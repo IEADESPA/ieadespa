@@ -1,7 +1,7 @@
 ---
 import { ClientRouter } from "astro:transitions";
 import { siteConfig } from "@/config/site";
-import { DIRECTUS_URL } from "@/lib/directus";
+import { DIRECTUS_URL, REGISTRAR_VISITA_URL } from "@/lib/directus";
 import "@/styles/global.css";
 
 interface Props {
@@ -214,10 +214,14 @@ const schema = structuredData ?? defaultStructuredData;
         window.__ieadespaIntervalIds = [];
       });
     </script>
-    <script is:inline define:vars={{ directusUrl: DIRECTUS_URL }}>
+    <script is:inline define:vars={{ registrarVisitaUrl: REGISTRAR_VISITA_URL }}>
       /*
        * Contador de visitas próprio — sem cookie, sem armazenamento no
        * navegador, sem identificar a pessoa nem segui-la entre visitas.
+       * Chama a Function `/api/registrar-visita` (mesma origem, sem pré-voo
+       * CORS), que junta as visitas e grava no Directus em lote: o navegador
+       * não fala mais com o Directus por causa da visita (16/10/2026, o
+       * Directus travava a 100 % de CPU com ~60 visitantes por minuto).
        * Só grava caminho da página e, se veio de outro site, o domínio de
        * origem (nunca a URL completa, que poderia ter termo de busca ou
        * outro dado da pessoa). Não roda em páginas internas de operação
@@ -233,7 +237,7 @@ const schema = structuredData ?? defaultStructuredData;
        */
       document.addEventListener("astro:page-load", () => {
         const path = location.pathname;
-        const internas = ["/painel-eventos", "/painel/", "/checkin"];
+        const internas = ["/painel-eventos", "/painel-camisetas", "/painel-conteudo", "/painel/", "/checkin"];
         if (internas.some((prefixo) => path.startsWith(prefixo))) return;
 
         let referrerDomain = null;
@@ -244,12 +248,11 @@ const schema = structuredData ?? defaultStructuredData;
         } catch {}
 
         const corpo = JSON.stringify({ path, referrer_domain: referrerDomain });
-        const url = `${directusUrl}/items/pageviews`;
 
         if (navigator.sendBeacon) {
-          navigator.sendBeacon(url, new Blob([corpo], { type: "application/json" }));
+          navigator.sendBeacon(registrarVisitaUrl, new Blob([corpo], { type: "application/json" }));
         } else {
-          fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }).catch(() => {});
+          fetch(registrarVisitaUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo, keepalive: true }).catch(() => {});
         }
       });
     </script>

@@ -200,3 +200,14 @@ mostra o caminho sem fingir que já foi construído. Crescer aqui, quando
 cada peça do roadmap for implementada, é só marcar `pronto: true` no
 array — mesmo espírito do objeto `MODULOS` do painel principal (seção
 2.6), um nível mais fundo.
+
+## Nota de numeração das refatorações de navegação (movida do README em 15/10/2026)
+
+> **Nota de numeração (corrigida na 7ª rodada).** As três refatorações acima
+> foram rotuladas no passado como "v4.2.2" e "v4.2.3" só porque aconteceram
+> *durante* o período em que a FASE 4 estava sendo construída — mas elas não
+> são sub-versões da v4.2 (que é "Plano de Contas e Fundo Restrito/Livre",
+> financeiro puro). Quem procurasse "v4.2.2" no plano de versões não acharia
+> nada. Os rótulos foram removidos: mudança de navegação transversal não recebe
+> número de versão de um módulo de negócio — quando precisar de versão própria,
+> entra na FASE 10 (Experiência, Design e Performance).

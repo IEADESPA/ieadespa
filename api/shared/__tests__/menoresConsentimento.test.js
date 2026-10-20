@@ -5,15 +5,15 @@ const mc = require("../menoresConsentimento");
 const IP = "177.8.9.10";
 const HASH = (f) => mc.textoDe(f).hash;
 const CONCEDE = { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", aceito: true, termoHash: HASH("IMAGEM"), ip: IP };
-const linha = (extra = {}) => ({ concedido: true, responsavelId: 40, textoVersao: 1, textoHash: HASH("IMAGEM"), forma: "CLICK_RESP", registradoEm: "2026-10-08T12:00:00.000Z", ...extra });
+const linha = (extra = {}) => ({ concedido: true, responsavelId: 40, textoVersao: 2, textoHash: HASH("IMAGEM"), forma: "CLICK_RESP", registradoEm: "2026-10-08T12:00:00.000Z", ...extra });
 
 describe("os textos (um por finalidade) e o hash", () => {
-  test("duas finalidades, versão 1, cada uma com título, itens e frase de aceite; o hash tem 64 hexadecimais e é DIFERENTE por finalidade", () => {
+  test("duas finalidades, versão 2, cada uma com título, itens e frase de aceite; o hash tem 64 hexadecimais e é DIFERENTE por finalidade", () => {
     expect(mc.CODIGOS_FINALIDADE).toEqual(["IMAGEM", "SAUDE_CRACHA"]);
-    expect(mc.CONSENTIMENTO_VERSAO).toBe(1);
+    expect(mc.CONSENTIMENTO_VERSAO).toBe(2);
     const hashes = mc.textosVigentes().map((t) => t.hash);
     for (const t of mc.textosVigentes()) {
-      expect(t.versao).toBe(1);
+      expect(t.versao).toBe(2);
       expect(t.titulo.length).toBeGreaterThan(10);
       expect(t.aceite).toMatch(/responsável legal/);
       expect(t.hash).toMatch(/^[0-9a-f]{64}$/);
@@ -78,11 +78,14 @@ describe("os textos (um por finalidade) e o hash", () => {
     expect(mc.hashConfere("OUTRA", HASH("IMAGEM"))).toBe(false);
   });
   test("a integridade do registro: ficha é documento externo; o aceite digital confere o hash da versão", () => {
-    expect(mc.avaliarIntegridade({ forma: "FICHA_FISICA", textoVersao: 1, textoHash: "x" }, "IMAGEM").status).toBe("DOCUMENTO_EXTERNO");
-    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 1, textoHash: HASH("IMAGEM") }, "IMAGEM").status).toBe("OK");
-    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 1, textoHash: "0".repeat(64) }, "IMAGEM").status).toBe("DIVERGENTE");
+    expect(mc.avaliarIntegridade({ forma: "FICHA_FISICA", textoVersao: 2, textoHash: "x" }, "IMAGEM").status).toBe("DOCUMENTO_EXTERNO");
+    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 2, textoHash: HASH("IMAGEM") }, "IMAGEM").status).toBe("OK");
+    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 2, textoHash: "0".repeat(64) }, "IMAGEM").status).toBe("DIVERGENTE");
     expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 0, textoHash: "0".repeat(64) }, "IMAGEM").status).toBe("VERSAO_ANTERIOR");
-    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 1 }, "IMAGEM").status).toBe("SEM_HASH");
+    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 2 }, "IMAGEM").status).toBe("SEM_HASH");
+    // a versão 1 (antes da v7.10) continua sendo prova do texto da época: só aparece como versão anterior, nunca como divergência
+    expect(mc.avaliarIntegridade({ forma: "CLICK_RESP", textoVersao: 1, textoHash: "0".repeat(64) }, "SAUDE_CRACHA").status).toBe("VERSAO_ANTERIOR");
+    expect(mc.estadoDoConsentimento(linha({ textoVersao: 1 }), [40])).toMatchObject({ situacao: "CONCEDIDO", vigente: true, desatualizado: true });
   });
 });
 
@@ -149,7 +152,7 @@ describe("estadoDoConsentimento: a última linha + os responsáveis ativos", () 
 describe("validarConceder", () => {
   test("o caminho feliz devolve só o que o banco grava (a versão e o hash são os do texto VIGENTE, não os enviados)", () => {
     const v = mc.validarConceder({ ...CONCEDE, finalidade: "saude_cracha", termoHash: HASH("SAUDE_CRACHA").toUpperCase() });
-    expect(v).toEqual({ valido: true, dados: { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", textoVersao: 1, textoHash: HASH("SAUDE_CRACHA") } });
+    expect(v).toEqual({ valido: true, dados: { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", textoVersao: 2, textoHash: HASH("SAUDE_CRACHA") } });
   });
   test("ids estritos: '0x10', '1e1' (texto), true, [5], 0, negativo, decimal, grande demais e nulos NÃO são identificadores", () => {
     for (const ruim of ["0x10", "1e1", true, [5], {}, 0, -1, 1.5, "1.5", "-3", 3e9, "99999999999", "", " ", null, undefined, "abc"]) {
@@ -209,7 +212,7 @@ describe("validarRegistroManual (a ficha assinada, registrada pela Secretaria)",
   const FICHA = { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", concedido: true, referencia: "Ficha 12, pasta azul", por: 5 };
   test("o caminho feliz (concede ou revoga) devolve os dados com a versão e o hash vigentes", () => {
     const v = mc.validarRegistroManual(FICHA);
-    expect(v).toEqual({ valido: true, dados: { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", concedido: true, referencia: "Ficha 12, pasta azul", registradoPor: 5, textoVersao: 1, textoHash: HASH("IMAGEM") } });
+    expect(v).toEqual({ valido: true, dados: { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", concedido: true, referencia: "Ficha 12, pasta azul", registradoPor: 5, textoVersao: 2, textoHash: HASH("IMAGEM") } });
     expect(mc.validarRegistroManual({ ...FICHA, concedido: false }).dados.concedido).toBe(false);
   });
   test("ids estritos (menor, responsável e quem registra)", () => {

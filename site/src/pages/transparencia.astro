@@ -4,7 +4,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
-import { DIRECTUS_ADMIN_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
+import { directusAssetUrl, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 
 interface Relatorio {
@@ -17,10 +17,10 @@ interface Relatorio {
 
 const allPosts = visiblePosts(await getAllMensagens());
 
-/** Publicados pela diretoria através do painel de conteúdo. */
-const reports = (await fetchItems<Relatorio>("relatorios")).sort(
-  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-);
+/** Publicados pela diretoria através do painel de conteúdo (o painel exige o PDF; sem arquivo não há o que baixar, então nem listamos). */
+const reports = (await fetchItems<Relatorio>("relatorios"))
+  .filter((report) => Boolean(report.file))
+  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
 /*
  * Números públicos de crescimento — só dado agregado, nunca individual:
@@ -164,9 +164,9 @@ const maxCrescimento = crescimentoPorAno ? Math.max(...crescimentoPorAno.map((p)
           ) : (
             <div class="gallery-empty">
               <p class="text-sm leading-relaxed text-muted-foreground">
-                Nenhum relatório publicado ainda. Assim que a diretoria publicar um relatório de
-                prestação de contas pelo <a href={DIRECTUS_ADMIN_URL}>painel de conteúdo</a>, ele aparecerá
-                aqui.
+                Nenhum relatório publicado ainda. Assim que a Diretoria publicar um relatório de
+                prestação de contas pelo <a href="/painel-conteudo/">painel de conteúdo</a> (área restrita
+                da Diretoria), ele aparecerá aqui.
               </p>
             </div>
           )

@@ -21,7 +21,8 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-      filter: (page) => page !== new URL("/busca/", siteConfig.siteUrl).toString(),
+      // fora do mapa do site: a busca e as telas da equipe (/painel, /painel-eventos, /painel-camisetas, /painel-conteudo — já são noindex)
+      filter: (page) => page !== new URL("/busca/", siteConfig.siteUrl).toString() && !new URL(page).pathname.startsWith("/painel"),
     }),
     mdx(),
   ],

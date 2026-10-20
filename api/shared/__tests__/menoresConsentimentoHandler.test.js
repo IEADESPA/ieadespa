@@ -158,7 +158,7 @@ describe("leitura", () => {
   test("textos: o texto vigente de cada finalidade, com o hash que a tela devolve ao autorizar (qualquer login, inclusive PIN)", async () => {
     const r = await chamar("textos", { token: PIN() });
     expect(r.status).toBe(200);
-    expect(r.body.versao).toBe(1);
+    expect(r.body.versao).toBe(2);
     expect(r.body.finalidades.map((f) => f.codigo)).toEqual(["IMAGEM", "SAUDE_CRACHA"]);
     expect(r.body.textos.map((t) => [t.finalidade, t.hash])).toEqual([["IMAGEM", HASH("IMAGEM")], ["SAUDE_CRACHA", HASH("SAUDE_CRACHA")]]);
     expect(r.body.textos[0].itens.map((i) => i.codigo)).toContain("REVOGAR");
@@ -237,7 +237,7 @@ describe("conceder", () => {
     const r = await chamar("conceder", { metodo: "POST", token: PIN(40), headers: { ...CLIENTE, "x-azure-clientip": "9.9.9.9" }, corpo: { ...CONCEDE(), responsavelId: 41, RegistradoPorMembroId: 5, forma: "FICHA_FISICA", ip: "1.1.1.1" } });
     expect(r.status).toBe(201);
     expect(r.body).toMatchObject({ sucesso: true, consentimentoId: 77, estado: { situacao: "CONCEDIDO", vigente: true, concedidoPorVoce: true } });
-    expect(insercao().inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, ver: 1, h: HASH("IMAGEM"), forma: "CLICK_RESP", ip: "177.87.165.132", por: null, ref: null });
+    expect(insercao().inputs).toMatchObject({ mn: 30, rs: 40, f: "IMAGEM", c: 1, ver: 2, h: HASH("IMAGEM"), forma: "CLICK_RESP", ip: "177.87.165.132", por: null, ref: null });
     expect(JSON.parse(insercao().inputs.cad)).toMatchObject({ "x-forwarded-for": "177.87.165.132:24294, 40.70.146.136:36945", "x-azure-clientip": "9.9.9.9" });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENOR_CONSENTIMENTO_CONCEDIDO", usuarioId: 40 });
     expect(JSON.stringify(registrarAuditoria.mock.calls)).not.toMatch(/177\.87|forwarded/);
@@ -333,6 +333,7 @@ describe("revogar", () => {
     expect(r.status).toBe(200);
     expect(r.body.fotoApagada).toBe(false);
     expect(storage.excluirFoto).not.toHaveBeenCalled();
+    expect(mockConsultas.some((c) => /DELETE FROM CheckinInfantilSaude/.test(c.sql))).toBe(true);     // v7.10: e o dado de saúde do check-in sai junto
   });
   test("quem não é responsável ativo (estranho, o próprio menor, responsável revogado): 403 e a foto NÃO é apagada", async () => {
     RESPONSAVEIS = RESPONSAVEIS.filter((r) => r.resp !== 41);

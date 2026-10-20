@@ -51,7 +51,7 @@ const MUTACOES = [
   ["escape: protocolo do canal de ajuda", P, "<strong>${escaparHtmlEbd(data.protocolo)}</strong>. Anote", "<strong>${data.protocolo}</strong>. Anote"],
   ["escape: falha do canal de ajuda (mensagem do servidor)", P, "el.innerHTML = `<p>${escaparHtmlEbd(mensagem)}</p>", "el.innerHTML = `<p>${mensagem}</p>"],
   ["escape: protocolo em Meus registros", P, "<h5>${escaparHtmlEbd(i.protocolo)} ${prtSelo(\"cal-st-deferido\", i.nivelRotulo)}", "<h5>${i.protocolo} ${prtSelo(\"cal-st-deferido\", i.nivelRotulo)}"],
-  ["escape: resposta do registro (mensagem)", P, "<p>${escaparHtmlEbd(prtMsgErro(data))}</p>\n    ${exige ? `", "<p>${prtMsgErro(data)}</p>\n    ${exige ? `"],
+  ["escape: resposta do registro (mensagem) (âncora 7B)", P, "<p${alerta ? ` class=\"psc-aviso\" role=\"alert\"` : \"\"}>${escaparHtmlEbd(prtMsgErro(data))}</p>", "<p${alerta ? ` class=\"psc-aviso\" role=\"alert\"` : \"\"}>${prtMsgErro(data)}</p>"],
   ["escape: protocolo no cartão da fila", P, "<h5>${escaparHtmlEbd(i.protocolo)} <span class=\"psc-legenda\">${prtData(i.dataOcorrencia)}", "<h5>${i.protocolo} <span class=\"psc-legenda\">${prtData(i.dataOcorrencia)}"],
   ["escape: congregação no cartão da fila", P, "${i.congregacaoNome ? ` · ${escaparHtmlEbd(i.congregacaoNome)}` : \"\"}", "${i.congregacaoNome ? ` · ${i.congregacaoNome}` : \"\"}"],
   ["escape: protocolo na ficha", P, "<h4 id=\"prtDetalheTitulo\" tabindex=\"-1\">${escaparHtmlEbd(inc.protocolo)}</h4>", "<h4 id=\"prtDetalheTitulo\" tabindex=\"-1\">${inc.protocolo}</h4>"],
@@ -147,7 +147,7 @@ const MUTACOES = [
   ["comunicação: a data vai como texto do campo (não ISO)", P, "const corpo = { incidenteId: id, orgao, forma, comunicadoEm: quando.toISOString() };", "const corpo = { incidenteId: id, orgao, forma, comunicadoEm: quandoTexto };"],
   ["comunicação: incidenteId como texto", P, "const corpo = { incidenteId: id, orgao, forma, comunicadoEm", "const corpo = { incidenteId: String(id), orgao, forma, comunicadoEm"],
   ["comunicação: a recusa do servidor fecha o formulário", P, "    if (data.sucesso === false) return;       // recusa de regra: mensagem do servidor e formulário aberto, com o que foi escrito", "    if (data.sucesso === false) { prtFecharFormAcao(); return; }"],
-  ["comunicação: depois do sucesso a ficha não é refeita", P, "async function prtDepoisDoAto(id, mensagem) {\n  const ok = await prtCarregarDetalhe(id);", "async function prtDepoisDoAto(id, mensagem) {\n  const ok = false;"],
+  ["comunicação: depois do sucesso a ficha não é refeita (âncora 7B)", P, "async function prtDepoisDoAto(id, data) {\n  const ok = await prtCarregarDetalhe(id);", "async function prtDepoisDoAto(id, data) {\n  const ok = false;"],
   ["adendo: aceita texto com < >", P, "if (texto.length < 10 || texto.length > 2000 || prtTemMarca(texto)) { mostrarToast(", "if (texto.length < 10 || texto.length > 2000) { mostrarToast("],
   ["adendo: incidenteId como texto", P, "prtPostar(\"adendo\", { incidenteId: id, texto })", "prtPostar(\"adendo\", { incidenteId: String(id), texto })"],
   ["adendo: sem o aviso de não fazer novas perguntas", P, "<strong>Não faça novas perguntas</strong> para obter mais: repetir a conversa machuca de novo.", "Registre."],
@@ -155,7 +155,7 @@ const MUTACOES = [
   ["reclassificar: sem o 'tem certeza'", P, "  if (!(await confirmarAcao(aviso, \"Reclassificar\"))) return;", ""],
   ["reclassificar: a suspeita vai sem o relato", P, "    corpo.relatadoPor = quem; corpo.relato = relato;", "    corpo.relatadoPor = quem;"],
   ["reclassificar: a suspeita não pede quem contou", P, "    if (!quem) { erro(\"Informe quem contou ou percebeu o fato.\"); return; }", ""],
-  ["reclassificar: a confirmação da suspeita não diz o efeito", P, "O prazo de 24 horas para comunicar o Conselho Tutelar começa agora; a pessoa envolvida, se for membro, sai das escalas com crianças por cautela; a liderança de proteção será avisada. Só se sobe de nível: depois não dá para voltar atrás.", "Só se sobe de nível."],
+  ["reclassificar: a confirmação da suspeita não diz o efeito (âncora 7B)", P, "A lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja (24 horas) começa agora; a pessoa envolvida, se for membro, sai das escalas com crianças por cautela; a liderança de proteção será avisada. Só se sobe de nível: depois não dá para voltar atrás.", "Só se sobe de nível."],
   ["decidir: a observação é conferida só depois do 428", P, "  if (observacao.length < 10 || observacao.length > 300 || prtTemMarca(observacao)) { erro(\"Registre o motivo da decisão", "  if (false) { erro(\"Registre o motivo da decisão"],
   ["decidir: sem o 'tem certeza'", P, "  if (!(await confirmarAcao(`${prtRotuloDe(prtCatalogos.decisoes, decisao)} (${envolvido.nome})?", "  if (false && !(await confirmarAcao(`${prtRotuloDe(prtCatalogos.decisoes, decisao)} (${envolvido.nome})?"],
   ["decidir: envolvidoId como texto", P, "prtPostar(\"cautelar-decidir\", { incidenteId: id, envolvidoId: eid,", "prtPostar(\"cautelar-decidir\", { incidenteId: id, envolvidoId: String(eid),"],
@@ -191,7 +191,7 @@ const MUTACOES = [
 
   // ---------------------------------------------------------------- registro de incidente
   ["registro: a confirmação da suspeita some", P, "  if (c.nivel === \"ALEGACAO\" && !(await confirmarAcao(prtTextoConfirmarSuspeita(c), \"Enviar a suspeita\"))) return;", ""],
-  ["registro: a confirmação não diz o efeito (prazo)", P, "o prazo de 24 horas para comunicar o Conselho Tutelar começa agora", "o prazo começa agora"],
+  ["registro: a confirmação não diz o efeito (prazo) (âncora 7B)", P, "a lei manda comunicar o Conselho Tutelar imediatamente, e o prazo máximo da Igreja (24 horas) começa agora", "o prazo começa agora"],
   ["registro: a confirmação não fala da saída das escalas", P, "; a pessoa envolvida (matrícula ${c.envMatricula}), se for membro, sai das escalas com crianças por cautela (não é punição)", ""],
   ["registro: sem a validação de nível", P, "  if (!c.nivel) return \"Escolha o que aconteceu:", "  if (false) return \"Escolha o que aconteceu:"],
   ["registro: aceita data no futuro", P, "  if (c.data > calHojeBrasilia()) return", "  if (false) return"],
@@ -221,11 +221,11 @@ const MUTACOES = [
   ["permissão: os papéis falsos (todos liberados)", P, "    papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral }\n  };\n  return prtCatalogos;", "    papeis: { gestao: true, geral: true }\n  };\n  return prtCatalogos;"],
   ["permissão: sem o aviso de 'sem acesso'", P, "if (semAcesso) semAcesso.style.display = prtCatalogos && !PRT_SECOES.some(prtSecaoPermitida) ? \"\" : \"none\";", "if (semAcesso) semAcesso.style.display = \"none\";"],
   ["permissão: a aba abre com a chave errada", S, "  protecao: [\"protecao_menores\"],\n", ""],
-  ["navegação: a aba não está no módulo de Habilitação", S, "abas: [\"habilitacao\", \"menores\", \"protecao\"] },", "abas: [\"habilitacao\", \"menores\"] },"],
-  ["navegação: a aba não está em NOMES_ABAS", S, "\"menores\", \"protecao\", \"assistenciasocial\",", "\"menores\", \"assistenciasocial\","],
-  ["navegação: a sub-aba não está em SUB_ABAS_MEUPAINEL", S, "\"menores\", \"protecao\", \"minhasconquistas\",", "\"menores\", \"minhasconquistas\","],
+  ["navegação: a aba não está no módulo de Habilitação (âncora 7B)", S, "abas: [\"habilitacao\", \"menores\", \"protecao\", \"checkininfantil\"] },", "abas: [\"habilitacao\", \"menores\", \"checkininfantil\"] },"],
+  ["navegação: a aba não está em NOMES_ABAS (âncora 7B)", S, "const NOMES_ABAS = [\"meupainel\", \"financeiro\", \"reunioes\", \"pessoas\", \"cartas\", \"orgaos\", \"estrutura\", \"catalogos\", \"permissoes\", \"consagracoes\", \"enquetes\", \"arquivos\", \"disciplina\", \"abandono\", \"auditoria\", \"protecaodedados\", \"ouvidoria\", \"documentos\", \"mediacao\", \"relatoriosdepto\", \"escalas\", \"habilitacao\", \"menores\", \"protecao\", \"checkininfantil\",", "const NOMES_ABAS = [\"meupainel\", \"financeiro\", \"reunioes\", \"pessoas\", \"cartas\", \"orgaos\", \"estrutura\", \"catalogos\", \"permissoes\", \"consagracoes\", \"enquetes\", \"arquivos\", \"disciplina\", \"abandono\", \"auditoria\", \"protecaodedados\", \"ouvidoria\", \"documentos\", \"mediacao\", \"relatoriosdepto\", \"escalas\", \"habilitacao\", \"menores\", \"checkininfantil\","],
+  ["navegação: a sub-aba não está em SUB_ABAS_MEUPAINEL (âncora 7B)", S, "\"menores\", \"protecao\", \"checkininfantil\", \"minhasconquistas\",", "\"menores\", \"checkininfantil\", \"minhasconquistas\","],
   ["navegação: a sub-aba não carrega a tela", S, "  if (sub === \"protecao\" && typeof carregarMeuPainelProtecaoAcao === \"function\") carregarMeuPainelProtecaoAcao();\n", ""],
-  ["navegação: a sub-aba sem título", S, "protecao: \"Proteção de crianças\", minhasconquistas:", "minhasconquistas:"],
+  ["navegação: a sub-aba sem título (âncora 7B)", S, "protecao: \"Proteção de crianças\", checkininfantil:", "checkininfantil:"],
   ["navegação: a aba não carrega a tela", D, "  if (aba === \"protecao\" && typeof carregarOpcoesProtecaoAcao === \"function\") carregarOpcoesProtecaoAcao();\n", ""],
   ["navegação: a aba sem título", D, "menores: \"Ministério com Menores\", protecao: \"Proteção de Crianças\",", "menores: \"Ministério com Menores\","],
   ["navegação: sem ajuda contextual da aba", S, "  protecao: \"Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes", "  protecaoX: \"Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes"],
@@ -328,7 +328,7 @@ const MUTACOES = [
   // L8: impressão (CSS)
   ["L8: o relato fica na folha num Ctrl+P comum", C, "  #prtRelatoCx, #prtDetalheCx { display: none !important; }\n", ""],
   ["L8: o resto da página só fica invisível na impressão do relatório (folha em branco no fim)", C, "    body.prt-imprimindo *:not(#prtRelImprimivel):not(#prtRelImprimivel *):not(:has(#prtRelImprimivel)) { display: none !important; }\n", ""],
-  ["L8: as pastas do relatório guardam a altura mínima na impressão", C, "min-height: 0 !important; ", ""],
+  ["L8: as pastas do relatório guardam a altura mínima na impressão (âncora 7B)", C, "body.prt-imprimindo *:has(#prtRelImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; min-height: 0 !important; ", "body.prt-imprimindo *:has(#prtRelImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; "],
   ["L8: a impressão do relatório perde a reserva de visibility:hidden", C, "  body.prt-imprimindo * { visibility: hidden !important; }\n", ""],
 
   // L9: foco
@@ -377,6 +377,32 @@ const MUTACOES = [
   ["público: o envio não tem limite de tempo", P, "  const limite = controle ? setTimeout(() => controle.abort(), PRT_MS_LIMITE_AJUDA) : null;", "  const limite = null;"],
   ["público: o limite do envio é de 5 minutos", P, "const PRT_MS_LIMITE_AJUDA = 30000;", "const PRT_MS_LIMITE_AJUDA = 300000;"],
   ["público: o temporizador do envio não é desarmado", P, "    if (limite != null) clearTimeout(limite);\n", ""],
+
+  // Trava 7-B: "a pessoa envolvida é da liderança?", o selo "só Diretoria e Comitê", o ato que dá certo com um alerta e o texto da lei ("imediatamente")
+  ["7B: a pergunta da liderança não é montada no formulário", P, "  prtMontarPerguntaLideranca();\n", ""],
+  ["7B: a pergunta da liderança é montada de novo a cada abertura (duplica)", P, "  if (prtEl(\"prtRegLiderancaCx\")) return;\n", ""],
+  ["7B: a pergunta começa em 'sim'", P, [
+    ["value=\"nao\" checked />", "value=\"nao\" />"],
+    ["value=\"sim\" />", "value=\"sim\" checked />"]
+  ]],
+  ["7B: o registro não manda envolvidoDaLideranca", P, "  corpo.envolvidoDaLideranca = c.envLideranca === true;", "  "],
+  ["7B: o 'sim' não chega ao corpo do registro", P, "envLideranca: prtLiderancaEnvolvida(),", "envLideranca: false,"],
+  ["7B: envolvidoDaLideranca vai como texto (o servidor responde 422)", P, "  corpo.envolvidoDaLideranca = c.envLideranca === true;", "  corpo.envolvidoDaLideranca = String(c.envLideranca === true);"],
+  ["7B: a pergunta não volta para 'não' depois de registrar", P, "  prtVoltarLiderancaParaNao();   // o próximo registro começa em \"não\"\n", ""],
+  ["7B: a troca de login deixa o 'sim' da pessoa anterior marcado", P, "  prtVoltarLiderancaParaNao();   // a resposta da pessoa anterior não fica marcada para quem entra depois\n", ""],
+  ["7B: a confirmação da suspeita com 'sim' promete o aviso à liderança local", P, "  const quem = c.envLideranca ? ", "  const quem = false ? "],
+  ["7B: o selo 'só Diretoria e Comitê' some", P, "    i.somenteNivelGeral === true ? prtSelo(\"cal-st-indeferido\", \"🔒 só Diretoria e Comitê\") : \"\",\n", ""],
+  ["7B: o selo 'só Diretoria e Comitê' aparece em todo caso", P, "    i.somenteNivelGeral === true ? prtSelo(", "    true ? prtSelo("],
+  ["7B: a ficha não explica por que o caso é só do nível geral", P, "    ${prtHtmlSoNivelGeral(inc)}\n", ""],
+  ["7B: a ficha dá o porquê errado (liderança apontada vira 'sem matrícula')", P, "    : inc.envolvidoDaLideranca === true ? \"quem registrou", "    : false ? \"quem registrou"],
+  ["7B: o aviso que não saiu do sistema (texto ATENÇÃO) não vira alerta", P, " || String(data.mensagem == null ? \"\" : data.mensagem).includes(\"ATENÇÃO:\");", ";"],
+  ["7B: o sucesso com alerta solta o toast de sucesso", P, "mostrarToast(texto, (data && data.sucesso === false) || alerta ? \"erro\" : \"sucesso\");", "mostrarToast(texto, (data && data.sucesso === false) ? \"erro\" : \"sucesso\");"],
+  ["7B: o sucesso com alerta não fica em destaque no formulário", P, "  prtEscreverAviso(idMensagem, texto, destaque || alerta || !!(data && data.sucesso === false));", "  prtEscreverAviso(idMensagem, texto, destaque || !!(data && data.sucesso === false));"],
+  ["7B: o alerta não fica em destaque na ficha refeita", P, "  if (ok) prtEscreverAviso(\"prtDetalheMsg\", prtMsgErro(data), prtTemAlerta(data));", "  if (ok) prtEscreverAviso(\"prtDetalheMsg\", prtMsgErro(data), false);"],
+  ["7B: a resposta do registro mantém o ✅ com o alerta", P, "  const alerta = prtTemAlerta(data);\n  cx.innerHTML", "  const alerta = false;\n  cx.innerHTML"],
+  ["7B: a resposta da suspeita volta a dizer 'em até 24 horas'", P, "<p><strong>A lei manda comunicar ao Conselho Tutelar imediatamente.</strong> Prazo máximo da Igreja: ${data.prazoEm ? prtDataHora(data.prazoEm) : \"24 horas depois de a Igreja ficar sabendo\"}.</p>", "<p><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${data.prazoEm ? prtDataHora(data.prazoEm) : \"em até 24 horas depois de a Igreja ficar sabendo\"}</p>"],
+  ["7B: o aviso da suspeita (index.html) volta a dizer 'em até 24 horas'", H, "A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo máximo da Igreja é de 24 horas. Ao enviar, esse prazo", "A lei manda comunicar ao Conselho Tutelar em até 24 horas. Ao enviar, o prazo"],
+  ["7B: o topo da aba (index.html) volta a dizer 'em até 24 horas'", H, "<strong>comunicada ao Conselho Tutelar imediatamente</strong> (ECA, art. 13; a omissão tem multa, art. 245); o prazo máximo da Igreja é de 24 horas.", "<strong>comunicada ao Conselho Tutelar em até 24 horas</strong> (ECA, art. 13; a omissão tem multa, art. 245)."],
 
   // extras: (d) a data volta para hoje depois de registrar
   ["registro: a data do fato anterior fica para o próximo registro", P, "  if (dia) dia.value = calHojeBrasilia();   // o próximo registro começa em hoje (a data do fato anterior não fica)\n", ""],

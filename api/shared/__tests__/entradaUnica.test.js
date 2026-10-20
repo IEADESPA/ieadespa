@@ -37,10 +37,10 @@ const SID_ATIVO = "aaaaaaaa-1111-2222-3333-444444444444";
 const SID_ENCERRADO = "bbbbbbbb-1111-2222-3333-444444444444";
 const tokenCom = (sid) => auth.reassinarSessao({ membroId: 5, nome: "Fulano", termosPendentes: [], via: "SENHA", nivel: "CONGREGACAO", permissoes: [], escopoCongregacoes: ["Central"], sid });
 const contexto = (pasta) => ({ bindingData: {}, executionContext: { functionDirectory: path.join(RAIZ_API, pasta), functionName: pasta }, log: Object.assign(() => {}, { error() {}, info() {}, warn() {}, verbose() {} }) });
-async function chamarPelaEntrada(pasta, { token, metodo = "GET", corpo = {}, ligado = {} } = {}) {
+async function chamarPelaEntrada(pasta, { token, cabecalhos = {}, metodo = "GET", corpo = {}, ligado = {} } = {}) {
   const ctx = contexto(pasta);
   ctx.bindingData = ligado;
-  await entrada(ctx, { method: metodo, query: {}, body: corpo, headers: token ? { "x-auth-token": token } : {} });
+  await entrada(ctx, { method: metodo, query: {}, body: corpo, headers: { ...(token ? { "x-auth-token": token } : {}), ...cabecalhos } });
   return ctx.res;
 }
 
@@ -117,6 +117,50 @@ describe("comportamento: a lista de sessões encerradas", () => {
     expect(r.status).toBe(401);
     expect(r.body.mensagem).toBe("Faça login para continuar.");
     expect(leiturasDaLista()).toHaveLength(0);
+  });
+
+  // 16/10/2026 — o Azure Static Web Apps entrega à Function um `Authorization: Bearer …` PRÓPRIO em toda chamada. Com a condição antiga ("tem algum token") até o "está no ar" (a cada
+  // 5 min) e a agenda pública (a cada 15 min) leram o banco toda vez, e o Azure SQL serverless não pausava nunca (~R$ 87/dia contra ~R$ 8). Só uma sessão nossa, assinada e no prazo, justifica a leitura.
+  describe("só uma sessão nossa (assinada e no prazo) faz a entrada ler o banco", () => {
+    test("o 'Authorization: Bearer' que o Azure entrega NÃO lê o banco — nem no 'está no ar', nem na agenda pública", async () => {
+      const doAzure = { authorization: "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJzd2EifQ.assinatura-do-azure" };
+      const saude = await chamarPelaEntrada("Saude", { cabecalhos: doAzure });
+      expect(saude.status).toBe(200);
+      await chamarPelaEntrada("AgendaPublica", { cabecalhos: doAzure, ligado: { acao: "versao" } });
+      expect(leiturasDaLista()).toHaveLength(0);
+    });
+
+    test("token com assinatura errada, mal formado ou vencido NÃO lê o banco, e a rota protegida responde 401 sozinha", async () => {
+      const assinaturaErrada = tokenCom(SID_ATIVO).replace(/\.[^.]+$/, ".assinaturaerrada");
+      const vencido = tokenCom(SID_ATIVO);
+      agora += 13 * 60 * 60 * 1000; // o token vive 12 h: com o relógio 13 h adiante, este já venceu
+      for (const token of [assinaturaErrada, "lixo-sem-ponto", vencido]) {
+        const r = await chamarPelaEntrada("GestaoSessoes", { token });
+        expect(r.status).toBe(401);
+        expect(r.body.mensagem).toBe("Faça login para continuar.");
+      }
+      expect(leiturasDaLista()).toHaveLength(0);
+    });
+
+    test("com o 'Authorization' do Azure E o x-auth-token da aplicação: lê a lista normalmente (a sessão de verdade continua conferida)", async () => {
+      const r = await chamarPelaEntrada("GestaoSessoes", { token: tokenCom(SID_ENCERRADO), cabecalhos: { authorization: "Bearer token-do-azure" } });
+      expect(r.status).toBe(401);
+      expect(r.body.mensagem).toBe("Sua sessão foi encerrada. Entre novamente.");
+      expect(leiturasDaLista()).toHaveLength(1);
+    });
+
+    test("sessão nossa válida só em 'Authorization: Bearer' (sem x-auth-token) também é conferida", async () => {
+      const r = await chamarPelaEntrada("GestaoSessoes", { cabecalhos: { authorization: `Bearer ${tokenCom(SID_ENCERRADO)}` } });
+      expect(r.status).toBe(401);
+      expect(r.body.mensagem).toBe("Sua sessão foi encerrada. Entre novamente.");
+      expect(leiturasDaLista()).toHaveLength(1);
+    });
+
+    test("token inválido com o banco fora do ar não vira 503: não há lista a conferir", async () => {
+      mockFalharLeitura = true;
+      const r = await chamarPelaEntrada("Saude", { cabecalhos: { authorization: "Bearer qualquer-coisa" } });
+      expect(r.status).toBe(200);
+    });
   });
 
   test("com token: a primeira chamada lê a lista; sessão encerrada -> 401 'Sua sessão foi encerrada'; sessão aberta passa", async () => {

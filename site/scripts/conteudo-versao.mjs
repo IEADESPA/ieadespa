@@ -57,7 +57,7 @@ async function lerColecao(colecao) {
   const dados = (await res.json()).data;
   // Itens de TESTE (baterias de site/scripts/testes, criados e apagados em minutos) não contam:
   // senão cada rodada de teste remontaria o site duas vezes à toa.
-  const ehTeste = (it) => /^(teste|sonda|prova)-/.test(String(it?.slug || "")) || /^TESTE\b/.test(String(it?.title || it?.nome || ""));
+  const ehTeste = (it) => /^(teste|sonda|prova)-/.test(String(it?.slug || "")) || /^TESTE\b/.test(String(it?.title || it?.nome || it?.pergunta || ""));
   const itens = (Array.isArray(dados) ? dados : dados ? [dados] : []).filter((it) => !ehTeste(it));
   const texto = JSON.stringify(itens);
   return { colecao, n: itens.length, hash: createHash("sha256").update(texto).digest("hex").slice(0, 12), bytes: texto.length };

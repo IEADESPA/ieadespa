@@ -88,3 +88,19 @@ toda fase anterior (v4.8, v4.19, v5.4, v7.7), então é o lugar onde qualquer
 inconsistência acumulada nas fases 4 a 10 fica mais visível: se um número
 aqui não bate com o módulo de origem, é sinal de que uma trava anterior
 deixou passar algo.
+
+## Visão de longo prazo — integração total e sistema próprio de criação de sites (registrada em 19/10/2026)
+
+Não é uma versão com checklist: é uma direção, registrada a pedido do responsável para ser tratada **na FASE 12**, não antes. Hoje o site
+(estático + Functions + Directus/PostgreSQL) e o sistema de gestão (Azure SQL) são dois conjuntos de dados separados, ligados por
+APIs. O dia em que isso for tratado é o da **integração total entre todos os bancos de dados**, com a igreja tendo o **próprio sistema de
+criação de sites** no lugar do Directus. Quando chegar a hora:
+
+- O que já ajuda e não se perde: as regras de negócio estão nas Functions (`site/api`, `api`), não no Directus; a trava de vagas e de
+  cupom (`vagasEvento.js`) e o limite de pedidos (`limiteLote.js`) já são lógica nossa sobre o banco; o site é estático e lê o conteúdo por
+  uma camada fina (`site/src/lib/directus.ts`).
+- Passo intermediário possível (menor que a visão toda, **não** é o mesmo): as gravações quentes (pedido de camiseta, inscrição em evento)
+  irem direto ao PostgreSQL, com o Directus ficando só como painel de edição de conteúdo. Mediu-se em 19/10/2026 que hoje o gargalo de
+  gravação é o Directus (≈ 1,5–2 gravações por segundo no plano B1), não o banco.
+- Decisão do responsável: **não é prioridade agora**; a capacidade segue pelo caminho atual (espera automática nos formulários, status com
+  uma consulta por vez, e dobrar o servidor do Directus por hora ou de forma fixa só se um evento mostrar necessidade).

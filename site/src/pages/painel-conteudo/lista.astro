@@ -1,0 +1,597 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { painelUrls } from "@/lib/painelConteudo";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Lista — Painel de conteúdo" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas" data-pc-lista data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow"><a href={painelUrls.inicio} class="text-accent" data-astro-reload>← Painel de conteúdo</a></p>
+        <div class="pc-topo-linha">
+          <h1 class="pagehead-title" data-pc-titulo>Conteúdo</h1>
+          <a href={painelUrls.inicio} class="btn btn-solid" data-pc-nova data-astro-reload hidden>+ Nova</a>
+        </div>
+        <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
+        <p class="mt-3 text-sm" data-pc-ver-site-wrap hidden>
+          <span data-pc-ver-site-links></span>
+        </p>
+      </header>
+
+      <div class="pc-faixa pc-faixa-erro" data-pc-erro hidden>
+        <p data-pc-erro-texto></p>
+        <div class="pc-faixa-botoes">
+          <button type="button" class="btn btn-outline" data-pc-tentar>Tentar de novo</button>
+          <a href={painelUrls.inicio} class="btn btn-outline" data-astro-reload>Voltar ao painel</a>
+        </div>
+      </div>
+
+      <div hidden data-painel-conteudo>
+        <p class="pc-faixa" data-pc-excluido hidden>Item excluído.</p>
+
+        <div class="pc-resumo" data-pc-resumo>
+          <div class="stat-card" data-pc-stat-card="total"><p class="stat-numero" data-pc-stat="total">0</p><p class="stat-label">No total</p></div>
+          <div class="stat-card" data-pc-stat-card="publicados"><p class="stat-numero" data-pc-stat="publicados">0</p><p class="stat-label">Publicados</p></div>
+          <div class="stat-card" data-pc-stat-card="rascunhos"><p class="stat-numero" data-pc-stat="rascunhos">0</p><p class="stat-label">Rascunhos</p></div>
+          <div class="stat-card" data-pc-stat-card="destaques"><p class="stat-numero" data-pc-stat="destaques">0</p><p class="stat-label">Em destaque</p></div>
+        </div>
+
+        <div class="pc-lista-barra mt-6">
+          <label class="sr-only" for="pc-busca">Buscar pelo título</label>
+          <input id="pc-busca" type="search" class="field" placeholder="Buscar pelo título…" autocomplete="off" data-pc-busca />
+          <div class="pc-lista-chips" role="group" aria-label="Filtrar" data-pc-chips>
+            <button type="button" class="filtro-chip is-active" data-pc-filtro="todos" aria-pressed="true">Todos</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="publicados" aria-pressed="false">Publicados</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="rascunhos" aria-pressed="false">Rascunhos</button>
+            <button type="button" class="filtro-chip" data-pc-filtro="destaques" aria-pressed="false">Destaques</button>
+          </div>
+        </div>
+
+        <p class="mt-4 text-xs text-muted-foreground" data-pc-nota>
+          Depois de publicar ou editar, o site pode levar até uns 20 minutos para mostrar a mudança.
+        </p>
+        <p class="mt-2 text-sm" data-pc-dica-ordem hidden>
+          <strong>Ordem no site:</strong> use as setas ▲ e ▼ de cada item para mudá-lo de lugar. Vale na hora (aparece no site em até uns 20 minutos).
+        </p>
+
+        <p class="mt-4 text-sm" data-pc-contagem role="status" aria-live="polite"></p>
+        <p class="sr-only" data-pc-mov-status role="status" aria-live="polite"></p>
+        <p class="pc-faixa pc-faixa-erro mt-3" data-pc-mov-erro role="alert" hidden></p>
+        <div class="pc-itens mt-3" data-pc-itens></div>
+        <div class="mt-5" data-pc-mais-wrap hidden>
+          <button type="button" class="btn btn-outline btn-block" data-pc-mais>Mostrar mais</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { directusAssetUrl } from "@/lib/directus";
+    import { exigirAutenticacao } from "@/lib/painelAuth";
+    import {
+      AUTH_CONTEUDO,
+      calcularTroca,
+      camposDaLista,
+      chaveGrupo,
+      criarApi,
+      dataBR,
+      estaPublicado,
+      explicarErroDirectus,
+      iniciarQuandoPronto,
+      montarGrupos,
+      obterTipo,
+      painelUrls,
+      todosCampos,
+      type CampoConteudo,
+      type GrupoLista,
+      type TipoConteudo,
+    } from "@/lib/painelConteudo";
+
+    iniciarQuandoPronto("[data-pc-lista]", (raiz) => {
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const api = criarApi(directusUrl, { redirecionar: true });
+      const q = <T extends HTMLElement>(seletor: string) => raiz.querySelector<T>(seletor);
+      const params = new URLSearchParams(window.location.search);
+      const tipoOuNulo = obterTipo(params.get("tipo"));
+
+      const carregando = q("[data-painel-carregando]");
+      const conteudo = q("[data-painel-conteudo]");
+      const erroEl = q("[data-pc-erro]");
+      const erroTexto = q("[data-pc-erro-texto]");
+      const tituloEl = q("[data-pc-titulo]");
+      const novaEl = q<HTMLAnchorElement>("[data-pc-nova]");
+      const itensEl = q("[data-pc-itens]");
+      const contagemEl = q("[data-pc-contagem]");
+      const maisWrap = q("[data-pc-mais-wrap]");
+      const maisBtn = q<HTMLButtonElement>("[data-pc-mais]");
+      const buscaEl = q<HTMLInputElement>("[data-pc-busca]");
+      const movStatus = q("[data-pc-mov-status]");
+      const movErro = q("[data-pc-mov-erro]");
+
+      const mostrarErro = (texto: string) => {
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = true;
+        if (erroEl) erroEl.hidden = false;
+        if (erroTexto) erroTexto.textContent = texto;
+      };
+
+      if (!tipoOuNulo) {
+        mostrarErro("Não conheço este tipo de conteúdo. Volte ao painel e escolha uma das opções.");
+        q("[data-pc-tentar]")?.setAttribute("hidden", "");
+        return;
+      }
+
+      const tipo: TipoConteudo = tipoOuNulo;
+      // Item único (ex.: Sobre e Crenças): não existe lista; vai direto para o formulário.
+      if (tipo.unico) {
+        window.location.replace(painelUrls.editar(tipo.id));
+        return;
+      }
+      document.title = `${tipo.titulos.plural} — Painel de conteúdo`;
+      if (tituloEl) tituloEl.textContent = tipo.titulos.plural;
+      if (novaEl) {
+        novaEl.textContent = `+ ${tipo.titulos.nova}`;
+        novaEl.href = painelUrls.editar(tipo.id);
+        novaEl.hidden = false;
+      }
+      if (params.get("excluido") === "1") q("[data-pc-excluido]")?.removeAttribute("hidden");
+
+      const temRascunho = Boolean(tipo.rascunho);
+      const temDestaque = Boolean(tipo.campoDestaque);
+      const ordem = tipo.ordem;
+      const campos = todosCampos(tipo);
+      const campoPorNome = new Map<string, CampoConteudo>(campos.map((c) => [c.nome, c]));
+
+      // "Ver no site": as páginas públicas que mostram este tipo de conteúdo.
+      const verSiteWrap = q("[data-pc-ver-site-wrap]");
+      const verSiteLinks = q("[data-pc-ver-site-links]");
+      if (verSiteWrap && verSiteLinks && tipo.paginasPublicas.length) {
+        verSiteLinks.replaceChildren(
+          ...tipo.paginasPublicas.flatMap((p, i) => {
+            const a = document.createElement("a");
+            a.href = p.url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.className = "link-sweep font-semibold text-accent";
+            a.setAttribute("data-pc-ver-site", "");
+            a.textContent = `Ver a página “${p.rotulo}” no site ↗`;
+            return i ? [document.createTextNode(" · "), a] : [a];
+          }),
+        );
+        verSiteWrap.hidden = false;
+      }
+
+      // O que a tela mostra depende do tipo: sem rascunho não há "Publicados/Rascunhos"; sem destaque, não há "Destaques".
+      const mostrarFiltro = (nome: string) => nome === "todos" || (nome === "destaques" ? temDestaque : temRascunho && (nome === "publicados" || nome === "rascunhos"));
+      raiz.querySelectorAll<HTMLElement>("[data-pc-stat-card]").forEach((el) => {
+        el.hidden = !mostrarFiltro(el.dataset.pcStatCard ?? "");
+      });
+      raiz.querySelectorAll<HTMLElement>("[data-pc-filtro]").forEach((el) => {
+        el.hidden = !mostrarFiltro(el.dataset.pcFiltro ?? "");
+      });
+      if (!temRascunho && !temDestaque) {
+        q("[data-pc-resumo]")?.setAttribute("hidden", "");
+        q("[data-pc-chips]")?.setAttribute("hidden", "");
+      }
+      const nota = q("[data-pc-nota]");
+      if (nota && !temRascunho) nota.textContent = "Nesta área não há rascunho: o que você salvar aparece no site em até uns 20 minutos.";
+      if (ordem) q("[data-pc-dica-ordem]")?.removeAttribute("hidden");
+      if (buscaEl) buscaEl.placeholder = `Buscar em ${tipo.titulos.plural.toLowerCase()}…`;
+
+      type Item = Record<string, unknown> & { id: number };
+      const categoriaCampo = campoPorNome.get(tipo.campoCategoria ?? "");
+      const rotuloCategoria = (valor: unknown) => {
+        if (valor === null || valor === undefined || valor === "") return "";
+        return categoriaCampo?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? String(valor);
+      };
+
+      // Rótulos de campos ligados a outra coleção (ex.: o tipo do ministério) e dos grupos da lista.
+      const rotulosRelacionados: Record<string, Record<string, string>> = {};
+      const ordemRelacionada: Record<string, string[]> = {};
+
+      /** Texto de um campo para a linha de detalhes de um item. */
+      const textoDoCampo = (nome: string, valor: unknown): string => {
+        if (valor === null || valor === undefined || valor === "") return "";
+        const campo = campoPorNome.get(nome);
+        if (campo?.tipo === "select") return campo.opcoes?.find((o) => o.valor === String(valor))?.rotulo ?? String(valor);
+        if (campo?.tipo === "date") return dataBR(valor);
+        if (campo?.tipo === "m2o") return rotulosRelacionados[nome]?.[String(valor)] ?? String(valor);
+        return String(valor);
+      };
+
+      let itens: Item[] = [];
+      let filtro: "todos" | "publicados" | "rascunhos" | "destaques" = "todos";
+      let termo = "";
+      const PASSO = ordem ? 100 : 30;
+      let limite = PASSO;
+      let movendo = false;
+      let focoApos: { id: number; acao: "subir" | "descer" } | null = null;
+
+      const normalizar = (s: unknown) =>
+        String(s ?? "")
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase();
+
+      const ehDestaque = (i: Item) => Boolean(tipo.campoDestaque && i[tipo.campoDestaque] === true);
+      const ehPublicado = (i: Item) => estaPublicado(tipo, i);
+
+      function filtrados(): Item[] {
+        const t = normalizar(termo.trim());
+        return itens.filter((i) => {
+          if (filtro === "publicados" && !ehPublicado(i)) return false;
+          if (filtro === "rascunhos" && ehPublicado(i)) return false;
+          if (filtro === "destaques" && !ehDestaque(i)) return false;
+          return !t || normalizar(i[tipo.campoTitulo]).includes(t);
+        });
+      }
+
+      /** Todos os itens divididos em grupos (ou um grupo só), cada um na ordem manual — com TODOS os itens, sem filtro. */
+      function gruposCompletos(): GrupoLista[] {
+        if (!ordem) return [{ chave: "", rotulo: "", itens: itens as GrupoLista["itens"] }];
+        const campoGrupo = ordem.agruparPor ? campoPorNome.get(ordem.agruparPor) : undefined;
+        const rotulos: Record<string, string> = {};
+        let ordemChaves: string[] = [];
+        if (campoGrupo?.tipo === "select") {
+          ordemChaves = (campoGrupo.opcoes ?? []).map((o) => o.valor);
+          for (const o of campoGrupo.opcoes ?? []) rotulos[o.valor] = o.rotulo;
+        } else if (campoGrupo?.tipo === "m2o") {
+          ordemChaves = ordemRelacionada[campoGrupo.nome] ?? [];
+          Object.assign(rotulos, rotulosRelacionados[campoGrupo.nome] ?? {});
+        }
+        return montarGrupos(itens as GrupoLista["itens"], ordem.agruparPor, {
+          campoOrdem: ordem.campo,
+          ordemChaves,
+          rotulos,
+          rotuloSemGrupo: ordem.rotuloSemGrupo,
+        });
+      }
+
+      function criarCartao(i: Item, vizinhos: { anterior: Item | null; proximo: Item | null; grupo: GrupoLista } | null): HTMLElement {
+        const publicado = ehPublicado(i);
+        const capa = tipo.campoCapa ? (i[tipo.campoCapa] as string | null) : null;
+        const cartao = document.createElement("article");
+        cartao.className = `pc-item${tipo.campoCapa ? "" : " pc-item-sem-capa"}`;
+        cartao.dataset.pcItem = String(i.id);
+
+        if (capa) {
+          const img = document.createElement("img");
+          img.className = "pc-item-capa";
+          img.alt = "";
+          img.loading = "lazy";
+          img.width = 80;
+          img.height = 80;
+          img.src = directusAssetUrl(capa, { width: 160, height: 160, fit: "cover", quality: 70, format: "webp" });
+          cartao.append(img);
+        } else if (tipo.campoCapa) {
+          const vazia = document.createElement("div");
+          vazia.className = "pc-item-capa-vazia";
+          vazia.setAttribute("aria-hidden", "true");
+          vazia.textContent = tipo.icone;
+          cartao.append(vazia);
+        }
+
+        const texto = document.createElement("div");
+        const titulo = document.createElement("h2");
+        titulo.className = "pc-item-titulo";
+        titulo.textContent = String(i[tipo.campoTitulo] || "(sem título)");
+        texto.append(titulo);
+        const detalhes = tipo.camposMeta
+          ? tipo.camposMeta.map((n) => textoDoCampo(n, i[n])).filter(Boolean).join(" · ")
+          : [tipo.campoData ? dataBR(i[tipo.campoData]) : "", tipo.campoCategoria ? rotuloCategoria(i[tipo.campoCategoria]) : ""].filter(Boolean).join(" · ") || "Sem data";
+        if (detalhes) {
+          const meta = document.createElement("p");
+          meta.className = "pc-item-meta";
+          meta.textContent = detalhes;
+          texto.append(meta);
+        }
+        if (temRascunho || ehDestaque(i)) {
+          const selos = document.createElement("div");
+          selos.className = "pc-selos";
+          const selo = (classe: string, rotulo: string) => {
+            const s = document.createElement("span");
+            s.className = `pc-selo ${classe}`;
+            s.textContent = rotulo;
+            selos.append(s);
+          };
+          if (temRascunho) selo(publicado ? "pc-selo-publicado" : "pc-selo-rascunho", publicado ? "Publicado" : "Rascunho");
+          if (ehDestaque(i)) selo("pc-selo-destaque", "Destaque");
+          texto.append(selos);
+        }
+        cartao.append(texto);
+
+        const acoes = document.createElement("div");
+        acoes.className = "pc-item-acoes";
+        const editar = document.createElement("a");
+        editar.className = "btn btn-solid";
+        editar.href = painelUrls.editar(tipo.id, i.id);
+        editar.textContent = "Editar";
+        editar.setAttribute("data-astro-reload", "");
+        acoes.append(editar);
+        const url = publicado ? tipo.urlPublica(i) : null;
+        if (url) {
+          const ver = document.createElement("a");
+          ver.className = "btn btn-outline";
+          ver.href = url;
+          ver.target = "_blank";
+          ver.rel = "noopener";
+          ver.textContent = "Ver no site";
+          ver.title = "O site pode levar até uns 20 minutos para mostrar mudanças recentes.";
+          acoes.append(ver);
+        }
+        const arquivoId = tipo.campoArquivo ? (i[tipo.campoArquivo] as string | null) : null;
+        if (arquivoId) {
+          const abrir = document.createElement("a");
+          abrir.className = "btn btn-outline pc-item-arquivo";
+          abrir.href = directusAssetUrl(arquivoId);
+          abrir.target = "_blank";
+          abrir.rel = "noopener noreferrer";
+          abrir.textContent = "Abrir PDF";
+          abrir.setAttribute("data-pc-abrir-arquivo", "");
+          abrir.setAttribute("aria-label", `Abrir o arquivo de “${String(i[tipo.campoTitulo] || "este item")}”`);
+          acoes.append(abrir);
+        }
+        if (vizinhos) {
+          const nomeItem = String(i[tipo.campoTitulo] || "este item");
+          const lugar = vizinhos.grupo.rotulo ? ` (em “${vizinhos.grupo.rotulo}”)` : "";
+          const mover = h("div", "pc-mover");
+          const botao = (acao: "subir" | "descer", simbolo: string, alvo: Item | null) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn btn-outline pc-mover-btn";
+            b.dataset.pcMover = acao;
+            b.textContent = simbolo;
+            const dica = `${acao === "subir" ? "Subir" : "Descer"} “${nomeItem}” uma posição${lugar}`;
+            b.setAttribute("aria-label", dica);
+            b.title = dica;
+            b.disabled = !alvo || movendo;
+            if (alvo) b.addEventListener("click", () => void moverItem(i, alvo, acao));
+            return b;
+          };
+          mover.append(botao("subir", "▲", vizinhos.anterior), botao("descer", "▼", vizinhos.proximo));
+          acoes.append(mover);
+        }
+        cartao.append(acoes);
+        return cartao;
+      }
+
+      function h(tag: string, classe: string): HTMLElement {
+        const el = document.createElement(tag);
+        el.className = classe;
+        return el;
+      }
+
+      function atualizarResumo() {
+        const set = (nome: string, valor: number) => {
+          const el = q(`[data-pc-stat="${nome}"]`);
+          if (el) el.textContent = String(valor);
+        };
+        set("total", itens.length);
+        set("publicados", itens.filter(ehPublicado).length);
+        set("rascunhos", itens.filter((i) => !ehPublicado(i)).length);
+        set("destaques", itens.filter(ehDestaque).length);
+        const conta: Record<string, number> = {
+          todos: itens.length,
+          publicados: itens.filter(ehPublicado).length,
+          rascunhos: itens.filter((i) => !ehPublicado(i)).length,
+          destaques: itens.filter(ehDestaque).length,
+        };
+        raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((b) => {
+          const nome = b.dataset.pcFiltro ?? "todos";
+          const rotulo = { todos: "Todos", publicados: "Publicados", rascunhos: "Rascunhos", destaques: "Destaques" }[nome as "todos"] ?? nome;
+          b.textContent = `${rotulo} (${conta[nome] ?? 0})`;
+        });
+      }
+
+      function pintar() {
+        if (!itensEl) return;
+        const lista = filtrados();
+        let desenhados = 0;
+        if (ordem) {
+          // Ordem manual: grupos na ordem do site, itens de cada grupo na ordem de `sort`; ▲/▼ trocam com o vizinho VISÍVEL do mesmo grupo.
+          const visiveis = new Set(lista.map((i) => i.id));
+          const blocos: HTMLElement[] = [];
+          for (const grupo of gruposCompletos()) {
+            const doGrupo = grupo.itens.filter((i) => visiveis.has(i.id as number)) as Item[];
+            if (!doGrupo.length) continue;
+            const restante = Math.max(0, limite - desenhados);
+            if (restante === 0) break;
+            const mostrar = doGrupo.slice(0, restante);
+            desenhados += mostrar.length;
+            const secao = document.createElement("section");
+            secao.className = "pc-grupo";
+            secao.dataset.pcGrupo = grupo.chave;
+            if (ordem.agruparPor) {
+              const idTitulo = `pc-grupo-${blocos.length}`;
+              secao.setAttribute("aria-labelledby", idTitulo);
+              const cab = document.createElement("h2");
+              cab.className = "pc-grupo-titulo";
+              cab.id = idTitulo;
+              cab.append(`${grupo.rotulo} `);
+              const conta = document.createElement("span");
+              conta.className = "pc-grupo-conta";
+              conta.textContent = `(${doGrupo.length})`;
+              cab.append(conta);
+              secao.append(cab);
+            }
+            const caixa = h("div", "pc-itens-grupo");
+            mostrar.forEach((i) => {
+              const pos = doGrupo.indexOf(i);
+              caixa.append(criarCartao(i, { anterior: doGrupo[pos - 1] ?? null, proximo: doGrupo[pos + 1] ?? null, grupo }));
+            });
+            secao.append(caixa);
+            blocos.push(secao);
+          }
+          itensEl.replaceChildren(...blocos);
+        } else {
+          const visiveis = lista.slice(0, limite);
+          desenhados = visiveis.length;
+          itensEl.replaceChildren(...visiveis.map((i) => criarCartao(i, null)));
+        }
+        if (contagemEl) {
+          contagemEl.textContent = !itens.length
+            ? `Ainda não há ${tipo.titulos.plural.toLowerCase()}. Use o botão “+ ${tipo.titulos.nova}” para criar ${/^novo\b/i.test(tipo.titulos.nova) ? "o primeiro" : "a primeira"}.`
+            : !lista.length
+              ? "Nada encontrado com essa busca ou filtro."
+              : lista.length > desenhados
+                ? `Mostrando ${desenhados} de ${lista.length}.`
+                : `${lista.length} ${lista.length === 1 ? "item" : "itens"}.`;
+        }
+        if (maisWrap) maisWrap.hidden = lista.length <= desenhados;
+        if (maisBtn) maisBtn.textContent = `Mostrar mais (${Math.min(PASSO, lista.length - desenhados)})`;
+        if (focoApos) {
+          const alvo = itensEl.querySelector<HTMLButtonElement>(`[data-pc-item="${focoApos.id}"] [data-pc-mover="${focoApos.acao}"]`);
+          const outro = itensEl.querySelector<HTMLButtonElement>(`[data-pc-item="${focoApos.id}"] [data-pc-mover]:not(:disabled)`);
+          (alvo && !alvo.disabled ? alvo : outro)?.focus();
+          focoApos = null;
+        }
+      }
+
+      /** ▲/▼: troca a ordem do item com a do vizinho. Um pedido só (em lote, tudo ou nada) com os ids dos itens no corpo. */
+      async function moverItem(item: Item, vizinho: Item, acao: "subir" | "descer") {
+        if (!ordem || movendo) return;
+        const grupo = gruposCompletos().find((g) => g.chave === chaveGrupo(ordem.agruparPor ? item[ordem.agruparPor] : ""));
+        if (!grupo) return;
+        const corpo = calcularTroca(grupo.itens, ordem.campo, item.id, vizinho.id);
+        if (!corpo.length) return;
+        const foco = { id: item.id, acao };
+        movendo = true;
+        if (movErro) movErro.hidden = true;
+        pintar();
+        try {
+          let res: Response;
+          try {
+            res = await api(`/items/${tipo.colecao}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+          } catch {
+            if (movErro) {
+              movErro.hidden = false;
+              movErro.textContent = "Não foi possível falar com o servidor (sem conexão?). A ordem não mudou; tente de novo.";
+            }
+            return;
+          }
+          if (!res.ok) {
+            const json = await res.json().catch(() => null);
+            if (movErro) {
+              movErro.hidden = false;
+              movErro.textContent = `${explicarErroDirectus(res.status, json, "mudar a ordem", tipo).mensagem} A ordem não mudou.`;
+            }
+            return;
+          }
+          // Deu certo: guarda as ordens novas na tela (sem reler tudo) e repinta.
+          for (const g of corpo) {
+            const alvo = itens.find((x) => x.id === g.id);
+            if (alvo) alvo[ordem.campo] = g[ordem.campo];
+          }
+          const depois = gruposCompletos().find((g) => g.chave === grupo.chave);
+          const posicao = (depois?.itens.findIndex((x) => x.id === item.id) ?? -1) + 1;
+          if (movStatus)
+            movStatus.textContent = `“${String(item[tipo.campoTitulo] || "Item")}” agora é o número ${posicao} de ${depois?.itens.length ?? 0}${grupo.rotulo ? ` em “${grupo.rotulo}”` : ""}.`;
+        } finally {
+          movendo = false;
+          focoApos = foco;
+          pintar();
+        }
+      }
+
+      raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((b) => {
+        b.addEventListener("click", () => {
+          filtro = (b.dataset.pcFiltro as typeof filtro) ?? "todos";
+          limite = PASSO;
+          raiz.querySelectorAll<HTMLButtonElement>("[data-pc-filtro]").forEach((o) => {
+            const ativo = o === b;
+            o.classList.toggle("is-active", ativo);
+            o.setAttribute("aria-pressed", String(ativo));
+          });
+          pintar();
+        });
+      });
+      buscaEl?.addEventListener("input", () => {
+        termo = buscaEl.value;
+        limite = PASSO;
+        pintar();
+      });
+      maisBtn?.addEventListener("click", () => {
+        limite += PASSO;
+        pintar();
+      });
+      q("[data-pc-tentar]")?.addEventListener("click", () => void carregar());
+
+      /** Rótulos dos campos que apontam para outra coleção (tipo do ministério etc.). Sem permissão de leitura: mostra o valor cru. */
+      async function carregarRelacionados() {
+        const usados = new Set<string>([...(tipo.camposMeta ?? []), ...(ordem?.agruparPor ? [ordem.agruparPor] : [])]);
+        for (const nome of usados) {
+          const campo = campoPorNome.get(nome);
+          if (campo?.tipo !== "m2o" || !campo.colecaoRelacionada) continue;
+          const rotuloCampo = campo.campoRotuloRelacionado ?? "id";
+          const ordemCampo = campo.campoOrdemRelacionado;
+          try {
+            const res = await api(`/items/${campo.colecaoRelacionada}?fields=id,${rotuloCampo}&sort=${ordemCampo ?? rotuloCampo}&limit=-1`);
+            if (!res.ok) continue;
+            const json = (await res.json()) as { data?: Record<string, unknown>[] };
+            rotulosRelacionados[nome] = {};
+            ordemRelacionada[nome] = [];
+            for (const it of json.data ?? []) {
+              rotulosRelacionados[nome][String(it.id)] = String(it[rotuloCampo] ?? it.id);
+              ordemRelacionada[nome].push(String(it.id));
+            }
+          } catch {
+            /* sem rótulos: aparece o valor cru */
+          }
+        }
+      }
+
+      /** Lê tudo em páginas de 200 (o Directus entrega no máximo isso de uma vez com segurança); a tela só desenha uns poucos por vez. */
+      async function carregar() {
+        if (erroEl) erroEl.hidden = true;
+        if (carregando) {
+          carregando.hidden = false;
+          carregando.textContent = `Carregando ${tipo.titulos.plural.toLowerCase()}…`;
+        }
+        const camposPedidos = camposDaLista(tipo).join(",");
+        const sort = tipo.ordenacao.join(",");
+        const TAMANHO = 200;
+        const todos: Item[] = [];
+        try {
+          for (let offset = 0; offset < 5000; offset += TAMANHO) {
+            const res = await api(`/items/${tipo.colecao}?fields=${encodeURIComponent(camposPedidos)}&sort=${encodeURIComponent(sort)}&limit=${TAMANHO}&offset=${offset}`);
+            if (!res.ok) {
+              const json = await res.json().catch(() => null);
+              mostrarErro(explicarErroDirectus(res.status, json, `ver ${tipo.titulos.plural.toLowerCase()}`, tipo).mensagem);
+              return;
+            }
+            const json = (await res.json()) as { data?: Item[] };
+            const pagina = json.data ?? [];
+            todos.push(...pagina);
+            if (pagina.length < TAMANHO) break;
+          }
+          await carregarRelacionados();
+        } catch {
+          mostrarErro("Não foi possível carregar agora (sem conexão ou servidor fora do ar). Tente de novo.");
+          return;
+        }
+        itens = todos;
+        if (carregando) carregando.hidden = true;
+        if (conteudo) conteudo.hidden = false;
+        atualizarResumo();
+        pintar();
+      }
+
+      async function iniciar() {
+        const token = await exigirAutenticacao(directusUrl, AUTH_CONTEUDO);
+        if (!token) return;
+        await carregar();
+      }
+
+      void iniciar();
+    });
+  </script>
+</BaseLayout>

@@ -3,7 +3,7 @@
 const L = require("./lib");
 const { chamar, GERAL, LIDER, PIN, API, path, obterPool } = L;
 const spec = JSON.parse(process.argv[2]);
-const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js" };
+const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();
@@ -30,6 +30,8 @@ const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "Gestao
   const token = t.tipo === "PIN" ? PIN(t.membroId) : t.tipo === "GERAL" ? GERAL(t.membroId, t.permissoes) : LIDER(t.membroId, t.permissoes, t.escopo, t.nivel);
   if (espera() > 0) await new Promise((r) => setTimeout(r, espera()));
   const r = await chamar(h, { acao: spec.acao, metodo: spec.metodo || "POST", token, corpo: spec.corpo, headers: spec.headers || {} });
-  process.stdout.write("@@RESULTADO@@" + JSON.stringify({ status: r.status, mensagem: r.body && r.body.mensagem, body: r.body && r.body.sucesso !== undefined ? { sucesso: r.body.sucesso } : null }) + "\n");
+  // `flags`: os indicadores que as corridas do check-in conferem (código errado, travada, divergente...), sem o resto da resposta (nunca o código).
+  const flags = {}; for (const k of ["codigoErrado", "travada", "divergente", "aguardaLideranca", "retirada", "aprovada", "negada", "jaEstava", "termoMudou"]) if (r.body && r.body[k] !== undefined) flags[k] = r.body[k];
+  process.stdout.write("@@RESULTADO@@" + JSON.stringify({ status: r.status, mensagem: r.body && r.body.mensagem, flags, body: r.body && r.body.sucesso !== undefined ? { sucesso: r.body.sucesso } : null }) + "\n");
   L.shimEncerrar();
 })().catch((e) => { process.stdout.write("@@RESULTADO@@" + JSON.stringify({ status: 0, erro: String(e && e.message) }) + "\n"); try { L.shimEncerrar(); } catch { } process.exit(0); });

@@ -104,7 +104,7 @@ quem não deveria vê-lo.
 | `mural_oracao` | Pedido de oração, nome opcional, confidencial | Leitura pública só do que é `aprovado=true`, não confidencial e dos últimos 90 dias; contador `orando_count` só é escrito pela Function `OrarMural/index.js` |
 | `contato_mensagens` | Formulário de contato (inclui LGPD/pedido de oração) | Só cria publicamente, nunca lida |
 | `push_subscriptions` | Inscrição de notificação push | Só cria publicamente; edição usa o próprio endpoint como "senha de posse" |
-| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente |
+| `pageviews` | Caminho da página + domínio de origem + data (sem IP, sem cookie) | Só cria publicamente (permissão que o site já não usa: quem grava é a Function `RegistrarVisita`, com o token de administrador, em lote) |
 | `contas` | E-mail da "Minha Conta" | Sem leitura/escrita pública — só via Functions da Minha Conta |
 | `contas_codigos` | Código de login de 6 dígitos (hash SHA-256) | Sem leitura/escrita pública |
 | `enquete_votos` | Voto (enquete + opção + e-mail) | Sem leitura/escrita pública — só via `ConsultarEnquete/index.js`/`VotarEnquete/index.js` |
@@ -132,8 +132,9 @@ autenticado), `/cracha/<slug>/`, `/pesquisa/<slug>/`, `/qrcode/<slug>/`,
 
 **Comunidade e conta**: `/mural-de-oracao/`, `/enquetes/`, `/minha-conta/`.
 
-**Painel de equipe**: `/painel-eventos/` (gestão de eventos, autenticado), `/painel/<local>/`
-(telão "hoje na igreja", sem autenticação — pensado para um aparelho fixo na recepção).
+**Painel de equipe**: `/painel-eventos/` (gestão de eventos, autenticado), `/painel-conteudo/`
+(notícias, mensagens, FAQ, programação, galeria, ministérios, história, páginas fixas, relatórios de transparência e, para a Diretoria, a moderação de depoimentos e do mural, autenticado — ver [Painel de conteúdo](#painel-de-conteúdo)),
+`/painel/<local>/` (telão "hoje na igreja", sem autenticação — pensado para um aparelho fixo na recepção).
 
 **Sistema**: `/404`, `robots.txt`, `sitemap.xml`, `rss.xml`, `/busca` (índice JSON),
 `/ieadespa.vcf`, `/programacao-semanal.png`, `/api/versiculo-imagem` (imagem dinâmica do
@@ -308,6 +309,91 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   aviso em massa agora **erra de forma explícita (502)** quando uma consulta
   ao Directus falha, em vez de contar zero e o painel dizer "Pronto: 0". Bateria `scripts/testes/reserva.cjs`
   (só simula, nunca envia e-mail).
+- **Filtros de separação, separação em massa e campanha grátis (15/10/2026, pedido do responsável durante a
+  entrega da Marcha para Jesus)** — o chip "Com peça a retirar" misturava quem já tinha a peça separada e
+  quem não. Agora os chips são: Todos · Devendo · Pago parcial · Pago · **Falta retirar (todos)** ·
+  **Separados (aguardando)** · **Não separados** · Já retirado tudo, **cada um com a contagem** do que está na
+  tela (menos o próprio chip), e uma linha de resumo "Separados aguardando · Não separados · Já retirado
+  tudo". **Separação em massa** (barra abaixo dos filtros): "Marcar como separado" e "Tirar a reserva" valem só
+  para o que está na tela (filtros e aba do lote incluídos), ficam de fora os já separados, quem já levou tudo e
+  as vendas avulsas, e há o campo **"os primeiros N"** (os pedidos mais antigos primeiro) para separar só quanto
+  chegou de peças. Confirma mostrando quantos e quais (#a até #b); acima de 100 pedidos, ou sem nenhum filtro
+  ligado, exige digitar SEPARAR/TIRAR; grava em lotes de 100; **não manda e-mail** (depois, na campanha, o aviso
+  "só quem está separado"); **"Desfazer a última ação em massa"** devolve cada pedido ao estado de antes. Em
+  **campanha grátis** (nenhum tamanho tem preço) somem os chips e cartões de dinheiro e o campo "Pago: R$" dos
+  cartões — só reaparece, com um aviso, num pedido que já tenha valor lançado, para poder zerar (em 15/10/2026 a
+  Marcha tinha 74 pedidos com R$ 1,00 "pago" que ninguém arrecadou; o Directus não guardou quem nem quando;
+  foram zerados, com cópia do estado anterior).
+- **Excluir os pedidos que ninguém veio buscar (16/10/2026, pedido do responsável: na Marcha para Jesus mais de
+  300 pessoas não pegaram a camiseta e a peça precisa passar para o próximo)** — fica na página da **campanha**, na aba
+  **"Excluir"** (a última, a mais escondida, junto de "Excluir a campanha inteira"); a tela de pedidos **não tem mais o
+  botão**, para ninguém apertar sem querer (foi o responsável quem pediu a mudança no mesmo dia). O bloco **"Excluir os
+  pedidos que ninguém veio buscar"** tem as escolhas de **lote**, **tamanho** e **modelo** e o campo **"só os primeiros
+  N"**, mostra o resumo, a lista do que seria excluído e o botão "Excluir os pedidos (N)". A lista é lida ao abrir a aba
+  (e em "Atualizar a lista"), sempre do Directus, e só entra pedido **não separado
+  e em que ninguém levou nenhuma peça**: ficam de fora os separados, as vendas avulsas, quem já levou tudo **e quem
+  levou só parte** (apagar apagaria a prova do que a pessoa recebeu). **A conta da malharia não muda nos lotes
+  fechados**: o lote fechado guarda os números congelados no fechamento (`total_vendido`, `total_arrecadado`,
+  `total_pago_malharia`, `saldo` e, por tamanho, `pedido_congelado`) e nunca os recalcula; no lote **aberto** a conta é ao
+  vivo e diminui, e a confirmação avisa com destaque quantos pedidos estão em cada caso. Passos: (1) confirma dizendo
+  quantos, do #a ao #b, as peças por tamanho e o que acontece com a malharia; (2) pede para **digitar EXCLUIR** (sempre,
+  mesmo com poucos pedidos); (3) relê os pedidos no Directus e, se alguém separou ou deu retirada no meio, **não apaga
+  nada**; (4) **baixa um arquivo de cópia** (`pedidos-excluidos-<campanha>-<data>.json`, com todas as colunas, itens e
+  respostas e os mesmos números); (5) apaga em lotes de 100 (o banco apaga itens e respostas em cascata); (6) aparece
+  **"Desfazer a exclusão"**, que recria tudo com os **mesmos números** (só a data de criação passa a ser a da
+  restauração, porque o Directus a preenche sozinho; a mensagem do desfazer fica na tela depois de a lista recarregar).
+  Fechou a página? Restaura-se pelo arquivo:
+  `DIRECTUS_URL=… DIRECTUS_ADMIN_TOKEN=… node site/scripts/restaurar-pedidos.mjs arquivo.json` (use `--conferir` para só
+  ver; recusa restaurar o que já existe, para nunca duplicar). Regra pura em `src/lib/exclusaoEmMassa.ts` e a parte com
+  rede (relê, baixa a cópia, apaga, desfaz) em `src/lib/exclusaoEmMassaAcao.ts`; provas:
+  `scripts/testes/exclusao-unidade.cjs` (143, sem rede, com um Directus de mentira rodando o fluxo inteiro),
+  `scripts/testes/exclusao.cjs` (31, contra o Directus; roda no CI) e a prova no Edge com a página real, na aba
+  "Excluir" (59 verificações, campanha descartável: inclui que a tela de pedidos não tem mais o botão e que os números
+  travados do lote fechado não mudam).
+- **Limite de pedidos (16/10/2026, pedido do responsável: na Marcha são 140 camisetas e a 141ª tem de ser recusada)** — na aba **Dados**
+  da campanha: **"Limite de pedidos"** (total, todos os tamanhos) e **"Limite por tamanho"**; em branco = sem limite. Vale para as peças dos
+  **lotes abertos** da campanha (site e balcão, pagas ou não; pedido apagado libera a vaga na hora; venda avulsa e lote fechado não contam; ao
+  fechar o lote o próximo começa do zero). A página pública mostra **"esgotado"** (o formulário some e volta sozinho se liberar vaga) e o tamanho
+  esgotado fica desabilitado. **Como nunca passa do número**: o Directus não tem transação entre chamadas, então cada pedido grava, na MESMA
+  transação, uma "senha" no livro `camiseta_controle` (chave única `campanha:n`, n = último + 1), depois de ler o último número e SÓ ENTÃO a
+  soma das peças; se outro pedido pegou a mesma senha o banco recusa e se lê tudo de novo (`api/src/lib/limiteLote.js`, o raciocínio está no
+  cabeçalho do arquivo). **Estabilidade** (o Directus B1 grava ~1,5 pedido/s): o hash do telefone é assíncrono e só calculado depois das
+  recusas; os pedidos de uma campanha entram numa fila de um por vez por instância e quem não daria tempo recebe 503 "tente de novo" na hora;
+  a instância lembra por 3 s o último número e as peças (pula 2 leituras por pedido; a idade conta desde a última leitura real); o lote é criado
+  uma vez só por instância. Gestor: adicionar/editar item ou mover pedido que passa do limite **avisa e pede confirmação** (não bloqueia); o
+  "Desfazer exclusão" não restaura o que não cabe. Esquema (2 campos na campanha + a coleção do livro, repetível, só acrescenta):
+  `site/scripts/directus-limite-esquema.mjs`. Provas: `limite-unidade.cjs` (130, com 7 mutações que têm de reprovar), `limite-carga.cjs` (Directus
+  real, 1 a 8 instâncias em processos separados), `limite.cjs` (HTTP, roda no CI) e o emulador `swa-local.cjs` (site + API contra um Directus de
+  teste, sem tocar a produção).
+- **Vagas e cupom das inscrições em evento (16/10/2026)** — medido no Directus local: com 20 vagas e 40 inscrições ao mesmo tempo, as 40 saíam
+  **confirmadas** ("conta os confirmados, depois grava", sem trava), e o limite de usos do cupom tinha a mesma falha (lia `usos` e gravava
+  `usos + n`). Agora, quando o evento tem limite de vagas (sem aprovação) ou o cupom tem limite de usos, a inscrição grava na MESMA transação uma
+  senha no livro `evento_controle` (chave única `evento:n`, n = última + 1; ler a última senha, SÓ ENTÃO contar confirmados e usos; se outra
+  inscrição pegou a senha o banco recusa e a leitura é refeita) — a mesma técnica do limite de pedidos das camisetas, em `api/src/lib/vagasEvento.js`
+  (o raciocínio está no cabeçalho). Diferente do pedido de camiseta, **ninguém é recusado por falta de vaga**: quem não cabe entra na lista de
+  espera, e o cupom esgotado só deixa de dar desconto. O limite do cupom passa a ser a **contagem das inscrições com o código**; o campo `usos` é só o
+  número que o painel mostra. Evento sem limite e cupom sem limite seguem direto, sem trava. Estabilidade: fila de uma inscrição por vez por evento e
+  instância (503 "tente de novo" na hora quando não daria tempo), hash do telefone assíncrono depois das recusas baratas, memória de 3 s da senha e
+  das contagens, leitura do evento uma vez só por instância; falha do Directus ao ler o evento agora é 503, não "evento não encontrado". Sem o esquema
+  aplicado a função grava do jeito antigo (e avisa no log), nunca deixa de aceitar inscrição. Esquema (a coleção do livro + 1 campo na inscrição,
+  repetível, só acrescenta): `site/scripts/directus-vagas-esquema.mjs` — **aplicar no Directus ANTES de publicar o código**. Provas:
+  `vagas-evento-unidade.cjs` (sem rede; inclui o teste do teste: sem a chave única, ou contando antes de ler a senha, a corrida estoura),
+  `inscricao-carga.cjs` (Directus real local, 1 a 8 instâncias em processos separados; 120 inscrições para 40 vagas, com cupom e com grupos: sempre
+  exato) e `inscricao-vagas.cjs` (HTTP, roda no CI).
+- **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
+  trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
+  Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de
+  quantidade zero, com a linha "Total de peças"; quando a campanha tem mais de um modelo, o modelo vai junto do
+  tamanho ("M - Baby look"). A tela do consolidado continua com a conta completa. Regra pura em
+  `src/lib/pdfMalharia.ts`.
+- **Markdown das páginas públicas passa por um filtro (15/10/2026)** — as oito páginas que mostram texto escrito no
+  Directus (notícia, mensagem, evento, órgão/ministério, história, sobre, crenças, visitante) chamavam o `marked`
+  direto e jogavam o HTML na página; a política de segurança do site aceita script em linha, então quem edita um
+  texto poderia publicar script. Agora usam `src/lib/markdownSeguro.ts`: HTML escrito à mão no texto vira texto
+  visível (nunca marcação) e link/imagem só com endereço http(s), mailto/tel (só link), relativo ou âncora. Nos 39
+  textos que o site tem hoje a saída é **idêntica** (conferido também comparando as 33 páginas montadas antes e
+  depois: 0 diferenças). Quem precisar de quebra de linha usa dois espaços no fim da linha, não `<br>`. Teste à mão:
+  `scripts/testes/markdown-seguro.mjs` (precisa do `marked` instalado; só lê o Directus).
 - **Painel de pedidos no celular (13/10/2026)** — a barra de busca fica presa no alto durante a
   rolagem e os filtros ficam **recolhidos** atrás do botão "Filtros" (com um selo com quantos estão
   ligados); uma linha "Filtrando por: Tamanho GG" com o botão "Limpar" fica sempre à vista, para
@@ -421,6 +507,167 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   campanha e a do evento) lado a lado na página — a prévia de link (que só tem espaço pra uma)
   continua com prioridade pro evento.
 
+### Painel de conteúdo
+
+Uma página feita para o **celular**, no lugar do Directus "cru", para a equipe escrever e editar o que
+aparece no site **sem precisar abrir o Directus**: notícias, mensagens (pregações e estudos), perguntas
+frequentes, programação semanal, galeria de fotos, ministérios, a história da igreja, os textos fixos
+de "Sobre" e "Crenças" e os **relatórios de transparência** (PDF) — e, só para a Diretoria, a **moderação**
+do que o público envia pelo site (depoimentos e pedidos do mural de oração). Endereços:
+`/painel-conteudo/` (início, com os cartões agrupados em quatro seções — "Moderação", "Notícias e
+mensagens", "Páginas e informações" e "Institucional" — e uma frase embaixo de cada cartão; só aparece o
+que o perfil consegue ler), `/painel-conteudo/entrar/` (login),
+`/painel-conteudo/lista/?tipo=…` (lista com busca pelo título), `/painel-conteudo/editar/?tipo=…&id=…`
+(formulário; sem `id` cria um item novo) e `/painel-conteudo/moderar/?tipo=depoimentos|mural_oracao`
+(moderação, descrita mais abaixo). Como os outros painéis, entra com a **própria conta do
+Directus** (tokens em `sessionStorage`, chaves `painel_conteudo_token` e `painel_conteudo_token_refresh`)
+e **toda leitura e gravação vai ao Directus com o token da pessoa**: quem decide o que cada um pode
+fazer é o Directus; a tela só mostra o que ele permite (um 403 vira "Seu perfil não pode … aqui").
+A moderação e os relatórios são **só da Diretoria** (funções "Semi-administrador" e "Administrator"): o
+"Editor de notícias" não tem essas coleções (403) e não vê os cartões.
+
+| Tipo (`?tipo=`) | Coleção | Aparece em | Rascunho | Ordem manual (▲/▼) |
+| --- | --- | --- | --- | --- |
+| `noticias` | `noticias` | `/noticias/` | sim (`draft`) + aviso no navegador | não (a data decide) |
+| `mensagens` | `mensagens` | `/mensagens/` | sim (`draft`) + aviso no navegador | não (a data decide) |
+| `faq` | `faq` | `/duvidas-frequentes/` | sim (`draft`), **sem** aviso | dentro de cada categoria |
+| `programacao` | `programacao` | `/` e `/contato/` | não | dentro de cada dia da semana |
+| `galeria` | `galeria` | `/galeria/` | não | dentro de cada álbum |
+| `ministerios` | `ministerios` | `/orgaos/` e `/orgao/<slug>/` | não | dentro de cada tipo de órgão |
+| `historia` | `historia` (+ `historia_files`) | `/historia/` | não | uma fila só |
+| `relatorios` | `relatorios` | `/transparencia/` | não | não (a data decide) |
+| `configuracoes` | `configuracoes` (item único) | `/`, `/sobre/`, `/crencas/` | não | não |
+
+- **Quem usa** (funções do Directus): "Editor de notícias" cobre notícias, mensagens, FAQ, programação,
+  galeria, ministérios e história (incluindo as fotos extras, `historia_files`), envia imagem (só
+  JPEG, PNG, WebP e GIF, sem apagar arquivo) e **lê** `orgao_membros`/`orgao_categorias`.
+  "Semi-administrador" e "Administrator" editam as páginas fixas (`configuracoes`) — **só** eles; o
+  Editor de notícias recebe 403 e o cartão nem aparece. Atenção: a função "Semi-administrador"
+  **ainda não tem** permissão em `faq`, `historia_files`, `orgao_categorias` e `orgao_membros`
+  (conferido com `/permissions/me`): ela não vê o cartão de FAQ; na história, o campo de fotos extras vira
+  um aviso ("Seu perfil não pode ver nem mudar estas fotos aqui") em vez de fingir que não há fotos; e,
+  em ministérios, o "Tipo de órgão" não carrega a lista. Dar essas permissões é decisão do responsável
+  (no Directus), não do código. O que é confidencial — `mural_oracao`, `contas`, `contas_codigos`,
+  inscrições, pedidos de camiseta, `push_subscriptions`, `contato_mensagens`, relatórios, depoimentos —
+  o Editor de notícias **não alcança** (403); a bateria `site/scripts/testes/conteudo.cjs` confere isso
+  (inclusive pelo mapa `/permissions/me`, sem gravar nada), o envio só de imagem e as cinco páginas, a
+  cada montagem (passo "Painel de conteúdo" do `site-testes.yml`). **Só a Diretoria** ("Semi-administrador"
+  e "Administrator") lê, grava e apaga `depoimentos`, `mural_oracao` e `relatorios` e envia **imagem e
+  PDF** (`directus_files:create` aceita JPEG, PNG, WebP, GIF e PDF; o Editor de notícias, só as imagens).
+- **Com rascunho × sem rascunho**: tipos com `draft` (notícias, mensagens, FAQ) têm "Salvar rascunho" e
+  "Publicar" (depois, "Salvar alterações" e "Voltar para rascunho"); nada de agendamento (o site só esconde
+  o rascunho, não olha a data — por isso o campo se chama "Data exibida"). Publicar notícia/mensagem com
+  `notificacao_enviada = false` **notifica gente de verdade** (o robô `scripts/send-content-notifications.mjs`
+  marca o campo, que é **somente leitura** na tela); a confirmação diz isso. **Os demais tipos não têm
+  rascunho: o que for salvo vai ao ar na próxima montagem do site** (até uns 20 minutos; montagem
+  automática a cada 15 min). Por isso o formulário tem um botão só, **"Salvar — aparece no site em até uns
+  20 minutos"**, a lista não mostra "Publicado/Rascunho", e **excluir** continua exigindo digitar EXCLUIR.
+- **Ordem manual** (`ordem: { campo: "sort", agruparPor }`): a lista mostra **▲ e ▼** em cada item. Um
+  toque troca o valor de `sort` com o do vizinho **visível do mesmo grupo** — um único `PATCH` em lote
+  (`PATCH /items/<coleção>` com `[{ id, sort }, { id, sort }]`, tudo ou nada) — e a lista já mostra a nova
+  ordem, avisa o leitor de tela e mantém o foco na seta. Se algum item do grupo não tem `sort` ou há
+  valores repetidos, o grupo é renumerado 1, 2, 3… (só vão os que mudam). Item **novo** entra no fim do
+  grupo (`maior sort + 1`, perguntado ao Directus na hora de salvar); item que **muda de grupo** (ex.:
+  pergunta que troca de categoria) também vai para o fim do grupo novo. O campo `sort` nunca aparece no
+  formulário. Funções puras testadas em `site/scripts/testes/painel-unidade.cjs`: `calcularTroca`,
+  `montarGrupos`, `proximaOrdem`, `consultaMaiorOrdem`.
+- **Item único** (`unico: true`, hoje `configuracoes`): não existe lista; o cartão abre direto o formulário
+  (`editar/?tipo=configuracoes`, sem `id`), lê e grava no endereço do singleton (`/items/configuracoes`),
+  manda só o campo que mudou, e não tem "novo" nem "excluir". As páginas "Sobre" e "Crenças" são Markdown:
+  **cada título (`##`) vira uma seção** da página (ver `quebrarEmSecoes` em `src/lib/markdown.ts`).
+  A bateria nunca grava nessa coleção — e confere o texto antes e depois.
+- **Várias fotos** (campo `tipo: "imagens"`, hoje `historia.fotos` via `historia_files`): "Adicionar
+  fotos" aceita várias de uma vez, mostra miniaturas com ◀ ▶ (ordem) e "Remover" (tira só a ligação; o
+  arquivo continua no Directus). Ao salvar manda a diferença no formato do Directus
+  (`{ create: […], update: […], delete: […] }` — `diferencaFotos`) e relê as linhas novas para não duplicar
+  nada na gravação seguinte. Se o perfil não pode ler a tabela de ligação, o campo vira um aviso e as
+  fotos ficam intactas.
+- **Perguntas frequentes**: "Grupo da pergunta" tem as mesmas oito opções do campo `categoria` do Directus
+  e de `CATEGORY_ORDER` em `src/lib/faq.ts` (nova categoria = Directus + este arquivo + `faq.ts`). A resposta
+  é texto simples (o site a mostra sem formatação). **Galeria**: a "Descrição da foto" (`alt`) é
+  **obrigatória** e a tela explica por quê: é o que o leitor de tela lê para quem é cego ou tem baixa
+  visão; o campo "Álbum" sugere os álbuns que já existem (para não escrever o mesmo nome de dois jeitos);
+  sem álbum a foto vai para "Outras fotos". **Programação**: o dia é obrigatório e começa em branco (escolha
+  consciente); "Qual domingo do mês" só vale para "Domingo à noite". **Ministérios**: o endereço (slug) é
+  único e vira `/orgao/<slug>/`; o tipo vem de `orgao_categorias`; excluir um ministério que ainda tem
+  membros ou notícias ligadas é recusado pelo Directus e a tela explica.
+- **Relatórios de transparência** (`relatorios`, só Diretoria): título, período (a etiqueta ao lado do título
+  na página), data (só ordena: o mais recente primeiro), resumo (opcional) e o **arquivo PDF** — todos
+  obrigatórios menos o resumo, conferidos no navegador. Sem rascunho: o que for salvo aparece em
+  `/transparencia/` na próxima montagem (o botão diz isso). A lista traz **"Abrir PDF"** em cada item e o
+  link "Ver a página “Transparência” no site". A página pública só lista relatório que tem arquivo.
+- **Envio de PDF** (campo `tipo: "arquivo"`, com `regraArquivo: REGRA_PDF`): "Escolher arquivo" abre o
+  seletor do aparelho. **Antes de enviar** o navegador confere, com frase em português (e sem mandar nada
+  ao servidor quando recusa): só **PDF** (tipo `application/pdf`; aparelho que não informa o tipo vale pela
+  extensão `.pdf`; Word e Excel pedem "Salvar como PDF"), arquivo **não vazio**, no máximo **25 MB**
+  ("O arquivo tem 26 MB e o limite é 25 MB…") e **conteúdo de PDF de verdade** (começa com `%PDF-`; um
+  arquivo só renomeado para `.pdf` é barrado). Enviado, o campo mostra **nome, tamanho** (lidos do Directus)
+  e o link **"Abrir / baixar"**; **"Trocar arquivo"** envia outro e avisa que o anterior **continua
+  guardado no Directus**, só sem ligação com o relatório (o painel nunca apaga arquivo). Qualquer pessoa
+  baixa o PDF direto de `/assets/<id>` (a leitura pública de `directus_files` já existe): a tela avisa que
+  **não se deve enviar nada sigiloso** (CPF, endereço, dados de membros). Funções puras testadas:
+  `validarArquivoPorRegra`, `tamanhoLegivel`, `confereAssinatura`.
+- **Moderação** (`/painel-conteudo/moderar/?tipo=depoimentos` ou `mural_oracao`, só Diretoria): na página
+  inicial, a seção **"Moderação"** (a primeira) tem um cartão para cada assunto com a contagem do que espera
+  decisão ("3 aguardando", "2 aguardando · 1 confidencial"; o cartão some para quem não lê a coleção). A
+  tela tem **abas** — "Aguardando" (`aprovado = falso`, e no mural `confidencial` diferente de verdade),
+  "Publicados" (`aprovado = verdadeiro`) e, só no mural, "🔒 Confidenciais (só a equipe pastoral)" ("Só a
+  Diretoria vê esta aba") — com a contagem em cada uma, e `?aba=` no endereço. Os filtros tratam campo vazio
+  como "não" e as três abas juntas cobrem todos os itens, sem sobrepor (conferido pelo teste de unidade e,
+  com o Directus de verdade, pela bateria). Cada item é um cartão com nome (ou "Anônimo"), data e hora
+  locais, o **texto inteiro** (sempre `textContent`, com as quebras de linha; HTML escrito pela pessoa não
+  executa), a miniatura da foto (depoimentos), o selo "Consentimento LGPD: sim/não" e, no mural, "🙏 N
+  orando" (só leitura: o contador é da Function `OrarMural`). Do mais novo para o mais antigo, 20 por vez
+  ("Mostrar mais"). **Ações**: **Aprovar** (grava só `{ aprovado: true }`), **Tirar do ar** (só
+  `{ aprovado: false }`; um toque, sem confirmação, por ser o caminho seguro) e **Excluir** (digitar
+  EXCLUIR). **Regras da tela**: depoimento **sem consentimento LGPD não se aprova** (botão desligado, com o
+  motivo escrito ao lado; o mesmo vale para pedido do mural, porque o formulário público exige a caixa);
+  pedido **confidencial não tem Aprovar** — só o rótulo "Confidencial: só a equipe pastoral lê; nunca é
+  publicado" e Excluir (a confirmação pede que se exclua só depois do atendimento pastoral); aprovar um
+  depoimento avisa que ele aparece "na próxima montagem (em até uns 20 minutos)", e aprovar um pedido do
+  mural avisa que ele aparece **IMEDIATAMENTE** no mural público (o mural é em tempo real), por **90
+  dias** — por isso o item publicado mostra "No mural público até dd/mm/aaaa" ou "Já saiu do mural público
+  (passou de 90 dias)". Antes de aprovar, a tela **lê o item de novo** e aplica as regras ao que está no
+  Directus agora (se virou confidencial ou perdeu o consentimento com a tela aberta, recusa e atualiza).
+  Depois de cada ação a lista e as contagens se atualizam **sem recarregar a página**; botões travados
+  desde o primeiro toque (nada de clique duplo); erro (servidor, rede, 403) mostra a frase e **não mexe
+  em nada**; a mensagem de resultado recebe o foco (leitor de tela). Excluir um depoimento **não apaga a
+  foto** (o painel não apaga arquivos). Regras e textos em
+  [`src/lib/painelModeracao.ts`](./src/lib/painelModeracao.ts) (`TIPOS_MODERACAO`; tipo novo = um objeto
+  novo ali).
+- **"Ver no site"**: cada tipo declara as páginas públicas que o mostram (`paginasPublicas`); a lista e o
+  formulário trazem os links "Ver a página “…” no site ↗" com o aviso de que o site mostra a mudança em
+  até uns 20 minutos (só para o que já está no ar).
+- **O que a tela cuida**: endereço (slug) gerado do título enquanto a pessoa não o edita (aviso quando
+  mudá-lo quebra links de um item no ar e mensagem clara se já existir); texto em Markdown com barra
+  (negrito, itálico, título, lista, citação, link, imagem por endereço ou enviada do aparelho) e **prévia
+  ao vivo sanitizada** (lista de tags e atributos permitidos; `on…`, `style`, `script`, `iframe` e
+  `javascript:` somem); imagem com envio direto ao Directus (JPEG/PNG/WebP/GIF, até 8 MB); campos
+  obrigatórios conferidos no navegador com frase em português; salvar manda só o que mudou; aviso de
+  alterações não salvas; clique duplo não duplica; a sessão que acaba **não apaga o texto** (aparece
+  "Entrar de novo", que abre outra aba); **Excluir** fica numa zona de perigo e só vale digitando
+  EXCLUIR.
+- **Acrescentar um tipo novo**: um objeto novo em `TIPOS_CONTEUDO`, em
+  [`src/lib/painelConteudo.ts`](./src/lib/painelConteudo.ts) — coleção, `titulos`, `grupo` (seção da página
+  inicial), `paginasPublicas`, campo do título, `rascunho` (omita para "vai direto ao site"), `ordem`
+  (ordem manual e agrupamento), `unico`, `camposMeta` (o que aparece embaixo do título na lista),
+  `urlPublica` e a lista de campos em seções (`text`, `textarea`, `markdown`, `select`, `boolean`, `date`,
+  `datetime`, `image`, `imagens`, `arquivo`, `m2o`, `number`, `url`, `slug`, `readonly`) — **mais a permissão da função no
+  Directus**. As páginas não mudam e o cartão aparece sozinho para quem puder ler a coleção. O desenho dos
+  campos fica em `src/lib/painelConteudoCampos.ts`. Atenção ao tipo real do campo de data no Directus:
+  `date` (só dia) ou `dateTime` (`datetime`, que converte entre o horário local da tela e o ISO gravado).
+  Tipo sem rascunho é público no instante em que se grava: **nunca teste gravando de verdade nele**.
+- **Testes**: `site/scripts/testes/painel-unidade.cjs` (sem rede: datas, endereço, validação, ordem,
+  fotos, envio de arquivo, configuração dos nove tipos e a moderação — filtros das abas, regras de
+  aprovação, textos de confirmação, cartões da página inicial —; `node scripts/testes/painel-unidade.cjs`
+  dentro de `site/`); `conteudo.cjs` (CI, Directus de verdade: só itens de teste em rascunho, nada gravado
+  onde não pode; com um usuário "Semi-administrador" confere leitura, abas da moderação, envio de PDF e
+  que o PDF é baixado por qualquer pessoa); e, fora do repositório, uma prova no navegador (Edge) com as
+  gravações dos tipos sem rascunho interceptadas. **Regra para qualquer teste da moderação: o mural é
+  público e em tempo real, então NUNCA se grava `aprovado: true` de verdade** (nem em depoimentos);
+  itens de teste nascem `aprovado: false`, com texto começando por "TESTE", e são apagados no fim; em
+  `relatorios` não se grava nada de verdade (vai ao site na montagem seguinte).
+
 ### Comunidade: mural de oração, enquetes e Minha Conta
 
 - **Mural de oração** (`/mural-de-oracao/`) — pedido público com moderação, opção de anônimo e de
@@ -476,12 +723,34 @@ Quality/Pollen/Solar/Roads/Time Zone/Weather (sem aplicação real para um site 
 - **Performance**: `srcset` responsivo (3 larguras) nas capas de conteúdo, `fetchpriority="high"`
   nelas, `Cache-Control` de longo prazo para assets com hash de conteúdo, `preconnect`/
   `dns-prefetch` para o Directus.
+- **Imagens do Directus servidas pelo próprio site**: depois do `astro build`,
+  `scripts/localizar-imagens.mjs` (encadeado em `npm run build`, que é o que o Static Web Apps
+  roda) varre o HTML montado atrás de `https://<Directus>/assets/<id>?...`, baixa cada imagem
+  distinta uma vez (4 ao mesmo tempo, 30 s, 2 tentativas, só se a resposta for `image/*`), grava em
+  `dist/media/<hash do conteúdo>.<ext>` e troca a URL por `/media/...` (`og:image`,
+  `twitter:image` e o JSON-LD pela URL absoluta do site). Assim nenhum visitante pede imagem ao
+  Directus (1 núcleo, de 0,3 a 1,4 s de CPU cada). Se um download falha, a resposta não é imagem
+  (SVG fica de fora de propósito: aberto direto no nosso domínio executaria script) ou o total passa
+  de 120 MB, aquela ocorrência fica com a URL do Directus e o resumo avisa — a montagem nunca falha
+  por isso. `/media/*` tem `Cache-Control` de 1 ano (`immutable`; o nome muda com o conteúdo) em
+  `public/staticwebapp.config.json`. As telas do painel, que desenham a imagem no navegador,
+  continuam no Directus. Prova sem rede: `scripts/testes/imagens-locais-unidade.cjs`.
 - **SEO**: `sitemap.xml`, `rss.xml`, dados estruturados (`VideoObject`, `FAQPage`), busca rápida
   (Ctrl/Cmd+K, 10 tipos de conteúdo), atalho de vídeo com miniatura estática ("facade" do YouTube,
   sem carregar o player até o clique).
 - **Analytics próprio, sem cookie**: contador de visitas (`pageviews`, só caminho + origem + data)
   com dashboard nativo no Directus Insights; notificação push de conteúdo novo como alternativa a
   newsletter por e-mail.
+- **Contador de visitas em lote (16/10/2026)**: o navegador chama `POST /api/registrar-visita`
+  (`api/RegistrarVisita/`, mesma origem, sem pré-voo CORS) em vez de gravar direto no Directus (antes:
+  duas requisições por visita; o Directus B1, de 1 núcleo, chegava a 100 % de CPU com ~60–70
+  visitantes por minuto). A Function ignora robôs, valida `{ path, referrer_domain }`, limita a 120
+  visitas por IP em 5 min e guarda a visita num buffer em memória; o Directus recebe UM
+  `POST /items/pageviews` com o array de linhas a cada 25 visitas ou 10 s (uma gravação por vez por
+  instância; falha devolve as linhas ao buffer, no máximo 500, e nunca derruba a visita).
+  **Perda aceita**: se a instância reciclar, somem as visitas ainda no buffer (no máximo as dos
+  últimos 10 s) — é só um contador. Regra e provas: `api/src/lib/visitas.js` e
+  `scripts/testes/visitas-unidade.cjs`.
 
 ### E-mail transacional
 
@@ -497,7 +766,8 @@ nem de conta no GitHub — só um login de e-mail e senha criado para cada pesso
 
 - **Acesso**: `https://ieadespa-directus-gae4hfarf4a4ffcf.brazilsouth-01.azurewebsites.net/admin`
 - **Perfis (roles) hoje**: Administrator, Semi-administrador (tudo exceto
-  Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias, Editor de
+  Configurações/Fluxos/Webhooks/Usuários/tokens), Editor de eventos, Editor de notícias (notícias, mensagens, FAQ, programação, galeria, ministérios e história, pelo
+  [painel de conteúdo](#painel-de-conteúdo); envia só imagens), Editor de
   contatos, Gestor de Camisetas (só as coleções de camiseta, sem apagar campanha) — cada um limitado ao próprio escopo (testado: acesso fora do escopo dá 403).
 - **Mídia**: fotos e PDFs enviados no Directus vão direto para o Azure Blob Storage, não para o
   repositório do GitHub.

@@ -125,6 +125,28 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           <div class="grid gap-2" data-precos-tamanho-lista></div>
         </div>
 
+        <!-- 16/10/2026 — limite de pedidos do lote aberto. Só aparece se o Directus já tem os campos (limite_total / limites_tamanho). A regra e a trava estão em api/src/lib/limiteLote.js. -->
+        <div class="grid gap-2 limite-bloco" data-limite-wrap hidden>
+          <label class="text-sm font-semibold" for="f-limite-total">Limite de pedidos (opcional)</label>
+          <p class="text-xs text-muted-foreground">
+            Quantas peças o <strong>lote aberto</strong> aceita, de todos os tamanhos juntos. Chegou no número, o site mostra
+            <strong>"esgotado"</strong> e não aceita mais pedido — nem com muita gente pedindo ao mesmo tempo. Pedido apagado
+            libera a vaga na hora. Deixe em branco para <strong>não ter limite</strong>. Conta todas as peças do lote
+            (site e balcão, pagas ou não). Ao fechar o lote, o próximo pedido abre um lote novo e começa do zero com estes
+            mesmos limites: mude os números aqui antes, se precisar.
+          </p>
+          <input id="f-limite-total" type="number" min="0" step="1" inputmode="numeric" class="field" placeholder="Sem limite" style="max-width:12rem" />
+          <div class="grid gap-2" data-limite-tamanho-wrap hidden>
+            <label class="text-sm font-semibold">Limite por tamanho (opcional)</label>
+            <p class="text-xs text-muted-foreground">
+              Preencha só os tamanhos que precisam de limite próprio (ex.: M 40, G 30); o tamanho que chegar no seu número aparece
+              como <strong>"esgotado"</strong> e os outros seguem abertos. Em branco = sem limite próprio (só conta no total).
+            </p>
+            <div class="grid gap-2" data-limite-tamanho-lista></div>
+          </div>
+          <p class="text-sm font-semibold" data-limite-uso aria-live="polite"></p>
+        </div>
+
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="f-pedidos-ate">Pedidos até (opcional)</label>
           <input id="f-pedidos-ate" type="date" class="field" />
@@ -322,8 +344,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       </div>
 
       <div data-tab-panel="excluir" hidden>
-        <div style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-          <p class="text-sm font-semibold text-red-700">Excluir</p>
+        <!-- 16/10/2026 — excluir de verdade os pedidos que ninguém veio buscar (a peça passa para o próximo). Fica AQUI, na aba mais escondida, e não junto dos botões do dia a dia.
+             Só pedido não separado em que ninguém levou nenhuma peça. Lote FECHADO guarda os números congelados: a conta da malharia não muda. Baixa uma cópia antes e dá para desfazer. -->
+        <div class="excluir-bloco" data-excluir-pedidos>
+          <p class="text-sm font-semibold text-red-700">Excluir os pedidos que ninguém veio buscar</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Apaga de vez os pedidos <strong>não separados</strong> em que <strong>ninguém levou nenhuma peça</strong>, para a peça passar para o próximo.
+            Os separados, as vendas avulsas e quem já levou alguma peça ficam de fora. Nos lotes <strong>fechados</strong> a conta da malharia <strong>não muda</strong> (os números ficaram travados no fechamento);
+            no lote aberto a quantidade a encomendar diminui. Antes de apagar, o navegador baixa uma cópia, e logo depois dá para desfazer.
+          </p>
+          <div class="mt-3 flex flex-wrap items-end gap-3">
+            <label class="text-sm">Lote<br /><select class="field" data-excluir-lote-filtro aria-label="Lote"></select></label>
+            <label class="text-sm">Tamanho<br /><select class="field" data-excluir-tamanho aria-label="Tamanho"></select></label>
+            <label class="text-sm">Modelo<br /><select class="field" data-excluir-modelo aria-label="Modelo"></select></label>
+            <label class="text-sm">Só os primeiros<br /><input type="number" min="1" inputmode="numeric" class="field" style="width:7rem" placeholder="todos" data-excluir-qtd aria-label="Só os primeiros quantos pedidos (vazio = todos)" /></label>
+            <button type="button" class="btn btn-outline" data-excluir-atualizar>Atualizar a lista</button>
+          </div>
+          <p class="mt-3 text-sm font-semibold" data-excluir-resumo aria-live="polite">Carregando os pedidos…</p>
+          <p class="mt-1 text-xs text-muted-foreground" data-excluir-fora></p>
+          <details class="mt-2">
+            <summary class="text-sm font-semibold" style="cursor:pointer">Ver os pedidos que seriam excluídos</summary>
+            <ol class="mt-2 text-sm excluir-lista" data-excluir-lista></ol>
+          </details>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" class="btn btn-outline excluir-perigo" data-excluir-executar disabled>Excluir os pedidos (0)</button>
+            <button type="button" class="btn btn-outline" data-excluir-restaurar hidden>Desfazer a exclusão</button>
+          </div>
+          <p class="mt-2 text-sm" data-excluir-pedidos-status role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="mt-6" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+          <p class="text-sm font-semibold text-red-700">Excluir a campanha inteira</p>
           <p class="mt-1 text-sm text-muted-foreground">Remove esta camiseta, seus lotes de compra e todos os pedidos ligados a ela. Não pode ser desfeito.</p>
           <button type="button" class="btn btn-outline mt-3" data-excluir-lote>Excluir</button>
           <p class="mt-2 text-sm" data-excluir-status role="status" aria-live="polite"></p>
@@ -339,6 +390,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { graficoBarrasSvg, desenharGraficoBarrasPDF, type ContagemOpcao } from "@/lib/graficos";
+    import { elegiveisParaExcluir, filtrarAlvo, limiteDaExclusao, descreverEscolha, levouAlgumaPeca, resumoDaExclusao, type CopiaDaExclusao, type PedidoParaExcluir, type LoteParaExcluir } from "@/lib/exclusaoEmMassa";
+    import { excluirPedidos, desfazerExclusao, type AmbienteExclusao } from "@/lib/exclusaoEmMassaAcao";
+    import { avaliar, limitesDoGrupo, pedidoDosItens, resumoDoUso, temLimite, usoDoAgregado, type Limites } from "@/lib/limitePedidos";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -362,6 +416,9 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       email_retirada_assunto: string | null;
       email_retirada_corpo: string | null;
       retirada_liberada?: boolean;
+      // campos novos (16/10/2026): só existem depois do roteiro `scripts/directus-limite-esquema.mjs`
+      limite_total?: number | null;
+      limites_tamanho?: Record<string, number> | null;
       imagem: string | null;
     }
 
@@ -475,7 +532,37 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         .join("");
     }
 
-    fTamanhos.addEventListener("input", () => renderizarPrecosTamanho(csvParaLista(fTamanhos.value)));
+    // Limite de pedidos (16/10/2026): os campos só existem se o Directus já tem as colunas; sem elas o bloco fica escondido e nada disto vai no PATCH.
+    const limiteWrap = document.querySelector<HTMLElement>("[data-limite-wrap]");
+    const fLimiteTotal = el<HTMLInputElement>("f-limite-total");
+    const limiteTamanhoWrap = document.querySelector<HTMLElement>("[data-limite-tamanho-wrap]");
+    const limiteTamanhoLista = document.querySelector<HTMLElement>("[data-limite-tamanho-lista]");
+    let limiteDisponivel = false;
+    let limitesSalvos: Limites = { total: null, porTamanho: {} }; // o que está gravado no Directus (a linha de uso mostra este, não o que está sendo digitado)
+
+    function renderizarLimitesTamanho(tamanhosAtuais: string[]) {
+      if (!limiteTamanhoWrap || !limiteTamanhoLista) return;
+      const valoresAtuais: Record<string, string> = {};
+      limiteTamanhoLista.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+        if (input.value) valoresAtuais[input.dataset.limiteTamanho ?? ""] = input.value;
+      });
+      limiteTamanhoWrap.hidden = tamanhosAtuais.length === 0;
+      limiteTamanhoLista.innerHTML = tamanhosAtuais
+        .map(
+          (t) => `
+            <label class="grid gap-1 sm:grid-cols-[8rem_1fr] sm:items-center text-sm">
+              <span>${escapeHtml(t)}</span>
+              <input type="number" min="0" step="1" inputmode="numeric" class="field" placeholder="Sem limite próprio" value="${valoresAtuais[t] ?? ""}" data-limite-tamanho="${escapeHtml(t)}" style="max-width:12rem" />
+            </label>
+          `,
+        )
+        .join("");
+    }
+
+    fTamanhos.addEventListener("input", () => {
+      renderizarPrecosTamanho(csvParaLista(fTamanhos.value));
+      if (limiteDisponivel) renderizarLimitesTamanho(csvParaLista(fTamanhos.value));
+    });
 
     // Abas — mesmo padrão já usado em painel-eventos/evento/index.astro.
     const tabBotoes = document.querySelectorAll<HTMLButtonElement>("[data-tab]");
@@ -538,6 +625,18 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         const tamanho = input.dataset.precoTamanho ?? "";
         if (precos[tamanho] != null) input.value = String(precos[tamanho]);
       });
+      limiteDisponivel = "limite_total" in grupo && "limites_tamanho" in grupo;
+      if (limiteWrap) limiteWrap.hidden = !limiteDisponivel;
+      if (limiteDisponivel) {
+        const limites = limitesDoGrupo(grupo);
+        limitesSalvos = limites;
+        fLimiteTotal.value = limites.total !== null ? String(limites.total) : "";
+        renderizarLimitesTamanho(grupo.tamanhos ?? []);
+        limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+          const valor = limites.porTamanho[input.dataset.limiteTamanho ?? ""];
+          if (valor !== undefined) input.value = String(valor);
+        });
+      }
       renderizarImagem(grupo);
     }
 
@@ -557,7 +656,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         if (tamanho && input.value !== "") precosTamanho[tamanho] = Number(input.value);
       });
 
-      return {
+      const base = {
         nome: fNome.value.trim(),
         slug: fSlug.value.trim() || slugify(fNome.value),
         descricao: fDescricao.value.trim() || null,
@@ -577,6 +676,31 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         email_retirada_corpo: fEmailCorpo.value.trim() || null,
         retirada_liberada: fRetiradaLiberada.checked,
       };
+      if (!limiteDisponivel) return base;
+      const limitesTamanho: Record<string, number> = {};
+      const tamanhosDaLista = new Set(base.tamanhos);
+      limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => {
+        const tamanho = input.dataset.limiteTamanho ?? "";
+        if (tamanho && tamanhosDaLista.has(tamanho) && input.value.trim() !== "") limitesTamanho[tamanho] = Math.floor(Number(input.value));
+      });
+      return {
+        ...base,
+        limite_total: fLimiteTotal.value.trim() !== "" ? Math.floor(Number(fLimiteTotal.value)) : null,
+        limites_tamanho: Object.keys(limitesTamanho).length ? limitesTamanho : null,
+      };
+    }
+
+    /** Confere, antes de salvar, que os números dos limites são inteiros de 0 para cima (a tela de edição é a única porta de entrada deles). */
+    function limitesInvalidos(): string | null {
+      if (!limiteDisponivel) return null;
+      const campos: [string, string][] = [["limite total", fLimiteTotal.value]];
+      limiteTamanhoLista?.querySelectorAll<HTMLInputElement>("[data-limite-tamanho]").forEach((input) => campos.push([`limite do tamanho ${input.dataset.limiteTamanho}`, input.value]));
+      for (const [nome, valor] of campos) {
+        if (valor.trim() === "") continue;
+        const n = Number(valor);
+        if (!Number.isInteger(n) || n < 0) return `O ${nome} precisa ser um número inteiro, de 0 para cima (ou fique em branco para não ter limite).`;
+      }
+      return null;
     }
 
     /**
@@ -753,16 +877,42 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         finally { btnEnviar.disabled = false; if (btnConferir) btnConferir.disabled = false; }
       });
 
+      // Quanto do limite o lote aberto já usou (aba Dados). Atualiza ao abrir, ao salvar e a cada mudança de pedido (tempo real), então dá para acompanhar a rajada.
+      async function carregarUsoDoLimite() {
+        const alvo = document.querySelector<HTMLElement>("[data-limite-uso]");
+        if (!alvo) return;
+        if (!limiteDisponivel || !temLimite(limitesSalvos)) { alvo.textContent = ""; return; }
+        try {
+          const cab = { headers: { Authorization: `Bearer ${token}` } };
+          const lotesRes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=numero&fields=id,numero&limit=20`, cab);
+          if (!lotesRes.ok) throw new Error("lotes");
+          const abertos = ((await lotesRes.json()).data ?? []) as { id: number; numero: number }[];
+          let uso = usoDoAgregado([]);
+          if (abertos.length) {
+            const usoRes = await api(`${directusUrl}/items/camiseta_itens_pedido?filter[pedido][lote][grupo][_eq]=${grupoId}&filter[pedido][lote][status][_eq]=aberto&aggregate[sum]=quantidade&groupBy[]=tamanho`, cab);
+            if (!usoRes.ok) throw new Error("uso");
+            uso = usoDoAgregado((await usoRes.json()).data);
+          }
+          alvo.textContent = resumoDoUso(limitesSalvos, uso, abertos.map((l) => l.numero));
+        } catch {
+          alvo.textContent = "";
+        }
+      }
+
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const invalido = limitesInvalidos();
+        if (invalido) { definirStatus(invalido); return; }
         definirStatus("Salvando…");
         try {
+          const corpo = lerFormulario();
           const res = await api(`${directusUrl}/items/camiseta_grupos/${grupoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(lerFormulario()),
+            body: JSON.stringify(corpo),
           });
           if (!res.ok) throw new Error("falha ao salvar");
+          if (limiteDisponivel) { limitesSalvos = limitesDoGrupo(corpo as { limite_total?: number | null; limites_tamanho?: Record<string, number> | null }); void carregarUsoDoLimite(); }
           definirStatus("✅ Salvo.");
         } catch {
           definirStatus("Não foi possível salvar agora.");
@@ -1172,7 +1322,8 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       });
 
       await carregarConsolidado();
-      iniciarRealtime(token, carregarConsolidado);
+      void carregarUsoDoLimite();
+      iniciarRealtime(token, () => { void carregarConsolidado(); void carregarUsoDoLimite(); });
 
       document.querySelector("[data-excluir-lote]")?.addEventListener("click", async () => {
         const excluirStatus = document.querySelector<HTMLElement>("[data-excluir-status]");
@@ -1189,12 +1340,186 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
           if (excluirStatus) excluirStatus.textContent = "Não foi possível excluir agora.";
         }
       });
+
+      // --- aba Excluir: os pedidos que ninguém veio buscar (16/10/2026) ---
+      type PedidoLista = PedidoParaExcluir & { nome: string };
+      let pedidosCarregados: PedidoLista[] = [];
+      let lotesDaExclusao: (LoteParaExcluir & { numero: number })[] = [];
+      let ultimaCopia: CopiaDaExclusao | null = null;
+      let ocupado = false;
+      const exQuery = <T extends HTMLElement>(s: string) => document.querySelector<T>(s);
+      const exStatus = (texto: string) => { const el = exQuery("[data-excluir-pedidos-status]"); if (el) el.textContent = texto; };
+
+      const ambienteDaExclusao: AmbienteExclusao = {
+        api, directusUrl, token: () => token,
+        confirmar: (texto) => confirm(texto), perguntar: (texto) => prompt(texto), status: exStatus,
+        // Limite de pedidos: se, depois da exclusão, pedidos novos ocuparam as vagas do lote aberto, restaurar pedidos desse lote passaria do limite — então não restaura.
+        conferirEspaco: async (copia) => {
+          if (!limiteDisponivel || !temLimite(limitesSalvos)) return null;
+          const cab = { headers: { Authorization: `Bearer ${token}` } };
+          const lotesRes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&filter[status][_eq]=aberto&sort=numero&fields=id,numero&limit=20`, cab);
+          if (!lotesRes.ok) throw new Error("lotes");
+          const abertos = ((await lotesRes.json()).data ?? []) as { id: number; numero: number }[];
+          const idsAbertos = new Set(abertos.map((l) => l.id));
+          const doAberto = new Set(copia.pedidos.filter((p) => idsAbertos.has(Number(p.lote))).map((p) => Number(p.id)));
+          if (doAberto.size === 0) return null;
+          const usoRes = await api(`${directusUrl}/items/camiseta_itens_pedido?filter[pedido][lote][grupo][_eq]=${grupoId}&filter[pedido][lote][status][_eq]=aberto&aggregate[sum]=quantidade&groupBy[]=tamanho`, cab);
+          if (!usoRes.ok) throw new Error("uso");
+          const volta = pedidoDosItens(copia.itens.filter((i) => doAberto.has(Number(i.pedido))) as { tamanho?: string | null; quantidade?: unknown }[]);
+          const v = avaliar(limitesSalvos, usoDoAgregado((await usoRes.json()).data), volta);
+          return v.ok ? null : `Não dá para desfazer agora: ${v.mensagem}, e ${doAberto.size} desses pedidos voltariam para um lote aberto. NADA foi restaurado; o arquivo da cópia continua com você.`;
+        },
+        baixar: (nome, conteudo) => {
+          const url = URL.createObjectURL(new Blob([conteudo], { type: "application/json" }));
+          const a = document.createElement("a");
+          a.href = url; a.download = nome;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        },
+      };
+
+      async function carregarParaExcluir(limparMensagem = true) {
+        if (limparMensagem) exStatus("");
+        const resumo = exQuery("[data-excluir-resumo]");
+        if (resumo) resumo.textContent = "Carregando os pedidos…";
+        try {
+          const [rp, rl] = await Promise.all([
+            api(`${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&fields=id,nome,avulso,separado,lote,itens.tamanho,itens.modelo,itens.quantidade,itens.quantidade_retirada&sort=id&limit=-1`, { headers: { Authorization: `Bearer ${token}` } }),
+            api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1&fields=id,numero,status,total_vendido`, { headers: { Authorization: `Bearer ${token}` } }),
+          ]);
+          if (!rp.ok || !rl.ok) throw new Error("leitura");
+          pedidosCarregados = ((await rp.json()).data ?? []).map((p: PedidoLista) => ({ ...p, itens: p.itens ?? [] }));
+          lotesDaExclusao = (await rl.json()).data ?? [];
+        } catch {
+          if (resumo) resumo.textContent = "Não consegui carregar os pedidos agora. Use “Atualizar a lista”.";
+          pedidosCarregados = [];
+        }
+        montarOpcoesDaExclusao();
+        renderizarExclusao();
+      }
+
+      function opcoesDe(sel: HTMLSelectElement | null, rotuloTodos: string, valores: { valor: string; rotulo: string }[]) {
+        if (!sel) return;
+        const atual = sel.value;
+        sel.innerHTML = `<option value="">${rotuloTodos}</option>` + valores.map((v) => `<option value="${escaparHtmlAtributo(v.valor)}">${escaparHtmlAtributo(v.rotulo)}</option>`).join("");
+        if (valores.some((v) => v.valor === atual)) sel.value = atual;
+      }
+      function escaparHtmlAtributo(s: string) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c); }
+
+      function montarOpcoesDaExclusao() {
+        const elegiveis = elegiveisParaExcluir(pedidosCarregados);
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-lote-filtro]"), "Todos os lotes", lotesDaExclusao.map((l) => ({ valor: String(l.id), rotulo: `Lote ${l.numero} (${l.status === "aberto" ? "aberto" : "fechado"})` })));
+        const tamanhos = [...new Set(elegiveis.flatMap((p) => p.itens.map((i) => String(i.tamanho ?? "")).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+        const modelos = [...new Set(elegiveis.flatMap((p) => p.itens.map((i) => String(i.modelo ?? "")).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-tamanho]"), "Todos os tamanhos", tamanhos.map((v) => ({ valor: v, rotulo: v })));
+        opcoesDe(exQuery<HTMLSelectElement>("[data-excluir-modelo]"), "Todos os modelos", modelos.map((v) => ({ valor: v, rotulo: v })));
+      }
+
+      /** O que a pessoa escolheu agora e o que isso alcança (já com o "só os primeiros N"); `primeiros` é null quando o campo está em branco. */
+      function alvoDaExclusao() {
+        const sel = (s: string) => exQuery<HTMLSelectElement>(s)?.value ?? "";
+        const escolha = { loteId: sel("[data-excluir-lote-filtro]"), tamanho: sel("[data-excluir-tamanho]"), modelo: sel("[data-excluir-modelo]") };
+        const todos = filtrarAlvo(elegiveisParaExcluir(pedidosCarregados), escolha);
+        const texto = exQuery<HTMLInputElement>("[data-excluir-qtd]")?.value ?? "";
+        const limite = limiteDaExclusao(texto, todos.length);
+        const primeiros = texto.trim() === "" ? null : limite;
+        return { escolha, todos, limite, primeiros, alvo: limite === null ? [] : todos.slice(0, limite) };
+      }
+
+      function renderizarExclusao() {
+        const resumoEl = exQuery("[data-excluir-resumo]");
+        const foraEl = exQuery("[data-excluir-fora]");
+        const lista = exQuery("[data-excluir-lista]");
+        const botao = exQuery<HTMLButtonElement>("[data-excluir-executar]");
+        const { alvo, limite } = alvoDaExclusao();
+        const r = resumoDaExclusao(alvo, lotesDaExclusao);
+        if (resumoEl) {
+          resumoEl.textContent = limite === null
+            ? "Escreva só o número de pedidos (ou deixe em branco para todos)."
+            : alvo.length === 0
+              ? "Nenhum pedido que ninguém veio buscar com essa escolha."
+              : `${alvo.length} pedido(s) que ninguém veio buscar (${r.pecas} peça(s))${r.emLoteTravado.pedidos ? ` · ${r.emLoteTravado.pedidos} em lote fechado (conta da malharia não muda)` : ""}${r.emLoteAoVivo.pedidos ? ` · ⚠ ${r.emLoteAoVivo.pedidos} em lote aberto ou sem lote (a quantidade a encomendar diminui)` : ""}.`;
+        }
+        const separados = pedidosCarregados.filter((p) => !p.avulso && p.separado).length;
+        const avulsos = pedidosCarregados.filter((p) => p.avulso).length;
+        const comRetirada = pedidosCarregados.filter((p) => !p.avulso && !p.separado && levouAlgumaPeca(p)).length;
+        if (foraEl) foraEl.textContent = `Ficam de fora: ${separados} separado(s), ${avulsos} venda(s) avulsa(s) e ${comRetirada} que já levaram alguma peça.`;
+        if (lista) {
+          const mostrados = alvo.slice(0, 300) as PedidoLista[];
+          lista.innerHTML = "";
+          for (const p of mostrados) {
+            const li = document.createElement("li");
+            const pecas = p.itens.map((i) => `${i.quantidade}× ${[i.tamanho, i.modelo].filter(Boolean).join(" ")}`).join(", ") || "sem itens";
+            li.textContent = `#${p.id} — ${p.nome} — ${pecas}`;
+            lista.appendChild(li);
+          }
+          if (alvo.length > mostrados.length) { const li = document.createElement("li"); li.textContent = `… e mais ${alvo.length - mostrados.length}`; lista.appendChild(li); }
+        }
+        if (botao) { botao.disabled = ocupado || alvo.length === 0; botao.textContent = `Excluir os pedidos (${alvo.length})`; }
+        const restaurar = exQuery<HTMLButtonElement>("[data-excluir-restaurar]");
+        if (restaurar) {
+          restaurar.hidden = !ultimaCopia;
+          restaurar.disabled = ocupado;
+          if (ultimaCopia) restaurar.textContent = `Desfazer a exclusão de ${ultimaCopia.pedidos.length} pedido(s)`;
+        }
+      }
+
+      function travarExclusao(travar: boolean) {
+        ocupado = travar;
+        exQuery("[data-excluir-atualizar]")?.toggleAttribute("disabled", travar);
+        renderizarExclusao();
+      }
+
+      for (const s of ["[data-excluir-lote-filtro]", "[data-excluir-tamanho]", "[data-excluir-modelo]"]) exQuery(s)?.addEventListener("change", renderizarExclusao);
+      exQuery("[data-excluir-qtd]")?.addEventListener("input", renderizarExclusao);
+      exQuery("[data-excluir-atualizar]")?.addEventListener("click", () => { void carregarParaExcluir(); });
+      document.querySelector('[data-tab="excluir"]')?.addEventListener("click", () => { void carregarParaExcluir(); });
+      // as abas aparecem antes de o consolidado terminar de carregar: quem já abriu a aba Excluir nesse intervalo não clicou "depois" do ouvinte, então carrega agora
+      if (document.querySelector('[data-tab-panel="excluir"]')?.hasAttribute("hidden") === false) void carregarParaExcluir();
+
+      exQuery("[data-excluir-executar]")?.addEventListener("click", async () => {
+        if (ocupado) return;
+        const { escolha, alvo, primeiros } = alvoDaExclusao();
+        if (!alvo.length) return;
+        const rotuloLote = escolha.loteId ? (exQuery<HTMLSelectElement>("[data-excluir-lote-filtro]")?.selectedOptions[0]?.textContent ?? "") : "";
+        const filtros = descreverEscolha(rotuloLote, escolha.tamanho, escolha.modelo, primeiros);
+        const semFiltro = !escolha.loteId && !escolha.tamanho && !escolha.modelo && primeiros === null;
+        travarExclusao(true);
+        try {
+          const resultado = await excluirPedidos(ambienteDaExclusao, { grupo: { id: grupo.id, nome: grupo.nome }, alvo, lotes: lotesDaExclusao, filtros, semFiltro });
+          if (resultado && resultado.apagados.length) {
+            const apagados = new Set(resultado.apagados);
+            pedidosCarregados = pedidosCarregados.filter((p) => !apagados.has(p.id));
+            ultimaCopia = resultado.copia;
+          }
+        } finally {
+          travarExclusao(false);
+        }
+        void carregarConsolidado();
+      });
+
+      exQuery("[data-excluir-restaurar]")?.addEventListener("click", async () => {
+        if (ocupado || !ultimaCopia) return;
+        travarExclusao(true);
+        try {
+          const r = await desfazerExclusao(ambienteDaExclusao, ultimaCopia);
+          if (r.ok) ultimaCopia = null;
+        } finally {
+          travarExclusao(false);
+        }
+        await carregarParaExcluir(false);
+        void carregarConsolidado();
+      });
     }
 
     iniciar();
   </script>
 
   <style>
+    .excluir-bloco { border: 1px solid #a33a2a; border-radius: var(--radius-md); padding: 1rem 1.25rem; background: rgb(163 58 42 / 6%); }
+    .excluir-lista { max-height: 18rem; overflow: auto; padding-left: 1.5rem; list-style: decimal; }
+    .excluir-perigo:not(:disabled) { border-color: #a33a2a; color: #a33a2a; font-weight: 600; }
+    .excluir-perigo:not(:disabled):hover { background: rgb(163 58 42 / 10%); }
     .pergunta-card-camiseta {
       border: 1px solid var(--border);
       border-radius: var(--radius-md);

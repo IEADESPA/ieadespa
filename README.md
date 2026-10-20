@@ -285,14 +285,9 @@ abrindo um mini-sistema à parte com nav própria, mesmo login por trás).
   (territoriais, já escopados por pessoa — item acima). Nenhuma lógica de
   reunião foi reescrita, só o ponto de entrada.
 
-> **Nota de numeração (corrigida na 7ª rodada).** As três refatorações acima
-> foram rotuladas no passado como "v4.2.2" e "v4.2.3" só porque aconteceram
-> *durante* o período em que a FASE 4 estava sendo construída — mas elas não
-> são sub-versões da v4.2 (que é "Plano de Contas e Fundo Restrito/Livre",
-> financeiro puro). Quem procurasse "v4.2.2" no plano de versões não acharia
-> nada. Os rótulos foram removidos: mudança de navegação transversal não recebe
-> número de versão de um módulo de negócio — quando precisar de versão própria,
-> entra na FASE 10 (Experiência, Design e Performance).
+> **Nota de numeração.** As refatorações de navegação acima aconteceram durante a FASE 4, mas não são sub-versões da
+> v4.2: não recebem número de versão de módulo de negócio. O texto completo da nota está no fim de
+> [fase-4-financeiro-e-patrimonio.md](docs/plano/fase-4-financeiro-e-patrimonio.md).
 
 ### 2.7 Segregação de funções (princípio financeiro, formalizado por pesquisa de mercado)
 
@@ -323,29 +318,15 @@ diz em que arquivo ela está e em que pé ela anda.
 
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
-- **Em andamento — FASE 7:** v7.1 (PSC), v7.2 (Calendário oficial), v7.3 (Canais oficiais), v7.4
-  (Eventos e congressos), v7.5 (Escalas e voluntariado), v7.6 (Setores Técnicos e Termo de Vistoria) e v7.7 (Ministério com menores, Lei 14.811/2024) entregues e no ar. Os pontos que a revisão da v7.5 apontou (IP
-  medido no Azure, idade para aderir, anonimização do IP, Meus Dados, avisos em ciclo, escopo de departamento e o
-  primeiro passo da CSP) foram fechados na própria versão — inclusive o **acesso do membro por matrícula + PIN**, a
-  exigência de sessão em todas as rotas de autoatendimento (que antes tratavam a matrícula como a própria pessoa) e o
-  **Termo do menor aceito pelo responsável legal**. Uma revisão independente do acesso por PIN achou outras brechas
-  (sessão de PIN valendo como liderança, troca de senha sem a senha atual, escopo de congregação ausente na ficha de
-  pessoa, voto de enquete com a matrícula do corpo, entre outras): todas corrigidas e presas por teste. Em seguida o
-  **escopo hierárquico passou a valer em todas as rotas** (dirigente → só a congregação; pastor de área → as da área; e
-  assim até o nível geral, que vê tudo), os catálogos só são lidos com login e só o nível geral os altera, e cada
-  documento ganhou a marca de quem pode vê-lo. Depois, o **fecho dos itens em aberto** (03/10/2026): sessão que se
-  derruba na hora (toda rota entra por `api/shared/entrada.js`), delegação por permissão, índices únicos no banco, aceite
-  de mediação só por ato da parte, abandono com dois olhos, remessa com as mesmas conferências do pagamento comum e
-  estorno de cessão. Só a chave site↔sistema nos dois portais do Azure depende de gente; os limites que continuam estão
-  no plano da fase 7. A CSP forte (04/10/2026) está feita. **Antes da 🔒 Trava 7-A entra a FASE D** (06/10/2026, 8ª
-  rodada): retrofit de robustez e operação (prova automática de toda tela, front em módulos, homologação, segundo fator,
-  alerta de queda, celular do membro), com custo escrito por versão pra decisão do responsável. Em 07/10/2026 a prova
-  de tela roda no CI (vD.1, também em janela de celular pro membro), o `script.js` virou núcleo + 23 módulos (vD.2),
-  a homologação migra, se semeia e varre as suas rotas sozinha (vD.3), a agenda chega ao site sem acordar o banco
-  (vD.5) e o menu do celular virou gaveta (vD.6). A Trava D-A foi fechada no mesmo dia. Em 08/10/2026: site na raiz
-  `ieadespa.org.br` (vD.7), segredos trocados e rotação escrita (vD.5/vD.8) e **chave de acesso** no login da liderança
-  (vD.4: passkey ou código por e-mail, confirmação reforçada nos quatro atos, provada com autenticador virtual no CI).
-  Resta o que depende do responsável (ensaio de restauração, Search Console, teste de carga) e a 🔒 Trava D-B.
+- **Em andamento — FASE 7:** v7.1 a v7.8 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
+  congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças).
+  A 🔒 Trava 7-A foi fechada em 08/10/2026. Próxima: **v7.10** (check-in infantil); a antiga v7.9 (faltas na CLI) foi
+  fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
+  feitos; só a chave site↔sistema nos dois portais do Azure depende de gente. O resumo em prosa completo está no
+  começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
+- **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
+  tela no CI, front em módulos, homologação, chave de acesso (passkey) e site na raiz `ieadespa.org.br`. Ficam só
+  decisões do responsável (ensaio de restauração, Search Console, teste de carga).
 - **Planejadas:** FASES 8 a 12. Candidatos pra depois (implantação por congregação, pequenos grupos, Secretaria da
   Família) estão na [8ª rodada](docs/pesquisa/oitava-rodada-2026.md), sem versão, aguardando decisão.
 
@@ -362,7 +343,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.7 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 entregues; Trava 7-A fechada em 08/10/2026; próxima: v7.10; a antiga v7.9 foi fundida à v8.1 na fase 8; Trava 7-B antes da v7.11) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
@@ -520,15 +501,14 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   hash da certidão) e `VistoriasAnulacoes`. Permissões novas, só da Diretoria: `setores_tecnicos`, `setores_ratificacao`, `vistoria_antecedentes`.
 - **Ministério com menores (v7.7, migração 143):** `MinisterioMenoresPoliticaAceites`, `...Consentimentos` (do responsável, LGPD art. 14), `...AutoDenuncias`,
   `...Retiradas`, `...Salas`, `...CadastroNacional`; a validade das certidões (180 dias) é calculada pela data de emissão do Termo de Vistoria, nunca gravada.
+- **Incidentes de proteção (v7.8, migração 144):** `IncidentesProtecao`, `IncidenteEnvolvidos`, `IncidenteRelatos` (um relato por incidente, só de acréscimo), `IncidenteLeituras`, `IncidenteComunicacoes`,
+  `IncidenteDecisoesCautelares`, `IncidenteReclassificacoes` (gatilhos: nada se apaga; o nível só sobe). O prazo de 24 horas é calculado na leitura; o afastamento cautelar é um bloqueio reservado
+  da aptidão da v7.7; permissão `protecao_menores` e papel "Comitê de Proteção". Rotina horária (`rotinas-protecao.yml`) que só abre o banco se há prazo correndo.
+- **Check-in infantil e portão da EBD (v7.10, migração 145; Trava 7-B, migrações 146 e 147):** `CheckinInfantilRegistros` (custódia: só o HMAC do código), `...Eventos` (só de acréscimo), `...Voluntarios`, `...Autorizados`,
+  `...AutorizadosVisita`, `...Saude` (com o consentimento SAUDE_CRACHA), `...SegundasVias`; `EbdTurmas.ContatoComMenores`. Rota `/api/checkin-infantil/<ação>`; retenção de 5 anos.
 
-**Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
-implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,
-`Licoes`, `Trilhas`, `Modulos`, `Certificados`), departamentos
-(`SchemasRelatorio`, `CamposFormulario`, `RelatoriosMensais`, `PerfisRateio`,
-`TesourariasDepartamento`), eventos (`Eventos`, `Inscricoes`, `Credenciamentos`), proteção de menores
-(`HabilitacoesMinisterioInfantil`, `CheckinsInfantis`, `Incidentes`), comunicação
-(`ConsentimentosComunicacao`, `Mensagens`), missões (`CamposMissionarios`,
-`RelatoriosCampo`), obrigações fiscais (`ObrigacoesAcessorias`).
+**Ainda não existem** (projeção das fases futuras, nomes sujeitos a mudança): comunicação (`ConsentimentosComunicacao`, `Mensagens`), missões
+(`CamposMissionarios`, `RelatoriosCampo`) e obrigações fiscais (`ObrigacoesAcessorias`). EBD, departamentos, eventos e proteção de menores já existem (acima).
 
 ## 5. Migração dos subsistemas (passo a passo)
 

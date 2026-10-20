@@ -260,8 +260,22 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         // mostrando o formulário até o próximo build; centenas de pedidos entraram depois
         // do fechamento. Agora a página pergunta à API ao abrir e esconde o formulário na
         // hora; a API recusa de qualquer jeito (403), e esse 403 também esconde.
+        //
+        // 16/10/2026 — limite de pedidos do lote: a resposta de `status-camiseta` traz `limite: { esgotado, tamanhosEsgotados }`.
+        // Esgotado = o formulário some com um aviso e a página confere de novo a cada 45 s (se uma peça for liberada, o formulário volta);
+        // tamanho esgotado = a opção fica desabilitada e marcada "(esgotado)". Quem manda é a API (ela recusa o que não cabe, com 409):
+        // isto é só para a pessoa não preencher um formulário que vai ser recusado.
+        let tamanhosEsgotados = new Set();
+        let avisoEsgotado = null;
+        let temporizadorEsgotado = null;
+
+        function pararConferenciaDeEsgotado() {
+          if (temporizadorEsgotado) { clearInterval(temporizadorEsgotado); temporizadorEsgotado = null; }
+        }
         function encerrarFormulario(mensagem) {
           if (!form) return;
+          pararConferenciaDeEsgotado();
+          if (avisoEsgotado) avisoEsgotado.hidden = true;
           form.hidden = true;
           const aviso = document.createElement("p");
           aviso.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
@@ -269,10 +283,54 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
           aviso.textContent = mensagem || "Esta campanha está encerrada e não aceita mais pedidos.";
           form.insertAdjacentElement("beforebegin", aviso);
         }
-        fetch(statusUrl, { cache: "no-store" })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((s) => { if (s && s.aberto === false) encerrarFormulario(s.mensagem); })
-          .catch(() => {});
+        function aplicarTamanhosEsgotados() {
+          document.querySelectorAll("[data-item-tamanho]").forEach((seletor) => {
+            seletor.querySelectorAll("option").forEach((opcao) => {
+              if (!opcao.value) return;
+              const esgotado = tamanhosEsgotados.has(opcao.value);
+              opcao.disabled = esgotado;
+              opcao.textContent = esgotado ? `${opcao.value} (esgotado)` : opcao.value;
+            });
+            if (seletor.value && tamanhosEsgotados.has(seletor.value)) seletor.value = "";
+          });
+        }
+        function mostrarEsgotado() {
+          if (!form) return;
+          form.hidden = true;
+          if (!avisoEsgotado) {
+            avisoEsgotado = document.createElement("p");
+            avisoEsgotado.className = "mt-6 text-sm leading-relaxed text-muted-foreground";
+            avisoEsgotado.setAttribute("role", "status");
+            avisoEsgotado.textContent = "Os pedidos desta campanha esgotaram. Se alguma peça for liberada, esta página volta a aceitar pedidos (ela confere sozinha de tempos em tempos).";
+            form.insertAdjacentElement("beforebegin", avisoEsgotado);
+          }
+          avisoEsgotado.hidden = false;
+          if (!temporizadorEsgotado) temporizadorEsgotado = setInterval(conferirStatus, 45000);
+        }
+        function mostrarFormulario() {
+          if (!form) return;
+          pararConferenciaDeEsgotado();
+          if (avisoEsgotado) avisoEsgotado.hidden = true;
+          if (form.hidden) {
+            form.hidden = false;
+            const botao = form.querySelector('button[type="submit"]');
+            if (botao) botao.disabled = false;
+          }
+        }
+        function aplicarStatus(s) {
+          if (!s) return;
+          if (s.aberto === false) { encerrarFormulario(s.mensagem); return; }
+          tamanhosEsgotados = new Set((s.limite && s.limite.tamanhosEsgotados) || []);
+          aplicarTamanhosEsgotados();
+          if (s.limite && s.limite.esgotado) mostrarEsgotado(); else mostrarFormulario();
+        }
+        function conferirStatus() {
+          fetch(statusUrl, { cache: "no-store" })
+            .then((r) => (r.ok ? r.json() : null))
+            .then(aplicarStatus)
+            .catch(() => {});
+        }
+        conferirStatus();
 
         // Fase 26 — pré-preenche com o e-mail da Minha Conta, se já logado.
         (() => {
@@ -319,6 +377,20 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
           `;
         }
 
+        // 19/10/2026 — pico de gente: o servidor recusa com 503 + motivo "ocupado" ANTES de gravar qualquer coisa (fila cheia). Como nada foi gravado, é seguro repetir:
+        // a página tenta de novo sozinha, com pausa e um pouco de acaso (para não voltarem todos juntos), e mostra a espera. Qualquer outra resposta segue o fluxo normal.
+        async function enviarComEspera(url, init) {
+          const { avisoEspera, ...resto } = init;
+          for (let tentativa = 1; ; tentativa += 1) {
+            const resposta = await fetch(url, resto);
+            if (resposta.status !== 503 || tentativa >= 12) return resposta;
+            const corpo = await resposta.clone().json().catch(() => null);
+            if (!corpo || corpo.motivo !== "ocupado") return resposta;
+            if (avisoEspera) avisoEspera(tentativa);
+            await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
+          }
+        }
+
         function precoLabel(v) {
           return v > 0 ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "grátis";
         }
@@ -341,9 +413,11 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         }
 
         itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+        aplicarTamanhosEsgotados();
 
         document.querySelector("[data-item-adicionar]")?.addEventListener("click", () => {
           itensLista?.insertAdjacentHTML("beforeend", linhaItemHtml());
+          aplicarTamanhosEsgotados();
         });
 
         itensLista?.addEventListener("click", (event) => {
@@ -409,7 +483,8 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             // direta pelo navegador foi desativada de propósito, pra ninguém
             // conseguir escolher o próprio lote nem criar dois lotes "1" ao
             // mesmo tempo.
-            const pedidoRes = await fetch(criarPedidoUrl, {
+            const pedidoRes = await enviarComEspera(criarPedidoUrl, {
+              avisoEspera: (n) => { if (status) status.textContent = "Muita gente pedindo ao mesmo tempo. Aguarde, estamos tentando de novo (" + n + ")…"; },
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -429,6 +504,22 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
                 return;
               }
               if (pedidoRes.status === 429) throw new Error("Muitos pedidos deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
+              // limite de pedidos do lote (16/10/2026): esgotou tudo, esgotou um tamanho, ou não cabe a quantidade pedida — os dados digitados ficam
+              if (pedidoRes.status === 409 && erro?.motivo === "esgotado") {
+                mostrarEsgotado();
+                if (button) button.disabled = false;
+                if (status) status.textContent = "";
+                return;
+              }
+              if (pedidoRes.status === 409 && erro?.motivo === "tamanho_esgotado" && erro.tamanho) {
+                tamanhosEsgotados.add(erro.tamanho);
+                aplicarTamanhosEsgotados();
+                atualizarTotal();
+              }
+              // 5xx (fora o "ocupado", já repetido acima): o servidor pode ter gravado antes de falhar — não mandar a pessoa enviar de novo às cegas.
+              if (pedidoRes.status >= 500 && !(pedidoRes.status === 503 && erro?.motivo === "ocupado")) {
+                throw new Error("Não conseguimos confirmar o seu pedido agora. Ele pode ter sido registrado: confira em Meus pedidos, com o seu telefone, antes de enviar de novo.");
+              }
               throw new Error(erro?.erro || "falha ao criar pedido");
             }
 
@@ -437,7 +528,8 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             document.querySelectorAll(".item-linha, .item-linha-preco").forEach((linha, indice) => { if (indice > 1) linha.remove(); });
             atualizarTotal();
           } catch (err) {
-            if (status) status.textContent = (err && err.message && err.message !== "falha ao criar pedido") ? err.message : "Não foi possível enviar agora. Tente novamente em instantes.";
+            // erro de rede (a resposta pode ter se perdido depois de o servidor gravar): conferir antes de enviar de novo
+            if (status) status.textContent = (err && err.name === "TypeError") ? "Sua conexão falhou na hora de enviar. O pedido pode ter sido registrado: confira em Meus pedidos, com o seu telefone, antes de enviar de novo." : (err && err.message && err.message !== "falha ao criar pedido") ? err.message : "Não foi possível enviar agora. Tente novamente em instantes.";
             if (button) button.disabled = false;
           }
         });

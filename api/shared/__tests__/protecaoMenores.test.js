@@ -225,7 +225,8 @@ describe("os textos dos avisos", () => {
       pm.textoPadrao({ tipo: "EQUIPE", total: 3 }), pm.textoComiteIncompleto({ problemas: ["falta leigo."] }), pm.textoCautelarSemDecisao({ dias: 4 }), pm.textoCautelarPessoa(), pm.textoCautelarLevantada(), pm.textoConfirmacaoDeAjuda(), pm.textoResumoDiario({ vencidas: 2, semComprovante: 1 }), pm.textoArquivadoSemConteudo(), pm.textoRetiradaCautelar({ equipes: ["Berçário"], nEscalas: 2 })
     ];
     for (const t of textos) { expect(typeof t).toBe("string"); expect(t.length).toBeGreaterThan(20); expect(t.length).toBeLessThanOrEqual(1000); expect(t).not.toMatch(/<|>/); }
-    expect(textos[0]).toMatch(/até 24 horas.*10\/10 às 12h00/);
+    expect(textos[0]).toMatch(/comunicar ao Conselho Tutelar imediatamente: o prazo máximo da Igreja termina em 10\/10 às 12h00/);
+    expect(textos[0]).not.toMatch(/em até 24 horas/);                // a lei não dá prazo de horas (ECA 13 e 70-B; Lei 14.344/2022, art. 23): as 24 horas são o teto da Igreja
     expect(pm.textoCautelarPessoa()).not.toMatch(/alega|suspeita|incidente|violência|abuso/i);        // a pessoa afastada não lê o motivo
     expect(textos[4]).toMatch(/PRAZO VENCIDO/);
     expect(pm.textoConfirmacaoDeAjuda()).toMatch(/190/);

@@ -29,11 +29,12 @@ function fatos(sobre = {}) {
 const aptidao = (sobre) => mm.avaliarAptidao(fatos(sobre), { hoje, prazos: {} });
 
 // minha-situacao (GestaoMinisterioMenores → db.minhaSituacao)
-function minhaSituacao({ sobre = {}, equipes = [{ equipeId: 3, nome: "Maternal" }], autoDenuncia = null, politicaAceita = false } = {}) {
+// (Trava 7-B) `turmas`: as turmas da EBD marcadas "com menores" em que a pessoa leciona ({ turmaId, nome })
+function minhaSituacao({ sobre = {}, equipes = [{ equipeId: 3, nome: "Maternal" }], turmas = [], autoDenuncia = null, politicaAceita = false } = {}) {
   const ap = aptidao(sobre);
   return { sucesso: true, situacao: {
     apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: ap.bloqueios, validades: ap.validades, proximoVencimento: ap.proximoVencimento,
-    equipes, habilitacaoAberta: true, politica: { vigente: { versao: mm.POLITICA_VERSAO }, aceita: politicaAceita }, autoDenuncia
+    equipes, turmas, habilitacaoAberta: true, politica: { vigente: { versao: mm.POLITICA_VERSAO }, aceita: politicaAceita }, autoDenuncia
   } };
 }
 const politica = (aceita = false) => ({ sucesso: true, politica: mm.politicaVigente(), aceita });
@@ -62,20 +63,21 @@ function autoDenunciaDaSituacao(row) {
 }
 
 // painel (db.painel): a mesma montagem do servidor, sobre linhas sintéticas
-function painel(linhas, { reservado = false, equipesSemMarca = [] } = {}) {
+function painel(linhas, { reservado = false, equipesSemMarca = [], turmasSemMarca = [] } = {}) {
   const itens = linhas.map((l) => {
     const status = mm.statusDaLinha(l.aptidao);
     return {
-      membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome),
+      membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome), turmas: (l.turmas || []).map((t) => t.nome),
       status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }),
       proximoVencimento: reservado ? l.aptidao.proximoVencimento : mm.proximoVencimentoParaGestao(l.aptidao.proximoVencimento, l.aptidao.bloqueios),
       validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios)
     };
   }).sort((a, b) => ({ BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[a.status] - { BLOQUEADO: 0, VENCENDO: 1, APTO: 2 }[b.status]) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
-  return { sucesso: true, resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca };
+  return { sucesso: true, resumo: mm.resumirPainel(linhas, { reservado }), porCongregacao: mm.agruparPorCongregacao(linhas, { reservado }), voluntarios: itens, equipesSemMarca, turmasSemMarca };
 }
-const linha = (membroId, nome, cong, sobre, equipes = [{ equipeId: 3, nome: "Maternal", liderMembroId: 9 }]) => ({
-  membroId, nome, congregacaoId: cong.id, congregacaoNome: cong.nome, equipes, aptidao: aptidao(sobre)
+// (Trava 7-B) `turmas`: as turmas da EBD marcadas "com menores" em que a pessoa leciona ({ turmaId, nome, congregacaoId }); quem só é professor vem com `equipes` vazio
+const linha = (membroId, nome, cong, sobre, equipes = [{ equipeId: 3, nome: "Maternal", liderMembroId: 9 }], turmas = []) => ({
+  membroId, nome, congregacaoId: cong.id, congregacaoNome: cong.nome, equipes, turmas, aptidao: aptidao(sobre)
 });
 
 // ---- Consentimento do responsável ----

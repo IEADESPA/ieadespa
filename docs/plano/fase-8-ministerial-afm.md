@@ -3,7 +3,7 @@
 > Histórico e checklist desta parte do plano de versões. As referências a “seção 2.x” e “seção 4” apontam para o
 > [README](../../README.md); cada versão tem seu lugar no [índice do plano](INDICE.md).
 
-## v8.1 — AFM (Academia de Formação Ministerial)
+## v8.1 — AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)
 
 - [ ] Cadastro de Reitor + Corpo Docente.
 - [ ] Matrícula obrigatória de oficiais (Auxiliares→Pastores/Missionários).
@@ -14,6 +14,38 @@
       (Comissões Permanentes) porque dependia do Reitor, que nasce aqui —
       construir junto com o cadastro de Reitor deste item, reaproveitando
       `shared/comissoes.js` (mesmo padrão de CFO/CEP: calculada quando dá).
+
+> **Fusão decidida pelo responsável em 15/10/2026:** a antiga **v7.9** da FASE 7 foi movida **na íntegra** para cá e passa a fazer parte desta versão. A v8.1 vira uma
+> **mega fase**: o módulo da AFM (cadastro de Reitor e docentes, matrícula, escolaridade, CDER) **e** a contagem de faltas da CLI construídos juntos, porque a contagem
+> depende de saber quais sessões da CLI são também sessões da AFM (Art. 69). Ver também a nota sobre o contador único de faltas em [fase-2-governanca.md](fase-2-governanca.md).
+>
+> **Ponto de projeto em aberto (decidir antes de construir):** o texto da v7.9 abaixo diz que as sessões da CLI **integradas com a AFM ficam fora** da contagem de 3 faltas; a nota
+> “v0.3” da fase 2 diz que as faltas da CLI e da AFM deveriam **somar** no mesmo contador. As duas redações estão preservadas como foram escritas; é preciso escolher uma antes de
+> implementar.
+
+### Absorvido da antiga v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
+
+Movido de v2.3 de propósito — ver nota lá. Constrói **junto** com v8.1 (AFM),
+não antes: precisa primeiro saber marcar uma sessão da CLI como "integrada com
+AFM" (Art. 69) pra não contar errado a cada 3 meses.
+
+- [ ] 3 faltas consecutivas sem justificativa aceita nas reuniões da CLI
+      (excluindo as integradas com AFM) = perda automática do assento (Art. 27
+      §1º) — calculado a partir de `Presencas`, igual mandato vencido de
+      Assento (nunca marcação manual). Quem entra por Ordenação (Pastor/
+      Evangelista/Presbítero) precisa de um jeito de sair da composição da CLI
+      sem perder o `CargoMinisterial` (são coisas diferentes: perder assento
+      na Câmara ≠ deixar de ser Pastor); quem entra por Função já sai
+      naturalmente encerrando o Assento (mecanismo já existe).
+- [ ] Art. 27 §2º: se a exclusão for de quem está na CLI por cargo eletivo da
+      Diretoria Executiva ou Conselho Fiscal, a CLI aprecia e, sendo o caso,
+      convoca AGE de destituição em até 30 dias (matéria "Destituição", já
+      existente desde v2.2) — o sistema só aponta pro fluxo existente, não
+      automatiza a convocação.
+- [ ] **Taxonomia fechada de justificativa de falta** (Art. 149 §2º, gap da
+      varredura): só fator externo justifica — **escala ou evento de departamento
+      não é justificativa válida**. Catálogo com os motivos vedados bloqueados na
+      própria tela, não conferidos depois por alguém que talvez não conheça o §2º.
 
 ## v8.2 — Escada ministerial e ascensão
 

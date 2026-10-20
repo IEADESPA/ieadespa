@@ -1,0 +1,113 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { DIRECTUS_URL } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import "@/styles/painel-conteudo.css";
+
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title="Entrar — Painel de conteúdo" description="Área restrita da equipe." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer pc-escopo">
+    <div class="canvas entrar-canvas" data-pc-entrar data-directus-url={DIRECTUS_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">Área restrita</p>
+        <h1 class="pagehead-title">Painel de conteúdo</h1>
+        <p class="pagehead-description">
+          Entre com sua conta do Directus. Essa é a mesma conta usada no painel administrativo do
+          site — nenhuma senha nova é criada aqui.
+        </p>
+      </header>
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-entrar-form>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="entrar-email">E-mail</label>
+          <input id="entrar-email" name="email" type="email" autocomplete="username" required class="field" />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="entrar-senha">Senha</label>
+          <input id="entrar-senha" name="senha" type="password" autocomplete="current-password" required class="field" />
+        </div>
+        <button type="submit" class="btn btn-solid" data-entrar-submit>Entrar</button>
+        <p class="text-sm" data-entrar-status role="status" aria-live="polite"></p>
+      </form>
+
+      <p class="mt-8 text-sm text-muted-foreground" data-entrar-aba hidden>
+        Você entrou. Pode fechar esta aba e voltar para o texto que estava escrevendo: ele continua lá, e a
+        sessão já foi renovada.
+      </p>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { guardarSessao } from "@/lib/painelAuth";
+    import { AUTH_CONTEUDO, CANAL_SESSAO, iniciarQuandoPronto, painelUrls, voltarSeguro } from "@/lib/painelConteudo";
+
+    iniciarQuandoPronto("[data-pc-entrar]", (raiz) => {
+      const form = raiz.querySelector<HTMLFormElement>("[data-entrar-form]");
+      if (!form) throw new Error("formulário de login ausente");
+
+      const directusUrl = raiz.dataset.directusUrl ?? "";
+      const status = form.querySelector<HTMLElement>("[data-entrar-status]");
+      const submitBtn = form.querySelector<HTMLButtonElement>("[data-entrar-submit]");
+      const emailInput = document.getElementById("entrar-email") as HTMLInputElement;
+      const senhaInput = document.getElementById("entrar-senha") as HTMLInputElement;
+      const params = new URLSearchParams(window.location.search);
+      // Aberta pelo "Entrar de novo" de uma tela de edição que ficou sem sessão: em vez de navegar, entrega a sessão
+      // àquela aba (canal da mesma origem) e deixa a pessoa fechar esta.
+      const modoAba = params.get("aba") === "1";
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!status || !submitBtn || submitBtn.disabled) return;
+
+        submitBtn.disabled = true;
+        status.textContent = "Entrando…";
+
+        try {
+          // Modo "json": devolve também o token de renovação, guardado em sessionStorage — o cookie do Directus
+          // (outro domínio) nunca chegava à renovação.
+          const res = await fetch(`${directusUrl}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: emailInput.value.trim(), password: senhaInput.value, mode: "json" }),
+          });
+
+          if (!res.ok) {
+            status.textContent = "E-mail ou senha incorretos.";
+            submitBtn.disabled = false;
+            return;
+          }
+
+          const json = await res.json();
+          guardarSessao(AUTH_CONTEUDO.tokenKey, json.data.access_token, json.data.refresh_token);
+
+          // Avisa as outras abas do painel (uma tela de edição que ficou sem sessão pega a nova sem perder o texto).
+          try {
+            const canal = new BroadcastChannel(CANAL_SESSAO);
+            canal.postMessage({ tipo: "sessao", access: json.data.access_token, refresh: json.data.refresh_token });
+            canal.close();
+          } catch {
+            // sem BroadcastChannel: a tela de edição oferece "tentar de novo" e a pessoa entra por lá
+          }
+
+          if (modoAba) {
+            status.textContent = "✅ Pronto! Sessão renovada.";
+            raiz.querySelector<HTMLElement>("[data-entrar-aba]")?.removeAttribute("hidden");
+            window.close(); // só funciona numa aba aberta por script; senão a mensagem acima basta
+            return;
+          }
+
+          window.location.href = voltarSeguro(params.get("voltar"), painelUrls.inicio);
+        } catch {
+          status.textContent = "Não foi possível entrar agora. Tente novamente em instantes.";
+          submitBtn.disabled = false;
+        }
+      });
+    });
+  </script>
+</BaseLayout>

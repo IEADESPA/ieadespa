@@ -36,4 +36,25 @@ class Verificador {
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
-module.exports = { ambiente, Verificador, esperar };
+// Um PDF mínimo e VÁLIDO (uma página em branco de 3x3 pontos, com a tabela de referências nos deslocamentos certos), para os
+// testes de envio de arquivo (o painel de conteúdo aceita PDF de relatório; o servidor confere o tipo do arquivo).
+function pdfMinimo() {
+  const objetos = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 3 3] >>",
+  ];
+  let corpo = "%PDF-1.4\n";
+  const deslocamentos = [];
+  objetos.forEach((o, i) => {
+    deslocamentos.push(corpo.length);
+    corpo += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = corpo.length;
+  corpo += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n`;
+  for (const d of deslocamentos) corpo += `${String(d).padStart(10, "0")} 00000 n \n`;
+  corpo += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(corpo, "latin1");
+}
+
+module.exports = { ambiente, Verificador, esperar, pdfMinimo };

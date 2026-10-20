@@ -52,22 +52,19 @@ async function podeAcessarCongregacao(pool, usuario, congregacaoId) {
   return !!nome && auth.estaNoEscopo(usuario, nome);
 }
 
-async function ehProfessorAtivoDaTurma(pool, membroId, turmaId) {
-  if (!membroId) return false;
-  const r = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
-    SELECT TOP 1 1 FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
-  `);
-  return r.recordset.length > 0;
-}
-
 // Mesma regra da chamada (v6.2): ebd_gestao no escopo da turma OU professor
-// ativo dela.
+// ativo dela. Devolve { ok, mensagem }. Trava 7-B: na turma marcada "com
+// menores", o professor só age se estiver apto hoje e for adulto
+// (shared/ebdTurmas.js, portaoDoProfessorNaTurma).
 async function podeGerenciarTurma(pool, usuario, turmaId) {
   const turma = await ebd.buscarTurmaPorId(pool, turmaId);
-  if (!turma) return false;
-  if (temEbdGestao(usuario) && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)) return true;
-  return ehProfessorAtivoDaTurma(pool, usuario.membroId, turmaId);
+  if (!turma) return { ok: false };
+  return ebd.acessoDoProfessorOuGestor(pool, {
+    membroId: usuario.membroId, turmaId,
+    gestorNoEscopo: async () => temEbdGestao(usuario) && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)
+  });
 }
+const FORA_DA_TURMA = "Fora do seu escopo de atuação nesta turma.";
 
 function nomesPermitidos(usuario) {
   return usuario.escopoCongregacoes === "TODAS" ? null : (Array.isArray(usuario.escopoCongregacoes) ? usuario.escopoCongregacoes : []);
@@ -106,7 +103,8 @@ module.exports = async function (context, req) {
       const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
-      if (!(await podeGerenciarTurma(pool, usuario, turmaId))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const acesso = await podeGerenciarTurma(pool, usuario, turmaId);
+      if (!acesso.ok) return erro(context, 403, acesso.mensagem || FORA_DA_TURMA);
       const dados = await caderneta.montarLinhaDaTurma(pool, licaoId, turmaId);
       if (!dados) return erro(context, 404, "Lição não encontrada.");
       // A turma é da congregação da lição? Senão nada da lição (data, status) é devolvido — o
@@ -121,7 +119,8 @@ module.exports = async function (context, req) {
       const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
-      if (!(await podeGerenciarTurma(pool, usuario, turmaId))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const acesso = await podeGerenciarTurma(pool, usuario, turmaId);
+      if (!acesso.ok) return erro(context, 403, acesso.mensagem || FORA_DA_TURMA);
       const resultado = await caderneta.salvarCaderneta(pool, {
         licaoId, turmaId, biblias, revistas, observacao, registradoPorMembroId: usuario.membroId
       });

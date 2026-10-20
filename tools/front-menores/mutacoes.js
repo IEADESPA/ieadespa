@@ -20,7 +20,7 @@ const MUTACOES = [
   ["escape: aviso das equipes sem a marca", M, "<li>${escaparHtmlEbd(e.nome)}${e.congregacaoNome ? ` — ${escaparHtmlEbd(e.congregacaoNome)}` : \"\"}</li>", "<li>${e.nome}${e.congregacaoNome ? ` — ${e.congregacaoNome}` : \"\"}</li>"],
   ["escape: nome da sala (escalas)", E, "<h5>${escaparHtmlEbd(s.equipeNome)} ${s.ok", "<h5>${s.equipeNome} ${s.ok"],
   ["escape: problema de publicação (alerta)", E, "<ul class=\"mnr-problemas\">${problemas.map(p => `<li>${escaparHtmlEbd(p.mensagem)}", "<ul class=\"mnr-problemas\">${problemas.map(p => `<li>${p.mensagem}"],
-  ["escape: nome da equipe no seletor da Habilitação", E, "Faixa etária da equipe ${escaparHtmlEbd(e.nome)}</label>", "Faixa etária da equipe ${e.nome}</label>"],
+  ["escape: nome da equipe no seletor da Habilitação (âncora 7B)", E, "aria-label=\"Faixa etária da equipe ${escaparHtmlEbd(e.nome)}\">", "aria-label=\"Faixa etária da equipe ${e.nome}\">"],
   // ---- o hash que a tela mostrou é o que vai ----
   ["hash: aceite da política sem o hash mostrado", M, "{ aceito: true, textoHash }", "{ aceito: true, textoHash: \"fixo\" }"],
   ["hash: aceite da política sem o aceito:true", M, "{ aceito: true, textoHash }", "{ textoHash }"],
@@ -65,7 +65,7 @@ const MUTACOES = [
   ["escalas: publicar 422 volta a mostrar só a mensagem", E, "if (Array.isArray(data.problemas) && data.problemas.length) {", "if (false) {"],
   ["escalas: ids como texto no POST das crianças", E, "body: JSON.stringify({ servicoId: Number(servicoId), equipeId: Number(equipeId), criancas: Number(texto) })", "body: JSON.stringify({ servicoId: String(servicoId), equipeId: String(equipeId), criancas: texto })"],
   ["escalas: a faixa sai em branco", E, "if (!faixa) { mostrarToast(\"Escolha a faixa etária da equipe.\", \"erro\"); return; }", ""],
-  ["escalas: o seletor de faixa aparece em equipe sem a marca", E, "<td>${e.contatoComMenores ? `<label for=\"hvFaixa", "<td>${true ? `<label for=\"hvFaixa"],
+  ["escalas: o seletor de faixa aparece em equipe sem a marca (âncora 7B)", E, "${e.contatoComMenores ? `<br /><select id=\"hvFaixa", "${true ? `<br /><select id=\"hvFaixa"],
   // ---- tipos dos argumentos ----
   ["tipo: menorId como texto na autorização", M, "{ menorId: id, finalidade, aceito: true, termoHash }", "{ menorId: String(id), finalidade, aceito: true, termoHash }"],
   ["tipo: matrícula como texto no aceite em ficha", M, "const membroId = mnrInteiro(mnrTexto(\"mnrRpMatricula\"))", "const membroId = mnrTexto(\"mnrRpMatricula\")"],
@@ -87,7 +87,16 @@ const MUTACOES = [
   ["escalas: a faixa gravada deixa de aparecer escolhida", E, "sel.value = e.faixaEtariaMenores;", "void 0;"],
   ["foto de menor: o botão de consentimento próprio continua visível", M, "if (conceder) conceder.style.display = \"none\";", "void 0;"],
   ["foto de menor: sem ler o estado, o texto afirma que falta a autorização", M, "if (!imagem) {", "if (false) {"],
-  ["avisos fixos: o erro tem a mesma cara do sucesso", M, "destaque || !!(data && data.sucesso === false)", "destaque"]
+  ["avisos fixos: o erro tem a mesma cara do sucesso", M, "destaque || !!(data && data.sucesso === false)", "destaque"],
+  // ---- Trava 7-B: o professor de turma da EBD marcada "com menores" ----
+  ["7B: Meu Painel ignora as turmas da EBD", M, "const turmas = Array.isArray(s.turmas) ? s.turmas.filter(t => t && typeof t === \"object\") : [];", "const turmas = [];"],
+  ["7B: o professor sem equipe volta a ler 'não está em nenhuma equipe nem turma'", M, "${turmas.length ? \"Você não está em nenhuma equipe de escala com contato com menores.\"", "${false ? \"Você não está em nenhuma equipe de escala com contato com menores.\""],
+  ["7B: escape: nome da turma (Meu Painel)", M, "${turmas.map(t => `<li>${escaparHtmlEbd(t.nome)}</li>`).join(\"\")}", "${turmas.map(t => `<li>${t.nome}</li>`).join(\"\")}"],
+  ["7B: o painel ignora as turmas da EBD", M, "const turmas = Array.isArray(v.turmas) ? v.turmas : [];", "const turmas = [];"],
+  ["7B: escape: nome da turma (painel)", M, "${turmas.map(t => escaparHtmlEbd(t)).join(\", \")}", "${turmas.map(t => t).join(\", \")}"],
+  ["7B: o painel vazio volta a falar só de equipe", M, "Nenhuma pessoa serve em equipe nem leciona em turma da EBD com contato com menores nesta seleção.", "Nenhuma pessoa serve em equipe com contato com menores nesta seleção."],
+  ["7B: Meus Dados trata a retirada da turma como de equipe ('0 escala(s) desmarcada(s)')", M, "  if (r && r.origem === \"TURMA_EBD\") return", "  if (false) return"],
+  ["7B: escape: nome da turma (Meus Dados)", M, "`Turma ${escaparHtmlEbd(r.turma)} (EBD)`", "`Turma ${r.turma} (EBD)`"]
 ];
 
 const vivo = setInterval(() => {}, 1000);   // um ato esperando para sempre não pode encerrar o processo em silêncio

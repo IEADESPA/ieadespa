@@ -14,6 +14,7 @@
 //
 // GET  /api/ebd-turmas/turmas?congregacaoId=          -> turmas da congregação (+ contagem de professores/alunos)
 // POST /api/ebd-turmas/turmas   body:{congregacaoId, nome, faixaEtaria?}
+// POST /api/ebd-turmas/turmas/menores body:{turmaId, contatoComMenores:true|false}  -> v7.10: marca a turma "com menores" (só professor apto; ligar já tira o inapto; desligar pede a confirmação reforçada)
 // GET  /api/ebd-turmas/professores?turmaId=
 // POST /api/ebd-turmas/professores          body:{turmaId, membroId, principal?}
 // POST /api/ebd-turmas/professores/encerrar body:{turmaId, membroId}
@@ -126,6 +127,22 @@ module.exports = async function (context, req) {
       }
     }
 
+    // v7.10 — portão da EBD: a marca "com menores" da turma. Desligar derruba o portão (certidões, treinamento, política...): pede a confirmação reforçada, como a marca das equipes.
+    if (acao === "turmas/menores" && metodo === "POST") {
+      const { turmaId, contatoComMenores } = req.body || {};
+      if (!turmaId || typeof contatoComMenores !== "boolean") return erro(context, 400, "Informe turmaId e contatoComMenores (true/false).");
+      const tid = Number(turmaId);
+      // só número ou texto de dígitos: uma lista [3] vira "3" ao virar texto e passava como se fosse o número 3 (achado na prova no banco real, e2e-19)
+      if ((typeof turmaId !== "number" && typeof turmaId !== "string") || !Number.isInteger(tid) || tid <= 0 || String(turmaId).trim() !== String(tid)) return erro(context, 400, "turmaId inválido.");
+      const { ok, turma } = await podeAcessarTurma(pool, usuario, tid);
+      // turma que não existe e turma fora do escopo: a mesma resposta
+      if (!turma || !ok) return erro(context, 404, "Turma não encontrada.");
+      if (!contatoComMenores && turma.contatoComMenores && !auth.exigirFatorRecente(req, context)) return;
+      const resultado = await ebd.definirContatoComMenores(pool, { turmaId: tid, contatoComMenores, por: usuario.membroId });
+      context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
+      return;
+    }
+
     // ---- Professores ----
     if (acao === "professores") {
       if (metodo === "GET") {
@@ -137,8 +154,12 @@ module.exports = async function (context, req) {
         return;
       }
       if (metodo === "POST") {
-        const { turmaId, membroId, principal } = req.body || {};
-        if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+        const { turmaId: turmaBruta, membroId: membroBruto, principal } = req.body || {};
+        if (!turmaBruta || !membroBruto) return erro(context, 400, "Informe turmaId e membroId.");
+        // Identificador na grafia canônica (inteiro positivo): "5.9" virava 5 no driver do banco e o portão da turma "com menores" conferia OUTRA pessoa (achado da revisão da v7.10).
+        const turmaId = auth.idDeRota(turmaBruta), membroId = auth.idDeRota(membroBruto);
+        if (!turmaId) return erro(context, 400, "turmaId inválido.");
+        if (!membroId) return erro(context, 400, "membroId inválido.");
         const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
         if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
         const resultado = await ebd.designarProfessor(pool, { turmaId, membroId, principal, designadoPorMembroId: usuario.membroId });
@@ -148,8 +169,11 @@ module.exports = async function (context, req) {
     }
 
     if (acao === "professores/encerrar" && metodo === "POST") {
-      const { turmaId, membroId } = req.body || {};
-      if (!turmaId || !membroId) return erro(context, 400, "Informe turmaId e membroId.");
+      const { turmaId: turmaBruta, membroId: membroBruto } = req.body || {};
+      if (!turmaBruta || !membroBruto) return erro(context, 400, "Informe turmaId e membroId.");
+      const turmaId = auth.idDeRota(turmaBruta), membroId = auth.idDeRota(membroBruto);
+      if (!turmaId) return erro(context, 400, "turmaId inválido.");
+      if (!membroId) return erro(context, 400, "membroId inválido.");
       const { ok } = await podeAcessarTurma(pool, usuario, turmaId);
       if (!ok) return erro(context, 403, "Fora do seu escopo de atuação.");
       const resultado = await ebd.encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId: usuario.membroId });

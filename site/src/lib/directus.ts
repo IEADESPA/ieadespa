@@ -115,6 +115,12 @@ export const STATUS_CAMISETA_URL = "/api/status-camiseta";
 export const STATUS_INSCRICAO_URL = "/api/status-inscricao";
 
 /**
+ * Contador de visitas (16/10/2026): `POST` com `{ path, referrer_domain }` a cada página vista (ver `BaseLayout.astro`). A Function junta as
+ * visitas num buffer e grava no Directus em lote (25 visitas ou 10 s); antes cada visita era uma gravação direta do navegador no Directus.
+ */
+export const REGISTRAR_VISITA_URL = "/api/registrar-visita";
+
+/**
  * Inscrição em evento inteira no servidor (06/10/2026): prazo, vagas, cupom,
  * grupo e gravação — o navegador não escreve mais no Directus (a permissão
  * pública de criar inscrição/resposta e de mudar o contador do cupom saiu).

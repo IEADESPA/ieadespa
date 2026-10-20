@@ -65,8 +65,10 @@ const AJUDA_POR_ABA = {
   "meupainel:setores": "Sua situação nos Setores Técnicos: candidate-se a um setor da sua profissão, leia e aceite o Termo de Adesão quando for aprovado(a) e saia quando quiser, sem penalidade. Quem serve em Engenharia ou Segurança pode interditar um templo em risco; quem serve em Comunicação pode pedir a remoção de uma postagem. O líder da congregação vê aqui os atos dela.",
   menores: "Ministério com menores (Lei 14.811/2024): quem serve com crianças e adolescentes precisa estar habilitado hoje. O painel mostra, por congregação, quem está apto, quem tem algo vencendo e quem está bloqueado e por quê; as ferramentas registram o aceite da política e a autorização do responsável em ficha de papel, confirmam a ficha cadastral e definem a faixa etária da equipe. A Diretoria também decide sobre as comunicações dos voluntários que respondem a processo criminal (Regimento Art. 133 §5º, V).",
   "meupainel:menores": "Se você serve (ou quer servir) com crianças e adolescentes: veja se está apto e o que falta, aceite a política de comunicação, confirme a sua ficha a cada 6 meses e, se responde a inquérito ou processo criminal, comunique a Diretoria (é um dever e não é punição). Se você é pai, mãe ou tutor de um menor, autorize ou revogue aqui o uso da imagem e da saúde dele(a) no crachá.",
-  "meupainel:protecao": "Proteção de crianças e adolescentes: se você (ou alguém) precisa de ajuda, escreva do seu jeito, sem precisar dizer o nome: uma pessoa preparada vai ler. Se você serve com crianças ou é líder, registre aqui um incidente (quase-acidente, quebra de política ou suspeita de violência). Em caso de suspeita, a lei manda comunicar ao Conselho Tutelar em até 24 horas: o sistema avisa a liderança na hora. Perigo agora: ligue 190. Disque 100, de graça, a qualquer hora.",
-  protecao: "Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes mostra, em tempo real, quanto falta para comunicar ao Conselho Tutelar cada suspeita de violência (24 horas). Abra o incidente para ler o relato (cada leitura fica registrada com o seu nome), registrar a comunicação ao órgão e anexar o comprovante. A Diretoria e o Comitê também decidem o afastamento cautelar, encerram o caso e acompanham padrões, o Comitê e o relatório anual. A Igreja acolhe e encaminha: quem apura são as autoridades.",
+  "meupainel:protecao": "Proteção de crianças e adolescentes: se você (ou alguém) precisa de ajuda, escreva do seu jeito, sem precisar dizer o nome: uma pessoa preparada vai ler. Se você serve com crianças ou é líder, registre aqui um incidente (quase-acidente, quebra de política ou suspeita de violência). Em caso de suspeita, a lei manda comunicar ao Conselho Tutelar imediatamente (o prazo máximo da Igreja é de 24 horas): o sistema avisa a liderança na hora. Perigo agora: ligue 190. Disque 100, de graça, a qualquer hora.",
+  protecao: "Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes mostra, em tempo real, quanto falta para comunicar ao Conselho Tutelar cada suspeita de violência (a lei manda comunicar imediatamente; o prazo máximo da Igreja é de 24 horas). Abra o incidente para ler o relato (cada leitura fica registrada com o seu nome), registrar a comunicação ao órgão e anexar o comprovante. A Diretoria e o Comitê também decidem o afastamento cautelar, encerram o caso e acompanham padrões, o Comitê e o relatório anual. A Igreja acolhe e encaminha: quem apura são as autoridades.",
+  "meupainel:checkininfantil": "Check-in infantil: as salas de hoje em que você serve com crianças (abra a sala, toque em “Entrar na sala”, receba as crianças e imprima a etiqueta com o código de retirada) e, se você é pai, mãe ou responsável cadastrado, o histórico dos seus filhos, a lista de quem pode retirá-los e a alergia ou condição de saúde que vai na etiqueta. Quem retira a criança digita o código da etiqueta: sem código ninguém leva, nem quem a equipe conhece. O responsável nunca faz o check-in por aqui.",
+  checkininfantil: "Check-in infantil (ECA arts. 70, 70-A e 70-B; Lei 14.811/2024): as salas de hoje com crianças, as aprovações de retirada por quem não está na lista (confirme com o responsável pelo telefone antes de decidir; o ato pede confirmação reforçada), as crianças travadas por erros do código e as fichas assinadas dos responsáveis. Na sala você vê a lotação, os voluntários, o relatório do dia e pode tirar quem esqueceu de sair.",
   vistoria: "Termo de Vistoria de antecedentes (Art. 133 §5º), só da Diretoria Executiva e do Conselho de Ética: veja quem falta, lavre o Termo e solicite certidões. A certidão nunca sobe ao sistema: o navegador calcula o código (hash) do arquivo e só ele é enviado.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
@@ -415,6 +417,8 @@ function limparSessao() {
   // v7.8: o relato e a fila de incidentes (dado de criança) saem da página junto com a sessão. O módulo é outro arquivo (modulos/protecao.js): se ele faltar ou estiver velho no cache do service worker,
   // a saída da sessão NÃO pode parar aqui (sem isto o authToken ficava preenchido).
   if (typeof prtLimparTela === "function") prtLimparTela();
+  // v7.10: a sala do check-in infantil, a busca, os formulários e o CÓDIGO de retirada (que só existe em memória e no painel de impressão) saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
+  if (typeof chkLimparTela === "function") chkLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
@@ -1233,7 +1237,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1266,6 +1270,9 @@ const ABA_PERMISSOES_ALT = {
   // Diretoria e o Comitê veem tudo, e só o nível geral decide o afastamento, encerra e vê padrões, Comitê e relatório anual (o servidor confere cada ação e a tela mostra só as
   // seções que ele libera). O pedido de ajuda, o registro de incidente e "Meus registros" ficam em Meu Painel → Proteção de crianças, abertos a qualquer login.
   protecao: ["protecao_menores"],
+  // v7.10 — Check-in infantil: a MESMA permissão da Habilitação ("habilitacao_voluntarios"), no escopo da congregação, só em sessão de liderança (o servidor confere cada ato). A tela da sala dos
+  // voluntários da equipe fica em Meu Painel → Check-in infantil, aberta a qualquer login (inclusive PIN): o que protege a criança é o código e a conferência do servidor.
+  checkininfantil: ["habilitacao_voluntarios"],
   // v5.9 — permissão própria, nunca concedida por padrão (dado mais
   // sensível do sistema: situação socioeconômica de família assistida).
   assistenciasocial: ["assistencia_social"],
@@ -1400,7 +1407,7 @@ const MODULOS = {
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
-  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao"] },
+  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao", "checkininfantil"] },
   assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
   ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
   conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
@@ -1460,11 +1467,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1472,6 +1479,7 @@ let subAbaMeupainelAtual = "perfil";
 function mostrarSubAbaMeupainel(sub) {
   subAbaMeupainelAtual = sub;
   chaveAjudaAtual = `meupainel:${sub}`;
+  if (typeof chkSubAbaMudou === "function") chkSubAbaMudou(sub);   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
@@ -1486,6 +1494,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "minhahabilitacao") carregarMinhaHabilitacaoAcao();
   if (sub === "menores") carregarMeuPainelMenoresAcao();
   if (sub === "protecao" && typeof carregarMeuPainelProtecaoAcao === "function") carregarMeuPainelProtecaoAcao();
+  if (sub === "checkininfantil" && typeof chkCarregarMeuPainelAcao === "function") chkCarregarMeuPainelAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

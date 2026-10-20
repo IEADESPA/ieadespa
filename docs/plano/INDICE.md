@@ -68,11 +68,12 @@ Arquivo: [`fase-3-disciplina-e-etica.md`](fase-3-disciplina-e-etica.md) — 7 bl
 
 ## FASE 4 — Financeiro e Patrimônio
 
-Arquivo: [`fase-4-financeiro-e-patrimonio.md`](fase-4-financeiro-e-patrimonio.md) — 1 bloco(s) · itens 21/21 concluídos.
+Arquivo: [`fase-4-financeiro-e-patrimonio.md`](fase-4-financeiro-e-patrimonio.md) — 2 bloco(s) · itens 21/21 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | v4.1 | [Tesouraria Local e Repasses (Entradas)](fase-4-financeiro-e-patrimonio.md#v41--tesouraria-local-e-repasses-entradas) | ✅ 21/21 |
+| · | [Nota de numeração das refatorações de navegação (movida do README em 15/10/2026)](fase-4-financeiro-e-patrimonio.md#nota-de-numeração-das-refatorações-de-navegação-movida-do-readme-em-15102026) | — |
 
 ## FASE B — Consolidação da Base
 
@@ -152,10 +153,11 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 18 bloco(s) · itens 56/87 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 63/85 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
+| · | [Resumo em prosa do andamento da fase 7 e da fase D (movido do README em 15/10/2026)](fase-7-saude-eventos-e-comunicacao.md#resumo-em-prosa-do-andamento-da-fase-7-e-da-fase-d-movido-do-readme-em-15102026) | — |
 | v7.1 | [PSC (Programa de Saúde Congregacional)](fase-7-saude-eventos-e-comunicacao.md#v71--psc-programa-de-saúde-congregacional) | ✅ 6/6 |
 | v7.2 | [Calendário oficial e agenda unificada](fase-7-saude-eventos-e-comunicacao.md#v72--calendário-oficial-e-agenda-unificada) | ✅ 12/12 |
 | v7.3 | [Canais oficiais e comunicação](fase-7-saude-eventos-e-comunicacao.md#v73--canais-oficiais-e-comunicação) | ✅ 8/8 |
@@ -165,8 +167,8 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-saude-eventos-e-comunicacao.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ✅ 3/3 |
 | v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
 | v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-saude-eventos-e-comunicacao.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ✅ 7/7 |
-| v7.9 | [CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)](fase-7-saude-eventos-e-comunicacao.md#v79--cli-comparecimento-obrigatório-e-perda-de-assento-por-faltas-art-27) | ⬜ 0/3 |
-| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ⬜ 0/6 |
+| v7.9 | [Movida para a v8.1 (fase 8), na íntegra](fase-7-saude-eventos-e-comunicacao.md#v79--movida-para-a-v81-fase-8-na-íntegra) | — |
+| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ✅ 7/7 |
 | 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | — |
 | v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | ⬜ 0/4 |
 | v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ⬜ 0/5 |
@@ -194,11 +196,11 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 
 ## FASE 8 — Ministerial (AFM)
 
-Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 0/26 concluídos.
+Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 0/29 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
-| v8.1 | [AFM (Academia de Formação Ministerial)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial) | ⬜ 0/5 |
+| v8.1 | [AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79) | ⬜ 0/8 |
 | v8.2 | [Escada ministerial e ascensão](fase-8-ministerial-afm.md#v82--escada-ministerial-e-ascensão) | ⬜ 0/3 |
 | v8.3 | [Consagração e documentação](fase-8-ministerial-afm.md#v83--consagração-e-documentação) | ⬜ 0/3 |
 | v8.4 | [Credencial digital com QR Code](fase-8-ministerial-afm.md#v84--credencial-digital-com-qr-code) | ⬜ 0/3 |
@@ -249,7 +251,7 @@ Arquivo: [`fase-11-sistema-campal.md`](fase-11-sistema-campal.md) — 0 bloco(s)
 
 ## FASE 12 — Inteligência, Indicadores e Benchmarking
 
-Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indicadores.md) — 7 bloco(s) · itens 0/13 concluídos.
+Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indicadores.md) — 8 bloco(s) · itens 0/13 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -260,3 +262,4 @@ Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indica
 | v12.4 | [Painel executivo denominacional](fase-12-inteligencia-e-indicadores.md#v124--painel-executivo-denominacional) | ⬜ 0/3 |
 | · | [📌 Pendência entre fases — Trilha de discipulado (self-service, vB.5)](fase-12-inteligencia-e-indicadores.md#-pendência-entre-fases--trilha-de-discipulado-self-service-vb5) | — |
 | 🔒 12-B | [antes de encerrar a FASE 12 (e o roadmap comprometido até aqui)](fase-12-inteligencia-e-indicadores.md#-trava-de-revisão-12-b--antes-de-encerrar-a-fase-12-e-o-roadmap-comprometido-até-aqui) | — |
+| · | [Visão de longo prazo — integração total e sistema próprio de criação de sites (registrada em 19/10/2026)](fase-12-inteligencia-e-indicadores.md#visão-de-longo-prazo--integração-total-e-sistema-próprio-de-criação-de-sites-registrada-em-19102026) | — |

@@ -203,7 +203,9 @@ function mapearTurma(row) {
   if (!row) return null;
   return {
     turmaId: row.TurmaId, congregacaoId: row.CongregacaoId, nome: row.Nome,
-    faixaEtaria: row.FaixaEtaria, ativa: row.Ativa, criadoEm: row.CriadoEm
+    faixaEtaria: row.FaixaEtaria, ativa: row.Ativa, criadoEm: row.CriadoEm,
+    // v7.10: turma "com menores" só aceita professor apto (a marca nasce desligada)
+    contatoComMenores: !!row.ContatoComMenores
   };
 }
 
@@ -280,6 +282,37 @@ async function ehProfessorAtivoDaCongregacao(pool, membroId, congregacaoId) {
   return r.recordset.length > 0;
 }
 
+// Trava 7-B — o portão da EBD no ATO, como o do check-in (checkinInfantilDb.papelDoOperador): na turma marcada "com menores", ser professor ativo não basta; é preciso
+// estar APTO HOJE (a aptidão da v7.7, calculada agora, nunca guardada) e ser ADULTO. Sem isso, quem perdeu a habilitação no meio da semana seguia fazendo chamada e vendo os
+// alunos até a rotina diária tirá-lo da turma, e o adolescente apto agia como professor. A mensagem não diz o motivo (a pessoa o vê em Meu Painel).
+// Devolve { professor, ok, mensagem }: professor = tem o vínculo ativo na turma; ok = pode agir como professor dela. Turma sem a marca: o vínculo basta (nada muda).
+// A consulta mantém "FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1", a mesma que as rotas faziam.
+const MENSAGEM_PROFESSOR_INAPTO = "Esta turma está marcada como \"com menores\" e hoje você não pode agir nela como professor: a sua habilitação para servir com menores não está em dia. Veja o que falta em Meu Painel → Ministério com menores e fale com a Secretaria da congregação.";
+const MENSAGEM_PROFESSOR_ADOLESCENTE = "Esta turma está marcada como \"com menores\": só adultos (18 anos ou mais) agem nela como professor. Fale com a Secretaria da congregação.";
+async function portaoDoProfessorNaTurma(pool, membroId, turmaId, { hoje } = {}) {
+  if (!membroId || !turmaId) return { professor: false, ok: false };
+  const r = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
+    SELECT TOP 1 (SELECT t.ContatoComMenores FROM EbdTurmas t WHERE t.TurmaId = @turmaId) AS ContatoComMenores
+    FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
+  `);
+  const vinculo = r.recordset[0];
+  if (!vinculo) return { professor: false, ok: false };
+  if (!vinculo.ContatoComMenores) return { professor: true, ok: true };
+  const ap = await require("./ministerioMenoresDb").aptidaoDe(pool, membroId, hoje ? { hoje } : {});
+  if (!ap || !ap.apto) return { professor: true, ok: false, mensagem: MENSAGEM_PROFESSOR_INAPTO };
+  if (!ap.contaComoAdulto) return { professor: true, ok: false, mensagem: MENSAGEM_PROFESSOR_ADOLESCENTE };
+  return { professor: true, ok: true };
+}
+
+// O acesso de uma rota da turma: { ok, mensagem }. O professor da turma marcada que hoje não pode agir é recusado MESMO se também tiver a gestão da EBD (é ele quem está na
+// sala); a liderança que não é professor da turma segue a regra de sempre (`gestorNoEscopo`, que a rota calcula). `mensagem` só vem na recusa pelo portão dos menores.
+async function acessoDoProfessorOuGestor(pool, { membroId, turmaId, gestorNoEscopo, hoje }) {
+  const p = await portaoDoProfessorNaTurma(pool, membroId, turmaId, { hoje });
+  if (p.professor && !p.ok) return { ok: false, mensagem: p.mensagem };
+  if (await gestorNoEscopo()) return { ok: true };
+  return { ok: p.ok };
+}
+
 async function buscarVinculoProfessor(pool, turmaId, membroId) {
   const result = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
     SELECT * FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId
@@ -289,7 +322,13 @@ async function buscarVinculoProfessor(pool, turmaId, membroId) {
   return { turmaProfessorId: row.TurmaProfessorId, turmaId: row.TurmaId, membroId: row.MembroId, principal: row.Principal, ativo: row.Ativo };
 }
 
-async function designarProfessor(pool, { turmaId, membroId, principal, designadoPorMembroId }) {
+// Identificador na grafia canônica: inteiro positivo, só dígitos, dentro do INT do SQL. "5.9" (que o driver do banco grava como 5), "05", "1e1", true e [5] não são identificadores.
+const idCanonico = (v) => ((typeof v === "number" || typeof v === "string") && /^[1-9]\d{0,9}$/.test(String(v)) && Number(v) <= 2147483647 ? Number(v) : null);
+
+async function designarProfessor(pool, { turmaId: turmaBruta, membroId: membroBruto, principal, designadoPorMembroId }) {
+  // (v7.10, achado da revisão) o portão da turma "com menores" confere a pessoa pelo número: um número fracionário passava como "5.9" na conferência e era gravado como 5 pelo driver.
+  const turmaId = idCanonico(turmaBruta), membroId = idCanonico(membroBruto);
+  if (!turmaId || !membroId) return { sucesso: false, mensagem: "Informe a turma e o membro (números inteiros positivos)." };
   const turma = await buscarTurmaPorId(pool, turmaId);
   if (!turma) return { sucesso: false, mensagem: "Turma não encontrada." };
 
@@ -305,6 +344,13 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
   // é afetado: só a designação nova passa por aqui.
   const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "EBD_PROFESSOR", membroId });
   if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
+
+  // v7.10 — portão da EBD (Lei 14.811/2024): turma marcada "com menores" só aceita professor APTO hoje (a aptidão da v7.7, calculada agora). Quem já leciona sai pela
+  // rotina diária (ministerioMenoresDb.retirarInaptosDasTurmas); aqui só a designação nova (ou a reativação) passa pelo portão. Turma sem a marca: nada muda.
+  const portao = await require("./ministerioMenoresDb").aptosParaTurma(pool, { turmaId, membroIds: [membroId] });
+  if (portao.contatoComMenores && !portao.aptos.has(Number(membroId))) {
+    return { sucesso: false, mensagem: `Esta turma está marcada como "com menores" e o professor não pode ser designado: ${portao.bloqueados.get(Number(membroId))}.` };
+  }
 
   if (vinculo) {
     await pool.request().input("id", sql.Int, vinculo.turmaProfessorId).input("principal", sql.Bit, !!principal).query(`
@@ -323,6 +369,22 @@ async function designarProfessor(pool, { turmaId, membroId, principal, designado
   });
 
   return { sucesso: true, mensagem: "✅ Professor designado.", alertas: formacao.alertas };
+}
+
+// v7.10: marcar (ou desmarcar) a turma como "com menores". Ligar é livre e já tira da turma, na hora, o professor que não é apto; desligar derruba o portão da turma e a rota pede a
+// confirmação reforçada. Devolve `mudou` para a rota saber se houve mudança (a auditoria é só de mudança).
+async function definirContatoComMenores(pool, { turmaId, contatoComMenores, por }) {
+  const turma = await buscarTurmaPorId(pool, turmaId);
+  if (!turma) return { sucesso: false, mensagem: "Turma não encontrada." };
+  const marca = contatoComMenores === true;
+  if (turma.contatoComMenores === marca) return { sucesso: true, mudou: false, mensagem: marca ? "A turma já estava marcada como \"com menores\"." : "A turma já estava sem a marca de menores." };
+  await pool.request().input("id", sql.Int, turmaId).input("v", sql.Bit, marca ? 1 : 0).query(`UPDATE EbdTurmas SET ContatoComMenores = @v, AtualizadoEm = SYSUTCDATETIME() WHERE TurmaId = @id`);
+  await registrarAuditoria({ tabela: "EbdTurmas", registroId: turmaId, acao: "TURMA_CONTATO_COM_MENORES_ALTERADO", usuarioId: por, dadosAntes: { contatoComMenores: !marca }, dadosDepois: { contatoComMenores: marca } });
+  let retirada = null;
+  if (marca) { try { retirada = await require("./ministerioMenoresDb").retirarInaptosDasTurmas(pool, { turmaId }); } catch (e) { retirada = { retirados: 0, vinculos: 0, falhou: true }; } }
+  const n = retirada ? retirada.vinculos : 0;
+  return { sucesso: true, mudou: true, retirados: n, retiradaFalhou: !!(retirada && retirada.falhou),
+    mensagem: marca ? (n ? `✅ Turma marcada como "com menores". ${n} professor(es) sem habilitação saíram da turma (eles e os colegas foram avisados).` : "✅ Turma marcada como \"com menores\": só professor com habilitação em dia será designado.") : "✅ Marca de menores retirada da turma." };
 }
 
 async function encerrarProfessor(pool, { turmaId, membroId, registradoPorMembroId }) {
@@ -583,13 +645,16 @@ async function listarTurmasParaVisaoAgrupada(pool, { nomesCongregacoesPermitidas
 }
 
 module.exports = {
+  definirContatoComMenores,
   PREFIXO_MATRICULA_EBD,
   nomeTurmaValido, validarNovaTurma, podeDesignarProfessor, podeMatricularAluno,
   formatarMatricula, agruparPorAreaCongregacao, filtrarBuscaAgrupada,
   criarTurma, buscarTurmaPorId, listarTurmasPorCongregacao,
-  buscarVinculoProfessor, designarProfessor, encerrarProfessor, listarProfessoresPorTurma,
+  buscarVinculoProfessor, designarProfessor, idCanonico, encerrarProfessor, listarProfessoresPorTurma,
   buscarAlunoPorMembro, matricularAluno, transferirAluno, listarAlunosPorTurma,
   listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao,
+  // Trava 7-B — portão da turma "com menores" no ato
+  portaoDoProfessorNaTurma, acessoDoProfessorOuGestor, MENSAGEM_PROFESSOR_INAPTO, MENSAGEM_PROFESSOR_ADOLESCENTE,
   // v6.8 — aluno não-membro
   MAIORIDADE_ANOS, idadeEmAnos, validarAlunoNaoMembro, podeMatricularNaoMembro, podeVincularAMembro,
   buscarAlunoPorId, matricularAlunoNaoMembro, vincularAlunoAMembro, encerrarMatricula

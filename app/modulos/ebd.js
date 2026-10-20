@@ -23,10 +23,28 @@ async function carregarTurmasEbdAcao() {
   if (data === null) return;
   if (data.sucesso === false) { container.innerHTML = `<p class="subtitle">${escaparHtmlEbd(data.mensagem)}</p>`; return; }
   container.innerHTML = data.turmas.length
-    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Faixa Etária</th><th>Professores</th><th>Alunos</th></tr></thead><tbody>
-        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${escaparHtmlEbd(t.totalProfessores)}</td><td>${escaparHtmlEbd(t.totalAlunos)}</td></tr>`).join("")}
+    ? `<table class="tabela-frequencia"><thead><tr><th>Id</th><th>Nome</th><th>Faixa Etária</th><th>Professores</th><th>Alunos</th><th>Com menores</th></tr></thead><tbody>
+        ${data.turmas.map(t => `<tr><td>${t.turmaId}</td><td>${escaparHtmlEbd(t.nome)}</td><td>${escaparHtmlEbd(t.faixaEtaria || "-")}</td><td>${escaparHtmlEbd(t.totalProfessores)}</td><td>${escaparHtmlEbd(t.totalAlunos)}</td>
+          <td>${t.contatoComMenores ? "Sim" : "Não"} <button type="button" class="btn-link" data-on-click="alternarMenoresTurmaEbdAcao" data-args-click="${argsAttr(Number(t.turmaId), !t.contatoComMenores)}">${t.contatoComMenores ? "Desmarcar" : "Marcar"}</button></td></tr>`).join("")}
       </tbody></table>`
     : "<p class='subtitle'>Nenhuma turma cadastrada nesta congregação ainda.</p>";
+}
+
+// v7.10 — portão da EBD: a turma de crianças leva a marca "com menores"; só professor apto fica nela (ligar a marca já tira os inaptos, com aviso a eles e aos colegas).
+// Desmarcar pede a confirmação da identidade de novo (fator recente) na própria rota; o fetchProtegido trata o 428.
+async function alternarMenoresTurmaEbdAcao(turmaId, novoValor) {
+  const ligando = novoValor === true || novoValor === "true";
+  const aviso = ligando
+    ? "Marcar esta turma como de contato com menores? Professores sem a habilitação exigida saem da turma agora (eles e os colegas são avisados), e daqui em diante só professor apto entra nela."
+    : "Desmarcar? A turma deixa de exigir a habilitação dos professores.";
+  if (!confirm(aviso)) return;
+  const res = await fetchProtegido(`${API_BASE}/ebd-turmas/turmas/menores`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turmaId: Number(turmaId), contatoComMenores: ligando })
+  });
+  const data = await res.json().catch(() => ({}));
+  mostrarToast(data.mensagem || (res.ok ? "Feito." : "Não foi possível alterar agora."), data.sucesso === false || !res.ok ? "erro" : "sucesso");
+  carregarTurmasEbdAcao();
 }
 
 async function criarTurmaEbdAcao() {
@@ -2342,6 +2360,7 @@ async function carregarRankingConquistaAdminAcao() {
 }
 
 registrarAcoes({
+  alternarMenoresTurmaEbdAcao,
   abrirLicaoEbdAcao, abrirMatriculaTrilhaAcao, abrirTelaChamadaOffline, adicionarMaterialPlanoEbdAcao, adicionarModuloTrilhaAcao,
   adicionarQuestaoEbdAcao, adicionarVisitanteOfflineAcao, anonimizarAlunoEbdDpoAcao, anonimizarVisitanteEbdDpoAcao, apagarDadosOfflineEbdAcao,
   aprovarPedidoRevistaEbdAcao, atualizarFormularioQuestaoEbd, atualizarItensPedidoRevistaEbdAcao, baixarPdfCertificado, baixarTurmaOfflineEbdAcao,

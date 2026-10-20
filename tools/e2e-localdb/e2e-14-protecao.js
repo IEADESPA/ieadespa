@@ -87,7 +87,7 @@ const idDe = async (protocolo) => escalar("SELECT IncidenteId FROM IncidentesPro
   ok(audRet.every((a) => !/6011/.test(a.DadosDepois)), "a auditoria da retirada não liga a pessoa ao motivo reservado");
   n = await notif("PROTECAO_INCIDENTE_NOVO");
   const novo = n.filter((x) => x.r === alg);
-  ok(novo.length === NAVISADOS && novo.every((x) => /24 horas/.test(x.m) && !/6011|criança disse/.test(x.m)), "o aviso da suspeita diz o prazo de 24 horas e não leva nome nem relato", novo[0] && novo[0].m);
+  ok(novo.length === NAVISADOS && novo.every((x) => /imediatamente/.test(x.m) && /prazo máximo da Igreja/.test(x.m) && !/6011|criança disse/.test(x.m)), "o aviso da suspeita manda comunicar imediatamente, diz o prazo máximo da Igreja (Trava 7-B) e não leva nome nem relato", novo[0] && novo[0].m);
   ok(!novo.some((x) => x.d === 6011 || x.d === 6012), "nem o envolvido nem quem registrou recebem o aviso da gestão");
   const aud = await auditoria("PROTECAO_INCIDENTE_REGISTRADO");
   const audAlg = aud[aud.length - 1];

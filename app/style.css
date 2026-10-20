@@ -934,5 +934,111 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
   }
 }
 
+/* v7.10 — Check-in infantil (módulo checkin-infantil.js: Meu Painel → Check-in infantil, a aba da liderança e a TELA DA SALA, usada no celular pela equipe). Prefixo .chk-; só variáveis do tema
+   (mais o verde escuro #156B3A que o sistema já usa nos botões de sucesso, para o texto passar de 4,5:1). No celular (360 a 390 px) tudo empilha e nada rola de lado (só as tabelas do relatório,
+   dentro de .chk-rolagem); todo alvo de toque tem pelo menos 40 px; a informação nunca depende só da cor (ícone e texto dizem o mesmo). As abas começam escondidas aqui (o JS as mostra por estilo). */
+#abaCheckininfantil, #subMeupainelCheckininfantil, #chkSecaoAprovacoes, #chkSecaoFichas { display: none; }
+.chk-btn { width: auto; margin: 0; min-height: 48px; }
+.chk-btn-principal { width: 100%; min-height: 56px; font-size: 1.05rem; }
+.chk-selo { white-space: normal; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; line-height: 1.3; }
+.chk-selo.cal-st-homologado { color: #156B3A; }
+.chk-selo.cal-st-cancelado { color: var(--cor-texto); }
+.chk-selos { margin: 4px 0 8px; line-height: 1.9; }
+.chk-sala-cartao, .chk-crianca, .chk-filho, .chk-resultado, .chk-voluntarios, .chk-lotacao, .chk-checkin, .chk-gestao, .chk-ficha, .chk-impressao, .chk-painel-acao { overflow-wrap: anywhere; }
+.chk-sala-cartao h5, .chk-crianca h5, .chk-filho h5 { overflow-wrap: anywhere; }
+.chk-contagem { font-size: 0.92rem; margin: 6px 0; }
+.chk-barra { gap: 10px; }
+.chk-titulo-lista { margin: 16px 0 6px; color: var(--cor-primaria); }
+.chk-subtitulo { margin: 14px 0 6px; font-size: 0.95rem; color: var(--cor-primaria); }
+.chk-nome { font-weight: 700; color: var(--cor-primaria); overflow-wrap: anywhere; }
+.chk-lista { margin: 4px 0 10px; padding-left: 20px; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chk-lista li { margin: 6px 0; }
+.chk-chips, .chk-voluntarios .chk-lista { list-style: none; padding-left: 0; }
+.chk-chip { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); background: var(--cor-superficie); padding: 8px 10px; margin: 6px 0; }
+.chk-voluntario { border-top: 1px dashed var(--cor-borda); padding: 8px 0; }
+.chk-lotacao-ok { border-left: 6px solid var(--cor-sucesso); }
+.chk-lotacao-problema { border-left: 6px solid var(--cor-erro); }
+.chk-lotacao-linha { font-size: 0.92rem; margin: 6px 0; line-height: 1.5; }
+.chk-progresso { width: 100%; height: 18px; accent-color: var(--cor-primaria); }
+.chk-problemas { margin: 8px 0 0; padding-left: 20px; font-size: 0.9rem; line-height: 1.45; color: var(--cor-erro); overflow-wrap: anywhere; }
+.chk-pendencias { margin: 10px 0; }
+.chk-pendencias .chk-lista { margin-bottom: 0; }
+.chk-crianca-divergente, .chk-crianca-travada { border-left: 6px solid var(--cor-erro); }
+.chk-crianca-via { border-left: 6px solid var(--cor-secundaria); }
+.chk-aguardando { background: var(--cor-secundaria-suave); color: #7A6110; border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chk-alergia { font-weight: 800; font-size: 1.05rem; color: #fff; background: var(--cor-erro); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 6px 0; overflow-wrap: anywhere; }
+.chk-acoes { gap: 10px; }
+.chk-apr-grupo { margin: 12px 0; }
+.chk-apr-sala { margin: 0 0 2px; font-size: 0.92rem; color: var(--cor-texto); overflow-wrap: anywhere; }
+.chk-tel { display: inline-flex; align-items: center; min-height: 40px; color: #156B3A; font-weight: 700; text-decoration: underline; }
+.chk-fieldset { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 0 0 14px; min-width: 0; }
+.chk-fieldset legend { font-weight: 700; font-size: 0.95rem; padding: 0 6px; color: var(--cor-primaria); }
+.chk-visitante { margin: 10px 0; }
+.chk-visitante summary, .chk-checkin details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--cor-primaria); }
+.chk-termo { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; max-height: 260px; overflow-y: auto; }
+.chk-termo-itens { margin: 4px 0 8px; padding-left: 20px; font-size: 0.86rem; line-height: 1.45; overflow-wrap: anywhere; }
+.chk-campo-codigo { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 1.6rem; font-weight: 800; letter-spacing: 0.3em; text-align: center; text-transform: uppercase; }
+.chk-historico { list-style: none; margin: 4px 0; padding: 0; }
+.chk-visita { border-top: 1px dashed var(--cor-borda); padding: 8px 0; font-size: 0.92rem; line-height: 1.6; overflow-wrap: anywhere; }
+.chk-secao-filho { margin: 6px 0; }
+[id^="chk"] .btn-link { font-size: 0.95rem; padding: 10px 8px; min-height: 40px; }
+#subMeupainelCheckininfantil input[type="text"], #subMeupainelCheckininfantil input[type="number"], #subMeupainelCheckininfantil input[type="date"], #subMeupainelCheckininfantil select, #subMeupainelCheckininfantil textarea,
+#abaCheckininfantil input[type="text"], #abaCheckininfantil input[type="number"], #abaCheckininfantil input[type="date"], #abaCheckininfantil select, #abaCheckininfantil textarea { min-height: 44px; width: 100%; max-width: 100%; }
+#subMeupainelCheckininfantil input[type="date"], #abaCheckininfantil input[type="date"] { padding: 8px 10px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; font-family: inherit; color: var(--cor-texto); box-sizing: border-box; }
+#subMeupainelCheckininfantil .opcao-checkbox, #abaCheckininfantil .opcao-checkbox { display: flex; align-items: flex-start; gap: 8px; min-height: 44px; margin: 8px 0; font-size: 0.92rem; line-height: 1.4; }
+#subMeupainelCheckininfantil .opcao-checkbox input, #abaCheckininfantil .opcao-checkbox input { width: 24px; height: 24px; flex: 0 0 24px; margin: 2px 0 0; }
+#abaCheckininfantil .barra-lista label { font-weight: 600; font-size: 0.85rem; }
+.chk-pilulas .cal-pilula { min-height: 44px; }
+/* o cinza das legendas e dos subtítulos do sistema (#6B7280) passa de 4,5:1 só sobre branco; nos cartões (fundo tingido) fica em 4,4:1: aqui o texto é mais escuro (6,9:1) */
+#subMeupainelCheckininfantil .psc-legenda, #abaCheckininfantil .psc-legenda, #subMeupainelCheckininfantil .subtitle:not(.psc-aviso), #abaCheckininfantil .subtitle:not(.psc-aviso) { color: #4B5563; }
+/* a etiqueta e o recibo: na tela e no papel (etiqueta pequena; recibo à parte; a saúde em destaque) */
+.chk-imprimivel { margin-top: 8px; }
+.chk-lote { margin: 0 0 16px; }
+.chk-lote-estado { margin: 0 0 6px; font-size: 0.9rem; font-weight: 700; }
+.chk-lote-impresso { color: #14532D; }
+.chk-etiquetas { display: flex; flex-wrap: wrap; gap: 10px; }
+.chk-etiqueta { width: 7cm; max-width: 100%; border: 2px dashed var(--cor-primaria); border-radius: 8px; background: #fff; color: #000; padding: 8px 10px; box-sizing: border-box; }
+.chk-etq-nome { font-size: 1.25rem; font-weight: 800; overflow-wrap: anywhere; }
+.chk-etq-sala, .chk-etq-hora { font-size: 0.8rem; overflow-wrap: anywhere; }
+.chk-codigo { font-family: ui-monospace, Consolas, "Courier New", monospace; font-size: 2.2rem; font-weight: 800; letter-spacing: 0.18em; text-align: center; margin: 6px 0; overflow-wrap: anywhere; }
+.chk-codigo-recibo { display: inline-block; font-size: 1.5rem; margin: 0 0 0 6px; }
+.chk-aviso-faixa { margin-top: 6px; font-size: 0.8rem; font-weight: 600; color: #7A6110; }
+.chk-recibo { border: 1px solid var(--cor-borda); border-radius: 8px; background: #fff; color: #000; padding: 10px 12px; margin-top: 12px; max-width: 14cm; }
+.chk-recibo-titulo { margin: 0 0 6px; font-size: 1rem; color: #000; }
+.chk-recibo-linha, .chk-recibo-orientacao { margin: 4px 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.chk-recibo-crianca { margin: 6px 0; font-size: 1rem; }
+.chk-recibo-nome { font-weight: 700; }
+.chk-rolagem { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.chk-tabela { margin-top: 4px; }
+.chk-tabela th { color: var(--cor-texto); }
+@media (max-width: 640px) {
+  .chk-acoes .chk-btn, .chk-barra .chk-btn { flex: 1 1 100%; }
+  .chk-codigo { font-size: 2rem; }
+}
+/* Impressão (v7.10). (1) O CÓDIGO de retirada nunca sai na impressora num Ctrl+P comum: só quando a pessoa toca em "Imprimir" (a classe .chk-imprimindo existe só durante window.print()).
+   (2) "Imprimir etiquetas e recibo" imprime só a caixa #chkImprimivel, e nela só os lotes marcados .chk-lote-alvo (os ainda não impressos); "Imprimir o relatório" imprime só #chkRelImprimivel. Base (qualquer navegador): visibility:hidden; onde o navegador sabe :has(),
+   o resto da página sai com display:none (sem ocupar folha). A etiqueta não parte no meio; o recibo começa numa folha à parte; a saúde sai em quadro preto grosso (a impressora pode ser preto e branco). */
+@media print {
+  body:not(.chk-imp-etiquetas) #chkImpressaoCx { display: none !important; }
+  .chk-so-tela { display: none !important; }
+  body.chk-imprimindo * { visibility: hidden !important; }
+  body.chk-imp-etiquetas .chk-lote:not(.chk-lote-alvo) { display: none !important; }
+  body.chk-imp-etiquetas #chkImprimivel, body.chk-imp-etiquetas #chkImprimivel *, body.chk-imp-relatorio #chkRelImprimivel, body.chk-imp-relatorio #chkRelImprimivel * { visibility: visible !important; }
+  body.chk-imp-etiquetas #chkImprimivel, body.chk-imp-relatorio #chkRelImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
+  body.chk-imprimindo .chk-etiqueta { border: 1px solid #000; break-inside: avoid; page-break-inside: avoid; }
+  body.chk-imprimindo .chk-recibo { border: 1px solid #000; break-before: page; page-break-before: always; }
+  body.chk-imprimindo .chk-alergia { background: #fff; color: #000; border: 3px solid #000; }
+  body.chk-imprimindo .chk-rolagem { overflow: visible; }
+  body.chk-imprimindo .chk-tabela { display: table; width: 100%; font-size: 9pt; }
+  body.chk-imprimindo .chk-tabela th, body.chk-imprimindo .chk-tabela td { white-space: normal; }
+}
+@supports selector(:has(*)) {
+  @media print {
+    body.chk-imp-etiquetas *:not(#chkImprimivel):not(#chkImprimivel *):not(:has(#chkImprimivel)), body.chk-imp-relatorio *:not(#chkRelImprimivel):not(#chkRelImprimivel *):not(:has(#chkRelImprimivel)) { display: none !important; }
+    body.chk-imp-etiquetas *:has(#chkImprimivel), body.chk-imp-relatorio *:has(#chkRelImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; }
+    body.chk-imp-etiquetas #chkImprimivel, body.chk-imp-relatorio #chkRelImprimivel { position: static; width: auto; }
+  }
+}
+
 /* Blocos que o servidor só entrega ao nível geral (papel Global com escopo de todas as congregações): escondidos para os demais. */
 body:not(.sessao-geral) .so-geral { display: none !important; }

@@ -52,6 +52,13 @@ class Elemento extends No {
   }
   // ---- árvore ----
   appendChild(n) { if (n.parentNode) n.parentNode.removeChild(n); n.parentNode = this; this.children.push(n); return n; }
+  // como o navegador: sem referência é o mesmo que appendChild; referência que não é filha deste elemento é erro (NotFoundError)
+  insertBefore(n, ref) {
+    if (ref == null) return this.appendChild(n);
+    if (this.children.indexOf(ref) < 0) throw new Error("NotFoundError: insertBefore com uma referência que não é filha deste elemento");
+    if (n.parentNode) n.parentNode.removeChild(n);
+    n.parentNode = this; this.children.splice(this.children.indexOf(ref), 0, n); return n;
+  }
   removeChild(n) { const i = this.children.indexOf(n); if (i >= 0) this.children.splice(i, 1); n.parentNode = null; return n; }
   remove() { if (this.parentNode) this.parentNode.removeChild(this); }
   get textContent() { return this.children.map(c => c.textContent).join(""); }

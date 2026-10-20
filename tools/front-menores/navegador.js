@@ -255,7 +255,7 @@ async function rodarViewport(nav, base, nome, viewport) {
   const s = await servidor();
   const nav = await puppeteer.launch({
     executablePath: EDGE, headless: true, userDataDir: path.join(require("os").tmpdir(), "mnr-edge-" + Date.now()),
-    args: ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--lang=pt-BR"],
+    args: ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--lang=pt-BR"],
     protocolTimeout: 120000
   });
   const resultados = [];

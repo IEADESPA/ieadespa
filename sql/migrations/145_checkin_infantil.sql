@@ -1,6 +1,6 @@
 -- ============================================================
 -- Migração 145 — v7.10: Check-in infantil com cadeia de custódia
--- (ECA art. 70 e 70-A — prevenção; art. 59-A (Lei 14.811/2024); LGPD art. 14 e art. 11 — dado de saúde de criança)
+-- (ECA art. 70 e 70-B — prevenção; art. 59-A (Lei 14.811/2024); LGPD art. 14 e art. 11 — dado de saúde de criança)
 --
 -- A v7.7 tornou obrigatória a habilitação de quem serve com menores e a regra dos dois adultos na ESCALA; a v7.8 deu à Igreja o relógio das 24 horas para o
 -- Conselho Tutelar. Faltava a peça do dia a dia: quem entregou a criança, quem a retirou, a que horas, com que código. Esta migração acrescenta:
@@ -422,31 +422,43 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'CHECKIN_VISITANTE_CONTATO
     INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('CHECKIN_VISITANTE_CONTATO_DIAS', N'Check-in infantil — dias até apagar o telefone de quem trouxe um visitante e o dado de saúde informado no balcão', 90);
 GO
 
--- ---- 8) Avisos (motor da vB.2). Os que protegem criança não podem ser desligados pelo destinatário (Obrigatoria = 1). ----
+-- ---- 8) Avisos (motor da vB.2). Os que protegem criança não podem ser desligados pelo destinatário (Obrigatoria = 1) e saem por e-mail E pelo celular (Trava 7-B: o sino sozinho não avisa a tempo). ----
 
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_RETIRADA_DIVERGENTE')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_RETIRADA_DIVERGENTE', N'Check-in infantil: alguém que não está na lista pediu para retirar uma criança', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_RETIRADA_DIVERGENTE', N'Check-in infantil: alguém que não está na lista pediu para retirar uma criança', N'MENORES', NULL, NULL, 1, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEGUNDA_VIA')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_SEGUNDA_VIA', N'Check-in infantil: foi emitida a segunda via do código de retirada da sua criança', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_SEGUNDA_VIA', N'Check-in infantil: foi emitida a segunda via do código de retirada da sua criança', N'MENORES', NULL, NULL, 1, 1, 1);
 -- (decisão da liderança, 20/10/2026) quem tem a guarda sabe, na hora, que a criança foi entregue ou retirada por alguém que não é responsável cadastrado (nome livre ou indicado só para a visita)
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_TERCEIRO_ENTREGA')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_TERCEIRO_ENTREGA', N'Check-in infantil: sua criança foi entregue na sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_TERCEIRO_ENTREGA', N'Check-in infantil: sua criança foi entregue na sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_TERCEIRO_RETIRADA')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_TERCEIRO_RETIRADA', N'Check-in infantil: sua criança foi retirada da sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_TERCEIRO_RETIRADA', N'Check-in infantil: sua criança foi retirada da sala por alguém que não está cadastrado como responsável', N'MENORES', NULL, NULL, 1, 1, 1);
+-- (Trava 7-B, 20/10/2026) toda pessoa incluída na lista de quem retira a criança avisa os responsáveis cadastrados (menos quem incluiu) — sobretudo a inclusão "por ficha" pela liderança
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_AUTORIZADO_INCLUIDO')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_AUTORIZADO_INCLUIDO', N'Check-in infantil: alguém foi incluído na lista de quem pode retirar a sua criança', N'MENORES', NULL, NULL, 1, 1, 1);
+-- (Trava 7-B) a retirada divergente que ninguém decidiu em 20 minutos lembra a liderança uma vez (a criança espera na sala)
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_DIVERGENCIA_PARADA')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_DIVERGENCIA_PARADA', N'Check-in infantil: uma retirada divergente espera a sua decisão há mais de 20 minutos', N'MENORES', NULL, NULL, 1, 1, 1);
+-- (Trava 7-B) a baixa administrativa avisa o responsável cadastrado: o registro da criança foi encerrado sem a retirada registrada
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_BAIXA_ADMINISTRATIVA')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_BAIXA_ADMINISTRATIVA', N'Check-in infantil: o registro da sua criança foi encerrado pela liderança sem a retirada registrada', N'MENORES', NULL, NULL, 1, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_SEM_RETIRADA')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_SEM_RETIRADA', N'Check-in infantil: criança sem retirada registrada depois do serviço', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_SEM_RETIRADA', N'Check-in infantil: criança sem retirada registrada depois do serviço', N'MENORES', NULL, NULL, 1, 1, 1);
 -- (revisão) quando um responsável cadastrado é revogado, o que ele autorizou a retirar a criança deixa de valer e a liderança é avisada (sem nome de criança)
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CHECKIN_AUTORIZADOS_DEPENDENTES')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'CHECKIN_AUTORIZADOS_DEPENDENTES', N'Check-in infantil: autorizações de retirada deixaram de valer porque o responsável que as fez foi revogado', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CHECKIN_AUTORIZADOS_DEPENDENTES', N'Check-in infantil: autorizações de retirada deixaram de valer porque o responsável que as fez foi revogado', N'MENORES', NULL, NULL, 1, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'EBD_PROFESSOR_RETIRADO')
-    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
-    VALUES (N'EBD_PROFESSOR_RETIRADO', N'EBD: professor saiu de turma com menores por falta de habilitação', N'MENORES', NULL, NULL, 1, 1);
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'EBD_PROFESSOR_RETIRADO', N'EBD: professor saiu de turma com menores por falta de habilitação', N'MENORES', NULL, NULL, 1, 1, 1);
 GO
 
 -- ---- 9) Retenção ----
@@ -457,7 +469,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Check-in 
     VALUES (N'Check-in infantil (entrega e retirada de crianças)', N'x', 1825);
 GO
 UPDATE dbo.PoliticasRetencao
-SET BaseLegal = N'Entrega e retirada de crianças, código (só o HMAC), autorizados e saúde (ECA arts. 70 e 70-A; LGPD arts. 11 e 14): 5 anos como prova de custódia; telefone de visitante e saúde do balcão saem em 90 dias; a saúde cadastrada é apagada ao revogar o consentimento; depois, anonimiza.'
+SET BaseLegal = N'Entrega e retirada de crianças, código (só o HMAC), autorizados e saúde (ECA arts. 70 e 70-B; LGPD arts. 11 e 14): 5 anos como prova de custódia; telefone de visitante e saúde do balcão saem em 90 dias; a saúde cadastrada é apagada ao revogar o consentimento; depois, anonimiza.'
 WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)';
 GO
 

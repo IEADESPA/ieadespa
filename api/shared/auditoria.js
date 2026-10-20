@@ -12,36 +12,26 @@ function sha256(texto) {
   return crypto.createHash("sha256").update(texto, "utf8").digest("hex");
 }
 
-async function registrarAuditoria({ tabela, registroId, acao, usuarioId, dadosAntes, dadosDepois }) {
-  try {
-    const pool = await getPool();
-    // Hash do registro anterior da mesma tabela (topo da corrente).
-    const anterior = await pool.request().input("tabela", sql.NVarChar(50), tabela)
-      .query(`SELECT TOP 1 HashRegistro FROM AuditLog WHERE Tabela = @tabela ORDER BY AuditId DESC`);
-    const hashAnterior = anterior.recordset[0] ? (anterior.recordset[0].HashRegistro || "") : "";
-
-    // O hash precisa ser calculado sobre EXATAMENTE os mesmos valores que
-    // ficam gravados no banco (strings), senão a verificação da cadeia
-    // (GET /api/auditoria/cadeia), que relê do banco, nunca vai bater —
-    // ela reconstrói o payload a partir das colunas já persistidas.
-    const registroIdNorm = registroId != null ? registroId : null;
-    const dadosAntesStr = dadosAntes ? JSON.stringify(dadosAntes) : null;
-    const dadosDepoisStr = dadosDepois ? JSON.stringify(dadosDepois) : null;
-    const payload = JSON.stringify({ tabela, registroId: registroIdNorm, acao, usuarioId: usuarioId || null, dadosAntes: dadosAntesStr, dadosDepois: dadosDepoisStr });
-    const hashRegistro = sha256(payload + hashAnterior);
-
-    await pool.request()
-      .input("tabela", sql.NVarChar(50), tabela)
-      .input("registroId", sql.Int, registroIdNorm)
-      .input("acao", sql.NVarChar(100), acao)
-      .input("usuarioId", sql.Int, usuarioId || null)
-      .input("dadosAntes", sql.NVarChar(sql.MAX), dadosAntesStr)
-      .input("dadosDepois", sql.NVarChar(sql.MAX), dadosDepoisStr)
-      .input("hashRegistro", sql.NVarChar(64), hashRegistro)
-      .query(`INSERT INTO AuditLog (Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro)
-              VALUES (@tabela, @registroId, @acao, @usuarioId, @dadosAntes, @dadosDepois, @hashRegistro)`);
-  } catch (e) {
-    console.error("[AUDITORIA] falha ao gravar:", e.message);
+// Trava 7-B (20/10/2026): antes, ler o topo da cadeia e gravar eram dois comandos soltos — duas gravações da mesma tabela ao mesmo tempo liam o MESMO hash anterior e a cadeia
+// bifurcava (a verificação de /api/auditoria/cadeia acusava quebra sem ter havido adulteração). Agora é uma transação curta com o topo lido sob UPDLOCK, HOLDLOCK, exatamente como
+// registrarAuditoriaNaTransacao: as gravações da mesma tabela fazem fila. Uma tentativa a mais se o banco escolher esta transação como vítima de impasse (erro 1205).
+// A falha de auditoria continua não derrubando a operação.
+async function registrarAuditoria(registro) {
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    let transacao = null;
+    try {
+      const pool = await getPool();
+      transacao = new sql.Transaction(pool);
+      await transacao.begin();
+      await registrarAuditoriaNaTransacao(transacao, registro);
+      await transacao.commit();
+      return true;
+    } catch (e) {
+      if (transacao) { try { await transacao.rollback(); } catch { } }
+      if (tentativa === 1 && e && (e.number === 1205 || (e.originalError && e.originalError.info && e.originalError.info.number === 1205))) continue;
+      console.error("[AUDITORIA] falha ao gravar:", e.message);
+      return true;
+    }
   }
   return true;
 }

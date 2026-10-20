@@ -44,6 +44,7 @@ const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const mc = require("../shared/menoresConsentimento");
 const mm = require("../shared/ministerioMenores");
+const mmDb = require("../shared/ministerioMenoresDb");
 const ck = require("../shared/checkinInfantil");
 const db = require("../shared/checkinInfantilDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
@@ -66,14 +67,25 @@ module.exports = async function (context, req) {
   // A permissão da liderança só vale em sessão de liderança: PIN ou código nunca valem como liderança (e não têm permissão alguma).
   const lideranca = auth.ehSessaoDeLideranca(sessao);
   const visaoHab = lideranca ? auth.visaoDaPermissao(sessao, "habilitacao_voluntarios") : null;
-  const gestao = !!visaoHab;
-  const gestorPodeVer = gestao ? (congregacaoNome) => auth.estaNoEscopo(visaoHab, congregacaoNome) : null;
+  let gestao = !!visaoHab;
+  let gestorPodeVer = gestao ? (congregacaoNome) => auth.estaNoEscopo(visaoHab, congregacaoNome) : null;
 
   const acao = context.bindingData.acao;
   const metodo = req.method;
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
   const consulta = req.query || {};
   const hoje = hojeBrasilia();
+
+  // Trava 7-B (20/10/2026): a liderança com pendência reservada à Diretoria (afastamento cautelar da v7.8, comunicação em análise, cadastro nacional, restrição nos antecedentes, fora
+  // de comunhão) não vê a sala nem age como gestão do check-in — é o mesmo bloqueio que tira o voluntário da sala. Sem isso, um Dirigente afastado por suspeita continuava vendo nomes,
+  // saúde e telefones, aprovando divergência e cadastrando autorizado "por ficha". A resposta é a de quem não tem a permissão (o motivo segue reservado). Na dúvida (a aptidão não
+  // pôde ser lida), fecha.
+  if (gestao) {
+    let impedido = true;
+    try { const ap = await mmDb.aptidaoDe(await getPool(), sessao.membroId, { hoje }); impedido = !ap || mm.temBloqueioReservado(ap.bloqueios); }
+    catch (e) { context.log && context.log.error && context.log.error("[CHECKIN] não foi possível conferir a aptidão da liderança:", e.message); }
+    if (impedido) { gestao = false; gestorPodeVer = null; }
+  }
 
   // Identificador que chega de fora: inteiro positivo escrito direito; o resto é 400 (nunca vira consulta ao banco).
   for (const campo of ["servicoId", "equipeId", "menorId", "registroId", "membroId", "autorizadoId"]) {
@@ -178,6 +190,8 @@ module.exports = async function (context, req) {
       if (!v.valido) return erro(context, 422, v.mensagem);
       const ficha = corpo.ficha === true;
       if (ficha && !gestao) return erro(context, 403, SEM_PERMISSAO);
+      // Trava 7-B: a liderança pondo alguém na lista de quem retira a criança "por ficha" é ato tão sensível quanto aprovar uma divergência (a pessoa passa a retirar e a pedir 2ª via)
+      if (ficha && !auth.exigirFatorRecente(req, context)) return;
       const pool = await getPool();
       return resposta(context, await db.adicionarAutorizado(pool, { dados: v, atorId: sessao.membroId, forma: ficha ? "FICHA_FISICA" : "RESPONSAVEL", gestorPodeVer, hoje }), 201);
     }

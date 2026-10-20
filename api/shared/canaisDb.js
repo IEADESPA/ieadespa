@@ -485,9 +485,11 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
     const criar = deps.criarNotificacao || require("./notificacoes").criarNotificacao;
     const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
     const regra = (await pool.request().input("chave", sql.NVarChar(60), regraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @chave AND Ativa = 1`)).recordset[0];
-    if (!regra) return { criadas: 0 };
+    if (!regra) return { criadas: 0, externas: 0 };
     const vistos = new Set();
-    let criadas = 0, suprimidas = 0;
+    // externas: quantas pessoas receberam o aviso FORA do app (e-mail aceito pelo provedor ou push entregue a pelo menos um aparelho). Só o sino não basta para
+    // aviso que protege criança: quem chama decide o que fazer quando ninguém foi alcançado (Trava 7-B, 20/10/2026).
+    let criadas = 0, suprimidas = 0, externas = 0;
     for (const d of destinatarios || []) {
       if (!d || !d.membroId || vistos.has(d.membroId)) continue;
       vistos.add(d.membroId);
@@ -502,13 +504,16 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
       });
       if (!criada) continue;
       criadas++;
-      try { await enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email, ...(aguardarEntrega === false ? { aguardarEntrega: false } : {}) }); }
+      try {
+        const canais = await enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email, ...(aguardarEntrega === false ? { aguardarEntrega: false } : {}) });
+        if (canais && (canais.emailEnviado || Number(canais.pushEnviados) > 0)) externas++;
+      }
       catch (e) { console.error("[CANAIS] falha ao enviar aviso:", e.message); }
     }
-    return { criadas, suprimidas };
+    return { criadas, suprimidas, externas };
   } catch (e) {
     console.error("[CANAIS] falha ao notificar:", e.message);
-    return { criadas: 0 };
+    return { criadas: 0, externas: 0 };
   }
 }
 

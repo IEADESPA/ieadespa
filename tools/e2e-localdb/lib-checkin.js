@@ -5,6 +5,12 @@ const fs = require("fs");
 const L = require("./lib");
 const { q, um, escalar, GERAL, LIDER, PIN, sessao, IP_PUBLICO, API, path } = L;
 
+// O provedor de e-mail no lugar do de verdade (o banco local não tem Azure Communication Services): aceita todo e-mail com endereço e guarda cada envio em EMAILS. Sem isso, nenhum
+// aviso seria "alcançado fora do app" e todo ato do check-in viraria `semAviso` (Trava 7-B, 20/10/2026: só o sino não conta). `EMAIL_FORA = true` simula o provedor caído.
+const EMAILS = [];
+const correio = { fora: false };
+require.cache[require.resolve(path.join(API, "shared/notificacaoEmail.js"))] = { id: "notificacaoEmail-falso", loaded: true,
+  exports: { enviarEmailNotificacao: async ({ email, titulo, mensagem }) => { if (correio.fora || !email) return false; EMAILS.push({ email, titulo, mensagem }); return true; } } };
 const CK = require(path.join(API, "GestaoCheckinInfantil/index.js"));
 const CONSENT = require(path.join(API, "GestaoConsentimentoMenor/index.js"));
 const VOLUNT = require(path.join(API, "GestaoVoluntariado/index.js"));
@@ -163,5 +169,5 @@ const falha = async (texto, params) => { try { await q(texto, params); return nu
 module.exports = {
   L, q, um, escalar, hoje, HAB, TABELAS_CK, cenario, pin, gestao, geral, semFator, LOGS, erroFatal, chamarH, ckGet, ckPost, consGet, consPost, volPost, meusDados, rotinaDiaria, CK, CONSENT, VOLUNT, db, ckRegra,
   nascimentoParaIdade, membro, adulto, crianca, responsavel, servico, alocar, abrirSala, visitante, trouxeLivre, checkin, codigosDe, registrosDe, codigoErradoDe,
-  textoDasTabelas, retratoCk, fuzzar, limpar, derrubarAptidao, restaurarAptidao, reg, eventos, notif, auditoria, falha, IP_PUBLICO
+  textoDasTabelas, retratoCk, fuzzar, limpar, derrubarAptidao, restaurarAptidao, reg, eventos, notif, auditoria, falha, IP_PUBLICO, EMAILS, correio
 };

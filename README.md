@@ -504,15 +504,11 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 - **Incidentes de proteção (v7.8, migração 144):** `IncidentesProtecao`, `IncidenteEnvolvidos`, `IncidenteRelatos` (um relato por incidente, só de acréscimo), `IncidenteLeituras`, `IncidenteComunicacoes`,
   `IncidenteDecisoesCautelares`, `IncidenteReclassificacoes` (gatilhos: nada se apaga; o nível só sobe). O prazo de 24 horas é calculado na leitura; o afastamento cautelar é um bloqueio reservado
   da aptidão da v7.7; permissão `protecao_menores` e papel "Comitê de Proteção". Rotina horária (`rotinas-protecao.yml`) que só abre o banco se há prazo correndo.
+- **Check-in infantil e portão da EBD (v7.10, migração 145; Trava 7-B, migrações 146 e 147):** `CheckinInfantilRegistros` (custódia: só o HMAC do código), `...Eventos` (só de acréscimo), `...Voluntarios`, `...Autorizados`,
+  `...AutorizadosVisita`, `...Saude` (com o consentimento SAUDE_CRACHA), `...SegundasVias`; `EbdTurmas.ContatoComMenores`. Rota `/api/checkin-infantil/<ação>`; retenção de 5 anos.
 
-**Ainda não existem** (projeção das fases futuras — nomes sujeitos a mudança na
-implementação, registrados aqui só como intenção): EBD (`ClassesEBD`, `AulasEBD`,
-`Licoes`, `Trilhas`, `Modulos`, `Certificados`), departamentos
-(`SchemasRelatorio`, `CamposFormulario`, `RelatoriosMensais`, `PerfisRateio`,
-`TesourariasDepartamento`), eventos (`Eventos`, `Inscricoes`, `Credenciamentos`), proteção de menores
-(`HabilitacoesMinisterioInfantil`, `CheckinsInfantis`, `Incidentes`), comunicação
-(`ConsentimentosComunicacao`, `Mensagens`), missões (`CamposMissionarios`,
-`RelatoriosCampo`), obrigações fiscais (`ObrigacoesAcessorias`).
+**Ainda não existem** (projeção das fases futuras, nomes sujeitos a mudança): comunicação (`ConsentimentosComunicacao`, `Mensagens`), missões
+(`CamposMissionarios`, `RelatoriosCampo`) e obrigações fiscais (`ObrigacoesAcessorias`). EBD, departamentos, eventos e proteção de menores já existem (acima).
 
 ## 5. Migração dos subsistemas (passo a passo)
 

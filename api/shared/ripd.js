@@ -54,7 +54,7 @@ const RIPDS = [
   },
   {
     chave: "INCIDENTES_DE_PROTECAO",
-    tratamento: "Registro de incidentes de proteção de crianças e adolescentes, do relato espontâneo, da comunicação ao Conselho Tutelar em 24 horas, do afastamento cautelar do envolvido e do relatório anual do Comitê de Proteção (v7.8).",
+    tratamento: "Registro de incidentes de proteção de crianças e adolescentes, do relato espontâneo, da comunicação imediata ao Conselho Tutelar (prazo máximo interno de 24 horas), do afastamento cautelar do envolvido e do relatório anual do Comitê de Proteção (v7.8).",
     riscoIdentificado: "Dado de criança sobre violência é o mais sensível que a Igreja guarda: vazamento revitimiza e expõe; uma acusação falsa ou errada afasta e marca uma pessoa inocente; e a omissão da comunicação tem multa e, pior, deixa a criança desprotegida.",
     medidasMitigacao: [
       "A Igreja COMUNICA, não investiga: não há campo de pergunta nem de inquirição; o formulário mostra o roteiro (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer",

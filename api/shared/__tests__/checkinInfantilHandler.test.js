@@ -20,7 +20,7 @@ jest.mock("../db", () => {
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => undefined), sha256: () => "" }));
 jest.mock("../segredoSessao", () => ({ resolverSegredo: () => "segredo-de-teste-com-mais-de-16-caracteres" }));
 jest.mock("../financeiroSeguro", () => ({ ...jest.requireActual("../financeiroSeguro"), obterTrava: jest.fn(async () => true) }));
-jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
+jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1, externas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
 jest.mock("../ministerioMenoresDb", () => ({
   aptidaoDe: jest.fn(async () => ({ apto: true, contaComoAdulto: true, bloqueios: [] })),
   aptidaoEmLote: jest.fn(async (_p, ids) => new Map(ids.map((i) => [Number(i), { apto: true, contaComoAdulto: true, bloqueios: [] }]))),
@@ -324,7 +324,7 @@ describe("encerrar-sala (rota da liderança)", () => {
     quando(/DECLARE @v TABLE/, []);
     const r = await encerrar(GESTAO());
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ sucesso: true, baixadas: 2, mensagem: expect.stringMatching(/2 criança\(s\) receberam a baixa administrativa/) });
+    expect(r.body).toEqual({ sucesso: true, baixadas: 2, semAviso: false, mensagem: expect.stringMatching(/2 criança\(s\) receberam a baixa administrativa/) });
     expect(r.headers).toMatchObject({ "Cache-Control": "no-store" });
     expect(com(/DECLARE @b TABLE/)[0].inputs).toMatchObject({ s: 5, e: 7, g: 5, m: "Os voluntários esqueceram de registrar as retiradas." });
   });
@@ -385,5 +385,40 @@ describe("o relatório do dia é ato de gestão e sair da sala não depende da e
     const gestor = await chamar("sala", { token: LOCAL(["habilitacao_voluntarios"]), query: CORPO_SALA });
     expect(gestor.status).toBe(200);
     expect(gestor.body.adultosPresentes.every((a) => typeof a.apto === "boolean")).toBe(true);
+  });
+});
+
+describe("Trava 7-B: a liderança com pendência reservada (afastamento cautelar, comunicação em análise...) não age como gestão do check-in", () => {
+  const mmDb = require("../ministerioMenoresDb");
+  const DECISAO = { registroId: 9, aprovar: true, motivo: "Confirmei com a mãe pelo telefone." };
+  afterEach(() => mmDb.aptidaoDe.mockImplementation(async () => ({ apto: true, contaComoAdulto: true, bloqueios: [] })));
+  test("afastada (INCIDENTE_EM_APURACAO): aprovar divergência, destravar e o relatório viram 403 com a mensagem de quem não tem a permissão, sem ler registro de criança", async () => {
+    mmDb.aptidaoDe.mockImplementation(async () => ({ apto: false, contaComoAdulto: true, bloqueios: [{ codigo: "INCIDENTE_EM_APURACAO" }] }));
+    for (const [acao, corpo] of [["decidir-divergencia", DECISAO], ["destravar", { registroId: 9 }]]) {
+      mockConsultas = [];
+      const r = await chamar(acao, { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"]), corpo });
+      expect(r.status).toBe(403);
+      expect(r.body.mensagem).not.toMatch(/apura|incidente|afast/i);
+      expect(com(/CheckinInfantilRegistros/)).toHaveLength(0);
+    }
+    const ficha = await chamar("autorizado-adicionar", { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"]), corpo: { menorId: 30, nome: "Dona Lúcia", parentesco: "AVO", ficha: true, referencia: "Ficha 3" } });
+    expect(ficha.status).toBe(403);
+    expect(escritas()).toHaveLength(0);
+  });
+  test("as outras pendências reservadas também barram; pendência comum (certidão vencida) não barra a gestão; e a aptidão que não pôde ser lida fecha a porta", async () => {
+    for (const codigo of ["AUTO_DENUNCIA_EM_ANALISE", "CADASTRO_NACIONAL", "ANTECEDENTES_COM_RESTRICAO", "FORA_DE_COMUNHAO"]) {
+      mmDb.aptidaoDe.mockImplementation(async () => ({ apto: false, bloqueios: [{ codigo }] }));
+      expect((await chamar("destravar", { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"]), corpo: { registroId: 9 } })).status).toBe(403);
+    }
+    mmDb.aptidaoDe.mockImplementation(async () => { throw new Error("banco fora"); });
+    expect((await chamar("destravar", { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"]), corpo: { registroId: 9 } })).status).toBe(403);
+    mmDb.aptidaoDe.mockImplementation(async () => ({ apto: false, bloqueios: [{ codigo: "CERTIDAO_VENCIDA" }] }));
+    const r = await chamar("destravar", { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"]), corpo: { registroId: 9 } });
+    expect(r.status).not.toBe(403);                                            // segue para a busca do registro (404 aqui: o banco simulado não tem a criança)
+  });
+  test("incluir autorizado POR FICHA pede a confirmação reforçada (428) antes de gravar", async () => {
+    const r = await chamar("autorizado-adicionar", { metodo: "POST", token: LOCAL(["habilitacao_voluntarios"], ["Central"], 5, null), corpo: { menorId: 30, nome: "Dona Lúcia", parentesco: "AVO", ficha: true, referencia: "Ficha 3" } });
+    expect(r.status).toBe(428);
+    expect(escritas()).toHaveLength(0);
   });
 });

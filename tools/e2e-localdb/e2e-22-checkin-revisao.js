@@ -456,6 +456,16 @@ const contar = (rs) => rs.reduce((a, r) => { a[r.status] = (a[r.status] || 0) + 
     r = await R(pin(BRUNO), registrosDe(r)[0], codigosDe(r)[0], { ref: "TROUXE" });
     ok(r.status === 200 && r.body.retirada === true && r.body.semAviso === true && /não conseguiu avisar o responsável cadastrado/.test(msg(r)), "e na retirada: a criança saiu, e a resposta diz que a família NÃO foi avisada", [r.status, msg(r)]);
   } finally { await q("UPDATE NotificacaoRegras SET Ativa = 1 WHERE Chave IN ('CHECKIN_TERCEIRO_ENTREGA', 'CHECKIN_TERCEIRO_RETIRADA')"); }
+  // Trava 7-B: o aviso que fica SÓ no sino do app (o provedor de e-mail caiu) não conta como avisado
+  ok(H.EMAILS.some((e) => /^Lia foi entregue na sala/.test(e.mensagem)), "(o aviso da entrega da Lia saiu por e-mail: provedor simulado)", H.EMAILS.length);
+  H.correio.fora = true;
+  try {
+    await H.crianca({ id: 7315, nome: "Rui Sem Correio E2E", idade: 4, cong: c1, resp: [[P.alice, "MAE"]] });
+    const nSino = await quantas("CHECKIN_TERCEIRO_ENTREGA");
+    r = anota(await checkin(pin(ANA), svTer, eq.maternal, [{ menorId: 7315 }], trouxeLivre("Tia Sem Correio Terceira")));
+    ok(r.status === 201 && r.body.semAviso === true && /não conseguiu avisar o responsável cadastrado/.test(msg(r)) && (await quantas("CHECKIN_TERCEIRO_ENTREGA")) === nSino + 1,
+      "Trava 7-B: com o e-mail fora do ar o aviso fica no sino (a linha existe), mas a resposta diz que a família NÃO foi avisada e manda ligar", [r.status, msg(r)]);
+  } finally { H.correio.fora = false; }
   // visitante (sem responsável cadastrado): não há a quem avisar, e isso não é alarme
   r = await checkin(pin(ANA), svTer, eq.maternal, [visitante("Visitante Sem Familia Teste", 4)], trouxeLivre("Tia Visitante Terceira"));
   ok(r.status === 201 && r.body.avisados === 0 && r.body.semAviso === false, "visitante: sem responsável cadastrado, sem aviso e sem alarme", r.body);

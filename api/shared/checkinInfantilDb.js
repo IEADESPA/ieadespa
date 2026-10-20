@@ -283,6 +283,32 @@ const JUNCOES_REGISTRO = `FROM CheckinInfantilRegistros r
   LEFT JOIN MembroReferencia rm ON rm.MembroId = r.RetiradoMembroId`;
 
 // visao: 'OPERADOR' (a equipe da sala) ou 'GESTOR' (a liderança: vê também o telefone de quem trouxe e quem decide as divergências).
+// Retirada divergente parada (Trava 7-B, 20/10/2026): o pedido avisa a liderança na hora, mas, se ninguém decide, a criança espera na sala e nada mais acontecia no mesmo dia (o aviso
+// "sem retirada" só sai na manhã seguinte). Enquanto a sala está aberta a tela lê a sala a cada poucos segundos; a leitura que encontra um pedido parado há mais de
+// LEMBRETE_DIVERGENCIA_MIN minutos manda UM lembrete obrigatório à liderança (o aviso deduplica pelo evento do pedido; a memória do processo evita reconsultar a cada leitura).
+// Nunca derruba a leitura da sala.
+const LEMBRETE_DIVERGENCIA_MIN = 20;
+const divergenciasLembradas = new Set();
+async function lembrarDivergenciasParadas(pool, sala, regs, deps = {}) {
+  for (const r of regs) {
+    if (r.Situacao !== "RETIRADA_PENDENTE" || !r.DivergenciaPedidaEm) continue;
+    const pedida = new Date(r.DivergenciaPedidaEm).getTime();
+    if (!Number.isFinite(pedida) || Date.now() - pedida < LEMBRETE_DIVERGENCIA_MIN * 60000) continue;
+    const chave = `${Number(r.RegistroId)}:${pedida}`;
+    if (divergenciasLembradas.has(chave)) continue;
+    divergenciasLembradas.add(chave);
+    try {
+      const ev = (await pool.request().input("r", sql.Int, Number(r.RegistroId)).query(`SELECT TOP 1 EventoId FROM CheckinInfantilEventos WHERE RegistroId = @r AND Tipo = 'RETIRADA_DIVERGENTE_PEDIDA' ORDER BY EventoId DESC`)).recordset[0];
+      const interessados = await listaDeInteressados(pool, { MenorMembroId: null }, sala);
+      if (!interessados.gestao.length) continue;
+      const minutos = Math.floor((Date.now() - pedida) / 60000);
+      await (deps.notificarAgora || notificarAgora)(pool, { regraChave: "CHECKIN_DIVERGENCIA_PARADA", destinatarios: interessados.gestao, aguardarEntrega: false,
+        mensagem: `Há ${minutos} minutos uma retirada divergente espera a sua decisão na sala ${sala.equipeNome}, e a criança continua na sala. Abra Check-in infantil → Aprovações, confirme com o responsável pelo telefone cadastrado e decida.`.slice(0, 1000),
+        referenciaId: ev ? Number(ev.EventoId) : Number(r.RegistroId), referenciaTabela: "CheckinInfantilEventos" });
+    } catch (e) { console.error("[CHECKIN] falha ao lembrar a liderança da retirada divergente parada:", e.message); }
+  }
+}
+
 async function snapshotDaSala(pool, sala, { hoje = hojeBrasilia(), agoraIso = ck.agoraBrasiliaIso(), visao = "OPERADOR" } = {}) {
   const prazos = await lerPrazos(pool);
   const params = await parametrosDaProporcao(pool, sala);
@@ -304,6 +330,14 @@ async function snapshotDaSala(pool, sala, { hoje = hojeBrasilia(), agoraIso = ck
   const adultos = lista.filter((x) => x.contaComoAdulto).length;
   const lotacao = ck.avaliarLotacao({ adultos, criancas: regs.length, adicionar: 0, faixa: sala.faixa, criancasPorAdulto: params.criancasPorAdulto, adultosMinimos: params.adultosMinimos });
   const janela = ck.avaliarJanela({ servicoIso: sala.dataHora, agoraIso, antesMin: prazos.abreMinutosAntes, depoisHoras: prazos.fechaHorasDepois });
+  // A cópia da saúde que veio do CADASTRO só aparece enquanto o consentimento SAUDE_CRACHA vale (Trava 7-B): se o apagar que segue a revogação falhou, a tela não mostra o dado até a
+  // rotina diária o apagar. A do balcão (visitante) vale para a visita, com o aceite gravado no registro.
+  const saudeVigente = new Set();
+  for (const r of regs) {
+    if (r.SaudeOrigem === "CADASTRO" && r.SaudeTexto && r.MenorMembroId && (await mcDb.consentimentoVigente(pool, Number(r.MenorMembroId), "SAUDE_CRACHA", { hoje }))) saudeVigente.add(Number(r.RegistroId));
+  }
+  const saudeDe = (r) => (r.SaudeOrigem === "CADASTRO" ? (saudeVigente.has(Number(r.RegistroId)) ? r.SaudeTexto : null) : r.SaudeTexto) || null;
+  await lembrarDivergenciasParadas(pool, sala, regs);
   const criancas = regs.map((r) => {
     const via = viaPorRegistro.get(Number(r.RegistroId));
     const viaValida = via && (agora - new Date(via.PedidaEm).getTime()) < ck.SEGUNDA_VIA_MINUTOS * 60000;
@@ -311,7 +345,7 @@ async function snapshotDaSala(pool, sala, { hoje = hojeBrasilia(), agoraIso = ck
       registroId: Number(r.RegistroId), nome: r.CriancaNome, tipo: r.MenorMembroId ? "MEMBRO" : "VISITANTE", idade: r.IdadeAnos, foraDaFaixa: !!r.IdadeForaDaFaixa,
       // travada = o travamento gravado OU o teto de erros já atingido (uma queda entre a reserva da tentativa e a gravação, ou um prazo reduzido depois, deixa 'Tentativas' no teto com Travado = 0)
       entregueEm: iso(r.EntregueEm), situacao: r.Situacao, rotuloSituacao: ck.SITUACOES[r.Situacao], travado: !!r.Travado || Number(r.Tentativas) >= prazos.tentativasCodigo,
-      tentativasRestantes: Math.max(0, prazos.tentativasCodigo - Number(r.Tentativas)), saude: r.SaudeTexto || null,
+      tentativasRestantes: Math.max(0, prazos.tentativasCodigo - Number(r.Tentativas)), saude: saudeDe(r),
       quemTrouxe: { nome: r.TrouxeNomeResolvido || null, parentesco: r.TrouxeParentesco || null },
       quemPodeRetirar: (autorizados.get(Number(r.RegistroId)) || []).map((a) => ({ ref: a.ref, tipo: a.tipo, nome: a.nome, rotulo: a.rotulo })),
       segundaViaPendente: viaValida ? { viaId: Number(via.ViaId), pedidaEm: iso(via.PedidaEm), pedidaPorMembroId: Number(via.PedidaPorMembroId), pessoaNome: via.PessoaNome || null, documento: via.Documento || null } : null,
@@ -473,12 +507,22 @@ async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia
       if (idade == null) return { sucesso: false, mensagem: `${m.Nome}: ${ck.MENSAGENS.SEM_NASCIMENTO}` };
       if (idade >= vol.MAIORIDADE) return { sucesso: false, mensagem: `${m.Nome}: ${ck.MENSAGENS.NAO_E_MENOR}` };
       if (dados.trouxe.membroId && !(resp.get(c.menorId) || new Set()).has(Number(dados.trouxe.membroId))) {
-        return { sucesso: false, mensagem: `${m.Nome}: a pessoa escolhida não é responsável cadastrado desta criança. ${ck.MENSAGENS.SEM_RESPONSAVEL}` };
+        // (Trava 7-B) a mensagem antiga mandava "fazer como visitante" — e a criança membro como visitante perde a lista de autorizados, o aviso ao responsável e o histórico.
+        return { sucesso: false, mensagem: `${m.Nome}: a pessoa escolhida não é responsável cadastrado desta criança. Escolha "outra pessoa" e informe quem trouxe pelo nome: a criança entra como membro e o responsável cadastrado é avisado.` };
       }
       preparadas.push({ ...c, nome: m.Nome, idade });
     } else {
       preparadas.push({ ...c, nome: c.nome });
     }
+  }
+  // (Trava 7-B) a criança membro registrada como VISITANTE escapava da custódia (sem a lista de autorizados, sem o aviso ao responsável, sem histórico, e quem a trouxe a retirava):
+  // o visitante cujo nome (sem acento e caixa) e nascimento batem com uma criança cadastrada da congregação é recusado — ela entra como membro. A busca de crianças da sala já mostra
+  // esses nomes ao voluntário, então a resposta não revela nada novo.
+  for (const c of preparadas) {
+    if (c.tipo !== "VISITANTE") continue;
+    const membro = (await pool.request().input("n", sql.NVarChar(150), c.nome).input("d", sql.Date, c.nascimento).input("c", sql.Int, Number(sala.congregacaoId))
+      .query(`SELECT TOP 1 1 AS x FROM MembroReferencia WHERE CongregacaoId = @c AND DataNascimento = @d AND Nome COLLATE Latin1_General_CI_AI = @n`)).recordset[0];
+    if (membro) return { sucesso: false, mensagem: `${c.nome}: esta criança já tem cadastro de membro na congregação. Busque pelo nome e faça o check-in como membro (com o responsável cadastrado ou quem trouxe pelo nome).` };
   }
   const saudeMembros = await saudeVigenteDosMenores(pool, idsMembros, hoje);
   for (const c of preparadas) {
@@ -643,9 +687,9 @@ async function avisarResponsaveisDeTerceiro(pool, { regraChave, itens, texto, de
   for (const g of grupos.values()) {
     try {
       const a = await (deps.notificarAgora || notificarAgora)(pool, { regraChave, destinatarios: g.pais, mensagem: texto(g.itens), referenciaId: g.itens[0].registroId, referenciaTabela: "CheckinInfantilRegistros", aguardarEntrega: false });
-      const criadas = Number((a || {}).criadas || 0);
-      avisados += criadas;
-      if (criadas === 0) semAviso = true;
+      const alcancados = Number((a || {}).externas || 0);          // só conta quem recebeu fora do app (e-mail ou celular): o sino sozinho não avisa ninguém a tempo
+      avisados += alcancados;
+      if (alcancados === 0) semAviso = true;
     } catch (e) { console.error("[CHECKIN] falha ao avisar o responsável sobre o terceiro:", e.message); semAviso = true; }
   }
   return { avisados, semAviso };
@@ -737,11 +781,11 @@ async function retirar(pool, { sala, registroId, operadorId, dados, hoje = hojeB
     const notificar = async (p, o) => ((o.destinatarios || []).length ? (deps.notificarAgora || notificarAgora)(p, o) : { criadas: 0 });        // sem destinatário não há o que avisar
     const a = await notificar(pool, { regraChave: "CHECKIN_RETIRADA_DIVERGENTE", destinatarios: interessados.pais, mensagem: ck.textoRetiradaDivergentePais({ nomeCrianca: reg0.CriancaNome, salaNome: sala.equipeNome }),
       referenciaId: ref, referenciaTabela: "CheckinInfantilEventos", aguardarEntrega: false });
-    paisCriadas = Number((a || {}).criadas || 0);
+    paisCriadas = Number((a || {}).externas || 0);                 // (alcançados fora do app: e-mail ou celular)
     gestaoDestinos = interessados.gestao.filter((g) => !interessados.pais.some((p) => p.membroId === g.membroId));
     const b = await notificar(pool, { regraChave: "CHECKIN_RETIRADA_DIVERGENTE", destinatarios: gestaoDestinos, mensagem: ck.textoRetiradaDivergenteGestao({ salaNome: sala.equipeNome }),
       referenciaId: ref, referenciaTabela: "CheckinInfantilEventos", aguardarEntrega: false });
-    gestaoCriadas = Number((b || {}).criadas || 0);
+    gestaoCriadas = Number((b || {}).externas || 0);
   } catch (e) { console.error("[CHECKIN] falha ao avisar sobre a retirada divergente:", e.message); }
   // A liderança foi avisada se algum gestor recebeu o aviso próprio; se todos os gestores já são responsáveis da criança, eles receberam o aviso dos responsáveis.
   const liderancaAvisada = gestaoDestinos.length ? gestaoCriadas > 0 : (interessados.gestao.length > 0 && paisCriadas > 0);
@@ -854,10 +898,24 @@ async function encerrarSala(pool, { sala, gestorId, motivo, agoraIso = ck.agoraB
     await transaction.commit();
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
   const n = baixadas.length;
+  // (Trava 7-B) o responsável cadastrado fica sabendo que o registro da criança foi encerrado pela liderança SEM a retirada registrada (não há prova de quem a levou): ele confirma
+  // com a liderança. Depois do commit nada lança; a resposta diz se alguém ficou sem aviso.
+  let semAviso = false;
+  if (n) {
+    try {
+      const rq = pool.request();
+      const membros = (await rq.query(`SELECT r.RegistroId, r.MenorMembroId, m.Nome FROM CheckinInfantilRegistros r JOIN MembroReferencia m ON m.MembroId = r.MenorMembroId
+        WHERE r.RegistroId IN (${listaIn(rq, "r", baixadas.map((b) => Number(b.RegistroId)))}) AND r.MenorMembroId IS NOT NULL`)).recordset;
+      const aviso = await avisarResponsaveisDeTerceiro(pool, { regraChave: "CHECKIN_BAIXA_ADMINISTRATIVA",
+        itens: membros.map((x) => ({ registroId: Number(x.RegistroId), menorId: Number(x.MenorMembroId), nome: x.Nome })),
+        texto: (grupo) => `A liderança da congregação encerrou a sala ${sala.equipeNome} e o registro de ${grupo.map((i) => ck.primeiroNome(i.nome)).join(" e ")} ficou SEM a retirada registrada (o sistema não tem a prova de quem levou a criança). Confirme com a liderança que está tudo bem.`.slice(0, 1000) });
+      semAviso = aviso.semAviso;
+    } catch (e) { console.error("[CHECKIN] falha ao avisar os responsáveis da baixa administrativa:", e.message); semAviso = true; }
+  }
   return {
-    sucesso: true, baixadas: n,
+    sucesso: true, baixadas: n, semAviso,
     mensagem: n
-      ? `Sala encerrada: ${n} criança(s) receberam a baixa administrativa (sem retirada registrada; o motivo ficou guardado) e ${saidos.length} voluntário(s) saíram da sala.`
+      ? `Sala encerrada: ${n} criança(s) receberam a baixa administrativa (sem retirada registrada; o motivo ficou guardado) e ${saidos.length} voluntário(s) saíram da sala.${semAviso ? " Atenção: o sistema não conseguiu avisar algum responsável cadastrado: ligue para a família." : ""}`
       : `Sala encerrada: nenhuma criança ficou sem retirada; ${saidos.length} voluntário(s) saíram da sala.`
   };
 }
@@ -930,11 +988,17 @@ async function confirmarSegundaVia(pool, { sala, operadorId, registroId, hoje = 
   try {
     const a = !interessados.pais.length ? { criadas: 0 } : await (deps.notificarAgora || notificarAgora)(pool, { regraChave: "CHECKIN_SEGUNDA_VIA", destinatarios: interessados.pais, mensagem: ck.textoSegundaVia({ nomeCrianca: reg.CriancaNome, salaNome: sala.equipeNome }),
       referenciaId: Number(via.ViaId), referenciaTabela: "CheckinInfantilSegundasVias", aguardarEntrega: false });
-    criadas = Number((a || {}).criadas || 0);
+    criadas = Number((a || {}).externas || 0);                     // (alcançados fora do app: e-mail ou celular)
   } catch (e) { console.error("[CHECKIN] falha ao avisar sobre a segunda via:", e.message); }
   const semAviso = !!interessados.falhou || (interessados.pais.length > 0 && criadas === 0);
+  // A saúde do CADASTRO só vai para a etiqueta nova se o consentimento ainda vale (Trava 7-B). Nada lança aqui (o código novo já existe): na dúvida, a etiqueta sai sem a saúde.
+  let saudeEtiqueta = reg.SaudeTexto;
+  if (reg.SaudeOrigem === "CADASTRO" && reg.SaudeTexto) {
+    try { if (!(await mcDb.consentimentoVigente(pool, Number(reg.MenorMembroId), "SAUDE_CRACHA", { hoje }))) saudeEtiqueta = null; }
+    catch (e) { console.error("[CHECKIN] não foi possível conferir o consentimento de saúde na segunda via:", e.message); saudeEtiqueta = null; }
+  }
   // A etiqueta da segunda via mostra a hora em que a criança ENTROU (a da etiqueta original) e, à parte, a hora da reemissão: quem confere vê que é uma segunda via.
-  const etiqueta = ck.montarEtiqueta({ nomeCrianca: reg.CriancaNome, idade: reg.IdadeAnos, salaNome: sala.equipeNome, congregacaoNome: sala.congregacaoNome, codigo, saudeTexto: reg.SaudeTexto, instante: iso(reg.EntregueEm), segundaViaEm: new Date().toISOString() });
+  const etiqueta = ck.montarEtiqueta({ nomeCrianca: reg.CriancaNome, idade: reg.IdadeAnos, salaNome: sala.equipeNome, congregacaoNome: sala.congregacaoNome, codigo, saudeTexto: saudeEtiqueta, instante: iso(reg.EntregueEm), segundaViaEm: new Date().toISOString() });
   return {
     sucesso: true, registroId: Number(registroId), etiqueta, avisados: criadas, semAviso,
     mensagem: `Segunda via emitida. O código antigo deixou de valer: entregue a etiqueta e o recibo novos a quem pediu.${semAviso ? ` ${ck.MENSAGENS.SEM_AVISO_RESPONSAVEIS}` : ""}`
@@ -1014,7 +1078,28 @@ async function adicionarAutorizado(pool, { dados, atorId, forma, gestorPodeVer =
     throw e;
   }
   await registrarAuditoria({ tabela: "CheckinInfantilAutorizados", registroId: id, acao: "CHECKIN_AUTORIZADO_ADICIONADO", usuarioId: Number(atorId), dadosDepois: { menorId: dados.menorId, forma } });
-  return { sucesso: true, autorizadoId: id, mensagem: "Pessoa autorizada a retirar a criança." };
+  // Trava 7-B (20/10/2026): toda inclusão na lista de quem retira a criança avisa os responsáveis cadastrados (menos quem incluiu): a pessoa incluída passa a retirar com o código
+  // e a pedir segunda via, então quem tem a guarda precisa saber na hora — sobretudo quando foi a liderança, "por ficha". Aviso obrigatório; falhar não desfaz a inclusão, mas a
+  // resposta diz (semAviso) para a liderança ligar.
+  const aviso = await avisarResponsaveisDaInclusao(pool, { autorizadoId: id, menorId: dados.menorId, nomeCrianca: m.nome, nomeAutorizado: nomeGravado, parentesco: dados.parentesco, forma, atorId });
+  return {
+    sucesso: true, autorizadoId: id, avisados: aviso.avisados, semAviso: aviso.semAviso,
+    mensagem: `Pessoa autorizada a retirar a criança.${aviso.semAviso ? " Atenção: o sistema não conseguiu avisar os responsáveis cadastrados desta inclusão. Ligue para eles." : ""}`
+  };
+}
+
+async function avisarResponsaveisDaInclusao(pool, { autorizadoId, menorId, nomeCrianca, nomeAutorizado, parentesco, forma, atorId, deps = {} }) {
+  let destinos;
+  try { destinos = (await responsaveisVigentesDe(pool, menorId)).filter((p) => p.membroId !== Number(atorId)); }
+  catch (e) { console.error("[CHECKIN] não foi possível montar a lista de responsáveis (autorizado incluído):", e.message); return { avisados: 0, semAviso: true }; }
+  if (!destinos.length) return { avisados: 0, semAviso: false };          // o único responsável é quem incluiu: não há a quem avisar
+  const quem = forma === "FICHA_FISICA" ? "pela liderança da congregação, com a ficha assinada" : "por outro responsável cadastrado";
+  const mensagem = `${ck.primeiroNome(nomeCrianca)} tem uma pessoa nova na lista de quem pode retirá-la da sala: ${nomeAutorizado} (${(ck.PARENTESCOS[parentesco] || "autorizado(a)").toLowerCase()}), incluída ${quem}. Se você não reconhece essa autorização, avise a liderança agora: ela pode ser revogada em Meu Painel.`.slice(0, 1000);
+  try {
+    const a = await (deps.notificarAgora || notificarAgora)(pool, { regraChave: "CHECKIN_AUTORIZADO_INCLUIDO", destinatarios: destinos, mensagem, referenciaId: Number(autorizadoId), referenciaTabela: "CheckinInfantilAutorizados", aguardarEntrega: false });
+    const alcancados = Number((a || {}).externas || 0);
+    return { avisados: alcancados, semAviso: alcancados === 0 };
+  } catch (e) { console.error("[CHECKIN] falha ao avisar a inclusão de autorizado:", e.message); return { avisados: 0, semAviso: true }; }
 }
 
 async function revogarAutorizado(pool, { autorizadoId, atorId, gestorPodeVer = null, hoje = hojeBrasilia() }) {
@@ -1049,7 +1134,7 @@ async function tratarAutorizadosDoResponsavelRevogado(pool, { menorId, responsav
     const gestao = (await require("./psc").resolverDestinatariosDaCongregacao(pool, { permissao: "habilitacao_voluntarios", congregacaoId: Number(congregacaoId) })).map((d) => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
     const a = await (deps.notificarAgora || notificarAgora)(pool, { regraChave: "CHECKIN_AUTORIZADOS_DEPENDENTES", destinatarios: gestao, mensagem: ck.textoAutorizadosDeixaramDeValer({ quantidade: revogados }),
       referenciaId: Number(cadastroId), referenciaTabela: "VoluntariadoResponsaveis", aguardarEntrega: false });
-    avisados = Number((a || {}).criadas || 0);
+    avisados = Number((a || {}).externas || 0);
   } catch (e) { console.error("[CHECKIN] falha ao avisar sobre autorizados sem efeito:", e.message); }
   return { revogados, avisados };
 }
@@ -1181,14 +1266,22 @@ async function detectarCriancasSemRetirada(pool, { hoje = hojeBrasilia() } = {})
   const linhas = (await pool.request().input("hoje", sql.Date, hoje).query(`
     SELECT r.ServicoId, r.EquipeId, COUNT(*) AS n, MIN(s.DataHora) AS DataHora, MAX(e.Nome) AS EquipeNome, MAX(r.CongregacaoId) AS CongregacaoId, MAX(e.LiderMembroId) AS LiderMembroId
     FROM CheckinInfantilRegistros r JOIN EscalasServicos s ON s.ServicoId = r.ServicoId JOIN EscalasEquipes e ON e.EquipeId = r.EquipeId
-    WHERE r.Situacao <> 'RETIRADA' AND CAST(s.DataHora AS DATE) < @hoje AND CAST(s.DataHora AS DATE) >= DATEADD(DAY, -7, @hoje)
+    WHERE r.Situacao <> 'RETIRADA' AND CAST(s.DataHora AS DATE) < @hoje AND CAST(s.DataHora AS DATE) >= DATEADD(DAY, -90, @hoje)
     GROUP BY r.ServicoId, r.EquipeId`)).recordset;
+  // (Trava 7-B) a janela era de 7 dias: a sala que nenhum dia avisou (sem ninguém a quem avisar) sumia do detector. Com 90 dias a referência por (serviço, equipe) continua avisando
+  // UMA vez por pessoa (o aviso deduplica), e quem chega depois ainda fica sabendo. Sem líder e sem gestão na congregação, avisa a gestão de nível geral — nunca pula calado.
+  let geral = null;
   const fatos = [];
   for (const x of linhas) {
     const interessados = await listaDeInteressados(pool, { MenorMembroId: null }, { liderMembroId: x.LiderMembroId ? Number(x.LiderMembroId) : null, congregacaoId: Number(x.CongregacaoId) });
-    if (!interessados.gestao.length) continue;
+    let destinos = interessados.gestao;
+    if (!destinos.length) {
+      if (!geral) geral = (await require("./notificacoes").resolverDestinatariosPorPermissao(pool, { permissao: "habilitacao_voluntarios", nivel: "GLOBAL" })).map((d) => ({ membroId: d.membroId, nome: d.nome, email: d.email }));
+      destinos = geral;
+    }
+    if (!destinos.length) { console.error(`[CHECKIN] sala sem retirada registrada (serviço ${x.ServicoId}, equipe ${x.EquipeId}) sem NINGUÉM a quem avisar: falta gestão com habilitacao_voluntarios`); continue; }
     fatos.push({
-      referenciaId: ck.referenciaDeSemRetirada(x.ServicoId, x.EquipeId), destinatarios: interessados.gestao,
+      referenciaId: ck.referenciaDeSemRetirada(x.ServicoId, x.EquipeId), destinatarios: destinos,
       fatoGerador: ck.textoSemRetirada({ quantidade: Number(x.n), salaNome: x.EquipeNome, data: new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", dateStyle: "short" }).format(x.DataHora instanceof Date ? x.DataHora : new Date(x.DataHora)) })
     });
   }

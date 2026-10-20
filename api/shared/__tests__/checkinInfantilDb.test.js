@@ -22,7 +22,7 @@ jest.mock("../db", () => {
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => undefined), sha256: () => "" }));
 jest.mock("../segredoSessao", () => ({ resolverSegredo: () => "segredo-de-teste-com-mais-de-16-caracteres" }));
 jest.mock("../financeiroSeguro", () => ({ ...jest.requireActual("../financeiroSeguro"), obterTrava: jest.fn(async () => true) }));
-jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
+jest.mock("../canaisDb", () => ({ ...jest.requireActual("../canaisDb"), notificarAgora: jest.fn(async () => ({ criadas: 1, externas: 1 })), lerPrazoDias: jest.fn(async (_p, _s, padrao) => padrao) }));
 jest.mock("../ministerioMenoresDb", () => ({
   aptidaoDe: jest.fn(), aptidaoEmLote: jest.fn(), lerPrazos: jest.fn(async () => ({ adultosMinimos: 2 })), lerPrazosFaixas: jest.fn(async () => ({}))
 }));
@@ -54,7 +54,7 @@ let pool;
 beforeEach(async () => {
   mockRegras = []; mockConsultas = []; jest.clearAllMocks(); apto();
   db.limparCaches();                                                    // a configuração dos prazos fica 15 s em memória: cada teste parte do zero
-  notificarAgora.mockImplementation(async () => ({ criadas: 1 }));
+  notificarAgora.mockImplementation(async () => ({ criadas: 1, externas: 1 }));
   require("../canaisDb").lerPrazoDias.mockImplementation(async (_p, _s, padrao) => padrao);
   mmDb.lerPrazos.mockResolvedValue({ adultosMinimos: 2 }); mmDb.lerPrazosFaixas.mockResolvedValue({});
   mcDb.consentimentoVigente.mockResolvedValue(false);
@@ -372,6 +372,13 @@ describe("check-in", () => {
         expect(r.mensagem).toMatch(/não conseguiu avisar o responsável cadastrado/);
         expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(1);
       }
+    });
+    test("o aviso que ficou SÓ no sino do app (nenhum e-mail aceito, nenhum push) não conta como avisado: semAviso (Trava 7-B)", async () => {
+      prepararFeliz(); responsaveisDoBanco(40, 41);
+      notificarAgora.mockImplementation(async () => ({ criadas: 2, externas: 0 }));
+      const r = await checkin(dadosMembro({ trouxe: TERCEIRO }));
+      expect(r).toMatchObject({ sucesso: true, avisados: 0, semAviso: true });
+      expect(r.mensagem).toMatch(/não conseguiu avisar o responsável cadastrado/);
     });
     test("não conseguir nem montar a lista de responsáveis também é semAviso (e não derruba a entrada)", async () => {
       prepararFeliz();
@@ -1061,7 +1068,7 @@ describe("A1: encerrar a sala (baixa administrativa)", () => {
     preparar();
     require("../financeiroSeguro").obterTrava.mockImplementationOnce(async (_exec, nome) => { mockConsultas.push({ sql: "TRAVA", inputs: { r: nome } }); return true; });
     const r = await encerrar();
-    expect(r).toEqual({ sucesso: true, baixadas: 3, mensagem: expect.stringMatching(/3 criança\(s\) receberam a baixa administrativa.*2 voluntário\(s\) saíram/) });
+    expect(r).toEqual({ sucesso: true, baixadas: 3, semAviso: false, mensagem: expect.stringMatching(/3 criança\(s\) receberam a baixa administrativa.*2 voluntário\(s\) saíram/) });
     const baixa = com(/DECLARE @b TABLE/)[0];
     expect(baixa.inputs).toMatchObject({ s: 5, e: 7, g: 77, m: "Os voluntários esqueceram de registrar as retiradas." });
     expect(baixa.sql).toMatch(/SET Situacao = 'RETIRADA', RetiradoEm = SYSUTCDATETIME\(\), RetiradoTipo = 'BAIXA_ADM', RetiradoMembroId = NULL, RetiradoNome = NULL, RetiradoParentesco = NULL/);
@@ -1249,7 +1256,7 @@ describe("B9: o aviso obrigatório não falha em silêncio e nenhum erro de avis
   const registro = (extra = {}) => ({ RegistroId: 9, ServicoId: 5, EquipeId: 7, CongregacaoId: 1, MenorMembroId: 30, VisitanteNome: null, IdadeAnos: 5, FaixaSala: "MATERNAL", IdadeForaDaFaixa: 0, TrouxeMembroId: 40, TrouxeNome: null, TrouxeNomeResolvido: "Maria Souza",
     TrouxeParentesco: null, SaudeTexto: null, CodigoGeracao: 1, Tentativas: 0, Travado: 0, Situacao: "NA_SALA", EntregueEm: new Date("2026-10-18T12:05:00Z"), EntreguePorMembroId: 10, CriancaNome: "Caio Souza", CodigoHash: hashDe(), ...extra });
   const OUTRO = { registroId: 9, codigo: CODIGO, retirante: { outro: { nome: "Roberto Dias", parentesco: "AMIGO_FAMILIA", documento: "CNH", motivo: "Disse que a mãe mandou." } } };
-  const reais = () => notificarAgora.mockImplementation(async (_p, o) => ({ criadas: (o.destinatarios || []).length }));       // como o motor de verdade: sem destinatário, nada é criado
+  const reais = () => notificarAgora.mockImplementation(async (_p, o) => ({ criadas: (o.destinatarios || []).length, externas: (o.destinatarios || []).length }));       // como o motor de verdade: sem destinatário, nada é criado
   function preparar({ reg = registro() } = {}) {
     escalado(); presenteNaSala(); reais();
     quando(/WHERE r\.RegistroId = @r/, [reg]);
@@ -1289,6 +1296,13 @@ describe("B9: o aviso obrigatório não falha em silêncio e nenhum erro de avis
     expect(r.mensagem).toMatch(/NÃO foi avisada/);
     expect(r.mensagem).toMatch(/ligue agora para a liderança/);
     expect(com(/SET Situacao = 'RETIRADA_PENDENTE'/)).toHaveLength(1);
+  });
+  test("o aviso ficou SÓ no sino do app (criado, mas nenhum e-mail aceito e nenhum push): a liderança NÃO conta como avisada (Trava 7-B)", async () => {
+    preparar();
+    notificarAgora.mockImplementation(async () => ({ criadas: 2, externas: 0 }));
+    const r = await retirar();
+    expect(r).toMatchObject({ sucesso: true, divergente: true, semAviso: true, avisados: 0 });
+    expect(r.mensagem).toMatch(/ligue agora para a liderança/);
   });
   test("a lista de quem avisar FALHA: o pedido é gravado, nada lança depois do UPDATE, e a resposta diz que ninguém foi avisado (antes: 500 e, na nova tentativa, 'já há um pedido')", async () => {
     preparar();
@@ -1334,6 +1348,13 @@ describe("B9: o aviso obrigatório não falha em silêncio e nenhum erro de avis
       expect(r).toMatchObject({ semAviso: true, avisados: 0 });
       expect(r.mensagem).toMatch(/não conseguiu avisar o responsável/);
       expect(mockConsultas.map((c) => c.sql)).toContain("COMMIT");
+    });
+    test("o aviso da segunda via ficou SÓ no sino (sem e-mail aceito nem push): semAviso, e o código novo sai (Trava 7-B)", async () => {
+      prepararVia();
+      notificarAgora.mockImplementation(async () => ({ criadas: 1, externas: 0 }));
+      const r = await confirmar();
+      expect(r).toMatchObject({ sucesso: true, semAviso: true, avisados: 0 });
+      expect(r.etiqueta.codigo).toMatch(/^[A-HJKMNP-Z2-9]{6}$/);
     });
     test("o aviso lança depois do commit: a resposta continua trazendo o código novo", async () => {
       prepararVia();
@@ -1459,5 +1480,127 @@ describe("C15, C17, C23, C26", () => {
     expect(dup.sql).toMatch(/MenorMembroId IS NULL AND Situacao <> 'RETIRADA' AND VisitanteNascimento = @vd/);
     expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(0);
     expect(mockConsultas.map((c) => c.sql)).toContain("ROLLBACK");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Trava 7-B (20/10/2026): as correções da revisão que olhou as versões 7.7, 7.8 e 7.10 juntas. Cada teste reprova no código de antes.
+describe("Trava 7-B no check-in", () => {
+  const REGISTROS = /SELECT r\.RegistroId, r\.ServicoId[\s\S]*WHERE r\.ServicoId = @s AND r\.EquipeId = @e AND r\.Situacao <> 'RETIRADA' ORDER BY r\.RegistroId/;
+  const regSala = (extra = {}) => ({ RegistroId: 9, ServicoId: 5, EquipeId: 7, MenorMembroId: 30, VisitanteNome: null, CriancaNome: "Caio Souza", IdadeAnos: 5, IdadeForaDaFaixa: 0, TrouxeNomeResolvido: "Maria Souza",
+    SaudeTexto: "Alergia a amendoim", SaudeOrigem: "CADASTRO", Tentativas: 0, Travado: 0, Situacao: "NA_SALA", EntregueEm: new Date("2026-10-18T12:05:00Z"), ...extra });
+  function salaLida(regs) {
+    salaCom([10, 11], regs.length);
+    quando(REGISTROS, regs);
+    quando(/SELECT COUNT\(\*\) AS entregues/, [{ entregues: regs.length, retiradas: 0 }]);
+  }
+  const snapshot = () => db.snapshotDaSala(pool, SALA, { hoje: HOJE, agoraIso: AGORA, visao: "OPERADOR" });
+
+  test("a saúde copiada do CADASTRO some da tela da sala quando o consentimento não vale mais (o apagar que segue a revogação pode ter falhado); a do balcão continua", async () => {
+    salaLida([regSala(), regSala({ RegistroId: 10, MenorMembroId: null, CriancaNome: "Davi Lima", SaudeOrigem: "BALCAO", SaudeTexto: "Asma" })]);
+    mcDb.consentimentoVigente.mockResolvedValue(false);
+    let s = await snapshot();
+    expect(s.criancas.find((c) => c.registroId === 9).saude).toBeNull();
+    expect(s.criancas.find((c) => c.registroId === 10).saude).toBe("Asma");
+    mcDb.consentimentoVigente.mockResolvedValue(true);
+    s = await snapshot();
+    expect(s.criancas.find((c) => c.registroId === 9).saude).toBe("Alergia a amendoim");
+  });
+
+  test("retirada divergente parada há mais de 20 minutos: a leitura da sala lembra a liderança UMA vez (e nunca derruba a leitura)", async () => {
+    const pedida = new Date(Date.now() - 25 * 60000);
+    salaLida([regSala({ RegistroId: 77, Situacao: "RETIRADA_PENDENTE", DivergenciaPedidaEm: pedida, SaudeTexto: null })]);
+    quando(/SELECT TOP 1 EventoId FROM CheckinInfantilEventos WHERE RegistroId = @r AND Tipo = 'RETIRADA_DIVERGENTE_PEDIDA'/, [{ EventoId: 4321 }]);
+    await snapshot(); await snapshot();
+    const lembretes = notificarAgora.mock.calls.filter((c) => c[1].regraChave === "CHECKIN_DIVERGENCIA_PARADA");
+    expect(lembretes).toHaveLength(1);
+    expect(lembretes[0][1]).toMatchObject({ referenciaId: 4321, referenciaTabela: "CheckinInfantilEventos" });
+    expect(lembretes[0][1].mensagem).toMatch(/espera a sua decisão na sala Maternal/);
+    expect(lembretes[0][1].mensagem).not.toMatch(/Caio/);                                     // aviso à liderança nunca leva nome de criança
+    mockRegras = []; mockConsultas = []; notificarAgora.mockClear();
+    salaLida([regSala({ RegistroId: 78, Situacao: "RETIRADA_PENDENTE", DivergenciaPedidaEm: new Date(Date.now() - 5 * 60000), SaudeTexto: null })]);
+    await snapshot();
+    expect(notificarAgora.mock.calls.filter((c) => c[1].regraChave === "CHECKIN_DIVERGENCIA_PARADA")).toHaveLength(0);   // 5 minutos: ainda não
+    mockRegras = []; mockConsultas = [];
+    salaLida([regSala({ RegistroId: 79, Situacao: "RETIRADA_PENDENTE", DivergenciaPedidaEm: pedida, SaudeTexto: null })]);
+    notificarAgora.mockRejectedValueOnce(new Error("fila fora"));
+    await expect(snapshot()).resolves.toBeTruthy();
+  });
+
+  test("visitante com o nome (sem acento/caixa) e o nascimento de uma criança MEMBRO da congregação é recusado: ela entra como membro", async () => {
+    escalado(); presenteNaSala(); salaCom([10, 11], 0);
+    quando(/SELECT TOP 1 1 AS x FROM MembroReferencia WHERE CongregacaoId = @c AND DataNascimento = @d AND Nome COLLATE Latin1_General_CI_AI = @n/, [{ x: 1 }]);
+    const r = await db.fazerCheckin(pool, { sala: SALA, operadorId: 10, hoje: HOJE, agoraIso: AGORA,
+      dados: { servicoId: 5, equipeId: 7, criancas: [{ tipo: "VISITANTE", nome: "Caio Souza", nascimento: "2021-03-01", idade: 5, saude: null }], trouxe: { nome: "Rosa Lima", parentesco: "TIA", documento: "RG", contato: "94991112222" }, extras: [] } });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/já tem cadastro de membro/);
+    expect(com(/INSERT INTO CheckinInfantilRegistros/)).toHaveLength(0);
+    const c = com(/COLLATE Latin1_General_CI_AI = @n/)[0];
+    expect(c.inputs).toMatchObject({ n: "Caio Souza", d: "2021-03-01", c: 1 });
+  });
+
+  test("a pessoa escolhida que não é responsável: a mensagem manda informar quem trouxe pelo nome — nunca mais 'faça como visitante'", async () => {
+    escalado(); presenteNaSala(); salaCom([10, 11], 0);
+    quando(/SELECT MembroId, Nome, DataNascimento, CongregacaoId FROM MembroReferencia WHERE MembroId IN/, [{ MembroId: 30, Nome: "Caio Souza", DataNascimento: new Date("2021-03-01T00:00:00Z"), CongregacaoId: 1 }]);
+    quando(/SELECT MenorMembroId, ResponsavelMembroId FROM VoluntariadoResponsaveis WHERE MenorMembroId IN/, [{ MenorMembroId: 30, ResponsavelMembroId: 40 }]);
+    const r = await db.fazerCheckin(pool, { sala: SALA, operadorId: 10, hoje: HOJE, agoraIso: AGORA, dados: { servicoId: 5, equipeId: 7, criancas: [{ tipo: "MEMBRO", menorId: 30 }], trouxe: { membroId: 41 }, extras: [] } });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/informe quem trouxe pelo nome/);
+    expect(r.mensagem).not.toMatch(/visitante/);
+  });
+
+  describe("inclusão de autorizado avisa os responsáveis", () => {
+    const crianca = { MembroId: 30, Nome: "Caio Souza", DataNascimento: new Date("2021-03-01T00:00:00Z"), CongregacaoId: 1, CongregacaoNome: "Central" };
+    const dados = { menorId: 30, nome: "Dona Lúcia", parentesco: "AVO", membroId: null, validoAte: null, referencia: "Ficha 7" };
+    function preparar(resps) {
+      quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c ON c\.CongregacaoId = m\.CongregacaoId WHERE m\.MembroId = @m/, [crianca]);
+      quando(/FROM VoluntariadoResponsaveis WHERE MenorMembroId = @m AND ResponsavelMembroId = @r AND RevogadoEm IS NULL/, [{ x: 1 }]);
+      quando(/INSERT INTO CheckinInfantilAutorizados/, [{ AutorizadoId: 12 }]);
+      quando(/SELECT COUNT\(\*\) AS n FROM CheckinInfantilAutorizados a WHERE a\.MenorMembroId = @m/, [{ n: 0 }]);
+      quando(/SELECT p\.MembroId, p\.Nome, p\.Email FROM VoluntariadoResponsaveis/, resps.map((i) => ({ MembroId: i, Nome: `R${i}`, Email: `r${i}@e.org` })));
+    }
+    const doAviso = () => notificarAgora.mock.calls.filter((c) => c[1].regraChave === "CHECKIN_AUTORIZADO_INCLUIDO");
+    test("por ficha (liderança): TODOS os responsáveis cadastrados são avisados, com o nome do incluído e o primeiro nome da criança", async () => {
+      preparar([40, 41]);
+      const r = await db.adicionarAutorizado(pool, { dados, atorId: 5, forma: "FICHA_FISICA", gestorPodeVer: () => true, hoje: HOJE });
+      expect(r).toMatchObject({ sucesso: true, autorizadoId: 12, semAviso: false });
+      expect(doAviso()).toHaveLength(1);
+      expect(doAviso()[0][1].destinatarios.map((d) => d.membroId)).toEqual([40, 41]);
+      expect(doAviso()[0][1]).toMatchObject({ referenciaId: 12, referenciaTabela: "CheckinInfantilAutorizados" });
+      expect(doAviso()[0][1].mensagem).toMatch(/^Caio tem uma pessoa nova na lista de quem pode retirá-la da sala: Dona Lúcia .*com a ficha assinada/);
+      expect(doAviso()[0][1].mensagem).not.toMatch(/Souza/);
+    });
+    test("pelo próprio responsável: avisa os OUTROS responsáveis (não quem incluiu); sendo o único, não há a quem avisar e não é alarme", async () => {
+      preparar([40, 41]);
+      await db.adicionarAutorizado(pool, { dados: { ...dados, referencia: null }, atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+      expect(doAviso()[0][1].destinatarios.map((d) => d.membroId)).toEqual([41]);
+      expect(doAviso()[0][1].mensagem).toMatch(/por outro responsável cadastrado/);
+      mockRegras = []; mockConsultas = []; notificarAgora.mockClear();
+      preparar([40]);
+      const r = await db.adicionarAutorizado(pool, { dados: { ...dados, referencia: null }, atorId: 40, forma: "RESPONSAVEL", hoje: HOJE });
+      expect(r).toMatchObject({ sucesso: true, semAviso: false });
+      expect(doAviso()).toHaveLength(0);
+    });
+    test("o aviso fica só no sino ou falha: a inclusão vale, e a resposta manda ligar para os responsáveis", async () => {
+      for (const falha of [async () => ({ criadas: 2, externas: 0 }), async () => { throw new Error("fora"); }]) {
+        mockRegras = []; mockConsultas = [];
+        preparar([40, 41]);
+        notificarAgora.mockImplementation(falha);
+        const r = await db.adicionarAutorizado(pool, { dados, atorId: 5, forma: "FICHA_FISICA", gestorPodeVer: () => true, hoje: HOJE });
+        expect(r).toMatchObject({ sucesso: true, semAviso: true });
+        expect(r.mensagem).toMatch(/não conseguiu avisar os responsáveis/);
+      }
+    });
+  });
+
+  test("criança sem retirada numa congregação SEM gestão: avisa a gestão de nível geral (antes pulava calado); a janela é de 90 dias", async () => {
+    require("../psc").resolverDestinatariosDaCongregacao.mockImplementation(async () => []);
+    quando(/FROM CheckinInfantilRegistros r JOIN EscalasServicos s ON s\.ServicoId = r\.ServicoId JOIN EscalasEquipes e/, [{ ServicoId: 5, EquipeId: 7, n: 1, DataHora: new Date("2026-10-18T09:00:00Z"), EquipeNome: "Maternal", CongregacaoId: 1, LiderMembroId: null }]);
+    quando(/FROM Lideranca l\s+JOIN Papeis p/, [{ membroId: 1, nome: "Secretário Geral", email: "sg@e.org" }]);
+    const fatos = await db.detectarCriancasSemRetirada(pool, { hoje: "2026-10-19" });
+    require("../psc").resolverDestinatariosDaCongregacao.mockImplementation(async () => [{ membroId: 900, nome: "Dirigente", email: "d@e.org" }]);
+    expect(fatos).toHaveLength(1);
+    expect(fatos[0].destinatarios.map((d) => d.membroId)).toEqual([1]);
+    expect(com(/DATEADD\(DAY, -90, @hoje\)/)).toHaveLength(1);
   });
 });

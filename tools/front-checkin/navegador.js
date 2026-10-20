@@ -227,7 +227,7 @@ async function rodarViewport(nav, nome, viewport) {
     await esperar(() => !!document.getElementById("chkChip1"), "o visitante na lista");
     // com visitante a 'outra pessoa' é a escolha de quem trouxe (os dois têm de ter o mesmo responsável)
     await page.evaluate(() => { document.getElementById("chkCiTrouxe").value = "OUTRA"; document.getElementById("chkCiTrouxe").dispatchEvent(new Event("change", { bubbles: true })); });
-    await preencher("chkCiTrouxeNome", "Tia Zeza"); await preencher("chkCiTrouxePar", "TIO"); await preencher("chkCiTrouxeDoc", "RG"); await preencher("chkCiTrouxeTel", "(11) 99999-0000");
+    await preencher("chkCiTrouxeNome", "Tia Zeza"); await preencher("chkCiTrouxePar", "MAE"); /* (Trava 7-B) a alergia do visitante na etiqueta só com pai, mãe ou tutor(a) */ await preencher("chkCiTrouxeDoc", "RG"); await preencher("chkCiTrouxeTel", "(11) 99999-0000");
     await medida("Check-in / formulário completo"); await foto("#chkCheckinCx", "checkin-completo");
     await clicarId("chkCiEnviar");
     await esperar(() => document.getElementById("chkImprimivel") && document.querySelector("#chkImprimivel .chk-codigo"), "as etiquetas e o recibo");

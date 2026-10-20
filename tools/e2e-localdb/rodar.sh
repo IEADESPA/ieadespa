@@ -20,10 +20,10 @@ case "$1" in
     $PS "$AQUI/bases.ps1" salvar cenario-protecao
     ;;
   preparar-checkin)
-    # v7.10: a partir da base "cenario-protecao" (v7.8), aplica só a migração 145 (segundos), salva "protecao-145", roda o setup do check-in (e2e-18) e salva "cenario-checkin"
+    # v7.10: a partir da base "cenario-protecao" (v7.8), aplica as migrações 145 a 147 (segundos), salva "protecao-145", roda o setup do check-in (e2e-18) e salva "cenario-checkin"
     cd "$AQUI"
     $PS bases.ps1 restaurar cenario-protecao | tail -1
-    node -r ./shim-mssql.js aplicar-migracao.js 145 2>&1 | tail -2
+    for m in 145 146 147; do node -r ./shim-mssql.js aplicar-migracao.js $m 2>&1 | tail -2; done   # (146 e 147: Trava 7-B)
     $PS bases.ps1 salvar protecao-145 | tail -1
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-18-checkin-setup.js > "$SAIDA" 2>&1; ESTADO=$?

@@ -55,12 +55,11 @@ const NEGADO = [403, 404];
     historico: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: 200, mae: 200, conhecido: 200, secretariaPorPin: 200, gestor: 200, gestorDaVila: 200, gestorSemFator: 200, geral: 200 },
     sala: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
     relatorio: { semSessao: 401, tokenLixo: 401, voluntario: "negado", voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
-    buscar: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: "negado", gestorDaVila: "negado", gestorSemFator: "negado", geral: "negado" },
     responsaveis: { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: "negado", gestorDaVila: "negado", gestorSemFator: "negado", geral: "negado" },
     autorizados: { semSessao: 401, tokenLixo: 401, voluntario: "negado", voluntarioDaVila: "negado", mae: 200, conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 },
     saude: { semSessao: 401, tokenLixo: 401, voluntario: "negado", voluntarioDaVila: "negado", mae: 200, conhecido: "negado", secretariaPorPin: "negado", gestor: 200, gestorDaVila: "negado", gestorSemFator: 200, geral: 200 }
   };
-  const QUERY = { sala: sala(svC), relatorio: sala(svC), buscar: { ...sala(svC), q: "Bia" }, responsaveis: { ...sala(svC), menorId: K.bia }, autorizados: { menorId: K.bia }, saude: { menorId: K.bia }, historico: {} };
+  const QUERY = { sala: sala(svC), relatorio: sala(svC), responsaveis: { ...sala(svC), menorId: K.bia }, autorizados: { menorId: K.bia }, saude: { menorId: K.bia }, historico: {} };
   let divergencias = [];
   for (const [acao, esperado] of Object.entries(ESPERADO_LEITURA)) for (const [nome, token] of Object.entries(SESSOES)) {
     const x = await get(acao, token, QUERY[acao]);
@@ -69,6 +68,15 @@ const NEGADO = [403, 404];
     if (!certo) divergencias.push(`GET ${acao} como ${nome}: esperava ${e}, veio ${x.status} ${msg(x).slice(0, 60)}`);
   }
   ok(divergencias.length === 0, `leituras: ${Object.keys(ESPERADO_LEITURA).length * Object.keys(SESSOES).length} combinações rota × sessão conferem`, divergencias.slice(0, 6));
+  // Trava 7-B: a busca de criança é POST (o nome digitado não vai no endereço); a matriz de quem pode é a mesma de antes
+  const ESPERADO_BUSCA = { semSessao: 401, tokenLixo: 401, voluntario: 200, voluntarioDaVila: "negado", mae: "negado", conhecido: "negado", secretariaPorPin: "negado", gestor: "negado", gestorDaVila: "negado", gestorSemFator: "negado", geral: "negado" };
+  divergencias = [];
+  for (const [nome, token] of Object.entries(SESSOES)) {
+    const x = await post("buscar", token, { ...sala(svC), q: "Bia" });
+    const e = ESPERADO_BUSCA[nome];
+    if (!(e === "negado" ? NEGADO.includes(x.status) : x.status === e)) divergencias.push(`POST buscar como ${nome}: esperava ${e}, veio ${x.status} ${msg(x).slice(0, 60)}`);
+  }
+  ok(divergencias.length === 0, "POST buscar: as 11 sessões conferem (só a equipe da sala, presente, busca criança)", divergencias.slice(0, 6));
   // 'geral' = Diretoria de nível geral COM a permissão: vê a sala e a lista, mas NÃO opera (buscar/responsaveis são da equipe da sala, presente)
 
   console.log("== as escritas: quem não é da equipe da sala nunca grava nada ==");
@@ -289,7 +297,7 @@ const NEGADO = [403, 404];
     ok(mudancas.length === 0, `${rotulo}: chamada recusada nunca altera o banco`, mudancas.slice(0, 5));
   }
   const svF = await H.abrirSala(c1, eq.maternal, [ANA, BRUNO, CARLA]);
-  const baseCheckin = { ...sala(svF), criancas: [{ visitante: { nome: "Visitante Fuzz Teste", nascimento: H.nascimentoParaIdade(4), saude: { texto: "Alergia fuzz", concordo: true, textoHash: (await ckGet("catalogos", pin(ANA))).body.textoSaude.hash } } }], trouxe: { nome: "Tia Fuzz Teste", parentesco: "TIO", documento: "RG", contato: "11 98888-7777" }, autorizadosVisita: [{ nome: "Indicada Fuzz", parentesco: "AVO" }] };
+  const baseCheckin = { ...sala(svF), criancas: [{ visitante: { nome: "Visitante Fuzz Teste", nascimento: H.nascimentoParaIdade(4), saude: { texto: "Alergia fuzz", concordo: true, textoHash: (await ckGet("catalogos", pin(ANA))).body.textoSaude.hash } } }], trouxe: { nome: "Tia Fuzz Teste", parentesco: "MAE", documento: "RG", contato: "11 98888-7777" }, autorizadosVisita: [{ nome: "Indicada Fuzz", parentesco: "AVO" }] };
   await fuzzarCaminhos("checkin", (corpo) => ckPost("checkin", pin(ANA), corpo), baseCheckin, [["servicoId"], ["equipeId"], ["criancas"], ["criancas", 0, "visitante"], ["criancas", 0, "visitante", "nome"], ["criancas", 0, "visitante", "nascimento"], ["criancas", 0, "visitante", "saude"], ["criancas", 0, "visitante", "saude", "texto"],
     ["criancas", 0, "visitante", "saude", "concordo"], ["criancas", 0, "visitante", "saude", "textoHash"], ["criancas", 0, "menorId"], ["trouxe"], ["trouxe", "nome"], ["trouxe", "parentesco"], ["trouxe", "documento"], ["trouxe", "contato"], ["trouxe", "responsavelId"], ["autorizadosVisita"], ["autorizadosVisita", 0, "nome"], ["autorizadosVisita", 0, "parentesco"]]);
   await limpar(); for (const m of [ANA, BRUNO, CARLA]) await ckPost("entrar-na-sala", pin(m), sala(svF));

@@ -65,7 +65,15 @@ describe("migração 145: garantias que a prova no banco real exigiu", () => {
     expect(g).toMatch(/i\.RegistroId <> d\.RegistroId OR i\.Parentesco <> d\.Parentesco OR \(i\.Nome IS NOT NULL AND ISNULL\(i\.Nome, N''''\) <> ISNULL\(d\.Nome, N''''\)\)/);
   });
   test("o aviso obrigatório das autorizações sem efeito existe (o destinatário não desliga)", () => {
-    expect(TEXTO).toMatch(/Chave = N'CHECKIN_AUTORIZADOS_DEPENDENTES'\) INSERT INTO dbo\.NotificacaoRegras \(Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria\) VALUES \(N'CHECKIN_AUTORIZADOS_DEPENDENTES', N'[^']+', N'MENORES', NULL, NULL, 1, 1\)/);
+    expect(TEXTO).toMatch(/Chave = N'CHECKIN_AUTORIZADOS_DEPENDENTES'\) INSERT INTO dbo\.NotificacaoRegras \(Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria\) VALUES \(N'CHECKIN_AUTORIZADOS_DEPENDENTES', N'[^']+', N'MENORES', NULL, NULL, 1, 1, 1\)/);
+  });
+  test("Trava 7-B: TODA regra de aviso da 145 é obrigatória e sai por e-mail E pelo celular (o sino sozinho não avisa a tempo)", () => {
+    const regras = [...TEXTO.matchAll(/INSERT INTO dbo\.NotificacaoRegras \(([^)]*)\) VALUES \(N'([A-Z_]+)', N'[^']+', N'MENORES', NULL, NULL, ([^)]*)\)/g)];
+    expect(regras.length).toBeGreaterThanOrEqual(10);
+    for (const [, colunas, chave, valores] of regras) {
+      expect([chave, colunas]).toEqual([chave, "Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria"]);
+      expect([chave, valores]).toEqual([chave, "1, 1, 1"]);
+    }
   });
   test("o texto da base legal da retenção cabe na coluna (NVARCHAR(300)): um UPDATE maior que isso derruba a migração inteira", () => {
     const m = /SET BaseLegal = N'([^]*?)'\s+WHERE Categoria = N'Check-in infantil/.exec(SEM_COMENTARIOS);

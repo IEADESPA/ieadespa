@@ -208,12 +208,13 @@ describe("retenção e varredura", () => {
     expect(r).toEqual({ anonimizados: 4, retencaoDias: 1825 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENORES_IP_ANONIMIZADO", dadosDepois: { quantidade: 4 } });
   });
-  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta nas escalas e uma nas turmas da EBD, e mais nenhuma)", async () => {
+  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta nas escalas, uma nas turmas da EBD e uma nas salas do check-in, e mais nenhuma)", async () => {
     const r = await db.retirarInaptosDasEscalas(pool, { hoje: HOJE });
-    expect(r).toEqual({ retirados: 0, alocacoes: 0, turmasRetiradas: 0 });
-    expect(mockConsultas).toHaveLength(2);
+    expect(r).toEqual({ retirados: 0, alocacoes: 0, turmasRetiradas: 0, presencasEncerradas: 0 });
+    expect(mockConsultas).toHaveLength(3);
     expect(mockConsultas[0].sql).toMatch(/FROM EscalasAlocacoes a/);
     expect(mockConsultas[1].sql).toMatch(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t/);
+    expect(mockConsultas[2].sql).toMatch(/FROM CheckinInfantilVoluntarios v JOIN EscalasServicos s/);       // Trava 7-B: a presença aberta na sala
     expect(escritas()).toHaveLength(0);
     expect(notificarAgora).not.toHaveBeenCalled();
   });
@@ -225,7 +226,8 @@ describe("retenção e varredura", () => {
     await db.retirarInaptosDasEscalas(pool, { hoje: HOJE, equipeId: 3 });
     expect(mockConsultas[0].sql).toMatch(/a\.EquipeId = @eq/);
     expect(mockConsultas[0].inputs.eq).toBe(3);
-    expect(mockConsultas).toHaveLength(1);                         // varrer UMA equipe não olha as turmas da EBD
+    expect(mockConsultas).toHaveLength(2);                         // varrer UMA equipe não olha as turmas da EBD (só as escalas e a sala do check-in DESSA equipe)
+    expect(mockConsultas[1].sql).toMatch(/FROM CheckinInfantilVoluntarios v[\s\S]*AND v\.EquipeId = @eq/);
   });
   test("a varredura de uma pessoa também olha as turmas da EBD dela (filtro por professor)", async () => {
     await db.retirarInaptosDasEscalas(pool, { hoje: HOJE, membroId: 7 });

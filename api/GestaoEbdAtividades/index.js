@@ -59,12 +59,13 @@ function temEbdGestao(usuario) {
   return auth.temPermissao(usuario, "ebd_gestao");
 }
 
-async function ehProfessorAtivoDaTurma(pool, membroId, turmaId) {
-  if (!membroId) return false;
-  const r = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
-    SELECT TOP 1 1 FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
-  `);
-  return r.recordset.length > 0;
+// Trava 7-B: na turma marcada "com menores", o professor só age se estiver apto hoje e for adulto (shared/ebdTurmas.js, portaoDoProfessorNaTurma).
+// Devolve { ok, mensagem }; `mensagem` só vem na recusa pelo portão dos menores.
+async function acessoATurma(pool, usuario, turma) {
+  return ebdTurmas.acessoDoProfessorOuGestor(pool, {
+    membroId: usuario.membroId, turmaId: turma.turmaId,
+    gestorNoEscopo: async () => temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))
+  });
 }
 
 async function ehProfessorAtivoDaCongregacao(pool, membroId, congregacaoId) {
@@ -100,9 +101,7 @@ async function podeGerenciarRespostaDoAluno(pool, usuario, alunoId) {
   if (!aluno) return { ok: false, aluno: null };
   const turma = await ebdTurmas.buscarTurmaPorId(pool, aluno.TurmaId);
   if (!turma) return { ok: false, aluno };
-  if (temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return { ok: true, aluno, turma };
-  if (await ehProfessorAtivoDaTurma(pool, usuario.membroId, aluno.TurmaId)) return { ok: true, aluno, turma };
-  return { ok: false, aluno, turma };
+  return { ...(await acessoATurma(pool, usuario, turma)), aluno, turma };
 }
 
 // Revisão de escopo: a atividade/questão precisa ser da MESMA congregação da turma do aluno. Antes só o aluno era conferido — o professor de uma congregação lançava resposta em
@@ -207,8 +206,8 @@ module.exports = async function (context, req) {
       const questaoId = auth.idDeRota(req.body && req.body.questaoId);
       const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!questaoId || !alunoId) return erro(context, 400, "Informe questaoId e alunoId.");
-      const { ok, turma } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, FORA_DA_TURMA);
+      const { ok, turma, mensagem } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       // questão inexistente e questão de outra congregação: a mesma resposta
       if (!(await questaoDaCongregacao(pool, questaoId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const resultado = await atividades.registrarRespostaAluno(pool, { questaoId, alunoId, resposta, registradoPorMembroId: usuario.membroId });
@@ -221,8 +220,8 @@ module.exports = async function (context, req) {
       const respostaId = auth.idDeRota(req.body && req.body.respostaId);
       const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!respostaId || !alunoId || correta === undefined) return erro(context, 400, "Informe respostaId, alunoId e correta.");
-      const { ok } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, FORA_DA_TURMA);
+      const { ok, mensagem } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const resultado = await atividades.corrigirRespostaManual(pool, { respostaId, alunoId, correta, corrigidoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -232,8 +231,8 @@ module.exports = async function (context, req) {
       const atividadeId = auth.idDeRota(req.query && req.query.atividadeId);
       const alunoId = auth.idDeRota(req.query && req.query.alunoId);
       if (!atividadeId || !alunoId) return erro(context, 400, "Informe atividadeId e alunoId.");
-      const { ok, turma } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
-      if (!ok) return erro(context, 403, FORA_DA_TURMA);
+      const { ok, turma, mensagem } = await podeGerenciarRespostaDoAluno(pool, usuario, alunoId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       if (!(await atividadeDaCongregacao(pool, atividadeId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const respostas = await atividades.listarRespostasAluno(pool, { atividadeId, alunoId });
       context.res = { status: 200, body: { sucesso: true, respostas, resumo: atividades.calcularNotaAtividade(respostas) } };
@@ -246,9 +245,8 @@ module.exports = async function (context, req) {
       if (!atividadeId || !turmaId) return erro(context, 400, "Informe atividadeId e turmaId.");
       const turma = await ebdTurmas.buscarTurmaPorId(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
-      const temGestao = temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId));
-      const ehProfessor = await ehProfessorAtivoDaTurma(pool, usuario.membroId, turmaId);
-      if (!temGestao && !ehProfessor) return erro(context, 403, FORA_DA_TURMA);
+      const acesso = await acessoATurma(pool, usuario, turma);
+      if (!acesso.ok) return erro(context, 403, acesso.mensagem || FORA_DA_TURMA);
       if (!(await atividadeDaCongregacao(pool, atividadeId, turma.congregacaoId))) return erro(context, 403, FORA_DA_TURMA);
       const resumo = await atividades.listarResumoTurma(pool, { atividadeId, turmaId });
       context.res = { status: 200, body: { sucesso: true, resumo } };

@@ -52,27 +52,20 @@ async function podeAcessarCongregacao(pool, usuario, congregacaoId) {
   return !!nome && auth.estaNoEscopo(usuario, nome);
 }
 
-async function ehProfessorAtivoDaTurma(pool, membroId, turmaId) {
-  if (!membroId) return false;
-  const r = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
-    SELECT TOP 1 1 FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
-  `);
-  return r.recordset.length > 0;
-}
-
 // Lançar chamada de uma turma: "ebd_gestao" (dentro do escopo territorial)
-// OU professor ativo da própria turma (ver preâmbulo acima).
+// OU professor ativo da própria turma (ver preâmbulo acima). Trava 7-B: na
+// turma marcada "com menores", o professor só age se estiver apto hoje e for
+// adulto (shared/ebdTurmas.js, portaoDoProfessorNaTurma) — `mensagem` diz isso.
 async function podeLancarChamadaDaTurma(pool, usuario, turmaId) {
   const turma = await ebd.buscarTurmaPorId(pool, turmaId);
   if (!turma) return { ok: false, turma: null };
-  if (auth.temPermissao(usuario, "ebd_gestao") && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)) {
-    return { ok: true, turma };
-  }
-  if (await ehProfessorAtivoDaTurma(pool, usuario.membroId, turmaId)) {
-    return { ok: true, turma };
-  }
-  return { ok: false, turma };
+  const acesso = await ebd.acessoDoProfessorOuGestor(pool, {
+    membroId: usuario.membroId, turmaId,
+    gestorNoEscopo: async () => auth.temPermissao(usuario, "ebd_gestao") && await podeAcessarCongregacao(pool, usuario, turma.congregacaoId)
+  });
+  return { ...acesso, turma };
 }
+const FORA_DA_TURMA = "Fora do seu escopo de atuação nesta turma.";
 
 module.exports = async function (context, req) {
   const sessao = auth.exigirLogin(req, context);
@@ -153,8 +146,8 @@ module.exports = async function (context, req) {
       const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       if (!turmaId || !licaoId) return erro(context, 400, "Informe turmaId e licaoId.");
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       context.res = { status: 200, body: { sucesso: true, alunos: await chamada.listarRosterComPresenca(pool, { turmaId, licaoId }) } };
       return;
     }
@@ -165,8 +158,8 @@ module.exports = async function (context, req) {
       const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       const alunoId = auth.idDeRota(req.body && req.body.alunoId);
       if (!licaoId || !turmaId || !alunoId || !status) return erro(context, 400, "Informe licaoId, turmaId, alunoId e status.");
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const resultado = await chamada.registrarPresencaAluno(pool, { licaoId, turmaId, alunoId, status, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -177,8 +170,8 @@ module.exports = async function (context, req) {
       const licaoId = auth.idDeRota(req.body && req.body.licaoId);
       const turmaId = auth.idDeRota(req.body && req.body.turmaId);
       if (!licaoId || !turmaId || !visitanteNome) return erro(context, 400, "Informe licaoId, turmaId e visitanteNome.");
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const resultado = await chamada.registrarVisitante(pool, { licaoId, turmaId, visitanteNome, visitanteContato, registradoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 201 : 422, body: resultado };
       return;
@@ -188,8 +181,8 @@ module.exports = async function (context, req) {
       const licaoId = auth.idDeRota(req.query && req.query.licaoId);
       const turmaId = auth.idDeRota(req.query && req.query.turmaId);
       if (!licaoId || !turmaId) return erro(context, 400, "Informe licaoId e turmaId.");
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const registros = await chamada.listarChamadaPorLicaoTurma(pool, { licaoId, turmaId });
       context.res = { status: 200, body: { sucesso: true, chamada: registros, resumo: chamada.resumirChamada(registros) } };
       return;
@@ -201,8 +194,8 @@ module.exports = async function (context, req) {
       const data = (req.query && req.query.data) || salaAula.hojeBrasilia();
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const turma = await salaAula.buscarTurmaComCongregacao(pool, turmaId);
       if (!turma || !turma.ativa) return erro(context, 422, "Turma inativa.");
       context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { sucesso: true, pacote: await salaAula.montarPacoteOffline(pool, { turma, data }) } };
@@ -212,8 +205,8 @@ module.exports = async function (context, req) {
     if (acao === "sincronizar" && metodo === "POST") {
       const lote = salaAula.validarLoteOffline(req.body || {});
       if (!lote.valido) return erro(context, 422, lote.mensagem);
-      const { ok } = await podeLancarChamadaDaTurma(pool, usuario, lote.turmaId);
-      if (!ok) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const { ok, mensagem } = await podeLancarChamadaDaTurma(pool, usuario, lote.turmaId);
+      if (!ok) return erro(context, 403, mensagem || FORA_DA_TURMA);
       const turma = await salaAula.buscarTurmaComCongregacao(pool, lote.turmaId);
       if (!turma || !turma.ativa) return erro(context, 422, "Turma inativa.");
       const resultado = await salaAula.sincronizarChamadaOffline(pool, { lote, turma, membroId: usuario.membroId });

@@ -444,10 +444,15 @@ async function aptosParaTurma(pool, { turmaId, membroIds, hoje = hojeBrasilia() 
   const aptos = new Set(), bloqueados = new Map();
   for (const id of ids) {
     const a = aptidoes.get(id);
-    if (a && a.apto) aptos.add(id); else bloqueados.set(id, a ? motivoCurto(a) : "habilitação para servir com menores pendente");
+    // Trava 7-B: o menor de 18 anos nunca conta como adulto (a regra da v7.7). Na equipe ele pode servir como auxiliar; a turma da EBD não tem esse papel (todo professor da turma
+    // faz chamada e lida com os alunos sozinho), então na turma marcada só entra professor ADULTO e apto.
+    if (a && a.apto && a.contaComoAdulto) aptos.add(id);
+    else if (a && a.apto) bloqueados.set(id, MOTIVO_PROFESSOR_ADOLESCENTE);
+    else bloqueados.set(id, a ? motivoCurto(a) : "habilitação para servir com menores pendente");
   }
   return { contatoComMenores: true, aptos, bloqueados };
 }
+const MOTIVO_PROFESSOR_ADOLESCENTE = "em turma com menores só leciona adulto (18 anos ou mais); o adolescente não conta como adulto";
 
 // A rotina diária e os atos da Diretoria (certidão com restrição, inapto marcado, auto-denúncia, incidente) tiram da turma com menores o professor que deixou de ser apto, na hora.
 // `membroId`: só uma pessoa; `turmaId`: só uma turma (ao ligar a marca). Cada par pessoa×turma é uma transação que relê o vínculo com trava (duas varreduras ao mesmo tempo não avisam duas vezes).
@@ -521,8 +526,98 @@ async function retirarInaptosDasTurmas(pool, { hoje = hojeBrasilia(), membroId =
   return resultado;
 }
 
-// O invólucro que todo ato da Diretoria e a rotina diária já chamam: varre as escalas e, se não é só uma equipe, também as turmas da EBD marcadas "com menores".
-// Uma falha numa das duas não impede a outra; o erro sobe no fim, com o que já foi feito em `parcial`.
+// ---------------------------------------------------------------
+// Trava 7-B: quem deixou de ser apto sai também da SALA do check-in (a presença aberta da v7.10)
+// ---------------------------------------------------------------
+
+const DETALHE_SAIDA_PELA_LIDERANCA = "retirado pela liderança";     // o mesmo texto que sairDaSala grava quando a liderança tira alguém da sala
+
+function textoSaidaObrigatoria({ equipe, quando, nome, adultos, criancas, minimo, porAdulto, furou }) {
+  const base = `Check-in infantil — sala ${equipe}${quando ? ` (${quando})` : ""}: uma pessoa da equipe precisa sair da sala agora. ${nome} não pode continuar com as crianças neste serviço e o sistema já encerrou a presença na sala. Confirme que a pessoa saiu.`;
+  const alerta = furou
+    ? ` Atenção: a sala ficou com ${adultos} adulto(s) habilitado(s) para ${criancas} criança(s) e precisa de ao menos ${minimo}${porAdulto ? ` (e de um adulto para cada ${porAdulto} crianças)` : ""}: mande agora outro adulto habilitado para a sala.`
+    : "";
+  return (base + alerta).slice(0, 1000);
+}
+
+// A escala é desmarcada pela varredura acima, mas quem já tinha entrado na sala continuava "presente" (e, se a aptidão caiu no meio do culto, com as crianças).
+// Aqui a presença aberta de quem não é apto hoje é encerrada (SaiuEm), com o evento imutável VOLUNTARIO_SAIU "retirado pela liderança" (o ator gravado é a própria pessoa:
+// a coluna não aceita vazio e o ato é do sistema), e o líder da equipe e a gestão da congregação recebem um aviso obrigatório e urgente — sem o motivo e sem nome de criança.
+// Só os serviços de HOJE: a presença esquecida de um dia anterior sai pela baixa administrativa da sala. Não precisa da trava da sala: quem não é apto já não conta como adulto
+// em nenhuma conta da sala (a v7.10 calcula a aptidão a cada ato), então encerrar a presença não muda proporção nem regra dos dois adultos — o aviso só diz como a sala ficou.
+async function encerrarPresencasDeInaptos(pool, { hoje = hojeBrasilia(), membroId = null, equipeId = null, deps } = {}) {
+  const rq = pool.request().input("hoje", sql.Date, hoje);
+  let filtro = "";
+  if (membroId) { rq.input("m", sql.Int, membroId); filtro += " AND v.MembroId = @m"; }
+  if (equipeId) { rq.input("eq", sql.Int, equipeId); filtro += " AND v.EquipeId = @eq"; }
+  const linhas = (await rq.query(`
+    SELECT v.PresencaId, v.ServicoId, v.EquipeId, v.MembroId, m.Nome, e.Nome AS EquipeNome, e.LiderMembroId, e.CongregacaoId, e.FaixaEtariaMenores, s.DataHora
+    FROM CheckinInfantilVoluntarios v JOIN EscalasServicos s ON s.ServicoId = v.ServicoId JOIN EscalasEquipes e ON e.EquipeId = v.EquipeId JOIN MembroReferencia m ON m.MembroId = v.MembroId
+    WHERE v.SaiuEm IS NULL AND CAST(s.DataHora AS DATE) = @hoje${filtro}`)).recordset;
+  if (!linhas.length) return { presencasEncerradas: 0 };
+  const aptidoes = await aptidaoEmLote(pool, linhas.map((l) => l.MembroId), { hoje });
+  const alvos = linhas.filter((l) => { const ap = aptidoes.get(Number(l.MembroId)); return !(ap && ap.apto); });
+  if (!alvos.length) return { presencasEncerradas: 0 };
+
+  const feitas = [];
+  const erros = [];
+  for (const a of alvos) {
+    const transaction = new sql.Transaction(pool);
+    try {
+      await transaction.begin();
+      const up = await new sql.Request(transaction).input("p", sql.Int, a.PresencaId).query(`UPDATE CheckinInfantilVoluntarios SET SaiuEm = SYSUTCDATETIME() WHERE PresencaId = @p AND SaiuEm IS NULL`);
+      // A pessoa saiu sozinha (ou a liderança a tirou) entre a leitura e aqui: nada a registrar nem a avisar.
+      if (!up.rowsAffected || !up.rowsAffected[0]) { await fecharTransacao(transaction, false); continue; }
+      await new sql.Request(transaction).input("r", sql.Int, null).input("s", sql.Int, a.ServicoId).input("e", sql.Int, a.EquipeId).input("t", sql.NVarChar(32), "VOLUNTARIO_SAIU")
+        .input("a", sql.Int, a.MembroId).input("d", sql.NVarChar(100), DETALHE_SAIDA_PELA_LIDERANCA)
+        .query(`INSERT INTO CheckinInfantilEventos (RegistroId, ServicoId, EquipeId, Tipo, AtorMembroId, Detalhe) VALUES (@r, @s, @e, @t, @a, @d)`);
+      await transaction.commit();
+    } catch (e) { await fecharTransacao(transaction, false); erros.push(e); continue; }
+    // Como a saída da sala pela liderança: a trilha diz onde, não quem (a matrícula, somada à hora, poderia apontar uma pendência reservada).
+    await registrarAuditoria({ tabela: "CheckinInfantilVoluntarios", registroId: a.ServicoId, acao: "CHECKIN_VOLUNTARIO_SAIU", usuarioId: null, dadosDepois: { servicoId: a.ServicoId, equipeId: a.EquipeId, automatica: true } });
+    feitas.push(a);
+  }
+
+  let prazos = null, faixas = null;
+  let semAviso = 0;
+  for (const a of feitas) {
+    try {
+      if (!prazos) { prazos = await lerPrazos(pool); faixas = await lerPrazosFaixas(pool); }
+      // Os adultos que sobraram, contados como a sala conta: presentes, aptos hoje e com 18 anos ou mais. As crianças: as que ainda não foram retiradas.
+      const restantes = (await pool.request().input("s", sql.Int, a.ServicoId).input("e", sql.Int, a.EquipeId)
+        .query(`SELECT MembroId FROM CheckinInfantilVoluntarios WHERE ServicoId = @s AND EquipeId = @e AND SaiuEm IS NULL`)).recordset.map((x) => Number(x.MembroId));
+      const apRest = restantes.length ? await aptidaoEmLote(pool, restantes, { hoje, prazos }) : new Map();
+      const adultos = restantes.filter((id) => { const ap = apRest.get(id); return !!(ap && ap.apto && ap.contaComoAdulto); }).length;
+      const criancas = Number(((await pool.request().input("s", sql.Int, a.ServicoId).input("e", sql.Int, a.EquipeId)
+        .query(`SELECT COUNT(*) AS n FROM CheckinInfantilRegistros WHERE ServicoId = @s AND EquipeId = @e AND Situacao <> 'RETIRADA'`)).recordset[0] || {}).n || 0);
+      const minimo = Math.max(mm.ADULTOS_MINIMOS_PADRAO, Number.isInteger(prazos.adultosMinimos) ? prazos.adultosMinimos : mm.ADULTOS_MINIMOS_PADRAO);
+      const porAdulto = a.FaixaEtariaMenores ? mm.criancasPorAdulto(a.FaixaEtariaMenores, faixas) : null;
+      const furou = criancas > 0 && (adultos < minimo || (!!porAdulto && criancas > adultos * porAdulto));
+      const lider = a.LiderMembroId && Number(a.LiderMembroId) !== Number(a.MembroId) ? await lerEmail(pool, a.LiderMembroId) : null;
+      let gestao = [];
+      try { gestao = await gestoresDaCongregacao(pool, a.CongregacaoId); } catch (e) { /* o aviso ao líder segue */ }
+      const destinatarios = unicosPorMembro([lider, ...gestao]).filter((d) => Number(d.membroId) !== Number(a.MembroId));
+      const quando = a.DataHora ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", dateStyle: "short", timeStyle: "short" }).format(a.DataHora instanceof Date ? a.DataHora : new Date(a.DataHora)) : null;
+      const r = destinatarios.length
+        ? await notificarAgora(pool, { regraChave: "CHECKIN_SAIDA_OBRIGATORIA", destinatarios, mensagem: textoSaidaObrigatoria({ equipe: a.EquipeNome, quando, nome: a.Nome, adultos, criancas, minimo, porAdulto, furou }),
+          referenciaId: a.PresencaId, referenciaTabela: "CheckinInfantilVoluntarios", deps })
+        : null;
+      if (!r || !r.criadas) semAviso++;
+    } catch (e) { semAviso++; console.error("[MENORES] a presença foi encerrada, mas o aviso de saída obrigatória da sala falhou:", e.message); }
+  }
+  // Aviso obrigatório que não sai não cala: a presença já foi encerrada (o ato vale) e quem chama fica sabendo (a rotina registra no log).
+  if (semAviso) console.error(`[MENORES] ${semAviso} saída(s) obrigatória(s) da sala sem ninguém avisado: ligue para a liderança da sala.`);
+  const resultado = { presencasEncerradas: feitas.length, ...(semAviso ? { saidasSemAviso: semAviso } : {}) };
+  if (erros.length) {
+    const e = new Error(`O encerramento da presença na sala falhou em ${erros.length} de ${alvos.length} presença(s): ${erros[0].message}`);
+    e.parcial = resultado;
+    throw e;
+  }
+  return resultado;
+}
+
+// O invólucro que todo ato da Diretoria e a rotina diária já chamam: varre as escalas e, se não é só uma equipe, também as turmas da EBD marcadas "com menores"; e, por
+// último, encerra a presença na sala do check-in de quem não é apto (Trava 7-B). Uma falha numa das três não impede as outras; o erro sobe no fim, com o que já foi feito em `parcial`.
 async function retirarInaptosDasEscalas(pool, opcoes = {}) {
   let resultado = { retirados: 0, alocacoes: 0 };
   let erro = null;
@@ -533,6 +628,10 @@ async function retirarInaptosDasEscalas(pool, opcoes = {}) {
       resultado = { ...resultado, turmasRetiradas: t.vinculos };
     } catch (e) { erro = erro || e; resultado = { ...resultado, turmasRetiradas: (e.parcial && e.parcial.vinculos) || 0 }; }
   }
+  try {
+    const p = await encerrarPresencasDeInaptos(pool, { hoje: opcoes.hoje, membroId: opcoes.membroId, equipeId: opcoes.equipeId, deps: opcoes.deps });
+    resultado = { ...resultado, ...p };
+  } catch (e) { erro = erro || e; resultado = { ...resultado, ...(e.parcial || { presencasEncerradas: 0 }) }; }
   if (erro) { erro.parcial = resultado; throw erro; }
   return resultado;
 }
@@ -550,25 +649,42 @@ async function turmasSemMarcaQueParecemInfantis(pool, { congregacaoIds = null } 
 // Quem serve com menores: a base do painel e dos avisos
 // ---------------------------------------------------------------
 
-// Membros ativos de equipes ativas com a marca de menores, com as equipes onde servem. `congregacaoIds`: null = todas.
+// Membros ativos de equipes ativas com a marca de menores, com as equipes onde servem, e os professores ativos das turmas ativas da EBD marcadas "com menores", com as
+// turmas onde lecionam. `congregacaoIds`: null = todas (o filtro vale pela congregação da equipe ou da turma).
+// Trava 7-B (20/10/2026): antes só as equipes entravam, e o professor de turma marcada ficava fora do painel, da escada de avisos de vencimento e do aviso mensal das
+// certidões — e saía da turma no dia do vencimento sem aviso prévio. Quem está numa equipe E numa turma aparece uma vez só, com as duas listas.
 async function voluntariosComMenores(pool, { congregacaoIds = null } = {}) {
+  if (congregacaoIds && !congregacaoIds.length) return [];
   const rq = pool.request();
-  let filtro = "";
-  if (congregacaoIds) {
-    if (!congregacaoIds.length) return [];
-    filtro = ` AND e.CongregacaoId IN (${listaIn(rq, "c", congregacaoIds)})`;
-  }
+  const filtro = congregacaoIds ? ` AND e.CongregacaoId IN (${listaIn(rq, "c", congregacaoIds)})` : "";
   const r = await rq.query(`
     SELECT em.MembroId, m.Nome, e.CongregacaoId, c.Nome AS CongregacaoNome, e.EquipeId, e.Nome AS EquipeNome, e.LiderMembroId
     FROM EscalasEquipeMembros em JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId AND e.Ativa = 1 AND e.ContatoComMenores = 1
     JOIN MembroReferencia m ON m.MembroId = em.MembroId JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
     WHERE em.Ativo = 1${filtro} ORDER BY c.Nome, m.Nome`);
+  const rqT = pool.request();
+  const filtroT = congregacaoIds ? ` AND t.CongregacaoId IN (${listaIn(rqT, "c", congregacaoIds)})` : "";
+  const rt = await rqT.query(`
+    SELECT tp.MembroId, m.Nome, t.CongregacaoId, c.Nome AS CongregacaoNome, t.TurmaId, t.Nome AS TurmaNome
+    FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t.TurmaId = tp.TurmaId AND t.Ativa = 1 AND t.ContatoComMenores = 1
+    JOIN MembroReferencia m ON m.MembroId = tp.MembroId JOIN Congregacoes c ON c.CongregacaoId = t.CongregacaoId
+    WHERE tp.Ativo = 1${filtroT} ORDER BY c.Nome, m.Nome`);
   const porMembro = new Map();
-  for (const x of r.recordset) {
-    if (!porMembro.has(x.MembroId)) porMembro.set(x.MembroId, { membroId: x.MembroId, nome: x.Nome, congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome, equipes: [] });
-    porMembro.get(x.MembroId).equipes.push({ equipeId: x.EquipeId, nome: x.EquipeNome, liderMembroId: x.LiderMembroId });
+  const pessoa = (x) => {
+    if (!porMembro.has(x.MembroId)) porMembro.set(x.MembroId, { membroId: x.MembroId, nome: x.Nome, congregacaoId: x.CongregacaoId, congregacaoNome: x.CongregacaoNome, equipes: [], turmas: [] });
+    return porMembro.get(x.MembroId);
+  };
+  for (const x of r.recordset) pessoa(x).equipes.push({ equipeId: x.EquipeId, nome: x.EquipeNome, liderMembroId: x.LiderMembroId });
+  let soDaTurma = false;
+  for (const x of rt.recordset) {
+    if (!porMembro.has(x.MembroId)) soDaTurma = true;
+    const p = pessoa(x);
+    if (!p.turmas.some((t) => t.turmaId === x.TurmaId)) p.turmas.push({ turmaId: x.TurmaId, nome: x.TurmaNome, congregacaoId: x.CongregacaoId });
   }
-  return [...porMembro.values()];
+  const lista = [...porMembro.values()];
+  // Quem só leciona entrou depois das equipes: a lista volta à ordem de congregação e nome (a mesma das equipes).
+  if (soDaTurma) lista.sort((a, b) => String(a.congregacaoNome).localeCompare(String(b.congregacaoNome), "pt-BR") || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+  return lista;
 }
 
 // `cache`: só os detectores diários o usam — os quatro precisam das mesmas linhas, e a conta (a aptidão de todos) é a parte cara. O painel da tela nunca usa cache.
@@ -601,7 +717,7 @@ async function painel(pool, { congregacaoIds = null, reservado = false, hoje = h
   const itens = linhas.map((l) => {
     const status = mm.statusDaLinha(l.aptidao);
     return {
-      membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome),
+      membroId: l.membroId, nome: l.nome, congregacaoId: l.congregacaoId, congregacaoNome: l.congregacaoNome, equipes: l.equipes.map((e) => e.nome), turmas: (l.turmas || []).map((t) => t.nome),
       status, bloqueios: mm.bloqueiosParaPainel(l.aptidao.bloqueios, { reservado }),
       proximoVencimento: reservado ? l.aptidao.proximoVencimento : mm.proximoVencimentoParaGestao(l.aptidao.proximoVencimento, l.aptidao.bloqueios),
       validades: reservado ? l.aptidao.validades : mm.validadesParaGestao(l.aptidao.validades, l.aptidao.bloqueios)
@@ -618,12 +734,16 @@ async function minhaSituacao(pool, membroId, { hoje = hojeBrasilia() } = {}) {
   const ap = await aptidaoDe(pool, membroId, { hoje });
   const r = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT e.EquipeId, e.Nome FROM EscalasEquipeMembros em JOIN EscalasEquipes e ON e.EquipeId = em.EquipeId AND e.Ativa = 1 AND e.ContatoComMenores = 1 WHERE em.MembroId = @m AND em.Ativo = 1 ORDER BY e.Nome`);
+  // Trava 7-B: as turmas da EBD marcadas "com menores" em que a pessoa leciona também contam como serviço com menores.
+  const turmas = (await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT t.TurmaId, t.Nome FROM EbdTurmaProfessores tp JOIN EbdTurmas t ON t.TurmaId = tp.TurmaId AND t.Ativa = 1 AND t.ContatoComMenores = 1 WHERE tp.MembroId = @m AND tp.Ativo = 1 ORDER BY t.Nome`)).recordset;
   const politicaAceita = ap.fatos.politicaVersaoAceita != null && ap.fatos.politicaVersaoAceita >= mm.POLITICA_VERSAO;
   const aberta = (await pool.request().input("m", sql.Int, membroId).query(`
     SELECT TOP 1 AutoDenunciaId, Tipo, DataCiencia, DeclaradaEm, Decisao, DecididaEm, LiberadoEm FROM MinisterioMenoresAutoDenuncias WHERE MembroId = @m ORDER BY AutoDenunciaId DESC`)).recordset[0];
   return {
     apto: ap.apto, contaComoAdulto: ap.contaComoAdulto, bloqueios: mm.bloqueiosParaAPessoa(ap.bloqueios), validades: ap.validades, proximoVencimento: ap.proximoVencimento,
     equipes: r.recordset.map((x) => ({ equipeId: x.EquipeId, nome: x.Nome })),
+    turmas: turmas.map((x) => ({ turmaId: x.TurmaId, nome: x.Nome })),
     habilitacaoAberta: ap.fatos.esteira.existe,
     politica: { vigente: { versao: mm.POLITICA_VERSAO }, aceita: politicaAceita },
     autoDenuncia: aberta ? {
@@ -801,6 +921,15 @@ async function detectarVencimentos(pool, { faixa, hoje = hojeBrasilia() } = {}) 
   const linhas = await linhasDoPainel(pool, { hoje, cache: true });
   const gestores = new Map();       // a secretaria é buscada UMA vez por congregação na rodada
   const gestoresDe = async (congregacaoId) => { if (!gestores.has(congregacaoId)) gestores.set(congregacaoId, await gestoresDaCongregacao(pool, congregacaoId)); return gestores.get(congregacaoId); };
+  const ebdPorCongregacao = new Map();
+  const gestaoEbdDe = async (congregacaoId) => {
+    if (!ebdPorCongregacao.has(congregacaoId)) {
+      let lista = [];
+      try { lista = (await require("./psc").resolverDestinatariosDaCongregacao(pool, { permissao: "ebd_gestao", congregacaoId })).map((d) => ({ membroId: d.membroId, nome: d.nome, email: d.email })); } catch (e) { /* o aviso à pessoa e à secretaria segue */ }
+      ebdPorCongregacao.set(congregacaoId, lista);
+    }
+    return ebdPorCongregacao.get(congregacaoId);
+  };
   const fatos = [];
   for (const l of linhas) {
     const ap = l.aptidao;
@@ -811,13 +940,18 @@ async function detectarVencimentos(pool, { faixa, hoje = hojeBrasilia() } = {}) 
     const referenciaId = mm.referenciaDoAviso(ap.habilitacaoId, proximo.data);
     const pessoa = await lerEmail(pool, l.membroId);
     if (pessoa) fatos.push({ referenciaId, destinatarios: [pessoa], fatoGerador: mm.textoVencendo({ itens, faixa }) });
-    // Os líderes das equipes e a secretaria da congregação sabem com a mesma antecedência (não é só problema do voluntário).
+    // Os líderes das equipes e a secretaria da congregação sabem com a mesma antecedência (não é só problema do voluntário). Do professor de turma da EBD com menores
+    // (Trava 7-B), sabe também a gestão da EBD da congregação da turma: é quem a retirada da turma avisa no dia do vencimento.
     const lideres = [];
     for (const e of l.equipes) if (e.liderMembroId && e.liderMembroId !== l.membroId) { const d = await lerEmail(pool, e.liderMembroId); if (d) lideres.push(d); }
-    const destinatarios = unicosPorMembro([...lideres, ...(await gestoresDe(l.congregacaoId))]).filter((d) => d.membroId !== l.membroId);
+    const turmas = l.turmas || [];
+    const gestaoEbd = [];
+    for (const c of new Set(turmas.map((t) => t.congregacaoId))) gestaoEbd.push(...(await gestaoEbdDe(c)));
+    const destinatarios = unicosPorMembro([...lideres, ...(await gestoresDe(l.congregacaoId)), ...gestaoEbd]).filter((d) => d.membroId !== l.membroId);
     if (destinatarios.length) {
       const lista = itens.map((i) => `${i.rotulo} (${mm.formatarDataBr(i.data)})`).join(", ");
-      fatos.push({ referenciaId, destinatarios, fatoGerador: `Ministério com menores: a habilitação de ${l.nome} vence em até ${faixa} dias — ${lista}. Acompanhe a renovação: no dia do vencimento a pessoa sai automaticamente das escalas com menores.`.slice(0, 1000) });
+      const onde = turmas.length ? (l.equipes.length ? "das escalas e das turmas da EBD com menores" : "das turmas da EBD com menores") : "das escalas com menores";
+      fatos.push({ referenciaId, destinatarios, fatoGerador: `Ministério com menores: a habilitação de ${l.nome} vence em até ${faixa} dias — ${lista}. Acompanhe a renovação: no dia do vencimento a pessoa sai automaticamente ${onde}.`.slice(0, 1000) });
     }
   }
   return fatos;
@@ -900,13 +1034,20 @@ async function anonimizarIpsVencidos(pool, { hoje = hojeBrasilia() } = {}) {
 async function dadosDoTitular(pool, membroId) {
   const pol = (await pool.request().input("m", sql.Int, membroId).query(`SELECT Versao, Forma, AceitoEm, EnderecoIp, Referencia FROM MinisterioMenoresPoliticaAceites WHERE MembroId = @m ORDER BY AceiteId DESC`)).recordset;
   const hab = await habMod.buscarHabilitacaoPorMembro(pool, membroId);
-  const ret = (await pool.request().input("m", sql.Int, membroId).query(`SELECT r.RetiradoEm, r.AlocacoesCanceladas, e.Nome AS EquipeNome FROM MinisterioMenoresRetiradas r JOIN EscalasEquipes e ON e.EquipeId = r.EquipeId WHERE r.MembroId = @m ORDER BY r.RetiradaId DESC`)).recordset;
+  // A retirada é de uma equipe de escala OU de uma turma da EBD (migração 145: EquipeId ficou opcional). Antes o JOIN com as equipes escondia a retirada da turma (Trava 7-B).
+  const ret = (await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT r.RetiradoEm, r.AlocacoesCanceladas, r.EquipeId, r.TurmaId, e.Nome AS EquipeNome, t.Nome AS TurmaNome
+    FROM MinisterioMenoresRetiradas r LEFT JOIN EscalasEquipes e ON e.EquipeId = r.EquipeId LEFT JOIN EbdTurmas t ON t.TurmaId = r.TurmaId
+    WHERE r.MembroId = @m ORDER BY r.RetiradaId DESC`)).recordset;
   const auto = (await pool.request().input("m", sql.Int, membroId).query(`SELECT * FROM MinisterioMenoresAutoDenuncias WHERE MembroId = @m ORDER BY AutoDenunciaId DESC`)).recordset;
   const cad = (await pool.request().input("m", sql.Int, membroId).query(`SELECT Fonte, Resultado, ConsultadoEm FROM MinisterioMenoresCadastroNacional WHERE MembroId = @m ORDER BY ConsultaId DESC`)).recordset;
   return {
     politicaDeComunicacao: pol.map((x) => ({ versao: x.Versao, forma: x.Forma, aceitoEm: isoInstante(x.AceitoEm), enderecoIp: x.EnderecoIp || null, referencia: x.Referencia || null })),
     fichaConfirmadaEm: hab ? isoInstante(hab.fichaAtualizadaEm) : null,
-    retiradasDaEscala: ret.map((x) => ({ equipe: x.EquipeNome, em: isoInstante(x.RetiradoEm), escalasDesmarcadas: x.AlocacoesCanceladas })),
+    // `origem` diz de onde a pessoa saiu; na turma não há escala desmarcada (sai o vínculo de professor), e `equipe` leva um rótulo legível para a tela que ainda só lê esse campo.
+    retiradasDaEscala: ret.map((x) => (x.TurmaId != null && x.EquipeId == null
+      ? { origem: "TURMA_EBD", equipe: x.TurmaNome ? `Turma ${x.TurmaNome} (EBD)` : "Turma da EBD", turma: x.TurmaNome || null, em: isoInstante(x.RetiradoEm), escalasDesmarcadas: 0 }
+      : { origem: "EQUIPE", equipe: x.EquipeNome, turma: null, em: isoInstante(x.RetiradoEm), escalasDesmarcadas: x.AlocacoesCanceladas })),
     comunicacoesADiretoria: auto.map((x) => mapearAutoDenuncia(x)),
     consultasAoCadastroNacional: cad.map((x) => ({ fonte: x.Fonte, resultado: x.Resultado, em: isoInstante(x.ConsultadoEm) })),
     aviso: "A validade das certidões é calculada pela data de emissão das certidões do Termo de Vistoria (que aparece no bloco de vistorias). A Igreja guarda só o código (hash) de cada certidão, nunca o documento."
@@ -916,7 +1057,7 @@ async function dadosDoTitular(pool, membroId) {
 module.exports = {
   lerPrazos, lerPrazosFaixas, carregarFatos, aptidaoEmLote, aptidaoDe, equipeComMenores, aptosParaEquipe, motivoCurto, conferirParaServir, trocaPreservaAdultos, antecedentesDe,
   salasDosServicos, avaliarPublicacao, definirFaixaEquipe, definirCriancasPrevistas, criancasPrevistasDoServico,
-  retirarInaptosDasEscalas, retirarInaptosDasTurmas, aptosParaTurma, turmaComMenores, turmasSemMarcaQueParecemInfantis, voluntariosComMenores, linhasDoPainel, limparCacheDoPainel, equipesSemMarcaQueParecemInfantis, painel, minhaSituacao,
+  retirarInaptosDasEscalas, retirarInaptosDasTurmas, encerrarPresencasDeInaptos, textoSaidaObrigatoria, aptosParaTurma, turmaComMenores, turmasSemMarcaQueParecemInfantis, voluntariosComMenores, linhasDoPainel, limparCacheDoPainel, equipesSemMarcaQueParecemInfantis, painel, minhaSituacao,
   aceitarPolitica, registrarPoliticaManual, confirmarFicha,
   declararAutoDenuncia, listarAutoDenuncias, decidirAutoDenuncia, liberarAutoDenuncia, mapearAutoDenuncia,
   detectarVencimentos, detectarSalasSemSegundoAdulto, detectarVistoriasARenovar, detectarAutoDenunciaPendente,

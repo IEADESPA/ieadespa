@@ -29,6 +29,7 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const salaAula = require("../shared/ebdSalaAula");
+const ebd = require("../shared/ebdTurmas");
 
 function erro(context, status, mensagem) {
   context.res = { status, body: { sucesso: false, mensagem } };
@@ -69,14 +70,14 @@ async function podeVerPlanoComoGestor(pool, usuario, plano) {
   return podeAcessarCongregacao(pool, usuario, plano.congregacaoId);
 }
 
+// { ok, mensagem }. Trava 7-B: na turma marcada "com menores" o professor só vê o plano e os ausentes se estiver apto hoje e for adulto (shared/ebdTurmas.js).
 async function podeVerTurma(pool, usuario, turma) {
-  if (temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))) return true;
-  if (!usuario.membroId) return false;
-  const r = await pool.request().input("turmaId", sql.Int, turma.turmaId).input("membroId", sql.Int, usuario.membroId).query(`
-    SELECT TOP 1 1 FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
-  `);
-  return r.recordset.length > 0;
+  return ebd.acessoDoProfessorOuGestor(pool, {
+    membroId: usuario.membroId, turmaId: turma.turmaId,
+    gestorNoEscopo: async () => temEbdGestao(usuario) && (await podeAcessarCongregacao(pool, usuario, turma.congregacaoId))
+  });
 }
+const FORA_DA_TURMA = "Fora do seu escopo de atuação nesta turma.";
 
 const SEM_PERMISSAO = "Você não tem permissão para isso. Fale com quem administra as Permissões.";
 
@@ -139,7 +140,8 @@ module.exports = async function (context, req) {
       if (!salaAula.dataIsoValida(data)) return erro(context, 400, "Data inválida — use AAAA-MM-DD.");
       const turma = await salaAula.buscarTurmaComCongregacao(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
-      if (!(await podeVerTurma(pool, usuario, turma))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const acesso = await podeVerTurma(pool, usuario, turma);
+      if (!acesso.ok) return erro(context, 403, acesso.mensagem || FORA_DA_TURMA);
       context.res = { status: 200, body: { sucesso: true, data, planos: await salaAula.listarPlanosParaTurma(pool, { turma, data }) } };
       return;
     }
@@ -213,7 +215,8 @@ module.exports = async function (context, req) {
       if (!turmaId) return erro(context, 400, "Informe turmaId.");
       const turma = await salaAula.buscarTurmaComCongregacao(pool, turmaId);
       if (!turma) return erro(context, 404, "Turma não encontrada.");
-      if (!(await podeVerTurma(pool, usuario, turma))) return erro(context, 403, "Fora do seu escopo de atuação nesta turma.");
+      const acesso = await podeVerTurma(pool, usuario, turma);
+      if (!acesso.ok) return erro(context, 403, acesso.mensagem || FORA_DA_TURMA);
       const resultado = await salaAula.listarAusentesDaTurma(pool, turmaId);
       context.res = { status: 200, body: { sucesso: true, turmaId, ...resultado } };
       return;

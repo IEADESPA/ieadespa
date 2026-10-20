@@ -282,6 +282,37 @@ async function ehProfessorAtivoDaCongregacao(pool, membroId, congregacaoId) {
   return r.recordset.length > 0;
 }
 
+// Trava 7-B — o portão da EBD no ATO, como o do check-in (checkinInfantilDb.papelDoOperador): na turma marcada "com menores", ser professor ativo não basta; é preciso
+// estar APTO HOJE (a aptidão da v7.7, calculada agora, nunca guardada) e ser ADULTO. Sem isso, quem perdeu a habilitação no meio da semana seguia fazendo chamada e vendo os
+// alunos até a rotina diária tirá-lo da turma, e o adolescente apto agia como professor. A mensagem não diz o motivo (a pessoa o vê em Meu Painel).
+// Devolve { professor, ok, mensagem }: professor = tem o vínculo ativo na turma; ok = pode agir como professor dela. Turma sem a marca: o vínculo basta (nada muda).
+// A consulta mantém "FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1", a mesma que as rotas faziam.
+const MENSAGEM_PROFESSOR_INAPTO = "Esta turma está marcada como \"com menores\" e hoje você não pode agir nela como professor: a sua habilitação para servir com menores não está em dia. Veja o que falta em Meu Painel → Ministério com menores e fale com a Secretaria da congregação.";
+const MENSAGEM_PROFESSOR_ADOLESCENTE = "Esta turma está marcada como \"com menores\": só adultos (18 anos ou mais) agem nela como professor. Fale com a Secretaria da congregação.";
+async function portaoDoProfessorNaTurma(pool, membroId, turmaId, { hoje } = {}) {
+  if (!membroId || !turmaId) return { professor: false, ok: false };
+  const r = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
+    SELECT TOP 1 (SELECT t.ContatoComMenores FROM EbdTurmas t WHERE t.TurmaId = @turmaId) AS ContatoComMenores
+    FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId AND Ativo = 1
+  `);
+  const vinculo = r.recordset[0];
+  if (!vinculo) return { professor: false, ok: false };
+  if (!vinculo.ContatoComMenores) return { professor: true, ok: true };
+  const ap = await require("./ministerioMenoresDb").aptidaoDe(pool, membroId, hoje ? { hoje } : {});
+  if (!ap || !ap.apto) return { professor: true, ok: false, mensagem: MENSAGEM_PROFESSOR_INAPTO };
+  if (!ap.contaComoAdulto) return { professor: true, ok: false, mensagem: MENSAGEM_PROFESSOR_ADOLESCENTE };
+  return { professor: true, ok: true };
+}
+
+// O acesso de uma rota da turma: { ok, mensagem }. O professor da turma marcada que hoje não pode agir é recusado MESMO se também tiver a gestão da EBD (é ele quem está na
+// sala); a liderança que não é professor da turma segue a regra de sempre (`gestorNoEscopo`, que a rota calcula). `mensagem` só vem na recusa pelo portão dos menores.
+async function acessoDoProfessorOuGestor(pool, { membroId, turmaId, gestorNoEscopo, hoje }) {
+  const p = await portaoDoProfessorNaTurma(pool, membroId, turmaId, { hoje });
+  if (p.professor && !p.ok) return { ok: false, mensagem: p.mensagem };
+  if (await gestorNoEscopo()) return { ok: true };
+  return { ok: p.ok };
+}
+
 async function buscarVinculoProfessor(pool, turmaId, membroId) {
   const result = await pool.request().input("turmaId", sql.Int, turmaId).input("membroId", sql.Int, membroId).query(`
     SELECT * FROM EbdTurmaProfessores WHERE TurmaId = @turmaId AND MembroId = @membroId
@@ -622,6 +653,8 @@ module.exports = {
   buscarVinculoProfessor, designarProfessor, idCanonico, encerrarProfessor, listarProfessoresPorTurma,
   buscarAlunoPorMembro, matricularAluno, transferirAluno, listarAlunosPorTurma,
   listarTurmasParaVisaoAgrupada, listarTurmasDoProfessor, ehProfessorAtivoDaCongregacao,
+  // Trava 7-B — portão da turma "com menores" no ato
+  portaoDoProfessorNaTurma, acessoDoProfessorOuGestor, MENSAGEM_PROFESSOR_INAPTO, MENSAGEM_PROFESSOR_ADOLESCENTE,
   // v6.8 — aluno não-membro
   MAIORIDADE_ANOS, idadeEmAnos, validarAlunoNaoMembro, podeMatricularNaoMembro, podeVincularAMembro,
   buscarAlunoPorId, matricularAlunoNaoMembro, vincularAlunoAMembro, encerrarMatricula

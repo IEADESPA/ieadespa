@@ -64,6 +64,22 @@ describe("a porta", () => {
     await chamar("item", { token: PIN(10), query: { itemId: 3 } });
     expect(db.detalheItem.mock.calls[0][2].ver).toMatchObject({ membroId: 10, gestao: false, geral: false });
   });
+  test("(revisão) a concessão de Extensão ou de Departamento não opera a fila (a Extensão veria a congregação-mãe inteira pelo nome)", async () => {
+    const ext = tokenDe(5, { via: "SENHA", fator: COM_FATOR, nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], escopoExtensaoNome: "Extensão X", permissoes: PERM });
+    const dep = tokenDe(5, { via: "SENHA", fator: COM_FATOR, nivel: "DEPARTAMENTO", escopoCongregacoes: "TODAS", permissoes: PERM });
+    for (const tok of [ext, dep]) {
+      expect((await chamar("fila", { token: tok })).status).toBe(403);
+      expect((await chamar("catalogos", { token: tok })).body.papeis).toEqual({ gestao: false, geral: false });
+    }
+    expect(chamadasAoBanco()).toBe(0);
+  });
+  test("(revisão) \"da Área para cima\" vai para o banco: o Dirigente não, o Pastor de Área sim", async () => {
+    await chamar("risco", { metodo: "POST", token: LIDER(), corpo: { pedidoId: 1, marcar: true } });
+    expect(db.marcarRisco.mock.calls[0][1].ver.acima).toBe(false);
+    const area = tokenDe(6, { via: "SENHA", fator: COM_FATOR, nivel: "AREA", escopoCongregacoes: ["Central", "Vila"], permissoes: PERM });
+    await chamar("risco", { metodo: "POST", token: area, corpo: { pedidoId: 1, marcar: true } });
+    expect(db.marcarRisco.mock.calls[1][1].ver.acima).toBe(true);
+  });
   test("o catálogo diz o papel", async () => {
     expect((await chamar("catalogos", { token: LIDER() })).body.papeis).toEqual({ gestao: true, geral: false });
     expect((await chamar("catalogos", { token: GERAL() })).body.papeis).toEqual({ gestao: true, geral: true });

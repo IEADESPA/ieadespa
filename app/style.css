@@ -1122,7 +1122,8 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
 /* Impressão (v7.11). (1) A nota pastoral, o acompanhamento, os pedidos de oração e os formulários NUNCA saem na impressora, nem num Ctrl+P comum.
    (2) "Imprimir" do boletim imprime só #cpaBolImprimivel (linhas sem nome): a classe .cpa-imprimindo existe só durante window.print() (cuidado-pastoral.js → cpaImprimirBoletimAcao). */
 @media print {
-  #cpaDetalheGesCx, #cpaDetalheMeuCx, #cpaNotaCx, .cpa-notas, #cpaPedLista, #cpaRegPedCx, #cpaNovoCx, #cpaMeusCx, #cpaMeusPedidos, #cpaOracaoForm, #cpaVisitaForm, #cpaOracaoResultado, #cpaVisitaResultado { display: none !important; }
+  #cpaDetalheGesCx, #cpaDetalheMeuCx, #cpaNotaCx, .cpa-notas, #cpaPedLista, #cpaRegPedCx, #cpaNovoCx, #cpaMeusCx, #cpaMeusPedidos, #cpaOracaoForm, #cpaVisitaForm, #cpaOracaoResultado, #cpaVisitaResultado,
+  #cpaFilaLista, #cpaPainelLista, #cpaMeusLista, #cpaDetalheGes, #cpaDetalheMeu { display: none !important; }
   body.cpa-imprimindo * { visibility: hidden !important; }
   body.cpa-imprimindo #cpaBolImprimivel, body.cpa-imprimindo #cpaBolImprimivel * { visibility: visible !important; }
   body.cpa-imprimindo #cpaBolImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }

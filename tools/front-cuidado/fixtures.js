@@ -219,7 +219,12 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
       const n = novaNota({ membroId: inp.m || null, itemId: inp.i || null, nivel: inp.nv, texto: inp.t, autor: Number(inp.a), retifica: inp.rt || null, h: 0 });
       return [{ id: n.NotaId }];
     }
-    if (t.includes("SELECT COUNT(*) AS n FROM PedidosOracao WHERE RegistradoPorMembroId = @r")) return [{ n: S.pedidos.filter(p => p.RegistradoPorMembroId === Number(inp.r) && p.CriadoEm.getTime() >= agora - DIA).length }];
+    // o mesmo texto da mesma pessoa em 10 minutos é o mesmo pedido (a resposta que se perdeu na rede)
+    if (t.includes("SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE RegistradoPorMembroId = @r AND Texto = @t AND CriadoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME())")) {
+      return S.pedidos.filter(p => p.RegistradoPorMembroId === Number(inp.r) && p.Texto === inp.t && p.CriadoEm.getTime() >= agora - 10 * 60000).sort((a, b) => b.PedidoId - a.PedidoId).slice(0, 1)
+        .map(p => ({ PedidoId: p.PedidoId, Risco: p.Risco }));
+    }
+    if (t.includes("SELECT COUNT(*) AS n FROM PedidosOracao WHERE RegistradoPorMembroId = @r"))return [{ n: S.pedidos.filter(p => p.RegistradoPorMembroId === Number(inp.r) && p.CriadoEm.getTime() >= agora - DIA).length }];
     if (t.includes("SELECT COUNT(*) AS n FROM CuidadoItens WHERE MembroId = @m AND Origem = 'PEDIDO_MEMBRO'")) return [{ n: S.itens.filter(i => i.MembroId === Number(inp.m) && i.Origem === "PEDIDO_MEMBRO" && i.CriadoEm.getTime() >= agora - DIA).length }];
     if (t.startsWith("INSERT INTO PedidosOracao")) {
       const p = novoPedido({ congregacaoId: Number(inp.c), solicitante: inp.s ? Number(inp.s) : null, registradoPor: Number(inp.r), solicitanteNome: inp.sn, solicitanteContato: inp.sc, paraQuem: inp.pq, categoria: inp.cat,

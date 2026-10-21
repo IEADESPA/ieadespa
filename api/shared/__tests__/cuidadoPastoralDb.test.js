@@ -210,3 +210,17 @@ describe("(revisão) o pedido de socorro nunca se perde", () => {
     expect(mockEventos).toEqual(["begin", "commit"]);
   });
 });
+
+describe("(revisão da tela) o mesmo pedido reenviado em 10 minutos não é outro pedido", () => {
+  test("devolve o que já chegou: sem gravar, sem item e sem aviso novos", async () => {
+    quando(/SELECT m\.MembroId, m\.Nome, m\.Email, m\.Telefone, m\.Status/, [{ MembroId: 8011, Nome: "Bento", Status: "ATIVO", CongregacaoId: 1, CongregacaoNome: "Central" }]);
+    quando(/SELECT DISTINCT l\.EscopoTipo/, TERRITORIO);
+    quando(/SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE RegistradoPorMembroId = @r AND Texto = @t/, [{ PedidoId: 5, Risco: true }]);
+    quando(/INSERT INTO/, new Error("não devia gravar"));
+    const r = await db.pedirOracao(await getPool(), { membroId: 8011, dados: { categoria: "OUTRO", texto: "não aguento mais viver", podeBoletim: false } });
+    expect(r).toMatchObject({ sucesso: true, repetido: true, pedidoId: 5, risco: true });
+    expect(r.ajuda.map((c) => c.numero)).toContain("188");
+    expect(notificarAgora).not.toHaveBeenCalled();
+    expect(mockEventos).toEqual(["begin", "rollback"]);
+  });
+});

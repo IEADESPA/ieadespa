@@ -21,11 +21,18 @@ const CPA_SITUACOES_FILA = ["ABERTOS", "VENCIDOS", "SEM_RESPONSAVEL", "URGENTES"
 const CPA_SITUACOES_PEDIDOS = ["AGUARDANDO", "RISCO", "APROVADOS", "TODOS"];
 const CPA_TEMPO_LIMITE_MS = 20000;              // cada chamada desiste depois de 20 s (rede ruim, celular que dormiu): a pessoa vê que não deu e tenta de novo
 const CPA_MSG_FATOR = "Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
-const CPA_MSG_TEMPO = "O servidor demorou mais de 20 segundos para responder. Verifique a internet e tente de novo. Se você estava gravando alguma coisa, confira na lista antes de repetir.";
+// (o fetchProtegido avisa a desistência com o toast de "não foi possível conectar": o texto da tela diz o mesmo, com o porquê)
+const CPA_MSG_TEMPO = "Não foi possível falar com o servidor a tempo (20 segundos sem resposta). Verifique a internet e tente de novo. Se você estava gravando alguma coisa, confira na lista antes de repetir.";
 const CPA_MSG_REDE = "Não foi possível falar com o servidor agora. Verifique a internet e tente de novo.";
 const CPA_MSG_NAO_ABRIU = "Não foi possível abrir este acompanhamento. Ele pode não existir, ter mudado de responsável ou estar fora do seu alcance.";
 const CPA_MSG_SEM_CATALOGO = "Não foi possível carregar as opções do cuidado pastoral agora. Verifique a internet e toque em Atualizar.";
 const CPA_MSG_PEDIDO_NAO_FOI = "O seu pedido NÃO foi enviado. Tente de novo daqui a pouco. Se é urgente, procure o Dirigente ou o pastor pessoalmente.";
+// rede caída ou tempo esgotado DEPOIS de mandar: o pedido pode ter chegado (o servidor reconhece o mesmo texto reenviado em 10 minutos e não grava duas vezes)
+const CPA_MSG_PEDIDO_TALVEZ = "Não sabemos se o seu pedido chegou: veja em Meus pedidos antes de enviar de novo. Se é urgente, procure o Dirigente ou o pastor pessoalmente.";
+const CPA_MSG_REGISTRO_TALVEZ = "Não sabemos se o pedido chegou: veja na lista de pedidos antes de registrar de novo.";
+const CPA_MSG_NOTA_TALVEZ = "A nota pode ter sido guardada: atualize a lista de notas antes de escrever de novo (o texto continua no formulário).";
+const CPA_MSG_NOTA_SEM_LISTA = "Nota guardada; não foi possível atualizar a lista agora. Toque em \"Atualizar notas\".";
+const CPA_MSG_SO_AREA = "Desmarcar/cancelar é da Área para cima: peça ao Pastor de Área ou à Diretoria.";
 // os mesmos telefones do servidor (api/shared/cuidadoPastoral.js → CONTATOS_DE_AJUDA): só valem se o catálogo do servidor não chegou (rede caída)
 const CPA_CONTATOS_PADRAO = [
   { nome: "CVV — Centro de Valorização da Vida", numero: "188", descricao: "De graça, 24 horas, todos os dias. Para quem está sofrendo ou pensando em tirar a própria vida." },
@@ -73,14 +80,26 @@ let cpaEscolhas = {};               // alvo da busca -> { membroId, nome } (a pe
 let cpaPedFormAberto = 0;           // o pedido de oração com o formulário (publicar/desmarcar) aberto
 let cpaGatilhoForm = null;          // o botão que abriu o formulário: o foco volta para ele quando o formulário fecha
 let cpaGatilhoDetalhe = null;       // o botão que abriu o acompanhamento: o foco volta para ele ao voltar à lista
+let cpaGatilhoNota = null;          // o botão que abriu o formulário da nota (a nota tem a sua área, separada dos formulários de ato)
 let cpaDetCarregando = "";          // o contexto ("Ges"/"Meu") de um acompanhamento que ainda está a caminho (fechar antes de ele chegar também o descarta)
 let cpaSeqMeusLista = 0, cpaSeqFila = 0, cpaSeqDet = 0, cpaSeqNotas = 0, cpaSeqNota = 0, cpaSeqLeit = 0, cpaSeqPed = 0, cpaSeqBol = 0, cpaSeqPainel = 0, cpaSeqMeu = 0, cpaSeqMeusPed = 0, cpaSeqBolMeu = 0, cpaSeqBusca = 0;
 const cpaEmCurso = new Set();       // trava duplo clique nas ações que gravam
+let cpaGerGes = 0, cpaGerMeu = 0;   // sobem quando a pessoa sai da aba da liderança / de Meu Painel → Cuidado: um ato que estava a caminho não relê nem pinta nada depois
 
 // A aba abre para quem tem a permissão; o que cada um vê dentro dela o SERVIDOR decide (o catálogo traz os papéis da sessão).
 function cpaPodeAba() { return authPermissoes.includes("cuidado_pastoral"); }
 function cpaEhGestao() { return !!(cpaCatalogos && cpaCatalogos.papeis.gestao); }
 function cpaEhGeral() { return !!(cpaCatalogos && cpaCatalogos.papeis.geral); }
+// "da Área para cima" (desmarcar risco, cancelar urgente): o catálogo diz; o servidor tem a palavra final
+function cpaEhAcima() { return !!(cpaCatalogos && cpaCatalogos.papeis.acima); }
+// A marca de um ato: de que login (cpaGeracao) e de que visita à tela ele é. Depois de cada await, cpaViva(marca) diz se ainda pode mexer na tela (e começar uma releitura):
+// mesma geração, a pessoa não saiu da aba/sub-aba e ela continua à vista.
+function cpaMarca(ctxBruto) { const ctx = cpaCtx(ctxBruto); return { ctx, g: cpaGeracao, t: ctx === "Meu" ? cpaGerMeu : cpaGerGes }; }
+function cpaViva(m) {
+  if (!m || m.g !== cpaGeracao) return false;
+  return m.ctx === "Meu" ? m.t === cpaGerMeu && cpaMeuVisivel() : m.t === cpaGerGes && cpaAbaVisivel();
+}
+function cpaSecaoViva(secao) { return cpaAbaVisivel() && cpaSecaoAtual === secao; }
 
 // ---- utilidades ----
 function cpaEl(id) { return document.getElementById(id); }
@@ -225,7 +244,7 @@ async function cpaGarantirCatalogos(forcar) {
     tipos: lista(data.tipos), formas: lista(data.formas), formasPresenciais: Array.isArray(data.formasPresenciais) ? data.formasPresenciais.map(x => String(x)) : ["VISITA_LAR", "VISITA_HOSPITAL"],
     desfechosConclusao: lista(data.desfechosConclusao), desfechosCancelamento: lista(data.desfechosCancelamento), niveisNota: lista(data.niveisNota), categorias: lista(data.categorias),
     paraQuem: lista(data.paraQuem), degraus: lista(data.degraus), contatosDeAjuda: ajuda.length ? ajuda : CPA_CONTATOS_PADRAO,
-    limites: data.limites && typeof data.limites === "object" ? data.limites : {}, papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral }
+    limites: data.limites && typeof data.limites === "object" ? data.limites : {}, papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral, acima: !!papeis.acima }
   };
   return cpaCatalogos;
 }
@@ -238,6 +257,7 @@ const CPA_IDS_SELECTS = ["cpaFiltroCong", "cpaFiltroTipo", "cpaPedCong", "cpaBol
 function cpaLimparImpressao() { const c = document.body && document.body.classList; if (c) c.remove("cpa-imprimindo"); }
 // Tudo o que é da aba da liderança: a fila, o acompanhamento aberto (e a nota aberta), os pedidos, o boletim e o painel.
 function cpaFecharGestao() {
+  cpaGerGes++;
   cpaFecharDetalheInterno("Ges");
   cpaSeqFila++; cpaSeqPed++; cpaSeqBol++; cpaSeqPainel++; cpaSeqBusca++;
   cpaFila = []; cpaPedidos = []; cpaPedFormAberto = 0; cpaBuscaRes = {}; cpaEscolhas = {};
@@ -248,6 +268,7 @@ function cpaFecharGestao() {
 }
 // Tudo o que é de Meu Painel → Cuidado: meus acompanhamentos (e o aberto), o que a pessoa escrevia nos pedidos, os pedidos dela e o boletim.
 function cpaFecharMeu() {
+  cpaGerMeu++;
   cpaFecharDetalheInterno("Meu");
   cpaSeqMeu++; cpaSeqMeusLista++; cpaSeqMeusPed++; cpaSeqBolMeu++;
   cpaMeus = [];
@@ -257,6 +278,9 @@ function cpaFecharMeu() {
 }
 function cpaLimparTela() {
   cpaGeracao++;
+  // uma confirmação aberta (nomear, cancelar, marcar risco) não sobrevive à sessão: fechar o diálogo deixa a promessa sem resposta, e nada é enviado
+  const sobre = cpaEl("modalOverlay");
+  if (sobre && !sobre.classList.contains("escondido") && typeof fecharModal === "function") fecharModal();
   cpaFecharGestao();
   cpaFecharMeu();
   cpaCatalogos = null; cpaCongregacoes = []; cpaSecaoAtual = "fila"; cpaSituacaoPedidos = "AGUARDANDO"; cpaDet = null; cpaNotas = [];
@@ -433,15 +457,16 @@ function cpaFiltrosFila() {
   return { situacao: CPA_SITUACOES_FILA.includes(s) ? s : "ABERTOS", congregacaoId: cpaInteiro(cpaTexto("cpaFiltroCong")), tipo: tipos.includes(tipo) ? tipo : "" };
 }
 async function cpaCarregarFilaAcao() {
-  if (!cpaEhGestao()) return;
+  // fora da aba (ou de outra seção) nada se pede: uma releitura que nascesse de um ato atrasado encheria a página escondida com nomes e contatos
+  if (!cpaEhGestao() || !cpaSecaoViva("fila")) return;
   const f = cpaFiltrosFila();
   const consulta = [`situacao=${encodeURIComponent(f.situacao)}`];
   if (f.congregacaoId) consulta.push(`congregacaoId=${f.congregacaoId}`);
   if (f.tipo) consulta.push(`tipo=${encodeURIComponent(f.tipo)}`);
-  const seq = ++cpaSeqFila;
+  const seq = ++cpaSeqFila, marca = cpaMarca("Ges");
   cpaEscrever("cpaFilaMsg", "Carregando…", false);
   const data = await cpaObter(`fila?${consulta.join("&")}`);
-  if (seq !== cpaSeqFila) return;   // resposta velha: filtro trocado, aba fechada ou outro login
+  if (seq !== cpaSeqFila || !cpaViva(marca) || !cpaSecaoViva("fila")) return;   // resposta velha: filtro trocado, aba fechada ou outro login
   const lista = cpaEl("cpaFilaLista");
   if (data.sucesso === false || !Array.isArray(data.itens)) {
     cpaFila = [];
@@ -486,7 +511,7 @@ function cpaAbrirFormNovoAcao(gatilho) {
     <div id="cpaNovoMembroCx" style="display:none;">
       <div class="input-group">
         <label for="cpaNovoBusca">Nome da pessoa (pelo menos 2 letras)</label>
-        <input type="text" id="cpaNovoBusca" maxlength="60" autocomplete="off" />
+        <input type="text" id="cpaNovoBusca" maxlength="60" autocomplete="off" spellcheck="false" />
       </div>
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaBuscarAcao" data-args-click="${argsAttr("novoPessoa", ARG.elemento)}">🔍 Buscar</button></div>
       <div id="cpaNovoBuscaRes" role="status" aria-live="polite"></div>
@@ -496,18 +521,18 @@ function cpaAbrirFormNovoAcao(gatilho) {
       <div class="cal-form-grade">
         <div class="input-group">
           <label for="cpaNovoNome">Nome da pessoa</label>
-          <input type="text" id="cpaNovoNome" maxlength="${cpaLimite("nome")}" autocomplete="off" />
+          <input type="text" id="cpaNovoNome" maxlength="${cpaLimite("nome")}" autocomplete="off" spellcheck="false" />
         </div>
         <div class="input-group">
           <label for="cpaNovoContato">Telefone, WhatsApp ou e-mail</label>
-          <input type="text" id="cpaNovoContato" maxlength="${cpaLimite("contato")}" autocomplete="off" />
+          <input type="text" id="cpaNovoContato" maxlength="${cpaLimite("contato")}" autocomplete="off" spellcheck="false" />
         </div>
       </div>
       <p class="psc-legenda">Sem um contato ninguém consegue procurar a pessoa. Quem não é do cadastro não vira membro por aqui.</p>
     </div>
     <div class="input-group">
       <label for="cpaNovoMotivo">Motivo (opcional, até ${cpaLimite("motivo")} caracteres)</label>
-      <textarea id="cpaNovoMotivo" rows="3" maxlength="${cpaLimite("motivo")}" autocomplete="off"></textarea>
+      <textarea id="cpaNovoMotivo" rows="3" maxlength="${cpaLimite("motivo")}" autocomplete="off" spellcheck="false"></textarea>
       <p class="psc-legenda">Escreva o que ajuda a procurar (ex.: "visitou no domingo com a família"). Não escreva diagnóstico nem segredo: para isso existem as notas pastorais.</p>
     </div>
     <fieldset class="cpa-grupo">
@@ -515,7 +540,7 @@ function cpaAbrirFormNovoAcao(gatilho) {
       <p class="psc-legenda">Se ninguém for escolhido, o Dirigente da congregação fica como responsável. Pode ser qualquer membro maior de idade da congregação (um diácono, uma irmã do círculo de oração) ou alguém da liderança.</p>
       <div class="input-group">
         <label for="cpaNovoRespBusca">Nome do responsável</label>
-        <input type="text" id="cpaNovoRespBusca" maxlength="60" autocomplete="off" />
+        <input type="text" id="cpaNovoRespBusca" maxlength="60" autocomplete="off" spellcheck="false" />
       </div>
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaBuscarAcao" data-args-click="${argsAttr("novoResp", ARG.elemento)}">🔍 Buscar responsável</button></div>
       <div id="cpaNovoRespRes" role="status" aria-live="polite"></div>
@@ -575,11 +600,11 @@ async function cpaBuscarAcao(alvoBruto, botao) {
   const congregacaoId = cpaCongDaBusca(alvo);
   if (!congregacaoId) { res.textContent = "Escolha a congregação antes de buscar."; return; }
   if (q.length < 2 || q.length > 60 || /[<>%_[\]]/.test(q)) { res.textContent = "Digite pelo menos 2 letras do nome (sem sinais como < > % _ [ ])."; return; }
-  const seq = ++cpaSeqBusca;
+  const seq = ++cpaSeqBusca, marca = cpaMarca(cpaDet && alvo === "troca" ? cpaDet.ctx : "Ges");
   res.textContent = "Buscando…";
   await cpaProteger(botao, async () => {
     const data = await cpaPostar("buscar-pessoas", { congregacaoId, q });   // por POST: o nome não vai no endereço
-    if (seq !== cpaSeqBusca || !cpaEl(cfg.res)) return;
+    if (seq !== cpaSeqBusca || !cpaViva(marca) || cpaEl(cfg.res) !== res || !res.isConnected) return;
     if (data.sucesso === false || !Array.isArray(data.pessoas)) { res.textContent = cpaMsgErro(data); return; }
     const pessoas = data.pessoas.filter(p => p && typeof p === "object" && cpaInteiro(p.membroId) && (!cfg.soMaior || p.maior === true));
     cpaBuscaRes[alvo] = pessoas;
@@ -637,17 +662,17 @@ function cpaLerNovo() {
 async function cpaEnviarNovoAcao(botao) {
   const lido = cpaLerNovo();
   if (lido.problema) { cpaEscrever("cpaNovoMsg", lido.problema, true); return; }
-  const geracao = cpaGeracao;
+  const marca = cpaMarca("Ges");
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaNovoMsg", "Gravando…", false);
     const data = await cpaPostar("abrir", lido.corpo);
-    if (geracao !== cpaGeracao) return;
+    if (!cpaViva(marca)) return;   // a pessoa saiu da aba enquanto gravava: nada é relido nem pintado (os nomes não voltam para a página escondida)
     if (data.sucesso === false) { cpaMostrarResultado(data, "cpaNovoMsg", true); return; }
     cpaFecharNovoAcao();
     cpaMostrarResultado(data, "cpaFilaMsg", !(data.responsavel && data.responsavel.nome));
     const msg = cpaMsgErro(data);
     await cpaCarregarFilaAcao();
-    if (geracao === cpaGeracao) cpaEscrever("cpaFilaMsg", msg, !(data.responsavel && data.responsavel.nome));
+    if (cpaViva(marca) && cpaSecaoViva("fila")) cpaEscrever("cpaFilaMsg", msg, !(data.responsavel && data.responsavel.nome));
   }, "abrir");
 }
 
@@ -673,7 +698,7 @@ function cpaFecharDetalheInterno(ctxBruto) {
     cpaDet = null; cpaNotas = []; cpaDetCarregando = "";
     cpaSeqDet++; cpaSeqNotas++; cpaSeqLeit++;
     cpaBuscaRes.troca = [];
-    cpaGatilhoForm = null;
+    cpaGatilhoForm = null; cpaGatilhoNota = null;
   }
   const conteudo = cpaEl(ids.conteudo);
   if (conteudo) conteudo.innerHTML = "";
@@ -705,6 +730,8 @@ async function cpaCarregarDetalhe(ctxBruto, itemId, focar) {
   const ctx = cpaCtx(ctxBruto);
   const id = cpaInteiro(itemId);
   const ids = cpaIdsDoCtx(ctx);
+  const marca = cpaMarca(ctx);
+  if (!cpaViva(marca)) return false;   // fora da tela não se lê acompanhamento (nem a releitura de um ato atrasado)
   const seq = ++cpaSeqDet;
   cpaDetCarregando = ctx;
   cpaLimparNota();
@@ -712,7 +739,7 @@ async function cpaCarregarDetalhe(ctxBruto, itemId, focar) {
   cpaMostrar(ids.cx, true);
   cpaEscrever(ids.msg, "Carregando…", false);
   const data = await cpaObter(`item?itemId=${id}`);
-  if (seq !== cpaSeqDet) return false;   // a pessoa trocou de acompanhamento, voltou, saiu da aba ou trocou de login
+  if (seq !== cpaSeqDet || !cpaViva(marca)) return false;   // a pessoa trocou de acompanhamento, voltou, saiu da aba ou trocou de login
   cpaDetCarregando = "";
   const conteudo = cpaEl(ids.conteudo);
   if (data.sucesso === false || !data.item || typeof data.item !== "object") {
@@ -752,7 +779,8 @@ function cpaHtmlBotoesDetalhe(d) {
     <button type="button" class="btn-confirmar cpa-btn" data-on-click="cpaAbrirFormAcao" data-args-click="${argsAttr("concluir", ARG.elemento)}">✅ Concluir</button>
     ${d.podeGerir ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirFormAcao" data-args-click="${argsAttr("responsavel", ARG.elemento)}">👤 Trocar responsável</button>
     <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirFormAcao" data-args-click="${argsAttr("adiar", ARG.elemento)}">📅 Adiar prazo</button>
-    <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirFormAcao" data-args-click="${argsAttr("cancelar", ARG.elemento)}">✖️ Cancelar</button>` : ""}`;
+    ${d.item.urgente && !cpaEhAcima() ? `<p class="psc-legenda cpa-so-area" role="note">${escaparHtmlEbd(CPA_MSG_SO_AREA)}</p>`
+    : `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirFormAcao" data-args-click="${argsAttr("cancelar", ARG.elemento)}">✖️ Cancelar</button>`}` : ""}`;
 }
 function cpaRenderDetalhe() {
   if (!cpaDet) return;
@@ -761,6 +789,7 @@ function cpaRenderDetalhe() {
   const conteudo = cpaEl(ids.conteudo);
   if (!conteudo) return;
   const aberto = i.status === "ABERTO";
+  const rascunho = cpaRascunhoNota();   // a nota que a pessoa escrevia não se perde quando o acompanhamento é relido depois de outro ato
   conteudo.innerHTML = `<div class="cpa-detalhe">
     <h4 id="cpaDetTitulo" tabindex="-1">${escaparHtmlEbd(i.pessoaNome || "(sem nome)")} — ${escaparHtmlEbd(i.tipoRotulo)}</h4>
     <div class="cpa-selos">${cpaSelosDoItem(i)}</div>
@@ -786,7 +815,8 @@ function cpaRenderDetalhe() {
     ${cpaHtmlEventos(d.eventos)}
     <div id="cpaNotasCx" class="cpa-notas"></div>
   </div>`;
-  cpaRenderNotas();
+  cpaMontarNotas();
+  if (rascunho) cpaRestaurarRascunhoNota(rascunho);
 }
 
 // -- os formulários do acompanhamento --
@@ -822,11 +852,11 @@ function cpaFormContato() {
     <p id="cpaFcRegra" class="cnl-aviso-senha" role="note" style="display:none;"><strong>Visita nunca a sós</strong> (Regimento Art. 85 §3º): toda visita no lar ou no hospital é feita com outra pessoa, e o nome dela fica registrado.</p>
     <div class="input-group">
       <label for="cpaFcAcompanhante">Quem foi junto <span id="cpaFcObrig">(obrigatório em visita)</span></label>
-      <input type="text" id="cpaFcAcompanhante" maxlength="${cpaLimite("nome")}" autocomplete="off" />
+      <input type="text" id="cpaFcAcompanhante" maxlength="${cpaLimite("nome")}" autocomplete="off" spellcheck="false" />
     </div>
     <div class="input-group">
       <label for="cpaFcObs">Observação curta (opcional, até ${cpaLimite("observacao")} caracteres)</label>
-      <textarea id="cpaFcObs" rows="3" maxlength="${cpaLimite("observacao")}" autocomplete="off"></textarea>
+      <textarea id="cpaFcObs" rows="3" maxlength="${cpaLimite("observacao")}" autocomplete="off" spellcheck="false"></textarea>
       <p class="psc-legenda">Não escreva diagnóstico, doença nem segredo aqui: o histórico é visto por quem trabalha no acompanhamento. Para isso use as notas pastorais, mais abaixo.</p>
     </div>
     ${cpaHtmlRodapeForm("cpaEnviarContatoAcao", "💾 Gravar o contato")}
@@ -843,7 +873,7 @@ function cpaFormConcluir() {
     ${i.tipo === "AFASTAMENTO" ? "<p class='psc-legenda'>Se a pessoa não foi localizada ou não quis contato, o caminho do abandono continua manual (a liderança decide).</p>" : ""}
     <div class="input-group">
       <label for="cpaFkObs">Observação (obrigatória quando o desfecho é "Outro"; até ${cpaLimite("observacao")} caracteres)</label>
-      <textarea id="cpaFkObs" rows="3" maxlength="${cpaLimite("observacao")}" autocomplete="off"></textarea>
+      <textarea id="cpaFkObs" rows="3" maxlength="${cpaLimite("observacao")}" autocomplete="off" spellcheck="false"></textarea>
     </div>
     ${cpaHtmlRodapeForm("cpaEnviarConcluirAcao", "✅ Concluir")}
   </div>`;
@@ -855,7 +885,7 @@ function cpaFormResponsavel() {
     <p class="psc-legenda">Responsável hoje: ${cpaHtmlResponsavel(i)}. Pode ser qualquer membro ativo e maior de idade da congregação ou alguém da liderança que alcança a congregação. Quem for nomeado recebe o aviso.</p>
     <div class="input-group">
       <label for="cpaFrBusca">Nome de quem vai acompanhar (pelo menos 2 letras)</label>
-      <input type="text" id="cpaFrBusca" maxlength="60" autocomplete="off" />
+      <input type="text" id="cpaFrBusca" maxlength="60" autocomplete="off" spellcheck="false" />
     </div>
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaBuscarAcao" data-args-click="${argsAttr("troca", ARG.elemento)}">🔍 Buscar</button>
@@ -879,7 +909,7 @@ function cpaFormAdiar() {
     </div>
     <div class="input-group">
       <label for="cpaFaMotivo">Motivo (de 5 a ${cpaLimite("observacao")} caracteres)</label>
-      <textarea id="cpaFaMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off"></textarea>
+      <textarea id="cpaFaMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off" spellcheck="false"></textarea>
     </div>
     ${cpaHtmlRodapeForm("cpaEnviarAdiarAcao", "📅 Adiar")}
   </div>`;
@@ -894,7 +924,7 @@ function cpaFormCancelar() {
     </div>
     <div class="input-group">
       <label for="cpaFxMotivo">Explique (de 5 a ${cpaLimite("observacao")} caracteres)</label>
-      <textarea id="cpaFxMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off"></textarea>
+      <textarea id="cpaFxMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off" spellcheck="false"></textarea>
     </div>
     ${cpaHtmlRodapeForm("cpaEnviarCancelarAcao", "✖️ Cancelar o acompanhamento")}
   </div>`;
@@ -911,15 +941,24 @@ async function cpaAbrirFormAcao(tipoBruto, gatilho) {
   }
   const gerir = !!cpaDet.dados.podeGerir;
   if (["responsavel", "adiar", "cancelar"].includes(tipo) && !gerir) return;
+  // a nota tem a sua área: abrir outro formulário (contato, concluir...) nunca apaga o rascunho da nota, e reabrir a nota não apaga o que já está escrito
+  if (tipo === "nota") {
+    if (cpaEl("cpaFnTexto")) { cpaFocarId("cpaFnTexto"); return; }
+    cpaGatilhoNota = gatilho && typeof gatilho === "object" ? gatilho : null;
+    area.innerHTML = cpaFormNota();
+    cpaRolarPara("cpaNotaForm");
+    cpaFocarId(CPA_PRIMEIRO_CAMPO.nota);
+    return;
+  }
   cpaFecharFormInterno();
   cpaGatilhoForm = gatilho && typeof gatilho === "object" ? gatilho : null;
-  area.innerHTML = tipo === "contato" ? cpaFormContato() : tipo === "concluir" ? cpaFormConcluir() : tipo === "responsavel" ? cpaFormResponsavel() : tipo === "adiar" ? cpaFormAdiar()
-    : tipo === "cancelar" ? cpaFormCancelar() : cpaFormNota();
-  cpaRolarPara(tipo === "nota" ? "cpaNotaForm" : "cpaFormAcao");
+  area.innerHTML = tipo === "contato" ? cpaFormContato() : tipo === "concluir" ? cpaFormConcluir() : tipo === "responsavel" ? cpaFormResponsavel() : tipo === "adiar" ? cpaFormAdiar() : cpaFormCancelar();
+  cpaRolarPara("cpaFormAcao");
   cpaFocarId(CPA_PRIMEIRO_CAMPO[tipo]);
 }
+// fecha o formulário de ATO (contato, concluir, trocar, adiar, cancelar); a nota fica
 function cpaFecharFormInterno() {
-  cpaEsvaziar(["cpaFormAcao", "cpaNotaForm"]);
+  cpaEsvaziar(["cpaFormAcao"]);
   cpaBuscaRes.troca = [];
 }
 function cpaFecharFormAcao() {
@@ -927,6 +966,28 @@ function cpaFecharFormAcao() {
   const gatilho = cpaGatilhoForm;
   cpaGatilhoForm = null;
   if (gatilho && gatilho.isConnected) cpaFocar(gatilho);
+}
+// fecha o formulário da nota (só por quem toca em "Fechar" nele)
+function cpaFecharNotaFormAcao() {
+  cpaEsvaziar(["cpaNotaForm"]);
+  const gatilho = cpaGatilhoNota;
+  cpaGatilhoNota = null;
+  if (gatilho && gatilho.isConnected) cpaFocar(gatilho); else cpaFocarId("cpaNotasTitulo");
+}
+// o rascunho da nota (nível, texto, "corrige") — para sobreviver à releitura do acompanhamento depois de outro ato
+function cpaRascunhoNota() {
+  if (!cpaEl("cpaFnTexto")) return null;
+  return { nivel: cpaTexto("cpaFnNivel"), texto: (cpaEl("cpaFnTexto").value || ""), corrige: cpaTexto("cpaFnCorrige") };
+}
+function cpaRestaurarRascunhoNota(r) {
+  const area = cpaEl("cpaNotaForm");
+  if (!area || !cpaCatalogos) return;
+  area.innerHTML = cpaFormNota();
+  const nivel = cpaEl("cpaFnNivel"), texto = cpaEl("cpaFnTexto"), corrige = cpaEl("cpaFnCorrige");
+  if (nivel) nivel.value = r.nivel;
+  if (texto) texto.value = r.texto;
+  if (corrige) corrige.value = r.corrige;
+  cpaContarNotaAcao();
 }
 function cpaMudouFormaAcao() {
   const presencial = !!cpaCatalogos && cpaCatalogos.formasPresenciais.includes(cpaTexto("cpaFcForma"));
@@ -936,20 +997,27 @@ function cpaMudouFormaAcao() {
 async function cpaDepoisDoAto(data, destaque) {
   if (!cpaDet) return;
   const { ctx, itemId } = cpaDet;
+  const marca = cpaMarca(ctx);
+  if (!cpaViva(marca)) return;
   const ok = await cpaCarregarDetalhe(ctx, itemId, false);
-  if (ok) cpaEscrever(cpaIdsDoCtx(ctx).msg, cpaMsgErro(data), !!destaque || data.sucesso === false);
-  else if (data.sucesso !== false && !(cpaDet && cpaDet.ctx === ctx)) {
+  if (!cpaViva(marca)) return;   // a pessoa saiu enquanto o acompanhamento era relido: nem a mensagem nem a lista voltam
+  if (ok) {
+    cpaEscrever(cpaIdsDoCtx(ctx).msg, cpaMsgErro(data), !!destaque || data.sucesso === false);
+    cpaFocarId("cpaDetTitulo");   // o botão do ato sumiu com a releitura: o foco vai para o título do acompanhamento (a mensagem está logo acima)
+  } else if (data.sucesso !== false && !(cpaDet && cpaDet.ctx === ctx)) {
     // o ato deu certo, mas o acompanhamento não se abre mais para esta pessoa (o voluntário que concluiu: o servidor só abre item aberto): volta à lista com a mensagem do ato
     cpaFecharDetalheInterno(ctx);
     if (ctx === "Meu") cpaRenderMeus();
     cpaEscrever(ctx === "Meu" ? "cpaMeuMsg" : "cpaFilaMsg", cpaMsgErro(data), !!destaque);
     cpaFocarId(ctx === "Meu" ? "cpaMeusTitulo" : "cpaFilaTitulo");
   }
+  if (!cpaViva(marca)) return;
   if (ctx === "Ges") cpaCarregarFilaAcao(); else cpaRecarregarMeus();
 }
-// a resposta de um ato no acompanhamento: sucesso relê; 409 relê e mostra o porquê; 404 (o item sumiu ou não é mais seu) fecha; o resto fica no formulário
-async function cpaTratarAto(data, idMsgForm, geracao, itemId, destaqueOk) {
-  if (geracao !== cpaGeracao || !cpaDet || cpaDet.itemId !== itemId) return;
+// a resposta de um ato no acompanhamento: sucesso relê; 409 relê e mostra o porquê; 404 (o item sumiu ou não é mais seu) fecha; o resto fica no formulário.
+// `marca` (cpaMarca): de quando o ato começou — fora da tela, ou com outro acompanhamento aberto, a resposta não mexe em nada.
+async function cpaTratarAto(data, idMsgForm, marca, itemId, destaqueOk) {
+  if (!cpaViva(marca) || !cpaDet || cpaDet.itemId !== itemId || cpaDet.ctx !== marca.ctx) return;
   if (data.sucesso !== false) { if (!data.jaAvisado) mostrarToast(cpaMsgErro(data), "sucesso"); await cpaDepoisDoAto(data, destaqueOk); return; }
   if (data.httpStatus === 409) { if (!data.jaAvisado) mostrarToast(cpaMsgErro(data), "erro"); await cpaDepoisDoAto(data, true); return; }
   if (data.httpStatus === 404) {
@@ -979,11 +1047,11 @@ async function cpaEnviarContatoAcao(botao) {
   if (acompanhante) corpo.acompanhante = acompanhante;
   if (observacao) corpo.observacao = observacao;
   if (data) corpo.data = data;
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFormMsg", "Gravando…", false);
     const r = await cpaPostar("contato", corpo);
-    await cpaTratarAto(r, "cpaFormMsg", geracao, itemId, false);
+    await cpaTratarAto(r, "cpaFormMsg", marca, itemId, false);
   }, `contato${itemId}`);
 }
 async function cpaEnviarConcluirAcao(botao) {
@@ -997,24 +1065,26 @@ async function cpaEnviarConcluirAcao(botao) {
   if (problema) { cpaEscrever("cpaFormMsg", problema, true); return; }
   const corpo = { itemId: cpaDet.itemId, desfecho };
   if (observacao) corpo.observacao = observacao;
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFormMsg", "Gravando…", false);
     const r = await cpaPostar("concluir", corpo);
     // sugestaoAbandono: a mensagem do servidor mostra o caminho manual do abandono (em destaque)
-    await cpaTratarAto(r, "cpaFormMsg", geracao, itemId, r.sucesso !== false && r.sugestaoAbandono === true);
+    await cpaTratarAto(r, "cpaFormMsg", marca, itemId, r.sucesso !== false && r.sugestaoAbandono === true);
   }, `concluir${itemId}`);
 }
 async function cpaEnviarTrocaAcao(responsavelMembroId, botao) {
   if (!cpaDet || !cpaDet.dados.podeGerir) return;
   const p = (cpaBuscaRes.troca || []).find(x => Number(x.membroId) === Number(responsavelMembroId));
   if (!p) return;
+  // a marca e o item são guardados ANTES da confirmação: quem saiu, trocou de acompanhamento ou de login enquanto o diálogo estava aberto não grava nada
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;
   if (!(await confirmarAcao(`Nomear ${String(p.nome == null ? "" : p.nome)} como responsável por este acompanhamento? A pessoa recebe o aviso.`, "Nomear"))) return;
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  if (!cpaViva(marca) || !cpaDet || cpaDet.itemId !== itemId) return;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFormMsg", "Gravando…", false);
     const r = await cpaPostar("atribuir", { itemId, responsavelMembroId: Number(p.membroId) });
-    await cpaTratarAto(r, "cpaFormMsg", geracao, itemId, false);
+    await cpaTratarAto(r, "cpaFormMsg", marca, itemId, false);
   }, `atribuir${itemId}`);
 }
 async function cpaEnviarAdiarAcao(botao) {
@@ -1023,11 +1093,11 @@ async function cpaEnviarAdiarAcao(botao) {
   const motivo = cpaTexto("cpaFaMotivo");
   const problema = !/^\d{4}-\d{2}-\d{2}$/.test(novoPrazo) ? "Escolha a nova data do prazo." : cpaProblemaTexto(motivo, { nome: "o motivo", min: 5, max: cpaLimite("observacao"), obrigatorio: true });
   if (problema) { cpaEscrever("cpaFormMsg", problema, true); return; }
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFormMsg", "Gravando…", false);
     const r = await cpaPostar("adiar", { itemId, novoPrazo, motivo });
-    await cpaTratarAto(r, "cpaFormMsg", geracao, itemId, false);
+    await cpaTratarAto(r, "cpaFormMsg", marca, itemId, false);
   }, `adiar${itemId}`);
 }
 async function cpaEnviarCancelarAcao(botao) {
@@ -1036,12 +1106,13 @@ async function cpaEnviarCancelarAcao(botao) {
   const motivo = cpaTexto("cpaFxMotivo");
   const problema = !cpaCatalogos.desfechosCancelamento.some(x => x.codigo === desfecho) ? "Escolha por que cancelar (duplicado ou engano)." : cpaProblemaTexto(motivo, { nome: "o motivo", min: 5, max: cpaLimite("observacao"), obrigatorio: true });
   if (problema) { cpaEscrever("cpaFormMsg", problema, true); return; }
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;   // antes da confirmação (veja cpaEnviarTrocaAcao)
   if (!(await confirmarAcao("Cancelar este acompanhamento? Ele sai da fila (o histórico fica guardado). Use só para o que foi aberto por engano ou em duplicidade.", "Cancelar o acompanhamento"))) return;
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  if (!cpaViva(marca) || !cpaDet || cpaDet.itemId !== itemId) return;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFormMsg", "Gravando…", false);
     const r = await cpaPostar("cancelar", { itemId, desfecho, motivo });
-    await cpaTratarAto(r, "cpaFormMsg", geracao, itemId, false);
+    await cpaTratarAto(r, "cpaFormMsg", marca, itemId, false);
   }, `cancelar${itemId}`);
 }
 
@@ -1075,13 +1146,15 @@ function cpaHtmlNota(n) {
     <div id="cpaLeit${id}" class="cpa-leituras" role="status" aria-live="polite"></div>
   </li>`;
 }
-function cpaRenderNotas() {
+// O esqueleto das notas (uma vez por desenho do acompanhamento): a lista (refeita a cada releitura), a caixa da nota aberta, os botões e a área do formulário da nota, que a
+// releitura da lista NÃO apaga (o rascunho fica).
+function cpaMontarNotas() {
   const cx = cpaEl("cpaNotasCx");
   if (!cx || !cpaDet) return;
   const podeEscrever = cpaNiveisPermitidos().length > 0 || (cpaDet.dados.podeNotaNiveis || []).length > 0;
   cx.innerHTML = `<h5 id="cpaNotasTitulo" tabindex="-1">🔐 Notas pastorais</h5>
     <p class="psc-legenda">A lista mostra só as notas que você pode ler, sem o texto. O texto só aparece ao tocar em "Abrir a nota", e <strong>cada abertura fica registrada</strong> (quem abriu e quando). A pessoa acompanhada nunca vê as notas.</p>
-    ${cpaNotas.length ? `<ul class="cpa-notas-lista">${cpaNotas.map(cpaHtmlNota).join("")}</ul>` : "<p class='psc-legenda'>Nenhuma nota que você possa ler.</p>"}
+    <div id="cpaNotasLista"></div>
     <p id="cpaNotasMsg" class="subtitle" role="status" aria-live="polite"></p>
     <div id="cpaNotaCx" class="cpa-nota-aberta" style="display:none;" tabindex="-1" role="region" aria-labelledby="cpaNotaAbertaTitulo">
       <h5 id="cpaNotaAbertaTitulo">Nota aberta</h5>
@@ -1093,23 +1166,35 @@ function cpaRenderNotas() {
       <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaRecarregarNotasAcao">🔄 Atualizar notas</button>
     </div>
     <div id="cpaNotaForm"></div>`;
+  cpaRenderNotas();
+}
+// Só a lista. Um "quem abriu" que ainda esteja a caminho é da lista velha: não escreve em nada (cpaSeqLeit).
+function cpaRenderNotas() {
+  const cx = cpaEl("cpaNotasLista");
+  if (!cx || !cpaDet) return;
+  cpaSeqLeit++;
+  cx.innerHTML = cpaNotas.length ? `<ul class="cpa-notas-lista">${cpaNotas.map(cpaHtmlNota).join("")}</ul>` : "<p class='psc-legenda'>Nenhuma nota que você possa ler.</p>";
 }
 // Relê as notas: GET notas pelo alvo; se o alvo não é alcançável por esse caminho (o responsável não vê a matrícula de quem acompanha), relê o acompanhamento, que traz a lista.
+// Devolve true quando a lista foi relida.
 async function cpaRecarregarNotasAcao() {
-  if (!cpaDet) return;
+  if (!cpaDet) return false;
   const alvo = cpaAlvoNota();
   const { ctx, itemId } = cpaDet;
+  const marca = cpaMarca(ctx);
+  if (!cpaViva(marca)) return false;
   const seq = ++cpaSeqNotas;
   cpaLimparNota();
   const data = await cpaObter(alvo.membroId ? `notas?membroId=${alvo.membroId}` : `notas?itemId=${alvo.itemId}`);
-  if (seq !== cpaSeqNotas || !cpaDet || cpaDet.itemId !== itemId) return;
+  if (seq !== cpaSeqNotas || !cpaViva(marca) || !cpaDet || cpaDet.itemId !== itemId) return false;
   if (data.sucesso === false || !Array.isArray(data.notas)) {
-    if (data.httpStatus === 404) { await cpaCarregarDetalhe(ctx, itemId, false); return; }
+    if (data.httpStatus === 404) return cpaCarregarDetalhe(ctx, itemId, false);
     cpaMostrarResultado(data, "cpaNotasMsg", true);
-    return;
+    return false;
   }
   cpaNotas = data.notas.filter(n => n && typeof n === "object" && cpaInteiro(n.notaId));
   cpaRenderNotas();
+  return true;
 }
 function cpaMostrarNota(nota) {
   const corpo = cpaEl("cpaNotaCorpo"), cx = cpaEl("cpaNotaCx");
@@ -1160,19 +1245,21 @@ async function cpaLeiturasAcao(notaId, botao) {
   cx.textContent = "Carregando…";
   await cpaProteger(botao, async () => {
     const data = await cpaObter(`leituras?notaId=${id}`);
-    if (seq !== cpaSeqLeit || !cpaDet || cpaDet.itemId !== itemId || !cpaEl(`cpaLeit${id}`)) return;
+    // a lista foi refeita (Atualizar notas, nota nova) ou o acompanhamento mudou: a resposta é da caixa velha e não escreve em nada — nem no pedaço que saiu da página
+    const alvo = cpaEl(`cpaLeit${id}`);
+    if (seq !== cpaSeqLeit || !cpaDet || cpaDet.itemId !== itemId || !alvo || alvo !== cx) return;
     if (data.sucesso === false || !Array.isArray(data.leituras)) {
       if (data.httpStatus === 404) {
         const b = cpaEl(`cpaLeitBtn${id}`);
         if (b) b.style.display = "none";
-        cx.textContent = "Só quem escreveu a nota e o nível geral veem quem abriu.";
+        alvo.textContent = "Só quem escreveu a nota e o nível geral veem quem abriu.";
         return;
       }
-      cx.textContent = cpaMsgErro(data);
+      alvo.textContent = cpaMsgErro(data);
       return;
     }
     const lista = data.leituras.filter(l => l && typeof l === "object");
-    cx.innerHTML = lista.length ? `<p class="psc-legenda">Quem abriu (as 30 últimas):</p><ul class="cpa-lista">${lista.map(l => `<li>${escaparHtmlEbd(l.nome)} — ${cpaDataHora(l.lidaEm)}</li>`).join("")}</ul>`
+    alvo.innerHTML = lista.length ? `<p class="psc-legenda">Quem abriu (as 30 últimas):</p><ul class="cpa-lista">${lista.map(l => `<li>${escaparHtmlEbd(l.nome)} — ${cpaDataHora(l.lidaEm)}</li>`).join("")}</ul>`
       : "<p class='psc-legenda'>Ninguém abriu esta nota ainda.</p>";
   }, `leit${id}`);
 }
@@ -1198,7 +1285,7 @@ function cpaFormNota() {
     <p class="cnl-aviso-senha" role="note">A nota <strong>não se edita</strong> depois de guardada. Para corrigir, escreva outra nota e escolha acima qual ela corrige.</p>
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar cpa-btn" id="cpaFnBotao" data-on-click="cpaEnviarNotaAcao" data-args-click="${argsAttr(ARG.elemento)}">💾 Guardar a nota</button>
-      <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaFecharFormAcao">Fechar</button>
+      <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaFecharNotaFormAcao">Fechar</button>
     </div>
     <p id="cpaFnMsg" class="subtitle" role="status" aria-live="polite"></p>
   </div>`;
@@ -1213,22 +1300,36 @@ async function cpaEnviarNotaAcao(botao) {
   if (problema) { cpaEscrever("cpaFnMsg", problema, true); return; }
   const corpo = Object.assign({}, cpaAlvoNota(), { nivel, texto });
   if (retifica) corpo.retificaNotaId = retifica;
-  const geracao = cpaGeracao, itemId = cpaDet.itemId;
+  const marca = cpaMarca(cpaDet.ctx), itemId = cpaDet.itemId;
+  const vale = () => cpaViva(marca) && !!cpaDet && cpaDet.itemId === itemId;
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaFnMsg", "Guardando…", false);
     const data = await cpaPostar("nota", corpo);
-    if (geracao !== cpaGeracao || !cpaDet || cpaDet.itemId !== itemId) return;
+    if (!vale()) return;
     if (data.sucesso === false) {
+      // sem resposta (rede caída, 20 s): a nota PODE ter sido guardada — a nota não se edita, então um segundo envio às cegas a duplicaria. Avisa e relê a lista (o rascunho fica).
+      if (data.falhaDeRede) {
+        cpaEscrever("cpaFnMsg", CPA_MSG_NOTA_TALVEZ, true);
+        await cpaRecarregarNotasAcao();
+        if (vale()) cpaEscrever("cpaFnMsg", CPA_MSG_NOTA_TALVEZ, true);
+        return;
+      }
       cpaMostrarResultado(data, "cpaFnMsg", true);
       if (data.httpStatus === 404) cpaEscrever("cpaFnMsg", "Não foi possível guardar a nota neste acompanhamento (ele pode ter sido encerrado ou não estar mais com você). Nada foi guardado.", true);
       return;
     }
+    // guardada: o texto e o formulário saem JÁ (antes de reler a lista) — o botão não pode mandar a mesma nota de novo, nem se a releitura falhar
     const msg = cpaMsgErro(data);
-    cpaGatilhoForm = null;
-    await cpaRecarregarNotasAcao();   // o formulário some junto (a lista é refeita); o texto não fica na tela
-    if (geracao !== cpaGeracao || !cpaDet || cpaDet.itemId !== itemId) return;
+    const campo = cpaEl("cpaFnTexto");
+    if (campo) campo.value = "";
+    cpaEsvaziar(["cpaNotaForm"]);
+    cpaGatilhoNota = null;
     if (!data.jaAvisado) mostrarToast(msg, "sucesso");
     cpaEscrever("cpaNotasMsg", msg, false);
+    cpaFocarId("cpaNotasTitulo");
+    const releu = await cpaRecarregarNotasAcao();
+    if (!vale()) return;
+    cpaEscrever("cpaNotasMsg", releu ? msg : CPA_MSG_NOTA_SEM_LISTA, !releu);
     cpaFocarId("cpaNotasTitulo");
   }, `nota-nova${itemId}`);
 }
@@ -1248,13 +1349,14 @@ function cpaMostrarPedidosAcao(situacaoBruta) {
   cpaCarregarPedidosAcao();
 }
 async function cpaCarregarPedidosAcao() {
-  if (!cpaEhGestao()) return;
+  // fora da seção nada se pede (a releitura de um ato atrasado encheria a página escondida com os textos dos pedidos)
+  if (!cpaEhGestao() || !cpaSecaoViva("pedidos")) return;
   const congregacaoId = cpaInteiro(cpaTexto("cpaPedCong"));
-  const seq = ++cpaSeqPed;
+  const seq = ++cpaSeqPed, marca = cpaMarca("Ges");
   cpaPedFormAberto = 0;
   cpaEscrever("cpaPedMsg", "Carregando…", false);
   const data = await cpaObter(`pedidos?situacao=${encodeURIComponent(cpaSituacaoPedidos)}${congregacaoId ? `&congregacaoId=${congregacaoId}` : ""}`);
-  if (seq !== cpaSeqPed) return;
+  if (seq !== cpaSeqPed || !cpaViva(marca) || !cpaSecaoViva("pedidos")) return;
   const lista = cpaEl("cpaPedLista");
   if (data.sucesso === false || !Array.isArray(data.pedidos)) {
     cpaPedidos = [];
@@ -1284,7 +1386,7 @@ function cpaHtmlPedido(p) {
   ].join("");
   const aprovado = !risco && p.moderacao === "APROVADO";
   return `<div class="cal-cartao cpa-pedido${risco ? " cpa-pedido-risco" : ""}">
-    ${risco ? `<div class="cpa-risco-topo" role="alert"><strong>🚨 Atenda agora.</strong> Este pedido fala de autolesão ou violência${p.riscoOrigem === "LIDERANCA" ? " (marcado pela liderança)" : " (a lista do sistema pegou)"}. Ele não vai ao boletim. Ligue para a pessoa ou vá até ela com mais alguém.</div>` : ""}
+    ${risco ? `<div class="cpa-risco-topo"><strong>🚨 Atenda agora.</strong> Este pedido fala de autolesão ou violência${p.riscoOrigem === "LIDERANCA" ? " (marcado pela liderança)" : " (a lista do sistema pegou)"}. Ele não vai ao boletim. Ligue para a pessoa ou vá até ela com mais alguém.</div>` : ""}
     ${risco && p.riscoCrianca ? "<p class='cnl-aviso-senha' role='note'>O pedido fala de criança ou adolescente junto com violência: registre também em Proteção de Crianças (a lei manda comunicar ao Conselho Tutelar imediatamente).</p>" : ""}
     <div class="cpa-selos">${selos}</div>
     <p class="cpa-texto">${escaparHtmlEbd(p.texto)}</p>
@@ -1306,7 +1408,8 @@ function cpaHtmlPedido(p) {
       ${aprovado ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaMarcarLidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Tirar do boletim</button>` : ""}
       ${p.itemId && p.itemAberto !== false ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaVerItemAcao" data-args-click="${argsAttr(Number(p.itemId), ARG.elemento)}">📂 Ver acompanhamento</button>` : ""}
       ${!p.itemId || p.itemAberto === false ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAcompanharPedidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">📂 Abrir acompanhamento</button>` : ""}
-      ${risco ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirDesmarcarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Desmarcar (alarme falso)</button>`
+      ${risco ? (cpaEhAcima() ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirDesmarcarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Desmarcar (alarme falso)</button>`
+        : `<p class="psc-legenda cpa-so-area" role="note">${escaparHtmlEbd(CPA_MSG_SO_AREA)}</p>`)
         : `<button type="button" class="btn-confirmar btn-perigo cpa-btn" data-on-click="cpaMarcarRiscoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🚨 Marcar sinal de risco</button>`}
     </div>
     <div id="cpaPedForm${id}"></div>
@@ -1340,7 +1443,7 @@ function cpaAbrirPublicarAcao(pedidoId, gatilho) {
     <p class="psc-legenda">O boletim <strong>nunca leva o texto do pedido</strong>: só esta linha, sem nome. Pode reescrever (de 10 a ${cpaLimite("boletim")} caracteres), mas uma linha com o nome de quem pediu é recusada. Fica 14 dias no boletim.</p>
     <div class="input-group">
       <label for="cpaPubTexto">Linha do boletim</label>
-      <textarea id="cpaPubTexto" rows="2" maxlength="${cpaLimite("boletim")}" autocomplete="off">${escaparHtmlEbd(p.sugestaoBoletim || "")}</textarea>
+      <textarea id="cpaPubTexto" rows="2" maxlength="${cpaLimite("boletim")}" autocomplete="off" spellcheck="false">${escaparHtmlEbd(p.sugestaoBoletim || "")}</textarea>
     </div>
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar cpa-btn" data-on-click="cpaEnviarPublicarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">📖 Publicar</button>
@@ -1364,7 +1467,7 @@ function cpaAbrirDesmarcarAcao(pedidoId, gatilho) {
     <p class="psc-legenda">Só depois de falar com a pessoa. O pedido volta para a moderação comum e o acompanhamento continua aberto. Nada é apagado. Pede a confirmação reforçada (chave de acesso ou código por e-mail).</p>
     <div class="input-group">
       <label for="cpaDesMotivo">Por que é alarme falso (de 5 a ${cpaLimite("observacao")} caracteres)</label>
-      <textarea id="cpaDesMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off"></textarea>
+      <textarea id="cpaDesMotivo" rows="2" maxlength="${cpaLimite("observacao")}" autocomplete="off" spellcheck="false"></textarea>
     </div>
     <div class="psc-acoes">
       <button type="button" class="btn-confirmar btn-perigo cpa-btn" data-on-click="cpaEnviarDesmarcarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Desmarcar o sinal de risco</button>
@@ -1375,17 +1478,19 @@ function cpaAbrirDesmarcarAcao(pedidoId, gatilho) {
   cpaFocarId("cpaDesMotivo");
 }
 // depois de um ato num pedido: a lista é relida e a mensagem do servidor fica em cima da lista
-async function cpaDepoisDoPedido(data) {
-  const geracao = cpaGeracao;
+// `marca` (cpaMarca("Ges")): de quando o ato começou — se a pessoa saiu da aba ou da seção, nada é relido nem pintado (os textos dos pedidos não voltam para a página escondida)
+async function cpaDepoisDoPedido(marca, data) {
+  if (!cpaViva(marca) || !cpaSecaoViva("pedidos")) return;
   const msg = cpaMsgErro(data);
   const alerta = data.sucesso === false || data.avisada === false;
   if (!data.jaAvisado) mostrarToast(msg, alerta ? "erro" : "sucesso");
   await cpaCarregarPedidosAcao();
-  if (geracao === cpaGeracao) cpaEscrever("cpaPedMsg", msg, alerta);
+  if (cpaViva(marca) && cpaSecaoViva("pedidos")) cpaEscrever("cpaPedMsg", msg, alerta);
 }
 // recusa do servidor num pedido: 409 e 404 relêem a lista (ele mudou ou saiu do alcance); o resto fica no formulário
-async function cpaFalhaDoPedido(data, idMsg) {
-  if (data.httpStatus === 409 || data.httpStatus === 404) { await cpaDepoisDoPedido(data); return; }
+async function cpaFalhaDoPedido(marca, data, idMsg) {
+  if (!cpaViva(marca)) return;
+  if (data.httpStatus === 409 || data.httpStatus === 404) { await cpaDepoisDoPedido(marca, data); return; }
   cpaMostrarResultado(data, cpaEl(idMsg) ? idMsg : "cpaPedMsg", true);
 }
 async function cpaEnviarPublicarAcao(pedidoId, botao) {
@@ -1394,36 +1499,37 @@ async function cpaEnviarPublicarAcao(pedidoId, botao) {
   const texto = cpaTexto("cpaPubTexto");
   const problema = cpaProblemaTexto(texto, { nome: "a linha do boletim", min: 10, max: cpaLimite("boletim"), obrigatorio: true });
   if (problema) { cpaEscrever("cpaPubMsg", problema, true); return; }
-  const geracao = cpaGeracao, id = Number(p.pedidoId);
+  const marca = cpaMarca("Ges"), id = Number(p.pedidoId);
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaPubMsg", "Publicando…", false);
     const data = await cpaPostar("moderar", { pedidoId: id, decisao: "APROVAR", textoBoletim: texto });
-    if (geracao !== cpaGeracao) return;
-    if (data.sucesso === false) { await cpaFalhaDoPedido(data, "cpaPubMsg"); return; }
-    await cpaDepoisDoPedido(data);
+    if (!cpaViva(marca)) return;
+    if (data.sucesso === false) { await cpaFalhaDoPedido(marca, data, "cpaPubMsg"); return; }
+    await cpaDepoisDoPedido(marca, data);
   }, `moderar${id}`);
 }
 async function cpaMarcarLidoAcao(pedidoId, botao) {
   const p = cpaPedido(pedidoId);
   if (!p) return;
-  const geracao = cpaGeracao, id = Number(p.pedidoId);
+  const marca = cpaMarca("Ges"), id = Number(p.pedidoId);
   await cpaProteger(botao, async () => {
     const data = await cpaPostar("moderar", { pedidoId: id, decisao: "NAO_PUBLICAR" });
-    if (geracao !== cpaGeracao) return;
-    if (data.sucesso === false) { await cpaFalhaDoPedido(data, `cpaPedMsg${id}`); return; }
-    await cpaDepoisDoPedido(data);
+    if (!cpaViva(marca)) return;
+    if (data.sucesso === false) { await cpaFalhaDoPedido(marca, data, `cpaPedMsg${id}`); return; }
+    await cpaDepoisDoPedido(marca, data);
   }, `moderar${id}`);
 }
 async function cpaMarcarRiscoAcao(pedidoId, botao) {
   const p = cpaPedido(pedidoId);
   if (!p || p.risco) return;
+  const marca = cpaMarca("Ges"), id = Number(p.pedidoId);   // antes da confirmação: quem saiu ou trocou de login com o diálogo aberto não grava
   if (!(await confirmarAcao("Marcar SINAL DE RISCO avisa agora toda a liderança do território (o aviso não leva o texto), tira o pedido do boletim e deixa o acompanhamento urgente (24 horas). Marcar?", "Marcar sinal de risco"))) return;
-  const geracao = cpaGeracao, id = Number(p.pedidoId);
+  if (!cpaViva(marca) || !cpaSecaoViva("pedidos") || !cpaPedido(id)) return;
   await cpaProteger(botao, async () => {
     const data = await cpaPostar("risco", { pedidoId: id, marcar: true });
-    if (geracao !== cpaGeracao) return;
-    if (data.sucesso === false) { await cpaFalhaDoPedido(data, `cpaPedMsg${id}`); return; }
-    await cpaDepoisDoPedido(data);
+    if (!cpaViva(marca)) return;
+    if (data.sucesso === false) { await cpaFalhaDoPedido(marca, data, `cpaPedMsg${id}`); return; }
+    await cpaDepoisDoPedido(marca, data);
   }, `risco${id}`);
 }
 async function cpaEnviarDesmarcarAcao(pedidoId, botao) {
@@ -1432,24 +1538,24 @@ async function cpaEnviarDesmarcarAcao(pedidoId, botao) {
   const motivo = cpaTexto("cpaDesMotivo");
   const problema = cpaProblemaTexto(motivo, { nome: "o motivo", min: 5, max: cpaLimite("observacao"), obrigatorio: true });
   if (problema) { cpaEscrever("cpaDesMsg", problema, true); return; }
-  const geracao = cpaGeracao, id = Number(p.pedidoId);
+  const marca = cpaMarca("Ges"), id = Number(p.pedidoId);
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaDesMsg", "Gravando…", false);
     const data = await cpaPostar("risco", { pedidoId: id, marcar: false, motivo });   // 428: confirmação reforçada e a chamada é repetida uma vez
-    if (geracao !== cpaGeracao) return;
-    if (data.sucesso === false) { await cpaFalhaDoPedido(data, "cpaDesMsg"); return; }
-    await cpaDepoisDoPedido(data);
+    if (!cpaViva(marca)) return;
+    if (data.sucesso === false) { await cpaFalhaDoPedido(marca, data, "cpaDesMsg"); return; }
+    await cpaDepoisDoPedido(marca, data);
   }, `risco${id}`);
 }
 async function cpaAcompanharPedidoAcao(pedidoId, botao) {
   const p = cpaPedido(pedidoId);
   if (!p || (p.itemId && p.itemAberto !== false)) return;   // já tem um acompanhamento aberto (o encerrado pode ganhar outro)
-  const geracao = cpaGeracao, id = Number(p.pedidoId);
+  const marca = cpaMarca("Ges"), id = Number(p.pedidoId);
   await cpaProteger(botao, async () => {
     const data = await cpaPostar("acompanhar-pedido", { pedidoId: id });
-    if (geracao !== cpaGeracao) return;
-    if (data.sucesso === false) { await cpaFalhaDoPedido(data, `cpaPedMsg${id}`); return; }
-    await cpaDepoisDoPedido(data);
+    if (!cpaViva(marca)) return;
+    if (data.sucesso === false) { await cpaFalhaDoPedido(marca, data, `cpaPedMsg${id}`); return; }
+    await cpaDepoisDoPedido(marca, data);
   }, `acompanhar${id}`);
 }
 async function cpaVerItemAcao(itemId, gatilho) {
@@ -1487,7 +1593,7 @@ function cpaAbrirFormRegistrarPedidoAcao(gatilho) {
     <div id="cpaRpMembroCx" style="display:none;">
       <div class="input-group">
         <label for="cpaRpBusca">Nome de quem pediu</label>
-        <input type="text" id="cpaRpBusca" maxlength="60" autocomplete="off" />
+        <input type="text" id="cpaRpBusca" maxlength="60" autocomplete="off" spellcheck="false" />
       </div>
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaBuscarAcao" data-args-click="${argsAttr("regMembro", ARG.elemento)}">🔍 Buscar</button></div>
       <div id="cpaRpBuscaRes" role="status" aria-live="polite"></div>
@@ -1496,11 +1602,11 @@ function cpaAbrirFormRegistrarPedidoAcao(gatilho) {
     <div id="cpaRpForaCx" style="display:none;" class="cal-form-grade">
       <div class="input-group">
         <label for="cpaRpNome">Nome de quem pediu</label>
-        <input type="text" id="cpaRpNome" maxlength="${cpaLimite("nome")}" autocomplete="off" />
+        <input type="text" id="cpaRpNome" maxlength="${cpaLimite("nome")}" autocomplete="off" spellcheck="false" />
       </div>
       <div class="input-group">
         <label for="cpaRpContato">Contato (opcional)</label>
-        <input type="text" id="cpaRpContato" maxlength="${cpaLimite("contato")}" autocomplete="off" />
+        <input type="text" id="cpaRpContato" maxlength="${cpaLimite("contato")}" autocomplete="off" spellcheck="false" />
       </div>
     </div>
     <div class="cal-form-grade">
@@ -1577,11 +1683,18 @@ async function cpaEnviarRegistrarPedidoAcao(botao) {
   if (!problema) problema = cpaProblemaTexto(texto, { nome: "o pedido", min: 5, max: cpaLimite("pedido"), obrigatorio: true });
   if (!problema && podeBoletim == null) problema = "Diga se o pedido pode ir ao boletim (sem o nome) ou é só para a liderança.";
   if (problema) { cpaEscrever("cpaRpMsg", problema, true); return; }
-  const geracao = cpaGeracao;
+  const marca = cpaMarca("Ges");
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaRpMsg", "Gravando…", false);
     const data = await cpaPostar("registrar-pedido", corpo);
-    if (geracao !== cpaGeracao || !cpaEl("cpaRpMsg")) return;
+    if (!cpaViva(marca) || !cpaSecaoViva("pedidos") || !cpaEl("cpaRpMsg")) return;
+    // sem resposta: o pedido pode ter chegado (o servidor reconhece o mesmo texto reenviado em 10 minutos) — confira na lista, que é relida
+    if (data.sucesso === false && data.falhaDeRede) {
+      cpaEscrever("cpaRpMsg", `${cpaMsgErro(data)} ${CPA_MSG_REGISTRO_TALVEZ}`, true);
+      await cpaCarregarPedidosAcao();
+      if (cpaViva(marca) && cpaEl("cpaRpMsg")) cpaEscrever("cpaRpMsg", `${cpaMsgErro(data)} ${CPA_MSG_REGISTRO_TALVEZ}`, true);
+      return;
+    }
     if (data.sucesso === false) { cpaMostrarResultado(data, "cpaRpMsg", true); return; }
     if (data.risco) {
       // sinal de risco: a resposta do servidor (mensagem + telefones) fica no formulário, em destaque, para quem registrou ler para a pessoa
@@ -1596,7 +1709,7 @@ async function cpaEnviarRegistrarPedidoAcao(botao) {
     cpaFecharRegistrarPedidoAcao();
     if (!data.jaAvisado) mostrarToast(msg, "sucesso");
     await cpaCarregarPedidosAcao();
-    if (geracao === cpaGeracao) cpaEscrever("cpaPedMsg", msg, false);
+    if (cpaViva(marca) && cpaSecaoViva("pedidos")) cpaEscrever("cpaPedMsg", msg, false);
   }, "registrar-pedido");
 }
 
@@ -1619,12 +1732,12 @@ function cpaHtmlBoletim(linhas, comCongregacao) {
   </section>`).join("");
 }
 async function cpaCarregarBoletimAcao() {
-  if (!cpaEhGestao()) return;
+  if (!cpaEhGestao() || !cpaSecaoViva("boletim")) return;
   const congregacaoId = cpaInteiro(cpaTexto("cpaBolCong"));
-  const seq = ++cpaSeqBol;
+  const seq = ++cpaSeqBol, marca = cpaMarca("Ges");
   cpaEscrever("cpaBolMsg", "Carregando…", false);
   const data = await cpaObter(`boletim${congregacaoId ? `?congregacaoId=${congregacaoId}` : ""}`);
-  if (seq !== cpaSeqBol) return;
+  if (seq !== cpaSeqBol || !cpaViva(marca)) return;
   const cx = cpaEl("cpaBolImprimivel");
   if (data.sucesso === false || !Array.isArray(data.linhas)) { if (cx) cx.innerHTML = ""; cpaMostrarResultado(data, "cpaBolMsg", true); return; }
   cpaEscrever("cpaBolMsg", "", false);
@@ -1632,18 +1745,22 @@ async function cpaCarregarBoletimAcao() {
     <p class="psc-legenda">Pedidos sem nome, aprovados pela liderança. Cada linha fica 14 dias.</p>
     ${cpaHtmlBoletim(data.linhas, true)}`;
 }
+// A classe .cpa-imprimindo (só o boletim na folha) vale até o navegador dizer que acabou de imprimir (afterprint): no celular o print() volta antes de a folha ser montada,
+// e tirar a classe logo depois imprimia a página inteira. Sem o evento (navegador muito velho), sai logo depois, como antes.
 function cpaImprimirBoletimAcao() {
   const classes = document.body && document.body.classList;
   if (classes) classes.add("cpa-imprimindo");
-  try { window.print(); } finally { if (classes) classes.remove("cpa-imprimindo"); }
+  const comEvento = typeof window.addEventListener === "function";
+  try { window.print(); } finally { if (!comEvento && classes) classes.remove("cpa-imprimindo"); }
 }
+function cpaDepoisDeImprimir() { cpaLimparImpressao(); }
 function cpaNumeroOuTraco(v) { return v == null || !Number.isFinite(Number(v)) ? "—" : String(Number(v)).replace(".", ","); }
 async function cpaCarregarPainelAcao() {
-  if (!cpaEhGestao()) return;
-  const seq = ++cpaSeqPainel;
+  if (!cpaEhGestao() || !cpaSecaoViva("painel")) return;
+  const seq = ++cpaSeqPainel, marca = cpaMarca("Ges");
   cpaEscrever("cpaPainelMsg", "Carregando…", false);
   const data = await cpaObter("painel");
-  if (seq !== cpaSeqPainel) return;
+  if (seq !== cpaSeqPainel || !cpaViva(marca)) return;
   const cx = cpaEl("cpaPainelLista");
   if (data.sucesso === false || !Array.isArray(data.congregacoes)) { if (cx) cx.innerHTML = ""; cpaMostrarResultado(data, "cpaPainelMsg", true); return; }
   const linhas = data.congregacoes.filter(c => c && typeof c === "object");
@@ -1694,9 +1811,11 @@ function cpaRenderMeus() {
   lista.innerHTML = cpaMeus.length ? `<p class="subtitle">${abertos} em aberto${cpaMeus.length > abertos ? ` e ${cpaMeus.length - abertos} encerrado(s) nos últimos 30 dias` : ""}.</p>${cpaMeus.map(i => cpaHtmlCartao(i, "Meu")).join("")}` : "";
 }
 async function cpaRecarregarMeus() {
+  const marca = cpaMarca("Meu");
+  if (!cpaViva(marca)) return;   // fora da sub-aba nada se pede (o telefone e o motivo de quem é acompanhado não voltam para a página escondida)
   const seq = ++cpaSeqMeusLista;
   const meus = await cpaObter("meus");
-  if (seq !== cpaSeqMeusLista || meus.sucesso === false || !Array.isArray(meus.itens)) return;
+  if (seq !== cpaSeqMeusLista || !cpaViva(marca) || meus.sucesso === false || !Array.isArray(meus.itens)) return;
   cpaMeus = meus.itens.filter(i => i && typeof i === "object" && cpaInteiro(i.itemId));
   cpaRenderMeus();
 }
@@ -1742,7 +1861,7 @@ function cpaMontarFormsMeu() {
       <label class="cpa-opcao" for="cpaPvHospital"><input type="checkbox" id="cpaPvHospital" /> Estou ou estive internado(a)</label>
       <div class="input-group">
         <label for="cpaPvContato">Melhor contato ou horário (opcional)</label>
-        <input type="text" id="cpaPvContato" maxlength="${cpaLimite("contato")}" autocomplete="off" />
+        <input type="text" id="cpaPvContato" maxlength="${cpaLimite("contato")}" autocomplete="off" spellcheck="false" />
       </div>
       <p class="psc-legenda">A visita é sempre feita por duas pessoas da igreja.</p>
       <div class="psc-acoes"><button type="button" class="btn-confirmar cpa-btn cpa-btn-principal" id="cpaPvBotao" data-on-click="cpaEnviarVisitaAcao" data-args-click="${argsAttr(ARG.elemento)}">🏠 Pedir a visita</button></div>
@@ -1762,11 +1881,13 @@ function cpaMostrarRespostaRisco(idCx, data, paraLideranca) {
   </div>`;
   cpaFocar(cx);
 }
+// sem resposta (rede caída, 20 s) ou erro do servidor: o pedido pode ter chegado. "NÃO foi enviado" só quando o servidor recusou de verdade (409, 422, 429, 403...).
+function cpaPedidoTalvez(data) { return !!(data && (data.falhaDeRede || Number(data.httpStatus) >= 500)); }
 function cpaMostrarRespostaComum(idCx, data, ok) {
   const cx = cpaEl(idCx);
   if (!cx) return;
   cx.innerHTML = ok ? `<div class="cpa-ok" role="status"><p>✅ ${escaparHtmlEbd(cpaMsgErro(data))}</p></div>`
-    : `<div class="cpa-falha" role="alert"><p>${escaparHtmlEbd(cpaMsgErro(data))}</p>${Array.isArray(data.ajuda) || data.falhaDeRede ? `<p>${escaparHtmlEbd(CPA_MSG_PEDIDO_NAO_FOI)}</p>${cpaHtmlContatos(data.ajuda)}` : ""}</div>`;
+    : `<div class="cpa-falha" role="alert"><p>${escaparHtmlEbd(cpaMsgErro(data))}</p><p>${escaparHtmlEbd(cpaPedidoTalvez(data) ? CPA_MSG_PEDIDO_TALVEZ : CPA_MSG_PEDIDO_NAO_FOI)}</p>${cpaHtmlContatos(data.ajuda)}</div>`;
   cpaFocar(cx);
 }
 async function cpaEnviarOracaoAcao(botao) {
@@ -1781,14 +1902,15 @@ async function cpaEnviarOracaoAcao(botao) {
   if (!problema && podeBoletim == null) problema = "Escolha se o pedido pode ir ao boletim (sem o seu nome) ou é só para a liderança.";
   if (problema) { cpaEscrever("cpaPoMsg", problema, true); return; }
   const corpo = { categoria, texto, paraQuem, podeBoletim, querContato: cpaMarcado("cpaPoQuerContato") };
-  const geracao = cpaGeracao;
+  const marca = cpaMarca("Meu");
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaPoMsg", "Enviando…", false);
     cpaEsvaziar(["cpaOracaoResultado"]);
     const data = await cpaPostar("pedir-oracao", corpo);
-    if (geracao !== cpaGeracao || !cpaEl("cpaPoMsg")) return;
+    if (!cpaViva(marca) || !cpaEl("cpaPoMsg")) return;
     cpaEscrever("cpaPoMsg", "", false);
-    if (data.sucesso === false) { cpaMostrarRespostaComum("cpaOracaoResultado", data, false); return; }
+    // sem resposta: talvez tenha chegado — Meus pedidos é relido para a pessoa conferir (o texto fica no campo; o servidor reconhece o mesmo texto reenviado)
+    if (data.sucesso === false) { cpaMostrarRespostaComum("cpaOracaoResultado", data, false); if (cpaPedidoTalvez(data)) cpaCarregarMeusPedidosAcao(); return; }
     if (data.risco === true) cpaMostrarRespostaRisco("cpaOracaoResultado", data); else cpaMostrarRespostaComum("cpaOracaoResultado", data, true);
     // o que foi enviado sai do campo (o que a pessoa digitou depois, não)
     const campo = cpaEl("cpaPoTexto");
@@ -1804,14 +1926,14 @@ async function cpaEnviarVisitaAcao(botao) {
   if (problema) { cpaEscrever("cpaPvMsg", problema, true); return; }
   const corpo = { motivo, hospital: cpaMarcado("cpaPvHospital") };
   if (contato) corpo.contato = contato;
-  const geracao = cpaGeracao;
+  const marca = cpaMarca("Meu");
   await cpaProteger(botao, async () => {
     cpaEscrever("cpaPvMsg", "Enviando…", false);
     cpaEsvaziar(["cpaVisitaResultado"]);
     const data = await cpaPostar("pedir-visita", corpo);
-    if (geracao !== cpaGeracao || !cpaEl("cpaPvMsg")) return;
+    if (!cpaViva(marca) || !cpaEl("cpaPvMsg")) return;
     cpaEscrever("cpaPvMsg", "", false);
-    if (data.sucesso === false) { cpaMostrarRespostaComum("cpaVisitaResultado", data, false); return; }
+    if (data.sucesso === false) { cpaMostrarRespostaComum("cpaVisitaResultado", data, false); if (cpaPedidoTalvez(data)) cpaCarregarMeusPedidosAcao(); return; }
     if (data.risco === true) cpaMostrarRespostaRisco("cpaVisitaResultado", data); else cpaMostrarRespostaComum("cpaVisitaResultado", data, true);
     const campo = cpaEl("cpaPvMotivo");
     if (campo && cpaTexto("cpaPvMotivo") === motivo) campo.value = "";
@@ -1823,11 +1945,12 @@ async function cpaEnviarVisitaAcao(botao) {
   }, "pedir-visita");
 }
 async function cpaCarregarMeusPedidosAcao() {
-  if (!authToken) return;
+  const marca = cpaMarca("Meu");
+  if (!authToken || !cpaViva(marca)) return;
   const seq = ++cpaSeqMeusPed;
   cpaEscrever("cpaMeusPedidosMsg", "Carregando…", false);
   const data = await cpaObter("meus-pedidos");
-  if (seq !== cpaSeqMeusPed) return;
+  if (seq !== cpaSeqMeusPed || !cpaViva(marca)) return;
   const cx = cpaEl("cpaMeusPedidos");
   if (data.sucesso === false) { if (cx) cx.innerHTML = ""; cpaMostrarResultado(data, "cpaMeusPedidosMsg", true); return; }
   const oracao = Array.isArray(data.oracao) ? data.oracao.filter(p => p && typeof p === "object") : [];
@@ -1844,13 +1967,23 @@ async function cpaCarregarMeusPedidosAcao() {
     </li>`).join("")}</ul>` : ""}`;
 }
 async function cpaCarregarBoletimMeu() {
+  const marca = cpaMarca("Meu");
+  if (!cpaViva(marca)) return;
   const seq = ++cpaSeqBolMeu;
   const data = await cpaObter("boletim-meu");
-  if (seq !== cpaSeqBolMeu) return;
+  if (seq !== cpaSeqBolMeu || !cpaViva(marca)) return;
   const cx = cpaEl("cpaBoletimMeu");
   if (!cx) return;
   if (data.sucesso === false || !Array.isArray(data.linhas)) { cx.textContent = cpaMsgErro(data); return; }
   cx.innerHTML = cpaHtmlBoletim(data.linhas, false);
+}
+
+// A nota aberta tem vida curta: o celular que vai para o bolso (aba escondida) ou a página que sai (pagehide) fecham o texto. Depois de imprimir, a classe de impressão sai.
+function cpaPaginaEscondida() { if (document.visibilityState === "hidden") cpaLimparNota(); }
+document.addEventListener("visibilitychange", cpaPaginaEscondida);
+if (typeof window.addEventListener === "function") {
+  window.addEventListener("pagehide", cpaLimparNota);
+  window.addEventListener("afterprint", cpaDepoisDeImprimir);
 }
 
 registrarAcoes({
@@ -1858,7 +1991,7 @@ registrarAcoes({
   cpaBuscarAcao, cpaCarregarBoletimAcao, cpaCarregarFilaAcao, cpaCarregarMeuPainelAcao, cpaCarregarMeusPedidosAcao, cpaCarregarPainelAcao, cpaCarregarPedidosAcao, cpaContarNotaAcao,
   cpaContarPedidoAcao, cpaEnviarAdiarAcao, cpaEnviarCancelarAcao, cpaEnviarConcluirAcao, cpaEnviarContatoAcao, cpaEnviarDesmarcarAcao, cpaEnviarNotaAcao, cpaEnviarNovoAcao,
   cpaEnviarOracaoAcao, cpaEnviarPublicarAcao, cpaEnviarRegistrarPedidoAcao, cpaEnviarVisitaAcao, cpaEscolherPessoaAcao, cpaFecharDetalheAcao, cpaFecharFormAcao, cpaFecharFormPedidoAcao,
-  cpaFecharNotaAcao, cpaFecharNovoAcao, cpaFecharRegistrarPedidoAcao, cpaImprimirBoletimAcao, cpaLeiturasAcao, cpaMarcarLidoAcao, cpaMarcarRiscoAcao, cpaMostrarPedidosAcao,
+  cpaFecharNotaAcao, cpaFecharNotaFormAcao, cpaFecharNovoAcao, cpaFecharRegistrarPedidoAcao, cpaImprimirBoletimAcao, cpaLeiturasAcao, cpaMarcarLidoAcao, cpaMarcarRiscoAcao, cpaMostrarPedidosAcao,
   cpaMostrarSecaoAcao, cpaMudouCadastroNovoAcao, cpaMudouCadastroRegAcao, cpaMudouCongNovoAcao, cpaMudouCongRegAcao, cpaMudouFormaAcao, cpaMudouTipoNovoAcao, cpaRecarregarNotasAcao,
   cpaVerItemAcao
 });

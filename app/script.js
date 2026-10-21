@@ -539,6 +539,8 @@ function esconderTodasAsTelas() {
 }
 
 function voltarParaCheckin() {
+  // v7.11: a fila, o acompanhamento e a nota pastoral aberta não ficam escondidos atrás da Portaria (módulo ausente ou velho no cache: a navegação segue)
+  if (typeof cpaAbaMudou === "function") cpaAbaMudou("portaria");
   esconderTodasAsTelas();
   document.getElementById("telaCheckin").style.display = "flex";
 }

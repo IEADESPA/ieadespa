@@ -45,6 +45,7 @@ BEGIN
         Risco                       BIT NOT NULL CONSTRAINT DF_PedidosOracao_Risco DEFAULT 0,
         RiscoOrigem                 NVARCHAR(10) NULL CONSTRAINT CK_PedidosOracao_RiscoOrigem CHECK (RiscoOrigem IS NULL OR RiscoOrigem IN (N'AUTOMATICO', N'LIDERANCA')),
         RiscoCrianca                BIT NOT NULL CONSTRAINT DF_PedidosOracao_RiscoCrianca DEFAULT 0,
+        SoNivelGeral                BIT NOT NULL CONSTRAINT DF_PedidosOracao_SoNivelGeral DEFAULT 0,
         RiscoJaTeve                 BIT NOT NULL CONSTRAINT DF_PedidosOracao_RiscoJaTeve DEFAULT 0,
         RiscoMarcadoEm              DATETIME2(0) NULL,
         RiscoDesmarcadoPorMembroId  INT NULL REFERENCES dbo.MembroReferencia(MembroId),
@@ -64,7 +65,7 @@ BEGIN
 END
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_PedidosOracao_Congregacao' AND object_id = OBJECT_ID(N'dbo.PedidosOracao'))
-    CREATE INDEX IX_PedidosOracao_Congregacao ON dbo.PedidosOracao (CongregacaoId, Moderacao, CriadoEm DESC);
+    CREATE INDEX IX_PedidosOracao_Congregacao ON dbo.PedidosOracao (CongregacaoId, Moderacao, CriadoEm DESC) INCLUDE (Risco, AnonimizadoEm, SolicitanteMembroId, SoNivelGeral);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_PedidosOracao_Solicitante' AND object_id = OBJECT_ID(N'dbo.PedidosOracao'))
     CREATE INDEX IX_PedidosOracao_Solicitante ON dbo.PedidosOracao (SolicitanteMembroId, CriadoEm DESC);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_PedidosOracao_Registrante' AND object_id = OBJECT_ID(N'dbo.PedidosOracao'))
@@ -89,7 +90,7 @@ BEGIN
            OR (ISNULL(i.RegistradoPorMembroId, -1) <> ISNULL(d.RegistradoPorMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.RegistradoPorMembroId IS NULL))
            OR (ISNULL(i.SolicitanteMembroId, -1) <> ISNULL(d.SolicitanteMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.SolicitanteMembroId IS NULL)) OR i.ParaQuem <> d.ParaQuem OR i.Categoria <> d.Categoria
            OR (i.AnonimizadoEm IS NULL AND (ISNULL(i.SolicitanteNome, N'''') <> ISNULL(d.SolicitanteNome, N'''') OR ISNULL(i.SolicitanteContato, N'''') <> ISNULL(d.SolicitanteContato, N'''')))
-           OR (d.RiscoJaTeve = 1 AND i.RiscoJaTeve = 0)
+           OR (d.RiscoJaTeve = 1 AND i.RiscoJaTeve = 0) OR (d.SoNivelGeral = 1 AND i.SoNivelGeral = 0)
            OR (ISNULL(i.Texto, N'''') <> ISNULL(d.Texto, N'''') AND NOT (i.AnonimizadoEm IS NOT NULL AND i.Texto IS NULL))
            OR (d.AnonimizadoEm IS NOT NULL AND ISNULL(i.AnonimizadoEm, ''19000101'') <> d.AnonimizadoEm))
     BEGIN
@@ -118,6 +119,7 @@ BEGIN
                                     CHECK (Origem IS NOT NULL AND Origem IN (N'LIDERANCA', N'DETECCAO', N'PEDIDO_MEMBRO', N'PEDIDO_ORACAO')),
         PedidoOracaoId          INT NULL REFERENCES dbo.PedidosOracao(PedidoId),
         Urgente                 BIT NOT NULL CONSTRAINT DF_CuidadoItens_Urgente DEFAULT 0,
+        SoNivelGeral            BIT NOT NULL CONSTRAINT DF_CuidadoItens_SoNivelGeral DEFAULT 0,
         DeteccaoResumo          NVARCHAR(200) NULL,
         ResponsavelMembroId     INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         PrazoEm                 DATETIME2(0) NOT NULL,
@@ -142,7 +144,7 @@ BEGIN
             OR (Status = N'CONCLUIDO' AND EncerradoEm IS NOT NULL AND Desfecho IS NOT NULL AND Desfecho NOT IN (N'DUPLICADO', N'ENGANO'))
             OR (Status = N'CANCELADO' AND EncerradoEm IS NOT NULL AND Desfecho IN (N'DUPLICADO', N'ENGANO'))),
         CONSTRAINT CK_CuidadoItens_Anonimizado CHECK (AnonimizadoEm IS NULL OR (Status <> N'ABERTO' AND MembroId IS NULL AND PessoaNome IS NULL AND PessoaContato IS NULL AND Motivo IS NULL AND DeteccaoResumo IS NULL)),
-        CONSTRAINT CK_CuidadoItens_Contadores CHECK (Escalonamentos BETWEEN 0 AND 10 AND LembretesGerais BETWEEN 0 AND 10)
+        CONSTRAINT CK_CuidadoItens_Contadores CHECK (Escalonamentos BETWEEN 0 AND 10 AND LembretesGerais BETWEEN 0 AND 5)
     );
 END
 GO
@@ -150,15 +152,18 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CuidadoItens_Fila' AN
     CREATE INDEX IX_CuidadoItens_Fila ON dbo.CuidadoItens (Status, CongregacaoId, PrazoEm);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CuidadoItens_Responsavel' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
     CREATE INDEX IX_CuidadoItens_Responsavel ON dbo.CuidadoItens (ResponsavelMembroId, Status);
+-- a fila, o painel e os avisos filtram pela congregação do território (revisão: num banco de 5 DTU, sem varrer a tabela)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CuidadoItens_Congregacao' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
+    CREATE INDEX IX_CuidadoItens_Congregacao ON dbo.CuidadoItens (CongregacaoId, Status) INCLUDE (PrazoEm, ResponsavelMembroId, Urgente, Origem, CriadoEm, PrimeiroContatoEm, MembroId, SoNivelGeral);
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CuidadoItens_Membro' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
     CREATE INDEX IX_CuidadoItens_Membro ON dbo.CuidadoItens (MembroId, Tipo, Status);
 -- uma pessoa do cadastro tem no máximo UM item aberto de cada um destes tipos (a rotina de detecção e dois cliques ao mesmo tempo não abrem dois)
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CuidadoItens_UmAbertoPorPessoa' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
     CREATE UNIQUE INDEX UX_CuidadoItens_UmAbertoPorPessoa ON dbo.CuidadoItens (Tipo, MembroId)
         WHERE Status = N'ABERTO' AND MembroId IS NOT NULL AND Tipo IN (N'NOVO_CONVERTIDO', N'AFASTAMENTO', N'PEDIDO_VISITA', N'POS_INTERNACAO');
--- um pedido de oração gera no máximo um item
+-- um pedido de oração tem no máximo um item ABERTO (encerrado o item, o risco marcado depois abre outro)
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CuidadoItens_UmPorPedido' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
-    CREATE UNIQUE INDEX UX_CuidadoItens_UmPorPedido ON dbo.CuidadoItens (PedidoOracaoId) WHERE PedidoOracaoId IS NOT NULL;
+    CREATE UNIQUE INDEX UX_CuidadoItens_UmPorPedido ON dbo.CuidadoItens (PedidoOracaoId) WHERE PedidoOracaoId IS NOT NULL AND Status = N'ABERTO';
 GO
 
 -- O item não se apaga; tipo, congregação, pessoa, origem e criação não se reescrevem; encerrado não reabre; a identificação só sai pela anonimização.
@@ -176,7 +181,8 @@ BEGIN
     END
     IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.ItemId = i.ItemId
         WHERE i.Tipo <> d.Tipo OR i.CongregacaoId <> d.CongregacaoId OR i.Origem <> d.Origem OR i.CriadoEm <> d.CriadoEm
-           OR ISNULL(i.CriadoPorMembroId, -1) <> ISNULL(d.CriadoPorMembroId, -1) OR ISNULL(i.PedidoOracaoId, -1) <> ISNULL(d.PedidoOracaoId, -1)
+           OR (ISNULL(i.CriadoPorMembroId, -1) <> ISNULL(d.CriadoPorMembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.CriadoPorMembroId IS NULL))
+           OR ISNULL(i.PedidoOracaoId, -1) <> ISNULL(d.PedidoOracaoId, -1) OR (d.SoNivelGeral = 1 AND i.SoNivelGeral = 0)
            OR (ISNULL(i.MembroId, -1) <> ISNULL(d.MembroId, -1) AND NOT (i.AnonimizadoEm IS NOT NULL AND i.MembroId IS NULL))
            OR (d.Status <> N''ABERTO'' AND (i.Status <> d.Status OR ISNULL(i.Desfecho, N'''') <> ISNULL(d.Desfecho, N'''') OR ISNULL(i.EncerradoEm, ''19000101'') <> ISNULL(d.EncerradoEm, ''19000101'')
                 OR ISNULL(i.ResponsavelMembroId, -1) <> ISNULL(d.ResponsavelMembroId, -1) OR i.PrazoEm <> d.PrazoEm OR i.Nivel <> d.Nivel))
@@ -236,13 +242,14 @@ BEGIN
         END
         RETURN;
     END
-    -- a única mudança aceita é a anonimização: carimbo novo, observação e acompanhante apagados (ou trocados pelo texto neutro), e nada mais
+    -- a única mudança aceita é a anonimização: carimbo novo, observação e acompanhante apagados (ou trocados pelo texto neutro), quem agiu e o responsável apagados (é o
+    -- próprio titular, no pedido que ele mesmo fez: deixar a matrícula seria só pseudonimizar), e nada mais
     IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.EventoId = i.EventoId
         WHERE d.AnonimizadoEm IS NOT NULL OR i.AnonimizadoEm IS NULL
-           OR i.ItemId <> d.ItemId OR i.Tipo <> d.Tipo OR i.Em <> d.Em OR ISNULL(i.MembroId, -1) <> ISNULL(d.MembroId, -1)
+           OR i.ItemId <> d.ItemId OR i.Tipo <> d.Tipo OR i.Em <> d.Em OR (i.MembroId IS NOT NULL AND ISNULL(i.MembroId, -1) <> ISNULL(d.MembroId, -1))
            OR ISNULL(i.Forma, N'''') <> ISNULL(d.Forma, N'''') OR ISNULL(CAST(i.Conseguiu AS INT), -1) <> ISNULL(CAST(d.Conseguiu AS INT), -1)
            OR ISNULL(i.NivelDe, N'''') <> ISNULL(d.NivelDe, N'''') OR ISNULL(i.NivelPara, N'''') <> ISNULL(d.NivelPara, N'''')
-           OR ISNULL(i.PrazoNovo, ''19000101'') <> ISNULL(d.PrazoNovo, ''19000101'') OR ISNULL(i.ResponsavelMembroId, -1) <> ISNULL(d.ResponsavelMembroId, -1)
+           OR ISNULL(i.PrazoNovo, ''19000101'') <> ISNULL(d.PrazoNovo, ''19000101'') OR (i.ResponsavelMembroId IS NOT NULL AND ISNULL(i.ResponsavelMembroId, -1) <> ISNULL(d.ResponsavelMembroId, -1))
            OR i.Observacao IS NOT NULL OR (i.Acompanhante IS NOT NULL AND i.Acompanhante <> N''(anonimizado)''))
     BEGIN
         RAISERROR(N''O histórico do acompanhamento pastoral não se altera.'', 16, 1);
@@ -325,6 +332,11 @@ BEGIN
         ROLLBACK TRANSACTION;
     END
 END');
+GO
+
+-- O procedimento de abandono aberto é conferido por pessoa na detecção diária (revisão: índice para não varrer a tabela).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ProcedimentosAbandono_MembroStatus' AND object_id = OBJECT_ID(N'dbo.ProcedimentosAbandono'))
+    CREATE INDEX IX_ProcedimentosAbandono_MembroStatus ON dbo.ProcedimentosAbandono (MembroId, Status);
 GO
 
 -- ---- 5) A permissão e os papéis ----

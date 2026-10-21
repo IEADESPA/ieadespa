@@ -25,4 +25,5 @@ bash rodar.sh preparar-pastoral
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-24-cuidado-fluxos.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-25-cuidado-seguranca.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-26-cuidado-corridas.js
+BASE=cenario-pastoral bash rodar.sh roteiro e2e-27-cuidado-revisao.js
 echo TUDO-PRONTO

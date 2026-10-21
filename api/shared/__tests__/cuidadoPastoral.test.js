@@ -46,6 +46,11 @@ describe("a escada do prazo vencido", () => {
     expect(cp.proximoDegrau("CONGREGACAO", [])).toBeNull();
     expect(cp.proximoDegrau("QUADRANTE", ["GERAL"])).toBeNull();
   });
+  test("(revisão) o urgente continua com 24 horas a cada degrau; o comum ganha os dias de Catálogos", () => {
+    expect(cp.prazoDoDegrau({ Urgente: true }, AGORA, cp.prazosDoCuidado({})).toISOString()).toBe("2026-10-22T15:00:00.000Z");
+    expect(cp.prazoDoDegrau({ Urgente: false }, AGORA, cp.prazosDoCuidado({ CUIDADO_PRAZO_DEGRAU_DIAS: 5 })).toISOString()).toBe("2026-10-26T15:00:00.000Z");
+    expect(cp.textoSemResponsavel({ congregacaoNome: "Central", para: "AREA" })).toMatch(/não tem quem o receba na congregação e veio para a Área/);
+  });
   test("vencido sobe; no topo, lembra até 5 vezes; no prazo ou encerrado, nada", () => {
     const vencido = { Status: "ABERTO", PrazoEm: new Date(AGORA.getTime() - 1000), Nivel: "CONGREGACAO", LembretesGerais: 0 };
     expect(cp.decidirEscada(vencido, ["AREA", "GERAL"], AGORA)).toEqual({ acao: "SUBIR", de: "CONGREGACAO", para: "AREA" });
@@ -137,12 +142,33 @@ describe("o sinal de risco", () => {
     "minha avó está internada", "luto pelo meu pai"];
   test.each(SIM)("acusa: %s", (t) => { expect(cp.avaliarRisco(t).risco).toBe(true); });
   test.each(NAO)("não acusa: %s", (t) => { expect(cp.avaliarRisco(t).risco).toBe(false); });
+  // (revisão independente, 21/10/2026) as frases que a primeira lista deixava passar
+  const REVISAO_SIM = ["eu me mato", "não quero viver", "cansei de viver", "queria estar morta", "seria melhor se eu morresse", "melhor eu morrer", "quero sumir", "não quero mais estar aqui",
+    "quero acabar com tudo", "vou dar fim na minha vida", "vou me jogar na frente de um carro", "pular do prédio", "vou enforcar-me", "tomei veneno", "vou tomar chumbinho", "tomei uma caixa de remédios",
+    "não quero mais acordar", "penso em me ferir", "sem vontade de viver", "pensamentos de morte", "ele abusa da minha filha", "abusa de mim", "meu marido bate em mim", "meu marido bate nos meus filhos",
+    "o padrasto bate na menina", "ela apanha do pai", "ele está agredindo a mãe", "vai matar meus filhos", "ameaçou matar a gente", "me deu um soco", "me deu um tapa", "levei uma surra",
+    "ele me trancou em casa", "me mantém presa", "tocou nas partes íntimas da criança", "o tio mexe com a sobrinha", "pedofilia", "exploração sexual"];
+  test.each(REVISAO_SIM)("acusa (revisão): %s", (t) => { expect(cp.avaliarRisco(t).risco).toBe(true); });
   test("autolesão e violência são separadas; criança só conta junto com violência", () => {
-    expect(cp.avaliarRisco("quero morrer")).toEqual({ risco: true, autolesao: true, violencia: false, crianca: false });
-    expect(cp.avaliarRisco("o padrasto abusou da minha filha")).toEqual({ risco: true, autolesao: false, violencia: true, crianca: true });
+    expect(cp.avaliarRisco("quero morrer")).toEqual({ risco: true, autolesao: true, violencia: false, crianca: false, liderancaCitada: false });
+    expect(cp.avaliarRisco("o padrasto abusou da minha filha")).toEqual({ risco: true, autolesao: false, violencia: true, crianca: true, liderancaCitada: false });
     expect(cp.avaliarRisco("pela saúde da minha filha").crianca).toBe(false);
     expect(cp.avaliarRisco("pela saúde", "ele me bate").violencia).toBe(true);
     expect(cp.avaliarRisco(null, 5, {}).risco).toBe(false);
+  });
+  test("violência que cita a liderança (pela função) marca o caso para o nível geral; autolesão não", () => {
+    expect(cp.avaliarRisco("o dirigente abusou de mim").liderancaCitada).toBe(true);
+    expect(cp.avaliarRisco("o pastor me bate").liderancaCitada).toBe(true);
+    expect(cp.avaliarRisco("o professor da EBD tocou na minha filha").liderancaCitada).toBe(true);
+    expect(cp.avaliarRisco("quero morrer, nem o pastor me entende").liderancaCitada).toBe(false);
+    expect(cp.avaliarRisco("orem pelo pastor").risco).toBe(false);
+  });
+  test("citar pelo nome: o primeiro nome E mais uma parte", () => {
+    expect(cp.citaPeloNome("o irmão Jorge Souza me agrediu", "Jorge Henrique Souza")).toBe(true);
+    expect(cp.citaPeloNome("o Jorge me agrediu", "Jorge Henrique Souza")).toBe(false);
+    expect(cp.citaPeloNome("a Souza", "Jorge Henrique Souza")).toBe(false);
+    expect(cp.citaPeloNome("Jor​ge Souza", "Jorge Souza")).toBe(true);
+    expect(cp.citaPeloNome("qualquer", "Zé")).toBe(false);
   });
   test("ignora acento, maiúscula e pontuação", () => {
     expect(cp.normalizar("Não AGUENTO… mais!! viver")).toBe("nao aguento mais viver");
@@ -167,6 +193,22 @@ describe("o boletim sem nome", () => {
     expect(cp.validarTextoBoletim("curto").valido).toBe(false);
     expect(cp.validarTextoBoletim("x".repeat(201)).valido).toBe(false);
     expect(cp.validarTextoBoletim("Alguém <b>pede</b> oração").valido).toBe(false);
+  });
+  test("(revisão) nome curto, nome partido por caractere invisível e diagnóstico também são recusados", () => {
+    expect(cp.validarTextoBoletim("O Zé pede oração pela saúde", { nomes: ["Zé"] }).valido).toBe(false);
+    expect(cp.validarTextoBoletim("Alguém da igreja pede oração", { nomes: ["Zé"] }).valido).toBe(true);
+    expect(cp.validarTextoBoletim("A Ma​ria pede oração pela saúde", { nomes: ["Maria Silva"] }).valido).toBe(false);
+    expect(cp.validarTextoBoletim("Alguém pede oração pela saúde, ela está com câncer de mama").mensagem).toMatch(/diagnóstico/);
+    expect(cp.validarTextoBoletim("Alguém pede oração por um irmão na UTI").valido).toBe(false);
+    for (const c of Object.keys(cp.CATEGORIAS_ORACAO)) for (const pq of ["PROPRIO", "OUTRA_PESSOA"]) {
+      expect(cp.validarTextoBoletim(cp.linhaDoBoletim({ categoria: c, paraQuem: pq, congregacaoNome: "Vila Nova" }), { nomes: ["Ana Vila"], congregacaoNome: "Vila Nova" }).valido).toBe(true);
+    }
+  });
+  test("(revisão) todo texto livre recusa caractere de controle ou invisível; a quebra de linha vale", () => {
+    expect(cp.validarNota({ nivel: "EQUIPE", membroId: 5, texto: "visita\nboa" }).valido).toBe(true);
+    expect(cp.validarNota({ nivel: "EQUIPE", membroId: 5, texto: "visita\u0000boa" }).valido).toBe(false);
+    expect(cp.validarPedidoOracao({ categoria: "SAUDE", texto: "pela mi​nha mãe", podeBoletim: true }).valido).toBe(false);
+    expect(cp.validarAbertura({ tipo: "VISITANTE", congregacaoId: 3, pessoaNome: "Ful‮ano", pessoaContato: "91 9999" }).valido).toBe(false);
   });
 });
 
@@ -215,6 +257,13 @@ describe("quem lê e quem escreve cada nível de nota", () => {
     expect(cp.podeLerNota(nota("PASTORAL", 9), { membroId: 9 })).toBe(true);
     expect(cp.podeLerNota(nota("OUTRO"), pastor)).toBe(false);
     expect(cp.podeLerNota(null, pastor)).toBe(false);
+  });
+  test("(revisão) a correção nunca rebaixa o sigilo", () => {
+    expect(cp.podeCorrigir("EQUIPE", "PASTORAL")).toBe(false);
+    expect(cp.podeCorrigir("LIDERANCA", "PASTORAL")).toBe(false);
+    expect(cp.podeCorrigir("PASTORAL", "EQUIPE")).toBe(true);
+    expect(cp.podeCorrigir("LIDERANCA", "LIDERANCA")).toBe(true);
+    expect(cp.podeCorrigir("X", "EQUIPE")).toBe(false);
   });
   test("o responsável escreve só a de equipe; abrir \"somente pastor\" pede a confirmação reforçada", () => {
     expect(cp.podeEscreverNota("EQUIPE", { responsavelAberto: true })).toBe(true);

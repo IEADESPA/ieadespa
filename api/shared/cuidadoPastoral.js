@@ -141,6 +141,8 @@ function textoLivre(v, { campo, min = 0, max, obrigatorio = false }) {
   const t = limpar(v);
   if (!t) return obrigatorio ? { mensagem: `Escreva ${campo}.` } : { texto: null };
   if (temMarca(t)) return { mensagem: `${campo[0].toUpperCase()}${campo.slice(1)} não pode ter os sinais < e >.` };
+  // caractere de controle ou invisível (o "espaço de largura zero" que parte um nome em dois e passa pela conferência do boletim); a quebra de linha e o tab valem
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f­​-‏‪-‮⁠-⁤﻿]/.test(t)) return { mensagem: `${campo[0].toUpperCase()}${campo.slice(1)} tem um caractere invisível ou de controle: apague e escreva de novo.` };
   if (t.length < min) return { mensagem: `${campo[0].toUpperCase()}${campo.slice(1)} está curto demais (pelo menos ${min} caracteres).` };
   if (t.length > max) return { mensagem: `${campo[0].toUpperCase()}${campo.slice(1)} pode ter no máximo ${max} caracteres.` };
   return { texto: t };
@@ -211,6 +213,13 @@ function decidirEscada(item, comGente, agora = new Date()) {
   if (prox) return { acao: "SUBIR", de: item.Nivel, para: prox };
   if ((Number(item.LembretesGerais) || 0) < LEMBRETES_GERAIS_MAXIMO) return { acao: "LEMBRAR", de: item.Nivel, para: item.Nivel };
   return { acao: "NADA" };
+}
+
+// O prazo novo de quem subiu de degrau: o urgente (sinal de risco) continua com 24 horas a cada degrau; o comum ganha os dias de Catálogos (padrão 3).
+function prazoDoDegrau(item, agora, prazos) {
+  const a = instanteValido(agora) || new Date();
+  if (item && item.Urgente) return new Date(a.getTime() + PRAZO_RISCO_HORAS * MS_HORA);
+  return new Date(a.getTime() + ((prazos && prazos.CUIDADO_PRAZO_DEGRAU_DIAS) || PARAMETROS.CUIDADO_PRAZO_DEGRAU_DIAS.padrao) * MS_DIA);
 }
 
 // ---------------------------------------------------------------
@@ -361,31 +370,55 @@ function validarPedidoVisita(corpo) {
 
 // Minúsculas, sem acento, só letras e números separados por um espaço. "Não AGUENTO mais viver!!" → "nao aguento mais viver".
 function normalizar(texto) {
-  return String(texto == null ? "" : texto).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return String(texto == null ? "" : texto).replace(/[­​-‏⁠-⁤﻿]/g, "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 // A lista prefere errar para mais: um alarme falso custa um telefonema; um pedido de socorro perdido não tem volta. A liderança desmarca o alarme falso, com motivo.
+// (Revisão independente, 21/10/2026: a primeira lista só pegava a forma "me bate"; o jeito comum de escrever — "ele bate em mim", "abusa da minha filha", "eu me mato",
+// "não quero viver", "quero sumir" — passava. A tabela de frases do teste, de um lado e de outro, é a régua desta lista.)
 const PADROES_AUTOLESAO = [
-  /\bsuicid/, /\b(me|se) matar\b/, /\bmatar me\b/, /\btirar (a )?(minha |propria |minha propria )?vida\b/, /\bacabar com (a )?minha vida\b/,
-  /\bnao (quero|aguento|consigo|suporto) mais viver\b/, /\b(quero|queria|vontade de|pensando em|penso em|desejo de|prefiro) morrer\b/,
-  /\bme (cortar|corto|cortei|cortando|enforcar|jogar da|jogar de)\b/, /\bme machuc(ar|o|ei|ando)\b/, /\bauto ?mutila/, /\bauto ?lesa/,
-  /\bcort(ar|ei|o) (os |meus |o |meu )?puls/, /\boverdose\b/, /\b(tomar|tomei) (todos os|muitos|varios) remedios\b/, /\bvida (nao tem|sem) sentido\b/,
-  /\bsumir (de vez|para sempre|pra sempre)\b/, /\bdesist(ir|i|indo) da vida\b/, /\bnao vale a pena viver\b/
+  /\bsuicid/, /\b(me|se) matar\b/, /\bmatar me\b/, /\bme mato\b/, /\btirar (a )?(minha |propria |minha propria )?vida\b/,
+  /\b(acabar|dar fim|por fim|por um fim) (com|a|na|em) (a )?minha (propria )?vida\b/, /\bacabar com tudo\b/,
+  /\bnao (quero|aguento|consigo|suporto|tenho vontade de)( mais)? viver\b/, /\b(cansei|cansada|cansado) de viver\b/, /\bdesist(ir|i|indo) (da vida|de viver)\b/, /\bsem vontade de viver\b/,
+  /\b(quero|queria|vontade de|pensando em|penso em|desejo de|prefiro|melhor eu) morrer\b/, /\bse eu morresse\b/, /\bmelhor (eu )?morrer\b/,
+  /\b(quero|queria|preferia|prefiro) (estar|ficar) mort[oa]\b/, /\bpensamentos? (de|sobre) morte\b/,
+  /\b(quero|queria|vontade de|vou) sumir\b/, /\bsumir (de vez|para sempre|pra sempre)\b/, /\bnao quero mais (estar aqui|acordar|existir)\b/, /\bnao queria (ter nascido|existir)\b/,
+  /\bme (cortar|corto|cortei|cortando|enforcar|enforco|jogar|jogo|ferir|firo|feri)\b/, /\benforcar\b/, /\bme machuc(ar|o|ei|ando)\b/, /\bauto ?mutila/, /\bauto ?lesa/,
+  /\bcort(ar|ei|o|ando) (os |meus |o |meu )?puls/, /\bpular (d[ao]s?|de) (predio|ponte|janela|viaduto|apartamento|sacada)\b/, /\boverdose\b/,
+  /\b(tomar|tomei|tomo|vou tomar) (todos os|muitos|varios|uma caixa de|um monte de|a cartela de|a caixa de)( de)? remedios?\b/, /\b(caixa|cartela|vidro) (inteira |inteiro )?de remedios?\b/,
+  /\bveneno\b/, /\bchumbinho\b/, /\bvida (nao tem|sem) sentido\b/, /\bnao vale a pena viver\b/
 ];
+const VITIMAS = "(em mim|nela|nele|neles|nelas|na gente|em nos|n[ao]s? (minh[ao]s?|meus?|nossa|nosso)|n[ao]s? (filh|crianc|menin|mae|esposa|mulher|sobrinh|net|entead|bebe))";
 const PADROES_VIOLENCIA = [
-  /\bme (bate|bateu|batem|bateram|espanca|espancou|agride|agrediu|ameaca|ameacou|machuca|machucou|empurra|empurrou|estuprou|violentou|abusou|forca|forcou|prende|prendeu)\b/,
-  /\b(apanho|apanhei|apanhando)\b/, /\bespancad/, /\bagredid/, /\bagress(ao|oes|or|ora)\b/, /\bviolencia\b/, /\bviolentad/, /\babus(o|os|ada|ado|ou|ando|ador|adora|aram|ar)\b/,
-  /\bestupr/, /\bmolest/, /\bassedi/, /\bameac\w* de morte\b/, /\b(vai|quer|ameaca|ameacou|prometeu) me matar\b/, /\bmedida protetiva\b/, /\bmaria da penha\b/,
-  /\b(tenho|tem|sinto|tenha) medo (dele|dela|do meu (marido|pai|padrasto|namorado|companheiro|ex)|de voltar (para|pra) casa)\b/, /\bcarcere privado\b/
+  /\bme (bate|bateu|batem|bateram|batia|espanca|espancou|agride|agrediu|ameaca|ameacou|machuca|machucou|empurra|empurrou|estuprou|violentou|abusou|abusa|forca|forcou|prende|prendeu|tranca|trancou|chuta|chutou|esgana|esganou|enforca|enforcou)\b/,
+  new RegExp(`\\bbat(e|eu|em|ia|endo|eram) ${VITIMAS}`), /\b(apanho|apanhei|apanhando|apanha|apanhou|apanhava|apanham)\b/, /\bespanc/, /\bagred/, /\bagress(ao|oes|or|ora|iv)/,
+  /\bviolencia\b/, /\bviolentad/, /\bviolentou\b/, /\babus[a-z]*/, /\bestupr/, /\bmolest/, /\bassedi/, /\bpedofil/, /\bexplora[a-z]* sexual/, /\bpartes intimas\b/,
+  /\b(toca|tocou|tocando|passa a mao|passou a mao) (n[ao]s? |em )?(minh[ao]s? |meus? |a |o )?(partes|nela|nele|crianca|menin|filh|sobrinh|net|entead)/,
+  /\b(mexe|mexeu|mexendo) com (a |o )?(crianca|menin|minha filha|meu filho|sobrinh|net|entead)/,
+  /\bameac\w* de morte\b/, /\b(vai|quer|ameaca|ameacou|prometeu|jurou|disse que vai) (me )?matar\b/, /\bmatar (a gente|nos|meus?|minhas?|os filhos|as criancas)\b/,
+  /\b(soco|socos|tapa|tapas|surra|surras|murro|murros|chute|chutes)\b/, /\bmedida protetiva\b/, /\bmaria da penha\b/, /\bcarcere privado\b/,
+  /\b(me|nos) (tranca|trancou|trancava)\b/, /\b(mantem|me deixa|deixa a gente) (presa|preso|presos|presas|trancad)/,
+  /\b(tenho|tem|sinto|tenha|temos) medo (dele|dela|do meu (marido|pai|padrasto|namorado|companheiro|ex|filho)|da minha (mae|madrasta|companheira|esposa)|de voltar (para|pra) casa)\b/
 ];
 const PADROES_CRIANCA = [/\b(crianca|criancas|filh[oa]s?|menin[oa]s?|sobrinh[oa]s?|net[oa]s?|bebe|menor de idade|adolescentes?|entead[oa]s?)\b/];
+// Quem escreve sobre violência e cita alguém da igreja (o pastor, o dirigente, um obreiro, o professor da EBD): o caso fica só com o nível geral — a pessoa citada pode ser
+// justamente quem receberia o aviso, leria o texto e poderia desmarcar o risco (revisão independente, 21/10/2026; o mesmo princípio da v7.8).
+const PADROES_LIDERANCA = [/\b(pastor|pastora|pr|dirigente|presbitero|diacono|diaconisa|evangelista|obreiro|obreira|missionari[oa]|lider|lideranca|professor|professora|tio da ebd|tia da ebd|secretari[oa] da igreja|tesoureir[oa])\b/];
 
-// { risco, autolesao, violencia, crianca } — `crianca` só vale junto com violência (é o que manda para a Proteção de crianças, v7.8).
+// { risco, autolesao, violencia, crianca, liderancaCitada } — `crianca` e `liderancaCitada` só valem junto com violência (a criança manda para a Proteção de crianças, v7.8; a
+// liderança citada deixa o caso só com o nível geral).
 function avaliarRisco(...textos) {
   const t = ` ${normalizar(textos.filter((x) => typeof x === "string").join(" "))} `;
   const autolesao = PADROES_AUTOLESAO.some((p) => p.test(t));
   const violencia = PADROES_VIOLENCIA.some((p) => p.test(t));
   const crianca = violencia && PADROES_CRIANCA.some((p) => p.test(t));
-  return { risco: autolesao || violencia, autolesao, violencia, crianca };
+  const liderancaCitada = violencia && PADROES_LIDERANCA.some((p) => p.test(t));
+  return { risco: autolesao || violencia, autolesao, violencia, crianca, liderancaCitada };
+}
+// O texto cita esta pessoa pelo nome? (o primeiro nome E mais uma parte do nome, cada uma com 3 letras ou mais: "o Jorge Souza" acusa; só "Jorge", não)
+function citaPeloNome(texto, nome) {
+  const palavras = new Set(normalizar(texto).split(" "));
+  const partes = normalizar(nome).split(" ").filter((p) => p.length >= 3 && !PARTICULAS.has(p));
+  return partes.length >= 2 && palavras.has(partes[0]) && partes.slice(1).some((p) => palavras.has(p));
 }
 
 // ---------------------------------------------------------------
@@ -404,6 +437,10 @@ function linhaDoBoletim({ categoria, paraQuem, congregacaoNome }) {
 // Cada parte com 3 letras ou mais conta ("Maria", "Souza"); "da", "de" e "dos" não, nem as palavras do nome da congregação (`congregacaoNome`), que a própria linha gerada
 // leva (a irmã "Maria Central" da Congregação Central: "central" não acusa, "maria" acusa).
 const PARTICULAS = new Set(["da", "de", "do", "das", "dos", "e"]);
+// As palavras de duas letras do português que não são nome (o "Zé" e a "Lu" acusam; o "da", o "em" e o "ao", não).
+const CURTAS_COMUNS = new Set(["da", "de", "do", "as", "os", "ao", "em", "na", "no", "um", "se", "ou", "eu", "me", "te", "ja", "so", "la", "ha", "lhe", "pr", "e", "a", "o"]);
+// Diagnóstico não vai ao boletim (a linha é lida em voz alta e impressa): a reescrita que traz um destes termos é recusada.
+const TERMOS_DE_SAUDE = /\b(cancer|tumor|metastase|quimio|hiv|aids|depressao|depressiv|ansiedade|psiquiatr|bipolar|esquizofren|autis|dependencia|alcoolism|drogas?|gravidez|gravida|aborto|infarto|avc|derrame|cirurgia (de|no|na) (seio|mama|utero|prostata)|uti|terminal)/;
 function validarTextoBoletim(texto, { nomes = [], congregacaoNome = "" } = {}) {
   const t = textoLivre(texto, { campo: "a linha do boletim", min: MIN_TEXTO_BOLETIM, max: MAX_BOLETIM, obrigatorio: true });
   if (t.mensagem) return { valido: false, mensagem: t.mensagem };
@@ -411,9 +448,10 @@ function validarTextoBoletim(texto, { nomes = [], congregacaoNome = "" } = {}) {
   const palavras = new Set(normalizar(t.texto).split(" ").filter((p) => !daCongregacao.has(p)));
   for (const nome of nomes) {
     for (const parte of normalizar(nome).split(" ")) {
-      if (parte.length >= 3 && !PARTICULAS.has(parte) && palavras.has(parte)) return { valido: false, mensagem: "A linha do boletim não pode ter o nome de quem pediu: o boletim é sem nome." };
+      if (parte.length >= 2 && !PARTICULAS.has(parte) && !CURTAS_COMUNS.has(parte) && palavras.has(parte)) return { valido: false, mensagem: "A linha do boletim não pode ter o nome de quem pediu: o boletim é sem nome." };
     }
   }
+  if (TERMOS_DE_SAUDE.test(` ${normalizar(t.texto)} `)) return { valido: false, mensagem: "A linha do boletim não leva diagnóstico nem detalhe de saúde: escreva só \"pela saúde\" (o texto do pedido fica com a liderança)." };
   return { valido: true, texto: t.texto };
 }
 
@@ -486,6 +524,9 @@ function podeEscreverNota(nivel, ctx) {
   return nivel === "EQUIPE" && !!ctx.responsavelAberto;
 }
 const notaPedeFator = (nivel) => nivel === "PASTORAL";
+// A correção nunca rebaixa o sigilo: a nota que corrige é do mesmo nível ou de um mais restrito que a corrigida (revisão independente, 21/10/2026).
+const ORDEM_SIGILO = { EQUIPE: 1, LIDERANCA: 2, PASTORAL: 3 };
+const podeCorrigir = (nivelNovo, nivelCorrigida) => !!ORDEM_SIGILO[nivelNovo] && !!ORDEM_SIGILO[nivelCorrigida] && ORDEM_SIGILO[nivelNovo] >= ORDEM_SIGILO[nivelCorrigida];
 
 // Quem pode ser nomeado responsável. `p`: { membroId, status, nascimento, congregacaoId } da pessoa indicada; `item`: { congregacaoId, membroId (acompanhado),
 // acompanhadoMenor }; `alcancaPorLideranca`: a pessoa tem liderança com a permissão que alcança a congregação; `bloqueioReservado`: pendência reservada à Diretoria (v7.8).
@@ -522,11 +563,17 @@ function textoDegrau({ congregacaoNome, para, diasVencido }) {
   return `Um acompanhamento pastoral${onde} passou do prazo${quando} e subiu para ${para === "GERAL" ? "o nível geral" : `a ${DEGRAUS[para] || "liderança"}`}. `
     + "Abra Cuidado pastoral → Fila: veja quem é o responsável e ajude ou troque o responsável.";
 }
+// O item que nasce sem quem o receba na congregação (não há Dirigente, ou a pessoa acompanhada É o Dirigente) sobe na hora para o degrau de cima.
+function textoSemResponsavel({ congregacaoNome, para }) {
+  const onde = limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : "";
+  return `Um acompanhamento pastoral novo${onde} não tem quem o receba na congregação e veio para ${para === "GERAL" ? "o nível geral" : `a ${DEGRAUS[para] || "liderança"}`}. `
+    + "Abra Cuidado pastoral → Fila (Sem responsável) e nomeie alguém.";
+}
 function textoModeracao({ quantos, congregacaoNome }) {
   return `${quantos} ${quantos === 1 ? "pedido de oração espera" : "pedidos de oração esperam"} moderação${limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : ""}. Abra Cuidado pastoral → Pedidos de oração.`;
 }
 function textoRisco({ congregacaoNome, crianca = false }) {
-  return `Chegou um pedido com SINAL DE RISCO${limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : ""}. Atenda agora: abra Cuidado pastoral → Pedidos de oração → Sinal de risco. `
+  return `Chegou um pedido com SINAL DE RISCO${limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : ""}. Atenda agora: abra Cuidado pastoral → Pedidos de oração → Sinal de risco (o acompanhamento urgente está na Fila → Urgentes). `
     + "Se a pessoa corre perigo agora: Polícia 190; CVV 188 (24 horas)."
     + (crianca ? " O pedido fala de criança ou adolescente junto com violência: registre também em Proteção de crianças (a lei manda comunicar ao Conselho Tutelar imediatamente)." : "");
 }
@@ -551,6 +598,6 @@ module.exports = {
   DETECCAO_BASE_DIAS, DETECCAO_MIN_BASE, DETECCAO_MIN_RECENTES, DETECCAO_MAX_POR_CONGREGACAO, DETECCAO_CARENCIA_DIAS, PARAMETROS, SIGLAS_PRAZO,
   prazosDoCuidado, prazoInicial, situacaoDoPrazo, proximoDegrau, decidirEscada, fimDoDiaBrasilia, diaBrasilia, primeiroNome, somarDiasIso,
   validarAbertura, validarContato, validarConclusao, validarCancelamento, validarAdiamento, validarNota, validarPedidoOracao, validarSolicitante, validarPedidoVisita,
-  normalizar, avaliarRisco, linhaDoBoletim, validarTextoBoletim, avaliarFrequencia, podeLerNota, podeEscreverNota, notaPedeFator, avaliarResponsavel,
-  textoAtribuido, textoResumo, textoDegrau, textoModeracao, textoRisco, textoAvisoRisco, referenciaDoDia
+  normalizar, avaliarRisco, citaPeloNome, podeCorrigir, prazoDoDegrau, linhaDoBoletim, validarTextoBoletim, avaliarFrequencia, podeLerNota, podeEscreverNota, notaPedeFator, avaliarResponsavel,
+  textoAtribuido, textoResumo, textoDegrau, textoSemResponsavel, textoModeracao, textoRisco, textoAvisoRisco, referenciaDoDia
 };

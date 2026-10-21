@@ -46,7 +46,8 @@ Cada versão parte da base da anterior (`BASE=...`):
 
 - **v7.11** (cuidado pastoral), base `cenario-pastoral` (`bash rodar.sh preparar-pastoral` a refaz a partir da `cenario-protecao`, aplicando a 148 duas vezes): `e2e-23` (migração 148:
   esquema, CHECK, gatilhos, a marca de purga das notas, permissão, papel, prazos, avisos, retenção; e o cenário com a Região, o Superintendente e 30 domingos de EBD), `e2e-24` (fluxos:
-  detecção, território, pessoa acompanhada, responsável por PIN, notas e leituras, pedidos, risco, escada, regra dos 30 dias, retenção, LGPD), `e2e-25` (segurança) e `e2e-26` (corridas).
+  detecção, território, pessoa acompanhada, responsável por PIN, notas e leituras, pedidos, risco, escada, regra dos 30 dias, retenção, LGPD), `e2e-25` (segurança), `e2e-26` (corridas) e `e2e-27` (o que a revisão adversarial
+  independente pediu: mudança de congregação, licença, Extensão, urgente, liderança citada, socorro que não se perde, fila com 410 itens, sonda do cadastro, anonimização).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

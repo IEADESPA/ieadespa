@@ -2868,8 +2868,8 @@ na Proteção de crianças (v7.8). A liderança pode **marcar** risco num pedido
 **Avisos.** *Você é o responsável* (na hora, a quem é nomeado por outra pessoa); *resumo do dia* (às 7h, a cada
 responsável com item novo, vencendo em 24 horas ou vencido); *subiu de degrau* (às 7h, a quem está no degrau novo);
 *pedidos esperando moderação* (às 7h, à liderança da congregação); *sinal de risco* (na hora, obrigatório, não se
-desliga). Nenhum leva nota nem texto de pedido; o do responsável leva o nome da pessoa acompanhada (ele precisa saber quem
-procurar) e o tipo.
+desliga). Nenhum leva nota nem texto de pedido; o do responsável leva o **primeiro** nome da pessoa acompanhada (ele precisa
+saber quem procurar) e nunca o tipo (ver as emendas).
 
 **Guarda e LGPD.** Os itens encerrados ficam 5 anos e depois perdem a identificação (nome, contato, motivo e observações
 do visitante e do membro; a contagem sobrevive); o pedido de oração perde o texto em 1 ano (5 anos se teve sinal de
@@ -2880,6 +2880,55 @@ códigos: nunca texto de nota, de pedido, nem a categoria de risco.
 **Fora desta versão (por decisão):** presença no culto por pessoa (é uma chamada nova na porta do templo; sem ela, o
 detector usa a EBD e as reuniões), integração com o mural de oração do site e lembrete de hora em hora (o prazo mais curto
 é de 24 horas para o risco, e esse aviso sai na hora).
+
+### Emendas ao contrato (21/10/2026) — depois da revisão adversarial independente do servidor
+
+Uma revisão independente (só leitura do código e reproduções no banco local) achou **2 críticos, 7 altos, 6 médios e 8
+baixos**. Tudo foi corrigido, com teste que falha no código de antes (jest e o roteiro `e2e-27` no SQL Server local). O
+que o contrato precisou mudar:
+
+- **A lista de risco pegava pouco (crítico).** Só a forma "me bate"; "ele bate em mim", "abusa da minha filha", "eu me
+  mato", "não quero viver", "quero sumir", "tomei veneno", "me deu um soco" passavam. A lista foi ampliada (verbos sem o
+  pronome, terceira pessoa, abuso de criança, envenenamento) e o teste traz as frases de um lado e de outro.
+- **O pedido de socorro nunca é recusado (crítico).** Com sinal de risco, o pedido passa do limite do dia e, se a pessoa
+  já tem um pedido de visita aberto, **esse** vira urgente (antes: "você já tem um pedido", e nenhum aviso). O pedido de
+  visita com risco também vai para a aba do risco (onde a liderança lê o texto e pode desmarcar o alarme falso).
+- **Violência que cita a liderança fica só com o nível geral.** Se o texto fala de violência e cita alguém da igreja (o
+  pastor, o dirigente, um obreiro, o professor da EBD) ou o nome de alguém da liderança do território, o caso nasce **no
+  nível geral, sem responsável**, o aviso vai só à Diretoria e quem foi citado pelo nome não recebe nada; o Dirigente e a
+  Área não veem o pedido nem o item.
+- **Desmarcar o risco e cancelar um acompanhamento urgente são da Área para cima** (dois olhares; o Dirigente pode ser o
+  citado). O urgente que sobe de degrau continua com 24 horas a cada degrau.
+- **Quem muda de congregação some da antiga na hora** (Regimento Art. 132 §1º, II): o item, as notas e os pedidos dele
+  deixam de aparecer para a congregação antiga no mesmo instante; na rotina da manhã o item aberto **passa** para a
+  congregação nova (o mesmo tipo e urgência, o Dirigente de lá como responsável, com aviso). Antes, a rotina só fechava o
+  item, e até lá o Dirigente antigo lia as notas que o novo escrevia.
+- **Licença não é saída.** A regra dos 30 dias vale só para quem foi **desligado do rol com data de saída** (carta,
+  abandono, desligamento); a licença de candidatura e outras situações não apagam notas nem encerram itens.
+- **O responsável voluntário só vê o item aberto**; o encerrado fica em Meu Painel só como lembrança (tipo, primeiro nome,
+  desfecho). O contato da pessoa só aparece com o item aberto.
+- **O item nunca fica sem quem receba.** Sem Dirigente, ou quando o Dirigente é a própria pessoa acompanhada, o item nasce
+  no degrau de cima que tem gente, que é avisado na hora.
+- **A fila é territorial de verdade.** O filtro do território vai **no banco**, antes do limite de 400 (antes, numa igreja
+  grande a fila do Dirigente podia vir vazia); a concessão de **Extensão** e a de **Departamento** não operam a fila (quem
+  cuida da Extensão é o Dirigente da congregação-mãe); o painel não conta o item sobre quem olha.
+- **Notas.** A correção nunca rebaixa o sigilo (a de "equipe" não corrige a "somente pastor") e não revela a nota que a
+  pessoa não lê; quem escreveu lê a própria nota **enquanto alcança a pessoa**; o nível geral vê **quem** leu qualquer nota
+  (sem ler o texto, se não for pastor); a nota sobre quem não é do cadastro sai 1 ano depois que o item encerra.
+- **Boletim.** Aprovar só o que espera moderação (o que já foi publicado pode ser **tirado** do boletim, não reescrito);
+  a linha recusa também nome de duas letras ("Zé"), nome partido por caractere invisível e diagnóstico ("câncer", "UTI").
+  Todo texto livre recusa caractere de controle ou invisível.
+- **Meus Dados e Meus pedidos** não mostram o texto do pedido que teve sinal de risco (num celular da família, "meu marido me
+  bate" reaparecendo é perigo; o texto sai pelo Encarregado) e contam só os acompanhamentos **já encerrados**.
+- **A sonda do cadastro foi fechada:** nomear como responsável alguém de fora do território responde sempre "Pessoa não
+  encontrada".
+- **Anonimização sem sobra:** some também quem criou o item (o próprio titular, no pedido dele) e quem agiu no histórico.
+- **Banco:** a marca de purga das notas é ligada, usada e desligada num **lote só** (com TRY/CATCH: nunca volta ao pool
+  ligada); uma rodada de purga por vez (a corrida no banco real dava deadlock); o item aberto é conferido antes de gravar,
+  com trava de faixa (não pelo erro do índice único dentro da transação); o vínculo pedido↔item é único só para o item
+  aberto; índices novos para a fila, o painel e a detecção no banco de 5 DTU; o lembrete no topo é limitado a 5 no banco.
+- **Texto do contrato corrigido:** o aviso "você é o responsável" leva o **primeiro nome** e nunca o tipo (pós-internação
+  diria a doença num e-mail); a auditoria tem o código do ato (marcado/desmarcado), nunca o tipo do risco.
 
 ## v7.12 — Comunicação: consentimento granular e envio segmentado *(7ª rodada)*
 

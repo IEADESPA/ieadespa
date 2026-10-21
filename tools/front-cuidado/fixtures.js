@@ -128,7 +128,8 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
   const novaNota = (o) => { const n = { NotaId: o.id || ++S.seq.nota, MembroId: o.membroId || null, ItemId: o.itemId || null, Nivel: o.nivel || "EQUIPE", Texto: o.texto, AutorMembroId: o.autor || 10, CriadaEm: new Date(S.agoraMs - (o.h || 5) * HORA), RetificaNotaId: o.retifica || null }; S.notas.push(n); return n; };
   const novoPedido = (o) => {
     const p = {
-      PedidoId: o.id || ++S.seq.pedido, CongregacaoId: o.congregacaoId || 1, SolicitanteMembroId: o.solicitante === undefined ? 60 : o.solicitante, RegistradoPorMembroId: o.registradoPor || o.solicitante || 60,
+      PedidoId: o.id || ++S.seq.pedido, CongregacaoId: o.origem === "SITE" ? null : (o.congregacaoId || 1), Origem: o.origem || "SISTEMA", SiteItemId: o.siteItemId || null,
+      SolicitanteMembroId: o.origem === "SITE" ? null : (o.solicitante === undefined ? 60 : o.solicitante), RegistradoPorMembroId: o.registradoPor || o.solicitante || 60,
       SolicitanteNome: o.solicitanteNome || null, SolicitanteContato: o.solicitanteContato || null, ParaQuem: o.paraQuem || "PROPRIO", Categoria: o.categoria || "SAUDE", Texto: o.texto,
       PodeBoletim: o.podeBoletim !== false, QuerContato: !!o.querContato, Moderacao: o.moderacao || "AGUARDANDO", TextoBoletim: o.textoBoletim || null, BoletimAte: o.boletimAte || null,
       ModeradoEm: o.moderacao && o.moderacao !== "AGUARDANDO" ? new Date(S.agoraMs - 2 * HORA) : null, ModeradoPorMembroId: o.moderacao && o.moderacao !== "AGUARDANDO" ? 10 : null,
@@ -324,7 +325,7 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
     if (t.includes("FROM NotasPastoraisLeituras l JOIN MembroReferencia m")) return S.leituras.filter(l => l.NotaId === Number(inp.n)).sort((a, b) => b.LeituraId - a.LeituraId).slice(0, 30).map(l => ({ LidaEm: l.LidaEm, Nome: nomeDe(l.MembroId) }));
     // ---------------- pedidos ----------------
     if (t.includes("FROM PedidosOracao WHERE SolicitanteMembroId = @m ORDER BY PedidoId DESC")) return S.pedidos.filter(p => p.SolicitanteMembroId === Number(inp.m)).sort((a, b) => b.PedidoId - a.PedidoId).slice(0, 50);
-    if (t.includes("SELECT TOP 300 * FROM (") && t.includes("FROM PedidosOracao p JOIN Congregacoes c")) {
+    if (t.includes("SELECT TOP 300 * FROM (") && t.includes("FROM PedidosOracao p LEFT JOIN Congregacoes c")) {
       let l = S.pedidos.map(linhaPedido).filter(p => !p.AnonimizadoEm);
       if (t.includes("p.Risco = 1")) l = l.filter(p => p.Risco);
       else if (t.includes("p.Moderacao = 'APROVADO' AND p.BoletimAte")) l = l.filter(p => p.Moderacao === "APROVADO" && p.BoletimAte && p.BoletimAte >= hojeSql());
@@ -336,7 +337,7 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
       const ids = idsDoIn(t, "p.CongregacaoId", inp);
       return l.filter(p => noIn(ids, p.CongregacaoId)).sort((a, b) => (Number(b.Risco) - Number(a.Risco)) || (b.PedidoId - a.PedidoId)).slice(0, 300);
     }
-    if (t.includes("FROM PedidosOracao p JOIN Congregacoes c") && t.includes("WHERE p.PedidoId = @id")) return S.pedidos.filter(p => p.PedidoId === Number(inp.id)).map(linhaPedido);
+    if (t.includes("FROM PedidosOracao p LEFT JOIN Congregacoes c") && t.includes("WHERE p.PedidoId = @id")) return S.pedidos.filter(p => p.PedidoId === Number(inp.id)).map(linhaPedido);
     if (t.includes("SELECT p.PedidoId, p.TextoBoletim, p.ModeradoEm, p.BoletimAte, p.Categoria, c.Nome AS CongregacaoNome")) {
       let l = S.pedidos.map(linhaPedido).filter(p => p.Moderacao === "APROVADO" && !p.Risco && p.BoletimAte && p.BoletimAte >= String(inp.hoje) && !p.AnonimizadoEm);
       if (t.includes("p.CongregacaoId = @c")) l = l.filter(p => p.CongregacaoId === Number(inp.c));
@@ -385,6 +386,9 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
     };
     if (p === "./escopo") return { ancestraisTerritoriais: async (pool_, sql_, nivel, id) => { const c = congDe(id) || {}; return { congregacaoId: Number(id), areaId: c.areaId || null, regiaoId: c.regiaoId || null, quadranteId: null, distritoId: null }; } };
     if (p === "./financeiroSeguro") return { obterTrava: async () => true };
+    // (v7.11.1) o nível geral do cuidado, para o que vem do mural do site
+    if (p === "./notificacoes") return { resolverDestinatariosPorPermissao: async () => S.lideranca.filter((l) => l.escopoTipo === "GLOBAL" && `,${l.permissoes},`.includes(",cuidado_pastoral,"))
+      .map((l) => { const m = S.membros.get(l.membroId); return { membroId: m.MembroId, nome: m.Nome, email: m.Email }; }) };
     if (p === "./ministerioMenores") return { temBloqueioReservado: () => false };
     if (p === "./ministerioMenoresDb") return { aptidaoDe: async () => ({ bloqueios: [] }) };
     throw new Error(`a camada de banco pediu um módulo que a imitação não tem: ${p}`);

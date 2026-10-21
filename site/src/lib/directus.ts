@@ -95,6 +95,9 @@ export const CONSULTAR_PEDIDOS_CAMISETA_URL = "/api/consultar-pedidos-camiseta";
  */
 export const ORAR_MURAL_URL = "/api/orar-mural";
 
+/** v7.11.1 — envio do pedido do mural (Function do site; avisa o cuidado pastoral do sistema e confere o sinal de risco). */
+export const ENVIAR_PEDIDO_MURAL_URL = "/api/enviar-pedido-mural";
+
 /**
  * Cria o pedido público de camiseta inteiro (pedido + itens + respostas),
  * atribuindo-o automaticamente ao lote aberto da campanha (ver

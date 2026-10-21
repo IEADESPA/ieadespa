@@ -1115,6 +1115,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // no boletim (para tirar) e um caso "só nível geral" (cita a liderança)
     const pBol = srv.novoPedido({ solicitante: 31, texto: "PEDIDO-NO-BOLETIM", moderacao: "APROVADO", textoBoletim: "Alguém da Congregação Central pede oração pela família.", boletimAte: somarDias(hojeBr(), 5) });
     srv.novoPedido({ solicitante: 50, texto: "PEDIDO-SO-GERAL: o pastor me bate", risco: true, soNivelGeral: true });
+    // (v7.11.1) um pedido confidencial que veio do mural do SITE: sem congregação, só do nível geral, fora do boletim
+    srv.novoPedido({ origem: "SITE", texto: "PEDIDO-DO-SITE confidencial", podeBoletim: false, soNivelGeral: true, solicitanteNome: "Anônima do site", siteItemId: 77 });
     const itGeral = srv.novoItem({ tipo: "PEDIDO_ORACAO", membroId: 50, origem: "PEDIDO_ORACAO", urgente: true, soNivelGeral: true, responsavel: null, nivel: "GERAL", prazoH: 20 });
     const env = novo(srv);
     await abrirAba(env);
@@ -1163,6 +1165,12 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const cgp = desc(envG, envG.e("cpaPedLista")).find(x => x.localName === "div" && x.className.includes("cpa-pedido") && x.textContent.includes("PEDIDO-SO-GERAL"));
     confere(!!cgp && cgp.textContent.includes("Só o nível geral (cita a liderança)"), "o pedido 'só nível geral' traz o selo para o nível geral");
     confere(itGeral.SoNivelGeral, "(o item 'só nível geral' existe)");
+    // o pedido do mural do site, na aba "aguardando" do nível geral: o selo do site, nenhum "Abrir acompanhamento" (não há congregação nem contato) nem "Publicar no boletim"
+    await clicar(envG, envG.e("btnCpaPedAguardando"));
+    const cs = desc(envG, envG.e("cpaPedLista")).find(x => x.localName === "div" && x.className.includes("cpa-pedido") && x.textContent.includes("PEDIDO-DO-SITE"));
+    confere(!!cs && cs.textContent.includes("Veio do mural de oração do site") && cs.textContent.includes("Mural de oração do site"), "(v7.11.1) o pedido do site aparece para o nível geral com o selo do site");
+    confere(!!cs && !botao(envG, "📂 Abrir acompanhamento", cs) && !botao(envG, "📖 Publicar no boletim", cs) && !!botao(envG, "✔️ Marcar como lido", cs), "(v7.11.1) o pedido do site não oferece acompanhamento nem boletim; só marcar como lido");
+    confere(!cs || !cs.textContent.includes("Só o nível geral (cita a liderança)"), "(v7.11.1) o pedido do site não leva o selo de 'cita a liderança'");
     // Meu Painel: o pedido que teve risco volta com o texto guardado, tal como o servidor manda; caractere invisível é recusado
     const envM = novo(srv);
     await abrirMeu(envM, "pin50", 50);

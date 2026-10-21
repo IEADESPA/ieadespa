@@ -671,6 +671,16 @@ async function gravarPedidoOracao(pool, { d, quem, agora = new Date(), item: com
   try {
     await transaction.begin();
     if (!(await obterTrava(() => new sql.Request(transaction), `cuidado-pedido-${quem.registradoPor}`, 8000))) { await fecharTransacao(transaction, false); return { sucesso: false, mudou: true, mensagem: "Tente de novo em instantes.", ajuda: cp.CONTATOS_DE_AJUDA }; }
+    // o mesmo texto da mesma pessoa em 10 minutos é o MESMO pedido (o celular que perdeu a resposta e mandou de novo): devolve o que já chegou, sem item nem aviso novos
+    // (revisão da tela: o reenvio depois do tempo esgotado criava outro acompanhamento urgente e outro alerta a todo o território)
+    const repetido = (await new sql.Request(transaction).input("r", sql.Int, quem.registradoPor).input("t", sql.NVarChar(1000), d.texto)
+      .query(`SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE RegistradoPorMembroId = @r AND Texto = @t AND CriadoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY PedidoId DESC`)).recordset[0];
+    if (repetido) {
+      await fecharTransacao(transaction, false);
+      return { sucesso: true, repetido: true, pedidoId: repetido.PedidoId, risco: !!repetido.Risco, ...(repetido.Risco ? { ajuda: cp.CONTATOS_DE_AJUDA } : {}),
+        mensagem: repetido.Risco ? "Este pedido já tinha chegado e a liderança já está cuidando dele. Se você está em perigo agora, ligue 190. Se está sofrendo, o CVV atende de graça, 24 horas, no 188."
+          : "Este pedido já tinha chegado: não foi preciso enviar de novo." };
+    }
     if (!risco.risco) {
       const n = (await new sql.Request(transaction).input("r", sql.Int, quem.registradoPor).query(`SELECT COUNT(*) AS n FROM PedidosOracao WHERE RegistradoPorMembroId = @r AND CriadoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0];
       if (Number(n.n) >= cp.LIMITE_PEDIDOS_ORACAO_DIA) { await fecharTransacao(transaction, false); return { sucesso: false, limite: true, mensagem: `Limite de ${cp.LIMITE_PEDIDOS_ORACAO_DIA} pedidos em 24 horas. Se for urgente, ligue para o Dirigente ou o pastor.`, ajuda: cp.CONTATOS_DE_AJUDA }; }

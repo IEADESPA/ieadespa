@@ -3,7 +3,7 @@
 const L = require("./lib");
 const { chamar, GERAL, LIDER, PIN, API, path, obterPool } = L;
 const spec = JSON.parse(process.argv[2]);
-const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js" };
+const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js", cuidado: "GestaoCuidadoPastoral/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();

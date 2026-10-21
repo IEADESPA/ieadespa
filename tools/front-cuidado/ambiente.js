@@ -111,6 +111,11 @@ function criarAmbiente({ mutar = {}, agora = new Date().toISOString(), semModulo
   // ---- impressão observável ----
   const impressoes = [];
   ctx.print = () => { impressoes.push({ classeImprimindo: doc.body.classList.contains("cpa-imprimindo"), conteudo: (doc.getElementById("cpaBolImprimivel") || { textContent: "" }).textContent }); };
+  // ---- eventos da janela (pagehide, afterprint...): anotados e disparados pelo roteiro ----
+  const ouvintesJanela = {};
+  ctx.addEventListener = (tipo, fn) => { (ouvintesJanela[tipo] = ouvintesJanela[tipo] || []).push(fn); };
+  ctx.removeEventListener = (tipo, fn) => { ouvintesJanela[tipo] = (ouvintesJanela[tipo] || []).filter(x => x !== fn); };
+  const dispararJanela = (tipo) => { (ouvintesJanela[tipo] || []).forEach(fn => fn({ type: tipo })); };
   ctx.__xss = function (c) { ctx.__xss.chamadas.push(String(c)); };
   ctx.__xss.chamadas = [];
   doc._executar = (codigo) => { try { vm.runInContext(codigo, contexto); } catch (e) { /* o ataque pode falhar; só importa se rodou */ } };
@@ -131,7 +136,7 @@ function carregarPainelInicial() { window.__painelInicial = (window.__painelInic
   // do script.js: o que o módulo usa, a navegação entre abas/módulos/sub-abas e a limpeza da sessão
   ev(aplicarMutacoes("script.js", extrair("script.js", [
     "mostrarToast", "fecharModal", "confirmarAcao", "escaparHtmlEbd", "argsAttr", "urlSegura", "formatarDataEbd", "mensagemPadraoDaRecusa", "fetchProtegido", "sessaoDeLiderancaNaTela",
-    "limparSessao", "NOMES_ABAS", "ABA_PERMISSOES_ALT", "permissoesDaAba", "ABAS_SO_DO_GERAL", "temPermissaoDaAba", "MODULOS", "podeAcessarAba", "podeAcessarModulo", "entrarModulo", "sairDoModulo",
+    "limparSessao", "esconderTodasAsTelas", "voltarParaCheckin", "NOMES_ABAS", "ABA_PERMISSOES_ALT", "permissoesDaAba", "ABAS_SO_DO_GERAL", "temPermissaoDaAba", "MODULOS", "podeAcessarAba", "podeAcessarModulo", "entrarModulo", "sairDoModulo",
     "SUB_ABAS_MEUPAINEL", "TITULOS_SUB_MEUPAINEL", "mostrarSubAbaMeupainel", "AJUDA_POR_ABA", "chaveAjudaAtual", "moduloAtual", "subAbaMeupainelAtual", "aplicarPermissoesNoMenu", "montarGradeModulos"
   ])), "script.js(extraido)");
   ev(extrair("modulos/calendario.js", ["calIso", "calSomarDias", "calHojeBrasilia", "calParaInstante", "calData", "calDataHora"]), "calendario.js(extraido)");
@@ -160,7 +165,7 @@ function carregarPainelInicial() { window.__painelInicial = (window.__painelInic
   };
   const limparRegistro = () => { api.chamadas.length = 0; e("toastContainer").innerHTML = ""; ctx.__xss.chamadas.length = 0; doc._ataques.length = 0; };
   const foco = () => doc.activeElement;
-  return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, responderModal, limparRegistro, errosDaPagina, resposta, intervalos, temporizadores, dispararTemporizador, gravacoes, impressoes, foco, consoleDaTela };
+  return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, responderModal, limparRegistro, errosDaPagina, resposta, intervalos, temporizadores, dispararTemporizador, gravacoes, impressoes, foco, consoleDaTela, dispararJanela };
 }
 
 module.exports = { criarAmbiente, extrair, lerApp };

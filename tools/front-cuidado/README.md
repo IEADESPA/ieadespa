@@ -40,3 +40,8 @@ celular e da impressão.
 
 Resultado de 21/10/2026: roteiro 582 verificações, 0 falhas. A prova em navegador (Edge, 390 e
 1280 px) e a prova de mutação não foram feitas nesta rodada.
+
+Revisão independente da tela (21/10/2026, 12 itens): o cenário "Revisão da tela" e os ajustes nos
+cenários de pedidos, prazo de 20 s e revisão do servidor trazem uma verificação por item que
+falhava no código de antes (conferido rodando o roteiro novo contra o módulo, o `style.css` e o
+`script.js` de antes: 44 falhas) e passa no de agora: roteiro 657 verificações, 0 falhas.

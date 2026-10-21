@@ -401,12 +401,14 @@ function linhaDoBoletim({ categoria, paraQuem, congregacaoNome }) {
 }
 
 // O moderador pode reescrever a linha, mas a reescrita não pode trazer o nome de quem pediu nem de quem o pedido cita (`nomes`: os nomes completos conhecidos).
-// Cada parte com 3 letras ou mais conta ("Maria", "Souza"); "da", "de" e "dos" não.
+// Cada parte com 3 letras ou mais conta ("Maria", "Souza"); "da", "de" e "dos" não, nem as palavras do nome da congregação (`congregacaoNome`), que a própria linha gerada
+// leva (a irmã "Maria Central" da Congregação Central: "central" não acusa, "maria" acusa).
 const PARTICULAS = new Set(["da", "de", "do", "das", "dos", "e"]);
-function validarTextoBoletim(texto, { nomes = [] } = {}) {
+function validarTextoBoletim(texto, { nomes = [], congregacaoNome = "" } = {}) {
   const t = textoLivre(texto, { campo: "a linha do boletim", min: MIN_TEXTO_BOLETIM, max: MAX_BOLETIM, obrigatorio: true });
   if (t.mensagem) return { valido: false, mensagem: t.mensagem };
-  const palavras = new Set(normalizar(t.texto).split(" "));
+  const daCongregacao = new Set(normalizar(congregacaoNome).split(" "));
+  const palavras = new Set(normalizar(t.texto).split(" ").filter((p) => !daCongregacao.has(p)));
   for (const nome of nomes) {
     for (const parte of normalizar(nome).split(" ")) {
       if (parte.length >= 3 && !PARTICULAS.has(parte) && palavras.has(parte)) return { valido: false, mensagem: "A linha do boletim não pode ter o nome de quem pediu: o boletim é sem nome." };

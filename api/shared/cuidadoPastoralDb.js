@@ -708,7 +708,7 @@ async function moderar(pool, { pedidoId, dados, ver, agora = new Date() }) {
     if (!p.PodeBoletim) return { sucesso: false, mensagem: "Quem pediu escolheu \"só para a liderança\": este pedido não vai ao boletim." };
     const escrito = dados.textoBoletim == null || dados.textoBoletim === "" ? cp.linhaDoBoletim({ categoria: p.Categoria, paraQuem: p.ParaQuem, congregacaoNome: p.CongregacaoNome }) : dados.textoBoletim;
     const nomes = [p.SolicitanteNome, p.RegistradoPorNome].filter(Boolean);
-    const v = cp.validarTextoBoletim(escrito, { nomes });
+    const v = cp.validarTextoBoletim(escrito, { nomes, congregacaoNome: p.CongregacaoNome });
     if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
     textoBoletim = v.texto;
     boletimAte = cp.somarDiasIso(hojeBrasilia(agora), cp.BOLETIM_DIAS);
@@ -1051,15 +1051,19 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
 
 // Um resumo por responsável, por dia, quando há item novo (das últimas 26 horas), vencendo em 24 horas ou vencido.
 async function detectarResumoDiario(pool, { agora = new Date() } = {}) {
+  // (o SQL Server não soma um EXISTS: a marca "novo" de cada item é calculada antes, numa tabela derivada)
   const r = await pool.request().query(`
-    SELECT i.ResponsavelMembroId AS membroId, m.Nome AS nome, m.Email AS email, COUNT(*) AS abertos,
-      SUM(CASE WHEN EXISTS (SELECT 1 FROM CuidadoEventos e WHERE e.ItemId = i.ItemId AND e.Tipo IN ('CRIADO', 'ATRIBUIDO') AND e.Em >= DATEADD(HOUR, -26, SYSUTCDATETIME())
-                               AND (e.Tipo = 'CRIADO' OR e.ResponsavelMembroId = i.ResponsavelMembroId)) THEN 1 ELSE 0 END) AS novos,
-      SUM(CASE WHEN i.PrazoEm >= SYSUTCDATETIME() AND i.PrazoEm < DATEADD(HOUR, 24, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS vencendo,
-      SUM(CASE WHEN i.PrazoEm < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS vencidos
-    FROM CuidadoItens i JOIN MembroReferencia m ON m.MembroId = i.ResponsavelMembroId
-    WHERE i.Status = 'ABERTO' AND m.Status = 'ATIVO' AND (i.MembroId IS NULL OR i.MembroId <> i.ResponsavelMembroId)
-    GROUP BY i.ResponsavelMembroId, m.Nome, m.Email`);
+    SELECT x.ResponsavelMembroId AS membroId, m.Nome AS nome, m.Email AS email, COUNT(*) AS abertos, SUM(x.Novo) AS novos,
+      SUM(CASE WHEN x.PrazoEm >= SYSUTCDATETIME() AND x.PrazoEm < DATEADD(HOUR, 24, SYSUTCDATETIME()) THEN 1 ELSE 0 END) AS vencendo,
+      SUM(CASE WHEN x.PrazoEm < SYSUTCDATETIME() THEN 1 ELSE 0 END) AS vencidos
+    FROM (
+      SELECT i.ItemId, i.ResponsavelMembroId, i.PrazoEm,
+        CASE WHEN EXISTS (SELECT 1 FROM CuidadoEventos e WHERE e.ItemId = i.ItemId AND e.Tipo IN ('CRIADO', 'ATRIBUIDO') AND e.Em >= DATEADD(HOUR, -26, SYSUTCDATETIME())
+                          AND (e.Tipo = 'CRIADO' OR e.ResponsavelMembroId = i.ResponsavelMembroId)) THEN 1 ELSE 0 END AS Novo
+      FROM CuidadoItens i WHERE i.Status = 'ABERTO' AND i.ResponsavelMembroId IS NOT NULL AND (i.MembroId IS NULL OR i.MembroId <> i.ResponsavelMembroId)
+    ) x JOIN MembroReferencia m ON m.MembroId = x.ResponsavelMembroId
+    WHERE m.Status = 'ATIVO'
+    GROUP BY x.ResponsavelMembroId, m.Nome, m.Email`);
   const ref = cp.referenciaDoDia(hojeBrasilia(agora));
   return r.recordset.filter((l) => Number(l.novos) + Number(l.vencendo) + Number(l.vencidos) > 0).map((l) => ({
     referenciaId: ref, destinatarios: [destinatarioDe(l)],

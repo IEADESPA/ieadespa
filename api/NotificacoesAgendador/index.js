@@ -30,6 +30,16 @@ module.exports = async function (context, req) {
     context.log.error("[MENORES] falha na retirada automática da escala:", e.message);
     retiradaFalhou = true;
   }
+  // v7.11 — cuidado pastoral, também ANTES dos avisos: encerra o item de quem saiu, detecta quem se afastou do próprio costume, sobe a escada dos itens vencidos (os avisos de
+  // "subiu para você" saem nesta mesma rodada), apaga as notas de quem saiu há mais de 30 dias (Regimento Art. 132 §2º, II) e aplica a retenção. Cada passo é fail-soft.
+  let cuidado = null;
+  try {
+    cuidado = await require("../shared/cuidadoPastoralDb").rotinaDiaria(pool);
+    context.log(`[CUIDADO] rotina: ${JSON.stringify({ ...cuidado, falhas: undefined })}${cuidado.falhas.length ? ` — FALHOU: ${cuidado.falhas.join(", ")}` : ""}`);
+  } catch (e) {
+    context.log.error("[CUIDADO] falha na rotina diária:", e.message);
+    cuidado = { falhas: ["rotina"] };
+  }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
   // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
   try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
@@ -82,10 +92,12 @@ module.exports = async function (context, req) {
   }
   // A rotina é fail-soft de propósito (uma falha não derruba as outras), mas a retirada que protege criança e os detectores do ministério com menores NÃO podem falhar em silêncio:
   // aí a resposta é 500, o job do GitHub fica vermelho e o aviso de "rotina falhou" sai. (Tudo o mais já rodou: a resposta vem no fim.)
+  // (v7.11) O mesmo para o cuidado pastoral: a escada do prazo vencido e a regra dos 30 dias das notas não podem parar sem ninguém saber.
   const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_") || String(k).startsWith("PROTECAO_") || String(k).startsWith("CHECKIN_") || String(k).startsWith("EBD_PROFESSOR"));
+  const falhaCuidado = (cuidado && cuidado.falhas.length > 0) || falhas.some((k) => String(k).startsWith("CUIDADO_"));
   context.res = {
-    status: falhaMenores ? 500 : 200,
+    status: falhaMenores || falhaCuidado ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, detectoresComFalha: falhas },
   };
 };

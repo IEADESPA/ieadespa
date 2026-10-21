@@ -92,7 +92,7 @@ async function principal(context, req) {
     if (metodo === "GET") {
       if (acao === "catalogos") {
         context.res = { status: 200, body: {
-          sucesso: true, papeis: { gestao, geral },
+          sucesso: true, papeis: { gestao, geral, acima },
           tipos: Object.entries(cp.TIPOS).map(([codigo, t]) => ({ codigo, rotulo: t.rotulo, descricao: t.descricao, manual: cp.TIPOS_ABERTURA_MANUAL.includes(codigo), soMembro: cp.TIPOS_SO_MEMBRO.includes(codigo) })),
           formas: lista(cp.FORMAS_CONTATO), formasPresenciais: cp.FORMAS_PRESENCIAIS, desfechosConclusao: lista(cp.DESFECHOS_CONCLUSAO), desfechosCancelamento: lista(cp.DESFECHOS_CANCELAMENTO),
           niveisNota: lista(cp.NIVEIS_NOTA), categorias: lista(cp.CATEGORIAS_ORACAO), paraQuem: lista(cp.PARA_QUEM), degraus: lista(cp.DEGRAUS), contatosDeAjuda: cp.CONTATOS_DE_AJUDA,

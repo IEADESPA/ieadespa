@@ -151,6 +151,7 @@
             <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
             <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -230,6 +231,8 @@
             </div>
             <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
             <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
+            <!-- v7.11 — Cuidado pastoral: fila com responsável, prazo e escada; pedidos de oração com moderação e sinal de risco; boletim e painel. Permissão própria "cuidado_pastoral". -->
+            <button class="btn-aba" id="btnAbaCuidadopastoral" data-on-click="mostrarAbaSecretaria" data-args-click='["cuidadopastoral"]'><span class="icone">💛</span><span class="rotulo">Cuidado Pastoral</span></button>
           </div>
 
           <!-- MÓDULO: ESTRUTURA & TERRITÓRIOS (candidato natural a fatiar
@@ -1021,6 +1024,66 @@
             <div id="chkFilhosLista"></div>
           </div>
           <div id="chkSalaMeu"></div>
+        </div>
+
+        <!-- SUB-ABA: CUIDADO (v7.11 — Cuidado pastoral). Aberta a qualquer login (inclusive PIN): "Meus acompanhamentos" (só para quem foi nomeado responsável: contato, motivo,
+             registrar contato, concluir e nota de equipe), "Pedir oração", "Pedir visita", "Meus pedidos" e o boletim de oração da própria congregação. Os telefones de ajuda ficam
+             sempre à vista. Toda regra mora no servidor (shared/cuidadoPastoral.js); a tela é montada por cuidado-pastoral.js. -->
+        <div id="subMeupainelCuidado" class="sub-aba-secretaria" style="display:none;">
+          <h3>💛 Cuidado</h3>
+          <p class="subtitle">Aqui você <strong>pede oração</strong> ou uma <strong>visita</strong> da liderança da sua congregação e acompanha os seus pedidos. Se a liderança nomeou você para
+            acompanhar alguém, os <strong>seus acompanhamentos</strong> aparecem aqui também.
+            <em>Exemplo: a irmã Ana está com a mãe internada. Ela pede oração pela saúde, marca "só para a liderança" e "quero que alguém fale comigo": o Dirigente recebe o pedido e liga para ela.</em></p>
+          <p id="cpaMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarMeuPainelAcao">🔄 Atualizar</button></div>
+
+          <div id="cpaMeusCx" style="display:none;">
+            <h4 id="cpaMeusTitulo" tabindex="-1">🤝 Meus acompanhamentos</h4>
+            <p class="subtitle">A liderança nomeou você para procurar estas pessoas. Ligue, visite (sempre com mais alguém) e registre o que foi feito. As notas restritas ficam só com a liderança.</p>
+            <div id="cpaMeusListaCx">
+              <div id="cpaMeusLista"></div>
+            </div>
+            <div id="cpaDetalheMeuCx" style="display:none;">
+              <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaFecharDetalheAcao" data-args-click='["Meu"]'>← Voltar aos meus acompanhamentos</button></div>
+              <p id="cpaDetalheMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+              <div id="cpaDetalheMeu"></div>
+            </div>
+            <hr />
+          </div>
+
+          <h4>🙏 Pedir oração</h4>
+          <p class="subtitle">O pedido vai para a liderança da sua congregação. <strong>Nada vai ao boletim de oração sem a liderança ler antes</strong>, e o boletim nunca leva o seu nome nem o que você escreveu.</p>
+          <div id="cpaOracaoForm"></div>
+          <div id="cpaOracaoResultado" class="cpa-resultado" tabindex="-1"></div>
+          <div id="cpaAjudaFixa" class="cpa-ajuda-fixa">
+            <div class="cpa-ajuda" role="group" aria-label="Telefones de ajuda">
+              <p class="cpa-ajuda-titulo"><strong>Precisa de ajuda agora?</strong> Estes telefones atendem de graça:</p>
+              <ul class="cpa-contatos-lista">
+                <li><a class="cpa-tel" href="tel:188">📞 <strong>188</strong> CVV — Centro de Valorização da Vida</a><span class="cpa-tel-desc">De graça, 24 horas, todos os dias. Para quem está sofrendo ou pensando em tirar a própria vida.</span></li>
+                <li><a class="cpa-tel" href="tel:190">📞 <strong>190</strong> Polícia</a><span class="cpa-tel-desc">Se existe perigo agora.</span></li>
+                <li><a class="cpa-tel" href="tel:180">📞 <strong>180</strong> Central de Atendimento à Mulher</a><span class="cpa-tel-desc">De graça, 24 horas. Para a mulher que sofre violência.</span></li>
+                <li><a class="cpa-tel" href="tel:100">📞 <strong>100</strong> Disque 100</a><span class="cpa-tel-desc">De graça, 24 horas. Violência contra criança, adolescente, idoso ou pessoa com deficiência.</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <hr />
+          <h4>🏠 Pedir visita</h4>
+          <p class="subtitle">Para você mesmo(a): a liderança combina o dia com você. <em>Exemplo: o irmão João saiu do hospital ontem; ele marca "estive internado" e deixa o melhor horário para a visita.</em></p>
+          <div id="cpaVisitaForm"></div>
+          <div id="cpaVisitaResultado" class="cpa-resultado" tabindex="-1"></div>
+
+          <hr />
+          <h4>📋 Meus pedidos</h4>
+          <p class="subtitle">Só os pedidos que você mesmo(a) fez, com a situação de cada um.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarMeusPedidosAcao">🔄 Atualizar meus pedidos</button></div>
+          <p id="cpaMeusPedidosMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="cpaMeusPedidos"></div>
+
+          <hr />
+          <h4>📖 Boletim de oração da minha congregação</h4>
+          <p class="subtitle">Pedidos sem nome que a liderança aprovou. Ore junto!</p>
+          <div id="cpaBoletimMeu"></div>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -3587,6 +3650,101 @@
           </div>
           <p id="chkFichaMsg" class="subtitle" role="status" aria-live="polite"></p>
           <div id="chkFichaCx"></div>
+        </div>
+      </div>
+
+      <!-- ABA: CUIDADO PASTORAL (v7.11 — filas com responsável, prazo e sigilo; Regimento Art. 128 §5º, II, b; Art. 85 §3º, I; Art. 132). Permissão "cuidado_pastoral" (sessão de
+           liderança; o Dirigente vê a congregação, o Pastor de Área a área, o Superintendente a região, o nível geral tudo). Fila (detalhe, contato, troca de responsável, adiar, concluir,
+           cancelar e notas pastorais), pedidos de oração (moderação e sinal de risco), boletim de oração (sem nome) e painel. Tudo é montado por cuidado-pastoral.js. -->
+      <div id="abaCuidadopastoral" class="aba-secretaria" style="display:none;">
+        <h3>💛 Cuidado pastoral</h3>
+        <p class="subtitle">Cada pessoa que precisa de alguém da igreja ganha um <strong>responsável</strong> e um <strong>prazo</strong>. Se o prazo vence, o acompanhamento <strong>sobe um degrau</strong>
+          (Congregação → Área → Região → nível geral) para chamar ajuda, sem tirar de quem já cuida. <em>Exemplo: uma visitante veio no domingo. O Dirigente abre "Visitante", nomeia a irmã Rute e
+          ela tem 48 horas para ligar (Regimento Art. 128 §5º). Ela liga, registra o contato e conclui como "Integrado".</em></p>
+        <div class="cal-pilulas cpa-pilulas" id="cpaPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnCpaSecaoFila" aria-pressed="true" data-on-click="cpaMostrarSecaoAcao" data-args-click='["fila"]'>📋 Fila</button>
+          <button type="button" class="cal-pilula" id="btnCpaSecaoPedidos" aria-pressed="false" data-on-click="cpaMostrarSecaoAcao" data-args-click='["pedidos"]'>🙏 Pedidos de oração</button>
+          <button type="button" class="cal-pilula" id="btnCpaSecaoBoletim" aria-pressed="false" data-on-click="cpaMostrarSecaoAcao" data-args-click='["boletim"]'>📖 Boletim de oração</button>
+          <button type="button" class="cal-pilula" id="btnCpaSecaoPainel" aria-pressed="false" data-on-click="cpaMostrarSecaoAcao" data-args-click='["painel"]'>📊 Painel</button>
+        </div>
+        <p id="cpaGesMsg" class="subtitle" role="status" aria-live="polite"></p>
+        <p id="cpaSemAcesso" class="subtitle psc-aviso" role="status" style="display:none;">Com o seu login atual você não tem acesso ao cuidado pastoral. Entre com a senha de liderança ou fale com quem administra as Permissões.</p>
+
+        <!-- a) FILA -->
+        <div id="cpaSecaoFila" class="cal-secao">
+          <div id="cpaFilaCx">
+            <h4 id="cpaFilaTitulo" tabindex="-1">📋 Fila de acompanhamento</h4>
+            <div class="barra-lista cpa-barra">
+              <label for="cpaFiltroSituacao">Mostrar</label>
+              <select id="cpaFiltroSituacao" data-on-change="cpaCarregarFilaAcao">
+                <option value="ABERTOS">Abertos</option>
+                <option value="VENCIDOS">Vencidos</option>
+                <option value="SEM_RESPONSAVEL">Sem responsável</option>
+                <option value="URGENTES">Urgentes</option>
+                <option value="ENCERRADOS">Encerrados (90 dias)</option>
+              </select>
+              <label for="cpaFiltroCong">Congregação</label>
+              <select id="cpaFiltroCong" data-on-change="cpaCarregarFilaAcao"></select>
+              <label for="cpaFiltroTipo">Tipo</label>
+              <select id="cpaFiltroTipo" data-on-change="cpaCarregarFilaAcao"></select>
+              <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarFilaAcao">🔄 Atualizar</button>
+              <button type="button" class="btn-confirmar cpa-btn" data-on-click="cpaAbrirFormNovoAcao" data-args-click='[{"$":"this"}]'>➕ Abrir acompanhamento</button>
+            </div>
+            <div id="cpaNovoCx"></div>
+            <p id="cpaFilaMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="cpaFilaLista"></div>
+          </div>
+          <div id="cpaDetalheGesCx" style="display:none;">
+            <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaFecharDetalheAcao" data-args-click='["Ges"]'>← Voltar à fila</button></div>
+            <p id="cpaDetalheGesMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="cpaDetalheGes"></div>
+          </div>
+        </div>
+
+        <!-- b) PEDIDOS DE ORAÇÃO -->
+        <div id="cpaSecaoPedidos" class="cal-secao" style="display:none;">
+          <h4>🙏 Pedidos de oração</h4>
+          <p class="subtitle"><strong>Nada vai ao boletim sem moderação</strong>, e o boletim nunca leva o texto do pedido: só uma linha sem nome. O pedido com <strong>sinal de risco</strong> (fala de
+            autolesão ou de violência) não entra na moderação comum: vira acompanhamento urgente e a liderança é avisada na hora. Atenda esses primeiro.</p>
+          <div class="cal-pilulas cpa-pilulas" id="cpaPedPilulas">
+            <button type="button" class="cal-pilula ativo" id="btnCpaPedAguardando" aria-pressed="true" data-on-click="cpaMostrarPedidosAcao" data-args-click='["AGUARDANDO"]'>⏳ Esperando moderação</button>
+            <button type="button" class="cal-pilula" id="btnCpaPedRisco" aria-pressed="false" data-on-click="cpaMostrarPedidosAcao" data-args-click='["RISCO"]'>🚨 Sinal de risco</button>
+            <button type="button" class="cal-pilula" id="btnCpaPedAprovados" aria-pressed="false" data-on-click="cpaMostrarPedidosAcao" data-args-click='["APROVADOS"]'>📖 No boletim</button>
+            <button type="button" class="cal-pilula" id="btnCpaPedTodos" aria-pressed="false" data-on-click="cpaMostrarPedidosAcao" data-args-click='["TODOS"]'>🗂️ Todos (90 dias)</button>
+          </div>
+          <div class="barra-lista cpa-barra">
+            <label for="cpaPedCong">Congregação</label>
+            <select id="cpaPedCong" data-on-change="cpaCarregarPedidosAcao"></select>
+            <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarPedidosAcao">🔄 Atualizar</button>
+            <button type="button" class="btn-confirmar cpa-btn" data-on-click="cpaAbrirFormRegistrarPedidoAcao" data-args-click='[{"$":"this"}]'>✍️ Registrar pedido recebido em mãos</button>
+          </div>
+          <div id="cpaRegPedCx"></div>
+          <p id="cpaPedMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="cpaPedLista"></div>
+        </div>
+
+        <!-- c) BOLETIM DE ORAÇÃO -->
+        <div id="cpaSecaoBoletim" class="cal-secao" style="display:none;">
+          <h4>📖 Boletim de oração</h4>
+          <p class="subtitle">Só as linhas aprovadas, <strong>sem nome</strong> e sem o texto dos pedidos. Imprima para o culto ou para o círculo de oração.</p>
+          <div class="barra-lista cpa-barra">
+            <label for="cpaBolCong">Congregação</label>
+            <select id="cpaBolCong" data-on-change="cpaCarregarBoletimAcao"></select>
+            <button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarBoletimAcao">🔄 Atualizar</button>
+            <button type="button" class="btn-confirmar cpa-btn" data-on-click="cpaImprimirBoletimAcao">🖨️ Imprimir</button>
+          </div>
+          <p id="cpaBolMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="cpaBolImprimivel"></div>
+        </div>
+
+        <!-- d) PAINEL -->
+        <div id="cpaSecaoPainel" class="cal-secao" style="display:none;">
+          <h4>📊 Painel por congregação</h4>
+          <p class="subtitle">Os números do seu território. A detecção de afastamento só mede a <strong>EBD e as reuniões</strong>: o sistema não registra presença nos cultos, então quem não está numa turma
+            nem num órgão não é medido.</p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaCarregarPainelAcao">🔄 Atualizar</button></div>
+          <p id="cpaPainelMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="cpaPainelLista"></div>
         </div>
       </div>
 
@@ -6507,6 +6665,7 @@
   <script src="modulos/catalogos-estrutura.js"></script>
   <script src="modulos/checkin-infantil.js"></script>
   <script src="modulos/consagracoes.js"></script>
+  <script src="modulos/cuidado-pastoral.js"></script>
   <script src="modulos/disciplina.js"></script>
   <script src="modulos/doacoes.js"></script>
   <script src="modulos/ebd.js"></script>

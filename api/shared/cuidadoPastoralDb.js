@@ -550,13 +550,20 @@ async function notasVisiveis(pool, alvo, { ver }) {
     // a correção que aponta uma nota que esta pessoa não lê não revela que ela existe
     retificaNotaId: n.RetificaNotaId && ids.has(n.RetificaNotaId) ? n.RetificaNotaId : null, tamanho: Number(n.Tamanho) || 0, pedeConfirmacao: cp.notaPedeFator(n.Nivel) && !mesmo(n.AutorMembroId, ver.membroId) }));
 }
-async function listarNotas(pool, alvo, { ver }) { return notasVisiveis(pool, alvo, { ver }); }
+// O item de um MEMBRO não tem notas próprias: as notas são sobre a pessoa. Quem chega pelo item (o responsável voluntário, que não recebe a matrícula) é levado à pessoa.
+async function alvoDasNotas(pool, alvo) {
+  if (!alvo || !alvo.itemId) return alvo;
+  const i = await carregarItem(pool, alvo.itemId);
+  return i && i.MembroId ? { membroId: i.MembroId } : alvo;
+}
+async function listarNotas(pool, alvo, { ver }) { return notasVisiveis(pool, await alvoDasNotas(pool, alvo), { ver }); }
 
 async function escreverNota(pool, { dados, ver }) {
   const v = cp.validarNota(dados);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const d = v.dados;
   if (d.membroId && d.itemId) return { sucesso: false, mensagem: "A nota é sobre um membro OU sobre o item de quem não é do cadastro." };
+  if (d.itemId) { const a = await alvoDasNotas(pool, { itemId: d.itemId }); if (a.membroId) { d.membroId = a.membroId; d.itemId = null; } }
   const ctx = await contextoDoAlvo(pool, d.membroId ? { membroId: d.membroId } : { itemId: d.itemId }, ver);
   if (!ctx || ctx.alvoProprio || (!ctx.gestao && !ctx.responsavelAberto)) return NAO_EXISTE;
   if (!cp.podeEscreverNota(d.nivel, ctx)) return { sucesso: false, proibido: true, mensagem: "Como responsável, você escreve notas de nível \"Equipe\". As restritas são da liderança." };

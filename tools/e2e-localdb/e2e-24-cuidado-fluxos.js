@@ -192,7 +192,9 @@ const ids = (lista) => (lista || []).map((x) => x.itemId);
   ok((await POST(H, "nota", DIR_C, { membroId: P.iris, nivel: "EQUIPE", texto: "<script>x</script>" })).status === 422, "nota com marcação é recusada");
   const notaVisit = await POST(H, "nota", DIR_C, { itemId: visitante.body.itemId, nivel: "LIDERANCA", texto: `${SEGREDO_NOTA} visitante` });
   ok(notaVisit.status === 201, "nota sobre o visitante (que não é do cadastro) vai no item");
-  ok((await POST(H, "nota", DIR_C, { itemId: anaItem, nivel: "EQUIPE", texto: "nota no item de membro" })).status === 404, "nota de membro vai na pessoa, não no item");
+  const viaItem = await POST(H, "nota", DIR_C, { itemId: anaItem, nivel: "EQUIPE", texto: "nota no item de membro" });
+  ok(viaItem.status === 201 && (await um("SELECT MembroId, ItemId FROM NotasPastorais WHERE NotaId = @n", { n: viaItem.body.notaId })).MembroId === P.ana, "nota escrita pelo item de um membro vai para a PESSOA (o responsável voluntário não recebe a matrícula)");
+  ok((await GET(H, "notas", DIR_C, { itemId: anaItem })).body.notas.some((n) => n.notaId === viaItem.body.notaId), "e a lista pelo item mostra as notas da pessoa");
   await POST(H, "concluir", PIN(P.joao), { itemId: doJoao.body.itemId, desfecho: "ACOMPANHADO" });
   ok((await lista(PIN(P.joao))) === 404, "fechado o item, o responsável deixa de ler (inclusive a nota que ele mesmo escreveu)");
 

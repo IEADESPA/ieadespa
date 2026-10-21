@@ -163,7 +163,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
     confere(scripts.includes("modulos/checkin-infantil.js") && scripts.indexOf("modulos/checkin-infantil.js") > scripts.indexOf("script.js") && scripts.indexOf("modulos/checkin-infantil.js") === scripts.indexOf("modulos/catalogos-estrutura.js") + 1, "modulos/checkin-infantil.js entra depois do script.js, na ordem alfabética dos módulos");
     const sw = ler("service-worker.js");
-    confere(/ieadespa-app-shell-v34/.test(sw) && sw.includes('"/modulos/checkin-infantil.js"'), "o service worker devia estar na v34 com /modulos/checkin-infantil.js na casca");
+    // a casca sobe de versão a cada entrega (v35 na v7.11): basta não ser anterior à v34, a da v7.10, e trazer o módulo
+    const versaoSw = Number((/ieadespa-app-shell-v(\d+)/.exec(sw) || [])[1]);
+    confere(versaoSw >= 34 && sw.includes('"/modulos/checkin-infantil.js"'), `o service worker devia estar na v34 ou depois com /modulos/checkin-infantil.js na casca (v${versaoSw})`);
     confere(/\/\/ v34 \(/.test(sw), "a v34 do service worker precisa da linha de comentário do histórico");
     const script = ler("script.js"), dados = ler("modulos/meus-dados.js");
     confere(/typeof chkLimparTela === "function"/.test(script) && /typeof chkSubAbaMudou === "function"/.test(script) && /typeof chkCarregarMeuPainelAcao === "function"/.test(script), "script.js: as três ligações com o módulo têm a guarda `typeof`");

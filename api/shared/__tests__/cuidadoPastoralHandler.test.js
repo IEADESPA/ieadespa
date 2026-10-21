@@ -54,7 +54,7 @@ describe("a porta", () => {
   test("o PIN com permissão enxertada no token continua sem liderança", async () => {
     const enxertado = tokenDe(10, { via: "PIN", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM });
     expect((await chamar("fila", { token: enxertado })).status).toBe(403);
-    expect((await chamar("catalogos", { token: enxertado })).body.papeis).toEqual({ gestao: false, geral: false });
+    expect((await chamar("catalogos", { token: enxertado })).body.papeis).toEqual({ gestao: false, geral: false, acima: false });
   });
   test("o membro por PIN usa as ações dele (o banco recebe o membroId da sessão, nunca do corpo)", async () => {
     expect((await chamar("pedir-oracao", { metodo: "POST", token: PIN(10), corpo: { membroId: 99 } })).status).toBe(201);
@@ -69,7 +69,7 @@ describe("a porta", () => {
     const dep = tokenDe(5, { via: "SENHA", fator: COM_FATOR, nivel: "DEPARTAMENTO", escopoCongregacoes: "TODAS", permissoes: PERM });
     for (const tok of [ext, dep]) {
       expect((await chamar("fila", { token: tok })).status).toBe(403);
-      expect((await chamar("catalogos", { token: tok })).body.papeis).toEqual({ gestao: false, geral: false });
+      expect((await chamar("catalogos", { token: tok })).body.papeis).toEqual({ gestao: false, geral: false, acima: false });
     }
     expect(chamadasAoBanco()).toBe(0);
   });
@@ -81,8 +81,8 @@ describe("a porta", () => {
     expect(db.marcarRisco.mock.calls[1][1].ver.acima).toBe(true);
   });
   test("o catálogo diz o papel", async () => {
-    expect((await chamar("catalogos", { token: LIDER() })).body.papeis).toEqual({ gestao: true, geral: false });
-    expect((await chamar("catalogos", { token: GERAL() })).body.papeis).toEqual({ gestao: true, geral: true });
+    expect((await chamar("catalogos", { token: LIDER() })).body.papeis).toEqual({ gestao: true, geral: false, acima: false });
+    expect((await chamar("catalogos", { token: GERAL() })).body.papeis).toEqual({ gestao: true, geral: true, acima: true });
   });
 });
 

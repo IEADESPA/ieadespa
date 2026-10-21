@@ -2754,24 +2754,41 @@ Hoje o sistema registra o que **aconteceu** (disciplina, abandono, carta). Não
 registra o que alguém **precisa fazer por alguém** — e é justamente aí que as
 pessoas se perdem sem que ninguém perceba a tempo.
 
-- [ ] **Fila de acompanhamento com dono e SLA**: visitante, novo convertido,
+- [x] **Fila de acompanhamento com dono e SLA**: visitante, novo convertido,
       membro afastado, pedido de visita, pedido de oração, pós-internação.
       Cada item tem responsável nomeado e prazo; vencido, escala pela hierarquia
       territorial que já existe (Dirigente → Pastor de Área → Região).
       *(Rock RMS Connections; MinistryPlatform Care Cases; CCB process queues)*
-- [ ] **Detecção de afastamento por desvio do próprio padrão** — não regra fixa
+      *(Os seis tipos, com prazo ajustável em Catálogos — o visitante em **48 horas**, a Busca Ativa do Regimento Art. 128 §5º. O item nasce com o
+      Dirigente como responsável (ou no degrau de cima, se não há Dirigente ou se é ele a pessoa acompanhada); a liderança troca o responsável,
+      que pode ser qualquer membro adulto da congregação e o trabalha pelo Meu Painel, mesmo por PIN. Vencido, sobe Congregação → Área
+      (Pastor de Área) → Região (papel novo **Superintendente Regional**) → nível geral, pulando o degrau sem ninguém; quem estava embaixo continua
+      trabalhando. Toda visita registra quem foi junto (Art. 85 §3º, "nunca a sós"). Quem muda de congregação some da antiga na hora e o item
+      passa para a nova na rotina das 7h.)*
+- [x] **Detecção de afastamento por desvio do próprio padrão** — não regra fixa
       global ("faltou 3 cultos"), e sim comparação com o histórico **daquela
       pessoa**: quem vinha 4x por mês e caiu para 1 é sinal; quem sempre veio 1x
       não é. Abre item na fila antes de virar caso de abandono (v1.5).
       *(CDM+ Missing Analysis)*
-- [ ] **Notas pastorais com nível de confidencialidade** (pública / liderança
+      *(A taxa de presença dos ~6 meses de base contra a das últimas 6 semanas, com o que o sistema registra: a chamada da EBD (com o "ausente") e
+      as reuniões encerradas — o sistema não tem presença no culto por pessoa, e a tela diz isso. Sinal quando havia costume (50% ou mais) e a
+      queda é de 60% ou mais; no máximo 5 por congregação por dia; o item diz o porquê em números e nunca abre abandono sozinho.)*
+- [x] **Notas pastorais com nível de confidencialidade** (pública / liderança
       local / somente pastor), log de acesso auditável e **versão anonimizada
       automática** para boletim de oração ("um irmão da congregação X"). Dado de
       saúde e aconselhamento é dado sensível — vazamento aqui destrói confiança e
       gera passivo. *(CareNote; Notebird; TouchPoint)*
-- [ ] Pedidos de oração com moderação antes de publicar e **sinalização de risco**
+      *(Equipe / Liderança local / Somente pastor (só quem tem o cargo de Pastor no cadastro; abrir pede a confirmação reforçada). A nota não se
+      edita e a correção nunca abre o sigilo; o texto só sai ao abrir e cada abertura fica registrada; a pessoa nunca vê as notas sobre ela (em Meus
+      Dados, só quantas). Saem 30 dias depois do desligamento (Art. 132 §2º, II) e na exclusão LGPD. O boletim leva uma linha **gerada pelo
+      assunto e pela congregação** ("Alguém da Congregação Vila Nova pede oração pela saúde."), nunca o texto, e recusa nome e diagnóstico.)*
+- [x] Pedidos de oração com moderação antes de publicar e **sinalização de risco**
       (menção a autolesão/violência) escalando imediatamente para o pastor, fora
       da fila normal.
+      *(Nada vai ao boletim sem moderação. Com sinal de risco, o pedido sai da moderação comum, vira acompanhamento urgente de 24 horas e o aviso
+      obrigatório (e-mail e celular) vai na hora a toda a liderança do território — ou só ao nível geral, se o texto cita a liderança; quem pediu
+      lê o 188, o 190, o 180 e o 100, e só lê "a liderança foi avisada" se o aviso saiu de fato. O pedido de socorro nunca é recusado pelo limite
+      do dia nem por já haver outro pedido aberto; desmarcar um alarme falso é da Área para cima, com motivo e confirmação reforçada.)*
 
 ### Contrato da v7.11 (decisões tomadas antes de construir)
 
@@ -2877,9 +2894,12 @@ risco, como prova de que a Igreja agiu); as notas seguem a regra dos 30 dias aci
 (a RIPD de "nota pastoral", que estava "N/A — entra quando o módulo existir", passa a valer). A auditoria guarda só ids e
 códigos: nunca texto de nota, de pedido, nem a categoria de risco.
 
-**Fora desta versão (por decisão):** presença no culto por pessoa (é uma chamada nova na porta do templo; sem ela, o
-detector usa a EBD e as reuniões), integração com o mural de oração do site e lembrete de hora em hora (o prazo mais curto
-é de 24 horas para o risco, e esse aviso sai na hora).
+**Fora desta versão (por decisão):** lembrete de hora em hora (o prazo mais curto é de 24 horas para o risco, e esse aviso
+sai na hora). **Decidido NÃO fazer (responsável da Igreja, 21/10/2026):** registrar a presença de cada pessoa nos cultos — o
+trabalho de catalogar quem vai a cada culto não compensa; o detector de afastamento fica com a EBD e as reuniões. **Decidido
+fazer (21/10/2026), logo depois desta versão:** ligar o mural de oração do site à fila — o pedido confidencial ou com sinal de
+risco que chega pelo site entra no cuidado pastoral (com o aviso na hora, no risco), e quem escreve vê o 188 e o 190 na própria
+página.
 
 ### Emendas ao contrato (21/10/2026) — depois da revisão adversarial independente do servidor
 

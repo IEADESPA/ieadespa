@@ -22,12 +22,16 @@
 //   - o titular adulto que aparece como autorizado a retirar uma criança (CheckinInfantilAutorizados.AutorizadoMembroId) tem essas autorizações revogadas (RevogadoEm; nada se apaga).
 // O registro de custódia (quem trouxe e quem retirou cada criança, a que horas, de qual sala) NÃO se apaga nem se anonimiza aqui: é prova guardada por 5 anos (PoliticasRetencao,
 // migração 145) e a rotina diária o anonimiza no fim do prazo.
+//
+// v7.11 — cuidado pastoral, na MESMA transação: as notas pastorais sobre o titular (e o registro de quem as abriu) são apagadas, os acompanhamentos sobre ele são encerrados e
+// perdem a identificação, e os pedidos de oração que ele fez perdem o texto e o nome (cuidadoPastoralDb.exclusaoLgpd).
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const { exigirGeral } = require("../shared/escopoRotas");
 const mcDb = require("../shared/menoresConsentimentoDb");
+const cuidadoDb = require("../shared/cuidadoPastoralDb");
 
 const STATUS_EXECUTAVEIS = ["PENDENTE", "EM_ANALISE"];
 
@@ -67,12 +71,13 @@ module.exports = async function (context, req) {
   const membroAntes = await pool.request().input("mat", sql.Int, solicitacao.MembroId)
     .query(`SELECT Telefone, Email, Endereco, FotoUrl FROM MembroReferencia WHERE MembroId = @mat`);
 
-  const resposta = String(respostaTexto || "Dados de contato (telefone/e-mail/endereço) e foto anonimizados; dado de saúde do check-in infantil apagado e autorizações (imagem, saúde, retirada de criança) revogadas, quando havia. Dados cadastrais e de processos são mantidos por obrigação legal e exercício regular de direitos (LGPD Art. 16), assim como o registro de entrega e retirada de crianças (prova de custódia, 5 anos).").slice(0, 500);
+  const resposta = String(respostaTexto || "Dados de contato (telefone/e-mail/endereço) e foto anonimizados; dado de saúde do check-in infantil apagado e autorizações (imagem, saúde, retirada de criança) revogadas, quando havia; notas pastorais apagadas e pedidos de oração e acompanhamentos pastorais anonimizados. Dados cadastrais e de processos são mantidos por obrigação legal e exercício regular de direitos (LGPD Art. 16), assim como o registro de entrega e retirada de crianças (prova de custódia, 5 anos).").slice(0, 500);
 
   const transaction = new sql.Transaction(pool);
   const r = () => new sql.Request(transaction);
   const contagem = (x) => Number((((x && x.recordset) || [])[0] || {}).n) || 0;
   let checkin = { saudeApagada: false, consentimentosRevogados: [], autorizacoesRevogadas: 0 };
+  let cuidado = { notas: 0, itens: 0, pedidos: 0 };
   await transaction.begin();
   try {
     // "Toma" a solicitação: só quem a encontra ainda em aberto segue adiante.
@@ -112,6 +117,8 @@ module.exports = async function (context, req) {
     const autorizados = await r().input("mat", sql.Int, solicitacao.MembroId).input("por", sql.Int, usuario.membroId).query(`
       UPDATE CheckinInfantilAutorizados SET RevogadoEm = SYSUTCDATETIME(), RevogadoPorMembroId = @por WHERE AutorizadoMembroId = @mat AND RevogadoEm IS NULL; SELECT @@ROWCOUNT AS n`);
     checkin = { saudeApagada: contagem(saude) + contagem(copias) > 0, consentimentosRevogados, autorizacoesRevogadas: contagem(autorizados) };
+    // v7.11 — notas pastorais, acompanhamentos e pedidos de oração (ver o cabeçalho)
+    cuidado = await cuidadoDb.exclusaoLgpd(r, solicitacao.MembroId);
 
     await transaction.commit();
   } catch (e) {
@@ -143,6 +150,13 @@ module.exports = async function (context, req) {
     await registrarAuditoria({
       tabela: "CheckinInfantilSaude", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: saúde do check-in apagada e autorizações revogadas",
       usuarioId: usuario.membroId, dadosDepois: { ...checkin, motivo: "EXCLUSAO_LGPD" }
+    });
+  }
+  // só as contagens: nunca texto de nota nem de pedido
+  if (cuidado.notas || cuidado.itens || cuidado.pedidos) {
+    await registrarAuditoria({
+      tabela: "NotasPastorais", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: notas pastorais apagadas e cuidado pastoral anonimizado",
+      usuarioId: usuario.membroId, dadosDepois: { ...cuidado, motivo: "EXCLUSAO_LGPD" }
     });
   }
   await registrarAuditoria({

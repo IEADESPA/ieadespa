@@ -762,7 +762,7 @@ async function reenviarEmailsPendentes(pool, { limite = 100, deps = {} } = {}) {
     SELECT TOP (@lim) n.NotificacaoId, n.RegraChave, n.DestinatarioMembroId, n.Titulo, n.Mensagem, n.Categoria, m.Email
     FROM Notificacoes n JOIN MembroReferencia m ON m.MembroId = n.DestinatarioMembroId
     WHERE (n.RegraChave LIKE 'PROTECAO[_]%'
-           OR ((n.RegraChave LIKE 'CHECKIN[_]%' OR n.RegraChave LIKE 'MENORES[_]%' OR n.RegraChave LIKE 'EBD[_]%')
+           OR ((n.RegraChave LIKE 'CHECKIN[_]%' OR n.RegraChave LIKE 'MENORES[_]%' OR n.RegraChave LIKE 'EBD[_]%' OR n.RegraChave LIKE 'CUIDADO[_]%')
                AND EXISTS (SELECT 1 FROM NotificacaoRegras r WHERE r.Chave = n.RegraChave AND r.Obrigatoria = 1)))
       AND n.EnviadaEmail = 0 AND m.Email IS NOT NULL
       AND n.CriadaEm >= DATEADD(HOUR, -48, SYSUTCDATETIME()) AND n.CriadaEm <= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY n.NotificacaoId`)).recordset;

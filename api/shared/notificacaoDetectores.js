@@ -146,6 +146,7 @@ const vistoriaDb = require("./vistoriaAntecedentesDb");
 const mmDb = require("./ministerioMenoresDb");
 const protecaoDb = require("./protecaoDb");
 const checkinDb = require("./checkinInfantilDb");
+const cuidadoDb = require("./cuidadoPastoralDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -214,7 +215,12 @@ const DETECTORES = {
   PROTECAO_CAUTELAR_SEM_DECISAO: { tabela: "IncidenteEnvolvidos", detectar: (pool) => protecaoDb.detectarCautelarSemDecisao(pool) },
   // Check-in infantil (v7.10): a retirada divergente e a segunda via avisam NA HORA, no ato (sem detector). Aqui fica a manhã seguinte: criança que ficou "na sala"
   // depois do serviço, sem retirada registrada (a Igreja precisa provar a quem entregou cada criança).
-  CHECKIN_SEM_RETIRADA: { tabela: "CheckinInfantilRegistros", detectar: (pool) => checkinDb.detectarCriancasSemRetirada(pool) }
+  CHECKIN_SEM_RETIRADA: { tabela: "CheckinInfantilRegistros", detectar: (pool) => checkinDb.detectarCriancasSemRetirada(pool) },
+  // Cuidado pastoral (v7.11): "você é o responsável" e o sinal de risco avisam NA HORA, no ato (sem detector). Aqui fica a manhã: o resumo de cada responsável, o item vencido que subiu
+  // de degrau (a rotina diária de NotificacoesAgendador sobe a escada ANTES desta rodada) e os pedidos de oração esperando moderação.
+  CUIDADO_RESUMO_DIARIO: { tabela: "CuidadoResumo", detectar: (pool) => cuidadoDb.detectarResumoDiario(pool) },
+  CUIDADO_DEGRAU: { tabela: "CuidadoEventos", detectar: (pool) => cuidadoDb.detectarDegraus(pool) },
+  CUIDADO_MODERACAO: { tabela: "CuidadoModeracao", detectar: (pool) => cuidadoDb.detectarModeracao(pool) }
 };
 
 module.exports = { DETECTORES };

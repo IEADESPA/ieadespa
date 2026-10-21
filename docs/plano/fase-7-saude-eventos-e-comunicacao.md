@@ -2660,10 +2660,9 @@ O que o contrato precisou mudar:
   criança sem responsável cadastrado não têm a quem avisar (sem alarme). A retirada de quem **não está na lista**
   continua com o aviso próprio (divergente). Se o aviso não sair, o ato vale (já está gravado) e a resposta ao voluntário
   traz `semAviso` e manda ligar para a família.
-- **Decisões que ficam com o responsável da igreja (não implementadas):** (2) a retirada comum com **dois olhares** ou
-  exigindo que quem retira seja outro voluntário que não o que fez o check-in (hoje só a divergente e a segunda via
-  têm dois olhares); (3) deixar o voluntário **reentrar na sala depois da janela** só para retirar com o código
-  (hoje só a baixa administrativa resolve).
+- **Decidido NÃO fazer (responsável da Igreja, 21/10/2026):** a retirada comum com **dois olhares** (o código da
+  etiqueta já protege e a fila do fim do culto ficaria lenta) e deixar o voluntário **reentrar na sala depois da
+  janela** só para retirar (a sala já aceita retirada até 5 horas depois; passou disso, a baixa administrativa).
 
 ## 🔒 Trava de Revisão 7-B — antes de avançar para a v7.11
 
@@ -2730,16 +2729,16 @@ notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".
      custódia usa o cadastro de responsáveis da Secretaria, não o vínculo familiar).
   4. *O que ficou para trás foi corrigido, não só anotado?* **Sim, o que o código resolve.** A revogação da saúde
      não é a mesma transação, mas a leitura não mostra o dado e a rotina diária o apaga. O detector de divergência
-     parada e a busca por POST foram feitos, e a cadeia da auditoria foi corrigida. **Ficam com o responsável da
-     Igreja (decisões, não código):**
+     parada e a busca por POST foram feitos, e a cadeia da auditoria foi corrigida. **Decidido NÃO fazer** (o
+     responsável da Igreja, 21/10/2026: "deixa como está"; saem dos planos):
      - dois olhares na retirada comum;
      - deixar o voluntário reentrar na sala depois da janela só para retirar;
-     - tratar como divergente a retirada por quem está com afastamento cautelar (hoje o afastamento tira a pessoa
-       da equipe, não de quem traz ou retira a própria criança);
+     - tratar como divergente a retirada por quem está com afastamento cautelar (o afastamento é cautela, não
+       decisão de juiz: a Igreja não impede um pai de buscar o filho; se for o caso, o Comitê conversa com a família);
      - exigir o membro que não é do clero nas decisões do Comitê;
-     - se o caso volta ao Dirigente depois de vincular a matrícula do envolvido (hoje não volta);
-     - turmas da EBD a marcar "com menores" (ação humana);
-     - cadastrar o Comitê de Proteção (ação humana).
+     - devolver o caso ao Dirigente depois de vincular a matrícula do envolvido (fica com a Diretoria e o Comitê).
+
+     **Ação humana (não é código):** marcar as turmas da EBD "com menores" e cadastrar o Comitê de Proteção.
 
      A lista de responsáveis de uma criança continua visível ao voluntário apto da sala: é como ele escolhe quem
      trouxe.

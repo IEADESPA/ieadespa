@@ -20,6 +20,7 @@ const mmDb = require("../shared/ministerioMenoresDb");
 const vistoriaDb = require("../shared/vistoriaAntecedentesDb");
 const menoresConsentimentoDb = require("../shared/menoresConsentimentoDb");
 const checkinInfantilDb = require("../shared/checkinInfantilDb");
+const cuidadoPastoralDb = require("../shared/cuidadoPastoralDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -123,6 +124,9 @@ module.exports = async function (context, req) {
   const ministerioMenores = await mmDb.dadosDoTitular(pool, alvo);
   // v7.10 — check-in infantil: quantas vezes a pessoa (como criança, como quem trouxe ou retirou, como autorizada) consta nos registros e se há dado de saúde dela guardado.
   const checkinInfantil = await checkinInfantilDb.dadosDoTitular(pool, alvo);
+  // v7.11 — cuidado pastoral: os pedidos que a pessoa fez (com o texto: são dela) e QUANTAS notas e acompanhamentos existem sobre ela e de quando (o texto escrito pela
+  // liderança sobre ela sai a pedido, pelo Encarregado: o mesmo critério da v7.5 para texto escrito por outros).
+  const cuidadoPastoral = await cuidadoPastoralDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -146,7 +150,8 @@ module.exports = async function (context, req) {
       vistoriasAntecedentes,
       consentimentosMenores,
       ministerioMenores,
-      checkinInfantil
+      checkinInfantil,
+      cuidadoPastoral
     }
   };
 };

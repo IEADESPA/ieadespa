@@ -539,8 +539,9 @@ module.exports = function registrar(H) {
     confere(env.foco() === env.e("chkAbrirMeu501x31"), "sair da sala: o foco volta ao 'Abrir a sala' de onde veio");
     // HTML novo da sub-aba e da aba: sem evento em linha, sem estilo em linha
     const html = lerApp("index.html");
-    for (const [inicio, fim, nome] of [['id="subMeupainelCheckininfantil"', 'id="subMeupainelMinhaformacao"', "sub-aba"], ['id="abaCheckininfantil"', 'id="abaAssistenciasocial"', "aba"]]) {
-      const i = html.indexOf(inicio), j = html.indexOf(fim);
+    // (o trecho vai até o começo do bloco SEGUINTE do mesmo tipo — sub-aba ou aba —, seja qual for: a v7.11 pôs o Cuidado logo depois do check-in)
+    for (const [inicio, fim, nome] of [['id="subMeupainelCheckininfantil"', 'class="sub-aba-secretaria"', "sub-aba"], ['id="abaCheckininfantil"', 'class="aba-secretaria"', "aba"]]) {
+      const i = html.indexOf(inicio), j = html.indexOf(fim, i + inicio.length + 40);
       const trecho = html.slice(i, j > i ? j : undefined).replace(/<!--[\s\S]*?-->/g, "");
       confere(i > 0 && !/\son[a-z]+\s*=/i.test(trecho), `${nome}: nenhum atributo on...= no HTML`);
       confere(!/\sstyle\s*=/i.test(trecho), `${nome}: nenhum estilo em linha no HTML`);

@@ -14,7 +14,10 @@ jest.mock("../menoresConsentimentoDb", () => ({
   apagarFotosDeMenoresSemConsentimento: jest.fn(async () => ({ apagadas: 2 }))
 }));
 
+jest.mock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+
 const { avaliarRegras } = require("../notificacaoMotor");
+const cuidadoDb = require("../cuidadoPastoralDb");
 const mmDb = require("../ministerioMenoresDb");
 const mcDb = require("../menoresConsentimentoDb");
 const handler = require("../../NotificacoesAgendador/index.js");
@@ -28,6 +31,30 @@ beforeEach(() => {
   avaliarRegras.mockReset(); avaliarRegras.mockResolvedValue({ criadas: 1, emailsEnviados: 0, falhas: [] });
   mmDb.retirarInaptosDasEscalas.mockReset(); mmDb.retirarInaptosDasEscalas.mockResolvedValue({ retirados: 1, alocacoes: 2 });
   mcDb.apagarFotosDeMenoresSemConsentimento.mockClear();
+  cuidadoDb.rotinaDiaria.mockReset(); cuidadoDb.rotinaDiaria.mockResolvedValue({ falhas: [], deteccao: { abertos: 0 } });
+});
+
+// v7.11 — a rotina do cuidado pastoral (escada do prazo vencido, regra dos 30 dias das notas) roda ANTES dos avisos e não falha em silêncio.
+test("cuidado pastoral: a rotina roda antes dos avisos; um passo que falhou, ou um detector CUIDADO_, dá 500 (os avisos do dia rodaram)", async () => {
+  const ordem = [];
+  cuidadoDb.rotinaDiaria.mockImplementation(async () => { ordem.push("rotina"); return { falhas: [] }; });
+  avaliarRegras.mockImplementation(async () => { ordem.push("avisos"); return { criadas: 0, emailsEnviados: 0, falhas: [] }; });
+  const ok = await rodar();
+  expect(ok.status).toBe(200);
+  expect(ordem).toEqual(["rotina", "avisos"]);
+  cuidadoDb.rotinaDiaria.mockResolvedValue({ falhas: ["escada"] });
+  const passo = await rodar();
+  expect(passo.status).toBe(500);
+  expect(passo.body.cuidado.falhas).toEqual(["escada"]);
+  cuidadoDb.rotinaDiaria.mockRejectedValue(new Error("banco fora"));
+  const tudo = await rodar();
+  expect(tudo.status).toBe(500);
+  expect(tudo.body.cuidado.falhas).toEqual(["rotina"]);
+  cuidadoDb.rotinaDiaria.mockResolvedValue({ falhas: [] });
+  avaliarRegras.mockResolvedValue({ criadas: 0, emailsEnviados: 0, falhas: ["CUIDADO_DEGRAU"] });
+  const detector = await rodar();
+  expect(detector.status).toBe(500);
+  expect(avaliarRegras).toHaveBeenCalled();
 });
 
 test("tudo certo: 200 e a faxina das fotos de menor roda (o número vai no corpo)", async () => {

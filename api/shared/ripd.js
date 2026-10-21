@@ -70,8 +70,19 @@ const RIPDS = [
   },
   {
     chave: "NOTA_PASTORAL",
-    tratamento: "N/A hoje — não existe tabela/tela de 'nota pastoral' no sistema.",
-    riscoIdentificado: null, medidasMitigacao: [], riscoResidual: "N/A — sem tratamento real, sem RIPD a fazer. Entra quando o módulo existir."
+    tratamento: "Cuidado pastoral (v7.11): notas pastorais em três níveis de sigilo (equipe, liderança local, somente pastor), a fila de acompanhamento (visitante, novo convertido, membro afastado, pedido de visita, pedido de oração, pós-internação) com a detecção de afastamento pela frequência da própria pessoa, e os pedidos de oração com moderação e sinal de risco.",
+    riscoIdentificado: "Aconselhamento, saúde, família e vida espiritual são o dado mais íntimo que a Igreja guarda: uma nota lida por quem não devia, um pedido de oração publicado com o nome, ou a própria pessoa descobrindo o que se escreve sobre ela antes de a liderança conversar com ela destroem a confiança e geram passivo; e um pedido de socorro (autolesão, violência) que espera a moderação comum pode custar uma vida.",
+    medidasMitigacao: [
+      "Três níveis de sigilo decididos por quem escreve; a nota \"somente pastor\" só é lida por quem escreveu e por quem, na liderança que alcança a pessoa, tem o cargo de Pastor no cadastro (a Diretoria não lê por ser Diretoria), e abrir pede a confirmação reforçada (vD.4)",
+      "A lista mostra só as notas que a pessoa pode ler (as outras não aparecem, nem a contagem); o texto só sai ao abrir, e cada abertura fica registrada (quem e quando, nunca o conteúdo); quem escreveu e o nível geral veem quem leu",
+      "A nota não se edita (gatilho no banco): a correção é outra nota; quem deixa de alcançar a pessoa (ela mudou de congregação, o item fechou) deixa de ler, inclusive o que escreveu (Regimento Art. 132 §1º, II)",
+      "A pessoa acompanhada nunca vê o item nem as notas sobre ela, mesmo sendo da liderança; em Meus Dados ela vê quantas notas e acompanhamentos existem e de quando, e o texto pode ser pedido ao Encarregado",
+      "O boletim de oração nunca leva o texto do pedido: leva uma linha gerada pelo assunto e pela congregação, conferida pelo moderador, e a reescrita com o nome de quem pediu é recusada",
+      "Os textos que os membros mandam passam pela lista de sinais de autolesão e de violência; com sinal, o aviso obrigatório sai na hora a toda a liderança do território (sem o texto) e quem pediu lê os telefones 188, 190, 180 e 100; desmarcar um alarme falso pede motivo e a confirmação reforçada",
+      "Nenhum aviso (o e-mail sai do sistema), auditoria ou log leva texto de nota ou de pedido; o aviso ao responsável leva só o primeiro nome de quem acompanhar",
+      "Regimento Art. 132 §2º, II: as notas de quem saiu são apagadas em 30 dias; a exclusão LGPD as apaga na hora; os itens encerrados perdem a identificação em 5 anos e o pedido de oração perde o texto em 1 ano (5 com sinal de risco)"
+    ],
+    riscoResidual: "Médio — o dado é sensível por natureza e depende do bom uso de quem tem acesso legítimo; o detector de afastamento só vê a EBD e as reuniões (quem não está nelas não é medido) e a lista de sinais de risco não pega tudo (a liderança pode marcar o risco à mão). O vazamento por quem lê é tratado pelo registro de cada abertura e pela orientação à liderança."
   },
   {
     chave: "CHECKIN_INFANTIL",

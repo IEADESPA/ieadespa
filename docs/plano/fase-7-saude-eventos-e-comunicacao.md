@@ -2773,6 +2773,163 @@ pessoas se perdem sem que ninguém perceba a tempo.
       (menção a autolesão/violência) escalando imediatamente para o pastor, fora
       da fila normal.
 
+### Contrato da v7.11 (decisões tomadas antes de construir)
+
+Escrito em 21/10/2026, depois de ler o que o sistema já tem. Cada linha é uma decisão que o Regimento não fecha; a CLI
+pode revertê-la. Os itens acima só viram `[x]` com a prova (jest, banco real, tela, homologação).
+
+**O que o sistema já sabe (e o que não sabe).** Não existe tabela de visitante, de pedido de visita, de pedido de oração
+nem de nota pastoral; o que existe é o **abandono** (v1.5), que é manual (alguém marca "sem comunhão" e a data). E o
+sistema **não registra presença nos cultos** por pessoa: a única frequência semanal por pessoa é a **chamada da EBD**
+(com o "ausente" gravado) e, mais espaçada, a das **reuniões** encerradas (assembleia, CLI, órgãos locais). A detecção de
+afastamento usa só isso, e a tela diz isso com todas as letras: quem não está numa turma da EBD nem num órgão **não é
+medido** (o detector não inventa falta de quem ele não vê). O motor de Fluxos (vB.3) tem a escada
+Congregação → Área → Região, mas não tem dono nomeado nem sigilo: a fila tem a sua própria tabela e reaproveita só a ideia.
+
+**Quem trabalha a fila.** Permissão nova `cuidado_pastoral` (sessão de liderança), dada ao Presidente, ao Secretário Geral,
+ao Dirigente de Congregação e ao Pastor de Área, e papel novo **Superintendente Regional** (nível Região; Regimento: "a
+presidência regional é exercida pelo Superintendente Regional"). Cada um vê a fila **do seu território** (o Dirigente, a
+congregação; o Pastor de Área, as congregações da área; o Superintendente, as da região; o nível geral, tudo). O
+**responsável nomeado** pode ser qualquer membro ativo e maior de idade da congregação (um diácono, um presbítero, uma irmã
+do círculo de oração) ou alguém da liderança que alcança a congregação; ele vê **só os itens dele**, em Meu Painel, mesmo
+entrando por PIN, com o nome e o contato da pessoa, o motivo e o histórico — nunca as notas restritas.
+
+**A pessoa acompanhada nunca vê o item nem as notas sobre ela**, mesmo que seja da liderança (o Dirigente que caiu na
+detecção não vê o próprio item: quem vê é a Área para cima). Ela vê, em Meu Painel, **só os pedidos que ela mesma fez**
+(visita, oração), com a situação.
+
+**Os tipos e os prazos (ajustáveis em Catálogos → Prazos).** Visitante: **48 horas** (Regimento Art. 128 §5º, II, b: "Busca
+Ativa em até 48 horas"); novo convertido: 7 dias; membro afastado: 14 dias; pedido de visita: 7 dias; pedido de oração com
+pedido de contato: 3 dias; pós-internação: 3 dias. O item nasce com o **Dirigente** da congregação como responsável (se o
+Dirigente não for a própria pessoa acompanhada); a liderança troca o responsável quando quiser, e quem é nomeado recebe o
+aviso. Visitante e novo convertido entram pelo nome e o contato (não ganham cadastro de membro, como na chamada da EBD).
+
+**A escada do prazo vencido.** A rotina diária das 7h (a mesma das outras; o banco não fica ligado à toa) olha os itens
+abertos com o prazo vencido e **sobe um degrau**: Congregação → Área → Região → nível geral. O degrau sem ninguém com a
+permissão (uma região sem Superintendente cadastrado) é **pulado** — o item nunca fica sem quem receba. Quem está no
+degrau novo recebe o aviso e o item ganha um prazo novo de 3 dias; quem estava embaixo **continua vendo e trabalhando** o
+item (subir é chamar ajuda, não tirar do Dirigente). No nível geral, vencido de novo, o aviso se repete no máximo 5 vezes.
+O prazo é calculado na leitura (a fila mostra "vence em…" / "vencido há…" mesmo sem a rotina). Adiar o prazo é da
+liderança, com motivo, até 30 dias, e fica no histórico.
+
+**O trabalho no item.** Registrar contato (ligação, mensagem, visita no lar, visita no hospital, conversa no culto, outro;
+se conseguiu falar; observação curta), concluir com um desfecho (integrado, segue acompanhado pela liderança, não
+localizado, não quis contato, encaminhado, outro) e cancelar (duplicado ou engano, com motivo). **Toda visita presencial
+registra quem foi junto**: o Regimento (Art. 85 §3º, I) proíbe o obreiro a sós com uma mulher que não é a esposa, e o
+cadastro não guarda o sexo — a regra vale para toda visita. O histórico é **só de acréscimo** (gatilho no banco).
+Concluir um "membro afastado" como "não localizado" ou "não quis contato" mostra o caminho do abandono (v1.5), que segue
+manual: a fila **não** abre procedimento de abandono sozinha.
+
+**A detecção de afastamento (pelo padrão da própria pessoa).** Para cada membro ativo, a rotina junta as oportunidades
+que o sistema conhece (aula da EBD da turma dele, com presença ou ausência; reunião encerrada em que ele era esperado) e
+compara a **taxa de presença** de dois períodos: os ~6 meses de base e as **últimas 6 semanas**. Vira sinal quando a base
+tem pelo menos 6 oportunidades com presença de **50% ou mais** (havia costume), as 6 semanas têm pelo menos 3
+oportunidades e a taxa caiu **60% ou mais** (ex.: quem vinha 9 de 10 domingos e veio 1 de 6). Quem sempre veio pouco (1
+domingo por mês = 25%) nunca é sinal. Fica de fora quem já está "sem comunhão", com abandono aberto, com item de
+afastamento aberto ou encerrado há menos de 90 dias. No máximo 5 itens novos por congregação por dia (os de maior queda
+primeiro), para a fila não amanhecer entupida. O item diz o porquê em números ("EBD e reuniões: antes 9 de 10; nas
+últimas 6 semanas 1 de 6") e nunca vira abandono por conta própria. Os parâmetros (6 semanas, 50%, 60%) ficam em
+Catálogos → Prazos.
+
+**Notas pastorais com três níveis.** *Equipe* (a "pública" do plano: a liderança e o responsável de um item aberto da
+pessoa), *Liderança local* (só a liderança com a permissão no território, nunca o responsável voluntário) e *Somente
+pastor* (só quem escreveu e quem, na liderança que alcança a pessoa, tem o cargo de **Pastor** no cadastro; abrir pede a
+confirmação reforçada). A nota é sobre um membro (ou, para o visitante, sobre o item) e **não se edita**: corrige-se com
+outra nota que aponta a anterior. A lista mostra só o que a pessoa pode ler (as notas que ela não pode ler não aparecem,
+nem a contagem); o texto só sai ao **abrir**, e **cada abertura fica registrada** (quem e quando, nunca o conteúdo); quem
+escreveu e o nível geral veem quem leu. Nenhum aviso, auditoria ou log leva o texto. **Regimento Art. 132 §2º, II:** as
+anotações pastorais são eliminadas na saída do membro — a rotina diária apaga as notas de quem saiu (carta, abandono,
+desligamento) há mais de 30 dias ("regra dos 30 dias") e a exclusão LGPD as apaga na hora. A Diretoria não lê nota de
+nível "somente pastor" por ser Diretoria: só se tiver o cargo de Pastor. Em Meus Dados, a própria pessoa vê **quantas**
+notas existem sobre ela e de quando, não o texto (o mesmo critério da v7.5 para texto escrito por outros sobre a pessoa;
+o texto pode ser pedido ao Encarregado).
+
+**Pedidos de oração, moderação e o boletim.** O membro pede pelo Meu Painel (por ele ou por outra pessoa), escolhe o
+assunto (saúde, família, trabalho, luto, vida espiritual, gratidão, outro), escreve o pedido e diz se ele **pode ir ao
+boletim sem nome** ou é **só para a liderança**, e se quer que alguém da liderança fale com ele (aí nasce um item da
+fila). A liderança também registra o pedido recebido em mãos. **Nada vai ao boletim sem moderação**. O boletim **nunca
+leva o texto do pedido**: leva uma linha anonimizada gerada pelo assunto e pela congregação ("Alguém da Congregação Vila
+Nova pede oração pela saúde."), que o moderador pode reescrever (até 200 caracteres) — e a reescrita que contém o nome de
+quem pediu é recusada. A linha aprovada fica 14 dias no boletim, que a liderança imprime e que o membro vê no Meu Painel
+(só as linhas da própria congregação). O mural de oração do **site** é outro lugar (Directus, moderado pela Diretoria) e
+não muda nesta versão.
+
+**Sinal de risco, fora da fila normal.** Todo texto livre que um membro manda (pedido de oração, pedido de visita) passa
+por uma lista de expressões de **autolesão** (ex.: "quero morrer", "me matar", "me cortar") e de **violência** (ex.: "ele
+me bate", "abuso", "ameaça de morte", "medida protetiva"); a lista ignora acento e maiúscula e prefere errar para mais. Com
+sinal, o pedido **não entra na moderação comum**: vira item **urgente** (prazo de 24 horas) e o aviso obrigatório sai
+**na hora** (e-mail e push) para o Dirigente, o Pastor de Área, o Superintendente e o nível geral — o aviso diz só "um
+pedido com sinal de risco chegou na congregação X", nunca o texto. Quem pediu lê, na hora, os telefones **188** (CVV, de
+graça, 24 h), **190**, **180** (Central de Atendimento à Mulher) e **100**; e só lê "a liderança foi avisada" se o aviso
+saiu do app de verdade (a regra da Trava 7-B). Se o texto fala de **criança** junto com violência, o aviso manda registrar
+na Proteção de crianças (v7.8). A liderança pode **marcar** risco num pedido que a lista não pegou (mesmo aviso) e
+**desmarcar** um alarme falso, com motivo (o pedido volta para a moderação comum); nada disso apaga o registro.
+
+**Avisos.** *Você é o responsável* (na hora, a quem é nomeado por outra pessoa); *resumo do dia* (às 7h, a cada
+responsável com item novo, vencendo em 24 horas ou vencido); *subiu de degrau* (às 7h, a quem está no degrau novo);
+*pedidos esperando moderação* (às 7h, à liderança da congregação); *sinal de risco* (na hora, obrigatório, não se
+desliga). Nenhum leva nota nem texto de pedido; o do responsável leva o **primeiro** nome da pessoa acompanhada (ele precisa
+saber quem procurar) e nunca o tipo (ver as emendas).
+
+**Guarda e LGPD.** Os itens encerrados ficam 5 anos e depois perdem a identificação (nome, contato, motivo e observações
+do visitante e do membro; a contagem sobrevive); o pedido de oração perde o texto em 1 ano (5 anos se teve sinal de
+risco, como prova de que a Igreja agiu); as notas seguem a regra dos 30 dias acima. ROPA e RIPD ganham "Cuidado pastoral"
+(a RIPD de "nota pastoral", que estava "N/A — entra quando o módulo existir", passa a valer). A auditoria guarda só ids e
+códigos: nunca texto de nota, de pedido, nem a categoria de risco.
+
+**Fora desta versão (por decisão):** presença no culto por pessoa (é uma chamada nova na porta do templo; sem ela, o
+detector usa a EBD e as reuniões), integração com o mural de oração do site e lembrete de hora em hora (o prazo mais curto
+é de 24 horas para o risco, e esse aviso sai na hora).
+
+### Emendas ao contrato (21/10/2026) — depois da revisão adversarial independente do servidor
+
+Uma revisão independente (só leitura do código e reproduções no banco local) achou **2 críticos, 7 altos, 6 médios e 8
+baixos**. Tudo foi corrigido, com teste que falha no código de antes (jest e o roteiro `e2e-27` no SQL Server local). O
+que o contrato precisou mudar:
+
+- **A lista de risco pegava pouco (crítico).** Só a forma "me bate"; "ele bate em mim", "abusa da minha filha", "eu me
+  mato", "não quero viver", "quero sumir", "tomei veneno", "me deu um soco" passavam. A lista foi ampliada (verbos sem o
+  pronome, terceira pessoa, abuso de criança, envenenamento) e o teste traz as frases de um lado e de outro.
+- **O pedido de socorro nunca é recusado (crítico).** Com sinal de risco, o pedido passa do limite do dia e, se a pessoa
+  já tem um pedido de visita aberto, **esse** vira urgente (antes: "você já tem um pedido", e nenhum aviso). O pedido de
+  visita com risco também vai para a aba do risco (onde a liderança lê o texto e pode desmarcar o alarme falso).
+- **Violência que cita a liderança fica só com o nível geral.** Se o texto fala de violência e cita alguém da igreja (o
+  pastor, o dirigente, um obreiro, o professor da EBD) ou o nome de alguém da liderança do território, o caso nasce **no
+  nível geral, sem responsável**, o aviso vai só à Diretoria e quem foi citado pelo nome não recebe nada; o Dirigente e a
+  Área não veem o pedido nem o item.
+- **Desmarcar o risco e cancelar um acompanhamento urgente são da Área para cima** (dois olhares; o Dirigente pode ser o
+  citado). O urgente que sobe de degrau continua com 24 horas a cada degrau.
+- **Quem muda de congregação some da antiga na hora** (Regimento Art. 132 §1º, II): o item, as notas e os pedidos dele
+  deixam de aparecer para a congregação antiga no mesmo instante; na rotina da manhã o item aberto **passa** para a
+  congregação nova (o mesmo tipo e urgência, o Dirigente de lá como responsável, com aviso). Antes, a rotina só fechava o
+  item, e até lá o Dirigente antigo lia as notas que o novo escrevia.
+- **Licença não é saída.** A regra dos 30 dias vale só para quem foi **desligado do rol com data de saída** (carta,
+  abandono, desligamento); a licença de candidatura e outras situações não apagam notas nem encerram itens.
+- **O responsável voluntário só vê o item aberto**; o encerrado fica em Meu Painel só como lembrança (tipo, primeiro nome,
+  desfecho). O contato da pessoa só aparece com o item aberto.
+- **O item nunca fica sem quem receba.** Sem Dirigente, ou quando o Dirigente é a própria pessoa acompanhada, o item nasce
+  no degrau de cima que tem gente, que é avisado na hora.
+- **A fila é territorial de verdade.** O filtro do território vai **no banco**, antes do limite de 400 (antes, numa igreja
+  grande a fila do Dirigente podia vir vazia); a concessão de **Extensão** e a de **Departamento** não operam a fila (quem
+  cuida da Extensão é o Dirigente da congregação-mãe); o painel não conta o item sobre quem olha.
+- **Notas.** A correção nunca rebaixa o sigilo (a de "equipe" não corrige a "somente pastor") e não revela a nota que a
+  pessoa não lê; quem escreveu lê a própria nota **enquanto alcança a pessoa**; o nível geral vê **quem** leu qualquer nota
+  (sem ler o texto, se não for pastor); a nota sobre quem não é do cadastro sai 1 ano depois que o item encerra.
+- **Boletim.** Aprovar só o que espera moderação (o que já foi publicado pode ser **tirado** do boletim, não reescrito);
+  a linha recusa também nome de duas letras ("Zé"), nome partido por caractere invisível e diagnóstico ("câncer", "UTI").
+  Todo texto livre recusa caractere de controle ou invisível.
+- **Meus Dados e Meus pedidos** não mostram o texto do pedido que teve sinal de risco (num celular da família, "meu marido me
+  bate" reaparecendo é perigo; o texto sai pelo Encarregado) e contam só os acompanhamentos **já encerrados**.
+- **A sonda do cadastro foi fechada:** nomear como responsável alguém de fora do território responde sempre "Pessoa não
+  encontrada".
+- **Anonimização sem sobra:** some também quem criou o item (o próprio titular, no pedido dele) e quem agiu no histórico.
+- **Banco:** a marca de purga das notas é ligada, usada e desligada num **lote só** (com TRY/CATCH: nunca volta ao pool
+  ligada); uma rodada de purga por vez (a corrida no banco real dava deadlock); o item aberto é conferido antes de gravar,
+  com trava de faixa (não pelo erro do índice único dentro da transação); o vínculo pedido↔item é único só para o item
+  aberto; índices novos para a fila, o painel e a detecção no banco de 5 DTU; o lembrete no topo é limitado a 5 no banco.
+- **Texto do contrato corrigido:** o aviso "você é o responsável" leva o **primeiro nome** e nunca o tipo (pós-internação
+  diria a doença num e-mail); a auditoria tem o código do ato (marcado/desmarcado), nunca o tipo do risco.
+
 ## v7.12 — Comunicação: consentimento granular e envio segmentado *(7ª rodada)*
 
 A vB.2 constrói o motor de notificação. Esta versão trata da parte jurídica e da

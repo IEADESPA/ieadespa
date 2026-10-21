@@ -67,7 +67,8 @@ describe("a exclusão LGPD alcança o check-in infantil", () => {
     expect(saude.inputs).toEqual({ mat: 30 });
     // as cópias: só as colunas de saúde (o gatilho TR_CheckinRegistros_Protegido não deixa mexer no resto), e nada de anonimizar ou apagar o registro de custódia
     expect(copias.sql).toMatch(/SET SaudeTexto = NULL, SaudeOrigem = NULL, SaudeTextoVersao = NULL, SaudeTextoHash = NULL\s+WHERE MenorMembroId = @mat AND SaudeTexto IS NOT NULL/);
-    expect(escritas().some((c) => /AnonimizadoEm|DELETE FROM CheckinInfantilRegistros|TrouxeNome|RetiradoNome/.test(c.sql))).toBe(false);
+    // (v7.11: a exclusão também anonimiza o cuidado pastoral — CuidadoItens, CuidadoEventos, PedidosOracao —, que não é registro de custódia)
+    expect(escritas().filter((c) => !/CuidadoItens|CuidadoEventos|PedidosOracao|NotasPastorais/.test(c.sql)).some((c) => /AnonimizadoEm|DELETE FROM CheckinInfantilRegistros|TrouxeNome|RetiradoNome/.test(c.sql))).toBe(false);
     // o consentimento: as duas finalidades, a linha só entra se a ÚLTIMA concede, com o texto vigente; ficha registrada pelo Encarregado, ou o próprio responsável se for ele
     expect(consent.map((c) => c.inputs.f)).toEqual(["IMAGEM", "SAUDE_CRACHA"]);
     const s = consent[1];

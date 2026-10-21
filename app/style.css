@@ -1042,3 +1042,95 @@ h3 { text-align: left; color: var(--cor-primaria); margin: 0 0 12px; font-weight
 
 /* Blocos que o servidor só entrega ao nível geral (papel Global com escopo de todas as congregações): escondidos para os demais. */
 body:not(.sessao-geral) .so-geral { display: none !important; }
+/* v7.11 — Cuidado pastoral (módulo cuidado-pastoral.js: a aba da liderança e Meu Painel → Cuidado). Prefixo .cpa-; só variáveis do tema (mais o verde escuro #156B3A dos botões de ligar,
+   para o texto passar de 4,5:1). No celular (360 a 390 px) tudo empilha e nada rola de lado (só a tabela do painel, dentro de .cpa-rolagem); todo alvo de toque tem pelo menos 44 px; a
+   informação nunca depende só da cor (ícone e texto dizem o mesmo). O pedido com sinal de risco é vermelho e traz os telefones de ajuda. */
+.cpa-btn { width: auto; margin: 0; min-height: 44px; }
+.cpa-btn-principal { width: 100%; min-height: 52px; font-size: 1.05rem; }
+.cpa-pilulas .cal-pilula { min-height: 44px; }
+.cpa-barra label { font-weight: 600; font-size: 0.85rem; }
+.cpa-selo { white-space: normal; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; line-height: 1.3; }
+.cpa-selo.cal-st-homologado { color: #156B3A; }
+.cpa-selo.cal-st-cancelado { color: var(--cor-texto); }
+.cpa-selos { margin: 4px 0 8px; line-height: 1.9; }
+.cpa-cartao, .cpa-cartao h5, .cpa-detalhe, .cpa-detalhe h4, .cpa-pedido, .cpa-nota, .cpa-meus-pedidos li, .cpa-boletim-lista li { overflow-wrap: anywhere; }
+.cpa-cartao-urgente { border-left: 6px solid var(--cor-erro); }
+.cpa-selo.cpa-vencido { background: var(--cor-erro); color: #fff; font-weight: 800; }
+.cpa-urgente { font-weight: 800; }
+.cpa-sem-resp { color: var(--cor-erro); font-weight: 800; }
+.cpa-linha { margin: 4px 0; font-size: 0.92rem; }
+.cpa-deteccao { color: var(--cor-texto); }
+.cpa-dados { margin: 8px 0; }
+.cpa-dados div { display: flex; flex-wrap: wrap; gap: 2px 8px; padding: 6px 0; border-top: 1px dashed var(--cor-borda); }
+.cpa-dados dt { font-weight: 700; min-width: 150px; color: var(--cor-texto); }
+.cpa-dados dd { margin: 0; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.cpa-texto { white-space: pre-wrap; overflow-wrap: anywhere; margin: 4px 0 8px; font-size: 0.95rem; line-height: 1.5; }
+.cpa-historico { margin: 4px 0 10px; padding-left: 22px; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.cpa-evento { margin: 8px 0; }
+.cpa-evento-det { color: var(--cor-texto); }
+.cpa-form textarea, .cpa-form input[type="text"], .cpa-form input[type="date"], .cpa-form select { width: 100%; max-width: 100%; min-height: 44px; box-sizing: border-box; }
+.cpa-form input[type="date"] { padding: 8px 10px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; font-family: inherit; color: var(--cor-texto); }
+.cpa-grupo { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 10px; margin: 0 0 12px; min-width: 0; }
+.cpa-grupo legend { font-weight: 700; font-size: 0.9rem; padding: 0 6px; color: var(--cor-primaria); }
+.cpa-opcao { display: flex; align-items: flex-start; gap: 8px; min-height: 44px; margin: 6px 0; font-size: 0.92rem; line-height: 1.4; font-weight: normal; cursor: pointer; overflow-wrap: anywhere; }
+.cpa-opcao input { width: 24px; height: 24px; flex: 0 0 24px; margin: 2px 0 0; }
+.cpa-escolhido { font-weight: 700; color: var(--cor-primaria); margin: 6px 0; overflow-wrap: anywhere; }
+.cpa-busca-lista { list-style: none; padding: 0; margin: 6px 0; }
+.cpa-busca-lista li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; border-top: 1px dashed var(--cor-borda); padding: 6px 0; }
+.cpa-busca-nome { flex: 1 1 160px; overflow-wrap: anywhere; }
+.cpa-notas { margin-top: 16px; border-top: 2px solid var(--cor-borda); padding-top: 8px; }
+.cpa-notas-lista { list-style: none; padding: 0; margin: 6px 0; }
+.cpa-nota { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 10px; margin: 8px 0; background: var(--cor-superficie); }
+.cpa-nota-aberta { background: var(--cor-superficie); border: 3px solid var(--cor-primaria); border-radius: var(--raio); padding: 12px 14px; margin: 10px 0; overflow-wrap: anywhere; }
+.cpa-nota-cab { font-weight: 700; color: var(--cor-primaria); margin: 0 0 6px; }
+.cpa-nota-texto { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1rem; line-height: 1.5; margin: 0 0 8px; color: var(--cor-texto); }
+.cpa-pedido-risco { border: 3px solid var(--cor-erro); background: var(--cor-erro-suave); }
+.cpa-risco-topo { background: var(--cor-erro); color: #fff; border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 0 0 8px; font-size: 0.95rem; line-height: 1.45; }
+.cpa-ajuda { border: 2px solid var(--cor-sucesso); background: var(--cor-sucesso-suave); border-radius: var(--raio); padding: 10px 12px; margin: 12px 0; }
+.cpa-ajuda-risco { border-color: var(--cor-erro); background: var(--cor-superficie); }
+.cpa-ajuda-titulo { margin: 0 0 4px; font-size: 0.95rem; color: var(--cor-texto); }
+.cpa-contatos-lista { list-style: none; margin: 6px 0; padding: 0; }
+.cpa-contatos-lista li { margin: 4px 0; }
+.cpa-tel { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 14px; margin: 6px 0 2px; border-radius: var(--raio-pequeno); background: #156B3A; color: #fff; font-weight: 600; font-size: 1.02rem; text-decoration: none; overflow-wrap: anywhere; }
+.cpa-tel strong { font-weight: 800; font-size: 1.15rem; }
+.cpa-tel:hover { text-decoration: underline; }
+.cpa-tel-desc { display: block; font-size: 0.88rem; line-height: 1.4; color: var(--cor-texto); margin: 2px 2px 8px; }
+.cpa-tel-linha { display: inline-flex; align-items: center; min-height: 44px; color: var(--cor-primaria); font-weight: 600; overflow-wrap: anywhere; }
+.cpa-risco-resposta { border: 3px solid var(--cor-erro); background: var(--cor-erro-suave); border-radius: var(--raio); padding: 12px 14px; margin: 12px 0; }
+.cpa-risco-resposta h4 { margin: 0 0 6px; color: var(--cor-erro); }
+.cpa-risco-msg { font-size: 1.05rem; font-weight: 700; line-height: 1.5; color: var(--cor-texto); overflow-wrap: anywhere; }
+.cpa-ok { background: var(--cor-sucesso-suave); border: 2px solid var(--cor-sucesso); border-radius: var(--raio); padding: 10px 12px; margin: 10px 0; color: var(--cor-texto); overflow-wrap: anywhere; }
+.cpa-falha { background: var(--cor-secundaria-suave); border-left: 4px solid var(--cor-secundaria); border-radius: var(--raio-pequeno); padding: 10px 12px; margin: 10px 0; color: #7A6110; overflow-wrap: anywhere; }
+.cpa-resultado:focus, .cpa-nota-aberta:focus { outline: 3px solid var(--cor-primaria); outline-offset: 2px; }
+.cpa-boletim-titulo { margin: 4px 0; color: var(--cor-primaria); }
+.cpa-boletim-lista { list-style: none; padding: 0; margin: 6px 0; }
+.cpa-boletim-lista li { padding: 8px 0; border-top: 1px dashed var(--cor-borda); line-height: 1.5; }
+.cpa-boletim-ate { color: var(--cor-texto); font-size: 0.85rem; }
+.cpa-meus-pedidos { list-style: none; padding: 0; margin: 6px 0; }
+.cpa-meus-pedidos li { padding: 8px 0; border-top: 1px dashed var(--cor-borda); line-height: 1.5; }
+.cpa-rolagem { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.cpa-tabela th { color: var(--cor-texto); }
+.cpa-num-alerta { color: var(--cor-erro); font-weight: 800; }
+.cpa-lista { margin: 4px 0 10px; padding-left: 20px; font-size: 0.92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.cpa-leituras { font-size: 0.9rem; }
+/* o cinza das legendas e dos subtítulos do sistema (#6B7280) fica abaixo de 4,5:1 nos cartões (fundo tingido): aqui o texto é mais escuro */
+#subMeupainelCuidado .psc-legenda, #abaCuidadopastoral .psc-legenda, #subMeupainelCuidado .subtitle:not(.psc-aviso), #abaCuidadopastoral .subtitle:not(.psc-aviso) { color: #4B5563; }
+@media (max-width: 640px) {
+  .cpa-barra select, .cpa-barra .cpa-btn, .psc-acoes .cpa-btn { flex: 1 1 100%; }
+  .cpa-dados dt { min-width: 0; flex: 1 1 100%; }
+}
+/* Impressão (v7.11). (1) A nota pastoral, o acompanhamento, os pedidos de oração e os formulários NUNCA saem na impressora, nem num Ctrl+P comum.
+   (2) "Imprimir" do boletim imprime só #cpaBolImprimivel (linhas sem nome): a classe .cpa-imprimindo existe só durante window.print() (cuidado-pastoral.js → cpaImprimirBoletimAcao). */
+@media print {
+  #cpaDetalheGesCx, #cpaDetalheMeuCx, #cpaNotaCx, .cpa-notas, #cpaPedLista, #cpaRegPedCx, #cpaNovoCx, #cpaMeusCx, #cpaMeusPedidos, #cpaOracaoForm, #cpaVisitaForm, #cpaOracaoResultado, #cpaVisitaResultado { display: none !important; }
+  body.cpa-imprimindo * { visibility: hidden !important; }
+  body.cpa-imprimindo #cpaBolImprimivel, body.cpa-imprimindo #cpaBolImprimivel * { visibility: visible !important; }
+  body.cpa-imprimindo #cpaBolImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
+}
+@supports selector(:has(*)) {
+  @media print {
+    body.cpa-imprimindo *:not(#cpaBolImprimivel):not(#cpaBolImprimivel *):not(:has(#cpaBolImprimivel)) { display: none !important; }
+    body.cpa-imprimindo *:has(#cpaBolImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; }
+    body.cpa-imprimindo #cpaBolImprimivel { position: static; width: auto; }
+  }
+}

@@ -3134,20 +3134,30 @@ evento; o painel mostra o registro divergente e o registro de atividade do Direc
 O Art. 159 descreve um processo participativo com calendário rígido, critério de
 originalidade e consequência financeira — nada disso tem onde existir hoje.
 
-- [ ] **Calendário do processo** (Art. 159 §1º): sugestões de 01 a 15/nov →
-      triagem de 16 a 21/nov → votação de 22 a 30/nov → arte em dezembro (3
-      cores) → escolha final até 31/12 por maioria simples. Cada etapa com
-      abertura e fechamento automáticos.
-- [ ] **Antiduplicidade desde 2006**: vedado repetir tema já usado — exige o
-      histórico completo cadastrado, e a validação acontece na triagem, não
-      depois da arte pronta.
-- [ ] Coleta de sugestões e votação reaproveitando o módulo de **Enquetes**
-      (v2.8), que já existe e já resolve público-alvo e apuração.
-- [ ] **Pedido de uniforme do Dirigente = compromisso financeiro irrevogável da
-      congregação** (§7º): o pedido vira automaticamente conta a pagar da
-      congregação (v4.5), com fornecedor único (§2º, vedada produção local).
-      É a regra que mais gera conflito hoje — e ela fica explícita na tela do
-      pedido, antes de confirmar.
+**Decisões do responsável da Igreja (22/10/2026).** (1) A lista dos temas já usados desde 2006 **não existe** no sistema: a
+versão traz a tela "Temas já usados" e a Secretaria cadastra (até lá, a triagem confere à mão). (2) **Vota todo membro apto e
+em comunhão, pelo Meu Painel** (matrícula e PIN; quem não tem acesso vota com a ajuda da Secretaria). (3) **Pedidos de
+uniforme: fora** — a camiseta do ano já é pedida e tratada na aba Camisetas do site (o membro ou um responsável pede; o
+Dirigente avisa e entrega); o item "pedido do Dirigente vira conta a pagar" não se faz. O primeiro ciclo é o da identidade
+de 2027: as sugestões abrem em **1º/11/2026**.
+
+- [ ] **Calendário do processo** (Art. 159 §1º): sugestões de 01 a 15/nov → triagem de 16 a 21/nov → votação de 22 a 30/nov
+      → arte em dezembro (até 3 cores da Diretoria e concurso de arte dos membros) → escolha final até 31/12 por maioria
+      simples dos presentes (no culto; o sistema registra o resultado). Cada etapa abre e fecha sozinha pela data de Brasília
+      (calculada na hora, sem depender de rotina).
+- [ ] **Antiduplicidade desde 2006**: a tela "Temas já usados" (ano e tema; o tema escolhido de cada ano entra sozinho). Na
+      sugestão, o tema igual a um já usado (sem diferença de acento, maiúscula ou pontuação) é recusado na hora, e o parecido
+      fica marcado para a triagem — a validação acontece antes da votação, nunca depois da arte pronta.
+- [ ] **Sugestões e triagem**: cada membro apto manda até 3 sugestões (frase curta, até 80 letras) e pode retirar a sua até o
+      dia 15; na triagem, a Diretoria aprova como finalista (pode ajustar a redação, guardando a original) ou descarta com o
+      critério do inciso I (curto e memorável, amplo e abrangente, originalidade).
+- [ ] **Votação reaproveitando o módulo de Enquetes** (v2.8): no dia 22 os finalistas viram uma enquete de toda a membresia
+      apta, votada em **Meu Painel** (uma vez por pessoa); no fim do dia 30 ela fecha sozinha e o resultado é apurado.
+- [ ] **Arte e escolha final**: a Diretoria registra até 3 cores; membros mandam a arte (imagem) baseada nas cores; a
+      Diretoria registra a escolha final do culto (arte + cor, data, votos), que vira a Identidade Visual oficial do ano
+      seguinte e entra na lista de temas já usados.
+
+**Fora desta versão (por decisão):** pedidos de uniforme (já são feitos na aba Camisetas do site).
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 

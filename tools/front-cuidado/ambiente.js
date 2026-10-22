@@ -61,7 +61,7 @@ function criarAmbiente({ mutar = {}, agora = new Date().toISOString(), semModulo
   };
 
   // ---- a API: resposta fixa (api.rotas) ou o servidor imitado (api.servidor) ----
-  const api = { chamadas: [], rotas: {}, retencoes: [], redeCaida: false, servidor };
+  const api = { chamadas: [], todas: [], rotas: {}, retencoes: [], redeCaida: false, servidor };   // todas: como chamadas, mas nunca é esvaziada (limparRegistro)
   const ctx = contexto;
   ctx.fetch = async (url, opts = {}) => {
     const u = new URL(url, "http://local");
@@ -70,7 +70,7 @@ function criarAmbiente({ mutar = {}, agora = new Date().toISOString(), semModulo
     const chamada = { metodo, url: String(url), caminho: u.pathname.replace(/^\/api\//, ""), consulta: Object.fromEntries(u.searchParams), corpo: opts.body ? JSON.parse(opts.body) : null, semFator: !!opts.semFator, cabecalhos, comPrazo: !!opts.signal };
     chamada.chave = `${metodo} ${chamada.caminho}`;
     chamada.comToken = "x-auth-token" in cabecalhos || "authorization" in cabecalhos;
-    api.chamadas.push(chamada);
+    api.chamadas.push(chamada); api.todas.push({ metodo, url: String(url) });
     if (api.redeCaida) throw new TypeError("Failed to fetch");
     // a resposta nasce quando o pedido CHEGA ao servidor: uma retenção só atrasa a entrega (quem trocou de login enquanto isso recebe o que era de quem pediu)
     const rota = api.rotas[chamada.chave];

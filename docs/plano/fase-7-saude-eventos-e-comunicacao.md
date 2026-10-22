@@ -3108,6 +3108,9 @@ transporte por congregação: fora** — no campo todos vão juntos; só faria s
 - [ ] **Crachá configurável:** cada inscrição tem um **tipo de participante** (Participante, Preletor, Equipe, Imprensa,
       Convidado — o organizador muda), e o evento escolhe o que vai no crachá: nome, tipo, igreja/congregação (da resposta a
       uma pergunta do evento), cidade, e o **QR do credenciamento** (o mesmo código do check-in, para entrar mais rápido).
+- [ ] **Aviso contra golpe** (pedido do responsável, 22/10/2026) em toda tela do site que fala de pagamento: a Igreja não entra
+      em contato com ninguém pedindo pagamento ou Pix; pague só pelos dados mostrados no site e, se receber um pedido assim,
+      avise a Secretaria. O pagamento continua só informado até a v10.8.
 
 **Fora desta versão (por decisão):** pagamento online (Pix Cora: v10.8, depois da segurança do domínio da v10.7); hospedagem e transporte
 (v10.6); levar as inscrições para o sistema (v10.6).

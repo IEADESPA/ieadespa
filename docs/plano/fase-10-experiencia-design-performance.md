@@ -209,7 +209,8 @@ segurança ao mesmo tempo (ver a v10.7). Ver a "visão futura" de integração t
 Medido em 22/10/2026: os dois sites já têm o cadeado com uso obrigatório (HSTS com preload), regras do que a página pode
 carregar (CSP; a do site público ainda aceita script escrito dentro da página) e proteção contra ser exibido dentro de outro
 site. Faltam: **DNSSEC** (o DNS de `ieadespa.org.br` está na Microsoft 365, que não oferece DNSSEC), **CAA** (quem pode emitir o
-cadeado) e o endurecimento do **DMARC** (o registro em modo de observação é feito antes, de graça, pela própria Igreja). O
+cadeado) e o **DMARC**. Decisão do responsável (22/10/2026): **nenhum registro de DNS é mexido antes desta versão** (nem o DMARC
+em observação) — mexer agora e de novo na troca deixaria registro demais; tudo é feito de uma vez aqui. O
 domínio `ieadespa.org` (e-mail do Google, DNS no provedor Odara) tem o SPF sem os servidores do Google e também não tem DMARC.
 
 Decisão do responsável: comprar um **domínio novo** para ser o domínio do e-mail da Microsoft 365 (trocando os e-mails para
@@ -219,7 +220,9 @@ alternativa sem domínio novo: levar `ieadespa.org.br` inteiro para o Azure DNS,
 da Microsoft 365 (que funciona com DNS de qualquer provedor) — sem trocar o endereço de e-mail de ninguém.
 
 - [ ] Inventário de todos os registros de hoje (e-mail da Microsoft 365 e do Google, os dois sites, o serviço de e-mail do
-      sistema, verificações) e a troca planejada, num horário calmo, com volta rápida se algo falhar.
+      sistema, verificações) e a troca planejada, num horário calmo, com volta rápida se algo falhar: na zona nova entram
+      TODOS os registros (domínio e subdomínios, os serviços de e-mail, as verificações), e o e-mail automático do sistema
+      (Azure Communication Services, hoje `DoNotReply@ieadespa.org.br`) é reconfigurado para o domínio certo.
 - [ ] Zona no Azure DNS com DNSSEC ligado e o registro DS publicado no Registro.br.
 - [ ] CAA permitindo só quem emite os cadeados (hoje a DigiCert, pelo Azure), conferido antes de cada renovação.
 - [ ] DMARC endurecido em todos os domínios (observação → quarentena → rejeição), com os relatórios lidos; SPF do

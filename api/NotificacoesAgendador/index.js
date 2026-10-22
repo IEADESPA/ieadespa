@@ -40,6 +40,15 @@ module.exports = async function (context, req) {
     context.log.error("[CUIDADO] falha na rotina diária:", e.message);
     cuidado = { falhas: ["rotina"] };
   }
+  // v7.12 — comunicação: a retenção do registro de entrega e uma rodada da fila (a rotina de 15 em 15 minutos faz o resto). Fail-soft.
+  let comunicacao = null;
+  try {
+    comunicacao = await require("../shared/comunicacaoDb").rotinaDiaria(pool);
+    if (comunicacao.falhas.length) context.log.error(`[COMUNICACAO] rotina diária — FALHOU: ${comunicacao.falhas.join(", ")}`);
+  } catch (e) {
+    context.log.error("[COMUNICACAO] falha na rotina diária:", e.message);
+    comunicacao = { falhas: ["rotina"] };
+  }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
   // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
   try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
@@ -98,6 +107,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: falhaMenores || falhaCuidado ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, detectoresComFalha: falhas },
   };
 };

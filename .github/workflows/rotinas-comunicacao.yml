@@ -1,0 +1,57 @@
+name: Rotina da fila de comunicados (a cada 15 minutos)
+
+# v7.12 (Comunicação): o comunicado sai na hora pelo sininho e pelo celular; o e-mail vai por uma fila, porque o serviço de e-mail do Azure aceita 30 por minuto e 100 por hora
+# no domínio da Igreja. Esta rotina chama a rota protegida por segredo (api/ComunicacaoFila), que manda a parte da rodada (Catálogos → Prazos: COMUNICACAO_EMAILS_POR_RODADA e
+# COMUNICACAO_EMAILS_POR_HORA) e conclui os envios sem nada na fila.
+#
+# CUSTO: a chamada leva o cabeçalho `x-somente-se-pendente`: a rota pergunta antes a uma marca no Storage se há fila e, se não há, responde sem abrir o banco (o mesmo cuidado
+# da rotina da proteção). Roda das 6h às 22h45 de Brasília; de madrugada nada sai (ninguém recebe comunicado às 3h), e a primeira rodada da manhã continua de onde parou.
+# Falhou: o job fica vermelho e o e-mail de falha sai, como nas outras rotinas.
+
+on:
+  schedule:
+    - cron: "*/15 0-1,9-23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  fila:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Uma rodada da fila de comunicados (v7.12)
+        run: |
+          # até 3 tentativas: a primeira chamada com fila paga o cold start da API
+          for i in 1 2 3; do
+            if curl -sf -m 120 -X POST "https://app.ieadespa.org.br/api/comunicacao-fila-interna" \
+                 -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -H "x-somente-se-pendente: 1"; then echo; exit 0; fi
+            echo "tentativa $i falhou"; sleep 30
+          done
+          exit 1
+
+  avisar-falha:
+    needs: [fila]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avisar por e-mail
+        env:
+          ACS_CONNECTION_STRING: ${{ secrets.ACS_CONNECTION_STRING }}
+          DESTINATARIO: presidente@ieadespa.org
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npm install --silent --no-audit --no-fund @azure/communication-email@1 >/dev/null 2>&1
+          node - <<'EOF'
+          const { EmailClient } = require("@azure/communication-email");
+          const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Belem" });
+          (async () => {
+            const client = new EmailClient(process.env.ACS_CONNECTION_STRING);
+            const poller = await client.beginSend({
+              senderAddress: "DoNotReply@ieadespa.org.br",
+              content: {
+                subject: "[IEADESPA] A fila de comunicados falhou",
+                plainText: `A rotina da fila de comunicados falhou em ${agora}. Os e-mails de comunicado podem estar parados. Detalhes: ${process.env.RUN_URL}`
+              },
+              recipients: { to: [{ address: process.env.DESTINATARIO }] }
+            });
+            await poller.pollUntilDone();
+          })().catch((e) => { console.error(e.message); process.exit(1); });
+          EOF

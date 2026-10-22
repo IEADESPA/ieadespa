@@ -189,10 +189,65 @@ carrega tudo a cada acesso.
       tem, v1.8), sempre respeitando o escopo de quem exporta e registrando a
       exportação (vB.8).
 
+## v10.6 — Integração total: o site vira conteúdo, o que é "vivo" vai para o sistema *(decisão de 22/10/2026)*
+
+Decisão do responsável da Igreja (22/10/2026, ao fazer a v7.13): as coisas "vivas" que hoje moram no site (Directus) —
+inscrições em evento, pedidos de camiseta e o gestor de camisetas, mural de oração, enquetes, Minha Conta — passam para o
+sistema de gestão, e o site fica sendo páginas de conteúdo. Fica para esta fase porque mexe em domínio, subdomínios, páginas e
+segurança ao mesmo tempo (ver a v10.7). Ver a "visão futura" de integração total (sem Directus) registrada em 19/10/2026.
+
+- [ ] Inscrições em evento (lotes, informar pagamento, confirmação com nome e hora, cortesia, credenciamento por sala,
+      ausentes e crachá da v7.13) no sistema, ligadas ao evento do Calendário (v7.2) e ao caixa do evento (v7.4).
+- [ ] Camisetas (pedidos, lotes, separação, venda de balcão, limite de pedidos) no sistema.
+- [ ] Mural de oração, enquetes e Minha Conta no sistema (o membro entra com o acesso que já tem).
+- [ ] Migração dos dados do Directus com conferência (contagens antes e depois) e as páginas do site lendo do sistema.
+- [ ] Hospedagem e transporte de eventos: blocos (ônibus, alojamento) com vagas e lista de embarque — só para evento fora da
+      cidade ou convenção recebida; no campo todos vão juntos (decisão de 22/10/2026).
+
+## v10.7 — Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*
+
+Medido em 22/10/2026: os dois sites já têm o cadeado com uso obrigatório (HSTS com preload), regras do que a página pode
+carregar (CSP; a do site público ainda aceita script escrito dentro da página) e proteção contra ser exibido dentro de outro
+site. Faltam: **DNSSEC** (o DNS de `ieadespa.org.br` está na Microsoft 365, que não oferece DNSSEC), **CAA** (quem pode emitir o
+cadeado) e o **DMARC**. Decisão do responsável (22/10/2026): **nenhum registro de DNS é mexido antes desta versão** (nem o DMARC
+em observação) — mexer agora e de novo na troca deixaria registro demais; tudo é feito de uma vez aqui. O
+domínio `ieadespa.org` (e-mail do Google, DNS no provedor Odara) tem o SPF sem os servidores do Google e também não tem DMARC.
+
+Decisão do responsável: comprar um **domínio novo** para ser o domínio do e-mail da Microsoft 365 (trocando os e-mails para
+ele) e levar `ieadespa.org.br` (a sigla da Igreja) para a **zona do Azure DNS**, com DNSSEC, e lá configurar o domínio e os
+subdomínios. Depende de orçamento (o domínio novo; o Azure DNS custa alguns reais por mês). Antes de executar, comparar com a
+alternativa sem domínio novo: levar `ieadespa.org.br` inteiro para o Azure DNS, recriando ali também os registros do e-mail
+da Microsoft 365 (que funciona com DNS de qualquer provedor) — sem trocar o endereço de e-mail de ninguém.
+
+- [ ] Inventário de todos os registros de hoje (e-mail da Microsoft 365 e do Google, os dois sites, o serviço de e-mail do
+      sistema, verificações) e a troca planejada, num horário calmo, com volta rápida se algo falhar: na zona nova entram
+      TODOS os registros (domínio e subdomínios, os serviços de e-mail, as verificações), e o e-mail automático do sistema
+      (Azure Communication Services, hoje `DoNotReply@ieadespa.org.br`) é reconfigurado para o domínio certo.
+- [ ] Zona no Azure DNS com DNSSEC ligado e o registro DS publicado no Registro.br.
+- [ ] CAA permitindo só quem emite os cadeados (hoje a DigiCert, pelo Azure), conferido antes de cada renovação.
+- [ ] DMARC endurecido em todos os domínios (observação → quarentena → rejeição), com os relatórios lidos; SPF do
+      `ieadespa.org` corrigido para incluir o Google.
+- [ ] CSP do site público sem script escrito dentro da página.
+- [ ] Confirmação em duas etapas conferida em todas as contas que mandam no domínio (Registro.br, Microsoft 365, Google,
+      Azure).
+
+## v10.8 — Pagamento online pelo Pix (conta da Igreja no banco Cora) *(decisão de 22/10/2026)*
+
+Aprovado pelo Presidente (custo informado: cerca de R$ 1 a 2 por Pix e R$ 50 por mês), **parado até a v10.7** por decisão do
+responsável: com dinheiro real e o CPF de quem paga, a segurança da borda vem antes. Integração Direta da Cora (certificado,
+chave e identificação gerados no aplicativo da Cora, em Conta → Integrações via APIs; há ambiente de teste). A Cora exige o
+**CPF de quem paga** e o **valor mínimo de R$ 5**.
+
+- [ ] Cobrança Pix (QR e "copia e cola") gerada para a inscrição ou o pedido, com baixa automática pelo aviso do banco
+      (webhook conferido) e conciliação no financeiro.
+- [ ] CPF pedido só na hora de gerar o Pix, guardado protegido e **apagado depois de pago** (respeitando o que o estorno exigir).
+- [ ] Segredos (certificado e chave) só no fluxo criptografado (SOPS); testes no ambiente de teste da Cora antes do real.
+- [ ] Estorno e cancelamento; o "informar pagamento" da v7.13 continua para quem paga em mãos.
+
 ## 🔒 Trava de Revisão 10-B — antes de encerrar a FASE 10
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v10.4 e v10.5 pelas 5 perguntas do checklist, e faz uma varredura
+Audita v10.4 a v10.8 pelas 5 perguntas do checklist, e faz uma varredura
 final na FASE 10 inteira — v10.4 é modularização do próprio `script.js`
 (hoje um arquivo único de milhares de linhas), então o próprio risco de
 regressão desta versão é o motivo de existir a trava: dividir o arquivo sem

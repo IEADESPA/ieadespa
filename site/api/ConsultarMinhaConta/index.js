@@ -1,5 +1,6 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { verificar } = require("../src/lib/contaToken");
+const { avisoDoRegistro } = require("../src/lib/pagamentoInformado");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -11,6 +12,11 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * no token de sessão (assinado, ver `contaToken.js`) — nunca o e-mail cru
  * mandado pelo navegador, ou qualquer um poderia consultar a conta alheia só
  * digitando o e-mail de outra pessoa.
+ *
+ * v7.13 ("Meus eventos"): cada inscrição e cada pedido vêm com o `id` (para "Informar o pagamento",
+ * rota `informar-pagamento`, que confere o mesmo token), o lote, o valor, se é cortesia e o aviso de
+ * pagamento já informado. As leituras usam `fields=*` para não quebrar num Directus ainda sem os
+ * campos novos (pedir um campo que não existe dá 403); nada além do listado abaixo sai daqui.
  */
 /**
  * Preço por peça pode variar por tamanho (`camiseta_grupos.precos_tamanho`,
@@ -57,11 +63,11 @@ module.exports = async function (context, req) {
 
   const [inscricoesRes, pedidosRes] = await Promise.all([
     fetch(
-      `${DIRECTUS_URL}/items/inscricoes_eventos?${filtroEmail}&fields=id,codigo,pago,presente,aguardando_vaga,pendente_aprovacao,evento.slug,evento.title,evento.event_date&sort=-id&limit=-1`,
+      `${DIRECTUS_URL}/items/inscricoes_eventos?${filtroEmail}&fields=*,evento.slug,evento.title,evento.event_date&sort=-id&limit=-1`,
       { headers },
     ),
     fetch(
-      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=id,valor_pago,avulso,separado,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
+      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=*,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
       { headers },
     ),
   ]);
@@ -84,8 +90,13 @@ module.exports = async function (context, req) {
 
   const pedidosResultado = pedidos.map((p) => {
     const itensComAlocacao = alocarPagamento(itensPorPedido[p.id] || [], Number(p.valor_pago ?? 0), p.grupo);
+    const valorTotal = (itensPorPedido[p.id] || []).reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
     return {
+      id: p.id,
       grupo: p.grupo?.nome ?? null,
+      avulso: Boolean(p.avulso),
+      valorTotal,
+      pagamentoInformado: avisoDoRegistro(p),
       valorPago: p.valor_pago,
       separado: Boolean(p.separado),
       itens: itensComAlocacao.map((i) => ({
@@ -99,6 +110,11 @@ module.exports = async function (context, req) {
   });
 
   const inscricoesResultado = inscricoes.map((i) => ({
+    id: i.id,
+    faixa: i.faixa_rotulo ?? null,
+    valor: i.valor == null ? null : Number(i.valor),
+    cortesia: i.cortesia === true,
+    pagamentoInformado: avisoDoRegistro(i),
     eventoTitulo: i.evento?.title ?? null,
     eventoSlug: i.evento?.slug ?? null,
     eventoData: i.evento?.event_date ?? null,

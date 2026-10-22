@@ -1,4 +1,5 @@
 ---
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -144,6 +145,8 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
           <li><strong class="text-foreground">Pedidos até:</strong> {dateFormatter.format(new Date(lote.pedidos_ate))}</li>
         )}
       </ul>
+
+      <AvisoGolpe class="mt-6" />
 
       {
         prazoEncerrado ? (

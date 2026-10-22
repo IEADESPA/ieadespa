@@ -1,6 +1,7 @@
 ---
 import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -59,7 +60,8 @@ interface Evento {
   requer_aprovacao: boolean;
   inscricoes_ate: string | null;
   inscricoes_encerradas: boolean;
-  faixas_valor: { descricao: string; valor: number }[] | null;
+  /** v7.13: cada faixa é um LOTE — `ate` (último dia, Brasília) e `vagas` opcionais; vencido/esgotado não aparece. */
+  faixas_valor: { descricao: string; valor: number; ate?: string | null; vagas?: number | null }[] | null;
   permite_inscricao_grupo: boolean;
   /** Participações especiais do calendário oficial (v7.4), via `aplicarDatasOficiais`; ausente/vazio = sem bloco. */
   convidados?: ConvidadoOficial[];
@@ -114,6 +116,15 @@ const localCoordenada = !congregacaoDoEvento && event.location_maps_url
 const inscricaoVencida = event.inscricoes_ate ? new Date(`${String(event.inscricoes_ate).slice(0, 10)}T23:59:59-03:00`).getTime() < Date.now() : false;
 const inscricaoAberta = event.aceita_inscricao && !event.inscricoes_encerradas && !inscricaoVencida;
 const inscricaoEncerradaMotivo = event.inscricoes_encerradas ? "encerradas" : inscricaoVencida ? "vencido" : null;
+
+// v7.13 — lotes: o que já venceu na hora da montagem nem aparece; o que vencer depois (ou esgotar) a página esconde ao abrir,
+// pela data e pela situação que `/api/status-inscricao/{id}` devolve. A API recusa do mesmo jeito (a página é só conforto).
+const loteVencidoNoBuild = (ate: string | null | undefined) => Boolean(ate) && new Date(`${String(ate).slice(0, 10)}T23:59:59-03:00`).getTime() < Date.now();
+const lotes = (event.faixas_valor ?? []).filter((f) => f && String(f.descricao ?? "").trim() && !loteVencidoNoBuild(f.ate));
+const diaCurto = (ate: string) => {
+  const [, m, d] = String(ate).slice(0, 10).split("-");
+  return `${d}/${m}`;
+};
 
 /* Cada evento define suas próprias perguntas — nada fixo (nem "congregação",
    nem "casal") além de nome/telefone, que todo evento precisa pra
@@ -320,6 +331,10 @@ const structuredData = startDate
             <a href={`/cancelar-inscricao/${event.slug}/`} class="text-accent underline underline-offset-2">
               cancelar minha inscrição
             </a>
+            {" "}· Já pagou?{" "}
+            <a href={`/informar-pagamento/${event.slug}/`} class="text-accent underline underline-offset-2">
+              informar o pagamento
+            </a>
           </p>
         )
       }
@@ -350,19 +365,28 @@ const structuredData = startDate
             </ul>
 
             {
-              event.faixas_valor && event.faixas_valor.length > 0 && (
+              lotes.length > 0 && (
                 <div class="mt-4 valores-tabela">
                   <p class="text-sm font-semibold">Valores</p>
                   <ul class="mt-2 grid gap-1 text-sm text-muted-foreground">
-                    {event.faixas_valor.map((faixa) => (
-                      <li class="flex items-baseline justify-between gap-3">
-                        <span>{faixa.descricao}</span>
+                    {lotes.map((faixa) => (
+                      <li class="flex items-baseline justify-between gap-3" data-lote-linha={faixa.descricao} data-lote-ate={faixa.ate ?? ""}>
+                        <span>
+                          {faixa.descricao}
+                          {faixa.ate && <span class="text-xs"> (até {diaCurto(faixa.ate)})</span>}
+                          <span class="text-xs" data-lote-situacao />
+                        </span>
                         <span class="text-foreground font-semibold">
                           R$ {Number(faixa.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
                       </li>
                     ))}
                   </ul>
+                  <p class="mt-2 text-xs">
+                    Já se inscreveu e pagou?{" "}
+                    <a href={`/informar-pagamento/${event.slug}/`} class="text-accent underline underline-offset-2">Informe o pagamento</a> — a equipe confere no extrato.
+                  </p>
+                  <AvisoGolpe class="mt-3" />
                 </div>
               )
             }
@@ -384,17 +408,19 @@ const structuredData = startDate
                 </div>
 
                 {
-                  event.faixas_valor && event.faixas_valor.length > 0 && (
+                  lotes.length > 0 && (
                     <div class="grid gap-2">
                       <label class="text-sm font-semibold" for="inscricao-faixa">Faixa de valor</label>
-                      <select id="inscricao-faixa" class="field">
+                      <select id="inscricao-faixa" class="field" required>
                         <option value="">Selecione…</option>
-                        {event.faixas_valor.map((faixa) => (
-                          <option value={faixa.valor}>
+                        {lotes.map((faixa) => (
+                          <option value={faixa.descricao} data-valor={faixa.valor} data-ate={faixa.ate ?? ""}>
                             {faixa.descricao} — R$ {Number(faixa.valor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            {faixa.ate ? ` (até ${diaCurto(faixa.ate)})` : ""}
                           </option>
                         ))}
                       </select>
+                      <p class="text-xs text-muted-foreground" role="status" aria-live="polite" data-lote-aviso />
                     </div>
                   )
                 }
@@ -552,6 +578,7 @@ const structuredData = startDate
           statusInscricaoUrl: `${STATUS_INSCRICAO_URL}/${event.id}`,
           enviarConfirmacaoUrl: ENVIAR_CONFIRMACAO_URL,
           eventoTitulo: event.title,
+          eventoSlug: event.slug,
           eventoPeriodo: [event.event_date ? dateFormatter.format(new Date(event.event_date)) : null, timeRange].filter(Boolean).join(", "),
           eventoLocal: localNome,
           vagasLimite: event.vagas_limite,
@@ -573,6 +600,8 @@ const structuredData = startDate
         // hora (mesma regra de prazo/encerramento, em `/api/status-inscricao/{id}`).
         // 19/10/2026 — pico de gente: o servidor recusa com 503 + motivo "ocupado" ANTES de gravar qualquer coisa (fila cheia). Como nada foi gravado, é seguro repetir:
         // a página tenta de novo sozinha, com pausa e um pouco de acaso (para não voltarem todos juntos), e mostra a espera. Qualquer outra resposta segue o fluxo normal.
+        // Revisão de 22/10/2026: o nome digitado ia para a tela como HTML (innerHTML) — agora sempre escapado.
+        const escaparHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
         async function enviarComEspera(url, init) {
           const { avisoEspera, ...resto } = init;
           for (let tentativa = 1; ; tentativa += 1) {
@@ -608,8 +637,37 @@ const structuredData = startDate
             if (vagasRestantesEl && vagasLimite && s.vagasRestantes != null) {
               vagasRestantesEl.textContent = s.vagasRestantes > 0 ? `(${s.vagasRestantes} restantes)` : "(esgotadas — lista de espera)";
             }
+            // v7.13 — lotes vencidos/esgotados somem da escolha; o que tiver poucas vagas mostra "restam N".
+            (s.lotes || []).forEach((l) => marcarLote(l.descricao, l.disponivel ? null : l.motivo, l.restantes));
           })
           .catch(() => {});
+
+        // v7.13 — lote vencido (pela data, no fuso de Brasília) ou esgotado: sai da escolha e fica riscado na tabela de valores.
+        function marcarLote(rotulo, motivo, restantes) {
+          const select = document.getElementById("inscricao-faixa");
+          const opcao = select ? Array.from(select.options).find((o) => o.value === rotulo) : null;
+          const linha = Array.from(document.querySelectorAll("[data-lote-linha]")).find((el) => el.dataset.loteLinha === rotulo);
+          const situacao = linha ? linha.querySelector("[data-lote-situacao]") : null;
+          if (motivo) {
+            if (opcao) {
+              if (select.value === rotulo) select.value = "";
+              opcao.remove();
+              // Revisão de 22/10/2026: a escolha é obrigatória (a API recusa sem lote); sem nenhum lote sobrando, a página diz isso.
+              if (select.options.length <= 1) {
+                const aviso = document.querySelector("[data-lote-aviso]");
+                if (aviso) aviso.textContent = "Não há lote disponível agora: os lotes encerraram ou esgotaram.";
+              }
+            }
+            if (situacao) situacao.textContent = motivo === "esgotado" ? " — esgotado" : " — encerrado";
+            if (linha) linha.classList.add("lote-indisponivel");
+          } else if (situacao && restantes != null && restantes <= 10) {
+            situacao.textContent = ` — restam ${restantes}`;
+          }
+        }
+        document.querySelectorAll("[data-lote-linha]").forEach((linha) => {
+          const ate = linha.dataset.loteAte;
+          if (ate && new Date(`${ate}T23:59:59-03:00`).getTime() < Date.now()) marcarLote(linha.dataset.loteLinha, "vencido", null);
+        });
 
         function urlBase64ToUint8Array(base64String) {
           const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -696,8 +754,13 @@ const structuredData = startDate
             const button = form.querySelector("button[type=submit]");
             const data = new FormData(form);
             const eventoId = Number(form.dataset.eventoId);
+            // v7.13: vai o rótulo do lote (`faixa`) e o valor (para a API conferir que os dois batem).
             const faixaEl = form.querySelector("#inscricao-faixa");
-            const valorFaixa = faixaEl?.value ? Number(faixaEl.value) : null;
+            const faixaOpcao = faixaEl && faixaEl.value ? faixaEl.selectedOptions[0] : null;
+            const faixa = faixaOpcao ? faixaOpcao.value : null;
+            const valorFaixa = faixaOpcao ? Number(faixaOpcao.dataset.valor) : null;
+            const loteAvisoEl = form.querySelector("[data-lote-aviso]");
+            if (loteAvisoEl) loteAvisoEl.textContent = "";
             const cupomInput = form.querySelector("[data-cupom-input]");
             const cupomStatusEl = form.querySelector("[data-cupom-status]");
             const codigoCupom = cupomInput?.value.trim().toUpperCase();
@@ -749,6 +812,7 @@ const structuredData = startDate
                   nomes,
                   telefone: String(data.get("telefone") || ""),
                   email: email || null,
+                  faixa,
                   valorFaixa,
                   cupom: codigoCupom || null,
                   respostas: respostasBase,
@@ -759,28 +823,35 @@ const structuredData = startDate
                 encerrarInscricao(json?.erro);
                 return;
               }
+              if (res.status === 409 && (json?.motivo === "lote_esgotado" || json?.motivo === "lote_vencido")) {
+                // O lote acabou enquanto a pessoa preenchia: sai da escolha e ela escolhe o seguinte. Nada foi gravado.
+                if (json.motivo === "lote_vencido" || !json.restantes) marcarLote(json.lote, json.motivo === "lote_vencido" ? "vencido" : "esgotado", 0);
+                if (loteAvisoEl) loteAvisoEl.textContent = json.erro;
+                throw new Error(json.erro);
+              }
               if (res.status === 429) throw new Error("Muitas inscrições deste mesmo acesso em poucos minutos. Aguarde um pouco e tente de novo.");
               // 5xx (fora o "ocupado", já repetido acima): o servidor pode ter gravado antes de falhar — não mandar a pessoa enviar de novo às cegas.
               if (res.status >= 500 && !(res.status === 503 && json?.motivo === "ocupado")) throw new Error("Não conseguimos confirmar a inscrição agora. Ela pode ter sido registrada: aguarde um minuto e, para ter certeza, procure a organização do evento antes de tentar de novo.");
               if (!res.ok) throw new Error(json?.erro || "falha ao criar inscrição");
 
               if (cupomStatusEl && json.cupom) cupomStatusEl.textContent = json.cupom.mensagem || "";
-              const resultados = (json.inscricoes || []).map((i) => ({ nome: i.nome, codigo: i.codigo, aguardandoVaga: i.aguardandoVaga, pendenteAprovacao: i.pendenteAprovacao, inscricaoId: i.id }));
+              const resultados = (json.inscricoes || []).map((i) => ({ nome: i.nome, codigo: i.codigo, aguardandoVaga: i.aguardandoVaga, pendenteAprovacao: i.pendenteAprovacao, inscricaoId: i.id, valor: i.valor }));
               if (resultados.length === 0) throw new Error("falha ao criar inscrição");
 
               if (status) {
                 if (resultados.length === 1) {
                   const { codigo, aguardandoVaga, pendenteAprovacao } = resultados[0];
                   status.innerHTML = pendenteAprovacao
-                    ? `Inscrição recebida — aguardando aprovação da equipe organizadora. Seu código é <strong>${codigo}</strong>; guarde-o, você vai precisar dele depois que a inscrição for aceita.`
+                    ? `Inscrição recebida — aguardando aprovação da equipe organizadora. Seu código é <strong>${escaparHtml(codigo)}</strong>; guarde-o, você vai precisar dele depois que a inscrição for aceita.`
                     : aguardandoVaga
-                    ? `Vagas esgotadas no momento — você está na <strong>lista de espera</strong>. Seu código é <strong>${codigo}</strong>; guarde-o, porque se abrir vaga sua inscrição é confirmada automaticamente com esse mesmo código.`
-                    : `Inscrição confirmada! Seu código de check-in é <strong>${codigo}</strong> — anote ou tire um print, você vai usar na entrada do evento.`;
+                    ? `Vagas esgotadas no momento — você está na <strong>lista de espera</strong>. Seu código é <strong>${escaparHtml(codigo)}</strong>; guarde-o, porque se abrir vaga sua inscrição é confirmada automaticamente com esse mesmo código.`
+                    : `Inscrição confirmada! Seu código de check-in é <strong>${escaparHtml(codigo)}</strong> — anote ou tire um print, você vai usar na entrada do evento.`;
+                  if (Number(resultados[0].valor) > 0 && !pendenteAprovacao && !aguardandoVaga) status.innerHTML += ` Depois de pagar, <a href="/informar-pagamento/${eventoSlug}/" class="text-accent underline">informe o pagamento</a> com esse código.`;
                 } else {
                   const linhas = resultados
                     .map(
                       (r) =>
-                        `${r.nome}: <strong>${r.codigo}</strong>${
+                        `${escaparHtml(r.nome)}: <strong>${escaparHtml(r.codigo)}</strong>${
                           r.pendenteAprovacao ? " (aguardando aprovação)" : r.aguardandoVaga ? " (lista de espera)" : ""
                         }`,
                     )
@@ -855,6 +926,11 @@ const structuredData = startDate
     .valores-tabela {
       border-top: 1px solid var(--border);
       padding-top: 0.85rem;
+    }
+
+    .valores-tabela :global(.lote-indisponivel) {
+      text-decoration: line-through;
+      opacity: 0.6;
     }
 
     .contact-checkbox {

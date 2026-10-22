@@ -4,6 +4,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
+import { normalizarLocais } from "@/lib/credenciamento";
 
 interface Evento {
   id: number;
@@ -14,7 +15,8 @@ interface Evento {
   time: string | null;
   checkin_libera_minutos_antes: number | null;
   checkin_liberado_manualmente: boolean;
-  locais_checkin: string[] | null;
+  /** v7.13: nomes (formato antigo) ou { nome, capacidade } — ver `credenciamento.ts`. */
+  locais_checkin: unknown;
   vagas_limite: number | null;
 }
 
@@ -31,6 +33,7 @@ interface Props {
 
 const { event } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
+const locais = normalizarLocais(event.locais_checkin);
 ---
 
 <BaseLayout title={`Check-in — ${event.title}`} description="Confirme sua presença no evento." noindex>
@@ -46,6 +49,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       data-minutos-antes={event.checkin_libera_minutos_antes ?? ""}
       data-liberado-manualmente={event.checkin_liberado_manualmente ? "1" : ""}
       data-vagas-limite={event.vagas_limite ?? ""}
+      data-locais={JSON.stringify(locais)}
     >
       <header class="pagehead">
         <p class="eyebrow">Check-in</p>
@@ -67,14 +71,16 @@ const allPosts = visiblePosts(await getAllMensagens());
       <div class="mt-6 checkin-resumo">
         <p class="checkin-resumo-numero" data-checkin-contador>—</p>
         <p class="text-xs text-muted-foreground" data-checkin-sync-status>Carregando…</p>
+        <ul class="mt-2 grid gap-0.5 text-sm" data-checkin-locais-resumo hidden></ul>
       </div>
+      <p class="mt-3 text-sm font-semibold checkin-capacidade-aviso" role="alert" data-checkin-capacidade-aviso hidden></p>
       {
-        event.locais_checkin && event.locais_checkin.length > 0 && (
+        locais.length > 0 && (
           <div class="mt-6 grid gap-2 max-w-sm local-checkin-bloco">
-            <label class="text-sm font-semibold" for="checkin-local">Local deste aparelho (portaria)</label>
+            <label class="text-sm font-semibold" for="checkin-local">Local deste aparelho (portaria, sala ou ala)</label>
             <select id="checkin-local" class="field" data-checkin-local-select>
               <option value="">Selecione…</option>
-              {event.locais_checkin.map((local) => <option value={local}>{local}</option>)}
+              {locais.map((local) => <option value={local.nome}>{local.nome}{local.capacidade ? ` (capacidade ${local.capacidade})` : ""}</option>)}
             </select>
             <p class="text-xs text-muted-foreground">
               Escolha uma vez só — fica guardado neste aparelho, e toda confirmação feita por ele
@@ -138,7 +144,8 @@ const allPosts = visiblePosts(await getAllMensagens());
 
   <script is:inline src="/vendor/jsQR-1.4.0.js"></script>
   <script>
-    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
+    import { exigirAutenticacao, irParaLogin, renovarToken, sair } from "@/lib/painelAuth";
+    import { avisoCapacidade, chaveEntrada, classificarRespostaCheckin, contarPorLocal, diaEmBrasilia, entradaJaConhecida, jaEntrouNoLocal, resumoLocais, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do check-in ausente");
@@ -151,6 +158,13 @@ const allPosts = visiblePosts(await getAllMensagens());
     const minutosAntes = container.dataset.minutosAntes ? Number(container.dataset.minutosAntes) : null;
     const liberadoManualmente = container.dataset.liberadoManualmente === "1";
     const vagasLimite = container.dataset.vagasLimite ? Number(container.dataset.vagasLimite) : null;
+    const locais: LocalCheckin[] = (() => {
+      try {
+        return JSON.parse(container.dataset.locais || "[]");
+      } catch {
+        return [];
+      }
+    })();
 
     const verificandoEl = document.querySelector<HTMLElement>("[data-checkin-verificando]");
     const usuarioWrap = document.querySelector<HTMLElement>("[data-checkin-usuario-wrap]");
@@ -180,12 +194,19 @@ const allPosts = visiblePosts(await getAllMensagens());
       codigo?: string;
       pago: boolean;
       presente: boolean;
+      cortesia?: boolean;
     }
 
+    /**
+     * Um check-in guardado no aparelho até chegar ao servidor (sem internet, ou o servidor falhou). v7.13: além de marcar presente, leva a
+     * ENTRADA do local (`evento_entradas`), com a hora do aparelho e a chave "inscrição:local:dia" — reenviar não duplica.
+     */
     interface Pendencia {
       id: number | string;
       local_checkin: string | null;
       observacao_checkin: string | null;
+      marcarPresente?: boolean;
+      entrada?: { local: string | null; entrou_em: string; chave: string } | null;
     }
 
     function rodarCheckin() {
@@ -228,6 +249,8 @@ const allPosts = visiblePosts(await getAllMensagens());
       const localSelect = document.querySelector<HTMLSelectElement>("[data-checkin-local-select]");
       const contadorEl = document.querySelector<HTMLElement>("[data-checkin-contador]")!;
       const syncStatusEl = document.querySelector<HTMLElement>("[data-checkin-sync-status]")!;
+      const locaisResumoEl = document.querySelector<HTMLElement>("[data-checkin-locais-resumo]");
+      const capacidadeAvisoEl = document.querySelector<HTMLElement>("[data-checkin-capacidade-aviso]");
 
       const escapeHtml = (value: unknown) =>
         String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
@@ -253,7 +276,17 @@ const allPosts = visiblePosts(await getAllMensagens());
       // presença ao vivo, sem precisar abrir a tela de inscritos. ---
       const ROSTER_KEY = `ieadespa-checkin-roster-${eventoSlug}`;
       const PENDENCIAS_KEY = `ieadespa-checkin-pendencias-${eventoSlug}`;
+      const ENTRADAS_KEY = `ieadespa-checkin-entradas-${eventoSlug}`;
       let roster: Pessoa[] = [];
+      // v7.13 — as entradas já registradas (do servidor + as deste aparelho): base da contagem por local e do "já entrou aqui hoje".
+      let entradasServidor: Entrada[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem(ENTRADAS_KEY) || "[]");
+        } catch {
+          return [];
+        }
+      })();
+      let entradasRegistraveis = true; // vira false se o Directus ainda não tiver `evento_entradas` (esquema v7.13) ou o perfil não puder gravar
 
       function carregarRosterDoCache(): Pessoa[] {
         try {
@@ -284,10 +317,54 @@ const allPosts = visiblePosts(await getAllMensagens());
         } catch {}
       }
 
+      function todasEntradas(): Entrada[] {
+        const pendentes = lerPendencias()
+          .filter((p) => p.entrada)
+          .map((p) => ({ inscricao: p.id, local: p.entrada!.local, entrou_em: p.entrada!.entrou_em }));
+        return [...entradasServidor, ...pendentes];
+      }
+
       function atualizarContador() {
         if (!contadorEl) return;
         const presentes = roster.filter((p) => p.presente).length;
         contadorEl.textContent = vagasLimite ? `${presentes} presentes de ${vagasLimite} vagas` : `${presentes} presentes`;
+        // v7.13 — quantas pessoas entraram HOJE em cada local, com a capacidade.
+        if (locaisResumoEl && locais.length) {
+          const contagens = contarPorLocal(todasEntradas(), diaEmBrasilia(new Date()));
+          locaisResumoEl.hidden = false;
+          locaisResumoEl.innerHTML = resumoLocais(locais, contagens)
+            .map((r) => `<li class="${r.aviso?.nivel === "passou" ? "checkin-local-passou" : ""}">${escapeHtml(r.texto)}${r.aviso?.nivel === "passou" ? " ⚠️" : ""}</li>`)
+            .join("");
+        }
+      }
+
+      /** O aviso de capacidade do local DESTE aparelho (avisa, não barra). */
+      function avisarCapacidadeDoLocal(local: string | null) {
+        if (!capacidadeAvisoEl) return;
+        const alvo = locais.find((l) => l.nome === local) ?? null;
+        const aviso = alvo ? avisoCapacidade(alvo, contarPorLocal(todasEntradas(), diaEmBrasilia(new Date()))[alvo.nome] ?? 0) : null;
+        capacidadeAvisoEl.hidden = !aviso;
+        capacidadeAvisoEl.textContent = aviso ? aviso.texto : "";
+      }
+
+      async function carregarEntradas() {
+        if (!entradasRegistraveis) return;
+        try {
+          const res = await fetch(`${directusUrl}/items/evento_entradas?filter[evento][_eq]=${eventoId}&fields=inscricao,local,entrou_em,date_created&limit=-1`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.status === 403) {
+            entradasRegistraveis = false; // sem o esquema v7.13 (ou sem permissão): segue como antes, só com a presença
+            return;
+          }
+          if (!res.ok) return;
+          entradasServidor = (await res.json()).data ?? [];
+          try {
+            localStorage.setItem(ENTRADAS_KEY, JSON.stringify(entradasServidor));
+          } catch {}
+        } catch {
+          /* sem rede: fica o que já estava guardado */
+        }
       }
 
       function atualizarSyncStatus() {
@@ -311,6 +388,15 @@ const allPosts = visiblePosts(await getAllMensagens());
           if (!res.ok) throw new Error("falha ao buscar lista");
           const json = await res.json();
           const fresco: Pessoa[] = json.data ?? [];
+          // v7.13 — cortesia não é "não pago": leitura à parte (num Directus sem o campo ela dá 403 e tudo segue como antes).
+          const resCortesia = await fetch(`${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&filter[cortesia][_eq]=true&fields=id&limit=-1`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null);
+          if (resCortesia && resCortesia.ok) {
+            const cortesias = new Set(((await resCortesia.json()).data ?? []).map((c: { id: number }) => String(c.id)));
+            fresco.forEach((p) => (p.cortesia = cortesias.has(String(p.id))));
+          }
+          await carregarEntradas();
           // Se este aparelho já confirmou alguém (otimista) e a atualização
           // ainda não chegou no servidor (PATCH lento, ou por sincronizar),
           // não deixa essa atualização periódica "desconfirmar" a pessoa na
@@ -325,31 +411,128 @@ const allPosts = visiblePosts(await getAllMensagens());
         atualizarSyncStatus();
       }
 
+      // v7.13 — a fila pode ter várias entradas da mesma pessoa (locais diferentes): cada item é identificado por pessoa + chave da entrada.
+      const chaveDaPendencia = (p: Pendencia) => `${p.id}|${p.entrada?.chave ?? ""}`;
+      function tirarDaFila(chaves: Set<string>) {
+        salvarPendencias(lerPendencias().filter((p) => !chaves.has(chaveDaPendencia(p))));
+      }
+      function porNaFila(p: Pendencia) {
+        salvarPendencias([...lerPendencias().filter((x) => chaveDaPendencia(x) !== chaveDaPendencia(p)), p]);
+      }
+
+      let sincronizando = false;
       async function sincronizarPendencias() {
+        if (sincronizando) return;
         const pendencias = lerPendencias();
         if (!pendencias.length) {
           atualizarSyncStatus();
           return;
         }
-        const restantes = [];
-        for (const pendencia of pendencias) {
-          try {
-            const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${pendencia.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                presente: true,
-                local_checkin: pendencia.local_checkin,
-                observacao_checkin: pendencia.observacao_checkin,
-              }),
-            });
-            if (!res.ok) throw new Error("falha ao sincronizar");
-          } catch {
-            restantes.push(pendencia);
+        sincronizando = true;
+        let sessaoCaiu = false;
+        try {
+          const feitas = new Set<string>();
+          for (const pendencia of pendencias) {
+            try {
+              await gravarCheckin(pendencia);
+              feitas.add(chaveDaPendencia(pendencia));
+            } catch (e) {
+              const erro = e as ErroCheckin;
+              if (erro.permanente) {
+                // Revisão de 22/10/2026: falha que não passa repetindo (inscrição apagada, dado recusado) sai da fila e a tela avisa — antes era reenviada para sempre.
+                feitas.add(chaveDaPendencia(pendencia));
+                avisarFalhaPermanente(pendencia, erro.message);
+                continue;
+              }
+              porNaFila(pendencia); // guarda o que já foi feito (a presença) e tenta só o resto depois
+              if (erro.sessao) {
+                sessaoCaiu = true;
+                break; // sem sessão, as próximas falhariam igual: a fila fica guardada no aparelho
+              }
+            }
           }
+          // Relê a fila no fim: o que entrou nela durante a sincronização não se perde.
+          tirarDaFila(feitas);
+        } finally {
+          sincronizando = false;
         }
-        salvarPendencias(restantes);
+        atualizarContador();
+        if (sessaoCaiu) {
+          if (await sessaoDeNovo()) window.setTimeout(sincronizarPendencias, 0);
+          return;
+        }
         atualizarSyncStatus();
+      }
+
+      /** O token do painel venceu (401): tenta renovar sozinho; se não der, pede para entrar de novo (a fila continua guardada no aparelho). */
+      async function sessaoDeNovo(): Promise<boolean> {
+        const novo = await renovarToken(directusUrl).catch(() => null);
+        if (novo) {
+          token = novo;
+          return true;
+        }
+        pedirLoginDeNovo();
+        return false;
+      }
+
+      /**
+       * Grava um check-in: marca presente (na primeira entrada) e registra a ENTRADA do local. A entrada leva a chave única
+       * "inscrição:local:dia": se a mesma entrada chegar duas vezes (fila sem internet), o Directus recusa a segunda e isso conta como feito.
+       * Quem fez o check-in o Directus guarda sozinho (`user_created`, pelo token de quem está logado). Lança erro se algo precisar ser tentado de novo.
+       */
+      type ErroCheckin = Error & { permanente?: boolean; sessao?: boolean };
+      const erroCheckin = (mensagem: string, tipo: "permanente" | "sessao" | null): ErroCheckin => Object.assign(new Error(mensagem), tipo ? { [tipo]: true } : {});
+      const codigosDeErro = async (res: Response) => ((await res.json().catch(() => null))?.errors || []).map((e: { extensions?: { code?: string } }) => e.extensions?.code || "");
+
+      async function gravarCheckin(p: Pendencia) {
+        if (p.marcarPresente !== false) {
+          const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${p.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ presente: true, local_checkin: p.local_checkin, observacao_checkin: p.observacao_checkin }),
+          });
+          const destino = classificarRespostaCheckin("presenca", res.status);
+          if (destino === "sessao") throw erroCheckin("sessão terminou", "sessao");
+          if (destino === "permanente") throw erroCheckin(`a inscrição não pôde ser marcada como presente (o servidor respondeu ${res.status}: apagada ou sem permissão)`, "permanente");
+          if (destino !== "ok") throw erroCheckin("falha ao confirmar", null);
+          p.marcarPresente = false; // a presença já foi; se a entrada falhar, só ela é repetida
+        }
+        if (p.entrada && entradasRegistraveis) {
+          const res = await fetch(`${directusUrl}/items/evento_entradas`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ evento: eventoId, inscricao: Number(p.id), local: p.entrada.local, entrou_em: p.entrada.entrou_em, chave: p.entrada.chave }),
+          });
+          const destino = classificarRespostaCheckin("entrada", res.status, res.ok ? [] : await codigosDeErro(res));
+          if (destino === "sem_esquema") {
+            entradasRegistraveis = false; // sem o esquema v7.13 (ou sem permissão): a presença basta, como antes
+            return;
+          }
+          if (destino === "sessao") throw erroCheckin("sessão terminou", "sessao");
+          if (destino === "permanente") throw erroCheckin(`a entrada não pôde ser registrada (o servidor respondeu ${res.status})`, "permanente");
+          if (destino === "tentar_de_novo") throw erroCheckin("falha ao registrar a entrada", null);
+          // Revisão de 22/10/2026: a confirmação e a sincronização podem gravar a mesma entrada; ela entra na lista uma vez só.
+          const nova = { inscricao: p.id, local: p.entrada.local, entrou_em: p.entrada.entrou_em };
+          if (!entradaJaConhecida(entradasServidor, nova)) entradasServidor.push(nova);
+        }
+      }
+
+      function avisarFalhaPermanente(p: Pendencia, motivo: string) {
+        const nome = roster.find((x) => String(x.id) === String(p.id))?.nome ?? `inscrição ${p.id}`;
+        resultado.textContent = `⚠️ O check-in de ${nome} NÃO foi gravado: ${motivo}. Confira com a coordenação.`;
+      }
+
+      function pedirLoginDeNovo() {
+        const n = lerPendencias().length;
+        syncStatusEl.innerHTML = "";
+        const texto = document.createElement("span");
+        texto.textContent = `Sua sessão terminou. ${n} check-in(s) continuam guardados neste aparelho e vão assim que você entrar de novo. `;
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "link-sweep text-accent font-semibold";
+        botao.textContent = "Entrar de novo";
+        botao.addEventListener("click", () => irParaLogin());
+        syncStatusEl.append(texto, botao);
       }
 
       carregarRoster();
@@ -362,14 +545,19 @@ const allPosts = visiblePosts(await getAllMensagens());
       // e vira pendência se a rede falhar ou estiver offline, sincronizando
       // sozinha depois.
       async function confirmarPresenca(id: number | string, nome: string, pago: boolean) {
-        const jaConfirmado = roster.find((p) => String(p.id) === String(id))?.presente;
-        if (jaConfirmado) {
-          resultado.textContent = `${nome} já estava confirmado — nada mudou.`;
+        const pessoa = roster.find((p) => String(p.id) === String(id));
+        const jaConfirmado = pessoa?.presente;
+        const localAtual = localSelect?.value || null;
+        const agora = new Date();
+        const hoje = diaEmBrasilia(agora);
+        // v7.13 — a mesma pessoa pode entrar em mais de um local; no MESMO local, no mesmo dia, é uma entrada só.
+        if (jaConfirmado && (!entradasRegistraveis || jaEntrouNoLocal(todasEntradas(), id, localAtual, hoje))) {
+          resultado.textContent = localAtual ? `${nome} já tinha entrado em ${localAtual} hoje — nada mudou.` : `${nome} já estava confirmado — nada mudou.`;
           return;
         }
 
         let observacao = null;
-        if (!pago) {
+        if (!pago && !pessoa?.cortesia && !jaConfirmado) {
           observacao = window.prompt(
             `${nome} ainda não está marcada como paga. Confirmar a entrada mesmo assim é uma exceção — digite o motivo (ex.: "vai pagar depois") ou cancele.`,
           );
@@ -379,32 +567,48 @@ const allPosts = visiblePosts(await getAllMensagens());
           }
         }
 
-        const localAtual = localSelect?.value || null;
+        const pendencia: Pendencia = {
+          id,
+          local_checkin: localAtual,
+          observacao_checkin: observacao || null,
+          marcarPresente: !jaConfirmado,
+          entrada: entradasRegistraveis ? { local: localAtual, entrou_em: agora.toISOString(), chave: chaveEntrada(id, localAtual, agora) } : null,
+        };
 
         // Otimista: já marca presente no cache local e mostra sucesso antes
         // de qualquer resposta de rede.
-        const pessoaRoster = roster.find((p) => String(p.id) === String(id));
-        if (pessoaRoster) pessoaRoster.presente = true;
+        if (pessoa) pessoa.presente = true;
         salvarRosterNoCache();
+        // A entrada fica na fila do aparelho até o servidor confirmar (é ela que soma na contagem do local enquanto isso).
+        porNaFila(pendencia);
         atualizarContador();
-        resultado.textContent = observacao
-          ? `✅ ${nome} — presença confirmada (exceção: ${observacao}).`
-          : `✅ ${nome} — presença confirmada!`;
+        avisarCapacidadeDoLocal(localAtual);
+        resultado.textContent = jaConfirmado
+          ? `✅ ${nome} — entrada registrada${localAtual ? ` em ${localAtual}` : " (hoje)"}.`
+          : observacao
+            ? `✅ ${nome} — presença confirmada (exceção: ${observacao}).`
+            : `✅ ${nome} — presença confirmada!`;
 
+        let semSessao = false;
         try {
-          const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ presente: true, local_checkin: localAtual, observacao_checkin: observacao || null }),
-          });
-          if (!res.ok) throw new Error("falha ao confirmar");
-        } catch {
-          const pendencias = lerPendencias().filter((p) => String(p.id) !== String(id));
-          pendencias.push({ id, local_checkin: localAtual, observacao_checkin: observacao || null });
-          salvarPendencias(pendencias);
-          atualizarSyncStatus();
-          sincronizarPendencias();
+          await gravarCheckin(pendencia);
+          tirarDaFila(new Set([chaveDaPendencia(pendencia)]));
+        } catch (e) {
+          const erro = e as ErroCheckin;
+          if (erro.permanente) {
+            tirarDaFila(new Set([chaveDaPendencia(pendencia)]));
+            avisarFalhaPermanente(pendencia, erro.message);
+          } else {
+            // Fica na fila (com o que falta: presença e/ou entrada) e sincroniza sozinho depois.
+            porNaFila(pendencia);
+            if (erro.sessao) semSessao = true;
+            else sincronizarPendencias();
+          }
         }
+        atualizarContador();
+        if (semSessao) {
+          if (await sessaoDeNovo()) sincronizarPendencias();
+        } else atualizarSyncStatus();
       }
 
       function buscarNoRoster(codigo: string) {
@@ -579,6 +783,16 @@ const allPosts = visiblePosts(await getAllMensagens());
       border-radius: var(--radius-md);
       border: 1px solid var(--border);
       background: #000;
+    }
+
+    .checkin-capacidade-aviso {
+      color: #b3261e;
+      max-width: 24rem;
+    }
+
+    :global(.checkin-local-passou) {
+      color: #b3261e;
+      font-weight: 600;
     }
   </style>
 </BaseLayout>

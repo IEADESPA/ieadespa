@@ -86,6 +86,24 @@ function conferirHash(telefoneBruto, valorGuardado) {
 }
 
 /**
+ * O mesmo `conferirHash`, mas com o scrypt FORA do processo principal e com poucos ao mesmo tempo (como `gerarHashAssincrono`) — para rota pública
+ * que confere um registro (v7.13, revisão de 22/10/2026: o "informar pagamento" usava o `scryptSync`, que trava o processo ~50 ms por chamada).
+ */
+function conferirHashAssincrono(telefoneBruto, valorGuardado) {
+  if (!valorGuardado || !String(valorGuardado).includes(":")) return Promise.resolve(false);
+  const normalizado = normalizar(telefoneBruto);
+  if (normalizado.length < 8) return Promise.resolve(false);
+  const [salt, hashGuardado] = String(valorGuardado).split(":");
+  return limitarScrypt(() => new Promise((resolve, reject) => {
+    crypto.scrypt(normalizado, salt, SCRYPT_KEYLEN, (erro, chave) => {
+      if (erro) return reject(erro);
+      const bufB = Buffer.from(hashGuardado, "hex");
+      resolve(chave.length === bufB.length && crypto.timingSafeEqual(chave, bufB));
+    });
+  }));
+}
+
+/**
  * Chave de BUSCA do telefone (06/10/2026): HMAC-SHA256 do telefone normalizado
  * com um segredo só do servidor (`TELEFONE_CHAVE_SEGREDO`, Application Setting
  * do site, guardado criptografado em `site/secrets.env`). Determinística — o
@@ -166,4 +184,4 @@ function normalizarNome(valor) {
     .trim();
 }
 
-module.exports = { normalizar, gerarHash, gerarHashAssincrono, conferirHash, chaveTelefone, normalizarNome, digitosCompletos, cifrarTelefone, decifrarTelefone, linkWhatsApp };
+module.exports = { normalizar, gerarHash, gerarHashAssincrono, conferirHash, conferirHashAssincrono, chaveTelefone, normalizarNome, digitosCompletos, cifrarTelefone, decifrarTelefone, linkWhatsApp };

@@ -255,6 +255,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { montarLinhasMalharia } from "@/lib/pdfMalharia";
     import { avaliar, limitesDoGrupo, pedidoDosItens, temLimite, type PedidoDoLimite } from "@/lib/limitePedidos";
+    import { textoPagamentoInformado } from "@/lib/informarPagamento";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -295,6 +296,12 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       separado: boolean;
       separado_em: string | null;
       aviso_retirada_em?: string | null;
+      /** v7.13 — o pagamento que a pessoa informou ("Meus pedidos"/Minha Conta); a equipe confere no extrato e lança em "Pago: R$". */
+      pagamento_informado_em?: string | null;
+      pagamento_informado_data?: string | null;
+      pagamento_informado_meio?: string | null;
+      pagamento_informado_valor?: number | string | null;
+      pagamento_informado_nome?: string | null;
       itens: Item[];
     }
 
@@ -768,6 +775,14 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       const avisoEmMassa = p.aviso_retirada_em
         ? `<p class="camiseta-pedido-aviso">✉️ Avisado por e-mail em ${new Date(p.aviso_retirada_em).toLocaleDateString("pt-BR")} que pode retirar.</p>`
         : "";
+      // v7.13 — "Pagamento informado": a pessoa avisou que pagou; confira no extrato e lance o valor em "Pago: R$".
+      const textoInformado = textoPagamentoInformado(
+        p.pagamento_informado_em
+          ? { em: p.pagamento_informado_em, data: p.pagamento_informado_data ?? null, meio: p.pagamento_informado_meio ?? null, valor: p.pagamento_informado_valor == null ? null : Number(p.pagamento_informado_valor), nome: p.pagamento_informado_nome ?? null }
+          : null,
+        "💬 Pagamento informado pela pessoa",
+      );
+      const avisoInformado = textoInformado && devendo(p) ? `<p class="camiseta-pedido-aviso">${escapeHtml(textoInformado)} Confira no extrato e lance em "Pago".</p>` : "";
 
       return `
         <div class="camiseta-pedido-painel-card" data-pedido-id="${p.id}">
@@ -793,6 +808,7 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
           ${avisoLoteFechado}
           ${avisoAguardandoRetirada}
           ${avisoEmMassa}
+          ${avisoInformado}
           <ul class="mt-3 grid gap-2">${itensHtml}</ul>
           <button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-mostrar-novo-item>+ Adicionar item</button>
           ${novoItemLinhaHtml()}
@@ -1958,6 +1974,19 @@ const nomesCongregacoes: Record<number, string> = Object.fromEntries(
       );
       pedidos = (await resPedidos.json()).data ?? [];
       pedidos.forEach((p) => { if (!p.itens) p.itens = []; });
+      // v7.13 — o aviso de pagamento numa leitura à parte: num Directus ainda sem esses campos ela dá 403 e a tela segue sem o aviso.
+      try {
+        const resAvisos = await fetch(
+          `${directusUrl}/items/camiseta_pedidos?filter[grupo][_eq]=${grupoId}&filter[pagamento_informado_em][_nnull]=true&fields=id,pagamento_informado_em,pagamento_informado_data,pagamento_informado_meio,pagamento_informado_valor,pagamento_informado_nome&limit=-1`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (resAvisos.ok) {
+          const porId = new Map(((await resAvisos.json()).data ?? []).map((a: Partial<Pedido> & { id: number }) => [a.id, a]));
+          pedidos.forEach((p) => Object.assign(p, porId.get(p.id) ?? {}));
+        }
+      } catch {
+        /* sem o aviso: a tela funciona como antes */
+      }
 
       const resLotes = await api(`${directusUrl}/items/camiseta_lotes?filter[grupo][_eq]=${grupoId}&sort=numero&limit=-1`, {
         headers: { Authorization: `Bearer ${token}` },

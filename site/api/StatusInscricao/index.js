@@ -1,5 +1,6 @@
 const { avaliarJanela } = require("../src/lib/janela");
 const { umaVezPorChave } = require("../src/lib/limiteLote");
+const { normalizarFaixas, algumLoteComVagas, situacaoDosLotes } = require("../src/lib/lotes");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -12,6 +13,10 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  * formulário suma na hora. Regra: `aceita_inscricao` e `inscricoes_encerradas`
  * mandam acima de tudo; `inscricoes_ate` (dia inclusive, Brasília) fecha pelo
  * prazo. Cache de 20 s por instância.
+ *
+ * v7.13 — também diz a situação de cada LOTE (faixa de valor com `ate`/`vagas`, ver `lotes.js`):
+ * `lotes: [{ descricao, valor, ate, vagas, restantes, disponivel, motivo }]`, para a página esconder o
+ * lote vencido ou esgotado sem esperar a remontagem. A contagem por lote é UMA consulta agrupada.
  */
 const CACHE_MS = 20 * 1000;
 const cache = new Map();
@@ -38,7 +43,7 @@ module.exports = async function (context, req) {
   // em vez de disparar mil consultas (medido em 19/10/2026 no status da camiseta, que tinha o mesmo desenho: 200 aberturas simultâneas levavam ~20 s no meio e 4 falhavam).
   const lida = await umaVezPorChave(`status-inscricao:${eventoId}`, async () => {
     const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` };
-    const res = await fetch(`${DIRECTUS_URL}/items/eventos/${eventoId}?fields=id,aceita_inscricao,inscricoes_encerradas,inscricoes_ate,vagas_limite,requer_aprovacao`, { headers });
+    const res = await fetch(`${DIRECTUS_URL}/items/eventos/${eventoId}?fields=id,aceita_inscricao,inscricoes_encerradas,inscricoes_ate,vagas_limite,requer_aprovacao,faixas_valor`, { headers });
     let corpo;
     if (res.status === 404 || res.status === 403) {
       corpo = { aberto: false, motivo: "inexistente", mensagem: "Evento não encontrado." };
@@ -54,6 +59,21 @@ module.exports = async function (context, req) {
         const confirmados = c.ok ? Number(((await c.json()).data?.[0]?.count?.id) ?? 0) : null;
         corpo.vagasLimite = Number(ev.vagas_limite);
         corpo.vagasRestantes = confirmados == null ? null : Math.max(Number(ev.vagas_limite) - confirmados, 0);
+      }
+      const faixas = normalizarFaixas(ev.faixas_valor);
+      if (faixas.length > 0) {
+        const contagens = {};
+        if (algumLoteComVagas(faixas) && corpo.aberto) {
+          // Sem o campo `faixa_rotulo` (esquema v7.13 ainda não aplicado) a consulta falha: o lote com vagas aparece disponível e a trava decide na hora.
+          const g = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos?aggregate[count]=id&groupBy[]=faixa_rotulo&filter[evento][_eq]=${eventoId}&limit=-1`, { headers });
+          if (g.ok) {
+            for (const linha of (await g.json()).data || []) {
+              if (linha.faixa_rotulo != null) contagens[linha.faixa_rotulo] = Number(linha.count?.id ?? linha.count) || 0;
+            }
+          }
+        }
+        // O número de inscritos de cada lote não sai daqui (só "restam N"), como as vagas do evento.
+        corpo.lotes = situacaoDosLotes(faixas, contagens).map(({ inscritos, ...publico }) => publico);
       }
     }
 

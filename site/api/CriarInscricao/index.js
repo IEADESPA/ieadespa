@@ -2,7 +2,8 @@ const crypto = require("node:crypto");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { gerarHashAssincrono, chaveTelefone, cifrarTelefone } = require("../src/lib/telefone");
 const { avaliarJanela } = require("../src/lib/janela");
-const { gravarInscricoesComTrava, lerComRepeticao } = require("../src/lib/vagasEvento");
+const { gravarInscricoesComTrava, lerComRepeticao, FILTRO_LOTE } = require("../src/lib/vagasEvento");
+const { normalizarFaixas, escolherFaixa, mensagemLoteEsgotado } = require("../src/lib/lotes");
 const { umaVezPorChave } = require("../src/lib/limiteLote");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
@@ -20,7 +21,10 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  *   - evento aceita inscrição? (`aceita_inscricao`, `inscricoes_encerradas` e
  *     `inscricoes_ate`, mesma régua de `StatusInscricao`/`janela.js`);
  *   - grupo (várias pessoas) só se o evento permitir;
- *   - faixa de valor tem que ser uma das faixas do evento;
+ *   - faixa de valor tem que ser uma das faixas do evento; v7.13: a faixa é um
+ *     LOTE — vencido (`ate`) é recusado (409) e o que tem `vagas` é contado
+ *     DENTRO da trava (409 "esse lote esgotou, escolha o seguinte"); o rótulo
+ *     escolhido fica gravado em `faixa_rotulo` (ver `lotes.js`);
  *   - cupom conferido aqui (ativo, validade, usos restantes) e o contador de
  *     usos atualizado aqui — nunca pelo navegador;
  *   - vagas contadas aqui, no mesmo critério do painel (aguardando_vaga falso
@@ -101,10 +105,17 @@ async function buscarCupom(headers, eventoId, codigo) {
 }
 
 /**
- * Decide, com o que se sabe das vagas (`estado.confirmados`) e dos usos do cupom (`estado.usosCupom`), quem fica confirmado e quem vai para a lista de espera, e quem leva o
- * desconto. É PURA (a trava a chama de novo a cada tentativa, com a leitura nova). Devolve `{ registros, confirmadosNovos, usosNovos }`.
+ * Decide, com o que se sabe das vagas (`estado.confirmados`), dos usos do cupom (`estado.usosCupom`) e das inscrições do lote (`estado.usadasLote`, v7.13), quem fica confirmado e
+ * quem vai para a lista de espera, e quem leva o desconto. É PURA (a trava a chama de novo a cada tentativa, com a leitura nova). Devolve `{ registros, confirmadosNovos, usosNovos,
+ * loteNovos }` ou, quando o lote escolhido tem vagas e a inscrição não cabe nele, `{ recusa: { status: 409, body } }` (nada é gravado; a pessoa escolhe o lote seguinte).
  */
-function montarRegistros({ nomes, evento, eventoId, valorFaixa, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado) {
+function montarRegistros({ nomes, evento, eventoId, valorFaixa, faixa = null, contarLote = false, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado) {
+  if (contarLote && faixa && faixa.vagas != null) {
+    const cabem = Math.max(faixa.vagas - (Number(estado.usadasLote) || 0), 0);
+    if (nomes.length > cabem) {
+      return { recusa: { status: 409, body: { erro: mensagemLoteEsgotado(faixa, cabem, nomes.length), motivo: "lote_esgotado", lote: faixa.descricao, restantes: cabem } }, registros: [], confirmadosNovos: 0, usosNovos: 0, loteNovos: 0 };
+    }
+  }
   let confirmados = estado.confirmados;
   let usosRestantesCupom = cupom ? (cupom.limite_usos == null ? Infinity : Number(cupom.limite_usos) - estado.usosCupom) : 0;
   let confirmadosNovos = 0;
@@ -135,9 +146,10 @@ function montarRegistros({ nomes, evento, eventoId, valorFaixa, cupom, contarVag
       cupom_usado: cupomAplicado,
       aguardando_vaga: aguardandoVaga,
       pendente_aprovacao: pendenteAprovacao,
+      faixa_rotulo: faixa ? faixa.descricao : null,
     };
   });
-  return { registros, confirmadosNovos, usosNovos };
+  return { registros, confirmadosNovos, usosNovos, loteNovos: faixa ? registros.length : 0 };
 }
 
 module.exports = async function (context, req) {
@@ -187,18 +199,15 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // Faixa de valor: só uma das faixas do evento (ou nenhuma, se o evento não tem faixa).
-  const faixas = Array.isArray(evento.faixas_valor) ? evento.faixas_valor : [];
-  let valorFaixa = null;
-  if (faixas.length > 0) {
-    const pedido = body.valorFaixa == null || body.valorFaixa === "" ? null : Number(body.valorFaixa);
-    const existe = pedido != null && faixas.some((f) => Number(f.valor) === pedido);
-    if (pedido != null && !existe) {
-      context.res = { status: 400, body: { erro: "Faixa de valor inválida." } };
-      return;
-    }
-    valorFaixa = pedido;
+  // Faixa de valor (lote): só uma das faixas do evento (ou nenhuma, se o evento não tem faixa), e nunca um lote vencido (v7.13).
+  const faixas = normalizarFaixas(evento.faixas_valor);
+  const escolha = escolherFaixa(faixas, { rotulo: body.faixa == null ? null : String(body.faixa).slice(0, 200), valor: body.valorFaixa });
+  if (escolha.erro) {
+    context.res = { status: escolha.erro.status, headers: { "Content-Type": "application/json" }, body: escolha.erro.body };
+    return;
   }
+  const faixa = escolha.faixa;
+  const valorFaixa = faixa ? faixa.valor : null;
 
   try {
     const [jaTem, cupomInfo] = await Promise.all([
@@ -214,6 +223,7 @@ module.exports = async function (context, req) {
     const pendenteAprovacao = Boolean(evento.requer_aprovacao);
     const contarVagas = Boolean(evento.vagas_limite) && !pendenteAprovacao;
     const contarCupom = Boolean(cupom) && cupom.limite_usos != null;
+    let contarLote = Boolean(faixa) && faixa.vagas != null;
 
     // O hash scrypt do telefone (assíncrono e com poucos ao mesmo tempo) só é calculado agora, com as recusas baratas já feitas.
     const telefoneHash = await gerarHashAssincrono(telefone);
@@ -221,20 +231,30 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { erro: "Parâmetros ausentes (evento, nome e telefone com pelo menos 8 dígitos)." } };
       return;
     }
-    const montar = (estado) => montarRegistros({ nomes, evento, eventoId, valorFaixa, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado);
+    const montar = (estado) => montarRegistros({ nomes, evento, eventoId, valorFaixa, faixa, contarLote, cupom, contarVagas, pendenteAprovacao, telefone, telefoneHash, telefoneChave, email }, estado);
 
     let criadas = null;
     let montagem = null;
     let usosDoCupom = null; // valor do contador `usos` do cupom depois desta inscrição
 
-    if (contarVagas || contarCupom) {
-      // Vagas ou limite de cupom em jogo: grava com a senha do livro do evento, para nunca passar do número com muita gente ao mesmo tempo.
-      const r = await gravarInscricoesComTrava({
+    if (contarVagas || contarCupom || contarLote) {
+      // Vagas, limite de cupom ou lote com vagas em jogo: grava com a senha do livro do evento, para nunca passar do número com muita gente ao mesmo tempo.
+      const gravar = () => gravarInscricoesComTrava({
         directus: (caminho, init = {}) => fetch(`${DIRECTUS_URL}${caminho}`, { ...init, headers }),
-        eventoId, cupomCodigo: contarCupom ? cupom.codigo : null, contarVagas, montar, log: (m) => context.log.warn(m),
+        eventoId, cupomCodigo: contarCupom ? cupom.codigo : null, contarVagas, loteRotulo: contarLote ? faixa.descricao : null, montar, log: (m) => context.log.warn(m),
       });
+      let r = await gravar();
+      if (r.semCampoLote) {
+        // Directus sem o campo do lote (esquema v7.13 não aplicado): sem o limite do lote, mas a trava de vagas e de cupom continua (revisão de 22/10/2026).
+        contarLote = false;
+        r = contarVagas || contarCupom ? await gravar() : { semControle: true };
+      }
       if (r.erroHttp) {
         context.res = { status: r.erroHttp.status, headers: { "Content-Type": "application/json" }, body: r.erroHttp.body };
+        return;
+      }
+      if (r.recusa) {
+        context.res = { status: r.recusa.status, headers: { "Content-Type": "application/json" }, body: r.recusa.body };
         return;
       }
       if (!r.semControle) {
@@ -247,7 +267,18 @@ module.exports = async function (context, req) {
     if (!criadas) {
       // Sem limite nenhum — ou o livro de senhas ainda não existe no Directus (esquema não aplicado): grava do jeito de sempre, para nunca deixar de aceitar inscrição.
       const confirmados = contarVagas ? await contarConfirmados(headers, eventoId) : 0;
-      montagem = montar({ confirmados, usosCupom: cupom ? cupom.usos : 0 });
+      let usadasLote = 0;
+      if (contarLote) {
+        // Sem o livro de senhas a conta do lote não é exata (melhor esforço); sem o campo `faixa_rotulo` (esquema v7.13 não aplicado) nem dá para contar: segue sem o limite do lote.
+        const c = await directus(headers, "GET", `/items/inscricoes_eventos?aggregate[count]=id&${FILTRO_LOTE(eventoId, faixa.descricao)}`);
+        if (c.ok) usadasLote = Number(c.data?.[0]?.count?.id ?? 0);
+        else { contarLote = false; context.log.warn(`não deu para contar o lote "${faixa.descricao}" (${c.status}): aplique site/scripts/directus-eventos-v713-esquema.mjs`); }
+      }
+      montagem = montar({ confirmados, usosCupom: cupom ? cupom.usos : 0, usadasLote });
+      if (montagem.recusa) {
+        context.res = { status: montagem.recusa.status, headers: { "Content-Type": "application/json" }, body: montagem.recusa.body };
+        return;
+      }
       const criado = await directus(headers, "POST", "/items/inscricoes_eventos", montagem.registros);
       if (!criado.ok || !Array.isArray(criado.data)) {
         context.log.error("Falha ao criar inscrição:", criado.status);
@@ -273,7 +304,7 @@ module.exports = async function (context, req) {
       status: 200,
       headers: { "Content-Type": "application/json" },
       body: {
-        inscricoes: criadas.map((i) => ({ id: i.id, nome: i.nome, codigo: i.codigo, aguardandoVaga: Boolean(i.aguardando_vaga), pendenteAprovacao: Boolean(i.pendente_aprovacao), valor: i.valor })),
+        inscricoes: criadas.map((i) => ({ id: i.id, nome: i.nome, codigo: i.codigo, aguardandoVaga: Boolean(i.aguardando_vaga), pendenteAprovacao: Boolean(i.pendente_aprovacao), valor: i.valor, faixa: i.faixa_rotulo ?? null })),
         cupom: codigoCupom ? { aplicado: usosAplicados > 0, mensagem: cupomInfo.mensagem || (usosAplicados > 0 ? "✅ Cupom aplicado." : "Cupom esgotado.") } : null,
       },
     };

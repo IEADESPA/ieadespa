@@ -144,8 +144,8 @@ const locais = normalizarLocais(event.locais_checkin);
 
   <script is:inline src="/vendor/jsQR-1.4.0.js"></script>
   <script>
-    import { exigirAutenticacao, sair } from "@/lib/painelAuth";
-    import { avisoCapacidade, chaveEntrada, contarPorLocal, diaEmBrasilia, jaEntrouNoLocal, resumoLocais, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
+    import { exigirAutenticacao, irParaLogin, renovarToken, sair } from "@/lib/painelAuth";
+    import { avisoCapacidade, chaveEntrada, classificarRespostaCheckin, contarPorLocal, diaEmBrasilia, entradaJaConhecida, jaEntrouNoLocal, resumoLocais, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
     if (!container) throw new Error("contêiner do check-in ausente");
@@ -429,14 +429,26 @@ const locais = normalizarLocais(event.locais_checkin);
           return;
         }
         sincronizando = true;
+        let sessaoCaiu = false;
         try {
           const feitas = new Set<string>();
           for (const pendencia of pendencias) {
             try {
               await gravarCheckin(pendencia);
               feitas.add(chaveDaPendencia(pendencia));
-            } catch {
+            } catch (e) {
+              const erro = e as ErroCheckin;
+              if (erro.permanente) {
+                // Revisão de 22/10/2026: falha que não passa repetindo (inscrição apagada, dado recusado) sai da fila e a tela avisa — antes era reenviada para sempre.
+                feitas.add(chaveDaPendencia(pendencia));
+                avisarFalhaPermanente(pendencia, erro.message);
+                continue;
+              }
               porNaFila(pendencia); // guarda o que já foi feito (a presença) e tenta só o resto depois
+              if (erro.sessao) {
+                sessaoCaiu = true;
+                break; // sem sessão, as próximas falhariam igual: a fila fica guardada no aparelho
+              }
             }
           }
           // Relê a fila no fim: o que entrou nela durante a sincronização não se perde.
@@ -445,7 +457,22 @@ const locais = normalizarLocais(event.locais_checkin);
           sincronizando = false;
         }
         atualizarContador();
+        if (sessaoCaiu) {
+          if (await sessaoDeNovo()) window.setTimeout(sincronizarPendencias, 0);
+          return;
+        }
         atualizarSyncStatus();
+      }
+
+      /** O token do painel venceu (401): tenta renovar sozinho; se não der, pede para entrar de novo (a fila continua guardada no aparelho). */
+      async function sessaoDeNovo(): Promise<boolean> {
+        const novo = await renovarToken(directusUrl).catch(() => null);
+        if (novo) {
+          token = novo;
+          return true;
+        }
+        pedirLoginDeNovo();
+        return false;
       }
 
       /**
@@ -453,6 +480,10 @@ const locais = normalizarLocais(event.locais_checkin);
        * "inscrição:local:dia": se a mesma entrada chegar duas vezes (fila sem internet), o Directus recusa a segunda e isso conta como feito.
        * Quem fez o check-in o Directus guarda sozinho (`user_created`, pelo token de quem está logado). Lança erro se algo precisar ser tentado de novo.
        */
+      type ErroCheckin = Error & { permanente?: boolean; sessao?: boolean };
+      const erroCheckin = (mensagem: string, tipo: "permanente" | "sessao" | null): ErroCheckin => Object.assign(new Error(mensagem), tipo ? { [tipo]: true } : {});
+      const codigosDeErro = async (res: Response) => ((await res.json().catch(() => null))?.errors || []).map((e: { extensions?: { code?: string } }) => e.extensions?.code || "");
+
       async function gravarCheckin(p: Pendencia) {
         if (p.marcarPresente !== false) {
           const res = await fetch(`${directusUrl}/items/inscricoes_eventos/${p.id}`, {
@@ -460,7 +491,10 @@ const locais = normalizarLocais(event.locais_checkin);
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ presente: true, local_checkin: p.local_checkin, observacao_checkin: p.observacao_checkin }),
           });
-          if (!res.ok) throw new Error("falha ao confirmar");
+          const destino = classificarRespostaCheckin("presenca", res.status);
+          if (destino === "sessao") throw erroCheckin("sessão terminou", "sessao");
+          if (destino === "permanente") throw erroCheckin(`a inscrição não pôde ser marcada como presente (o servidor respondeu ${res.status}: apagada ou sem permissão)`, "permanente");
+          if (destino !== "ok") throw erroCheckin("falha ao confirmar", null);
           p.marcarPresente = false; // a presença já foi; se a entrada falhar, só ela é repetida
         }
         if (p.entrada && entradasRegistraveis) {
@@ -469,17 +503,36 @@ const locais = normalizarLocais(event.locais_checkin);
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ evento: eventoId, inscricao: Number(p.id), local: p.entrada.local, entrou_em: p.entrada.entrou_em, chave: p.entrada.chave }),
           });
-          if (res.status === 403) {
+          const destino = classificarRespostaCheckin("entrada", res.status, res.ok ? [] : await codigosDeErro(res));
+          if (destino === "sem_esquema") {
             entradasRegistraveis = false; // sem o esquema v7.13 (ou sem permissão): a presença basta, como antes
             return;
           }
-          if (!res.ok) {
-            const corpo = await res.json().catch(() => null);
-            const repetida = res.status === 400 && (corpo?.errors || []).some((e: { extensions?: { code?: string } }) => e.extensions?.code === "RECORD_NOT_UNIQUE");
-            if (!repetida) throw new Error("falha ao registrar a entrada");
-          }
-          entradasServidor.push({ inscricao: p.id, local: p.entrada.local, entrou_em: p.entrada.entrou_em });
+          if (destino === "sessao") throw erroCheckin("sessão terminou", "sessao");
+          if (destino === "permanente") throw erroCheckin(`a entrada não pôde ser registrada (o servidor respondeu ${res.status})`, "permanente");
+          if (destino === "tentar_de_novo") throw erroCheckin("falha ao registrar a entrada", null);
+          // Revisão de 22/10/2026: a confirmação e a sincronização podem gravar a mesma entrada; ela entra na lista uma vez só.
+          const nova = { inscricao: p.id, local: p.entrada.local, entrou_em: p.entrada.entrou_em };
+          if (!entradaJaConhecida(entradasServidor, nova)) entradasServidor.push(nova);
         }
+      }
+
+      function avisarFalhaPermanente(p: Pendencia, motivo: string) {
+        const nome = roster.find((x) => String(x.id) === String(p.id))?.nome ?? `inscrição ${p.id}`;
+        resultado.textContent = `⚠️ O check-in de ${nome} NÃO foi gravado: ${motivo}. Confira com a coordenação.`;
+      }
+
+      function pedirLoginDeNovo() {
+        const n = lerPendencias().length;
+        syncStatusEl.innerHTML = "";
+        const texto = document.createElement("span");
+        texto.textContent = `Sua sessão terminou. ${n} check-in(s) continuam guardados neste aparelho e vão assim que você entrar de novo. `;
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "link-sweep text-accent font-semibold";
+        botao.textContent = "Entrar de novo";
+        botao.addEventListener("click", () => irParaLogin());
+        syncStatusEl.append(texto, botao);
       }
 
       carregarRoster();
@@ -536,16 +589,26 @@ const locais = normalizarLocais(event.locais_checkin);
             ? `✅ ${nome} — presença confirmada (exceção: ${observacao}).`
             : `✅ ${nome} — presença confirmada!`;
 
+        let semSessao = false;
         try {
           await gravarCheckin(pendencia);
           tirarDaFila(new Set([chaveDaPendencia(pendencia)]));
-        } catch {
-          // Fica na fila (com o que falta: presença e/ou entrada) e sincroniza sozinho depois.
-          porNaFila(pendencia);
-          sincronizarPendencias();
+        } catch (e) {
+          const erro = e as ErroCheckin;
+          if (erro.permanente) {
+            tirarDaFila(new Set([chaveDaPendencia(pendencia)]));
+            avisarFalhaPermanente(pendencia, erro.message);
+          } else {
+            // Fica na fila (com o que falta: presença e/ou entrada) e sincroniza sozinho depois.
+            porNaFila(pendencia);
+            if (erro.sessao) semSessao = true;
+            else sincronizarPendencias();
+          }
         }
         atualizarContador();
-        atualizarSyncStatus();
+        if (semSessao) {
+          if (await sessaoDeNovo()) sincronizarPendencias();
+        } else atualizarSyncStatus();
       }
 
       function buscarNoRoster(codigo: string) {

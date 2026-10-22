@@ -7,7 +7,7 @@ process.env.DIRECTUS_ADMIN_TOKEN = "token-admin-de-teste";
 const fs = require("fs");
 const path = require("path");
 const Module = require("module");
-const ts = require("typescript");
+const { carregarTs } = require("./carregar-ts.cjs");
 const { gerarHash } = require("../../api/src/lib/telefone.js");
 
 let falhas = 0;
@@ -19,17 +19,16 @@ const eq = (a, b, d) => {
 };
 const verdade = (c, d) => eq(!!c, true, d);
 
-function carregarTs(nome) {
-  const arquivo = path.join(__dirname, `../../src/lib/${nome}.ts`);
-  const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const mod = new Module(`${nome}.js`);
-  mod._compile(js, `${nome}.js`);
-  return mod.exports;
+// Um bloco que quebra (ex.: rodando contra o código de antes da revisão, sem a função nova) conta como falha e o teste segue para os outros blocos.
+async function tentar(nome, fn) {
+  try { await fn(); } catch (e) { falhas++; total++; console.log("  FALHA", nome, "→ o bloco quebrou:", e && e.message); }
 }
-const C = carregarTs("credenciamento");
-const K = carregarTs("cracha");
+
+let C, K;
 
 (async () => {
+  C = await carregarTs("credenciamento");
+  K = await carregarTs("cracha");
   console.log("== os locais do evento (formato antigo e novo) ==");
   eq(C.normalizarLocais(["Portaria Leste", "Sala 2"]), [{ nome: "Portaria Leste", capacidade: null }, { nome: "Sala 2", capacidade: null }], "formato antigo (só nomes): continua valendo, sem capacidade");
   eq(C.normalizarLocais([{ nome: " Sala 2 ", capacidade: "40" }, "Portaria", { nome: "Ala Kids", capacidade: 0 }, { nome: "Sala 2", capacidade: 10 }, "", null, 7]),
@@ -125,30 +124,89 @@ const K = carregarTs("cracha");
   console.log("== VerificarInscricao devolve os dados do crachá (só depois do telefone) ==");
   const TEL = "(94) 99123-4567";
   const pedidos = [];
+  let configCracha = { tipo: true, igreja: true, pergunta_igreja: 31, cidade: true, pergunta_cidade: 32, qr: true };
   globalThis.fetch = async (url) => {
     const u = new URL(String(url));
     pedidos.push(u.pathname + u.search);
     const r = (corpo) => new Response(JSON.stringify(corpo), { status: 200 });
     if (u.pathname === "/items/inscricoes_eventos") return r({ data: [{ id: 5, nome: "Maria", codigo: "ABC234", presente: false, pago: false, telefone: gerarHash(TEL) }] });
-    if (u.pathname === "/items/inscricoes_eventos/5") return r({ data: { id: 5, tipo_participante: "Preletor", faixa_rotulo: "1º lote", valor: "50.00", cortesia: false, pagamento_informado_em: null } });
-    if (u.pathname === "/items/eventos/9") return r({ data: { id: 9, cracha_config: { tipo: true, igreja: true, pergunta_igreja: 31, cidade: true, pergunta_cidade: 32, qr: true } } });
-    if (u.pathname === "/items/respostas_inscricao") return r({ data: [{ pergunta: 31, valor: "Congregação Betel" }, { pergunta: 32, valor: "Parauapebas" }] });
+    if (u.pathname === "/items/inscricoes_eventos/5") return r({ data: { id: 5, date_created: "2026-10-20T10:00:00Z", tipo_participante: "Preletor", faixa_rotulo: "1º lote", valor: "50.00", cortesia: false, pagamento_informado_em: null } });
+    if (u.pathname === "/items/eventos/9") return r({ data: { id: 9, cracha_config: configCracha } });
+    // a resposta da inscrição (id 1), uma sem data (antiga, id 2) e a de um ANÔNIMO criada depois (id 9) — o Directus devolve na ordem do id
+    if (u.pathname === "/items/respostas_inscricao") return r({ data: [{ id: 1, pergunta: 31, valor: "Congregação Betel", date_created: "2026-10-20T10:00:02Z" }, { id: 2, pergunta: 32, valor: "Parauapebas", date_created: null }, { id: 9, pergunta: 31, valor: "IGREJA FALSA", date_created: "2026-10-21T08:00:00Z" }, { id: 10, pergunta: 33, valor: "PESQUISA", date_created: "2026-10-20T10:00:03Z" }] });
+    if (u.pathname === "/items/perguntas_evento") return r({ data: [{ id: 31, evento: 9, momento: "inscricao" }, { id: 32, evento: 9, momento: "inscricao" }, { id: 33, evento: 9, momento: "pos_evento" }].filter((p) => (u.searchParams.get("filter[id][_in]") || "").split(",").includes(String(p.id))) });
     return new Response("{}", { status: 404 });
   };
   const handler = require("../../api/VerificarInscricao/index.js");
   const chamar = async (body) => { const ctx = { log: Object.assign(() => {}, { warn() {}, error() {} }) }; await handler(ctx, { headers: { "x-forwarded-for": "10.2.0.1, 1.1.1.1" }, body }); return ctx.res.body; };
   let b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: TEL, cracha: true });
-  eq([b.encontrado, b.tipoParticipante, b.faixa, b.valor, b.cracha.igreja, b.cracha.cidade, b.cracha.config.qr], [true, "Preletor", "1º lote", 50, "Congregação Betel", "Parauapebas", true], "código + telefone: tipo, lote, valor e o crachá (igreja e cidade das perguntas escolhidas)");
+  eq([b.encontrado, b.tipoParticipante, b.faixa, b.valor, b.cracha.igreja, b.cracha.cidade, b.cracha.config.qr], [true, "Preletor", "1º lote", 50, "Congregação Betel", "Parauapebas", true], "[revisão 2] código + telefone: o crachá usa a resposta da INSCRIÇÃO — a 'IGREJA FALSA' criada depois por um anônimo é ignorada");
   verdade(pedidos.some((p) => p.includes("filter[pergunta][_in]=31,32")), "lê só as respostas das 2 perguntas escolhidas");
   pedidos.length = 0;
   b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: "(94) 98888-0000", cracha: true });
   eq([b.encontrado, b.cracha, pedidos.some((p) => p.includes("/items/inscricoes_eventos/5") || p.includes("respostas"))], [false, undefined, false], "telefone errado: nada (nem lê os detalhes)");
+  pedidos.length = 0;
   b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: TEL });
-  eq([b.encontrado, b.cracha], [true, undefined], "sem pedir o crachá: não lê o evento nem as respostas");
+  eq([b.encontrado, b.cracha, b.tipoParticipante, pedidos.filter((p) => p.startsWith("/items/inscricoes_eventos/5") || p.startsWith("/items/eventos") || p.startsWith("/items/respostas")).length], [true, undefined, undefined, 0], "[revisão 11] sem pedir detalhes nem crachá (QR, certificado, pesquisa): só a verificação, nenhuma leitura a mais");
+  b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: TEL, detalhes: true });
+  eq([b.tipoParticipante, b.faixa, b.cracha], ["Preletor", "1º lote", undefined], "[revisão 11] com `detalhes: true` (página Informar pagamento): os detalhes, sem o crachá");
+  // revisão 2: a pergunta "igreja" apontando para uma pergunta da PESQUISA pós-evento (que tem criação pública) não vale
+  configCracha = { tipo: true, igreja: true, pergunta_igreja: 33, cidade: false, qr: false };
+  b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: TEL, cracha: true });
+  eq(b.cracha.igreja, null, "[revisão 2] pergunta da pesquisa pós-evento não vai para o crachá");
+  configCracha = { tipo: true, igreja: true, pergunta_igreja: 31, cidade: true, pergunta_cidade: 32, qr: true };
   globalThis.fetch = (orig => async (url, init) => (String(url).includes("/items/inscricoes_eventos/5") ? new Response("{}", { status: 500 }) : orig(url, init)))(globalThis.fetch);
   b = await chamar({ evento: 9, modo: "codigo", codigo: "ABC234", telefone: TEL, cracha: true });
   eq([b.encontrado, b.nome, b.tipoParticipante], [true, "Maria", undefined], "detalhes indisponíveis (Directus sem os campos ou fora): a verificação continua funcionando como antes");
 
+  await tentar("revisão 2 (regra da resposta)", async () => {
+console.log("== revisão de 22/10/2026: a regra da resposta do crachá (API e painel iguais) ==");
+  const KJ = require("../../api/src/lib/cracha.js");
+  const respostas = [
+    { id: 4, pergunta: 31, valor: "Betel", date_created: "2026-10-20T10:00:05Z" },
+    { id: 8, pergunta: 31, valor: "FALSA", date_created: "2026-10-20T10:30:00Z" },
+    { id: 9, pergunta: 32, valor: "TARDE", date_created: "2026-10-20T10:30:00Z" },
+    { id: 10, pergunta: 34, valor: "Antiga", date_created: null },
+    { id: 11, pergunta: 35, valor: "Outro evento", date_created: "2026-10-20T10:00:05Z" },
+  ];
+  const perguntas = [{ id: 31, evento: 9, momento: "inscricao" }, { id: 32, evento: 9, momento: "inscricao" }, { id: 34, evento: 9, momento: null }, { id: 36, evento: 9, momento: "pos_evento" }, { id: 35, evento: 7, momento: "inscricao" }];
+  for (const [nome, regra] of [["API", KJ], ["painel", K]]) {
+    const opcoes = { perguntasValidas: regra.perguntasDoCracha(perguntas, 9), inscricaoCriadaEm: "2026-10-20T10:00:00Z" };
+    eq([31, 32, 34, 35, 36].map((p) => regra.respostaParaCracha(respostas, p, opcoes)), ["Betel", null, "Antiga", null, null], `[revisão 2] ${nome}: a mais antiga vence; criada 30 min depois não vale; antiga sem data vale; pergunta de outro evento ou da pesquisa não vale`);
+  }
+
+  });
+  await tentar("revisão 14 (fila do check-in)", async () => {
+console.log("== revisão de 22/10/2026: a fila do check-in ==");
+  eq([["presenca", 200], ["presenca", 401], ["presenca", 404], ["presenca", 403], ["presenca", 503], ["entrada", 400, ["RECORD_NOT_UNIQUE"]], ["entrada", 400, ["INVALID_PAYLOAD"]], ["entrada", 403], ["entrada", 404], ["entrada", 500], ["entrada", 429]].map(([e, s, c]) => C.classificarRespostaCheckin(e, s, c || [])),
+    ["ok", "sessao", "permanente", "permanente", "tentar_de_novo", "repetida", "permanente", "sem_esquema", "permanente", "tentar_de_novo", "tentar_de_novo"], "[revisão 14] falha permanente (400/404) sai da fila; 401 pede login sem perder a fila; rede/5xx/429 tenta de novo");
+  const conhecidas = [{ inscricao: 5, local: "Sala A", entrou_em: "2026-11-20T13:00:00Z" }];
+  eq([C.entradaJaConhecida(conhecidas, { inscricao: "5", local: "Sala A", entrou_em: "2026-11-20T18:00:00Z" }), C.entradaJaConhecida(conhecidas, { inscricao: 5, local: "Sala B", entrou_em: "2026-11-20T18:00:00Z" })], [true, false], "[revisão 14] a mesma entrada (confirmação × sincronização) não entra duas vezes na contagem");
+  const paginaCheckin = fs.readFileSync(path.join(__dirname, "../../src/pages/checkin/[slug].astro"), "utf8");
+  verdade(paginaCheckin.includes("classificarRespostaCheckin(") && paginaCheckin.includes("entradaJaConhecida(") && paginaCheckin.includes("avisarFalhaPermanente(") && paginaCheckin.includes("renovarToken("), "[revisão 14] a tela de check-in usa a classificação, tira da fila a falha permanente, avisa, e renova a sessão antes de pedir login");
+
+  });
+  await tentar("revisão 16 (LGPD)", async () => {
+console.log("== revisão de 22/10/2026: o pedido de dados pessoais (LGPD) mostra os dados novos ==");
+  globalThis.fetch = async (url) => {
+    const u = new URL(String(url));
+    const r = (corpo, status = 200) => new Response(JSON.stringify(corpo), { status });
+    if (u.pathname === "/users/me") return r({ data: { id: "equipe" } });
+    if (u.pathname === "/items/inscricoes_eventos" && !u.searchParams.get("filter[id][_in]")) return r({ data: [{ id: 5, nome: "Maria", telefone: gerarHash(TEL), codigo: "ABC234", evento: { title: "Seminário" } }] });
+    if (u.pathname === "/items/inscricoes_eventos") return r({ data: [{ id: 5, faixa_rotulo: "1º lote", tipo_participante: "Preletor", cortesia: true, cortesia_motivo: "Convidado", cortesia_autorizada_por: "Pr. João", pagamento_informado_em: "2026-10-21T10:00:00Z", pagamento_informado_valor: "50", pagamento_informado_meio: "PIX", pagamento_informado_nome: "Maria" }] });
+    if (u.pathname === "/items/evento_entradas") return r({ data: [{ inscricao: 5, local: "Sala A", entrou_em: "2026-11-20T13:00:00Z" }] });
+    if (u.pathname === "/items/camiseta_pedidos" && !u.searchParams.get("filter[id][_in]")) return r({ data: [{ id: 10, nome: "Maria", telefone: gerarHash(TEL), grupo: { nome: "Camiseta" } }] });
+    if (u.pathname === "/items/camiseta_pedidos") return r({ data: [{ id: 10, pagamento_informado_em: "2026-10-21T10:00:00Z", pagamento_informado_valor: "40" }] });
+    return r({}, 404);
+  };
+  const lgpd = require("../../api/BuscarDadosPessoais/index.js");
+  const ctxL = { log: Object.assign(() => {}, { warn() {}, error() {} }) };
+  await lgpd(ctxL, { headers: { "x-forwarded-for": "10.3.0.1, 1.1.1.1" }, body: { staffToken: "t", telefone: TEL } });
+  const insc = ctxL.res.body.inscricoes[0] || {};
+  eq([insc.lote, insc.tipoParticipante, insc.cortesia?.motivo, insc.pagamentoInformado?.valor, insc.entradas?.[0]?.local, ctxL.res.body.pedidos[0]?.pagamentoInformado?.valor], ["1º lote", "Preletor", "Convidado", 50, "Sala A", 40], "[revisão 16] a busca da LGPD devolve lote, tipo, cortesia, pagamento informado e entradas (e o aviso do pedido de camiseta)");
+  verdade(fs.readFileSync(path.join(__dirname, "../../src/pages/painel-eventos/lgpd.astro"), "utf8").includes("extrasHtml(i)"), "[revisão 16] e a tela da LGPD mostra esses dados");
+
+  });
   console.log(falhas === 0 ? `\nTUDO CERTO (${total} verificações)` : `\n${falhas} FALHA(S) de ${total}`);
   process.exit(falhas === 0 ? 0 : 1);
 })().catch((e) => { console.log("ERRO NO TESTE:", e && e.stack); process.exit(1); });

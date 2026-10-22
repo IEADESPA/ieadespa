@@ -1,5 +1,5 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
-const { conferirHash, chaveTelefone } = require("../src/lib/telefone");
+const { conferirHashAssincrono, chaveTelefone } = require("../src/lib/telefone");
 const { verificar } = require("../src/lib/contaToken");
 const { validarPagamentoInformado, camposDoAviso, avisoDoRegistro } = require("../src/lib/pagamentoInformado");
 
@@ -12,12 +12,31 @@ const { validarPagamentoInformado, camposDoAviso, avisoDoRegistro } = require(".
  *   - inscrição pela MINHA CONTA (o token assinado; o e-mail da inscrição tem de ser o da conta):  { tipo: "inscricao", token, inscricaoId, pagamento };
  *   - pedido de camiseta pelo TELEFONE do pedido ("Meus pedidos"):  { tipo: "pedido", telefone, pedidoId, pagamento };
  *   - pedido de camiseta pela MINHA CONTA:  { tipo: "pedido", token, pedidoId, pagamento }.
- * Dado que não confere responde sempre a mesma coisa (404 "não encontramos"), para a rota não servir para descobrir se um código ou um pedido existe. Limite: 20 chamadas por IP
+ * Dado que não confere responde sempre a mesma coisa (404 "não encontramos"), para a rota não servir para descobrir se um código ou um pedido existe. Limite: 50 chamadas por IP
  * em 5 minutos (o mesmo das outras consultas por telefone). Grava com o token de administrador, só os 5 campos do aviso.
  */
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
-const LIMITE_POR_IP = 20; // 5 min
+// Revisão de 22/10/2026: 50 (era 20) — no dia do evento muita gente informa pelo mesmo Wi-Fi (mesmo IP de saída). Adivinhar código + telefone continua inviável.
+const LIMITE_POR_IP = 50; // 5 min
+
+/** Preço por peça (o mesmo de `ConsultarPedidosCamiseta`): o do tamanho, se a campanha tiver; senão o valor de venda; sem nada, grátis. */
+function precoTamanho(grupo, tamanho) {
+  const precos = (grupo && grupo.precos_tamanho) || {};
+  if (tamanho && precos[tamanho] != null && precos[tamanho] !== "") return Number(precos[tamanho]);
+  return grupo && grupo.valor_venda != null ? Number(grupo.valor_venda) : 0;
+}
+
+/**
+ * O telefone confere com o registro? Com a chave de busca gravada, só a chave (HMAC, rápido); sem ela (registro antigo), o scrypt FORA do processo principal
+ * (revisão de 22/10/2026: antes rodava o `scryptSync`, que trava o processo).
+ */
+async function telefoneConfere(telefone, registro) {
+  const chave = chaveTelefone(telefone);
+  if (!chave) return false;
+  if (registro.telefone_chave) return registro.telefone_chave === chave;
+  return Boolean(registro.telefone) && conferirHashAssincrono(telefone, registro.telefone);
+}
 
 const NAO_ACHOU = "Não encontramos esse registro com os dados informados. Confira e tente de novo.";
 
@@ -40,7 +59,8 @@ async function acharRegistro(body) {
   }
 
   if (tipo === "inscricao") {
-    const campos = "id,evento,email,telefone,pago,cortesia,valor";
+    // `*`: num Directus sem os campos novos pedir `cortesia` daria 403 (e a resposta seria 502 em vez do 503 "não disponível").
+    const campos = "*";
     if (porConta) {
       const id = Number(body.inscricaoId);
       if (!Number.isInteger(id) || id <= 0) return { invalido: "Inscrição inválida." };
@@ -55,13 +75,13 @@ async function acharRegistro(body) {
     const r = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos?filter[evento][_eq]=${evento}&filter[codigo][_eq]=${encodeURIComponent(codigo)}&fields=${campos}&limit=2`, { headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` } });
     if (!r.ok) return { falhou: r.status };
     const linhas = (await r.json()).data || [];
-    const item = linhas.find((l) => l.telefone && conferirHash(body.telefone, l.telefone));
-    return item ? { colecao: "inscricoes_eventos", item } : { naoAchou: true };
+    for (const l of linhas) if (await telefoneConfere(body.telefone, l)) return { colecao: "inscricoes_eventos", item: l };
+    return { naoAchou: true };
   }
 
   const id = Number(body.pedidoId);
   if (!Number.isInteger(id) || id <= 0) return { invalido: "Pedido inválido." };
-  const lido = await lerUm("camiseta_pedidos", id, "id,email,telefone,telefone_chave,avulso");
+  const lido = await lerUm("camiseta_pedidos", id, "*,grupo.valor_venda,grupo.precos_tamanho");
   if (!lido.item) return lido;
   if (porConta) {
     if (String(lido.item.email || "").trim().toLowerCase() !== String(email).trim().toLowerCase()) return { naoAchou: true };
@@ -69,8 +89,7 @@ async function acharRegistro(body) {
   }
   const chave = chaveTelefone(body.telefone);
   if (!chave) return { invalido: "Informe o telefone usado no pedido." };
-  const confere = (lido.item.telefone_chave && lido.item.telefone_chave === chave) || (lido.item.telefone && conferirHash(body.telefone, lido.item.telefone));
-  return confere ? { colecao: "camiseta_pedidos", item: lido.item } : { naoAchou: true };
+  return (await telefoneConfere(body.telefone, lido.item)) ? { colecao: "camiseta_pedidos", item: lido.item } : { naoAchou: true };
 }
 
 module.exports = async function (context, req) {
@@ -102,10 +121,21 @@ module.exports = async function (context, req) {
   if (colecao === "inscricoes_eventos") {
     if (item.cortesia === true) return responder(409, { erro: "Esta inscrição é cortesia: não há pagamento a informar." });
     if (item.pago === true) return responder(409, { erro: "O pagamento desta inscrição já foi confirmado pela equipe." });
+    // Revisão de 22/10/2026: a mesma regra da tela — só quem tem vaga e algo a pagar informa.
+    if (item.aguardando_vaga === true) return responder(409, { erro: "Esta inscrição está na lista de espera: pague só depois que a vaga for confirmada." });
+    if (item.pendente_aprovacao === true) return responder(409, { erro: "Esta inscrição ainda aguarda a aprovação da equipe: pague só depois de aprovada." });
+    if (!(Number(item.valor) > 0)) return responder(409, { erro: "Esta inscrição não tem valor a pagar." });
+  } else {
+    if (item.avulso === true) return responder(409, { erro: "Venda de balcão: o pagamento é acertado direto com a equipe." });
+    const itens = await fetch(`${DIRECTUS_URL}/items/camiseta_itens_pedido?filter[pedido][_eq]=${item.id}&fields=tamanho,quantidade&limit=-1`, { headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` } });
+    if (!itens.ok) return responder(502, { erro: "Não foi possível conferir agora. Tente de novo em instantes." });
+    const total = ((await itens.json()).data || []).reduce((s, i) => s + (Number(i.quantidade) || 0) * precoTamanho(item.grupo, i.tamanho), 0);
+    if (!(total > 0)) return responder(409, { erro: "Este pedido não tem valor a pagar." });
+    if (Number(item.valor_pago || 0) >= total) return responder(409, { erro: "Este pedido já está pago." });
   }
 
   const campos = camposDoAviso(validado.pagamento);
-  const r = await fetch(`${DIRECTUS_URL}/items/${colecao}/${item.id}?fields=id,pagamento_informado_em,pagamento_informado_data,pagamento_informado_meio,pagamento_informado_valor,pagamento_informado_nome`, {
+  const r = await fetch(`${DIRECTUS_URL}/items/${colecao}/${item.id}?fields=*`, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(campos),

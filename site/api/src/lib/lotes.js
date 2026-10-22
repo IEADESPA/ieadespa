@@ -60,7 +60,9 @@ function escolherFaixa(faixas, { rotulo = null, valor = null } = {}, agora = Dat
   if (!faixas.length) return { faixa: null };
   const textoRotulo = rotulo == null ? "" : String(rotulo).trim();
   const temValor = valor !== null && valor !== undefined && valor !== "";
-  if (!textoRotulo && !temValor) return { faixa: null };
+  // Revisão de 22/10/2026: evento COM faixas exige a escolha. Antes, mandar sem faixa passava por cima do lote (data, vagas e preço) — inclusive depois de o lote
+  // esgotar, quando a página voltava a escolha para "Selecione…".
+  if (!textoRotulo && !temValor) return { erro: { status: 400, body: { erro: "Escolha o lote (faixa de valor) da inscrição.", motivo: "lote_obrigatorio" } } };
   let candidatas;
   if (textoRotulo) {
     candidatas = faixas.filter((f) => f.descricao === textoRotulo);

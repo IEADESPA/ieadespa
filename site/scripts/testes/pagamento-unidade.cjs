@@ -9,7 +9,7 @@ process.env.CONTA_TOKEN_SECRET = "segredo-da-conta-de-teste";
 const fs = require("fs");
 const path = require("path");
 const Module = require("module");
-const ts = require("typescript");
+const { carregarTs } = require("./carregar-ts.cjs");
 const P = require("../../api/src/lib/pagamentoInformado.js");
 const A = require("../../api/src/lib/auditoriaPagamento.js");
 const { gerarHash, chaveTelefone } = require("../../api/src/lib/telefone.js");
@@ -23,19 +23,18 @@ const eq = (a, b, d) => {
   if (!ok) { falhas++; console.log("  FALHA", d, "→", JSON.stringify(a), "esperado", JSON.stringify(b)); } else console.log("  ok   ", d);
 };
 const verdade = (c, d) => eq(!!c, true, d);
+
+// Um bloco que quebra (ex.: rodando contra o código de antes da revisão, sem a função nova) conta como falha e o teste segue para os outros blocos.
+async function tentar(nome, fn) {
+  try { await fn(); } catch (e) { falhas++; total++; console.log("  FALHA", nome, "→ o bloco quebrou:", e && e.message); }
+}
 const BRT = (texto) => new Date(`${texto}-03:00`).getTime();
 
-function carregarTs(nome) {
-  const arquivo = path.join(__dirname, `../../src/lib/${nome}.ts`);
-  const js = ts.transpileModule(fs.readFileSync(arquivo, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const mod = new Module(`${nome}.js`);
-  mod._compile(js, `${nome}.js`);
-  return mod.exports;
-}
-const IP = carregarTs("informarPagamento");
-const IPainel = carregarTs("inscricoesPainel");
+let IP, IPainel;
 
 (async () => {
+  IP = await carregarTs("informarPagamento");
+  IPainel = await carregarTs("inscricoesPainel");
   console.log("== a validação do aviso de pagamento ==");
   const agora = BRT("2026-10-22T10:00:00");
   const bom = { data: "2026-10-20", meio: "pix", valor: "50,00", nome: "  Maria   da Silva " };
@@ -72,7 +71,7 @@ const IPainel = carregarTs("inscricoesPainel");
   verdade(IP.formularioPagamentoHtml("x", { valor: 50 }).includes('value="50,00"'), "sugere o valor da inscrição com vírgula");
 
   console.log("== o aviso contra golpe: um texto só, em todas as telas de pagamento ==");
-  const Golpe = carregarTs("avisoGolpe");
+  const Golpe = await carregarTs("avisoGolpe");
   verdade(/NÃO entra em contato com ninguém por mensagem, telefone ou e-mail pedindo pagamento ou Pix/.test(Golpe.AVISO_GOLPE) && /avise a Secretaria/.test(Golpe.AVISO_GOLPE), "o texto diz que a Igreja não pede pagamento por mensagem/telefone/e-mail e manda avisar a Secretaria");
   const componente = fs.readFileSync(path.join(__dirname, "../../src/components/AvisoGolpe.astro"), "utf8");
   verdade(componente.includes("{AVISO_GOLPE}") && !/<button|hidden/.test(componente.replace(/\/\*[\s\S]*?\*\//, "")), "o componente mostra a constante (sem texto próprio) e não tem botão de fechar nem fica escondido");
@@ -84,9 +83,10 @@ const IPainel = carregarTs("inscricoesPainel");
   console.log("== quem confirmou e quando (regras puras) ==");
   eq([A.nomeDoUsuario({ first_name: "Maria", last_name: "Souza" }), A.nomeDoUsuario({ email: "m@x.org" }), A.nomeDoUsuario({ id: "abcdef123456" }), A.nomeDoUsuario(null)], ["Maria Souza", "m@x.org", "Usuário abcdef12", "Equipe"], "o nome que aparece: nome completo, senão e-mail, senão o começo do id");
   const perm = (access, fields) => ({ inscricoes_eventos: { update: { access, fields } } });
-  eq([A.perfilPode(perm("full", ["*"]), "pago"), A.perfilPode(perm("partial", ["pago", "nome"]), "cortesia"), A.perfilPode(perm("partial", ["nome"]), "pago"), A.perfilPode(perm("partial", ["nome"]), "tipo"), A.perfilPode(perm("none", []), "tipo"), A.perfilPode({}, "pago")], [true, true, false, true, false, false], "pode mexer no pagamento só quem pode alterar o campo 'pago'; tipo, quem altera a inscrição");
+  eq([A.perfilPode(perm("full", ["*"]), "pago"), A.perfilPode(perm("partial", ["pago", "nome"]), "cortesia"), A.perfilPode(perm("partial", ["nome"]), "pago"), A.perfilPode(perm("partial", ["nome"]), "tipo"), A.perfilPode(perm("none", []), "tipo"), A.perfilPode({}, "pago")], [true, true, false, false, false, false], "[revisão 6] pagamento só com o campo 'pago'; o tipo só com o campo tipo_participante (antes bastava alterar qualquer campo)");
+  eq([A.perfilPode(perm("partial", ["tipo_participante"]), "tipo"), A.perfilPode(perm("full", ["*"]), "tipo")], [true, true], "[revisão 6] tipo com o campo na lista, ou com '*': pode");
   const eu = { id: "u-1", first_name: "Maria", last_name: "Souza" };
-  eq(A.montarAlteracao({ acao: "pago", pago: true }, eu, "2026-10-22T13:00:00Z"), { campos: { pago: true, pago_conferido_em: "2026-10-22T13:00:00Z", pago_conferido_por: "u-1", pago_conferido_por_nome: "Maria Souza" } }, "marcar pago: grava pago + quem + quando");
+  eq(A.montarAlteracao({ acao: "pago", pago: true }, eu, "2026-10-22T13:00:00Z"), { campos: { pago: true, pago_conferido_valor: true, pago_conferido_em: "2026-10-22T13:00:00Z", pago_conferido_por: "u-1", pago_conferido_por_nome: "Maria Souza" } }, "[revisão 3] marcar pago: grava pago + o VALOR registrado + quem + quando");
   eq(A.montarAlteracao({ acao: "pago", pago: false }, eu, "t").campos.pago_conferido_por_nome, "Maria Souza", "desmarcar também registra quem e quando");
   eq(A.montarAlteracao({ acao: "pago", pago: "sim" }, eu).erro !== undefined, true, "'pago' tem de ser verdadeiro/falso");
   eq(A.montarAlteracao({ acao: "pago", pago: true, pago_conferido_por_nome: "Outra Pessoa" }, eu, "t").campos.pago_conferido_por_nome, "Maria Souza", "nome vindo da chamada é IGNORADO: vale o do token");
@@ -94,8 +94,8 @@ const IPainel = carregarTs("inscricoesPainel");
   verdade(/motivo/.test(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: "", autorizadoPor: "Pr. João" }, eu).erro), "cortesia sem motivo: recusa");
   verdade(/autorizou/.test(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: "Preletor convidado", autorizadoPor: " " }, eu).erro), "cortesia sem quem autorizou: recusa");
   verdade(/não é aceito/.test(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: "ok\u0007", autorizadoPor: "Pr. João" }, eu).erro), "motivo com caractere de controle: recusa");
-  eq(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: " Preletor  convidado ", autorizadoPor: "Pr. João" }, eu, "t"), { campos: { cortesia: true, cortesia_motivo: "Preletor convidado", cortesia_autorizada_por: "Pr. João", cortesia_em: "t", cortesia_registrada_por: "u-1", cortesia_registrada_por_nome: "Maria Souza" } }, "cortesia: motivo, quem autorizou, quem registrou e quando");
-  eq(A.montarAlteracao({ acao: "cortesia", ativa: false }, eu, "t").campos, { cortesia: false, cortesia_motivo: null, cortesia_autorizada_por: null, cortesia_em: "t", cortesia_registrada_por: "u-1", cortesia_registrada_por_nome: "Maria Souza" }, "tirar a cortesia: registra quem tirou e quando");
+  eq(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: " Preletor  convidado ", autorizadoPor: "Pr. João" }, eu, "t"), { campos: { cortesia: true, cortesia_registrada_valor: true, cortesia_motivo: "Preletor convidado", cortesia_autorizada_por: "Pr. João", cortesia_em: "t", cortesia_registrada_por: "u-1", cortesia_registrada_por_nome: "Maria Souza" } }, "cortesia: motivo, quem autorizou, quem registrou e quando");
+  eq(A.montarAlteracao({ acao: "cortesia", ativa: false }, eu, "t").campos, { cortesia: false, cortesia_registrada_valor: false, cortesia_motivo: null, cortesia_autorizada_por: null, cortesia_em: "t", cortesia_registrada_por: "u-1", cortesia_registrada_por_nome: "Maria Souza" }, "tirar a cortesia: registra quem tirou e quando");
   eq([A.montarAlteracao({ acao: "tipo", tipo: "Preletor" }, eu).campos, A.montarAlteracao({ acao: "tipo", tipo: "Chefe" }, eu).erro], [{ tipo_participante: "Preletor" }, "Tipo de participante inválido."], "tipo de participante: só os 5 da lista");
   eq(A.montarAlteracao({ acao: "apagar" }, eu).erro, "Ação inválida.", "ação desconhecida: recusa");
 
@@ -129,15 +129,23 @@ const IPainel = carregarTs("inscricoesPainel");
       { id: 1, evento: 9, codigo: "ABC234", telefone: gerarHash(TEL), email: "maria@x.org", pago: false, cortesia: false, valor: 50 },
       { id: 2, evento: 9, codigo: "PAGO22", telefone: gerarHash(TEL), email: "maria@x.org", pago: true, cortesia: false, valor: 50 },
       { id: 3, evento: 9, codigo: "CORT33", telefone: gerarHash(TEL), email: "outra@x.org", pago: false, cortesia: true, valor: 50 },
+      { id: 4, evento: 9, codigo: "ESPE44", telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", pago: false, valor: 50, aguardando_vaga: true },
+      { id: 5, evento: 9, codigo: "APRO55", telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", pago: false, valor: 50, pendente_aprovacao: true },
+      { id: 6, evento: 9, codigo: "ZERO66", telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", pago: false, valor: 0 },
+      { id: 7, evento: 9, codigo: "CHAV77", telefone: "lixo:00", telefone_chave: chaveTelefone(TEL), email: "maria@x.org", pago: false, valor: 50 }, // só a chave confere
     ],
     camiseta_pedidos: [
       { id: 10, telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", avulso: false, valor_pago: 0 },
       { id: 11, telefone: gerarHash(TEL), telefone_chave: null, email: null, avulso: false, valor_pago: 0 }, // pedido antigo, sem a chave
+      { id: 12, telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", avulso: true, valor_pago: 0 },
+      { id: 13, telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", avulso: false, valor_pago: 50 },
+      { id: 14, telefone: gerarHash(TEL), telefone_chave: chaveTelefone(TEL), email: "maria@x.org", avulso: false, valor_pago: 0, gratis: true },
     ],
+    camiseta_itens_pedido: [10, 11, 12, 13, 14].map((pedido) => ({ pedido, tamanho: "M", quantidade: 1 })),
   };
   const opcoes = { semEsquema: false };
   const NOVOS = new Set(["pagamento_informado_data", "pagamento_informado_meio", "pagamento_informado_valor", "pagamento_informado_nome", "pagamento_informado_em", "pago_conferido_em", "pago_conferido_por", "pago_conferido_por_nome", "cortesia", "cortesia_motivo", "cortesia_autorizada_por", "cortesia_em", "cortesia_registrada_por", "cortesia_registrada_por_nome", "tipo_participante"]);
-  const usuarios = { "token-da-maria": { id: "u-maria", first_name: "Maria", last_name: "Souza", email: "maria@igreja.org", pode: true }, "token-do-leitor": { id: "u-leitor", first_name: "Leitor", pode: false }, "token-sem-nome": { id: "u-joao", pode: true } };
+  const usuarios = { "token-da-maria": { id: "u-maria", first_name: "Maria", last_name: "Souza", email: "maria@igreja.org", pode: true }, "token-do-leitor": { id: "u-leitor", first_name: "Leitor", pode: false }, "token-sem-nome": { id: "u-joao", pode: true }, "token-parcial": { id: "u-parcial", first_name: "Parcial", pode: "parcial" } };
   const nomesNoAdmin = { "u-joao": { id: "u-joao", first_name: "João", last_name: "Lima" } };
   const registro = [];
   const resp = (status, corpo) => new Response(JSON.stringify(corpo), { status, headers: { "Content-Type": "application/json" } });
@@ -149,7 +157,7 @@ const IPainel = carregarTs("inscricoesPainel");
     const admin = auth === process.env.DIRECTUS_ADMIN_TOKEN;
     if (u.pathname === "/users/me") return usuarios[auth] ? resp(200, { data: auth === "token-sem-nome" ? { id: "u-joao" } : usuarios[auth] }) : resp(401, { errors: [{ message: "token inválido" }] });
     if (u.pathname.startsWith("/users/")) return admin && nomesNoAdmin[u.pathname.split("/").pop()] ? resp(200, { data: nomesNoAdmin[u.pathname.split("/").pop()] }) : resp(403, {});
-    if (u.pathname === "/permissions/me") return resp(200, { data: { inscricoes_eventos: { update: usuarios[auth]?.pode ? { access: "full", fields: ["*"] } : { access: "none", fields: [] } } } });
+    if (u.pathname === "/permissions/me") return resp(200, { data: { inscricoes_eventos: { update: usuarios[auth]?.pode === "parcial" ? { access: "partial", fields: ["pago", "nome"] } : usuarios[auth]?.pode ? { access: "full", fields: ["*"] } : { access: "none", fields: [] } } } });
     if (u.pathname.startsWith("/fields/inscricoes_eventos/")) return opcoes.semEsquema ? resp(403, { errors: [{ message: "forbidden" }] }) : resp(200, { data: { field: u.pathname.split("/").pop() } });
     const m = /^\/items\/(\w+)(?:\/(\d+))?$/.exec(u.pathname);
     if (!m) return resp(404, {});
@@ -162,8 +170,9 @@ const IPainel = carregarTs("inscricoesPainel");
       if (metodo === "PATCH") {
         for (const [k, v] of Object.entries(JSON.parse(init.body))) if (!(opcoes.semEsquema && NOVOS.has(k))) item[k] = v; // sem o esquema, o Directus ignora campo desconhecido
       }
-      return resp(200, { data: { ...item } });
+      return resp(200, { data: colecao === "camiseta_pedidos" ? { ...item, grupo: { valor_venda: item.gratis ? null : 50, precos_tamanho: null } } : { ...item } });
     }
+    if (colecao === "camiseta_itens_pedido") return resp(200, { data: tabela.filter((x) => x.pedido === Number(u.searchParams.get("filter[pedido][_eq]"))) });
     const evento = Number(u.searchParams.get("filter[evento][_eq]"));
     const codigo = u.searchParams.get("filter[codigo][_eq]");
     return resp(200, { data: tabela.filter((x) => (!evento || x.evento === evento) && (!codigo || x.codigo === codigo)) });
@@ -235,8 +244,8 @@ const IPainel = carregarTs("inscricoesPainel");
   eq(r.status, 503, "Directus sem os campos (ignora em silêncio): a função confere a resposta e diz 503, não finge que gravou");
   opcoes.semEsquema = false;
   const respostas = [];
-  for (let i = 0; i < 22; i++) respostas.push((await chamar("InformarPagamento", { tipo: "inscricao", evento: 9, codigo: "ZZZ999", telefone: TEL, pagamento: aviso }, {}, "10.9.9.9")).status);
-  eq([respostas.slice(0, 20).every((s) => s === 404), respostas.slice(20)], [true, [429, 429]], "20 tentativas por IP em 5 minutos; a 21ª recebe 429 (adivinhar código não compensa)");
+  for (let i = 0; i < 52; i++) respostas.push((await chamar("InformarPagamento", { tipo: "inscricao", evento: 9, codigo: "ZZZ999", telefone: TEL, pagamento: aviso }, {}, "10.9.9.9")).status);
+  eq([respostas.slice(0, 50).every((s) => s === 404), respostas.slice(50)], [true, [429, 429]], "[revisão 9] 50 tentativas por IP em 5 minutos (Wi-Fi do evento); a 51ª recebe 429");
 
   console.log("== PainelInscricao: quem e quando saem do token ==");
   const tok = { "x-painel-token": "token-da-maria" };
@@ -254,7 +263,7 @@ const IPainel = carregarTs("inscricoesPainel");
   eq([r.status, i1.pago, i1.pago_conferido_por, i1.pago_conferido_por_nome], [200, true, "u-maria", "Maria Souza"], "marcar pago: grava pago, o id e o NOME DE QUEM ESTÁ LOGADO (o nome inventado na chamada é ignorado)");
   verdade(Math.abs(Date.parse(i1.pago_conferido_em) - Date.now()) < 5000, "e a hora é a do servidor (não a '2020-01-01' da chamada)");
   const gravacao = registro.find((x) => x.metodo === "PATCH");
-  eq([gravacao.auth === process.env.DIRECTUS_ADMIN_TOKEN, Object.keys(gravacao.corpo).sort()], [true, ["pago", "pago_conferido_em", "pago_conferido_por", "pago_conferido_por_nome"]], "grava com o token de administrador só os 4 campos");
+  eq([gravacao.auth === process.env.DIRECTUS_ADMIN_TOKEN, Object.keys(gravacao.corpo).sort()], [true, ["pago", "pago_conferido_em", "pago_conferido_por", "pago_conferido_por_nome", "pago_conferido_valor"]], "grava com o token de administrador só os 5 campos (pago, valor registrado, quem, quando)");
   verdade(registro.some((x) => x.caminho.startsWith("/users/me") && x.auth === "token-da-maria") && registro.some((x) => x.caminho === "/permissions/me" && x.auth === "token-da-maria"), "quem é e o que pode: perguntado ao Directus com o token DA PESSOA");
   r = await chamar("PainelInscricao", { inscricaoId: 1, acao: "pago", pago: false }, tok);
   eq([r.status, i1.pago, r.body.inscricao.pago_conferido_por_nome], [200, false, "Maria Souza"], "desmarcar: também guarda quem e quando");
@@ -278,6 +287,61 @@ const IPainel = carregarTs("inscricoesPainel");
   eq([r.status, i1.pago, registro.some((x) => x.metodo === "PATCH")], [503, true, false], "Directus sem os campos de auditoria: 503 e NADA é gravado (nem o 'pago')");
   opcoes.semEsquema = false;
 
+  await tentar("revisões 3, 6, 8, 10, 12, 13 e 17", async () => {
+console.log("== revisão de 22/10/2026 ==");
+  // 12: milhar só com o primeiro dígito de 1 a 9
+  eq([P.lerValor("0.050"), P.lerValor("0.001"), P.lerValor("1.234"), P.lerValor("0,05"), P.lerValor("00.500")], [null, null, 1234, 0.05, null], "[revisão 12] '0.050' e '0.001' NÃO viram R$ 50 nem R$ 1; '1.234' continua R$ 1.234");
+  // 13: os invisíveis que faltavam
+  for (const cp of [0x061c, 0x00ad, 0x034f, 0x180e, 0xe0001, 0xe007f]) {
+    const ch = String.fromCodePoint(cp);
+    verdade(/não é aceito/.test(P.validarPagamentoInformado({ ...bom, nome: `Maria${ch}Souza` }, agora).erro || ""), `[revisão 13] U+${cp.toString(16).toUpperCase()} no nome de quem pagou: recusado`);
+    verdade(/não é aceito/.test(A.montarAlteracao({ acao: "cortesia", ativa: true, motivo: `Preletor${ch}`, autorizadoPor: "Pr. João" }, eu).erro || ""), `[revisão 13] U+${cp.toString(16).toUpperCase()} no motivo da cortesia: recusado`);
+  }
+  eq(P.validarPagamentoInformado({ ...bom, nome: "José Ñandú Çá" }, agora).ok, true, "[revisão 13] acentos, ç e ñ continuam valendo");
+});
+  await tentar("revisão 3 (registro divergente)", async () => {
+  // 3: registro divergente (o 'pago' mudado por fora do painel)
+  const conferida = { id: 1, pago: true, pago_conferido_valor: true, pago_conferido_em: "2026-10-22T13:00:00Z", pago_conferido_por_nome: "Maria" };
+  eq([IPainel.registroDivergente(conferida).pago, /divergente/.test(IPainel.textoConferencia(conferida))], [false, false], "[revisão 3] pago igual ao registrado: sem aviso");
+  eq([IPainel.registroDivergente({ ...conferida, pago: false }).pago, /divergente/.test(IPainel.textoConferencia({ ...conferida, pago: false }))], [true, true], "[revisão 3] desmarcaram o pago FORA do painel: 'registro divergente'");
+  verdade(/^Confirmado por Maria/.test(IPainel.textoConferencia({ ...conferida, pago: false })), "[revisão 3] e o texto diz o que foi REGISTRADO (confirmado por Maria), não o valor de agora");
+  eq([IPainel.registroDivergente({ id: 2, cortesia: true }).cortesia, IPainel.registroDivergente({ id: 2, cortesia: true, cortesia_em: "x", cortesia_registrada_valor: true }).cortesia, IPainel.registroDivergente({ id: 2, cortesia: false, cortesia_em: "x", cortesia_registrada_valor: true }).cortesia],
+    [true, false, true], "[revisão 3] cortesia ligada sem registro, ou tirada por fora: divergente");
+  verdade(/divergente/.test(IPainel.textoCortesia({ id: 2, cortesia: true })), "[revisão 3] o texto da cortesia avisa a divergência");
+});
+  await tentar("revisões 8, 10, 17 e 6 (funções)", async () => {
+  // 8: a mesma regra da tela no servidor
+  for (const [codigo, motivo] of [["ESPE44", "lista de espera"], ["APRO55", "aguardando aprovação"], ["ZERO66", "sem valor"]]) {
+    r = await chamar("InformarPagamento", { tipo: "inscricao", evento: 9, codigo, telefone: TEL, pagamento: aviso });
+    eq(r.status, 409, `[revisão 8] inscrição ${motivo}: 409`);
+  }
+  for (const [pedidoId, motivo] of [[12, "venda avulsa (balcão)"], [13, "já quitado"], [14, "campanha grátis"]]) {
+    r = await chamar("InformarPagamento", { tipo: "pedido", telefone: TEL, pedidoId, pagamento: aviso });
+    eq(r.status, 409, `[revisão 8] pedido ${motivo}: 409`);
+  }
+  // 10: com a chave gravada, só a chave; sem ela, o scrypt ASSÍNCRONO (nunca o scryptSync, que trava o processo)
+  r = await chamar("InformarPagamento", { tipo: "inscricao", evento: 9, codigo: "CHAV77", telefone: TEL, pagamento: aviso });
+  eq(r.status, 200, "[revisão 10] inscrição com a chave do telefone gravada: confere pela chave (o hash nem é usado)");
+  const cripto = require("crypto");
+  const scryptSyncOriginal = cripto.scryptSync;
+  let chamadasSync = 0;
+  cripto.scryptSync = (...a) => { chamadasSync += 1; return scryptSyncOriginal(...a); };
+  try {
+    r = await chamar("InformarPagamento", { tipo: "pedido", telefone: TEL, pedidoId: 11, pagamento: aviso });
+    const r2 = await chamar("InformarPagamento", { tipo: "pedido", telefone: "(11) 90000-0000", pedidoId: 11, pagamento: aviso });
+    eq([r.status, r2.status, chamadasSync], [200, 404, 0], "[revisão 10] pedido antigo (sem chave): confere pelo hash com o scrypt assíncrono — nenhum scryptSync");
+  } finally {
+    cripto.scryptSync = scryptSyncOriginal;
+  }
+  // 17: tirar cortesia de quem nunca teve
+  registro.length = 0;
+  r = await chamar("PainelInscricao", { inscricaoId: 2, acao: "cortesia", ativa: false }, tok);
+  eq([r.status, registro.some((x) => x.metodo === "PATCH"), banco.inscricoes_eventos[1].cortesia_em ?? null], [409, false, null], "[revisão 17] tirar a cortesia de quem não tem: 409 e nada gravado");
+  // 6: o tipo exige o campo
+  r = await chamar("PainelInscricao", { inscricaoId: 1, acao: "tipo", tipo: "Equipe" }, { "x-painel-token": "token-parcial" });
+  eq(r.status, 403, "[revisão 6] perfil que altera só 'pago' e 'nome' não muda o tipo de participante (403)");
+
+  });
   console.log("== Minha Conta e Meus pedidos devolvem o id e o aviso ==");
   globalThis.fetch = async (url) => {
     const u = new URL(String(url));

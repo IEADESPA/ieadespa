@@ -14,8 +14,8 @@ const MEIOS = Object.freeze({ PIX: "Pix", TRANSFERENCIA: "Transferência", DINHE
 const VALOR_MAXIMO = 50000;
 const NOME_MAX = 120;
 const DIA_MS = 24 * 60 * 60 * 1000;
-// Controles C0/C1 e os invisíveis que embaralham a leitura (largura zero, marcas e isolamentos de direção, BOM).
-const INVISIVEIS = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁤⁦-⁩﻿]/;
+// Controles e invisíveis: ver `textoSeguro.js`.
+const { temCaractereProibido } = require("./textoSeguro");
 
 /** O dia de hoje em Brasília (UTC-3, sem horário de verão), como AAAA-MM-DD. */
 function hojeEmBrasilia(agora = Date.now()) {
@@ -40,7 +40,7 @@ function lerValor(bruto) {
   if (typeof bruto === "number") n = bruto;
   else if (typeof bruto === "string") {
     let t = bruto.trim().replace(/^R\$\s*/i, "");
-    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(t)) t = t.replace(/\./g, "").replace(",", "."); // 1.234,56
+    if (/^[1-9]\d{0,2}(\.\d{3})+(,\d{1,2})?$/.test(t)) t = t.replace(/\./g, "").replace(",", "."); // 1.234,56
     else if (/^\d+,\d{1,2}$/.test(t)) t = t.replace(",", "."); // 50,50
     if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
     n = Number(t);
@@ -52,7 +52,7 @@ function lerValor(bruto) {
 
 function lerNome(bruto) {
   if (typeof bruto !== "string") return { erro: "Informe o nome de quem pagou." };
-  if (INVISIVEIS.test(bruto)) return { erro: "O nome de quem pagou tem um caractere que não é aceito." };
+  if (temCaractereProibido(bruto)) return { erro: "O nome de quem pagou tem um caractere que não é aceito." };
   const nome = bruto.trim().replace(/\s+/g, " ");
   if (nome.length < 2) return { erro: "Informe o nome de quem pagou." };
   if (nome.length > NOME_MAX) return { erro: `O nome de quem pagou pode ter no máximo ${NOME_MAX} letras.` };

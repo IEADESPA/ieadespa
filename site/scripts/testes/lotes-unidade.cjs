@@ -20,6 +20,11 @@ const eq = (a, b, d) => {
   if (!ok) { falhas++; console.log("  FALHA", d, "→", JSON.stringify(a), "esperado", JSON.stringify(b)); } else console.log("  ok   ", d);
 };
 const verdade = (c, d) => eq(!!c, true, d);
+
+// Um bloco que quebra (ex.: rodando contra o código de antes da revisão, sem a função nova) conta como falha e o teste segue para os outros blocos.
+async function tentar(nome, fn) {
+  try { await fn(); } catch (e) { falhas++; total++; console.log("  FALHA", nome, "→ o bloco quebrou:", e && e.message); }
+}
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 const BRT = (texto) => new Date(`${texto}-03:00`).getTime(); // um instante no horário de Brasília
 
@@ -63,7 +68,8 @@ function novaInstancia() {
   eq(L.escolherFaixa(faixas, { valor: 50 }, antes).faixa.descricao, "1º lote", "página antiga (só o valor): acha pela faixa de mesmo valor");
   eq(L.escolherFaixa(faixas, { valor: 70 }, depois).faixa.descricao, "2º lote", "só o valor, repetido em duas faixas: a primeira em vigor");
   eq(L.escolherFaixa(faixas, { valor: 50 }, depois).erro.status, 409, "só o valor de um lote vencido: 409");
-  eq(L.escolherFaixa(faixas, {}, antes), { faixa: null }, "sem escolher faixa: segue sem faixa (como sempre foi)");
+  eq([L.escolherFaixa(faixas, {}, antes).erro?.status, L.escolherFaixa(faixas, {}, antes).erro?.body.motivo], [400, "lote_obrigatorio"], "[revisão 1] evento com faixas e nenhuma escolhida: 400 'Escolha o lote' (antes passava por cima do lote, da data e do preço)");
+  eq(L.escolherFaixa(faixas, { rotulo: "", valor: "" }, antes).erro?.status, 400, "[revisão 1] rótulo e valor vazios: também 400");
   eq(L.escolherFaixa([], { rotulo: "x", valor: 9 }, antes), { faixa: null }, "evento sem faixas: ignora o que vier");
 
   console.log("== situação dos lotes (página pública) ==");
@@ -214,7 +220,21 @@ function novaInstancia() {
   console.log("== sem o campo faixa_rotulo no Directus (esquema v7.13 não aplicado) ==");
   {
     const r = await inscrever(novaInstancia(), novoDirectus({ semCampoLote: true }), { faixa: LOTE1 });
-    eq(r, { semControle: true }, "a contagem do lote dá 403: avisa para gravar do jeito antigo, nunca deixa de aceitar inscrição");
+    eq(r, { semCampoLote: true }, "[revisão 4] a contagem do lote dá 403: avisa que falta SÓ o campo do lote (não derruba a trava inteira)");
+    // A função de inscrição refaz sem o lote e a trava de VAGAS continua: com muita gente ao mesmo tempo, o limite geral segue exato e cada inscrição pega a sua senha.
+    const fake = novoDirectus({ atraso: 4, semCampoLote: true });
+    const evento = { id: 1, title: "Sem esquema", aceita_inscricao: true, inscricoes_encerradas: false, inscricoes_ate: null, vagas_limite: 5, requer_aprovacao: false, permite_inscricao_grupo: false, faixas_valor: [{ descricao: "1º lote", valor: 50, vagas: 3 }] };
+    globalThis.fetch = async (url, init = {}) => {
+      const caminho = String(url).replace(process.env.DIRECTUS_URL, "");
+      if (caminho.startsWith("/items/eventos/1")) return new Response(JSON.stringify({ data: evento }), { status: 200 });
+      if (caminho.includes("telefone_chave")) return new Response(JSON.stringify({ data: [{ count: { id: "0" } }] }), { status: 200 });
+      return fake.directus(caminho, init);
+    };
+    delete require.cache[require.resolve("../../api/CriarInscricao/index.js")];
+    novaInstancia();
+    const handler = require("../../api/CriarInscricao/index.js");
+    const rs = await Promise.all(Array.from({ length: 12 }, async (_, i) => { const ctx = { log: Object.assign(() => {}, { warn() {}, error() {} }) }; await handler(ctx, { headers: { "x-forwarded-for": `10.7.0.${i}, 1.1.1.1` }, body: { eventoId: 1, nomes: [`P${i}`], telefone: `94 98888-00${String(i).padStart(2, "0")}`, faixa: "1º lote", valorFaixa: 50 } }); return ctx.res; }));
+    eq([rs.filter((x) => x.status === 200).length, confirmadas(fake), fake.banco.controle.length], [12, 5, 12], "[revisão 4] sem o campo do lote: 12 ao mesmo tempo para 5 vagas → 5 confirmadas, o resto na espera, e UMA senha por inscrição (a trava continua; antes caía no 'conta, depois grava')");
   }
 
   console.log("== o teste do teste ==");
@@ -276,6 +296,8 @@ function novaInstancia() {
     eq(r.status, 200, "uma pessoa ainda cabe");
     r = await chamar({ eventoId: 1, nomes: ["Davi"], telefone: "94 99999-0005", faixa: "2º lote", valorFaixa: 70 });
     eq([r.status, r.body.motivo, noLote(fake, "2º lote")], [409, "lote_esgotado", 2], "a 3ª no lote de 2: 409, o lote fica em 2");
+    r = await chamar({ eventoId: 1, nomes: ["Zé"], telefone: "94 99999-0007" });
+    eq([r.status, r.body.motivo, noLote(fake, "2º lote"), fake.banco.inscricoes.length], [400, "lote_obrigatorio", 2, 2], "[revisão 1] lote esgotado e a pessoa manda SEM lote (a página tinha voltado para Selecione…): 400, nada gravado");
     r = await chamar({ eventoId: 1, nomes: ["Eva"], telefone: "94 99999-0006", faixa: "2º lote", valorFaixa: 999 });
     eq(r.status, 400, "rótulo certo com valor inventado: 400");
   }
@@ -301,6 +323,26 @@ function novaInstancia() {
     eq(pedidos.filter((p) => p.includes("groupBy")).length, 1, "UMA consulta agrupada para todos os lotes");
   }
 
+  await tentar("revisões 1, 4, 5 e 18 (painel e páginas)", async () => {
+console.log("== revisão de 22/10/2026: o nome do lote no painel e as páginas ==");
+  const { carregarTs } = require("./carregar-ts.cjs");
+  const IPainel = await carregarTs("inscricoesPainel");
+  eq(IPainel.problemaDosLotes([{ descricao: "1º lote" }, { descricao: "2º lote" }], { "1º lote": 3 }), null, "[revisão 5] nomes diferentes, lote com inscritos mantido: pode salvar");
+  verdade(/dois lotes com o nome/.test(IPainel.problemaDosLotes([{ descricao: "Membro" }, { descricao: " membro " }], null) || ""), "[revisão 5] dois lotes com o mesmo nome (maiúscula/espaço não importam): bloqueia");
+  verdade(/já tem 3 inscrições: não dá para mudar o nome/.test(IPainel.problemaDosLotes([{ descricao: "Primeiro lote" }, { descricao: "2º lote" }], { "1º lote": 3 }) || ""), "[revisão 5] renomear (ou remover) lote que já tem inscritos: bloqueia, e diz como fechar o lote");
+  eq(IPainel.problemaDosLotes([{ descricao: "Novo" }], { "1º lote": 0, "": 4 }), null, "[revisão 5] lote sem inscritos pode ser renomeado; inscrições sem lote não contam");
+  verdade(/120 letras/.test(IPainel.problemaDosLotes([{ descricao: "x".repeat(121) }], null) || ""), "[revisão 5] nome com mais de 120 letras: bloqueia");
+});
+  await tentar("revisões 1, 4, 5 e 18 (páginas)", async () => {
+  const raizPaginas = path.join(__dirname, "../../src/pages");
+  const paginaEvento = fs.readFileSync(path.join(raizPaginas, "evento/[slug].astro"), "utf8");
+  const painelEvento = fs.readFileSync(path.join(raizPaginas, "painel-eventos/evento/index.astro"), "utf8");
+  verdade(/<select id="inscricao-faixa" class="field" required>/.test(paginaEvento), "[revisão 1] a página do evento exige escolher o lote (select com required)");
+  verdade(paginaEvento.includes("escaparHtml(r.nome)") && !/\$\{r\.nome\}: <strong>/.test(paginaEvento), "[revisão 18] o nome digitado vai escapado para a mensagem de confirmação (innerHTML)");
+  verdade(painelEvento.includes('maxlength="120"') && painelEvento.includes("problemaDosLotes(lerFaixas(), inscritosPorLote)"), "[revisão 5] o painel limita o nome a 120 letras e confere os nomes antes de salvar");
+  verdade(painelEvento.includes("vagasDoLoteDisponiveis = false") && painelEvento.includes("data-faixa-vagas-rotulo"), "[revisão 4] sem o campo do lote no Directus, o painel esconde 'Vagas do lote'");
+
+  });
   console.log(falhas === 0 ? `\nTUDO CERTO (${total} verificações)` : `\n${falhas} FALHA(S) de ${total}`);
   process.exit(falhas === 0 ? 0 : 1);
 })().catch((e) => { console.log("ERRO NO TESTE:", e && e.stack); process.exit(1); });

@@ -76,6 +76,32 @@ export function camposDoCracha(config: ConfigCracha, dados: DadosCracha, eventoI
   };
 }
 
+/**
+ * Qual resposta vai para o crachá (revisão de 22/10/2026) — a MESMA regra de `api/src/lib/cracha.js`: `respostas_inscricao` tem criação
+ * pública (a pesquisa pós-evento), então só vale a resposta MAIS ANTIGA (menor id), de pergunta do evento feita na inscrição (momento
+ * diferente de "pos_evento"), criada até 10 minutos depois da inscrição (resposta antiga, sem `date_created`, vale).
+ */
+export const JANELA_RESPOSTA_CRACHA_MS = 10 * 60 * 1000;
+
+export function perguntasDoCracha(perguntas: { id: number; evento?: number | string | null; momento?: string | null }[], eventoId: number | string | null): Set<number> {
+  return new Set(perguntas.filter((p) => (p.evento == null || eventoId == null || String(p.evento) === String(eventoId)) && p.momento !== "pos_evento").map((p) => Number(p.id)));
+}
+
+export function respostaParaCracha(
+  respostas: { id: number; pergunta: number; valor: string | null; date_created?: string | null }[],
+  perguntaId: number | null,
+  { perguntasValidas, inscricaoCriadaEm = null }: { perguntasValidas: Set<number>; inscricaoCriadaEm?: string | null },
+): string | null {
+  if (!perguntaId || !perguntasValidas.has(Number(perguntaId))) return null;
+  const limite = inscricaoCriadaEm ? Date.parse(inscricaoCriadaEm) + JANELA_RESPOSTA_CRACHA_MS : null;
+  const candidatas = respostas
+    .filter((r) => Number(r.pergunta) === Number(perguntaId))
+    .filter((r) => !r.date_created || limite == null || Number.isNaN(limite) || Date.parse(r.date_created) <= limite)
+    .sort((a, b) => Number(a.id) - Number(b.id));
+  const valor = candidatas.length ? candidatas[0].valor : null;
+  return valor == null || String(valor).trim() === "" ? null : String(valor);
+}
+
 /** A matriz do QR (módulos escuros), no formato que `desenharCracha` desenha. Quem chama gera com a biblioteca do site (`/vendor/qrcode-generator`). */
 export interface MatrizQr {
   tamanho: number;

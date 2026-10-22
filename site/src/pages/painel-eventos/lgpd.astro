@@ -69,16 +69,35 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     const AUTH = { tokenKey: "painel_eventos_token", loginPath: "/painel-eventos/entrar/" };
 
+    interface PagamentoInformado { data: string | null; meioRotulo?: string | null; valor: number | null; nome: string | null; em: string }
     interface Inscricao {
       id: number;
       nome: string;
       codigo: string;
       eventoTitulo: string | null;
+      // v7.13 (LGPD): o que mais o site guarda desta inscrição
+      lote?: string | null;
+      tipoParticipante?: string | null;
+      cortesia?: { motivo: string | null; autorizadaPor: string | null } | null;
+      pagamentoInformado?: PagamentoInformado | null;
+      entradas?: { local: string | null; em: string | null }[];
     }
     interface Pedido {
       id: number;
       nome: string;
       grupoNome: string | null;
+      pagamentoInformado?: PagamentoInformado | null;
+    }
+
+    /** v7.13 — os dados novos de cada registro, numa linha (pagamento informado, tipo, cortesia, entradas). */
+    function extrasHtml(x: { lote?: string | null; tipoParticipante?: string | null; cortesia?: Inscricao["cortesia"]; pagamentoInformado?: PagamentoInformado | null; entradas?: Inscricao["entradas"] }) {
+      const partes: string[] = [];
+      if (x.lote) partes.push(`lote: ${x.lote}`);
+      if (x.tipoParticipante) partes.push(`tipo: ${x.tipoParticipante}`);
+      if (x.cortesia) partes.push(`cortesia (${x.cortesia.motivo ?? "?"}; autorizada por ${x.cortesia.autorizadaPor ?? "?"})`);
+      if (x.pagamentoInformado) partes.push(`pagamento informado: R$ ${Number(x.pagamentoInformado.valor ?? 0).toFixed(2).replace(".", ",")} por ${x.pagamentoInformado.meioRotulo ?? "?"} em ${x.pagamentoInformado.data ?? "?"}, pago por ${x.pagamentoInformado.nome ?? "?"}`);
+      if (x.entradas && x.entradas.length) partes.push(`entradas no credenciamento: ${x.entradas.map((e) => `${e.local || "sem local"} (${e.em ? new Date(e.em).toLocaleString("pt-BR", { timeZone: "America/Belem" }) : "?"})`).join(", ")}`);
+      return partes.length ? `<br /><span class="text-xs text-muted-foreground">${escapeHtml(partes.join(" · "))}</span>` : "";
     }
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
@@ -137,8 +156,8 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (listaEl) listaEl.hidden = false;
       if (itensEl) {
         itensEl.innerHTML = [
-          ...inscricoes.map((i) => `<li>Inscrição em <strong>${escapeHtml(i.eventoTitulo ?? "evento")}</strong> — ${escapeHtml(i.nome)} (código ${escapeHtml(i.codigo)})</li>`),
-          ...pedidos.map((p) => `<li>Pedido de camiseta — <strong>${escapeHtml(p.grupoNome ?? "campanha")}</strong> — ${escapeHtml(p.nome)}</li>`),
+          ...inscricoes.map((i) => `<li>Inscrição em <strong>${escapeHtml(i.eventoTitulo ?? "evento")}</strong> — ${escapeHtml(i.nome)} (código ${escapeHtml(i.codigo)})${extrasHtml(i)}</li>`),
+          ...pedidos.map((p) => `<li>Pedido de camiseta — <strong>${escapeHtml(p.grupoNome ?? "campanha")}</strong> — ${escapeHtml(p.nome)}${extrasHtml(p)}</li>`),
         ].join("");
       }
     });

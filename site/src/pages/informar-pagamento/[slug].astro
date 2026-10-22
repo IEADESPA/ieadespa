@@ -102,7 +102,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       }
       resultado.textContent = "Verificando…";
       try {
-        const res = await fetch(verificarUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }) });
+        const res = await fetch(verificarUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone, detalhes: true }) });
         if (res.status === 429) {
           resultado.textContent = "Muitas tentativas. Aguarde alguns minutos.";
           return;

@@ -56,6 +56,33 @@ export function serializarLocais(locais: LocalCheckin[]): (string | LocalCheckin
   return normalizarLocais(locais).map((l) => (l.capacidade == null ? l.nome : { nome: l.nome, capacidade: l.capacidade }));
 }
 
+/**
+ * Revisão de 22/10/2026 — o que fazer com a resposta do Directus a um check-in da fila do aparelho. Antes, qualquer falha voltava para a fila e era reenviada para
+ * sempre (inscrição apagada, por exemplo). Agora:
+ *   - "ok" / "repetida" (a mesma entrada já estava lá: chave única) → sai da fila;
+ *   - "sessao" (401) → para a sincronização e pede para entrar de novo; a fila fica guardada no aparelho;
+ *   - "permanente" (400 que não é repetição, 403 na presença, 404) → sai da fila e a tela avisa que aquele check-in não foi gravado;
+ *   - "sem_esquema" (403 na entrada: o Directus não tem `evento_entradas` ou o perfil não grava) → a presença basta, como antes da v7.13;
+ *   - "tentar_de_novo" (rede, 5xx, 429) → fica na fila.
+ */
+export type DestinoCheckin = "ok" | "repetida" | "sessao" | "permanente" | "sem_esquema" | "tentar_de_novo";
+
+export function classificarRespostaCheckin(etapa: "presenca" | "entrada", status: number, codigosDeErro: string[] = []): DestinoCheckin {
+  if (status >= 200 && status < 300) return "ok";
+  if (status === 401) return "sessao";
+  if (etapa === "entrada" && status === 400 && codigosDeErro.includes("RECORD_NOT_UNIQUE")) return "repetida";
+  if (etapa === "entrada" && status === 403) return "sem_esquema";
+  if (status === 400 || status === 403 || status === 404) return "permanente";
+  return "tentar_de_novo";
+}
+
+/** A entrada já está na lista (mesma pessoa, mesmo local, mesmo dia)? Evita contar duas vezes quando a confirmação e a sincronização gravam a mesma entrada. */
+export function entradaJaConhecida(entradas: Entrada[], nova: Entrada): boolean {
+  const quando = nova.entrou_em || nova.date_created;
+  if (!quando) return false;
+  return jaEntrouNoLocal(entradas, nova.inscricao, nova.local, diaEmBrasilia(quando));
+}
+
 /** O dia em Brasília (UTC-3, sem horário de verão) de um instante, AAAA-MM-DD. */
 export function diaEmBrasilia(quando: Date | string | number): string {
   const d = quando instanceof Date ? quando : new Date(quando);

@@ -106,7 +106,7 @@ function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas
   const contar = (consulta, o_que, { campoNovo = false } = {}) => lerComRepeticao(async () => {
     const r = await directus(`/items/inscricoes_eventos?aggregate[count]=id&${consulta}`);
     // Campo novo (`faixa_rotulo`, v7.13) que ainda não existe no Directus: ele responde 400/403 ao filtro. É o esquema não aplicado — a função grava do jeito antigo e avisa.
-    if (campoNovo && (r.status === 400 || r.status === 403)) { const e = new Error(`o campo faixa_rotulo não existe neste Directus (${r.status})`); e.semEsquema = true; throw e; }
+    if (campoNovo && (r.status === 400 || r.status === 403)) { const e = new Error(`o campo faixa_rotulo não existe neste Directus (${r.status})`); e.semEsquema = true; e.campoLote = true; throw e; }
     if (!r.ok) throw new Error(`falha ao contar ${o_que} (${r.status})`);
     return Number(((await r.json()).data || [])[0]?.count?.id ?? 0);
   }, repeticao);
@@ -161,6 +161,8 @@ async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null
       },
     }), opcoesFila);
   } catch (e) {
+    // Revisão de 22/10/2026: se o que falta é SÓ o campo do lote (esquema v7.13 não aplicado), a trava de vagas e de cupom continua valendo — quem chama refaz sem o lote.
+    if (e && e.campoLote) { log(`${e.message}: seguindo sem o limite do lote, com a trava de vagas e cupom (aplique site/scripts/directus-eventos-v713-esquema.mjs)`); return { semCampoLote: true }; }
     if (e && e.semEsquema) { log(`${e.message}: gravando sem trava (aplique site/scripts/directus-vagas-esquema.mjs)`); return { semControle: true }; }
     throw e;
   }

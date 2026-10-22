@@ -168,7 +168,7 @@ const allPosts = visiblePosts(await getAllMensagens());
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
-    import { camposDoCracha, desenharCracha, matrizQr, normalizarConfigCracha, TIPOS_PARTICIPANTE, type ConfigCracha } from "@/lib/cracha";
+    import { camposDoCracha, desenharCracha, matrizQr, normalizarConfigCracha, perguntasDoCracha, respostaParaCracha, TIPOS_PARTICIPANTE, type ConfigCracha } from "@/lib/cracha";
     import { contagemPorLote, passaNoFiltroPagamento, situacaoPagamento, textoConferencia, textoCortesia, totaisPagamento, type InscricaoPagamento } from "@/lib/inscricoesPainel";
     import { textoPagamentoInformado } from "@/lib/informarPagamento";
     import { agruparAusentes, contarPorLocal, listarAusentes, normalizarLocais, resumoAusencia, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
@@ -217,6 +217,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       inscricao: number;
       pergunta: number;
       valor: string;
+      date_created?: string | null;
     }
 
     const container = document.querySelector<HTMLElement>("[data-directus-url]");
@@ -1022,8 +1023,10 @@ const allPosts = visiblePosts(await getAllMensagens());
             const y = margem + linha * alturaCel;
 
             // v7.13: o que vai no crachá segue a configuração do evento (tipo, igreja, cidade, QR do credenciamento).
+            // Revisão de 22/10/2026: a mesma regra do /cracha/ (`respostaParaCracha`): só a resposta mais antiga, de pergunta da inscrição, feita junto com a inscrição.
             const respostas = respostasPorInscricao.get(pessoa.id) ?? [];
-            const resposta = (perguntaId: number | null) => (perguntaId ? respostas.find((r) => r.pergunta === perguntaId)?.valor ?? null : null);
+            const opcoesResposta = { perguntasValidas: perguntasDoCracha([...perguntasPorId.values()], null), inscricaoCriadaEm: (pessoa as { date_created?: string | null }).date_created ?? null };
+            const resposta = (perguntaId: number | null) => respostaParaCracha(respostas, perguntaId, opcoesResposta);
             const campos = camposDoCracha(configCracha, { nome: pessoa.nome, codigo: pessoa.codigo, tipo: pessoa.tipo_participante, igreja: resposta(configCracha.pergunta_igreja), cidade: resposta(configCracha.pergunta_cidade) }, eventoId);
             desenharCracha(doc, { x, y, largura: larguraCel, altura: alturaCel }, { nome: campos.nome, eventoTitulo, tema: eventoTema || null, logo }, { tipo: campos.tipo, linhas: campos.linhas, qr: matrizQr(campos.qr) });
 

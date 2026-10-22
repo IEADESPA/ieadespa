@@ -24,6 +24,9 @@ export interface InscricaoPagamento {
   pagamento_informado_nome?: string | null;
   pago_conferido_em?: string | null;
   pago_conferido_por_nome?: string | null;
+  /** O "pago" que a equipe registrou pelo painel (revisão de 22/10/2026) — diferente do `pago` atual = mudaram por fora. */
+  pago_conferido_valor?: boolean | null;
+  cortesia_registrada_valor?: boolean | null;
   cortesia_motivo?: string | null;
   cortesia_autorizada_por?: string | null;
   cortesia_em?: string | null;
@@ -79,6 +82,32 @@ export function contagemPorLote(lista: InscricaoPagamento[], faixas: { descricao
   return saida;
 }
 
+/**
+ * Revisão de 22/10/2026 — o lote é identificado pelo NOME (`faixa_rotulo`): dois lotes com o mesmo nome, ou renomear/remover um
+ * lote que já tem inscritos, embaralham a contagem (o lote renomeado "volta a zero"). O painel confere antes de salvar e bloqueia.
+ * `inscritosPorLote` = { nome: inscrições } (null = não deu para contar, o painel não bloqueia por isso). Devolve a frase do problema, ou null.
+ */
+export function problemaDosLotes(novas: { descricao: string }[], inscritosPorLote: Record<string, number> | null): string | null {
+  const chave = (t: string) => t.trim().replace(/\s+/g, " ").toLocaleLowerCase("pt-BR");
+  const vistos = new Map<string, string>();
+  for (const f of novas) {
+    const nome = String(f.descricao ?? "").trim();
+    if (!nome) continue;
+    if (nome.length > 120) return `O nome do lote "${nome.slice(0, 30)}…" passa de 120 letras.`;
+    if (vistos.has(chave(nome))) return `Há dois lotes com o nome "${nome}". Cada lote precisa de um nome diferente (a contagem de vagas é pelo nome).`;
+    vistos.set(chave(nome), nome);
+  }
+  if (inscritosPorLote) {
+    for (const [nome, n] of Object.entries(inscritosPorLote)) {
+      if (!nome || !(n > 0)) continue;
+      if (!novas.some((f) => String(f.descricao ?? "").trim() === nome)) {
+        return `O lote "${nome}" já tem ${n} ${n === 1 ? "inscrição" : "inscrições"}: não dá para mudar o nome dele nem removê-lo (a contagem é pelo nome e voltaria a zero). Para fechar o lote, ponha o último dia ("Vale até") ou o número de vagas.`;
+      }
+    }
+  }
+  return null;
+}
+
 export function formatarMomento(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -87,13 +116,30 @@ export function formatarMomento(iso: string | null | undefined): string {
 }
 
 /** "Confirmado por Maria em 21/10/2026 10:30" ou "Desmarcado por João em …" — ou null quando ninguém mexeu ainda. */
+export const AVISO_DIVERGENTE = "⚠️ Registro divergente: mudaram isto fora do painel depois do último registro. Quem mudou aparece no registro de atividade do Directus.";
+
+/**
+ * Revisão de 22/10/2026 — o "pago" ou a cortesia foram mudados FORA do painel (direto no Directus) depois do último registro de quem e quando?
+ * Pago: o registro guarda o valor registrado (`pago_conferido_valor`); diferente do `pago` de agora = divergente (registro antigo, sem o valor, não acusa).
+ * Cortesia: só existe desde a v7.13 e só pelo painel; cortesia ligada sem registro, ou diferente do valor registrado = divergente.
+ */
+export function registroDivergente(i: InscricaoPagamento): { pago: boolean; cortesia: boolean } {
+  const pago = Boolean(i.pago_conferido_em) && i.pago_conferido_valor != null && Boolean(i.pago) !== Boolean(i.pago_conferido_valor);
+  const cortesia = i.cortesia_registrada_valor != null ? Boolean(i.cortesia) !== Boolean(i.cortesia_registrada_valor) : Boolean(i.cortesia) && !i.cortesia_em;
+  return { pago, cortesia };
+}
+
 export function textoConferencia(i: InscricaoPagamento): string | null {
+  const divergente = registroDivergente(i).pago;
   if (!i.pago_conferido_em) return null;
-  return `${i.pago ? "Confirmado" : "Desmarcado"} por ${i.pago_conferido_por_nome || "alguém da equipe"} em ${formatarMomento(i.pago_conferido_em)}`;
+  const registrado = i.pago_conferido_valor != null ? Boolean(i.pago_conferido_valor) : Boolean(i.pago);
+  const texto = `${registrado ? "Confirmado" : "Desmarcado"} por ${i.pago_conferido_por_nome || "alguém da equipe"} em ${formatarMomento(i.pago_conferido_em)}`;
+  return divergente ? `${texto}. ${AVISO_DIVERGENTE}` : texto;
 }
 
 /** "Cortesia: <motivo> — autorizada por X (registrada por Y em …)" ou, depois de tirada, "Cortesia tirada por Y em …". */
 export function textoCortesia(i: InscricaoPagamento): string | null {
+  if (registroDivergente(i).cortesia) return `Cortesia ${i.cortesia ? "ligada" : "desligada"} sem passar pelo painel. ${AVISO_DIVERGENTE}`;
   if (i.cortesia) return `Cortesia: ${i.cortesia_motivo || "(sem motivo)"} — autorizada por ${i.cortesia_autorizada_por || "?"} (registrada por ${i.cortesia_registrada_por_nome || "?"} em ${formatarMomento(i.cortesia_em)})`;
   if (i.cortesia_em) return `Cortesia tirada por ${i.cortesia_registrada_por_nome || "?"} em ${formatarMomento(i.cortesia_em)}`;
   return null;

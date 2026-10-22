@@ -411,7 +411,7 @@ const structuredData = startDate
                   lotes.length > 0 && (
                     <div class="grid gap-2">
                       <label class="text-sm font-semibold" for="inscricao-faixa">Faixa de valor</label>
-                      <select id="inscricao-faixa" class="field">
+                      <select id="inscricao-faixa" class="field" required>
                         <option value="">Selecione…</option>
                         {lotes.map((faixa) => (
                           <option value={faixa.descricao} data-valor={faixa.valor} data-ate={faixa.ate ?? ""}>
@@ -600,6 +600,8 @@ const structuredData = startDate
         // hora (mesma regra de prazo/encerramento, em `/api/status-inscricao/{id}`).
         // 19/10/2026 — pico de gente: o servidor recusa com 503 + motivo "ocupado" ANTES de gravar qualquer coisa (fila cheia). Como nada foi gravado, é seguro repetir:
         // a página tenta de novo sozinha, com pausa e um pouco de acaso (para não voltarem todos juntos), e mostra a espera. Qualquer outra resposta segue o fluxo normal.
+        // Revisão de 22/10/2026: o nome digitado ia para a tela como HTML (innerHTML) — agora sempre escapado.
+        const escaparHtml = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[c]);
         async function enviarComEspera(url, init) {
           const { avisoEspera, ...resto } = init;
           for (let tentativa = 1; ; tentativa += 1) {
@@ -650,6 +652,11 @@ const structuredData = startDate
             if (opcao) {
               if (select.value === rotulo) select.value = "";
               opcao.remove();
+              // Revisão de 22/10/2026: a escolha é obrigatória (a API recusa sem lote); sem nenhum lote sobrando, a página diz isso.
+              if (select.options.length <= 1) {
+                const aviso = document.querySelector("[data-lote-aviso]");
+                if (aviso) aviso.textContent = "Não há lote disponível agora: os lotes encerraram ou esgotaram.";
+              }
             }
             if (situacao) situacao.textContent = motivo === "esgotado" ? " — esgotado" : " — encerrado";
             if (linha) linha.classList.add("lote-indisponivel");
@@ -835,16 +842,16 @@ const structuredData = startDate
                 if (resultados.length === 1) {
                   const { codigo, aguardandoVaga, pendenteAprovacao } = resultados[0];
                   status.innerHTML = pendenteAprovacao
-                    ? `Inscrição recebida — aguardando aprovação da equipe organizadora. Seu código é <strong>${codigo}</strong>; guarde-o, você vai precisar dele depois que a inscrição for aceita.`
+                    ? `Inscrição recebida — aguardando aprovação da equipe organizadora. Seu código é <strong>${escaparHtml(codigo)}</strong>; guarde-o, você vai precisar dele depois que a inscrição for aceita.`
                     : aguardandoVaga
-                    ? `Vagas esgotadas no momento — você está na <strong>lista de espera</strong>. Seu código é <strong>${codigo}</strong>; guarde-o, porque se abrir vaga sua inscrição é confirmada automaticamente com esse mesmo código.`
-                    : `Inscrição confirmada! Seu código de check-in é <strong>${codigo}</strong> — anote ou tire um print, você vai usar na entrada do evento.`;
+                    ? `Vagas esgotadas no momento — você está na <strong>lista de espera</strong>. Seu código é <strong>${escaparHtml(codigo)}</strong>; guarde-o, porque se abrir vaga sua inscrição é confirmada automaticamente com esse mesmo código.`
+                    : `Inscrição confirmada! Seu código de check-in é <strong>${escaparHtml(codigo)}</strong> — anote ou tire um print, você vai usar na entrada do evento.`;
                   if (Number(resultados[0].valor) > 0 && !pendenteAprovacao && !aguardandoVaga) status.innerHTML += ` Depois de pagar, <a href="/informar-pagamento/${eventoSlug}/" class="text-accent underline">informe o pagamento</a> com esse código.`;
                 } else {
                   const linhas = resultados
                     .map(
                       (r) =>
-                        `${r.nome}: <strong>${r.codigo}</strong>${
+                        `${escaparHtml(r.nome)}: <strong>${escaparHtml(r.codigo)}</strong>${
                           r.pendenteAprovacao ? " (aguardando aprovação)" : r.aguardandoVaga ? " (lista de espera)" : ""
                         }`,
                     )

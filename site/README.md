@@ -387,24 +387,34 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   devolve `lotes`) e a API recusa (409 "escolha o lote seguinte"); o esgotado é contado **dentro da mesma trava** do livro
   `evento_controle` (a contagem do lote é lida depois da última senha, em `api/src/lib/vagasEvento.js`; regra em `api/src/lib/lotes.js`).
   Conta para o lote toda inscrição com o rótulo (inclusive lista de espera); o limite geral do evento continua só mandando para a lista
-  de espera. Não mude o nome de um lote que já tem inscritos (a contagem é pelo nome). **Informar o pagamento** (rota
-  `informar-pagamento`, 20/IP em 5 min): a pessoa diz data, meio, valor e nome de quem pagou em `/informar-pagamento/<slug>/`
+  de espera. Evento com faixas **exige** a escolha do lote (400 "Escolha o lote"; antes, mandar sem lote passava por cima da data, das
+  vagas e do preço). A contagem é pelo nome: o painel recusa dois lotes com o mesmo nome e bloqueia renomear ou remover lote que já tem
+  inscritos (para fechar um lote, use "Vale até" ou as vagas); sem o campo `faixa_rotulo` no Directus o painel esconde "Vagas do lote" e
+  a inscrição segue sem o limite do lote, mas **com** a trava de vagas e de cupom. **Informar o pagamento** (rota
+  `informar-pagamento`, 50/IP em 5 min, por causa do Wi-Fi do evento): a pessoa diz data, meio, valor e nome de quem pagou em `/informar-pagamento/<slug>/`
   (código + telefone), na Minha Conta ("Meus eventos", também para camisetas) e em "Meus pedidos de camiseta" (telefone); grava só
   `pagamento_informado_*` (informar de novo substitui), **nunca marca pago**; data não futura nem com mais de 1 ano, valor até
-  R$ 50.000, nome até 120 letras sem caractere de controle (`api/src/lib/pagamentoInformado.js`). **Confirmar com nome e hora:** no
+  R$ 50.000, nome até 120 letras sem caractere de controle nem invisível (`api/src/lib/textoSeguro.js`); só quem tem vaga e algo a pagar
+  informa (lista de espera, aguardando aprovação, valor zero, venda avulsa, pedido grátis ou quitado: 409). **Confirmar com nome e hora:** no
   painel de inscritos, pago/desmarcar, **cortesia** (motivo e quem autorizou obrigatórios; sai do "não pagos" e do "a receber") e o
   **tipo de participante** passam pela função `PainelInscricao` (`x-painel-token`): o "quem" sai de `/users/me` com o token da pessoa,
-  a permissão de `/permissions/me`, e a gravação é com o token de administrador (`pago_conferido_*`, `cortesia_*`). Filtro "Pagamento
+  a permissão de `/permissions/me` (o tipo exige o campo `tipo_participante`), e a gravação é com o token de administrador
+  (`pago_conferido_*`, `cortesia_*`, inclusive o VALOR registrado). **Limite que fica:** a licença gratuita do Directus não deixa fechar
+  campo por campo nem limitar a equipe a um evento (sem filtro condicional em permissão): quem tem "alterar inscrições" pode mudar
+  `pago` de qualquer evento direto no Directus. O painel então mostra **"registro divergente"** (o `pago`/cortesia de agora diferente
+  do registrado) e a **prova de quem mudou é o registro de atividade do Directus**. Filtro "Pagamento
   informado, a conferir"; o gestor de camisetas vê o aviso no cartão do pedido e lança o valor como sempre. **Credenciamento por
   sala/ala:** `locais_checkin` aceita `{ nome, capacidade }` (nome sozinho continua valendo); cada check-in grava uma linha em
   `evento_entradas` (chave única "inscrição:local:dia", a fila sem internet reenvia sem duplicar; a mesma pessoa entra em vários
   locais); a tela mostra quantos entraram hoje em cada local e avisa ao passar da capacidade (não barra). **Relatório de ausentes**
   (PDF, por lote ou por tipo) na lista de inscritos. **Crachá configurável** (`eventos.cracha_config`, aba Dados do evento): tipo,
   igreja/congregação e cidade (das respostas a perguntas escolhidas) e o QR do credenciamento (`<evento>:<código>`), no `/cracha/` e
-  no lote do painel (`src/lib/cracha.ts`). **Aviso contra golpe:** um texto só (`src/lib/avisoGolpe.ts`, componente `AvisoGolpe.astro`)
+  no lote do painel (`src/lib/cracha.ts`). Como `respostas_inscricao` tem criação pública (a pesquisa pós-evento), o crachá só usa a
+  resposta **mais antiga**, de pergunta da inscrição (nunca da pesquisa), criada até 10 min depois da inscrição (`date_created`). **Aviso contra golpe:** um texto só (`src/lib/avisoGolpe.ts`, componente `AvisoGolpe.astro`)
   em toda tela que fala de pagamento — "a Igreja NÃO pede pagamento ou Pix por mensagem, telefone ou e-mail". Esquema (repetível, só
   acrescenta; **aplicar antes de publicar o código**): `site/scripts/directus-eventos-v713-esquema.mjs`. Provas: `lotes-unidade.cjs`,
-  `pagamento-unidade.cjs`, `credenciamento-unidade.cjs` (sem rede) e `eventos-v713.cjs` (réplica local + `swa-local.cjs`).
+  `pagamento-unidade.cjs`, `credenciamento-unidade.cjs`, `esquema-v713-unidade.cjs` (sem rede) e `eventos-v713.cjs` (réplica local +
+  `swa-local.cjs`).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

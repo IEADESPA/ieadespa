@@ -33,11 +33,13 @@ async function main() {
     r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Teste Tres"], telefone: tel(), valorFaixa: 25 });
     v.ok("terceira: lista de espera (2 vagas)", r.status === 200 && r.j.inscricoes?.[0]?.aguardandoVaga === true, `${r.ms} ms`);
     const tg = tel();
-    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Grupo A", "Grupo B"], telefone: tg, respostas: [{ pergunta: 999999, valor: "x" }] });
+    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Grupo A", "Grupo B"], telefone: tg, valorFaixa: 50, respostas: [{ pergunta: 999999, valor: "x" }] });
     v.ok("grupo de 2 criado", r.status === 200 && r.j.inscricoes?.length === 2 && r.j.inscricoes.every((i) => i.aguardandoVaga === true), `${r.ms} ms`);
     r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Teste Faixa"], telefone: tel(), valorFaixa: 99 });
     v.ok("faixa de valor inválida → 400", r.status === 400, `${r.ms} ms`);
-    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: Array.from({ length: 9 }, (_, i) => "Muitos " + i), telefone: tg });
+    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Sem Lote"], telefone: tel() });
+    v.ok("evento com faixas e inscrição sem escolher a faixa → 400 (v7.13: o lote é obrigatório)", r.status === 400 && r.j.motivo === "lote_obrigatorio", `${r.ms} ms`);
+    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: Array.from({ length: 9 }, (_, i) => "Muitos " + i), telefone: tg, valorFaixa: 50 });
     v.ok("11 inscrições no mesmo telefone → 400", r.status === 400, `${r.ms} ms`);
     await dx("PATCH", `/items/eventos/${E}`, { permite_inscricao_grupo: false });
     await esperar(11000);

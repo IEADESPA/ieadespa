@@ -5,7 +5,9 @@
 //
 // O que cria (só acrescenta):
 //   inscricoes_eventos  + faixa_rotulo (o LOTE escolhido), tipo_participante (do crachá), pagamento_informado_* (o aviso da pessoa: data, meio, valor, nome, quando),
-//                         pago_conferido_* (quem marcou/desmarcou "pago" e quando), cortesia + cortesia_* (motivo, quem autorizou, quem registrou e quando) e o alias `entradas`;
+//                         pago_conferido_* (quem marcou/desmarcou "pago", quando e o VALOR registrado), cortesia + cortesia_* (motivo, quem autorizou, quem registrou,
+//                         quando e o valor registrado) e o alias `entradas`;
+//   respostas_inscricao + date_created (o crachá só usa a resposta criada junto com a inscrição — a coleção tem criação pública);
 //   camiseta_pedidos    + pagamento_informado_* (o mesmo aviso, para o pedido de camiseta);
 //   eventos             + cracha_config (o que vai no crachá: tipo, igreja/congregação, cidade e QR, e de quais perguntas saem igreja e cidade);
 //   evento_entradas     — coleção nova: cada ENTRADA do credenciamento (inscrição, local, hora do aparelho, chave única "inscrição:local:dia"), com `user_created` e
@@ -18,7 +20,8 @@
 //     `user_created` e `date_created` são preenchidos pelo próprio Directus na criação, por cima do que vier na chamada;
 //   - políticas da equipe que leem `inscricoes_eventos`, `camiseta_pedidos` ou `eventos` com uma LISTA de campos (não "*"): os campos novos entram na lista de leitura (e
 //     `cracha_config` também na de alteração de `eventos`), senão o painel não os enxerga;
-//   - a política PÚBLICA não ganha nada. O script confere e AVISA se a leitura ou a alteração pública de `inscricoes_eventos`/`camiseta_pedidos` for "*" (todos os campos):
+//   - a política PÚBLICA não ganha nada. O script confere TODAS as linhas públicas (ler/criar/alterar/apagar) de `inscricoes_eventos`, `camiseta_pedidos`,
+//     `respostas_inscricao` e `evento_entradas` e AVISA o que estiver aberto demais — por exemplo, leitura ou alteração pública com "*" (todos os campos):
 //     aí os campos novos (nome de quem pagou, quem confirmou) estariam abertos ao público, e é preciso trocar o "*" por uma lista no Directus antes de publicar o código.
 //   - `--travar-auditoria`: nas políticas da equipe que alteram `inscricoes_eventos` com "*", troca o "*" pela lista de todos os campos MENOS os de auditoria (pago_conferido_*,
 //     cortesia_*): assim só a função `PainelInscricao` (token de administrador) grava "quem e quando". Sem a opção, o script só avisa.
@@ -62,17 +65,23 @@ const CAMPOS_INSCRICAO = [
   quando("pago_conferido_em", "Quando o pagamento foi marcado/desmarcado no painel."),
   texto("pago_conferido_por", 64, "Usuário do Directus que marcou/desmarcou o pagamento (id).", { readonly: true }),
   texto("pago_conferido_por_nome", 120, "Nome de quem marcou/desmarcou o pagamento.", { readonly: true }),
+  { field: "pago_conferido_valor", type: "boolean", meta: { interface: "boolean", readonly: true, note: "O 'pago' que a equipe registrou pelo painel (se o 'pago' de agora for diferente, alguém mudou fora do painel: ver o registro de atividade)." }, schema: { is_nullable: true } },
   { field: "cortesia", type: "boolean", meta: { interface: "boolean", readonly: true, note: "Cortesia/isenção: sai da conta do \"a receber\". Só pelo painel de inscritos (motivo + quem autorizou)." }, schema: { is_nullable: false, default_value: false } },
   { field: "cortesia_motivo", type: "text", meta: { interface: "input-multiline", readonly: true, note: "Motivo da cortesia." }, schema: { is_nullable: true } },
   texto("cortesia_autorizada_por", 120, "Quem autorizou a cortesia.", { readonly: true }),
   quando("cortesia_em", "Quando a cortesia foi dada ou tirada."),
   texto("cortesia_registrada_por", 64, "Usuário do Directus que registrou a cortesia (id).", { readonly: true }),
   texto("cortesia_registrada_por_nome", 120, "Nome de quem registrou a cortesia.", { readonly: true }),
+  { field: "cortesia_registrada_valor", type: "boolean", meta: { interface: "boolean", readonly: true, note: "A cortesia que a equipe registrou pelo painel (diferente da de agora = mudaram fora do painel)." }, schema: { is_nullable: true } },
+];
+// Revisão de 22/10/2026: a data de criação da resposta (o crachá só usa resposta criada junto com a inscrição; ver `site/api/src/lib/cracha.js`).
+const CAMPOS_RESPOSTA = [
+  { field: "date_created", type: "timestamp", meta: { special: ["date-created"], interface: "datetime", readonly: true, hidden: true, note: "Quando a resposta foi criada (preenchido pelo Directus)." }, schema: { is_nullable: true } },
 ];
 const CAMPOS_EVENTO = [
   { field: "cracha_config", type: "json", meta: { interface: "input-code", options: { language: "json" }, note: "O que vai no crachá (painel do evento, aba Dados): tipo, igreja/congregação, cidade, QR do credenciamento." }, schema: { is_nullable: true } },
 ];
-const AUDITORIA = ["pago_conferido_em", "pago_conferido_por", "pago_conferido_por_nome", "cortesia", "cortesia_motivo", "cortesia_autorizada_por", "cortesia_em", "cortesia_registrada_por", "cortesia_registrada_por_nome"];
+const AUDITORIA = ["pago_conferido_em", "pago_conferido_por", "pago_conferido_por_nome", "pago_conferido_valor", "cortesia_registrada_valor", "cortesia", "cortesia_motivo", "cortesia_autorizada_por", "cortesia_em", "cortesia_registrada_por", "cortesia_registrada_por_nome"];
 
 async function garantirCampos(colecao, lista) {
   console.log(colecao);
@@ -87,6 +96,7 @@ async function garantirCampos(colecao, lista) {
 await garantirCampos("inscricoes_eventos", CAMPOS_INSCRICAO);
 await garantirCampos("camiseta_pedidos", AVISO);
 await garantirCampos("eventos", CAMPOS_EVENTO);
+await garantirCampos("respostas_inscricao", CAMPOS_RESPOSTA);
 
 // ---------- a coleção das entradas ----------
 console.log("evento_entradas");
@@ -144,17 +154,42 @@ const ehEquipe = (id) => { const p = politicas.find((x) => x.id === id); return 
 const nomeDa = (id) => (politicas.find((x) => x.id === id) || {}).name || id;
 const achar = (politica, colecao, acao) => permissoes.find((x) => x.policy === politica && x.collection === colecao && x.action === acao);
 
-// a política pública não ganha nada; só conferir o que ela já tem
-for (const colecao of ["inscricoes_eventos", "camiseta_pedidos"]) {
-  for (const acao of ["read", "update"]) {
-    const p = permissoes.find((x) => x.collection === colecao && x.action === acao && (x.policy === null || (publica && x.policy === publica.id)));
-    if (!p) { console.log(`  público: ${colecao}.${acao} — nenhuma permissão (ok)`); continue; }
-    const lista = p.fields || [];
-    if (lista.includes("*")) {
-      console.log(`  ATENÇÃO: o público pode ${acao === "read" ? "LER" : "ALTERAR"} TODOS os campos de ${colecao} ("*"). Os campos novos (nome de quem pagou, quem confirmou, cortesia) ficariam abertos.`);
-      console.log(`           Troque o "*" por uma lista no Directus antes de publicar o código (leitura: id, evento, aguardando_vaga, presente; alteração: push_endpoint, push_p256dh, push_auth).`);
-      process.exitCode = 1;
-    } else console.log(`  público: ${colecao}.${acao} — só ${lista.join(", ") || "(nenhum campo)"} (ok: os campos novos não entram)`);
+// a política pública não ganha nada; só conferir o que ela já tem (revisão de 22/10/2026: TODAS as linhas de permissão, não só a primeira, e mais ações e coleções)
+const ehPublica = (x) => x.policy === null || (publica && x.policy === publica.id);
+const NOMES_ACAO = { read: "LER", update: "ALTERAR", create: "CRIAR", delete: "APAGAR" };
+const CONFERIR_PUBLICO = [
+  ["inscricoes_eventos", ["read", "update", "create", "delete"]],
+  ["camiseta_pedidos", ["read", "update", "create", "delete"]],
+  ["respostas_inscricao", ["create", "update", "delete"]],
+  ["evento_entradas", ["read", "create", "update", "delete"]],
+];
+for (const [colecao, acoes] of CONFERIR_PUBLICO) {
+  for (const acao of acoes) {
+    const linhas = permissoes.filter((x) => x.collection === colecao && x.action === acao && ehPublica(x));
+    if (!linhas.length) { console.log(`  público: ${colecao}.${acao} — nenhuma permissão (ok)`); continue; }
+    for (const p of linhas) {
+      const lista = p.fields || [];
+      const regra = p.permissions && Object.keys(p.permissions).length ? ` com a regra ${JSON.stringify(p.permissions)}` : " sem regra (vale para TODOS os registros)";
+      const validacao = p.validation && Object.keys(p.validation).length ? ` e a validação ${JSON.stringify(p.validation)}` : " e sem validação";
+      if (colecao === "evento_entradas" || acao === "delete" || (acao === "create" && colecao !== "respostas_inscricao")) {
+        console.log(`  ATENÇÃO: o público pode ${NOMES_ACAO[acao]} em ${colecao} (campos: ${lista.join(", ") || "nenhum"})${regra}. Isso não devia existir: tire no Directus.`);
+        process.exitCode = 1;
+      } else if (colecao === "respostas_inscricao") {
+        // A pesquisa pós-evento cria respostas pelo navegador: é conhecido. O crachá não confia nelas (só a mais antiga, feita junto com a inscrição).
+        console.log(`  aviso: o público pode ${NOMES_ACAO[acao]} em respostas_inscricao (campos: ${lista.join(", ") || "nenhum"})${regra}${validacao}. O crachá só usa a resposta mais antiga, criada junto com a inscrição.`);
+        if (acao !== "create") process.exitCode = 1;
+      } else if (lista.includes("*")) {
+        console.log(`  ATENÇÃO: o público pode ${NOMES_ACAO[acao]} TODOS os campos de ${colecao} ("*")${regra}. Os campos novos (nome de quem pagou, quem confirmou, cortesia) ficariam abertos.`);
+        console.log(`           Troque o "*" por uma lista no Directus antes de publicar o código (leitura: id, evento, aguardando_vaga, presente; alteração: push_endpoint, push_p256dh, push_auth).`);
+        process.exitCode = 1;
+      } else {
+        const sensiveis = lista.filter((c) => /^(pago|valor|cortesia|pagamento_informado_|pago_conferido_|tipo_participante|faixa_rotulo)/.test(c));
+        if (acao !== "read" && sensiveis.length) {
+          console.log(`  ATENÇÃO: o público pode ALTERAR ${sensiveis.join(", ")} em ${colecao}${regra}. Tire esses campos da permissão pública.`);
+          process.exitCode = 1;
+        } else console.log(`  público: ${colecao}.${acao} — só ${lista.join(", ") || "(nenhum campo)"}${regra} (ok: os campos novos não entram)`);
+      }
+    }
   }
 }
 
@@ -182,6 +217,7 @@ async function acrescentarCampos(colecao, acao, novos) {
 await acrescentarCampos("inscricoes_eventos", "read", [...CAMPOS_INSCRICAO.map((c) => c.field), "entradas"]);
 await acrescentarCampos("camiseta_pedidos", "read", AVISO.map((c) => c.field));
 await acrescentarCampos("eventos", "read", ["cracha_config"]);
+await acrescentarCampos("respostas_inscricao", "read", ["date_created"]);
 await acrescentarCampos("eventos", "update", ["cracha_config"]);
 
 // a auditoria: quem pode gravar "quem e quando" direto no Directus?

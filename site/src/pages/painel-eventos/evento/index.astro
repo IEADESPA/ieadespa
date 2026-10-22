@@ -533,6 +533,7 @@ const tipoPerguntaOpcoes = [
     import { exigirAutenticacao } from "@/lib/painelAuth";
     import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
     import { normalizarConfigCracha } from "@/lib/cracha";
+    import { problemaDosLotes } from "@/lib/inscricoesPainel";
 
     interface Faixa {
       descricao: string;
@@ -794,13 +795,13 @@ const tipoPerguntaOpcoes = [
       return `
         <div class="grid gap-2 faixa-linha">
           <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-            <input type="text" class="field" placeholder="Ex.: Casal, Membro, 1º lote" value="${esc(f.descricao)}" data-faixa-descricao aria-label="Nome da faixa (público)" />
+            <input type="text" class="field" maxlength="120" placeholder="Ex.: Casal, Membro, 1º lote" value="${esc(f.descricao)}" data-faixa-descricao aria-label="Nome da faixa (público)" />
             <input type="number" step="0.01" class="field faixa-valor" placeholder="R$" value="${esc(f.valor)}" data-faixa-valor aria-label="Valor (R$)" />
             <button type="button" class="btn btn-outline" data-faixa-remover>Remover</button>
           </div>
           <div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <label class="flex items-center gap-1">Vale até <input type="date" class="field" style="width:auto" value="${esc(f.ate)}" data-faixa-ate /></label>
-            <label class="flex items-center gap-1">Vagas do lote <input type="number" min="1" step="1" class="field" style="width:6rem" placeholder="sem limite" value="${esc(f.vagas)}" data-faixa-vagas /></label>
+            <label class="flex items-center gap-1" data-faixa-vagas-rotulo ${vagasDoLoteDisponiveis ? "" : "hidden"}>Vagas do lote <input type="number" min="1" step="1" class="field" style="width:6rem" placeholder="sem limite" value="${esc(f.vagas)}" data-faixa-vagas /></label>
             <span data-faixa-contagem></span>
           </div>
         </div>
@@ -829,11 +830,22 @@ const tipoPerguntaOpcoes = [
     }
 
     /** "12 inscritos neste lote (restam 8)" ao lado de cada faixa — a mesma contagem que a trava do site usa (todas as inscrições com o nome do lote). */
+    // Revisão de 22/10/2026: quantas inscrições cada lote já tem (para bloquear renomear/remover lote com inscritos) e se o Directus tem o campo do lote.
+    let inscritosPorLote: Record<string, number> | null = null;
+    let vagasDoLoteDisponiveis = true;
+
     async function mostrarContagemLotes(token: string, id: number) {
       if (!faixasListaEl) return;
       const res = await fetch(`${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&groupBy[]=faixa_rotulo&filter[evento][_eq]=${id}&limit=-1`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
-      if (!res || !res.ok) return; // sem o esquema v7.13: sem contagem
+      if (res && (res.status === 403 || res.status === 400)) {
+        // Sem o campo `faixa_rotulo` (esquema v7.13 não aplicado) as "vagas do lote" não seriam contadas: o campo some para ninguém achar que vale.
+        vagasDoLoteDisponiveis = false;
+        faixasListaEl.querySelectorAll<HTMLElement>("[data-faixa-vagas-rotulo]").forEach((el) => (el.hidden = true));
+        return;
+      }
+      if (!res || !res.ok) return;
       const contagens = new Map<string, number>(((await res.json()).data ?? []).map((l: { faixa_rotulo: string | null; count: { id: string | number } | string | number }) => [String(l.faixa_rotulo ?? ""), Number(typeof l.count === "object" ? l.count.id : l.count) || 0]));
+      inscritosPorLote = Object.fromEntries([...contagens].filter(([nome]) => nome));
       faixasListaEl.querySelectorAll<HTMLElement>(".faixa-linha").forEach((linha) => {
         const nome = linha.querySelector<HTMLInputElement>("[data-faixa-descricao]")?.value.trim() ?? "";
         const vagas = Number(linha.querySelector<HTMLInputElement>("[data-faixa-vagas]")?.value || 0);
@@ -1457,7 +1469,7 @@ const tipoPerguntaOpcoes = [
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!statusEl) return;
-        const problema = crachaDisponivel ? problemaCracha() : null;
+        const problema = problemaDosLotes(lerFaixas(), inscritosPorLote) ?? (crachaDisponivel ? problemaCracha() : null);
         if (problema) {
           statusEl.textContent = problema;
           return;

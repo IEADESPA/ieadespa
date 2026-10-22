@@ -18,18 +18,14 @@
 const fs = require("fs");
 const path = require("path");
 const Module = require("module");
-const ts = require("typescript");
+const { carregarTs } = require("./carregar-ts.cjs");
 const { ambiente, Verificador, esperar } = require("./comum.cjs");
 
-function carregarTs(nome) {
-  const js = ts.transpileModule(fs.readFileSync(path.join(__dirname, `../../src/lib/${nome}.ts`), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const mod = new Module(`${nome}.js`);
-  mod._compile(js, `${nome}.js`);
-  return mod.exports;
-}
-const C = carregarTs("credenciamento");
+let C, IPainel;
 
 async function main() {
+  C = await carregarTs("credenciamento");
+  IPainel = await carregarTs("inscricoesPainel");
   const { SITE, URL, dx, site } = ambiente();
   if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL) && process.env.V713_FORA_DO_LOCAL !== "sim") {
     console.error("Esta bateria cria usuário, função e política temporários: só roda contra a réplica local (DIRECTUS_URL=http://127.0.0.1:8055). Ver o cabeçalho.");
@@ -81,7 +77,9 @@ async function main() {
     v.ok("aceitas = gravadas", aceitas.length === doLote.length, `${aceitas.length} aceitas`);
     v.ok("as recusas dizem para escolher o lote seguinte", esgotou.length > 0 && esgotou.every((r) => /escolha o lote seguinte/i.test(r.j.erro)), esgotou[0]?.j?.erro);
     v.ok("quem entrou no lote tem o valor do lote (R$ 50)", doLote.every((i) => Number(i.valor) === 50));
-    let r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Vencido"], telefone: tel(), faixa: "Lote vencido", valorFaixa: 30 });
+    let r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Sem lote"], telefone: tel() });
+    v.ok("[revisão 1] evento com lotes e inscrição SEM escolher o lote: 400 'Escolha o lote' (antes passava por cima do lote esgotado)", r.status === 400 && r.j.motivo === "lote_obrigatorio", r.j.erro);
+    r = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["Vencido"], telefone: tel(), faixa: "Lote vencido", valorFaixa: 30 });
     v.ok("lote vencido: 409 'encerrou… escolha o lote seguinte'", r.status === 409 && r.j.motivo === "lote_vencido", r.j.erro);
     // o limite geral (15) continua mandando para a lista de espera no lote sem limite
     const grupo = await site("POST", "/api/criar-inscricao", { eventoId: E, nomes: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"], telefone: tel(), faixa: "2º lote", valorFaixa: 70 });
@@ -163,6 +161,26 @@ async function main() {
     v.ok("CRACHÁ: a verificação devolve o tipo, a igreja (da pergunta escolhida) e a configuração do QR", verPreletor.j.cracha?.tipo === "Preletor" && verPreletor.j.cracha?.igreja === "Congregação Betel" && verPreletor.j.cracha?.config?.qr === true, JSON.stringify(verPreletor.j.cracha));
     r = await site("POST", "/api/informar-pagamento", { tipo: "inscricao", evento: E, codigo: aceitas[1].r.j.inscricoes[0].codigo, telefone: aceitas[1].tel, pagamento: aviso });
     v.ok("cortesia: informar pagamento é recusado (409)", r.status === 409);
+
+    // revisão de 22/10/2026
+    r = await painel(tokenEquipe, { inscricaoId, acao: "cortesia", ativa: false });
+    item = (await dx("GET", `/items/inscricoes_eventos/${inscricaoId}?fields=*`)).data;
+    v.ok("[revisão 17] tirar a cortesia de quem nunca teve: 409 e nada gravado", r.status === 409 && !item.cortesia_em, `${r.status}`);
+    r = await painel(tokenEquipe, { inscricaoId, acao: "pago", pago: true });
+    item = (await dx("GET", `/items/inscricoes_eventos/${inscricaoId}?fields=*`)).data;
+    v.ok("[revisão 3] o painel grava o VALOR registrado junto (pago_conferido_valor)", r.status === 200 && item.pago_conferido_valor === true && !IPainel.registroDivergente(item).pago);
+    const direto = await comToken(tokenEquipe)("PATCH", `/items/inscricoes_eventos/${inscricaoId}`, { pago: false });
+    item = (await dx("GET", `/items/inscricoes_eventos/${inscricaoId}?fields=*`)).data;
+    v.ok("[revisão 3] a equipe desmarca o 'pago' DIRETO no Directus (a licença não deixa fechar o campo): o painel mostra 'registro divergente'", direto.ok && IPainel.registroDivergente(item).pago && /divergente/.test(IPainel.textoConferencia(item)), IPainel.textoConferencia(item));
+    // um anônimo cria uma resposta nova para a pergunta "igreja" de outra inscrição (aqui pelo administrador, imitando a criação pública)
+    const insc2 = aceitas[1].r.j.inscricoes[0];
+    await dx("POST", "/items/respostas_inscricao", { inscricao: insc2.id, pergunta: perg.data?.id, valor: "IGREJA FALSA" });
+    const verFalsa = await site("POST", "/api/verificar-inscricao", { evento: E, modo: "codigo", codigo: insc2.codigo, telefone: aceitas[1].tel, cracha: true });
+    v.ok("[revisão 2] resposta criada depois para a mesma pergunta NÃO muda o crachá (vale a da inscrição)", verFalsa.j.cracha?.igreja === "Congregação Betel", verFalsa.j.cracha?.igreja);
+    const respostasGravadas = (await dx("GET", `/items/respostas_inscricao?filter[inscricao][_eq]=${insc2.id}&fields=id,date_created&sort=id`)).data || [];
+    v.ok("[revisão 2] o Directus grava a data de criação da resposta (date_created)", respostasGravadas.length === 2 && respostasGravadas.every((x) => Boolean(x.date_created)));
+    const verSem = await site("POST", "/api/verificar-inscricao", { evento: E, modo: "codigo", codigo: insc2.codigo, telefone: aceitas[1].tel });
+    v.ok("[revisão 11] sem pedir detalhes nem crachá: a verificação não devolve os detalhes", verSem.j.encontrado === true && verSem.j.tipoParticipante === undefined);
 
     // ---------- 4. CREDENCIAMENTO POR LOCAL ----------
     const equipe = comToken(tokenEquipe);

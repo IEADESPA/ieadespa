@@ -65,7 +65,7 @@ module.exports = async function (context, req) {
   if (alteracao.erro) return responder(400, { erro: alteracao.erro });
 
   // O Directus ignora em silêncio campo que não existe: sem o esquema v7.13 o "pago" mudaria e o "quem e quando" sumiria. Confere ANTES de gravar (uma vez por instância).
-  const conferir = body.acao === "pago" ? "pago_conferido_em" : body.acao === "cortesia" ? "cortesia_em" : "tipo_participante";
+  const conferir = body.acao === "pago" ? "pago_conferido_valor" : body.acao === "cortesia" ? "cortesia_registrada_valor" : "tipo_participante";
   if (!camposConferidos.has(conferir)) {
     const rc = await fetch(`${DIRECTUS_URL}/fields/inscricoes_eventos/${conferir}`, { headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` } }).catch(() => null);
     if (!rc || rc.status === 403 || rc.status === 404) {
@@ -74,6 +74,13 @@ module.exports = async function (context, req) {
     }
     if (!rc.ok) return responder(502, { erro: "Não foi possível conferir agora. Tente de novo." });
     camposConferidos.add(conferir);
+  }
+
+  // Revisão de 22/10/2026: "tirar a cortesia" de quem não tem cortesia não grava nada (senão ficaria um "cortesia tirada por…" que nunca existiu).
+  if (body.acao === "cortesia" && body.ativa === false) {
+    const ra = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos/${inscricaoId}?fields=*`, { headers: { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` } });
+    if (!ra.ok) return responder(502, { erro: "Não foi possível conferir a inscrição agora. Tente de novo." });
+    if (((await ra.json()).data || {}).cortesia !== true) return responder(409, { erro: "Esta inscrição não tem cortesia: não há o que tirar." });
   }
 
   const r = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos/${inscricaoId}?fields=${CAMPOS_RESPOSTA}`, {

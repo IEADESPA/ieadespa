@@ -239,10 +239,16 @@ module.exports = async function (context, req) {
 
     if (contarVagas || contarCupom || contarLote) {
       // Vagas, limite de cupom ou lote com vagas em jogo: grava com a senha do livro do evento, para nunca passar do número com muita gente ao mesmo tempo.
-      const r = await gravarInscricoesComTrava({
+      const gravar = () => gravarInscricoesComTrava({
         directus: (caminho, init = {}) => fetch(`${DIRECTUS_URL}${caminho}`, { ...init, headers }),
         eventoId, cupomCodigo: contarCupom ? cupom.codigo : null, contarVagas, loteRotulo: contarLote ? faixa.descricao : null, montar, log: (m) => context.log.warn(m),
       });
+      let r = await gravar();
+      if (r.semCampoLote) {
+        // Directus sem o campo do lote (esquema v7.13 não aplicado): sem o limite do lote, mas a trava de vagas e de cupom continua (revisão de 22/10/2026).
+        contarLote = false;
+        r = contarVagas || contarCupom ? await gravar() : { semControle: true };
+      }
       if (r.erroHttp) {
         context.res = { status: r.erroHttp.status, headers: { "Content-Type": "application/json" }, body: r.erroHttp.body };
         return;

@@ -338,6 +338,14 @@ function validarPedidoOracao(corpo) {
   return { valido: true, dados: { paraQuem, categoria, texto: texto.texto, podeBoletim: booleano(d.podeBoletim), querContato: booleano(d.querContato) } };
 }
 
+// O texto que chega do mural do SITE (público, de qualquer pessoa): nunca é recusado por causa de um caractere — um pedido de socorro não pode se perder por um "<3" —, então
+// a limpeza troca o que não serve em vez de recusar: tira caractere de controle e invisível, troca < e > pelos parecidos ‹ ›, junta espaços e corta no tamanho.
+function limparTextoDoSite(v, max) {
+  if (typeof v !== "string") return "";
+  return v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f­​-‏‪-‮⁠-⁤﻿]/g, "").replace(/</g, "‹").replace(/>/g, "›")
+    .replace(/[ \t]+/g, " ").trim().slice(0, max);
+}
+
 // A liderança registra um pedido recebido em mãos: de um membro (matrícula) ou de alguém de fora do cadastro (nome e contato).
 function validarSolicitante(corpo) {
   const d = corpo && typeof corpo === "object" ? corpo : {};
@@ -572,7 +580,12 @@ function textoSemResponsavel({ congregacaoNome, para }) {
 function textoModeracao({ quantos, congregacaoNome }) {
   return `${quantos} ${quantos === 1 ? "pedido de oração espera" : "pedidos de oração esperam"} moderação${limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : ""}. Abra Cuidado pastoral → Pedidos de oração.`;
 }
-function textoRisco({ congregacaoNome, crianca = false }) {
+function textoRisco({ congregacaoNome, crianca = false, doSite = false }) {
+  if (doSite) {
+    return "Chegou um pedido com SINAL DE RISCO pelo mural de oração do SITE (pode ser de alguém de fora da igreja). Leia agora: Cuidado pastoral → Pedidos de oração → Sinal de risco; "
+      + "o pedido também está no painel do site (moderação do mural, aba Confidenciais). Se houver um contato no texto, procure a pessoa. Se ela corre perigo agora: Polícia 190; CVV 188."
+      + (crianca ? " O pedido fala de criança ou adolescente junto com violência: registre também em Proteção de crianças (a lei manda comunicar ao Conselho Tutelar imediatamente)." : "");
+  }
   return `Chegou um pedido com SINAL DE RISCO${limpar(congregacaoNome) ? ` na Congregação ${limpar(congregacaoNome)}` : ""}. Atenda agora: abra Cuidado pastoral → Pedidos de oração → Sinal de risco (o acompanhamento urgente está na Fila → Urgentes). `
     + "Se a pessoa corre perigo agora: Polícia 190; CVV 188 (24 horas)."
     + (crianca ? " O pedido fala de criança ou adolescente junto com violência: registre também em Proteção de crianças (a lei manda comunicar ao Conselho Tutelar imediatamente)." : "");
@@ -597,7 +610,7 @@ module.exports = {
   LEMBRETES_GERAIS_MAXIMO, LIMITE_PEDIDOS_ORACAO_DIA, LIMITE_PEDIDOS_VISITA_DIA, LIMITE_NOTAS_DIA, MAIORIDADE,
   DETECCAO_BASE_DIAS, DETECCAO_MIN_BASE, DETECCAO_MIN_RECENTES, DETECCAO_MAX_POR_CONGREGACAO, DETECCAO_CARENCIA_DIAS, PARAMETROS, SIGLAS_PRAZO,
   prazosDoCuidado, prazoInicial, situacaoDoPrazo, proximoDegrau, decidirEscada, fimDoDiaBrasilia, diaBrasilia, primeiroNome, somarDiasIso,
-  validarAbertura, validarContato, validarConclusao, validarCancelamento, validarAdiamento, validarNota, validarPedidoOracao, validarSolicitante, validarPedidoVisita,
+  validarAbertura, validarContato, validarConclusao, validarCancelamento, validarAdiamento, validarNota, validarPedidoOracao, validarSolicitante, validarPedidoVisita, limparTextoDoSite,
   normalizar, avaliarRisco, citaPeloNome, podeCorrigir, prazoDoDegrau, linhaDoBoletim, validarTextoBoletim, avaliarFrequencia, podeLerNota, podeEscreverNota, notaPedeFator, avaliarResponsavel,
   textoAtribuido, textoResumo, textoDegrau, textoSemResponsavel, textoModeracao, textoRisco, textoAvisoRisco, referenciaDoDia
 };

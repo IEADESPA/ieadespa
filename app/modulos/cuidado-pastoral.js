@@ -1377,12 +1377,14 @@ function cpaHtmlPedido(p) {
   const id = Number(p.pedidoId);
   const risco = p.risco === true;
   const aguardando = !risco && p.moderacao === "AGUARDANDO";
+  const doSite = p.origem === "SITE";
   const selos = [
     risco ? cpaSelo("cal-st-indeferido cpa-urgente", "🚨 SINAL DE RISCO") : cpaSelo(p.moderacao === "APROVADO" ? "cal-st-homologado" : p.moderacao === "AGUARDANDO" ? "cal-st-proposto" : "cal-st-cancelado", cpaRotuloModeracao(p)),
     cpaSelo("cal-st-deferido", p.categoriaRotulo || p.categoria),
-    cpaSelo(p.podeBoletim ? "cal-st-homologado" : "cal-st-cancelado", p.podeBoletim ? "pode ir ao boletim sem nome" : "só para a liderança"),
+    // (v7.11.1) o pedido que veio do mural do SITE: sem congregação nem contato, sempre só do nível geral e fora do boletim (o mural público é decidido no painel do site)
+    doSite ? cpaSelo("cal-st-proposto", "🌐 Veio do mural de oração do site") : cpaSelo(p.podeBoletim ? "cal-st-homologado" : "cal-st-cancelado", p.podeBoletim ? "pode ir ao boletim sem nome" : "só para a liderança"),
     p.querContato ? cpaSelo("cal-st-proposto", "📞 quer que alguém fale com ele(a)") : "",
-    p.soNivelGeral ? cpaSelo("cal-st-indeferido", "🔒 Só o nível geral (cita a liderança)") : ""
+    p.soNivelGeral && !doSite ? cpaSelo("cal-st-indeferido", "🔒 Só o nível geral (cita a liderança)") : ""
   ].join("");
   const aprovado = !risco && p.moderacao === "APROVADO";
   return `<div class="cal-cartao cpa-pedido${risco ? " cpa-pedido-risco" : ""}">
@@ -1407,7 +1409,7 @@ function cpaHtmlPedido(p) {
       ${aguardando ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaMarcarLidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✔️ Marcar como lido</button>` : ""}
       ${aprovado ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaMarcarLidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Tirar do boletim</button>` : ""}
       ${p.itemId && p.itemAberto !== false ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaVerItemAcao" data-args-click="${argsAttr(Number(p.itemId), ARG.elemento)}">📂 Ver acompanhamento</button>` : ""}
-      ${!p.itemId || p.itemAberto === false ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAcompanharPedidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">📂 Abrir acompanhamento</button>` : ""}
+      ${!doSite && (!p.itemId || p.itemAberto === false) ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAcompanharPedidoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">📂 Abrir acompanhamento</button>` : ""}
       ${risco ? (cpaEhAcima() ? `<button type="button" class="btn-confirmar btn-secundario cpa-btn" data-on-click="cpaAbrirDesmarcarAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Desmarcar (alarme falso)</button>`
         : `<p class="psc-legenda cpa-so-area" role="note">${escaparHtmlEbd(CPA_MSG_SO_AREA)}</p>`)
         : `<button type="button" class="btn-confirmar btn-perigo cpa-btn" data-on-click="cpaMarcarRiscoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🚨 Marcar sinal de risco</button>`}

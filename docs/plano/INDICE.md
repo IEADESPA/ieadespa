@@ -227,7 +227,7 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 
 ## FASE 10 — Experiência, Design e Performance
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 10 bloco(s) · itens 0/26 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 13 bloco(s) · itens 0/41 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -240,6 +240,9 @@ Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-desig
 | 🔒 10-A | [antes de avançar para a v10.4](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-a--antes-de-avançar-para-a-v104) | — |
 | v10.4 | [Modularização do front-end *(7ª rodada — dívida técnica real)*](fase-10-experiencia-design-performance.md#v104--modularização-do-front-end-7ª-rodada--dívida-técnica-real) | ⬜ 0/4 |
 | v10.5 | [Impressão institucional e exportação padronizada *(7ª rodada)*](fase-10-experiencia-design-performance.md#v105--impressão-institucional-e-exportação-padronizada-7ª-rodada) | ⬜ 0/2 |
+| v10.6 | [Integração total: o site vira conteúdo, o que é "vivo" vai para o sistema *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v106--integração-total-o-site-vira-conteúdo-o-que-é-vivo-vai-para-o-sistema-decisão-de-22102026) | ⬜ 0/5 |
+| v10.7 | [Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v107--domínio-dns-e-segurança-da-borda-decisão-de-22102026) | ⬜ 0/6 |
+| v10.8 | [Pagamento online pelo Pix (conta da Igreja no banco Cora) *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v108--pagamento-online-pelo-pix-conta-da-igreja-no-banco-cora-decisão-de-22102026) | ⬜ 0/4 |
 | 🔒 10-B | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-b--antes-de-encerrar-a-fase-10) | — |
 
 ## FASE 11 — Sistema Campal (multi-campo)

@@ -3109,8 +3109,8 @@ transporte por congregação: fora** — no campo todos vão juntos; só faria s
       Convidado — o organizador muda), e o evento escolhe o que vai no crachá: nome, tipo, igreja/congregação (da resposta a
       uma pergunta do evento), cidade, e o **QR do credenciamento** (o mesmo código do check-in, para entrar mais rápido).
 
-**Fora desta versão (por decisão):** pagamento online (Pix Cora, depois da análise de segurança); hospedagem e transporte
-(Fase 10); levar as inscrições para o sistema (Fase 10).
+**Fora desta versão (por decisão):** pagamento online (Pix Cora: v10.8, depois da segurança do domínio da v10.7); hospedagem e transporte
+(v10.6); levar as inscrições para o sistema (v10.6).
 
 ## v7.14 — Identidade Visual Anual *(gap da varredura normativa)*
 

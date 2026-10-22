@@ -193,13 +193,19 @@ const tipoPerguntaOpcoes = [
         </label>
 
         <fieldset class="grid gap-2">
-          <legend class="text-sm font-semibold">Faixas de valor (opcional)</legend>
+          <legend class="text-sm font-semibold">Faixas de valor / lotes (opcional)</legend>
           <p class="text-xs text-muted-foreground">
             Aparece na página pública do evento. Se o formulário de inscrição tiver mais de uma
             faixa cadastrada, a pessoa escolhe uma delas ao se inscrever, e o valor já fica
             preenchido pra cada pessoa daquela inscrição — não processa pagamento nenhum, só
             registra o valor combinado. Ex.: "Individual" R$50, "Casal" R$80 (R$40 cada), "Grupo
             (5 ou mais, por pessoa)" R$30 — use isso pra dar desconto por grupo/quantidade.
+          </p>
+          <p class="text-xs text-muted-foreground">
+            <strong>Lotes:</strong> cada faixa pode ter, se quiser, o <strong>último dia</strong> em que vale ("1º lote até
+            05/11") e o <strong>número de vagas</strong> daquele lote. Lote vencido ou esgotado some da página e o site
+            recusa quem tentar (com o aviso "escolha o lote seguinte"). O nome da faixa é o público ("Membro",
+            "Visitante", "1º lote"). Depois que alguém se inscreveu num lote, não mude o nome dele: a contagem é pelo nome.
           </p>
           <div class="grid gap-2" data-faixas-lista></div>
           <button type="button" class="btn btn-outline mt-1" data-faixa-adicionar>+ Adicionar faixa</button>
@@ -254,15 +260,34 @@ const tipoPerguntaOpcoes = [
         </div>
 
         <fieldset class="grid gap-2">
-          <legend class="text-sm font-semibold">Locais de check-in (opcional)</legend>
+          <legend class="text-sm font-semibold">Locais de check-in — salas, alas, portarias (opcional)</legend>
           <p class="text-xs text-muted-foreground">
             Se o evento tem mais de uma portaria/entrada, cadastre os nomes aqui — quem for fazer
             check-in escolhe uma vez qual local aquele aparelho representa (fica guardado só
             naquele aparelho), e toda confirmação feita dali em diante já leva essa marcação
             sozinha. Deixe em branco se só existe um jeito de entrar.
           </p>
+          <p class="text-xs text-muted-foreground">
+            <strong>Capacidade</strong> (opcional): quantas pessoas cabem no local. A tela de check-in mostra quantas já
+            entraram em cada local e avisa quando passar — avisa, não barra. A mesma pessoa pode entrar em mais de um local.
+          </p>
           <div class="grid gap-2" data-locais-checkin-lista></div>
           <button type="button" class="btn btn-outline mt-1" data-local-checkin-adicionar>+ Adicionar local</button>
+        </fieldset>
+
+        <fieldset class="grid gap-2" data-cracha-config>
+          <legend class="text-sm font-semibold">Crachá</legend>
+          <p class="text-xs text-muted-foreground">
+            O nome sempre vai no crachá. Escolha o que mais vai junto — vale para o crachá que a pessoa baixa em
+            /cracha/ e para "Baixar crachás de todos os confirmados" na lista de inscritos.
+          </p>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-tipo /> Tipo de participante (Participante, Preletor, Equipe, Imprensa, Convidado — muda-se na lista de inscritos)</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-igreja /> Igreja/congregação — da resposta à pergunta:</label>
+          <select class="field" data-cracha-pergunta-igreja><option value="">Escolha a pergunta…</option></select>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-cidade /> Cidade — da resposta à pergunta:</label>
+          <select class="field" data-cracha-pergunta-cidade><option value="">Escolha a pergunta…</option></select>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-qr /> QR do credenciamento (o mesmo código do check-in, para entrar mais rápido)</label>
+          <p class="text-xs text-muted-foreground" data-cracha-aviso></p>
         </fieldset>
 
         <div class="grid gap-3">
@@ -506,6 +531,16 @@ const tipoPerguntaOpcoes = [
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { contarRespostas, desenharGraficoBarrasPDF, graficoBarrasSvg } from "@/lib/graficos";
     import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
+    import { normalizarConfigCracha } from "@/lib/cracha";
+
+    interface Faixa {
+      descricao: string;
+      valor: number;
+      /** v7.13: último dia do lote (AAAA-MM-DD) e vagas do lote — opcionais. */
+      ate?: string;
+      vagas?: number;
+    }
 
     interface Evento {
       id: number;
@@ -525,13 +560,14 @@ const tipoPerguntaOpcoes = [
       vagas_limite: number | null;
       inscricoes_ate: string | null;
       inscricoes_encerradas: boolean;
-      faixas_valor: { descricao: string; valor: number }[] | null;
+      faixas_valor: Faixa[] | null;
       permite_inscricao_grupo: boolean;
       evento_anterior: number | null;
+      cracha_config?: unknown;
       estatisticas_finais: EstatisticasFinais | null;
       checkin_libera_minutos_antes: number | null;
       checkin_liberado_manualmente: boolean;
-      locais_checkin: string[] | null;
+      locais_checkin: unknown;
       requer_aprovacao: boolean;
     }
 
@@ -671,8 +707,9 @@ const tipoPerguntaOpcoes = [
       fEventoAnterior.value = evento.evento_anterior ? String(evento.evento_anterior) : "";
       fCheckinMinutos.value = evento.checkin_libera_minutos_antes != null ? String(evento.checkin_libera_minutos_antes) : "60";
       fCheckinManual.checked = Boolean(evento.checkin_liberado_manualmente);
-      renderizarLocaisCheckin(evento.locais_checkin ?? []);
+      renderizarLocaisCheckin(normalizarLocais(evento.locais_checkin));
       renderizarFaixas(evento.faixas_valor ?? []);
+      preencherCracha(evento);
     }
 
     function lerFormulario() {
@@ -704,37 +741,111 @@ const tipoPerguntaOpcoes = [
       };
     }
 
+    // ---------- v7.13: crachá ----------
+    const crachaBloco = document.querySelector<HTMLElement>("[data-cracha-config]");
+    const crachaCampo = <T extends HTMLElement>(nome: string) => crachaBloco?.querySelector<T>(`[data-cracha-${nome}]`) ?? null;
+    let crachaDisponivel = false; // só grava `cracha_config` se o Directus devolveu o campo (sem o esquema v7.13, ou sem permissão, o salvar não pode quebrar)
+    let crachaConfigLida = normalizarConfigCracha(null);
+
+    function preencherCracha(evento: Evento) {
+      crachaDisponivel = Object.prototype.hasOwnProperty.call(evento, "cracha_config");
+      if (crachaBloco) crachaBloco.hidden = !crachaDisponivel;
+      crachaConfigLida = normalizarConfigCracha(evento.cracha_config);
+      const bruto = (evento.cracha_config && typeof evento.cracha_config === "object" ? evento.cracha_config : {}) as Record<string, unknown>;
+      (crachaCampo<HTMLInputElement>("tipo") as HTMLInputElement | null)!.checked = crachaConfigLida.tipo;
+      (crachaCampo<HTMLInputElement>("igreja") as HTMLInputElement | null)!.checked = bruto.igreja === true;
+      (crachaCampo<HTMLInputElement>("cidade") as HTMLInputElement | null)!.checked = bruto.cidade === true;
+      (crachaCampo<HTMLInputElement>("qr") as HTMLInputElement | null)!.checked = crachaConfigLida.qr;
+    }
+
+    /** As perguntas de inscrição do evento viram as opções de "igreja" e "cidade" (chamada depois de carregar as perguntas). */
+    function preencherPerguntasCracha(perguntas: Pergunta[]) {
+      const opcoes = perguntas.filter((p) => p.momento !== "pos_evento");
+      for (const [nome, selecionada] of [["pergunta-igreja", crachaConfigLida.pergunta_igreja], ["pergunta-cidade", crachaConfigLida.pergunta_cidade]] as const) {
+        const sel = crachaCampo<HTMLSelectElement>(nome) as HTMLSelectElement | null;
+        if (!sel) continue;
+        const atual = sel.value || (selecionada != null ? String(selecionada) : "");
+        sel.innerHTML = `<option value="">Escolha a pergunta…</option>` + opcoes.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
+        sel.value = atual;
+      }
+    }
+
+    function lerCracha() {
+      const marcado = (n: string) => Boolean((crachaCampo<HTMLInputElement>(n) as HTMLInputElement | null)?.checked);
+      const pergunta = (n: string) => {
+        const v = (crachaCampo<HTMLSelectElement>(n) as HTMLSelectElement | null)?.value;
+        return v ? Number(v) : null;
+      };
+      return { tipo: marcado("tipo"), igreja: marcado("igreja"), cidade: marcado("cidade"), qr: marcado("qr"), pergunta_igreja: pergunta("pergunta-igreja"), pergunta_cidade: pergunta("pergunta-cidade") };
+    }
+
+    /** Confere antes de salvar: igreja/cidade ligadas pedem a pergunta. Devolve a frase do problema, ou null. */
+    function problemaCracha(): string | null {
+      const c = lerCracha();
+      if (c.igreja && !c.pergunta_igreja) return "No crachá: escolha de qual pergunta sai a igreja/congregação (ou desmarque).";
+      if (c.cidade && !c.pergunta_cidade) return "No crachá: escolha de qual pergunta sai a cidade (ou desmarque).";
+      return null;
+    }
+
     const faixasListaEl = document.querySelector<HTMLElement>("[data-faixas-lista]");
 
-    function linhaFaixaHtml(descricao: string, valor: string) {
+    function linhaFaixaHtml(f: Partial<Faixa>) {
+      const esc = (v: unknown) => String(v ?? "").replace(/"/g, "&quot;");
       return `
-        <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center faixa-linha">
-          <input type="text" class="field" placeholder="Ex.: Casal" value="${descricao.replace(/"/g, "&quot;")}" data-faixa-descricao />
-          <input type="number" step="0.01" class="field faixa-valor" placeholder="R$" value="${valor}" data-faixa-valor />
-          <button type="button" class="btn btn-outline" data-faixa-remover>Remover</button>
+        <div class="grid gap-2 faixa-linha">
+          <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+            <input type="text" class="field" placeholder="Ex.: Casal, Membro, 1º lote" value="${esc(f.descricao)}" data-faixa-descricao aria-label="Nome da faixa (público)" />
+            <input type="number" step="0.01" class="field faixa-valor" placeholder="R$" value="${esc(f.valor)}" data-faixa-valor aria-label="Valor (R$)" />
+            <button type="button" class="btn btn-outline" data-faixa-remover>Remover</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <label class="flex items-center gap-1">Vale até <input type="date" class="field" style="width:auto" value="${esc(f.ate)}" data-faixa-ate /></label>
+            <label class="flex items-center gap-1">Vagas do lote <input type="number" min="1" step="1" class="field" style="width:6rem" placeholder="sem limite" value="${esc(f.vagas)}" data-faixa-vagas /></label>
+            <span data-faixa-contagem></span>
+          </div>
         </div>
       `;
     }
 
-    function renderizarFaixas(faixas: { descricao: string; valor: number }[]) {
+    function renderizarFaixas(faixas: Faixa[]) {
       if (!faixasListaEl) return;
-      faixasListaEl.innerHTML = faixas.map((f) => linhaFaixaHtml(f.descricao, String(f.valor ?? ""))).join("");
+      faixasListaEl.innerHTML = faixas.map((f) => linhaFaixaHtml(f)).join("");
     }
 
-    function lerFaixas(): { descricao: string; valor: number }[] {
+    function lerFaixas(): Faixa[] {
       if (!faixasListaEl) return [];
       return Array.from(faixasListaEl.querySelectorAll<HTMLElement>(".faixa-linha"))
         .map((linha) => {
           const descricao = linha.querySelector<HTMLInputElement>("[data-faixa-descricao]")?.value.trim() ?? "";
           const valor = Number(linha.querySelector<HTMLInputElement>("[data-faixa-valor]")?.value ?? 0);
-          return { descricao, valor };
+          const ate = linha.querySelector<HTMLInputElement>("[data-faixa-ate]")?.value || "";
+          const vagas = Number(linha.querySelector<HTMLInputElement>("[data-faixa-vagas]")?.value || 0);
+          const faixa: Faixa = { descricao, valor };
+          if (ate) faixa.ate = ate;
+          if (Number.isInteger(vagas) && vagas > 0) faixa.vagas = vagas;
+          return faixa;
         })
         .filter((f) => f.descricao);
     }
 
+    /** "12 inscritos neste lote (restam 8)" ao lado de cada faixa — a mesma contagem que a trava do site usa (todas as inscrições com o nome do lote). */
+    async function mostrarContagemLotes(token: string, id: number) {
+      if (!faixasListaEl) return;
+      const res = await fetch(`${directusUrl}/items/inscricoes_eventos?aggregate[count]=id&groupBy[]=faixa_rotulo&filter[evento][_eq]=${id}&limit=-1`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+      if (!res || !res.ok) return; // sem o esquema v7.13: sem contagem
+      const contagens = new Map<string, number>(((await res.json()).data ?? []).map((l: { faixa_rotulo: string | null; count: { id: string | number } | string | number }) => [String(l.faixa_rotulo ?? ""), Number(typeof l.count === "object" ? l.count.id : l.count) || 0]));
+      faixasListaEl.querySelectorAll<HTMLElement>(".faixa-linha").forEach((linha) => {
+        const nome = linha.querySelector<HTMLInputElement>("[data-faixa-descricao]")?.value.trim() ?? "";
+        const vagas = Number(linha.querySelector<HTMLInputElement>("[data-faixa-vagas]")?.value || 0);
+        const n = contagens.get(nome) ?? 0;
+        const alvo = linha.querySelector<HTMLElement>("[data-faixa-contagem]");
+        if (alvo) alvo.textContent = `${n} ${n === 1 ? "inscrito" : "inscritos"} neste lote${vagas > 0 ? ` (restam ${Math.max(vagas - n, 0)})` : ""}`;
+      });
+    }
+
     document.querySelector("[data-faixa-adicionar]")?.addEventListener("click", () => {
       if (!faixasListaEl) return;
-      faixasListaEl.insertAdjacentHTML("beforeend", linhaFaixaHtml("", ""));
+      faixasListaEl.insertAdjacentHTML("beforeend", linhaFaixaHtml({}));
     });
 
     faixasListaEl?.addEventListener("click", (event) => {
@@ -744,30 +855,35 @@ const tipoPerguntaOpcoes = [
 
     const locaisCheckinListaEl = document.querySelector<HTMLElement>("[data-locais-checkin-lista]");
 
-    function linhaLocalCheckinHtml(nome: string) {
+    function linhaLocalCheckinHtml(local: LocalCheckin) {
       return `
-        <div class="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center local-checkin-linha">
-          <input type="text" class="field" placeholder="Ex.: Portaria Leste" value="${nome.replace(/"/g, "&quot;")}" data-local-checkin-nome />
+        <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center local-checkin-linha">
+          <input type="text" class="field" placeholder="Ex.: Portaria Leste, Sala 2, Ala das crianças" value="${local.nome.replace(/"/g, "&quot;")}" data-local-checkin-nome aria-label="Nome do local" />
+          <input type="number" min="1" step="1" class="field" style="width:8rem" placeholder="Capacidade" value="${local.capacidade ?? ""}" data-local-checkin-capacidade aria-label="Capacidade (pessoas)" />
           <button type="button" class="btn btn-outline" data-local-checkin-remover>Remover</button>
         </div>
       `;
     }
 
-    function renderizarLocaisCheckin(locais: string[]) {
+    function renderizarLocaisCheckin(locais: LocalCheckin[]) {
       if (!locaisCheckinListaEl) return;
       locaisCheckinListaEl.innerHTML = locais.map(linhaLocalCheckinHtml).join("");
     }
 
-    function lerLocaisCheckin(): string[] {
+    /** Local sem capacidade continua sendo gravado só com o nome (o formato antigo); com capacidade, { nome, capacidade }. */
+    function lerLocaisCheckin() {
       if (!locaisCheckinListaEl) return [];
-      return Array.from(locaisCheckinListaEl.querySelectorAll<HTMLInputElement>("[data-local-checkin-nome]"))
-        .map((input) => input.value.trim())
-        .filter(Boolean);
+      return serializarLocais(
+        Array.from(locaisCheckinListaEl.querySelectorAll<HTMLElement>(".local-checkin-linha")).map((linha) => ({
+          nome: linha.querySelector<HTMLInputElement>("[data-local-checkin-nome]")?.value.trim() ?? "",
+          capacidade: Number(linha.querySelector<HTMLInputElement>("[data-local-checkin-capacidade]")?.value || 0) || null,
+        })),
+      );
     }
 
     document.querySelector("[data-local-checkin-adicionar]")?.addEventListener("click", () => {
       if (!locaisCheckinListaEl) return;
-      locaisCheckinListaEl.insertAdjacentHTML("beforeend", linhaLocalCheckinHtml(""));
+      locaisCheckinListaEl.insertAdjacentHTML("beforeend", linhaLocalCheckinHtml({ nome: "", capacidade: null }));
     });
 
     locaisCheckinListaEl?.addEventListener("click", (event) => {
@@ -830,6 +946,7 @@ const tipoPerguntaOpcoes = [
       });
       const json = await res.json();
       const perguntas: Pergunta[] = json.data ?? [];
+      preencherPerguntasCracha(perguntas);
 
       if (perguntasListaInscricao) {
         perguntasListaInscricao.innerHTML = perguntas
@@ -1082,6 +1199,7 @@ const tipoPerguntaOpcoes = [
       await carregarSessoes(token, eventoIdNumero);
       await carregarHistorico(token, evento);
       await carregarCupons(token, eventoIdNumero);
+      await mostrarContagemLotes(token, eventoIdNumero);
 
       document.querySelector("[data-encerrar-evento]")?.addEventListener("click", async () => {
         const encerrarStatus = document.querySelector<HTMLElement>("[data-encerrar-status]");
@@ -1095,16 +1213,19 @@ const tipoPerguntaOpcoes = [
 
         try {
           const resInscritos = await fetch(
-            `${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&fields=id,nome,pago,valor,presente&limit=-1`,
+            // `*`: `cortesia` é campo novo (v7.13); pedir um campo que não existe dá 403.
+            `${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&fields=*&limit=-1`,
             { headers: { Authorization: `Bearer ${token}` } },
           );
-          const inscritos: { id: number; nome: string; pago: boolean; valor: number | null; presente: boolean }[] =
+          const inscritos: { id: number; nome: string; pago: boolean; valor: number | null; presente: boolean; cortesia?: boolean }[] =
             (await resInscritos.json()).data ?? [];
 
           const totalInscritos = inscritos.length;
           const presentes = inscritos.filter((i) => i.presente).length;
-          const pagos = inscritos.filter((i) => i.pago);
-          const naoPagos = totalInscritos - pagos.length;
+          const pagos = inscritos.filter((i) => i.pago && !i.cortesia);
+          // v7.13: cortesia não é "não pago" (não há o que receber).
+          const cortesias = inscritos.filter((i) => i.cortesia).length;
+          const naoPagos = totalInscritos - pagos.length - cortesias;
           const valorArrecadado = pagos.reduce((soma, i) => soma + (Number(i.valor) || 0), 0);
           const taxaComparecimento = totalInscritos ? Math.round((presentes / totalInscritos) * 100) : 0;
 
@@ -1182,6 +1303,7 @@ const tipoPerguntaOpcoes = [
           [
             `Pagos: ${pagos.length}`,
             `Não pagos: ${naoPagos}`,
+            ...(cortesias ? [`Cortesias (isentos): ${cortesias}`] : []),
             `Valor total arrecadado: R$ ${valorArrecadado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
           ].forEach((linha) => {
             doc.text(linha, margem, y);
@@ -1335,6 +1457,11 @@ const tipoPerguntaOpcoes = [
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!statusEl) return;
+        const problema = crachaDisponivel ? problemaCracha() : null;
+        if (problema) {
+          statusEl.textContent = problema;
+          return;
+        }
         statusEl.textContent = "Salvando…";
         try {
           const dadosForm = lerFormulario();
@@ -1342,7 +1469,7 @@ const tipoPerguntaOpcoes = [
           const res = await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(dadosForm),
+            body: JSON.stringify(crachaDisponivel ? { ...dadosForm, cracha_config: lerCracha() } : dadosForm),
           });
           if (!res.ok) throw new Error("falha ao salvar");
           evento.vagas_limite = dadosForm.vagas_limite;

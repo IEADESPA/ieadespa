@@ -3,7 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { DIRECTUS_URL, TELEFONE_HASH_URL } from "@/lib/directus";
+import { DIRECTUS_URL, PAINEL_INSCRICAO_URL, TELEFONE_HASH_URL } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
@@ -12,7 +12,7 @@ const allPosts = visiblePosts(await getAllMensagens());
 <BaseLayout title="Inscritos — Gestão de eventos" description="Área restrita da equipe." noindex>
   <SiteHeader posts={allPosts} />
   <main id="content" class="outer">
-    <div class="canvas inscritos-canvas" data-directus-url={DIRECTUS_URL} data-telefone-hash-url={TELEFONE_HASH_URL} data-site-url={siteConfig.siteUrl}>
+    <div class="canvas inscritos-canvas" data-directus-url={DIRECTUS_URL} data-telefone-hash-url={TELEFONE_HASH_URL} data-painel-inscricao-url={PAINEL_INSCRICAO_URL} data-site-url={siteConfig.siteUrl}>
       <header class="pagehead">
         <p class="eyebrow" data-painel-voltar>
           <a href="/painel-eventos/" class="text-accent">← Gestão de eventos</a>
@@ -26,6 +26,13 @@ const allPosts = visiblePosts(await getAllMensagens());
             <button type="button" class="btn btn-outline" data-baixar-certificados hidden>
               Baixar certificados de todos os presentes
             </button>
+            <span class="flex flex-wrap items-center gap-2" data-ausentes-bloco hidden>
+              <button type="button" class="btn btn-outline" data-baixar-ausentes>Relatório de ausentes (PDF)</button>
+              <select class="field" style="width:auto" data-ausentes-por aria-label="Agrupar o relatório de ausentes">
+                <option value="lote">por lote</option>
+                <option value="tipo">por tipo de participante</option>
+              </select>
+            </span>
           </div>
         </div>
         <p class="pagehead-description" data-painel-carregando>Verificando sua sessão…</p>
@@ -36,7 +43,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       </div>
 
       <div hidden data-painel-conteudo>
-        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-6" data-cartoes-stats>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5" data-cartoes-stats>
           <div class="stat-card">
             <p class="stat-valor" data-stat="total">0</p>
             <p class="stat-label">Inscritos</p>
@@ -61,6 +68,27 @@ const allPosts = visiblePosts(await getAllMensagens());
             <p class="stat-valor" data-stat="arrecadado">R$ 0</p>
             <p class="stat-label">Arrecadado (pagos)</p>
           </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="a-receber">R$ 0</p>
+            <p class="stat-label">A receber (com vaga, sem cortesia)</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="a-conferir">0</p>
+            <p class="stat-label">Pagamento informado, a conferir</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="cortesias">0</p>
+            <p class="stat-label">Cortesias</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-valor" data-stat="entradas">0</p>
+            <p class="stat-label">Entradas registradas (check-in)</p>
+          </div>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="text-sm" data-resumo-lotes hidden></div>
+          <div class="text-sm" data-resumo-locais hidden></div>
         </div>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">
@@ -69,6 +97,8 @@ const allPosts = visiblePosts(await getAllMensagens());
             <button type="button" class="filtro-chip is-active" data-filtro="todos">Todos</button>
             <button type="button" class="filtro-chip" data-filtro="pagos">Pagos</button>
             <button type="button" class="filtro-chip" data-filtro="nao-pagos">Não pagos</button>
+            <button type="button" class="filtro-chip" data-filtro="a-conferir">Pagamento informado, a conferir</button>
+            <button type="button" class="filtro-chip" data-filtro="cortesia">Cortesia</button>
             <button type="button" class="filtro-chip" data-filtro="presentes">Presentes</button>
             <button type="button" class="filtro-chip" data-filtro="ausentes">Ausentes</button>
             <button type="button" class="filtro-chip" data-filtro="espera">Lista de espera</button>
@@ -115,15 +145,16 @@ const allPosts = visiblePosts(await getAllMensagens());
                 <th>Nome</th>
                 <th>Telefone</th>
                 <th>Código</th>
+                <th>Lote · Tipo</th>
                 <th>Valor (R$)</th>
-                <th>Pago</th>
+                <th>Pagamento</th>
                 <th>Presente</th>
                 <th>Espera</th>
                 <th></th>
               </tr>
             </thead>
             <tbody data-inscritos-corpo>
-              <tr><td colspan="8" class="text-sm text-muted-foreground">Carregando inscritos…</td></tr>
+              <tr><td colspan="9" class="text-sm text-muted-foreground">Carregando inscritos…</td></tr>
             </tbody>
           </table>
         </div>
@@ -132,11 +163,15 @@ const allPosts = visiblePosts(await getAllMensagens());
   </main>
   <SiteFooter />
 
+  <script is:inline src="/vendor/qrcode-generator-2.0.4.min.js"></script>
   <script>
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
-    import { desenharCracha } from "@/lib/cracha";
+    import { camposDoCracha, desenharCracha, matrizQr, normalizarConfigCracha, TIPOS_PARTICIPANTE, type ConfigCracha } from "@/lib/cracha";
+    import { contagemPorLote, passaNoFiltroPagamento, situacaoPagamento, textoConferencia, textoCortesia, totaisPagamento, type InscricaoPagamento } from "@/lib/inscricoesPainel";
+    import { textoPagamentoInformado } from "@/lib/informarPagamento";
+    import { agruparAusentes, contarPorLocal, listarAusentes, normalizarLocais, resumoAusencia, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
     import { contarRespostas, graficoBarrasSvg } from "@/lib/graficos";
     import { exigirAutenticacao } from "@/lib/painelAuth";
 
@@ -145,9 +180,15 @@ const allPosts = visiblePosts(await getAllMensagens());
     let eventoTema = "";
     let eventoSlug = "";
     let vagasLimite: number | null = null;
+    // v7.13
+    let configCracha: ConfigCracha = normalizarConfigCracha(null);
+    let faixasEvento: { descricao: string; vagas?: number | null }[] = [];
+    let locaisEvento: LocalCheckin[] = [];
+    let entradas: Entrada[] = [];
 
-    interface Inscricao {
+    interface Inscricao extends InscricaoPagamento {
       id: number;
+      tipo_participante?: string | null;
       nome: string;
       telefone: string | null;
       codigo: string | null;
@@ -183,6 +224,22 @@ const allPosts = visiblePosts(await getAllMensagens());
     const directusUrl = container.dataset.directusUrl ?? "";
     const telefoneHashUrl = container.dataset.telefoneHashUrl ?? "";
     const siteUrl = container.dataset.siteUrl ?? "";
+    const painelInscricaoUrl = container.dataset.painelInscricaoUrl ?? "";
+
+    /**
+     * v7.13 — pago, cortesia e tipo passam pela função do site (`/api/painel-inscricao`), que tira o "quem" do próprio token
+     * (nunca da tela) e grava a hora do servidor. Devolve os campos gravados, ou lança o erro em português.
+     */
+    async function acaoNaInscricao(inscricaoId: number, corpo: Record<string, unknown>) {
+      const res = await fetch(painelInscricaoUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-painel-token": token },
+        body: JSON.stringify({ inscricaoId, ...corpo }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.erro || "Não foi possível gravar agora. Tente de novo.");
+      return json.inscricao as Partial<Inscricao>;
+    }
 
     // O telefone nunca é gravado em texto puro — vira hash (scrypt, ver
     // api/src/lib/telefone.js) antes de chegar no Directus. `null`/vazio
@@ -277,20 +334,49 @@ const allPosts = visiblePosts(await getAllMensagens());
       return Array.from(perguntasPorId.values()).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
     }
 
+    const reais = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
     function atualizarStats() {
       const total = inscricoes.length;
-      const pagos = inscricoes.filter((i) => i.pago);
       const presentes = inscricoes.filter((i) => i.presente).length;
       const espera = inscricoes.filter((i) => i.aguardando_vaga).length;
       const pendentes = inscricoes.filter((i) => i.pendente_aprovacao).length;
-      const arrecadado = pagos.reduce((soma, i) => soma + (Number(i.valor) || 0), 0);
+      // v7.13: cortesia sai de "não pagos" e do "a receber"; "a conferir" = pagamento informado e ainda não confirmado.
+      const t = totaisPagamento(inscricoes);
 
       document.querySelector('[data-stat="total"]')!.textContent = String(total);
-      document.querySelector('[data-stat="pagos"]')!.textContent = String(pagos.length);
+      document.querySelector('[data-stat="pagos"]')!.textContent = String(t.pagos);
       document.querySelector('[data-stat="presentes"]')!.textContent = String(presentes);
       document.querySelector('[data-stat="espera"]')!.textContent = String(espera);
       document.querySelector('[data-stat="pendentes"]')!.textContent = String(pendentes);
-      document.querySelector('[data-stat="arrecadado"]')!.textContent = `R$ ${arrecadado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+      document.querySelector('[data-stat="arrecadado"]')!.textContent = reais(t.arrecadado);
+      document.querySelector('[data-stat="a-receber"]')!.textContent = reais(t.aReceber);
+      document.querySelector('[data-stat="a-conferir"]')!.textContent = String(t.aConferir);
+      document.querySelector('[data-stat="cortesias"]')!.textContent = String(t.cortesias);
+      document.querySelector('[data-stat="entradas"]')!.textContent = String(entradas.length);
+
+      // Por lote (a mesma contagem que a trava do site usa) e por local de credenciamento.
+      const resumoLotes = document.querySelector<HTMLElement>("[data-resumo-lotes]");
+      const lotes = contagemPorLote(inscricoes, faixasEvento);
+      if (resumoLotes) {
+        resumoLotes.hidden = lotes.length === 0;
+        resumoLotes.innerHTML = `<p class="font-semibold">Inscrições por lote</p><ul class="mt-1 grid gap-0.5 text-muted-foreground">${lotes
+          .map((l) => `<li>${escapeHtml(l.descricao)}: <strong>${l.inscritos}</strong>${l.vagas ? ` de ${l.vagas} vagas${l.inscritos >= l.vagas ? " — esgotado" : ` (restam ${l.vagas - l.inscritos})`}` : ""}</li>`)
+          .join("")}</ul>`;
+      }
+      const resumoLocais = document.querySelector<HTMLElement>("[data-resumo-locais]");
+      if (resumoLocais) {
+        const contagens = contarPorLocal(entradas);
+        const nomes = [...new Set([...locaisEvento.map((l) => l.nome), ...Object.keys(contagens)])];
+        resumoLocais.hidden = entradas.length === 0 && locaisEvento.length === 0;
+        resumoLocais.innerHTML = `<p class="font-semibold">Pessoas que entraram, por local</p><ul class="mt-1 grid gap-0.5 text-muted-foreground">${nomes
+          .map((nome) => {
+            const cap = locaisEvento.find((l) => l.nome === nome)?.capacidade ?? null;
+            const n = contagens[nome] ?? 0;
+            return `<li>${escapeHtml(nome || "Sem local")}: <strong>${n}</strong>${cap ? ` de ${cap}${n > cap ? " ⚠️ passou da capacidade" : ""}` : ""}</li>`;
+          })
+          .join("")}</ul>`;
+      }
     }
 
     function filtrar(lista: Inscricao[]) {
@@ -310,8 +396,8 @@ const allPosts = visiblePosts(await getAllMensagens());
           // não precisa bater com todos, só ter pelo menos um em comum.
           if (!valores.some((v) => filtroPerguntaValores.includes(v))) return false;
         }
-        if (filtroAtivo === "pagos") return i.pago;
-        if (filtroAtivo === "nao-pagos") return !i.pago;
+        const pagamento = passaNoFiltroPagamento(i, filtroAtivo);
+        if (pagamento !== null) return pagamento;
         if (filtroAtivo === "espera") return i.aguardando_vaga;
         if (filtroAtivo === "pendentes") return i.pendente_aprovacao;
         if (filtroAtivo === "presentes") return i.presente;
@@ -431,13 +517,38 @@ const allPosts = visiblePosts(await getAllMensagens());
       `;
     }
 
+    /** v7.13 — a célula de pagamento: o botão Pago/Pendente (com quem confirmou e quando), o aviso da pessoa e a cortesia. */
+    function pagamentoCelulaHtml(i: Inscricao) {
+      const situacao = situacaoPagamento(i);
+      const conferencia = textoConferencia(i);
+      const cortesia = textoCortesia(i);
+      const aviso = i.pagamento_informado_em
+        ? textoPagamentoInformado({ em: i.pagamento_informado_em, data: i.pagamento_informado_data ?? null, meio: i.pagamento_informado_meio ?? null, valor: i.pagamento_informado_valor == null ? null : Number(i.pagamento_informado_valor), nome: i.pagamento_informado_nome ?? null }, "Informado pela pessoa")
+        : null;
+      const botao = situacao === "cortesia"
+        ? `<span class="badge-toggle badge-cortesia">Cortesia</span>`
+        : `<button type="button" class="badge-toggle ${i.pago ? "is-on" : situacao === "a_conferir" ? "badge-conferir" : ""}" data-acao="pago">${i.pago ? "Pago" : situacao === "a_conferir" ? "A conferir" : "Pendente"}</button>`;
+      return `
+        ${botao}
+        ${conferencia ? `<p class="cupom-nota" title="Quem marcou e quando">🧾 ${escapeHtml(conferencia)}</p>` : ""}
+        ${aviso && situacao !== "pago" ? `<p class="cupom-nota aviso-nota" title="A pessoa avisou que pagou; confira no extrato">💬 ${escapeHtml(aviso)}</p>` : ""}
+        ${cortesia ? `<p class="cupom-nota aviso-nota">🎁 ${escapeHtml(cortesia)}</p>` : ""}
+        <button type="button" class="link-sweep text-xs font-semibold text-accent" data-acao="cortesia">${i.cortesia ? "Tirar cortesia" : "Cortesia…"}</button>
+        <div class="grid gap-1 mt-1" data-cortesia-form hidden>
+          <input type="text" class="field campo-inline" maxlength="300" placeholder="Motivo (obrigatório)" data-cortesia-motivo />
+          <input type="text" class="field campo-inline" maxlength="120" placeholder="Quem autorizou (obrigatório)" data-cortesia-autorizou />
+          <button type="button" class="btn btn-outline" data-acao="cortesia-salvar">Registrar cortesia</button>
+        </div>
+        <p class="text-xs" role="status" aria-live="polite" data-pagamento-status></p>`;
+    }
+
     function renderizar() {
       if (!corpoTabela) return;
       const visiveis = filtrar(inscricoes);
 
       if (!visiveis.length) {
         renderizarGraficos(visiveis);
-        corpoTabela.innerHTML = `<tr><td colspan="8" class="text-sm text-muted-foreground">Nenhum inscrito encontrado.</td></tr>`;
+        corpoTabela.innerHTML = `<tr><td colspan="9" class="text-sm text-muted-foreground">Nenhum inscrito encontrado.</td></tr>`;
         return;
       }
 
@@ -459,10 +570,16 @@ const allPosts = visiblePosts(await getAllMensagens());
               </td>
               <td class="codigo-cel">${escapeHtml(i.codigo ?? "—")}</td>
               <td>
+                <p class="text-xs">${escapeHtml(i.faixa_rotulo || "—")}</p>
+                <select class="field campo-inline" data-tipo-participante aria-label="Tipo de participante (crachá)">
+                  ${TIPOS_PARTICIPANTE.map((t) => `<option value="${t}" ${(i.tipo_participante || "Participante") === t ? "selected" : ""}>${t}</option>`).join("")}
+                </select>
+              </td>
+              <td>
                 <input type="number" step="0.01" class="field campo-inline valor-input" value="${i.valor ?? ""}" data-campo="valor" />
                 ${i.cupom_usado ? `<p class="cupom-nota" title="Cupom de desconto usado">🎟️ ${escapeHtml(i.cupom_usado)}</p>` : ""}
               </td>
-              <td><button type="button" class="badge-toggle ${i.pago ? "is-on" : ""}" data-acao="pago">${i.pago ? "Pago" : "Pendente"}</button></td>
+              <td class="pagamento-cel">${pagamentoCelulaHtml(i)}</td>
               <td>
                 <button type="button" class="badge-toggle ${i.presente ? "is-on" : ""}" data-acao="presente">${i.presente ? "Presente" : "Ausente"}</button>
                 ${i.local_checkin ? `<p class="cupom-nota" title="Local do check-in">📍 ${escapeHtml(i.local_checkin)}</p>` : ""}
@@ -488,7 +605,7 @@ const allPosts = visiblePosts(await getAllMensagens());
               </td>
             </tr>
             <tr class="linha-respostas" data-linha-respostas="${i.id}" hidden>
-              <td colspan="8">${respostasHtml(i.id)}</td>
+              <td colspan="9">${respostasHtml(i.id)}</td>
             </tr>
           `,
         )
@@ -498,6 +615,11 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
 
     async function carregarTudo() {
+      // v7.13: as entradas do credenciamento (por local). Sem o esquema, ou sem permissão, a tela segue sem elas.
+      const resEntradas = await fetch(`${directusUrl}/items/evento_entradas?filter[evento][_eq]=${eventoId}&fields=inscricao,local,entrou_em,date_created&limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+      entradas = resEntradas && resEntradas.ok ? (await resEntradas.json()).data ?? [] : [];
       const [resInscricoes, resPerguntas, resRespostas] = await Promise.all([
         fetch(`${directusUrl}/items/inscricoes_eventos?filter[evento][_eq]=${eventoId}&sort=nome&limit=-1`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -589,8 +711,58 @@ const allPosts = visiblePosts(await getAllMensagens());
       const inscricao = inscricoes.find((i) => i.id === id);
       if (!inscricao) return;
 
-      if (target.matches('[data-acao="pago"]') || target.matches('[data-acao="presente"]') || target.matches('[data-acao="espera"]')) {
-        const campo = target.dataset.acao === "pago" ? "pago" : target.dataset.acao === "presente" ? "presente" : "aguardando_vaga";
+      const statusPagamento = linha.querySelector<HTMLElement>("[data-pagamento-status]");
+      if (target.matches('[data-acao="pago"]')) {
+        // v7.13: pela função do site — fica gravado quem confirmou (ou desmarcou) e quando.
+        const novo = !inscricao.pago;
+        if (!novo && !confirm(`Desmarcar o pagamento de "${inscricao.nome}"? Fica registrado quem desmarcou e quando.`)) return;
+        (target as HTMLButtonElement).disabled = true;
+        try {
+          Object.assign(inscricao, await acaoNaInscricao(id, { acao: "pago", pago: novo }));
+          renderizar();
+        } catch (e) {
+          if (statusPagamento) statusPagamento.textContent = (e as Error).message;
+          (target as HTMLButtonElement).disabled = false;
+        }
+        return;
+      }
+
+      if (target.matches('[data-acao="cortesia"]')) {
+        if (inscricao.cortesia) {
+          if (!confirm(`Tirar a cortesia de "${inscricao.nome}"? A inscrição volta a ser cobrada (fica registrado quem tirou e quando).`)) return;
+          try {
+            Object.assign(inscricao, await acaoNaInscricao(id, { acao: "cortesia", ativa: false }));
+            renderizar();
+          } catch (e) {
+            if (statusPagamento) statusPagamento.textContent = (e as Error).message;
+          }
+          return;
+        }
+        const formCortesia = linha.querySelector<HTMLElement>("[data-cortesia-form]");
+        if (formCortesia) formCortesia.hidden = !formCortesia.hidden;
+        return;
+      }
+
+      if (target.matches('[data-acao="cortesia-salvar"]')) {
+        const motivo = linha.querySelector<HTMLInputElement>("[data-cortesia-motivo]")?.value.trim() ?? "";
+        const autorizadoPor = linha.querySelector<HTMLInputElement>("[data-cortesia-autorizou]")?.value.trim() ?? "";
+        if (!motivo || !autorizadoPor) {
+          if (statusPagamento) statusPagamento.textContent = "Cortesia só com o motivo e o nome de quem autorizou.";
+          return;
+        }
+        (target as HTMLButtonElement).disabled = true;
+        try {
+          Object.assign(inscricao, await acaoNaInscricao(id, { acao: "cortesia", ativa: true, motivo, autorizadoPor }));
+          renderizar();
+        } catch (e) {
+          if (statusPagamento) statusPagamento.textContent = (e as Error).message;
+          (target as HTMLButtonElement).disabled = false;
+        }
+        return;
+      }
+
+      if (target.matches('[data-acao="presente"]') || target.matches('[data-acao="espera"]')) {
+        const campo = target.dataset.acao === "presente" ? "presente" : "aguardando_vaga";
         const novoValor = !inscricao[campo];
         await fetch(`${directusUrl}/items/inscricoes_eventos/${id}`, {
           method: "PATCH",
@@ -693,6 +865,27 @@ const allPosts = visiblePosts(await getAllMensagens());
       }
     });
 
+    // v7.13 — tipo de participante (vai no crachá), pela função do site.
+    corpoTabela?.addEventListener("change", async (event) => {
+      const alvo = event.target as HTMLElement;
+      if (!alvo.matches("[data-tipo-participante]")) return;
+      const linha = alvo.closest<HTMLElement>("[data-linha-id]");
+      const inscricao = linha ? inscricoes.find((i) => i.id === Number(linha.dataset.linhaId)) : null;
+      if (!linha || !inscricao) return;
+      const select = alvo as HTMLSelectElement;
+      const statusPagamento = linha.querySelector<HTMLElement>("[data-pagamento-status]");
+      select.disabled = true;
+      try {
+        Object.assign(inscricao, await acaoNaInscricao(inscricao.id, { acao: "tipo", tipo: select.value }));
+        if (statusPagamento) statusPagamento.textContent = `Tipo: ${select.value}`;
+      } catch (e) {
+        select.value = inscricao.tipo_participante || "Participante";
+        if (statusPagamento) statusPagamento.textContent = (e as Error).message;
+      } finally {
+        select.disabled = false;
+      }
+    });
+
     const abrirNovoBtn = document.querySelector<HTMLButtonElement>("[data-abrir-novo]");
     const formNovo = document.querySelector<HTMLElement>("[data-form-novo]");
     const novoPerguntasEl = document.querySelector<HTMLElement>("[data-novo-perguntas]");
@@ -770,10 +963,8 @@ const allPosts = visiblePosts(await getAllMensagens());
         return;
       }
 
-      const resEvento = await fetch(
-        `${directusUrl}/items/eventos/${eventoId}?fields=id,title,slug,description,event_date,end_date,vagas_limite`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      // `*`: `cracha_config` é campo novo (v7.13) e pedir um campo que não existe dá 403.
+      const resEvento = await fetch(`${directusUrl}/items/eventos/${eventoId}?fields=*`, { headers: { Authorization: `Bearer ${token}` } });
       if (!resEvento.ok) {
         if (carregando) carregando.hidden = true;
         if (erroEl) erroEl.hidden = false;
@@ -783,6 +974,9 @@ const allPosts = visiblePosts(await getAllMensagens());
       const evento = eventoJson.data;
       vagasLimite = evento.vagas_limite ?? null;
       eventoSlug = evento.slug ?? "";
+      configCracha = normalizarConfigCracha(evento.cracha_config);
+      faixasEvento = Array.isArray(evento.faixas_valor) ? evento.faixas_valor.filter((f: { descricao?: string }) => f && f.descricao) : [];
+      locaisEvento = normalizarLocais(evento.locais_checkin);
 
       eventoTitulo = evento.title;
       eventoTema = evento.description ?? "";
@@ -827,7 +1021,11 @@ const allPosts = visiblePosts(await getAllMensagens());
             const x = margem + coluna * larguraCel;
             const y = margem + linha * alturaCel;
 
-            desenharCracha(doc, { x, y, largura: larguraCel, altura: alturaCel }, { nome: pessoa.nome, eventoTitulo, tema: eventoTema || null, logo });
+            // v7.13: o que vai no crachá segue a configuração do evento (tipo, igreja, cidade, QR do credenciamento).
+            const respostas = respostasPorInscricao.get(pessoa.id) ?? [];
+            const resposta = (perguntaId: number | null) => (perguntaId ? respostas.find((r) => r.pergunta === perguntaId)?.valor ?? null : null);
+            const campos = camposDoCracha(configCracha, { nome: pessoa.nome, codigo: pessoa.codigo, tipo: pessoa.tipo_participante, igreja: resposta(configCracha.pergunta_igreja), cidade: resposta(configCracha.pergunta_cidade) }, eventoId);
+            desenharCracha(doc, { x, y, largura: larguraCel, altura: alturaCel }, { nome: campos.nome, eventoTitulo, tema: eventoTema || null, logo }, { tipo: campos.tipo, linhas: campos.linhas, qr: matrizQr(campos.qr) });
 
             // Linha pontilhada de corte, igual ao modelo físico usado hoje.
             doc.setDrawColor(120);
@@ -875,6 +1073,47 @@ const allPosts = visiblePosts(await getAllMensagens());
           baixarCertificadosBtn.disabled = false;
           baixarCertificadosBtn.textContent = "Baixar certificados de todos os presentes";
         }
+      });
+
+      // v7.13 — relatório de ausentes: quem se inscreveu, tinha vaga e não veio (nem presença, nem entrada registrada), por lote ou por tipo.
+      const ausentesBloco = document.querySelector<HTMLElement>("[data-ausentes-bloco]");
+      if (ausentesBloco) ausentesBloco.hidden = false;
+      const baixarAusentesBtn = document.querySelector<HTMLButtonElement>("[data-baixar-ausentes]");
+      baixarAusentesBtn?.addEventListener("click", () => {
+        const por = (document.querySelector<HTMLSelectElement>("[data-ausentes-por]")?.value === "tipo" ? "tipo" : "lote") as "lote" | "tipo";
+        const ausentes = listarAusentes(inscricoes, entradas);
+        const resumo = resumoAusencia(inscricoes, entradas, por);
+        const grupos = agruparAusentes(ausentes, por);
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        configurarAcessibilidadePdf(doc, `Ausentes — ${eventoTitulo}`);
+        const margem = 48;
+        const alturaPagina = doc.internal.pageSize.getHeight();
+        let y = margem;
+        const linha = (texto: string, tamanho = 10, negrito = false, recuo = 0) => {
+          if (y > alturaPagina - margem) {
+            doc.addPage();
+            y = margem;
+          }
+          doc.setFont("helvetica", negrito ? "bold" : "normal");
+          doc.setFontSize(tamanho);
+          doc.text(texto, margem + recuo, y);
+          y += tamanho + 6;
+        };
+        linha(`Relatório de ausentes — ${eventoTitulo}`, 15, true);
+        if (eventoPeriodo) linha(eventoPeriodo, 10);
+        linha(`Gerado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Belem" })}. Ausente = inscrito com vaga (fora da lista de espera e já aprovado) sem presença e sem entrada registrada.`, 8);
+        y += 6;
+        linha(`Resumo ${por === "lote" ? "por lote" : "por tipo de participante"}`, 12, true);
+        resumo.forEach((r) => linha(`${r.grupo}: ${r.ausentes} ausente(s) de ${r.inscritos} inscrito(s) com vaga (${r.taxa}%)`, 10, false, 8));
+        linha(`Total: ${ausentes.length} ausente(s) de ${resumo.reduce((s, r) => s + r.inscritos, 0)} inscrito(s) com vaga`, 10, true, 8);
+        y += 6;
+        grupos.forEach((g) => {
+          linha(`${g.grupo} (${g.pessoas.length})`, 12, true);
+          g.pessoas.forEach((p) => linha(`${p.nome}${p.codigo ? `  ·  ${p.codigo}` : ""}`, 10, false, 8));
+          y += 4;
+        });
+        if (!grupos.length) linha("Ninguém faltou.", 11);
+        doc.save(`ausentes-${eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`);
       });
 
       await carregarTudo();
@@ -1028,6 +1267,29 @@ const allPosts = visiblePosts(await getAllMensagens());
 
     .acao-excluir {
       color: #b3261e;
+    }
+
+    .badge-conferir {
+      border-color: color-mix(in srgb, #2b7de0 70%, var(--border));
+      background: color-mix(in srgb, #2b7de0 18%, var(--background));
+      color: #1f5aa6;
+    }
+
+    .badge-cortesia {
+      display: inline-block;
+      cursor: default;
+      border-color: color-mix(in srgb, #d9b34f 70%, var(--border));
+      background: color-mix(in srgb, #d9b34f 22%, var(--background));
+      color: #6b5417;
+    }
+
+    .aviso-nota {
+      white-space: normal;
+      max-width: 18rem;
+    }
+
+    .pagamento-cel {
+      min-width: 12rem;
     }
 
     .grafico-card {

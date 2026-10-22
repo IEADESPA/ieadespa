@@ -35,14 +35,14 @@ const tratamentos: Tratamento[] = [
     acesso: "Só a equipe responsável por cada tipo de assunto (contato geral, pedidos de oração).",
   },
   {
-    dado: "Pedido de camiseta/uniforme — nome, telefone, congregação (opcional), itens do carrinho (tamanho, modelo, quantidade), valor pago",
+    dado: "Pedido de camiseta/uniforme — nome, telefone, congregação (opcional), itens do carrinho (tamanho, modelo, quantidade), valor pago e, se você informar o pagamento, a data, o meio, o valor e o nome de quem pagou",
     finalidade: "Confirmar seu pedido e permitir que você mesmo consulte (só com o telefone, sem senha) quantas peças já pode retirar e quanto falta pagar, além de ajudar a equipe a controlar estoque, quem já pagou e o total por congregação.",
     baseLegal: "Execução de procedimento preliminar/contrato a pedido do titular (Art. 7º, V) — você mesmo faz o pedido.",
     retencao: "O telefone é guardado como hash (mesma técnica do telefone de inscrição em evento, ver abaixo), retido por prazo indeterminado. Nome, congregação, itens e valor pago seguem a mesma regra.",
     acesso: "A equipe responsável pelo lote de camiseta. O telefone nunca é lido por ninguém — só comparado (por hash) no momento em que você mesmo o digita pra consultar seu pedido.",
   },
   {
-    dado: "Inscrição em evento — nome, telefone, e-mail (opcional), respostas às perguntas do evento (quando houver)",
+    dado: "Inscrição em evento — nome, telefone, e-mail (opcional), respostas às perguntas do evento (quando houver), o lote escolhido, o tipo de participante do crachá, as entradas no credenciamento (local e hora) e, se você informar o pagamento, a data, o meio, o valor e o nome de quem pagou",
     finalidade: "Confirmar sua vaga, fazer seu check-in na entrada, permitir que você emita certificado/crachá ou responda a pesquisa de satisfação depois do evento, e — só se você deixar o e-mail — te enviar um comprovante da inscrição e um lembrete um dia antes do evento.",
     baseLegal: "Execução de procedimento preliminar/contrato a pedido do titular (Art. 7º, V) — você mesmo inicia a inscrição e decide se deixa o e-mail.",
     retencao: "O telefone é guardado como hash (explicado abaixo) e retido por prazo indeterminado, de propósito — é a chave que permite pedir uma segunda via do certificado ou de qualquer documento do evento anos depois. Nome, código, presença, e-mail e respostas seguem a mesma regra: nada é apagado automaticamente ao fim do evento.",

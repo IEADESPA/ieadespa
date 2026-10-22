@@ -333,10 +333,16 @@ console.log("== a resposta da gravação em lote ==");
       mm._compile(mutante, caminhoLib);
       return mm.exports;
     };
-    const mutantes = [0, 1, 2, 3].map(instanciaMutante);
-    const fake2 = novoDirectus({ atraso: 6 });
-    await Promise.all(Array.from({ length: 120 }, (_, i) => inscrever(mutantes[i % 4], fake2, { vagas: 40 })));
-    verdade(confirmadas(fake2) > 40, `lendo na ordem errada (conta, depois a senha), a rajada ESTOURA as vagas (${confirmadas(fake2)} confirmadas para 40)`);
+    // A corrida depende do acaso (quase sempre estoura na primeira rodada, às vezes não): até 5 rodadas; basta UMA estourar para provar que o teste pega o defeito (22/10/2026:
+    // com uma rodada só, cerca de 1 vez em 6 o mutante ficava em 40 e o teste do teste falhava à toa).
+    let maior = 0;
+    for (let rodada = 0; rodada < 5 && maior <= 40; rodada += 1) {
+      const mutantes = [0, 1, 2, 3].map(instanciaMutante);
+      const fake2 = novoDirectus({ atraso: 6 });
+      await Promise.all(Array.from({ length: 120 }, (_, i) => inscrever(mutantes[i % 4], fake2, { vagas: 40 })));
+      maior = Math.max(maior, confirmadas(fake2));
+    }
+    verdade(maior > 40, `lendo na ordem errada (conta, depois a senha), a rajada ESTOURA as vagas (${maior} confirmadas para 40)`);
   }
 
   console.log(falhas === 0 ? "\nTUDO CERTO" : `\n${falhas} FALHA(S)`);

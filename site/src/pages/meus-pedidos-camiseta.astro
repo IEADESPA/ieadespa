@@ -1,8 +1,9 @@
 ---
 import SiteFooter from "@/components/SiteFooter.astro";
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { CONSULTAR_PEDIDOS_CAMISETA_URL } from "@/lib/directus";
+import { CONSULTAR_PEDIDOS_CAMISETA_URL, INFORMAR_PAGAMENTO_URL } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
@@ -25,7 +26,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         </p>
       </header>
 
-      <form class="mt-8 grid gap-4 max-w-sm" data-consulta-form data-consulta-url={CONSULTAR_PEDIDOS_CAMISETA_URL}>
+      <form class="mt-8 grid gap-4 max-w-sm" data-consulta-form data-consulta-url={CONSULTAR_PEDIDOS_CAMISETA_URL} data-informar-url={INFORMAR_PAGAMENTO_URL}>
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="consulta-telefone">Telefone / WhatsApp</label>
           <input id="consulta-telefone" name="telefone" type="tel" autocomplete="tel" required class="field" />
@@ -38,12 +39,16 @@ const allPosts = visiblePosts(await getAllMensagens());
         <button type="submit" class="btn btn-solid">Consultar</button>
       </form>
 
+      <AvisoGolpe class="mt-6" />
+
       <div class="mt-8" data-consulta-resultado></div>
     </div>
   </main>
   <SiteFooter />
 
   <script>
+    import { formularioPagamentoHtml, ligarFormularioPagamento, textoPagamentoInformado, type PagamentoInformado } from "@/lib/informarPagamento";
+
     interface Item {
       tamanho: string | null;
       modelo: string | null;
@@ -54,6 +59,8 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
 
     interface Pedido {
+      id: number;
+      pagamentoInformado: PagamentoInformado | null;
       lote: string | null;
       nome: string | null;
       criadoEm: string | null;
@@ -75,6 +82,8 @@ const allPosts = visiblePosts(await getAllMensagens());
     if (!form) throw new Error("formulário de consulta ausente");
 
     const consultaUrl = form.dataset.consultaUrl ?? "";
+    const informarUrl = form.dataset.informarUrl ?? "";
+    let telefoneConsultado = "";
     const telefoneInput = document.getElementById("consulta-telefone") as HTMLInputElement;
     const nomeInput = document.getElementById("consulta-nome") as HTMLInputElement;
     const nomeBloco = document.querySelector<HTMLElement>("[data-consulta-nome-bloco]");
@@ -153,6 +162,12 @@ const allPosts = visiblePosts(await getAllMensagens());
       const pagamento = p.valorTotal > 0
         ? `<p class="camiseta-pedido-detalhe"><strong>Pagamento:</strong> ${escapeHtml(situacaoPagamento(p))}${falta > 0 ? ` — falta R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : ""}</p>`
         : "";
+      // v7.13 — "Informar pagamento": a pessoa avisa que pagou (a equipe confere no extrato e lança o valor pago). Só enquanto falta pagar.
+      const aviso = textoPagamentoInformado(p.pagamentoInformado);
+      const informar = `
+        <p class="camiseta-pedido-detalhe" data-aviso-pagamento>${aviso ? escapeHtml(aviso) : ""}</p>
+        ${falta > 0 ? `<button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-pagar-pedido="${p.id}">${aviso ? "Informar de novo" : "Informar pagamento"}</button>
+        <div class="mt-3" data-pagar-form hidden></div>` : ""}`;
       return `
         <div class="camiseta-pedido-card">
           <p class="camiseta-pedido-lote">${escapeHtml(p.lote ?? "Pedido")}${p.nome ? ` <span class="font-normal text-muted-foreground">· ${escapeHtml(p.nome)}</span>` : ""}</p>
@@ -162,6 +177,7 @@ const allPosts = visiblePosts(await getAllMensagens());
           ${ondeRetirar}
           <ul class="camiseta-pedido-itens">${p.itens.map(itemLinhaHtml).join("")}</ul>
           ${pagamento}
+          ${informar}
         </div>
       `;
     }
@@ -218,10 +234,32 @@ const allPosts = visiblePosts(await getAllMensagens());
           return;
         }
 
+        telefoneConsultado = telefone;
         resultado.innerHTML = `<div class="grid gap-4 sm:grid-cols-2">${pedidos.map(pedidoCardHtml).join("")}</div>`;
       } catch {
         resultado.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível consultar agora. Tente novamente em instantes.</p>`;
       }
+    });
+
+    // O formulário de "Informar pagamento" de cada pedido: a prova é o mesmo telefone da consulta (o servidor confere de novo).
+    resultado?.addEventListener("click", (event) => {
+      const botao = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-pagar-pedido]");
+      if (!botao) return;
+      const cartao = botao.closest<HTMLElement>(".camiseta-pedido-card");
+      const caixa = cartao?.querySelector<HTMLElement>("[data-pagar-form]");
+      if (!cartao || !caixa) return;
+      if (!caixa.hidden) {
+        caixa.hidden = true;
+        return;
+      }
+      const pedidoId = Number(botao.dataset.pagarPedido);
+      caixa.innerHTML = formularioPagamentoHtml(`pag-pedido-${pedidoId}`);
+      caixa.hidden = false;
+      ligarFormularioPagamento(caixa, informarUrl, { tipo: "pedido", telefone: telefoneConsultado, pedidoId }, (aviso) => {
+        const avisoEl = cartao.querySelector<HTMLElement>("[data-aviso-pagamento]");
+        if (avisoEl) avisoEl.textContent = textoPagamentoInformado(aviso) ?? "";
+        botao.textContent = "Informar de novo";
+      });
     });
   </script>
 

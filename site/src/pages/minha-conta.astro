@@ -1,8 +1,9 @@
 ---
 import SiteFooter from "@/components/SiteFooter.astro";
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { SOLICITAR_CODIGO_CONTA_URL, CONFIRMAR_CODIGO_CONTA_URL, CONSULTAR_MINHA_CONTA_URL } from "@/lib/directus";
+import { SOLICITAR_CODIGO_CONTA_URL, CONFIRMAR_CODIGO_CONTA_URL, CONSULTAR_MINHA_CONTA_URL, INFORMAR_PAGAMENTO_URL } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
@@ -29,6 +30,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         data-solicitar-url={SOLICITAR_CODIGO_CONTA_URL}
         data-confirmar-url={CONFIRMAR_CODIGO_CONTA_URL}
         data-consultar-url={CONSULTAR_MINHA_CONTA_URL}
+        data-informar-url={INFORMAR_PAGAMENTO_URL}
       >
         <form class="mt-8 grid gap-4 max-w-sm" data-form-email>
           <div class="grid gap-2">
@@ -58,6 +60,7 @@ const allPosts = visiblePosts(await getAllMensagens());
             </p>
             <button type="button" class="btn btn-outline" data-btn-sair>Sair</button>
           </div>
+          <AvisoGolpe class="mt-6" />
           <div class="mt-6" data-conta-conteudo></div>
         </div>
       </div>
@@ -67,8 +70,14 @@ const allPosts = visiblePosts(await getAllMensagens());
 
   <script>
     import { contaSalvar, contaToken, contaEmail, contaSair } from "@/lib/contaAuth";
+    import { formularioPagamentoHtml, formatarReais, ligarFormularioPagamento, textoPagamentoInformado, type PagamentoInformado } from "@/lib/informarPagamento";
 
     interface Inscricao {
+      id: number;
+      faixa: string | null;
+      valor: number | null;
+      cortesia: boolean;
+      pagamentoInformado: PagamentoInformado | null;
       eventoTitulo: string | null;
       eventoSlug: string | null;
       eventoData: string | null;
@@ -88,6 +97,10 @@ const allPosts = visiblePosts(await getAllMensagens());
     }
 
     interface Pedido {
+      id: number;
+      avulso: boolean;
+      valorTotal: number;
+      pagamentoInformado: PagamentoInformado | null;
       grupo: string | null;
       valorPago: number;
       separado: boolean;
@@ -100,6 +113,8 @@ const allPosts = visiblePosts(await getAllMensagens());
     const solicitarUrl = wrap.dataset.solicitarUrl ?? "";
     const confirmarUrl = wrap.dataset.confirmarUrl ?? "";
     const consultarUrl = wrap.dataset.consultarUrl ?? "";
+    const informarUrl = wrap.dataset.informarUrl ?? "";
+    let tokenAtual = "";
 
     const formEmail = wrap.querySelector<HTMLFormElement>("[data-form-email]")!;
     const avisoEmail = wrap.querySelector<HTMLElement>("[data-form-email-aviso]")!;
@@ -119,7 +134,21 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (i.pendenteAprovacao) return "Aguardando aprovação da equipe";
       if (i.aguardandoVaga) return "Lista de espera";
       if (i.presente) return "Presença confirmada no evento";
-      return i.pago ? "Confirmada" : "Confirmada — pagamento pendente";
+      if (i.cortesia) return "Confirmada — cortesia";
+      if (i.pago) return "Confirmada";
+      return i.pagamentoInformado ? "Confirmada — pagamento informado, a equipe vai conferir" : "Confirmada — pagamento pendente";
+    }
+
+    // v7.13 — "Informar pagamento": só onde ainda há o que pagar (inscrição com valor, com vaga, não paga e não cortesia; pedido que ainda deve).
+    const podeInformarInscricao = (i: Inscricao) => !i.pago && !i.cortesia && !i.aguardandoVaga && !i.pendenteAprovacao && Number(i.valor) > 0;
+    const podeInformarPedido = (p: Pedido) => !p.avulso && Number(p.valorTotal) > Number(p.valorPago ?? 0);
+
+    function blocoPagamentoHtml(tipo: "inscricao" | "pedido", id: number, aviso: PagamentoInformado | null, pode: boolean): string {
+      const texto = textoPagamentoInformado(aviso);
+      return `
+        <p class="minha-conta-card-detalhe" data-aviso-pagamento>${texto ? escapeHtml(texto) : ""}</p>
+        ${pode ? `<button type="button" class="link-sweep text-sm font-semibold text-accent mt-2" data-pagar="${tipo}" data-pagar-id="${id}">${texto ? "Informar de novo" : "Informar pagamento"}</button>
+        <div class="mt-3" data-pagar-form hidden></div>` : ""}`;
     }
 
     function inscricaoCardHtml(i: Inscricao): string {
@@ -132,6 +161,8 @@ const allPosts = visiblePosts(await getAllMensagens());
           <p class="minha-conta-card-titulo">${titulo}</p>
           ${data ? `<p class="minha-conta-card-detalhe">${escapeHtml(data)}</p>` : ""}
           <p class="minha-conta-card-detalhe">Código: ${escapeHtml(i.codigo)} — ${escapeHtml(situacaoInscricao(i))}</p>
+          ${i.faixa || i.valor != null ? `<p class="minha-conta-card-detalhe">${escapeHtml([i.faixa, i.valor != null ? formatarReais(i.valor) : null].filter(Boolean).join(" · "))}</p>` : ""}
+          ${blocoPagamentoHtml("inscricao", i.id, i.pagamentoInformado, podeInformarInscricao(i))}
         </div>
       `;
     }
@@ -161,7 +192,8 @@ const allPosts = visiblePosts(await getAllMensagens());
           <p class="minha-conta-card-titulo">${escapeHtml(p.grupo ?? "Pedido de camiseta")}</p>
           ${avisoRetirada}
           <p class="minha-conta-card-detalhe">${totalPedido(p)} peça(s) — ${itensTexto || "sem itens"}</p>
-          <p class="minha-conta-card-detalhe">Valor pago: R$ ${Number(p.valorPago ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+          <p class="minha-conta-card-detalhe">Valor pago: R$ ${Number(p.valorPago ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${p.valorTotal ? ` de ${formatarReais(p.valorTotal)}` : ""}</p>
+          ${blocoPagamentoHtml("pedido", p.id, p.pagamentoInformado, podeInformarPedido(p))}
         </div>
       `;
     }
@@ -171,6 +203,7 @@ const allPosts = visiblePosts(await getAllMensagens());
       formCodigo.hidden = true;
       blocoLogado.hidden = false;
       emailLogadoSpan.textContent = email;
+      tokenAtual = token;
       conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Carregando…</p>`;
 
       try {
@@ -194,13 +227,36 @@ const allPosts = visiblePosts(await getAllMensagens());
         }
 
         conteudo.innerHTML = `
-          ${inscricoes.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Inscrições em eventos</h2><div class="grid gap-3 sm:grid-cols-2 mb-8">${inscricoes.map(inscricaoCardHtml).join("")}</div>` : ""}
+          ${inscricoes.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Meus eventos</h2><div class="grid gap-3 sm:grid-cols-2 mb-8">${inscricoes.map(inscricaoCardHtml).join("")}</div>` : ""}
           ${pedidos.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Pedidos de camiseta</h2><div class="grid gap-3 sm:grid-cols-2">${pedidos.map(pedidoCardHtml).join("")}</div>` : ""}
         `;
       } catch {
         conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível carregar agora. Tente novamente em instantes.</p>`;
       }
     }
+
+    // "Informar pagamento" em cada cartão: abre o formulário ali mesmo; a prova é o token da conta (o servidor confere o e-mail do registro).
+    conteudo.addEventListener("click", (event) => {
+      const botao = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-pagar]");
+      if (!botao) return;
+      const cartao = botao.closest<HTMLElement>(".minha-conta-card");
+      const caixa = cartao?.querySelector<HTMLElement>("[data-pagar-form]");
+      if (!cartao || !caixa) return;
+      if (!caixa.hidden) {
+        caixa.hidden = true;
+        return;
+      }
+      const tipo = botao.dataset.pagar === "pedido" ? "pedido" : "inscricao";
+      const id = Number(botao.dataset.pagarId);
+      caixa.innerHTML = formularioPagamentoHtml(`pag-${tipo}-${id}`);
+      caixa.hidden = false;
+      const corpo = tipo === "pedido" ? { tipo, token: tokenAtual, pedidoId: id } : { tipo, token: tokenAtual, inscricaoId: id };
+      ligarFormularioPagamento(caixa, informarUrl, corpo, (aviso) => {
+        const avisoEl = cartao.querySelector<HTMLElement>("[data-aviso-pagamento]");
+        if (avisoEl) avisoEl.textContent = textoPagamentoInformado(aviso) ?? "";
+        botao.textContent = "Informar de novo";
+      });
+    });
 
     formEmail.addEventListener("submit", async (event) => {
       event.preventDefault();

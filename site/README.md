@@ -92,6 +92,7 @@ quem não deveria vê-lo.
 | Coleção | Guarda | Como é protegida |
 | --- | --- | --- |
 | `inscricoes_eventos` | Nome, telefone (hash), código, presença, pagamento | Leitura pública mínima (`id`/`evento`/`aguardando_vaga`/`presente`, só para contadores); só eventos dos últimos 90 dias; nome/código exigem check-in autenticado ou a Function `VerificarInscricao/index.js` (código **e** telefone) |
+| `evento_entradas` | Entrada do credenciamento (inscrição, local, hora; quem fez o check-in em `user_created`) — v7.13 | Sem leitura/escrita pública; a equipe que já altera inscrições cria e lê com o próprio token |
 | `respostas_inscricao` | Resposta a pergunta customizada de um evento | Só cria publicamente |
 | `cupons_desconto` | Código de desconto, limite de usos | Leitura pública por código; atualização pública só do contador de usos |
 | `camiseta_grupos` | Campanha de camiseta/uniforme (nome, valor, prazo) | Leitura pública |
@@ -124,7 +125,7 @@ fixos (nome, endereço, horários, CNPJ, redes sociais) em
 
 **Eventos**: `/eventos/` (agenda + mapa do mês), `/eventos/exportar/` (PDF), `/evento/<slug>/`
 (inscrição), `/cancelar-inscricao/<slug>/`, `/certificado/<slug>/`, `/checkin/<slug>/` (equipe,
-autenticado), `/cracha/<slug>/`, `/pesquisa/<slug>/`, `/qrcode/<slug>/`,
+autenticado), `/cracha/<slug>/`, `/informar-pagamento/<slug>/`, `/pesquisa/<slug>/`, `/qrcode/<slug>/`,
 `/verificar-certificado/<slug>/`.
 
 **Camisetas e uniformes**: `/camisetas/`, `/camiseta/<slug>/`, `/meus-pedidos-camiseta/`,
@@ -380,6 +381,30 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `vagas-evento-unidade.cjs` (sem rede; inclui o teste do teste: sem a chave única, ou contando antes de ler a senha, a corrida estoura),
   `inscricao-carga.cjs` (Directus real local, 1 a 8 instâncias em processos separados; 120 inscrições para 40 vagas, com cupom e com grupos: sempre
   exato) e `inscricao-vagas.cjs` (HTTP, roda no CI).
+- **Eventos, inscrições e congressos (v7.13, 22/10/2026)** — decisões em `docs/plano/fase-7-saude-eventos-e-comunicacao.md`
+  (tudo no site; pagamento continua manual, sem pagamento online). **Lotes:** cada faixa de valor pode ter `ate` (último dia,
+  Brasília) e `vagas`; a inscrição guarda o lote em `faixa_rotulo`. Lote vencido/esgotado some da página (`/api/status-inscricao`
+  devolve `lotes`) e a API recusa (409 "escolha o lote seguinte"); o esgotado é contado **dentro da mesma trava** do livro
+  `evento_controle` (a contagem do lote é lida depois da última senha, em `api/src/lib/vagasEvento.js`; regra em `api/src/lib/lotes.js`).
+  Conta para o lote toda inscrição com o rótulo (inclusive lista de espera); o limite geral do evento continua só mandando para a lista
+  de espera. Não mude o nome de um lote que já tem inscritos (a contagem é pelo nome). **Informar o pagamento** (rota
+  `informar-pagamento`, 20/IP em 5 min): a pessoa diz data, meio, valor e nome de quem pagou em `/informar-pagamento/<slug>/`
+  (código + telefone), na Minha Conta ("Meus eventos", também para camisetas) e em "Meus pedidos de camiseta" (telefone); grava só
+  `pagamento_informado_*` (informar de novo substitui), **nunca marca pago**; data não futura nem com mais de 1 ano, valor até
+  R$ 50.000, nome até 120 letras sem caractere de controle (`api/src/lib/pagamentoInformado.js`). **Confirmar com nome e hora:** no
+  painel de inscritos, pago/desmarcar, **cortesia** (motivo e quem autorizou obrigatórios; sai do "não pagos" e do "a receber") e o
+  **tipo de participante** passam pela função `PainelInscricao` (`x-painel-token`): o "quem" sai de `/users/me` com o token da pessoa,
+  a permissão de `/permissions/me`, e a gravação é com o token de administrador (`pago_conferido_*`, `cortesia_*`). Filtro "Pagamento
+  informado, a conferir"; o gestor de camisetas vê o aviso no cartão do pedido e lança o valor como sempre. **Credenciamento por
+  sala/ala:** `locais_checkin` aceita `{ nome, capacidade }` (nome sozinho continua valendo); cada check-in grava uma linha em
+  `evento_entradas` (chave única "inscrição:local:dia", a fila sem internet reenvia sem duplicar; a mesma pessoa entra em vários
+  locais); a tela mostra quantos entraram hoje em cada local e avisa ao passar da capacidade (não barra). **Relatório de ausentes**
+  (PDF, por lote ou por tipo) na lista de inscritos. **Crachá configurável** (`eventos.cracha_config`, aba Dados do evento): tipo,
+  igreja/congregação e cidade (das respostas a perguntas escolhidas) e o QR do credenciamento (`<evento>:<código>`), no `/cracha/` e
+  no lote do painel (`src/lib/cracha.ts`). **Aviso contra golpe:** um texto só (`src/lib/avisoGolpe.ts`, componente `AvisoGolpe.astro`)
+  em toda tela que fala de pagamento — "a Igreja NÃO pede pagamento ou Pix por mensagem, telefone ou e-mail". Esquema (repetível, só
+  acrescenta; **aplicar antes de publicar o código**): `site/scripts/directus-eventos-v713-esquema.mjs`. Provas: `lotes-unidade.cjs`,
+  `pagamento-unidade.cjs`, `credenciamento-unidade.cjs` (sem rede) e `eventos-v713.cjs` (réplica local + `swa-local.cjs`).
 - **PDF da malharia só com o resultado final (15/10/2026)** — o "Exportar PDF" do lote (o que vai para a malharia)
   trazia pedido pelo sistema, estoque extra e total: conta interna da igreja. Agora tem **duas colunas, Tamanho e
   Quantidade** (a quantidade final = pedidos + estoque extra), na ordem dos tamanhos da campanha, sem linha de

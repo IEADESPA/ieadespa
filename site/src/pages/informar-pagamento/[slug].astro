@@ -1,0 +1,159 @@
+---
+import SiteFooter from "@/components/SiteFooter.astro";
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { INFORMAR_PAGAMENTO_URL, VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+/*
+ * v7.13 — "Informar o pagamento" de uma inscrição, com o código + o telefone da inscrição (a mesma prova do QR Code, do crachá e do
+ * certificado). A pessoa diz a data, o meio, o valor e o nome de quem pagou; a equipe confere no extrato e confirma no painel. Nunca
+ * marca como pago. Quem tem Minha Conta faz o mesmo em "Meus eventos".
+ */
+interface Evento {
+  id: number;
+  slug: string;
+  title: string;
+  aceita_inscricao: boolean;
+}
+
+export async function getStaticPaths() {
+  const events = await fetchItems<Evento>("eventos", "filter[aceita_inscricao][_eq]=true");
+  // slug é opcional no Directus — sem essa checagem, evento sem slug quebraria o build.
+  return events.filter((event) => event.slug).map((event) => ({ params: { slug: event.slug }, props: { event } }));
+}
+
+interface Props {
+  event: Evento;
+}
+
+const { event } = Astro.props;
+const allPosts = visiblePosts(await getAllMensagens());
+---
+
+<BaseLayout title={`Informar pagamento — ${event.title}`} description="Avise a equipe que você pagou a inscrição." noindex>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas pagamento-canvas" data-pagamento-raiz data-evento-id={event.id} data-verificar-url={VERIFICAR_INSCRICAO_URL} data-informar-url={INFORMAR_PAGAMENTO_URL}>
+      <header class="pagehead">
+        <p class="eyebrow">Informar pagamento</p>
+        <h1 class="pagehead-title">{event.title}</h1>
+        <p class="pagehead-description">
+          Pagou a inscrição por Pix, transferência ou em dinheiro? Avise aqui: a equipe confere no extrato e confirma. Não precisa
+          mandar comprovante.
+        </p>
+      </header>
+
+      <AvisoGolpe class="mt-6" />
+
+      <form class="mt-8 grid gap-4 max-w-sm" data-pagamento-busca>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="pagamento-codigo">Código da inscrição</label>
+          <input id="pagamento-codigo" type="text" autocomplete="off" autocapitalize="characters" maxlength="6" class="field pagamento-codigo-input" placeholder="A3F9K2" />
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="pagamento-telefone">Telefone usado na inscrição</label>
+          <input id="pagamento-telefone" type="tel" autocomplete="tel" class="field" placeholder="(00) 00000-0000" />
+          <p class="text-xs text-muted-foreground">Confere que a inscrição é mesmo sua.</p>
+        </div>
+        <button type="submit" class="btn btn-solid">Buscar minha inscrição</button>
+        <p class="text-sm" role="status" aria-live="polite" data-pagamento-resultado></p>
+      </form>
+
+      <section class="mt-8 max-w-md pagamento-cartao" data-pagamento-cartao hidden aria-live="polite">
+        <p class="font-semibold" data-pagamento-nome></p>
+        <p class="text-sm text-muted-foreground" data-pagamento-situacao></p>
+        <p class="mt-2 text-sm" data-pagamento-aviso></p>
+        <div class="mt-4" data-pagamento-form></div>
+      </section>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script>
+    import { formularioPagamentoHtml, formatarReais, ligarFormularioPagamento, textoPagamentoInformado, type PagamentoInformado } from "@/lib/informarPagamento";
+
+    const raiz = document.querySelector<HTMLElement>("[data-pagamento-raiz]");
+    if (!raiz) throw new Error("página sem raiz");
+    const eventoId = Number(raiz.dataset.eventoId);
+    const verificarUrl = raiz.dataset.verificarUrl ?? "";
+    const informarUrl = raiz.dataset.informarUrl ?? "";
+    const busca = raiz.querySelector<HTMLFormElement>("[data-pagamento-busca]")!;
+    const resultado = raiz.querySelector<HTMLElement>("[data-pagamento-resultado]")!;
+    const cartao = raiz.querySelector<HTMLElement>("[data-pagamento-cartao]")!;
+    const nomeEl = raiz.querySelector<HTMLElement>("[data-pagamento-nome]")!;
+    const situacaoEl = raiz.querySelector<HTMLElement>("[data-pagamento-situacao]")!;
+    const avisoEl = raiz.querySelector<HTMLElement>("[data-pagamento-aviso]")!;
+    const formEl = raiz.querySelector<HTMLElement>("[data-pagamento-form]")!;
+
+    function mostrarAviso(aviso: PagamentoInformado | null) {
+      avisoEl.textContent = textoPagamentoInformado(aviso) ?? "";
+    }
+
+    busca.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const codigo = (document.getElementById("pagamento-codigo") as HTMLInputElement).value.trim().toUpperCase();
+      const telefone = (document.getElementById("pagamento-telefone") as HTMLInputElement).value.trim();
+      cartao.hidden = true;
+      if (!codigo || !telefone) {
+        resultado.textContent = "Digite o código e o telefone usados na inscrição.";
+        return;
+      }
+      resultado.textContent = "Verificando…";
+      try {
+        const res = await fetch(verificarUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }) });
+        if (res.status === 429) {
+          resultado.textContent = "Muitas tentativas. Aguarde alguns minutos.";
+          return;
+        }
+        const p = await res.json();
+        if (!p?.encontrado) {
+          resultado.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+          return;
+        }
+        resultado.textContent = "";
+        cartao.hidden = false;
+        nomeEl.textContent = p.nome;
+        const valor = p.valor != null ? ` · ${formatarReais(p.valor)}` : "";
+        const lote = p.faixa ? ` · ${p.faixa}` : "";
+        formEl.innerHTML = "";
+        mostrarAviso(p.pagamentoInformado ?? null);
+        if (p.cortesia) {
+          situacaoEl.textContent = `Inscrição de cortesia${lote}: não há pagamento a informar.`;
+          return;
+        }
+        if (p.pago) {
+          situacaoEl.textContent = `✅ Pagamento confirmado pela equipe${lote}${valor}.`;
+          return;
+        }
+        situacaoEl.textContent = `Pagamento ainda não confirmado${lote}${valor}.`;
+        formEl.innerHTML = formularioPagamentoHtml("pag", { valor: p.pagamentoInformado?.valor ?? p.valor, nome: p.pagamentoInformado?.nome ?? p.nome });
+        ligarFormularioPagamento(formEl, informarUrl, { tipo: "inscricao", evento: eventoId, codigo, telefone }, mostrarAviso);
+      } catch {
+        resultado.textContent = "Não foi possível buscar agora. Tente de novo em instantes.";
+      }
+    });
+  </script>
+
+  <style>
+    .pagamento-canvas {
+      max-width: 40rem;
+    }
+
+    .pagamento-codigo-input {
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-size: 1.5rem;
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+
+    .pagamento-cartao {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem 1.5rem;
+      background: var(--muted);
+    }
+  </style>
+</BaseLayout>

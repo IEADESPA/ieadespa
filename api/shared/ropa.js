@@ -57,7 +57,16 @@ const REGISTROS_TRATAMENTO = [
     categoriasDados: ["E-mail, inscrição push"],
     baseLegal: "LGPD Art. 11, II, \"a\" — comunicação inerente ao exercício da função/vínculo, com opt-out por categoria (NotificacaoPreferencias, vB.2)",
     tabelasEnvolvidas: ["Notificacoes", "PushInscricoesMembro"],
-    retencao: "Notificação: indeterminada enquanto não arquivada. Inscrição push: até o dispositivo revogar/desinstalar."
+    retencao: "Notificação: indeterminada enquanto não arquivada. Inscrição push: até o dispositivo revogar/desinstalar. A exclusão LGPD apaga as preferências de aviso e os aparelhos inscritos (v7.12)."
+  },
+  {
+    chave: "COMUNICACAO_MEMBROS",
+    finalidade: "Comunicados da Igreja aos membros por grupo (convocação oficial, eventos, devocional, financeiro): modelos aprovados, grupo calculado pelos critérios (território, cargo, departamento, liderança, EBD, formação, voluntariado, direito a voto) e registro de entrega e leitura — v7.12. Sem WhatsApp e sem SMS; nenhum grupo pelo dízimo.",
+    titulares: "Membros ativos e adultos dos grupos escolhidos pela liderança",
+    categoriasDados: ["Consentimento por canal (e-mail, celular) e categoria: sim/não, origem (Meu Painel, ficha em papel, link de saída), versão e impressão digital do texto aceito, data da ficha, endereço de quem marcou", "E-mail e aparelho inscrito (já do cadastro)", "Registro de entrega por pessoa e canal (aceito, falhou, sem consentimento, sem contato, sem aparelho, cancelado), leitura no sininho e ciência da convocação", "Na convocação: nome, congregação e telefone de quem não foi alcançado (só o nível geral vê o telefone)"],
+    baseLegal: "LGPD Art. 7º, I e 8º — consentimento por canal e categoria para eventos, devocional e financeiro (pedido, não presumido; a saída é um toque no link do e-mail ou em Meu Painel); Art. 7º, II e IX, e 11, II, a — a convocação oficial é obrigação estatutária de comunicação e vai por todo canal que a pessoa tiver, sem link de saída. A convocação só sai pelo nível geral; cada um envia só ao próprio território.",
+    tabelasEnvolvidas: ["ComunicacaoConsentimentos", "ComunicacaoModelos", "ComunicacaoAudiencias", "ComunicacaoEnvios", "ComunicacaoEntregas", "Notificacoes"],
+    retencao: "O registro de entrega perde o nome em 1 ano (PoliticasRetencao 'Comunicação — registro de entrega'), ou em 5 na convocação oficial (prova do ato); a contagem do envio fica. O histórico de consentimento fica enquanto a pessoa estiver no cadastro e sai na exclusão LGPD. Consentimento e entrega não se alteram (gatilhos no banco). A pessoa vê em Meus Dados o histórico do consentimento e quantos comunicados recebeu."
   },
   {
     chave: "VINCULO_FAMILIAR_MENOR",

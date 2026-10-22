@@ -44,11 +44,14 @@ Cada versão parte da base da anterior (`BASE=...`):
   `e2e-19` (fluxos), `e2e-20` (segurança), `e2e-21` (corridas com vários processos) e `e2e-22` (a revisão adversarial do servidor: encerrar a sala, autorizados × responsável
   revogado, portão da EBD, retenção, avisos que não falham em silêncio, cache dos prazos). **Cada um parte da base sozinho** (não rode dois no mesmo banco).
 
-- **v7.11** (cuidado pastoral), base `cenario-pastoral` (`bash rodar.sh preparar-pastoral` a refaz a partir da `cenario-protecao`, aplicando a 148 e a 149 duas vezes): `e2e-23` (migração 148:
+- **v7.11** (cuidado pastoral), base `cenario-pastoral` (`bash rodar.sh preparar-pastoral` a refaz a partir da `cenario-protecao`, aplicando a 148, a 149 e a 150 duas vezes): `e2e-23` (migração 148:
   esquema, CHECK, gatilhos, a marca de purga das notas, permissão, papel, prazos, avisos, retenção; e o cenário com a Região, o Superintendente e 30 domingos de EBD), `e2e-24` (fluxos:
   detecção, território, pessoa acompanhada, responsável por PIN, notas e leituras, pedidos, risco, escada, regra dos 30 dias, retenção, LGPD), `e2e-25` (segurança), `e2e-26` (corridas) e `e2e-27` (o que a revisão adversarial
   independente pediu: mudança de congregação, licença, Extensão, urgente, liderança citada, socorro que não se perde, fila com 410 itens, sonda do cadastro, anonimização) e `e2e-28` (v7.11.1, o mural de oração do site: esquema da 149, rota que falha
-  fechada, o comum que não grava, o confidencial e o com risco guardados só no nível geral, aviso na hora sem o texto, quem vê, marcação à mão que não cala outro aviso, rotina e retenção).
+  fechada, o comum que não grava, o confidencial e o com risco guardados só no nível geral, aviso na hora sem o texto, quem vê, marcação à mão que não cala outro aviso, rotina e retenção),
+  `e2e-29` (v7.12, comunicação: esquema da 150, consentimento com a impressão digital do texto, ficha em papel, modelos, grupo vivo cortado pelo território, envio com a fila e as
+  cotas, 429, consentimento retirado no meio, cancelamento, convocação com ciência e "não alcançados", link de saída sem login, retenção e exclusão LGPD) e `e2e-30` (corridas: seis
+  rodadas da fila juntas sem e-mail repetido e dentro do teto da hora, o mesmo envio em quatro processos, quatro mudanças de consentimento da mesma pessoa).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

@@ -152,6 +152,7 @@
             <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone">✉️</span><span class="rotulo">Comunicações</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -382,6 +383,7 @@
           <div class="grupo-modulo" id="grupoModuloCanais" style="display:none;">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaCanais" data-on-click="mostrarAbaSecretaria" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais e Comunicação</span></button>
+            <button class="btn-aba" id="btnAbaComunicacao" data-on-click="mostrarAbaSecretaria" data-args-click='["comunicacao"]'><span class="icone">✉️</span><span class="rotulo">Comunicados</span></button>
           </div>
 
           <!-- MÓDULO: EVENTOS E CONGRESSOS (v7.4) — dossiê de governança do evento do
@@ -1024,6 +1026,21 @@
             <div id="chkFilhosLista"></div>
           </div>
           <div id="chkSalaMeu"></div>
+        </div>
+
+        <!-- SUB-ABA: COMUNICAÇÕES (v7.12). Aberta a qualquer login (inclusive PIN): o que a pessoa quer receber, por categoria (eventos, devocional, financeiro) e por canal (e-mail,
+             celular), lendo o texto exato de cada autorização; a convocação oficial chega sempre. E os comunicados recebidos, com "Recebi a convocação". Montada por comunicacao.js. -->
+        <div id="subMeupainelComunicacoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>✉️ Comunicações</h3>
+          <p class="subtitle">Escolha o que você quer receber da Igreja por <strong>e-mail</strong> e no <strong>celular</strong>. Nada chega fora do sistema sem você marcar, menos a
+            <strong>convocação oficial</strong> (assembleias), que é obrigação do Estatuto. Todo comunicado aparece também no sininho.
+            <em>Exemplo: o irmão João quer saber dos eventos por e-mail, mas não quer o devocional: ele marca "Eventos → E-mail" e deixa o resto em branco.</em></p>
+          <p id="comMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" data-on-click="comCarregarMeuPainelAcao">🔄 Atualizar</button></div>
+          <h4>O que você quer receber</h4>
+          <div id="comMeuPrefs"></div>
+          <h4>Comunicados recebidos</h4>
+          <div id="comMeuComunicados"></div>
         </div>
 
         <!-- SUB-ABA: CUIDADO (v7.11 — Cuidado pastoral). Aberta a qualquer login (inclusive PIN): "Meus acompanhamentos" (só para quem foi nomeado responsável: contato, motivo,
@@ -4923,6 +4940,48 @@
         </div>
       </div>
 
+      <!-- ABA: COMUNICADOS (v7.12 — consentimento por canal e categoria, modelos aprovados, envio por grupo, registro de entrega). Permissão "comunicacao" (sessão de liderança; cada
+           um no seu território). Enviar (modelo + grupo + quantas pessoas), Envios (relatório; na convocação, quem não foi alcançado), Modelos (só o nível geral) e Ficha em papel.
+           Toda regra mora no servidor (shared/comunicacao.js); a tela é montada por comunicacao.js. -->
+      <div id="abaComunicacao" class="aba-secretaria" style="display:none;">
+        <h3>✉️ Comunicados</h3>
+        <p class="subtitle">Mande um comunicado a um <strong>grupo</strong> (por território, cargo, departamento, EBD, formação, voluntariado ou direito a voto). O sistema calcula o grupo
+          na hora e respeita o que cada pessoa autorizou: o e-mail e o celular só chegam a quem marcou aquela categoria; a <strong>convocação oficial</strong> chega a todos.
+          <em>Exemplo: o Dirigente escolhe o modelo "Congresso de jovens", marca "Professores de EBD", vê que são 18 pessoas (12 por e-mail) e envia.</em></p>
+        <div class="cal-pilulas" id="comPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnComSecaoEnviar" aria-pressed="true" data-on-click="comMostrarSecaoAcao" data-args-click='["enviar"]'>📤 Enviar</button>
+          <button type="button" class="cal-pilula" id="btnComSecaoEnvios" aria-pressed="false" data-on-click="comMostrarSecaoAcao" data-args-click='["envios"]'>📊 Envios</button>
+          <button type="button" class="cal-pilula" id="btnComSecaoModelos" aria-pressed="false" style="display:none;" data-on-click="comMostrarSecaoAcao" data-args-click='["modelos"]'>📝 Modelos</button>
+          <button type="button" class="cal-pilula" id="btnComSecaoFicha" aria-pressed="false" data-on-click="comMostrarSecaoAcao" data-args-click='["ficha"]'>📄 Ficha em papel</button>
+        </div>
+        <p id="comGesMsg" class="subtitle" role="status" aria-live="polite"></p>
+        <p id="comSemAcesso" class="subtitle psc-aviso" style="display:none;">Esta aba é da liderança que envia comunicados (permissão "comunicacao", em sessão de liderança).</p>
+        <div id="comConteudo">
+          <div id="comSecaoEnviar">
+            <p id="comEnvMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="comEnvForm"></div>
+            <div id="comEnvPrevia"></div>
+            <div id="comEnvResultado"></div>
+          </div>
+          <div id="comSecaoEnvios" style="display:none;">
+            <p id="comEnviosMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" data-on-click="comCarregarEnviosAcao">🔄 Atualizar</button></div>
+            <div id="comEnviosLista"></div>
+            <div id="comRelatorio"></div>
+          </div>
+          <div id="comSecaoModelos" style="display:none;">
+            <p id="comModelosMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="comModeloForm"></div>
+            <div id="comModelosLista"></div>
+          </div>
+          <div id="comSecaoFicha" style="display:none;">
+            <p class="subtitle">Para quem autorizou (ou recusou) numa <strong>ficha em papel</strong>, com o texto impresso da autorização. Guarde a ficha: ela é a prova.</p>
+            <p id="comFichaMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="comFichaForm"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ABA: CANAIS E COMUNICAÇÃO (v7.3). Exige "canais_gestao" (Secretaria
            Geral/Comunicação): registra e mantém a relação de Canais Oficiais,
            designa administradores, custodia as senhas, confere a conformidade,
@@ -6664,6 +6723,7 @@
   <script src="modulos/canais.js"></script>
   <script src="modulos/catalogos-estrutura.js"></script>
   <script src="modulos/checkin-infantil.js"></script>
+  <script src="modulos/comunicacao.js"></script>
   <script src="modulos/consagracoes.js"></script>
   <script src="modulos/cuidado-pastoral.js"></script>
   <script src="modulos/disciplina.js"></script>

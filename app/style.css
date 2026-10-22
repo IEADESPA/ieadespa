@@ -1135,3 +1135,19 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
     body.cpa-imprimindo #cpaBolImprimivel { position: static; width: auto; }
   }
 }
+
+/* v7.12 — Comunicação (módulo comunicacao.js: Meu Painel → Comunicações e a aba Comunicados) e a página do link de saída (sair.html). Prefixo .com-/.sair-; só variáveis do tema.
+   No celular tudo empilha; todo alvo de toque tem pelo menos 44 px. */
+.com-cat { border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+.com-cat legend { font-weight: 600; padding: 0 6px; }
+.com-texto { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; }
+.com-canais { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
+.com-canal { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; width: auto; margin: 0; }
+.com-canal input { width: 22px; height: 22px; margin: 0; }
+.com-obrigatoria { font-weight: 600; }
+.com-autorizacao summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.com-comunicado { border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 12px; margin: 0 0 12px; overflow-wrap: anywhere; }
+.com-comunicado h4 { margin: 0 0 4px; }
+.pagina-sair { display: flex; justify-content: center; padding: 16px; }
+.sair-caixa { max-width: 560px; width: 100%; }
+.sair-caixa h1 { font-size: 1.4rem; }

@@ -34,11 +34,12 @@ const PUBLICAS = {
   GestaoDocumentos: "GET sem login devolve só os documentos marcados como PÚBLICOS (documentosVisibilidade.test.js); registrar, mudar e apagar exigem sessão",
   GestaoTextoMestre: "GET sem login devolve só a versão vigente do texto mestre (normativo público)",
   CuidadoPastoralSite: "v7.11.1: o mural de oração do site, servidor a servidor; FALHA FECHADA sem a chave combinada CHAVE_SITE_SISTEMA (401), limitador por origem e teto por hora no banco; só guarda o confidencial e o com sinal de risco e devolve só sim/não",
+  ComunicacaoSair: "v7.12: o link \"não quero mais receber\" do e-mail de comunicado, sem login por desenho (a saída tem de ser fácil, LGPD art. 8º, § 5º): o link assinado (HMAC, por pessoa e categoria) é a prova; GET só lê, POST grava o não; limitador por origem",
   ProtecaoAjuda: "v7.8: canal de ajuda da criança e do adolescente — SEM login por desenho (a criança pode não ter conta); só grava um pedido de ajuda, sem perguntas, sem IP guardado; limitador por origem (5/hora) e teto global (40/hora) no banco",
   Saude: "vD.5: 'está no ar?' para o teste de disponibilidade (GitHub Actions a cada 5 min); não toca no banco e só devolve ok + hora"
 };
 // Rotinas agendadas: protegidas por segredo (x-cron-secret), não por sessão.
-const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes", "ProtecaoVerificador"]);
+const ROTINAS = new Set(["NotificacoesAgendador", "EbdFechamentoAutomatico", "FluxosEscalonador", "AvaliarNotificacoes", "ProtecaoVerificador", "ComunicacaoFila"]);
 
 function rotas() {
   const saida = [];

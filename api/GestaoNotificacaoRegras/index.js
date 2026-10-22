@@ -41,7 +41,7 @@ module.exports = async function (context, req) {
     const antes = existente.recordset[0];
     // Os avisos que protegem criança (proteção e ministério com menores) são OBRIGATÓRIOS: nem o destinatário nem quem administra o sistema os desliga (seria o aviso de prazo de 24 horas calado).
     // (v7.11) O aviso de SINAL DE RISCO do cuidado pastoral (autolesão, violência) também: calado, um pedido de socorro esperaria a moderação comum.
-    if (antes.Obrigatoria && ["PROTECAO", "MENORES", "CUIDADO"].includes(antes.Categoria) && (ativa === false || canalEmail === false)) {
+    if (antes.Obrigatoria && ["PROTECAO", "MENORES", "CUIDADO", "COMUNICACAO"].includes(antes.Categoria) && (ativa === false || canalEmail === false)) {
       context.res = { status: 422, body: { sucesso: false, mensagem: antes.Categoria === "CUIDADO"
         ? "Este aviso é o do sinal de risco (autolesão ou violência): não pode ser desligado (nem o e-mail). Só o texto do título pode ser ajustado."
         : "Este aviso protege crianças e adolescentes: não pode ser desligado (nem o e-mail). Só o texto do título pode ser ajustado." } };

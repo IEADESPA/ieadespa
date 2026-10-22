@@ -45,4 +45,24 @@ async function enviarEmailNotificacao({ email, titulo, mensagem, aguardarEntrega
   }
 }
 
-module.exports = { enviarEmailNotificacao };
+// v7.12 — o e-mail de um comunicado (texto e HTML já montados por shared/comunicacao.js). Responde o que aconteceu, para o registro de entrega:
+// { ok:true } aceito pelo serviço · { limite:true } o serviço recusou por excesso (429: nada saiu; a fila tenta na rodada seguinte) · { ok:false } falhou.
+async function enviarEmailComunicado({ email, assunto, texto, html }) {
+  const emailClient = getClient();
+  if (!emailClient || !email) return { ok: false };
+  try {
+    await emailClient.beginSend({
+      senderAddress: REMETENTE,
+      content: { subject: assunto, plainText: texto, html },
+      recipients: { to: [{ address: email }] }
+    });
+    return { ok: true };
+  } catch (e) {
+    const status = e && (e.statusCode || (e.response && e.response.status));
+    if (status === 429 || /too ?many|429/i.test(String(e && (e.code || e.message)))) return { limite: true };
+    console.error("[COMUNICACAO] falha ao enviar e-mail:", e && e.message);
+    return { ok: false };
+  }
+}
+
+module.exports = { enviarEmailNotificacao, enviarEmailComunicado };

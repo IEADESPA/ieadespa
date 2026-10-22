@@ -3,7 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { DIRECTUS_URL, ORAR_MURAL_URL } from "@/lib/directus";
+import { DIRECTUS_URL, ENVIAR_PEDIDO_MURAL_URL, ORAR_MURAL_URL } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
@@ -74,6 +74,14 @@ const allPosts = visiblePosts(await getAllMensagens());
 
         <button type="submit" class="btn btn-solid">Enviar pedido</button>
         <p class="text-sm" data-mural-status role="status" aria-live="polite"></p>
+        <div class="mural-ajuda" data-mural-ajuda tabindex="-1" role="alert" hidden>
+          <p><strong>Ninguém precisa passar por isso sem ajuda.</strong> Se você corre perigo agora, ligue <a href="tel:190">190</a> (Polícia).</p>
+          <p>Para conversar com alguém agora, a qualquer hora e de graça: <a href="tel:188">CVV — 188</a> (ou cvv.org.br).</p>
+        </div>
+        <p class="text-xs leading-relaxed text-muted-foreground">
+          Precisa de ajuda agora? Em perigo, ligue <a href="tel:190" class="underline underline-offset-2">190</a>. Para conversar com
+          alguém, a qualquer hora e de graça: CVV, <a href="tel:188" class="underline underline-offset-2">188</a>.
+        </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
           Não serão publicados: mensagens ofensivas, discurso de ódio, conteúdo político-partidário,
           propaganda comercial, spam, ou dados sensíveis de terceiros (endereço, telefone, valores).
@@ -94,10 +102,11 @@ const allPosts = visiblePosts(await getAllMensagens());
   </main>
   <SiteFooter />
 
-  <script is:inline define:vars={{ directusUrl: DIRECTUS_URL, orarMuralUrl: ORAR_MURAL_URL }}>
+  <script is:inline define:vars={{ directusUrl: DIRECTUS_URL, orarMuralUrl: ORAR_MURAL_URL, enviarPedidoUrl: ENVIAR_PEDIDO_MURAL_URL }}>
     (() => {
       const form = document.querySelector("[data-mural-form]");
       const status = document.querySelector("[data-mural-status]");
+      const ajuda = document.querySelector("[data-mural-ajuda]");
       const lista = document.querySelector("[data-mural-lista]");
       const vazio = document.querySelector("[data-mural-vazio]");
       const carregarMaisBtn = document.querySelector("[data-mural-carregar-mais]");
@@ -222,20 +231,31 @@ const allPosts = visiblePosts(await getAllMensagens());
           return;
         }
 
+        // v7.11.1: o envio passa pela Function do site (enviar-pedido-mural), que avisa o cuidado
+        // pastoral do sistema; com sinal de risco, o pedido nunca é publicado e a ajuda aparece aqui.
         status.textContent = "Enviando…";
+        ajuda.hidden = true;
         try {
-          const res = await fetch(`${directusUrl}/items/mural_oracao`, {
+          const res = await fetch(enviarPedidoUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ texto, nome: nome || null, confidencial, consentimento_lgpd: consentimentoLgpd }),
+            body: JSON.stringify({ texto, nome: nome || null, confidencial, consentimento: consentimentoLgpd }),
           });
-          if (!res.ok) throw new Error("falha ao enviar");
+          const json = await res.json().catch(() => ({}));
+          if (json.risco) ajuda.hidden = false;
+          if (!res.ok) throw new Error(json.erro || "falha ao enviar");
           form.reset();
-          status.textContent = confidencial
-            ? "Recebido! Seu pedido confidencial vai direto pra equipe pastoral, sem ser publicado."
-            : "Recebido! Seu pedido será revisado e publicado em até 2 dias úteis.";
-        } catch {
-          status.textContent = "Não foi possível enviar agora. Tente novamente em instantes.";
+          status.textContent = json.risco
+            ? "Recebido. Seu pedido foi direto para a equipe pastoral, sem ser publicado, e alguém da igreja vai procurar ajudar."
+            : json.confidencial
+              ? "Recebido! Seu pedido confidencial vai direto pra equipe pastoral, sem ser publicado."
+              : "Recebido! Seu pedido será revisado e publicado em até 2 dias úteis.";
+          if (json.risco) ajuda.focus();
+        } catch (e) {
+          status.textContent =
+            e && e.message && e.message !== "falha ao enviar" && !/fetch|network/i.test(e.message)
+              ? e.message
+              : "Não foi possível enviar agora. Tente novamente em instantes.";
         }
       });
 
@@ -342,6 +362,31 @@ const allPosts = visiblePosts(await getAllMensagens());
     .mural-confidencial-toggle input {
       margin-top: 0.2rem;
       accent-color: var(--accent);
+    }
+
+    /* v7.11.1: aparece em destaque quando o pedido tem sinal de risco */
+    .mural-ajuda {
+      border: 2px solid var(--accent);
+      border-radius: var(--radius-sm);
+      padding: 0.9rem 1rem;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      display: grid;
+      gap: 0.4rem;
+    }
+
+    .mural-ajuda[hidden] {
+      display: none;
+    }
+
+    .mural-ajuda p {
+      margin: 0;
+    }
+
+    .mural-ajuda a {
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
     /* Escondido pra gente de verdade (some visualmente e do layout), mas

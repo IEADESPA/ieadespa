@@ -23,6 +23,7 @@ const { registrarAuditoria } = require("./auditoria");
 const cp = require("./cuidadoPastoral");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { notificarAgora, lerPrazoDias } = require("./canaisDb");
+const { resolverDestinatariosPorPermissao } = require("./notificacoes");
 const { ancestraisTerritoriais } = require("./escopo");
 const { obterTrava } = require("./financeiroSeguro");
 
@@ -800,8 +801,8 @@ const SELECT_PEDIDO = `
   SELECT p.PedidoId, p.CongregacaoId, c.Nome AS CongregacaoNome, p.SolicitanteMembroId, COALESCE(s.Nome, p.SolicitanteNome) AS SolicitanteNome, p.SolicitanteContato,
          s.Status AS SolicitanteStatus, s.CongregacaoId AS SolicitanteCongregacaoId, rg.Nome AS RegistradoPorNome, p.RegistradoPorMembroId, p.ParaQuem, p.Categoria, p.Texto,
          p.PodeBoletim, p.QuerContato, p.Moderacao, p.TextoBoletim, p.BoletimAte, p.ModeradoEm, md.Nome AS ModeradoPorNome, p.Risco, p.RiscoOrigem, p.RiscoCrianca, p.RiscoJaTeve,
-         p.SoNivelGeral, p.RiscoMarcadoEm, p.RiscoDesmarcadoEm, p.RiscoDesmarcadoMotivo, p.CriadoEm, p.AnonimizadoEm, ci.ItemId, ci.Status AS ItemStatus
-  FROM PedidosOracao p JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoId LEFT JOIN MembroReferencia s ON s.MembroId = p.SolicitanteMembroId
+         p.SoNivelGeral, p.RiscoMarcadoEm, p.RiscoDesmarcadoEm, p.RiscoDesmarcadoMotivo, p.CriadoEm, p.AnonimizadoEm, p.Origem, p.SiteItemId, ci.ItemId, ci.Status AS ItemStatus
+  FROM PedidosOracao p LEFT JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoId LEFT JOIN MembroReferencia s ON s.MembroId = p.SolicitanteMembroId
   LEFT JOIN MembroReferencia rg ON rg.MembroId = p.RegistradoPorMembroId LEFT JOIN MembroReferencia md ON md.MembroId = p.ModeradoPorMembroId
   OUTER APPLY (SELECT TOP 1 x.ItemId, x.Status FROM CuidadoItens x WHERE x.PedidoOracaoId = p.PedidoId ORDER BY CASE WHEN x.Status = 'ABERTO' THEN 0 ELSE 1 END, x.ItemId DESC) ci`;
 // A liderança não modera nem lê o pedido que ela mesma fez (quem modera é o degrau de cima); o pedido "só nível geral" é só do nível geral; e o pedido de quem mudou de
@@ -815,7 +816,8 @@ function pedidoVisivel(ver, p) {
 }
 function formatarPedido(p) {
   return {
-    pedidoId: p.PedidoId, congregacaoId: p.CongregacaoId, congregacaoNome: p.CongregacaoNome, solicitante: p.SolicitanteNome || (p.AnonimizadoEm ? "(anonimizado)" : null),
+    pedidoId: p.PedidoId, congregacaoId: p.CongregacaoId, congregacaoNome: p.Origem === "SITE" ? "Mural de oração do site" : p.CongregacaoNome, origem: p.Origem || "SISTEMA",
+    siteItemId: p.SiteItemId || null, solicitante: p.SolicitanteNome || (p.AnonimizadoEm ? "(anonimizado)" : null),
     solicitanteMembroId: p.SolicitanteMembroId || null, solicitanteContato: p.SolicitanteContato || null, registradoPor: p.RegistradoPorNome || null,
     paraQuem: p.ParaQuem, paraQuemRotulo: cp.PARA_QUEM[p.ParaQuem], categoria: p.Categoria, categoriaRotulo: cp.CATEGORIAS_ORACAO[p.Categoria].rotulo, texto: p.Texto,
     podeBoletim: !!p.PodeBoletim, querContato: !!p.QuerContato, moderacao: p.Moderacao, textoBoletim: p.TextoBoletim, boletimAte: dia(p.BoletimAte), moderadoPor: p.ModeradoPorNome || null,
@@ -849,6 +851,7 @@ async function moderar(pool, { pedidoId, dados, ver, agora = new Date() }) {
   const decisao = typeof (dados || {}).decisao === "string" ? dados.decisao : "";
   if (!["APROVAR", "NAO_PUBLICAR"].includes(decisao)) return { sucesso: false, mensagem: "Escolha: publicar no boletim (sem nome) ou deixar só com a liderança." };
   if (p.Risco) return { sucesso: false, mensagem: "Este pedido tem sinal de risco: ele não vai ao boletim. Atenda a pessoa; se for alarme falso, desmarque o risco (com o motivo) antes." };
+  if (decisao === "APROVAR" && p.Origem === "SITE") return { sucesso: false, mensagem: "Este pedido veio do mural do site: o que vai ao mural público é decidido no painel do site (moderação do mural). Aqui ele só pode ser marcado como lido." };
   if (decisao === "APROVAR" && p.Moderacao !== "AGUARDANDO") return { sucesso: false, mensagem: p.Moderacao === "APROVADO" ? "Este pedido já está no boletim." : "Este pedido foi marcado como lido: ele não volta ao boletim." };
   if (decisao === "NAO_PUBLICAR" && p.Moderacao === "NAO_PUBLICAR") return { sucesso: false, mensagem: "Este pedido já está marcado como lido." };
   let textoBoletim = null, boletimAte = null;
@@ -888,6 +891,7 @@ async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
     return { sucesso: true, mensagem: "Sinal de risco desmarcado. O pedido volta para a moderação comum; o acompanhamento continua aberto." };
   }
   if (p.Risco) return { sucesso: false, mensagem: "Este pedido já está com sinal de risco." };
+  if (p.Origem === "SITE") return marcarRiscoDoSite(pool, { p, ver });
   const rk = await riscoDoTexto(pool, p.Texto || "", p.CongregacaoId);
   const soGeral = !!p.SoNivelGeral || rk.soGeral;
   const prazos = await lerPrazos(pool);
@@ -936,6 +940,7 @@ async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
 async function acompanharPedido(pool, { pedidoId, ver, agora = new Date() }) {
   const p = await carregarPedido(pool, pedidoId);
   if (!pedidoVisivel(ver, p) || p.AnonimizadoEm) return NAO_EXISTE;
+  if (p.Origem === "SITE") return { sucesso: false, mensagem: "Este pedido veio do mural do site: não há congregação nem contato para abrir um acompanhamento. Se o texto traz um contato, procure a pessoa e registre o pedido em mãos." };
   if (p.ItemId && p.ItemStatus === "ABERTO") return { sucesso: false, mudou: true, itemId: p.ItemId, mensagem: "Este pedido já tem um acompanhamento aberto." };
   const destino = await destinoDoItem(pool, { congregacaoId: p.CongregacaoId, membroId: p.SolicitanteMembroId || null, soGeral: !!p.SoNivelGeral });
   const prazoEm = cp.prazoInicial("PEDIDO_ORACAO", agora, await lerPrazos(pool), { urgente: !!p.Risco });
@@ -1294,6 +1299,12 @@ async function detectarModeracao(pool, { agora = new Date() } = {}) {
     if (!degrau) continue;
     fatos.push({ referenciaId: hoje * 10000 + (Number(l.CongregacaoId) % 10000), destinatarios: territorio[degrau], fatoGerador: cp.textoModeracao({ quantos: Number(l.n), congregacaoNome: l.CongregacaoNome }) });
   }
+  // (v7.11.1) os confidenciais do mural do site esperando leitura: ao nível geral, um aviso por dia (o do risco já saiu na hora)
+  const site = Number(((await pool.request().query(`SELECT COUNT(*) AS n FROM PedidosOracao WHERE Origem = 'SITE' AND Moderacao = 'AGUARDANDO' AND Risco = 0 AND AnonimizadoEm IS NULL`)).recordset[0] || {}).n) || 0;
+  if (site > 0) {
+    const gerais = await geraisDoCuidado(pool);
+    if (gerais.length) fatos.push({ referenciaId: hoje * 10000 + 9999, destinatarios: gerais, fatoGerador: cp.textoModeracao({ quantos: site, congregacaoNome: null }).replace("moderação.", "leitura no mural de oração do site (confidenciais).") });
+  }
   return fatos;
 }
 
@@ -1343,7 +1354,70 @@ async function exclusaoLgpd(r, membroId) {
   return { notas, itens, pedidos };
 }
 
+// ---------------------------------------------------------------
+// v7.11.1 — o mural de oração do SITE
+// ---------------------------------------------------------------
+
+// O nível geral do cuidado (Diretoria): quem recebe o que vem do site, que não tem congregação.
+async function geraisDoCuidado(pool) {
+  return semRepetidos((await resolverDestinatariosPorPermissao(pool, { permissao: PERMISSAO, nivel: "GLOBAL" })).map(destinatarioDe));
+}
+const LIMITE_SITE_HORA = 30;                // pedidos do site guardados por hora (contra inundação vinda do site público); o de risco tem folga própria
+const LIMITE_SITE_RISCO_HORA = 60;
+const MAX_TEXTO_SITE = 1000, MAX_NOME_SITE = 150;
+
+// O site manda, servidor a servidor, o pedido que acabou de receber no mural. Só o CONFIDENCIAL ou com SINAL DE RISCO é guardado aqui (os outros seguem só no
+// Directus, com a moderação da Diretoria no painel do site) — e para esses o banco nem é aberto. Com risco, o aviso obrigatório sai na hora ao nível geral.
+// Devolve { gravado, risco, avisada?, repetido? }; o site usa `risco` para mostrar o 188 e o 190 a quem escreveu e para guardar o pedido como confidencial.
+async function receberDoSite(pool, { texto, nome, confidencial, siteItemId = null }) {
+  const t = cp.limparTextoDoSite(texto, MAX_TEXTO_SITE);
+  const n = cp.limparTextoDoSite(nome, MAX_NOME_SITE) || null;
+  if (t.length < 2) return { gravado: false, risco: false, invalido: true };
+  const risco = cp.avaliarRisco(t);
+  if (!confidencial && !risco.risco) return { gravado: false, risco: false };
+  const transaction = new sql.Transaction(pool);
+  let pedidoId;
+  try {
+    await transaction.begin();
+    if (!(await obterTrava(() => new sql.Request(transaction), "cuidado-site", 8000))) { await fecharTransacao(transaction, false); return { gravado: false, risco: risco.risco, ocupado: true }; }
+    const rep = (await new sql.Request(transaction).input("t", sql.NVarChar(1000), t)
+      .query(`SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE Origem = 'SITE' AND Texto = @t AND CriadoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY PedidoId DESC`)).recordset[0];
+    if (rep) { await fecharTransacao(transaction, false); return { gravado: true, repetido: true, risco: !!rep.Risco, pedidoId: rep.PedidoId }; }
+    const naHora = Number((await new sql.Request(transaction).input("r", sql.Bit, risco.risco ? 1 : 0)
+      .query(`SELECT COUNT(*) AS n FROM PedidosOracao WHERE Origem = 'SITE' AND Risco = @r AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`)).recordset[0].n);
+    if (naHora >= (risco.risco ? LIMITE_SITE_RISCO_HORA : LIMITE_SITE_HORA)) { await fecharTransacao(transaction, false); return { gravado: false, risco: risco.risco, limite: true }; }
+    pedidoId = (await new sql.Request(transaction).input("sn", sql.NVarChar(150), n).input("t", sql.NVarChar(1000), t).input("rk", sql.Bit, risco.risco ? 1 : 0)
+      .input("ro", sql.NVarChar(10), risco.risco ? "AUTOMATICO" : null).input("rc", sql.Bit, risco.crianca ? 1 : 0).input("si", sql.Int, Number.isInteger(siteItemId) && siteItemId > 0 ? siteItemId : null)
+      .query(`INSERT INTO PedidosOracao (CongregacaoId, SolicitanteMembroId, RegistradoPorMembroId, SolicitanteNome, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato,
+                Risco, RiscoOrigem, RiscoCrianca, RiscoJaTeve, RiscoMarcadoEm, SoNivelGeral, Origem, SiteItemId)
+              VALUES (NULL, NULL, NULL, @sn, 'PROPRIO', 'OUTRO', @t, 0, 0, @rk, @ro, @rc, @rk, CASE WHEN @rk = 1 THEN SYSUTCDATETIME() ELSE NULL END, 1, 'SITE', @si);
+              SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
+    await transaction.commit();
+  } catch (e) { await fecharTransacao(transaction, false); throw e; }
+  await auditar("PedidosOracao", pedidoId, "CUIDADO_PEDIDO_DO_SITE", null);
+  if (!risco.risco) return { gravado: true, risco: false, pedidoId };
+  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: await geraisDoCuidado(pool), mensagem: cp.textoRisco({ doSite: true, crianca: risco.crianca }),
+    referenciaTabela: "PedidosOracaoSite", referenciaId: pedidoId, aguardarEntrega: false });
+  return { gravado: true, risco: true, pedidoId, avisada: Number((aviso || {}).externas) > 0 };
+}
+
+// Marcar o risco num pedido do site (a lista não pegou): o pedido fica com o sinal e o nível geral é avisado — sem acompanhamento (não há congregação nem contato).
+// Cada marcação avisa de novo (a referência leva o número da marcação, para o motor não calar a segunda), numa tabela de referência própria: pedido×10+vez na mesma
+// "PedidosOracaoSite" do aviso automático coincidiria com outro pedido (o 5 marcado = 51 = o pedido 51 com risco) e o motor calaria o aviso do 51.
+async function marcarRiscoDoSite(pool, { p, ver }) {
+  const r = await pool.request().input("id", sql.Int, p.PedidoId)
+    .query(`UPDATE PedidosOracao SET Risco = 1, RiscoOrigem = 'LIDERANCA', RiscoJaTeve = 1, RiscoMarcadoEm = SYSUTCDATETIME() WHERE PedidoId = @id AND Risco = 0 AND AnonimizadoEm IS NULL; SELECT @@ROWCOUNT AS n`);
+  if (!Number(r.recordset[0].n)) return MUDOU("O pedido mudou enquanto você decidia. Abra de novo.");
+  await auditar("PedidosOracao", p.PedidoId, "CUIDADO_PEDIDO_MARCADO", ver.membroId);
+  const vez = Number((await pool.request().input("id", sql.Int, p.PedidoId).query(`SELECT COUNT(*) AS n FROM AuditLog WHERE Tabela = 'PedidosOracao' AND RegistroId = @id AND Acao = 'CUIDADO_PEDIDO_MARCADO'`)).recordset[0].n) || 1;
+  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: semRepetidos(await geraisDoCuidado(pool), [ver.membroId]),
+    mensagem: cp.textoRisco({ doSite: true, crianca: cp.avaliarRisco(p.Texto || "").crianca }), referenciaTabela: "PedidosOracaoSiteMarcado", referenciaId: p.PedidoId * 10 + Math.min(vez, 9), aguardarEntrega: false });
+  return { sucesso: true, itemId: null, avisada: Number((aviso || {}).externas) > 0,
+    mensagem: `Sinal de risco marcado no pedido do site. ${Number((aviso || {}).externas) > 0 ? "O nível geral foi avisado agora." : "O aviso não saiu do sistema: avise a Diretoria por telefone."} Não há acompanhamento a abrir (o site não tem congregação nem contato): se o texto traz um contato, procure a pessoa.` };
+}
+
 module.exports = {
+  receberDoSite,
   PERMISSAO, lerPrazos, limparCaches, liderancaDoTerritorio, dirigenteDa, ehPastor, acessoAoItem,
   abrirItem, listarFila, detalheItem, meusItens, registrarContato, atribuir, adiar, concluir, cancelar,
   listarNotas, escreverNota, notaLegivel, lerNota, leiturasDaNota,

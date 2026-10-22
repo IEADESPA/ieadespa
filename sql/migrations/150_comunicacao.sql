@@ -30,13 +30,14 @@ BEGIN
         TextoVersao             NVARCHAR(20) NOT NULL,
         TextoHash               CHAR(64) NOT NULL,
         DataFicha               DATE NULL,
+        FichaReferencia         NVARCHAR(100) NULL,
         EnderecoIp              NVARCHAR(64) NULL,
         RegistradoPorMembroId   INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         EnvioId                 INT NULL,
         CriadoEm                DATETIME2 NOT NULL CONSTRAINT DF_ComunicacaoConsentimentos_CriadoEm DEFAULT SYSUTCDATETIME(),
         -- o "sim" só nasce de quem leu o texto (o próprio membro ou a ficha que ele assinou); a ficha em papel diz a data e quem a lançou
         CONSTRAINT CK_ComunicacaoConsentimentos_Sim CHECK (Concedido = 0 OR Origem IN (N'MEU_PAINEL', N'FICHA_PAPEL')),
-        CONSTRAINT CK_ComunicacaoConsentimentos_Ficha CHECK (Origem <> N'FICHA_PAPEL' OR (DataFicha IS NOT NULL AND RegistradoPorMembroId IS NOT NULL)),
+        CONSTRAINT CK_ComunicacaoConsentimentos_Ficha CHECK (Origem <> N'FICHA_PAPEL' OR (DataFicha IS NOT NULL AND RegistradoPorMembroId IS NOT NULL AND LEN(FichaReferencia) >= 3)),
         CONSTRAINT CK_ComunicacaoConsentimentos_Hash CHECK (LEN(TextoHash) = 64)
     );
 END
@@ -164,8 +165,10 @@ BEGIN
                                     N'SEM_CONTATO', N'SEM_APARELHO', N'CANCELADO')),
         AtualizadoEm            DATETIME2 NOT NULL CONSTRAINT DF_ComunicacaoEntregas_AtualizadoEm DEFAULT SYSUTCDATETIME(),
         CienciaEm               DATETIME2 NULL,
+        LidaEm                  DATETIME2 NULL,              -- copiada do sininho quando a retenção apaga o aviso (o relatório continua contando quem leu)
         AnonimizadoEm           DATETIME2 NULL,
         CONSTRAINT CK_ComunicacaoEntregas_Ciencia CHECK (CienciaEm IS NULL OR Canal = N'SININHO'),
+        CONSTRAINT CK_ComunicacaoEntregas_Lida CHECK (LidaEm IS NULL OR Canal = N'SININHO'),
         CONSTRAINT CK_ComunicacaoEntregas_Anonimo CHECK (MembroId IS NOT NULL OR AnonimizadoEm IS NOT NULL)
     );
 END
@@ -217,7 +220,7 @@ GO
 IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'COMUNICACAO_EMAILS_POR_RODADA')
     INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('COMUNICACAO_EMAILS_POR_RODADA', N'Comunicação — e-mails por rodada da fila (a cada 15 min; o Azure aceita 30/min)', 20);
 IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'COMUNICACAO_EMAILS_POR_HORA')
-    INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('COMUNICACAO_EMAILS_POR_HORA', N'Comunicação — teto de e-mails de comunicado por hora (o Azure aceita 100/h)', 80);
+    INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('COMUNICACAO_EMAILS_POR_HORA', N'Comunicação — teto de e-mails de comunicado por hora (o Azure aceita 100/h)', 60);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'COMUNICADO')
@@ -231,9 +234,9 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Comunica�
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao) VALUES (N'Comunicação — registro de entrega da convocação oficial', N'x', 1825);
 GO
 UPDATE dbo.PoliticasRetencao
-SET BaseLegal = N'Comunicados aos membros (LGPD arts. 7º, I e IX, e 11, II, a): quem recebeu, por qual canal e se leu; depois de 1 ano o registro perde o nome (a contagem do envio fica). O histórico de consentimento fica enquanto a pessoa estiver no cadastro e sai na exclusão LGPD.'
-WHERE Categoria = N'Comunicação — registro de entrega';
+SET BaseLegal = N'Comunicados aos membros (LGPD arts. 7º, I e IX, e 11, II, a): quem recebeu, por qual canal e se leu; depois de 1 ano o registro perde o nome e o aviso do sininho sai (a contagem do envio fica). O histórico de consentimento fica enquanto a pessoa estiver no cadastro e sai na exclusão LGPD.'
+WHERE Categoria = N'Comunicação — registro de entrega' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
-SET BaseLegal = N'Convocação oficial (Estatuto: a convocação regular é condição de validade da assembleia): quem foi alcançado e quem deu ciência fica 5 anos como prova do ato; depois perde o nome.'
-WHERE Categoria = N'Comunicação — registro de entrega da convocação oficial';
+SET BaseLegal = N'Convocação oficial (Estatuto: a convocação regular é condição de validade da assembleia; LGPD art. 16, I): quem foi alcançado e quem deu ciência fica 5 anos como prova do ato, inclusive depois de uma exclusão LGPD; depois perde o nome.'
+WHERE Categoria = N'Comunicação — registro de entrega da convocação oficial' AND BaseLegal = N'x';
 GO

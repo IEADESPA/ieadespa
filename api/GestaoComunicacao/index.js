@@ -10,11 +10,11 @@
 //  POST preferencias       body:{ mudancas:[{canal,categoria,concedido,hash}] }   (o "sim" só com a impressão digital do texto mostrado)
 //  GET  meus-comunicados   -> { comunicados[] }        POST ciencia body:{envioId}   ("Recebi a convocação")
 // ---- Liderança (permissão comunicacao, sessão de liderança; cada um no seu território) ------------------------------------------------------------
-//  GET  modelos     POST modelo body:{chave?,categoria,titulo,corpo} (nível geral)     POST aprovar-modelo body:{modeloId} (nível geral; confirmação reforçada)
+//  GET  modelos     POST modelo body:{chave?,categoria,titulo,corpo} (nível geral)     POST aprovar-modelo body:{modeloId,hash} (nível geral; confirmação reforçada; hash = o do modelo que a tela mostrou)
 //  POST arquivar-modelo body:{modeloId} (nível geral; o rascunho é apagado)
 //  GET  opcoes      POST previa body:{categoria,criterios}     GET grupos     POST grupo body:{nome,criterios}     POST excluir-grupo body:{audienciaId}
 //  POST enviar body:{modeloId,criterios} (confirmação reforçada)     GET envios     GET envio?envioId=     POST cancelar body:{envioId}
-//  POST ficha body:{membroId,canal,categoria,concedido,dataFicha}   (o consentimento que a pessoa deu numa ficha em papel)
+//  POST ficha body:{membroId,canal,categoria,concedido,dataFicha,fichaReferencia}   (nível geral; confirmação reforçada: o consentimento dado numa ficha em papel)
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 · 400 dado ruim · 403 sem permissão · 404 não achou (o que não existe e o que a pessoa não pode
 // ver recebem a MESMA resposta) · 409 mudou enquanto isso · 428 confirmação reforçada · 429 ocupado.
@@ -25,10 +25,14 @@ const vol = require("../shared/voluntariado");
 const cm = require("../shared/comunicacao");
 const db = require("../shared/comunicacaoDb");
 const { ipDoCliente } = require("../shared/origemConexao");
+const { criarLimitador } = require("../shared/limiteTaxa");
 
 const SEM_PERMISSAO = "Isto é da liderança que envia comunicados. Fale com quem administra as Permissões.";
 const NAO_ACHOU = "Não encontrado.";
 const idDe = vol.inteiroPositivo;
+// por pessoa: alternar o consentimento sem parar cria linhas que não se apagam; a prévia cruza o cadastro inteiro (banco de 5 DTU)
+const limitePreferencias = criarLimitador({ janelaMs: 10 * 60000, maximo: 20 });
+const limitePrevia = criarLimitador({ janelaMs: 60000, maximo: 20 });
 
 function erro(context, status, mensagem) { context.res = { status, body: { sucesso: false, mensagem } }; }
 function resposta(context, resultado, statusOk = 200) {
@@ -75,7 +79,9 @@ async function principal(context, req) {
     if (metodo === "POST" && !ESCRITAS.includes(acao)) return erro(context, 404, "Ação inválida.");
     if (EXIGE_GESTAO.includes(acao) && !gestao) return erro(context, 403, SEM_PERMISSAO);
     // aprovar o texto que fala pela Igreja e mandar a centenas de pessoas são atos sem volta: pedem a confirmação reforçada (chave do aparelho ou código)
-    if (metodo === "POST" && (acao === "aprovar-modelo" || acao === "enviar") && !auth.exigirFatorRecente(req, context)) return;
+    if (metodo === "POST" && ["aprovar-modelo", "enviar", "ficha"].includes(acao) && !auth.exigirFatorRecente(req, context)) return;
+    const limitador = metodo === "POST" && acao === "preferencias" ? limitePreferencias : metodo === "POST" && acao === "previa" ? limitePrevia : null;
+    if (limitador && !limitador.registrar(`m${sessao.membroId}`).permitido) return erro(context, 429, "Muitas mudanças seguidas. Espere alguns minutos e tente de novo.");
     const pool = await getPool();
 
     if (metodo === "GET") {
@@ -113,7 +119,7 @@ async function principal(context, req) {
     if (acao === "aprovar-modelo" || acao === "arquivar-modelo") {
       const modeloId = idDe(corpo.modeloId);
       if (!modeloId) return erro(context, 400, "Informe modeloId.");
-      resposta(context, acao === "aprovar-modelo" ? await db.aprovarModelo(pool, { ver, modeloId }) : await db.arquivarModelo(pool, { ver, modeloId }));
+      resposta(context, acao === "aprovar-modelo" ? await db.aprovarModelo(pool, { ver, modeloId, hash: corpo.hash }) : await db.arquivarModelo(pool, { ver, modeloId }));
       return;
     }
     if (acao === "previa") { resposta(context, await db.previa(pool, { ver, dados: corpo })); return; }

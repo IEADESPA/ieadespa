@@ -68,13 +68,22 @@ const deps = { enviarEmail: async (m) => { const r = respostaEmail(m); if (r.ok)
   ok(!!(await falha("UPDATE ComunicacaoConsentimentos SET Concedido = 0 WHERE MembroId = 8010")) && !!(await falha("DELETE FROM ComunicacaoConsentimentos WHERE MembroId = 8010")), "o histórico não se edita nem se apaga");
   ok((await marcou(P.ana, [["WHATSAPP", "EVENTOS", true]])).status === 422 && (await marcou(P.ana, [["EMAIL", "CONVOCACAO", true]])).status === 422, "WhatsApp e convocação não se marcam");
 
-  console.log("== a ficha em papel ==");
-  ok((await POST(H, "ficha", DIR_SEM, { membroId: P.carla, canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2026-10-01" })).status === 403, "sem a permissão: 403");
-  const ficha = await POST(H, "ficha", DIR_C, { membroId: P.carla, canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2026-10-01" });
-  ok(ficha.status === 201 && (await um("SELECT TOP 1 * FROM ComunicacaoConsentimentos WHERE MembroId = 8012 ORDER BY ConsentimentoId DESC")).RegistradoPorMembroId === 3001, "o Dirigente lança a ficha da Carla (Central), com a data e quem lançou");
-  ok((await POST(H, "ficha", DIR_C, { membroId: P.vilaA, canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2026-10-01" })).status === 404, "a de quem é de outra congregação: 404 (como se não existisse)");
-  ok((await POST(H, "ficha", DIR_C, { membroId: P.carla, canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2099-01-01" })).status === 422, "ficha com data futura: recusada");
-  ok((await POST(H, "ficha", DIR_C, { membroId: 3001, canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2026-10-01" })).status === 422, "a própria ficha não: cada um marca o seu em Meu Painel");
+  console.log("== a ficha em papel (só o nível geral, com a referência da ficha) ==");
+  const FICHA = { canal: "PUSH", categoria: "DEVOCIONAL", concedido: true, dataFicha: "2026-10-01", fichaReferencia: "Livro 3, ficha 27" };
+  ok((await POST(H, "ficha", DIR_SEM, { ...FICHA, membroId: P.carla })).status === 403, "sem a permissão: 403");
+  ok((await POST(H, "ficha", DIR_C, { ...FICHA, membroId: P.carla })).status === 403, "o Dirigente não lança ficha (é da Secretaria, que guarda o papel)");
+  const ficha = await POST(H, "ficha", SEC, { ...FICHA, membroId: P.carla });
+  const lFicha = await um("SELECT TOP 1 * FROM ComunicacaoConsentimentos WHERE MembroId = 8012 ORDER BY ConsentimentoId DESC");
+  ok(ficha.status === 201 && lFicha.RegistradoPorMembroId === 1002 && lFicha.FichaReferencia === "Livro 3, ficha 27", "o nível geral lança a ficha da Carla, com a data, a referência e quem lançou", ficha.body);
+  ok((await POST(H, "ficha", SEC, { ...FICHA, membroId: P.carla, fichaReferencia: "" })).status === 422, "sem a referência da ficha: recusada");
+  ok((await POST(H, "ficha", SEC, { ...FICHA, membroId: P.carla, dataFicha: "2099-01-01" })).status === 422, "ficha com data futura: recusada");
+  ok((await POST(H, "ficha", SEC, { ...FICHA, membroId: P.carla, dataFicha: "2026-02-30" })).status === 422, "data que não existe (30 de fevereiro): recusada");
+  ok((await POST(H, "ficha", SEC, { ...FICHA, membroId: 1002 })).status === 422, "a própria ficha não: cada um marca o seu em Meu Painel");
+  ok((await POST(H, "ficha", SEC, { ...FICHA, membroId: P.menor })).status === 422, "o \"sim\" de menor de 18 não se lança (é dos responsáveis)");
+  await marcou(P.elisa, [["PUSH", "DEVOCIONAL", true]]);
+  await marcou(P.elisa, [["PUSH", "DEVOCIONAL", false]]);
+  const velha = await POST(H, "ficha", SEC, { ...FICHA, membroId: P.elisa, dataFicha: "2025-11-01" });
+  ok(velha.status === 422 && /depois da data desta ficha/.test(velha.body.mensagem), "a ficha antiga não passa por cima do \"não\" que a pessoa marcou depois", velha.body);
 
   console.log("== os modelos ==");
   ok((await POST(H, "modelo", DIR_C, { categoria: "EVENTOS", titulo: "Congresso", corpo: "Olá {{primeiro_nome}}, venha ao congresso." })).status === 403, "o Dirigente não escreve modelo (é a voz da Igreja: nível geral)");
@@ -84,21 +93,30 @@ const deps = { enviarEmail: async (m) => { const r = respostaEmail(m); if (r.ok)
   ok((await POST(H, "enviar", SEC, { modeloId: mEv, criterios: {} })).status === 422, "rascunho não se envia");
   const ed = await POST(H, "modelo", SEC, { chave: rasc.body.modelo.chave, categoria: "EVENTOS", titulo: "Congresso de jovens 2026", corpo: "Olá, {{primeiro_nome}}! O congresso da {{congregacao}} é sábado, às 19h." });
   ok(ed.body.modelo.modeloId === mEv && ed.body.modelo.versao === 1, "editar com o rascunho aberto edita o próprio rascunho");
-  ok((await POST(H, "aprovar-modelo", SEC, { modeloId: mEv })).body.modelo.status === "APROVADO", "aprovado");
+  ok((await POST(H, "aprovar-modelo", SEC, { modeloId: mEv })).status === 409, "aprovar sem a impressão digital do texto lido: \"mudou\"");
+  ok((await POST(H, "aprovar-modelo", SEC, { modeloId: mEv, hash: rasc.body.modelo.hash })).status === 409, "aprovar com a impressão digital do texto de ANTES da edição: \"mudou\" (o texto que fala pela Igreja é o que foi lido)");
+  ok((await POST(H, "aprovar-modelo", SEC, { modeloId: mEv, hash: ed.body.modelo.hash })).body.modelo.status === "APROVADO", "aprovado com a impressão digital do texto que foi lido");
   ok(!!(await falha("UPDATE ComunicacaoModelos SET Corpo = N'outro texto qualquer' WHERE ModeloId = @m", { m: mEv })) && !!(await falha("DELETE FROM ComunicacaoModelos WHERE ModeloId = @m", { m: mEv })), "o aprovado não se edita nem se apaga (gatilho)");
   const v2 = await POST(H, "modelo", SEC, { chave: rasc.body.modelo.chave, categoria: "EVENTOS", titulo: "Congresso de jovens 2026", corpo: "Olá, {{primeiro_nome}}! Mudou: o congresso é domingo." });
   ok(v2.body.modelo.versao === 2 && v2.body.modelo.status === "RASCUNHO", "corrigir o aprovado = versão 2 em rascunho");
-  await POST(H, "aprovar-modelo", SEC, { modeloId: v2.body.modelo.modeloId });
+  await POST(H, "aprovar-modelo", SEC, { modeloId: v2.body.modelo.modeloId, hash: v2.body.modelo.hash });
   ok((await um("SELECT Status FROM ComunicacaoModelos WHERE ModeloId = @m", { m: mEv })).Status === "ARQUIVADO", "aprovar a versão 2 arquiva a 1");
   const mEv2 = v2.body.modelo.modeloId;
   ok((await GET(H, "modelos", DIR_C)).body.modelos.every((m) => m.status === "APROVADO" && m.categoria !== "CONVOCACAO"), "o Dirigente só vê os aprovados que pode usar");
-  const conv = (await POST(H, "modelo", SEC, { categoria: "CONVOCACAO", titulo: "Convocação da Assembleia Geral", corpo: "Fica convocado(a), {{primeiro_nome}}, para a Assembleia Geral Ordinária." })).body.modelo.modeloId;
-  await POST(H, "aprovar-modelo", SEC, { modeloId: conv });
+  const convM = (await POST(H, "modelo", SEC, { categoria: "CONVOCACAO", titulo: "Convocação da Assembleia Geral", corpo: "Fica convocado(a), {{primeiro_nome}}, para a Assembleia Geral Ordinária." })).body.modelo;
+  const conv = convM.modeloId;
+  await POST(H, "aprovar-modelo", SEC, { modeloId: conv, hash: convM.hash });
 
   console.log("== o grupo vivo ==");
+  await q("UPDATE MembroReferencia SET DataNascimento = NULL WHERE MembroId = 8019");          // o João sem data de nascimento no cadastro
   const prevC = await POST(H, "previa", DIR_C, { categoria: "EVENTOS", criterios: {} });
-  const naCentral = await escalar(`SELECT COUNT(*) FROM MembroReferencia m WHERE m.CongregacaoId = @c AND m.Status = 'ATIVO' AND (m.DataNascimento IS NULL OR m.DataNascimento <= DATEADD(YEAR, -18, CAST(SYSUTCDATETIME() AS DATE)))`, { c: c1 });
-  ok(prevC.status === 200 && prevC.body.total === naCentral, `"todas" para o Dirigente da Central = só a Central (${naCentral}), sem o menor`, prevC.body);
+  const naCentral = await escalar(`SELECT COUNT(*) FROM MembroReferencia m WHERE m.CongregacaoId = @c AND m.Status = 'ATIVO' AND m.DataNascimento IS NOT NULL AND m.DataNascimento <= DATEADD(YEAR, -18, CAST(SYSUTCDATETIME() AS DATE))`, { c: c1 });
+  const semData = await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE CongregacaoId = @c AND Status = 'ATIVO' AND DataNascimento IS NULL", { c: c1 });
+  ok(semData >= 1 && prevC.status === 200 && prevC.body.total === naCentral && prevC.body.semNascimento === semData, `"todas" para o Dirigente da Central = só a Central (${naCentral}), sem o menor e sem quem não tem data de nascimento (${semData}, contados à parte)`, prevC.body);
+  ok((await POST(H, "previa", SEC, { categoria: "CONVOCACAO", criterios: { territorio: { tipo: "CONGREGACAO", ids: [c1] } } })).body.total === naCentral + semData, "na convocação, quem não tem data de nascimento entra (vai a todos)");
+  ok((await POST(H, "previa", DIR_C, { categoria: "EVENTOS", criterios: { assembleiaGeral: true } })).status === 403, "o critério \"direito a voto\" é só do nível geral (cruza com a disciplina)");
+  ok((await POST(H, "previa", SEC, { categoria: "EVENTOS", criterios: { territorio: "CONGREGACAO" } })).status === 422, "território em texto (não objeto): recusado, nunca vira \"todas\"");
+  ok((await marcou(P.ana, [["toString", "EVENTOS", false]])).status === 422 && (await marcou(P.ana, [["EMAIL", "constructor", false]])).status === 422, "\"toString\"/\"constructor\" como canal ou categoria: 422, não 500");
   ok(prevC.body.canais.EMAIL.receberao === 4 && prevC.body.canais.PUSH.receberao === 2, "e-mail: Ana, Bento, Carla e Elisa (o Davi não tem e-mail; o menino não entra); celular: Ana e Bento", prevC.body.canais);
   ok((await POST(H, "previa", DIR_C, { categoria: "EVENTOS", criterios: { territorio: { tipo: "CONGREGACAO", ids: [c2] } } })).body.total === 0, "pedir a Vila Nova (fora do território) dá zero: o grupo é cortado");
   ok((await POST(H, "previa", SEC, { categoria: "EVENTOS", criterios: { territorio: { tipo: "CONGREGACAO", ids: [c2] } } })).body.total >= 2, "o nível geral alcança a Vila Nova");
@@ -187,18 +205,54 @@ const deps = { enviarEmail: async (m) => { const r = respostaEmail(m); if (r.ok)
   await FILA(ctx2, { method: "POST", query: {}, body: {}, headers: { "x-cron-secret": process.env.CRON_SECRET } });
   ok(ctx2.res.status === 200, "com o segredo, a rodada roda", ctx2.res.body);
   await q("UPDATE ComunicacaoEnvios SET CriadoEm = DATEADD(DAY, -400, CriadoEm) WHERE EnvioId IN (@a, @b)", { a: envioId, b: ec.envioId });
+  await q("UPDATE Notificacoes SET Lida = 1, LidaEm = SYSUTCDATETIME() WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @a AND DestinatarioMembroId = 8010", { a: envioId });
   const ret = await db.aplicarRetencao(pool);
   ok(ret.entregas > 0 && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @a AND MembroId IS NOT NULL", { a: envioId })) === 0, "depois de 1 ano o envio comum perde os nomes");
+  ok(ret.avisos > 0 && (await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @a", { a: envioId })) === 0, "e o aviso do sininho (texto e primeiro nome) sai");
+  const relVelho = (await GET(H, "envio", DIR_C, { envioId })).body;
+  ok(relVelho.lidos >= 1, "o relatório continua contando quem leu (a leitura passou para a entrega)", relVelho.lidos);
   ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @b AND MembroId IS NOT NULL", { b: ec.envioId })) > 0, "a convocação guarda 5 anos (prova do ato)");
   const t = new L.sql.Transaction(pool);
   await t.begin();
   const lg = await db.exclusaoLgpd(() => new L.sql.Request(t), P.carla);
   await t.commit();
   ok(lg.consentimentos >= 2 && (await escalar("SELECT COUNT(*) FROM ComunicacaoConsentimentos WHERE MembroId = 8012")) === 0, "a exclusão LGPD apaga o histórico de consentimento (com a marca de purga)", lg);
-  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE MembroId = 8012")) === 0, "e as entregas perdem o nome");
+  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId WHERE s.MembroId = 8012 AND e.Categoria <> 'CONVOCACAO'")) === 0, "as entregas comuns perdem o nome");
+  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId WHERE s.MembroId = 8012 AND e.Categoria = 'CONVOCACAO'")) > 0, "a da convocação fica (prova do ato, 5 anos: LGPD art. 16, I)");
+  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND DestinatarioMembroId = 8012")) === 0 && lg.avisos > 0, "os avisos de comunicado do sininho saem");
   ok(!!(await falha("DELETE FROM ComunicacaoConsentimentos WHERE MembroId = 8010")), "fora da exclusão, a marca de purga não ficou ligada");
   const titular = await db.dadosDoTitular(pool, P.ana);
   ok(titular.consentimentos.length >= 3 && titular.comunicadosRecebidos >= 2, "Meus Dados mostra o histórico e quantos comunicados", titular.comunicadosRecebidos);
+
+  console.log("== revisão: a fila (prioridade, tempo, erro no meio, celular que falha, cancelado não é \"o mesmo\") ==");
+  await q("UPDATE Prazos SET Dias = 50 WHERE Sigla IN ('COMUNICACAO_EMAILS_POR_RODADA', 'COMUNICACAO_EMAILS_POR_HORA')");
+  await q("DELETE FROM PushInscricoesMembro WHERE MembroId = 8013");
+  // a fila começa vazia: o que sobrou dos testes de cima (a convocação da Central ainda saindo) não pode decidir a ordem por ser mais antigo
+  await q("UPDATE ComunicacaoEntregas SET Situacao = 'CANCELADO', AtualizadoEm = SYSUTCDATETIME() WHERE Situacao = 'PENDENTE'");
+  const semEmail = { ...deps, enviarEmail: async () => ({ limite: true }) };
+  const eEvR = await db.enviar(pool, { ver: VER.geral, dados: { modeloId: mEv2, criterios: { territorio: { tipo: "CONGREGACAO", ids: [c2] }, cargos: ["MEMBRO"] } }, deps: semEmail });
+  const eEv = eEvR.envioId;
+  ok(!eEvR.repetido && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { e: eEv })) >= 1, "(um comunicado de eventos fica na fila antes da convocação)");
+  const eCv = (await db.enviar(pool, { ver: VER.geral, dados: { modeloId: conv, criterios: { territorio: { tipo: "CONGREGACAO", ids: [c2] } } }, deps: semEmail })).envioId;
+  const ordem = [];
+  await db.processarFila(pool, { deps: { ...deps, enviarEmail: async (m) => { ordem.push(/obrigação do Estatuto/.test(m.texto) ? "C" : "E"); return { ok: true }; } }, maxEmails: 1 });
+  ok(ordem[0] === "C", "a convocação passa na frente na fila, mesmo enviada depois", ordem);
+  const pendAntes = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId IN (@a, @b) AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { a: eEv, b: eCv });
+  const curto = await db.processarFila(pool, { deps, orcamentoMs: 1 });
+  ok(curto.devolvidos >= 1 && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Situacao = 'ENVIANDO'")) === 0
+    && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId IN (@a, @b) AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { a: eEv, b: eCv })) === pendAntes,
+    "sem tempo para mandar: o que foi tomado volta para a fila (não vira \"falhou\")", curto);
+  let chamadas = 0;
+  const erro = await db.processarFila(pool, { deps: { ...deps, enviarEmail: async () => { chamadas++; if (chamadas === 2) throw new Error("banco piscou"); return { ok: true }; } }, maxEmails: 3 });
+  ok(erro.devolvidos >= 1 && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Situacao = 'ENVIANDO'")) === 0, "erro no meio da rodada: o resto volta para a fila", erro);
+  const ePush = (await db.enviar(pool, { ver: VER.dirC, dados: { modeloId: mEv2, criterios: { territorio: { tipo: "CONGREGACAO", ids: [c1] }, cargos: ["MEMBRO"] } }, deps: { ...deps, enviarPush: async () => 0 } })).envioId;
+  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao = 'FALHOU'", { e: ePush })) >= 1
+    && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao = 'SEM_APARELHO' AND MembroId = 8010", { e: ePush })) === 0,
+    "celular com aparelho inscrito que não recebeu = \"falhou\", não \"sem aparelho\"");
+  const eCanc = (await db.enviar(pool, { ver: VER.dirC, dados: { modeloId: mEv2, criterios: { territorio: { tipo: "CONGREGACAO", ids: [c1] } } }, deps: semEmail })).envioId;
+  ok((await POST(H, "cancelar", DIR_C, { envioId: eCanc })).status === 200, "(o envio na fila foi cancelado)");
+  const deNovo = await db.enviar(pool, { ver: VER.dirC, dados: { modeloId: mEv2, criterios: { territorio: { tipo: "CONGREGACAO", ids: [c1] } } }, deps: semEmail });
+  ok(deNovo.envioId !== eCanc && !deNovo.repetido, "reenviar depois de cancelar é um envio novo (não devolve o cancelado como \"o mesmo\")", deNovo.envioId);
 
   fim("e2e-29 (comunicação)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

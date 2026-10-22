@@ -54,8 +54,9 @@ async function principal() {
   await q(`INSERT INTO ComunicacaoConsentimentos (MembroId, Canal, Categoria, Concedido, Origem, TextoVersao, TextoHash)
            SELECT m.MembroId, 'EMAIL', 'EVENTOS', 1, 'MEU_PAINEL', @v, @h FROM MembroReferencia m WHERE m.CongregacaoId = @c AND m.Status = 'ATIVO' AND m.Email IS NOT NULL`,
     { v: cm.TEXTO_VERSAO, h: cm.hashDoTexto("EVENTOS"), c: c1 });
-  const modelo = (await db.salvarModelo(pool, { ver: VER_GERAL, dados: { categoria: "EVENTOS", titulo: "Corrida da fila", corpo: "Olá, {{primeiro_nome}}: teste das corridas da fila." } })).modelo.modeloId;
-  await db.aprovarModelo(pool, { ver: VER_GERAL, modeloId: modelo });
+  const mod = (await db.salvarModelo(pool, { ver: VER_GERAL, dados: { categoria: "EVENTOS", titulo: "Corrida da fila", corpo: "Olá, {{primeiro_nome}}: teste das corridas da fila." } })).modelo;
+  const modelo = mod.modeloId;
+  await db.aprovarModelo(pool, { ver: VER_GERAL, modeloId: modelo, hash: mod.hash });
   const criterios = { territorio: { tipo: "CONGREGACAO", ids: [c1] } };
 
   console.log("== o mesmo envio em quatro processos ==");
@@ -86,6 +87,32 @@ async function principal() {
   ok(rs.every((r) => r.ok && (r.resultado.sucesso || r.resultado.limite)), "as quatro terminam sem erro (ou \"tente de novo\")", rs.map((r) => r.resultado));
   const hist = (await q("SELECT CAST(Concedido AS INT) AS s FROM ComunicacaoConsentimentos WHERE MembroId = 8013 AND Canal = 'PUSH' AND Categoria = 'DEVOCIONAL' ORDER BY ConsentimentoId")).map((l) => l.s);
   ok(hist.length >= 1 && hist[0] === 1 && hist.every((s, i) => i === 0 || s !== hist[i - 1]), "o histórico alterna (nunca dois \"sim\" ou dois \"não\" seguidos) e começa num \"sim\"", hist);
+
+  console.log("== escala: 4.900 pessoas num envio, o teto de 5.000 e o direito a voto antes do corte ==");
+  const vila = await escalar("SELECT CongregacaoId FROM Congregacoes WHERE Nome = N'Vila Nova E2E'");
+  await q(`DECLARE @base INT = (SELECT ISNULL(MAX(MembroId), 0) FROM MembroReferencia);
+    WITH n AS (SELECT TOP 4900 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS i FROM sys.all_objects a CROSS JOIN sys.all_objects b)
+    INSERT INTO MembroReferencia (MembroId, Nome, Status, CongregacaoId, DataNascimento, Email)
+    SELECT @base + i, CONCAT(N'Escala ', i, N' E2E'), 'ATIVO', @c, '1980-01-01', CONCAT('escala', i, '@e2e.local') FROM n`, { c: vila });
+  await q(`INSERT INTO ComunicacaoConsentimentos (MembroId, Canal, Categoria, Concedido, Origem, TextoVersao, TextoHash)
+    SELECT m.MembroId, 'EMAIL', 'EVENTOS', 1, 'MEU_PAINEL', @v, @h FROM MembroReferencia m WHERE m.Nome LIKE N'Escala %'`, { v: cm.TEXTO_VERSAO, h: cm.hashDoTexto("EVENTOS") });
+  const t0 = Date.now();
+  const grande = await db.enviar(pool, { ver: VER_GERAL, dados: { modeloId: modelo, criterios: { territorio: { tipo: "CONGREGACAO", ids: [vila] } } },
+    deps: { enviarEmail: async () => ({ limite: true }), enviarPush: async () => 1 } });
+  const segundos = (Date.now() - t0) / 1000;
+  const naVila = await escalar("SELECT COUNT(*) FROM MembroReferencia m WHERE m.CongregacaoId = @c AND m.Status = 'ATIVO' AND m.DataNascimento IS NOT NULL AND m.DataNascimento <= DATEADD(YEAR, -18, CAST(SYSUTCDATETIME() AS DATE))", { c: vila });
+  ok(grande.sucesso && grande.envio.total === naVila && naVila > 4900, `o envio a ${naVila} pessoas grava tudo em blocos (${segundos.toFixed(1)} s no banco local)`, grande.mensagem);
+  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e", { e: grande.envioId })) === naVila * 3
+    && (await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @e", { e: grande.envioId })) === naVila, "três entregas e um aviso de sininho por pessoa");
+  await q(`DECLARE @base INT = (SELECT ISNULL(MAX(MembroId), 0) FROM MembroReferencia);
+    WITH n AS (SELECT TOP 200 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS i FROM sys.all_objects)
+    INSERT INTO MembroReferencia (MembroId, Nome, Status, CongregacaoId, DataNascimento) SELECT @base + i, CONCAT(N'Escala extra ', i), 'ATIVO', @c, '1980-01-01' FROM n`, { c: vila });
+  const demais = await db.previa(pool, { ver: VER_GERAL, dados: { categoria: "EVENTOS", criterios: { territorio: { tipo: "CONGREGACAO", ids: [vila] } } } });
+  ok(demais.sucesso === false && /passa de 5000/.test(demais.mensagem), "mais de 5.000: recusa com o pedido de dividir (nunca corta calado)", demais);
+  const ultimo = await escalar("SELECT MAX(MembroId) FROM MembroReferencia");
+  const voto = await db.previa(pool, { ver: VER_GERAL, dados: { categoria: "CONVOCACAO", criterios: { territorio: { tipo: "CONGREGACAO", ids: [vila] }, assembleiaGeral: true } },
+    deps: { universoDoOrgao: async () => [{ membroId: ultimo }] } });
+  ok(voto.sucesso && voto.total === 1, "o direito a voto filtra ANTES do corte de 5.000: a matrícula mais alta do território, a única com voto, aparece", voto);
 
   fim("e2e-30 (corridas da comunicação)");
 }

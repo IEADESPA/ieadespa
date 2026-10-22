@@ -1149,5 +1149,5 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
 .com-comunicado { border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 12px; margin: 0 0 12px; overflow-wrap: anywhere; }
 .com-comunicado h4 { margin: 0 0 4px; }
 .pagina-sair { display: flex; justify-content: center; padding: 16px; }
-.sair-caixa { max-width: 560px; width: 100%; }
+.sair-caixa { max-width: 35rem; width: 100%; }
 .sair-caixa h1 { font-size: 1.4rem; }

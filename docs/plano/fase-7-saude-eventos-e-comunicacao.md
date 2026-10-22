@@ -3016,10 +3016,24 @@ uma rodada da fila. Tela: Meu Painel → Comunicações e a aba Comunicados (`ap
 também as preferências de aviso e os aparelhos inscritos (antes ficavam); Meus Dados mostra o histórico do consentimento; ROPA ("Comunicação com os membros") e RIPD
 ("Comunicação com os membros") novos.
 
-**Provas:** jest (regra pura, rotas, exclusão LGPD, varredura de rotas), `e2e-29` no SQL Server local (77 verificações: esquema, consentimento, ficha, modelos, grupo,
-fila com as cotas, 429, cancelamento, convocação, saída, retenção e LGPD), `e2e-30` (corridas: seis rodadas da fila juntas nunca mandam o mesmo e-mail duas vezes e
-respeitam o teto da hora; sem a trava da rodada o teste falha com 22 e-mails num teto de 12) e a prova da tela `tools/front-comunicacao`. Dois defeitos achados nas
-provas: o SQL Server recusa `OUTPUT` sem `INTO` numa tabela com gatilho (a fila não andava) e a recusa "o texto mudou" perdia o sinal que manda a tela recarregar.
+**Provas:** jest (regra pura, marca da fila, rotas, exclusão LGPD, varredura de rotas), `e2e-29` no SQL Server local (98 verificações: esquema,
+consentimento, ficha, modelos, grupo, fila com as cotas e a prioridade da convocação, 429, tempo esgotado e erro no meio que devolvem à fila, cancelamento,
+convocação, saída, retenção e LGPD), `e2e-30` (corridas e escala: seis rodadas da fila juntas nunca mandam o mesmo e-mail duas vezes e respeitam o teto da hora;
+sem a trava da rodada o teste falha com 22 e-mails num teto de 12; um envio a ~4.900 pessoas grava em blocos; mais de 5.000 é recusado) e a prova da tela
+`tools/front-comunicacao` (417 verificações; 26 falham na tela de antes das correções). Defeitos achados nas provas: o SQL Server recusa `OUTPUT` sem `INTO`
+numa tabela com gatilho (a fila não andava) e a recusa "o texto mudou" perdia o sinal que manda a tela recarregar; a prova da tela achou 5 na tela (aba que dizia
+"sem acesso" quando o catálogo não carregava, pílula do nível geral que ficava para o login seguinte, grupo apagado ao guardar outro, "Enviar" religado sem
+contagem, motivo apagado na releitura).
+
+**Revisão adversarial independente (22/10/2026), 2 altos, 11 médios e 15 baixos, todos corrigidos:** o direito a voto filtra antes do corte de 5.000 (antes a
+convocação podia sair incompleta sem aviso); a ficha em papel é só do nível geral, com a referência da ficha e a confirmação reforçada, e não vence o que a pessoa
+marcou depois da data dela; a convocação passa na frente na fila; o 429 do e-mail volta na hora (o SDK repetia esperando minutos); o tempo é conferido a cada
+mensagem e o que não foi tentado volta à fila; a rodada das 7h só faz a retenção; o envio grava em blocos; o teto da hora soma os avisos do sistema (padrão 60);
+"direito a voto" só para o nível geral (cruza com a disciplina); a retenção e a exclusão alcançam o aviso do sininho; quem não tem data de nascimento fica fora
+(salvo na convocação) e o menor não autoriza sozinho; aprovar confere a impressão digital do texto lido; a marca da fila não volta atrás (versão e ETag); e os
+baixos (chaves herdadas, território em texto, saída de quem foi excluído, a prova da convocação guardada na exclusão, cancelado que não é "o mesmo",
+"mostrando 500 de N", celular que falha × sem aparelho, Meus Dados completo, mensagem das regras, `$` no nome, data inexistente, limite de mudanças e de
+contagens, base legal editada que a migração não sobrescreve, ficha de quem não tem congregação, e-mail fora do log).
 
 **Depende de gente (fora do código):** pedir ao suporte do Azure o aumento do limite de e-mail (hoje 100 por hora; o pedido é de graça e leva até 72 horas) quando os
 comunicados passarem de algumas centenas de pessoas; depois, subir `COMUNICACAO_EMAILS_POR_HORA` em Catálogos → Prazos.

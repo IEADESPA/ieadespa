@@ -18,9 +18,13 @@ const CATEGORIAS = {
   FINANCEIRO: { rotulo: "Financeiro", descricao: "Prestação de contas e campanhas da Igreja (nunca o que você dá ou deixa de dar)." }
 };
 const CATEGORIAS_COM_CONSENTIMENTO = ["EVENTOS", "DEVOCIONAL", "FINANCEIRO"];
+// "constructor" e "toString" existem em todo objeto: a conferência de código vindo de fora é sempre pela chave PRÓPRIA (revisão independente, 22/10/2026)
+const proprio = (obj, chave) => typeof chave === "string" && Object.prototype.hasOwnProperty.call(obj, chave);
+const ehCategoria = (c) => proprio(CATEGORIAS, c);
 // Os canais externos com envio. WhatsApp e SMS ficam no banco para ligar depois (decisão de 22/10/2026), sem aparecer na tela.
 const CANAIS = { EMAIL: "E-mail", PUSH: "Celular (aviso do aplicativo)" };
 const CANAIS_PREVISTOS = ["WHATSAPP", "SMS"];
+const ehCanal = (c) => proprio(CANAIS, c);
 
 const SITUACOES = {
   PENDENTE: "na fila",
@@ -36,8 +40,8 @@ const SITUACOES = {
 // O texto exato que a pessoa lê ao marcar cada categoria. Mudar o texto = versão nova (o "sim" antigo continua valendo: a impressão digital guardada prova o texto da época).
 const TEXTO_VERSAO = "2026-10-22";
 function textoConsentimento(categoria) {
+  if (!ehCategoria(categoria) || CATEGORIAS[categoria].obrigatoria) return null;
   const c = CATEGORIAS[categoria];
-  if (!c || c.obrigatoria) return null;
   return `Autorizo a Igreja Evangélica Assembleia de Deus (IEADESPA) a me enviar comunicados de "${c.rotulo}" (${c.descricao.replace(/\.$/, "")}) pelos canais que marquei, `
     + "a partir do e-mail e do aparelho do meu cadastro. Posso desmarcar quando quiser, aqui ou pelo link \"não quero mais receber\" de cada e-mail, sem custo e sem precisar explicar. "
     + "Os dados ficam só com a Igreja e não são vendidos nem cedidos (LGPD, arts. 7º, I, e 8º).";
@@ -68,7 +72,7 @@ function validarTexto(v, { campo, max, min = 1 }) {
 // Um modelo: categoria, título e texto, com só os campos que o sistema sabe preencher.
 function validarModelo(dados) {
   const d = dados && typeof dados === "object" ? dados : {};
-  if (!CATEGORIAS[d.categoria]) return { problema: "Escolha a categoria do comunicado." };
+  if (!ehCategoria(d.categoria)) return { problema: "Escolha a categoria do comunicado." };
   const titulo = validarTexto(d.titulo, { campo: "o título", max: MAX_TITULO, min: 3 });
   if (titulo.problema) return titulo;
   if (/\n/.test(titulo.texto)) return { problema: "O título é uma linha só." };
@@ -97,7 +101,9 @@ function chaveDoTitulo(titulo) {
 const primeiroNome = (nome) => String(nome || "").trim().split(/\s+/)[0] || "irmão(ã)";
 // O texto que a pessoa recebe: os campos preenchidos; nada de HTML (o e-mail escapa tudo).
 function preencher(texto, { nome, congregacao }) {
-  return String(texto).replace(/\{\{\s*primeiro_nome\s*\}\}/g, primeiroNome(nome)).replace(/\{\{\s*congregacao\s*\}\}/g, String(congregacao || "sua congregação").trim());
+  // a troca é por função: um "$&" ou "$'" no nome ou na congregação é texto, não padrão de troca
+  const n = primeiroNome(nome), c = String(congregacao || "sua congregação").trim();
+  return String(texto).replace(/\{\{\s*primeiro_nome\s*\}\}/g, () => n).replace(/\{\{\s*congregacao\s*\}\}/g, () => c);
 }
 // O sininho guarda até 1.000 caracteres: o texto inteiro fica em Meu Painel → Comunicações.
 const MAX_SININHO = 1000;
@@ -134,7 +140,8 @@ function validarCriterios(entrada) {
   if (!entrada || typeof entrada !== "object" || Array.isArray(entrada)) return { problema: "Monte o grupo." };
   const estranho = Object.keys(entrada).find((k) => !CRITERIOS.includes(k));
   if (estranho) return { problema: `Critério desconhecido: ${String(estranho).slice(0, 40)}.` };
-  const t = entrada.territorio && typeof entrada.territorio === "object" ? entrada.territorio : { tipo: "TODAS" };
+  if (entrada.territorio != null && (typeof entrada.territorio !== "object" || Array.isArray(entrada.territorio))) return { problema: "Escolha o território." };
+  const t = entrada.territorio || { tipo: "TODAS" };
   if (!TERRITORIOS.includes(t.tipo)) return { problema: "Escolha o território." };
   const ids = listaDeIds(t.ids, "Território");
   if (ids.problema) return ids;
@@ -218,8 +225,11 @@ function montarEmail({ titulo, corpo, categoria, linkSair }) {
   return { assunto: titulo, texto, html };
 }
 
+// A impressão digital do modelo que a pessoa leu: aprovar confere que o texto não mudou entre a leitura e a aprovação.
+const hashDoModelo = (m) => sha256(`${m.categoria}|${m.titulo}|${m.corpo}`);
+
 module.exports = {
   CATEGORIAS, CATEGORIAS_COM_CONSENTIMENTO, CANAIS, CANAIS_PREVISTOS, SITUACOES, TEXTO_VERSAO, TEXTO_SAIDA, HASH_SAIDA, MAX_TITULO, MAX_CORPO, MAX_NOME_GRUPO, MAX_SININHO,
-  textoConsentimento, hashDoTexto, validarTexto, validarModelo, chaveDoTitulo, primeiroNome, preencher, textoDoSininho,
+  ehCategoria, ehCanal, hashDoModelo, textoConsentimento, hashDoTexto, validarTexto, validarModelo, chaveDoTitulo, primeiroNome, preencher, textoDoSininho,
   validarCriterios, descreverCriterios, assinarSaida, lerSaida, montarEmail, escaparHtml, sha256
 };

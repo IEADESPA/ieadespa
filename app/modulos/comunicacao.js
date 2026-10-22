@@ -6,7 +6,7 @@
 //   1) Meu Painel → Comunicações (qualquer login, inclusive PIN): o que a pessoa quer receber, por categoria e por canal, lendo o texto exato de cada autorização; e os comunicados
 //      que ela recebeu, com o "Recebi a convocação" da convocação oficial;
 //   2) aba "Comunicação" (permissão comunicacao, sessão de liderança): ENVIAR (modelo aprovado + grupo montado pelos critérios + quantas pessoas, antes de mandar), ENVIOS (relatório de
-//      entrega e leitura; na convocação, quem não foi alcançado), MODELOS (só o nível geral escreve e aprova) e FICHA EM PAPEL (o "sim" ou o "não" que a pessoa deu no papel).
+//      entrega e leitura; na convocação, quem não foi alcançado), MODELOS (só o nível geral escreve e aprova) e FICHA EM PAPEL (só o nível geral: o "sim" ou o "não" que a pessoa deu no papel).
 // Toda regra mora no servidor (shared/comunicacao.js e shared/comunicacaoDb.js): aqui só se monta o que ele devolve e se manda o que a pessoa fez. 422 = recusa de regra, mostrada tal
 // qual; 404 = a MESMA resposta para "não existe" e "não é seu"; 428 = confirmação reforçada da vD.4 (o mesmo confirmarFatorAgora do fetchProtegido, e a chamada repetida uma vez).
 // Tudo o que vem do servidor e entra em innerHTML passa por escaparHtmlEbd; id de elemento e argumento de ação levam só número inteiro ou código validado aqui.
@@ -129,8 +129,10 @@ function comLimparTela() {
   COM_IDS_LISTAS.forEach(id => { const el = comEl(id); if (el) el.innerHTML = ""; });
   COM_IDS_MSGS.forEach(id => comEscrever(id, "", false));
   comMostrar("comSemAcesso", false);
+  comMostrarPilulasDoGeral(false);   // as pílulas do nível geral não ficam para a próxima pessoa (nem enquanto a aba dela carrega)
   comAplicarSecao("enviar");
 }
+function comMostrarPilulasDoGeral(visivel) { comMostrar("btnComSecaoModelos", visivel); comMostrar("btnComSecaoFicha", visivel); }
 function comChaveDoDono() { return `${authMatricula}|${sessaoDeLiderancaNaTela() ? "senha" : "pin"}`; }
 function comVerificarDono() { if (comDono !== comChaveDoDono()) { comLimparTela(); comDono = comChaveDoDono(); } }
 function comAbaMudou(aba) {
@@ -201,7 +203,8 @@ async function comSalvarPreferenciasAcao(botao) {
     if (!comViva(marca)) return;
     if (data.sucesso === false) {
       comMostrarResultado(data, "comMeuMsg");
-      if (data.textoMudou) await comCarregarMeuPainelAcao();
+      // o texto mudou: relê (a pessoa lê o texto novo e marca de novo) e o motivo continua escrito depois de reler
+      if (data.textoMudou) { await comCarregarMeuPainelAcao(); if (comViva(marca)) comEscrever("comMeuMsg", comMsgErro(data), true); }
       return;
     }
     comPrefs = data; comPintarPreferencias();
@@ -242,13 +245,17 @@ async function comCienciaAcao(envioId, botao) {
 // ============================================================================
 async function comAbrirAba() {
   comVerificarDono();
+  comMostrarPilulasDoGeral(comEhGeral());   // enquanto o catálogo não chega, as pílulas do nível geral não aparecem
   const marca = comMarca("Ges");
-  await comGarantirCatalogos();
+  const cat = await comGarantirCatalogos();
   if (!comViva(marca)) return;
-  if (!comEhGestao()) { comMostrar("comSemAcesso", true); comMostrar("comConteudo", false); return; }
+  // o catálogo não veio (rede, prazo, servidor): é falha, não "sem acesso" — o motivo, e tocar na aba de novo tenta outra vez
+  if (!cat) { comMostrar("comSemAcesso", false); comMostrar("comConteudo", false); comEscrever("comGesMsg", "Não foi possível abrir os comunicados agora. Verifique a internet e toque na aba de novo.", true); return; }
+  comEscrever("comGesMsg", "", false);
+  if (!comEhGestao()) { comMostrar("comSemAcesso", true); comMostrar("comConteudo", false); comMostrarPilulasDoGeral(false); return; }
   comMostrar("comSemAcesso", false); comMostrar("comConteudo", true);
-  comMostrar("btnComSecaoModelos", comEhGeral());
-  if (comSecaoAtual === "modelos" && !comEhGeral()) comSecaoAtual = "enviar";
+  comMostrarPilulasDoGeral(comEhGeral());
+  if ((comSecaoAtual === "modelos" || comSecaoAtual === "ficha") && !comEhGeral()) comSecaoAtual = "enviar";
   await comMostrarSecaoAcao(comSecaoAtual);
 }
 function comAplicarSecao(secao) {
@@ -261,7 +268,7 @@ function comAplicarSecao(secao) {
 }
 async function comMostrarSecaoAcao(secao) {
   const s = COM_SECOES.includes(secao) ? secao : "enviar";
-  if (s === "modelos" && !comEhGeral()) return;
+  if ((s === "modelos" || s === "ficha") && !comEhGeral()) return;   // Modelos e Ficha em papel: só o nível geral
   comAplicarSecao(s);
   if (s === "enviar") await comCarregarEnviar();
   if (s === "envios") await comCarregarEnviosAcao();
@@ -316,7 +323,7 @@ function comPintarEnviar() {
     <div class="com-canais">
       <label class="com-canal"><input type="checkbox" id="comGrpLideranca" data-on-change="comMudouGrupoAcao"> Só quem tem liderança ativa</label>
       <label class="com-canal"><input type="checkbox" id="comGrpEbd" data-on-change="comMudouGrupoAcao"> Só professores de EBD</label>
-      <label class="com-canal"><input type="checkbox" id="comGrpAssembleia" data-on-change="comMudouGrupoAcao"> Só quem tem direito a voto na Assembleia Geral</label></div>
+      ${comOpcoes.geral ? `<label class="com-canal"><input type="checkbox" id="comGrpAssembleia" data-on-change="comMudouGrupoAcao"> Só quem tem direito a voto na Assembleia Geral</label>` : ""}</div>
     <label for="comGrpFormacao">Formação vencida ou vencendo em até … dias (vazio = não filtrar; 0 = só as vencidas)</label>
     <input type="number" id="comGrpFormacao" min="0" max="365" inputmode="numeric" data-on-input="comMudouGrupoAcao">
     <label for="comGrpHabilitacao">Habilitação de voluntário vencida ou vencendo em até … dias (vazio = não filtrar)</label>
@@ -386,8 +393,9 @@ async function comPreviaAcao(botao) {
     const total = comInteiro(data.total) || 0;
     const k = data.canais && typeof data.canais === "object" ? data.canais : {};
     const linha = (rotulo, c) => (c ? `<li>${rotulo}: <strong>${Number(c.receberao) || 0}</strong> recebem; ${Number(c.semConsentimento) || 0} sem autorização; ${Number(c.semContato) || 0} sem ${rotulo === "E-mail" ? "e-mail" : "aparelho"}</li>` : "");
+    const semNascimento = comInteiro(data.semNascimento);
     if (cx) cx.innerHTML = `<div class="com-comunicado"><p><strong>${total}</strong> pessoa(s) no grupo: ${escaparHtmlEbd(data.grupo || "")}</p>
-      <ul>${linha("E-mail", k.EMAIL)}${linha("Celular", k.PUSH)}</ul><p class="subtitle">Todas veem no sininho do sistema. O e-mail sai aos poucos (o serviço aceita 100 por hora).</p></div>`;
+      <ul>${linha("E-mail", k.EMAIL)}${linha("Celular", k.PUSH)}</ul>${semNascimento ? `<p class="subtitle psc-aviso">${semNascimento} sem data de nascimento no cadastro ficaram de fora (peça à Secretaria para completar).</p>` : ""}<p class="subtitle">Todas veem no sininho do sistema. O e-mail sai aos poucos (o serviço aceita 100 por hora).</p></div>`;
     comPrevia = total ? { chave: comChaveDaPrevia(comInteiro(m.modeloId), criterios), total } : null;
     const b = comEl("comBtnEnviar"); if (b) b.disabled = !comPrevia;
   }, "previa");
@@ -408,6 +416,8 @@ async function comEnviarAcao(botao) {
     const cx = comEl("comEnvResultado");
     if (cx) cx.innerHTML = comHtmlRelatorio(data);
   }, "enviar");
+  // o comProteger devolve o botão como estava; depois de enviar (ou do prazo esgotado) a contagem não vale mais: o "Enviar" fica desabilitado até uma contagem nova
+  const b = comEl("comBtnEnviar"); if (b && !comEmCurso.has("enviar")) b.disabled = !comPrevia;
 }
 async function comSalvarGrupoAcao(botao) {
   const nome = comValor("comGrpNome");
@@ -417,14 +427,27 @@ async function comSalvarGrupoAcao(botao) {
     const data = await comPostar("grupo", { nome, criterios: comCriterios() });
     if (!comViva(marca)) return;
     comMostrarResultado(data.sucesso === false ? data : { sucesso: true, mensagem: "Grupo guardado." }, "comEnvMsg");
-    if (data.sucesso !== false) { const g = await comObter("grupos"); if (comViva(marca) && g.sucesso !== false) { comGrupos = comLista(g.grupos); const sel = comModeloEscolhido(); comPintarEnviar(); if (sel) { comEl("comEnvModelo").value = String(comInteiro(sel.modeloId)); comMudouModeloAcao(); } } }
+    if (data.sucesso !== false) { const g = await comObter("grupos"); if (comViva(marca) && g.sucesso !== false) { comGrupos = comLista(g.grupos); comRepintarEnviar(); } }
   }, "grupo");
+}
+// repinta o formulário (a lista de grupos guardados mudou) sem perder o modelo escolhido nem o grupo montado: senão a próxima contagem seria do território inteiro
+function comRepintarEnviar() {
+  const sel = comModeloEscolhido();
+  const criterios = comEl("comGrpTipo") ? comCriterios() : null;
+  comPintarEnviar();
+  if (sel && comEl("comEnvModelo")) { comEl("comEnvModelo").value = String(comInteiro(sel.modeloId)); comMudouModeloAcao(); }
+  if (criterios) comAplicarCriterios(criterios);
+  comInvalidarPrevia();
 }
 function comUsarGrupoAcao() {
   const id = comInteiro(comValor("comGrpSalvos"));
   const g = comGrupos.find(x => comInteiro(x.audienciaId) === id);
   if (!g || !g.criterios || typeof g.criterios !== "object") return;
-  const c = g.criterios;
+  comAplicarCriterios(g.criterios);
+  comInvalidarPrevia();
+  comEscrever("comEnvMsg", "Grupo carregado: confira e toque em \"Ver quantas pessoas\".", false);
+}
+function comAplicarCriterios(c) {
   const tipo = c.territorio && ["TODAS", "CONGREGACAO", "AREA", "REGIAO"].includes(c.territorio.tipo) ? c.territorio.tipo : "TODAS";
   comEl("comGrpTipo").value = tipo;
   comPintarIds(c.territorio && Array.isArray(c.territorio.ids) ? c.territorio.ids : []);
@@ -432,8 +455,6 @@ function comUsarGrupoAcao() {
   comLista(comOpcoes.departamentos).forEach(x => { const el = comEl(`comGrpDep_${comInteiro(x.id)}`); if (el) el.checked = comLista(c.departamentos).includes(comInteiro(x.id)); });
   [["comGrpLideranca", c.lideranca], ["comGrpEbd", c.ebdProfessores], ["comGrpAssembleia", c.assembleiaGeral]].forEach(([id2, v]) => { const el = comEl(id2); if (el) el.checked = v === true; });
   [["comGrpFormacao", c.formacaoVencendoDias], ["comGrpHabilitacao", c.habilitacaoVencendoDias]].forEach(([id2, v]) => { const el = comEl(id2); if (el) el.value = Number.isInteger(v) ? String(v) : ""; });
-  comInvalidarPrevia();
-  comEscrever("comEnvMsg", "Grupo carregado: confira e toque em \"Ver quantas pessoas\".", false);
 }
 async function comExcluirGrupoAcao(botao) {
   const id = comInteiro(comValor("comGrpSalvos"));
@@ -444,7 +465,7 @@ async function comExcluirGrupoAcao(botao) {
     const data = await comPostar("excluir-grupo", { audienciaId: id });
     if (!comViva(marca)) return;
     comMostrarResultado(data.sucesso === false ? data : { sucesso: true, mensagem: "Grupo apagado." }, "comEnvMsg");
-    if (data.sucesso !== false) { comGrupos = comGrupos.filter(g => comInteiro(g.audienciaId) !== id); comPintarEnviar(); }
+    if (data.sucesso !== false) { comGrupos = comGrupos.filter(g => comInteiro(g.audienciaId) !== id); comRepintarEnviar(); }
   }, "grupo");
 }
 
@@ -481,7 +502,8 @@ function comHtmlRelatorio(r) {
     <p class="subtitle">${escaparHtmlEbd(e.categoriaRotulo)} · ${comData(e.criadoEm)} · ${Number(e.total) || 0} pessoa(s) · ${escaparHtmlEbd(e.grupo)}</p>
     <ul>${linhas}</ul>
     <p>Leram no sininho: <strong>${Number(r.lidos) || 0}</strong>${e.categoria === "CONVOCACAO" ? ` · Deram ciência ("Recebi a convocação"): <strong>${Number(r.ciencia) || 0}</strong>` : ""}</p>
-    ${nao ? (nao.length ? `<h4>Não alcançados (nem e-mail, nem celular, nem leitura): procure por telefone</h4><ul>${nao.map(p => {
+    ${nao ? (nao.length ? `<h4>Não alcançados (nem e-mail, nem celular, nem leitura): procure por telefone</h4>${r.naoAlcancadosCortado
+      ? `<p class="subtitle psc-aviso">Mostrando ${nao.length} de ${Number(r.naoAlcancadosTotal) || nao.length}: a lista é cortada; procure os primeiros e abra o relatório de novo depois.</p>` : ""}<ul>${nao.map(p => {
       const tel = p.telefone ? String(p.telefone).replace(/\D/g, "").slice(0, 15) : "";
       return `<li>${escaparHtmlEbd(p.nome)} — ${escaparHtmlEbd(p.congregacao || "")}${tel ? ` — <a href="tel:${escaparHtmlEbd(tel)}">${escaparHtmlEbd(p.telefone)}</a>` : ""}</li>`;
     }).join("")}</ul>` : `<p class="subtitle">Todos foram alcançados por algum canal ou leram.</p>`) : ""}</div>`;
@@ -581,9 +603,11 @@ async function comAprovarModeloAcao(modeloId, botao) {
   if (!(await confirmarAcao(`Aprovar "${String(m.titulo)}"? Depois de aprovado o texto não muda (corrigir cria a versão seguinte), e a versão aprovada anterior deste modelo é arquivada.`, "Aprovar"))) return;
   const marca = comMarca("Ges");
   await comProteger(botao, async () => {
-    const data = await comPostar("aprovar-modelo", { modeloId: id });
+    // a impressão digital do texto que a pessoa viu na lista: se o rascunho mudou enquanto ela decidia, o servidor recusa (409) e a lista é relida
+    const data = await comPostar("aprovar-modelo", { modeloId: id, hash: String(m.hash == null ? "" : m.hash) });
     if (!comViva(marca)) return;
-    comMostrarResultado(data.sucesso === false ? data : { sucesso: true, mensagem: "Modelo aprovado: já pode ser enviado." }, "comModelosMsg");
+    comMostrarResultado(data.sucesso === false ? (data.httpStatus === 409 ? Object.assign({}, data, { mensagem: `${comMsgErro(data)} A lista foi atualizada: confira o texto antes de aprovar.` }) : data)
+      : { sucesso: true, mensagem: "Modelo aprovado: já pode ser enviado." }, "comModelosMsg");
     await comCarregarModelos();
   }, `modelo-${id}`);
 }
@@ -614,6 +638,7 @@ function comPintarFicha() {
       <label class="com-canal"><input type="radio" name="comFichaSim" id="comFichaSim"> Autorizou</label>
       <label class="com-canal"><input type="radio" name="comFichaSim" id="comFichaNao"> Não autorizou</label></fieldset>
     <label for="comFichaData">Data da ficha</label><input type="date" id="comFichaData">
+    <label for="comFichaReferencia">Onde a ficha está guardada (número da ficha, do livro ou da pasta)</label><input type="text" id="comFichaReferencia" maxlength="100" spellcheck="false" placeholder="Ex.: Livro 3, folha 12">
     <div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="comEnviarFichaAcao" data-args-click="${argsAttr(ARG.elemento)}">💾 Lançar a ficha</button></div>`;
 }
 async function comEnviarFichaAcao(botao) {
@@ -622,9 +647,12 @@ async function comEnviarFichaAcao(botao) {
   if (!membroId) { comEscrever("comFichaMsg", "Informe a matrícula.", true); return; }
   if (!sim && !nao) { comEscrever("comFichaMsg", "Marque se a pessoa autorizou ou não.", true); return; }
   if (!comValor("comFichaData")) { comEscrever("comFichaMsg", "Informe a data da ficha.", true); return; }
+  const fichaReferencia = comValor("comFichaReferencia");
+  if (fichaReferencia.length < 3 || fichaReferencia.length > 100) { comEscrever("comFichaMsg", "Informe onde a ficha está guardada (número da ficha, do livro ou da pasta; de 3 a 100 caracteres).", true); return; }
   const marca = comMarca("Ges");
   await comProteger(botao, async () => {
-    const data = await comPostar("ficha", { membroId, canal: comValor("comFichaCanal"), categoria: comValor("comFichaCategoria"), concedido: sim, dataFicha: comValor("comFichaData") });
+    // lançar o consentimento de outra pessoa é ato do nível geral, com a confirmação reforçada (428: o comRequisitar pede e repete uma vez)
+    const data = await comPostar("ficha", { membroId, canal: comValor("comFichaCanal"), categoria: comValor("comFichaCategoria"), concedido: sim, dataFicha: comValor("comFichaData"), fichaReferencia });
     if (!comViva(marca)) return;
     comMostrarResultado(data.httpStatus === 404 ? { sucesso: false, mensagem: "Matrícula não encontrada no seu território." } : data, "comFichaMsg");
   }, "ficha");

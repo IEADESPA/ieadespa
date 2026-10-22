@@ -45,4 +45,33 @@ async function enviarEmailNotificacao({ email, titulo, mensagem, aguardarEntrega
   }
 }
 
-module.exports = { enviarEmailNotificacao };
+// v7.12 — o e-mail de um comunicado (texto e HTML já montados por shared/comunicacao.js). Responde o que aconteceu, para o registro de entrega:
+// { ok:true } aceito pelo serviço · { limite:true } o serviço recusou por excesso (429: nada saiu; a fila tenta na rodada seguinte) · { ok:false } falhou.
+// Um cliente próprio, SEM novas tentativas automáticas: o padrão do SDK repete o 429 esperando o Retry-After (minutos, com o limite da hora estourado) e a rodada da fila
+// estouraria o tempo da função com as entregas presas em "enviando" (revisão independente, 22/10/2026). Aqui o 429 volta na hora e a fila tenta na rodada seguinte.
+let clienteSemRepeticao = null;
+function getClienteComunicado() {
+  if (!ACS_CONNECTION_STRING) return null;
+  if (!clienteSemRepeticao) clienteSemRepeticao = new EmailClient(ACS_CONNECTION_STRING, { retryOptions: { maxRetries: 0 } });
+  return clienteSemRepeticao;
+}
+async function enviarEmailComunicado({ email, assunto, texto, html }) {
+  const emailClient = getClienteComunicado();
+  if (!emailClient || !email) return { ok: false };
+  try {
+    await emailClient.beginSend({
+      senderAddress: REMETENTE,
+      content: { subject: assunto, plainText: texto, html },
+      recipients: { to: [{ address: email }] }
+    });
+    return { ok: true };
+  } catch (e) {
+    const status = e && (e.statusCode || (e.response && e.response.status));
+    if (status === 429 || /too ?many|429/i.test(String(e && (e.code || e.message)))) return { limite: true };
+    // só o código e o status: a mensagem do serviço pode conter o endereço de quem recebe
+    console.error("[COMUNICACAO] falha ao enviar e-mail:", (e && (e.code || e.name)) || "erro", status || "");
+    return { ok: false };
+  }
+}
+
+module.exports = { enviarEmailNotificacao, enviarEmailComunicado };

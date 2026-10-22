@@ -1,5 +1,5 @@
 #!/bin/bash
-# tudo.sh — a bateria inteira (v7.6, v7.7, v7.8, v7.10, v7.11 e v7.11.1), cada grupo de roteiros sobre a sua base restaurada. Rode `bash rodar.sh preparar` antes se o esquema mudou.
+# tudo.sh — a bateria inteira (v7.6, v7.7, v7.8, v7.10, v7.11, v7.11.1 e v7.12), cada grupo de roteiros sobre a sua base restaurada. Rode `bash rodar.sh preparar` antes se o esquema mudou.
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 cd "$AQUI"
 export LINHAS=${LINHAS:-40}
@@ -27,4 +27,6 @@ BASE=cenario-pastoral bash rodar.sh roteiro e2e-25-cuidado-seguranca.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-26-cuidado-corridas.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-27-cuidado-revisao.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-28-mural-site.js
+BASE=cenario-pastoral bash rodar.sh roteiro e2e-29-comunicacao.js
+BASE=cenario-pastoral bash rodar.sh roteiro e2e-30-comunicacao-corridas.js
 echo TUDO-PRONTO

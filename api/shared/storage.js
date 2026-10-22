@@ -127,4 +127,29 @@ async function lerJsonPrivado(nomeBlob) {
   return JSON.parse((await blob.downloadToBuffer()).toString("utf8"));
 }
 
-module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado };
+// v7.12 — o mesmo JSON privado com a VERSÃO (ETag), para gravar só se ninguém gravou no meio (a marca da fila de comunicados não pode ter um valor novo
+// sobrescrito por uma gravação velha que chegou atrasada). lerJsonPrivadoComVersao: { dados, etag } ou null (sem blob). salvarJsonPrivadoSe: com `etag`, grava só se a
+// versão ainda é essa; com etag null, só se o blob ainda não existe; se alguém gravou no meio, lança um erro com `conflito: true`.
+async function lerJsonPrivadoComVersao(nomeBlob) {
+  const blob = getContainerClient(CONTAINER_CACHE_PUBLICO).getBlockBlobClient(nomeBlob);
+  if (!(await blob.exists())) return null;
+  const r = await blob.download();
+  const partes = [];
+  for await (const p of r.readableStreamBody) partes.push(p);
+  return { dados: JSON.parse(Buffer.concat(partes).toString("utf8")), etag: r.etag };
+}
+async function salvarJsonPrivadoSe(nomeBlob, objeto, etag) {
+  const container = getContainerClient(CONTAINER_CACHE_PUBLICO);
+  await container.createIfNotExists();
+  const texto = JSON.stringify(objeto);
+  try {
+    await container.getBlockBlobClient(nomeBlob).upload(texto, Buffer.byteLength(texto), {
+      blobHTTPHeaders: { blobContentType: "application/json" }, conditions: etag ? { ifMatch: etag } : { ifNoneMatch: "*" }
+    });
+  } catch (e) {
+    if (e && (e.statusCode === 412 || e.statusCode === 409)) { const c = new Error("o blob mudou no meio"); c.conflito = true; throw c; }
+    throw e;
+  }
+}
+
+module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };

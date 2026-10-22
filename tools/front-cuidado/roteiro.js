@@ -6,19 +6,30 @@
 // sinal de risco sem inventar "a liderança foi avisada", 429, rede caída), a moderação (publicar, recusa do nome, lido, marcar e desmarcar o risco com 428, acompanhar, pedido
 // recebido em mãos), o boletim (impressão) e o painel, a saída da aba e a troca de login, respostas atrasadas, duplo clique, o prazo de 20 s e a acessibilidade.
 "use strict";
-const { criarAmbiente, lerApp } = require("./ambiente");
+const { criarAmbiente, lerApp: lerAppDoDisco } = require("./ambiente");
 const F = require("./fixtures");
 const { ATAQUE, HORA, DIA } = F;
 
 async function rodar({ mutar = {}, so = null } = {}) {
   const T = { total: 0, falhas: [], cenarioAtual: "" };
+  // as conferências por texto (contrato, CSS, campos) leem o MESMO código que a tela roda: com `mutar`, a troca vale aqui também (mutacoes.js)
+  const lerApp = (rel) => {
+    let codigo = lerAppDoDisco(rel);
+    for (const [de, para] of (mutar[rel] || [])) {
+      const n = codigo.split(de).length - 1;
+      if (n !== 1) throw new Error(`mutação inaplicável em ${rel} (${n} ocorrências): ${de.slice(0, 80)}`);
+      codigo = codigo.replace(de, () => para);
+    }
+    return codigo;
+  };
   const confere = (cond, msg) => { T.total++; if (!cond) T.falhas.push(`${T.cenarioAtual}: ${msg}`); };
   const cenarios = [];
   const cenario = (nome, fn) => cenarios.push({ nome, fn });
   const AGORA = Date.now();
   const hojeBr = (ms = AGORA) => new Date(ms - 3 * HORA).toISOString().slice(0, 10);
   const somarDias = (iso, n) => { const [a, m, d] = iso.split("-").map(Number); return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10); };
-  const novo = (srv, opcoes) => criarAmbiente(Object.assign({ mutar, agora: new Date(AGORA).toISOString(), servidor: srv ? srv.servidor : null }, opcoes || {}));
+  const AMBIENTES = [];   // os pedidos de todo ambiente criado ficam anotados: no fim, nenhum pedido com corpo (POST) levou nada no endereço
+  const novo = (srv, opcoes) => { const env = criarAmbiente(Object.assign({ mutar, agora: new Date(AGORA).toISOString(), servidor: srv ? srv.servidor : null }, opcoes || {})); AMBIENTES.push(env.api.todas); return env; };
   // todo servidor criado fica anotado: no fim, nenhum pode ter tido erro interno (500) nem consulta que o banco falso não conhece
   const SERVIDORES = [];
   const servidor = (op) => { const s = F.criarServidor(Object.assign({ agoraMs: AGORA }, op || {})); s.cenario = T.cenarioAtual; SERVIDORES.push(s); return s; };
@@ -830,6 +841,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(!env.doc.body.classList.contains("cpa-imprimindo"), "a classe de impressão sai depois (afterprint)");
     const css = lerApp("style.css");
     confere(/@media print \{[^}]*#cpaNotaCx[^}]*display: none !important/.test(css) && /body\.cpa-imprimindo #cpaBolImprimivel \{ position: absolute/.test(css), "o CSS de impressão esconde a nota e imprime só o boletim");
+    // (prova de mutação, 21/10/2026) "Imprimir" esconde TODO o resto da página e só o boletim volta a aparecer: sem a primeira regra, a folha leva a página inteira
+    confere(/@media print \{[\s\S]*?body\.cpa-imprimindo \* \{ visibility: hidden !important; \}[\s\S]*?body\.cpa-imprimindo #cpaBolImprimivel, body\.cpa-imprimindo #cpaBolImprimivel \* \{ visibility: visible !important; \}/.test(css),
+      "ao imprimir o boletim, tudo o mais fica invisível e só #cpaBolImprimivel (com o que tem dentro) aparece");
     await clicar(env, env.e("btnCpaSecaoPainel"));
     confere(texto(env, "cpaSecaoPainel").includes("EBD e as reuniões") && texto(env, "cpaSecaoPainel").includes("não registra presença nos cultos"), "o painel explica o que a detecção mede");
     const linhas = desc(env, env.e("cpaPainelLista")).filter(x => x.localName === "tr");
@@ -1365,7 +1379,1008 @@ async function rodar({ mutar = {}, so = null } = {}) {
       const sem = campos.filter(c => !c.includes('spellcheck="false"'));
       confere(campos.length >= 18 && sem.length === 0, `item 9: todo campo de texto livre tem spellcheck="false" (${campos.length} campos; sem: ${sem.map(c => (/id="([^"]+)"/.exec(c) || [])[1]).join(", ")})`);
       for (const id of ["cpaDesMotivo", "cpaFcObs", "cpaFkObs", "cpaFaMotivo", "cpaFxMotivo", "cpaNovoMotivo", "cpaPubTexto"]) confere(campos.some(c => c.includes(`id="${id}"`) && c.includes('spellcheck="false"')), `item 9: ${id} com spellcheck="false"`);
+      // (prova de mutação, 21/10/2026) o navegador também não guarda nem oferece de novo o que se escreve: nome, nota e pedido num aparelho que outra pessoa usa depois
+      const semAuto = campos.filter(c => !c.includes('autocomplete="off"'));
+      confere(campos.length >= 18 && semAuto.length === 0, `todo campo de texto livre tem autocomplete="off" (sem: ${semAuto.map(c => (/id="([^"]+)"/.exec(c) || [])[1]).join(", ")})`);
     }
+  });
+
+  // ============================================================================================================================================
+  // 12c) O QUE A PROVA DE MUTAÇÃO MOSTROU QUE FALTAVA (21/10/2026): cada bloco abaixo mata mutantes que escapavam (mutacoes.js)
+  // ============================================================================================================================================
+  const cuidado = (env) => env.api.chamadas.filter(c => c.caminho.startsWith("cuidado-pastoral/"));
+  const nomesDe = (lista) => lista.map(c => c.chave).join(", ");
+  const sair = async (env, aba = "protecao") => { env.ev(`mostrarAbaSecretaria("${aba}")`); await env.ocioso(); };
+  const voltar = async (env) => { env.ev('mostrarAbaSecretaria("cuidadopastoral")'); await env.ocioso(); };
+  const toastsErro = (env) => [...env.e("toastContainer").children].filter(t => t.className.includes("toast-erro")).map(t => t.textContent);
+  const toastsOk = (env) => [...env.e("toastContainer").children].filter(t => t.className.includes("toast-sucesso")).map(t => t.textContent);
+  // a resposta de verdade do servidor imitado (para servir alterada como resposta fixa: um campo com ataque, uma lista vazia...)
+  const respostaReal = async (srv, token, metodo, caminho, consulta = {}, corpo = null) => JSON.parse(JSON.stringify((await srv.servidor({ metodo, caminho: `cuidado-pastoral/${caminho}`, consulta, corpo, cabecalhos: { "x-auth-token": token } })).corpo));
+  const cartaoPedido = (env, t) => desc(env, env.e("cpaPedLista")).find(x => x.localName === "div" && x.className.includes("cpa-pedido") && x.textContent.includes(t)) || null;
+  const liNota = (env, t) => desc(env, env.e("cpaNotasCx")).find(x => x.localName === "li" && x.className.includes("cpa-nota") && x.textContent.includes(t)) || null;
+  cenario("Prova de mutação: papéis, catálogo, respostas fora da tela, saída e troca de login", async () => {
+    const srv = servidor(); const I = semear(srv); semearNotas(srv, I);
+    // o catálogo de verdade do servidor, para servir alterado (telefones) como resposta fixa
+    const catalogoDe = async (token) => (await srv.servidor({ metodo: "GET", caminho: "cuidado-pastoral/catalogos", consulta: {}, corpo: null, cabecalhos: { "x-auth-token": token } })).corpo;
+
+    // ---- papéis: a tela confere por conta própria (as ações também podem ser chamadas direto) ----
+    {
+      const env = novo(srv);
+      env.sessao({ matricula: 11, token: "semperm", permissoes: ["pessoas"] });
+      env.ev("cpaCarregarOpcoesAcao()"); await env.ocioso();
+      confere(cuidado(env).length === 0, `sem a permissão cuidado_pastoral, a carga da aba chamada direto não pede nada (${nomesDe(cuidado(env))})`);
+    }
+    {
+      const env = novo(srv);
+      env.sessao({ matricula: 11, token: "semperm", permissoes: ["cuidado_pastoral"] });   // a tela acha que tem; o servidor diz que não é gestão
+      env.ev('mostrarAbaSecretaria("cuidadopastoral")'); await env.ocioso();
+      env.limparRegistro();
+      env.ev('cpaMostrarSecaoAcao("pedidos")'); env.ev("cpaAbrirFormNovoAcao(null)"); env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it1.ItemId}, null)`); await env.ocioso();
+      confere(cuidado(env).length === 0 && env.e("cpaNovoCx").innerHTML === "", `quem o servidor diz que não é gestão não abre seção, formulário nem acompanhamento, nem chamando direto (${nomesDe(cuidado(env))})`);
+      env.ev("limparSessao()"); await env.ocioso();
+      confere(env.e("cpaSemAcesso").style.display === "none", "sair da sessão esconde o aviso 'sem acesso' do login anterior");
+    }
+    {
+      const env = novo(srv);
+      await abrirAba(env, "geral", 13, true);
+      await abrirItemPorNome(env, "Maria Afastada");
+      const li = desc(env, env.e("cpaNotasCx")).find(x => x.localName === "li" && x.className.includes("cpa-nota") && x.textContent.includes("Diác. João"));
+      confere(!!li && !!botao(env, "Quem abriu", li), "o nível geral vê 'Quem abriu' também nas notas que outros escreveram");
+    }
+    {
+      // o responsável por PIN (não gere): trocar, adiar e cancelar não saem nem chamando direto
+      const env = novo(srv);
+      await abrirMeu(env, "pin30", 30);
+      await abrirItemPorNome(env, "Joaquim Menor", "cpaMeusLista");
+      const det = g(env, "cpaDet");
+      confere(!!det && det.dados.podeGerir !== true, "(o responsável abriu o acompanhamento, sem podeGerir)");
+      env.limparRegistro();
+      env.ev('cpaAbrirFormAcao("responsavel", null)'); await env.ocioso();
+      confere(env.e("cpaFormAcao").innerHTML === "", "quem não gere não abre 'Trocar responsável', nem chamando direto");
+      env.ev('document.getElementById("cpaFormAcao").innerHTML = cpaFormAdiar()');
+      digitar(env, "cpaFaData", somarDias(hojeBr(), 3)); digitar(env, "cpaFaMotivo", "Motivo do teste de mutação");
+      env.ev("cpaEnviarAdiarAcao(null)"); await env.ocioso();
+      env.ev('document.getElementById("cpaFormAcao").innerHTML = cpaFormCancelar()');
+      escolher(env, "cpaFxDesfecho", "DUPLICADO"); digitar(env, "cpaFxMotivo", "Motivo do teste de mutação");
+      env.ev("cpaEnviarCancelarAcao(null)"); await env.ocioso();
+      env.ev('cpaBuscaRes.troca = [{ membroId: 31, nome: "Irmã Rute" }]; cpaEnviarTrocaAcao(31, null);'); await env.ocioso();
+      const modal = !env.e("modalOverlay").classList.contains("escondido");
+      confere(!modal && !env.api.chamadas.some(c => /cuidado-pastoral\/(adiar|cancelar|atribuir)$/.test(c.caminho)), `quem não gere não adia, não cancela e não troca o responsável, nem chamando direto (modal: ${modal}; ${nomesDe(cuidado(env))})`);
+      if (modal) await env.responderModal(false);
+    }
+
+    // ---- textos e respostas que só a tela trata ----
+    {
+      const env = novo(srv);
+      await abrirMeu(env, "pin60", 60);
+      env.limparRegistro();
+      digitar(env, "cpaPvMotivo", "x".repeat(400));
+      await clicar(env, env.e("cpaPvBotao"));
+      confere(texto(env, "cpaPvMsg").includes("no máximo") && chamadas(env, "POST cuidado-pastoral/pedir-visita").length === 0, `o texto acima do limite é barrado na tela (${texto(env, "cpaPvMsg").slice(0, 80)})`);
+      // 4xx sem 'sucesso' no corpo é recusa (o texto fica no campo)
+      env.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 422, corpo: { mensagem: "RECUSA-SEM-CAMPO" } };
+      escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", "Pela saúde da minha avó."); marcar(env, "cpaPoBolNao");
+      await clicar(env, env.e("cpaPoBotao"));
+      confere(texto(env, "cpaOracaoResultado").includes("RECUSA-SEM-CAMPO") && texto(env, "cpaOracaoResultado").includes("NÃO foi enviado") && env.e("cpaPoTexto").value.includes("avó"),
+        `a recusa 4xx sem o campo 'sucesso' é recusa: 'NÃO foi enviado' e o texto fica (${texto(env, "cpaOracaoResultado").slice(0, 120)})`);
+      delete env.api.rotas["POST cuidado-pastoral/pedir-oracao"];
+    }
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      env.limparRegistro();
+      env.api.rotas["GET cuidado-pastoral/fila"] = { status: 200, corpo: [] };
+      escolher(env, "cpaFiltroSituacao", "URGENTES"); await env.ocioso();
+      confere(texto(env, "cpaFilaMsg").includes("Resposta inesperada do servidor (200)"), `um corpo que não é objeto (lista) é resposta inesperada (${texto(env, "cpaFilaMsg")})`);
+      env.api.rotas["GET cuidado-pastoral/fila"] = { status: 422, corpo: { sucesso: false, mensagem: "FILA-RECUSADA" } };
+      escolher(env, "cpaFiltroSituacao", "VENCIDOS"); await env.ocioso();
+      confere(toastsErro(env).some(t => t.includes("FILA-RECUSADA")) && !toastsOk(env).some(t => t.includes("FILA-RECUSADA")), "a recusa sai como aviso de ERRO (não de sucesso)");
+      delete env.api.rotas["GET cuidado-pastoral/fila"];
+      // 428 recusado: a mensagem é a da tela (o que fazer), não a do servidor
+      escolher(env, "cpaFiltroSituacao", "ABERTOS"); await env.ocioso();
+      await abrirItemPorNome(env, "Maria Afastada");
+      env.ctx.__fatorConfirmar = async () => false;
+      const ln3 = desc(env, env.e("cpaNotasCx")).find(x => x.localName === "li" && x.textContent.includes("Pra. Lídia Área") && x.textContent.includes("Somente pastor"));
+      await clicar(env, botao(env, "Abrir a nota", ln3));
+      confere(texto(env, "cpaNotasMsg").includes("Tente de novo e confirme quando a tela pedir"), `428 recusado: a tela diz o que fazer (${texto(env, "cpaNotasMsg").slice(0, 100)})`);
+    }
+
+    // ---- o catálogo ----
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      env.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 503, corpo: { sucesso: false, mensagem: "fora do ar" } };
+      await sair(env); env.limparRegistro(); await voltar(env);
+      confere(g(env, "cpaCatalogos") !== null && !texto(env, "cpaGesMsg").includes("Não foi possível carregar as opções") && chamadas(env, "GET cuidado-pastoral/fila").length === 1,
+        "a falha ao recarregar o catálogo não apaga o que valia: a aba segue montada");
+      delete env.api.rotas["GET cuidado-pastoral/catalogos"];
+    }
+    {
+      const env = novo(srv);
+      env.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 503, corpo: { sucesso: false, mensagem: "fora do ar" } };
+      await abrirAba(env);
+      confere(texto(env, "cpaGesMsg").includes("Não foi possível carregar as opções") && chamadas(env, "GET cuidado-pastoral/fila").length === 0, "sem catálogo a aba avisa e não monta nada");
+      const envM = novo(srv);
+      envM.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 503, corpo: { sucesso: false, mensagem: "fora do ar" } };
+      await abrirMeu(envM, "pin60", 60);
+      confere(texto(envM, "cpaMeuMsg").includes("Não foi possível carregar as opções"), "Meu Painel sem catálogo avisa");
+      envM.ev("cpaEnviarOracaoAcao(null)"); await envM.ocioso();
+      confere(chamadas(envM, "POST cuidado-pastoral/pedir-oracao").length === 0, "pedir oração sem catálogo não quebra nem envia");
+      const tels = desc(envM, envM.e("cpaAjudaFixa")).filter(x => x.localName === "a").map(x => x.getAttribute("href"));
+      confere(JSON.stringify(tels) === JSON.stringify(["tel:188", "tel:190", "tel:180", "tel:100"]), `sem catálogo os telefones de ajuda continuam (${tels.join(",")})`);
+    }
+    {
+      const env = novo(srv);
+      env.api.rotas["GET cuidado-pastoral/congregacoes"] = { status: 422, corpo: { sucesso: false, mensagem: "CONG-FALHOU" } };
+      await abrirAba(env);
+      confere(texto(env, "cpaGesMsg").includes("Não foi possível carregar as congregações") && texto(env, "cpaGesMsg").includes("CONG-FALHOU"), "a falha das congregações é dita");
+      env.ev("limparSessao()"); await env.ocioso();
+      confere(texto(env, "cpaGesMsg") === "", "sair da sessão apaga as mensagens do login anterior");
+    }
+    {
+      // telefones: o servidor sem nenhum (os padrão entram), um com máscara (o endereço leva só algarismos) e um sem número (o nome aparece)
+      const cat = await catalogoDe("pin60");
+      const env = novo(srv);
+      env.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 200, corpo: Object.assign({}, cat, { contatosDeAjuda: [] }) };
+      await abrirMeu(env, "pin60", 60);
+      const tels = desc(env, env.e("cpaAjudaFixa")).filter(x => x.localName === "a").map(x => x.getAttribute("href"));
+      confere(JSON.stringify(tels) === JSON.stringify(["tel:188", "tel:190", "tel:180", "tel:100"]), `o servidor sem telefones: os padrão (188, 190, 180, 100) entram (${tels.join(",")})`);
+      const env2 = novo(srv);
+      env2.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 200, corpo: Object.assign({}, cat, { contatosDeAjuda: [{ nome: "PLANTAO-X", numero: "(91) 3333-4444", descricao: "d" }, { nome: "SEM-NUMERO-Y", numero: null, descricao: "procure na secretaria" }] }) };
+      await abrirMeu(env2, "pin60", 60);
+      const tels2 = desc(env2, env2.e("cpaAjudaFixa")).filter(x => x.localName === "a").map(x => x.getAttribute("href"));
+      confere(JSON.stringify(tels2) === JSON.stringify(["tel:91333344"]) && texto(env2, "cpaAjudaFixa").includes("SEM-NUMERO-Y"), `o endereço tel: leva só algarismos e o contato sem número aparece pelo nome (${tels2.join(",")})`);
+    }
+
+    // ---- respostas que chegam fora da tela: sair e voltar, trocar de login sem passar pela saída ----
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+      escolher(env, "cpaNovoTipo", "VISITANTE"); await env.ocioso(); marcar(env, "cpaNovoCadNao"); await env.ocioso();
+      digitar(env, "cpaNovoNome", "Visitante Atrasado"); digitar(env, "cpaNovoContato", "(91) 98877-6655");
+      const r = env.retem(c => c.chave === "POST cuidado-pastoral/abrir");
+      env.doc.clicar(env.e("cpaNovoBotao")); await env.ocioso();
+      await sair(env); await voltar(env);
+      const n0 = chamadas(env, "GET cuidado-pastoral/fila").length, t0 = env.toasts().length;
+      r.liberar(); await env.ocioso();
+      confere(chamadas(env, "GET cuidado-pastoral/fila").length === n0 && env.toasts().length === t0, "o 'abrir' que volta depois de sair e voltar à aba não relê nem pinta a aba nova");
+    }
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      const r = env.retem(c => c.chave === "GET cuidado-pastoral/fila" && c.consulta.situacao === "ENCERRADOS");
+      escolher(env, "cpaFiltroSituacao", "ENCERRADOS"); await env.ocioso();
+      env.sessao({ matricula: 12, token: "area" });   // outro login sem passar pela saída (a tela ainda não foi refeita)
+      r.liberar(); await env.ocioso();
+      confere(!texto(env, "cpaFilaLista").includes("Encerrada Antiga"), "a fila do login anterior que chega depois da troca de login não é pintada");
+    }
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      const r = env.retem(c => c.chave === "GET cuidado-pastoral/item");
+      env.doc.clicar(botao(env, "Abrir acompanhamento", cartaoDe(env, "Carla Visitante"))); await env.ocioso();
+      env.sessao({ matricula: 12, token: "area" });
+      r.liberar(); await env.ocioso();
+      confere(!detalhe(env).includes("Carla Visitante"), "o acompanhamento que chega depois da troca de login não é pintado");
+    }
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      srv.novoPedido({ solicitante: 60, texto: "RISCO-TROCA-LOGIN", risco: true });
+      const r = env.retem(c => c.chave === "GET cuidado-pastoral/pedidos" && c.consulta.situacao === "RISCO");
+      env.doc.clicar(env.e("btnCpaPedRisco")); await env.ocioso();
+      env.sessao({ matricula: 12, token: "area" });
+      r.liberar(); await env.ocioso();
+      confere(!texto(env, "cpaPedLista").includes("RISCO-TROCA-LOGIN"), "os pedidos que chegam depois da troca de login não são pintados");
+    }
+    {
+      // (a Pastora de Área vê as duas congregações: o boletim filtrado é outro texto, e a troca é para o Dirigente)
+      srv.novoPedido({ congregacaoId: 1, solicitante: 31, texto: "bt1", moderacao: "APROVADO", textoBoletim: "BOLTROCA-CENTRAL pela família.", boletimAte: somarDias(hojeBr(), 5) });
+      srv.novoPedido({ congregacaoId: 2, solicitante: 11, texto: "bt2", moderacao: "APROVADO", textoBoletim: "BOLTROCA-VILA pela saúde.", boletimAte: somarDias(hojeBr(), 6) });
+      const env = novo(srv);
+      await abrirAba(env, "area", 12);
+      await clicar(env, env.e("btnCpaSecaoBoletim"));
+      const r = env.retem(c => c.chave === "GET cuidado-pastoral/boletim" && c.consulta.congregacaoId === "2");
+      escolher(env, "cpaBolCong", "2"); await env.ocioso();
+      const antes = env.e("cpaBolImprimivel").innerHTML;
+      env.sessao({ matricula: 10, token: "lid" });
+      r.liberar(); await env.ocioso();
+      confere(antes.includes("BOLTROCA-CENTRAL") && env.e("cpaBolImprimivel").innerHTML === antes, "o boletim que chega depois da troca de login não é pintado");
+      const r2 = env.retem(c => c.chave === "GET cuidado-pastoral/painel");
+      env.sessao({ matricula: 12, token: "area" });
+      env.doc.clicar(env.e("btnCpaSecaoPainel")); await env.ocioso();
+      env.sessao({ matricula: 10, token: "lid" });
+      r2.liberar(); await env.ocioso();
+      confere(env.e("cpaPainelLista").innerHTML === "", "o painel que chega depois da troca de login não é pintado");
+    }
+    {
+      // fora da aba, nada se pede (as ações chamadas direto, como faria uma releitura atrasada)
+      const env = novo(srv);
+      await abrirAba(env);
+      await sair(env); env.limparRegistro();
+      env.ev("cpaCarregarFilaAcao()"); env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it1.ItemId}, null)`); await env.ocioso();
+      confere(cuidado(env).length === 0, `fora da aba a fila e o acompanhamento não são pedidos (${nomesDe(cuidado(env))})`);
+      await voltar(env); env.limparRegistro();
+      env.ev("cpaCarregarPedidosAcao()"); await env.ocioso();
+      confere(chamadas(env, "GET cuidado-pastoral/pedidos").length === 0, "na seção da fila os pedidos não são pedidos");
+    }
+    {
+      // o ato num pedido que volta depois de trocar de seção: nada é relido nem avisado
+      const env = novo(srv);
+      await abrirAba(env);
+      srv.novoPedido({ solicitante: 60, texto: "PEDIDO-SECAO-TROCADA" });
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      const card = desc(env, env.e("cpaPedLista")).find(x => x.localName === "div" && x.className.includes("cpa-pedido") && x.textContent.includes("PEDIDO-SECAO-TROCADA"));
+      const r = env.retem(c => c.chave === "POST cuidado-pastoral/moderar");
+      env.doc.clicar(botao(env, "Marcar como lido", card)); await env.ocioso();
+      await clicar(env, env.e("btnCpaSecaoBoletim"));
+      const n0 = chamadas(env, "GET cuidado-pastoral/pedidos").length, t0 = env.toasts().length;
+      r.liberar(); await env.ocioso();
+      confere(chamadas(env, "GET cuidado-pastoral/pedidos").length === n0 && env.toasts().length === t0, "o 'lido' que volta depois de trocar de seção não relê os pedidos nem avisa");
+    }
+    {
+      // a confirmação aberta e a aba fechada: confirmar depois não grava (marcar risco e cancelar)
+      const env = novo(srv);
+      await abrirAba(env);
+      srv.novoPedido({ solicitante: 60, texto: "PEDIDO-MODAL-ABERTO" });
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      const card = desc(env, env.e("cpaPedLista")).find(x => x.localName === "div" && x.className.includes("cpa-pedido") && x.textContent.includes("PEDIDO-MODAL-ABERTO"));
+      env.doc.clicar(botao(env, "Marcar sinal de risco", card)); await env.ocioso();
+      await sair(env);
+      const m = await env.responderModal(true); await env.ocioso();
+      confere(m.aberto && chamadas(env, "POST cuidado-pastoral/risco").length === 0, "marcar risco: com a aba fechada enquanto a confirmação estava aberta, nada é gravado");
+      await voltar(env); await clicar(env, env.e("btnCpaSecaoFila"));
+      await abrirItemPorNome(env, "Carla Visitante");
+      await clicar(env, botao(env, "✖️ Cancelar", env.e("cpaDetalheGes")));
+      escolher(env, "cpaFxDesfecho", "DUPLICADO"); digitar(env, "cpaFxMotivo", "Aberto em duplicidade");
+      env.doc.clicar(env.e("cpaFormBotao")); await env.ocioso();
+      await sair(env);
+      const m2 = await env.responderModal(true); await env.ocioso();
+      confere(m2.aberto && chamadas(env, "POST cuidado-pastoral/cancelar").length === 0, "cancelar: com a aba fechada enquanto a confirmação estava aberta, nada é gravado");
+    }
+    {
+      // o pedido em mãos que volta depois de sair e voltar (com o formulário aberto de novo): nada é fechado nem avisado
+      const env = novo(srv);
+      await abrirAba(env);
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      await clicar(env, botao(env, "Registrar pedido recebido em mãos"));
+      marcar(env, "cpaRpCadNao"); await env.ocioso();
+      digitar(env, "cpaRpNome", "Dona Francisca"); escolher(env, "cpaRpCategoria", "SAUDE"); digitar(env, "cpaRpTexto", "Pela saúde do marido."); marcar(env, "cpaRpBolNao");
+      const r = env.retem(c => c.chave === "POST cuidado-pastoral/registrar-pedido");
+      env.doc.clicar(env.e("cpaRpBotao")); await env.ocioso();
+      await sair(env); await voltar(env);
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      await clicar(env, botao(env, "Registrar pedido recebido em mãos"));
+      const t0 = env.toasts().length;
+      r.liberar(); await env.ocioso();
+      confere(env.e("cpaRegPedCx").innerHTML !== "" && texto(env, "cpaRpMsg") === "" && env.toasts().length === t0, "o pedido em mãos que volta depois de sair e voltar não mexe no formulário novo");
+    }
+    {
+      // o catálogo da primeira visita que chega depois de sair da aba
+      const env = novo(srv);
+      const r = env.retem(c => c.chave === "GET cuidado-pastoral/catalogos");
+      await abrirAba(env);
+      await sair(env);
+      r.liberar(); await env.ocioso();
+      confere(env.e("cpaFiltroCong").options.length === 0 && chamadas(env, "GET cuidado-pastoral/fila").length === 0, "o catálogo que chega depois de sair da aba não monta nada");
+    }
+    {
+      // imprimir e sair da aba antes do afterprint: a classe sai
+      const env = novo(srv);
+      await abrirAba(env);
+      await clicar(env, env.e("btnCpaSecaoBoletim"));
+      await clicar(env, botao(env, "🖨️ Imprimir"));
+      confere(env.doc.body.classList.contains("cpa-imprimindo"), "(a classe de impressão está no corpo)");
+      await sair(env);
+      confere(!env.doc.body.classList.contains("cpa-imprimindo"), "sair da aba tira a classe de impressão");
+    }
+
+    // ---- Meu Painel: sair e voltar ----
+    {
+      const env = novo(srv);
+      await abrirMeu(env, "pin60", 60);
+      escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", "Pela saúde do meu pai."); marcar(env, "cpaPoBolNao");
+      const r = env.retem(c => c.chave === "POST cuidado-pastoral/pedir-oracao");
+      env.doc.clicar(env.e("cpaPoBotao")); await env.ocioso();
+      digitar(env, "cpaPvMotivo", "Quero uma visita em casa");
+      const r2 = env.retem(c => c.chave === "POST cuidado-pastoral/pedir-visita");
+      env.doc.clicar(env.e("cpaPvBotao")); await env.ocioso();
+      env.ev('mostrarSubAbaMeupainel("perfil")'); await env.ocioso();
+      env.ev('mostrarSubAbaMeupainel("cuidado")'); await env.ocioso();
+      r.liberar(); r2.liberar(); await env.ocioso();
+      confere(env.e("cpaOracaoResultado").innerHTML === "" && env.e("cpaVisitaResultado").innerHTML === "", "o pedido de oração e o de visita que voltam depois de sair e voltar à sub-aba não pintam a sub-aba nova");
+    }
+    {
+      const env = novo(srv);
+      I.it1.ResponsavelMembroId = 30;
+      await abrirMeu(env, "pin30", 30);
+      confere(g(env, "cpaMeus").length > 0, "(o responsável tem acompanhamentos)");
+      env.ev('mostrarSubAbaMeupainel("perfil")'); await env.ocioso();
+      confere(g(env, "cpaMeus").length === 0 && env.e("cpaMeusCx").style.display === "none", "sair da sub-aba tira 'Meus acompanhamentos' da memória e da vista");
+      env.limparRegistro();
+      env.ev("cpaRecarregarMeus(); cpaCarregarMeusPedidosAcao(); cpaCarregarBoletimMeu();"); await env.ocioso();
+      confere(cuidado(env).length === 0, `fora da sub-aba 'meus', 'meus pedidos' e o boletim não são pedidos (${nomesDe(cuidado(env))})`);
+      I.it1.ResponsavelMembroId = 31;
+    }
+    {
+      // de Meu Painel → Cuidado para outra aba: o que a pessoa escrevia sai
+      const env = novo(srv);
+      env.sessao({ matricula: 10, token: "lid" });
+      env.ev('mostrarAbaSecretaria("meupainel")'); env.ev('mostrarSubAbaMeupainel("cuidado")'); await env.ocioso();
+      digitar(env, "cpaPoTexto", "TEXTO-ESCRITO-ZZZ");
+      await voltar(env);
+      confere(env.e("cpaPoTexto") === null && env.e("cpaOracaoForm").innerHTML === "", "ir de Meu Painel → Cuidado para outra aba tira da página o que a pessoa escrevia");
+    }
+
+    // ---- a saída da sessão: nada do login anterior fica ----
+    {
+      const env = novo(srv);
+      await abrirAba(env);
+      escolher(env, "cpaFiltroSituacao", "ENCERRADOS"); await env.ocioso();
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      await clicar(env, env.e("btnCpaPedRisco"));
+      env.ev("limparSessao()"); await env.ocioso();
+      confere(env.e("btnCpaPedAguardando").getAttribute("aria-pressed") === "true" && env.e("btnCpaPedRisco").getAttribute("aria-pressed") === "false", "sair da sessão volta as pílulas dos pedidos ao padrão");
+      env.limparRegistro();
+      await abrirAba(env);
+      const f = ultima(env, "GET cuidado-pastoral/fila");
+      confere(!!f && f.consulta.situacao === "ABERTOS" && chamadas(env, "GET cuidado-pastoral/pedidos").length === 0, `o login seguinte começa na fila, com o filtro padrão (${f && f.consulta.situacao})`);
+      await clicar(env, env.e("btnCpaSecaoPedidos"));
+      const p = ultima(env, "GET cuidado-pastoral/pedidos");
+      confere(!!p && p.consulta.situacao === "AGUARDANDO", `o login seguinte começa os pedidos em 'Esperando moderação' (${p && p.consulta.situacao})`);
+      await clicar(env, env.e("btnCpaSecaoFila"));
+      await abrirItemPorNome(env, "Carla Visitante");
+      env.ev("limparSessao()"); await env.ocioso();
+      confere(env.e("cpaDetalheGesCx").style.display === "none" && env.e("cpaFilaCx").style.display !== "none", "sair da sessão com um acompanhamento aberto volta a aba à lista");
+    }
+    {
+      const env = novo(srv);
+      await abrirMeu(env, "pin60", 60);
+      escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", "Pela saúde da minha tia."); marcar(env, "cpaPoBolNao");
+      const r = env.retem(c => c.chave === "POST cuidado-pastoral/pedir-oracao");
+      env.doc.clicar(env.e("cpaPoBotao")); await env.ocioso();
+      env.ev("limparSessao()"); await env.ocioso();
+      await abrirMeu(env, "pin31", 31);
+      escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", "Pela saúde do meu irmão."); marcar(env, "cpaPoBolNao");
+      await clicar(env, env.e("cpaPoBotao"));
+      confere(chamadas(env, "POST cuidado-pastoral/pedir-oracao").length === 2, "a trava de duplo clique do login anterior não bloqueia o login seguinte");
+      r.liberar(); await env.ocioso();
+    }
+    {
+      // o que estava a caminho no login anterior não monta nada para o login seguinte (a mesma aba, o mesmo acompanhamento)
+      const env = novo(srv);
+      let r = env.retem(c => c.chave === "GET cuidado-pastoral/congregacoes");
+      await abrirAba(env);
+      env.ev("limparSessao()"); await env.ocioso();
+      await abrirAba(env, "area", 12);
+      const nOp = env.e("cpaFiltroCong").options.length;
+      r.liberar(); await env.ocioso();
+      confere(nOp === 3 && env.e("cpaFiltroCong").options.length === nOp, `as congregações do login anterior não repovoam os filtros do seguinte (${nOp} → ${env.e("cpaFiltroCong").options.length})`);
+      env.ev("limparSessao()"); await env.ocioso();
+      await abrirAba(env);
+      await abrirItemPorNome(env, "Carla Visitante");
+      env.ev("cpaCatalogos = null");
+      r = env.retem(c => c.chave === "GET cuidado-pastoral/catalogos");
+      env.doc.clicar(botao(env, "Registrar contato", env.e("cpaDetalheGes"))); await env.ocioso();
+      env.ev("limparSessao()"); await env.ocioso();
+      await abrirAba(env);
+      env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it1.ItemId}, null)`); await env.ocioso();
+      r.liberar(); await env.ocioso();
+      confere(!!g(env, "cpaDet") && env.e("cpaFormAcao") && env.e("cpaFormAcao").innerHTML === "", "o formulário pedido no login anterior não abre no seguinte, nem com o mesmo acompanhamento aberto");
+    }
+    {
+      // o módulo ausente no cache: voltar à Portaria segue
+      const env = novo(srv, { semModulo: true });
+      let erro = null;
+      try { env.sessao({ matricula: 10, token: "lid" }); env.ev("voltarParaCheckin()"); } catch (e) { erro = e; }
+      confere(!erro, `sem o módulo, voltar à Portaria não quebra (${erro && erro.message})`);
+    }
+  });
+
+  cenario("Prova de mutação: notas pastorais (abrir, reler, Quem abriu, rascunho, guardar)", async () => {
+    const srv = servidor(); const I = semear(srv); const N = semearNotas(srv, I);
+    const env = novo(srv);
+    await abrirAba(env);
+    await abrirItemPorNome(env, "Maria Afastada");
+    const abrirN1 = async () => { await clicar(env, botao(env, "Abrir a nota", liNota(env, "Diác. João"))); };
+    await abrirN1();
+    confere(texto(env, "cpaNotaCorpo").includes("Diác. João"), "a nota aberta diz quem escreveu");
+    env.doc.disparar(env.doc.body, "visibilitychange"); await env.ocioso();   // a página continua à vista
+    confere(texto(env, "cpaNotaCorpo").includes("NOTA-EQUIPE-AAA"), "a página que continua à vista não fecha a nota");
+    await clicar(env, botao(env, "Atualizar notas"));
+    confere(texto(env, "cpaNotaCorpo") === "", "reler as notas fecha a nota aberta");
+    // a abertura que chega depois de fechar
+    let r = env.retem(c => c.chave === "POST cuidado-pastoral/abrir-nota");
+    env.doc.clicar(botao(env, "Abrir a nota", liNota(env, "Diác. João"))); await env.ocioso();
+    env.ev("cpaFecharNotaAcao()"); await env.ocioso();
+    r.liberar(); await env.ocioso();
+    confere(texto(env, "cpaNotaCorpo") === "", "a abertura que chega depois de fechar a nota não mostra o texto");
+    env.limparRegistro();
+    env.ev("cpaAbrirNotaAcao(99999, null)"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/abrir-nota").length === 0, "abrir uma nota que não está na lista não pede nada");
+    env.api.rotas["POST cuidado-pastoral/abrir-nota"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await abrirN1();
+    confere(texto(env, "cpaNotasMsg").includes("Esta nota não pode mais ser aberta"), "404 ao abrir: a tela explica");
+    delete env.api.rotas["POST cuidado-pastoral/abrir-nota"];
+    // a lista nunca mostra texto de nota, nem que o servidor mande
+    const notasReais = await respostaReal(srv, "lid", "GET", "notas", { membroId: "50" });
+    notasReais.notas.forEach(n => { n.texto = "TEXTO-NA-LISTA"; });
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 200, corpo: notasReais };
+    await clicar(env, botao(env, "Atualizar notas"));
+    confere(liNota(env, "Diác. João") && !env.doc.body.innerHTML.includes("TEXTO-NA-LISTA"), "a lista de notas nunca mostra o texto, nem que ele venha do servidor");
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    const nItem = chamadas(env, "GET cuidado-pastoral/item").length;
+    await clicar(env, botao(env, "Atualizar notas"));
+    confere(chamadas(env, "GET cuidado-pastoral/item").length === nItem + 1, "404 ao reler as notas: o acompanhamento é relido");
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 422, corpo: { sucesso: false, mensagem: "NOTAS-FALHOU" } };
+    await clicar(env, botao(env, "Atualizar notas"));
+    confere(texto(env, "cpaNotasMsg").includes("NOTAS-FALHOU"), "a falha ao reler as notas aparece");
+    delete env.api.rotas["GET cuidado-pastoral/notas"];
+    await clicar(env, botao(env, "Atualizar notas"));
+    // duas releituras: a mais velha não sobrescreve a mais nova; e a que chega depois da troca de login não é pintada
+    const contar = () => desc(env, env.e("cpaNotasLista")).filter(x => x.localName === "li" && x.className.includes("cpa-nota")).length;
+    const n0 = contar();
+    srv.novaNota({ membroId: 50, nivel: "EQUIPE", texto: "NOTA-NOVA-1", autor: 30, h: 1 });
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/notas");
+    env.doc.clicar(botao(env, "Atualizar notas")); await env.ocioso();
+    srv.novaNota({ membroId: 50, nivel: "EQUIPE", texto: "NOTA-NOVA-2", autor: 30, h: 1 });
+    await clicar(env, botao(env, "Atualizar notas"));
+    r.liberar(); await env.ocioso();
+    confere(contar() === n0 + 2, `a releitura mais velha das notas não sobrescreve a mais nova (${contar()} de ${n0 + 2})`);
+    srv.novaNota({ membroId: 50, nivel: "EQUIPE", texto: "NOTA-NOVA-3", autor: 30, h: 1 });
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/notas");
+    env.doc.clicar(botao(env, "Atualizar notas")); await env.ocioso();
+    env.sessao({ matricula: 12, token: "area" });
+    r.liberar(); await env.ocioso();
+    confere(contar() === n0 + 2, "as notas que chegam depois da troca de login não são pintadas");
+    env.sessao({ matricula: 10, token: "lid" });
+    // Quem abriu
+    const idN4 = N.n4.NotaId;
+    env.api.rotas["GET cuidado-pastoral/leituras"] = { status: 422, corpo: { sucesso: false, mensagem: "LEIT-FALHOU" } };
+    await clicar(env, botao(env, "Quem abriu", liNota(env, "(você)")));
+    confere(texto(env, `cpaLeit${idN4}`).includes("LEIT-FALHOU"), "'Quem abriu' com falha diz o porquê");
+    delete env.api.rotas["GET cuidado-pastoral/leituras"];
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/leituras");
+    env.doc.clicar(botao(env, "Quem abriu", liNota(env, "(você)"))); await env.ocioso();
+    await clicar(env, botao(env, "Atualizar notas"));
+    r.liberar(); await env.ocioso();
+    confere(texto(env, `cpaLeit${idN4}`) === "", "'Quem abriu' que chega depois de a lista ser refeita não escreve na caixa nova");
+    // o formulário da nota: reabrir não apaga, fechar devolve o foco ao botão
+    const btnEscrever = botao(env, "Escrever nota");
+    await clicar(env, btnEscrever);
+    digitar(env, "cpaFnTexto", "Rascunho guardado");
+    await clicar(env, botao(env, "Escrever nota"));
+    confere(env.e("cpaFnTexto") && env.e("cpaFnTexto").value === "Rascunho guardado", "tocar de novo em 'Escrever nota' não apaga o que já está escrito");
+    await clicar(env, botao(env, "Fechar", env.e("cpaNotaForm")));
+    confere(env.foco() === btnEscrever, "fechar o formulário da nota devolve o foco ao botão 'Escrever nota'");
+    // o rascunho sobrevive à releitura do acompanhamento (outro ato): nível, texto, 'corrige' e o contador
+    await clicar(env, botao(env, "Escrever nota"));
+    escolher(env, "cpaFnNivel", "EQUIPE"); digitar(env, "cpaFnTexto", "Rascunho X"); escolher(env, "cpaFnCorrige", String(N.n1.NotaId));
+    await clicar(env, botao(env, "Registrar contato", env.e("cpaDetalheGes")));
+    escolher(env, "cpaFcForma", "LIGACAO"); marcar(env, "cpaFcSim");
+    await clicar(env, env.e("cpaFormBotao"));
+    confere(env.e("cpaFnCorrige") && env.e("cpaFnCorrige").value === String(N.n1.NotaId) && texto(env, "cpaFnContador") === "10", `o rascunho volta com o 'corrige' e o contador (${env.e("cpaFnCorrige") && env.e("cpaFnCorrige").value}, ${texto(env, "cpaFnContador")})`);
+    // guardada: o formulário some e o foco vai ao título JÁ, antes da releitura; o toast avisa
+    escolher(env, "cpaFnCorrige", "");
+    digitar(env, "cpaFnTexto", "Nota de teste guardada");
+    env.limparRegistro();
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/notas");
+    env.doc.clicar(env.e("cpaFnBotao")); await env.ocioso();
+    confere(env.e("cpaNotaForm").innerHTML === "" && env.foco() === env.e("cpaNotasTitulo") && toastsOk(env).length === 1, "guardada: o formulário some e o foco vai ao título antes de a lista voltar, com o aviso");
+    r.liberar(); await env.ocioso();
+    // guardada e a releitura das notas dá 404 (o acompanhamento inteiro é redesenhado): o foco volta ao título novo
+    await clicar(env, botao(env, "Escrever nota"));
+    escolher(env, "cpaFnNivel", "EQUIPE"); digitar(env, "cpaFnTexto", "Nota com a lista em 404");
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, env.e("cpaFnBotao"));
+    delete env.api.rotas["GET cuidado-pastoral/notas"];
+    confere(env.foco() === env.e("cpaNotasTitulo"), "guardada, com o acompanhamento redesenhado na releitura: o foco vai ao título novo das notas");
+    // a releitura das notas dá 404 e o acompanhamento não abre mais: o conteúdo antigo sai
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    env.api.rotas["GET cuidado-pastoral/item"] = { status: 422, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, botao(env, "Atualizar notas"));
+    confere(env.e("cpaDetalheGes").innerHTML === "", "o acompanhamento que não abre mais na releitura sai da tela");
+    delete env.api.rotas["GET cuidado-pastoral/notas"]; delete env.api.rotas["GET cuidado-pastoral/item"];
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await env.ocioso();
+    // 404 ao guardar; sem resposta e o acompanhamento relido (o rascunho volta, o aviso também)
+    await clicar(env, botao(env, "Escrever nota"));
+    escolher(env, "cpaFnNivel", "EQUIPE"); digitar(env, "cpaFnTexto", "Outra nota de teste");
+    env.api.rotas["POST cuidado-pastoral/nota"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, env.e("cpaFnBotao"));
+    confere(texto(env, "cpaFnMsg").includes("Não foi possível guardar a nota neste acompanhamento"), "404 ao guardar: a tela explica");
+    env.api.rotas["POST cuidado-pastoral/nota"] = () => { throw new TypeError("Failed to fetch"); };
+    env.api.rotas["GET cuidado-pastoral/notas"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, env.e("cpaFnBotao"));
+    confere(texto(env, "cpaFnMsg").includes("A nota pode ter sido guardada") && env.e("cpaFnTexto").value === "Outra nota de teste", `sem resposta: o aviso 'pode ter sido guardada' fica, mesmo com o acompanhamento relido (${texto(env, "cpaFnMsg").slice(0, 80)})`);
+    delete env.api.rotas["POST cuidado-pastoral/nota"]; delete env.api.rotas["GET cuidado-pastoral/notas"];
+    // a resposta da nota que chega com outro acompanhamento aberto, ou depois de sair e voltar ao mesmo
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/nota");
+    env.doc.clicar(env.e("cpaFnBotao")); await env.ocioso();
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it1.ItemId}, null)`); await env.ocioso();
+    let t0 = env.toasts().length;
+    r.liberar(); await env.ocioso();
+    confere(env.toasts().length === t0 && texto(env, "cpaNotasMsg") === "", "a nota guardada que volta com outro acompanhamento aberto não mexe nele");
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await env.ocioso();
+    await clicar(env, botao(env, "Escrever nota"));
+    escolher(env, "cpaFnNivel", "EQUIPE"); digitar(env, "cpaFnTexto", "Mais uma nota de teste");
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/nota");
+    env.doc.clicar(env.e("cpaFnBotao")); await env.ocioso();
+    await sair(env); await voltar(env);
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await env.ocioso();
+    t0 = env.toasts().length;
+    r.liberar(); await env.ocioso();
+    confere(env.toasts().length === t0 && texto(env, "cpaNotasMsg") === "", "a nota guardada que volta depois de sair e voltar não pinta a tela nova");
+    // quem o servidor diz que não escreve nota não vê 'Escrever nota'
+    const itemReal = await respostaReal(srv, "lid", "GET", "item", { itemId: String(I.it2.ItemId) });
+    itemReal.podeNotaNiveis = [];
+    env.api.rotas["GET cuidado-pastoral/item"] = { status: 200, corpo: itemReal };
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await env.ocioso();
+    confere(!botao(env, "Escrever nota", env.e("cpaDetalheGes")), "sem nível de nota permitido, 'Escrever nota' não aparece");
+    delete env.api.rotas["GET cuidado-pastoral/item"];
+    limpo(env, "notas (mutação)");
+  });
+
+  cenario("Prova de mutação: fila, detalhe, atos, busca e abrir acompanhamento", async () => {
+    const srv = servidor(); const I = semear(srv); const N = semearNotas(srv, I);
+    srv.membro({ id: 70, nome: "Sem Contato Silva", telefone: null, email: null });
+    const itSem = srv.novoItem({ tipo: "AFASTAMENTO", membroId: 70, responsavel: 10 });
+    srv.novoEvento({ ItemId: I.it2.ItemId, Tipo: "CONTATO", MembroId: 31, Forma: "LIGACAO", Conseguiu: false });
+    const env = novo(srv);
+    await abrirAba(env);
+    escolher(env, "cpaFiltroSituacao", "URGENTES"); await env.ocioso();
+    confere(texto(env, "cpaFilaMsg").startsWith("1 acompanhamento."), `um só: 'acompanhamento' no singular (${texto(env, "cpaFilaMsg")})`);
+    env.api.rotas["GET cuidado-pastoral/fila"] = { status: 200, corpo: { sucesso: true, itens: [] } };
+    escolher(env, "cpaFiltroSituacao", "VENCIDOS"); await env.ocioso();
+    confere(texto(env, "cpaFilaMsg") === "Nenhum acompanhamento nesta situação.", "a fila vazia diz que não há nada");
+    delete env.api.rotas["GET cuidado-pastoral/fila"];
+    escolher(env, "cpaFiltroSituacao", "ABERTOS"); await env.ocioso();
+    const carla = cartaoDe(env, "Carla Visitante");
+    confere(!!carla && !carla.textContent.includes("subiu para") && !carla.textContent.includes("Detectado pelo sistema"), "o item da congregação, aberto à mão, não diz 'subiu para' nem 'Detectado'");
+    await abrirItemPorNome(env, "Sem Contato Silva");
+    confere(detalhe(env).includes("sem contato no cadastro"), "sem contato: a tela diz");
+    await clicar(env, botao(env, "Voltar à fila"));
+    await abrirItemPorNome(env, "Maria Afastada");
+    confere(detalhe(env).includes("não conseguiu falar") && detalhe(env).includes("subiu para:"), "o histórico diz 'não conseguiu falar' e o degrau");
+    await clicar(env, botao(env, "Voltar à fila"));
+    // voltar devolve o foco ao botão do cartão
+    const b = botao(env, "Abrir acompanhamento", cartaoDe(env, "Carla Visitante"));
+    await clicar(env, b);
+    await clicar(env, botao(env, "Voltar à fila"));
+    confere(env.foco() === b, "voltar à fila devolve o foco ao botão de onde veio");
+    await clicar(env, b);
+    // a regra da visita reaparece na recusa; fechar o formulário devolve o foco
+    const bc = botao(env, "Registrar contato", env.e("cpaDetalheGes"));
+    await clicar(env, bc);
+    env.e("cpaFcForma").value = "VISITA_LAR";
+    await clicar(env, env.e("cpaFormBotao"));
+    confere(env.e("cpaFcRegra").style.display === "block", "a recusa da visita sem acompanhante mostra a regra 'nunca a sós'");
+    await clicar(env, botao(env, "Fechar", env.e("cpaFormAcao")));
+    confere(env.foco() === bc, "fechar o formulário devolve o foco ao botão do ato");
+    await clicar(env, botao(env, "✅ Concluir", env.e("cpaDetalheGes")));
+    env.limparRegistro();
+    await clicar(env, env.e("cpaFormBotao"));
+    confere(texto(env, "cpaFormMsg").includes("Escolha como terminou") && chamadas(env, "POST cuidado-pastoral/concluir").length === 0, "concluir sem o desfecho: aviso e nada enviado");
+    const preencherContato = async () => { await clicar(env, botao(env, "Registrar contato", env.e("cpaDetalheGes"))); escolher(env, "cpaFcForma", "LIGACAO"); marcar(env, "cpaFcSim"); };
+    // 409: relê e fica em destaque; 404: fecha e diz na lista
+    env.api.rotas["POST cuidado-pastoral/contato"] = { status: 409, corpo: { sucesso: false, mensagem: "MUDOU-ENQUANTO" } };
+    await preencherContato(); await clicar(env, env.e("cpaFormBotao"));
+    confere(texto(env, "cpaDetalheGesMsg").includes("MUDOU-ENQUANTO") && env.e("cpaDetalheGesMsg").className.includes("psc-aviso"), "409: a mensagem fica em destaque");
+    env.api.rotas["POST cuidado-pastoral/contato"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await preencherContato(); await clicar(env, env.e("cpaFormBotao"));
+    confere(g(env, "cpaDet") === null && env.e("cpaDetalheGesCx").style.display === "none", "404 no ato: o acompanhamento fecha");
+    delete env.api.rotas["POST cuidado-pastoral/contato"];
+    // a releitura depois do ato falha: o conteúdo antigo sai
+    await abrirItemPorNome(env, "Carla Visitante");
+    await preencherContato();
+    env.api.rotas["GET cuidado-pastoral/item"] = { status: 422, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, env.e("cpaFormBotao"));
+    confere(env.e("cpaDetalheGes").innerHTML === "", "a releitura que falha depois do ato tira o conteúdo antigo");
+    delete env.api.rotas["GET cuidado-pastoral/item"];
+    // o ato que volta com outro acompanhamento aberto, ou depois da troca de login
+    await clicar(env, botao(env, "Voltar à fila"));
+    await abrirItemPorNome(env, "Carla Visitante");
+    await preencherContato();
+    let r = env.retem(c => c.chave === "POST cuidado-pastoral/contato");
+    env.doc.clicar(env.e("cpaFormBotao")); await env.ocioso();
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it3.ItemId}, null)`); await env.ocioso();
+    let nI = chamadas(env, "GET cuidado-pastoral/item").length, t0 = env.toasts().length;
+    r.liberar(); await env.ocioso();
+    confere(chamadas(env, "GET cuidado-pastoral/item").length === nI && env.toasts().length === t0, "o ato que volta com outro acompanhamento aberto não relê nem avisa");
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it1.ItemId}, null)`); await env.ocioso();
+    await preencherContato();
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/contato");
+    env.doc.clicar(env.e("cpaFormBotao")); await env.ocioso();
+    env.sessao({ matricula: 12, token: "area" });
+    t0 = env.toasts().length;
+    r.liberar(); await env.ocioso();
+    confere(env.toasts().length === t0, "o ato que volta depois da troca de login não avisa");
+    env.sessao({ matricula: 10, token: "lid" });
+    // um acompanhamento aberto por vez (a liderança e Meu Painel)
+    env.ev(`cpaAbrirDetalheAcao("Meu", ${I.it1.ItemId}, null)`); await env.ocioso();
+    confere(g(env, "cpaDet") === null && env.e("cpaDetalheGes").innerHTML === "", "abrir um acompanhamento em Meu Painel fecha o da liderança");
+    // o encerrado não mostra o contato
+    escolher(env, "cpaFiltroSituacao", "ENCERRADOS"); await env.ocioso();
+    const enc = await respostaReal(srv, "lid", "GET", "item", { itemId: String(I.it7.ItemId) });
+    enc.item.contato = "(91) 3111-2222";   // (o servidor não manda; a tela também não mostraria)
+    env.api.rotas["GET cuidado-pastoral/item"] = { status: 200, corpo: enc };
+    await abrirItemPorNome(env, "Encerrada Antiga");
+    delete env.api.rotas["GET cuidado-pastoral/item"];
+    confere(detalhe(env).includes("Encerrada Antiga") && !detalhe(env).includes("3111"), "o acompanhamento encerrado não mostra o contato, nem que ele venha do servidor");
+    await clicar(env, botao(env, "Voltar à fila"));
+    escolher(env, "cpaFiltroSituacao", "ABERTOS"); await env.ocioso();
+    // abrir acompanhamento: tocar de novo não apaga; validações; a busca
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    digitar(env, "cpaNovoMotivo", "Motivo que fica");
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    confere(env.e("cpaNovoMotivo").value === "Motivo que fica", "tocar de novo em 'Abrir acompanhamento' não apaga o que foi escrito");
+    escolher(env, "cpaNovoTipo", "VISITANTE"); await env.ocioso(); escolher(env, "cpaNovoCong", ""); marcar(env, "cpaNovoCadNao"); await env.ocioso();
+    digitar(env, "cpaNovoNome", "Pessoa Teste"); digitar(env, "cpaNovoContato", "(91) 98877-6655");
+    env.limparRegistro();
+    await clicar(env, env.e("cpaNovoBotao"));
+    confere(texto(env, "cpaNovoMsg").includes("Escolha a congregação") && chamadas(env, "POST cuidado-pastoral/abrir").length === 0, "abrir sem congregação: aviso e nada enviado");
+    escolher(env, "cpaNovoCong", "1"); marcar(env, "cpaNovoCadSim"); await env.ocioso();
+    await clicar(env, env.e("cpaNovoBotao"));
+    confere(texto(env, "cpaNovoMsg").includes("Busque a pessoa") && chamadas(env, "POST cuidado-pastoral/abrir").length === 0, "membro sem escolher a pessoa: aviso e nada enviado");
+    escolher(env, "cpaNovoCong", ""); digitar(env, "cpaNovoBusca", "Jo");
+    await clicar(env, botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx")));
+    confere(texto(env, "cpaNovoBuscaRes").includes("Escolha a congregação") && chamadas(env, "POST cuidado-pastoral/buscar-pessoas").length === 0, "buscar sem congregação: aviso e nada enviado");
+    escolher(env, "cpaNovoCong", "1"); digitar(env, "cpaNovoBusca", "Jo%");
+    await clicar(env, botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx")));
+    confere(chamadas(env, "POST cuidado-pastoral/buscar-pessoas").length === 0, "% e _ na busca: aviso e nada enviado");
+    digitar(env, "cpaNovoBusca", "Jo");
+    env.ev('cpaBuscarAcao("novoPessoa", null); cpaBuscarAcao("novoPessoa", null);'); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/buscar-pessoas").length === 1, "duplo toque em Buscar: um pedido só");
+    // a busca mais velha (de outro campo) não escreve depois da mais nova
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/buscar-pessoas" && c.corpo.q === "Jo");
+    env.doc.clicar(botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx"))); await env.ocioso();
+    digitar(env, "cpaNovoRespBusca", "Ru");
+    await clicar(env, botao(env, "🔍 Buscar responsável"));
+    r.liberar(); await env.ocioso();
+    confere(!botao(env, "Escolher", env.e("cpaNovoBuscaRes")), "a busca mais velha não escreve depois da mais nova");
+    // a busca que chega depois de fechar e reabrir o formulário não volta à memória
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/buscar-pessoas");
+    env.doc.clicar(botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx"))); await env.ocioso();
+    await clicar(env, botao(env, "Cancelar", env.e("cpaNovoCx")));
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    r.liberar(); await env.ocioso();
+    confere(g(env, "cpaBuscaRes").novoPessoa.length === 0, "a busca que chega depois de fechar o formulário não entra");
+    // duplo clique (as ações chamadas duas vezes seguidas: o segundo é barrado pela chave)
+    await clicar(env, botao(env, "Cancelar", env.e("cpaNovoCx")));
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    escolher(env, "cpaNovoTipo", "VISITANTE"); await env.ocioso(); marcar(env, "cpaNovoCadNao"); await env.ocioso();
+    digitar(env, "cpaNovoNome", "Pessoa Dupla"); digitar(env, "cpaNovoContato", "(91) 98877-1111");
+    env.limparRegistro();
+    env.ev("cpaEnviarNovoAcao(null); cpaEnviarNovoAcao(null);"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/abrir").length === 1, "abrir acompanhamento duas vezes seguidas: um pedido só");
+    await abrirItemPorNome(env, "Carla Visitante");
+    await clicar(env, botao(env, "✅ Concluir", env.e("cpaDetalheGes")));
+    escolher(env, "cpaFkDesfecho", "INTEGRADO");
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/concluir");
+    env.ev("cpaEnviarConcluirAcao(null); cpaEnviarConcluirAcao(null);"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/concluir").length === 1, "concluir duas vezes seguidas: um pedido só");
+    // (o servidor já processou o concluir retido: os outros atos vão noutro acompanhamento aberto)
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${itSem.ItemId}, null)`); await env.ocioso();
+    await clicar(env, botao(env, "📅 Adiar prazo", env.e("cpaDetalheGes")));
+    digitar(env, "cpaFaData", somarDias(hojeBr(), 3)); digitar(env, "cpaFaMotivo", "A família viajou");
+    env.ev("cpaEnviarAdiarAcao(null); cpaEnviarAdiarAcao(null);"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/adiar").length === 1, "adiar duas vezes seguidas: um pedido só");
+    const btnsDet = botoes(env, "", env.e("cpaDetalheGes")).map(x => x.textContent.trim()).join(" / ");
+    await clicar(env, botao(env, "✖️ Cancelar", env.e("cpaDetalheGes")));
+    escolher(env, "cpaFxDesfecho", "DUPLICADO"); digitar(env, "cpaFxMotivo", "Aberto em duplicidade");
+    const r2 = env.retem(c => c.chave === "POST cuidado-pastoral/cancelar");
+    env.ev("cpaEnviarCancelarAcao(null)"); const mc1 = await env.responderModal(true); await env.ocioso();
+    env.ev("cpaEnviarCancelarAcao(null)"); const mc2 = await env.responderModal(true); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/cancelar").length === 1, `cancelar duas vezes seguidas: um pedido só (${chamadas(env, "POST cuidado-pastoral/cancelar").length}; modal ${mc1.aberto}/${mc2.aberto}; ${texto(env, "cpaFormMsg")}; ${btnsDet}; ${texto(env, "cpaDetalheGesMsg")})`);
+    env.ev('cpaBuscaRes.troca = [{ membroId: 31, nome: "Irmã Rute" }]');
+    const r3 = env.retem(c => c.chave === "POST cuidado-pastoral/atribuir");
+    env.ev("cpaEnviarTrocaAcao(31, null)"); await env.responderModal(true); await env.ocioso();
+    env.ev("cpaEnviarTrocaAcao(31, null)"); await env.responderModal(true); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/atribuir").length === 1, "nomear duas vezes seguidas: um pedido só");
+    r.liberar(); r2.liberar(); r3.liberar(); await env.ocioso();
+    env.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await env.ocioso();
+    const idNota = N.n4.NotaId;
+    env.limparRegistro();
+    env.ev(`cpaAbrirNotaAcao(${idNota}, null); cpaAbrirNotaAcao(${idNota}, null);`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/abrir-nota").length === 1, "abrir a mesma nota duas vezes seguidas: um pedido só");
+    env.ev(`cpaLeiturasAcao(${idNota}, null); cpaLeiturasAcao(${idNota}, null);`); await env.ocioso();
+    confere(chamadas(env, "GET cuidado-pastoral/leituras").length === 1, "'Quem abriu' duas vezes seguidas: um pedido só");
+    await clicar(env, botao(env, "Escrever nota"));
+    escolher(env, "cpaFnNivel", "EQUIPE"); digitar(env, "cpaFnTexto", "Nota dupla de teste");
+    env.ev("cpaEnviarNotaAcao(null); cpaEnviarNotaAcao(null);"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/nota").length === 1, "guardar a nota duas vezes seguidas: um pedido só");
+    limpo(env, "fila e atos (mutação)");
+  });
+
+  cenario("Prova de mutação: pedidos de oração, pedido em mãos, boletim e painel", async () => {
+    const srv = servidor(); const I = semear(srv);
+    const pNormal = srv.novoPedido({ solicitante: 60, texto: "PM-NORMAL pela saúde" });
+    const pNormal2 = srv.novoPedido({ solicitante: 31, texto: "PM-NORMAL2 pela família", categoria: "FAMILIA" });
+    const pSoLid = srv.novoPedido({ solicitante: 31, texto: "PM-SOLID pelo emprego", podeBoletim: false });
+    const pRisco = srv.novoPedido({ solicitante: 50, texto: "PM-RISCO ele me bate", risco: true });
+    const pRiscoLid = srv.novoPedido({ solicitante: 31, texto: "PM-RISCOLID tristeza", risco: true, riscoOrigem: "LIDERANCA" });
+    const pComItem = srv.novoPedido({ solicitante: 60, texto: "PM-COMITEM pela cirurgia", querContato: true });
+    srv.novoItem({ tipo: "PEDIDO_ORACAO", membroId: 60, pedidoOracaoId: pComItem.PedidoId, origem: "PEDIDO_ORACAO" });
+    const env = novo(srv);
+    await abrirAba(env);
+    await clicar(env, env.e("btnCpaSecaoPedidos"));
+    await clicar(env, env.e("btnCpaPedRisco"));
+    confere(env.e("cpaPedMsg").className.includes("psc-aviso"), "com sinal de risco, a contagem fica em destaque");
+    confere((cartaoPedido(env, "PM-RISCO ele") || { textContent: "" }).textContent.includes("(a lista do sistema pegou)") && (cartaoPedido(env, "PM-RISCOLID") || { textContent: "" }).textContent.includes("(marcado pela liderança)"), "o cartão do risco diz quem marcou");
+    env.limparRegistro();
+    env.ev(`cpaMarcarRiscoAcao(${pRisco.PedidoId}, null)`); await env.ocioso();
+    confere(env.e("modalOverlay").classList.contains("escondido") && chamadas(env, "POST cuidado-pastoral/risco").length === 0, "marcar risco num pedido que já tem risco: nada (chamado direto)");
+    await clicar(env, env.e("btnCpaPedTodos"));
+    const idN = pNormal.PedidoId;
+    env.ev(`cpaAbrirDesmarcarAcao(${idN}, null)`); await env.ocioso();
+    confere(env.e(`cpaPedForm${idN}`).innerHTML === "", "o formulário de desmarcar não abre num pedido sem risco (chamado direto)");
+    env.ev(`document.getElementById("cpaPedForm${idN}").innerHTML = '<textarea id="cpaDesMotivo"></textarea>'; document.getElementById("cpaDesMotivo").value = "Motivo bem comprido"; cpaEnviarDesmarcarAcao(${idN}, null);`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/risco").length === 0, "desmarcar um pedido sem risco: nada enviado (chamado direto)");
+    env.ev(`document.getElementById("cpaPedForm${idN}").innerHTML = ""`);
+    env.ev(`cpaAbrirPublicarAcao(${pSoLid.PedidoId}, null); cpaAbrirPublicarAcao(${pRisco.PedidoId}, null);`); await env.ocioso();
+    confere(env.e(`cpaPedForm${pSoLid.PedidoId}`).innerHTML === "" && env.e(`cpaPedForm${pRisco.PedidoId}`).innerHTML === "", "publicar não abre em pedido 'só para a liderança' nem com risco (chamado direto)");
+    env.ev(`cpaAcompanharPedidoAcao(${pComItem.PedidoId}, null)`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/acompanhar-pedido").length === 0, "um pedido com acompanhamento aberto não ganha outro (chamado direto)");
+    escolher(env, "cpaPedCong", "1"); await env.ocioso();
+    confere((ultima(env, "GET cuidado-pastoral/pedidos") || { consulta: {} }).consulta.congregacaoId === "1", "o filtro de congregação vai na consulta dos pedidos");
+    escolher(env, "cpaPedCong", ""); await env.ocioso();
+    env.api.rotas["GET cuidado-pastoral/pedidos"] = { status: 422, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(env, env.e("btnCpaPedAguardando"));
+    confere(env.e("cpaPedLista").innerHTML === "", "a falha ao ler os pedidos tira a lista antiga");
+    delete env.api.rotas["GET cuidado-pastoral/pedidos"];
+    await clicar(env, env.e("btnCpaPedAguardando"));
+    for (const st of [404, 409]) {
+      env.api.rotas["POST cuidado-pastoral/moderar"] = { status: st, corpo: { sucesso: false, mensagem: `MOD-${st}` } };
+      const n = chamadas(env, "GET cuidado-pastoral/pedidos").length;
+      await clicar(env, botao(env, "Marcar como lido", cartaoPedido(env, "PM-NORMAL pela")));
+      confere(chamadas(env, "GET cuidado-pastoral/pedidos").length === n + 1 && texto(env, "cpaPedMsg").includes(`MOD-${st}`), `${st} ao moderar: a lista é relida e a mensagem fica em cima`);
+    }
+    delete env.api.rotas["POST cuidado-pastoral/moderar"];
+    // duplo clique nos atos dos pedidos
+    env.limparRegistro();
+    env.ev(`cpaMarcarLidoAcao(${pNormal2.PedidoId}, null); cpaMarcarLidoAcao(${pNormal2.PedidoId}, null);`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/moderar").length === 1, "marcar como lido duas vezes seguidas: um pedido só");
+    await clicar(env, env.e("btnCpaPedAguardando"));
+    await clicar(env, botao(env, "Publicar no boletim", cartaoPedido(env, "PM-NORMAL pela")));
+    digitar(env, "cpaPubTexto", "Alguém da congregação pede oração pela saúde.");
+    env.limparRegistro();
+    env.ev(`cpaEnviarPublicarAcao(${idN}, null); cpaEnviarPublicarAcao(${idN}, null);`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/moderar").length === 1, "publicar duas vezes seguidas: um pedido só");
+    await clicar(env, env.e("btnCpaPedTodos"));
+    env.limparRegistro();
+    env.ev(`cpaAcompanharPedidoAcao(${pSoLid.PedidoId}, null); cpaAcompanharPedidoAcao(${pSoLid.PedidoId}, null);`); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/acompanhar-pedido").length === 1, "abrir acompanhamento do pedido duas vezes seguidas: um pedido só");
+    await clicar(env, env.e("btnCpaPedTodos"));
+    const pMarcar = srv.novoPedido({ solicitante: 60, texto: "PM-MARCAR tristeza" });
+    await clicar(env, env.e("btnCpaPedTodos"));
+    env.limparRegistro();
+    let r = env.retem(c => c.chave === "POST cuidado-pastoral/risco");
+    env.ev(`cpaMarcarRiscoAcao(${pMarcar.PedidoId}, null)`); await env.responderModal(true); await env.ocioso();
+    env.ev(`cpaMarcarRiscoAcao(${pMarcar.PedidoId}, null)`); await env.responderModal(true); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/risco").length === 1, "marcar o risco duas vezes seguidas: um pedido só");
+    r.liberar(); await env.ocioso();
+    // o pedido em mãos: tocar de novo não apaga; 'não é do cadastro' mostra nome e contato; cada validação; o 'para quem' padrão
+    await clicar(env, env.e("btnCpaPedAguardando"));
+    await clicar(env, botao(env, "Registrar pedido recebido em mãos"));
+    digitar(env, "cpaRpTexto", "Texto que fica");
+    await clicar(env, botao(env, "Registrar pedido recebido em mãos"));
+    confere(env.e("cpaRpTexto").value === "Texto que fica", "tocar de novo em 'Registrar pedido' não apaga o que foi escrito");
+    escolher(env, "cpaRpCong", "");
+    env.limparRegistro();
+    const tentar = async () => { await clicar(env, env.e("cpaRpBotao")); return texto(env, "cpaRpMsg"); };
+    confere((await tentar()).includes("Escolha a congregação"), "pedido em mãos sem congregação: aviso");
+    escolher(env, "cpaRpCong", "1"); marcar(env, "cpaRpCadSim"); await env.ocioso();
+    confere((await tentar()).includes("Busque quem pediu"), "pedido em mãos do cadastro sem escolher a pessoa: aviso");
+    marcar(env, "cpaRpCadSim", false); marcar(env, "cpaRpCadNao"); await env.ocioso();
+    confere(env.e("cpaRpForaCx").style.display === "", "'não é do cadastro' mostra o nome e o contato");
+    digitar(env, "cpaRpNome", "Dona Francisca"); digitar(env, "cpaRpTexto", "");
+    confere((await tentar()).includes("Escolha o assunto"), "pedido em mãos sem assunto: aviso");
+    escolher(env, "cpaRpCategoria", "SAUDE");
+    confere((await tentar()).includes("Escreva o pedido"), "pedido em mãos sem texto: aviso");
+    confere(chamadas(env, "POST cuidado-pastoral/registrar-pedido").length === 0, "(nenhuma das recusas acima enviou nada)");
+    digitar(env, "cpaRpTexto", "Pela saúde do marido dela."); marcar(env, "cpaRpBolNao");
+    r = env.retem(c => c.chave === "POST cuidado-pastoral/registrar-pedido");
+    env.ev("cpaEnviarRegistrarPedidoAcao(null); cpaEnviarRegistrarPedidoAcao(null);"); await env.ocioso();
+    const reg = chamadas(env, "POST cuidado-pastoral/registrar-pedido");
+    confere(reg.length === 1 && reg[0].corpo.paraQuem === "PROPRIO", `registrar duas vezes seguidas: um pedido só, com 'para quem' = PROPRIO (${reg.map(c => c.corpo.paraQuem).join(",")})`);
+    r.liberar(); await env.ocioso();
+    // o pedido em mãos com sinal de risco: o texto sai do campo e a lista é relida
+    await clicar(env, botao(env, "Registrar pedido recebido em mãos"));
+    escolher(env, "cpaRpCong", "1"); marcar(env, "cpaRpCadNao"); await env.ocioso();
+    digitar(env, "cpaRpNome", "Seu Antônio"); escolher(env, "cpaRpCategoria", "SAUDE"); digitar(env, "cpaRpTexto", "Não aguento mais, quero morrer."); marcar(env, "cpaRpBolNao");
+    const nP = chamadas(env, "GET cuidado-pastoral/pedidos").length;
+    await clicar(env, env.e("cpaRpBotao"));
+    confere(texto(env, "cpaRpResposta").length > 0 && env.e("cpaRpTexto").value === "" && chamadas(env, "GET cuidado-pastoral/pedidos").length === nP + 1, "o pedido em mãos com risco: a resposta fica, o texto sai do campo e a lista é relida");
+    limpo(env, "pedidos (mutação)");
+    // o catálogo sem as opções de 'para quem': o pedido em mãos vai como PROPRIO
+    const catSemPara = await respostaReal(srv, "lid", "GET", "catalogos");
+    catSemPara.paraQuem = [];
+    const envP = novo(srv);
+    envP.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 200, corpo: catSemPara };
+    await abrirAba(envP);
+    await clicar(envP, envP.e("btnCpaSecaoPedidos"));
+    await clicar(envP, botao(envP, "Registrar pedido recebido em mãos"));
+    escolher(envP, "cpaRpCong", "1"); marcar(envP, "cpaRpCadNao"); await envP.ocioso();
+    digitar(envP, "cpaRpNome", "Dona Joana"); escolher(envP, "cpaRpCategoria", "SAUDE"); digitar(envP, "cpaRpTexto", "Pela saúde da neta."); marcar(envP, "cpaRpBolNao");
+    await clicar(envP, envP.e("cpaRpBotao"));
+    const regP = ultima(envP, "POST cuidado-pastoral/registrar-pedido");
+    confere(!!regP && regP.corpo.paraQuem === "PROPRIO", `sem as opções de 'para quem', o pedido em mãos vai como PROPRIO (${regP && regP.corpo.paraQuem})`);
+
+    // a Pastora de Área: desmarcar (foco no motivo e duplo clique)
+    const envA = novo(srv);
+    await abrirAba(envA, "area", 12);
+    await clicar(envA, envA.e("btnCpaSecaoPedidos")); await clicar(envA, envA.e("btnCpaPedRisco"));
+    await clicar(envA, botao(envA, "Desmarcar", cartaoPedido(envA, "PM-RISCO ele")));
+    confere(envA.foco() === envA.e("cpaDesMotivo"), "desmarcar: o foco vai para o motivo");
+    digitar(envA, "cpaDesMotivo", "Falei com ela, era um texto de novela");
+    envA.limparRegistro();
+    envA.ev(`cpaEnviarDesmarcarAcao(${pRisco.PedidoId}, null); cpaEnviarDesmarcarAcao(${pRisco.PedidoId}, null);`); await envA.ocioso();
+    confere(chamadas(envA, "POST cuidado-pastoral/risco").length === 1, "desmarcar duas vezes seguidas: um pedido só");
+
+    // o boletim: com a congregação de cada linha; a releitura velha não sobrescreve a nova; a falha tira o antigo
+    srv.novoPedido({ congregacaoId: 1, solicitante: 31, texto: "b1", moderacao: "APROVADO", textoBoletim: "Alguém da Congregação Central pede oração pela família.", boletimAte: somarDias(hojeBr(), 5) });
+    srv.novoPedido({ congregacaoId: 2, solicitante: 11, texto: "b2", moderacao: "APROVADO", textoBoletim: "Alguém da Congregação Vila Nova agradece a Deus.", boletimAte: somarDias(hojeBr(), 6) });
+    const envB = novo(srv);
+    await abrirAba(envB, "area", 12);
+    await clicar(envB, envB.e("btnCpaSecaoBoletim"));
+    confere(desc(envB, envB.e("cpaBolImprimivel")).some(x => x.localName === "h5" && x.textContent.includes("Congregação")), "o boletim da liderança separa as linhas pela congregação");
+    r = envB.retem(c => c.chave === "GET cuidado-pastoral/boletim" && c.consulta.congregacaoId === "1");
+    escolher(envB, "cpaBolCong", "1"); await envB.ocioso();
+    escolher(envB, "cpaBolCong", "2"); await envB.ocioso();
+    r.liberar(); await envB.ocioso();
+    confere(texto(envB, "cpaBolImprimivel").includes("Vila Nova agradece") && !texto(envB, "cpaBolImprimivel").includes("Central pede"), "o boletim velho não sobrescreve o novo");
+    envB.api.rotas["GET cuidado-pastoral/boletim"] = { status: 422, corpo: { sucesso: false, mensagem: "x" } };
+    escolher(envB, "cpaBolCong", ""); await envB.ocioso();
+    confere(envB.e("cpaBolImprimivel").innerHTML === "", "a falha do boletim tira o antigo");
+    delete envB.api.rotas["GET cuidado-pastoral/boletim"];
+    // o painel: a releitura velha não sobrescreve a nova
+    const abertosCentral = () => { const tr = desc(envB, envB.e("cpaPainelLista")).find(x => x.localName === "tr" && x.textContent.includes("Central")); return tr ? desc(envB, tr).filter(x => x.localName === "td").map(x => x.textContent)[0] : ""; };
+    r = envB.retem(c => c.chave === "GET cuidado-pastoral/painel");
+    envB.doc.clicar(envB.e("btnCpaSecaoPainel")); await envB.ocioso();
+    srv.novoItem({ tipo: "VISITANTE", pessoaNome: "Mais Um Visitante", pessoaContato: "(91) 3222-1111" });
+    await clicar(envB, envB.e("btnCpaSecaoPainel"));
+    const depois = abertosCentral();
+    r.liberar(); await envB.ocioso();
+    confere(depois !== "" && abertosCentral() === depois, `o painel velho não sobrescreve o novo (${depois} → ${abertosCentral()})`);
+    void I;
+  });
+
+  cenario("Prova de mutação: Meu Painel (pedidos, respostas, 'meus', boletim) e o texto de ataque nos caminhos raros", async () => {
+    const srv = servidor(); const I = semear(srv);
+    const env = novo(srv);
+    await abrirMeu(env, "pin60", 60);
+    const pedir = async (t, outra) => { escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", t); marcar(env, "cpaPoBolNao"); if (outra) marcar(env, "cpaPoParaOutra"); env.e("cpaPoTexto").focus(); await clicar(env, env.e("cpaPoBotao")); };
+    const mp = () => chamadas(env, "GET cuidado-pastoral/meus-pedidos").length;
+    const rr = () => env.e("cpaOracaoResultado");
+    await pedir("Pela saúde da minha mãe.", true);
+    confere(env.foco() === rr() && texto(env, "cpaOracaoResultado").length > 0, "a resposta comum recebe o foco");
+    confere(texto(env, "cpaMeusPedidos").includes("(por outra pessoa)"), "Meus pedidos diz 'por outra pessoa'");
+    await pedir("Não aguento mais, quero morrer.");
+    confere(env.foco() === rr(), "a resposta do risco recebe o foco");
+    env.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 200, corpo: { sucesso: true, risco: true, mensagem: "RISCO-MSG", ajuda: [{ nome: "AJUDA-DO-SERVIDOR", numero: "155", descricao: "d" }] } };
+    await pedir("Outro pedido de teste.");
+    confere(desc(env, rr()).some(x => x.localName === "a" && x.getAttribute("href") === "tel:155"), "a resposta do risco usa os telefones que o servidor mandou");
+    env.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 422, corpo: { sucesso: false, mensagem: "RECUSADO-422" } };
+    let n = mp();
+    await pedir("Pedido recusado de teste.");
+    confere(desc(env, rr()).some(x => x.getAttribute && x.getAttribute("role") === "alert") && mp() === n, "a recusa é anunciada como alerta e não relê Meus pedidos (o servidor disse que não)");
+    env.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 500, corpo: { sucesso: false, mensagem: "erro" } };
+    n = mp();
+    await pedir("Pedido com erro do servidor.");
+    confere(texto(env, "cpaOracaoResultado").includes("Não sabemos se o seu pedido chegou") && mp() === n + 1, "erro do servidor (5xx): 'não sabemos se chegou' e Meus pedidos é relido");
+    delete env.api.rotas["POST cuidado-pastoral/pedir-oracao"];
+    // o que a pessoa digitou depois de enviar fica
+    let r = env.retem(c => c.chave === "POST cuidado-pastoral/pedir-oracao");
+    escolher(env, "cpaPoCategoria", "SAUDE"); digitar(env, "cpaPoTexto", "Pedido enviado agora."); marcar(env, "cpaPoBolNao");
+    env.doc.clicar(env.e("cpaPoBotao")); await env.ocioso();
+    digitar(env, "cpaPoTexto", "Outro texto novo");
+    r.liberar(); await env.ocioso();
+    confere(env.e("cpaPoTexto").value === "Outro texto novo", "o que a pessoa escreveu depois de enviar não é apagado");
+    // visita: rede caída relê Meus pedidos; o contato enviado sai do campo; duplo clique
+    env.api.redeCaida = true;
+    n = mp();
+    digitar(env, "cpaPvMotivo", "Quero uma visita em casa");
+    await clicar(env, env.e("cpaPvBotao"));
+    env.api.redeCaida = false;
+    confere(texto(env, "cpaVisitaResultado").includes("Não sabemos") && mp() === n + 1, "visita sem resposta: 'não sabemos se chegou' e Meus pedidos é relido");
+    digitar(env, "cpaPvMotivo", "Quero uma visita em casa"); digitar(env, "cpaPvContato", "Depois das 18h");
+    await clicar(env, env.e("cpaPvBotao"));
+    confere(env.e("cpaPvContato").value === "", "o contato enviado sai do campo");
+    digitar(env, "cpaPvMotivo", "Outra visita, por favor");
+    env.limparRegistro();
+    env.ev("cpaEnviarVisitaAcao(null); cpaEnviarVisitaAcao(null);"); await env.ocioso();
+    confere(chamadas(env, "POST cuidado-pastoral/pedir-visita").length === 1, "pedir visita duas vezes seguidas: um pedido só");
+    // Meus pedidos e o boletim: a falha tira o antigo; a releitura velha não sobrescreve a nova
+    env.api.rotas["GET cuidado-pastoral/meus-pedidos"] = { status: 422, corpo: { sucesso: false, mensagem: "x" } };
+    env.ev("cpaCarregarMeusPedidosAcao()"); await env.ocioso();
+    confere(env.e("cpaMeusPedidos").innerHTML === "", "a falha de Meus pedidos tira a lista antiga");
+    delete env.api.rotas["GET cuidado-pastoral/meus-pedidos"];
+    srv.novoPedido({ solicitante: 60, texto: "MP-UM pela tia" });
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/meus-pedidos");
+    env.ev("cpaCarregarMeusPedidosAcao()"); await env.ocioso();
+    srv.novoPedido({ solicitante: 60, texto: "MP-DOIS pelo primo" });
+    env.ev("cpaCarregarMeusPedidosAcao()"); await env.ocioso();
+    r.liberar(); await env.ocioso();
+    confere(texto(env, "cpaMeusPedidos").includes("MP-DOIS"), "Meus pedidos velho não sobrescreve o novo");
+    srv.novoPedido({ congregacaoId: 1, solicitante: 31, texto: "bm1", moderacao: "APROVADO", textoBoletim: "BOLMEU-UM pela família.", boletimAte: somarDias(hojeBr(), 5) });
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/boletim-meu");
+    env.ev("cpaCarregarBoletimMeu()"); await env.ocioso();
+    srv.novoPedido({ congregacaoId: 1, solicitante: 31, texto: "bm2", moderacao: "APROVADO", textoBoletim: "BOLMEU-DOIS pela saúde.", boletimAte: somarDias(hojeBr(), 6) });
+    env.ev("cpaCarregarBoletimMeu()"); await env.ocioso();
+    r.liberar(); await env.ocioso();
+    confere(texto(env, "cpaBoletimMeu").includes("BOLMEU-DOIS") && !desc(env, env.e("cpaBoletimMeu")).some(x => x.localName === "h5"), "o boletim do Meu Painel velho não sobrescreve o novo, e não tem o cabeçalho da congregação");
+    // 'Atualizar' não apaga o que a pessoa escrevia; a falha de 'meus' é dita; a carga velha não refaz nada
+    digitar(env, "cpaPoTexto", "Texto que a pessoa escrevia");
+    await clicar(env, botao(env, "🔄 Atualizar", env.e("subMeupainelCuidado")));
+    confere(env.e("cpaPoTexto").value === "Texto que a pessoa escrevia", "'Atualizar' não apaga o pedido que a pessoa escrevia");
+    env.api.rotas["GET cuidado-pastoral/meus"] = { status: 422, corpo: { sucesso: false, mensagem: "MEUS-FALHOU" } };
+    await clicar(env, botao(env, "🔄 Atualizar", env.e("subMeupainelCuidado")));
+    confere(texto(env, "cpaMeuMsg").includes("MEUS-FALHOU"), "a falha de 'meus' é dita");
+    delete env.api.rotas["GET cuidado-pastoral/meus"];
+    r = env.retem(c => c.chave === "GET cuidado-pastoral/meus");
+    env.doc.clicar(botao(env, "🔄 Atualizar", env.e("subMeupainelCuidado"))); await env.ocioso();
+    await clicar(env, botao(env, "🔄 Atualizar", env.e("subMeupainelCuidado")));
+    n = mp();
+    r.liberar(); await env.ocioso();
+    confere(mp() === n, "a carga velha do Meu Painel não refaz nada (Meus pedidos não é pedido de novo)");
+    limpo(env, "Meu Painel (mutação)");
+
+    // o responsável: a releitura velha de 'meus' não sobrescreve a nova; voltar refaz a lista
+    const envR = novo(srv);
+    await abrirMeu(envR, "pin30", 30);
+    r = envR.retem(c => c.chave === "GET cuidado-pastoral/meus");
+    envR.ev("cpaRecarregarMeus()"); await envR.ocioso();
+    I.it1.ResponsavelMembroId = 30;
+    envR.ev("cpaRecarregarMeus()"); await envR.ocioso();
+    const nMeus = g(envR, "cpaMeus").length;
+    r.liberar(); await envR.ocioso();
+    confere(g(envR, "cpaMeus").length === nMeus && nMeus >= 2, `'meus' velho não sobrescreve o novo (${g(envR, "cpaMeus").length} de ${nMeus})`);
+    I.it1.ResponsavelMembroId = 31;
+    await abrirItemPorNome(envR, "Joaquim Menor", "cpaMeusLista");
+    envR.api.rotas["POST cuidado-pastoral/contato"] = { status: 404, corpo: { sucesso: false, mensagem: "x" } };
+    await clicar(envR, botao(envR, "Registrar contato", envR.e("cpaDetalheMeu")));
+    escolher(envR, "cpaFcForma", "LIGACAO"); marcar(envR, "cpaFcSim");
+    await clicar(envR, envR.e("cpaFormBotao"));
+    confere(g(envR, "cpaDet") === null && texto(envR, "cpaMeuMsg").includes("Não foi possível abrir este acompanhamento"), "404 no ato do responsável: o acompanhamento fecha e Meu Painel diz por quê");
+    delete envR.api.rotas["POST cuidado-pastoral/contato"];
+    await abrirItemPorNome(envR, "Joaquim Menor", "cpaMeusLista");
+    envR.ev("cpaMeus = []");
+    await clicar(envR, botao(envR, "Voltar"));
+    confere(envR.e("cpaMeusCx").style.display === "none", "voltar à lista refaz 'Meus acompanhamentos' com o que mudou (sem nenhum, a seção some)");
+
+    // o texto de ataque nos caminhos raros (o servidor de verdade não manda isto, mas a tela não confia)
+    const envX = novo(srv);
+    envX.api.rotas["GET cuidado-pastoral/meus"] = { status: 200, corpo: { sucesso: true, itens: [{ itemId: 901, status: ATAQUE("st"), encerrado: true, pessoaNome: ATAQUE("pn"), tipoRotulo: ATAQUE("tr"), desfechoRotulo: ATAQUE("dr"), encerradoEm: ATAQUE("ee") }] } };
+    const cat = await respostaReal(srv, "pin60", "GET", "catalogos");
+    cat.categorias = [{ codigo: ATAQUE("codCat"), rotulo: "Categoria com código de ataque" }].concat(cat.categorias);
+    envX.api.rotas["GET cuidado-pastoral/catalogos"] = { status: 200, corpo: cat };
+    envX.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 200, corpo: { sucesso: true, risco: true, mensagem: ATAQUE("msgRisco") } };
+    await abrirMeu(envX, "pin30", 30);
+    escolher(envX, "cpaPoCategoria", "SAUDE"); digitar(envX, "cpaPoTexto", "Pedido de teste."); marcar(envX, "cpaPoBolNao");
+    await clicar(envX, envX.e("cpaPoBotao"));
+    envX.api.rotas["POST cuidado-pastoral/pedir-oracao"] = { status: 200, corpo: { sucesso: true, mensagem: ATAQUE("msgOk") } };
+    escolher(envX, "cpaPoCategoria", "SAUDE"); digitar(envX, "cpaPoTexto", "Pedido de teste."); marcar(envX, "cpaPoBolNao");
+    await clicar(envX, envX.e("cpaPoBotao"));
+    limpo(envX, "ataque: o encerrado de 'meus', o código da categoria e as mensagens da resposta", ["[pn]", "[tr]", "[msgOk]"]);
+    const envY = novo(srv);
+    await abrirAba(envY);
+    const item = await respostaReal(srv, "lid", "GET", "item", { itemId: String(I.it2.ItemId) });
+    item.item.status = ATAQUE("st808"); item.item.desfechoRotulo = null; item.item.encerradoEm = ATAQUE("enc808");
+    if (Array.isArray(item.eventos) && item.eventos[0]) { item.eventos[0].tipo = ATAQUE("ev771"); item.eventos[0].em = ATAQUE("em771"); }
+    envY.api.rotas["GET cuidado-pastoral/item"] = { status: 200, corpo: item };
+    envY.ev(`cpaAbrirDetalheAcao("Ges", ${I.it2.ItemId}, null)`); await envY.ocioso();
+    limpo(envY, "ataque: o status, o desfecho e o evento do acompanhamento", ["[st808]", "[ev771]"]);
+    delete envY.api.rotas["GET cuidado-pastoral/item"];
+    const ped = srv.novoPedido({ solicitante: 60, texto: "PEDIDO-SUGESTAO" });
+    await clicar(envY, envY.e("btnCpaSecaoPedidos"));
+    const lista = await respostaReal(srv, "lid", "GET", "pedidos", { situacao: "AGUARDANDO" });
+    lista.pedidos.forEach(p => { if (Number(p.pedidoId) === ped.PedidoId) p.sugestaoBoletim = `</textarea>${ATAQUE("sug1446")}`; });
+    envY.api.rotas["GET cuidado-pastoral/pedidos"] = { status: 200, corpo: lista };
+    await clicar(envY, envY.e("btnCpaPedAguardando"));
+    await clicar(envY, botao(envY, "Publicar no boletim", cartaoPedido(envY, "PEDIDO-SUGESTAO")));
+    confere(!!envY.e("cpaPubTexto") && envY.e("cpaPubTexto").value.includes("[sug1446]"), "(a sugestão com ataque chegou ao campo, como texto)");
+    limpo(envY, "ataque: a sugestão do boletim");
   });
 
   cenario("O servidor imitado não teve erro interno nem consulta desconhecida em nenhum cenário", async () => {
@@ -1374,6 +2389,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
       confere(s.consultasSemImitacao.length === 0, `consulta sem imitação (cenário "${s.cenario}"): ${s.consultasSemImitacao.slice(0, 1).join("")}`);
     }
     confere(SERVIDORES.length >= 10, `servidores criados: ${SERVIDORES.length}`);
+    // (prova de mutação, 21/10/2026) o que vai no corpo nunca vai também no endereço: nenhum POST da tela leva consulta (?texto=, ?motivo=...)
+    const postsComConsulta = AMBIENTES.flatMap(todas => todas.filter(c => c.metodo === "POST" && c.url.includes("?")).map(c => c.url));
+    confere(postsComConsulta.length === 0 && AMBIENTES.length >= 10, `nenhum POST leva dado no endereço (${postsComConsulta.slice(0, 2).join(" ; ")})`);
   });
 
   // ============================================================================================================================================

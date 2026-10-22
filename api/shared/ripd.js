@@ -85,6 +85,21 @@ const RIPDS = [
     riscoResidual: "Médio — o dado é sensível por natureza e depende do bom uso de quem tem acesso legítimo; o detector de afastamento só vê a EBD e as reuniões (quem não está nelas não é medido) e a lista de sinais de risco não pega tudo (a liderança pode marcar o risco à mão). O vazamento por quem lê é tratado pelo registro de cada abertura e pela orientação à liderança."
   },
   {
+    chave: "COMUNICACAO_COM_MEMBROS",
+    tratamento: "Comunicados da Igreja a grupos de membros (v7.12): consentimento por canal (e-mail, celular) e categoria (eventos, devocional, financeiro), grupo calculado pelos critérios (território, cargo, departamento, liderança, EBD, formação, voluntariado, direito a voto), modelos aprovados, registro de entrega e leitura, e a convocação oficial, que chega a todos.",
+    riscoIdentificado: "Ser membro de uma igreja é dado de convicção religiosa (LGPD Art. 11): um e-mail que sai para quem não pediu, um grupo montado errado (por exemplo, pelo que a pessoa dá) ou um relatório com nomes e telefones lido por quem não devia expõem a pessoa; e a convocação que não chega a quem tem direito a voto ameaça a validade da assembleia.",
+    medidasMitigacao: [
+      "Consentimento pedido, não presumido: sem um \"sim\" registrado (com a versão e a impressão digital do texto lido e o endereço de quem marcou) o e-mail e o celular daquela categoria não recebem; o consentimento é conferido de novo na hora de mandar cada mensagem",
+      "Sair é um toque: em Meu Painel ou no link de cada e-mail (sem login, assinado por pessoa e categoria; abrir o link só lê, o botão grava); a convocação oficial não tem saída e diz por quê",
+      "Nenhum grupo pelo dízimo (decisão do responsável, 22/10/2026); menores de 18 anos e quem pediu a exclusão ficam sempre fora; o grupo é cortado pelo território de quem envia; a prévia mostra só números, nunca nomes",
+      "Só se envia modelo aprovado pelo nível geral (o aprovado não se edita); a convocação oficial só sai pelo nível geral; enviar e aprovar pedem a confirmação reforçada (vD.4)",
+      "O e-mail sai por uma fila que respeita o limite do serviço e nunca manda a mesma mensagem duas vezes (a entrega é tomada antes de mandar; a que travar vira \"falhou\")",
+      "O relatório é de quem enviou e do nível geral; o telefone de quem a convocação não alcançou só o nível geral vê; não há rastreio de abertura do e-mail",
+      "Consentimento e entrega não se alteram (gatilhos no banco); a entrega perde o nome em 1 ano (5 na convocação); a exclusão LGPD apaga o consentimento, as preferências e os aparelhos e anonimiza as entregas"
+    ],
+    riscoResidual: "Baixo — o maior risco é humano (um modelo aprovado com texto inadequado, um grupo largo demais); mitigado pela aprovação no nível geral, pela prévia com o número de pessoas antes de enviar e pelo cancelamento do que ainda está na fila."
+  },
+  {
     chave: "CHECKIN_INFANTIL",
     tratamento: "Check-in infantil com cadeia de custódia (v7.10): registro de quem entregou e quem retirou cada criança, código de retirada, lista de pessoas autorizadas, retirada divergente, segunda via e presença dos voluntários na sala.",
     riscoIdentificado: "Quem sabe onde a criança está e a quem ela pode ser entregue tem poder sobre ela: um código vazado, uma lista de autorizados lida por quem não devia, ou uma retirada indevida por pessoa de fora é o pior desfecho possível; e o histórico (quem trouxe, quando, em qual sala) expõe a rotina da família.",

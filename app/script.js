@@ -57,6 +57,7 @@ const AJUDA_POR_ABA = {
   psc: "Avaliação anual obrigatória de cada congregação pelos 5 Sinais Vitais (Escada Bloqueada): preencher, enviar, validar e homologar, mais a reclassificação compulsória para Extensão da Tenda (Regimento Art. 127-129).",
   calendario: "Calendário Oficial do Campo: veja a agenda do mês, proponha datas (o nível do evento decide quem prevalece no choque), acompanhe a pauta e, conforme a sua permissão, consolide, homologue o ano ou ajuste a agenda litúrgica (Regimento Art. 79, 81, 147, 154 e 154-A).",
   "meupainel:agenda": "A agenda oficial dos próximos 60 dias: eventos do Calendário Oficial já homologados e a grade litúrgica fixa. Escolha a sua congregação para ver só o que alcança ela.",
+  comunicacao: "Comunicados: escolha um modelo aprovado, monte o grupo (território, cargo, departamento, EBD, formação, voluntariado, direito a voto) e veja quantas pessoas recebem antes de enviar. O e-mail e o celular só chegam a quem autorizou aquela categoria; a convocação oficial chega a todos. Em Envios, o relatório mostra quem recebeu e quem leu; na convocação, quem não foi alcançado. Só o nível geral escreve e aprova modelos.",
   canais: "Relação de Canais Oficiais da IEADESPA (Estatuto Art. 12): só conta, número ou grupo em nome da Igreja. Registre canais, designe administradores, acompanhe a Regra das 24 Horas, as trocas de senha na sucessão de liderança e a transmissão dos cultos (Área Cega).",
   "meupainel:canais": "Se você administra um canal oficial, aceite aqui o Termo de Dever de Moderação e trate as ocorrências em até 24 horas. Qualquer pessoa pode avisar um conteúdo irregular num canal oficial e acompanhar o aviso.",
   eventos: "Dossiê de governança do evento do Calendário: organizadores, convidados externos (parecer do Conselho de Ética e Nada Consta da Presidência — Art. 111 e 111-A) e Caixa Flutuante (superávit recolhido à Sede ou convertido em benfeitoria — Art. 53-E §2º). Inscrição, check-in e certificado ficam no site.",
@@ -423,6 +424,8 @@ function limparSessao() {
   if (typeof chkLimparTela === "function") chkLimparTela();
   // v7.11: a fila, o acompanhamento aberto, a NOTA PASTORAL aberta e os pedidos de oração saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
   if (typeof cpaLimparTela === "function") cpaLimparTela();
+  // v7.12: as escolhas de comunicação, os comunicados e o relatório de envio (com nomes e telefones) saem da página junto com a sessão — mesma guarda
+  if (typeof comLimparTela === "function") comLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
@@ -541,6 +544,7 @@ function esconderTodasAsTelas() {
 function voltarParaCheckin() {
   // v7.11: a fila, o acompanhamento e a nota pastoral aberta não ficam escondidos atrás da Portaria (módulo ausente ou velho no cache: a navegação segue)
   if (typeof cpaAbaMudou === "function") cpaAbaMudou("portaria");
+  if (typeof comAbaMudou === "function") comAbaMudou("portaria");
   esconderTodasAsTelas();
   document.getElementById("telaCheckin").style.display = "flex";
 }
@@ -1243,7 +1247,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "eventos", "setores", "vistoria"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1282,6 +1286,9 @@ const ABA_PERMISSOES_ALT = {
   // v7.11 — Cuidado pastoral: permissão própria "cuidado_pastoral" (Presidente, Secretário Geral, Dirigente, Pastor de Área e Superintendente Regional), só em sessão de liderança; cada um vê
   // o próprio território (o servidor confere cada ato). O responsável nomeado e o pedido de oração/visita ficam em Meu Painel → Cuidado, abertos a qualquer login (inclusive PIN).
   cuidadopastoral: ["cuidado_pastoral"],
+  // v7.12 — Comunicados: permissão própria "comunicacao" (Presidente, Secretário Geral, Dirigente e Pastor de Área), só em sessão de liderança; cada um envia ao próprio território, e só o
+  // nível geral escreve e aprova modelos e envia a convocação oficial (o servidor confere cada ato). As escolhas de cada membro ficam em Meu Painel → Comunicações (qualquer login).
+  comunicacao: ["comunicacao"],
   // v5.9 — permissão própria, nunca concedida por padrão (dado mais
   // sensível do sistema: situação socioeconômica de família assistida).
   assistenciasocial: ["assistencia_social"],
@@ -1423,7 +1430,7 @@ const MODULOS = {
   trilhas: { titulo: "Formação e Certificação", icone: "🎓", abaEntrada: "trilhas", abas: ["trilhas"] },
   psc: { titulo: "Saúde Congregacional (PSC)", icone: "🩺", abaEntrada: "psc", abas: ["psc"] },
   calendario: { titulo: "Calendário Oficial", icone: "📅", abaEntrada: "calendario", abas: ["calendario"] },
-  canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais"] },
+  canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
   eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
   setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
@@ -1476,11 +1483,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1489,6 +1496,7 @@ function mostrarSubAbaMeupainel(sub) {
   subAbaMeupainelAtual = sub;
   chaveAjudaAtual = `meupainel:${sub}`;
   if (typeof chkSubAbaMudou === "function") chkSubAbaMudou(sub);
+  if (typeof comSubAbaMudou === "function") comSubAbaMudou(sub);   // v7.12: as escolhas e os comunicados da pessoa não ficam para trás
   if (typeof cpaSubAbaMudou === "function") cpaSubAbaMudou(sub);   // v7.11: o acompanhamento aberto (e a nota pastoral aberta) e o que a pessoa escrevia nos pedidos não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
@@ -1506,6 +1514,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "protecao" && typeof carregarMeuPainelProtecaoAcao === "function") carregarMeuPainelProtecaoAcao();
   if (sub === "checkininfantil" && typeof chkCarregarMeuPainelAcao === "function") chkCarregarMeuPainelAcao();
   if (sub === "cuidado" && typeof cpaCarregarMeuPainelAcao === "function") cpaCarregarMeuPainelAcao();
+  if (sub === "comunicacoes" && typeof comCarregarMeuPainelAcao === "function") comCarregarMeuPainelAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Não quero mais receber — IEADESPA</title>
+  <!-- v7.12: a página do link "não quero mais receber" dos e-mails de comunicado. Sem login: o link assinado é a prova. Abrir só LÊ (os "pré-visualizadores" de link dos e-mails
+       não descadastram ninguém); só o botão grava. Montada por sair.js (CSP: nenhum código nesta página). -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="pagina-sair">
+  <main class="sair-caixa">
+    <h1>✉️ Comunicados da IEADESPA</h1>
+    <p id="sairMsg" class="subtitle" role="status" aria-live="polite">Conferindo o link…</p>
+    <div id="sairConteudo" hidden>
+      <p>Categoria: <strong id="sairCategoria"></strong></p>
+      <p id="sairTexto" class="com-texto"></p>
+      <button type="button" class="btn-confirmar" id="sairBotao">Confirmar: não quero mais receber por e-mail</button>
+    </div>
+    <p class="subtitle">Você também pode escolher o que recebe em <strong>Meu Painel → Comunicações</strong>, no sistema.</p>
+  </main>
+  <script src="sair.js"></script>
+</body>
+</html>

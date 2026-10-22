@@ -2987,21 +2987,95 @@ A vB.2 constrói o motor de notificação. Esta versão trata da parte jurídica
 segmentação — no Brasil, WhatsApp sem opt-in registrado é risco de LGPD e de
 bloqueio pela própria Meta.
 
-- [ ] **Consentimento por canal E por categoria** (WhatsApp/SMS/e-mail/push ×
-      convocação oficial/evento/devocional/financeiro), com origem, data, e o
-      **texto exato aceito**. O detalhe que importa: o membro pode sair de
-      "eventos" e continuar recebendo **convocação oficial de assembleia** — que
-      é obrigação estatutária de comunicação, não marketing.
-- [ ] Opt-out automático por palavra-chave (SAIR/STOP) com log, e bloqueio de
-      envio sem consentimento vigente.
-- [ ] Templates versionados e aprovados (exigência da API oficial do WhatsApp
-      Business). *(Meta/WhatsApp Business API; Infobip; SocialHub)*
-- [ ] **Segmentação dinâmica por consulta viva**, não lista estática: "diáconos do
-      Setor 3", "professores de EBD com trilha vencida", "dizimistas inativos há
-      90 dias", "voluntários com certidão vencendo em 30 dias". Cada módulo novo
-      vira audiência sem ninguém montar lista na mão.
-- [ ] Registro de entrega/leitura e relatório de alcance — saber se a convocação
-      oficial de fato chegou é questão de validade do ato, não de curiosidade.
+**Decisões do responsável da Igreja (22/10/2026):** **sem WhatsApp e sem SMS** nesta versão (são pagos por mensagem;
+mantém a decisão de 14/09 da vB.2) — o consentimento já nasce com esses canais previstos, para ligar depois sem refazer
+nada; e **nenhum grupo de envio escolhido pelo dízimo** ("dizimistas inativos" saiu do plano: ninguém recebe ou deixa de
+receber mensagem pelo que dá).
+
+- [x] **Consentimento por canal E por categoria** (e-mail e celular × convocação oficial, eventos, devocional,
+      financeiro), com origem, data, o **texto exato aceito** (versão e impressão digital do texto) e o endereço de quem
+      aceitou. O membro pode sair de "eventos" e continuar recebendo **convocação oficial**, que é obrigação estatutária
+      de comunicação, não marketing.
+- [x] **Saída com um toque** e bloqueio de envio sem consentimento vigente. Sem WhatsApp/SMS não há palavra-chave a
+      receber: o equivalente é o link "não quero mais receber" em todo e-mail que não é convocação, com registro (o
+      cabeçalho de descadastro de um clique ficou de fora: o serviço de e-mail do Azure não garante aceitá-lo, e um
+      cabeçalho recusado pararia todos os e-mails).
+- [x] Modelos de mensagem **versionados e aprovados**: só se envia um modelo aprovado; o aprovado não se edita (corrigir
+      é criar a versão seguinte).
+- [x] **Segmentação dinâmica por consulta viva**, não lista estática: território (congregação, área, região), cargo
+      ministerial, departamento, liderança ativa, professores de EBD, formação vencida ou vencendo, voluntário com
+      habilitação vencendo e os elegíveis de uma sessão da Assembleia. A lista é calculada na hora do envio.
+- [x] Registro de entrega/leitura e relatório de alcance — saber se a convocação oficial de fato chegou é questão de
+      validade do ato, não de curiosidade.
+
+### Entrega (22/10/2026)
+
+Migração 150; `shared/comunicacao.js` (regra pura), `shared/comunicacaoDb.js`, `shared/comunicacaoFilaMarca.js`; rotas `GestaoComunicacao` (`/api/comunicacao/<ação>`),
+`ComunicacaoSair` (o link do e-mail, sem login) e `ComunicacaoFila` (a rotina de 15 em 15 minutos, `rotinas-comunicacao.yml`); a rodada das 7h aplica a retenção e roda
+uma rodada da fila. Tela: Meu Painel → Comunicações e a aba Comunicados (`app/modulos/comunicacao.js`), a página `sair.html`, casca v37. A exclusão LGPD passou a apagar
+também as preferências de aviso e os aparelhos inscritos (antes ficavam); Meus Dados mostra o histórico do consentimento; ROPA ("Comunicação com os membros") e RIPD
+("Comunicação com os membros") novos.
+
+**Provas:** jest (regra pura, marca da fila, rotas, exclusão LGPD, varredura de rotas), `e2e-29` no SQL Server local (98 verificações: esquema,
+consentimento, ficha, modelos, grupo, fila com as cotas e a prioridade da convocação, 429, tempo esgotado e erro no meio que devolvem à fila, cancelamento,
+convocação, saída, retenção e LGPD), `e2e-30` (corridas e escala: seis rodadas da fila juntas nunca mandam o mesmo e-mail duas vezes e respeitam o teto da hora;
+sem a trava da rodada o teste falha com 22 e-mails num teto de 12; um envio a ~4.900 pessoas grava em blocos; mais de 5.000 é recusado) e a prova da tela
+`tools/front-comunicacao` (417 verificações; 26 falham na tela de antes das correções). Defeitos achados nas provas: o SQL Server recusa `OUTPUT` sem `INTO`
+numa tabela com gatilho (a fila não andava) e a recusa "o texto mudou" perdia o sinal que manda a tela recarregar; a prova da tela achou 5 na tela (aba que dizia
+"sem acesso" quando o catálogo não carregava, pílula do nível geral que ficava para o login seguinte, grupo apagado ao guardar outro, "Enviar" religado sem
+contagem, motivo apagado na releitura).
+
+**Revisão adversarial independente (22/10/2026), 2 altos, 11 médios e 15 baixos, todos corrigidos:** o direito a voto filtra antes do corte de 5.000 (antes a
+convocação podia sair incompleta sem aviso); a ficha em papel é só do nível geral, com a referência da ficha e a confirmação reforçada, e não vence o que a pessoa
+marcou depois da data dela; a convocação passa na frente na fila; o 429 do e-mail volta na hora (o SDK repetia esperando minutos); o tempo é conferido a cada
+mensagem e o que não foi tentado volta à fila; a rodada das 7h só faz a retenção; o envio grava em blocos; o teto da hora soma os avisos do sistema (padrão 60);
+"direito a voto" só para o nível geral (cruza com a disciplina); a retenção e a exclusão alcançam o aviso do sininho; quem não tem data de nascimento fica fora
+(salvo na convocação) e o menor não autoriza sozinho; aprovar confere a impressão digital do texto lido; a marca da fila não volta atrás (versão e ETag); e os
+baixos (chaves herdadas, território em texto, saída de quem foi excluído, a prova da convocação guardada na exclusão, cancelado que não é "o mesmo",
+"mostrando 500 de N", celular que falha × sem aparelho, Meus Dados completo, mensagem das regras, `$` no nome, data inexistente, limite de mudanças e de
+contagens, base legal editada que a migração não sobrescreve, ficha de quem não tem congregação, e-mail fora do log).
+
+**Depende de gente (fora do código):** pedir ao suporte do Azure o aumento do limite de e-mail (hoje 100 por hora; o pedido é de graça e leva até 72 horas) quando os
+comunicados passarem de algumas centenas de pessoas; depois, subir `COMUNICACAO_EMAILS_POR_HORA` em Catálogos → Prazos.
+
+### Contrato (22/10/2026)
+
+**Canais e categorias.** Canais externos: **e-mail** e **celular** (o aviso do aplicativo instalado); WhatsApp e SMS
+existem no banco, sem envio. O **sininho** do sistema não é canal externo: todo comunicado aparece lá para quem está no
+grupo. Categorias: **Convocação oficial** (assembleias e reuniões estatutárias), **Eventos**, **Devocional** e
+**Financeiro** (prestação de contas e campanhas).
+
+**Consentimento.** É **pedido, não presumido**: sem um "sim" registrado, o e-mail e o celular daquela categoria não
+recebem (o sininho recebe). O membro marca em **Meu Painel → Comunicações**, lendo o texto exato de cada categoria; a
+Secretaria pode registrar o "sim" ou o "não" que a pessoa deu numa **ficha em papel** (com a data da ficha). Cada
+mudança é uma linha nova (o histórico não se apaga). A **convocação oficial** vai por todo canal que a pessoa tiver,
+com ou sem consentimento, e nunca tem o link de saída; isso está escrito na tela.
+
+**Modelos.** Título (até 150) e texto (até 2.000), com dois campos que o sistema preenche: `{{primeiro_nome}}` e
+`{{congregacao}}`; nada de HTML. Criar e aprovar modelos é do nível geral (o modelo é a voz da Igreja); a convocação
+oficial só sai pelo nível geral.
+
+**Grupos.** A liderança com a permissão nova **comunicacao** monta o grupo pelos critérios acima e vê **quantas pessoas**
+ele tem antes de enviar (e quantas de cada canal receberão); o grupo é sempre cortado pelo território de quem envia.
+Ficam de fora: quem não está ativo, menores de 18 anos (o comunicado ao menor vai pelos responsáveis, fora desta
+versão) e quem pediu a exclusão dos dados. Grupos podem ser guardados com nome para reusar; a lista é refeita a cada
+envio.
+
+**Fila e limite do e-mail.** O serviço de e-mail do Azure manda, no domínio da Igreja, **30 por minuto e 100 por hora**
+(o aumento é pedido de graça ao suporte e leva até 72 horas). Por isso: sininho e celular saem **na hora**; os e-mails
+vão por uma **fila** que manda uma parte a cada 15 minutos (o número por rodada é ajustável em Catálogos → Prazos). A
+rotina só abre o banco quando há fila (uma marca guardada no Storage, como a da proteção). Um e-mail nunca é mandado
+duas vezes: o que travar no meio vira "falhou", não é repetido sozinho.
+
+**Entrega e leitura.** Por pessoa e por canal: aceito pelo serviço, falhou, sem consentimento, sem e-mail, sem aparelho,
+cancelado. Leitura = abriu no sininho; na convocação oficial, a pessoa ainda pode tocar **"Recebi a convocação"** (a
+ciência fica registrada). Não há "pixel" de leitura no e-mail (privacidade). O **relatório** do envio mostra os números e,
+na convocação, a lista de quem **não foi alcançado** por canal nenhum nem leu, para a Secretaria procurar por telefone.
+
+**Guarda e LGPD.** O registro de entrega perde o nome em 1 ano (5 anos na convocação oficial, prova do ato); o
+histórico de consentimento fica enquanto a pessoa estiver no cadastro e sai na exclusão LGPD (que também passa a apagar
+as preferências de aviso e os aparelhos inscritos). Meus Dados mostra os consentimentos e os comunicados recebidos.
+ROPA e RIPD ganham "Comunicação com os membros".
 
 ## v7.13 — Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*
 

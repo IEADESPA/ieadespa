@@ -122,7 +122,7 @@ describe("o pedido do site na tela da Diretoria", () => {
     quando(/INSERT INTO CuidadoItens/, new Error("não devia abrir item"));
     const r = await db.marcarRisco(await getPool(), { pedidoId: 5, dados: { marcar: true }, ver: GERAL });
     expect(r).toMatchObject({ sucesso: true, itemId: null, avisada: true });
-    expect(notificarAgora.mock.calls[0][1]).toMatchObject({ regraChave: "CUIDADO_RISCO", referenciaTabela: "PedidosOracaoSite", referenciaId: 51 });
+    expect(notificarAgora.mock.calls[0][1]).toMatchObject({ regraChave: "CUIDADO_RISCO", referenciaTabela: "PedidosOracaoSiteMarcado", referenciaId: 51 });
   });
   test("só o nível geral vê o pedido do site", async () => {
     quando(/WHERE p\.PedidoId = @id/, [pedido]);

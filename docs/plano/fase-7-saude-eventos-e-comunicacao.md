@@ -2868,8 +2868,8 @@ fila). A liderança também registra o pedido recebido em mãos. **Nada vai ao b
 leva o texto do pedido**: leva uma linha anonimizada gerada pelo assunto e pela congregação ("Alguém da Congregação Vila
 Nova pede oração pela saúde."), que o moderador pode reescrever (até 200 caracteres) — e a reescrita que contém o nome de
 quem pediu é recusada. A linha aprovada fica 14 dias no boletim, que a liderança imprime e que o membro vê no Meu Painel
-(só as linhas da própria congregação). O mural de oração do **site** é outro lugar (Directus, moderado pela Diretoria) e
-não muda nesta versão.
+(só as linhas da própria congregação). O mural de oração do **site** é outro lugar (Directus, moderado pela Diretoria); o
+confidencial e o com sinal de risco que chegam por ele entram na fila desde a v7.11.1 (abaixo).
 
 **Sinal de risco, fora da fila normal.** Todo texto livre que um membro manda (pedido de oração, pedido de visita) passa
 por uma lista de expressões de **autolesão** (ex.: "quero morrer", "me matar", "me cortar") e de **violência** (ex.: "ele
@@ -2949,6 +2949,37 @@ que o contrato precisou mudar:
   aberto; índices novos para a fila, o painel e a detecção no banco de 5 DTU; o lembrete no topo é limitado a 5 no banco.
 - **Texto do contrato corrigido:** o aviso "você é o responsável" leva o **primeiro nome** e nunca o tipo (pós-internação
   diria a doença num e-mail); a auditoria tem o código do ato (marcado/desmarcado), nunca o tipo do risco.
+
+### v7.11.1 — o mural de oração do site entra no cuidado pastoral (22/10/2026)
+
+Decidido pelo responsável em 21/10/2026 ("mais compensativo" que a presença no culto, que não se fará).
+
+- [x] **O envio do mural passa pelo servidor do site** (`site/api/EnviarPedidoMural`, `/api/enviar-pedido-mural`): antes o
+      navegador gravava direto no Directus. A Function grava o pedido em `mural_oracao` (aguardando moderação, como sempre)
+      e avisa o sistema, servidor a servidor, com a chave combinada `CHAVE_SITE_SISTEMA`. Limite de 10 envios por IP em 5
+      minutos, campo-isca contra robô, autorização (LGPD) obrigatória, texto até 500 e nome até 80 letras.
+- [x] **O sistema confere o sinal de risco** (`/api/cuidado-pastoral-site`, a mesma lista de expressões do cuidado
+      pastoral). O pedido comum **nem abre o banco** do sistema (segue só no site). O **confidencial** e o **com risco**
+      entram em `PedidosOracao` com origem `SITE`, **sem congregação** (o site não sabe), **só para o nível geral**, nunca
+      boletim. Com risco, o aviso obrigatório sai **na hora** ao nível geral (Presidente e Secretário Geral), sem o texto.
+      A rota **falha fechada**: sem a chave configurada no sistema ninguém entra (401). O mesmo texto reenviado em 10
+      minutos é o mesmo pedido; teto de 30 pedidos por hora (60 com risco) contra inundação.
+- [x] **Com risco, o pedido nunca vai ao mural público:** o site o marca como confidencial no Directus (a moderação não
+      tem "Aprovar" para confidencial), e quem escreveu vê na hora, em destaque, o **190** e o **188** (CVV). O 188 e o
+      190 aparecem também, discretos, embaixo do formulário, sempre.
+- [x] **Se o sistema não responder**, o pedido fica no Directus como antes (ninguém perde o que escreveu).
+- [x] **Na tela do cuidado pastoral** (só o nível geral vê): selo "Veio do mural de oração do site"; não vai ao boletim,
+      não abre acompanhamento (não há congregação nem contato); dá para marcar como lido e marcar o sinal de risco (avisa
+      o nível geral de novo). Os confidenciais do site que esperam leitura entram no aviso das 7h ao nível geral.
+- [x] **Banco (migração 149):** `Origem` (`SISTEMA`/`SITE`) e `SiteItemId`; `CongregacaoId` aceita vazio **só** no pedido do
+      site (CHECK); a origem e o número do item do site não mudam depois (gatilho); a guarda (1 ano; 5 com risco) vale
+      igual.
+- [x] **Provas:** jest (rota, recebimento, tela), roteiro da tela 660/0, `site/scripts/testes/mural-unidade.cjs` (envio do
+      site, sem rede) e `e2e-28` no SQL Server local (41/41, inclusive a migração aplicada duas vezes). Um defeito achado na
+      prova: a marcação à mão de risco num pedido do site usava a mesma referência de aviso do aviso automático (pedido 5
+      marcado = 51 = pedido 51 com risco) e calaria o aviso do outro; agora cada um tem a sua (o teste falha no código antigo).
+- [ ] **Depois de uma semana no ar:** tirar do Directus a permissão pública de **criar** em `mural_oracao` (hoje ainda
+      aberta, para quem estiver com a página antiga no cache do navegador).
 
 ## v7.12 — Comunicação: consentimento granular e envio segmentado *(7ª rodada)*
 

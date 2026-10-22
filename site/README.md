@@ -676,6 +676,15 @@ A moderação e os relatórios são **só da Diretoria** (funções "Semi-admini
   contador "orando por você" é incrementado exclusivamente pela Function `OrarMural/index.js` — sempre
   +1 a partir do valor real gravado no servidor, nunca um valor vindo do navegador (ver
   [Segurança](#segurança-privacidade-e-decisões-de-arquitetura) sobre o bug que isso corrigiu).
+  **Envio (v7.11.1 do sistema, 22/10/2026):** o formulário chama a Function `EnviarPedidoMural`
+  (`/api/enviar-pedido-mural`, 10 envios por IP em 5 min), que grava em `mural_oracao` com o token
+  de admin e avisa o cuidado pastoral do sistema (`app.ieadespa.org.br/api/cuidado-pastoral-site`,
+  com a `CHAVE_SITE_SISTEMA` no cabeçalho `x-site-key`). O sistema confere o sinal de risco (autolesão
+  ou violência): com risco, a Diretoria é avisada na hora, o item vira confidencial no Directus (nunca
+  publicado) e a página mostra em destaque o 190 e o 188 (CVV); o confidencial também fica na fila do
+  cuidado pastoral, só do nível geral. Se o sistema não responder, o pedido fica só no Directus, como
+  antes. Teste sem rede: `node scripts/testes/mural-unidade.cjs`. Falta (uma semana depois de no ar):
+  tirar a permissão pública de **criar** em `mural_oracao`.
 - **Enquetes** (`/enquetes/`) — opinião pública com voto único por conta: resultado só aparece
   depois de votar (ou quando a enquete encerra), e um voto por e-mail por enquete é garantido pela
   Function `VotarEnquete/index.js`, nunca por `localStorage` sozinho (facilmente burlável).

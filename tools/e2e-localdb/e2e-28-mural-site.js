@@ -3,7 +3,7 @@
 // banco, o confidencial e o com risco guardados, o aviso na hora ao nível geral sem o texto, o mesmo pedido reenviado, a tela da Diretoria (quem vê, o que dá para fazer), a
 // rotina diária e a retenção com o pedido sem congregação.
 const L = require("./lib");
-const { ok, fim, q, um, escalar, obterPool, API, path, GET, POST, LIDER, GERAL } = L;
+const { ok, fim, q, um, escalar, obterPool, API, path, GET, POST, LIDER, GERAL, PIN } = L;
 process.env.CRON_SECRET = "segredo-da-rotina-e2e";
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site";
 const H = require(path.join(API, "GestaoCuidadoPastoral/index.js"));
@@ -23,15 +23,20 @@ async function doSite(corpo, chave = process.env.CHAVE_SITE_SISTEMA) {
 const rotina = async () => { const ctx = { bindingData: {}, log }; await AGENDADOR(ctx, { method: "POST", query: {}, body: {}, headers: { "x-cron-secret": process.env.CRON_SECRET } }); return ctx.res; };
 const falha = async (texto, params) => { try { await q(texto, params); return null; } catch (e) { return e.message || String(e); } };
 const pedidosDoSite = () => escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Origem = 'SITE'");
+// o pedido não se apaga (gatilho): a limpeza entre rodadas desliga o gatilho só para isso
+const limparSite = () => q("DISABLE TRIGGER TR_PedidosOracao_Protegido ON PedidosOracao; DELETE FROM PedidosOracao WHERE Origem = 'SITE'; ENABLE TRIGGER TR_PedidosOracao_Protegido ON PedidosOracao");
 
 (async () => {
   await obterPool();
   const c1 = await escalar("SELECT CongregacaoId FROM Congregacoes WHERE Nome = @n", { n: C });
-  await q("DELETE FROM PedidosOracao WHERE Origem = 'SITE'").catch(() => { });
+  await limparSite();
 
   console.log("== o esquema da 149 ==");
   ok((await um("SELECT is_nullable FROM sys.columns WHERE object_id = OBJECT_ID('PedidosOracao') AND name = 'CongregacaoId'")).is_nullable === true, "CongregacaoId aceita vazio (só o do site)");
-  ok((await escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Origem IS NULL OR Origem <> 'SISTEMA'")) === 0 && (await escalar("SELECT COUNT(*) FROM PedidosOracao")) > 0, "os pedidos que já existiam ficaram com origem SISTEMA");
+  ok((await escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Origem IS NULL OR Origem <> 'SISTEMA'")) === 0, "nenhum pedido que já existia ficou sem a origem SISTEMA");
+  const doMembro = await POST(H, "pedir-oracao", PIN(8012), { categoria: "SAUDE", texto: "Ore pela minha cirurgia (e2e-28)", podeBoletim: true });
+  const pMembro = doMembro.body && await um("SELECT Origem, SiteItemId, CongregacaoId FROM PedidosOracao WHERE PedidoId = @p", { p: doMembro.body.pedidoId });
+  ok(doMembro.status === 201 && pMembro && pMembro.Origem === "SISTEMA" && pMembro.SiteItemId === null && pMembro.CongregacaoId, "o pedido do membro pelo sistema continua nascendo com origem SISTEMA e a congregação", doMembro.body);
   ok(!!(await falha("INSERT INTO PedidosOracao (CongregacaoId, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato, SoNivelGeral, Origem) VALUES (NULL, 'PROPRIO', 'OUTRO', N'x', 0, 0, 1, 'SISTEMA')")), "pedido do SISTEMA sem congregação: recusado");
   ok(!!(await falha("INSERT INTO PedidosOracao (CongregacaoId, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato, SoNivelGeral, Origem) VALUES (@c, 'PROPRIO', 'OUTRO', N'x', 0, 0, 1, 'SITE')", { c: c1 })), "pedido do SITE com congregação: recusado");
   ok(!!(await falha("INSERT INTO PedidosOracao (CongregacaoId, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato, SoNivelGeral, Origem) VALUES (NULL, 'PROPRIO', 'OUTRO', N'x', 1, 0, 1, 'SITE')")), "pedido do SITE que pode ir ao boletim: recusado");
@@ -63,7 +68,7 @@ const pedidosDoSite = () => escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Or
   ok(avisos.every((a) => /mural de oração do SITE/.test(a.Mensagem) && !/aguento|vida/.test(a.Mensagem)), "o aviso diz de onde veio e não leva o texto", avisos[0] && avisos[0].Mensagem);
   const repetido = await doSite({ texto: "não aguento mais, penso em tirar minha vida", confidencial: false, siteItemId: 504 });
   ok(repetido.body.gravado === true && repetido.body.risco === true && (await escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Origem = 'SITE' AND Risco = 1")) === 1, "o mesmo texto reenviado em 10 minutos é o mesmo pedido");
-  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE ReferenciaTabela = 'PedidosOracaoSite'")) === avisos.length, "e não avisa de novo");
+  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE ReferenciaTabela = 'PedidosOracaoSite' AND ReferenciaId = @p", { p: pRisco.PedidoId })) === avisos.length, "e não avisa de novo");
   const auditoria = await q("SELECT CAST(Detalhes AS NVARCHAR(MAX)) AS d FROM AuditLog WHERE Tabela = 'PedidosOracao' AND RegistroId IN (@a, @b)", { a: pConf.PedidoId, b: pRisco.PedidoId }).catch(() => []);
   ok(auditoria.every((a) => !/aguento|família|Marta/.test(a.d || "")), "a auditoria não guarda o texto nem o nome");
 
@@ -83,7 +88,13 @@ const pedidosDoSite = () => escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Or
   const marcou = await POST(H, "risco", SEC, { pedidoId: pConf.PedidoId, marcar: true });
   ok(marcou.status === 200 && marcou.body.itemId === null, "marcar o risco no pedido do site passa, sem abrir item", marcou.body);
   ok((await escalar("SELECT COUNT(*) FROM CuidadoItens")) === itensAntes, "nenhum item novo na fila");
-  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE ReferenciaTabela = 'PedidosOracaoSite' AND ReferenciaId = @r", { r: pConf.PedidoId * 10 + 1 })) > 0, "e o nível geral é avisado");
+  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE ReferenciaTabela = 'PedidosOracaoSiteMarcado' AND ReferenciaId = @r", { r: pConf.PedidoId * 10 + 1 })) > 0, "e o nível geral é avisado");
+  // a marcação à mão não pode calar o aviso automático de outro pedido cujo número coincida com pedido×10+vez (o 5 marcado = 51 = o pedido 51)
+  const alvo = pConf.PedidoId * 10 + 1;
+  const avisadoNaMarcacao = await escalar("SELECT TOP 1 DestinatarioMembroId FROM Notificacoes WHERE ReferenciaTabela LIKE 'PedidosOracaoSite%' AND ReferenciaId = @r", { r: alvo });
+  await q("DISABLE TRIGGER TR_PedidosOracao_Protegido ON PedidosOracao; SET IDENTITY_INSERT PedidosOracao ON; INSERT INTO PedidosOracao (PedidoId, CongregacaoId, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato, Risco, RiscoOrigem, RiscoJaTeve, RiscoMarcadoEm, SoNivelGeral, Origem) VALUES (@a, NULL, 'PROPRIO', 'OUTRO', N'(e2e-28) coincidência de número', 0, 0, 1, 'AUTOMATICO', 1, SYSUTCDATETIME(), 1, 'SITE'); SET IDENTITY_INSERT PedidosOracao OFF; ENABLE TRIGGER TR_PedidosOracao_Protegido ON PedidosOracao", { a: alvo }).catch((e) => console.log("  (montagem)", e.message));
+  const naoColide = await require(path.join(API, "shared/canaisDb.js")).notificarAgora(await obterPool(), { regraChave: "CUIDADO_RISCO", destinatarios: [{ membroId: avisadoNaMarcacao, nome: "Diretoria", email: null }], mensagem: "teste", referenciaTabela: "PedidosOracaoSite", referenciaId: alvo, aguardarEntrega: false });
+  ok(naoColide && naoColide.criadas > 0, `o aviso automático do pedido ${alvo} ainda sai depois da marcação à mão do pedido ${pConf.PedidoId}`, naoColide);
   const leu = await POST(H, "moderar", SEC, { pedidoId: pRisco.PedidoId, decisao: "NAO_PUBLICAR" });
   ok(leu.status === 422, "o com risco não sai como lido sem desmarcar antes (mesma regra do sistema)");
 
@@ -91,11 +102,11 @@ const pedidosDoSite = () => escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Or
   const r = await rotina();
   ok(r && r.status === 200, "a rotina roda com pedido sem congregação", r && r.body);
   ok(!JSON.stringify((r && r.body) || {}).includes("falhas\":[\""), "sem passo falhando", r && r.body);
-  await q("DISABLE TRIGGER ALL ON PedidosOracao; UPDATE PedidosOracao SET CriadoEm = DATEADD(DAY, -800, SYSUTCDATETIME()) WHERE Origem = 'SITE'; ENABLE TRIGGER ALL ON PedidosOracao");
+  await q("DISABLE TRIGGER ALL ON PedidosOracao; UPDATE PedidosOracao SET CriadoEm = DATEADD(DAY, -2000, SYSUTCDATETIME()) WHERE Origem = 'SITE'; ENABLE TRIGGER ALL ON PedidosOracao");
   const ret = await db.aplicarRetencao(await obterPool());
   ok(ret.pedidos >= 2, "a retenção anonimiza os pedidos antigos do site", ret);
   ok((await escalar("SELECT COUNT(*) FROM PedidosOracao WHERE Origem = 'SITE' AND (Texto IS NOT NULL OR SolicitanteNome IS NOT NULL)")) === 0, "sem texto nem nome");
-  await q("DELETE FROM PedidosOracao WHERE Origem = 'SITE'").catch(() => { });
+  await limparSite();
 
   fim("e2e-28 (mural do site)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

@@ -1402,7 +1402,8 @@ async function receberDoSite(pool, { texto, nome, confidencial, siteItemId = nul
 }
 
 // Marcar o risco num pedido do site (a lista não pegou): o pedido fica com o sinal e o nível geral é avisado — sem acompanhamento (não há congregação nem contato).
-// Cada marcação avisa de novo (a referência leva o número da marcação, para o motor não calar a segunda).
+// Cada marcação avisa de novo (a referência leva o número da marcação, para o motor não calar a segunda), numa tabela de referência própria: pedido×10+vez na mesma
+// "PedidosOracaoSite" do aviso automático coincidiria com outro pedido (o 5 marcado = 51 = o pedido 51 com risco) e o motor calaria o aviso do 51.
 async function marcarRiscoDoSite(pool, { p, ver }) {
   const r = await pool.request().input("id", sql.Int, p.PedidoId)
     .query(`UPDATE PedidosOracao SET Risco = 1, RiscoOrigem = 'LIDERANCA', RiscoJaTeve = 1, RiscoMarcadoEm = SYSUTCDATETIME() WHERE PedidoId = @id AND Risco = 0 AND AnonimizadoEm IS NULL; SELECT @@ROWCOUNT AS n`);
@@ -1410,7 +1411,7 @@ async function marcarRiscoDoSite(pool, { p, ver }) {
   await auditar("PedidosOracao", p.PedidoId, "CUIDADO_PEDIDO_MARCADO", ver.membroId);
   const vez = Number((await pool.request().input("id", sql.Int, p.PedidoId).query(`SELECT COUNT(*) AS n FROM AuditLog WHERE Tabela = 'PedidosOracao' AND RegistroId = @id AND Acao = 'CUIDADO_PEDIDO_MARCADO'`)).recordset[0].n) || 1;
   const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: semRepetidos(await geraisDoCuidado(pool), [ver.membroId]),
-    mensagem: cp.textoRisco({ doSite: true, crianca: cp.avaliarRisco(p.Texto || "").crianca }), referenciaTabela: "PedidosOracaoSite", referenciaId: p.PedidoId * 10 + Math.min(vez, 9), aguardarEntrega: false });
+    mensagem: cp.textoRisco({ doSite: true, crianca: cp.avaliarRisco(p.Texto || "").crianca }), referenciaTabela: "PedidosOracaoSiteMarcado", referenciaId: p.PedidoId * 10 + Math.min(vez, 9), aguardarEntrega: false });
   return { sucesso: true, itemId: null, avisada: Number((aviso || {}).externas) > 0,
     mensagem: `Sinal de risco marcado no pedido do site. ${Number((aviso || {}).externas) > 0 ? "O nível geral foi avisado agora." : "O aviso não saiu do sistema: avise a Diretoria por telefone."} Não há acompanhamento a abrir (o site não tem congregação nem contato): se o texto traz um contato, procure a pessoa.` };
 }

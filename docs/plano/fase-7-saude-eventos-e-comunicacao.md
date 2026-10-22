@@ -3089,28 +3089,42 @@ responsável está fazendo (DNSSEC no domínio, cuidado com o CPF que a Cora exi
 transporte por congregação: fora** — no campo todos vão juntos; só faria sentido num evento fora ou numa convenção recebida
 (Fase 10).
 
-- [ ] **Lotes de inscrição** (preço, vagas e público): cada faixa de valor do evento ganha, opcionais, a data em que deixa de
+- [x] **Lotes de inscrição** (preço, vagas e público): cada faixa de valor do evento ganha, opcionais, a data em que deixa de
       valer ("1º lote até 05/11") e o número de vagas daquele lote; o público é o próprio rótulo ("Membro", "Visitante",
       "Jovem"). Lote vencido ou esgotado não aparece para escolher; o esgotado só é recusado DENTRO da trava de vagas (a mesma
       senha do livro do evento), com o aviso "escolha o lote seguinte" — o limite geral de vagas continua mandando para a lista
       de espera, sem recusar ninguém.
-- [ ] **Informar o pagamento:** na página da inscrição (código + telefone) e em **Minha Conta → Meus eventos**, a pessoa diz
+- [x] **Informar o pagamento:** na página da inscrição (código + telefone) e em **Minha Conta → Meus eventos**, a pessoa diz
       a data, o meio (Pix, transferência, dinheiro, outro), o valor e o nome de quem pagou; o mesmo para o pedido de camiseta.
       Não precisa mandar comprovante: a equipe confere no extrato. No painel do evento aparece o filtro "Pagamento informado,
       a conferir".
-- [ ] **Confirmar com nome e hora:** marcar "pago" (e desmarcar) passa a guardar quem confirmou e quando; **cortesia ou
+- [x] **Confirmar com nome e hora:** marcar "pago" (e desmarcar) passa a guardar quem confirmou e quando; **cortesia ou
       isenção** só com o motivo e o nome de quem autorizou (a inscrição de cortesia sai da conta de "a receber" e do filtro
       "não pagos"). O total recebido do evento continua indo, à mão, para o caixa do evento no sistema (v7.4).
-- [ ] **Credenciamento por sala ou ala:** cada local de credenciamento do evento pode ter capacidade; a tela de check-in
+- [x] **Credenciamento por sala ou ala:** cada local de credenciamento do evento pode ter capacidade; a tela de check-in
       mostra quantas pessoas entraram em cada local e avisa ao passar da capacidade; cada entrada fica registrada (quem, em
       que local, a que horas, por qual equipe) — a mesma pessoa pode entrar em mais de um local. **Relatório de ausentes**
       (quem se inscreveu e não veio), por lote e por tipo, para imprimir — insumo para dimensionar o próximo evento.
-- [ ] **Crachá configurável:** cada inscrição tem um **tipo de participante** (Participante, Preletor, Equipe, Imprensa,
+- [x] **Crachá configurável:** cada inscrição tem um **tipo de participante** (Participante, Preletor, Equipe, Imprensa,
       Convidado — o organizador muda), e o evento escolhe o que vai no crachá: nome, tipo, igreja/congregação (da resposta a
       uma pergunta do evento), cidade, e o **QR do credenciamento** (o mesmo código do check-in, para entrar mais rápido).
-- [ ] **Aviso contra golpe** (pedido do responsável, 22/10/2026) em toda tela do site que fala de pagamento: a Igreja não entra
+- [x] **Aviso contra golpe** (pedido do responsável, 22/10/2026) em toda tela do site que fala de pagamento: a Igreja não entra
       em contato com ninguém pedindo pagamento ou Pix; pague só pelos dados mostrados no site e, se receber um pedido assim,
       avise a Secretaria. O pagamento continua só informado até a v10.8.
+
+### Entrega da v7.13 (22/10/2026)
+
+No site (Directus + `site/api`): `lotes.js` (o lote é contado dentro da trava de vagas, lido depois da última senha; a escolha do lote é
+obrigatória quando o evento tem lotes), `InformarPagamento` (código + telefone, conta ou telefone do pedido; nunca marca pago),
+`PainelInscricao` (pago, cortesia e tipo com quem e quando tirados do token; "registro divergente" quando alguém muda direto no
+Directus), a coleção `evento_entradas` (uma entrada por pessoa, local e dia), o relatório de ausentes, o crachá com tipo, igreja,
+cidade e QR (só a resposta original da inscrição) e o aviso contra golpe em 5 telas. Esquema aplicado em produção pelo script
+repetível `site/scripts/directus-eventos-v713-esquema.mjs` (simulado antes; a segunda rodada não criou nada; nenhuma permissão
+pública nova). Provas: testes de unidade (lotes 77, pagamento 135, credenciamento 46, esquema 17), bateria na réplica local do
+Directus (49, com 40 inscrições ao mesmo tempo num lote de 10: entram exatamente 10) e a bateria do site em homologação e produção.
+Revisão adversarial independente: 1 alto (inscrição sem lote pulava o preço), 4 médios e 13 baixos, todos corrigidos, cada um com
+teste que falha no código de antes. Limite da licença do Directus: não dá para fechar o campo "pago" campo a campo nem separar por
+evento; o painel mostra o registro divergente e o registro de atividade do Directus é a prova.
 
 **Fora desta versão (por decisão):** pagamento online (Pix Cora: v10.8, depois da segurança do domínio da v10.7); hospedagem e transporte
 (v10.6); levar as inscrições para o sistema (v10.6).

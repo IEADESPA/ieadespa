@@ -1,10 +1,60 @@
 const { conferirHash } = require("../src/lib/telefone");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
+const { avisoDoRegistro } = require("../src/lib/pagamentoInformado");
+const { respostaParaCracha, perguntasDoCracha } = require("../src/lib/cracha");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
 
 const norm = (v) => String(v || "").trim().toLowerCase();
+
+/**
+ * v7.13 — o resto do que a própria pessoa pode ver da sua inscrição (lote, tipo, cortesia, pagamento informado) e, quando `eventoId` vem, os dados do crachá: a configuração do
+ * crachá do evento e as respostas da pessoa às perguntas escolhidas para "igreja/congregação" e "cidade". Só é chamada DEPOIS de o telefone conferir.
+ */
+async function detalhesDaInscricao(inscricaoId, eventoId) {
+  const headers = { Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` };
+  const r = await fetch(`${DIRECTUS_URL}/items/inscricoes_eventos/${inscricaoId}?fields=*`, { headers });
+  if (!r.ok) throw new Error(`leitura da inscrição falhou (${r.status})`);
+  const i = (await r.json()).data || {};
+  const saida = {
+    faixa: i.faixa_rotulo ?? null,
+    valor: i.valor == null ? null : Number(i.valor),
+    tipoParticipante: i.tipo_participante || "Participante",
+    cortesia: i.cortesia === true,
+    aguardandoVaga: i.aguardando_vaga === true,
+    pagamentoInformado: avisoDoRegistro(i),
+  };
+  if (eventoId) {
+    const re = await fetch(`${DIRECTUS_URL}/items/eventos/${encodeURIComponent(eventoId)}?fields=*`, { headers });
+    const evento = re.ok ? (await re.json()).data || {} : {};
+    let config = evento.cracha_config;
+    if (typeof config === "string") { try { config = JSON.parse(config); } catch { config = null; } }
+    config = config && typeof config === "object" ? config : {};
+    const perguntas = { igreja: config.igreja ? Number(config.pergunta_igreja) : null, cidade: config.cidade ? Number(config.pergunta_cidade) : null };
+    const ids = Object.values(perguntas).filter((n) => Number.isInteger(n) && n > 0);
+    // Revisão de 22/10/2026: a resposta pode ter sido criada por qualquer pessoa (criação pública em respostas_inscricao). Só vale a MAIS ANTIGA, de pergunta
+    // do evento feita na inscrição, criada até 10 min depois da inscrição (ver `src/lib/cracha.js`).
+    let respostas = [];
+    let validas = new Set();
+    if (ids.length) {
+      const [rr, rp] = await Promise.all([
+        fetch(`${DIRECTUS_URL}/items/respostas_inscricao?filter[inscricao][_eq]=${inscricaoId}&filter[pergunta][_in]=${ids.join(",")}&fields=*&sort=id&limit=50`, { headers }),
+        fetch(`${DIRECTUS_URL}/items/perguntas_evento?filter[id][_in]=${ids.join(",")}&fields=id,evento,momento&limit=10`, { headers }),
+      ]);
+      respostas = rr.ok ? (await rr.json()).data || [] : [];
+      validas = perguntasDoCracha(rp.ok ? (await rp.json()).data || [] : [], eventoId);
+    }
+    const opcoes = { perguntasValidas: validas, inscricaoCriadaEm: i.date_created || null };
+    saida.cracha = {
+      config,
+      tipo: saida.tipoParticipante,
+      igreja: perguntas.igreja ? respostaParaCracha(respostas, perguntas.igreja, opcoes) : null,
+      cidade: perguntas.cidade ? respostaParaCracha(respostas, perguntas.cidade, opcoes) : null,
+    };
+  }
+  return saida;
+}
 
 /**
  * Substitui o Flow "Verificar inscricao (codigo + telefone)" do Directus —
@@ -44,14 +94,21 @@ module.exports = async function (context, req) {
   }
   const roster = (await rosterRes.json()).data || [];
 
-  const responder = (registro) => ({
-    encontrado: true,
-    id: registro.id,
-    nome: registro.nome,
-    codigo: registro.codigo,
-    presente: registro.presente,
-    pago: registro.pago,
-  });
+  // v7.13: depois de o telefone conferir, a pessoa também vê o lote, o tipo de participante, se é cortesia e o pagamento que ela informou (página "Informar pagamento"), e, se
+  // a página pedir (`cracha: true`), o que vai no crachá (respostas às perguntas que o evento escolheu). Isso vem numa leitura à parte, com `fields=*`, para a verificação não
+  // quebrar num Directus ainda sem os campos novos (pedir um campo que não existe dá 403). Revisão de 22/10/2026: só quando a página PEDE (`detalhes` ou `cracha`) —
+  // o QR Code, o certificado e a pesquisa não precisam disso e não pagam as leituras a mais.
+  const querDetalhes = body.detalhes === true || body.cracha === true;
+  const responder = async (registro) => {
+    const base = { encontrado: true, id: registro.id, nome: registro.nome, codigo: registro.codigo, presente: registro.presente, pago: registro.pago };
+    if (!querDetalhes) return base;
+    try {
+      Object.assign(base, await detalhesDaInscricao(registro.id, body.cracha === true ? evento : null));
+    } catch (e) {
+      context.log.warn("detalhes da inscrição indisponíveis:", e && e.message);
+    }
+    return base;
+  };
 
   if (modo === "codigo") {
     const registro = roster.find((r) => norm(r.codigo) === norm(codigo));
@@ -59,7 +116,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { encontrado: false } };
       return;
     }
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: responder(registro) };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await responder(registro) };
     return;
   }
 
@@ -83,7 +140,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { encontrado: false } };
       return;
     }
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: responder(registro) };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: await responder(registro) };
     return;
   }
 

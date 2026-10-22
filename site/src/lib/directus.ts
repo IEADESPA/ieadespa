@@ -118,6 +118,20 @@ export const STATUS_CAMISETA_URL = "/api/status-camiseta";
 export const STATUS_INSCRICAO_URL = "/api/status-inscricao";
 
 /**
+ * v7.13 — "Informar o pagamento" da inscrição (código + telefone, ou Minha Conta) e do pedido de
+ * camiseta (telefone do pedido, ou Minha Conta). Nunca marca como pago: só guarda o aviso para a
+ * equipe conferir no extrato. Ver `api/InformarPagamento/index.js`.
+ */
+export const INFORMAR_PAGAMENTO_URL = "/api/informar-pagamento";
+
+/**
+ * v7.13 — ações do painel de inscritos que guardam "quem e quando": marcar/desmarcar pago, cortesia
+ * (motivo + quem autorizou) e tipo de participante. Token do painel em `x-painel-token`; ver
+ * `api/PainelInscricao/index.js`.
+ */
+export const PAINEL_INSCRICAO_URL = "/api/painel-inscricao";
+
+/**
  * Contador de visitas (16/10/2026): `POST` com `{ path, referrer_domain }` a cada página vista (ver `BaseLayout.astro`). A Function junta as
  * visitas num buffer e grava no Directus em lote (25 visitas ou 10 s); antes cada visita era uma gravação direta do navegador no Directus.
  */

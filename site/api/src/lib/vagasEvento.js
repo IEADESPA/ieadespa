@@ -8,6 +8,7 @@
  *   1. lê a última senha (h);  2. DEPOIS lê o que conta (confirmados do evento e usos do cupom);  3. decide quem fica confirmado e quem vai para a lista de espera, e quem leva o desconto;
  *   4. grava as inscrições pedindo a senha h+1. Se outra inscrição gravou a h+1 no meio do caminho, o banco recusa a nossa (chave única), nada é gravado, e a leitura é refeita.
  * Diferente do pedido de camiseta, aqui ninguém é recusado por falta de vaga: quem não cabe entra na lista de espera (como sempre foi) e o cupom esgotado só deixa de dar desconto.
+ * A única recusa é a do LOTE esgotado (v7.13, ver `lotes.js`): a contagem do lote é lida no passo 2, junto com as outras, e a inscrição que não cabe nele não grava nada.
  * Estabilidade: as inscrições de um mesmo evento entram numa fila de uma por vez por instância, com recusa imediata (503 "tente de novo") quando não daria tempo, e a instância lembra por
  * poucos segundos a última senha e as contagens (a idade conta desde a última leitura REAL) para pular duas leituras por inscrição quando está gravando em sequência.
  */
@@ -20,8 +21,9 @@ const pausar = (ms) => new Promise((r) => setTimeout(r, ms));
 // ----- o que esta instância sabe do evento (validade curta; a idade conta desde a última leitura real) -----
 // A chave é "<evento>|<cupom>|<conta vagas>": a contagem de usos vale para UM cupom e a de vagas só se o evento conta vagas, então estados diferentes nunca se misturam. A última senha é
 // do evento todo; se alguém (com outro cupom, ou sem) gravou a senha seguinte, a nossa já estará tomada e o banco recusa: aí a leitura é refeita.
-const estados = new Map(); // chave -> { em, ultima, estado: { confirmados, usosCupom } }
-const chaveDoEstado = (eventoId, cupomCodigo, contarVagas) => `${eventoId}|${cupomCodigo || ""}|${contarVagas ? 1 : 0}`;
+// v7.13: o LOTE (faixa de valor com número de vagas) entra na chave do mesmo jeito que o cupom — a contagem de cada lote é de um lote só.
+const estados = new Map(); // chave -> { em, ultima, estado: { confirmados, usosCupom, usadasLote } }
+const chaveDoEstado = (eventoId, cupomCodigo, contarVagas, loteRotulo = null) => `${eventoId}|${cupomCodigo || ""}|${contarVagas ? 1 : 0}|${loteRotulo || ""}`;
 function lembrarEstado(chave, ultima, estado, leituraEm = Date.now()) { estados.set(String(chave), { em: leituraEm, ultima, estado }); }
 function esquecerEstado(chave) { estados.delete(String(chave)); }
 function estadoRecente(chave, agora = Date.now()) {
@@ -32,18 +34,23 @@ function esquecerMemoria() { estados.clear(); }
 
 /**
  * O laço da senha. As operações vêm de fora (o teste de unidade troca por um livro de mentira):
- *  - `lerUltimaSenha()` → número (0 se o livro do evento está vazio);  - `lerEstado()` → { confirmados, usosCupom };
- *  - `montar(estado)` → { registros, confirmadosNovos, usosNovos } (função PURA: decide lista de espera e desconto com o estado lido);
+ *  - `lerUltimaSenha()` → número (0 se o livro do evento está vazio);  - `lerEstado()` → { confirmados, usosCupom, usadasLote };
+ *  - `montar(estado)` → { registros, confirmadosNovos, usosNovos, loteNovos } (função PURA: decide lista de espera e desconto com o estado lido) ou, quando o LOTE escolhido
+ *    não comporta a inscrição (v7.13), `{ recusa: { status, body } }` — nada é gravado;
  *  - `gravar(registros, numero)` → { ok: true, ... } | { conflito: true } | { falhou: true, ... }.
- * `estadoInicial` ({ ultima, estado, em }): o que a instância já sabe de poucos segundos atrás; usado só na PRIMEIRA tentativa.
- * Resultado: `{ ok: true, ultima, estado, leituraEm, resultado, montagem }` | `{ ok: false, ocupado: true }` | `{ ok: false, falhou }`.
+ * `estadoInicial` ({ ultima, estado, em }): o que a instância já sabe de poucos segundos atrás; usado só na PRIMEIRA tentativa. Uma recusa de lote tirada dessa memória NUNCA vale:
+ * a leitura é refeita antes de recusar (uma vaga do lote pode ter voltado nesses segundos).
+ * Resultado: `{ ok: true, ultima, estado, leituraEm, resultado, montagem }` | `{ ok: false, recusa }` | `{ ok: false, ocupado: true }` | `{ ok: false, falhou }`.
  */
 async function reservarEGravarEvento({ lerUltimaSenha, lerEstado, montar, gravar, estadoInicial = null, maxTentativas = MAX_TENTATIVAS_SENHA, esperar = pausar, aleatorio = Math.random }) {
+  let usarMemoria = Boolean(estadoInicial);
   for (let tentativa = 0; tentativa < maxTentativas; tentativa += 1) {
     let ultima;
     let estado;
     let leituraEm;
-    if (tentativa === 0 && estadoInicial) {
+    const daMemoria = usarMemoria;
+    usarMemoria = false;
+    if (daMemoria) {
       ({ ultima, estado, em: leituraEm } = estadoInicial);
     } else {
       ultima = await lerUltimaSenha();
@@ -51,11 +58,19 @@ async function reservarEGravarEvento({ lerUltimaSenha, lerEstado, montar, gravar
       leituraEm = Date.now();
     }
     const montagem = montar(estado);
+    if (montagem.recusa) {
+      if (daMemoria) { tentativa -= 1; continue; } // recusa pela memória: confere com uma leitura de verdade (não conta como tentativa)
+      return { ok: false, recusa: montagem.recusa, ultima, estado, leituraEm };
+    }
     const r = await gravar(montagem.registros, ultima + 1);
     if (r.ok) {
       return {
         ok: true, ultima: ultima + 1, leituraEm, resultado: r, montagem,
-        estado: { confirmados: estado.confirmados + montagem.confirmadosNovos, usosCupom: estado.usosCupom + montagem.usosNovos },
+        estado: {
+          confirmados: estado.confirmados + montagem.confirmadosNovos,
+          usosCupom: estado.usosCupom + montagem.usosNovos,
+          usadasLote: (estado.usadasLote || 0) + (montagem.loteNovos || 0),
+        },
       };
     }
     if (!r.conflito) return { ok: false, falhou: r };
@@ -84,9 +99,14 @@ async function lerComRepeticao(fazer, { tentativas = 3, esperar = pausar, aleato
   throw erro;
 }
 
-function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas = true, repeticao = {} } = {}) {
-  const contar = (consulta, o_que) => lerComRepeticao(async () => {
+/** O filtro das inscrições de UM lote do evento (v7.13): conta todas, confirmadas ou não (ver o cabeçalho de `lotes.js`). */
+const FILTRO_LOTE = (eventoId, rotulo) => `filter[evento][_eq]=${eventoId}&filter[faixa_rotulo][_eq]=${encodeURIComponent(rotulo)}`;
+
+function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas = true, loteRotulo = null, repeticao = {} } = {}) {
+  const contar = (consulta, o_que, { campoNovo = false } = {}) => lerComRepeticao(async () => {
     const r = await directus(`/items/inscricoes_eventos?aggregate[count]=id&${consulta}`);
+    // Campo novo (`faixa_rotulo`, v7.13) que ainda não existe no Directus: ele responde 400/403 ao filtro. É o esquema não aplicado — a função grava do jeito antigo e avisa.
+    if (campoNovo && (r.status === 400 || r.status === 403)) { const e = new Error(`o campo faixa_rotulo não existe neste Directus (${r.status})`); e.semEsquema = true; e.campoLote = true; throw e; }
     if (!r.ok) throw new Error(`falha ao contar ${o_que} (${r.status})`);
     return Number(((await r.json()).data || [])[0]?.count?.id ?? 0);
   }, repeticao);
@@ -100,11 +120,12 @@ function operacoesDoEvento(directus, eventoId, { cupomCodigo = null, contarVagas
       return linhas.length ? Number(linhas[0].n) || 0 : 0;
     }, repeticao),
     async lerEstado() {
-      const [confirmados, usosCupom] = await Promise.all([
+      const [confirmados, usosCupom, usadasLote] = await Promise.all([
         contarVagas ? contar(FILTRO_CONFIRMADOS(eventoId), "as vagas") : Promise.resolve(0),
         cupomCodigo ? contar(`filter[evento][_eq]=${eventoId}&filter[cupom_usado][_eq]=${encodeURIComponent(cupomCodigo)}`, "os usos do cupom") : Promise.resolve(0),
+        loteRotulo ? contar(FILTRO_LOTE(eventoId, loteRotulo), "as inscrições do lote", { campoNovo: true }) : Promise.resolve(0),
       ]);
-      return { confirmados, usosCupom };
+      return { confirmados, usosCupom, usadasLote };
     },
   };
 }
@@ -127,9 +148,9 @@ const MENSAGEM_OCUPADO = "Muita gente se inscrevendo ao mesmo tempo. Aguarde alg
  * `{ criadas, montagem, estado }`, ou `{ erroHttp: { status, body } }`, ou `{ semControle: true }` (o Directus não aceitou a senha — o esquema não existe — e a função de inscrição
  * grava do jeito antigo, para nunca deixar de aceitar inscrição por causa disto).
  */
-async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null, contarVagas = true, montar, log = () => {}, opcoesFila = {}, repeticao = {} }) {
-  const ops = operacoesDoEvento(directus, eventoId, { cupomCodigo, contarVagas, repeticao });
-  const chave = chaveDoEstado(eventoId, cupomCodigo, contarVagas);
+async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null, contarVagas = true, loteRotulo = null, montar, log = () => {}, opcoesFila = {}, repeticao = {} }) {
+  const ops = operacoesDoEvento(directus, eventoId, { cupomCodigo, contarVagas, loteRotulo, repeticao });
+  const chave = chaveDoEstado(eventoId, cupomCodigo, contarVagas, loteRotulo);
   let fila;
   try {
     fila = await enfileirar(`evento:${eventoId}`, () => reservarEGravarEvento({
@@ -140,6 +161,8 @@ async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null
       },
     }), opcoesFila);
   } catch (e) {
+    // Revisão de 22/10/2026: se o que falta é SÓ o campo do lote (esquema v7.13 não aplicado), a trava de vagas e de cupom continua valendo — quem chama refaz sem o lote.
+    if (e && e.campoLote) { log(`${e.message}: seguindo sem o limite do lote, com a trava de vagas e cupom (aplique site/scripts/directus-eventos-v713-esquema.mjs)`); return { semCampoLote: true }; }
     if (e && e.semEsquema) { log(`${e.message}: gravando sem trava (aplique site/scripts/directus-vagas-esquema.mjs)`); return { semControle: true }; }
     throw e;
   }
@@ -152,6 +175,12 @@ async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null
     lembrarEstado(chave, r.ultima, r.estado, r.leituraEm);
     return { criadas: r.resultado.data, montagem: r.montagem, estado: r.estado };
   }
+  if (r.recusa) {
+    // Lote esgotado (v7.13), conferido com uma leitura de verdade dentro da trava: nada foi gravado. A memória guarda o que foi lido (nada mudou), e uma recusa tirada dela é
+    // sempre conferida de novo antes de valer.
+    lembrarEstado(chave, r.ultima, r.estado, r.leituraEm);
+    return { recusa: r.recusa };
+  }
   esquecerEstado(chave);
   if (r.ocupado) {
     log(`senhas disputadas demais no evento ${eventoId} (tentativas esgotadas)`);
@@ -163,7 +192,7 @@ async function gravarInscricoesComTrava({ directus, eventoId, cupomCodigo = null
 }
 
 module.exports = {
-  MAX_TENTATIVAS_SENHA, VALIDADE_MEMORIA_MS, FILTRO_CONFIRMADOS, MENSAGEM_OCUPADO,
+  MAX_TENTATIVAS_SENHA, VALIDADE_MEMORIA_MS, FILTRO_CONFIRMADOS, FILTRO_LOTE, MENSAGEM_OCUPADO,
   chaveDoEstado, lembrarEstado, esquecerEstado, estadoRecente, esquecerMemoria,
   reservarEGravarEvento, operacoesDoEvento, classificarGravacaoLote, gravarInscricoesComTrava, lerComRepeticao,
 };

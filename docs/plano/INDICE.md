@@ -153,7 +153,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 80/94 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 80/95 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | ✅ 1/1 |
 | v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | 🟡 11/12 |
 | v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ✅ 5/5 |
-| v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ⬜ 0/5 |
+| v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ⬜ 0/6 |
 | v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ⬜ 0/4 |
 | v7.15 | [Gestão de crise e porta-voz único *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v715--gestão-de-crise-e-porta-voz-único-gap-da-varredura-normativa) | ⬜ 0/4 |
 | 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | — |
@@ -227,7 +227,7 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 
 ## FASE 10 — Experiência, Design e Performance
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 10 bloco(s) · itens 0/26 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 13 bloco(s) · itens 0/41 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -240,6 +240,9 @@ Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-desig
 | 🔒 10-A | [antes de avançar para a v10.4](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-a--antes-de-avançar-para-a-v104) | — |
 | v10.4 | [Modularização do front-end *(7ª rodada — dívida técnica real)*](fase-10-experiencia-design-performance.md#v104--modularização-do-front-end-7ª-rodada--dívida-técnica-real) | ⬜ 0/4 |
 | v10.5 | [Impressão institucional e exportação padronizada *(7ª rodada)*](fase-10-experiencia-design-performance.md#v105--impressão-institucional-e-exportação-padronizada-7ª-rodada) | ⬜ 0/2 |
+| v10.6 | [Integração total: o site vira conteúdo, o que é "vivo" vai para o sistema *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v106--integração-total-o-site-vira-conteúdo-o-que-é-vivo-vai-para-o-sistema-decisão-de-22102026) | ⬜ 0/5 |
+| v10.7 | [Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v107--domínio-dns-e-segurança-da-borda-decisão-de-22102026) | ⬜ 0/6 |
+| v10.8 | [Pagamento online pelo Pix (conta da Igreja no banco Cora) *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v108--pagamento-online-pelo-pix-conta-da-igreja-no-banco-cora-decisão-de-22102026) | ⬜ 0/4 |
 | 🔒 10-B | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-b--antes-de-encerrar-a-fase-10) | — |
 
 ## FASE 11 — Sistema Campal (multi-campo)

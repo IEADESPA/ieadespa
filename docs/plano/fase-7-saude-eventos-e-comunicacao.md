@@ -3079,17 +3079,41 @@ ROPA e RIPD ganham "Comunicação com os membros".
 
 ## v7.13 — Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*
 
-- [ ] Lotes de inscrição (preço, vagas, público-alvo), com pagamento conciliado
-      no financeiro que já existe (v4.6 Contas a Receber).
-- [ ] **Credenciamento por QR** no dia, com contagem de lotação por sala/ala e
-      relatório de no-show — insumo real para dimensionar o próximo evento.
-- [ ] Crachá com campos configuráveis por tipo de participante.
-- [ ] Para congressos denominacionais: **blocos de hospedagem e transporte por
-      congregação**, com lista de embarque gerada do mesmo cadastro — hoje isso é
-      planilha paralela por congregação, refeita todo ano.
-- [ ] Isenção/cortesia registrada com quem autorizou (conecta com v4.21: evento
-      com receita é receita acessória e precisa de destinação finalística).
-      *(Tithely Events; ChMeetings)*
+**Decisões do responsável da Igreja (22/10/2026).** (1) **Tudo no site**, ampliando o que já existe (inscrição, faixas, cupom,
+vagas, QR, crachá): um seminário em novembro é o maior uso, as inscrições abrem em 1 a 2 semanas e não se aceita o risco de
+mudar de lugar agora; levar inscrições e camisetas para o sistema fica para a **Fase 10** (integração total, com o site virando
+só conteúdo). (2) **Pagamento:** continua manual, mas a pessoa **informa o pagamento** e a equipe confere no extrato e confirma;
+"cada inscrição vira uma conta a receber" está **errado** (não se faz). O **Pix online pela conta da Igreja no banco Cora** foi
+aprovado pelo Presidente (cerca de R$ 1 a 2 por Pix e R$ 50 por mês), mas fica **parado** até a análise de segurança que o
+responsável está fazendo (DNSSEC no domínio, cuidado com o CPF que a Cora exige, valor mínimo de R$ 5). (3) **Hospedagem e
+transporte por congregação: fora** — no campo todos vão juntos; só faria sentido num evento fora ou numa convenção recebida
+(Fase 10).
+
+- [ ] **Lotes de inscrição** (preço, vagas e público): cada faixa de valor do evento ganha, opcionais, a data em que deixa de
+      valer ("1º lote até 05/11") e o número de vagas daquele lote; o público é o próprio rótulo ("Membro", "Visitante",
+      "Jovem"). Lote vencido ou esgotado não aparece para escolher; o esgotado só é recusado DENTRO da trava de vagas (a mesma
+      senha do livro do evento), com o aviso "escolha o lote seguinte" — o limite geral de vagas continua mandando para a lista
+      de espera, sem recusar ninguém.
+- [ ] **Informar o pagamento:** na página da inscrição (código + telefone) e em **Minha Conta → Meus eventos**, a pessoa diz
+      a data, o meio (Pix, transferência, dinheiro, outro), o valor e o nome de quem pagou; o mesmo para o pedido de camiseta.
+      Não precisa mandar comprovante: a equipe confere no extrato. No painel do evento aparece o filtro "Pagamento informado,
+      a conferir".
+- [ ] **Confirmar com nome e hora:** marcar "pago" (e desmarcar) passa a guardar quem confirmou e quando; **cortesia ou
+      isenção** só com o motivo e o nome de quem autorizou (a inscrição de cortesia sai da conta de "a receber" e do filtro
+      "não pagos"). O total recebido do evento continua indo, à mão, para o caixa do evento no sistema (v7.4).
+- [ ] **Credenciamento por sala ou ala:** cada local de credenciamento do evento pode ter capacidade; a tela de check-in
+      mostra quantas pessoas entraram em cada local e avisa ao passar da capacidade; cada entrada fica registrada (quem, em
+      que local, a que horas, por qual equipe) — a mesma pessoa pode entrar em mais de um local. **Relatório de ausentes**
+      (quem se inscreveu e não veio), por lote e por tipo, para imprimir — insumo para dimensionar o próximo evento.
+- [ ] **Crachá configurável:** cada inscrição tem um **tipo de participante** (Participante, Preletor, Equipe, Imprensa,
+      Convidado — o organizador muda), e o evento escolhe o que vai no crachá: nome, tipo, igreja/congregação (da resposta a
+      uma pergunta do evento), cidade, e o **QR do credenciamento** (o mesmo código do check-in, para entrar mais rápido).
+- [ ] **Aviso contra golpe** (pedido do responsável, 22/10/2026) em toda tela do site que fala de pagamento: a Igreja não entra
+      em contato com ninguém pedindo pagamento ou Pix; pague só pelos dados mostrados no site e, se receber um pedido assim,
+      avise a Secretaria. O pagamento continua só informado até a v10.8.
+
+**Fora desta versão (por decisão):** pagamento online (Pix Cora: v10.8, depois da segurança do domínio da v10.7); hospedagem e transporte
+(v10.6); levar as inscrições para o sistema (v10.6).
 
 ## v7.14 — Identidade Visual Anual *(gap da varredura normativa)*
 

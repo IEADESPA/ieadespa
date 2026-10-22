@@ -1,0 +1,42 @@
+---
+/*
+ * Aviso contra golpe (v7.13): o mesmo texto em todas as telas que falam de pagamento — ver `src/lib/avisoGolpe.ts`.
+ * Fixo e visível (não some, não fecha); `role="note"` para o leitor de tela anunciar como observação.
+ */
+import { AVISO_GOLPE, AVISO_GOLPE_TITULO } from "@/lib/avisoGolpe";
+
+interface Props {
+  class?: string;
+}
+const { class: classe = "" } = Astro.props;
+---
+
+<div class={`aviso-golpe ${classe}`} role="note" data-aviso-golpe>
+  <p class="aviso-golpe-titulo">⚠️ {AVISO_GOLPE_TITULO}</p>
+  <p class="aviso-golpe-texto">{AVISO_GOLPE}</p>
+</div>
+
+<style>
+  .aviso-golpe {
+    border: 1px solid color-mix(in srgb, #b3261e 55%, var(--border));
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, #b3261e 8%, var(--background));
+    padding: 0.75rem 1rem;
+    max-width: 40rem;
+  }
+
+  .aviso-golpe-titulo {
+    margin: 0;
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: #8c1d18;
+  }
+
+  .aviso-golpe-texto {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+</style>

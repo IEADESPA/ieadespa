@@ -49,6 +49,16 @@ module.exports = async function (context, req) {
     context.log.error("[COMUNICACAO] falha na rotina diária:", e.message);
     comunicacao = { falhas: ["rotina"] };
   }
+  // v7.15 — segurança da congregação: quem deixou a congregação, foi desligado ou chegou ao "até" sai da equipe de segurança; a retenção apaga o contato do jornalista e o nome
+  // de quem saiu da equipe há mais de 5 anos. ANTES dos avisos (os avisos da segurança já enxergam a equipe limpa). Fail-soft.
+  let criseSeguranca = null;
+  try {
+    criseSeguranca = await require("../shared/criseSegurancaDb").rotinaDiaria(pool);
+    if (criseSeguranca.falhas.length) context.log.error(`[SEGURANCA] rotina diária — FALHOU: ${criseSeguranca.falhas.join(", ")}`);
+  } catch (e) {
+    context.log.error("[SEGURANCA] falha na rotina diária:", e.message);
+    criseSeguranca = { falhas: ["rotina"] };
+  }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
   // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
   try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
@@ -107,6 +117,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: falhaMenores || falhaCuidado ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, criseSeguranca, detectoresComFalha: falhas },
   };
 };

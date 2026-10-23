@@ -36,6 +36,7 @@ const { exigirGeral } = require("../shared/escopoRotas");
 const mcDb = require("../shared/menoresConsentimentoDb");
 const cuidadoDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
+const criseSegurancaDb = require("../shared/criseSegurancaDb");
 
 const STATUS_EXECUTAVEIS = ["PENDENTE", "EM_ANALISE"];
 
@@ -83,6 +84,7 @@ module.exports = async function (context, req) {
   let checkin = { saudeApagada: false, consentimentosRevogados: [], autorizacoesRevogadas: 0 };
   let cuidado = { notas: 0, itens: 0, pedidos: 0 };
   let comunicacao = { consentimentos: 0, entregas: 0, preferencias: 0, aparelhos: 0 };
+  let seguranca = { equipeSeguranca: 0 };
   await transaction.begin();
   try {
     // "Toma" a solicitação: só quem a encontra ainda em aberto segue adiante.
@@ -125,6 +127,8 @@ module.exports = async function (context, req) {
     // v7.11 — notas pastorais, acompanhamentos e pedidos de oração (ver o cabeçalho)
     cuidado = await cuidadoDb.exclusaoLgpd(r, solicitacao.MembroId);
     comunicacao = await comunicacaoDb.exclusaoLgpd(r, solicitacao.MembroId);
+    // v7.15 — a pessoa sai da equipe de segurança e o nome sai do registro (o histórico da crise é registro institucional e fica: ver criseSegurancaDb.exclusaoLgpd)
+    seguranca = await criseSegurancaDb.exclusaoLgpd(r, solicitacao.MembroId);
 
     await transaction.commit();
   } catch (e) {
@@ -169,6 +173,12 @@ module.exports = async function (context, req) {
     await registrarAuditoria({
       tabela: "ComunicacaoConsentimentos", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: consentimento de comunicação apagado e entregas anonimizadas",
       usuarioId: usuario.membroId, dadosDepois: { ...comunicacao, motivo: "EXCLUSAO_LGPD" }
+    });
+  }
+  if (seguranca.equipeSeguranca) {
+    await registrarAuditoria({
+      tabela: "SegurancaEquipe", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: saída da equipe de segurança e nome retirado do registro",
+      usuarioId: usuario.membroId, dadosDepois: { ...seguranca, motivo: "EXCLUSAO_LGPD" }
     });
   }
   await registrarAuditoria({

@@ -147,6 +147,7 @@ const mmDb = require("./ministerioMenoresDb");
 const protecaoDb = require("./protecaoDb");
 const checkinDb = require("./checkinInfantilDb");
 const cuidadoDb = require("./cuidadoPastoralDb");
+const criseDb = require("./criseSegurancaDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -220,7 +221,13 @@ const DETECTORES = {
   // de degrau (a rotina diária de NotificacoesAgendador sobe a escada ANTES desta rodada) e os pedidos de oração esperando moderação.
   CUIDADO_RESUMO_DIARIO: { tabela: "CuidadoResumo", detectar: (pool) => cuidadoDb.detectarResumoDiario(pool) },
   CUIDADO_DEGRAU: { tabela: "CuidadoEventos", detectar: (pool) => cuidadoDb.detectarDegraus(pool) },
-  CUIDADO_MODERACAO: { tabela: "CuidadoModeracao", detectar: (pool) => cuidadoDb.detectarModeracao(pool) }
+  CUIDADO_MODERACAO: { tabela: "CuidadoModeracao", detectar: (pool) => cuidadoDb.detectarModeracao(pool) },
+  // Segurança da congregação (v7.15): um aviso por regra e por pessoa (Dirigente e Pastor de Área), juntando as congregações dela; repete uma vez por mês e na hora em que mais uma
+  // congregação entra na lista (o pedido da imprensa e o aviso da crise saem NA HORA, no ato, sem detector).
+  SEGURANCA_PLANO_REVISAO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_PLANO_REVISAO") },
+  SEGURANCA_SEM_SIMULADO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_SIMULADO") },
+  SEGURANCA_SEM_VISTORIA: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_VISTORIA") },
+  SEGURANCA_AVCB_SEGURO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_AVCB_SEGURO") }
 };
 
 module.exports = { DETECTORES };

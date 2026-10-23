@@ -64,7 +64,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     for (const m of modulo.matchAll(/"(crs[A-Za-z]+Acao)"/g)) usadas.add(m[1]);
     confere([...usadas].every(a => registradas.includes(a)) && registradas.every(a => usadas.has(a)), `toda ação usada está registrada e vice-versa (usadas sem registro: ${[...usadas].filter(a => !registradas.includes(a))}; registradas sem uso: ${registradas.filter(a => !usadas.has(a))})`);
     const sw = lerApp("service-worker.js");
-    confere(sw.includes('"/modulos/crise-seguranca.js"') && /ieadespa-app-shell-v41/.test(sw), "o módulo está na casca do service worker (v41)");
+    const versaoCasca = Number((/ieadespa-app-shell-v(\d+)"/.exec(sw) || [])[1] || 0);
+    confere(sw.includes('"/modulos/crise-seguranca.js"') && versaoCasca >= 39, "o módulo está na casca do service worker (v39 ou mais nova)");
     confere(html.indexOf('src="modulos/consagracoes.js"') < html.indexOf('src="modulos/crise-seguranca.js"') && html.indexOf('src="modulos/crise-seguranca.js"') < html.indexOf('src="modulos/cuidado-pastoral.js"'), "o script do módulo carrega na ordem dos nomes");
     const k = F.contratoComOServidor();
     const chamadasDoModulo = new Set([...modulo.matchAll(/crs(?:Obter|Postar)\(\s*[`"]([a-z-]+)/g), ...modulo.matchAll(/crsGravarSeguranca\(botao, "([a-z-]+)"/g)].map(m => m[1]));

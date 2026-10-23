@@ -28,6 +28,9 @@
 //
 // v7.12 — comunicação, na MESMA transação: o histórico de consentimento (canal × categoria) é apagado, o registro de entrega dos comunicados perde o nome (o que ainda estava na
 // fila é cancelado), e as preferências de aviso e os aparelhos inscritos para aviso no celular saem (antes ficavam).
+//
+// v7.14 — identidade visual, na MESMA transação: as sugestões de tema e as artes perdem o nome; a sugestão que não foi finalista perde também o texto; a imagem da arte que não
+// foi a escolhida sai (o arquivo é apagado do armazenamento depois da transação). As contagens, os finalistas e a identidade escolhida ficam.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -36,6 +39,7 @@ const { exigirGeral } = require("../shared/escopoRotas");
 const mcDb = require("../shared/menoresConsentimentoDb");
 const cuidadoDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
+const identidadeDb = require("../shared/identidadeVisualDb");
 const criseSegurancaDb = require("../shared/criseSegurancaDb");
 
 const STATUS_EXECUTAVEIS = ["PENDENTE", "EM_ANALISE"];
@@ -76,7 +80,7 @@ module.exports = async function (context, req) {
   const membroAntes = await pool.request().input("mat", sql.Int, solicitacao.MembroId)
     .query(`SELECT Telefone, Email, Endereco, FotoUrl FROM MembroReferencia WHERE MembroId = @mat`);
 
-  const resposta = String(respostaTexto || "Contato e foto anonimizados; saúde do check-in infantil apagada e autorizações (imagem, saúde, retirada de criança) revogadas, quando havia; notas pastorais apagadas e pedidos de oração e acompanhamentos anonimizados; consentimento de comunicação apagado e comunicados anonimizados. Dados cadastrais e de processos ficam por obrigação legal e exercício regular de direitos (LGPD Art. 16), assim como o registro de entrega e retirada de crianças (prova de custódia, 5 anos).").slice(0, 500);
+  const resposta = String(respostaTexto || "Contato e foto anonimizados; saúde do check-in infantil apagada e autorizações (imagem, saúde, retirada de criança) revogadas, se havia; notas pastorais apagadas e pedidos de oração e acompanhamentos anonimizados; consentimento de comunicação apagado; comunicados, sugestões e artes da identidade visual anonimizados. Cadastro e processos ficam por obrigação legal e exercício regular de direitos (LGPD Art. 16), assim como o registro de entrega e retirada de crianças (prova de custódia, 5 anos).").slice(0, 500);
 
   const transaction = new sql.Transaction(pool);
   const r = () => new sql.Request(transaction);
@@ -84,6 +88,7 @@ module.exports = async function (context, req) {
   let checkin = { saudeApagada: false, consentimentosRevogados: [], autorizacoesRevogadas: 0 };
   let cuidado = { notas: 0, itens: 0, pedidos: 0 };
   let comunicacao = { consentimentos: 0, entregas: 0, preferencias: 0, aparelhos: 0 };
+  let identidade = { sugestoes: 0, artes: 0, arquivos: [] };
   let seguranca = { equipeSeguranca: 0 };
   await transaction.begin();
   try {
@@ -127,6 +132,7 @@ module.exports = async function (context, req) {
     // v7.11 — notas pastorais, acompanhamentos e pedidos de oração (ver o cabeçalho)
     cuidado = await cuidadoDb.exclusaoLgpd(r, solicitacao.MembroId);
     comunicacao = await comunicacaoDb.exclusaoLgpd(r, solicitacao.MembroId);
+    identidade = await identidadeDb.exclusaoLgpd(r, solicitacao.MembroId);
     // v7.15 — a pessoa sai da equipe de segurança e o nome sai do registro (o histórico da crise é registro institucional e fica: ver criseSegurancaDb.exclusaoLgpd)
     seguranca = await criseSegurancaDb.exclusaoLgpd(r, solicitacao.MembroId);
 
@@ -148,6 +154,8 @@ module.exports = async function (context, req) {
   if (membroAntes.recordset[0] && membroAntes.recordset[0].FotoUrl) {
     await storage.excluirFoto(solicitacao.MembroId);
   }
+  // v7.14 — as imagens das artes não escolhidas (a linha já não aponta para elas)
+  await identidadeDb.apagarArquivos(identidade.arquivos);
 
   // Trava 6-B: a trilha de auditoria é encadeada por hash e não pode ser
   // corrigida depois — gravar aqui o telefone/e-mail/endereço "de antes"
@@ -178,6 +186,12 @@ module.exports = async function (context, req) {
     await registrarAuditoria({
       tabela: "ComunicacaoConsentimentos", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: consentimento de comunicação apagado e entregas anonimizadas",
       usuarioId: usuario.membroId, dadosDepois: { ...comunicacao, motivo: "EXCLUSAO_LGPD" }
+    });
+  }
+  if (identidade.sugestoes || identidade.artes) {
+    await registrarAuditoria({
+      tabela: "IdentidadeSugestoes", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: sugestões de tema e artes da identidade visual anonimizadas",
+      usuarioId: usuario.membroId, dadosDepois: { sugestoes: identidade.sugestoes, artes: identidade.artes, imagens: identidade.arquivos.length, motivo: "EXCLUSAO_LGPD" }
     });
   }
   if (seguranca.equipeSeguranca) {

@@ -68,7 +68,8 @@ describe("hash do PIN", () => {
     const a = pin.hashPin("7392", 20), b = pin.hashPin("7392", 20);
     expect(a).not.toBe(b);
     expect(a).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/);
-    expect(a).not.toContain("7392");
+    // (o hash é só hexadecimal: "7392" pode aparecer nele por acaso, ~0,1% das vezes — o que se prova é que nenhum PEDAÇO do valor guardado é o PIN)
+    expect(a.split(":")).not.toContain("7392");
   });
   test("hash guardado malformado ou ausente nunca confere", () => {
     for (const h of [null, undefined, "", "semdoispontos", "a:b", ":", `${"0".repeat(32)}:`, 123]) expect(pin.verificarPin("7392", 20, h)).toBe(false);
@@ -85,7 +86,9 @@ describe("banco: gravar o PIN", () => {
     expect(chamadas[0].sql).toMatch(/UPDATE MembroPins SET PinHash = @h, Provisorio = @prov/);
     expect(chamadas[0].inputs.prov).toBe(false);
     expect(chamadas[0].inputs.por).toBeNull();
-    expect(JSON.stringify(chamadas)).not.toContain("7392");
+    // o PIN não vai ao banco em texto: tirado o hash (sal:hash, só hexadecimal, onde "7392" pode aparecer por acaso), ele não está em lugar nenhum dos pedidos
+    expect(JSON.stringify(chamadas)).toMatch(/[0-9a-f]{32}:[0-9a-f]{64}/);
+    expect(JSON.stringify(chamadas).replace(/[0-9a-f]{32}:[0-9a-f]{64}/g, "<hash>")).not.toContain("7392");
     expect(chamadas[1].sql).toMatch(/UPDATE AcessoTentativas SET Falhas = 0, BloqueadoAte = NULL/);
     expect(chamadas[1].inputs.c).toBe("PIN");
   });

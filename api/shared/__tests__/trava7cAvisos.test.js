@@ -80,6 +80,8 @@ describe("a rodada das 7h (NotificacoesAgendador)", () => {
     jest.doMock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
     jest.doMock("../comunicacaoDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
     jest.doMock("../criseSegurancaDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+    jest.doMock("../identidadeVisualDb", () => ({ rotinaAntesDosAvisos: jest.fn(async () => ({ falhas: [] })), rotinaDepoisDosAvisos: jest.fn(async () => ({ falhas: [] })) }));
+    jest.doMock("../enquetes", () => ({ encerrarVencidas: jest.fn(async () => ({ encerradas: 0 })) }));
     jest.doMock("../protecaoPendencia", () => ({ atualizar: jest.fn(async () => {}) }));
     jest.doMock("../protecaoDb", () => ({ reenviarEmailsPendentes: jest.fn(async () => ({ tentados: 0 })) }));
     const handler = require("../../NotificacoesAgendador/index.js");

@@ -26,6 +26,7 @@ const RETENCAO = {
   equipe: { categoria: "Segurança — equipe de segurança após a saída", padrao: 1825 }
 };
 const MAX_DEMANDAS_DIA = 30;                 // por pessoa: o pedido da imprensa é coisa rara; mais que isso é engano ou abuso
+const AVISOS_IMPRENSA_DIA = 10;              // avisos de pedido da imprensa por destinatário em 24 horas (o pedido continua registrado e na lista)
 const CACHE_FAIXA_MS = 20000;               // a faixa é lida por toda tela da liderança: 20 segundos em memória (zerado a cada ato da crise nesta instância)
 const GRUPO_AVISO = "Toda a liderança ativa (aviso do regime de crise, Regimento Art. 161-B)";
 
@@ -141,18 +142,45 @@ async function conferirPortaVoz(pool, portaVoz) {
   if (!m || m.Status !== "ATIVO" || m.Excluido) return { problema: "A matrícula do porta-voz não existe ou não está ativa (deixe em branco se o profissional não é membro)." };
   return { portaVoz: { ...portaVoz, nome: String(m.Nome).slice(0, cs.MAX.nome) } };
 }
-const insereHistorico = (rq, { criseId, evento, portaVoz, textoLivre, membroId, envioId }) => rq.input("c", sql.Int, criseId).input("ev", sql.NVarChar(12), evento)
+const insereHistorico = async (rq, { criseId, evento, portaVoz, textoLivre, membroId, envioId }) => (await rq.input("c", sql.Int, criseId).input("ev", sql.NVarChar(12), evento)
   .input("pt", sql.NVarChar(12), portaVoz.tipo).input("pm", sql.Int, portaVoz.membroId || null).input("pn", sql.NVarChar(150), portaVoz.nome).input("pc", sql.NVarChar(150), portaVoz.contato)
   .input("pa", sql.NVarChar(300), portaVoz.ato || null).input("tx", sql.NVarChar(500), textoLivre || null).input("m", sql.Int, membroId).input("e", sql.Int, envioId || null)
   .query(`INSERT INTO CriseHistorico (CriseId, Evento, PortaVozTipo, PortaVozMembroId, PortaVozNome, PortaVozContato, DesignacaoAto, Texto, MembroId, EnvioId)
-          VALUES (@c, @ev, @pt, @pm, @pn, @pc, @pa, @tx, @m, @e)`);
+          VALUES (@c, @ev, @pt, @pm, @pn, @pc, @pa, @tx, @m, @e); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
 const chaveDoAviso = (criseId, evento) => `crise-${criseId}-${evento === "ABERTA" ? "abertura" : evento === "ENCERRADA" ? "fim" : "pv"}-${crypto.randomBytes(3).toString("hex")}`;
+const dataBr = (iso10) => String(iso10).split("-").reverse().join("/");
+
+// O tempo da requisição (o Static Web Apps corta em ~45 s; a tela espera 40 s): o celular do aviso sai em paralelo até ~30 s depois do início do ato, e a fila roda curta.
+const PRAZO_DO_ATO_MS = 30000;
+// Depois do commit de abrir, trocar o porta-voz ou encerrar: o celular do aviso em paralelo, a rodada curta da fila, o aviso ao Presidente quando o ato foi de outra pessoa
+// em nome dele, e a mensagem que diz a VERDADE sobre o que já saiu (revisão independente, v7.15).
+async function depoisDoAto(pool, { ver, acao, envioId, historicoId, inicio, deps, presidente, rotuloAto }) {
+  const decorrido = Date.now() - inicio;
+  const orcamentoCelularMs = Math.max(4000, Math.min(15000, PRAZO_DO_ATO_MS - decorrido - 6000));
+  await com.depoisDoAvisoDoSistema(pool, { deps, orcamentoCelularMs, orcamentoFilaMs: 5000 });
+  if (presidente && !mesmo(presidente.membroId, ver.membroId)) {
+    const quem = (await pool.request().input("m", sql.Int, ver.membroId).query(`SELECT Nome FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
+    await notificarAgora(pool, { regraChave: "CRISE_EM_SEU_NOME", destinatarios: [{ membroId: presidente.membroId, nome: presidente.nome, email: null }], referenciaTabela: "CriseHistorico",
+      referenciaId: historicoId, mensagem: `${rotuloAto} em seu nome por ${quem ? quem.Nome : "outra pessoa do nível geral"}. Confira em Crise e segurança → Crise.`, deps });
+  }
+  return mensagemDoAviso(acao, await com.situacaoDoAvisoDoSistema(pool, envioId));
+}
+function mensagemDoAviso(acao, a) {
+  const push = (a && a.canais && a.canais.PUSH) || {};
+  const n = (s) => Number(push[s]) || 0;
+  const comAparelho = n("ACEITO") + n("FALHOU") + n("PENDENTE") + n("ENVIANDO");
+  const faltam = n("PENDENTE") + n("ENVIANDO");
+  return `${acao} Sininho: ${Number(a && a.total) || 0} líder(es) já avisados. Celular: ${n("ACEITO")} de ${comAparelho} aparelho(s) avisados agora`
+    + (faltam ? `; os outros ${faltam} saem pela fila em minutos (de 15 em 15 minutos, das 6h às 23h) ou no botão "Continuar o aviso agora"` : "")
+    + `. E-mail: sai aos poucos (o serviço aceita 100 por hora) e só para quem ainda não foi alcançado pelo sininho ou pelo celular.`;
+}
 
 // ---------------------------------------------------------------
 // A crise: abrir, designar o porta-voz, encerrar
 // ---------------------------------------------------------------
 
 async function abrir(pool, { ver, dados, deps = {}, hoje = hojeBrasilia() }) {
+  const inicio = Date.now();
   if (!ver.crise) return PROIBIDO("Abrir o regime de crise é do nível geral (Presidente e Secretário Geral).");
   const presidente = await presidenteAtual(pool);
   if (!presidente) return RECUSA("Não há Presidente ativo na Liderança: quem ordena o regime é o Presidente. Cadastre-o em Permissões.");
@@ -161,11 +189,12 @@ async function abrir(pool, { ver, dados, deps = {}, hoje = hojeBrasilia() }) {
   const pv = await conferirPortaVoz(pool, v.dados.portaVoz);
   if (pv.problema) return RECUSA(pv.problema);
   const antes = await criseAtiva(pool);
-  if (antes) return MUDOU(`Já há um regime de crise ativo desde ${dia(antes.AbertaEm).split("-").reverse().join("/")}: encerre-o antes de abrir outro.`, { jaAtiva: true });
+  if (antes) return MUDOU(`Já há um regime de crise ativo desde ${dataBr(cs.diaBrasilia(antes.AbertaEm))}: encerre-o antes de abrir outro.`, { jaAtiva: true });
   const texto = cs.textoAviso({ evento: "ABERTA", portaVoz: pv.portaVoz, desde: hoje });
-  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await liderancaAtiva(pool) });
+  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await liderancaAtiva(pool),
+    celular: cs.textoCelular({ evento: "ABERTA", portaVoz: pv.portaVoz }) });
   const t = new sql.Transaction(pool);
-  let criseId, envioId;
+  let criseId, envioId, historicoId;
   try {
     await t.begin();
     if (!(await obterTrava(() => new sql.Request(t), "crise-regime", 10000))) { await fecharTransacao(t, false); return OCUPADO("Outro ato da crise está sendo gravado. Tente de novo."); }
@@ -179,16 +208,17 @@ async function abrir(pool, { ver, dados, deps = {}, hoje = hojeBrasilia() }) {
       .query(`INSERT INTO CriseRegimes (Motivo, OrdenadoPorMembroId, RegistradoPorMembroId, PortaVozTipo, PortaVozMembroId, PortaVozNome, PortaVozContato, DesignacaoAto)
               VALUES (@mo, @or, @re, @pt, @pm, @pn, @pc, @pa); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
     envioId = await com.gravarAvisoDoSistema(() => new sql.Request(t), preparo, { chave: chaveDoAviso(criseId, "ABERTA"), enviadoPor: ver.membroId, grupo: GRUPO_AVISO });
-    await insereHistorico(new sql.Request(t), { criseId, evento: "ABERTA", portaVoz: p, textoLivre: v.dados.motivo, membroId: ver.membroId, envioId });
+    historicoId = await insereHistorico(new sql.Request(t), { criseId, evento: "ABERTA", portaVoz: p, textoLivre: v.dados.motivo, membroId: ver.membroId, envioId });
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
   limparCacheFaixa();
   await auditar("CriseRegimes", criseId, "CRISE_ABERTA", ver.membroId);
-  await com.depoisDoAvisoDoSistema(pool, { deps });
-  return { sucesso: true, criseId, mensagem: "Regime de crise aberto. A liderança já foi avisada no sininho e no celular; os e-mails saem aos poucos.", ...(await detalheCrise(pool, { ver, criseId })) };
+  const mensagem = await depoisDoAto(pool, { ver, acao: "Regime de crise aberto.", envioId, historicoId, inicio, deps, presidente, rotuloAto: "O regime de crise foi aberto" });
+  return { sucesso: true, criseId, mensagem, ...(await detalheCrise(pool, { ver, criseId })) };
 }
 
 async function designarPortaVoz(pool, { ver, criseId, dados, deps = {} }) {
+  const inicio = Date.now();
   if (!ver.crise) return PROIBIDO("Designar o porta-voz é do nível geral (Presidente e Secretário Geral).");
   const crise = await carregarCrise(pool, criseId);
   if (!crise) return NAO_EXISTE;
@@ -202,10 +232,11 @@ async function designarPortaVoz(pool, { ver, criseId, dados, deps = {} }) {
   if (p.tipo === atual.tipo && mesmo(p.membroId || -1, atual.membroId || -1) && p.nome === atual.nome && p.contato === atual.contato && (p.ato || null) === atual.ato) {
     return RECUSA("Nada mudou: o porta-voz já é este, com este contato.");
   }
-  const texto = cs.textoAviso({ evento: "PORTA_VOZ", portaVoz: p, desde: dia(crise.AbertaEm) });
-  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await liderancaAtiva(pool) });
+  const texto = cs.textoAviso({ evento: "PORTA_VOZ", portaVoz: p, desde: cs.diaBrasilia(crise.AbertaEm) });
+  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await liderancaAtiva(pool),
+    celular: cs.textoCelular({ evento: "PORTA_VOZ", portaVoz: p }) });
   const t = new sql.Transaction(pool);
-  let envioId;
+  let envioId, historicoId;
   try {
     await t.begin();
     if (!(await obterTrava(() => new sql.Request(t), "crise-regime", 10000))) { await fecharTransacao(t, false); return OCUPADO("Outro ato da crise está sendo gravado. Tente de novo."); }
@@ -216,49 +247,56 @@ async function designarPortaVoz(pool, { ver, criseId, dados, deps = {} }) {
     if (!contagem(r)) { await fecharTransacao(t, false); return MUDOU("A crise foi encerrada enquanto você decidia."); }
     await com.cancelarPendentesDoSistema(() => new sql.Request(t), await enviosDaCrise(new sql.Request(t), criseId));
     envioId = await com.gravarAvisoDoSistema(() => new sql.Request(t), preparo, { chave: chaveDoAviso(criseId, "PORTA_VOZ"), enviadoPor: ver.membroId, grupo: GRUPO_AVISO });
-    await insereHistorico(new sql.Request(t), { criseId, evento: "PORTA_VOZ", portaVoz: p, textoLivre: null, membroId: ver.membroId, envioId });
+    historicoId = await insereHistorico(new sql.Request(t), { criseId, evento: "PORTA_VOZ", portaVoz: p, textoLivre: null, membroId: ver.membroId, envioId });
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
   limparCacheFaixa();
   await auditar("CriseRegimes", criseId, "CRISE_PORTA_VOZ", ver.membroId);
-  await com.depoisDoAvisoDoSistema(pool, { deps });
-  return { sucesso: true, mensagem: "Porta-voz designado. A liderança já foi avisada do novo porta-voz.", ...(await detalheCrise(pool, { ver, criseId })) };
+  const mensagem = await depoisDoAto(pool, { ver, acao: "Porta-voz designado.", envioId, historicoId, inicio, deps, presidente, rotuloAto: "O porta-voz da crise foi trocado" });
+  return { sucesso: true, mensagem, ...(await detalheCrise(pool, { ver, criseId })) };
 }
 
 async function encerrar(pool, { ver, criseId, dados, deps = {} }) {
+  const inicio = Date.now();
   if (!ver.crise) return PROIBIDO("Encerrar o regime de crise é do nível geral (Presidente e Secretário Geral).");
   const v = cs.validarEncerramento(dados);
   if (v.problema) return RECUSA(v.problema);
   const crise = await carregarCrise(pool, criseId);
   if (!crise) return NAO_EXISTE;
   if (crise.Status !== "ATIVA") return MUDOU("Esta crise já foi encerrada.");
-  const texto = cs.textoAviso({ evento: "ENCERRADA", portaVoz: portaVozDe(crise), desde: dia(crise.AbertaEm), resumo: v.dados.resumo });
-  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await destinatariosDoFim(pool, criseId) });
+  const presidente = await presidenteAtual(pool);
+  const texto = cs.textoAviso({ evento: "ENCERRADA", portaVoz: portaVozDe(crise), desde: cs.diaBrasilia(crise.AbertaEm), resumo: v.dados.resumo });
+  const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await destinatariosDoFim(pool, criseId),
+    celular: cs.textoCelular({ evento: "ENCERRADA" }) });
   const t = new sql.Transaction(pool);
-  let envioId;
+  let envioId, historicoId;
   try {
     await t.begin();
     if (!(await obterTrava(() => new sql.Request(t), "crise-regime", 10000))) { await fecharTransacao(t, false); return OCUPADO("Outro ato da crise está sendo gravado. Tente de novo."); }
+    // relida DENTRO da trava: o porta-voz que fica no histórico do fim é o de agora (a troca pode ter entrado entre a leitura de fora e a trava)
+    const agora = (await new sql.Request(t).input("id", sql.Int, criseId).query(`SELECT * FROM CriseRegimes WITH (UPDLOCK, HOLDLOCK) WHERE CriseId = @id`)).recordset[0];
+    if (!agora || agora.Status !== "ATIVA") { await fecharTransacao(t, false); return MUDOU("Esta crise já foi encerrada."); }
     const r = await new sql.Request(t).input("id", sql.Int, criseId).input("por", sql.Int, ver.membroId).input("rs", sql.NVarChar(500), v.dados.resumo)
       .query(`UPDATE CriseRegimes SET Status = 'ENCERRADA', EncerradaEm = SYSUTCDATETIME(), EncerradaPorMembroId = @por, ResumoEncerramento = @rs
               WHERE CriseId = @id AND Status = 'ATIVA'; SELECT @@ROWCOUNT AS n`);
     if (!contagem(r)) { await fecharTransacao(t, false); return MUDOU("Esta crise já foi encerrada."); }
     await com.cancelarPendentesDoSistema(() => new sql.Request(t), await enviosDaCrise(new sql.Request(t), criseId));
     envioId = await com.gravarAvisoDoSistema(() => new sql.Request(t), preparo, { chave: chaveDoAviso(criseId, "ENCERRADA"), enviadoPor: ver.membroId, grupo: GRUPO_AVISO });
-    await insereHistorico(new sql.Request(t), { criseId, evento: "ENCERRADA", portaVoz: portaVozDe(crise), textoLivre: v.dados.resumo, membroId: ver.membroId, envioId });
+    historicoId = await insereHistorico(new sql.Request(t), { criseId, evento: "ENCERRADA", portaVoz: portaVozDe(agora), textoLivre: v.dados.resumo, membroId: ver.membroId, envioId });
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
   limparCacheFaixa();
   await auditar("CriseRegimes", criseId, "CRISE_ENCERRADA", ver.membroId);
-  await com.depoisDoAvisoDoSistema(pool, { deps });
-  return { sucesso: true, mensagem: "Regime de crise encerrado. A liderança já foi avisada do fim.", ...(await detalheCrise(pool, { ver, criseId })) };
+  const mensagem = await depoisDoAto(pool, { ver, acao: "Regime de crise encerrado.", envioId, historicoId, inicio, deps, presidente, rotuloAto: "O regime de crise foi encerrado" });
+  return { sucesso: true, mensagem, ...(await detalheCrise(pool, { ver, criseId })) };
 }
 
-// "Continuar o aviso agora": mais uma rodada da fila (o celular de quem ficou para trás e, dentro do teto da hora, mais e-mails). Só o nível geral da crise.
+// "Continuar o aviso agora": mais uma rodada (o celular de quem ficou para trás, em paralelo, e, dentro do teto da hora, mais e-mails). Só o nível geral da crise.
 async function continuarAviso(pool, { ver, deps = {} }) {
   if (!ver.crise) return PROIBIDO("Só o nível geral da crise.");
-  await com.depoisDoAvisoDoSistema(pool, { deps });
-  return { sucesso: true, mensagem: "Mais uma rodada do aviso foi feita. O e-mail respeita o limite de 100 por hora do serviço." };
+  const r = await com.depoisDoAvisoDoSistema(pool, { deps, orcamentoCelularMs: 20000, orcamentoFilaMs: 6000 });
+  const cel = (r && r.celular) || { aceitos: 0 };
+  return { sucesso: true, celularEnviados: cel.aceitos, mensagem: `Mais uma rodada do aviso: ${cel.aceitos} celular(es) avisados agora. O e-mail respeita o limite de 100 por hora do serviço.` };
 }
 
 async function listarCrises(pool, { ver }) {
@@ -312,7 +350,15 @@ async function registrarManifestacao(pool, { ver, dados }) {
   let id;
   try {
     await t.begin();
-    if (!(await obterTrava(() => new sql.Request(t), `crise-manifestacao-${criseId}`, 8000))) { await fecharTransacao(t, false); return OCUPADO("Outra manifestação está sendo gravada. Tente de novo."); }
+    // a MESMA trava dos atos do regime (abrir, trocar o porta-voz, encerrar): quem pode e até quando é conferido de novo DENTRO dela (revisão independente, v7.15)
+    if (!(await obterTrava(() => new sql.Request(t), "crise-regime", 8000))) { await fecharTransacao(t, false); return OCUPADO("Outro registro da crise está sendo gravado. Tente de novo."); }
+    const agora = (await new sql.Request(t).input("id", sql.Int, criseId).query(`SELECT * FROM CriseRegimes WHERE CriseId = @id`)).recordset[0];
+    if (!ver.crise && !ehPortaVozDa(agora, ver)) { await fecharTransacao(t, false); return PROIBIDO("Você deixou de ser o porta-voz desta crise (ou ela foi encerrada)."); }
+    // na crise encerrada, o nível geral registra só o que foi dito ATÉ o encerramento
+    if (agora.Status === "ENCERRADA" && x.dataHora.getTime() > new Date(agora.EncerradaEm).getTime()) {
+      await fecharTransacao(t, false);
+      return RECUSA("A crise já tinha sido encerrada nessa data e hora: registre só o que foi dito até o encerramento.");
+    }
     if (x.corrigeManifestacaoId) {
       const alvo = (await new sql.Request(t).input("id", sql.Int, x.corrigeManifestacaoId).query(`
         SELECT CriseId, (SELECT COUNT(*) FROM CriseManifestacoes y WITH (UPDLOCK, HOLDLOCK) WHERE y.CorrigeManifestacaoId = @id) AS Corrigida FROM CriseManifestacoes WHERE ManifestacaoId = @id`)).recordset[0];
@@ -334,6 +380,22 @@ async function registrarManifestacao(pool, { ver, dados }) {
 // Demandas de imprensa
 // ---------------------------------------------------------------
 
+// Quem recebe o aviso do pedido da imprensa: quem tem crise_gestao numa concessão GERAL (nível Global, todas as congregações) pela Liderança vigente ou por uma delegação
+// vigente dela, e o porta-voz da crise ativa — todos membros ativos e sem exclusão LGPD atendida (revisão independente, v7.15).
+async function destinatariosDaImprensa(pool, crise) {
+  const r = await pool.request().input("perm", sql.NVarChar(60), `%,${cs.PERMISSAO_CRISE},%`).input("pv", sql.Int, crise && crise.PortaVozMembroId ? crise.PortaVozMembroId : null).query(`
+    WITH gestao AS (
+      SELECT l.MembroId FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND p.Nivel = 'GLOBAL' AND ${LIDERANCA_ATIVA_SQL}
+      UNION
+      SELECT g.DelegadoMembroId FROM DelegacoesAcesso g JOIN Lideranca l ON l.LiderancaId = g.LiderancaId JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND p.Nivel = 'GLOBAL' AND g.Status = 'ATIVA' AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN g.DataInicio AND g.DataFim
+      UNION
+      SELECT @pv WHERE @pv IS NOT NULL)
+    SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, m.Email AS email FROM gestao x JOIN MembroReferencia m ON m.MembroId = x.MembroId
+    WHERE m.Status = 'ATIVO' AND NOT ${EXCLUIDO_SQL}`);
+  return r.recordset;
+}
 // Quem administra os pedidos: o nível geral da crise e o porta-voz da crise ativa.
 async function papelNaImprensa(pool, ver) {
   if (ver.crise) return { gestor: true, crise: await criseAtiva(pool) };
@@ -358,7 +420,9 @@ async function registrarDemanda(pool, { ver, dados, deps = {} }) {
       const alvo = (await new sql.Request(t).input("id", sql.Int, x.corrigeDemandaId).query(`
         SELECT CriseId, RegistradoPorMembroId, (SELECT COUNT(*) FROM CriseDemandasImprensa y WITH (UPDLOCK, HOLDLOCK) WHERE y.CorrigeDemandaId = @id) AS Corrigida
         FROM CriseDemandasImprensa WHERE DemandaId = @id`)).recordset[0];
-      if (!alvo || !(gestor || mesmo(alvo.RegistradoPorMembroId, ver.membroId))) { await fecharTransacao(t, false); return NAO_EXISTE; }
+      // corrige quem registrou, o nível geral e o porta-voz SÓ no alcance da lista dele (os pedidos da crise ativa); fora disso, 404 antes de dizer se já foi corrigido
+      const alcanca = ver.crise || mesmo(alvo && alvo.RegistradoPorMembroId, ver.membroId) || (gestor && crise && alvo && mesmo(alvo.CriseId, crise.CriseId));
+      if (!alvo || !alcanca) { await fecharTransacao(t, false); return NAO_EXISTE; }
       if (Number(alvo.Corrigida)) { await fecharTransacao(t, false); return MUDOU("Este pedido já foi corrigido: corrija a versão mais nova."); }
       criseId = alvo.CriseId || null;     // a correção fica na mesma crise do pedido original
     }
@@ -369,13 +433,17 @@ async function registrarDemanda(pool, { ver, dados, deps = {} }) {
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
   await auditar("CriseDemandasImprensa", id, x.corrigeDemandaId ? "CRISE_DEMANDA_CORRECAO" : "CRISE_DEMANDA", ver.membroId);
-  // o encaminhamento: o nível geral da crise e o porta-voz (se for membro) recebem na hora, no sininho e no celular (nunca quem registrou)
+  // o encaminhamento: o nível geral da crise e o porta-voz (se for membro ativo) recebem na hora, no sininho e no celular (nunca quem registrou). Teto (revisão independente,
+  // v7.15): no máximo 10 avisos destes por destinatário em 24 horas, e o celular só no 1º pedido de cada líder na hora — um líder não enche o celular do Presidente.
   if (!x.corrigeDemandaId) {
-    const destinos = await resolverDestinatariosPorPermissao(pool, { permissao: cs.PERMISSAO_CRISE, nivel: "GLOBAL" });
-    if (crise && crise.PortaVozMembroId) destinos.push({ membroId: crise.PortaVozMembroId, nome: crise.PortaVozNome, email: null });
+    const destinos = await destinatariosDaImprensa(pool, crise);
     const prazo = x.prazo ? ` Prazo: ${dataHoraBr(x.prazo)}.` : "";
+    const naHora = contagem(await pool.request().input("m", sql.Int, ver.membroId).input("id", sql.Int, id)
+      .query(`SELECT COUNT(*) AS n FROM CriseDemandasImprensa WHERE RegistradoPorMembroId = @m AND DemandaId <> @id AND RecebidaEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`));
+    const enviarCanais = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
+    const semCelular = naHora > 0 ? { ...deps, enviarCanais: (p, o) => enviarCanais(p, { ...o, regra: { ...o.regra, CanalPush: false } }) } : deps;
     await notificarAgora(pool, { regraChave: "CRISE_DEMANDA_IMPRENSA", destinatarios: destinos.filter((dd) => !mesmo(dd.membroId, ver.membroId)), referenciaTabela: "CriseDemandasImprensa", referenciaId: id,
-      mensagem: `${x.veiculo} pediu: ${x.pedido.slice(0, 300)}${x.pedido.length > 300 ? "…" : ""}${prazo} Veja em Crise e segurança → Imprensa.`, deps });
+      limiteDia: AVISOS_IMPRENSA_DIA, mensagem: `${x.veiculo} pediu: ${x.pedido.slice(0, 300)}${x.pedido.length > 300 ? "…" : ""}${prazo} Veja em Crise e segurança → Imprensa.`, deps: semCelular });
   }
   return { sucesso: true, demandaId: id, mensagem: crise ? "Pedido registrado e encaminhado ao porta-voz. Não comente o assunto com a imprensa." : "Pedido registrado e encaminhado à Presidência." };
 }
@@ -385,7 +453,8 @@ async function listarDemandas(pool, { ver }) {
   const rq = pool.request().input("eu", sql.Int, ver.membroId);
   let filtro = "d.RegistradoPorMembroId = @eu";
   if (gestor && !soPortaVoz) filtro = "1 = 1";
-  else if (gestor) { rq.input("c", sql.Int, crise.CriseId); filtro = "(d.CriseId = @c OR d.CriseId IS NULL OR d.RegistradoPorMembroId = @eu)"; }
+  // o porta-voz vê os pedidos da crise ativa (e os que ele registrou); os de fora da crise (e o contato do jornalista deles) ficam só com o nível geral
+  else if (gestor) { rq.input("c", sql.Int, crise.CriseId); filtro = "(d.CriseId = @c OR d.RegistradoPorMembroId = @eu)"; }
   const r = await rq.query(`
     SELECT TOP 200 d.*, p.Nome AS RegistradoPorNome, (SELECT TOP 1 y.DemandaId FROM CriseDemandasImprensa y WHERE y.CorrigeDemandaId = d.DemandaId) AS CorrigidaPor
     FROM CriseDemandasImprensa d LEFT JOIN MembroReferencia p ON p.MembroId = d.RegistradoPorMembroId WHERE ${filtro} ORDER BY d.DemandaId DESC`);
@@ -395,7 +464,7 @@ async function listarDemandas(pool, { ver }) {
     WHERE r.DemandaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)) ORDER BY r.RespostaId`)).recordset : [];
   const porDemanda = new Map();
   for (const x of respostas) { if (!porDemanda.has(x.DemandaId)) porDemanda.set(x.DemandaId, []); porDemanda.get(x.DemandaId).push(x); }
-  const podeResponder = (d) => gestor && (!soPortaVoz || d.CriseId == null || mesmo(d.CriseId, crise.CriseId));
+  const podeResponder = (d) => gestor && (!soPortaVoz || mesmo(d.CriseId, crise.CriseId));
   return {
     gestor, criseAtivaId: crise ? crise.CriseId : null,
     demandas: r.recordset.map((d) => {
@@ -420,7 +489,7 @@ async function responderDemanda(pool, { ver, dados }) {
     SELECT d.DemandaId, d.CriseId, d.RegistradoPorMembroId, (SELECT COUNT(*) FROM CriseDemandasImprensa y WHERE y.CorrigeDemandaId = d.DemandaId) AS Corrigida
     FROM CriseDemandasImprensa d WHERE d.DemandaId = @id`)).recordset[0];
   if (!alvo) return NAO_EXISTE;
-  if (!gestor || (soPortaVoz && alvo.CriseId != null && !mesmo(alvo.CriseId, crise.CriseId))) {
+  if (!gestor || (soPortaVoz && !mesmo(alvo.CriseId, crise.CriseId))) {
     return mesmo(alvo.RegistradoPorMembroId, ver.membroId) ? PROIBIDO("Quem responde a imprensa é o porta-voz (ou o nível geral).") : NAO_EXISTE;
   }
   if (Number(alvo.Corrigida)) return RECUSA("Este pedido foi corrigido: responda a versão nova.");
@@ -430,7 +499,12 @@ async function responderDemanda(pool, { ver, dados }) {
   let id, esperada = null;
   try {
     await t.begin();
-    if (!(await obterTrava(() => new sql.Request(t), `crise-resposta-${demandaId}`, 8000))) { await fecharTransacao(t, false); return OCUPADO("Outra resposta está sendo gravada. Tente de novo."); }
+    // a trava dos atos do regime: o porta-voz é conferido de novo DENTRO dela (a troca do porta-voz não passa no meio)
+    if (!(await obterTrava(() => new sql.Request(t), "crise-regime", 8000))) { await fecharTransacao(t, false); return OCUPADO("Outra resposta está sendo gravada. Tente de novo."); }
+    if (!ver.crise) {
+      const ativa = (await new sql.Request(t).query(`SELECT TOP 1 * FROM CriseRegimes WHERE Status = 'ATIVA'`)).recordset[0] || null;
+      if (!ehPortaVozDa(ativa, ver) || !mesmo(alvo.CriseId, ativa.CriseId)) { await fecharTransacao(t, false); return PROIBIDO("Você deixou de ser o porta-voz desta crise (ou ela foi encerrada)."); }
+    }
     const ultima = (await new sql.Request(t).input("id", sql.Int, demandaId)
       .query(`SELECT TOP 1 RespostaId FROM CriseDemandaRespostas WITH (UPDLOCK, HOLDLOCK) WHERE DemandaId = @id ORDER BY RespostaId DESC`)).recordset[0];
     esperada = ultima ? ultima.RespostaId : null;
@@ -483,8 +557,8 @@ async function fatosDasCongregacoes(pool, ids, hoje) {
       (SELECT TOP 1 p.RevisadoEm FROM SegurancaPlanos p WHERE p.CongregacaoId = c.CongregacaoId ORDER BY p.Versao DESC) AS PlanoRevisadoEm,
       (SELECT MAX(s.Data) FROM SegurancaSimulados s WHERE s.CongregacaoId = c.CongregacaoId AND s.AnuladoEm IS NULL) AS UltimoSimulado,
       (SELECT MAX(v.Data) FROM SegurancaVistorias v WHERE v.CongregacaoId = c.CongregacaoId AND v.AnuladoEm IS NULL) AS UltimaVistoria,
-      (SELECT COUNT(*) FROM SegurancaVistoriaItens i WHERE i.Resultado = 'PENDENTE' AND i.ResolvidaEm IS NULL AND i.VistoriaId = (SELECT TOP 1 v.VistoriaId FROM SegurancaVistorias v
-         WHERE v.CongregacaoId = c.CongregacaoId AND v.AnuladoEm IS NULL ORDER BY v.Data DESC, v.VistoriaId DESC)) AS Pendencias,
+      (SELECT COUNT(*) FROM SegurancaVistoriaItens i JOIN SegurancaVistorias v ON v.VistoriaId = i.VistoriaId
+         WHERE v.CongregacaoId = c.CongregacaoId AND v.AnuladoEm IS NULL AND i.Resultado = 'PENDENTE' AND i.ResolvidaEm IS NULL) AS Pendencias,   -- de TODA vistoria não anulada: a pendência só sai quando é marcada resolvida
       (SELECT COUNT(*) FROM SegurancaEquipe e JOIN MembroReferencia m ON m.MembroId = e.MembroId WHERE e.CongregacaoId = c.CongregacaoId AND e.EncerradoEm IS NULL
          AND m.Status = 'ATIVO' AND m.CongregacaoId = e.CongregacaoId AND (e.Ate IS NULL OR e.Ate >= @hoje)) AS Equipe
     FROM Congregacoes c WHERE c.Ativa = 1 AND ${filtroDeIds(rq, "c.CongregacaoId", ids, "e")} ORDER BY c.Nome`)).recordset;
@@ -705,10 +779,11 @@ async function adicionarEquipe(pool, { ver, congregacaoId, dados, hoje = hojeBra
   return { sucesso: true, equipeId: id, mensagem: "Pessoa incluída na equipe de segurança." };
 }
 async function encerrarEquipe(pool, { ver, equipeId, hoje = hojeBrasilia() }) {
-  const e = (await pool.request().input("id", sql.Int, equipeId).query(`SELECT CongregacaoId, EncerradoEm, Desde FROM SegurancaEquipe WHERE EquipeId = @id`)).recordset[0];
+  const e = (await pool.request().input("id", sql.Int, equipeId).query(`SELECT CongregacaoId, EncerradoEm, Desde, Ate FROM SegurancaEquipe WHERE EquipeId = @id`)).recordset[0];
   if (!e || !(await congregacaoAlcancada(pool, ver, e.CongregacaoId))) return NAO_EXISTE;
   if (e.EncerradoEm) return MUDOU("Esta pessoa já saiu da equipe.");
-  const ate = dia(e.Desde) > hoje ? dia(e.Desde) : hoje;
+  // o "até" já passado não se estica até hoje (revisão independente, v7.15); quem ainda nem começou sai no dia em que começaria
+  const ate = dia(e.Desde) > hoje ? dia(e.Desde) : e.Ate && dia(e.Ate) < hoje ? dia(e.Ate) : hoje;
   const r = await pool.request().input("id", sql.Int, equipeId).input("por", sql.Int, ver.membroId).input("ate", sql.Date, ate)
     .query(`UPDATE SegurancaEquipe SET EncerradoEm = SYSUTCDATETIME(), EncerradoPorMembroId = @por, MotivoEncerramento = 'MANUAL', Ate = @ate WHERE EquipeId = @id AND EncerradoEm IS NULL;
             SELECT @@ROWCOUNT AS n`);
@@ -722,11 +797,17 @@ async function encerrarEquipe(pool, { ver, equipeId, hoje = hojeBrasilia() }) {
 // ---------------------------------------------------------------
 
 // Quem recebe: a permissão seguranca_congregacao no escopo da CONGREGAÇÃO ou da ÁREA dela (o nível geral acompanha pelo painel, sem um aviso por congregação).
+// Revisão independente (v7.15): também quem recebeu o papel por DELEGAÇÃO vigente; nunca a concessão de departamento; nunca quem teve a exclusão LGPD atendida.
 async function responsaveisDaSeguranca(pool) {
   return (await pool.request().input("perm", sql.NVarChar(60), `%,${cs.PERMISSAO_SEGURANCA},%`).query(`
-    SELECT DISTINCT l.EscopoTipo, l.EscopoId, m.MembroId AS membroId, m.Nome AS nome, m.Email AS email FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
-    JOIN MembroReferencia m ON m.MembroId = l.MembroId
-    WHERE (',' + p.Permissoes + ',') LIKE @perm AND m.Status = 'ATIVO' AND ${LIDERANCA_ATIVA_SQL} AND l.EscopoTipo IN ('CONGREGACAO', 'AREA') AND l.EscopoId IS NOT NULL`)).recordset;
+    WITH alcance AS (
+      SELECT l.EscopoTipo, l.EscopoId, l.MembroId FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND ${LIDERANCA_ATIVA_SQL} AND l.DepartamentoId IS NULL
+      UNION
+      SELECT l.EscopoTipo, l.EscopoId, g.DelegadoMembroId FROM DelegacoesAcesso g JOIN Lideranca l ON l.LiderancaId = g.LiderancaId JOIN Papeis p ON p.PapelId = l.PapelId
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND l.DepartamentoId IS NULL AND g.Status = 'ATIVA' AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN g.DataInicio AND g.DataFim)
+    SELECT DISTINCT x.EscopoTipo, x.EscopoId, m.MembroId AS membroId, m.Nome AS nome, m.Email AS email FROM alcance x JOIN MembroReferencia m ON m.MembroId = x.MembroId
+    WHERE m.Status = 'ATIVO' AND NOT ${EXCLUIDO_SQL} AND x.EscopoTipo IN ('CONGREGACAO', 'AREA') AND x.EscopoId IS NOT NULL`)).recordset;
 }
 async function detectar(pool, regra, { hoje = hojeBrasilia() } = {}) {
   const prazos = await lerPrazos(pool);

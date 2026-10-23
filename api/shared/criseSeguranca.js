@@ -83,6 +83,14 @@ function diasEntre(de, ate) {
   return Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86400000);
 }
 const diaDe = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+// O dia de Brasília de um INSTANTE (DATETIME2 gravado em UTC): o ato das 22h30 do dia 23 é do dia 23, não do 24 (UTC-3, sem horário de verão desde 2019).
+// Texto de só data ("2026-10-23") já é o dia: fica como está.
+function diaBrasilia(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d) ? null : new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10);
+}
 // Data e hora de Brasília como a tela manda ("2026-10-23T14:30", do campo datetime-local) -> instante (Date). Brasília não tem horário de verão desde 2019: UTC-3.
 function dataHoraBrasilia(v) {
   if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return null;
@@ -226,6 +234,15 @@ function textoAviso({ evento, portaVoz, desde, resumo }) {
 }
 // O rodapé do e-mail do aviso (no lugar do link "não quero mais receber": é aviso obrigatório).
 const RODAPE_AVISO = "Você recebe este aviso porque é da liderança da Igreja: durante o regime de crise, o Regimento (Art. 161-B) pede que toda a liderança saiba quem é o porta-voz único.";
+// O texto CURTO do celular (título até 120, mensagem até 180): o essencial — quem fala e o contato — no começo, nunca cortado no meio (revisão independente, v7.15).
+function textoCelular({ evento, portaVoz }) {
+  const pv = portaVoz || {};
+  const corta = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  if (evento === "ENCERRADA") return { titulo: "Fim do regime de crise", mensagem: "A crise foi encerrada pela Presidência: a vedação do Art. 161-B deixa de valer. Detalhes no sininho." };
+  const nome = corta(String(pv.nome || ""), 60), contato = corta(String(pv.contato || ""), 60);
+  const titulo = evento === "PORTA_VOZ" ? corta(`Crise: novo porta-voz — ${nome}`, 120) : corta(`Crise: só ${nome} fala pela Igreja`, 120);
+  return { titulo, mensagem: corta(`Imprensa: encaminhe para ${contato}. Não comente o assunto (Art. 161-B). Detalhes no sininho.`, 180) };
+}
 
 // ---------------------------------------------------------------
 // Segurança da congregação
@@ -330,15 +347,18 @@ function situacaoAvcb(fim, hoje) {
 //   plano: { versao, revisadoEm } | null · simulado: data do último (não anulado) | null · vistoria: data da última | null · pendencias: itens pendentes não resolvidos
 //   imoveis: [{ descricao, avcbVigenciaFim, seguro: "VIGENTE" | "VENCIDO" | "SEM_SEGURO", seguroFim }]
 // Cada alerta: { codigo, regra, texto }. `regra` é a chave do aviso do sininho que ele alimenta (null = só aparece no painel).
-function avaliarSeguranca({ hoje, plano, simulado, vistoria, pendencias = 0, imoveis = [], prazos = {} }) {
+// `imoveis`: null = não se sabe (não avalia); [] = a congregação não tem imóvel no patrimônio (o AVCB não pode ser conferido: avisa).
+function avaliarSeguranca({ hoje, plano, simulado, vistoria, pendencias = 0, imoveis = null, prazos = {} }) {
   const p = prazosDaSeguranca(prazos);
   const alertas = [];
   const out = { plano: null, simulado: null, vistoria: null, imoveis: [] };
   if (!plano) { alertas.push({ codigo: "PLANO_AUSENTE", regra: "SEGURANCA_PLANO_REVISAO", texto: "Sem plano de emergência." }); }
   else {
-    const venceEm = somarDias(diaDe(plano.revisadoEm), p.SEGURANCA_PLANO_REVISAO_DIAS);
-    out.plano = { versao: plano.versao, revisadoEm: diaDe(plano.revisadoEm), venceEm, vencido: venceEm < hoje };
-    if (venceEm < hoje) alertas.push({ codigo: "PLANO_VENCIDO", regra: "SEGURANCA_PLANO_REVISAO", texto: `Plano de emergência sem revisão desde ${dataBr(plano.revisadoEm)}.` });
+    // a revisão é um instante (gravado em UTC): o dia que vale é o de Brasília (a revisão das 22h do dia 23 não pode virar dia 24)
+    const revisadoEm = diaBrasilia(plano.revisadoEm);
+    const venceEm = somarDias(revisadoEm, p.SEGURANCA_PLANO_REVISAO_DIAS);
+    out.plano = { versao: plano.versao, revisadoEm, venceEm, vencido: venceEm < hoje };
+    if (venceEm < hoje) alertas.push({ codigo: "PLANO_VENCIDO", regra: "SEGURANCA_PLANO_REVISAO", texto: `Plano de emergência sem revisão desde ${dataBr(revisadoEm)}.` });
   }
   if (!simulado) alertas.push({ codigo: "SIMULADO_AUSENTE", regra: "SEGURANCA_SEM_SIMULADO", texto: "Nenhum simulado registrado." });
   else {
@@ -353,10 +373,13 @@ function avaliarSeguranca({ hoje, plano, simulado, vistoria, pendencias = 0, imo
     if (limite < hoje) alertas.push({ codigo: "VISTORIA_ATRASADA", regra: "SEGURANCA_SEM_VISTORIA", texto: `Última vistoria em ${dataBr(vistoria)}: mais de ${p.SEGURANCA_VISTORIA_MAX_DIAS} dias.` });
   }
   if (pendencias > 0) alertas.push({ codigo: "PENDENCIAS", regra: null, texto: `${pendencias} pendência(s) da vistoria sem resolver.` });
+  // v7.15 (revisão independente): sem imóvel no patrimônio, ou imóvel sem AVCB informado, também avisa — o "nunca cadastrado" não pode passar por "em dia"
+  if (Array.isArray(imoveis) && !imoveis.length) alertas.push({ codigo: "SEM_IMOVEL", regra: "SEGURANCA_AVCB_SEGURO", texto: "Nenhum imóvel desta congregação no patrimônio: não há como conferir o AVCB nem o seguro (peça à Tesouraria para cadastrar)." });
   for (const i of imoveis || []) {
     const avcb = situacaoAvcb(i.avcbVigenciaFim, hoje);
     out.imoveis.push({ descricao: i.descricao, avcb, avcbVigenciaFim: diaDe(i.avcbVigenciaFim), avcbNumero: i.avcbNumero || null, seguro: i.seguro || "SEM_SEGURO", seguroFim: diaDe(i.seguroFim) });
     if (avcb === "VENCIDA") alertas.push({ codigo: "AVCB_VENCIDO", regra: "SEGURANCA_AVCB_SEGURO", texto: `AVCB vencido (${i.descricao}) desde ${dataBr(i.avcbVigenciaFim)}: o Regimento veda receber culto sem AVCB vigente.` });
+    if (avcb === "NAO_INFORMADA") alertas.push({ codigo: "AVCB_NAO_INFORMADO", regra: "SEGURANCA_AVCB_SEGURO", texto: `AVCB não informado (${i.descricao}): cadastre o número e a validade em Financeiro → Imóveis.` });
     if (i.seguro === "VENCIDO") alertas.push({ codigo: "SEGURO_VENCIDO", regra: "SEGURANCA_AVCB_SEGURO", texto: `Seguro vencido (${i.descricao})${i.seguroFim ? ` desde ${dataBr(i.seguroFim)}` : ""}.` });
   }
   return { ...out, alertas };
@@ -383,8 +406,8 @@ function textoResumo(regra, nomes) {
 module.exports = {
   PERMISSAO_CRISE, PERMISSAO_SEGURANCA, PORTA_VOZ, CANAIS_MANIFESTACAO, SITUACOES_DEMANDA, SITUACOES_RESPOSTA, TIPOS_SIMULADO, ITENS_VISTORIA, RESULTADOS_ITEM, FUNCOES_EQUIPE,
   CONTATOS_EMERGENCIA, MAX, PRAZOS_PADRAO, AVCB_AVISO_DIAS, RODAPE_AVISO, TEXTO_REGRA,
-  texto, dataValida, somarDias, diasEntre, diaDe, dataHoraBrasilia, linkValido, inteiroPositivo,
-  validarPortaVoz, validarAbertura, validarEncerramento, validarManifestacao, validarDemanda, validarResposta, textoAviso,
+  texto, dataValida, somarDias, diasEntre, diaDe, diaBrasilia, dataHoraBrasilia, linkValido, inteiroPositivo,
+  validarPortaVoz, validarAbertura, validarEncerramento, validarManifestacao, validarDemanda, validarResposta, textoAviso, textoCelular,
   validarPlano, validarSimulado, validarVistoria, validarAnulacao, validarResolucao, validarEquipe, prazosDaSeguranca, situacaoAvcb, avaliarSeguranca,
   referenciaDoResumo, textoResumo
 };

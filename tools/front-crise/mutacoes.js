@@ -12,7 +12,7 @@ const MUTACOES = [
   ["faixa: resposta atrasada aceita", M, "if (seq !== crsFaixaSeq || crsDono !== crsChaveDoDono()) return;", "if (false) return;"],
   ["faixa: relida a cada troca de tela", M, "if (Date.now() - crsFaixaLidaEm > CRS_FAIXA_INTERVALO_MS) crsAtualizarFaixa();", "crsAtualizarFaixa();"],
   ["abrir: sem a confirmação", M, "  if (!(await confirmarAcao(\"Abrir o regime de crise? Toda", "  if (false && !(await confirmarAcao(\"Abrir o regime de crise? Toda"],
-  ["428: sem repetir depois da confirmação", M, "if (r.res.status === 428) { const ok = await confirmarFatorAgora(); if (ok) r = await crsTentar(url, opcoes); }", ""],
+  ["428: sem repetir depois da confirmação", M, "if (r.res.status === 428) { const ok = await confirmarFatorAgora(); if (ok) r = await crsTentar(url, opcoes, prazoMs); }", ""],
   ["resposta: sem a resposta anterior", M, "  if (anterior) dados.substituiRespostaId = anterior;", ""],
   ["manifestação: a correção não aponta a original", M, "  if (crsCorrigeManif) dados.corrigeManifestacaoId = crsCorrigeManif;", ""],
   ["manifestação: o link sem urlSegura", M, "const link = m.link ? urlSegura(m.link) : \"\";", "const link = m.link ? String(m.link) : \"\";"],
@@ -22,7 +22,8 @@ const MUTACOES = [
   ["seção: resposta atrasada pinta por cima", M, "  if (seq !== crsSeq || !crsViva(marca) || crsSecaoAtual !== \"crise\") return;\n  if (data.sucesso === false || !Array.isArray(data.crises))", "  if (data.sucesso === false || !Array.isArray(data.crises))"],
   ["aba: sair dela não limpa", M, "  if (aba !== \"crise\") crsFecharAba();", ""],
   ["pílulas: a da crise para todos", M, "crsMostrarPilulas({ crise: cat.papeis.crise, manifestacoes", "crsMostrarPilulas({ crise: true, manifestacoes"],
-  ["prazo: sem prazo no pedido", M, "const limite = controle ? setTimeout(() => controle.abort(), CRS_TEMPO_LIMITE_MS) : null;", "const limite = null;"],
+  ["prazo dos atos: 25 s em vez de 40 s", M, "const CRS_TEMPO_LIMITE_ATO_MS = 40000;", "const CRS_TEMPO_LIMITE_ATO_MS = 25000;"],
+  ["prazo: sem prazo no pedido", M, "const limite = controle ? setTimeout(() => controle.abort(), prazoMs || CRS_TEMPO_LIMITE_MS) : null;", "const limite = null;"],
   ["Meus Dados: a função sem escape", M, "<strong>Equipe de segurança:</strong> ${escaparHtmlEbd(e.funcao)}", "<strong>Equipe de segurança:</strong> ${e.funcao}"],
   ["equipe: o texto da pendência sem escape", M, "${i.pendencia ? ` — ${escaparHtmlEbd(i.pendencia)}` : \"\"}", "${i.pendencia ? ` — ${i.pendencia}` : \"\"}"],
   ["navegação: a aba fechada para quem não tem permissão", "script.js", "  if (nome === \"crise\") return sessaoDeLiderancaNaTela();", ""]

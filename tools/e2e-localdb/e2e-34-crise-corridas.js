@@ -99,6 +99,8 @@ async function principal() {
   ok(rs.every((x) => x.ok) && rs[1].r.sucesso, "o encerramento passa; a troca ou passou antes ou ouviu que a crise acabou", rs.map((x) => x.r));
   const eventos = (await q("SELECT Evento FROM CriseHistorico WHERE CriseId = @c ORDER BY HistoricoId", { c: criseId })).map((x) => x.Evento).join(",");
   ok(["ABERTA,ENCERRADA", "ABERTA,PORTA_VOZ,ENCERRADA"].includes(eventos) && (rs[0].r.sucesso ? eventos.includes("PORTA_VOZ") : !eventos.includes("PORTA_VOZ")), "o histórico fica numa ordem que existe (nunca troca de porta-voz depois do fim)", eventos);
+  ok((await escalar("SELECT PortaVozNome FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ENCERRADA'", { c: criseId })) === (await escalar("SELECT PortaVozNome FROM CriseRegimes WHERE CriseId = @c", { c: criseId })),
+    "revisão: o porta-voz do histórico do fim é o do regime no fim (relido dentro da trava)");
   rs = await disparar([1, 2, 3, 4].map((n) => ({ tipo: "encerrar", criseId, n })));
   ok(rs.every((x) => x.ok && !x.r.sucesso && (x.r.mudou || x.r.limite)), "encerrar de novo, quatro ao mesmo tempo: todos ouvem que já foi encerrada", rs.map((x) => x.r));
   ok((await escalar("SELECT COUNT(*) FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ENCERRADA'", { c: criseId })) === 1
@@ -109,6 +111,33 @@ async function principal() {
   fs.unlinkSync(arquivo);
   ok(linhas.length > 0 && new Set(linhas).size === linhas.length, `${linhas.length} e-mails saíram nas rodadas das corridas, nenhum repetido`);
   ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Situacao = 'ENVIANDO'")) === 0, "nada ficou preso em \"enviando\"");
+
+  console.log("== revisão: 420 líderes com celular — o aviso sai NA HORA, em paralelo (não um a um, em horas) ==");
+  // os canais de mentira deste processo: o celular demora 40 ms por aviso (a rede de verdade leva 0,2 a 0,4 s; o banco local já soma o resto)
+  const pushesEscala = [];
+  require(path.join(API, "shared/notificacaoPush.js")).enviarPushNotificacao = async (_p, _s, membroId) => { await new Promise((r) => setTimeout(r, 40)); pushesEscala.push(membroId); return 1; };
+  require(path.join(API, "shared/notificacaoEmail.js")).enviarEmailComunicado = async () => ({ ok: true });
+  const dbMain = require(path.join(API, "shared/criseSegurancaDb.js"));
+  const pool = await L.obterPool();
+  const papel = (await q("INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES (N'Liderança de Escala E2E', 'CONGREGACAO', ''); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
+  await q(`DECLARE @base INT = (SELECT ISNULL(MAX(MembroId), 0) FROM MembroReferencia);
+    WITH n AS (SELECT TOP 420 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS i FROM sys.all_objects a CROSS JOIN sys.all_objects b)
+    INSERT INTO MembroReferencia (MembroId, Nome, Status, CongregacaoId, DataNascimento, Email) SELECT @base + i, CONCAT(N'Líder Escala ', i, N' E2E'), 'ATIVO', @c, '1980-01-01', CONCAT('lider', i, '@e2e.invalid') FROM n;
+    INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) SELECT m.MembroId, @p, 'CONGREGACAO', @c FROM MembroReferencia m WHERE m.Nome LIKE N'Líder Escala %';
+    INSERT INTO PushInscricoesMembro (MembroId, Endpoint, P256dh, Auth) SELECT m.MembroId, CONCAT(N'https://push.e2e/escala/', m.MembroId), N'p', N'a' FROM MembroReferencia m WHERE m.Nome LIKE N'Líder Escala %';`, { c: c1, p: papel });
+  const t0 = Date.now();
+  const ab = await dbMain.abrir(pool, { ver: VER_SEC, dados: { motivo: "Crise de escala E2E", portaVoz: PV } });
+  const seg = (Date.now() - t0) / 1000;
+  ok(ab.sucesso, "a crise abre com mais de 420 líderes", ab.mensagem);
+  const envioEscala = await escalar("SELECT EnvioId FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ABERTA'", { c: ab.criseId });
+  const comAparelho = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao <> 'SEM_APARELHO'", { e: envioEscala });
+  const aceitosNaHora = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao = 'ACEITO'", { e: envioEscala });
+  ok(comAparelho >= 420 && seg < 38, `a resposta da abertura voltou em ${seg.toFixed(1)} s (cabe no limite de ~45 s do serviço) com ${aceitosNaHora} de ${comAparelho} celulares avisados`);
+  if (aceitosNaHora < comAparelho) await dbMain.continuarAviso(pool, { ver: VER_SEC });
+  const aceitos = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao = 'ACEITO'", { e: envioEscala });
+  ok(aceitos === comAparelho && new Set(pushesEscala).size === pushesEscala.length, `revisão: TODOS os ${comAparelho} celulares avisados em no máximo duas rodadas (abertura ${aceitosNaHora}), nenhum repetido`, { aceitos, comAparelho });
+  ok(/Celular: \d+ de \d+ aparelho/.test(ab.mensagem), "a resposta conta quantos celulares já foram avisados", ab.mensagem);
+  ok((await dbMain.encerrar(pool, { ver: VER_SEC, criseId: ab.criseId, dados: { resumo: "Fim da escala." } })).sucesso, "a crise de escala é encerrada");
 
   fim("e2e-34 (corridas da crise)");
 }

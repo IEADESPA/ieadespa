@@ -496,7 +496,35 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Comunicacao
     ALTER TABLE dbo.ComunicacaoEnvios ADD CONSTRAINT CK_ComunicacaoEnvios_Categoria CHECK (Categoria IN (N'CONVOCACAO', N'EVENTOS', N'DEVOCIONAL', N'FINANCEIRO', N'CRISE'));
 GO
 
+-- A entrega de e-mail do aviso de crise que NÃO sai porque a pessoa já foi alcançada (leu no sininho, deu ciência ou recebeu no celular): situação ALCANCADO (revisão
+-- independente, 23/10/2026 — a cota de 100 e-mails por hora fica para quem ainda não sabe e para a convocação oficial).
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ComunicacaoEntregas_Situacao' AND definition NOT LIKE N'%ALCANCADO%')
+    ALTER TABLE dbo.ComunicacaoEntregas DROP CONSTRAINT CK_ComunicacaoEntregas_Situacao;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ComunicacaoEntregas_Situacao')
+    ALTER TABLE dbo.ComunicacaoEntregas ADD CONSTRAINT CK_ComunicacaoEntregas_Situacao CHECK (Situacao IN (N'PENDENTE', N'ENVIANDO', N'ACEITO', N'FALHOU', N'SEM_CONSENTIMENTO',
+        N'SEM_CONTATO', N'SEM_APARELHO', N'CANCELADO', N'ALCANCADO'));
+GO
+
 -- ---- 9) Permissões, prazos, avisos e retenção ----
+
+-- A lista de permissões de um papel é uma string separada por vírgula (NVARCHAR(1000) desde a 142). Se o acréscimo das duas permissões novas não couber num papel que
+-- as recebe, a coluna é alargada para 2000 ANTES do UPDATE (o UPDATE que estoura derrubaria a migração e o deploy); se nem 2000 couber, a migração para com a explicação.
+-- (Revisão independente, 23/10/2026.) Não há índice sobre Permissoes.
+IF EXISTS (SELECT 1 FROM dbo.Papeis p CROSS APPLY (SELECT LEN(ISNULL(p.Permissoes, N''))
+             + CASE WHEN p.Nome IN (N'Presidente', N'Secretário Geral') AND CHARINDEX(N',crise_gestao,', N',' + ISNULL(p.Permissoes, N'') + N',') = 0 THEN 13 ELSE 0 END
+             + CASE WHEN CHARINDEX(N',seguranca_congregacao,', N',' + ISNULL(p.Permissoes, N'') + N',') = 0 THEN 22 ELSE 0 END AS Precisa) x
+           WHERE p.Nome IN (N'Presidente', N'Secretário Geral', N'Dirigente de Congregação', N'Pastor de Área')
+             AND x.Precisa > (SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Papeis' AND COLUMN_NAME = 'Permissoes'))
+   AND (SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Papeis' AND COLUMN_NAME = 'Permissoes') BETWEEN 1 AND 1999
+    ALTER TABLE dbo.Papeis ALTER COLUMN Permissoes NVARCHAR(2000) NULL;
+GO
+IF EXISTS (SELECT 1 FROM dbo.Papeis p CROSS APPLY (SELECT LEN(ISNULL(p.Permissoes, N''))
+             + CASE WHEN p.Nome IN (N'Presidente', N'Secretário Geral') AND CHARINDEX(N',crise_gestao,', N',' + ISNULL(p.Permissoes, N'') + N',') = 0 THEN 13 ELSE 0 END
+             + CASE WHEN CHARINDEX(N',seguranca_congregacao,', N',' + ISNULL(p.Permissoes, N'') + N',') = 0 THEN 22 ELSE 0 END AS Precisa) x
+           WHERE p.Nome IN (N'Presidente', N'Secretário Geral', N'Dirigente de Congregação', N'Pastor de Área')
+             AND x.Precisa > (SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'Papeis' AND COLUMN_NAME = 'Permissoes'))
+    RAISERROR(N'Migração 152: a lista de permissões de um papel não cabe em Papeis.Permissoes nem com 2000 caracteres. Revise as permissões repetidas do papel antes de aplicar.', 16, 1);
+GO
 
 IF NOT EXISTS (SELECT 1 FROM dbo.Funcionalidades WHERE Chave = 'crise_gestao')
     INSERT INTO dbo.Funcionalidades (Chave, Nome) VALUES ('crise_gestao', N'Crise — regime de crise, porta-voz único, manifestações e imprensa');
@@ -517,6 +545,9 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'SEGURANCA_SIMULADO_MAX_DI
     INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('SEGURANCA_SIMULADO_MAX_DIAS', N'Segurança — tempo máximo sem simulado na congregação', 365);
 IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'SEGURANCA_VISTORIA_MAX_DIAS')
     INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('SEGURANCA_VISTORIA_MAX_DIAS', N'Segurança — tempo máximo sem vistoria predial (6 meses)', 180);
+-- o aviso de crise tem teto PRÓPRIO de e-mails por hora (menor que o dos comunicados), e nunca leva mais da metade da rodada quando há convocação oficial na fila
+IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'COMUNICACAO_CRISE_EMAILS_POR_HORA')
+    INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('COMUNICACAO_CRISE_EMAILS_POR_HORA', N'Comunicação — teto de e-mails do aviso de crise por hora (dentro do teto dos comunicados)', 30);
 GO
 
 -- Os avisos da segurança vão ao sininho do Dirigente e do Pastor de Área (um por regra, por pessoa, juntando as congregações). Sem e-mail e sem celular de partida: num
@@ -526,6 +557,10 @@ GO
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CRISE_DEMANDA_IMPRENSA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
     VALUES (N'CRISE_DEMANDA_IMPRENSA', N'Pedido da imprensa encaminhado', N'CRISE', NULL, NULL, 0, 1, 1);
+-- Quando outra pessoa do nível geral abre, troca o porta-voz ou encerra o regime EM NOME do Presidente, ele recebe na hora (sininho e celular).
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'CRISE_EM_SEU_NOME')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
+    VALUES (N'CRISE_EM_SEU_NOME', N'Ato do regime de crise em seu nome', N'CRISE', NULL, NULL, 0, 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'SEGURANCA_PLANO_REVISAO')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria)
     VALUES (N'SEGURANCA_PLANO_REVISAO', N'Plano de emergência sem revisão', N'SEGURANCA', NULL, NULL, 0, 0, 0);

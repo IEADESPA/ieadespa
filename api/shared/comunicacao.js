@@ -44,7 +44,8 @@ const SITUACOES = {
   SEM_CONSENTIMENTO: "sem consentimento",
   SEM_CONTATO: "sem e-mail no cadastro",
   SEM_APARELHO: "sem aparelho inscrito",
-  CANCELADO: "cancelado"
+  CANCELADO: "cancelado",
+  ALCANCADO: "já alcançado por outro canal"        // v7.15: o e-mail do aviso de crise não sai para quem já leu, deu ciência ou recebeu no celular
 };
 
 // O texto exato que a pessoa lê ao marcar cada categoria. Mudar o texto = versão nova (o "sim" antigo continua valendo: a impressão digital guardada prova o texto da época).

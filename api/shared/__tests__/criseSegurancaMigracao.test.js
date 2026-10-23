@@ -49,7 +49,7 @@ describe("migração 152", () => {
   test("os CHECK de lista fecham o NULL, e nenhum LEN(coluna que aceita NULL) fica sem o IS NOT NULL ao lado", () => {
     const listas = [...TEXTO.matchAll(/CHECK \((\w+) (IS NOT NULL AND \w+ )?IN \(/g)];
     expect(listas.length).toBeGreaterThanOrEqual(12);
-    for (const l of listas) if (l[1] !== "Categoria" && l[1] !== "MotivoEncerramento") expect(l[0]).toMatch(/IS NOT NULL AND/);
+    for (const l of listas) if (!["Categoria", "MotivoEncerramento", "Situacao"].includes(l[1])) expect(l[0]).toMatch(/IS NOT NULL AND/);   // as três: coluna NOT NULL ou o NULL é permitido de propósito
     for (const col of ["DesignacaoAto", "MotivoAnulacao", "Pendencia", "ComoResolvida"]) {
       for (const m of TEXTO.matchAll(new RegExp(`LEN\\(${col}\\)`, "g"))) expect(TEXTO.slice(m.index - 40, m.index)).toMatch(new RegExp(`${col} IS NOT NULL AND $`));
     }
@@ -67,7 +67,7 @@ describe("migração 152", () => {
   test("os limites das colunas do sistema: Funcionalidades.Nome 100, Prazos.Sigla 40 e Nome 150, PoliticasRetencao Categoria 60 e BaseLegal 300, NotificacaoRegras.Titulo 150", () => {
     for (const [, nome] of TEXTO.matchAll(/INSERT INTO dbo\.Funcionalidades \(Chave, Nome\) VALUES \('\w+', N'([^']+)'\)/g)) expect(nome.length).toBeLessThanOrEqual(100);
     const prazos = [...TEXTO.matchAll(/INSERT INTO dbo\.Prazos \(Sigla, Nome, Dias\) VALUES \('(\w+)', N'([^']+)', (\d+)\)/g)];
-    expect(prazos.map((p) => [p[1], Number(p[3])])).toEqual([["SEGURANCA_PLANO_REVISAO_DIAS", 365], ["SEGURANCA_SIMULADO_MAX_DIAS", 365], ["SEGURANCA_VISTORIA_MAX_DIAS", 180]]);
+    expect(prazos.map((p) => [p[1], Number(p[3])])).toEqual([["SEGURANCA_PLANO_REVISAO_DIAS", 365], ["SEGURANCA_SIMULADO_MAX_DIAS", 365], ["SEGURANCA_VISTORIA_MAX_DIAS", 180], ["COMUNICACAO_CRISE_EMAILS_POR_HORA", 30]]);
     for (const p of prazos) { expect(p[1].length).toBeLessThanOrEqual(40); expect(p[2].length).toBeLessThanOrEqual(150); }
     for (const [, cat] of TEXTO.matchAll(/INSERT INTO dbo\.PoliticasRetencao \(Categoria, BaseLegal, DiasRetencao\) VALUES \(N'([^']+)'/g)) expect(cat.length).toBeLessThanOrEqual(60);
     const bases = [...TEXTO.matchAll(/SET BaseLegal = N'([^']+)'/g)].map((m) => m[1]);
@@ -76,11 +76,31 @@ describe("migração 152", () => {
   });
   test("os avisos: o pedido da imprensa é obrigatório e vai ao celular; os da segurança vão só ao sininho (o e-mail direto do motor passaria dos 100 por hora)", () => {
     const regras = [...TEXTO.matchAll(/INSERT INTO dbo\.NotificacaoRegras \(Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, CanalPush, Obrigatoria\)\s+VALUES \(N'(\w+)', N'([^']+)', N'(\w+)', NULL, NULL, (\d), (\d), (\d)\)/g)];
-    expect(regras.map((r) => r[1]).sort()).toEqual(["CRISE_DEMANDA_IMPRENSA", "SEGURANCA_AVCB_SEGURO", "SEGURANCA_PLANO_REVISAO", "SEGURANCA_SEM_SIMULADO", "SEGURANCA_SEM_VISTORIA"]);
+    expect(regras.map((r) => r[1]).sort()).toEqual(["CRISE_DEMANDA_IMPRENSA", "CRISE_EM_SEU_NOME", "SEGURANCA_AVCB_SEGURO", "SEGURANCA_PLANO_REVISAO", "SEGURANCA_SEM_SIMULADO", "SEGURANCA_SEM_VISTORIA"]);
+    const emSeuNome = regras.find((r) => r[1] === "CRISE_EM_SEU_NOME");
+    expect([emSeuNome[4], emSeuNome[5], emSeuNome[6]]).toEqual(["0", "1", "1"]);
     for (const r of regras) expect(r[2].length).toBeLessThanOrEqual(150);
     const imprensa = regras.find((r) => r[1] === "CRISE_DEMANDA_IMPRENSA");
     expect([imprensa[4], imprensa[5], imprensa[6]]).toEqual(["0", "1", "1"]);
     for (const r of regras.filter((x) => x[3] === "SEGURANCA")) expect([r[4], r[5], r[6]]).toEqual(["0", "0", "0"]);
+  });
+  test("revisão independente: a situação ALCANCADO entra no CHECK da entrega sem tirar nenhuma, e só uma vez", () => {
+    expect(TEXTO).toMatch(/IF EXISTS \(SELECT 1 FROM sys\.check_constraints WHERE name = N'CK_ComunicacaoEntregas_Situacao' AND definition NOT LIKE N'%ALCANCADO%'\)/);
+    const add = /ADD CONSTRAINT CK_ComunicacaoEntregas_Situacao CHECK \(Situacao IN \(([^)]*)\)\)/.exec(TEXTO);
+    expect(add && add[1].replace(/\s+/g, " ")).toBe("N'PENDENTE', N'ENVIANDO', N'ACEITO', N'FALHOU', N'SEM_CONSENTIMENTO', N'SEM_CONTATO', N'SEM_APARELHO', N'CANCELADO', N'ALCANCADO'");
+  });
+  test("revisão independente: Papeis.Permissoes é alargada para 2000 ANTES do UPDATE quando o acréscimo não cabe; se nem assim couber, a migração para com a explicação", () => {
+    const iAlarga = TEXTO.indexOf("ALTER TABLE dbo.Papeis ALTER COLUMN Permissoes NVARCHAR(2000) NULL");
+    const iErro = TEXTO.indexOf("RAISERROR(N'Migração 152: a lista de permissões");
+    const iUpdate = TEXTO.indexOf("SET Permissoes = CASE WHEN ISNULL(Permissoes, '') = '' THEN 'crise_gestao'");
+    expect(iAlarga).toBeGreaterThan(0);
+    expect(iAlarga < iErro && iErro < iUpdate).toBe(true);
+    expect(TEXTO.slice(iAlarga - 900, iAlarga)).toMatch(/BETWEEN 1 AND 1999\s*$/);
+    // a conta é exata: só soma o que falta (13 de ",crise_gestao" para o Presidente e o Secretário; 22 de ",seguranca_congregacao")
+    expect(",crise_gestao".length).toBe(13);
+    expect(",seguranca_congregacao".length).toBe(22);
+    expect((TEXTO.match(/THEN 13 ELSE 0 END/g) || []).length).toBe(2);
+    expect((TEXTO.match(/THEN 22 ELSE 0 END/g) || []).length).toBe(2);
   });
   test("o cabeçalho diz que é idempotente", () => {
     expect(TEXTO).toMatch(/-- Idempotente: seguro para reexecutar sem apagar dados\./);

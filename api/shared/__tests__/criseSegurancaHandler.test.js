@@ -79,6 +79,11 @@ describe("a porta", () => {
     const ver = db.painelSeguranca.mock.calls[0][1].ver;
     expect([ver.seguranca, ver.geralSeguranca, ver.crise, ver.podeVerCongregacao("Central"), ver.podeVerCongregacao("Vila")]).toEqual([true, false, false, true, false]);
   });
+  test("revisão independente: a concessão restrita a um DEPARTAMENTO também não entra na segurança", async () => {
+    const comDepto = tokenDe(5, { via: "SENHA", fator: COM_FATOR, nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], departamentoId: 7, permissoes: ["seguranca_congregacao"] });
+    for (const a of SEG_GET) expect((await chamar(a, { token: comDepto, query: IDS })).status).toBe(403);
+    expect(db.painelSeguranca).not.toHaveBeenCalled();
+  });
   test("o banco recebe o membroId da sessão, nunca do corpo", async () => {
     await chamar("demanda", { metodo: "POST", token: DIRIGENTE(), corpo: { membroId: 99, veiculo: "Rádio" } });
     expect(db.registrarDemanda.mock.calls[0][1].ver.membroId).toBe(5);

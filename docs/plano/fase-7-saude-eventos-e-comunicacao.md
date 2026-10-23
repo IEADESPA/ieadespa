@@ -3240,6 +3240,26 @@ a retenção), Meus Dados e a exclusão LGPD. Tela: a faixa "Crise ativa — por
 e v7.12 verdes. Mutações no servidor (guardas desfeitas uma a uma) acusadas pelos testes. Defeito achado pelo `e2e-33`: a resposta da imprensa gravava e devolvia 500
 (variável fora do escopo depois da transação) — corrigido.
 
+**Revisão adversarial independente (23/10/2026): 1 alto, 6 médios e 9 baixos, todos corrigidos**, cada um com teste que falha no código revisado (`0591414`):
+
+- **(alto) "Celular na hora" não acontecia:** o celular saía um a um (0,2 a 0,4 s cada), ~6 s por rodada — com 400 líderes, o último receberia em horas. Agora o celular do
+  aviso sai em paralelo (lotes de 25, cada aviso com prazo), com orçamento próprio dentro da resposta (~15 s), e a rotina de 15 minutos manda primeiro o celular do aviso,
+  também em paralelo. A resposta diz a verdade ("Celular: X de N aparelhos avisados agora; os outros saem pela fila"). Prova: 420 líderes de mentira, todos avisados em no
+  máximo duas rodadas, a abertura respondendo em menos de 38 s.
+- **(médio) E-mail:** não sai para quem já foi alcançado (leu no sininho, deu ciência ou recebeu no celular: situação `ALCANCADO`); o aviso tem teto próprio por hora
+  (`COMUNICACAO_CRISE_EMAILS_POR_HORA`, 30) e, com convocação oficial na fila, leva no máximo metade da rodada. Na troca do porta-voz o aviso novo vai a todos, mas o
+  e-mail dele só sai para quem não foi alcançado pelo aviso novo.
+- **(médio)** O porta-voz vê e responde só os pedidos da crise ativa (os de fora, com o contato do jornalista, ficam com o nível geral) e corrige só no alcance da lista.
+- **(médio)** AVCB não informado e congregação sem imóvel no patrimônio também avisam.
+- **(médio)** O aviso do pedido da imprensa tem teto: 10 por destinatário em 24 horas, e o celular só no 1º pedido de cada líder na hora.
+- **(médio/baixo)** A tela espera 40 s nos três atos (o servidor fecha a resposta antes de ~38 s).
+- **(baixos)** Datas da abertura e da revisão do plano no dia de Brasília; o encerramento relê o porta-voz dentro da trava; a manifestação e a resposta conferem o
+  porta-voz dentro da trava, e na crise encerrada só se registra o que foi dito até o encerramento; sem o botão "Cancelar" no aviso de crise; o celular com um texto curto
+  próprio (quem fala e o contato; na troca, o novo porta-voz); a segurança exclui a concessão de departamento, e os avisos da segurança e da imprensa ignoram quem está
+  inativo ou teve a exclusão LGPD e incluem quem recebeu o papel por delegação; "registrar a saída" não estica o "até" já passado e a pendência de vistoria anterior
+  continua contando até ser resolvida; o Presidente é avisado quando outra pessoa abre, troca o porta-voz ou encerra em nome dele; a migração alarga
+  `Papeis.Permissoes` para 2000 antes de acrescentar, se preciso (e para com a explicação se nem assim couber).
+
 ## 🔒 Trava de Revisão 7-C — antes de encerrar a FASE 7 e avançar para a FASE 8
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).

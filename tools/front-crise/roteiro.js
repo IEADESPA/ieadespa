@@ -193,6 +193,21 @@ async function rodar({ mutar = {}, so = null } = {}) {
     limpo(env, "continuar");
   });
 
+  // revisão independente: abrir, trocar o porta-voz e encerrar avisam a liderança inteira (o celular sai dentro da resposta): a tela espera 40 s, não 25
+  cenario("Tempo: os três atos da crise esperam 40 s", async () => {
+    const srv = servidor();
+    const env = novo(srv);
+    srv.S.fatorOk = true;
+    await abrirAba(env, "geral");
+    digitar(env, "crsMotivo", "Acidente no templo central"); digitar(env, "crsAbreContato", "(91) 3333-4444");
+    const preso = env.retem(c => c.chave === "POST crise/abrir");
+    env.doc.clicar(botao(env, "Abrir o regime")); await env.responderModal(true); await env.ocioso();
+    confere(preso.chegou && env.dispararTemporizador(25000) === 0, "abrir não é interrompido em 25 s");
+    confere(env.dispararTemporizador(40000) === 1, "abrir é interrompido só em 40 s");
+    await env.ocioso();
+    confere(texto(env, "crsCriseMsg").includes("confira se o registro já não aparece"), "e então a mensagem pede para conferir antes de repetir");
+  });
+
   cenario("Manifestações: o porta-voz registra, corrige; o link só se for http(s)", async () => {
     const srv = servidor({ comCrise: true });
     const env = novo(srv);

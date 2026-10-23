@@ -68,7 +68,8 @@ async function principal(context, req) {
   const crise = !!visaoCrise && esc.ehGeral(visaoCrise);
   // A segurança é TERRITORIAL: a concessão de uma Extensão e a de Departamento não entram (quem cuida do templo da Extensão é o Dirigente da congregação-mãe).
   const visaoSegBruta = auth.visaoDaPermissao(sessao, cs.PERMISSAO_SEGURANCA);
-  const visaoSeg = visaoSegBruta ? auth.restringirVisao(visaoSegBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO") : null;
+  // (revisão independente) nem a concessão restrita a um departamento — o mesmo critério de GestaoSetoresTecnicos
+  const visaoSeg = visaoSegBruta ? auth.restringirVisao(visaoSegBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO" && !c.departamentoId) : null;
   const seguranca = !!visaoSeg && auth.temPermissao(visaoSeg, cs.PERMISSAO_SEGURANCA);
   const geralSeguranca = seguranca && esc.ehGeral(visaoSeg);
   const ver = { membroId: sessao.membroId, crise, seguranca, geralSeguranca, podeVerCongregacao: (nome) => !!visaoSeg && auth.estaNoEscopo(visaoSeg, nome) };

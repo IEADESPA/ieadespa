@@ -487,7 +487,7 @@ async function comCarregarEnviosAcao() {
       <p class="subtitle">${escaparHtmlEbd(e.categoriaRotulo)} · ${comData(e.criadoEm)} · ${escaparHtmlEbd(e.enviadoPor || "")} · ${Number(e.total) || 0} pessoa(s) · ${st}</p>
       <p class="subtitle">${escaparHtmlEbd(e.grupo)}</p>
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" data-on-click="comVerRelatorioAcao" data-args-click="${argsAttr(id, ARG.elemento)}">📊 Ver relatório</button>
-      ${e.status === "FILA" ? `<button type="button" class="btn-confirmar btn-secundario" data-on-click="comCancelarEnvioAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🚫 Cancelar o que está na fila</button>` : ""}</div></article>`;
+      ${e.status === "FILA" && e.categoria !== "CRISE" ? `<button type="button" class="btn-confirmar btn-secundario" data-on-click="comCancelarEnvioAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🚫 Cancelar o que está na fila</button>` : ""}</div></article>`;
   }).join("") : `<p class="subtitle">Nenhum envio ainda.</p>`;
 }
 function comHtmlRelatorio(r) {

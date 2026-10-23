@@ -33,5 +33,5 @@ prazo de 25 s, a rede caída; console e armazenamento limpos.
   (`api/shared/criseSeguranca.js`). `contratoComOServidor()` confere as ações que a tela chama, a
   confirmação reforçada e os campos que ela lê contra o código do servidor.
 
-Resultado de 23/10/2026: roteiro 212 verificações, 0 falhas; `node mutacoes.js`: 20 mutações, 20
+Resultado de 23/10/2026 (depois da revisão independente): roteiro 216 verificações, 0 falhas; `node mutacoes.js`: 21 mutações, 21
 acusadas. A prova em navegador (Edge com a CSP final) não foi feita nesta rodada.

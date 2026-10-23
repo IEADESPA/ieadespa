@@ -13,6 +13,8 @@
 const CRS_ROTA = "crise";
 const CRS_SECOES = ["crise", "manifestacoes", "imprensa", "seguranca"];
 const CRS_TEMPO_LIMITE_MS = 25000;
+// abrir, trocar o porta-voz e encerrar avisam a liderança inteira (o celular sai em paralelo dentro da resposta): a tela espera até 40 s (o servidor fecha a resposta antes de ~38 s)
+const CRS_TEMPO_LIMITE_ATO_MS = 40000;
 const CRS_FAIXA_INTERVALO_MS = 120000;            // a faixa é relida no máximo a cada 2 minutos, ao trocar de tela
 const CRS_MSG_FATOR = "Este ato precisa de uma confirmação recente de quem você é (chave de acesso ou código por e-mail). Tente de novo e confirme quando a tela pedir.";
 const CRS_MSG_TEMPO = "Não foi possível falar com o servidor a tempo. Verifique a internet e, antes de repetir, confira se o registro já não aparece na lista.";
@@ -56,9 +58,9 @@ async function crsProteger(botao, tarefa, chave) {
 }
 
 // ---- falar com o servidor ----
-async function crsTentar(url, opcoes) {
+async function crsTentar(url, opcoes, prazoMs) {
   const controle = typeof AbortController === "function" ? new AbortController() : null;
-  const limite = controle ? setTimeout(() => controle.abort(), CRS_TEMPO_LIMITE_MS) : null;
+  const limite = controle ? setTimeout(() => controle.abort(), prazoMs || CRS_TEMPO_LIMITE_MS) : null;
   try {
     const res = await fetchProtegido(url, Object.assign({}, opcoes || {}, { semFator: true }, controle ? { signal: controle.signal } : {}));
     let corpo = null;
@@ -66,11 +68,11 @@ async function crsTentar(url, opcoes) {
     return { res, corpo };
   } finally { if (limite != null) clearTimeout(limite); }
 }
-async function crsRequisitar(caminho, opcoes) {
+async function crsRequisitar(caminho, opcoes, prazoMs) {
   const url = `${API_BASE}/${CRS_ROTA}/${caminho}`;
   try {
-    let r = await crsTentar(url, opcoes);
-    if (r.res.status === 428) { const ok = await confirmarFatorAgora(); if (ok) r = await crsTentar(url, opcoes); }
+    let r = await crsTentar(url, opcoes, prazoMs);
+    if (r.res.status === 428) { const ok = await confirmarFatorAgora(); if (ok) r = await crsTentar(url, opcoes, prazoMs); }
     const { res, corpo } = r;
     if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, mensagem: `Resposta inesperada do servidor (${res.status}).`, httpStatus: res.status };
     if (res.status >= 400) corpo.sucesso = false;
@@ -85,7 +87,7 @@ async function crsRequisitar(caminho, opcoes) {
   }
 }
 function crsObter(caminho) { return crsRequisitar(caminho); }
-function crsPostar(caminho, corpo) { return crsRequisitar(caminho, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }); }
+function crsPostar(caminho, corpo, prazoMs) { return crsRequisitar(caminho, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }, prazoMs); }
 function crsMostrarResultado(data, idMensagem) {
   const texto = crsMsgErro(data);
   const falhou = !!(data && data.sucesso === false);
@@ -240,7 +242,7 @@ function crsHtmlAviso(a) {
   return `<ul class="crs-aviso">
     <li>Sininho: <strong>${crsNumero(a.total)}</strong> líder(es) · leram: ${crsNumero(a.lidos)} · deram ciência ("Li o aviso"): ${crsNumero(a.ciencia)}</li>
     <li>Celular: ${n("PUSH", "ACEITO")} entregue(s) · ${n("PUSH", "PENDENTE") + n("PUSH", "ENVIANDO")} na fila · ${n("PUSH", "SEM_APARELHO")} sem aparelho · ${n("PUSH", "FALHOU")} falharam</li>
-    <li>E-mail: ${n("EMAIL", "ACEITO")} enviado(s) · ${n("EMAIL", "PENDENTE") + n("EMAIL", "ENVIANDO")} na fila (sai aos poucos: o serviço aceita 100 por hora) · ${n("EMAIL", "SEM_CONTATO")} sem e-mail · ${n("EMAIL", "CANCELADO")} substituídos por um aviso mais novo</li></ul>`;
+    <li>E-mail: ${n("EMAIL", "ACEITO")} enviado(s) · ${n("EMAIL", "PENDENTE") + n("EMAIL", "ENVIANDO")} na fila (sai aos poucos: o serviço aceita 100 por hora) · ${n("EMAIL", "ALCANCADO")} dispensados (já alcançados pelo sininho ou pelo celular) · ${n("EMAIL", "SEM_CONTATO")} sem e-mail · ${n("EMAIL", "CANCELADO")} substituídos por um aviso mais novo</li></ul>`;
 }
 const CRS_EVENTOS = { ABERTA: "Regime aberto", PORTA_VOZ: "Porta-voz trocado", ENCERRADA: "Regime encerrado" };
 function crsPintarCrises() {
@@ -304,7 +306,7 @@ async function crsAbrirCriseAcao(botao) {
   if (!(await confirmarAcao("Abrir o regime de crise? Toda a liderança recebe agora o aviso de que só o porta-voz fala pela Igreja (sininho e celular; o e-mail sai aos poucos).", "Abrir o regime"))) return;
   const marca = crsMarca();
   await crsProteger(botao, async () => {
-    const data = await crsPostar("abrir", { motivo, portaVoz });
+    const data = await crsPostar("abrir", { motivo, portaVoz }, CRS_TEMPO_LIMITE_ATO_MS);
     if (!crsViva(marca)) return;
     crsMostrarResultado(data, "crsCriseMsg");
     if (data.sucesso !== false || data.httpStatus === 409) { await crsAtualizarFaixa(); await crsCarregarCrises(); if (data.sucesso === false) crsEscrever("crsCriseMsg", crsMsgErro(data), true); }
@@ -317,7 +319,7 @@ async function crsTrocarPortaVozAcao(criseId, botao) {
   if (!(await confirmarAcao("Trocar o porta-voz único? Toda a liderança recebe o aviso do novo porta-voz agora.", "Trocar e avisar"))) return;
   const marca = crsMarca();
   await crsProteger(botao, async () => {
-    const data = await crsPostar("porta-voz", { criseId: id, portaVoz });
+    const data = await crsPostar("porta-voz", { criseId: id, portaVoz }, CRS_TEMPO_LIMITE_ATO_MS);
     if (!crsViva(marca)) return;
     crsMostrarResultado(data, "crsCriseMsg");
     if (data.sucesso !== false || data.httpStatus === 409) { await crsAtualizarFaixa(); await crsCarregarCrises(); if (data.sucesso === false) crsEscrever("crsCriseMsg", crsMsgErro(data), true); }
@@ -331,7 +333,7 @@ async function crsEncerrarAcao(criseId, botao) {
   if (!(await confirmarAcao("Encerrar o regime de crise? Toda a liderança recebe o aviso de que a vedação deixa de valer.", "Encerrar"))) return;
   const marca = crsMarca();
   await crsProteger(botao, async () => {
-    const data = await crsPostar("encerrar", { criseId: id, resumo });
+    const data = await crsPostar("encerrar", { criseId: id, resumo }, CRS_TEMPO_LIMITE_ATO_MS);
     if (!crsViva(marca)) return;
     crsMostrarResultado(data, "crsCriseMsg");
     if (data.sucesso !== false || data.httpStatus === 409) { await crsAtualizarFaixa(); await crsCarregarCrises(); if (data.sucesso === false) crsEscrever("crsCriseMsg", crsMsgErro(data), true); }

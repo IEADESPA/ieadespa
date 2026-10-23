@@ -38,6 +38,7 @@ const iso = (v) => (v instanceof Date ? v.toISOString() : v ? String(v) : null);
 // v7.15: a categoria do sistema (CRISE) nunca entra pela tela de comunicados; ela nasce em shared/criseSegurancaDb.js (avisoDoSistema* abaixo)
 const doSistema = (categoria) => cm.CATEGORIAS_DO_SISTEMA.includes(categoria);
 const SEM_SISTEMA = (coluna) => `${coluna} NOT IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ") || "''"})`;
+const COM_SISTEMA = (coluna) => `${coluna} IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ") || "''"})`;
 const LISTA_DE_PROVA = cm.CATEGORIAS_DE_PROVA.map((c) => `'${c}'`).join(", ");
 const dia = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const contagem = (x) => Number((((x && x.recordset) || [])[0] || {}).n) || 0;
@@ -571,13 +572,15 @@ async function cancelar(pool, { ver, envioId }) {
 
 // Toma até `n` entregas pendentes do canal (ninguém mais as pega: READPAST + UPDLOCK), o aviso de crise (v7.15) e a convocação oficial primeiro, e devolve o que é preciso para mandar.
 const PRIORIDADE = "CASE v.Categoria WHEN 'CRISE' THEN 0 WHEN 'CONVOCACAO' THEN 1 ELSE 2 END";
-async function tomar(rq, canal, n) {
+// `filtro` (v7.15, revisão independente): "SISTEMA" toma só o aviso do sistema (CRISE); "SEM_SISTEMA", só os outros; omitido, todos.
+async function tomar(rq, canal, n, filtro = null) {
   if (n <= 0) return [];
+  const cond = filtro === "SISTEMA" ? `AND ${COM_SISTEMA("v.Categoria")}` : filtro === "SEM_SISTEMA" ? `AND ${SEM_SISTEMA("v.Categoria")}` : "";
   const r = await rq.input("canal", sql.NVarChar(10), canal).input("n", sql.Int, n).query(`
     DECLARE @tomadas TABLE (EntregaId INT, EnvioId INT, MembroId INT);
     WITH alvo AS (
       SELECT TOP (@n) x.* FROM ComunicacaoEntregas x WITH (READPAST, UPDLOCK, ROWLOCK) JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId
-      WHERE x.Canal = @canal AND x.Situacao = 'PENDENTE' ORDER BY ${PRIORIDADE}, x.EntregaId)
+      WHERE x.Canal = @canal AND x.Situacao = 'PENDENTE' ${cond} ORDER BY ${PRIORIDADE}, x.EntregaId)
     UPDATE alvo SET Situacao = 'ENVIANDO', AtualizadoEm = SYSUTCDATETIME() OUTPUT inserted.EntregaId, inserted.EnvioId, inserted.MembroId INTO @tomadas;
     SELECT t.EntregaId, t.EnvioId, t.MembroId FROM @tomadas t JOIN ComunicacaoEnvios v ON v.EnvioId = t.EnvioId ORDER BY ${PRIORIDADE}, t.EntregaId`);
   return r.recordset;
@@ -614,6 +617,61 @@ function antesDeMandar(envio, pessoa) {
   return null;
 }
 
+// v7.15 (revisão independente): a pessoa já foi alcançada por este aviso do sistema — leu no sininho, deu ciência ou o celular foi entregue? Então o e-mail não sai (ALCANCADO):
+// a cota da hora fica para quem ainda não sabe (e para a convocação oficial).
+async function jaAlcancado(pool, envioId, membroId) {
+  return contagem(await pool.request().input("e", sql.Int, envioId).input("m", sql.Int, membroId).query(`
+    SELECT COUNT(*) AS n FROM ComunicacaoEntregas s WHERE s.EnvioId = @e AND s.MembroId = @m
+      AND ((s.Canal = 'SININHO' AND (s.CienciaEm IS NOT NULL OR ${LIDA_SQL})) OR (s.Canal = 'PUSH' AND s.Situacao = 'ACEITO'))`)) > 0;
+}
+
+// v7.15 (revisão independente): o CELULAR do aviso do sistema (a crise) sai EM PARALELO, em lotes de 25 — um a um (0,2 a 0,4 s cada), com 400 líderes o último receberia
+// horas depois. Por lote: uma consulta traz a pessoa, o aparelho e o texto curto do celular; os avisos saem juntos (cada um com prazo); uma gravação por situação.
+const PUSH_SISTEMA_POR_LOTE = 25;
+const PUSH_PRAZO_MS = 8000;
+async function celularDoSistema(pool, { deps = {}, orcamentoMs = 15000 } = {}) {
+  const inicio = Date.now();
+  const enviarPush = deps.enviarPush || ((membroId, msg) => enviarPushNotificacao(pool, sql, membroId, msg));
+  const r = { aceitos: 0, outros: 0, lotes: 0 };
+  while (Date.now() - inicio < orcamentoMs - PUSH_PRAZO_MS / 2) {
+    const lote = await tomar(pool.request(), "PUSH", PUSH_SISTEMA_POR_LOTE, "SISTEMA");
+    if (!lote.length) break;
+    r.lotes++;
+    const dados = (await pool.request().input("ids", sql.NVarChar(sql.MAX), JSON.stringify(lote.map((x) => x.EntregaId))).query(`
+      SELECT x.EntregaId, x.MembroId, e.Status AS EnvioStatus, e.CriteriosJson, mo.Titulo, mo.Corpo, p.Nome, p.Status, cg.Nome AS Congregacao,
+        (SELECT COUNT(*) FROM PushInscricoesMembro i WHERE i.MembroId = x.MembroId) AS Aparelhos
+      FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios e ON e.EnvioId = x.EnvioId JOIN ComunicacaoModelos mo ON mo.ModeloId = e.ModeloId
+      LEFT JOIN MembroReferencia p ON p.MembroId = x.MembroId LEFT JOIN Congregacoes cg ON cg.CongregacaoId = p.CongregacaoId
+      WHERE x.EntregaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`)).recordset;
+    const situacoes = await Promise.all(dados.map(async (d) => {
+      if (d.EnvioStatus === "CANCELADO" || d.Status !== "ATIVO") return [d.EntregaId, "CANCELADO"];
+      if (!Number(d.Aparelhos)) return [d.EntregaId, "SEM_APARELHO"];
+      let texto = null;
+      try { texto = (JSON.parse(d.CriteriosJson) || {}).celular || null; } catch (e) { texto = null; }
+      if (!texto || typeof texto.titulo !== "string" || typeof texto.mensagem !== "string") {
+        const corpo = cm.preencher(d.Corpo, { nome: d.Nome, congregacao: d.Congregacao });
+        texto = { titulo: cm.preencher(d.Titulo, { nome: d.Nome, congregacao: d.Congregacao }), mensagem: corpo.length > 180 ? corpo.slice(0, 177) + "…" : corpo };
+      }
+      let prazo = null;
+      try {
+        const n = await Promise.race([enviarPush(d.MembroId, { titulo: texto.titulo, mensagem: texto.mensagem }), new Promise((ok) => { prazo = setTimeout(() => ok(0), PUSH_PRAZO_MS); })]);
+        return [d.EntregaId, Number(n) > 0 ? "ACEITO" : "FALHOU"];
+      } catch (e) { return [d.EntregaId, "FALHOU"]; } finally { if (prazo) clearTimeout(prazo); }
+    }));
+    const porSituacao = new Map();
+    for (const [id, sit] of situacoes) { if (!porSituacao.has(sit)) porSituacao.set(sit, []); porSituacao.get(sit).push(id); }
+    for (const [sit, ids] of porSituacao) {
+      await pool.request().input("s", sql.NVarChar(18), sit).input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids))
+        .query(`UPDATE ComunicacaoEntregas SET Situacao = @s, AtualizadoEm = SYSUTCDATETIME() WHERE Situacao = 'ENVIANDO' AND EntregaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`);
+      if (sit === "ACEITO") r.aceitos += ids.length; else r.outros += ids.length;
+    }
+    // a entrega que a consulta não trouxe (não deveria acontecer) volta para a fila
+    const vistas = new Set(dados.map((d) => d.EntregaId));
+    await devolver(pool, lote.map((x) => x.EntregaId).filter((id) => !vistas.has(id)));
+  }
+  return r;
+}
+
 // Uma rodada: os presos viram FALHOU; o celular sai em lotes até o tempo acabar; o e-mail sai até o teto da rodada e da hora (somando os avisos do sistema já mandados na hora);
 // o tempo é conferido a cada mensagem e o que não foi tentado volta à fila; o envio sem nada na fila é concluído.
 async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = null, maxEmails = Infinity } = {}) {
@@ -643,9 +701,12 @@ async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = n
     return true;
   }
 
-  // celular
+  // celular: o aviso do sistema (a crise) primeiro, em paralelo (v7.15); depois os comunicados, um a um
+  if (deps.celularDoSistema !== false) {
+    try { res.pushSistema = await celularDoSistema(pool, { deps, orcamentoMs: Math.floor(orcamentoMs * 0.3) }); } catch (e) { console.error("[COMUNICACAO] celular do aviso do sistema:", e && e.message); }
+  }
   while (resta() > orcamentoMs * 0.5) {
-    const lote = await tomar(pool.request(), "PUSH", PUSH_POR_LOTE);
+    const lote = await tomar(pool.request(), "PUSH", PUSH_POR_LOTE, "SEM_SISTEMA");
     if (!lote.length) break;
     const seguiu = await percorrer(lote, async (x) => {
       const envio = await dadosDoEnvio(pool, cache, x.EnvioId);
@@ -665,25 +726,35 @@ async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = n
   }
 
   // e-mail: a cota da rodada e a da última hora (os comunicados e os avisos do sistema já mandados) decidem quantos saem; uma rodada por vez decide
+  // v7.15 (revisão independente): o aviso de crise tem um teto PRÓPRIO por hora (menor) e, havendo convocação oficial na fila, nunca leva mais da metade da rodada.
   const porRodada = await lerPrazoDias(pool, "COMUNICACAO_EMAILS_POR_RODADA", 20);
   const porHora = await lerPrazoDias(pool, "COMUNICACAO_EMAILS_POR_HORA", 60);
+  const criseHora = await lerPrazoDias(pool, "COMUNICACAO_CRISE_EMAILS_POR_HORA", 30);
   const t = new sql.Transaction(pool);
   let lote = [];
   try {
     await t.begin();
     if (await obterTrava(() => new sql.Request(t), "comunicacao-fila-email", 5000)) {
-      const naHora = contagem(await new sql.Request(t).query(`SELECT
+      const h = (await new sql.Request(t).query(`SELECT
         (SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Canal = 'EMAIL' AND Situacao IN ('ACEITO', 'ENVIANDO') AND AtualizadoEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME()))
-        + (SELECT COUNT(*) FROM Notificacoes WHERE EnviadaEmail = 1 AND EnviadaEmailEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME())) AS n`));
-      res.email.cota = Math.max(0, Math.min(porRodada, porHora - naHora, maxEmails));
-      lote = await tomar(new sql.Request(t), "EMAIL", res.email.cota);
+        + (SELECT COUNT(*) FROM Notificacoes WHERE EnviadaEmail = 1 AND EnviadaEmailEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME())) AS n,
+        (SELECT COUNT(*) FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId WHERE x.Canal = 'EMAIL' AND x.Situacao IN ('ACEITO', 'ENVIANDO')
+           AND x.AtualizadoEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME()) AND ${COM_SISTEMA("v.Categoria")}) AS sistema,
+        CASE WHEN EXISTS (SELECT 1 FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId WHERE x.Canal = 'EMAIL' AND x.Situacao = 'PENDENTE' AND v.Categoria = 'CONVOCACAO')
+          THEN 1 ELSE 0 END AS convocacao`)).recordset[0];
+      res.email.cota = Math.max(0, Math.min(porRodada, porHora - Number(h.n), maxEmails));
+      const reserva = Number(h.convocacao) ? Math.ceil(res.email.cota / 2) : 0;
+      res.email.cotaSistema = Math.max(0, Math.min(res.email.cota - reserva, criseHora - Number(h.sistema)));
+      const loteSistema = await tomar(new sql.Request(t), "EMAIL", res.email.cotaSistema, "SISTEMA");
+      lote = [...loteSistema, ...(await tomar(new sql.Request(t), "EMAIL", res.email.cota - loteSistema.length, "SEM_SISTEMA"))];
     }
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
   await percorrer(lote, async (x) => {
     const envio = await dadosDoEnvio(pool, cache, x.EnvioId);
     const pessoa = await dadosDaPessoa(pool, x.MembroId, "EMAIL", envio && envio.Categoria);
-    const barrado = antesDeMandar(envio, pessoa) || (!pessoa.Email || !String(pessoa.Email).trim() ? "SEM_CONTATO" : null);
+    const barrado = antesDeMandar(envio, pessoa) || (!pessoa.Email || !String(pessoa.Email).trim() ? "SEM_CONTATO" : null)
+      || (envio && doSistema(envio.Categoria) && (await jaAlcancado(pool, x.EnvioId, x.MembroId)) ? "ALCANCADO" : null);
     if (barrado) { await marcar(pool, x.EntregaId, barrado); res.email.outros++; return null; }
     const vars = { nome: pessoa.Nome, congregacao: pessoa.Congregacao };
     const linkSair = cm.CATEGORIAS[envio.Categoria].obrigatoria ? null
@@ -789,7 +860,7 @@ async function darCiencia(pool, { membroId, envioId }) {
 // de quem chama: `prepararAvisoDoSistema` (FORA da transação: só lê se cada pessoa tem e-mail e aparelho e monta o texto de cada uma), `gravarAvisoDoSistema` (DENTRO dela: o
 // modelo já aprovado, o envio, as entregas e o sininho, tudo junto com o ato) e, depois do commit, `depoisDoAvisoDoSistema` (a marca da fila e a primeira rodada: o celular sai
 // na hora; o e-mail, aos poucos, pela mesma fila que respeita os 100 por hora do Azure). A categoria é obrigatória: não pede consentimento e não tem link de saída.
-async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas }) {
+async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas, celular = null }) {
   if (!doSistema(categoria)) throw new Error("Categoria do sistema desconhecida.");
   const linhas = await situacaoPorCanal(pool, { ids: pessoas.map((p) => p.MembroId), categoria });
   const porId = new Map(linhas.map((l) => [l.membroId, l]));
@@ -801,7 +872,7 @@ async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas 
     sininho.push({ d: p.MembroId, t: cm.preencher(titulo, { nome: p.Nome, congregacao: p.Congregacao }).slice(0, 200),
       msg: cm.textoDoSininho(cm.preencher(corpo, { nome: p.Nome, congregacao: p.Congregacao })) });
   }
-  return { categoria, titulo, corpo, entregas, sininho };
+  return { categoria, titulo, corpo, entregas, sininho, celular };
 }
 // `novoRequest`: () => new sql.Request(transacao). Devolve o envioId.
 async function gravarAvisoDoSistema(novoRequest, preparo, { chave, enviadoPor, grupo }) {
@@ -810,7 +881,9 @@ async function gravarAvisoDoSistema(novoRequest, preparo, { chave, enviadoPor, g
     .input("co", sql.NVarChar(2000), corpo).input("por", sql.Int, enviadoPor)
     .query(`INSERT INTO ComunicacaoModelos (Chave, Versao, Categoria, Titulo, Corpo, Status, CriadoPorMembroId, AprovadoPorMembroId, AprovadoEm)
             VALUES (@c, 1, @k, @ti, @co, 'APROVADO', @por, @por, SYSUTCDATETIME()); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
-  const envioId = (await novoRequest().input("mo", sql.Int, modeloId).input("k", sql.NVarChar(12), categoria).input("j", sql.NVarChar(2000), JSON.stringify({ sistema: categoria }))
+  // o texto CURTO do celular (quem fala e o contato) vai junto do envio: o celular não corta no meio o texto longo do aviso (revisão independente, v7.15)
+  const celular = preparo.celular && typeof preparo.celular === "object" ? { titulo: String(preparo.celular.titulo).slice(0, 120), mensagem: String(preparo.celular.mensagem).slice(0, 180) } : undefined;
+  const envioId = (await novoRequest().input("mo", sql.Int, modeloId).input("k", sql.NVarChar(12), categoria).input("j", sql.NVarChar(2000), JSON.stringify({ sistema: categoria, ...(celular ? { celular } : {}) }))
     .input("g", sql.NVarChar(500), String(grupo).slice(0, 500)).input("eu", sql.Int, enviadoPor).input("tot", sql.Int, preparo.sininho.length)
     .query(`INSERT INTO ComunicacaoEnvios (ModeloId, Categoria, CriteriosJson, GrupoDescricao, EnviadoPorMembroId, Total) VALUES (@mo, @k, @j, @g, @eu, @tot); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
   for (const bloco of emBlocos(preparo.entregas, LOTE_INSERCAO)) {
@@ -833,10 +906,14 @@ async function cancelarPendentesDoSistema(novoRequest, envioIds) {
     WHERE x.Situacao = 'PENDENTE' AND x.Canal IN ('EMAIL', 'PUSH') AND e.Categoria IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ")})
       AND x.EnvioId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)); SELECT @@ROWCOUNT AS n`));
 }
-// Depois do commit: a marca da fila e uma rodada (curta) junto com a resposta. O resto vai pela rotina de 15 em 15 minutos (e pelo botão "Continuar o aviso").
-async function depoisDoAvisoDoSistema(pool, { deps = {}, orcamentoMs = 12000 } = {}) {
+// Depois do commit, dentro do tempo da requisição: o CELULAR do aviso em paralelo, com orçamento próprio (v7.15, revisão independente), e uma rodada curta da fila (e-mail aos
+// poucos). O resto vai pela rotina de 15 em 15 minutos (que também manda primeiro o celular do aviso, em paralelo) e pelo botão "Continuar o aviso agora".
+async function depoisDoAvisoDoSistema(pool, { deps = {}, orcamentoCelularMs = 15000, orcamentoFilaMs = 5000 } = {}) {
   await regravarMarca(pool);
-  try { return await processarFila(pool, { deps, orcamentoMs: deps.orcamentoMs || orcamentoMs, maxEmails: 10 }); } catch (e) { console.error("[COMUNICACAO] primeira rodada do aviso do sistema:", e && e.message); return null; }
+  const r = { celular: null, fila: null };
+  try { r.celular = await celularDoSistema(pool, { deps, orcamentoMs: orcamentoCelularMs }); } catch (e) { console.error("[COMUNICACAO] celular do aviso do sistema:", e && e.message); }
+  try { r.fila = await processarFila(pool, { deps: { ...deps, celularDoSistema: false }, orcamentoMs: orcamentoFilaMs, maxEmails: 10 }); } catch (e) { console.error("[COMUNICACAO] primeira rodada do aviso do sistema:", e && e.message); }
+  return r;
 }
 // Para o painel da crise: quantas pessoas, o que cada canal já fez e quantas leram ou deram ciência (sem nomes).
 async function situacaoDoAvisoDoSistema(pool, envioId) {
@@ -921,5 +998,5 @@ module.exports = {
   PERMISSAO, MAX_GRUPO, minhasPreferencias, salvarPreferencias, validarMudancas, registrarFicha, consultarSaida, confirmarSaida,
   listarModelos, salvarModelo, aprovarModelo, arquivarModelo, opcoes, resolverGrupo, previa, salvarGrupo, listarGrupos, excluirGrupo,
   enviar, cancelar, processarFila, relatorio, listarEnvios, meusComunicados, darCiencia, aplicarRetencao, rotinaDiaria, exclusaoLgpd, dadosDoTitular, regravarMarca,
-  prepararAvisoDoSistema, gravarAvisoDoSistema, cancelarPendentesDoSistema, depoisDoAvisoDoSistema, situacaoDoAvisoDoSistema
+  prepararAvisoDoSistema, gravarAvisoDoSistema, cancelarPendentesDoSistema, depoisDoAvisoDoSistema, situacaoDoAvisoDoSistema, celularDoSistema, jaAlcancado
 };

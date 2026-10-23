@@ -38,6 +38,8 @@ const PASTOR_AREA = LIDER(3003, ["seguranca_congregacao"], [C, V], "AREA");
 const LIDER_SEM = LIDER(1003, ["setores_tecnicos"], "TODAS", "GLOBAL");
 const PORTA_VOZ = LIDER(2004, [], [C]);                 // o profissional designado (membro, sem permissão nenhuma)
 const P = { ana: 8010, bento: 8011, carla: 8012, menor: 8021, vilaA: 8030, semNasc: 2007 };
+const VER_CRISE = { membroId: 1002, crise: true, seguranca: true, geralSeguranca: true, podeVerCongregacao: () => true };
+const somarDias = (iso, d) => { const [a, m, x] = iso.split("-").map(Number); return new Date(Date.UTC(a, m - 1, x + d)).toISOString().slice(0, 10); };
 const falha = async (texto, params) => { try { await q(texto, params); return null; } catch (e) { return e.message || String(e); } };
 const dataHoraAgora = (minutos = 0) => new Date(Date.now() - 3 * 3600000 + minutos * 60000).toISOString().slice(0, 16);
 const TABELAS = ["CriseRegimes", "CriseHistorico", "CriseManifestacoes", "CriseDemandasImprensa", "CriseDemandaRespostas", "SegurancaPlanos", "SegurancaSimulados", "SegurancaVistorias",
@@ -143,11 +145,21 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   const sino3001 = await um("SELECT Titulo, Mensagem FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @e AND DestinatarioMembroId = 3001", { e: envioAb });
   ok(/porta-voz/i.test(sino3001.Titulo) && /Paz do Senhor, Dirigente\./.test(sino3001.Mensagem) && /Adv Davi E2E/.test(sino3001.Mensagem) && /§ 2º/.test(sino3001.Mensagem) && !/Acidente no templo/.test(sino3001.Mensagem),
     "o texto: primeiro nome, o porta-voz, a vedação do § 2º — e NUNCA o motivo registrado", sino3001);
-  const pushesDoAviso = pushes.slice(antesPush).map((p) => p.membroId).sort((a, b) => a - b);
+  const pushesDoAviso = pushes.slice(antesPush).filter((p) => p.titulo === "Crise: só Adv Davi E2E fala pela Igreja").map((p) => p.membroId).sort((a, b) => a - b);
   const comAparelho = (await q("SELECT DISTINCT s.MembroId AS m FROM ComunicacaoEntregas s WHERE s.EnvioId = @e AND s.Canal = 'PUSH' AND s.Situacao <> 'SEM_APARELHO' ORDER BY 1", { e: envioAb })).map((x) => x.m);
   ok(pushesDoAviso.includes(3001) && pushesDoAviso.includes(3002) && JSON.stringify(pushesDoAviso) === JSON.stringify(comAparelho), "o celular saiu NA HORA para todos os líderes com aparelho", { pushesDoAviso, comAparelho });
   const emailsDoAviso = enviados.slice(antesEnv);
-  ok(emailsDoAviso.length === 3, "o e-mail respeitou o teto da HORA (8): 5 do comunicado + 3 do aviso", emailsDoAviso.length);
+  const emailCrise = await q("SELECT MembroId, Situacao FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao IN ('ACEITO', 'ALCANCADO')", { e: envioAb });
+  ok(emailCrise.length === 3 && emailsDoAviso.length === emailCrise.filter((x) => x.Situacao === "ACEITO").length,
+    "a rodada tomou 3 e-mails do aviso (o teto da HORA, 8: 5 do comunicado + 3) e mandou só os de quem ainda não tinha sido alcançado", { emailCrise, enviados: emailsDoAviso.length });
+  ok(emailCrise.filter((x) => x.Situacao === "ALCANCADO").every((x) => comAparelho.includes(x.MembroId)), "revisão: o e-mail dispensado (ALCANCADO) é só de quem já recebeu no celular");
+  ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { e: comum.envioId })) === comumPend, "o comunicado de eventos não andou nesta rodada: o aviso passou na frente");
+  const pushAbertura = pushes.slice(antesPush).find((p) => p.membroId === 3001) || {};
+  ok(pushAbertura.titulo === "Crise: só Adv Davi E2E fala pela Igreja" && /^Imprensa: encaminhe para imprensa@ieadespa\.e2e\./.test(pushAbertura.mensagem),
+    "revisão: o celular leva o texto curto com quem fala e o contato (não o começo do texto longo)", pushAbertura);
+  ok(/Celular: \d+ de \d+ aparelho\(s\) avisados agora/.test(ab.body.mensagem) && /Sininho: \d+ líder/.test(ab.body.mensagem), "revisão: a resposta diz a verdade sobre o celular (quantos de quantos)", ab.body.mensagem);
+  const emSeuNome = await q("SELECT Mensagem FROM Notificacoes WHERE RegraChave = 'CRISE_EM_SEU_NOME' AND DestinatarioMembroId = 1001");
+  ok(emSeuNome.length === 1 && /aberto em seu nome por Secretário Geral E2E/.test(emSeuNome[0].Mensagem), "revisão: o Presidente é avisado de que o regime foi aberto em seu nome pelo Secretário", emSeuNome);
   ok(emailsDoAviso.every((m) => /porta-voz/i.test(m.assunto) && !/sair\.html/.test(m.html) && /liderança da Igreja/.test(m.texto)), "o aviso passou NA FRENTE do comunicado de eventos, sem link de saída", emailsDoAviso.map((m) => m.assunto));
   ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'SEM_CONTATO' AND MembroId = 3004", { e: envioAb })) === 1, "o líder sem e-mail fica como sem contato");
   ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { e: envioAb })) > 0, "o resto dos e-mails do aviso espera na fila");
@@ -207,6 +219,11 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok(listaDir.gestor === false && listaDir.demandas.length === 1 && listaDir.demandas[0].minha && listaDir.demandas[0].podeResponder === false, "o Dirigente vê só os pedidos dele, sem poder responder");
   ok(listaVila.demandas.length === 0, "o outro Dirigente não vê o pedido");
   ok(listaPv.gestor === true && listaPv.demandas.some((d) => d.demandaId === d1.body.demandaId && d.podeResponder && d.contato === DEM.contato), "o porta-voz vê todos os pedidos da crise e responde");
+  const foraId = (await q("INSERT INTO CriseDemandasImprensa (CriseId, Veiculo, Contato, Pedido, RegistradoPorMembroId) VALUES (NULL, N'Jornal de Antes E2E', N'(91) 97777-0000', N'Pedido de antes da crise.', 3002); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
+  ok(!(await GET(H, "demandas", PORTA_VOZ)).body.demandas.some((d) => d.demandaId === foraId), "revisão: o porta-voz NÃO vê o pedido de fora da crise (nem o contato do jornalista dele)");
+  ok((await GET(H, "demandas", SEC)).body.demandas.some((d) => d.demandaId === foraId && d.contato === "(91) 97777-0000"), "o nível geral vê o pedido de fora da crise");
+  ok((await POST(H, "demanda", PORTA_VOZ, { ...DEM, corrigeDemandaId: foraId })).status === 404, "revisão: o porta-voz não corrige pedido fora do alcance da lista dele (404)");
+  ok((await POST(H, "responder", PORTA_VOZ, { demandaId: foraId, situacao: "RESPONDIDA", resposta: "Resposta indevida." })).status === 404, "revisão: nem responde o de fora da crise");
   ok((await POST(H, "responder", DIR_C, { demandaId: d1.body.demandaId, situacao: "RESPONDIDA", resposta: "Entrevista dada." })).status === 403, "quem registrou não responde (403)");
   ok((await POST(H, "responder", DIR_V, { demandaId: d1.body.demandaId, situacao: "RESPONDIDA", resposta: "Entrevista dada." })).status === 404, "outro líder: 404, como se não existisse");
   const r1 = await POST(H, "responder", PORTA_VOZ, { demandaId: d1.body.demandaId, situacao: "RESPONDIDA", resposta: "Nota enviada ao repórter." });
@@ -226,12 +243,20 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   const pendAntes = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Situacao = 'PENDENTE'", { e: envioAb });
   ok((await POST(H, "porta-voz", SEC_SEM_FATOR, { criseId, portaVoz: { tipo: "PRESIDENTE", contato: "(91) 3333-4444" } })).status === 428, "trocar o porta-voz pede a confirmação reforçada");
   ok((await POST(H, "porta-voz", SEC, { criseId, portaVoz: PV })).status === 422, "o mesmo porta-voz: nada mudou (422)");
+  // a crise "aberta" às 23h30 de Brasília de ontem (02h30 UTC de hoje): o aviso tem de dizer o dia de BRASÍLIA (só para o teste: o gatilho fica desligado na mudança)
+  await q("DISABLE TRIGGER TR_CriseRegimes_Protegido ON CriseRegimes; UPDATE CriseRegimes SET AbertaEm = DATEADD(MINUTE, 150, CAST(CAST(SYSUTCDATETIME() AS DATE) AS DATETIME2)) WHERE CriseId = @c; ENABLE TRIGGER TR_CriseRegimes_Protegido ON CriseRegimes", { c: criseId });
+  const ontemUtc = somarDias(new Date().toISOString().slice(0, 10), -1).split("-").reverse().join("/");
+  const antesPushTroca = pushes.length;
   const pv2 = await POST(H, "porta-voz", SEC, { criseId, portaVoz: { tipo: "PRESIDENTE", contato: "(91) 3333-4444" } });
   ok(pv2.status === 200 && pv2.body.crise.portaVoz.nome === "Presidente E2E" && pv2.body.crise.portaVoz.membroId === 1001, "o Presidente passa a ser o porta-voz", pv2.body.crise);
   ok(pendAntes > 0 && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Situacao = 'PENDENTE'", { e: envioAb })) === 0
     && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Situacao = 'CANCELADO'", { e: envioAb })) === pendAntes, `os ${pendAntes} avisos velhos que estavam na fila foram cancelados (o novo vai a todos)`);
   ok((await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Situacao = 'PENDENTE'", { e: comum.envioId })) === comumPend, "o comunicado de eventos na fila não foi tocado");
   ok((await GET(H, "faixa", LIDER_SEM)).body.portaVoz.nome === "Presidente E2E", "a faixa já mostra o novo porta-voz");
+  const envioTroca = await escalar("SELECT EnvioId FROM CriseHistorico WHERE CriseId = @c AND Evento = 'PORTA_VOZ'", { c: criseId });
+  const sinoTroca = await escalar("SELECT Mensagem FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @e AND DestinatarioMembroId = 3001", { e: envioTroca });
+  ok(String(sinoTroca).includes(`declarado em ${ontemUtc}`), `revisão: o aviso usa o dia de Brasília da abertura (${ontemUtc})`, sinoTroca);
+  ok(pushes.slice(antesPushTroca).some((p) => p.membroId === 3001 && p.titulo === "Crise: novo porta-voz — Presidente E2E" && /\(91\) 3333-4444/.test(p.mensagem)), "revisão: o celular da troca leva o NOVO porta-voz e o contato");
   ok((await POST(H, "manifestacao", PORTA_VOZ, MAN)).status === 403, "o porta-voz antigo não registra mais manifestação");
   ok((await GET(H, "demandas", PORTA_VOZ)).body.gestor === false, "nem vê os pedidos de todos");
   ok((await q("SELECT Evento FROM CriseHistorico WHERE CriseId = @c ORDER BY HistoricoId", { c: criseId })).map((x) => x.Evento).join(",") === "ABERTA,PORTA_VOZ", "o histórico guarda a abertura e a troca");
@@ -241,7 +266,20 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   await q("UPDATE Lideranca SET AtivoAte = DATEADD(DAY, -1, CAST(SYSUTCDATETIME() AS DATE)) WHERE MembroId = 3004");
   ok((await POST(H, "encerrar", SEC_SEM_FATOR, { criseId, resumo: "Assunto encerrado." })).status === 428, "encerrar pede a confirmação reforçada");
   ok((await POST(H, "encerrar", SEC, { criseId, resumo: "" })).status === 422, "sem o resumo: recusado");
+  // revisão: a troca do porta-voz entra DEPOIS da leitura de fora e ANTES da trava do encerramento (no preparo do aviso do fim): o histórico do fim tem de ter o porta-voz de agora
+  const prepOriginal = com.prepararAvisoDoSistema;
+  let interposto = false;
+  com.prepararAvisoDoSistema = async (p2, args) => {
+    if (!interposto && args && args.titulo === "Fim do regime de crise") {
+      interposto = true;
+      await db.designarPortaVoz(pool, { ver: VER_CRISE, criseId, dados: { portaVoz: { tipo: "DESIGNADO", nome: "Assessor Novo E2E", contato: "novo@e2e.invalid", ato: "Ato 77/2026" } } });
+    }
+    return prepOriginal(p2, args);
+  };
   const enc = await POST(H, "encerrar", SEC, { criseId, resumo: "Assunto encerrado pela Presidência." });
+  com.prepararAvisoDoSistema = prepOriginal;
+  ok(interposto && (await escalar("SELECT PortaVozNome FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ENCERRADA'", { c: criseId })) === "Assessor Novo E2E",
+    "revisão: a troca que entrou antes da trava aparece no histórico do fim (o porta-voz é relido dentro da trava)");
   ok(enc.status === 200 && enc.body.crise.status === "ENCERRADA", "o regime é encerrado", enc.body);
   const hFim = await um("SELECT * FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ENCERRADA'", { c: criseId });
   ok(!!(await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND ReferenciaId = @e AND DestinatarioMembroId = 3004", { e: hFim.EnvioId })), "quem deixou a liderança no meio também recebe o fim");
@@ -250,6 +288,9 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok((await GET(H, "faixa", LIDER_SEM)).body.ativa === false, "a faixa some");
   ok((await POST(H, "manifestacao", SEC, { ...MAN, dataHora: dataHoraAgora(-5) })).status === 201, "o nível geral ainda registra o que foi dito no último dia, na crise encerrada");
   ok((await POST(H, "porta-voz", SEC, { criseId, portaVoz: { tipo: "PRESIDENTE", contato: "(91) 3333-4444" } })).status === 409, "crise encerrada não troca porta-voz");
+  await q("DISABLE TRIGGER TR_CriseRegimes_Protegido ON CriseRegimes; UPDATE CriseRegimes SET EncerradaEm = DATEADD(MINUTE, -30, SYSUTCDATETIME()) WHERE CriseId = @c; ENABLE TRIGGER TR_CriseRegimes_Protegido ON CriseRegimes", { c: criseId });
+  const depoisDoFim = await POST(H, "manifestacao", SEC, { ...MAN, dataHora: dataHoraAgora(-5) });
+  ok(depoisDoFim.status === 422 && /encerrada/.test(depoisDoFim.body.mensagem), "revisão: na crise encerrada, só se registra o que foi dito ATÉ o encerramento", depoisDoFim.body);
   const d2 = await POST(H, "demanda", DIR_V, { ...DEM, veiculo: "Blog E2E" });
   ok(d2.status === 201 && (await escalar("SELECT CriseId FROM CriseDemandasImprensa WHERE DemandaId = @d", { d: d2.body.demandaId })) === null && /Presidência/.test(d2.body.mensagem), "fora da crise o pedido também se centraliza (sem crise)");
   ok(!!(await falha("UPDATE CriseRegimes SET Motivo = N'x' WHERE CriseId = @c", { c: criseId })) && !!(await falha("UPDATE CriseRegimes SET Status = 'ATIVA', EncerradaEm = NULL, EncerradaPorMembroId = NULL, ResumoEncerramento = NULL WHERE CriseId = @c", { c: criseId }))
@@ -259,7 +300,7 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   const crises = (await GET(H, "crises", SEC)).body.crises;
   ok(crises.length === 1 && crises[0].manifestacoes === 3 && crises[0].demandas === 2, "a lista de crises com as contagens", crises);
   const det = (await GET(H, "crise", SEC, { criseId })).body;
-  ok(det.historico.length === 3 && det.historico.every((h) => h.aviso && h.aviso.total > 0) && det.crise.motivo === "Acidente no templo", "o detalhe: histórico com o aviso de cada passo, e o motivo para o nível geral");
+  ok(det.historico.length === 4 && det.historico.every((h) => h.aviso && h.aviso.total > 0) && det.crise.motivo === "Acidente no templo", "o detalhe: histórico com o aviso de cada passo, e o motivo para o nível geral");
   ok((await GET(H, "crise", PORTA_VOZ, { criseId })).status === 404 && (await GET(H, "crise", DIR_C, { criseId })).status === 404, "o detalhe da crise não abre para os outros");
 
   console.log("== segurança: território ==");
@@ -314,6 +355,11 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok((await GET(H, "seguranca", DIR_C)).body.congregacoes[0].pendencias === 0, "o painel não mostra mais a pendência");
   ok(!!(await falha("UPDATE SegurancaVistoriaItens SET ResolvidaEm = NULL, ResolvidaPorMembroId = NULL, ComoResolvida = NULL WHERE VistoriaItemId = @i", { i: itemPend.vistoriaItemId })), "a resolução não se desfaz no banco");
 
+  // revisão: a pendência de uma vistoria anterior, não resolvida, continua contando depois de uma vistoria nova "em ordem"
+  const itensOk = Object.keys(cs.ITENS_VISTORIA).map((item) => ({ item, resultado: "OK" }));
+  ok((await POST(H, "vistoria", SEC, { congregacaoId: cong.b, data: somarDias(hojeBr(), -20), itens })).status === 201 && (await POST(H, "vistoria", SEC, { congregacaoId: cong.b, data: hojeBr(), itens: itensOk })).status === 201, "Beta: uma vistoria com pendência e uma nova em ordem");
+  ok((await GET(H, "seguranca", SEC)).body.congregacoes.find((c) => c.congregacaoId === cong.b).pendencias === 1, "revisão: a pendência da vistoria anterior continua no painel até ser marcada resolvida");
+
   console.log("== AVCB e seguro (v4.24 e v4.16) ==");
   const bem = (await q("INSERT INTO BensPatrimoniais (CongregacaoId, Tipo, Descricao, ValorAquisicao, DataAquisicao, RegistradoPor) VALUES (@c, 'IMOVEL', N'Templo Central E2E', 100000, '2010-01-01', 1002); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { c: cong.c }))[0].id;
   await q("INSERT INTO ImoveisSituacaoFiscal (BemId, AvcbNumero, AvcbVigenciaFim, RegistradoPor) VALUES (@b, N'AVCB-123', DATEADD(DAY, -3, CAST(SYSUTCDATETIME() AS DATE)), 1002)", { b: bem });
@@ -337,6 +383,10 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok((await POST(H, "buscar-membros", DIR_C, { congregacaoId: cong.c, q: "%" })).body.membros.length === 0, "o % é texto, não curinga");
   ok((await POST(H, "sair-equipe", DIR_V, { equipeId: e3.body.equipeId })).status === 404 && (await POST(H, "sair-equipe", DIR_C, { equipeId: e3.body.equipeId })).status === 200
     && (await POST(H, "sair-equipe", DIR_C, { equipeId: e3.body.equipeId })).status === 409, "saída manual: só no território, uma vez");
+  const passado = (await q("INSERT INTO SegurancaEquipe (CongregacaoId, MembroId, Funcao, Desde, Ate, RegistradoPorMembroId) VALUES (@b, 2011, 'PORTARIA', @d, @a, 1002); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id",
+    { b: cong.b, d: somarDias(hojeBr(), -100), a: somarDias(hojeBr(), -5) }))[0].id;
+  ok((await POST(H, "sair-equipe", SEC, { equipeId: passado })).status === 200, "registra a saída de quem tinha o \"até\" no passado");
+  ok((await escalar("SELECT CONVERT(CHAR(10), Ate, 23) FROM SegurancaEquipe WHERE EquipeId = @e", { e: passado })) === somarDias(hojeBr(), -5), "revisão: registrar a saída não estica o \"até\" que já passou");
   await q("UPDATE MembroReferencia SET CongregacaoId = @v WHERE MembroId = @m", { v: cong.v, m: P.ana });
   const eqDet = (await GET(H, "congregacao", DIR_C, { congregacaoId: cong.c })).body.equipe.filter((e) => e.equipeId === e1.body.equipeId)[0];
   ok(eqDet.saiuDaCongregacao === true && eqDet.ativo === false, "quem mudou de congregação já não conta como ativo na tela, antes da rotina");
@@ -348,6 +398,9 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
     && !!(await falha("UPDATE SegurancaEquipe SET MembroId = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE MembroId = @a", { a: P.ana })), "a equipe não se apaga, não reabre e não perde o nome sem a marca de purga");
 
   console.log("== os avisos do sininho (motor das 7h) ==");
+  const lidVila = await escalar("SELECT TOP 1 LiderancaId FROM Lideranca WHERE MembroId = 3002");
+  await q("INSERT INTO DelegacoesAcesso (LiderancaId, DeleganteMembroId, DelegadoMembroId, DataInicio, DataFim, Motivo) VALUES (@l, 3002, 2010, @i, @f, N'Férias E2E')",
+    { l: lidVila, i: somarDias(hojeBr(), -1), f: somarDias(hojeBr(), 5) });
   const CHAVES = ["SEGURANCA_PLANO_REVISAO", "SEGURANCA_SEM_SIMULADO", "SEGURANCA_SEM_VISTORIA", "SEGURANCA_AVCB_SEGURO"];
   const r1m = await avaliarRegras(pool, { chaves: CHAVES });
   const avisos = await q("SELECT RegraChave, DestinatarioMembroId AS m, Mensagem FROM Notificacoes WHERE RegraChave LIKE 'SEGURANCA[_]%'");
@@ -357,6 +410,8 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok(de(3002, "SEGURANCA_PLANO_REVISAO").length === 1 && /Vila Nova E2E/.test(de(3002, "SEGURANCA_PLANO_REVISAO")[0].Mensagem) && !/Central/.test(de(3002, "SEGURANCA_PLANO_REVISAO")[0].Mensagem), "o Dirigente da Vila recebe o da Vila (e não o da Central)");
   ok(de(3003, "SEGURANCA_AVCB_SEGURO").length === 1 && de(3003, "SEGURANCA_SEM_VISTORIA").length === 1 && /Vila Nova E2E/.test(de(3003, "SEGURANCA_SEM_VISTORIA")[0].Mensagem), "o Pastor de Área recebe um aviso por regra, juntando as congregações da área");
   ok(avisos.every((a) => ![1001, 1002].includes(a.m)), "o nível geral não recebe um aviso por congregação (acompanha pelo painel)");
+  ok(de(3002, "SEGURANCA_AVCB_SEGURO").length === 1 && /Vila Nova E2E/.test(de(3002, "SEGURANCA_AVCB_SEGURO")[0].Mensagem), "revisão: a congregação sem imóvel no patrimônio também entra no aviso do AVCB");
+  ok(de(2010, "SEGURANCA_PLANO_REVISAO").length === 1 && /Vila Nova E2E/.test(de(2010, "SEGURANCA_PLANO_REVISAO")[0].Mensagem), "revisão: quem recebeu o papel por delegação vigente também recebe o aviso");
   ok((await avaliarRegras(pool, { chaves: CHAVES })).criadas === 0, "rodar de novo no mesmo dia não repete");
 
   console.log("== retenção, exclusão LGPD e Meus Dados ==");
@@ -379,6 +434,55 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok(ret.equipeAnonimizada === 1 && (await escalar("SELECT MembroId FROM SegurancaEquipe WHERE EquipeId = @e", { e: e3.body.equipeId })) === null, "o nome de quem saiu da equipe há 5 anos sai do registro");
   ok((await escalar("SELECT ISNULL(CAST(SESSION_CONTEXT(N'crise_purga') AS INT), 0) + ISNULL(CAST(SESSION_CONTEXT(N'seguranca_purga') AS INT), 0)")) === 0, "a marca de purga não ficou ligada na conexão");
   ok(!!(await falha("UPDATE CriseDemandasImprensa SET Contato = NULL, ContatoApagadoEm = SYSUTCDATETIME() WHERE DemandaId = @d", { d: dc.body.demandaId })), "sem a marca, nem a retenção mexe no pedido");
+
+  console.log("== revisão: o pedido da imprensa não enche o celular do Presidente ==");
+  const antesRajada = pushes.length;
+  const VER_BETA = { membroId: 3004, crise: false, seguranca: false, geralSeguranca: false, podeVerCongregacao: () => false };
+  for (let i = 1; i <= 11; i++) await db.registrarDemanda(pool, { ver: VER_BETA, dados: { veiculo: `Rajada ${i} E2E`, contato: "(91) 90000-1111", pedido: "Mais um pedido de entrevista." } });
+  const avisosPres = await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'CRISE_DEMANDA_IMPRENSA' AND DestinatarioMembroId = 1001 AND CriadaEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())");
+  ok(avisosPres === 10, "revisão: no máximo 10 avisos de pedido da imprensa por pessoa em 24 horas (os pedidos ficam todos na lista)", avisosPres);
+  ok(pushes.slice(antesRajada).filter((p) => p.membroId === 1001 && /Rajada/.test(p.mensagem)).length === 1, "revisão: o celular só no 1º pedido do líder na hora", pushes.slice(antesRajada).filter((p) => p.membroId === 1001).length);
+  ok((await escalar("SELECT COUNT(*) FROM CriseDemandasImprensa WHERE Veiculo LIKE N'Rajada %'")) === 11, "os 11 pedidos estão registrados");
+
+  console.log("== revisão: a fila do aviso — metade da rodada para a convocação, teto próprio, e-mail só a quem não foi alcançado; porta-voz desligado ==");
+  await q("UPDATE Prazos SET Dias = 1000 WHERE Sigla = 'COMUNICACAO_EMAILS_POR_HORA'; UPDATE Prazos SET Dias = 6 WHERE Sigla = 'COMUNICACAO_EMAILS_POR_RODADA'; UPDATE Prazos SET Dias = 1000 WHERE Sigla = 'COMUNICACAO_CRISE_EMAILS_POR_HORA'");
+  const segura = { enviarEmail: async () => ({ limite: true }) };
+  const ab2 = await db.abrir(pool, { ver: VER_CRISE, dados: { motivo: "Segunda crise E2E", portaVoz: { tipo: "DESIGNADO", membroId: 2012, nome: "Ivo", contato: "pv2@e2e.invalid", ato: "Ato 88/2026" } }, deps: segura });
+  ok(ab2.sucesso, "a segunda crise abre", ab2.mensagem);
+  const envio2 = await escalar("SELECT EnvioId FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ABERTA'", { c: ab2.criseId });
+  const modC = (await com.salvarModelo(pool, { ver: VER_COM, dados: { categoria: "CONVOCACAO", titulo: "Convocação E2E", corpo: "Assembleia no sábado, {{primeiro_nome}}." } })).modelo;
+  await com.aprovarModelo(pool, { ver: VER_COM, modeloId: modC.modeloId, hash: modC.hash });
+  const conv = await com.enviar(pool, { ver: VER_COM, dados: { modeloId: modC.modeloId, criterios: { territorio: { tipo: "CONGREGACAO", ids: [cong.c] } } }, deps: segura });
+  const pendCrise = () => escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { e: envio2 });
+  const pc0 = await pendCrise();
+  ok(pc0 >= 6 && (await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND Situacao = 'PENDENTE'", { e: conv.envioId })) >= 6, "aviso e convocação esperam na fila", pc0);
+  let antesR = enviados.length;
+  await com.processarFila(pool, {});
+  let rodada = enviados.slice(antesR);
+  const nConv = rodada.filter((m) => /Convocação E2E/.test(m.assunto)).length, tomadasCrise = pc0 - (await pendCrise());
+  ok(nConv >= 3 && tomadasCrise <= 3, `revisão: com convocação na fila, o aviso leva no máximo a metade da rodada (6): convocação ${nConv}, aviso ${tomadasCrise}`);
+  const criseNaHora = await escalar("SELECT COUNT(*) FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId WHERE v.Categoria = 'CRISE' AND x.Canal = 'EMAIL' AND x.Situacao IN ('ACEITO', 'ENVIANDO') AND x.AtualizadoEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME())");
+  await q("UPDATE Prazos SET Dias = @d WHERE Sigla = 'COMUNICACAO_CRISE_EMAILS_POR_HORA'; UPDATE Prazos SET Dias = 20 WHERE Sigla = 'COMUNICACAO_EMAILS_POR_RODADA'", { d: criseNaHora + 1 });
+  const pc1 = await pendCrise();
+  await com.processarFila(pool, {});
+  ok(pc1 - (await pendCrise()) <= 1, `revisão: o teto próprio do aviso por hora (${criseNaHora + 1}) vale: nesta rodada saiu no máximo 1 e-mail do aviso`, pc1 - (await pendCrise()));
+  await q("UPDATE Prazos SET Dias = 1000 WHERE Sigla = 'COMUNICACAO_CRISE_EMAILS_POR_HORA'; UPDATE Prazos SET Dias = 50 WHERE Sigla = 'COMUNICACAO_EMAILS_POR_RODADA'");
+  antesR = enviados.length;
+  await com.processarFila(pool, {});
+  const comPush = (await q("SELECT MembroId AS m FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'PUSH' AND Situacao = 'ACEITO'", { e: envio2 })).map((x) => x.m);
+  const emailsDeQuemTemPush = await q("SELECT MembroId, Situacao FROM ComunicacaoEntregas WHERE EnvioId = @e AND Canal = 'EMAIL' AND MembroId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))", { e: envio2, ids: JSON.stringify(comPush) });
+  ok(comPush.length >= 2 && emailsDeQuemTemPush.length === comPush.length && emailsDeQuemTemPush.every((x) => ["ALCANCADO", "SEM_CONTATO"].includes(x.Situacao))
+    && emailsDeQuemTemPush.filter((x) => x.Situacao === "ALCANCADO").length >= 2,
+  "revisão: quem já recebeu no celular não recebe o e-mail do aviso (ALCANCADO)", emailsDeQuemTemPush);
+  const emailsDosComPush = enviados.slice(antesR).filter((m) => /porta-voz/i.test(m.assunto) && comPush.some((id) => m.email === `p${id}@exemplo.org` || m.email === `dirigente${id}@e2e.invalid`));
+  ok(emailsDosComPush.length === 0, "revisão: e nenhum e-mail do aviso saiu para eles", emailsDosComPush.map((m) => m.email));
+  ok((await pendCrise()) === 0, "o resto do aviso saiu");
+  await q("UPDATE MembroReferencia SET Status = 'DESLIGADO' WHERE MembroId = 2012");
+  const dDesl = await db.registrarDemanda(pool, { ver: { membroId: 3001, crise: false }, dados: { veiculo: "Rádio do Desligado E2E", contato: "(91) 90000-2222", pedido: "Pedido com porta-voz desligado." } });
+  ok(dDesl.sucesso && (await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = 'CRISE_DEMANDA_IMPRENSA' AND ReferenciaId = @d AND DestinatarioMembroId = 2012", { d: dDesl.demandaId })) === 0,
+    "revisão: o porta-voz desligado não recebe o aviso do pedido da imprensa");
+  await q("UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = 2012");
+  ok((await db.encerrar(pool, { ver: VER_CRISE, criseId: ab2.criseId, dados: { resumo: "Fim da segunda crise E2E." }, deps: segura })).sucesso, "a segunda crise é encerrada");
 
   console.log("== lixo em cada campo ==");
   const VER_SEC = { membroId: 1002, crise: true, seguranca: true, geralSeguranca: true, podeVerCongregacao: () => true };
@@ -406,6 +510,15 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok((await escalar("SELECT COUNT(*) FROM AuditLog WHERE (Acao LIKE 'CRISE[_]%' OR Acao LIKE 'SEGURANCA[_]%') AND (RegistroId IS NULL OR RegistroId = 0)")) === 0, "nenhuma linha de auditoria sem o registro");
   ok(!(await q("SELECT DadosDepois FROM AuditLog WHERE Acao LIKE 'CRISE[_]%'")).some((x) => /Acidente|Rádio|Nota oficial/.test(String(x.DadosDepois))), "a auditoria não guarda o texto (motivo, pedido, manifestação)");
   ok(falhasAuditoria === 0, "nenhuma falha de auditoria", falhasAuditoria);
+
+  console.log("== revisão: reaplicar a 152 com a lista de permissões de um papel quase cheia ==");
+  await q("UPDATE Papeis SET Permissoes = LEFT(REPLACE(REPLACE(Permissoes, ',seguranca_congregacao', ''), 'seguranca_congregacao,', '') + ',' + REPLICATE('x', 1000), 995) WHERE Nome = N'Dirigente de Congregação'");
+  const textoMig = require("fs").readFileSync(path.join(API, "..", "sql", "migrations", "152_crise_e_seguranca.sql"), "utf8");
+  let erroMig = null;
+  try { for (const lote of textoMig.split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await pool.request().query(lote); } catch (e) { erroMig = e.message; }
+  const larg = await escalar("SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Papeis' AND COLUMN_NAME = 'Permissoes'");
+  const permDir = await escalar("SELECT Permissoes FROM Papeis WHERE Nome = N'Dirigente de Congregação'");
+  ok(erroMig === null && larg === 2000 && String(permDir).endsWith(",seguranca_congregacao"), "revisão: a 152 alarga Papeis.Permissoes antes de acrescentar (nada estoura)", { erroMig, larg, fim: String(permDir).slice(-30) });
 
   fim("e2e-33 (crise e segurança)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

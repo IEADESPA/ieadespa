@@ -2666,7 +2666,7 @@ O que o contrato precisou mudar:
   bifurcar com gravações simultâneas (anterior a esta versão e do sistema todo); busca de criança por GET leva
   pedaço do nome no endereço (o Application Insights o registra). *(Atualizado na Trava 7-C: o detector da
   divergência parada, a busca por POST e a cadeia de hash da auditoria foram **resolvidos na Trava 7-B**. Seguem
-  registrados a revogação na mesma transação e o usuário de banco sem `TRUNCATE`/`DISABLE TRIGGER`, avaliados na 7-C.)*
+  registrados a revogação na mesma transação — **resolvida na 7-C** (`e2e-38`) — e o usuário de banco sem `TRUNCATE`/`DISABLE TRIGGER`, avaliado na 7-C.)*
 - **Aviso ao responsável quando um terceiro traz ou retira a criança (decidido pela liderança em 20/10/2026).** Quem
   trouxe a criança sem ser responsável cadastrado (nome digitado no balcão) ganha direito de retirar só com o código;
   agora os **responsáveis cadastrados** recebem, na hora, um aviso obrigatório em dois momentos: na **entrega**
@@ -2745,7 +2745,9 @@ notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".
      com exatidão o prazo imediato, a revogação da saúde e a exclusão LGPD. Os itens da v7.10 foram reescritos (a
      custódia usa o cadastro de responsáveis da Secretaria, não o vínculo familiar).
   4. *O que ficou para trás foi corrigido, não só anotado?* **Sim, o que o código resolve.** A revogação da saúde
-     não é a mesma transação, mas a leitura não mostra o dado e a rotina diária o apaga. O detector de divergência
+     não é a mesma transação, mas a leitura não mostra o dado e a rotina diária o apaga *(resolvido na Trava 7-C: a
+     revogação e o apagar da saúde e das cópias correm na MESMA transação, sob a trava da saúde da criança — a mesma da
+     gravação da saúde, do check-in e da exclusão LGPD; prova no `e2e-38`)*. O detector de divergência
      parada e a busca por POST foram feitos, e a cadeia da auditoria foi corrigida. **Decidido NÃO fazer** (o
      responsável da Igreja, 21/10/2026: "deixa como está"; saem dos planos):
      - dois olhares na retirada comum;
@@ -3401,3 +3403,6 @@ seguir pra Ministerial.
   - **Fila de comunicados 24 h:** de madrugada só o aviso de crise; o comunicado comum espera as 6h.
   - **Superintendente Regional:** o painel do nível geral avisa a região sem o cadastro (a escada a pula). Ação humana: cadastrar.
   - **Site:** a política de privacidade e o formulário do mural contam a cópia para o sistema, a lista de risco e o aviso à Diretoria.
+  - **Saúde do check-in (v7.10):** revogar o consentimento de saúde grava a revogação e apaga a saúde e as cópias na MESMA transação, sob uma trava
+    por criança que a gravação da saúde, o check-in (depois da trava da sala) e a exclusão LGPD também pegam, sempre antes de tocar em tabela. A
+    leitura que confere o consentimento e a rotina diária ficam como rede. Prova: `e2e-38` (inclusive com o apagar falhando e corridas em vários processos).

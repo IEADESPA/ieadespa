@@ -78,6 +78,9 @@ Cada versão parte da base da anterior (`BASE=...`):
   LGPD de quem era o responsável), `e2e-41` (a crise e a comunicação: o menor fora do aviso, o suspenso fora da fila e do fim, a delegação que avisa, a equipe de segurança, a
   leitura que vira prova na exclusão LGPD, os contatos das versões antigas do plano, Meus Dados sem corte, o IP do consentimento) e `e2e-42` (corridas: os tetos do dia do
   pedido de visita e do pedido da imprensa contados dentro da trava).
+- **Trava 7-C** (a saúde do check-in, item I1), sobre a `cenario-checkin` (`bash rodar.sh preparar-checkin`): `e2e-38` (revogar o consentimento de saúde e
+  apagar a saúde e as cópias na MESMA transação, pelo responsável e pela ficha; o apagar que falha no meio — um gatilho de teste — não deixa a revogação pela metade;
+  corridas de revogar × gravar a saúde × check-in em vários processos, sem 500, sem deadlock e sem saúde órfã). `E2E38_RODADAS` muda o número de rodadas (padrão 6).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

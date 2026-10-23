@@ -21,6 +21,7 @@ BASE=cenario-checkin bash rodar.sh roteiro e2e-19-checkin-fluxos.js
 BASE=cenario-checkin bash rodar.sh roteiro e2e-20-checkin-seguranca.js
 BASE=cenario-checkin bash rodar.sh roteiro e2e-21-checkin-corridas.js
 BASE=cenario-checkin bash rodar.sh roteiro e2e-22-checkin-revisao.js
+BASE=cenario-checkin bash rodar.sh roteiro e2e-38-trava7c-saude-revogacao.js
 bash rodar.sh preparar-pastoral
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-24-cuidado-fluxos.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-25-cuidado-seguranca.js

@@ -33,6 +33,10 @@ const CORRECOES = [...T153.matchAll(/SET BaseLegal = N'([^']*)'\s+WHERE Categori
   await obterPool();
   console.log("== o ponto de partida (cenario-crise, até a 152) ==");
   ok(CORRECOES.length === 9, "a 153 corrige 9 políticas", CORRECOES.length);
+  // o `preparar` aplica TODAS as migrações (a 153 inclusive): a base já pode estar com o texto novo — volta ao original para ver o antes e o depois
+  for (const c of CORRECOES) {
+    if ((await texto(c.categoria)) === c.novo) await escalar("UPDATE PoliticasRetencao SET BaseLegal = @o WHERE Categoria = @c; SELECT @@ROWCOUNT", { o: c.original, c: c.categoria });
+  }
   for (const c of CORRECOES) ok((await texto(c.categoria)) === c.original, `"${c.categoria}" está com o texto original da migração que a criou`, await texto(c.categoria));
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE BaseLegal = N'x'")) === 0, "nenhuma política ficou com o texto de partida 'x'");
 

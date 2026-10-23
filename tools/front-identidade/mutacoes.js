@@ -191,7 +191,8 @@ if (process.env.IDV_SO_BASE) {
     const args = process.argv.slice(2);
     const filtro = args.find(a => !a.startsWith("--")) || "";
     const todas = montarLista();
-    const indices = todas.map((m, i) => i).filter(i => todas[i][0].includes(filtro));
+    const desde = Number((args.find(a => a.startsWith("--desde=")) || "--desde=0").slice(8)) || 0; // retomar uma rodada interrompida (índice 0-based)
+    const indices = todas.map((m, i) => i).filter(i => i >= desde && todas[i][0].includes(filtro));
     const nomes = todas.map(m => m[0]);
     const repetidos = nomes.filter((n, i) => nomes.indexOf(n) !== i);
     if (repetidos.length) { console.log(`nomes de mutação repetidos: ${[...new Set(repetidos)].join(" | ")}`); process.exit(2); }

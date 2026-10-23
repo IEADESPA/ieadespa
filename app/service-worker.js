@@ -23,7 +23,9 @@
 // v37 (22/10/2026): v7.12 — comunicação: o módulo comunicacao.js (Meu Painel → Comunicações e a aba Comunicados) entra na casca; index.html, script.js, meus-dados.js e style.css mudaram junto.
 // v38 (23/10/2026): v7.14 — identidade visual: o módulo identidade-visual.js (Meu Painel → Identidade Visual e a aba Identidade Visual) entra na casca; Meu Painel ganhou
 // Votações (enquetes.js); index.html, script.js, meus-dados.js e style.css mudaram junto.
-const CACHE_NOME = "ieadespa-app-shell-v38";
+// v40 (23/10/2026): v7.14 depois da revisão adversarial (a v39 já foi usada pela v7.15 em produção): a tela da Identidade Visual mudou (votação com sugestões sem
+// decisão, tema sem votação, resultado com a imagem da arte, retirada da arte até 24/12).
+const CACHE_NOME = "ieadespa-app-shell-v40";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/enquetes.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

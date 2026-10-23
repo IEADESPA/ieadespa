@@ -3181,17 +3181,27 @@ que vira "já respondeu" (antes, erro 500) e a votação do tema que não se enc
 
 Decisões tomadas na construção (o Regimento não fecha; ajustáveis):
 
-- a votação abre sozinha no dia 22 só com **pelo menos 2 finalistas** (no máximo 10); sem isso, a Diretoria é avisada todo dia e,
-  se a triagem atrasou, ainda aprova finalistas e abre pelo botão até o dia 30;
-- **empate ou nenhum voto**: a Diretoria define o tema entre os mais votados, com o motivo (fica registrado quem e por quê);
+- o primeiro ciclo que se abre no sistema é o da identidade de **2028** (o banco também recusa ano anterior);
+- a votação abre sozinha no dia 22 só com **pelo menos 2 finalistas** (no máximo 10) **e a triagem completa**; com sugestão ainda
+  sem decisão, a Diretoria é avisada todo dia e abre pelo botão, que pergunta "há N sem decisão, abrir assim mesmo?" (até o dia 30);
+- **menos de 2 finalistas**: a partir do dia 22 (ou depois do dia 30 sem votação), a Diretoria pode definir o tema sem votação, com
+  o motivo e a confirmação reforçada (fica registrado quem e por quê);
+- **empate ou nenhum voto**: a Diretoria define o tema entre os mais votados **pela contagem gravada na apuração**, com o motivo;
 - a triagem vê **só o texto** da sugestão (nunca quem mandou); as artes mostram o autor à Diretoria (para falar com quem desenhou);
-- até **3 artes** ativas por pessoa (PNG ou JPEG, até 5 MB); as cores podem ser registradas desde a triagem e não mudam depois que
-  chega a primeira arte (acrescentar até 3 ainda pode); a Diretoria pode tirar do concurso a arte ilegível, com o motivo;
+- até **3 artes** ativas por pessoa (PNG ou JPEG, até 5 MB); a imagem é guardada **sem os metadados** (localização GPS, data,
+  aparelho, textos embutidos); o membro retira a sua arte **até 24/12** e nunca depois do resultado; as cores podem ser registradas
+  desde a triagem e não mudam depois que chega a primeira arte (acrescentar até 3 ainda pode); a Diretoria pode tirar do concurso a
+  arte ilegível, com o motivo;
 - o resultado do culto pode ser registrado depois de 31/12 (o culto pode ser a vigília), mas a data do culto tem de ser de dezembro;
-  registrado, não se edita;
+  se a arte escolhida não veio pelo sistema, a Diretoria manda a imagem no próprio registro; registrado, não se edita;
+- o tema só aceita letras do alfabeto latino (com acento), números e pontuação — texto com letra de outro alfabeto (que imita a
+  latina e burlaria a recusa do igual) é recusado com mensagem clara; o limite de 80 conta como o banco (um emoji conta 2);
+- os atos do membro (sugerir, retirar, mandar e retirar arte) ficam na auditoria **sem o nome e sem o número do registro**;
+- confirmação reforçada (a chave do aparelho ou o código) em: abrir e cancelar ciclo, excluir tema usado, corrigir tema, abrir
+  votação, tema sem votação, desempate, cores, recusar arte, resultado e qualquer decisão da triagem sobre finalista;
 - "Temas já usados" aceita de 2006 ao ano que vem; o tema escolhido pelo processo entra sozinho e não se edita;
 - exclusão LGPD: as sugestões e as artes perdem o nome; a sugestão que não foi finalista perde também o texto; a imagem não escolhida
-  sai; ficam as contagens, os finalistas e a identidade escolhida.
+  sai **quando o ciclo encerra** (até lá ela ainda pode ser a escolhida); ficam as contagens, os finalistas e a identidade escolhida.
 
 Provas: jest 5.859 (141 arquivos; novos: a regra pura 52, a rota 22, as enquetes que fecham sozinhas 25); ponta a ponta no LocalDB `e2e-31`
 (205: esquema e gatilhos, a porta, o ciclo de 2028 inteiro com o relógio da regra em novembro e dezembro de 2027, o ciclo de 2029 com
@@ -3201,8 +3211,27 @@ vários processos: 6 sugestões da mesma pessoa entram 3, o mesmo tema por 6 pes
 recusa, o voto duplicado que dava 500 e a apuração antes da meia-noite: cada uma acusada); `e2e-24`, `e2e-28`, `e2e-29` e `e2e-30`
 seguem verdes. Tela `tools/front-identidade` (632 verificações; 3 defeitos da tela achados e corrigidos; prova de mutação 115: 107
 acusadas, 8 equivalentes, nenhuma escapou) e as telas de antes (cuidado 870, comunicação 417, check-in 1.488, proteção 808,
-menores 322) sem falha. Falta: a revisão adversarial independente, a homologação (migração 151 no Azure SQL, rotas 401, a tela no
-navegador) e a produção.
+menores 322) sem falha.
+
+**Revisão adversarial independente (23/10/2026, sobre o commit 8b59841): 22 itens + 1 teste instável, todos corrigidos.** O membro
+some da auditoria dos próprios atos (sugestão e arte, sem nome e sem número do registro); a enquete com fechamento marcado é
+encerrada de verdade na primeira leitura depois da hora (resultado gravado, não só o rótulo; a ata também); o voto lê a enquete com
+trava dentro do próprio INSERT e o encerramento marca ENCERRADA antes de contar (seguro com READ_COMMITTED_SNAPSHOT, o padrão do
+Azure), e a apuração decide pela hora do banco; o "parecido/igual a tema já usado" é recalculado na triagem; letras de outro
+alfabeto recusadas; emoji medido como o banco; confirmação reforçada nos atos da lista acima; a arte não some (retirada até 24/12,
+LGPD só apaga a imagem quando o ciclo encerra); metadados (GPS etc.) tirados de PNG e JPEG sem dependência nova; ciclo só a partir de
+2028 (também no CHECK); a votação não abre sozinha com sugestão sem decisão; tema sem votação e resultado com a imagem da Diretoria;
+voto de várias perguntas numa transação e sem reler todas as respostas; o fechamento automático audita como o manual; cancelar ×
+sugerir na mesma trava do ciclo; o login da tela igual ao do voto; desempate pela contagem gravada; o ajuste da redação não se perde;
+só o erro do gatilho das cores vira aquela mensagem; na rotina diária, a falha da identidade não pula o passo da agenda pública, o
+fechamento das enquetes é passo próprio e a retenção que apaga imagens vem depois dos avisos, com orçamento de tempo; o teste do PIN
+ficou determinístico. Provas: jest **5.881** (143 arquivos), e 32 testes falham com os fontes de 8b59841; `e2e-31` **241**,
+`e2e-32` **23** e o novo `e2e-33` **9** (READ_COMMITTED_SNAPSHOT ligado no próprio teste: o voto que estava sendo gravado entra na
+contagem, máximo de 3 e tema único) — com o código antigo o `e2e-33` falha e as reversões dirigidas dos itens 4, 7, 11, 20 e 21
+falham no `e2e-31`; os itens 17 e 18 são provados por corrida (não determinísticos contra o código antigo; o 18 já era coberto pela
+trava da aplicação); `e2e-23` a `e2e-30` seguem verdes. Tela: 815 verificações (38 falhas com o módulo de antes), mutação 139:
+131 acusadas, 8 equivalentes, nenhuma escapou; telas de antes sem falha. Falta: a homologação (migração 151 no Azure SQL, rotas
+401, a tela no navegador) e a produção.
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 

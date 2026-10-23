@@ -13,6 +13,9 @@
 --      arte + cor, data, votos, ata; não se edita).
 --   5) Enquetes.DataFechamentoPrevista: a enquete que fecha sozinha (lida na hora: depois do instante, ninguém mais vota; a rotina diária a encerra de vez).
 --   6) a permissão identidade_visual (Presidente e Secretário Geral — o servidor ainda exige o nível Geral), os avisos à Diretoria e a retenção.
+-- Revisão adversarial (23/10/2026, ainda antes de ir para produção): o primeiro ciclo é o de 2028; a apuração NAO_VOTADA e o tema definido pela DIRETORIA (ciclo sem
+-- votação possível); os votos de cada finalista gravados na apuração (VotosApurados: o desempate não reconta); a arte que a Diretoria envia no registro do resultado
+-- (EnviadaPelaDiretoria). As restrições do ciclo que mudaram ficam fora do CREATE TABLE, trocadas só quando a definição gravada é a antiga.
 -- Nada se apaga: sugestão e arte só perdem o nome (e a sugestão não finalista, o texto) na exclusão LGPD e na retenção; a imagem não escolhida sai do Storage.
 --
 -- Idempotente: seguro para reexecutar sem apagar dados.

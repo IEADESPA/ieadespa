@@ -7,7 +7,7 @@ navegador, sem tocar na API de verdade nem no banco. Rodar da pasta `tools/front
 | --- | --- |
 | `node roteiro.js` | A tela contra o front de verdade em DOM simulado e o servidor imitado (abaixo), com texto de ataque (`<img src=x onerror=...>`) em todo texto que vem dele. Um argumento filtra os cenários: `node roteiro.js Diretoria`. |
 | `IDV_MODULO=<arquivo> node roteiro.js` | O mesmo roteiro contra outra cópia de `app/modulos/identidade-visual.js` (ex.: a de antes de uma correção, para ver a verificação falhar). `ENQ_MODULO` faz o mesmo com o `enquetes.js`. |
-| `node mutacoes.js` | Prova de mutação: desfaz, uma a uma, as garantias da tela e exige que o roteiro acuse cada uma. Um processo por mutação, com teto de memória e de tempo. `--conferir` só confere as âncoras; `--listar` lista; um argumento filtra pelo nome. |
+| `node mutacoes.js` | Prova de mutação: desfaz, uma a uma, as garantias da tela e exige que o roteiro acuse cada uma. Um processo por mutação, com teto de memória e de tempo. `--conferir` só confere as âncoras; `--listar` lista; um argumento filtra pelo nome; `--desde=N` retoma uma rodada interrompida a partir do índice N (o do `--listar`). |
 
 Cobre: Meu Painel → Identidade Visual em cada etapa (sem ciclo: o ano que vem e a identidade
 vigente, nenhuma etapa; aguardando; sugestões: vazio recusado na tela, 422 mostrado tal qual com
@@ -88,3 +88,8 @@ ocasião já filtrado), nenhuma escapou — a primeira rodada deixou escapar 5 (
 depois da troca de pessoa, sair da sessão com Meu Painel aberto e três textos sem texto de
 ataque no servidor imitado), e o roteiro ganhou as verificações que as acusam. A prova em
 navegador não foi feita nesta rodada.
+
+Depois da revisão adversarial (23/10/2026): roteiro 815 verificações, 0 falhas; contra o
+`identidade-visual.js` do commit 8b59841 (antes da revisão), 38 falhas. Prova de mutação: 139
+mutações, 131 acusadas, 8 equivalentes conhecidas, nenhuma escapou (rodada em duas partes por
+uma interrupção: índices 0 a 81 e `--desde=82`). Prova em navegador continua não feita.

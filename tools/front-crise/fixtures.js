@@ -35,7 +35,7 @@ function criarServidor({ ataque = true, agoraMs = Date.now(), comCrise = false }
       resumoEncerramento: null, ordenadoPor: S.presidente.nome, registradoPor: A("registradoPor", "Secretário"), encerradaPor: null,
       portaVoz: { tipo: "DESIGNADO", membroId: 30, nome: A("pvNome", "Joana Assessora"), contato: A("pvContato", "imprensa@igreja.org"), ato: A("pvAto", "Ato nº 12/2026") } }, o);
     S.historico.push({ criseId: S.crise.criseId, evento: "ABERTA", em: S.crise.abertaEm, por: A("histPor", "Secretário"), portaVoz: S.crise.portaVoz, texto: S.crise.motivo,
-      aviso: { envioId: 9, total: 37, canais: { SININHO: { ACEITO: 37 }, PUSH: { ACEITO: 5, PENDENTE: 1, SEM_APARELHO: 31 }, EMAIL: { ACEITO: 10, PENDENTE: 25, SEM_CONTATO: 2 } }, lidos: 12, ciencia: 4 } });
+      aviso: { envioId: 9, total: 37, canais: { SININHO: { ACEITO: 37 }, PUSH: { ACEITO: 5, PENDENTE: 1, SEM_APARELHO: 31 }, EMAIL: { ACEITO: 10, PENDENTE: 25, SEM_CONTATO: 2 } }, lidos: 12, ciencia: 4, emailsPorHora: 30 } });
   };
   if (comCrise) novaCrise();
 

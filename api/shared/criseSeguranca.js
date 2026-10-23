@@ -233,7 +233,7 @@ function textoAviso({ evento, portaVoz, desde, resumo }) {
   return { titulo, corpo };
 }
 // O rodapé do e-mail do aviso (no lugar do link "não quero mais receber": é aviso obrigatório).
-const RODAPE_AVISO = "Você recebe este aviso porque é da liderança da Igreja: durante o regime de crise, o Regimento (Art. 161-B) pede que toda a liderança saiba quem é o porta-voz único.";
+const RODAPE_AVISO = "Você recebe este aviso porque é da liderança da Igreja: durante o regime de crise, por decisão da Igreja, com base no Art. 161-B do Regimento, toda a liderança fica sabendo quem é o porta-voz único.";
 // O texto CURTO do celular (título até 120, mensagem até 180): o essencial — quem fala e o contato — no começo, nunca cortado no meio (revisão independente, v7.15).
 function textoCelular({ evento, portaVoz }) {
   const pv = portaVoz || {};

@@ -478,13 +478,16 @@ async function excluirGrupo(pool, { ver, audienciaId }) {
 // ---------------------------------------------------------------
 
 // { n, seq }: quantas entregas de e-mail/celular esperam e o maior EntregaId que existe (um envio novo sempre o aumenta: a marca do Storage usa isso para não voltar atrás)
+// `sistema` (Trava 7-C): quantas dessas são do aviso do sistema (a crise) — de madrugada a rotina só abre o banco se houver alguma.
 async function pendentesNaFila(pool) {
   const r = (await pool.request().query(`SELECT (SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Situacao IN ('PENDENTE', 'ENVIANDO') AND Canal IN ('EMAIL', 'PUSH')) AS n,
+    (SELECT COUNT(*) FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId WHERE x.Situacao IN ('PENDENTE', 'ENVIANDO') AND x.Canal IN ('EMAIL', 'PUSH')
+       AND ${COM_SISTEMA("v.Categoria")}) AS sistema,
     (SELECT ISNULL(MAX(EntregaId), 0) FROM ComunicacaoEntregas) AS seq`)).recordset[0];
-  return { n: Number(r.n) || 0, seq: Number(r.seq) || 0 };
+  return { n: Number(r.n) || 0, seq: Number(r.seq) || 0, sistema: Number(r.sistema) || 0 };
 }
 async function regravarMarca(pool) {
-  try { const p = await pendentesNaFila(pool); await marca.gravar(p.n, p.seq); } catch (e) { await marca.gravar(null); }
+  try { const p = await pendentesNaFila(pool); await marca.gravar(p.n, p.seq, undefined, p.sistema); } catch (e) { await marca.gravar(null); }
 }
 
 // Envia um modelo aprovado ao grupo. O sininho e o registro de entrega nascem na hora (uma transação, em blocos); o celular e o e-mail vão para a fila, e a primeira rodada
@@ -674,7 +677,8 @@ async function celularDoSistema(pool, { deps = {}, orcamentoMs = 15000 } = {}) {
 
 // Uma rodada: os presos viram FALHOU; o celular sai em lotes até o tempo acabar; o e-mail sai até o teto da rodada e da hora (somando os avisos do sistema já mandados na hora);
 // o tempo é conferido a cada mensagem e o que não foi tentado volta à fila; o envio sem nada na fila é concluído.
-async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = null, maxEmails = Infinity } = {}) {
+// `somenteSistema` (Trava 7-C): a rodada da madrugada (23h às 6h) manda só o aviso do sistema (a crise): o comunicado comum espera a manhã (ninguém recebe comunicado às 3h).
+async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = null, maxEmails = Infinity, somenteSistema = false } = {}) {
   const inicio = Date.now();
   const resta = () => orcamentoMs - (Date.now() - inicio);
   const enviarEmail = deps.enviarEmail || enviarEmailComunicado;
@@ -705,7 +709,7 @@ async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = n
   if (deps.celularDoSistema !== false) {
     try { res.pushSistema = await celularDoSistema(pool, { deps, orcamentoMs: Math.floor(orcamentoMs * 0.3) }); } catch (e) { console.error("[COMUNICACAO] celular do aviso do sistema:", e && e.message); }
   }
-  while (resta() > orcamentoMs * 0.5) {
+  while (!somenteSistema && resta() > orcamentoMs * 0.5) {
     const lote = await tomar(pool.request(), "PUSH", PUSH_POR_LOTE, "SEM_SISTEMA");
     if (!lote.length) break;
     const seguiu = await percorrer(lote, async (x) => {
@@ -743,10 +747,10 @@ async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = n
         CASE WHEN EXISTS (SELECT 1 FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId WHERE x.Canal = 'EMAIL' AND x.Situacao = 'PENDENTE' AND v.Categoria = 'CONVOCACAO')
           THEN 1 ELSE 0 END AS convocacao`)).recordset[0];
       res.email.cota = Math.max(0, Math.min(porRodada, porHora - Number(h.n), maxEmails));
-      const reserva = Number(h.convocacao) ? Math.ceil(res.email.cota / 2) : 0;
+      const reserva = !somenteSistema && Number(h.convocacao) ? Math.ceil(res.email.cota / 2) : 0;   // de madrugada a convocação não sai: nada a reservar
       res.email.cotaSistema = Math.max(0, Math.min(res.email.cota - reserva, criseHora - Number(h.sistema)));
       const loteSistema = await tomar(new sql.Request(t), "EMAIL", res.email.cotaSistema, "SISTEMA");
-      lote = [...loteSistema, ...(await tomar(new sql.Request(t), "EMAIL", res.email.cota - loteSistema.length, "SEM_SISTEMA"))];
+      lote = somenteSistema ? loteSistema : [...loteSistema, ...(await tomar(new sql.Request(t), "EMAIL", res.email.cota - loteSistema.length, "SEM_SISTEMA"))];
     }
     await t.commit();
   } catch (e) { await fecharTransacao(t, false); throw e; }
@@ -772,7 +776,8 @@ async function processarFila(pool, { deps = {}, orcamentoMs = 20000, segredo = n
     WHERE e.Status = 'FILA' AND NOT EXISTS (SELECT 1 FROM ComunicacaoEntregas x WHERE x.EnvioId = e.EnvioId AND x.Situacao IN ('PENDENTE', 'ENVIANDO')); SELECT @@ROWCOUNT AS n`));
   const p = await pendentesNaFila(pool);
   res.pendentes = p.n;
-  await marca.gravar(p.n, p.seq);
+  res.pendentesSistema = p.sistema;
+  await marca.gravar(p.n, p.seq, undefined, p.sistema);
   return res;
 }
 

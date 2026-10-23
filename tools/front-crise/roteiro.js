@@ -64,7 +64,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     for (const m of modulo.matchAll(/"(crs[A-Za-z]+Acao)"/g)) usadas.add(m[1]);
     confere([...usadas].every(a => registradas.includes(a)) && registradas.every(a => usadas.has(a)), `toda ação usada está registrada e vice-versa (usadas sem registro: ${[...usadas].filter(a => !registradas.includes(a))}; registradas sem uso: ${registradas.filter(a => !usadas.has(a))})`);
     const sw = lerApp("service-worker.js");
-    confere(sw.includes('"/modulos/crise-seguranca.js"') && /ieadespa-app-shell-v39/.test(sw), "o módulo está na casca do service worker (v39)");
+    confere(sw.includes('"/modulos/crise-seguranca.js"') && /ieadespa-app-shell-v41/.test(sw), "o módulo está na casca do service worker (v41)");
     confere(html.indexOf('src="modulos/consagracoes.js"') < html.indexOf('src="modulos/crise-seguranca.js"') && html.indexOf('src="modulos/crise-seguranca.js"') < html.indexOf('src="modulos/cuidado-pastoral.js"'), "o script do módulo carrega na ordem dos nomes");
     const k = F.contratoComOServidor();
     const chamadasDoModulo = new Set([...modulo.matchAll(/crs(?:Obter|Postar)\(\s*[`"]([a-z-]+)/g), ...modulo.matchAll(/crsGravarSeguranca\(botao, "([a-z-]+)"/g)].map(m => m[1]));
@@ -148,6 +148,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const env = novo(srv);
     await abrirAba(env, "geral");
     confere(visivel(env, "crsSecaoCrise") && botao(env, "Abrir o regime"), "sem crise: o formulário de abertura");
+    confere(texto(env, "crsCriseConteudo").includes("para avisar os membros, use a aba Comunicados") && texto(env, "crsCriseConteudo").includes("antes deste registro"),
+      "Trava 7-C: a abertura lembra que o aviso vai só à liderança (membros: Comunicados) e que a proibição vale antes do registro");
     await clicar(env, botao(env, "Abrir o regime"));
     confere(texto(env, "crsCriseMsg").includes("motivo") && chamadas(env, "POST crise/abrir").length === 0, "sem motivo: a tela avisa e não manda");
     digitar(env, "crsMotivo", "Acidente no templo central");
@@ -189,7 +191,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     srv.novaCrise(); env.ev('crsMostrarSecaoAcao("crise")'); await env.ocioso();
     await clicar(env, botao(env, "Continuar o aviso"));
     confere(chamadas(env, "POST crise/continuar-aviso").length === 1, "continuar o aviso agora");
-    confere(texto(env, "crsCriseConteudo").includes("100 por hora") && texto(env, "crsCriseConteudo").includes("Li o aviso"), "o painel explica o e-mail aos poucos e mostra a ciência");
+    confere(texto(env, "crsCriseConteudo").includes("até 30 por hora para o aviso de crise") && texto(env, "crsCriseConteudo").includes("Li o aviso"), "o painel explica o e-mail aos poucos e mostra a ciência");
     limpo(env, "continuar");
   });
 

@@ -133,7 +133,8 @@ async function principal(context, req) {
         context.res = { status: 200, body: { sucesso: true, agora: new Date().toISOString(), itens: await db.listarFila(pool, { ver, filtros }) } };
         return;
       }
-      if (acao === "painel") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.painel(pool, { ver }) } }; return; }
+      // (Trava 7-C) o nível geral vê também as regiões sem Superintendente Regional cadastrado: a escada pula essas regiões
+      if (acao === "painel") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.painel(pool, { ver }), regioesSemSuperintendente: ver.geral ? await db.regioesSemSuperintendente(pool) : [] } }; return; }
       if (acao === "congregacoes") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.congregacoesDoTerritorio(pool, { ver }) } }; return; }
       if (acao === "pedidos") {
         const situacao = ["AGUARDANDO", "RISCO", "APROVADOS", "TODOS"].includes(consulta.situacao) ? consulta.situacao : "AGUARDANDO";

@@ -1034,6 +1034,20 @@ async function painel(pool, { ver }) {
   });
 }
 
+// Trava 7-C: as regiões com congregação ativa e SEM Superintendente Regional ativo com a permissão do cuidado. O Regimento (Art. 104 §1º) diz que o Superintendente é,
+// automaticamente, o Pastor Titular da Área-Polo, mas o sistema só o conhece cadastrado na Liderança (escopo Região): sem o cadastro, a escada do prazo vencido pula a
+// Região sem dizer nada. O painel do nível geral mostra a lista para a Secretaria cadastrar.
+async function regioesSemSuperintendente(pool) {
+  const r = await pool.request().input("perm", sql.NVarChar(60), `%,${PERMISSAO},%`).query(`
+    SELECT rg.RegiaoId, rg.Nome, COUNT(DISTINCT c.CongregacaoId) AS Congregacoes
+    FROM Regioes rg JOIN Areas a ON a.RegiaoId = rg.RegiaoId JOIN Congregacoes c ON c.AreaId = a.AreaId AND c.Ativa = 1
+    WHERE NOT EXISTS (SELECT 1 FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId JOIN MembroReferencia m ON m.MembroId = l.MembroId
+                      WHERE l.EscopoTipo = 'REGIAO' AND l.EscopoId = rg.RegiaoId AND (',' + p.Permissoes + ',') LIKE @perm AND m.Status = 'ATIVO'
+                        AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE)))
+    GROUP BY rg.RegiaoId, rg.Nome ORDER BY rg.Nome`);
+  return r.recordset.map((x) => ({ regiaoId: x.RegiaoId, nome: x.Nome, congregacoes: Number(x.Congregacoes) || 0 }));
+}
+
 // As congregações do território (para os seletores da tela).
 async function congregacoesDoTerritorio(pool, { ver }) {
   const r = await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes WHERE Ativa = 1 ORDER BY Nome`);
@@ -1422,7 +1436,7 @@ module.exports = {
   abrirItem, listarFila, detalheItem, meusItens, registrarContato, atribuir, adiar, concluir, cancelar,
   listarNotas, escreverNota, notaLegivel, lerNota, leiturasDaNota,
   pedirOracao, registrarPedidoRecebido, pedirVisita, meusPedidos, listarPedidos, moderar, marcarRisco, acompanharPedido, boletim,
-  buscarPessoas, painel, congregacoesDoTerritorio,
+  buscarPessoas, painel, congregacoesDoTerritorio, regioesSemSuperintendente,
   rotinaDiaria, acompanharQuemMudou, detectarAfastamentos, subirEscada, apagarNotasDeQuemSaiu, aplicarRetencao,
   detectarResumoDiario, detectarDegraus, detectarModeracao, dadosDoTitular, exclusaoLgpd
 };

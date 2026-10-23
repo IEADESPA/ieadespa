@@ -175,6 +175,8 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
     const agora = agoraSql().getTime();
     const it = (id) => S.itens.find(i => i.ItemId === Number(id));
     const pe = (id) => S.pedidos.find(p => p.PedidoId === Number(id));
+    // (Trava 7-C) as regiões sem Superintendente Regional (só o painel do nível geral pergunta)
+    if (t.includes("FROM Regioes rg JOIN Areas a") && t.includes("EscopoTipo = 'REGIAO'")) return (S.regioesSemSup || []).map(r => ({ RegiaoId: r.id, Nome: r.nome, Congregacoes: r.congregacoes }));
     // ---------------- gravações ----------------
     if (t.startsWith("INSERT INTO CuidadoItens")) {
       const membroId = inp.m || null;

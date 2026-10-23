@@ -5,12 +5,17 @@ name: Rotina da fila de comunicados (a cada 15 minutos)
 # COMUNICACAO_EMAILS_POR_HORA) e conclui os envios sem nada na fila.
 #
 # CUSTO: a chamada leva o cabeçalho `x-somente-se-pendente`: a rota pergunta antes a uma marca no Storage se há fila e, se não há, responde sem abrir o banco (o mesmo cuidado
-# da rotina da proteção). Roda das 6h às 22h45 de Brasília; de madrugada nada sai (ninguém recebe comunicado às 3h), e a primeira rodada da manhã continua de onde parou.
+# da rotina da proteção). Das 6h às 22h45 de Brasília manda tudo; das 23h às 5h45 (Trava 7-C) passa com `x-somente-sistema`: só o aviso de CRISE (Regimento Art. 161-B,
+# v7.15) sai de madrugada, e o banco só é aberto se a marca disser que há aviso de crise na fila. O comunicado comum espera a manhã (ninguém recebe comunicado às 3h), e a
+# primeira rodada das 6h continua de onde parou.
 # Falhou: o job fica vermelho e o e-mail de falha sai, como nas outras rotinas.
 
 on:
   schedule:
+    # 6h às 22h45 de Brasília (UTC-3): a fila inteira
     - cron: "*/15 0-1,9-23 * * *"
+    # 23h às 5h45 de Brasília: só o aviso de crise (Trava 7-C)
+    - cron: "*/15 2-8 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -18,11 +23,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Uma rodada da fila de comunicados (v7.12)
+        env:
+          AGENDA: ${{ github.event.schedule }}
         run: |
+          # de madrugada (o horário 2-8 UTC) só o aviso de crise; de dia (e no disparo manual) a fila inteira
+          SO_SISTEMA=()
+          if [ "$AGENDA" = "*/15 2-8 * * *" ]; then SO_SISTEMA=(-H "x-somente-sistema: 1"); fi
           # até 3 tentativas: a primeira chamada com fila paga o cold start da API
           for i in 1 2 3; do
             if curl -sf -m 120 -X POST "https://app.ieadespa.org.br/api/comunicacao-fila-interna" \
-                 -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -H "x-somente-se-pendente: 1"; then echo; exit 0; fi
+                 -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -H "x-somente-se-pendente: 1" "${SO_SISTEMA[@]}"; then echo; exit 0; fi
             echo "tentativa $i falhou"; sleep 30
           done
           exit 1

@@ -7,8 +7,8 @@
 //     manifestação, vê e responde todos os pedidos; o PORTA-VOZ da crise ativa (se for membro com sessão de liderança) registra manifestação e responde os pedidos;
 //   - a permissão seguranca_congregacao (Dirigente, Pastor de Área e o nível geral) cuida do plano de emergência, dos simulados, da vistoria e da equipe de segurança, cada um
 //     só nas congregações do seu território (a Extensão e o Departamento não entram).
-// O aviso da crise vai a toda a liderança ativa pela comunicação da v7.12 (categoria CRISE): o sininho nasce na mesma transação do ato; o celular sai na primeira rodada, junto
-// com a resposta; o e-mail vai pela fila (100 por hora no Azure). Nada aqui se edita depois de registrado: correção é linha nova (gatilhos no banco).
+// O aviso da crise vai a toda a liderança ativa pela comunicação da v7.12 (categoria CRISE): o sininho nasce na mesma transação do ato; o celular sai em paralelo dentro da
+// resposta do ato (o que não couber sai pela fila de 15 minutos); o e-mail vai pela fila, com teto próprio por hora (COMUNICACAO_CRISE_EMAILS_POR_HORA, 30), também de madrugada (Trava 7-C). Nada aqui se edita depois de registrado: correção é linha nova (gatilhos no banco).
 // Respostas de escrita: { sucesso, mensagem, ... }; `naoExiste` = 404 (o mesmo para o que não existe e para o que a pessoa não alcança), `proibido` = 403, `mudou` = 409,
 // `limite` = 429.
 const crypto = require("crypto");
@@ -163,16 +163,19 @@ async function depoisDoAto(pool, { ver, acao, envioId, historicoId, inicio, deps
     await notificarAgora(pool, { regraChave: "CRISE_EM_SEU_NOME", destinatarios: [{ membroId: presidente.membroId, nome: presidente.nome, email: null }], referenciaTabela: "CriseHistorico",
       referenciaId: historicoId, mensagem: `${rotuloAto} em seu nome por ${quem ? quem.Nome : "outra pessoa do nível geral"}. Confira em Crise e segurança → Crise.`, deps });
   }
-  return mensagemDoAviso(acao, await com.situacaoDoAvisoDoSistema(pool, envioId));
+  return mensagemDoAviso(acao, await com.situacaoDoAvisoDoSistema(pool, envioId), await tetoEmailCrise(pool));
 }
-function mensagemDoAviso(acao, a) {
+// O teto de e-mails do aviso de crise por hora (Catálogos → Prazos: COMUNICACAO_CRISE_EMAILS_POR_HORA; o mesmo padrão de 30 da fila) — lido, nunca fixo no texto (Trava 7-C).
+const tetoEmailCrise = (pool) => lerPrazoDias(pool, "COMUNICACAO_CRISE_EMAILS_POR_HORA", 30);
+function mensagemDoAviso(acao, a, emailsPorHora) {
   const push = (a && a.canais && a.canais.PUSH) || {};
   const n = (s) => Number(push[s]) || 0;
   const comAparelho = n("ACEITO") + n("FALHOU") + n("PENDENTE") + n("ENVIANDO");
   const faltam = n("PENDENTE") + n("ENVIANDO");
   return `${acao} Sininho: ${Number(a && a.total) || 0} líder(es) já avisados. Celular: ${n("ACEITO")} de ${comAparelho} aparelho(s) avisados agora`
-    + (faltam ? `; os outros ${faltam} saem pela fila em minutos (de 15 em 15 minutos, das 6h às 23h) ou no botão "Continuar o aviso agora"` : "")
-    + `. E-mail: sai aos poucos (o serviço aceita 100 por hora) e só para quem ainda não foi alcançado pelo sininho ou pelo celular.`;
+    + (faltam ? `; os outros ${faltam} saem pela fila em minutos (de 15 em 15 minutos, inclusive de madrugada) ou no botão "Continuar o aviso agora"` : "")
+    + `. E-mail: sai aos poucos (até ${Number(emailsPorHora) || 30} por hora para o aviso de crise) e só para quem ainda não foi alcançado pelo sininho ou pelo celular.`
+    + ` Para avisar os MEMBROS (o § 2º vale para todos), use Comunicados.`;
 }
 
 // ---------------------------------------------------------------
@@ -296,7 +299,7 @@ async function continuarAviso(pool, { ver, deps = {} }) {
   if (!ver.crise) return PROIBIDO("Só o nível geral da crise.");
   const r = await com.depoisDoAvisoDoSistema(pool, { deps, orcamentoCelularMs: 20000, orcamentoFilaMs: 6000 });
   const cel = (r && r.celular) || { aceitos: 0 };
-  return { sucesso: true, celularEnviados: cel.aceitos, mensagem: `Mais uma rodada do aviso: ${cel.aceitos} celular(es) avisados agora. O e-mail respeita o limite de 100 por hora do serviço.` };
+  return { sucesso: true, celularEnviados: cel.aceitos, mensagem: `Mais uma rodada do aviso: ${cel.aceitos} celular(es) avisados agora. O e-mail sai até ${await tetoEmailCrise(pool)} por hora para o aviso de crise.` };
 }
 
 async function listarCrises(pool, { ver }) {
@@ -314,9 +317,10 @@ async function detalheCrise(pool, { ver, criseId }) {
   const h = (await pool.request().input("id", sql.Int, criseId).query(`
     SELECT h.*, m.Nome AS PorNome FROM CriseHistorico h LEFT JOIN MembroReferencia m ON m.MembroId = h.MembroId WHERE h.CriseId = @id ORDER BY h.HistoricoId`)).recordset;
   const historico = [];
+  const emailsPorHora = ver.crise ? await tetoEmailCrise(pool) : null;
   for (const x of h) {
     historico.push({ evento: x.Evento, em: iso(x.Em), por: x.PorNome || null, portaVoz: portaVozDe(x), texto: ver.crise ? x.Texto || null : null,
-      aviso: x.EnvioId && ver.crise ? await com.situacaoDoAvisoDoSistema(pool, x.EnvioId) : null });
+      aviso: x.EnvioId && ver.crise ? { ...(await com.situacaoDoAvisoDoSistema(pool, x.EnvioId)), emailsPorHora } : null });
   }
   const crise = formatarCrise(c);
   if (!ver.crise) crise.motivo = null;      // o porta-voz designado vê o regime, o histórico de porta-vozes e as manifestações; o motivo registrado fica com o nível geral

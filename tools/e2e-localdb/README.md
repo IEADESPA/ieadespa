@@ -61,6 +61,12 @@ Cada versão parte da base da anterior (`BASE=...`):
   manifestações, quatro correções da mesma, quatro primeiras respostas ao mesmo pedido, dois planos na mesma versão, a mesma pessoa na equipe por quatro, troca de porta-voz × fim
   e quatro encerramentos). Os roteiros `e2e-29` e `e2e-30` (v7.12) também passam sobre a `cenario-crise`.
 
+- **Trava 7-C** (migração 153): `e2e-35` sobre a `cenario-crise` (as migrações rodando de novo não desfazem a base legal editada na tela; a 153, duas
+  vezes, troca só o texto original; o esquema novo) e, sobre a `cenario-trava7c` (`bash rodar.sh preparar-trava7c`: a 153 duas vezes sobre a
+  `cenario-crise`), `e2e-36` (as retenções da v7.2 a v7.4: justificativa da Ceia, ocorrência e administrador de canal, contato do convidado, com o
+  gatilho do relógio e a rotina diária de verdade) e `e2e-37` (a rodada da madrugada só com o aviso de crise; a região sem Superintendente; o teto de
+  e-mails da crise lido da configuração). Os roteiros da v7.11 a v7.15 (`e2e-24` a `e2e-30`, `e2e-33`, `e2e-34`) passam sobre a `cenario-crise`.
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

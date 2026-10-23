@@ -242,7 +242,7 @@ function crsHtmlAviso(a) {
   return `<ul class="crs-aviso">
     <li>Sininho: <strong>${crsNumero(a.total)}</strong> líder(es) · leram: ${crsNumero(a.lidos)} · deram ciência ("Li o aviso"): ${crsNumero(a.ciencia)}</li>
     <li>Celular: ${n("PUSH", "ACEITO")} entregue(s) · ${n("PUSH", "PENDENTE") + n("PUSH", "ENVIANDO")} na fila · ${n("PUSH", "SEM_APARELHO")} sem aparelho · ${n("PUSH", "FALHOU")} falharam</li>
-    <li>E-mail: ${n("EMAIL", "ACEITO")} enviado(s) · ${n("EMAIL", "PENDENTE") + n("EMAIL", "ENVIANDO")} na fila (sai aos poucos: o serviço aceita 100 por hora) · ${n("EMAIL", "ALCANCADO")} dispensados (já alcançados pelo sininho ou pelo celular) · ${n("EMAIL", "SEM_CONTATO")} sem e-mail · ${n("EMAIL", "CANCELADO")} substituídos por um aviso mais novo</li></ul>`;
+    <li>E-mail: ${n("EMAIL", "ACEITO")} enviado(s) · ${n("EMAIL", "PENDENTE") + n("EMAIL", "ENVIANDO")} na fila (sai aos poucos: até ${crsNumero(a.emailsPorHora) || 30} por hora para o aviso de crise) · ${n("EMAIL", "ALCANCADO")} dispensados (já alcançados pelo sininho ou pelo celular) · ${n("EMAIL", "SEM_CONTATO")} sem e-mail · ${n("EMAIL", "CANCELADO")} substituídos por um aviso mais novo</li></ul>`;
 }
 const CRS_EVENTOS = { ABERTA: "Regime aberto", PORTA_VOZ: "Porta-voz trocado", ENCERRADA: "Regime encerrado" };
 function crsPintarCrises() {
@@ -273,6 +273,8 @@ function crsPintarCrises() {
       <p class="subtitle">Use quando o Presidente decidir: crise institucional, escândalo na mídia, acidente grave ou fato de repercussão pública negativa (Regimento Art. 161-B). Toda a liderança
         recebe na hora, no sininho e no celular, o aviso de que só o porta-voz fala pela Igreja; o e-mail sai aos poucos. <em>Exemplo: um acidente no templo saiu na TV — o Presidente
         decide que só ele fala, e a Secretaria registra aqui.</em></p>
+      <p class="subtitle">Pelo Regimento, a política vale sozinha assim que a crise existe: a proibição de falar vale mesmo antes deste registro, que é a formalização. Este aviso vai
+        só à <strong>liderança</strong>; a proibição (§ 2º) vale para <strong>todo membro</strong> — para avisar os membros, use a aba <strong>Comunicados</strong>.</p>
       <label for="crsMotivo">Motivo, em poucas palavras (fica só com o nível geral; NÃO vai no aviso)</label><textarea id="crsMotivo" rows="2" maxlength="300"></textarea>
       ${crsHtmlPortaVoz("crsAbre")}
       <div class="psc-acoes"><button type="button" class="btn-confirmar btn-perigo crs-btn" data-on-click="crsAbrirCriseAcao" data-args-click="${argsAttr(ARG.elemento)}">🚨 Abrir o regime e avisar a liderança</button></div></article>`;

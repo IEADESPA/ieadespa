@@ -3187,6 +3187,7 @@ depois de registrado (correção = nova linha); o histórico fica.
 
 **Segurança da congregação.** Com a permissão nova `seguranca_congregacao` (Dirigente, Pastor de Área e o nível geral, cada
 um no seu território):
+
 - **Plano de emergência** da congregação: rotas de evacuação e pontos de encontro (texto), contatos (Bombeiros 193, SAMU 192,
   Polícia 190, mais os da congregação), responsáveis; revisão anual (aviso quando vence).
 - **Simulados**: data, tipo (evacuação, incêndio, primeiros socorros, violência), participantes (número), duração, o que

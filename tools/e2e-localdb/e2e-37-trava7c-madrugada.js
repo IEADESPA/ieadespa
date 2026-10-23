@@ -44,7 +44,7 @@ const pendentesDo = async (envioId) => escalar("SELECT COUNT(*) FROM Comunicacao
   const ab = await POST(HCRISE, "abrir", SEC, { motivo: "Teste da madrugada", portaVoz: PV });
   ok(ab.status === 201 && ab.body.criseId > 0, "a crise abre (201)", ab.body);
   ok(/até 77 por hora para o aviso de crise/.test(ab.body.mensagem || "") && !/100 por hora/.test(ab.body.mensagem || ""), "F) a resposta diz o teto da crise lido da configuração (77), não '100 por hora'", ab.body.mensagem);
-  ok(/inclusive de madrugada/.test(ab.body.mensagem || "") && /use Comunicados/.test(ab.body.mensagem || ""), "F) a resposta diz que a fila roda de madrugada e lembra os Comunicados para os membros");
+  ok(/use Comunicados/.test(ab.body.mensagem || "") && !/das 6h às 23h/.test(ab.body.mensagem || ""), "F) a resposta lembra os Comunicados para os membros e não diz mais que a fila só roda das 6h às 23h");
   const envioCrise = await escalar("SELECT EnvioId FROM CriseHistorico WHERE CriseId = @c AND Evento = 'ABERTA'", { c: ab.body.criseId });
   const det = await GET(HCRISE, "crise", SEC, { criseId: ab.body.criseId });
   const aviso = det.body && det.body.historico && det.body.historico[0] && det.body.historico[0].aviso;
@@ -53,22 +53,30 @@ const pendentesDo = async (envioId) => escalar("SELECT COUNT(*) FROM Comunicacao
   ok(crisePend > 0, `ainda há aviso de crise na fila depois do ato (${crisePend})`);
 
   console.log("== D) a rodada da madrugada ==");
+  // um comunicado comum que chega DEPOIS da abertura (celular e e-mail na fila): a madrugada também não pode tocá-lo
+  const envioTarde = await escalar(`INSERT INTO ComunicacaoEnvios (ModeloId, Categoria, CriteriosJson, GrupoDescricao, EnviadoPorMembroId, Total)
+    VALUES (@m, N'EVENTOS', N'{}', N'Grupo E2E tarde', 1002, @t); SELECT CAST(SCOPE_IDENTITY() AS INT)`, { m: modelo, t: membros.length });
+  for (const m of membros) await q("INSERT INTO ComunicacaoEntregas (EnvioId, MembroId, Canal, Situacao) VALUES (@e, @m, 'EMAIL', 'PENDENTE'), (@e, @m, 'PUSH', 'PENDENTE')", { e: envioTarde, m });
+  const tardeAntes = JSON.stringify(await situacoes(envioTarde));
+  // (a abertura roda uma rodada curta da fila de DIA: o que ela já tirou do comunicado comum não conta; vale o que está na fila agora)
   const comumAntes = JSON.stringify(await situacoes(envioComum));
+  const comunsNaFila = (await pendentesDo(envioComum)) + (await pendentesDo(envioTarde));
+  ok(comunsNaFila > 0, `o comunicado comum ainda tem ${comunsNaFila} entrega(s) na fila quando a madrugada começa`);
   enviados.length = 0;
   let r = await com.processarFila(pool, { somenteSistema: true, orcamentoMs: 20000 });
   ok(r.pendentesSistema === (await pendentesDo(envioCrise)), "a contagem do aviso do sistema (a da marca) bate com a fila", { r: r.pendentesSistema });
-  ok(r.pendentes === r.pendentesSistema + comuns, "a contagem total soma o comunicado comum", { total: r.pendentes, sistema: r.pendentesSistema });
-  ok(JSON.stringify(await situacoes(envioComum)) === comumAntes, "a rodada da madrugada não toca o comunicado comum");
+  ok(r.pendentes === r.pendentesSistema + comunsNaFila, "a contagem total soma o comunicado comum", { total: r.pendentes, sistema: r.pendentesSistema });
+  ok(JSON.stringify(await situacoes(envioComum)) === comumAntes && JSON.stringify(await situacoes(envioTarde)) === tardeAntes, "a rodada da madrugada não toca o comunicado comum (nem o celular nem o e-mail)");
   ok(enviados.length > 0 && enviados.every((m) => !/culto de jovens/i.test(`${m.assunto} ${m.texto}`)), `a madrugada manda só o aviso da crise (${enviados.length} e-mail(s))`);
   let voltas = 0;
   while (r.pendentesSistema > 0 && voltas++ < 60) r = await com.processarFila(pool, { somenteSistema: true, orcamentoMs: 20000 });
   ok(r.pendentesSistema === 0, `em ${voltas + 1} rodadas da madrugada o aviso da crise sai todo`, r.pendentesSistema);
-  ok(JSON.stringify(await situacoes(envioComum)) === comumAntes && (await pendentesDo(envioComum)) === comuns, "e o comunicado comum continua inteiro na fila, esperando a manhã");
-  ok(r.pendentes === comuns, "a marca ficaria com o comunicado comum pendente e zero do sistema (a rota da madrugada não abre mais o banco)", r.pendentes);
+  ok(JSON.stringify(await situacoes(envioComum)) === comumAntes && JSON.stringify(await situacoes(envioTarde)) === tardeAntes && (await pendentesDo(envioComum)) + (await pendentesDo(envioTarde)) === comunsNaFila, "e o comunicado comum continua inteiro na fila, esperando a manhã");
+  ok(r.pendentes === comunsNaFila, "a marca ficaria com o comunicado comum pendente e zero do sistema (a rota da madrugada não abre mais o banco)", r.pendentes);
 
   console.log("== D) a rodada do dia ==");
-  for (let i = 0; i < 10 && (await pendentesDo(envioComum)) > 0; i++) await com.processarFila(pool, { orcamentoMs: 20000 });
-  ok((await pendentesDo(envioComum)) === 0, "de dia o comunicado comum sai (ou é barrado pelo consentimento): a fila esvazia");
+  for (let i = 0; i < 10 && (await pendentesDo(envioComum)) + (await pendentesDo(envioTarde)) > 0; i++) await com.processarFila(pool, { orcamentoMs: 20000 });
+  ok((await pendentesDo(envioComum)) + (await pendentesDo(envioTarde)) === 0, "de dia o comunicado comum sai (ou é barrado pelo consentimento): a fila esvazia");
 
   console.log("== E) a região sem Superintendente Regional ==");
   const semSup = async () => { const p = await GET(HCUIDADO, "painel", SEC); return (p.body && p.body.regioesSemSuperintendente) || null; };
@@ -87,9 +95,10 @@ const pendentesDo = async (envioId) => escalar("SELECT COUNT(*) FROM Comunicacao
   ok(!(await semSup()).some((x) => x.regiaoId === regiao), "cadastrado o Superintendente, a região sai da lista");
   await q("UPDATE Lideranca SET AtivoAte = DATEADD(DAY, -1, CAST(SYSUTCDATETIME() AS DATE)) WHERE LiderancaId = @l", { l: lid });
   ok((await semSup()).some((x) => x.regiaoId === regiao), "o mandato do Superintendente venceu: a região volta para a lista");
-  await q("UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = @c", { c: cong });
-  ok(!(await semSup()).some((x) => x.regiaoId === regiao), "região sem congregação ativa não aparece");
+  ok((await semSup()).length > 0, "(há região na lista agora)");
   const dir = await GET(HCUIDADO, "painel", LIDER(3001, ["cuidado_pastoral"], ["Central E2E"]));
   ok(dir.status === 200 && Array.isArray(dir.body.regioesSemSuperintendente) && dir.body.regioesSemSuperintendente.length === 0, "o Dirigente não recebe a lista (é assunto do nível geral)", dir.status);
+  await q("UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = @c", { c: cong });
+  ok(!(await semSup()).some((x) => x.regiaoId === regiao), "região sem congregação ativa não aparece");
   fim("e2e-37 (Trava 7-C: a crise de madrugada, o Superintendente e o teto da crise)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

@@ -35,6 +35,10 @@ const MUDOU = (mensagem) => ({ sucesso: false, mudou: true, mensagem });
 const RECUSA = (mensagem) => ({ sucesso: false, mensagem });
 const OCUPADO = (mensagem) => ({ sucesso: false, limite: true, mensagem });
 const iso = (v) => (v instanceof Date ? v.toISOString() : v ? String(v) : null);
+// v7.15: a categoria do sistema (CRISE) nunca entra pela tela de comunicados; ela nasce em shared/criseSegurancaDb.js (avisoDoSistema* abaixo)
+const doSistema = (categoria) => cm.CATEGORIAS_DO_SISTEMA.includes(categoria);
+const SEM_SISTEMA = (coluna) => `${coluna} NOT IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ") || "''"})`;
+const LISTA_DE_PROVA = cm.CATEGORIAS_DE_PROVA.map((c) => `'${c}'`).join(", ");
 const dia = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const contagem = (x) => Number((((x && x.recordset) || [])[0] || {}).n) || 0;
 async function fecharTransacao(t, ok) { try { if (ok) await t.commit(); else await t.rollback(); } catch (e) { /* já encerrada */ } }
@@ -108,7 +112,7 @@ async function minhasPreferencias(pool, membroId) {
     SELECT CASE WHEN Email IS NULL OR LTRIM(RTRIM(Email)) = '' THEN 0 ELSE 1 END AS TemEmail,
            (SELECT COUNT(*) FROM PushInscricoesMembro p WHERE p.MembroId = @m) AS Aparelhos
     FROM MembroReferencia WHERE MembroId = @m`)).recordset[0] || { TemEmail: 0, Aparelhos: 0 };
-  const categorias = Object.entries(cm.CATEGORIAS).map(([codigo, c]) => ({
+  const categorias = Object.entries(cm.CATEGORIAS).filter(([, c]) => !c.sistema).map(([codigo, c]) => ({
     categoria: codigo, rotulo: c.rotulo, descricao: c.descricao, obrigatoria: !!c.obrigatoria,
     ...(c.obrigatoria ? {} : { texto: cm.textoConsentimento(codigo), versao: cm.TEXTO_VERSAO, hash: cm.hashDoTexto(codigo) }),
     canais: Object.fromEntries(Object.keys(cm.CANAIS).map((canal) => {
@@ -241,7 +245,8 @@ const SELECT_MODELO = `SELECT m.*, a.Nome AS CriadoPorNome, b.Nome AS AprovadoPo
 // O nível geral vê tudo (rascunhos e arquivados dos últimos 2 anos); os outros, só os aprovados que podem usar (a convocação só o nível geral envia).
 async function listarModelos(pool, { ver }) {
   const cond = ver.geral ? "(m.Status <> 'ARQUIVADO' OR m.ArquivadoEm >= DATEADD(YEAR, -2, SYSUTCDATETIME()))" : "m.Status = 'APROVADO' AND m.Categoria <> 'CONVOCACAO'";
-  const r = await pool.request().query(`SELECT TOP 300 * FROM (${SELECT_MODELO}) m WHERE ${cond} ORDER BY CASE m.Status WHEN 'APROVADO' THEN 0 WHEN 'RASCUNHO' THEN 1 ELSE 2 END, m.ModeloId DESC`);
+  // v7.15: o modelo do SISTEMA (o aviso de crise) não aparece na tela: não se edita, não se arquiva e não se reenvia por aqui
+  const r = await pool.request().query(`SELECT TOP 300 * FROM (${SELECT_MODELO}) m WHERE ${cond} AND ${SEM_SISTEMA("m.Categoria")} ORDER BY CASE m.Status WHEN 'APROVADO' THEN 0 WHEN 'RASCUNHO' THEN 1 ELSE 2 END, m.ModeloId DESC`);
   return r.recordset.map(formatarModelo);
 }
 async function carregarModelo(pool, modeloId) {
@@ -260,8 +265,8 @@ async function salvarModelo(pool, { ver, dados }) {
     await t.begin();
     if (!(await obterTrava(() => new sql.Request(t), "comunicacao-modelos", 8000))) { await fecharTransacao(t, false); return OCUPADO("Outro modelo está sendo gravado. Tente de novo."); }
     if (chave) {
-      const versoes = (await new sql.Request(t).input("c", sql.NVarChar(40), chave).query(`SELECT ModeloId, Versao, Status FROM ComunicacaoModelos WHERE Chave = @c ORDER BY Versao DESC`)).recordset;
-      if (!versoes.length) { await fecharTransacao(t, false); return NAO_EXISTE; }
+      const versoes = (await new sql.Request(t).input("c", sql.NVarChar(40), chave).query(`SELECT ModeloId, Versao, Status, Categoria FROM ComunicacaoModelos WHERE Chave = @c ORDER BY Versao DESC`)).recordset;
+      if (!versoes.length || versoes.some((x) => doSistema(x.Categoria))) { await fecharTransacao(t, false); return NAO_EXISTE; }
       const rascunho = versoes.find((x) => x.Status === "RASCUNHO");
       if (rascunho) {
         await new sql.Request(t).input("id", sql.Int, rascunho.ModeloId).input("k", sql.NVarChar(12), categoria).input("ti", sql.NVarChar(150), titulo).input("co", sql.NVarChar(2000), corpo)
@@ -288,7 +293,7 @@ async function salvarModelo(pool, { ver, dados }) {
 async function aprovarModelo(pool, { ver, modeloId, hash }) {
   if (!ver.geral) return PROIBIDO("Só o nível geral aprova modelos.");
   const m = await carregarModelo(pool, modeloId);
-  if (!m) return NAO_EXISTE;
+  if (!m || doSistema(m.Categoria)) return NAO_EXISTE;
   if (m.Status !== "RASCUNHO") return RECUSA(m.Status === "APROVADO" ? "Este modelo já está aprovado." : "Este modelo está arquivado.");
   if (typeof hash !== "string" || hash !== cm.hashDoModelo({ categoria: m.Categoria, titulo: m.Titulo, corpo: m.Corpo })) return MUDOU("O texto deste rascunho mudou depois que você o abriu: leia de novo antes de aprovar.");
   const t = new sql.Transaction(pool);
@@ -309,7 +314,7 @@ async function aprovarModelo(pool, { ver, modeloId, hash }) {
 async function arquivarModelo(pool, { ver, modeloId }) {
   if (!ver.geral) return PROIBIDO("Só o nível geral arquiva modelos.");
   const m = await carregarModelo(pool, modeloId);
-  if (!m) return NAO_EXISTE;
+  if (!m || doSistema(m.Categoria)) return NAO_EXISTE;
   if (m.Status === "RASCUNHO") {
     const r = await pool.request().input("id", sql.Int, modeloId).query(`DELETE FROM ComunicacaoModelos WHERE ModeloId = @id AND Status = 'RASCUNHO'; SELECT @@ROWCOUNT AS n`);
     if (!contagem(r)) return MUDOU("O modelo mudou enquanto você decidia. Abra de novo.");
@@ -433,7 +438,7 @@ async function previa(pool, { ver, dados, deps }) {
   const d = dados || {};
   const v = cm.validarCriterios(d.criterios);
   if (v.problema) return RECUSA(v.problema);
-  if (!cm.ehCategoria(d.categoria)) return RECUSA("Escolha a categoria (ou o modelo).");
+  if (!cm.ehCategoriaDaTela(d.categoria)) return RECUSA("Escolha a categoria (ou o modelo).");
   if (d.categoria === "CONVOCACAO" && !ver.geral) return PROIBIDO("A convocação oficial só sai pelo nível geral.");
   const g = await resolverGrupo(pool, { ver, criterios: v.criterios, categoria: d.categoria, deps });
   if (g.proibido) return PROIBIDO(SO_GERAL_VOTO);
@@ -490,7 +495,7 @@ async function enviar(pool, { ver, dados, deps = {} }) {
   const v = cm.validarCriterios(d.criterios);
   if (v.problema) return RECUSA(v.problema);
   const m = await carregarModelo(pool, modeloId);
-  if (!m) return NAO_EXISTE;
+  if (!m || doSistema(m.Categoria)) return NAO_EXISTE;
   if (m.Categoria === "CONVOCACAO" && !ver.geral) return PROIBIDO("A convocação oficial só sai pelo nível geral.");
   if (m.Status !== "APROVADO") return RECUSA("Só se envia modelo aprovado.");
   const criteriosJson = JSON.stringify(v.criterios);
@@ -544,8 +549,9 @@ async function enviar(pool, { ver, dados, deps = {} }) {
 }
 
 async function cancelar(pool, { ver, envioId }) {
-  const e = (await pool.request().input("id", sql.Int, envioId).query(`SELECT EnvioId, EnviadoPorMembroId, Status FROM ComunicacaoEnvios WHERE EnvioId = @id`)).recordset[0];
+  const e = (await pool.request().input("id", sql.Int, envioId).query(`SELECT EnvioId, EnviadoPorMembroId, Status, Categoria FROM ComunicacaoEnvios WHERE EnvioId = @id`)).recordset[0];
   if (!e || !(ver.geral || Number(e.EnviadoPorMembroId) === Number(ver.membroId))) return NAO_EXISTE;
+  if (doSistema(e.Categoria)) return RECUSA("O aviso da crise é obrigatório e não se cancela: o que ainda estiver na fila para sozinho quando a crise é encerrada.");
   if (e.Status !== "FILA") return RECUSA(e.Status === "CANCELADO" ? "Este envio já foi cancelado." : "Este envio já terminou: não há o que cancelar.");
   const t = new sql.Transaction(pool);
   try {
@@ -563,16 +569,17 @@ async function cancelar(pool, { ver, envioId }) {
 
 // ---- A fila ----
 
-// Toma até `n` entregas pendentes do canal (ninguém mais as pega: READPAST + UPDLOCK), a convocação oficial primeiro, e devolve o que é preciso para mandar.
+// Toma até `n` entregas pendentes do canal (ninguém mais as pega: READPAST + UPDLOCK), o aviso de crise (v7.15) e a convocação oficial primeiro, e devolve o que é preciso para mandar.
+const PRIORIDADE = "CASE v.Categoria WHEN 'CRISE' THEN 0 WHEN 'CONVOCACAO' THEN 1 ELSE 2 END";
 async function tomar(rq, canal, n) {
   if (n <= 0) return [];
   const r = await rq.input("canal", sql.NVarChar(10), canal).input("n", sql.Int, n).query(`
     DECLARE @tomadas TABLE (EntregaId INT, EnvioId INT, MembroId INT);
     WITH alvo AS (
       SELECT TOP (@n) x.* FROM ComunicacaoEntregas x WITH (READPAST, UPDLOCK, ROWLOCK) JOIN ComunicacaoEnvios v ON v.EnvioId = x.EnvioId
-      WHERE x.Canal = @canal AND x.Situacao = 'PENDENTE' ORDER BY CASE WHEN v.Categoria = 'CONVOCACAO' THEN 0 ELSE 1 END, x.EntregaId)
+      WHERE x.Canal = @canal AND x.Situacao = 'PENDENTE' ORDER BY ${PRIORIDADE}, x.EntregaId)
     UPDATE alvo SET Situacao = 'ENVIANDO', AtualizadoEm = SYSUTCDATETIME() OUTPUT inserted.EntregaId, inserted.EnvioId, inserted.MembroId INTO @tomadas;
-    SELECT t.EntregaId, t.EnvioId, t.MembroId FROM @tomadas t JOIN ComunicacaoEnvios v ON v.EnvioId = t.EnvioId ORDER BY CASE WHEN v.Categoria = 'CONVOCACAO' THEN 0 ELSE 1 END, t.EntregaId`);
+    SELECT t.EntregaId, t.EnvioId, t.MembroId FROM @tomadas t JOIN ComunicacaoEnvios v ON v.EnvioId = t.EnvioId ORDER BY ${PRIORIDADE}, t.EntregaId`);
   return r.recordset;
 }
 async function dadosDoEnvio(pool, cache, envioId) {
@@ -720,7 +727,7 @@ async function relatorio(pool, { ver, envioId }) {
     canais, lidos: Number(leitura.lidos) || 0, ciencia: Number(leitura.ciencia) || 0
   };
   // Na convocação: quem não foi alcançado por canal nenhum fora do sistema e não leu nem deu ciência — para a Secretaria procurar por telefone (só o nível geral vê o telefone).
-  if (e.Categoria === "CONVOCACAO") {
+  if (cm.CATEGORIAS_DE_PROVA.includes(e.Categoria)) {
     const condicao = `s.EnvioId = @id AND s.Canal = 'SININHO' AND s.MembroId IS NOT NULL AND s.CienciaEm IS NULL
         AND NOT EXISTS (SELECT 1 FROM ComunicacaoEntregas x WHERE x.EnvioId = s.EnvioId AND x.MembroId = s.MembroId AND x.Canal IN ('EMAIL', 'PUSH') AND x.Situacao = 'ACEITO')
         AND NOT ${LIDA_SQL}`;
@@ -757,7 +764,7 @@ async function meusComunicados(pool, membroId) {
   return r.recordset.map((x) => {
     const vars = { nome: x.Nome, congregacao: x.Congregacao };
     return { envioId: x.EnvioId, categoria: x.Categoria, categoriaRotulo: cm.CATEGORIAS[x.Categoria].rotulo, titulo: cm.preencher(x.Titulo, vars), texto: cm.preencher(x.Corpo, vars),
-      recebidoEm: iso(x.CriadoEm), lido: !!Number(x.Lida) || !!x.LidaEm, cienciaEm: iso(x.CienciaEm), pedeCiencia: x.Categoria === "CONVOCACAO" };
+      recebidoEm: iso(x.CriadoEm), lido: !!Number(x.Lida) || !!x.LidaEm, cienciaEm: iso(x.CienciaEm), pedeCiencia: cm.CATEGORIAS_DE_PROVA.includes(x.Categoria) };
   });
 }
 // "Recebi a convocação": a ciência fica no registro de entrega, e o aviso do sininho conta como lido.
@@ -765,7 +772,7 @@ async function darCiencia(pool, { membroId, envioId }) {
   const s = (await pool.request().input("m", sql.Int, membroId).input("e", sql.Int, envioId).query(`
     SELECT s.EntregaId, s.CienciaEm, e.Categoria FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId WHERE s.MembroId = @m AND s.EnvioId = @e AND s.Canal = 'SININHO'`)).recordset[0];
   if (!s) return NAO_EXISTE;
-  if (s.Categoria !== "CONVOCACAO") return RECUSA("Só a convocação oficial pede ciência.");
+  if (!cm.CATEGORIAS_DE_PROVA.includes(s.Categoria)) return RECUSA("Só a convocação oficial e o aviso de crise pedem ciência.");
   if (!s.CienciaEm) {
     await pool.request().input("id", sql.Int, s.EntregaId).query(`UPDATE ComunicacaoEntregas SET CienciaEm = SYSUTCDATETIME() WHERE EntregaId = @id AND CienciaEm IS NULL`);
     await auditar("ComunicacaoEntregas", s.EntregaId, "COMUNICACAO_CIENCIA", membroId);
@@ -773,6 +780,74 @@ async function darCiencia(pool, { membroId, envioId }) {
   await pool.request().input("m", sql.Int, membroId).input("e", sql.Int, envioId).query(`
     UPDATE Notificacoes SET Lida = 1, LidaEm = SYSUTCDATETIME() WHERE RegraChave = 'COMUNICADO' AND ReferenciaTabela = 'ComunicacaoEnvios' AND ReferenciaId = @e AND DestinatarioMembroId = @m AND Lida = 0`);
   return { sucesso: true, comunicados: await meusComunicados(pool, membroId) };
+}
+
+// ---------------------------------------------------------------
+// 5) O aviso do SISTEMA (v7.15 — o aviso do regime de crise, Regimento Art. 161-B)
+// ---------------------------------------------------------------
+// Não passa pela tela de modelos nem pelo grupo por critérios: quem chama (shared/criseSegurancaDb.js) decide as pessoas e o texto. É feito em partes, para caber na transação
+// de quem chama: `prepararAvisoDoSistema` (FORA da transação: só lê se cada pessoa tem e-mail e aparelho e monta o texto de cada uma), `gravarAvisoDoSistema` (DENTRO dela: o
+// modelo já aprovado, o envio, as entregas e o sininho, tudo junto com o ato) e, depois do commit, `depoisDoAvisoDoSistema` (a marca da fila e a primeira rodada: o celular sai
+// na hora; o e-mail, aos poucos, pela mesma fila que respeita os 100 por hora do Azure). A categoria é obrigatória: não pede consentimento e não tem link de saída.
+async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas }) {
+  if (!doSistema(categoria)) throw new Error("Categoria do sistema desconhecida.");
+  const linhas = await situacaoPorCanal(pool, { ids: pessoas.map((p) => p.MembroId), categoria });
+  const porId = new Map(linhas.map((l) => [l.membroId, l]));
+  const entregas = [], sininho = [];
+  for (const p of pessoas) {
+    const l = porId.get(p.MembroId);
+    if (!l) continue;
+    entregas.push({ m: p.MembroId, c: "SININHO", s: "ACEITO" }, { m: p.MembroId, c: "EMAIL", s: l.EMAIL }, { m: p.MembroId, c: "PUSH", s: l.PUSH });
+    sininho.push({ d: p.MembroId, t: cm.preencher(titulo, { nome: p.Nome, congregacao: p.Congregacao }).slice(0, 200),
+      msg: cm.textoDoSininho(cm.preencher(corpo, { nome: p.Nome, congregacao: p.Congregacao })) });
+  }
+  return { categoria, titulo, corpo, entregas, sininho };
+}
+// `novoRequest`: () => new sql.Request(transacao). Devolve o envioId.
+async function gravarAvisoDoSistema(novoRequest, preparo, { chave, enviadoPor, grupo }) {
+  const { categoria, titulo, corpo } = preparo;
+  const modeloId = (await novoRequest().input("c", sql.NVarChar(40), chave).input("k", sql.NVarChar(12), categoria).input("ti", sql.NVarChar(150), titulo)
+    .input("co", sql.NVarChar(2000), corpo).input("por", sql.Int, enviadoPor)
+    .query(`INSERT INTO ComunicacaoModelos (Chave, Versao, Categoria, Titulo, Corpo, Status, CriadoPorMembroId, AprovadoPorMembroId, AprovadoEm)
+            VALUES (@c, 1, @k, @ti, @co, 'APROVADO', @por, @por, SYSUTCDATETIME()); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
+  const envioId = (await novoRequest().input("mo", sql.Int, modeloId).input("k", sql.NVarChar(12), categoria).input("j", sql.NVarChar(2000), JSON.stringify({ sistema: categoria }))
+    .input("g", sql.NVarChar(500), String(grupo).slice(0, 500)).input("eu", sql.Int, enviadoPor).input("tot", sql.Int, preparo.sininho.length)
+    .query(`INSERT INTO ComunicacaoEnvios (ModeloId, Categoria, CriteriosJson, GrupoDescricao, EnviadoPorMembroId, Total) VALUES (@mo, @k, @j, @g, @eu, @tot); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
+  for (const bloco of emBlocos(preparo.entregas, LOTE_INSERCAO)) {
+    await novoRequest().input("e", sql.Int, envioId).input("j", sql.NVarChar(sql.MAX), JSON.stringify(bloco)).query(`
+      INSERT INTO ComunicacaoEntregas (EnvioId, MembroId, Canal, Situacao) SELECT @e, x.m, x.c, x.s FROM OPENJSON(@j) WITH (m INT '$.m', c NVARCHAR(10) '$.c', s NVARCHAR(18) '$.s') x`);
+  }
+  for (const bloco of emBlocos(preparo.sininho, LOTE_INSERCAO)) {
+    await novoRequest().input("e", sql.Int, envioId).input("j", sql.NVarChar(sql.MAX), JSON.stringify(bloco)).query(`
+      INSERT INTO Notificacoes (RegraChave, DestinatarioMembroId, Titulo, Mensagem, Categoria, ReferenciaTabela, ReferenciaId)
+      SELECT N'COMUNICADO', x.d, x.t, x.msg, N'COMUNICACAO', N'ComunicacaoEnvios', @e FROM OPENJSON(@j) WITH (d INT '$.d', t NVARCHAR(200) '$.t', msg NVARCHAR(1000) '$.msg') x`);
+  }
+  return envioId;
+}
+// O aviso anterior que ainda não saiu (celular e e-mail na fila) fica velho quando a crise muda de porta-voz ou acaba: o novo vai a todos. O que já saiu fica.
+async function cancelarPendentesDoSistema(novoRequest, envioIds) {
+  const ids = (envioIds || []).filter((x) => Number.isInteger(x) && x > 0);
+  if (!ids.length) return 0;
+  return contagem(await novoRequest().input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids)).query(`
+    UPDATE x SET Situacao = 'CANCELADO', AtualizadoEm = SYSUTCDATETIME() FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios e ON e.EnvioId = x.EnvioId
+    WHERE x.Situacao = 'PENDENTE' AND x.Canal IN ('EMAIL', 'PUSH') AND e.Categoria IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ")})
+      AND x.EnvioId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)); SELECT @@ROWCOUNT AS n`));
+}
+// Depois do commit: a marca da fila e uma rodada (curta) junto com a resposta. O resto vai pela rotina de 15 em 15 minutos (e pelo botão "Continuar o aviso").
+async function depoisDoAvisoDoSistema(pool, { deps = {}, orcamentoMs = 12000 } = {}) {
+  await regravarMarca(pool);
+  try { return await processarFila(pool, { deps, orcamentoMs: deps.orcamentoMs || orcamentoMs, maxEmails: 10 }); } catch (e) { console.error("[COMUNICACAO] primeira rodada do aviso do sistema:", e && e.message); return null; }
+}
+// Para o painel da crise: quantas pessoas, o que cada canal já fez e quantas leram ou deram ciência (sem nomes).
+async function situacaoDoAvisoDoSistema(pool, envioId) {
+  const porCanal = (await pool.request().input("id", sql.Int, envioId).query(`SELECT Canal, Situacao, COUNT(*) AS n FROM ComunicacaoEntregas WHERE EnvioId = @id GROUP BY Canal, Situacao`)).recordset;
+  const canais = {};
+  for (const l of porCanal) (canais[l.Canal] = canais[l.Canal] || {})[l.Situacao] = Number(l.n);
+  const leitura = (await pool.request().input("id", sql.Int, envioId).query(`
+    SELECT (SELECT COUNT(*) FROM ComunicacaoEntregas s WHERE s.EnvioId = @id AND s.Canal = 'SININHO' AND ${LIDA_SQL}) AS lidos,
+           (SELECT COUNT(*) FROM ComunicacaoEntregas WHERE EnvioId = @id AND Canal = 'SININHO' AND CienciaEm IS NOT NULL) AS ciencia,
+           (SELECT Total FROM ComunicacaoEnvios WHERE EnvioId = @id) AS total`)).recordset[0] || {};
+  return { envioId, total: Number(leitura.total) || 0, canais, lidos: Number(leitura.lidos) || 0, ciencia: Number(leitura.ciencia) || 0 };
 }
 
 // ---------------------------------------------------------------
@@ -790,7 +865,7 @@ async function diasDeRetencao(pool, chave) {
 async function aplicarRetencao(pool) {
   const comum = await diasDeRetencao(pool, "entregas");
   const conv = await diasDeRetencao(pool, "convocacao");
-  const vencidos = `SELECT e.EnvioId FROM ComunicacaoEnvios e WHERE e.CriadoEm < DATEADD(DAY, -CASE WHEN e.Categoria = 'CONVOCACAO' THEN @dv ELSE @dc END, SYSUTCDATETIME())`;
+  const vencidos = `SELECT e.EnvioId FROM ComunicacaoEnvios e WHERE e.CriadoEm < DATEADD(DAY, -CASE WHEN e.Categoria IN (${LISTA_DE_PROVA}) THEN @dv ELSE @dc END, SYSUTCDATETIME())`;
   const t = new sql.Transaction(pool);
   let entregas = 0, avisos = 0;
   try {
@@ -821,7 +896,7 @@ async function exclusaoLgpd(r, membroId) {
   await r().input("m", sql.Int, membroId).query(`UPDATE ComunicacaoEntregas SET Situacao = 'CANCELADO', AtualizadoEm = SYSUTCDATETIME() WHERE MembroId = @m AND Situacao IN ('PENDENTE', 'ENVIANDO')`);
   const entregas = await r().input("m", sql.Int, membroId).query(`
     UPDATE s SET MembroId = NULL, AnonimizadoEm = SYSUTCDATETIME() FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId
-    WHERE s.MembroId = @m AND e.Categoria <> 'CONVOCACAO'; SELECT @@ROWCOUNT AS n`);
+    WHERE s.MembroId = @m AND e.Categoria NOT IN (${LISTA_DE_PROVA}); SELECT @@ROWCOUNT AS n`);
   const avisos = await r().input("m", sql.Int, membroId).query(`DELETE FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND DestinatarioMembroId = @m; SELECT @@ROWCOUNT AS n`);
   const prefs = await r().input("m", sql.Int, membroId).query(`DELETE FROM NotificacaoPreferencias WHERE MembroId = @m; SELECT @@ROWCOUNT AS n`);
   const aparelhos = await r().input("m", sql.Int, membroId).query(`DELETE FROM PushInscricoesMembro WHERE MembroId = @m; SELECT @@ROWCOUNT AS n`);
@@ -845,5 +920,6 @@ async function dadosDoTitular(pool, membroId) {
 module.exports = {
   PERMISSAO, MAX_GRUPO, minhasPreferencias, salvarPreferencias, validarMudancas, registrarFicha, consultarSaida, confirmarSaida,
   listarModelos, salvarModelo, aprovarModelo, arquivarModelo, opcoes, resolverGrupo, previa, salvarGrupo, listarGrupos, excluirGrupo,
-  enviar, cancelar, processarFila, relatorio, listarEnvios, meusComunicados, darCiencia, aplicarRetencao, rotinaDiaria, exclusaoLgpd, dadosDoTitular, regravarMarca
+  enviar, cancelar, processarFila, relatorio, listarEnvios, meusComunicados, darCiencia, aplicarRetencao, rotinaDiaria, exclusaoLgpd, dadosDoTitular, regravarMarca,
+  prepararAvisoDoSistema, gravarAvisoDoSistema, cancelarPendentesDoSistema, depoisDoAvisoDoSistema, situacaoDoAvisoDoSistema
 };

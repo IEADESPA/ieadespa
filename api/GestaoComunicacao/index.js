@@ -87,7 +87,7 @@ async function principal(context, req) {
     if (metodo === "GET") {
       if (acao === "catalogos") {
         context.res = { status: 200, body: { sucesso: true,
-          categorias: Object.entries(cm.CATEGORIAS).map(([codigo, c]) => ({ codigo, rotulo: c.rotulo, descricao: c.descricao, obrigatoria: !!c.obrigatoria })),
+          categorias: Object.entries(cm.CATEGORIAS).filter(([, c]) => !c.sistema).map(([codigo, c]) => ({ codigo, rotulo: c.rotulo, descricao: c.descricao, obrigatoria: !!c.obrigatoria })),
           canais: Object.entries(cm.CANAIS).map(([codigo, rotulo]) => ({ codigo, rotulo })), situacoes: cm.SITUACOES, maxGrupo: db.MAX_GRUPO,
           papeis: { gestao, geral } } };
         return;

@@ -4,7 +4,7 @@
 //
 // Duas telas sobre uma rota do servidor (GestaoComunicacao: /api/comunicacao/*):
 //   1) Meu Painel → Comunicações (qualquer login, inclusive PIN): o que a pessoa quer receber, por categoria e por canal, lendo o texto exato de cada autorização; e os comunicados
-//      que ela recebeu, com o "Recebi a convocação" da convocação oficial;
+//      que ela recebeu, com o "Recebi a convocação" da convocação oficial (e o "Li o aviso" do aviso de crise da v7.15);
 //   2) aba "Comunicação" (permissão comunicacao, sessão de liderança): ENVIAR (modelo aprovado + grupo montado pelos critérios + quantas pessoas, antes de mandar), ENVIOS (relatório de
 //      entrega e leitura; na convocação, quem não foi alcançado), MODELOS (só o nível geral escreve e aprova) e FICHA EM PAPEL (só o nível geral: o "sim" ou o "não" que a pessoa deu no papel).
 // Toda regra mora no servidor (shared/comunicacao.js e shared/comunicacaoDb.js): aqui só se monta o que ele devolve e se manda o que a pessoa fez. 422 = recusa de regra, mostrada tal
@@ -220,7 +220,7 @@ function comPintarComunicados(data) {
     const id = comInteiro(c.envioId);
     const ciencia = c.pedeCiencia
       ? (c.cienciaEm ? `<p class="subtitle">✅ Ciência registrada em ${comData(c.cienciaEm)}.</p>`
-        : (id ? `<div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="comCienciaAcao" data-args-click="${argsAttr(id, ARG.elemento)}">✔️ Recebi a convocação</button></div>` : ""))
+        : (id ? `<div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="comCienciaAcao" data-args-click="${argsAttr(id, ARG.elemento)}">${c.categoria === "CRISE" ? "✔️ Li o aviso" : "✔️ Recebi a convocação"}</button></div>` : ""))
       : "";
     return `<article class="com-comunicado"><h4>${escaparHtmlEbd(c.titulo)}</h4>
       <p class="subtitle">${escaparHtmlEbd(c.categoriaRotulo || comRotuloCategoria(c.categoria))} · ${comData(c.recebidoEm)}</p>
@@ -501,7 +501,7 @@ function comHtmlRelatorio(r) {
   return `<div class="com-comunicado"><h4>${escaparHtmlEbd(e.titulo)} (v${comInteiro(e.versao)})</h4>
     <p class="subtitle">${escaparHtmlEbd(e.categoriaRotulo)} · ${comData(e.criadoEm)} · ${Number(e.total) || 0} pessoa(s) · ${escaparHtmlEbd(e.grupo)}</p>
     <ul>${linhas}</ul>
-    <p>Leram no sininho: <strong>${Number(r.lidos) || 0}</strong>${e.categoria === "CONVOCACAO" ? ` · Deram ciência ("Recebi a convocação"): <strong>${Number(r.ciencia) || 0}</strong>` : ""}</p>
+    <p>Leram no sininho: <strong>${Number(r.lidos) || 0}</strong>${e.categoria === "CONVOCACAO" || e.categoria === "CRISE" ? ` · Deram ciência (${e.categoria === "CRISE" ? '"Li o aviso"' : '"Recebi a convocação"'}): <strong>${Number(r.ciencia) || 0}</strong>` : ""}</p>
     ${nao ? (nao.length ? `<h4>Não alcançados (nem e-mail, nem celular, nem leitura): procure por telefone</h4>${r.naoAlcancadosCortado
       ? `<p class="subtitle psc-aviso">Mostrando ${nao.length} de ${Number(r.naoAlcancadosTotal) || nao.length}: a lista é cortada; procure os primeiros e abra o relatório de novo depois.</p>` : ""}<ul>${nao.map(p => {
       const tel = p.telefone ? String(p.telefone).replace(/\D/g, "").slice(0, 15) : "";

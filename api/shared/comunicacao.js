@@ -15,12 +15,22 @@ const CATEGORIAS = {
   CONVOCACAO: { rotulo: "Convocação oficial", descricao: "Convocação de assembleias e reuniões do Estatuto. É obrigação da Igreja avisar: chega por todo canal que você tiver, mesmo sem marcar.", obrigatoria: true },
   EVENTOS: { rotulo: "Eventos", descricao: "Cultos especiais, congressos, inscrições e programações." },
   DEVOCIONAL: { rotulo: "Devocional", descricao: "Mensagens de edificação, leitura bíblica e oração." },
-  FINANCEIRO: { rotulo: "Financeiro", descricao: "Prestação de contas e campanhas da Igreja (nunca o que você dá ou deixa de dar)." }
+  FINANCEIRO: { rotulo: "Financeiro", descricao: "Prestação de contas e campanhas da Igreja (nunca o que você dá ou deixa de dar)." },
+  // v7.15 — o aviso do regime de crise (Regimento Art. 161-B). É do SISTEMA: nasce só pela abertura, troca de porta-voz e encerramento da crise (shared/criseSegurancaDb.js),
+  // nunca por modelo escrito na tela; vai a toda a liderança ativa, como a convocação (obrigatório, sem link de saída, passa na frente na fila, ciência e registro por 5 anos).
+  CRISE: { rotulo: "Aviso de crise", descricao: "Aviso do regime de crise (Regimento Art. 161-B): quem é o porta-voz único e o que fica proibido. Chega a toda a liderança, por todo canal.",
+    obrigatoria: true, sistema: true,
+    rodape: "Você recebe este aviso porque é da liderança da Igreja: durante o regime de crise, o Regimento (Art. 161-B) pede que toda a liderança saiba quem é o porta-voz único." }
 };
 const CATEGORIAS_COM_CONSENTIMENTO = ["EVENTOS", "DEVOCIONAL", "FINANCEIRO"];
 // "constructor" e "toString" existem em todo objeto: a conferência de código vindo de fora é sempre pela chave PRÓPRIA (revisão independente, 22/10/2026)
 const proprio = (obj, chave) => typeof chave === "string" && Object.prototype.hasOwnProperty.call(obj, chave);
 const ehCategoria = (c) => proprio(CATEGORIAS, c);
+// v7.15 — as categorias que a TELA usa (modelo, prévia, catálogo, preferências): a do sistema (CRISE) fica de fora.
+const ehCategoriaDaTela = (c) => ehCategoria(c) && !CATEGORIAS[c].sistema;
+const CATEGORIAS_DO_SISTEMA = Object.keys(CATEGORIAS).filter((c) => CATEGORIAS[c].sistema);
+// As que valem como prova do ato (ciência, quem não foi alcançado, 5 anos de registro, ficam na exclusão LGPD): a convocação oficial e o aviso de crise.
+const CATEGORIAS_DE_PROVA = Object.keys(CATEGORIAS).filter((c) => CATEGORIAS[c].obrigatoria);
 // Os canais externos com envio. WhatsApp e SMS ficam no banco para ligar depois (decisão de 22/10/2026), sem aparecer na tela.
 const CANAIS = { EMAIL: "E-mail", PUSH: "Celular (aviso do aplicativo)" };
 const CANAIS_PREVISTOS = ["WHATSAPP", "SMS"];
@@ -72,7 +82,7 @@ function validarTexto(v, { campo, max, min = 1 }) {
 // Um modelo: categoria, título e texto, com só os campos que o sistema sabe preencher.
 function validarModelo(dados) {
   const d = dados && typeof dados === "object" ? dados : {};
-  if (!ehCategoria(d.categoria)) return { problema: "Escolha a categoria do comunicado." };
+  if (!ehCategoriaDaTela(d.categoria)) return { problema: "Escolha a categoria do comunicado." };
   const titulo = validarTexto(d.titulo, { campo: "o título", max: MAX_TITULO, min: 3 });
   if (titulo.problema) return titulo;
   if (/\n/.test(titulo.texto)) return { problema: "O título é uma linha só." };
@@ -216,7 +226,7 @@ const escaparHtml = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (c) =>
 function montarEmail({ titulo, corpo, categoria, linkSair }) {
   const c = CATEGORIAS[categoria];
   const rodape = c.obrigatoria
-    ? "Você recebe esta convocação porque é membro da Igreja: avisar é obrigação do Estatuto, e ela chega a todos, mesmo a quem não quer outros comunicados."
+    ? (c.rodape || "Você recebe esta convocação porque é membro da Igreja: avisar é obrigação do Estatuto, e ela chega a todos, mesmo a quem não quer outros comunicados.")
     : `Você recebe "${c.rotulo}" porque marcou essa opção em Meu Painel. Não quer mais receber por e-mail? ${linkSair}`;
   const texto = `${corpo}\n\n—\n${rodape}`;
   const rodapeHtml = c.obrigatoria ? escaparHtml(rodape)
@@ -230,6 +240,6 @@ const hashDoModelo = (m) => sha256(`${m.categoria}|${m.titulo}|${m.corpo}`);
 
 module.exports = {
   CATEGORIAS, CATEGORIAS_COM_CONSENTIMENTO, CANAIS, CANAIS_PREVISTOS, SITUACOES, TEXTO_VERSAO, TEXTO_SAIDA, HASH_SAIDA, MAX_TITULO, MAX_CORPO, MAX_NOME_GRUPO, MAX_SININHO,
-  ehCategoria, ehCanal, hashDoModelo, textoConsentimento, hashDoTexto, validarTexto, validarModelo, chaveDoTitulo, primeiroNome, preencher, textoDoSininho,
+  ehCategoria, ehCategoriaDaTela, CATEGORIAS_DO_SISTEMA, CATEGORIAS_DE_PROVA, ehCanal, hashDoModelo, textoConsentimento, hashDoTexto, validarTexto, validarModelo, chaveDoTitulo, primeiroNome, preencher, textoDoSininho,
   validarCriterios, descreverCriterios, assinarSaida, lerSaida, montarEmail, escaparHtml, sha256
 };

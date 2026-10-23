@@ -248,6 +248,8 @@ const MANUAIS = [
   ["viva: o pedido de visita que volta depois de sair da sub-aba é pintado", P, "    if (!cpaViva(marca) || !cpaEl(\"cpaPvMsg\")) return;", "    if (!cpaEl(\"cpaPvMsg\")) return;"],
   ["viva: o pedido em mãos que volta depois de sair da seção é pintado", P, "    if (!cpaViva(marca) || !cpaSecaoViva(\"pedidos\") || !cpaEl(\"cpaRpMsg\")) return;", "    if (!cpaEl(\"cpaRpMsg\")) return;"],
   ["viva: o boletim que chega depois de sair é pintado", P, "  if (seq !== cpaSeqBol || !cpaViva(marca)) return;", "  if (seq !== cpaSeqBol) return;"],
+  ["Trava 7-C: o aviso da região sem Superintendente some", P, "  const avisoSup = semSup.length ?", "  const avisoSup = false ?"],
+  ["Trava 7-C: o nome da região sem escape", P, "${semSup.map(r => `${escaparHtmlEbd(r.nome)} (", "${semSup.map(r => `${r.nome} ("],
   ["viva: o painel que chega depois de sair é pintado", P, "  if (seq !== cpaSeqPainel || !cpaViva(marca)) return;", "  if (seq !== cpaSeqPainel) return;"],
   ["viva: o boletim do Meu Painel é pedido fora da sub-aba", P, "  const marca = cpaMarca(\"Meu\");\n  if (!cpaViva(marca)) return;\n  const seq = ++cpaSeqBolMeu;", "  const marca = cpaMarca(\"Meu\");\n  const seq = ++cpaSeqBolMeu;"],
   ["sair da aba: as respostas a caminho (fila, pedidos, boletim, painel, busca) entram depois", P, "  cpaSeqFila++; cpaSeqPed++; cpaSeqBol++; cpaSeqPainel++; cpaSeqBusca++;\n  cpaFila = [];", "  cpaFila = [];"],
@@ -622,7 +624,7 @@ const MANUAIS = [
   ["boletim: o de Meu Painel mostra o cabeçalho da congregação", P, "  cx.innerHTML = cpaHtmlBoletim(data.linhas, false);", "  cx.innerHTML = cpaHtmlBoletim(data.linhas, true);"],
   ["boletim: a falha deixa o boletim antigo", P, "  if (data.sucesso === false || !Array.isArray(data.linhas)) { if (cx) cx.innerHTML = \"\"; cpaMostrarResultado(data, \"cpaBolMsg\", true); return; }", "  if (data.sucesso === false || !Array.isArray(data.linhas)) { cpaMostrarResultado(data, \"cpaBolMsg\", true); return; }"],
   ["painel: vencidos sem destaque", P, "<td class=\"${Number(c.vencidos) > 0 ? \"cpa-num-alerta\" : \"\"}\">", "<td class=\"\">"],
-  ["painel: a tabela sem a caixa que rola", P, "  cx.innerHTML = linhas.length ? `<div class=\"cpa-rolagem\"><table", "  cx.innerHTML = linhas.length ? `<div><table"],
+  ["painel: a tabela sem a caixa que rola", P, "  cx.innerHTML = avisoSup + (linhas.length ? `<div class=\"cpa-rolagem\"><table", "  cx.innerHTML = avisoSup + (linhas.length ? `<div><table"],
   ["painel: o vazio vira zero", P, "function cpaNumeroOuTraco(v) { return v == null || !Number.isFinite(Number(v)) ? \"—\" : String(Number(v)).replace(\".\", \",\"); }", "function cpaNumeroOuTraco(v) { return String(Number(v || 0)).replace(\".\", \",\"); }"],
 
   // ---- Meu Painel

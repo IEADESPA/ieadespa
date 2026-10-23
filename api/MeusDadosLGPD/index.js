@@ -22,6 +22,7 @@ const menoresConsentimentoDb = require("../shared/menoresConsentimentoDb");
 const checkinInfantilDb = require("../shared/checkinInfantilDb");
 const cuidadoPastoralDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
+const identidadeDb = require("../shared/identidadeVisualDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -130,6 +131,8 @@ module.exports = async function (context, req) {
   const cuidadoPastoral = await cuidadoPastoralDb.dadosDoTitular(pool, alvo);
   // v7.12 — comunicação: o histórico de consentimento (canal, categoria, sim/não, origem, versão do texto) e quantos comunicados a pessoa recebeu.
   const comunicacao = await comunicacaoDb.dadosDoTitular(pool, alvo);
+  // v7.14 — identidade visual: as sugestões de tema e as artes que a pessoa mandou (com a situação de cada uma)
+  const identidadeVisual = await identidadeDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -155,7 +158,8 @@ module.exports = async function (context, req) {
       ministerioMenores,
       checkinInfantil,
       cuidadoPastoral,
-      comunicacao
+      comunicacao,
+      identidadeVisual
     }
   };
 };

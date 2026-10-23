@@ -1151,3 +1151,32 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
 .pagina-sair { display: flex; justify-content: center; padding: 16px; }
 .sair-caixa { max-width: 35rem; width: 100%; }
 .sair-caixa h1 { font-size: 1.4rem; }
+
+/* v7.14 — Identidade Visual (módulo identidade-visual.js: Meu Painel → Identidade Visual e a aba Identidade Visual) e Meu Painel → Votações (enquetes.js). Prefixo .idv-;
+   só variáveis do tema; larguras em rem. No celular tudo empilha; todo alvo de toque tem pelo menos 44 px. */
+.idv-cartao { border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 12px; margin: 0 0 12px; overflow-wrap: anywhere; }
+.idv-cartao h4 { margin: 0 0 8px; }
+.idv-linha { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.idv-linha li { flex: 1 1 9rem; border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.idv-linha li span { font-size: 0.85rem; }
+.idv-linha li.idv-atual { border-color: var(--cor-secundaria); background: var(--cor-secundaria-suave); }
+.idv-vigente, .idv-tema { font-size: 1.05rem; }
+.idv-lista { padding-left: 1.2rem; }
+.idv-lista li { margin: 0 0 10px; overflow-wrap: anywhere; }
+.idv-opcoes { border: 1px solid var(--borda, #ddd); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.idv-opcao { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; width: auto; }
+.idv-opcao input { width: 22px; height: 22px; margin: 0; }
+.idv-cores { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
+.idv-cor { display: inline-flex; align-items: center; gap: 6px; }
+.idv-amostra { display: inline-block; width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--borda, #999); }
+.idv-triagem { border-left: 3px solid var(--borda, #ddd); padding-left: 10px; margin: 6px 0; }
+.idv-alerta { color: #7A6110; font-weight: 600; }
+.idv-arte-img { display: block; max-width: 100%; max-height: 24rem; height: auto; margin: 8px 0; border-radius: 8px; border: 1px solid var(--borda, #ddd); }
+.idv-tema-manual { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.idv-tema-manual input[type="number"] { width: 6rem; }
+.idv-tema-manual input[type="text"] { flex: 1 1 14rem; min-width: 0; }
+.idv-form-cor input[type="color"] { width: 4rem; min-height: 44px; padding: 2px; }
+#idvPilulas .cal-pilula, .idv-cartao .btn-link { min-height: 44px; }
+@media (max-width: 640px) {
+  .idv-linha li { flex-basis: 100%; }
+}

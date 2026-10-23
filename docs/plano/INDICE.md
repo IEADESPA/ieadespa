@@ -153,7 +153,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 86/95 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 91/96 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -173,7 +173,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | 🟡 11/12 |
 | v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ✅ 5/5 |
 | v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ✅ 6/6 |
-| v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ⬜ 0/4 |
+| v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ✅ 5/5 |
 | v7.15 | [Gestão de crise e porta-voz único *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v715--gestão-de-crise-e-porta-voz-único-gap-da-varredura-normativa) | ⬜ 0/4 |
 | 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | — |
 

@@ -320,8 +320,8 @@ diz em que arquivo ela está e em que pé ela anda.
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 a v7.8 e v7.10 a v7.13 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
   congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças, Check-in
-  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. Próxima: **v7.14**
-  (identidade visual anual); a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
+  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. A **v7.14**
+  (identidade visual anual) está construída e vai à homologação; a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
   feitos; só a chave site↔sistema nos dois portais do Azure depende de gente. O resumo em prosa completo está no
   começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
 - **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
@@ -343,7 +343,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 e v7.10 a v7.13 entregues; Travas 7-A e 7-B fechadas em 08/10 e 20/10/2026; próxima: v7.14; a antiga v7.9 foi fundida à v8.1 na fase 8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 e v7.10 a v7.13 entregues; Travas 7-A e 7-B fechadas em 08/10 e 20/10/2026; v7.14 construída, a homologar; a antiga v7.9 foi fundida à v8.1 na fase 8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
@@ -509,6 +509,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 - **Cuidado pastoral (v7.11, migração 148):** `CuidadoItens` (fila com responsável, prazo e degrau da escada), `CuidadoEventos`, `NotasPastorais` (três níveis de sigilo; não se editam), `NotasPastoraisLeituras`, `PedidosOracao`
   (moderação, boletim sem nome, sinal de risco); permissão `cuidado_pastoral` e papel "Superintendente Regional". Rota `/api/cuidado-pastoral/<ação>`; a rotina das 7h detecta afastamento e sobe a escada. v7.11.1 (migração 149): o confidencial e o com risco do mural do site entram por `/api/cuidado-pastoral-site` (chave do site), só no nível geral.
 - **Comunicação (v7.12, migração 150):** `ComunicacaoConsentimentos` (canal × categoria, com a impressão digital do texto aceito; não se edita), `ComunicacaoModelos` (o aprovado não se edita), `ComunicacaoAudiencias`, `ComunicacaoEnvios` e `ComunicacaoEntregas` (por pessoa e canal; ciência da convocação); permissão `comunicacao`. Rotas `/api/comunicacao/<ação>`, `/api/comunicacao-sair` (link do e-mail, sem login) e a fila `/api/comunicacao-fila-interna` (a cada 15 minutos). Sem WhatsApp/SMS e sem grupo pelo dízimo (decisões de 22/10/2026).
+- **Identidade visual anual (v7.14, migração 151):** `IdentidadeCiclos` (um por ano, aberto pela Diretoria; as etapas do Art. 159 são calculadas pela data de Brasília), `IdentidadeTemasUsados` (desde 2006; o do processo não se edita), `IdentidadeSugestoes` (até 3 por pessoa, texto único no ciclo, triagem com a redação original guardada), `IdentidadeCores`, `IdentidadeArtes` (imagem no Storage privado) e `IdentidadeResultados` (não se edita); `Enquetes.DataFechamentoPrevista` (a enquete que fecha sozinha; a votação do tema é uma Enquete votada em Meu Painel → Votações). Permissão `identidade_visual` (só o nível Geral). Rota `/api/identidade-visual/<ação>`.
 
 **Ainda não existem** (projeção das fases futuras, nomes sujeitos a mudança): missões
 (`CamposMissionarios`, `RelatoriosCampo`) e obrigações fiscais (`ObrigacoesAcessorias`). EBD, departamentos, eventos e proteção de menores já existem (acima).

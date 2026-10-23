@@ -18,7 +18,8 @@ jest.mock("../storage", () => ({
   excluirDocumento: jest.fn(async () => {}),
   urlDocumentoComSas: (u) => `${u}?sas`
 }));
-jest.mock("../enquetes", () => ({ membrosElegiveis: jest.fn() }));
+// (v7.14) o voto confere o público só da pessoa (membroElegivel): aqui ele segue a mesma lista simulada de membrosElegiveis
+jest.mock("../enquetes", () => { const membrosElegiveis = jest.fn(); return { membrosElegiveis, membroElegivel: jest.fn(async (p, s, e, m) => (await membrosElegiveis(p, s, e)).has(Number(m))), passouDoFechamento: jest.requireActual("../enquetes").passouDoFechamento }; });
 jest.mock("../universo", () => ({
   composicaoCLI: jest.fn(),
   membrosComCartaMudancaEmitida: jest.fn(async () => new Set()),

@@ -10,7 +10,9 @@
 // pra formulário de 1 pergunta só, tipo Opções.
 //
 // GET  /api/enquetes                 -> lista (participação/resultado, respeita Visibilidade)
-// POST /api/enquetes                 -> cria (exige permissão reunioes/assembleia)
+// GET  /api/enquetes?paraVotar=1     -> (v7.14, Meu Painel → Votações) só as ABERTAS em que a pessoa da sessão está no público: perguntas e opções, sem contagem, e se ela já
+//                                       respondeu. Qualquer login (inclusive PIN).
+// POST /api/enquetes                 -> cria (exige permissão reunioes/assembleia); `dataFechamentoPrevista` opcional ("AAAA-MM-DDTHH:MM", horário de Brasília): fecha sozinha
 // POST /api/enquetes/{id}/votar      -> body: { respostas: [{perguntaId, opcaoId?|textoResposta?}] } — exige sessão; o voto é SEMPRE da matrícula da sessão
 //                                       (fecho da v7.5: antes bastava informar uma matrícula no corpo e qualquer um votava em nome de qualquer pessoa)
 // POST /api/enquetes/{id}/encerrar   -> fecha; se Vinculante, calcula ResultadoAprovado
@@ -22,12 +24,17 @@
 //  - ENCERRAR: o criador da enquete ou o GERAL (encerrar fixa o resultado de uma enquete vinculante);
 //  - GET: quem não tem "reunioes"/"assembleia" só vê as enquetes em que está no público e, nelas, só a própria participação; a mesa local vê participantes e respostas
 //    só de pessoas do seu escopo (e o total de votos por opção, que é agregado, continua inteiro).
+//
+// v7.14 (Identidade Visual): (1) a enquete pode fechar sozinha (DataFechamentoPrevista): passado o instante, a leitura já a mostra ENCERRADA e o voto é recusado — conferido
+// no próprio INSERT, pela hora do banco —, e a rotina diária a encerra de vez; (2) o voto confere o público só da pessoa (não relê o cadastro inteiro a cada voto) e, com
+// dois envios ao mesmo tempo, o segundo esbarra na chave única (uma resposta por pergunta e pessoa) e recebe "já respondeu" — antes, um erro 500; (3) a votação do tema da
+// Identidade Visual não se encerra à mão: ela fecha sozinha no fim do dia 30/11 e o ciclo apura.
 const auth = require("../shared/auth");
 const { ehGeral, noEscopoDaPessoa } = require("../shared/escopoRotas");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { membrosElegiveis } = require("../shared/enquetes");
+const { membrosElegiveis, membroElegivel, passouDoFechamento } = require("../shared/enquetes");
 const estatuto = require("../shared/estatuto");
 
 const TIPOS_VALIDOS = ["OPCOES", "TEXTO_LIVRE"];
@@ -46,11 +53,15 @@ async function montarEnqueteCompleta(pool, enqueteId) {
            Visibilidade AS visibilidade, PublicoTipo AS publicoTipo, Vinculante AS vinculante,
            QuorumTipo AS quorumTipo, Status AS status, ResultadoAprovado AS resultadoAprovado, CriadoPor AS criadoPor,
            CONVERT(varchar(33), DataAbertura, 126) AS dataAbertura,
-           CONVERT(varchar(33), DataFechamento, 126) AS dataFechamento
+           CONVERT(varchar(33), DataFechamento, 126) AS dataFechamento,
+           CONVERT(varchar(33), DataFechamentoPrevista, 126) AS dataFechamentoPrevista
     FROM Enquetes WHERE EnqueteId = @id
   `);
   const enquete = enqueteResult.recordset[0];
   if (!enquete) return null;
+  // v7.14 — passou do instante marcado: para quem lê, já está encerrada (a rotina diária grava o encerramento)
+  if (enquete.status === "ABERTA" && passouDoFechamento(enquete)) enquete.status = "ENCERRADA";
+  if (enquete.dataFechamentoPrevista === undefined) enquete.dataFechamentoPrevista = null;
 
   const perguntasResult = await pool.request().input("id", sql.Int, enqueteId)
     .query(`SELECT PerguntaId AS perguntaId, Ordem AS ordem, Titulo AS titulo, Tipo AS tipo
@@ -153,8 +164,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já foi encerrada." } };
       return;
     }
-    const elegiveis = await membrosElegiveis(pool, sql, enquete);
-    if (!elegiveis.has(Number(membroId))) {
+    if (!(await membroElegivel(pool, sql, enquete, Number(membroId)))) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta matrícula não está no público desta enquete." } };
       return;
     }
@@ -194,14 +204,37 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // v7.14 — cada resposta só entra com a enquete ainda aberta e antes do instante marcado (na hora do BANCO, no mesmo comando); as perguntas vão sempre na mesma ordem,
+    // então, com dois envios da mesma pessoa ao mesmo tempo, o segundo esbarra já na primeira pergunta (chave única) e não grava nada.
+    let gravadas = 0;
     for (const pergunta of enquete.perguntas) {
       const resposta = respostasPorPerguntaId[pergunta.perguntaId];
-      await pool.request()
-        .input("perguntaId", sql.Int, pergunta.perguntaId)
-        .input("membroId", sql.Int, membroId)
-        .input("opcaoId", sql.Int, pergunta.tipo === "OPCOES" ? resposta.opcaoId : null)
-        .input("textoResposta", sql.NVarChar(500), pergunta.tipo === "TEXTO_LIVRE" ? resposta.textoResposta : null)
-        .query(`INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta) VALUES (@perguntaId, @membroId, @opcaoId, @textoResposta)`);
+      let r;
+      try {
+        r = await pool.request()
+          .input("enqueteId", sql.Int, enqueteId)
+          .input("perguntaId", sql.Int, pergunta.perguntaId)
+          .input("membroId", sql.Int, membroId)
+          .input("opcaoId", sql.Int, pergunta.tipo === "OPCOES" ? resposta.opcaoId : null)
+          .input("textoResposta", sql.NVarChar(500), pergunta.tipo === "TEXTO_LIVRE" ? resposta.textoResposta : null)
+          .query(`INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
+                  SELECT @perguntaId, @membroId, @opcaoId, @textoResposta
+                  WHERE EXISTS (SELECT 1 FROM Enquetes WHERE EnqueteId = @enqueteId AND Status = 'ABERTA' AND (DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME()))`);
+      } catch (e) {
+        if (e && (e.number === 2627 || e.number === 2601) && gravadas === 0) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta matrícula já respondeu este formulário." } };
+          return;
+        }
+        throw e;
+      }
+      if (!(r && r.rowsAffected && r.rowsAffected[0] > 0)) {
+        if (gravadas === 0) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já foi encerrada." } };
+          return;
+        }
+        break;
+      }
+      gravadas++;
     }
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Respostas registradas." } };
@@ -227,6 +260,12 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já está encerrada." } };
       return;
     }
+    // v7.14 — a votação do tema da Identidade Visual segue o calendário do Art. 159: não se encerra à mão
+    const daIdentidade = await pool.request().input("id", sql.Int, enqueteId).query(`SELECT AnoAlvo FROM IdentidadeCiclos WHERE EnqueteId = @id`);
+    if (daIdentidade.recordset.length > 0) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta é a votação do tema da Identidade Visual: ela fecha sozinha no fim do dia 30 de novembro (Regimento, Art. 159), e o sistema apura." } };
+      return;
+    }
     let resultadoAprovado = null;
     if (enquete.vinculante) {
       const pergunta = enquete.perguntas[0];
@@ -249,6 +288,42 @@ module.exports = async function (context, req) {
   }
 
   // ---- GET: lista (com detalhe conforme visibilidade) — exige sessão (antes qualquer um listava participantes e, nas públicas, quem votou em quê) ----
+  // ---- GET ?paraVotar=1 (v7.14 — Meu Painel → Votações): as abertas em que a pessoa está no público, sem contagem ----
+  if (method === "GET" && !id && req.query && String(req.query.paraVotar) === "1") {
+    const usuario = auth.exigirLoginIgnorandoTermos(req, context);
+    if (!usuario) return;
+    const membroId = auth.idDeRota(usuario.membroId);
+    if (!membroId) { context.res = { status: 400, body: { sucesso: false, mensagem: "Sessão sem matrícula." } }; return; }
+    const abertas = (await pool.request().query(`
+      SELECT EnqueteId AS enqueteId, Titulo AS titulo, Descricao AS descricao, Visibilidade AS visibilidade, PublicoTipo AS publicoTipo,
+             CONVERT(varchar(33), DataAbertura, 126) AS dataAbertura, CONVERT(varchar(33), DataFechamentoPrevista, 126) AS dataFechamentoPrevista
+      FROM Enquetes WHERE Status = 'ABERTA' AND (DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME())
+      ORDER BY DataAbertura DESC`)).recordset;
+    let aptoTodos = null;   // "todos os ativos" é a mesma conta para todas as enquetes: confere uma vez
+    const lista = [];
+    for (const e of abertas) {
+      let pode;
+      if (e.publicoTipo === "LISTA_CUSTOM") pode = await membroElegivel(pool, sql, e, membroId);
+      else { if (aptoTodos === null) aptoTodos = await membroElegivel(pool, sql, e, membroId); pode = aptoTodos; }
+      if (!pode) continue;
+      const perguntas = (await pool.request().input("id", sql.Int, e.enqueteId)
+        .query(`SELECT PerguntaId AS perguntaId, Ordem AS ordem, Titulo AS titulo, Tipo AS tipo FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem`)).recordset;
+      for (const p of perguntas) {
+        p.opcoes = p.tipo === "OPCOES" ? (await pool.request().input("id", sql.Int, p.perguntaId)
+          .query(`SELECT OpcaoId AS opcaoId, Texto AS texto FROM OpcoesEnquete WHERE PerguntaId = @id ORDER BY OpcaoId`)).recordset : [];
+      }
+      const ja = await pool.request().input("enqueteId", sql.Int, e.enqueteId).input("membroId", sql.Int, membroId)
+        .query(`SELECT TOP 1 CONVERT(varchar(33), r.DataResposta, 126) AS em FROM RespostasEnquete r JOIN PerguntasEnquete p ON p.PerguntaId = r.PerguntaId
+                WHERE p.EnqueteId = @enqueteId AND r.MembroId = @membroId`);
+      const identidade = await pool.request().input("id", sql.Int, e.enqueteId).query(`SELECT AnoAlvo FROM IdentidadeCiclos WHERE EnqueteId = @id`);
+      lista.push({ enqueteId: e.enqueteId, titulo: e.titulo, descricao: e.descricao, visibilidade: e.visibilidade, dataAbertura: e.dataAbertura,
+        dataFechamentoPrevista: e.dataFechamentoPrevista || null, perguntas, jaRespondeu: ja.recordset.length > 0, respondidaEm: ja.recordset.length ? ja.recordset[0].em : null,
+        identidadeVisual: identidade.recordset.length ? Number(identidade.recordset[0].AnoAlvo) : null });
+    }
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { sucesso: true, enquetes: lista } };
+    return;
+  }
+
   if (method === "GET" && !id) {
     const usuario = auth.exigirLoginIgnorandoTermos(req, context);
     if (!usuario) return;
@@ -257,6 +332,7 @@ module.exports = async function (context, req) {
     const ehMesa = !!vMesa;
     const meuId = Number(usuario.membroId);
     const idsResult = await pool.request().query(`SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY DataAbertura DESC`);
+    const daIdentidade = new Set(((await pool.request().query(`SELECT EnqueteId FROM IdentidadeCiclos WHERE EnqueteId IS NOT NULL`)).recordset || []).map(x => Number(x.EnqueteId)));
     const enquetes = [];
     let publicoTodosAtivos = null; // o universo "todos os ativos" é igual para todas as enquetes: calcula uma vez
     for (const row of idsResult.recordset) {
@@ -271,7 +347,14 @@ module.exports = async function (context, req) {
         }
         if (!elegiveis.has(meuId)) continue; // enquete de outro público: nem aparece
       }
-      enquetes.push(visaoDaEnquete(enquete, vMesa || usuario, !ehMesa));
+      const visao = visaoDaEnquete(enquete, vMesa || usuario, !ehMesa);
+      // v7.14 — a votação do tema da Identidade Visual é secreta até fechar: com ela aberta, ninguém (nem a mesa) vê a contagem por opção; a tela da identidade mostra só
+      // quantos votaram, e a apuração sai depois da meia-noite do dia 30
+      if (visao.status === "ABERTA" && daIdentidade.has(Number(visao.enqueteId))) {
+        visao.perguntas = visao.perguntas.map(p => Object.assign({}, p, { opcoes: p.opcoes.map(({ votos, ...o }) => o), respostas: undefined }));
+        visao.participantes = visao.participantes.filter(p => Number(p.membroId) === meuId);
+      }
+      enquetes.push(visao);
     }
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: enquetes };
     return;
@@ -342,6 +425,22 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Enquete vinculante precisa ter exatamente 1 pergunta, do tipo Opções, com um QuorumTipo válido." } };
       return;
     }
+    // v7.14 — fecha sozinha: data e hora de Brasília (o campo datetime-local da tela), no futuro e em até 1 ano; guardada em UTC
+    let previstaUtc = null;
+    if (corpo.dataFechamentoPrevista !== undefined && corpo.dataFechamentoPrevista !== null && corpo.dataFechamentoPrevista !== "") {
+      const v = corpo.dataFechamentoPrevista;
+      const instante = typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v) ? Date.parse(`${v}:00-03:00`) : NaN;
+      const agora = Date.now();
+      if (!Number.isFinite(instante) || new Date(instante - 3 * 3600000).toISOString().slice(0, 16) !== v) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Data de fechamento inválida (use dia e hora)." } };
+        return;
+      }
+      if (instante <= agora + 5 * 60000 || instante > agora + 366 * 86400000) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "A enquete precisa fechar no futuro (pelo menos 5 minutos a partir de agora) e em até 1 ano." } };
+        return;
+      }
+      previstaUtc = new Date(instante).toISOString().slice(0, 19);
+    }
     if (publicoTipoFinal === "LISTA_CUSTOM" && (!Array.isArray(publicoMembroIds) || publicoMembroIds.length === 0)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Informe as matrículas do público customizado." } };
       return;
@@ -405,10 +504,11 @@ module.exports = async function (context, req) {
       .input("orgaoId", sql.Int, orgaoId || null)
       .input("sessaoId", sql.Int, sessaoId || null)
       .input("criadoPor", sql.Int, usuario.membroId)
+      .input("prevista", sql.NVarChar(19), previstaUtc)
       .query(`
-        INSERT INTO Enquetes (Titulo, Descricao, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, OrgaoId, SessaoId, CriadoPor)
+        INSERT INTO Enquetes (Titulo, Descricao, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, OrgaoId, SessaoId, CriadoPor, DataFechamentoPrevista)
         OUTPUT INSERTED.EnqueteId
-        VALUES (@titulo, @descricao, @visibilidade, @publicoTipo, @vinculante, @quorumTipo, @orgaoId, @sessaoId, @criadoPor)
+        VALUES (@titulo, @descricao, @visibilidade, @publicoTipo, @vinculante, @quorumTipo, @orgaoId, @sessaoId, @criadoPor, CONVERT(datetime2, @prevista, 126))
       `);
     const enqueteId = criada.recordset[0].EnqueteId;
 

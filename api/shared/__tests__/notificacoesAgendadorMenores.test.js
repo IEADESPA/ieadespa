@@ -15,9 +15,11 @@ jest.mock("../menoresConsentimentoDb", () => ({
 }));
 
 jest.mock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+jest.mock("../identidadeVisualDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
 
 const { avaliarRegras } = require("../notificacaoMotor");
 const cuidadoDb = require("../cuidadoPastoralDb");
+const identidadeDb = require("../identidadeVisualDb");
 const mmDb = require("../ministerioMenoresDb");
 const mcDb = require("../menoresConsentimentoDb");
 const handler = require("../../NotificacoesAgendador/index.js");
@@ -32,6 +34,7 @@ beforeEach(() => {
   mmDb.retirarInaptosDasEscalas.mockReset(); mmDb.retirarInaptosDasEscalas.mockResolvedValue({ retirados: 1, alocacoes: 2 });
   mcDb.apagarFotosDeMenoresSemConsentimento.mockClear();
   cuidadoDb.rotinaDiaria.mockReset(); cuidadoDb.rotinaDiaria.mockResolvedValue({ falhas: [], deteccao: { abertos: 0 } });
+  identidadeDb.rotinaDiaria.mockReset(); identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: [], votacoesAbertas: 0, apuradas: 0 });
 });
 
 // v7.11 — a rotina do cuidado pastoral (escada do prazo vencido, regra dos 30 dias das notas) roda ANTES dos avisos e não falha em silêncio.
@@ -83,4 +86,23 @@ test("detector do ministério com menores falhou: 500; detector de outro assunto
   const outro = await rodar();
   expect(outro.status).toBe(200);
   expect(outro.body.detectoresComFalha).toEqual(["APOLICE_A_VENCER"]);
+});
+
+// v7.14 — a identidade visual (abrir a votação no dia 22, fechar e apurar depois do dia 30) roda ANTES dos avisos e também não falha em silêncio.
+test("identidade visual: a rotina roda antes dos avisos; um passo que falhou, ou um detector IDENTIDADE_, dá 500", async () => {
+  const ordem = [];
+  identidadeDb.rotinaDiaria.mockImplementation(async () => { ordem.push("identidade"); return { falhas: [] }; });
+  avaliarRegras.mockImplementation(async () => { ordem.push("avisos"); return { criadas: 0, emailsEnviados: 0, falhas: [] }; });
+  const ok = await rodar();
+  expect(ok.status).toBe(200);
+  expect(ordem).toEqual(["identidade", "avisos"]);
+  identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: ["ciclo"] });
+  expect((await rodar()).status).toBe(500);
+  identidadeDb.rotinaDiaria.mockRejectedValue(new Error("banco fora"));
+  const caiu = await rodar();
+  expect(caiu.status).toBe(500);
+  expect(caiu.body.identidade).toEqual({ falhas: ["rotina"] });
+  identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: [] });
+  avaliarRegras.mockResolvedValue({ criadas: 0, emailsEnviados: 0, falhas: ["IDENTIDADE_VOTACAO"] });
+  expect((await rodar()).status).toBe(500);
 });

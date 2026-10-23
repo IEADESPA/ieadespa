@@ -153,6 +153,8 @@
             <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
             <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone">✉️</span><span class="rotulo">Comunicações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVotacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["votacoes"]'><span class="icone">🗳️</span><span class="rotulo">Votações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelIdentidade" data-on-click="mostrarSubAbaMeupainel" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
@@ -276,6 +278,7 @@
             <button class="btn-aba" id="btnAbaConsagracoes" data-on-click="mostrarAbaSecretaria" data-args-click='["consagracoes"]'><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
             <button class="btn-aba" id="btnAbaEnquetes" data-on-click="mostrarAbaSecretaria" data-args-click='["enquetes"]'><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
             <button class="btn-aba" id="btnAbaArquivos" data-on-click="mostrarAbaSecretaria" data-args-click='["arquivos"]'><span class="icone">📁</span><span class="rotulo">Arquivos</span></button>
+            <button class="btn-aba" id="btnAbaIdentidade" data-on-click="mostrarAbaSecretaria" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
           </div>
 
           <!-- MÓDULO: DISCIPLINA & ÉTICA -->
@@ -1041,6 +1044,30 @@
           <div id="comMeuPrefs"></div>
           <h4>Comunicados recebidos</h4>
           <div id="comMeuComunicados"></div>
+        </div>
+
+        <!-- SUB-ABA: VOTAÇÕES (v7.14). Aberta a qualquer login (inclusive PIN): as enquetes abertas em que a pessoa está no público (o servidor confere), para responder
+             uma vez. A votação do tema da Identidade Visual aparece aqui também. Montada por enquetes.js. -->
+        <div id="subMeupainelVotacoes" class="sub-aba-secretaria" style="display:none;">
+          <h3>🗳️ Votações</h3>
+          <p class="subtitle">As enquetes e votações abertas para você. Cada pessoa responde uma vez, e a resposta não se muda depois.
+            <em>Exemplo: em novembro, a votação do tema da camiseta do ano aparece aqui para todo membro ativo e em comunhão.</em></p>
+          <p id="enqMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" data-on-click="enqCarregarMeuPainelAcao">🔄 Atualizar</button></div>
+          <div id="enqMeuLista"></div>
+        </div>
+
+        <!-- SUB-ABA: IDENTIDADE VISUAL (v7.14 — Regimento Art. 159). Aberta a qualquer login (inclusive PIN): a etapa do ano com as datas, mandar e retirar sugestões de tema
+             (01 a 15/nov), votar (22 a 30/nov), as cores e o concurso de arte (dezembro) e a identidade escolhida. Toda regra mora no servidor (shared/identidadeVisual.js);
+             a tela é montada por identidade-visual.js. -->
+        <div id="subMeupainelIdentidade" class="sub-aba-secretaria" style="display:none;">
+          <h3>🎨 Identidade Visual do ano</h3>
+          <p class="subtitle">O tema e a camiseta de cada ano são escolhidos pela Igreja, em novembro e dezembro: os membros sugerem o tema, a Diretoria faz a triagem, todos votam
+            aqui e, em dezembro, os membros mandam a arte e o culto escolhe arte e cor. <em>Exemplo: a irmã Ana sugere "Raízes profundas" no dia 5 de novembro e, no dia 22, vota
+            entre os finalistas.</em></p>
+          <p id="idvMeuMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div class="psc-acoes"><button type="button" class="btn-confirmar btn-secundario" data-on-click="idvCarregarMeuPainelAcao">🔄 Atualizar</button></div>
+          <div id="idvMeuConteudo"></div>
         </div>
 
         <!-- SUB-ABA: CUIDADO (v7.11 — Cuidado pastoral). Aberta a qualquer login (inclusive PIN): "Meus acompanhamentos" (só para quem foi nomeado responsável: contato, motivo,
@@ -2496,6 +2523,10 @@
               <option value="DOIS_TERCOS">Quórum: Dois terços</option>
               <option value="NOVENTA_POR_CENTO">Quórum: 90% (Núcleo Fundamental — Art. 71)</option>
             </select>
+          </div>
+          <div class="input-group">
+            <label for="enqueteFechamento">Fecha sozinha em (opcional — dia e hora de Brasília; depois disso ninguém mais responde):</label>
+            <input type="datetime-local" id="enqueteFechamento" />
           </div>
           <button class="btn-confirmar" type="submit">🗳️ Criar Enquete</button>
         </form>
@@ -4940,6 +4971,35 @@
         </div>
       </div>
 
+      <!-- ABA: IDENTIDADE VISUAL (v7.14 — Regimento Art. 159 § 1º; Art. 126-Q, II). Permissão "identidade_visual" no nível Geral (Presidente e Secretário Geral), em sessão de
+           liderança. Ciclo do ano (abrir, triagem, votação, cores, artes, resultado do culto) e Temas já usados. Toda regra mora no servidor; a tela é montada por identidade-visual.js. -->
+      <div id="abaIdentidade" class="aba-secretaria" style="display:none;">
+        <h3>🎨 Identidade Visual</h3>
+        <p class="subtitle">O processo do Art. 159: a Diretoria abre o ciclo do ano; os membros sugerem o tema de 01 a 15/nov; a triagem é de 16 a 21/nov; a votação, em Meu Painel, de
+          22 a 30/nov (abre e fecha sozinha); em dezembro vêm as cores e o concurso de arte, e a escolha final do culto é registrada aqui. <em>Exemplo: no dia 16 a Diretoria aprova
+          "Raízes profundas" como finalista e descarta um tema já usado em 2019.</em></p>
+        <div class="cal-pilulas" id="idvPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnIdvSecaoCiclo" aria-pressed="true" data-on-click="idvMostrarSecaoAcao" data-args-click='["ciclo"]'>📅 Ciclo do ano</button>
+          <button type="button" class="cal-pilula" id="btnIdvSecaoTemas" aria-pressed="false" data-on-click="idvMostrarSecaoAcao" data-args-click='["temas"]'>📚 Temas já usados</button>
+        </div>
+        <p id="idvGesMsg" class="subtitle" role="status" aria-live="polite"></p>
+        <p id="idvSemAcesso" class="subtitle psc-aviso" style="display:none;">Esta aba é da Diretoria do nível Geral (permissão "identidade_visual", em sessão de liderança).</p>
+        <div id="idvConteudo">
+          <div id="idvSecaoCiclo">
+            <p id="idvCicloMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="idvPainelTopo"></div>
+            <div id="idvCicloDetalhe"></div>
+          </div>
+          <div id="idvSecaoTemas" style="display:none;">
+            <p class="subtitle">Os temas usados pela Igreja desde 2006 (um por ano). A sugestão igual a um deles é recusada na hora; a parecida fica marcada para a triagem. O tema
+              escolhido pelo processo no sistema entra sozinho e não se edita.</p>
+            <p id="idvTemasMsg" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="idvTemasForm"></div>
+            <div id="idvTemasLista"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ABA: COMUNICADOS (v7.12 — consentimento por canal e categoria, modelos aprovados, envio por grupo, registro de entrega). Permissão "comunicacao" (sessão de liderança; cada
            um no seu território). Enviar (modelo + grupo + quantas pessoas), Envios (relatório; na convocação, quem não foi alcançado), Modelos (só o nível geral) e Ficha em papel.
            Toda regra mora no servidor (shared/comunicacao.js); a tela é montada por comunicacao.js. -->
@@ -6733,6 +6793,7 @@
   <script src="modulos/escalas.js"></script>
   <script src="modulos/eventos-congressos.js"></script>
   <script src="modulos/financeiro.js"></script>
+  <script src="modulos/identidade-visual.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
   <script src="modulos/ministerio-menores.js"></script>

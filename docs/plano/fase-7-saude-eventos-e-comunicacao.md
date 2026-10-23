@@ -3138,26 +3138,71 @@ originalidade e consequência financeira — nada disso tem onde existir hoje.
 versão traz a tela "Temas já usados" e a Secretaria cadastra (até lá, a triagem confere à mão). (2) **Vota todo membro apto e
 em comunhão, pelo Meu Painel** (matrícula e PIN; quem não tem acesso vota com a ajuda da Secretaria). (3) **Pedidos de
 uniforme: fora** — a camiseta do ano já é pedida e tratada na aba Camisetas do site (o membro ou um responsável pede; o
-Dirigente avisa e entrega); o item "pedido do Dirigente vira conta a pagar" não se faz. O primeiro ciclo é o da identidade
-de 2027: as sugestões abrem em **1º/11/2026**.
+Dirigente avisa e entrega); o item "pedido do Dirigente vira conta a pagar" não se faz.
 
-- [ ] **Calendário do processo** (Art. 159 §1º): sugestões de 01 a 15/nov → triagem de 16 a 21/nov → votação de 22 a 30/nov
+**Decisão de 23/10/2026: não há prazo de 1º/11.** O processo deste ano (identidade de 2027) está sendo feito **fora do
+sistema**; o primeiro ciclo no sistema será o de **novembro de 2027 (identidade de 2028)**. O ciclo do ano é **aberto pela
+Diretoria** quando ela quiser (até 15/11 daquele ano): o sistema não cria ciclo sozinho e não mostra etapa de um ciclo que não
+foi aberto. O tema de 2027, escolhido fora, a Secretaria cadastra em "Temas já usados".
+
+- [x] **Calendário do processo** (Art. 159 §1º): sugestões de 01 a 15/nov → triagem de 16 a 21/nov → votação de 22 a 30/nov
       → arte em dezembro (até 3 cores da Diretoria e concurso de arte dos membros) → escolha final até 31/12 por maioria
       simples dos presentes (no culto; o sistema registra o resultado). Cada etapa abre e fecha sozinha pela data de Brasília
       (calculada na hora, sem depender de rotina).
-- [ ] **Antiduplicidade desde 2006**: a tela "Temas já usados" (ano e tema; o tema escolhido de cada ano entra sozinho). Na
+- [x] **Antiduplicidade desde 2006**: a tela "Temas já usados" (ano e tema; o tema escolhido de cada ano entra sozinho). Na
       sugestão, o tema igual a um já usado (sem diferença de acento, maiúscula ou pontuação) é recusado na hora, e o parecido
       fica marcado para a triagem — a validação acontece antes da votação, nunca depois da arte pronta.
-- [ ] **Sugestões e triagem**: cada membro apto manda até 3 sugestões (frase curta, até 80 letras) e pode retirar a sua até o
+- [x] **Sugestões e triagem**: cada membro apto manda até 3 sugestões (frase curta, até 80 letras) e pode retirar a sua até o
       dia 15; na triagem, a Diretoria aprova como finalista (pode ajustar a redação, guardando a original) ou descarta com o
       critério do inciso I (curto e memorável, amplo e abrangente, originalidade).
-- [ ] **Votação reaproveitando o módulo de Enquetes** (v2.8): no dia 22 os finalistas viram uma enquete de toda a membresia
+- [x] **Votação reaproveitando o módulo de Enquetes** (v2.8): no dia 22 os finalistas viram uma enquete de toda a membresia
       apta, votada em **Meu Painel** (uma vez por pessoa); no fim do dia 30 ela fecha sozinha e o resultado é apurado.
-- [ ] **Arte e escolha final**: a Diretoria registra até 3 cores; membros mandam a arte (imagem) baseada nas cores; a
+- [x] **Arte e escolha final**: a Diretoria registra até 3 cores; membros mandam a arte (imagem) baseada nas cores; a
       Diretoria registra a escolha final do culto (arte + cor, data, votos), que vira a Identidade Visual oficial do ano
       seguinte e entra na lista de temas já usados.
 
 **Fora desta versão (por decisão):** pedidos de uniforme (já são feitos na aba Camisetas do site).
+
+### Entrega da v7.14 (23/10/2026, no ramo; a homologar)
+
+Migração 151 (só acréscimo): `IdentidadeCiclos`, `IdentidadeTemasUsados`, `IdentidadeSugestoes`, `IdentidadeCores`, `IdentidadeArtes`,
+`IdentidadeResultados`, `Enquetes.DataFechamentoPrevista`, a permissão `identidade_visual` (Presidente e Secretário Geral; o servidor
+exige o nível Geral — Art. 126-Q, II), 4 avisos à Diretoria (triagem começou, votação aberta ou que não abriu, apuração, fase da
+arte; nenhum aos membros) e a retenção (1 ano depois do fim do ciclo, a sugestão e a arte perdem o nome e a imagem não escolhida
+sai). Gatilhos: o ciclo só anda para a frente; no máximo 3 sugestões e 3 artes ativas por pessoa; texto único no ciclo; a cédula
+congela quando a votação nasce; o resultado e o tema do processo não se editam; a cor em que já há arte não muda.
+`shared/identidadeVisual.js` (regra pura: as etapas pela data de Brasília, o texto normalizado, igual e parecido, cores, imagem,
+apuração), `shared/identidadeVisualDb.js`, rota `/api/identidade-visual/<ação>`, módulo `app/modulos/identidade-visual.js` (Meu
+Painel → Identidade Visual e a aba Identidade Visual, no módulo Vida Eclesiástica) e Meu Painel → **Votações** (enquetes.js).
+
+As Enquetes ganharam: a data de fechamento (lida na hora, conferida no próprio INSERT do voto pela hora do banco e encerrada pela
+rotina diária), o voto que confere o público só da pessoa (antes relia o cadastro inteiro a cada voto), o segundo voto simultâneo
+que vira "já respondeu" (antes, erro 500) e a votação do tema que não se encerra à mão.
+
+Decisões tomadas na construção (o Regimento não fecha; ajustáveis):
+
+- a votação abre sozinha no dia 22 só com **pelo menos 2 finalistas** (no máximo 10); sem isso, a Diretoria é avisada todo dia e,
+  se a triagem atrasou, ainda aprova finalistas e abre pelo botão até o dia 30;
+- **empate ou nenhum voto**: a Diretoria define o tema entre os mais votados, com o motivo (fica registrado quem e por quê);
+- a triagem vê **só o texto** da sugestão (nunca quem mandou); as artes mostram o autor à Diretoria (para falar com quem desenhou);
+- até **3 artes** ativas por pessoa (PNG ou JPEG, até 5 MB); as cores podem ser registradas desde a triagem e não mudam depois que
+  chega a primeira arte (acrescentar até 3 ainda pode); a Diretoria pode tirar do concurso a arte ilegível, com o motivo;
+- o resultado do culto pode ser registrado depois de 31/12 (o culto pode ser a vigília), mas a data do culto tem de ser de dezembro;
+  registrado, não se edita;
+- "Temas já usados" aceita de 2006 ao ano que vem; o tema escolhido pelo processo entra sozinho e não se edita;
+- exclusão LGPD: as sugestões e as artes perdem o nome; a sugestão que não foi finalista perde também o texto; a imagem não escolhida
+  sai; ficam as contagens, os finalistas e a identidade escolhida.
+
+Provas: jest 5.859 (141 arquivos; novos: a regra pura 52, a rota 22, as enquetes que fecham sozinhas 25); ponta a ponta no LocalDB `e2e-31`
+(205: esquema e gatilhos, a porta, o ciclo de 2028 inteiro com o relógio da regra em novembro e dezembro de 2027, o ciclo de 2029 com
+votação sem finalistas, botão, empate e desempate, LGPD, Meus Dados, retenção e lixo em cada campo) e `e2e-32` (21, corridas com
+vários processos: 6 sugestões da mesma pessoa entram 3, o mesmo tema por 6 pessoas entra 1, uma enquete só com 4 acessos no dia 22,
+4 votos da mesma pessoa viram 1, uma apuração só, no máximo 3 artes, um resultado só); prova de mutação no servidor (o igual que não
+recusa, o voto duplicado que dava 500 e a apuração antes da meia-noite: cada uma acusada); `e2e-24`, `e2e-28`, `e2e-29` e `e2e-30`
+seguem verdes. Tela `tools/front-identidade` (632 verificações; 3 defeitos da tela achados e corrigidos; prova de mutação 115: 107
+acusadas, 8 equivalentes, nenhuma escapou) e as telas de antes (cuidado 870, comunicação 417, check-in 1.488, proteção 808,
+menores 322) sem falha. Falta: a revisão adversarial independente, a homologação (migração 151 no Azure SQL, rotas 401, a tela no
+navegador) e a produção.
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 

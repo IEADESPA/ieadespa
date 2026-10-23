@@ -15,11 +15,13 @@ jest.mock("../menoresConsentimentoDb", () => ({
 }));
 
 jest.mock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
-jest.mock("../identidadeVisualDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+jest.mock("../identidadeVisualDb", () => ({ rotinaAntesDosAvisos: jest.fn(async () => ({ falhas: [] })), rotinaDepoisDosAvisos: jest.fn(async () => ({ falhas: [] })) }));
+jest.mock("../enquetes", () => ({ encerrarVencidas: jest.fn(async () => ({ encerradas: 0 })) }));
 
 const { avaliarRegras } = require("../notificacaoMotor");
 const cuidadoDb = require("../cuidadoPastoralDb");
 const identidadeDb = require("../identidadeVisualDb");
+const enquetesMod = require("../enquetes");
 const mmDb = require("../ministerioMenoresDb");
 const mcDb = require("../menoresConsentimentoDb");
 const handler = require("../../NotificacoesAgendador/index.js");
@@ -34,7 +36,9 @@ beforeEach(() => {
   mmDb.retirarInaptosDasEscalas.mockReset(); mmDb.retirarInaptosDasEscalas.mockResolvedValue({ retirados: 1, alocacoes: 2 });
   mcDb.apagarFotosDeMenoresSemConsentimento.mockClear();
   cuidadoDb.rotinaDiaria.mockReset(); cuidadoDb.rotinaDiaria.mockResolvedValue({ falhas: [], deteccao: { abertos: 0 } });
-  identidadeDb.rotinaDiaria.mockReset(); identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: [], votacoesAbertas: 0, apuradas: 0 });
+  identidadeDb.rotinaAntesDosAvisos.mockReset(); identidadeDb.rotinaAntesDosAvisos.mockResolvedValue({ falhas: [], votacoesAbertas: 0, apuradas: 0 });
+  identidadeDb.rotinaDepoisDosAvisos.mockReset(); identidadeDb.rotinaDepoisDosAvisos.mockResolvedValue({ falhas: [] });
+  enquetesMod.encerrarVencidas.mockReset(); enquetesMod.encerrarVencidas.mockResolvedValue({ encerradas: 0 });
 });
 
 // v7.11 — a rotina do cuidado pastoral (escada do prazo vencido, regra dos 30 dias das notas) roda ANTES dos avisos e não falha em silêncio.
@@ -88,21 +92,40 @@ test("detector do ministério com menores falhou: 500; detector de outro assunto
   expect(outro.body.detectoresComFalha).toEqual(["APOLICE_A_VENCER"]);
 });
 
-// v7.14 — a identidade visual (abrir a votação no dia 22, fechar e apurar depois do dia 30) roda ANTES dos avisos e também não falha em silêncio.
-test("identidade visual: a rotina roda antes dos avisos; um passo que falhou, ou um detector IDENTIDADE_, dá 500", async () => {
+// v7.14 — a identidade visual (abrir a votação no dia 22, fechar e apurar depois do dia 30) roda ANTES dos avisos e também não falha em silêncio; (revisão) a retenção dela,
+// que apaga imagens, vai DEPOIS dos avisos, com orçamento de tempo; e o encerramento das enquetes agendadas é um passo próprio.
+test("identidade visual: antes dos avisos o ciclo, depois deles a retenção (com orçamento); as enquetes agendadas num passo próprio; cada falha dá 500", async () => {
   const ordem = [];
-  identidadeDb.rotinaDiaria.mockImplementation(async () => { ordem.push("identidade"); return { falhas: [] }; });
+  identidadeDb.rotinaAntesDosAvisos.mockImplementation(async () => { ordem.push("identidade"); return { falhas: [] }; });
+  enquetesMod.encerrarVencidas.mockImplementation(async () => { ordem.push("enquetes"); return { encerradas: 1 }; });
   avaliarRegras.mockImplementation(async () => { ordem.push("avisos"); return { criadas: 0, emailsEnviados: 0, falhas: [] }; });
+  identidadeDb.rotinaDepoisDosAvisos.mockImplementation(async (_p, op) => { ordem.push(`retencao:${op && op.orcamentoMs}`); return { falhas: [] }; });
   const ok = await rodar();
   expect(ok.status).toBe(200);
-  expect(ordem).toEqual(["identidade", "avisos"]);
-  identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: ["ciclo"] });
+  expect(ordem).toEqual(["identidade", "enquetes", "avisos", "retencao:15000"]);
+  expect(ok.body.enquetesAgendadas).toEqual({ encerradas: 1 });
+  identidadeDb.rotinaAntesDosAvisos.mockResolvedValue({ falhas: ["ciclo"] });
   expect((await rodar()).status).toBe(500);
-  identidadeDb.rotinaDiaria.mockRejectedValue(new Error("banco fora"));
+  identidadeDb.rotinaAntesDosAvisos.mockRejectedValue(new Error("banco fora"));
   const caiu = await rodar();
   expect(caiu.status).toBe(500);
-  expect(caiu.body.identidade).toEqual({ falhas: ["rotina"] });
-  identidadeDb.rotinaDiaria.mockResolvedValue({ falhas: [] });
+  expect(caiu.body.identidade.falhas).toContain("rotina");
+  identidadeDb.rotinaAntesDosAvisos.mockResolvedValue({ falhas: [] });
+  identidadeDb.rotinaDepoisDosAvisos.mockResolvedValue({ falhas: ["retencao"] });
+  expect((await rodar()).status).toBe(500);
+  identidadeDb.rotinaDepoisDosAvisos.mockResolvedValue({ falhas: [] });
+  enquetesMod.encerrarVencidas.mockRejectedValue(new Error("timeout"));
+  const enq = await rodar();
+  expect(enq.status).toBe(500);
+  expect(enq.body.criadas).toBeDefined();                       // os avisos do dia rodaram mesmo assim
+  enquetesMod.encerrarVencidas.mockResolvedValue({ encerradas: 0 });
   avaliarRegras.mockResolvedValue({ criadas: 0, emailsEnviados: 0, falhas: ["IDENTIDADE_VOTACAO"] });
   expect((await rodar()).status).toBe(500);
+});
+// (revisão) a rotina responde 500 quando um passo protegido falhou: o passo seguinte do workflow (a versão da agenda pública) roda assim mesmo, e o e-mail de falha sai.
+test("rotinas-diarias.yml: a versão da agenda pública roda mesmo com a rotina de avisos em falha, e a falha manda o e-mail", () => {
+  const yml = require("fs").readFileSync(require("path").join(__dirname, "..", "..", "..", ".github", "workflows", "rotinas-diarias.yml"), "utf8").split(String.fromCharCode(13)).join("");
+  const passo = yml.split("- name: ").find((p) => p.startsWith("Guarda a versão da agenda pública"));
+  expect(passo).toMatch(/\n\s+if: \$\{\{ !cancelled\(\) \}\}\n/);
+  expect(yml).toMatch(/avisar-falha:\n\s+needs: \[notificacoes, fluxos, ebd-fechamento\]\n\s+if: \$\{\{ failure\(\) \}\}/);
 });

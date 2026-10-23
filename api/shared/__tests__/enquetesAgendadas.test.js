@@ -60,7 +60,8 @@ describe("o voto", () => {
     expect(r.body.sucesso).toBe(true);
     const ins = rodou(/INSERT INTO RespostasEnquete/)[0];
     expect(ins.inputs).toMatchObject({ enqueteId: 1, perguntaId: 10, membroId: 20, opcaoId: 100 });
-    expect(ins.sql).toMatch(/WHERE EXISTS \(SELECT 1 FROM Enquetes WHERE EnqueteId = @enqueteId AND Status = 'ABERTA' AND \(DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME\(\)\)\)/);
+    // (revisão) a enquete é lida COM TRAVA dentro do INSERT: com READ_COMMITTED_SNAPSHOT, sem ela o voto não esperava o encerramento em curso
+    expect(ins.sql).toMatch(/WHERE EXISTS \(SELECT 1 FROM Enquetes WITH \(UPDLOCK, REPEATABLEREAD\) WHERE EnqueteId = @enqueteId AND Status = 'ABERTA'\s+AND \(DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME\(\)\)\)/);
   });
   test("o público é conferido só para a pessoa (sem reler o cadastro inteiro)", async () => {
     monta();
@@ -106,6 +107,27 @@ describe("a lista e o encerramento", () => {
     quando(/FROM RespostasEnquete r JOIN MembroReferencia m/, []);
     const r = await chamar({ token: GERAL() });
     expect(r.body[0]).toMatchObject({ status: "ENCERRADA", dataFechamentoPrevista: PASSADO });
+  });
+  test("(revisão) passada a hora, a LEITURA encerra de verdade, uma vez: a vinculante sai com o resultado gravado (antes: 'Não aprovado' até a rotina das 7h)", async () => {
+    quando(/SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY/, [{ enqueteId: 1 }]);
+    monta({ dataFechamentoPrevista: PASSADO, vinculante: true, quorumTipo: "MAIORIA_SIMPLES" });
+    quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1);
+    mockRegras.unshift([/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 100, votos: 3 }, { OpcaoId: 101, votos: 1 }], 0]);   // antes da regra das perguntas (o texto da contagem também as cita)
+    quando(/FROM RespostasEnquete r JOIN MembroReferencia m/, []);
+    const r = await chamar({ token: GERAL() });
+    expect(r.body[0]).toMatchObject({ status: "ENCERRADA", resultadoAprovado: true });
+    const fechou = rodou(/UPDATE Enquetes SET Status = 'ENCERRADA'/);
+    expect(fechou).toHaveLength(1);
+    expect(fechou[0].inputs).toMatchObject({ id: 1, agendada: 1 });
+    expect(fechou[0].sql).toMatch(/DataFechamentoPrevista <= SYSUTCDATETIME\(\)/);
+    expect(rodou(/UPDATE Enquetes SET ResultadoAprovado = @resultado/)[0].inputs).toMatchObject({ resultado: true });
+    expect(require("../auditoria").registrarAuditoria).toHaveBeenCalledWith(expect.objectContaining({ tabela: "Enquetes", registroId: 1, acao: "Encerrou enquete (fechamento agendado)", usuarioId: null }));
+  });
+  test("(revisão) o voto não relê as respostas de todo mundo", async () => {
+    monta();
+    quando(/INSERT INTO RespostasEnquete/, [], 1);
+    await votar();
+    expect(rodou(/FROM RespostasEnquete r JOIN MembroReferencia m/)).toHaveLength(0);
   });
   test("a votação da Identidade Visual aberta não mostra a contagem nem quem votou (nem à mesa do geral); fechada, mostra", async () => {
     for (const [prevista, deveMostrar] of [[FUTURO, false], [PASSADO, true]]) {
@@ -202,28 +224,49 @@ describe("Meu Painel → Votações (?paraVotar=1)", () => {
 });
 
 describe("encerrarEnquete e a rotina", () => {
-  test("agendada: fecha no instante marcado; a vinculante conta só os votos de antes dele", async () => {
+  test("(revisão) FECHA PRIMEIRO e só então conta: o UPDATE de ENCERRADA vem antes da contagem; a vinculante conta só os votos de antes do instante", async () => {
     const pool = await require("../db").getPool();
-    quando(/SELECT EnqueteId, Vinculante, QuorumTipo, Status, DataFechamentoPrevista FROM Enquetes/, [{ EnqueteId: 7, Vinculante: true, QuorumTipo: "MAIORIA_SIMPLES", Status: "ABERTA", DataFechamentoPrevista: new Date() }]);
+    quando(/SELECT Vinculante AS vinculante, QuorumTipo AS quorumTipo FROM Enquetes/, [{ vinculante: true, quorumTipo: "MAIORIA_SIMPLES" }]);
     quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 1, votos: 6 }, { OpcaoId: 2, votos: 2 }]);
     quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1);
     const r = await enquetes.encerrarEnquete(pool, 7, { agendada: true });
     expect(r).toEqual({ encerrada: true, resultadoAprovado: true });
+    const ordem = mockConsultas.map((c) => (/UPDATE Enquetes SET Status = 'ENCERRADA'/.test(c.sql) ? "fecha" : /FROM OpcoesEnquete o WHERE o\.PerguntaId/.test(c.sql) ? "conta" : /SET ResultadoAprovado/.test(c.sql) ? "grava" : null)).filter(Boolean);
+    expect(ordem).toEqual(["fecha", "conta", "grava"]);
     expect(rodou(/FROM OpcoesEnquete o WHERE o\.PerguntaId/)[0].sql).toMatch(/r\.DataResposta < e\.DataFechamentoPrevista/);
-    expect(rodou(/UPDATE Enquetes SET Status = 'ENCERRADA'/)[0].inputs).toMatchObject({ agendada: 1, resultado: true });
+    expect(rodou(/UPDATE Enquetes SET Status = 'ENCERRADA'/)[0].inputs).toMatchObject({ agendada: 1 });
+    expect(rodou(/UPDATE Enquetes SET ResultadoAprovado/)[0].sql).toMatch(/ResultadoAprovado IS NULL/);
   });
-  test("outra chamada já fechou: encerrada=false (UPDATE condicional)", async () => {
+  test("outra chamada já fechou (ou a hora do banco ainda não chegou): encerrada=false, nada contado nem auditado", async () => {
     const pool = await require("../db").getPool();
-    quando(/SELECT EnqueteId, Vinculante/, [{ EnqueteId: 7, Vinculante: false, Status: "ABERTA" }]);
+    const { registrarAuditoria } = require("../auditoria");
+    registrarAuditoria.mockClear();
+    quando(/SELECT Vinculante AS vinculante/, [{ vinculante: true, quorumTipo: "MAIORIA_SIMPLES" }]);
     quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 0);
     expect(await enquetes.encerrarEnquete(pool, 7, { agendada: true })).toEqual({ encerrada: false, resultadoAprovado: null });
+    expect(rodou(/FROM OpcoesEnquete o/)).toHaveLength(0);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
   });
-  test("a rotina fecha as vencidas, menos as da Identidade Visual (o ciclo as apura)", async () => {
+  test("a rotina fecha as vencidas (menos as da Identidade Visual) e (revisão) deixa a trilha como o encerramento manual", async () => {
     const pool = await require("../db").getPool();
+    const { registrarAuditoria } = require("../auditoria");
+    registrarAuditoria.mockClear();
     quando(/SELECT e\.EnqueteId FROM Enquetes e WHERE e\.Status = 'ABERTA'/, [{ EnqueteId: 7 }, { EnqueteId: 8 }]);
-    quando(/SELECT EnqueteId, Vinculante/, (i) => [{ EnqueteId: i.id, Vinculante: false, Status: "ABERTA" }]);
+    quando(/SELECT Vinculante AS vinculante/, [{ vinculante: false, quorumTipo: null }]);
     quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1);
     expect(await enquetes.encerrarVencidas(pool)).toEqual({ encerradas: 2 });
     expect(rodou(/SELECT e\.EnqueteId FROM Enquetes e/)[0].sql).toMatch(/NOT EXISTS \(SELECT 1 FROM IdentidadeCiclos c WHERE c\.EnqueteId = e\.EnqueteId\)/);
+    expect(registrarAuditoria.mock.calls.map((c) => [c[0].tabela, c[0].registroId, c[0].acao, c[0].usuarioId])).toEqual([
+      ["Enquetes", 7, "Encerrou enquete (fechamento agendado)", null], ["Enquetes", 8, "Encerrou enquete (fechamento agendado)", null]]);
+  });
+  test("a vinculante encerrada sem resultado gravado (caiu entre os passos) tem o resultado refeito na leitura", async () => {
+    const pool = await require("../db").getPool();
+    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 1, votos: 1 }, { OpcaoId: 2, votos: 3 }]);
+    const e = await enquetes.recuperarResultado(pool, { enqueteId: 9, vinculante: true, status: "ENCERRADA", resultadoAprovado: null, quorumTipo: "MAIORIA_SIMPLES" });
+    expect(e.resultadoAprovado).toBe(true);
+    expect(rodou(/UPDATE Enquetes SET ResultadoAprovado/)).toHaveLength(1);
+    mockConsultas = [];
+    await enquetes.recuperarResultado(pool, { enqueteId: 9, vinculante: true, status: "ENCERRADA", resultadoAprovado: false, quorumTipo: "MAIORIA_SIMPLES" });
+    expect(mockConsultas).toHaveLength(0);
   });
 });

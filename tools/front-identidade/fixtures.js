@@ -3,8 +3,9 @@
 // (painelMembro, painelGestao, detalheCiclo, formatarCiclo, votacaoDoCiclo, resultadoDoCiclo, listarTemas e a resposta de cada ato) e os mesmos códigos (200/201/400/403/404/
 // 409/422/428/429), e as formas de api/GestaoEnquetes/index.js (GET ?paraVotar=1, POST {id}/votar, GET e POST da lista da liderança). As REGRAS que decidem o que é aceito são
 // as de verdade (api/shared/identidadeVisual.js): calendario, fase, anoAlvoDoDia, podeAbrirCiclo, votacaoFechou, validarTema, validarTextoLivre, conferirTemasUsados, normalizar,
-// validarCor, base64CabeNoLimite, conferirImagem, apurar e validarResultado. As listas de ações (LEITURAS, ESCRITAS, EXIGE_GESTAO) e os atos que pedem a confirmação reforçada
-// (428) são LIDOS do handler de verdade: se o servidor mudar, o imitado muda junto (ou a leitura falha alto).
+// validarCor, base64CabeNoLimite, prepararImagem (tira os metadados), apurar, validarResultado e retiradaDeArteAte. As listas de ações (LEITURAS, ESCRITAS, EXIGE_GESTAO,
+// ATOS_COM_FATOR) e as condições da confirmação reforçada (428: corrigir tema, finalista da triagem e, no banco, mexer numa finalista) são LIDAS do servidor de verdade: se
+// ele mudar, o imitado muda junto (ou a leitura falha alto).
 // Todo texto que o servidor devolve (temas, sugestões, finalistas, critérios, motivos, observações, nomes, autores, congregações, títulos, descrições, ocasiões, cores, atas,
 // mensagens) leva o texto de ataque ATAQUE(campo): se algum virar marcação, o DOM simulado acusa (e executa o onerror, como o navegador).
 // `contratoComOServidor()` confere por escrito, contra o código do servidor, as ações que a tela chama, os campos que ela lê e a confirmação reforçada.
@@ -21,11 +22,17 @@ const listaDoHandler = (nome) => {
   return [...m[1].matchAll(/"([a-z-]+)"/g)].map(x => x[1]);
 };
 const LEITURAS = listaDoHandler("LEITURAS"), ESCRITAS = listaDoHandler("ESCRITAS"), EXIGE_GESTAO = listaDoHandler("EXIGE_GESTAO");
-// a linha do handler que decide o 428: `const pedeFator = metodo === "POST" && ([...].includes(acao) || (acao === "triar" && corpo.decisao === "FINALISTA"));`
+// a linha do handler que decide o 428 na porta:
+//   `const pedeFator = metodo === "POST" && (ATOS_COM_FATOR.includes(acao) || (acao === "tema" && corpo.temaUsadoId) || (acao === "triar" && corpo.decisao === "FINALISTA"));`
+// e a triagem que mexe numa FINALISTA (descartar, voltar), que o banco decide (`{ precisaFator: true }` -> 428)
 const LINHA_FATOR = HANDLER.split(/\r?\n/).find(l => /const pedeFator =/.test(l)) || "";
-const FATOR_ACOES = ((/\(\[([^\]]+)\]\.includes\(acao\)/.exec(LINHA_FATOR) || [])[1] || "").match(/[a-z-]+/g) || [];
+const FATOR_ACOES = /ATOS_COM_FATOR\.includes\(acao\)/.test(LINHA_FATOR) ? listaDoHandler("ATOS_COM_FATOR") : [];
+const FATOR_TEMA = /\(acao === "tema" && corpo\.temaUsadoId\)/.test(LINHA_FATOR);
 const FATOR_TRIAR = /acao === "triar" && corpo\.decisao === "FINALISTA"/.test(LINHA_FATOR);
-if (!FATOR_ACOES.length) throw new Error("fixtures: não achei a lista de atos com confirmação reforçada no handler");
+const DB_SRC = fs.readFileSync(path.join(API, "shared/identidadeVisualDb.js"), "utf8");
+const FATOR_TRIAR_FINALISTA = /if \(\(decisao === "FINALISTA" \|\| s0\.Status === "FINALISTA"\) && !fatorRecente\) return \{ sucesso: false, precisaFator: true \};/.test(DB_SRC)
+  && /if \(r && r\.precisaFator\) \{ auth\.exigirFatorRecente\(req, context\); return; \}/.test(HANDLER);
+if (!FATOR_ACOES.length) throw new Error("fixtures: não achei a lista de atos com confirmação reforçada no handler (ATOS_COM_FATOR)");
 
 const HORA = 3600000, DIA = 24 * HORA;
 // texto de ataque: sai do atributo (aspas), sai da tag (>) e abre uma imagem quebrada com onerror; o nome do campo identifica quem vazou
@@ -63,15 +70,17 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
   const novoCiclo = (o) => { const c = Object.assign({ cicloId: ++S.seq.ciclo, anoAlvo: 2027, abertoEm: "2026-10-20T13:00:00.000Z", abertoPorId: 13, enqueteId: null, votacaoCriadaEm: null,
     votacaoCriadaPorId: null, apuracao: null, apuradoEm: null, votosTotal: null, tema: null, resultado: null }, o); S.ciclos.push(c); return c; };
   const novaSugestao = (o) => { const s = Object.assign({ sugestaoId: ++S.seq.sugestao, cicloId: S.C.cicloId, membroId: 31, texto: "Tema", textoFinal: null, status: "ENVIADA", parecido: null,
-    criterio: null, observacao: null, triadoPorId: null, triadoEm: null, criadaEm: "2026-11-02T12:00:00.000Z", retiradaEm: null, anonimizada: false, opcaoId: null }, o);
+    criterio: null, observacao: null, triadoPorId: null, triadoEm: null, criadaEm: "2026-11-02T12:00:00.000Z", retiradaEm: null, anonimizada: false, opcaoId: null, votosApurados: null }, o);
     s.normalizado = iv.normalizar(s.texto); S.sugestoes.push(s); return s; };
   const novaArte = (o) => { const a = Object.assign({ arteId: ++S.seq.arte, cicloId: S.C.cicloId, membroId: 31, titulo: null, descricao: null, status: "ENVIADA", motivoRecusa: null,
-    criadaEm: "2026-12-03T12:00:00.000Z", temImagem: true, tamanho: 20, tipo: "image/png" }, o); S.artes.push(a); return a; };
+    criadaEm: "2026-12-03T12:00:00.000Z", temImagem: true, tamanho: 20, tipo: "image/png", daDiretoria: false, sha: null }, o); S.artes.push(a); return a; };
   const novoTema = (o) => { const t = Object.assign({ temaUsadoId: ++S.seq.tema, origem: "MANUAL", cicloId: null, registradoPorId: 13, registradoEm: "2026-10-01T12:00:00.000Z", atualizadoPorId: null, atualizadoEm: null }, o);
     t.normalizado = iv.normalizar(t.tema); S.temas.push(t); return t; };
   // os temas já usados (a Secretaria cadastra): texto com ataque, um PROCESSO (o de 2026, quando há o ciclo antigo)
   S.T = {
-    t2019: novoTema({ ano: 2019, tema: A("temaUsado2019", "Raízes da fé") }),
+    // o rótulo do ataque é o da sugestão da Ana em MAIÚSCULAS: normalizado, o ataque é o mesmo e "Raízes profundas [sugAna]" fica PARECIDO (não igual) com este tema,
+    // como o servidor de verdade calcula na hora (detalheCiclo); na tela, o "[SUGANA]" diz que o texto que apareceu (ou vazou) é o do tema já usado
+    t2019: novoTema({ ano: 2019, tema: A("SUGANA", "Raízes da fé") }),
     t2020: novoTema({ ano: 2020, tema: "Avante, Igreja!" }),
     t2025: novoTema({ ano: 2025, tema: A("temaUsado2025", "Tempo de colheita"), atualizadoPorId: 14, atualizadoEm: "2026-10-05T12:00:00.000Z" })
   };
@@ -90,7 +99,7 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     S.C = novoCiclo({ cicloId: 7, anoAlvo: 2027 });
     S.S = {
       // da irmã Ana (31): uma com ataque e parecida com um tema já usado, uma limpa, uma retirada
-      ana1: novaSugestao({ texto: A("sugAna", "Raízes profundas"), parecido: { ano: 2019, tema: A("parecidoTema", "Raízes da fé") } }),
+      ana1: novaSugestao({ texto: A("sugAna", "Raízes profundas"), parecido: { ano: 2019, tema: A("parecidoTema", "Raízes da fé") } }),   // `parecido` = o que valia no envio
       ana2: novaSugestao({ texto: "Frutos que permanecem" }),
       anaRetirada: novaSugestao({ texto: A("sugRetirada", "Caminhando juntos"), status: "RETIRADA", retiradaEm: "2026-11-03T12:00:00.000Z" }),
       // de outros membros
@@ -136,18 +145,26 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       enqueteId: c.enqueteId || null, votacaoCriadaEm: c.votacaoCriadaEm, votacaoAutomatica: !!c.enqueteId && !c.votacaoCriadaPorId,
       apuracao: c.apuracao, apuradoEm: c.apuradoEm, votosTotal: c.votosTotal,
       tema: c.tema ? { sugestaoId: c.tema.sugestaoId, texto: c.tema.texto, votos: c.tema.votos, definidoPor: c.tema.definidoPor,
-        desempate: c.tema.definidoPor === "DESEMPATE" ? { motivo: c.tema.desempate.motivo, por: nomeDe(c.tema.desempate.porId), em: c.tema.desempate.em } : null } : null,
+        desempate: ["DESEMPATE", "DIRETORIA"].includes(c.tema.definidoPor) ? { motivo: c.tema.desempate.motivo, por: nomeDe(c.tema.desempate.porId), em: c.tema.desempate.em } : null } : null,
       encerrado: !!c.resultado,
       resultadoPendente: !c.resultado && S.hoje >= iv.calendario(c.anoAlvo).arte.inicio
     };
   }
-  function criarVotacao(c, porMembroId) {
+  const semDecisao = (cicloId) => S.sugestoes.filter(s => s.cicloId === cicloId && s.status === "ENVIADA").length;
+  // porMembroId null = abriu sozinha (rotina ou primeiro acesso no dia 22): só com a triagem completa. Pelo botão, com sugestão sem decisão, a resposta diz quantas são
+  // (`pendentes`) e a Diretoria confirma (`aceitarPendentes`).
+  function criarVotacao(c, porMembroId, aceitarPendentes = false) {
     if (c.enqueteId) return { sucesso: true, jaExistia: true, enqueteId: c.enqueteId, mensagem: A("msgJaAberta", "A votação já está aberta.") };
+    if (c.apuracao || c.tema) return { sucesso: false, mensagem: A("msg422", "O tema deste ano já foi definido: não há mais votação a abrir.") };
     const cal = iv.calendario(c.anoAlvo);
     if (S.hoje < cal.votacao.inicio) return { sucesso: false, mensagem: A("msg422", `A votação só começa em ${iv.dataBr(cal.votacao.inicio)}.`) };
     if (iv.votacaoFechou(c.anoAlvo, agora())) return { sucesso: false, mensagem: A("msg422", `O período da votação terminou em ${iv.dataBr(cal.votacao.fim)}.`) };
     const lista = finalistas(c.cicloId).sort((a, b) => iv.normalizar(textoDaFinalista(a)).localeCompare(iv.normalizar(textoDaFinalista(b))));
     if (lista.length < iv.MIN_FINALISTAS) return { sucesso: false, faltamFinalistas: true, mensagem: A("msg422", `A votação precisa de pelo menos ${iv.MIN_FINALISTAS} finalistas aprovados na triagem (há ${lista.length}).`) };
+    const pendentes = semDecisao(c.cicloId);
+    if (pendentes > 0 && !(porMembroId && aceitarPendentes)) {
+      return { sucesso: false, pendentes, mensagem: A("msgPendentes", `Há ${pendentes} sugestão(ões) ainda sem decisão da triagem. ${porMembroId ? "Confirme para abrir a votação assim mesmo (elas ficam fora)." : "A votação espera a Diretoria."}`) };
+    }
     const e = novaEnquete({ titulo: `Tema da Identidade Visual de ${c.anoAlvo}`, descricao: `Escolha um dos temas finalistas para a Identidade Visual de ${c.anoAlvo}.`, criadoPorId: porMembroId,
       dataFechamentoPrevista: cal.votacaoFechaEm.slice(0, 19), identidade: c.anoAlvo, dataAbertura: agora().toISOString() }, [{ titulo: `Qual tema você escolhe para a Identidade Visual de ${c.anoAlvo}?`, tipo: "OPCOES", opcoes: lista.map(textoDaFinalista) }]);
     lista.forEach((s, i) => { s.opcaoId = e.perguntas[0].opcoes[i].opcaoId; });
@@ -160,13 +177,16 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     const opcoes = finalistas(c.cicloId).filter(s => s.opcaoId).map(s => ({ s, opcaoId: s.opcaoId, votos: votosDe(e, s.opcaoId) }));
     const ap = iv.apurar(opcoes);
     const venc = ap.situacao === "VENCEDOR" ? opcoes.find(o => o.opcaoId === ap.vencedor) : null;
+    // os votos de cada finalista ficam gravados (VotosApurados): a contagem mostrada e o desempate usam esta, nunca uma recontagem
+    for (const o of opcoes) if (o.s.votosApurados == null) o.s.votosApurados = o.votos;
     Object.assign(c, { apuracao: ap.situacao, apuradoEm: agora().toISOString(), votosTotal: ap.total,
       tema: venc ? { sugestaoId: venc.s.sugestaoId, texto: textoDaFinalista(venc.s), votos: ap.maior, definidoPor: "VOTACAO", desempate: null } : null });
   }
   // o que a data já decidiu (a votação que abre sozinha no dia 22; a apuração depois da meia-noite do dia 30)
   function materializar(c) {
     if (!c || c.resultado) return;
-    if (!c.enqueteId && iv.fase(c.anoAlvo, S.hoje) === "VOTACAO" && !iv.votacaoFechou(c.anoAlvo, agora()) && finalistas(c.cicloId).length >= iv.MIN_FINALISTAS) criarVotacao(c, null);
+    if (!c.enqueteId && !c.apuracao && iv.fase(c.anoAlvo, S.hoje) === "VOTACAO" && !iv.votacaoFechou(c.anoAlvo, agora()) && finalistas(c.cicloId).length >= iv.MIN_FINALISTAS
+      && semDecisao(c.cicloId) === 0) criarVotacao(c, null);
     if (c.enqueteId && !c.apuracao && iv.votacaoFechou(c.anoAlvo, agora())) apurar(c);
   }
   function votacaoDoCiclo(c, { membroId = null, comVotos = false } = {}) {
@@ -177,7 +197,8 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     const mostrar = comVotos || fechada;
     const minha = membroId ? e.respostas.find(r => r.membroId === membroId) : null;
     return { enqueteId: e.enqueteId, perguntaId: p.perguntaId, aberta: !fechada, fechaEm: iv.calendario(c.anoAlvo).votacaoFechaEm, participantes: new Set(e.respostas.map(r => r.membroId)).size,
-      opcoes: p.opcoes.map(o => { const s = S.sugestoes.find(x => x.opcaoId === o.opcaoId); return { opcaoId: o.opcaoId, sugestaoId: s ? s.sugestaoId : null, texto: o.texto, ...(mostrar ? { votos: votosDe(e, o.opcaoId) } : {}) }; }),
+      opcoes: p.opcoes.map(o => { const s = S.sugestoes.find(x => x.opcaoId === o.opcaoId); return { opcaoId: o.opcaoId, sugestaoId: s ? s.sugestaoId : null, texto: o.texto,
+        ...(mostrar ? { votos: c.apuracao && s && s.votosApurados != null ? s.votosApurados : votosDe(e, o.opcaoId) } : {}) }; }),
       ...(membroId ? { jaVotou: !!minha, votouEm: minha ? minha.em : null } : {}) };
   }
   const coresDoCiclo = (cicloId) => S.cores.filter(k => k.cicloId === cicloId).sort((a, b) => a.ordem - b.ordem).map(k => ({ corId: k.corId, ordem: k.ordem, nome: k.nome, hex: k.hex }));
@@ -202,9 +223,11 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       .map(s => ({ sugestaoId: s.sugestaoId, texto: s.texto, situacao: s.status === "RETIRADA" ? "RETIRADA" : c.enqueteId || c.apuracao ? s.status : "ENVIADA",
         textoNaVotacao: c.enqueteId && s.status === "FINALISTA" ? (s.textoFinal || s.texto) : null, enviadaEm: s.criadaEm, retiradaEm: s.retiradaEm }));
     const cores = ["ARTE", "ENCERRADO"].includes(f.fase) ? coresDoCiclo(c.cicloId) : [];
-    const minhasArtes = S.artes.filter(a => a.cicloId === c.cicloId && a.membroId === membroId).sort((a, b) => a.arteId - b.arteId)
-      .map(a => ({ arteId: a.arteId, titulo: a.titulo || null, situacao: a.status, motivoRecusa: a.motivoRecusa || null, enviadaEm: a.criadaEm, temImagem: !!a.temImagem }));
-    return { ...base, ciclo: f, minhasSugestoes: minhas, votacao: votacaoDoCiclo(c, { membroId }), cores, minhasArtes, resultado: f.encerrado ? resultadoDoCiclo(c) : null };
+    const minhasArtes = S.artes.filter(a => a.cicloId === c.cicloId && a.membroId === membroId && !a.daDiretoria).sort((a, b) => a.arteId - b.arteId)
+      .map(a => ({ arteId: a.arteId, titulo: a.titulo || null, situacao: a.status, motivoRecusa: a.motivoRecusa || null, enviadaEm: a.criadaEm, temImagem: !!a.temImagem,
+        podeRetirar: a.status === "ENVIADA" && !f.encerrado && S.hoje <= iv.retiradaDeArteAte(f.anoAlvo) }));
+    return { ...base, ciclo: f, retiradaDeArteAte: iv.retiradaDeArteAte(f.anoAlvo), minhasSugestoes: minhas, votacao: votacaoDoCiclo(c, { membroId }), cores, minhasArtes,
+      resultado: f.encerrado ? resultadoDoCiclo(c) : null };
   }
   function painelGestao() {
     const proximo = iv.anoAlvoDoDia(S.hoje);
@@ -222,16 +245,24 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     const c = ciclo(cicloId);
     if (!c) return null;
     materializar(c);
+    // o "parecido" é recalculado NA HORA contra os Temas já usados de hoje (um tema cadastrado depois do envio também marca), com `igual` quando a redação é a mesma
+    const temas = S.temas.map(t => ({ ano: t.ano, tema: t.tema, normalizado: t.normalizado }));
     const sugestoes = S.sugestoes.filter(s => s.cicloId === cicloId && s.status !== "RETIRADA").sort((a, b) => a.sugestaoId - b.sugestaoId)
-      .map(s => ({ sugestaoId: s.sugestaoId, texto: s.texto, textoFinal: s.textoFinal || null, situacao: s.status, parecido: s.parecido,
-        criterio: s.criterio ? { codigo: s.criterio, rotulo: A("criterioRotulo", iv.CRITERIOS[s.criterio].rotulo) } : null, observacao: s.observacao || null, enviadaEm: s.criadaEm,
-        triadaEm: s.triadoEm, triadaPor: nomeDe(s.triadoPorId), anonimizada: !!s.anonimizada }));
+      .map(s => {
+        const conf = s.anonimizada && s.status !== "FINALISTA" ? { igual: null, parecido: null } : iv.conferirTemasUsados(s.textoFinal ? iv.normalizar(s.textoFinal) : s.normalizado, temas);
+        const achado = conf.igual || conf.parecido;
+        return { sugestaoId: s.sugestaoId, texto: s.texto, textoFinal: s.textoFinal || null, situacao: s.status,
+          parecido: achado ? { ano: achado.ano, tema: achado.tema, igual: !!conf.igual } : null, parecidoNoEnvio: s.parecido ? { ano: s.parecido.ano, tema: s.parecido.tema } : null,
+          criterio: s.criterio ? { codigo: s.criterio, rotulo: A("criterioRotulo", iv.CRITERIOS[s.criterio].rotulo) } : null, observacao: s.observacao || null, enviadaEm: s.criadaEm,
+          triadaEm: s.triadoEm, triadaPor: nomeDe(s.triadoPorId), anonimizada: !!s.anonimizada };
+      });
     const retiradas = S.sugestoes.filter(s => s.cicloId === cicloId && s.status === "RETIRADA").length;
     const participantes = new Set(S.sugestoes.filter(s => s.cicloId === cicloId && s.status !== "RETIRADA").map(s => s.membroId)).size;
     const artes = S.artes.filter(a => a.cicloId === cicloId && a.status !== "RETIRADA").sort((a, b) => a.arteId - b.arteId)
       .map(a => ({ arteId: a.arteId, titulo: a.titulo || null, descricao: a.descricao || null, situacao: a.status, motivoRecusa: a.motivoRecusa || null, enviadaEm: a.criadaEm,
-        tamanho: a.tamanho, tipo: a.tipo, temImagem: !!a.temImagem, autor: nomeDe(a.membroId) || "(anonimizado)", congregacao: S.membros[a.membroId] ? S.membros[a.membroId].congregacao : null }));
-    return { sucesso: true, ciclo: formatarCiclo(c), sugestoes, retiradas, participantes, criterios: Object.values(iv.CRITERIOS),
+        tamanho: a.tamanho, tipo: a.tipo, temImagem: !!a.temImagem, autor: a.daDiretoria ? A("autorDiretoria", "Diretoria (arte escolhida no culto)") : nomeDe(a.membroId) || "(anonimizado)",
+        congregacao: a.daDiretoria ? null : S.membros[a.membroId] ? S.membros[a.membroId].congregacao : null, daDiretoria: !!a.daDiretoria }));
+    return { sucesso: true, ciclo: formatarCiclo(c), sugestoes, retiradas, participantes, semDecisao: sugestoes.filter(x => x.situacao === "ENVIADA").length, criterios: Object.values(iv.CRITERIOS),
       votacao: votacaoDoCiclo(c, { comVotos: false }), cores: coresDoCiclo(cicloId), artes, resultado: resultadoDoCiclo(c),
       ocasioes: Object.entries(iv.OCASIOES).map(([codigo, rotulo]) => ({ codigo, rotulo })) };
   }
@@ -258,8 +289,9 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     if (chamada.metodo === "GET" && chamada.corpoBruto) S.erros.push(`GET com corpo: ${acao}`);
     const gestao = !!ses.gestao;
     if (EXIGE_GESTAO.includes(acao) && !gestao) return falha(403, "Isto é da Diretoria (nível Geral) que conduz a escolha da identidade visual. Fale com quem administra as Permissões.");
-    const pedeFator = chamada.metodo === "POST" && (FATOR_ACOES.includes(acao) || (FATOR_TRIAR && acao === "triar" && corpo.decisao === "FINALISTA"));
-    if (pedeFator && !S.fatorOk) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: A("msg428", "Confirme quem você é.") } };
+    const pedeFator = chamada.metodo === "POST" && (FATOR_ACOES.includes(acao) || (FATOR_TEMA && acao === "tema" && corpo.temaUsadoId) || (FATOR_TRIAR && acao === "triar" && corpo.decisao === "FINALISTA"));
+    const PEDE_FATOR = () => ({ status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: A("msg428", "Este ato exige confirmação recente de quem você é (chave de acesso ou código por e-mail).") } });
+    if (pedeFator && !S.fatorOk) return PEDE_FATOR();
     if (chamada.metodo === "POST" && (acao === "sugerir" || acao === "arte") && S.limiteEnvios) return falha(429, "Muitos envios seguidos. Espere alguns minutos e tente de novo.");
     if (chamada.metodo === "POST" && S.ocupado) return falha(429, "Muita gente mexendo neste ciclo agora. Espere alguns segundos e tente de novo.");
     const membroId = ses.membroId;
@@ -337,20 +369,27 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       if (descricao.problema) return recusa(descricao.problema);
       if (!iv.TIPOS_IMAGEM.includes(corpo.tipo)) return recusa("A arte tem de ser uma imagem PNG ou JPEG.");
       if (!iv.base64CabeNoLimite(corpo.imagemBase64)) return recusa("A imagem está vazia, corrompida ou passa de 5 MB.");
-      const buffer = Buffer.from(corpo.imagemBase64, "base64");
-      const img = iv.conferirImagem(buffer, corpo.tipo);
+      // a imagem é guardada SEM os metadados (o PNG tem de ir de IHDR a IEND; o JPEG, até o EOI): a regra de verdade
+      const img = iv.prepararImagem(Buffer.from(corpo.imagemBase64, "base64"), corpo.tipo);
       if (img.problema) return recusa(img.problema);
+      const buffer = img.buffer;
       if (!S.aptos.has(membroId)) return recusa(NAO_APTO);
-      const ativas = S.artes.filter(a => a.cicloId === c.cicloId && a.membroId === membroId && ["ENVIADA", "ESCOLHIDA"].includes(a.status)).length;
-      if (ativas >= iv.MAX_ARTES) return recusa(`Você já mandou ${iv.MAX_ARTES} artes este ano (o máximo). Para mandar outra, retire uma das suas antes.`);
-      const a = novaArte({ cicloId: c.cicloId, membroId, titulo: titulo.texto, descricao: descricao.texto, tamanho: buffer.length, tipo: corpo.tipo, criadaEm: agora().toISOString(), bytes: buffer });
+      const sha = require("crypto").createHash("sha256").update(buffer).digest("hex");
+      const doMembro = S.artes.filter(a => a.cicloId === c.cicloId && a.membroId === membroId && !a.daDiretoria && ["ENVIADA", "ESCOLHIDA"].includes(a.status));
+      if (doMembro.some(a => a.sha === sha)) return recusa("Você já mandou esta mesma imagem.");
+      if (doMembro.length >= iv.MAX_ARTES) return recusa(`Você já mandou ${iv.MAX_ARTES} artes este ano (o máximo). Para mandar outra, retire uma das suas antes.`);
+      const a = novaArte({ cicloId: c.cicloId, membroId, titulo: titulo.texto, descricao: descricao.texto, tamanho: buffer.length, tipo: corpo.tipo, criadaEm: agora().toISOString(), bytes: buffer, sha });
       return ok({ arteId: a.arteId, mensagem: A("msgArte", "Arte recebida. A escolha final (arte + cor) é no culto de dezembro.") }, 201);
     }
     if (acao === "retirar-arte") {
       const id = exigir("arteId"); if (!id) return falha(400, "Informe arteId.");
-      const a = S.artes.find(x => x.arteId === id && x.membroId === membroId);
+      const a = S.artes.find(x => x.arteId === id && x.membroId === membroId && !x.daDiretoria);
       if (!a) return NAO_EXISTE();
       if (a.status !== "ENVIADA") return recusa(a.status === "ESCOLHIDA" ? "Esta arte foi a escolhida no culto: não pode mais ser retirada." : "Esta arte já não está no concurso.");
+      const ca = ciclo(a.cicloId);
+      if (ca.resultado) return recusa("A escolha final deste ano já foi registrada: as artes do concurso não saem mais.");
+      const limite = iv.retiradaDeArteAte(ca.anoAlvo);
+      if (S.hoje > limite) return recusa(`A arte só pode ser retirada até ${iv.dataBr(limite)}: depois disso a Diretoria já prepara a escolha do culto.`);
       Object.assign(a, { status: "RETIRADA", temImagem: false });
       return ok({ mensagem: A("msgArteRetirada", "Arte retirada (a imagem foi apagada).") });
     }
@@ -367,7 +406,7 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       const id = exigir("cicloId"); if (!id) return falha(400, "Informe cicloId.");
       const c = ciclo(id);
       if (!c) return NAO_EXISTE();
-      if (c.enqueteId || S.sugestoes.some(s => s.cicloId === id) || S.cores.some(k => k.cicloId === id) || S.artes.some(a => a.cicloId === id) || S.temas.some(t => t.cicloId === id)) return recusa("Este ciclo já tem sugestões, cores ou artes: não pode mais ser cancelado.");
+      if (c.enqueteId || c.apuracao || S.sugestoes.some(s => s.cicloId === id) || S.cores.some(k => k.cicloId === id) || S.artes.some(a => a.cicloId === id) || S.temas.some(t => t.cicloId === id)) return recusa("Este ciclo já tem sugestões, cores ou artes: não pode mais ser cancelado.");
       S.ciclos = S.ciclos.filter(x => x !== c);
       return ok({ mensagem: A("msgCancelado", `Ciclo de ${c.anoAlvo} cancelado.`) });
     }
@@ -419,31 +458,58 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       }
       const s = S.sugestoes.find(x => x.sugestaoId === id);
       if (!s) return NAO_EXISTE();
+      // mexer numa FINALISTA (descartar, voltar para a triagem) também pede a confirmação reforçada: quem sabe a situação é o banco ({ precisaFator } -> 428)
+      if (FATOR_TRIAR_FINALISTA && (decisao === "FINALISTA" || s.status === "FINALISTA") && !S.fatorOk) return PEDE_FATOR();
       const c = ciclo(s.cicloId);
       const fase = faseDe(c);
       if (c.enqueteId) return falha(409, "A votação já começou: a lista de finalistas não muda mais.");
       if (!(fase === "TRIAGEM" || (fase === "VOTACAO" && !iv.votacaoFechou(c.anoAlvo, agora())))) return recusa(`A triagem vai de ${iv.dataBr(iv.calendario(c.anoAlvo).triagem.inicio)} a ${iv.dataBr(iv.calendario(c.anoAlvo).triagem.fim)}.`);
       if (s.status === "RETIRADA") return recusa("Esta sugestão foi retirada por quem mandou.");
       if (s.anonimizada && decisao === "FINALISTA" && s.status !== "FINALISTA") return recusa("Esta sugestão foi removida a pedido do titular (LGPD) e não pode ser finalista.");
+      let parecido = null;
       if (decisao === "FINALISTA") {
+        // aprovar de novo sem `textoAjustado` mantém o ajuste já salvo (só o mesmo texto da original o desfaz)
+        const veioAjuste = corpo.textoAjustado !== undefined && corpo.textoAjustado !== null && corpo.textoAjustado !== "";
+        if (!veioAjuste && s.status === "FINALISTA" && s.textoFinal) { textoFinal = s.textoFinal; normalFinal = iv.normalizar(s.textoFinal); }
         if (textoFinal && textoFinal === s.texto) { textoFinal = null; normalFinal = null; }
         const normal = normalFinal || s.normalizado;
         const conf = iv.conferirTemasUsados(normal, S.temas.map(t => ({ ano: t.ano, tema: t.tema, normalizado: t.normalizado })));
-        if (conf.igual) return recusa(`Essa redação é igual ao tema de ${conf.igual.ano}: tema repetido não vai à votação (Art. 159).`);
+        if (conf.igual) return recusa(`Essa redação é igual ao tema de ${conf.igual.ano} ("${conf.igual.tema}"): tema repetido não vai à votação (Art. 159).`);
+        parecido = conf.parecido;
         const outras = finalistas(c.cicloId).filter(o => o !== s);
         if (outras.length >= iv.MAX_FINALISTAS) return recusa(`A votação leva no máximo ${iv.MAX_FINALISTAS} finalistas.`);
         if (outras.some(o => iv.normalizar(textoDaFinalista(o)) === normal)) return recusa("Já há uma finalista com esta mesma redação.");
       }
       Object.assign(s, { status: decisao, textoFinal, criterio, observacao, triadoPorId: decisao === "ENVIADA" ? null : membroId, triadoEm: decisao === "ENVIADA" ? null : agora().toISOString() });
-      return ok({ mensagem: A("msgTriar", decisao === "FINALISTA" ? (textoFinal ? "Aprovada como finalista, com a redação ajustada (a original fica guardada)." : "Aprovada como finalista.")
-        : decisao === "DESCARTADA" ? `Descartada: ${iv.CRITERIOS[criterio].rotulo}.` : "A sugestão voltou para a triagem.") });
+      return ok({ mensagem: A("msgTriar", (decisao === "FINALISTA" ? (textoFinal ? "Aprovada como finalista, com a redação ajustada (a original fica guardada)." : "Aprovada como finalista.")
+        : decisao === "DESCARTADA" ? `Descartada: ${iv.CRITERIOS[criterio].rotulo}.` : "A sugestão voltou para a triagem.")
+        + (parecido ? ` Atenção: ela lembra o tema de ${parecido.ano} ("${parecido.tema}").` : "")), parecido: parecido ? { ano: parecido.ano, tema: parecido.tema } : null });
     }
     if (acao === "abrir-votacao") {
       const id = exigir("cicloId"); if (!id) return falha(400, "Informe cicloId.");
       const c = ciclo(id);
       if (!c) return NAO_EXISTE();
-      const r = criarVotacao(c, membroId);
+      const r = criarVotacao(c, membroId, corpo.aceitarPendentes === true);
       return r.sucesso ? ok(r, 201) : { status: 422, corpo: r };
+    }
+    if (acao === "tema-sem-votacao") {
+      const id = exigir("sugestaoId"); if (!id) return falha(400, "Informe sugestaoId.");
+      const motivo = iv.validarTextoLivre(corpo.motivo, { campo: "o motivo da decisão", max: 300, min: 5 });
+      if (motivo.problema) return recusa(motivo.problema);
+      const s0 = S.sugestoes.find(x => x.sugestaoId === id);
+      if (!s0) return NAO_EXISTE();
+      const c = ciclo(s0.cicloId);
+      if (c.enqueteId) return recusa("Este ciclo teve votação: o tema sai da apuração (e, no empate, do desempate).");
+      if (c.apuracao || c.tema) return recusa("O tema deste ano já está definido.");
+      const cal = iv.calendario(c.anoAlvo);
+      const lista = finalistas(c.cicloId);
+      if (S.hoje < cal.votacao.inicio) return recusa(`Antes de ${iv.dataBr(cal.votacao.inicio)}, termine a triagem: o tema sai da votação.`);
+      if (lista.length >= iv.MIN_FINALISTAS && !iv.votacaoFechou(c.anoAlvo, agora())) return recusa("Há finalistas para a votação: abra a votação (o tema sai do voto dos membros).");
+      const escolhida = lista.find(x => x.sugestaoId === id);
+      if (!escolhida) return recusa("Escolha uma das sugestões aprovadas como finalista.");
+      Object.assign(c, { apuracao: "NAO_VOTADA", apuradoEm: agora().toISOString(), votosTotal: 0,
+        tema: { sugestaoId: id, texto: textoDaFinalista(escolhida), votos: 0, definidoPor: "DIRETORIA", desempate: { motivo: A("temaUnicoMotivo", motivo.texto), porId: membroId, em: agora().toISOString() } } });
+      return ok({ mensagem: A("msgTemaUnico", `Tema definido pela Diretoria, sem votação: "${c.tema.texto}".`) });
     }
     if (acao === "desempate") {
       const id = exigir("sugestaoId"); if (!id) return falha(400, "Informe sugestaoId.");
@@ -454,8 +520,9 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       const c = ciclo(s0.cicloId);
       if (!c.apuracao) return recusa("A votação ainda não foi apurada.");
       if (c.tema) return recusa("O tema deste ano já está definido.");
-      const e = enquete(c.enqueteId);
-      const opcoes = finalistas(c.cicloId).filter(s => s.opcaoId).map(s => ({ s, votos: votosDe(e, s.opcaoId) }));
+      if (!["EMPATE", "SEM_VOTOS"].includes(c.apuracao)) return recusa("Só há desempate quando a votação terminou empatada ou sem nenhum voto.");
+      // a contagem GRAVADA na apuração (VotosApurados), nunca uma recontagem
+      const opcoes = finalistas(c.cicloId).filter(s => s.opcaoId).map(s => ({ s, votos: s.votosApurados == null ? 0 : s.votosApurados }));
       const maior = Math.max(0, ...opcoes.map(o => o.votos));
       const escolhida = opcoes.find(o => o.s.sugestaoId === id);
       if (!escolhida || escolhida.votos !== maior) return recusa(c.apuracao === "EMPATE" ? "Escolha um dos temas empatados em primeiro lugar." : "Escolha um dos temas finalistas.");
@@ -499,27 +566,46 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     }
     if (acao === "resultado") {
       const cicloId = exigir("cicloId"); if (!cicloId) return falha(400, "Informe cicloId.");
-      const arteId = exigir("arteId"); if (!arteId) return falha(400, "Informe arteId.");
+      // a arte do concurso (arteId) OU a imagem da arte escolhida no culto enviada aqui mesmo (imagemBase64 + tipo)
+      const arteId = corpo.arteId === undefined || corpo.arteId === null || corpo.arteId === "" ? null : ID(corpo.arteId);
+      if (!arteId && !corpo.imagemBase64) return falha(400, "Informe arteId (ou a imagem da arte escolhida).");
       const corId = exigir("corId"); if (!corId) return falha(400, "Informe corId.");
       const c = ciclo(cicloId);
       if (!c) return NAO_EXISTE();
       if (S.hoje < iv.calendario(c.anoAlvo).arte.inicio) return recusa("A escolha final é em dezembro, depois da votação do tema.");
       const v = iv.validarResultado({ ...corpo, arteId, corId }, { anoAlvo: c.anoAlvo, hoje: S.hoje });
       if (v.problema) return recusa(v.problema);
+      const comImagem = corpo.imagemBase64 !== undefined && corpo.imagemBase64 !== null && corpo.imagemBase64 !== "";
+      if (comImagem === !!arteId) return recusa("Escolha uma das artes do concurso OU envie a imagem da arte escolhida no culto (uma das duas).");
+      let imagem = null;
+      if (comImagem) {
+        if (!iv.TIPOS_IMAGEM.includes(corpo.tipo)) return recusa("A arte tem de ser uma imagem PNG ou JPEG.");
+        if (!iv.base64CabeNoLimite(corpo.imagemBase64)) return recusa("A imagem está vazia, corrompida ou passa de 5 MB.");
+        const p = iv.prepararImagem(Buffer.from(corpo.imagemBase64, "base64"), corpo.tipo);
+        if (p.problema) return recusa(p.problema);
+        imagem = p.buffer;
+      }
       if (c.resultado) return recusa("A escolha final deste ano já foi registrada.");
       if (!c.tema) return recusa("O tema do ano ainda não está definido (a votação não foi apurada ou o empate não foi decidido).");
-      const a = S.artes.find(x => x.arteId === arteId && x.cicloId === cicloId);
-      if (!a || a.status !== "ENVIADA" || !a.temImagem) return recusa("Escolha uma das artes do concurso deste ano.");
+      // (a transação do servidor desfaz a arte da Diretoria se algo abaixo recusar: aqui as recusas vêm antes de ela existir)
       const k = S.cores.find(x => x.corId === corId && x.cicloId === cicloId);
+      const a = comImagem ? { status: "ENVIADA", temImagem: true } : S.artes.find(x => x.arteId === arteId && x.cicloId === cicloId);
+      if (!a || a.status !== "ENVIADA" || !a.temImagem) return recusa("Escolha uma das artes do concurso deste ano.");
       if (!k) return recusa("Escolha uma das cores registradas para este ano.");
       if (S.temas.some(t => t.ano === c.anoAlvo)) return recusa(`Já há um tema cadastrado à mão para ${c.anoAlvo} em "Temas já usados": apague-o lá antes de registrar o resultado do processo.`);
-      a.status = "ESCOLHIDA";
-      c.resultado = { resultadoId: ++S.seq.resultado, arteId, corId, tema: c.tema.texto, cor: { nome: k.nome, hex: k.hex }, ...v.dados, registradoPorId: membroId, registradoEm: agora().toISOString() };
-      novoTema({ ano: c.anoAlvo, tema: c.tema.texto, origem: "PROCESSO", cicloId, registradoPorId: membroId });
-      return ok({ resultadoId: c.resultado.resultadoId, mensagem: A("msgResultado", `Resultado registrado: é a Identidade Visual oficial de ${c.anoAlvo}.`) }, 201);
+      const escolhida = comImagem ? novaArte({ cicloId, membroId, titulo: A("tituloDiretoria", "Arte escolhida no culto (enviada pela Diretoria)"), tamanho: imagem.length, tipo: corpo.tipo, criadaEm: agora().toISOString(),
+        bytes: imagem, daDiretoria: true }) : a;
+      return registrarResultado(c, escolhida, k, v, membroId);
     }
     S.erros.push(`ação sem imitação: ${chamada.metodo} ${acao}`);
     return falha(404, "Ação inválida.");
+  }
+  // grava a escolha final (a arte do concurso ou a que a Diretoria enviou), a cor e o tema na lista dos já usados
+  function registrarResultado(c, a, k, v, membroId) {
+    a.status = "ESCOLHIDA";
+    c.resultado = { resultadoId: ++S.seq.resultado, arteId: a.arteId, corId: k.corId, tema: c.tema.texto, cor: { nome: k.nome, hex: k.hex }, ...v.dados, registradoPorId: membroId, registradoEm: agora().toISOString() };
+    novoTema({ ano: c.anoAlvo, tema: c.tema.texto, origem: "PROCESSO", cicloId: c.cicloId, registradoPorId: membroId });
+    return ok({ resultadoId: c.resultado.resultadoId, mensagem: A("msgResultado", `Resultado registrado: é a Identidade Visual oficial de ${c.anoAlvo}.`) }, 201);
   }
 
   // ---- as Enquetes (GestaoEnquetes): ?paraVotar=1, {id}/votar, e a lista e a criação da liderança ----
@@ -610,8 +696,19 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
       Object.assign(S.S.bento, { status: "FINALISTA", triadoPorId: 14, triadoEm: "2026-11-17T12:00:00.000Z" });
       Object.assign(S.S.ana1, { status: "DESCARTADA", criterio: 3, observacao: A("obsTriagem", "Parecido demais com 2019"), triadoPorId: 13, triadoEm: "2026-11-17T12:00:00.000Z" });
     },
-    // a votação de 22 a 30/11 (criada como a rotina do dia 22 faria)
-    votacaoAberta() { atalhos.triagemFeita(); const h = S.hoje; S.hoje = "2026-11-22"; criarVotacao(S.C, null); S.hoje = h; return enquete(S.C.enqueteId); },
+    // a triagem completa: além do triagemFeita, as que sobraram (Fé que vence e a anonimizada) descartadas pelo critério 2 — sem sugestão sem decisão, a votação abre sozinha
+    triagemCompleta() {
+      atalhos.triagemFeita();
+      for (const s of S.sugestoes) if (s.cicloId === S.C.cicloId && s.status === "ENVIADA") Object.assign(s, { status: "DESCARTADA", criterio: 2, triadoPorId: 13, triadoEm: "2026-11-17T12:00:00.000Z" });
+    },
+    // a votação de 22 a 30/11 (criada como a rotina do dia 22 faria: só com a triagem completa)
+    votacaoAberta() {
+      atalhos.triagemCompleta();
+      const h = S.hoje; S.hoje = "2026-11-22";
+      const r = criarVotacao(S.C, null); S.hoje = h;
+      if (!r.sucesso) throw new Error(`votacaoAberta: a votação não abriu (${r.mensagem})`);
+      return enquete(S.C.enqueteId);
+    },
     votar(membroId, sugestao) { const e = enquete(S.C.enqueteId); e.respostas.push({ membroId, perguntaId: e.perguntas[0].perguntaId, opcaoId: sugestao.opcaoId, textoResposta: null, em: "2026-11-23T12:00:00.000" }); },
     enquete, novaArte, novaSugestao, novoTema, novaEnquete, novoCiclo
   };
@@ -623,7 +720,7 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
 // ============================================================================
 function contratoComOServidor() {
   const faltam = [];
-  const dbSrc = fs.readFileSync(path.join(API, "shared/identidadeVisualDb.js"), "utf8");
+  const dbSrc = DB_SRC;
   const enqSrv = fs.readFileSync(path.join(API, "GestaoEnquetes/index.js"), "utf8");
   const { lerApp } = require("./ambiente");
   const modulo = lerApp("modulos/identidade-visual.js");
@@ -635,15 +732,31 @@ function contratoComOServidor() {
   for (const a of posts) if (!ESCRITAS.includes(a)) faltam.push(`POST ${a} não existe no handler`);
   if (new Set(gets).size !== LEITURAS.length) faltam.push(`a tela devia usar as ${LEITURAS.length} leituras do handler (usa ${[...new Set(gets)].join(",")})`);
   if (new Set(posts).size !== ESCRITAS.length) faltam.push(`a tela devia usar as ${ESCRITAS.length} escritas do handler (usa ${[...new Set(posts)].join(",")})`);
-  // o 428: exatamente abrir-votacao, desempate, resultado e o finalista da triagem
-  if (JSON.stringify([...FATOR_ACOES].sort()) !== JSON.stringify(["abrir-votacao", "desempate", "resultado"]) || !FATOR_TRIAR) faltam.push(`a confirmação reforçada do handler mudou: ${LINHA_FATOR.trim()}`);
+  // o 428 (revisão de 23/10/2026): todo ato da Diretoria que muda o processo (a lista ATOS_COM_FATOR), corrigir um tema já usado (com temaUsadoId), aprovar finalista e mexer
+  // numa finalista (o banco decide); só cadastrar um tema novo não pede
+  const ESPERADOS = ["abrir-ciclo", "abrir-votacao", "cancelar-ciclo", "cor", "desempate", "excluir-cor", "excluir-tema", "recusar-arte", "resultado", "tema-sem-votacao"];
+  if (JSON.stringify([...FATOR_ACOES].sort()) !== JSON.stringify(ESPERADOS) || !FATOR_TEMA || !FATOR_TRIAR) faltam.push(`a confirmação reforçada do handler mudou: ${LINHA_FATOR.trim()}`);
+  if (!FATOR_TRIAR_FINALISTA) faltam.push("a triagem que mexe numa finalista devia pedir a confirmação reforçada (db: precisaFator; handler: 428)");
+  const semFator = ESCRITAS.filter(a => !FATOR_ACOES.includes(a) && EXIGE_GESTAO.includes(a));
+  if (JSON.stringify(semFator.sort()) !== JSON.stringify(["tema", "triar"])) faltam.push(`atos da Diretoria sem a confirmação reforçada na porta: ${semFator.join(", ")}`);
   if (!/if \(r\.res\.status === 428\) \{ const ok = await confirmarFatorAgora\(\); if \(ok\) r = await idvTentar\(url, opcoes\); \}/.test(modulo)) faltam.push("a tela devia tratar o 428 com confirmarFatorAgora e repetir a chamada uma vez");
+  // abrir a votação com sugestão sem decisão: 422 com `pendentes`, e a tela confirma e manda `aceitarPendentes: true`
+  if (!/aceitarPendentes: corpo\.aceitarPendentes === true/.test(HANDLER) || !/RECUSA\([^\n]*\{ pendentes \}\)/.test(DB_SRC)) faltam.push("abrir-votacao devia responder `pendentes` e ler `aceitarPendentes === true`");
+  if (!/idvPostar\("abrir-votacao", \{ cicloId: id, aceitarPendentes: true \}\)/.test(modulo) || !/idvInteiro\(data\.pendentes\)/.test(modulo)) faltam.push("a tela devia ler `pendentes` e repetir com `aceitarPendentes: true`");
+  // o resultado com a imagem enviada pela Diretoria (imagemBase64 + tipo, sem arteId)
+  if (!/!arteId && !corpo\.imagemBase64/.test(HANDLER) || !/const comImagem = d\.imagemBase64 !== undefined/.test(DB_SRC)) faltam.push("resultado devia aceitar arteId OU imagemBase64 + tipo");
+  if (!/\{ imagemBase64: await idvBase64\(arquivo\), tipo: arquivo\.type \}/.test(modulo) || !/\.\.\.\(arteId \? \{ arteId \} : imagem\)/.test(modulo)) faltam.push("a tela devia mandar a arteId OU a imagem (imagemBase64 + tipo)");
+  // o "parecido" recalculado com `igual`; podeRetirar e a data limite; a arte da Diretoria
+  if (!/igual: !!conf\.igual/.test(DB_SRC) || !/s\.parecido\.igual/.test(modulo)) faltam.push("o parecido devia vir com `igual` e a tela ler s.parecido.igual");
+  if (!/podeRetirar: a\.Status === "ENVIADA"/.test(DB_SRC) || !/a\.podeRetirar === true/.test(modulo)) faltam.push("a arte do membro devia vir com podeRetirar e a tela só mostrar Retirar com ele");
+  if (!/NAO_VOTADA/.test(DB_SRC) || !/NAO_VOTADA/.test(modulo) || !/\["DESEMPATE", "DIRETORIA"\]\.includes\(c\.TemaDefinidoPor\)/.test(DB_SRC)) faltam.push("o tema sem votação (NAO_VOTADA, DIRETORIA, com o motivo) devia existir no servidor e na tela");
   // os campos que a tela lê, na forma que o banco devolve
   const campos = ["identidadeVigente", "proximoAno", "calendarioProximo", "apto", "maxSugestoes", "maxTexto", "maxArtes", "maxImagemBytes", "minhasSugestoes", "textoNaVotacao", "situacao",
     "sugestaoId", "votacao", "aberta", "jaVotou", "votouEm", "enqueteId", "perguntaId", "opcaoId", "votos", "participantes", "cores", "minhasArtes", "arteId", "temImagem", "motivoRecusa",
     "enviadaEm", "resultado", "dataCulto", "ocasiaoRotulo", "votosVencedor", "presentes", "podeAbrir", "motivoNaoAbre", "ciclos", "cicloId", "anoAlvo", "fase", "calendario", "abertoEm",
     "abertoPor", "votacaoAutomatica", "apuracao", "tema", "desempate", "motivo", "resultadoPendente", "sugestoes", "retiradas", "textoFinal", "parecido", "criterio", "rotulo", "observacao",
-    "triadaPor", "triadaEm", "anonimizada", "corId", "ordem", "nome", "hex", "artes", "titulo", "descricao", "autor", "congregacao", "registradoPor", "registradoEm", "ata", "temaUsadoId", "origem"];
+    "triadaPor", "triadaEm", "anonimizada", "corId", "ordem", "nome", "hex", "artes", "titulo", "descricao", "autor", "congregacao", "registradoPor", "registradoEm", "ata", "temaUsadoId", "origem",
+    "semDecisao", "podeRetirar", "retiradaDeArteAte", "igual", "daDiretoria", "pendentes", "aceitarPendentes", "imagemBase64", "parecidoNoEnvio"];
   for (const c of campos) if (!new RegExp(`\\b${c}\\b`).test(dbSrc) && !new RegExp(`\\b${c}\\b`).test(HANDLER)) faltam.push(`campo ${c} não aparece no servidor`);
   // os campos que a tela LÊ e o servidor manda: d.X / c.X / v.X ... no módulo, conferidos um a um contra o servidor
   const lidos = new Set([...modulo.matchAll(/\b(?:d|c|v|r|s|a|k|o|p|t|data|cor|ciclo|votacao|idvMeu|idvCat)\.([a-z][A-Za-z]+)\b/g)].map(m => m[1]));
@@ -668,4 +781,4 @@ function contratoComOServidor() {
   return faltam;
 }
 
-module.exports = { criarServidor, contratoComOServidor, ATAQUE, URL_IMAGEM, HORA, DIA, LEITURAS, ESCRITAS, EXIGE_GESTAO, FATOR_ACOES };
+module.exports = { criarServidor, contratoComOServidor, ATAQUE, URL_IMAGEM, HORA, DIA, LEITURAS, ESCRITAS, EXIGE_GESTAO, FATOR_ACOES, FATOR_TEMA, FATOR_TRIAR_FINALISTA };

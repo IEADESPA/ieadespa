@@ -31,6 +31,12 @@ describe("o calendário (Art. 159 § 1º)", () => {
     expect(iv.podeAbrirCiclo(2029, "2027-03-10").problema).toMatch(/ano que vem \(2028\)/);
     expect(iv.podeAbrirCiclo("2028", "2027-03-10").problema).toBeDefined();
   });
+  test("(revisão) o primeiro ciclo no sistema é o da identidade de 2028 (o de 2027 foi feito fora — decisão de 23/10/2026)", () => {
+    expect(iv.PRIMEIRO_CICLO).toBe(2028);
+    expect(iv.podeAbrirCiclo(2027, "2026-10-23").problema).toMatch(/primeiro ciclo no sistema é o da identidade de 2028/);
+    expect(iv.podeAbrirCiclo(2028, "2027-10-23").ok).toBe(true);
+  });
+  test("(revisão) a arte se retira até 24/12 do ano do processo", () => { expect(iv.retiradaDeArteAte(2028)).toBe("2027-12-24"); });
   test("ano fora do intervalo: erro (nunca um calendário inventado)", () => { expect(() => iv.calendario(1999)).toThrow(); expect(() => iv.calendario(2028.5)).toThrow(); });
 });
 
@@ -40,14 +46,31 @@ describe("o texto da sugestão", () => {
     expect(iv.normalizar("Família: fé — e missão...")).toBe("familia fe e missao");
     expect(iv.normalizar(null)).toBe("");
   });
-  test("válido: espaços colapsados; o tamanho conta as letras como a pessoa as vê", () => {
+  test("válido: espaços colapsados", () => {
     expect(iv.validarTema("  Fé   que  vence ")).toEqual({ texto: "Fé que vence", normalizado: "fe que vence" });
     expect(iv.validarTema("é".repeat(80)).texto).toHaveLength(80);
-    expect(iv.validarTema("😀".repeat(40) + " fé").problema).toBeUndefined();
+  });
+  test("(revisão) o tamanho é o do banco (NVARCHAR conta unidades UTF-16: um emoji conta 2) — 40 emojis e mais texto não passam de 80 sem a recusa", () => {
+    const emoji = String.fromCodePoint(0x1f600);
+    expect(iv.validarTema(emoji.repeat(40) + " fé").problema).toMatch(/até 80 caracteres \(tem 83; um emoji conta 2\)/);
+    expect(iv.validarTema(emoji.repeat(30) + " Fé que vence").problema).toBeUndefined();
+    expect(iv.validarTextoLivre(emoji.repeat(151), { campo: "o motivo", max: 300 }).problema).toMatch(/tem 302/);
+    expect(iv.validarTextoLivre(emoji.repeat(150), { campo: "o motivo", max: 300 }).texto).toHaveLength(300);
+  });
+  test("(revisão) letra de outro alfabeto (o 'а' cirílico, o 'ο' grego, que parecem latinos) é recusada com aviso; a letra larga e a ligadura viram a comum", () => {
+    const cirilico = String.fromCharCode(0x0410) + "vante igreja";          // "Аvante" com o A cirílico
+    const grego = "Ig" + String.fromCharCode(0x03bf) + "reja";               // "o" grego
+    expect(iv.validarTema(cirilico).problema).toMatch(/letras de outro alfabeto/);
+    expect(iv.validarTema(grego).problema).toMatch(/letras de outro alfabeto/);
+    const largo = Array.from("Avante", (c) => String.fromCharCode(c.charCodeAt(0) + 0xfee0)).join("") + " igreja";   // "Ａｖａｎｔｅ igreja"
+    expect(iv.validarTema(largo).normalizado).toBe("avante igreja");
+    expect(iv.normalizar(String.fromCharCode(0xfb01) + "el" + String.fromCharCode(0x00b2))).toBe("fiel2");          // "ﬁel²"
+    expect(iv.conferirTemasUsados(iv.validarTema(largo).normalizado, [{ ano: 2027, tema: "Avante, Igreja!", normalizado: "avante igreja" }]).igual.ano).toBe(2027);
+    expect(iv.validarTema("Ação, fé e coração").problema).toBeUndefined();      // acento e cedilha são do nosso alfabeto
   });
   const invisivel = String.fromCharCode(0x200b), bidi = String.fromCharCode(0x202e), separador = String.fromCharCode(0x2028);
   test.each([
-    [undefined, /Escreva/], [12, /Escreva/], ["ab", /mínimo 3/], ["x".repeat(81), /até 80 letras \(tem 81\)/], ["<b>Tema</b>", /< e >/], ["Tema " + invisivel + "oculto", /invisível/],
+    [undefined, /Escreva/], [12, /Escreva/], ["ab", /mínimo 3/], ["x".repeat(81), /até 80 caracteres \(tem 81/], ["<b>Tema</b>", /< e >/], ["Tema " + invisivel + "oculto", /invisível/],
     ["Tema " + bidi + "invertido", /invisível/], ["Tema" + separador + "linha", /invisível/], ["Tema\noutra linha", /quebra de linha/], ["Tema\u0000nulo", /invisível/], ["!!! ???", /palavras/], ["123 456", /palavras/]
   ])("recusa %p", (v, msg) => { expect(iv.validarTema(v).problema).toMatch(msg); });
   test("texto livre (motivo, ata): opcional quando pode faltar; o limite e o invisível valem", () => {
@@ -134,11 +157,46 @@ describe("cores, imagem, apuração e resultado", () => {
   });
 });
 
+describe("(revisão) os metadados da imagem saem antes de guardar (GPS, aparelho, data, autor, perfil de cor)", () => {
+  const chunk = (tipo, dados) => { const d = Buffer.from(dados, "latin1"); const b = Buffer.alloc(12 + d.length); b.writeUInt32BE(d.length, 0); b.write(tipo, 4, "latin1"); d.copy(b, 8); return b; };
+  const ASS = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const png = Buffer.concat([ASS, chunk("IHDR", "x".repeat(13)), chunk("tEXt", "Author" + String.fromCharCode(0) + "Fulano"), chunk("eXIf", "MM*GPSLatitude -6.06 GPSLongitude -49.9"),
+    chunk("iTXt", "XML:com.adobe.xmp GPS"), chunk("iCCP", "perfil do aparelho"), chunk("tIME", "1234567"), chunk("pHYs", "123456789"), chunk("IDAT", "dados da imagem"), chunk("IEND", "")]);
+  const seg = (marcador, dados) => { const d = Buffer.from(dados, "latin1"); const b = Buffer.alloc(4 + d.length); b[0] = 0xff; b[1] = marcador; b.writeUInt16BE(d.length + 2, 2); d.copy(b, 4); return b; };
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe0, "JFIF" + String.fromCharCode(0) + "dados"), seg(0xe1, "Exif GPSLatitude -6.06 Canon"), seg(0xe2, "ICC_PROFILE perfil"),
+    seg(0xed, "Photoshop IPTC autor"), seg(0xfe, "comentario do GPS"), seg(0xee, "Adobe"), seg(0xdb, "tabela"), seg(0xc0, "quadro"), seg(0xc4, "huffman"), seg(0xda, "cabecalho"),
+    Buffer.from([0x12, 0x34, 0xff, 0x00, 0x56, 0xff, 0xd0, 0x78]), Buffer.from([0xff, 0xd9]), Buffer.from("lixo depois do fim com GPS", "latin1")]);
+  test("PNG: saem texto, EXIF, XMP, perfil e data; ficam o cabeçalho, os dados, o fim e a densidade", () => {
+    const r = iv.prepararImagem(png, "image/png");
+    expect(r.problema).toBeUndefined();
+    const t = r.buffer.toString("latin1");
+    for (const x of ["GPS", "Author", "Fulano", "perfil", "tEXt", "eXIf", "iTXt", "iCCP", "tIME"]) expect(t).not.toContain(x);
+    for (const x of ["IHDR", "IDAT", "dados da imagem", "IEND", "pHYs"]) expect(t).toContain(x);
+    expect(r.buffer.subarray(0, 8).equals(ASS)).toBe(true);
+  });
+  test("JPEG: saem APP1 (EXIF/XMP), APP2 (perfil), APP13 (IPTC), o comentário e o que vem depois do fim; ficam JFIF, Adobe, tabelas, quadro e os dados comprimidos", () => {
+    const r = iv.prepararImagem(jpeg, "image/jpeg");
+    expect(r.problema).toBeUndefined();
+    const t = r.buffer.toString("latin1");
+    for (const x of ["GPS", "Exif", "Canon", "ICC_PROFILE", "Photoshop", "comentario", "lixo"]) expect(t).not.toContain(x);
+    for (const x of ["JFIF", "Adobe", "tabela", "quadro", "huffman", "cabecalho"]) expect(t).toContain(x);
+    expect(r.buffer.subarray(r.buffer.length - 2).equals(Buffer.from([0xff, 0xd9]))).toBe(true);
+    expect(t).toContain(Buffer.from([0x12, 0x34, 0xff, 0x00, 0x56, 0xff, 0xd0, 0x78]).toString("latin1"));     // os dados comprimidos, com o byte de enchimento e o reinício
+  });
+  test("arquivo que não se deixa percorrer é recusado (não é a imagem que diz ser)", () => {
+    expect(iv.prepararImagem(Buffer.concat([ASS, Buffer.from("lixo")]), "image/png").problema).toMatch(/corrompida/);
+    expect(iv.prepararImagem(Buffer.concat([ASS, chunk("IHDR", "x".repeat(13))]), "image/png").problema).toMatch(/corrompida/);          // sem o fim (IEND)
+    expect(iv.prepararImagem(Buffer.from([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff, 0x00]), "image/jpeg").problema).toMatch(/corrompida/);        // tamanho além do arquivo
+    expect(iv.prepararImagem(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0x12]), "image/jpeg").problema).toMatch(/corrompida/);   // sem o fim (EOI)
+  });
+});
+
 describe("os avisos à Diretoria", () => {
   test("cada etapa diz o que fazer e até quando", () => {
     expect(iv.textoTriagem({ anoAlvo: 2028, quantas: 12 })).toMatch(/12 sugestão\(ões\).*21\/11\/2027/);
     expect(iv.textoVotacaoAberta({ anoAlvo: 2028, finalistas: 3 })).toMatch(/Meu Painel.*30\/11\/2027/);
     expect(iv.textoVotacaoSemFinalistas({ anoAlvo: 2028, finalistas: 1 })).toMatch(/NÃO abriu.*pelo menos 2/);
+    expect(iv.textoVotacaoEsperando({ anoAlvo: 2028, pendentes: 3, finalistas: 4 })).toMatch(/NÃO abriu sozinha: há 3 sugestão\(ões\) ainda sem decisão/);
     expect(iv.textoApuracao({ anoAlvo: 2028, situacao: "VENCEDOR", tema: "Fé", votos: 3, total: 5 })).toMatch(/"Fé" \(3 de 5/);
     expect(iv.textoApuracao({ anoAlvo: 2028, situacao: "EMPATE", total: 4 })).toMatch(/EMPATE/);
     expect(iv.textoApuracao({ anoAlvo: 2028, situacao: "SEM_VOTOS" })).toMatch(/sem nenhum voto/);

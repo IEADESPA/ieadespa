@@ -12,6 +12,7 @@ const { sql: sqlPadrao } = require("./db");
 const { universoDoOrgao } = require("./universo");
 const { CONDICAO_SQL_ATIVO } = require("./disciplina");
 const estatuto = require("./estatuto");
+const { registrarAuditoria } = require("./auditoria");
 
 async function membrosElegiveis(pool, sql, enquete) {
   if (enquete.publicoTipo === "LISTA_CUSTOM") {
@@ -49,31 +50,54 @@ function passouDoFechamento(enquete, agora = new Date()) {
   return !!p && Date.parse(p.endsWith("Z") ? p : `${p}Z`) <= agora.getTime();
 }
 
-// Encerra UMA enquete aberta. `agendada`: fecha no instante marcado (DataFechamento = DataFechamentoPrevista) e a vinculante conta só os votos de antes dele.
-// Devolve { encerrada, resultadoAprovado } — encerrada=false quando outra chamada a fechou antes (UPDATE condicional).
-async function encerrarEnquete(pool, enqueteId, { agendada = false, sql = sqlPadrao } = {}) {
-  const e = (await pool.request().input("id", sql.Int, enqueteId)
-    .query(`SELECT EnqueteId, Vinculante, QuorumTipo, Status, DataFechamentoPrevista FROM Enquetes WHERE EnqueteId = @id`)).recordset[0];
-  if (!e || e.Status !== "ABERTA") return { encerrada: false, resultadoAprovado: null };
-  let resultadoAprovado = null;
-  if (e.Vinculante) {
-    const filtro = agendada && e.DataFechamentoPrevista ? "AND r.DataResposta < e.DataFechamentoPrevista" : "";
-    const contagem = (await pool.request().input("id", sql.Int, enqueteId).query(`
-      SELECT o.OpcaoId, (SELECT COUNT(*) FROM RespostasEnquete r JOIN Enquetes e ON e.EnqueteId = @id WHERE r.OpcaoId = o.OpcaoId ${filtro}) AS votos
-      FROM OpcoesEnquete o WHERE o.PerguntaId = (SELECT TOP 1 PerguntaId FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem)`)).recordset;
-    const total = contagem.reduce((s, o) => s + Number(o.votos), 0);
-    const maisVotada = contagem.reduce((m, o) => Math.max(m, Number(o.votos)), 0);
-    resultadoAprovado = estatuto.avaliarAprovacaoEnquete(total, maisVotada, e.QuorumTipo).aprovado;
+// Encerra UMA enquete aberta, em dois passos e nesta ordem (revisão de 23/10/2026):
+//   1) marca ENCERRADA (UPDATE condicional: só a que ainda está ABERTA; na agendada, só se a hora do BANCO já passou de DataFechamentoPrevista);
+//   2) só então conta os votos e grava o resultado da vinculante.
+// Por que nesta ordem: o voto (GestaoEnquetes) só entra com a enquete ABERTA e lê a enquete com trava (UPDLOCK); com o banco em READ_COMMITTED_SNAPSHOT (o padrão do Azure
+// SQL), uma contagem feita ANTES de fechar não via o voto que estava sendo gravado — e ele entrava depois, fora da conta. Fechada primeiro, o voto em curso termina antes
+// (a trava) e entra na contagem, e nenhum voto novo entra depois. Se algo cair entre os dois passos, a leitura seguinte refaz o resultado (recuperarResultado).
+// `enquete` (opcional): { vinculante, quorumTipo } já lidos por quem chama. `acao`/`usuarioId`: a trilha (a manual leva quem encerrou; a agendada, ninguém).
+// Devolve { encerrada, resultadoAprovado } — encerrada=false quando outra chamada a fechou antes (ou a hora ainda não chegou).
+async function encerrarEnquete(pool, enqueteId, { agendada = false, sql = sqlPadrao, enquete = null, usuarioId = null, acao = null } = {}) {
+  let e = enquete;
+  if (!e) {
+    const l = (await pool.request().input("id", sql.Int, enqueteId).query(`SELECT Vinculante AS vinculante, QuorumTipo AS quorumTipo FROM Enquetes WHERE EnqueteId = @id`)).recordset[0];
+    if (!l) return { encerrada: false, resultadoAprovado: null };
+    e = l;
   }
-  const r = await pool.request().input("id", sql.Int, enqueteId).input("resultado", sql.Bit, resultadoAprovado).input("agendada", sql.Bit, agendada ? 1 : 0)
-    .query(`UPDATE Enquetes SET Status = 'ENCERRADA', ResultadoAprovado = @resultado,
+  const r = await pool.request().input("id", sql.Int, enqueteId).input("agendada", sql.Bit, agendada ? 1 : 0)
+    .query(`UPDATE Enquetes SET Status = 'ENCERRADA',
               DataFechamento = CASE WHEN @agendada = 1 AND DataFechamentoPrevista IS NOT NULL THEN DataFechamentoPrevista ELSE SYSUTCDATETIME() END
-            WHERE EnqueteId = @id AND Status = 'ABERTA'`);
+            WHERE EnqueteId = @id AND Status = 'ABERTA' AND (@agendada = 0 OR (DataFechamentoPrevista IS NOT NULL AND DataFechamentoPrevista <= SYSUTCDATETIME()))`);
   const encerrada = !!(r.rowsAffected && r.rowsAffected[0] > 0);
-  return { encerrada, resultadoAprovado: encerrada ? resultadoAprovado : null };
+  if (!encerrada) return { encerrada: false, resultadoAprovado: null };
+  const resultadoAprovado = e.vinculante ? await gravarResultado(pool, enqueteId, { sql, quorumTipo: e.quorumTipo }) : null;
+  await registrarAuditoria({ tabela: "Enquetes", registroId: Number(enqueteId), acao: acao || (agendada ? "Encerrou enquete (fechamento agendado)" : "Encerrou enquete"), usuarioId: usuarioId || null,
+    dadosDepois: { resultadoAprovado, agendada: !!agendada } });
+  return { encerrada: true, resultadoAprovado };
+}
+// O resultado da vinculante, contado com a enquete JÁ encerrada (os votos de antes do instante marcado, quando há um), gravado uma vez só.
+async function gravarResultado(pool, enqueteId, { sql = sqlPadrao, quorumTipo } = {}) {
+  const contagem = (await pool.request().input("id", sql.Int, enqueteId).query(`
+    SELECT o.OpcaoId, (SELECT COUNT(*) FROM RespostasEnquete r JOIN Enquetes e ON e.EnqueteId = @id
+      WHERE r.OpcaoId = o.OpcaoId AND (e.DataFechamentoPrevista IS NULL OR r.DataResposta < e.DataFechamentoPrevista)) AS votos
+    FROM OpcoesEnquete o WHERE o.PerguntaId = (SELECT TOP 1 PerguntaId FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem)`)).recordset;
+  const total = contagem.reduce((s, o) => s + Number(o.votos), 0);
+  const maisVotada = contagem.reduce((m, o) => Math.max(m, Number(o.votos)), 0);
+  const aprovado = estatuto.avaliarAprovacaoEnquete(total, maisVotada, quorumTipo).aprovado;
+  await pool.request().input("id", sql.Int, enqueteId).input("resultado", sql.Bit, aprovado)
+    .query(`UPDATE Enquetes SET ResultadoAprovado = @resultado WHERE EnqueteId = @id AND Status = 'ENCERRADA' AND ResultadoAprovado IS NULL`);
+  return aprovado;
+}
+// A vinculante encerrada sem resultado gravado (caiu entre os dois passos): refaz na leitura.
+async function recuperarResultado(pool, enquete, { sql = sqlPadrao } = {}) {
+  if (!enquete || !enquete.vinculante || enquete.status !== "ENCERRADA" || enquete.resultadoAprovado !== null && enquete.resultadoAprovado !== undefined) return enquete;
+  enquete.resultadoAprovado = await gravarResultado(pool, enquete.enqueteId, { sql, quorumTipo: enquete.quorumTipo });
+  return enquete;
 }
 
-// Rotina diária: fecha as enquetes que passaram do instante marcado. As da identidade visual ficam de fora (o ciclo as fecha e apura junto: identidadeVisualDb).
+// Rotina diária: fecha as enquetes que passaram do instante marcado (com a trilha, como a manual). As da identidade visual ficam de fora (o ciclo as fecha e apura junto:
+// identidadeVisualDb), embora a leitura de qualquer uma delas também a feche.
 async function encerrarVencidas(pool, { sql = sqlPadrao } = {}) {
   const ids = (await pool.request().query(`
     SELECT e.EnqueteId FROM Enquetes e WHERE e.Status = 'ABERTA' AND e.DataFechamentoPrevista IS NOT NULL AND e.DataFechamentoPrevista <= SYSUTCDATETIME()
@@ -83,4 +107,4 @@ async function encerrarVencidas(pool, { sql = sqlPadrao } = {}) {
   return { encerradas };
 }
 
-module.exports = { membrosElegiveis, membroElegivel, aptoEmComunhao, passouDoFechamento, encerrarEnquete, encerrarVencidas };
+module.exports = { membrosElegiveis, membroElegivel, aptoEmComunhao, passouDoFechamento, encerrarEnquete, gravarResultado, recuperarResultado, encerrarVencidas };

@@ -56,7 +56,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   o nome de quem mandou, a votação que abre sozinha no dia 22 e é votada pela Enquete, o fechamento e a apuração depois da meia-noite do dia 30, cores e artes, o resultado
   do culto, os avisos só à Diretoria, empate e desempate, o botão, LGPD, Meus Dados, retenção e lixo em cada campo; o relógio da regra vai a 2027 e 2028 por
   `usarRelogio`) e `e2e-32` (corridas: seis sugestões da mesma pessoa, o mesmo tema por seis pessoas, a votação aberta por quatro acessos, quatro votos da mesma pessoa,
-  a rotina e acessos apurando juntos, quatro artes e dois resultados ao mesmo tempo).
+  a rotina e acessos apurando juntos, quatro artes e dois resultados ao mesmo tempo, cancelar o ciclo e sugerir juntos) e `e2e-33` (o banco com
+  READ_COMMITTED_SNAPSHOT ligado, como o Azure SQL: o voto em curso entra na contagem do encerramento e o "no máximo 3" e o tema único seguem valendo; liga e desliga sozinho).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

@@ -3,9 +3,11 @@
 // Meu Painel → Identidade Visual em cada etapa (sem ciclo, aguardando, sugestões, triagem, votação, arte, encerrado; quem não é apto), Meu Painel → Votações (enquetes.js),
 // a aba da Diretoria (sem acesso, falha ao abrir, abrir e cancelar o ciclo, pílulas dos ciclos, triagem com o 428, abrir a votação, desempate, cores, artes, resultado e Temas
 // já usados), o "Fecha sozinha em" do formulário de enquete, a troca de login e a saída da aba e da sub-aba, respostas atrasadas, o prazo de 20 s, 401 e 403, duplo clique,
-// console e armazenamento.
+// console e armazenamento. Revisão de 23/10/2026: o 428 em todo ato da Diretoria (ATOS_COM_FATOR, corrigir tema, mexer numa finalista), abrir a votação com sugestões sem
+// decisão (pendentes/aceitarPendentes), o tema sem votação (NAO_VOTADA/DIRETORIA), o resultado com a imagem da Diretoria, a retirada da arte até 24/12 (podeRetirar), a marca
+// ⛔ de tema igual, imagens de verdade (o servidor tira os metadados) e o primeiro ciclo no sistema = 2028.
 "use strict";
-const { criarAmbiente, lerApp, arquivo } = require("./ambiente");
+const { criarAmbiente, lerApp, arquivo, pngReal, jpegReal } = require("./ambiente");
 const F = require("./fixtures");
 const { ATAQUE, URL_IMAGEM } = F;
 const iv = require("../../api/shared/identidadeVisual");
@@ -392,14 +394,16 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await mandar();
     confere(meuMsg(env).includes("vazia") && posts(env).length === 0, "arquivo vazio: recusa");
     // o arquivo certo: POST arte {imagemBase64, tipo, titulo, descricao}
-    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 250, 251, 252, 0, 7]);
+    const bytes = pngReal({ metadado: true });          // um PNG de verdade, com o texto do autor (o servidor tira os metadados antes de guardar)
     const png = arquivo({ bytes });
     env.e("idvArteArquivo").files = [png];
     digitar(env, "idvArteTitulo", "  Minha arte  "); digitar(env, "idvArteDescricao", "Azul com branco");
     await mandar();
     let p = ultima(env, "POST identidade-visual/arte");
     confere(!!p && JSON.stringify(p.corpo) === JSON.stringify({ imagemBase64: bytes.toString("base64"), tipo: "image/png", titulo: "Minha arte", descricao: "Azul com branco" }), `POST arte com a imagem em base64, o tipo, o título e a descrição: ${p && JSON.stringify(p.corpo).slice(0, 160)}`);
-    confere(iv.base64CabeNoLimite(p.corpo.imagemBase64) && !iv.conferirImagem(Buffer.from(p.corpo.imagemBase64, "base64"), "image/png").problema, "o base64 passa nas regras de verdade do servidor (é o PNG que a pessoa escolheu)");
+    confere(iv.base64CabeNoLimite(p.corpo.imagemBase64) && !iv.prepararImagem(Buffer.from(p.corpo.imagemBase64, "base64"), "image/png").problema, "o base64 passa nas regras de verdade do servidor (é o PNG que a pessoa escolheu, inteiro)");
+    const gravada = srv.S.artes[srv.S.artes.length - 1];
+    confere(gravada.tamanho === pngReal().length && !gravada.bytes.includes(Buffer.from("Author")), `o servidor guardou a imagem sem o metadado (${gravada.tamanho} bytes)`);
     confere(meuMsg(env).includes("Arte recebida.") && !!liCom(env, "idvMeuConteudo", "Minha arte") && chamadas(env, "GET identidade-visual/meu").length === 2, "201: relê, a arte nova na lista, a mensagem fica");
     // Ver: GET imagem?arteId= e a imagem pela urlSegura
     const liNova = liCom(env, "idvMeuConteudo", ATAQUE("arteTitulo"));
@@ -713,44 +717,52 @@ async function rodar({ mutar = {}, so = null } = {}) {
   });
 
   cenario("Diretoria: abrir o ciclo, cancelar o aberto por engano, pílulas dos ciclos, o motivo de não abrir", async () => {
-    const srv = servidor({ comCiclo: false, comAntigo: true, hoje: "2026-10-23" });
+    // o primeiro ciclo no sistema é o da identidade de 2028 (o de 2027 foi feito fora): a Diretoria abre em 2027
+    const srv = servidor({ comCiclo: false, comAntigo: true, hoje: "2027-10-23" });
     const env = novo(srv);
     await abrirAba(env);
     confere(chamadas(env, "GET identidade-visual/catalogos").length === 1 && chamadas(env, "GET identidade-visual/painel").length === 1, "abre: catálogo e painel, uma vez cada");
     const g = ultima(env, "GET identidade-visual/ciclo");
     confere(!!g && g.consulta.cicloId === "6", "o primeiro ciclo da lista abre sozinho (GET ciclo?cicloId=6)");
     const topo = texto(env, "idvPainelTopo");
-    confere(topo.includes("O ciclo da identidade de 2027 ainda não foi aberto") && topo.includes("01/11/2026") && !!botao(env, "Abrir o ciclo da identidade de 2027"), "o convite para abrir o ciclo de 2027");
+    confere(topo.includes("O ciclo da identidade de 2028 ainda não foi aberto") && topo.includes("01/11/2027") && !!botao(env, "Abrir o ciclo da identidade de 2028"), "o convite para abrir o ciclo de 2028");
     const pilulas = desc(env, env.e("idvPainelTopo")).filter(x => x.localName === "button" && x.className.includes("cal-pilula"));
     confere(pilulas.length === 1 && pilulas[0].textContent === "2026 — Encerrado" && pilulas[0].className.includes("ativo"), `a pílula do ciclo antigo, ativa (${pilulas.map(x => x.textContent).join("|")})`);
     const det = texto(env, "idvCicloDetalhe");
     confere(det.includes("Escolha final registrada") && det.includes(ATAQUE("temaAntigo")) && det.includes(ATAQUE("ataAntiga")) && det.includes(`Registrado por Presidente Marcos ${ATAQUE("nomePresidente")}`) && det.includes(ATAQUE("ocasiaoRotulo")), "o ciclo encerrado: o resultado com a ata e quem registrou");
     confere(!det.includes("Registrar a escolha final") && botoes(env, "Cancelar este ciclo", env.e("idvCicloDetalhe")).length === 0, "encerrado: sem formulário de resultado e sem cancelar");
     limpo(env, "painel", [ATAQUE("temaAntigo"), ATAQUE("ataAntiga")]);
-    // abrir: confirmação; cancelar não abre; confirmar manda {anoAlvo}
-    let m = await clicarEResponder(env, botao(env, "Abrir o ciclo da identidade de 2027"), false);
-    confere(m.aberto && m.texto.includes("Abrir o processo da identidade visual de 2027?") && chamadas(env, "POST identidade-visual/abrir-ciclo").length === 0, "abrir pede confirmação; cancelar não abre");
-    await clicarEResponder(env, botao(env, "Abrir o ciclo da identidade de 2027"), true);
-    const p = ultima(env, "POST identidade-visual/abrir-ciclo");
-    confere(!!p && JSON.stringify(p.corpo) === JSON.stringify({ anoAlvo: 2027 }), `POST abrir-ciclo {anoAlvo}: ${p && JSON.stringify(p.corpo)}`);
-    const novoId = srv.S.ciclos.find(c => c.anoAlvo === 2027).cicloId;
-    confere(chamadas(env, "GET identidade-visual/painel").length === 2 && ultima(env, "GET identidade-visual/ciclo").consulta.cicloId === String(novoId), "abriu: relê o painel e mostra o ciclo novo");
-    confere(cicloMsg(env).includes("Ciclo da Identidade Visual de 2027 aberto.") && !botao(env, "Abrir o ciclo da identidade de 2027"), "a mensagem do servidor e o convite some");
+    // abrir: confirmação; cancelar não abre; confirmar manda {anoAlvo}; o 428 pede a confirmação reforçada e repete uma vez
+    let m = await clicarEResponder(env, botao(env, "Abrir o ciclo da identidade de 2028"), false);
+    confere(m.aberto && m.texto.includes("Abrir o processo da identidade visual de 2028?") && chamadas(env, "POST identidade-visual/abrir-ciclo").length === 0, "abrir pede confirmação; cancelar não abre");
+    env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    await clicarEResponder(env, botao(env, "Abrir o ciclo da identidade de 2028"), true);
+    const pa = chamadas(env, "POST identidade-visual/abrir-ciclo");
+    confere(pa.length === 2 && env.g("window.__fatorPedidos") === 1 && pa.every(x => JSON.stringify(x.corpo) === JSON.stringify({ anoAlvo: 2028 })), `428 e repete: POST abrir-ciclo {anoAlvo} (${pa.length} POST; ${pa[0] && JSON.stringify(pa[0].corpo)})`);
+    const novoId = (srv.S.ciclos.find(c => c.anoAlvo === 2028) || {}).cicloId;
+    confere(!!novoId && chamadas(env, "GET identidade-visual/painel").length === 2 && ultima(env, "GET identidade-visual/ciclo").consulta.cicloId === String(novoId), "abriu: relê o painel e mostra o ciclo novo");
+    confere(cicloMsg(env).includes("Ciclo da Identidade Visual de 2028 aberto.") && !botao(env, "Abrir o ciclo da identidade de 2028"), "a mensagem do servidor e o convite some");
     const pil2 = desc(env, env.e("idvPainelTopo")).filter(x => x.localName === "button" && x.className.includes("cal-pilula"));
-    confere(pil2.length === 2 && pil2[0].textContent === "2027 — Aguardando o início" && pil2[0].className.includes("ativo") && !pil2[1].className.includes("ativo"), "o ciclo novo é a pílula ativa");
+    confere(pil2.length === 2 && pil2[0].textContent === "2028 — Aguardando o início" && pil2[0].className.includes("ativo") && !pil2[1].className.includes("ativo"), "o ciclo novo é a pílula ativa");
     // trocar de ciclo pela pílula
     await clicar(env, pil2[1]);
     confere(ultima(env, "GET identidade-visual/ciclo").consulta.cicloId === "6" && texto(env, "idvCicloDetalhe").includes("Escolha final registrada"), "a pílula do outro ciclo abre o detalhe dele");
-    await clicar(env, desc(env, env.e("idvPainelTopo")).find(x => x.localName === "button" && x.textContent.startsWith("2027")));
-    // cancelar o aberto por engano
-    const bc = botoes(env, "Cancelar este ciclo", env.e("idvCicloDetalhe"))[0];
-    confere(!!bc, "o ciclo sem sugestões pode ser cancelado");
-    m = await clicarEResponder(env, bc, true);
-    const pc = ultima(env, "POST identidade-visual/cancelar-ciclo");
-    confere(m.aberto && !!pc && JSON.stringify(pc.corpo) === JSON.stringify({ cicloId: novoId }) && !srv.S.ciclos.some(c => c.cicloId === novoId), `POST cancelar-ciclo {cicloId}: ${pc && JSON.stringify(pc.corpo)}`);
-    confere(cicloMsg(env).includes("Ciclo de 2027 cancelado.") && !!botao(env, "Abrir o ciclo da identidade de 2027") && ultima(env, "GET identidade-visual/ciclo").consulta.cicloId === "6", "cancelado: relê, o convite volta e o ciclo antigo fica selecionado");
+    await clicar(env, desc(env, env.e("idvPainelTopo")).find(x => x.localName === "button" && x.textContent.startsWith("2028")));
+    // cancelar o aberto por engano: confirmação, 428 (fator recusado: nada cancelado), depois com o fator
+    const bc = () => botoes(env, "Cancelar este ciclo", env.e("idvCicloDetalhe"))[0];
+    confere(!!bc(), "o ciclo sem sugestões pode ser cancelado");
+    srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => false;
+    m = await clicarEResponder(env, bc(), true);
+    confere(m.aberto && chamadas(env, "POST identidade-visual/cancelar-ciclo").length === 1 && srv.S.ciclos.some(c => c.cicloId === novoId) && cicloMsg(env) === msgs(env).fator, `fator recusado: um POST, nada cancelado, a mensagem da confirmação (${cicloMsg(env).slice(0, 60)})`);
+    env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    await clicar(env, desc(env, env.e("idvPainelTopo")).find(x => x.localName === "button" && x.textContent.startsWith("2028")));
+    await clicarEResponder(env, bc(), true);
+    const pcs = chamadas(env, "POST identidade-visual/cancelar-ciclo");
+    confere(pcs.length === 3 && pcs.every(x => JSON.stringify(x.corpo) === JSON.stringify({ cicloId: novoId })) && !srv.S.ciclos.some(c => c.cicloId === novoId), `428 e repete: POST cancelar-ciclo {cicloId} (${pcs.length})`);
+    confere(cicloMsg(env).includes("Ciclo de 2028 cancelado.") && !!botao(env, "Abrir o ciclo da identidade de 2028") && ultima(env, "GET identidade-visual/ciclo").consulta.cicloId === "6", "cancelado: relê, o convite volta e o ciclo antigo fica selecionado");
+    limpo(env, "abrir e cancelar", [ATAQUE("msgCicloAberto"), ATAQUE("msgCancelado")]);
     // não dá mais para abrir (passou do dia 15): o motivo do servidor, sem botão
-    const srv2 = servidor({ comCiclo: false, hoje: "2026-11-20" });
+    const srv2 = servidor({ comCiclo: false, hoje: "2027-11-20" });
     const env2 = novo(srv2);
     await abrirAba(env2);
     confere(texto(env2, "idvPainelTopo").includes("terminaram em 15/11") && texto(env2, "idvPainelTopo").includes(ATAQUE("motivoNaoAbre")) && !botao(env2, "Abrir o ciclo") && texto(env2, "idvPainelTopo").includes("Nenhum ciclo aberto ainda."), "o motivo de não abrir, como texto, sem botão");
@@ -759,6 +771,16 @@ async function rodar({ mutar = {}, so = null } = {}) {
     // ciclo de outra pessoa que sumiu: 404 neutro
     env2.ev("idvCarregarCicloAcao(99)"); await env2.ocioso();
     confere(cicloMsg(env2) === "Ciclo não encontrado.", "404: 'Ciclo não encontrado.'");
+    // em 2026 (o processo da identidade de 2027 foi feito fora do sistema): o motivo do servidor, sem botão
+    const srv3 = servidor({ comCiclo: false, hoje: "2026-10-23" });
+    const env3 = novo(srv3);
+    await abrirAba(env3);
+    confere(texto(env3, "idvPainelTopo").includes("O primeiro ciclo no sistema é o da identidade de 2028") && !botao(env3, "Abrir o ciclo"), `2026: o motivo (o primeiro ciclo é o de 2028), sem botão (${texto(env3, "idvPainelTopo").slice(0, 80)})`);
+    // e o ato direto (outra aba, tela velha) recebe a recusa do servidor
+    srv3.S.fatorOk = true;
+    env3.ev("idvAbrirCicloAcao(2027, null)"); await env3.responderModal(true); await env3.ocioso();
+    confere(chamadas(env3, "POST identidade-visual/abrir-ciclo").length === 1 && cicloMsg(env3).includes("O primeiro ciclo no sistema é o da identidade de 2028") && !srv3.S.ciclos.length, "abrir o de 2027: 422 do servidor, nada aberto");
+    limpo(env3, "2026", [ATAQUE("motivoNaoAbre")]);
   });
 
   cenario("Diretoria: triagem — a lista sem nomes, finalista com ajuste e o 428, descartar com critério, voltar para a triagem, duplo clique", async () => {
@@ -770,7 +792,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(det.includes("Sugestões (5; 0 finalista(s); 1 retirada(s); 4 pessoa(s))"), `o cabeçalho com as contagens: ${det.slice(det.indexOf("Sugestões ("), det.indexOf("Sugestões (") + 60)}`);
     confere(!det.includes("Caminhando juntos") && !det.includes("Ana Sugestora") && !det.includes("Carla Membro"), "a triagem vê só o texto: sem a retirada e sem nomes de quem mandou");
     const liAna = liCom(env, "idvCicloDetalhe", ATAQUE("sugAna"));
-    confere(!!liAna && liAna.textContent.includes(`Parece com o tema de 2019: "Raízes da fé ${ATAQUE("parecidoTema")}"`), "a marca do 'parecido' com o tema e o ano");
+    confere(!!liAna && liAna.textContent.includes(`⚠️ Parece com o tema de 2019: "Raízes da fé ${ATAQUE("SUGANA")}"`) && !liAna.textContent.includes("Igual ao tema"), "a marca do 'parecido' (recalculada pelo servidor contra os temas de hoje) com o tema e o ano");
     const liBento = liCom(env, "idvCicloDetalhe", ATAQUE("sugBento"));
     confere(!!liBento && liBento.textContent.includes(`Descartada — Curto e memorável ${ATAQUE("criterioRotulo")}`) && liBento.textContent.includes(`Observação: Longo demais ${ATAQUE("obsTriagem")}`) && liBento.textContent.includes(`Triada por Secretário Jonas ${ATAQUE("nomeSecretario")}`), "a descartada: critério, observação e quem triou, como texto");
     confere(botoes(env, "Voltar para a triagem", liBento).length === 1 && botoes(env, "Voltar para a triagem", liAna).length === 0, "'Voltar para a triagem' só na que já foi triada");
@@ -781,7 +803,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(JSON.stringify(sel.options.map(o => o.value)) === '["","1","2","3"]' && sel.options[1].textContent.includes(ATAQUE("criterio1")), `os critérios do Art. 159 (o de código inválido fica fora): ${sel.options.map(o => o.value).join(",")}`);
     confere(env.e(`idvAjuste_${srv.S.S.ana1.sugestaoId}`).value === srv.S.S.ana1.texto, "o campo do ajuste começa com o texto (o ataque fica no valor, como texto)");
     confere(texto(env, "idvCicloDetalhe").includes("A votação abre sozinha em 22/11/2026"), "o aviso da triagem com a data da votação");
-    limpo(env, "triagem", [ATAQUE("sugAna"), ATAQUE("obsTriagem"), ATAQUE("parecidoTema")]);
+    limpo(env, "triagem", [ATAQUE("sugAna"), ATAQUE("obsTriagem"), ATAQUE("SUGANA")]);
     // finalista com ajuste: 428 → confirmação reforçada → repete uma vez
     env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
     digitar(env, `idvAjuste_${carla.sugestaoId}`, "  Fé que vence o mundo ");
@@ -843,7 +865,11 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(m.aberto && m.texto.includes("Depois disso a lista não muda mais") && ps.length === 2 && JSON.stringify(ps[1].corpo) === JSON.stringify({ cicloId: 7 }), `428 e repete: POST abrir-votacao {cicloId} (${ps.length})`);
     confere(cicloMsg(env).includes("pelo menos 2 finalistas") && cicloMsg(env).includes(ATAQUE("msg422")) && !!botao(env, "Abrir a votação agora"), "422 (só 1 finalista): a mensagem do servidor, o botão continua");
     Object.assign(srv.S.S.bento, { status: "FINALISTA" });
-    await clicarEResponder(env, botao(env, "Abrir a votação agora"), true);
+    // 2 finalistas e 3 sugestões sem decisão: o servidor responde `pendentes` e a tela pergunta antes de abrir assim mesmo
+    env.doc.clicar(botao(env, "Abrir a votação agora")); await env.responderModal(true); await env.ocioso();
+    m = await env.responderModal(true); await env.ocioso();
+    ps = chamadas(env, "POST identidade-visual/abrir-votacao");
+    confere(m.aberto && m.texto.includes("Há 3 sugestão(ões) ainda sem decisão da triagem") && ps.length === 4 && JSON.stringify(ps[2].corpo) === JSON.stringify({ cicloId: 7 }) && JSON.stringify(ps[3].corpo) === JSON.stringify({ cicloId: 7, aceitarPendentes: true }), `pendentes: a confirmação e o POST com aceitarPendentes (${ps.length}; ${m.texto.slice(0, 60)})`);
     const det = texto(env, "idvCicloDetalhe");
     confere(!!srv.S.C.enqueteId && cicloMsg(env).includes("Votação aberta com 2 finalistas") && !botao(env, "Abrir a votação agora"), "201: a votação aberta, o botão some");
     confere(det.includes("Aberta em Meu Painel até 30/11/2026. 0 pessoa(s) votaram.") && !det.includes("abriu sozinha") && botoes(env, "Finalista", env.e("idvCicloDetalhe")).length === 0, "aberta à mão: sem 'abriu sozinha' e sem as ações da triagem");
@@ -906,9 +932,12 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(estilos.length === 1 && estilos[0] === "background:#1A4D8F", `gestão: só a cor conferida entra no estilo (${JSON.stringify(estilos)})`);
     confere(!!env.e("idvCorHex") && env.e("idvCorHex").type === "color" && JSON.stringify(env.e("idvCorOrdem").options.map(o => o.value)) === '["1","2","3"]', "o formulário da cor: posição 1 a 3 e o seletor de cor");
     // registrar: o hex vai em maiúsculas
+    // (cada ato da Diretoria aqui pede a confirmação reforçada: 428, confirmarFatorAgora e UMA nova tentativa)
+    const comFator = async (chave, ato) => { srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; }; const n0 = chamadas(env, chave).length; const f0 = env.g("window.__fatorPedidos") || 0; await ato(); return { posts: chamadas(env, chave).length - n0, fator: (env.g("window.__fatorPedidos") || 0) - f0 }; };
     escolher(env, "idvCorOrdem", "3"); digitar(env, "idvCorNome", "Branco gelo"); digitar(env, "idvCorHex", "#f0f4f8");
-    await clicar(env, botao(env, "Registrar a cor"));
+    let q = await comFator("POST identidade-visual/cor", () => clicar(env, botao(env, "Registrar a cor")));
     let p = ultima(env, "POST identidade-visual/cor");
+    confere(q.posts === 2 && q.fator === 1, `cor: 428, a confirmação reforçada e uma nova tentativa (${q.posts} POST, ${q.fator} pedido)`);
     confere(!!p && JSON.stringify(p.corpo) === JSON.stringify({ cicloId: 7, ordem: 3, nome: "Branco gelo", hex: "#F0F4F8" }), `POST cor {cicloId, ordem, nome, hex em maiúsculas}: ${p && JSON.stringify(p.corpo)}`);
     confere(cicloMsg(env).includes("Cor 3 registrada.") && desc(env, env.e("idvCicloDetalhe")).some(x => x.getAttribute("style") === "background:#F0F4F8"), "relê e a cor nova aparece");
     // cor inválida no campo: recusa na tela
@@ -921,7 +950,9 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await clicar(env, botao(env, "Registrar a cor"));
     confere(cicloMsg(env).includes("Escreva o nome da cor") && cicloMsg(env).includes(ATAQUE("msg422")), "nome vazio: a regra do servidor");
     // apagar
-    let m = await clicarEResponder(env, botoes(env, "Apagar", liCom(env, "idvCicloDetalhe", ATAQUE("corNome")))[0], true);
+    let m;
+    q = await comFator("POST identidade-visual/excluir-cor", async () => { m = await clicarEResponder(env, botoes(env, "Apagar", liCom(env, "idvCicloDetalhe", ATAQUE("corNome")))[0], true); });
+    confere(q.posts === 2 && q.fator === 1, `excluir-cor: 428 e uma nova tentativa (${q.posts} POST)`);
     p = ultima(env, "POST identidade-visual/excluir-cor");
     confere(m.aberto && m.texto.includes("Apagar esta cor?") && !!p && JSON.stringify(p.corpo) === JSON.stringify({ corId: 401 }) && cicloMsg(env).includes("Cor apagada."), `POST excluir-cor {corId}: ${p && JSON.stringify(p.corpo)}`);
     limpo(env, "cores", [ATAQUE("corRuim").slice(0, 0) || "Cor quebrada", ATAQUE("msgCor")]);
@@ -946,7 +977,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await clicar(env, botoes(env, "Tirar do concurso", liCom(env, "idvCicloDetalhe", ATAQUE("arteTitulo")))[0]);
     confere(cicloMsg(env).includes("Escreva o motivo") && chamadas(env, "POST identidade-visual/recusar-arte").length === 0 && env.e("modalOverlay").classList.contains("escondido"), "motivo curto: o aviso, sem confirmação e sem pedido");
     digitar(env, `idvMotivo_${a1.arteId}`, " Cores fora do tecido ");
-    m = await clicarEResponder(env, botoes(env, "Tirar do concurso", liCom(env, "idvCicloDetalhe", ATAQUE("arteTitulo")))[0], true);
+    q = await comFator("POST identidade-visual/recusar-arte", async () => { m = await clicarEResponder(env, botoes(env, "Tirar do concurso", liCom(env, "idvCicloDetalhe", ATAQUE("arteTitulo")))[0], true); });
+    confere(q.posts === 2 && q.fator === 1, `recusar-arte: 428 e uma nova tentativa (${q.posts} POST)`);
     p = ultima(env, "POST identidade-visual/recusar-arte");
     confere(m.aberto && m.texto.includes("não se desfaz") && !!p && JSON.stringify(p.corpo) === JSON.stringify({ arteId: a1.arteId, motivo: "Cores fora do tecido" }) && a1.status === "RECUSADA", `POST recusar-arte {arteId, motivo}: ${p && JSON.stringify(p.corpo)}`);
     confere(liCom(env, "idvCicloDetalhe", ATAQUE("arteTitulo")).textContent.includes("Motivo: Cores fora do tecido"), "relê: o motivo aparece");
@@ -974,8 +1006,12 @@ async function rodar({ mutar = {}, so = null } = {}) {
     limpo(env, "formulário do resultado", [ATAQUE("ocasiaoCULTO_ADMINISTRATIVO")]);
     const registrar = () => clicar(env, botao(env, "Registrar o resultado"));
     await registrar();
-    confere(cicloMsg(env) === "Escolha a arte e a cor." && posts(env).length === 0, "sem arte e cor: o aviso");
-    escolher(env, "idvResArte", String(a1.arteId)); escolher(env, "idvResCor", "401");
+    confere(cicloMsg(env) === "Escolha a arte (ou envie a imagem dela) e a cor." && posts(env).length === 0, "sem arte e cor: o aviso");
+    escolher(env, "idvResArte", String(a1.arteId));
+    env.e("idvCicloMsg").textContent = "";
+    await registrar();
+    confere(cicloMsg(env) === "Escolha a arte (ou envie a imagem dela) e a cor." && posts(env).length === 0, "a arte sem a cor: o aviso, nenhum pedido");
+    escolher(env, "idvResCor", "401");
     await registrar();
     confere(cicloMsg(env) === "Informe a data do culto." && posts(env).length === 0, "sem data: o aviso");
     digitar(env, "idvResData", "2026-12-13");
@@ -1035,11 +1071,14 @@ async function rodar({ mutar = {}, so = null } = {}) {
     digitar(env, "idvTemaAno", "2020"); digitar(env, "idvTemaTexto", "Outro");
     await clicar(env, botao(env, "Cadastrar"));
     confere(texto(env, "idvTemasMsg").includes("Já há um tema cadastrado para 2020") && env.e("idvTemaTexto").value === "Outro", "ano repetido: 422 e o que foi digitado fica");
-    // corrigir
+    confere(chamadas(env, "POST identidade-visual/tema").length === 2 && !env.g("window.__fatorPedidos"), "cadastrar um tema novo não pede a confirmação reforçada");
+    // corrigir: pede a confirmação reforçada (428) e repete uma vez
     const t20 = srv.S.T.t2020;
+    env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
     digitar(env, `idvTemaTexto_${t20.temaUsadoId}`, "Avante, Igreja de Cristo!");
     await clicar(env, botoes(env, "Salvar", desc(env, env.e("idvTemasLista")).find(x => x.localName === "li" && desc(env, x).some(y => y.id === `idvTemaTexto_${t20.temaUsadoId}`)))[0]);
     p = ultima(env, "POST identidade-visual/tema");
+    confere(chamadas(env, "POST identidade-visual/tema").length === 4 && env.g("window.__fatorPedidos") === 1, `corrigir: 428 e uma nova tentativa (${chamadas(env, "POST identidade-visual/tema").length - 2} POST)`);
     confere(JSON.stringify(p.corpo) === JSON.stringify({ temaUsadoId: t20.temaUsadoId, ano: 2020, tema: "Avante, Igreja de Cristo!" }) && t20.tema === "Avante, Igreja de Cristo!", `POST tema {temaUsadoId, ano, tema}: ${JSON.stringify(p.corpo)}`);
     confere(texto(env, "idvTemasMsg").includes("Tema de 2020 corrigido."), "corrigido: a mensagem");
     // salvar o de 2019 sem mexer (o texto tem < e >): a regra do servidor recusa e a tela mostra
@@ -1049,8 +1088,10 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const liT20 = () => desc(env, env.e("idvTemasLista")).find(x => x.localName === "li" && desc(env, x).some(y => y.id === `idvTemaTexto_${t20.temaUsadoId}`));
     let m = await clicarEResponder(env, botoes(env, "Apagar", liT20())[0], false);
     confere(m.aberto && m.texto.includes("Apagar este tema") && chamadas(env, "POST identidade-visual/excluir-tema").length === 0, "apagar pede confirmação; cancelar não apaga");
+    srv.S.fatorOk = false;
     await clicarEResponder(env, botoes(env, "Apagar", liT20())[0], true);
     p = ultima(env, "POST identidade-visual/excluir-tema");
+    confere(chamadas(env, "POST identidade-visual/excluir-tema").length === 2 && env.g("window.__fatorPedidos") === 2, "apagar: 428 e uma nova tentativa");
     confere(!!p && JSON.stringify(p.corpo) === JSON.stringify({ temaUsadoId: t20.temaUsadoId }) && !liT20() && texto(env, "idvTemasMsg").includes("Tema de 2020 apagado da lista."), `POST excluir-tema {temaUsadoId}: ${p && JSON.stringify(p.corpo)}`);
     // de volta ao ciclo
     await clicar(env, env.e("btnIdvSecaoCiclo"));
@@ -1269,6 +1310,285 @@ async function rodar({ mutar = {}, so = null } = {}) {
     await clicar(env, botoes(env, "Descartar", liCom(env, "idvCicloDetalhe", "Fé que vence"))[0]);
     confere(env.toasts().filter(x => x.includes("Isto é da Diretoria")).length === 1 && cicloMsg(env).includes("Isto é da Diretoria"), "403: um aviso só e o motivo na tela");
     limpo(env, "403", [ATAQUE("msg403")]);
+  });
+
+  // ============================================================================================================================================
+  // 6) REVISÃO DE 23/10/2026: pendentes da triagem, tema sem votação, resultado com a imagem da Diretoria, retirada da arte até 24/12, "igual" a tema já
+  //    usado e a confirmação reforçada em todo ato da Diretoria
+  // ============================================================================================================================================
+  const trocarResposta = (srv, f) => async (c) => { const r = await srv.servidor(c); if (r.status === 200) f(r.corpo); return r; };
+  const pilulaDoCiclo = (env, ano) => desc(env, env.e("idvPainelTopo")).find(x => x.localName === "button" && x.textContent.startsWith(String(ano)));
+
+  cenario("Diretoria: abrir a votação com sugestões sem decisão — a confirmação; cancelar não manda; confirmar manda aceitarPendentes", async () => {
+    const srv = servidor({ hoje: "2026-11-25" });
+    srv.triagemFeita();                                  // 2 finalistas; "Fé que vence" e a anonimizada sem decisão
+    const env = novo(srv);
+    await abrirAba(env);
+    confere(texto(env, "idvCicloDetalhe").includes("(há 2 sugestão(ões) sem decisão)") && !!botao(env, "Abrir a votação agora"), "o aviso diz quantas estão sem decisão (semDecisao) e o botão aparece");
+    confere(!srv.S.C.enqueteId, "com sugestão sem decisão a votação não abre sozinha");
+    // cancelar na segunda pergunta: um POST só, nada aberto
+    srv.S.fatorOk = true;
+    env.doc.clicar(botao(env, "Abrir a votação agora")); await env.responderModal(true); await env.ocioso();
+    let m = await env.responderModal(false); await env.ocioso();
+    let ps = chamadas(env, "POST identidade-visual/abrir-votacao");
+    confere(m.aberto && m.texto.includes("Há 2 sugestão(ões) ainda sem decisão da triagem. Abrir a votação assim mesmo? Elas ficam fora.") && ps.length === 1 && JSON.stringify(ps[0].corpo) === JSON.stringify({ cicloId: 7 }), `pendentes: a pergunta com o número; cancelar não manda o segundo POST (${ps.length})`);
+    confere(cicloMsg(env) === "A votação não foi aberta: termine a triagem." && !srv.S.C.enqueteId && !env.toasts().some(x => x.includes("sem decisão")), `cancelado: a frase da tela, nada aberto (${cicloMsg(env)})`);
+    limpo(env, "pendentes cancelado");
+    // confirmar, com o 428 no meio: 428 -> confirmação reforçada -> repete -> 422 pendentes -> pergunta -> POST com aceitarPendentes
+    srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    env.doc.clicar(botao(env, "Abrir a votação agora")); await env.responderModal(true); await env.ocioso();
+    m = await env.responderModal(true); await env.ocioso();
+    ps = chamadas(env, "POST identidade-visual/abrir-votacao").slice(1);
+    confere(m.aberto && ps.length === 3 && env.g("window.__fatorPedidos") === 1 && JSON.stringify(ps.map(x => x.corpo)) === JSON.stringify([{ cicloId: 7 }, { cicloId: 7 }, { cicloId: 7, aceitarPendentes: true }]), `428, nova tentativa, pendentes e o POST com aceitarPendentes: true (${JSON.stringify(ps.map(x => x.corpo))})`);
+    const e = srv.enquete(srv.S.C.enqueteId);
+    confere(!!e && e.perguntas[0].opcoes.length === 2 && srv.S.S.carla.status === "ENVIADA", "aberta com os 2 finalistas; a sem decisão ficou fora");
+    confere(cicloMsg(env).includes("Votação aberta com 2 finalistas") && cicloMsg(env).includes(ATAQUE("msgVotacao")) && !botao(env, "Abrir a votação agora") && texto(env, "idvCicloDetalhe").includes("Aberta em Meu Painel"), "aberta: a mensagem do servidor, relê, o botão some");
+    limpo(env, "pendentes confirmado", [ATAQUE("msgVotacao")]);
+    // `pendentes` que não é número: a tela não pergunta (só a recusa do servidor, como texto)
+    const srv2 = servidor({ hoje: "2026-11-25" }); srv2.triagemFeita(); srv2.S.fatorOk = true;
+    const env2 = novo(srv2);
+    await abrirAba(env2);
+    env2.api.rotas["POST identidade-visual/abrir-votacao"] = { status: 422, corpo: { sucesso: false, pendentes: ATAQUE("pendentes"), mensagem: "Recusada " + ATAQUE("msgPendentesRuim") } };
+    env2.doc.clicar(botao(env2, "Abrir a votação agora")); await env2.responderModal(true); await env2.ocioso();
+    confere(chamadas(env2, "POST identidade-visual/abrir-votacao").length === 1 && env2.e("modalOverlay").classList.contains("escondido") && cicloMsg(env2).includes(ATAQUE("msgPendentesRuim")), "pendentes que não é número: nenhuma pergunta, a mensagem do servidor como texto");
+    limpo(env2, "pendentes inválido", [ATAQUE("msgPendentesRuim")]);
+    // a troca de pessoa durante a pergunta: o segundo POST não sai
+    const srv3 = servidor({ hoje: "2026-11-25" }); srv3.triagemFeita(); srv3.S.fatorOk = true;
+    const env3 = novo(srv3);
+    await abrirAba(env3);
+    env3.doc.clicar(botao(env3, "Abrir a votação agora")); await env3.responderModal(true); await env3.ocioso();
+    confere(!env3.e("modalOverlay").classList.contains("escondido") && env3.e("modalCaixa").textContent.includes("sem decisão"), "a pergunta dos pendentes aberta");
+    env3.ev('mostrarAbaSecretaria("meupainel")'); await env3.ocioso();
+    if (!env3.e("modalOverlay").classList.contains("escondido")) { env3.doc.clicar(env3.e("modalConfirmar")); await env3.ocioso(); }
+    confere(chamadas(env3, "POST identidade-visual/abrir-votacao").length === 1 && !srv3.S.C.enqueteId, "saiu da aba com a pergunta aberta: o POST com aceitarPendentes não sai");
+  });
+
+  cenario("Diretoria: definir o tema sem votação — quando aparece, motivo, confirmação, 428, o corpo, o tema DIRETORIA e NAO_VOTADA como texto", async () => {
+    // a partir do dia 22 com 1 finalista (a votação não pode abrir)
+    const srv = servidor({ hoje: "2026-11-25" });
+    srv.triagemFeita(); Object.assign(srv.S.S.bento, { status: "ENVIADA", triadoPorId: null, triadoEm: null });
+    const env = novo(srv);
+    await abrirAba(env);
+    const ana2 = srv.S.S.ana2;
+    const sel = env.e("idvTemaUnicoOpcao");
+    confere(!!sel && !!botao(env, "Definir o tema sem votação") && !!botao(env, "Abrir a votação agora") && texto(env, "idvCicloDetalhe").includes("Sem votação possível (menos de 2 finalistas)"), "votação com 1 finalista: o formulário do tema sem votação (e o botão de abrir)");
+    confere(!!sel && JSON.stringify(sel.options.map(o => o.value)) === JSON.stringify(["", String(ana2.sugestaoId)]) && sel.options[1].textContent === `Frutos que permanecem para sempre ${ATAQUE("textoFinal")}`, `só os finalistas, com a redação ajustada como texto (${sel && sel.options.map(o => o.textContent.slice(0, 20)).join("|")})`);
+    limpo(env, "tema sem votação: o formulário", [ATAQUE("textoFinal")]);
+    const definir = () => clicar(env, botao(env, "Definir o tema sem votação"));
+    await definir();
+    confere(cicloMsg(env) === "Escolha o tema." && posts(env).length === 0 && env.e("modalOverlay").classList.contains("escondido"), "sem tema: o aviso, sem pergunta e sem pedido");
+    escolher(env, "idvTemaUnicoOpcao", String(ana2.sugestaoId)); digitar(env, "idvTemaUnicoMotivo", " ata ");
+    await definir();
+    confere(cicloMsg(env) === "Escreva por quê (a reunião ou a ata da decisão)." && posts(env).length === 0 && env.e("modalOverlay").classList.contains("escondido"), "motivo com menos de 5 letras: o aviso, sem pergunta e sem pedido");
+    digitar(env, "idvTemaUnicoMotivo", "  Reunião da Diretoria de 24/11, ata 16  ");
+    let m = await clicarEResponder(env, botao(env, "Definir o tema sem votação"), false);
+    confere(m.aberto && m.texto.includes("Definir o tema do ano sem votação?") && m.texto.includes("com o seu nome e o motivo") && posts(env).length === 0, "pede confirmação; cancelar não manda");
+    // o servidor recusa (apareceu um segundo finalista): a regra como texto, nada definido
+    srv.S.fatorOk = true;
+    Object.assign(srv.S.S.bento, { status: "FINALISTA" });
+    await clicarEResponder(env, botao(env, "Definir o tema sem votação"), true);
+    confere(cicloMsg(env).includes("Há finalistas para a votação") && cicloMsg(env).includes(ATAQUE("msg422")) && !srv.S.C.tema, `422: a regra do servidor como texto (${cicloMsg(env).slice(0, 60)})`);
+    confere(!env.e("idvTemaUnicoOpcao") && !!botao(env, "Abrir a votação agora"), "relido com 2 finalistas: o formulário some (a votação pode abrir)");
+    // de volta a 1 finalista: 428 -> confirmação reforçada -> repete; o corpo {sugestaoId, motivo}
+    Object.assign(srv.S.S.bento, { status: "ENVIADA" });
+    await clicar(env, pilulaDoCiclo(env, 2027));
+    escolher(env, "idvTemaUnicoOpcao", String(ana2.sugestaoId)); digitar(env, "idvTemaUnicoMotivo", "  Reunião da Diretoria de 24/11, ata 16  ");
+    srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    await clicarEResponder(env, botao(env, "Definir o tema sem votação"), true);
+    const ps = chamadas(env, "POST identidade-visual/tema-sem-votacao");
+    confere(ps.length === 3 && env.g("window.__fatorPedidos") === 1 && ps.slice(1).every(x => JSON.stringify(x.corpo) === JSON.stringify({ sugestaoId: ana2.sugestaoId, motivo: "Reunião da Diretoria de 24/11, ata 16" })) && x0(ps[1]), `428 e repete: POST tema-sem-votacao {sugestaoId, motivo} (${ps.length}; ${ps[2] && JSON.stringify(ps[2].corpo)})`);
+    confere(srv.S.C.apuracao === "NAO_VOTADA" && srv.S.C.tema && srv.S.C.tema.definidoPor === "DIRETORIA", "o servidor gravou o tema sem votação");
+    const det = texto(env, "idvCicloDetalhe");
+    confere(det.includes("Sem votação: tema definido pela Diretoria") && det.includes(`Tema de 2027: Frutos que permanecem para sempre ${ATAQUE("textoFinal")} — definido pela Diretoria (Reunião da Diretoria de 24/11, ata 16 ${ATAQUE("temaUnicoMotivo")})`), `NAO_VOTADA e o tema DIRETORIA com o motivo, como texto (${det.slice(det.indexOf("Votação"), det.indexOf("Votação") + 200)})`);
+    confere(!env.e("idvTemaUnicoOpcao") && !botao(env, "Abrir a votação agora") && cicloMsg(env).includes("Tema definido pela Diretoria, sem votação") && cicloMsg(env).includes(ATAQUE("msgTemaUnico")), "definido: o formulário e o botão somem; a mensagem do servidor fica");
+    limpo(env, "tema sem votação definido", [ATAQUE("temaUnicoMotivo"), ATAQUE("msgTemaUnico")]);
+    // o membro vê o tema (dezembro), com o texto como texto
+    srv.S.hoje = "2026-12-05";
+    const envM = novo(srv);
+    await abrirMeu(envM);
+    confere(texto(envM, "idvMeuConteudo").includes(`Tema de 2027: Frutos que permanecem para sempre ${ATAQUE("textoFinal")}`), "Meu Painel: o tema definido pela Diretoria");
+    limpo(envM, "Meu Painel: tema DIRETORIA", [ATAQUE("textoFinal")]);
+    // apuração NAO_VOTADA sem o tema (resposta trocada): o rótulo da tela, como texto, nos dois lados
+    const envX = novo(srv);
+    envX.api.rotas["GET identidade-visual/meu"] = trocarResposta(srv, (d) => { d.ciclo.tema = null; });
+    await abrirMeu(envX);
+    confere(texto(envX, "idvMeuConteudo").includes("Sem votação: tema definido pela Diretoria"), "Meu Painel: NAO_VOTADA sem o tema mostra o rótulo da tela");
+    limpo(envX, "NAO_VOTADA sem tema");
+    // quando NÃO aparece: na triagem; na votação com 2 finalistas; com a votação aberta; sem finalistas; com a apuração
+    const casos = [
+      ["triagem", (s) => { s.S.hoje = "2026-11-18"; s.triagemFeita(); }],
+      ["votação com 2 finalistas", (s) => { s.triagemFeita(); }],
+      ["votação aberta", (s) => { s.votacaoAberta(); }],
+      ["arte sem finalistas", (s) => { s.S.hoje = "2026-12-05"; }],
+      ["arte com a votação apurada", (s) => { s.votacaoAberta(); s.votar(33, s.S.S.bento); s.S.hoje = "2026-12-05"; }]
+    ];
+    for (const [qual, preparar] of casos) {
+      const s = servidor({ hoje: "2026-11-25" }); preparar(s);
+      const en = novo(s);
+      await abrirAba(en);
+      confere(!en.e("idvTemaUnicoOpcao") && !botao(en, "Definir o tema sem votação"), `${qual}: sem o formulário do tema sem votação`);
+    }
+    // e aparece em dezembro sem votação (a votação não aconteceu), mesmo com 2 finalistas
+    const s4 = servidor({ hoje: "2026-11-25" }); s4.triagemFeita(); s4.S.hoje = "2026-12-05";
+    const en4 = novo(s4);
+    await abrirAba(en4);
+    confere(!!en4.e("idvTemaUnicoOpcao") && en4.e("idvTemaUnicoOpcao").options.length === 3 && texto(en4, "idvCicloDetalhe").includes("(a votação não aconteceu)") && !botao(en4, "Abrir a votação agora"), "dezembro sem votação: o formulário com os 2 finalistas, sem o botão de abrir");
+    function x0(p) { return !!p && p.cabecalhos["content-type"] === "application/json" && p.comToken && p.comPrazo; }
+  });
+
+  cenario("Diretoria: o resultado com a imagem enviada pela Diretoria — as duas ou nenhuma, tipo e tamanho na tela, o corpo sem arteId, a arte da Diretoria", async () => {
+    const srv = servidor({ hoje: "2026-12-20" });
+    srv.votacaoAberta(); srv.votar(33, srv.S.S.bento);
+    srv.S.cores.push({ corId: 401, cicloId: 7, ordem: 1, nome: srv.A("corNome", "Azul royal"), hex: "#1A4D8F" });
+    const a1 = srv.novaArte({ membroId: 33, titulo: srv.A("arteTitulo", "Raízes em azul") });
+    const env = novo(srv);
+    await abrirAba(env);
+    const campo = env.e("idvResImagem");
+    confere(!!campo && campo.type === "file" && campo.getAttribute("accept") === "image/png,image/jpeg", "o campo da imagem, só PNG e JPEG");
+    const registrar = () => clicar(env, botao(env, "Registrar o resultado"));
+    const preencher = () => { escolher(env, "idvResCor", "401"); digitar(env, "idvResData", "2026-12-13"); digitar(env, "idvResVotos", "150"); };
+    preencher();
+    // as duas: a arte do concurso E a imagem
+    const png = arquivo({ bytes: pngReal() });
+    escolher(env, "idvResArte", String(a1.arteId)); campo.files = [png];
+    await registrar();
+    confere(cicloMsg(env) === "Escolha uma arte do concurso OU envie a imagem — não as duas." && posts(env).length === 0 && env.e("modalOverlay").classList.contains("escondido") && png.lidos === 0, "a arte e a imagem: o aviso, sem pergunta, sem pedido, o arquivo nem é lido");
+    // nenhuma das duas
+    escolher(env, "idvResArte", ""); campo.files = [];
+    await registrar();
+    confere(cicloMsg(env) === "Escolha a arte (ou envie a imagem dela) e a cor." && posts(env).length === 0, "nem a arte nem a imagem: o aviso, sem pedido");
+    // tipo errado, grande demais, vazio: recusa antes da pergunta e do pedido
+    for (const [qual, arq] of [["tipo errado", arquivo({ nome: "a.gif", tipo: "image/gif" })], ["mais de 5 MB", arquivo({ tamanho: 5 * 1024 * 1024 + 1 })], ["vazio", arquivo({ bytes: Buffer.alloc(0) })]]) {
+      campo.files = [arq];
+      await registrar();
+      confere(cicloMsg(env) === "A imagem tem de ser PNG ou JPEG, até 5 MB." && posts(env).length === 0 && env.e("modalOverlay").classList.contains("escondido") && arq.lidos === 0, `${qual}: o aviso, sem pergunta e sem pedido`);
+    }
+    // o arquivo cortado (sem o fim): o servidor recusa e nada é registrado
+    srv.S.fatorOk = true;
+    campo.files = [arquivo({ bytes: pngReal({ semFim: true }) })];
+    await clicarEResponder(env, botao(env, "Registrar o resultado"), true);
+    confere(cicloMsg(env).includes("A imagem está corrompida") && cicloMsg(env).includes(ATAQUE("msg422")) && !srv.S.C.resultado && !srv.S.artes.some(a => a.daDiretoria), "PNG sem o fim: a recusa do servidor, nada registrado");
+    // o JPEG certo (com o EXIF do celular): pergunta, 428 e repete; o corpo leva imagemBase64 + tipo e NÃO leva arteId
+    srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    preencher();
+    const jpg = jpegReal({ metadado: true });
+    env.e("idvResImagem").files = [arquivo({ nome: "culto.jpg", tipo: "image/jpeg", bytes: jpg })];
+    const m = await clicarEResponder(env, botao(env, "Registrar o resultado"), true);
+    const ps = chamadas(env, "POST identidade-visual/resultado").slice(1);
+    const esperado = { cicloId: 7, imagemBase64: jpg.toString("base64"), tipo: "image/jpeg", corId: 401, dataCulto: "2026-12-13", ocasiao: "CULTO_ADMINISTRATIVO", votosVencedor: 150 };
+    confere(m.aberto && ps.length === 2 && ps.every(x => JSON.stringify(x.corpo) === JSON.stringify(esperado)) && !("arteId" in ps[1].corpo), `428 e repete: POST resultado {imagemBase64, tipo} sem arteId (${ps.length}; ${ps[1] && JSON.stringify(Object.keys(ps[1].corpo))})`);
+    confere(!iv.prepararImagem(Buffer.from(ps[1].corpo.imagemBase64, "base64"), "image/jpeg").problema, "o base64 é o JPEG inteiro (passa na regra de verdade do servidor)");
+    const daDir = srv.S.artes.find(a => a.daDiretoria);
+    confere(!!srv.S.C.resultado && !!daDir && srv.S.C.resultado.arteId === daDir.arteId && daDir.status === "ESCOLHIDA" && daDir.tamanho === jpegReal().length && a1.status === "ENVIADA", "registrado com a arte da Diretoria (sem o EXIF); a do concurso fica como estava");
+    const det = texto(env, "idvCicloDetalhe");
+    const liDir = liCom(env, "idvCicloDetalhe", ATAQUE("autorDiretoria"));
+    confere(det.includes("Escolha final registrada") && !!liDir && liDir.textContent.includes(ATAQUE("tituloDiretoria")) && liDir.textContent.includes("Escolhida no culto") && botoes(env, "Tirar do concurso", liDir).length === 0, "a arte da Diretoria na lista, com o autor e o título como texto, sem 'Tirar do concurso'");
+    limpo(env, "resultado com a imagem", [ATAQUE("autorDiretoria"), ATAQUE("tituloDiretoria"), ATAQUE("msgResultado")]);
+    // o membro (Bento) em janeiro: a imagem escolhida aparece; a arte dele não tem mais Retirar
+    srv.S.hoje = "2027-01-05";
+    const envB = novo(srv);
+    await abrirMeu(envB, "pin3", 33);
+    const g = ultima(envB, "GET identidade-visual/imagem");
+    confere(!!g && g.consulta.arteId === String(daDir.arteId) && !!desc(envB, envB.e("idvArteEscolhida")).find(x => x.localName === "img"), "Meu Painel: a imagem da arte escolhida (a da Diretoria)");
+    limpo(envB, "Meu Painel com a arte da Diretoria");
+    // a pessoa sai da aba (ou da sessão) enquanto a imagem é lida: o resultado não sai
+    for (const sair of ['mostrarAbaSecretaria("meupainel")', "limparSessao()"]) {
+      const s5 = servidor({ hoje: "2026-12-20" }); s5.votacaoAberta(); s5.votar(33, s5.S.S.bento);
+      s5.S.cores.push({ corId: 401, cicloId: 7, ordem: 1, nome: "Azul", hex: "#1A4D8F" }); s5.S.fatorOk = true;
+      const env5 = novo(s5);
+      await abrirAba(env5);
+      let soltar = null;
+      const b5 = pngReal();
+      const lento = { name: "culto.png", type: "image/png", size: b5.length, lidos: 0, arrayBuffer() { this.lidos++; return new Promise(r => { soltar = () => r(b5.buffer.slice(b5.byteOffset, b5.byteOffset + b5.length)); }); } };
+      escolher(env5, "idvResCor", "401"); digitar(env5, "idvResData", "2026-12-13"); digitar(env5, "idvResVotos", "150");
+      env5.e("idvResImagem").files = [lento];
+      env5.doc.clicar(botao(env5, "Registrar o resultado")); await env5.responderModal(true); await env5.ocioso();
+      confere(lento.lidos === 1 && !!soltar && posts(env5).length === 0, `${sair}: a imagem sendo lida, nada saiu ainda`);
+      env5.ev(sair); await env5.ocioso();
+      if (soltar) soltar();
+      await env5.ocioso();
+      confere(chamadas(env5, "POST identidade-visual/resultado").length === 0 && !s5.S.C.resultado, `${sair} enquanto a imagem era lida: o resultado não sai`);
+    }
+  });
+
+  cenario("Meu Painel: a arte só se retira até 24/12 (podeRetirar) — sem Retirar depois, a data escrita, a recusa do servidor", async () => {
+    const srv = servidor({ hoje: "2026-12-10" });
+    srv.votacaoAberta(); srv.votar(33, srv.S.S.bento);
+    srv.S.cores.push({ corId: 401, cicloId: 7, ordem: 1, nome: "Azul", hex: "#1A4D8F" });
+    const minha = srv.novaArte({ titulo: srv.A("arteTitulo", "Raízes em azul") });
+    srv.S.hoje = "2026-12-26";
+    const env = novo(srv);
+    await abrirMeu(env);
+    const li = liCom(env, "idvMeuConteudo", ATAQUE("arteTitulo"));
+    confere(!!li && li.textContent.includes("No concurso") && botoes(env, "Retirar", li).length === 0 && botoes(env, "Ver", li).length === 1, "depois de 24/12: a arte no concurso, com Ver e SEM Retirar");
+    confere(texto(env, "idvMeuConteudo").includes("Você pode retirar a sua arte até 24/12/2026; depois disso ela fica no concurso."), "a data limite da retirada, escrita");
+    limpo(env, "depois de 24/12", [ATAQUE("arteTitulo")]);
+    // o ato direto (tela velha): a recusa do servidor, como texto
+    env.ev(`idvRetirarArteAcao(${minha.arteId}, null)`); await env.responderModal(true); await env.ocioso();
+    confere(chamadas(env, "POST identidade-visual/retirar-arte").length === 1 && meuMsg(env).includes("A arte só pode ser retirada até 24/12/2026") && meuMsg(env).includes(ATAQUE("msg422")) && minha.status === "ENVIADA", "retirar depois de 24/12: a recusa do servidor, nada muda");
+    limpo(env, "recusa da retirada", [ATAQUE("msg422")]);
+    // podeRetirar que não é `true` (texto, 1): sem Retirar; a data limite com ataque: só texto
+    const env2 = novo(srv);
+    srv.S.hoje = "2026-12-20";
+    env2.api.rotas["GET identidade-visual/meu"] = trocarResposta(srv, (d) => { d.minhasArtes[0].podeRetirar = "true"; d.retiradaDeArteAte = ATAQUE("retiradaAte"); });
+    await abrirMeu(env2);
+    confere(botoes(env2, "Retirar", liCom(env2, "idvMeuConteudo", ATAQUE("arteTitulo"))).length === 0, "podeRetirar \"true\" (texto): sem Retirar");
+    confere(texto(env2, "idvMeuConteudo").includes("Você pode retirar a sua arte até"), "a frase da data aparece");
+    limpo(env2, "podeRetirar inválido");
+    // antes de 24/12: Retirar
+    const env3 = novo(srv);
+    await abrirMeu(env3);
+    confere(botoes(env3, "Retirar", liCom(env3, "idvMeuConteudo", ATAQUE("arteTitulo"))).length === 1, "até 24/12: com Retirar");
+    // sem retiradaDeArteAte (servidor antigo): nem a frase
+    const env4 = novo(srv);
+    env4.api.rotas["GET identidade-visual/meu"] = trocarResposta(srv, (d) => { delete d.retiradaDeArteAte; });
+    await abrirMeu(env4);
+    confere(!texto(env4, "idvMeuConteudo").includes("Você pode retirar a sua arte até"), "sem a data do servidor: sem a frase");
+  });
+
+  cenario("Diretoria: ⛔ igual a um tema já usado; descartar e voltar uma finalista pedem a confirmação reforçada", async () => {
+    const srv = servidor({ hoje: "2026-11-18" });
+    // o rótulo em maiúsculas: normalizado, o ataque é o mesmo e a redação é IGUAL; na tela, "[TEMAIGUAL]" diz que é o texto do tema já usado
+    srv.novoTema({ ano: 2015, tema: srv.A("TEMAIGUAL", "Graça abundante") });
+    const igual = srv.novaSugestao({ membroId: 33, texto: srv.A("temaIgual", "Graça abundante") });
+    const env = novo(srv);
+    await abrirAba(env);
+    const li = liCom(env, "idvCicloDetalhe", ATAQUE("temaIgual"));
+    confere(!!li && li.textContent.includes(`⛔ Igual ao tema de 2015: "Graça abundante ${ATAQUE("TEMAIGUAL")}" — não pode ir à votação`) && !li.textContent.includes("Parece com"), "igual a um tema já usado: a marca ⛔, com o tema como texto");
+    limpo(env, "⛔ igual", [ATAQUE("TEMAIGUAL"), ATAQUE("temaIgual")]);
+    // aprovar como finalista (sem mexer na redação): o servidor recusa (tema repetido) e a tela mostra
+    srv.S.fatorOk = true;
+    digitar(env, `idvAjuste_${igual.sugestaoId}`, "");
+    await clicar(env, botoes(env, "Finalista", liCom(env, "idvCicloDetalhe", ATAQUE("temaIgual")))[0]);
+    confere(cicloMsg(env).includes("Essa redação é igual ao tema de 2015") && igual.status === "ENVIADA", "finalista igual a tema usado: a recusa do servidor");
+    // descartar uma FINALISTA: 428 -> confirmação reforçada -> repete
+    const carla = srv.S.S.carla;
+    Object.assign(carla, { status: "FINALISTA", triadoPorId: 13, triadoEm: "2026-11-17T12:00:00.000Z" });
+    await clicar(env, pilulaDoCiclo(env, 2027));
+    srv.S.fatorOk = false; env.ctx.__fatorConfirmar = async () => false;
+    escolher(env, `idvCriterio_${carla.sugestaoId}`, "1");
+    await clicar(env, botoes(env, "Descartar", liCom(env, "idvCicloDetalhe", "Fé que vence"))[0]);
+    let ps = chamadas(env, "POST identidade-visual/triar").slice(1);
+    confere(ps.length === 1 && carla.status === "FINALISTA" && cicloMsg(env) === msgs(env).fator, `descartar a finalista com o fator recusado: um POST, nada muda (${ps.length})`);
+    env.ctx.__fatorConfirmar = async () => { srv.S.fatorOk = true; return true; };
+    escolher(env, `idvCriterio_${carla.sugestaoId}`, "1");
+    await clicar(env, botoes(env, "Descartar", liCom(env, "idvCicloDetalhe", "Fé que vence"))[0]);
+    ps = chamadas(env, "POST identidade-visual/triar").slice(2);
+    confere(ps.length === 2 && ps.every(x => JSON.stringify(x.corpo) === JSON.stringify({ sugestaoId: carla.sugestaoId, decisao: "DESCARTADA", criterio: 1 })) && carla.status === "DESCARTADA", `descartar a finalista: 428 e uma nova tentativa (${ps.length})`);
+    // voltar para a triagem uma FINALISTA: 428 -> repete
+    Object.assign(carla, { status: "FINALISTA", criterio: null });
+    await clicar(env, pilulaDoCiclo(env, 2027));
+    srv.S.fatorOk = false;
+    await clicar(env, botoes(env, "Voltar para a triagem", liCom(env, "idvCicloDetalhe", "Fé que vence"))[0]);
+    ps = chamadas(env, "POST identidade-visual/triar").slice(4);
+    confere(ps.length === 2 && ps.every(x => JSON.stringify(x.corpo) === JSON.stringify({ sugestaoId: carla.sugestaoId, decisao: "ENVIADA" })) && carla.status === "ENVIADA", `voltar a finalista: 428 e uma nova tentativa (${ps.length})`);
+    // descartar uma que NÃO é finalista: sem 428
+    srv.S.fatorOk = false;
+    const n = chamadas(env, "POST identidade-visual/triar").length, f = env.g("window.__fatorPedidos");
+    escolher(env, `idvCriterio_${carla.sugestaoId}`, "3");
+    await clicar(env, botoes(env, "Descartar", liCom(env, "idvCicloDetalhe", "Fé que vence"))[0]);
+    confere(chamadas(env, "POST identidade-visual/triar").length === n + 1 && env.g("window.__fatorPedidos") === f && carla.status === "DESCARTADA", "descartar a que não é finalista: um POST, sem confirmação reforçada");
+    limpo(env, "triagem com fator", [ATAQUE("TEMAIGUAL")]);
   });
 
   cenario("O servidor imitado não teve erro nem ação desconhecida em nenhum cenário", async () => {

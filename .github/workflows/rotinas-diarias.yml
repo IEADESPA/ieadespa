@@ -59,7 +59,11 @@ jobs:
       # vD.5 (07/10/2026): com o banco já acordado, regrava a versão da agenda pública no Storage — é por
       # ela que o sincronizador do site (a cada 15 min) decide se reconstrói, sem tocar o banco. Rede de
       # segurança: toda mudança no calendário/canais/eventos já regrava na hora (shared/agendaPublicaVersao.js).
+      # v7.14 (revisão de 23/10/2026): roda MESMO que o passo anterior falhe — a rotina de avisos responde 500 quando um passo protegido falhou (menores, cuidado,
+      # identidade visual) e isso marcava o job como falho E pulava este passo; agora a falha continua aparecendo (o job fica vermelho e o e-mail de "rotina falhou"
+      # sai pelo avisar-falha), mas a versão da agenda pública é regravada do mesmo jeito.
       - name: Guarda a versão da agenda pública fora do banco (vD.5)
+        if: ${{ !cancelled() }}
         run: |
           curl -sf -X POST "https://app.ieadespa.org.br/api/agenda-publica/atualizar-versao" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}"

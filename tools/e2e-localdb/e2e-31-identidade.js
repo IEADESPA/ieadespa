@@ -27,7 +27,7 @@ const blobs = new Map();
 let seqBlob = 0;
 const apagados = [];
 db.usarArmazenamento({
-  salvarDocumento: async (buffer, tipo) => { const u = `https://blob.e2e/documentos/doc-${++seqBlob}`; blobs.set(u, { tamanho: buffer.length, tipo }); return u; },
+  salvarDocumento: async (buffer, tipo) => { const u = `https://blob.e2e/documentos/doc-${++seqBlob}`; blobs.set(u, { tamanho: buffer.length, tipo, bytes: Buffer.from(buffer) }); return u; },
   excluirDocumento: async (u) => { apagados.push(u); blobs.delete(u); },
   urlDocumentoComSas: (u) => `${u}?sas=e2e`
 });
@@ -47,8 +47,13 @@ async function votar(membroId, enqueteId, perguntaId, opcaoId) {
   await ENQ(ctx, { method: "POST", query: {}, body: { respostas: [{ perguntaId, opcaoId }] }, headers: { "x-auth-token": PIN(membroId) } });
   return ctx.res;
 }
-const png = (semente, tamanho = 200) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(tamanho, semente)]);
-const jpeg = (semente) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(300, semente)]);
+const pedacoPng = (tipo, dados) => { const d = Buffer.isBuffer(dados) ? dados : Buffer.from(dados, "latin1"); const b = Buffer.alloc(12 + d.length); b.writeUInt32BE(d.length, 0); b.write(tipo, 4, "latin1"); d.copy(b, 8); return b; };
+// PNG com cabeçalho, dados e fim — e, como a foto de um celular, texto com o GPS e o EXIF (que têm de sair antes de guardar)
+const png = (semente, tamanho = 200) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pedacoPng("IHDR", Buffer.alloc(13, 1)),
+  pedacoPng("tEXt", "GPSLatitude" + String.fromCharCode(0) + "-6.0675"), pedacoPng("eXIf", "MM*GPSLongitude -49.9"), pedacoPng("IDAT", Buffer.alloc(tamanho, semente)), pedacoPng("IEND", "")]);
+const segJpeg = (m, dados) => { const d = Buffer.from(dados, "latin1"); const b = Buffer.alloc(4 + d.length); b[0] = 0xff; b[1] = m; b.writeUInt16BE(d.length + 2, 2); d.copy(b, 4); return b; };
+const jpeg = (semente) => Buffer.concat([Buffer.from([0xff, 0xd8]), segJpeg(0xe0, "JFIF"), segJpeg(0xe1, "Exif GPSLatitude -6.0675 Celular"), segJpeg(0xdb, "tabela"),
+  segJpeg(0xda, "varredura"), Buffer.alloc(300, semente), Buffer.from([0xff, 0xd9])]);
 const enviarArte = (membroId, buf, tipo = "image/png", extra = {}) => POST(H, "arte", PIN(membroId), { imagemBase64: buf.toString("base64"), tipo, ...extra });
 async function avisos(chave) { return q("SELECT DestinatarioMembroId AS d, ReferenciaId AS ref, Mensagem AS m FROM Notificacoes WHERE RegraChave = @k ORDER BY NotificacaoId", { k: chave }); }
 const QUEM_RODA = [2002, 2003, 2004, 2005, 2012, 3002, 3003, 3004, 2001, 1003, 5001, 5002, 5003, 5004, 7001, 7002, 7003, 8010, 8011, 8012, 8013, 8014, 8015, 8016, 8017];
@@ -92,7 +97,7 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   const pol = await um("SELECT DiasRetencao, BaseLegal FROM PoliticasRetencao WHERE Categoria = N'Identidade visual — sugestões e artes dos membros'");
   ok(pol && pol.DiasRetencao === 365 && pol.BaseLegal !== "x" && pol.BaseLegal.length <= 300, "a retenção (1 ano) tem a base legal escrita", pol);
   ok((await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('Enquetes') AND name = 'DataFechamentoPrevista'")) === 1, "a enquete ganhou a data de fechamento");
-  ok(!!(await falha("INSERT INTO IdentidadeCiclos (AnoAlvo, AbertoPorMembroId) VALUES (2026, 1002)")), "não há ciclo da identidade de 2026 (feito fora do sistema; CHECK a partir de 2027)");
+  ok(!!(await falha("INSERT INTO IdentidadeCiclos (AnoAlvo, AbertoPorMembroId) VALUES (2027, 1002)")), "(revisão) não há ciclo da identidade de 2027 no banco (feito fora do sistema; CHECK a partir de 2028)");
   ok(!!(await falha("INSERT INTO IdentidadeTemasUsados (Ano, Tema, TemaNormalizado, Origem, RegistradoPorMembroId) VALUES (2005, N'Tema antigo', N'tema antigo', 'MANUAL', 1002)")), "tema já usado só de 2006 em diante");
   ok(!!(await falha("INSERT INTO IdentidadeTemasUsados (Ano, Tema, TemaNormalizado, Origem, RegistradoPorMembroId) VALUES (2010, N'Tema antigo', N'tema antigo', NULL, 1002)")), "a origem do tema não pode ser nula (o CHECK com IN deixaria passar)");
 
@@ -129,6 +134,12 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
 
   console.log("== a Diretoria abre o ciclo ==");
   ok((await POST(H, "abrir-ciclo", DIR, { anoAlvo: 2029 })).status === 422, "só o ciclo do ano que vem (2028) se abre");
+  em("2026-10-23T12:00:00Z");
+  const ab27 = await POST(H, "abrir-ciclo", DIR, { anoAlvo: 2027 });
+  ok(ab27.status === 422 && /primeiro ciclo no sistema é o da identidade de 2028/.test(ab27.body.mensagem), "(revisão) o ciclo de 2027 não se abre (o processo foi feito fora do sistema)", ab27.body);
+  ok((await GET(H, "painel", DIR)).body.podeAbrir === false, "e o painel não oferece abrir");
+  em("2027-10-20T12:00:00Z");
+  ok((await POST(H, "abrir-ciclo", SEM_FATOR, { anoAlvo: 2028 })).status === 428, "(revisão) abrir o ciclo pede a confirmação reforçada");
   const pg0 = (await GET(H, "painel", DIR)).body;
   ok(pg0.podeAbrir === true && pg0.proximoAno === 2028 && pg0.ciclos.length === 0, "o painel diz que dá para abrir o de 2028", pg0);
   const ab = await POST(H, "abrir-ciclo", DIR, { anoAlvo: 2028 });
@@ -181,18 +192,27 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   console.log("== triagem (16 a 21/nov) ==");
   em("2027-11-16T13:00:00Z");
   ok((await sugerir(M.hugo, "Tarde demais")).status === 422 && (await POST(H, "retirar-sugestao", PIN(M.ana), { sugestaoId: a5.body.sugestaoId })).status === 422, "depois do dia 15: nem sugerir nem retirar");
+  // (revisão) a Secretaria cadastra dois temas antigos DEPOIS que as sugestões chegaram: a triagem tem de ver o igual e o parecido mesmo assim (antes, só o do envio)
+  ok((await POST(H, "tema", DIR, { ano: 2019, tema: "Tempo da colheita" })).status === 201 && (await POST(H, "tema", DIR, { ano: 2018, tema: "Sal da terra e luz do mundo!" })).status === 201,
+    "temas de 2019 e 2018 cadastrados depois do envio");
   const det = await GET(H, "ciclo", DIR, { cicloId: CICLO });
   ok(det.status === 200 && det.body.ciclo.fase === "TRIAGEM" && det.body.sugestoes.length === 8 && det.body.retiradas === 1 && det.body.participantes === 6, "a Diretoria vê as 8 sugestões ativas, de 6 pessoas", det.body.sugestoes.length);
   ok(!/Eng Ana E2E|Seg Beto E2E|Com Carla E2E|membroId/.test(JSON.stringify(det.body.sugestoes)), "a triagem vê só o texto, nunca quem mandou");
   const idDe = (texto) => det.body.sugestoes.find((s) => s.texto === texto).sugestaoId;
   const S = { familia: idDe("Família, fé e missão"), avante: idDe("Avante a Igreja do Senhor"), jovens: idDe("Jovens que brilham"), igreja: idDe("Igreja forte, família unida"),
     missao: idDe("Missão sem fronteiras"), descartar: idDe("Tema que será descartado"), colheita: idDe("Tempo de colheita"), sal: idDe("Sal da terra e luz do mundo") };
+  const sugCol = det.body.sugestoes.find((x) => x.sugestaoId === S.colheita), sugSal = det.body.sugestoes.find((x) => x.sugestaoId === S.sal);
+  ok(sugCol.parecido && sugCol.parecido.ano === 2019 && sugCol.parecido.igual === false && sugCol.parecidoNoEnvio === null, "(revisão) o parecido com um tema cadastrado DEPOIS do envio aparece na triagem", sugCol);
+  ok(sugSal.parecido && sugSal.parecido.ano === 2018 && sugSal.parecido.igual === true, "(revisão) o igual a um tema cadastrado depois aparece como igual", sugSal);
+  ok((await POST(H, "triar", DIR, { sugestaoId: S.sal, decisao: "FINALISTA" })).status === 422, "e o igual não vira finalista");
   ok((await POST(H, "triar", SEM_FATOR, { sugestaoId: S.familia, decisao: "FINALISTA" })).status === 428, "aprovar finalista sem a confirmação recente: 428");
   ok((await POST(H, "triar", LOCAL, { sugestaoId: S.familia, decisao: "FINALISTA" })).status === 403, "o Dirigente não faz triagem");
   const f1 = await POST(H, "triar", DIR, { sugestaoId: S.familia, decisao: "FINALISTA", textoAjustado: "Família: fé e missão", observacao: "Ajuste de pontuação" });
   ok(f1.status === 200, "aprovada com a redação ajustada", f1.body);
   const linhaF1 = await um("SELECT Texto, TextoFinal, Status, TriadoPorMembroId FROM IdentidadeSugestoes WHERE SugestaoId = @s", { s: S.familia });
   ok(linhaF1.Texto === "Família, fé e missão" && linhaF1.TextoFinal === "Família: fé e missão" && linhaF1.TriadoPorMembroId === 1002, "a original fica guardada; a ajustada vai à votação", linhaF1);
+  const f1b = await POST(H, "triar", DIR, { sugestaoId: S.familia, decisao: "FINALISTA", observacao: "Conferida de novo" });
+  ok(f1b.status === 200 && (await escalar("SELECT TextoFinal FROM IdentidadeSugestoes WHERE SugestaoId = @s", { s: S.familia })) === "Família: fé e missão", "(revisão) aprovar de novo SEM ajuste mantém o ajuste salvo", f1b.body);
   ok((await POST(H, "triar", DIR, { sugestaoId: S.avante, decisao: "FINALISTA", textoAjustado: "Avante, igreja" })).status === 422, "o ajuste que fica igual a um tema já usado: recusado");
   ok((await POST(H, "triar", DIR, { sugestaoId: S.igreja, decisao: "FINALISTA", textoAjustado: "familia fe e missao" })).status === 422, "duas finalistas com a mesma redação: recusado");
   ok((await POST(H, "triar", DIR, { sugestaoId: S.descartar, decisao: "DESCARTADA" })).status === 422, "descartar sem o critério: recusado");
@@ -200,6 +220,9 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok(d1.status === 200 && (await escalar("SELECT Criterio FROM IdentidadeSugestoes WHERE SugestaoId = @s", { s: S.descartar })) === 3, "descartar (sem confirmação reforçada) guarda o critério 3 do Art. 159", d1.body);
   ok((await POST(H, "triar", DIR, { sugestaoId: S.avante, decisao: "DESCARTADA", criterio: 3 })).status === 200, "a parecida com 2027 é descartada");
   for (const s of [S.igreja, S.missao, S.colheita]) ok((await POST(H, "triar", DIR, { sugestaoId: s, decisao: "FINALISTA" })).status === 200, "mais uma finalista");
+  const semFatorFin = await POST(H, "triar", SEM_FATOR, { sugestaoId: S.missao, decisao: "DESCARTADA", criterio: 1 });
+  ok(semFatorFin.status === 428 && (await escalar("SELECT Status FROM IdentidadeSugestoes WHERE SugestaoId = @s", { s: S.missao })) === "FINALISTA", "(revisão) descartar uma FINALISTA sem a confirmação recente: 428, nada muda");
+  ok((await POST(H, "triar", SEM_FATOR, { sugestaoId: S.colheita, decisao: "ENVIADA" })).status === 428, "(revisão) voltar uma finalista para a triagem também pede");
   ok((await POST(H, "triar", DIR, { sugestaoId: S.colheita, decisao: "ENVIADA" })).status === 200 && (await escalar("SELECT Status FROM IdentidadeSugestoes WHERE SugestaoId = @s", { s: S.colheita })) === "ENVIADA", "a decisão pode ser desfeita enquanto a votação não abriu");
   ok((await POST(H, "triar", DIR, { sugestaoId: a3.body.sugestaoId, decisao: "FINALISTA" })).status === 422, "a retirada não vira finalista");
   const membroAntes = await meu(M.ana);
@@ -214,6 +237,17 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
 
   console.log("== votação (22 a 30/nov): abre sozinha, vota-se pela Enquete ==");
   em("2027-11-22T11:00:00Z");
+  const pendentes = await escalar("SELECT COUNT(*) FROM IdentidadeSugestoes WHERE CicloId = @c AND Status = 'ENVIADA'", { c: CICLO });
+  const mv0 = await meu(M.beto);
+  ok(pendentes > 0 && mv0.votacao === null && mv0.ciclo.fase === "VOTACAO", `(revisão) com ${pendentes} sugestão(ões) sem decisão, a votação NÃO abre sozinha no dia 22`, mv0.votacao);
+  await avaliarRegras(await obterPool(), { chaves: ["IDENTIDADE_VOTACAO"] });
+  const avEsp = (await avisos("IDENTIDADE_VOTACAO")).filter((a) => a.ref < 0);
+  ok(avEsp.length === DIRETORIA.length && /NÃO abriu sozinha: há \d+ sugestão\(ões\) ainda sem decisão/.test(avEsp[0].m), "(revisão) a Diretoria é avisada de que ela espera a triagem (ou o botão)", avEsp);
+  const perg = await POST(H, "abrir-votacao", DIR, { cicloId: CICLO });
+  ok(perg.status === 422 && perg.body.pendentes === pendentes, "(revisão) o botão diz quantas estão sem decisão e pede a confirmação", perg.body);
+  for (const sid of (await q("SELECT SugestaoId FROM IdentidadeSugestoes WHERE CicloId = @c AND Status = 'ENVIADA'", { c: CICLO })).map((x) => x.SugestaoId)) {
+    await POST(H, "triar", DIR, { sugestaoId: sid, decisao: "DESCARTADA", criterio: 2 });
+  }
   const mv = await meu(M.beto);
   ok(mv.ciclo.fase === "VOTACAO" && mv.votacao && mv.votacao.aberta && mv.votacao.opcoes.length === 3 && mv.ciclo.votacaoAutomatica === true, "no dia 22 o primeiro acesso abre a votação, com as 3 finalistas", mv.votacao);
   ok(mv.votacao.opcoes.every((o) => o.votos === undefined), "durante a votação ninguém vê a contagem");
@@ -250,17 +284,26 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok(detV.votacao.participantes === 6 && detV.votacao.opcoes.every((o) => o.votos === undefined), "a Diretoria vê quantos votaram, não em quem", detV.votacao);
   await avaliarRegras(await obterPool(), { chaves: ["IDENTIDADE_VOTACAO"] });
   const avV = await avisos("IDENTIDADE_VOTACAO");
-  ok(avV.length === DIRETORIA.length && avV.every((a) => a.ref === CICLO) && /está aberta/.test(avV[0].m), "o aviso da votação aberta vai à Diretoria", avV);
+  const avVa = avV.filter((a) => a.ref === CICLO);
+  ok(avVa.length === DIRETORIA.length && /está aberta/.test(avVa[0].m), "o aviso da votação aberta vai à Diretoria", avV);
   ok((await q("SELECT DISTINCT DestinatarioMembroId AS d FROM Notificacoes WHERE RegraChave LIKE 'IDENTIDADE_%'")).every((x) => DIRETORIA.includes(x.d)), "nenhum aviso a membro (só à Diretoria)");
 
   console.log("== apuração (depois da meia-noite de 30/11) ==");
   em("2027-11-30T23:00:00Z");                                       // 20h de 30/11 em Brasília: ainda aberta
   ok((await meu(M.ana)).votacao.aberta === true && (await escalar("SELECT Apuracao FROM IdentidadeCiclos WHERE CicloId = @c", { c: CICLO })) === null, "às 20h do dia 30 a votação segue aberta");
-  em("2027-12-01T03:30:00Z");                                       // 00h30 de 1º/12 em Brasília
+  em("2027-12-01T03:30:00Z");                                       // 00h30 de 1º/12 em Brasília (o relógio da regra)
+  // (revisão) o relógio da regra já passou, mas o do BANCO não (a data marcada ainda está no futuro para ele): não apura — o voto ainda é aceito pela hora do banco
+  ok((await meu(M.carla)).ciclo.apuracao === null && (await escalar("SELECT Status FROM Enquetes WHERE EnqueteId = @e", { e: enq.EnqueteId })) === "ABERTA",
+    "(revisão) quem decide que a votação fechou é a hora do BANCO (a mesma que o voto confere): sem ela, não apura");
+  // o banco "chega" à data marcada: a data passa a ser AGORA (os votos do roteiro foram gravados antes)
+  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
+  const previstaBanco = await escalar("SELECT CONVERT(varchar(33), DataFechamentoPrevista, 126) FROM Enquetes WHERE EnqueteId = @e", { e: enq.EnqueteId });
   const ma = await meu(M.carla);
   ok(ma.ciclo.fase === "ARTE" && ma.ciclo.apuracao === "VENCEDOR" && ma.ciclo.tema.texto === "Família: fé e missão" && ma.ciclo.tema.votos === 3 && ma.ciclo.votosTotal === 6, "passada a meia-noite, o primeiro acesso fecha e apura: vence a da Ana, 3 de 6", ma.ciclo);
   const enqF = await um("SELECT Status, DataFechamento FROM Enquetes WHERE EnqueteId = @e", { e: enq.EnqueteId });
-  ok(enqF.Status === "ENCERRADA" && new Date(enqF.DataFechamento).toISOString() === "2027-12-01T03:00:00.000Z", "a enquete fica ENCERRADA no instante marcado", enqF);
+  ok(enqF.Status === "ENCERRADA" && new Date(enqF.DataFechamento).getTime() === new Date(previstaBanco + "Z").getTime(), "a enquete fica ENCERRADA no instante marcado", { enqF, previstaBanco });
+  ok((await q("SELECT VotosApurados FROM IdentidadeSugestoes WHERE CicloId = @c AND Status = 'FINALISTA' ORDER BY VotosApurados DESC", { c: CICLO })).map((x) => x.VotosApurados).join() === "3,2,1",
+    "(revisão) os votos de cada finalista ficam gravados na apuração");
   ok(ma.votacao.opcoes.find((o) => o.texto === "Família: fé e missão").votos === 3, "fechada, a contagem aparece");
   ok((await votar(M.gil, enq.EnqueteId, P1, opc["Missão sem fronteiras"])).body.sucesso === false, "depois de fechada, ninguém mais vota");
   ok(!!(await falha("UPDATE IdentidadeCiclos SET TemaTexto = N'Outro' WHERE CicloId = @c", { c: CICLO })), "o tema apurado não muda (gatilho)");
@@ -307,6 +350,19 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   const detA = (await GET(H, "ciclo", DIR, { cicloId: CICLO })).body;
   ok(detA.artes.length === 3 && detA.artes.find((a) => a.arteId === artHugo.body.arteId).autor === "Com Hugo E2E", "a Diretoria vê as artes com o autor (para falar com quem desenhou)", detA.artes.map((a) => a.autor));
 
+  const trilhaMembro = await q("SELECT Tabela, RegistroId, UsuarioId, Acao FROM AuditLog WHERE Acao IN ('IDENTIDADE_SUGESTAO_ENVIADA', 'IDENTIDADE_SUGESTAO_RETIRADA', 'IDENTIDADE_ARTE_ENVIADA', 'IDENTIDADE_ARTE_RETIRADA')");
+  ok(trilhaMembro.length >= 12 && trilhaMembro.every((x) => x.UsuarioId === null && x.Tabela === "IdentidadeCiclos" && x.RegistroId === CICLO),
+    "(revisão) a trilha de mandar/retirar sugestão e arte não guarda quem foi nem o número da sugestão/arte (só o ciclo)", trilhaMembro.slice(0, 3));
+  // (revisão, item 13) a imagem guardada não tem os metadados do celular (GPS, EXIF)
+  const guardadas = [...blobs.values()].filter((b) => b.bytes);
+  ok(guardadas.length >= 3 && guardadas.every((b) => !b.bytes.toString("latin1").includes("GPS") && !b.bytes.toString("latin1").includes("Exif")), "(revisão) nenhuma imagem guardada leva GPS nem EXIF");
+  ok(guardadas.some((b) => b.tipo === "image/jpeg" && b.bytes.toString("latin1").includes("JFIF")) && guardadas.some((b) => b.tipo === "image/png" && b.bytes.toString("latin1").includes("IDAT")), "e a imagem continua inteira (o desenho fica)");
+  // (revisão, item 7) depois de 24/12 o membro não retira mais a arte (a Diretoria já prepara a escolha do culto)
+  em("2027-12-25T12:00:00Z");
+  const tarde = await POST(H, "retirar-arte", PIN(M.gil), { arteId: art1.body.arteId });
+  ok(tarde.status === 422 && /até 24\/12\/2027/.test(tarde.body.mensagem) && (await escalar("SELECT Status FROM IdentidadeArtes WHERE ArteId = @a", { a: art1.body.arteId })) === "ENVIADA", "(revisão) depois de 24/12 a arte não se retira", tarde.body);
+  ok((await meu(M.gil)).minhasArtes.every((a) => a.podeRetirar === false), "e a tela não oferece o botão");
+
   console.log("== a escolha final do culto ==");
   em("2027-12-20T14:00:00Z");
   const base = { cicloId: CICLO, arteId: artHugo.body.arteId, corId: c1.body.corId, dataCulto: "2027-12-19", ocasiao: "CULTO_ADMINISTRATIVO", votosVencedor: 120, presentes: 180, ata: "Ata 12/2027, folha 3" };
@@ -321,6 +377,9 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok(tema2028 && tema2028.Tema === "Família: fé e missão" && tema2028.Origem === "PROCESSO" && tema2028.CicloId === CICLO, "o tema entrou sozinho na lista de temas já usados (origem PROCESSO)", tema2028);
   ok((await escalar("SELECT Status FROM IdentidadeArtes WHERE ArteId = @a", { a: artHugo.body.arteId })) === "ESCOLHIDA", "a arte do Hugo é a escolhida");
   ok((await POST(H, "resultado", DIR, base)).status === 422, "registrar de novo: recusado");
+  em("2027-12-21T12:00:00Z");
+  ok((await POST(H, "retirar-arte", PIN(M.gil), { arteId: art1.body.arteId })).status === 422, "(revisão) com o resultado registrado, nenhuma arte se retira (nem antes de 24/12)");
+  em("2027-12-20T14:00:00Z");
   const temaProc = (await GET(H, "temas", DIR)).body.temas.find((t) => t.ano === 2028);
   ok((await POST(H, "tema", DIR, { temaUsadoId: temaProc.temaUsadoId, ano: 2028, tema: "Outro" })).status === 422 && (await POST(H, "excluir-tema", DIR, { temaUsadoId: temaProc.temaUsadoId })).status === 422, "o tema do processo não se edita nem se apaga pela tela");
   ok(!!(await falha("DELETE FROM IdentidadeTemasUsados WHERE Ano = 2028")) && !!(await falha("UPDATE IdentidadeResultados SET VotosVencedor = 1")) && !!(await falha("DELETE FROM IdentidadeResultados")), "nem no banco (gatilhos)");
@@ -374,7 +433,7 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok(semFin.status === 422 && semFin.body.faltamFinalistas === true, "nem pelo botão (são precisas 2)", semFin.body);
   await avaliarRegras(await obterPool(), { chaves: ["IDENTIDADE_VOTACAO"] });
   await avaliarRegras(await obterPool(), { chaves: ["IDENTIDADE_VOTACAO"] });
-  const avNao = (await avisos("IDENTIDADE_VOTACAO")).filter((a) => a.ref < 0);
+  const avNao = (await avisos("IDENTIDADE_VOTACAO")).filter((a) => a.ref === -20281122);
   ok(avNao.length === DIRETORIA.length && /NÃO abriu/.test(avNao[0].m), "a Diretoria é avisada de que a votação não abriu (uma vez por dia)", avNao);
   ok((await POST(H, "triar", DIR, { sugestaoId: s29.b, decisao: "FINALISTA" })).status === 200 && (await POST(H, "triar", DIR, { sugestaoId: s29.c, decisao: "FINALISTA" })).status === 200,
     "a Diretoria atrasada ainda aprova no dia 22 (a votação não abriu)");
@@ -386,6 +445,7 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   await votar(M.beto, v29.enqueteId, v29.perguntaId, o29["Raízes e asas"]);
   await votar(M.carla, v29.enqueteId, v29.perguntaId, o29["Unidos no amor"]);
   em("2028-12-01T04:00:00Z");
+  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: v29.enqueteId });
   await db.rotinaDiaria(await obterPool());
   const c29 = await um("SELECT Apuracao, TemaSugestaoId, VotosTotal FROM IdentidadeCiclos WHERE CicloId = @c", { c: C29 });
   ok(c29.Apuracao === "EMPATE" && c29.TemaSugestaoId === null && c29.VotosTotal === 2, "a rotina diária apura: EMPATE, sem tema", c29);
@@ -393,12 +453,59 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok((await avisos("IDENTIDADE_APURACAO")).some((a) => a.ref === C29 && /EMPATE/.test(a.m)), "a Diretoria é avisada do empate");
   ok((await POST(H, "resultado", DIR, { cicloId: C29, arteId: artHugo.body.arteId, corId: c1.body.corId, dataCulto: "2028-12-01", ocasiao: "VIGILIA", votosVencedor: 5 })).status === 422, "sem tema definido, o resultado não se registra");
   ok((await POST(H, "desempate", SEM_FATOR, { sugestaoId: s29.a, motivo: "Decisão da Diretoria" })).status === 428, "o desempate pede a confirmação reforçada");
-  ok((await POST(H, "desempate", DIR, { sugestaoId: s29.c, motivo: "Decisão da Diretoria" })).status === 422, "só entre as empatadas em primeiro (a sem voto, não)");
+  // (revisão) um voto "fantasma" gravado DEPOIS da apuração, com data de antes do fechamento: a recontagem ao vivo empataria a terceira; a contagem GRAVADA, não
+  await q("INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, DataResposta) SELECT @p, 2012, @o, DATEADD(MINUTE, -5, DataFechamentoPrevista) FROM Enquetes WHERE EnqueteId = @e",
+    { p: v29.perguntaId, o: o29["Herança e esperança"], e: v29.enqueteId });
+  ok((await POST(H, "desempate", DIR, { sugestaoId: s29.c, motivo: "Decisão da Diretoria" })).status === 422, "só entre as empatadas em primeiro (a sem voto, não) — pela contagem GRAVADA na apuração, nunca recontada");
   ok((await POST(H, "desempate", DIR, { sugestaoId: s29.a, motivo: "ok" })).status === 422, "com o motivo escrito");
   const dz = await POST(H, "desempate", DIR, { sugestaoId: s29.a, motivo: "Reunião da Diretoria de 02/12/2028, ata 40" });
   const c29b = await um("SELECT TemaTexto, TemaDefinidoPor, DesempatePorMembroId FROM IdentidadeCiclos WHERE CicloId = @c", { c: C29 });
   ok(dz.status === 200 && c29b.TemaTexto === "Raízes e asas" && c29b.TemaDefinidoPor === "DESEMPATE" && c29b.DesempatePorMembroId === 1002, "o tema fica definido pela Diretoria, com quem e por quê", c29b);
   ok((await POST(H, "desempate", DIR, { sugestaoId: s29.b, motivo: "Mudamos de ideia" })).status === 422, "e não muda mais");
+  em("2028-12-03T12:00:00Z");
+  const cor29 = await POST(H, "cor", DIR, { cicloId: C29, ordem: 1, nome: "Verde bandeira", hex: "#00A859" });
+  const arteIvo = await enviarArte(M.ivo, png(41), "image/png", { titulo: "Arte do Ivo" });
+  ok(cor29.status === 200 && arteIvo.status === 201, "2029: a cor e a arte do Ivo", [cor29.body, arteIvo.body]);
+  const urlIvo = await escalar("SELECT ArquivoUrl FROM IdentidadeArtes WHERE ArteId = @a", { a: arteIvo.body.arteId });
+  const solIvo = (await q("INSERT INTO SolicitacoesTitularLGPD (MembroId, Tipo, Status) VALUES (@m, 'EXCLUSAO', 'PENDENTE'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { m: M.ivo }))[0].id;
+  const ctxIvo = { bindingData: { id: String(solIvo) }, log: Object.assign(() => { }, { error() { } }) };
+  await EXCLUSAO(ctxIvo, { method: "POST", query: {}, body: {}, headers: { "x-auth-token": GERAL(1002, ["protecaodedados"]) } });
+  const linhaIvo = await um("SELECT MembroId, ArquivoUrl, Status FROM IdentidadeArtes WHERE ArteId = @a", { a: arteIvo.body.arteId });
+  ok(ctxIvo.res.status === 200 && linhaIvo.MembroId === null && linhaIvo.ArquivoUrl === urlIvo && linhaIvo.Status === "ENVIADA" && !apagados.includes(urlIvo),
+    "(revisão) LGPD com o ciclo em andamento: a arte perde o nome, mas a imagem fica no concurso (pode ser a escolhida)", linhaIvo);
+  await db.aplicarRetencao(await obterPool());
+  ok(!apagados.includes(urlIvo), "a retenção não apaga a imagem enquanto o ciclo não encerra");
+  // a arte escolhida no culto não veio pelo sistema: a Diretoria envia a imagem no próprio registro do resultado
+  em("2028-12-20T12:00:00Z");
+  const res29 = await POST(H, "resultado", DIR, { cicloId: C29, imagemBase64: jpeg(77).toString("base64"), tipo: "image/jpeg", corId: cor29.body.corId, dataCulto: "2028-12-18", ocasiao: "CULTO_ADMINISTRATIVO", votosVencedor: 80 });
+  ok(res29.status === 201, "(revisão) resultado com a imagem enviada pela Diretoria (sem arte do concurso)", res29.body);
+  const escolhida29 = await um("SELECT a.EnviadaPelaDiretoria, a.Status, a.MembroId FROM IdentidadeResultados r JOIN IdentidadeArtes a ON a.ArteId = r.ArteId WHERE r.CicloId = @c", { c: C29 });
+  ok(escolhida29 && escolhida29.EnviadaPelaDiretoria === true && escolhida29.Status === "ESCOLHIDA" && (await escalar("SELECT Origem FROM IdentidadeTemasUsados WHERE Ano = 2029")) === "PROCESSO",
+    "a arte da Diretoria é a escolhida e o tema de 2029 entra na lista", escolhida29);
+  ok(!(await meu(1002)).minhasArtes.length, "a arte enviada pela Diretoria não aparece como \"arte do membro\" para quem registrou");
+  await db.aplicarRetencao(await obterPool());
+  ok(apagados.includes(urlIvo) && (await escalar("SELECT ArquivoUrl FROM IdentidadeArtes WHERE ArteId = @a", { a: arteIvo.body.arteId })) === null,
+    "(revisão) com o ciclo encerrado, a retenção apaga a imagem da arte anonimizada que não foi a escolhida");
+
+  console.log("== o ciclo de 2030: sem 2 finalistas, o tema sem votação ==");
+  em("2029-10-01T12:00:00Z");
+  const C30 = (await POST(H, "abrir-ciclo", DIR, { anoAlvo: 2030 })).body.cicloId;
+  ok(!!C30, "ciclo de 2030 aberto");
+  em("2029-11-04T12:00:00Z");
+  const s30 = (await sugerir(M.eva, "Fé que transforma vidas")).body.sugestaoId;
+  em("2029-11-18T12:00:00Z");
+  ok((await POST(H, "triar", DIR, { sugestaoId: s30, decisao: "FINALISTA" })).status === 200, "uma finalista só");
+  ok((await POST(H, "tema-sem-votacao", DIR, { sugestaoId: s30, motivo: "Ata 41, só um tema viável" })).status === 422, "antes do dia 22, termine a triagem: o tema sai da votação");
+  em("2029-11-23T12:00:00Z");
+  ok((await POST(H, "tema-sem-votacao", SEM_FATOR, { sugestaoId: s30, motivo: "Ata 41, só um tema viável" })).status === 428, "definir o tema sem votação pede a confirmação reforçada");
+  ok((await POST(H, "tema-sem-votacao", DIR, { sugestaoId: s30, motivo: "ok" })).status === 422, "com o motivo escrito");
+  const sv = await POST(H, "tema-sem-votacao", DIR, { sugestaoId: s30, motivo: "Ata 41, só um tema viável" });
+  const c30 = await um("SELECT Apuracao, TemaTexto, TemaDefinidoPor, DesempatePorMembroId, EnqueteId FROM IdentidadeCiclos WHERE CicloId = @c", { c: C30 });
+  ok(sv.status === 200 && c30.Apuracao === "NAO_VOTADA" && c30.TemaTexto === "Fé que transforma vidas" && c30.TemaDefinidoPor === "DIRETORIA" && c30.DesempatePorMembroId === 1002 && c30.EnqueteId === null,
+    "(revisão) o tema fica definido pela Diretoria, sem votação, com quem e por quê", c30);
+  ok((await POST(H, "abrir-votacao", DIR, { cicloId: C30 })).status === 422 && !!(await falha("UPDATE IdentidadeCiclos SET EnqueteId = 1, VotacaoCriadaEm = SYSUTCDATETIME() WHERE CicloId = @c", { c: C30 })),
+    "e depois disso não há votação (nem pelo banco)");
+  ok((await meu(M.eva)).ciclo.tema.texto === "Fé que transforma vidas", "o membro vê o tema do ano");
 
   console.log("== retenção ==");
   em("2029-01-05T12:00:00Z");

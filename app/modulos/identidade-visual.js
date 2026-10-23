@@ -22,7 +22,7 @@ const IDV_ROTULO_FASE = { AGUARDANDO: "Aguardando o início", SUGESTAO: "Sugest�
 const IDV_ROTULO_SUGESTAO = { ENVIADA: "Em análise", RETIRADA: "Retirada por você", FINALISTA: "Finalista", DESCARTADA: "Não foi à votação" };
 const IDV_ROTULO_SUGESTAO_GESTAO = { ENVIADA: "Aguardando a triagem", FINALISTA: "Finalista", DESCARTADA: "Descartada" };
 const IDV_ROTULO_ARTE = { ENVIADA: "No concurso", RETIRADA: "Retirada", RECUSADA: "Fora do concurso", ESCOLHIDA: "Escolhida no culto" };
-const IDV_ROTULO_APURACAO = { VENCEDOR: "Tema escolhido na votação", EMPATE: "Empate: a Diretoria decide", SEM_VOTOS: "Ninguém votou: a Diretoria decide" };
+const IDV_ROTULO_APURACAO = { VENCEDOR: "Tema escolhido na votação", EMPATE: "Empate: a Diretoria decide", SEM_VOTOS: "Ninguém votou: a Diretoria decide", NAO_VOTADA: "Sem votação: tema definido pela Diretoria" };
 const IDV_TIPOS_IMAGEM = ["image/png", "image/jpeg"];
 const IDV_HEX = /^#[0-9A-F]{6}$/;
 
@@ -262,11 +262,12 @@ function idvPintarArteMembro(d) {
     const id = idvInteiro(a.arteId);
     if (!id) return "";
     const ver = a.temImagem ? ` <button type="button" class="btn-link" data-on-click="idvVerImagemAcao" data-args-click="${argsAttr(id, "Meu", ARG.elemento)}">Ver</button>` : "";
-    const retirar = a.situacao === "ENVIADA" ? ` <button type="button" class="btn-link btn-link-perigo" data-on-click="idvRetirarArteAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Retirar</button>` : "";
+    const retirar = a.situacao === "ENVIADA" && a.podeRetirar === true ? ` <button type="button" class="btn-link btn-link-perigo" data-on-click="idvRetirarArteAcao" data-args-click="${argsAttr(id, ARG.elemento)}">Retirar</button>` : "";
     const motivo = a.situacao === "RECUSADA" && a.motivoRecusa ? `<br><span class="subtitle">Motivo: ${escaparHtmlEbd(a.motivoRecusa)}</span>` : "";
     return `<li><strong>${escaparHtmlEbd(a.titulo || "Sem título")}</strong> — ${escaparHtmlEbd(IDV_ROTULO_ARTE[a.situacao] || a.situacao)} (${idvData(a.enviadaEm)})${ver}${retirar}${motivo}<div id="idvImg_${id}"></div></li>`;
   }).join("")}</ul>` : "";
-  return `<section class="idv-cartao"><h4>Concurso de arte (dezembro)</h4>
+  const ate = d.retiradaDeArteAte ? `<p class="subtitle">Você pode retirar a sua arte até ${idvData(d.retiradaDeArteAte)}; depois disso ela fica no concurso.</p>` : "";
+  return `<section class="idv-cartao"><h4>Concurso de arte (dezembro)</h4>${ate}
     <p class="subtitle">Qualquer membro pode mandar a arte da camiseta do ano, com o tema escolhido e nas cores da Diretoria (Art. 159, § 1º, IV). A escolha final — arte e cor —
       é no culto de dezembro, por maioria dos presentes.</p>${coresHtml}${form}</section>${lista}`;
 }
@@ -491,7 +492,9 @@ function idvPintarSugestoesGestao(d) {
   const linhas = lista.map(s => {
     const id = idvInteiro(s.sugestaoId);
     if (!id) return "";
-    const parecido = s.parecido ? `<br><span class="idv-alerta">⚠️ Parece com o tema de ${Number(s.parecido.ano)}: "${escaparHtmlEbd(s.parecido.tema)}"</span>` : "";
+    const parecido = !s.parecido ? "" : s.parecido.igual
+      ? `<br><span class="idv-alerta">⛔ Igual ao tema de ${Number(s.parecido.ano)}: "${escaparHtmlEbd(s.parecido.tema)}" — não pode ir à votação</span>`
+      : `<br><span class="idv-alerta">⚠️ Parece com o tema de ${Number(s.parecido.ano)}: "${escaparHtmlEbd(s.parecido.tema)}"</span>`;
     const ajuste = s.textoFinal ? `<br><span class="subtitle">Redação ajustada: "${escaparHtmlEbd(s.textoFinal)}"</span>` : "";
     const criterio = s.criterio ? ` — ${escaparHtmlEbd(s.criterio.rotulo)}` : "";
     const obs = s.observacao ? `<br><span class="subtitle">Observação: ${escaparHtmlEbd(s.observacao)}</span>` : "";
@@ -516,8 +519,17 @@ function idvPintarVotacaoGestao(d) {
   const c = d.ciclo, v = d.votacao;
   const id = idvInteiro(c.cicloId);
   let corpo = "";
-  if (!v && c.fase === "VOTACAO") corpo = `<p class="subtitle psc-aviso">A votação ainda não abriu (são precisos pelo menos 2 finalistas). Conclua a triagem e abra agora.</p>
+  const finalistas = (Array.isArray(d.sugestoes) ? d.sugestoes : []).filter(s => s.situacao === "FINALISTA" && idvInteiro(s.sugestaoId));
+  const semDecisao = Number(d.semDecisao) || 0;
+  if (!v && !c.apuracao && c.fase === "VOTACAO") corpo = `<p class="subtitle psc-aviso">A votação ainda não abriu: ela abre sozinha com pelo menos 2 finalistas e a triagem completa${semDecisao ? ` (há ${semDecisao} sugestão(ões) sem decisão)` : ""}. Conclua a triagem ou abra agora.</p>
     <div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="idvAbrirVotacaoAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🗳️ Abrir a votação agora</button></div>`;
+  // ciclo sem saída: a partir do dia 22 com menos de 2 finalistas, ou depois do dia 30 sem votação — a Diretoria define o tema entre os finalistas, com o motivo
+  if (!v && !c.apuracao && finalistas.length && ((c.fase === "VOTACAO" && finalistas.length < 2) || ["ARTE", "ENCERRADO"].includes(c.fase))) {
+    corpo += `<div class="idv-triagem"><p class="subtitle">Sem votação possível (${finalistas.length < 2 ? "menos de 2 finalistas" : "a votação não aconteceu"}): a Diretoria define o tema entre os finalistas, dizendo por quê.</p>
+      <label for="idvTemaUnicoOpcao">Tema</label><select id="idvTemaUnicoOpcao"><option value="">— escolha —</option>${finalistas.map(s => `<option value="${idvInteiro(s.sugestaoId)}">${escaparHtmlEbd(s.textoFinal || s.texto)}</option>`).join("")}</select>
+      <label for="idvTemaUnicoMotivo">Por quê (a reunião, a ata)</label><textarea id="idvTemaUnicoMotivo" maxlength="300" rows="2"></textarea>
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="idvTemaSemVotacaoAcao" data-args-click="${argsAttr(ARG.elemento)}">✔️ Definir o tema sem votação</button></div></div>`;
+  }
   if (v) corpo = `<p class="subtitle">${v.aberta ? `Aberta em Meu Painel até ${idvData(c.calendario.votacao.fim)}.` : "Encerrada."} ${Number(v.participantes)} pessoa(s) votaram${c.votacaoAutomatica ? " (abriu sozinha no dia 22)" : ""}.</p>${idvContagem(v)}`;
   if (c.apuracao) corpo += `<p><strong>${escaparHtmlEbd(IDV_ROTULO_APURACAO[c.apuracao] || c.apuracao)}</strong></p>`;
   if (c.tema) corpo += `<p class="idv-tema">Tema de ${Number(c.anoAlvo)}: <strong>${escaparHtmlEbd(c.tema.texto)}</strong>${c.tema.desempate ? ` — definido pela Diretoria (${escaparHtmlEbd(c.tema.desempate.motivo)})` : ""}</p>`;
@@ -575,7 +587,8 @@ function idvPintarResultadoGestao(d) {
   return `<section class="idv-cartao"><h4>Registrar a escolha final do culto</h4>
     <p class="subtitle">A arte e a cor escolhidas por maioria simples dos presentes no Culto Administrativo de Dezembro ou na Vigília de Ano Novo (Art. 159, § 1º, V e VI). Depois de
       registrado, não se edita, e o tema entra sozinho na lista de temas já usados.</p>
-    <label for="idvResArte">Arte</label><select id="idvResArte"><option value="">— escolha —</option>${artes.map(a => `<option value="${idvInteiro(a.arteId)}">${escaparHtmlEbd(a.titulo || "Sem título")} — ${escaparHtmlEbd(a.autor)}</option>`).join("")}</select>
+    <label for="idvResArte">Arte do concurso</label><select id="idvResArte"><option value="">— escolha —</option>${artes.map(a => `<option value="${idvInteiro(a.arteId)}">${escaparHtmlEbd(a.titulo || "Sem título")} — ${escaparHtmlEbd(a.autor)}</option>`).join("")}</select>
+    <label for="idvResImagem">Ou, se a arte escolhida no culto não veio pelo sistema, a imagem dela (PNG ou JPEG, até 5 MB)</label><input type="file" id="idvResImagem" accept="image/png,image/jpeg">
     <label for="idvResCor">Cor</label><select id="idvResCor"><option value="">— escolha —</option>${cores.map(k => `<option value="${idvInteiro(k.corId)}">${escaparHtmlEbd(k.nome)}</option>`).join("")}</select>
     <label for="idvResData">Data do culto</label><input type="date" id="idvResData">
     <label for="idvResOcasiao">Ocasião</label><select id="idvResOcasiao">${ocasioes.map(o => `<option value="${escaparHtmlEbd(o.codigo)}">${escaparHtmlEbd(o.rotulo)}</option>`).join("")}</select>
@@ -626,7 +639,33 @@ async function idvAbrirVotacaoAcao(cicloId, botao) {
   const id = idvInteiro(cicloId);
   if (!id || !idvAbaVisivel()) return;
   if (!(await confirmarAcao("Abrir agora a votação com os finalistas aprovados? Depois disso a lista não muda mais.", "Abrir a votação"))) return;
-  await idvAtoNoCiclo(botao, "abrir-votacao", { cicloId: id }, `votacao-${id}`);
+  const marca = idvMarca("Ges");
+  await idvProteger(botao, async () => {
+    let data = await idvPostar("abrir-votacao", { cicloId: id });
+    if (!idvViva(marca)) return;
+    const pendentes = idvInteiro(data.pendentes);
+    if (data.sucesso === false && pendentes) {
+      if (!(await confirmarAcao(`Há ${pendentes} sugestão(ões) ainda sem decisão da triagem. Abrir a votação assim mesmo? Elas ficam fora.`, "Abrir assim mesmo"))) {
+        if (idvViva(marca)) idvEscrever("idvCicloMsg", "A votação não foi aberta: termine a triagem.", false);
+        return;
+      }
+      if (!idvViva(marca)) return;
+      data = await idvPostar("abrir-votacao", { cicloId: id, aceitarPendentes: true });
+      if (!idvViva(marca)) return;
+    }
+    idvMostrarResultado(data, "idvCicloMsg");
+    if (idvCicloSel) await idvCarregarCicloAcao(idvCicloSel);
+    if (idvViva(marca)) idvEscrever("idvCicloMsg", idvMsgErro(data), data.sucesso === false);
+  }, `votacao-${id}`);
+}
+async function idvTemaSemVotacaoAcao(botao) {
+  if (!idvAbaVisivel()) return;
+  const sugestaoId = idvInteiro(idvValor("idvTemaUnicoOpcao"));
+  const motivo = idvValor("idvTemaUnicoMotivo");
+  if (!sugestaoId) { idvEscrever("idvCicloMsg", "Escolha o tema.", true); return; }
+  if (motivo.length < 5) { idvEscrever("idvCicloMsg", "Escreva por quê (a reunião ou a ata da decisão).", true); return; }
+  if (!(await confirmarAcao("Definir o tema do ano sem votação? A decisão fica registrada com o seu nome e o motivo.", "Definir o tema"))) return;
+  await idvAtoNoCiclo(botao, "tema-sem-votacao", { sugestaoId, motivo }, "tema-sem-votacao");
 }
 async function idvDesempatarAcao(botao) {
   if (!idvAbaVisivel()) return;
@@ -659,13 +698,24 @@ async function idvRecusarArteAcao(arteId, botao) {
 async function idvRegistrarResultadoAcao(botao) {
   if (!idvAbaVisivel() || !idvCicloSel) return;
   const arteId = idvInteiro(idvValor("idvResArte")), corId = idvInteiro(idvValor("idvResCor"));
-  if (!arteId || !corId) { idvEscrever("idvCicloMsg", "Escolha a arte e a cor.", true); return; }
+  const campoImagem = idvEl("idvResImagem");
+  const arquivo = campoImagem && campoImagem.files && campoImagem.files[0];
+  if (arteId && arquivo) { idvEscrever("idvCicloMsg", "Escolha uma arte do concurso OU envie a imagem — não as duas.", true); return; }
+  if ((!arteId && !arquivo) || !corId) { idvEscrever("idvCicloMsg", "Escolha a arte (ou envie a imagem dela) e a cor.", true); return; }
+  if (arquivo && (!IDV_TIPOS_IMAGEM.includes(arquivo.type) || !(arquivo.size > 0) || arquivo.size > 5 * 1024 * 1024)) { idvEscrever("idvCicloMsg", "A imagem tem de ser PNG ou JPEG, até 5 MB.", true); return; }
   if (!idvValor("idvResData")) { idvEscrever("idvCicloMsg", "Informe a data do culto.", true); return; }
   const votos = idvInteiro(idvValor("idvResVotos"));
   if (!votos) { idvEscrever("idvCicloMsg", "Informe quantos votos o modelo escolhido recebeu.", true); return; }
   const presentes = idvValor("idvResPresentes");
   if (!(await confirmarAcao("Registrar a Identidade Visual oficial? Depois de registrado, o resultado não se edita.", "Registrar"))) return;
-  await idvAtoNoCiclo(botao, "resultado", { cicloId: idvCicloSel, arteId, corId, dataCulto: idvValor("idvResData"), ocasiao: idvValor("idvResOcasiao"), votosVencedor: votos,
+  const marca = idvMarca("Ges");
+  let imagem = {};
+  if (arquivo) {
+    try { imagem = { imagemBase64: await idvBase64(arquivo), tipo: arquivo.type }; } catch (e) { idvEscrever("idvCicloMsg", "Não foi possível ler a imagem. Escolha o arquivo de novo.", true); return; }
+    // enquanto a imagem era lida a pessoa pode ter saído da aba ou da sessão: o resultado não sai em nome de ninguém
+    if (!idvViva(marca)) return;
+  }
+  await idvAtoNoCiclo(botao, "resultado", { cicloId: idvCicloSel, ...(arteId ? { arteId } : imagem), corId, dataCulto: idvValor("idvResData"), ocasiao: idvValor("idvResOcasiao"), votosVencedor: votos,
     presentes: presentes ? idvInteiro(presentes) || presentes : undefined, ata: idvValor("idvResAta") || undefined }, "resultado");
 }
 
@@ -725,5 +775,5 @@ async function idvExcluirTemaAcao(temaUsadoId, botao) {
 registrarAcoes({
   idvAbrirCicloAcao, idvAbrirVotacaoAcao, idvCancelarCicloAcao, idvCarregarCicloAcao, idvCarregarMeuPainelAcao, idvDesempatarAcao, idvEnviarArteAcao,
   idvExcluirCorAcao, idvExcluirTemaAcao, idvMostrarSecaoAcao, idvRecusarArteAcao, idvRegistrarResultadoAcao, idvRetirarArteAcao, idvRetirarSugestaoAcao, idvSalvarCorAcao,
-  idvSalvarTemaAcao, idvSugerirAcao, idvTriarAcao, idvVerImagemAcao, idvVotarAcao
+  idvSalvarTemaAcao, idvSugerirAcao, idvTemaSemVotacaoAcao, idvTriarAcao, idvVerImagemAcao, idvVotarAcao
 });

@@ -5,7 +5,7 @@
 #   bash rodar.sh roteiro e2e-3-atos.js [e2e-5-seguranca.js ...]    restaura a base "cenario" (segundos) e roda os roteiros em sequência, no MESMO banco
 #   BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js ...  o mesmo, a partir da base da v7.7 (e2e-8 a e2e-12)
 #   BASE=cenario-protecao bash rodar.sh roteiro e2e-14-protecao.js ...  o mesmo, a partir da base da v7.8 (e2e-14 a e2e-17)
-#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 151 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-32
+#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 151 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-33
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 API="$AQUI/../../api"
 PS="powershell.exe -NoProfile -ExecutionPolicy Bypass -File"

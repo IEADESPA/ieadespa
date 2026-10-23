@@ -22,7 +22,7 @@ jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async 
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, urlDocumentoComSas: (u) => u, salvarFoto: jest.fn(), salvarDocumento: jest.fn() }));
 // (v7.14) o voto confere o público só da pessoa (membroElegivel): a mesma lista simulada [20, 21]
-jest.mock("../enquetes", () => ({ membrosElegiveis: jest.fn(async () => new Set([20, 21])), membroElegivel: jest.fn(async (_p, _s, _e, m) => [20, 21].includes(Number(m))), passouDoFechamento: jest.requireActual("../enquetes").passouDoFechamento }));
+jest.mock("../enquetes", () => ({ ...jest.requireActual("../enquetes"), membrosElegiveis: jest.fn(async () => new Set([20, 21])), membroElegivel: jest.fn(async (_p, _s, _e, m) => [20, 21].includes(Number(m))) }));
 
 const auth = require("../auth");
 const pin = require("../pinMembro");

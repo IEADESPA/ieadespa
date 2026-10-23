@@ -11,7 +11,8 @@ jest.mock("../identidadeVisualDb", () => ({
   abrirCiclo: jest.fn(async () => ({ sucesso: true, cicloId: 1 })), cancelarCiclo: jest.fn(async () => ({ sucesso: true })),
   salvarTema: jest.fn(async () => ({ sucesso: true })), excluirTema: jest.fn(async () => ({ sucesso: true })), triar: jest.fn(async () => ({ sucesso: true })),
   criarVotacao: jest.fn(async () => ({ sucesso: true })), desempatar: jest.fn(async () => ({ sucesso: true })), salvarCor: jest.fn(async () => ({ sucesso: true })),
-  excluirCor: jest.fn(async () => ({ sucesso: true })), recusarArte: jest.fn(async () => ({ sucesso: true })), registrarResultado: jest.fn(async () => ({ sucesso: true }))
+  excluirCor: jest.fn(async () => ({ sucesso: true })), recusarArte: jest.fn(async () => ({ sucesso: true })), registrarResultado: jest.fn(async () => ({ sucesso: true })),
+  definirTemaSemVotacao: jest.fn(async () => ({ sucesso: true }))
 }));
 
 const auth = require("../auth");
@@ -35,7 +36,7 @@ const chamadasAoBanco = () => Object.values(db).filter((f) => f && f.mock).reduc
 beforeEach(() => { jest.clearAllMocks(); });
 
 const GESTAO_GET = ["painel", "ciclo", "temas"];
-const GESTAO_POST = ["abrir-ciclo", "cancelar-ciclo", "tema", "excluir-tema", "triar", "abrir-votacao", "desempate", "cor", "excluir-cor", "recusar-arte", "resultado"];
+const GESTAO_POST = ["abrir-ciclo", "cancelar-ciclo", "tema", "excluir-tema", "triar", "abrir-votacao", "desempate", "cor", "excluir-cor", "recusar-arte", "resultado", "tema-sem-votacao"];
 const TODOS_GET = ["catalogos", "meu", "imagem", ...GESTAO_GET];
 const TODOS_POST = ["sugerir", "retirar-sugestao", "arte", "retirar-arte", ...GESTAO_POST];
 const CORPO = { cicloId: 1, sugestaoId: 1, arteId: 1, corId: 1, temaUsadoId: 1, decisao: "DESCARTADA" };
@@ -80,28 +81,53 @@ describe("a porta", () => {
 });
 
 describe("a confirmação reforçada", () => {
-  test("aprovar finalista, abrir a votação, desempatar e registrar o resultado: 428 sem a confirmação recente (nada chega ao banco)", async () => {
+  test("(revisão) todo ato da Diretoria que muda o processo: 428 sem a confirmação recente (nada chega ao banco)", async () => {
     const velho = GERAL(VELHO);
     for (const [acao, corpo] of [["triar", { sugestaoId: 1, decisao: "FINALISTA" }], ["abrir-votacao", { cicloId: 1 }], ["desempate", { sugestaoId: 1, motivo: "x" }],
-      ["resultado", { cicloId: 1, arteId: 1, corId: 1 }]]) {
+      ["resultado", { cicloId: 1, arteId: 1, corId: 1 }], ["abrir-ciclo", { anoAlvo: 2028 }], ["cancelar-ciclo", { cicloId: 1 }], ["excluir-tema", { temaUsadoId: 1 }],
+      ["tema", { temaUsadoId: 1, ano: 2010, tema: "x" }], ["cor", { cicloId: 1, ordem: 1 }], ["excluir-cor", { corId: 1 }], ["recusar-arte", { arteId: 1, motivo: "x" }],
+      ["tema-sem-votacao", { sugestaoId: 1, motivo: "x" }]]) {
       const r = await chamar(acao, { metodo: "POST", token: velho, corpo });
-      expect(r.status).toBe(428);
+      expect([acao, r.status]).toEqual([acao, 428]);
       expect(r.body.precisaFator).toBe(true);
     }
     expect(chamadasAoBanco()).toBe(0);
   });
-  test("descartar, cores, temas e abrir o ciclo não pedem", async () => {
+  test("(revisão) descartar ou voltar para a triagem: a rota passa se a confirmação está recente; o banco pede (428) quando a sugestão é FINALISTA", async () => {
     const velho = GERAL(VELHO);
+    db.triar.mockResolvedValueOnce({ sucesso: false, precisaFator: true });
+    const r = await chamar("triar", { metodo: "POST", token: velho, corpo: { sugestaoId: 1, decisao: "DESCARTADA", criterio: 1 } });
+    expect(r.status).toBe(428);
+    expect(r.body.precisaFator).toBe(true);
+    expect(db.triar.mock.calls[0][1].fatorRecente).toBe(false);
+    await chamar("triar", { metodo: "POST", token: GERAL(), corpo: { sugestaoId: 1, decisao: "DESCARTADA", criterio: 1 } });
+    expect(db.triar.mock.calls[1][1].fatorRecente).toBe(true);
+    // a sugestão que não é finalista: o banco não pede, e o descarte passa
     expect((await chamar("triar", { metodo: "POST", token: velho, corpo: { sugestaoId: 1, decisao: "DESCARTADA", criterio: 1 } })).status).toBe(200);
-    expect((await chamar("cor", { metodo: "POST", token: velho, corpo: { cicloId: 1, ordem: 1 } })).status).toBe(200);
-    expect((await chamar("tema", { metodo: "POST", token: velho, corpo: { ano: 2010, tema: "x" } })).status).toBe(201);
-    expect((await chamar("abrir-ciclo", { metodo: "POST", token: velho, corpo: { anoAlvo: 2028 } })).status).toBe(201);
+  });
+  test("cadastrar um tema NOVO em 'Temas já usados' (acréscimo) não pede", async () => {
+    expect((await chamar("tema", { metodo: "POST", token: GERAL(VELHO), corpo: { ano: 2010, tema: "x" } })).status).toBe(201);
+  });
+  test("(revisão) quem tem termo pendente participa como vota na enquete (a mesma porta: exigirLoginIgnorandoTermos)", async () => {
+    const pendente = tokenDe(10, { via: "PIN", termosPendentes: [{ termoId: 1 }] });
+    expect((await chamar("meu", { token: pendente })).status).toBe(200);
+    expect((await chamar("sugerir", { metodo: "POST", token: pendente, corpo: { texto: "Fé" } })).status).toBe(201);
   });
   test("com a confirmação, o ato chega ao banco com quem fez", async () => {
     expect((await chamar("abrir-votacao", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4" } })).status).toBe(201);
-    expect(db.criarVotacao.mock.calls[0][1]).toEqual({ cicloId: 4, porMembroId: 1 });
+    expect(db.criarVotacao.mock.calls[0][1]).toEqual({ cicloId: 4, porMembroId: 1, aceitarPendentes: false });
+    await chamar("abrir-votacao", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4", aceitarPendentes: true } });
+    expect(db.criarVotacao.mock.calls[1][1].aceitarPendentes).toBe(true);
+    await chamar("abrir-votacao", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4", aceitarPendentes: "true" } });
+    expect(db.criarVotacao.mock.calls[2][1].aceitarPendentes).toBe(false);
     await chamar("resultado", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4", arteId: "5", corId: "6", dataCulto: "2027-12-19" } });
     expect(db.registrarResultado.mock.calls[0][1]).toMatchObject({ ver: { membroId: 1, gestao: true }, cicloId: 4, dados: { arteId: 5, corId: 6, dataCulto: "2027-12-19" } });
+    // (revisão) sem arte do concurso: a imagem da arte escolhida vem no próprio registro
+    expect((await chamar("resultado", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4", imagemBase64: "iVBO", tipo: "image/png", corId: "6" } })).status).toBe(201);
+    expect(db.registrarResultado.mock.calls[1][1].dados).toMatchObject({ arteId: null, imagemBase64: "iVBO", corId: 6 });
+    expect((await chamar("resultado", { metodo: "POST", token: GERAL(), corpo: { cicloId: "4", corId: "6" } })).status).toBe(400);
+    await chamar("tema-sem-votacao", { metodo: "POST", token: GERAL(), corpo: { sugestaoId: "9", motivo: "Só houve uma finalista" } });
+    expect(db.definirTemaSemVotacao.mock.calls[0][1]).toMatchObject({ ver: { membroId: 1 }, dados: { sugestaoId: 9, motivo: "Só houve uma finalista" } });
   });
 });
 

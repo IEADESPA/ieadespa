@@ -11,7 +11,8 @@ const db = require(path.join(API, "shared/identidadeVisualDb.js"));
 const H = require(path.join(API, "GestaoIdentidadeVisual/index.js"));
 const ENQ = require(path.join(API, "GestaoEnquetes/index.js"));
 const ARMAZEM = { salvarDocumento: async () => `https://blob.e2e/documentos/doc-${process.pid}-${Math.random().toString(36).slice(2)}`, excluirDocumento: async () => { }, urlDocumentoComSas: (u) => u };
-const png = (semente) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(120, semente)]).toString("base64");
+const pedaco = (tipo, d) => { const b = Buffer.alloc(12 + d.length); b.writeUInt32BE(d.length, 0); b.write(tipo, 4, "latin1"); d.copy(b, 8); return b; };
+const png = (semente) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pedaco("IHDR", Buffer.alloc(13, 1)), pedaco("IDAT", Buffer.alloc(120, semente)), pedaco("IEND", Buffer.alloc(0))]).toString("base64");
 
 async function filho() {
   const spec = JSON.parse(process.argv[3]);
@@ -81,9 +82,23 @@ async function principal() {
   rs = await disparar(temas.map((t, i) => ({ tipo: "rota", acao: "sugerir", membroId: 9110 + i, corpo: { texto: t }, agora: NOV05 })));
   ok(rs.every((r) => r.ok && r.resultado.status === 201), "as oito entram (a trava do ciclo só põe em fila, não recusa)", rs.map((r) => r.resultado || r.erro));
 
+  console.log("== cancelar o ciclo × mandar sugestão, ao mesmo tempo (a mesma trava do ciclo) ==");
+  db.usarRelogio(() => new Date("2028-11-03T12:00:00Z"));
+  const c29 = await db.abrirCiclo(pool, { ver: { membroId: 1002 }, anoAlvo: 2029 });
+  const NOV03 = "2028-11-03T12:00:00Z";
+  rs = await disparar([{ tipo: "rota", acao: "cancelar-ciclo", geral: true, membroId: 1002, corpo: { cicloId: c29.cicloId }, agora: NOV03 },
+    ...Array.from({ length: 3 }, (_, i) => ({ tipo: "rota", acao: "sugerir", membroId: 9110 + i, corpo: { texto: `Corrida do cancelamento ${i + 1}` }, agora: NOV03 }))]);
+  ok(rs.every((r) => r.ok && [200, 201, 422, 429].includes(r.resultado.status)), "(revisão) os quatro terminam sem erro (nada de 500 da chave estrangeira)", rs.map((r) => r.resultado || r.erro));
+  const existe29 = await escalar("SELECT COUNT(*) FROM IdentidadeCiclos WHERE CicloId = @c", { c: c29.cicloId });
+  const sug29 = await escalar("SELECT COUNT(*) FROM IdentidadeSugestoes WHERE CicloId = @c", { c: c29.cicloId });
+  ok((existe29 === 0 && sug29 === 0 && rs[0].resultado.status === 200) || (existe29 === 1 && sug29 > 0 && rs[0].resultado.status === 422),
+    "(revisão) ou o ciclo saiu sem nenhuma sugestão, ou ficou com elas e o cancelamento foi recusado", { existe29, sug29, cancelar: rs[0].resultado });
+
   console.log("== quatro acessos no dia 22 abrem a votação: uma enquete só ==");
-  await db.triar(pool, { ver: { membroId: 1002 }, dados: { sugestaoId: await escalar("SELECT SugestaoId FROM IdentidadeSugestoes WHERE TextoNormalizado = N'raizes profundas'"), decisao: "FINALISTA" }, agora: new Date("2027-11-17T12:00:00Z") });
-  await db.triar(pool, { ver: { membroId: 1002 }, dados: { sugestaoId: await escalar("SELECT SugestaoId FROM IdentidadeSugestoes WHERE TextoNormalizado = N'luz nas nacoes'"), decisao: "FINALISTA" }, agora: new Date("2027-11-17T12:00:00Z") });
+  await db.triar(pool, { ver: { membroId: 1002 }, dados: { sugestaoId: await escalar("SELECT SugestaoId FROM IdentidadeSugestoes WHERE TextoNormalizado = N'raizes profundas'"), decisao: "FINALISTA" }, fatorRecente: true, agora: new Date("2027-11-17T12:00:00Z") });
+  await db.triar(pool, { ver: { membroId: 1002 }, dados: { sugestaoId: await escalar("SELECT SugestaoId FROM IdentidadeSugestoes WHERE TextoNormalizado = N'luz nas nacoes'"), decisao: "FINALISTA" }, fatorRecente: true, agora: new Date("2027-11-17T12:00:00Z") });
+  // a votação só abre sozinha com a triagem completa: as outras sugestões são descartadas (direto no banco: aqui o assunto é a corrida da abertura)
+  await q("UPDATE IdentidadeSugestoes SET Status = 'DESCARTADA', Criterio = 1, TriadoPorMembroId = 1002, TriadoEm = SYSUTCDATETIME() WHERE CicloId = @c AND Status = 'ENVIADA'", { c: CICLO });
   const NOV22 = "2027-11-22T12:00:00Z";
   rs = await disparar([...Array.from({ length: 3 }, (_, i) => ({ tipo: "rota", acao: "meu", metodo: "GET", membroId: 9120 + i, agora: NOV22 })), { tipo: "rotina", agora: NOV22 }]);
   ok(rs.every((r) => r.ok && (r.resultado.status === 200 || Array.isArray(r.resultado.falhas))), "os quatro terminam sem erro", rs.map((r) => r.resultado || r.erro));
@@ -103,6 +118,8 @@ async function principal() {
 
   console.log("== a rotina e três acessos fecham e apuram juntos depois do dia 30 ==");
   const DEZ01 = "2027-12-01T10:00:00Z";
+  // o banco "chega" à data marcada (a apuração decide pela hora do banco)
+  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
   rs = await disparar([{ tipo: "rotina", agora: DEZ01 }, { tipo: "rotina", agora: DEZ01 }, ...Array.from({ length: 2 }, (_, i) => ({ tipo: "rota", acao: "meu", metodo: "GET", membroId: 9126 + i, agora: DEZ01 }))]);
   ok(rs.every((r) => r.ok && (r.resultado.status === 200 || (Array.isArray(r.resultado.falhas) && r.resultado.falhas.length === 0))), "os quatro terminam sem erro", rs.map((r) => r.resultado || r.erro));
   const ap = await L.um("SELECT Apuracao, VotosTotal, TemaTexto, TemaVotos FROM IdentidadeCiclos WHERE CicloId = @c", { c: CICLO });

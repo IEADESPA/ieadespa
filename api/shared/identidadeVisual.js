@@ -16,6 +16,7 @@ const { hojeBrasilia } = require("./dataBrasilia");
 
 const PERMISSAO = "identidade_visual";
 const PRIMEIRO_ANO_TEMAS = 2006;              // "desde o ano de 2006" (Art. 159 § 1º, I, a, 3)
+const PRIMEIRO_CICLO = 2028;                  // decisão de 23/10/2026: o processo da identidade de 2027 foi feito fora do sistema; o primeiro ciclo no sistema é o de 2028
 const MAX_SUGESTOES = 3;                      // por membro e por ciclo (decisão de 22/10/2026)
 const MAX_TEXTO = 80;                         // "frase curta, até 80 letras"
 const MIN_TEXTO = 3;
@@ -84,10 +85,14 @@ function anoAlvoDoDia(hoje) { return Number(String(hoje).slice(0, 4)) + 1; }
 
 // A Diretoria abre o ciclo do ano quando quiser, até o último dia das sugestões (abrir depois disso seria um processo sem sugestão nenhuma).
 function podeAbrirCiclo(anoAlvo, hoje) {
+  if (Number.isInteger(anoAlvo) && anoAlvo < PRIMEIRO_CICLO) return { problema: `O primeiro ciclo no sistema é o da identidade de ${PRIMEIRO_CICLO}: o de ${anoAlvo} foi feito fora do sistema (cadastre o tema em "Temas já usados").` };
   if (!Number.isInteger(anoAlvo) || anoAlvo !== anoAlvoDoDia(hoje)) return { problema: `Só se abre o ciclo da identidade do ano que vem (${anoAlvoDoDia(hoje)}).` };
   if (hoje > calendario(anoAlvo).sugestao.fim) return { problema: `As sugestões para ${anoAlvo} terminaram em 15/11: este ano o ciclo não pode mais ser aberto no sistema.` };
   return { ok: true };
 }
+
+// O membro retira a própria arte até 24/12 do ano do processo (depois, a Diretoria já prepara a escolha do culto) e nunca depois do resultado.
+function retiradaDeArteAte(anoAlvo) { return `${calendario(anoAlvo).anoDoProcesso}-12-24`; }
 
 // A votação já fechou (o instante da meia-noite de 1º/12 em Brasília passou)?
 function votacaoFechou(anoAlvo, agora = new Date()) { return agora.getTime() >= Date.parse(calendario(anoAlvo).votacaoFechaEm); }
@@ -101,25 +106,30 @@ function dataBr(iso) { const s = String(iso || ""); return /^\d{4}-\d{2}-\d{2}/.
 // Controle, formatação invisível (zero-width, direção do texto), separador de linha/parágrafo: nunca entram.
 const INVISIVEL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const TEM_LETRA = /\p{L}/u;
+// Letra que não é do alfabeto latino (depois de tirar os acentos): o "а" cirílico é igual ao "a" na tela, mas não na comparação — por isso é recusado com aviso.
+const LETRA_DE_OUTRO_ALFABETO = /(?=\p{L})\P{Script=Latin}/u;
 
 // A forma de comparação: sem acento, minúsculas, só letras e números, um espaço entre as palavras. "Avante, Igreja!" = "avante igreja".
+// NFKD (e não só NFD): as formas de compatibilidade viram a letra comum — "Ａｖａｎｔｅ" (letra larga), "ﬁ" (ligadura) e "²" (sobrescrito) não escapam da comparação.
 function normalizar(texto) {
   return String(texto == null ? "" : texto)
-    .normalize("NFD").replace(/\p{Mn}/gu, "")
+    .normalize("NFKD").replace(/\p{M}/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
-// O texto de uma sugestão (ou do ajuste da Diretoria): uma linha, sem tag, sem caractere invisível, de 3 a 80 letras (contadas como a pessoa as vê).
+// O texto de uma sugestão (ou do ajuste da Diretoria): uma linha, sem tag, sem caractere invisível, só letras do alfabeto latino, de 3 a 80 caracteres (como o banco conta).
 function validarTema(v, { max = MAX_TEXTO, campo = "o tema" } = {}) {
   if (typeof v !== "string") return { problema: `Escreva ${campo}.` };
   if (INVISIVEL.test(v.replace(/[ \t]/g, " ").replace(/\r?\n$/, ""))) return { problema: `${maiuscula(campo)} tem um caractere invisível ou uma quebra de linha: apague e escreva de novo, numa linha só.` };
   const t = v.replace(/\s+/g, " ").trim();
-  const tamanho = Array.from(t).length;
+  // o tamanho é o do banco (NVARCHAR conta unidades UTF-16: um emoji conta 2) — contar "como a pessoa vê" deixava passar texto que o banco não guarda
+  const tamanho = t.length;
   if (tamanho < MIN_TEXTO) return { problema: `Escreva ${campo} (no mínimo ${MIN_TEXTO} letras).` };
-  if (tamanho > max) return { problema: `${maiuscula(campo)} pode ter até ${max} letras (tem ${tamanho}).` };
+  if (tamanho > max) return { problema: `${maiuscula(campo)} pode ter até ${max} caracteres (tem ${tamanho}; um emoji conta 2).` };
   if (/[<>]/.test(t)) return { problema: `${maiuscula(campo)} não pode ter os sinais < e >.` };
+  if (LETRA_DE_OUTRO_ALFABETO.test(t.normalize("NFKD").replace(/\p{M}/gu, ""))) return { problema: `${maiuscula(campo)} tem letras de outro alfabeto (por exemplo, do russo ou do grego): escreva só com as letras do português.` };
   if (!TEM_LETRA.test(t) || !normalizar(t)) return { problema: `${maiuscula(campo)} precisa ter palavras.` };
   return { texto: t, normalizado: normalizar(t) };
 }
@@ -132,9 +142,9 @@ function validarTextoLivre(v, { campo, max, min = 1, opcional = false, umaLinha 
   const t = v.replace(/\r\n/g, "\n").trim();
   const sem = umaLinha ? t : t.replace(/\n/g, " ");
   if (INVISIVEL.test(sem.replace(/\t/g, " "))) return { problema: `${maiuscula(campo)} tem um caractere invisível ou de controle${umaLinha ? " (ou uma quebra de linha)" : ""}: apague e escreva de novo.` };
-  const tamanho = Array.from(t).length;
+  const tamanho = t.length;                     // unidades UTF-16, como o NVARCHAR do banco (um emoji conta 2)
   if (tamanho < min) return { problema: `Escreva ${campo} (no mínimo ${min} letras).` };
-  if (tamanho > max) return { problema: `${maiuscula(campo)} pode ter até ${max} letras (tem ${tamanho}).` };
+  if (tamanho > max) return { problema: `${maiuscula(campo)} pode ter até ${max} caracteres (tem ${tamanho}; um emoji conta 2).` };
   return { texto: t };
 }
 
@@ -211,6 +221,72 @@ function conferirImagem(buffer, tipo) {
   if ((tipo === "image/png" && !png) || (tipo === "image/jpeg" && !jpeg)) return { problema: "O arquivo não é a imagem que diz ser (PNG ou JPEG)." };
   return { ok: true };
 }
+// ---- Metadados da imagem (decisão do responsável, 23/10/2026): a arte pode vir de um celular, com o lugar (GPS), o aparelho, a data e o nome de quem fotografou.
+// Antes de guardar, sai tudo o que não é a imagem — sem biblioteca nova: o arquivo é percorrido pedaço a pedaço e só os pedaços de desenho ficam.
+// PNG: ficam os pedaços críticos (cabeçalho, paleta, dados, fim) e os de cor e transparência; saem texto (tEXt, zTXt, iTXt), EXIF (eXIf), data (tIME), perfil de cor (iCCP) e
+// qualquer outro pedaço auxiliar. JPEG: saem APP1 a APP15 (EXIF, XMP, IPTC/Photoshop, perfil de cor...) — menos o APP14 da Adobe, que diz como converter as cores — e os
+// comentários (COM); o que vem depois do fim da imagem (EOI) também sai. Arquivo que não se deixa percorrer é recusado (não é a imagem que diz ser).
+const PNG_ASSINATURA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG_MANTER = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "sBIT", "bKGD", "pHYs", "acTL", "fcTL", "fdAT"]);
+function limparPng(buf) {
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_ASSINATURA)) return null;
+  const partes = [PNG_ASSINATURA];
+  let i = 8;
+  while (i + 12 <= buf.length) {
+    const tamanho = buf.readUInt32BE(i);
+    const tipo = buf.toString("latin1", i + 4, i + 8);
+    const fim = i + 12 + tamanho;
+    if (tamanho > 0x7fffffff || fim > buf.length || !/^[A-Za-z]{4}$/.test(tipo)) return null;
+    const critico = (buf[i + 4] & 0x20) === 0;          // 1ª letra maiúscula = pedaço crítico (o desenho não sai sem ele)
+    if (critico || PNG_MANTER.has(tipo)) partes.push(buf.subarray(i, fim));
+    i = fim;
+    if (tipo === "IEND") return Buffer.concat(partes);
+  }
+  return null;
+}
+function limparJpeg(buf) {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  const partes = [buf.subarray(0, 2)];
+  let i = 2;
+  while (i < buf.length) {
+    if (buf[i] !== 0xff) return null;
+    while (i + 1 < buf.length && buf[i + 1] === 0xff) i++;                       // bytes de preenchimento antes do marcador
+    if (i + 1 >= buf.length) return null;
+    const m = buf[i + 1];
+    if (m === 0xd9) { partes.push(Buffer.from([0xff, 0xd9])); return Buffer.concat(partes); }      // fim da imagem: o que vier depois é descartado
+    if ((m >= 0xd0 && m <= 0xd7) || m === 0x01) { partes.push(buf.subarray(i, i + 2)); i += 2; continue; }
+    if (i + 4 > buf.length) return null;
+    const fim = i + 2 + buf.readUInt16BE(i + 2);
+    if (buf.readUInt16BE(i + 2) < 2 || fim > buf.length) return null;
+    if (m === 0xda) {                                                            // início da varredura: o cabeçalho e os dados comprimidos até o próximo marcador
+      let j = fim;
+      while (j < buf.length) {
+        if (buf[j] === 0xff && j + 1 < buf.length) {
+          const n = buf[j + 1];
+          if (n === 0x00 || (n >= 0xd0 && n <= 0xd7)) { j += 2; continue; }
+          break;
+        }
+        j++;
+      }
+      partes.push(buf.subarray(i, j));
+      i = j;
+      continue;
+    }
+    const tirar = (m >= 0xe1 && m <= 0xef && m !== 0xee) || m === 0xfe;
+    if (!tirar) partes.push(buf.subarray(i, fim));
+    i = fim;
+  }
+  return null;
+}
+// Confere a imagem e devolve o arquivo SEM os metadados ({ buffer }) ou { problema }.
+function prepararImagem(buffer, tipo) {
+  const c = conferirImagem(buffer, tipo);
+  if (c.problema) return c;
+  const limpo = tipo === "image/png" ? limparPng(buffer) : limparJpeg(buffer);
+  if (!limpo || limpo.length < 8) return { problema: "A imagem está corrompida (não foi possível ler o arquivo inteiro). Salve de novo como PNG ou JPEG e mande outra vez." };
+  return { buffer: limpo };
+}
+
 // O tamanho do texto base64 já entrega o do arquivo: recusa antes de decodificar.
 function base64CabeNoLimite(texto) { return typeof texto === "string" && texto.length > 0 && texto.length <= Math.ceil(MAX_IMAGEM_BYTES / 3) * 4 + 4 && /^[A-Za-z0-9+/]+={0,2}$/.test(texto); }
 
@@ -261,6 +337,10 @@ function textoVotacaoSemFinalistas({ anoAlvo, finalistas }) {
   return `A votação do tema da Identidade Visual de ${anoAlvo} NÃO abriu: há ${finalistas} finalista(s) aprovado(s) e são precisos pelo menos ${MIN_FINALISTAS}. `
     + `Conclua a triagem e abra a votação (ela termina em ${dataBr(calendario(anoAlvo).votacao.fim)}).`;
 }
+function textoVotacaoEsperando({ anoAlvo, pendentes, finalistas }) {
+  return `A votação do tema da Identidade Visual de ${anoAlvo} NÃO abriu sozinha: há ${pendentes} sugestão(ões) ainda sem decisão da triagem (e ${finalistas} finalista(s)). `
+    + `Termine a triagem — ou abra a votação pelo botão, assim mesmo (ela termina em ${dataBr(calendario(anoAlvo).votacao.fim)}).`;
+}
 function textoApuracao({ anoAlvo, situacao, tema, votos, total }) {
   if (situacao === "VENCEDOR") return `Votação encerrada: o tema da Identidade Visual de ${anoAlvo} é "${tema}" (${votos} de ${total} voto(s)). Agora vêm as cores e o concurso de arte.`;
   if (situacao === "EMPATE") return `Votação do tema de ${anoAlvo} encerrada com EMPATE (${total} voto(s)): a Diretoria registra o desempate na aba Identidade Visual.`;
@@ -279,6 +359,6 @@ module.exports = {
   FASES, CRITERIOS, OCASIOES,
   calendario, fase, anoAlvoDoDia, podeAbrirCiclo, votacaoFechou, dataBr, hoje,
   normalizar, validarTema, validarTextoLivre, palavras, distancia, parecidos, conferirTemasUsados,
-  validarCor, conferirImagem, base64CabeNoLimite, apurar, validarResultado,
-  textoTriagem, textoVotacaoAberta, textoVotacaoSemFinalistas, textoApuracao, textoArte
+  validarCor, conferirImagem, prepararImagem, limparPng, limparJpeg, base64CabeNoLimite, apurar, validarResultado, retiradaDeArteAte, PRIMEIRO_CICLO,
+  textoTriagem, textoVotacaoAberta, textoVotacaoSemFinalistas, textoVotacaoEsperando, textoApuracao, textoArte
 };

@@ -15,11 +15,13 @@
 //  GET  painel   GET ciclo?cicloId=   GET temas
 //  POST abrir-ciclo body:{anoAlvo}     POST cancelar-ciclo body:{cicloId}
 //  POST tema body:{temaUsadoId?, ano, tema}     POST excluir-tema body:{temaUsadoId}
-//  POST triar body:{sugestaoId, decisao: FINALISTA|DESCARTADA|ENVIADA, textoAjustado?, criterio?, observacao?}   (aprovar finalista: confirmação reforçada)
-//  POST abrir-votacao body:{cicloId}   (confirmação reforçada; no dia 22 ela também abre sozinha)
-//  POST desempate body:{sugestaoId, motivo}   (confirmação reforçada)
+//  POST triar body:{sugestaoId, decisao: FINALISTA|DESCARTADA|ENVIADA, textoAjustado?, criterio?, observacao?}   (aprovar finalista e mexer numa finalista: confirmação reforçada)
+//  POST abrir-votacao body:{cicloId, aceitarPendentes?}   (no dia 22 ela abre sozinha se a triagem estiver completa; com sugestão sem decisão, só pelo botão, confirmando)
+//  POST desempate body:{sugestaoId, motivo}      POST tema-sem-votacao body:{sugestaoId, motivo}   (sem 2 finalistas até o fim da votação, ou a votação não abriu)
 //  POST cor body:{cicloId, ordem, nome, hex}     POST excluir-cor body:{corId}     POST recusar-arte body:{arteId, motivo}
-//  POST resultado body:{cicloId, arteId, corId, dataCulto, ocasiao, votosVencedor, presentes?, ata?}   (confirmação reforçada)
+//  POST resultado body:{cicloId, (arteId | imagemBase64 + tipo), corId, dataCulto, ocasiao, votosVencedor, presentes?, ata?}
+// Confirmação reforçada (revisão de 23/10/2026): TODO ato da Diretoria que muda o processo — abrir e cancelar o ciclo, temas já usados, triagem de finalista, votação,
+// desempate, tema sem votação, cores, tirar arte do concurso e o resultado. Só o cadastro de um tema novo em "Temas já usados" (acréscimo, corrigível) não pede.
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 · 400 dado ruim · 403 sem permissão · 404 não achou (o que não existe e o que a pessoa não pode
 // ver recebem a MESMA resposta) · 409 mudou enquanto isso · 428 confirmação reforçada · 429 ocupado.
@@ -53,7 +55,8 @@ module.exports = async function (context, req) {
 };
 
 async function principal(context, req) {
-  const sessao = auth.exigirLogin(req, context);
+  // (revisão) a mesma porta do voto (GestaoEnquetes): o membro com termo pendente participa da identidade visual como vota na enquete
+  const sessao = auth.exigirLoginIgnorandoTermos(req, context);
   if (!sessao) return;
   const lideranca = auth.ehSessaoDeLideranca(sessao);
   const visao = lideranca ? auth.visaoDaPermissao(sessao, db.PERMISSAO) : null;
@@ -73,9 +76,11 @@ async function principal(context, req) {
   }
   const LEITURAS = ["catalogos", "meu", "imagem", "painel", "ciclo", "temas"];
   const ESCRITAS = ["sugerir", "retirar-sugestao", "arte", "retirar-arte", "abrir-ciclo", "cancelar-ciclo", "tema", "excluir-tema", "triar", "abrir-votacao", "desempate", "cor",
-    "excluir-cor", "recusar-arte", "resultado"];
+    "excluir-cor", "recusar-arte", "resultado", "tema-sem-votacao"];
   const EXIGE_GESTAO = ["painel", "ciclo", "temas", "abrir-ciclo", "cancelar-ciclo", "tema", "excluir-tema", "triar", "abrir-votacao", "desempate", "cor", "excluir-cor",
-    "recusar-arte", "resultado"];
+    "recusar-arte", "resultado", "tema-sem-votacao"];
+  // os atos que pedem a confirmação reforçada na porta (a triagem decide lá dentro: aprovar finalista e mexer numa finalista)
+  const ATOS_COM_FATOR = ["abrir-ciclo", "cancelar-ciclo", "excluir-tema", "abrir-votacao", "desempate", "tema-sem-votacao", "cor", "excluir-cor", "recusar-arte", "resultado"];
 
   try {
     if (metodo !== "GET" && metodo !== "POST") return erro(context, 405, "Método não permitido.");
@@ -83,8 +88,10 @@ async function principal(context, req) {
     if (metodo === "POST" && !ESCRITAS.includes(acao)) return erro(context, 404, "Ação inválida.");
     if (EXIGE_GESTAO.includes(acao) && !gestao) return erro(context, 403, SEM_PERMISSAO);
     // aprovar o finalista que vai à votação de toda a Igreja, abrir a votação, decidir o empate e registrar a identidade oficial: confirmação reforçada (chave do aparelho ou código)
-    const pedeFator = metodo === "POST" && (["abrir-votacao", "desempate", "resultado"].includes(acao) || (acao === "triar" && corpo.decisao === "FINALISTA"));
+    const pedeFator = metodo === "POST" && (ATOS_COM_FATOR.includes(acao) || (acao === "tema" && corpo.temaUsadoId) || (acao === "triar" && corpo.decisao === "FINALISTA"));
     if (pedeFator && !auth.exigirFatorRecente(req, context)) return;
+    // a triagem que mexe numa FINALISTA (descartar, voltar) também pede — quem sabe a situação é o banco; aqui só se diz se a confirmação está recente
+    const fatorRecente = metodo === "POST" && acao === "triar" ? auth.exigirFatorRecente(req, {}) : false;
     const limitador = metodo === "POST" && acao === "sugerir" ? limiteSugestoes : metodo === "POST" && acao === "arte" ? limiteArtes : null;
     if (limitador && !limitador.registrar(`m${sessao.membroId}`).permitido) return erro(context, 429, "Muitos envios seguidos. Espere alguns minutos e tente de novo.");
     const pool = await getPool();
@@ -123,15 +130,24 @@ async function principal(context, req) {
     if (acao === "cancelar-ciclo") { const id = exigir("cicloId"); if (!id) return; resposta(context, await db.cancelarCiclo(pool, { ver, cicloId: id })); return; }
     if (acao === "tema") { resposta(context, await db.salvarTema(pool, { ver, dados: corpo }), corpo.temaUsadoId ? 200 : 201); return; }
     if (acao === "excluir-tema") { const id = exigir("temaUsadoId"); if (!id) return; resposta(context, await db.excluirTema(pool, { ver, temaUsadoId: id })); return; }
-    if (acao === "triar") { const id = exigir("sugestaoId"); if (!id) return; resposta(context, await db.triar(pool, { ver, dados: { ...corpo, sugestaoId: id } })); return; }
-    if (acao === "abrir-votacao") { const id = exigir("cicloId"); if (!id) return; resposta(context, await db.criarVotacao(pool, { cicloId: id, porMembroId: sessao.membroId }), 201); return; }
+    if (acao === "triar") {
+      const id = exigir("sugestaoId"); if (!id) return;
+      const r = await db.triar(pool, { ver, dados: { ...corpo, sugestaoId: id }, fatorRecente });
+      if (r && r.precisaFator) { auth.exigirFatorRecente(req, context); return; }
+      resposta(context, r);
+      return;
+    }
+    if (acao === "abrir-votacao") { const id = exigir("cicloId"); if (!id) return; resposta(context, await db.criarVotacao(pool, { cicloId: id, porMembroId: sessao.membroId, aceitarPendentes: corpo.aceitarPendentes === true }), 201); return; }
+    if (acao === "tema-sem-votacao") { const id = exigir("sugestaoId"); if (!id) return; resposta(context, await db.definirTemaSemVotacao(pool, { ver, dados: { ...corpo, sugestaoId: id } })); return; }
     if (acao === "desempate") { const id = exigir("sugestaoId"); if (!id) return; resposta(context, await db.desempatar(pool, { ver, dados: { ...corpo, sugestaoId: id } })); return; }
     if (acao === "cor") { const id = exigir("cicloId"); if (!id) return; resposta(context, await db.salvarCor(pool, { ver, cicloId: id, dados: corpo })); return; }
     if (acao === "excluir-cor") { const id = exigir("corId"); if (!id) return; resposta(context, await db.excluirCor(pool, { ver, corId: id })); return; }
     if (acao === "recusar-arte") { const id = exigir("arteId"); if (!id) return; resposta(context, await db.recusarArte(pool, { ver, arteId: id, motivo: corpo.motivo })); return; }
     if (acao === "resultado") {
       const cicloId = exigir("cicloId"); if (!cicloId) return;
-      const arteId = exigir("arteId"); if (!arteId) return;
+      // a arte do concurso (arteId) OU a imagem da arte escolhida no culto enviada aqui mesmo (imagemBase64 + tipo)
+      const arteId = corpo.arteId === undefined || corpo.arteId === null || corpo.arteId === "" ? null : idDe(corpo.arteId);
+      if (!arteId && !corpo.imagemBase64) return erro(context, 400, "Informe arteId (ou a imagem da arte escolhida).");
       const corId = exigir("corId"); if (!corId) return;
       resposta(context, await db.registrarResultado(pool, { ver, cicloId, dados: { ...corpo, arteId, corId } }), 201);
       return;

@@ -31,4 +31,5 @@ BASE=cenario-pastoral bash rodar.sh roteiro e2e-29-comunicacao.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-30-comunicacao-corridas.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-31-identidade.js
 BASE=cenario-pastoral bash rodar.sh roteiro e2e-32-identidade-corridas.js
+BASE=cenario-pastoral bash rodar.sh roteiro e2e-33-identidade-rcsi.js
 echo TUDO-PRONTO

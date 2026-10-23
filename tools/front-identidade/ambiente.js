@@ -48,9 +48,26 @@ function resposta(status, corpo, naoJson) {
   return r;
 }
 
+// Imagens de verdade, como o servidor exige desde que passou a tirar os metadados (iv.prepararImagem): o PNG percorrido de IHDR a IEND, o JPEG até o fim da imagem (EOI).
+// `metadado` acrescenta o que o servidor tira (o texto do autor no PNG; o EXIF no JPEG); `semFim` corta o arquivo antes do IEND/EOI (o servidor recusa).
+function pedacoPng(tipo, dados) {
+  const d = Buffer.from(dados);
+  const b = Buffer.alloc(12 + d.length);
+  b.writeUInt32BE(d.length, 0); b.write(tipo, 4, "latin1"); d.copy(b, 8);
+  return b;                                                     // o CRC fica zerado: o servidor não confere
+}
+function pngReal({ metadado = false, semFim = false, desenho = [1, 2, 3, 250, 251, 252, 0, 7] } = {}) {
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), pedacoPng("IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]),
+    ...(metadado ? [pedacoPng("tEXt", Buffer.from("Author Ana Sugestora", "latin1"))] : []), pedacoPng("IDAT", desenho), ...(semFim ? [] : [pedacoPng("IEND", [])])]);
+}
+function jpegReal({ metadado = false, semFim = false } = {}) {
+  const seg = (m, dados) => { const d = Buffer.from(dados); const b = Buffer.alloc(4 + d.length); b[0] = 0xff; b[1] = m; b.writeUInt16BE(d.length + 2, 2); d.copy(b, 4); return b; };
+  return Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe0, [74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]), ...(metadado ? [seg(0xe1, Buffer.from("Exif  GPS -1.45 -48.49", "latin1"))] : []),
+    seg(0xdb, [0, ...new Array(64).fill(1)]), seg(0xda, [1, 1, 0, 0, 63, 0]), Buffer.from([0x12, 0x34, 0xff, 0x00, 0x56]), ...(semFim ? [] : [Buffer.from([0xff, 0xd9])])]);
+}
 // Um arquivo escolhido no <input type="file">, como o navegador entrega (name, type, size e arrayBuffer()).
 function arquivo({ nome = "arte.png", tipo = "image/png", bytes = null, tamanho = null } = {}) {
-  const b = bytes || Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82, 1, 2, 3, 4]);
+  const b = bytes || pngReal();
   return { name: nome, type: tipo, size: tamanho == null ? b.length : tamanho, lidos: 0, async arrayBuffer() { this.lidos++; return b.buffer.slice(b.byteOffset, b.byteOffset + b.length); } };
 }
 
@@ -183,4 +200,4 @@ function carregarPainelInicial() { window.__painelInicial = (window.__painelInic
   return { doc, ctx, api, ev, e, g, ocioso, sessao, retem, toasts, responderModal, limparRegistro, errosDaPagina, resposta, intervalos, temporizadores, dispararTemporizador, gravacoes, consoleDaTela };
 }
 
-module.exports = { criarAmbiente, extrair, lerApp, arquivo };
+module.exports = { criarAmbiente, extrair, lerApp, arquivo, pngReal, jpegReal };

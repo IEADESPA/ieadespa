@@ -24,34 +24,58 @@ IF OBJECT_ID(N'dbo.IdentidadeCiclos', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.IdentidadeCiclos (
         CicloId                     INT IDENTITY PRIMARY KEY,
-        AnoAlvo                     SMALLINT NOT NULL CONSTRAINT UQ_IdentidadeCiclos_Ano UNIQUE
-                                        CONSTRAINT CK_IdentidadeCiclos_Ano CHECK (AnoAlvo BETWEEN 2027 AND 2200),
+        AnoAlvo                     SMALLINT NOT NULL CONSTRAINT UQ_IdentidadeCiclos_Ano UNIQUE,
         AbertoPorMembroId           INT NOT NULL REFERENCES dbo.MembroReferencia(MembroId),
         AbertoEm                    DATETIME2 NOT NULL CONSTRAINT DF_IdentidadeCiclos_AbertoEm DEFAULT SYSUTCDATETIME(),
         EnqueteId                   INT NULL REFERENCES dbo.Enquetes(EnqueteId),
         VotacaoCriadaEm             DATETIME2 NULL,
         VotacaoCriadaPorMembroId    INT NULL REFERENCES dbo.MembroReferencia(MembroId),     -- NULL = a votação abriu sozinha (rotina ou primeiro acesso no dia 22)
-        Apuracao                    NVARCHAR(10) NULL CONSTRAINT CK_IdentidadeCiclos_Apuracao CHECK (Apuracao IS NULL OR Apuracao IN (N'VENCEDOR', N'EMPATE', N'SEM_VOTOS')),
+        Apuracao                    NVARCHAR(10) NULL,
         ApuradoEm                   DATETIME2 NULL,
         VotosTotal                  INT NULL,
         TemaSugestaoId              INT NULL,
         TemaTexto                   NVARCHAR(80) NULL,
         TemaVotos                   INT NULL,
-        TemaDefinidoPor             NVARCHAR(10) NULL CONSTRAINT CK_IdentidadeCiclos_DefinidoPor CHECK (TemaDefinidoPor IS NULL OR TemaDefinidoPor IN (N'VOTACAO', N'DESEMPATE')),
+        TemaDefinidoPor             NVARCHAR(10) NULL,
         DesempateMotivo             NVARCHAR(300) NULL,
         DesempatePorMembroId        INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         DesempateEm                 DATETIME2 NULL,
         CONSTRAINT CK_IdentidadeCiclos_Votacao CHECK ((EnqueteId IS NULL AND VotacaoCriadaEm IS NULL AND VotacaoCriadaPorMembroId IS NULL) OR (EnqueteId IS NOT NULL AND VotacaoCriadaEm IS NOT NULL)),
-        CONSTRAINT CK_IdentidadeCiclos_Apurado CHECK ((Apuracao IS NULL AND ApuradoEm IS NULL AND VotosTotal IS NULL)
-                                                   OR (Apuracao IS NOT NULL AND ApuradoEm IS NOT NULL AND VotosTotal IS NOT NULL AND VotosTotal >= 0 AND EnqueteId IS NOT NULL)),
         CONSTRAINT CK_IdentidadeCiclos_Tema CHECK ((TemaSugestaoId IS NULL AND TemaTexto IS NULL AND TemaDefinidoPor IS NULL AND TemaVotos IS NULL)
-                                                OR (TemaSugestaoId IS NOT NULL AND LEN(TemaTexto) >= 3 AND TemaDefinidoPor IS NOT NULL AND TemaVotos IS NOT NULL AND Apuracao IS NOT NULL)),
-        -- o tema da votação só nasce do VENCEDOR; o do desempate só do EMPATE ou de nenhum voto, com quem decidiu e por quê
-        CONSTRAINT CK_IdentidadeCiclos_Origem CHECK (TemaDefinidoPor IS NULL
-                                                  OR (TemaDefinidoPor = N'VOTACAO' AND Apuracao = N'VENCEDOR' AND DesempatePorMembroId IS NULL AND DesempateMotivo IS NULL AND DesempateEm IS NULL)
-                                                  OR (TemaDefinidoPor = N'DESEMPATE' AND Apuracao IN (N'EMPATE', N'SEM_VOTOS') AND DesempatePorMembroId IS NOT NULL AND LEN(DesempateMotivo) >= 5 AND DesempateEm IS NOT NULL))
+                                                OR (TemaSugestaoId IS NOT NULL AND LEN(TemaTexto) >= 3 AND TemaDefinidoPor IS NOT NULL AND TemaVotos IS NOT NULL AND Apuracao IS NOT NULL))
     );
 END
+GO
+-- As restrições que a revisão de 23/10/2026 mudou ficam FORA do CREATE TABLE: quem já tinha a 151 aplicada (o banco local e a homologação) recebe a versão nova, e a segunda
+-- rodada não faz nada. Cada uma é trocada só se a definição gravada for a antiga.
+--   - o ano: o primeiro ciclo no sistema é o da identidade de 2028 (o de 2027 foi feito fora do sistema — decisão de 23/10/2026);
+--   - a apuração NAO_VOTADA e o tema definido pela DIRETORIA: até 30/11 não houve 2 finalistas (ou a votação não chegou a abrir) — a Diretoria define o tema entre os
+--     finalistas, com o motivo, sem enquete; o tema da votação só nasce do VENCEDOR; o do desempate só do EMPATE ou de nenhum voto, sempre com quem decidiu e por quê.
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Ano' AND definition LIKE N'%2027%')
+    ALTER TABLE dbo.IdentidadeCiclos DROP CONSTRAINT CK_IdentidadeCiclos_Ano;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Ano')
+    ALTER TABLE dbo.IdentidadeCiclos ADD CONSTRAINT CK_IdentidadeCiclos_Ano CHECK (AnoAlvo BETWEEN 2028 AND 2200);
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Apuracao' AND definition NOT LIKE N'%NAO_VOTADA%')
+    ALTER TABLE dbo.IdentidadeCiclos DROP CONSTRAINT CK_IdentidadeCiclos_Apuracao;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Apuracao')
+    ALTER TABLE dbo.IdentidadeCiclos ADD CONSTRAINT CK_IdentidadeCiclos_Apuracao CHECK (Apuracao IS NULL OR Apuracao IN (N'VENCEDOR', N'EMPATE', N'SEM_VOTOS', N'NAO_VOTADA'));
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_DefinidoPor' AND definition NOT LIKE N'%DIRETORIA%')
+    ALTER TABLE dbo.IdentidadeCiclos DROP CONSTRAINT CK_IdentidadeCiclos_DefinidoPor;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_DefinidoPor')
+    ALTER TABLE dbo.IdentidadeCiclos ADD CONSTRAINT CK_IdentidadeCiclos_DefinidoPor CHECK (TemaDefinidoPor IS NULL OR TemaDefinidoPor IN (N'VOTACAO', N'DESEMPATE', N'DIRETORIA'));
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Apurado' AND definition NOT LIKE N'%NAO_VOTADA%')
+    ALTER TABLE dbo.IdentidadeCiclos DROP CONSTRAINT CK_IdentidadeCiclos_Apurado;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Apurado')
+    ALTER TABLE dbo.IdentidadeCiclos ADD CONSTRAINT CK_IdentidadeCiclos_Apurado CHECK ((Apuracao IS NULL AND ApuradoEm IS NULL AND VotosTotal IS NULL)
+        OR (Apuracao IN (N'VENCEDOR', N'EMPATE', N'SEM_VOTOS') AND ApuradoEm IS NOT NULL AND VotosTotal IS NOT NULL AND VotosTotal >= 0 AND EnqueteId IS NOT NULL)
+        OR (Apuracao = N'NAO_VOTADA' AND ApuradoEm IS NOT NULL AND VotosTotal = 0 AND EnqueteId IS NULL));
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Origem' AND definition NOT LIKE N'%DIRETORIA%')
+    ALTER TABLE dbo.IdentidadeCiclos DROP CONSTRAINT CK_IdentidadeCiclos_Origem;
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_IdentidadeCiclos_Origem')
+    ALTER TABLE dbo.IdentidadeCiclos ADD CONSTRAINT CK_IdentidadeCiclos_Origem CHECK (TemaDefinidoPor IS NULL
+        OR (TemaDefinidoPor = N'VOTACAO' AND Apuracao = N'VENCEDOR' AND DesempatePorMembroId IS NULL AND DesempateMotivo IS NULL AND DesempateEm IS NULL)
+        OR (TemaDefinidoPor = N'DESEMPATE' AND Apuracao IN (N'EMPATE', N'SEM_VOTOS') AND DesempatePorMembroId IS NOT NULL AND LEN(DesempateMotivo) >= 5 AND DesempateEm IS NOT NULL)
+        OR (TemaDefinidoPor = N'DIRETORIA' AND Apuracao = N'NAO_VOTADA' AND DesempatePorMembroId IS NOT NULL AND LEN(DesempateMotivo) >= 5 AND DesempateEm IS NOT NULL));
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_IdentidadeCiclos_Enquete' AND object_id = OBJECT_ID(N'dbo.IdentidadeCiclos'))
     CREATE UNIQUE INDEX UX_IdentidadeCiclos_Enquete ON dbo.IdentidadeCiclos (EnqueteId) WHERE EnqueteId IS NOT NULL;
@@ -73,6 +97,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.CicloId = i.CicloId
         WHERE i.AnoAlvo <> d.AnoAlvo OR i.AbertoPorMembroId <> d.AbertoPorMembroId OR i.AbertoEm <> d.AbertoEm
            OR (d.EnqueteId IS NOT NULL AND ISNULL(i.EnqueteId, -1) <> d.EnqueteId)
+           OR (d.Apuracao IS NOT NULL AND ISNULL(i.EnqueteId, -1) <> ISNULL(d.EnqueteId, -1))
            OR (d.VotacaoCriadaEm IS NOT NULL AND ISNULL(i.VotacaoCriadaEm, ''19000101'') <> d.VotacaoCriadaEm)
            OR (d.Apuracao IS NOT NULL AND (ISNULL(i.Apuracao, N'''') <> d.Apuracao OR ISNULL(i.ApuradoEm, ''19000101'') <> d.ApuradoEm OR ISNULL(i.VotosTotal, -1) <> d.VotosTotal))
            OR (d.TemaSugestaoId IS NOT NULL AND (ISNULL(i.TemaSugestaoId, -1) <> d.TemaSugestaoId OR ISNULL(i.TemaTexto, N'''') <> d.TemaTexto
@@ -145,6 +170,7 @@ BEGIN
         TriadoPorMembroId           INT NULL REFERENCES dbo.MembroReferencia(MembroId),
         TriadoEm                    DATETIME2 NULL,
         OpcaoId                     INT NULL REFERENCES dbo.OpcoesEnquete(OpcaoId),     -- a opção da enquete que é esta finalista
+        VotosApurados               INT NULL,                                           -- os votos desta finalista, gravados na apuração (não se recontam depois)
         CriadaEm                    DATETIME2 NOT NULL CONSTRAINT DF_IdentidadeSugestoes_CriadaEm DEFAULT SYSUTCDATETIME(),
         RetiradaEm                  DATETIME2 NULL,
         AnonimizadoEm               DATETIME2 NULL,
@@ -157,6 +183,9 @@ BEGIN
         CONSTRAINT CK_IdentidadeSugestoes_Anonimo CHECK (MembroId IS NOT NULL OR AnonimizadoEm IS NOT NULL)
     );
 END
+GO
+IF COL_LENGTH(N'dbo.IdentidadeSugestoes', N'VotosApurados') IS NULL
+    ALTER TABLE dbo.IdentidadeSugestoes ADD VotosApurados INT NULL;
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_IdentidadeSugestoes_Texto' AND object_id = OBJECT_ID(N'dbo.IdentidadeSugestoes'))
     CREATE UNIQUE INDEX UX_IdentidadeSugestoes_Texto ON dbo.IdentidadeSugestoes (CicloId, TextoNormalizado) WHERE Status IN (N'ENVIADA', N'FINALISTA', N'DESCARTADA');
@@ -198,7 +227,8 @@ BEGIN
            OR (ISNULL(i.MembroId, -1) <> ISNULL(d.MembroId, -1) AND NOT (i.MembroId IS NULL AND i.AnonimizadoEm IS NOT NULL))
            OR (d.AnonimizadoEm IS NOT NULL AND ISNULL(i.AnonimizadoEm, ''19000101'') <> d.AnonimizadoEm)
            OR ((i.Texto COLLATE Latin1_General_BIN2 <> d.Texto COLLATE Latin1_General_BIN2 OR i.TextoNormalizado <> d.TextoNormalizado) AND NOT (d.AnonimizadoEm IS NULL AND i.AnonimizadoEm IS NOT NULL))
-           OR (d.OpcaoId IS NOT NULL AND ISNULL(i.OpcaoId, -1) <> d.OpcaoId))
+           OR (d.OpcaoId IS NOT NULL AND ISNULL(i.OpcaoId, -1) <> d.OpcaoId)
+           OR (d.VotosApurados IS NOT NULL AND ISNULL(i.VotosApurados, -1) <> d.VotosApurados))
     BEGIN
         RAISERROR(N''A sugestão só anda para a frente: o texto original fica, a retirada não volta e a pessoa só sai na anonimização.'', 16, 1);
         ROLLBACK TRANSACTION;
@@ -252,6 +282,7 @@ BEGIN
         RetiradaEm                  DATETIME2 NULL,
         ImagemApagadaEm             DATETIME2 NULL,
         AnonimizadoEm               DATETIME2 NULL,
+        EnviadaPelaDiretoria        BIT NOT NULL CONSTRAINT DF_IdentidadeArtes_Diretoria DEFAULT 0,
         CONSTRAINT CK_IdentidadeArtes_Imagem CHECK ((ArquivoUrl IS NOT NULL AND ImagemApagadaEm IS NULL) OR (ArquivoUrl IS NULL AND ImagemApagadaEm IS NOT NULL)),
         CONSTRAINT CK_IdentidadeArtes_Escolhida CHECK (Status <> N'ESCOLHIDA' OR ArquivoUrl IS NOT NULL),
         CONSTRAINT CK_IdentidadeArtes_Recusa CHECK ((Status = N'RECUSADA' AND RecusadaEm IS NOT NULL AND RecusadaPorMembroId IS NOT NULL AND LEN(MotivoRecusa) >= 3)
@@ -261,6 +292,9 @@ BEGIN
         CONSTRAINT CK_IdentidadeArtes_Anonimo CHECK (MembroId IS NOT NULL OR AnonimizadoEm IS NOT NULL)
     );
 END
+GO
+IF COL_LENGTH(N'dbo.IdentidadeArtes', N'EnviadaPelaDiretoria') IS NULL
+    ALTER TABLE dbo.IdentidadeArtes ADD EnviadaPelaDiretoria BIT NOT NULL CONSTRAINT DF_IdentidadeArtes_Diretoria DEFAULT 0;
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_IdentidadeArtes_Escolhida' AND object_id = OBJECT_ID(N'dbo.IdentidadeArtes'))
     CREATE UNIQUE INDEX UX_IdentidadeArtes_Escolhida ON dbo.IdentidadeArtes (CicloId) WHERE Status = N'ESCOLHIDA';
@@ -281,8 +315,8 @@ BEGIN
         END
         RETURN;
     END
-    IF EXISTS (SELECT 1 FROM (SELECT DISTINCT CicloId, MembroId FROM inserted WHERE MembroId IS NOT NULL AND Status IN (N''ENVIADA'', N''ESCOLHIDA'')) i
-        WHERE (SELECT COUNT(*) FROM dbo.IdentidadeArtes a WHERE a.CicloId = i.CicloId AND a.MembroId = i.MembroId AND a.Status IN (N''ENVIADA'', N''ESCOLHIDA'')) > 3)
+    IF EXISTS (SELECT 1 FROM (SELECT DISTINCT CicloId, MembroId FROM inserted WHERE MembroId IS NOT NULL AND Status IN (N''ENVIADA'', N''ESCOLHIDA'') AND EnviadaPelaDiretoria = 0) i
+        WHERE (SELECT COUNT(*) FROM dbo.IdentidadeArtes a WHERE a.CicloId = i.CicloId AND a.MembroId = i.MembroId AND a.Status IN (N''ENVIADA'', N''ESCOLHIDA'') AND a.EnviadaPelaDiretoria = 0) > 3)
     BEGIN
         RAISERROR(N''Cada membro manda no máximo 3 artes por ano.'', 16, 1);
         ROLLBACK TRANSACTION;
@@ -291,6 +325,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM deleted) RETURN;
     IF EXISTS (SELECT 1 FROM inserted i JOIN deleted d ON d.ArteId = i.ArteId
         WHERE i.CicloId <> d.CicloId OR i.CriadaEm <> d.CriadaEm OR i.Sha256 <> d.Sha256 OR i.TipoConteudo <> d.TipoConteudo OR i.TamanhoBytes <> d.TamanhoBytes
+           OR i.EnviadaPelaDiretoria <> d.EnviadaPelaDiretoria
            OR (d.Status <> N''ENVIADA'' AND i.Status <> d.Status)
            OR (d.ArquivoUrl IS NULL AND i.ArquivoUrl IS NOT NULL)
            OR (d.ArquivoUrl IS NOT NULL AND i.ArquivoUrl IS NOT NULL AND i.ArquivoUrl <> d.ArquivoUrl)

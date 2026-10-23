@@ -34,8 +34,13 @@ const { ehGeral, noEscopoDaPessoa } = require("../shared/escopoRotas");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { membrosElegiveis, membroElegivel, passouDoFechamento } = require("../shared/enquetes");
-const estatuto = require("../shared/estatuto");
+const { membrosElegiveis, membroElegivel, passouDoFechamento, encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
+// O INSERT do voto: a enquete lida COM TRAVA (UPDLOCK, REPEATABLEREAD — uma leitura com trava mesmo com o banco em READ_COMMITTED_SNAPSHOT), aberta e antes do instante
+// marcado pela hora do banco. Exportado para o roteiro ponta a ponta provar a corrida com o encerramento (tools/e2e-localdb/e2e-33).
+const SQL_INSERIR_RESPOSTA = `INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
+                  SELECT @perguntaId, @membroId, @opcaoId, @textoResposta
+                  WHERE EXISTS (SELECT 1 FROM Enquetes WITH (UPDLOCK, REPEATABLEREAD) WHERE EnqueteId = @enqueteId AND Status = 'ABERTA'
+                                AND (DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME()))`;
 
 const TIPOS_VALIDOS = ["OPCOES", "TEXTO_LIVRE"];
 const VISIBILIDADES_VALIDAS = ["PUBLICA", "SECRETA"];
@@ -47,7 +52,9 @@ const MAX_PUBLICO_CUSTOM = 5000;
 const MSG_SO_GERAL = "Enquete vinculante, para todos os membros ou de órgão central é da administração geral da igreja. Crie uma enquete de público específico, só com membros do seu escopo.";
 const MSG_PUBLICO_FORA = "Há matrícula inexistente ou fora do seu escopo no público da enquete.";
 
-async function montarEnqueteCompleta(pool, enqueteId) {
+// A enquete (só a linha). Passado o instante marcado, a enquete é ENCERRADA DE VERDADE aqui, uma vez (o mesmo encerramento da rotina, com o resultado da vinculante
+// gravado e a trilha) — não só para quem lê: até a rotina das 7h, a vinculante aparecia "Não aprovado" e a minuta da ata, "em andamento" (revisão de 23/10/2026).
+async function lerEnquete(pool, enqueteId) {
   const enqueteResult = await pool.request().input("id", sql.Int, enqueteId).query(`
     SELECT EnqueteId AS enqueteId, Titulo AS titulo, Descricao AS descricao,
            Visibilidade AS visibilidade, PublicoTipo AS publicoTipo, Vinculante AS vinculante,
@@ -59,20 +66,42 @@ async function montarEnqueteCompleta(pool, enqueteId) {
   `);
   const enquete = enqueteResult.recordset[0];
   if (!enquete) return null;
-  // v7.14 — passou do instante marcado: para quem lê, já está encerrada (a rotina diária grava o encerramento)
-  if (enquete.status === "ABERTA" && passouDoFechamento(enquete)) enquete.status = "ENCERRADA";
   if (enquete.dataFechamentoPrevista === undefined) enquete.dataFechamentoPrevista = null;
-
+  if (enquete.status === "ABERTA" && passouDoFechamento(enquete)) {
+    const fechou = await encerrarEnquete(pool, enqueteId, { agendada: true, enquete });
+    if (fechou.encerrada) { enquete.status = "ENCERRADA"; enquete.resultadoAprovado = fechou.resultadoAprovado; }
+    else {
+      // outra chamada fechou no meio, ou o relógio do banco ainda não chegou ao instante: relê a situação gravada
+      const atual = (await pool.request().input("id", sql.Int, enqueteId).query(`SELECT Status AS status, ResultadoAprovado AS resultadoAprovado FROM Enquetes WHERE EnqueteId = @id`)).recordset[0] || {};
+      if (atual.status === "ENCERRADA") { enquete.status = "ENCERRADA"; enquete.resultadoAprovado = atual.resultadoAprovado; }
+      else enquete.status = "ENCERRADA";           // para quem lê, já passou da hora (o voto também é recusado pela hora do banco)
+    }
+  }
+  await recuperarResultado(pool, enquete, { sql });
+  return enquete;
+}
+// As perguntas e as opções (sem respostas): o que o voto precisa conferir.
+async function lerPerguntas(pool, enqueteId) {
   const perguntasResult = await pool.request().input("id", sql.Int, enqueteId)
     .query(`SELECT PerguntaId AS perguntaId, Ordem AS ordem, Titulo AS titulo, Tipo AS tipo
             FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem`);
-
   const perguntas = [];
-  const participantesPorId = {};
-
   for (const pergunta of perguntasResult.recordset) {
     const opcoesResult = await pool.request().input("id", sql.Int, pergunta.perguntaId)
       .query(`SELECT OpcaoId AS opcaoId, Texto AS texto FROM OpcoesEnquete WHERE PerguntaId = @id`);
+    perguntas.push(Object.assign({}, pergunta, { opcoes: opcoesResult.recordset }));
+  }
+  return perguntas;
+}
+
+async function montarEnqueteCompleta(pool, enqueteId) {
+  const enquete = await lerEnquete(pool, enqueteId);
+  if (!enquete) return null;
+  const perguntas = [];
+  const participantesPorId = {};
+
+  for (const pergunta of await lerPerguntas(pool, enqueteId)) {
+    const opcoesResult = { recordset: pergunta.opcoes };
     // congregacaoNome/extensaoNome só servem para filtrar a visão por escopo (visaoDaEnquete) e saem antes da resposta.
     const respostasResult = await pool.request().input("id", sql.Int, pergunta.perguntaId).query(`
       SELECT r.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome, r.OpcaoId AS opcaoId, r.TextoResposta AS textoResposta
@@ -155,7 +184,8 @@ module.exports = async function (context, req) {
         return;
       }
     }
-    const enquete = await montarEnqueteCompleta(pool, enqueteId);
+    // (revisão) só a enquete, as perguntas e as opções — o voto não relê as respostas de todo mundo
+    const enquete = await lerEnquete(pool, enqueteId);
     if (!enquete) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Enquete não encontrada." } };
       return;
@@ -164,6 +194,7 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já foi encerrada." } };
       return;
     }
+    enquete.perguntas = await lerPerguntas(pool, enqueteId);
     if (!(await membroElegivel(pool, sql, enquete, Number(membroId)))) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta matrícula não está no público desta enquete." } };
       return;
@@ -204,37 +235,52 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // v7.14 — cada resposta só entra com a enquete ainda aberta e antes do instante marcado (na hora do BANCO, no mesmo comando); as perguntas vão sempre na mesma ordem,
-    // então, com dois envios da mesma pessoa ao mesmo tempo, o segundo esbarra já na primeira pergunta (chave única) e não grava nada.
-    let gravadas = 0;
-    for (const pergunta of enquete.perguntas) {
+    // v7.14 — cada resposta só entra com a enquete ainda ABERTA e antes do instante marcado, na hora do BANCO, no mesmo comando (SQL_INSERIR_RESPOSTA). A enquete é
+    // lida com trava (UPDLOCK): com o banco em READ_COMMITTED_SNAPSHOT (Azure SQL), o encerramento que estiver em curso termina antes — e o voto a encontra encerrada —, ou
+    // espera este voto terminar e o conta (shared/enquetes.js, encerrarEnquete: fecha primeiro, conta depois).
+    // Uma pergunta: um comando só (atômico); dois envios da mesma pessoa ao mesmo tempo: o segundo esbarra na chave única e recebe "já respondeu".
+    // Várias perguntas: uma transação — ou todas as respostas entram, ou nenhuma (revisão: antes, se a enquete fechasse no meio, ficava gravada só a primeira e a
+    // resposta dizia "registradas").
+    const JA_RESPONDEU = { status: 200, body: { sucesso: false, mensagem: "Esta matrícula já respondeu este formulário." } };
+    const ENCERRADA = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já foi encerrada." } };
+    const inserir = (rq, pergunta) => {
       const resposta = respostasPorPerguntaId[pergunta.perguntaId];
+      return rq.input("enqueteId", sql.Int, enqueteId)
+        .input("perguntaId", sql.Int, pergunta.perguntaId)
+        .input("membroId", sql.Int, membroId)
+        .input("opcaoId", sql.Int, pergunta.tipo === "OPCOES" ? resposta.opcaoId : null)
+        .input("textoResposta", sql.NVarChar(500), pergunta.tipo === "TEXTO_LIVRE" ? resposta.textoResposta : null)
+        .query(SQL_INSERIR_RESPOSTA);
+    };
+    const gravou = (r) => !!(r && r.rowsAffected && r.rowsAffected[0] > 0);
+    if (enquete.perguntas.length === 1) {
       let r;
-      try {
-        r = await pool.request()
-          .input("enqueteId", sql.Int, enqueteId)
-          .input("perguntaId", sql.Int, pergunta.perguntaId)
-          .input("membroId", sql.Int, membroId)
-          .input("opcaoId", sql.Int, pergunta.tipo === "OPCOES" ? resposta.opcaoId : null)
-          .input("textoResposta", sql.NVarChar(500), pergunta.tipo === "TEXTO_LIVRE" ? resposta.textoResposta : null)
-          .query(`INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
-                  SELECT @perguntaId, @membroId, @opcaoId, @textoResposta
-                  WHERE EXISTS (SELECT 1 FROM Enquetes WHERE EnqueteId = @enqueteId AND Status = 'ABERTA' AND (DataFechamentoPrevista IS NULL OR DataFechamentoPrevista > SYSUTCDATETIME()))`);
-      } catch (e) {
-        if (e && (e.number === 2627 || e.number === 2601) && gravadas === 0) {
-          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta matrícula já respondeu este formulário." } };
-          return;
-        }
+      try { r = await inserir(pool.request(), enquete.perguntas[0]); } catch (e) {
+        if (e && (e.number === 2627 || e.number === 2601)) { context.res = JA_RESPONDEU; return; }
         throw e;
       }
-      if (!(r && r.rowsAffected && r.rowsAffected[0] > 0)) {
-        if (gravadas === 0) {
-          context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já foi encerrada." } };
-          return;
+      if (!gravou(r)) { context.res = ENCERRADA; return; }
+    } else {
+      const t = new sql.Transaction(pool);
+      const rq = () => new sql.Request(t);
+      let ok = false;
+      try {
+        await t.begin();
+        // a resposta da primeira pergunta é lida com trava de intervalo: um segundo envio da mesma pessoa espera este terminar e então vê que já respondeu
+        const ja = await rq().input("p", sql.Int, enquete.perguntas[0].perguntaId).input("m", sql.Int, membroId)
+          .query(`SELECT 1 AS ja FROM RespostasEnquete WITH (UPDLOCK, HOLDLOCK) WHERE PerguntaId = @p AND MembroId = @m`);
+        if (ja.recordset.length > 0) { context.res = JA_RESPONDEU; return; }
+        for (const pergunta of enquete.perguntas) {
+          if (!gravou(await inserir(rq(), pergunta))) { context.res = ENCERRADA; return; }
         }
-        break;
+        await t.commit();
+        ok = true;
+      } catch (e) {
+        if (e && (e.number === 2627 || e.number === 2601)) { context.res = JA_RESPONDEU; return; }
+        throw e;
+      } finally {
+        if (!ok) { try { await t.rollback(); } catch (_) { /* já desfeita */ } }
       }
-      gravadas++;
     }
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Respostas registradas." } };
@@ -266,23 +312,13 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta é a votação do tema da Identidade Visual: ela fecha sozinha no fim do dia 30 de novembro (Regimento, Art. 159), e o sistema apura." } };
       return;
     }
-    let resultadoAprovado = null;
-    if (enquete.vinculante) {
-      const pergunta = enquete.perguntas[0];
-      const maisVotada = pergunta.opcoes.reduce((max, o) => (o.votos > max ? o.votos : max), 0);
-      const avaliacao = estatuto.avaliarAprovacaoEnquete(pergunta.totalRespostas, maisVotada, enquete.quorumTipo);
-      resultadoAprovado = avaliacao.aprovado;
-    }
-    const fechada = await pool.request().input("id", sql.Int, enqueteId).input("resultado", sql.Bit, resultadoAprovado)
-      .query(`UPDATE Enquetes SET Status = 'ENCERRADA', DataFechamento = SYSUTCDATETIME(), ResultadoAprovado = @resultado WHERE EnqueteId = @id AND Status = 'ABERTA'`);
-    if (fechada.rowsAffected && fechada.rowsAffected[0] === 0) {
+    // (revisão) marca ENCERRADA primeiro e só então conta (shared/enquetes.js): um voto em curso termina antes e entra na conta; nenhum entra depois
+    const fechada = await encerrarEnquete(pool, enqueteId, { enquete, usuarioId: usuario.membroId, acao: "Encerrou enquete" });
+    if (!fechada.encerrada) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Esta enquete já está encerrada." } };
       return;
     }
-    await registrarAuditoria({
-      tabela: "Enquetes", registroId: enqueteId, acao: "Encerrou enquete", usuarioId: usuario.membroId,
-      dadosDepois: { resultadoAprovado }
-    });
+    const resultadoAprovado = fechada.resultadoAprovado;
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Enquete encerrada.", resultadoAprovado } };
     return;
   }
@@ -557,3 +593,6 @@ module.exports = async function (context, req) {
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
 };
+
+// Para o roteiro ponta a ponta (a corrida do voto com o encerramento). NÃO enumerável: o host precisa ver um export igual ao de um index.js comum (só a função).
+Object.defineProperty(module.exports, "SQL_INSERIR_RESPOSTA", { value: SQL_INSERIR_RESPOSTA, enumerable: false });

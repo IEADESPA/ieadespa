@@ -33,6 +33,24 @@ cadastrar, corrigir, apagar); o "Fecha sozinha em" do formulário de enquete (va
 depois, aparece na lista na hora de Brasília); a saída da sessão, a troca de login, a saída da
 aba e da sub-aba; respostas atrasadas; o prazo de 20 s; 401 e 403; console e armazenamento limpos.
 
+Desde a revisão de 23/10/2026 cobre também: a confirmação reforçada (428, `confirmarFatorAgora` e
+UMA nova tentativa) em abrir e cancelar o ciclo, corrigir e apagar um tema já usado (cadastrar um
+novo não pede), cores, apagar cor, tirar arte do concurso, descartar e voltar uma finalista;
+abrir a votação com sugestões sem decisão (o aviso com o número, a pergunta "Há N sugestão(ões)…",
+cancelar não manda o segundo POST, confirmar manda `aceitarPendentes: true`, `pendentes` que não é
+número não pergunta, sair da aba com a pergunta aberta não manda nada); "Definir o tema sem
+votação" (aparece só sem enquete e sem apuração, com finalistas, na votação com menos de 2 ou em
+dezembro; só os finalistas; tema e motivo de 5 letras na tela; confirmação; 422 do servidor; o
+corpo `{sugestaoId, motivo}`; NAO_VOTADA e o tema DIRETORIA com o motivo, como texto, na aba e em
+Meu Painel); o resultado com a imagem enviada pela Diretoria (arte E imagem, ou nenhuma, recusadas
+na tela; tipo, tamanho e vazio recusados sem ler o arquivo; o corpo com `imagemBase64` + `tipo` e
+sem `arteId`; o arquivo cortado recusado pelo servidor; a arte "Diretoria (arte escolhida no
+culto)" na lista e na imagem do Meu Painel; sair da aba ou da sessão enquanto a imagem é lida não
+manda nada); a arte só se retira até 24/12 (`podeRetirar` estritamente `true`, a data escrita, a
+recusa do servidor); a marca ⛔ "Igual ao tema de AAAA… não pode ir à votação" (o "parecido" agora é
+recalculado pelo servidor contra os temas de hoje); o ciclo aberto é o de 2028 (datas de 2027) e em
+2026 o motivo do servidor ("o primeiro ciclo no sistema é o de 2028").
+
 ## Como é montado
 
 - `ambiente.js` carrega o `index.html` de verdade, o `eventos.js`, o `identidade-visual.js` e o
@@ -40,16 +58,25 @@ aba e da sub-aba; respostas atrasadas; o prazo de 20 s; 401 e 403; console e arm
   `calendario.js` (fetchProtegido, confirmarAcao, urlSegura, jsonDaTela, limparSessao, a
   navegação entre abas e sub-abas), extraídas pela árvore do JavaScript. Temporizadores
   observáveis (o prazo de 20 s é disparado pelo roteiro); console e armazenamento anotados; rádio
-  exclusivo como no navegador; `arquivo()` imita o arquivo escolhido no `<input type="file">`.
+  exclusivo como no navegador; `arquivo()` imita o arquivo escolhido no `<input type="file">`, e
+  `pngReal()`/`jpegReal()` montam imagens de verdade (o PNG de IHDR a IEND, o JPEG até o EOI, com
+  metadado opcional e a versão cortada), porque o servidor agora percorre o arquivo para tirar os
+  metadados (`iv.prepararImagem`).
 - `fixtures.js` é o servidor imitado, com estado, nas formas de
   `api/GestaoIdentidadeVisual/index.js`, `api/shared/identidadeVisualDb.js` e
   `api/GestaoEnquetes/index.js` (mesmos códigos 400, 403, 404, 409, 422, 428 e 429). As regras são
   as de verdade (`api/shared/identidadeVisual.js`: calendário, etapa, validarTema, validarCor,
-  validarResultado, conferirTemasUsados, conferirImagem, apurar...). As listas LEITURAS, ESCRITAS
-  e EXIGE_GESTAO e os atos com confirmação reforçada são lidos do handler.
+  validarResultado, conferirTemasUsados, prepararImagem, apurar, retiradaDeArteAte,
+  podeAbrirCiclo...). As listas LEITURAS, ESCRITAS, EXIGE_GESTAO e ATOS_COM_FATOR e as condições do
+  428 (`tema` com `temaUsadoId`, `triar` FINALISTA e, no banco, mexer numa finalista) são lidas do
+  código do servidor. Imita também `pendentes`/`aceitarPendentes`, `tema-sem-votacao`, o resultado
+  com a imagem, `semDecisao`, `podeRetirar`/`retiradaDeArteAte`, o "parecido" recalculado com
+  `igual`, a arte `daDiretoria` e a contagem gravada na apuração (VotosApurados).
 - `contratoComOServidor()` confere, contra o código do servidor, as ações que a tela chama (todas
-  as 6 leituras e as 15 escritas), os campos que ela lê, o 428 exatamente em abrir-votacao,
-  desempate, resultado e finalista da triagem, e o voto e Meu Painel → Votações no GestaoEnquetes.
+  as 6 leituras e as 16 escritas, com `tema-sem-votacao`), os campos que ela lê, o 428 exatamente
+  na lista ATOS_COM_FATOR + corrigir tema + finalista da triagem (só `tema` novo e `triar` comum
+  ficam sem ele na porta), `pendentes`/`aceitarPendentes`, `imagemBase64`, `igual`, `podeRetirar`,
+  NAO_VOTADA, e o voto e Meu Painel → Votações no GestaoEnquetes.
 
 Resultado de 23/10/2026: roteiro 632 verificações, 0 falhas. Contra os módulos de antes das
 correções desta rodada (`IDV_MODULO`/`ENQ_MODULO`): 4 falhas, uma por defeito corrigido

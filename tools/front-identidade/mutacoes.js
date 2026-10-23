@@ -1,7 +1,8 @@
 // mutacoes.js — desfaz, uma a uma, as garantias da tela da v7.14 (Identidade Visual e Meu Painel → Votações): o escape de cada campo que vem do servidor, a urlSegura da imagem,
 // a conferência da cor (#RRGGBB) antes do estilo, as validações antes de qualquer pedido (texto vazio, arquivo, tipo, tamanho, critério, motivo, campos do resultado), a
 // confirmação do voto e o voto só na opção marcada, a trava de duplo clique, o 428 com a nova tentativa, o prazo de 20 s, as travas de resposta atrasada, a limpeza ao sair
-// da aba, da sub-aba e da sessão (e as ligações com o script.js e o meus-dados.js), o dono da tela e as pílulas da Diretoria. Cada mutação TEM de ser acusada (pelo menos
+// da aba, da sub-aba e da sessão (e as ligações com o script.js e o meus-dados.js), o dono da tela e as pílulas da Diretoria; desde a revisão de 23/10/2026, a pergunta dos
+// pendentes e o aceitarPendentes, o tema sem votação (tema, motivo, confirmação, quando aparece), a arte OU a imagem no resultado, o podeRetirar e a marca ⛔. Cada mutação TEM de ser acusada (pelo menos
 // uma falha no roteiro); uma que escapa mostra um buraco no roteiro. Âncora que não casa exatamente uma vez = "INAPLICÁVEL", também reprovada.
 //   node mutacoes.js              roda tudo, UMA mutação por vez, cada uma num processo novo (nunca em paralelo)
 //   node mutacoes.js <filtro>     só as mutações cujo nome contém o filtro
@@ -67,9 +68,36 @@ const MANUAIS = [
   ["arte: a imagem não vai em base64", I, "try { imagemBase64 = await idvBase64(arquivo); }", "try { imagemBase64 = \"\"; }"],
   ["triagem: descarte sem critério vai ao servidor", I, "if (!criterio) { idvEscrever(\"idvCicloMsg\", \"Escolha o critério do descarte.\", true); return; }", ""],
   ["triagem: o ajuste da redação não vai", I, "if (t) corpo.textoAjustado = t;", ""],
-  ["desempate: motivo curto vai ao servidor", I, "if (motivo.length < 5) {", "if (false) {"],
+  ["desempate: motivo curto vai ao servidor", I, "if (motivo.length < 5) { idvEscrever(\"idvCicloMsg\", \"Escreva por quê (a reunião ou a ata da decisão).\", true); return; }\n  await idvAtoNoCiclo(botao, \"desempate\"", "await idvAtoNoCiclo(botao, \"desempate\""],
   ["desempate: oferece todos os finalistas, não só os empatados", I, "(Number(o.votos) || 0) === maior);", "true);"],
-  ["resultado: sem arte e cor vai ao servidor", I, "if (!arteId || !corId) { idvEscrever(\"idvCicloMsg\", \"Escolha a arte e a cor.\", true); return; }", ""],
+  // o resultado: a arte do concurso OU a imagem enviada pela Diretoria
+  ["resultado: arte e imagem juntas vão ao servidor", I, "if (arteId && arquivo) { idvEscrever(\"idvCicloMsg\", \"Escolha uma arte do concurso OU envie a imagem — não as duas.\", true); return; }", ""],
+  ["resultado: sem arte nem imagem vai ao servidor", I, "if ((!arteId && !arquivo) || !corId) {", "if (!corId) {"],
+  ["resultado: sem cor vai ao servidor", I, "if ((!arteId && !arquivo) || !corId) {", "if (!arteId && !arquivo) {"],
+  ["resultado: tipo e tamanho da imagem não conferidos", I, "if (arquivo && (!IDV_TIPOS_IMAGEM.includes(arquivo.type) || !(arquivo.size > 0) || arquivo.size > 5 * 1024 * 1024)) {", "if (false) {"],
+  ["resultado: a imagem não vai (só a arte)", I, "...(arteId ? { arteId } : imagem)", "...({ arteId })"],
+  ["resultado: a arteId vai junto com a imagem", I, "...(arteId ? { arteId } : imagem)", "arteId, ...imagem"],
+  ["resultado: a imagem lida depois de sair ainda manda", I, "    if (!idvViva(marca)) return;\n  }\n  await idvAtoNoCiclo(botao, \"resultado\"", "  }\n  await idvAtoNoCiclo(botao, \"resultado\""],
+  // abrir a votação com sugestões sem decisão (pendentes)
+  ["pendentes: abre sem perguntar", I, "if (!(await confirmarAcao(`Há ${pendentes} sugestão(ões) ainda sem decisão da triagem. Abrir a votação assim mesmo? Elas ficam fora.`, \"Abrir assim mesmo\"))) {", "if (false) {"],
+  ["pendentes: a resposta não é lida (sem a pergunta)", I, "if (data.sucesso === false && pendentes) {", "if (false) {"],
+  ["pendentes: o segundo POST sem aceitarPendentes", I, "data = await idvPostar(\"abrir-votacao\", { cicloId: id, aceitarPendentes: true });", "data = await idvPostar(\"abrir-votacao\", { cicloId: id });"],
+  ["pendentes: a pergunta respondida depois de sair ainda manda", I, "      if (!idvViva(marca)) return;\n      data = await idvPostar(\"abrir-votacao\"", "      data = await idvPostar(\"abrir-votacao\""],
+  ["pendentes: o aviso sem o número de sem decisão", I, "const semDecisao = Number(d.semDecisao) || 0;", "const semDecisao = 0;"],
+  // o tema sem votação
+  ["tema sem votação: sem tema escolhido vai ao servidor", I, "  if (!sugestaoId) { idvEscrever(\"idvCicloMsg\", \"Escolha o tema.\", true); return; }\n  if (motivo.length < 5) { idvEscrever(\"idvCicloMsg\", \"Escreva por quê (a reunião ou a ata da decisão).\", true); return; }\n  if (!(await confirmarAcao(\"Definir o tema do ano",
+    "  if (motivo.length < 5) { idvEscrever(\"idvCicloMsg\", \"Escreva por quê (a reunião ou a ata da decisão).\", true); return; }\n  if (!(await confirmarAcao(\"Definir o tema do ano"],
+  ["tema sem votação: motivo curto vai ao servidor", I, "if (motivo.length < 5) { idvEscrever(\"idvCicloMsg\", \"Escreva por quê (a reunião ou a ata da decisão).\", true); return; }\n  if (!(await confirmarAcao(\"Definir o tema do ano", "if (!(await confirmarAcao(\"Definir o tema do ano"],
+  ["tema sem votação: sem confirmação", I, "  if (!(await confirmarAcao(\"Definir o tema do ano sem votação? A decisão fica registrada com o seu nome e o motivo.\", \"Definir o tema\"))) return;\n", ""],
+  ["tema sem votação: o formulário aparece sempre que há finalista", I, "if (!v && !c.apuracao && finalistas.length && ((c.fase === \"VOTACAO\" && finalistas.length < 2) || [\"ARTE\", \"ENCERRADO\"].includes(c.fase))) {", "if (finalistas.length) {"],
+  ["tema sem votação: some em dezembro (a votação não aconteceu)", I, "|| [\"ARTE\", \"ENCERRADO\"].includes(c.fase))) {", "|| false)) {"],
+  ["tema sem votação: oferece toda sugestão, não só as finalistas", I, ".filter(s => s.situacao === \"FINALISTA\" && idvInteiro(s.sugestaoId));", ".filter(s => idvInteiro(s.sugestaoId));"],
+  ["tema sem votação: o rótulo NAO_VOTADA some", I, ", NAO_VOTADA: \"Sem votação: tema definido pela Diretoria\" }", " }"],
+  // a retirada da arte até 24/12 e a marca do tema igual
+  ["Meu Painel: Retirar a arte sem olhar podeRetirar", I, "a.situacao === \"ENVIADA\" && a.podeRetirar === true ?", "a.situacao === \"ENVIADA\" ?"],
+  ["Meu Painel: podeRetirar aceito sem ser true", I, "a.podeRetirar === true", "a.podeRetirar"],
+  ["Meu Painel: a data limite da retirada some", I, "const ate = d.retiradaDeArteAte ? ", "const ate = false ? "],
+  ["triagem: o ⛔ igual vira ⚠️ parecido", I, "const parecido = !s.parecido ? \"\" : s.parecido.igual", "const parecido = !s.parecido ? \"\" : false"],
   ["arte da Diretoria: motivo curto vai ao servidor", I, "if (motivo.length < 3) {", "if (false) {"],
   // o voto
   ["voto: sem confirmação", I, "if (!(await confirmarAcao(`Confirmar o voto em \"${escolhida.texto}\"? O voto não se muda depois.`, \"Votar\"))) return;", ""],

@@ -104,3 +104,16 @@ describe("RIPD (Trava 7-C)", () => {
     expect(ripd("INCIDENTES_DE_PROTECAO").riscoIdentificado).not.toMatch(/tem multa/);
   });
 });
+
+describe("ROPA — as retenções que estavam só anotadas (Trava 7-C, achado C)", () => {
+  test("calendário, canais e eventos dizem o prazo e a rotina; nenhum 'ainda não existe'", () => {
+    for (const chave of ["CALENDARIO", "CANAIS", "EVENTOS"]) {
+      const r = reg(chave).retencao;
+      expect([chave, r]).not.toEqual([chave, expect.stringMatching(/ainda não existe|AINDA NÃO existe|sem prazo de descarte por ora/)]);
+      expect([chave, r]).toEqual([chave, expect.stringMatching(/rotina diária/)]);
+    }
+    expect(reg("CALENDARIO").retencao).toMatch(/2 anos depois da Ceia/);
+    expect(reg("CANAIS").retencao).toMatch(/5 anos depois de encerrada/);
+    expect(reg("EVENTOS").retencao).toMatch(/1 ano depois do último evento/);
+  });
+});

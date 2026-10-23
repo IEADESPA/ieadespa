@@ -721,7 +721,7 @@ const SELECT_OCORRENCIA = `
   SELECT o.*, c.Nome AS CanalNome, c.Plataforma AS CanalPlataforma, mr.Nome AS RelatadaPorNome, mm.Nome AS RemovidaPorNome
   FROM CanalOcorrencias o
   JOIN CanaisOficiaisComunicacao c ON c.CanalId = o.CanalId
-  JOIN MembroReferencia mr ON mr.MembroId = o.RelatadaPorMembroId
+  LEFT JOIN MembroReferencia mr ON mr.MembroId = o.RelatadaPorMembroId
   LEFT JOIN MembroReferencia mm ON mm.MembroId = o.RemovidaPorMembroId`;
 
 // filtros: status, canalId, canaisIds (lista permitida), relatadaPor. `verAutor` esconde/mostra quem relatou.
@@ -1206,7 +1206,44 @@ async function detectarConferenciasVencidas(pool, { hoje = hojeBrasilia() } = {}
   return fatos;
 }
 
+// Trava 7-C — retenção (LGPD art. 16; prova de diligência por 5 anos, margem sobre a prescrição da reparação civil, CC art. 206, §3º, V):
+//   - a ocorrência ENCERRADA (removida ou improcedente) perde a descrição, o link, a observação da advertência e quem avisou 5 anos depois de encerrada (política
+//     "Canais — ocorrência de moderação encerrada"); ficam o canal, a categoria, as datas e o desfecho (a prova do relógio das 24 horas);
+//   - quem deixou de administrar um canal perde o nome 5 anos depois (política "Canais — administrador que deixou a função"); ficam o papel, as datas, a versão do termo
+//     e quem designou e encerrou (atos da liderança). A lista de ocorrências passa a usar LEFT JOIN em quem avisou: a anonimizada continua na lista, sem o nome.
+// O gatilho da ocorrência só aceita apagar a descrição e quem avisou com a marca de sessão `canais_purga`, ligada e desligada no MESMO lote (molde da 148, 150 e 152).
+const POLITICAS_CANAIS = {
+  ocorrencia: { categoria: "Canais — ocorrência de moderação encerrada", padrao: 1825 },
+  administrador: { categoria: "Canais — administrador que deixou a função", padrao: 1825 }
+};
+async function aplicarRetencao(pool) {
+  const { diasDaPolitica } = require("./politicasRetencao");
+  const diasOc = await diasDaPolitica(pool, POLITICAS_CANAIS.ocorrencia.categoria, POLITICAS_CANAIS.ocorrencia.padrao);
+  const diasAdm = await diasDaPolitica(pool, POLITICAS_CANAIS.administrador.categoria, POLITICAS_CANAIS.administrador.padrao);
+  const oc = await pool.request().input("d", sql.Int, diasOc).query(`
+    DECLARE @n INT = 0;
+    BEGIN TRY
+      EXEC sp_set_session_context @key = N'canais_purga', @value = 1;
+      UPDATE CanalOcorrencias SET Descricao = N'(anonimizada pela retenção)', LinkEvidencia = NULL, AdvertenciaObs = NULL, RelatadaPorMembroId = NULL, AnonimizadaEm = SYSUTCDATETIME()
+      WHERE AnonimizadaEm IS NULL AND Status IN ('REMOVIDA', 'IMPROCEDENTE')
+        AND COALESCE(DecididaEm, RemocaoRegistradaEm, RemovidaEm, RelatadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME());
+      SET @n = @@ROWCOUNT;
+      EXEC sp_set_session_context @key = N'canais_purga', @value = NULL;
+    END TRY
+    BEGIN CATCH
+      EXEC sp_set_session_context @key = N'canais_purga', @value = NULL;
+      THROW;
+    END CATCH;
+    SELECT @n AS n`);
+  const adm = await pool.request().input("d", sql.Int, diasAdm).query(`
+    UPDATE CanalAdministradores SET MembroId = NULL, MotivoEncerramento = NULL, AnonimizadoEm = SYSUTCDATETIME()
+    WHERE MembroId IS NOT NULL AND EncerradoEm IS NOT NULL AND EncerradoEm < DATEADD(DAY, -@d, SYSUTCDATETIME());
+    SELECT @@ROWCOUNT AS n`);
+  return { ocorrenciasAnonimizadas: Number((oc.recordset[0] || {}).n) || 0, administradoresAnonimizados: Number((adm.recordset[0] || {}).n) || 0, retencaoDias: { ocorrencia: diasOc, administrador: diasAdm } };
+}
+
 module.exports = {
+  POLITICAS_CANAIS, aplicarRetencao,
   LIMITE_LISTA, emMs, isoInstante, carregarContexto, lerPrazoDias,
   mapearCanal, carregarCanais, buscarCanal, listarCanais, detalharCanal, carregarEstadoDosCanais,
   buscarContatosPessoais, criarCanal, atualizarCanal, definirResponsavelAcesso, desativarCanal, reativarCanal,

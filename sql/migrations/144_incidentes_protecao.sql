@@ -323,5 +323,5 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Incidente
 GO
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Incidente, relato espontâneo, comunicação ao Conselho Tutelar e decisões (ECA arts. 13 e 245; Lei 13.431/2017; LGPD arts. 11 e 14): guardados por 20 anos do encerramento, porque o prazo para a apuração corre a partir dos 18 anos da vítima. Acesso restrito, com registro de cada leitura do relato.'
-WHERE Categoria = N'Incidentes de proteção de crianças e adolescentes';
+WHERE Categoria = N'Incidentes de proteção de crianças e adolescentes' AND BaseLegal = N'x';
 GO

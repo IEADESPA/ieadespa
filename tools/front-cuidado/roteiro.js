@@ -229,6 +229,30 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(env2.e("cpaFiltroCong").options.length === 3, "a Área vê as congregações da área");
   });
 
+  // Trava 7-C: a regra da Trava 7-B no cuidado pastoral. O MESMO Dirigente, agora com pendência reservada à Diretoria (afastamento cautelar, comunicação em análise...), não vê o
+  // acompanhamento do menor na fila nem acha a criança na busca; o resto da fila continua igual. A Pastora de Área (sem pendência) segue vendo o menor.
+  cenario("Trava 7-C: o Dirigente com pendência reservada não vê o menor (fila e busca); a Área continua vendo", async () => {
+    const srv = servidor(); semear(srv);
+    srv.S.bloqueados.add(10);
+    const env = novo(srv);
+    await abrirAba(env);
+    const cs = cartoes(env);
+    confere(cs.length === 3 && !cartaoDe(env, "Joaquim Menor"), `com pendência, a fila do Dirigente tem 3 cartões, sem o menor: ${cs.length}`);
+    confere(!!cartaoDe(env, "Maria Afastada") && !!cartaoDe(env, "José Internado") && !!cartaoDe(env, "Carla Visitante"), "os acompanhamentos de adultos continuam na fila dele");
+    confere(!env.e("cpaFilaLista").textContent.includes("menor de idade"), "nenhum selo de menor na fila dele");
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    marcar(env, "cpaNovoCadSim", true); await env.ocioso();
+    escolher(env, "cpaNovoTipo", "PEDIDO_VISITA"); await env.ocioso();
+    digitar(env, "cpaNovoBusca", "Jo");
+    await clicar(env, botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx")));
+    const res = env.e("cpaNovoBuscaRes").textContent;
+    confere(res.includes("José Internado") && !res.includes("Joana Adolescente") && !res.includes("Joaquim Menor"), `com pendência, a busca não acha as crianças: ${res}`);
+    limpo(env, "fila com pendência");
+    const env2 = novo(srv);
+    await abrirAba(env2, "area", 12);
+    confere(!!cartaoDe(env2, "Joaquim Menor") && cartaoDe(env2, "Joaquim Menor").textContent.includes("menor de idade"), "a Pastora de Área (sem pendência) vê o menor");
+  });
+
   // ============================================================================================================================================
   // 2) ABRIR UM ACOMPANHAMENTO À MÃO
   // ============================================================================================================================================

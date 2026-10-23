@@ -64,6 +64,16 @@ module.exports = async function (context, req) {
   // v7.14 — as enquetes com fechamento marcado que passaram da hora (as da identidade visual são do ciclo, acima): passo próprio, separado da identidade.
   let enquetesAgendadas = null;
   try { enquetesAgendadas = await require("../shared/enquetes").encerrarVencidas(pool); } catch (e) { context.log.error("[ENQUETES] encerramento agendado:", e.message); enquetesAgendadas = { falhas: ["encerramento"] }; }
+  // v7.15 — segurança da congregação: quem deixou a congregação, foi desligado ou chegou ao "até" sai da equipe de segurança; a retenção apaga o contato do jornalista e o nome
+  // de quem saiu da equipe há mais de 5 anos. ANTES dos avisos (os avisos da segurança já enxergam a equipe limpa). Fail-soft.
+  let criseSeguranca = null;
+  try {
+    criseSeguranca = await require("../shared/criseSegurancaDb").rotinaDiaria(pool);
+    if (criseSeguranca.falhas.length) context.log.error(`[SEGURANCA] rotina diária — FALHOU: ${criseSeguranca.falhas.join(", ")}`);
+  } catch (e) {
+    context.log.error("[SEGURANCA] falha na rotina diária:", e.message);
+    criseSeguranca = { falhas: ["rotina"] };
+  }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
   // v7.14 — depois dos avisos: a retenção da identidade visual (tira o nome, apaga imagens não escolhidas), com orçamento de tempo (o resto fica para amanhã).
   try {
@@ -132,6 +142,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: falhaMenores || falhaCuidado || falhaIdentidade ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, detectoresComFalha: falhas },
   };
 };

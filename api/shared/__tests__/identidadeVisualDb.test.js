@@ -1,5 +1,5 @@
 // (revisão de 23/10/2026) Pedaços da camada de banco da Identidade Visual com o banco SIMULADO por texto da consulta. O comportamento contra o SQL Server está nos roteiros
-// ponta a ponta (tools/e2e-localdb, e2e-31 a e2e-33).
+// ponta a ponta (tools/e2e-localdb, e2e-31, e2e-32 e e2e-39).
 let mockRegras = [];
 let mockConsultas = [];
 jest.mock("../db", () => {

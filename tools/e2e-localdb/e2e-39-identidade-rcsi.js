@@ -1,4 +1,4 @@
-// e2e-33-identidade-rcsi.js — v7.14 (revisão adversarial de 23/10/2026): o banco com READ_COMMITTED_SNAPSHOT LIGADO, como o Azure SQL vem por padrão (o LocalDB vem
+// e2e-39-identidade-rcsi.js — v7.14 (revisão adversarial de 23/10/2026): o banco com READ_COMMITTED_SNAPSHOT LIGADO, como o Azure SQL vem por padrão (o LocalDB vem
 // desligado, e com ele desligado a leitura comum espera a gravação em curso — a corrida não aparece). Liga no começo e desliga no fim.
 //   1) o voto em curso × o encerramento da enquete: com a leitura de versão, a contagem feita ANTES de fechar não via o voto que estava sendo gravado — ele entrava depois,
 //      fora da conta (o resultado da vinculante saía errado). Prova determinística: este processo abre uma transação e grava um voto com o MESMO comando do handler
@@ -102,7 +102,7 @@ async function principal() {
     await q("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE");
   }
   ok((await escalar("SELECT CAST(is_read_committed_snapshot_on AS INT) FROM sys.databases WHERE name = DB_NAME()")) === 0, "e o banco volta ao normal no fim");
-  fim("e2e-33 (identidade visual e enquetes com READ_COMMITTED_SNAPSHOT)");
+  fim("e2e-39 (identidade visual e enquetes com READ_COMMITTED_SNAPSHOT)");
 }
 
 (process.argv[2] === "filho" ? filho() : principal()).catch((e) => { console.log("ERRO:", e && e.stack); try { L.q("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE").finally(() => L.shimEncerrar()); } catch { L.shimEncerrar(); } process.exitCode = 1; });

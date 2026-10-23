@@ -212,6 +212,7 @@ async function alternarMeusDadosLGPD() {
     ${mnrCartaoConsentimentosMeusDados(data.consentimentosMenores)}
     ${mnrCartaoMeusDados(data.ministerioMenores)}
     ${typeof mnrCartaoCheckinMeusDados === "function" ? mnrCartaoCheckinMeusDados(data.checkinInfantil) : ""}
+    ${typeof crsCartaoMeusDados === "function" ? crsCartaoMeusDados(data.criseSeguranca) : ""}
 
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Consentimentos LGPD</h4>

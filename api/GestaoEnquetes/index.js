@@ -36,7 +36,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { membrosElegiveis, membroElegivel, passouDoFechamento, encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
 // O INSERT do voto: a enquete lida COM TRAVA (UPDLOCK, REPEATABLEREAD — uma leitura com trava mesmo com o banco em READ_COMMITTED_SNAPSHOT), aberta e antes do instante
-// marcado pela hora do banco. Exportado para o roteiro ponta a ponta provar a corrida com o encerramento (tools/e2e-localdb/e2e-33).
+// marcado pela hora do banco. Exportado para o roteiro ponta a ponta provar a corrida com o encerramento (tools/e2e-localdb/e2e-39).
 const SQL_INSERIR_RESPOSTA = `INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
                   SELECT @perguntaId, @membroId, @opcaoId, @textoResposta
                   WHERE EXISTS (SELECT 1 FROM Enquetes WITH (UPDLOCK, REPEATABLEREAD) WHERE EnqueteId = @enqueteId AND Status = 'ABERTA'

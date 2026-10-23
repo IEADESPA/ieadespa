@@ -389,6 +389,14 @@
             <button class="btn-aba" id="btnAbaComunicacao" data-on-click="mostrarAbaSecretaria" data-args-click='["comunicacao"]'><span class="icone">✉️</span><span class="rotulo">Comunicados</span></button>
           </div>
 
+          <!-- MÓDULO: CRISE E SEGURANÇA (v7.15) — regime de crise com Porta-Voz Único (Regimento Art. 161-B), manifestações autorizadas, pedidos da imprensa e a segurança
+               de cada congregação (plano de emergência, simulados, vistoria predial com AVCB e seguro, equipe de segurança). Aberto a TODA sessão de liderança (todo líder
+               registra o pedido da imprensa que chegou a ele); as pílulas Crise e Segurança aparecem só para quem tem crise_gestao e seguranca_congregacao. -->
+          <div class="grupo-modulo" id="grupoModuloCrise" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaCrise" data-on-click="mostrarAbaSecretaria" data-args-click='["crise"]'><span class="icone">🚨</span><span class="rotulo">Crise e segurança</span></button>
+          </div>
+
           <!-- MÓDULO: EVENTOS E CONGRESSOS (v7.4) — dossiê de governança do evento do
                Calendário: organizadores, convidados externos (parecer do Conselho de Ética
                e Nada Consta da Presidência, Regimento Art. 111 e 111-A) e Caixa Flutuante
@@ -480,6 +488,8 @@
             </div>
           </div>
         </div>
+        <!-- v7.15 — a FAIXA da crise: enquanto houver regime de crise, toda tela da liderança mostra quem é o porta-voz único (montada por crise-seguranca.js). -->
+        <div id="crsFaixa" class="crs-faixa" role="status" aria-live="polite" style="display:none;"></div>
 
       <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) — dividida em 3 sub-abas
            (submenu na barra lateral, ver #submenuMeupainel) pra não virar uma página
@@ -5042,6 +5052,42 @@
         </div>
       </div>
 
+      <!-- ABA: CRISE E SEGURANÇA (v7.15 — Regimento Art. 161-B; contrato de 23/10/2026). Toda sessão de liderança: Imprensa (registrar o pedido que chegou). Nível geral com
+           crise_gestao: Crise (abrir, trocar o porta-voz, encerrar, ver o aviso) e Manifestações (também o porta-voz). seguranca_congregacao: Segurança, no território.
+           Toda regra mora no servidor (shared/criseSeguranca.js); a tela é montada por crise-seguranca.js. -->
+      <div id="abaCrise" class="aba-secretaria" style="display:none;">
+        <h3>🚨 Crise e segurança</h3>
+        <p class="subtitle">Em <strong>crise</strong> (escândalo na mídia, acidente grave, fato de repercussão negativa), só o <strong>porta-voz único</strong> fala em nome da Igreja
+          (Regimento Art. 161-B). Aqui ficam o regime de crise, o que foi dito, os pedidos da imprensa e a <strong>segurança</strong> de cada congregação.
+          <em>Exemplo: um repórter ligou para o Dirigente — ele não comenta, registra o pedido em Imprensa, e o porta-voz recebe na hora.</em></p>
+        <div class="cal-pilulas crs-pilulas" id="crsPilulas">
+          <button type="button" class="cal-pilula" id="btnCrsSecaoCrise" aria-pressed="false" style="display:none;" data-on-click="crsMostrarSecaoAcao" data-args-click='["crise"]'>🚨 Crise</button>
+          <button type="button" class="cal-pilula" id="btnCrsSecaoManifestacoes" aria-pressed="false" style="display:none;" data-on-click="crsMostrarSecaoAcao" data-args-click='["manifestacoes"]'>🗣️ Manifestações</button>
+          <button type="button" class="cal-pilula" id="btnCrsSecaoImprensa" aria-pressed="false" data-on-click="crsMostrarSecaoAcao" data-args-click='["imprensa"]'>📰 Imprensa</button>
+          <button type="button" class="cal-pilula" id="btnCrsSecaoSeguranca" aria-pressed="false" style="display:none;" data-on-click="crsMostrarSecaoAcao" data-args-click='["seguranca"]'>🧯 Segurança</button>
+        </div>
+        <p id="crsMsg" class="subtitle" role="status" aria-live="polite"></p>
+        <div id="crsSecaoCrise" style="display:none;">
+          <p id="crsCriseMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="crsCriseConteudo"></div>
+        </div>
+        <div id="crsSecaoManifestacoes" style="display:none;">
+          <p id="crsManifMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="crsManifConteudo"></div>
+        </div>
+        <div id="crsSecaoImprensa" style="display:none;">
+          <p id="crsImprensaMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="crsImprensaForm"></div>
+          <div id="crsImprensaLista"></div>
+        </div>
+        <div id="crsSecaoSeguranca" style="display:none;">
+          <p class="subtitle">O plano de emergência é revisado todo ano; o simulado, ao menos uma vez por ano; a vistoria, a cada 6 meses. O sistema avisa no sininho quando algo vence.</p>
+          <p id="crsSegMsg" class="subtitle" role="status" aria-live="polite"></p>
+          <div id="crsSegPainel"></div>
+          <div id="crsSegDetalhe"></div>
+        </div>
+      </div>
+
       <!-- ABA: CANAIS E COMUNICAÇÃO (v7.3). Exige "canais_gestao" (Secretaria
            Geral/Comunicação): registra e mantém a relação de Canais Oficiais,
            designa administradores, custodia as senhas, confere a conformidade,
@@ -6785,6 +6831,7 @@
   <script src="modulos/checkin-infantil.js"></script>
   <script src="modulos/comunicacao.js"></script>
   <script src="modulos/consagracoes.js"></script>
+  <script src="modulos/crise-seguranca.js"></script>
   <script src="modulos/cuidado-pastoral.js"></script>
   <script src="modulos/disciplina.js"></script>
   <script src="modulos/doacoes.js"></script>

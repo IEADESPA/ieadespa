@@ -57,6 +57,7 @@ const AJUDA_POR_ABA = {
   psc: "Avaliação anual obrigatória de cada congregação pelos 5 Sinais Vitais (Escada Bloqueada): preencher, enviar, validar e homologar, mais a reclassificação compulsória para Extensão da Tenda (Regimento Art. 127-129).",
   calendario: "Calendário Oficial do Campo: veja a agenda do mês, proponha datas (o nível do evento decide quem prevalece no choque), acompanhe a pauta e, conforme a sua permissão, consolide, homologue o ano ou ajuste a agenda litúrgica (Regimento Art. 79, 81, 147, 154 e 154-A).",
   "meupainel:agenda": "A agenda oficial dos próximos 60 dias: eventos do Calendário Oficial já homologados e a grade litúrgica fixa. Escolha a sua congregação para ver só o que alcança ela.",
+  crise: "Crise e segurança: em crise (escândalo na mídia, acidente grave), só o porta-voz único fala pela Igreja (Regimento Art. 161-B). Qualquer líder registra aqui, em Imprensa, o pedido de jornalista que chegou a ele — sem comentar o assunto — e o porta-voz recebe na hora. O nível geral abre e encerra o regime e troca o porta-voz (toda a liderança é avisada); o porta-voz registra o que disse. Em Segurança, o Dirigente e o Pastor de Área cuidam do plano de emergência, dos simulados, da vistoria do templo e da equipe de segurança.",
   comunicacao: "Comunicados: escolha um modelo aprovado, monte o grupo (território, cargo, departamento, EBD, formação, voluntariado, direito a voto) e veja quantas pessoas recebem antes de enviar. O e-mail e o celular só chegam a quem autorizou aquela categoria; a convocação oficial chega a todos. Em Envios, o relatório mostra quem recebeu e quem leu; na convocação, quem não foi alcançado. Só o nível geral escreve e aprova modelos.",
   canais: "Relação de Canais Oficiais da IEADESPA (Estatuto Art. 12): só conta, número ou grupo em nome da Igreja. Registre canais, designe administradores, acompanhe a Regra das 24 Horas, as trocas de senha na sucessão de liderança e a transmissão dos cultos (Área Cega).",
   identidade: "Identidade Visual do ano (Regimento Art. 159): abra o ciclo do ano; de 16 a 21/11 faça a triagem (finalista, com a redação ajustada se preciso, ou descarte pelo critério); a votação abre sozinha em Meu Painel no dia 22 e fecha no fim do dia 30; em dezembro registre até 3 cores, veja as artes e registre a escolha final do culto. Em Temas já usados, cadastre os temas desde 2006.",
@@ -432,6 +433,8 @@ function limparSessao() {
   // v7.14: as sugestões, o voto, as artes (e, na aba da Diretoria, as sugestões e os autores das artes) saem da página junto com a sessão — mesma guarda
   if (typeof idvLimparTela === "function") idvLimparTela();
   if (typeof enqLimparMeu === "function") enqLimparMeu();
+  // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
+  if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
   authToken = null;
   authNome = null;
@@ -939,6 +942,8 @@ async function abrirPainelConteudo(matricula) {
   // passa por mostrarSubAbaMeupainel('perfil') no login), por isso carrega
   // direto aqui também, não só na troca de sub-aba.
   if (authToken) await carregarPainelInicial();
+  // v7.15 — a faixa "Crise ativa — porta-voz único" no alto de toda tela da liderança (sem esperar: não atrasa a entrada)
+  if (typeof crsAtualizarFaixa === "function") crsAtualizarFaixa();
   // v6.10 — chamada da EBD feita sem internet: envia assim que há sessão.
   agendarSincronizacaoOfflineEbd();
 }
@@ -1254,7 +1259,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1299,6 +1304,9 @@ const ABA_PERMISSOES_ALT = {
   // v7.14 — Identidade Visual: permissão própria "identidade_visual" (Presidente e Secretário Geral), só no nível Geral (Art. 126-Q, II: só o Geral define a identidade) e em
   // sessão de liderança (o servidor confere cada ato). Sugerir, votar e mandar a arte ficam em Meu Painel → Identidade Visual (qualquer login).
   identidade: ["identidade_visual"],
+  // v7.15 — Crise e segurança: a aba abre para TODA sessão de liderança (o pedido da imprensa que chegou a qualquer líder; ver temPermissaoDaAba); as pílulas Crise
+  // (crise_gestao, nível geral) e Segurança (seguranca_congregacao, no território) aparecem conforme o servidor libera.
+  crise: ["crise_gestao", "seguranca_congregacao"],
   // v5.9 — permissão própria, nunca concedida por padrão (dado mais
   // sensível do sistema: situação socioeconômica de família assistida).
   assistenciasocial: ["assistencia_social"],
@@ -1372,6 +1380,7 @@ const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "prote
 function temPermissaoDaAba(nome) {
   if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
+  if (nome === "crise") return sessaoDeLiderancaNaTela();   // v7.15: todo líder registra o pedido da imprensa que chegou a ele
   return nome === "ebd" && ebdTurmasProfessor.length > 0;
 }
 async function carregarTurmasProfessorEbd() {
@@ -1441,6 +1450,7 @@ const MODULOS = {
   psc: { titulo: "Saúde Congregacional (PSC)", icone: "🩺", abaEntrada: "psc", abas: ["psc"] },
   calendario: { titulo: "Calendário Oficial", icone: "📅", abaEntrada: "calendario", abas: ["calendario"] },
   canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
+  crise: { titulo: "Crise e Segurança", icone: "🚨", abaEntrada: "crise", abas: ["crise"] },
   eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
   setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },

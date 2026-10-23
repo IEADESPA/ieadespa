@@ -148,6 +148,7 @@ const protecaoDb = require("./protecaoDb");
 const checkinDb = require("./checkinInfantilDb");
 const cuidadoDb = require("./cuidadoPastoralDb");
 const identidadeDb = require("./identidadeVisualDb");
+const criseDb = require("./criseSegurancaDb");
 
 const DETECTORES = {
   SEGUROS_VENCENDO: { tabela: "ApolicesSeguro", detectar: detectarSegurosVencendo },
@@ -228,7 +229,13 @@ const DETECTORES = {
   IDENTIDADE_TRIAGEM: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarTriagem(pool) },
   IDENTIDADE_VOTACAO: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarVotacao(pool) },
   IDENTIDADE_APURACAO: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarApuracao(pool) },
-  IDENTIDADE_ARTE: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarArte(pool) }
+  IDENTIDADE_ARTE: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarArte(pool) },
+  // Segurança da congregação (v7.15): um aviso por regra e por pessoa (Dirigente e Pastor de Área), juntando as congregações dela; repete uma vez por mês e na hora em que mais uma
+  // congregação entra na lista (o pedido da imprensa e o aviso da crise saem NA HORA, no ato, sem detector).
+  SEGURANCA_PLANO_REVISAO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_PLANO_REVISAO") },
+  SEGURANCA_SEM_SIMULADO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_SIMULADO") },
+  SEGURANCA_SEM_VISTORIA: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_VISTORIA") },
+  SEGURANCA_AVCB_SEGURO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_AVCB_SEGURO") }
 };
 
 module.exports = { DETECTORES };

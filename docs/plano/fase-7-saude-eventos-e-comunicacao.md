@@ -3226,8 +3226,8 @@ sugerir na mesma trava do ciclo; o login da tela igual ao do voto; desempate pel
 só o erro do gatilho das cores vira aquela mensagem; na rotina diária, a falha da identidade não pula o passo da agenda pública, o
 fechamento das enquetes é passo próprio e a retenção que apaga imagens vem depois dos avisos, com orçamento de tempo; o teste do PIN
 ficou determinístico. Provas: jest **5.881** (143 arquivos), e 32 testes falham com os fontes de 8b59841; `e2e-31` **241**,
-`e2e-32` **23** e o novo `e2e-33` **9** (READ_COMMITTED_SNAPSHOT ligado no próprio teste: o voto que estava sendo gravado entra na
-contagem, máximo de 3 e tema único) — com o código antigo o `e2e-33` falha e as reversões dirigidas dos itens 4, 7, 11, 20 e 21
+`e2e-32` **23** e o novo `e2e-39` **9** (READ_COMMITTED_SNAPSHOT ligado no próprio teste: o voto que estava sendo gravado entra na
+contagem, máximo de 3 e tema único) — com o código antigo o `e2e-39` falha e as reversões dirigidas dos itens 4, 7, 11, 20 e 21
 falham no `e2e-31`; os itens 17 e 18 são provados por corrida (não determinísticos contra o código antigo; o 18 já era coberto pela
 trava da aplicação); `e2e-23` a `e2e-30` seguem verdes. Tela: 815 verificações (38 falhas com o módulo de antes), mutação 139:
 131 acusadas, 8 equivalentes, nenhuma escapou; telas de antes sem falha. Falta: a homologação (migração 151 no Azure SQL, rotas
@@ -3235,16 +3235,114 @@ trava da aplicação); `e2e-23` a `e2e-30` seguem verdes. Tela: 815 verificaçõ
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 
-- [ ] **Sinalizador institucional de "crise ativa"** (Art. 161-B §§1º-2º) com
+Base: Regimento Art. 161-B — em crise institucional, escândalo na mídia, acidente grave ou evento de repercussão pública
+negativa, vale a Política de Porta-Voz Único: só o Pastor Presidente, ou um profissional de comunicação designado formalmente
+por ele, fala em nome da IEADESPA (§ 1º); qualquer outro diretor, pastor, advogado ou membro fica proibido de dar nota,
+entrevista ou opinião ligando o assunto à Igreja durante a crise (§ 2º). Trabalhada em paralelo com a v7.14 (por pedido do
+responsável, 23/10/2026: as duas não têm nada em comum).
+
+- [x] **Sinalizador institucional de "crise ativa"** (Art. 161-B §§1º-2º) com
       designação formal do Porta-Voz Único e aviso automático a **todos** os
       líderes sobre a vedação de manifestação individual enquanto durar o regime.
-- [ ] Registro de manifestações autorizadas e centralização das demandas de
+- [x] Registro de manifestações autorizadas e centralização das demandas de
       imprensa — quem falou o quê, quando e com autorização de quem.
-- [ ] Plano de emergência por congregação (evacuação, contatos), **registro de
+- [x] Plano de emergência por congregação (evacuação, contatos), **registro de
       simulados** (data, participantes) e checklist de vistoria predial —
       conecta com AVCB (v4.24) e seguros (v4.16).
       *(Brotherhood Mutual — violence response plan e disaster plan)*
-- [ ] Equipe de segurança por congregação com composição registrada.
+- [x] Equipe de segurança por congregação com composição registrada.
+
+### Contrato (23/10/2026)
+
+**Crise.** Quem abre e encerra o regime de crise no sistema é o nível geral com a permissão nova `crise_gestao` (Presidente e
+Secretário Geral), com a confirmação reforçada, registrando quem ordenou (o Presidente), o motivo em poucas palavras, o
+alcance (todo o Campo) e o **Porta-Voz Único**: o próprio Presidente ou o profissional designado (nome, contato e o ato da
+designação). Só uma crise ativa por vez; o histórico não se apaga. Ao abrir, **todos os líderes ativos** recebem na hora,
+pelo sininho e pelo celular, o aviso obrigatório da vedação do § 2º (quem é o porta-voz, a quem encaminhar a imprensa) — o
+e-mail vai pela fila da v7.12 (o serviço do Azure aceita 100 por hora), nunca disparado de uma vez. Ao encerrar, o aviso de
+fim também sai. Enquanto a crise está ativa, a tela de toda a liderança mostra a faixa "Crise ativa — porta-voz único:
+fulano".
+
+**Manifestações e imprensa.** Registro das manifestações autorizadas (data e hora, canal — nota, entrevista, rede social,
+coletiva —, quem falou, resumo, link ou documento, quem autorizou) e das demandas de imprensa recebidas (veículo, contato,
+pedido, prazo, situação — recebida, respondida pelo porta-voz, recusada — e a resposta). Qualquer líder registra uma demanda
+que chegou a ele (é assim que encaminha); só o porta-voz e o nível geral respondem e registram manifestação. Nada se edita
+depois de registrado (correção = nova linha); o histórico fica.
+
+**Segurança da congregação.** Com a permissão nova `seguranca_congregacao` (Dirigente, Pastor de Área e o nível geral, cada
+um no seu território):
+
+- **Plano de emergência** da congregação: rotas de evacuação e pontos de encontro (texto), contatos (Bombeiros 193, SAMU 192,
+  Polícia 190, mais os da congregação), responsáveis; revisão anual (aviso quando vence).
+- **Simulados**: data, tipo (evacuação, incêndio, primeiros socorros, violência), participantes (número), duração, o que
+  correu bem e o que melhorar, quem registrou; aviso quando a congregação passa de 1 ano sem simulado.
+- **Vistoria predial**: checklist periódico (extintores na validade, saídas desobstruídas, iluminação de emergência, quadro
+  elétrico, acessibilidade…) com o resultado de cada item e as pendências; mostra a validade do **AVCB** (v4.24,
+  `ImoveisSituacaoFiscal`) e se há **seguro vigente** (v4.16, `ApolicesSeguro`), avisando o que está vencido; aviso quando a
+  vistoria passa de 6 meses.
+- **Equipe de segurança**: membros adultos da congregação com a função (coordenação, brigada, primeiros socorros, portaria,
+  estacionamento), desde e até quando; sai sozinho de quem deixa a congregação ou é desligado.
+
+### Entrega (23/10/2026)
+
+Migração 152 (só acréscimos; reaplicada duas vezes no banco local): `CriseRegimes` (um regime ativo por vez, garantido por índice único filtrado no
+banco), `CriseHistorico`, `CriseManifestacoes`, `CriseDemandasImprensa`, `CriseDemandaRespostas`, `SegurancaPlanos`, `SegurancaSimulados`, `SegurancaVistorias`,
+`SegurancaVistoriaItens` e `SegurancaEquipe`, com gatilhos que só deixam acrescentar (correção é linha nova; simulado e vistoria errados são anulados, uma vez, com o
+motivo); as permissões `crise_gestao` (Presidente e Secretário Geral) e `seguranca_congregacao` (Dirigente, Pastor de Área e o nível geral); os prazos da segurança em
+Catálogos → Prazos (plano 365 dias, simulado 365, vistoria 180); os avisos do sininho (`SEGURANCA_*` e o pedido da imprensa `CRISE_DEMANDA_IMPRENSA`); a retenção (o
+contato do jornalista sai em 5 anos; o nome de quem saiu da equipe, em 5 anos ou na exclusão LGPD); o ROPA ("Crise e segurança"). Código: `shared/criseSeguranca.js`
+(regra pura), `shared/criseSegurancaDb.js`, rota `GestaoCriseSeguranca` (`/api/crise/<ação>`), a rotina diária dentro de `NotificacoesAgendador` (a equipe de quem saiu e
+a retenção), Meus Dados e a exclusão LGPD. Tela: a faixa "Crise ativa — porta-voz único: fulano" no alto de toda tela da liderança e a aba **Crise e segurança**
+(`app/modulos/crise-seguranca.js`), aberta a toda sessão de liderança; casca v39.
+
+**Decisões tomadas na construção (o contrato não fechava):**
+
+- **O aviso da crise é um comunicado do sistema.** Uma categoria nova na comunicação da v7.12, `CRISE`, marcada como do sistema: não aparece na tela de modelos, nas
+  preferências nem na prévia; não se reenvia, não se arquiva nem se cancela pela tela de comunicados. Abrir, trocar o porta-voz e encerrar gravam, na MESMA transação do
+  ato, o modelo já aprovado, o envio, as entregas e o sininho (regra `COMUNICADO`, obrigatória); o celular sai na primeira rodada da fila, junto com a resposta; o e-mail
+  vai pela fila (passa na frente da convocação oficial e respeita o teto da hora). Ela se comporta como a convocação oficial: sem consentimento e sem link de saída,
+  ciência "Li o aviso", lista de não alcançados no relatório, 5 anos de registro e fica na exclusão LGPD (prova do aviso). O aviso velho que ainda estava na fila é
+  cancelado quando o porta-voz muda ou a crise acaba (o novo vai a todos). Botão "Continuar o aviso agora" para mais uma rodada.
+- **O motivo nunca vai no aviso nem na faixa** — fica só com o nível geral (o aviso diz quem fala, o contato e a vedação do § 2º).
+- **Trocar o porta-voz também avisa toda a liderança** (é a quem encaminhar a imprensa) e pede a confirmação reforçada, como abrir e encerrar.
+- **Quem ordenou é o Presidente cadastrado na Liderança**: sem Presidente ativo, o regime não abre. O profissional designado pode não ser membro (sem matrícula); se
+  tiver matrícula, o nome vem do cadastro e ele, numa sessão de liderança, registra manifestação e responde a imprensa enquanto for o porta-voz.
+- **Todo líder ativo recebe o aviso**, inclusive quem não tem data de nascimento no cadastro (como a convocação); no encerramento, também quem recebeu o aviso e deixou a
+  liderança no meio.
+- **O pedido da imprensa fora de crise também se centraliza** (vai à Presidência); na crise, ao porta-voz. O pedido chega na hora (sininho e celular) a quem tem
+  `crise_gestao` no nível geral e ao porta-voz.
+- **Os avisos da segurança vão só ao sininho** do Dirigente e do Pastor de Área (um por regra, por pessoa, juntando as congregações; repete uma vez por mês e quando mais
+  uma congregação entra na lista). Sem e-mail de partida: o e-mail direto do motor passaria dos 100 por hora do Azure num mês com muitas congregações atrasadas. O nível
+  geral acompanha pelo painel. "Nunca registrado" conta como vencido.
+- **AVCB e seguro** vêm dos imóveis da congregação no patrimônio (`BensPatrimoniais` tipo IMOVEL + `ImoveisSituacaoFiscal` + `ApolicesSeguro`); avisa o vencido (seguro só
+  quando houve apólice e ela venceu: o Regimento só exige seguro do Templo Sede). Imóvel sem congregação (Sede/Matriz) não entra no painel de nenhuma congregação.
+- **A equipe é só de adultos** com data de nascimento no cadastro; a saída automática (quem mudou de congregação, foi desligado ou chegou ao "até") roda às 7h, e a tela já
+  mostra "saiu da congregação" antes disso.
+
+**Provas:** jest (regra pura 27, migração 11, rota 13; a suíte inteira verde), `e2e-33` no SQL Server local (182 verificações) e `e2e-34` (corridas, 20), `e2e-29` e
+`e2e-30` (v7.12) verdes sobre a base nova, a prova da tela `tools/front-crise` (212 verificações; 20 mutações, 20 acusadas) e as provas de tela da v7.7, v7.8, v7.10, v7.11
+e v7.12 verdes. Mutações no servidor (guardas desfeitas uma a uma) acusadas pelos testes. Defeito achado pelo `e2e-33`: a resposta da imprensa gravava e devolvia 500
+(variável fora do escopo depois da transação) — corrigido.
+
+**Revisão adversarial independente (23/10/2026): 1 alto, 6 médios e 9 baixos, todos corrigidos**, cada um com teste que falha no código revisado (`0591414`):
+
+- **(alto) "Celular na hora" não acontecia:** o celular saía um a um (0,2 a 0,4 s cada), ~6 s por rodada — com 400 líderes, o último receberia em horas. Agora o celular do
+  aviso sai em paralelo (lotes de 25, cada aviso com prazo), com orçamento próprio dentro da resposta (~15 s), e a rotina de 15 minutos manda primeiro o celular do aviso,
+  também em paralelo. A resposta diz a verdade ("Celular: X de N aparelhos avisados agora; os outros saem pela fila"). Prova: 420 líderes de mentira, todos avisados em no
+  máximo duas rodadas, a abertura respondendo em menos de 38 s.
+- **(médio) E-mail:** não sai para quem já foi alcançado (leu no sininho, deu ciência ou recebeu no celular: situação `ALCANCADO`); o aviso tem teto próprio por hora
+  (`COMUNICACAO_CRISE_EMAILS_POR_HORA`, 30) e, com convocação oficial na fila, leva no máximo metade da rodada. Na troca do porta-voz o aviso novo vai a todos, mas o
+  e-mail dele só sai para quem não foi alcançado pelo aviso novo.
+- **(médio)** O porta-voz vê e responde só os pedidos da crise ativa (os de fora, com o contato do jornalista, ficam com o nível geral) e corrige só no alcance da lista.
+- **(médio)** AVCB não informado e congregação sem imóvel no patrimônio também avisam.
+- **(médio)** O aviso do pedido da imprensa tem teto: 10 por destinatário em 24 horas, e o celular só no 1º pedido de cada líder na hora.
+- **(médio/baixo)** A tela espera 40 s nos três atos (o servidor fecha a resposta antes de ~38 s).
+- **(baixos)** Datas da abertura e da revisão do plano no dia de Brasília; o encerramento relê o porta-voz dentro da trava; a manifestação e a resposta conferem o
+  porta-voz dentro da trava, e na crise encerrada só se registra o que foi dito até o encerramento; sem o botão "Cancelar" no aviso de crise; o celular com um texto curto
+  próprio (quem fala e o contato; na troca, o novo porta-voz); a segurança exclui a concessão de departamento, e os avisos da segurança e da imprensa ignoram quem está
+  inativo ou teve a exclusão LGPD e incluem quem recebeu o papel por delegação; "registrar a saída" não estica o "até" já passado e a pendência de vistoria anterior
+  continua contando até ser resolvida; o Presidente é avisado quando outra pessoa abre, troca o porta-voz ou encerra em nome dele; a migração alarga
+  `Papeis.Permissoes` para 2000 antes de acrescentar, se preciso (e para com a explicação se nem assim couber).
 
 ## 🔒 Trava de Revisão 7-C — antes de encerrar a FASE 7 e avançar para a FASE 8
 

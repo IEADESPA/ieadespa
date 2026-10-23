@@ -544,6 +544,18 @@ async function rodar({ mutar = {}, so = null } = {}) {
     limpo(env2, "envios do Dirigente");
   });
 
+  // v7.15 (revisão independente): o aviso de crise na fila não mostra "Cancelar" (ele é obrigatório; o servidor também recusa)
+  cenario("Envios: o aviso de crise na fila não tem o botão de cancelar", async () => {
+    const srv = servidor(); const env = novo(srv);
+    const base = srv.S.envios.find(x => x.status === "FILA");
+    srv.S.envios.push(Object.assign({}, base, { envioId: 990, categoria: "CRISE", categoriaRotulo: "Aviso de crise", titulo: "Regime de crise: porta-voz único", status: "FILA", naFila: 7 }));
+    await abrirAba(env, "geral", 13, true);
+    await secao(env, "Envios");
+    const crise = artigoCom(env, "comEnviosLista", "Regime de crise: porta-voz único");
+    confere(!!crise && botoes(env, "Cancelar", crise).length === 0, "o aviso de crise na fila não tem o botão de cancelar");
+    confere(botoes(env, "Cancelar o que está na fila", env.e("comEnviosLista")).length === 1, "o comunicado comum na fila continua com o botão");
+  });
+
   // ============================================================================================================================================
   // 5) MODELOS (nível geral)
   // ============================================================================================================================================

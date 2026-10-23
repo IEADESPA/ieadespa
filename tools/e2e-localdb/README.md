@@ -56,10 +56,22 @@ Cada versão parte da base da anterior (`BASE=...`):
   o nome de quem mandou, a votação que abre sozinha no dia 22 e é votada pela Enquete, o fechamento e a apuração depois da meia-noite do dia 30, cores e artes, o resultado
   do culto, os avisos só à Diretoria, empate e desempate, o botão, LGPD, Meus Dados, retenção e lixo em cada campo; o relógio da regra vai a 2027 e 2028 por
   `usarRelogio`) e `e2e-32` (corridas: seis sugestões da mesma pessoa, o mesmo tema por seis pessoas, a votação aberta por quatro acessos, quatro votos da mesma pessoa,
-  a rotina e acessos apurando juntos, quatro artes e dois resultados ao mesmo tempo, cancelar o ciclo e sugerir juntos) e `e2e-33` (o banco com
+  a rotina e acessos apurando juntos, quatro artes e dois resultados ao mesmo tempo, cancelar o ciclo e sugerir juntos) e `e2e-39` (o banco com
   READ_COMMITTED_SNAPSHOT ligado, como o Azure SQL: o voto em curso entra na contagem do encerramento e o "no máximo 3" e o tema único seguem valendo; liga e desliga sozinho).
+- **v7.15** (crise e porta-voz único; segurança da congregação), base `cenario-crise` (`bash rodar.sh preparar-crise` a refaz a partir da `cenario-pastoral`, aplicando a 152 duas
+  vezes): `e2e-33` (esquema da 152 e a categoria CRISE na comunicação; quem entra; abrir com o aviso a toda a liderança — sininho na hora, celular na primeira rodada, e-mail na
+  fila passando na frente de um comunicado e dentro do teto da hora —, o motivo que nunca vai no aviso, a crise única no banco, a faixa, o modelo do aviso fora da tela de
+  comunicados, a ciência "Li o aviso"; manifestações e correções; pedidos da imprensa com o encaminhamento, a resposta e a correção; trocar o porta-voz cancelando o aviso velho da
+  fila; encerrar, com quem saiu da liderança no meio recebendo o fim; a segurança: território, plano em versões, simulado, vistoria com pendência, AVCB e seguro, equipe só de adultos
+  da congregação e a saída automática; os avisos do sininho; retenção, exclusão LGPD e Meus Dados; lixo em cada campo; auditoria) e `e2e-34` (corridas: quatro aberturas, seis
+  manifestações, quatro correções da mesma, quatro primeiras respostas ao mesmo pedido, dois planos na mesma versão, a mesma pessoa na equipe por quatro, troca de porta-voz × fim
+  e quatro encerramentos). Os roteiros `e2e-29` e `e2e-30` (v7.12) também passam sobre a `cenario-crise`.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
+
+**Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou
+rodar roteiro (`until mkdir C:/tmp/localdb-trava 2>/dev/null; do sleep 20; done && ...`) e solte no fim (`rmdir C:/tmp/localdb-trava`). Encadeie com `&&`, nunca com `;`: se a
+trava não foi pega, nada pode rodar (v7.15: um `;` deixou uma restauração passar por cima do banco de outro trabalho).
 
 ## Armadilhas já pagas
 

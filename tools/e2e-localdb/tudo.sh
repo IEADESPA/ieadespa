@@ -32,4 +32,8 @@ BASE=cenario-pastoral bash rodar.sh roteiro e2e-30-comunicacao-corridas.js
 bash rodar.sh preparar-crise
 BASE=cenario-crise bash rodar.sh roteiro e2e-33-crise.js
 BASE=cenario-crise bash rodar.sh roteiro e2e-34-crise-corridas.js
+bash rodar.sh preparar-7c
+BASE=cenario-7c bash rodar.sh roteiro e2e-40-trava7c-cuidado.js
+BASE=cenario-7c bash rodar.sh roteiro e2e-41-trava7c-crise-comunicacao.js
+BASE=cenario-7c bash rodar.sh roteiro e2e-42-trava7c-corridas.js
 echo TUDO-PRONTO

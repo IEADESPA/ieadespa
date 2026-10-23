@@ -23,7 +23,8 @@ const { resolverDestinatariosPorPermissao } = require("./notificacoes");
 
 const RETENCAO = {
   contatoImprensa: { categoria: "Crise — contato do jornalista na demanda de imprensa", padrao: 1825 },
-  equipe: { categoria: "Segurança — equipe de segurança após a saída", padrao: 1825 }
+  equipe: { categoria: "Segurança — equipe de segurança após a saída", padrao: 1825 },
+  planos: { categoria: "Plano de emergência — contatos das versões antigas", padrao: 1825 }        // Trava 7-C (migração 154)
 };
 const MAX_DEMANDAS_DIA = 30;                 // por pessoa: o pedido da imprensa é coisa rara; mais que isso é engano ou abuso
 const AVISOS_IMPRENSA_DIA = 10;              // avisos de pedido da imprensa por destinatário em 24 horas (o pedido continua registrado e na lista)
@@ -62,6 +63,15 @@ SELECT @apagadas AS n`;
 }
 const EXCLUIDO_SQL = "EXISTS (SELECT 1 FROM SolicitacoesTitularLGPD s WHERE s.MembroId = m.MembroId AND s.Tipo = 'EXCLUSAO' AND s.Status = 'ATENDIDA')";
 const LIDERANCA_ATIVA_SQL = "(l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))";
+// Trava 7-C: quem está SUSPENSO por medida cautelar (Art. 45 §1º, I: o acesso ao sistema suspenso grava AtivoAte no passado em toda a Liderança da pessoa) e ainda não voltou
+// à liderança; e o menor conhecido (data de nascimento no cadastro, menos de 18 anos), que não recebe o aviso da crise (o comunicado ao menor ficou fora desta versão).
+const SUSPENSO_SQL = (a) => `(EXISTS (SELECT 1 FROM MedidasCautelares mc WHERE mc.MembroId = ${a}.MembroId AND mc.SuspenderAcessoSistema = 1)
+  AND NOT EXISTS (SELECT 1 FROM Lideranca lv WHERE lv.MembroId = ${a}.MembroId AND (lv.AtivoAte IS NULL OR lv.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))))`;
+const MENOR_SQL = (a) => `(${a}.DataNascimento IS NOT NULL AND ${a}.DataNascimento > DATEADD(YEAR, -18, CAST(SYSUTCDATETIME() AS DATE)))`;
+// A delegação vale para aviso só enquanto o cargo de quem delegou está vigente (l = a Liderança delegada, como a sessão faz em shared/delegacoes.js) e quem a recebeu não
+// está SUSPENSO por medida cautelar (o login já não o deixa entrar; o aviso também não o alcança).
+const DELEGACAO_VALE_SQL = `${LIDERANCA_ATIVA_SQL} AND g.Status = 'ATIVA' AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN g.DataInicio AND g.DataFim
+  AND NOT EXISTS (SELECT 1 FROM MembroReferencia gd WHERE gd.MembroId = g.DelegadoMembroId AND ${SUSPENSO_SQL("gd")})`;
 async function diasDeRetencao(pool, chave) {
   const r = RETENCAO[chave];
   const linha = (await pool.request().input("c", sql.NVarChar(60), r.categoria).query(`SELECT TOP 1 DiasRetencao FROM PoliticasRetencao WHERE Categoria = @c AND Ativo = 1`)).recordset[0];
@@ -115,20 +125,21 @@ async function presidenteAtual(pool) {
   const p = r.recordset[0];
   return p ? { membroId: p.MembroId, nome: p.Nome } : null;
 }
-// Quem recebe o aviso: toda pessoa com Liderança vigente, ativa no cadastro e sem exclusão LGPD atendida.
+// Quem recebe o aviso: toda pessoa com Liderança vigente, ativa no cadastro e sem exclusão LGPD atendida; (Trava 7-C) nunca o menor conhecido.
 async function liderancaAtiva(pool) {
   return (await pool.request().query(`
     SELECT DISTINCT m.MembroId, m.Nome, c.Nome AS Congregacao FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-    WHERE m.Status = 'ATIVO' AND ${LIDERANCA_ATIVA_SQL} AND NOT ${EXCLUIDO_SQL}`)).recordset;
+    WHERE m.Status = 'ATIVO' AND ${LIDERANCA_ATIVA_SQL} AND NOT ${EXCLUIDO_SQL} AND NOT ${MENOR_SQL("m")}`)).recordset;
 }
-// No encerramento, também quem recebeu algum aviso desta crise e deixou a liderança no meio (o fim da vedação vale para essa pessoa também).
+// No encerramento, também quem recebeu algum aviso desta crise e deixou a liderança no meio (o fim da vedação vale para essa pessoa também) — (Trava 7-C) menos quem saiu
+// SUSPENSO por medida cautelar (o resumo da crise não vai a quem a Igreja afastou) e o menor conhecido.
 async function destinatariosDoFim(pool, criseId) {
   const lideres = await liderancaAtiva(pool);
   const extra = (await pool.request().input("c", sql.Int, criseId).query(`
     SELECT DISTINCT m.MembroId, m.Nome, cg.Nome AS Congregacao FROM CriseHistorico h JOIN ComunicacaoEntregas s ON s.EnvioId = h.EnvioId AND s.Canal = 'SININHO'
     JOIN MembroReferencia m ON m.MembroId = s.MembroId LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
-    WHERE h.CriseId = @c AND m.Status = 'ATIVO' AND NOT ${EXCLUIDO_SQL}`)).recordset;
+    WHERE h.CriseId = @c AND m.Status = 'ATIVO' AND NOT ${EXCLUIDO_SQL} AND NOT ${SUSPENSO_SQL("m")} AND NOT ${MENOR_SQL("m")}`)).recordset;
   const vistos = new Set(lideres.map((p) => p.MembroId));
   return [...lideres, ...extra.filter((p) => !vistos.has(p.MembroId))];
 }
@@ -267,7 +278,7 @@ async function encerrar(pool, { ver, criseId, dados, deps = {} }) {
   const presidente = await presidenteAtual(pool);
   const texto = cs.textoAviso({ evento: "ENCERRADA", portaVoz: portaVozDe(crise), desde: cs.diaBrasilia(crise.AbertaEm), resumo: v.dados.resumo });
   const preparo = await com.prepararAvisoDoSistema(pool, { categoria: "CRISE", titulo: texto.titulo, corpo: texto.corpo, pessoas: await destinatariosDoFim(pool, criseId),
-    celular: cs.textoCelular({ evento: "ENCERRADA" }) });
+    celular: cs.textoCelular({ evento: "ENCERRADA" }), incluiQuemSaiu: true });
   const t = new sql.Transaction(pool);
   let envioId, historicoId;
   try {
@@ -381,7 +392,8 @@ async function registrarManifestacao(pool, { ver, dados }) {
 // ---------------------------------------------------------------
 
 // Quem recebe o aviso do pedido da imprensa: quem tem crise_gestao numa concessão GERAL (nível Global, todas as congregações) pela Liderança vigente ou por uma delegação
-// vigente dela, e o porta-voz da crise ativa — todos membros ativos e sem exclusão LGPD atendida (revisão independente, v7.15).
+// vigente dela, e o porta-voz da crise ativa — todos membros ativos e sem exclusão LGPD atendida (revisão independente, v7.15). (Trava 7-C) A delegação só vale com o cargo
+// de quem delegou vigente e com quem a recebeu ainda na liderança (o suspenso por medida cautelar, não).
 async function destinatariosDaImprensa(pool, crise) {
   const r = await pool.request().input("perm", sql.NVarChar(60), `%,${cs.PERMISSAO_CRISE},%`).input("pv", sql.Int, crise && crise.PortaVozMembroId ? crise.PortaVozMembroId : null).query(`
     WITH gestao AS (
@@ -389,7 +401,7 @@ async function destinatariosDaImprensa(pool, crise) {
       WHERE (',' + p.Permissoes + ',') LIKE @perm AND p.Nivel = 'GLOBAL' AND ${LIDERANCA_ATIVA_SQL}
       UNION
       SELECT g.DelegadoMembroId FROM DelegacoesAcesso g JOIN Lideranca l ON l.LiderancaId = g.LiderancaId JOIN Papeis p ON p.PapelId = l.PapelId
-      WHERE (',' + p.Permissoes + ',') LIKE @perm AND p.Nivel = 'GLOBAL' AND g.Status = 'ATIVA' AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN g.DataInicio AND g.DataFim
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND p.Nivel = 'GLOBAL' AND ${DELEGACAO_VALE_SQL}
       UNION
       SELECT @pv WHERE @pv IS NOT NULL)
     SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, m.Email AS email FROM gestao x JOIN MembroReferencia m ON m.MembroId = x.MembroId
@@ -406,15 +418,17 @@ async function registrarDemanda(pool, { ver, dados, deps = {} }) {
   const v = cs.validarDemanda(dados);
   if (v.problema) return RECUSA(v.problema);
   const x = v.dados;
-  const hoje = contagem(await pool.request().input("m", sql.Int, ver.membroId)
-    .query(`SELECT COUNT(*) AS n FROM CriseDemandasImprensa WHERE RegistradoPorMembroId = @m AND RecebidaEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`));
-  if (hoje >= MAX_DEMANDAS_DIA) return OCUPADO("Muitos pedidos registrados nas últimas 24 horas. Fale com a Secretaria.");
   const { gestor, crise } = await papelNaImprensa(pool, ver);
   let criseId = crise ? crise.CriseId : null;
   const t = new sql.Transaction(pool);
   let id;
   try {
     await t.begin();
+    // (Trava 7-C) o teto do dia é contado DENTRO da trava de quem registra, na mesma transação que grava: dois pedidos ao mesmo tempo não passam juntos pela contagem
+    if (!(await obterTrava(() => new sql.Request(t), `crise-demanda-registro-${ver.membroId}`, 8000))) { await fecharTransacao(t, false); return OCUPADO("Outro pedido seu está sendo gravado. Tente de novo."); }
+    const hoje = contagem(await new sql.Request(t).input("m", sql.Int, ver.membroId)
+      .query(`SELECT COUNT(*) AS n FROM CriseDemandasImprensa WHERE RegistradoPorMembroId = @m AND RecebidaEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`));
+    if (hoje >= MAX_DEMANDAS_DIA) { await fecharTransacao(t, false); return OCUPADO("Muitos pedidos registrados nas últimas 24 horas. Fale com a Secretaria."); }
     if (x.corrigeDemandaId) {
       if (!(await obterTrava(() => new sql.Request(t), `crise-demanda-${x.corrigeDemandaId}`, 8000))) { await fecharTransacao(t, false); return OCUPADO("Outra correção está sendo gravada. Tente de novo."); }
       const alvo = (await new sql.Request(t).input("id", sql.Int, x.corrigeDemandaId).query(`
@@ -762,6 +776,9 @@ async function adicionarEquipe(pool, { ver, congregacaoId, dados, hoje = hojeBra
       CASE WHEN ${EXCLUIDO_SQL} THEN 1 ELSE 0 END AS Excluido FROM MembroReferencia m WHERE m.MembroId = @m`)).recordset[0];
   if (!m || m.Status !== "ATIVO" || !mesmo(m.CongregacaoId, congregacaoId) || m.Excluido) return RECUSA("A pessoa precisa ser membro ativo desta congregação.");
   if (!Number(m.Adulto)) return RECUSA(m.DataNascimento ? "A equipe de segurança é só de adultos (18 anos ou mais)." : "A pessoa não tem data de nascimento no cadastro: a equipe é só de adultos. Peça à Secretaria para completar.");
+  // (Trava 7-C) quem tem pendência reservada à Diretoria (afastamento cautelar, comunicação em análise, cadastro nacional, restrição) ou está fora de comunhão não entra na equipe de
+  // segurança (ela cuida do templo, das portas e das salas, com crianças por perto). A resposta é a mesma de quem não é membro ativo daqui: o motivo segue reservado.
+  if ((await comPendenciaReservada(pool, [x.membroId], hoje)).has(Number(x.membroId))) return RECUSA("A pessoa precisa ser membro ativo desta congregação.");
   const t = new sql.Transaction(pool);
   let id;
   try {
@@ -805,7 +822,7 @@ async function responsaveisDaSeguranca(pool) {
       WHERE (',' + p.Permissoes + ',') LIKE @perm AND ${LIDERANCA_ATIVA_SQL} AND l.DepartamentoId IS NULL
       UNION
       SELECT l.EscopoTipo, l.EscopoId, g.DelegadoMembroId FROM DelegacoesAcesso g JOIN Lideranca l ON l.LiderancaId = g.LiderancaId JOIN Papeis p ON p.PapelId = l.PapelId
-      WHERE (',' + p.Permissoes + ',') LIKE @perm AND l.DepartamentoId IS NULL AND g.Status = 'ATIVA' AND CAST(SYSUTCDATETIME() AS DATE) BETWEEN g.DataInicio AND g.DataFim)
+      WHERE (',' + p.Permissoes + ',') LIKE @perm AND l.DepartamentoId IS NULL AND ${DELEGACAO_VALE_SQL})
     SELECT DISTINCT x.EscopoTipo, x.EscopoId, m.MembroId AS membroId, m.Nome AS nome, m.Email AS email FROM alcance x JOIN MembroReferencia m ON m.MembroId = x.MembroId
     WHERE m.Status = 'ATIVO' AND NOT ${EXCLUIDO_SQL} AND x.EscopoTipo IN ('CONGREGACAO', 'AREA') AND x.EscopoId IS NOT NULL`)).recordset;
 }
@@ -830,26 +847,65 @@ async function detectar(pool, regra, { hoje = hojeBrasilia() } = {}) {
 // Rotina diária, retenção e LGPD
 // ---------------------------------------------------------------
 
-// Quem deixou a congregação, foi desligado ou chegou ao "até" sai sozinho da equipe (o histórico fica).
+// (Trava 7-C) Quem, nesta lista, tem pendência reservada à Diretoria (a aptidão do ministério com menores: afastamento cautelar, comunicação em análise, cadastro nacional,
+// restrição, fora de comunhão). Para RECUSAR a entrada, a dúvida fecha (todos contam como pendentes); a rotina usa `naDuvida: "erro"` (não tira ninguém sem saber).
+async function comPendenciaReservada(pool, membroIds, hoje = hojeBrasilia(), { naDuvida = "fecha" } = {}) {
+  const ids = [...new Set((membroIds || []).filter((x) => x != null).map(Number))];
+  if (!ids.length) return new Set();
+  try {
+    const mm = require("./ministerioMenores");
+    const mapa = await require("./ministerioMenoresDb").aptidaoEmLote(pool, ids, { hoje });
+    return new Set(ids.filter((id) => { const ap = mapa.get(id); return naDuvida === "erro" ? !!ap && mm.temBloqueioReservado(ap.bloqueios) : !ap || mm.temBloqueioReservado(ap.bloqueios); }));
+  } catch (e) {
+    if (naDuvida === "erro") throw e;
+    console.error("[SEGURANCA] a aptidão não pôde ser conferida (fecha):", e && e.message);
+    return new Set(ids);
+  }
+}
+const ATE_NO_FIM_SQL = "CASE WHEN e.Ate IS NOT NULL AND e.Ate < @hoje THEN e.Ate WHEN e.Desde > @hoje THEN e.Desde ELSE @hoje END";
+// Quem deixou a congregação, foi desligado ou chegou ao "até" sai sozinho da equipe (o histórico fica). (Trava 7-C) E quem ficou fora de comunhão ou passou a ter pendência
+// reservada à Diretoria sai com o motivo AFASTADO (o motivo da pendência nunca é gravado).
 async function encerrarEquipeAutomatica(pool, hoje = hojeBrasilia()) {
-  return contagem(await pool.request().input("hoje", sql.Date, hoje).query(`
+  const abertos = (await pool.request().query(`SELECT e.EquipeId, e.MembroId FROM SegurancaEquipe e JOIN MembroReferencia m ON m.MembroId = e.MembroId
+    WHERE e.EncerradoEm IS NULL AND m.Status = 'ATIVO' AND m.CongregacaoId = e.CongregacaoId`)).recordset;
+  let afastados = 0;
+  if (abertos.length) {
+    const pendentes = await comPendenciaReservada(pool, abertos.map((a) => a.MembroId), hoje, { naDuvida: "erro" });
+    const ids = abertos.filter((a) => pendentes.has(Number(a.MembroId))).map((a) => a.EquipeId);
+    if (ids.length) {
+      afastados = contagem(await pool.request().input("hoje", sql.Date, hoje).input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids)).query(`
+        UPDATE e SET EncerradoEm = SYSUTCDATETIME(), MotivoEncerramento = 'AFASTADO', Ate = ${ATE_NO_FIM_SQL}
+        FROM SegurancaEquipe e WHERE e.EncerradoEm IS NULL AND e.EquipeId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids));
+        SELECT @@ROWCOUNT AS n`));
+    }
+  }
+  return afastados + contagem(await pool.request().input("hoje", sql.Date, hoje).query(`
     UPDATE e SET EncerradoEm = SYSUTCDATETIME(),
-      MotivoEncerramento = CASE WHEN m.MembroId IS NULL OR m.Status <> 'ATIVO' THEN 'DESLIGADO' WHEN m.CongregacaoId IS NULL OR m.CongregacaoId <> e.CongregacaoId THEN 'SAIU_DA_CONGREGACAO' ELSE 'PRAZO' END,
-      Ate = CASE WHEN e.Ate IS NOT NULL AND e.Ate < @hoje THEN e.Ate WHEN e.Desde > @hoje THEN e.Desde ELSE @hoje END
+      MotivoEncerramento = CASE WHEN m.MembroId IS NULL OR m.Status <> 'ATIVO' THEN 'DESLIGADO' WHEN m.CongregacaoId IS NULL OR m.CongregacaoId <> e.CongregacaoId THEN 'SAIU_DA_CONGREGACAO'
+        WHEN m.SituacaoMembro = 'SEM_COMUNHAO' THEN 'AFASTADO' ELSE 'PRAZO' END,
+      Ate = ${ATE_NO_FIM_SQL}
     FROM SegurancaEquipe e LEFT JOIN MembroReferencia m ON m.MembroId = e.MembroId
-    WHERE e.EncerradoEm IS NULL AND (m.MembroId IS NULL OR m.Status <> 'ATIVO' OR m.CongregacaoId IS NULL OR m.CongregacaoId <> e.CongregacaoId OR (e.Ate IS NOT NULL AND e.Ate < @hoje));
+    WHERE e.EncerradoEm IS NULL AND (m.MembroId IS NULL OR m.Status <> 'ATIVO' OR m.CongregacaoId IS NULL OR m.CongregacaoId <> e.CongregacaoId OR m.SituacaoMembro = 'SEM_COMUNHAO'
+      OR (e.Ate IS NOT NULL AND e.Ate < @hoje));
     SELECT @@ROWCOUNT AS n`));
 }
 async function aplicarRetencao(pool) {
   const diasImprensa = await diasDeRetencao(pool, "contatoImprensa");
   const diasEquipe = await diasDeRetencao(pool, "equipe");
+  const diasPlanos = await diasDeRetencao(pool, "planos");
   const contatos = contagem(await pool.request().input("d", sql.Int, diasImprensa).query(comMarca("crise_purga", `
     UPDATE CriseDemandasImprensa SET Contato = NULL, ContatoApagadoEm = SYSUTCDATETIME() WHERE Contato IS NOT NULL AND RecebidaEm < DATEADD(DAY, -@d, SYSUTCDATETIME());
     SET @apagadas = @@ROWCOUNT;`)));
   const equipe = contagem(await pool.request().input("d", sql.Int, diasEquipe).query(comMarca("seguranca_purga", `
     UPDATE SegurancaEquipe SET MembroId = NULL, AnonimizadoEm = SYSUTCDATETIME() WHERE MembroId IS NOT NULL AND EncerradoEm IS NOT NULL AND EncerradoEm < DATEADD(DAY, -@d, SYSUTCDATETIME());
     SET @apagadas = @@ROWCOUNT;`)));
-  return { contatosApagados: contatos, equipeAnonimizada: equipe };
+  // (Trava 7-C) os contatos locais e os responsáveis (texto livre, com nomes e telefones) da versão do plano SUBSTITUÍDA há mais do prazo: a versão vigente nunca muda; as rotas e
+  // os pontos de encontro ficam. "Substituída há mais de N dias" = alguma versão mais nova foi revisada antes disso (a seguinte é a mais antiga das mais novas).
+  const planos = contagem(await pool.request().input("d", sql.Int, diasPlanos).query(comMarca("seguranca_purga", `
+    UPDATE p SET ContatosLocais = NULL, Responsaveis = N'(anonimizado)', AnonimizadoEm = SYSUTCDATETIME() FROM SegurancaPlanos p
+    WHERE p.AnonimizadoEm IS NULL AND EXISTS (SELECT 1 FROM SegurancaPlanos x WHERE x.CongregacaoId = p.CongregacaoId AND x.Versao > p.Versao AND x.RevisadoEm < DATEADD(DAY, -@d, SYSUTCDATETIME()));
+    SET @apagadas = @@ROWCOUNT;`)));
+  return { contatosApagados: contatos, equipeAnonimizada: equipe, planosAnonimizados: planos };
 }
 async function rotinaDiaria(pool, { hoje = hojeBrasilia() } = {}) {
   const r = { falhas: [] };
@@ -869,6 +925,7 @@ async function exclusaoLgpd(r, membroId, hoje = hojeBrasilia()) {
     SET @apagadas = @@ROWCOUNT;`));
   return { equipeSeguranca: contagem(equipe) };
 }
+const ROTULO_ATO = { ABERTA: "Abriu o regime de crise", PORTA_VOZ: "Designou o porta-voz", ENCERRADA: "Encerrou o regime de crise" };
 // Meus Dados: a equipe de segurança (congregação, função, desde e até), as crises em que a pessoa foi o porta-voz e quantos registros dela existem na crise.
 async function dadosDoTitular(pool, membroId) {
   const eq = (await pool.request().input("m", sql.Int, membroId).query(`
@@ -879,10 +936,13 @@ async function dadosDoTitular(pool, membroId) {
   const n = (await pool.request().input("m", sql.Int, membroId).query(`
     SELECT (SELECT COUNT(*) FROM CriseDemandasImprensa WHERE RegistradoPorMembroId = @m) AS demandas, (SELECT COUNT(*) FROM CriseManifestacoes WHERE RegistradoPorMembroId = @m) AS manifestacoes,
            (SELECT COUNT(*) FROM CriseDemandaRespostas WHERE RespondidoPorMembroId = @m) AS respostas`)).recordset[0] || {};
+  // (Trava 7-C) os atos do regime que a própria pessoa praticou (abrir, trocar o porta-voz, encerrar): ficam no histórico da crise com a matrícula dela
+  const atos = (await pool.request().input("m", sql.Int, membroId).query(`SELECT h.CriseId, h.Evento, h.Em FROM CriseHistorico h WHERE h.MembroId = @m ORDER BY h.HistoricoId`)).recordset;
   return {
     equipeSeguranca: eq.map((e) => ({ congregacao: e.Congregacao || null, funcao: cs.FUNCOES_EQUIPE[e.Funcao] || e.Funcao, desde: dia(e.Desde), ate: dia(e.Ate), encerradoEm: iso(e.EncerradoEm), motivo: e.MotivoEncerramento || null })),
     portaVozEmCrises: pv.map((x) => ({ criseId: x.CriseId, abertaEm: iso(x.AbertaEm), encerradaEm: iso(x.EncerradaEm) })),
-    registrosNaCrise: { pedidosDeImprensa: Number(n.demandas) || 0, manifestacoes: Number(n.manifestacoes) || 0, respostas: Number(n.respostas) || 0 }
+    registrosNaCrise: { pedidosDeImprensa: Number(n.demandas) || 0, manifestacoes: Number(n.manifestacoes) || 0, respostas: Number(n.respostas) || 0, atosDoRegime: atos.length },
+    atosNoRegimeDeCrise: atos.map((x) => ({ criseId: x.CriseId, ato: ROTULO_ATO[x.Evento] || x.Evento, em: iso(x.Em) }))
   };
 }
 

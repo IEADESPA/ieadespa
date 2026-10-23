@@ -61,6 +61,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   manifestações, quatro correções da mesma, quatro primeiras respostas ao mesmo pedido, dois planos na mesma versão, a mesma pessoa na equipe por quatro, troca de porta-voz × fim
   e quatro encerramentos). Os roteiros `e2e-29` e `e2e-30` (v7.12) também passam sobre a `cenario-crise`.
 
+- **Trava 7-C** (costuras entre a proteção, o cuidado pastoral, a comunicação e a crise), base `cenario-7c` (`bash rodar.sh preparar-7c` a refaz a partir da `cenario-crise`, aplicando
+  a 154 duas vezes): `e2e-40` (o cuidado pastoral × a proteção de crianças: a liderança com pendência reservada fora do item, da nota, do pedido e da busca do menor, o item que sai
+  dela e sobe ao degrau de cima; o sinal de risco sobre criança só com o nível geral e o aviso à Proteção; o reenvio do mesmo item do site; a concessão de departamento; a exclusão
+  LGPD de quem era o responsável), `e2e-41` (a crise e a comunicação: o menor fora do aviso, o suspenso fora da fila e do fim, a delegação que avisa, a equipe de segurança, a
+  leitura que vira prova na exclusão LGPD, os contatos das versões antigas do plano, Meus Dados sem corte, o IP do consentimento) e `e2e-42` (corridas: os tetos do dia do
+  pedido de visita e do pedido da imprensa contados dentro da trava).
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

@@ -228,6 +228,10 @@ da Microsoft 365 (que funciona com DNS de qualquer provedor) — sem trocar o en
 - [ ] DMARC endurecido em todos os domínios (observação → quarentena → rejeição), com os relatórios lidos; SPF do
       `ieadespa.org` corrigido para incluir o Google.
 - [ ] CSP do site público sem script escrito dentro da página.
+- [ ] CSP do **sistema** sem `style-src 'unsafe-inline'` (deixado pela Trava 7-A como "projeto à parte", registrado aqui na Trava 7-C):
+      os ~931 atributos `style="..."` do HTML e os ~355 do `script.js` viram classes (casa com os tokens da v10.1 e a aplicação
+      módulo a módulo da v10.1.3), e as janelas de impressão passam a usar uma folha de estilo própria; no fim a CSP troca
+      `'unsafe-inline'` por `'self'` e a prova do navegador (`tools/csp-e2e`) confere 0 violação.
 - [ ] Confirmação em duas etapas conferida em todas as contas que mandam no domínio (Registro.br, Microsoft 365, Google,
       Azure).
 

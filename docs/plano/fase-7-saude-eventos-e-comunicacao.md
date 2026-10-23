@@ -538,7 +538,9 @@ estava, a versão cobria talvez um quinto do que a norma manda.
   - **A justificativa de ausência na Ceia Geral é texto livre e pode citar
     saúde.** Fica visível só à Secretaria e à CLI, mas a política de retenção da
     categoria não separa esse campo e o prazo de descarte está em aberto: a CLI
-    precisa definir quando anonimizar.
+    precisa definir quando anonimizar. *(Resolvido na Trava 7-C: política própria "Calendário — justificativa de
+    ausência na Santa Ceia", padrão de 2 anos depois da Ceia, ajustável na tela; a rotina diária apaga o texto e
+    fica que a ausência foi justificada.)*
 
 ## v7.3 — Canais oficiais e comunicação
 
@@ -833,7 +835,9 @@ registro do canal, sozinho, não cobre nada disso.
   - **Grupo focado nunca vai ao site** e **link de convite nunca é guardado**.
   - **Ocorrências e administradores: 5 anos de retenção**, sem rotina automática de
     descarte por ora. A descrição livre da ocorrência pode revelar opinião política
-    (dado sensível, tratado como prova de diligência — ROPA, categoria `CANAIS`).
+    (dado sensível, tratado como prova de diligência — ROPA, categoria `CANAIS`). *(Resolvido na Trava 7-C: a
+    ocorrência encerrada perde a descrição, o link, a observação e quem avisou 5 anos depois de encerrada, e o
+    administrador que saiu perde o nome 5 anos depois — políticas próprias, ajustáveis, aplicadas pela rotina diária.)*
   - **Aviso de "prazo vencido" sai na rodada diária**: o aviso do prazo no ato é
     imediato, mas a escalada de uma ocorrência vencida pode chegar até 24 horas
     depois; o painel mostra a situação ao vivo.
@@ -1059,7 +1063,9 @@ ponto real de integração:
     duas).
   - **Retenção:** caixa e prestação de contas, 5 anos; o contato do convidado é
     dado de terceiro, desnecessário depois do evento, e **a rotina automática de
-    descarte ainda não existe** (prazo a definir pela CLI/Encarregado).
+    descarte ainda não existe** (prazo a definir pela CLI/Encarregado). *(Resolvido na Trava 7-C: política
+    "Eventos — contato do convidado externo", padrão de 1 ano depois do último evento dele — o mesmo nome ou o
+    mesmo contato num evento mais novo seguram —, ajustável na tela e aplicada pela rotina diária.)*
   - **Limites:** o Directus pode listar preletores nas sessões de um evento sem passar
     por este protocolo — o sistema só controla o que ele mesmo publica; e o
     Conselho Fiscal (NIF), que audita a prestação de contas (Art. 152, I), não tem
@@ -1365,7 +1371,10 @@ ponto real de integração:
     com Ordem de Serviço escrita prévia (Art. 133 §4º), a vedação da "diarista disfarçada" —
     pagar valor fixo a uma pessoa só para limpar (Art. 135 §2º) —, a proibição de cachê a
     membro (§3º) e a de comissão em cantina e bazar (Art. 135 §3º). O Termo informa o
-    voluntário dessas regras, mas **nada no sistema as impede ainda**; o Art. 135 §4º
+    voluntário dessas regras, mas **nada no sistema as impede ainda** *(avaliado na Trava 7-C: o pagamento a pessoa
+    sai por `SaidasTesouraria`, o membro não tem CPF no cadastro e o fornecedor não se liga ao membro; avisar
+    habitualidade e voluntário ativo é pequeno-médio, bloquear sem a Ordem de Serviço é grande — aguarda a decisão do
+    responsável)*; o Art. 135 §4º
     (higiene e proteção do voluntário na cozinha) também fica como orientação.
   - **Retenção:** a **adesão** (data, versão, hash, forma) é a prova da Lei 9.608/98 e **não
     tem prazo final**. O **IP e os cabeçalhos do aceite digital** são dado pessoal que só
@@ -1914,7 +1923,8 @@ Audita v7.1 a v7.5 pelas 5 perguntas do checklist — depois de fechada a FASE D
      homologação de verdade, segundo fator, alerta de queda. **Limites que continuam, ditos com honestidade** (não
      são pendências de código): o leiaute CNAB nunca foi homologado com um banco real (depende de integrar); os
      protocolos de ouvidoria já emitidos continuam curtos; a regra dos dois olhos do abandono depende de duas pessoas
-     do nível geral; `style-src` mantém `'unsafe-inline'` (projeto à parte).
+     do nível geral; `style-src` mantém `'unsafe-inline'` (projeto à parte — registrado como item da FASE 10, v10.7,
+     na Trava 7-C).
   5. *Deploy real aconteceu?* **Sim.** Produção conferida hoje depois do merge da vD.4 (script com a segunda etapa,
      casca do service worker v29, varredura verde); a agenda pública segue chegando ao site sem acordar o banco.
      Fechada esta trava, a FASE 7 segue para a v7.6.
@@ -2654,7 +2664,9 @@ O que o contrato precisou mudar:
   "divergência pendente há muito tempo"; fechar `TRUNCATE`/`DISABLE TRIGGER` nas tabelas do check-in (só se resolve
   tirando essa permissão do usuário do banco: decisão de operação); a cadeia de hash da auditoria geral que pode
   bifurcar com gravações simultâneas (anterior a esta versão e do sistema todo); busca de criança por GET leva
-  pedaço do nome no endereço (o Application Insights o registra).
+  pedaço do nome no endereço (o Application Insights o registra). *(Atualizado na Trava 7-C: o detector da
+  divergência parada, a busca por POST e a cadeia de hash da auditoria foram **resolvidos na Trava 7-B**. Seguem
+  registrados a revogação na mesma transação e o usuário de banco sem `TRUNCATE`/`DISABLE TRIGGER`, avaliados na 7-C.)*
 - **Aviso ao responsável quando um terceiro traz ou retira a criança (decidido pela liderança em 20/10/2026).** Quem
   trouxe a criança sem ser responsável cadastrado (nome digitado no balcão) ganha direito de retirar só com o código;
   agora os **responsáveis cadastrados** recebem, na hora, um aviso obrigatório em dois momentos: na **entrega**
@@ -2825,6 +2837,11 @@ Ativa em até 48 horas"); novo convertido: 7 dias; membro afastado: 14 dias; ped
 pedido de contato: 3 dias; pós-internação: 3 dias. O item nasce com o **Dirigente** da congregação como responsável (se o
 Dirigente não for a própria pessoa acompanhada); a liderança troca o responsável quando quiser, e quem é nomeado recebe o
 aviso. Visitante e novo convertido entram pelo nome e o contato (não ganham cadastro de membro, como na chamada da EBD).
+
+**(Trava 7-C) O Superintendente Regional.** O Regimento (Art. 104 §1º) diz que ele é, automaticamente, o Pastor Titular da Área-Polo; o sistema
+só o conhece cadastrado na Liderança da Região (papel "Superintendente Regional"). Sem o cadastro, a escada pula a Região: o painel do nível
+geral (Cuidado pastoral → Painel) agora lista "região sem Superintendente Regional cadastrado". **Ação humana:** cadastrar o Superintendente de
+cada região.
 
 **A escada do prazo vencido.** A rotina diária das 7h (a mesma das outras; o banco não fica ligado à toa) olha os itens
 abertos com o prazo vencido e **sobe um degrau**: Congregação → Área → Região → nível geral. O degrau sem ninguém com a
@@ -3016,8 +3033,9 @@ receber mensagem pelo que dá).
 ### Entrega (22/10/2026)
 
 Migração 150; `shared/comunicacao.js` (regra pura), `shared/comunicacaoDb.js`, `shared/comunicacaoFilaMarca.js`; rotas `GestaoComunicacao` (`/api/comunicacao/<ação>`),
-`ComunicacaoSair` (o link do e-mail, sem login) e `ComunicacaoFila` (a rotina de 15 em 15 minutos, `rotinas-comunicacao.yml`); a rodada das 7h aplica a retenção e roda
-uma rodada da fila. Tela: Meu Painel → Comunicações e a aba Comunicados (`app/modulos/comunicacao.js`), a página `sair.html`, casca v37. A exclusão LGPD passou a apagar
+`ComunicacaoSair` (o link do e-mail, sem login) e `ComunicacaoFila` (a rotina de 15 em 15 minutos, `rotinas-comunicacao.yml`); a rodada das 7h aplica a retenção e
+regrava a marca da fila, mas não manda a fila (texto alinhado ao código na Trava 7-C). Janela real da fila (Trava 7-C): das 6h às 22h45 de Brasília a fila
+inteira; das 23h às 5h45 só o aviso de crise, abrindo o banco só se a marca do Storage disser que há crise na fila. Tela: Meu Painel → Comunicações e a aba Comunicados (`app/modulos/comunicacao.js`), a página `sair.html`, casca v37. A exclusão LGPD passou a apagar
 também as preferências de aviso e os aparelhos inscritos (antes ficavam); Meus Dados mostra o histórico do consentimento; ROPA ("Comunicação com os membros") e RIPD
 ("Comunicação com os membros") novos.
 
@@ -3169,7 +3187,9 @@ responsável, 23/10/2026: as duas não têm nada em comum).
       imprensa — quem falou o quê, quando e com autorização de quem.
 - [x] Plano de emergência por congregação (evacuação, contatos), **registro de
       simulados** (data, participantes) e checklist de vistoria predial —
-      conecta com AVCB (v4.24) e seguros (v4.16).
+      conecta com AVCB (v4.24) e seguros (v4.16). *(Trava 7-C: as duas versões estão documentadas em
+      `docs/pesquisa/mercado-e-norma-2026.md` — "v4.16 — Seguros institucionais" e "v4.24 — Obras, licenciamento e
+      inauguração" —, não no plano da fase 4; o código está nas migrações 066_seguros_institucionais e 074.)*
       *(Brotherhood Mutual — violence response plan e disaster plan)*
 - [x] Equipe de segurança por congregação com composição registrada.
 
@@ -3220,11 +3240,20 @@ a retenção), Meus Dados e a exclusão LGPD. Tela: a faixa "Crise ativa — por
 
 - **O aviso da crise é um comunicado do sistema.** Uma categoria nova na comunicação da v7.12, `CRISE`, marcada como do sistema: não aparece na tela de modelos, nas
   preferências nem na prévia; não se reenvia, não se arquiva nem se cancela pela tela de comunicados. Abrir, trocar o porta-voz e encerrar gravam, na MESMA transação do
-  ato, o modelo já aprovado, o envio, as entregas e o sininho (regra `COMUNICADO`, obrigatória); o celular sai na primeira rodada da fila, junto com a resposta; o e-mail
+  ato, o modelo já aprovado, o envio, as entregas e o sininho (regra `COMUNICADO`, obrigatória); o celular sai em paralelo dentro da resposta do ato (emenda da
+  revisão independente, abaixo; o que não couber sai pela fila de 15 minutos, também de madrugada desde a Trava 7-C); o e-mail
   vai pela fila (passa na frente da convocação oficial e respeita o teto da hora). Ela se comporta como a convocação oficial: sem consentimento e sem link de saída,
   ciência "Li o aviso", lista de não alcançados no relatório, 5 anos de registro e fica na exclusão LGPD (prova do aviso). O aviso velho que ainda estava na fila é
   cancelado quando o porta-voz muda ou a crise acaba (o novo vai a todos). Botão "Continuar o aviso agora" para mais uma rodada.
 - **O motivo nunca vai no aviso nem na faixa** — fica só com o nível geral (o aviso diz quem fala, o contato e a vedação do § 2º).
+- **(Trava 7-C) O que o regime no sistema é.** O Art. 161-B diz que a política se ativa automaticamente diante da crise: a proibição de falar vale
+  ANTES do registro, e o regime no sistema é a **formalização** (quem ordenou, o porta-voz, o aviso, o histórico). O aviso vai à **liderança**; a
+  vedação do § 2º vale para **todo membro**, e a tela da crise lembra que, para avisar os membros, usa-se Comunicados (v7.12). O rodapé do
+  aviso diz "por decisão da Igreja, com base no Art. 161-B" (o artigo não manda avisar a liderança: é decisão da Igreja). O teto de e-mails do
+  aviso é lido da configuração (`COMUNICACAO_CRISE_EMAILS_POR_HORA`), não fixo no texto.
+- **(Trava 7-C) Sem RIPD próprio da v7.15:** o RIPD é para dado sensível ou de criança em escala, ou tratamento cujo vazamento expõe a pessoa a
+  dano grave; a crise guarda dado comum (quem fala pela Igreja, o contato do jornalista, a equipe de segurança), e o aviso é um comunicado do
+  sistema já coberto pelo RIPD "Comunicação com os membros". O critério ficou escrito no topo de `api/shared/ripd.js`.
 - **Trocar o porta-voz também avisa toda a liderança** (é a quem encaminhar a imprensa) e pede a confirmação reforçada, como abrir e encerrar.
 - **Quem ordenou é o Presidente cadastrado na Liderança**: sem Presidente ativo, o regime não abre. O profissional designado pode não ser membro (sem matrícula); se
   tiver matrícula, o nome vem do cadastro e ele, numa sessão de liderança, registra manifestação e responde a imprensa enquanto for o porta-voz.
@@ -3274,3 +3303,17 @@ novo, nos fluxos de proteção de menores (v7.7/v7.8/v7.10) e no consentimento
 de comunicação granular (v7.12): são os pontos da fase com maior exposição
 legal, e é aqui que qualquer regressão neles precisa ser pega antes de
 seguir pra Ministerial.
+
+- [ ] **Em andamento (23/10/2026)** — revisão de lei, plano e README, no ramo `trava-7c` (migração 153; `e2e-35` a `e2e-37`):
+  - **Base legal (LGPD Art. 11, II).** Não existe a hipótese "organização religiosa": o vínculo de membro é exercício regular de direitos da
+    associação religiosa (alínea "d"; Código Civil arts. 44, 53 a 61; CF art. 5º, VI); a disciplina, "d" com o CC art. 57; o financeiro,
+    "a" (CTN art. 14, III) e "d"; os incidentes, "a" (ECA arts. 13 e 70-B; Lei 14.344/2022) e "e"; o cuidado pastoral, "d", "e" e o
+    Art. 11, I, sem o legítimo interesse (que não serve para dado sensível). O ECA 59-A é adotado por cautela (o caput alcança quem recebe
+    recurso público; o parágrafo único, estabelecimentos educacionais e similares). A multa do ECA 245 saiu dos textos que a aplicavam à Igreja.
+    O mural do site entrou no ROPA e no RIPD. A migração 153 corrige o texto das políticas só onde ele ainda é o original.
+  - **Migrações que regravavam a política a cada deploy** (117, 142, 143, 144, 145, 148) agora só escrevem na linha recém-criada.
+  - **Retenções da v7.2, v7.3 e v7.4 resolvidas** pela rotina diária, com prazo padrão ajustável: justificativa de ausência na Ceia (2 anos),
+    ocorrência de canal encerrada e administrador que saiu (5 anos), contato do convidado externo (1 ano depois do último evento dele).
+  - **Fila de comunicados 24 h:** de madrugada só o aviso de crise; o comunicado comum espera as 6h.
+  - **Superintendente Regional:** o painel do nível geral avisa a região sem o cadastro (a escada a pula). Ação humana: cadastrar.
+  - **Site:** a política de privacidade e o formulário do mural contam a cópia para o sistema, a lista de risco e o aviso à Diretoria.

@@ -110,11 +110,9 @@ tratados como **dados reais**: nenhuma atualização pode apagá-los, recriá-lo
   `sql/migrations/NNN_descricao.sql`, **sempre idempotente** (use `IF NOT EXISTS` /
   `IF EXISTS`). **Nunca** `DROP TABLE`/`DROP COLUMN` sem etapa de transição explícita e aprovada.
 - `sql/schema.sql` é só referência/leitura; **não** é o que roda no deploy.
-- O workflow (`.github/workflows/azure-static-web-apps-*.yml`) roda cada migração com um
-  step próprio do `azure/sql-action` (ele espera um arquivo, não uma pasta) — **ao criar
-  uma migração nova, é obrigatório adicionar o step dela no workflow**, na ordem certa,
-  antes do "Build And Deploy". Migração sem step no workflow nunca chega a rodar no Azure
-  SQL de verdade, mesmo já estando commitada.
+- O deploy roda **todas** as migrações, em ordem, num passo único (`api/scripts/executar-migracoes.js`): a migração nova
+  entra só com o arquivo em `sql/migrations/`, sem mexer no workflow. Como TODAS rodam a cada push, nenhuma pode regravar
+  o que a tela edita (Trava 7-C: o texto de uma política de retenção só entra na linha recém-criada, com `N'x'`).
 
 **Código ↔ banco em sincronia:**
 
@@ -320,10 +318,9 @@ diz em que arquivo ela está e em que pé ela anda.
   poucos itens adiados de propósito, que o índice marca como 🟡.
 - **Em andamento — FASE 7:** v7.1 a v7.8, v7.10 a v7.13 e v7.15 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
   congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças, Check-in
-  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá, Gestão de crise com porta-voz único e segurança das congregações). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. Em andamento: **v7.14** (identidade visual anual); depois, a 🔒 Trava 7-C e o encerramento da fase
-  (identidade visual anual); a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
-  feitos; só a chave site↔sistema nos dois portais do Azure depende de gente. O resumo em prosa completo está no
-  começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
+  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá, Gestão de crise com porta-voz único e segurança das congregações). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. Em andamento: **v7.14** (identidade visual anual) e a 🔒 Trava 7-C (migração 153);
+  depois, o encerramento da fase. A antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte
+  (04/10/2026) estão feitos. O resumo em prosa completo está no começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
 - **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
   tela no CI, front em módulos, homologação, chave de acesso (passkey) e site na raiz `ieadespa.org.br`. Ficam só
   decisões do responsável (ensaio de restauração, Search Console, teste de carga).
@@ -438,7 +435,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
 > `sql/migrations/`. **Regra nova:** toda migração que cria tabela atualiza esta
 > seção no mesmo commit — documentação que mente é pior que documentação que falta.
 
-**Já existem (95 tabelas, migrações 001-059):**
+**Já existem (309 tabelas, migrações 001 a 153 — contagem dos `CREATE TABLE` distintos em 23/10/2026; a lista agrupa por tema):**
 
 - **Núcleo e identidade:** `MembroReferencia`, `Congregacoes`, `Funcoes`, `Orgaos`,
   `Mandatos`, `Assentos`, `Sessoes`, `Presencas`, `Lideranca`, `Consagracoes`,
@@ -510,6 +507,7 @@ funcionando igual não importa qual modelo de IA esteja conduzindo a sessão.
   (moderação, boletim sem nome, sinal de risco); permissão `cuidado_pastoral` e papel "Superintendente Regional". Rota `/api/cuidado-pastoral/<ação>`; a rotina das 7h detecta afastamento e sobe a escada. v7.11.1 (migração 149): o confidencial e o com risco do mural do site entram por `/api/cuidado-pastoral-site` (chave do site), só no nível geral.
 - **Comunicação (v7.12, migração 150):** `ComunicacaoConsentimentos` (canal × categoria, com a impressão digital do texto aceito; não se edita), `ComunicacaoModelos` (o aprovado não se edita), `ComunicacaoAudiencias`, `ComunicacaoEnvios` e `ComunicacaoEntregas` (por pessoa e canal; ciência da convocação); permissão `comunicacao`. Rotas `/api/comunicacao/<ação>`, `/api/comunicacao-sair` (link do e-mail, sem login) e a fila `/api/comunicacao-fila-interna` (a cada 15 minutos). Sem WhatsApp/SMS e sem grupo pelo dízimo (decisões de 22/10/2026).
 - **Crise e segurança (v7.15, migração 152):** `CriseRegimes` (um regime ativo por vez, índice único filtrado; o Porta-Voz Único do Art. 161-B), `CriseHistorico`, `CriseManifestacoes`, `CriseDemandasImprensa` e `CriseDemandaRespostas` (só acrescentam: correção é linha nova), `SegurancaPlanos` (em versões), `SegurancaSimulados`, `SegurancaVistorias` + `SegurancaVistoriaItens` e `SegurancaEquipe`; permissões `crise_gestao` e `seguranca_congregacao`. O aviso da crise é um comunicado do sistema (categoria `CRISE`) pela fila da v7.12. Rota `/api/crise/<ação>`.
+- **Trava 7-C (migração 153):** base legal das políticas corrigida (só onde o texto é o original); as retenções da v7.2 a v7.4 (`JustificativaApagadaEm`, `ContatoApagadoEm`, `CanalOcorrencias.AnonimizadaEm` e `CanalAdministradores.AnonimizadoEm`, com quem avisou e o administrador aceitando vazio só na anonimização). A fila de comunicados passa 24 h: de madrugada (23h às 5h45) só o aviso de crise, e o banco só abre se a marca do Storage disser que há crise na fila.
 
 **Ainda não existem** (projeção das fases futuras, nomes sujeitos a mudança): missões
 (`CamposMissionarios`, `RelatoriosCampo`) e obrigações fiscais (`ObrigacoesAcessorias`). EBD, departamentos, eventos e proteção de menores já existem (acima).
@@ -573,7 +571,7 @@ governanca-ieadespa/
 │   ├── shared/auditoria.js Auditoria reutilizada
 │   └── <Function>/         Uma pasta por rota
 └── app/                    Front estático (index.html, style.css, eventos.js, script.js)
-    ├── modulos/            23 módulos por tema (vD.2); o script.js é só o núcleo (login, navegação, ajudantes)
+    ├── modulos/            30 módulos por tema (vD.2 em diante); o script.js é só o núcleo (login, navegação, ajudantes)
     └── documentos/         Estatuto e Regimento Interno (cópia servida como estático)
 ```
 

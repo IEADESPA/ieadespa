@@ -138,6 +138,11 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Trava 7-C — os acompanhamentos abertos de que o titular era o responsável ficaram sem responsável (na transação): o degrau de cada um é avisado agora (fail-soft).
+  const { itensSoltos = [], ...cuidadoContagens } = cuidado;
+  cuidado = cuidadoContagens;
+  if (itensSoltos.length) await cuidadoDb.avisarItensSoltos(pool, itensSoltos, solicitacao.MembroId);
+
   // Best-effort — o dado principal (FotoUrl) já foi zerado no SQL independentemente
   // do resultado da chamada ao Storage.
   if (membroAntes.recordset[0] && membroAntes.recordset[0].FotoUrl) {
@@ -163,7 +168,7 @@ module.exports = async function (context, req) {
     });
   }
   // só as contagens: nunca texto de nota nem de pedido
-  if (cuidado.notas || cuidado.itens || cuidado.pedidos) {
+  if (cuidado.notas || cuidado.itens || cuidado.pedidos || cuidado.soltos) {
     await registrarAuditoria({
       tabela: "NotasPastorais", registroId: solicitacao.MembroId, acao: "Exclusão LGPD: notas pastorais apagadas e cuidado pastoral anonimizado",
       usuarioId: usuario.membroId, dadosDepois: { ...cuidado, motivo: "EXCLUSAO_LGPD" }

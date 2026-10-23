@@ -2,7 +2,8 @@
 // POST /api/cuidado-pastoral-site   body:{ texto, nome?, confidencial, siteItemId? }   cabeçalho x-site-key = CHAVE_SITE_SISTEMA (a mesma nos dois aplicativos do Azure)
 //
 // Chamada pelo site (site/api/EnviarPedidoMural), servidor a servidor, no instante em que alguém envia um pedido no mural de oração. Aqui:
-//   - o pedido sem confidencialidade e sem sinal de risco não abre o banco: a resposta é { gravado:false, risco:false } e ele segue só no Directus, com a moderação de sempre;
+//   - o pedido sem confidencialidade e sem sinal de risco não abre o banco (nem pede a conexão: Trava 7-C): a resposta é { gravado:false, risco:false } e ele segue só no
+//     Directus, com a moderação de sempre;
 //   - o CONFIDENCIAL ou com SINAL DE RISCO entra na fila do cuidado pastoral, só do nível geral (o site não diz a congregação), e com risco o aviso obrigatório sai na hora.
 // A resposta é sempre pequena (nunca devolve o texto nem quem é avisado): o site só precisa saber se havia risco, para mostrar o 188 e o 190 a quem escreveu.
 //
@@ -30,6 +31,11 @@ module.exports = async function (context, req) {
   if (typeof corpo.confidencial !== "boolean") return res(400, { sucesso: false, mensagem: "Diga se o pedido é confidencial." });
   const siteItemId = corpo.siteItemId == null ? null : inteiroPositivo(corpo.siteItemId);
   if (corpo.siteItemId != null && !siteItemId) return res(400, { sucesso: false, mensagem: "siteItemId inválido." });
+  // Trava 7-C: o que dá para decidir sem o banco é decidido ANTES de pedir a conexão — o pedido comum (sem confidencialidade e sem sinal de risco) responde na hora, mesmo com o
+  // Azure SQL pausado (acordá-lo levaria mais que os 8 s que o site espera).
+  const previa = db.preverDoSite({ texto: corpo.texto, confidencial: corpo.confidencial });
+  if (previa.invalido) return res(400, { sucesso: false, mensagem: "O texto do pedido está vazio." });
+  if (!previa.precisaBanco) return res(200, { sucesso: true, gravado: false, risco: false });
   try {
     const r = await db.receberDoSite(await getPool(), { texto: corpo.texto, nome: corpo.nome, confidencial: corpo.confidencial, siteItemId });
     if (r.invalido) return res(400, { sucesso: false, mensagem: "O texto do pedido está vazio." });

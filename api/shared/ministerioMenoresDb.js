@@ -632,6 +632,13 @@ async function retirarInaptosDasEscalas(pool, opcoes = {}) {
     const p = await encerrarPresencasDeInaptos(pool, { hoje: opcoes.hoje, membroId: opcoes.membroId, equipeId: opcoes.equipeId, deps: opcoes.deps });
     resultado = { ...resultado, ...p };
   } catch (e) { erro = erro || e; resultado = { ...resultado, ...(e.parcial || { presencasEncerradas: 0 }) }; }
+  // Trava 7-C: e quem passou a ter pendência reservada deixa de ser o responsável pelos acompanhamentos pastorais abertos de crianças e adolescentes (v7.11)
+  if (!opcoes.equipeId) {
+    try {
+      const c = await require("./cuidadoPastoralDb").soltarItensDeMenores(pool, { membroId: opcoes.membroId || null, ...(opcoes.hoje ? { hoje: opcoes.hoje } : {}) });
+      resultado = { ...resultado, cuidadoSoltos: c.soltos };
+    } catch (e) { erro = erro || e; resultado = { ...resultado, cuidadoSoltos: 0 }; }
+  }
   if (erro) { erro.parcial = resultado; throw erro; }
   return resultado;
 }

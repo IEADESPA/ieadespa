@@ -49,7 +49,8 @@ const P = {
     CUIDADO_PRAZO_POS_INTERNACAO_DIAS: 3, CUIDADO_PRAZO_DEGRAU_DIAS: 3, CUIDADO_DETECCAO_SEMANAS: 6, CUIDADO_DETECCAO_COSTUME_PCT: 50, CUIDADO_DETECCAO_QUEDA_PCT: 60 };
   ok(JSON.stringify(prazos, Object.keys(esperados).sort()) === JSON.stringify(esperados, Object.keys(esperados).sort()) && Object.keys(prazos).length === 10, "os 10 prazos nascem com os valores do contrato (48 h do visitante)", prazos);
   ok((await escalar("SELECT COUNT(*) FROM (SELECT Sigla FROM Prazos WHERE Sigla LIKE 'CUIDADO[_]%' GROUP BY Sigla HAVING COUNT(*) > 1) x")) === 0, "reaplicar não duplicou prazos");
-  const regras = await q("SELECT Chave, Obrigatoria, CanalEmail, CanalPush, Categoria, Ativa FROM NotificacaoRegras WHERE Chave LIKE 'CUIDADO[_]%' ORDER BY Chave");
+  // (a Trava 7-C, migração 154, acrescenta CUIDADO_RISCO_CRIANCA, também obrigatória: aqui contam só as 5 da 148, com a base montada antes ou depois da 154)
+  const regras = await q("SELECT Chave, Obrigatoria, CanalEmail, CanalPush, Categoria, Ativa FROM NotificacaoRegras WHERE Chave LIKE 'CUIDADO[_]%' AND Chave <> 'CUIDADO_RISCO_CRIANCA' ORDER BY Chave");
   ok(regras.length === 5 && regras.every((r) => r.Categoria === "CUIDADO" && r.Ativa && r.CanalEmail), "as 5 regras de aviso do cuidado existem, ativas, por e-mail", regras.map((r) => r.Chave));
   const risco = regras.find((r) => r.Chave === "CUIDADO_RISCO") || {};
   ok(risco.Obrigatoria === true && risco.CanalPush === true, "o aviso de SINAL DE RISCO é obrigatório e vai também pelo celular", risco);

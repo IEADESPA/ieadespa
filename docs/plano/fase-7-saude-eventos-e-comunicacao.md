@@ -3151,6 +3151,12 @@ originalidade e consequência financeira — nada disso tem onde existir hoje.
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 
+Base: Regimento Art. 161-B — em crise institucional, escândalo na mídia, acidente grave ou evento de repercussão pública
+negativa, vale a Política de Porta-Voz Único: só o Pastor Presidente, ou um profissional de comunicação designado formalmente
+por ele, fala em nome da IEADESPA (§ 1º); qualquer outro diretor, pastor, advogado ou membro fica proibido de dar nota,
+entrevista ou opinião ligando o assunto à Igreja durante a crise (§ 2º). Trabalhada em paralelo com a v7.14 (por pedido do
+responsável, 23/10/2026: as duas não têm nada em comum).
+
 - [ ] **Sinalizador institucional de "crise ativa"** (Art. 161-B §§1º-2º) com
       designação formal do Porta-Voz Único e aviso automático a **todos** os
       líderes sobre a vedação de manifestação individual enquanto durar o regime.
@@ -3161,6 +3167,36 @@ originalidade e consequência financeira — nada disso tem onde existir hoje.
       conecta com AVCB (v4.24) e seguros (v4.16).
       *(Brotherhood Mutual — violence response plan e disaster plan)*
 - [ ] Equipe de segurança por congregação com composição registrada.
+
+### Contrato (23/10/2026)
+
+**Crise.** Quem abre e encerra o regime de crise no sistema é o nível geral com a permissão nova `crise_gestao` (Presidente e
+Secretário Geral), com a confirmação reforçada, registrando quem ordenou (o Presidente), o motivo em poucas palavras, o
+alcance (todo o Campo) e o **Porta-Voz Único**: o próprio Presidente ou o profissional designado (nome, contato e o ato da
+designação). Só uma crise ativa por vez; o histórico não se apaga. Ao abrir, **todos os líderes ativos** recebem na hora,
+pelo sininho e pelo celular, o aviso obrigatório da vedação do § 2º (quem é o porta-voz, a quem encaminhar a imprensa) — o
+e-mail vai pela fila da v7.12 (o serviço do Azure aceita 100 por hora), nunca disparado de uma vez. Ao encerrar, o aviso de
+fim também sai. Enquanto a crise está ativa, a tela de toda a liderança mostra a faixa "Crise ativa — porta-voz único:
+fulano".
+
+**Manifestações e imprensa.** Registro das manifestações autorizadas (data e hora, canal — nota, entrevista, rede social,
+coletiva —, quem falou, resumo, link ou documento, quem autorizou) e das demandas de imprensa recebidas (veículo, contato,
+pedido, prazo, situação — recebida, respondida pelo porta-voz, recusada — e a resposta). Qualquer líder registra uma demanda
+que chegou a ele (é assim que encaminha); só o porta-voz e o nível geral respondem e registram manifestação. Nada se edita
+depois de registrado (correção = nova linha); o histórico fica.
+
+**Segurança da congregação.** Com a permissão nova `seguranca_congregacao` (Dirigente, Pastor de Área e o nível geral, cada
+um no seu território):
+- **Plano de emergência** da congregação: rotas de evacuação e pontos de encontro (texto), contatos (Bombeiros 193, SAMU 192,
+  Polícia 190, mais os da congregação), responsáveis; revisão anual (aviso quando vence).
+- **Simulados**: data, tipo (evacuação, incêndio, primeiros socorros, violência), participantes (número), duração, o que
+  correu bem e o que melhorar, quem registrou; aviso quando a congregação passa de 1 ano sem simulado.
+- **Vistoria predial**: checklist periódico (extintores na validade, saídas desobstruídas, iluminação de emergência, quadro
+  elétrico, acessibilidade…) com o resultado de cada item e as pendências; mostra a validade do **AVCB** (v4.24,
+  `ImoveisSituacaoFiscal`) e se há **seguro vigente** (v4.16, `ApolicesSeguro`), avisando o que está vencido; aviso quando a
+  vistoria passa de 6 meses.
+- **Equipe de segurança**: membros adultos da congregação com a função (coordenação, brigada, primeiros socorros, portaria,
+  estacionamento), desde e até quando; sai sozinho de quem deixa a congregação ou é desligado.
 
 ## 🔒 Trava de Revisão 7-C — antes de encerrar a FASE 7 e avançar para a FASE 8
 

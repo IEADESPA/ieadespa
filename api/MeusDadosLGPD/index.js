@@ -4,8 +4,9 @@
 // vB.8 — Correção de base legal: até aqui (v1.9) isso ficava travado atrás
 // do consentimento 'DADOS_CONTATO' — base legal ERRADA. O direito de acesso
 // do titular (Art. 18) nunca depende de consentimento; o dado básico de
-// membresia em si é tratado sob Art. 11, II, "a" (organização religiosa,
-// vínculo regular), que DISPENSA consentimento. Consentimento continua
+// membresia em si é tratado sob Art. 11, II, "d" (exercício regular de
+// direitos da associação religiosa com os seus membros — a Trava 7-C corrigiu
+// a alínea "a" que estava aqui), que DISPENSA consentimento. Consentimento continua
 // valendo só pra Foto (uso de imagem) e pro uso do telefone/e-mail pra
 // contato (Tipo='DADOS_CONTATO', ver shared/consentimentoFoto.js) — nunca
 // mais pra bloquear a própria pessoa de ver o próprio cadastro.

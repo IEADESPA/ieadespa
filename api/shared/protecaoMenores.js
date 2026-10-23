@@ -1,7 +1,8 @@
 // shared/protecaoMenores.js (v7.8 — Incidentes, notificação obrigatória e escuta protegida)
 //
 // ECA, Art. 13 (suspeita ou confirmação de maus-tratos deve ser comunicada ao Conselho Tutelar), Art. 70-B, parágrafo único (quem cuida de criança por razão de "ministério"
-// também responde pela comunicação; pune o "injustificado retardamento ou omissão") e Art. 245 (multa de 3 a 20 salários de referência pela omissão, dobrada na reincidência);
+// também responde pela comunicação; pune o "injustificado retardamento ou omissão"). O Art. 245 (multa) alcança o médico, o professor e o responsável por estabelecimento de saúde ou de
+// ensino fundamental, pré-escola ou creche — não a Igreja como tal (Trava 7-C);
 // Lei 14.344/2022, art. 23 (comunicar IMEDIATAMENTE) e art. 26 (a omissão é crime); Lei 13.431/2017 (escuta protegida: quem acolhe NÃO inquire, registra o relato espontâneo
 // e encaminha); Regimento Art. 133 §5º (afastamento cautelar).
 // A lei não dá prazo de horas: manda comunicar já. As 24 horas do relógio são o prazo MÁXIMO interno da Igreja (Trava 7-B, 20/10/2026), nunca "o prazo da lei".

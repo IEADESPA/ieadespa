@@ -1,6 +1,6 @@
 -- ============================================================
 -- Migração 144 — v7.8: Incidentes, notificação obrigatória e escuta protegida
--- (ECA Art. 13 e Art. 245; Lei 13.431/2017; Regimento Art. 133 §5º; LGPD arts. 11 e 14)
+-- (ECA Arts. 13 e 70-B; Lei 13.431/2017; Regimento Art. 133 §5º; LGPD arts. 11 e 14)
 --
 -- O que a Igreja precisa poder PROVAR, sem investigar:
 --   1) o registro de um incidente de proteção em três níveis (quase-acidente, quebra de política, suspeita ou relato de violência), com o instante

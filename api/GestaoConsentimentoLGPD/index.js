@@ -6,7 +6,9 @@
 // vB.8 — Correção de base legal: a v1.9 tinha generalizado o Tipo padrão
 // (DADOS_CONTATO) pra também travar "ver os próprios dados" — base legal
 // ERRADA (direito de acesso, Art. 18, nunca depende de consentimento; dado
-// básico de membresia é Art. 11, II, "a", que DISPENSA consentimento).
+// básico de membresia é Art. 11, II, "d" — exercício regular de direitos
+// da associação religiosa com os seus membros —, que DISPENSA consentimento;
+// a Trava 7-C corrigiu a alínea: a LGPD não tem hipótese "organização religiosa").
 // Revertido: DADOS_CONTATO volta a significar só "posso usar seu telefone/
 // e-mail (e foto) pra contato" — MeusDadosLGPD não checa mais nada daqui.
 // v7.7 — revogar o consentimento FOTO (de qualquer membro, pelo titular ou pela

@@ -526,8 +526,9 @@ comum não entra num painel de secretaria — ele entra no celular.
 ## vB.8 — LGPD: corrigir a base legal e fechar as lacunas
 
 Achado da pesquisa jurídica: o sistema pede **consentimento** para tratar dados de
-membro, mas a LGPD (Art. 11, II, "a") **dispensa o consentimento** justamente para
-organização religiosa tratar dado de pessoa com vínculo regular. Usar base legal
+membro, mas a LGPD (Art. 11, II, "d", exercício regular de direitos — a Trava 7-C
+corrigiu a alínea "a" que estava aqui) **dispensa o consentimento** para a associação
+religiosa tratar dado de pessoa com vínculo regular. Usar base legal
 errada é um problema real: cria obrigação que a lei não impõe (e que trava o
 sistema quando a pessoa não consente) e desprotege o que a lei de fato exige —
 **a vedação de compartilhamento com terceiros**, que hoje não tem trava nenhuma.
@@ -538,7 +539,7 @@ sistema quando a pessoa não consente) e desprotege o que a lei de fato exige �
       consentimento antes de ver seus próprios dados", inclusive dados
       básicos (nome, datas). Base legal errada de propósito duplo: o
       direito de acesso NUNCA depende de consentimento, e o dado básico de
-      membresia em si é Art. 11, II, "a" (organização religiosa, vínculo
+      membresia em si é Art. 11, II, "d" (exercício regular de direitos, vínculo
       regular — dispensa consentimento). Corrigido: `MeusDadosLGPD` não
       checa mais nenhum consentimento pra devolver o cadastro; o checkbox
       único que existia (`ConsentimentosLGPD.Tipo='DADOS_CONTATO'`) voltou

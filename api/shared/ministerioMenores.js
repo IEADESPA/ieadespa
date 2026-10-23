@@ -1,7 +1,9 @@
 // shared/ministerioMenores.js (v7.7 — Habilitação para Ministério com Menores)
 //
-// Lei 14.811/2024 (art. 59-A do ECA, em vigor desde 12/01/2024): quem faz atividade com crianças e adolescentes — inclusive voluntário — precisa ter ficha
-// cadastral e certidão de antecedentes criminais atualizadas, com atualização semestral. Regimento Art. 133 §5º (vistoria e dever de auto-denúncia).
+// Lei 14.811/2024 (art. 59-A do ECA, em vigor desde 12/01/2024): o caput alcança a instituição que recebe recurso público; o parágrafo único manda os
+// estabelecimentos educacionais e similares manter ficha cadastral e certidão de antecedentes de todos os colaboradores. A Igreja ADOTA a exigência (com atualização
+// semestral, inclusive para voluntário) por cautela e pelo Regimento Art. 133 §5º (vistoria e dever de auto-denúncia) — a EBD pode ser tida como "similar", mas o
+// sistema não afirma que a lei a obriga em todos os casos (Trava 7-C).
 //
 // Este módulo é a REGRA, pura (sem banco): decide se uma pessoa está apta a servir com menores, o que a bloqueia, quando cada documento vence, se uma sala
 // tem adultos suficientes e o que cada aviso diz. O banco (shared/ministerioMenoresDb.js) só reúne os fatos e grava o que aqui se decide.

@@ -2118,13 +2118,16 @@ História/Acervo, RP/Cerimonial, Libras, Beleza/Estética, Educação/Pedagogia.
 
 > **Este é o achado mais grave de toda a 7ª rodada.** A **Lei 14.811/2024**
 > inseriu o **art. 59-A no ECA** e está em vigor desde **12/01/2024**, sem
-> vacatio: entidades públicas e privadas que desenvolvem atividades com crianças
-> e adolescentes devem **exigir e manter atualizada** ficha cadastral e
-> **certidão de antecedentes criminais de todos os colaboradores, incluindo
-> voluntários**, com **atualização semestral**. Igreja com EBD infantil, coral de
-> crianças, departamento infantil e eventos com menores está inteiramente dentro
-> do alcance. O sistema hoje não tem nada disso — e a exposição não é teórica:
-> é responsabilização institucional e pessoal dos dirigentes.
+> vacatio. **Correção da Trava 7-C (23/10/2026):** o texto antigo dizia que toda
+> entidade com crianças está obrigada; a lei é mais estreita. O **caput** alcança a
+> instituição que **recebe recurso público**; o **parágrafo único**, os
+> "**estabelecimentos educacionais e similares**", que devem manter fichas e
+> certidões de antecedentes de **todos os colaboradores**. A EBD pode ser tida
+> como "similar", mas não há obrigação inequívoca para a Igreja como tal. Por
+> isso a Igreja **adota a exigência por cautela** e pelo **Regimento, Art. 133
+> §5º** (com a atualização semestral, inclusive para voluntários); a base legal
+> no ROPA é o Art. 7º, II onde a lei alcança e o Art. 7º, IX (legítimo interesse
+> na proteção), sem afirmar obrigação legal em todos os casos.
 
 *(Numeração: as versões v7.7 e v7.8 existiam como lacuna no documento — o
 roadmap pulava de v7.6 para v7.9 sem nota. A lacuna foi preenchida com o tema
@@ -2310,9 +2313,11 @@ de maus-tratos como assunto interno é exatamente o erro que gerou as maiores
 crises institucionais em denominações no mundo inteiro.
 
 - [x] **Notificação obrigatória ao Conselho Tutelar** diante de **suspeita** (não
-      exige certeza, não cabe à igreja investigar): ECA **Art. 13**, com **multa
-      de 3 a 20 salários de referência pela omissão, dobrada na reincidência**
-      (ECA Art. 245). Fluxo com **SLA curto (24h)**, relógio regressivo visível ao
+      exige certeza, não cabe à igreja investigar): ECA **Art. 13** e **Art. 70-B,
+      parágrafo único** (quem cuida de criança por ministério responde pelo retardamento
+      ou pela omissão). *(Correção da Trava 7-C: o texto antigo citava a multa do Art. 245,
+      que alcança o médico, o professor e o responsável por estabelecimento de saúde ou de
+      ensino fundamental, pré-escola ou creche — não a Igreja como tal.)* Fluxo com **SLA curto (24h)**, relógio regressivo visível ao
       Dirigente e à Secretaria Geral, campos de órgão notificado (Conselho
       Tutelar/MP/Polícia), protocolo e anexo do ofício.
       *(Registrar uma suspeita de violência abre o relógio de **24 horas** contados do instante em
@@ -2669,8 +2674,8 @@ O que o contrato precisou mudar:
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v7.7 a v7.10 pelas 5 perguntas do checklist — **atenção máxima**: a
 v7.7 (habilitação para ministério com menores, Lei 14.811/2024) e a v7.8
-(notificação obrigatória de suspeita de maus-tratos, ECA Art. 13/245)
-tratam de obrigação legal já vigente, com multa por omissão, e de dado de
+(notificação obrigatória de suspeita de maus-tratos, ECA Arts. 13 e 70-B)
+tratam de obrigação legal já vigente, com responsabilização pela omissão, e de dado de
 criança. Um bug de tela aqui não é só inconveniente — pode significar
 voluntário sem antecedente verificado atuando com menor, ou suspeita não
 notificada. Testar cada fluxo manualmente, não só confiar no "parece certo".

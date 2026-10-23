@@ -213,6 +213,12 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok(JSON.stringify(avisados) === JSON.stringify(esperados) && avisados.includes(1001) && avisados.includes(1002) && avisados.includes(2004) && !avisados.includes(3001),
     "o pedido chega na hora a quem tem crise_gestao no nível geral (Presidente e Secretário) e ao porta-voz — nunca a quem registrou", { avisados, esperados });
   ok(pushes.some((p) => p.membroId === 2004 && /Rádio Clube/.test(p.mensagem)), "e no celular do porta-voz");
+  // fechamento da revisão: quem teve a exclusão LGPD ATENDIDA não recebe o aviso do pedido da imprensa, mesmo tendo crise_gestao
+  const excluidoImprensa = gestoresDaCrise.find((m) => ![1001, 1002].includes(m));
+  await q("INSERT INTO SolicitacoesTitularLGPD (MembroId, Tipo, Status) VALUES (@m, 'EXCLUSAO', 'ATENDIDA')", { m: excluidoImprensa });
+  const dLgpd = await db.registrarDemanda(pool, { ver: { membroId: 2005, crise: false }, dados: { veiculo: "TV LGPD E2E", contato: "(91) 90000-3333", pedido: "Pedido para conferir a exclusão LGPD." } });
+  const avisadosLgpd = (await q("SELECT DestinatarioMembroId AS m FROM Notificacoes WHERE RegraChave = 'CRISE_DEMANDA_IMPRENSA' AND ReferenciaId = @d", { d: dLgpd.demandaId })).map((x) => x.m);
+  ok(!!excluidoImprensa && avisadosLgpd.includes(1001) && !avisadosLgpd.includes(excluidoImprensa), "revisão: quem teve a exclusão LGPD atendida não recebe o aviso da imprensa (os outros recebem)", { excluidoImprensa, avisadosLgpd });
   const listaDir = (await GET(H, "demandas", DIR_C)).body;
   const listaVila = (await GET(H, "demandas", DIR_V)).body;
   const listaPv = (await GET(H, "demandas", PORTA_VOZ)).body;
@@ -298,7 +304,7 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok((await falha(`INSERT INTO CriseRegimes (Motivo, OrdenadoPorMembroId, RegistradoPorMembroId, PortaVozTipo, PortaVozNome, PortaVozContato, DesignacaoAto, Status, EncerradaEm, EncerradaPorMembroId)
       VALUES (N'Teste do CHECK', 1001, 1002, N'DESIGNADO', N'Fulano', N'(91) 3333-4444', NULL, N'ENCERRADA', SYSUTCDATETIME(), 1002)`) || "").includes("CK_CriseRegimes_Designado"), "o banco recusa o designado sem o ato (o CHECK fecha o NULL)");
   const crises = (await GET(H, "crises", SEC)).body.crises;
-  ok(crises.length === 1 && crises[0].manifestacoes === 3 && crises[0].demandas === 2, "a lista de crises com as contagens", crises);
+  ok(crises.length === 1 && crises[0].manifestacoes === 3 && crises[0].demandas === 3, "a lista de crises com as contagens", crises);
   const det = (await GET(H, "crise", SEC, { criseId })).body;
   ok(det.historico.length === 4 && det.historico.every((h) => h.aviso && h.aviso.total > 0) && det.crise.motivo === "Acidente no templo", "o detalhe: histórico com o aviso de cada passo, e o motivo para o nível geral");
   ok((await GET(H, "crise", PORTA_VOZ, { criseId })).status === 404 && (await GET(H, "crise", DIR_C, { criseId })).status === 404, "o detalhe da crise não abre para os outros");
@@ -401,6 +407,11 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   const lidVila = await escalar("SELECT TOP 1 LiderancaId FROM Lideranca WHERE MembroId = 3002");
   await q("INSERT INTO DelegacoesAcesso (LiderancaId, DeleganteMembroId, DelegadoMembroId, DataInicio, DataFim, Motivo) VALUES (@l, 3002, 2010, @i, @f, N'Férias E2E')",
     { l: lidVila, i: somarDias(hojeBr(), -1), f: somarDias(hojeBr(), 5) });
+  // e um delegado da Central com a exclusão LGPD atendida: não recebe os lembretes de segurança
+  const lidCentral = await escalar("SELECT TOP 1 LiderancaId FROM Lideranca WHERE MembroId = 3001");
+  await q("INSERT INTO DelegacoesAcesso (LiderancaId, DeleganteMembroId, DelegadoMembroId, DataInicio, DataFim, Motivo) VALUES (@l, 3001, 2001, @i, @f, N'Licença E2E')",
+    { l: lidCentral, i: somarDias(hojeBr(), -1), f: somarDias(hojeBr(), 5) });
+  await q("INSERT INTO SolicitacoesTitularLGPD (MembroId, Tipo, Status) VALUES (2001, 'EXCLUSAO', 'ATENDIDA')");
   const CHAVES = ["SEGURANCA_PLANO_REVISAO", "SEGURANCA_SEM_SIMULADO", "SEGURANCA_SEM_VISTORIA", "SEGURANCA_AVCB_SEGURO"];
   const r1m = await avaliarRegras(pool, { chaves: CHAVES });
   const avisos = await q("SELECT RegraChave, DestinatarioMembroId AS m, Mensagem FROM Notificacoes WHERE RegraChave LIKE 'SEGURANCA[_]%'");
@@ -411,6 +422,7 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   ok(de(3003, "SEGURANCA_AVCB_SEGURO").length === 1 && de(3003, "SEGURANCA_SEM_VISTORIA").length === 1 && /Vila Nova E2E/.test(de(3003, "SEGURANCA_SEM_VISTORIA")[0].Mensagem), "o Pastor de Área recebe um aviso por regra, juntando as congregações da área");
   ok(avisos.every((a) => ![1001, 1002].includes(a.m)), "o nível geral não recebe um aviso por congregação (acompanha pelo painel)");
   ok(de(3002, "SEGURANCA_AVCB_SEGURO").length === 1 && /Vila Nova E2E/.test(de(3002, "SEGURANCA_AVCB_SEGURO")[0].Mensagem), "revisão: a congregação sem imóvel no patrimônio também entra no aviso do AVCB");
+  ok(avisos.filter((a) => a.m === 2001).length === 0 && de(3001, "SEGURANCA_AVCB_SEGURO").length === 1, "revisão: o delegado com a exclusão LGPD atendida não recebe os lembretes de segurança (o delegante recebe)");
   ok(de(2010, "SEGURANCA_PLANO_REVISAO").length === 1 && /Vila Nova E2E/.test(de(2010, "SEGURANCA_PLANO_REVISAO")[0].Mensagem), "revisão: quem recebeu o papel por delegação vigente também recebe o aviso");
   ok((await avaliarRegras(pool, { chaves: CHAVES })).criadas === 0, "rodar de novo no mesmo dia não repete");
 

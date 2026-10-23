@@ -20,13 +20,19 @@ async function filho() {
   emailMod.enviarEmailComunicado = async (m) => { if (spec.arquivo) fs.appendFileSync(spec.arquivo, `${m.email}|${m.assunto}\n`); return { ok: true }; };
   emailMod.enviarEmailNotificacao = async () => true;
   require(path.join(API, "shared/notificacaoPush.js")).enviarPushNotificacao = async () => 1;
+  // só para a corrida da troca do porta-voz: este processo segura a trava do regime por `atrasoTrava` ms ANTES de gravar (a janela em que os outros já leram o porta-voz antigo)
+  if (spec.atrasoTrava) {
+    const fs2 = require(path.join(API, "shared/financeiroSeguro.js"));
+    const original = fs2.obterTrava;
+    fs2.obterTrava = async (...a) => { const ok = await original(...a); if (ok && a[1] === "crise-regime") await new Promise((r) => setTimeout(r, spec.atrasoTrava)); return ok; };
+  }
   const db = require(path.join(API, "shared/criseSegurancaDb.js"));
   const pool = await L.obterPool();
-  const espera = spec.t0 - Date.now();
+  const espera = spec.t0 + (spec.depois || 0) - Date.now();
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
   let r;
   try {
-    const ver = { ...VER_SEC, membroId: spec.membroId || 1002 };
+    const ver = spec.comoPortaVoz ? { membroId: spec.membroId, crise: false, seguranca: false, geralSeguranca: false, podeVerCongregacao: () => false } : { ...VER_SEC, membroId: spec.membroId || 1002 };
     if (spec.tipo === "abrir") r = await db.abrir(pool, { ver, dados: { motivo: `Corrida ${spec.n}`, portaVoz: PV } });
     else if (spec.tipo === "encerrar") r = await db.encerrar(pool, { ver, criseId: spec.criseId, dados: { resumo: `Fim ${spec.n}` } });
     else if (spec.tipo === "porta-voz") r = await db.designarPortaVoz(pool, { ver, criseId: spec.criseId, dados: { portaVoz: { tipo: "DESIGNADO", nome: "Assessora Corrida", contato: "assessoria@e2e.invalid", ato: "Ato 99/2026" } } });
@@ -34,7 +40,7 @@ async function filho() {
     else if (spec.tipo === "responder") r = await db.responderDemanda(pool, { ver, dados: spec.dados });
     else if (spec.tipo === "plano") r = await db.salvarPlano(pool, { ver, congregacaoId: spec.congregacaoId, dados: spec.dados });
     else if (spec.tipo === "equipe") r = await db.adicionarEquipe(pool, { ver, congregacaoId: spec.congregacaoId, dados: spec.dados });
-    process.stdout.write("@@RESULTADO@@" + JSON.stringify({ ok: true, r: { sucesso: r.sucesso, mudou: !!r.mudou, limite: !!r.limite, mensagem: r.mensagem, criseId: r.criseId } }) + "\n");
+    process.stdout.write("@@RESULTADO@@" + JSON.stringify({ ok: true, r: { sucesso: r.sucesso, mudou: !!r.mudou, limite: !!r.limite, proibido: !!r.proibido, mensagem: r.mensagem, criseId: r.criseId } }) + "\n");
   } catch (e) {
     process.stdout.write("@@RESULTADO@@" + JSON.stringify({ ok: false, erro: e && e.message }) + "\n");
   }
@@ -138,6 +144,26 @@ async function principal() {
   ok(aceitos === comAparelho && new Set(pushesEscala).size === pushesEscala.length, `revisão: TODOS os ${comAparelho} celulares avisados em no máximo duas rodadas (abertura ${aceitosNaHora}), nenhum repetido`, { aceitos, comAparelho });
   ok(/Celular: \d+ de \d+ aparelho/.test(ab.mensagem), "a resposta conta quantos celulares já foram avisados", ab.mensagem);
   ok((await dbMain.encerrar(pool, { ver: VER_SEC, criseId: ab.criseId, dados: { resumo: "Fim da escala." } })).sucesso, "a crise de escala é encerrada");
+
+  console.log("== revisão: o porta-voz substituído nunca grava depois da troca (manifestação e resposta disputando com a troca, em processos separados) ==");
+  const ab3 = await dbMain.abrir(pool, { ver: VER_SEC, dados: { motivo: "Crise da troca E2E", portaVoz: { tipo: "DESIGNADO", membroId: 2004, nome: "Adv", contato: "adv@e2e.invalid", ato: "Ato 55/2026" } } });
+  ok(ab3.sucesso, "a crise abre com o porta-voz 2004", ab3.mensagem);
+  const demandasTroca = [];
+  for (let i = 1; i <= 4; i++) demandasTroca.push((await q("INSERT INTO CriseDemandasImprensa (CriseId, Veiculo, Contato, Pedido, RegistradoPorMembroId) VALUES (@c, @v, N'(91) 90000-4444', N'Pedido da corrida da troca.', 3001); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { c: ab3.criseId, v: `Veículo Troca ${i}` }))[0].id);
+  const MANT = { criseId: ab3.criseId, dataHora: dataHoraAgora(-1), canal: "NOTA", quemFalou: "Adv Davi E2E", resumo: "Nota do porta-voz durante a troca.", autorizadoPor: "Presidente E2E" };
+  rs = await disparar([
+    { tipo: "porta-voz", criseId: ab3.criseId, atrasoTrava: 3000 },
+    ...[1, 2, 3, 4].map((n) => ({ tipo: "manifestacao", comoPortaVoz: true, membroId: 2004, depois: 1000, dados: { ...MANT, resumo: `${MANT.resumo} (${n})` } })),
+    ...demandasTroca.map((demandaId) => ({ tipo: "responder", comoPortaVoz: true, membroId: 2004, depois: 1000, dados: { demandaId, situacao: "RESPONDIDA", resposta: "Resposta do porta-voz antigo." } }))
+  ]);
+  ok(rs.every((x) => x.ok) && rs[0].r.sucesso, "a troca passa e ninguém dá erro", rs.map((x) => x.r));
+  const tentativas = rs.slice(1);
+  ok(tentativas.length === 8 && tentativas.every((x) => x.r && !x.r.sucesso && (x.r.proibido || x.r.limite)), "revisão: as 8 tentativas do porta-voz antigo, feitas enquanto a troca gravava, são recusadas", tentativas.map((x) => x.r));
+  const trocaEm = await L.um("SELECT Em FROM CriseHistorico WHERE CriseId = @c AND Evento = 'PORTA_VOZ'", { c: ab3.criseId });
+  ok((await escalar("SELECT COUNT(*) FROM CriseManifestacoes WHERE CriseId = @c AND RegistradoPorMembroId = 2004", { c: ab3.criseId })) === 0
+    && (await escalar("SELECT COUNT(*) FROM CriseDemandaRespostas WHERE RespondidoPorMembroId = 2004 AND DemandaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))", { ids: JSON.stringify(demandasTroca) })) === 0 && !!trocaEm,
+    "revisão: nada gravado pelo porta-voz substituído (nem manifestação, nem resposta)");
+  ok((await dbMain.encerrar(pool, { ver: VER_SEC, criseId: ab3.criseId, dados: { resumo: "Fim da troca." } })).sucesso, "a crise da troca é encerrada");
 
   fim("e2e-34 (corridas da crise)");
 }

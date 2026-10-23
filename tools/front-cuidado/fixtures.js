@@ -68,6 +68,8 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
       { id: 3, nome: A("congNome3", "Fora do Território"), ativa: true, areaId: 101, regiaoId: 200 }],
     membros: new Map(), itens: [], eventos: [], notas: [], leituras: [], pedidos: [],
     lideranca: [], sessoes: {},
+    // (Trava 7-C) quem tem pendência reservada à Diretoria (a aptidão do ministério com menores) e quem é envolvido de incidente de proteção aberto
+    bloqueados: new Set(), envolvidos: new Set(),
     seq: { item: 100, evento: 1000, nota: 500, pedido: 700, leitura: 1 }
   };
   const congDe = (id) => S.congregacoes.find(c => c.id === Number(id)) || null;
@@ -156,7 +158,7 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
   function linhaPedido(p) {
     const c = congDe(p.CongregacaoId), s = p.SolicitanteMembroId ? S.membros.get(p.SolicitanteMembroId) : null;
     const itens = S.itens.filter(i => Number(i.PedidoOracaoId) === Number(p.PedidoId)).sort((a, b) => (Number(a.Status !== "ABERTO") - Number(b.Status !== "ABERTO")) || (b.ItemId - a.ItemId));
-    return Object.assign({}, p, { CongregacaoNome: c ? c.nome : null, SolicitanteNome: s ? s.Nome : p.SolicitanteNome, SolicitanteStatus: s ? s.Status : null, SolicitanteCongregacaoId: s ? s.CongregacaoId : null,
+    return Object.assign({}, p, { CongregacaoNome: c ? c.nome : null, SolicitanteNome: s ? s.Nome : p.SolicitanteNome, SolicitanteStatus: s ? s.Status : null, SolicitanteNascimento: s ? s.DataNascimento : null, SolicitanteCongregacaoId: s ? s.CongregacaoId : null,
       RegistradoPorNome: nomeDe(p.RegistradoPorMembroId), ModeradoPorNome: nomeDe(p.ModeradoPorMembroId), ItemId: itens[0] ? itens[0].ItemId : null, ItemStatus: itens[0] ? itens[0].Status : null });
   }
   // "coluna IN (@t0, @t1)" → [ids]; "1 = 0" → []; sem filtro → null (todas)
@@ -362,6 +364,10 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
       const l = S.pedidos.filter(p => !p.AnonimizadoEm && (!p.SolicitanteMembroId || p.SolicitanteMembroId !== Number(inp.eu)) && (!t.includes("p.SoNivelGeral = 0") || !p.SoNivelGeral) && noIn(ids, p.CongregacaoId));
       return [...new Set(l.map(p => p.CongregacaoId))].map(c => ({ CongregacaoId: c, Aguardando: l.filter(p => p.CongregacaoId === c && p.Moderacao === "AGUARDANDO" && !p.Risco).length, ComRisco: l.filter(p => p.CongregacaoId === c && p.Risco).length }));
     }
+    // (Trava 7-C) os envolvidos de incidente de proteção aberto, entre os ids pedidos
+    if (t.includes("FROM IncidenteEnvolvidos e JOIN IncidentesProtecao i") && t.includes("i.Status = 'ABERTO'")) {
+      return JSON.parse(inp.ids || "[]").map(Number).filter((id) => S.envolvidos.has(id)).map((id) => ({ MembroId: id }));
+    }
     consultasSemImitacao.push(t.slice(0, 200));
     throw new Error(`consulta sem imitação: ${t.slice(0, 200)}`);
   }
@@ -389,8 +395,12 @@ function criarServidor({ ataque = false, agoraMs = Date.now() } = {}) {
     // (v7.11.1) o nível geral do cuidado, para o que vem do mural do site
     if (p === "./notificacoes") return { resolverDestinatariosPorPermissao: async () => S.lideranca.filter((l) => l.escopoTipo === "GLOBAL" && `,${l.permissoes},`.includes(",cuidado_pastoral,"))
       .map((l) => { const m = S.membros.get(l.membroId); return { membroId: m.MembroId, nome: m.Nome, email: m.Email }; }) };
-    if (p === "./ministerioMenores") return { temBloqueioReservado: () => false };
-    if (p === "./ministerioMenoresDb") return { aptidaoDe: async () => ({ bloqueios: [] }) };
+    // (Trava 7-C) a aptidão de verdade é do ministério com menores; aqui, a pendência reservada vem do estado (S.bloqueados)
+    if (p === "./ministerioMenores") return { temBloqueioReservado: (b) => (b || []).some((x) => x && x.codigo === "AUTO_DENUNCIA_EM_ANALISE") };
+    if (p === "./ministerioMenoresDb") {
+      const aptidao = (id) => ({ bloqueios: S.bloqueados.has(Number(id)) ? [{ codigo: "AUTO_DENUNCIA_EM_ANALISE" }] : [] });
+      return { aptidaoDe: async (pool_, id) => aptidao(id), aptidaoEmLote: async (pool_, ids) => new Map((ids || []).map((id) => [Number(id), aptidao(id)])) };
+    }
     throw new Error(`a camada de banco pediu um módulo que a imitação não tem: ${p}`);
   };
   const modDb = { exports: {} };

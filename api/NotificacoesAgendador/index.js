@@ -49,6 +49,21 @@ module.exports = async function (context, req) {
     context.log.error("[COMUNICACAO] falha na rotina diária:", e.message);
     comunicacao = { falhas: ["rotina"] };
   }
+  // v7.14 — identidade visual, também ANTES dos avisos: no dia 22/11 a votação do tema abre (com pelo menos 2 finalistas e a triagem completa), passada a meia-noite do
+  // dia 30 ela é fechada e apurada (o primeiro acesso de qualquer pessoa faz o mesmo: a etapa é a data, não esta rotina). A retenção dela (que apaga imagens) vai DEPOIS dos
+  // avisos, com orçamento de tempo.
+  const identidadeDb = require("../shared/identidadeVisualDb");
+  let identidade = null;
+  try {
+    identidade = await identidadeDb.rotinaAntesDosAvisos(pool);
+    context.log(`[IDENTIDADE] rotina: ${JSON.stringify({ ...identidade, falhas: undefined })}${identidade.falhas.length ? ` — FALHOU: ${identidade.falhas.join(", ")}` : ""}`);
+  } catch (e) {
+    context.log.error("[IDENTIDADE] falha na rotina diária:", e.message);
+    identidade = { falhas: ["rotina"] };
+  }
+  // v7.14 — as enquetes com fechamento marcado que passaram da hora (as da identidade visual são do ciclo, acima): passo próprio, separado da identidade.
+  let enquetesAgendadas = null;
+  try { enquetesAgendadas = await require("../shared/enquetes").encerrarVencidas(pool); } catch (e) { context.log.error("[ENQUETES] encerramento agendado:", e.message); enquetesAgendadas = { falhas: ["encerramento"] }; }
   // v7.15 — segurança da congregação: quem deixou a congregação, foi desligado ou chegou ao "até" sai da equipe de segurança; a retenção apaga o contato do jornalista e o nome
   // de quem saiu da equipe há mais de 5 anos. ANTES dos avisos (os avisos da segurança já enxergam a equipe limpa). Fail-soft.
   let criseSeguranca = null;
@@ -60,6 +75,14 @@ module.exports = async function (context, req) {
     criseSeguranca = { falhas: ["rotina"] };
   }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
+  // v7.14 — depois dos avisos: a retenção da identidade visual (tira o nome, apaga imagens não escolhidas), com orçamento de tempo (o resto fica para amanhã).
+  try {
+    const depois = await identidadeDb.rotinaDepoisDosAvisos(pool, { orcamentoMs: 15000 });
+    identidade = { ...identidade, ...depois, falhas: [...(identidade.falhas || []), ...depois.falhas] };
+  } catch (e) {
+    context.log.error("[IDENTIDADE] falha na retenção:", e.message);
+    identidade = { ...identidade, falhas: [...(identidade.falhas || []), "retencao"] };
+  }
   // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
   try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
   if (falhas.length) context.log.error(`[NOTIFICACOES] detector(es) que falharam: ${falhas.join(", ")}`);
@@ -114,9 +137,11 @@ module.exports = async function (context, req) {
   // (v7.11) O mesmo para o cuidado pastoral: a escada do prazo vencido e a regra dos 30 dias das notas não podem parar sem ninguém saber.
   const falhaMenores = retiradaFalhou || falhas.some((k) => String(k).startsWith("MENORES_") || String(k).startsWith("PROTECAO_") || String(k).startsWith("CHECKIN_") || String(k).startsWith("EBD_PROFESSOR"));
   const falhaCuidado = (cuidado && cuidado.falhas.length > 0) || falhas.some((k) => String(k).startsWith("CUIDADO_"));
+  // (v7.14) E a identidade visual: a votação que não fecha (ou não abre) no dia certo não pode parar sem ninguém saber.
+  const falhaIdentidade = (identidade && identidade.falhas.length > 0) || falhas.some((k) => String(k).startsWith("IDENTIDADE_")) || !!(enquetesAgendadas && enquetesAgendadas.falhas);
   context.res = {
-    status: falhaMenores || falhaCuidado ? 500 : 200,
+    status: falhaMenores || falhaCuidado || falhaIdentidade ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, criseSeguranca, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, detectoresComFalha: falhas },
   };
 };

@@ -234,6 +234,7 @@ async function carregarMinhasSolicitacoesEdicao() {
 function mostrarAbaSecretaria(aba) {
   chaveAjudaAtual = aba;
   if (typeof chkAbaMudou === "function") chkAbaMudou(aba);
+  if (typeof idvAbaMudou === "function") idvAbaMudou(aba);   // v7.14: as sugestões e as artes (com o autor) não ficam para trás
   if (typeof comAbaMudou === "function") comAbaMudou(aba);   // v7.12: o grupo, o relatório (nomes e telefones) e as escolhas de comunicação não ficam para trás
   if (typeof crsAbaMudou === "function") crsAbaMudou(aba);   // v7.15: a aba da crise fecha o que estava aberto e a faixa da crise é relida de tempos em tempos
   if (typeof cpaAbaMudou === "function") cpaAbaMudou(aba);   // v7.11: a fila, o acompanhamento e a nota pastoral aberta (e, fora de Meu Painel, os pedidos que a pessoa escrevia) não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) e as fichas não ficam para trás quando a pessoa vai para outra tela
@@ -288,6 +289,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "checkininfantil" && typeof chkCarregarOpcoesAcao === "function") chkCarregarOpcoesAcao();
   if (aba === "cuidadopastoral" && typeof cpaCarregarOpcoesAcao === "function") cpaCarregarOpcoesAcao();
   if (aba === "comunicacao" && typeof comAbrirAba === "function") comAbrirAba();
+  if (aba === "identidade" && typeof idvAbrirAba === "function") idvAbrirAba();
   if (aba === "crise" && typeof crsAbrirAba === "function") crsAbrirAba();
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
   if (aba === "ebd") {
@@ -340,7 +342,7 @@ const TITULOS_MODULOS = {
   abandono: "Perda de Membresia",
   auditoria: "Auditoria", protecaodedados: "Proteção de Dados", ouvidoria: "Ouvidoria", documentos: "Documentos",
   mediacao: "Mediação e Arbitragem", relatoriosdepto: "Relatórios de Departamentos",
-  escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários", menores: "Ministério com Menores", protecao: "Proteção de Crianças", checkininfantil: "Check-in Infantil", cuidadopastoral: "Cuidado Pastoral", comunicacao: "Comunicados", crise: "Crise e Segurança",
+  escalas: "Escalas de Serviço", habilitacao: "Habilitação de Voluntários", menores: "Ministério com Menores", protecao: "Proteção de Crianças", checkininfantil: "Check-in Infantil", cuidadopastoral: "Cuidado Pastoral", comunicacao: "Comunicados", identidade: "Identidade Visual", crise: "Crise e Segurança",
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
   conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação",
   psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos",

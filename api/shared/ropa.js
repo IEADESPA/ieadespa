@@ -69,6 +69,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "O registro de entrega perde o nome em 1 ano (PoliticasRetencao 'Comunicação — registro de entrega'), ou em 5 na convocação oficial (prova do ato); a contagem do envio fica. O histórico de consentimento fica enquanto a pessoa estiver no cadastro e sai na exclusão LGPD. Consentimento e entrega não se alteram (gatilhos no banco). A pessoa vê em Meus Dados o histórico do consentimento e quantos comunicados recebeu."
   },
   {
+    chave: "IDENTIDADE_VISUAL",
+    finalidade: "Escolha participativa da Identidade Visual do ano (Regimento Art. 159 § 1º — v7.14): sugestões de tema dos membros, triagem da Diretoria, votação pelo Meu Painel (Enquete), cores e concurso de arte, e o registro da escolha final do culto. A Diretoria abre o ciclo do ano.",
+    titulares: "Membros ativos e em comunhão que mandam sugestão, votam ou mandam arte",
+    categoriasDados: ["Sugestão de tema (texto curto) com a data e a situação (enviada, retirada, finalista, descartada)", "Voto na enquete (secreto: só a contagem por opção aparece)", "Arte enviada (imagem PNG ou JPEG, título, descrição) com a situação; o nome do autor só a Diretoria vê", "Quem triou, decidiu o empate e registrou o resultado (liderança)"],
+    baseLegal: "LGPD Art. 7º, IX e 11, II, a — processo participativo previsto no Regimento (Art. 159), de quem quis participar; a triagem vê só o texto da sugestão, sem o nome de quem mandou.",
+    tabelasEnvolvidas: ["IdentidadeCiclos", "IdentidadeSugestoes", "IdentidadeTemasUsados", "IdentidadeCores", "IdentidadeArtes", "IdentidadeResultados", "Enquetes", "RespostasEnquete"],
+    retencao: "1 ano depois do fim do ciclo (31/12), a sugestão e a arte perdem o nome e a imagem não escolhida sai do armazenamento (PoliticasRetencao 'Identidade visual — sugestões e artes dos membros'); ficam as contagens, os finalistas e o tema e a arte escolhidos. A exclusão LGPD faz o mesmo na hora (e a sugestão que não foi finalista perde o texto). A pessoa vê em Meus Dados as sugestões e as artes que mandou."
+  },
+  {
     chave: "VINCULO_FAMILIAR_MENOR",
     finalidade: "Registro de vínculo familiar e identificação de responsável legal de menor",
     titulares: "Membros menores de idade e seus responsáveis",

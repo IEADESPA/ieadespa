@@ -147,6 +147,7 @@ const mmDb = require("./ministerioMenoresDb");
 const protecaoDb = require("./protecaoDb");
 const checkinDb = require("./checkinInfantilDb");
 const cuidadoDb = require("./cuidadoPastoralDb");
+const identidadeDb = require("./identidadeVisualDb");
 const criseDb = require("./criseSegurancaDb");
 
 const DETECTORES = {
@@ -222,6 +223,13 @@ const DETECTORES = {
   CUIDADO_RESUMO_DIARIO: { tabela: "CuidadoResumo", detectar: (pool) => cuidadoDb.detectarResumoDiario(pool) },
   CUIDADO_DEGRAU: { tabela: "CuidadoEventos", detectar: (pool) => cuidadoDb.detectarDegraus(pool) },
   CUIDADO_MODERACAO: { tabela: "CuidadoModeracao", detectar: (pool) => cuidadoDb.detectarModeracao(pool) },
+  // Identidade Visual (v7.14, Art. 159): só a Diretoria (identidade_visual, nível GLOBAL) é avisada — nada vai aos membros. Um aviso por ciclo quando a triagem começa (16/11),
+  // quando a votação abre (ou, se não abriu por falta de finalistas, um por dia até abrir), quando ela é apurada e quando chega a fase da arte (dezembro). A rotina diária
+  // (NotificacoesAgendador) abre e apura a votação ANTES desta rodada.
+  IDENTIDADE_TRIAGEM: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarTriagem(pool) },
+  IDENTIDADE_VOTACAO: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarVotacao(pool) },
+  IDENTIDADE_APURACAO: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarApuracao(pool) },
+  IDENTIDADE_ARTE: { tabela: "IdentidadeCiclos", detectar: (pool) => identidadeDb.detectarArte(pool) },
   // Segurança da congregação (v7.15): um aviso por regra e por pessoa (Dirigente e Pastor de Área), juntando as congregações dela; repete uma vez por mês e na hora em que mais uma
   // congregação entra na lista (o pedido da imprensa e o aviso da crise saem NA HORA, no ato, sem detector).
   SEGURANCA_PLANO_REVISAO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_PLANO_REVISAO") },

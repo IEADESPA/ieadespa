@@ -60,6 +60,9 @@ const AJUDA_POR_ABA = {
   crise: "Crise e segurança: em crise (escândalo na mídia, acidente grave), só o porta-voz único fala pela Igreja (Regimento Art. 161-B). Qualquer líder registra aqui, em Imprensa, o pedido de jornalista que chegou a ele — sem comentar o assunto — e o porta-voz recebe na hora. O nível geral abre e encerra o regime e troca o porta-voz (toda a liderança é avisada); o porta-voz registra o que disse. Em Segurança, o Dirigente e o Pastor de Área cuidam do plano de emergência, dos simulados, da vistoria do templo e da equipe de segurança.",
   comunicacao: "Comunicados: escolha um modelo aprovado, monte o grupo (território, cargo, departamento, EBD, formação, voluntariado, direito a voto) e veja quantas pessoas recebem antes de enviar. O e-mail e o celular só chegam a quem autorizou aquela categoria; a convocação oficial chega a todos. Em Envios, o relatório mostra quem recebeu e quem leu; na convocação, quem não foi alcançado. Só o nível geral escreve e aprova modelos.",
   canais: "Relação de Canais Oficiais da IEADESPA (Estatuto Art. 12): só conta, número ou grupo em nome da Igreja. Registre canais, designe administradores, acompanhe a Regra das 24 Horas, as trocas de senha na sucessão de liderança e a transmissão dos cultos (Área Cega).",
+  identidade: "Identidade Visual do ano (Regimento Art. 159): abra o ciclo do ano; de 16 a 21/11 faça a triagem (finalista, com a redação ajustada se preciso, ou descarte pelo critério); a votação abre sozinha em Meu Painel no dia 22 e fecha no fim do dia 30; em dezembro registre até 3 cores, veja as artes e registre a escolha final do culto. Em Temas já usados, cadastre os temas desde 2006.",
+  "meupainel:identidade": "A escolha do tema e da camiseta do ano: mande até 3 sugestões de 01 a 15/11 (pode retirar até o dia 15), vote de 22 a 30/11 e, em dezembro, mande a sua arte nas cores da Diretoria. O resultado aparece aqui.",
+  "meupainel:votacoes": "As enquetes e votações abertas para você. Cada pessoa responde uma vez, e a resposta não se muda depois.",
   "meupainel:canais": "Se você administra um canal oficial, aceite aqui o Termo de Dever de Moderação e trate as ocorrências em até 24 horas. Qualquer pessoa pode avisar um conteúdo irregular num canal oficial e acompanhar o aviso.",
   eventos: "Dossiê de governança do evento do Calendário: organizadores, convidados externos (parecer do Conselho de Ética e Nada Consta da Presidência — Art. 111 e 111-A) e Caixa Flutuante (superávit recolhido à Sede ou convertido em benfeitoria — Art. 53-E §2º). Inscrição, check-in e certificado ficam no site.",
   "meupainel:eventos": "Se você organiza um evento (propôs no Calendário ou foi designado), registre aqui os convidados externos e o Caixa Flutuante do evento. Inscrição, lista de espera, check-in e certificado ficam no site — use os links do cartão.",
@@ -427,6 +430,9 @@ function limparSessao() {
   if (typeof cpaLimparTela === "function") cpaLimparTela();
   // v7.12: as escolhas de comunicação, os comunicados e o relatório de envio (com nomes e telefones) saem da página junto com a sessão — mesma guarda
   if (typeof comLimparTela === "function") comLimparTela();
+  // v7.14: as sugestões, o voto, as artes (e, na aba da Diretoria, as sugestões e os autores das artes) saem da página junto com a sessão — mesma guarda
+  if (typeof idvLimparTela === "function") idvLimparTela();
+  if (typeof enqLimparMeu === "function") enqLimparMeu();
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -548,6 +554,7 @@ function voltarParaCheckin() {
   // v7.11: a fila, o acompanhamento e a nota pastoral aberta não ficam escondidos atrás da Portaria (módulo ausente ou velho no cache: a navegação segue)
   if (typeof cpaAbaMudou === "function") cpaAbaMudou("portaria");
   if (typeof comAbaMudou === "function") comAbaMudou("portaria");
+  if (typeof idvAbaMudou === "function") idvAbaMudou("portaria");
   esconderTodasAsTelas();
   document.getElementById("telaCheckin").style.display = "flex";
 }
@@ -1252,7 +1259,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "crise", "eventos", "setores", "vistoria"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1294,6 +1301,9 @@ const ABA_PERMISSOES_ALT = {
   // v7.12 — Comunicados: permissão própria "comunicacao" (Presidente, Secretário Geral, Dirigente e Pastor de Área), só em sessão de liderança; cada um envia ao próprio território, e só o
   // nível geral escreve e aprova modelos e envia a convocação oficial (o servidor confere cada ato). As escolhas de cada membro ficam em Meu Painel → Comunicações (qualquer login).
   comunicacao: ["comunicacao"],
+  // v7.14 — Identidade Visual: permissão própria "identidade_visual" (Presidente e Secretário Geral), só no nível Geral (Art. 126-Q, II: só o Geral define a identidade) e em
+  // sessão de liderança (o servidor confere cada ato). Sugerir, votar e mandar a arte ficam em Meu Painel → Identidade Visual (qualquer login).
+  identidade: ["identidade_visual"],
   // v7.15 — Crise e segurança: a aba abre para TODA sessão de liderança (o pedido da imprensa que chegou a qualquer líder; ver temPermissaoDaAba); as pílulas Crise
   // (crise_gestao, nível geral) e Segurança (seguranca_congregacao, no território) aparecem conforme o servidor libera.
   crise: ["crise_gestao", "seguranca_congregacao"],
@@ -1366,7 +1376,7 @@ function permissoesDaAba(nome) {
 // backend já o deixava lançar chamada/resposta/pedido da própria turma desde
 // a v6.2, mas ele nunca via a tela (ebdTurmasProfessor: junto do estado de sessão).
 // Abas cujo servidor agora só atende o nível GERAL (catálogos e permissões: quem cadastra congregações, cargos e papéis): para os demais nem aparecem.
-const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados", "setores", "vistoria"]);
+const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados", "setores", "vistoria", "identidade"]);
 function temPermissaoDaAba(nome) {
   if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
@@ -1428,7 +1438,7 @@ const MODULOS = {
   territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
   orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
-  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos"] },
+  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos", "identidade"] },
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
@@ -1493,11 +1503,11 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
   perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
-  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
+  minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
 };
 let subAbaMeupainelAtual = "perfil";
@@ -1506,6 +1516,8 @@ function mostrarSubAbaMeupainel(sub) {
   subAbaMeupainelAtual = sub;
   chaveAjudaAtual = `meupainel:${sub}`;
   if (typeof chkSubAbaMudou === "function") chkSubAbaMudou(sub);
+  if (typeof idvSubAbaMudou === "function") idvSubAbaMudou(sub);   // v7.14: as sugestões, o voto e as artes da pessoa não ficam para trás
+  if (typeof enqSubAbaMudou === "function") enqSubAbaMudou(sub);
   if (typeof comSubAbaMudou === "function") comSubAbaMudou(sub);   // v7.12: as escolhas e os comunicados da pessoa não ficam para trás
   if (typeof cpaSubAbaMudou === "function") cpaSubAbaMudou(sub);   // v7.11: o acompanhamento aberto (e a nota pastoral aberta) e o que a pessoa escrevia nos pedidos não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
@@ -1525,6 +1537,8 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "checkininfantil" && typeof chkCarregarMeuPainelAcao === "function") chkCarregarMeuPainelAcao();
   if (sub === "cuidado" && typeof cpaCarregarMeuPainelAcao === "function") cpaCarregarMeuPainelAcao();
   if (sub === "comunicacoes" && typeof comCarregarMeuPainelAcao === "function") comCarregarMeuPainelAcao();
+  if (sub === "votacoes" && typeof enqCarregarMeuPainelAcao === "function") enqCarregarMeuPainelAcao();
+  if (sub === "identidade" && typeof idvCarregarMeuPainelAcao === "function") idvCarregarMeuPainelAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

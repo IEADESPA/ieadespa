@@ -5,7 +5,7 @@
 #   bash rodar.sh roteiro e2e-3-atos.js [e2e-5-seguranca.js ...]    restaura a base "cenario" (segundos) e roda os roteiros em sequência, no MESMO banco
 #   BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js ...  o mesmo, a partir da base da v7.7 (e2e-8 a e2e-12)
 #   BASE=cenario-protecao bash rodar.sh roteiro e2e-14-protecao.js ...  o mesmo, a partir da base da v7.8 (e2e-14 a e2e-17)
-#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 150 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-30
+#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 152 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-32 e e2e-39
 #   bash rodar.sh preparar-crise      (v7.15) a migração 152 (duas vezes) sobre a base cenario-pastoral; depois BASE=cenario-crise para e2e-33 e e2e-34
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 API="$AQUI/../../api"
@@ -44,6 +44,10 @@ case "$1" in
     node -r ./shim-mssql.js aplicar-migracao.js 149 2 2>&1 | tail -2
     # v7.12: a comunicação (150), também duas vezes
     node -r ./shim-mssql.js aplicar-migracao.js 150 2 2>&1 | tail -2
+    # v7.14: a identidade visual (151), também duas vezes
+    node -r ./shim-mssql.js aplicar-migracao.js 151 2 2>&1 | tail -2
+    # v7.15: a crise (152) também entra aqui: os handlers da rotina diária e da exclusão LGPD já a usam, e os roteiros da v7.11 a v7.14 chamam esses handlers
+    node -r ./shim-mssql.js aplicar-migracao.js 152 2>&1 | tail -2
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"

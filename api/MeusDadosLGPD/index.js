@@ -22,6 +22,7 @@ const menoresConsentimentoDb = require("../shared/menoresConsentimentoDb");
 const checkinInfantilDb = require("../shared/checkinInfantilDb");
 const cuidadoPastoralDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
+const identidadeDb = require("../shared/identidadeVisualDb");
 const criseSegurancaDb = require("../shared/criseSegurancaDb");
 
 module.exports = async function (context, req) {
@@ -131,6 +132,8 @@ module.exports = async function (context, req) {
   const cuidadoPastoral = await cuidadoPastoralDb.dadosDoTitular(pool, alvo);
   // v7.12 — comunicação: o histórico de consentimento (canal, categoria, sim/não, origem, versão do texto) e quantos comunicados a pessoa recebeu.
   const comunicacao = await comunicacaoDb.dadosDoTitular(pool, alvo);
+  // v7.14 — identidade visual: as sugestões de tema e as artes que a pessoa mandou (com a situação de cada uma)
+  const identidadeVisual = await identidadeDb.dadosDoTitular(pool, alvo);
   // v7.15 — segurança e crise: a equipe de segurança (congregação, função, desde e até), as crises em que a pessoa foi o porta-voz e quantos registros dela há na crise.
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
 
@@ -159,6 +162,7 @@ module.exports = async function (context, req) {
       checkinInfantil,
       cuidadoPastoral,
       comunicacao,
+      identidadeVisual,
       criseSeguranca
     }
   };

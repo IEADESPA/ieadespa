@@ -14,6 +14,7 @@ const { ehGeral } = require("../shared/escopoRotas");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { universoDoOrgao } = require("../shared/universo");
 const estatuto = require("../shared/estatuto");
+const { encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
 
 function celula(texto, { cabecalho = false } = {}) {
   return new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: texto, bold: cabecalho })] })] });
@@ -65,6 +66,15 @@ module.exports = async function (context, req) {
   const totalUniverso = universo.length;
   const totalPresentes = presentes.length;
 
+  // v7.14 (revisão) — a enquete que passou do fechamento marcado é encerrada de verdade antes de ir para a minuta (com o resultado da vinculante gravado); a vinculante
+  // encerrada sem resultado (caiu entre os passos) tem o resultado refeito. Sem isso, até a rotina das 7h a minuta dizia "em andamento" ou "REPROVADA".
+  const aFechar = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT EnqueteId, Vinculante, QuorumTipo, Status, ResultadoAprovado FROM Enquetes WHERE SessaoId = @id
+      AND ((Status = 'ABERTA' AND DataFechamentoPrevista IS NOT NULL AND DataFechamentoPrevista <= SYSUTCDATETIME()) OR (Status = 'ENCERRADA' AND Vinculante = 1 AND ResultadoAprovado IS NULL))`)).recordset;
+  for (const e of aFechar) {
+    if (e.Status === "ABERTA") await encerrarEnquete(pool, e.EnqueteId, { agendada: true, enquete: { vinculante: !!e.Vinculante, quorumTipo: e.QuorumTipo } });
+    else await recuperarResultado(pool, { enqueteId: e.EnqueteId, vinculante: true, status: "ENCERRADA", resultadoAprovado: e.ResultadoAprovado, quorumTipo: e.QuorumTipo });
+  }
   const enquetes = (await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT EnqueteId, Titulo, Vinculante, QuorumTipo, Status, ResultadoAprovado FROM Enquetes WHERE SessaoId = @id
   `)).recordset;

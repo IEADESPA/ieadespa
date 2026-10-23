@@ -1151,3 +1151,28 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
 .pagina-sair { display: flex; justify-content: center; padding: 16px; }
 .sair-caixa { max-width: 35rem; width: 100%; }
 .sair-caixa h1 { font-size: 1.4rem; }
+/* v7.15 — Crise e segurança (módulo crise-seguranca.js: a faixa da crise no alto de toda tela da liderança e a aba "Crise e segurança"). Prefixo .crs-; só variáveis do tema.
+   A faixa é vermelha e fica sempre visível (não depende só da cor: o texto diz "Crise ativa"). No celular tudo empilha e nada rola de lado; todo alvo de toque tem pelo menos 44 px. */
+.crs-faixa { background: var(--cor-erro-suave); border-left: 6px solid var(--cor-erro); border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; color: var(--cor-texto); overflow-wrap: anywhere; }
+.crs-faixa-titulo { margin: 0 0 4px; color: var(--cor-erro); }
+.crs-faixa-texto { margin: 0 0 6px; }
+.crs-btn { width: auto; margin: 0; min-height: 44px; }
+.crs-pilulas .cal-pilula { min-height: 44px; }
+.crs-cartao { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 12px; margin: 0 0 12px; background: var(--cor-superficie); overflow-wrap: anywhere; }
+.crs-cartao h4, .crs-cartao h5 { margin: 0 0 6px; }
+.crs-cartao-ativa { border-left: 6px solid var(--cor-erro); }
+.crs-cartao-alerta { border-left: 6px solid var(--cor-secundaria); }
+.crs-corrigida { opacity: 0.75; }
+.crs-corrigida > p:first-child { text-decoration: line-through; }
+.crs-texto { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; }
+.crs-alertas { margin: 4px 0 8px; padding-left: 1.2rem; }
+.crs-aviso { margin: 4px 0 8px; padding-left: 1.2rem; }
+.crs-form summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.crs-fieldset { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+.crs-fieldset legend { font-weight: 600; padding: 0 6px; }
+.crs-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 12px; }
+.crs-secao { border-top: 2px solid var(--cor-borda); padding-top: 8px; margin-top: 16px; }
+.crs-campos { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.crs-telefones { display: flex; flex-wrap: wrap; gap: 8px; }
+.crs-tel { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--cor-borda); border-radius: 8px; text-decoration: none; color: var(--cor-texto); }
+@media print { .crs-faixa { display: none !important; } }

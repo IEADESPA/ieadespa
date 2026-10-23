@@ -48,7 +48,8 @@ function criarServidor({ ataque = true, agoraMs = Date.now() } = {}) {
   // ---- catálogos com ataque ----
   const rotCat = (k) => A(`rotuloCat${k}`, cm.CATEGORIAS[k].rotulo);
   const rotCanal = (k) => A(`rotuloCanal${k}`, cm.CANAIS[k]);
-  const catalogoCategorias = () => [...Object.entries(cm.CATEGORIAS).map(([codigo, c]) => ({ codigo, rotulo: rotCat(codigo), descricao: A(`descCat${codigo}`, c.descricao), obrigatoria: !!c.obrigatoria })),
+  // v7.15: a categoria do SISTEMA (CRISE, o aviso do regime de crise) não entra na tela, como em GestaoComunicacao (catalogos) e comunicacaoDb.minhasPreferencias
+  const catalogoCategorias = () => [...Object.entries(cm.CATEGORIAS).filter(([, c]) => !c.sistema).map(([codigo, c]) => ({ codigo, rotulo: rotCat(codigo), descricao: A(`descCat${codigo}`, c.descricao), obrigatoria: !!c.obrigatoria })),
     { codigo: ATAQUE("codigoCat"), rotulo: A("rotuloCatFalsa", "Falsa"), descricao: "x", obrigatoria: false }];
   const catalogoCanais = () => [...Object.entries(cm.CANAIS).map(([codigo]) => ({ codigo, rotulo: rotCanal(codigo) })), { codigo: ATAQUE("codigoCanal"), rotulo: A("rotuloCanalFalso", "Falso") }];
   const situacoes = () => Object.fromEntries(Object.entries(cm.SITUACOES).map(([k, v]) => [k, A(`situacao${k}`, v)]));
@@ -125,7 +126,7 @@ function criarServidor({ ataque = true, agoraMs = Date.now() } = {}) {
   const preferenciasDe = (membroId) => {
     const p = S.membros[membroId] || { temEmail: false, aparelhos: 0 };
     const v = consentDe(membroId);
-    const categorias = Object.entries(cm.CATEGORIAS).map(([codigo, c]) => ({
+    const categorias = Object.entries(cm.CATEGORIAS).filter(([, c]) => !c.sistema).map(([codigo, c]) => ({
       categoria: codigo, rotulo: rotCat(codigo), descricao: A(`descPref${codigo}`, c.descricao), obrigatoria: !!c.obrigatoria,
       ...(c.obrigatoria ? {} : { texto: A(`textoAut${codigo}`, cm.textoConsentimento(codigo)), versao: A("versao", cm.TEXTO_VERSAO), hash: S.hash[codigo] }),
       canais: Object.fromEntries(Object.keys(cm.CANAIS).map(canal => [canal, c.obrigatoria ? { concedido: true, obrigatoria: true } : { concedido: !!v[`${canal}|${codigo}`], desde: null, origem: v[`${canal}|${codigo}`] ? A("origem", "MEU_PAINEL") : null }]))
@@ -268,7 +269,7 @@ function criarServidor({ ataque = true, agoraMs = Date.now() } = {}) {
     if (acao === "previa") {
       const v = cm.validarCriterios(corpo.criterios);
       if (v.problema) return falha(422, v.problema);
-      if (!cm.CATEGORIAS[corpo.categoria]) return falha(422, "Escolha a categoria (ou o modelo).");
+      if (!cm.ehCategoriaDaTela(corpo.categoria)) return falha(422, "Escolha a categoria (ou o modelo).");
       if (corpo.categoria === "CONVOCACAO" && !geral) return falha(403, "A convocação oficial só sai pelo nível geral.");
       if (S.limitePrevia) return falha(429, "Muitas contagens seguidas. Espere um minuto.");
       const total = S.totalPrevia;

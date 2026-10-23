@@ -40,6 +40,10 @@ const doSistema = (categoria) => cm.CATEGORIAS_DO_SISTEMA.includes(categoria);
 const SEM_SISTEMA = (coluna) => `${coluna} NOT IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ") || "''"})`;
 const COM_SISTEMA = (coluna) => `${coluna} IN (${cm.CATEGORIAS_DO_SISTEMA.map((c) => `'${c}'`).join(", ") || "''"})`;
 const LISTA_DE_PROVA = cm.CATEGORIAS_DE_PROVA.map((c) => `'${c}'`).join(", ");
+// (Trava 7-C) A liderança da pessoa AGORA, para o aviso da crise: LiderAtivo (alguma Liderança vigente) e Suspenso (medida cautelar de suspensão do acesso, sem Liderança vigente).
+const LIDERANCA_DA_PESSOA_SQL = (a) => `CASE WHEN EXISTS (SELECT 1 FROM Lideranca lv WHERE lv.MembroId = ${a}.MembroId AND (lv.AtivoAte IS NULL OR lv.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))) THEN 1 ELSE 0 END AS LiderAtivo,
+      CASE WHEN EXISTS (SELECT 1 FROM MedidasCautelares mc WHERE mc.MembroId = ${a}.MembroId AND mc.SuspenderAcessoSistema = 1)
+        AND NOT EXISTS (SELECT 1 FROM Lideranca lv WHERE lv.MembroId = ${a}.MembroId AND (lv.AtivoAte IS NULL OR lv.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))) THEN 1 ELSE 0 END AS Suspenso`;
 const dia = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
 const contagem = (x) => Number((((x && x.recordset) || [])[0] || {}).n) || 0;
 async function fecharTransacao(t, ok) { try { if (ok) await t.commit(); else await t.rollback(); } catch (e) { /* já encerrada */ } }
@@ -591,13 +595,13 @@ async function tomar(rq, canal, n, filtro = null) {
 async function dadosDoEnvio(pool, cache, envioId) {
   if (!cache.has(envioId)) {
     cache.set(envioId, (await pool.request().input("id", sql.Int, envioId).query(`
-      SELECT e.EnvioId, e.Status, e.Categoria, m.Titulo, m.Corpo FROM ComunicacaoEnvios e JOIN ComunicacaoModelos m ON m.ModeloId = e.ModeloId WHERE e.EnvioId = @id`)).recordset[0] || null);
+      SELECT e.EnvioId, e.Status, e.Categoria, e.CriteriosJson, m.Titulo, m.Corpo FROM ComunicacaoEnvios e JOIN ComunicacaoModelos m ON m.ModeloId = e.ModeloId WHERE e.EnvioId = @id`)).recordset[0] || null);
   }
   return cache.get(envioId);
 }
 async function dadosDaPessoa(pool, membroId, canal, categoria) {
   return (await pool.request().input("m", sql.Int, membroId).input("c", sql.NVarChar(10), canal).input("k", sql.NVarChar(12), categoria).query(`
-    SELECT m.Nome, m.Email, m.Status, c.Nome AS Congregacao,
+    SELECT m.Nome, m.Email, m.Status, c.Nome AS Congregacao, ${LIDERANCA_DA_PESSOA_SQL("m")},
       (SELECT COUNT(*) FROM PushInscricoesMembro p WHERE p.MembroId = m.MembroId) AS Aparelhos,
       (SELECT TOP 1 CAST(k.Concedido AS INT) FROM ComunicacaoConsentimentos k WHERE k.MembroId = m.MembroId AND k.Canal = @c AND k.Categoria = @k ORDER BY k.ConsentimentoId DESC) AS Sim
     FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @m`)).recordset[0] || null;
@@ -613,9 +617,20 @@ async function devolver(pool, entregaIds) {
     .query(`UPDATE ComunicacaoEntregas SET Situacao = 'PENDENTE', AtualizadoEm = SYSUTCDATETIME() WHERE Situacao = 'ENVIANDO' AND EntregaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`);
 }
 // O que mudou entre o envio e a rodada: envio cancelado, consentimento retirado, pessoa que saiu.
+// (Trava 7-C) No aviso da CRISE, a liderança é conferida de novo: quem foi SUSPENSO por medida cautelar depois do ato não recebe o que estava na fila, e quem deixou a liderança
+// também não — menos no aviso do FIM, que vai de propósito a quem recebeu algum aviso da crise e saiu no meio (criseSegurancaDb.destinatariosDoFim; marca `incluiQuemSaiu`).
+function foraDaCrise(categoria, criteriosJson, pessoa) {
+  if (categoria !== "CRISE" || !pessoa) return false;
+  if (Number(pessoa.Suspenso)) return true;
+  if (Number(pessoa.LiderAtivo)) return false;
+  let incluiQuemSaiu = false;
+  try { incluiQuemSaiu = !!(JSON.parse(criteriosJson || "{}") || {}).incluiQuemSaiu; } catch (e) { incluiQuemSaiu = false; }
+  return !incluiQuemSaiu;
+}
 function antesDeMandar(envio, pessoa) {
   if (!envio || envio.Status === "CANCELADO") return "CANCELADO";
   if (!pessoa || pessoa.Status !== "ATIVO") return "CANCELADO";
+  if (foraDaCrise(envio.Categoria, envio.CriteriosJson, pessoa)) return "CANCELADO";
   if (!cm.CATEGORIAS[envio.Categoria].obrigatoria && !Number(pessoa.Sim)) return "SEM_CONSENTIMENTO";
   return null;
 }
@@ -641,13 +656,13 @@ async function celularDoSistema(pool, { deps = {}, orcamentoMs = 15000 } = {}) {
     if (!lote.length) break;
     r.lotes++;
     const dados = (await pool.request().input("ids", sql.NVarChar(sql.MAX), JSON.stringify(lote.map((x) => x.EntregaId))).query(`
-      SELECT x.EntregaId, x.MembroId, e.Status AS EnvioStatus, e.CriteriosJson, mo.Titulo, mo.Corpo, p.Nome, p.Status, cg.Nome AS Congregacao,
+      SELECT x.EntregaId, x.MembroId, e.Status AS EnvioStatus, e.Categoria, e.CriteriosJson, mo.Titulo, mo.Corpo, p.Nome, p.Status, cg.Nome AS Congregacao, ${LIDERANCA_DA_PESSOA_SQL("p")},
         (SELECT COUNT(*) FROM PushInscricoesMembro i WHERE i.MembroId = x.MembroId) AS Aparelhos
       FROM ComunicacaoEntregas x JOIN ComunicacaoEnvios e ON e.EnvioId = x.EnvioId JOIN ComunicacaoModelos mo ON mo.ModeloId = e.ModeloId
       LEFT JOIN MembroReferencia p ON p.MembroId = x.MembroId LEFT JOIN Congregacoes cg ON cg.CongregacaoId = p.CongregacaoId
       WHERE x.EntregaId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`)).recordset;
     const situacoes = await Promise.all(dados.map(async (d) => {
-      if (d.EnvioStatus === "CANCELADO" || d.Status !== "ATIVO") return [d.EntregaId, "CANCELADO"];
+      if (d.EnvioStatus === "CANCELADO" || d.Status !== "ATIVO" || foraDaCrise(d.Categoria, d.CriteriosJson, d)) return [d.EntregaId, "CANCELADO"];
       if (!Number(d.Aparelhos)) return [d.EntregaId, "SEM_APARELHO"];
       let texto = null;
       try { texto = (JSON.parse(d.CriteriosJson) || {}).celular || null; } catch (e) { texto = null; }
@@ -673,6 +688,18 @@ async function celularDoSistema(pool, { deps = {}, orcamentoMs = 15000 } = {}) {
     await devolver(pool, lote.map((x) => x.EntregaId).filter((id) => !vistas.has(id)));
   }
   return r;
+}
+
+// (Trava 7-C) A cota de e-mails dos AVISOS AUTOMÁTICOS (o motor das 7h e o reenvio da proteção) no MESMO teto da comunicação: o que sobra da hora (comunicados, aviso do
+// sistema e os avisos já mandados na última hora contam) e no máximo uma rodada (o teto por minuto do serviço). O aviso imediato de um ato (notificarAgora) não passa por aqui:
+// ele usa a folga entre o teto da comunicação e o limite do Azure (100 por hora).
+async function cotaDeEmailsDosAvisos(pool) {
+  const porRodada = await lerPrazoDias(pool, "COMUNICACAO_EMAILS_POR_RODADA", 20);
+  const porHora = await lerPrazoDias(pool, "COMUNICACAO_EMAILS_POR_HORA", 60);
+  const usados = contagem(await pool.request().query(`SELECT
+    (SELECT COUNT(*) FROM ComunicacaoEntregas WHERE Canal = 'EMAIL' AND Situacao IN ('ACEITO', 'ENVIANDO') AND AtualizadoEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME()))
+    + (SELECT COUNT(*) FROM Notificacoes WHERE EnviadaEmail = 1 AND EnviadaEmailEm >= DATEADD(MINUTE, -60, SYSUTCDATETIME())) AS n`));
+  return Math.max(0, Math.min(porRodada, porHora - usados));
 }
 
 // Uma rodada: os presos viram FALHOU; o celular sai em lotes até o tempo acabar; o e-mail sai até o teto da rodada e da hora (somando os avisos do sistema já mandados na hora);
@@ -830,9 +857,10 @@ async function listarEnvios(pool, { ver }) {
 
 // ---- Do lado de quem recebe ----
 
-async function meusComunicados(pool, membroId) {
+// `limite`: a tela mostra os 100 mais novos; Meus Dados (a exportação do titular) passa null e leva todos (Trava 7-C).
+async function meusComunicados(pool, membroId, { limite = 100 } = {}) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
-    SELECT TOP 100 e.EnvioId, e.Categoria, e.CriadoEm, m.Titulo, m.Corpo, s.CienciaEm, s.LidaEm, mr.Nome, c.Nome AS Congregacao,
+    SELECT ${Number.isInteger(limite) && limite > 0 ? `TOP ${limite} ` : ""}e.EnvioId, e.Categoria, e.CriadoEm, m.Titulo, m.Corpo, s.CienciaEm, s.LidaEm, mr.Nome, c.Nome AS Congregacao,
       (SELECT TOP 1 CAST(n.Lida AS INT) FROM Notificacoes n WHERE n.RegraChave = 'COMUNICADO' AND n.ReferenciaTabela = 'ComunicacaoEnvios' AND n.ReferenciaId = e.EnvioId AND n.DestinatarioMembroId = @m) AS Lida
     FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId JOIN ComunicacaoModelos m ON m.ModeloId = e.ModeloId
     JOIN MembroReferencia mr ON mr.MembroId = s.MembroId LEFT JOIN Congregacoes c ON c.CongregacaoId = mr.CongregacaoId
@@ -865,7 +893,7 @@ async function darCiencia(pool, { membroId, envioId }) {
 // de quem chama: `prepararAvisoDoSistema` (FORA da transação: só lê se cada pessoa tem e-mail e aparelho e monta o texto de cada uma), `gravarAvisoDoSistema` (DENTRO dela: o
 // modelo já aprovado, o envio, as entregas e o sininho, tudo junto com o ato) e, depois do commit, `depoisDoAvisoDoSistema` (a marca da fila e a primeira rodada: o celular sai
 // na hora; o e-mail, aos poucos, pela mesma fila que respeita os 100 por hora do Azure). A categoria é obrigatória: não pede consentimento e não tem link de saída.
-async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas, celular = null }) {
+async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas, celular = null, incluiQuemSaiu = false }) {
   if (!doSistema(categoria)) throw new Error("Categoria do sistema desconhecida.");
   const linhas = await situacaoPorCanal(pool, { ids: pessoas.map((p) => p.MembroId), categoria });
   const porId = new Map(linhas.map((l) => [l.membroId, l]));
@@ -877,7 +905,7 @@ async function prepararAvisoDoSistema(pool, { categoria, titulo, corpo, pessoas,
     sininho.push({ d: p.MembroId, t: cm.preencher(titulo, { nome: p.Nome, congregacao: p.Congregacao }).slice(0, 200),
       msg: cm.textoDoSininho(cm.preencher(corpo, { nome: p.Nome, congregacao: p.Congregacao })) });
   }
-  return { categoria, titulo, corpo, entregas, sininho, celular };
+  return { categoria, titulo, corpo, entregas, sininho, celular, incluiQuemSaiu: !!incluiQuemSaiu };
 }
 // `novoRequest`: () => new sql.Request(transacao). Devolve o envioId.
 async function gravarAvisoDoSistema(novoRequest, preparo, { chave, enviadoPor, grupo }) {
@@ -888,7 +916,7 @@ async function gravarAvisoDoSistema(novoRequest, preparo, { chave, enviadoPor, g
             VALUES (@c, 1, @k, @ti, @co, 'APROVADO', @por, @por, SYSUTCDATETIME()); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
   // o texto CURTO do celular (quem fala e o contato) vai junto do envio: o celular não corta no meio o texto longo do aviso (revisão independente, v7.15)
   const celular = preparo.celular && typeof preparo.celular === "object" ? { titulo: String(preparo.celular.titulo).slice(0, 120), mensagem: String(preparo.celular.mensagem).slice(0, 180) } : undefined;
-  const envioId = (await novoRequest().input("mo", sql.Int, modeloId).input("k", sql.NVarChar(12), categoria).input("j", sql.NVarChar(2000), JSON.stringify({ sistema: categoria, ...(celular ? { celular } : {}) }))
+  const envioId = (await novoRequest().input("mo", sql.Int, modeloId).input("k", sql.NVarChar(12), categoria).input("j", sql.NVarChar(2000), JSON.stringify({ sistema: categoria, ...(celular ? { celular } : {}), ...(preparo.incluiQuemSaiu ? { incluiQuemSaiu: true } : {}) }))
     .input("g", sql.NVarChar(500), String(grupo).slice(0, 500)).input("eu", sql.Int, enviadoPor).input("tot", sql.Int, preparo.sininho.length)
     .query(`INSERT INTO ComunicacaoEnvios (ModeloId, Categoria, CriteriosJson, GrupoDescricao, EnviadoPorMembroId, Total) VALUES (@mo, @k, @j, @g, @eu, @tot); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`)).recordset[0].id;
   for (const bloco of emBlocos(preparo.entregas, LOTE_INSERCAO)) {
@@ -962,10 +990,26 @@ async function aplicarRetencao(pool) {
   } catch (e) { await fecharTransacao(t, false); throw e; }
   return { entregas, avisos };
 }
+// (Trava 7-C) O endereço IP do consentimento: anonimizado 5 anos depois que o consentimento deixou de valer (outra escolha da mesma pessoa, canal e categoria o substituiu) ou
+// que a pessoa saiu do rol — a mesma regra e o mesmo prazo do IP dos aceites das v7.5 a v7.7 (VOLUNTARIADO_IP_RETENCAO_DIAS, ajustável em Prazos). O consentimento vigente de
+// quem continua no rol guarda o IP (é a prova do "sim"). A marca 'comunicacao_purga' é a única porta do gatilho (migração 154).
+async function anonimizarIpsVencidos(pool) {
+  const dias = await lerPrazoDias(pool, "VOLUNTARIADO_IP_RETENCAO_DIAS", 1825);
+  const n = contagem(await pool.request().input("d", sql.Int, dias).query(comMarcaDePurga(`
+    UPDATE k SET EnderecoIp = N'anonimizado' FROM ComunicacaoConsentimentos k JOIN MembroReferencia m ON m.MembroId = k.MembroId
+    WHERE k.EnderecoIp IS NOT NULL AND k.EnderecoIp <> N'anonimizado' AND (
+      EXISTS (SELECT 1 FROM ComunicacaoConsentimentos x WHERE x.MembroId = k.MembroId AND x.Canal = k.Canal AND x.Categoria = k.Categoria AND x.ConsentimentoId > k.ConsentimentoId
+              AND x.CriadoEm < DATEADD(DAY, -@d, SYSUTCDATETIME()))
+      OR (m.Status = 'DESLIGADO' AND m.DataSaida IS NOT NULL AND m.DataSaida < CAST(DATEADD(DAY, -@d, SYSUTCDATETIME()) AS DATE)));
+    SET @apagadas = @@ROWCOUNT;`)));
+  if (n > 0) await auditar("ComunicacaoConsentimentos", 0, "COMUNICACAO_IP_ANONIMIZADO", null);
+  return { anonimizados: n, retencaoDias: dias };
+}
 // A rodada das 7h só faz a retenção e regrava a marca da fila: a fila em si roda de 15 em 15 minutos desde as 6h (rodar aqui atrasaria os avisos do dia e a marca da proteção).
 async function rotinaDiaria(pool) {
   const r = { falhas: [] };
   try { r.retencao = await aplicarRetencao(pool); } catch (e) { r.falhas.push("retencao"); console.error("[COMUNICACAO] retenção:", e.message); }
+  try { r.ips = await anonimizarIpsVencidos(pool); } catch (e) { r.falhas.push("ips"); console.error("[COMUNICACAO] IP do consentimento:", e.message); }
   try { await regravarMarca(pool); } catch (e) { r.falhas.push("marca"); }
   return r;
 }
@@ -979,6 +1023,10 @@ async function exclusaoLgpd(r, membroId) {
   const entregas = await r().input("m", sql.Int, membroId).query(`
     UPDATE s SET MembroId = NULL, AnonimizadoEm = SYSUTCDATETIME() FROM ComunicacaoEntregas s JOIN ComunicacaoEnvios e ON e.EnvioId = s.EnvioId
     WHERE s.MembroId = @m AND e.Categoria NOT IN (${LISTA_DE_PROVA}); SELECT @@ROWCOUNT AS n`);
+  // (Trava 7-C) antes de o aviso do sininho sair, a leitura passa para a entrega (como na retenção): a entrega da convocação e da crise fica como prova e precisa dizer que foi lida
+  await r().input("m", sql.Int, membroId).query(`UPDATE s SET LidaEm = n.LidaEm FROM ComunicacaoEntregas s JOIN Notificacoes n ON n.RegraChave = 'COMUNICADO' AND n.ReferenciaTabela = 'ComunicacaoEnvios'
+    AND n.ReferenciaId = s.EnvioId AND n.DestinatarioMembroId = s.MembroId AND n.Lida = 1
+    WHERE s.Canal = 'SININHO' AND s.LidaEm IS NULL AND s.MembroId = @m`);
   const avisos = await r().input("m", sql.Int, membroId).query(`DELETE FROM Notificacoes WHERE RegraChave = 'COMUNICADO' AND DestinatarioMembroId = @m; SELECT @@ROWCOUNT AS n`);
   const prefs = await r().input("m", sql.Int, membroId).query(`DELETE FROM NotificacaoPreferencias WHERE MembroId = @m; SELECT @@ROWCOUNT AS n`);
   const aparelhos = await r().input("m", sql.Int, membroId).query(`DELETE FROM PushInscricoesMembro WHERE MembroId = @m; SELECT @@ROWCOUNT AS n`);
@@ -989,7 +1037,7 @@ async function dadosDoTitular(pool, membroId) {
   const k = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT k.Canal, k.Categoria, k.Concedido, k.Origem, k.TextoVersao, k.DataFicha, k.FichaReferencia, k.EnderecoIp, k.EnvioId, k.CriadoEm, p.Nome AS RegistradoPor
     FROM ComunicacaoConsentimentos k LEFT JOIN MembroReferencia p ON p.MembroId = k.RegistradoPorMembroId WHERE k.MembroId = @m ORDER BY k.ConsentimentoId DESC`);
-  const comunicados = (await meusComunicados(pool, membroId)).map((c) => ({ envioId: c.envioId, categoria: c.categoriaRotulo, titulo: c.titulo, recebidoEm: c.recebidoEm, lido: c.lido, cienciaEm: c.cienciaEm }));
+  const comunicados = (await meusComunicados(pool, membroId, { limite: null })).map((c) => ({ envioId: c.envioId, categoria: c.categoriaRotulo, titulo: c.titulo, recebidoEm: c.recebidoEm, lido: c.lido, cienciaEm: c.cienciaEm }));
   return {
     consentimentos: k.recordset.map((x) => ({ canal: cm.CANAIS[x.Canal] || x.Canal, categoria: (cm.CATEGORIAS[x.Categoria] || {}).rotulo || x.Categoria, concedido: !!x.Concedido, origem: x.Origem,
       versaoDoTexto: x.TextoVersao, dataFicha: dia(x.DataFicha), fichaReferencia: x.FichaReferencia || null, registradoPor: x.RegistradoPor || null, enderecoIp: x.EnderecoIp || null,
@@ -1003,5 +1051,5 @@ module.exports = {
   PERMISSAO, MAX_GRUPO, minhasPreferencias, salvarPreferencias, validarMudancas, registrarFicha, consultarSaida, confirmarSaida,
   listarModelos, salvarModelo, aprovarModelo, arquivarModelo, opcoes, resolverGrupo, previa, salvarGrupo, listarGrupos, excluirGrupo,
   enviar, cancelar, processarFila, relatorio, listarEnvios, meusComunicados, darCiencia, aplicarRetencao, rotinaDiaria, exclusaoLgpd, dadosDoTitular, regravarMarca,
-  prepararAvisoDoSistema, gravarAvisoDoSistema, cancelarPendentesDoSistema, depoisDoAvisoDoSistema, situacaoDoAvisoDoSistema, celularDoSistema, jaAlcancado
+  prepararAvisoDoSistema, gravarAvisoDoSistema, cancelarPendentesDoSistema, depoisDoAvisoDoSistema, situacaoDoAvisoDoSistema, celularDoSistema, jaAlcancado, cotaDeEmailsDosAvisos, anonimizarIpsVencidos
 };

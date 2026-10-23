@@ -480,12 +480,16 @@ async function reativarCanal(pool, ctx, canalId, { membroId }) {
 // `limiteDia` (opcional): no máximo esse tanto de avisos DESTA regra para a mesma pessoa em 24 horas; os seguintes não são criados (nem enviados por e-mail).
 // Serve para a regra que alguém pode repetir de propósito contra uma pessoa (remover e reintegrar em ciclo): o fato continua registrado, só o aviso para.
 // `aguardarEntrega: false`: não espera o serviço de e-mail confirmar a entrega de cada mensagem (só a aceitação) — para o aviso de um ato que não pode demorar.
-async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, aguardarEntrega = true, deps = {} }) {
+// `prazoMs` (Trava 7-C): o aviso que não pode segurar a resposta (o pedido do mural do site, o canal de ajuda sem login): primeiro nasce o sininho de TODOS os destinatários;
+// depois o e-mail e o celular saem em paralelo e a resposta espera no máximo `prazoMs`. O que não terminou continua a caminho; o e-mail que não sair fica com EnviadaEmail = 0
+// e o reenvio da proteção (protecaoDb.reenviarEmailsPendentes, das regras obrigatórias) o manda depois. `externas` conta só o que terminou dentro do prazo.
+async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, aguardarEntrega = true, prazoMs = null, deps = {} }) {
   try {
     const criar = deps.criarNotificacao || require("./notificacoes").criarNotificacao;
     const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
     const regra = (await pool.request().input("chave", sql.NVarChar(60), regraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @chave AND Ativa = 1`)).recordset[0];
     if (!regra) return { criadas: 0, externas: 0 };
+    if (Number(prazoMs) > 0) return await notificarComPrazo(pool, { regra, regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, prazoMs: Number(prazoMs), criar, enviar });
     const vistos = new Set();
     // externas: quantas pessoas receberam o aviso FORA do app (e-mail aceito pelo provedor ou push entregue a pelo menos um aparelho). Só o sino não basta para
     // aviso que protege criança: quem chama decide o que fazer quando ninguém foi alcançado (Trava 7-B, 20/10/2026).
@@ -515,6 +519,26 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
     console.error("[CANAIS] falha ao notificar:", e.message);
     return { criadas: 0, externas: 0 };
   }
+}
+
+async function notificarComPrazo(pool, { regra, regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, prazoMs, criar, enviar }) {
+  const vistos = new Set();
+  const criadas = [];
+  for (const d of destinatarios || []) {
+    if (!d || !d.membroId || vistos.has(d.membroId)) continue;
+    vistos.add(d.membroId);
+    const { criada, notificacaoId } = await criar(pool, { regraChave, destinatarioMembroId: d.membroId, titulo: regra.Titulo, mensagem: String(mensagem).slice(0, 1000), categoria: regra.Categoria, referenciaTabela, referenciaId });
+    if (criada) criadas.push({ d, notificacaoId });
+  }
+  let externas = 0, terminadas = 0;
+  const tarefas = criadas.map(({ d, notificacaoId }) => Promise.resolve()
+    .then(() => enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email, aguardarEntrega: false }))
+    .then((canais) => { terminadas++; if (canais && (canais.emailEnviado || Number(canais.pushEnviados) > 0)) externas++; })
+    .catch((e) => { terminadas++; console.error("[CANAIS] falha ao enviar aviso:", e && e.message); }));
+  let relogio = null;
+  await Promise.race([Promise.all(tarefas), new Promise((ok) => { relogio = setTimeout(ok, prazoMs); })]);
+  if (relogio) clearTimeout(relogio);
+  return { criadas: criadas.length, suprimidas: 0, externas, aCaminho: criadas.length - terminadas };
 }
 
 async function administradoresAtivosDoCanal(pool, canalId) {

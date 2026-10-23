@@ -21,21 +21,39 @@ const MAX_NOME = 80;
  * 3. Com risco, o pedido vira confidencial aqui também: nunca é publicado no
  *    mural, e a pessoa vê na hora os telefones do CVV (188) e da polícia (190).
  *
- * Se o sistema não responder, o pedido fica só no Directus, como antes (a
- * pessoa não perde o que escreveu); o 188 e o 190 aparecem na página sempre.
+ * Trava 7-C (23/10/2026):
+ * 4. O pedido que o sistema GUARDOU (confidencial ou com risco) perde o texto e
+ *    o nome no Directus: o texto fica só no sistema (Cuidado pastoral → Pedidos
+ *    de oração, nível geral). No Directus sobra a marca (confidencial, data).
+ * 5. Sem resposta do sistema (fora do ar, banco acordando, chave recusada), o
+ *    risco é desconhecido: o pedido vira CONFIDENCIAL por padrão (nunca vai ao
+ *    mural público por engano) e ganha a marca `sistema_pendente` (a escolha
+ *    original da pessoa: PUBLICO ou CONFIDENCIAL). Toda vez que o sistema
+ *    responde a um envio novo, até 2 pendentes são reenviados (o sistema
+ *    reconhece o mesmo item pelo número e não grava nem avisa duas vezes):
+ *    guardado → perde o texto; comum sem risco → volta para a moderação de sempre.
+ *    O campo `sistema_pendente` é criado pelo script
+ *    site/scripts/directus-mural-pendente-esquema.mjs; sem ele, o pedido sem
+ *    resposta fica confidencial (seguro) e só não é reenviado.
+ *
+ * Sem a chave configurada no site, nada muda: o pedido fica só no Directus,
+ * como antes; o 188 e o 190 aparecem na página sempre.
  */
-async function avisarSistema(dados, log) {
+const TEXTO_GUARDADO_NO_SISTEMA = "(pedido guardado no sistema da Igreja: Cuidado pastoral → Pedidos de oração, nível geral)";
+const MAX_REENVIOS = 2;
+
+async function avisarSistema(dados, log, prazoMs = 8000) {
   const chave = process.env.CHAVE_SITE_SISTEMA;
   if (!chave) {
     log.warn("CHAVE_SITE_SISTEMA ausente: o pedido do mural não foi ao cuidado pastoral do sistema.");
-    return null;
+    return { semChave: true };
   }
   try {
     const res = await fetch(`${SISTEMA_API_URL}/cuidado-pastoral-site`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-site-key": chave },
       body: JSON.stringify(dados),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(prazoMs),
     });
     if (!res.ok) {
       if (res.status === 401) log.warn("O sistema recusou a chave do site (CHAVE_SITE_SISTEMA diferente nos dois aplicativos do Azure?): o pedido do mural não foi ao cuidado pastoral.");
@@ -48,6 +66,54 @@ async function avisarSistema(dados, log) {
     log.warn("O sistema não respondeu ao pedido do mural:", e && e.name);
     return null;
   }
+}
+
+async function alterar(headers, log, itemId, campos, rotulo) {
+  try {
+    const r = await fetch(`${DIRECTUS_URL}/items/mural_oracao/${itemId}`, { method: "PATCH", headers, body: JSON.stringify(campos) });
+    if (!r.ok) log.error(`Pedido do mural — falha ao ${rotulo}:`, r.status);
+    return r.ok;
+  } catch (e) {
+    log.error(`Pedido do mural — falha ao ${rotulo}:`, e && e.name);
+    return false;
+  }
+}
+// O que o Directus guarda depois da resposta do sistema (ou da falta dela).
+async function depoisDoSistema(headers, log, { itemId, confidencial, sistema }) {
+  if (!itemId || (sistema && sistema.semChave)) return;
+  if (sistema && sistema.gravado) {
+    // o sistema guardou: o texto e o nome saem do Directus (só a marca fica)
+    await alterar(headers, log, itemId, { confidencial: true, texto: TEXTO_GUARDADO_NO_SISTEMA, nome: null }, "tirar do Directus o texto guardado no sistema");
+    return;
+  }
+  if (sistema && !sistema.risco && !confidencial) return;            // pedido comum: segue a moderação de sempre
+  // sem resposta (risco desconhecido) ou o sistema não guardou um confidencial/com risco (ocupado, limite da hora): confidencial agora, e a marca para reenviar.
+  // Duas gravações: a marca pode ainda não existir no Directus, e a falta dela nunca pode impedir o "confidencial".
+  await alterar(headers, log, itemId, { confidencial: true }, "marcar como confidencial");
+  await alterar(headers, log, itemId, { sistema_pendente: confidencial ? "CONFIDENCIAL" : "PUBLICO" }, "marcar para reenvio");
+}
+// Reenvia ao sistema até MAX_REENVIOS pedidos que ficaram sem resposta (o sistema acabou de responder: está de pé).
+async function reenviarPendentes(headers, log, excetoId) {
+  let lista = [];
+  try {
+    const r = await fetch(`${DIRECTUS_URL}/items/mural_oracao?filter[sistema_pendente][_nnull]=true&fields=id,texto,nome,sistema_pendente&sort=id&limit=${MAX_REENVIOS + 1}`,
+      { headers, signal: AbortSignal.timeout(3000) });
+    if (!r.ok) return 0;                                                // o campo ainda não existe no Directus: nada a reenviar
+    lista = ((await r.json()).data || []).filter((x) => x && x.id !== excetoId).slice(0, MAX_REENVIOS);
+  } catch (e) {
+    return 0;
+  }
+  let feitos = 0;
+  for (const it of lista) {
+    const original = it.sistema_pendente === "CONFIDENCIAL";
+    const s = await avisarSistema({ texto: it.texto, nome: it.nome || null, confidencial: original, siteItemId: it.id }, log, 3000);
+    if (!s || s.semChave) break;
+    if (s.gravado) await alterar(headers, log, it.id, { confidencial: true, texto: TEXTO_GUARDADO_NO_SISTEMA, nome: null, sistema_pendente: null }, "concluir o reenvio");
+    else if (!s.risco && !original) await alterar(headers, log, it.id, { confidencial: false, sistema_pendente: null }, "devolver à moderação");
+    else continue;                                                      // o sistema não guardou agora (ocupado): fica para a próxima
+    feitos++;
+  }
+  return feitos;
 }
 
 module.exports = async function (context, req) {
@@ -89,16 +155,8 @@ module.exports = async function (context, req) {
 
   const sistema = await avisarSistema({ texto, nome: nome || null, confidencial, ...(itemId ? { siteItemId: itemId } : {}) }, log);
   const risco = !!(sistema && sistema.risco);
-
-  // Com risco, nunca vai ao mural público: marca como confidencial (a moderação não tem "Aprovar" para confidencial).
-  if (risco && !confidencial && itemId) {
-    try {
-      const patch = await fetch(`${DIRECTUS_URL}/items/mural_oracao/${itemId}`, { method: "PATCH", headers, body: JSON.stringify({ confidencial: true }) });
-      if (!patch.ok) log.error("Falha ao marcar como confidencial o pedido do mural com risco:", patch.status);
-    } catch (e) {
-      log.error("Falha ao marcar como confidencial o pedido do mural com risco:", e && e.name);
-    }
-  }
+  await depoisDoSistema(headers, log, { itemId, confidencial, sistema });
+  if (sistema && !sistema.semChave) await reenviarPendentes(headers, log, itemId);
 
   // Sem o Directus e sem o sistema guardar, o pedido se perdeu: a pessoa tenta de novo.
   if (!itemId && !(sistema && sistema.gravado)) return responder(502, { erro: "Não foi possível enviar agora. Tente novamente em instantes.", risco });

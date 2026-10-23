@@ -48,6 +48,10 @@ async function avaliarRegras(pool, { chaves = null } = {}) {
   let emailsEnviados = 0;
   let pushesEnviados = 0;
   const falhas = [];      // chaves das regras cujo detector falhou nesta rodada: as outras regras seguem (um detector com problema não derruba os avisos do dia)
+  // Trava 7-C: os e-mails desta rodada entram no MESMO teto da comunicação (comunicacaoDb.cotaDeEmailsDosAvisos: o que sobra da hora, no máximo uma rodada). Passou da cota, o
+  // aviso fica no sininho e no celular; o e-mail das regras obrigatórias fica pendente e o reenvio da proteção o manda numa rodada seguinte. Sem esperar a entrega de cada um.
+  let cotaEmail = 0;
+  try { cotaEmail = await require("./comunicacaoDb").cotaDeEmailsDosAvisos(pool); } catch (e) { cotaEmail = 0; console.error("[NOTIFICACOES] a cota de e-mails não pôde ser lida (só sininho e celular nesta rodada):", e && e.message); }
 
   for (const regra of regras) {
     const detector = DETECTORES[regra.Chave];
@@ -83,10 +87,12 @@ async function avaliarRegras(pool, { chaves = null } = {}) {
         if (!criada) continue;
         criadas++;
 
+        const comEmail = !!(regra.CanalEmail && dest.email && cotaEmail > 0);
         const envio = await enviarCanaisNotificacao(pool, {
-          regra, destinatarioMembroId: dest.membroId, notificacaoId, titulo: regra.Titulo,
-          mensagem: fato.fatoGerador, categoria: regra.Categoria, email: dest.email
+          regra: comEmail ? regra : { ...regra, CanalEmail: false }, destinatarioMembroId: dest.membroId, notificacaoId, titulo: regra.Titulo,
+          mensagem: fato.fatoGerador, categoria: regra.Categoria, email: dest.email, aguardarEntrega: false
         });
+        if (comEmail) cotaEmail--;
         if (envio.emailEnviado) emailsEnviados++;
         pushesEnviados += envio.pushEnviados;
       }

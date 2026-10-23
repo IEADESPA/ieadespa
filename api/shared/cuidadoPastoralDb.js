@@ -18,6 +18,11 @@
 // Revisão independente (21/10/2026): 2 críticos, 7 altos, 6 médios e 8 baixos, todos tratados aqui — a lista de risco ampliada (shared/cuidadoPastoral.js), o pedido de socorro que
 // nunca se perde (nem no limite do dia, nem com outro pedido aberto), a fila filtrada pelo território NO BANCO (antes do TOP), a Extensão fora da fila, o acesso que acaba na mudança
 // de congregação, o responsável que só vê item aberto, o risco marcado em pedido de item encerrado (abre outro), a anonimização sem sobra de matrícula, a marca de purga num lote só.
+//
+// Trava de Revisão 7-C (23/10/2026), as costuras com a proteção de crianças (a regra da Trava 7-B, já no check-in): quem tem pendência reservada à Diretoria (afastamento
+// cautelar, comunicação em análise, cadastro nacional, restrição, fora de comunhão) não vê item, nota nem pedido de criança ou adolescente, não é o destino nem o responsável
+// deles e sai dos que já tinha (a rotina e cada ato da Diretoria); o pedido com sinal de risco sobre criança, ou feito por um menor, fica só com o nível geral, longe de quem tem
+// pendência ou é envolvido de incidente aberto, e a Proteção de crianças é avisada do prazo do Conselho Tutelar; o mural do site responde sem abrir o banco quando não precisa.
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const cp = require("./cuidadoPastoral");
@@ -114,13 +119,14 @@ async function diasDeRetencao(pool, chave) {
 
 // { CONGREGACAO, AREA, REGIAO, QUADRANTE, DISTRITO, GERAL } com { membroId, nome, email, pastor } de quem tem a permissão no escopo que alcança a congregação. A escada usa
 // CONGREGACAO → AREA → REGIAO → GERAL; Quadrante e Distrito (se alguém lá tiver a permissão) recebem o aviso de risco, que vai a todo o território.
+// (Trava 7-C) A concessão restrita a um departamento não entra: o mesmo critério da rota (e da crise).
 async function liderancaDoTerritorio(pool, congregacaoId) {
   const anc = await ancestraisTerritoriais(pool, sql, 1, congregacaoId);
   const r = await pool.request().input("perm", sql.NVarChar(60), `%,${PERMISSAO},%`).input("c", sql.Int, congregacaoId).input("a", sql.Int, anc.areaId || null)
     .input("rg", sql.Int, anc.regiaoId || null).input("q", sql.Int, anc.quadranteId || null).input("d", sql.Int, anc.distritoId || null).query(`
     SELECT DISTINCT l.EscopoTipo, m.MembroId AS membroId, m.Nome AS nome, m.Email AS email, m.CargoMinisterial
     FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId JOIN MembroReferencia m ON m.MembroId = l.MembroId
-    WHERE (',' + p.Permissoes + ',') LIKE @perm AND m.Status = 'ATIVO' AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+    WHERE (',' + p.Permissoes + ',') LIKE @perm AND m.Status = 'ATIVO' AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE)) AND l.DepartamentoId IS NULL
       AND ((l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @c) OR (l.EscopoTipo = 'AREA' AND l.EscopoId = @a) OR (l.EscopoTipo = 'REGIAO' AND l.EscopoId = @rg)
         OR (l.EscopoTipo = 'QUADRANTE' AND l.EscopoId = @q) OR (l.EscopoTipo = 'DISTRITO' AND l.EscopoId = @d) OR l.EscopoTipo = 'GLOBAL')`);
   const t = { CONGREGACAO: [], AREA: [], REGIAO: [], QUADRANTE: [], DISTRITO: [], GERAL: [] };
@@ -154,6 +160,52 @@ async function pessoa(pool, membroId) {
     SELECT m.MembroId, m.Nome, m.Email, m.Telefone, m.Status, m.DataNascimento, m.CongregacaoId, c.Nome AS CongregacaoNome
     FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @m`)).recordset[0] || null;
 }
+
+// ---------------------------------------------------------------
+// Trava 7-C — a regra da Trava 7-B (GestaoCheckinInfantil) no cuidado pastoral
+// ---------------------------------------------------------------
+// A liderança com pendência reservada à Diretoria (afastamento cautelar da v7.8, comunicação em análise, cadastro nacional, restrição nos antecedentes, fora de comunhão) não vê
+// o item, as notas nem o pedido de uma criança ou adolescente, não é nomeada nem fica responsável por eles e não recebe o aviso sobre eles. Para ela, o que é sobre o menor
+// simplesmente não existe (a mesma resposta de "não encontrado": o motivo segue reservado). Na dúvida (a aptidão não pôde ser lida), fecha.
+const menorPelaData = (nascimento, hoje) => { const idade = require("./voluntariado").idadeEmAnos(nascimento, hoje); return idade != null && idade < cp.MAIORIDADE; };
+// O conjunto de quem, nesta lista, tem pendência reservada (aptidão do ministério com menores, em lote).
+async function bloqueadosEntre(pool, membroIds, hoje = hojeBrasilia()) {
+  const ids = [...new Set((membroIds || []).filter((x) => x != null).map(Number))];
+  if (!ids.length) return new Set();
+  try {
+    const mm = require("./ministerioMenores");
+    const mapa = await require("./ministerioMenoresDb").aptidaoEmLote(pool, ids, { hoje });
+    return new Set(ids.filter((id) => { const ap = mapa.get(id); return !ap || mm.temBloqueioReservado(ap.bloqueios); }));
+  } catch (e) {
+    console.error("[CUIDADO] a aptidão não pôde ser conferida (fecha):", e && e.message);
+    return new Set(ids);
+  }
+}
+// Quem é ENVOLVIDO num incidente de proteção ainda aberto (v7.8), qualquer que seja o nível: fica fora do que é sobre criança (o aviso do risco).
+async function envolvidosEmIncidenteAberto(pool, membroIds) {
+  const ids = [...new Set((membroIds || []).filter((x) => x != null).map(Number))];
+  if (!ids.length) return new Set();
+  try {
+    const r = await pool.request().input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids)).query(`
+      SELECT DISTINCT e.MembroId FROM IncidenteEnvolvidos e JOIN IncidentesProtecao i ON i.IncidenteId = e.IncidenteId
+      WHERE i.Status = 'ABERTO' AND e.MembroId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`);
+    return new Set(r.recordset.map((x) => Number(x.MembroId)));
+  } catch (e) {
+    console.error("[CUIDADO] os envolvidos de incidente não puderam ser lidos (fecha):", e && e.message);
+    return new Set(ids);
+  }
+}
+// Quem fica fora de tudo que é sobre criança: a pendência reservada E o envolvido de incidente aberto.
+async function foraDoQueESobreCrianca(pool, membroIds, hoje = hojeBrasilia()) {
+  const [a, b] = await Promise.all([bloqueadosEntre(pool, membroIds, hoje), envolvidosEmIncidenteAberto(pool, membroIds)]);
+  return new Set([...a, ...b]);
+}
+// O bloqueio de quem olha, calculado uma vez por requisição e guardado no próprio `ver` (só quando aparece algo sobre um menor).
+async function conferirBloqueio(pool, ver, agora = new Date()) {
+  if (ver && ver.bloqueioReservado === undefined) ver.bloqueioReservado = (await bloqueadosEntre(pool, [ver.membroId], hojeBrasilia(agora))).has(Number(ver.membroId));
+  return ver;
+}
+const bloqueado = (ver) => !ver || ver.bloqueioReservado !== false;
 // `ver`: { membroId, gestao, geral, acima, podeVerCongregacao(nome) } — montado pela rota a partir da sessão de liderança.
 const alcanca = (ver, congregacaoNome) => !!(ver && ver.gestao && (ver.geral || (congregacaoNome && ver.podeVerCongregacao && ver.podeVerCongregacao(congregacaoNome))));
 // As congregações do território, como lista de ids para a consulta (null = todas, nível geral). O filtro vai NO BANCO, antes do TOP (revisão: o TOP 400 da igreja inteira
@@ -188,9 +240,11 @@ async function carregarItem(pool, itemId) {
 // A pessoa do item deixou de ser membro ativo DESTA congregação (mudou, saiu): a congregação antiga não a vê mais.
 const pessoaMudou = (item) => !!item.MembroId && (item.MembroStatus !== "ATIVO" || !mesmo(item.MembroCongregacaoId, item.CongregacaoId));
 // "GESTAO" | "RESPONSAVEL" | null. A pessoa acompanhada nunca tem acesso ao próprio item.
+// (Trava 7-C) O item de criança ou adolescente: só com o bloqueio de quem olha já conferido (conferirBloqueio) e sem pendência reservada; sem a conferência, fecha.
 function acessoAoItem(ver, item) {
   if (!ver || !item) return null;
   if (item.MembroId && mesmo(item.MembroId, ver.membroId)) return null;
+  if (ehMenor(item, hojeBrasilia()) && bloqueado(ver)) return null;
   const mudou = pessoaMudou(item);
   if (ver.gestao) {
     if (ver.geral) return "GESTAO";
@@ -201,8 +255,13 @@ function acessoAoItem(ver, item) {
   return null;
 }
 function ehMenor(item, hoje) {
-  const idade = require("./voluntariado").idadeEmAnos(item.MembroNascimento, hoje);
-  return idade != null && idade < cp.MAIORIDADE;
+  return !!item && menorPelaData(item.MembroNascimento, hoje);
+}
+// Antes de decidir o acesso a uma lista de itens: confere o bloqueio de quem olha se algum deles é de um menor (uma vez por requisição).
+async function prepararVer(pool, ver, itens, agora = new Date()) {
+  const hoje = hojeBrasilia(agora);
+  if ((itens || []).some((i) => i && ehMenor(i, hoje))) await conferirBloqueio(pool, ver, agora);
+  return ver;
 }
 function formatarItem(i, { agora = new Date(), acesso = "GESTAO", completo = false } = {}) {
   const hoje = hojeBrasilia(agora);
@@ -276,13 +335,23 @@ async function avisarResponsavel(pool, { responsavel, eventoId, pessoaNome, cong
 
 // Para onde vai o item que nasce: o responsável (o escolhido; sem escolha, o Dirigente, se ele não for a própria pessoa) e o degrau. Sem ninguém na congregação, o item nasce
 // no degrau de cima que tem gente (revisão: o item sobre o Dirigente ficava sem dono e sem aviso até vencer). O caso "só nível geral" nasce no topo, sem responsável.
-async function destinoDoItem(pool, { congregacaoId, membroId, soGeral = false, responsavel }) {
+// (Trava 7-C) O item de criança ou adolescente nunca vai a quem tem pendência reservada: nem o Dirigente vira o responsável, nem quem tem a pendência conta como "gente" num
+// degrau (o item sobe ao degrau de cima) ou recebe o aviso. `fora`: essas pessoas.
+async function destinoDoItem(pool, { congregacaoId, membroId, soGeral = false, responsavel, agora = new Date() }) {
   const territorio = await liderancaDoTerritorio(pool, congregacaoId);
-  if (soGeral) return { territorio, responsavel: null, nivel: "GERAL", soGeral: true };
+  const dir = responsavel === undefined && !soGeral ? await dirigenteDa(pool, congregacaoId) : null;
+  let fora = [];
+  if (membroId) {
+    const p = await pessoa(pool, membroId);
+    if (p && menorPelaData(p.DataNascimento, hojeBrasilia(agora))) {
+      fora = [...(await bloqueadosEntre(pool, [...todosDoTerritorio(territorio).map((d) => d.membroId), ...(dir ? [dir.membroId] : [])], hojeBrasilia(agora)))];
+    }
+  }
+  if (soGeral) return { territorio, responsavel: null, nivel: "GERAL", soGeral: true, fora };
   let resp = responsavel;
-  if (resp === undefined) { const dir = await dirigenteDa(pool, congregacaoId); resp = dir && !mesmo(dir.membroId, membroId) ? dir : null; }
-  if (resp) return { territorio, responsavel: resp, nivel: "CONGREGACAO", soGeral: false };
-  return { territorio, responsavel: null, nivel: cp.proximoDegrau("CONGREGACAO", degrausComGente(territorio, [membroId])) || "CONGREGACAO", soGeral: false };
+  if (resp === undefined) resp = dir && !mesmo(dir.membroId, membroId) && !fora.some((f) => mesmo(f, dir.membroId)) ? dir : null;
+  if (resp) return { territorio, responsavel: resp, nivel: "CONGREGACAO", soGeral: false, fora };
+  return { territorio, responsavel: null, nivel: cp.proximoDegrau("CONGREGACAO", degrausComGente(territorio, [membroId, ...fora])) || "CONGREGACAO", soGeral: false, fora };
 }
 // Depois de gravado: o responsável recebe "você é o responsável" (se não foi ele mesmo que se nomeou); sem responsável, quem está no degrau em que o item nasceu é avisado.
 async function avisarDestino(pool, { destino, g, membroId, pessoaNome, congregacaoNome, prazoEm, agora, por }) {
@@ -291,7 +360,7 @@ async function avisarDestino(pool, { destino, g, membroId, pessoaNome, congregac
     return avisarResponsavel(pool, { responsavel: destino.responsavel, eventoId: g.eventoAtribuido, pessoaNome, congregacaoNome, prazoEm, agora });
   }
   if (destino.soGeral || destino.nivel === "CONGREGACAO") return null;
-  return notificarAgora(pool, { regraChave: "CUIDADO_DEGRAU", destinatarios: semRepetidos(destino.territorio[destino.nivel], [membroId, por]), referenciaTabela: "CuidadoEventos",
+  return notificarAgora(pool, { regraChave: "CUIDADO_DEGRAU", destinatarios: semRepetidos(destino.territorio[destino.nivel], [membroId, por, ...(destino.fora || [])]), referenciaTabela: "CuidadoEventos",
     referenciaId: g.eventoCriado, mensagem: cp.textoSemResponsavel({ congregacaoNome, para: destino.nivel }) });
 }
 
@@ -342,8 +411,9 @@ async function abrirItem(pool, { dados, ver, agora = new Date() }) {
     const p = await pessoa(pool, d.membroId);
     if (!p || p.Status !== "ATIVO" || !mesmo(p.CongregacaoId, d.congregacaoId)) return { sucesso: false, mensagem: "A matrícula não é de um membro ativo desta congregação." };
     if (mesmo(p.MembroId, ver.membroId)) return { sucesso: false, mensagem: "Ninguém abre acompanhamento sobre si mesmo: peça a outra pessoa da liderança." };
-    const idade = require("./voluntariado").idadeEmAnos(p.DataNascimento, hoje);
-    acompanhadoMenor = idade != null && idade < cp.MAIORIDADE;
+    acompanhadoMenor = menorPelaData(p.DataNascimento, hoje);
+    // (Trava 7-C) quem tem pendência reservada não age como gestão sobre uma criança: a mesma resposta de matrícula que não alcança (o motivo segue reservado)
+    if (acompanhadoMenor && bloqueado(await conferirBloqueio(pool, ver, agora))) return { sucesso: false, mensagem: "A matrícula não é de um membro ativo desta congregação." };
     nome = p.Nome;
   }
   let escolhido;
@@ -379,12 +449,14 @@ async function listarFila(pool, { ver, filtros = {}, agora = new Date() }) {
   cond.push(filtroDeIds(rq, "i.CongregacaoId", await idsDoTerritorio(pool, ver)));
   const ordem = situacao === "ENCERRADOS" ? "i.EncerradoEm DESC" : "i.Urgente DESC, i.PrazoEm ASC";
   const r = await rq.query(`SELECT TOP (@lim) * FROM (${SELECT_ITEM} WHERE ${cond.join(" AND ")}) i ORDER BY ${ordem}`);
+  await prepararVer(pool, ver, r.recordset, agora);
   return r.recordset.filter((i) => acessoAoItem(ver, i) === "GESTAO").map((i) => formatarItem(i, { agora, acesso: "GESTAO" }));
 }
 
 // O detalhe (liderança ou responsável). null = "não existe".
 async function detalheItem(pool, itemId, { ver, agora = new Date() }) {
   const i = await carregarItem(pool, itemId);
+  await prepararVer(pool, ver, [i], agora);
   const acesso = acessoAoItem(ver, i);
   if (!acesso) return null;
   const notas = await notasVisiveis(pool, i.MembroId ? { membroId: i.MembroId } : { itemId: i.ItemId }, { ver });
@@ -401,9 +473,12 @@ async function meusItens(pool, membroId, { agora = new Date() } = {}) {
     WHERE i.ResponsavelMembroId = @m AND (i.MembroId IS NULL OR i.MembroId <> @m) AND (i.Status = 'ABERTO' OR i.EncerradoEm >= DATEADD(DAY, -30, SYSUTCDATETIME()))
     ORDER BY CASE WHEN i.Status = 'ABERTO' THEN 0 ELSE 1 END, i.Urgente DESC, i.PrazoEm`);
   const ver = { membroId, gestao: false, geral: false };
+  await prepararVer(pool, ver, r.recordset, agora);
+  const hoje = hojeBrasilia(agora);
   return r.recordset.map((i) => {
     if (acessoAoItem(ver, i) === "RESPONSAVEL") return formatarItem(i, { agora, acesso: "RESPONSAVEL", completo: true });
     if (i.Status === "ABERTO") return null;                                                     // a pessoa mudou de congregação: o item vai para a outra
+    if (ehMenor(i, hoje) && bloqueado(ver)) return null;                                         // (Trava 7-C) nem a lembrança do item de um menor
     return { itemId: i.ItemId, tipo: i.Tipo, tipoRotulo: (cp.TIPOS[i.Tipo] || {}).rotulo, pessoaNome: cp.primeiroNome(i.PessoaNomeExibido) || null, status: i.Status,
       desfechoRotulo: cp.DESFECHOS_CONCLUSAO[i.Desfecho] || cp.DESFECHOS_CANCELAMENTO[i.Desfecho] || null, encerradoEm: iso(i.EncerradoEm), encerrado: true };
   }).filter(Boolean);
@@ -413,6 +488,7 @@ async function meusItens(pool, membroId, { agora = new Date() } = {}) {
 // `exige`: "GESTAO" ou "QUALQUER" (liderança ou responsável). `fazer(transaction, linha, item, acesso)` devolve o resultado.
 async function noItemAberto(pool, itemId, ver, exige, fazer) {
   const item = await carregarItem(pool, itemId);
+  await prepararVer(pool, ver, [item]);
   const acesso = acessoAoItem(ver, item);
   if (!acesso || (exige === "GESTAO" && acesso !== "GESTAO")) return acesso && exige === "GESTAO" ? { sucesso: false, proibido: true, mensagem: "Isto é da liderança do território." } : NAO_EXISTE;
   const transaction = new sql.Transaction(pool);
@@ -443,6 +519,7 @@ async function registrarContato(pool, { itemId, dados, ver, agora = new Date() }
 
 async function atribuir(pool, { itemId, responsavelMembroId, ver, agora = new Date() }) {
   const item = await carregarItem(pool, itemId);
+  await prepararVer(pool, ver, [item], agora);
   if (acessoAoItem(ver, item) !== "GESTAO") return NAO_EXISTE;
   const hoje = hojeBrasilia(agora);
   const c = await conferirResponsavel(pool, responsavelMembroId, { congregacaoId: item.CongregacaoId, membroId: item.MembroId, acompanhadoMenor: ehMenor(item, hoje) }, hoje, ver);
@@ -518,6 +595,8 @@ async function contextoDoAlvo(pool, alvo, ver) {
     if (!p) return null;
     congregacaoNome = p.Status === "ATIVO" ? p.CongregacaoNome : null;        // quem saiu: só o nível geral alcança (e a rotina apaga as notas em 30 dias)
     alvoMembroId = p.MembroId;
+    // (Trava 7-C) as notas sobre uma criança ou adolescente não existem para quem tem pendência reservada (nem para escrever)
+    if (!mesmo(alvoMembroId, ver.membroId) && menorPelaData(p.DataNascimento, hojeBrasilia()) && bloqueado(await conferirBloqueio(pool, ver))) return null;
   } else {
     const i = await carregarItem(pool, alvo.itemId);
     if (!i || i.MembroId) return null;                                       // item de membro: a nota é sobre o membro, não sobre o item
@@ -621,6 +700,11 @@ async function leiturasDaNota(pool, notaId, { ver }) {
   if (!n || (n.MembroId && mesmo(n.MembroId, ver.membroId))) return null;
   if (mesmo(n.AutorMembroId, ver.membroId)) { if (!(await notaLegivel(pool, notaId, { ver }))) return null; }
   else if (!(ver.gestao && ver.geral)) return null;
+  else if (n.MembroId) {
+    // (Trava 7-C) quem leu a nota sobre um menor também é dado sobre ele: não para quem tem pendência reservada
+    const p = await pessoa(pool, n.MembroId);
+    if (p && menorPelaData(p.DataNascimento, hojeBrasilia()) && bloqueado(await conferirBloqueio(pool, ver))) return null;
+  }
   const r = await pool.request().input("n", sql.Int, notaId).query(`SELECT TOP 30 l.LidaEm, m.Nome FROM NotasPastoraisLeituras l JOIN MembroReferencia m ON m.MembroId = l.MembroId WHERE l.NotaId = @n ORDER BY l.LeituraId DESC`);
   return r.recordset.map((l) => ({ nome: l.Nome, lidaEm: iso(l.LidaEm) }));
 }
@@ -631,21 +715,39 @@ async function leiturasDaNota(pool, notaId, { ver }) {
 
 // O que o texto pede: { risco (cp.avaliarRisco), citados (ids da liderança do território citados pelo nome), soGeral }. Violência que cita a liderança (pela função ou pelo nome)
 // fica só com o nível geral.
-async function riscoDoTexto(pool, texto, congregacaoId) {
+// (Trava 7-C) `menor`: quem pediu é criança ou adolescente. O sinal de risco SOBRE criança (violência que fala de criança) ou num pedido FEITO por um menor fica só com o nível
+// geral, como o relato de criança da v7.8 (protecaoDb.somenteNivelGeral): o Dirigente pode ser justamente a pessoa de quem se fala.
+async function riscoDoTexto(pool, texto, congregacaoId, { menor = false } = {}) {
   const risco = cp.avaliarRisco(texto);
-  if (!risco.risco) return { risco, citados: [], soGeral: false };
+  if (!risco.risco) return { risco, citados: [], soGeral: false, sobreCrianca: false };
   const territorio = await liderancaDoTerritorio(pool, congregacaoId);
   const citados = risco.violencia ? todosDoTerritorio(territorio).filter((l) => cp.citaPeloNome(texto, l.nome)).map((l) => l.membroId) : [];
-  return { risco, citados, soGeral: risco.violencia && (risco.liderancaCitada || citados.length > 0), territorio };
+  const sobreCrianca = !!(risco.crianca || menor);
+  return { risco, citados, soGeral: (risco.violencia && (risco.liderancaCitada || citados.length > 0)) || sobreCrianca, sobreCrianca, menor: !!menor, territorio };
 }
 // Avisa NA HORA toda a liderança do território (Dirigente, Área, Região, Quadrante, Distrito e nível geral), menos a própria pessoa e quem o texto cita; o caso "só nível geral"
 // avisa só o nível geral (e, se não sobrar ninguém lá, o resto do território). O aviso não leva o texto.
-async function avisarRisco(pool, { congregacaoId, congregacaoNome, eventoId, crianca, fora = [], citados = [], soGeral = false, territorio = null }) {
+// (Trava 7-C) Sobre criança (`sobreCrianca`): ninguém com pendência reservada nem envolvido de incidente aberto recebe; e quem cuida da Proteção de crianças no nível geral é
+// avisado do prazo do Conselho Tutelar, com o caminho para registrar o incidente (o sistema não abre incidente sozinho: quem registra é uma pessoa, que leu o pedido).
+async function avisarRisco(pool, { congregacaoId, congregacaoNome, eventoId, crianca, menor = false, sobreCrianca = false, fora = [], citados = [], soGeral = false, territorio = null }) {
   const t = territorio || await liderancaDoTerritorio(pool, congregacaoId);
-  const excluir = [...fora, ...citados];
+  let excluir = [...fora, ...citados];
+  if (sobreCrianca) excluir = [...excluir, ...(await foraDoQueESobreCrianca(pool, todosDoTerritorio(t).map((d) => d.membroId)))];
   let destinatarios = soGeral ? semRepetidos(t.GERAL, excluir) : todosDoTerritorio(t, excluir);
   if (!destinatarios.length) destinatarios = todosDoTerritorio(t, excluir);
-  return notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios, mensagem: cp.textoRisco({ congregacaoNome, crianca }), referenciaTabela: "CuidadoEventos", referenciaId: eventoId, aguardarEntrega: false });
+  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios, mensagem: cp.textoRisco({ congregacaoNome, crianca }), referenciaTabela: "CuidadoEventos", referenciaId: eventoId, aguardarEntrega: false });
+  if (sobreCrianca) await avisarProtecao(pool, { referenciaTabela: "CuidadoEventosProtecao", referenciaId: eventoId, crianca, menor, fora: excluir });
+  return aviso;
+}
+// O aviso à Proteção de crianças (permissão protecao_menores, nível geral: a Diretoria e o Comitê), sem o texto do pedido: o prazo do Conselho Tutelar e onde registrar.
+async function avisarProtecao(pool, { referenciaTabela, referenciaId, crianca, menor, doSite = false, fora = [] }) {
+  try {
+    const todos = (await resolverDestinatariosPorPermissao(pool, { permissao: "protecao_menores", nivel: "GLOBAL" })).map(destinatarioDe);
+    const longe = await foraDoQueESobreCrianca(pool, todos.map((d) => d.membroId));
+    const destinatarios = semRepetidos(todos, [...fora, ...longe]);
+    if (!destinatarios.length) return { criadas: 0, externas: 0 };
+    return await notificarAgora(pool, { regraChave: "CUIDADO_RISCO_CRIANCA", destinatarios, mensagem: cp.textoRiscoCrianca({ crianca, menor, doSite }), referenciaTabela, referenciaId, aguardarEntrega: false, prazoMs: 4000 });
+  } catch (e) { console.error("[CUIDADO] aviso à Proteção de crianças:", e && e.message); return { criadas: 0, externas: 0 }; }
 }
 const MENSAGEM_RISCO_A_QUEM_PEDIU = (aviso) => `Recebemos o seu pedido. ${cp.textoAvisoRisco(aviso)} Se você está em perigo agora, ligue 190. Se está sofrendo, o CVV atende de graça, 24 horas, no 188.`;
 const MENSAGEM_RISCO_A_LIDERANCA = (aviso) => `Pedido registrado COM SINAL DE RISCO. ${Number((aviso || {}).externas) > 0 ? "A liderança do território foi avisada agora." : "O aviso NÃO saiu do sistema: ligue agora para o Pastor de Área e a Diretoria."} `
@@ -662,7 +764,8 @@ const TEXTO_GUARDADO = "(o texto deste pedido fica guardado só com a liderança
 // pelo limite do dia nem se perde porque já existe outro pedido aberto (revisão: o socorro era descartado com 409/429). `quem`: { solicitanteMembroId?, solicitanteNome?,
 // solicitanteContato?, registradoPor, congregacaoId, congregacaoNome }. `item`: o item que nasce ({ tipo, origem, motivo }; padrão: pedido de oração).
 async function gravarPedidoOracao(pool, { d, quem, agora = new Date(), item: comoItem = null }) {
-  const rk = await riscoDoTexto(pool, d.texto, quem.congregacaoId);
+  const solicitante = quem.solicitanteMembroId ? await pessoa(pool, quem.solicitanteMembroId) : null;
+  const rk = await riscoDoTexto(pool, d.texto, quem.congregacaoId, { menor: !!solicitante && menorPelaData(solicitante.DataNascimento, hojeBrasilia(agora)) });
   const risco = rk.risco;
   const prazos = await lerPrazos(pool);
   const tipoItem = comoItem ? comoItem.tipo : "PEDIDO_ORACAO";
@@ -722,7 +825,7 @@ async function gravarPedidoOracao(pool, { d, quem, agora = new Date(), item: com
   const resposta = { sucesso: true, pedidoId, itemId: item ? item.itemId : null, risco: risco.risco };
   if (risco.risco) {
     const aviso = await avisarRisco(pool, { congregacaoId: quem.congregacaoId, congregacaoNome: quem.congregacaoNome, eventoId: item.eventoCriado, crianca: risco.crianca,
-      fora: [quem.solicitanteMembroId], citados: rk.citados, soGeral: rk.soGeral, territorio: rk.territorio });
+      menor: rk.menor, sobreCrianca: rk.sobreCrianca, fora: [quem.solicitanteMembroId], citados: rk.citados, soGeral: rk.soGeral, territorio: rk.territorio });
     resposta.avisada = Number((aviso || {}).externas) > 0;
     resposta.ajuda = cp.CONTATOS_DE_AJUDA;
     resposta.mensagem = aQuemPediu ? MENSAGEM_RISCO_A_QUEM_PEDIU(aviso) : MENSAGEM_RISCO_A_LIDERANCA(aviso);
@@ -752,6 +855,8 @@ async function registrarPedidoRecebido(pool, { dados, ver, agora = new Date() })
   if (s.dados.membroId) {
     const p = await pessoa(pool, s.dados.membroId);
     if (!p || p.Status !== "ATIVO" || !mesmo(p.CongregacaoId, cong.CongregacaoId)) return { sucesso: false, mensagem: "A matrícula não é de um membro ativo desta congregação." };
+    // (Trava 7-C) quem tem pendência reservada não registra pedido em nome de uma criança: a mesma resposta (o motivo segue reservado)
+    if (menorPelaData(p.DataNascimento, hojeBrasilia(agora)) && bloqueado(await conferirBloqueio(pool, ver, agora))) return { sucesso: false, mensagem: "A matrícula não é de um membro ativo desta congregação." };
   }
   return gravarPedidoOracao(pool, { d: v.dados, agora, quem: { ...s.dados, solicitanteMembroId: s.dados.membroId, registradoPor: ver.membroId, congregacaoId: cong.CongregacaoId, congregacaoNome: cong.Nome } });
 }
@@ -769,13 +874,24 @@ async function pedirVisita(pool, { dados, membroId, agora = new Date() }) {
     return gravarPedidoOracao(pool, { d: { paraQuem: "PROPRIO", categoria: "OUTRO", texto, podeBoletim: false, querContato: true }, agora,
       quem: { solicitanteMembroId: membroId, registradoPor: membroId, congregacaoId: p.CongregacaoId, congregacaoNome: p.CongregacaoNome }, item: { tipo, origem: "PEDIDO_MEMBRO", motivo: texto } });
   }
-  const n = (await pool.request().input("m", sql.Int, membroId).query(`SELECT COUNT(*) AS n FROM CuidadoItens WHERE MembroId = @m AND Origem = 'PEDIDO_MEMBRO' AND CriadoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0];
-  if (Number(n.n) >= cp.LIMITE_PEDIDOS_VISITA_DIA) return { sucesso: false, limite: true, mensagem: "Você já fez pedidos de visita hoje. Se for urgente, ligue para o Dirigente.", ajuda: cp.CONTATOS_DE_AJUDA };
-  const destino = await destinoDoItem(pool, { congregacaoId: p.CongregacaoId, membroId });
+  const destino = await destinoDoItem(pool, { congregacaoId: p.CongregacaoId, membroId, agora });
   const prazoEm = cp.prazoInicial(tipo, agora, await lerPrazos(pool));
-  const g = await gravarItem(pool, { tipo, congregacaoId: p.CongregacaoId, membroId, motivo: texto, origem: "PEDIDO_MEMBRO", prazoEm,
-    responsavelMembroId: destino.responsavel ? destino.responsavel.membroId : null, nivel: destino.nivel, criadoPor: membroId });
-  if (g.repetido) return { sucesso: false, mudou: true, mensagem: "Você já tem um pedido de visita em andamento. A liderança vai procurar você." };
+  // (Trava 7-C) o teto do dia é contado DENTRO da trava da pessoa, na mesma transação que grava: dois pedidos ao mesmo tempo não passam juntos pela contagem
+  const LIMITE = { sucesso: false, limite: true, mensagem: "Você já fez pedidos de visita hoje. Se for urgente, ligue para o Dirigente.", ajuda: cp.CONTATOS_DE_AJUDA };
+  const REPETIDO = { sucesso: false, mudou: true, mensagem: "Você já tem um pedido de visita em andamento. A liderança vai procurar você." };
+  const transaction = new sql.Transaction(pool);
+  let g;
+  try {
+    await transaction.begin();
+    if (!(await obterTrava(() => new sql.Request(transaction), `cuidado-pedido-${membroId}`, 8000))) { await fecharTransacao(transaction, false); return { sucesso: false, mudou: true, mensagem: "Tente de novo em instantes.", ajuda: cp.CONTATOS_DE_AJUDA }; }
+    const n = (await new sql.Request(transaction).input("m", sql.Int, membroId).query(`SELECT COUNT(*) AS n FROM CuidadoItens WHERE MembroId = @m AND Origem = 'PEDIDO_MEMBRO' AND CriadoEm >= DATEADD(HOUR, -24, SYSUTCDATETIME())`)).recordset[0];
+    if (Number(n.n) >= cp.LIMITE_PEDIDOS_VISITA_DIA) { await fecharTransacao(transaction, false); return LIMITE; }
+    if (await abertoDoTipo(transaction, membroId, tipo)) { await fecharTransacao(transaction, false); return REPETIDO; }
+    g = await gravarItem(pool, { tipo, congregacaoId: p.CongregacaoId, membroId, motivo: texto, origem: "PEDIDO_MEMBRO", prazoEm,
+      responsavelMembroId: destino.responsavel ? destino.responsavel.membroId : null, nivel: destino.nivel, criadoPor: membroId }, { transaction });
+    await fecharTransacao(transaction, !g.repetido);
+  } catch (e) { await fecharTransacao(transaction, false); throw e; }
+  if (g.repetido) return REPETIDO;
   await auditar("CuidadoItens", g.itemId, "CUIDADO_PEDIDO_VISITA", membroId);
   await avisarDestino(pool, { destino, g, membroId, pessoaNome: p.Nome, congregacaoNome: p.CongregacaoNome, prazoEm, agora, por: membroId });
   return { sucesso: true, itemId: g.itemId, risco: false, mensagem: "Pedido de visita recebido. A liderança vai combinar com você." };
@@ -799,7 +915,7 @@ async function meusPedidos(pool, membroId) {
 
 const SELECT_PEDIDO = `
   SELECT p.PedidoId, p.CongregacaoId, c.Nome AS CongregacaoNome, p.SolicitanteMembroId, COALESCE(s.Nome, p.SolicitanteNome) AS SolicitanteNome, p.SolicitanteContato,
-         s.Status AS SolicitanteStatus, s.CongregacaoId AS SolicitanteCongregacaoId, rg.Nome AS RegistradoPorNome, p.RegistradoPorMembroId, p.ParaQuem, p.Categoria, p.Texto,
+         s.Status AS SolicitanteStatus, s.CongregacaoId AS SolicitanteCongregacaoId, s.DataNascimento AS SolicitanteNascimento, rg.Nome AS RegistradoPorNome, p.RegistradoPorMembroId, p.ParaQuem, p.Categoria, p.Texto,
          p.PodeBoletim, p.QuerContato, p.Moderacao, p.TextoBoletim, p.BoletimAte, p.ModeradoEm, md.Nome AS ModeradoPorNome, p.Risco, p.RiscoOrigem, p.RiscoCrianca, p.RiscoJaTeve,
          p.SoNivelGeral, p.RiscoMarcadoEm, p.RiscoDesmarcadoEm, p.RiscoDesmarcadoMotivo, p.CriadoEm, p.AnonimizadoEm, p.Origem, p.SiteItemId, ci.ItemId, ci.Status AS ItemStatus
   FROM PedidosOracao p LEFT JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoId LEFT JOIN MembroReferencia s ON s.MembroId = p.SolicitanteMembroId
@@ -807,9 +923,16 @@ const SELECT_PEDIDO = `
   OUTER APPLY (SELECT TOP 1 x.ItemId, x.Status FROM CuidadoItens x WHERE x.PedidoOracaoId = p.PedidoId ORDER BY CASE WHEN x.Status = 'ABERTO' THEN 0 ELSE 1 END, x.ItemId DESC) ci`;
 // A liderança não modera nem lê o pedido que ela mesma fez (quem modera é o degrau de cima); o pedido "só nível geral" é só do nível geral; e o pedido de quem mudou de
 // congregação ou saiu some da congregação antiga (Regimento Art. 132 §1º, II).
+// (Trava 7-C) O pedido sobre criança (o sinal de risco que fala de criança) ou feito por um menor não existe para quem tem pendência reservada.
+const pedidoSobreCrianca = (p) => !!p && (!!p.RiscoCrianca || menorPelaData(p.SolicitanteNascimento, hojeBrasilia()));
+async function prepararVerPedidos(pool, ver, pedidos) {
+  if ((pedidos || []).some(pedidoSobreCrianca)) await conferirBloqueio(pool, ver);
+  return ver;
+}
 function pedidoVisivel(ver, p) {
   if (!p || !ver || !ver.gestao) return false;
   if (p.SolicitanteMembroId && mesmo(p.SolicitanteMembroId, ver.membroId)) return false;
+  if (pedidoSobreCrianca(p) && bloqueado(ver)) return false;
   if (ver.geral) return true;
   if (p.SoNivelGeral || !alcanca(ver, p.CongregacaoNome)) return false;
   return !p.SolicitanteMembroId || (p.SolicitanteStatus === "ATIVO" && mesmo(p.SolicitanteCongregacaoId, p.CongregacaoId));
@@ -838,15 +961,19 @@ async function listarPedidos(pool, { ver, situacao = "AGUARDANDO", congregacaoId
   if (!ver.geral) cond.push("p.SoNivelGeral = 0");
   cond.push(filtroDeIds(rq, "p.CongregacaoId", await idsDoTerritorio(pool, ver)));
   const r = await rq.query(`SELECT TOP 300 * FROM (${SELECT_PEDIDO}) p WHERE ${cond.join(" AND ")} ORDER BY p.Risco DESC, p.PedidoId DESC`);
+  await prepararVerPedidos(pool, ver, r.recordset);
   return r.recordset.filter((p) => pedidoVisivel(ver, p)).map(formatarPedido);
 }
-async function carregarPedido(pool, pedidoId) {
-  return (await pool.request().input("id", sql.Int, pedidoId).query(`${SELECT_PEDIDO} WHERE p.PedidoId = @id`)).recordset[0] || null;
+// (com `ver`, já confere o bloqueio de quem olha quando o pedido é sobre criança)
+async function carregarPedido(pool, pedidoId, ver = null) {
+  const p = (await pool.request().input("id", sql.Int, pedidoId).query(`${SELECT_PEDIDO} WHERE p.PedidoId = @id`)).recordset[0] || null;
+  if (p && ver) await prepararVerPedidos(pool, ver, [p]);
+  return p;
 }
 
 // Moderar: APROVAR (vai ao boletim, só a linha sem nome; só do que espera moderação) ou NAO_PUBLICAR ("lido, fica só com a liderança"; também tira do boletim o que já foi).
 async function moderar(pool, { pedidoId, dados, ver, agora = new Date() }) {
-  const p = await carregarPedido(pool, pedidoId);
+  const p = await carregarPedido(pool, pedidoId, ver);
   if (!pedidoVisivel(ver, p) || p.AnonimizadoEm) return NAO_EXISTE;
   const decisao = typeof (dados || {}).decisao === "string" ? dados.decisao : "";
   if (!["APROVAR", "NAO_PUBLICAR"].includes(decisao)) return { sucesso: false, mensagem: "Escolha: publicar no boletim (sem nome) ou deixar só com a liderança." };
@@ -876,7 +1003,7 @@ async function moderar(pool, { pedidoId, dados, ver, agora = new Date() }) {
 // Marcar (a lista não pegou, mas a liderança percebeu) ou desmarcar (alarme falso, com motivo; da Área para cima) o sinal de risco. Marcar tira o pedido do boletim, deixa o
 // acompanhamento urgente (abre outro se o do pedido já foi encerrado) e avisa na hora.
 async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
-  const p = await carregarPedido(pool, pedidoId);
+  const p = await carregarPedido(pool, pedidoId, ver);
   if (!pedidoVisivel(ver, p) || p.AnonimizadoEm) return NAO_EXISTE;
   if ((dados || {}).marcar !== true && (dados || {}).marcar !== false) return { sucesso: false, mensagem: "Diga se é para marcar ou desmarcar o sinal de risco." };
   if (dados.marcar === false) {
@@ -892,11 +1019,13 @@ async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
   }
   if (p.Risco) return { sucesso: false, mensagem: "Este pedido já está com sinal de risco." };
   if (p.Origem === "SITE") return marcarRiscoDoSite(pool, { p, ver });
-  const rk = await riscoDoTexto(pool, p.Texto || "", p.CongregacaoId);
-  const soGeral = !!p.SoNivelGeral || rk.soGeral;
+  const menor = menorPelaData(p.SolicitanteNascimento, hojeBrasilia(agora));
+  const rk = await riscoDoTexto(pool, p.Texto || "", p.CongregacaoId, { menor });
+  const sobreCrianca = rk.sobreCrianca || menor;                      // (Trava 7-C) marcado à mão no pedido de um menor: também só o nível geral
+  const soGeral = !!p.SoNivelGeral || rk.soGeral || sobreCrianca;
   const prazos = await lerPrazos(pool);
   const prazoRisco = cp.prazoInicial("PEDIDO_ORACAO", agora, prazos, { urgente: true });
-  const destino = await destinoDoItem(pool, { congregacaoId: p.CongregacaoId, membroId: p.SolicitanteMembroId || null, soGeral });
+  const destino = await destinoDoItem(pool, { congregacaoId: p.CongregacaoId, membroId: p.SolicitanteMembroId || null, soGeral, agora });
   const transaction = new sql.Transaction(pool);
   let eventoId, itemId = null, abriuNovo = false;
   try {
@@ -928,7 +1057,8 @@ async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
     await transaction.commit();
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
   await auditar("PedidosOracao", pedidoId, "CUIDADO_PEDIDO_MARCADO", ver.membroId);
-  const aviso = await avisarRisco(pool, { congregacaoId: p.CongregacaoId, congregacaoNome: p.CongregacaoNome, eventoId, crianca: rk.risco.crianca, fora: [p.SolicitanteMembroId], citados: rk.citados, soGeral, territorio: destino.territorio });
+  const aviso = await avisarRisco(pool, { congregacaoId: p.CongregacaoId, congregacaoNome: p.CongregacaoNome, eventoId, crianca: rk.risco.crianca, menor, sobreCrianca,
+    fora: [p.SolicitanteMembroId], citados: rk.citados, soGeral, territorio: destino.territorio });
   const avisou = Number((aviso || {}).externas) > 0;
   return { sucesso: true, itemId, avisada: avisou,
     mensagem: `Sinal de risco marcado: ${abriuNovo ? "um acompanhamento urgente (24 horas) foi aberto" : "o acompanhamento ficou urgente (24 horas)"}. `
@@ -938,7 +1068,7 @@ async function marcarRisco(pool, { pedidoId, dados, ver, agora = new Date() }) {
 // Abre o acompanhamento a partir de um pedido que não tem um aberto (a liderança quer falar com quem pediu). O pedido fica travado durante a abertura (um "marcar risco" ao mesmo
 // tempo espera e vê o item).
 async function acompanharPedido(pool, { pedidoId, ver, agora = new Date() }) {
-  const p = await carregarPedido(pool, pedidoId);
+  const p = await carregarPedido(pool, pedidoId, ver);
   if (!pedidoVisivel(ver, p) || p.AnonimizadoEm) return NAO_EXISTE;
   if (p.Origem === "SITE") return { sucesso: false, mensagem: "Este pedido veio do mural do site: não há congregação nem contato para abrir um acompanhamento. Se o texto traz um contato, procure a pessoa e registre o pedido em mãos." };
   if (p.ItemId && p.ItemStatus === "ABERTO") return { sucesso: false, mudou: true, itemId: p.ItemId, mensagem: "Este pedido já tem um acompanhamento aberto." };
@@ -998,7 +1128,11 @@ async function buscarPessoas(pool, { ver, congregacaoId, q, agora = new Date() }
   const territorio = await liderancaDoTerritorio(pool, congregacaoId);
   const norm = cp.normalizar(termo);
   const lideres = todosDoTerritorio(territorio).filter((d) => cp.normalizar(d.nome).includes(norm));
-  const lista = r.recordset.map((m) => { const idade = vol.idadeEmAnos(m.DataNascimento, hoje); return { membroId: m.MembroId, nome: m.Nome, lideranca: false, maior: idade != null && idade >= cp.MAIORIDADE }; });
+  // (Trava 7-C) quem tem pendência reservada não acha criança pela busca (não abre item nem registra pedido sobre ela)
+  const temMenor = r.recordset.some((m) => menorPelaData(m.DataNascimento, hoje));
+  const semMenores = temMenor && bloqueado(await conferirBloqueio(pool, ver, agora));
+  const lista = r.recordset.filter((m) => !(semMenores && menorPelaData(m.DataNascimento, hoje)))
+    .map((m) => { const idade = vol.idadeEmAnos(m.DataNascimento, hoje); return { membroId: m.MembroId, nome: m.Nome, lideranca: false, maior: idade != null && idade >= cp.MAIORIDADE }; });
   for (const l of lideres) if (!lista.some((x) => mesmo(x.membroId, l.membroId))) lista.push({ membroId: l.membroId, nome: l.nome, lideranca: true, maior: true });
   return lista;
 }
@@ -1163,15 +1297,87 @@ async function detectarAfastamentos(pool, { agora = new Date() } = {}) {
   return { avaliados: candidatos.length, sinais: sinais.length, abertos };
 }
 
+// (Trava 7-C) Tirar o responsável de um item aberto, DENTRO de uma transação (`r` cria a requisição nela): o item fica sem responsável, no degrau `nivelPara` (o mesmo, ou o
+// de cima quando o dele ficou sem ninguém), com um evento ATRIBUIDO sem pessoa e a observação neutra — o motivo nunca aparece (pode ser pendência reservada ou a exclusão
+// LGPD de quem era o responsável). Devolve o id do evento, ou null se o item já não estava com ele.
+const OBS_RESPONSAVEL_SAIU = "O responsável deixou este acompanhamento (rotina do sistema). Nomeie outra pessoa.";
+async function soltarNaTransacao(r, { itemId, responsavelMembroId, nivelDe, nivelPara }) {
+  const u = await r().input("i", sql.Int, itemId).input("rp", sql.Int, responsavelMembroId).input("nv", sql.NVarChar(12), nivelPara)
+    .query(`UPDATE CuidadoItens SET ResponsavelMembroId = NULL, Nivel = @nv WHERE ItemId = @i AND Status = 'ABERTO' AND ResponsavelMembroId = @rp; SELECT @@ROWCOUNT AS n`);
+  if (!contagem(u)) return null;
+  return inserirEvento(r(), { itemId, tipo: "ATRIBUIDO", observacao: OBS_RESPONSAVEL_SAIU, ...(nivelPara !== nivelDe ? { nivelDe, nivelPara } : {}) });
+}
+// O degrau do item que ficou sem responsável: o dele, se ainda tem alguém lá (fora quem saiu e quem tem pendência); senão o próximo com gente.
+function nivelSemResponsavel(item, territorio, fora) {
+  const comGente = degrausComGente(territorio, [item.MembroId, ...fora]);
+  return comGente.has(item.Nivel) ? item.Nivel : cp.proximoDegrau(item.Nivel, comGente) || item.Nivel;
+}
+// Depois do commit: quem está no degrau do item é avisado de que ele ficou sem responsável (nunca a pessoa acompanhada nem quem saiu).
+async function avisarResponsavelSaiu(pool, { eventoId, congregacaoId, congregacaoNome, membroId, nivel, fora = [] }) {
+  if (!eventoId) return null;
+  const territorio = await liderancaDoTerritorio(pool, congregacaoId);
+  const destinatarios = semRepetidos(territorio[nivel] || [], [membroId, ...fora]);
+  if (!destinatarios.length) return null;
+  return notificarAgora(pool, { regraChave: "CUIDADO_DEGRAU", destinatarios, referenciaTabela: "CuidadoEventos", referenciaId: eventoId, mensagem: cp.textoResponsavelSaiu({ congregacaoNome, para: nivel }) });
+}
+// (Trava 7-C) A regra da 7-B depois do fato: quem passou a ter pendência reservada (afastamento cautelar, comunicação em análise, cadastro nacional, restrição, fora de comunhão)
+// deixa de ser o responsável pelos itens ABERTOS de crianças e adolescentes. Roda junto com a retirada das escalas (ministerioMenoresDb.retirarInaptosDasEscalas: cada ato da
+// Diretoria, com `membroId`, e a rotina diária, sem). Aqui a dúvida NÃO solta ninguém: se a aptidão não pôde ser lida, o erro sobe (a rotina avisa; a próxima refaz).
+async function soltarItensDeMenores(pool, { membroId = null, hoje = hojeBrasilia() } = {}) {
+  const rq = pool.request();
+  let filtro = "";
+  if (membroId) { rq.input("r", sql.Int, membroId); filtro = " AND i.ResponsavelMembroId = @r"; }
+  const linhas = (await rq.query(`
+    SELECT i.ItemId, i.CongregacaoId, c.Nome AS CongregacaoNome, i.MembroId, i.ResponsavelMembroId, i.Nivel, m.DataNascimento AS MembroNascimento
+    FROM CuidadoItens i JOIN MembroReferencia m ON m.MembroId = i.MembroId JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId
+    WHERE i.Status = 'ABERTO' AND i.ResponsavelMembroId IS NOT NULL AND m.DataNascimento IS NOT NULL${filtro}`)).recordset.filter((i) => ehMenor(i, hoje));
+  if (!linhas.length) return { soltos: 0 };
+  const mm = require("./ministerioMenores");
+  const aptidoes = await require("./ministerioMenoresDb").aptidaoEmLote(pool, linhas.map((l) => l.ResponsavelMembroId), { hoje });
+  const comPendencia = (id) => { const ap = aptidoes.get(Number(id)); return !!ap && mm.temBloqueioReservado(ap.bloqueios); };
+  const territorios = new Map(), memo = new Map();
+  let soltos = 0;
+  for (const it of linhas.filter((l) => comPendencia(l.ResponsavelMembroId))) {
+    if (!territorios.has(it.CongregacaoId)) territorios.set(it.CongregacaoId, await liderancaDoTerritorio(pool, it.CongregacaoId));
+    const territorio = territorios.get(it.CongregacaoId);
+    const fora = [...(await bloqueadosDoTerritorio(pool, territorio, it.CongregacaoId, hoje, memo)), it.ResponsavelMembroId];
+    const nivelPara = nivelSemResponsavel(it, territorio, fora);
+    const t = new sql.Transaction(pool);
+    let eventoId = null;
+    try {
+      await t.begin();
+      eventoId = await soltarNaTransacao(() => new sql.Request(t), { itemId: it.ItemId, responsavelMembroId: it.ResponsavelMembroId, nivelDe: it.Nivel, nivelPara });
+      await fecharTransacao(t, !!eventoId);
+    } catch (e) { await fecharTransacao(t, false); throw e; }
+    if (!eventoId) continue;
+    soltos++;
+    // a auditoria guarda só o item e o código (nunca quem era o responsável: somado à hora, apontaria quem tem pendência)
+    await auditar("CuidadoItens", it.ItemId, "CUIDADO_RESPONSAVEL_RETIRADO", null);
+    await avisarResponsavelSaiu(pool, { eventoId, congregacaoId: it.CongregacaoId, congregacaoNome: it.CongregacaoNome, membroId: it.MembroId, nivel: nivelPara, fora });
+  }
+  return { soltos };
+}
+
+// (Trava 7-C) Quem tem pendência reservada na liderança do território de uma congregação: uma conferência por congregação e por rodada (`memo` vive só durante a rodada;
+// quem tem pendência é dado reservado e não fica em cache).
+async function bloqueadosDoTerritorio(pool, territorio, congregacaoId, hoje, memo) {
+  if (!memo.has(congregacaoId)) memo.set(congregacaoId, await bloqueadosEntre(pool, todosDoTerritorio(territorio).map((d) => d.membroId), hoje));
+  return memo.get(congregacaoId);
+}
+
 // Sobe um degrau (ou lembra, no topo) cada item aberto vencido. Os avisos saem pelos detectores do motor, que leem os eventos de hoje.
 async function subirEscada(pool, { agora = new Date() } = {}) {
   const prazos = await lerPrazos(pool);
-  const r = await pool.request().query(`SELECT ItemId, CongregacaoId, MembroId, Nivel, PrazoEm, Status, LembretesGerais, Urgente FROM CuidadoItens WHERE Status = 'ABERTO' AND PrazoEm < SYSUTCDATETIME()`);
-  const territorios = new Map();
+  const r = await pool.request().query(`SELECT i.ItemId, i.CongregacaoId, i.MembroId, i.Nivel, i.PrazoEm, i.Status, i.LembretesGerais, i.Urgente, m.DataNascimento AS MembroNascimento
+    FROM CuidadoItens i LEFT JOIN MembroReferencia m ON m.MembroId = i.MembroId WHERE i.Status = 'ABERTO' AND i.PrazoEm < SYSUTCDATETIME()`);
+  const territorios = new Map(), memo = new Map();
+  const hoje = hojeBrasilia(agora);
   let subiram = 0, lembretes = 0;
   for (const item of r.recordset) {
     if (!territorios.has(item.CongregacaoId)) territorios.set(item.CongregacaoId, await liderancaDoTerritorio(pool, item.CongregacaoId));
-    const comGente = degrausComGente(territorios.get(item.CongregacaoId), [item.MembroId]);
+    // (Trava 7-C) no item de um menor, quem tem pendência reservada não conta como "gente" no degrau (o item passa por cima dele)
+    const fora = ehMenor(item, hoje) ? [...(await bloqueadosDoTerritorio(pool, territorios.get(item.CongregacaoId), item.CongregacaoId, hoje, memo))] : [];
+    const comGente = degrausComGente(territorios.get(item.CongregacaoId), [item.MembroId, ...fora]);
     const dec = cp.decidirEscada(item, comGente, agora);
     if (dec.acao === "NADA") continue;
     const novoPrazo = cp.prazoDoDegrau(item, agora, prazos);
@@ -1273,6 +1479,7 @@ async function detectarResumoDiario(pool, { agora = new Date() } = {}) {
       WHERE i.Status = 'ABERTO' AND i.ResponsavelMembroId IS NOT NULL AND (i.MembroId IS NULL OR (i.MembroId <> i.ResponsavelMembroId AND mb.Status = 'ATIVO' AND mb.CongregacaoId = i.CongregacaoId))
     ) x JOIN MembroReferencia m ON m.MembroId = x.ResponsavelMembroId
     WHERE m.Status = 'ATIVO'
+      AND NOT EXISTS (SELECT 1 FROM SolicitacoesTitularLGPD s WHERE s.MembroId = m.MembroId AND s.Tipo = 'EXCLUSAO' AND s.Status = 'ATENDIDA')
     GROUP BY x.ResponsavelMembroId, m.Nome, m.Email`);
   const ref = cp.referenciaDoDia(hojeBrasilia(agora));
   return r.recordset.filter((l) => Number(l.novos) + Number(l.vencendo) + Number(l.vencidos) > 0).map((l) => ({
@@ -1284,14 +1491,17 @@ async function detectarResumoDiario(pool, { agora = new Date() } = {}) {
 // Um aviso por item que subiu (ou lembrou no topo) nas últimas 26 horas, a quem está no degrau novo (menos a própria pessoa acompanhada).
 async function detectarDegraus(pool, { agora = new Date() } = {}) {
   const r = await pool.request().query(`
-    SELECT e.EventoId, e.NivelPara, i.ItemId, i.CongregacaoId, i.MembroId, c.Nome AS CongregacaoNome
-    FROM CuidadoEventos e JOIN CuidadoItens i ON i.ItemId = e.ItemId JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId
+    SELECT e.EventoId, e.NivelPara, i.ItemId, i.CongregacaoId, i.MembroId, c.Nome AS CongregacaoNome, m.DataNascimento AS MembroNascimento
+    FROM CuidadoEventos e JOIN CuidadoItens i ON i.ItemId = e.ItemId JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId LEFT JOIN MembroReferencia m ON m.MembroId = i.MembroId
     WHERE e.Tipo IN ('ESCALONADO', 'LEMBRETE_GERAL') AND e.Em >= DATEADD(HOUR, -26, SYSUTCDATETIME()) AND i.Status = 'ABERTO'`);
-  const territorios = new Map();
+  const territorios = new Map(), memo = new Map();
+  const hoje = hojeBrasilia(agora);
   const fatos = [];
   for (const ev of r.recordset) {
     if (!territorios.has(ev.CongregacaoId)) territorios.set(ev.CongregacaoId, await liderancaDoTerritorio(pool, ev.CongregacaoId));
-    const destinatarios = semRepetidos(territorios.get(ev.CongregacaoId)[ev.NivelPara] || [], [ev.MembroId]);
+    // (Trava 7-C) o aviso do item de um menor não vai a quem tem pendência reservada
+    const fora = ehMenor(ev, hoje) ? [...(await bloqueadosDoTerritorio(pool, territorios.get(ev.CongregacaoId), ev.CongregacaoId, hoje, memo))] : [];
+    const destinatarios = semRepetidos(territorios.get(ev.CongregacaoId)[ev.NivelPara] || [], [ev.MembroId, ...fora]);
     if (!destinatarios.length) continue;
     fatos.push({ referenciaId: ev.EventoId, destinatarios, fatoGerador: cp.textoDegrau({ congregacaoNome: ev.CongregacaoNome, para: ev.NivelPara }) });
   }
@@ -1365,7 +1575,28 @@ async function exclusaoLgpd(r, membroId) {
     UPDATE PedidosOracao SET Texto = NULL, SolicitanteMembroId = NULL, RegistradoPorMembroId = NULL, SolicitanteNome = NULL, SolicitanteContato = NULL, TextoBoletim = NULL,
       RiscoDesmarcadoMotivo = NULL, Moderacao = CASE WHEN Moderacao = 'APROVADO' THEN 'NAO_PUBLICAR' ELSE Moderacao END, BoletimAte = NULL, AnonimizadoEm = SYSUTCDATETIME()
     WHERE SolicitanteMembroId = @m AND AnonimizadoEm IS NULL; SELECT @@ROWCOUNT AS n`));
-  return { notas, itens, pedidos };
+  // (Trava 7-C) os itens ABERTOS de que a pessoa era a RESPONSÁVEL ficam sem responsável (no mesmo degrau, ou no de cima se o dela ficou vazio), com o evento neutro; quem
+  // chama avisa o degrau depois do commit (avisarItensSoltos). Sem isto, a fila mostrava um responsável que já não existe e o item vencia sem ninguém saber.
+  const deResponsavel = ((await r().input("m", sql.Int, id).query(`
+    SELECT i.ItemId, i.CongregacaoId, c.Nome AS CongregacaoNome, i.MembroId, i.Nivel FROM CuidadoItens i JOIN Congregacoes c ON c.CongregacaoId = i.CongregacaoId
+    WHERE i.ResponsavelMembroId = @m AND i.Status = 'ABERTO'`)) || {}).recordset || [];
+  const itensSoltos = [];
+  for (const it of deResponsavel) {
+    const eventoId = await soltarNaTransacao(r, { itemId: it.ItemId, responsavelMembroId: id, nivelDe: it.Nivel, nivelPara: it.Nivel });
+    if (eventoId) itensSoltos.push({ eventoId, congregacaoId: it.CongregacaoId, congregacaoNome: it.CongregacaoNome, membroId: it.MembroId, nivel: it.Nivel });
+  }
+  return { notas, itens, pedidos, soltos: itensSoltos.length, itensSoltos };
+}
+// Depois do commit da exclusão LGPD: quem está no degrau de cada item que ficou sem responsável é avisado (ou, sem ninguém lá, o próximo degrau com gente; o item segue no
+// degrau dele e a escada da rotina o leva adiante se vencer). Fail-soft: o item já está na fila "Sem responsável".
+async function avisarItensSoltos(pool, itensSoltos, membroExcluido) {
+  for (const it of itensSoltos || []) {
+    try {
+      const territorio = await liderancaDoTerritorio(pool, it.congregacaoId);
+      const nivel = nivelSemResponsavel({ MembroId: it.membroId, Nivel: it.nivel }, territorio, [membroExcluido]);
+      await avisarResponsavelSaiu(pool, { eventoId: it.eventoId, congregacaoId: it.congregacaoId, congregacaoNome: it.congregacaoNome, membroId: it.membroId, nivel, fora: [membroExcluido] });
+    } catch (e) { console.error("[CUIDADO] aviso do item sem responsável (exclusão LGPD):", e && e.message); }
+  }
 }
 
 // ---------------------------------------------------------------
@@ -1383,25 +1614,39 @@ const MAX_TEXTO_SITE = 1000, MAX_NOME_SITE = 150;
 // O site manda, servidor a servidor, o pedido que acabou de receber no mural. Só o CONFIDENCIAL ou com SINAL DE RISCO é guardado aqui (os outros seguem só no
 // Directus, com a moderação da Diretoria no painel do site) — e para esses o banco nem é aberto. Com risco, o aviso obrigatório sai na hora ao nível geral.
 // Devolve { gravado, risco, avisada?, repetido? }; o site usa `risco` para mostrar o 188 e o 190 a quem escreveu e para guardar o pedido como confidencial.
+// (Trava 7-C) O que dá para decidir SEM o banco: o texto vazio e o pedido comum (sem confidencialidade e sem sinal de risco), que nem abre o banco. A rota usa isto ANTES de
+// pedir a conexão: com o banco pausado (o Azure SQL dorme quando ninguém usa), o pedido comum responde na hora em vez de esperar o banco acordar e estourar o tempo do site.
+function preverDoSite({ texto, confidencial }) {
+  const t = cp.limparTextoDoSite(texto, MAX_TEXTO_SITE);
+  if (t.length < 2) return { invalido: true, precisaBanco: false, risco: false };
+  const risco = cp.avaliarRisco(t);
+  return { invalido: false, precisaBanco: !!confidencial || risco.risco, risco: risco.risco };
+}
+const PRAZO_AVISO_SITE_MS = 4000;          // (Trava 7-C) o aviso do risco não segura a resposta ao site: o sininho de todos nasce antes; e-mail e celular têm 4 s (o e-mail que não sair
+                                           // fica pendente e o reenvio da proteção o manda: CUIDADO_RISCO é obrigatória)
 async function receberDoSite(pool, { texto, nome, confidencial, siteItemId = null }) {
   const t = cp.limparTextoDoSite(texto, MAX_TEXTO_SITE);
   const n = cp.limparTextoDoSite(nome, MAX_NOME_SITE) || null;
   if (t.length < 2) return { gravado: false, risco: false, invalido: true };
   const risco = cp.avaliarRisco(t);
   if (!confidencial && !risco.risco) return { gravado: false, risco: false };
+  const si = Number.isInteger(siteItemId) && siteItemId > 0 ? siteItemId : null;
   const transaction = new sql.Transaction(pool);
   let pedidoId;
   try {
     await transaction.begin();
     if (!(await obterTrava(() => new sql.Request(transaction), "cuidado-site", 8000))) { await fecharTransacao(transaction, false); return { gravado: false, risco: risco.risco, ocupado: true }; }
-    const rep = (await new sql.Request(transaction).input("t", sql.NVarChar(1000), t)
-      .query(`SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE Origem = 'SITE' AND Texto = @t AND CriadoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY PedidoId DESC`)).recordset[0];
+    // (Trava 7-C) o mesmo item do site já entregue (o site reenvia o que ficou sem resposta, e a primeira tentativa pode ter gravado depois que o site desistiu): é o MESMO pedido
+    const rep = (si ? (await new sql.Request(transaction).input("si", sql.Int, si)
+      .query(`SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE Origem = 'SITE' AND SiteItemId = @si ORDER BY PedidoId`)).recordset[0] : null)
+      || (await new sql.Request(transaction).input("t", sql.NVarChar(1000), t)
+        .query(`SELECT TOP 1 PedidoId, Risco FROM PedidosOracao WHERE Origem = 'SITE' AND Texto = @t AND CriadoEm >= DATEADD(MINUTE, -10, SYSUTCDATETIME()) ORDER BY PedidoId DESC`)).recordset[0];
     if (rep) { await fecharTransacao(transaction, false); return { gravado: true, repetido: true, risco: !!rep.Risco, pedidoId: rep.PedidoId }; }
     const naHora = Number((await new sql.Request(transaction).input("r", sql.Bit, risco.risco ? 1 : 0)
       .query(`SELECT COUNT(*) AS n FROM PedidosOracao WHERE Origem = 'SITE' AND Risco = @r AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`)).recordset[0].n);
     if (naHora >= (risco.risco ? LIMITE_SITE_RISCO_HORA : LIMITE_SITE_HORA)) { await fecharTransacao(transaction, false); return { gravado: false, risco: risco.risco, limite: true }; }
     pedidoId = (await new sql.Request(transaction).input("sn", sql.NVarChar(150), n).input("t", sql.NVarChar(1000), t).input("rk", sql.Bit, risco.risco ? 1 : 0)
-      .input("ro", sql.NVarChar(10), risco.risco ? "AUTOMATICO" : null).input("rc", sql.Bit, risco.crianca ? 1 : 0).input("si", sql.Int, Number.isInteger(siteItemId) && siteItemId > 0 ? siteItemId : null)
+      .input("ro", sql.NVarChar(10), risco.risco ? "AUTOMATICO" : null).input("rc", sql.Bit, risco.crianca ? 1 : 0).input("si", sql.Int, si)
       .query(`INSERT INTO PedidosOracao (CongregacaoId, SolicitanteMembroId, RegistradoPorMembroId, SolicitanteNome, ParaQuem, Categoria, Texto, PodeBoletim, QuerContato,
                 Risco, RiscoOrigem, RiscoCrianca, RiscoJaTeve, RiscoMarcadoEm, SoNivelGeral, Origem, SiteItemId)
               VALUES (NULL, NULL, NULL, @sn, 'PROPRIO', 'OUTRO', @t, 0, 0, @rk, @ro, @rc, @rk, CASE WHEN @rk = 1 THEN SYSUTCDATETIME() ELSE NULL END, 1, 'SITE', @si);
@@ -1410,9 +1655,18 @@ async function receberDoSite(pool, { texto, nome, confidencial, siteItemId = nul
   } catch (e) { await fecharTransacao(transaction, false); throw e; }
   await auditar("PedidosOracao", pedidoId, "CUIDADO_PEDIDO_DO_SITE", null);
   if (!risco.risco) return { gravado: true, risco: false, pedidoId };
-  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: await geraisDoCuidado(pool), mensagem: cp.textoRisco({ doSite: true, crianca: risco.crianca }),
-    referenciaTabela: "PedidosOracaoSite", referenciaId: pedidoId, aguardarEntrega: false });
+  const aviso = await avisarRiscoDoSite(pool, { referenciaTabela: "PedidosOracaoSite", referenciaId: pedidoId, crianca: risco.crianca, prazoMs: PRAZO_AVISO_SITE_MS });
   return { gravado: true, risco: true, pedidoId, avisada: Number((aviso || {}).externas) > 0 };
+}
+// O aviso do risco que veio do site: ao nível geral do cuidado; (Trava 7-C) sobre criança, sem quem tem pendência reservada ou é envolvido de incidente aberto, e com o aviso
+// à Proteção de crianças.
+async function avisarRiscoDoSite(pool, { referenciaTabela, referenciaId, crianca, fora = [], prazoMs = null }) {
+  const gerais = await geraisDoCuidado(pool);
+  const longe = crianca ? [...(await foraDoQueESobreCrianca(pool, gerais.map((d) => d.membroId)))] : [];
+  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: semRepetidos(gerais, [...fora, ...longe]), mensagem: cp.textoRisco({ doSite: true, crianca }),
+    referenciaTabela, referenciaId, aguardarEntrega: false, ...(prazoMs ? { prazoMs } : {}) });
+  if (crianca) await avisarProtecao(pool, { referenciaTabela: `${referenciaTabela}Protecao`, referenciaId, crianca, doSite: true, fora: [...fora, ...longe] });
+  return aviso;
 }
 
 // Marcar o risco num pedido do site (a lista não pegou): o pedido fica com o sinal e o nível geral é avisado — sem acompanhamento (não há congregação nem contato).
@@ -1424,14 +1678,13 @@ async function marcarRiscoDoSite(pool, { p, ver }) {
   if (!Number(r.recordset[0].n)) return MUDOU("O pedido mudou enquanto você decidia. Abra de novo.");
   await auditar("PedidosOracao", p.PedidoId, "CUIDADO_PEDIDO_MARCADO", ver.membroId);
   const vez = Number((await pool.request().input("id", sql.Int, p.PedidoId).query(`SELECT COUNT(*) AS n FROM AuditLog WHERE Tabela = 'PedidosOracao' AND RegistroId = @id AND Acao = 'CUIDADO_PEDIDO_MARCADO'`)).recordset[0].n) || 1;
-  const aviso = await notificarAgora(pool, { regraChave: "CUIDADO_RISCO", destinatarios: semRepetidos(await geraisDoCuidado(pool), [ver.membroId]),
-    mensagem: cp.textoRisco({ doSite: true, crianca: cp.avaliarRisco(p.Texto || "").crianca }), referenciaTabela: "PedidosOracaoSiteMarcado", referenciaId: p.PedidoId * 10 + Math.min(vez, 9), aguardarEntrega: false });
+  const aviso = await avisarRiscoDoSite(pool, { referenciaTabela: "PedidosOracaoSiteMarcado", referenciaId: p.PedidoId * 10 + Math.min(vez, 9), crianca: cp.avaliarRisco(p.Texto || "").crianca, fora: [ver.membroId] });
   return { sucesso: true, itemId: null, avisada: Number((aviso || {}).externas) > 0,
     mensagem: `Sinal de risco marcado no pedido do site. ${Number((aviso || {}).externas) > 0 ? "O nível geral foi avisado agora." : "O aviso não saiu do sistema: avise a Diretoria por telefone."} Não há acompanhamento a abrir (o site não tem congregação nem contato): se o texto traz um contato, procure a pessoa.` };
 }
 
 module.exports = {
-  receberDoSite,
+  receberDoSite, preverDoSite, soltarItensDeMenores, avisarItensSoltos, conferirBloqueio,
   PERMISSAO, lerPrazos, limparCaches, liderancaDoTerritorio, dirigenteDa, ehPastor, acessoAoItem,
   abrirItem, listarFila, detalheItem, meusItens, registrarContato, atribuir, adiar, concluir, cancelar,
   listarNotas, escreverNota, notaLegivel, lerNota, leiturasDaNota,

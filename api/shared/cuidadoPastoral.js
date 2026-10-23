@@ -590,6 +590,21 @@ function textoRisco({ congregacaoNome, crianca = false, doSite = false }) {
     + "Se a pessoa corre perigo agora: Polícia 190; CVV 188 (24 horas)."
     + (crianca ? " O pedido fala de criança ou adolescente junto com violência: registre também em Proteção de crianças (a lei manda comunicar ao Conselho Tutelar imediatamente)." : "");
 }
+// (Trava 7-C) O aviso à Proteção de crianças (nível geral, permissão protecao_menores) quando o sinal de risco é sobre criança ou o pedido veio de um menor. Nunca leva o texto
+// do pedido: diz onde lê-lo e o prazo do Conselho Tutelar. O sistema não abre o incidente sozinho (quem registra é uma pessoa, que leu o pedido).
+function textoRiscoCrianca({ crianca = false, menor = false, doSite = false } = {}) {
+  const onde = doSite ? "pelo mural de oração do SITE" : "no cuidado pastoral";
+  const sobre = crianca ? "fala de criança ou adolescente junto com violência" : menor ? "foi feito por um menor de idade" : "envolve criança ou adolescente";
+  return `Chegou ${onde} um pedido com SINAL DE RISCO que ${sobre}. Leia agora em Cuidado pastoral → Pedidos de oração → Sinal de risco e, se houver suspeita de violência, `
+    + "registre em Proteção de crianças → Registrar incidente: a lei manda comunicar o Conselho Tutelar IMEDIATAMENTE (o prazo máximo da Igreja é de 24 horas). "
+    + "Se a criança corre perigo agora: Polícia 190; Disque 100.";
+}
+// (Trava 7-C) O item que ficou sem responsável (a pessoa deixou de poder cuidar dele: o motivo nunca vai no aviso).
+function textoResponsavelSaiu({ congregacaoNome, para }) {
+  const onde = limpar(congregacaoNome) ? ` da Congregação ${limpar(congregacaoNome)}` : "";
+  return `Um acompanhamento pastoral${onde} ficou sem responsável e está com ${para === "GERAL" ? "o nível geral" : `a ${DEGRAUS[para] || "liderança"}`}. `
+    + "Abra Cuidado pastoral → Fila (Sem responsável) e nomeie alguém.";
+}
 // O que a resposta diz a quem pediu, depois do aviso de risco (a regra da Trava 7-B: "avisada" só quando o aviso saiu do app).
 function textoAvisoRisco(aviso) {
   if (Number((aviso || {}).externas) > 0) return "A liderança foi avisada agora.";
@@ -612,5 +627,5 @@ module.exports = {
   prazosDoCuidado, prazoInicial, situacaoDoPrazo, proximoDegrau, decidirEscada, fimDoDiaBrasilia, diaBrasilia, primeiroNome, somarDiasIso,
   validarAbertura, validarContato, validarConclusao, validarCancelamento, validarAdiamento, validarNota, validarPedidoOracao, validarSolicitante, validarPedidoVisita, limparTextoDoSite,
   normalizar, avaliarRisco, citaPeloNome, podeCorrigir, prazoDoDegrau, linhaDoBoletim, validarTextoBoletim, avaliarFrequencia, podeLerNota, podeEscreverNota, notaPedeFator, avaliarResponsavel,
-  textoAtribuido, textoResumo, textoDegrau, textoSemResponsavel, textoModeracao, textoRisco, textoAvisoRisco, referenciaDoDia
+  textoAtribuido, textoResumo, textoDegrau, textoSemResponsavel, textoModeracao, textoRisco, textoAvisoRisco, referenciaDoDia, textoRiscoCrianca, textoResponsavelSaiu
 };

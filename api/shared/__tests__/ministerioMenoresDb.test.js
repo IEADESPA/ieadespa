@@ -208,10 +208,11 @@ describe("retenção e varredura", () => {
     expect(r).toEqual({ anonimizados: 4, retencaoDias: 1825 });
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ acao: "MENORES_IP_ANONIMIZADO", dadosDepois: { quantidade: 4 } });
   });
-  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta nas escalas, uma nas turmas da EBD e uma nas salas do check-in, e mais nenhuma)", async () => {
+  test("sem ninguém escalado nas equipes com menores, a varredura não faz nada (uma consulta nas escalas, uma nas turmas da EBD, uma nas salas do check-in e uma nos acompanhamentos pastorais de menores, e mais nenhuma)", async () => {
     const r = await db.retirarInaptosDasEscalas(pool, { hoje: HOJE });
-    expect(r).toEqual({ retirados: 0, alocacoes: 0, turmasRetiradas: 0, presencasEncerradas: 0 });
-    expect(mockConsultas).toHaveLength(3);
+    expect(r).toEqual({ retirados: 0, alocacoes: 0, turmasRetiradas: 0, presencasEncerradas: 0, cuidadoSoltos: 0 });
+    expect(mockConsultas).toHaveLength(4);
+    expect(mockConsultas[3].sql).toMatch(/FROM CuidadoItens i JOIN MembroReferencia m/);                   // Trava 7-C: o responsável com pendência sai do item do menor
     expect(mockConsultas[0].sql).toMatch(/FROM EscalasAlocacoes a/);
     expect(mockConsultas[1].sql).toMatch(/FROM EbdTurmaProfessores tp JOIN EbdTurmas t/);
     expect(mockConsultas[2].sql).toMatch(/FROM CheckinInfantilVoluntarios v JOIN EscalasServicos s/);       // Trava 7-B: a presença aberta na sala

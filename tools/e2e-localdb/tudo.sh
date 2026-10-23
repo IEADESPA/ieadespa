@@ -36,4 +36,7 @@ BASE=cenario-crise bash rodar.sh roteiro e2e-35-trava7c-politicas.js
 bash rodar.sh preparar-trava7c
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-36-trava7c-retencao.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-37-trava7c-madrugada.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-40-trava7c-cuidado.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-41-trava7c-crise-comunicacao.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-42-trava7c-corridas.js
 echo TUDO-PRONTO

@@ -10,12 +10,6 @@ const { EmailClient } = require("@azure/communication-email");
 const ACS_CONNECTION_STRING = process.env.ACS_CONNECTION_STRING;
 const REMETENTE = process.env.ACS_REMETENTE || "DoNotReply@ieadespa.org.br";
 
-let client = null;
-function getClient() {
-  if (!ACS_CONNECTION_STRING) return null;
-  if (!client) client = new EmailClient(ACS_CONNECTION_STRING);
-  return client;
-}
 
 // A mensagem pode carregar texto digitado por gente (nome de equipe, de rodízio...): vai ao HTML do e-mail sempre escapada.
 function escaparHtml(texto) {
@@ -24,8 +18,11 @@ function escaparHtml(texto) {
 
 // `aguardarEntrega: false` (vD.4): responde assim que o serviço ACEITA o e-mail (beginSend), sem esperar a entrega — o login
 // da liderança não pode ficar 10-15 s preso esperando o serviço de e-mail confirmar.
+// Trava 7-C: o cliente SEM novas tentativas (o mesmo da comunicação, abaixo): o padrão do SDK repete o 429 esperando o Retry-After (minutos, com o limite da hora estourado) e a
+// rodada das 7h passava do tempo da função, atrasando as retenções e o aviso de risco. O 429 volta na hora como "não enviado": a notificação fica com EnviadaEmail = 0 e o
+// reenvio das regras obrigatórias (protecaoDb.reenviarEmailsPendentes) a manda depois.
 async function enviarEmailNotificacao({ email, titulo, mensagem, aguardarEntrega = true }) {
-  const emailClient = getClient();
+  const emailClient = getClienteComunicado();
   if (!emailClient || !email) return false;
   try {
     const poller = await emailClient.beginSend({

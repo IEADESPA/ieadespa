@@ -66,6 +66,12 @@ Cada versão parte da base da anterior (`BASE=...`):
   `cenario-crise`), `e2e-36` (as retenções da v7.2 a v7.4: justificativa da Ceia, ocorrência e administrador de canal, contato do convidado, com o
   gatilho do relógio e a rotina diária de verdade) e `e2e-37` (a rodada da madrugada só com o aviso de crise; a região sem Superintendente; o teto de
   e-mails da crise lido da configuração). Os roteiros da v7.11 a v7.15 (`e2e-24` a `e2e-30`, `e2e-33`, `e2e-34`) passam sobre a `cenario-crise`.
+- **Trava 7-C** (costuras entre a proteção, o cuidado pastoral, a comunicação e a crise), sobre a `cenario-trava7c` (a mesma do
+  `preparar-trava7c`, que aplica a 153 e a 154 duas vezes): `e2e-40` (o cuidado pastoral × a proteção de crianças: a liderança com pendência reservada fora do item, da nota, do pedido e da busca do menor, o item que sai
+  dela e sobe ao degrau de cima; o sinal de risco sobre criança só com o nível geral e o aviso à Proteção; o reenvio do mesmo item do site; a concessão de departamento; a exclusão
+  LGPD de quem era o responsável), `e2e-41` (a crise e a comunicação: o menor fora do aviso, o suspenso fora da fila e do fim, a delegação que avisa, a equipe de segurança, a
+  leitura que vira prova na exclusão LGPD, os contatos das versões antigas do plano, Meus Dados sem corte, o IP do consentimento) e `e2e-42` (corridas: os tetos do dia do
+  pedido de visita e do pedido da imprensa contados dentro da trava).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

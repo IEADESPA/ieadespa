@@ -7,6 +7,7 @@
 #   BASE=cenario-protecao bash rodar.sh roteiro e2e-14-protecao.js ...  o mesmo, a partir da base da v7.8 (e2e-14 a e2e-17)
 #   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 150 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-30
 #   bash rodar.sh preparar-crise      (v7.15) a migração 152 (duas vezes) sobre a base cenario-pastoral; depois BASE=cenario-crise para e2e-33 e e2e-34
+#   bash rodar.sh preparar-7c         (Trava 7-C) a migração 154 (duas vezes) sobre a base cenario-crise; depois BASE=cenario-7c para e2e-40 a e2e-42
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 API="$AQUI/../../api"
 PS="powershell.exe -NoProfile -ExecutionPolicy Bypass -File"
@@ -56,6 +57,14 @@ case "$1" in
     $PS bases.ps1 restaurar cenario-pastoral | tail -1
     node -r ./shim-mssql.js aplicar-migracao.js 152 2 2>&1 | tail -2
     $PS bases.ps1 salvar cenario-crise | tail -1
+    ;;
+  preparar-7c)
+    # Trava 7-C (costuras): a partir da base "cenario-crise" (v7.15), aplica a migração 154 duas vezes (prova a idempotência) e salva "cenario-7c" (e2e-40 em diante).
+    # Rode `bash rodar.sh preparar-crise` antes, se a base cenario-crise não existe.
+    cd "$AQUI"
+    $PS bases.ps1 restaurar cenario-crise | tail -1
+    node -r ./shim-mssql.js aplicar-migracao.js 154 2 2>&1 | tail -2
+    $PS bases.ps1 salvar cenario-7c | tail -1
     ;;
   roteiro)
     shift

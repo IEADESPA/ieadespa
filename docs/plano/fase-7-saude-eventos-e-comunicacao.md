@@ -3188,7 +3188,7 @@ foi aberto. O tema de 2027, escolhido fora, a Secretaria cadastra em "Temas já 
 
 **Fora desta versão (por decisão):** pedidos de uniforme (já são feitos na aba Camisetas do site).
 
-### Entrega da v7.14 (23/10/2026, no ramo; a homologar)
+### Entrega da v7.14 (23/10/2026; em produção desde 27/10/2026)
 
 Migração 151 (só acréscimo): `IdentidadeCiclos`, `IdentidadeTemasUsados`, `IdentidadeSugestoes`, `IdentidadeCores`, `IdentidadeArtes`,
 `IdentidadeResultados`, `Enquetes.DataFechamentoPrevista`, a permissão `identidade_visual` (Presidente e Secretário Geral; o servidor
@@ -3255,8 +3255,13 @@ ficou determinístico. Provas: jest **5.881** (143 arquivos), e 32 testes falham
 contagem, máximo de 3 e tema único) — com o código antigo o `e2e-39` falha e as reversões dirigidas dos itens 4, 7, 11, 20 e 21
 falham no `e2e-31`; os itens 17 e 18 são provados por corrida (não determinísticos contra o código antigo; o 18 já era coberto pela
 trava da aplicação); `e2e-23` a `e2e-30` seguem verdes. Tela: 815 verificações (38 falhas com o módulo de antes), mutação 139:
-131 acusadas, 8 equivalentes, nenhuma escapou; telas de antes sem falha. Falta: a homologação (migração 151 no Azure SQL, rotas
-401, a tela no navegador) e a produção.
+131 acusadas, 8 equivalentes, nenhuma escapou; telas de antes sem falha.
+
+**No ar.** Juntada à v7.15 no ramo (casca v40; a `e2e-33` da v7.14 virou `e2e-39`), com a bateria e2e inteira refeita do zero e as
+sete provas de tela verdes. Homologação: migração 151 aplicada, rotas 401, teste de tela 1.085 ações iguais no computador e 151 no
+celular, sem divergência (base aprovada em `d18db55`: só acréscimos — Votações e Identidade Visual no Meu Painel). Produção em
+27/10/2026 (merge `1604e66`; reverter = `git revert -m 1 1604e66`): migração 151 aplicada, `/api/identidade-visual/*` 401 sem login,
+casca v40.
 
 ## v7.15 — Gestão de crise e porta-voz único *(gap da varredura normativa)*
 

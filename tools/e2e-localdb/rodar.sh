@@ -5,9 +5,9 @@
 #   bash rodar.sh roteiro e2e-3-atos.js [e2e-5-seguranca.js ...]    restaura a base "cenario" (segundos) e roda os roteiros em sequência, no MESMO banco
 #   BASE=cenario-menores bash rodar.sh roteiro e2e-8-menores.js ...  o mesmo, a partir da base da v7.7 (e2e-8 a e2e-12)
 #   BASE=cenario-protecao bash rodar.sh roteiro e2e-14-protecao.js ...  o mesmo, a partir da base da v7.8 (e2e-14 a e2e-17)
-#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 154 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-32 e e2e-39
+#   bash rodar.sh preparar-pastoral   (v7.11) as migrações 145 a 155 sobre a base da v7.8 + o setup e2e-23; depois BASE=cenario-pastoral para e2e-24 a e2e-32 e e2e-39
 #   bash rodar.sh preparar-crise      (v7.15) a migração 152 (duas vezes) sobre a base cenario-pastoral; depois BASE=cenario-crise para e2e-33 e e2e-34
-#   bash rodar.sh preparar-trava7c    (Trava 7-C) as migrações 153 e 154 (duas vezes) sobre a cenario-crise; depois BASE=cenario-trava7c para e2e-36, 37 e 40 a 42
+#   bash rodar.sh preparar-trava7c    (Trava 7-C) as migrações 153, 154 e 155 (duas vezes) sobre a cenario-crise; depois BASE=cenario-trava7c para e2e-36, 37 e 40 a 46
 #                                     (o e2e-35 roda sobre a cenario-crise: ele mesmo aplica a 153)
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 API="$AQUI/../../api"
@@ -53,6 +53,8 @@ case "$1" in
     # Trava 7-C: a 153 e a 154 também (a rotina diária e o cuidado pastoral já usam as colunas delas)
     node -r ./shim-mssql.js aplicar-migracao.js 153 2>&1 | tail -2
     node -r ./shim-mssql.js aplicar-migracao.js 154 2>&1 | tail -2
+    # e a 155 (as decisões de 23/10/2026: a rotina diária já usa as regras e as colunas dela)
+    node -r ./shim-mssql.js aplicar-migracao.js 155 2>&1 | tail -2
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"
@@ -74,6 +76,8 @@ case "$1" in
     node -r ./shim-mssql.js aplicar-migracao.js 153 2 2>&1 | tail -2
     # e a 154 (costuras), também duas vezes: uma base só para a Trava 7-C, como no deploy
     node -r ./shim-mssql.js aplicar-migracao.js 154 2 2>&1 | tail -2
+    # e a 155 (as decisões: dinheiro do voluntário e funções com menores), também duas vezes
+    node -r ./shim-mssql.js aplicar-migracao.js 155 2 2>&1 | tail -2
     $PS bases.ps1 salvar cenario-trava7c | tail -1
     ;;
   roteiro)

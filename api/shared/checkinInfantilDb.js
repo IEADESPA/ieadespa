@@ -155,6 +155,17 @@ async function registrarEvento(executor, { registroId = null, servicoId, equipeI
 }
 const exec = (pool) => () => pool.request();
 const execTx = (tx) => () => new sql.Request(tx);
+// Para as leituras que recebem um `pool` (consentimentoVigente, saudeVigenteDosMenores): o mesmo formato, mas cada pedido corre dentro da transação.
+const comoPool = (tx) => ({ request: () => new sql.Request(tx) });
+// Trava 7-C — a trava da saúde de cada criança (sp_getapplock da transação). Quem a pega: revogar SAUDE_CRACHA (com o apagar, na mesma transação), gravar a saúde, o
+// check-in (depois da trava da sala), apagar a saúde (rotina e pedido) e a exclusão LGPD — sempre ANTES de tocar em qualquer tabela, e várias crianças em ordem crescente.
+// Assim ninguém segura linha de tabela enquanto espera a trava da saúde, e a espera nunca fecha um ciclo.
+const TRAVA_SAUDE = (menorId) => `checkin-saude:${Number(menorId)}`;
+async function travarSaude(novaRequisicao, menorIds) {
+  const ids = [...new Set((menorIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b);
+  for (const id of ids) if (!(await obterTrava(novaRequisicao, TRAVA_SAUDE(id)))) return false;
+  return true;
+}
 
 // ---------------------------------------------------------------
 // Presença dos voluntários (os adultos reais da sala)
@@ -524,7 +535,6 @@ async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia
       .query(`SELECT TOP 1 1 AS x FROM MembroReferencia WHERE CongregacaoId = @c AND DataNascimento = @d AND Nome COLLATE Latin1_General_CI_AI = @n`)).recordset[0];
     if (membro) return { sucesso: false, mensagem: `${c.nome}: esta criança já tem cadastro de membro na congregação. Busque pelo nome e faça o check-in como membro (com o responsável cadastrado ou quem trouxe pelo nome).` };
   }
-  const saudeMembros = await saudeVigenteDosMenores(pool, idsMembros, hoje);
   for (const c of preparadas) {
     if (c.tipo === "VISITANTE" && c.saude && !mc.hashConfere("SAUDE_CRACHA", c.saude.textoHash)) {
       return { sucesso: false, termoMudou: true, mensagem: "O texto da autorização de saúde mudou desde que a tela foi aberta: recarregue a tela e peça ao responsável para ler de novo." };
@@ -544,6 +554,10 @@ async function fazerCheckin(pool, { sala, operadorId, dados, hoje = hojeBrasilia
   const criados = [];
   try {
     if (!(await obterTrava(execTx(transaction), `checkin-sala:${sala.servicoId}:${sala.equipeId}`))) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: "A sala está ocupada com outra operação. Tente de novo em instantes." }; }
+    // Trava 7-C: a saúde de cada criança membro é lida DEPOIS da trava da saúde dela (a mesma da revogação e da gravação), antes de qualquer outra leitura: a cópia na
+    // etiqueta nunca sai de um dado que uma revogação simultânea já apagou. Ordem fixa de aquisição: a sala, depois a saúde de cada criança em ordem crescente.
+    if (!(await travarSaude(execTx(transaction), idsMembros))) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: "O cadastro de uma das crianças está ocupado com outra operação. Tente de novo em instantes." }; }
+    const saudeMembros = await saudeVigenteDosMenores(comoPool(transaction), idsMembros, hoje);
     const lista = await presentes(execTx(transaction), sala, { hoje, pool });
     const criancasAgora = await contarCriancasNaSala(execTx(transaction), sala);
     const adultos = lista.filter((x) => x.contaComoAdulto).length;
@@ -1163,23 +1177,47 @@ async function gravarSaude(pool, { dados, atorId, forma, gestorPodeVer = null, h
     if (!gestorPodeVer || !gestorPodeVer(m.congregacaoNome)) return sonda;
     if (!dados.referencia) return { sucesso: false, mensagem: "Informe a referência da ficha assinada pelo responsável (onde ela está arquivada)." };
   }
-  if (!(await mcDb.consentimentoVigente(pool, dados.menorId, "SAUDE_CRACHA", { hoje }))) {
-    return { sucesso: false, mensagem: "O responsável precisa autorizar primeiro o uso da informação de saúde no crachá (Meu Painel → Ministério com menores, ou ficha registrada pela Secretaria). Sem a autorização a informação não é guardada." };
-  }
-  await pool.request().input("m", sql.Int, dados.menorId).input("t", sql.NVarChar(400), dados.texto).input("f", sql.NVarChar(12), forma).input("ref", sql.NVarChar(200), dados.referencia || null).input("por", sql.Int, Number(atorId))
+  // Trava 7-C: a conferência do consentimento e a gravação andam juntas, sob a trava da saúde da criança: uma revogação simultânea ou vem antes (e aqui se recusa) ou depois
+  // (e apaga o que foi gravado) — nunca sobra saúde gravada sem consentimento.
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    if (!(await travarSaude(execTx(transaction), [dados.menorId]))) { await fecharTransacao(transaction, false); return { sucesso: false, mensagem: "O cadastro desta criança está ocupado com outra operação. Tente de novo em instantes." }; }
+    if (!(await mcDb.consentimentoVigente(comoPool(transaction), dados.menorId, "SAUDE_CRACHA", { hoje }))) {
+      await fecharTransacao(transaction, false);
+      return { sucesso: false, mensagem: "O responsável precisa autorizar primeiro o uso da informação de saúde no crachá (Meu Painel → Ministério com menores, ou ficha registrada pela Secretaria). Sem a autorização a informação não é guardada." };
+    }
+    await new sql.Request(transaction).input("m", sql.Int, dados.menorId).input("t", sql.NVarChar(400), dados.texto).input("f", sql.NVarChar(12), forma).input("ref", sql.NVarChar(200), dados.referencia || null).input("por", sql.Int, Number(atorId))
     .query(`MERGE CheckinInfantilSaude WITH (HOLDLOCK) AS d USING (SELECT @m AS MenorMembroId) AS o ON d.MenorMembroId = o.MenorMembroId
             WHEN MATCHED THEN UPDATE SET Texto = @t, Forma = @f, Referencia = @ref, RegistradoPorMembroId = @por, AtualizadoEm = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN INSERT (MenorMembroId, Texto, Forma, Referencia, RegistradoPorMembroId) VALUES (@m, @t, @f, @ref, @por);`);
+    await transaction.commit();
+  } catch (e) { await fecharTransacao(transaction, false); throw e; }
   // nunca o texto da saúde na auditoria
   await registrarAuditoria({ tabela: "CheckinInfantilSaude", registroId: Number(dados.menorId), acao: "CHECKIN_SAUDE_GRAVADA", usuarioId: Number(atorId), dadosDepois: { forma } });
   return { sucesso: true, mensagem: "Informação de saúde guardada: aparece na etiqueta do check-in." };
 }
 
-// Apaga o dado de saúde da criança e as cópias nos registros de check-in. Chamado ao revogar o consentimento (na mesma operação) e pelo responsável quando quiser.
+// Apaga o dado de saúde da criança e as cópias nos registros de check-in. Trava 7-C: `apagarSaudeNaTransacao` roda na transação de quem chama, que JÁ pegou a trava da
+// saúde (a revogação do consentimento, junto da linha de revogação; quem chama audita depois do commit, com `auditarSaudeApagada`); `apagarSaudeDoMenor` (a rotina diária,
+// o pedido do responsável, a revogação que já estava revogada) abre a própria transação com a trava.
+async function apagarSaudeNaTransacao(novaRequisicao, menorId) {
+  const a = await novaRequisicao().input("m", sql.Int, menorId).query(`DELETE FROM CheckinInfantilSaude WHERE MenorMembroId = @m; SELECT @@ROWCOUNT AS n`);
+  const b = await novaRequisicao().input("m", sql.Int, menorId).query(`UPDATE CheckinInfantilRegistros SET SaudeTexto = NULL, SaudeOrigem = NULL, SaudeTextoVersao = NULL, SaudeTextoHash = NULL WHERE MenorMembroId = @m AND SaudeTexto IS NOT NULL; SELECT @@ROWCOUNT AS n`);
+  return Number((a.recordset[0] || {}).n || 0) + Number((b.recordset[0] || {}).n || 0) > 0;
+}
+async function auditarSaudeApagada(menorId, por) {
+  if (por != null) await registrarAuditoria({ tabela: "CheckinInfantilSaude", registroId: Number(menorId), acao: "CHECKIN_SAUDE_APAGADA", usuarioId: Number(por), dadosDepois: { motivo: "REVOGACAO_OU_PEDIDO" } });
+}
 async function apagarSaudeDoMenor(pool, { menorId, por = null }) {
-  const a = await pool.request().input("m", sql.Int, menorId).query(`DELETE FROM CheckinInfantilSaude WHERE MenorMembroId = @m; SELECT @@ROWCOUNT AS n`);
-  const b = await pool.request().input("m", sql.Int, menorId).query(`UPDATE CheckinInfantilRegistros SET SaudeTexto = NULL, SaudeOrigem = NULL, SaudeTextoVersao = NULL, SaudeTextoHash = NULL WHERE MenorMembroId = @m AND SaudeTexto IS NOT NULL; SELECT @@ROWCOUNT AS n`);
-  const apagou = Number((a.recordset[0] || {}).n || 0) + Number((b.recordset[0] || {}).n || 0) > 0;
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  let apagou = false;
+  try {
+    if (!(await travarSaude(execTx(transaction), [menorId]))) throw new Error("a trava da saúde da criança está ocupada");
+    apagou = await apagarSaudeNaTransacao(execTx(transaction), menorId);
+    await transaction.commit();
+  } catch (e) { await fecharTransacao(transaction, false); throw e; }
   if (apagou && por != null) await registrarAuditoria({ tabela: "CheckinInfantilSaude", registroId: Number(menorId), acao: "CHECKIN_SAUDE_APAGADA", usuarioId: Number(por), dadosDepois: { motivo: "REVOGACAO_OU_PEDIDO" } });
   return { apagou };
 }
@@ -1347,5 +1385,6 @@ module.exports = {
   carregarAutorizados, snapshotDaSala, minhasSalas, buscarCriancas, responsaveisDaCrianca, fazerCheckin,
   relacionadoComASala, lerRegistro, registroComSala, retirar, decidirDivergencia, destravar, pedirSegundaVia, confirmarSegundaVia,
   listarAutorizados, adicionarAutorizado, revogarAutorizado, tratarAutorizadosDoResponsavelRevogado, lerSaudeDaCrianca, gravarSaude, apagarSaudeDoMenor, apagarSaudeSemConsentimento,
+  TRAVA_SAUDE, travarSaude, apagarSaudeNaTransacao, auditarSaudeApagada,
   historicoDoResponsavel, meusFilhos, relatorioDaSala, detectarCriancasSemRetirada, aplicarRetencao, dadosDoTitular, encerrarSala, limparCaches
 };

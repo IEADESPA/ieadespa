@@ -92,6 +92,13 @@ module.exports = async function (context, req) {
   let seguranca = { equipeSeguranca: 0 };
   await transaction.begin();
   try {
+    // Trava 7-C: a trava da saúde do titular ANTES de qualquer tabela (a mesma da revogação, da gravação da saúde e do check-in): uma gravação de saúde simultânea não
+    // grava depois do apagar daqui, e a ordem de aquisição é a mesma de todos (não fecha ciclo).
+    if (!(await require("../shared/checkinInfantilDb").travarSaude(r, [solicitacao.MembroId]))) {
+      await transaction.rollback();
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cadastro desta pessoa está ocupado com outra operação. Tente de novo em instantes." } };
+      return;
+    }
     // "Toma" a solicitação: só quem a encontra ainda em aberto segue adiante.
     const tomada = await r()
       .input("id", sql.Int, id)

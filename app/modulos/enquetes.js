@@ -83,6 +83,9 @@ async function salvarEnquete() {
   const quorumTipo = document.getElementById("enqueteQuorumTipo").value;
   const perguntas = lerBlocosPerguntaEnquete();
   const publicoMembroIds = (document.getElementById("enquetePublicoMatriculas").value.match(/\d+/g) || []).map(Number);
+  // v7.14 — fecha sozinha (dia e hora de Brasília, opcional): o servidor guarda em UTC e, passado o instante, ninguém mais responde
+  const campoFechamento = document.getElementById("enqueteFechamento");
+  const dataFechamentoPrevista = campoFechamento && campoFechamento.value ? campoFechamento.value : undefined;
   const msg = document.getElementById("resultadoEnquete");
   if (!titulo) { msg.textContent = "Informe o título."; return; }
   if (perguntas.length === 0) { msg.textContent = "Adicione ao menos 1 pergunta."; return; }
@@ -93,7 +96,7 @@ async function salvarEnquete() {
     body: JSON.stringify({
       titulo, descricao: descricao || undefined, visibilidade, publicoTipo, perguntas,
       publicoMembroIds: publicoTipo === "LISTA_CUSTOM" ? publicoMembroIds : undefined,
-      vinculante, quorumTipo: vinculante ? quorumTipo : undefined
+      vinculante, quorumTipo: vinculante ? quorumTipo : undefined, dataFechamentoPrevista
     })
   });
   const data = await res.json();
@@ -103,6 +106,7 @@ async function salvarEnquete() {
     document.getElementById("enqueteDescricao").value = "";
     document.getElementById("enquetePublicoMatriculas").value = "";
     document.getElementById("enqueteVinculante").checked = false;
+    if (campoFechamento) campoFechamento.value = "";
     document.getElementById("listaPerguntasEnquete").innerHTML = "";
     onChangeVinculanteEnquete();
     carregarEnquetes();
@@ -148,7 +152,7 @@ async function carregarEnquetes() {
     html += `<div class="cartao-perfil" style="margin-bottom:12px;">
       <h4 style="margin:0 0 6px; color: var(--cor-primaria);">${escaparHtmlEbd(e.titulo)} ${e.vinculante ? "🔒 vinculante" : ""}</h4>
       <p class="subtitle">${escaparHtmlEbd(e.descricao || "")}</p>
-      <p class="subtitle">Visibilidade: ${escaparHtmlEbd(ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade)} · Status: ${escaparHtmlEbd(e.status)} · Participantes: ${Number(e.totalVotos)}</p>
+      <p class="subtitle">Visibilidade: ${escaparHtmlEbd(ROTULO_VISIBILIDADE_ENQUETE[e.visibilidade] || e.visibilidade)} · Status: ${escaparHtmlEbd(e.status)} · Participantes: ${Number(e.totalVotos)}${e.dataFechamentoPrevista ? ` · Fecha sozinha em ${escaparHtmlEbd(typeof calDataHora === "function" ? calDataHora(e.dataFechamentoPrevista) : e.dataFechamentoPrevista)}` : ""}</p>
       <ul>${perguntasHtml}</ul>
       <p class="subtitle">Participaram: ${participantesHtml}</p>
       ${resultadoHtml}
@@ -186,7 +190,102 @@ async function encerrarEnqueteAcao(enqueteId) {
   if (data.sucesso) carregarEnquetes();
 }
 
+// ---- MEU PAINEL → VOTAÇÕES (v7.14) — qualquer login, inclusive PIN: as enquetes ABERTAS em que a pessoa está no público (o servidor confere), sem contagem; o voto vai
+// por POST /api/enquetes/{id}/votar (a matrícula é a da sessão) e não se muda depois. A votação do tema da Identidade Visual aparece aqui e em Meu Painel → Identidade Visual.
+let enqMeuSeq = 0;
+let enqMeuGeracao = 0;   // muda na saída da sub-aba e da sessão: a resposta de um voto que chega depois não é pintada nem avisada (nem para a próxima pessoa)
+let enqMeuLista = [];
+const ENQ_MEU_TEMPO_MS = 20000;
+const ENQ_MEU_MSG_TEMPO = "Não foi possível falar com o servidor a tempo (20 segundos sem resposta). Verifique a internet e tente de novo.";
+const ENQ_MEU_MSG_REDE = "Não foi possível falar com o servidor agora. Verifique a internet e tente de novo.";
+function enqMeuVisivel() { const s = document.getElementById("subMeupainelVotacoes"); return !!(authToken && s && s.style.display === "block"); }
+// O pedido de Meu Painel → Votações, com o prazo de 20 s (sem resposta, a tela diz em vez de ficar em "Carregando…"). Devolve o JSON, ou { sucesso:false, mensagem }.
+async function enqMeuPedir(url, opcoes) {
+  const controle = typeof AbortController === "function" ? new AbortController() : null;
+  const limite = controle ? setTimeout(() => controle.abort(), ENQ_MEU_TEMPO_MS) : null;
+  try {
+    const res = await fetchProtegido(url, Object.assign({}, opcoes || {}, controle ? { signal: controle.signal } : {}));
+    try { return await res.json(); } catch (e) { return null; }
+  } catch (e) {
+    return { sucesso: false, mensagem: e && e.name === "AbortError" ? ENQ_MEU_MSG_TEMPO : ENQ_MEU_MSG_REDE };
+  } finally { if (limite != null) clearTimeout(limite); }
+}
+function enqLimparMeu() {
+  enqMeuSeq++; enqMeuGeracao++;
+  enqMeuLista = [];
+  const el = document.getElementById("enqMeuLista"); if (el) el.innerHTML = "";
+  const msg = document.getElementById("enqMeuMsg"); if (msg) msg.textContent = "";
+}
+function enqSubAbaMudou(sub) { if (sub !== "votacoes") enqLimparMeu(); }
+function enqDataHora(v) { return escaparHtmlEbd(typeof calDataHora === "function" ? calDataHora(v) : String(v || "")); }
+async function enqCarregarMeuPainelAcao() {
+  const seq = ++enqMeuSeq;
+  const msg = document.getElementById("enqMeuMsg");
+  if (msg) msg.textContent = "Carregando…";
+  const data = await enqMeuPedir(`${API_BASE}/enquetes?paraVotar=1`);
+  if (seq !== enqMeuSeq || !enqMeuVisivel()) return;
+  if (!data || data.sucesso === false || !Array.isArray(data.enquetes)) { if (msg) msg.textContent = (data && data.mensagem) || "Não foi possível carregar as votações agora."; return; }
+  if (msg) msg.textContent = "";
+  enqMeuLista = data.enquetes;
+  enqPintarMeu();
+}
+function enqIdValido(v) { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : 0; }
+function enqPintarMeu() {
+  const el = document.getElementById("enqMeuLista");
+  if (!el) return;
+  const lista = enqMeuLista.filter(e => e && enqIdValido(e.enqueteId));
+  if (!lista.length) { el.innerHTML = "<p class='subtitle'>Nenhuma votação aberta para você agora.</p>"; return; }
+  el.innerHTML = lista.map(e => {
+    const id = enqIdValido(e.enqueteId);
+    const fecha = e.dataFechamentoPrevista ? `<p class="subtitle">Fecha em ${enqDataHora(e.dataFechamentoPrevista)}.</p>` : "";
+    const identidade = e.identidadeVisual ? `<p class="subtitle">É a escolha do tema da Identidade Visual de ${Number(e.identidadeVisual)} (também em Meu Painel → Identidade Visual).</p>` : "";
+    if (e.jaRespondeu) return `<div class="cartao-perfil"><h4>${escaparHtmlEbd(e.titulo)}</h4>${identidade}<p class="subtitle">✅ Você já respondeu${e.respondidaEm ? ` (${enqDataHora(e.respondidaEm)})` : ""}.</p></div>`;
+    const perguntas = (Array.isArray(e.perguntas) ? e.perguntas : []).filter(p => p && enqIdValido(p.perguntaId)).map(p => {
+      const pid = enqIdValido(p.perguntaId);
+      const campo = p.tipo === "OPCOES"
+        ? (Array.isArray(p.opcoes) ? p.opcoes : []).filter(o => o && enqIdValido(o.opcaoId)).map(o => `<label class="idv-opcao"><input type="radio" name="enqMeu_${id}_${pid}" id="enqMeuOpc_${id}_${pid}_${enqIdValido(o.opcaoId)}"> ${escaparHtmlEbd(o.texto)}</label>`).join("")
+        : `<input type="text" id="enqMeuTxt_${id}_${pid}" maxlength="500" autocomplete="off" aria-label="Sua resposta">`;
+      return `<fieldset class="idv-opcoes"><legend>${escaparHtmlEbd(p.titulo)}</legend>${campo}</fieldset>`;
+    }).join("");
+    return `<div class="cartao-perfil"><h4>${escaparHtmlEbd(e.titulo)}</h4>${e.descricao ? `<p class="subtitle">${escaparHtmlEbd(e.descricao)}</p>` : ""}${identidade}${fecha}${perguntas}
+      <div class="psc-acoes"><button type="button" class="btn-confirmar" data-on-click="enqVotarMeuPainelAcao" data-args-click="${argsAttr(id, ARG.elemento)}">🗳️ Enviar minha resposta</button></div></div>`;
+  }).join("");
+}
+async function enqVotarMeuPainelAcao(enqueteId, botao) {
+  const id = enqIdValido(enqueteId);
+  const e = enqMeuLista.find(x => enqIdValido(x.enqueteId) === id);
+  if (!id || !e || !enqMeuVisivel()) return;
+  const msg = document.getElementById("enqMeuMsg");
+  const respostas = [];
+  for (const p of (Array.isArray(e.perguntas) ? e.perguntas : [])) {
+    const pid = enqIdValido(p.perguntaId);
+    if (!pid) continue;
+    if (p.tipo === "OPCOES") {
+      const o = (Array.isArray(p.opcoes) ? p.opcoes : []).find(x => { const r = document.getElementById(`enqMeuOpc_${id}_${pid}_${enqIdValido(x.opcaoId)}`); return r && r.checked; });
+      if (!o) { if (msg) msg.textContent = `Responda: "${p.titulo}".`; return; }
+      respostas.push({ perguntaId: pid, opcaoId: enqIdValido(o.opcaoId) });
+    } else {
+      const t = document.getElementById(`enqMeuTxt_${id}_${pid}`);
+      const texto = t ? String(t.value || "").trim() : "";
+      if (!texto) { if (msg) msg.textContent = `Responda: "${p.titulo}".`; return; }
+      respostas.push({ perguntaId: pid, textoResposta: texto });
+    }
+  }
+  if (!(await confirmarAcao("Enviar a sua resposta? Ela não se muda depois.", "Enviar"))) return;
+  if (botao && typeof botao === "object") botao.disabled = true;
+  const geracao = enqMeuGeracao;
+  try {
+    const data = await enqMeuPedir(`${API_BASE}/enquetes/${id}/votar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ respostas }) });
+    if (geracao !== enqMeuGeracao || !enqMeuVisivel()) return;
+    const ok = !!(data && data.sucesso);
+    const texto = ok ? "Resposta registrada. Obrigado!" : (data && data.mensagem) || "Não foi possível registrar agora.";
+    mostrarToast(texto, ok ? "sucesso" : "erro");
+    await enqCarregarMeuPainelAcao();
+    if (msg && geracao === enqMeuGeracao && enqMeuVisivel()) msg.textContent = texto;
+  } finally { if (botao && typeof botao === "object") botao.disabled = false; }
+}
+
 registrarAcoes({
-  adicionarBlocoPerguntaEnquete, encerrarEnqueteAcao, onChangePublicoEnquete, onChangeTipoPerguntaEnquete, onChangeVinculanteEnquete,
+  adicionarBlocoPerguntaEnquete, encerrarEnqueteAcao, enqCarregarMeuPainelAcao, enqVotarMeuPainelAcao, onChangePublicoEnquete, onChangeTipoPerguntaEnquete, onChangeVinculanteEnquete,
   removerBlocoPerguntaEnquete, salvarEnquete, votarEnqueteAcao
 });

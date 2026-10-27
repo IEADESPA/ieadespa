@@ -44,14 +44,20 @@ Cada versão parte da base da anterior (`BASE=...`):
   `e2e-19` (fluxos), `e2e-20` (segurança), `e2e-21` (corridas com vários processos) e `e2e-22` (a revisão adversarial do servidor: encerrar a sala, autorizados × responsável
   revogado, portão da EBD, retenção, avisos que não falham em silêncio, cache dos prazos). **Cada um parte da base sozinho** (não rode dois no mesmo banco).
 
-- **v7.11** (cuidado pastoral), base `cenario-pastoral` (`bash rodar.sh preparar-pastoral` a refaz a partir da `cenario-protecao`, aplicando a 148, a 149 e a 150 duas vezes): `e2e-23` (migração 148:
+- **v7.11** (cuidado pastoral), base `cenario-pastoral` (`bash rodar.sh preparar-pastoral` a refaz a partir da `cenario-protecao`, aplicando a 148, a 149, a 150 e a 151 duas vezes): `e2e-23` (migração 148:
   esquema, CHECK, gatilhos, a marca de purga das notas, permissão, papel, prazos, avisos, retenção; e o cenário com a Região, o Superintendente e 30 domingos de EBD), `e2e-24` (fluxos:
   detecção, território, pessoa acompanhada, responsável por PIN, notas e leituras, pedidos, risco, escada, regra dos 30 dias, retenção, LGPD), `e2e-25` (segurança), `e2e-26` (corridas) e `e2e-27` (o que a revisão adversarial
   independente pediu: mudança de congregação, licença, Extensão, urgente, liderança citada, socorro que não se perde, fila com 410 itens, sonda do cadastro, anonimização) e `e2e-28` (v7.11.1, o mural de oração do site: esquema da 149, rota que falha
   fechada, o comum que não grava, o confidencial e o com risco guardados só no nível geral, aviso na hora sem o texto, quem vê, marcação à mão que não cala outro aviso, rotina e retenção),
   `e2e-29` (v7.12, comunicação: esquema da 150, consentimento com a impressão digital do texto, ficha em papel, modelos, grupo vivo cortado pelo território, envio com a fila e as
   cotas, 429, consentimento retirado no meio, cancelamento, convocação com ciência e "não alcançados", link de saída sem login, retenção e exclusão LGPD) e `e2e-30` (corridas: seis
-  rodadas da fila juntas sem e-mail repetido e dentro do teto da hora, o mesmo envio em quatro processos, quatro mudanças de consentimento da mesma pessoa).
+  rodadas da fila juntas sem e-mail repetido e dentro do teto da hora, o mesmo envio em quatro processos, quatro mudanças de consentimento da mesma pessoa),
+  `e2e-31` (v7.14, identidade visual: esquema e gatilhos da 151, a porta, o ciclo aberto pela Diretoria, temas já usados, sugestões com igual e parecido, triagem sem
+  o nome de quem mandou, a votação que abre sozinha no dia 22 e é votada pela Enquete, o fechamento e a apuração depois da meia-noite do dia 30, cores e artes, o resultado
+  do culto, os avisos só à Diretoria, empate e desempate, o botão, LGPD, Meus Dados, retenção e lixo em cada campo; o relógio da regra vai a 2027 e 2028 por
+  `usarRelogio`) e `e2e-32` (corridas: seis sugestões da mesma pessoa, o mesmo tema por seis pessoas, a votação aberta por quatro acessos, quatro votos da mesma pessoa,
+  a rotina e acessos apurando juntos, quatro artes e dois resultados ao mesmo tempo, cancelar o ciclo e sugerir juntos) e `e2e-39` (o banco com
+  READ_COMMITTED_SNAPSHOT ligado, como o Azure SQL: o voto em curso entra na contagem do encerramento e o "no máximo 3" e o tema único seguem valendo; liga e desliga sozinho).
 - **v7.15** (crise e porta-voz único; segurança da congregação), base `cenario-crise` (`bash rodar.sh preparar-crise` a refaz a partir da `cenario-pastoral`, aplicando a 152 duas
   vezes): `e2e-33` (esquema da 152 e a categoria CRISE na comunicação; quem entra; abrir com o aviso a toda a liderança — sininho na hora, celular na primeira rodada, e-mail na
   fila passando na frente de um comunicado e dentro do teto da hora —, o motivo que nunca vai no aviso, a crise única no banco, a faixa, o modelo do aviso fora da tela de

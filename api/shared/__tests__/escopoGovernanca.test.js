@@ -18,7 +18,8 @@ jest.mock("../storage", () => ({
   excluirDocumento: jest.fn(async () => {}),
   urlDocumentoComSas: (u) => `${u}?sas`
 }));
-jest.mock("../enquetes", () => ({ membrosElegiveis: jest.fn() }));
+// (v7.14) o voto confere o público só da pessoa (membroElegivel): aqui ele segue a mesma lista simulada de membrosElegiveis
+jest.mock("../enquetes", () => { const membrosElegiveis = jest.fn(); return { ...jest.requireActual("../enquetes"), membrosElegiveis, membroElegivel: jest.fn(async (p, s, e, m) => (await membrosElegiveis(p, s, e)).has(Number(m))) }; });
 jest.mock("../universo", () => ({
   composicaoCLI: jest.fn(),
   membrosComCartaMudancaEmitida: jest.fn(async () => new Set()),
@@ -1295,6 +1296,19 @@ describe("MinutaAta", () => {
   };
   const ligado = (sessaoId) => ({ sessaoId: String(sessaoId) });
   const lePresencas = () => rodou(/FROM Presencas p JOIN MembroReferencia m/).length;
+
+  test("(v7.14, revisão) a enquete vinculante que passou do fechamento marcado é ENCERRADA de verdade antes da minuta (com o resultado gravado), uma vez", async () => {
+    monta(sessaoCentral);
+    mockRegras.unshift([/DataFechamentoPrevista <= SYSUTCDATETIME\(\)\) OR \(Status = 'ENCERRADA' AND Vinculante = 1 AND ResultadoAprovado IS NULL\)/, [{ EnqueteId: 4, Vinculante: true, QuorumTipo: "MAIORIA_SIMPLES", Status: "ABERTA", ResultadoAprovado: null }], 0]);
+    mockRegras.unshift([/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1]);
+    mockRegras.unshift([/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 1, votos: 7 }, { OpcaoId: 2, votos: 2 }], 0]);
+    const ok = await chamar(hMinuta, { token: GERAL(["reunioes"]), ligado: ligado(8) });
+    expect(ok.status).toBe(200);
+    const fechou = rodou(/UPDATE Enquetes SET Status = 'ENCERRADA'/);
+    expect(fechou).toHaveLength(1);
+    expect(fechou[0].inputs).toMatchObject({ id: 4, agendada: 1 });
+    expect(rodou(/UPDATE Enquetes SET ResultadoAprovado = @resultado/)[0].inputs).toMatchObject({ resultado: true });
+  });
 
   test("sem sessão 401; PIN 403; sem permissão 403; id malformado 404 — nada lido", async () => {
     expect((await chamar(hMinuta, { ligado: ligado(9) })).status).toBe(401);

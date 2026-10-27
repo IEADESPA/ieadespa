@@ -20,13 +20,14 @@ async function dadosElegibilidadeCEI(pool, sql, membroId) {
   const anosDesdeConsagracaoPresbitero = diasDesdeConsagracao !== null ? diasDesdeConsagracao / 365 : null;
 
   const afmResult = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT TOP 1 NivelEscolaridade AS nivelEscolaridade, CertificadoHabilitacao AS certificadoHabilitacao
+    SELECT TOP 1 NivelEscolaridade AS nivelEscolaridade, CertificadoHabilitacao AS certificadoHabilitacao, StatusMatricula AS statusMatricula
     FROM Matriculas_AFM
     WHERE MembroId = @id
     ORDER BY MatriculaId DESC
   `);
   const afm = afmResult.recordset[0] || null;
-  const afmAvancadoComCertificado = !!(afm &&
+  // v8.1: a matrícula inativa (desmatriculado por faltas ou reprovação) não habilita — Regimento Art. 72 exige a Matrícula Ativa
+  const afmAvancadoComCertificado = !!(afm && afm.statusMatricula !== "INATIVA" &&
     ["AVANCADO", "BACHAREL"].includes(afm.nivelEscolaridade) &&
     afm.certificadoHabilitacao);
 

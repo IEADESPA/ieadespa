@@ -10,6 +10,8 @@ async function carregarPainelPessoal(matricula) {
   const cartao = document.getElementById("cartaoPerfilPessoal");
   const stats = document.getElementById("resumoStatsPessoal");
   if (!matricula) return;
+  const cartaoAfm = document.getElementById("cartaoAfmCli");
+  if (cartaoAfm) cartaoAfm.innerHTML = "";   // v8.1: a situação da pessoa anterior não fica no painel, nem se a frequência falhar
 
   const res = await fetchProtegido(`${API_BASE}/membros/${matricula}/frequencia`);
   const data = await res.json();
@@ -26,6 +28,8 @@ async function carregarPainelPessoal(matricula) {
       <p class="linha-perfil">Matrícula ${data.membro.membroId} · ${escaparHtmlEbd(data.membro.funcao) || "sem função cadastrada"}</p>
       <p class="linha-perfil">${escaparHtmlEbd(data.membro.congregacao) || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
+
+  if (typeof afmCarregarMinhaSituacao === "function") afmCarregarMinhaSituacao();   // v8.1 — faltas seguidas na CLI e a matrícula da AFM
 
   const orgaosContainer = document.getElementById("cartaoMeusOrgaos");
   orgaosContainer.innerHTML = (data.assentos && data.assentos.length)
@@ -51,7 +55,7 @@ async function carregarPainelPessoal(matricula) {
     if (!item.presente && !item.faltaJustificada) {
       acaoHtml = item.justificativaPendente
         ? `<span class="tag-pendente">Aguardando aprovação</span>`
-        : `<button class="btn-justificar" data-on-click="solicitarJustificativaAcao" data-args-click="${argsAttr(String(matricula ?? ""), item.sessaoId)}">✍️ Justificar falta</button>`;
+        : `<button class="btn-justificar" data-on-click="solicitarJustificativaAcao" data-args-click="${argsAttr(String(matricula ?? ""), item.sessaoId, !!item.ehCLI)}">✍️ Justificar falta</button>`;
     }
     html += `<tr>
       <td>${escaparHtmlEbd(item.dataSessao) || "-"}</td>
@@ -68,14 +72,23 @@ async function carregarPainelPessoal(matricula) {
   carregarMinhasSolicitacoesLGPD(matricula);
 }
 
-async function solicitarJustificativaAcao(matricula, sessaoId) {
-  const motivo = await pedirTexto("Justificar falta", "Explique por que você não pôde comparecer");
-  if (motivo === null) return;
+async function solicitarJustificativaAcao(matricula, sessaoId, ehCLI) {
+  let corpo;
+  if (ehCLI && typeof afmPedirJustificativa === "function") {
+    // v8.1 — na CLI, só o catálogo do Regimento Art. 149 §2º (os motivos vedados aparecem bloqueados)
+    const j = await afmPedirJustificativa({ titulo: "Justificar falta na CLI" });
+    if (j === null) return;
+    corpo = { codigo: j.codigo, detalhe: j.detalhe };
+  } else {
+    const motivo = await pedirTexto("Justificar falta", "Explique por que você não pôde comparecer");
+    if (motivo === null) return;
+    corpo = { motivo };
+  }
 
   const res = await fetchProtegido(`${API_BASE}/membros/${matricula}/reunioes/${sessaoId}/solicitar-justificativa`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ motivo })
+    body: JSON.stringify(corpo)
   });
   const data = await res.json();
   avisarResultado(data);

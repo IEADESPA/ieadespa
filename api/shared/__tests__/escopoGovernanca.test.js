@@ -4,14 +4,17 @@
 // Os handlers são os de verdade; o banco é simulado por TEXTO da consulta (como em revisaoV75.test.js).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+jest.mock("../db", () => {
+  const requisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor, afetadas] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs, texto) : valor, rowsAffected: [afetadas === undefined ? 0 : afetadas] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
+  } }; return r; };
+  // (v8.1) a inclusão em comissão grava numa transação com a trava da comissão: Transaction e Request simulados sobre o mesmo banco de texto
+  class Transacao { async begin() {} async commit() {} async rollback() {} }
+  function Requisicao() { return requisicao(); }
+  return { getPool: async () => ({ request: requisicao }), sql: new Proxy({}, { get: (_a, p) => (p === "Transaction" ? Transacao : p === "Request" ? Requisicao : () => undefined) }) };
+});
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../storage", () => ({
   salvarDocumento: jest.fn(async () => "https://blob.exemplo/documentos/doc-1"),
@@ -332,6 +335,8 @@ describe("GestaoComissoes", () => {
   test("geral adiciona membro à CCJ (pessoas) e à PMO (financeiro): grava; matrícula malformada = 'não encontrada' sem gravar", async () => {
     quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/FROM ComissaoMembros c/, []);
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);
     quando(/INSERT INTO ComissaoMembros/, [{ ComissaoMembroId: 3 }]);
     const ccj = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj" }, corpo: { membroId: "40" } });
     expect(ccj.status).toBe(201);

@@ -151,9 +151,9 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 | v6.10 | [Sala de aula assistida e material *(7ª rodada)*](fase-6-ebd.md#v610--sala-de-aula-assistida-e-material-7ª-rodada) | ✅ 4/4 |
 | 🔒 6-B | [antes de encerrar a FASE 6 e avançar para a FASE 7](fase-6-ebd.md#-trava-de-revisão-6-b--antes-de-encerrar-a-fase-6-e-avançar-para-a-fase-7) | ✅ 1/1 |
 
-## FASE 7 — Saúde, Eventos e Comunicação
+## FASE 7 — Saúde, Eventos e Comunicação (parte 1: v7.1 a v7.5 e Trava 7-A)
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 95/97 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 8 bloco(s) · itens 36/36 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -164,18 +164,26 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.4 | [Eventos e congressos](fase-7-saude-eventos-e-comunicacao.md#v74--eventos-e-congressos) | ✅ 5/5 |
 | v7.5 | [Escalas e voluntariado](fase-7-saude-eventos-e-comunicacao.md#v75--escalas-e-voluntariado) | ✅ 4/4 |
 | 🔒 7-A | [antes de avançar para a v7.6](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-a--antes-de-avançar-para-a-v76) | ✅ 1/1 |
-| v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-saude-eventos-e-comunicacao.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ✅ 3/3 |
-| v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-saude-eventos-e-comunicacao.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
-| v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-saude-eventos-e-comunicacao.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ✅ 7/7 |
-| v7.9 | [Movida para a v8.1 (fase 8), na íntegra](fase-7-saude-eventos-e-comunicacao.md#v79--movida-para-a-v81-fase-8-na-íntegra) | — |
-| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ✅ 7/7 |
-| 🔒 7-B | [antes de avançar para a v7.11](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | ✅ 1/1 |
-| v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | 🟡 11/12 |
-| v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-saude-eventos-e-comunicacao.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ✅ 5/5 |
-| v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ✅ 6/6 |
-| v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ✅ 5/5 |
-| v7.15 | [Gestão de crise e porta-voz único *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v715--gestão-de-crise-e-porta-voz-único-gap-da-varredura-normativa) | ✅ 4/4 |
-| 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | ⬜ 0/1 |
+| · | [Continuação: v7.6 a v7.15 e a 🔒 Trava 7-C](fase-7-saude-eventos-e-comunicacao.md#continuação-v76-a-v715-e-a--trava-7-c) | — |
+
+## FASE 7 — Saúde, Eventos e Comunicação (parte 2: v7.6 a v7.15 e Trava 7-C)
+
+Arquivo: [`fase-7-parte-2-menores-cuidado-e-crise.md`](fase-7-parte-2-menores-cuidado-e-crise.md) — 12 bloco(s) · itens 60/61 concluídos.
+
+| Versão | Título | Itens |
+| --- | --- | --- |
+| v7.6 | [Setores Técnicos (voluntariado profissional) *(gap da varredura)*](fase-7-parte-2-menores-cuidado-e-crise.md#v76--setores-técnicos-voluntariado-profissional-gap-da-varredura) | ✅ 3/3 |
+| v7.7 | [Habilitação para Ministério com Menores *(7ª rodada — OBRIGAÇÃO LEGAL VIGENTE)*](fase-7-parte-2-menores-cuidado-e-crise.md#v77--habilitação-para-ministério-com-menores-7ª-rodada--obrigação-legal-vigente) | ✅ 10/10 |
+| v7.8 | [Incidentes, notificação obrigatória e escuta protegida *(7ª rodada — OBRIGAÇÃO LEGAL)*](fase-7-parte-2-menores-cuidado-e-crise.md#v78--incidentes-notificação-obrigatória-e-escuta-protegida-7ª-rodada--obrigação-legal) | ✅ 7/7 |
+| v7.9 | [Movida para a v8.1 (fase 8), na íntegra](fase-7-parte-2-menores-cuidado-e-crise.md#v79--movida-para-a-v81-fase-8-na-íntegra) | — |
+| v7.10 | [Check-in infantil com cadeia de custódia *(7ª rodada)*](fase-7-parte-2-menores-cuidado-e-crise.md#v710--check-in-infantil-com-cadeia-de-custódia-7ª-rodada) | ✅ 7/7 |
+| 🔒 7-B | [antes de avançar para a v7.11](fase-7-parte-2-menores-cuidado-e-crise.md#-trava-de-revisão-7-b--antes-de-avançar-para-a-v711) | ✅ 1/1 |
+| v7.11 | [Cuidado pastoral: filas com responsável, prazo e sigilo *(7ª rodada)*](fase-7-parte-2-menores-cuidado-e-crise.md#v711--cuidado-pastoral-filas-com-responsável-prazo-e-sigilo-7ª-rodada) | 🟡 11/12 |
+| v7.12 | [Comunicação: consentimento granular e envio segmentado *(7ª rodada)*](fase-7-parte-2-menores-cuidado-e-crise.md#v712--comunicação-consentimento-granular-e-envio-segmentado-7ª-rodada) | ✅ 5/5 |
+| v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-parte-2-menores-cuidado-e-crise.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ✅ 6/6 |
+| v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-parte-2-menores-cuidado-e-crise.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ✅ 5/5 |
+| v7.15 | [Gestão de crise e porta-voz único *(gap da varredura normativa)*](fase-7-parte-2-menores-cuidado-e-crise.md#v715--gestão-de-crise-e-porta-voz-único-gap-da-varredura-normativa) | ✅ 4/4 |
+| 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-parte-2-menores-cuidado-e-crise.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | ✅ 1/1 |
 
 ## FASE D — Robustez, operação e celular (retrofit das fases 0 a 7)
 
@@ -196,11 +204,11 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 
 ## FASE 8 — Ministerial (AFM)
 
-Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 0/29 concluídos.
+Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 8/29 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
-| v8.1 | [AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79) | ⬜ 0/8 |
+| v8.1 | [AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79) | ✅ 8/8 |
 | v8.2 | [Escada ministerial e ascensão](fase-8-ministerial-afm.md#v82--escada-ministerial-e-ascensão) | ⬜ 0/3 |
 | v8.3 | [Consagração e documentação](fase-8-ministerial-afm.md#v83--consagração-e-documentação) | ⬜ 0/3 |
 | v8.4 | [Credencial digital com QR Code](fase-8-ministerial-afm.md#v84--credencial-digital-com-qr-code) | ⬜ 0/3 |

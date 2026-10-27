@@ -87,6 +87,17 @@ Cada versão parte da base da anterior (`BASE=...`):
   os avisos numa transação, o resumo do mês, Meus Dados), `e2e-44` (funções com menores: as marcas de departamento e cargo, a nomeação que avisa sem o motivo, o painel da
   Diretoria × da Proteção, o aviso pelo motor que nunca vai à própria pessoa e se repete no mês seguinte), `e2e-45` (atores, território, sondas e lixo) e `e2e-46` (corridas).
 
+- **v8.1** (AFM e faltas da CLI, migração 156), base `cenario-afm` (`bash rodar.sh preparar-afm`: a `cenario-trava7c` com a 153 a 155 reaplicadas e a 156 duas
+  vezes). Cada roteiro monta o próprio cenário (`lib-afm.js`): `e2e-47` (esquema da 156; tipo da reunião; 3 faltas seguidas com exclusão só pelo sistema, sem perder o
+  cargo; providências, comunicação e readmissão que recomeça a contagem pela ordem das reuniões; catálogo da justificativa no pedido e na Secretaria; Extraordinária que não
+  conta; Sessão Magna com as duas turmas e a falta dupla; desmatrícula, reprovação, licença para oficiar no batismo, rematrícula; Reitor, docentes e CDER; Meu Painel, Meus
+  Dados, avisos, rotina, retenção e auditoria — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-afm`), `e2e-48` (401 em toda ação, PIN, território, nível
+  geral, 404, justificativa só a própria e no território, lixo em cada campo) e `e2e-49` (corridas: seis apurações, justificativas × apurações, readmissões, reprovações,
+  rematrículas, nomeações de Reitor, mestres da CDER, matrícula automática) e `e2e-50` (o que a revisão independente do servidor pediu: só o nível geral mexe no que conta
+  falta, ninguém na própria falta, uma reunião que conta por dia e "não conta falta", período fora que interrompe, pedido pendente que segura a exclusão, exclusão refeita
+  na apuração atrasada, Seminário só da AFM, quórum da Magna só da Câmara, motivo fora da trilha e do nível local, CEI e o certificado na rematrícula).
+  Os roteiros põem cada reunião que conta numa data passada diferente (uma por dia, como no sistema).
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

@@ -15,13 +15,24 @@ const auth = require("../shared/auth");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita } = require("../shared/comissoes");
+const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER } = require("../shared/comissoes");
 const { comConflito } = require("../shared/violacaoUnica");
+const { composicaoCLI } = require("../shared/universo");
+const { reitorAtual } = require("../shared/afmDb");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { obterTrava } = require("../shared/financeiroSeguro");
 
 // Limite de membros ativos por comissão de cadastro manual — CCJ é eleita
 // pelo Plenário com número fixo (Art. 19, I); PMO não tem número fixo no
 // Regimento, um teto prático evita uma comissão inchada sem propósito.
-const LIMITES_COMISSAO_MANUAL = { CCJ: 3, PMO: 9 };
+// v8.1 — CDER: 2 mestres de teologia da CLI (Art. 22, I), além do Reitor (calculado).
+const LIMITES_COMISSAO_MANUAL = { CCJ: 3, PMO: 9, CDER: 2 };
+
+async function idsDaCLI(pool) {
+  const orgao = (await pool.request().query(`SELECT OrgaoId FROM Orgaos WHERE Sigla = 'CLI'`)).recordset[0];
+  if (!orgao) return new Set();
+  return new Set((await composicaoCLI(pool, orgao.OrgaoId)).map(m => Number(m.membroId)));
+}
 
 // A mesma pessoa ativa duas vezes na mesma comissão também é recusada pelo banco (índice UX_ComissaoMembros_Ativo, migração 127): dois pedidos ao mesmo tempo furam a conferência
 // "já está na comissão", e o perdedor recebe o 409 em vez de um 500.
@@ -36,12 +47,13 @@ module.exports = comConflito(async function (context, req) {
     const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
     if (!usuario) return;
     const [ccj, cfo, cep, pmo] = await Promise.all([composicaoCCJ(pool), composicaoCFO(pool), composicaoCEP(pool), composicaoPorSiglaEleita(pool, "PMO")]);
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { CCJ: ccj, CFO: cfo, CEP: cep, PMO: pmo } };
+    const cder = await composicaoCDER(pool, hojeBrasilia(), await idsDaCLI(pool));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { CCJ: ccj, CFO: cfo, CEP: cep, PMO: pmo, CDER: cder } };
     return;
   }
 
   if (!LIMITES_COMISSAO_MANUAL[sigla]) {
-    context.res = { status: 400, body: { sucesso: false, mensagem: "Só CCJ e PMO têm cadastro manual — CFO e CEP são calculadas." } };
+    context.res = { status: 400, body: { sucesso: false, mensagem: "Só CCJ, PMO e os mestres da CDER têm cadastro manual — CFO e CEP são calculadas." } };
     return;
   }
   const limite = LIMITES_COMISSAO_MANUAL[sigla];
@@ -92,6 +104,25 @@ module.exports = comConflito(async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
       return;
     }
+    // v8.1 — CDER (Art. 22): os 2 mestres são "da CLI" (precisam compor a CLI hoje), com a titulação registrada; o Reitor entra calculado, não por aqui.
+    let qualificacao = null;
+    if (sigla === "CDER") {
+      const q = typeof (req.body || {}).qualificacao === "string" ? req.body.qualificacao.trim() : "";
+      if (q.length < 5 || q.length > 150) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a titulação em teologia do mestre (5 a 150 caracteres)." } };
+        return;
+      }
+      if (!(await idsDaCLI(pool)).has(Number(membroId))) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "A CDER é formada por mestres de teologia DA CLI (Regimento, Art. 22): esta pessoa não compõe a CLI hoje." } };
+        return;
+      }
+      const { reitor } = await reitorAtual(() => pool.request(), hojeBrasilia());
+      if (reitor && Number(reitor.membroId) === Number(membroId)) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "O Reitor já integra a CDER pelo cargo: escolha outro mestre." } };
+        return;
+      }
+      qualificacao = q;
+    }
     const ativos = sigla === "CCJ" ? await composicaoCCJ(pool) : await composicaoPorSiglaEleita(pool, sigla);
     if (ativos.some(m => m.membroId === Number(membroId))) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Essa pessoa já está na ${sigla}.` } };
@@ -102,13 +133,37 @@ module.exports = comConflito(async function (context, req) {
       return;
     }
 
-    const result = await pool.request().input("sigla", sql.NVarChar(10), sigla).input("membroId", sql.Int, membroId)
-      .query(`INSERT INTO ComissaoMembros (Sigla, MembroId) OUTPUT INSERTED.ComissaoMembroId VALUES (@sigla, @membroId)`);
-    const comissaoMembroId = result.recordset[0].ComissaoMembroId;
+    // v8.1 (e2e-49): quatro inclusões ao mesmo tempo passavam todas pela conferência acima e a comissão ficava acima do limite. A contagem é refeita e a gravação feita sob a
+    // trava da comissão (sp_getapplock), numa transação: a 2ª inclusão simultânea já vê a 1ª.
+    const transacao = new sql.Transaction(pool);
+    await transacao.begin();
+    let comissaoMembroId;
+    try {
+      if (!(await obterTrava(() => new sql.Request(transacao), `comissao_${sigla}`))) {
+        await transacao.rollback();
+        context.res = { status: 409, body: { sucesso: false, mensagem: "Outra inclusão nesta comissão está em andamento. Tente de novo." } };
+        return;
+      }
+      const contagem = await new sql.Request(transacao).input("sigla", sql.NVarChar(10), sigla)
+        .query(`SELECT COUNT(*) AS n FROM ComissaoMembros WHERE Sigla = @sigla AND DataFim IS NULL`);
+      const agora = Number(((contagem.recordset || [])[0] || {}).n) || 0;
+      if (agora >= limite) {
+        await transacao.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: `A ${sigla} já tem ${limite} membros ativos — encerre um antes de adicionar outro.` } };
+        return;
+      }
+      const result = await new sql.Request(transacao).input("sigla", sql.NVarChar(10), sigla).input("membroId", sql.Int, membroId).input("qualificacao", sql.NVarChar(150), qualificacao)
+        .query(`INSERT INTO ComissaoMembros (Sigla, MembroId, Qualificacao) OUTPUT INSERTED.ComissaoMembroId VALUES (@sigla, @membroId, @qualificacao)`);
+      comissaoMembroId = result.recordset[0].ComissaoMembroId;
+      await transacao.commit();
+    } catch (e) {
+      try { await transacao.rollback(); } catch (_) { /* já encerrada */ }
+      throw e;
+    }
 
     await registrarAuditoria({
       tabela: "ComissaoMembros", registroId: comissaoMembroId, acao: `Adicionou membro à ${sigla}`,
-      usuarioId: usuario.membroId, dadosDepois: { membroId }
+      usuarioId: usuario.membroId, dadosDepois: { membroId, qualificacao }
     });
 
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Membro adicionado à ${sigla}.` } };

@@ -23,6 +23,7 @@ const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const disciplina = require("./disciplina");
 const escopo = require("./escopo");
+const afmDb = require("./afmDb");
 
 function emComunhaoAtiva(membro, idsSobDisciplina) {
   return membro.situacaoMembro !== "SEM_COMUNHAO" && !idsSobDisciplina.has(membro.membroId);
@@ -64,8 +65,12 @@ async function composicaoCLI(pool, orgaoIdCLI) {
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     WHERE m.Status = 'ATIVO' AND m.CargoMinisterial IN ('PRESBITERO', 'EVANGELISTA', 'PASTOR')
   `);
-  const idsPorOrdenacao = new Set(porOrdenacao.recordset.map(m => m.membroId));
-  const comOrdenacao = porOrdenacao.recordset.map(m => Object.assign({}, m, {
+  // v8.1 — obreiro com a matrícula da AFM inativa está com a credencial suspensa (Regimento Art. 69 §3º) e deixa de ser "devidamente credenciado" (Estatuto Art. 15 §1º, I): não
+  // entra por Ordenação enquanto durar (mantém o cargo). Se também ocupa uma cadeira por Função, entra por ela.
+  const inativosAFM = await afmDb.idsInativosAFM(pool);
+  const ordenacaoValida = porOrdenacao.recordset.filter(m => !inativosAFM.has(Number(m.membroId)));
+  const idsPorOrdenacao = new Set(ordenacaoValida.map(m => m.membroId));
+  const comOrdenacao = ordenacaoValida.map(m => Object.assign({}, m, {
     viaOrdenacao: true, viaFuncao: false, cargoOuFuncao: null, orgaoOrigemNome: null
   }));
 
@@ -119,7 +124,10 @@ async function composicaoCLI(pool, orgaoIdCLI) {
     .filter(m => !idsPorOrdenacao.has(m.membroId) && !idsPorFuncao.has(m.membroId))
     .map(m => Object.assign({}, m, { viaOrdenacao: false, viaFuncao: true, cargoMinisterial: null }));
 
-  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo);
+  // v8.1 — excluído por 3 faltas seguidas (Estatuto Art. 27 §1º) sai da composição por QUALQUER caminho, sem perder cargo, cadeira ou acesso (essas providências são
+  // humanas — ver shared/afm.js, providenciasDaExclusao). Volta com a readmissão (Regimento Art. 149 §1º) ou se a exclusão for anulada.
+  const excluidos = await afmDb.idsExcluidosCLI(pool);
+  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo).filter(m => !excluidos.has(Number(m.membroId)));
 }
 
 // Art. 151 §2º — Colégio de Dirigentes Congregacionais: Pastores de Área
@@ -148,7 +156,10 @@ async function composicaoColegioDirigentes(pool) {
   return result.recordset;
 }
 
-async function universoDoOrgao(pool, orgao) {
+// v8.1 — `opcoes.magnaAFM`: na Sessão Magna da AFM (Regimento Art. 69, integrada à reunião da CLI) esperam-se duas turmas ao mesmo tempo — quem compõe a CLI E todo
+// obreiro com matrícula ativa na Academia. Cada pessoa volta marcada com esperadoCLI/esperadoAFM: um único registro de presença vale para as duas (Art. 69 §1º, I) e a
+// falta de quem está nas duas conta nas duas (falta dupla, §1º, II). Sem a opção, a CLI devolve só a composição (esperadoCLI = true) — é o que o quórum usa.
+async function universoDoOrgao(pool, orgao, opcoes = {}) {
   const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
 
   if (!orgao) {
@@ -176,8 +187,16 @@ async function universoDoOrgao(pool, orgao) {
   }
 
   if (orgao.sigla === "CLI") {
-    const composicao = await composicaoCLI(pool, orgao.orgaoId);
-    return composicao.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+    const composicao = (await composicaoCLI(pool, orgao.orgaoId)).filter(m => emComunhaoAtiva(m, idsSobDisciplina))
+      .map(m => Object.assign({}, m, { esperadoCLI: true, esperadoAFM: false }));
+    if (!opcoes.magnaAFM) return composicao;
+    const porId = new Map(composicao.map(m => [Number(m.membroId), m]));
+    for (const m of (await afmDb.universoAFM(pool)).filter(x => emComunhaoAtiva(x, idsSobDisciplina))) {
+      const ja = porId.get(Number(m.membroId));
+      if (ja) ja.esperadoAFM = true;
+      else porId.set(Number(m.membroId), Object.assign({}, m, { esperadoCLI: false, esperadoAFM: true }));
+    }
+    return [...porId.values()];
   }
 
   if (orgao.sigla === "COLEGIO_DIRIGENTES") {

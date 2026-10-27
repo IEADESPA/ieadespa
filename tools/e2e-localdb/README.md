@@ -78,6 +78,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   LGPD de quem era o responsável), `e2e-41` (a crise e a comunicação: o menor fora do aviso, o suspenso fora da fila e do fim, a delegação que avisa, a equipe de segurança, a
   leitura que vira prova na exclusão LGPD, os contatos das versões antigas do plano, Meus Dados sem corte, o IP do consentimento) e `e2e-42` (corridas: os tetos do dia do
   pedido de visita e do pedido da imprensa contados dentro da trava).
+- **Trava 7-C, as decisões de 23/10/2026** (migração 155, aplicada duas vezes no `preparar-trava7c`), sobre a `cenario-trava7c`: `e2e-43` (o dinheiro do voluntário só avisa:
+  o fornecedor pessoa física ligado à matrícula no território, os avisos de voluntário ativo, pagamento habitual e cachê/comissão que só gravam depois da confirmação, a saída e
+  os avisos numa transação, o resumo do mês, Meus Dados), `e2e-44` (funções com menores: as marcas de departamento e cargo, a nomeação que avisa sem o motivo, o painel da
+  Diretoria × da Proteção, o aviso pelo motor que nunca vai à própria pessoa e se repete no mês seguinte), `e2e-45` (atores, território, sondas e lixo) e `e2e-46` (corridas).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

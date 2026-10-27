@@ -20,6 +20,7 @@ const { comConflito } = require("../shared/violacaoUnica");
 const { composicaoCLI } = require("../shared/universo");
 const { reitorAtual } = require("../shared/afmDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { obterTrava } = require("../shared/financeiroSeguro");
 
 // Limite de membros ativos por comissão de cadastro manual — CCJ é eleita
 // pelo Plenário com número fixo (Art. 19, I); PMO não tem número fixo no
@@ -132,9 +133,33 @@ module.exports = comConflito(async function (context, req) {
       return;
     }
 
-    const result = await pool.request().input("sigla", sql.NVarChar(10), sigla).input("membroId", sql.Int, membroId).input("qualificacao", sql.NVarChar(150), qualificacao)
-      .query(`INSERT INTO ComissaoMembros (Sigla, MembroId, Qualificacao) OUTPUT INSERTED.ComissaoMembroId VALUES (@sigla, @membroId, @qualificacao)`);
-    const comissaoMembroId = result.recordset[0].ComissaoMembroId;
+    // v8.1 (e2e-49): quatro inclusões ao mesmo tempo passavam todas pela conferência acima e a comissão ficava acima do limite. A contagem é refeita e a gravação feita sob a
+    // trava da comissão (sp_getapplock), numa transação: a 2ª inclusão simultânea já vê a 1ª.
+    const transacao = new sql.Transaction(pool);
+    await transacao.begin();
+    let comissaoMembroId;
+    try {
+      if (!(await obterTrava(() => new sql.Request(transacao), `comissao_${sigla}`))) {
+        await transacao.rollback();
+        context.res = { status: 409, body: { sucesso: false, mensagem: "Outra inclusão nesta comissão está em andamento. Tente de novo." } };
+        return;
+      }
+      const contagem = await new sql.Request(transacao).input("sigla", sql.NVarChar(10), sigla)
+        .query(`SELECT COUNT(*) AS n FROM ComissaoMembros WHERE Sigla = @sigla AND DataFim IS NULL`);
+      const agora = Number(((contagem.recordset || [])[0] || {}).n) || 0;
+      if (agora >= limite) {
+        await transacao.rollback();
+        context.res = { status: 200, body: { sucesso: false, mensagem: `A ${sigla} já tem ${limite} membros ativos — encerre um antes de adicionar outro.` } };
+        return;
+      }
+      const result = await new sql.Request(transacao).input("sigla", sql.NVarChar(10), sigla).input("membroId", sql.Int, membroId).input("qualificacao", sql.NVarChar(150), qualificacao)
+        .query(`INSERT INTO ComissaoMembros (Sigla, MembroId, Qualificacao) OUTPUT INSERTED.ComissaoMembroId VALUES (@sigla, @membroId, @qualificacao)`);
+      comissaoMembroId = result.recordset[0].ComissaoMembroId;
+      await transacao.commit();
+    } catch (e) {
+      try { await transacao.rollback(); } catch (_) { /* já encerrada */ }
+      throw e;
+    }
 
     await registrarAuditoria({
       tabela: "ComissaoMembros", registroId: comissaoMembroId, acao: `Adicionou membro à ${sigla}`,

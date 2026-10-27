@@ -16,13 +16,19 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
+  // v8.1 (e2e-48): identificador malformado ou fora do Int (2**40) dava 500 no banco; agora é 400. O motivo livre (outros órgãos) é texto de até 300.
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
-  const { membroId, motivo } = corpo;
+  const membroId = auth.idDeRota(corpo.membroId);
+  const motivo = corpo.motivo;
   const usuarioId = usuario.membroId;
 
   if (!sessaoId || !membroId) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sessaoId (rota) e membroId (body)." } };
+    return;
+  }
+  if (motivo != null && (typeof motivo !== "string" || motivo.length > 300)) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "O motivo é um texto de até 300 caracteres." } };
     return;
   }
 

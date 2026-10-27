@@ -174,6 +174,8 @@ describe("GestaoComissoes — a mesma pessoa ativa duas vezes na comissão (UX_C
   const regras = () => {
     quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/FROM ComissaoMembros c\s+JOIN MembroReferencia m/, []);                                        // a conferência "já está na comissão" ainda não vê o outro pedido
+    quando(/sp_getapplock/, [{ resultado: 0 }]);                                                            // (v8.1) a trava da comissão
+    quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);
   };
   test.each([["ccj", "CCJ"], ["pmo", "PMO"]])("%s: o INSERT perde para outro pedido → 409 'Essa pessoa já está na %s.', sem auditoria", async (rota, sigla) => {
     regras();

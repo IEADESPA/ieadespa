@@ -9,8 +9,10 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
-  const { membroId, presente } = req.body || {};
+  // v8.1 (e2e-48): identificador malformado ou fora do Int dava 500 no banco; agora é 400.
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);
+  const membroId = auth.idDeRota((req.body || {}).membroId);
+  const { presente } = req.body || {};
 
   if (!sessaoId || !membroId || typeof presente !== "boolean") {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe sessaoId (rota), membroId e presente (true/false)." } };

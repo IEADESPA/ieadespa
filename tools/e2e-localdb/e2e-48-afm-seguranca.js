@@ -45,6 +45,7 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
     const r = await chamarRota("AbrirReuniao/index.js", { metodo: "POST", token: SEC, corpo: { orgaoId: orgaoCLI, descricao: `Seg ${i}`, senhaAcesso: senha, tipoSessao: "ORDINARIA" } });
     S.push(r.body.sessaoId);
     await chamarRota("RegistrarPresenca/index.js", { metodo: "POST", corpo: { matricula: P.presente, senha } });
+    await q("UPDATE Sessoes SET DataSessao = DATEADD(DAY, @d, CAST(SYSUTCDATETIME() AS DATE)) WHERE SessaoId = @s", { d: -(100 - 7 * i), s: r.body.sessaoId });   // uma que conta por dia
     await chamarRota("EncerrarReuniao/index.js", { metodo: "POST", binding: { sessaoId: r.body.sessaoId }, token: SEC, corpo: {} });
   }
   const exF = await um("SELECT ExclusaoId FROM CLIExclusoesFaltas WHERE MembroId = @id AND AnuladaEm IS NULL AND ReadmitidaEm IS NULL", { id: P.fiscal });
@@ -75,7 +76,7 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   for (const a of ACOES_POST.filter((x) => x !== "x")) { const r = await afm(a, LOCAL_C, "POST", { membroId: P.diacono, exclusaoId: exF.ExclusaoId, data: hoje, ato: "Ata 1/2026", nivel: "BASICO", concluido: true }); ok(r.status === 403, `liderança local: POST ${a} é do nível geral (403)`, r.status); }
   ok((await retrato()) === antesLocal, "nada mudou no banco pelas tentativas da liderança local");
   ok((await afm("matriculas", GERAL_SEM)).status === 403 && (await afm("nivel", GERAL_SEM, "POST", { membroId: P.diacono, nivel: "BASICO", concluido: true })).status === 403, "nível geral sem a permissão afm: 403");
-  ok((await afm("faltas-cli", LOCAL_C)).status === 200, "faltas-cli: quem tem reuniões lê (a composição da CLI é institucional)");
+  ok((await afm("faltas-cli", LOCAL_C)).status === 403, "faltas-cli: só o nível geral (as faltas e as exclusões são da igreja inteira)");
 
   console.log("== o que não existe ==");
   ok((await afm("readmitir", SEC, "POST", { exclusaoId: 99999999, data: hoje, ato: "Ata 1/2026" })).status === 404, "readmitir exclusão inexistente: 404");

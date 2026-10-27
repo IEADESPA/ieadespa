@@ -666,8 +666,11 @@ async function carregarReunioes() {
 
   reunioes.forEach(r => {
     // v8.1 — o tipo da reunião da CLI (a Extraordinária não conta para as 3 faltas)
-    const tipoCLI = r.orgaoSigla === "CLI" && r.contaFaltasCLI !== undefined && typeof afmRotuloTipoSessao === "function" && (r.contaFaltasCLI || r.tipoSessao === "EXTRAORDINARIA")
-      ? ` <span class="tag-pendente">${escaparHtmlEbd(afmRotuloTipoSessao(r.tipoSessao))}</span>` : "";
+    const tipoCLI = r.orgaoSigla === "CLI" && r.contaFaltasCLI !== undefined && typeof afmRotuloTipoSessao === "function" && (r.contaFaltasCLI || r.tipoSessao !== "ORDINARIA" || r.naoContaMotivo)
+      ? ` <span class="tag-pendente">${escaparHtmlEbd(afmRotuloTipoSessao(r.tipoSessao))}${r.naoContaMotivo ? " — não conta falta" : ""}</span>` : "";
+    // v8.1: a reunião da CLI aberta ou encerrada por engano deixa de contar falta (nível geral, com o motivo)
+    const botaoNaoConta = r.orgaoSigla === "CLI" && r.contaFaltasCLI && authGeral && typeof afmNaoContaAcao === "function"
+      ? `<button class="btn-link btn-link-perigo" data-on-click="afmNaoContaAcao" data-args-click="${argsAttr(r.sessaoId)}">Não conta falta…</button>` : "";
     html += `<tr>
       <td>${escaparHtmlEbd(r.orgaoNome) || "-"}</td>
       <td>${escaparHtmlEbd(r.descricao)}${tipoCLI}</td>
@@ -680,6 +683,7 @@ async function carregarReunioes() {
         <button class="btn-link" data-on-click="verFrequencia" data-args-click="${argsAttr(r.sessaoId, String(r.descricao ?? ""))}">Ver frequência</button>
         ${r.status === "ABERTA" ? `<button class="btn-link" data-on-click="encerrarReuniaoAcao" data-args-click="${argsAttr(r.sessaoId)}">Encerrar</button>` : ""}
         <button class="btn-link" data-on-click="baixarMinutaAta" data-args-click="${argsAttr(r.sessaoId)}">📝 Minuta (.docx)</button>
+        ${botaoNaoConta}
         ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" data-on-click="abrirCredenciamentoAssembleia" data-args-click="${argsAttr(r.sessaoId)}">🪪 Credenciamento</button>` : ""}
       </td>
     </tr>`;
@@ -867,7 +871,6 @@ async function verFrequencia(sessaoId, descricao) {
 
   // v8.1 — reunião da CLI: a justificativa sai do catálogo fechado do Regimento Art. 149 §2º (e, na Sessão Magna, com o documento conferido)
   const ehCLI = !!(data.sessao && data.sessao.orgaoSigla === "CLI");
-  const magna = !!(data.sessao && data.sessao.tipoSessao === "MAGNA_AFM");
   if (ehCLI && typeof afmCarregarCatalogo === "function") await afmCarregarCatalogo();
   if (sessaoFrequenciaAberta !== aberta) return;
   data.frequencia.forEach(item => {
@@ -878,7 +881,7 @@ async function verFrequencia(sessaoId, descricao) {
     const textoPedido = item.justificativaPendente || (item.pendenteCodigo && typeof afmRotuloMotivo === "function" ? afmRotuloMotivo(item.pendenteCodigo) : "");
     const pendenteHtml = item.justificativaPendente || item.pendenteCodigo
       ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(textoPedido)}"</div>
-         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""), String(item.pendenteCodigo ?? ""), ehCLI, magna)}">Aprovar</button>
+         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""), String(item.pendenteCodigo ?? ""), ehCLI, !!item.esperadoAFM)}">Aprovar</button>
          <button class="btn-link btn-link-perigo" data-on-click="rejeitarJustificativaAcao" data-args-click="${argsAttr(sessaoId, item.membroId)}">Rejeitar</button>`
       : "";
     html += `<tr>
@@ -886,7 +889,7 @@ async function verFrequencia(sessaoId, descricao) {
       <td>${escaparHtmlEbd(item.nome)}</td>
       <td>${escaparHtmlEbd(item.funcao) || "-"}</td>
       <td>${statusFrequencia(item)}</td>
-      <td>${podeJustificar ? `<button class="btn-link" data-on-click="justificarFalta" data-args-click="${argsAttr(sessaoId, item.membroId, ehCLI, magna)}">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
+      <td>${podeJustificar ? `<button class="btn-link" data-on-click="justificarFalta" data-args-click="${argsAttr(sessaoId, item.membroId, ehCLI, !!item.esperadoAFM)}">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
     </tr>`;
   });
 

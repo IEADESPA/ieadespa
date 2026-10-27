@@ -13,7 +13,7 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);   // v8.1: "abc" ou 2**40 eram 500
   if (!sessaoId) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o sessaoId na rota." } };
     return;
@@ -43,8 +43,12 @@ module.exports = async function (context, req) {
     LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
     WHERE p.SessaoId = @id`);
 
+  // v8.1 (revisão): o texto da justificativa da CLI pode citar saúde — fora do nível geral, a linha diz só "justificada" e o motivo do catálogo some.
+  const geral = require("../shared/escopoRotas").ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
   const frequencia = presencasResult.recordset
     .filter(item => auth.estaNoEscopo(usuario, item.congregacao))
+    .map(item => (geral || (!item.motivoCodigo && !item.pendenteCodigo)) ? item
+      : { ...item, motivoJustificativa: null, motivoCodigo: null, justificativaPendente: item.pendenteCodigo ? "(pedido aguardando a Secretaria Geral)" : item.justificativaPendente, pendenteCodigo: null })
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).input("idLocal", sql.Int, sessao.orgaoLocalId).query(`
@@ -57,7 +61,8 @@ module.exports = async function (context, req) {
 
   const universo = await universoDoOrgao(pool, orgao);
   const totalAtivos = universo.length;
-  const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente).length;
+  // v8.1 (revisão): na Sessão Magna a turma da Academia também bate ponto; o quórum da CLI conta só quem a CLI esperava (EsperadoCLI; nulo = reunião antiga ou outro órgão)
+  const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente && f.esperadoCLI !== false).length;
   const percentualPresenca = totalAtivos > 0 ? Math.round((totalPresentesGeral / totalAtivos) * 100) : 0;
 
   // v2.2 — o quórum aplicável agora vem do QuorumTipo gravado na própria sessão

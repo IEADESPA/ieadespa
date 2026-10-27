@@ -172,4 +172,21 @@ describe("tipos da reunião da CLI", () => {
     expect(afm.TIPOS_SESSAO_CLI.MAGNA_AFM).toMatchObject({ contaFaltas: true, magna: true });
     expect(afm.TIPOS_SESSAO_CLI.EXTRAORDINARIA.contaFaltas).toBe(false);
   });
+  test("o Seminário de novembro conta para a Academia, não para a CLI (Regimento Art. 70 §1º: suspende-se a pauta da CLI)", () => {
+    expect(afm.TIPOS_SESSAO_CLI.SEMINARIO_AFM).toMatchObject({ contaFaltas: true, contaCLI: false, contaAFM: true, magna: true });
+    expect(afm.TIPOS_AFM_SQL).toMatch(/SEMINARIO_AFM/);
+  });
+});
+
+describe("revisão independente (27/10/2026): quebra e pedido pendente", () => {
+  test("reunião em que a pessoa não era esperada interrompe a sequência (faltas separadas por um período fora não somam)", () => {
+    const r = afm.apurarSequencia([h(1, "2026-01-25"), h(2, "2026-02-22"), { sessaoId: 3, data: "2026-03-29", quebra: true }, h(4, "2028-01-30")]);
+    expect(r.atingiu).toBe(false);
+    expect(r.atual).toBe(1);
+  });
+  test("pedido pendente: com pendenteInterrompe a exclusão não nasce; sem ele, conta como falta (o pedido sozinho não desfaz)", () => {
+    const hist = [h(1, "2026-09-27"), { ...h(2, "2026-10-25"), pendente: true }, h(3, "2026-11-29")];
+    expect(afm.apurarSequencia(hist, 3, { pendenteInterrompe: true }).atingiu).toBe(false);
+    expect(afm.apurarSequencia(hist).atingiu).toBe(true);
+  });
 });

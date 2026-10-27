@@ -3,7 +3,7 @@
 //
 // Base legal: Estatuto Art. 15 §1º (CLI mista; o membro por Ordenação só fica "devidamente credenciado") e Art. 27 (3 faltas seguidas sem justificativa = exclusão automática;
 // §2º providências quando a pessoa entra por cargo); Regimento Art. 22 (CDER), Art. 66 a 69 (AFM: matrícula obrigatória, Reitor, Sessão Magna integrada à CLI, falta dupla,
-// desmatrícula automática), Art. 72 (nível de escolaridade por cargo), Art. 149 (reingresso; catálogo fechado de justificativa) e Art. 310 (perda por tabela).
+// desmatrícula automática), Art. 72 (nível de escolaridade por cargo), Art. 149 (reingresso; catálogo fechado de justificativa) e Art. 56 §2º (perda por tabela).
 // O desenho completo está em docs/plano/fase-8-ministerial-afm.md ("Desenho da v8.1").
 
 // Art. 66 §2º — todos os oficiais do Campo integram a AFM, obrigatoriamente.
@@ -31,11 +31,16 @@ const REQUISITO_NIVEL = {
 
 // Tipo da reunião da CLI. Só a Ordinária e a Sessão Magna contam para as 3 faltas: o Estatuto, Art. 27 caput, fala das "reuniões mensais"; a Extraordinária (Regimento
 // Art. 147 §2º, convocada a qualquer tempo com 48 h) registra presença, mas não pesa na sanção (lida de forma restrita, por ser sanção).
+// O Seminário Anual de novembro (Regimento Art. 70 §1º) é dia da Academia em que "suspende-se a pauta administrativa ordinária da CLI": a presença é mandatória para os
+// oficiais (conta para a AFM), mas não há reunião da Câmara naquele dia — não conta falta da CLI (revisão independente, 27/10/2026).
+// `contaCLI`: entra nas 3 faltas da CLI; `contaAFM`: entra nas 3 faltas da Academia (sempre com a turma da AFM esperada: `magna`).
 const TIPOS_SESSAO_CLI = {
-  ORDINARIA: { rotulo: "Ordinária (mensal)", contaFaltas: true, magna: false },
-  EXTRAORDINARIA: { rotulo: "Extraordinária (não conta falta)", contaFaltas: false, magna: false },
-  MAGNA_AFM: { rotulo: "Sessão Magna da AFM (integrada; conta para a CLI e para a Academia)", contaFaltas: true, magna: true }
+  ORDINARIA: { rotulo: "Ordinária (mensal)", contaFaltas: true, contaCLI: true, contaAFM: false, magna: false },
+  EXTRAORDINARIA: { rotulo: "Extraordinária (não conta falta)", contaFaltas: false, contaCLI: false, contaAFM: false, magna: false },
+  MAGNA_AFM: { rotulo: "Sessão Magna da AFM (integrada; conta para a CLI e para a Academia)", contaFaltas: true, contaCLI: true, contaAFM: true, magna: true },
+  SEMINARIO_AFM: { rotulo: "Seminário Anual de novembro (só da Academia; não conta falta da CLI)", contaFaltas: true, contaCLI: false, contaAFM: true, magna: true }
 };
+const TIPOS_AFM_SQL = "N'MAGNA_AFM', N'SEMINARIO_AFM'";
 
 // Regimento Art. 149 §2º, I — só fator EXTERNO à rotina da igreja justifica.
 const MOTIVOS_ACEITOS = {
@@ -86,12 +91,15 @@ function textoDaJustificativa(codigo, detalhe) {
 // Sequência de faltas sem justificativa, em ordem de data. `historico`: [{ sessaoId, data:'AAAA-MM-DD', presente, justificada }] — só as reuniões que contam e em que a
 // pessoa era esperada. Presença e falta justificada INTERROMPEM a sequência (sanção se lê de forma restrita: as 3 faltas têm de ser em reuniões seguidas).
 // Devolve o PRIMEIRO ponto em que a sequência chegou a 3 (é a data da exclusão/desmatrícula) e a sequência que está correndo agora (para o aviso "2 de 3").
-function apurarSequencia(historico, limite = FALTAS_PARA_PERDA) {
+// `quebra`: reunião que conta, mas em que a pessoa NÃO era esperada (estava fora da CLI, sob disciplina, não era oficial) — interrompe a sequência: faltas separadas por um
+// período fora não somam (revisão independente, 27/10/2026). `pendente`: falta com pedido de justificativa esperando a Secretaria; com `pendenteInterrompe`, conta como
+// interrupção (a exclusão não nasce enquanto a Secretaria não decide), sem ela conta como falta (um pedido sozinho não desfaz uma exclusão já registrada).
+function apurarSequencia(historico, limite = FALTAS_PARA_PERDA, { pendenteInterrompe = false } = {}) {
   const ordenado = (Array.isArray(historico) ? historico : []).slice().sort((a, b) => (String(a.data) < String(b.data) ? -1 : String(a.data) > String(b.data) ? 1 : Number(a.sessaoId) - Number(b.sessaoId)));
   let corrente = [];
   let gatilho = null;
   for (const h of ordenado) {
-    if (!h.presente && !h.justificada) {
+    if (!h.quebra && !h.presente && !h.justificada && !(pendenteInterrompe && h.pendente)) {
       corrente.push(h);
       if (!gatilho && corrente.length >= limite) gatilho = { sessoes: corrente.slice(0, limite).map((x) => Number(x.sessaoId)), data: String(corrente[limite - 1].data).slice(0, 10) };
     } else {
@@ -101,7 +109,7 @@ function apurarSequencia(historico, limite = FALTAS_PARA_PERDA) {
   return { atingiu: !!gatilho, gatilho, atual: corrente.length, sessoesAtuais: corrente.map((x) => Number(x.sessaoId)) };
 }
 
-// As providências da exclusão por faltas, conforme por onde a pessoa entrava na CLI (Estatuto Art. 27 §2º; Regimento Art. 310). `caminhos`:
+// As providências da exclusão por faltas, conforme por onde a pessoa entrava na CLI (Estatuto Art. 27 §2º; Regimento Art. 56 §2º). `caminhos`:
 // [{ via:'ORDENACAO'|'ASSENTO'|'LIDERANCA', orgaoSigla?, cargo?, nivel? }]. O sistema NÃO fecha cadeira nem convoca: só diz o que a Secretaria e a CLI precisam fazer.
 function providenciasDaExclusao(caminhos, dataExclusao) {
   const lista = [];
@@ -118,12 +126,12 @@ function providenciasDaExclusao(caminhos, dataExclusao) {
       tipo: "AGE_DESTITUICAO",
       prazo,
       texto: `Cargo eletivo (${cargos}): a CLI convoca Assembleia Geral Extraordinária para deliberar a destituição em até ${DIAS_PRAZO_AGE} dias, com contraditório e ampla defesa `
-        + `(Estatuto, Art. 27 §2º) — use "Convocar Assembleia" com a matéria "Destituição". No Conselho Fiscal e na Tesouraria, a CLI dá posse ao suplente eleito, se houver (Regimento, Art. 310 §2º).`
+        + `(Estatuto, Art. 27 §2º) — use "Convocar Assembleia" com a matéria "Destituição". No Conselho Fiscal e na Tesouraria, a CLI dá posse ao suplente eleito, se houver (Regimento, Art. 56 §2º).`
     });
   }
   if (livres.length) {
     const funcoes = livres.map((c) => c.cargo || "função de liderança").join(", ");
-    lista.push({ tipo: "SUBSTITUICAO", texto: `Função de livre nomeação (${funcoes}): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º).` });
+    lista.push({ tipo: "SUBSTITUICAO", texto: `Função de livre nomeação (${funcoes}): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º).` });
   }
   if (cs.some((c) => c.via === "ORDENACAO")) {
     lista.push({ tipo: "MANTEM_CARGO", texto: "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro." });
@@ -204,7 +212,7 @@ function textoObrigatorio(valor, { minimo = 5, maximo = 300, rotulo }) {
 }
 
 module.exports = {
-  CARGOS_OFICIAIS, CARGOS_ORDENACAO_CLI, NIVEIS, REQUISITO_NIVEL, TIPOS_SESSAO_CLI, MOTIVOS_ACEITOS, MOTIVOS_VEDADOS, MENSAGEM_VEDADO, FALTAS_PARA_PERDA, DIAS_PRAZO_AGE,
+  CARGOS_OFICIAIS, CARGOS_ORDENACAO_CLI, NIVEIS, REQUISITO_NIVEL, TIPOS_SESSAO_CLI, TIPOS_AFM_SQL, MOTIVOS_ACEITOS, MOTIVOS_VEDADOS, MENSAGEM_VEDADO, FALTAS_PARA_PERDA, DIAS_PRAZO_AGE,
   validarJustificativa, textoDaJustificativa, apurarSequencia, providenciasDaExclusao, somarDias, fimDoMandatoReitor, situacaoReitor, avaliarNivel, licencaLiturgica,
   validarRematricula, dataDoAto, textoObrigatorio
 };

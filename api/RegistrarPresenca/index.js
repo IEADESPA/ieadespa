@@ -20,6 +20,20 @@ const { comConflito } = require("../shared/violacaoUnica");
 // em poucos minutos.
 const limitador = criarLimitador({ janelaMs: 60000, maximo: 120 });
 
+// v8.1 (revisão, capacidade): na Sessão Magna o universo junta a CLI e todos os oficiais — várias consultas a cada check-in. Fica lembrado por reunião por 2 minutos nesta
+// instância (quem mudou de situação nesse meio tempo entra na próxima leitura; o encerramento recalcula o universo inteiro).
+const LEMBRANCA_MS = 120000;
+const lembranca = new Map();
+async function universoLembrado(pool, sessao, calcular) {
+  const agora = Date.now();
+  const atual = lembranca.get(sessao.sessaoId);
+  if (atual && agora - atual.em < LEMBRANCA_MS) return atual.universo;
+  const universo = await calcular();
+  lembranca.set(sessao.sessaoId, { em: agora, universo });
+  if (lembranca.size > 50) for (const [k, v] of lembranca) if (agora - v.em >= LEMBRANCA_MS) lembranca.delete(k);
+  return universo;
+}
+
 // Uma presença por pessoa por reunião também no banco (índice UX_Presencas_Sessao_Membro, migração 128): dois toques ao mesmo tempo furam o SELECT de "já registrou", e o
 // segundo recebe o 409 com a mesma frase do caso comum em vez de um 500.
 module.exports = comConflito(async function (context, req) {
@@ -28,7 +42,8 @@ module.exports = comConflito(async function (context, req) {
     context.res = { status: 429, headers: { "Retry-After": String(limite.retryAposSegundos) }, body: { sucesso: false, mensagem: "Muitas tentativas seguidas. Aguarde um minuto e tente de novo." } };
     return;
   }
-  const { matricula, senha, sessaoId } = req.body || {};
+  const { senha, sessaoId } = req.body || {};
+  const matricula = require("../shared/auth").idDeRota((req.body || {}).matricula) || ((req.body || {}).matricula ? -1 : null);   // v8.1: "abc" ou 2**40 eram 500
 
   if (!matricula || !senha) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe matrícula e senha da reunião." } };
@@ -68,8 +83,8 @@ module.exports = comConflito(async function (context, req) {
   const elegiveis = [];
   for (const sessao of candidatasSenha) {
     // v8.1 — na Sessão Magna da AFM a turma da Academia também bate ponto (Regimento Art. 69); a marca de quem era esperado por quem vai junto com a presença.
-    const universo = await universoDoOrgao(pool, { orgaoId: sessao.orgaoId, orgaoLocalId: sessao.orgaoLocalId, sigla: sessao.orgaoSigla, nivel: sessao.nivel, referenciaId: sessao.referenciaId },
-      { magnaAFM: sessao.orgaoSigla === "CLI" && sessao.tipoSessao === "MAGNA_AFM" });
+    const universo = await universoLembrado(pool, sessao, () => universoDoOrgao(pool, { orgaoId: sessao.orgaoId, orgaoLocalId: sessao.orgaoLocalId, sigla: sessao.orgaoSigla, nivel: sessao.nivel, referenciaId: sessao.referenciaId },
+      { magnaAFM: sessao.orgaoSigla === "CLI" && ["MAGNA_AFM", "SEMINARIO_AFM"].includes(sessao.tipoSessao) }));
     const noUniverso = universo.find(m => String(m.membroId) === String(membro.membroId));
     if (!noUniverso) continue;
     sessao.esperado = sessao.orgaoSigla === "CLI" ? { cli: !!noUniverso.esperadoCLI, afm: !!noUniverso.esperadoAFM } : null;

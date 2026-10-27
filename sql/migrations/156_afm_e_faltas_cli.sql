@@ -1,7 +1,7 @@
 -- ============================================================
 -- Migração 156 — v8.1: AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9).
 --
--- Base legal: Estatuto Art. 15 §1º e Art. 27; Regimento Art. 22, 66 a 69, 72, 149 e 310. Desenho em docs/plano/fase-8-ministerial-afm.md.
+-- Base legal: Estatuto Art. 15 §1º e Art. 27; Regimento Art. 22, 56 §2º, 66 a 70, 72 e 149. Desenho em docs/plano/fase-8-ministerial-afm.md.
 --
 --   1) Sessoes.ContaFaltasCLI: a reunião da CLI que conta para as 3 faltas (Ordinária e Sessão Magna da AFM). Nasce 0 em todas as reuniões antigas: só contam as abertas
 --      depois da v8.1 (ninguém é excluído por uma regra que ainda não estava no sistema). TipoSessao ganha o valor 'MAGNA_AFM' (a Sessão Magna, Art. 69).
@@ -26,6 +26,10 @@ IF COL_LENGTH(N'dbo.Sessoes', N'ContaFaltasCLI') IS NULL
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Sessoes_ContaFaltasCLI' AND object_id = OBJECT_ID(N'dbo.Sessoes'))
     CREATE INDEX IX_Sessoes_ContaFaltasCLI ON dbo.Sessoes (DataSessao, SessaoId) INCLUDE (TipoSessao, Status) WHERE ContaFaltasCLI = 1;
+GO
+-- A reunião aberta ou encerrada por engano (ou duas no mesmo dia) pode ser marcada pelo nível geral como "não conta falta", com o motivo: a apuração é refeita na hora.
+IF COL_LENGTH(N'dbo.Sessoes', N'NaoContaMotivo') IS NULL
+    ALTER TABLE dbo.Sessoes ADD NaoContaMotivo NVARCHAR(300) NULL, NaoContaPor INT NULL, NaoContaEm DATETIME2 NULL;
 GO
 
 -- ---- 2) Presenças: quem era esperado e o motivo do catálogo ----
@@ -89,14 +93,13 @@ IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.Matricula
     ALTER TABLE dbo.Matriculas_AFM ALTER COLUMN NivelAtual NVARCHAR(30) NULL;
 GO
 UPDATE dbo.Matriculas_AFM SET Origem = N'AUTOMATICA' WHERE Origem IS NULL AND MatriculaId = (SELECT MIN(a2.MatriculaId) FROM dbo.Matriculas_AFM a2 WHERE a2.MembroId = dbo.Matriculas_AFM.MembroId);
-UPDATE dbo.Matriculas_AFM SET Origem = N'REMATRICULA', ReciclagemAprovadaEm = ISNULL(ReciclagemAprovadaEm, ISNULL(DataUltimaAvaliacao, CAST(SYSUTCDATETIME() AS DATE))),
-       ContagemAposSessaoId = ISNULL(ContagemAposSessaoId, 0)
-WHERE Origem IS NULL;
+-- linhas antigas além da primeira (do esquema inicial, sem uso): "LEGADO", sem inventar aprovação em reciclagem que não houve
+UPDATE dbo.Matriculas_AFM SET Origem = N'LEGADO', Observacao = ISNULL(Observacao, N'Linha anterior à v8.1 (sem origem registrada).') WHERE Origem IS NULL;
 UPDATE dbo.Matriculas_AFM SET StatusMatricula = N'ATIVA' WHERE StatusMatricula IS NULL OR StatusMatricula NOT IN (N'ATIVA', N'INATIVA');
 UPDATE dbo.Matriculas_AFM SET NivelEscolaridade = NULL WHERE NivelEscolaridade IS NOT NULL AND NivelEscolaridade NOT IN (N'BASICO', N'MEDIO', N'AVANCADO', N'BACHAREL');
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Matriculas_AFM_Origem')
-    ALTER TABLE dbo.Matriculas_AFM ADD CONSTRAINT CK_Matriculas_AFM_Origem CHECK (Origem IS NOT NULL AND Origem IN (N'AUTOMATICA', N'REMATRICULA'));
+    ALTER TABLE dbo.Matriculas_AFM ADD CONSTRAINT CK_Matriculas_AFM_Origem CHECK (Origem IS NOT NULL AND Origem IN (N'AUTOMATICA', N'REMATRICULA', N'LEGADO'));
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_Matriculas_AFM_Status')
     ALTER TABLE dbo.Matriculas_AFM ADD CONSTRAINT CK_Matriculas_AFM_Status CHECK (StatusMatricula IS NOT NULL AND StatusMatricula IN (N'ATIVA', N'INATIVA'));
@@ -181,7 +184,7 @@ BEGIN
         MembroId           INT NOT NULL CONSTRAINT FK_CLIExclusoesFaltas_Membro REFERENCES dbo.MembroReferencia(MembroId),
         DataExclusao       DATE NOT NULL,              -- a data da 3ª reunião
         SessoesGatilho     NVARCHAR(60) NOT NULL,      -- as 3 reuniões (ids), na ordem
-        ComoEntrava        NVARCHAR(1000) NULL,        -- retrato, em JSON, dos caminhos pelos quais a pessoa compunha a CLI no dia da apuração
+        ComoEntrava        NVARCHAR(4000) NULL,        -- retrato, em JSON, dos caminhos pelos quais a pessoa compunha a CLI no dia da apuração
         RegistradoEm       DATETIME2 NOT NULL CONSTRAINT DF_CLIExclusoesFaltas_Em DEFAULT SYSUTCDATETIME(),
         ComunicadaCLIEm    DATE NULL,                  -- Estatuto Art. 27 §2º: a Secretaria Geral comunica à CLI
         ComunicadaPor      INT NULL,
@@ -297,11 +300,11 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'AFM — matrículas, desmatrículas e corpo docente')
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
-    VALUES (N'AFM — matrículas, desmatrículas e corpo docente', N'LGPD art. 7º, II e IX e art. 11, II, a: histórico de habilitação ministerial exigido pelo Regimento (Art. 66 a 72); guardado enquanto a pessoa for membro e excluído com o cadastro.', 3650);
+    VALUES (N'AFM — matrículas, desmatrículas e corpo docente', N'LGPD art. 7º, II e IX e art. 11, II, d: histórico de habilitação ministerial exigido pelo Regimento (Art. 66 a 72); a exclusão LGPD anonimiza o cadastro e o histórico fica sem identificação.', 3650);
 IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'CLI — detalhe da justificativa de falta')
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
     VALUES (N'CLI — detalhe da justificativa de falta', N'LGPD art. 6º, III e art. 11: o texto escrito pode citar saúde; sai 2 anos depois da reunião (o código do catálogo fica, porque sustenta a contagem das faltas).', 730);
 IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'CLI — exclusões por faltas')
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
-    VALUES (N'CLI — exclusões por faltas', N'LGPD art. 7º, II e IX: registro de ato de governança exigido pelo Estatuto (Art. 27) e pelo Regimento (Art. 149); excluído com o cadastro da pessoa.', 3650);
+    VALUES (N'CLI — exclusões por faltas', N'LGPD art. 7º, II e IX: registro de ato de governança exigido pelo Estatuto (Art. 27) e pelo Regimento (Art. 149); a exclusão LGPD anonimiza o cadastro e o registro fica sem identificação.', 3650);
 GO

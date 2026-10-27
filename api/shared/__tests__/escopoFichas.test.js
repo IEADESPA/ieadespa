@@ -420,17 +420,23 @@ describe("EditarMarcoMembro: corrigir marco de qualquer pessoa é do GERAL", () 
     expect(r.body.mensagem).toBe(er.MSG_GERAL);
     expect(mockConsultas).toHaveLength(0);
   });
-  test("geral: corrige o marco e audita antes/depois (não exige permissão de lista)", async () => {
+  // v8.1 (revisão independente): o nível geral COM a permissão "pessoas" — um papel Global de outra área (o "Reitor da AFM", só com "afm") não corrige marco de ninguém
+  test("geral só com outra permissão (afm): 403 antes de tocar o banco", async () => {
+    const r = await chamar(hEditarMarco, { metodo: "POST", token: GERAL(["afm"]), ligado: { marcoId: "1" }, corpo });
+    expect(r.status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("geral com pessoas: corrige o marco e audita antes/depois", async () => {
     quando(/SELECT \* FROM MarcosMembro WHERE MarcoId = @id/, [{ MarcoId: 1, Descricao: "velha", DataMarco: null, DataAproximada: false }]);
-    const r = await chamar(hEditarMarco, { metodo: "POST", token: GERAL([]), ligado: { marcoId: "1" }, corpo });
+    const r = await chamar(hEditarMarco, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { marcoId: "1" }, corpo });
     expect(r.body.sucesso).toBe(true);
     expect(rodou(/UPDATE MarcosMembro SET Descricao/)).toHaveLength(1);
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "MarcosMembro", registroId: 1, dadosAntes: { descricao: "velha" } });
   });
   test("geral: marco inexistente, id malformado e data inválida não gravam nada", async () => {
-    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL([]), ligado: { marcoId: "9" }, corpo })).body.mensagem).toBe("Marco não encontrado.");
-    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL([]), ligado: { marcoId: "0x1" }, corpo })).body.mensagem).toBe("Marco não encontrado.");
-    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL([]), ligado: { marcoId: "1" }, corpo: { ...corpo, dataMarco: "2026-02-30" } })).status).toBe(400);
+    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { marcoId: "9" }, corpo })).body.mensagem).toBe("Marco não encontrado.");
+    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { marcoId: "0x1" }, corpo })).body.mensagem).toBe("Marco não encontrado.");
+    expect((await chamar(hEditarMarco, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { marcoId: "1" }, corpo: { ...corpo, dataMarco: "2026-02-30" } })).status).toBe(400);
     expect(escritas()).toHaveLength(0);
   });
 });

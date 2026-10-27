@@ -51,11 +51,15 @@ module.exports = async function (context, req) {
   }
 
   const presencas = (await pool.request().input("id", sql.Int, sessaoId).query(`
-    SELECT p.Presente AS presente, p.FaltaJustificada AS faltaJustificada, p.MotivoJustificativa AS motivoJustificativa, m.Nome AS nome
+    SELECT p.Presente AS presente, p.FaltaJustificada AS faltaJustificada, p.MotivoJustificativa AS motivoJustificativa, m.Nome AS nome,
+           p.MotivoCodigo AS motivoCodigo, p.EsperadoCLI AS esperadoCLI
     FROM Presencas p JOIN MembroReferencia m ON m.MembroId = p.MembroId
     WHERE p.SessaoId = @id
     ORDER BY m.Nome
-  `)).recordset;
+  `)).recordset
+    // v8.1 (revisão): a ata da CLI lista a Câmara (na Sessão Magna, a turma só da Academia não entra); o motivo do catálogo vai pelo rótulo, sem o detalhe (pode citar saúde)
+    .filter((p) => p.esperadoCLI !== false)
+    .map((p) => (p.motivoCodigo ? { ...p, motivoJustificativa: require("../shared/afm").MOTIVOS_ACEITOS[p.motivoCodigo] || p.motivoCodigo } : p));
   const presentes = presencas.filter((p) => p.presente);
   const ausentes = presencas.filter((p) => !p.presente);
 

@@ -298,7 +298,9 @@ describe("RegistrarPresenca — dois toques ao mesmo tempo (UX_Presencas_Sessao_
 
 describe("EncerrarReuniao — a presença que chega no meio do fechamento não derruba o lançamento das faltas", () => {
   const preparar = (faltaQueFalha) => {
-    quando(/FROM Sessoes WHERE SessaoId = @id/, [{ sessaoId: 5, orgaoId: 3, orgaoLocalId: null, status: "ABERTA" }]);
+    // (v8.1) a sessão vem com a sigla do órgão (a CLI é do nível geral) e o encerramento só vale se ainda estava aberta
+    quando(/FROM Sessoes s LEFT JOIN Orgaos o ON o\.OrgaoId = s\.OrgaoId WHERE s\.SessaoId = @id/, [{ sessaoId: 5, orgaoId: 3, orgaoLocalId: null, status: "ABERTA", sigla: "CLI" }]);
+    quando(/UPDATE Sessoes SET Status = 'ENCERRADA'/, [], 1);
     quando(/FROM Orgaos o WHERE o\.OrgaoId = @id/, [{ orgaoId: 3, sigla: "CLI", orgaoLocalId: null, nivel: null, referenciaId: null }]);
     quando(/FROM Presencas WHERE SessaoId = @id/, [{ membroId: 1, presente: 1, faltaJustificada: 0 }]);
     universo.universoDoOrgao.mockImplementation(async () => [{ membroId: 1 }, { membroId: 2 }, { membroId: 3 }, { membroId: 4 }]);

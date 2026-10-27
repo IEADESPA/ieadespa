@@ -17,6 +17,8 @@
 // ---- CLI (permissões de reuniões; os atos são do nível geral) ----------------------------------------------------------------------------------
 //  GET  faltas-cli       -> { limite, emRisco[], exclusoes[], inativosAFM[] }
 //  POST comunicar-exclusao body:{exclusaoId,data}        POST readmitir body:{exclusaoId,data,ato}
+//  POST nao-conta        body:{sessaoId,motivo}   (a reunião aberta ou encerrada por engano deixa de contar falta; a apuração é refeita)
+//  (revisão independente, 27/10/2026: o quadro da CLI — faltas, exclusões, "por onde entrava" — é da igreja inteira: só o nível geral o lê)
 //
 // Respostas: { sucesso:true, ... } · recusa de regra 422 · dado ruim 400 · sem permissão 403 · não achou 404 · mudou enquanto isso 409.
 const auth = require("../shared/auth");
@@ -60,7 +62,7 @@ async function principal(context, req) {
   const metodo = req.method;
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
 
-  for (const campo of ["membroId", "exclusaoId", "corpoDocenteId"]) {
+  for (const campo of ["membroId", "exclusaoId", "corpoDocenteId", "sessaoId"]) {
     if (campo in corpo && corpo[campo] != null && corpo[campo] !== "" && !idDe(corpo[campo])) return erro(context, 400, `${campo} inválido.`);
   }
   const hoje = hojeBrasilia();
@@ -88,10 +90,18 @@ async function principal(context, req) {
 
   // ---- CLI: faltas e cadeiras ----
   if (acao === "faltas-cli" && metodo === "GET") {
-    if (!auth.exigirAlgumaPermissao(req, context, PERMISSOES_CLI)) return;
+    if (!esc.exigirGeral(req, context, PERMISSOES_CLI)) return;
     const pool = await getPool();
     context.res = { status: 200, body: { sucesso: true, ...(await db.painelFaltasCLI(pool, await composicaoAtual(pool))) } };
     return;
+  }
+  if (metodo === "POST" && acao === "nao-conta") {
+    const usuario = esc.exigirGeral(req, context, PERMISSOES_CLI);
+    if (!usuario) return;
+    if (!idDe(corpo.sessaoId)) return erro(context, 400, "Informe a reunião.");
+    const m = afm.textoObrigatorio(corpo.motivo, { minimo: 10, maximo: 300, rotulo: "O motivo (por que a reunião não deve contar falta)" });
+    if (!m.valido) return erro(context, 400, m.mensagem);
+    return resposta(context, await db.marcarNaoConta(await getPool(), { sessaoId: Number(corpo.sessaoId), motivo: m.texto, por: usuario.membroId }));
   }
   if (metodo === "POST" && (acao === "comunicar-exclusao" || acao === "readmitir")) {
     const usuario = esc.exigirGeral(req, context, PERMISSOES_CLI);

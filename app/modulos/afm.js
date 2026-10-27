@@ -107,7 +107,7 @@ function afmRotuloMotivo(codigo) {
   return m ? m.rotulo : codigo;
 }
 function afmRotuloTipoSessao(tipo) {
-  return { ORDINARIA: "Ordinária", EXTRAORDINARIA: "Extraordinária", MAGNA_AFM: "Sessão Magna (AFM)" }[tipo] || "";
+  return { ORDINARIA: "Ordinária", EXTRAORDINARIA: "Extraordinária", MAGNA_AFM: "Sessão Magna (AFM)", SEMINARIO_AFM: "Seminário de novembro (AFM)" }[tipo] || "";
 }
 
 // ==================== aba Academia (AFM) ====================
@@ -507,6 +507,16 @@ function afmAtualizarSeCLI() {
   if (typeof carregarComposicaoCLI === "function") carregarComposicaoCLI();
 }
 
+// A reunião da CLI aberta ou encerrada por engano (ou a segunda no mesmo dia) deixa de contar falta: o servidor refaz a apuração (pode desfazer exclusões).
+async function afmNaoContaAcao(sessaoId) {
+  const motivo = await pedirTexto("Esta reunião não conta falta", "Por que (10 a 300 caracteres)? Ex.: encerrada por engano com a sala ainda chegando");
+  if (motivo === null) return;
+  if (!(await confirmarAcao("Confirma? As faltas desta reunião deixam de valer para as 3 faltas da CLI e da Academia, e isso não se desfaz.", "Não conta falta"))) return;
+  const data = await afmPost("nao-conta", { sessaoId, motivo });
+  avisarResultado(data);
+  if (data.sucesso) { if (typeof carregarReunioes === "function") carregarReunioes(); afmAtualizarSeCLI(); }
+}
+
 // O seletor de tipo da reunião só aparece para a CLI (as outras reuniões não têm tipo).
 function afmAjustarTipoReuniao(ehCLI) {
   const bloco = afmEl("blocoTipoReuniaoCLI");
@@ -546,5 +556,5 @@ registrarAcoes({
   afmEnviarAnularReprovacaoAcao, afmEnviarComunicarAcao, afmEnviarDocenteAcao, afmEnviarEncerrarAcao, afmEnviarHomologarAcao, afmEnviarNivelAcao, afmEnviarNomearReitorAcao,
   afmEnviarReadmitirAcao, afmEnviarReconduzirAcao, afmEnviarRematricularAcao, afmEnviarReprovarAcao, afmFecharFormAcao, afmFiltrarMatriculasAcao, afmFormAnularReprovacaoAcao,
   afmFormComunicarAcao, afmFormDocenteAcao, afmFormEncerrarAcao, afmFormHomologarAcao, afmFormNivelAcao, afmFormNomearReitorAcao, afmFormReadmitirAcao, afmFormReconduzirAcao,
-  afmFormRematricularAcao, afmFormReprovarAcao, afmMostrarSecaoAcao
+  afmFormRematricularAcao, afmFormReprovarAcao, afmMostrarSecaoAcao, afmNaoContaAcao
 });

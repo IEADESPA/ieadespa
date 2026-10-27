@@ -4,6 +4,12 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const afmDb = require("../shared/afmDb");
+const { ehGeral } = require("../shared/escopoRotas");
+// v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
+// — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
+const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
+const SO_GERAL_CLI = { sucesso: false, mensagem: "A reunião da CLI conta falta para as 3 faltas do Estatuto (Art. 27): só a Secretaria Geral abre, encerra, justifica e corrige presença nela." };
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -27,6 +33,10 @@ module.exports = async function (context, req) {
     return;
   }
 
+  const sessaoCLI = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT s.ContaFaltasCLI AS conta FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId AND o.Sigla = 'CLI' WHERE s.SessaoId = @id`)).recordset[0];
+  if (sessaoCLI && !geralEmReunioes(usuario)) { context.res = { status: 403, body: SO_GERAL_CLI }; return; }
+
   const upd = await pool.request()
     .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId)
     .query(`UPDATE Presencas SET JustificativaPendente = NULL, PendenteCodigo = NULL WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
@@ -43,5 +53,8 @@ module.exports = async function (context, req) {
     dadosDepois: { sessaoId: Number(sessaoId) }
   });
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Solicitação rejeitada." } };
+  // v8.1: com o pedido pendente a exclusão/desmatrícula não nascia; recusado, a apuração é refeita
+  let apuracao = "";
+  if (sessaoCLI && sessaoCLI.conta) apuracao = afmDb.resumoDaApuracao(await afmDb.apurarSemFalhar(pool, { membroIds: [Number(membroId)] }, context.log.error));
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Solicitação rejeitada.${apuracao}` } };
 };

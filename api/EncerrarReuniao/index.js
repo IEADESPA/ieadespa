@@ -12,12 +12,17 @@ const { universoDoOrgao } = require("../shared/universo");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { violouUnicidade } = require("../shared/violacaoUnica");
 const afmDb = require("../shared/afmDb");
+const { ehGeral } = require("../shared/escopoRotas");
+// v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
+// — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
+const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
+const SO_GERAL_CLI = { sucesso: false, mensagem: "A reunião da CLI conta falta para as 3 faltas do Estatuto (Art. 27): só a Secretaria Geral abre, encerra, justifica e corrige presença nela." };
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);   // v8.1: "abc" ou 2**40 eram 500
   const usuarioId = usuario.membroId;
 
   if (!sessaoId) {
@@ -27,8 +32,9 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId)
-    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Status AS status, TipoSessao AS tipoSessao, ContaFaltasCLI AS contaFaltasCLI
-            FROM Sessoes WHERE SessaoId = @id`);
+    .query(`SELECT s.SessaoId AS sessaoId, s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId, s.Status AS status, s.TipoSessao AS tipoSessao, s.ContaFaltasCLI AS contaFaltasCLI,
+                   o.Sigla AS sigla
+            FROM Sessoes s LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId WHERE s.SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
@@ -38,12 +44,21 @@ module.exports = async function (context, req) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Esta reunião já está encerrada." } };
     return;
   }
+  if (sessao.sigla === "CLI" && !geralEmReunioes(usuario)) {
+    context.res = { status: 403, body: SO_GERAL_CLI };
+    return;
+  }
   if (sessao.orgaoLocalId && !(await membroAutorizadoNoOrgaoLocal(pool, sql, usuarioId, sessao.orgaoLocalId))) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Você não tem vínculo com o órgão territorial desta reunião." } };
     return;
   }
 
-  await pool.request().input("id", sql.Int, sessaoId).query(`UPDATE Sessoes SET Status = 'ENCERRADA' WHERE SessaoId = @id`);
+  // v8.1: dois cliques em "Encerrar" ao mesmo tempo — só o primeiro encerra (e só ele lança as faltas e apura)
+  const encerrou = await pool.request().input("id", sql.Int, sessaoId).query(`UPDATE Sessoes SET Status = 'ENCERRADA' WHERE SessaoId = @id AND Status = 'ABERTA'`);
+  if (!encerrou.rowsAffected[0]) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: "Esta reunião já está encerrada." } };
+    return;
+  }
 
   const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).input("idLocal", sql.Int, sessao.orgaoLocalId).query(`
     SELECT o.OrgaoId AS orgaoId, o.Sigla AS sigla, NULL AS orgaoLocalId, NULL AS nivel, NULL AS referenciaId FROM Orgaos o WHERE o.OrgaoId = @id
@@ -58,7 +73,7 @@ module.exports = async function (context, req) {
 
   // v8.1 — reunião da CLI: cada falta guarda se a pessoa era esperada pela CLI e/ou pela Academia (Sessão Magna, Regimento Art. 69 — falta dupla).
   const ehCLI = !!orgao && orgao.sigla === "CLI";
-  const universo = await universoDoOrgao(pool, orgao, { magnaAFM: ehCLI && sessao.tipoSessao === "MAGNA_AFM" });
+  const universo = await universoDoOrgao(pool, orgao, { magnaAFM: ehCLI && ["MAGNA_AFM", "SEMINARIO_AFM"].includes(sessao.tipoSessao) });
   let totalFaltas = 0;
   for (const membro of universo) {
     if (idsComPresenca.has(membro.membroId)) continue;

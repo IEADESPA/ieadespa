@@ -13,7 +13,8 @@ const { dataISOValida } = require("../shared/escopoFichas");
 
 module.exports = async function (context, req) {
   // Corrigir marco de QUALQUER pessoa é do nível GERAL (papel Global com escopo de todas as congregações): o nível do papel sozinho não prova o alcance.
-  const usuario = exigirGeral(req, context, null);
+  // v8.1 (revisão): com a permissão "pessoas" — o papel novo "Reitor da AFM" (Global, só "afm") passaria só pelo nível.
+  const usuario = exigirGeral(req, context, "pessoas");
   if (!usuario) return;
 
   const marcoIdBruto = context.bindingData.marcoId;

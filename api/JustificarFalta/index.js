@@ -11,6 +11,11 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const afm = require("../shared/afm");
 const afmDb = require("../shared/afmDb");
+const { ehGeral } = require("../shared/escopoRotas");
+// v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
+// — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
+const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
+const SO_GERAL_CLI = { sucesso: false, mensagem: "A reunião da CLI conta falta para as 3 faltas do Estatuto (Art. 27): só a Secretaria Geral abre, encerra, justifica e corrige presença nela." };
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -42,10 +47,15 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const sessao = (await pool.request().input("id", sql.Int, sessaoId).query(`
-    SELECT s.TipoSessao AS tipoSessao, s.ContaFaltasCLI AS contaFaltasCLI, o.Sigla AS sigla
-    FROM Sessoes s LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId WHERE s.SessaoId = @id`)).recordset[0];
+  const sessao = (await pool.request().input("id", sql.Int, sessaoId).input("m", sql.Int, membroId).query(`
+    SELECT s.TipoSessao AS tipoSessao, s.ContaFaltasCLI AS contaFaltasCLI, o.Sigla AS sigla, p.EsperadoAFM AS esperadoAFM
+    FROM Sessoes s LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId LEFT JOIN Presencas p ON p.SessaoId = s.SessaoId AND p.MembroId = @m WHERE s.SessaoId = @id`)).recordset[0];
   const ehCLI = !!sessao && sessao.sigla === "CLI";
+  if (ehCLI && !geralEmReunioes(usuario)) { context.res = { status: 403, body: SO_GERAL_CLI }; return; }
+  if (ehCLI && Number(membroId) === Number(usuarioId)) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Ninguém justifica a própria falta na CLI: peça pelo Meu Painel e outra pessoa da Secretaria decide (Estatuto, Art. 27 §1º)." } };
+    return;
+  }
 
   let texto = motivo || null;
   let codigo = null;
@@ -53,7 +63,8 @@ module.exports = async function (context, req) {
   if (ehCLI) {
     const v = afm.validarJustificativa({
       codigo: corpo.codigo, detalhe: corpo.detalhe,
-      exigirComprovante: sessao.tipoSessao === "MAGNA_AFM", comprovanteConferido: corpo.comprovanteConferido
+      // o documento (Regimento Art. 69 §2º, I) é exigência da Academia: só para a falta de quem a AFM esperava
+      exigirComprovante: !!sessao.esperadoAFM, comprovanteConferido: corpo.comprovanteConferido
     });
     if (!v.valido) {
       context.res = { status: 422, body: { sucesso: false, mensagem: v.mensagem } };
@@ -61,7 +72,7 @@ module.exports = async function (context, req) {
     }
     codigo = v.codigo;
     texto = afm.textoDaJustificativa(v.codigo, v.detalhe);
-    comprovante = sessao.tipoSessao === "MAGNA_AFM" ? true : null;
+    comprovante = sessao.esperadoAFM ? true : null;
   }
 
   const upd = await pool.request()
@@ -80,7 +91,8 @@ module.exports = async function (context, req) {
     registroId: Number(membroId),
     acao: "Justificou falta",
     usuarioId,
-    dadosDepois: { sessaoId: Number(sessaoId), motivo: texto, codigo }
+    // na CLI, a trilha (que não se apaga) guarda só o código do catálogo: o detalhe escrito pode citar saúde e sai em 2 anos (retenção)
+    dadosDepois: ehCLI ? { sessaoId: Number(sessaoId), codigo } : { sessaoId: Number(sessaoId), motivo: texto }
   });
 
   let apuracao = "";

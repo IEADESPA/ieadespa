@@ -4,6 +4,11 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const afmDb = require("../shared/afmDb");
+const { ehGeral } = require("../shared/escopoRotas");
+// v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
+// — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
+const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
+const SO_GERAL_CLI = { sucesso: false, mensagem: "A reunião da CLI conta falta para as 3 faltas do Estatuto (Art. 27): só a Secretaria Geral abre, encerra, justifica e corrige presença nela." };
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -25,6 +30,14 @@ module.exports = async function (context, req) {
             LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId WHERE m.MembroId = @id`);
   if (!auth.estaNoEscopo(usuario, alvo.recordset[0] ? alvo.recordset[0].Congregacao : null)) {
     context.res = { status: 403, body: { sucesso: false, mensagem: "Este obreiro está fora do seu escopo de acesso." } };
+    return;
+  }
+
+  const daCLI = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT 1 AS x FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId AND o.Sigla = 'CLI' WHERE s.SessaoId = @id`)).recordset.length > 0;
+  if (daCLI && !geralEmReunioes(usuario)) { context.res = { status: 403, body: SO_GERAL_CLI }; return; }
+  if (daCLI && Number(membroId) === Number(usuario.membroId)) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Ninguém corrige a própria presença na CLI: outra pessoa da Secretaria faz a correção." } };
     return;
   }
 

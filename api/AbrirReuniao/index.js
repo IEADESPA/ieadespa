@@ -20,6 +20,11 @@ const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { resolverOrgao, membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const afm = require("../shared/afm");
+const { ehGeral } = require("../shared/escopoRotas");
+// v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
+// — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
+const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
+const SO_GERAL_CLI = { sucesso: false, mensagem: "A reunião da CLI conta falta para as 3 faltas do Estatuto (Art. 27): só a Secretaria Geral abre, encerra, justifica e corrige presença nela." };
 
 function chaveOrgao(row) {
   return row.orgaoId ? `central:${row.orgaoId}` : `local:${row.orgaoLocalId}`;
@@ -102,14 +107,23 @@ module.exports = async function (context, req) {
 
   // v8.1 — a reunião da CLI diz o tipo (shared/afm.js, TIPOS_SESSAO_CLI): Ordinária e Sessão Magna da AFM contam para as 3 faltas (Estatuto Art. 27; Regimento Art. 69);
   // Extraordinária não. Sem tipo informado vale Ordinária (a mensal, o caso comum). Os demais órgãos não têm tipo.
+  // (revisão) o tipo é obrigatório na CLI (nada de "Ordinária" por omissão) e só o nível geral abre reunião da CLI.
   let tipo = "ORDINARIA";
   if (orgao.sigla === "CLI") {
-    if (tipoSessao != null && tipoSessao !== "") {
-      if (typeof tipoSessao !== "string" || !Object.prototype.hasOwnProperty.call(afm.TIPOS_SESSAO_CLI, tipoSessao)) {
-        context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo da reunião da CLI inválido: Ordinária, Extraordinária ou Sessão Magna da AFM." } };
+    if (!geralEmReunioes(usuario)) { context.res = { status: 403, body: SO_GERAL_CLI }; return; }
+    if (typeof tipoSessao !== "string" || !Object.prototype.hasOwnProperty.call(afm.TIPOS_SESSAO_CLI, tipoSessao)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Escolha o tipo da reunião da CLI: Ordinária, Extraordinária, Sessão Magna da AFM ou Seminário de novembro." } };
+      return;
+    }
+    tipo = tipoSessao;
+    // Uma reunião que conta falta por dia (Regimento Art. 78, III, b: a reunião da CLI ou da AFM é no último domingo): a segunda no mesmo dia daria duas faltas à mesma pessoa.
+    if (afm.TIPOS_SESSAO_CLI[tipo].contaFaltas) {
+      const jaHoje = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId)
+        .query(`SELECT TOP 1 1 AS x FROM Sessoes WHERE OrgaoId = @orgaoId AND ContaFaltasCLI = 1 AND DataSessao = CAST(SYSUTCDATETIME() AS DATE)`);
+      if (jaHoje.recordset.length) {
+        context.res = { status: 422, body: { sucesso: false, mensagem: "Já houve hoje uma reunião da CLI que conta falta. Outra no mesmo dia, abra como Extraordinária (ou marque a anterior como \"não conta falta\", se foi aberta por engano)." } };
         return;
       }
-      tipo = tipoSessao;
     }
   }
   const contaFaltasCLI = orgao.sigla === "CLI" && afm.TIPOS_SESSAO_CLI[tipo].contaFaltas;
@@ -138,7 +152,7 @@ module.exports = async function (context, req) {
     const idsNovo = new Set(universoNovo.map(m => m.membroId));
     for (const sessaoAberta of abertasResult.recordset) {
       const mesmoOrgao = chaveOrgao(sessaoAberta) === chaveOrgao(orgao);
-      const universoExistente = mesmoOrgao ? universoNovo : await universoDoOrgao(pool, sessaoAberta, { magnaAFM: sessaoAberta.sigla === "CLI" && sessaoAberta.tipoSessao === "MAGNA_AFM" });
+      const universoExistente = mesmoOrgao ? universoNovo : await universoDoOrgao(pool, sessaoAberta, { magnaAFM: sessaoAberta.sigla === "CLI" && ["MAGNA_AFM", "SEMINARIO_AFM"].includes(sessaoAberta.tipoSessao) });
       const conflito = universoExistente.find(m => idsNovo.has(m.membroId));
       if (conflito) {
         context.res = {

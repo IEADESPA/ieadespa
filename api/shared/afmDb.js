@@ -134,23 +134,45 @@ async function caminhosNaCLI(pool, membroId) {
 
 // ============================== HISTÓRICO ==============================
 
-// As presenças que contam, por pessoa, em ordem de data. tipo: "CLI" ou "AFM".
+// As presenças que contam, por pessoa, em ordem. tipo: "CLI" ou "AFM".
+// - CLI: reunião da CLI encerrada que conta falta (Ordinária e Sessão Magna; o Seminário de novembro não: Regimento Art. 70 §1º) em que a pessoa era esperada pela CLI;
+// - AFM: Sessão Magna ou Seminário encerrados que contam, em que a pessoa era esperada pela Academia.
+// Revisão independente (27/10/2026): a reunião que conta mas em que a pessoa NÃO era esperada (fora da CLI, sob disciplina, ainda não oficial) entra como `quebra` — interrompe a
+// sequência, para que faltas separadas por um período fora não somem 3. E `pendente` marca o pedido de justificativa esperando a Secretaria.
 async function historico(requisicao, tipo, ids = null) {
+  const ehAFM = tipo === "AFM";
+  const condSessao = ehAFM ? `s.TipoSessao IN (${afm.TIPOS_AFM_SQL})` : "s.TipoSessao <> N'SEMINARIO_AFM'";
   const req = requisicao();
   const filtro = filtroIds(req, "p.MembroId", ids);
-  const condicao = tipo === "AFM" ? "s.TipoSessao = N'MAGNA_AFM' AND p.EsperadoAFM = 1" : "p.EsperadoCLI = 1";
   const r = await req.query(`
-    SELECT p.MembroId, s.SessaoId, CONVERT(varchar(10), s.DataSessao, 120) AS DataSessao, p.Presente, p.FaltaJustificada
+    SELECT p.MembroId, s.SessaoId, p.Presente, p.FaltaJustificada,
+           CASE WHEN p.JustificativaPendente IS NOT NULL OR p.PendenteCodigo IS NOT NULL THEN 1 ELSE 0 END AS Pendente
     FROM Presencas p
     JOIN Sessoes s ON s.SessaoId = p.SessaoId
     JOIN Orgaos o ON o.OrgaoId = s.OrgaoId AND o.Sigla = N'CLI'
-    WHERE s.ContaFaltasCLI = 1 AND s.Status = N'ENCERRADA' AND ${condicao} ${filtro}
-    ORDER BY p.MembroId, s.DataSessao, s.SessaoId`);
-  const mapa = new Map();
+    WHERE s.ContaFaltasCLI = 1 AND s.Status = N'ENCERRADA' AND ${condSessao} AND ${ehAFM ? "p.EsperadoAFM = 1" : "p.EsperadoCLI = 1"} ${filtro}`);
+  const sessoes = (await requisicao().query(`
+    SELECT s.SessaoId, CONVERT(varchar(10), s.DataSessao, 120) AS DataSessao
+    FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId AND o.Sigla = N'CLI'
+    WHERE s.ContaFaltasCLI = 1 AND s.Status = N'ENCERRADA' AND ${condSessao}
+    ORDER BY s.DataSessao, s.SessaoId`)).recordset.map((s) => ({ sessaoId: Number(s.SessaoId), data: s.DataSessao }));
+  const daPessoa = new Map();
   for (const l of r.recordset) {
     const id = Number(l.MembroId);
-    if (!mapa.has(id)) mapa.set(id, []);
-    mapa.get(id).push({ sessaoId: Number(l.SessaoId), data: l.DataSessao, presente: !!l.Presente, justificada: !!l.FaltaJustificada });
+    if (!daPessoa.has(id)) daPessoa.set(id, new Map());
+    daPessoa.get(id).set(Number(l.SessaoId), { presente: !!l.Presente, justificada: !!l.FaltaJustificada, pendente: !!l.Pendente });
+  }
+  const mapa = new Map();
+  for (const [id, linhas] of daPessoa) {
+    const lista = [];
+    let comecou = false;
+    for (const s of sessoes) {
+      const l = linhas.get(s.sessaoId);
+      if (l) comecou = true;
+      if (!comecou) continue;                         // antes da primeira reunião em que a pessoa era esperada, nada a contar
+      lista.push(l ? { sessaoId: s.sessaoId, data: s.data, ...l } : { sessaoId: s.sessaoId, data: s.data, quebra: true });
+    }
+    mapa.set(id, lista);
   }
   return mapa;
 }
@@ -159,9 +181,22 @@ async function historico(requisicao, tipo, ids = null) {
 // ordem das reuniões, não pela data: no mesmo dia do ato, as reuniões antigas não voltam a contar.
 const aPartirDe = (linhas, aposSessaoId) => (aposSessaoId != null ? linhas.filter((h) => h.sessaoId > Number(aposSessaoId)) : linhas);
 
+// O retrato de "por onde a pessoa entrava" sempre como JSON válido dentro da coluna (quem tem muitas lideranças perde as últimas, nunca o formato).
+function serializarCaminhos(caminhos) {
+  const lista = (Array.isArray(caminhos) ? caminhos : []).slice();
+  let texto = JSON.stringify(lista);
+  while (texto.length > 4000 && lista.length) { lista.pop(); texto = JSON.stringify(lista); }
+  return texto;
+}
+
 // ============================== APURAÇÃO ==============================
 
 // Apura as 3 faltas da CLI e da AFM. `membroIds`: só essas pessoas (null = todo mundo). Devolve o que mudou.
+// - NASCER: a exclusão/desmatrícula só nasce quando nenhuma das 3 faltas tem pedido de justificativa esperando a Secretaria (Estatuto Art. 27 §1º: "sem justificativa
+//   aceitável apresentada") — a recusa do pedido refaz a apuração;
+// - ANULAR: o pedido sozinho não desfaz uma exclusão já registrada; a justificativa ACEITA (ou a presença corrigida, ou a reunião marcada "não conta") desfaz;
+// - REFAZER: se as faltas da sequência mudaram e ela continua chegando a 3, a exclusão antiga é anulada e uma nova nasce com as reuniões e a data certas (o prazo da AGE
+//   corre da data nova).
 async function apurar(pool, { membroIds = null } = {}) {
   const ids = listaDeIds(membroIds);
   await garantirMatriculas(pool);
@@ -170,6 +205,8 @@ async function apurar(pool, { membroIds = null } = {}) {
   const candidatos = [...preHistCLI.entries()].filter(([, linhas]) => afm.apurarSequencia(linhas).atingiu).map(([id]) => id);
   const caminhos = new Map();
   for (const id of candidatos) caminhos.set(id, await caminhosNaCLI(pool, id));
+  const MOTIVO_ANULA = "Apuração refeita: uma das 3 faltas foi justificada, corrigida ou a reunião deixou de contar — a sequência deixou de existir.";
+  const MOTIVO_REFAZ = "Apuração refeita: as faltas da sequência mudaram; o registro foi refeito com as reuniões e a data certas.";
 
   const r = await comTrava(pool, TRAVA_APURACAO, async (t) => {
     const req = () => new sql.Request(t);
@@ -180,7 +217,7 @@ async function apurar(pool, { membroIds = null } = {}) {
     const exReq = req();
     const exFiltro = filtroIds(exReq, "MembroId", ids);
     const exclusoes = (await exReq.query(`
-      SELECT ExclusaoId, MembroId, CONVERT(varchar(10), DataExclusao, 120) AS DataExclusao, CONVERT(varchar(10), ReadmitidaEm, 120) AS ReadmitidaEm, ContagemAposSessaoId, AnuladaEm
+      SELECT ExclusaoId, MembroId, SessoesGatilho, CONVERT(varchar(10), ReadmitidaEm, 120) AS ReadmitidaEm, ContagemAposSessaoId, AnuladaEm
       FROM CLIExclusoesFaltas WITH (UPDLOCK, HOLDLOCK) WHERE 1 = 1 ${exFiltro}`)).recordset;
     const porMembro = new Map();
     for (const e of exclusoes) {
@@ -190,22 +227,26 @@ async function apurar(pool, { membroIds = null } = {}) {
       if (!e.ReadmitidaEm && !e.AnuladaEm) p.vigente = e;
       if (e.ReadmitidaEm && e.ContagemAposSessaoId != null && (p.inicio == null || Number(e.ContagemAposSessaoId) > p.inicio)) p.inicio = Number(e.ContagemAposSessaoId);
     }
+    const inserirExclusao = async (id, gatilho) => {
+      const caminho = caminhos.has(id) ? caminhos.get(id) : await caminhosNaCLI(pool, id);
+      const ins = await req().input("m", sql.Int, id).input("data", sql.Date, gatilho.data).input("sessoes", sql.NVarChar(60), gatilho.sessoes.join(","))
+        .input("como", sql.NVarChar(4000), serializarCaminhos(caminho))
+        .query(`INSERT INTO CLIExclusoesFaltas (MembroId, DataExclusao, SessoesGatilho, ComoEntrava) OUTPUT INSERTED.ExclusaoId VALUES (@m, @data, @sessoes, @como)`);
+      out.exclusoes.push({ exclusaoId: ins.recordset[0].ExclusaoId, membroId: id, data: gatilho.data });
+    };
+    const anularExclusao = async (id, exclusaoId, motivo) => {
+      await req().input("id", sql.Int, exclusaoId).input("motivo", sql.NVarChar(300), motivo)
+        .query(`UPDATE CLIExclusoesFaltas SET AnuladaEm = SYSUTCDATETIME(), MotivoAnulacao = @motivo WHERE ExclusaoId = @id AND AnuladaEm IS NULL AND ReadmitidaEm IS NULL`);
+      out.anuladasCLI.push({ exclusaoId, membroId: id });
+    };
     for (const id of new Set([...histCLI.keys(), ...porMembro.keys()])) {
       const p = porMembro.get(id) || { vigente: null, inicio: null };
-      const seq = afm.apurarSequencia(aPartirDe(histCLI.get(id) || [], p.inicio));
-      if (p.vigente && !seq.atingiu) {
-        await req().input("id", sql.Int, p.vigente.ExclusaoId)
-          .input("motivo", sql.NVarChar(300), "Apuração refeita: uma das 3 faltas foi justificada ou corrigida depois — a sequência deixou de existir.")
-          .query(`UPDATE CLIExclusoesFaltas SET AnuladaEm = SYSUTCDATETIME(), MotivoAnulacao = @motivo WHERE ExclusaoId = @id AND AnuladaEm IS NULL AND ReadmitidaEm IS NULL`);
-        out.anuladasCLI.push({ exclusaoId: p.vigente.ExclusaoId, membroId: id });
-      } else if (!p.vigente && seq.atingiu) {
-        const caminho = caminhos.has(id) ? caminhos.get(id) : await caminhosNaCLI(pool, id);
-        const ins = await req().input("m", sql.Int, id).input("data", sql.Date, seq.gatilho.data)
-          .input("sessoes", sql.NVarChar(60), seq.gatilho.sessoes.join(","))
-          .input("como", sql.NVarChar(1000), JSON.stringify(caminho).slice(0, 1000))
-          .query(`INSERT INTO CLIExclusoesFaltas (MembroId, DataExclusao, SessoesGatilho, ComoEntrava) OUTPUT INSERTED.ExclusaoId VALUES (@m, @data, @sessoes, @como)`);
-        out.exclusoes.push({ exclusaoId: ins.recordset[0].ExclusaoId, membroId: id, data: seq.gatilho.data });
-      }
+      const linhas = aPartirDe(histCLI.get(id) || [], p.inicio);
+      const seq = afm.apurarSequencia(linhas);
+      const seqNascer = afm.apurarSequencia(linhas, afm.FALTAS_PARA_PERDA, { pendenteInterrompe: true });
+      if (p.vigente && !seq.atingiu) await anularExclusao(id, p.vigente.ExclusaoId, MOTIVO_ANULA);
+      else if (p.vigente && seq.gatilho.sessoes.join(",") !== String(p.vigente.SessoesGatilho)) { await anularExclusao(id, p.vigente.ExclusaoId, MOTIVO_REFAZ); await inserirExclusao(id, seq.gatilho); }
+      else if (!p.vigente && seqNascer.atingiu) await inserirExclusao(id, seqNascer.gatilho);
     }
 
     // ---- AFM ----
@@ -215,20 +256,26 @@ async function apurar(pool, { membroIds = null } = {}) {
       const mat = mats.get(id);
       if (!mat) continue;            // sem matrícula: não é oficial (a rodada de garantirMatriculas acima já criou a de todo oficial)
       const inicio = mat.Origem === "REMATRICULA" ? mat.ContagemAposSessaoId : null;
-      const seq = afm.apurarSequencia(aPartirDe(histAFM.get(id) || [], inicio));
-      if (mat.DesmatriculaId && mat.DesmatriculaMotivo === "FALTAS" && !seq.atingiu) {
-        await req().input("id", sql.Int, mat.DesmatriculaId).input("mat", sql.Int, mat.MatriculaId)
-          .input("motivo", sql.NVarChar(300), "Apuração refeita: uma das 3 faltas foi justificada ou corrigida depois — a sequência deixou de existir.")
+      const linhas = aPartirDe(histAFM.get(id) || [], inicio);
+      const seq = afm.apurarSequencia(linhas);
+      const seqNascer = afm.apurarSequencia(linhas, afm.FALTAS_PARA_PERDA, { pendenteInterrompe: true });
+      const porFaltas = mat.DesmatriculaId && mat.DesmatriculaMotivo === "FALTAS";
+      const desmatricular = async (gatilho) => {
+        const ins = await req().input("mat", sql.Int, mat.MatriculaId).input("m", sql.Int, id).input("data", sql.Date, gatilho.data)
+          .input("sessoes", sql.NVarChar(60), gatilho.sessoes.join(","))
+          .query(`INSERT INTO AFMDesmatriculas (MatriculaId, MembroId, Motivo, DataDesmatricula, SessoesGatilho) OUTPUT INSERTED.DesmatriculaId VALUES (@mat, @m, N'FALTAS', @data, @sessoes);
+                  UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;`);
+        out.desmatriculas.push({ desmatriculaId: ins.recordset[0].DesmatriculaId, membroId: id, data: gatilho.data });
+      };
+      const anular = async (motivo) => {
+        await req().input("id", sql.Int, mat.DesmatriculaId).input("mat", sql.Int, mat.MatriculaId).input("motivo", sql.NVarChar(300), motivo)
           .query(`UPDATE AFMDesmatriculas SET AnuladaEm = SYSUTCDATETIME(), MotivoAnulacao = @motivo WHERE DesmatriculaId = @id AND AnuladaEm IS NULL;
                   UPDATE Matriculas_AFM SET StatusMatricula = N'ATIVA' WHERE MatriculaId = @mat;`);
         out.anuladasAFM.push({ desmatriculaId: mat.DesmatriculaId, membroId: id });
-      } else if (!mat.DesmatriculaId && mat.StatusMatricula === "ATIVA" && seq.atingiu) {
-        const ins = await req().input("mat", sql.Int, mat.MatriculaId).input("m", sql.Int, id).input("data", sql.Date, seq.gatilho.data)
-          .input("sessoes", sql.NVarChar(60), seq.gatilho.sessoes.join(","))
-          .query(`INSERT INTO AFMDesmatriculas (MatriculaId, MembroId, Motivo, DataDesmatricula, SessoesGatilho) OUTPUT INSERTED.DesmatriculaId VALUES (@mat, @m, N'FALTAS', @data, @sessoes);
-                  UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;`);
-        out.desmatriculas.push({ desmatriculaId: ins.recordset[0].DesmatriculaId, membroId: id, data: seq.gatilho.data });
-      }
+      };
+      if (porFaltas && !seq.atingiu) await anular(MOTIVO_ANULA);
+      else if (porFaltas && seq.gatilho.sessoes.join(",") !== String(mat.SessoesGatilho)) { await anular(MOTIVO_REFAZ); await desmatricular(seq.gatilho); }
+      else if (!mat.DesmatriculaId && mat.StatusMatricula === "ATIVA" && seqNascer.atingiu) await desmatricular(seqNascer.gatilho);
     }
     return out;
   });
@@ -238,6 +285,22 @@ async function apurar(pool, { membroIds = null } = {}) {
   for (const d of r.desmatriculas) await registrarAuditoria({ tabela: "AFMDesmatriculas", registroId: d.desmatriculaId, acao: "AFM_DESMATRICULA_FALTAS", usuarioId: null, dadosDepois: d });
   for (const d of r.anuladasAFM) await registrarAuditoria({ tabela: "AFMDesmatriculas", registroId: d.desmatriculaId, acao: "AFM_DESMATRICULA_ANULADA", usuarioId: null, dadosDepois: d });
   return r;
+}
+
+// A reunião da CLI aberta ou encerrada por engano (ou a segunda no mesmo dia) deixa de contar falta: ato do nível geral, com o motivo; a apuração é refeita na hora para
+// todos os que estavam nela (pode desfazer exclusões e desmatrículas). Não volta a contar depois (a reunião errada vira registro de presença).
+async function marcarNaoConta(pool, { sessaoId, motivo, por }) {
+  const s = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT s.SessaoId, s.ContaFaltasCLI, s.Status, o.Sigla FROM Sessoes s LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId WHERE s.SessaoId = @id`)).recordset[0];
+  if (!s || s.Sigla !== "CLI") return NAO_EXISTE;
+  if (!s.ContaFaltasCLI) return { sucesso: false, mensagem: "Esta reunião já não conta falta." };
+  const upd = await pool.request().input("id", sql.Int, sessaoId).input("motivo", sql.NVarChar(300), motivo).input("por", sql.Int, por)
+    .query(`UPDATE Sessoes SET ContaFaltasCLI = 0, NaoContaMotivo = @motivo, NaoContaPor = @por, NaoContaEm = SYSUTCDATETIME() WHERE SessaoId = @id AND ContaFaltasCLI = 1`);
+  if (!upd.rowsAffected[0]) return MUDOU("A reunião mudou enquanto isso. Atualize a tela.");
+  await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoId), acao: "CLI_REUNIAO_NAO_CONTA", usuarioId: por, dadosDepois: { motivo } });
+  const ids = (await pool.request().input("id", sql.Int, sessaoId).query(`SELECT MembroId FROM Presencas WHERE SessaoId = @id`)).recordset.map((l) => Number(l.MembroId));
+  const ap = await apurar(pool, { membroIds: ids });
+  return { sucesso: true, mensagem: `A reunião deixou de contar falta.${resumoDaApuracao(ap)}` };
 }
 
 // Apura sem derrubar quem chamou (encerrar reunião, justificar): a falha fica no log e a rotina diária repete.
@@ -327,10 +390,11 @@ async function rematricular(pool, { membroId, reciclagemAprovadaEm, observacao, 
     if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
     const ins = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("cargo", sql.NVarChar(30), pessoa.CargoMinisterial)
       .input("nivel", sql.NVarChar(30), mat.NivelEscolaridade || null).input("conc", sql.Bit, !!mat.NivelConcluido)
-      .input("rec", sql.Date, v.data).input("obs", sql.NVarChar(300), v.observacao).input("por", sql.Int, por)
-      .query(`INSERT INTO Matriculas_AFM (MembroId, NivelAtual, StatusMatricula, Origem, DataMatricula, NivelEscolaridade, NivelConcluido, ReciclagemAprovadaEm, Observacao, CriadoPor, ContagemAposSessaoId)
+      .input("rec", sql.Date, v.data).input("obs", sql.NVarChar(300), v.observacao).input("por", sql.Int, por).input("anterior", sql.Int, mat.MatriculaId)
+      .query(`INSERT INTO Matriculas_AFM (MembroId, NivelAtual, StatusMatricula, Origem, DataMatricula, NivelEscolaridade, NivelConcluido, ReciclagemAprovadaEm, Observacao, CriadoPor, ContagemAposSessaoId, CertificadoHabilitacao)
               OUTPUT INSERTED.MatriculaId
-              VALUES (@m, @cargo, N'ATIVA', N'REMATRICULA', CAST(SYSUTCDATETIME() AS DATE), @nivel, @conc, @rec, @obs, @por, (SELECT ISNULL(MAX(SessaoId), 0) FROM Sessoes))`);
+              VALUES (@m, @cargo, N'ATIVA', N'REMATRICULA', CAST(SYSUTCDATETIME() AS DATE), @nivel, @conc, @rec, @obs, @por, (SELECT ISNULL(MAX(SessaoId), 0) FROM Sessoes),
+                      (SELECT ISNULL(CertificadoHabilitacao, 0) FROM Matriculas_AFM WHERE MatriculaId = @anterior))   -- o CHM não se perde na rematrícula (a CEI o lê da matrícula atual)`);
     return { sucesso: true, matriculaId: ins.recordset[0].MatriculaId, mensagem: "Nova matrícula registrada: o obreiro voltou a ficar ativo, com a licença para oficiar. A contagem de faltas recomeça hoje." };
   });
   if (r.sucesso) await registrarAuditoria({ tabela: "Matriculas_AFM", registroId: r.matriculaId, acao: "AFM_REMATRICULA", usuarioId: por, dadosDepois: { membroId: Number(membroId), reciclagemAprovadaEm } });
@@ -572,7 +636,7 @@ async function sessoesMagnas(pool) {
            SUM(CASE WHEN p.EsperadoAFM = 1 AND p.Presente = 0 AND ISNULL(p.FaltaJustificada, 0) = 0 THEN 1 ELSE 0 END) AS Faltas,
            SUM(CASE WHEN p.EsperadoAFM = 1 AND p.Presente = 0 AND p.FaltaJustificada = 1 THEN 1 ELSE 0 END) AS Justificadas
     FROM Sessoes s LEFT JOIN Presencas p ON p.SessaoId = s.SessaoId
-    WHERE s.TipoSessao = N'MAGNA_AFM'
+    WHERE s.TipoSessao IN (${afm.TIPOS_AFM_SQL})
     GROUP BY s.SessaoId, s.Descricao, s.DataSessao, s.Status
     ORDER BY s.DataSessao DESC, s.SessaoId DESC`);
   return r.recordset.map((l) => ({ sessaoId: l.SessaoId, descricao: l.Descricao, data: l.DataSessao, status: l.Status, presentes: l.Presentes || 0, faltas: l.Faltas || 0, justificadas: l.Justificadas || 0 }));
@@ -791,7 +855,7 @@ async function dadosDoTitular(pool, membroId) {
 }
 
 module.exports = {
-  PERMISSAO, garantirMatriculas, matriculasAtuais, universoAFM, idsInativosAFM, idsExcluidosCLI, caminhosNaCLI, historico, apurar, apurarSemFalhar, resumoDaApuracao,
+  PERMISSAO, garantirMatriculas, marcarNaoConta, matriculasAtuais, universoAFM, idsInativosAFM, idsExcluidosCLI, caminhosNaCLI, historico, apurar, apurarSemFalhar, resumoDaApuracao,
   definirNivel, registrarReprovacao, anularReprovacao, rematricular, comunicarExclusao, readmitir,
   corpoDocente, reitorAtual, nomearReitor, homologarReitor, reconduzirReitor, encerrarCorpoDocente, cadastrarDocente,
   sequenciasAtuais, listarMatriculas, painelFaltasCLI, sessoesMagnas, minhaSituacao, licencasDe,

@@ -6,10 +6,88 @@
   "exclusoes": [
    {
     "exclusaoId": 9,
+    "membroId": 3004,
+    "nome": "Dirigente Beta E2E",
+    "congregacao": "Beta E2E",
+    "dataExclusao": "2025-10-13",
+    "sessoes": [
+     9,
+     10,
+     11
+    ],
+    "caminhos": [
+     {
+      "via": "LIDERANCA",
+      "orgaoSigla": null,
+      "cargo": "Dirigente de Congregação"
+     }
+    ],
+    "vigente": true,
+    "comunicadaCLIEm": null,
+    "readmitidaEm": null,
+    "readmissaoAto": null,
+    "anuladaEm": null,
+    "motivoAnulacao": null,
+    "providencias": [
+     {
+      "tipo": "COMUNICAR_CLI",
+      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "SUBSTITUICAO",
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "REINGRESSO",
+      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
+     }
+    ]
+   },
+   {
+    "exclusaoId": 8,
+    "membroId": 3002,
+    "nome": "Dirigente Vila Nova E2E",
+    "congregacao": "Vila Nova E2E",
+    "dataExclusao": "2025-10-13",
+    "sessoes": [
+     9,
+     10,
+     11
+    ],
+    "caminhos": [
+     {
+      "via": "LIDERANCA",
+      "orgaoSigla": null,
+      "cargo": "Dirigente de Congregação"
+     }
+    ],
+    "vigente": true,
+    "comunicadaCLIEm": null,
+    "readmitidaEm": null,
+    "readmissaoAto": null,
+    "anuladaEm": null,
+    "motivoAnulacao": null,
+    "providencias": [
+     {
+      "tipo": "COMUNICAR_CLI",
+      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "SUBSTITUICAO",
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "REINGRESSO",
+      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
+     }
+    ]
+   },
+   {
+    "exclusaoId": 7,
     "membroId": 9112,
     "nome": "Conselheiro de Etica E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -36,11 +114,11 @@
     ]
    },
    {
-    "exclusaoId": 8,
+    "exclusaoId": 6,
     "membroId": 9106,
     "nome": "Conselheiro Fiscal E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -66,8 +144,8 @@
      },
      {
       "tipo": "AGE_DESTITUICAO",
-      "prazo": "2026-11-26",
-      "texto": "Cargo eletivo (Conselheiro Fiscal): a CLI convoca Assembleia Geral Extraordinária para deliberar a destituição em até 30 dias, com contraditório e ampla defesa (Estatuto, Art. 27 §2º) — use \"Convocar Assembleia\" com a matéria \"Destituição\". No Conselho Fiscal e na Tesouraria, a CLI dá posse ao suplente eleito, se houver (Regimento, Art. 310 §2º)."
+      "prazo": "2025-11-12",
+      "texto": "Cargo eletivo (Conselheiro Fiscal): a CLI convoca Assembleia Geral Extraordinária para deliberar a destituição em até 30 dias, com contraditório e ampla defesa (Estatuto, Art. 27 §2º) — use \"Convocar Assembleia\" com a matéria \"Destituição\". No Conselho Fiscal e na Tesouraria, a CLI dá posse ao suplente eleito, se houver (Regimento, Art. 56 §2º)."
      },
      {
       "tipo": "REINGRESSO",
@@ -76,11 +154,11 @@
     ]
    },
    {
-    "exclusaoId": 7,
+    "exclusaoId": 5,
     "membroId": 9102,
     "nome": "Presbitero Faltoso E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -111,11 +189,11 @@
     ]
    },
    {
-    "exclusaoId": 6,
+    "exclusaoId": 4,
     "membroId": 8001,
     "nome": "Superintendente Norte E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -138,80 +216,6 @@
      {
       "tipo": "MANTEM_CARGO",
       "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
-     },
-     {
-      "tipo": "REINGRESSO",
-      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
-     }
-    ]
-   },
-   {
-    "exclusaoId": 5,
-    "membroId": 7001,
-    "nome": "Pastor do Comite E2E",
-    "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
-    "sessoes": [
-     9,
-     10,
-     11
-    ],
-    "caminhos": [
-     {
-      "via": "ORDENACAO",
-      "orgaoSigla": null,
-      "cargo": "Pastor"
-     }
-    ],
-    "vigente": true,
-    "comunicadaCLIEm": null,
-    "readmitidaEm": null,
-    "readmissaoAto": null,
-    "anuladaEm": null,
-    "motivoAnulacao": null,
-    "providencias": [
-     {
-      "tipo": "MANTEM_CARGO",
-      "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
-     },
-     {
-      "tipo": "REINGRESSO",
-      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
-     }
-    ]
-   },
-   {
-    "exclusaoId": 4,
-    "membroId": 3004,
-    "nome": "Dirigente Beta E2E",
-    "congregacao": "Beta E2E",
-    "dataExclusao": "2026-10-27",
-    "sessoes": [
-     9,
-     10,
-     11
-    ],
-    "caminhos": [
-     {
-      "via": "LIDERANCA",
-      "orgaoSigla": null,
-      "cargo": "Dirigente de Congregação"
-     }
-    ],
-    "vigente": true,
-    "comunicadaCLIEm": null,
-    "readmitidaEm": null,
-    "readmissaoAto": null,
-    "anuladaEm": null,
-    "motivoAnulacao": null,
-    "providencias": [
-     {
-      "tipo": "COMUNICAR_CLI",
-      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
-     },
-     {
-      "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
      },
      {
       "tipo": "REINGRESSO",
@@ -221,10 +225,10 @@
    },
    {
     "exclusaoId": 3,
-    "membroId": 3003,
-    "nome": "Pastor de Área Alfa E2E",
+    "membroId": 7001,
+    "nome": "Pastor do Comite E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -256,10 +260,10 @@
    },
    {
     "exclusaoId": 2,
-    "membroId": 3002,
-    "nome": "Dirigente Vila Nova E2E",
-    "congregacao": "Vila Nova E2E",
-    "dataExclusao": "2026-10-27",
+    "membroId": 3003,
+    "nome": "Pastor de Área Alfa E2E",
+    "congregacao": "Central E2E",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -267,9 +271,9 @@
     ],
     "caminhos": [
      {
-      "via": "LIDERANCA",
+      "via": "ORDENACAO",
       "orgaoSigla": null,
-      "cargo": "Dirigente de Congregação"
+      "cargo": "Pastor"
      }
     ],
     "vigente": true,
@@ -280,12 +284,8 @@
     "motivoAnulacao": null,
     "providencias": [
      {
-      "tipo": "COMUNICAR_CLI",
-      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
-     },
-     {
-      "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
+      "tipo": "MANTEM_CARGO",
+      "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
      },
      {
       "tipo": "REINGRESSO",
@@ -298,7 +298,7 @@
     "membroId": 3001,
     "nome": "Dirigente Central E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -329,7 +329,7 @@
      },
      {
       "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
      },
      {
       "tipo": "MANTEM_CARGO",
@@ -351,7 +351,7 @@
    "orgaoId": 2,
    "orgaoLocalId": null,
    "descricao": "Sessão Magna 1 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-10-27",
    "status": "ENCERRADA",
    "quorumTipo": "GERAL",
    "vinculadaSessaoId": null,
@@ -589,8 +589,8 @@
   ],
   "quorum": {
    "totalAtivos": 8,
-   "totalPresentes": 9,
-   "percentualPresenca": 113,
+   "totalPresentes": 7,
+   "percentualPresenca": 88,
    "quorumMinimoPct": null,
    "quorumAtingido": true,
    "maioriaAbsolutaNecessaria": 5,
@@ -611,10 +611,88 @@
   "exclusoes": [
    {
     "exclusaoId": 9,
+    "membroId": 3004,
+    "nome": "Dirigente Beta E2E",
+    "congregacao": "Beta E2E",
+    "dataExclusao": "2025-10-13",
+    "sessoes": [
+     9,
+     10,
+     11
+    ],
+    "caminhos": [
+     {
+      "via": "LIDERANCA",
+      "orgaoSigla": null,
+      "cargo": "Dirigente de Congregação"
+     }
+    ],
+    "vigente": true,
+    "comunicadaCLIEm": null,
+    "readmitidaEm": null,
+    "readmissaoAto": null,
+    "anuladaEm": null,
+    "motivoAnulacao": null,
+    "providencias": [
+     {
+      "tipo": "COMUNICAR_CLI",
+      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "SUBSTITUICAO",
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "REINGRESSO",
+      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
+     }
+    ]
+   },
+   {
+    "exclusaoId": 8,
+    "membroId": 3002,
+    "nome": "Dirigente Vila Nova E2E",
+    "congregacao": "Vila Nova E2E",
+    "dataExclusao": "2025-10-13",
+    "sessoes": [
+     9,
+     10,
+     11
+    ],
+    "caminhos": [
+     {
+      "via": "LIDERANCA",
+      "orgaoSigla": null,
+      "cargo": "Dirigente de Congregação"
+     }
+    ],
+    "vigente": true,
+    "comunicadaCLIEm": null,
+    "readmitidaEm": null,
+    "readmissaoAto": null,
+    "anuladaEm": null,
+    "motivoAnulacao": null,
+    "providencias": [
+     {
+      "tipo": "COMUNICAR_CLI",
+      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "SUBSTITUICAO",
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
+     },
+     {
+      "tipo": "REINGRESSO",
+      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
+     }
+    ]
+   },
+   {
+    "exclusaoId": 7,
     "membroId": 9112,
     "nome": "Conselheiro de Etica E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -641,11 +719,11 @@
     ]
    },
    {
-    "exclusaoId": 6,
+    "exclusaoId": 4,
     "membroId": 8001,
     "nome": "Superintendente Norte E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -668,80 +746,6 @@
      {
       "tipo": "MANTEM_CARGO",
       "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
-     },
-     {
-      "tipo": "REINGRESSO",
-      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
-     }
-    ]
-   },
-   {
-    "exclusaoId": 5,
-    "membroId": 7001,
-    "nome": "Pastor do Comite E2E",
-    "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
-    "sessoes": [
-     9,
-     10,
-     11
-    ],
-    "caminhos": [
-     {
-      "via": "ORDENACAO",
-      "orgaoSigla": null,
-      "cargo": "Pastor"
-     }
-    ],
-    "vigente": true,
-    "comunicadaCLIEm": null,
-    "readmitidaEm": null,
-    "readmissaoAto": null,
-    "anuladaEm": null,
-    "motivoAnulacao": null,
-    "providencias": [
-     {
-      "tipo": "MANTEM_CARGO",
-      "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
-     },
-     {
-      "tipo": "REINGRESSO",
-      "texto": "Só volta à CLI por novo processo de admissão (Regimento, Art. 149 §1º): registre a readmissão com a data e o ato."
-     }
-    ]
-   },
-   {
-    "exclusaoId": 4,
-    "membroId": 3004,
-    "nome": "Dirigente Beta E2E",
-    "congregacao": "Beta E2E",
-    "dataExclusao": "2026-10-27",
-    "sessoes": [
-     9,
-     10,
-     11
-    ],
-    "caminhos": [
-     {
-      "via": "LIDERANCA",
-      "orgaoSigla": null,
-      "cargo": "Dirigente de Congregação"
-     }
-    ],
-    "vigente": true,
-    "comunicadaCLIEm": null,
-    "readmitidaEm": null,
-    "readmissaoAto": null,
-    "anuladaEm": null,
-    "motivoAnulacao": null,
-    "providencias": [
-     {
-      "tipo": "COMUNICAR_CLI",
-      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
-     },
-     {
-      "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
      },
      {
       "tipo": "REINGRESSO",
@@ -751,10 +755,10 @@
    },
    {
     "exclusaoId": 3,
-    "membroId": 3003,
-    "nome": "Pastor de Área Alfa E2E",
+    "membroId": 7001,
+    "nome": "Pastor do Comite E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -786,10 +790,10 @@
    },
    {
     "exclusaoId": 2,
-    "membroId": 3002,
-    "nome": "Dirigente Vila Nova E2E",
-    "congregacao": "Vila Nova E2E",
-    "dataExclusao": "2026-10-27",
+    "membroId": 3003,
+    "nome": "Pastor de Área Alfa E2E",
+    "congregacao": "Central E2E",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -797,9 +801,9 @@
     ],
     "caminhos": [
      {
-      "via": "LIDERANCA",
+      "via": "ORDENACAO",
       "orgaoSigla": null,
-      "cargo": "Dirigente de Congregação"
+      "cargo": "Pastor"
      }
     ],
     "vigente": true,
@@ -810,12 +814,8 @@
     "motivoAnulacao": null,
     "providencias": [
      {
-      "tipo": "COMUNICAR_CLI",
-      "texto": "A Secretaria Geral comunica a exclusão à CLI, que a aprecia (Estatuto, Art. 27 §2º)."
-     },
-     {
-      "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
+      "tipo": "MANTEM_CARGO",
+      "texto": "Sai da composição da CLI, mas continua com o cargo ministerial: perder a cadeira na Câmara não é deixar de ser ministro."
      },
      {
       "tipo": "REINGRESSO",
@@ -828,7 +828,7 @@
     "membroId": 3001,
     "nome": "Dirigente Central E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -859,7 +859,7 @@
      },
      {
       "tipo": "SUBSTITUICAO",
-      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 310 §2º; Estatuto, Art. 27 §2º)."
+      "texto": "Função de livre nomeação (Dirigente de Congregação): perde a função no mesmo ato e o Pastor Presidente nomeia o substituto (Regimento, Art. 56 §2º; Estatuto, Art. 27 §2º)."
      },
      {
       "tipo": "MANTEM_CARGO",
@@ -876,7 +876,7 @@
     "membroId": 9107,
     "nome": "Presbitero Falta Dupla E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-11-10",
     "sessoes": [
      13,
      14,
@@ -894,15 +894,15 @@
     "readmitidaEm": null,
     "readmissaoAto": null,
     "anuladaEm": "2026-10-27",
-    "motivoAnulacao": "Apuração refeita: uma das 3 faltas foi justificada ou corrigida depois — a sequência deixou de existir.",
+    "motivoAnulacao": "Apuração refeita: uma das 3 faltas foi justificada, corrigida ou a reunião deixou de contar — a sequência deixou de existir.",
     "providencias": []
    },
    {
-    "exclusaoId": 8,
+    "exclusaoId": 6,
     "membroId": 9106,
     "nome": "Conselheiro Fiscal E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -924,11 +924,11 @@
     "providencias": []
    },
    {
-    "exclusaoId": 7,
+    "exclusaoId": 5,
     "membroId": 9102,
     "nome": "Presbitero Faltoso E2E",
     "congregacao": "Central E2E",
-    "dataExclusao": "2026-10-27",
+    "dataExclusao": "2025-10-13",
     "sessoes": [
      9,
      10,
@@ -946,7 +946,7 @@
     "readmitidaEm": null,
     "readmissaoAto": null,
     "anuladaEm": "2026-10-27",
-    "motivoAnulacao": "Apuração refeita: uma das 3 faltas foi justificada ou corrigida depois — a sequência deixou de existir.",
+    "motivoAnulacao": "Apuração refeita: uma das 3 faltas foi justificada, corrigida ou a reunião deixou de contar — a sequência deixou de existir.",
     "providencias": []
    }
   ],
@@ -956,7 +956,7 @@
     "nome": "Dirigente Central E2E",
     "congregacao": "Central E2E",
     "cargo": "Presbítero",
-    "desde": "2026-10-27",
+    "desde": "2025-11-10",
     "motivo": "FALTAS"
    },
    {
@@ -964,7 +964,7 @@
     "nome": "Pastor de Área Alfa E2E",
     "congregacao": "Central E2E",
     "cargo": "Pastor",
-    "desde": "2026-10-27",
+    "desde": "2025-11-10",
     "motivo": "FALTAS"
    },
    {
@@ -972,7 +972,7 @@
     "nome": "Pastor do Comite E2E",
     "congregacao": "Central E2E",
     "cargo": "Pastor",
-    "desde": "2026-10-27",
+    "desde": "2025-11-10",
     "motivo": "FALTAS"
    },
    {
@@ -988,7 +988,7 @@
     "nome": "Superintendente Norte E2E",
     "congregacao": "Central E2E",
     "cargo": "Pastor",
-    "desde": "2026-10-27",
+    "desde": "2025-11-10",
     "motivo": "FALTAS"
    }
   ]
@@ -1077,7 +1077,7 @@
     "faltasSeguidas": 3,
     "desmatricula": {
      "motivo": "FALTAS",
-     "data": "2026-10-27",
+     "data": "2025-11-10",
      "detalhe": null,
      "sessoes": "13,14,15"
     },
@@ -1124,7 +1124,7 @@
     "faltasSeguidas": 3,
     "desmatricula": {
      "motivo": "FALTAS",
-     "data": "2026-10-27",
+     "data": "2025-11-10",
      "detalhe": null,
      "sessoes": "13,14,15"
     },
@@ -1150,7 +1150,7 @@
     "faltasSeguidas": 3,
     "desmatricula": {
      "motivo": "FALTAS",
-     "data": "2026-10-27",
+     "data": "2025-11-10",
      "detalhe": null,
      "sessoes": "13,14,15"
     },
@@ -1302,7 +1302,7 @@
     "faltasSeguidas": 3,
     "desmatricula": {
      "motivo": "FALTAS",
-     "data": "2026-10-27",
+     "data": "2025-11-10",
      "detalhe": null,
      "sessoes": "13,14,15"
     },
@@ -1465,42 +1465,6 @@
   },
   "historico": [
    {
-    "sessaoId": 9,
-    "descricao": "Ordinária 1 E2E",
-    "dataSessao": "2026-10-27",
-    "presente": false,
-    "faltaJustificada": false,
-    "motivoJustificativa": null,
-    "justificativaPendente": null,
-    "ehCLI": 1,
-    "tipoSessao": "ORDINARIA",
-    "pendenteCodigo": null
-   },
-   {
-    "sessaoId": 10,
-    "descricao": "Ordinária 2 E2E",
-    "dataSessao": "2026-10-27",
-    "presente": false,
-    "faltaJustificada": true,
-    "motivoJustificativa": "Viagem profissional civil — Congresso da empresa em Belém",
-    "justificativaPendente": null,
-    "ehCLI": 1,
-    "tipoSessao": "ORDINARIA",
-    "pendenteCodigo": null
-   },
-   {
-    "sessaoId": 11,
-    "descricao": "Ordinária 3 E2E",
-    "dataSessao": "2026-10-27",
-    "presente": true,
-    "faltaJustificada": false,
-    "motivoJustificativa": null,
-    "justificativaPendente": null,
-    "ehCLI": 1,
-    "tipoSessao": "ORDINARIA",
-    "pendenteCodigo": null
-   },
-   {
     "sessaoId": 12,
     "descricao": "Extraordinária E2E",
     "dataSessao": "2026-10-27",
@@ -1513,9 +1477,9 @@
     "pendenteCodigo": null
    },
    {
-    "sessaoId": 13,
-    "descricao": "Sessão Magna 1 E2E",
-    "dataSessao": "2026-10-27",
+    "sessaoId": 15,
+    "descricao": "Sessão Magna 3 E2E",
+    "dataSessao": "2025-11-10",
     "presente": true,
     "faltaJustificada": false,
     "motivoJustificativa": null,
@@ -1527,7 +1491,7 @@
    {
     "sessaoId": 14,
     "descricao": "Sessão Magna 2 E2E",
-    "dataSessao": "2026-10-27",
+    "dataSessao": "2025-11-03",
     "presente": true,
     "faltaJustificada": false,
     "motivoJustificativa": null,
@@ -1537,15 +1501,51 @@
     "pendenteCodigo": null
    },
    {
-    "sessaoId": 15,
-    "descricao": "Sessão Magna 3 E2E",
-    "dataSessao": "2026-10-27",
+    "sessaoId": 13,
+    "descricao": "Sessão Magna 1 E2E",
+    "dataSessao": "2025-10-27",
     "presente": true,
     "faltaJustificada": false,
     "motivoJustificativa": null,
     "justificativaPendente": null,
     "ehCLI": 1,
     "tipoSessao": "MAGNA_AFM",
+    "pendenteCodigo": null
+   },
+   {
+    "sessaoId": 11,
+    "descricao": "Ordinária 3 E2E",
+    "dataSessao": "2025-10-13",
+    "presente": true,
+    "faltaJustificada": false,
+    "motivoJustificativa": null,
+    "justificativaPendente": null,
+    "ehCLI": 1,
+    "tipoSessao": "ORDINARIA",
+    "pendenteCodigo": null
+   },
+   {
+    "sessaoId": 10,
+    "descricao": "Ordinária 2 E2E",
+    "dataSessao": "2025-10-06",
+    "presente": false,
+    "faltaJustificada": true,
+    "motivoJustificativa": "Viagem profissional civil — Congresso da empresa em Belém",
+    "justificativaPendente": null,
+    "ehCLI": 1,
+    "tipoSessao": "ORDINARIA",
+    "pendenteCodigo": null
+   },
+   {
+    "sessaoId": 9,
+    "descricao": "Ordinária 1 E2E",
+    "dataSessao": "2025-09-29",
+    "presente": false,
+    "faltaJustificada": false,
+    "motivoJustificativa": null,
+    "justificativaPendente": null,
+    "ehCLI": 1,
+    "tipoSessao": "ORDINARIA",
     "pendenteCodigo": null
    }
   ],
@@ -1608,18 +1608,32 @@
     "codigo": "ORDINARIA",
     "rotulo": "Ordinária (mensal)",
     "contaFaltas": true,
+    "contaCLI": true,
+    "contaAFM": false,
     "magna": false
    },
    {
     "codigo": "EXTRAORDINARIA",
     "rotulo": "Extraordinária (não conta falta)",
     "contaFaltas": false,
+    "contaCLI": false,
+    "contaAFM": false,
     "magna": false
    },
    {
     "codigo": "MAGNA_AFM",
     "rotulo": "Sessão Magna da AFM (integrada; conta para a CLI e para a Academia)",
     "contaFaltas": true,
+    "contaCLI": true,
+    "contaAFM": true,
+    "magna": true
+   },
+   {
+    "codigo": "SEMINARIO_AFM",
+    "rotulo": "Seminário Anual de novembro (só da Academia; não conta falta da CLI)",
+    "contaFaltas": true,
+    "contaCLI": false,
+    "contaAFM": true,
     "magna": true
    }
   ],
@@ -1652,7 +1666,7 @@
    {
     "sessaoId": 15,
     "descricao": "Sessão Magna 3 E2E",
-    "data": "2026-10-27",
+    "data": "2025-11-10",
     "status": "ENCERRADA",
     "presentes": 8,
     "faltas": 6,
@@ -1661,7 +1675,7 @@
    {
     "sessaoId": 14,
     "descricao": "Sessão Magna 2 E2E",
-    "data": "2026-10-27",
+    "data": "2025-11-03",
     "status": "ENCERRADA",
     "presentes": 8,
     "faltas": 5,
@@ -1670,7 +1684,7 @@
    {
     "sessaoId": 13,
     "descricao": "Sessão Magna 1 E2E",
-    "data": "2026-10-27",
+    "data": "2025-10-27",
     "status": "ENCERRADA",
     "presentes": 8,
     "faltas": 6,
@@ -1682,7 +1696,7 @@
   {
    "sessaoId": 15,
    "descricao": "Sessão Magna 3 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-11-10",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1690,6 +1704,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "MAGNA_AFM",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 9,
    "totalFaltas": 6,
    "totalJustificadas": 0
@@ -1697,7 +1712,7 @@
   {
    "sessaoId": 14,
    "descricao": "Sessão Magna 2 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-11-03",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1705,6 +1720,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "MAGNA_AFM",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 9,
    "totalFaltas": 6,
    "totalJustificadas": 1
@@ -1712,7 +1728,7 @@
   {
    "sessaoId": 13,
    "descricao": "Sessão Magna 1 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-10-27",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1720,6 +1736,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "MAGNA_AFM",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 9,
    "totalFaltas": 6,
    "totalJustificadas": 0
@@ -1735,6 +1752,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "EXTRAORDINARIA",
    "contaFaltasCLI": false,
+   "naoContaMotivo": null,
    "totalPresentes": 0,
    "totalFaltas": 8,
    "totalJustificadas": 0
@@ -1742,7 +1760,7 @@
   {
    "sessaoId": 11,
    "descricao": "Ordinária 3 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-10-13",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1750,6 +1768,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "ORDINARIA",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 6,
    "totalFaltas": 9,
    "totalJustificadas": 0
@@ -1757,7 +1776,7 @@
   {
    "sessaoId": 10,
    "descricao": "Ordinária 2 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-10-06",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1765,6 +1784,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "ORDINARIA",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 5,
    "totalFaltas": 10,
    "totalJustificadas": 2
@@ -1772,7 +1792,7 @@
   {
    "sessaoId": 9,
    "descricao": "Ordinária 1 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-09-29",
    "status": "ENCERRADA",
    "orgaoId": 2,
    "orgaoLocalId": null,
@@ -1780,6 +1800,7 @@
    "orgaoSigla": "CLI",
    "tipoSessao": "ORDINARIA",
    "contaFaltasCLI": true,
+   "naoContaMotivo": null,
    "totalPresentes": 5,
    "totalFaltas": 10,
    "totalJustificadas": 0
@@ -1792,7 +1813,7 @@
    "orgaoId": 2,
    "orgaoLocalId": null,
    "descricao": "Ordinária 2 E2E",
-   "dataSessao": "2026-10-27",
+   "dataSessao": "2025-10-06",
    "status": "ENCERRADA",
    "quorumTipo": "GERAL",
    "vinculadaSessaoId": null,

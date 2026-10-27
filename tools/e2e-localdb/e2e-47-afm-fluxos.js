@@ -28,7 +28,13 @@ async function abrir(tipoSessao, descricao) {
   return { r, sessaoId: r.body && r.body.sessaoId, senha };
 }
 const presenca = (sessao, matricula) => chamarRota("RegistrarPresenca/index.js", { metodo: "POST", corpo: { matricula, senha: sessao.senha }, headers: { "x-forwarded-for": `10.1.${senhaN}.${matricula % 250}` } });
-const encerrar = (sessaoId) => chamarRota("EncerrarReuniao/index.js", { metodo: "POST", binding: { sessaoId }, token: SEC, corpo: {} });
+// Uma reunião que conta falta por dia (AbrirReuniao): antes de encerrar, a reunião que conta vai para uma data passada, cada uma depois da anterior — como os domingos reais.
+let idade = 0;
+async function encerrar(sessaoId) {
+  await q("UPDATE Sessoes SET DataSessao = DATEADD(DAY, @d, CAST(SYSUTCDATETIME() AS DATE)) WHERE SessaoId = @s AND ContaFaltasCLI = 1", { d: -(400 - 7 * ++idade), s: sessaoId });
+  return chamarRota("EncerrarReuniao/index.js", { metodo: "POST", binding: { sessaoId }, token: SEC, corpo: {} });
+}
+const dataDa = async (sessaoId) => { const d = await escalar("SELECT CONVERT(varchar(10), DataSessao, 120) FROM Sessoes WHERE SessaoId = @s", { s: sessaoId }); return d; };
 const justificar = (sessaoId, corpo, token = SEC) => chamarRota("JustificarFalta/index.js", { metodo: "POST", binding: { sessaoId }, token, corpo });
 const pedir = (sessaoId, matricula, corpo) => chamarRota("SolicitarJustificativa/index.js", { metodo: "POST", binding: { matricula, sessaoId }, token: PIN(matricula), corpo });
 const afmGet = (acao, token = SEC) => chamarRota("GestaoAFM/index.js", { binding: { acao }, token });
@@ -90,11 +96,13 @@ const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
   console.log("== tipo da reunião da CLI ==");
   const ruim = await chamarRota("AbrirReuniao/index.js", { metodo: "POST", token: SEC, corpo: { orgaoId: orgaoCLI, descricao: "x", senhaAcesso: "zz", tipoSessao: "QUALQUER" } });
   ok(ruim.status === 400, "tipo inválido: 400", ruim);
+  const semTipo = await chamarRota("AbrirReuniao/index.js", { metodo: "POST", token: SEC, corpo: { orgaoId: orgaoCLI, descricao: "x", senhaAcesso: "zz" } });
+  ok(semTipo.status === 400, "na CLI o tipo é obrigatório (nada de Ordinária por omissão)", semTipo);
 
   console.log("== 3 faltas seguidas na CLI (ordinárias) ==");
   const S = [];
   for (let i = 1; i <= 3; i++) {
-    const s = await abrir(i === 1 ? undefined : "ORDINARIA", `Ordinária ${i} E2E`);
+    const s = await abrir("ORDINARIA", `Ordinária ${i} E2E`);
     ok(s.r.status === 201, `abre a ordinária ${i}`, s.r.body);
     S.push(s);
     ok((await presenca(s, P.presente)).body.sucesso === true, `o Pastor bate ponto na ${i}`);
@@ -128,10 +136,11 @@ const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
   const p1 = await presencaDe(S[0].sessaoId, P.faltoso);
   ok(p1 && p1.Presente === false && p1.EsperadoCLI === true && p1.EsperadoAFM === false, "a falta guarda que era esperado pela CLI (e não pela AFM)", p1);
   ok((await presencaDe(S[0].sessaoId, P.presente)).EsperadoCLI === true, "a presença também guarda (check-in)");
-  ok((await um("SELECT ContaFaltasCLI c, TipoSessao t FROM Sessoes WHERE SessaoId = @s", { s: S[0].sessaoId })).c === true, "sem tipo informado vale Ordinária e conta falta");
+  ok((await um("SELECT ContaFaltasCLI c, TipoSessao t FROM Sessoes WHERE SessaoId = @s", { s: S[0].sessaoId })).c === true, "a Ordinária conta falta");
 
+  const dataS3 = await dataDa(S[2].sessaoId);
   const exF = await exclusaoVigente(P.faltoso);
-  ok(!!exF && exF.SessoesGatilho === S.map((s) => s.sessaoId).join(",") && String(exF.DataExclusao.toISOString ? exF.DataExclusao.toISOString().slice(0, 10) : exF.DataExclusao).slice(0, 10) === hoje,
+  ok(!!exF && exF.SessoesGatilho === S.map((s) => s.sessaoId).join(",") && String(exF.DataExclusao.toISOString ? exF.DataExclusao.toISOString().slice(0, 10) : exF.DataExclusao).slice(0, 10) === dataS3,
     "Presbítero: exclusão registrada com as 3 reuniões e a data da 3ª", exF);
   ok(/ORDENACAO/.test(exF.ComoEntrava) && !/ASSENTO/.test(exF.ComoEntrava), "o retrato diz que entrava por Ordenação", exF.ComoEntrava);
   ok(!(await naCLI(P.faltoso)), "excluído sai da composição da CLI");
@@ -151,7 +160,7 @@ const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
   ok(pF && pF.vigente && pF.providencias.map((x) => x.tipo).join() === "MANTEM_CARGO,REINGRESSO", "só Ordenação: 'mantém o cargo' e 'reingresso'", pF && pF.providencias);
   const pFis = painel.body.exclusoes.find((e) => e.membroId === P.fiscal);
   const age = pFis && pFis.providencias.find((x) => x.tipo === "AGE_DESTITUICAO");
-  ok(age && age.prazo === somarDias(hoje, 30) && pFis.providencias[0].tipo === "COMUNICAR_CLI", "Conselho Fiscal: comunicar a CLI e AGE em até 30 dias, com o prazo", pFis && pFis.providencias);
+  ok(age && age.prazo === somarDias(dataS3, 30) && pFis.providencias[0].tipo === "COMUNICAR_CLI", "Conselho Fiscal: comunicar a CLI e AGE em até 30 dias, com o prazo", pFis && pFis.providencias);
   const pCei = painel.body.exclusoes.find((e) => e.membroId === P.cei);
   ok(pCei && !pCei.providencias.some((x) => x.tipo === "AGE_DESTITUICAO"), "CEI: sem AGE (o Art. 27 §2º não o inclui)");
   ok(painel.body.emRisco.every((m) => m.membroId !== P.faltoso), "o excluído não aparece em 'em risco' (já saiu)");
@@ -181,7 +190,7 @@ const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
   const jF = await justificar(S[1].sessaoId, { membroId: P.faltoso, codigo: "SAUDE" });
   ok(jF.status === 200 && /exclusão\(ões\) anulada/.test(jF.body.mensagem), "justificar a 2ª falta anula a exclusão na hora", jF.body);
   const anul = await um("SELECT * FROM CLIExclusoesFaltas WHERE ExclusaoId = @id", { id: exF.ExclusaoId });
-  ok(anul.AnuladaEm && /justificada ou corrigida/.test(anul.MotivoAnulacao) && anul.AnuladaPor === null, "anulada pelo sistema, com o motivo", anul);
+  ok(anul.AnuladaEm && /justificada/.test(anul.MotivoAnulacao) && anul.AnuladaPor === null, "anulada pelo sistema, com o motivo", anul);
   ok(await naCLI(P.faltoso), "volta à composição");
 
   console.log("== Extraordinária não conta ==");

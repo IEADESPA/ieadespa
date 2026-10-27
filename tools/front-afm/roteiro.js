@@ -299,6 +299,24 @@ const botoes = (amb, raizId, acao) => {
   retFreq.liberar(); await primeira; await amb.ocioso();
   ok(amb.e("tituloFrequencia").textContent === "Diretoria" && botoes(amb, "resultadoFrequencia", "justificarFalta").every((b) => JSON.parse(b.getAttribute("data-args-click"))[2] === false),
     "a resposta atrasada da Magna não sobrescreve a Diretoria; os botões levam 'não é CLI'");
+  // revisão do servidor: "não conta falta" (nível geral) e o Seminário de novembro como tipo
+  amb = montar();
+  ok(amb.e("reuniaoTipoSessao").options.some((o) => o.value === "SEMINARIO_AFM"), "o tipo Seminário de novembro está na lista");
+  await amb.ev("carregarReunioes()"); await amb.ocioso();
+  const btnNc = botoes(amb, "resultadoListaReunioes", "afmNaoContaAcao")[0];
+  ok(!!btnNc, "a reunião da CLI que conta tem 'Não conta falta…' para o nível geral");
+  amb.doc.clicar(btnNc);
+  for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
+  amb.e("modalTexto").value = "Encerrada por engano com a sala chegando";
+  amb.doc.clicar(amb.e("modalConfirmar")); await amb.ocioso();
+  const conf2 = await amb.responderModal(true); await amb.ocioso();
+  const pnc = posts(amb, "afm/nao-conta")[0];
+  ok(conf2.aberto && /não se desfaz/.test(conf2.texto) && pnc && pnc.corpo.motivo === "Encerrada por engano com a sala chegando" && typeof pnc.corpo.sessaoId === "number", "pede o motivo, confirma e envia", pnc && pnc.corpo);
+  amb = montar({ geral: false });
+  amb.ev("authGeral = false");
+  await amb.ev("carregarReunioes()"); await amb.ocioso();
+  ok(botoes(amb, "resultadoListaReunioes", "afmNaoContaAcao").length === 0, "fora do nível geral, o botão não aparece");
+
   // 7) o detalhe cabe inteiro no texto gravado (limite de 250 na tela, igual ao servidor)
   amb = montar();
   amb.ev("afmPedirJustificativa({})");

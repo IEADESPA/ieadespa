@@ -56,7 +56,7 @@ module.exports = async function (context, req) {
 
   await registrarAuditoria({
     tabela: "Presencas", registroId: Number(sessaoId), acao: "Solicitou justificativa de falta",
-    usuarioId: Number(matricula), dadosDepois: { motivo: texto, codigo }
+    usuarioId: Number(matricula), dadosDepois: ehCLI ? { codigo } : { motivo: texto }   // v8.1: na CLI a trilha guarda só o código (o detalhe pode citar saúde)
   });
 
   context.res = {

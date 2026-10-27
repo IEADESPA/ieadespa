@@ -229,6 +229,30 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(env2.e("cpaFiltroCong").options.length === 3, "a Área vê as congregações da área");
   });
 
+  // Trava 7-C: a regra da Trava 7-B no cuidado pastoral. O MESMO Dirigente, agora com pendência reservada à Diretoria (afastamento cautelar, comunicação em análise...), não vê o
+  // acompanhamento do menor na fila nem acha a criança na busca; o resto da fila continua igual. A Pastora de Área (sem pendência) segue vendo o menor.
+  cenario("Trava 7-C: o Dirigente com pendência reservada não vê o menor (fila e busca); a Área continua vendo", async () => {
+    const srv = servidor(); semear(srv);
+    srv.S.bloqueados.add(10);
+    const env = novo(srv);
+    await abrirAba(env);
+    const cs = cartoes(env);
+    confere(cs.length === 3 && !cartaoDe(env, "Joaquim Menor"), `com pendência, a fila do Dirigente tem 3 cartões, sem o menor: ${cs.length}`);
+    confere(!!cartaoDe(env, "Maria Afastada") && !!cartaoDe(env, "José Internado") && !!cartaoDe(env, "Carla Visitante"), "os acompanhamentos de adultos continuam na fila dele");
+    confere(!env.e("cpaFilaLista").textContent.includes("menor de idade"), "nenhum selo de menor na fila dele");
+    await clicar(env, botao(env, "➕ Abrir acompanhamento"));
+    marcar(env, "cpaNovoCadSim", true); await env.ocioso();
+    escolher(env, "cpaNovoTipo", "PEDIDO_VISITA"); await env.ocioso();
+    digitar(env, "cpaNovoBusca", "Jo");
+    await clicar(env, botao(env, "🔍 Buscar", env.e("cpaNovoMembroCx")));
+    const res = env.e("cpaNovoBuscaRes").textContent;
+    confere(res.includes("José Internado") && !res.includes("Joana Adolescente") && !res.includes("Joaquim Menor"), `com pendência, a busca não acha as crianças: ${res}`);
+    limpo(env, "fila com pendência");
+    const env2 = novo(srv);
+    await abrirAba(env2, "area", 12);
+    confere(!!cartaoDe(env2, "Joaquim Menor") && cartaoDe(env2, "Joaquim Menor").textContent.includes("menor de idade"), "a Pastora de Área (sem pendência) vê o menor");
+  });
+
   // ============================================================================================================================================
   // 2) ABRIR UM ACOMPANHAMENTO À MÃO
   // ============================================================================================================================================
@@ -1185,6 +1209,16 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(!!cs && cs.textContent.includes("Veio do mural de oração do site") && cs.textContent.includes("Mural de oração do site"), "(v7.11.1) o pedido do site aparece para o nível geral com o selo do site");
     confere(!!cs && !botao(envG, "📂 Abrir acompanhamento", cs) && !botao(envG, "📖 Publicar no boletim", cs) && !!botao(envG, "✔️ Marcar como lido", cs), "(v7.11.1) o pedido do site não oferece acompanhamento nem boletim; só marcar como lido");
     confere(!cs || !cs.textContent.includes("Só o nível geral (cita a liderança)"), "(v7.11.1) o pedido do site não leva o selo de 'cita a liderança'");
+    // (Trava 7-C) o painel do nível geral avisa a região sem Superintendente Regional cadastrado (a escada pula a Região); sem região faltando, nada aparece
+    await clicar(envG, envG.e("btnCpaSecaoPainel"));
+    confere(!texto(envG, "cpaPainelLista").includes("sem Superintendente"), "(Trava 7-C) toda região com Superintendente: nenhum aviso");
+    srv.S.regioesSemSup = [{ id: 201, nome: "Região Sul <b>x</b>", congregacoes: 3 }];
+    await clicar(envG, envG.e("btnCpaSecaoPedidos")); await clicar(envG, envG.e("btnCpaSecaoPainel"));
+    const avSup = desc(envG, envG.e("cpaPainelLista")).find(x => x.className && String(x.className).includes("cpa-aviso-regiao"));
+    confere(!!avSup && avSup.textContent.includes("Região sem Superintendente Regional cadastrado") && avSup.textContent.includes("Região Sul <b>x</b> (3 congregação(ões))")
+      && avSup.textContent.includes("pula a Região") && avSup.textContent.includes("Art. 104 §1º") && !desc(envG, avSup).some(x => x.localName === "b"),
+      "(Trava 7-C) o nível geral vê a região sem Superintendente, que a escada pula, e o nome vem como texto");
+    srv.S.regioesSemSup = [];
     // Meu Painel: o pedido que teve risco volta com o texto guardado, tal como o servidor manda; caractere invisível é recusado
     const envM = novo(srv);
     await abrirMeu(envM, "pin50", 50);

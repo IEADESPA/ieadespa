@@ -29,6 +29,7 @@ const { getPool, sql } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
 const pinMembro = require("../shared/pinMembro");
 const canaisDb = require("../shared/canaisDb");
+const funcoesMenoresDb = require("../shared/funcoesMenoresDb");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { comConflito, violouUnicidade } = require("../shared/violacaoUnica");
 
@@ -186,15 +187,23 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
   // acesso dele trancado e a Secretaria não tinha como liberar.
   if (senha) await pinMembro.limparTentativas(pool, membroId, "SENHA");
 
+  // Trava 7-C (decisão de 23/10/2026): o cargo ou o departamento tem contato com crianças e a pessoa não está apta para função com menores? A tela AVISA e não impede (a
+  // decisão é humana); a Diretoria e a Proteção de crianças do nível geral recebem o aviso pela rotina diária. O texto nunca diz o motivo. Uma falha aqui não desfaz a nomeação.
+  let avisoMenores = null;
+  try { avisoMenores = await funcoesMenoresDb.avisoNaNomeacao(pool, membroId); }
+  catch (e) { console.error("[GestaoLideranca] aptidão para função com menores:", e && e.message); }
+
   await registrarAuditoria({
     tabela: "Lideranca",
     registroId: Number(membroId),
     acao: jaTemAcesso ? "Atualizou liderança" : "Concedeu liderança",
     usuarioId,
-    dadosDepois: { membroId, papelId, escopoTipo, escopoId, duracaoMeses: duracaoMeses || null }
+    dadosDepois: Object.assign({ membroId, papelId, escopoTipo, escopoId, duracaoMeses: duracaoMeses || null }, avisoMenores ? { avisoFuncaoComMenores: true } : {})
   });
 
-  return { sucesso: true, mensagem: "✅ Liderança registrada." };
+  return avisoMenores
+    ? { sucesso: true, mensagem: `✅ Liderança registrada. ${avisoMenores}`, avisoMenores }
+    : { sucesso: true, mensagem: "✅ Liderança registrada." };
 }
 
 module.exports = comConflito(async function (context, req) {

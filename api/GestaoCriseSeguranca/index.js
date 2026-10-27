@@ -2,7 +2,8 @@
 // Regimento Art. 161-B (Política de Porta-Voz Único: §§ 1º e 2º); contrato de 23/10/2026 em docs/plano/fase-7-saude-eventos-e-comunicacao.md ("## v7.15").
 //
 // Toda a regra está em shared/criseSeguranca.js (pura, testada); o banco, em shared/criseSegurancaDb.js. O aviso da crise vai pela comunicação da v7.12 (categoria CRISE): o
-// sininho na hora, o celular na primeira rodada e o e-mail pela fila (ComunicacaoFila, 100 por hora). A rotina diária (equipe de quem saiu, retenção) e os avisos da segurança
+// sininho na hora, o celular em paralelo dentro da resposta do ato (o que não couber sai pela fila de 15 minutos, também de madrugada) e o e-mail pela fila (ComunicacaoFila),
+// com teto próprio por hora (Catálogos → Prazos: COMUNICACAO_CRISE_EMAILS_POR_HORA, padrão 30). A rotina diária (equipe de quem saiu, retenção) e os avisos da segurança
 // rodam dentro de NotificacoesAgendador, às 7h.
 //
 // ---- Qualquer sessão de LIDERANÇA (PIN e código não entram) ----------------------------------------------------------------------------------------

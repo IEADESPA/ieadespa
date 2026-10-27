@@ -7,6 +7,7 @@ let mockEventos = [];
 jest.mock("../db", () => {
   const rodar = async (texto, inputs, tx) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs }, tx });
+    if (/sp_getapplock/.test(texto)) return { recordset: [{ resultado: 0 }], recordsets: [], rowsAffected: [0] };   // a trava da saúde da criança (Trava 7-C)
     for (const [padrao, valor, afetadas] of mockRegras) {
       if (padrao.test(texto)) {
         const rs = typeof valor === "function" ? valor(inputs) : valor;

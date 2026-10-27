@@ -999,7 +999,7 @@ inteiro (situação socioeconômica de família assistida).
   herdado de nenhuma tabela existente.
 
   **LGPD (vB.8) integrado de verdade, não decorativo**: como o titular
-  tipicamente não tem vínculo de membresia, o Art. 11, II, "a" (que cobre
+  tipicamente não tem vínculo de membresia, o Art. 11, II, "d" (que cobre
   `MembroReferencia`) não se aplica — a base legal correta, registrada na
   própria linha do cadastro (mesmo vocabulário de `ConsentimentosLGPD` desde
   a migração 012: CONSENTIMENTO/OBRIGACAO_LEGAL/LEGITIMO_INTERESSE/

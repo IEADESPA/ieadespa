@@ -22,17 +22,19 @@ const falha = async (texto, params) => { try { await q(texto, params); return nu
     ok((await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(@t) AND name = @c", { t: "dbo." + tab, c: col })) === 1, `coluna ${tab}.${col} existe`);
   }
   ok((await escalar("SELECT COUNT(*) FROM Prazos WHERE Sigla LIKE 'MENORES[_]%' OR Sigla IN ('HABILITACAO_ANTECEDENTES_DIAS','HABILITACAO_TREINAMENTO_DIAS','HABILITACAO_FICHA_DIAS')")) === 11, "11 prazos novos");
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'MENORES[_]%'")) === 11, "11 regras de aviso");
+  // (Trava 7-C) a 155 acrescenta MENORES_FUNCAO_SEM_APTIDAO (departamentos e cargos com crianças): ela não é da 143, fica fora destas contagens
+  const DA_143 = "Chave LIKE 'MENORES[_]%' AND Chave <> 'MENORES_FUNCAO_SEM_APTIDAO'";
+  ok((await escalar(`SELECT COUNT(*) FROM NotificacaoRegras WHERE ${DA_143}`)) === 11, "11 regras de aviso");
   // 10 até a 146; a 147 (Trava 7-B) tornou obrigatório também o aviso mensal das certidões a renovar — o `preparar` aplica TODAS as migrações, então são 11
   const migrou147 = (await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave = 'MENORES_VISTORIAS_A_RENOVAR' AND Obrigatoria = 1")) === 1;
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'MENORES[_]%' AND Obrigatoria = 1")) === (migrou147 ? 11 : 10), "regras obrigatórias: 10 (todas, menos o aviso mensal das certidões a renovar) ou 11 depois da 147");
+  ok((await escalar(`SELECT COUNT(*) FROM NotificacaoRegras WHERE ${DA_143} AND Obrigatoria = 1`)) === (migrou147 ? 11 : 10), "regras obrigatórias: 10 (todas, menos o aviso mensal das certidões a renovar) ou 11 depois da 147");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria IN (N'Ministério com menores: aceites, consentimentos, retiradas', N'Auto-denúncia de inquérito ou processo (Art. 133 §5º, V)')")) === 2, "2 políticas de retenção");
   ok((await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_MenoresAutoDen_SemDecisao'")) === 1, "índice único: uma comunicação sem decisão por pessoa");
   // idempotência: reaplicar a 143 sobre o banco já migrado não duplica nada
   const sqlTexto = fs.readFileSync(path.join(API, "../sql/migrations/143_ministerio_menores.sql"), "utf8");
   const pool = await obterPool();
   for (let i = 0; i < 2; i++) for (const lote of sqlTexto.split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await pool.request().query(lote);
-  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE 'MENORES[_]%'")) === 11, "reaplicar duas vezes não duplica as regras de aviso");
+  ok((await escalar(`SELECT COUNT(*) FROM NotificacaoRegras WHERE ${DA_143}`)) === 11, "reaplicar duas vezes não duplica as regras de aviso");
   ok((await escalar("SELECT COUNT(*) FROM Prazos WHERE Sigla LIKE 'MENORES[_]%'")) === 8, "reaplicar não duplica os prazos");
   ok((await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria LIKE N'Ministério com menores%' OR Categoria LIKE N'Auto-denúncia%'")) === 2, "reaplicar não duplica a retenção");
 

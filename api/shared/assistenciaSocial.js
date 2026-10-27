@@ -39,7 +39,8 @@ const MESES_CONSECUTIVOS_ALERTA = 3;
 // Cadastro socioeconômico (Art. 46) — validação de forma + LGPD (decisão
 // 2 da migração 100: base legal Art. 7º, I por padrão, exige consentimento
 // registrado; titular tipicamente não tem vínculo de membresia, então o
-// Art. 11, II, "a" que cobre MembroReferencia não se aplica aqui).
+// Art. 11, II, "d" que cobre MembroReferencia — exercício regular de direitos
+// da associação com os seus membros — não se aplica aqui).
 // ---------------------------------------------------------------
 function validarCadastroSocioeconomico({ qtdPessoasNucleo, consentimentoObtidoEm, baseLegal, situacaoMoradia }) {
   if (!Number.isInteger(Number(qtdPessoasNucleo)) || Number(qtdPessoasNucleo) < 1) {

@@ -314,7 +314,8 @@ async function registrarPedidoDeAjuda(pool, { dados, agora = new Date(), deps })
   await auditar({ IncidenteId: incidenteId, Nivel: "ALEGACAO" }, "PROTECAO_PEDIDO_DE_AJUDA", null);
   // O pedido do canal é tratado só pelo nível geral (a congregação escolhida é palpite de quem escreveu, e o Dirigente dela pode ser a pessoa de quem se fala)
   const destinatarios = await destinatariosGeraisDaDiretoria(pool);
-  const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: "ALEGACAO", prazoEm: prazo }), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, deps });
+  // (Trava 7-C) o aviso não segura a resposta de quem pede ajuda: o sininho de todos primeiro, e-mail e celular com 5 s (o e-mail que não sair o reenvio da proteção manda)
+  const aviso = await notificarAgora(pool, { regraChave: "PROTECAO_INCIDENTE_NOVO", destinatarios, mensagem: pm.textoIncidenteNovo({ nivel: "ALEGACAO", prazoEm: prazo }), referenciaId: incidenteId, referenciaTabela: "IncidentesProtecao", aguardarEntrega: false, prazoMs: 5000, deps });
   await pendencia.atualizar(pool);
   // `avisada` é só um sim/não (a quem escreve sem login não se diz QUANTAS pessoas foram avisadas): a mensagem só afirma que a liderança foi avisada se alguém foi alcançado FORA do app
   // (e-mail aceito ou push entregue; Trava 7-B). Aviso que ficou só no sino do sistema não conta: quem escreveu lê que ninguém foi avisado por mensagem e que deve ligar 100 ou 190.
@@ -769,12 +770,16 @@ async function reenviarEmailsPendentes(pool, { limite = 100, deps = {} } = {}) {
   const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
   const regras = new Map();
   let tentados = 0;
+  // Trava 7-C: o reenvio também respeita o teto de e-mails da comunicação (o que não couber fica para a rodada seguinte: a janela é de 48 horas)
+  let cota = 0;
+  try { cota = deps.cotaEmail != null ? Number(deps.cotaEmail) : await require("./comunicacaoDb").cotaDeEmailsDosAvisos(pool); } catch (e) { cota = 0; }
   for (const l of linhas) {
+    if (tentados >= cota) break;
     if (!regras.has(l.RegraChave)) regras.set(l.RegraChave, (await pool.request().input("c", sql.NVarChar(60), l.RegraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @c AND Ativa = 1`)).recordset[0] || null);
     const regra = regras.get(l.RegraChave);
     if (!regra || !regra.CanalEmail) continue;
     tentados++;
-    try { await enviar(pool, { regra: { ...regra, CanalPush: false }, destinatarioMembroId: l.DestinatarioMembroId, notificacaoId: l.NotificacaoId, titulo: l.Titulo, mensagem: l.Mensagem, categoria: l.Categoria, email: l.Email }); }
+    try { await enviar(pool, { regra: { ...regra, CanalPush: false }, destinatarioMembroId: l.DestinatarioMembroId, notificacaoId: l.NotificacaoId, titulo: l.Titulo, mensagem: l.Mensagem, categoria: l.Categoria, email: l.Email, aguardarEntrega: false }); }
     catch (e) { console.error("[PROTECAO] reenvio de e-mail falhou:", e && e.message); }
   }
   return { tentados };

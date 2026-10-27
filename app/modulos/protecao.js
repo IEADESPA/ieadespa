@@ -1,4 +1,4 @@
-// app/modulos/protecao.js — v7.8: Incidentes, notificação obrigatória e escuta protegida (ECA arts. 13 e 245; Lei 13.431/2017; Regimento Art. 133 §5º; LGPD arts. 11 e 14).
+// app/modulos/protecao.js — v7.8: Incidentes, notificação obrigatória e escuta protegida (ECA arts. 13 e 70-B; Lei 13.431/2017; Regimento Art. 133 §5º; LGPD arts. 11 e 14).
 // Script clássico, carregado pelo index.html DEPOIS do script.js e do eventos.js: compartilha o escopo global com eles. As ações que o HTML pede deste módulo são
 // registradas aqui mesmo, no fim do arquivo (registrarAcoes mescla). Todos os nomes de nível superior começam com "prt"/"PRT_" (scripts clássicos dividem um só escopo).
 //

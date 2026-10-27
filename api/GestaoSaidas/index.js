@@ -28,6 +28,15 @@
 //  - Acima do valor de referência configurável (ParametrosSaida), a
 //    solicitação exige 3 cotações anexadas (Reg. Art. 62) — sem isso nem
 //    entra no sistema.
+// Trava 7-C (decisão de 23/10/2026 — regras de dinheiro do voluntário: SÓ AVISAR, não bloquear): ao lançar a saída para pessoa física, o servidor confere
+//  - o fornecedor está ligado a um membro que é voluntário ativo (Fornecedores.MembroId; termo de adesão vigente ou equipe de escala ativa): o serviço voluntário é gratuito
+//    (Lei 9.608/98; Regimento Art. 135) e o serviço pago pede Ordem de Serviço prévia (Art. 133 §4º);
+//  - pagamentos à mesma pessoa em semanas diferentes, acima do limite (Prazos TESOURARIA_HABITUAL_PAGAMENTOS e _JANELA_DIAS, padrão 3 em 60 dias): a "diarista disfarçada"
+//    (Art. 135 §2º);
+//  - cachê ou comissão na descrição, para voluntário (Art. 135 §3º).
+//  Havendo aviso, a primeira tentativa NÃO grava: responde { sucesso:false, precisaConfirmarAvisos:true, avisos[{codigo,rotulo,texto}] }. A tela mostra os avisos e repete com
+//  `confirmoAvisos: [códigos]`; se todos os avisos de AGORA estão confirmados, a saída e os avisos (texto mostrado, quem confirmou, quando) entram juntos numa transação
+//  (SaidaAvisosVoluntario, que não se edita). O detalhe da saída mostra os avisos a quem aprova e paga. Regra pura: shared/voluntarioPagamento.js.
 // GET  /api/saidas?congregacaoId=&status= -> lista dentro do escopo do usuário
 // GET  /api/saidas/{id} -> detalhe + aprovações + cotações já registradas
 // POST /api/saidas -> { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId?,
@@ -44,6 +53,9 @@ const conferencia = require("../shared/conferenciaPagamento");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const { afetadas } = require("../shared/entradaFinanceira");
 const { violouUnicidade } = require("../shared/violacaoUnica");
+const vp = require("../shared/voluntarioPagamento");
+const vpDb = require("../shared/voluntarioPagamentoDb");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -155,6 +167,7 @@ module.exports = async function (context, req) {
         comprovantePagamentoUrl: saida.comprovantePagamentoUrl ? storage.urlDocumentoComSas(saida.comprovantePagamentoUrl) : null,
         aprovacoes: aprovacoes.recordset,
         cotacoes: cotacoes.recordset.map(c => Object.assign({}, c, { documentoUrl: storage.urlDocumentoComSas(c.documentoUrl) })),
+        avisosVoluntario: await vpDb.avisosDaSaida(pool, id),
         alcada: alcada.recordset[0] ? { nivelMinimoAprovador: alcada.recordset[0].NivelMinimoAprovador, quantidadeAprovadores: alcada.recordset[0].QuantidadeAprovadores } : null
       })
     };
@@ -165,6 +178,11 @@ module.exports = async function (context, req) {
     const { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId, documentoFiscalBase64, mimeType, cotacoes, bemId, notaFiscalCnpjIgrejaConfirmado } = req.body || {};
     if (!congregacaoId || !fornecedorId || !tipo || !descricao || !descricao.trim() || !valor) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: congregacaoId, fornecedorId, tipo, descricao, valor." } };
+      return;
+    }
+    // Trava 7-C (achado do roteiro de lixo, e2e-45): identificador malformado ("abc", 2^40, lista) virava erro do driver (500); agora é 400, antes de qualquer consulta.
+    if (!auth.idDeRota(congregacaoId) || !auth.idDeRota(fornecedorId)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "congregacaoId e fornecedorId precisam ser identificadores válidos." } };
       return;
     }
     if (Number(valor) <= 0) {
@@ -279,24 +297,28 @@ module.exports = async function (context, req) {
       ? " ⚠️ Atenção: já existe outra solicitação para este mesmo fornecedor e valor nos últimos 7 dias — confira antes de aprovar, pode ser pagamento em duplicidade."
       : "";
 
+    // Trava 7-C — os avisos das regras de dinheiro do voluntário (só avisar): conferidos ANTES de subir o arquivo; sem a confirmação de cada um, nada é gravado.
+    const avisos = await vpDb.avisosParaSaida(pool, { fornecedorId, descricao: descricao.trim(), hoje: hojeBrasilia() });
+    if (avisos.length > 0 && !vp.todosConfirmados(avisos, (req.body || {}).confirmoAvisos)) {
+      context.res = {
+        status: 200, headers: { "Content-Type": "application/json" },
+        body: {
+          sucesso: false, precisaConfirmarAvisos: true,
+          avisos: avisos.map((a) => ({ codigo: a.codigo, rotulo: vp.ROTULOS[a.codigo], texto: a.texto })),
+          mensagem: "Leia os avisos sobre esta pessoa e confirme que leu para registrar a solicitação (o sistema avisa, não impede: a decisão é de quem lança)."
+        }
+      };
+      return;
+    }
+
     const { erro, url } = await validarEUpload(documentoFiscalBase64, mimeType, context);
     if (erro) { context.res = { status: 400, body: { sucesso: false, mensagem: erro } }; return; }
 
-    const criada = await pool.request()
-      .input("congregacaoId", sql.Int, congregacaoId)
-      .input("fornecedorId", sql.Int, fornecedorId)
-      .input("tipo", sql.NVarChar(30), tipo)
-      .input("descricao", sql.NVarChar(300), descricao.trim())
-      .input("valor", sql.Decimal(10, 2), valor)
-      .input("campanhaId", sql.Int, campanhaId || null)
-      .input("documentoFiscalUrl", sql.NVarChar(500), url)
-      .input("solicitadoPor", sql.Int, usuario.membroId)
-      .input("bemId", sql.Int, bemId || null)
-      .input("notaFiscalCnpj", sql.Bit, notaFiscalCnpjIgrejaConfirmado ? 1 : (bemId ? 1 : null))
-      .query(`INSERT INTO SaidasTesouraria (CongregacaoId, FornecedorId, Tipo, Descricao, Valor, CampanhaId, DocumentoFiscalUrl, SolicitadoPor, BemId, NotaFiscalCnpjIgrejaConfirmado)
-              OUTPUT INSERTED.SaidaId
-              VALUES (@congregacaoId, @fornecedorId, @tipo, @descricao, @valor, @campanhaId, @documentoFiscalUrl, @solicitadoPor, @bemId, @notaFiscalCnpj)`);
-    const saidaId = criada.recordset[0].SaidaId;
+    // A saída e os avisos confirmados entram juntos (uma transação): não existe saída com aviso "perdido".
+    const saidaId = await vpDb.inserirSaidaComAvisos(pool, {
+      congregacaoId, fornecedorId, tipo, descricao: descricao.trim(), valor, campanhaId: campanhaId || null, documentoFiscalUrl: url,
+      bemId: bemId || null, notaFiscalCnpj: notaFiscalCnpjIgrejaConfirmado ? 1 : (bemId ? 1 : null)
+    }, avisos, usuario.membroId);
 
     for (const cot of cotacoesValidas) {
       const uploadCotacao = await validarEUpload(cot.documentoBase64, cot.mimeType, context);
@@ -308,9 +330,10 @@ module.exports = async function (context, req) {
 
     await registrarAuditoria({
       tabela: "SaidasTesouraria", registroId: saidaId, acao: "Solicitou pagamento", usuarioId: usuario.membroId,
-      dadosDepois: { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId: campanhaId || null, totalCotacoes: cotacoesValidas.length }
+      dadosDepois: { congregacaoId, fornecedorId, tipo, descricao, valor, campanhaId: campanhaId || null, totalCotacoes: cotacoesValidas.length, avisosConfirmados: avisos.map((a) => a.codigo) }
     });
-    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Solicitação de pagamento registrada — aguardando aprovação.${avisoDuplicidade}`, saidaId } };
+    const avisoVoluntario = avisos.length ? ` Os ${avisos.length} aviso(s) sobre esta pessoa ficaram registrados com a sua confirmação (aparecem a quem aprova e paga).` : "";
+    context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Solicitação de pagamento registrada — aguardando aprovação.${avisoDuplicidade}${avisoVoluntario}`, saidaId } };
     return;
   }
 

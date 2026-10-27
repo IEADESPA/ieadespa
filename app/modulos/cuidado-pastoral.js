@@ -1769,14 +1769,20 @@ async function cpaCarregarPainelAcao() {
   cpaEscrever("cpaPainelMsg", linhas.length ? "" : "Nenhuma congregação no seu território.", false);
   if (!cx) return;
   const n = (v) => escaparHtmlEbd(cpaNumeroOuTraco(v));
-  cx.innerHTML = linhas.length ? `<div class="cpa-rolagem"><table class="tabela-frequencia cpa-tabela">
+  // (Trava 7-C) região sem Superintendente Regional cadastrado: a escada do prazo vencido pula a Região e sobe direto ao nível geral
+  const semSup = Array.isArray(data.regioesSemSuperintendente) ? data.regioesSemSuperintendente.filter(r => r && typeof r === "object") : [];
+  const avisoSup = semSup.length ? `<div class="psc-aviso cpa-aviso-regiao" role="status"><p><strong>⚠️ ${semSup.length === 1 ? "Região sem Superintendente Regional cadastrado" : "Regiões sem Superintendente Regional cadastrado"}:</strong>
+    ${semSup.map(r => `${escaparHtmlEbd(r.nome)} (${n(r.congregacoes)} congregação(ões))`).join("; ")}.</p>
+    <p>Enquanto não houver o cadastro, a escada do prazo vencido <strong>pula a Região</strong> e sobe direto ao nível geral. Pelo Regimento (Art. 104 §1º), o Superintendente é o
+    Pastor Titular da Área-Polo: cadastre-o na Liderança da Região com o papel "Superintendente Regional".</p></div>` : "";
+  cx.innerHTML = avisoSup + (linhas.length ? `<div class="cpa-rolagem"><table class="tabela-frequencia cpa-tabela">
     <thead><tr><th scope="col">Congregação</th><th scope="col">Abertos</th><th scope="col">Vencidos</th><th scope="col">Sem responsável</th><th scope="col">Urgentes</th>
       <th scope="col">Detectados (30 dias)</th><th scope="col">Horas até o 1º contato</th><th scope="col">Pedidos esperando</th><th scope="col">Pedidos com risco</th></tr></thead>
     <tbody>${linhas.map(c => `<tr>
       <th scope="row">${escaparHtmlEbd(c.congregacaoNome)}</th><td>${n(c.abertos)}</td><td class="${Number(c.vencidos) > 0 ? "cpa-num-alerta" : ""}">${n(c.vencidos)}</td>
       <td class="${Number(c.semResponsavel) > 0 ? "cpa-num-alerta" : ""}">${n(c.semResponsavel)}</td><td>${n(c.urgentes)}</td><td>${n(c.detectados30Dias)}</td>
       <td>${n(c.horasAtePrimeiroContato)}</td><td>${n(c.pedidosAguardando)}</td><td class="${Number(c.pedidosRisco) > 0 ? "cpa-num-alerta" : ""}">${n(c.pedidosRisco)}</td>
-    </tr>`).join("")}</tbody></table></div>` : "";
+    </tr>`).join("")}</tbody></table></div>` : "");
 }
 
 // ============================================================================

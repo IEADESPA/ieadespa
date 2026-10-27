@@ -4,8 +4,9 @@
 // vB.8 — Correção de base legal: até aqui (v1.9) isso ficava travado atrás
 // do consentimento 'DADOS_CONTATO' — base legal ERRADA. O direito de acesso
 // do titular (Art. 18) nunca depende de consentimento; o dado básico de
-// membresia em si é tratado sob Art. 11, II, "a" (organização religiosa,
-// vínculo regular), que DISPENSA consentimento. Consentimento continua
+// membresia em si é tratado sob Art. 11, II, "d" (exercício regular de
+// direitos da associação religiosa com os seus membros — a Trava 7-C corrigiu
+// a alínea "a" que estava aqui), que DISPENSA consentimento. Consentimento continua
 // valendo só pra Foto (uso de imagem) e pro uso do telefone/e-mail pra
 // contato (Tipo='DADOS_CONTATO', ver shared/consentimentoFoto.js) — nunca
 // mais pra bloquear a própria pessoa de ver o próprio cadastro.
@@ -24,6 +25,7 @@ const cuidadoPastoralDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
 const identidadeDb = require("../shared/identidadeVisualDb");
 const criseSegurancaDb = require("../shared/criseSegurancaDb");
+const voluntarioPagamentoDb = require("../shared/voluntarioPagamentoDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -136,6 +138,9 @@ module.exports = async function (context, req) {
   const identidadeVisual = await identidadeDb.dadosDoTitular(pool, alvo);
   // v7.15 — segurança e crise: a equipe de segurança (congregação, função, desde e até), as crises em que a pessoa foi o porta-voz e quantos registros dela há na crise.
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
+  // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
+  // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
+  const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -163,7 +168,8 @@ module.exports = async function (context, req) {
       cuidadoPastoral,
       comunicacao,
       identidadeVisual,
-      criseSeguranca
+      criseSeguranca,
+      tesouraria
     }
   };
 };

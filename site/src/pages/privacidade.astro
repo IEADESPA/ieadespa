@@ -9,7 +9,7 @@ import { getAllMensagens, visiblePosts } from "@/lib/posts";
 const allPosts = visiblePosts(await getAllMensagens());
 const config = await fetchConfiguracoes();
 
-const VIGENCIA = "8 de setembro de 2026";
+const VIGENCIA = "23 de outubro de 2026";
 
 interface Tratamento {
   dado: string;
@@ -22,10 +22,10 @@ interface Tratamento {
 const tratamentos: Tratamento[] = [
   {
     dado: "Mural de oração — pedido de oração (texto), nome (opcional), marcação de confidencial",
-    finalidade: "Publicar o pedido para a comunidade orar, ou encaminhar só para a liderança pastoral quando marcado como confidencial.",
-    baseLegal: "Consentimento específico (Art. 11, I, LGPD) — dado sobre convicção religiosa é categoria especial, e por isso o formulário tem um checkbox de autorização próprio, separado de qualquer outro.",
-    retencao: "Pedidos públicos ficam visíveis por 90 dias, depois somem da listagem (o registro em si continua no banco, sem ser mais exibido). Pedidos confidenciais não têm prazo de exibição pública porque nunca são exibidos.",
-    acesso: "Pedidos públicos: qualquer visitante do site. Pedidos confidenciais: só a liderança pastoral e a diretoria, nunca o público.",
+    finalidade: "Publicar o pedido para a comunidade orar, ou encaminhar só para a liderança pastoral quando marcado como confidencial. Todo texto enviado passa, na hora, por uma lista de palavras que indicam risco (por exemplo, vontade de se machucar ou violência), conferida no sistema interno da Igreja: o pedido comum não fica guardado lá; o confidencial e o que tiver sinal de risco são copiados para o sistema interno de cuidado pastoral, para que a liderança possa cuidar de quem pediu.",
+    baseLegal: "Consentimento específico (Art. 11, I, LGPD) — dado sobre convicção religiosa é categoria especial, e por isso o formulário tem um checkbox de autorização próprio, separado de qualquer outro. Quando o texto tem sinal de risco, o aviso à Diretoria se apoia também na proteção da vida (Art. 11, II, \"e\", LGPD).",
+    retencao: "Pedidos públicos ficam visíveis por 90 dias, depois somem da listagem (o registro em si continua no banco, sem ser mais exibido). Pedidos confidenciais nunca são exibidos ao público. A cópia do pedido confidencial ou com sinal de risco no sistema interno de cuidado pastoral guarda o texto e o nome (se você deu) por 1 ano — ou por 5 anos quando houve sinal de risco, como prova de que a Igreja agiu — e depois o texto e o nome são apagados.",
+    acesso: "Pedidos públicos: qualquer visitante do site. Pedidos confidenciais: só a liderança pastoral e a diretoria, nunca o público; a cópia no sistema interno só a Diretoria (nível geral) vê. Se um pedido marcado como público tiver sinal de risco, ele vira confidencial automaticamente (não é publicado), a Diretoria é avisada na hora — o aviso não leva o texto — e a página mostra a você os telefones do CVV (188) e da polícia (190).",
   },
   {
     dado: "Contato — nome, e-mail, mensagem (e, se o assunto for pedido de oração, o mesmo dado sensível acima)",

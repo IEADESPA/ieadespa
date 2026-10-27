@@ -547,6 +547,45 @@ function alternarCampoCampanhaSaida() {
 function alternarFormNovoFornecedor() {
   const form = document.getElementById("formNovoFornecedor");
   form.style.display = form.style.display === "none" ? "block" : "none";
+  alternarMembroFornecedor();
+}
+
+// ---- Trava 7-C: o fornecedor pessoa física ligado à matrícula (as regras de dinheiro do voluntário só AVISAM, decisão de 23/10/2026) ----
+const FIN_OPCAO_SEM_MEMBRO = `<option value="">— não é membro —</option>`;
+function alternarMembroFornecedor() {
+  const campos = document.getElementById("fornecedorMembroCampos");
+  if (!campos) return;
+  const pf = document.getElementById("fornecedorTipo").value === "PF";
+  campos.style.display = pf ? "block" : "none";
+  if (!pf) { document.getElementById("fornecedorMembroId").innerHTML = FIN_OPCAO_SEM_MEMBRO; document.getElementById("fornecedorMembroBusca").value = ""; }
+}
+// A busca devolve só quem está no território de quem cadastra (o servidor filtra); o texto que vem do servidor entra escapado.
+async function buscarMembroFornecedorAcao() {
+  const texto = document.getElementById("fornecedorMembroBusca").value.trim();
+  const select = document.getElementById("fornecedorMembroId");
+  if (texto.length < 3 && !/^\d+$/.test(texto)) { mostrarToast("Digite ao menos 3 letras do nome ou a matrícula.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/fornecedores?buscaMembro=${encodeURIComponent(texto)}`);
+  const data = await res.json();
+  const membros = data && Array.isArray(data.membros) ? data.membros : [];
+  select.innerHTML = FIN_OPCAO_SEM_MEMBRO + membros.map(m => `<option value="${Number(m.membroId)}">${escaparHtmlEbd(m.nome)} — matrícula ${Number(m.membroId)}${m.congregacaoNome ? ` (${escaparHtmlEbd(m.congregacaoNome)})` : ""}</option>`).join("");
+  if (membros.length === 1) select.value = String(Number(membros[0].membroId));
+  if (!membros.length) mostrarToast((data && data.sucesso === false && data.mensagem) || "Nenhum membro encontrado no seu território com esse nome ou matrícula.", "erro");
+}
+async function ligarMembroFornecedorAcao(fornecedorId) {
+  const matricula = await pedirTexto("Matrícula do membro (este fornecedor pessoa física é membro da Igreja)", "Ex: 1234");
+  if (matricula === null) return;
+  if (!/^\d{1,9}$/.test(matricula)) { mostrarToast("Informe só os números da matrícula.", "erro"); return; }
+  const res = await fetchProtegido(`${API_BASE}/fornecedores/${Number(fornecedorId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId: Number(matricula) }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarFornecedores();
+}
+async function desligarMembroFornecedorAcao(fornecedorId) {
+  if (!(await confirmarAcao("Desligar este fornecedor da matrícula do membro? Os avisos sobre voluntário deixam de aparecer ao lançar pagamentos para ele.", "Desligar"))) return;
+  const res = await fetchProtegido(`${API_BASE}/fornecedores/${Number(fornecedorId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId: null }) });
+  const data = await res.json();
+  avisarResultado(data);
+  if (data.sucesso) carregarFornecedores();
 }
 
 async function salvarFornecedorAcao() {
@@ -563,7 +602,9 @@ async function salvarFornecedorAcao() {
   const resultado = document.getElementById("resultadoFornecedor");
   if (!nome || !cpfCnpj) { resultado.textContent = "Informe o nome e o CPF/CNPJ."; return; }
 
-  const body = { nome, cpfCnpj, tipo, telefone: telefone || undefined, email: email || undefined, banco: banco || undefined, agencia: agencia || undefined, conta: conta || undefined, tipoConta: tipoConta || undefined, chavePix: chavePix || undefined };
+  const membroEscolhido = tipo === "PF" && document.getElementById("fornecedorMembroId") ? Number(document.getElementById("fornecedorMembroId").value) : 0;
+  const body = { nome, cpfCnpj, tipo, telefone: telefone || undefined, email: email || undefined, banco: banco || undefined, agencia: agencia || undefined, conta: conta || undefined, tipoConta: tipoConta || undefined, chavePix: chavePix || undefined,
+    membroId: Number.isInteger(membroEscolhido) && membroEscolhido > 0 ? membroEscolhido : undefined };
   const res = await fetchProtegido(`${API_BASE}/fornecedores`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
   });
@@ -572,6 +613,7 @@ async function salvarFornecedorAcao() {
   resultado.textContent = data.mensagem;
   if (data.sucesso) {
     ["fornecedorNome", "fornecedorCpfCnpj", "fornecedorTelefone", "fornecedorEmail", "fornecedorBanco", "fornecedorAgencia", "fornecedorConta", "fornecedorChavePix"].forEach(id => document.getElementById(id).value = "");
+    if (document.getElementById("fornecedorMembroId")) { document.getElementById("fornecedorMembroId").innerHTML = FIN_OPCAO_SEM_MEMBRO; document.getElementById("fornecedorMembroBusca").value = ""; }
     document.getElementById("formNovoFornecedor").style.display = "none";
     document.getElementById("saidaFornecedor").dataset.montado = "";
     carregarOpcoesFornecedoresSaida();
@@ -589,12 +631,18 @@ async function carregarFornecedores() {
     return;
   }
   // Só a administração geral vê CPF/CNPJ e dados bancários dos fornecedores, confirma os dados e anexa documentos; o tesoureiro local recebe só nome e situação.
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th>${authGeral ? "<th>CPF/CNPJ</th>" : ""}<th>Dados bancários</th><th></th></tr></thead><tbody>`;
+  // Trava 7-C: a coluna "Membro" diz se a pessoa física está ligada a uma matrícula (o geral vê o nome; o local, só que está ligada).
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th>${authGeral ? "<th>CPF/CNPJ</th>" : ""}<th>Membro</th><th>Dados bancários</th><th></th></tr></thead><tbody>`;
   fornecedores.forEach(f => {
+    const ligado = !!(f.membroId || f.membroVinculado);
+    const membro = f.tipo !== "PF" ? "—" : ligado ? (f.membroNome ? `${escaparHtmlEbd(f.membroNome)} (matrícula ${Number(f.membroId)})` : "Ligado a um membro") : "Não ligado";
     html += `<tr>
       <td>${escaparHtmlEbd(f.nome)}</td>${authGeral ? `<td>${escaparHtmlEbd(f.cpfCnpj)}</td>` : ""}
+      <td>${membro}</td>
       <td>${f.dadosBancariosConfirmados ? "<span class='badge-status badge-ativo'>Confirmados</span>" : "<span class='badge-status badge-pendente'>⚠️ Pendente de confirmação</span>"}</td>
       <td class="acoes-inline">
+        ${f.tipo === "PF" && !ligado ? `<button class="btn-link" data-on-click="ligarMembroFornecedorAcao" data-args-click="${argsAttr(Number(f.fornecedorId))}">Ligar a membro</button>` : ""}
+        ${f.tipo === "PF" && ligado ? `<button class="btn-link" data-on-click="desligarMembroFornecedorAcao" data-args-click="${argsAttr(Number(f.fornecedorId))}">Desligar do membro</button>` : ""}
         ${authGeral && !f.dadosBancariosConfirmados ? `<button class="btn-link" data-on-click="confirmarDadosBancariosFornecedorAcao" data-args-click="${argsAttr(Number(f.fornecedorId))}">Confirmar</button>` : ""}
         ${authGeral ? `<button class="btn-link" data-on-click="abrirModalAnexos" data-args-click="${argsAttr("Fornecedores", Number(f.fornecedorId), String(f.nome ?? ""))}">📎 Anexos</button>` : ""}
       </td>
@@ -724,10 +772,23 @@ async function solicitarSaidaAcao() {
     bemId: tipo === "COMBUSTIVEL" ? document.getElementById("saidaCombustivelBemId").value : undefined,
     notaFiscalCnpjIgrejaConfirmado: tipo === "COMBUSTIVEL" ? document.getElementById("saidaCombustivelNotaFiscalCnpj").checked : undefined
   };
-  const res = await fetchProtegido(`${API_BASE}/saidas`, {
+  let res = await fetchProtegido(`${API_BASE}/saidas`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
   });
-  const data = await res.json();
+  let data = await res.json();
+  // Trava 7-C (decisão de 23/10/2026): as regras de dinheiro do voluntário AVISAM, não impedem. O servidor não grava até quem lança ler e confirmar os avisos; confirmando,
+  // o mesmo pedido volta com os códigos e os avisos ficam registrados junto da saída (aparecem a quem aprova e paga). Cancelar não grava nada.
+  if (data && data.precisaConfirmarAvisos && Array.isArray(data.avisos) && data.avisos.length) {
+    const textos = data.avisos.map((a, i) => `${i + 1}) ${String(a.texto || "")}`).join("  ");
+    resultado.textContent = `Avisos sobre esta pessoa (o sistema avisa, não impede): ${textos}`;
+    const confirmou = await confirmarAcao(`Avisos sobre esta pessoa (o sistema avisa, não impede): ${textos}  Confirmo que li os avisos e quero registrar a solicitação — a minha confirmação fica registrada.`, "Li os avisos — registrar");
+    if (!confirmou) { resultado.textContent = "Solicitação NÃO registrada: os avisos não foram confirmados."; return; }
+    const codigos = data.avisos.map(a => String(a.codigo || "")).filter(c => /^[A-Z_]{1,30}$/.test(c));
+    res = await fetchProtegido(`${API_BASE}/saidas`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, body, { confirmoAvisos: codigos }))
+    });
+    data = await res.json();
+  }
   avisarResultado(data);
   resultado.textContent = data.mensagem;
   if (data.sucesso) {
@@ -792,6 +853,12 @@ async function verDetalheSaidaAcao(saidaId) {
     html += `<p class="subtitle">Cotações anexadas (Reg. Art. 62):</p><ul>` +
       s.cotacoes.map(c => `<li>${escaparHtmlEbd(c.fornecedorNome)} — R$ ${Number(c.valor).toFixed(2)} — <a href="${urlSegura(c.documentoUrl)}" target="_blank" rel="noopener">📎 ver</a></li>`).join("") +
       `</ul>`;
+  }
+  // Trava 7-C: os avisos das regras de dinheiro do voluntário que quem lançou leu e confirmou (com quem e quando) — para quem aprova e paga conferir a Ordem de Serviço
+  if (Array.isArray(s.avisosVoluntario) && s.avisosVoluntario.length > 0) {
+    html += `<div class="psc-aviso" role="status"><p class="subtitle"><strong>⚠️ Avisos sobre esta pessoa (lidos e confirmados por quem lançou):</strong></p><ul>` +
+      s.avisosVoluntario.map(a => `<li><strong>${escaparHtmlEbd(a.rotulo)}</strong>: ${escaparHtmlEbd(a.texto)} <span class="subtitle">— confirmado por ${escaparHtmlEbd(a.confirmadoPorNome)} em ${escaparHtmlEbd(a.confirmadoEm ? new Date(a.confirmadoEm).toLocaleString("pt-BR") : "")}</span></li>`).join("") +
+      `</ul></div>`;
   }
   if (s.motivoRejeicao) html += `<p class="subtitle">Motivo da rejeição: ${escaparHtmlEbd(s.motivoRejeicao)}</p>`;
   if (s.motivoCancelamento) html += `<p class="subtitle">Motivo do cancelamento: ${escaparHtmlEbd(s.motivoCancelamento)}</p>`;
@@ -3719,8 +3786,21 @@ async function carregarConsolidadoTesouraria() {
   container.innerHTML = html;
 }
 
+// Trava 7-C — Meus Dados (meu-painel.js): o cadastro de fornecedor ligado à pessoa e os avisos registrados nos pagamentos a ela. Sem nada disso, o cartão não aparece.
+function finCartaoMeusDados(t) {
+  if (!t || (!t.fornecedor && !(Array.isArray(t.avisosDePagamento) && t.avisosDePagamento.length))) return "";
+  const f = t.fornecedor;
+  const avisos = Array.isArray(t.avisosDePagamento) ? t.avisosDePagamento : [];
+  return `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Tesouraria (você presta serviço à Igreja)</h4>
+      ${f ? `<p class="linha-perfil">Cadastro de fornecedor: ${escaparHtmlEbd(f.nome)} (${f.tipo === "PF" ? "pessoa física" : "pessoa jurídica"}${f.ativo === false ? ", inativo" : ""})</p>` : ""}
+      ${avisos.length ? `<p class="subtitle">Avisos registrados nos pagamentos a você (o tesoureiro leu e confirmou; o sistema só avisa, não impede):</p>` + avisos.map(a => `<p class="linha-perfil">${escaparHtmlEbd(a.rotulo)} — ${formatarValorLgpd(a.em, "dataHora")}</p>`).join("") : ""}
+    </div>`;
+}
+
 registrarAcoes({
-  abrirInventarioAcao, abrirParecerViabilidadeAcao, acaoObra, alternarCampoCampanhaSaida, alternarCamposDemonstracao, alternarComprovanteLancamento,
+  abrirInventarioAcao, abrirParecerViabilidadeAcao, acaoObra, alternarMembroFornecedor, buscarMembroFornecedorAcao, ligarMembroFornecedorAcao, desligarMembroFornecedorAcao, alternarCampoCampanhaSaida, alternarCamposDemonstracao, alternarComprovanteLancamento,
   alternarCongregacaoFluxoCaixa, alternarCotacoesSaida, alternarEdicaoValorReferenciaCotacoes, alternarFormDadosBancariosInstituicao,
   alternarFormNovaCampanha, alternarFormNovaContaReceber, alternarFormNovaMetaPdq, alternarFormNovaSaida, alternarFormNovoFornecedor,
   alternarFormNovoFundoFixo, alternarFormNovoOrcamento, alternarFormNovoPlanoPdq, alternarFormNovoProjetoPdq, alternarFormNovoSorteio,

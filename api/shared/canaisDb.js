@@ -480,12 +480,16 @@ async function reativarCanal(pool, ctx, canalId, { membroId }) {
 // `limiteDia` (opcional): no máximo esse tanto de avisos DESTA regra para a mesma pessoa em 24 horas; os seguintes não são criados (nem enviados por e-mail).
 // Serve para a regra que alguém pode repetir de propósito contra uma pessoa (remover e reintegrar em ciclo): o fato continua registrado, só o aviso para.
 // `aguardarEntrega: false`: não espera o serviço de e-mail confirmar a entrega de cada mensagem (só a aceitação) — para o aviso de um ato que não pode demorar.
-async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, aguardarEntrega = true, deps = {} }) {
+// `prazoMs` (Trava 7-C): o aviso que não pode segurar a resposta (o pedido do mural do site, o canal de ajuda sem login): primeiro nasce o sininho de TODOS os destinatários;
+// depois o e-mail e o celular saem em paralelo e a resposta espera no máximo `prazoMs`. O que não terminou continua a caminho; o e-mail que não sair fica com EnviadaEmail = 0
+// e o reenvio da proteção (protecaoDb.reenviarEmailsPendentes, das regras obrigatórias) o manda depois. `externas` conta só o que terminou dentro do prazo.
+async function notificarAgora(pool, { regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, limiteDia = null, aguardarEntrega = true, prazoMs = null, deps = {} }) {
   try {
     const criar = deps.criarNotificacao || require("./notificacoes").criarNotificacao;
     const enviar = deps.enviarCanais || ((p, o) => require("./notificacaoMotor").enviarCanaisNotificacao(p, o));
     const regra = (await pool.request().input("chave", sql.NVarChar(60), regraChave).query(`SELECT * FROM NotificacaoRegras WHERE Chave = @chave AND Ativa = 1`)).recordset[0];
     if (!regra) return { criadas: 0, externas: 0 };
+    if (Number(prazoMs) > 0) return await notificarComPrazo(pool, { regra, regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, prazoMs: Number(prazoMs), criar, enviar });
     const vistos = new Set();
     // externas: quantas pessoas receberam o aviso FORA do app (e-mail aceito pelo provedor ou push entregue a pelo menos um aparelho). Só o sino não basta para
     // aviso que protege criança: quem chama decide o que fazer quando ninguém foi alcançado (Trava 7-B, 20/10/2026).
@@ -515,6 +519,26 @@ async function notificarAgora(pool, { regraChave, destinatarios, mensagem, refer
     console.error("[CANAIS] falha ao notificar:", e.message);
     return { criadas: 0, externas: 0 };
   }
+}
+
+async function notificarComPrazo(pool, { regra, regraChave, destinatarios, mensagem, referenciaId, referenciaTabela, prazoMs, criar, enviar }) {
+  const vistos = new Set();
+  const criadas = [];
+  for (const d of destinatarios || []) {
+    if (!d || !d.membroId || vistos.has(d.membroId)) continue;
+    vistos.add(d.membroId);
+    const { criada, notificacaoId } = await criar(pool, { regraChave, destinatarioMembroId: d.membroId, titulo: regra.Titulo, mensagem: String(mensagem).slice(0, 1000), categoria: regra.Categoria, referenciaTabela, referenciaId });
+    if (criada) criadas.push({ d, notificacaoId });
+  }
+  let externas = 0, terminadas = 0;
+  const tarefas = criadas.map(({ d, notificacaoId }) => Promise.resolve()
+    .then(() => enviar(pool, { regra, destinatarioMembroId: d.membroId, notificacaoId, titulo: regra.Titulo, mensagem, categoria: regra.Categoria, email: d.email, aguardarEntrega: false }))
+    .then((canais) => { terminadas++; if (canais && (canais.emailEnviado || Number(canais.pushEnviados) > 0)) externas++; })
+    .catch((e) => { terminadas++; console.error("[CANAIS] falha ao enviar aviso:", e && e.message); }));
+  let relogio = null;
+  await Promise.race([Promise.all(tarefas), new Promise((ok) => { relogio = setTimeout(ok, prazoMs); })]);
+  if (relogio) clearTimeout(relogio);
+  return { criadas: criadas.length, suprimidas: 0, externas, aCaminho: criadas.length - terminadas };
 }
 
 async function administradoresAtivosDoCanal(pool, canalId) {
@@ -721,7 +745,7 @@ const SELECT_OCORRENCIA = `
   SELECT o.*, c.Nome AS CanalNome, c.Plataforma AS CanalPlataforma, mr.Nome AS RelatadaPorNome, mm.Nome AS RemovidaPorNome
   FROM CanalOcorrencias o
   JOIN CanaisOficiaisComunicacao c ON c.CanalId = o.CanalId
-  JOIN MembroReferencia mr ON mr.MembroId = o.RelatadaPorMembroId
+  LEFT JOIN MembroReferencia mr ON mr.MembroId = o.RelatadaPorMembroId
   LEFT JOIN MembroReferencia mm ON mm.MembroId = o.RemovidaPorMembroId`;
 
 // filtros: status, canalId, canaisIds (lista permitida), relatadaPor. `verAutor` esconde/mostra quem relatou.
@@ -1206,7 +1230,44 @@ async function detectarConferenciasVencidas(pool, { hoje = hojeBrasilia() } = {}
   return fatos;
 }
 
+// Trava 7-C — retenção (LGPD art. 16; prova de diligência por 5 anos, margem sobre a prescrição da reparação civil, CC art. 206, §3º, V):
+//   - a ocorrência ENCERRADA (removida ou improcedente) perde a descrição, o link, a observação da advertência e quem avisou 5 anos depois de encerrada (política
+//     "Canais — ocorrência de moderação encerrada"); ficam o canal, a categoria, as datas e o desfecho (a prova do relógio das 24 horas);
+//   - quem deixou de administrar um canal perde o nome 5 anos depois (política "Canais — administrador que deixou a função"); ficam o papel, as datas, a versão do termo
+//     e quem designou e encerrou (atos da liderança). A lista de ocorrências passa a usar LEFT JOIN em quem avisou: a anonimizada continua na lista, sem o nome.
+// O gatilho da ocorrência só aceita apagar a descrição e quem avisou com a marca de sessão `canais_purga`, ligada e desligada no MESMO lote (molde da 148, 150 e 152).
+const POLITICAS_CANAIS = {
+  ocorrencia: { categoria: "Canais — ocorrência de moderação encerrada", padrao: 1825 },
+  administrador: { categoria: "Canais — administrador que deixou a função", padrao: 1825 }
+};
+async function aplicarRetencao(pool) {
+  const { diasDaPolitica } = require("./politicasRetencao");
+  const diasOc = await diasDaPolitica(pool, POLITICAS_CANAIS.ocorrencia.categoria, POLITICAS_CANAIS.ocorrencia.padrao);
+  const diasAdm = await diasDaPolitica(pool, POLITICAS_CANAIS.administrador.categoria, POLITICAS_CANAIS.administrador.padrao);
+  const oc = await pool.request().input("d", sql.Int, diasOc).query(`
+    DECLARE @n INT = 0;
+    BEGIN TRY
+      EXEC sp_set_session_context @key = N'canais_purga', @value = 1;
+      UPDATE CanalOcorrencias SET Descricao = N'(anonimizada pela retenção)', LinkEvidencia = NULL, AdvertenciaObs = NULL, RelatadaPorMembroId = NULL, AnonimizadaEm = SYSUTCDATETIME()
+      WHERE AnonimizadaEm IS NULL AND Status IN ('REMOVIDA', 'IMPROCEDENTE')
+        AND COALESCE(DecididaEm, RemocaoRegistradaEm, RemovidaEm, RelatadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME());
+      SET @n = @@ROWCOUNT;
+      EXEC sp_set_session_context @key = N'canais_purga', @value = NULL;
+    END TRY
+    BEGIN CATCH
+      EXEC sp_set_session_context @key = N'canais_purga', @value = NULL;
+      THROW;
+    END CATCH;
+    SELECT @n AS n`);
+  const adm = await pool.request().input("d", sql.Int, diasAdm).query(`
+    UPDATE CanalAdministradores SET MembroId = NULL, MotivoEncerramento = NULL, AnonimizadoEm = SYSUTCDATETIME()
+    WHERE MembroId IS NOT NULL AND EncerradoEm IS NOT NULL AND EncerradoEm < DATEADD(DAY, -@d, SYSUTCDATETIME());
+    SELECT @@ROWCOUNT AS n`);
+  return { ocorrenciasAnonimizadas: Number((oc.recordset[0] || {}).n) || 0, administradoresAnonimizados: Number((adm.recordset[0] || {}).n) || 0, retencaoDias: { ocorrencia: diasOc, administrador: diasAdm } };
+}
+
 module.exports = {
+  POLITICAS_CANAIS, aplicarRetencao,
   LIMITE_LISTA, emMs, isoInstante, carregarContexto, lerPrazoDias,
   mapearCanal, carregarCanais, buscarCanal, listarCanais, detalharCanal, carregarEstadoDosCanais,
   buscarContatosPessoais, criarCanal, atualizarCanal, definirResponsavelAcesso, desativarCanal, reativarCanal,

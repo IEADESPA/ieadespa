@@ -23,14 +23,18 @@ async function lerGuardada() {
   if (!disponivel()) return null;
   try {
     const g = await comPrazo(storage.lerJsonPrivado(nomeDoBlob()));
-    return g && Number.isInteger(g.pendentes) && g.pendentes >= 0 ? { pendentes: g.pendentes, seq: g.seq, em: g.em || null } : null;
+    // `sistema` (Trava 7-C): quantas das pendentes são do aviso do sistema (a crise); null = não sei (marca gravada antes da Trava 7-C)
+    return g && Number.isInteger(g.pendentes) && g.pendentes >= 0
+      ? { pendentes: g.pendentes, seq: g.seq, sistema: Number.isInteger(g.sistema) && g.sistema >= 0 ? g.sistema : null, em: g.em || null } : null;
   } catch (e) { return null; }
 }
-// Grava { pendentes, seq } se não houver marca mais nova; na falha, tenta invalidar. Nunca lança. `pendentes` null = invalidar ("não sei").
-async function gravar(pendentes, seq = 0, deps = {}) {
+// Grava { pendentes, seq, sistema } se não houver marca mais nova; na falha, tenta invalidar. Nunca lança. `pendentes` null = invalidar ("não sei"). `sistema` = quantas
+// das pendentes são do aviso do sistema (a crise): de madrugada a rotina só abre o banco se houver alguma (Trava 7-C).
+async function gravar(pendentes, seq = 0, deps = {}, sistema = null) {
   const st = deps.storage || storage;
   if (!deps.storage && !disponivel()) return false;
   const objeto = { pendentes: Number.isInteger(pendentes) ? pendentes : null, seq: Number.isInteger(seq) ? seq : 0, em: new Date().toISOString() };
+  if (objeto.pendentes !== null && Number.isInteger(sistema) && sistema >= 0) objeto.sistema = sistema;
   try {
     for (let tentativa = 0; tentativa < 3; tentativa++) {
       const atual = await comPrazo(st.lerJsonPrivadoComVersao(nomeDoBlob()));

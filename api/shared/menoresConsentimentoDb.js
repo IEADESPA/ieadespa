@@ -220,9 +220,27 @@ async function conceder(pool, { menorId, responsavelId, finalidade, aceito, text
 
 // Qualquer responsável ATIVO revoga (não só quem concedeu) — a qualquer momento, sem caixa, sem hash e sem exigir IP público (LGPD art. 8º, § 5º). Revogar IMAGEM apaga
 // o arquivo da foto do menor. Revogar o que já estava revogado não grava de novo (mas, para IMAGEM, ainda limpa uma foto que tenha sobrado: quem pede para apagar
-// quer a foto apagada). v7.10: revogar SAUDE_CRACHA apaga o dado de saúde da criança e as cópias nos registros do check-in infantil, na mesma operação (idem pela ficha).
+// quer a foto apagada). v7.10: revogar SAUDE_CRACHA apaga o dado de saúde da criança e as cópias nos registros do check-in infantil — desde a Trava 7-C na MESMA transação da linha de revogação (idem pela ficha).
 async function apagarSaudeAoRevogar(pool, { menorId, por }) {
   return require("./checkinInfantilDb").apagarSaudeDoMenor(pool, { menorId, por });
+}
+// Trava 7-C: revogar SAUDE_CRACHA grava a linha de revogação E apaga a saúde e as cópias nos registros do check-in na MESMA transação, sob a trava da saúde da criança
+// (a mesma da gravação da saúde e do check-in; pega antes de qualquer tabela). Ou tudo, ou nada: se o apagar falhar, a revogação também não fica gravada e a pessoa
+// tenta de novo. A leitura que confere o consentimento na hora e a rotina diária continuam como rede. Devolve { id, apagou } ou { id: null, ocupado? }.
+async function revogarSaudeNaTransacao(pool, linha) {
+  const ck = require("./checkinInfantilDb");
+  const t = new sql.Transaction(pool);
+  await t.begin();
+  const rq = () => new sql.Request(t);
+  const desfazer = async () => { try { await t.rollback(); } catch (_) { /* já desfeita */ } };
+  try {
+    if (!(await ck.travarSaude(rq, [linha.menorId]))) { await desfazer(); return { id: null, ocupado: true }; }
+    const id = await inserirLinha({ request: rq }, linha);
+    if (id == null) { await desfazer(); return { id: null }; }
+    const apagou = await ck.apagarSaudeNaTransacao(rq, linha.menorId);
+    await t.commit();
+    return { id, apagou };
+  } catch (e) { await desfazer(); throw e; }
 }
 async function revogar(pool, { menorId, responsavelId, finalidade, ip = null, cadeia = null, hoje = hojeBrasilia() }) {
   const v = mc.validarRevogar({ menorId, responsavelId, finalidade });
@@ -242,13 +260,16 @@ async function revogar(pool, { menorId, responsavelId, finalidade, ip = null, ca
     return { sucesso: true, jaRevogada: true, fotoApagada, mensagem: mc.mensagemJaRevogado({ finalidade: d.finalidade, fotoApagada }), estado: estadoDaFinalidade(d.finalidade, linha, ctx.ativos, { visitanteId: d.responsavelId }) };
   }
   const t = mc.textoDe(d.finalidade);
-  const id = await inserirLinha(pool, { ...d, concedido: false, textoVersao: t.versao, textoHash: t.hash, forma: "CLICK_RESP", ip: ip || mc.IP_INDISPONIVEL, cadeia });
+  const ehSaude = d.finalidade === "SAUDE_CRACHA";
+  const linhaNova = { ...d, concedido: false, textoVersao: t.versao, textoHash: t.hash, forma: "CLICK_RESP", ip: ip || mc.IP_INDISPONIVEL, cadeia };
+  const rs = ehSaude ? await revogarSaudeNaTransacao(pool, linhaNova) : { id: await inserirLinha(pool, linhaNova) };
+  const id = rs.id;
   if (id == null) return { sucesso: false, mensagem: mc.MENSAGENS.CONCORRENCIA };
   // Primeiro a trilha do ato (a revogação já está gravada), depois o efeito: apagar a foto.
   const fotoApagada = ehImagem && !!menor.FotoUrl;
   await registrarAuditoria({ tabela: TABELA, registroId: id, acao: "MENOR_CONSENTIMENTO_REVOGADO", usuarioId: d.responsavelId, dadosDepois: { menorId: d.menorId, finalidade: d.finalidade, forma: "CLICK_RESP", fotoApagada } });
   if (ehImagem) await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.responsavelId });
-  if (d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.responsavelId });
+  if (ehSaude && rs.apagou) await require("./checkinInfantilDb").auditarSaudeApagada(d.menorId, d.responsavelId);   // a saúde já saiu, na transação da revogação
   const nova = { consentimentoId: id, menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: false, textoVersao: t.versao, textoHash: t.hash, forma: "CLICK_RESP", registradoEm: new Date().toISOString(), referencia: null };
   return {
     sucesso: true, consentimentoId: id, fotoApagada, mensagem: mc.mensagemRevogado({ finalidade: d.finalidade, menorNome: menor.Nome, fotoApagada }),
@@ -284,13 +305,16 @@ async function registrarManual(pool, { menorId, responsavelId, finalidade, conce
     if (d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.registradoPor });
     return { sucesso: true, jaRevogada: true, fotoApagada, mensagem: mc.mensagemJaRevogado({ finalidade: d.finalidade, fotoApagada }), estado: estadoDaFinalidade(d.finalidade, linha, ctx.ativos, { paraGestao: true }) };
   }
-  const id = await inserirLinha(pool, { menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, textoVersao: d.textoVersao, textoHash: d.textoHash, forma: "FICHA_FISICA", referencia: d.referencia, por: d.registradoPor });
+  const linhaNova = { menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, textoVersao: d.textoVersao, textoHash: d.textoHash, forma: "FICHA_FISICA", referencia: d.referencia, por: d.registradoPor };
+  const revogaSaude = !d.concedido && d.finalidade === "SAUDE_CRACHA";
+  const rs = revogaSaude ? await revogarSaudeNaTransacao(pool, linhaNova) : { id: await inserirLinha(pool, linhaNova) };
+  const id = rs.id;
   if (id == null) return { sucesso: false, mensagem: mc.MENSAGENS.CONCORRENCIA };
   const fotoApagada = !d.concedido && ehImagem && !!menor.FotoUrl;
   await registrarAuditoria({ tabela: TABELA, registroId: id, acao: "MENOR_CONSENTIMENTO_FICHA", usuarioId: d.registradoPor,
     dadosDepois: { menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, forma: "FICHA_FISICA", textoVersao: d.textoVersao, textoHash: d.textoHash, referenciaTamanho: d.referencia.length, fotoApagada } });
   if (!d.concedido && ehImagem) await apagarFotoDoMenor(pool, { menorId: d.menorId, fotoUrl: menor.FotoUrl, por: d.registradoPor });
-  if (!d.concedido && d.finalidade === "SAUDE_CRACHA") await apagarSaudeAoRevogar(pool, { menorId: d.menorId, por: d.registradoPor });
+  if (revogaSaude && rs.apagou) await require("./checkinInfantilDb").auditarSaudeApagada(d.menorId, d.registradoPor);   // a saúde já saiu, na transação da revogação
   const nova = { consentimentoId: id, menorId: d.menorId, responsavelId: d.responsavelId, finalidade: d.finalidade, concedido: d.concedido, textoVersao: d.textoVersao, textoHash: d.textoHash, forma: "FICHA_FISICA", registradoEm: new Date().toISOString(), referencia: d.referencia };
   return {
     sucesso: true, consentimentoId: id, fotoApagada, mensagem: mc.mensagemRegistroManual({ finalidade: d.finalidade, menorNome: menor.Nome, concedido: d.concedido, fotoApagada }),

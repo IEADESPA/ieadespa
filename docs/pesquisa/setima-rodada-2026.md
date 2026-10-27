@@ -23,13 +23,17 @@ Quatro frentes de pesquisa de mercado (internacional + nacional) mais uma nova
 varredura do Regimento Interno alimentaram esta expansão. **Achado mais grave da
 rodada:** existe uma obrigação legal brasileira **vigente desde 12/01/2024** que o
 sistema não cobre de forma nenhuma (Lei 14.811/2024 — certidão de antecedentes
-semestral de todo voluntário que atua com menores) e outra com **multa por
-omissão** (ECA Art. 245). Isso virou a FASE 7 reescrita, não um bullet solto.
+semestral de todo voluntário que atua com menores) e outra com **responsabilização
+pela omissão** (ECA Art. 70-B, parágrafo único). *(Correção da Trava 7-C, 23/10/2026: o
+59-A alcança, no caput, a instituição que recebe recurso público e, no parágrafo único, os
+estabelecimentos educacionais e similares — a Igreja adota a exigência por cautela e pelo
+Regimento Art. 133 §5º; e a multa do Art. 245 alcança o médico, o professor e o responsável
+por estabelecimento de saúde ou de ensino, não a Igreja como tal.)* Isso virou a FASE 7 reescrita, não um bullet solto.
 
 | Achado | Fonte | Onde entra |
 | --- | --- | --- |
-| **Certidão de antecedentes de voluntário com menores, renovação semestral** — obrigação legal vigente | Lei 14.811/2024 (art. 59-A do ECA) | v7.7 (nova) |
-| **Comunicação obrigatória de suspeita de maus-tratos ao Conselho Tutelar** — multa de 3 a 20 salários por omissão | ECA Art. 13 e 245 | v7.8 (nova) |
+| **Certidão de antecedentes de voluntário com menores, renovação semestral** — adotada por cautela (a lei alcança quem recebe recurso público e estabelecimentos educacionais e similares) | Lei 14.811/2024 (art. 59-A do ECA); Regimento Art. 133 §5º | v7.7 (nova) |
+| **Comunicação obrigatória de suspeita de maus-tratos ao Conselho Tutelar** — quem cuida de criança por ministério responde pela omissão | ECA Arts. 13 e 70-B | v7.8 (nova) |
 | Escuta protegida — igreja acolhe e encaminha, **não** inquire (não revitimizar) | Lei 13.431/2017 | v7.8 (nova) |
 | Consentimento específico e destacado para dados de menores | LGPD Art. 14 | v7.7 (nova) |
 | Check-in/check-out infantil com código de retirada e cadeia de custódia | Planning Center Check-Ins, FellowshipOne, ChurchSuite | v7.10 (nova) |
@@ -43,7 +47,7 @@ omissão** (ECA Art. 245). Isso virou a FASE 7 reescrita, não um bullet solto.
 | **Imunidade se perde por desorganização formal**, não por desvio — escrituração é requisito | CF Art. 150 VI "b" §4º; CTN Art. 14 | v4.20 (nova) |
 | Receita acessória (bazar, aluguel de salão) só é imune se aplicada nas finalidades essenciais | Súmula Vinculante 52; RE 578.562 | v4.21 (nova) |
 | Ministro: sem vínculo, sem INSS patronal, **com IRPF** e risco de descaracterização | Lei 13.137/2015; Lei 14.647/2023 | v4.10 (expandida) |
-| **LGPD dispensa consentimento** para organização religiosa tratar dado de membro | LGPD Art. 11, II, "a" | vB.8 (nova) |
+| **LGPD dispensa consentimento** para a associação religiosa tratar dado de membro | LGPD Art. 11, II, "d" (exercício regular de direitos; a Trava 7-C corrigiu a alínea "a" que estava aqui — a LGPD não tem hipótese "organização religiosa") | vB.8 (nova) |
 | PLD-FT: doação em espécie acima de limite exige identificação do doador | Lei 9.613/98; GAFI Recomendação 8 | v4.22 (nova) |
 | Lei Anticorrupção alcança associações/fundações (programa de integridade) | Lei 12.846/2013; Decreto 11.129/2022 | v4.22 (nova) |
 | Motor de workflow/automação genérico (gatilho → ação → status) substitui 20 features pontuais | Rock RMS, Clearstream, Planning Center Workflows | vB.3 (nova) |

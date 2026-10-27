@@ -131,6 +131,10 @@ module.exports = async function (context, req) {
         .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE)) WHERE MembroId = @membroId`);
       // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
+      // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (antes a suspensa seguia na lista de quem recebe avisos por delegação, como o pedido da imprensa
+      // na crise). Ficam canceladas, com a trilha: levantar a medida não as revive (quem delegou faz uma nova, se quiser).
+      await pool.request().input("membroId", sql.Int, membroId)
+        .query(`UPDATE DelegacoesAcesso SET Status = 'CANCELADA' WHERE Status = 'ATIVA' AND (DelegadoMembroId = @membroId OR DeleganteMembroId = @membroId)`);
     }
 
     await registrarAuditoria({

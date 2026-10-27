@@ -59,7 +59,8 @@ async function principal(context, req) {
   // A fila é TERRITORIAL: a concessão de uma Extensão (que enxergaria a congregação-mãe inteira pelo nome) e a de Departamento não operam o cuidado pastoral — quem cuida da
   // Extensão é o Dirigente da congregação-mãe (revisão independente, 21/10/2026).
   const visaoBruta = lideranca ? auth.visaoDaPermissao(sessao, db.PERMISSAO) : null;
-  const visao = visaoBruta ? auth.restringirVisao(visaoBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO") : null;
+  // (Trava 7-C) nem a concessão restrita a um departamento: o mesmo critério da crise e dos Setores Técnicos
+  const visao = visaoBruta ? auth.restringirVisao(visaoBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO" && !c.departamentoId) : null;
   const gestao = !!visao && auth.temPermissao(visao, db.PERMISSAO);
   const geral = gestao && esc.ehGeral(visao);
   // "da Área para cima": desmarcar um sinal de risco e cancelar um acompanhamento urgente pedem alguém acima da congregação (o Dirigente pode ser o citado)
@@ -133,7 +134,8 @@ async function principal(context, req) {
         context.res = { status: 200, body: { sucesso: true, agora: new Date().toISOString(), itens: await db.listarFila(pool, { ver, filtros }) } };
         return;
       }
-      if (acao === "painel") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.painel(pool, { ver }) } }; return; }
+      // (Trava 7-C) o nível geral vê também as regiões sem Superintendente Regional cadastrado: a escada pula essas regiões
+      if (acao === "painel") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.painel(pool, { ver }), regioesSemSuperintendente: ver.geral ? await db.regioesSemSuperintendente(pool) : [] } }; return; }
       if (acao === "congregacoes") { context.res = { status: 200, body: { sucesso: true, congregacoes: await db.congregacoesDoTerritorio(pool, { ver }) } }; return; }
       if (acao === "pedidos") {
         const situacao = ["AGUARDANDO", "RISCO", "APROVADOS", "TODOS"].includes(consulta.situacao) ? consulta.situacao : "AGUARDANDO";

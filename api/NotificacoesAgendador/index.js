@@ -74,19 +74,8 @@ module.exports = async function (context, req) {
     context.log.error("[SEGURANCA] falha na rotina diária:", e.message);
     criseSeguranca = { falhas: ["rotina"] };
   }
-  const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
-  // v7.14 — depois dos avisos: a retenção da identidade visual (tira o nome, apaga imagens não escolhidas), com orçamento de tempo (o resto fica para amanhã).
-  try {
-    const depois = await identidadeDb.rotinaDepoisDosAvisos(pool, { orcamentoMs: 15000 });
-    identidade = { ...identidade, ...depois, falhas: [...(identidade.falhas || []), ...depois.falhas] };
-  } catch (e) {
-    context.log.error("[IDENTIDADE] falha na retenção:", e.message);
-    identidade = { ...identidade, falhas: [...(identidade.falhas || []), "retencao"] };
-  }
-  // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
-  try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
-  if (falhas.length) context.log.error(`[NOTIFICACOES] detector(es) que falharam: ${falhas.join(", ")}`);
-  context.log(`[NOTIFICACOES] rodada agendada: ${criadas} notificação(ões) nova(s), ${emailsEnviados} e-mail(s) enviado(s).`);
+  // Trava 7-C: as retenções e o apagamento da saúde sem consentimento rodam ANTES dos avisos — o motor manda e-mail e, num dia de muitos avisos, a rodada podia passar do
+  // tempo da função antes de chegar aqui (o dado vencido ficava mais um dia).
   // v7.5 — retenção LGPD do voluntariado: o IP do aceite digital é anonimizado 5 anos depois do último serviço. Fail-soft: uma falha aqui não derruba a rodada de avisos.
   let retencaoVoluntariado = null;
   try {
@@ -132,6 +121,26 @@ module.exports = async function (context, req) {
   } catch (e) {
     context.log.error("[CHECKIN] falha na retenção LGPD:", e.message);
   }
+  // Trava 7-C — as retenções que estavam só "anotadas" desde a v7.2, v7.3 e v7.4 (prazo padrão ajustável em Proteção de Dados → Políticas de retenção): a justificativa de
+  // ausência na Santa Ceia sai 2 anos depois da Ceia; a ocorrência de canal encerrada perde a descrição e quem avisou em 5 anos, e o administrador que saiu perde o nome em
+  // 5 anos; o contato do convidado externo sai 1 ano depois do último evento dele. Cada uma fail-soft (a próxima rodada repete).
+  const retencaoAnotadas = { falhas: [] };
+  for (const [chave, modulo] of [["calendario", "../shared/calendarioDb"], ["canais", "../shared/canaisDb"], ["eventos", "../shared/eventosDb"]]) {
+    try { retencaoAnotadas[chave] = await require(modulo).aplicarRetencao(pool); } catch (e) { retencaoAnotadas.falhas.push(chave); context.log.error(`[RETENCAO] ${chave}:`, e.message); }
+  }
+  const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);
+  // v7.14 — depois dos avisos: a retenção da identidade visual (tira o nome, apaga imagens não escolhidas), com orçamento de tempo (o resto fica para amanhã).
+  try {
+    const depois = await identidadeDb.rotinaDepoisDosAvisos(pool, { orcamentoMs: 15000 });
+    identidade = { ...identidade, ...depois, falhas: [...(identidade.falhas || []), ...depois.falhas] };
+  } catch (e) {
+    context.log.error("[IDENTIDADE] falha na retenção:", e.message);
+    identidade = { ...identidade, falhas: [...(identidade.falhas || []), "retencao"] };
+  }
+  // v7.8 — a marca "há prazo de 24 horas correndo" (que deixa a rotina horária da proteção dormir sem abrir o banco) é regravada todo dia, e os e-mails da proteção que não saíram são reenviados.
+  try { await require("../shared/protecaoPendencia").atualizar(pool); await require("../shared/protecaoDb").reenviarEmailsPendentes(pool); } catch (e) { context.log.error("[PROTECAO] marca de pendência / reenvio:", e.message); }
+  if (falhas.length) context.log.error(`[NOTIFICACOES] detector(es) que falharam: ${falhas.join(", ")}`);
+  context.log(`[NOTIFICACOES] rodada agendada: ${criadas} notificação(ões) nova(s), ${emailsEnviados} e-mail(s) enviado(s).`);
   // A rotina é fail-soft de propósito (uma falha não derruba as outras), mas a retirada que protege criança e os detectores do ministério com menores NÃO podem falhar em silêncio:
   // aí a resposta é 500, o job do GitHub fica vermelho e o aviso de "rotina falhou" sai. (Tudo o mais já rodou: a resposta vem no fim.)
   // (v7.11) O mesmo para o cuidado pastoral: a escada do prazo vencido e a regra dos 30 dias das notas não podem parar sem ninguém saber.
@@ -142,6 +151,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: falhaMenores || falhaCuidado || falhaIdentidade ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retencaoAnotadas, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, detectoresComFalha: falhas },
   };
 };

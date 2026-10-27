@@ -77,7 +77,7 @@ describe("a exclusão LGPD", () => {
     const { sql } = require("../db");
     const tx = new sql.Transaction();
     const r = () => new sql.Request(tx);
-    expect(await db.exclusaoLgpd(r, 30)).toEqual({ notas: 2, itens: 1, pedidos: 4 });
+    expect(await db.exclusaoLgpd(r, 30)).toEqual({ notas: 2, itens: 1, pedidos: 4, soltos: 0, itensSoltos: [] });
     expect(mockConsultas.every((c) => c.tx === true)).toBe(true);
     expect(lotesDePurga()).toHaveLength(1);
     conferirLote(lotesDePurga()[0]);
@@ -91,7 +91,27 @@ describe("a exclusão LGPD", () => {
   });
   test("sem nada do cuidado pastoral, segue com zeros", async () => {
     const { sql } = require("../db");
-    expect(await db.exclusaoLgpd(() => new sql.Request(new sql.Transaction()), 30)).toEqual({ notas: 0, itens: 0, pedidos: 0 });
+    expect(await db.exclusaoLgpd(() => new sql.Request(new sql.Transaction()), 30)).toEqual({ notas: 0, itens: 0, pedidos: 0, soltos: 0, itensSoltos: [] });
+  });
+  // Trava 7-C (BAIXO 14): o item ABERTO de que o titular era o RESPONSÁVEL fica sem responsável, na mesma transação, com o evento neutro (nunca o motivo); o aviso ao degrau sai
+  // depois do commit (avisarItensSoltos). Antes, a fila seguia mostrando um responsável que não existe mais.
+  test("os itens abertos de que o titular era o responsável ficam sem responsável, com o evento neutro, dentro da transação", async () => {
+    quando(/WHERE i\.ResponsavelMembroId = @m AND i\.Status = 'ABERTO'/, [{ ItemId: 55, CongregacaoId: 1, CongregacaoNome: "Central", MembroId: 9, Nivel: "CONGREGACAO" }]);
+    quando(/UPDATE CuidadoItens SET ResponsavelMembroId = NULL/, [{ n: 1 }]);
+    quando(/INSERT INTO CuidadoEventos/, [{ id: 901 }]);
+    const { sql } = require("../db");
+    const tx = new sql.Transaction();
+    const r = await db.exclusaoLgpd(() => new sql.Request(tx), 30);
+    expect(r.soltos).toBe(1);
+    expect(r.itensSoltos).toEqual([{ eventoId: 901, congregacaoId: 1, congregacaoNome: "Central", membroId: 9, nivel: "CONGREGACAO" }]);
+    const u = mockConsultas.find((c) => /UPDATE CuidadoItens SET ResponsavelMembroId = NULL/.test(c.sql));
+    expect(u.tx).toBe(true);
+    expect(u.inputs).toMatchObject({ i: 55, rp: 30 });
+    const ev = mockConsultas.filter((c) => /INSERT INTO CuidadoEventos/.test(c.sql)).pop();
+    expect(ev.inputs).toMatchObject({ i: 55, t: "ATRIBUIDO", rp: null, m: null });
+    expect(ev.inputs.ob).toMatch(/deixou este acompanhamento/);
+    expect(ev.inputs.ob).not.toMatch(/LGPD|exclus/i);
+    expect(mockEventos).toEqual([]);
   });
 });
 

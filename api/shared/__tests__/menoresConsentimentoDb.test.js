@@ -6,6 +6,21 @@ const fs = require("fs");
 const path = require("path");
 
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+// Trava 7-C: a transação falsa usa o pool do teste (a fila de recordsets continua na ordem do código) e anota o que corre DENTRO dela e quando ela fecha.
+let mockTx = [];
+jest.mock("../db", () => {
+  const real = jest.requireActual("../db");
+  class Transaction { constructor(pool) { this.pool = pool; } async begin() { mockTx.push("BEGIN"); } async commit() { mockTx.push("COMMIT"); } async rollback() { mockTx.push("ROLLBACK"); } }
+  class Request {
+    constructor(t) {
+      const r = t.pool.request(); const query = r.query;
+      r.query = async (texto) => { mockTx.push(texto); return query(texto); };
+      return r;
+    }
+  }
+  const sql = new Proxy(real.sql, { get: (alvo, prop) => (prop === "Transaction" ? Transaction : prop === "Request" ? Request : alvo[prop]) });
+  return { ...real, sql };
+});
 jest.mock("../storage", () => ({ excluirFoto: jest.fn(async () => {}), urlComSas: (u) => u }));
 
 const db = require("../menoresConsentimentoDb");
@@ -26,7 +41,8 @@ const ativoBD = (resp = 40, extra = {}) => ({ MenorMembroId: 30, ResponsavelMemb
 const escritas = (chamadas) => chamadas.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
 const insercao = (chamadas) => chamadas.find((c) => /INSERT INTO MinisterioMenoresConsentimentos/.test(c.sql));
 
-beforeEach(() => { registrarAuditoria.mockClear(); storage.excluirFoto.mockClear(); });
+beforeEach(() => { registrarAuditoria.mockClear(); storage.excluirFoto.mockClear(); mockTx = []; });
+const TRAVA_OK = [{ resultado: 0 }];
 
 const CONCEDE = { menorId: 30, responsavelId: 40, finalidade: "IMAGEM", aceito: true, textoHash: HASH("IMAGEM"), ip: IP, cadeia: CADEIA, hoje: HOJE };
 
@@ -203,8 +219,13 @@ describe("revogar", () => {
     expect(registrarAuditoria).toHaveBeenCalledTimes(1);
   });
   test("revogar a SAÚDE no crachá não toca na foto", async () => {
-    const { pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", TextoHash: HASH("SAUDE_CRACHA") })], [ativoBD(40)], [pessoa(30, { FotoUrl: "https://armazem/fotos-membros/membro-30" })], [{ id: 81 }], [{ n: 1 }], [{ n: 2 }]]);
+    const { pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", TextoHash: HASH("SAUDE_CRACHA") })], [ativoBD(40)], [pessoa(30, { FotoUrl: "https://armazem/fotos-membros/membro-30" })], TRAVA_OK, [{ id: 81 }], [{ n: 1 }], [{ n: 2 }]]);
     const r = await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", ip: IP, hoje: HOJE });
+    // Trava 7-C: tudo na MESMA transação — a trava da saúde, a linha de revogação, o apagar da saúde e o das cópias — e só então o commit
+    const passos = mockTx.map((x) => (/sp_getapplock/.test(x) ? "TRAVA" : /INSERT INTO MinisterioMenoresConsentimentos/.test(x) ? "REVOGA" : /DELETE FROM CheckinInfantilSaude/.test(x) ? "APAGA" : /UPDATE CheckinInfantilRegistros SET SaudeTexto = NULL/.test(x) ? "COPIAS" : x));
+    expect(passos).toEqual(["BEGIN", "TRAVA", "REVOGA", "APAGA", "COPIAS", "COMMIT"]);
+    expect(mockTx.find((x) => /sp_getapplock/.test(x))).toBeTruthy();
+    expect(chamadas.find((c) => /sp_getapplock/.test(c.sql)).inputs.recurso).toBe("checkin-saude:30");
     expect(r).toMatchObject({ sucesso: true, fotoApagada: false });
     expect(r.mensagem).toMatch(/informação de saúde de Caio Souza deixa de ser usada no crachá e foi apagada/);
     expect(chamadas.some((c) => /UPDATE MembroReferencia/.test(c.sql))).toBe(false);
@@ -234,7 +255,7 @@ describe("revogar", () => {
     expect(insercao(chamadas)).toBeUndefined();
     expect(storage.excluirFoto).toHaveBeenCalledWith(30);
     storage.excluirFoto.mockClear();
-    ({ pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", Concedido: 0 })], [ativoBD(40)], [pessoa(30)], [{ n: 1 }], [{ n: 0 }]]));
+    ({ pool, chamadas } = criarPoolFalso([[linhaBD({ Finalidade: "SAUDE_CRACHA", Concedido: 0 })], [ativoBD(40)], [pessoa(30)], TRAVA_OK, [{ n: 1 }], [{ n: 0 }]]));
     r = await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", hoje: HOJE });
     expect(r).toMatchObject({ sucesso: true, jaRevogada: true, fotoApagada: false });
     expect(insercao(chamadas)).toBeUndefined();
@@ -515,7 +536,7 @@ describe("alinhamento com o esquema da migração 143 (o código e o banco não 
   test("CHECKs da migração: clique exige IP e ninguém que registre; ficha exige referência e quem registra ≠ responsável — o código grava exatamente assim", async () => {
     expect(sqlMigracao).toMatch(/Forma <> 'CLICK_RESP' OR \(EnderecoIp IS NOT NULL AND RegistradoPorMembroId IS NULL\)/);
     expect(sqlMigracao).toMatch(/Forma <> 'FICHA_FISICA' OR \(Referencia IS NOT NULL AND RegistradoPorMembroId IS NOT NULL AND RegistradoPorMembroId <> ResponsavelMembroId\)/);
-    let { pool, chamadas } = criarPoolFalso([[], [ativoBD(40)], [pessoa(30)], [{ id: 1 }], [{ n: 0 }], [{ n: 0 }]]);
+    let { pool, chamadas } = criarPoolFalso([[], [ativoBD(40)], [pessoa(30)], TRAVA_OK, [{ id: 1 }], [{ n: 0 }], [{ n: 0 }]]);
     await db.revogar(pool, { menorId: 30, responsavelId: 40, finalidade: "SAUDE_CRACHA", ip: null, hoje: HOJE });
     expect(insercao(chamadas).inputs).toMatchObject({ forma: "CLICK_RESP", por: null });
     expect(insercao(chamadas).inputs.ip).toBeTruthy();                        // revogar sem IP usa o marcador: o CHECK do clique exige valor

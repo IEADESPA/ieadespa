@@ -23,6 +23,13 @@
 //  GET  auto-denuncias?abertas=1                        -> { autoDenuncias[{autoDenunciaId,nome,tipo,situacao:AGUARDANDO_DECISAO|MANTIDO|AFASTADO|LIBERADO,...}] }
 //  POST auto-denuncia-decidir  body:{autoDenunciaId, decisao:MANTIDO|AFASTADO_PREVENTIVAMENTE, observacao}   pede a confirmação reforçada (428)
 //  POST auto-denuncia-liberar  body:{autoDenunciaId, observacao}                                            levanta o afastamento preventivo; pede a confirmação reforçada (428)
+// ---- Funções com menores fora das escalas (Trava 7-C, decisão de 23/10/2026: departamentos e liderança; eventos ficaram fora) -----------------------------
+//  GET  funcoes   -> { departamentos[{departamentoId,sigla,nome,ativo,contatoComMenores,pareceInfantil}], papeis[{papelId,nome,nivel,contatoComMenores,pareceInfantil}],
+//                      inaptos[{membroId,nome,congregacaoNome,funcoes[{tipo,id,nome,rotulo}],bloqueios[{codigo,rotulo}]}] | null, resumo{ocupantes,inaptos} | null }
+//                    a lista das marcas: quem pode marcar ou ver; os INAPTOS: só a Diretoria (vistoria_antecedentes, lê o motivo) e a Proteção de crianças
+//                    (protecao_menores) do nível geral — esta vê a pendência reservada como "pendência com a Diretoria". Ninguém sai do cargo sozinho.
+//  POST funcao-marca body:{tipo:DEPARTAMENTO|PAPEL, id, contatoComMenores:true|false}   departamento: nível geral com `pessoas`; cargo: nível geral com `permissoes`
+//                    (as mesmas portas do catálogo); pede a confirmação reforçada (428) para ligar e para desligar.
 //
 // Respostas: { sucesso:true, ... } (200; 201 quando cria) · recusa de regra: 422 { sucesso:false, mensagem } · 400 dado ruim · 403 sem permissão · 404 não achou.
 // Quem não tem a permissão recebe 403 ANTES de qualquer busca; pessoa inexistente e pessoa fora do escopo recebem o mesmo 404.
@@ -33,6 +40,8 @@ const vol = require("../shared/voluntariado");
 const mm = require("../shared/ministerioMenores");
 const db = require("../shared/ministerioMenoresDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const fm = require("../shared/funcoesMenores");
+const fmDb = require("../shared/funcoesMenoresDb");
 
 const SEM_PERMISSAO = "Você não tem permissão para isso. Fale com quem administra as Permissões.";
 const idDe = vol.inteiroPositivo;        // estrito: "0x10", "1e1", true e [5] não são identificadores
@@ -53,6 +62,14 @@ module.exports = async function (context, req) {
   const gestao = !!visaoHab && auth.temPermissao(visaoHab, "habilitacao_voluntarios");
   const geral = !!visaoHab && esc.ehGeral(visaoHab);
   const diretoria = !!visaoDiretoria && esc.ehGeral(visaoDiretoria);
+  // Trava 7-C: as funções com menores fora das escalas. Ver quem não está apto: a Diretoria e a Proteção de crianças do nível geral. Marcar: o nível geral com a permissão do
+  // catálogo de cada um (departamentos: `pessoas`; cargos: `permissoes`).
+  const geralCom = (permissao) => { const v = lideranca ? auth.visaoDaPermissao(sessao, permissao) : null; return !!v && esc.ehGeral(v); };
+  const protecaoGeral = geralCom("protecao_menores");
+  const marcarDepartamento = geralCom("pessoas");
+  const marcarPapel = geralCom("permissoes");
+  const verInaptos = diretoria || protecaoGeral;
+  const funcoes = verInaptos || marcarDepartamento || marcarPapel;
 
   const pool = await getPool();
   const acao = context.bindingData.acao;
@@ -74,6 +91,7 @@ module.exports = async function (context, req) {
   try {
     if (EXIGE_GESTAO.includes(acao) && !gestao) return erro(context, 403, SEM_PERMISSAO);
     if (EXIGE_DIRETORIA.includes(acao) && !diretoria) return erro(context, 403, SEM_PERMISSAO);
+    if ((acao === "funcoes" || acao === "funcao-marca") && !funcoes) return erro(context, 403, SEM_PERMISSAO);
 
     // =============================== Leitura ===============================
     if (metodo === "GET") {
@@ -85,7 +103,7 @@ module.exports = async function (context, req) {
             faixas: Object.entries(mm.FAIXAS).map(([codigo, f]) => ({ codigo, rotulo: f.rotulo, criancasPorAdultoPadrao: f.padrao })),
             rotulosBloqueio: mm.ROTULO_BLOQUEIO, alertasDias: mm.ALERTAS_DIAS,
             tiposAutoDenuncia: lista(mm.TIPOS_AUTODENUNCIA), decisoesAutoDenuncia: lista(mm.DECISOES_AUTODENUNCIA),
-            papeis: { gestao, geral, diretoria }
+            papeis: { gestao, geral, diretoria, funcoes, verInaptos, marcarDepartamento, marcarPapel }
           }
         };
         return;
@@ -111,6 +129,11 @@ module.exports = async function (context, req) {
       if (acao === "painel-geral") {
         if (!geral) return erro(context, 403, esc.MSG_GERAL || SEM_PERMISSAO);
         context.res = { status: 200, body: { sucesso: true, ...(await db.painel(pool, { congregacaoIds: null, reservado: diretoria, hoje, verMembroId: sessao.membroId })) } };
+        return;
+      }
+      if (acao === "funcoes") {
+        const p = await fmDb.painel(pool, { verInaptos, reservado: diretoria, verMembroId: sessao.membroId, hoje });
+        context.res = { status: 200, body: { sucesso: true, ...p, podeMarcarDepartamento: marcarDepartamento, podeMarcarPapel: marcarPapel } };
         return;
       }
       if (acao === "auto-denuncias") {
@@ -154,6 +177,20 @@ module.exports = async function (context, req) {
       if (!alvo) return erro(context, 404, "Pessoa não encontrada.");
       if (acao === "registrar-politica") resposta(context, await db.registrarPoliticaManual(pool, { membroId, referencia: corpo.referencia, por: sessao.membroId }), 201);
       else resposta(context, await db.confirmarFicha(pool, { membroId, por: sessao.membroId, confirmo: corpo.confirmo }));
+      return;
+    }
+
+    // =============================== Funções com menores (Trava 7-C) ===============================
+    if (acao === "funcao-marca") {
+      const v = fm.validarMarca(corpo);
+      if (v.erro) return erro(context, 400, v.erro);
+      // a porta de cada catálogo: departamento é de quem cuida das pessoas no nível geral; cargo, de quem cuida das permissões
+      if (v.tipo === "DEPARTAMENTO" ? !marcarDepartamento : !marcarPapel) return erro(context, 403, esc.MSG_GERAL || SEM_PERMISSAO);
+      // ligar ou desligar a marca muda quem é conferido: a confirmação reforçada da vD.4
+      if (!auth.exigirFatorRecente(req, context)) return;
+      const r = await fmDb.marcar(pool, { tipo: v.tipo, id: v.id, contatoComMenores: v.contatoComMenores, por: sessao.membroId });
+      if (r.naoEncontrado) return erro(context, 404, r.mensagem);
+      resposta(context, r);
       return;
     }
 

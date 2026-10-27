@@ -149,6 +149,8 @@ async function rodar({ mutar = {}, so = null } = {}) {
     const env = novo(srv);
     await abrirAba(env, "geral");
     confere(visivel(env, "crsSecaoCrise") && botao(env, "Abrir o regime"), "sem crise: o formulário de abertura");
+    confere(texto(env, "crsCriseConteudo").includes("para avisar os membros, use a aba Comunicados") && texto(env, "crsCriseConteudo").includes("antes deste registro"),
+      "Trava 7-C: a abertura lembra que o aviso vai só à liderança (membros: Comunicados) e que a proibição vale antes do registro");
     await clicar(env, botao(env, "Abrir o regime"));
     confere(texto(env, "crsCriseMsg").includes("motivo") && chamadas(env, "POST crise/abrir").length === 0, "sem motivo: a tela avisa e não manda");
     digitar(env, "crsMotivo", "Acidente no templo central");
@@ -190,7 +192,7 @@ async function rodar({ mutar = {}, so = null } = {}) {
     srv.novaCrise(); env.ev('crsMostrarSecaoAcao("crise")'); await env.ocioso();
     await clicar(env, botao(env, "Continuar o aviso"));
     confere(chamadas(env, "POST crise/continuar-aviso").length === 1, "continuar o aviso agora");
-    confere(texto(env, "crsCriseConteudo").includes("100 por hora") && texto(env, "crsCriseConteudo").includes("Li o aviso"), "o painel explica o e-mail aos poucos e mostra a ciência");
+    confere(texto(env, "crsCriseConteudo").includes("até 30 por hora para o aviso de crise") && texto(env, "crsCriseConteudo").includes("Li o aviso"), "o painel explica o e-mail aos poucos e mostra a ciência");
     limpo(env, "continuar");
   });
 

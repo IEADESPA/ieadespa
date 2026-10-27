@@ -2,20 +2,24 @@
 // POST /api/comunicacao-fila-interna   cabeçalhos: x-cron-secret; x-somente-se-pendente (pergunta antes à marca no Storage e não abre o banco se a fila está vazia)
 //
 // O serviço de e-mail do Azure aceita 30 por minuto e 100 por hora no domínio da Igreja: cada rodada manda até COMUNICACAO_EMAILS_POR_RODADA e nunca passa de
-// COMUNICACAO_EMAILS_POR_HORA na última hora (Catálogos → Prazos). A rodada diária das 7h (NotificacoesAgendador) também roda uma.
+// COMUNICACAO_EMAILS_POR_HORA na última hora (Catálogos → Prazos). A rodada diária das 7h (NotificacoesAgendador) NÃO manda a fila: só aplica a retenção e regrava a marca.
 const { getPool } = require("../shared/db");
 const { exigirSegredoRotina } = require("../shared/cronAuth");
 const marca = require("../shared/comunicacaoFilaMarca");
 const db = require("../shared/comunicacaoDb");
 
+// Trava 7-C: a rotina passa 24 horas por dia. Das 23h às 6h ela chama com `x-somente-sistema`: só o aviso do sistema (a crise do Regimento Art. 161-B, que não espera a
+// manhã) sai, e o banco só é aberto se a marca disser que há aviso do sistema na fila (ou se a marca não souber dizer). O comunicado comum continua esperando as 6h.
 module.exports = async function (context, req) {
   if (!exigirSegredoRotina(req, context)) return;
-  if (req.headers && req.headers["x-somente-se-pendente"]) {
+  const somenteSistema = !!(req.headers && req.headers["x-somente-sistema"]);
+  if ((req.headers && req.headers["x-somente-se-pendente"]) || somenteSistema) {
     const g = await marca.lerGuardada();
-    if (g && g.pendentes === 0) { context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, ocioso: true } }; return; }
+    const ocioso = g && (g.pendentes === 0 || (somenteSistema && g.sistema === 0));
+    if (ocioso) { context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, ocioso: true } }; return; }
   }
   try {
-    const r = await db.processarFila(await getPool());
+    const r = await db.processarFila(await getPool(), { somenteSistema });
     context.log(`[COMUNICACAO] rodada: celular ${r.push.aceitos}, e-mail ${r.email.aceitos} (cota ${r.email.cota}, adiados ${r.email.adiados}), na fila ${r.pendentes}.`);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, ...r } };
   } catch (e) {

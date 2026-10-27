@@ -1018,7 +1018,21 @@ async function detectarParaHomologar(pool) {
   }));
 }
 
+// Trava 7-C — retenção (LGPD art. 16): a justificativa de ausência do dirigente na Santa Ceia Geral pode citar saúde. 2 anos depois da Ceia (política "Calendário —
+// justificativa de ausência na Santa Ceia", ajustável) a rotina diária apaga o texto; fica só que a ausência foi justificada.
+const POLITICA_JUSTIFICATIVA_CEIA = { categoria: "Calendário — justificativa de ausência na Santa Ceia", padrao: 730 };
+async function aplicarRetencao(pool, { hoje = hojeBrasilia() } = {}) {
+  const dias = await require("./politicasRetencao").diasDaPolitica(pool, POLITICA_JUSTIFICATIVA_CEIA.categoria, POLITICA_JUSTIFICATIVA_CEIA.padrao);
+  const r = await pool.request().input("d", sql.Int, dias).input("hoje", sql.Date, hoje).query(`
+    UPDATE p SET Justificativa = NULL, JustificativaApagadaEm = SYSUTCDATETIME()
+    FROM CalendarioPresencasDirigente p JOIN CalendarioEventos e ON e.EventoId = p.EventoId
+    WHERE p.Justificativa IS NOT NULL AND e.DataFim < DATEADD(DAY, -@d, @hoje);
+    SELECT @@ROWCOUNT AS n`);
+  return { justificativasApagadas: Number((r.recordset[0] || {}).n) || 0, retencaoDias: dias };
+}
+
 module.exports = {
+  POLITICA_JUSTIFICATIVA_CEIA, aplicarRetencao,
   LIMITE_LISTA, removerPrefixoNumerico,
   listarTipos, buscarTipo, buscarTipoPorCodigo, criarTipo, atualizarTipo, carregarContextoTerritorial,
   carregarEventos, buscarEvento, carregarPautaAtiva, mapearEvento,

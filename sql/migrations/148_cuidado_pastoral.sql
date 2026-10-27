@@ -411,14 +411,14 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Cuidado p
 GO
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Fila de acompanhamento (Regimento Art. 128 §5º; LGPD arts. 7º, IX e 11): o item encerrado guarda-se 5 anos como registro do cuidado e depois perde o nome, o contato, o motivo e as observações; a contagem fica.'
-WHERE Categoria = N'Cuidado pastoral — acompanhamentos';
+WHERE Categoria = N'Cuidado pastoral — acompanhamentos' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Pedido de oração (LGPD art. 11, dado sensível de convicção religiosa e saúde): o texto sai em 1 ano; o assunto e as datas ficam para a contagem. O boletim nunca leva o texto.'
-WHERE Categoria = N'Cuidado pastoral — pedidos de oração';
+WHERE Categoria = N'Cuidado pastoral — pedidos de oração' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Pedido de oração que teve sinal de risco (autolesão ou violência; LGPD art. 11, II, e — proteção da vida): o texto fica 5 anos como prova de que a Igreja agiu, depois sai.'
-WHERE Categoria = N'Cuidado pastoral — pedidos de oração com sinal de risco';
+WHERE Categoria = N'Cuidado pastoral — pedidos de oração com sinal de risco' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Regimento Art. 132 §2º, II (as anotações pastorais são eliminadas na saída do membro, regra dos 30 dias) e LGPD art. 16: a rotina diária apaga as notas de quem saiu há mais de 30 dias; a exclusão LGPD apaga na hora.'
-WHERE Categoria = N'Cuidado pastoral — notas pastorais após a saída';
+WHERE Categoria = N'Cuidado pastoral — notas pastorais após a saída' AND BaseLegal = N'x';
 GO

@@ -461,11 +461,11 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Termo de 
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
     VALUES (N'Termo de Vistoria de antecedentes', N'x', 1825);
 GO
--- (O texto é reaplicado a cada deploy: assim a redação corrigida chega a quem já tinha a linha.)
+-- (Trava 7-C: o texto só entra na linha recém-criada, com N'x'. Antes era reaplicado a cada deploy e desfazia o que o Encarregado editasse na tela.)
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Vínculo, Termo de Adesão (Lei 9.608/98 art. 2º; Reg. Art. 49 §2º) e atos cautelares (Art. 50): prova guardada sem prazo final. IP e cabeçalhos do aceite digital: anonimizados 5 anos após o fim do vínculo (CF art. 7º XXIX; LGPD art. 16).'
-WHERE Categoria = N'Setores Técnicos: vínculo, Termo de Adesão e atos cautelares';
+WHERE Categoria = N'Setores Técnicos: vínculo, Termo de Adesão e atos cautelares' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Termo de Vistoria: arquivo interno obrigatório da Igreja (Reg. Art. 133 §5º, IV, "c"; Lei 14.811/2024). Só o hash da certidão é guardado, nunca o documento; acesso restrito à Diretoria Executiva e ao Conselho de Ética.'
-WHERE Categoria = N'Termo de Vistoria de antecedentes';
+WHERE Categoria = N'Termo de Vistoria de antecedentes' AND BaseLegal = N'x';
 GO

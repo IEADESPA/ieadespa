@@ -228,7 +228,7 @@ const MUTACOES = [
   ["navegação: a sub-aba sem título (âncora 7B)", S, "protecao: \"Proteção de crianças\", checkininfantil:", "checkininfantil:"],
   ["navegação: a aba não carrega a tela", D, "  if (aba === \"protecao\" && typeof carregarOpcoesProtecaoAcao === \"function\") carregarOpcoesProtecaoAcao();\n", ""],
   ["navegação: a aba sem título", D, "menores: \"Ministério com Menores\", protecao: \"Proteção de Crianças\",", "menores: \"Ministério com Menores\","],
-  ["navegação: sem ajuda contextual da aba", S, "  protecao: \"Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes", "  protecaoX: \"Proteção de Crianças (ECA arts. 13 e 245; Lei 13.431/2017): a fila de incidentes"],
+  ["navegação: sem ajuda contextual da aba", S, "  protecao: \"Proteção de Crianças (ECA arts. 13 e 70-B; Lei 13.431/2017): a fila de incidentes", "  protecaoX: \"Proteção de Crianças (ECA arts. 13 e 70-B; Lei 13.431/2017): a fila de incidentes"],
   ["navegação: sem ajuda contextual da sub-aba", S, "  \"meupainel:protecao\": \"Proteção de crianças e adolescentes:", "  \"meupainel:protecaoX\": \"Proteção de crianças e adolescentes:"],
   ["navegação: o botão da aba sai do módulo de Habilitação", H, "<button class=\"btn-aba\" id=\"btnAbaProtecao\" data-on-click=\"mostrarAbaSecretaria\" data-args-click='[\"protecao\"]'><span class=\"icone\">🛡️</span><span class=\"rotulo\">Proteção de Crianças</span></button>", ""],
 
@@ -402,7 +402,7 @@ const MUTACOES = [
   ["7B: a resposta do registro mantém o ✅ com o alerta", P, "  const alerta = prtTemAlerta(data);\n  cx.innerHTML", "  const alerta = false;\n  cx.innerHTML"],
   ["7B: a resposta da suspeita volta a dizer 'em até 24 horas'", P, "<p><strong>A lei manda comunicar ao Conselho Tutelar imediatamente.</strong> Prazo máximo da Igreja: ${data.prazoEm ? prtDataHora(data.prazoEm) : \"24 horas depois de a Igreja ficar sabendo\"}.</p>", "<p><strong>Prazo para comunicar o Conselho Tutelar:</strong> ${data.prazoEm ? prtDataHora(data.prazoEm) : \"em até 24 horas depois de a Igreja ficar sabendo\"}</p>"],
   ["7B: o aviso da suspeita (index.html) volta a dizer 'em até 24 horas'", H, "A lei manda comunicar ao Conselho Tutelar imediatamente; o prazo máximo da Igreja é de 24 horas. Ao enviar, esse prazo", "A lei manda comunicar ao Conselho Tutelar em até 24 horas. Ao enviar, o prazo"],
-  ["7B: o topo da aba (index.html) volta a dizer 'em até 24 horas'", H, "<strong>comunicada ao Conselho Tutelar imediatamente</strong> (ECA, art. 13; a omissão tem multa, art. 245); o prazo máximo da Igreja é de 24 horas.", "<strong>comunicada ao Conselho Tutelar em até 24 horas</strong> (ECA, art. 13; a omissão tem multa, art. 245)."],
+  ["7B: o topo da aba (index.html) volta a dizer 'em até 24 horas'", H, "<strong>comunicada ao Conselho Tutelar imediatamente</strong> (ECA, arts. 13 e 70-B: quem cuida de criança por ministério responde pela omissão); o prazo máximo da Igreja é de 24 horas.", "<strong>comunicada ao Conselho Tutelar em até 24 horas</strong> (ECA, arts. 13 e 70-B: quem cuida de criança por ministério responde pela omissão)."],
 
   // extras: (d) a data volta para hoje depois de registrar
   ["registro: a data do fato anterior fica para o próximo registro", P, "  if (dia) dia.value = calHojeBrasilia();   // o próximo registro começa em hoje (a data do fato anterior não fica)\n", ""],

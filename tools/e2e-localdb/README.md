@@ -67,6 +67,26 @@ Cada versão parte da base da anterior (`BASE=...`):
   manifestações, quatro correções da mesma, quatro primeiras respostas ao mesmo pedido, dois planos na mesma versão, a mesma pessoa na equipe por quatro, troca de porta-voz × fim
   e quatro encerramentos). Os roteiros `e2e-29` e `e2e-30` (v7.12) também passam sobre a `cenario-crise`.
 
+- **Trava 7-C** (migração 153): `e2e-35` sobre a `cenario-crise` (as migrações rodando de novo não desfazem a base legal editada na tela; a 153, duas
+  vezes, troca só o texto original; o esquema novo) e, sobre a `cenario-trava7c` (`bash rodar.sh preparar-trava7c`: a 153 duas vezes sobre a
+  `cenario-crise`), `e2e-36` (as retenções da v7.2 a v7.4: justificativa da Ceia, ocorrência e administrador de canal, contato do convidado, com o
+  gatilho do relógio e a rotina diária de verdade) e `e2e-37` (a rodada da madrugada só com o aviso de crise; a região sem Superintendente; o teto de
+  e-mails da crise lido da configuração). Os roteiros da v7.11 a v7.15 (`e2e-24` a `e2e-30`, `e2e-33`, `e2e-34`) passam sobre a `cenario-crise`.
+- **Trava 7-C** (costuras entre a proteção, o cuidado pastoral, a comunicação e a crise), sobre a `cenario-trava7c` (a mesma do
+  `preparar-trava7c`, que aplica a 153 e a 154 duas vezes): `e2e-40` (o cuidado pastoral × a proteção de crianças: a liderança com pendência reservada fora do item, da nota, do pedido e da busca do menor, o item que sai
+  dela e sobe ao degrau de cima; o sinal de risco sobre criança só com o nível geral e o aviso à Proteção; o reenvio do mesmo item do site; a concessão de departamento; a exclusão
+  LGPD de quem era o responsável), `e2e-41` (a crise e a comunicação: o menor fora do aviso, o suspenso fora da fila e do fim, a delegação que avisa, a equipe de segurança, a
+  leitura que vira prova na exclusão LGPD, os contatos das versões antigas do plano, Meus Dados sem corte, o IP do consentimento) e `e2e-42` (corridas: os tetos do dia do
+  pedido de visita e do pedido da imprensa contados dentro da trava).
+- **Trava 7-C** (a saúde do check-in, item I1), sobre a `cenario-checkin` (`bash rodar.sh preparar-checkin`): `e2e-38` (revogar o consentimento de saúde e
+  apagar a saúde e as cópias na MESMA transação, pelo responsável e pela ficha; o apagar que falha no meio — um gatilho de teste — não deixa a revogação pela metade;
+  corridas de revogar × gravar a saúde × check-in em vários processos, sem 500, sem deadlock e sem saúde órfã; e, com READ_COMMITTED_SNAPSHOT ligado como no Azure, a revogação
+  a meio caminho segurando a trava enquanto outro processo grava a saúde e faz o check-in — prova determinística da trava). `E2E38_RODADAS` muda o número de rodadas (padrão 6).
+- **Trava 7-C, as decisões de 23/10/2026** (migração 155, aplicada duas vezes no `preparar-trava7c`), sobre a `cenario-trava7c`: `e2e-43` (o dinheiro do voluntário só avisa:
+  o fornecedor pessoa física ligado à matrícula no território, os avisos de voluntário ativo, pagamento habitual e cachê/comissão que só gravam depois da confirmação, a saída e
+  os avisos numa transação, o resumo do mês, Meus Dados), `e2e-44` (funções com menores: as marcas de departamento e cargo, a nomeação que avisa sem o motivo, o painel da
+  Diretoria × da Proteção, o aviso pelo motor que nunca vai à própria pessoa e se repete no mês seguinte), `e2e-45` (atores, território, sondas e lixo) e `e2e-46` (corridas).
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

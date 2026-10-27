@@ -235,7 +235,12 @@ const DETECTORES = {
   SEGURANCA_PLANO_REVISAO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_PLANO_REVISAO") },
   SEGURANCA_SEM_SIMULADO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_SIMULADO") },
   SEGURANCA_SEM_VISTORIA: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_SEM_VISTORIA") },
-  SEGURANCA_AVCB_SEGURO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_AVCB_SEGURO") }
+  SEGURANCA_AVCB_SEGURO: { tabela: "Congregacoes", detectar: (pool) => criseDb.detectar(pool, "SEGURANCA_AVCB_SEGURO") },
+  // Trava 7-C (decisões de 23/10/2026). Regras de dinheiro do voluntário (só avisar): o aviso ao tesoureiro sai NA HORA, ao lançar a saída; aqui fica o resumo do mês para a
+  // Tesouraria geral (quem recebeu pagamento com aviso confirmado), uma vez por mês e só se houver caso. Aptidão em departamentos e cargos com crianças: quem ocupa e não está
+  // apto, um aviso por pessoa e função a cada mês, à Diretoria e à Proteção de crianças do nível geral (nunca à própria pessoa; sem o motivo).
+  TESOURARIA_VOLUNTARIO_PAGO: { tabela: "SaidaAvisosVoluntario", detectar: (pool) => require("./voluntarioPagamentoDb").detectarMensal(pool) },
+  MENORES_FUNCAO_SEM_APTIDAO: { tabela: "Lideranca", detectar: (pool) => require("./funcoesMenoresDb").detectar(pool) }
 };
 
 module.exports = { DETECTORES };

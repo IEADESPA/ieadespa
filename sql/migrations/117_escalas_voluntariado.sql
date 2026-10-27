@@ -263,8 +263,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Voluntari
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
     VALUES (N'Voluntariado: adesão, rodízios e remoção da escala', N'x', 1825);
 GO
--- (O texto abaixo é reaplicado a cada deploy: na primeira vez que a migração rodou, a rotina de anonimização ainda não existia.)
+-- (Trava 7-C: o texto só entra na linha recém-criada, com N'x'. Antes era reaplicado a cada deploy e desfazia o que o Encarregado editasse na tela.)
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Adesão ao Termo (Lei 9.608/98 art. 2º; Reg. Art. 133 §8º): prova guardada sem prazo final. IP e cabeçalhos do aceite digital: anonimizados 5 anos após o último serviço (CF art. 7º XXIX; LGPD art. 16). Escalas e rodízios: prova do revezamento. Remoção: registro de RH.'
-WHERE Categoria = N'Voluntariado: adesão, rodízios e remoção da escala';
+WHERE Categoria = N'Voluntariado: adesão, rodízios e remoção da escala' AND BaseLegal = N'x';
 GO

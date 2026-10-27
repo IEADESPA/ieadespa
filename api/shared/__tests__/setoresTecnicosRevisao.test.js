@@ -279,7 +279,7 @@ describe("a emissão de atos: avisos honestos e em lotes", () => {
     const motor = fs.readFileSync(path.join(__dirname, "..", "notificacaoMotor.js"), "utf8");
     const canais = fs.readFileSync(path.join(__dirname, "..", "canaisDb.js"), "utf8");
     expect(motor).toMatch(/enviarEmailNotificacao\(\{ email, titulo, mensagem, aguardarEntrega \}\)/);
-    expect(canais).toMatch(/aguardarEntrega = true, deps = \{\}/);
+    expect(canais).toMatch(/aguardarEntrega = true, prazoMs = null, deps = \{\}/);           // Trava 7-C: e o prazo opcional do aviso que não segura a resposta
     expect(canais).toMatch(/aguardarEntrega === false \? \{ aguardarEntrega: false \} : \{\}/);
   });
 });

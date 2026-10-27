@@ -1,5 +1,5 @@
 // GestaoProtecaoMenores (v7.8 — Incidentes, notificação obrigatória e escuta protegida)
-// ECA Arts. 13, 70-B e 245 (comunicar a suspeita ao Conselho Tutelar imediatamente; multa pela omissão); Lei 14.344/2022, arts. 23 e 26; Lei 13.431/2017 (escuta protegida: a Igreja acolhe e encaminha, não inquire);
+// ECA Arts. 13 e 70-B, parágrafo único (comunicar a suspeita ao Conselho Tutelar imediatamente; quem cuida de criança por ministério responde pela omissão); Lei 14.344/2022, arts. 23 e 26; Lei 13.431/2017 (escuta protegida: a Igreja acolhe e encaminha, não inquire);
 // Regimento Art. 133 §5º; LGPD arts. 11 e 14.
 //
 // Toda a regra está em shared/protecaoMenores.js (pura, testada); o banco, em shared/protecaoDb.js. O afastamento cautelar do envolvido vale em todas as escalas, convites,

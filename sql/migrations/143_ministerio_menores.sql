@@ -347,8 +347,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Auto-den�
 GO
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Aceite da política com menores, consentimento do responsável (LGPD art. 14 §1º), retiradas da escala e ficha (ECA art. 59-A; Lei 14.811/2024): prova guardada enquanto a pessoa servir. IP e cabeçalhos do aceite são anonimizados 5 anos depois (LGPD art. 16).'
-WHERE Categoria = N'Ministério com menores: aceites, consentimentos, retiradas';
+WHERE Categoria = N'Ministério com menores: aceites, consentimentos, retiradas' AND BaseLegal = N'x';
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Comunicação de inquérito ou processo criminal (Reg. Art. 133 §5º, V): só o tipo, a data da ciência e a decisão da Diretoria, sem texto livre. Guardada enquanto a pessoa servir e 5 anos depois; acesso restrito à Diretoria Executiva e ao Conselho de Ética.'
-WHERE Categoria = N'Auto-denúncia de inquérito ou processo (Art. 133 §5º, V)';
+WHERE Categoria = N'Auto-denúncia de inquérito ou processo (Art. 133 §5º, V)' AND BaseLegal = N'x';
 GO

@@ -1,6 +1,6 @@
 -- ============================================================
 -- Migração 146 — Trava 7-B (20/10/2026): proteção de crianças, achados da revisão
--- (ECA Arts. 13, 70-B parágrafo único e 245; Lei 14.344/2022, arts. 23 e 26)
+-- (ECA Arts. 13 e 70-B parágrafo único; Lei 14.344/2022, arts. 23 e 26)
 --
 --   1) "A pessoa envolvida é da liderança desta congregação": a marca que quem registra o incidente pode dar. Marcada — ou com o envolvido registrado sem matrícula
 --      válida (só o nome, ou uma matrícula que não existe), o que o sistema calcula das linhas de IncidenteEnvolvidos — o caso fica SÓ com o nível geral (Diretoria e

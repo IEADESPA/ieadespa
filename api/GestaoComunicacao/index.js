@@ -54,7 +54,8 @@ async function principal(context, req) {
   const lideranca = auth.ehSessaoDeLideranca(sessao);
   // Território: a concessão de uma Extensão e a de Departamento (que alcançariam a congregação-mãe inteira ou todas) não montam grupo.
   const visaoBruta = lideranca ? auth.visaoDaPermissao(sessao, db.PERMISSAO) : null;
-  const visao = visaoBruta ? auth.restringirVisao(visaoBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO") : null;
+  // (Trava 7-C) nem a concessão restrita a um departamento: o mesmo critério da crise e dos Setores Técnicos
+  const visao = visaoBruta ? auth.restringirVisao(visaoBruta, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO" && !c.departamentoId) : null;
   const gestao = !!visao && auth.temPermissao(visao, db.PERMISSAO);
   const geral = gestao && esc.ehGeral(visao);
   const ver = { membroId: sessao.membroId, gestao, geral, podeVerCongregacao: (nome) => !!visao && auth.estaNoEscopo(visao, nome) };

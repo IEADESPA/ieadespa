@@ -322,7 +322,7 @@ describe("ROPA e RIPD", () => {
     expect(saude.riscoIdentificado).toBeTruthy();
     const medidas = saude.medidasMitigacao.join(" ");
     expect(medidas).toMatch(/consentimento específico e em destaque do responsável/);
-    expect(medidas).toMatch(/Revogar o consentimento apaga o dado/);
+    expect(medidas).toMatch(/Revogar o consentimento grava a revogação E apaga o dado e as cópias nos registros de check-in na MESMA transação/);   // Trava 7-C
     expect(medidas).toMatch(/400 caracteres/);
     expect(medidas).toMatch(/nunca vai para a auditoria/);
     expect(saude.riscoResidual).toMatch(/^Médio/);

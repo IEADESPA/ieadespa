@@ -854,7 +854,7 @@
         <div id="subMeupainelMenores" class="sub-aba-secretaria" style="display:none;">
           <h3>🧒 Ministério com menores</h3>
           <p class="subtitle">Quem serve com crianças e adolescentes (berçário, EBD infantil, juniores, adolescentes...) precisa estar <strong>habilitado</strong>
-            (Lei 14.811/2024). Aqui você vê se está apto, <strong>o que falta</strong> e <strong>até quando</strong> cada documento vale. A lei e o Regimento pedem: certidões de
+            (regra da Igreja pelo Regimento, Art. 133 §5º, que adota por cautela o que a Lei 14.811/2024 exige das escolas e instituições parecidas). Aqui você vê se está apto, <strong>o que falta</strong> e <strong>até quando</strong> cada documento vale. A Igreja pede: certidões de
             antecedentes criminais (federal e estadual) com cerca de 6 meses de validade, treinamento de proteção, ficha cadastral confirmada a cada 6 meses, o aceite
             da política de comunicação e 6 meses de comunhão. <em>Exemplo: a irmã Ana serve no Maternal e a certidão dela vence em 40 dias. O painel mostra o prazo em
             amarelo; ela pede a certidão nova com tempo e continua servindo. Se deixar vencer, o sistema a tira das escalas com crianças até regularizar. Não é punição.</em></p>
@@ -3432,7 +3432,7 @@
            para quem só tem "vistoria_antecedentes" (Conselho de Ética): a tela mostra só as seções que o servidor libera para a sessão. -->
       <div id="abaMenores" class="aba-secretaria" style="display:none;">
         <h3>🧒 Ministério com Menores</h3>
-        <p class="subtitle">Quem serve com crianças e adolescentes precisa estar habilitado hoje (Lei 14.811/2024 e Regimento): certidões de antecedentes em dia, treinamento, ficha
+        <p class="subtitle">Quem serve com crianças e adolescentes precisa estar habilitado hoje (Regimento Art. 133 §5º, que adota por cautela a exigência da Lei 14.811/2024): certidões de antecedentes em dia, treinamento, ficha
           confirmada, política aceita e 6 meses de comunhão. A situação é <strong>calculada na hora</strong>, nunca digitada. Quem deixa de estar apto <strong>sai sozinho das
           escalas futuras</strong> das equipes marcadas com "contato com menores" (sem punição), e o painel abaixo mostra o que falta para ajudá-lo a se regularizar.
           <em>Exemplo: o irmão Davi tem a certidão vencendo em 30 dias. Ele aparece em amarelo e a Secretaria o lembra de pedir a nova com a Diretoria antes do dia do vencimento.</em></p>
@@ -3441,6 +3441,7 @@
           <button type="button" class="cal-pilula ativo" id="btnMnrSecaoPainel" data-on-click="mnrMostrarSecaoAcao" data-args-click='["painel"]'>📊 Painel de conformidade</button>
           <button type="button" class="cal-pilula" id="btnMnrSecaoFerramentas" data-on-click="mnrMostrarSecaoAcao" data-args-click='["ferramentas"]'>🧰 Ferramentas</button>
           <button type="button" class="cal-pilula" id="btnMnrSecaoComunicacoes" data-on-click="mnrMostrarSecaoAcao" data-args-click='["comunicacoes"]' style="display:none;">⚖️ Comunicações dos voluntários</button>
+          <button type="button" class="cal-pilula" id="btnMnrSecaoFuncoes" data-on-click="mnrMostrarSecaoAcao" data-args-click='["funcoes"]' style="display:none;">🏷️ Funções com menores</button>
         </div>
         <p id="mnrSemAcesso" class="subtitle psc-aviso" role="status" style="display:none;">Com o seu login atual você não tem acesso a nenhuma tela desta aba. Entre com a senha de liderança ou fale com quem administra as Permissões.</p>
 
@@ -3587,14 +3588,31 @@
           <p id="mnrComAcaoMsg" class="subtitle" role="status"></p>
           <div id="mnrComLista"></div>
         </div>
+
+        <!-- d) FUNÇÕES COM MENORES FORA DAS ESCALAS (Trava 7-C, decisão de 23/10/2026: departamentos e cargos de liderança). Marcar é do nível geral (departamento: quem cuida
+             das pessoas; cargo: quem cuida das permissões), com a confirmação reforçada; quem não está apto aparece só para a Diretoria e a Proteção de crianças do nível geral. -->
+        <div id="mnrSecaoFuncoes" class="cal-secao" style="display:none;">
+          <h4>🏷️ Funções com menores (departamentos e cargos)</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Quem lidera um departamento de crianças ou ocupa um cargo com crianças precisa estar habilitado, como quem serve nas escalas. Marque aqui os departamentos e
+            os cargos que têm contato com crianças e adolescentes. Quem os ocupa e <strong>não está apto</strong> aparece para a Diretoria e para a Proteção de crianças, que recebem um aviso por mês enquanto
+            durar. <strong>Ninguém sai do cargo sozinho:</strong> a decisão é da Diretoria. <em>Exemplo: a irmã Ana lidera a União de Crianças e o treinamento de proteção dela venceu. Ela aparece na lista
+            abaixo e a Diretoria conversa com ela para renovar.</em></p>
+          <div class="barra-lista">
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mnrCarregarFuncoesAcao">🔄 Atualizar</button>
+          </div>
+          <p id="mnrFunResultado" class="subtitle" role="status"></p>
+          <p id="mnrFunAcaoMsg" class="subtitle" role="status"></p>
+          <div id="mnrFunInaptos"></div>
+          <div id="mnrFunMarcas"></div>
+        </div>
       </div>
 
-      <!-- ABA: PROTEÇÃO DE CRIANÇAS (v7.8 — ECA arts. 13 e 245; Lei 13.431/2017). Permissão "protecao_menores" (o Dirigente vê a sua congregação; a Diretoria e o Comitê veem tudo).
+      <!-- ABA: PROTEÇÃO DE CRIANÇAS (v7.8 — ECA arts. 13 e 70-B; Lei 13.431/2017). Permissão "protecao_menores" (o Dirigente vê a sua congregação; a Diretoria e o Comitê veem tudo).
            Incidentes (fila com o relógio de 24 horas, ficha, relato protegido, comunicação ao órgão, adendo, reclassificação e, no nível geral, afastamento cautelar e
            encerramento) e, só no nível geral, padrões, Comitê e relatório anual. A tela mostra só as seções que o servidor libera para a sessão. -->
       <div id="abaProtecao" class="aba-secretaria" style="display:none;">
         <h3>🛡️ Proteção de Crianças</h3>
-        <p class="subtitle">Toda suspeita ou relato de violência contra criança ou adolescente precisa ser <strong>comunicada ao Conselho Tutelar imediatamente</strong> (ECA, art. 13; a omissão tem multa, art. 245); o prazo máximo da Igreja é de 24 horas.
+        <p class="subtitle">Toda suspeita ou relato de violência contra criança ou adolescente precisa ser <strong>comunicada ao Conselho Tutelar imediatamente</strong> (ECA, arts. 13 e 70-B: quem cuida de criança por ministério responde pela omissão); o prazo máximo da Igreja é de 24 horas.
           A Igreja <strong>acolhe e encaminha</strong>: quem apura são as autoridades. O relógio abaixo mostra quanto tempo falta. <em>Exemplo: um relato chega às 9h de segunda. O Dirigente liga para o Conselho Tutelar às 11h,
           registra aqui a hora, o protocolo e anexa o comprovante: o relógio para e o caso pode ser encerrado depois pela Diretoria.</em></p>
 
@@ -5857,10 +5875,19 @@
             <div class="barra-lista">
               <input type="text" id="fornecedorNome" placeholder="Nome / Razão Social" style="min-width:220px;" />
               <input type="text" id="fornecedorCpfCnpj" placeholder="CPF ou CNPJ" style="max-width:180px;" />
-              <select id="fornecedorTipo">
+              <select id="fornecedorTipo" aria-label="Tipo de fornecedor" data-on-change="alternarMembroFornecedor">
                 <option value="PJ">Pessoa Jurídica</option>
                 <option value="PF">Pessoa Física</option>
               </select>
+            </div>
+            <!-- Trava 7-C: a pessoa física que é membro fica ligada à matrícula — ao lançar uma saída para ela, o sistema avisa as regras de dinheiro do voluntário -->
+            <div id="fornecedorMembroCampos" style="display:none;">
+              <p class="subtitle">Esta pessoa é membro da Igreja? Ligue o cadastro à matrícula dela (opcional): ao lançar um pagamento para um voluntário, o sistema avisa as regras do Regimento (Arts. 133 §4º e 135).</p>
+              <div class="barra-lista">
+                <input type="text" id="fornecedorMembroBusca" aria-label="Nome ou matrícula do membro" placeholder="Nome ou matrícula do membro" />
+                <button type="button" class="btn-link" data-on-click="buscarMembroFornecedorAcao">Buscar membro</button>
+                <select id="fornecedorMembroId" aria-label="Membro ligado ao fornecedor"><option value="">— não é membro —</option></select>
+              </div>
             </div>
             <div class="barra-lista">
               <input type="text" id="fornecedorTelefone" placeholder="Telefone (opcional)" />

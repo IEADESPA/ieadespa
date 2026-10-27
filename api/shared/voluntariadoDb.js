@@ -1284,7 +1284,7 @@ async function detectarTermosPendentes(pool, { hoje = hojeBrasilia() } = {}) {
 
 module.exports = {
   LIMITE_LISTA, nomeDoMembro: nomeDe,
-  ADESAO_SUSPENSA_SQL, escalasFuturasDeMenoresSemAdesao, menoresSemAdesaoVigente,
+  ADESAO_SUSPENSA_SQL, ADESAO_VIGENTE_SQL, escalasFuturasDeMenoresSemAdesao, menoresSemAdesaoVigente,
   mapearAdesao, buscarAdesao, situacaoDoTermo, aceitarDigital, registrarAdesaoManual, ratificar, listarRatificacoes, coberturaDoTermo, anonimizarIpsVencidos, dadosDoTitular,
   designarResponsavel, revogarResponsavel, listarResponsaveisDoMenor, responsaveisAtivosDe, menoresDoResponsavel, aceitarDigitalResponsavel,
   definirNaturezaEquipe, removidoDaEquipe, liderAtivo, lideraAlgumaEquipe, mensagemRemovido,

@@ -8,6 +8,7 @@ let mockTransacao = { begin: 0, commit: 0, rollback: 0 };
 jest.mock("../db", () => {
   const rodar = async (texto, inputs) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
+    if (/sp_getapplock/.test(texto)) return { recordset: [{ resultado: 0 }], recordsets: [], rowsAffected: [0] };   // a trava da saúde da criança (Trava 7-C)
     for (const [padrao, valor, afetadas] of mockRegras) {
       if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [afetadas === undefined ? 1 : afetadas] };
     }

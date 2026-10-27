@@ -470,7 +470,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Check-in 
 GO
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Entrega e retirada de crianças, código (só o HMAC), autorizados e saúde (ECA arts. 70 e 70-B; LGPD arts. 11 e 14): 5 anos como prova de custódia; telefone de visitante e saúde do balcão saem em 90 dias; a saúde cadastrada é apagada ao revogar o consentimento; depois, anonimiza.'
-WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)';
+WHERE Categoria = N'Check-in infantil (entrega e retirada de crianças)' AND BaseLegal = N'x';
 GO
 
 -- ---- 10) Portão da EBD: a turma "com menores" ----

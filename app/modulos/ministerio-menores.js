@@ -18,7 +18,7 @@
 // Decidir e liberar uma comunicação à Diretoria pedem a confirmação reforçada da vD.4 (428): o fetchProtegido já a trata (como em lavrar o Termo de Vistoria).
 const MNR_ROTA = "ministerio-menores";
 const MNR_ROTA_CONS = "consentimento-menor";
-const MNR_SECOES = ["painel", "ferramentas", "comunicacoes"];
+const MNR_SECOES = ["painel", "ferramentas", "comunicacoes", "funcoes"];
 const MNR_FINALIDADES = ["IMAGEM", "SAUDE_CRACHA"];   // as duas autorizações do responsável (a ordem é a da tela)
 const MNR_ROTULO_FINALIDADE = { IMAGEM: "Uso da imagem (foto)", SAUDE_CRACHA: "Alergia ou saúde no crachá" };
 const MNR_AJUDA_FINALIDADE = {
@@ -66,15 +66,18 @@ let mnrCongregacoes = null;          // GET catalogos/congregacoes (só as ativa
 let mnrEquipesFaixa = [];            // as equipes da congregação escolhida na ferramenta da faixa etária
 let mnrMenorConsultado = null;       // { menorId, nome, responsaveis[] } da ficha de consentimento em consulta
 let mnrComunicacoes = new Map();     // autoDenunciaId -> a comunicação como a tela a mostra (nome para a confirmação)
-let mnrSeqMeu = 0, mnrSeqPainel = 0, mnrSeqCom = 0, mnrSeqFicha = 0, mnrSeqEquipes = 0;
+let mnrSeqMeu = 0, mnrSeqPainel = 0, mnrSeqCom = 0, mnrSeqFicha = 0, mnrSeqEquipes = 0, mnrSeqFun = 0;
+let mnrFuncoes = null;              // GET funcoes (Trava 7-C): as marcas dos departamentos e cargos e, para a Diretoria e a Proteção do nível geral, quem não está apto
 const mnrEmCurso = new Set();        // trava duplo clique nas ações que gravam
 
 // A aba abre para quem tem a habilitação (Secretaria) ou a vistoria (Diretoria e Conselho de Ética: as comunicações dos voluntários ficam aqui); cada seção
 // só aparece para quem o SERVIDOR diz que pode (o catálogo traz os papéis da sessão).
-function mnrPodeAba() { return authPermissoes.includes("habilitacao_voluntarios") || authPermissoes.includes("vistoria_antecedentes"); }
+// Trava 7-C: a Proteção de crianças do NÍVEL GERAL (protecao_menores) também chega aqui, para a seção "Funções com menores" (o servidor confere de novo).
+function mnrPodeAba() { return authPermissoes.includes("habilitacao_voluntarios") || authPermissoes.includes("vistoria_antecedentes") || (authGeral && authPermissoes.includes("protecao_menores")); }
 function mnrEhGestao() { return mnrCatalogos ? mnrCatalogos.papeis.gestao : authPermissoes.includes("habilitacao_voluntarios"); }
 function mnrEhDiretoria() { return !!(mnrCatalogos && mnrCatalogos.papeis.diretoria); }
 function mnrEhGeral() { return !!(mnrCatalogos && mnrCatalogos.papeis.geral); }
+function mnrPodeFuncoes() { return !!(mnrCatalogos && mnrCatalogos.papeis.funcoes); }
 
 // ---- utilidades ----
 function mnrEl(id) { return document.getElementById(id); }
@@ -227,7 +230,8 @@ async function mnrGarantirCatalogos(forcar) {
   mnrCatalogos = {
     faixas: lista(data.faixas), rotulosBloqueio: mapa(data.rotulosBloqueio), alertasDias: lista(data.alertasDias),
     tiposAutoDenuncia: lista(data.tiposAutoDenuncia), decisoesAutoDenuncia: lista(data.decisoesAutoDenuncia),
-    papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral, diretoria: !!papeis.diretoria }
+    papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral, diretoria: !!papeis.diretoria, funcoes: !!papeis.funcoes, verInaptos: !!papeis.verInaptos,
+      marcarDepartamento: !!papeis.marcarDepartamento, marcarPapel: !!papeis.marcarPapel }
   };
   return mnrCatalogos;
 }
@@ -253,9 +257,9 @@ async function mnrGarantirCongregacoes() {
 
 // ---- troca de login: não deixa o dado da pessoa anterior na tela ----
 const MNR_IDS_LISTAS = ["mnrSituacao", "mnrPoliticaCx", "mnrAdAndamento", "mnrMenoresLista", "mnrFichaValidade", "mnrPainelResumo", "mnrPainelPorCong", "mnrPainelLista",
-  "mnrFcMenorInfo", "mnrComLista"];
+  "mnrFcMenorInfo", "mnrComLista", "mnrFunInaptos", "mnrFunMarcas"];
 const MNR_IDS_MENSAGENS = ["mnrMeuResultado", "mnrPoliticaMsg", "mnrFichaMsg", "mnrAdMsg", "mnrMenoresMsg", "mnrPainelResultado", "mnrRpMsg", "mnrFpMsg", "mnrFaixaMsg",
-  "mnrFcMsg", "mnrComResultado", "mnrComAcaoMsg"];
+  "mnrFcMsg", "mnrComResultado", "mnrComAcaoMsg", "mnrFunResultado", "mnrFunAcaoMsg"];
 const MNR_IDS_CAMPOS = ["mnrAdData", "mnrRpMatricula", "mnrRpReferencia", "mnrFpMatricula", "mnrFcMenor", "mnrFcRef"];
 const MNR_IDS_MARCAS = ["mnrFichaMarca", "mnrAdCiente", "mnrFpMarca"];
 const MNR_IDS_BLOCOS = ["mnrAdFormCx", "mnrFcForm"];
@@ -265,9 +269,9 @@ const MNR_IDS_SELECTS = ["mnrAdTipo", "mnrPainelCong", "mnrFaixaCong", "mnrFaixa
 const MNR_IDS_SELECTS_FIXOS = { mnrPainelFiltro: "todos", mnrFcFinalidade: "IMAGEM", mnrFcAcao: "concede" };
 function mnrLimparTela() {
   mnrCatalogos = null; mnrCongregacoes = null; mnrSecaoAtual = "painel"; mnrSituacao = null; mnrPolitica = null; mnrMenores = []; mnrPainel = null; mnrEquipesFaixa = []; mnrMenorConsultado = null;
-  mnrComunicacoes = new Map();
+  mnrComunicacoes = new Map(); mnrFuncoes = null;
   // pedidos que ainda estão a caminho trazem dado do login anterior: a resposta velha é descartada
-  mnrSeqMeu++; mnrSeqPainel++; mnrSeqCom++; mnrSeqFicha++; mnrSeqEquipes++;
+  mnrSeqMeu++; mnrSeqPainel++; mnrSeqCom++; mnrSeqFicha++; mnrSeqEquipes++; mnrSeqFun++;
   MNR_IDS_LISTAS.forEach(id => { const el = mnrEl(id); if (el) el.innerHTML = ""; });
   // a classe volta ao normal: uma mensagem em destaque (psc-aviso) esvaziada apareceria como uma caixa amarela vazia
   MNR_IDS_MENSAGENS.forEach(id => { const el = mnrEl(id); if (el) { el.textContent = ""; el.className = String(el.className || "").replace(/\bpsc-aviso\b/g, "").replace(/\bpsc-alerta\b/g, "").replace(/\s+/g, " ").trim(); } });
@@ -628,7 +632,10 @@ async function mnrRecarregarMenores(mensagem) {
 // 2) ABA "MINISTÉRIO COM MENORES" (habilitacao_voluntarios)
 // ============================================================================
 // O painel e as ferramentas são da gestão (habilitacao_voluntarios); as comunicações dos voluntários, só da Diretoria (o servidor também recusa a quem não é)
-function mnrSecaoPermitida(secao) { return secao === "comunicacoes" ? mnrEhDiretoria() : (secao === "painel" || secao === "ferramentas") && mnrEhGestao(); }
+function mnrSecaoPermitida(secao) {
+  if (secao === "funcoes") return mnrPodeFuncoes();
+  return secao === "comunicacoes" ? mnrEhDiretoria() : (secao === "painel" || secao === "ferramentas") && mnrEhGestao();
+}
 function mnrAplicarPermissoes() {
   MNR_SECOES.forEach(nome => { const btn = mnrEl(`btnMnrSecao${capitalize(nome)}`); if (btn) btn.style.display = mnrSecaoPermitida(nome) ? "" : "none"; });
   const semAcesso = mnrEl("mnrSemAcesso");
@@ -659,7 +666,7 @@ async function carregarOpcoesMenoresAcao() {
   if (mnrEhGestao() && !congregacoes.length) mnrEscreverAviso("mnrPainelResultado", MNR_AVISO_SEM_CONGREGACOES, true);
   else if (aviso && aviso.textContent === MNR_AVISO_SEM_CONGREGACOES) mnrEscreverAviso("mnrPainelResultado", "", false);
   const secao = mnrSecaoPermitida(mnrSecaoAtual) ? mnrSecaoAtual : (MNR_SECOES.find(mnrSecaoPermitida) || "");
-  mnrMostrarSecaoAcao(secao, secao !== "comunicacoes");
+  mnrMostrarSecaoAcao(secao, secao !== "comunicacoes" && secao !== "funcoes");
 }
 // `semCarregar`: só troca a seção, sem buscar dados.
 function mnrMostrarSecaoAcao(secao, semCarregar) {
@@ -674,6 +681,7 @@ function mnrMostrarSecaoAcao(secao, semCarregar) {
   });
   if (semCarregar) return;
   if (secao === "comunicacoes") mnrCarregarComunicacoesAcao();
+  if (secao === "funcoes") mnrCarregarFuncoesAcao();
 }
 
 // -- a) o painel de conformidade --
@@ -1151,7 +1159,76 @@ function mnrCartaoConsentimentosMeusDados(c) {
     </div>`;
 }
 
+// ============================================================================
+// d) FUNÇÕES COM MENORES FORA DAS ESCALAS (Trava 7-C, decisão de 23/10/2026: departamentos e cargos de liderança; eventos ficaram fora)
+// ============================================================================
+// O servidor decide tudo: quem vê a lista de quem não está apto (a Diretoria, com o motivo; a Proteção do nível geral, com a pendência reservada como "pendência com a
+// Diretoria") e quem marca (departamento: nível geral com `pessoas`; cargo: nível geral com `permissoes`; com a confirmação reforçada, 428, que o fetchProtegido trata).
+// A tela mostra o que vier, escapado; as ações recebem só constantes nossas e ids numéricos.
+const MNR_TIPOS_FUNCAO = { DEPARTAMENTO: "Departamento", PAPEL: "Cargo" };
+function mnrTipoFuncaoValido(bruto) { return bruto === "DEPARTAMENTO" ? "DEPARTAMENTO" : bruto === "PAPEL" ? "PAPEL" : ""; }
+async function mnrCarregarFuncoesAcao() {
+  const inaptos = mnrEl("mnrFunInaptos"), marcas = mnrEl("mnrFunMarcas");
+  if (!inaptos || !marcas) return;
+  if (!mnrPodeFuncoes()) { inaptos.innerHTML = ""; marcas.innerHTML = ""; mnrEscreverAviso("mnrFunResultado", "Esta área é do nível geral (Diretoria, Proteção de crianças e quem cuida das pessoas e das permissões).", true); return; }
+  const seq = ++mnrSeqFun;
+  mnrEscreverAviso("mnrFunResultado", "Carregando as funções com menores…", false);
+  const data = await mnrObter("funcoes");
+  if (seq !== mnrSeqFun) return;   // resposta velha (outro pedido depois, ou troca de login)
+  if (data.sucesso === false) { mnrFuncoes = null; inaptos.innerHTML = ""; marcas.innerHTML = ""; mnrEscreverAviso("mnrFunResultado", mnrMsgErro(data), true); return; }
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  mnrFuncoes = {
+    departamentos: lista(data.departamentos), papeis: lista(data.papeis), inaptos: Array.isArray(data.inaptos) ? data.inaptos : null,
+    resumo: data.resumo && typeof data.resumo === "object" ? data.resumo : null, podeMarcarDepartamento: data.podeMarcarDepartamento === true, podeMarcarPapel: data.podeMarcarPapel === true
+  };
+  mnrEscreverAviso("mnrFunResultado", mnrFuncoes.resumo ? `${Number(mnrFuncoes.resumo.ocupantes) || 0} pessoa(s) ocupam funções marcadas; ${Number(mnrFuncoes.resumo.inaptos) || 0} não estão aptas.` : "", false);
+  mnrRenderFuncoes();
+}
+function mnrRenderFuncoes() {
+  const f = mnrFuncoes;
+  const inaptos = mnrEl("mnrFunInaptos"), marcas = mnrEl("mnrFunMarcas");
+  if (!f || !inaptos || !marcas) return;
+  if (f.inaptos === null) inaptos.innerHTML = "";
+  else if (!f.inaptos.length) inaptos.innerHTML = `<p class="subtitle">✅ Todos que ocupam departamentos e cargos marcados estão aptos para função com menores.</p>`;
+  else {
+    inaptos.innerHTML = `<h5>⛔ Ocupam função com crianças e não estão aptos (${f.inaptos.length})</h5>
+      <p class="psc-legenda">A pessoa continua no cargo: a decisão é da Diretoria. ${mnrEhDiretoria() ? "" : "Os assuntos reservados à Diretoria aparecem só como \"pendência com a Diretoria\"."}</p>` +
+      f.inaptos.map(p => `<div class="cal-cartao cartao-area-ebd">
+        <h5>${escaparHtmlEbd(p.nome)} <span class="psc-legenda">matrícula ${Number(p.membroId)}${p.congregacaoNome ? ` · ${escaparHtmlEbd(p.congregacaoNome)}` : ""}</span> ${mnrSelo(mnrClasse("BLOQUEADO"), "⛔ Não apto para função com menores")}</h5>
+        <dl class="cal-dl">
+          ${mnrCampo("Funções", (Array.isArray(p.funcoes) ? p.funcoes : []).map(x => escaparHtmlEbd(x.rotulo || `${MNR_TIPOS_FUNCAO[mnrTipoFuncaoValido(x.tipo)] || ""} ${x.nome || ""}`)).join(", "))}
+          ${mnrCampo("O que falta", (Array.isArray(p.bloqueios) ? p.bloqueios : []).map(b => escaparHtmlEbd(b.rotulo || mnrRotuloBloqueio(b.codigo))).join("; "))}
+        </dl>
+      </div>`).join("");
+  }
+  const linha = (tipo, id, nome, extra, marcado, parece, pode) => `<tr>
+      <td>${escaparHtmlEbd(nome)}${extra ? ` <span class="psc-legenda">${escaparHtmlEbd(extra)}</span>` : ""}${parece ? ` <span class="psc-legenda">⚠️ o nome parece de crianças: confira</span>` : ""}</td>
+      <td>${marcado ? mnrSelo("cal-st-proposto", "🧒 Com crianças") : mnrSelo("cal-st-cancelado", "Sem marca")}</td>
+      <td>${pode ? `<button type="button" class="btn-link" data-on-click="mnrMarcarFuncaoAcao" data-args-click="${argsAttr(tipo, Number(id), !marcado, ARG.elemento)}">${marcado ? "Tirar a marca" : "Marcar: tem contato com crianças"}</button>` : ""}</td>
+    </tr>`;
+  const tabela = (titulo, linhas) => `<h5>${escaparHtmlEbd(titulo)}</h5><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Marca</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  marcas.innerHTML = tabela("Departamentos", f.departamentos.map(d => linha("DEPARTAMENTO", d.departamentoId, d.nome, d.sigla, d.contatoComMenores === true, d.pareceInfantil === true, f.podeMarcarDepartamento)).join(""))
+    + tabela("Cargos de liderança", f.papeis.map(p => linha("PAPEL", p.papelId, p.nome, p.nivel, p.contatoComMenores === true, p.pareceInfantil === true, f.podeMarcarPapel)).join(""));
+}
+async function mnrMarcarFuncaoAcao(tipoBruto, idBruto, ligar, botao) {
+  const tipo = mnrTipoFuncaoValido(tipoBruto), id = Number(idBruto);
+  if (!tipo || !Number.isInteger(id) || id < 1 || !mnrFuncoes) return;
+  const item = tipo === "DEPARTAMENTO" ? mnrFuncoes.departamentos.find(d => Number(d.departamentoId) === id) : mnrFuncoes.papeis.find(p => Number(p.papelId) === id);
+  if (!item) return;
+  const marcar = ligar === true;
+  const pergunta = marcar
+    ? `Marcar ${MNR_TIPOS_FUNCAO[tipo].toLowerCase()} "${item.nome}" como função com contato com crianças e adolescentes? Quem o ocupa sem aptidão passa a aparecer para a Diretoria e a Proteção de crianças (ninguém sai do cargo sozinho). A tela vai pedir uma confirmação de quem você é.`
+    : `Tirar a marca de ${MNR_TIPOS_FUNCAO[tipo].toLowerCase()} "${item.nome}"? Quem o ocupa deixa de ser conferido por esta regra. A tela vai pedir uma confirmação de quem você é.`;
+  if (!(await confirmarAcao(pergunta, marcar ? "Marcar" : "Tirar a marca"))) return;
+  await mnrProtegerBotao(botao, async () => {
+    const data = await mnrPostar("funcao-marca", { tipo, id, contatoComMenores: marcar });
+    mnrMostrarResultado(data, "mnrFunAcaoMsg");
+    if (data.sucesso !== false) await mnrCarregarFuncoesAcao();
+  }, `funcao-${tipo}-${id}`);
+}
+
 registrarAcoes({
+  mnrCarregarFuncoesAcao, mnrMarcarFuncaoAcao,
   mnrAbrirAutorizacaoAcao, mnrAbrirDecisaoAcao, mnrAceitarPoliticaAcao, mnrAtualizarBotaoAutorizarAcao, mnrAtualizarBotaoPoliticaAcao, mnrCarregarComunicacoesAcao,
   mnrCarregarEquipesFaixaAcao, mnrCarregarPainelAcao, mnrComunicarAcao, mnrConcederAcao, mnrConfirmarDecisaoAcao, mnrConfirmarFichaAcao,
   mnrConfirmarFichaPessoaAcao, mnrConsultarMenorAcao, mnrContarObsAcao, mnrFecharAutorizacaoAcao, mnrFecharDecisaoAcao, mnrFiltrarPainelAcao, mnrMostrarSecaoAcao,

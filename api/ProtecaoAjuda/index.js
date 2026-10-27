@@ -9,6 +9,7 @@
 const { getPool } = require("../shared/db");
 const db = require("../shared/protecaoDb");
 const pm = require("../shared/protecaoMenores");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
 
 const limitador = criarLimitador({ janelaMs: 3600000, maximo: 5 });          // 5 pedidos por hora por origem (e a Igreja aceita, no total, 40 por hora: shared/protecaoDb.js)
@@ -22,6 +23,10 @@ module.exports = async function (context, req) {
     return;
   }
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+  // Trava 7-C: o pedido inválido é recusado ANTES de pedir a conexão (com o Azure SQL pausado, acordá-lo leva segundos; a resposta de "escreva o que aconteceu" não espera).
+  const agora = new Date();
+  const previa = pm.validarPedidoDeAjuda(corpo, { hoje: hojeBrasilia(agora), agora });
+  if (!previa.valido) { context.res = { status: 422, headers: cabecalhos, body: { sucesso: false, mensagem: previa.mensagem, contatosDeAjuda: pm.CONTATOS_DE_AJUDA } }; return; }
   try {
     const pool = await getPool();
     const r = await db.registrarPedidoDeAjuda(pool, { dados: corpo });

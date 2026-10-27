@@ -2,10 +2,17 @@
 // Só entra aqui tratamento que É de alto risco E que EXISTE de verdade no
 // sistema hoje — nada fabricado. O texto original da vB.8 citava "foto,
 // dado de menor, nota pastoral, dado de saúde em evento" como exemplos de
-// tratamento de risco; dos quatro, hoje só dois têm tabela/tratamento real
-// (Foto, Dado de Menor) — os outros dois (nota pastoral, dado de saúde em
-// evento) não têm NENHUM módulo no sistema ainda, então entram como
-// "N/A hoje" em vez de um RIPD inventado sobre algo que não existe.
+// tratamento de risco. Na vB.8 só os dois primeiros tinham módulo; desde
+// então os quatro existem: a nota pastoral (NOTA_PASTORAL, v7.11, com o
+// mural de oração do site desde a v7.11.1) e a saúde no crachá do check-in
+// infantil (DADO_DE_SAUDE_EM_EVENTO, v7.10).
+//
+// Critério para uma entrada nova: dado sensível (LGPD Art. 5º, II) ou de
+// criança tratado em escala, ou um tratamento cujo vazamento ou erro expõe a
+// pessoa a dano grave (antecedentes, violência, custódia). A v7.15 (crise e
+// segurança) NÃO tem entrada própria: guarda dado comum (quem fala pela
+// Igreja, o contato do jornalista, a equipe de segurança); o aviso da crise
+// é um comunicado do sistema e já está coberto por COMUNICACAO_COM_MEMBROS.
 const RIPDS = [
   {
     chave: "FOTO",
@@ -55,7 +62,7 @@ const RIPDS = [
   {
     chave: "INCIDENTES_DE_PROTECAO",
     tratamento: "Registro de incidentes de proteção de crianças e adolescentes, do relato espontâneo, da comunicação imediata ao Conselho Tutelar (prazo máximo interno de 24 horas), do afastamento cautelar do envolvido e do relatório anual do Comitê de Proteção (v7.8).",
-    riscoIdentificado: "Dado de criança sobre violência é o mais sensível que a Igreja guarda: vazamento revitimiza e expõe; uma acusação falsa ou errada afasta e marca uma pessoa inocente; e a omissão da comunicação tem multa e, pior, deixa a criança desprotegida.",
+    riscoIdentificado: "Dado de criança sobre violência é o mais sensível que a Igreja guarda: vazamento revitimiza e expõe; uma acusação falsa ou errada afasta e marca uma pessoa inocente; e a omissão da comunicação responsabiliza quem cuida da criança (ECA art. 70-B, parágrafo único) e, pior, deixa a criança desprotegida.",
     medidasMitigacao: [
       "A Igreja COMUNICA, não investiga: não há campo de pergunta nem de inquirição; o formulário mostra o roteiro (acolher, registrar como foi dito, encaminhar) e o que NÃO fazer",
       "O relato fica em tabela à parte, só de acréscimo (gatilho no banco); um relato por incidente (repetir a escuta machuca de novo); só a liderança de proteção lê, com a confirmação reforçada (vD.4), e cada leitura fica registrada",
@@ -70,7 +77,7 @@ const RIPDS = [
   },
   {
     chave: "NOTA_PASTORAL",
-    tratamento: "Cuidado pastoral (v7.11): notas pastorais em três níveis de sigilo (equipe, liderança local, somente pastor), a fila de acompanhamento (visitante, novo convertido, membro afastado, pedido de visita, pedido de oração, pós-internação) com a detecção de afastamento pela frequência da própria pessoa, e os pedidos de oração com moderação e sinal de risco.",
+    tratamento: "Cuidado pastoral (v7.11): notas pastorais em três níveis de sigilo (equipe, liderança local, somente pastor), a fila de acompanhamento (visitante, novo convertido, membro afastado, pedido de visita, pedido de oração, pós-internação) com a detecção de afastamento pela frequência da própria pessoa, e os pedidos de oração com moderação e sinal de risco — inclusive os do mural de oração do SITE (v7.11.1): o pedido confidencial ou com sinal de risco de um visitante (nome opcional) é copiado do site (Directus) para o sistema, servidor a servidor.",
     riscoIdentificado: "Aconselhamento, saúde, família e vida espiritual são o dado mais íntimo que a Igreja guarda: uma nota lida por quem não devia, um pedido de oração publicado com o nome, ou a própria pessoa descobrindo o que se escreve sobre ela antes de a liderança conversar com ela destroem a confiança e geram passivo; e um pedido de socorro (autolesão, violência) que espera a moderação comum pode custar uma vida.",
     medidasMitigacao: [
       "Três níveis de sigilo decididos por quem escreve; a nota \"somente pastor\" só é lida por quem escreveu e por quem, na liderança que alcança a pessoa, tem o cargo de Pastor no cadastro (a Diretoria não lê por ser Diretoria), e abrir pede a confirmação reforçada (vD.4)",
@@ -80,6 +87,7 @@ const RIPDS = [
       "O boletim de oração nunca leva o texto do pedido: leva uma linha gerada pelo assunto e pela congregação, conferida pelo moderador, e a reescrita com o nome de quem pediu é recusada",
       "Os textos que os membros mandam passam pela lista de sinais de autolesão e de violência; com sinal, o aviso obrigatório sai na hora a toda a liderança do território (sem o texto) e quem pediu lê os telefones 188, 190, 180 e 100; desmarcar um alarme falso pede motivo e a confirmação reforçada",
       "Nenhum aviso (o e-mail sai do sistema), auditoria ou log leva texto de nota ou de pedido; o aviso ao responsável leva só o primeiro nome de quem acompanhar",
+      "Mural do site (v7.11.1): só o confidencial e o com sinal de risco entram no sistema, e só o nível geral os vê (o site não diz a congregação); a rota só aceita o site com a chave combinada (sem a chave configurada, recusa tudo) e tem limite por origem e teto por hora; a resposta ao site nunca devolve o texto nem quem foi avisado; o pedido comum fica só no site, com a moderação de lá",
       "Regimento Art. 132 §2º, II: as notas de quem saiu são apagadas em 30 dias; a exclusão LGPD as apaga na hora; os itens encerrados perdem a identificação em 5 anos e o pedido de oração perde o texto em 1 ano (5 com sinal de risco)"
     ],
     riscoResidual: "Médio — o dado é sensível por natureza e depende do bom uso de quem tem acesso legítimo; o detector de afastamento só vê a EBD e as reuniões (quem não está nelas não é medido) e a lista de sinais de risco não pega tudo (a liderança pode marcar o risco à mão). O vazamento por quem lê é tratado pelo registro de cada abertura e pela orientação à liderança."
@@ -125,7 +133,7 @@ const RIPDS = [
     riscoIdentificado: "Dado de saúde de criança é sensível por natureza; impresso num crachá no peito dela, qualquer pessoa o lê; guardado depois do consentimento, vira dado sem finalidade; e um erro de transcrição pode ser tão perigoso quanto a falta do aviso.",
     medidasMitigacao: [
       "Só com o consentimento específico e em destaque do responsável (finalidade SAUDE_CRACHA, texto versionado com hash): sem consentimento vigente o dado nem é gravado e não sai na etiqueta",
-      "Revogar o consentimento apaga o dado e as cópias nos registros de check-in logo em seguida; se esse apagar falhar, a tela da sala e a etiqueta da segunda via já não mostram a saúde (a leitura confere o consentimento na hora) e a rotina diária apaga o que ficou, inclusive de quem perdeu o consentimento por outro caminho (responsável desativado, criança que fez 18 anos); a exclusão LGPD do titular apaga a saúde e revoga os consentimentos na mesma transação",
+      "Revogar o consentimento grava a revogação E apaga o dado e as cópias nos registros de check-in na MESMA transação (Trava 7-C), sob uma trava por criança que também vale para gravar a saúde e para o check-in (nenhuma gravação ou cópia pode chegar depois do apagar); se o apagar falhar, nada fica pela metade. Como rede, a tela da sala e a etiqueta da segunda via só mostram a saúde com o consentimento vigente (a leitura confere na hora) e a rotina diária apaga o que tenha ficado, inclusive de quem perdeu o consentimento por outro caminho (responsável desativado, criança que fez 18 anos); a exclusão LGPD do titular apaga a saúde e revoga os consentimentos na mesma transação",
       "Quem informa é o responsável (Meu Painel) ou a Secretaria com a ficha assinada (a referência é obrigatória); o texto é livre só até 400 caracteres e sem marcação, e nunca vai para a auditoria",
       "O dado informado no balcão para criança visitante vale só para aquela visita e é apagado em 90 dias",
       "O que sai na etiqueta é só o texto que o responsável escolheu; a equipe da sala o lê, a liderança também, mais ninguém; o responsável pode apagá-lo quando quiser",

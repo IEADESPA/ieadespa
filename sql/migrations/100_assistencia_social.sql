@@ -33,7 +33,7 @@
 --    ConsentimentosLGPD porque ela exige MembroId NOT NULL (FK pra
 --    MembroReferencia), e o beneficiário majoritário NÃO é membro. Análise
 --    de base legal (mesmo espírito investigativo da vB.8, "achado real,
---    não fabricado"): o Art. 11, II, "a" da LGPD (organização religiosa,
+--    não fabricado"): o Art. 11, II, "d" da LGPD (exercício regular de direitos,
 --    vínculo regular) NÃO se aplica aqui — o titular tipicamente não tem
 --    vínculo de membresia. A base correta, na falta de vínculo, é o Art.
 --    7º, I (consentimento específico do titular/responsável familiar) —

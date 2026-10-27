@@ -662,7 +662,24 @@ async function detectarCaixasForaDoPrazo(pool, { hoje = hojeBrasilia() } = {}) {
   return fatos;
 }
 
+// Trava 7-C — retenção (LGPD art. 16): o contato do convidado externo (dado de terceiro) só serve para organizar o evento. 1 ano depois do ÚLTIMO evento dele (política
+// "Eventos — contato do convidado externo", ajustável) a rotina diária o apaga. "Dele" = o mesmo nome ou o mesmo contato em qualquer evento: se ele volta a ser convidado,
+// o contato antigo fica até 1 ano depois do novo evento. Ficam o nome e o protocolo (prova do Regimento Art. 111-A).
+const POLITICA_CONTATO_CONVIDADO = { categoria: "Eventos — contato do convidado externo", padrao: 365 };
+async function aplicarRetencao(pool, { hoje = hojeBrasilia() } = {}) {
+  const dias = await require("./politicasRetencao").diasDaPolitica(pool, POLITICA_CONTATO_CONVIDADO.categoria, POLITICA_CONTATO_CONVIDADO.padrao);
+  const r = await pool.request().input("d", sql.Int, dias).input("hoje", sql.Date, hoje).query(`
+    UPDATE c SET Contato = NULL, ContatoApagadoEm = SYSUTCDATETIME()
+    FROM EventoConvidados c
+    WHERE c.Contato IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM EventoConvidados o JOIN CalendarioEventos e ON e.EventoId = o.EventoId
+                      WHERE (o.ConvidadoId = c.ConvidadoId OR o.Nome = c.Nome OR o.Contato = c.Contato) AND e.DataFim >= DATEADD(DAY, -@d, @hoje));
+    SELECT @@ROWCOUNT AS n`);
+  return { contatosApagados: Number((r.recordset[0] || {}).n) || 0, retencaoDias: dias };
+}
+
 module.exports = {
+  POLITICA_CONTATO_CONVIDADO, aplicarRetencao,
   portadoresDe, organizadoresDoEvento, destinatariosDaOrganizacao, papeisNoEvento,
   designarOrganizador, encerrarOrganizador,
   mapearConvidado, carregarConvidados, buscarConvidadoBruto, criarConvidado, atualizarConvidado, submeterConvidado, decidirConvidado, oficializarConvidado, cancelarConvidado, filaDeAnalise,

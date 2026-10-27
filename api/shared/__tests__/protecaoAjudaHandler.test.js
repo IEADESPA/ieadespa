@@ -42,10 +42,12 @@ describe("a confirmação do canal de ajuda", () => {
     expect("avisados" in r.body).toBe(false);
   });
   test("recusa de regra (422), limite do banco (429) e erro (500) seguem trazendo a orientação do 100 e do 190", async () => {
-    db.registrarPedidoDeAjuda.mockResolvedValueOnce({ sucesso: false, mensagem: "Conte um pouco mais." });
+    // Trava 7-C: o pedido inválido é recusado ANTES de pedir a conexão (o banco pausado não segura a resposta)
     let r = await chamar({ texto: "curto" });
     expect(r.status).toBe(422);
     expect(r.body.contatosDeAjuda).toHaveLength(3);
+    expect(r.body.mensagem).toMatch(/Escreva o que você quer contar/);
+    expect(db.registrarPedidoDeAjuda).not.toHaveBeenCalled();
     db.registrarPedidoDeAjuda.mockResolvedValueOnce({ sucesso: false, limite: true, mensagem: "Estamos recebendo muitas mensagens." });
     r = await chamar({ texto: "um texto longo o bastante" });
     expect(r.status).toBe(429);

@@ -153,7 +153,7 @@ Arquivo: [`fase-6-ebd.md`](fase-6-ebd.md) — 12 bloco(s) · itens 35/35 conclu�
 
 ## FASE 7 — Saúde, Eventos e Comunicação
 
-Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 95/96 concluídos.
+Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comunicacao.md) — 19 bloco(s) · itens 95/97 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -175,7 +175,7 @@ Arquivo: [`fase-7-saude-eventos-e-comunicacao.md`](fase-7-saude-eventos-e-comuni
 | v7.13 | [Eventos, inscrições e congressos *(7ª rodada — expande v7.4)*](fase-7-saude-eventos-e-comunicacao.md#v713--eventos-inscrições-e-congressos-7ª-rodada--expande-v74) | ✅ 6/6 |
 | v7.14 | [Identidade Visual Anual *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v714--identidade-visual-anual-gap-da-varredura-normativa) | ✅ 5/5 |
 | v7.15 | [Gestão de crise e porta-voz único *(gap da varredura normativa)*](fase-7-saude-eventos-e-comunicacao.md#v715--gestão-de-crise-e-porta-voz-único-gap-da-varredura-normativa) | ✅ 4/4 |
-| 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | — |
+| 🔒 7-C | [antes de encerrar a FASE 7 e avançar para a FASE 8](fase-7-saude-eventos-e-comunicacao.md#-trava-de-revisão-7-c--antes-de-encerrar-a-fase-7-e-avançar-para-a-fase-8) | ⬜ 0/1 |
 
 ## FASE D — Robustez, operação e celular (retrofit das fases 0 a 7)
 
@@ -227,7 +227,7 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 
 ## FASE 10 — Experiência, Design e Performance
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 13 bloco(s) · itens 0/41 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 13 bloco(s) · itens 0/42 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -241,7 +241,7 @@ Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-desig
 | v10.4 | [Modularização do front-end *(7ª rodada — dívida técnica real)*](fase-10-experiencia-design-performance.md#v104--modularização-do-front-end-7ª-rodada--dívida-técnica-real) | ⬜ 0/4 |
 | v10.5 | [Impressão institucional e exportação padronizada *(7ª rodada)*](fase-10-experiencia-design-performance.md#v105--impressão-institucional-e-exportação-padronizada-7ª-rodada) | ⬜ 0/2 |
 | v10.6 | [Integração total: o site vira conteúdo, o que é "vivo" vai para o sistema *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v106--integração-total-o-site-vira-conteúdo-o-que-é-vivo-vai-para-o-sistema-decisão-de-22102026) | ⬜ 0/5 |
-| v10.7 | [Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v107--domínio-dns-e-segurança-da-borda-decisão-de-22102026) | ⬜ 0/6 |
+| v10.7 | [Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v107--domínio-dns-e-segurança-da-borda-decisão-de-22102026) | ⬜ 0/7 |
 | v10.8 | [Pagamento online pelo Pix (conta da Igreja no banco Cora) *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v108--pagamento-online-pelo-pix-conta-da-igreja-no-banco-cora-decisão-de-22102026) | ⬜ 0/4 |
 | 🔒 10-B | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-b--antes-de-encerrar-a-fase-10) | — |
 

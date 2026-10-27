@@ -53,4 +53,5 @@ bash rodar.sh preparar-afm
 BASE=cenario-afm bash rodar.sh roteiro e2e-47-afm-fluxos.js
 BASE=cenario-afm bash rodar.sh roteiro e2e-48-afm-seguranca.js
 BASE=cenario-afm bash rodar.sh roteiro e2e-49-afm-corridas.js
+BASE=cenario-afm bash rodar.sh roteiro e2e-50-afm-revisao.js
 echo TUDO-PRONTO

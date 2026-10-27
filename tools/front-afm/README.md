@@ -18,5 +18,6 @@ prazo da AGE, comunicar, readmitir, inativos da AFM), o tipo da reunião só na 
 vedados bloqueados, o documento obrigatório na Sessão Magna, "outro fator externo" com detalhe), a justificativa livre
 que continua nos outros órgãos, o Meu Painel (situação e pedido pelo catálogo) e a CDER em Comissões.
 
-Resultado de 27/10/2026: 63 verificações, 0 falhas. Duas mutações (tirar o escape do nome nas matrículas; deixar os
+Resultado de 27/10/2026: 80 verificações, 0 falhas (com os casos que as revisões independentes pediram: geral da permissão afm, tipo que
+volta a Ordinária, quadro relido, tela limpa ao sair, frequência sem corrida, "não conta falta", duplo clique). Duas mutações (tirar o escape do nome nas matrículas; deixar os
 vedados selecionáveis) foram acusadas pelo roteiro.

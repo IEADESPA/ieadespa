@@ -93,7 +93,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   conta; Sessão Magna com as duas turmas e a falta dupla; desmatrícula, reprovação, licença para oficiar no batismo, rematrícula; Reitor, docentes e CDER; Meu Painel, Meus
   Dados, avisos, rotina, retenção e auditoria — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-afm`), `e2e-48` (401 em toda ação, PIN, território, nível
   geral, 404, justificativa só a própria e no território, lixo em cada campo) e `e2e-49` (corridas: seis apurações, justificativas × apurações, readmissões, reprovações,
-  rematrículas, nomeações de Reitor, mestres da CDER, matrícula automática).
+  rematrículas, nomeações de Reitor, mestres da CDER, matrícula automática) e `e2e-50` (o que a revisão independente do servidor pediu: só o nível geral mexe no que conta
+  falta, ninguém na própria falta, uma reunião que conta por dia e "não conta falta", período fora que interrompe, pedido pendente que segura a exclusão, exclusão refeita
+  na apuração atrasada, Seminário só da AFM, quórum da Magna só da Câmara, motivo fora da trilha e do nível local, CEI e o certificado na rematrícula).
+  Os roteiros põem cada reunião que conta numa data passada diferente (uma por dia, como no sistema).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

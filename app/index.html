@@ -1747,8 +1747,8 @@
           <p class="subtitle">Art. 22 — o Reitor da AFM (entra pelo cargo, calculado) e 2 mestres de teologia da CLI, cadastrados aqui com a titulação.</p>
           <form class="so-geral" data-on-submit="adicionarMembroCDER" data-prevent="submit">
             <div class="barra-lista">
-              <input type="number" id="cderMatricula" placeholder="Matrícula" style="min-width:120px;" />
-              <input type="text" id="cderQualificacao" placeholder="Titulação (ex.: Mestre em Teologia)" maxlength="150" style="min-width:240px;" />
+              <input type="number" id="cderMatricula" placeholder="Matrícula" aria-label="Matrícula do mestre da CDER" style="min-width:120px;" />
+              <input type="text" id="cderQualificacao" placeholder="Titulação (ex.: Mestre em Teologia)" aria-label="Titulação em teologia do mestre" maxlength="150" style="min-width:240px;" />
               <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">➕ Adicionar</button>
             </div>
           </form>
@@ -5049,11 +5049,11 @@
         <div id="afmForm"></div>
         <div id="afmSecaoMatriculas">
           <div class="cal-pilulas" id="afmFiltrosMatriculas">
-            <button type="button" class="cal-pilula ativo" data-filtro="TODOS" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["TODOS"]'>Todos</button>
-            <button type="button" class="cal-pilula" data-filtro="INATIVOS" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["INATIVOS"]'>Inativos</button>
-            <button type="button" class="cal-pilula" data-filtro="RISCO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["RISCO"]'>2 Magnas seguidas</button>
-            <button type="button" class="cal-pilula" data-filtro="ABAIXO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["ABAIXO"]'>Abaixo do nível do cargo</button>
-            <button type="button" class="cal-pilula" data-filtro="SEM_NIVEL" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["SEM_NIVEL"]'>Nível a informar</button>
+            <button type="button" class="cal-pilula ativo" aria-pressed="true" data-filtro="TODOS" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["TODOS"]'>Todos</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="INATIVOS" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["INATIVOS"]'>Inativos</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="RISCO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["RISCO"]'>2 Magnas seguidas</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="ABAIXO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["ABAIXO"]'>Abaixo do nível do cargo</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="SEM_NIVEL" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["SEM_NIVEL"]'>Nível a informar</button>
           </div>
           <p id="afmResumoMatriculas" class="subtitle" role="status"></p>
           <div class="rolagem-tabela"><div id="afmListaMatriculas"></div></div>

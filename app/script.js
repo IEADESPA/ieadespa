@@ -434,6 +434,8 @@ function limparSessao() {
   // v7.14: as sugestões, o voto, as artes (e, na aba da Diretoria, as sugestões e os autores das artes) saem da página junto com a sessão — mesma guarda
   if (typeof idvLimparTela === "function") idvLimparTela();
   if (typeof enqLimparMeu === "function") enqLimparMeu();
+  // v8.1: as matrículas da AFM (com reprovação), o quadro de faltas da CLI e a situação da pessoa no Meu Painel saem da página junto com a sessão — mesma guarda
+  if (typeof afmLimparTela === "function") afmLimparTela();
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });

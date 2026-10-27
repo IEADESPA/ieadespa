@@ -61,7 +61,9 @@ describe("validarJustificativa — catálogo fechado (Regimento Art. 149 §2º)"
     expect(afm.validarJustificativa({ codigo: "OUTRO_EXTERNO", detalhe: "Enchente bloqueou a estrada" }).valido).toBe(true);
   });
   test("detalhe longo demais ou de outro tipo é recusado", () => {
-    expect(afm.validarJustificativa({ codigo: "SAUDE", detalhe: "x".repeat(301) }).valido).toBe(false);
+    expect(afm.validarJustificativa({ codigo: "SAUDE", detalhe: "x".repeat(251) }).valido).toBe(false);
+    expect(afm.validarJustificativa({ codigo: "OUTRO_EXTERNO", detalhe: "x".repeat(250) }).valido).toBe(true);
+    expect(afm.textoDaJustificativa("OUTRO_EXTERNO", "x".repeat(250)).endsWith("x".repeat(250))).toBe(true);   // cabe inteiro, sem corte
     expect(afm.validarJustificativa({ codigo: "SAUDE", detalhe: 12 }).valido).toBe(false);
   });
   test("Sessão Magna: quem aprova confirma o documento (Art. 69 §2º, I); só true vale", () => {

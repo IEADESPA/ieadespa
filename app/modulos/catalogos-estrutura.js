@@ -507,7 +507,7 @@ async function removerMembroComissaoAcao(sigla, comissaoMembroId) {
 
 async function carregarComissoes() {
   const res = await fetchProtegido(`${API_BASE}/comissoes`);
-  const data = await jsonDaTela(res, ["resultadoListaCCJ", "resultadoListaCFO", "resultadoListaCEP", "resultadoListaPMO"].map(id => document.getElementById(id)), "objeto");
+  const data = await jsonDaTela(res, ["resultadoListaCCJ", "resultadoListaCFO", "resultadoListaCEP", "resultadoListaPMO", "resultadoListaCDER"].map(id => document.getElementById(id)), "objeto");
   if (data === null) return;
   window._ccjCache = data.CCJ || [];
   if (document.getElementById("resultadoListaCCJ")) document.getElementById("resultadoListaCCJ").innerHTML = tabelaComissaoCalculada(data.CCJ, "ccj");

@@ -53,7 +53,7 @@ const MOTIVOS_VEDADOS = {
   ENTIDADE_VINCULADA: "Ação em entidade vinculada"
 };
 const MENSAGEM_VEDADO = "Este motivo é vedado pelo Regimento, Art. 149 §2º, II: no dia da reunião da Câmara, o comparecimento ao colegiado vem antes de qualquer outra atividade da igreja.";
-const DETALHE_MAXIMO = 300;
+const DETALHE_MAXIMO = 250;      // o texto gravado é "rótulo — detalhe" (coluna de 300): com o rótulo mais longo (41), cabe sem corte
 const DETALHE_MINIMO_OUTRO = 10;
 
 const FALTAS_PARA_PERDA = 3;       // Estatuto Art. 27 §1º e Regimento Art. 69 §2º, I

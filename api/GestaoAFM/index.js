@@ -27,6 +27,7 @@ const afm = require("../shared/afm");
 const db = require("../shared/afmDb");
 const { composicaoCLI } = require("../shared/universo");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { comConflito } = require("../shared/violacaoUnica");
 
 const PERMISSOES_CLI = ["reunioes", "assembleia", "cli"];
 const idDe = vol.inteiroPositivo;
@@ -45,11 +46,12 @@ async function composicaoAtual(pool) {
   return orgao ? composicaoCLI(pool, orgao.OrgaoId) : [];
 }
 
-// Matrícula e faltas são dado da pessoa: nada em cache.
-module.exports = async function (context, req) {
+// Matrícula e faltas são dado da pessoa: nada em cache. Dois atos iguais ao mesmo tempo (o mesmo docente cadastrado duas vezes, por exemplo) esbarram no índice único do
+// banco: a resposta é 409 com uma frase que a pessoa entende, nunca 500.
+module.exports = comConflito(async function (context, req) {
   await principal(context, req);
   if (context.res) context.res.headers = { "Cache-Control": "no-store", ...(context.res.headers || {}) };
-};
+}, "Alguém acabou de registrar o mesmo ato. Atualize a tela e confira.");
 
 async function principal(context, req) {
   // A porta de sessão vem antes de tudo (até de ação desconhecida): sem sessão, sempre 401.
@@ -78,7 +80,7 @@ async function principal(context, req) {
     const sessao = auth.exigirLogin(req, context);
     if (!sessao) return;
     const pool = await getPool();
-    const s = await db.minhaSituacao(pool, sessao.membroId, { composicaoCLI: await composicaoAtual(pool) });
+    const s = await db.minhaSituacao(pool, sessao.membroId);
     if (!s) return erro(context, 404, "Não encontrado.");
     context.res = { status: 200, body: { sucesso: true, ...s } };
     return;

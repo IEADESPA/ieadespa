@@ -579,19 +579,22 @@ async function sessoesMagnas(pool) {
 }
 
 // Meu Painel: a situação da própria pessoa na CLI e na AFM.
-async function minhaSituacao(pool, membroId, { composicaoCLI }) {
+// Só leitura e só da própria pessoa (abre em todo Meu Painel): nada de calcular a CLI inteira nem de gravar matrícula aqui — a pertença à CLI vem dos caminhos DELA (o mesmo
+// critério da composição: a Ordenação não vale com a matrícula da AFM inativa; a exclusão vigente tira por qualquer caminho) e o oficial ainda sem linha conta como ATIVO.
+async function minhaSituacao(pool, membroId) {
   const id = Number(membroId);
   const pessoa = await dadosDoMembro(pool, id);
   if (!pessoa) return null;
-  const naCLI = composicaoCLI.some((m) => Number(m.membroId) === id);
   const exVig = (await pool.request().input("id", sql.Int, id).query(`
     SELECT TOP 1 CONVERT(varchar(10), DataExclusao, 120) AS DataExclusao FROM CLIExclusoesFaltas WHERE MembroId = @id AND ReadmitidaEm IS NULL AND AnuladaEm IS NULL`)).recordset[0];
-  const seqCLI = (await sequenciasAtuais(pool, "CLI", [id])).get(id) || 0;
+  const mat = (await matriculasAtuais(() => pool.request(), [id])).get(id);
+  const inativaAFM = !!(mat && mat.StatusMatricula === "INATIVA");
+  const caminhos = (await caminhosNaCLI(pool, id)).filter((c) => !(c.via === "ORDENACAO" && inativaAFM));
+  const naCLI = caminhos.length > 0 && !exVig;
+  const seqCLI = naCLI ? (await sequenciasAtuais(pool, "CLI", [id])).get(id) || 0 : 0;
   const oficial = pessoa.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(pessoa.CargoMinisterial);
   let afmInfo = null;
   if (oficial) {
-    await garantirMatriculas(pool);
-    const mat = (await matriculasAtuais(() => pool.request(), [id])).get(id);
     const nivel = afm.avaliarNivel(pessoa.CargoMinisterial, mat && mat.NivelEscolaridade, mat && mat.NivelConcluido);
     afmInfo = {
       status: mat ? mat.StatusMatricula : "ATIVA", nivel: mat ? mat.NivelEscolaridade : null, nivelConcluido: !!(mat && mat.NivelConcluido), nivelAtende: nivel.atende, nivelExigido: nivel.exigido,

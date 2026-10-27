@@ -10,6 +10,17 @@ let afmSecaoAtual = "matriculas";
 let afmFiltroMatriculas = "TODOS";
 let afmMatriculasCache = [];
 let afmFaltasCache = null;
+let afmGeralMatriculas = false;   // o "geral" da permissão afm, como o servidor disse (não o authGeral, que vale para qualquer concessão)
+let afmEnviando = false;          // duplo clique: o segundo envio espera o primeiro voltar
+const AFM_DETALHE_MAX = 250;      // o texto gravado é "rótulo — detalhe" (até 300): o rótulo mais longo cabe com folga
+
+// Troca de login ou saída: nada da pessoa anterior (nomes, faltas, reprovação, a própria situação) fica na página.
+function afmLimparTela() {
+  afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false;
+  for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
+  const resumo = afmEl("afmResumoMatriculas");
+  if (resumo) resumo.textContent = "";
+}
 
 function afmEl(id) { return document.getElementById(id); }
 function afmEscrever(id, texto, erro) {
@@ -23,8 +34,20 @@ function afmData(iso) { return iso ? escaparHtmlEbd(String(iso).slice(0, 10).spl
 function afmHoje() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }
 async function afmJson(res) { try { return await res.json(); } catch (_) { return { sucesso: false, mensagem: "Resposta inesperada do servidor." }; } }
 async function afmPost(acao, corpo) {
-  const res = await fetchProtegido(`${API_BASE}/afm/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-  return afmJson(res);
+  if (afmEnviando) return { sucesso: false, mensagem: "Aguarde: o envio anterior ainda não voltou." };
+  afmEnviando = true;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/afm/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    return await afmJson(res);
+  } finally { afmEnviando = false; }
+}
+// O formulário abre no topo da aba: leva a pessoa até ele (no celular, a linha clicada pode estar longe) e põe o foco no primeiro campo.
+function afmMostrarForm(id) {
+  const cx = afmEl(id || "afmForm");
+  if (!cx) return;
+  if (typeof cx.scrollIntoView === "function") cx.scrollIntoView({ behavior: "smooth", block: "start" });
+  const campo = cx.querySelector ? cx.querySelector("input, select, textarea") : null;
+  if (campo && typeof campo.focus === "function") campo.focus();
 }
 
 async function afmCarregarCatalogo() {
@@ -53,16 +76,17 @@ async function afmPedirJustificativa({ titulo, comprovante = false, codigoSugeri
         <select id="afmJustCodigo"><option value="">— escolha —</option>${aceitos}<optgroup label="Não aceitos (Art. 149 §2º, II)">${vedados}</optgroup></select>
       </div>
       <div class="input-group">
-        <label for="afmJustDetalhe">Detalhe (até 300 caracteres; obrigatório em "outro fator externo"). Não escreva diagnóstico de saúde.</label>
-        <textarea id="afmJustDetalhe" rows="3" maxlength="300"></textarea>
+        <label for="afmJustDetalhe">Detalhe (até ${AFM_DETALHE_MAX} caracteres; obrigatório em "outro fator externo"). Não escreva diagnóstico de saúde.</label>
+        <textarea id="afmJustDetalhe" rows="3" maxlength="${AFM_DETALHE_MAX}"></textarea>
       </div>
-      ${comprovante ? `<label class="linha-check"><input type="checkbox" id="afmJustComprovante" /> Vi o documento que comprova (Sessão Magna da AFM: justificativa documentada, Art. 69 §2º, I)</label>` : ""}
+      ${comprovante ? `<label class="afm-check"><input type="checkbox" id="afmJustComprovante" /> Vi o documento que comprova (Sessão Magna da AFM: justificativa documentada, Art. 69 §2º, I)</label>` : ""}
       <div class="modal-acoes">
         <button class="btn-confirmar btn-secundario" id="modalCancelar">Cancelar</button>
         <button class="btn-confirmar" id="modalConfirmar">Enviar</button>
       </div>`;
     afmEl("modalOverlay").classList.remove("escondido");
-    afmEl("afmJustDetalhe").value = detalheSugerido || "";
+    afmEl("afmJustDetalhe").value = String(detalheSugerido || "").slice(0, AFM_DETALHE_MAX);
+    afmEl("afmJustCodigo").focus();
     afmEl("modalConfirmar").onclick = () => {
       const codigo = afmEl("afmJustCodigo").value;
       const detalhe = afmEl("afmJustDetalhe").value.trim();
@@ -131,14 +155,15 @@ async function afmCarregarMatriculasAcao() {
   const data = await jsonDaTela(res, cx, "objeto");
   if (data === null) return;
   afmMatriculasCache = Array.isArray(data.itens) ? data.itens : [];
-  afmRenderMatriculas(!!data.geral);
+  afmGeralMatriculas = !!data.geral;
+  afmRenderMatriculas(afmGeralMatriculas);
 }
 
 function afmFiltrarMatriculasAcao(filtro) {
   afmFiltroMatriculas = filtro;
   const barra = afmEl("afmFiltrosMatriculas");
-  if (barra) [...barra.children].filter(b => b.nodeType === 1).forEach(b => b.classList.toggle("ativo", b.getAttribute("data-filtro") === filtro));
-  afmRenderMatriculas(authGeral);
+  if (barra) [...barra.children].filter(b => b.nodeType === 1).forEach(b => { const ativo = b.getAttribute("data-filtro") === filtro; b.classList.toggle("ativo", ativo); b.setAttribute("aria-pressed", ativo ? "true" : "false"); });
+  afmRenderMatriculas(afmGeralMatriculas);
 }
 
 function afmRenderMatriculas(geral) {
@@ -189,13 +214,14 @@ function afmFormNivelAcao(membroId) {
     <div class="cartao-perfil">
       <h4>Nível de escolaridade — ${escaparHtmlEbd(afmNomeDaMatricula(membroId))}</h4>
       <p class="subtitle">Exigido para o cargo: ${escaparHtmlEbd(m.nivelExigido || "—")} (Regimento, Art. 72).</p>
+      <div class="input-group"><label for="afmNivelSel">Nível</label><select id="afmNivelSel">${opcoes}</select></div>
+      <label class="afm-check"><input type="checkbox" id="afmNivelConcluido"${m.nivelConcluido ? " checked" : ""} /> curso concluído</label>
       <div class="barra-lista">
-        <select id="afmNivelSel">${opcoes}</select>
-        <label class="linha-check"><input type="checkbox" id="afmNivelConcluido"${m.nivelConcluido ? " checked" : ""} /> curso concluído</label>
         <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="afmEnviarNivelAcao" data-args-click="${argsAttr(membroId)}">💾 Salvar</button>
         <button class="btn-link" data-on-click="afmFecharFormAcao">cancelar</button>
       </div>
     </div>`;
+  afmMostrarForm();
 }
 async function afmEnviarNivelAcao(membroId) {
   const data = await afmPost("nivel", { membroId, nivel: afmEl("afmNivelSel").value, concluido: !!afmEl("afmNivelConcluido").checked });
@@ -204,7 +230,7 @@ async function afmEnviarNivelAcao(membroId) {
 }
 
 function afmCampoData(id, rotulo, valor) {
-  return `<div class="input-group"><label for="${id}">${escaparHtmlEbd(rotulo)}</label><input type="date" id="${id}" value="${escaparHtmlEbd(valor || afmHoje())}" max="${afmHoje()}" /></div>`;
+  return `<div class="input-group"><label for="${id}">${escaparHtmlEbd(rotulo)}</label><input type="date" class="afm-data" id="${id}" value="${escaparHtmlEbd(valor || afmHoje())}" max="${afmHoje()}" /></div>`;
 }
 function afmCampoTexto(id, rotulo, placeholder, max) {
   return `<div class="input-group"><label for="${id}">${escaparHtmlEbd(rotulo)}</label><textarea id="${id}" rows="2" maxlength="${max || 300}" placeholder="${escaparHtmlEbd(placeholder || "")}"></textarea></div>`;
@@ -221,6 +247,7 @@ function afmFormReprovarAcao(membroId) {
     ${afmCampoData("afmRepData", "Data da reprovação")}
     ${afmCampoTexto("afmRepDetalhe", "Avaliação em que reprovou (10 a 500 caracteres)", "Ex.: Prova de liturgia do Seminário de novembro", 500)}
     ${afmBotoesForm("afmEnviarReprovarAcao", [membroId], "Registrar reprovação")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarReprovarAcao(membroId) {
   if (!(await confirmarAcao("Confirma a reprovação? A matrícula fica inativa e o obreiro perde a licença para oficiar.", "Registrar"))) return;
@@ -234,6 +261,7 @@ function afmFormAnularReprovacaoAcao(membroId) {
     <h4>Anular reprovação registrada por engano — ${escaparHtmlEbd(afmNomeDaMatricula(membroId))}</h4>
     ${afmCampoTexto("afmAnuMotivo", "Por que a reprovação está sendo anulada (10 a 300 caracteres)", "Ex.: a prova foi lançada no obreiro errado")}
     ${afmBotoesForm("afmEnviarAnularReprovacaoAcao", [membroId], "Anular")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarAnularReprovacaoAcao(membroId) {
   const data = await afmPost("anular-reprovacao", { membroId, motivo: afmEl("afmAnuMotivo").value });
@@ -248,6 +276,7 @@ function afmFormRematricularAcao(membroId) {
     ${afmCampoData("afmRemData", "Data da aprovação na reciclagem")}
     ${afmCampoTexto("afmRemObs", "Observação (opcional)", "Ex.: turma de reciclagem de outubro")}
     ${afmBotoesForm("afmEnviarRematricularAcao", [membroId], "Registrar nova matrícula")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarRematricularAcao(membroId) {
   const data = await afmPost("rematricular", { membroId, reciclagemAprovadaEm: afmEl("afmRemData").value, observacao: afmEl("afmRemObs").value });
@@ -317,9 +346,10 @@ function afmFormNomearReitorAcao() {
     ${afmCampoMatricula("afmReiMat", "Matrícula do Reitor")}
     ${afmCampoData("afmReiData", "Data da nomeação")}
     ${afmCampoLinha("afmReiTit", "Titulação (opcional)", "Ex.: Mestre em Teologia")}
-    <div class="input-group"><label for="afmReiHom">Homologação técnica da CLI (opcional)</label><input type="date" id="afmReiHom" max="${afmHoje()}" /></div>
+    <div class="input-group"><label for="afmReiHom">Homologação técnica da CLI (opcional)</label><input type="date" class="afm-data" id="afmReiHom" max="${afmHoje()}" /></div>
     ${afmCampoLinha("afmReiAto", "Ata da homologação (se houver)", "Ex.: Ata da CLI nº 10/2026", 300)}
     ${afmBotoesForm("afmEnviarNomearReitorAcao", [], "Registrar nomeação")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarNomearReitorAcao() {
   const corpo = { membroId: Number(afmEl("afmReiMat").value), dataInicio: afmEl("afmReiData").value, titulacao: afmEl("afmReiTit").value.trim() || undefined };
@@ -333,6 +363,7 @@ function afmFormHomologarAcao() {
     ${afmCampoData("afmHomData", "Data da homologação")}
     ${afmCampoLinha("afmHomAto", "Ata da CLI", "Ex.: Ata da CLI nº 10/2026", 300)}
     ${afmBotoesForm("afmEnviarHomologarAcao", [], "Registrar homologação")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarHomologarAcao() {
   const data = await afmPost("homologar-reitor", { data: afmEl("afmHomData").value, ato: afmEl("afmHomAto").value });
@@ -343,8 +374,9 @@ function afmFormReconduzirAcao() {
   const ano = Number(afmHoje().slice(0, 4)) + 1;
   afmEl("afmForm").innerHTML = `<div class="cartao-perfil"><h4>Recondução do Reitor</h4>
     <p class="subtitle">O mandato passa a ir até 31/12 do ano informado (Regimento, Art. 68 §1º: recondução sem limite).</p>
-    <div class="input-group"><label for="afmRecAno">Até o fim do ano</label><input type="number" id="afmRecAno" value="${ano}" min="2000" max="${ano}" /></div>
+    <div class="input-group"><label for="afmRecAno">Até o fim do ano</label><input type="number" class="afm-data" id="afmRecAno" value="${ano}" min="2000" max="${ano}" /></div>
     ${afmBotoesForm("afmEnviarReconduzirAcao", [], "Registrar recondução")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarReconduzirAcao() {
   const data = await afmPost("reconduzir-reitor", { ano: Number(afmEl("afmRecAno").value) });
@@ -357,6 +389,7 @@ function afmFormDocenteAcao() {
     ${afmCampoLinha("afmDocTit", "Titulação", "Ex.: Bacharel em Teologia")}
     ${afmCampoData("afmDocData", "Desde")}
     ${afmBotoesForm("afmEnviarDocenteAcao", [], "Cadastrar")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarDocenteAcao() {
   const data = await afmPost("docente", { membroId: Number(afmEl("afmDocMat").value), titulacao: afmEl("afmDocTit").value, dataInicio: afmEl("afmDocData").value });
@@ -368,6 +401,7 @@ function afmFormEncerrarAcao(corpoDocenteId, papel) {
     ${afmCampoData("afmEncData", "Data")}
     ${afmCampoLinha("afmEncMotivo", "Motivo (5 a 200 caracteres)", "Ex.: exonerado pelo Pastor Presidente", 200)}
     ${afmBotoesForm("afmEnviarEncerrarAcao", [corpoDocenteId], "Registrar")}</div>`;
+  afmMostrarForm();
 }
 async function afmEnviarEncerrarAcao(corpoDocenteId) {
   const data = await afmPost("encerrar-corpo", { corpoDocenteId, data: afmEl("afmEncData").value, motivo: afmEl("afmEncMotivo").value });
@@ -443,6 +477,7 @@ function afmFormComunicarAcao(exclusaoId) {
   if (!cx) return;
   cx.innerHTML = `${afmCampoData(`afmComData${exclusaoId}`, "Data em que a CLI foi comunicada")}
     <div class="barra-lista"><button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="afmEnviarComunicarAcao" data-args-click="${argsAttr(exclusaoId)}">Registrar</button></div>`;
+  afmMostrarForm(`afmFormExclusao${exclusaoId}`);
 }
 async function afmEnviarComunicarAcao(exclusaoId) {
   const data = await afmPost("comunicar-exclusao", { exclusaoId, data: afmEl(`afmComData${exclusaoId}`).value });
@@ -456,6 +491,7 @@ function afmFormReadmitirAcao(exclusaoId) {
     ${afmCampoData(`afmReaData${exclusaoId}`, "Data da readmissão")}
     ${afmCampoLinha(`afmReaAto${exclusaoId}`, "Ato (ata ou deliberação)", "Ex.: Ata da CLI nº 12/2026", 300)}
     <div class="barra-lista"><button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="afmEnviarReadmitirAcao" data-args-click="${argsAttr(exclusaoId)}">Registrar readmissão</button></div>`;
+  afmMostrarForm(`afmFormExclusao${exclusaoId}`);
 }
 async function afmEnviarReadmitirAcao(exclusaoId) {
   const data = await afmPost("readmitir", { exclusaoId, data: afmEl(`afmReaData${exclusaoId}`).value, ato: afmEl(`afmReaAto${exclusaoId}`).value });
@@ -463,12 +499,20 @@ async function afmEnviarReadmitirAcao(exclusaoId) {
   if (data.sucesso) { afmCarregarFaltasCLI(); if (typeof carregarComposicaoCLI === "function") carregarComposicaoCLI(); }
 }
 
+// Depois de um ato que refaz a apuração (encerrar, justificar, aprovar, rejeitar, corrigir presença): se a CLI está na tela, o quadro e a composição são relidos.
+function afmAtualizarSeCLI() {
+  const bloco = afmEl("blocoComposicaoCLI");
+  if (!bloco || bloco.style.display !== "block") return;
+  afmCarregarFaltasCLI();
+  if (typeof carregarComposicaoCLI === "function") carregarComposicaoCLI();
+}
+
 // O seletor de tipo da reunião só aparece para a CLI (as outras reuniões não têm tipo).
 function afmAjustarTipoReuniao(ehCLI) {
   const bloco = afmEl("blocoTipoReuniaoCLI");
   if (bloco) bloco.style.display = ehCLI ? "block" : "none";
   const sel = afmEl("reuniaoTipoSessao");
-  if (sel && !ehCLI) sel.value = "ORDINARIA";
+  if (sel) sel.selectedIndex = 0;                  // sempre volta para "Ordinária": uma Extraordinária ou Magna escolhida antes não passa para a próxima reunião
 }
 
 // ==================== Meu Painel: a minha situação ====================
@@ -476,8 +520,11 @@ async function afmCarregarMinhaSituacao() {
   const cx = afmEl("cartaoAfmCli");
   if (!cx) return;
   cx.innerHTML = "";
+  const token = authToken;
+  await afmCarregarCatalogo();                     // o nível aparece pelo rótulo ("Básico"), não pelo código
   const res = await fetchProtegido(`${API_BASE}/afm/minha-situacao`);
   const data = await afmJson(res);
+  if (token !== authToken) return;                 // a resposta atrasada de outro login não escreve no cartão de quem está agora
   if (!res.ok || !data || !data.sucesso) return;
   const partes = [];
   if (data.cli && data.cli.excluidaEm) {

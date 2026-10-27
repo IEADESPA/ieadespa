@@ -51,6 +51,11 @@ function montar({ geral = true, contrato = R } = {}) {
 }
 const posts = (amb, caminho) => amb.api.chamadas.filter((c) => c.metodo === "POST" && c.caminho === caminho);
 const semAtaque = (amb, onde) => { ok(amb.ctx.__xss.chamadas.length === 0 && amb.doc._ataques.length === 0, `${onde}: nenhum texto do servidor virou código`, { xss: amb.ctx.__xss.chamadas, ataques: amb.doc._ataques.slice(0, 3) }); };
+const clicarJustificar = (amb, membroId) => {
+  const b = botoes(amb, "resultadoFrequencia", "justificarFalta").find((x) => JSON.parse(x.getAttribute("data-args-click"))[1] === membroId);
+  if (b) amb.doc.clicar(b);
+  return b;
+};
 const botoes = (amb, raizId, acao) => {
   const raiz = amb.e(raizId);
   return raiz ? [...raiz.descendentes()].filter((b) => b.getAttribute("data-on-click") === acao) : [];
@@ -179,7 +184,7 @@ const botoes = (amb, raizId, acao) => {
   const falta = R["frequencia-magna"].frequencia.find((f) => !f.presente && !f.faltaJustificada);
   await amb.ev(`verFrequencia(${R["frequencia-magna"].sessao.sessaoId}, "Magna")`); await amb.ocioso();
   semAtaque(amb, "frequência");
-  amb.ev(`justificarFalta(${R["frequencia-magna"].sessao.sessaoId}, ${falta.membroId})`);
+  ok(!!clicarJustificar(amb, falta.membroId), "a tabela tem o botão Justificar da falta");
   for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
   const sel = amb.e("afmJustCodigo");
   const ops = sel ? sel.options : [];
@@ -193,7 +198,7 @@ const botoes = (amb, raizId, acao) => {
   const pj = posts(amb, `reunioes/${R["frequencia-magna"].sessao.sessaoId}/justificar`)[0];
   ok(pj && pj.corpo.codigo === "LUTO" && pj.corpo.comprovanteConferido === true && pj.corpo.membroId === falta.membroId && !("motivo" in pj.corpo), "envia o código, o documento conferido e nada de texto livre", pj && pj.corpo);
   // outro fator externo exige detalhe
-  amb.ev(`justificarFalta(${R["frequencia-magna"].sessao.sessaoId}, ${falta.membroId})`);
+  ok(!!clicarJustificar(amb, falta.membroId), "a tabela tem o botão Justificar da falta");
   for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
   amb.e("afmJustCodigo").selectedIndex = amb.e("afmJustCodigo").options.findIndex((o) => o.value === "OUTRO_EXTERNO");
   amb.e("afmJustDetalhe").value = "curto"; amb.e("afmJustComprovante").checked = true;
@@ -203,7 +208,8 @@ const botoes = (amb, raizId, acao) => {
   // reunião de outro órgão: segue o texto livre
   amb.__frequencia = { ...R["frequencia-ordinaria"], sessao: { ...R["frequencia-ordinaria"].sessao, orgaoSigla: "DIRETORIA_EXECUTIVA" } };
   await amb.ev(`verFrequencia(${R["frequencia-ordinaria"].sessao.sessaoId}, "Diretoria")`); await amb.ocioso();
-  amb.ev(`justificarFalta(${R["frequencia-ordinaria"].sessao.sessaoId}, 1)`);
+  const faltaOrd = amb.__frequencia.frequencia.find((f) => !f.presente && !f.faltaJustificada);
+  clicarJustificar(amb, faltaOrd.membroId);
   for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
   ok(!amb.e("afmJustCodigo") && !!amb.e("modalTexto"), "outros órgãos: continua o texto livre");
   amb.doc.clicar(amb.e("modalCancelar")); await amb.ocioso();
@@ -236,6 +242,77 @@ const botoes = (amb, raizId, acao) => {
   amb.e("cderQualificacao").value = "";
   await amb.ev("adicionarMembroCDER()"); await amb.ocioso();
   ok(posts(amb, "comissoes/cder").length === 1, "sem titulação: não envia");
+
+  console.log("== o que a revisão independente da tela pediu (27/10/2026) ==");
+  // 1) o "geral" dos atos é o que o servidor disse para a permissão afm, também depois de filtrar
+  amb = montar({ geral: true });
+  amb.api.rotas["GET afm/matriculas"] = { corpo: { ...R.matriculas, geral: false } };
+  amb.ev('mostrarAbaSecretaria("afm")'); await amb.ocioso();
+  amb.doc.clicar([...amb.e("afmFiltrosMatriculas").children].filter((b) => b.nodeType === 1).find((b) => b.getAttribute("data-filtro") === "INATIVOS")); await amb.ocioso();
+  ok(botoes(amb, "afmListaMatriculas", "afmFormNivelAcao").length === 0, "geral por OUTRA permissão: os atos da AFM não aparecem nem depois do filtro");
+  ok([...amb.e("afmFiltrosMatriculas").children].filter((b) => b.nodeType === 1).find((b) => b.getAttribute("data-filtro") === "INATIVOS").getAttribute("aria-pressed") === "true", "o filtro marca aria-pressed");
+  // 2) duas reuniões seguidas na CLI: a segunda volta a ser Ordinária
+  amb = montar();
+  amb.ev("afmAjustarTipoReuniao(true)");
+  amb.e("reuniaoOrgao").value = "central:2"; amb.e("descricaoReuniao").value = "Extra"; amb.e("senhaNovaReuniao").value = "1"; amb.e("reuniaoTipoSessao").selectedIndex = 2;
+  await amb.ev("abrirReuniao()"); await amb.ocioso();
+  ok(posts(amb, "reunioes/abrir")[0].corpo.tipoSessao === "EXTRAORDINARIA", "a primeira sai Extraordinária");
+  amb.e("descricaoReuniao").value = "Ordinária de novembro"; amb.e("senhaNovaReuniao").value = "2";
+  await amb.ev("abrirReuniao()"); await amb.ocioso();
+  ok(posts(amb, "reunioes/abrir")[1].corpo.tipoSessao === "ORDINARIA", "a segunda volta a ser Ordinária (a Extraordinária não passa adiante)");
+  // 3) justificar numa reunião da CLI com o quadro à vista: o quadro e a composição são relidos
+  amb = montar();
+  amb.e("blocoComposicaoCLI").style.display = "block";
+  amb.__frequencia = R["frequencia-magna"];
+  await amb.ev(`verFrequencia(${R["frequencia-magna"].sessao.sessaoId}, "Magna")`); await amb.ocioso();
+  amb.api.chamadas.length = 0;
+  clicarJustificar(amb, falta.membroId);
+  for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
+  amb.e("afmJustCodigo").selectedIndex = amb.e("afmJustCodigo").options.findIndex((o) => o.value === "SAUDE");
+  amb.e("afmJustComprovante").checked = true;
+  amb.doc.clicar(amb.e("modalConfirmar")); await amb.ocioso();
+  ok(amb.api.chamadas.some((c) => c.chave === "GET afm/faltas-cli"), "depois de justificar, o quadro Faltas e cadeiras é relido");
+  // 4) sair da sessão limpa tudo; a resposta atrasada de outro login não escreve no cartão
+  amb = montar();
+  amb.ev('mostrarAbaSecretaria("afm")'); await amb.ocioso();
+  await amb.ev("afmCarregarFaltasCLI()"); await amb.ocioso();
+  amb.sessao({ matricula: 9103, token: "pin", pin: true });
+  await amb.ev("afmCarregarMinhaSituacao()"); await amb.ocioso();
+  ok(amb.e("cartaoAfmCli").textContent.length > 0, "(o cartão estava preenchido)");
+  amb.ev("limparSessao()"); await amb.ocioso();
+  ok(["afmListaMatriculas", "afmFaltasCLI", "cartaoAfmCli", "afmForm"].every((id) => amb.e(id).innerHTML === ""), "sair da sessão limpa a aba, o quadro e o cartão");
+  amb.sessao({ matricula: 9103, token: "pin-a", pin: true });
+  const ret = amb.retem((c) => c.chave === "GET afm/minha-situacao");
+  const atrasada = amb.ev("afmCarregarMinhaSituacao()");
+  await amb.ocioso();
+  amb.sessao({ matricula: 9101, token: "pin-b", pin: true });
+  ret.liberar(); await atrasada; await amb.ocioso();
+  ok(amb.e("cartaoAfmCli").innerHTML === "", "a resposta atrasada do login anterior não aparece para o novo");
+  // 5) frequência de duas reuniões em sequência: a resposta da primeira não sobrescreve a segunda, e cada botão leva o tipo da própria reunião
+  amb = montar();
+  const retFreq = amb.retem((c) => c.caminho === `reunioes/${R["frequencia-magna"].sessao.sessaoId}/frequencia`);
+  amb.__frequencia = R["frequencia-magna"];
+  const primeira = amb.ev(`verFrequencia(${R["frequencia-magna"].sessao.sessaoId}, "Magna")`);
+  await amb.ocioso();
+  amb.__frequencia = { ...R["frequencia-ordinaria"], sessao: { ...R["frequencia-ordinaria"].sessao, orgaoSigla: "DIRETORIA_EXECUTIVA", sessaoId: 424242 } };
+  await amb.ev(`verFrequencia(424242, "Diretoria")`); await amb.ocioso();
+  retFreq.liberar(); await primeira; await amb.ocioso();
+  ok(amb.e("tituloFrequencia").textContent === "Diretoria" && botoes(amb, "resultadoFrequencia", "justificarFalta").every((b) => JSON.parse(b.getAttribute("data-args-click"))[2] === false),
+    "a resposta atrasada da Magna não sobrescreve a Diretoria; os botões levam 'não é CLI'");
+  // 7) o detalhe cabe inteiro no texto gravado (limite de 250 na tela, igual ao servidor)
+  amb = montar();
+  amb.ev("afmPedirJustificativa({})");
+  for (let i = 0; i < 40 && amb.e("modalOverlay").classList.contains("escondido"); i++) await amb.ocioso();
+  ok(amb.e("afmJustDetalhe").getAttribute("maxlength") === "250", "o detalhe vai até 250 caracteres");
+  amb.doc.clicar(amb.e("modalCancelar")); await amb.ocioso();
+  // 12) duplo clique: o segundo envio não sai enquanto o primeiro não volta
+  amb = montar();
+  const retPost = amb.retem((c) => c.chave === "POST afm/docente");
+  const p1 = amb.ev('afmPost("docente", { membroId: 9110, titulacao: "Bacharel", dataInicio: "2026-10-27" })');
+  await amb.ocioso();
+  const segunda = await amb.ev('afmPost("docente", { membroId: 9110, titulacao: "Bacharel", dataInicio: "2026-10-27" })');
+  retPost.liberar(); await p1;
+  ok(posts(amb, "afm/docente").length === 1 && segunda.sucesso === false, "o duplo clique manda um envio só");
 
   console.log(`\nfront-afm: ${total - falhas}/${total} verificações ok${falhas ? ` — ${falhas} FALHA(S)` : ""}`);
   process.exitCode = falhas ? 1 : 0;

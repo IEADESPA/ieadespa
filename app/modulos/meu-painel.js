@@ -10,6 +10,8 @@ async function carregarPainelPessoal(matricula) {
   const cartao = document.getElementById("cartaoPerfilPessoal");
   const stats = document.getElementById("resumoStatsPessoal");
   if (!matricula) return;
+  const cartaoAfm = document.getElementById("cartaoAfmCli");
+  if (cartaoAfm) cartaoAfm.innerHTML = "";   // v8.1: a situação da pessoa anterior não fica no painel, nem se a frequência falhar
 
   const res = await fetchProtegido(`${API_BASE}/membros/${matricula}/frequencia`);
   const data = await res.json();

@@ -137,7 +137,7 @@ async function afmCarregarMatriculasAcao() {
 function afmFiltrarMatriculasAcao(filtro) {
   afmFiltroMatriculas = filtro;
   const barra = afmEl("afmFiltrosMatriculas");
-  if (barra) [...barra.children].forEach(b => b.classList.toggle("ativo", b.getAttribute("data-filtro") === filtro));
+  if (barra) [...barra.children].filter(b => b.nodeType === 1).forEach(b => b.classList.toggle("ativo", b.getAttribute("data-filtro") === filtro));
   afmRenderMatriculas(authGeral);
 }
 

@@ -79,7 +79,7 @@ const botoes = (amb, raizId, acao) => {
   ok(tabela.includes(ATAQUE), "o nome aparece como TEXTO (com o ataque escapado)");
   semAtaque(amb, "matrículas");
   ok(botoes(amb, "afmListaMatriculas", "afmFormNivelAcao").length > 0 && botoes(amb, "afmListaMatriculas", "afmFormReprovarAcao").length > 0, "o nível geral vê os atos");
-  amb.doc.clicar(amb.e("afmFiltrosMatriculas").children.find((b) => b.getAttribute("data-filtro") === "INATIVOS"));
+  amb.doc.clicar([...amb.e("afmFiltrosMatriculas").children].filter((b) => b.nodeType === 1).find((b) => b.getAttribute("data-filtro") === "INATIVOS"));
   await amb.ocioso();
   const linhas = [...amb.e("afmListaMatriculas").descendentes()].filter((x) => x.localName === "tr").length - 1;
   ok(linhas === REAL.matriculas.itens.filter((m) => m.status === "INATIVA" && (m.oficial || true)).length, "o filtro Inativos mostra só os inativos", { linhas });
@@ -93,7 +93,7 @@ const botoes = (amb, raizId, acao) => {
     ok(p && p.corpo.reciclagemAprovadaEm === "2026-10-20" && p.corpo.observacao === "Turma de outubro" && typeof p.corpo.membroId === "number", "nova matrícula manda a data da reciclagem", p && p.corpo);
   }
   const ativo = REAL.matriculas.itens.find((m) => m.status === "ATIVA" && m.oficial);
-  amb.doc.clicar(amb.e("afmFiltrosMatriculas").children.find((b) => b.getAttribute("data-filtro") === "TODOS")); await amb.ocioso();
+  amb.doc.clicar([...amb.e("afmFiltrosMatriculas").children].filter((b) => b.nodeType === 1).find((b) => b.getAttribute("data-filtro") === "TODOS")); await amb.ocioso();
   amb.doc.clicar(botoes(amb, "afmListaMatriculas", "afmFormNivelAcao").find((b) => JSON.parse(b.getAttribute("data-args-click"))[0] === ativo.membroId)); await amb.ocioso();
   amb.e("afmNivelSel").selectedIndex = 2; amb.e("afmNivelConcluido").checked = true;
   amb.doc.clicar(botoes(amb, "afmForm", "afmEnviarNivelAcao")[0]); await amb.ocioso();
@@ -165,6 +165,8 @@ const botoes = (amb, raizId, acao) => {
   ok(posts(amb, "reunioes/abrir")[0] && posts(amb, "reunioes/abrir")[0].corpo.tipoSessao === "MAGNA_AFM", "CLI: manda o tipo escolhido");
   amb.ev('afmAjustarTipoReuniao(false)');
   ok(amb.e("blocoTipoReuniaoCLI").style.display === "none", "nos outros órgãos o tipo some");
+  ok(amb.e("descricaoReuniao").value === "" && amb.e("senhaNovaReuniao").value === "", "depois de abrir, a tela limpa a descrição e a senha");
+  amb.e("descricaoReuniao").value = "Diretoria"; amb.e("senhaNovaReuniao").value = "2";
   await amb.ev("abrirReuniao()"); await amb.ocioso();
   ok(posts(amb, "reunioes/abrir")[1] && !("tipoSessao" in posts(amb, "reunioes/abrir")[1].corpo), "outros órgãos: não manda tipo");
   await amb.ev("carregarReunioes()"); await amb.ocioso();

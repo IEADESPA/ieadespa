@@ -318,10 +318,10 @@ diz em que arquivo ela está e em que pé ela anda.
 
 - **Concluídas:** FASES 0 a 6 e as FASES B (consolidação da base) e C (integração com o site), salvo uns
   poucos itens adiados de propósito, que o índice marca como 🟡.
-- **Em andamento — FASE 7:** v7.1 a v7.8, v7.10 a v7.13 e v7.15 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
+- **Em andamento — FASE 7:** v7.1 a v7.8 e v7.10 a v7.15 entregues e no ar (PSC, Calendário oficial, Canais oficiais, Eventos e
   congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças, Check-in
-  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá, Gestão de crise com porta-voz único e segurança das congregações). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. A **v7.14**, a 🔒 Trava 7-C e o encerramento da fase
-  (identidade visual anual) está construída e vai à homologação; a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
+  infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá, Identidade visual anual, Gestão de crise com porta-voz único e segurança das congregações). As 🔒 Travas 7-A (08/10/2026) e 7-B (20/10/2026) estão fechadas. Em andamento:
+  a 🔒 Trava 7-C e, depois, o encerramento da fase; a antiga v7.9 (faltas na CLI) foi fundida à v8.1 da fase 8 em 15/10/2026. O fecho dos itens em aberto (03/10/2026) e a CSP forte (04/10/2026) estão
   feitos. O resumo em prosa completo está no começo do [arquivo da fase 7](docs/plano/fase-7-saude-eventos-e-comunicacao.md).
 - **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
   tela no CI, front em módulos, homologação, chave de acesso (passkey) e site na raiz `ieadespa.org.br`. Ficam só
@@ -342,7 +342,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | C | Integração com o site institucional | concluída | [fase-c-integracao-com-o-site](docs/plano/fase-c-integracao-com-o-site.md) |
 | 5 | Departamentos e relatórios | concluída | [fase-5-departamentos-e-relatorios](docs/plano/fase-5-departamentos-e-relatorios.md) |
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
-| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8, v7.10 a v7.13 e v7.15 entregues; Travas 7-A e 7-B fechadas em 08/10 e 20/10/2026; v7.14 construída, a homologar; depois a Trava 7-C; a antiga v7.9 foi fundida à v8.1 na fase 8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
+| 7 | Saúde, eventos e comunicação | **em andamento** (v7.1 a v7.8 e v7.10 a v7.15 entregues; Travas 7-A e 7-B fechadas em 08/10 e 20/10/2026; em andamento: a Trava 7-C; a antiga v7.9 foi fundida à v8.1 na fase 8) | [fase-7-saude-eventos-e-comunicacao](docs/plano/fase-7-saude-eventos-e-comunicacao.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
 | 8 | Ministerial (AFM) | planejada | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |

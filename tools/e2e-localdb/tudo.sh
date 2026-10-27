@@ -43,4 +43,9 @@ BASE=cenario-trava7c bash rodar.sh roteiro e2e-37-trava7c-madrugada.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-40-trava7c-cuidado.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-41-trava7c-crise-comunicacao.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-42-trava7c-corridas.js
+# Trava 7-C, as decisões de 23/10/2026 (migração 155): o dinheiro do voluntário só avisa; funções com menores em departamentos e liderança
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-43-trava7c-voluntario-pagamento.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-44-trava7c-funcoes-menores.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-45-trava7c-decisoes-seguranca.js
+BASE=cenario-trava7c bash rodar.sh roteiro e2e-46-trava7c-decisoes-corridas.js
 echo TUDO-PRONTO

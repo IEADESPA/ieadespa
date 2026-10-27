@@ -1,7 +1,7 @@
 // mutacoes.js — desfaz, uma a uma, as correções que o roteiro deve proteger; cada mutação TEM de ser acusada (pelo menos uma falha no roteiro).
 "use strict";
 const { rodar } = require("./roteiro");
-const M = "modulos/ministerio-menores.js", E = "modulos/escalas.js", D = "modulos/meus-dados.js", P = "modulos/pessoas.js", L = "modulos/meu-painel.js";
+const M = "modulos/ministerio-menores.js", E = "modulos/escalas.js", D = "modulos/meus-dados.js", P = "modulos/pessoas.js", L = "modulos/meu-painel.js", FI = "modulos/financeiro.js";
 
 const MUTACOES = [
   // ---- escape (texto do servidor entrando como marcação) ----
@@ -50,9 +50,9 @@ const MUTACOES = [
   ["duplo clique: o botão não é solto no fim", M, "if (botao) botao.disabled = false;\n    if (chave) mnrEmCurso.delete(chave);", "if (chave) mnrEmCurso.delete(chave);"],
   // ---- permissões e privacidade ----
   ["permissão: 'campo inteiro' para quem não é do nível geral", M, "const lista = mnrEhGeral() ? [{ congregacaoId: \"TODAS\"", "const lista = true ? [{ congregacaoId: \"TODAS\""],
-  ["permissão: comunicações da Diretoria para qualquer um da gestão", M, "function mnrSecaoPermitida(secao) { return secao === \"comunicacoes\" ? mnrEhDiretoria() :", "function mnrSecaoPermitida(secao) { return secao === \"comunicacoes\" ? true :"],
+  ["permissão: comunicações da Diretoria para qualquer um da gestão (âncora 7C)", M, "  return secao === \"comunicacoes\" ? mnrEhDiretoria() :", "  return secao === \"comunicacoes\" ? true :"],
   ["privacidade: o painel mostra o código no lugar do rótulo", M, "<li>${escaparHtmlEbd(b.rotulo || b.codigo)}${b.venceuEm", "<li>${escaparHtmlEbd(b.codigo)}${b.venceuEm"],
-  ["privacidade: a Secretaria é tratada como Diretoria (códigos reais)", M, "papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral, diretoria: !!papeis.diretoria }", "papeis: { gestao: true, geral: true, diretoria: true }"],
+  ["privacidade: a Secretaria é tratada como Diretoria (códigos reais; âncora 7C)", M, "papeis: { gestao: !!papeis.gestao, geral: !!papeis.geral, diretoria: !!papeis.diretoria,", "papeis: { gestao: true, geral: true, diretoria: true,"],
   // ---- foto de menor ----
   ["foto: o envio continua à vista para o menor sem autorização", D, "if (envio) envio.style.display = minhaFotoBloqueadaParaMenor ? \"none\" : \"\";", "if (envio) envio.style.display = \"\";"],
   ["foto: o envio sai mesmo bloqueado", D, "if (minhaFotoBloqueadaParaMenor) { msg.textContent =", "if (false) { msg.textContent ="],
@@ -96,7 +96,33 @@ const MUTACOES = [
   ["7B: escape: nome da turma (painel)", M, "${turmas.map(t => escaparHtmlEbd(t)).join(\", \")}", "${turmas.map(t => t).join(\", \")}"],
   ["7B: o painel vazio volta a falar só de equipe", M, "Nenhuma pessoa serve em equipe nem leciona em turma da EBD com contato com menores nesta seleção.", "Nenhuma pessoa serve em equipe com contato com menores nesta seleção."],
   ["7B: Meus Dados trata a retirada da turma como de equipe ('0 escala(s) desmarcada(s)')", M, "  if (r && r.origem === \"TURMA_EBD\") return", "  if (false) return"],
-  ["7B: escape: nome da turma (Meus Dados)", M, "`Turma ${escaparHtmlEbd(r.turma)} (EBD)`", "`Turma ${r.turma} (EBD)`"]
+  ["7B: escape: nome da turma (Meus Dados)", M, "`Turma ${escaparHtmlEbd(r.turma)} (EBD)`", "`Turma ${r.turma} (EBD)`"],
+  // ---- Trava 7-C: as decisões de 23/10/2026 (funções com menores; o dinheiro do voluntário) ----
+  ["7C: escape: nome de quem não está apto", M, "<h5>${escaparHtmlEbd(p.nome)} <span class=\"psc-legenda\">matrícula ${Number(p.membroId)}", "<h5>${p.nome} <span class=\"psc-legenda\">matrícula ${Number(p.membroId)}"],
+  ["7C: escape: rótulo da função", M, ".map(x => escaparHtmlEbd(x.rotulo || `${MNR_TIPOS_FUNCAO[mnrTipoFuncaoValido(x.tipo)] || \"\"} ${x.nome || \"\"}`))", ".map(x => (x.rotulo || x.nome))"],
+  ["7C: escape: nome do departamento na lista das marcas", M, "<td>${escaparHtmlEbd(nome)}${extra ?", "<td>${nome}${extra ?"],
+  ["7C: privacidade: o código no lugar do rótulo do bloqueio", M, ".map(b => escaparHtmlEbd(b.rotulo || mnrRotuloBloqueio(b.codigo))).join(\"; \")", ".map(b => escaparHtmlEbd(b.codigo)).join(\"; \")"],
+  ["7C: a seção das funções aparece para qualquer um", M, "  if (secao === \"funcoes\") return mnrPodeFuncoes();", "  if (secao === \"funcoes\") return true;"],
+  ["7C: botões de marcar para quem não pode", M, "f.departamentos.map(d => linha(\"DEPARTAMENTO\", d.departamentoId, d.nome, d.sigla, d.contatoComMenores === true, d.pareceInfantil === true, f.podeMarcarDepartamento))", "f.departamentos.map(d => linha(\"DEPARTAMENTO\", d.departamentoId, d.nome, d.sigla, d.contatoComMenores === true, d.pareceInfantil === true, true))"],
+  ["7C: marcar sem o 'tem certeza'", M, "  if (!(await confirmarAcao(pergunta, marcar ? \"Marcar\" : \"Tirar a marca\"))) return;", ""],
+  ["7C: tipo de fora vai ao servidor", M, "function mnrTipoFuncaoValido(bruto) { return bruto === \"DEPARTAMENTO\" ? \"DEPARTAMENTO\" : bruto === \"PAPEL\" ? \"PAPEL\" : \"\"; }", "function mnrTipoFuncaoValido(bruto) { return String(bruto); }"],
+  ["7C: o id vai como texto", M, "{ tipo, id, contatoComMenores: marcar }", "{ tipo, id: String(id), contatoComMenores: marcar }"],
+  ["7C: a troca de login esquece as funções", M, "\"mnrComLista\", \"mnrFunInaptos\", \"mnrFunMarcas\"];", "\"mnrComLista\"];"],
+  ["7C: resposta atrasada das funções entra na tela", M, "  if (seq !== mnrSeqFun) return;   // resposta velha (outro pedido depois, ou troca de login)", ""],
+  ["7C: a lista não é recarregada depois de marcar", M, "    if (data.sucesso !== false) await mnrCarregarFuncoesAcao();", ""],
+  ["7C: saída sem o 'tem certeza' dos avisos", FI, "if (!confirmou) { resultado.textContent = \"Solicitação NÃO registrada: os avisos não foram confirmados.\"; return; }", ""],
+  ["7C: a saída reenvia sem os códigos", FI, "JSON.stringify(Object.assign({}, body, { confirmoAvisos: codigos }))", "JSON.stringify(body)"],
+  ["7C: o aviso não é mostrado (vai direto)", FI, "if (data && data.precisaConfirmarAvisos && Array.isArray(data.avisos) && data.avisos.length) {", "if (false) {"],
+  ["7C: escape: aviso no detalhe da saída", FI, "<li><strong>${escaparHtmlEbd(a.rotulo)}</strong>: ${escaparHtmlEbd(a.texto)}", "<li><strong>${a.rotulo}</strong>: ${a.texto}"],
+  ["7C: escape: quem confirmou o aviso", FI, "— confirmado por ${escaparHtmlEbd(a.confirmadoPorNome)}", "— confirmado por ${a.confirmadoPorNome}"],
+  ["7C: escape: membro achado na busca", FI, "${escaparHtmlEbd(m.nome)} — matrícula ${Number(m.membroId)}", "${m.nome} — matrícula ${Number(m.membroId)}"],
+  ["7C: pessoa jurídica leva a matrícula", FI, "const membroEscolhido = tipo === \"PF\" && document.getElementById(\"fornecedorMembroId\")", "const membroEscolhido = document.getElementById(\"fornecedorMembroId\")"],
+  ["7C: a busca curta vai ao servidor", FI, "if (texto.length < 3 && !/^\\d+$/.test(texto)) { mostrarToast(", "if (false) { mostrarToast("],
+  ["7C: a busca vai sem codificar", FI, "buscaMembro=${encodeURIComponent(texto)}", "buscaMembro=${texto}"],
+  ["7C: matrícula com letra é enviada", FI, "if (!/^\\d{1,9}$/.test(matricula)) { mostrarToast(", "if (false) { mostrarToast("],
+  ["7C: desligar sem o 'tem certeza'", FI, "if (!(await confirmarAcao(\"Desligar este fornecedor da matrícula do membro?", "if (false && !(await confirmarAcao(\"Desligar este fornecedor da matrícula do membro?"],
+  ["7C: escape: Meus Dados da tesouraria", FI, "Cadastro de fornecedor: ${escaparHtmlEbd(f.nome)}", "Cadastro de fornecedor: ${f.nome}"],
+  ["7C: Meus Dados sem o cartão da tesouraria", L, "${typeof finCartaoMeusDados === \"function\" ? finCartaoMeusDados(data.tesouraria) : \"\"}", ""]
 ];
 
 const vivo = setInterval(() => {}, 1000);   // um ato esperando para sempre não pode encerrar o processo em silêncio

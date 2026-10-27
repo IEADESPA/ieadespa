@@ -82,6 +82,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   apagar a saúde e as cópias na MESMA transação, pelo responsável e pela ficha; o apagar que falha no meio — um gatilho de teste — não deixa a revogação pela metade;
   corridas de revogar × gravar a saúde × check-in em vários processos, sem 500, sem deadlock e sem saúde órfã; e, com READ_COMMITTED_SNAPSHOT ligado como no Azure, a revogação
   a meio caminho segurando a trava enquanto outro processo grava a saúde e faz o check-in — prova determinística da trava). `E2E38_RODADAS` muda o número de rodadas (padrão 6).
+- **Trava 7-C, as decisões de 23/10/2026** (migração 155, aplicada duas vezes no `preparar-trava7c`), sobre a `cenario-trava7c`: `e2e-43` (o dinheiro do voluntário só avisa:
+  o fornecedor pessoa física ligado à matrícula no território, os avisos de voluntário ativo, pagamento habitual e cachê/comissão que só gravam depois da confirmação, a saída e
+  os avisos numa transação, o resumo do mês, Meus Dados), `e2e-44` (funções com menores: as marcas de departamento e cargo, a nomeação que avisa sem o motivo, o painel da
+  Diretoria × da Proteção, o aviso pelo motor que nunca vai à própria pessoa e se repete no mês seguinte), `e2e-45` (atores, território, sondas e lixo) e `e2e-46` (corridas).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

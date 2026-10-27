@@ -91,7 +91,7 @@ function volEsc(v) { return escaparHtmlEbd(v); } function volObter() { return Pr
 function volCarregarMinhasEscalasAcao() {} function volCarregarTermoAcao() {}
 function badgeStatusLgpd(s) { return s; } function carregarConsentimentoLGPD() {} function carregarMinhasSolicitacoesLGPD() {}`, "prelude");
   // do script.js: o que os módulos usam
-  ev(extrair("script.js", ["mostrarToast", "fecharModal", "confirmarAcao", "escaparHtmlEbd", "argsAttr", "urlSegura", "formatarDataEbd", "mensagemPadraoDaRecusa", "fetchProtegido", "sessaoDeLiderancaNaTela", "listaDaApi"]), "script.js(extraido)");
+  ev(extrair("script.js", ["mostrarToast", "fecharModal", "confirmarAcao", "pedirTexto", "jsonDaTela", "escaparHtmlEbd", "argsAttr", "urlSegura", "formatarDataEbd", "mensagemPadraoDaRecusa", "fetchProtegido", "sessaoDeLiderancaNaTela", "listaDaApi"]), "script.js(extraido)");
   ev(extrair("modulos/calendario.js", ["calIso", "calHojeBrasilia", "calParaInstante", "calData", "calDataHora"]), "calendario.js(extraido)");
   ev(extrair("modulos/meus-dados.js", ["capitalize"]), "meus-dados.js(capitalize)");
   ev(lerApp("eventos.js"), "eventos.js");
@@ -101,6 +101,13 @@ function badgeStatusLgpd(s) { return s; } function carregarConsentimentoLGPD() {
   ev(aplicarMutacoes("modulos/meus-dados.js", extrair("modulos/meus-dados.js", ["minhaFotoBloqueadaParaMenor", "minhaFotoDono", "aplicarEnvioDaMinhaFoto", "carregarMinhaFoto", "enviarMinhaFotoAcao"])), "meus-dados.js(foto)");
   ev(aplicarMutacoes("modulos/pessoas.js", extrair("modulos/pessoas.js", ["carregarAbaFoto"])), "pessoas.js(foto)");
   ev(aplicarMutacoes("modulos/meu-painel.js", extrair("modulos/meu-painel.js", ["formatarValorLgpd", "linhaLgpd", "volCartaoMeusDados", "alternarMeusDadosLGPD"])), "meu-painel.js(lgpd)");
+  // Trava 7-C (decisões de 23/10/2026): o fornecedor ligado à matrícula, os avisos do dinheiro do voluntário na saída e o cartão da tesouraria em Meus Dados (financeiro.js);
+  // o arquivo da nota fiscal é de mentira (o DOM simulado não lê arquivo)
+  ev(aplicarMutacoes("modulos/financeiro.js", extrair("modulos/financeiro.js", ["_categoriasSaidaCache", "_fornecedoresSaidaCache", "_valorReferenciaCotacoes", "FIN_OPCAO_SEM_MEMBRO", "alternarFormNovoFornecedor", "alternarMembroFornecedor",
+    "buscarMembroFornecedorAcao", "ligarMembroFornecedorAcao", "desligarMembroFornecedorAcao", "salvarFornecedorAcao", "carregarFornecedores", "carregarOpcoesFornecedoresSaida", "solicitarSaidaAcao", "badgeStatusSaida",
+    "verDetalheSaidaAcao", "finCartaoMeusDados"])), "financeiro.js(7C)");
+  ev("function arquivoParaBase64() { return Promise.resolve('QUFBQQ=='); } function carregarSaidas() { window.__saidasRecarregadas = (window.__saidasRecarregadas || 0) + 1; } " +
+    "registrarAcoes({ alternarMembroFornecedor, buscarMembroFornecedorAcao, ligarMembroFornecedorAcao, desligarMembroFornecedorAcao });", "arquivo(7C)");
 
   // ---- utilidades de teste ----
   const e = (id) => doc.getElementById(id);

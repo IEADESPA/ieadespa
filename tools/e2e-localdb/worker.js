@@ -3,7 +3,9 @@
 const L = require("./lib");
 const { chamar, GERAL, LIDER, PIN, API, path, obterPool } = L;
 const spec = JSON.parse(process.argv[2]);
-const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js", cuidado: "GestaoCuidadoPastoral/index.js" };
+const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "GestaoVistoriasAntecedentes/index.js", menores: "GestaoMinisterioMenores/index.js", escalas: "GestaoEscalas/index.js", habilitacao: "GestaoHabilitacaoVoluntarios/index.js", protecao: "GestaoProtecaoMenores/index.js", ajuda: "ProtecaoAjuda/index.js", verificador: "ProtecaoVerificador/index.js", checkin: "GestaoCheckinInfantil/index.js", consentimento: "GestaoConsentimentoMenor/index.js", agendador: "NotificacoesAgendador/index.js", cuidado: "GestaoCuidadoPastoral/index.js",
+  // Trava 7-C (decisões de 23/10/2026): o fornecedor ligado à matrícula e a saída com os avisos do voluntário (e2e-46)
+  fornecedores: "GestaoFornecedores/index.js", saidas: "GestaoSaidas/index.js" };
 (async () => {
   const pool = await obterPool();                      // a ponte já está de pé e conectada
   const espera = () => spec.t0 - Date.now();
@@ -15,6 +17,8 @@ const handlers = { setores: "GestaoSetoresTecnicos/index.js", vistorias: "Gestao
     L.shimEncerrar();
     return;
   }
+  // a saída sobe a nota fiscal: no LocalDB o Blob não existe, então o armazenamento é de mentira (o mesmo do e2e-43)
+  if (spec.handler === "saidas") { const st = require(path.join(API, "shared/storage.js")); st.salvarDocumento = async () => `https://blob.e2e/documentos/doc-${process.pid}-${Date.now()}`; st.urlDocumentoComSas = (u) => u; }
   const h = require(path.join(API, handlers[spec.handler]));
   // rotina agendada (segredo no cabeçalho, context.log chamável) e rota pública (sem token)
   if (spec.rotina || spec.publica) {

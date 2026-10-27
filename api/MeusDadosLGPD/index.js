@@ -25,6 +25,7 @@ const cuidadoPastoralDb = require("../shared/cuidadoPastoralDb");
 const comunicacaoDb = require("../shared/comunicacaoDb");
 const identidadeDb = require("../shared/identidadeVisualDb");
 const criseSegurancaDb = require("../shared/criseSegurancaDb");
+const voluntarioPagamentoDb = require("../shared/voluntarioPagamentoDb");
 
 module.exports = async function (context, req) {
   const matricula = context.bindingData.matricula;
@@ -137,6 +138,9 @@ module.exports = async function (context, req) {
   const identidadeVisual = await identidadeDb.dadosDoTitular(pool, alvo);
   // v7.15 — segurança e crise: a equipe de segurança (congregação, função, desde e até), as crises em que a pessoa foi o porta-voz e quantos registros dela há na crise.
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
+  // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
+  // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
+  const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -164,7 +168,8 @@ module.exports = async function (context, req) {
       cuidadoPastoral,
       comunicacao,
       identidadeVisual,
-      criseSeguranca
+      criseSeguranca,
+      tesouraria
     }
   };
 };

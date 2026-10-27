@@ -48,4 +48,9 @@ BASE=cenario-trava7c bash rodar.sh roteiro e2e-43-trava7c-voluntario-pagamento.j
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-44-trava7c-funcoes-menores.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-45-trava7c-decisoes-seguranca.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-46-trava7c-decisoes-corridas.js
+# v8.1 (AFM e faltas da CLI, migração 156): cada roteiro sobre a base sozinho
+bash rodar.sh preparar-afm
+BASE=cenario-afm bash rodar.sh roteiro e2e-47-afm-fluxos.js
+BASE=cenario-afm bash rodar.sh roteiro e2e-48-afm-seguranca.js
+BASE=cenario-afm bash rodar.sh roteiro e2e-49-afm-corridas.js
 echo TUDO-PRONTO

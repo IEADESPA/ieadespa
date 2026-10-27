@@ -138,6 +138,8 @@ module.exports = async function (context, req) {
   const identidadeVisual = await identidadeDb.dadosDoTitular(pool, alvo);
   // v7.15 — segurança e crise: a equipe de segurança (congregação, função, desde e até), as crises em que a pessoa foi o porta-voz e quantos registros dela há na crise.
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
+  // v8.1 — AFM e CLI: as matrículas (com o nível), as desmatrículas, as exclusões da CLI por faltas e o corpo docente.
+  const afmCli = await require("../shared/afmDb").dadosDoTitular(pool, alvo);
   // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
   // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);
@@ -168,6 +170,7 @@ module.exports = async function (context, req) {
       cuidadoPastoral,
       comunicacao,
       identidadeVisual,
+      afmCli,
       criseSeguranca,
       tesouraria
     }

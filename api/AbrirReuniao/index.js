@@ -19,6 +19,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { resolverOrgao, membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
+const afm = require("../shared/afm");
 
 function chaveOrgao(row) {
   return row.orgaoId ? `central:${row.orgaoId}` : `local:${row.orgaoLocalId}`;
@@ -28,7 +29,7 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const { orgaoId, orgaoLocalId, descricao, senhaAcesso, sessaoId: sessaoConvocadaId } = req.body || {};
+  const { orgaoId, orgaoLocalId, descricao, senhaAcesso, sessaoId: sessaoConvocadaId, tipoSessao } = req.body || {};
   const usuarioId = usuario.membroId;
 
   const pool = await getPool();
@@ -99,6 +100,21 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // v8.1 — a reunião da CLI diz o tipo (shared/afm.js, TIPOS_SESSAO_CLI): Ordinária e Sessão Magna da AFM contam para as 3 faltas (Estatuto Art. 27; Regimento Art. 69);
+  // Extraordinária não. Sem tipo informado vale Ordinária (a mensal, o caso comum). Os demais órgãos não têm tipo.
+  let tipo = "ORDINARIA";
+  if (orgao.sigla === "CLI") {
+    if (tipoSessao != null && tipoSessao !== "") {
+      if (typeof tipoSessao !== "string" || !Object.prototype.hasOwnProperty.call(afm.TIPOS_SESSAO_CLI, tipoSessao)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo da reunião da CLI inválido: Ordinária, Extraordinária ou Sessão Magna da AFM." } };
+        return;
+      }
+      tipo = tipoSessao;
+    }
+  }
+  const contaFaltasCLI = orgao.sigla === "CLI" && afm.TIPOS_SESSAO_CLI[tipo].contaFaltas;
+  const magnaAFM = orgao.sigla === "CLI" && afm.TIPOS_SESSAO_CLI[tipo].magna;
+
   const assembleiaAberta = await pool.request().query(
     `SELECT TOP 1 1 AS x FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId WHERE s.Status = 'ABERTA' AND o.Sigla = 'ASSEMBLEIA_GERAL'`
   );
@@ -111,17 +127,18 @@ module.exports = async function (context, req) {
   // convocação) — trava só por sobreposição real de pessoas entre órgãos.
   const abertasResult = await pool.request().query(`
     SELECT s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId, COALESCE(o.Sigla, ol.Sigla) AS sigla, COALESCE(o.Nome, ol.Nome) AS nome,
-           ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId
+           ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId, s.TipoSessao AS tipoSessao
     FROM Sessoes s
     LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
     LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = s.OrgaoLocalId
     WHERE s.Status = 'ABERTA'`);
   if (abertasResult.recordset.length > 0) {
-    const universoNovo = await universoDoOrgao(pool, orgao);
+    // v8.1 — na Sessão Magna a turma da Academia também está na sala: o conflito considera os dois públicos.
+    const universoNovo = await universoDoOrgao(pool, orgao, { magnaAFM });
     const idsNovo = new Set(universoNovo.map(m => m.membroId));
     for (const sessaoAberta of abertasResult.recordset) {
       const mesmoOrgao = chaveOrgao(sessaoAberta) === chaveOrgao(orgao);
-      const universoExistente = mesmoOrgao ? universoNovo : await universoDoOrgao(pool, sessaoAberta);
+      const universoExistente = mesmoOrgao ? universoNovo : await universoDoOrgao(pool, sessaoAberta, { magnaAFM: sessaoAberta.sigla === "CLI" && sessaoAberta.tipoSessao === "MAGNA_AFM" });
       const conflito = universoExistente.find(m => idsNovo.has(m.membroId));
       if (conflito) {
         context.res = {
@@ -143,10 +160,12 @@ module.exports = async function (context, req) {
     .input("orgaoLocalId", sql.Int, orgao.orgaoLocalId)
     .input("descricao", sql.NVarChar(200), descricao)
     .input("senha", sql.NVarChar(50), senhaAcesso)
+    .input("tipo", sql.NVarChar(30), tipo)
+    .input("conta", sql.Bit, contaFaltasCLI)
     .query(`
-      INSERT INTO Sessoes (OrgaoId, OrgaoLocalId, Descricao, DataSessao, Status, SenhaAcesso)
+      INSERT INTO Sessoes (OrgaoId, OrgaoLocalId, Descricao, DataSessao, Status, SenhaAcesso, TipoSessao, ContaFaltasCLI)
       OUTPUT INSERTED.SessaoId
-      VALUES (@orgaoId, @orgaoLocalId, @descricao, CAST(SYSUTCDATETIME() AS DATE), 'ABERTA', @senha)
+      VALUES (@orgaoId, @orgaoLocalId, @descricao, CAST(SYSUTCDATETIME() AS DATE), 'ABERTA', @senha, @tipo, @conta)
     `);
   const sessaoId = result.recordset[0].SessaoId;
 
@@ -155,7 +174,7 @@ module.exports = async function (context, req) {
     registroId: sessaoId,
     acao: "Abriu reunião",
     usuarioId,
-    dadosDepois: { descricao, orgaoId: orgao.orgaoId, orgaoLocalId: orgao.orgaoLocalId, orgaoSigla: orgao.sigla }
+    dadosDepois: { descricao, orgaoId: orgao.orgaoId, orgaoLocalId: orgao.orgaoLocalId, orgaoSigla: orgao.sigla, tipoSessao: orgao.sigla === "CLI" ? tipo : undefined }
   });
 
   context.res = {

@@ -17,11 +17,13 @@ jest.mock("../menoresConsentimentoDb", () => ({
 jest.mock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
 jest.mock("../identidadeVisualDb", () => ({ rotinaAntesDosAvisos: jest.fn(async () => ({ falhas: [] })), rotinaDepoisDosAvisos: jest.fn(async () => ({ falhas: [] })) }));
 jest.mock("../enquetes", () => ({ encerrarVencidas: jest.fn(async () => ({ encerradas: 0 })) }));
+jest.mock("../afmDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
 
 const { avaliarRegras } = require("../notificacaoMotor");
 const cuidadoDb = require("../cuidadoPastoralDb");
 const identidadeDb = require("../identidadeVisualDb");
 const enquetesMod = require("../enquetes");
+const afmDb = require("../afmDb");
 const mmDb = require("../ministerioMenoresDb");
 const mcDb = require("../menoresConsentimentoDb");
 const handler = require("../../NotificacoesAgendador/index.js");
@@ -39,6 +41,7 @@ beforeEach(() => {
   identidadeDb.rotinaAntesDosAvisos.mockReset(); identidadeDb.rotinaAntesDosAvisos.mockResolvedValue({ falhas: [], votacoesAbertas: 0, apuradas: 0 });
   identidadeDb.rotinaDepoisDosAvisos.mockReset(); identidadeDb.rotinaDepoisDosAvisos.mockResolvedValue({ falhas: [] });
   enquetesMod.encerrarVencidas.mockReset(); enquetesMod.encerrarVencidas.mockResolvedValue({ encerradas: 0 });
+  afmDb.rotinaDiaria.mockReset(); afmDb.rotinaDiaria.mockResolvedValue({ falhas: [] });
 });
 
 // v7.11 — a rotina do cuidado pastoral (escada do prazo vencido, regra dos 30 dias das notas) roda ANTES dos avisos e não falha em silêncio.
@@ -121,6 +124,28 @@ test("identidade visual: antes dos avisos o ciclo, depois deles a retenção (co
   enquetesMod.encerrarVencidas.mockResolvedValue({ encerradas: 0 });
   avaliarRegras.mockResolvedValue({ criadas: 0, emailsEnviados: 0, falhas: ["IDENTIDADE_VOTACAO"] });
   expect((await rodar()).status).toBe(500);
+});
+// v8.1 — a apuração das 3 faltas (CLI e AFM) roda ANTES dos avisos e, por ser sanção, não falha em silêncio: passo com falha, rotina que estourou ou detector CLI_/AFM_ dão 500.
+test("AFM e faltas da CLI: a rotina roda antes dos avisos; falha dela ou de um detector CLI_/AFM_ dá 500 (os avisos do dia rodaram)", async () => {
+  const ordem = [];
+  afmDb.rotinaDiaria.mockImplementation(async () => { ordem.push("afm"); return { falhas: [], exclusoes: 0 }; });
+  avaliarRegras.mockImplementation(async () => { ordem.push("avisos"); return { criadas: 0, emailsEnviados: 0, falhas: [] }; });
+  const ok = await rodar();
+  expect(ok.status).toBe(200);
+  expect(ordem).toEqual(["afm", "avisos"]);
+  expect(ok.body.afm).toEqual({ falhas: [], exclusoes: 0 });
+  afmDb.rotinaDiaria.mockResolvedValue({ falhas: ["apuracao"] });
+  expect((await rodar()).status).toBe(500);
+  afmDb.rotinaDiaria.mockRejectedValue(new Error("banco fora"));
+  const tudo = await rodar();
+  expect(tudo.status).toBe(500);
+  expect(tudo.body.afm.falhas).toEqual(["rotina"]);
+  expect(tudo.body.criadas).toBeDefined();
+  afmDb.rotinaDiaria.mockResolvedValue({ falhas: [] });
+  for (const chave of ["CLI_EXCLUSAO_FALTAS", "AFM_DESMATRICULA"]) {
+    avaliarRegras.mockResolvedValue({ criadas: 0, emailsEnviados: 0, falhas: [chave] });
+    expect((await rodar()).status).toBe(500);
+  }
 });
 // (revisão) a rotina responde 500 quando um passo protegido falhou: o passo seguinte do workflow (a versão da agenda pública) roda assim mesmo, e o e-mail de falha sai.
 test("rotinas-diarias.yml: a versão da agenda pública roda mesmo com a rotina de avisos em falha, e a falha manda o e-mail", () => {

@@ -28,7 +28,7 @@ module.exports = async function (context, req) {
 
   const upd = await pool.request()
     .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId)
-    .query(`UPDATE Presencas SET JustificativaPendente = NULL WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
+    .query(`UPDATE Presencas SET JustificativaPendente = NULL, PendenteCodigo = NULL WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
   if (upd.rowsAffected[0] === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há registro de frequência para esse membro nesta reunião." } };
     return;

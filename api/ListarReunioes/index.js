@@ -30,6 +30,7 @@ module.exports = async function (context, req) {
            CONVERT(varchar(10), s.DataSessao, 120) AS dataSessao, s.Status AS status,
            s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId,
            COALESCE(o.Nome, ol.Nome) AS orgaoNome, COALESCE(o.Sigla, ol.Sigla) AS orgaoSigla,
+           s.TipoSessao AS tipoSessao, s.ContaFaltasCLI AS contaFaltasCLI,
            SUM(CASE WHEN p.Presente = 1 THEN 1 ELSE 0 END) AS totalPresentes,
            SUM(CASE WHEN p.Presente = 0 THEN 1 ELSE 0 END) AS totalFaltas,
            SUM(CASE WHEN p.Presente = 0 AND p.FaltaJustificada = 1 THEN 1 ELSE 0 END) AS totalJustificadas
@@ -46,7 +47,7 @@ module.exports = async function (context, req) {
     query += ` AND s.OrgaoLocalId = @orgaoLocalId`;
     request.input("orgaoLocalId", sql.Int, orgaoLocalId);
   }
-  query += ` GROUP BY s.SessaoId, s.Descricao, s.DataSessao, s.Status, s.OrgaoId, s.OrgaoLocalId, o.Nome, o.Sigla, ol.Nome, ol.Sigla ORDER BY s.SessaoId DESC`;
+  query += ` GROUP BY s.SessaoId, s.Descricao, s.DataSessao, s.Status, s.OrgaoId, s.OrgaoLocalId, o.Nome, o.Sigla, ol.Nome, ol.Sigla, s.TipoSessao, s.ContaFaltasCLI ORDER BY s.SessaoId DESC`;
 
   const result = await request.query(query);
   // Órgão territorial fora do escopo some da lista (e `?orgaoLocalId=` de fora devolve lista vazia, igual a "não existe").

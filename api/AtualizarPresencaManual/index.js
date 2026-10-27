@@ -3,6 +3,7 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const afmDb = require("../shared/afmDb");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -29,7 +30,11 @@ module.exports = async function (context, req) {
     .input("sessaoId", sql.Int, sessaoId).input("membroId", sql.Int, membroId).input("presente", sql.Bit, presente)
     .query(`UPDATE Presencas SET Presente = @presente,
             FaltaJustificada = CASE WHEN @presente = 1 THEN 0 ELSE FaltaJustificada END,
-            MotivoJustificativa = CASE WHEN @presente = 1 THEN NULL ELSE MotivoJustificativa END
+            MotivoJustificativa = CASE WHEN @presente = 1 THEN NULL ELSE MotivoJustificativa END,
+            MotivoCodigo = CASE WHEN @presente = 1 THEN NULL ELSE MotivoCodigo END,
+            ComprovanteConferido = CASE WHEN @presente = 1 THEN NULL ELSE ComprovanteConferido END,
+            JustificativaPendente = CASE WHEN @presente = 1 THEN NULL ELSE JustificativaPendente END,
+            PendenteCodigo = CASE WHEN @presente = 1 THEN NULL ELSE PendenteCodigo END
             WHERE SessaoId = @sessaoId AND MembroId = @membroId`);
   if (upd.rowsAffected[0] === 0) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Não há registro de frequência para esse membro nesta reunião." } };
@@ -44,5 +49,11 @@ module.exports = async function (context, req) {
     dadosDepois: { sessaoId: Number(sessaoId), presente }
   });
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Presença atualizada." } };
+  // v8.1 — corrigir presença numa reunião que conta falta refaz a apuração das 3 faltas (pode excluir ou desfazer uma exclusão).
+  let apuracao = "";
+  const conta = (await pool.request().input("id", sql.Int, sessaoId).query(`
+    SELECT s.ContaFaltasCLI AS conta FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId AND o.Sigla = 'CLI' WHERE s.SessaoId = @id`)).recordset[0];
+  if (conta && conta.conta) apuracao = afmDb.resumoDaApuracao(await afmDb.apurarSemFalhar(pool, { membroIds: [Number(membroId)] }, context.log.error));
+
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Presença atualizada.${apuracao}` } };
 };

@@ -23,7 +23,8 @@ module.exports = async function (context, req) {
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Descricao AS descricao,
            CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status,
-           QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias
+           QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias,
+           TipoSessao AS tipoSessao, ContaFaltasCLI AS contaFaltasCLI
     FROM Sessoes WHERE SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
@@ -34,7 +35,8 @@ module.exports = async function (context, req) {
   const presencasResult = await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, COALESCE(cm.Nome, m.Funcao) AS funcao, m.CongregacaoId AS congregacaoId,
            c.Nome AS congregacao, p.Presente AS presente, p.FaltaJustificada AS faltaJustificada,
-           p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente
+           p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente,
+           p.MotivoCodigo AS motivoCodigo, p.PendenteCodigo AS pendenteCodigo, p.EsperadoCLI AS esperadoCLI, p.EsperadoAFM AS esperadoAFM
     FROM Presencas p
     JOIN MembroReferencia m ON m.MembroId = p.MembroId
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId

@@ -39,7 +39,7 @@ module.exports = comConflito(async function (context, req) {
 
   const abertasResult = await pool.request().query(`
     SELECT s.SessaoId AS sessaoId, s.OrgaoId AS orgaoId, s.OrgaoLocalId AS orgaoLocalId, s.Descricao AS descricao, s.SenhaAcesso AS senhaAcesso,
-           COALESCE(o.Sigla, ol.Sigla) AS orgaoSigla, COALESCE(o.Nome, ol.Nome) AS orgaoNome, ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId
+           COALESCE(o.Sigla, ol.Sigla) AS orgaoSigla, COALESCE(o.Nome, ol.Nome) AS orgaoNome, ol.Nivel AS nivel, ol.ReferenciaId AS referenciaId, s.TipoSessao AS tipoSessao
     FROM Sessoes s
     LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
     LEFT JOIN OrgaosLocais ol ON ol.OrgaoLocalId = s.OrgaoLocalId
@@ -67,8 +67,12 @@ module.exports = comConflito(async function (context, req) {
   let algumJaRegistrado = false;
   const elegiveis = [];
   for (const sessao of candidatasSenha) {
-    const universo = await universoDoOrgao(pool, { orgaoId: sessao.orgaoId, orgaoLocalId: sessao.orgaoLocalId, sigla: sessao.orgaoSigla, nivel: sessao.nivel, referenciaId: sessao.referenciaId });
-    if (!universo.some(m => String(m.membroId) === String(membro.membroId))) continue;
+    // v8.1 — na Sessão Magna da AFM a turma da Academia também bate ponto (Regimento Art. 69); a marca de quem era esperado por quem vai junto com a presença.
+    const universo = await universoDoOrgao(pool, { orgaoId: sessao.orgaoId, orgaoLocalId: sessao.orgaoLocalId, sigla: sessao.orgaoSigla, nivel: sessao.nivel, referenciaId: sessao.referenciaId },
+      { magnaAFM: sessao.orgaoSigla === "CLI" && sessao.tipoSessao === "MAGNA_AFM" });
+    const noUniverso = universo.find(m => String(m.membroId) === String(membro.membroId));
+    if (!noUniverso) continue;
+    sessao.esperado = sessao.orgaoSigla === "CLI" ? { cli: !!noUniverso.esperadoCLI, afm: !!noUniverso.esperadoAFM } : null;
     algumNoUniverso = true;
     const jaRegistrado = await pool.request().input("sessaoId", sql.Int, sessao.sessaoId).input("mat", sql.Int, matricula)
       .query(`SELECT 1 AS x FROM Presencas WHERE SessaoId = @sessaoId AND MembroId = @mat`);
@@ -104,8 +108,10 @@ module.exports = comConflito(async function (context, req) {
     }
   }
 
+  const esperado = sessaoEscolhida.esperado;
   await pool.request().input("sessaoId", sql.Int, sessaoEscolhida.sessaoId).input("mat", sql.Int, matricula)
-    .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente) VALUES (@sessaoId, @mat, 1)`);
+    .input("cli", sql.Bit, esperado ? esperado.cli : null).input("afm", sql.Bit, esperado ? esperado.afm : null)
+    .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, EsperadoCLI, EsperadoAFM) VALUES (@sessaoId, @mat, 1, @cli, @afm)`);
 
   await registrarAuditoria({
     tabela: "Presencas", registroId: Number(sessaoEscolhida.sessaoId), acao: "Registrou presença (Portaria)",

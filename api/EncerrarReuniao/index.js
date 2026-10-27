@@ -11,6 +11,7 @@ const { getPool, sql } = require("../shared/db");
 const { universoDoOrgao } = require("../shared/universo");
 const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { violouUnicidade } = require("../shared/violacaoUnica");
+const afmDb = require("../shared/afmDb");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
@@ -26,7 +27,8 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId)
-    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Status AS status FROM Sessoes WHERE SessaoId = @id`);
+    .query(`SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Status AS status, TipoSessao AS tipoSessao, ContaFaltasCLI AS contaFaltasCLI
+            FROM Sessoes WHERE SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
     context.res = { status: 200, body: { sucesso: false, mensagem: "Reunião não encontrada." } };
@@ -54,13 +56,16 @@ module.exports = async function (context, req) {
     .query(`SELECT MembroId AS membroId, Presente AS presente, FaltaJustificada AS faltaJustificada FROM Presencas WHERE SessaoId = @id`);
   const idsComPresenca = new Set(presencasResult.recordset.map(p => p.membroId));
 
-  const universo = await universoDoOrgao(pool, orgao);
+  // v8.1 — reunião da CLI: cada falta guarda se a pessoa era esperada pela CLI e/ou pela Academia (Sessão Magna, Regimento Art. 69 — falta dupla).
+  const ehCLI = !!orgao && orgao.sigla === "CLI";
+  const universo = await universoDoOrgao(pool, orgao, { magnaAFM: ehCLI && sessao.tipoSessao === "MAGNA_AFM" });
   let totalFaltas = 0;
   for (const membro of universo) {
     if (idsComPresenca.has(membro.membroId)) continue;
     try {
       await pool.request().input("sessaoId", sql.Int, sessaoId).input("mat", sql.Int, membro.membroId)
-        .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada) VALUES (@sessaoId, @mat, 0, 0)`);
+        .input("cli", sql.Bit, ehCLI ? !!membro.esperadoCLI : null).input("afm", sql.Bit, ehCLI ? !!membro.esperadoAFM : null)
+        .query(`INSERT INTO Presencas (SessaoId, MembroId, Presente, FaltaJustificada, EsperadoCLI, EsperadoAFM) VALUES (@sessaoId, @mat, 0, 0, @cli, @afm)`);
     } catch (e) {
       // A pessoa bateu ponto entre a leitura das presenças e este INSERT: o índice único (UX_Presencas_Sessao_Membro) recusa a falta, e a presença dela vale. Sem isto o
       // encerramento parava aqui com a reunião já ENCERRADA e as faltas dos demais nunca seriam lançadas.
@@ -75,12 +80,19 @@ module.exports = async function (context, req) {
 
   await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoId), acao: "Encerrou reunião", usuarioId });
 
+  // v8.1 — reunião que conta falta: apura na hora as 3 faltas seguidas (CLI e AFM). Falha não desfaz o encerramento: a rotina diária repete.
+  let apuracao = "";
+  if (ehCLI && sessao.contaFaltasCLI) {
+    const ids = [...new Set(universo.map(m => Number(m.membroId)).concat(presencasResult.recordset.map(p => Number(p.membroId))))];
+    apuracao = afmDb.resumoDaApuracao(await afmDb.apurarSemFalhar(pool, { membroIds: ids }, context.log.error));
+  }
+
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json" },
     body: {
       sucesso: true,
-      mensagem: `✅ Reunião Encerrada!\nPresentes: ${totalPresentes}\nFaltas geradas: ${totalFaltas}\nJustificadas consumidas: ${totalJustificadas}`
+      mensagem: `✅ Reunião Encerrada!\nPresentes: ${totalPresentes}\nFaltas geradas: ${totalFaltas}\nJustificadas consumidas: ${totalJustificadas}${apuracao}`
     }
   };
 };

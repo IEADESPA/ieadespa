@@ -1371,10 +1371,10 @@ ponto real de integração:
     com Ordem de Serviço escrita prévia (Art. 133 §4º), a vedação da "diarista disfarçada" —
     pagar valor fixo a uma pessoa só para limpar (Art. 135 §2º) —, a proibição de cachê a
     membro (§3º) e a de comissão em cantina e bazar (Art. 135 §3º). O Termo informa o
-    voluntário dessas regras, mas **nada no sistema as impede ainda** *(avaliado na Trava 7-C: o pagamento a pessoa
-    sai por `SaidasTesouraria`, o membro não tem CPF no cadastro e o fornecedor não se liga ao membro; avisar
-    habitualidade e voluntário ativo é pequeno-médio, bloquear sem a Ordem de Serviço é grande — aguarda a decisão do
-    responsável)*; o Art. 135 §4º
+    voluntário dessas regras. *(Resolvido na Trava 7-C, **só aviso, por decisão de 23/10/2026**: o fornecedor pessoa
+    física se liga à matrícula do membro (`Fornecedores.MembroId`, migração 155) e, ao lançar a saída, o tesoureiro lê e
+    confirma os avisos — voluntário ativo, pagamento habitual, cachê/comissão —, que ficam registrados na saída. O sistema
+    não impede.)* O Art. 135 §4º
     (higiene e proteção do voluntário na cozinha) também fica como orientação.
   - **Retenção:** a **adesão** (data, versão, hash, forma) é a prova da Lei 9.608/98 e **não
     tem prazo final**. O **IP e os cabeçalhos do aceite digital** são dado pessoal que só
@@ -2477,8 +2477,9 @@ hora pelo workflow `rotinas-protecao.yml`). Anexos do incidente: `/api/anexos` c
   e encerrar o caso são do nível geral.
 - **A proteção cobre as escalas e os canais**; a sala de aula da EBD e outras funções com criança que não
   passam pelas escalas continuam fora do portão do sistema (como já era na v7.7): o afastamento ali é
-  decisão da Diretoria sobre o cadastro do professor. *(Registrado, não esquecido: é o próximo degrau de
-  proteção, junto com a v7.10.)*
+  decisão da Diretoria sobre o cadastro do professor. *(A turma da EBD ganhou o portão na Trava 7-B. Resolvido na
+  Trava 7-C, por decisão de 23/10/2026: **departamentos e liderança** — eventos ficaram fora. Quem ocupa departamento ou
+  cargo marcado "com crianças" e não está apto aparece para a Diretoria e a Proteção do nível geral, sem sair do cargo.)*
 
 ### O que NÃO é desta versão (e por quê)
 
@@ -3401,3 +3402,16 @@ seguir pra Ministerial.
   - **Fila de comunicados 24 h:** de madrugada só o aviso de crise; o comunicado comum espera as 6h.
   - **Superintendente Regional:** o painel do nível geral avisa a região sem o cadastro (a escada a pula). Ação humana: cadastrar.
   - **Site:** a política de privacidade e o formulário do mural contam a cópia para o sistema, a lista de risco e o aviso à Diretoria.
+  - **Decisões do responsável (23/10/2026), no ramo `trava-7c-decisoes` (migração 155; `e2e-43` a `e2e-46`):**
+    - **Dinheiro do voluntário: só aviso** (Regimento Art. 133 §4º, Art. 135 §2º e §3º; Lei 9.608/98). O fornecedor pessoa física pode
+      se ligar à matrícula de um membro do território (`Fornecedores.MembroId`: só pessoa física, uma matrícula por fornecedor). Ao lançar a
+      saída, três avisos: a pessoa é voluntária (termo vigente ou equipe de escala ativa); pagamentos à mesma pessoa física em 3 semanas
+      diferentes em 60 dias (prazos `TESOURARIA_HABITUAL_PAGAMENTOS` e `_JANELA_DIAS`, ajustáveis; o prebendado fica fora); cachê ou
+      comissão na descrição, para voluntário. Sem a confirmação nada é gravado; com ela, a saída e os avisos entram juntos
+      (`SaidaAvisosVoluntario`, que não se edita) e aparecem a quem aprova e paga. Resumo do mês para a Tesouraria geral pela rotina
+      diária (`TESOURARIA_VOLUNTARIO_PAGO`). Meus Dados mostra o cadastro de fornecedor e os avisos.
+    - **Funções com criança fora das escalas: departamentos e liderança** (eventos fora). A marca "tem contato com crianças" em
+      `Departamentos` e `Papeis` (a União de Crianças nasce marcada); marcar é do nível geral (departamento: `pessoas`; cargo:
+      `permissoes`), com a confirmação reforçada. Quem ocupa e não está apto aparece num painel (a Diretoria lê o motivo; a
+      Proteção do nível geral, "pendência com a Diretoria") e num aviso obrigatório (`MENORES_FUNCAO_SEM_APTIDAO`), uma vez por
+      pessoa e função a cada mês, nunca à própria pessoa e sem o motivo. A nomeação avisa e não impede: a decisão é humana.

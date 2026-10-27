@@ -291,6 +291,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "comunicacao" && typeof comAbrirAba === "function") comAbrirAba();
   if (aba === "identidade" && typeof idvAbrirAba === "function") idvAbrirAba();
   if (aba === "crise" && typeof crsAbrirAba === "function") crsAbrirAba();
+  if (aba === "afm" && typeof afmAbrirAba === "function") afmAbrirAba();   // v8.1 — Academia (AFM)
   if (aba === "assistenciasocial") { carregarOpcoesAssistenciaSocialAcao(); carregarProfissionaisAssistenciaAcao(); }
   if (aba === "ebd") {
     const modoProfessor = !authPermissoes.includes("ebd_gestao");
@@ -346,7 +347,7 @@ const TITULOS_MODULOS = {
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
   conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação",
   psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos",
-  setores: "Setores Técnicos", vistoria: "Vistoria de Antecedentes"
+  setores: "Setores Técnicos", vistoria: "Vistoria de Antecedentes", afm: "Academia de Formação Ministerial (AFM)"
 };
 
 registrarAcoes({

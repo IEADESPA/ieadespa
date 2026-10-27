@@ -370,7 +370,8 @@ function selecionarOrgaoReunioes(chave) {
   });
 
   if (ehAssembleia) carregarConvocacoesPendentes();
-  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); carregarProjetos(); }
+  if (typeof afmAjustarTipoReuniao === "function") afmAjustarTipoReuniao(ehCLI);   // v8.1: só a CLI tem tipo (Ordinária, Extraordinária, Sessão Magna)
+  if (ehCLI) { carregarComposicaoCLI(); carregarAssentosCLI(); carregarComissoes(); carregarProjetos(); if (typeof afmCarregarFaltasCLI === "function") afmCarregarFaltasCLI(); }
   if (ehDiretoria) { carregarAssentosDiretoria(); carregarSucessaoPresidencial(); }
   if (ehConselhoFiscal) { carregarAssentosConselhoFiscal(); if (authGeral) carregarMedidasCautelares(); } // medidas cautelares: rota inteira só do geral
   if (ehCEI) carregarAssentosCEI();
@@ -514,6 +515,34 @@ async function carregarComissoes() {
   if (document.getElementById("resultadoListaCEP")) document.getElementById("resultadoListaCEP").innerHTML = tabelaComissaoCalculada(data.CEP, false);
   // v4.8 (segunda parte) — PMO reaproveita a mesma tabela de exibição da CCJ.
   if (document.getElementById("resultadoListaPMO")) document.getElementById("resultadoListaPMO").innerHTML = tabelaComissaoCalculada(data.PMO, "pmo");
+  // v8.1 — CDER (Art. 22): o Reitor (calculado do cadastro da AFM) e os 2 mestres de teologia da CLI, com a titulação.
+  const cxCder = document.getElementById("resultadoListaCDER");
+  if (cxCder && data.CDER) {
+    const c = data.CDER;
+    const reitor = c.reitor
+      ? `<p class="linha-perfil"><strong>Reitor da AFM:</strong> ${escaparHtmlEbd(c.reitor.nome)} (matrícula ${escaparHtmlEbd(c.reitor.membroId)})${c.reitor.titulacao ? ` — ${escaparHtmlEbd(c.reitor.titulacao)}` : ""}${c.situacaoReitor === "EM_EXERCICIO" ? "" : " — <em>aguardando homologação ou com mandato vencido (aba Academia)</em>"}</p>`
+      : `<p class="linha-perfil"><strong>Reitor da AFM:</strong> <em>Reitoria vaga — registre a nomeação na aba Academia (AFM).</em></p>`;
+    const mestres = (c.mestres || []).map(m => Object.assign({}, m, { nome: `${m.nome}${m.qualificacao ? ` — ${m.qualificacao}` : ""}${m.foraDaCLI ? " (⚠️ não compõe mais a CLI: recomponha a vaga)" : ""}` }));
+    cxCder.innerHTML = reitor + tabelaComissaoCalculada(mestres, "cder");
+  }
+}
+
+async function adicionarMembroCDER() {
+  const membroId = document.getElementById("cderMatricula").value;
+  const qualificacao = document.getElementById("cderQualificacao").value.trim();
+  const msg = document.getElementById("resultadoCDER");
+  if (!membroId || !qualificacao) { msg.textContent = "Informe a matrícula e a titulação em teologia."; return; }
+  const res = await fetchProtegido(`${API_BASE}/comissoes/cder`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ membroId, qualificacao })
+  });
+  const data = await res.json();
+  avisarResultado(data);
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) {
+    document.getElementById("cderMatricula").value = "";
+    document.getElementById("cderQualificacao").value = "";
+    carregarComissoes();
+  }
 }
 
 async function adicionarMembroCCJ() {
@@ -694,7 +723,7 @@ async function excluirCongregacaoDetalheAcao(id) {
 }
 
 registrarAcoes({
-  adicionarMembroCCJ, adicionarMembroPMO, desativarCongregacaoDetalheAcao, editarCatalogo, editarCongregacaoDetalhe, encerrarAssentoCLIAcao,
+  adicionarMembroCCJ, adicionarMembroCDER, adicionarMembroPMO, desativarCongregacaoDetalheAcao, editarCatalogo, editarCongregacaoDetalhe, encerrarAssentoCLIAcao,
   excluirCatalogo, excluirCongregacaoDetalheAcao, filtrarCatalogo, limparFormCongregacaoDetalhe, mudarPaginaCatalogo, reativarCongregacaoDetalheAcao,
   removerMembroComissaoAcao, salvarAssentoCLI, salvarCatalogo, salvarCongregacaoDetalhe, selecionarOrgaoReunioes
 });

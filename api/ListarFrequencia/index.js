@@ -53,6 +53,7 @@ module.exports = async function (context, req) {
     SELECT NULL, ol.Sigla, NULL, ol.OrgaoLocalId, ol.Nivel, ol.ReferenciaId FROM OrgaosLocais ol WHERE ol.OrgaoLocalId = @idLocal
   `);
   const orgao = orgaoResult.recordset[0] || null;
+  sessao.orgaoSigla = orgao ? orgao.sigla : null;   // v8.1 — a tela usa o catálogo de justificativa nas reuniões da CLI
 
   const universo = await universoDoOrgao(pool, orgao);
   const totalAtivos = universo.length;

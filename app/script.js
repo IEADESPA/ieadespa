@@ -57,6 +57,7 @@ const AJUDA_POR_ABA = {
   psc: "Avaliação anual obrigatória de cada congregação pelos 5 Sinais Vitais (Escada Bloqueada): preencher, enviar, validar e homologar, mais a reclassificação compulsória para Extensão da Tenda (Regimento Art. 127-129).",
   calendario: "Calendário Oficial do Campo: veja a agenda do mês, proponha datas (o nível do evento decide quem prevalece no choque), acompanhe a pauta e, conforme a sua permissão, consolide, homologue o ano ou ajuste a agenda litúrgica (Regimento Art. 79, 81, 147, 154 e 154-A).",
   "meupainel:agenda": "A agenda oficial dos próximos 60 dias: eventos do Calendário Oficial já homologados e a grade litúrgica fixa. Escolha a sua congregação para ver só o que alcança ela.",
+  afm: "Academia (AFM): todo oficial é matriculado sozinho (Regimento Art. 66 §2º). Em Matrículas, veja quem está inativo (3 Sessões Magnas seguidas sem justificativa, ou reprovação), quem está abaixo do nível do cargo (Art. 72) e quem está com 2 Magnas seguidas; registre o nível, a reprovação e a nova matrícula depois da reciclagem. Em Reitor e docentes, registre a nomeação do Reitor, a homologação da CLI e a recondução (mandato até 31/12). As faltas da CLI ficam em Órgãos Centrais → CLI → Faltas e cadeiras.",
   crise: "Crise e segurança: em crise (escândalo na mídia, acidente grave), só o porta-voz único fala pela Igreja (Regimento Art. 161-B). Qualquer líder registra aqui, em Imprensa, o pedido de jornalista que chegou a ele — sem comentar o assunto — e o porta-voz recebe na hora. O nível geral abre e encerra o regime e troca o porta-voz (toda a liderança é avisada); o porta-voz registra o que disse. Em Segurança, o Dirigente e o Pastor de Área cuidam do plano de emergência, dos simulados, da vistoria do templo e da equipe de segurança.",
   comunicacao: "Comunicados: escolha um modelo aprovado, monte o grupo (território, cargo, departamento, EBD, formação, voluntariado, direito a voto) e veja quantas pessoas recebem antes de enviar. O e-mail e o celular só chegam a quem autorizou aquela categoria; a convocação oficial chega a todos. Em Envios, o relatório mostra quem recebeu e quem leu; na convocação, quem não foi alcançado. Só o nível geral escreve e aprova modelos.",
   canais: "Relação de Canais Oficiais da IEADESPA (Estatuto Art. 12): só conta, número ou grupo em nome da Igreja. Registre canais, designe administradores, acompanhe a Regra das 24 Horas, as trocas de senha na sucessão de liderança e a transmissão dos cultos (Área Cega).",
@@ -1259,7 +1260,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1442,7 +1443,7 @@ const MODULOS = {
   territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
   orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
-  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "enquetes", "arquivos", "identidade"] },
+  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "afm", "enquetes", "arquivos", "identidade"] },
   disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
   departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
   escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },

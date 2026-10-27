@@ -589,6 +589,9 @@ async function abrirReuniao() {
   if (!chave || !descricao || !senhaAcesso) { mostrarToast("Escolha o órgão e preencha descrição e senha.", "erro"); return; }
   const [tipo, id] = chave.split(":");
   const body = tipo === "local" ? { orgaoLocalId: id, descricao, senhaAcesso } : { orgaoId: id, descricao, senhaAcesso };
+  // v8.1 — a CLI diz o tipo (Ordinária e Sessão Magna contam falta; Extraordinária não)
+  const blocoTipo = document.getElementById("blocoTipoReuniaoCLI");
+  if (tipo === "central" && blocoTipo && blocoTipo.style.display !== "none") body.tipoSessao = document.getElementById("reuniaoTipoSessao").value;
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
     method: "POST",
@@ -659,9 +662,12 @@ async function carregarReunioes() {
   </tr></thead><tbody>`;
 
   reunioes.forEach(r => {
+    // v8.1 — o tipo da reunião da CLI (a Extraordinária não conta para as 3 faltas)
+    const tipoCLI = r.orgaoSigla === "CLI" && r.contaFaltasCLI !== undefined && typeof afmRotuloTipoSessao === "function" && (r.contaFaltasCLI || r.tipoSessao === "EXTRAORDINARIA")
+      ? ` <span class="tag-pendente">${escaparHtmlEbd(afmRotuloTipoSessao(r.tipoSessao))}</span>` : "";
     html += `<tr>
       <td>${escaparHtmlEbd(r.orgaoNome) || "-"}</td>
-      <td>${escaparHtmlEbd(r.descricao)}</td>
+      <td>${escaparHtmlEbd(r.descricao)}${tipoCLI}</td>
       <td>${escaparHtmlEbd(r.dataSessao)}</td>
       <td>${escaparHtmlEbd(r.status)}</td>
       <td>${escaparHtmlEbd(r.totalPresentes)}</td>
@@ -853,14 +859,19 @@ async function verFrequencia(sessaoId, descricao) {
     <th>Matrícula</th><th>Nome</th><th>Função</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
 
+  // v8.1 — reunião da CLI: a justificativa sai do catálogo fechado do Regimento Art. 149 §2º (e, na Sessão Magna, com o documento conferido)
+  sessaoFrequenciaAberta.ehCLI = !!(data.sessao && data.sessao.orgaoSigla === "CLI");
+  sessaoFrequenciaAberta.magna = !!(data.sessao && data.sessao.tipoSessao === "MAGNA_AFM");
+  if (sessaoFrequenciaAberta.ehCLI && typeof afmCarregarCatalogo === "function") await afmCarregarCatalogo();
   data.frequencia.forEach(item => {
     const podeJustificar = !item.presente && !item.faltaJustificada;
     const botaoCorrigir = item.presente
       ? `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, false)}">Marcar falta</button>`
       : `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, true)}">Marcar presente</button>`;
-    const pendenteHtml = item.justificativaPendente
-      ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(item.justificativaPendente)}"</div>
-         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""))}">Aprovar</button>
+    const textoPedido = item.justificativaPendente || (item.pendenteCodigo && typeof afmRotuloMotivo === "function" ? afmRotuloMotivo(item.pendenteCodigo) : "");
+    const pendenteHtml = item.justificativaPendente || item.pendenteCodigo
+      ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(textoPedido)}"</div>
+         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""), String(item.pendenteCodigo ?? ""))}">Aprovar</button>
          <button class="btn-link btn-link-perigo" data-on-click="rejeitarJustificativaAcao" data-args-click="${argsAttr(sessaoId, item.membroId)}">Rejeitar</button>`
       : "";
     html += `<tr>
@@ -877,13 +888,21 @@ async function verFrequencia(sessaoId, descricao) {
 }
 
 async function justificarFalta(sessaoId, membroId) {
-  const motivo = await pedirTexto("Motivo da justificativa", "Ex: estava viajando a trabalho");
-  if (motivo === null) return;
+  let corpo;
+  if (sessaoFrequenciaAberta && sessaoFrequenciaAberta.ehCLI && typeof afmPedirJustificativa === "function") {
+    const j = await afmPedirJustificativa({ titulo: "Justificar falta na CLI", comprovante: sessaoFrequenciaAberta.magna });
+    if (j === null) return;
+    corpo = { membroId, ...j };
+  } else {
+    const motivo = await pedirTexto("Motivo da justificativa", "Ex: estava viajando a trabalho");
+    if (motivo === null) return;
+    corpo = { membroId, motivo };
+  }
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/justificar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, motivo })
+    body: JSON.stringify(corpo)
   });
   const data = await res.json();
   avisarResultado(data);
@@ -892,14 +911,25 @@ async function justificarFalta(sessaoId, membroId) {
 
 // Aprova um pedido que o próprio obreiro enviou pelo painel pessoal — reaproveita
 // o mesmo endpoint de justificar, só pré-preenchendo com o motivo que ele mandou.
-async function aprovarJustificativaPendente(sessaoId, membroId, motivoSugerido) {
-  const motivo = await pedirTexto("Aprovar justificativa", "Motivo", motivoSugerido);
-  if (motivo === null) return;
+async function aprovarJustificativaPendente(sessaoId, membroId, motivoSugerido, codigoSugerido) {
+  let corpo;
+  if (sessaoFrequenciaAberta && sessaoFrequenciaAberta.ehCLI && typeof afmPedirJustificativa === "function") {
+    // v8.1 — o pedido do obreiro já veio pelo catálogo: a Secretaria confere (e, na Sessão Magna, confirma o documento)
+    const rotulo = codigoSugerido && typeof afmRotuloMotivo === "function" ? afmRotuloMotivo(codigoSugerido) : "";
+    const detalhe = rotulo && String(motivoSugerido || "").startsWith(`${rotulo} — `) ? String(motivoSugerido).slice(rotulo.length + 3) : "";
+    const j = await afmPedirJustificativa({ titulo: "Aprovar justificativa", comprovante: sessaoFrequenciaAberta.magna, codigoSugerido, detalheSugerido: detalhe });
+    if (j === null) return;
+    corpo = { membroId, ...j };
+  } else {
+    const motivo = await pedirTexto("Aprovar justificativa", "Motivo", motivoSugerido);
+    if (motivo === null) return;
+    corpo = { membroId, motivo };
+  }
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/justificar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, motivo })
+    body: JSON.stringify(corpo)
   });
   const data = await res.json();
   avisarResultado(data);

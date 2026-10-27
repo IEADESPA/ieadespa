@@ -37,6 +37,9 @@ async function naCLI(id) { return (await composicaoCLI(await obterPool(), orgaoC
 const exclusaoVigente = (id) => um("SELECT * FROM CLIExclusoesFaltas WHERE MembroId = @id AND ReadmitidaEm IS NULL AND AnuladaEm IS NULL", { id });
 const matriculaAtual = (id) => um("SELECT TOP 1 * FROM Matriculas_AFM WHERE MembroId = @id ORDER BY MatriculaId DESC", { id });
 const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId = @s AND MembroId = @id", { s: sessaoId, id });
+// E2E_CONTRATO=1: grava as respostas REAIS dos handlers em tools/front-afm/contrato-real.json (a prova da tela usa o formato verdadeiro, não um imaginado)
+const contrato = {};
+const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
 
 (async () => {
   await obterPool();
@@ -142,7 +145,7 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok((await db.apurar(pool, {})).exclusoes.length === 0, "apurar de novo não cria exclusão repetida");
 
   console.log("== painel Faltas e cadeiras e providências ==");
-  const painel = await afmGet("faltas-cli");
+  const painel = guardar("faltas-cli", await afmGet("faltas-cli"));
   ok(painel.status === 200 && painel.body.limite === 3, "o painel abre para a Secretaria", painel.status);
   const pF = painel.body.exclusoes.find((e) => e.membroId === P.faltoso);
   ok(pF && pF.vigente && pF.providencias.map((x) => x.tipo).join() === "MANTEM_CARGO,REINGRESSO", "só Ordenação: 'mantém o cargo' e 'reingresso'", pF && pF.providencias);
@@ -210,7 +213,7 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
       ok(fis.EsperadoAFM === false && fis.EsperadoCLI === true, "Conselheiro (não oficial): só CLI");
       const dia = await presencaDe(s.sessaoId, P.diacono);
       ok(dia && dia.Presente === false && dia.EsperadoAFM === true && dia.EsperadoCLI === false, "o Diácono faltoso tem falta só na AFM");
-      const fr = await chamarRota("ListarFrequencia/index.js", { binding: { sessaoId: s.sessaoId }, token: SEC });
+      const fr = guardar("frequencia-magna", await chamarRota("ListarFrequencia/index.js", { binding: { sessaoId: s.sessaoId }, token: SEC }));
       const comp = (await composicaoCLI(pool, orgaoCLI)).length;
       ok(fr.body.sessao.tipoSessao === "MAGNA_AFM" && fr.body.quorum.totalAtivos <= comp, "na Magna o quórum segue o da CLI, não soma a turma da Academia", { total: fr.body.quorum.totalAtivos, comp });
       ok(fr.body.frequencia.some((f) => f.membroId === P.auxiliar && f.esperadoAFM === true), "a frequência mostra quem era esperado pela AFM");
@@ -266,7 +269,7 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok(rep.status === 200, "reprovação registrada", rep.body);
   ok((await matriculaAtual(P.reprovado)).StatusMatricula === "INATIVA" && !(await naCLI(P.reprovado)), "inativo: sai da CLI por Ordenação (Estatuto Art. 15 §1º, I)");
   ok((await afmPost("reprovar", { membroId: P.reprovado, data: hoje, detalhe: "Prova de liturgia do Seminário de novembro" })).status === 422, "reprovar quem já está inativo: recusado");
-  const painel2 = await afmGet("faltas-cli");
+  const painel2 = guardar("faltas-cli-inativo", await afmGet("faltas-cli"));
   ok(painel2.body.inativosAFM.some((m) => m.membroId === P.reprovado), "o painel da CLI lista o inativo que entraria por Ordenação");
   ok((await afmPost("anular-reprovacao", { membroId: P.diacono, motivo: "Engano no registro da prova" })).status === 422, "anular-reprovação de quem não tem reprovação: recusado");
   const an = await afmPost("anular-reprovacao", { membroId: P.reprovado, motivo: "A prova foi lançada no obreiro errado" });
@@ -276,7 +279,7 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok((await afmPost("nivel", { membroId: P.presente, nivel: "DOUTORADO", concluido: true })).status === 422, "nível fora da lista: recusado");
   ok((await afmPost("nivel", { membroId: P.presente, nivel: "AVANCADO", concluido: "sim" })).status === 422, "concluído precisa ser sim/não de verdade");
   ok((await afmPost("nivel", { membroId: P.presente, nivel: "AVANCADO", concluido: false })).status === 200, "nível registrado");
-  const mats = await afmGet("matriculas");
+  const mats = guardar("matriculas", await afmGet("matriculas"));
   const mp = mats.body.itens.find((m) => m.membroId === P.presente);
   ok(mp && mp.nivelAtende === false && /concluído/.test(mp.nivelExigido), "Pastor com Avançado ainda cursando: abaixo do exigido (Art. 72, V, b)", mp);
   await afmPost("nivel", { membroId: P.presente, nivel: "AVANCADO", concluido: true });
@@ -302,7 +305,7 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok(/UX_AFMCorpoDocente_UmReitor|duplicate|duplicada|exclusiva/i.test(await falha("INSERT INTO AFMCorpoDocente (MembroId, Papel, DataInicio, MandatoAte) VALUES (@m, 'REITOR', @d, '2026-12-31')", { m: P.mestre, d: hoje }) || ""), "o banco não deixa dois Reitores");
   ok((await afmPost("docente", { membroId: P.mestre, titulacao: "Bacharel em Teologia", dataInicio: hoje })).status === 201, "docente cadastrado");
   ok((await afmPost("docente", { membroId: P.mestre, titulacao: "Bacharel em Teologia", dataInicio: hoje })).status === 422, "o mesmo docente duas vezes: recusado");
-  cd = await afmGet("corpo-docente");
+  cd = guardar("corpo-docente", await afmGet("corpo-docente"));
   const doc = cd.body.ativos.find((d) => d.papel === "DOCENTE" && d.membroId === P.mestre);
   ok(cd.body.encerrados.some((d) => d.membroId === P.reitor && /Substituído/.test(d.motivoFim)), "o Reitor anterior fica no histórico");
   ok((await afmPost("encerrar-corpo", { corpoDocenteId: doc.corpoDocenteId, data: hoje, motivo: "Mudou de cidade" })).status === 200, "docente encerrado");
@@ -314,16 +317,16 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok((await comissao("cder", { membroId: P.mestre, qualificacao: "Mestre em Teologia" })).status === 201, "CDER: mestre da CLI incluído");
   ok((await comissao("cder", { membroId: P.tesoureiro, qualificacao: "Mestre em Teologia Sistemática" })).status === 201, "CDER: o segundo mestre");
   ok((await comissao("cder", { membroId: P.dupla, qualificacao: "Mestre em Teologia" })).body.sucesso === false, "CDER: o terceiro passa do limite de 2");
-  const lista = await chamarRota("GestaoComissoes/index.js", { token: SEC });
+  const lista = guardar("comissoes", await chamarRota("GestaoComissoes/index.js", { token: SEC }));
   ok(lista.body.CDER && lista.body.CDER.reitor && lista.body.CDER.reitor.membroId === P.presente && lista.body.CDER.mestres.length === 2 && lista.body.CDER.mestres.every((m) => m.qualificacao && m.foraDaCLI === false),
     "a CDER mostra o Reitor (calculado) e os 2 mestres com a titulação", lista.body.CDER);
 
   console.log("== Meu Painel e Meus Dados ==");
-  const minha = await afmGet("minha-situacao", PIN(P.tesoureiro));
+  const minha = guardar("minha-situacao", await afmGet("minha-situacao", PIN(P.tesoureiro)));
   ok(minha.status === 200 && minha.body.cli.naCLI === true && minha.body.afm && minha.body.afm.status === "ATIVA", "Meu Painel: na CLI e matrícula ativa", minha.body);
   const minhaFis = await afmGet("minha-situacao", PIN(P.fiscal));
   ok(minhaFis.body.afm === null, "quem não é oficial não tem bloco da AFM");
-  const freq = await chamarRota("MinhaFrequencia/index.js", { binding: { matricula: P.tesoureiro }, token: PIN(P.tesoureiro) });
+  const freq = guardar("minha-frequencia", await chamarRota("MinhaFrequencia/index.js", { binding: { matricula: P.tesoureiro }, token: PIN(P.tesoureiro) }));
   ok(freq.body.historico.some((h) => h.ehCLI === 1 && h.tipoSessao === "MAGNA_AFM"), "Minha Frequência diz quais reuniões são da CLI (para o catálogo)", freq.body.historico[0]);
   const md = await chamarRota("MeusDadosLGPD/index.js", { binding: { matricula: P.dupla }, token: PIN(P.dupla) });
   const afmCli = md.body && (md.body.afmCli || (md.body.dados && md.body.dados.afmCli));
@@ -345,6 +348,16 @@ const presencaDe = (sessaoId, id) => um("SELECT * FROM Presencas WHERE SessaoId 
   ok((await escalar("SELECT COUNT(*) FROM AuditLog WHERE RegistroId IS NULL")) === 0, "nenhum registro de auditoria sem RegistroId");
   ok(falhasAuditoria === 0, "nenhuma falha ao gravar a auditoria", falhasAuditoria);
 
+  guardar("catalogos", await afmGet("catalogos"));
+  guardar("sessoes-magnas", await afmGet("sessoes-magnas"));
+  guardar("reunioes-cli", await chamarRota("ListarReunioes/index.js", { token: SEC, query: { orgaoId: orgaoCLI } }));
+  guardar("frequencia-ordinaria", await chamarRota("ListarFrequencia/index.js", { binding: { sessaoId: S[1].sessaoId }, token: SEC }));
+  if (process.env.E2E_CONTRATO) {
+    const destino = path.join(__dirname, "..", "front-afm", "contrato-real.json");
+    require("fs").mkdirSync(path.dirname(destino), { recursive: true });
+    require("fs").writeFileSync(destino, JSON.stringify(contrato, null, 1));
+    console.log("contrato gravado:", Object.keys(contrato).join(", "));
+  }
   fim("e2e-47 (AFM e faltas da CLI — fluxos)");
 })().catch((e) => { console.log("ERRO FATAL:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });
 

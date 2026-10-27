@@ -606,11 +606,12 @@ describe("GestaoDadosBancariosInstituicao", () => {
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------
 describe("GestaoFornecedores", () => {
   const COMPLETO = { FornecedorId: 1, Nome: "Gráfica Alfa", CpfCnpj: "12.345.678/0001-90", Tipo: "PJ", Telefone: "9999-0000", Email: "a@b.com", Banco: "Banco X", Agencia: "0001", Conta: "98765-4", TipoConta: "CORRENTE", ChavePix: "chave-pix-secreta", DadosBancariosConfirmados: true, DadosBancariosAlteradoPor: null, DadosBancariosAlteradoEm: null, Ativo: true };
-  const MINIMO = { fornecedorId: 1, nome: "Gráfica Alfa", tipo: "PJ", ativo: true, dadosBancariosConfirmados: true };
+  const MINIMO = { fornecedorId: 1, nome: "Gráfica Alfa", tipo: "PJ", ativo: true, dadosBancariosConfirmados: true, membroVinculado: false };   // (Trava 7-C) se há matrícula ligada, nunca qual
   const LISTA_LOCAL = /FROM Fornecedores f WHERE NOT EXISTS \(SELECT 1 FROM Prebendados pb WHERE pb\.FornecedorId = f\.FornecedorId\)/;
   const DETALHE_LOCAL = /f\.FornecedorId = @id AND NOT EXISTS \(SELECT 1 FROM Prebendados pb/;
   const PUT_LOCAL = /SELECT f\.\* FROM Fornecedores f WHERE f\.FornecedorId = @id AND NOT EXISTS/;
-  const DETALHE_GERAL = /SELECT \* FROM Fornecedores WHERE FornecedorId = @id/;
+  // o detalhe (GET) traz o nome do membro ligado (Trava 7-C); a alteração (PUT) lê a linha como antes
+  const DETALHE_GERAL = /SELECT f\.\*, m\.Nome AS MembroNome FROM Fornecedores f LEFT JOIN MembroReferencia m ON m\.MembroId = f\.MembroId WHERE f\.FornecedorId = @id|SELECT \* FROM Fornecedores WHERE FornecedorId = @id/;
 
   describe("leitura", () => {
     test("o tesoureiro local recebe SÓ id, nome, tipo, ativo e confirmação — sem CPF/CNPJ, telefone, e-mail nem dado bancário — e a consulta exclui os prebendados", async () => {
@@ -622,7 +623,7 @@ describe("GestaoFornecedores", () => {
       expect(mockConsultas[0].sql).not.toMatch(/ChavePix|Conta|CpfCnpj/);
     });
     test("o geral recebe o cadastro completo, incluindo os prebendados (consulta sem exclusão)", async () => {
-      quando(/SELECT \* FROM Fornecedores ORDER BY Nome/, [COMPLETO]);
+      quando(/SELECT f\.\*, m\.Nome AS MembroNome FROM Fornecedores f LEFT JOIN MembroReferencia m ON m\.MembroId = f\.MembroId ORDER BY f\.Nome/, [COMPLETO]);
       const r = await chamar(hFornecedores, { token: GERAL() });
       expect(r.body[0]).toMatchObject({ fornecedorId: 1, cpfCnpj: "12.345.678/0001-90", banco: "Banco X", chavePix: "chave-pix-secreta" });
       expect(mockConsultas[0].sql).not.toMatch(/Prebendados/);

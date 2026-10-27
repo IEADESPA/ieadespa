@@ -8,6 +8,8 @@
 //   3) corrida em vários processos — revogar × gravar a saúde (duas vezes) × check-in da criança —, em várias rodadas: nenhuma 500, nenhum deadlock, e no fim de cada rodada
 //      ou o consentimento continua valendo, ou não há saúde em lugar nenhum (nunca saúde órfã, sem precisar da rotina diária);
 //   4) a gravação da saúde depois da revogação é recusada.
+//   5) prova DETERMINÍSTICA da trava com READ_COMMITTED_SNAPSHOT ligado (como o Azure SQL): uma revogação a meio caminho (trava pega, revogação gravada e saúde
+//      apagada, sem confirmar) e, nesse meio tempo, gravar a saúde e o check-in da criança em outro processo — os dois esperam a trava e não deixam saúde órfã.
 process.env.AUTH_SECRET = "segredo-das-corridas-do-checkin-" + "x".repeat(24);
 process.env.CRON_SECRET = "segredo-cron-so-do-teste-e2e";
 const { spawn } = require("child_process");
@@ -109,5 +111,50 @@ const ultimaSaude = (m) => um("SELECT TOP 1 Concedido, ConsentimentoId FROM Mini
   ok(orfas === 0 && deadlocks === 0 && quinhentos === 0, `em ${RODADAS} rodadas: 0 saúde órfã, 0 deadlock, 0 erro 500`, { orfas, deadlocks, quinhentos });
   ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name LIKE 'TR[_]Checkin%' AND is_disabled = 1")) === 0 && (await escalar("SELECT COUNT(*) FROM sys.triggers WHERE name = 'TR_E2E38_FalhaNoApagar'")) === 0,
     "os gatilhos do check-in seguem ligados e o gatilho de teste foi removido");
+
+  // 5) Prova DETERMINÍSTICA da trava, com o banco como o Azure SQL vem (READ_COMMITTED_SNAPSHOT ligado: a leitura comum NÃO espera a gravação em curso, lê a versão
+  //    confirmada). Este processo faz uma revogação "a meio caminho": pega a trava da saúde da criança, grava a linha de revogação e apaga a saúde, SEM confirmar; um
+  //    processo filho grava a saúde (ou faz o check-in da criança) nesse meio tempo; só então a revogação é confirmada. Com a trava, o filho espera e vê a revogação;
+  //    sem ela, o filho lia o consentimento ainda valendo e gravava a saúde (ou a copiava na etiqueta) DEPOIS do apagar — saúde órfã.
+  console.log("== 5) revogação em curso × gravar a saúde e × check-in, com READ_COMMITTED_SNAPSHOT (como o Azure SQL) ==");
+  const pool = await obterPool();
+  const { sql } = L;
+  await q("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE");
+  try {
+    ok((await escalar("SELECT CAST(is_read_committed_snapshot_on AS INT) FROM sys.databases WHERE name = DB_NAME()")) === 1, "o banco está com READ_COMMITTED_SNAPSHOT ligado");
+    async function revogacaoEmCurso(filhoSpec) {
+      const sv = await prepararSaude(K.duda, P.claudia);
+      const t = new sql.Transaction(pool);
+      await t.begin();
+      const rq = () => new sql.Request(t);
+      await rq().input("r", sql.NVarChar(50), `checkin-saude:${K.duda}`)
+        .query("DECLARE @x INT; EXEC @x = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 5000; SELECT @x AS x");
+      await rq().input("m", sql.Int, K.duda).query(`INSERT INTO MinisterioMenoresConsentimentos (MenorMembroId, ResponsavelMembroId, Finalidade, Concedido, TextoVersao, TextoHash, Forma, EnderecoIp)
+        SELECT TOP 1 MenorMembroId, ResponsavelMembroId, Finalidade, 0, TextoVersao, TextoHash, N'CLICK_RESP', N'indisponivel' FROM MinisterioMenoresConsentimentos
+        WHERE MenorMembroId = @m AND Finalidade = 'SAUDE_CRACHA' ORDER BY ConsentimentoId DESC;
+        DELETE FROM CheckinInfantilSaude WHERE MenorMembroId = @m;
+        UPDATE CheckinInfantilRegistros SET SaudeTexto = NULL, SaudeOrigem = NULL, SaudeTextoVersao = NULL, SaudeTextoHash = NULL WHERE MenorMembroId = @m AND SaudeTexto IS NOT NULL;`);
+      const filho = disparar([typeof filhoSpec === "function" ? filhoSpec(sv) : filhoSpec]);
+      await new Promise((res) => setTimeout(res, 11000));            // o filho sobe a ponte e chega à gravação; com a trava, fica esperando
+      await t.commit();
+      const [rf] = await filho;
+      return rf;
+    }
+    let rf = await revogacaoEmCurso(ck("saude-gravar", PIN(P.claudia), { menorId: K.duda, texto: "Alergia gravada durante a revogação" }));
+    ok(rf.status > 0 && rf.status !== 500, "gravar a saúde durante a revogação termina sem erro", rf);
+    ok((await ultimaSaude(K.duda)).Concedido === false && (await saudeLinha(K.duda)) === 0,
+      "gravar a saúde durante a revogação: a gravação esperou a trava, viu a revogação e NÃO gravou (nenhuma saúde órfã)", { status: rf.status, mensagem: rf.mensagem, linha: await saudeLinha(K.duda) });
+    rf = await revogacaoEmCurso((sv) => ck("checkin", PIN(ANA), { servicoId: sv, equipeId: eq.maternal, criancas: [{ menorId: K.duda }], trouxe: { responsavelId: P.claudia } }));
+    ok(rf.status === 201, "o check-in durante a revogação entra (a criança é recebida)", rf);
+    ok((await ultimaSaude(K.duda)).Concedido === false && (await saudeCopias(K.duda)) === 0,
+      "check-in durante a revogação: a etiqueta esperou a trava e NÃO copiou a saúde que estava sendo apagada (nenhuma cópia órfã)", { copias: await saudeCopias(K.duda) });
+  } finally {
+    await q("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE");
+  }
   fim("e2e-38 (Trava 7-C: revogar a saúde e apagar na mesma transação)");
-})().catch((e) => { H.erroFatal("ERRO:", e); process.exitCode = 1; try { q("DROP TRIGGER IF EXISTS dbo.TR_E2E38_FalhaNoApagar").catch(() => { }); } catch { } try { L.shimEncerrar(); } catch { } });
+})().catch((e) => {
+  H.erroFatal("ERRO:", e); process.exitCode = 1;
+  q("DROP TRIGGER IF EXISTS dbo.TR_E2E38_FalhaNoApagar").catch(() => { })
+    .then(() => q("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE")).catch(() => { })
+    .finally(() => { try { L.shimEncerrar(); } catch { } });
+});

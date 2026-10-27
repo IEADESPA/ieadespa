@@ -80,7 +80,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   pedido de visita e do pedido da imprensa contados dentro da trava).
 - **Trava 7-C** (a saúde do check-in, item I1), sobre a `cenario-checkin` (`bash rodar.sh preparar-checkin`): `e2e-38` (revogar o consentimento de saúde e
   apagar a saúde e as cópias na MESMA transação, pelo responsável e pela ficha; o apagar que falha no meio — um gatilho de teste — não deixa a revogação pela metade;
-  corridas de revogar × gravar a saúde × check-in em vários processos, sem 500, sem deadlock e sem saúde órfã). `E2E38_RODADAS` muda o número de rodadas (padrão 6).
+  corridas de revogar × gravar a saúde × check-in em vários processos, sem 500, sem deadlock e sem saúde órfã; e, com READ_COMMITTED_SNAPSHOT ligado como no Azure, a revogação
+  a meio caminho segurando a trava enquanto outro processo grava a saúde e faz o check-in — prova determinística da trava). `E2E38_RODADAS` muda o número de rodadas (padrão 6).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

@@ -922,6 +922,217 @@ async function rodar({ mutar = {}, so = null, verboso = false } = {}) {
   });
 
   // ============================================================================================================================================
+  // 7C) TRAVA 7-C — AS DECISÕES DE 23/10/2026: funções com menores (departamentos e cargos) e os avisos do dinheiro do voluntário
+  // ============================================================================================================================================
+  // As respostas de /funcoes como o servidor as monta (funcoesMenoresDb.painel): as marcas e, para quem vê, quem não está apto, com os bloqueios pela função real
+  // (bloqueiosParaPainel: a Diretoria lê o motivo, os demais "pendência com a Diretoria").
+  const FM = require(require("path").resolve(__dirname, "../../api/shared/funcoesMenores"));
+  const respostaFuncoes = ({ verInaptos, reservado, podeDep = false, podePapel = false }) => {
+    const A = ATAQUE;
+    const pendente = F.aptidao({ autoDenunciaAberta: true, treinamento: null });
+    const inaptos = !verInaptos ? null : [
+      { membroId: 41, nome: A("nomeFun"), congregacaoNome: A("congFun"), funcoes: [{ tipo: "DEPARTAMENTO", id: 1, nome: A("depFun") }], bloqueios: pendente.bloqueios }
+    ].map(p => ({ ...p, funcoes: p.funcoes.map(f => ({ ...f, rotulo: FM.rotuloFuncao(f) })), bloqueios: F.mm.bloqueiosParaPainel(p.bloqueios, { reservado }) }));
+    return {
+      sucesso: true,
+      departamentos: [{ departamentoId: 1, sigla: A("siglaDep"), nome: A("depFun"), ativo: true, contatoComMenores: true, pareceInfantil: false }, { departamentoId: 2, sigla: "TEENS", nome: "Adolescentes", ativo: true, contatoComMenores: false, pareceInfantil: true }],
+      papeis: [{ papelId: 9, nome: A("papelFun"), nivel: "CONGREGACAO", contatoComMenores: false, pareceInfantil: false }],
+      inaptos, resumo: verInaptos ? { ocupantes: 3, inaptos: 1 } : null, podeMarcarDepartamento: podeDep, podeMarcarPapel: podePapel
+    };
+  };
+  const catFun = (papeis) => F.catalogos({ gestao: false, geral: false, diretoria: false, funcoes: true, verInaptos: false, marcarDepartamento: false, marcarPapel: false, ...papeis });
+
+  cenario("7C: Funções com menores — a Diretoria lê o motivo, a Proteção não; tudo escapado; acessível", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    api.rotas = {
+      "GET ministerio-menores/catalogos": { corpo: catFun({ diretoria: true, verInaptos: true }) },
+      "GET ministerio-menores/auto-denuncias": { corpo: F.autoDenuncias([]) },
+      "GET ministerio-menores/funcoes": { corpo: respostaFuncoes({ verInaptos: true, reservado: true }) }
+    };
+    env.sessao({ matricula: 5, nivel: "GLOBAL", permissoes: ["vistoria_antecedentes"], geral: true });
+    await env.ev("carregarOpcoesMenoresAcao()"); await env.ocioso();
+    confere(e("btnMnrSecaoFuncoes").style.display !== "none" && e("btnMnrSecaoPainel").style.display === "none", "7C: a Diretoria vê a pílula das funções (e não a do painel da Secretaria)");
+    env.limparRegistro();
+    doc.clicar(e("btnMnrSecaoFuncoes")); await env.ocioso();
+    confere(chamadas(env, "GET ministerio-menores/funcoes").length === 1 && e("mnrSecaoFuncoes").style.display === "block", "7C: abrir a seção carrega as funções");
+    const t = texto(env, "mnrSecaoFuncoes");
+    confere(t.includes("[nomeFun]") && t.includes("[congFun]") && /Departamento .*[depFun]/.test(t) && /Não apto para função com menores/.test(t), "7C: a pessoa, a congregação e a função aparecem");
+    confere(/Comunicação à Diretoria em análise/.test(t) && /Sem treinamento/.test(t), "7C: a Diretoria lê o motivo reservado");
+    confere(/A pessoa continua no cargo: a decisão é da Diretoria/.test(t) && /1 não estão aptas/.test(texto(env, "mnrFunResultado")), "7C: o resumo e o lembrete de que ninguém sai do cargo sozinho");
+    confere(!botao(env, "Marcar: tem contato com crianças", e("mnrSecaoFuncoes")) && !botao(env, "Tirar a marca", e("mnrSecaoFuncoes")), "7C: a Diretoria só vê: nenhum botão de marcar");
+    limpo(env, "7C/funções (Diretoria)", [ATAQUE("nomeFun"), ATAQUE("depFun"), ATAQUE("papelFun"), ATAQUE("siglaDep")]);
+    confereAcessibilidade(env, ["mnrSecaoFuncoes"], "7C/funções");
+    // a Proteção do nível geral (permissão protecao_menores): a aba abre para ela, e o motivo reservado chega como "pendência com a Diretoria"
+    const env2 = ambienteAtual = novo();
+    env2.api.rotas = {
+      "GET ministerio-menores/catalogos": { corpo: catFun({ verInaptos: true }) },
+      "GET ministerio-menores/funcoes": { corpo: respostaFuncoes({ verInaptos: true, reservado: false }) }
+    };
+    env2.sessao({ matricula: 7001, nivel: "GLOBAL", permissoes: ["protecao_menores"], geral: true });
+    await env2.ev("carregarOpcoesMenoresAcao()"); await env2.ocioso();
+    confere(env2.e("mnrSecaoFuncoes").style.display === "block" && env2.e("btnMnrSecaoComunicacoes").style.display === "none" && env2.e("mnrSemAcesso").style.display === "none", "7C: a Proteção do nível geral entra direto na seção das funções (sem as comunicações da Diretoria)");
+    const t2 = texto(env2, "mnrSecaoFuncoes");
+    confere(/Pendência a tratar com a Diretoria Executiva/.test(t2) && !/Comunicação à Diretoria em análise/.test(t2) && /assuntos reservados à Diretoria aparecem só como/.test(t2), "7C: a Proteção vê \"pendência com a Diretoria\", nunca o motivo");
+    limpo(env2, "7C/funções (Proteção)", [ATAQUE("nomeFun")]);
+  });
+
+  cenario("7C: Funções com menores — marcar com o 'tem certeza' e a confirmação reforçada (428); quem só marca não vê ninguém; troca de login limpa", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    const S = { marcados: 0 };
+    api.rotas = {
+      "GET ministerio-menores/catalogos": { corpo: catFun({ marcarDepartamento: true }) },
+      "GET ministerio-menores/funcoes": () => ({ corpo: respostaFuncoes({ verInaptos: false, reservado: false, podeDep: true }) }),
+      "POST ministerio-menores/funcao-marca": () => { if (!api.fatorRecente) return { status: 428, corpo: { sucesso: false, precisaFator: true, mensagem: "Este ato exige confirmação recente de quem você é." } }; S.marcados++; return { corpo: { sucesso: true, mudou: true, mensagem: "✅ Departamento \"Adolescentes\" marcado com contato com crianças e adolescentes." } }; }
+    };
+    env.ev("window.__fatorConfirmar = async () => { window.__api_fator(); return true; };");
+    env.ctx.__api_fator = () => { api.fatorRecente = true; };
+    env.sessao({ matricula: 5, nivel: "GLOBAL", permissoes: ["habilitacao_voluntarios", "pessoas"], geral: true });
+    await env.ev("carregarOpcoesMenoresAcao()"); await env.ocioso();
+    env.limparRegistro();
+    doc.clicar(e("btnMnrSecaoFuncoes")); await env.ocioso();
+    confere(e("mnrFunInaptos").innerHTML === "" && !/não estão aptas/.test(texto(env, "mnrFunResultado")), "7C: quem só marca não vê lista de quem não está apto");
+    const t = texto(env, "mnrFunMarcas");
+    confere(/o nome parece de crianças: confira/.test(t) && t.includes("[papelFun]"), "7C: o aviso do nome que parece de crianças e a lista dos cargos");
+    confere(!!botao(env, "Marcar: tem contato com crianças", e("mnrFunMarcas")) && !!botao(env, "Tirar a marca", e("mnrFunMarcas")), "7C: os departamentos ganham os botões de marcar e tirar");
+    const linhaPapel = achar(env, x => x.localName === "tr" && x.textContent.includes("[papelFun]"));
+    confere(linhaPapel && !botao(env, "Marcar", linhaPapel), "7C: sem a permissão dos cargos, nenhum botão nos cargos");
+    // cancelar o 'tem certeza': nada vai ao servidor
+    env.limparRegistro();
+    let p = env.ev("mnrMarcarFuncaoAcao('DEPARTAMENTO', 2, true, null)"); let m = await env.responderModal(false); await esperar(p);
+    confere(m.aberto && /Adolescentes/.test(m.texto) && /confirmação de quem você é/.test(m.texto) && chamadas(env, "POST ministerio-menores/funcao-marca").length === 0, "7C: cancelar o 'tem certeza' não envia");
+    // confirmar: 428 → a confirmação reforçada → repete UMA vez → recarrega a lista
+    env.limparRegistro(); env.ctx.__fatorPedidos = 0;
+    p = env.ev("mnrMarcarFuncaoAcao('DEPARTAMENTO', 2, true, null)"); m = await env.responderModal(true); await esperar(p); await env.ocioso();
+    const posts = chamadas(env, "POST ministerio-menores/funcao-marca");
+    confere(posts.length === 2 && env.ctx.__fatorPedidos === 1 && S.marcados === 1, `7C: 428 → confirmação → repetição UMA vez (chamadas=${posts.length}, pedidos=${env.ctx.__fatorPedidos})`);
+    confere(posts[0].corpo.tipo === "DEPARTAMENTO" && posts[0].corpo.id === 2 && typeof posts[0].corpo.id === "number" && posts[0].corpo.contatoComMenores === true, "7C: o corpo leva o tipo (constante), o id (número) e o booleano");
+    confere(/marcado com contato com crianças/.test(texto(env, "mnrFunAcaoMsg")) && chamadas(env, "GET ministerio-menores/funcoes").length === 1, "7C: a mensagem do servidor aparece e a lista é recarregada");
+    // argumento forjado (tipo fora da lista, id que não está na tela): nada é enviado
+    env.limparRegistro();
+    // ('EVENTO', 9): o 9 existe como CARGO na tela — só a validação do tipo impede que a ação siga como se fosse um cargo
+    await esperar(env.ev("mnrMarcarFuncaoAcao('EVENTO', 9, true, null)")); await esperar(env.ev("mnrMarcarFuncaoAcao('DEPARTAMENTO', 999, true, null)")); await env.ocioso();
+    confere(chamadas(env, "POST ministerio-menores/funcao-marca").length === 0 && !env.modal().aberto, "7C: tipo de fora ou id que não está na tela: nada é enviado");
+    // troca de login: a lista e as mensagens somem
+    env.sessao({ matricula: 20, pin: true });
+    env.api.rotas["GET ministerio-menores/minha-situacao"] = { corpo: F.minhaSituacao() };
+    await env.ev("carregarMeuPainelMenoresAcao()"); await env.ocioso();
+    confere(e("mnrFunMarcas").innerHTML === "" && e("mnrFunAcaoMsg").textContent === "" && e("btnMnrSecaoFuncoes").style.display === "none", "7C: depois da troca de login, nada das funções fica na tela");
+    // resposta atrasada de outro login é descartada
+    const env3 = ambienteAtual = novo();
+    env3.api.rotas = { "GET ministerio-menores/catalogos": { corpo: catFun({ diretoria: true, verInaptos: true }) }, "GET ministerio-menores/auto-denuncias": { corpo: F.autoDenuncias([]) }, "GET ministerio-menores/funcoes": { corpo: respostaFuncoes({ verInaptos: true, reservado: true }) } };
+    env3.sessao({ matricula: 5, nivel: "GLOBAL", permissoes: ["vistoria_antecedentes"], geral: true });
+    await env3.ev("carregarOpcoesMenoresAcao()"); await env3.ocioso();
+    const ret = env3.retem(c => c.chave === "GET ministerio-menores/funcoes");
+    const pend = env3.ev("mnrCarregarFuncoesAcao()"); await env3.ocioso();
+    env3.sessao({ matricula: 20, pin: true }); env3.api.rotas["GET ministerio-menores/minha-situacao"] = { corpo: F.minhaSituacao() };
+    await env3.ev("carregarMeuPainelMenoresAcao()"); ret.liberar(); await pend; await env3.ocioso();
+    confere(!texto(env3, "mnrFunInaptos").includes("[nomeFun]"), "7C: a resposta atrasada do login anterior não entra na tela");
+  });
+
+  cenario("7C: Saída para voluntário — o aviso é mostrado, cancelar não grava, confirmar reenvia com os códigos; o detalhe mostra a quem aprova", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    const vp = require(require("path").resolve(__dirname, "../../api/shared/voluntarioPagamento"));
+    const avisos = [{ codigo: "VOLUNTARIO_ATIVO", rotulo: vp.ROTULOS.VOLUNTARIO_ATIVO, texto: ATAQUE("aviso1") + vp.TEXTO_VOLUNTARIO }, { codigo: "HABITUALIDADE", rotulo: vp.ROTULOS.HABITUALIDADE, texto: vp.textoHabitualidade(3, 60) }];
+    const S = { posts: [] };
+    api.rotas = {
+      "POST saidas": (c) => { S.posts.push(c.corpo); if (!Array.isArray(c.corpo.confirmoAvisos)) return { corpo: { sucesso: false, precisaConfirmarAvisos: true, avisos, mensagem: "Leia os avisos sobre esta pessoa e confirme que leu para registrar a solicitação (o sistema avisa, não impede: a decisão é de quem lança)." } }; return { status: 201, corpo: { sucesso: true, saidaId: 77, mensagem: "✅ Solicitação de pagamento registrada — aguardando aprovação. Os 2 aviso(s) sobre esta pessoa ficaram registrados com a sua confirmação (aparecem a quem aprova e paga)." } }; },
+      "GET saidas": { corpo: [] },
+      "GET saidas/77": { corpo: { saidaId: 77, fornecedorNome: ATAQUE("forn"), valor: 120, status: "PENDENTE", descricao: "Limpeza", solicitadoPorNome: "Tesoureiro", solicitadoEm: F.instante(-1), documentoFiscalUrl: "https://blob/x", aprovacoes: [], cotacoes: [], alcada: null,
+        avisosVoluntario: [{ codigo: "VOLUNTARIO_ATIVO", rotulo: ATAQUE("rotuloAviso"), texto: ATAQUE("textoAviso"), confirmadoPorNome: ATAQUE("quemConfirmou"), confirmadoEm: F.instante(-1) }] } }
+    };
+    env.sessao({ matricula: 3001, nivel: "CONGREGACAO", permissoes: ["financeiro"] });
+    e("saidaCongregacao").innerHTML = `<option value="1">Central</option>`; e("saidaFornecedor").innerHTML = `<option value="9">Ana</option>`; e("saidaTipo").innerHTML = `<option value="MANUTENCAO">Manutenção</option>`;
+    doc.digitar(e("saidaDescricao"), "Limpeza do templo"); doc.digitar(e("saidaValor"), "120");
+    e("saidaDocumentoFiscal").files = [{ name: "nf.pdf", type: "application/pdf" }];
+    e("cotacoesSaidaLinhas").dataset = {};   // o DOM simulado não tem dataset (a limpeza das cotações, depois do sucesso, usa)
+    env.limparRegistro();
+    let p = env.ev("solicitarSaidaAcao()"); let m = await env.responderModal(false); await esperar(p); await env.ocioso();
+    confere(m.aberto && /Avisos sobre esta pessoa \(o sistema avisa, não impede\)/.test(m.texto) && /9\.608\/98/.test(m.texto) && /diarista disfarçada/.test(m.texto), "7C: o 'tem certeza' mostra os dois avisos");
+    confere(S.posts.length === 1 && /NÃO registrada/.test(texto(env, "resultadoNovaSaida")), "7C: cancelar não reenvia e a tela diz que nada foi registrado");
+    limpo(env, "7C/saída (avisos)", []);
+    S.posts.length = 0; env.limparRegistro();
+    p = env.ev("solicitarSaidaAcao()"); m = await env.responderModal(true); await esperar(p); await env.ocioso();
+    confere(S.posts.length === 2 && S.posts[1].confirmoAvisos.join() === "VOLUNTARIO_ATIVO,HABITUALIDADE" && S.posts[1].descricao === "Limpeza do templo" && S.posts[1].fornecedorId === "9", "7C: confirmar reenvia o MESMO pedido com os códigos dos avisos");
+    confere(/2 aviso\(s\) sobre esta pessoa ficaram registrados/.test(texto(env, "resultadoNovaSaida")), "7C: a mensagem do servidor aparece");
+    // o detalhe: os avisos confirmados (escapados) para quem aprova e paga
+    env.limparRegistro();
+    await env.ev("verDetalheSaidaAcao(77)"); await env.ocioso();
+    const d = texto(env, "detalheSaida");
+    confere(d.includes("[rotuloAviso]") && d.includes("[textoAviso]") && d.includes("[quemConfirmou]") && /lidos e confirmados por quem lançou/.test(d), "7C: o detalhe da saída mostra o aviso, quem confirmou e quando");
+    limpo(env, "7C/detalhe da saída", [ATAQUE("rotuloAviso"), ATAQUE("textoAviso"), ATAQUE("quemConfirmou"), ATAQUE("forn")]);
+  });
+
+  cenario("7C: Fornecedor — ligar à matrícula pela busca do território; coluna Membro; Meus Dados da tesouraria", async () => {
+    const env = ambienteAtual = novo(); const { doc, api, e } = env;
+    const S = { posts: [], puts: [] };
+    api.rotas = {
+      "GET fornecedores": (c) => (c.consulta.buscaMembro !== undefined
+        ? { corpo: { sucesso: true, membros: [{ membroId: 6010, nome: ATAQUE("membroBusca"), congregacaoNome: ATAQUE("congBusca") }] } }
+        : { corpo: [{ fornecedorId: 9, nome: ATAQUE("fornNome"), tipo: "PF", ativo: true, dadosBancariosConfirmados: true, membroVinculado: true }, { fornecedorId: 10, nome: "Sem Matrícula", tipo: "PF", ativo: true, dadosBancariosConfirmados: true, membroVinculado: false }, { fornecedorId: 11, nome: "Gráfica", tipo: "PJ", ativo: true, dadosBancariosConfirmados: true, membroVinculado: false }] }),
+      "POST fornecedores": (c) => { S.posts.push(c.corpo); return { status: 201, corpo: { sucesso: true, fornecedorId: 12, mensagem: "✅ Fornecedor cadastrado." } }; },
+      "PUT fornecedores/10": (c) => { S.puts.push(c.corpo); return { corpo: { sucesso: true, mensagem: "✅ Fornecedor atualizado." } }; },
+      "PUT fornecedores/9": (c) => { S.puts.push(c.corpo); return { corpo: { sucesso: true, mensagem: "✅ Fornecedor atualizado." } }; }
+    };
+    env.sessao({ matricula: 3001, nivel: "CONGREGACAO", permissoes: ["financeiro"] });
+    e("formNovoFornecedor").style.display = "none";
+    e("saidaFornecedor").dataset = {};   // o DOM simulado não tem dataset (o salvar do fornecedor o limpa)
+    await env.ev("alternarFormNovoFornecedor()");
+    confere(e("fornecedorMembroCampos").style.display === "none", "7C: pessoa jurídica (o padrão) não mostra a ligação à matrícula");
+    doc.escolher(e("fornecedorTipo"), "PF"); await env.ocioso();
+    confere(e("fornecedorMembroCampos").style.display === "block", "7C: pessoa física mostra a busca do membro");
+    doc.digitar(e("fornecedorMembroBusca"), "Ma"); env.limparRegistro();
+    await env.ev("buscarMembroFornecedorAcao()"); await env.ocioso();
+    confere(chamadas(env, "GET fornecedores").length === 0, "7C: busca com menos de 3 letras não vai ao servidor");
+    doc.digitar(e("fornecedorMembroBusca"), "Ana & <b>"); env.limparRegistro();
+    await env.ev("buscarMembroFornecedorAcao()"); await env.ocioso();
+    const b = chamadas(env, "GET fornecedores");
+    confere(b.length === 1 && b[0].consulta.buscaMembro === "Ana & <b>", "7C: o texto da busca vai codificado na consulta");
+    confere(e("fornecedorMembroId").value === "6010" && texto(env, "formNovoFornecedor").includes("[membroBusca]"), "7C: o membro achado fica escolhido (escapado)");
+    doc.digitar(e("fornecedorNome"), "Ana PF"); doc.digitar(e("fornecedorCpfCnpj"), "111.111.111-11");
+    await env.ev("salvarFornecedorAcao()"); await env.ocioso();
+    confere(S.posts.length === 1 && S.posts[0].membroId === 6010 && S.posts[0].tipo === "PF", "7C: o cadastro leva a matrícula (número)");
+    confere(e("fornecedorMembroId").options.length === 1 && e("fornecedorMembroBusca").value === "", "7C: depois de salvar, a escolha do membro é limpa");
+    // pessoa jurídica: a matrícula nunca vai
+    doc.escolher(e("fornecedorTipo"), "PJ"); doc.digitar(e("fornecedorNome"), "Gráfica"); doc.digitar(e("fornecedorCpfCnpj"), "11.111.111/0001-11");
+    e("fornecedorMembroId").innerHTML = `<option value="6010" selected>sobra de uma busca</option>`;   // uma escolha que sobrou na tela não pode ir com pessoa jurídica
+    await env.ev("salvarFornecedorAcao()"); await env.ocioso();
+    confere(S.posts.length === 2 && S.posts[1].membroId === undefined, "7C: pessoa jurídica não leva matrícula");
+    // a lista: coluna Membro e os botões
+    await env.ev("carregarFornecedores()"); await env.ocioso();
+    const l = texto(env, "resultadoFornecedores");
+    confere(/Ligado a um membro/.test(l) && /Não ligado/.test(l) && l.includes("[fornNome]"), "7C: a coluna Membro (o local vê só se está ligado)");
+    const linha10 = achar(env, x => x.localName === "tr" && x.textContent.includes("Sem Matrícula"));
+    const linha11 = achar(env, x => x.localName === "tr" && x.textContent.includes("Gráfica"));
+    confere(linha10 && botao(env, "Ligar a membro", linha10) && linha11 && !botao(env, "Ligar", linha11), "7C: 'Ligar a membro' só para pessoa física sem ligação");
+    limpo(env, "7C/fornecedores", [ATAQUE("fornNome")]);   // o membro da busca já foi conferido (escapado) antes de salvar; depois, a escolha é limpa
+    // ligar: matrícula só com números; desligar com o 'tem certeza'
+    env.limparRegistro();
+    let p = env.ev("ligarMembroFornecedorAcao(10)"); await env.ocioso();
+    e("modalTexto").value = "12a"; doc.clicar(e("modalConfirmar")); await esperar(p); await env.ocioso();
+    confere(S.puts.length === 0, "7C: matrícula com letra não é enviada");
+    p = env.ev("ligarMembroFornecedorAcao(10)"); await env.ocioso();
+    e("modalTexto").value = "6024"; doc.clicar(e("modalConfirmar")); await esperar(p); await env.ocioso();
+    confere(S.puts.length === 1 && S.puts[0].membroId === 6024, "7C: ligar envia a matrícula (número)");
+    p = env.ev("desligarMembroFornecedorAcao(9)"); let m = await env.responderModal(false); await esperar(p);
+    confere(m.aberto && S.puts.length === 1, "7C: desligar pede o 'tem certeza'; cancelar não envia");
+    p = env.ev("desligarMembroFornecedorAcao(9)"); m = await env.responderModal(true); await esperar(p); await env.ocioso();
+    confere(S.puts.length === 2 && S.puts[1].membroId === null, "7C: confirmar desliga (null)");
+    // Meus Dados: o cartão da tesouraria
+    const dados = { sucesso: true, geradoEm: new Date().toISOString(), membro: { nome: "Eu", congregacao: "Sede", status: "ATIVO", criadoEm: F.instante(-400) },
+      liderancas: [], assentos: [], processosDisciplinares: [], vinculosFamiliares: [], consentimentos: [], solicitacoesLgpd: [], casamentos: [], licencasCandidatura: [], voluntariado: null, ministerioMenores: null,
+      tesouraria: { fornecedor: { nome: ATAQUE("fornMeus"), tipo: "PF", ativo: true }, avisosDePagamento: [{ codigo: "VOLUNTARIO_ATIVO", rotulo: ATAQUE("rotuloMeus"), em: F.instante(-2) }] } };
+    env.api.rotas["GET lgpd/meus-dados/20"] = { corpo: dados };
+    env.sessao({ matricula: 20, pin: true });
+    e("cxMeusDadosLGPD").style.display = "none";
+    await env.ev("alternarMeusDadosLGPD()"); await env.ocioso();
+    const md = texto(env, "cxMeusDadosLGPD");
+    confere(/Tesouraria \(você presta serviço à Igreja\)/.test(md) && md.includes("[fornMeus]") && md.includes("[rotuloMeus]") && /pessoa física/.test(md), "7C: Meus Dados mostra o cadastro de fornecedor e os avisos dos pagamentos");
+    limpo(env, "7C/Meus Dados", [ATAQUE("fornMeus"), ATAQUE("rotuloMeus")]);
+    const semNada = env.g("finCartaoMeusDados")({ fornecedor: null, avisosDePagamento: [] });
+    confere(semNada === "", "7C: sem fornecedor e sem aviso, o cartão não aparece");
+  });
+
+  // ============================================================================================================================================
   const alvo = so ? cenarios.filter(c => c.nome.includes(so)) : cenarios;
   for (const c of alvo) {
     T.cenarioAtual = c.nome.split(":")[0].slice(0, 30);

@@ -68,7 +68,7 @@ const AJUDA_POR_ABA = {
   "meupainel:eventos": "Se você organiza um evento (propôs no Calendário ou foi designado), registre aqui os convidados externos e o Caixa Flutuante do evento. Inscrição, lista de espera, check-in e certificado ficam no site — use os links do cartão.",
   setores: "Os 20 Setores Técnicos do Regimento (Art. 48 a 52): quem serve em cada um (candidatura, aprovação e Termo de Adesão) e os atos cautelares — a interdição de templo em risco, que vale na hora e a Diretoria ratifica ou revoga, e o pedido de remoção de postagem nas redes oficiais. Voluntariado profissional: ninguém recebe salário nem honorário.",
   "meupainel:setores": "Sua situação nos Setores Técnicos: candidate-se a um setor da sua profissão, leia e aceite o Termo de Adesão quando for aprovado(a) e saia quando quiser, sem penalidade. Quem serve em Engenharia ou Segurança pode interditar um templo em risco; quem serve em Comunicação pode pedir a remoção de uma postagem. O líder da congregação vê aqui os atos dela.",
-  menores: "Ministério com menores (Lei 14.811/2024): quem serve com crianças e adolescentes precisa estar habilitado hoje. O painel mostra, por congregação, quem está apto, quem tem algo vencendo e quem está bloqueado e por quê; as ferramentas registram o aceite da política e a autorização do responsável em ficha de papel, confirmam a ficha cadastral e definem a faixa etária da equipe. A Diretoria também decide sobre as comunicações dos voluntários que respondem a processo criminal (Regimento Art. 133 §5º, V).",
+  menores: "Ministério com menores (Lei 14.811/2024): quem serve com crianças e adolescentes precisa estar habilitado hoje. O painel mostra, por congregação, quem está apto, quem tem algo vencendo e quem está bloqueado e por quê; as ferramentas registram o aceite da política e a autorização do responsável em ficha de papel, confirmam a ficha cadastral e definem a faixa etária da equipe. A Diretoria também decide sobre as comunicações dos voluntários que respondem a processo criminal (Regimento Art. 133 §5º, V). Em Funções com menores, o nível geral marca os departamentos e cargos com crianças, e a Diretoria e a Proteção veem quem os ocupa sem estar apto.",
   "meupainel:menores": "Se você serve (ou quer servir) com crianças e adolescentes: veja se está apto e o que falta, aceite a política de comunicação, confirme a sua ficha a cada 6 meses e, se responde a inquérito ou processo criminal, comunique a Diretoria (é um dever e não é punição). Se você é pai, mãe ou tutor de um menor, autorize ou revogue aqui o uso da imagem e da saúde dele(a) no crachá.",
   "meupainel:protecao": "Proteção de crianças e adolescentes: se você (ou alguém) precisa de ajuda, escreva do seu jeito, sem precisar dizer o nome: uma pessoa preparada vai ler. Se você serve com crianças ou é líder, registre aqui um incidente (quase-acidente, quebra de política ou suspeita de violência). Em caso de suspeita, a lei manda comunicar ao Conselho Tutelar imediatamente (o prazo máximo da Igreja é de 24 horas): o sistema avisa a liderança na hora. Perigo agora: ligue 190. Disque 100, de graça, a qualquer hora.",
   protecao: "Proteção de Crianças (ECA arts. 13 e 70-B; Lei 13.431/2017): a fila de incidentes mostra, em tempo real, quanto falta para comunicar ao Conselho Tutelar cada suspeita de violência (a lei manda comunicar imediatamente; o prazo máximo da Igreja é de 24 horas). Abra o incidente para ler o relato (cada leitura fica registrada com o seu nome), registrar a comunicação ao órgão e anexar o comprovante. A Diretoria e o Comitê também decidem o afastamento cautelar, encerram o caso e acompanham padrões, o Comitê e o relatório anual. A Igreja acolhe e encaminha: quem apura são as autoridades.",
@@ -1287,6 +1287,8 @@ const ABA_PERMISSOES_ALT = {
   // v7.7 — Ministério com Menores (Lei 14.811/2024): a MESMA permissão da Habilitação, no escopo da congregação (painel e ferramentas), mais a da Vistoria, para a Diretoria e o
   // Conselho de Ética chegarem às comunicações dos voluntários (o campo inteiro é só do nível geral; o servidor confere cada ação e a tela mostra só as seções que ele libera).
   // A situação de quem serve com menores fica em Meu Painel → Ministério com menores, aberta a qualquer login.
+  // Trava 7-C (23/10/2026): a Proteção de crianças do NÍVEL GERAL também entra, só para a seção "Funções com menores" — ver temPermissaoDaAba (o Dirigente com
+  // protecao_menores na congregação não vê esta aba, e a Proteção geral continua entrando no módulo pela aba Proteção de Crianças: ver entrarModulo).
   menores: ["habilitacao_voluntarios", "vistoria_antecedentes"],
   // v7.8 — Proteção de Crianças (ECA arts. 13 e 70-B; Lei 13.431/2017): permissão própria "protecao_menores" (a chave não é o nome da aba). O Dirigente vê a sua congregação; a
   // Diretoria e o Comitê veem tudo, e só o nível geral decide o afastamento, encerra e vê padrões, Comitê e relatório anual (o servidor confere cada ação e a tela mostra só as
@@ -1381,6 +1383,8 @@ function temPermissaoDaAba(nome) {
   if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
   if (nome === "crise") return sessaoDeLiderancaNaTela();   // v7.15: todo líder registra o pedido da imprensa que chegou a ele
+  // Trava 7-C: a aba "Ministério com Menores" abre também à Proteção de crianças do NÍVEL GERAL, só para a seção "Funções com menores" (o servidor confere de novo)
+  if (nome === "menores" && authGeral && authPermissoes.includes("protecao_menores")) return true;
   return nome === "ebd" && ebdTurmasProfessor.length > 0;
 }
 async function carregarTurmasProfessorEbd() {
@@ -1486,7 +1490,9 @@ function entrarModulo(chave) {
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById(`grupoModulo${capitalize(chave)}`).style.display = "block";
   document.getElementById("btnVoltarModulo").style.display = "flex";
-  const primeiraAbaPermitida = MODULOS[chave].abas.find(podeAcessarAba) || MODULOS[chave].abaEntrada;
+  // (Trava 7-C) quem só chega à aba dos menores pela Proteção geral entra pela aba da Proteção (a do trabalho dela), não pela das funções
+  const soPelaProtecao = (a) => a === "menores" && !permissoesDaAba(a).some(k => authPermissoes.includes(k));
+  const primeiraAbaPermitida = MODULOS[chave].abas.find(a => podeAcessarAba(a) && !soPelaProtecao(a)) || MODULOS[chave].abas.find(podeAcessarAba) || MODULOS[chave].abaEntrada;
   mostrarAbaSecretaria(primeiraAbaPermitida);
 }
 

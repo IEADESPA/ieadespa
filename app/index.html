@@ -3441,6 +3441,7 @@
           <button type="button" class="cal-pilula ativo" id="btnMnrSecaoPainel" data-on-click="mnrMostrarSecaoAcao" data-args-click='["painel"]'>📊 Painel de conformidade</button>
           <button type="button" class="cal-pilula" id="btnMnrSecaoFerramentas" data-on-click="mnrMostrarSecaoAcao" data-args-click='["ferramentas"]'>🧰 Ferramentas</button>
           <button type="button" class="cal-pilula" id="btnMnrSecaoComunicacoes" data-on-click="mnrMostrarSecaoAcao" data-args-click='["comunicacoes"]' style="display:none;">⚖️ Comunicações dos voluntários</button>
+          <button type="button" class="cal-pilula" id="btnMnrSecaoFuncoes" data-on-click="mnrMostrarSecaoAcao" data-args-click='["funcoes"]' style="display:none;">🏷️ Funções com menores</button>
         </div>
         <p id="mnrSemAcesso" class="subtitle psc-aviso" role="status" style="display:none;">Com o seu login atual você não tem acesso a nenhuma tela desta aba. Entre com a senha de liderança ou fale com quem administra as Permissões.</p>
 
@@ -3586,6 +3587,23 @@
           <p id="mnrComResultado" class="subtitle" role="status"></p>
           <p id="mnrComAcaoMsg" class="subtitle" role="status"></p>
           <div id="mnrComLista"></div>
+        </div>
+
+        <!-- d) FUNÇÕES COM MENORES FORA DAS ESCALAS (Trava 7-C, decisão de 23/10/2026: departamentos e cargos de liderança). Marcar é do nível geral (departamento: quem cuida
+             das pessoas; cargo: quem cuida das permissões), com a confirmação reforçada; quem não está apto aparece só para a Diretoria e a Proteção de crianças do nível geral. -->
+        <div id="mnrSecaoFuncoes" class="cal-secao" style="display:none;">
+          <h4>🏷️ Funções com menores (departamentos e cargos)</h4>
+          <p class="subtitle" style="margin:4px 0 10px;">Quem lidera um departamento de crianças ou ocupa um cargo com crianças precisa estar habilitado, como quem serve nas escalas. Marque aqui os departamentos e
+            os cargos que têm contato com crianças e adolescentes. Quem os ocupa e <strong>não está apto</strong> aparece para a Diretoria e para a Proteção de crianças, que recebem um aviso por mês enquanto
+            durar. <strong>Ninguém sai do cargo sozinho:</strong> a decisão é da Diretoria. <em>Exemplo: a irmã Ana lidera a União de Crianças e o treinamento de proteção dela venceu. Ela aparece na lista
+            abaixo e a Diretoria conversa com ela para renovar.</em></p>
+          <div class="barra-lista">
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="mnrCarregarFuncoesAcao">🔄 Atualizar</button>
+          </div>
+          <p id="mnrFunResultado" class="subtitle" role="status"></p>
+          <p id="mnrFunAcaoMsg" class="subtitle" role="status"></p>
+          <div id="mnrFunInaptos"></div>
+          <div id="mnrFunMarcas"></div>
         </div>
       </div>
 
@@ -5857,10 +5875,19 @@
             <div class="barra-lista">
               <input type="text" id="fornecedorNome" placeholder="Nome / Razão Social" style="min-width:220px;" />
               <input type="text" id="fornecedorCpfCnpj" placeholder="CPF ou CNPJ" style="max-width:180px;" />
-              <select id="fornecedorTipo">
+              <select id="fornecedorTipo" aria-label="Tipo de fornecedor" data-on-change="alternarMembroFornecedor">
                 <option value="PJ">Pessoa Jurídica</option>
                 <option value="PF">Pessoa Física</option>
               </select>
+            </div>
+            <!-- Trava 7-C: a pessoa física que é membro fica ligada à matrícula — ao lançar uma saída para ela, o sistema avisa as regras de dinheiro do voluntário -->
+            <div id="fornecedorMembroCampos" style="display:none;">
+              <p class="subtitle">Esta pessoa é membro da Igreja? Ligue o cadastro à matrícula dela (opcional): ao lançar um pagamento para um voluntário, o sistema avisa as regras do Regimento (Arts. 133 §4º e 135).</p>
+              <div class="barra-lista">
+                <input type="text" id="fornecedorMembroBusca" aria-label="Nome ou matrícula do membro" placeholder="Nome ou matrícula do membro" />
+                <button type="button" class="btn-link" data-on-click="buscarMembroFornecedorAcao">Buscar membro</button>
+                <select id="fornecedorMembroId" aria-label="Membro ligado ao fornecedor"><option value="">— não é membro —</option></select>
+              </div>
             </div>
             <div class="barra-lista">
               <input type="text" id="fornecedorTelefone" placeholder="Telefone (opcional)" />

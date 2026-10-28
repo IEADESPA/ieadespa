@@ -15,7 +15,14 @@ const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
 // fecho da v7.5 — o POST e o DELETE não conferiam o escopo: quem tinha "pessoas" numa congregação alterava, trocava o e-mail ou desligava QUALQUER membro de QUALQUER
 // congregação (só o GET filtrava). E o e-mail virou a raiz da entrada por código ("primeiro acesso / esqueci o PIN"). Agora o alvo E o destino precisam estar no escopo.
 // (a regra mora em shared/escopoRotas.js, usada por todas as rotas de ficha)
-const { noEscopoDaPessoa, FORA_DO_ESCOPO } = require("../shared/escopoRotas");
+const { noEscopoDaPessoa, FORA_DO_ESCOPO, ehGeral } = require("../shared/escopoRotas");
+// v8.2 — Escada ministerial: o cargo ministerial muda pela esteira de consagração (shared/escada.js). No cadastro, só o nível GERAL (a Secretaria: importação e correção)
+// troca o cargo ou informa "no cargo desde" — antes, quem tinha "pessoas" numa congregação punha alguém como Pastor e ele entrava na CLI por Ordenação. Toda troca entra no
+// histórico de cargos (shared/escadaDb.sincronizarCadastro). Sexo (M/F): Missionária é o teto das obreiras (Regimento Art. 71, III).
+const escadaDb = require("../shared/escadaDb");
+const afm = require("../shared/afm");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
+const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
   const s = String(e || "").trim();
@@ -51,11 +58,12 @@ const SELECT_MEMBRO = `
          m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil,
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
          CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
-         m.FotoUrl AS fotoUrl
+         m.FotoUrl AS fotoUrl, m.Sexo AS sexo, CONVERT(varchar(10), hc.Desde, 120) AS cargoDesde
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
-  LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial`;
+  LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
+  LEFT JOIN CargosMinisteriaisHistorico hc ON hc.MembroId = m.MembroId AND hc.Ate IS NULL AND hc.Cargo = m.CargoMinisterial`;
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -101,7 +109,7 @@ module.exports = async function (context, req) {
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
       dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
-      dataAfastamento, motivoSaida, dataSaida
+      dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
@@ -155,6 +163,24 @@ module.exports = async function (context, req) {
       return;
     }
 
+    if (sexo != null && sexo !== "" && !SEXOS.includes(sexo)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Sexo inválido: M ou F." } };
+      return;
+    }
+    let cargoDesdeFinal = null;
+    if (cargoDesde != null && cargoDesde !== "") {
+      const d = afm.dataDoAto(cargoDesde, hojeBrasilia(), "a data de entrada no cargo");
+      if (!d.valido) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: d.mensagem } };
+        return;
+      }
+      if (!cargoMinisterial || cargoMinisterial === "MEMBRO") {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "\"No cargo desde\" só vale para quem tem cargo de oficial." } };
+        return;
+      }
+      cargoDesdeFinal = d.data;
+    }
+
     // Causa de saída (Reg. Art. 11 — v1.5): mesmo padrão de validação de FORMAS_ADMISSAO.
     if (motivoSaida && !CAUSAS_SAIDA.includes(motivoSaida)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Causa de saída inválida. Use uma de: ${CAUSAS_SAIDA.join(", ")}.` } };
@@ -173,12 +199,30 @@ module.exports = async function (context, req) {
     }
 
     const existente = await pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
     if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    // v8.2 — trocar o cargo (ou criar alguém já com cargo de oficial) e informar "no cargo desde": só o nível geral.
+    const cargoAnterior = existia ? (existente.recordset[0].CargoAnterior || null) : null;
+    const cargoNovo = cargoMinisterial || null;
+    const geral = ehGeral(usuario);
+    const semCargo = (c) => c === null || c === "MEMBRO";
+    if (!geral && ((cargoAnterior !== cargoNovo && !(semCargo(cargoAnterior) && semCargo(cargoNovo))) || cargoDesdeFinal)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "O cargo ministerial muda pela esteira de consagração. Só a Secretaria (nível geral) corrige o cargo no cadastro." } };
+      return;
+    }
+    // "Dizimista fiel" é requisito da escada (Art. 72) e da Diretoria (Estatuto Art. 23 §2º, I): o rótulo da tela sempre disse "só o Geral pode afirmar", mas o servidor
+    // não conferia. Fora do nível geral o valor não muda (e pessoa nova entra "não informado").
+    const bitOuNulo = (v) => (v === null || v === undefined ? null : v === "false" ? false : v === "true" ? true : !!v);
+    const dizimistaAnterior = existia ? bitOuNulo(existente.recordset[0].DizimistaAnterior) : null;
+    const dizimistaNovo = dizimistaFiel === undefined || dizimistaFiel === "" ? null : bitOuNulo(dizimistaFiel);
+    if (!geral && dizimistaAnterior !== dizimistaNovo) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "\"Dizimista fiel\" só a Secretaria (nível geral) afirma." } };
       return;
     }
     const statusAnterior = existia ? existente.recordset[0].Status : null;
@@ -202,7 +246,7 @@ module.exports = async function (context, req) {
       .input("status", sql.NVarChar(20), statusFinal)
       .input("dataNascimento", sql.Date, dataNascimento || null)
       .input("dataAdmissao", sql.Date, dataAdmissao || null)
-      .input("dizimistaFiel", sql.Bit, dizimistaFiel === undefined ? null : dizimistaFiel)
+      .input("dizimistaFiel", sql.Bit, dizimistaNovo)
       .input("situacaoMembro", sql.NVarChar(30), situacaoFinal)
       .input("departamentoId", sql.Int, departamentoId || null)
       .input("cargoMinisterial", sql.NVarChar(30), cargoMinisterial || null)
@@ -220,7 +264,8 @@ module.exports = async function (context, req) {
       .input("estadoCivil", sql.NVarChar(20), estadoCivil || null)
       .input("dataAfastamento", sql.Date, dataAfastamento || null)
       .input("dataSaida", sql.Date, dataSaidaFinal)
-      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null);
+      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
+      .input("sexo", sql.NChar(1), sexo || null);
 
     if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
@@ -234,12 +279,19 @@ module.exports = async function (context, req) {
                DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
-               DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida
+               DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
         WHERE MembroId = @id`);
     } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida)
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo)
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo)`);
+    }
+
+    // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a
+    // escada mostra "data de entrada no cargo não informada" até lá (nunca presume a data).
+    if (cargoAnterior !== cargoNovo || cargoDesdeFinal) {
+      const h = await escadaDb.sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
+      if (!h.sucesso) context.log.warn(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
     }
 
     if (entrandoEmStatusTerminal) {
@@ -267,7 +319,7 @@ module.exports = async function (context, req) {
       registroId: Number(membroId),
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
+      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
     });
     // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
     if (emailMudou && emailAnterior) {

@@ -13,6 +13,8 @@ const afm = require("./afm");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
+const escada = require("./escada");
+const escadaDb = require("./escadaDb");
 
 const PERMISSAO = "afm";
 const OFICIAIS_SQL = afm.CARGOS_OFICIAIS.map((c) => `N'${c}'`).join(", ");
@@ -567,6 +569,7 @@ async function listarMatriculas(pool) {
   const r = await pool.request().query(`
     SELECT m.MembroId, m.Nome, m.CargoMinisterial, cm.Nome AS CargoNome, m.Status, c.Nome AS Congregacao,
            a.MatriculaId, a.StatusMatricula, a.NivelEscolaridade, a.NivelConcluido, a.Origem, CONVERT(varchar(10), a.DataMatricula, 120) AS DataMatricula,
+           a.CertificadoHabilitacao, CONVERT(varchar(10), a.CHMEm, 120) AS CHMEm,
            d.Motivo AS DesmatriculaMotivo, CONVERT(varchar(10), d.DataDesmatricula, 120) AS DataDesmatricula, d.Detalhe AS DesmatriculaDetalhe, d.SessoesGatilho
     FROM Matriculas_AFM a
     JOIN MembroReferencia m ON m.MembroId = a.MembroId
@@ -576,6 +579,7 @@ async function listarMatriculas(pool) {
     WHERE a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = a.MembroId)
     ORDER BY m.Nome`);
   const seq = await sequenciasAtuais(pool, "AFM");
+  const origens = await escadaDb.origensDoCargoAtual(pool);   // v8.2: nivelamento obrigatório (Art. 66 §5º)
   return r.recordset.map((l) => {
     const oficial = l.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
     const nivel = afm.avaliarNivel(l.CargoMinisterial, l.NivelEscolaridade, l.NivelConcluido);
@@ -584,7 +588,9 @@ async function listarMatriculas(pool) {
       status: l.StatusMatricula, nivel: l.NivelEscolaridade, nivelConcluido: !!l.NivelConcluido, nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
       origem: l.Origem, dataMatricula: l.DataMatricula, faltasSeguidas: seq.get(Number(l.MembroId)) || 0,
       desmatricula: l.DesmatriculaMotivo ? { motivo: l.DesmatriculaMotivo, data: l.DataDesmatricula, detalhe: l.DesmatriculaDetalhe, sessoes: l.SessoesGatilho } : null,
-      licenca: afm.licencaLiturgica({ cargo: oficial ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula })
+      licenca: afm.licencaLiturgica({ cargo: oficial ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula }),
+      chm: !!l.CertificadoHabilitacao, chmEm: l.CHMEm || null,
+      nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido)
     };
   });
 }

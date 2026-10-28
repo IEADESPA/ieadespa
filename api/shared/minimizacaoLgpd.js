@@ -33,8 +33,10 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
             Origem = NULL, IgrejaAnterior = NULL, DataRitoRecebimento = NULL,
             NomeLidoRito = NULL, MinistranteRito = NULL, DizimistaFiel = NULL,
             CongregacaoId = NULL, ExtensaoId = NULL,
-            DataSaida = @dataSaida, MotivoSaida = @motivo
+            DataSaida = @dataSaida, MotivoSaida = @motivo, Sexo = NULL
             WHERE MembroId = @id`);
+  // v8.2 — o histórico de cargos é registro eclesiástico de consagração: sai com a minimização (Regimento Art. 132 §2º, II).
+  await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id`);
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

@@ -95,6 +95,10 @@ async function salvarPessoa() {
   const dizimistaFiel = dizimistaSelect === "" ? null : dizimistaSelect === "true";
   const departamentoId = document.getElementById("pessoaDepartamento").value || null;
   const cargoMinisterial = document.getElementById("pessoaCargoMinisterial").value || null;
+  const sexo = document.getElementById("pessoaSexo").value || null;
+  // v8.2 — "no cargo desde" só vai quando o Geral mudou a data (sem mudança não regrava o histórico de cargos)
+  const campoCargoDesde = document.getElementById("pessoaCargoDesde");
+  const cargoDesde = authGeral && campoCargoDesde.value && campoCargoDesde.value !== (campoCargoDesde.dataset.original || "") ? campoCargoDesde.value : null;
   const telefone = document.getElementById("pessoaTelefone").value.trim() || null;
   const email = document.getElementById("pessoaEmail").value.trim() || null;
   const endereco = document.getElementById("pessoaEndereco").value.trim() || null;
@@ -113,7 +117,7 @@ async function salvarPessoa() {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
       departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito,
-      estadoCivil, dataAfastamento, motivoSaida
+      estadoCivil, dataAfastamento, motivoSaida, sexo, ...(cargoDesde ? { cargoDesde } : {})
     })
   });
   const data = await res.json();
@@ -141,6 +145,14 @@ async function salvarPessoa() {
   }
 }
 
+// v8.2 — cargo ministerial, "no cargo desde" e "dizimista fiel": só o nível geral muda no cadastro (o servidor confere; aqui só não deixa a pessoa tentar à toa).
+function travarCamposDoGeralPessoa() {
+  for (const id of ["pessoaCargoMinisterial", "pessoaCargoDesde", "pessoaDizimista"]) {
+    const campo = document.getElementById(id);
+    if (campo) campo.disabled = !authGeral;
+  }
+}
+
 // ---- NAVEGAÇÃO DA ABA PESSOAS (v1.10 — submenu Cadastrar/Buscar + Perfil) ----
 
 let subAbaPessoasAtual = "cadastrar";
@@ -153,6 +165,10 @@ function limparFormPessoa() {
   ["pessoaDataNascimento", "pessoaDataAdmissao", "pessoaDataBatismo", "pessoaDataRitoRecebimento",
     "pessoaDataAfastamento"].forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("pessoaCargoMinisterial").value = "";
+  document.getElementById("pessoaCargoDesde").value = "";
+  document.getElementById("pessoaCargoDesde").dataset.original = "";
+  document.getElementById("pessoaSexo").value = "";
+  travarCamposDoGeralPessoa();
   document.getElementById("pessoaCongregacao").selectedIndex = 0;
   document.getElementById("pessoaDepartamento").value = "";
   document.getElementById("pessoaExtensao").value = "";
@@ -295,6 +311,7 @@ function renderizarDadosPerfil(membroId) {
       ${linhaLgpd("Nome Lido no Rito", p.nomeLidoRito)}
       ${linhaLgpd("Ministrante do Rito", p.ministranteRito)}
       ${linhaLgpd("Estado Civil", ROTULO_ESTADO_CIVIL[p.estadoCivil])}
+      ${linhaLgpd("Sexo", { M: "Masculino", F: "Feminino" }[p.sexo])}
       ${linhaLgpd("Telefone", p.telefone)}
       ${linhaLgpd("E-mail", p.email)}
       ${linhaLgpd("Endereço", p.endereco)}
@@ -303,6 +320,7 @@ function renderizarDadosPerfil(membroId) {
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
       ${linhaLgpd("Função", p.funcao)}
       ${linhaLgpd("Cargo Ministerial", nomeCargoPorSigla(p.cargoMinisterial))}
+      ${linhaLgpd("No cargo desde", p.cargoDesde, "data")}
       ${linhaLgpd("Departamento", nomeDepartamentoPorId(p.departamentoId))}
       ${linhaLgpd("Dizimista Fiel", p.dizimistaFiel, "bit")}
     </div>
@@ -765,6 +783,10 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
   document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
+  document.getElementById("pessoaCargoDesde").value = pessoa.cargoDesde || "";
+  document.getElementById("pessoaCargoDesde").dataset.original = pessoa.cargoDesde || "";
+  document.getElementById("pessoaSexo").value = pessoa.sexo || "";
+  travarCamposDoGeralPessoa();
   document.getElementById("pessoaTelefone").value = pessoa.telefone || "";
   document.getElementById("pessoaEmail").value = pessoa.email || "";
   document.getElementById("pessoaEndereco").value = pessoa.endereco || "";

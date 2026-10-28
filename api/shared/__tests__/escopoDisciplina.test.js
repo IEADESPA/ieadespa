@@ -936,7 +936,8 @@ describe("EvoluirConsagracao: os passos do Conselho e do Plenário são do geral
   const preparar = ({ afetadasUpdate = 1 } = {}) => {
     quando(/FROM Consagracoes WHERE ConsagracaoId = @id/, (i) => (CONSAGRACOES[i.id] ? [{ ...CONSAGRACOES[i.id] }] : []));
     quando(/UPDATE Consagracoes SET/, [], afetadasUpdate);
-    quando(/SELECT TOP 1 CargoMinisterialResultante FROM TiposConsagracao/, [{ CargoMinisterialResultante: "DIACONO" }]);
+    quando(/SELECT TOP 1 CargoMinisterialResultante AS cargo FROM TiposConsagracao/, [{ cargo: "DIACONO" }]);
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
   };
   const evoluir = (token, consagracaoId, corpo) => chamar(hEvolCons, { token, corpo, ligado: { consagracaoId } });
 
@@ -964,8 +965,13 @@ describe("EvoluirConsagracao: os passos do Conselho e do Plenário são do geral
     preparar();
     const r = await evoluir(geral(["consagracoes"]), GUID(2), { acao: "AVANCAR" });
     expect(r.body).toMatchObject({ sucesso: true, novoStatus: "CONCLUIDO" });
-    expect(rodou(/UPDATE MembroReferencia SET Funcao/)).toHaveLength(1);
-    expect(rodou(/UPDATE MembroReferencia SET CargoMinisterial/)[0].inputs).toMatchObject({ membroId: 40, cargo: "DIACONO" });
+    // v8.2: cargo, Função e histórico juntos, na mesma transação (shared/escadaDb.trocarCargoNaTransacao)
+    const troca = rodou(/UPDATE MembroReferencia SET CargoMinisterial/);
+    expect(troca).toHaveLength(1);
+    expect(troca[0].inputs).toMatchObject({ m: 40, c: "DIACONO", f: "Diaconato", mudaFuncao: 1 });
+    expect(rodou(/INSERT INTO CargosMinisteriaisHistorico/)[0].inputs).toMatchObject({ m: 40, c: "DIACONO", o: "CONSAGRACAO" });
+    expect(troca[0].transacao).not.toBeNull();
+    expect(mockTransacoes[mockTransacoes.length - 1].estado).toBe("confirmada");
   });
   test("o processo mudou de etapa no meio (UPDATE sem linha): não aplica função nem cargo", async () => {
     preparar({ afetadasUpdate: 0 });

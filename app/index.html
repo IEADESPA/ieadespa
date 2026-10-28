@@ -1915,8 +1915,12 @@
               <input type="text" id="pessoaNome" placeholder="Ex: Maria da Silva" />
             </div>
             <div class="input-group">
-              <label>Cargo Ministerial (escada — Art. 71):</label>
+              <label for="pessoaCargoMinisterial">Cargo Ministerial (escada — Art. 71; muda pela consagração, só o Geral corrige aqui):</label>
               <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
+            </div>
+            <div class="input-group">
+              <label for="pessoaCargoDesde">No cargo desde (só o Geral — conta o interstício, Art. 72):</label>
+              <input type="date" id="pessoaCargoDesde" />
             </div>
             <div class="input-group">
               <label>Congregação:</label>
@@ -1983,6 +1987,14 @@
                 <option value="EM_COMUNHAO">Membro em Comunhão</option>
                 <option value="SEM_COMUNHAO">Membro sem Comunhão</option>
                 <option value="CONGREGADO">Congregado</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="pessoaSexo">Sexo:</label>
+              <select id="pessoaSexo">
+                <option value="">Não informado</option>
+                <option value="M">Masculino</option>
+                <option value="F">Feminino</option>
               </select>
             </div>
             <div class="input-group">
@@ -2486,13 +2498,28 @@
             <select id="consagracaoAssunto"></select>
             <input type="text" id="consagracaoAssuntoOutro" placeholder="Digite o assunto" style="display:none; margin-top:8px;" />
           </div>
+          <!-- v8.2 — Escada ministerial (Regimento Art. 66 §§3º–5º, 71 a 74): a nomeação direta do Pastor Presidente e o ministro de outra convenção só aparecem para o nível geral -->
+          <div class="input-group">
+            <label for="consagracaoModalidade">Modalidade:</label>
+            <select id="consagracaoModalidade">
+              <option value="INDICACAO">Indicação (JAI e Dirigente)</option>
+              <option value="NOMEACAO_PRESIDENCIAL" class="so-geral-escada">Nomeação direta do Pastor Presidente</option>
+              <option value="OUTRA_CONVENCAO" class="so-geral-escada">Ministro já ordenado vindo de outra convenção</option>
+            </select>
+          </div>
+          <div class="input-group" id="grupoConsagracaoAto" style="display:none;">
+            <label for="consagracaoAto" id="rotuloConsagracaoAto">Referência do ato da Presidência:</label>
+            <input type="text" id="consagracaoAto" maxlength="200" />
+          </div>
           <div class="input-group">
             <label>Matrícula do proponente:</label>
             <input type="number" id="consagracaoProponente" placeholder="Quem está propondo" />
           </div>
+          <button class="btn-confirmar" type="button" data-on-click="conferirRequisitosConsagracaoAcao">🔎 Conferir requisitos</button>
           <button class="btn-confirmar" type="submit">📩 Protocolar</button>
         </form>
         <p id="resultadoConsagracao"></p>
+        <div id="consagracaoRequisitos" aria-live="polite"></div>
 
         <hr />
         <h3>Esteira Ativa</h3>
@@ -5046,6 +5073,7 @@
           <button type="button" class="cal-pilula ativo" id="btnAfmSecaoMatriculas" aria-pressed="true" data-on-click="afmMostrarSecaoAcao" data-args-click='["matriculas"]'>📋 Matrículas</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoCorpo" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["corpo"]'>🎓 Reitor e docentes</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoMagnas" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["magnas"]'>📅 Sessões Magnas</button>
+          <button type="button" class="cal-pilula" id="btnAfmSecaoEscada" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["escada"]'>🪜 Escada e veto</button>
         </div>
         <div id="afmForm"></div>
         <div id="afmSecaoMatriculas">
@@ -5055,6 +5083,9 @@
             <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="RISCO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["RISCO"]'>2 Magnas seguidas</button>
             <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="ABAIXO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["ABAIXO"]'>Abaixo do nível do cargo</button>
             <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="SEM_NIVEL" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["SEM_NIVEL"]'>Nível a informar</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="NIVELAMENTO" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["NIVELAMENTO"]'>Nivelamento obrigatório</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="SEM_CHM" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["SEM_CHM"]'>Sem CHM</button>
+            <button type="button" class="cal-pilula" aria-pressed="false" data-filtro="CANDIDATOS" data-on-click="afmFiltrarMatriculasAcao" data-args-click='["CANDIDATOS"]'>Candidatos</button>
           </div>
           <p id="afmResumoMatriculas" class="subtitle" role="status"></p>
           <div class="rolagem-tabela"><div id="afmListaMatriculas"></div></div>
@@ -5063,6 +5094,15 @@
         <div id="afmSecaoMagnas" style="display:none;">
           <p class="subtitle">A Sessão Magna (Art. 69) é a reunião da CLI integrada à Academia: a presença vale para as duas e a falta conta nas duas. Abra-a em Órgãos Centrais → CLI.</p>
           <div class="rolagem-tabela"><div id="afmListaMagnas"></div></div>
+        </div>
+        <!-- v8.2 — Escada ministerial: o veto técnico (Regimento Art. 66 §3º e 67 §2º) e a matrícula de quem ainda não é oficial (Art. 72, I, b) -->
+        <div id="afmSecaoEscada" style="display:none;">
+          <p class="subtitle">A AFM pode <strong>vetar</strong> a indicação de quem não atinge os requisitos técnicos ou reprovou nas avaliações (Art. 66 §3º e 67 §2º): o veto encerra o
+            processo. A nomeação direta do Pastor Presidente não é vetável (§4º): o nomeado faz o <strong>nivelamento obrigatório</strong> depois da posse (§5º). O CHM se concede na
+            lista de Matrículas. <em>Exemplo: o candidato a Diácono reprovou na prova de liturgia do Seminário — vete a indicação com esse motivo.</em></p>
+          <div class="barra-lista"><button type="button" class="btn-confirmar" style="width:auto;margin:0;" data-on-click="afmFormCandidatoAcao">➕ Matricular candidato (quem ainda não é oficial)</button></div>
+          <h4>Indicações em andamento que a AFM pode vetar</h4>
+          <div class="rolagem-tabela"><div id="afmListaVetaveis"></div></div>
         </div>
       </div>
 

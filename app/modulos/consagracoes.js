@@ -15,14 +15,105 @@ async function carregarTiposConsagracao() {
   select.innerHTML = tipos.filter(t => t.ativo !== false).map(t => `<option value="${escaparHtmlEbd(t.nome)}">${escaparHtmlEbd(t.nome)}</option>`).join("")
     + `<option value="__outro">Outro (digitar)</option>`;
   document.getElementById("consagracaoAssuntoOutro").style.display = "none";
+  ajustarModalidadeConsagracao();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   const select = document.getElementById("consagracaoAssunto");
   if (select) select.addEventListener("change", () => {
     document.getElementById("consagracaoAssuntoOutro").style.display = select.value === "__outro" ? "block" : "none";
+    limparRequisitosEscada();
   });
+  const modalidade = document.getElementById("consagracaoModalidade");
+  if (modalidade) modalidade.addEventListener("change", () => { ajustarModalidadeConsagracao(); limparRequisitosEscada(); });
+  const matricula = document.getElementById("consagracaoMatricula");
+  if (matricula) matricula.addEventListener("input", limparRequisitosEscada);
 });
+
+// ---- v8.2 — ESCADA MINISTERIAL (Regimento Art. 66 §§3º–5º, 67, 71 a 74) ----
+// A "nomeação direta do Pastor Presidente" e o "ministro de outra convenção" só o nível geral registra (o servidor confere); fora dele as opções nem aparecem.
+const ROTULO_CARGO_ESCADA = { MEMBRO: "Membro", AUXILIAR: "Auxiliar", MISSIONARIO: "Missionário(a)", DIACONO: "Diácono", PRESBITERO: "Presbítero", EVANGELISTA: "Evangelista", PASTOR: "Pastor" };
+const ROTULO_MODALIDADE_ESCADA = { INDICACAO: "Indicação", NOMEACAO_PRESIDENCIAL: "Nomeação direta do Pastor Presidente", OUTRA_CONVENCAO: "Ministro de outra convenção" };
+const SITUACAO_ESCADA = {
+  ATENDE: { icone: "✔", texto: "atende" }, FALTA: { icone: "✖", texto: "falta" }, SEM_DADO: { icone: "✖", texto: "falta o dado" },
+  AVISO: { icone: "⚠", texto: "aviso" }, DISPENSADO: { icone: "–", texto: "dispensado" }
+};
+let consagracaoOcupada = false;
+
+function ajustarModalidadeConsagracao() {
+  const select = document.getElementById("consagracaoModalidade");
+  if (!select) return;
+  for (const opcao of select.querySelectorAll("option.so-geral-escada")) {
+    opcao.hidden = !authGeral;
+    opcao.disabled = !authGeral;
+  }
+  if (!authGeral && select.value !== "INDICACAO") select.value = "INDICACAO";
+  const grupo = document.getElementById("grupoConsagracaoAto");
+  const rotulo = document.getElementById("rotuloConsagracaoAto");
+  grupo.style.display = select.value === "INDICACAO" ? "none" : "block";
+  rotulo.textContent = select.value === "OUTRA_CONVENCAO" ? "Igreja ou convenção de origem:" : "Referência do ato da Presidência:";
+}
+
+function limparRequisitosEscada() {
+  const caixa = document.getElementById("consagracaoRequisitos");
+  if (caixa) caixa.innerHTML = "";
+}
+
+function htmlRequisitosEscada(av, alvoRotulo) {
+  if (!av || !Array.isArray(av.itens)) return "";
+  const destino = escaparHtmlEbd(alvoRotulo || ROTULO_CARGO_ESCADA[av.alvo] || av.alvo);
+  const cabeca = av.bloqueado
+    ? `Para ${destino}: <strong>ainda não pode seguir</strong>.`
+    : `Para ${destino}: <strong>pode seguir</strong>${av.nivelamento ? " — fica em nivelamento obrigatório na AFM depois da posse (Art. 66 §5º)" : ""}.`;
+  const linhas = av.itens.map((i) => {
+    const sit = SITUACAO_ESCADA[i.situacao] || { icone: "?", texto: String(i.situacao || "") };
+    return `<li class="escada-item escada-${escaparHtmlEbd(String(i.situacao || "").toLowerCase())}"><span aria-hidden="true">${escaparHtmlEbd(sit.icone)}</span>
+      <strong>${escaparHtmlEbd(i.rotulo)}</strong> <small>(${escaparHtmlEbd(i.artigo)})</small> — ${escaparHtmlEbd(sit.texto)}${i.detalhe ? `: ${escaparHtmlEbd(i.detalhe)}` : ""}</li>`;
+  }).join("");
+  return `<div class="escada-requisitos"><p>${cabeca}</p><ul class="escada-lista">${linhas}</ul></div>`;
+}
+
+function mostrarRequisitosEscada(av, alvoRotulo) {
+  const caixa = document.getElementById("consagracaoRequisitos");
+  if (caixa) caixa.innerHTML = htmlRequisitosEscada(av, alvoRotulo);
+}
+
+function dadosDoFormularioConsagracao() {
+  const selectAssunto = document.getElementById("consagracaoAssunto").value;
+  return {
+    membroId: document.getElementById("consagracaoMatricula").value,
+    assunto: selectAssunto === "__outro" ? document.getElementById("consagracaoAssuntoOutro").value : selectAssunto,
+    proponenteMembroId: document.getElementById("consagracaoProponente").value,
+    modalidade: document.getElementById("consagracaoModalidade").value || "INDICACAO",
+    atoReferencia: document.getElementById("consagracaoAto").value
+  };
+}
+
+async function conferirRequisitosConsagracaoAcao() {
+  const msg = document.getElementById("resultadoConsagracao");
+  const f = dadosDoFormularioConsagracao();
+  limparRequisitosEscada();
+  if (!f.membroId || !f.assunto) {
+    msg.textContent = "Informe a matrícula e o assunto para conferir os requisitos.";
+    return;
+  }
+  if (consagracaoOcupada) return;
+  consagracaoOcupada = true;
+  try {
+    const params = new URLSearchParams({ membroId: f.membroId, assunto: f.assunto, modalidade: f.modalidade });
+    const res = await fetchProtegido(`${API_BASE}/escada/requisitos?${params.toString()}`);
+    const data = await res.json();
+    // a matrícula, o assunto ou a modalidade mudaram enquanto a resposta vinha: descarta
+    const agora = dadosDoFormularioConsagracao();
+    if (agora.membroId !== f.membroId || agora.assunto !== f.assunto || agora.modalidade !== f.modalidade) return;
+    if (!data.sucesso) { msg.textContent = data.mensagem || "Não foi possível conferir."; return; }
+    if (!data.alvo) { msg.textContent = data.mensagem || "Este tipo de consagração não muda o cargo."; return; }
+    msg.textContent = "";
+    mostrarRequisitosEscada(data.requisitos, data.alvoRotulo);
+  } finally {
+    consagracaoOcupada = false;
+  }
+}
 
 // Trava de Revisão 4-A (v4.15.1): para origem CONGREGACAO a arrecadação
 // líquida é calculada no backend a partir do fechamento mensal real da
@@ -52,28 +143,41 @@ const ROTULO_STATUS_CONSAGRACAO = {
 };
 
 async function salvarConsagracao() {
-  const membroId = document.getElementById("consagracaoMatricula").value;
-  const selectAssunto = document.getElementById("consagracaoAssunto").value;
-  const assunto = selectAssunto === "__outro" ? document.getElementById("consagracaoAssuntoOutro").value : selectAssunto;
-  const proponenteMembroId = document.getElementById("consagracaoProponente").value;
+  const { membroId, assunto, proponenteMembroId, modalidade, atoReferencia } = dadosDoFormularioConsagracao();
   const msg = document.getElementById("resultadoConsagracao");
 
   if (!membroId || !assunto || !proponenteMembroId) {
     msg.textContent = "Informe matrícula, assunto e proponente.";
     return;
   }
-
-  const res = await fetchProtegido(`${API_BASE}/consagracoes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, assunto, proponenteMembroId })
-  });
-  const data = await res.json();
-  msg.textContent = data.mensagem;
-  if (data.sucesso) {
-    document.getElementById("consagracaoMatricula").value = "";
-    document.getElementById("consagracaoProponente").value = "";
-    carregarConsagracoes();
+  if (modalidade !== "INDICACAO" && !String(atoReferencia || "").trim()) {
+    msg.textContent = modalidade === "OUTRA_CONVENCAO" ? "Informe a igreja ou convenção de origem." : "Informe a referência do ato da Presidência.";
+    return;
+  }
+  if (consagracaoOcupada) return;
+  consagracaoOcupada = true;
+  limparRequisitosEscada();
+  try {
+    const corpo = { membroId, assunto, proponenteMembroId, modalidade };
+    if (modalidade !== "INDICACAO") corpo.atoReferencia = atoReferencia;
+    const res = await fetchProtegido(`${API_BASE}/consagracoes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo)
+    });
+    const data = await res.json();
+    msg.textContent = data.mensagem;
+    if (data.requisitos) mostrarRequisitosEscada(data.requisitos);
+    if (data.sucesso) {
+      document.getElementById("consagracaoMatricula").value = "";
+      document.getElementById("consagracaoProponente").value = "";
+      document.getElementById("consagracaoAto").value = "";
+      document.getElementById("consagracaoModalidade").value = "INDICACAO";
+      ajustarModalidadeConsagracao();
+      carregarConsagracoes();
+    }
+  } finally {
+    consagracaoOcupada = false;
   }
 }
 
@@ -89,18 +193,26 @@ async function carregarConsagracoes() {
   }
 
   let html = `<table class="tabela-frequencia"><thead><tr>
-    <th>Nome</th><th>Assunto</th><th>Proponente</th><th>Status</th><th>Protocolo</th><th></th>
+    <th>Nome</th><th>Assunto</th><th>Destino</th><th>Proponente</th><th>Status</th><th>Protocolo</th><th></th>
   </tr></thead><tbody>`;
 
   consagracoes.forEach(c => {
+    const vetado = !!c.vetoAFMEm;
+    const destino = c.cargoAlvo ? escaparHtmlEbd(ROTULO_CARGO_ESCADA[c.cargoAlvo] || c.cargoAlvo) : "-";
+    const modalidade = c.modalidade && c.modalidade !== "INDICACAO"
+      ? `<br><small>${escaparHtmlEbd(ROTULO_MODALIDADE_ESCADA[c.modalidade] || c.modalidade)}${c.atoReferencia ? `: ${escaparHtmlEbd(c.atoReferencia)}` : ""}</small>` : "";
+    const status = vetado
+      ? `Vetado pela AFM em ${escaparHtmlEbd(c.vetoAFMEm)}<br><small>${escaparHtmlEbd(c.vetoAFMMotivo)}</small>`
+      : (ROTULO_STATUS_CONSAGRACAO[c.status] || escaparHtmlEbd(c.status));
     html += `<tr>
       <td>${escaparHtmlEbd(c.nome)}</td>
       <td>${escaparHtmlEbd(c.assunto)}</td>
+      <td>${destino}${modalidade}</td>
       <td>${escaparHtmlEbd(c.proponente) || "-"}</td>
-      <td>${ROTULO_STATUS_CONSAGRACAO[c.status] || escaparHtmlEbd(c.status)}</td>
+      <td>${status}</td>
       <td>${escaparHtmlEbd(c.dataProtocolo)}</td>
       <td>
-        ${authGeral ? `<button class="btn-link" data-on-click="avancarConsagracaoAcao" data-args-click="${argsAttr(String(c.consagracaoId ?? ""))}">Avançar</button>
+        ${authGeral && !vetado ? `<button class="btn-link" data-on-click="avancarConsagracaoAcao" data-args-click="${argsAttr(String(c.consagracaoId ?? ""))}">Avançar</button>
         <button class="btn-link btn-link-perigo" data-on-click="reprovarConsagracaoAcao" data-args-click="${argsAttr(String(c.consagracaoId ?? ""))}">Reprovar</button>` : "-"}
       </td>
     </tr>`;
@@ -254,14 +366,22 @@ async function reprovarCandidatoBatismoAcao(id) {
 
 async function avancarConsagracaoAcao(id) {
   if (!(await confirmarAcao("Confirma avançar este processo para a próxima etapa?", "Avançar"))) return;
-  const res = await fetchProtegido(`${API_BASE}/consagracoes/${id}/evoluir`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ acao: "AVANCAR" })
-  });
-  const data = await res.json();
-  avisarResultado(data);
-  if (data.sucesso) carregarConsagracoes();
+  if (consagracaoOcupada) return;
+  consagracaoOcupada = true;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/consagracoes/${id}/evoluir`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "AVANCAR" })
+    });
+    const data = await res.json();
+    avisarResultado(data);
+    // travou na escada: a lista do que falta aparece embaixo do formulário
+    if (data.requisitos) mostrarRequisitosEscada(data.requisitos); else limparRequisitosEscada();
+    if (data.sucesso) carregarConsagracoes();
+  } finally {
+    consagracaoOcupada = false;
+  }
 }
 
 async function reprovarConsagracaoAcao(id) {
@@ -277,7 +397,7 @@ async function reprovarConsagracaoAcao(id) {
 }
 
 registrarAcoes({
-  acaoCandidatoBatismo, acaoTurmaBatismo, alternarDiscipuladoBatismoAcao, atribuirTurmaBatismoAcao, avancarConsagracaoAcao,
+  acaoCandidatoBatismo, acaoTurmaBatismo, alternarDiscipuladoBatismoAcao, atribuirTurmaBatismoAcao, avancarConsagracaoAcao, conferirRequisitosConsagracaoAcao,
   inscreverCandidatoBatismoAcao, parecerCandidatoBatismoAcao, reprovarCandidatoBatismoAcao, reprovarConsagracaoAcao, salvarConsagracao,
   salvarTurmaBatismoAcao
 });

@@ -105,6 +105,11 @@ describe("requisitos por degrau (Art. 72)", () => {
     expect(situacao(ev(false), "escolaridade")).toBe("FALTA");      // nem a nomeação do Presidente dispensa (Art. 72, V, b)
     expect(ev(false).bloqueado).toBe(true);
     expect(ev(true).bloqueado).toBe(false);
+    // o ministro já ordenado de outra convenção não é candidato: o curso fica para o nivelamento (Regimento Art. 8º e 10)
+    const fora = avaliar(base({ cargoAtual: "MEMBRO", cargoDesde: null, afm: null }), "PASTOR", "OUTRA_CONVENCAO");
+    expect(situacao(fora, "escolaridade")).toBe("DISPENSADO");
+    expect(fora.bloqueado).toBe(false);
+    expect(fora.nivelamento).toBe(true);
   });
   test("comunhão: inativo, disciplina e carta de mudança travam; dízimo em branco não conta como atendido", () => {
     expect(situacao(avaliar(base({ status: "INATIVO" }), "DIACONO"), "comunhao")).toBe("FALTA");

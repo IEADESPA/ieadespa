@@ -2491,7 +2491,7 @@
         <form data-on-submit="salvarConsagracao" data-prevent="submit">
           <div class="input-group">
             <label>Matrícula da pessoa:</label>
-            <input type="number" id="consagracaoMatricula" placeholder="Ex: 15" />
+            <input type="number" id="consagracaoMatricula" placeholder="Ex: 15" data-on-input="limparRequisitosEscada" />
           </div>
           <div class="input-group">
             <label>Assunto:</label>
@@ -2501,7 +2501,7 @@
           <!-- v8.2 — Escada ministerial (Regimento Art. 66 §§3º–5º, 71 a 74): a nomeação direta do Pastor Presidente e o ministro de outra convenção só aparecem para o nível geral -->
           <div class="input-group">
             <label for="consagracaoModalidade">Modalidade:</label>
-            <select id="consagracaoModalidade">
+            <select id="consagracaoModalidade" data-on-change="mudouModalidadeConsagracaoAcao">
               <option value="INDICACAO">Indicação (JAI e Dirigente)</option>
               <option value="NOMEACAO_PRESIDENCIAL" class="so-geral-escada">Nomeação direta do Pastor Presidente</option>
               <option value="OUTRA_CONVENCAO" class="so-geral-escada">Ministro já ordenado vindo de outra convenção</option>

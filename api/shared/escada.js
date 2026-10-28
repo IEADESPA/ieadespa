@@ -170,7 +170,9 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso } = {}
   }
   const nivel = avaliarNivel(alvo, afm && afm.nivel, afm && afm.concluido);
   const nivelRotulo = afm && afm.nivel && NIVEIS[afm.nivel] ? `${NIVEIS[afm.nivel].rotulo}${afm.concluido ? " (concluído)" : " (cursando)"}` : null;
-  const ministro = alvo === "EVANGELISTA" || alvo === "PASTOR";
+  // O curso concluído de Evangelista e Pastor (Art. 72, V, b) é regra do CANDIDATO a ministro: não se dispensa nem na nomeação do Presidente. O ministro já ordenado que
+  // vem de outra convenção não é candidato — o assento dele depende só do reconhecimento da função (Regimento Art. 8º e 10) — e faz o nivelamento depois.
+  const ministro = (alvo === "EVANGELISTA" || alvo === "PASTOR") && !outra;
   if (nivel.exigido) {
     const artigoNivel = nivel.exigido.split(" — ")[1];
     itens.push(nivel.atende === true

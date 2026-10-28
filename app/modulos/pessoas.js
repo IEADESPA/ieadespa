@@ -98,7 +98,7 @@ async function salvarPessoa() {
   const sexo = document.getElementById("pessoaSexo").value || null;
   // v8.2 — "no cargo desde" só vai quando o Geral mudou a data (sem mudança não regrava o histórico de cargos)
   const campoCargoDesde = document.getElementById("pessoaCargoDesde");
-  const cargoDesde = authGeral && campoCargoDesde.value && campoCargoDesde.value !== (campoCargoDesde.dataset.original || "") ? campoCargoDesde.value : null;
+  const cargoDesde = authGeral && campoCargoDesde.value && campoCargoDesde.value !== (campoCargoDesde.getAttribute("data-original") || "") ? campoCargoDesde.value : null;
   const telefone = document.getElementById("pessoaTelefone").value.trim() || null;
   const email = document.getElementById("pessoaEmail").value.trim() || null;
   const endereco = document.getElementById("pessoaEndereco").value.trim() || null;
@@ -166,7 +166,7 @@ function limparFormPessoa() {
     "pessoaDataAfastamento"].forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("pessoaCargoMinisterial").value = "";
   document.getElementById("pessoaCargoDesde").value = "";
-  document.getElementById("pessoaCargoDesde").dataset.original = "";
+  document.getElementById("pessoaCargoDesde").setAttribute("data-original", "");
   document.getElementById("pessoaSexo").value = "";
   travarCamposDoGeralPessoa();
   document.getElementById("pessoaCongregacao").selectedIndex = 0;
@@ -784,7 +784,7 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
   document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
   document.getElementById("pessoaCargoDesde").value = pessoa.cargoDesde || "";
-  document.getElementById("pessoaCargoDesde").dataset.original = pessoa.cargoDesde || "";
+  document.getElementById("pessoaCargoDesde").setAttribute("data-original", pessoa.cargoDesde || "");
   document.getElementById("pessoaSexo").value = pessoa.sexo || "";
   travarCamposDoGeralPessoa();
   document.getElementById("pessoaTelefone").value = pessoa.telefone || "";

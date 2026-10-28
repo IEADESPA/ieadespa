@@ -24,10 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("consagracaoAssuntoOutro").style.display = select.value === "__outro" ? "block" : "none";
     limparRequisitosEscada();
   });
-  const modalidade = document.getElementById("consagracaoModalidade");
-  if (modalidade) modalidade.addEventListener("change", () => { ajustarModalidadeConsagracao(); limparRequisitosEscada(); });
-  const matricula = document.getElementById("consagracaoMatricula");
-  if (matricula) matricula.addEventListener("input", limparRequisitosEscada);
 });
 
 // ---- v8.2 — ESCADA MINISTERIAL (Regimento Art. 66 §§3º–5º, 67, 71 a 74) ----
@@ -43,8 +39,8 @@ let consagracaoOcupada = false;
 function ajustarModalidadeConsagracao() {
   const select = document.getElementById("consagracaoModalidade");
   if (!select) return;
-  for (const opcao of select.querySelectorAll("option.so-geral-escada")) {
-    opcao.hidden = !authGeral;
+  for (const opcao of [...select.options].filter((o) => o.classList.contains("so-geral-escada"))) {
+    if (authGeral) opcao.removeAttribute("hidden"); else opcao.setAttribute("hidden", "");
     opcao.disabled = !authGeral;
   }
   if (!authGeral && select.value !== "INDICACAO") select.value = "INDICACAO";
@@ -52,6 +48,11 @@ function ajustarModalidadeConsagracao() {
   const rotulo = document.getElementById("rotuloConsagracaoAto");
   grupo.style.display = select.value === "INDICACAO" ? "none" : "block";
   rotulo.textContent = select.value === "OUTRA_CONVENCAO" ? "Igreja ou convenção de origem:" : "Referência do ato da Presidência:";
+}
+
+function mudouModalidadeConsagracaoAcao() {
+  ajustarModalidadeConsagracao();
+  limparRequisitosEscada();
 }
 
 function limparRequisitosEscada() {
@@ -397,7 +398,7 @@ async function reprovarConsagracaoAcao(id) {
 }
 
 registrarAcoes({
-  acaoCandidatoBatismo, acaoTurmaBatismo, alternarDiscipuladoBatismoAcao, atribuirTurmaBatismoAcao, avancarConsagracaoAcao, conferirRequisitosConsagracaoAcao,
+  acaoCandidatoBatismo, acaoTurmaBatismo, alternarDiscipuladoBatismoAcao, atribuirTurmaBatismoAcao, avancarConsagracaoAcao, conferirRequisitosConsagracaoAcao, limparRequisitosEscada, mudouModalidadeConsagracaoAcao,
   inscreverCandidatoBatismoAcao, parecerCandidatoBatismoAcao, reprovarCandidatoBatismoAcao, reprovarConsagracaoAcao, salvarConsagracao,
   salvarTurmaBatismoAcao
 });

@@ -97,6 +97,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   falta, ninguém na própria falta, uma reunião que conta por dia e "não conta falta", período fora que interrompe, pedido pendente que segura a exclusão, exclusão refeita
   na apuração atrasada, Seminário só da AFM, quórum da Magna só da Câmara, motivo fora da trilha e do nível local, CEI e o certificado na rematrícula).
   Os roteiros põem cada reunião que conta numa data passada diferente (uma por dia, como no sistema).
+- **v8.2** (Escada ministerial, migração 157), base `cenario-escada` (`bash rodar.sh preparar-escada`: a `cenario-afm` com a 157 duas vezes). Cada roteiro monta o
+  próprio cenário (`lib-escada.js`): `e2e-51` (esquema da 157; prévia, protocolo e cada avanço conferindo os requisitos; a conclusão que troca cargo, Função e histórico
+  juntos; interstício pelo histórico; queima de etapas; teto das obreiras; nomeação do Presidente com o nivelamento; outra convenção; Evangelista e Pastor só por indicação
+  do Presidente; disciplina com o motivo só ao nível geral; "no cargo desde"; candidato, CHM concedido e revogado no meio do processo; veto técnico; cadastro com cargo e
+  dízimo só no nível geral; vacância e minimização; Meus Dados — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-escada`), `e2e-52` (401, PIN, geral sem
+  a permissão, Dirigente fora do escopo e sem os atos do geral; lixo em todo campo sem 500 nem mudança no banco) e `e2e-53` (corridas: quatro protocolos, quatro
+  "avançar" na última etapa, vetos contra avanços, "no cargo desde", trocas de cargo, matrículas de candidato e CHM ao mesmo tempo).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

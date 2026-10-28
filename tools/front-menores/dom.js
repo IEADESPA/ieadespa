@@ -106,6 +106,8 @@ class Elemento extends No {
   get open() { return this._aberto !== null ? this._aberto : this.hasAttribute("open"); }
   set open(v) { this._aberto = !!v; }
   get hidden() { return this.hasAttribute("hidden"); }
+  // v8.3: como o navegador — `el.hidden = true` põe o atributo; `false` tira
+  set hidden(v) { if (v) this.setAttribute("hidden", ""); else this.removeAttribute("hidden"); }
   get type() { return (this.getAttribute("type") || (this.localName === "input" ? "text" : "")).toLowerCase(); }
 }
 

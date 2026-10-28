@@ -67,6 +67,20 @@ const REGRAS = {
       return !!procedimento && !!(await pessoaAlcancavel(pool, usuario, procedimento.MembroId));
     }
   },
+  // v8.3 — os documentos da indicação (Regimento Art. 74, II: cópia dos documentos pessoais) e o comprovante da taxa (Art. 75, I). O registro é o NÚMERO do processo. Quem
+  // alcança a pessoa pela permissão das consagrações (quem protocolou, no escopo dele; a Secretaria) e o CEI, que analisa o prontuário (Art. 74, III).
+  // Revisão independente (28/10/2026): ninguém vê nem mexe no dossiê do próprio processo; depois do envio ao CEI só o nível geral acrescenta (o comprovante da taxa) e
+  // ninguém apaga — o dossiê que o CEI analisou não se esvazia.
+  Consagracoes: {
+    permissoes: ["consagracoes", "cei"],
+    alcance: async (pool, visao, registroId, operacao = {}) => {
+      const processo = await registroExiste(pool, `SELECT Numero, MembroId, Status FROM Consagracoes WHERE Numero = @id`, registroId);
+      if (!processo || Number(processo.MembroId) === Number(visao.membroId)) return false;
+      if (operacao.exclusao && processo.Status !== "PROTOCOLADO") return false;
+      if (operacao.escrita && processo.Status !== "PROTOCOLADO" && !require("./escopoRotas").ehGeral(visao)) return false;
+      return !!(await pessoaAlcancavel(pool, visao, processo.MembroId));
+    }
+  },
   Fornecedores: {
     permissoes: ["financeiro"],
     soGeral: true,

@@ -12,12 +12,15 @@
 // as duas últimas só o nível geral registra, com a referência do ato ou a convenção de origem. Um processo em andamento por pessoa (índice único do banco → 409). Ninguém
 // protocola a própria consagração. Disciplina e carta de mudança só são conferidas aqui para quem tem a permissão "disciplina" sobre a pessoa (sem ela, o protocolo segue e
 // o avanço, do nível geral, confere) — a lista não pode dizer a um Dirigente quem está sob disciplina.
+//
+// v8.3 — quem faltou à cerimônia de consagração perde a consagração naquele ano e só protocola de novo no ano seguinte (Regimento, Art. 75, II, b).
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
 const escada = require("../shared/escada");
 const escadaDb = require("../shared/escadaDb");
+const consagracaoDb = require("../shared/consagracaoDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { violouUnicidade } = require("../shared/violacaoUnica");
@@ -96,6 +99,14 @@ module.exports = async function (context, req) {
   if (conferencia.avaliacao && conferencia.avaliacao.bloqueado) {
     context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: conferencia.avaliacao } };
     return;
+  }
+  // v8.3 — quem faltou à cerimônia perde a consagração naquele exercício e reinicia o processo só no ano seguinte (Regimento, Art. 75, II, b).
+  if (conferencia.alvo) {
+    const faltou = await consagracaoDb.perdeuNoAno(pool, membroId, hojeBrasilia());
+    if (faltou) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: `Esta pessoa faltou à cerimônia de ${faltou.split("-").reverse().join("/")}: perdeu a consagração neste ano e só reinicia o processo no ano que vem (Regimento, Art. 75, II, b).` } };
+      return;
+    }
   }
 
   // v6.9 — formação exigida para este tipo de consagração (TrilhaRequisitos,

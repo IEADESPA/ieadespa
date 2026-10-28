@@ -106,7 +106,14 @@ Cada versão parte da base da anterior (`BASE=...`):
   "avançar" na última etapa, vetos contra avanços, "no cargo desde", trocas de cargo, matrículas de candidato e CHM ao mesmo tempo) e `e2e-54` (o que as revisões
   independentes pediram: o próprio no cadastro, a ficha velha que não desfaz a promoção, o sexo que não se apaga, a data antes de 2000, a 157 reaplicada sem refazer o
   preenchimento, o CHM usado na promoção e levado na rematrícula, o teto das obreiras em toda modalidade, veto só em processo de cargo, candidato, data de Brasília,
-  conclusão refeita dentro da trava).
+  conclusão refeita dentro da trava). Desde a v8.3, `concluir()` percorre a esteira nova inteira (CEI, homologação, taxa e cerimônia).
+- **v8.3** (Consagração e documentação, migração 158), mesma base `cenario-escada` (a `preparar-escada` aplica a 158 duas vezes). `e2e-55` (documentos da indicação; fila
+  e parecer do CEI com sabatina, escrutínio do divorciado e INAPTO; processo antigo sem parecer; homologação do Presidente e da CLI, em lote; taxa com centavos, remoção e
+  quem registra; CHM como documento — emitido, substituído, usado na subida, quem baixa; cerimônia — comissão, candidatos, roteiro com casal e diplomação, diplomas
+  impressos com o código reservado, presença, ausência que perde no ano, taxa fora do prazo, retirar, cancelar; diploma verificável; Meus Dados; minimização), `e2e-56`
+  (401, PIN, liderança local, geral sem a permissão certa; ids ruins; ninguém no próprio processo; a disciplina que não vaza pelo parecer; lixo em todo campo sem 500 nem
+  mudança no banco) e `e2e-57` (corridas: pareceres, homologações, o mesmo processo em duas cerimônias, impressões dos diplomas, registrar × cancelar × retirar, CHM).
+  O cadastro assina o link da foto: o `lib.js` usa a conexão pública de desenvolvimento do armazenamento (`UseDevelopmentStorage=true`), que assina sem rede.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

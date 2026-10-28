@@ -37,6 +37,18 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
             WHERE MembroId = @id`);
   // v8.2 — o histórico de cargos é registro eclesiástico de consagração: sai com a minimização (Regimento Art. 132 §2º, II).
   await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id`);
+  // v8.3 — o texto do parecer do CEI (a fundamentação e a exceção do Pastor não casado falam da vida conjugal e pregressa) sai; o resultado e a data ficam como registro.
+  // As marcas do escrutínio (recasado, fundamento) e da sabatina falam da vida conjugal tanto quanto o texto: saem também (revisão independente, 28/10/2026).
+  await pool.request().input("id", sql.Int, membroId).query(`
+    UPDATE p SET Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL, EscrutinioFundamento = NULL, EscrutinioDocumental = NULL, Recasado = NULL, CasamentoAtualEstavel = NULL,
+                 SabatinaVidaPregressa = NULL, SabatinaFinanceira = NULL, SabatinaDoutrina = NULL
+    FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id`);
+  // A cópia dos documentos pessoais da indicação (Art. 74, II) não é registro que o Regimento mande guardar: sai do banco e do armazenamento.
+  const docs = await pool.request().input("id", sql.Int, membroId).query(`
+    DELETE a OUTPUT DELETED.Url FROM AnexosGenericos a JOIN Consagracoes c ON c.Numero = a.RegistroId WHERE a.Tabela = N'Consagracoes' AND c.MembroId = @id`);
+  for (const d of (docs && docs.recordset) || []) {
+    try { await require("./storage").excluirDocumento(d.Url); } catch (e) { /* o arquivo pode já não existir; o registro já saiu */ }
+  }
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

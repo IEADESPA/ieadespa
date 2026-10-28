@@ -69,9 +69,12 @@ function podeAcessarCertificado(certificado, { membroIdSolicitante, temGestao })
 // territorial de quem pede (membro sem congregação só por escopo global,
 // como auth.estaNoEscopo já trata). Antes, qualquer gestor local via, emitia
 // e revogava certificado de qualquer membro da igreja.
-async function gestorAlcancaMembro(pool, usuario, membroId) {
+// v8.3 — os documentos ministeriais têm dono próprio: o CHM é da AFM (permissão "afm") e o diploma de consagração é das Consagrações ("consagracoes"); a gestão da EBD e
+// das trilhas não os alcança (nem para ver, nem para revogar).
+const PERMISSOES_DA_NATUREZA = { CHM: ["afm"], DIPLOMA: ["consagracoes"] };
+async function gestorAlcancaMembro(pool, usuario, membroId, natureza = null) {
   // v7.6 — o escopo conferido é o das concessões que têm ebd_gestao/trilhas_gestao (shared/auth.js, "Concessões"), não o somado de outro cargo ou delegação.
-  const visao = require("./auth").visaoDaPermissao(usuario, ["ebd_gestao", "trilhas_gestao"]);
+  const visao = require("./auth").visaoDaPermissao(usuario, (natureza && PERMISSOES_DA_NATUREZA[natureza]) || ["ebd_gestao", "trilhas_gestao"]);
   if (!visao) return false;
   // Inexistente, malformado e fora do escopo (congregação, ou Extensão da Tenda para quem tem escopo de Extensão) dão o mesmo `false`.
   return !!(await require("./escopoRotas").pessoaAlcancavel(pool, visao, membroId));
@@ -198,7 +201,8 @@ function mapearCertificado(row) {
     trilhaMatriculaId: row.TrilhaMatriculaId || null,
     revogadoEm: row.RevogadoEm || null,
     motivoRevogacao: row.MotivoRevogacao || null,
-    hashIntegridade: row.HashIntegridade || null
+    hashIntegridade: row.HashIntegridade || null,
+    natureza: row.Natureza || null   // v8.3: CHM | DIPLOMA (null: certificado comum da EBD/trilhas)
   };
 }
 
@@ -219,7 +223,9 @@ function ehColisaoDeCodigo(erro) {
 
 // `validoAte` ('AAAA-MM-DD') e `trilhaMatriculaId` só vêm da conclusão de
 // uma trilha (shared/trilhas.js); a emissão manual da EBD (v6.5) não os usa.
-async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaId, emitidoPorMembroId, validoAte, trilhaMatriculaId }) {
+// v8.3 — `natureza` (CHM | DIPLOMA) marca os documentos ministeriais; `codigo` é o código já reservado (o diploma é impresso antes da cerimônia e só passa a valer
+// na conclusão); `auditar: false` quando quem chama está dentro de uma transação e audita depois do commit. `pool` pode ser a transação.
+async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaId, emitidoPorMembroId, validoAte, trilhaMatriculaId, natureza = null, codigo: codigoReservado = null, auditar = true }) {
   const validacao = validarEmissaoCertificado({ membroId, titulo });
   if (!validacao.valido) return { sucesso: false, mensagem: validacao.mensagem };
 
@@ -243,7 +249,7 @@ async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaI
   // O código é aleatório; em caso (astronomicamente raro) de colisão com o
   // índice único, sorteia outro em vez de falhar a emissão.
   for (let tentativa = 1; tentativa <= 3; tentativa++) {
-    const codigo = gerarCodigoVerificacao();
+    const codigo = codigoReservado ? normalizarCodigo(codigoReservado) : gerarCodigoVerificacao();
     const hash = calcularHashIntegridade({ codigo, membroId, titulo: tituloLimpo, dataEmissao: emitidoEm, validoAte });
     try {
       const result = await pool.request()
@@ -258,15 +264,16 @@ async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaI
         .input("validoAte", sql.Date, validoAte || null)
         .input("matriculaId", sql.Int, trilhaMatriculaId || null)
         .input("hash", sql.NVarChar(64), hash)
+        .input("natureza", sql.NVarChar(12), natureza)
         .query(`
           INSERT INTO CertificadosEmitidos (MembroId, Titulo, Descricao, ConquistaId, EmitidoPorMembroId, Protocolo, DataEmissao,
-                                            CodigoVerificacao, ValidoAte, TrilhaMatriculaId, HashIntegridade)
+                                            CodigoVerificacao, ValidoAte, TrilhaMatriculaId, HashIntegridade, Natureza)
           OUTPUT INSERTED.CertificadoId
-          VALUES (@membroId, @titulo, @descricao, @conquistaId, @emitidoPor, @protocolo, @emitidoEm, @codigo, @validoAte, @matriculaId, @hash)
+          VALUES (@membroId, @titulo, @descricao, @conquistaId, @emitidoPor, @protocolo, @emitidoEm, @codigo, @validoAte, @matriculaId, @hash, @natureza)
         `);
       const certificadoId = result.recordset[0].CertificadoId;
 
-      await registrarAuditoria({
+      if (auditar) await registrarAuditoria({
         tabela: "CertificadosEmitidos", registroId: certificadoId, acao: "CERTIFICADO_EMITIDO",
         usuarioId: emitidoPorMembroId, dadosAntes: null,
         dadosDepois: { membroId, titulo: tituloLimpo, conquistaId: conquistaId || null, protocolo, validoAte: validoAte || null, trilhaMatriculaId: trilhaMatriculaId || null }
@@ -274,7 +281,7 @@ async function emitirCertificado(pool, { membroId, titulo, descricao, conquistaI
 
       return { sucesso: true, certificadoId, protocolo, codigoVerificacao: formatarCodigo(codigo), mensagem: "✅ Certificado emitido." };
     } catch (e) {
-      if (!ehColisaoDeCodigo(e) || tentativa === 3) throw e;
+      if (!ehColisaoDeCodigo(e) || tentativa === 3 || codigoReservado) throw e;
     }
   }
   return { sucesso: false, mensagem: "Não foi possível gerar um código de verificação único." };
@@ -326,7 +333,7 @@ async function revogarCertificado(pool, { certificadoId, motivo, revogadoPorMemb
 module.exports = {
   TIPO_PROTOCOLO_CERTIFICADO, ALFABETO_CODIGO, TAMANHO_CODIGO,
   // Lógica pura
-  validarEmissaoCertificado, podeAcessarCertificado, gestorAlcancaMembro, mapearCertificado,
+  validarEmissaoCertificado, podeAcessarCertificado, gestorAlcancaMembro, mapearCertificado, PERMISSOES_DA_NATUREZA,
   gerarCodigoVerificacao, normalizarCodigo, codigoValido, formatarCodigo, urlVerificacao,
   isoDia, calcularHashIntegridade, avaliarVerificacaoPublica, podeRevogarCertificado,
   // Banco

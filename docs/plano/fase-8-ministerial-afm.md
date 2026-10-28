@@ -238,6 +238,46 @@ revisões pediram 25; tela (`tools/front-escada`, com as respostas reais gravada
 - [ ] Consagração coletiva (Comissão de Unção) + diplomação.
 - [ ] Documentação: CHM (Certificado de Habilitação Ministerial).
 
+### Desenho da v8.3 (contrato, 28/10/2026)
+
+Base legal: Regimento Art. 7º, III; 9º; 10; 67; 73, II e III; 74 e 75. A v8.2 pôs os requisitos dentro da esteira, mas cada etapa ainda é um clique de "Avançar" do nível
+geral, sem dizer **quem** decidiu. A v8.3 dá a cada etapa o seu dono, como o Art. 74 manda ("fica abolido o papelório"), e leva a consagração até o altar e o diploma.
+Vale para os processos que levam a cargo; Integração e Reintegração (sem cargo) continuam com a esteira simples de hoje.
+
+**1. Proposta digital (Art. 74, II).** O processo protocolado ganha os **documentos da indicação**: foto atualizada (a do cadastro da pessoa) e cópia dos documentos
+pessoais (anexo no próprio processo, PDF ou imagem). O certificado da Academia é o **CHM**, que o sistema já conhece — não se anexa. "Enviar ao CEI" só com a foto e pelo menos
+um documento.
+
+**2. Parecer do CEI (Art. 74, III; Art. 9º; Art. 73, III).** Em "Em análise", só quem tem a permissão **`cei`** (nível geral) registra o parecer: **APTO** ou **INAPTO**, a
+data da sabatina e a fundamentação (sigilosa: só quem tem `cei` lê). Para Presbítero, Evangelista e Pastor, a sabatina do Art. 9º §1º: vida pregressa e antecedentes,
+regularidade financeira (dízimo) e alinhamento doutrinário, cada um marcado. **Escrutínio especial** (Art. 73, III) quando o cadastro diz divorciado(a) ou quando o CEI marca
+que há histórico de ruptura conjugal: o fundamento (no "tempo da ignorância", antes da conversão, ou cláusula de exceção bíblica), a verificação documental e, se recasado(a),
+o casamento atual estável e legalizado — sem isso não há APTO. **Pastor não casado** (Art. 73, II): o CEI escreve o motivo da exceção (b: celibato) ou não há APTO.
+INAPTO arquiva o processo (Art. 9º §2º); APTO leva à homologação. Ninguém dá parecer no próprio processo.
+
+**3. Homologação (Art. 74, IV; Art. 7º, III).** Auxiliar, Missionário(a) e Diácono: o Pastor Presidente valida a lista dos aptos — a Secretaria (nível geral de
+`consagracoes`) registra o ato, podendo marcar vários de uma vez. Presbítero, Evangelista e Pastor: homologação **da CLI** em plenário — o registro aponta a reunião da CLI
+(já realizada) em que foi votada. Homologado, o processo espera a cerimônia.
+
+**4. Taxa de consagração (Art. 75, I).** Valor da cerimônia (R$ 70,00 em 2026, corrigido a cada ano), pago por PIX ou boleto até **45 dias antes** da cerimônia. A
+Secretaria ou a tesouraria (nível geral de `consagracoes` ou `financeiro`) registra o pagamento (data, valor, forma; o comprovante vai como documento do processo). Sem
+pagamento no prazo, a pessoa não é consagrada naquela cerimônia: o processo continua homologado e espera a próxima. O lançamento no caixa continua sendo da tesouraria, no
+financeiro, como hoje.
+
+**5. Cerimônia de consagração (Art. 75).** Nasce a cerimônia: data, local, ocasião (Assembleia Geral Ordinária, Sessão Magna ou Sessão Solene da CLI), valor da taxa e a
+**Comissão de Unção** (no mínimo 4 pastores titulares em atividade, nenhum deles candidato). Entram os processos homologados. A tela monta o **roteiro**: candidatos por
+patente, casais consagrados na mesma cerimônia lado a lado (Art. 75, III, b), quem vem de outra convenção como **diplomação** (Art. 10, parágrafo único — não há nova unção),
+a conta das **insígnias** por patente e quem está com a taxa pendente. Depois do culto, a Secretaria registra **quem estava presente**: presente e com a taxa em dia →
+consagrado (cargo, histórico e diploma, com os requisitos conferidos de novo dentro da trava); **ausente → perde a consagração naquele ano** (Art. 75, II, b: "não existe
+justificativa"), o processo é encerrado e um novo protocolo para a pessoa só no ano seguinte.
+
+**6. Documentos (Art. 67; Art. 75, IV, e).** O **CHM** passa a ser um documento de verdade: quando a AFM concede, o sistema emite o certificado com QR e código de
+verificação pública (o mesmo dos certificados da v6.9); revogado ou usado numa subida, o certificado é revogado junto. Cada consagração concluída emite o **diploma** (ou o
+diploma de reconhecimento, para quem vem de outra convenção), também verificável, que o titular baixa em Meus Certificados.
+
+**7. Onde aparece.** Consagrações: em cada processo, "Documentos", "Enviar ao CEI", "Parecer do CEI" (só `cei`), "Homologar" (com seleção em lote), "Taxa"; o diploma no
+concluído; seção nova **Cerimônias** (criar, comissão, incluir candidatos, roteiro para imprimir, registrar presença). Academia: o CHM com o link do certificado.
+
 ## v8.4 — Credencial digital com QR Code
 
 - [ ] Identidade Eclesiástica digital (Art. 76 Regimento).

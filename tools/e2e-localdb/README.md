@@ -114,6 +114,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   (401, PIN, liderança local, geral sem a permissão certa; ids ruins; ninguém no próprio processo; a disciplina que não vaza pelo parecer; lixo em todo campo sem 500 nem
   mudança no banco) e `e2e-57` (corridas: pareceres, homologações, o mesmo processo em duas cerimônias, impressões dos diplomas, registrar × cancelar × retirar, CHM).
   O cadastro assina o link da foto: o `lib.js` usa a conexão pública de desenvolvimento do armazenamento (`UseDevelopmentStorage=true`), que assina sem rede.
+- **v8.4** (Credencial digital, migração 159), mesma base `cenario-escada` (a `preparar-escada` aplica a 159 duas vezes). `e2e-59` (emitir; a credencial no Meu
+  Painel com o QR e o PDF; a leitura pública do QR só com o mínimo e a situação de agora — AFM inativa, processo só aberto que não aparece, afastamento, sem comunhão —;
+  códigos ruins; o limitador; nova via, cancelar; pedido e registro de impressão; lote; Meus Dados; a minimização que recolhe a credencial; quem pode o quê; lixo) e
+  `e2e-60` (corridas: emitir, nova via, emitir × cancelar × nova via, dois lotes). Com `E2E_CONTRATO=1` o `e2e-59` grava as respostas reais para
+  `tools/front-credencial`.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

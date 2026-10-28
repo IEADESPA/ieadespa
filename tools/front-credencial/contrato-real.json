@@ -1,0 +1,120 @@
+{
+  "minha": {
+    "sucesso": true,
+    "credencial": {
+      "credencialId": 1,
+      "membroId": 9202,
+      "via": 1,
+      "codigo": "Q2VG-ECY8-ZA6D-7JAT",
+      "situacao": "VALIDA",
+      "emitidaEm": "2026-10-28T18:58:24.127Z",
+      "encerradaEm": null,
+      "motivoEncerramento": null,
+      "impressaoSolicitadaEm": null,
+      "impressaEm": null,
+      "nome": "Auxiliar Promovido E2E",
+      "matricula": 9202,
+      "categoria": "Obreiro(a) — Auxiliar",
+      "congregacao": "Central E2E",
+      "fotoUrl": "https://ieadespaarmazenamento.blob.core.windows.net/fotos-membros/membro-1",
+      "url": "https://app.ieadespa.org.br/credencial.html?c=Q2VG-ECY8-ZA6D-7JAT",
+      "situacaoAgora": {
+        "situacao": "ATIVA",
+        "nome": "Auxiliar Promovido E2E",
+        "categoria": "Obreiro(a) — Auxiliar",
+        "congregacao": "Central E2E",
+        "via": 1,
+        "funcao": "HABILITADO"
+      }
+    }
+  },
+  "minhaSem": {
+    "sucesso": true,
+    "credencial": null
+  },
+  "publicaAtiva": {
+    "sucesso": true,
+    "situacao": "ATIVA",
+    "nome": "Auxiliar Promovido E2E",
+    "categoria": "Obreiro(a) — Auxiliar",
+    "congregacao": "Central E2E",
+    "via": 1,
+    "funcao": "HABILITADO",
+    "consultadoEm": "2026-10-28T18:58:34.348Z"
+  },
+  "publicaObreiroInativo": {
+    "sucesso": true,
+    "situacao": "ATIVA",
+    "nome": "Auxiliar Promovido E2E",
+    "categoria": "Obreiro(a) — Auxiliar",
+    "congregacao": "Central E2E",
+    "via": 1,
+    "funcao": "INATIVO",
+    "consultadoEm": "2026-10-28T18:58:34.383Z"
+  },
+  "publicaSubstituida": {
+    "sucesso": true,
+    "situacao": "SUBSTITUIDA",
+    "nome": "Auxiliar Promovido E2E",
+    "consultadoEm": "2026-10-28T18:58:34.783Z"
+  },
+  "lista": {
+    "sucesso": true,
+    "itens": [
+      {
+        "credencialId": 3,
+        "membroId": 9202,
+        "via": 3,
+        "situacao": "VALIDA",
+        "emitidaEm": "2026-10-28T18:58:34.858Z",
+        "encerradaEm": null,
+        "motivoEncerramento": null,
+        "impressaoSolicitadaEm": "2026-10-28T18:58:34.876Z",
+        "impressaEm": null,
+        "nome": "Auxiliar Promovido E2E",
+        "categoria": "Obreiro(a) — Auxiliar",
+        "congregacao": "Central E2E"
+      },
+      {
+        "credencialId": 1,
+        "membroId": 9202,
+        "via": 1,
+        "situacao": "SUBSTITUIDA",
+        "emitidaEm": "2026-10-28T18:58:24.127Z",
+        "encerradaEm": "2026-10-28T18:58:34.756Z",
+        "motivoEncerramento": "Perda do cartão (e2e)",
+        "impressaoSolicitadaEm": null,
+        "impressaEm": null,
+        "nome": "Auxiliar Promovido E2E",
+        "categoria": "Obreiro(a) — Auxiliar",
+        "congregacao": "Central E2E"
+      },
+      {
+        "credencialId": 2,
+        "membroId": 9202,
+        "via": 2,
+        "situacao": "CANCELADA",
+        "emitidaEm": "2026-10-28T18:58:34.758Z",
+        "encerradaEm": "2026-10-28T18:58:34.803Z",
+        "motivoEncerramento": "Pedido do próprio membro (e2e)",
+        "impressaoSolicitadaEm": null,
+        "impressaEm": null,
+        "nome": "Auxiliar Promovido E2E",
+        "categoria": "Obreiro(a) — Auxiliar",
+        "congregacao": "Central E2E"
+      }
+    ],
+    "semCredencial": 79
+  },
+  "publicaNaoEncontrada": {
+    "sucesso": false,
+    "situacao": "NAO_ENCONTRADA",
+    "mensagem": "Credencial não encontrada. Confira o código impresso no documento."
+  },
+  "publicaCancelada": {
+    "sucesso": true,
+    "situacao": "CANCELADA",
+    "nome": "Missionario Diacono E2E",
+    "consultadoEm": "2026-10-28T18:59:01.036Z"
+  }
+}

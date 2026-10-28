@@ -110,7 +110,7 @@ describe("vacância e a EBD", () => {
   const { sqlFalso } = require("./testUtils");
   test("disciplina e licença de candidatura tiram o professor, mas mantêm a matrícula de aluno", async () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
-      const { pool, chamadas } = criarPoolFalso([[], [], [], [], []]);
+      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], []]);
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
       const tudo = chamadas.map(c => c.sql).join("\n");
       expect(tudo).toMatch(/EbdTurmaProfessores/);

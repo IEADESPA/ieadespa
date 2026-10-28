@@ -54,4 +54,10 @@ BASE=cenario-afm bash rodar.sh roteiro e2e-47-afm-fluxos.js
 BASE=cenario-afm bash rodar.sh roteiro e2e-48-afm-seguranca.js
 BASE=cenario-afm bash rodar.sh roteiro e2e-49-afm-corridas.js
 BASE=cenario-afm bash rodar.sh roteiro e2e-50-afm-revisao.js
+# v8.2 (Escada ministerial, migração 157): cada roteiro sobre a base sozinho
+bash rodar.sh preparar-escada
+BASE=cenario-escada bash rodar.sh roteiro e2e-51-escada-fluxos.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-52-escada-seguranca.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-53-escada-corridas.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-54-escada-revisao.js
 echo TUDO-PRONTO

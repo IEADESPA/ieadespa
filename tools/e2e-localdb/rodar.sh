@@ -89,6 +89,14 @@ case "$1" in
     node -r ./shim-mssql.js aplicar-migracao.js 156 2 2>&1 | tail -2
     $PS bases.ps1 salvar cenario-afm | tail -1
     ;;
+  preparar-escada)
+    # v8.2 (Escada ministerial): a partir da base "cenario-afm", aplica a 157 duas vezes (prova a idempotência); salva "cenario-escada" (e2e-51 a e2e-53: cada roteiro monta
+    # o próprio cenário com lib-escada.js).
+    cd "$AQUI"
+    $PS bases.ps1 restaurar cenario-afm | tail -1
+    node -r ./shim-mssql.js aplicar-migracao.js 157 2 2>&1 | tail -2
+    $PS bases.ps1 salvar cenario-escada | tail -1
+    ;;
   roteiro)
     shift
     cd "$AQUI"

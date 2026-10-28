@@ -135,6 +135,9 @@ async function salvarConsentimentoLGPD() {
 function formatarValorLgpd(valor, tipo) {
   if (valor === null || valor === undefined || valor === "") return "-";
   if (tipo === "data") {
+    // "AAAA-MM-DD" é um dia, não um instante: new Date() leria meia-noite UTC, que no Brasil ainda é o dia anterior (a data aparecia um dia antes)
+    const dia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(valor));
+    if (dia) return escaparHtmlEbd(`${dia[3]}/${dia[2]}/${dia[1]}`);
     const d = new Date(valor);
     return isNaN(d) ? "-" : d.toLocaleDateString("pt-BR");
   }
@@ -187,6 +190,7 @@ async function alternarMeusDadosLGPD() {
       ${linhaLgpd("Data do Rito de Recebimento", m.dataRitoRecebimento, "data")}
       ${linhaLgpd("Nome Lido no Rito", m.nomeLidoRito)}
       ${linhaLgpd("Ministrante do Rito", m.ministranteRito)}
+      ${linhaLgpd("Sexo", { M: "Masculino", F: "Feminino" }[m.sexo])}
       ${linhaLgpd("Telefone", m.telefone)}
       ${linhaLgpd("E-mail", m.email)}
       ${linhaLgpd("Endereço", m.endereco)}
@@ -197,6 +201,7 @@ async function alternarMeusDadosLGPD() {
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
       ${linhaLgpd("Função", m.funcao)}
       ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
+      ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? String(c.desde).slice(0, 10).split("-").reverse().join("/") : "início não informado"} a ${c.ate ? String(c.ate).slice(0, 10).split("-").reverse().join("/") : "hoje"})`).join("; "))}
       ${linhaLgpd("Departamento", m.departamento)}
       ${linhaLgpd("Dizimista Fiel", m.dizimistaFiel, "bit")}
     </div>

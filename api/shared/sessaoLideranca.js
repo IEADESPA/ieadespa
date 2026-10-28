@@ -97,6 +97,8 @@ async function concluirLogin(pool, req, lideranca, { fator }) {
     escopo: sessao.escopoCongregacoes,
     // v7.6 — "geral" com a MESMA regra das rotas (escopoRotas.ehGeral). Só decide o que aparece.
     geral: ehGeral(sessao),
+    // v8.2 — em QUAIS permissões a pessoa é do nível geral (a tela da escada usa: quem é geral só no financeiro não é geral nas consagrações nem no cadastro)
+    permissoesGerais: (sessao.permissoes || []).filter((p) => ehGeral(auth.visaoDaPermissao(sessao, p))),
     permissoes: sessao.permissoes,
     termosPendentes: pendentes,
     delegacoesAtivas,

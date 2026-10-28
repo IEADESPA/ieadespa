@@ -80,6 +80,7 @@ describe("a rodada das 7h (NotificacoesAgendador)", () => {
     jest.doMock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
     jest.doMock("../comunicacaoDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
     jest.doMock("../criseSegurancaDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+    jest.doMock("../afmDb", () => ({ rotinaDiaria: passo("afm", { falhas: [] }) }));       // v8.1 — a apuração das faltas e a retenção da justificativa também vêm antes
     jest.doMock("../identidadeVisualDb", () => ({ rotinaAntesDosAvisos: jest.fn(async () => ({ falhas: [] })), rotinaDepoisDosAvisos: jest.fn(async () => ({ falhas: [] })) }));
     jest.doMock("../enquetes", () => ({ encerrarVencidas: jest.fn(async () => ({ encerradas: 0 })) }));
     jest.doMock("../protecaoPendencia", () => ({ atualizar: jest.fn(async () => {}) }));
@@ -89,7 +90,7 @@ describe("a rodada das 7h (NotificacoesAgendador)", () => {
     await handler(context, { method: "POST", headers: {} });
     expect(context.res.status).toBe(200);
     expect(ordem[ordem.length - 1]).toBe("avisos");
-    expect(ordem.slice(0, -1).sort()).toEqual(["ip-consentimentos", "ip-menores", "ip-setores", "ip-voluntariado", "retencao-checkin", "saude-checkin"]);
+    expect(ordem.slice(0, -1).sort()).toEqual(["afm", "ip-consentimentos", "ip-menores", "ip-setores", "ip-voluntariado", "retencao-checkin", "saude-checkin"]);
   });
 });
 

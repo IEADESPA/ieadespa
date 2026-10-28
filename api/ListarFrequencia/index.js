@@ -13,7 +13,7 @@ module.exports = async function (context, req) {
   const usuario = auth.exigirAlgumaPermissao(req, context, ["reunioes", "assembleia", "cli"]);
   if (!usuario) return;
 
-  const sessaoId = context.bindingData.sessaoId;
+  const sessaoId = auth.idDeRota(context.bindingData.sessaoId);   // v8.1: "abc" ou 2**40 eram 500
   if (!sessaoId) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "Informe o sessaoId na rota." } };
     return;
@@ -23,7 +23,8 @@ module.exports = async function (context, req) {
   const sessaoResult = await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT SessaoId AS sessaoId, OrgaoId AS orgaoId, OrgaoLocalId AS orgaoLocalId, Descricao AS descricao,
            CONVERT(varchar(10), DataSessao, 120) AS dataSessao, Status AS status,
-           QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias
+           QuorumTipo AS quorumTipo, VinculadaSessaoId AS vinculadaSessaoId, Materias AS materias,
+           TipoSessao AS tipoSessao, ContaFaltasCLI AS contaFaltasCLI
     FROM Sessoes WHERE SessaoId = @id`);
   const sessao = sessaoResult.recordset[0];
   if (!sessao) {
@@ -34,15 +35,20 @@ module.exports = async function (context, req) {
   const presencasResult = await pool.request().input("id", sql.Int, sessaoId).query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, COALESCE(cm.Nome, m.Funcao) AS funcao, m.CongregacaoId AS congregacaoId,
            c.Nome AS congregacao, p.Presente AS presente, p.FaltaJustificada AS faltaJustificada,
-           p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente
+           p.MotivoJustificativa AS motivoJustificativa, p.JustificativaPendente AS justificativaPendente,
+           p.MotivoCodigo AS motivoCodigo, p.PendenteCodigo AS pendenteCodigo, p.EsperadoCLI AS esperadoCLI, p.EsperadoAFM AS esperadoAFM
     FROM Presencas p
     JOIN MembroReferencia m ON m.MembroId = p.MembroId
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
     WHERE p.SessaoId = @id`);
 
+  // v8.1 (revisão): o texto da justificativa da CLI pode citar saúde — fora do nível geral, a linha diz só "justificada" e o motivo do catálogo some.
+  const geral = require("../shared/escopoRotas").ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
   const frequencia = presencasResult.recordset
     .filter(item => auth.estaNoEscopo(usuario, item.congregacao))
+    .map(item => (geral || (!item.motivoCodigo && !item.pendenteCodigo)) ? item
+      : { ...item, motivoJustificativa: null, motivoCodigo: null, justificativaPendente: item.pendenteCodigo ? "(pedido aguardando a Secretaria Geral)" : item.justificativaPendente, pendenteCodigo: null })
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const orgaoResult = await pool.request().input("id", sql.Int, sessao.orgaoId).input("idLocal", sql.Int, sessao.orgaoLocalId).query(`
@@ -51,10 +57,12 @@ module.exports = async function (context, req) {
     SELECT NULL, ol.Sigla, NULL, ol.OrgaoLocalId, ol.Nivel, ol.ReferenciaId FROM OrgaosLocais ol WHERE ol.OrgaoLocalId = @idLocal
   `);
   const orgao = orgaoResult.recordset[0] || null;
+  sessao.orgaoSigla = orgao ? orgao.sigla : null;   // v8.1 — a tela usa o catálogo de justificativa nas reuniões da CLI
 
   const universo = await universoDoOrgao(pool, orgao);
   const totalAtivos = universo.length;
-  const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente).length;
+  // v8.1 (revisão): na Sessão Magna a turma da Academia também bate ponto; o quórum da CLI conta só quem a CLI esperava (EsperadoCLI; nulo = reunião antiga ou outro órgão)
+  const totalPresentesGeral = presencasResult.recordset.filter(f => f.presente && f.esperadoCLI !== false).length;
   const percentualPresenca = totalAtivos > 0 ? Math.round((totalPresentesGeral / totalAtivos) * 100) : 0;
 
   // v2.2 — o quórum aplicável agora vem do QuorumTipo gravado na própria sessão

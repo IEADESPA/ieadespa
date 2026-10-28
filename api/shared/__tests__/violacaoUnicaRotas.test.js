@@ -174,6 +174,8 @@ describe("GestaoComissoes — a mesma pessoa ativa duas vezes na comissão (UX_C
   const regras = () => {
     quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/FROM ComissaoMembros c\s+JOIN MembroReferencia m/, []);                                        // a conferência "já está na comissão" ainda não vê o outro pedido
+    quando(/sp_getapplock/, [{ resultado: 0 }]);                                                            // (v8.1) a trava da comissão
+    quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);
   };
   test.each([["ccj", "CCJ"], ["pmo", "PMO"]])("%s: o INSERT perde para outro pedido → 409 'Essa pessoa já está na %s.', sem auditoria", async (rota, sigla) => {
     regras();
@@ -296,7 +298,9 @@ describe("RegistrarPresenca — dois toques ao mesmo tempo (UX_Presencas_Sessao_
 
 describe("EncerrarReuniao — a presença que chega no meio do fechamento não derruba o lançamento das faltas", () => {
   const preparar = (faltaQueFalha) => {
-    quando(/FROM Sessoes WHERE SessaoId = @id/, [{ sessaoId: 5, orgaoId: 3, orgaoLocalId: null, status: "ABERTA" }]);
+    // (v8.1) a sessão vem com a sigla do órgão (a CLI é do nível geral) e o encerramento só vale se ainda estava aberta
+    quando(/FROM Sessoes s LEFT JOIN Orgaos o ON o\.OrgaoId = s\.OrgaoId WHERE s\.SessaoId = @id/, [{ sessaoId: 5, orgaoId: 3, orgaoLocalId: null, status: "ABERTA", sigla: "CLI" }]);
+    quando(/UPDATE Sessoes SET Status = 'ENCERRADA'/, [], 1);
     quando(/FROM Orgaos o WHERE o\.OrgaoId = @id/, [{ orgaoId: 3, sigla: "CLI", orgaoLocalId: null, nivel: null, referenciaId: null }]);
     quando(/FROM Presencas WHERE SessaoId = @id/, [{ membroId: 1, presente: 1, faltaJustificada: 0 }]);
     universo.universoDoOrgao.mockImplementation(async () => [{ membroId: 1 }, { membroId: 2 }, { membroId: 3 }, { membroId: 4 }]);

@@ -16,10 +16,19 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { mesValidoParaTurma, localPermitido, efetivarTurma, turmaNoEscopo } = require("../shared/batismo");
 const { exigirGeral, ehGeral, pessoaAlcancavel, congregacaoNoEscopo, FORA_DO_ESCOPO } = require("../shared/escopoRotas");
+const afmDb = require("../shared/afmDb");
 
 const ACOES_DO_GERAL = ["AUTORIZAR_MESA", "REALIZAR"];
 const MAX_OFICIANTES = 30;
 const afetadas = (r) => (r && r.rowsAffected && r.rowsAffected[0]) || 0;
+
+// Frase de recusa com os nomes de quem não pode oficiar (null = todos podem).
+async function oficiantesSemLicenca(pool, ids) {
+  const licencas = await afmDb.licencasDe(pool, ids);
+  const sem = [...licencas.values()].filter((l) => !l.podeOficiar);
+  if (!sem.length) return null;
+  return `Sem licença para oficiar o batismo: ${sem.map((l) => `${l.nome} (${l.motivo})`).join("; ")}`;
+}
 
 module.exports = async function (context, req) {
   const idBruto = context.bindingData.id;
@@ -96,6 +105,12 @@ module.exports = async function (context, req) {
       }
       if (!oficiantes.includes(pessoa.membroId)) oficiantes.push(pessoa.membroId);
     }
+    // v8.1 — batizar é privativo do oficial com a matrícula da AFM ativa (Regimento Art. 66 §2º, I e II; Art. 69 §3º).
+    const semLicenca = await oficiantesSemLicenca(pool, oficiantes);
+    if (semLicenca) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: semLicenca } };
+      return;
+    }
 
     const criada = await pool.request()
       .input("dataBatismo", sql.Date, dataBatismo).input("local", sql.NVarChar(200), local.trim())
@@ -147,6 +162,13 @@ module.exports = async function (context, req) {
       }
       if (!turma.AutorizacaoMesa) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Falta a autorização da Mesa (Regimento, Art. 80 §1º) antes de realizar o batismo." } };
+        return;
+      }
+      // v8.1 — o oficiante pode ter ficado inativo na AFM depois que a turma foi criada: confere de novo no dia.
+      const idsOficiantes = (await pool.request().input("id", sql.Int, id).query(`SELECT MembroId FROM OficiantesBatismo WHERE TurmaId = @id`)).recordset.map((o) => o.MembroId);
+      const semLicenca = await oficiantesSemLicenca(pool, idsOficiantes);
+      if (semLicenca) {
+        context.res = { status: 422, body: { sucesso: false, mensagem: semLicenca } };
         return;
       }
       const realizou = await pool.request().input("id", sql.Int, id).query(`UPDATE TurmasBatismo SET Status = 'REALIZADA' WHERE TurmaId = @id AND Status = 'ABERTA'`);

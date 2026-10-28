@@ -1205,3 +1205,9 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
 .crs-telefones { display: flex; flex-wrap: wrap; gap: 8px; }
 .crs-tel { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--cor-borda); border-radius: 8px; text-decoration: none; color: var(--cor-texto); }
 @media print { .crs-faixa { display: none !important; } }
+
+/* v8.1 — Academia (AFM) e faltas da CLI (modulos/afm.js): a caixa de marcar não herda o tamanho dos campos da barra, e o campo de data tem a mesma
+   borda e a letra de 16 px dos outros (abaixo disso o iPhone dá zoom ao tocar). */
+.afm-check { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.88rem; cursor: pointer; margin: 4px 12px 10px 0; }
+.afm-check input { width: auto; min-width: 0; margin: 0; padding: 0; }
+input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda); border-radius: var(--raio-pequeno); font-size: 16px; box-sizing: border-box; font-family: inherit; color: var(--cor-texto); }

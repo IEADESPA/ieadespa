@@ -240,7 +240,15 @@ const DETECTORES = {
   // Tesouraria geral (quem recebeu pagamento com aviso confirmado), uma vez por mês e só se houver caso. Aptidão em departamentos e cargos com crianças: quem ocupa e não está
   // apto, um aviso por pessoa e função a cada mês, à Diretoria e à Proteção de crianças do nível geral (nunca à própria pessoa; sem o motivo).
   TESOURARIA_VOLUNTARIO_PAGO: { tabela: "SaidaAvisosVoluntario", detectar: (pool) => require("./voluntarioPagamentoDb").detectarMensal(pool) },
-  MENORES_FUNCAO_SEM_APTIDAO: { tabela: "Lideranca", detectar: (pool) => require("./funcoesMenoresDb").detectar(pool) }
+  MENORES_FUNCAO_SEM_APTIDAO: { tabela: "Lideranca", detectar: (pool) => require("./funcoesMenoresDb").detectar(pool) },
+  // v8.1 — AFM e faltas da CLI (Estatuto Art. 27; Regimento Art. 68 e 69). A exclusão e a desmatrícula são apuradas na hora (ao encerrar a reunião) e de novo pela rotina diária
+  // ANTES desta rodada; aqui saem os avisos: à pessoa na 2ª falta seguida (antes, não depois), à pessoa e à Secretaria/AFM do nível geral quando a exclusão ou a desmatrícula
+  // acontece, e à AFM quando a Reitoria precisa de providência (uma vez por mês enquanto durar).
+  CLI_FALTAS_ALERTA: { tabela: "Sessoes", detectar: (pool) => require("./afmDb").detectarAlertaCLI(pool) },
+  CLI_EXCLUSAO_FALTAS: { tabela: "CLIExclusoesFaltas", detectar: (pool) => require("./afmDb").detectarExclusoesCLI(pool) },
+  AFM_FALTAS_ALERTA: { tabela: "Sessoes", detectar: (pool) => require("./afmDb").detectarAlertaAFM(pool) },
+  AFM_DESMATRICULA: { tabela: "AFMDesmatriculas", detectar: (pool) => require("./afmDb").detectarDesmatriculas(pool) },
+  AFM_REITORIA: { tabela: "AFMCorpoDocente", detectar: (pool) => require("./afmDb").detectarReitoria(pool) }
 };
 
 module.exports = { DETECTORES };

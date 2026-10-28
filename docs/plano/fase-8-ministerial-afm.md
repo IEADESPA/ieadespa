@@ -5,11 +5,11 @@
 
 ## v8.1 — AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)
 
-- [ ] Cadastro de Reitor + Corpo Docente.
-- [ ] Matrícula obrigatória de oficiais (Auxiliares→Pastores/Missionários).
-- [ ] Matrícula Ativa × Inativa (desmatriculado perde licença de oficiar).
-- [ ] Níveis de escolaridade: Básico, Médio, Avançado, Bacharel Livre.
-- [ ] **CDER** — Comissão de Doutrina e Educação Religiosa (Regimento, Art. 22):
+- [x] Cadastro de Reitor + Corpo Docente.
+- [x] Matrícula obrigatória de oficiais (Auxiliares→Pastores/Missionários).
+- [x] Matrícula Ativa × Inativa (desmatriculado perde licença de oficiar).
+- [x] Níveis de escolaridade: Básico, Médio, Avançado, Bacharel Livre.
+- [x] **CDER** — Comissão de Doutrina e Educação Religiosa (Regimento, Art. 22):
       Reitor da AFM + 2 mestres de teologia da CLI. Vinha adiada de v2.4
       (Comissões Permanentes) porque dependia do Reitor, que nasce aqui —
       construir junto com o cadastro de Reitor deste item, reaproveitando
@@ -32,7 +32,7 @@ auditoria.
 
 **1. Tipo da reunião da CLI.** Ao abrir uma reunião da CLI a Secretaria escolhe: **Ordinária** (a mensal, conta falta), **Extraordinária** (Regimento Art. 147 §2º — registra
 presença, **não** conta para as 3 faltas, porque o Estatuto Art. 27 fala das “reuniões mensais”) ou **Sessão Magna da AFM** (Art. 69 — a reunião trimestral integrada à
-Academia; o Seminário de novembro, Art. 70 §1º, também é aberto assim). Na Sessão Magna esperam-se **duas turmas ao mesmo tempo**: quem compõe a CLI **e** todo obreiro com
+Academia). O Seminário de novembro (Art. 70 §1º) virou um tipo próprio: ver "Como ficou". Na Sessão Magna esperam-se **duas turmas ao mesmo tempo**: quem compõe a CLI **e** todo obreiro com
 matrícula ativa na AFM. Um único registro de presença vale para as duas (Art. 69 §1º, I); a falta de quem está nas duas conta nas duas (falta dupla, §1º, II). Cada presença
 guarda se a pessoa era esperada pela CLI e/ou pela AFM **naquele dia**, para que quem virou Presbítero depois não herde falta da época de Diácono.
 
@@ -42,7 +42,7 @@ as 3 reuniões e por onde a pessoa entrava na CLI) e ela **sai da composição d
 cadeira na Câmara ≠ deixar de ser Pastor). Depois disso:
 
 - **Avisos:** a pessoa recebe aviso na 2ª falta seguida (“mais uma e você perde a cadeira”) e na exclusão; a Secretaria Geral recebe a exclusão.
-- **Providências que a tela mostra (Art. 27 §2º e Regimento Art. 310)** conforme por onde a pessoa entrava: cargo **eletivo** da Diretoria Executiva ou do Conselho Fiscal → a
+- **Providências que a tela mostra (Art. 27 §2º e Regimento Art. 56 §2º)** conforme por onde a pessoa entrava: cargo **eletivo** da Diretoria Executiva ou do Conselho Fiscal → a
   Secretaria **comunica à CLI**, que aprecia e convoca **AGE de destituição em até 30 dias** (o sistema mostra o prazo e aponta para “Convocar Assembleia” com a matéria
   “Destituição”, que já existe — não convoca sozinho); função de **livre nomeação** (Dirigente, Líder de departamento) → o Pastor Presidente substitui o titular. O sistema
   **não** fecha cadeira nem tira acesso sozinho: aponta a providência e registra quando a Secretaria comunicou a CLI.
@@ -78,13 +78,54 @@ congregação, evento de departamento, ação em entidade vinculada. O servidor 
 **5. Onde aparece.** Aba nova **Academia (AFM)** (permissão `afm`: Matrículas, Corpo docente, Sessões Magnas); na CLI, um quadro **Faltas e cadeiras** (quem está com 1 ou 2
 faltas seguidas, exclusões com providências, readmissão); no **Meu Painel**, a situação da pessoa (“faltas seguidas na CLI: 2 de 3”, matrícula ativa/inativa e nível).
 
+### Como ficou (entregue em 27/10/2026)
+
+Migração **156**; regra pura em `api/shared/afm.js`, banco em `api/shared/afmDb.js`, rota `/api/afm/<ação>` (`GestaoAFM`), tela em `app/modulos/afm.js` (aba
+**Academia (AFM)** em Vida Eclesiástica; quadro **Faltas e cadeiras** em Órgãos Centrais → CLI; catálogo da justificativa na frequência e no Meu Painel; CDER em Comissões),
+casca do service worker **v42**. A apuração roda ao encerrar a reunião, ao justificar, recusar pedido ou corrigir presença, ao marcar "não conta falta" e, como rede de
+segurança, na rotina das 7h (que também apaga o detalhe escrito das justificativas com mais de 2 anos). Avisos: `CLI_FALTAS_ALERTA`, `CLI_EXCLUSAO_FALTAS`,
+`AFM_FALTAS_ALERTA`, `AFM_DESMATRICULA` (obrigatórios) e `AFM_REITORIA`.
+
+**O que mudou no desenho depois das duas revisões independentes** (servidor: 1 crítico, 4 altos, 9 médios, 8 baixos; tela: 5 médios, 9 baixos — todos tratados):
+
+- **Só o nível geral** (Secretaria Geral) abre e encerra reunião da CLI, justifica, recusa pedido, corrige presença e marca "não conta falta". Antes, um Dirigente (que tem
+  "reuniões" na congregação) conseguiria abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo. E **ninguém justifica nem corrige a própria falta** (Estatuto
+  Art. 27 §1º: a justificativa é apresentada à Secretaria).
+- **O tipo da reunião da CLI é obrigatório** e **só uma reunião que conta falta por dia** (Regimento Art. 78, III, b: a da CLI ou da AFM é no último domingo). A reunião
+  aberta ou encerrada por engano é marcada pelo nível geral como **"não conta falta"** (com o motivo; não se desfaz) e a apuração é refeita na hora.
+- **Seminário de novembro** é um tipo próprio: conta para a Academia, **não para a CLI** (Art. 70 §1º: "suspende-se a pauta administrativa ordinária da CLI").
+- **Período fora interrompe a sequência:** reunião que conta, mas em que a pessoa não era esperada (fora da CLI, sob disciplina, ainda não oficial), quebra a contagem —
+  duas faltas de 2026 e uma de 2028, depois de anos fora, não somam 3.
+- **Pedido de justificativa pendente segura a exclusão** até a Secretaria decidir; recusado, a apuração refaz e exclui. O pedido sozinho não desfaz uma exclusão já feita.
+- Se as faltas da sequência mudam e ela continua chegando a 3 (apuração atrasada), a exclusão é **refeita** com as reuniões e a data certas (o prazo da AGE corre da nova).
+- **Quórum e minuta de ata da Sessão Magna contam só a Câmara** (antes somavam os Auxiliares e Diáconos que bateram ponto na palestra).
+- O **documento** da justificativa (Art. 69 §2º, I) só é exigido de quem a Academia esperava; para quem é só da CLI, basta o escrito (Estatuto Art. 27).
+- **Dado de saúde:** a trilha de auditoria guarda só o código do motivo; fora do nível geral a frequência mostra só "justificada"; a ata leva o rótulo, nunca o detalhe.
+- A **CEI** passou a exigir a matrícula ATIVA (Art. 72) e a **rematrícula leva o Certificado de Habilitação** junto. O papel "Reitor da AFM" (Global) não corrige marco
+  de ninguém (`EditarMarcoMembro` exige "pessoas"). O quadro da CLI (faltas e exclusões da igreja inteira) é só do nível geral.
+- A citação do Regimento sobre a perda por tabela é o **Art. 56 §2º** (o rascunho dizia "Art. 310", que era o número da linha do arquivo, não do artigo).
+- Tela: o tipo volta a "Ordinária" depois de abrir; atos só com o "geral" da permissão `afm`; o quadro da CLI é relido depois de cada ato; a tela limpa ao sair e
+  descarta resposta atrasada de outro login; cada botão da frequência leva o tipo da própria reunião (sem corrida); detalhe até 250 caracteres (cabe inteiro); duplo
+  clique, foco, rótulos e o campo de data no celular.
+
+**Decisões tomadas pelo Regimento ou por interpretação (o responsável pode mudar qualquer uma):** a sessão integrada à AFM conta para a CLI (Art. 69 §1º); falta justificada
+interrompe a sequência; Extraordinária não conta (Estatuto Art. 27, "reuniões mensais"); só contam as reuniões abertas depois da v8.1 no ar; a exclusão não fecha cadeira
+nem tira acesso sozinha (aponta as providências: comunicar a CLI, AGE em 30 dias para cargo eletivo, substituição pelo Presidente na livre nomeação); o inativo na AFM sai da
+CLI por Ordenação e não oficia batismo, e o aviso à AFM aponta a retirada do acesso de liderança (não é automática, para nunca trancar a Secretaria fora); a presença na
+reunião continua sendo marcada na portaria com a matrícula e a senha da sala (quem marcar presença por outro só livra a falta dele — não cria falta para ninguém — e a
+Secretaria corrige à mão).
+
+**Provas:** jest 6.082 testes; banco local (LocalDB, `bash rodar.sh preparar-afm`): `e2e-47` fluxos 212, `e2e-48` segurança e lixo 104, `e2e-49` corridas 19 (a corrida
+achou a comissão passando do limite com 4 inclusões ao mesmo tempo — CCJ, PMO e CDER passaram a contar e gravar sob trava), `e2e-50` o que a revisão do servidor pediu 48;
+tela (`tools/front-afm`, com as respostas reais gravadas pelo `e2e-47`) 80, com duas mutações acusadas.
+
 ### Absorvido da antiga v7.9 — CLI: comparecimento obrigatório e perda de assento por faltas (Art. 27)
 
 Movido de v2.3 de propósito — ver nota lá. Constrói **junto** com v8.1 (AFM),
 não antes: precisa primeiro saber marcar uma sessão da CLI como "integrada com
 AFM" (Art. 69) pra não contar errado a cada 3 meses.
 
-- [ ] 3 faltas consecutivas sem justificativa aceita nas reuniões da CLI
+- [x] 3 faltas consecutivas sem justificativa aceita nas reuniões da CLI
       (excluindo as integradas com AFM — *texto original; superado pelo Art. 69 §1º: as
       integradas contam, ver o desenho acima*) = perda automática do assento (Art. 27
       §1º) — calculado a partir de `Presencas`, igual mandato vencido de
@@ -93,12 +134,12 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
       sem perder o `CargoMinisterial` (são coisas diferentes: perder assento
       na Câmara ≠ deixar de ser Pastor); quem entra por Função já sai
       naturalmente encerrando o Assento (mecanismo já existe).
-- [ ] Art. 27 §2º: se a exclusão for de quem está na CLI por cargo eletivo da
+- [x] Art. 27 §2º: se a exclusão for de quem está na CLI por cargo eletivo da
       Diretoria Executiva ou Conselho Fiscal, a CLI aprecia e, sendo o caso,
       convoca AGE de destituição em até 30 dias (matéria "Destituição", já
       existente desde v2.2) — o sistema só aponta pro fluxo existente, não
       automatiza a convocação.
-- [ ] **Taxonomia fechada de justificativa de falta** (Art. 149 §2º, gap da
+- [x] **Taxonomia fechada de justificativa de falta** (Art. 149 §2º, gap da
       varredura): só fator externo justifica — **escala ou evento de departamento
       não é justificativa válida**. Catálogo com os motivos vedados bloqueados na
       própria tela, não conferidos depois por alguém que talvez não conheça o §2º.

@@ -74,6 +74,16 @@ module.exports = async function (context, req) {
     context.log.error("[SEGURANCA] falha na rotina diária:", e.message);
     criseSeguranca = { falhas: ["rotina"] };
   }
+  // v8.1 — AFM e faltas da CLI, também ANTES dos avisos: matricula quem virou oficial, refaz a apuração das 3 faltas (rede de segurança: ela já roda ao encerrar a reunião) e
+  // apaga o detalhe escrito das justificativas antigas. Os avisos de exclusão/desmatrícula desta rodada já enxergam o resultado. Fail-soft.
+  let afmRotina = null;
+  try {
+    afmRotina = await require("../shared/afmDb").rotinaDiaria(pool);
+    context.log(`[AFM] rotina: ${JSON.stringify({ ...afmRotina, falhas: undefined })}${afmRotina.falhas.length ? ` — FALHOU: ${afmRotina.falhas.join(", ")}` : ""}`);
+  } catch (e) {
+    context.log.error("[AFM] falha na rotina diária:", e.message);
+    afmRotina = { falhas: ["rotina"] };
+  }
   // Trava 7-C: as retenções e o apagamento da saúde sem consentimento rodam ANTES dos avisos — o motor manda e-mail e, num dia de muitos avisos, a rodada podia passar do
   // tempo da função antes de chegar aqui (o dado vencido ficava mais um dia).
   // v7.5 — retenção LGPD do voluntariado: o IP do aceite digital é anonimizado 5 anos depois do último serviço. Fail-soft: uma falha aqui não derruba a rodada de avisos.
@@ -148,9 +158,11 @@ module.exports = async function (context, req) {
   const falhaCuidado = (cuidado && cuidado.falhas.length > 0) || falhas.some((k) => String(k).startsWith("CUIDADO_"));
   // (v7.14) E a identidade visual: a votação que não fecha (ou não abre) no dia certo não pode parar sem ninguém saber.
   const falhaIdentidade = (identidade && identidade.falhas.length > 0) || falhas.some((k) => String(k).startsWith("IDENTIDADE_")) || !!(enquetesAgendadas && enquetesAgendadas.falhas);
+  // (v8.1) E a apuração das 3 faltas da CLI e da AFM: é sanção (exclusão da Câmara, licença para oficiar) e não pode parar sem ninguém saber.
+  const falhaAFM = (afmRotina && afmRotina.falhas.length > 0) || falhas.some((k) => String(k).startsWith("CLI_") || String(k).startsWith("AFM_"));
   context.res = {
-    status: falhaMenores || falhaCuidado || falhaIdentidade ? 500 : 200,
+    status: falhaMenores || falhaCuidado || falhaIdentidade || falhaAFM ? 500 : 200,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retencaoAnotadas, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, detectoresComFalha: falhas },
+    body: { sucesso: !falhaMenores && !falhaCuidado && !falhaIdentidade && !falhaAFM, criadas, emailsEnviados, retencaoVoluntariado, retencaoSetores, retencaoMenores, retencaoConsentimentos, retencaoCheckin, retencaoAnotadas, retiradaMenores, retiradaFalhou, cuidado, comunicacao, identidade, enquetesAgendadas, criseSeguranca, afm: afmRotina, detectoresComFalha: falhas },
   };
 };

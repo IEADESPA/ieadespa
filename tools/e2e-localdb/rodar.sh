@@ -80,6 +80,15 @@ case "$1" in
     node -r ./shim-mssql.js aplicar-migracao.js 155 2 2>&1 | tail -2
     $PS bases.ps1 salvar cenario-trava7c | tail -1
     ;;
+  preparar-afm)
+    # v8.1 (AFM e faltas da CLI): a partir da base "cenario-trava7c", reaplica a 153, a 154 e a 155 (idempotentes: a base fica igual ao deploy) e aplica a 156 duas vezes
+    # (prova a idempotência); salva "cenario-afm" (e2e-47 a e2e-49: cada roteiro monta o próprio cenário com lib-afm.js).
+    cd "$AQUI"
+    $PS bases.ps1 restaurar cenario-trava7c | tail -1
+    for m in 153 154 155; do node -r ./shim-mssql.js aplicar-migracao.js $m 2>&1 | tail -2; done
+    node -r ./shim-mssql.js aplicar-migracao.js 156 2 2>&1 | tail -2
+    $PS bases.ps1 salvar cenario-afm | tail -1
+    ;;
   roteiro)
     shift
     cd "$AQUI"

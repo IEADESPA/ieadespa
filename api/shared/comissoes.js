@@ -69,4 +69,21 @@ async function composicaoPorSiglaEleita(pool, sigla) {
   return result.recordset;
 }
 
-module.exports = { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita };
+// v8.1 — Art. 22 — Comissão de Doutrina e Educação Religiosa: o Reitor da AFM (calculado do cadastro da Reitoria, shared/afmDb.js) + 2 mestres de teologia da CLI
+// (cadastro manual, mesmo padrão da CCJ, com a titulação). `idsNaCLI`: quem compõe a CLI hoje — o mestre que saiu da CLI aparece marcado (a vaga precisa ser recomposta).
+async function composicaoCDER(pool, hojeIso, idsNaCLI) {
+  const { reitorAtual } = require("./afmDb");
+  const { situacao, reitor } = await reitorAtual(() => pool.request(), hojeIso);
+  const result = await pool.request().query(`
+    SELECT c.ComissaoMembroId AS comissaoMembroId, m.MembroId AS membroId, m.Nome AS nome, c.Qualificacao AS qualificacao,
+           CONVERT(varchar(10), c.DataInicio, 120) AS dataInicio
+    FROM ComissaoMembros c
+    JOIN MembroReferencia m ON m.MembroId = c.MembroId
+    WHERE c.Sigla = 'CDER' AND c.DataFim IS NULL
+    ORDER BY c.DataInicio
+  `);
+  const mestres = result.recordset.map(m => Object.assign({}, m, { foraDaCLI: !!idsNaCLI && !idsNaCLI.has(Number(m.membroId)) }));
+  return { reitor: reitor ? { membroId: reitor.membroId, nome: reitor.nome, titulacao: reitor.titulacao } : null, situacaoReitor: situacao, mestres };
+}
+
+module.exports = { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER };

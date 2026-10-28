@@ -36,9 +36,12 @@ module.exports = async function (context, req) {
   const historicoResult = await pool.request().input("mat", sql.Int, matricula).query(`
     SELECT s.SessaoId AS sessaoId, s.Descricao AS descricao, CONVERT(varchar(10), s.DataSessao, 120) AS dataSessao,
            p.Presente AS presente, p.FaltaJustificada AS faltaJustificada, p.MotivoJustificativa AS motivoJustificativa,
-           p.JustificativaPendente AS justificativaPendente
+           p.JustificativaPendente AS justificativaPendente,
+           -- v8.1 — reunião da CLI pede o catálogo do Regimento Art. 149 §2º no pedido de justificativa
+           CASE WHEN o.Sigla = 'CLI' THEN 1 ELSE 0 END AS ehCLI, s.TipoSessao AS tipoSessao, p.PendenteCodigo AS pendenteCodigo
     FROM Presencas p
     JOIN Sessoes s ON s.SessaoId = p.SessaoId
+    LEFT JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
     WHERE p.MembroId = @mat
     ORDER BY s.DataSessao DESC`);
   const historico = historicoResult.recordset;

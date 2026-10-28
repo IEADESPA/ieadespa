@@ -589,6 +589,9 @@ async function abrirReuniao() {
   if (!chave || !descricao || !senhaAcesso) { mostrarToast("Escolha o órgão e preencha descrição e senha.", "erro"); return; }
   const [tipo, id] = chave.split(":");
   const body = tipo === "local" ? { orgaoLocalId: id, descricao, senhaAcesso } : { orgaoId: id, descricao, senhaAcesso };
+  // v8.1 — a CLI diz o tipo (Ordinária e Sessão Magna contam falta; Extraordinária não)
+  const blocoTipo = document.getElementById("blocoTipoReuniaoCLI");
+  if (tipo === "central" && blocoTipo && blocoTipo.style.display !== "none") body.tipoSessao = document.getElementById("reuniaoTipoSessao").value;
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
     method: "POST",
@@ -600,6 +603,8 @@ async function abrirReuniao() {
   if (data.sucesso) {
     document.getElementById("descricaoReuniao").value = "";
     document.getElementById("senhaNovaReuniao").value = "";
+    const tipoSel = document.getElementById("reuniaoTipoSessao");
+    if (tipoSel) tipoSel.selectedIndex = 0;   // v8.1
   }
   carregarReunioes();
 }
@@ -638,6 +643,7 @@ async function encerrarReuniaoAcao(sessaoId) {
   if (data.sucesso && sessaoFrequenciaAberta && String(sessaoFrequenciaAberta.sessaoId) === String(sessaoId)) {
     verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
   }
+  if (data.sucesso && typeof afmAtualizarSeCLI === "function") afmAtualizarSeCLI();   // v8.1: a apuração das 3 faltas pode ter excluído alguém
 }
 
 async function carregarReunioes() {
@@ -659,9 +665,15 @@ async function carregarReunioes() {
   </tr></thead><tbody>`;
 
   reunioes.forEach(r => {
+    // v8.1 — o tipo da reunião da CLI (a Extraordinária não conta para as 3 faltas)
+    const tipoCLI = r.orgaoSigla === "CLI" && r.contaFaltasCLI !== undefined && typeof afmRotuloTipoSessao === "function" && (r.contaFaltasCLI || r.tipoSessao !== "ORDINARIA" || r.naoContaMotivo)
+      ? ` <span class="tag-pendente">${escaparHtmlEbd(afmRotuloTipoSessao(r.tipoSessao))}${r.naoContaMotivo ? " — não conta falta" : ""}</span>` : "";
+    // v8.1: a reunião da CLI aberta ou encerrada por engano deixa de contar falta (nível geral, com o motivo)
+    const botaoNaoConta = r.orgaoSigla === "CLI" && r.contaFaltasCLI && authGeral && typeof afmNaoContaAcao === "function"
+      ? `<button class="btn-link btn-link-perigo" data-on-click="afmNaoContaAcao" data-args-click="${argsAttr(r.sessaoId)}">Não conta falta…</button>` : "";
     html += `<tr>
       <td>${escaparHtmlEbd(r.orgaoNome) || "-"}</td>
-      <td>${escaparHtmlEbd(r.descricao)}</td>
+      <td>${escaparHtmlEbd(r.descricao)}${tipoCLI}</td>
       <td>${escaparHtmlEbd(r.dataSessao)}</td>
       <td>${escaparHtmlEbd(r.status)}</td>
       <td>${escaparHtmlEbd(r.totalPresentes)}</td>
@@ -671,6 +683,7 @@ async function carregarReunioes() {
         <button class="btn-link" data-on-click="verFrequencia" data-args-click="${argsAttr(r.sessaoId, String(r.descricao ?? ""))}">Ver frequência</button>
         ${r.status === "ABERTA" ? `<button class="btn-link" data-on-click="encerrarReuniaoAcao" data-args-click="${argsAttr(r.sessaoId)}">Encerrar</button>` : ""}
         <button class="btn-link" data-on-click="baixarMinutaAta" data-args-click="${argsAttr(r.sessaoId)}">📝 Minuta (.docx)</button>
+        ${botaoNaoConta}
         ${r.orgaoSigla === "ASSEMBLEIA_GERAL" ? `<button class="btn-link" data-on-click="abrirCredenciamentoAssembleia" data-args-click="${argsAttr(r.sessaoId)}">🪪 Credenciamento</button>` : ""}
       </td>
     </tr>`;
@@ -813,12 +826,15 @@ function mudarPaginaElegiveis(delta) {
 }
 
 async function verFrequencia(sessaoId, descricao) {
-  sessaoFrequenciaAberta = { sessaoId, descricao };
+  const aberta = { sessaoId, descricao };
+  sessaoFrequenciaAberta = aberta;
   document.getElementById("blocoFrequencia").style.display = "block";
   document.getElementById("tituloFrequencia").textContent = descricao;
+  document.getElementById("resultadoFrequencia").textContent = "Carregando…";   // v8.1: a tabela anterior não fica clicável com os dados da reunião nova
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/frequencia`);
   const data = await res.json();
+  if (sessaoFrequenciaAberta !== aberta) return;   // v8.1: outra reunião foi aberta enquanto esta carregava
   const container = document.getElementById("resultadoFrequencia");
   const resumo = document.getElementById("resumoQuorum");
   if (!data.sucesso) {
@@ -853,14 +869,19 @@ async function verFrequencia(sessaoId, descricao) {
     <th>Matrícula</th><th>Nome</th><th>Função</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
 
+  // v8.1 — reunião da CLI: a justificativa sai do catálogo fechado do Regimento Art. 149 §2º (e, na Sessão Magna, com o documento conferido)
+  const ehCLI = !!(data.sessao && data.sessao.orgaoSigla === "CLI");
+  if (ehCLI && typeof afmCarregarCatalogo === "function") await afmCarregarCatalogo();
+  if (sessaoFrequenciaAberta !== aberta) return;
   data.frequencia.forEach(item => {
     const podeJustificar = !item.presente && !item.faltaJustificada;
     const botaoCorrigir = item.presente
       ? `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, false)}">Marcar falta</button>`
       : `<button class="btn-link" data-on-click="marcarPresencaManual" data-args-click="${argsAttr(sessaoId, item.membroId, true)}">Marcar presente</button>`;
-    const pendenteHtml = item.justificativaPendente
-      ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(item.justificativaPendente)}"</div>
-         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""))}">Aprovar</button>
+    const textoPedido = item.justificativaPendente || (item.pendenteCodigo && typeof afmRotuloMotivo === "function" ? afmRotuloMotivo(item.pendenteCodigo) : "");
+    const pendenteHtml = item.justificativaPendente || item.pendenteCodigo
+      ? `<div class="tag-pendente">Pedido: "${escaparHtmlEbd(textoPedido)}"</div>
+         <button class="btn-link btn-link-sucesso" data-on-click="aprovarJustificativaPendente" data-args-click="${argsAttr(sessaoId, item.membroId, String(item.justificativaPendente ?? ""), String(item.pendenteCodigo ?? ""), ehCLI, !!item.esperadoAFM)}">Aprovar</button>
          <button class="btn-link btn-link-perigo" data-on-click="rejeitarJustificativaAcao" data-args-click="${argsAttr(sessaoId, item.membroId)}">Rejeitar</button>`
       : "";
     html += `<tr>
@@ -868,7 +889,7 @@ async function verFrequencia(sessaoId, descricao) {
       <td>${escaparHtmlEbd(item.nome)}</td>
       <td>${escaparHtmlEbd(item.funcao) || "-"}</td>
       <td>${statusFrequencia(item)}</td>
-      <td>${podeJustificar ? `<button class="btn-link" data-on-click="justificarFalta" data-args-click="${argsAttr(sessaoId, item.membroId)}">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
+      <td>${podeJustificar ? `<button class="btn-link" data-on-click="justificarFalta" data-args-click="${argsAttr(sessaoId, item.membroId, ehCLI, !!item.esperadoAFM)}">Justificar</button>` : ""} ${botaoCorrigir}${pendenteHtml}</td>
     </tr>`;
   });
 
@@ -876,34 +897,55 @@ async function verFrequencia(sessaoId, descricao) {
   container.innerHTML = html;
 }
 
-async function justificarFalta(sessaoId, membroId) {
-  const motivo = await pedirTexto("Motivo da justificativa", "Ex: estava viajando a trabalho");
-  if (motivo === null) return;
+async function justificarFalta(sessaoId, membroId, ehCLI, magna) {
+  let corpo;
+  if (ehCLI && typeof afmPedirJustificativa === "function") {
+    const j = await afmPedirJustificativa({ titulo: "Justificar falta na CLI", comprovante: !!magna });
+    if (j === null) return;
+    corpo = { membroId, ...j };
+  } else {
+    const motivo = await pedirTexto("Motivo da justificativa", "Ex: estava viajando a trabalho");
+    if (motivo === null) return;
+    corpo = { membroId, motivo };
+  }
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/justificar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, motivo })
+    body: JSON.stringify(corpo)
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
+  if (data.sucesso) { verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao); if (typeof afmAtualizarSeCLI === "function") afmAtualizarSeCLI(); }
 }
 
 // Aprova um pedido que o próprio obreiro enviou pelo painel pessoal — reaproveita
 // o mesmo endpoint de justificar, só pré-preenchendo com o motivo que ele mandou.
-async function aprovarJustificativaPendente(sessaoId, membroId, motivoSugerido) {
-  const motivo = await pedirTexto("Aprovar justificativa", "Motivo", motivoSugerido);
-  if (motivo === null) return;
+async function aprovarJustificativaPendente(sessaoId, membroId, motivoSugerido, codigoSugerido, ehCLI, magna) {
+  let corpo;
+  if (ehCLI && typeof afmPedirJustificativa === "function") {
+    // v8.1 — o pedido do obreiro já veio pelo catálogo: a Secretaria confere (e, na Sessão Magna, confirma o documento). Pedido antigo, em texto livre (sem código): o texto
+    // vem inteiro para o detalhe, e a Secretaria só escolhe o motivo.
+    const rotulo = codigoSugerido && typeof afmRotuloMotivo === "function" ? afmRotuloMotivo(codigoSugerido) : "";
+    const detalhe = !codigoSugerido ? String(motivoSugerido || "")
+      : rotulo && String(motivoSugerido || "").startsWith(`${rotulo} — `) ? String(motivoSugerido).slice(rotulo.length + 3) : "";
+    const j = await afmPedirJustificativa({ titulo: "Aprovar justificativa", comprovante: !!magna, codigoSugerido, detalheSugerido: detalhe });
+    if (j === null) return;
+    corpo = { membroId, ...j };
+  } else {
+    const motivo = await pedirTexto("Aprovar justificativa", "Motivo", motivoSugerido);
+    if (motivo === null) return;
+    corpo = { membroId, motivo };
+  }
 
   const res = await fetchProtegido(`${API_BASE}/reunioes/${sessaoId}/justificar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ membroId, motivo })
+    body: JSON.stringify(corpo)
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
+  if (data.sucesso) { verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao); if (typeof afmAtualizarSeCLI === "function") afmAtualizarSeCLI(); }
 }
 
 async function rejeitarJustificativaAcao(sessaoId, membroId) {
@@ -916,7 +958,7 @@ async function rejeitarJustificativaAcao(sessaoId, membroId) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
+  if (data.sucesso) { verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao); if (typeof afmAtualizarSeCLI === "function") afmAtualizarSeCLI(); }
 }
 
 async function marcarPresencaManual(sessaoId, membroId, presente) {
@@ -930,7 +972,7 @@ async function marcarPresencaManual(sessaoId, membroId, presente) {
   });
   const data = await res.json();
   avisarResultado(data);
-  if (data.sucesso) verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao);
+  if (data.sucesso) { verFrequencia(sessaoId, sessaoFrequenciaAberta.descricao); if (typeof afmAtualizarSeCLI === "function") afmAtualizarSeCLI(); }
 }
 
 registrarAcoes({

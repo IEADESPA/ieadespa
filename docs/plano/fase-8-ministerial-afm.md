@@ -322,6 +322,27 @@ respostas reais gravadas pelo `e2e-55`) 98, com três mutações acusadas; as ou
 - [ ] Validação de status Ativo/Inativo via QR Code em tempo real.
 - [ ] Emissão centralizada na Secretaria Geral (anti-fraude).
 
+### Desenho da v8.4 (contrato, 28/10/2026)
+
+Base legal: Regimento Art. 76 (credencial digital, QR, sem validade impressa, gratuita, impressão só na Secretaria Geral); Art. 69 §3º e 77 (credencial suspensa do
+obreiro inativo e reativada na volta); Art. 95 §2º, IV, a (exclusão: recolhimento da credencial); Art. 10 (Credencial Ministerial na diplomação).
+
+**1. A credencial.** Cada membro tem no máximo **uma credencial válida**, com um **código de segurança** de 16 caracteres (o mesmo tipo de código dos certificados
+da v6.9: não se adivinha) que vai no QR. Ela não tem data de validade (Art. 76 §1º): quem a lê vê a situação **de agora**, consultada no banco na hora. Perdeu, foi
+roubada, mudou a foto ou o cargo: a Secretaria **emite uma nova via** e a anterior deixa de valer na mesma hora (o QR antigo passa a dizer "credencial substituída").
+
+**2. Quem emite (Art. 76 §2º, anti-fraude).** Só a **Secretaria Geral** (nível geral da permissão `pessoas`) emite, reemite, cancela e gera o PDF para impressão; a
+congregação não emite nem imprime. Emissão em lote para todos os membros ativos que ainda não têm. A pessoa vê a própria credencial digital no **Meu Painel** (com o QR e
+a foto do cadastro), baixa o PDF e pode **pedir a impressão** — o pedido aparece na lista da Secretaria, que registra quando imprimiu. Gratuita: nenhuma taxa.
+
+**3. O que o QR mostra (página pública, sem login).** Só o necessário para conferir quem está na frente: nome, se é **membro** ou **obreiro** (com o cargo), a
+congregação, e a situação: **Ativa** ou **Inativa** — e, para obreiro, **Habilitado** (pode oficiar) ou **Obreiro inativo** (Art. 69 §3º: matrícula da AFM inativa, ou
+afastado). Nunca o motivo, a matrícula, a foto nem dado de contato. Credencial substituída ou cancelada diz isso. Membro desligado ou excluído: "Inativa" (o
+recolhimento do Art. 95 §2º, IV, a vira automático). Limite de consultas por origem, como a verificação de certificados.
+
+**4. Onde aparece.** Meu Painel: "Minha credencial". Pessoas (nível geral): a seção **Credenciais** — emitir, emitir em lote, nova via, cancelar, PDF para impressão e os
+pedidos de impressão. A página pública `credencial.html`.
+
 ## 🔒 Trava de Revisão 8-A — antes de avançar para a v8.5
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).

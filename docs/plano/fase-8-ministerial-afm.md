@@ -280,7 +280,7 @@ concluído; seção nova **Cerimônias** (criar, comissão, incluir candidatos, 
 
 ### Como ficou a v8.3 (entregue em 28/10/2026)
 
-Migração **158**; regra pura em `api/shared/consagracao.js`, banco em `api/shared/consagracaoDb.js`, rotas novas `/api/esteira-consagracao/<ação>` (`EsteiraConsagracao`:
+**Em produção desde 28/10/2026** (merge `83994c8`; para desfazer: `git revert -m 1 83994c8`). Migração **158**; regra pura em `api/shared/consagracao.js`, banco em `api/shared/consagracaoDb.js`, rotas novas `/api/esteira-consagracao/<ação>` (`EsteiraConsagracao`:
 fila e parecer do CEI, reuniões da CLI, homologação, taxa) e `/api/cerimonias-consagracao/<ação>` (`CerimoniasConsagracao`); a página dos documentos em
 `api/shared/pdfDocumentoMinisterial.js`. "Avançar" passou a ser "Enviar ao CEI" nos processos que levam a cargo (e só com a foto e um documento); os de Integração e
 Reintegração seguem a esteira antiga. Tela: a aba Consagrações também para quem só tem `cei` (vê só os pareceres); cerimônias só no nível geral. Casca do service worker

@@ -130,7 +130,7 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   await afmPost("nivel", { membroId: P.nomeado, nivel: "AVANCADO", concluido: false });
   r = await afmGet("matriculas");
   ok(r.body.itens.find((m) => Number(m.membroId) === P.nomeado).nivelamento === false, "atingiu o nível do cargo: sai do nivelamento");
-  ok(r.body.itens.some((m) => Number(m.membroId) === P.candidato && m.chm === true && m.origem === "CANDIDATO"), "a lista traz o CHM e a origem");
+  ok(r.body.itens.some((m) => Number(m.membroId) === P.candidato && m.chm === false && m.chmEm === null && m.origem === "CANDIDATO"), "a lista traz a origem; o CHM foi usado na promoção (a próxima pede outro)");
 
   console.log("== Evangelista e Pastor: só por indicação do Presidente; outra convenção ==");
   r = await protocolar({ membroId: P.presbitero, assunto: TIPO.EVANGELISTA, proponenteMembroId: 1002 });
@@ -151,11 +151,18 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
 
   console.log("== disciplina: trava; o motivo só ao nível geral ==");
   r = await req(TIPO.DIACONO, P.disciplinado);
-  ok(item(r, "comunhao").situacao === "FALTA" && /disciplina/i.test(item(r, "comunhao").detalhe), "o geral vê: disciplina em curso", item(r, "comunhao"));
-  r = await req(TIPO.DIACONO, P.disciplinado, "INDICACAO", LID);
-  ok(item(r, "comunhao").situacao === "FALTA" && !/disciplina/i.test(item(r, "comunhao").detalhe), "o Dirigente vê só que não está apto", item(r, "comunhao"));
+  ok(item(r, "disciplina").situacao === "FALTA" && /disciplina em curso/i.test(item(r, "disciplina").detalhe), "quem tem 'disciplina' vê: disciplina em curso", item(r, "disciplina"));
+  const rLid = await req(TIPO.DIACONO, P.disciplinado, "INDICACAO", LID);
+  const rLidLimpo = await req(TIPO.DIACONO, P.missionaria, "INDICACAO", LID);
+  ok(JSON.stringify(item(rLid, "disciplina")) === JSON.stringify(item(rLidLimpo, "disciplina")) && item(rLid, "disciplina").situacao === "AVISO", "o Dirigente (sem 'disciplina') vê o mesmo aviso para quem está e quem não está sob disciplina", [item(rLid, "disciplina"), item(rLidLimpo, "disciplina")]);
   r = await protocolar({ membroId: P.disciplinado, assunto: TIPO.DIACONO, proponenteMembroId: P.lider }, LID);
-  ok(r.body.sucesso === false && !JSON.stringify(r.body).match(/disciplina/i), "no protocolo do Dirigente também não vaza", r.body);
+  ok(r.status === 201 && !JSON.stringify(r.body).match(/Há disciplina em curso/i), "o protocolo do Dirigente segue (nada vaza)", r.body);
+  const idDisc = r.body.consagracao.consagracaoId;
+  r = await evoluir(idDisc, "AVANCAR");
+  ok(r.body.sucesso === false && (r.body.requisitos.itens.find((i) => i.chave === "disciplina") || {}).situacao === "FALTA", "o avanço (nível geral) confere de verdade e trava", r.body.mensagem);
+  r = await evoluir(idDisc, "AVANCAR", L.GERAL(1003, ["consagracoes"]));
+  ok(r.body.sucesso === false && !/Há disciplina em curso/i.test(JSON.stringify(r.body)), "um geral de consagrações sem 'disciplina' vê que travou, não o motivo", r.body);
+  await evoluir(idDisc, "REPROVAR");
 
   console.log("== data de entrada no cargo: só a Secretaria informa ==");
   r = await req(TIPO.PRESBITERO, P.legado);

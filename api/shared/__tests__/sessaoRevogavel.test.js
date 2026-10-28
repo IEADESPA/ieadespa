@@ -270,6 +270,7 @@ describe("eventos que derrubam sessões", () => {
     const existente = (status) => [{ MembroId: 40, Status: status, CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo] }));
+    quando(/UPDATE MembroReferencia SET Nome/, []);   // v8.2: o UPDATE confere o cargo lido (aqui ele não mudou: 1 linha)
     const tk = sessaoDe(5, SID.atual, { permissoes: ["pessoas"] });
     mockRegras.unshift([/FROM MembroReferencia m[\s\S]*WHERE m\.MembroId = @id/, existente("ATIVO")]);
     await chamar(hPessoas, { metodo: "POST", token: tk, corpo: { membroId: 40, nome: "Maria", congregacaoId: 1, status: "ATIVO" } });

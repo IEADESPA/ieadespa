@@ -10,13 +10,16 @@ let afmSecaoAtual = "matriculas";
 let afmFiltroMatriculas = "TODOS";
 let afmMatriculasCache = [];
 let afmFaltasCache = null;
-let afmGeralMatriculas = false;   // o "geral" da permissão afm, como o servidor disse (não o authGeral, que vale para qualquer concessão)
+let afmGeralMatriculas = false;
+let afmVetaveisCache = [];          // v8.2: as indicações que a AFM pode vetar   // o "geral" da permissão afm, como o servidor disse (não o authGeral, que vale para qualquer concessão)
 let afmEnviando = false;          // duplo clique: o segundo envio espera o primeiro voltar
 const AFM_DETALHE_MAX = 250;      // o texto gravado é "rótulo — detalhe" (até 300): o rótulo mais longo cabe com folga
 
 // Troca de login ou saída: nada da pessoa anterior (nomes, faltas, reprovação, a própria situação) fica na página.
 function afmLimparTela() {
-  afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false;
+  afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false; afmVetaveisCache = [];
+  const pilulaEscada = afmEl("btnAfmSecaoEscada");
+  if (pilulaEscada) pilulaEscada.style.display = "none";
   for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER", "afmListaVetaveis"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) resumo.textContent = "";
@@ -169,6 +172,9 @@ function afmFiltrarMatriculasAcao(filtro) {
 
 function afmRenderMatriculas(geral) {
   const cx = afmEl("afmListaMatriculas");
+  // a seção "Escada e veto" (CHM, candidato, veto) é só do nível geral da Academia
+  const pilulaEscada = afmEl("btnAfmSecaoEscada");
+  if (pilulaEscada) pilulaEscada.style.display = geral ? "" : "none";
   // v8.2: o candidato (ainda não oficial, matriculado para cursar o Básico) também aparece
   const candidato = (m) => !m.oficial && m.origem === "CANDIDATO" && m.status === "ATIVA";
   const todos = afmMatriculasCache.filter(m => m.oficial || m.status === "INATIVA" || candidato(m));
@@ -331,16 +337,18 @@ async function afmEnviarCandidatoAcao() {
   if (data.sucesso) { afmFecharFormAcao(); afmCarregarVetaveisAcao(); }
 }
 
-let afmVetaveisCache = [];
 async function afmCarregarVetaveisAcao() {
   const cx = afmEl("afmListaVetaveis");
   if (!cx) return;
+  if (!afmGeralMatriculas) { cx.innerHTML = "<p class='subtitle'>O veto técnico é do nível geral da Academia.</p>"; return; }
   cx.innerHTML = "<p class='subtitle'>Carregando…</p>";
+  const token = authToken;   // resposta que chega depois de outro login (ou da saída) não pinta a tela
   await afmCarregarCatalogo();
   const res = await fetchProtegido(`${API_BASE}/afm/vetaveis`);
+  if (authToken !== token) return;
   if (res.status === 403) { cx.innerHTML = "<p class='subtitle'>O veto técnico é do nível geral da Academia.</p>"; return; }
   const data = await jsonDaTela(res, cx, "objeto");
-  if (data === null) return;
+  if (data === null || authToken !== token) return;
   afmVetaveisCache = Array.isArray(data.itens) ? data.itens : [];
   if (!afmVetaveisCache.length) { cx.innerHTML = "<p class='subtitle'>Nenhuma indicação em andamento.</p>"; return; }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Congregação</th><th>Para</th><th>Etapa</th><th>Protocolo</th><th></th></tr></thead><tbody>`;

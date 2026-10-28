@@ -39,12 +39,11 @@ function proximoDegrau(cargoAtual) {
   return i >= 0 && i < ESCADA.length - 1 ? ESCADA[i + 1] : null;
 }
 
-// AAAA-MM-DD + n anos (29/02 vira 28/02 no ano que não é bissexto).
+// AAAA-MM-DD + n anos. 29/02 num ano que não é bissexto vira 01/03 — o mesmo dia em que estatuto.idadeEm passa a contar o ano completo (a data que a tela
+// promete é a data em que o requisito passa a valer).
 function somarAnos(dataIso, anos) {
   const [a, m, d] = String(dataIso).slice(0, 10).split("-").map(Number);
-  const alvo = new Date(Date.UTC(a + anos, m - 1, d));
-  if (alvo.getUTCMonth() !== m - 1) alvo.setUTCDate(0);
-  return alvo.toISOString().slice(0, 10);
+  return new Date(Date.UTC(a + anos, m - 1, d)).toISOString().slice(0, 10);
 }
 const dataBr = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "");
 const isoDe = (v) => {
@@ -61,7 +60,9 @@ function item(chave, rotuloItem, artigo, situacao, detalhe, tecnico = false) {
 // dados: { cargoAtual, cargoDesde, status, emComunhao, sobDisciplina, cartaMudanca, dataNascimento, dataAdmissao, dizimistaFiel, sexo, estadoCivil, batismoEspirito,
 //          afm: { statusMatricula, nivel, concluido, chm, chmEm } | null }
 // alvo: o cargo de destino (do tipo de consagração). modalidade: INDICACAO | NOMEACAO_PRESIDENCIAL | OUTRA_CONVENCAO.
-function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso } = {}) {
+// veDisciplina: quem pergunta tem a permissão "disciplina" sobre a pessoa. Sem ela, disciplina e carta de mudança viram um AVISO igual para todos ("a Secretaria confere
+// no avanço") — senão a própria lista diria quem está sob disciplina (revisão independente, 28/10/2026). O avanço, que é do nível geral, sempre confere de verdade.
+function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDisciplina = true } = {}) {
   const d = dados || {};
   const itens = [];
   const outra = modalidade === "OUTRA_CONVENCAO";
@@ -94,16 +95,15 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso } = {}
     itens.push(item("ciadseta", "Homologação da Convenção (CIADSETA)", "Art. 72, V, a", "AVISO", "A ordenação depende da homologação da Convenção Estadual."));
   }
 
-  // 3. Plena comunhão (Art. 72, caput; Estatuto Art. 23).
-  if (d.status !== "ATIVO" || !d.emComunhao) {
-    itens.push(item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "FALTA", "A pessoa não está ativa em plena comunhão."));
-  } else if (d.sobDisciplina) {
-    itens.push(item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "FALTA", "Há disciplina em curso."));
-  } else if (d.cartaMudanca) {
-    itens.push(item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "FALTA", "Carta de mudança já emitida (trânsito em curso)."));
-  } else {
-    itens.push(item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "ATENDE"));
-  }
+  // 3. Plena comunhão (Art. 72, caput; Estatuto Art. 23): a situação do cadastro (que quem tem "pessoas" já vê) e, à parte, disciplina e carta de mudança.
+  itens.push(d.status !== "ATIVO" || !d.emComunhao
+    ? item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "FALTA", "A pessoa não está ativa em plena comunhão.")
+    : item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "ATENDE"));
+  const ROT_DISC = "Sem disciplina em curso nem carta de mudança";
+  if (!veDisciplina) itens.push(item("disciplina", ROT_DISC, "Art. 72, caput", "AVISO", "A Secretaria confere no avanço do processo."));
+  else if (d.sobDisciplina) itens.push(item("disciplina", ROT_DISC, "Art. 72, caput", "FALTA", "Há disciplina em curso."));
+  else if (d.cartaMudanca) itens.push(item("disciplina", ROT_DISC, "Art. 72, caput", "FALTA", "Carta de mudança já emitida (trânsito em curso)."));
+  else itens.push(item("disciplina", ROT_DISC, "Art. 72, caput", "ATENDE"));
 
   // 4. Fidelidade financeira (Art. 72, caput).
   itens.push(d.dizimistaFiel === true
@@ -143,10 +143,10 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso } = {}
     }
   }
 
-  // 7. Missionária é o teto para obreiras (Art. 71, III), salvo ordenação convencional específica (outra convenção).
+  // 7. Missionária é o teto para obreiras (Art. 71, III). A ressalva "salvo ordenação convencional específica" não é decidida pelo sistema (pode ser a da própria
+  // CIADSETA): vale para todas as modalidades, inclusive quem vem de outra convenção — o responsável pode mudar (decisão registrada no plano).
   if (iAlvo > ESCADA.indexOf(TETO_OBREIRAS)) {
-    if (outra) itens.push(item("sexo", "Acima de Missionário(a): obreiro", "Art. 71, III", "DISPENSADO", "Ordenação convencional já existente."));
-    else if (d.sexo === "M") itens.push(item("sexo", "Acima de Missionário(a): obreiro", "Art. 71, III", "ATENDE"));
+    if (d.sexo === "M") itens.push(item("sexo", "Acima de Missionário(a): obreiro", "Art. 71, III", "ATENDE"));
     else if (d.sexo === "F") itens.push(item("sexo", "Acima de Missionário(a): obreiro", "Art. 71, III", "FALTA", "Missionária é a patente máxima para obreiras, salvo ordenação convencional específica."));
     else itens.push(item("sexo", "Acima de Missionário(a): obreiro", "Art. 71, III", "SEM_DADO", "Falta o sexo no cadastro."));
   }
@@ -224,12 +224,12 @@ function fechar(itens, alvo, modalidade) {
   };
 }
 
-// Fora do nível geral, o motivo de não estar em plena comunhão (disciplina em curso, carta de mudança) não aparece: é dado sigiloso da pessoa. Fica só "não está apto(a)".
+// O avanço (nível geral) confere disciplina e carta de verdade; para quem avança sem a permissão "disciplina" sobre a pessoa, o motivo não aparece.
 function mascararParaEscopo(avaliacao) {
   if (!avaliacao) return avaliacao;
   return {
     ...avaliacao,
-    itens: avaliacao.itens.map((i) => (i.chave === "comunhao" && i.situacao === "FALTA" ? { ...i, detalhe: "Não está apto(a) pela comunhão: a Secretaria informa o motivo." } : i))
+    itens: avaliacao.itens.map((i) => (i.chave === "disciplina" && i.situacao === "FALTA" ? { ...i, detalhe: "Não está apto(a): quem cuida da disciplina informa o motivo." } : i))
   };
 }
 

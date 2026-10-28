@@ -41,20 +41,19 @@ BEGIN
         CONSTRAINT CK_CargosHist_Origem CHECK (Origem IS NOT NULL AND Origem IN (N'CONSAGRACAO', N'NOMEACAO_PRESIDENCIAL', N'OUTRA_CONVENCAO', N'CADASTRO', N'LEGADO')),
         CONSTRAINT CK_CargosHist_Periodo CHECK (Ate IS NULL OR Desde IS NULL OR Ate >= Desde)
     );
+    -- Quem já tem cargo de oficial ganha a linha aberta, com a data da consagração concluída a esse cargo quando ela existe. Roda UMA vez, junto com a criação da tabela
+    -- (as migrações rodam a cada publicação: refazer depois poria uma data antiga numa linha que a Secretaria deixou em branco de propósito — revisão de 28/10/2026).
+    EXEC(N'INSERT INTO dbo.CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Origem, Observacao)
+    SELECT m.MembroId, m.CargoMinisterial,
+           (SELECT MAX(c.DataConclusao) FROM dbo.Consagracoes c JOIN dbo.TiposConsagracao t ON t.Nome = c.Assunto
+            WHERE c.MembroId = m.MembroId AND c.Status = N''CONCLUIDO'' AND t.CargoMinisterialResultante = m.CargoMinisterial),
+           N''LEGADO'', N''Cargo que a pessoa já tinha quando a v8.2 entrou no ar.''
+    FROM dbo.MembroReferencia m
+    WHERE m.CargoMinisterial IN (N''AUXILIAR'', N''MISSIONARIO'', N''DIACONO'', N''PRESBITERO'', N''EVANGELISTA'', N''PASTOR'')');
 END
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CargosHist_Aberto' AND object_id = OBJECT_ID(N'dbo.CargosMinisteriaisHistorico'))
     CREATE UNIQUE INDEX UX_CargosHist_Aberto ON dbo.CargosMinisteriaisHistorico (MembroId) WHERE Ate IS NULL;
-GO
--- Quem já tem cargo de oficial ganha a linha aberta, com a data da consagração concluída a esse cargo quando ela existe.
-INSERT INTO dbo.CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Origem, Observacao)
-SELECT m.MembroId, m.CargoMinisterial,
-       (SELECT MAX(c.DataConclusao) FROM dbo.Consagracoes c JOIN dbo.TiposConsagracao t ON t.Nome = c.Assunto
-        WHERE c.MembroId = m.MembroId AND c.Status = N'CONCLUIDO' AND t.CargoMinisterialResultante = m.CargoMinisterial),
-       N'LEGADO', N'Cargo que a pessoa já tinha quando a v8.2 entrou no ar.'
-FROM dbo.MembroReferencia m
-WHERE m.CargoMinisterial IN (N'AUXILIAR', N'MISSIONARIO', N'DIACONO', N'PRESBITERO', N'EVANGELISTA', N'PASTOR')
-  AND NOT EXISTS (SELECT 1 FROM dbo.CargosMinisteriaisHistorico h WHERE h.MembroId = m.MembroId AND h.Ate IS NULL);
 GO
 
 -- ---- 3) Consagrações: destino, modalidade, requisitos e veto ----

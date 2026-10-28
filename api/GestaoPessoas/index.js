@@ -169,7 +169,12 @@ module.exports = async function (context, req) {
     }
     let cargoDesdeFinal = null;
     if (cargoDesde != null && cargoDesde !== "") {
-      const d = afm.dataDoAto(cargoDesde, hojeBrasilia(), "a data de entrada no cargo");
+      // de 1950 em diante (há Diácono no cargo desde antes de 2000, onde começa a regra comum dos atos), nunca no futuro, dia que existe no calendário
+      const txt = typeof cargoDesde === "string" ? cargoDesde.trim() : "";
+      const existe = /^\d{4}-\d{2}-\d{2}$/.test(txt) && !Number.isNaN(Date.parse(`${txt}T00:00:00Z`)) && new Date(`${txt}T00:00:00Z`).toISOString().slice(0, 10) === txt;
+      const d = !existe ? { valido: false, mensagem: "Informe a data de entrada no cargo (dia/mês/ano)." }
+        : txt > hojeBrasilia() ? { valido: false, mensagem: "A data de entrada no cargo não pode ser no futuro." }
+          : txt < "1950-01-01" ? { valido: false, mensagem: "A data de entrada no cargo está antiga demais." } : { valido: true, data: txt };
       if (!d.valido) {
         context.res = { status: 200, body: { sucesso: false, mensagem: d.mensagem } };
         return;
@@ -199,7 +204,7 @@ module.exports = async function (context, req) {
     }
 
     const existente = await pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
@@ -223,6 +228,21 @@ module.exports = async function (context, req) {
     const dizimistaNovo = dizimistaFiel === undefined || dizimistaFiel === "" ? null : bitOuNulo(dizimistaFiel);
     if (!geral && dizimistaAnterior !== dizimistaNovo) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "\"Dizimista fiel\" só a Secretaria (nível geral) afirma." } };
+      return;
+    }
+    // Sexo: sem o campo no pedido, fica o que estava (antes, um POST sem "sexo" apagava o dado que alimenta o teto das obreiras).
+    const sexoAnterior = existia && existente.recordset[0].SexoAnterior ? String(existente.recordset[0].SexoAnterior).trim() : null;
+    const sexoFinal = sexo === undefined ? sexoAnterior : (sexo || null);
+    const cargoMuda = cargoAnterior !== cargoNovo && !(semCargo(cargoAnterior) && semCargo(cargoNovo));
+    // Revisão independente (28/10/2026): ninguém mexe no que conta para a PRÓPRIA escada — protocolar, avançar, CHM e veto já barravam o próprio; o cadastro era o atalho.
+    if (existia && Number(membroId) === Number(usuario.membroId) && (cargoMuda || cargoDesdeFinal || dizimistaAnterior !== dizimistaNovo || sexoAnterior !== sexoFinal)) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém altera o próprio cargo, a data no cargo, o dízimo nem o sexo no cadastro: peça a outra pessoa da Secretaria." } };
+      return;
+    }
+    // A ficha aberta antes de uma consagração concluída não desfaz a promoção: a tela manda o cargo que leu (cargoOriginal); se o banco já tem outro, 409.
+    const lido = req.body && Object.prototype.hasOwnProperty.call(req.body, "cargoOriginal") ? (req.body.cargoOriginal || null) : undefined;
+    if (existia && lido !== undefined && lido !== cargoAnterior && !(semCargo(lido) && semCargo(cargoAnterior))) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto a ficha estava aberta (uma consagração foi concluída?). Abra a ficha de novo antes de salvar." } };
       return;
     }
     const statusAnterior = existia ? existente.recordset[0].Status : null;
@@ -265,13 +285,14 @@ module.exports = async function (context, req) {
       .input("dataAfastamento", sql.Date, dataAfastamento || null)
       .input("dataSaida", sql.Date, dataSaidaFinal)
       .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
-      .input("sexo", sql.NChar(1), sexo || null);
+      .input("sexo", sql.NChar(1), sexoFinal)
+      .input("cargoLido", sql.NVarChar(30), cargoAnterior);
 
     if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
       // esteira de Consagrações (ver EvoluirConsagracao) — salvar a pessoa
       // nunca deve apagar o que já estava lá.
-      await request.query(`
+      const gravou = await request.query(`
         UPDATE MembroReferencia SET Nome = @nome, CongregacaoId = @congregacaoId, Status = @status,
                DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
                SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId, CargoMinisterial = @cargoMinisterial,
@@ -280,7 +301,11 @@ module.exports = async function (context, req) {
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
                DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
-        WHERE MembroId = @id`);
+        WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
+      if (!(gravou && gravou.rowsAffected && gravou.rowsAffected[0])) {
+        context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+        return;
+      }
     } else {
       await request.query(`
         INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo)
@@ -290,8 +315,10 @@ module.exports = async function (context, req) {
     // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a
     // escada mostra "data de entrada no cargo não informada" até lá (nunca presume a data).
     if (cargoAnterior !== cargoNovo || cargoDesdeFinal) {
-      const h = await escadaDb.sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
-      if (!h.sucesso) context.log.warn(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
+      try {
+        const h = await escadaDb.sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
+        if (!h.sucesso) context.log.warn(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
+      } catch (e) { context.log.error(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${e.message}`); }
     }
 
     if (entrandoEmStatusTerminal) {
@@ -319,7 +346,8 @@ module.exports = async function (context, req) {
       registroId: Number(membroId),
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
+      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
+        ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
     });
     // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
     if (emailMudou && emailAnterior) {

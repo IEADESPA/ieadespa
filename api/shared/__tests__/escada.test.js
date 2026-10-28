@@ -85,9 +85,13 @@ describe("requisitos por degrau (Art. 72)", () => {
     expect(av.bloqueado).toBe(true);
     expect(av.itens.find((i) => i.chave === "intersticio").detalhe).toMatch(/No cargo desde/);
   });
-  test("29 de fevereiro + 1 ano = 28 de fevereiro", () => {
-    expect(escada.somarAnos("2024-02-29", 1)).toBe("2025-02-28");
+  test("29 de fevereiro + 1 ano = 1º de março: a data prometida é a mesma em que o requisito passa a valer", () => {
+    expect(escada.somarAnos("2024-02-29", 1)).toBe("2025-03-01");
     expect(escada.somarAnos("2024-02-29", 4)).toBe("2028-02-29");
+    const aux = (hojeIso) => escada.avaliarAscensao(base({ cargoAtual: "AUXILIAR", cargoDesde: "2024-02-29", afm: { statusMatricula: "ATIVA", nivel: "MEDIO", chm: true } }), "MISSIONARIO", { hojeIso });
+    expect(situacao(aux("2025-02-28"), "intersticio")).toBe("FALTA");
+    expect(aux("2025-02-28").itens.find((i) => i.chave === "intersticio").detalhe).toMatch(/completa em 01\/03\/2025/);
+    expect(situacao(aux("2025-03-01"), "intersticio")).toBe("ATENDE");
   });
   test("Diácono: Batismo no Espírito Santo", () => {
     expect(situacao(avaliar(base({ batismoEspirito: false }), "DIACONO"), "batismoEspirito")).toBe("FALTA");
@@ -114,16 +118,25 @@ describe("requisitos por degrau (Art. 72)", () => {
   test("comunhão: inativo, disciplina e carta de mudança travam; dízimo em branco não conta como atendido", () => {
     expect(situacao(avaliar(base({ status: "INATIVO" }), "DIACONO"), "comunhao")).toBe("FALTA");
     expect(situacao(avaliar(base({ emComunhao: false }), "DIACONO"), "comunhao")).toBe("FALTA");
-    expect(avaliar(base({ sobDisciplina: true }), "DIACONO").itens.find((i) => i.chave === "comunhao").detalhe).toMatch(/disciplina/);
-    expect(avaliar(base({ cartaMudanca: true }), "DIACONO").itens.find((i) => i.chave === "comunhao").detalhe).toMatch(/Carta de mudança/);
+    expect(situacao(avaliar(base({ sobDisciplina: true }), "DIACONO"), "disciplina")).toBe("FALTA");
+    expect(avaliar(base({ sobDisciplina: true }), "DIACONO").itens.find((i) => i.chave === "disciplina").detalhe).toMatch(/disciplina/);
+    expect(avaliar(base({ cartaMudanca: true }), "DIACONO").itens.find((i) => i.chave === "disciplina").detalhe).toMatch(/Carta de mudança/);
+    expect(situacao(avaliar(base({ sobDisciplina: true }), "DIACONO"), "comunhao")).toBe("ATENDE");   // a situação do cadastro, à parte
     expect(situacao(avaliar(base({ dizimistaFiel: null }), "DIACONO"), "dizimo")).toBe("SEM_DADO");
     expect(situacao(avaliar(base({ dizimistaFiel: false }), "DIACONO"), "dizimo")).toBe("FALTA");
   });
-  test("fora do nível geral o motivo da comunhão some (dado sigiloso)", () => {
+  test("sem a permissão 'disciplina' a lista é igual para quem está e quem não está sob disciplina (não vira oráculo)", () => {
+    const sem = (extra) => escada.avaliarAscensao(base(extra), "DIACONO", { hojeIso: HOJE, veDisciplina: false });
+    expect(JSON.stringify(sem({ sobDisciplina: true }))).toBe(JSON.stringify(sem({})));
+    expect(JSON.stringify(sem({ cartaMudanca: true }))).toBe(JSON.stringify(sem({})));
+    expect(situacao(sem({ sobDisciplina: true }), "disciplina")).toBe("AVISO");
+    expect(sem({ sobDisciplina: true }).bloqueado).toBe(false);   // o protocolo segue; o avanço (nível geral) confere de verdade
+  });
+  test("no avanço, quem não tem 'disciplina' vê que travou, mas não o motivo", () => {
     const av = escada.mascararParaEscopo(avaliar(base({ sobDisciplina: true }), "DIACONO"));
-    const i = av.itens.find((x) => x.chave === "comunhao");
+    const i = av.itens.find((x) => x.chave === "disciplina");
     expect(i.situacao).toBe("FALTA");
-    expect(i.detalhe).not.toMatch(/disciplina/i);
+    expect(i.detalhe).not.toMatch(/disciplina em curso/i);
     expect(av.bloqueado).toBe(true);
   });
 });
@@ -134,10 +147,10 @@ describe("Missionária é o teto das obreiras (Art. 71, III)", () => {
     expect(situacao(avaliar(base({ sexo: null }), "DIACONO"), "sexo")).toBe("SEM_DADO");
     expect(situacao(avaliar(base({ sexo: "M" }), "DIACONO"), "sexo")).toBe("ATENDE");
   });
-  test("até Missionária não se pergunta o sexo; ordenação convencional de fora dispensa", () => {
+  test("até Missionária não se pergunta o sexo; o teto vale em toda modalidade, inclusive outra convenção", () => {
     const aux = base({ cargoAtual: "AUXILIAR", cargoDesde: "2020-01-01", sexo: null });
     expect(situacao(avaliar(aux, "MISSIONARIO"), "sexo")).toBeUndefined();
-    expect(situacao(avaliar(base({ sexo: "F", cargoAtual: "MEMBRO" }), "PASTOR", "OUTRA_CONVENCAO"), "sexo")).toBe("DISPENSADO");
+    expect(situacao(avaliar(base({ sexo: "F", cargoAtual: "MEMBRO" }), "PASTOR", "OUTRA_CONVENCAO"), "sexo")).toBe("FALTA");
     expect(situacao(avaliar(base({ sexo: "F" }), "DIACONO", "NOMEACAO_PRESIDENCIAL"), "sexo")).toBe("FALTA");   // não é requisito técnico
   });
 });

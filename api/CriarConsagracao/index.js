@@ -10,7 +10,8 @@
 // v8.2 — Escada ministerial (Regimento Art. 66 §§3º–5º, 67, 71 a 74; regra em shared/escada.js). Quando o tipo leva a um cargo da escada, os requisitos são conferidos
 // AQUI e o processo nem nasce se faltar algum (a resposta traz a lista). Modalidade: INDICACAO (o comum), NOMEACAO_PRESIDENCIAL (Art. 66 §4º) e OUTRA_CONVENCAO (Art. 71) —
 // as duas últimas só o nível geral registra, com a referência do ato ou a convenção de origem. Um processo em andamento por pessoa (índice único do banco → 409). Ninguém
-// protocola a própria consagração.
+// protocola a própria consagração. Disciplina e carta de mudança só são conferidas aqui para quem tem a permissão "disciplina" sobre a pessoa (sem ela, o protocolo segue e
+// o avanço, do nível geral, confere) — a lista não pode dizer a um Dirigente quem está sob disciplina.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
@@ -86,13 +87,14 @@ module.exports = async function (context, req) {
   }
 
   // v8.2 — a escada: só vale para tipo que leva a um cargo; a nomeação e a outra convenção não fazem sentido sem cargo de destino.
-  const conferencia = await escadaDb.avaliar(pool, { membroId, assunto, modalidade });
+  const veDisciplina = escadaDb.veDisciplinaDe(usuario, pessoa);
+  const conferencia = await escadaDb.avaliar(pool, { membroId, assunto, modalidade, veDisciplina });
   if (!conferencia.alvo && modalidade !== "INDICACAO") {
     context.res = { status: 422, body: { sucesso: false, mensagem: "Este tipo de consagração não leva a um cargo da escada: registre-o como indicação." } };
     return;
   }
   if (conferencia.avaliacao && conferencia.avaliacao.bloqueado) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: ehGeral(usuario) ? conferencia.avaliacao : escada.mascararParaEscopo(conferencia.avaliacao) } };
+    context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: conferencia.avaliacao } };
     return;
   }
 
@@ -150,6 +152,6 @@ module.exports = async function (context, req) {
   context.res = {
     status: 201,
     headers: { "Content-Type": "application/json" },
-    body: { sucesso: true, mensagem: "✅ Processo protocolado e enviado para a Secretaria.", consagracao, alertasFormacao: formacao.alertas, requisitos: ehGeral(usuario) ? conferencia.avaliacao : escada.mascararParaEscopo(conferencia.avaliacao) }
+    body: { sucesso: true, mensagem: "✅ Processo protocolado e enviado para a Secretaria.", consagracao, alertasFormacao: formacao.alertas, requisitos: conferencia.avaliacao }
   };
 };

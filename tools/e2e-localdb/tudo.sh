@@ -59,4 +59,5 @@ bash rodar.sh preparar-escada
 BASE=cenario-escada bash rodar.sh roteiro e2e-51-escada-fluxos.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-52-escada-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-53-escada-corridas.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-54-escada-revisao.js
 echo TUDO-PRONTO

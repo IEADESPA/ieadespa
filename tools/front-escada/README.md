@@ -18,5 +18,6 @@ o protocolo travado e o feito (duplo clique, o formulário que volta à indicaç
 "Escada e veto", o veto e a matrícula de candidato; o que some fora do nível geral), o cadastro (sexo e "no cargo desde"; cargo,
 data e dízimo travados fora do nível geral; a data só vai quando muda) e a data pura de Meus Dados sem o dia a menos.
 
-Resultado de 28/10/2026: 63 verificações, 0 falhas. Duas mutações (tirar o escape do rótulo do requisito; deixar a nomeação do
+Resultado de 28/10/2026: 75 verificações, 0 falhas (com o que a revisão independente da tela pediu: saída da sessão, troca de cargo
+mantendo a data, cargo fora do catálogo, geral só em outra permissão, avanço travado com o nome, clique durante pedido em andamento). Duas mutações (tirar o escape do rótulo do requisito; deixar a nomeação do
 Presidente selecionável fora do nível geral) foram acusadas pelo roteiro.

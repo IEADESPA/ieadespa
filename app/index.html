@@ -1916,11 +1916,12 @@
             </div>
             <div class="input-group">
               <label for="pessoaCargoMinisterial">Cargo Ministerial (escada — Art. 71; muda pela consagração, só o Geral corrige aqui):</label>
-              <select id="pessoaCargoMinisterial"><option value="">Não informado</option></select>
+              <select id="pessoaCargoMinisterial" data-on-change="mudouCargoPessoaAcao"><option value="">Não informado</option></select>
             </div>
             <div class="input-group">
               <label for="pessoaCargoDesde">No cargo desde (só o Geral — conta o interstício, Art. 72):</label>
-              <input type="date" id="pessoaCargoDesde" />
+              <input type="date" id="pessoaCargoDesde" aria-describedby="pessoaCargoDesdeDica" />
+              <small id="pessoaCargoDesdeDica" class="subtitle" aria-live="polite"></small>
             </div>
             <div class="input-group">
               <label>Congregação:</label>
@@ -2490,7 +2491,7 @@
         <h3>Protocolar Processo</h3>
         <form data-on-submit="salvarConsagracao" data-prevent="submit">
           <div class="input-group">
-            <label>Matrícula da pessoa:</label>
+            <label for="consagracaoMatricula">Matrícula da pessoa:</label>
             <input type="number" id="consagracaoMatricula" placeholder="Ex: 15" data-on-input="limparRequisitosEscada" />
           </div>
           <div class="input-group">
@@ -2512,14 +2513,14 @@
             <input type="text" id="consagracaoAto" maxlength="200" />
           </div>
           <div class="input-group">
-            <label>Matrícula do proponente:</label>
+            <label for="consagracaoProponente">Matrícula do proponente:</label>
             <input type="number" id="consagracaoProponente" placeholder="Quem está propondo" />
           </div>
           <button class="btn-confirmar" type="button" data-on-click="conferirRequisitosConsagracaoAcao">🔎 Conferir requisitos</button>
           <button class="btn-confirmar" type="submit">📩 Protocolar</button>
         </form>
-        <p id="resultadoConsagracao"></p>
-        <div id="consagracaoRequisitos" aria-live="polite"></div>
+        <p id="resultadoConsagracao" role="status" aria-live="polite"></p>
+        <div id="consagracaoRequisitos" aria-live="polite" tabindex="-1"></div>
 
         <hr />
         <h3>Esteira Ativa</h3>
@@ -5073,7 +5074,7 @@
           <button type="button" class="cal-pilula ativo" id="btnAfmSecaoMatriculas" aria-pressed="true" data-on-click="afmMostrarSecaoAcao" data-args-click='["matriculas"]'>📋 Matrículas</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoCorpo" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["corpo"]'>🎓 Reitor e docentes</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoMagnas" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["magnas"]'>📅 Sessões Magnas</button>
-          <button type="button" class="cal-pilula" id="btnAfmSecaoEscada" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["escada"]'>🪜 Escada e veto</button>
+          <button type="button" class="cal-pilula" id="btnAfmSecaoEscada" aria-pressed="false" style="display:none;" data-on-click="afmMostrarSecaoAcao" data-args-click='["escada"]'>🪜 Escada e veto</button>
         </div>
         <div id="afmForm"></div>
         <div id="afmSecaoMatriculas">

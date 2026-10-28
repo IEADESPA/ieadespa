@@ -22,16 +22,19 @@ function envenenar(v, chave) {
 const R = envenenar(REAL);
 const TIPOS = [{ nome: "Consagração a Auxiliar", ativo: true }, { nome: "Separação ao Diaconato", ativo: true }, { nome: "Consagração a Pastor", ativo: true }];
 
-function montar({ geral = true } = {}) {
+function montar({ geral = true, gerais } = {}) {
   const amb = criarAmbiente({ semModulo: true });
   amb.ctx.URLSearchParams = URLSearchParams;   // o navegador tem; o contexto da prova, não
   const { ev } = amb;
-  ev(extrair("script.js", ["jsonDaTela", "avisarResultado", "pedirTexto"]), "script.js(extra)");
-  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa"]), "pessoas.js(extraido)");
+  ev(extrair("script.js", ["jsonDaTela", "avisarResultado", "pedirTexto", "geralPara"]), "script.js(extra)");
+  // v8.2: o login diz em quais permissões a sessão é do nível geral (o prelude do ambiente não conhece esta variável)
+  ev(`var authPermissoesGerais = ${JSON.stringify(gerais || (geral ? ["afm", "consagracoes", "pessoas"] : []))};`, "permissoes-gerais");
+  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla"]), "pessoas.js(extraido)");
   ev("async function carregarPessoas() {}", "stub: a lista de pessoas não é desta prova");
   ev(extrair("modulos/meu-painel.js", ["formatarValorLgpd"]), "meu-painel.js(extraido)");
   ev(lerApp("modulos/consagracoes.js"), "consagracoes.js");
   ev(lerApp("modulos/afm.js"), "afm.js");
+  ev("registrarAcoes({ mudouCargoPessoaAcao });", "acoes-pessoas");
   amb.sessao({ matricula: 1002, token: "tok", nivel: geral ? "GLOBAL" : "CONGREGACAO", permissoes: ["afm", "consagracoes", "pessoas"], geral });
   Object.assign(amb.api.rotas, {
     "GET catalogos/tiposConsagracao": { corpo: TIPOS },
@@ -150,12 +153,40 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   const avancar = botoes(amb, "resultadoListaConsagracoes", "avancarConsagracaoAcao");
   ok(avancar.length === R.listaEmAndamento.length && !avancar.some((b) => JSON.parse(b.getAttribute("data-args-click"))[0] === vet.consagracaoId), "o vetado não tem 'Avançar'");
   semAtaque(amb, "esteira");
+  amb.e("abaConsagracoes").style.display = "block";   // a aba aberta (a lista travada só ganha o foco se estiver visível)
   amb.limparRegistro();
   amb.doc.clicar(avancar[0]);
   await amb.responderModal(true);
   await amb.ocioso();
   ok(posts(amb, `consagracoes/${nom.consagracaoId}/evoluir`).length === 1 && /ainda não pode seguir/.test(amb.e("consagracaoRequisitos").textContent), "avanço travado: a lista do que falta aparece");
+  ok(amb.e("consagracaoRequisitos").textContent.includes(nom.nome) && amb.foco() === amb.e("consagracaoRequisitos"), "com o nome de quem é o processo, e a tela vai até ela");
   semAtaque(amb, "avanço travado");
+
+  console.log("== revisão da tela: ocupado, saída, geral só em outra permissão ==");
+  const ret2 = amb.retem((c) => c.chave === "GET escada/requisitos");
+  amb.doc.digitar(amb.e("consagracaoMatricula"), "9204");
+  amb.doc.escolher(amb.e("consagracaoAssunto"), "Separação ao Diaconato");
+  amb.doc.digitar(amb.e("consagracaoProponente"), "1002");
+  amb.limparRegistro();
+  amb.doc.clicar(botaoComTexto(amb, "abaConsagracoes", "Conferir requisitos"));
+  await amb.ocioso();
+  amb.g("salvarConsagracao")();
+  await amb.ocioso();
+  ok(/Aguarde/.test(amb.e("resultadoConsagracao").textContent) && posts(amb, "consagracoes").length === 0, "protocolar com a conferência em andamento: avisa 'Aguarde' (não some o clique)");
+  ret2.liberar();
+  await amb.ocioso();
+  ok(/pode seguir/.test(amb.e("consagracaoRequisitos").textContent), "a conferência volta e mostra a lista");
+  amb.g("limparSessao")();
+  ok(amb.e("consagracaoRequisitos").innerHTML === "" && amb.e("consagracaoMatricula").value === "" && amb.e("resultadoListaConsagracoes").innerHTML === "", "saiu da sessão: a lista de requisitos, o formulário e a esteira somem");
+  amb.sessao({ matricula: 1002, token: "tok", nivel: "GLOBAL", permissoes: ["afm", "consagracoes", "pessoas"], geral: true });
+  amb.ev(`authPermissoesGerais = ${JSON.stringify(["afm", "consagracoes", "pessoas"])};`);
+  const soFin = montar({ geral: true, gerais: ["financeiro"] });
+  await soFin.g("carregarTiposConsagracao")();
+  await soFin.ocioso();
+  ok(opcoes(soFin).filter((o) => o.classList.contains("so-geral-escada")).every((o) => o.hidden && o.disabled), "geral só no financeiro: a nomeação não aparece nas consagrações");
+  await soFin.g("carregarConsagracoes")();
+  await soFin.ocioso();
+  ok(botoes(soFin, "resultadoListaConsagracoes", "avancarConsagracaoAcao").length === 0, "e não ganha 'Avançar'");
 
   console.log("== Academia: CHM, nivelamento, candidatos e veto ==");
   amb.ev('mostrarAbaSecretaria("afm")');
@@ -243,6 +274,27 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   local.g("salvarPessoa")();
   await local.ocioso();
   ok(!("cargoDesde" in posts(local, "pessoas")[0].corpo), "e não envia 'no cargo desde'");
+
+  console.log("== cadastro: troca de cargo, cargo fora do catálogo, geral só em outra permissão ==");
+  amb.g("editarPessoa")(R.pessoa.membroId);
+  ok([...amb.e("pessoaCargoMinisterial").options].some((o) => o.value === R.pessoa.cargoMinisterial) && amb.e("pessoaCargoMinisterial").value === R.pessoa.cargoMinisterial, "cargo que não está na lista: entra como 'fora do catálogo' e não se perde");
+  amb.doc.escolher(amb.e("pessoaCargoMinisterial"), "");
+  ok(amb.e("pessoaCargoDesde").value === "" , "trocou o cargo: a data do cargo antigo some");
+  amb.doc.escolher(amb.e("pessoaCargoMinisterial"), R.pessoa.cargoMinisterial);
+  ok(amb.e("pessoaCargoDesde").value === R.pessoa.cargoDesde && amb.e("pessoaCargoDesdeDica").textContent === "", "voltou ao cargo de antes: a data volta");
+  amb.ev(`document.getElementById("pessoaCargoMinisterial").innerHTML += '<option value="PRESBITERO">Presbítero</option>';`);
+  amb.doc.escolher(amb.e("pessoaCargoMinisterial"), "PRESBITERO");
+  ok(/novo cargo/.test(amb.e("pessoaCargoDesdeDica").textContent), "cargo novo: pede a data do novo cargo");
+  amb.doc.digitar(amb.e("pessoaCargoDesde"), R.pessoa.cargoDesde);
+  amb.limparRegistro();
+  amb.g("salvarPessoa")();
+  await amb.ocioso();
+  p = posts(amb, "pessoas");
+  ok(p.length === 1 && p[0].corpo.cargoMinisterial === "PRESBITERO" && p[0].corpo.cargoDesde === R.pessoa.cargoDesde, "cargo mudou: a data vai mesmo igual à antiga", p[0] && p[0].corpo);
+  const finCad = montar({ geral: true, gerais: ["financeiro"] });
+  finCad.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa }])}; window._cargosCache = [];`);
+  finCad.g("editarPessoa")(R.pessoa.membroId);
+  ok(finCad.e("pessoaCargoMinisterial").disabled && finCad.e("pessoaDizimista").disabled, "geral só no financeiro: cargo e dízimo travados no cadastro");
 
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");

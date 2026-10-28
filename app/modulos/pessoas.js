@@ -97,8 +97,10 @@ async function salvarPessoa() {
   const cargoMinisterial = document.getElementById("pessoaCargoMinisterial").value || null;
   const sexo = document.getElementById("pessoaSexo").value || null;
   // v8.2 — "no cargo desde" só vai quando o Geral mudou a data (sem mudança não regrava o histórico de cargos)
+  // (e também quando o cargo mudou: a data digitada é a do cargo NOVO)
   const campoCargoDesde = document.getElementById("pessoaCargoDesde");
-  const cargoDesde = authGeral && campoCargoDesde.value && campoCargoDesde.value !== (campoCargoDesde.getAttribute("data-original") || "") ? campoCargoDesde.value : null;
+  const cargoMudou = (cargoMinisterial || "") !== (document.getElementById("pessoaCargoMinisterial").getAttribute("data-original") || "");
+  const cargoDesde = geralPara("pessoas") && campoCargoDesde.value && (cargoMudou || campoCargoDesde.value !== (campoCargoDesde.getAttribute("data-original") || "")) ? campoCargoDesde.value : null;
   const telefone = document.getElementById("pessoaTelefone").value.trim() || null;
   const email = document.getElementById("pessoaEmail").value.trim() || null;
   const endereco = document.getElementById("pessoaEndereco").value.trim() || null;
@@ -117,7 +119,9 @@ async function salvarPessoa() {
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
       departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito,
-      estadoCivil, dataAfastamento, motivoSaida, sexo, ...(cargoDesde ? { cargoDesde } : {})
+      estadoCivil, dataAfastamento, motivoSaida, sexo, ...(cargoDesde ? { cargoDesde } : {}),
+      // o cargo que a ficha leu: se uma consagração foi concluída enquanto ela estava aberta, o servidor recusa (409) em vez de desfazer a promoção
+      cargoOriginal: document.getElementById("pessoaCargoMinisterial").getAttribute("data-original") || null
     })
   });
   const data = await res.json();
@@ -149,8 +153,22 @@ async function salvarPessoa() {
 function travarCamposDoGeralPessoa() {
   for (const id of ["pessoaCargoMinisterial", "pessoaCargoDesde", "pessoaDizimista"]) {
     const campo = document.getElementById(id);
-    if (campo) campo.disabled = !authGeral;
+    if (campo) campo.disabled = !geralPara("pessoas");
   }
+}
+
+// O Geral trocou o cargo: a data de entrada mostrada era a do cargo ANTIGO — limpa e pede a do novo (sem ela, a escada mostra "data não informada" depois).
+function mudouCargoPessoaAcao() {
+  const select = document.getElementById("pessoaCargoMinisterial");
+  const data = document.getElementById("pessoaCargoDesde");
+  const dica = document.getElementById("pessoaCargoDesdeDica");
+  if ((select.value || "") === (select.getAttribute("data-original") || "")) {
+    data.value = data.getAttribute("data-original") || "";
+    dica.textContent = "";
+    return;
+  }
+  data.value = "";
+  dica.textContent = select.value ? "O cargo mudou: informe desde quando a pessoa está no novo cargo." : "";
 }
 
 // ---- NAVEGAÇÃO DA ABA PESSOAS (v1.10 — submenu Cadastrar/Buscar + Perfil) ----
@@ -165,8 +183,10 @@ function limparFormPessoa() {
   ["pessoaDataNascimento", "pessoaDataAdmissao", "pessoaDataBatismo", "pessoaDataRitoRecebimento",
     "pessoaDataAfastamento"].forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("pessoaCargoMinisterial").value = "";
+  document.getElementById("pessoaCargoMinisterial").setAttribute("data-original", "");
   document.getElementById("pessoaCargoDesde").value = "";
   document.getElementById("pessoaCargoDesde").setAttribute("data-original", "");
+  document.getElementById("pessoaCargoDesdeDica").textContent = "";
   document.getElementById("pessoaSexo").value = "";
   travarCamposDoGeralPessoa();
   document.getElementById("pessoaCongregacao").selectedIndex = 0;
@@ -782,7 +802,14 @@ function editarPessoa(membroId) {
   document.getElementById("pessoaMotivoSaida").value = pessoa.motivoSaida || "";
   document.getElementById("pessoaDizimista").value = pessoa.dizimistaFiel == null ? "" : String(pessoa.dizimistaFiel);
   document.getElementById("pessoaDepartamento").value = pessoa.departamentoId != null ? String(pessoa.departamentoId) : "";
-  document.getElementById("pessoaCargoMinisterial").value = pessoa.cargoMinisterial || "";
+  // cargo desativado no catálogo (ou catálogo que não carregou): a opção entra só para esta pessoa — senão o salvar mandaria "sem cargo" sem ninguém ter mexido
+  const selectCargo = document.getElementById("pessoaCargoMinisterial");
+  if (pessoa.cargoMinisterial && ![...selectCargo.options].some((o) => o.value === pessoa.cargoMinisterial)) {
+    selectCargo.innerHTML += `<option value="${escaparHtmlEbd(pessoa.cargoMinisterial)}">${escaparHtmlEbd(nomeCargoPorSigla(pessoa.cargoMinisterial))} (fora do catálogo)</option>`;
+  }
+  selectCargo.value = pessoa.cargoMinisterial || "";
+  selectCargo.setAttribute("data-original", pessoa.cargoMinisterial || "");
+  document.getElementById("pessoaCargoDesdeDica").textContent = "";
   document.getElementById("pessoaCargoDesde").value = pessoa.cargoDesde || "";
   document.getElementById("pessoaCargoDesde").setAttribute("data-original", pessoa.cargoDesde || "");
   document.getElementById("pessoaSexo").value = pessoa.sexo || "";
@@ -1663,7 +1690,7 @@ registrarAcoes({
   abrirModalExportarPessoas, abrirPerfilPessoa, aplicarFiltroPessoas, aprovarTodaSolicitacaoAcao, baixarModeloPessoas, baixarPdfCarta, cancelarCarta,
   concederConsentimentoFotoAcao, confirmarCartaPendente, corrigirMarcoMembroAcao, decidirCampoFilaAcao, definirDecisaoImportacao,
   desligarPessoaPerfilAcao, emitirCarta, enviarFotoMembroAcao, excluirApresentacaoCriancaAcao, excluirCasamentoAcao, imprimirCarta,
-  imprimirMinhaCarta, mostrarAbaPerfil, mostrarSubAbaPessoas, mudarPaginaPessoas, prepararImportacaoPessoas, processarSaidasCartas,
+  imprimirMinhaCarta, mostrarAbaPerfil, mostrarSubAbaPessoas, mudarPaginaPessoas, mudouCargoPessoaAcao, prepararImportacaoPessoas, processarSaidasCartas,
   registrarMarcoMembroAcao, registrarRetornoLicencaAcao, removerVinculoFamiliar, salvarApresentacaoCrianca, salvarCasamento,
   salvarLicencaCandidatura, salvarPessoa, salvarVinculoFamiliar, solicitarCarta, voltarBuscaPessoas
 });

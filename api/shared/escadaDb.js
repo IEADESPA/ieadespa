@@ -42,14 +42,14 @@ async function comTravaDaPessoa(pool, membroId, fazer) {
 // O cargo de destino de um tipo de consagração (null: o tipo não mexe no cargo — Integração, Reintegração, texto livre).
 async function cargoDoTipo(pool, assunto) {
   if (typeof assunto !== "string" || !assunto.trim()) return null;
-  const r = await pool.request().input("nome", sql.NVarChar(100), assunto).query(`SELECT TOP 1 CargoMinisterialResultante AS cargo FROM TiposConsagracao WHERE Nome = @nome`);
+  const r = await new sql.Request(pool).input("nome", sql.NVarChar(100), assunto).query(`SELECT TOP 1 CargoMinisterialResultante AS cargo FROM TiposConsagracao WHERE Nome = @nome`);
   const cargo = r.recordset[0] && r.recordset[0].cargo;
   return cargo && escada.ESCADA.includes(cargo) && cargo !== "MEMBRO" ? cargo : null;
 }
 
-// Tudo o que a escada confere sobre a pessoa, numa ida ao banco. null: a pessoa não existe.
-async function dadosDaPessoa(pool, membroId) {
-  const r = await pool.request().input("id", sql.Int, Number(membroId)).query(`
+// Tudo o que a escada confere sobre a pessoa, numa ida ao banco. null: a pessoa não existe. `conexao`: o pool ou a transação (a conclusão relê dentro da trava).
+async function dadosDaPessoa(conexao, membroId) {
+  const r = await new sql.Request(conexao).input("id", sql.Int, Number(membroId)).query(`
     SELECT m.MembroId, m.Status, m.SituacaoMembro, CONVERT(varchar(10), m.DataNascimento, 120) AS DataNascimento, CONVERT(varchar(10), m.DataAdmissao, 120) AS DataAdmissao,
            m.DizimistaFiel, m.Sexo, m.EstadoCivil, m.CargoMinisterial,
            h.Cargo AS HistCargo, CONVERT(varchar(10), h.Desde, 120) AS HistDesde, h.Origem AS HistOrigem,
@@ -88,13 +88,22 @@ async function dadosDaPessoa(pool, membroId) {
   };
 }
 
-// A conferência completa para uma pessoa e um tipo de consagração. { alvo:null } quando o tipo não leva a um cargo da escada.
-async function avaliar(pool, { membroId, assunto, modalidade = "INDICACAO", alvo: alvoDado = null }) {
-  const alvo = alvoDado || (await cargoDoTipo(pool, assunto));
+// A pessoa que sumiu no meio do caminho nunca "passa": a falta do dado trava (revisão independente, 28/10/2026).
+const PESSOA_SUMIU = (alvo, modalidade) => ({ alvo, modalidade, itens: [], bloqueado: true, nivelamento: false, mensagemBloqueio: "Pessoa não encontrada." });
+
+// A conferência completa para uma pessoa e um tipo de consagração. { alvo:null } quando o tipo não leva a um cargo da escada. `conexao`: o pool ou a transação.
+async function avaliar(conexao, { membroId, assunto, modalidade = "INDICACAO", alvo: alvoDado = null, veDisciplina = true }) {
+  const alvo = alvoDado || (await cargoDoTipo(conexao, assunto));
   if (!alvo) return { alvo: null, avaliacao: null };
-  const dados = await dadosDaPessoa(pool, membroId);
-  if (!dados) return { alvo, avaliacao: null, naoExiste: true };
-  return { alvo, dados, avaliacao: escada.avaliarAscensao(dados, alvo, { modalidade, hojeIso: hojeBrasilia() }) };
+  const dados = await dadosDaPessoa(conexao, membroId);
+  if (!dados) return { alvo, naoExiste: true, avaliacao: PESSOA_SUMIU(alvo, modalidade) };
+  return { alvo, dados, avaliacao: escada.avaliarAscensao(dados, alvo, { modalidade, hojeIso: hojeBrasilia(), veDisciplina }) };
+}
+
+// Quem pergunta tem a permissão "disciplina" sobre esta pessoa (o mesmo critério do cadastro: a visão da permissão e o escopo dela)?
+function veDisciplinaDe(usuario, pessoa) {
+  const v = require("./auth").visaoDaPermissao(usuario, "disciplina");
+  return !!v && require("./escopoRotas").noEscopoDaPessoa(v, pessoa && pessoa.congregacaoNome, pessoa && pessoa.extensaoNome);
 }
 
 // Troca o cargo da pessoa e o histórico juntos, dentro da transação `t` (quem chama já tem a trava). Fecha a linha aberta e abre a nova (cargo de oficial) com `desde`.
@@ -171,7 +180,10 @@ async function matricularCandidato(pool, { membroId, nivel, data, por }) {
   const r = await comTravaDaPessoa(pool, membroId, async (t) => {
     const p = (await new sql.Request(t).input("m", sql.Int, Number(membroId)).query(`SELECT Status, SituacaoMembro, CargoMinisterial FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
     if (!p) return NAO_EXISTE;
-    if (p.Status !== "ATIVO") return { sucesso: false, mensagem: "Só membro ativo é matriculado como candidato." };
+    if (Number(membroId) === Number(por)) return { sucesso: false, mensagem: "Ninguém matricula a si mesmo como candidato." };
+    if (p.Status !== "ATIVO" || !estatuto.calcularCapacidadeEleitoral({ situacaoMembro: p.SituacaoMembro, status: p.Status }).emComunhao) {
+      return { sucesso: false, mensagem: "Só membro ativo em plena comunhão é matriculado como candidato (congregado ainda não)." };
+    }
     if (OFICIAIS.has(p.CargoMinisterial)) return { sucesso: false, mensagem: "Esta pessoa já é oficial: a matrícula dela é automática." };
     const ja = await new sql.Request(t).input("m", sql.Int, Number(membroId)).query(`SELECT TOP 1 1 AS x FROM Matriculas_AFM WHERE MembroId = @m`);
     if (ja.recordset.length) return { sucesso: false, mensagem: "Esta pessoa já tem matrícula na AFM." };
@@ -212,10 +224,13 @@ async function vetar(pool, { consagracaoId, motivo, por }) {
   if (!atual) return NAO_EXISTE;
   if (atual.Modalidade !== "INDICACAO") return { sucesso: false, mensagem: "A nomeação direta do Pastor Presidente e a recepção de ministro de outra convenção não estão sujeitas ao veto técnico (Regimento, Art. 66 §4º)." };
   if (Number(atual.MembroId) === Number(por)) return { sucesso: false, mensagem: "Ninguém veta o próprio processo." };
-  const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("motivo", sql.NVarChar(500), motivo).input("por", sql.Int, por)
-    .query(`UPDATE Consagracoes SET Status = N'REPROVADO', DataConclusao = CAST(SYSUTCDATETIME() AS DATE), VetoAFMEm = SYSUTCDATETIME(), VetoAFMPor = @por, VetoAFMMotivo = @motivo
-            WHERE ConsagracaoId = @id AND Modalidade = N'INDICACAO' AND Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO')`);
-  if (!upd.rowsAffected[0]) return MUDOU("Este processo já foi concluído, reprovado ou vetado. Atualize a lista.");
+  // só a indicação a um cargo da escada (Integração, Reintegração e texto livre não são "consagração ou promoção" do Art. 66 §3º)
+  const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("motivo", sql.NVarChar(500), motivo).input("por", sql.Int, por).input("hoje", sql.Date, hojeBrasilia())
+    .query(`UPDATE c SET Status = N'REPROVADO', DataConclusao = @hoje, VetoAFMEm = SYSUTCDATETIME(), VetoAFMPor = @por, VetoAFMMotivo = @motivo
+            FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
+            WHERE c.ConsagracaoId = @id AND c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO')
+              AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL`);
+  if (!upd.rowsAffected[0]) return MUDOU("Este processo já foi concluído, reprovado ou vetado (ou não leva a um cargo da escada). Atualize a lista.");
   await registrarAuditoria({ tabela: "Consagracoes", registroId: Number(atual.MembroId), acao: "AFM_VETO_TECNICO", usuarioId: por, dadosDepois: { consagracaoId, motivo } });
   return { sucesso: true, mensagem: "Veto técnico registrado: a indicação foi encerrada (Regimento, Art. 67 §2º)." };
 }
@@ -230,6 +245,6 @@ async function origensDoCargoAtual(pool) {
 }
 
 module.exports = {
-  ORIGEM_DA_MODALIDADE, comTravaDaPessoa, cargoDoTipo, dadosDaPessoa, avaliar, trocarCargoNaTransacao, sincronizarCadastro, historicoDe,
+  ORIGEM_DA_MODALIDADE, comTravaDaPessoa, cargoDoTipo, dadosDaPessoa, avaliar, veDisciplinaDe, trocarCargoNaTransacao, sincronizarCadastro, historicoDe,
   definirCHM, matricularCandidato, processosVetaveis, vetar, origensDoCargoAtual, dia
 };

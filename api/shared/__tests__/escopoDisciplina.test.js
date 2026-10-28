@@ -29,6 +29,12 @@ jest.mock("../db", () => {
 });
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
+// v8.2 — a escada tem prova própria (escada.test.js e o banco local, e2e-51 a 53): aqui a conferência passa, e o que se prova é o escopo e a gravação
+jest.mock("../escadaDb", () => {
+  const real = jest.requireActual("../escadaDb");
+  const passa = (alvo) => ({ alvo, modalidade: "INDICACAO", itens: [], bloqueado: false, nivelamento: false, mensagemBloqueio: null });
+  return { ...real, avaliar: jest.fn(async (_c, { alvo, assunto }) => { const a = alvo || (assunto === "Diaconato" ? "DIACONO" : null); return { alvo: a, avaliacao: a ? passa(a) : null }; }), veDisciplinaDe: () => true };
+});
 jest.mock("../mediacaoArbitragem", () => ({ registrarAceiteClausulaCompromissoria: jest.fn(async () => 8) }));
 jest.mock("../batismo", () => ({ ...jest.requireActual("../batismo"), registrarAceiteEstatuto: jest.fn(async () => 7) }));
 

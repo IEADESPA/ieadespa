@@ -103,7 +103,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   do Presidente; disciplina com o motivo só ao nível geral; "no cargo desde"; candidato, CHM concedido e revogado no meio do processo; veto técnico; cadastro com cargo e
   dízimo só no nível geral; vacância e minimização; Meus Dados — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-escada`), `e2e-52` (401, PIN, geral sem
   a permissão, Dirigente fora do escopo e sem os atos do geral; lixo em todo campo sem 500 nem mudança no banco) e `e2e-53` (corridas: quatro protocolos, quatro
-  "avançar" na última etapa, vetos contra avanços, "no cargo desde", trocas de cargo, matrículas de candidato e CHM ao mesmo tempo).
+  "avançar" na última etapa, vetos contra avanços, "no cargo desde", trocas de cargo, matrículas de candidato e CHM ao mesmo tempo) e `e2e-54` (o que as revisões
+  independentes pediram: o próprio no cadastro, a ficha velha que não desfaz a promoção, o sexo que não se apaga, a data antes de 2000, a 157 reaplicada sem refazer o
+  preenchimento, o CHM usado na promoção e levado na rematrícula, o teto das obreiras em toda modalidade, veto só em processo de cargo, candidato, data de Brasília,
+  conclusão refeita dentro da trava).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

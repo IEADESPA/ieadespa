@@ -201,7 +201,7 @@ async function alternarMeusDadosLGPD() {
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
       ${linhaLgpd("Função", m.funcao)}
       ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
-      ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? formatarValorLgpd(c.desde, "data") : "início não informado"} a ${c.ate ? formatarValorLgpd(c.ate, "data") : "hoje"})`).join("; "))}
+      ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? String(c.desde).slice(0, 10).split("-").reverse().join("/") : "início não informado"} a ${c.ate ? String(c.ate).slice(0, 10).split("-").reverse().join("/") : "hoje"})`).join("; "))}
       ${linhaLgpd("Departamento", m.departamento)}
       ${linhaLgpd("Dizimista Fiel", m.dizimistaFiel, "bit")}
     </div>

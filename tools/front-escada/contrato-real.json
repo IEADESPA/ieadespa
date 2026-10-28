@@ -25,6 +25,14 @@
           "tecnico": false
         },
         {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
           "chave": "dizimo",
           "rotulo": "Dizimista fiel",
           "artigo": "Art. 72, caput",
@@ -104,6 +112,14 @@
           "tecnico": false
         },
         {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "AVISO",
+          "detalhe": "A Secretaria confere no avanço do processo.",
+          "tecnico": false
+        },
+        {
           "chave": "dizimo",
           "rotulo": "Dizimista fiel",
           "artigo": "Art. 72, caput",
@@ -161,7 +177,7 @@
     "sucesso": true,
     "mensagem": "✅ Processo protocolado e enviado para a Secretaria.",
     "consagracao": {
-      "consagracaoId": "2aff0aec-1b0b-41fe-ad1f-36af594e9f21",
+      "consagracaoId": "a2544685-bde7-4093-b873-809ca97ea0e6",
       "membroId": 9201,
       "nome": "Candidato Auxiliar E2E",
       "cargoAtual": null,
@@ -192,6 +208,14 @@
           "artigo": "Art. 72, caput",
           "situacao": "ATENDE",
           "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "AVISO",
+          "detalhe": "A Secretaria confere no avanço do processo.",
           "tecnico": false
         },
         {
@@ -274,6 +298,14 @@
           "tecnico": false
         },
         {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
           "chave": "dizimo",
           "rotulo": "Dizimista fiel",
           "artigo": "Art. 72, caput",
@@ -337,7 +369,7 @@
   },
   "listaEmAndamento": [
     {
-      "consagracaoId": "dbc56e86-d3e4-4065-9112-20e2c07a8cb3",
+      "consagracaoId": "0a10513e-317d-481b-bd46-328f814ee748",
       "membroId": 9205,
       "nome": "Diacono Nomeado E2E",
       "cargoAtual": null,
@@ -378,8 +410,8 @@
           "podeOficiar": true,
           "motivo": null
         },
-        "chm": true,
-        "chmEm": "2026-01-10",
+        "chm": false,
+        "chmEm": null,
         "nivelamento": false
       },
       {
@@ -450,8 +482,8 @@
           "podeOficiar": true,
           "motivo": null
         },
-        "chm": true,
-        "chmEm": "2026-10-28",
+        "chm": false,
+        "chmEm": null,
         "nivelamento": false
       },
       {
@@ -618,8 +650,8 @@
           "podeOficiar": true,
           "motivo": null
         },
-        "chm": true,
-        "chmEm": "2026-01-10",
+        "chm": false,
+        "chmEm": null,
         "nivelamento": false
       },
       {
@@ -770,7 +802,7 @@
   },
   "listaConsagracoes": [
     {
-      "consagracaoId": "22b479e6-b49f-40e0-be9d-6766b82802a3",
+      "consagracaoId": "78b5e51b-eae2-4d8d-ba15-1ed46572207b",
       "membroId": 9210,
       "nome": "Auxiliar Vetado E2E",
       "cargoAtual": null,
@@ -859,6 +891,14 @@
           "tecnico": false
         },
         {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
           "chave": "dizimo",
           "rotulo": "Dizimista fiel",
           "artigo": "Art. 72, caput",
@@ -924,7 +964,7 @@
     "sucesso": true,
     "itens": [
       {
-        "consagracaoId": "22b479e6-b49f-40e0-be9d-6766b82802a3",
+        "consagracaoId": "78b5e51b-eae2-4d8d-ba15-1ed46572207b",
         "membroId": 9210,
         "nome": "Auxiliar Vetado E2E",
         "congregacao": "Central E2E",

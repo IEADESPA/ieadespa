@@ -27,7 +27,8 @@ const trilhas = require("../shared/trilhas");
 const escada = require("../shared/escada");
 const escadaDb = require("../shared/escadaDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
-const { exigirGeral } = require("../shared/escopoRotas");
+const { exigirGeral, carregarPessoa } = require("../shared/escopoRotas");
+const auth = require("../shared/auth");
 
 const PROXIMA_ETAPA_CONSAGRACAO = {
   PROTOCOLADO: "EM_ANALISE_CONSELHO",
@@ -42,6 +43,7 @@ const SEM_CARGO = ["Integração", "Reintegração"];
 module.exports = async function (context, req) {
   const usuario = exigirGeral(req, context, "consagracoes");
   if (!usuario) return;
+  const sessao = auth.exigirLoginIgnorandoTermos(req, {}) || usuario;   // a sessão inteira (a de cima só tem o nível geral de "consagracoes"): para saber da permissão "disciplina"
 
   const consagracaoId = context.bindingData.consagracaoId;
   const { acao } = req.body || {};
@@ -66,7 +68,8 @@ module.exports = async function (context, req) {
 
   if (acao === "REPROVAR") {
     const reprovou = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId)
-      .query(`UPDATE Consagracoes SET Status = 'REPROVADO', DataConclusao = CAST(SYSUTCDATETIME() AS DATE)
+      .input("hoje", sql.Date, hojeBrasilia())
+      .query(`UPDATE Consagracoes SET Status = 'REPROVADO', DataConclusao = @hoje
               WHERE ConsagracaoId = @id AND Status NOT IN ('CONCLUIDO', 'REPROVADO')`);
     if (afetadas(reprovou) !== 1) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo já foi concluído ou reprovado." } };
@@ -92,9 +95,12 @@ module.exports = async function (context, req) {
 
     // v8.2 — a escada, conferida de novo. Processo de antes da v8.2 (sem cargo de destino gravado) usa o cargo do tipo.
     const modalidade = atual.modalidade || "INDICACAO";
+    const pessoa = await carregarPessoa(pool, atual.membroId);
+    const veDisciplina = escadaDb.veDisciplinaDe(sessao, pessoa);
+    const mostrar = (av) => (veDisciplina ? av : escada.mascararParaEscopo(av));
     const conferencia = await escadaDb.avaliar(pool, { membroId: atual.membroId, assunto: atual.assunto, modalidade, alvo: atual.cargoAlvo || null });
     if (conferencia.avaliacao && conferencia.avaliacao.bloqueado) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: conferencia.avaliacao } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: mostrar(conferencia.avaliacao) } };
       return;
     }
 
@@ -112,21 +118,33 @@ module.exports = async function (context, req) {
       // A etapa só muda se o processo AINDA está na etapa que lemos acima.
       const avancou = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("status", sql.NVarChar(30), novoStatus).input("etapaAtual", sql.NVarChar(30), atual.status)
         .input("retrato", sql.NVarChar(4000), retrato)
-        .query(`UPDATE Consagracoes SET Status = @status, RequisitosRetrato = ISNULL(@retrato, RequisitosRetrato) WHERE ConsagracaoId = @id AND Status = @etapaAtual`);
+        .query(`UPDATE Consagracoes SET Status = @status, RequisitosRetrato = ISNULL(@retrato, RequisitosRetrato) WHERE ConsagracaoId = @id AND Status = @etapaAtual`);   // etapa intermediária
       if (afetadas(avancou) !== 1) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo mudou de etapa enquanto você olhava. Atualize a lista." } };
         return;
       }
     } else {
-      // A conclusão: etapa, Função, cargo e histórico juntos (ou nada).
+      // A conclusão: etapa, Função, cargo e histórico juntos (ou nada). A conferência é REFEITA dentro da trava (revisão independente, 28/10/2026): um CHM revogado ou uma
+      // disciplina aberta entre a conferência de cima e este ponto não deixam o cargo mudar.
       const hoje = hojeBrasilia();
       const r = await escadaDb.comTravaDaPessoa(pool, atual.membroId, async (t) => {
-        const avancou = await new sql.Request(t).input("id", sql.UniqueIdentifier, consagracaoId).input("etapaAtual", sql.NVarChar(30), atual.status).input("retrato", sql.NVarChar(4000), retrato)
-          .query(`UPDATE Consagracoes SET Status = 'CONCLUIDO', DataConclusao = CAST(SYSUTCDATETIME() AS DATE), RequisitosRetrato = ISNULL(@retrato, RequisitosRetrato)
+        let retratoFinal = retrato;
+        if (conferencia.alvo) {
+          const dentro = await escadaDb.avaliar(t, { membroId: atual.membroId, assunto: atual.assunto, modalidade, alvo: conferencia.alvo });
+          if (dentro.avaliacao.bloqueado) return { sucesso: false, requisitos: dentro.avaliacao, mensagem: dentro.avaliacao.mensagemBloqueio };
+          retratoFinal = escada.retrato(dentro.avaliacao, hoje);
+        }
+        const avancou = await new sql.Request(t).input("id", sql.UniqueIdentifier, consagracaoId).input("etapaAtual", sql.NVarChar(30), atual.status).input("retrato", sql.NVarChar(4000), retratoFinal)
+          .input("hoje", sql.Date, hoje)
+          .query(`UPDATE Consagracoes SET Status = 'CONCLUIDO', DataConclusao = @hoje, RequisitosRetrato = ISNULL(@retrato, RequisitosRetrato)
                   WHERE ConsagracaoId = @id AND Status = @etapaAtual`);
         if (afetadas(avancou) !== 1) return { sucesso: false, mudou: true };
         if (!SEM_CARGO.includes(atual.assunto)) {
           if (conferencia.alvo) {
+            // o CHM foi para ESTA mudança de cargo: a próxima indicação pede um novo, "válido e atualizado" (Regimento Art. 67 §1º; Art. 74, I)
+            await new sql.Request(t).input("m", sql.Int, atual.membroId)
+              .query(`UPDATE a SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL FROM Matriculas_AFM a
+                      WHERE a.MembroId = @m AND a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = @m)`);
             await escadaDb.trocarCargoNaTransacao(t, {
               membroId: atual.membroId, cargoNovo: conferencia.alvo, desde: hoje, origem: escadaDb.ORIGEM_DA_MODALIDADE[modalidade] || "CONSAGRACAO",
               consagracaoId, funcao: atual.assunto, por: usuario.membroId
@@ -139,7 +157,9 @@ module.exports = async function (context, req) {
         return { sucesso: true };
       });
       if (!r.sucesso) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: r.mensagem && !r.mudou ? r.mensagem : "Este processo mudou de etapa enquanto você olhava. Atualize a lista." } };
+        context.res = { status: 200, body: r.requisitos
+          ? { sucesso: false, mensagem: r.mensagem, requisitos: mostrar(r.requisitos) }
+          : { sucesso: false, mensagem: r.mensagem && !r.mudou ? r.mensagem : "Este processo mudou de etapa enquanto você olhava. Atualize a lista." } };
         return;
       }
     }

@@ -1235,3 +1235,12 @@ input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda);
 .cons-pendente { color: var(--cor-erro); }
 .rotulo-oculto { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .rotulo-inline { display: inline-flex; gap: 4px; align-items: center; margin-right: 6px; font-size: 0.9rem; }
+/* v8.4 — a credencial digital no Meu Painel (o mesmo desenho do cartão em PDF) */
+.credencial-cartao { max-width: 420px; border: 1px solid var(--cor-borda); border-radius: 12px; overflow: hidden; background: var(--cor-superficie); margin: 8px 0 12px; }
+.credencial-topo { background: #0F1B33; color: #fff; font-weight: 700; font-size: 0.85rem; padding: 8px 12px; border-bottom: 3px solid #D9B34F; }
+.credencial-corpo { display: flex; gap: 10px; align-items: flex-start; padding: 12px; flex-wrap: wrap; }
+.credencial-foto { width: 72px; height: 96px; object-fit: cover; border-radius: 6px; border: 1px solid var(--cor-borda); }
+.credencial-semfoto { display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: var(--cor-texto-suave); }
+.credencial-dados { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.credencial-qr { width: 110px; height: 110px; }
+.credencial-codigo { padding: 6px 12px 10px; font-size: 0.85rem; letter-spacing: 0.04em; }

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Conferir credencial — IEADESPA</title>
+  <!-- v8.4 — página PÚBLICA (sem login) que o QR da credencial abre (Regimento Art. 76 §1º: a situação é a de agora, consultada na Sede). Autônoma de propósito: não
+       carrega o app, não usa cookie nem armazenamento local. Toda regra está em api/VerificarCredencial (o que mostrar, o que esconder). Aqui só se exibe a
+       resposta — sempre com textContent, nunca HTML. -->
+  <link rel="stylesheet" href="verificar.css" />
+</head>
+<body>
+  <header>
+    <h1>IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS — IEADESPA</h1>
+    <p>Conferência da credencial (Identidade Eclesiástica)</p>
+  </header>
+  <main>
+    <div class="cartao">
+      <form id="form" autocomplete="off">
+        <label for="codigo">Código da credencial</label>
+        <input id="codigo" name="codigo" inputmode="text" maxlength="24" placeholder="XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocapitalize="characters" />
+        <p class="dica">O código está impresso na credencial, logo abaixo do QR Code.</p>
+        <button id="botao" type="submit">Conferir</button>
+      </form>
+      <div id="resultado" role="status" aria-live="polite"></div>
+    </div>
+    <footer>A credencial não tem data de validade: esta página mostra a situação de agora. A consulta não exige login e não guarda dados de quem consulta.</footer>
+  </main>
+  <script src="credencial.js"></script>
+</body>
+</html>

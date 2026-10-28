@@ -211,13 +211,19 @@ function moverFormPessoaPara(slotId) {
   document.getElementById(slotId).appendChild(bloco);
 }
 
-const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações" };
+const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais" };
 
 function mostrarSubAbaPessoas(sub) {
   subAbaPessoasAtual = sub;
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
   document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
+  // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere)
+  const credGeral = geralPara("pessoas");
+  if (sub === "credenciais" && !credGeral) sub = "buscar";
+  document.getElementById("subPessoasCredenciais").style.display = sub === "credenciais" ? "block" : "none";
+  document.getElementById("btnSubPessoasCredenciais").style.display = credGeral ? "" : "none";
+  document.getElementById("btnSubPessoasCredenciais").classList.toggle("ativo", sub === "credenciais");
   document.getElementById("subPessoasPerfil").style.display = "none";
   document.getElementById("btnSubPessoasCadastrar").classList.toggle("ativo", sub === "cadastrar");
   document.getElementById("btnSubPessoasBuscar").classList.toggle("ativo", sub === "buscar");
@@ -228,6 +234,7 @@ function mostrarSubAbaPessoas(sub) {
     limparFormPessoa();
   }
   if (sub === "aprovacoes") carregarFilaAprovacoes();
+  if (sub === "credenciais") credCarregarListaAcao();
 }
 
 function voltarBuscaPessoas() {
@@ -1686,11 +1693,136 @@ async function aprovarTodaSolicitacaoAcao(solicitacaoId) {
   if (data.sucesso) carregarFilaAprovacoes();
 }
 
+// ---- v8.4 — CREDENCIAIS (Identidade Eclesiástica; Regimento Art. 76) ----
+// Só a Secretaria Geral emite, emite nova via, cancela e imprime (§2º); o servidor confere (GestaoCredenciais). Toda resposta que chega depois de uma troca de sessão é
+// descartada (authToken).
+const ROTULO_SITUACAO_CREDENCIAL = { VALIDA: "Válida", SUBSTITUIDA: "Substituída", CANCELADA: "Cancelada" };
+let credCache = [];
+let credOcupada = false;
+const credDataBr = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Belem" }) : "");
+
+function credLimparTela() {
+  credCache = [];
+  credOcupada = false;
+  for (const id of ["credLista", "credMinha"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
+  for (const id of ["credResultado", "credMinhaResultado"]) { const el = document.getElementById(id); if (el) el.textContent = ""; }
+  for (const id of ["credMatricula", "credFiltro"]) { const el = document.getElementById(id); if (el) el.value = ""; }
+}
+
+async function credCarregarListaAcao() {
+  const token = authToken;
+  const caixa = document.getElementById("credLista");
+  const res = await fetchProtegido(`${API_BASE}/credenciais`);
+  if (authToken !== token) return;
+  const data = await jsonDaTela(res, caixa, "objeto");
+  if (data === null || authToken !== token) return;
+  credCache = data.itens || [];
+  const msg = document.getElementById("credResultado");
+  if (msg && !msg.textContent) msg.textContent = data.semCredencial ? `${data.semCredencial} membro(s) ativo(s) ainda sem credencial.` : "Todos os membros ativos têm credencial.";
+  credFiltrarAcao();
+}
+
+function credFiltrarAcao() {
+  const caixa = document.getElementById("credLista");
+  const filtro = String((document.getElementById("credFiltro") || {}).value || "").trim().toLowerCase();
+  const itens = credCache.filter((c) => !filtro || String(c.nome || "").toLowerCase().includes(filtro) || String(c.congregacao || "").toLowerCase().includes(filtro));
+  if (!itens.length) { caixa.innerHTML = `<p class='subtitle'>${credCache.length ? "Nenhuma credencial com esse filtro." : "Nenhuma credencial emitida ainda."}</p>`; return; }
+  const mostrados = itens.slice(0, 300);
+  caixa.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Categoria</th><th>Congregação</th><th>Via</th><th>Situação</th><th>Impressão</th><th></th></tr></thead><tbody>`
+    + mostrados.map((c) => {
+      const valida = c.situacao === "VALIDA";
+      const impressao = c.impressaEm ? `impressa em ${escaparHtmlEbd(credDataBr(c.impressaEm))}` : c.impressaoSolicitadaEm ? `<strong>pedida em ${escaparHtmlEbd(credDataBr(c.impressaoSolicitadaEm))}</strong>` : "-";
+      const acoes = valida ? [
+        `<button class="btn-link" data-on-click="credPdfDeAcao" data-args-click="${argsAttr(Number(c.membroId))}">📄 PDF</button>`,
+        c.impressaEm ? "" : `<button class="btn-link" data-on-click="credMarcarImpressaAcao" data-args-click="${argsAttr(Number(c.credencialId), String(c.nome ?? ""))}">Marcar impressa</button>`,
+        `<button class="btn-link" data-on-click="credNovaViaAcao" data-args-click="${argsAttr(Number(c.membroId), String(c.nome ?? ""))}">Nova via</button>`,
+        `<button class="btn-link btn-link-perigo" data-on-click="credCancelarAcao" data-args-click="${argsAttr(Number(c.membroId), String(c.nome ?? ""))}">Cancelar</button>`
+      ].join(" ") : "-";
+      return `<tr>
+        <td>${escaparHtmlEbd(c.nome)}</td><td>${escaparHtmlEbd(c.categoria)}</td><td>${escaparHtmlEbd(c.congregacao || "-")}</td><td>${escaparHtmlEbd(String(c.via))}</td>
+        <td>${escaparHtmlEbd(ROTULO_SITUACAO_CREDENCIAL[c.situacao] || c.situacao)}${!valida && c.motivoEncerramento ? `<br><small>${escaparHtmlEbd(c.motivoEncerramento)}</small>` : ""}</td>
+        <td>${impressao}</td><td class="acoes-inline">${acoes}</td>
+      </tr>`;
+    }).join("") + "</tbody></table>"
+    + (itens.length > mostrados.length ? `<p class="subtitle">Mostrando ${mostrados.length} de ${itens.length}: use o filtro.</p>` : "");
+}
+
+async function credPost(acao, corpo) {
+  const msg = document.getElementById("credResultado");
+  if (credOcupada) { msg.textContent = "Aguarde: o pedido anterior ainda não voltou."; return null; }
+  credOcupada = true;
+  const token = authToken;
+  let data;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/credenciais/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo || {}) });
+    data = await res.json();
+  } finally {
+    credOcupada = false;
+  }
+  if (authToken !== token) return null;
+  msg.textContent = data.mensagem || "";
+  if (data.sucesso) credCarregarListaAcao();
+  return data;
+}
+
+async function credEmitirAcao() {
+  const campo = document.getElementById("credMatricula");
+  if (!campo.value) { document.getElementById("credResultado").textContent = "Informe a matrícula."; return; }
+  const data = await credPost("emitir", { membroId: Number(campo.value) });
+  if (data && data.sucesso) campo.value = "";
+}
+
+async function credEmitirLoteAcao() {
+  if (!(await confirmarAcao("Emitir a credencial para todos os membros ativos em comunhão que ainda não têm? (Gratuita; cada um passa a vê-la no Meu Painel.)", "Emitir"))) return;
+  await credPost("lote", {});
+}
+
+async function credNovaViaAcao(membroId, nome) {
+  const motivo = await pedirTexto(`Motivo da nova via de ${nome} (perda, roubo, foto ou cargo novo) — a via atual deixa de valer na hora`, "");
+  if (!motivo) return;
+  await credPost("nova-via", { membroId: Number(membroId), motivo });
+}
+
+async function credCancelarAcao(membroId, nome) {
+  const motivo = await pedirTexto(`Motivo do cancelamento da credencial de ${nome} — o QR passa a dizer "cancelada"`, "");
+  if (!motivo) return;
+  await credPost("cancelar", { membroId: Number(membroId), motivo });
+}
+
+async function credMarcarImpressaAcao(credencialId, nome) {
+  if (!(await confirmarAcao(`Registrar que a credencial de ${nome} foi impressa pela Secretaria Geral?`, "Registrar"))) return;
+  await credPost("impressa", { credencialId: Number(credencialId) });
+}
+
+// O PDF do cartão (o titular baixa o próprio; a Secretaria Geral, o de qualquer um).
+async function credBaixarPdf(membroId, msgId) {
+  const consulta = membroId ? `?membroId=${encodeURIComponent(String(membroId))}` : "";
+  const res = await fetchProtegido(`${API_BASE}/credenciais/pdf${consulta}`);
+  const msg = document.getElementById(msgId);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    if (msg) msg.textContent = (data && data.mensagem) || "Não foi possível gerar o PDF.";
+    return;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `credencial${membroId ? `-${membroId}` : ""}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function credPdfDeAcao(membroId) { return credBaixarPdf(Number(membroId), "credResultado"); }
+
 registrarAcoes({
   abrirModalExportarPessoas, abrirPerfilPessoa, aplicarFiltroPessoas, aprovarTodaSolicitacaoAcao, baixarModeloPessoas, baixarPdfCarta, cancelarCarta,
   concederConsentimentoFotoAcao, confirmarCartaPendente, corrigirMarcoMembroAcao, decidirCampoFilaAcao, definirDecisaoImportacao,
   desligarPessoaPerfilAcao, emitirCarta, enviarFotoMembroAcao, excluirApresentacaoCriancaAcao, excluirCasamentoAcao, imprimirCarta,
   imprimirMinhaCarta, mostrarAbaPerfil, mostrarSubAbaPessoas, mudarPaginaPessoas, mudouCargoPessoaAcao, prepararImportacaoPessoas, processarSaidasCartas,
   registrarMarcoMembroAcao, registrarRetornoLicencaAcao, removerVinculoFamiliar, salvarApresentacaoCrianca, salvarCasamento,
-  salvarLicencaCandidatura, salvarPessoa, salvarVinculoFamiliar, solicitarCarta, voltarBuscaPessoas
+  salvarLicencaCandidatura, salvarPessoa, salvarVinculoFamiliar, solicitarCarta, voltarBuscaPessoas,
+  // v8.4
+  credEmitirAcao, credEmitirLoteAcao, credFiltrarAcao, credNovaViaAcao, credCancelarAcao, credMarcarImpressaAcao, credPdfDeAcao,
 });

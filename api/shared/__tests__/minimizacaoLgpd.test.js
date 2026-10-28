@@ -27,11 +27,11 @@ describe("diasMinimizacaoExMembro", () => {
 
 describe("minimizarCamposExMembro", () => {
   test("encerra vínculos (Assentos/Lideranca/Cargo e, desde a Trava 6-B, professor e aluno da EBD) antes de zerar os campos operacionais", async () => {
-    const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], []]);
+    const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], [], []]);
     await minimizarCamposExMembro(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
     // 7 de encerrarVinculos (a 4ª, v8.2, fecha o histórico de cargos; a 7ª, v7.6, derruba as sessões abertas) + o UPDATE final + (v8.2) o histórico de cargos apagado
-    // + (v8.3) o texto e as marcas do parecer do CEI apagados + os documentos da indicação apagados
-    expect(chamadas).toHaveLength(11);
+    // + (v8.3) o texto e as marcas do parecer do CEI apagados + (v8.4) a credencial cancelada + (v8.3) os documentos da indicação apagados
+    expect(chamadas).toHaveLength(12);
     expect(chamadas[3].sql).toMatch(/UPDATE CargosMinisteriaisHistorico SET Ate/);
     expect(chamadas[4].sql).toMatch(/UPDATE EbdTurmaProfessores SET Ativo = 0/);
     expect(chamadas[5].sql).toMatch(/UPDATE EbdAlunos SET Ativo = 0/); // saiu da igreja: a matrícula de aluno também se encerra
@@ -45,7 +45,9 @@ describe("minimizarCamposExMembro", () => {
     expect(chamadas[9].sql).toMatch(/Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL/);
     expect(chamadas[9].sql).toMatch(/Recasado = NULL/);
     expect(chamadas[9].sql).not.toMatch(/Resultado\s*=/);   // o resultado e a data do parecer ficam como registro
-    expect(chamadas[10].sql).toMatch(/DELETE a OUTPUT DELETED\.Url FROM AnexosGenericos a/);
-    expect(chamadas[10].sql).toMatch(/N'Consagracoes'/);
+    expect(chamadas[10].sql).toMatch(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);
+    expect(chamadas[10].inputs.m).toBe(42);
+    expect(chamadas[11].sql).toMatch(/DELETE a OUTPUT DELETED\.Url FROM AnexosGenericos a/);
+    expect(chamadas[11].sql).toMatch(/N'Consagracoes'/);
   });
 });

@@ -200,7 +200,7 @@ processos que podem ser vetados.
 
 ### Como ficou (entregue em 28/10/2026)
 
-Migração **157**; regra pura em `api/shared/escada.js`, banco em `api/shared/escadaDb.js`, rota nova `/api/escada/requisitos` (`RequisitosEscada`) e as ações `vetaveis`,
+**Em produção desde 28/10/2026** (merge `9ee1968`; para desfazer: `git revert -m 1 9ee1968`). Migração **157**; regra pura em `api/shared/escada.js`, banco em `api/shared/escadaDb.js`, rota nova `/api/escada/requisitos` (`RequisitosEscada`) e as ações `vetaveis`,
 `chm`, `matricular-candidato` e `vetar` em `/api/afm/<ação>`; `CriarConsagracao`, `EvoluirConsagracao`, `ListarConsagracoes`, `GestaoPessoas`, a vacância e a minimização
 mudaram. Tela: Consagrações (modalidade, "Conferir requisitos", destino e veto na esteira), cadastro (Sexo, "No cargo desde"), Academia (coluna CHM, filtros "Nivelamento
 obrigatório", "Sem CHM" e "Candidatos", seção **Escada e veto**), Meus Dados (histórico de cargos). Casca do service worker **v43**. O login passou a dizer em quais

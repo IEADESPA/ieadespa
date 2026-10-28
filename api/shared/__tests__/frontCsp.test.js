@@ -312,9 +312,22 @@ if (typeof describe === "function") {
       expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
     });
 
-    test("service-worker: cache novo (v44), eventos.js e todos os módulos na casca offline", () => {
+    // v8.4 — a página pública da credencial (o QR abre): mesmas regras da de certificados — só o próprio script, nenhum estilo ou evento em linha, nada perigoso.
+    test("credencial.html e credencial.js (página pública do QR): só credencial.js e verificar.css, zero evento ou script em linha", () => {
+      const html = ler("credencial.html");
+      const tags = tagsDoHtml(html);
+      expect(tags.filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor)).toEqual(["credencial.js"]);
+      expect(tags.filter(t => t.nome === "style")).toEqual([]);
+      expect(tags.filter(t => t.attrs.some(a => a.nome === "style" || /^on/.test(a.nome) || /^data-on-/.test(a.nome)))).toEqual([]);
+      expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "verificar.css"))).toBe(true);
+      const analise = analisarScript("credencial.js", ler("credencial.js"));
+      expect(analise.problemas || []).toEqual([]);
+      expect(ler("credencial.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
+    });
+
+    test("service-worker: cache novo (v45), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v44";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v45";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });

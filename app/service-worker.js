@@ -38,7 +38,9 @@
 // (CHM, candidatos, nivelamento e a seção "Escada e veto"), Meus Dados (histórico de cargos; data pura sem o dia a menos) e o estilo da lista de requisitos.
 // v44 (28/10/2026): v8.3 — Consagração e documentação: Consagrações (documentos da indicação, pareceres do CEI, homologação em lote, taxa, cerimônias com a
 // Comissão de Unção, o roteiro, os diplomas e a presença), o CHM com o link do certificado na Academia e os processos de consagração em Meus Dados.
-const CACHE_NOME = "ieadespa-app-shell-v44";
+// v45 (28/10/2026): v8.4 — Credencial digital: "Minha Credencial" no Meu Painel (o cartão com o QR, o PDF e o pedido de impressão) e a sub-aba Credenciais da
+// Pessoas (só a Secretaria Geral). A página pública do QR (credencial.html) não entra na casca: é autônoma, como a verificar.html.
+const CACHE_NOME = "ieadespa-app-shell-v45";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/enquetes.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {
@@ -67,6 +69,8 @@ self.addEventListener("fetch", (evento) => {
   // vezes compartilhado) não deve guardá-lo. Também nunca cai no index.html
   // quando offline: melhor o erro do navegador do que o app no lugar dela.
   if (url.pathname === "/verificar.html") return;
+  // v8.4 — a página do QR da credencial também passa direto: o endereço leva o código de segurança, que não pode ficar guardado no aparelho de quem leu (revisão independente)
+  if (url.pathname === "/credencial.html" || url.pathname === "/credencial.js") return;
 
   evento.respondWith(
     fetch(evento.request)

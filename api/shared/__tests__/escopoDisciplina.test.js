@@ -415,7 +415,12 @@ describe("EvoluirProcedimentoAbandono", () => {
       expect(registrarAuditoria).not.toHaveBeenCalled();
       // a mesma transação para tudo, e confirmada
       expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
-      for (const c of escritas()) expect(c.transacao).toBe(1);
+      // v8.4: o recolhimento da credencial é a única escrita de fora — depois do commit, de propósito (melhor esforço; o QR já mostra "inativa")
+      for (const c of escritas().filter((x) => !/CredenciaisEclesiasticas/.test(x.sql))) expect(c.transacao).toBe(1);
+      const recolhe = rodou(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);
+      expect(recolhe).toHaveLength(1);
+      expect(recolhe[0].transacao).toBeNull();
+      expect(recolhe[0].inputs).toMatchObject({ m: 40 });
       expect(rodou(/FROM ProcedimentosAbandono WITH \(UPDLOCK, HOLDLOCK\)/)[0].transacao).toBe(1);
       expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
       // a vacância recebe um "pool" cujo request() roda DENTRO da transação

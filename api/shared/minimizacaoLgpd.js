@@ -43,6 +43,8 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
     UPDATE p SET Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL, EscrutinioFundamento = NULL, EscrutinioDocumental = NULL, Recasado = NULL, CasamentoAtualEstavel = NULL,
                  SabatinaVidaPregressa = NULL, SabatinaFinanceira = NULL, SabatinaDoutrina = NULL
     FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id`);
+  // v8.4 — o recolhimento da credencial (Regimento Art. 95 §2º, IV, a): a via válida é cancelada (o QR passa a dizer "cancelada").
+  await require("./credencialDb").cancelarNoDesligamento(pool, membroId, motivo || "Desligamento");
   // A cópia dos documentos pessoais da indicação (Art. 74, II) não é registro que o Regimento mande guardar: sai do banco e do armazenamento.
   const docs = await pool.request().input("id", sql.Int, membroId).query(`
     DELETE a OUTPUT DELETED.Url FROM AnexosGenericos a JOIN Consagracoes c ON c.Numero = a.RegistroId WHERE a.Tabela = N'Consagracoes' AND c.MembroId = @id`);

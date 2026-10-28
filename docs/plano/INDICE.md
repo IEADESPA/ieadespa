@@ -204,14 +204,14 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 
 ## FASE 8 — Ministerial (AFM)
 
-Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 14/29 concluídos.
+Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 17/29 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | v8.1 | [AFM (Academia de Formação Ministerial) e CLI: comparecimento e perda de assento (a antiga v7.9)](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79) | ✅ 8/8 |
 | v8.2 | [Escada ministerial e ascensão](fase-8-ministerial-afm.md#v82--escada-ministerial-e-ascensão) | ✅ 3/3 |
 | v8.3 | [Consagração e documentação](fase-8-ministerial-afm.md#v83--consagração-e-documentação) | ✅ 3/3 |
-| v8.4 | [Credencial digital com QR Code](fase-8-ministerial-afm.md#v84--credencial-digital-com-qr-code) | ⬜ 0/3 |
+| v8.4 | [Credencial digital com QR Code](fase-8-ministerial-afm.md#v84--credencial-digital-com-qr-code) | ✅ 3/3 |
 | 🔒 8-A | [antes de avançar para a v8.5](fase-8-ministerial-afm.md#-trava-de-revisão-8-a--antes-de-avançar-para-a-v85) | — |
 | v8.5 | [Trilha de discipulado como entidade de primeira classe *(7ª rodada)*](fase-8-ministerial-afm.md#v85--trilha-de-discipulado-como-entidade-de-primeira-classe-7ª-rodada) | ⬜ 0/4 |
 | v8.6 | [Educação continuada e requisito verificável de promoção *(7ª rodada)*](fase-8-ministerial-afm.md#v86--educação-continuada-e-requisito-verificável-de-promoção-7ª-rodada) | ⬜ 0/4 |

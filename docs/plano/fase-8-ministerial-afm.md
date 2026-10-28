@@ -280,7 +280,7 @@ concluído; seção nova **Cerimônias** (criar, comissão, incluir candidatos, 
 
 ### Como ficou a v8.3 (entregue em 28/10/2026)
 
-Migração **158**; regra pura em `api/shared/consagracao.js`, banco em `api/shared/consagracaoDb.js`, rotas novas `/api/esteira-consagracao/<ação>` (`EsteiraConsagracao`:
+**Em produção desde 28/10/2026** (merge `83994c8`; para desfazer: `git revert -m 1 83994c8`). Migração **158**; regra pura em `api/shared/consagracao.js`, banco em `api/shared/consagracaoDb.js`, rotas novas `/api/esteira-consagracao/<ação>` (`EsteiraConsagracao`:
 fila e parecer do CEI, reuniões da CLI, homologação, taxa) e `/api/cerimonias-consagracao/<ação>` (`CerimoniasConsagracao`); a página dos documentos em
 `api/shared/pdfDocumentoMinisterial.js`. "Avançar" passou a ser "Enviar ao CEI" nos processos que levam a cargo (e só com a foto e um documento); os de Integração e
 Reintegração seguem a esteira antiga. Tela: a aba Consagrações também para quem só tem `cei` (vê só os pareceres); cerimônias só no nível geral. Casca do service worker
@@ -318,9 +318,59 @@ respostas reais gravadas pelo `e2e-55`) 98, com três mutações acusadas; as ou
 
 ## v8.4 — Credencial digital com QR Code
 
-- [ ] Identidade Eclesiástica digital (Art. 76 Regimento).
-- [ ] Validação de status Ativo/Inativo via QR Code em tempo real.
-- [ ] Emissão centralizada na Secretaria Geral (anti-fraude).
+- [x] Identidade Eclesiástica digital (Art. 76 Regimento).
+- [x] Validação de status Ativo/Inativo via QR Code em tempo real.
+- [x] Emissão centralizada na Secretaria Geral (anti-fraude).
+
+### Desenho da v8.4 (contrato, 28/10/2026)
+
+Base legal: Regimento Art. 76 (credencial digital, QR, sem validade impressa, gratuita, impressão só na Secretaria Geral); Art. 69 §3º e 77 (credencial suspensa do
+obreiro inativo e reativada na volta); Art. 95 §2º, IV, a (exclusão: recolhimento da credencial); Art. 10 (Credencial Ministerial na diplomação).
+
+**1. A credencial.** Cada membro tem no máximo **uma credencial válida**, com um **código de segurança** de 16 caracteres (o mesmo tipo de código dos certificados
+da v6.9: não se adivinha) que vai no QR. Ela não tem data de validade (Art. 76 §1º): quem a lê vê a situação **de agora**, consultada no banco na hora. Perdeu, foi
+roubada, mudou a foto ou o cargo: a Secretaria **emite uma nova via** e a anterior deixa de valer na mesma hora (o QR antigo passa a dizer "credencial substituída").
+
+**2. Quem emite (Art. 76 §2º, anti-fraude).** Só a **Secretaria Geral** (nível geral da permissão `pessoas`) emite, reemite, cancela e gera o PDF para impressão; a
+congregação não emite nem imprime. Emissão em lote para todos os membros ativos que ainda não têm. A pessoa vê a própria credencial digital no **Meu Painel** (com o QR e
+a foto do cadastro), baixa o PDF e pode **pedir a impressão** — o pedido aparece na lista da Secretaria, que registra quando imprimiu. Gratuita: nenhuma taxa.
+
+**3. O que o QR mostra (página pública, sem login).** Só o necessário para conferir quem está na frente: nome, se é **membro** ou **obreiro** (com o cargo), a
+congregação, e a situação: **Ativa** ou **Inativa** — e, para obreiro, **Habilitado** (pode oficiar) ou **Obreiro inativo** (Art. 69 §3º: matrícula da AFM inativa, ou
+afastado). Nunca o motivo, a matrícula, a foto nem dado de contato. Credencial substituída ou cancelada diz isso. Membro desligado ou excluído: "Inativa" (o
+recolhimento do Art. 95 §2º, IV, a vira automático). Limite de consultas por origem, como a verificação de certificados.
+
+**4. Onde aparece.** Meu Painel: "Minha credencial". Pessoas (nível geral): a seção **Credenciais** — emitir, emitir em lote, nova via, cancelar, PDF para impressão e os
+pedidos de impressão. A página pública `credencial.html`.
+
+### Como ficou a v8.4 (entregue em 28/10/2026)
+
+Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
+crédito, para a impressora de PVC) em `api/shared/pdfCredencial.js`; rotas `/api/credenciais/<ação>` (`GestaoCredenciais`) e a pública
+`/api/verificacao-credencial/{código}` (`VerificarCredencial`, com limite de 30 leituras por minuto por origem); a página `app/credencial.html` (autônoma, como a de
+certificados, e fora do cache do aparelho: o endereço leva o código). Tela: "Minha Credencial" no Meu Painel e a sub-aba **Credenciais** da Pessoas (só o nível geral).
+Casca do service worker **v45**.
+
+**O que mudou depois da revisão independente** (2 altos, 6 médios, 9 baixos — tratados):
+
+- **A disciplina não muda o cadastro** (Status e Situação continuam "ativo"): por isso a credencial lê o próprio processo. Exclusão em vigor e Disciplina Rigorosa em
+  vigor deixam a credencial **inativa** (sem dizer por quê); a exclusão homologada, o desligamento registrado e o abandono **recolhem** a credencial na hora (a via fica
+  "cancelada"). Exclusão ainda pendente de homologação do CEI não vale. O **recurso não suspende a pena**: o obreiro suspenso continua inativo até o recurso ser julgado.
+- **O lote não desfaz o cancelamento**: só emite para quem nunca teve credencial (a cancelada à mão só volta pela emissão individual), só para adultos, 60 por clique.
+- **Licença** (inclusive a de candidatura): a pessoa continua membro ativo; o obreiro fica sem licença para oficiar enquanto ela durar.
+- A lista da Secretaria tem **busca no servidor** (nome ou matrícula): nenhuma credencial fica fora do alcance, por maior que seja a igreja.
+- O PDF só usa a foto que está no cadastro (a retirada por consentimento não volta pelo arquivo que sobrou). Datas de emissão em horário de Brasília. A página do QR não
+  fica guardada no aparelho de quem leu. Sem desvio para tela em branco na Pessoas; o PDF de uma sessão não baixa depois da saída.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** uma credencial só para membro e obreiro (a categoria diz o cargo); processo
+disciplinar **apenas aberto** não aparece no QR (só a sanção aplicada ou o afastamento cautelar suspendem o obreiro — presunção de inocência); a página pública mostra
+nome, categoria, congregação e o número da via; o **lote é só para adultos** (o menor recebe pela emissão individual, a pedido da família); a credencial é **recolhida**
+na exclusão, no desligamento e no abandono, mas na Disciplina Rigorosa só fica inativa enquanto ela durar; a credencial do obreiro volta a "habilitado" quando a
+suspensão temporária termina, como o sistema já fazia — o Art. 77 ("não devolve automaticamente a função") hoje só é aplicado à Disciplina Rigorosa, que exige a Prova
+de Reintegração.
+
+**Provas:** jest 6.151 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 159): `e2e-59` fluxos, segurança e lixo 68, `e2e-60` corridas 9; tela
+(`tools/front-credencial`, com as respostas reais gravadas pelo `e2e-59`) 42, com três mutações acusadas.
 
 ## 🔒 Trava de Revisão 8-A — antes de avançar para a v8.5
 

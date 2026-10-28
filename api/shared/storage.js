@@ -81,6 +81,16 @@ async function excluirFoto(membroId) {
   }
 }
 
+// v8.4 — a foto do cadastro em bytes, para o PDF da credencial. Best-effort: sem foto (ou sem o Storage), o cartão sai com o espaço da foto em branco.
+async function lerFoto(membroId) {
+  try {
+    // prazo curto: o PDF não espera as novas tentativas do Storage fora do ar
+    return await getContainerClient(CONTAINER_FOTOS).getBlockBlobClient(`membro-${Number(membroId)}`).downloadToBuffer(undefined, undefined, { abortSignal: AbortSignal.timeout(5000) });
+  } catch (e) {
+    return null;
+  }
+}
+
 // Documentos institucionais (v2.9) — catálogo de REFERÊNCIA a arquivos que já
 // existem (ata já assinada fora do sistema, termo escaneado etc.), nunca
 // editados aqui. Nome de blob único (timestamp + aleatório) porque, ao
@@ -152,4 +162,4 @@ async function salvarJsonPrivadoSe(nomeBlob, objeto, etag) {
   }
 }
 
-module.exports = { salvarFoto, excluirFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };
+module.exports = { salvarFoto, excluirFoto, lerFoto, urlComSas, salvarDocumento, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };

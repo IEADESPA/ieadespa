@@ -37,6 +37,10 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
             WHERE MembroId = @id`);
   // v8.2 — o histórico de cargos é registro eclesiástico de consagração: sai com a minimização (Regimento Art. 132 §2º, II).
   await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id`);
+  // v8.3 — o texto do parecer do CEI (a fundamentação e a exceção do Pastor não casado falam da vida conjugal e pregressa) sai; o resultado e a data ficam como registro.
+  await pool.request().input("id", sql.Int, membroId).query(`
+    UPDATE p SET Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL FROM PareceresCEIConsagracao p
+    JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id`);
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

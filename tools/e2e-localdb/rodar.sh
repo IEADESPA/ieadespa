@@ -95,6 +95,8 @@ case "$1" in
     cd "$AQUI"
     $PS bases.ps1 restaurar cenario-afm | tail -1
     node -r ./shim-mssql.js aplicar-migracao.js 157 2 2>&1 | tail -2
+    # v8.3 (Consagração e documentação): a 158 também, duas vezes — os roteiros da escada passam pela esteira nova (CEI, homologação, taxa, cerimônia); e2e-55 a e2e-58
+    node -r ./shim-mssql.js aplicar-migracao.js 158 2 2>&1 | tail -2
     $PS bases.ps1 salvar cenario-escada | tail -1
     ;;
   roteiro)

@@ -1,6 +1,7 @@
 // e2e-53-escada-corridas.js — v8.2 (Escada ministerial): corridas de verdade (N processos node, cada um com a sua conexão ao SQL Server) sobre a base "cenario-escada".
-// Quatro protocolos da mesma pessoa ao mesmo tempo: um processo; quatro "avançar" na última etapa: uma conclusão, um cargo, uma linha aberta no histórico; dois vetos e dois
-// "avançar" na última etapa da mesma indicação: ou vetado e o cargo não muda, ou concluído e sem veto — nunca os dois; quatro "no cargo desde" diferentes ao mesmo tempo: uma
+// Quatro protocolos da mesma pessoa ao mesmo tempo: um processo; quatro envios ao CEI: um; quatro registros da mesma cerimônia (v8.3): uma conclusão, um cargo, uma linha
+// aberta no histórico, um diploma; dois vetos e dois registros da cerimônia da mesma indicação: ou vetado e o cargo não muda, ou concluído e sem veto — nunca os dois;
+// quatro "no cargo desde" diferentes ao mesmo tempo: uma
 // linha aberta; quatro matrículas do mesmo candidato: uma; quatro CHM ao mesmo tempo: um estado só; quatro trocas de cargo pelo cadastro: uma linha aberta, do cargo final.
 // Cada processo filho roda este mesmo arquivo com o primeiro argumento "filho".
 process.env.AUTH_SECRET = "segredo-das-corridas-da-escada-" + "x".repeat(24);
@@ -18,6 +19,7 @@ async function filho() {
   try {
     if (spec.tipo === "protocolar") res = await E.protocolar(spec.corpo);
     else if (spec.tipo === "avancar") res = await E.evoluir(spec.id, "AVANCAR");
+    else if (spec.tipo === "registrar") res = await E.cerimonias("registrar", spec.corpo);   // v8.3: a conclusão é o registro da cerimônia
     else if (spec.tipo === "pessoa") res = await E.salvarPessoa(spec.membroId, spec.mudancas);
     else res = await E.afmPost(spec.tipo, spec.corpo);
     const b = res.body || {};
@@ -53,26 +55,36 @@ async function principal() {
   ok(rs.filter((x) => x.status === 201).length === 1 && rs.filter((x) => x.status === 409).length === 3, "um protocolo (201) e três 409", rs.map((x) => x.status));
   ok((await escalar("SELECT COUNT(*) FROM Consagracoes WHERE MembroId = @m AND Status IN ('PROTOCOLADO','EM_ANALISE_CONSELHO','AGUARDANDO_PLENARIO')", { m: P.missionario })) === 1, "um processo em andamento");
 
-  console.log("== quatro 'avançar' na última etapa ==");
+  console.log("== quatro 'enviar ao CEI' do mesmo processo ==");
   const idM = await escalar("SELECT ConsagracaoId FROM Consagracoes WHERE MembroId = @m AND Status = 'PROTOCOLADO'", { m: P.missionario });
-  await E.evoluir(idM, "AVANCAR"); await E.evoluir(idM, "AVANCAR");
   rs = await disparar(Array.from({ length: 4 }, () => ({ tipo: "avancar", id: idM })));
   ok(semErro(rs), "nenhum erro", rs);
+  ok(rs.filter((x) => x.sucesso === true).length === 1 && (await E.statusDe(idM)) === "EM_ANALISE_CONSELHO", "um envio", rs.map((x) => [x.status, x.sucesso]));
+
+  console.log("== quatro registros da mesma cerimônia (a conclusão da v8.3) ==");
+  await E.parecer(idM); await E.homologar(idM); await E.pagarTaxa(idM);
+  const ceM = await E.novaCerimonia();
+  await E.cerimonias("incluir", { cerimoniaId: ceM, ids: [idM] });
+  rs = await disparar(Array.from({ length: 4 }, () => ({ tipo: "registrar", corpo: { cerimoniaId: ceM, presentes: [idM] } })));
+  ok(semErro(rs), "nenhum erro", rs);
   ok(rs.filter((x) => x.sucesso === true).length === 1, "uma conclusão", rs.map((x) => [x.status, x.sucesso]));
+  ok((await escalar("SELECT COUNT(*) FROM CertificadosEmitidos WHERE MembroId = @m AND Natureza = 'DIPLOMA'", { m: P.missionario })) === 1, "um diploma");
   ok((await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = @m", { m: P.missionario })) === "DIACONO", "cargo DIACONO");
   let h = await aberta(P.missionario);
   ok(h.length === 1 && h[0].Cargo === "DIACONO" && h[0].Desde === hoje, "uma linha aberta (Diácono, hoje)", h);
   ok((await escalar("SELECT COUNT(*) FROM CargosMinisteriaisHistorico WHERE MembroId = @m AND Cargo = 'MISSIONARIO' AND Ate IS NOT NULL", { m: P.missionario })) === 1, "a de Missionário fechou uma vez");
 
-  console.log("== dois vetos e dois 'avançar' na mesma indicação ==");
+  console.log("== dois vetos e dois registros da cerimônia da mesma indicação ==");
   let r = await E.protocolar({ membroId: P.vetado, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 });
   const idV = r.body.consagracao.consagracaoId;
-  await E.evoluir(idV, "AVANCAR"); await E.evoluir(idV, "AVANCAR");
+  await E.evoluir(idV, "AVANCAR"); await E.parecer(idV); await E.homologar(idV); await E.pagarTaxa(idV);
+  const ceV = await E.novaCerimonia();
+  await E.cerimonias("incluir", { cerimoniaId: ceV, ids: [idV] });
   rs = await disparar([
     { tipo: "vetar", corpo: { consagracaoId: idV, motivo: "Reprovou na avaliação regimental (corrida)" } },
-    { tipo: "avancar", id: idV },
+    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV] } },
     { tipo: "vetar", corpo: { consagracaoId: idV, motivo: "Reprovou na avaliação regimental (corrida)" } },
-    { tipo: "avancar", id: idV }
+    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV] } }
   ]);
   ok(semErro(rs), "nenhum erro", rs);
   const cv = await um("SELECT Status, VetoAFMEm FROM Consagracoes WHERE ConsagracaoId = @id", { id: idV });

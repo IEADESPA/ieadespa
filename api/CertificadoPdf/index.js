@@ -17,6 +17,7 @@ const { getPool } = require("../shared/db");
 const certificados = require("../shared/certificados");
 const { novoDocumento, cabecalhoInstitucional, rodapeInstitucional, gerarBuffer, MARINHO, CINZA } = require("../shared/pdfInstitucional");
 const { desenharQrNoPdf } = require("../shared/certificadoQr");
+const { desenharDocumentoMinisterial } = require("../shared/pdfDocumentoMinisterial");
 
 function fmtData(valor) {
   if (!valor) return null;
@@ -46,13 +47,29 @@ async function gerar(context, usuario) {
 
   const pool = await getPool();
   const certificado = await certificados.buscarCertificadoPorId(pool, certificadoId);
-  const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId);
+  const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId, certificado.natureza);
   if (!certificados.podeAcessarCertificado(certificado, { membroIdSolicitante: usuario.membroId, temGestao })) {
     context.res = { status: 404, body: { sucesso: false, mensagem: "Certificado não encontrado." } };
     return;
   }
 
   const doc = novoDocumento({ titulo: `CERTIFICADO — ${certificado.titulo}` });
+  // v8.3 — CHM e diploma de consagração: página própria (cabeçalho, texto e assinaturas do documento ministerial).
+  if (certificado.natureza) {
+    desenharDocumentoMinisterial(doc, {
+      natureza: certificado.natureza, nome: certificado.nome, membroId: certificado.membroId, titulo: certificado.titulo, descricao: certificado.descricao || "",
+      revogadoEm: certificado.revogadoEm ? fmtData(certificado.revogadoEm) || "—" : null, codigo: certificado.codigoVerificacao,
+      rodape: `Protocolo ${certificado.protocolo} — emitido em ${fmtData(certificado.dataEmissao) || "—"} — documento gerado eletronicamente pelo sistema de governança da IEADESPA.`
+    });
+    const bufferMinisterial = await gerarBuffer(doc);
+    context.res = {
+      status: 200,
+      headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${certificado.natureza === "CHM" ? "chm" : "diploma"}-${certificado.certificadoId}.pdf"` },
+      body: bufferMinisterial,
+      isRaw: true
+    };
+    return;
+  }
   cabecalhoInstitucional(doc);
 
   doc.fontSize(18).font("Helvetica-Bold").text("CERTIFICADO", { align: "center" }).moveDown(certificado.revogadoEm ? 0.5 : 1.5);

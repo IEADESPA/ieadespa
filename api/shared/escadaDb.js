@@ -24,6 +24,8 @@ const OFICIAIS = new Set(afm.CARGOS_OFICIAIS);
 async function fecharTransacao(transaction, ok) {
   try { if (ok) await transaction.commit(); else await transaction.rollback(); } catch (e) { /* a transação já pode ter sido encerrada pelo servidor */ }
 }
+// v8.3 — para quem espera um "pool" (pool.request()) trabalhar dentro da transação `t` (shared/certificados.emitirCertificado, shared/protocolo).
+const naTransacao = (t) => ({ request: () => new sql.Request(t) });
 // `fazer(transaction)` dentro de uma transação com a trava da pessoa. Sem a trava (espera esgotada) devolve "mudou".
 async function comTravaDaPessoa(pool, membroId, fazer) {
   const transaction = new sql.Transaction(pool);
@@ -157,21 +159,43 @@ async function historicoDe(pool, membroId) {
 
 // ============================== AFM: CHM, candidato e veto ==============================
 
+// O documento do CHM deixa de valer (revogado ou usado numa subida). Dentro da transação `t`; não faz nada se já estava revogado.
+async function revogarDocumentoCHM(t, certificadoId, motivo, por) {
+  if (!certificadoId) return;
+  await new sql.Request(t).input("id", sql.Int, Number(certificadoId)).input("motivo", sql.NVarChar(300), motivo).input("por", sql.Int, por || null)
+    .query(`UPDATE CertificadosEmitidos SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = @motivo, RevogadoPorMembroId = @por
+            WHERE CertificadoId = @id AND RevogadoEm IS NULL AND Natureza = N'CHM'`);
+}
+
 // Concede (com a data) ou revoga o CHM da matrícula atual. Matrícula inativa não recebe CHM (a credencial está suspensa — Art. 69 §3º).
+// v8.3 — o CHM é um documento de verdade (Art. 67): conceder emite o certificado com QR e código de verificação; revogar (ou conceder de novo, com outra data) revoga o
+// documento anterior. Tudo numa transação, sob a trava da pessoa.
 async function definirCHM(pool, { membroId, conceder, data, por }) {
-  const r = await pool.request().input("m", sql.Int, Number(membroId))
-    .query(`SELECT TOP 1 MatriculaId, StatusMatricula, CertificadoHabilitacao, CONVERT(varchar(10), CHMEm, 120) AS CHMEm FROM Matriculas_AFM WHERE MembroId = @m ORDER BY MatriculaId DESC`);
-  const mat = r.recordset[0];
-  if (!mat) return { sucesso: false, mensagem: "Esta pessoa não tem matrícula na AFM." };
-  if (conceder && mat.StatusMatricula === "INATIVA") return { sucesso: false, mensagem: "A matrícula está inativa: o CHM só depois da nova matrícula com a reciclagem (Regimento, Art. 69 §3º)." };
-  if (!conceder && !mat.CertificadoHabilitacao) return { sucesso: false, mensagem: "Esta pessoa não tem CHM para revogar." };
-  const upd = await pool.request().input("id", sql.Int, mat.MatriculaId).input("c", sql.Bit, conceder ? 1 : 0).input("d", sql.Date, conceder ? data : null).input("por", sql.Int, conceder ? por : null)
-    .query(`UPDATE a SET CertificadoHabilitacao = @c, CHMEm = @d, CHMPor = @por FROM Matriculas_AFM a
-            WHERE a.MatriculaId = @id AND NOT EXISTS (SELECT 1 FROM Matriculas_AFM a2 WHERE a2.MembroId = a.MembroId AND a2.MatriculaId > a.MatriculaId)`);
-  if (!upd.rowsAffected[0]) return MUDOU("A matrícula mudou enquanto isso. Atualize a tela.");
-  await registrarAuditoria({ tabela: "Matriculas_AFM", registroId: mat.MatriculaId, acao: conceder ? "AFM_CHM_CONCEDIDO" : "AFM_CHM_REVOGADO", usuarioId: por,
-    dadosAntes: { chm: !!mat.CertificadoHabilitacao, chmEm: mat.CHMEm }, dadosDepois: { chm: !!conceder, chmEm: conceder ? data : null } });
-  return { sucesso: true, mensagem: conceder ? "CHM concedido (Regimento, Art. 67)." : "CHM revogado." };
+  const r = await comTravaDaPessoa(pool, membroId, async (t) => {
+    const mat = (await new sql.Request(t).input("m", sql.Int, Number(membroId))
+      .query(`SELECT TOP 1 MatriculaId, StatusMatricula, CertificadoHabilitacao, CONVERT(varchar(10), CHMEm, 120) AS CHMEm, CHMCertificadoId FROM Matriculas_AFM WHERE MembroId = @m ORDER BY MatriculaId DESC`)).recordset[0];
+    if (!mat) return { sucesso: false, mensagem: "Esta pessoa não tem matrícula na AFM." };
+    if (conceder && mat.StatusMatricula === "INATIVA") return { sucesso: false, mensagem: "A matrícula está inativa: o CHM só depois da nova matrícula com a reciclagem (Regimento, Art. 69 §3º)." };
+    if (!conceder && !mat.CertificadoHabilitacao) return { sucesso: false, mensagem: "Esta pessoa não tem CHM para revogar." };
+    await revogarDocumentoCHM(t, mat.CHMCertificadoId, conceder ? "Substituído por um novo CHM." : "CHM revogado pela AFM (Regimento, Art. 67).", por);
+    let certificadoId = null;
+    if (conceder) {
+      const doc = require("./consagracao").textoCHM(data);
+      const emitido = await require("./certificados").emitirCertificado(naTransacao(t), { membroId: Number(membroId), titulo: doc.titulo, descricao: doc.descricao, emitidoPorMembroId: por, natureza: "CHM", auditar: false });
+      if (!emitido.sucesso) return emitido;
+      certificadoId = emitido.certificadoId;
+    }
+    const upd = await new sql.Request(t).input("id", sql.Int, mat.MatriculaId).input("c", sql.Bit, conceder ? 1 : 0).input("d", sql.Date, conceder ? data : null).input("por", sql.Int, conceder ? por : null)
+      .input("cert", sql.Int, certificadoId)
+      .query(`UPDATE a SET CertificadoHabilitacao = @c, CHMEm = @d, CHMPor = @por, CHMCertificadoId = @cert FROM Matriculas_AFM a
+              WHERE a.MatriculaId = @id AND NOT EXISTS (SELECT 1 FROM Matriculas_AFM a2 WHERE a2.MembroId = a.MembroId AND a2.MatriculaId > a.MatriculaId)`);
+    if (!upd.rowsAffected[0]) return MUDOU("A matrícula mudou enquanto isso. Atualize a tela.");   // a rematrícula de outra tela: desfaz tudo (inclusive o documento)
+    return { sucesso: true, mat, certificadoId };
+  });
+  if (!r.sucesso) return r;
+  await registrarAuditoria({ tabela: "Matriculas_AFM", registroId: r.mat.MatriculaId, acao: conceder ? "AFM_CHM_CONCEDIDO" : "AFM_CHM_REVOGADO", usuarioId: por,
+    dadosAntes: { chm: !!r.mat.CertificadoHabilitacao, chmEm: r.mat.CHMEm, certificadoId: r.mat.CHMCertificadoId || null }, dadosDepois: { chm: !!conceder, chmEm: conceder ? data : null, certificadoId: r.certificadoId } });
+  return { sucesso: true, certificadoId: r.certificadoId, mensagem: conceder ? "CHM concedido (Regimento, Art. 67): o certificado, com QR de verificação, já está em Meus Certificados da pessoa." : "CHM revogado (o certificado também)." };
 }
 
 // Matricula na AFM quem ainda não é oficial (o candidato a Auxiliar cursa o Básico — Art. 72, I, b). Uma matrícula por vez: quem já tem não ganha outra aqui.
@@ -208,7 +232,7 @@ async function processosVetaveis(pool) {
     JOIN MembroReferencia m ON m.MembroId = c.MembroId
     LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
     LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
-    WHERE c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO')
+    WHERE c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')
       AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL
     ORDER BY c.DataProtocolo, m.Nome`);
   return r.recordset.map((l) => ({
@@ -228,7 +252,7 @@ async function vetar(pool, { consagracaoId, motivo, por }) {
   const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("motivo", sql.NVarChar(500), motivo).input("por", sql.Int, por).input("hoje", sql.Date, hojeBrasilia())
     .query(`UPDATE c SET Status = N'REPROVADO', DataConclusao = @hoje, VetoAFMEm = SYSUTCDATETIME(), VetoAFMPor = @por, VetoAFMMotivo = @motivo
             FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
-            WHERE c.ConsagracaoId = @id AND c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO')
+            WHERE c.ConsagracaoId = @id AND c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')
               AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL`);
   if (!upd.rowsAffected[0]) return MUDOU("Este processo já foi concluído, reprovado ou vetado (ou não leva a um cargo da escada). Atualize a lista.");
   await registrarAuditoria({ tabela: "Consagracoes", registroId: Number(atual.MembroId), acao: "AFM_VETO_TECNICO", usuarioId: por, dadosDepois: { consagracaoId, motivo } });
@@ -246,5 +270,5 @@ async function origensDoCargoAtual(pool) {
 
 module.exports = {
   ORIGEM_DA_MODALIDADE, comTravaDaPessoa, cargoDoTipo, dadosDaPessoa, avaliar, veDisciplinaDe, trocarCargoNaTransacao, sincronizarCadastro, historicoDe,
-  definirCHM, matricularCandidato, processosVetaveis, vetar, origensDoCargoAtual, dia
+  definirCHM, revogarDocumentoCHM, matricularCandidato, processosVetaveis, vetar, origensDoCargoAtual, dia, NAO_EXISTE, MUDOU, fecharTransacao, naTransacao
 };

@@ -67,6 +67,15 @@ const REGRAS = {
       return !!procedimento && !!(await pessoaAlcancavel(pool, usuario, procedimento.MembroId));
     }
   },
+  // v8.3 — os documentos da indicação (Regimento Art. 74, II: cópia dos documentos pessoais) e o comprovante da taxa (Art. 75, I). O registro é o NÚMERO do processo. Quem
+  // alcança a pessoa pela permissão das consagrações (quem protocolou, no escopo dele; a Secretaria) e o CEI, que analisa o prontuário (Art. 74, III).
+  Consagracoes: {
+    permissoes: ["consagracoes", "cei"],
+    alcance: async (pool, visao, registroId) => {
+      const processo = await registroExiste(pool, `SELECT Numero, MembroId FROM Consagracoes WHERE Numero = @id`, registroId);
+      return !!processo && !!(await pessoaAlcancavel(pool, visao, processo.MembroId));
+    }
+  },
   Fornecedores: {
     permissoes: ["financeiro"],
     soGeral: true,

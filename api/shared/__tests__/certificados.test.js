@@ -72,7 +72,8 @@ describe("mapearCertificado (linha do banco -> objeto da API, inclui o vínculo 
       descricao: "Concluiu o curso com aproveitamento.", conquistaId: null, conquistaNome: null,
       emitidoPorMembroId: 7, protocolo: "CERT-2026-0001", dataEmissao: "2026-09-19T00:00:00.000Z",
       // v6.9 — campos de verificação (todos vazios num certificado antigo sem código)
-      codigoVerificacao: null, validoAte: null, trilhaMatriculaId: null, revogadoEm: null, motivoRevogacao: null, hashIntegridade: null
+      codigoVerificacao: null, validoAte: null, trilhaMatriculaId: null, revogadoEm: null, motivoRevogacao: null, hashIntegridade: null,
+      natureza: null   // v8.3 — certificado comum (não é CHM nem diploma)
     });
   });
 

@@ -21,6 +21,10 @@
 // v8.2 — Escada ministerial: os requisitos (shared/escada.js) são conferidos de novo a CADA avanço, como a formação da v6.9 — um requisito que deixou de valer no meio do
 // caminho (disciplina aberta, matrícula inativa, CHM revogado) trava a etapa seguinte. Processo vetado pela AFM já está REPROVADO. A conclusão troca o cargo, a Função e o
 // histórico de cargos (CargosMinisteriaisHistorico, com a data e a origem pela modalidade) numa só transação, sob a trava da pessoa.
+//
+// v8.3 — Consagração e documentação (Regimento Art. 74 e 75): no processo que leva a cargo, "Avançar" só envia ao CEI, e só com os documentos da indicação (foto e
+// documentos pessoais — Art. 74, II). O parecer é do CEI, a homologação do Presidente ou da CLI (EsteiraConsagracao) e a conclusão é o registro da cerimônia
+// (CerimoniasConsagracao). Os processos sem cargo (Integração, Reintegração) seguem a esteira de sempre.
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const trilhas = require("../shared/trilhas");
@@ -29,6 +33,14 @@ const escadaDb = require("../shared/escadaDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { exigirGeral, carregarPessoa } = require("../shared/escopoRotas");
 const auth = require("../shared/auth");
+const consagracaoDb = require("../shared/consagracaoDb");
+
+// v8.3 — quem resolve cada etapa do processo que leva a cargo (Regimento Art. 74 e 75).
+const ETAPA_COM_DONO = {
+  EM_ANALISE_CONSELHO: "Este processo aguarda o parecer do CEI (Regimento, Art. 74, III): quem tem a permissão do CEI registra o parecer.",
+  AGUARDANDO_PLENARIO: "Este processo aguarda a homologação: use \"Homologar\" (ato do Pastor Presidente ou reunião da CLI — Regimento, Art. 74, IV e Art. 7º, III).",
+  HOMOLOGADO: "Este processo já está homologado: a consagração se conclui no registro da cerimônia (Regimento, Art. 75)."
+};
 
 const PROXIMA_ETAPA_CONSAGRACAO = {
   PROTOCOLADO: "EM_ANALISE_CONSELHO",
@@ -84,7 +96,7 @@ module.exports = async function (context, req) {
 
   if (acao === "AVANCAR") {
     const novoStatus = PROXIMA_ETAPA_CONSAGRACAO[atual.status];
-    if (!novoStatus) {
+    if (!novoStatus && atual.status !== "HOMOLOGADO") {   // v8.3: o homologado tem resposta própria logo abaixo
       context.res = { status: 400, body: { sucesso: false, mensagem: atual.status === "REPROVADO" ? "Este processo foi reprovado." : "Este processo já está em CONCLUIDO." } };
       return;
     }
@@ -93,12 +105,19 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // v8.3 — o processo que leva a cargo só sai daqui do protocolo para o CEI; as etapas seguintes têm dono próprio (EsteiraConsagracao e CerimoniasConsagracao).
+    const alvo = atual.cargoAlvo || (await escadaDb.cargoDoTipo(pool, atual.assunto));
+    if (alvo && atual.status !== "PROTOCOLADO") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: ETAPA_COM_DONO[atual.status] || "Este processo não avança por aqui. Atualize a lista." } };
+      return;
+    }
+
     // v8.2 — a escada, conferida de novo. Processo de antes da v8.2 (sem cargo de destino gravado) usa o cargo do tipo.
     const modalidade = atual.modalidade || "INDICACAO";
     const pessoa = await carregarPessoa(pool, atual.membroId);
     const veDisciplina = escadaDb.veDisciplinaDe(sessao, pessoa);
     const mostrar = (av) => (veDisciplina ? av : escada.mascararParaEscopo(av));
-    const conferencia = await escadaDb.avaliar(pool, { membroId: atual.membroId, assunto: atual.assunto, modalidade, alvo: atual.cargoAlvo || null });
+    const conferencia = await escadaDb.avaliar(pool, { membroId: atual.membroId, assunto: atual.assunto, modalidade, alvo: alvo || null });
     if (conferencia.avaliacao && conferencia.avaliacao.bloqueado) {
       context.res = { status: 200, body: { sucesso: false, mensagem: conferencia.avaliacao.mensagemBloqueio, requisitos: mostrar(conferencia.avaliacao) } };
       return;
@@ -113,6 +132,15 @@ module.exports = async function (context, req) {
       return;
     }
     const retrato = conferencia.avaliacao ? escada.retrato(conferencia.avaliacao, hojeBrasilia()) : null;
+    // v8.3 — os documentos da indicação (Art. 74, II), depois dos requisitos: o que trava a pessoa aparece primeiro.
+    if (alvo) {
+      const proc = await consagracaoDb.carregarProcesso(pool, consagracaoId);
+      const falta = proc ? consagracaoDb.faltaNoDossie(proc) : "Processo não encontrado.";
+      if (falta) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: falta } };
+        return;
+      }
+    }
 
     if (novoStatus !== "CONCLUIDO") {
       // A etapa só muda se o processo AINDA está na etapa que lemos acima.
@@ -124,42 +152,21 @@ module.exports = async function (context, req) {
         return;
       }
     } else {
-      // A conclusão: etapa, Função, cargo e histórico juntos (ou nada). A conferência é REFEITA dentro da trava (revisão independente, 28/10/2026): um CHM revogado ou uma
-      // disciplina aberta entre a conferência de cima e este ponto não deixam o cargo mudar.
+      // v8.3 — só o processo SEM cargo (Integração, Reintegração, texto livre) conclui aqui: grava a Função. O de cargo conclui no registro da cerimônia
+      // (shared/consagracaoDb.js — cargo, histórico, CHM usado e diploma, sob a trava de cada candidato).
       const hoje = hojeBrasilia();
       const r = await escadaDb.comTravaDaPessoa(pool, atual.membroId, async (t) => {
-        let retratoFinal = retrato;
-        if (conferencia.alvo) {
-          const dentro = await escadaDb.avaliar(t, { membroId: atual.membroId, assunto: atual.assunto, modalidade, alvo: conferencia.alvo });
-          if (dentro.avaliacao.bloqueado) return { sucesso: false, requisitos: dentro.avaliacao, mensagem: dentro.avaliacao.mensagemBloqueio };
-          retratoFinal = escada.retrato(dentro.avaliacao, hoje);
-        }
-        const avancou = await new sql.Request(t).input("id", sql.UniqueIdentifier, consagracaoId).input("etapaAtual", sql.NVarChar(30), atual.status).input("retrato", sql.NVarChar(4000), retratoFinal)
-          .input("hoje", sql.Date, hoje)
-          .query(`UPDATE Consagracoes SET Status = 'CONCLUIDO', DataConclusao = @hoje, RequisitosRetrato = ISNULL(@retrato, RequisitosRetrato)
-                  WHERE ConsagracaoId = @id AND Status = @etapaAtual`);
+        const avancou = await new sql.Request(t).input("id", sql.UniqueIdentifier, consagracaoId).input("etapaAtual", sql.NVarChar(30), atual.status).input("hoje", sql.Date, hoje)
+          .query(`UPDATE Consagracoes SET Status = 'CONCLUIDO', DataConclusao = @hoje WHERE ConsagracaoId = @id AND Status = @etapaAtual`);
         if (afetadas(avancou) !== 1) return { sucesso: false, mudou: true };
         if (!SEM_CARGO.includes(atual.assunto)) {
-          if (conferencia.alvo) {
-            // o CHM foi para ESTA mudança de cargo: a próxima indicação pede um novo, "válido e atualizado" (Regimento Art. 67 §1º; Art. 74, I)
-            await new sql.Request(t).input("m", sql.Int, atual.membroId)
-              .query(`UPDATE a SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL FROM Matriculas_AFM a
-                      WHERE a.MembroId = @m AND a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = @m)`);
-            await escadaDb.trocarCargoNaTransacao(t, {
-              membroId: atual.membroId, cargoNovo: conferencia.alvo, desde: hoje, origem: escadaDb.ORIGEM_DA_MODALIDADE[modalidade] || "CONSAGRACAO",
-              consagracaoId, funcao: atual.assunto, por: usuario.membroId
-            });
-          } else {
-            await new sql.Request(t).input("membroId", sql.Int, atual.membroId).input("funcao", sql.NVarChar(100), atual.assunto)
-              .query(`UPDATE MembroReferencia SET Funcao = @funcao WHERE MembroId = @membroId`);
-          }
+          await new sql.Request(t).input("membroId", sql.Int, atual.membroId).input("funcao", sql.NVarChar(100), atual.assunto)
+            .query(`UPDATE MembroReferencia SET Funcao = @funcao WHERE MembroId = @membroId`);
         }
         return { sucesso: true };
       });
       if (!r.sucesso) {
-        context.res = { status: 200, body: r.requisitos
-          ? { sucesso: false, mensagem: r.mensagem, requisitos: mostrar(r.requisitos) }
-          : { sucesso: false, mensagem: r.mensagem && !r.mudou ? r.mensagem : "Este processo mudou de etapa enquanto você olhava. Atualize a lista." } };
+        context.res = { status: 200, body: { sucesso: false, mensagem: r.mensagem && !r.mudou ? r.mensagem : "Este processo mudou de etapa enquanto você olhava. Atualize a lista." } };
         return;
       }
     }
@@ -169,7 +176,7 @@ module.exports = async function (context, req) {
       registroId: atual.membroId,
       acao: `Avançou para ${novoStatus}`,
       usuarioId: usuario.membroId,
-      dadosDepois: novoStatus === "CONCLUIDO" && conferencia.alvo ? { cargoNovo: conferencia.alvo, modalidade } : undefined
+      dadosDepois: alvo ? { etapa: "CEI" } : undefined
     });
 
     context.res = {
@@ -178,10 +185,9 @@ module.exports = async function (context, req) {
       body: {
         sucesso: true,
         novoStatus,
-        nivelamento: !!(conferencia.avaliacao && conferencia.avaliacao.nivelamento),
         mensagem: novoStatus === "CONCLUIDO"
-          ? (conferencia.alvo ? `✅ Efetivado! Agora é ${escada.ROTULO_CARGO[conferencia.alvo]}.${conferencia.avaliacao && conferencia.avaliacao.nivelamento ? " Fica em nivelamento obrigatório na AFM (Regimento, Art. 66 §5º)." : ""}` : "✅ Efetivado! A função do obreiro foi atualizada.")
-          : `Processo avançou para: ${novoStatus}`
+          ? "✅ Efetivado! A função do obreiro foi atualizada."
+          : alvo ? "Processo enviado ao CEI para o parecer (Regimento, Art. 74, III)." : `Processo avançou para: ${novoStatus}`
       }
     };
     return;

@@ -208,7 +208,7 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   r = await protocolar({ membroId: P.inativo, assunto: TIPO.PRESBITERO, proponenteMembroId: 1001, modalidade: "NOMEACAO_PRESIDENCIAL", atoReferencia: "Ato 4/2026" });
   ok(r.body.sucesso === false && (r.body.requisitos.itens.find((i) => i.chave === "matricula") || {}).situacao === "FALTA", "matrícula inativa: nem a nomeação passa", r.body.mensagem);
 
-  console.log("== sexo informado; CHM revogado no meio do processo trava a etapa seguinte ==");
+  console.log("== sexo informado; CHM revogado antes do envio ao CEI trava o avanço ==");
   r = await req(TIPO.DIACONO, P.semSexo);
   ok(item(r, "sexo").situacao === "SEM_DADO", "sem o sexo: falta o dado");
   await salvarPessoa(P.semSexo, { sexo: "M" });
@@ -216,13 +216,12 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   r = await protocolar({ membroId: P.semSexo, assunto: TIPO.DIACONO, proponenteMembroId: 1002 });
   ok(r.status === 201, "protocolado", r.body);
   const idSemSexo = r.body.consagracao.consagracaoId;
-  r = await evoluir(idSemSexo, "AVANCAR");
-  ok(r.body.sucesso, "primeiro avanço");
+  // v8.3: depois do envio ao CEI, o "Avançar" não anda mais (o parecer é do CEI); a revogação no meio do caminho é provada no parecer e na cerimônia (e2e-55)
   r = await afmPost("chm", { membroId: P.semSexo, conceder: false });
   ok(r.body.sucesso, "a AFM revoga o CHM", r.body);
   r = guardar("avancarTravado", await evoluir(idSemSexo, "AVANCAR"));
-  ok(r.body.sucesso === false && (r.body.requisitos.itens.find((i) => i.chave === "chm") || {}).situacao === "FALTA", "o avanço seguinte trava no CHM", r.body.mensagem);
-  ok((await escalar("SELECT Status FROM Consagracoes WHERE ConsagracaoId = @id", { id: idSemSexo })) === "EM_ANALISE_CONSELHO", "a etapa não mudou");
+  ok(r.body.sucesso === false && (r.body.requisitos.itens.find((i) => i.chave === "chm") || {}).situacao === "FALTA", "o envio ao CEI trava no CHM", r.body.mensagem);
+  ok((await escalar("SELECT Status FROM Consagracoes WHERE ConsagracaoId = @id", { id: idSemSexo })) === "PROTOCOLADO", "a etapa não mudou");
   r = await evoluir(idSemSexo, "REPROVAR");
   ok(r.body.sucesso, "reprovar nunca é travado");
 

@@ -64,7 +64,8 @@ module.exports = async function (context, req) {
       // escopo, inexistente e id malformado dão a MESMA resposta (sem sonda de id).
       const certificadoId = auth.idDeRota(certificadoBruto);
       const alvo = certificadoId ? await certificados.buscarCertificadoPorId(pool, certificadoId) : null;
-      if (!alvo || !(await certificados.gestorAlcancaMembro(pool, usuario, alvo.membroId))) return erro(context, 404, "Certificado não encontrado.");
+      // v8.3 — CHM e diploma de consagração não são da EBD: a mesma resposta de "não encontrado" (o CHM é revogado pela AFM; o diploma, nunca por aqui).
+      if (!alvo || alvo.natureza || !(await certificados.gestorAlcancaMembro(pool, usuario, alvo.membroId))) return erro(context, 404, "Certificado não encontrado.");
       const resultado = await certificados.revogarCertificado(pool, { certificadoId, motivo, revogadoPorMembroId: usuario.membroId });
       context.res = { status: resultado.sucesso ? 200 : 422, body: resultado };
       return;
@@ -83,7 +84,9 @@ module.exports = async function (context, req) {
       }
       // O selo de integridade é interno (só serve à verificação pública): a API
       // diz apenas se existe.
-      const lista = (await certificados.listarCertificadosMembro(pool, membroId)).map(({ hashIntegridade, ...c }) => ({ ...c, temSelo: !!hashIntegridade }));
+      // v8.3 — o titular vê também o CHM e os diplomas; a gestão da EBD e das trilhas, só os certificados dela.
+      const lista = (await certificados.listarCertificadosMembro(pool, membroId)).filter((c) => membroId === proprio || !c.natureza)
+        .map(({ hashIntegridade, ...c }) => ({ ...c, temSelo: !!hashIntegridade }));
       context.res = { status: 200, body: { sucesso: true, certificados: lista } };
       return;
     }

@@ -60,4 +60,8 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-51-escada-fluxos.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-52-escada-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-53-escada-corridas.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-54-escada-revisao.js
+# v8.3 (Consagração e documentação, migração 158 — a "preparar-escada" já a aplica): cada roteiro sobre a base sozinho
+BASE=cenario-escada bash rodar.sh roteiro e2e-55-consagracao-fluxos.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-56-consagracao-seguranca.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-57-consagracao-corridas.js
 echo TUDO-PRONTO

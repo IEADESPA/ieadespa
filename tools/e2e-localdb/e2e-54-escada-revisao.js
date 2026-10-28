@@ -84,17 +84,22 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   r = await afmPost("matricular-candidato", { membroId: P.menor, nivel: "BASICO", data: hoje });
   ok(r.status === 422 && /congregado/i.test(r.body.mensagem), "congregado não é candidato", r.body);
 
-  console.log("== conclusão: data de Brasília; refeita dentro da trava ==");
+  console.log("== conclusão (v8.3: o registro da cerimônia): data de Brasília; refeita dentro da trava ==");
   r = await protocolar({ membroId: P.auxiliar, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 });
   const idAux = r.body.consagracao.consagracaoId;
-  await evoluir(idAux, "AVANCAR"); await evoluir(idAux, "AVANCAR");
-  // entre a conferência de fora e a trava, a AFM revoga o CHM: simulado tirando o CHM e chamando a conclusão (a de dentro relê)
+  await evoluir(idAux, "AVANCAR"); await E.parecer(idAux); await E.homologar(idAux); await E.pagarTaxa(idAux);
+  let ce = await E.novaCerimonia();
+  await E.cerimonias("incluir", { cerimoniaId: ce, ids: [idAux] });
+  // entre a homologação e a cerimônia, a AFM revoga o CHM direto no banco (a conferência é feita de novo dentro da transação do registro)
   await q("UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0 WHERE MembroId = @m", { m: P.auxiliar });
-  r = await evoluir(idAux, "AVANCAR");
-  ok(r.body.sucesso === false && (await cargo(P.auxiliar)) === "AUXILIAR", "sem o CHM, a conclusão não muda o cargo", r.body.mensagem);
+  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux] });
+  ok(r.body.sucesso && r.body.resultados[0].resultado === "VOLTOU" && (await cargo(P.auxiliar)) === "AUXILIAR", "sem o CHM, a cerimônia não muda o cargo: volta para a fila", r.body);
+  ok((await E.statusDe(idAux)) === "HOMOLOGADO" && !(await escalar("SELECT CerimoniaId FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux })), "continua homologado, fora da cerimônia");
   await q("UPDATE Matriculas_AFM SET CertificadoHabilitacao = 1 WHERE MembroId = @m", { m: P.auxiliar });
-  r = await evoluir(idAux, "AVANCAR");
-  ok(r.body.sucesso && (await escalar("SELECT CONVERT(varchar(10), DataConclusao, 120) FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux })) === hoje, "concluída com a data de Brasília", r.body);
+  ce = await E.novaCerimonia();
+  await E.cerimonias("incluir", { cerimoniaId: ce, ids: [idAux] });
+  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux] });
+  ok(r.body.sucesso && r.body.resultados[0].resultado === "CONSAGRADO" && (await escalar("SELECT CONVERT(varchar(10), DataConclusao, 120) FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux })) === hoje, "concluída com a data da cerimônia (Brasília)", r.body);
 
   console.log("== a pessoa que sumiu nunca passa ==");
   const db = require(path.join(API, "shared/escadaDb.js"));

@@ -80,7 +80,7 @@ faltas seguidas, exclusões com providências, readmissão); no **Meu Painel**, 
 
 ### Como ficou (entregue em 27/10/2026)
 
-Migração **156**; regra pura em `api/shared/afm.js`, banco em `api/shared/afmDb.js`, rota `/api/afm/<ação>` (`GestaoAFM`), tela em `app/modulos/afm.js` (aba
+**Em produção desde 27/10/2026** (merge `e4e5ea2`; para desfazer: `git revert -m 1 e4e5ea2`). Migração **156**; regra pura em `api/shared/afm.js`, banco em `api/shared/afmDb.js`, rota `/api/afm/<ação>` (`GestaoAFM`), tela em `app/modulos/afm.js` (aba
 **Academia (AFM)** em Vida Eclesiástica; quadro **Faltas e cadeiras** em Órgãos Centrais → CLI; catálogo da justificativa na frequência e no Meu Painel; CDER em Comissões),
 casca do service worker **v42**. A apuração roda ao encerrar a reunião, ao justificar, recusar pedido ou corrigir presença, ao marcar "não conta falta" e, como rede de
 segurança, na rotina das 7h (que também apaga o detalhe escrito das justificativas com mais de 2 anos). Avisos: `CLI_FALTAS_ALERTA`, `CLI_EXCLUSAO_FALTAS`,

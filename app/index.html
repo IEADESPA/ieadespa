@@ -2488,6 +2488,71 @@
 
       <!-- ABA: CONSAGRAÇÕES -->
       <div id="abaConsagracoes" class="aba-secretaria" style="display:none;">
+        <!-- v8.3 — Pareceres do CEI (Regimento Art. 74, III; 9º; 73): só para o nível geral da permissão "cei" -->
+        <div id="consSecaoCEI" hidden>
+          <h3>⚖️ Pareceres do CEI</h3>
+          <p class="subtitle">Processos que esperam o parecer do Conselho de Ética e Integridade. A fundamentação é sigilosa: só o CEI a lê.</p>
+          <div class="rolagem-tabela"><div id="consListaCEI"></div></div>
+          <div id="consFormParecer" class="cons-painel" hidden>
+            <h4 id="consParecerTitulo">Parecer</h4>
+            <div class="input-group">
+              <label for="consParecerResultado">Resultado:</label>
+              <select id="consParecerResultado">
+                <option value="APTO">APTO</option>
+                <option value="INAPTO">INAPTO (arquiva o processo)</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="consParecerData">Data da sabatina (ou da análise):</label>
+              <input type="date" id="consParecerData" />
+            </div>
+            <div class="input-group">
+              <label for="consParecerFundamentacao">Fundamentação (sigilosa):</label>
+              <textarea id="consParecerFundamentacao" rows="4" maxlength="2000"></textarea>
+            </div>
+            <fieldset id="consParecerSabatina" class="cons-fieldset" hidden>
+              <legend>Sabatina (Art. 9º §1º — Presbítero, Evangelista e Pastor)</legend>
+              <label><input type="checkbox" id="consSabVida" /> Vida pregressa e antecedentes criminais/cíveis verificados</label>
+              <label><input type="checkbox" id="consSabFinanceira" /> Regularidade financeira (dízimos)</label>
+              <label><input type="checkbox" id="consSabDoutrina" /> Alinhamento doutrinário</label>
+            </fieldset>
+            <div id="consParecerHistoricoGrupo">
+              <label><input type="checkbox" id="consParecerHistorico" data-on-change="consMostrarEscrutinioAcao" /> Há histórico de ruptura conjugal (divórcio)</label>
+            </div>
+            <fieldset id="consParecerEscrutinio" class="cons-fieldset" hidden>
+              <legend>Escrutínio especial (Art. 73, III)</legend>
+              <div class="input-group">
+                <label for="consEscFundamento">O divórcio:</label>
+                <select id="consEscFundamento">
+                  <option value="">— escolha —</option>
+                  <option value="TEMPO_IGNORANCIA">Ocorreu no "tempo da ignorância" (antes da conversão)</option>
+                  <option value="EXCECAO_BIBLICA">Depois da conversão, com fundamento em cláusula de exceção bíblica</option>
+                </select>
+              </div>
+              <label><input type="checkbox" id="consEscDocumental" /> Verificado documentalmente pelo CEI</label>
+              <div class="input-group">
+                <label for="consEscRecasado">É recasado(a)?</label>
+                <select id="consEscRecasado">
+                  <option value="">— escolha —</option>
+                  <option value="nao">Não</option>
+                  <option value="sim">Sim</option>
+                </select>
+              </div>
+              <label><input type="checkbox" id="consEscEstavel" /> Se recasado(a): o casamento atual é estável, legalizado e exemplar (III, d)</label>
+            </fieldset>
+            <div class="input-group" id="consParecerExcecaoGrupo" hidden>
+              <label for="consParecerExcecao">Pastor não casado — motivo da exceção (Art. 73, II, b):</label>
+              <textarea id="consParecerExcecao" rows="2" maxlength="500"></textarea>
+            </div>
+            <button class="btn-confirmar" type="button" data-on-click="consEnviarParecerAcao">Registrar parecer</button>
+            <button class="btn-confirmar btn-secundario" type="button" data-on-click="consFecharParecerAcao">Cancelar</button>
+          </div>
+          <p id="consResultadoCEI" role="status" aria-live="polite"></p>
+          <div id="consRequisitosCEI" aria-live="polite"></div>
+          <hr />
+        </div>
+
+        <div id="consSecaoSecretaria">
         <h3>Protocolar Processo</h3>
         <form data-on-submit="salvarConsagracao" data-prevent="submit">
           <div class="input-group">
@@ -2524,7 +2589,80 @@
 
         <hr />
         <h3>Esteira Ativa</h3>
+        <p class="subtitle">Processo que leva a cargo: documentos da indicação → parecer do CEI → homologação (Presidente ou CLI) → cerimônia (Regimento, Art. 74 e 75).</p>
+        <!-- v8.3 — homologação em lote e taxa de consagração (nível geral) -->
+        <div id="consBarraHomologar" class="barra-lista" hidden>
+          <button class="btn-confirmar" style="width:auto;margin:0;" type="button" data-on-click="consAbrirHomologarAcao">✅ Homologar os marcados</button>
+        </div>
+        <div id="consPainelHomologar" class="cons-painel" hidden>
+          <h4>Homologação</h4>
+          <p class="subtitle">Auxiliar, Missionário(a) e Diácono: o Pastor Presidente valida a lista dos aptos (Art. 74, IV) — informe o ato e a data. Presbítero, Evangelista e
+            Pastor: homologação da CLI em plenário (Art. 7º, III) — escolha a reunião.</p>
+          <div class="input-group">
+            <label for="consHomAto">Ato do Pastor Presidente:</label>
+            <input type="text" id="consHomAto" maxlength="200" placeholder="Ex.: Lista dos aptos validada em reunião da Diretoria" />
+          </div>
+          <div class="input-group">
+            <label for="consHomData">Data da validação:</label>
+            <input type="date" id="consHomData" />
+          </div>
+          <div class="input-group">
+            <label for="consHomSessao">Reunião da CLI (já encerrada):</label>
+            <select id="consHomSessao"><option value="">— nenhuma —</option></select>
+          </div>
+          <button class="btn-confirmar" type="button" data-on-click="consHomologarAcao">Homologar</button>
+          <button class="btn-confirmar btn-secundario" type="button" data-on-click="consFecharPaineisAcao">Cancelar</button>
+        </div>
+        <div id="consPainelTaxa" class="cons-painel" hidden>
+          <h4 id="consTaxaTitulo">Taxa de consagração</h4>
+          <p class="subtitle">Paga por PIX ou boleto até 45 dias antes da cerimônia (Art. 75, I). O comprovante vai em "Documentos" do processo; o lançamento no caixa é da
+            tesouraria.</p>
+          <div class="input-group">
+            <label for="consTaxaData">Pago em:</label>
+            <input type="date" id="consTaxaData" />
+          </div>
+          <div class="input-group">
+            <label for="consTaxaValor">Valor (R$):</label>
+            <input type="number" id="consTaxaValor" min="0.01" step="0.01" value="70" />
+          </div>
+          <div class="input-group">
+            <label for="consTaxaForma">Forma:</label>
+            <select id="consTaxaForma"><option value="PIX">PIX</option><option value="BOLETO">Boleto bancário</option></select>
+          </div>
+          <button class="btn-confirmar" type="button" data-on-click="consRegistrarTaxaAcao">Registrar pagamento</button>
+          <button class="btn-confirmar btn-secundario" type="button" id="consTaxaRemover" data-on-click="consRemoverTaxaAcao" hidden>Remover registro</button>
+          <button class="btn-confirmar btn-secundario" type="button" data-on-click="consFecharPaineisAcao">Cancelar</button>
+        </div>
+        <p id="consResultadoEsteira" role="status" aria-live="polite"></p>
         <div class="rolagem-tabela"><div id="resultadoListaConsagracoes"></div></div>
+
+        <!-- v8.3 — Cerimônias de consagração (Regimento Art. 10 e 75): só o nível geral -->
+        <div id="consSecaoCerimonias" hidden>
+          <hr />
+          <h3>🕊️ Cerimônias de consagração</h3>
+          <p class="subtitle">Na Assembleia Geral Ordinária ou em Sessão Magna ou Solene da CLI. Comissão de Unção com no mínimo 4 pastores titulares; quem falta perde a
+            consagração naquele ano (Art. 75, II, b).</p>
+          <form data-on-submit="consCriarCerimoniaAcao" data-prevent="submit">
+            <div class="barra-lista">
+              <label for="consCerData" class="rotulo-oculto">Data</label>
+              <input type="date" id="consCerData" />
+              <label for="consCerLocal" class="rotulo-oculto">Local</label>
+              <input type="text" id="consCerLocal" maxlength="200" placeholder="Local (ex.: Templo Sede)" style="min-width:200px;" />
+              <label for="consCerOcasiao" class="rotulo-oculto">Ocasião</label>
+              <select id="consCerOcasiao">
+                <option value="AGO">Assembleia Geral Ordinária</option>
+                <option value="MAGNA_CLI">Sessão Magna da CLI</option>
+                <option value="SOLENE_CLI">Sessão Solene da CLI</option>
+              </select>
+              <label for="consCerValor" class="rotulo-oculto">Valor da taxa</label>
+              <input type="number" id="consCerValor" min="0.01" step="0.01" placeholder="Taxa (R$ 70,00)" style="max-width:150px;" />
+            </div>
+            <button class="btn-confirmar" style="width:auto;" type="submit">Criar cerimônia</button>
+          </form>
+          <p id="consResultadoCerimonia" role="status" aria-live="polite"></p>
+          <div class="rolagem-tabela"><div id="consListaCerimonias"></div></div>
+          <div id="consCerimoniaDetalhe" class="cons-painel" tabindex="-1" hidden></div>
+        </div>
 
         <hr />
         <!-- vB.11 — Esteira de Batismo (Regimento Art. 80). Fica aqui (não
@@ -2556,6 +2694,7 @@
         </div>
         <p id="resultadoCandidatoBatismo" class="subtitle"></p>
         <div class="rolagem-tabela"><div id="resultadoListaCandidatosBatismo"></div></div>
+        </div>
       </div>
 
       <!-- ABA: ENQUETES (v2.8) -->

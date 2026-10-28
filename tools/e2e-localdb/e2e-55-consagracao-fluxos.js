@@ -321,6 +321,8 @@ const MEMBRO = (m) => L.sessao(m, { via: "SENHA", fator: { via: "CHAVE", em: Dat
   ok((await escalar("SELECT COUNT(*) FROM AnexosGenericos a JOIN Consagracoes c ON c.Numero = a.RegistroId WHERE a.Tabela = 'Consagracoes' AND c.MembroId = @m", { m: P.missionario })) === 0, "e os documentos da indicação saem");
 
   if (process.env.E2E_CONTRATO) {
+    // o link assinado da foto (assinado com a chave pública do emulador) não vai para o repositório: a prova da tela não precisa dele
+    if (contrato.meusDados && contrato.meusDados.membro) contrato.meusDados.membro.fotoUrl = null;
     require("fs").mkdirSync(path.join(__dirname, "..", "front-consagracao"), { recursive: true });
     require("fs").writeFileSync(path.join(__dirname, "..", "front-consagracao", "contrato-real.json"), JSON.stringify(contrato, null, 2));
     console.log("contrato gravado em tools/front-consagracao/contrato-real.json");

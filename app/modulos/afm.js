@@ -192,7 +192,8 @@ function afmRenderMatriculas(geral) {
   for (const m of lista) {
     const nivelAviso = (m.nivelAtende === false ? ` <span class="tag-pendente" title="${escaparHtmlEbd(m.nivelExigido || "")}">abaixo do exigido</span>` : "")
       + (m.nivelamento ? ` <span class="tag-pendente" title="Nomeado direto pelo Pastor Presidente ou vindo de outra convenção: faz o nivelamento depois da posse (Regimento, Art. 66 §5º)">nivelamento obrigatório</span>` : "");
-    const chm = m.chm ? `✔ ${afmData(m.chmEm)}` : "—";
+    // v8.3 — o CHM é um documento verificável (Regimento Art. 67): o link baixa o certificado
+    const chm = m.chm ? `✔ ${afmData(m.chmEm)}${m.chmCertificadoId ? ` <button class="btn-link" data-on-click="baixarPdfCertificado" data-args-click="${argsAttr(Number(m.chmCertificadoId))}" aria-label="Baixar o certificado do CHM">📄</button>` : ""}` : "—";
     let acoes = "";
     if (geral) {
       acoes += `<button class="btn-link" data-on-click="afmFormNivelAcao" data-args-click="${argsAttr(m.membroId)}">Nível…</button>`;

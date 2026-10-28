@@ -1223,3 +1223,13 @@ input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda);
 .escada-falta, .escada-sem_dado { background: var(--cor-erro-suave); }
 .escada-aviso span[aria-hidden] { color: var(--cor-secundaria); }
 .escada-dispensado { color: var(--cor-texto-suave); }
+/* v8.3 — consagração e documentação: painéis da esteira (parecer, homologação, taxa, cerimônia) */
+.cons-painel { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 12px; margin: 10px 0; background: var(--cor-superficie); }
+.cons-painel h4 { margin: 0 0 8px; }
+.cons-fieldset { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; }
+.cons-fieldset label, #consParecerHistoricoGrupo label { display: block; margin: 4px 0; }
+.cons-roteiro { margin: 6px 0 10px 18px; padding: 0; }
+.cons-roteiro li { margin: 3px 0; }
+.cons-pendente { color: var(--cor-erro); }
+.rotulo-oculto { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.rotulo-inline { display: inline-flex; gap: 4px; align-items: center; margin-right: 6px; font-size: 0.9rem; }

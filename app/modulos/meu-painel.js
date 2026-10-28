@@ -202,6 +202,9 @@ async function alternarMeusDadosLGPD() {
       ${linhaLgpd("Função", m.funcao)}
       ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
       ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? String(c.desde).slice(0, 10).split("-").reverse().join("/") : "início não informado"} a ${c.ate ? String(c.ate).slice(0, 10).split("-").reverse().join("/") : "hoje"})`).join("; "))}
+      ${linhaLgpd("Processos de consagração", ((data.escada && data.escada.consagracoes) || []).map((c) => [`nº ${c.numero}`, c.cargo || c.assunto, c.etapa, c.parecerCEI ? `CEI: ${c.parecerCEI}` : null,
+        c.taxaPagaEm ? `taxa paga em ${String(c.taxaPagaEm).slice(0, 10).split("-").reverse().join("/")}` : null, c.cerimonia ? `cerimônia de ${String(c.cerimonia).slice(0, 10).split("-").reverse().join("/")}` : null,
+        c.encerramento].filter(Boolean).join(", ")).join("; "))}
       ${linhaLgpd("Departamento", m.departamento)}
       ${linhaLgpd("Dizimista Fiel", m.dizimistaFiel, "bit")}
     </div>

@@ -1224,6 +1224,8 @@ input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda);
 .escada-aviso span[aria-hidden] { color: var(--cor-secundaria); }
 .escada-dispensado { color: var(--cor-texto-suave); }
 /* v8.3 — consagração e documentação: painéis da esteira (parecer, homologação, taxa, cerimônia) */
+/* o atributo hidden vence o display das classes (.barra-lista é flex): sem isto, "Homologar os marcados" aparecia para todos (revisão independente da tela) */
+#abaConsagracoes [hidden] { display: none !important; }
 .cons-painel { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 12px; margin: 10px 0; background: var(--cor-superficie); }
 .cons-painel h4 { margin: 0 0 8px; }
 .cons-fieldset { border: 1px solid var(--cor-borda); border-radius: var(--raio-pequeno); padding: 8px 12px; margin: 8px 0; }

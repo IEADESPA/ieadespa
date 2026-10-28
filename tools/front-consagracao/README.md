@@ -21,7 +21,9 @@ escada na seção do CEI, duplo clique); a cerimônia (criar, comissão, casal e
 em dia, a pergunta que diz quantos perdem o ano, a lista inteira — presentes e ausentes —, o resultado com os diplomas, incluir, retirar,
 diplomas recusados, cancelar com motivo, editar); o CHM com o certificado na Academia; os processos em Meus Dados; a saída da sessão.
 
-Resultado de 28/10/2026: 90 verificações, 0 falhas. Três mutações (tirar o escape do destino do candidato na cerimônia; mandar só os
+Resultado de 28/10/2026: 98 verificações, 0 falhas (com o que a revisão independente da tela pediu: o ato vai para a cerimônia que
+estava na tela no clique, a presença desmarcada sobrevive ao redesenho, o resultado de cada pessoa depois do registro, a fila do CEI que
+chega depois da saída é descartada, o aviso para o CEI fora do nível geral, a lista da escada perto do painel da homologação). Três mutações (tirar o escape do destino do candidato na cerimônia; mandar só os
 presentes, sem a lista de ausentes; mostrar as cerimônias a quem não é do nível geral) foram acusadas.
 
 O navegador simulado (`tools/front-menores/dom.js`) passou a aceitar `el.hidden = true/false`, como o navegador de verdade; as outras

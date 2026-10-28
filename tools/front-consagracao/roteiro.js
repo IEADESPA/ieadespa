@@ -333,6 +333,75 @@ async function prova() {
   ok(/Processos de consagração/.test(md) && /Ausente na cerimônia/.test(md), "Meus Dados: os processos de consagração", md.slice(0, 120));
   semAtaque(amb, "Academia e Meus Dados");
 
+  console.log("== o que a revisão independente da tela pediu ==");
+  ok(/#abaConsagracoes \[hidden\] \{ display: none !important; \}/.test(lerApp("style.css")), "o 'escondido' vence o estilo das barras (no navegador de verdade)");
+  let rv = montar();
+  rv.g("consAbrirAba")();
+  await rv.ocioso();
+  const A = R.detalhePlanejada.cerimonia.cerimoniaId;
+  const B = R.detalheRealizada.cerimonia.cerimoniaId === A ? A + 1000 : R.detalheRealizada.cerimonia.cerimoniaId;
+  await rv.g("consAbrirCerimoniaAcao")(A);
+  // abriu B (resposta lenta) e, com A ainda na tela, pediu para cancelar: cancela A, não B
+  const retB = rv.retem((c) => c.chave === "GET cerimonias-consagracao/detalhe" && c.consulta.cerimoniaId === String(B));
+  rv.__detalhe = { ...R.detalhePlanejada, cerimonia: { ...R.detalhePlanejada.cerimonia, cerimoniaId: B } };
+  rv.g("consAbrirCerimoniaAcao")(B);
+  await rv.ocioso();
+  rv.limparRegistro();
+  rv.g("consCancelarCerimoniaAcao")();
+  for (let i = 0; i < 30 && rv.e("modalOverlay").classList.contains("escondido"); i++) await new Promise((x) => setImmediate(x));
+  retB.liberar();
+  await rv.ocioso();
+  rv.doc.digitar(rv.e("modalTexto"), "Motivo de teste");
+  await rv.responderModal(true);
+  await rv.ocioso();
+  p = posts(rv, "cerimonias-consagracao/cancelar");
+  ok(p.length === 1 && p[0].corpo.cerimoniaId === A, "o cancelamento vai para a cerimônia que estava na tela no clique", p.map((x) => x.corpo));
+  // a presença desmarcada sobrevive ao redesenho (salvar a comissão redesenha o detalhe)
+  rv.__detalhe = R.detalhePlanejada;
+  await rv.g("consAbrirCerimoniaAcao")(A);
+  const iDes = R.detalhePlanejada.candidatos.findIndex((c) => c.taxa.emDia);
+  rv.doc.marcar(rv.e(`consPresente_${iDes}`), false);
+  rv.__respostas["POST cerimonias-consagracao/comissao"] = { corpo: { sucesso: true, mensagem: "Comissão salva." } };
+  await rv.g("consSalvarComissaoAcao")();
+  await rv.ocioso();
+  ok(rv.e(`consPresente_${iDes}`).checked === false && /Comissão salva/.test(rv.e("consResultadoDetalhe").textContent), "a presença desmarcada continua desmarcada depois do redesenho (e a mensagem aparece)");
+  // o resultado de cada pessoa aparece depois do registro (a realizada também tem a linha de resultado)
+  rv.__respostas["POST cerimonias-consagracao/registrar"] = { corpo: R.registro };
+  rv.__detalhe = R.detalheRealizada;
+  rv.g("consRegistrarCerimoniaAcao")();
+  await rv.responderModal(true);
+  await rv.ocioso();
+  const linhaRes = rv.e("consResultadoDetalhe") && rv.e("consResultadoDetalhe").textContent;
+  ok(!!linhaRes && R.registro.resultados.every((x) => linhaRes.includes(REAL.registro.resultados.find((y) => y.consagracaoId === x.consagracaoId).nome)), "registrada: o resultado de cada pessoa aparece no detalhe", linhaRes);
+  // resposta atrasada da fila do CEI depois da saída: descartada
+  rv = montar({ permissoes: ["cei"], gerais: ["cei"] });
+  const retCEI = rv.retem((c) => c.chave === "GET esteira-consagracao/cei");
+  rv.g("consCarregarFilaCEI")();
+  await rv.ocioso();
+  rv.g("limparSessao")();
+  retCEI.liberar();
+  await rv.ocioso();
+  ok(rv.e("consListaCEI").innerHTML === "" && rv.g("consFilaCEI").length === 0, "a fila do CEI que chega depois da saída não aparece");
+  // CEI abaixo do nível geral: uma linha, não a aba vazia
+  rv = montar({ permissoes: ["cei"], gerais: [] });
+  rv.g("consAbrirAba")();
+  await rv.ocioso();
+  ok(!rv.e("consAvisoSemSecao").hidden && rv.e("consSecaoCEI").hidden, "CEI fora do nível geral: o aviso no lugar da aba vazia");
+  // a lista da escada de quem não foi homologado aparece perto do painel
+  rv = montar();
+  rv.__lista = R.listaFinal;
+  rv.g("consAbrirAba")();
+  await rv.ocioso();
+  const ci = rv.g("consagracoesCache").findIndex((c) => c.status === "AGUARDANDO_PLENARIO");
+  rv.doc.marcar(rv.e(`consMarcar_${ci}`), true);
+  rv.g("consAbrirHomologarAcao")();
+  rv.doc.digitar(rv.e("consHomAto"), "Ato");
+  rv.__respostas["POST esteira-consagracao/homologar"] = { status: 422, corpo: { sucesso: false, mensagem: "0 de 1.", resultados: [{ consagracaoId: "x", nome: `Fulano ${ATAQUE}`, sucesso: false, mensagem: "travou", requisitos: { alvo: "DIACONO", alvoRotulo: "Diácono", itens: [{ chave: "chm", rotulo: "CHM", artigo: "Art. 67", situacao: "FALTA", detalhe: "revogado" }], bloqueado: true } }] } };
+  rv.g("consHomologarAcao")();
+  await rv.ocioso();
+  ok(/ainda não pode seguir/.test(rv.e("consRequisitosEsteira").textContent) && rv.e("consagracaoRequisitos").innerHTML === "", "a lista do que falta vai para perto do painel (não para o formulário do protocolo)");
+  semAtaque(rv, "revisão da tela");
+
   console.log("== saída da sessão ==");
   amb.g("limparSessao")();
   ok(amb.e("consListaCEI").innerHTML === "" && amb.e("consCerimoniaDetalhe").hidden && amb.e("consCerimoniaDetalhe").innerHTML === "" && amb.e("consFormParecer").hidden && amb.e("consPainelTaxa").hidden, "saiu: a fila do CEI, o detalhe da cerimônia e os painéis somem");

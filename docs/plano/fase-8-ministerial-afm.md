@@ -297,6 +297,13 @@ Reintegração seguem a esteira antiga. Tela: a aba Consagrações também para 
   lado a lado (só o casamento mais recente conta). Dois casamentos registrados pedem o escrutínio, mesmo com o cadastro dizendo "casado". A minimização apaga também as
   marcas do escrutínio e da sabatina.
 
+**O que mudou depois da revisão independente da tela** (4 médios, 8 baixos): o botão "Homologar os marcados" aparecia para todos no navegador de verdade (o
+estilo da barra vencia o "escondido"); um ato sobre a cerimônia podia ir para outra aberta depois (agora vai a que estava na tela no clique); a fila do CEI que chegava
+depois da saída aparecia (agora é descartada, e o formulário do parecer é limpo); o resultado de cada pessoa sumia depois do registro; a presença desmarcada voltava a
+ficar marcada depois de imprimir os diplomas ou salvar a comissão; o valor da taxa que o navegador não entende não vira R$ 70,00 calado; aviso para quem é do CEI fora
+do nível geral; rótulos com o nome em cada caixinha; a lista do que falta perto do painel da homologação; reuniões da CLI relidas ao homologar. A taxa pela tela fica
+com a Secretaria (o servidor aceita também o nível geral do financeiro, mas a tesouraria não chega à aba Consagrações).
+
 **Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** o "Conselho" da esteira é o **CEI** (Art. 74, III) e quem dá o parecer é quem tem a
 permissão `cei` no nível geral; o parecer vale também para a nomeação do Presidente e para quem vem de outra convenção (o Art. 66 §4º só dispensa o veto da AFM); Auxiliar,
 Missionário(a) e Diácono são homologados pelo **ato do Presidente** (a Secretaria registra) e Presbítero, Evangelista e Pastor **pela CLI** (a reunião já encerrada); o
@@ -307,7 +314,7 @@ pelo sistema; o diploma é impresso antes com o código reservado e só vale dep
 
 **Provas:** jest 6.136 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 158): `e2e-55` fluxos 112, `e2e-56` segurança e lixo 86, `e2e-57` corridas 19,
 `e2e-58` o que a revisão pediu 25; os da v8.2 passam pela esteira nova (`e2e-51` 121, `e2e-52` 53, `e2e-53` 25, `e2e-54` 26); tela (`tools/front-consagracao`, com as
-respostas reais gravadas pelo `e2e-55`) 90, com três mutações acusadas; as outras provas de tela continuam passando.
+respostas reais gravadas pelo `e2e-55`) 98, com três mutações acusadas; as outras provas de tela continuam passando.
 
 ## v8.4 — Credencial digital com QR Code
 

@@ -5,6 +5,9 @@
 //   duas. A nova via encerra a anterior (SUBSTITUIDA) na mesma transação; nada se apaga.
 // - A situação pública é calculada na hora da leitura (Art. 76 §1º). Para o obreiro, só a sanção aplicada ou o afastamento cautelar suspendem a credencial — um
 //   processo apenas aberto, ainda sem julgamento, não aparece para quem lê o QR.
+// - A disciplina não muda o cadastro: a exclusão em vigor e a Disciplina Rigorosa em vigor vêm do processo (revisão independente, 28/10/2026). O recurso não tem
+//   efeito suspensivo: o processo original "em recurso" continua valendo até o recurso ser julgado (aí vale o resultado do recurso). Exclusão ainda pendente de
+//   homologação do CEI (HomologadoPeloCEI = 0) ainda não vale.
 const { sql } = require("./db");
 const regra = require("./credencial");
 const certificados = require("./certificados");
@@ -15,13 +18,27 @@ const { violouUnicidade } = require("./violacaoUnica");
 
 const NAO_EXISTE = { sucesso: false, naoExiste: true };
 const MUDOU = (mensagem) => ({ sucesso: false, mudou: true, mensagem });
-const dia = (v) => (v == null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+// a data de Brasília (UTC−3, sem horário de verão) de um instante gravado em UTC
+const dia = (v) => (v == null ? null : new Date(new Date(v).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
+
+// O processo original "em recurso" vale enquanto o recurso não é julgado (Regimento: o recurso não suspende a pena).
+const EM_RECURSO_VALE = `(pd.Status = N'EM_RECURSO' AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares r WHERE r.ProcessoOrigemId = pd.ProcessoId AND r.Status = N'JULGADO'))`;
+const HOMOLOGACAO_VALE = `ISNULL(pd.HomologadoPeloCEI, 1) = 1`;
+// As três marcas da disciplina, para a pessoa `m`: excluída, fora da comunhão (Disciplina Rigorosa) e afastada das funções (sanção ou afastamento cautelar).
+const MARCAS_DISCIPLINA = `
+  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd WHERE pd.MembroId = m.MembroId AND pd.Resultado = N'EXCLUSAO' AND ${HOMOLOGACAO_VALE}
+                    AND (pd.Status = N'JULGADO' OR ${EM_RECURSO_VALE})) THEN 1 ELSE 0 END AS Excluido,
+  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
+                    WHERE pd.MembroId = m.MembroId AND tp.Codigo = N'DISCIPLINA_RIGOROSA' AND ${HOMOLOGACAO_VALE} AND ((${CONDICAO_SQL_ATIVO}) OR ${EM_RECURSO_VALE})) THEN 1 ELSE 0 END AS ForaDaComunhao,
+  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
+                    WHERE pd.MembroId = m.MembroId AND ${HOMOLOGACAO_VALE}
+                      AND ((pd.Status <> N'EM_ANDAMENTO' AND ${CONDICAO_SQL_ATIVO})
+                           OR (${EM_RECURSO_VALE} AND pd.Resultado IN (N'SANCAO', N'EXCLUSAO') AND ISNULL(tp.Codigo, N'') <> N'ADVERTENCIA'))) THEN 1 ELSE 0 END AS Afastado`;
 
 const SELECT_PESSOA = `
   SELECT m.MembroId, m.Nome, m.Status, m.SituacaoMembro, m.CargoMinisterial, m.FotoUrl, cg.Nome AS Congregacao, ex.Nome AS Extensao,
          (SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula,
-         CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
-                           WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ProcessosDisciplinares.Status <> N'EM_ANDAMENTO' AND ${CONDICAO_SQL_ATIVO}) THEN 1 ELSE 0 END AS Afastado
+         ${MARCAS_DISCIPLINA}
   FROM MembroReferencia m
   LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId`;
@@ -29,7 +46,8 @@ const SELECT_PESSOA = `
 function mapearPessoa(l) {
   return {
     membroId: Number(l.MembroId), nome: l.Nome, status: l.Status, situacaoMembro: l.SituacaoMembro, cargo: l.CargoMinisterial || null, fotoUrl: l.FotoUrl || null,
-    congregacao: l.Congregacao || null, extensao: l.Extensao || null, statusMatricula: l.StatusMatricula || null, sobDisciplina: !!l.Afastado
+    congregacao: l.Congregacao || null, extensao: l.Extensao || null, statusMatricula: l.StatusMatricula || null, sobDisciplina: !!l.Afastado,
+    excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao
   };
 }
 async function pessoa(conexao, membroId) {
@@ -96,23 +114,27 @@ async function emitir(pool, { membroId, por }) {
   return { sucesso: true, credencialId: r.credencialId, mensagem: `Credencial emitida (via ${r.via}). A pessoa já a vê no Meu Painel.` };
 }
 
-// Emissão em lote: os membros ativos em comunhão que ainda não têm credencial válida (até `limite` por vez).
-async function emitirEmLote(pool, { por, limite = 300 }) {
-  const r = await pool.request().input("lim", sql.Int, limite).query(`
-    SELECT TOP (@lim) m.MembroId FROM MembroReferencia m
-    WHERE m.Status = N'ATIVO' AND (m.SituacaoMembro = N'EM_COMUNHAO' OR m.SituacaoMembro IS NULL)
-      AND NOT EXISTS (SELECT 1 FROM CredenciaisEclesiasticas c WHERE c.MembroId = m.MembroId AND c.Situacao = N'VALIDA')
-    ORDER BY m.MembroId`);
+// Quem o lote alcança: membro ativo (ou de licença) em comunhão, ADULTO (a criança recebe pela emissão individual, a pedido da família), que NUNCA teve credencial — quem
+// teve a sua cancelada pela Secretaria não volta a receber sozinho (revisão independente, 28/10/2026) — e sem as marcas da disciplina.
+const SQL_ELEGIVEIS_LOTE = `
+  SELECT x.MembroId FROM (
+    SELECT m.MembroId, ${MARCAS_DISCIPLINA}
+    FROM MembroReferencia m
+    WHERE m.Status IN (N'ATIVO', N'LICENÇA', N'LICENCA_CANDIDATURA') AND (m.SituacaoMembro = N'EM_COMUNHAO' OR m.SituacaoMembro IS NULL)
+      AND (m.DataNascimento IS NULL OR m.DataNascimento <= DATEADD(year, -18, CAST(DATEADD(hour, -3, SYSUTCDATETIME()) AS date)))
+      AND NOT EXISTS (SELECT 1 FROM CredenciaisEclesiasticas c WHERE c.MembroId = m.MembroId)
+  ) x WHERE x.Excluido = 0 AND x.ForaDaComunhao = 0`;
+
+// Emissão em lote, `limite` por vez (cada emissão é uma transação com trava: 60 cabem com folga no prazo de uma requisição).
+async function emitirEmLote(pool, { por, limite = 60 }) {
+  const r = await pool.request().input("lim", sql.Int, limite).query(`SELECT TOP (@lim) e.MembroId FROM (${SQL_ELEGIVEIS_LOTE}) e ORDER BY e.MembroId`);
   let emitidas = 0;
   for (const l of r.recordset) {
     const x = await emitir(pool, { membroId: l.MembroId, por });
     if (x.sucesso) emitidas++;
   }
-  const faltam = Number((await pool.request().query(`
-    SELECT COUNT(*) AS n FROM MembroReferencia m
-    WHERE m.Status = N'ATIVO' AND (m.SituacaoMembro = N'EM_COMUNHAO' OR m.SituacaoMembro IS NULL)
-      AND NOT EXISTS (SELECT 1 FROM CredenciaisEclesiasticas c WHERE c.MembroId = m.MembroId AND c.Situacao = N'VALIDA')`)).recordset[0].n);
-  return { sucesso: true, emitidas, faltam, mensagem: `${emitidas} credencial(is) emitida(s).${faltam ? ` Faltam ${faltam}: rode de novo.` : " Todos os membros ativos têm credencial."}` };
+  const faltam = Number((await pool.request().query(`SELECT COUNT(*) AS n FROM (${SQL_ELEGIVEIS_LOTE}) e`)).recordset[0].n);
+  return { sucesso: true, emitidas, faltam, mensagem: `${emitidas} credencial(is) emitida(s).${faltam ? ` Faltam ${faltam}: clique de novo.` : " Todos os membros adultos ativos que nunca tiveram credencial já têm."}` };
 }
 
 // Nova via (perda, roubo, foto ou cargo novo): a anterior deixa de valer na mesma hora.
@@ -151,10 +173,21 @@ async function cancelar(pool, { membroId, motivo, por }) {
 }
 
 // Desligamento e minimização (o recolhimento do Art. 95 §2º, IV, a): a credencial válida é cancelada junto.
-async function cancelarNoDesligamento(pool, membroId, motivo) {
-  await pool.request().input("m", sql.Int, Number(membroId)).input("motivo", sql.NVarChar(300), motivo || "Desligamento")
-    .query(`UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA', EncerradaEm = SYSUTCDATETIME(), MotivoEncerramento = @motivo
+async function cancelarNoDesligamento(pool, membroId, motivo, por = null) {
+  const r = await pool.request().input("m", sql.Int, Number(membroId)).input("motivo", sql.NVarChar(300), motivo || "Desligamento").input("por", sql.Int, por)
+    .query(`UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA', EncerradaEm = SYSUTCDATETIME(), EncerradaPor = @por, MotivoEncerramento = @motivo
+            OUTPUT INSERTED.CredencialId
             WHERE MembroId = @m AND Situacao = N'VALIDA'`);
+  const cancelada = r && r.recordset && r.recordset[0];
+  if (cancelada) {
+    await registrarAuditoria({ tabela: "CredenciaisEclesiasticas", registroId: cancelada.CredencialId, acao: "CREDENCIAL_RECOLHIDA", usuarioId: por, dadosDepois: { membroId: Number(membroId), motivo: motivo || "Desligamento" } });
+  }
+}
+
+// Os desligamentos que não passam pela minimização (saída registrada, abandono, exclusão homologada): o recolhimento é melhor esforço — a situação do QR já é calculada
+// na hora; isto só tira a via da lista de "válidas" da Secretaria. Nunca derruba o ato principal.
+async function recolherSemFalhar(pool, membroId, motivo, por) {
+  try { await cancelarNoDesligamento(pool, membroId, motivo, por); } catch (e) { console.error("[credencial] recolhimento não gravado (o QR já mostra a situação):", e && e.message); }
 }
 
 // A pessoa pede a impressão (Art. 76 §2º: só a Secretaria Geral imprime). Pedir de novo não muda nada.
@@ -162,7 +195,8 @@ async function pedirImpressao(pool, { membroId }) {
   const upd = await pool.request().input("m", sql.Int, Number(membroId))
     .query(`UPDATE CredenciaisEclesiasticas SET ImpressaoSolicitadaEm = SYSUTCDATETIME() WHERE MembroId = @m AND Situacao = N'VALIDA' AND ImpressaoSolicitadaEm IS NULL AND ImpressaEm IS NULL`);
   if (upd.rowsAffected[0]) {
-    await registrarAuditoria({ tabela: "CredenciaisEclesiasticas", registroId: Number(membroId), acao: "CREDENCIAL_IMPRESSAO_PEDIDA", usuarioId: Number(membroId) });
+    const c = await credencialValida(pool, membroId);
+    await registrarAuditoria({ tabela: "CredenciaisEclesiasticas", registroId: c ? c.credencialId : 0, acao: "CREDENCIAL_IMPRESSAO_PEDIDA", usuarioId: Number(membroId), dadosDepois: { membroId: Number(membroId) } });
     return { sucesso: true, mensagem: "Pedido enviado à Secretaria Geral. A impressão é gratuita." };
   }
   const atual = await credencialValida(pool, membroId);
@@ -178,17 +212,18 @@ async function registrarImpressao(pool, { credencialId, por }) {
   return { sucesso: true, mensagem: "Impressão registrada." };
 }
 
-// A lista da Secretaria: as credenciais válidas (com o pedido de impressão), as encerradas recentes e quantos membros ativos ainda não têm.
-async function listar(pool) {
-  const r = await pool.request().query(`
-    SELECT TOP 2000 c.*, m.Nome, m.CargoMinisterial, cg.Nome AS Congregacao
+// A lista da Secretaria. Sem busca: os pedidos de impressão pendentes e as mais recentes (até 300). Com busca (parte do nome ou a matrícula): as que batem, de qualquer
+// época — assim nenhuma credencial fica fora do alcance de "nova via", "cancelar" e PDF, por maior que seja a igreja (revisão independente, 28/10/2026).
+async function listar(pool, { busca } = {}) {
+  const termo = typeof busca === "string" ? busca.replace(/[\u0000-\u001F\u007F]+/g, " ").trim().slice(0, 100) : "";
+  const req = pool.request().input("nome", sql.NVarChar(120), `%${termo.replace(/[[\]%_]/g, (x) => `[${x}]`)}%`).input("mat", sql.Int, /^\d{1,9}$/.test(termo) ? Number(termo) : -1);
+  const r = await req.query(`
+    SELECT TOP 300 c.*, m.Nome, m.CargoMinisterial, cg.Nome AS Congregacao
     FROM CredenciaisEclesiasticas c JOIN MembroReferencia m ON m.MembroId = c.MembroId LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
-    WHERE c.Situacao = N'VALIDA' OR c.EncerradaEm >= DATEADD(day, -60, SYSUTCDATETIME())
-    ORDER BY CASE WHEN c.ImpressaoSolicitadaEm IS NOT NULL AND c.ImpressaEm IS NULL THEN 0 ELSE 1 END, m.Nome`);
-  const semCredencial = Number((await pool.request().query(`
-    SELECT COUNT(*) AS n FROM MembroReferencia m
-    WHERE m.Status = N'ATIVO' AND (m.SituacaoMembro = N'EM_COMUNHAO' OR m.SituacaoMembro IS NULL)
-      AND NOT EXISTS (SELECT 1 FROM CredenciaisEclesiasticas c WHERE c.MembroId = m.MembroId AND c.Situacao = N'VALIDA')`)).recordset[0].n);
+    WHERE ${termo ? "(m.Nome LIKE @nome OR m.MembroId = @mat)" : "(c.Situacao = N'VALIDA' OR c.EncerradaEm >= DATEADD(day, -60, SYSUTCDATETIME()))"}
+    ORDER BY CASE WHEN c.Situacao = N'VALIDA' AND c.ImpressaoSolicitadaEm IS NOT NULL AND c.ImpressaEm IS NULL THEN 0 ELSE 1 END,
+             ${termo ? "m.Nome, c.Via DESC" : "c.EmitidaEm DESC"}`);
+  const semCredencial = Number((await pool.request().query(`SELECT COUNT(*) AS n FROM (${SQL_ELEGIVEIS_LOTE}) e`)).recordset[0].n);
   return {
     itens: r.recordset.map((l) => ({ ...mapearCredencial(l), codigo: undefined, nome: l.Nome, categoria: regra.categoria(l.CargoMinisterial), congregacao: l.Congregacao || null })),
     semCredencial
@@ -235,6 +270,6 @@ async function dadosDoTitular(pool, membroId) {
 }
 
 module.exports = {
-  pessoa, credencialValida, urlCredencial, emitir, emitirEmLote, novaVia, cancelar, cancelarNoDesligamento, pedirImpressao, registrarImpressao, listar, minha,
+  pessoa, credencialValida, urlCredencial, emitir, emitirEmLote, novaVia, cancelar, cancelarNoDesligamento, recolherSemFalhar, pedirImpressao, registrarImpressao, listar, minha,
   verificarPublica, dadosDoCartao, dadosDoTitular
 };

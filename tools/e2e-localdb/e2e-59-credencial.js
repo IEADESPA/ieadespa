@@ -112,11 +112,57 @@ const PUBLICAS = new Set(["sucesso", "situacao", "nome", "categoria", "congregac
 
   console.log("== lote ==");
   r = await cred("lote", { token: SEC(), metodo: "POST" });
-  ok(r.status === 200 && r.body.emitidas > 0 && r.body.faltam === 0, "emite para todos os ativos em comunhão sem credencial", r.body);
+  ok(r.status === 200 && r.body.emitidas > 0 && r.body.emitidas <= 60, "emite em lotes de até 60 (cabe no prazo de uma requisição)", r.body);
+  for (let i = 0; i < 50 && r.body.faltam > 0; i++) r = await cred("lote", { token: SEC(), metodo: "POST" });
+  ok(r.body.faltam === 0 && /clique de novo|já têm/.test(r.body.mensagem), "clicando de novo, até não faltar ninguém", r.body);
   ok(!(await valida(P.menor)), "o congregado ficou de fora");
   r = await cred("lote", { token: SEC(), metodo: "POST" });
   ok(r.body.emitidas === 0, "de novo: nenhuma (todos já têm)", r.body);
   ok((await escalar("SELECT COUNT(*) FROM (SELECT MembroId FROM CredenciaisEclesiasticas WHERE Situacao = 'VALIDA' GROUP BY MembroId HAVING COUNT(*) > 1) x")) === 0, "ninguém com duas válidas");
+
+  console.log("== o que a revisão independente pediu ==");
+  // exclusão em vigor: a disciplina não muda o cadastro, mas o QR diz "inativa"; pendente de homologação do CEI ainda não vale
+  const cVet = await valida(P.vetado);
+  const exc = await escalar("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado) OUTPUT INSERTED.ProcessoId VALUES (@m, @d, 'JULGADO', 'EXCLUSAO')", { m: P.vetado, d: hojeBr() });
+  r = await ler(cVet.Codigo);
+  ok(r.body.situacao === "INATIVA" && !/exclu|disciplin/i.test(JSON.stringify(r.body)), "excluído (cadastro ainda 'ativo'): o QR diz inativa, sem o motivo", r.body);
+  await q("UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = 0 WHERE ProcessoId = @p", { p: exc });
+  ok((await ler(cVet.Codigo)).body.situacao === "ATIVA", "exclusão ainda pendente de homologação do CEI: ainda não vale");
+  await q("UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = 1 WHERE ProcessoId = @p", { p: exc });
+  ok((await cred("nova-via", { token: SEC(), metodo: "POST", corpo: { membroId: P.vetado, motivo: "Tentativa depois da exclusão" } })).status === 422, "excluído não recebe nova via");
+  await q("DELETE FROM ProcessosDisciplinares WHERE ProcessoId = @p", { p: exc });
+  // recurso sem efeito suspensivo: a suspensão continua até o recurso ser julgado
+  const cPres = await valida(P.presbitero);
+  const origem = await escalar("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado) OUTPUT INSERTED.ProcessoId VALUES (@m, @d, 'EM_RECURSO', 'SANCAO')", { m: P.presbitero, d: hojeBr() });
+  await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, ProcessoOrigemId) VALUES (@m, @d, 'EM_ANDAMENTO', @o)", { m: P.presbitero, d: hojeBr(), o: origem });
+  ok((await ler(cPres.Codigo)).body.funcao === "INATIVO", "sanção em recurso: o obreiro continua inativo (o recurso não suspende a pena)");
+  await q("UPDATE ProcessosDisciplinares SET Status = 'JULGADO', Resultado = 'ABSOLVICAO' WHERE ProcessoOrigemId = @o", { o: origem });
+  ok((await ler(cPres.Codigo)).body.funcao === "HABILITADO", "recurso julgado (absolvido): volta a habilitado");
+  await q("DELETE FROM ProcessosDisciplinares WHERE MembroId = @m", { m: P.presbitero });
+  // licença: continua membro ativo; o obreiro fica sem licença para oficiar
+  const cMia = await valida(P.missionaria);
+  await q("UPDATE MembroReferencia SET Status = N'LICENÇA' WHERE MembroId = @m", { m: P.missionaria });
+  r = await ler(cMia.Codigo);
+  ok(r.body.situacao === "ATIVA" && r.body.funcao === "INATIVO", "de licença: credencial ativa, obreira sem licença para oficiar", r.body);
+  await q("UPDATE MembroReferencia SET Status = N'ATIVO' WHERE MembroId = @m", { m: P.missionaria });
+  // o lote não desfaz o cancelamento da Secretaria; nem emite para menor de idade
+  await cred("cancelar", { token: SEC(), metodo: "POST", corpo: { membroId: P.auxiliar, motivo: "Recolhida pela Secretaria (e2e)" } });
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO' WHERE MembroId = @m", { m: P.menor });
+  r = await cred("lote", { token: SEC(), metodo: "POST" });
+  ok(r.status === 200 && !(await valida(P.auxiliar)) && !(await valida(P.menor)), "o lote não reemite a cancelada nem emite para o menor", r.body);
+  r = await cred("emitir", { token: SEC(), metodo: "POST", corpo: { membroId: P.menor } });
+  ok(r.status === 201, "o menor recebe pela emissão individual (a pedido da família)", r.body);
+  // a busca no servidor: pelo nome e pela matrícula, de qualquer época
+  r = await cred(undefined, { token: SEC(), query: { busca: "Auxiliar Promovido" } });
+  ok(r.status === 200 && r.body.itens.length >= 3 && r.body.itens.every((c) => c.membroId === P.auxiliar), "busca pelo nome: todas as vias da pessoa", r.body.itens.map((c) => [c.membroId, c.via, c.situacao]));
+  r = await cred(undefined, { token: SEC(), query: { busca: String(P.presbitero) } });
+  ok(r.body.itens.length >= 1 && r.body.itens.every((c) => c.membroId === P.presbitero), "busca pela matrícula", r.body.itens.map((c) => c.membroId));
+  r = await cred(undefined, { token: SEC(), query: { busca: "%' OR 1=1 --" } });
+  ok(r.status === 200 && r.body.itens.length === 0, "busca com SQL e curinga: nada (o texto é só texto)", r.body.itens.length);
+  // o desligamento registrado recolhe a credencial (não só a minimização)
+  const cLeg = await valida(P.legado);
+  r = await chamarRota("GestaoPessoas/index.js", { metodo: "DELETE", binding: { membroId: String(P.legado) }, token: SEC() });
+  ok(r.status === 200 && !(await valida(P.legado)) && (await ler(cLeg.Codigo)).body.situacao === "CANCELADA", "desligado pela Secretaria: a credencial é recolhida", r.body);
 
   console.log("== Meus Dados e a minimização ==");
   r = await chamarRota("MeusDadosLGPD/index.js", { token: MEMBRO(P.auxiliar), binding: { matricula: String(P.auxiliar) } });

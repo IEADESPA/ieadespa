@@ -282,6 +282,8 @@ module.exports = async function (context, req) {
       .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor WHERE ProcessoId = @id`);
     if (homologado) {
       await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
+      // v8.4 — exclusão homologada: a credencial é recolhida (Regimento Art. 95 §2º, IV, a). Na Disciplina Rigorosa ela só fica "inativa" no QR, enquanto durar.
+      if (atual.Resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);
     }
     await registrarAuditoria({
       tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: homologado ? "Homologou exclusão/disciplina rigorosa (CEI)" : "Não homologou (CEI)",
@@ -372,6 +374,7 @@ module.exports = async function (context, req) {
     // julgamento é do TER, a vacância só acontece na homologação do CEI.
     if (implicaVacancia && !pendenteDeHomologacao) {
       await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
+      if (resultado === "EXCLUSAO") await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, "Exclusão (Regimento, Art. 95 §2º, IV, a)", usuario.membroId);   // v8.4
     }
 
     await registrarAuditoria({

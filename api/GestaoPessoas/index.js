@@ -323,6 +323,7 @@ module.exports = async function (context, req) {
 
     if (entrandoEmStatusTerminal) {
       await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);   // também derruba as sessões abertas da pessoa
+      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaida || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
     } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
       // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
@@ -389,6 +390,7 @@ module.exports = async function (context, req) {
     // Vacância automática (v1.5): fecha Assentos/Liderança/Cargo — mesmo helper
     // usado no procedimento de abandono e na exclusão disciplinar.
     await vacancia.encerrarVinculos(pool, sql, membroIdRota, "DESLIGAMENTO");
+    await require("../shared/credencialDb").recolherSemFalhar(pool, membroIdRota, "Desligamento", usuario.membroId);   // v8.4: o recolhimento da credencial
     await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroIdRota), acao: "Desligou pessoa", usuarioId: usuario.membroId });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Pessoa desligada." } };
     return;

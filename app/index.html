@@ -2135,10 +2135,13 @@
             </div>
           </form>
           <p id="credResultado" role="status" aria-live="polite"></p>
-          <div class="barra-lista">
-            <label for="credFiltro">Filtrar:</label>
-            <input type="search" id="credFiltro" placeholder="Nome ou congregação" data-on-input="credFiltrarAcao" />
-          </div>
+          <form data-on-submit="credBuscarAcao" data-prevent="submit">
+            <div class="barra-lista">
+              <label for="credFiltro">Buscar:</label>
+              <input type="search" id="credFiltro" placeholder="Nome ou matrícula" />
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" type="submit">Buscar</button>
+            </div>
+          </form>
           <div class="rolagem-tabela"><div id="credLista"></div></div>
         </div>
 

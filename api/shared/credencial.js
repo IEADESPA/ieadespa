@@ -7,14 +7,22 @@ const { calcularCapacidadeEleitoral } = require("./estatuto");
 const { CARGOS_OFICIAIS } = require("./afm");
 const { ROTULO_CARGO } = require("./escada");
 
-// O que a pessoa precisa para receber uma credencial: membro ativo em plena comunhão (o congregado ainda não é membro; o desligado e o excluído já não são).
+// Membro de verdade: ativo ou de licença (a licença — inclusive a de candidatura política, Regimento Art. 157 — não tira a membresia: "senta-se como membro comum"),
+// em plena comunhão. A disciplina não muda o cadastro (Status/Situação): por isso a exclusão em vigor e a Disciplina Rigorosa em vigor (Art. 95 §2º, III e IV — o
+// "afastamento total da comunhão") vêm do processo disciplinar, lidos no banco (shared/credencialDb.js) — revisão independente, 28/10/2026.
+const STATUS_DE_MEMBRO = new Set(["ATIVO", "LICENÇA", "LICENCA_CANDIDATURA"]);
+function membroEmComunhao(p) {
+  if (!p || !STATUS_DE_MEMBRO.has(p.status) || p.excluido || p.foraDaComunhao) return false;
+  return calcularCapacidadeEleitoral({ situacaoMembro: p.situacaoMembro, status: "ATIVO" }).emComunhao;
+}
+
+// O que a pessoa precisa para receber uma credencial: membro em plena comunhão (o congregado ainda não é membro; o desligado e o excluído já não são).
 function podeReceber(pessoa) {
   if (!pessoa) return { pode: false, mensagem: "Matrícula não encontrada." };
-  if (pessoa.status !== "ATIVO") return { pode: false, mensagem: "Só membro ativo recebe a credencial." };
+  if (pessoa.excluido) return { pode: false, mensagem: "Pessoa excluída por decisão disciplinar: a credencial é recolhida (Regimento, Art. 95 §2º, IV, a)." };
+  if (!STATUS_DE_MEMBRO.has(pessoa.status)) return { pode: false, mensagem: "Só membro ativo recebe a credencial." };
   if (pessoa.situacaoMembro === "CONGREGADO") return { pode: false, mensagem: "Congregado ainda não é membro: a credencial vem com a recepção." };
-  if (!calcularCapacidadeEleitoral({ situacaoMembro: pessoa.situacaoMembro, status: pessoa.status }).emComunhao) {
-    return { pode: false, mensagem: "Só membro em plena comunhão recebe a credencial." };
-  }
+  if (!membroEmComunhao(pessoa)) return { pode: false, mensagem: "Só membro em plena comunhão recebe a credencial." };
   return { pode: true, mensagem: null };
 }
 
@@ -27,11 +35,12 @@ function situacaoPublica(credencial, pessoa) {
   if (!credencial || !pessoa) return { situacao: "NAO_ENCONTRADA" };
   if (credencial.situacao === "SUBSTITUIDA") return { situacao: "SUBSTITUIDA", nome: pessoa.nome };
   if (credencial.situacao === "CANCELADA") return { situacao: "CANCELADA", nome: pessoa.nome };
-  const ativa = pessoa.status === "ATIVO" && calcularCapacidadeEleitoral({ situacaoMembro: pessoa.situacaoMembro, status: pessoa.status }).emComunhao;
+  const ativa = membroEmComunhao(pessoa);
   const r = { situacao: ativa ? "ATIVA" : "INATIVA", nome: pessoa.nome, categoria: categoria(pessoa.cargo), congregacao: pessoa.congregacao || null, via: credencial.via };
   if (ehObreiro(pessoa.cargo)) {
-    // Art. 69 §3º: a matrícula da AFM inativa suspende a credencial do obreiro ("Obreiro Inativo"); o afastamento disciplinar também (Art. 95 §2º, II, b; Art. 77).
-    r.funcao = ativa && pessoa.statusMatricula !== "INATIVA" && !pessoa.sobDisciplina ? "HABILITADO" : "INATIVO";
+    // Art. 69 §3º: a matrícula da AFM inativa suspende a credencial do obreiro ("Obreiro Inativo"); o afastamento disciplinar também (Art. 95 §2º, II, b; Art. 77);
+    // e a licença afasta das funções enquanto dura.
+    r.funcao = ativa && pessoa.status === "ATIVO" && pessoa.statusMatricula !== "INATIVA" && !pessoa.sobDisciplina ? "HABILITADO" : "INATIVO";
   }
   return r;
 }
@@ -45,4 +54,4 @@ function validarMotivo(texto) {
   return { valido: true, texto: t };
 }
 
-module.exports = { podeReceber, ehObreiro, categoria, situacaoPublica, validarMotivo };
+module.exports = { STATUS_DE_MEMBRO, membroEmComunhao, podeReceber, ehObreiro, categoria, situacaoPublica, validarMotivo };

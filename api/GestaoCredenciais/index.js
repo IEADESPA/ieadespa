@@ -1,7 +1,7 @@
 // GestaoCredenciais (v8.4 — Credencial digital com QR Code; Regimento Art. 76)
 // A Secretaria Geral (nível geral da permissão "pessoas") emite, emite em lote, emite nova via, cancela, gera o PDF para impressão e registra a impressão — a congregação
 // não emite nem imprime (Art. 76 §2º, anti-fraude). A pessoa vê a própria credencial no Meu Painel, baixa o PDF e pede a impressão.
-//  GET  (sem ação)              (geral pessoas) a lista: válidas, pedidos de impressão, encerradas recentes e quantos ativos ainda não têm
+//  GET  (sem ação) [?busca=]     (geral pessoas) a lista: pedidos de impressão e as mais recentes, ou as que batem com a busca (nome ou matrícula); e quantos ainda não têm
 //  GET  minha                   (login)         a própria credencial, com a situação de agora e a foto do cadastro
 //  GET  qr?membroId=            (titular ou geral pessoas) o QR em SVG
 //  GET  pdf?membroId=           (titular ou geral pessoas) o cartão em PDF (tamanho de cartão de crédito)
@@ -57,7 +57,8 @@ module.exports = async function (context, req) {
       context.res = { status: 200, headers: { "Content-Type": "image/svg+xml", "Cache-Control": "private, no-store" }, body: matrizParaSvg(gerarMatriz(c.url)) };
       return;
     }
-    const buffer = await pdfDaCredencial(c, await storage.lerFoto(membroId));
+    // só a foto que está no cadastro: a que foi tirada (consentimento revogado) não volta pelo arquivo que sobrou no armazenamento
+    const buffer = await pdfDaCredencial(c, c.fotoUrlCrua ? await storage.lerFoto(membroId) : null);
     context.res = { status: 200, headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="credencial-${membroId}-via${c.via}.pdf"`, "Cache-Control": "no-store" }, body: buffer, isRaw: true };
     return;
   }
@@ -73,7 +74,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const por = usuario.membroId;
   if (metodo === "GET" && !acao) {
-    context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { sucesso: true, ...(await db.listar(pool)) } };
+    context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { sucesso: true, ...(await db.listar(pool, { busca: (req.query || {}).busca })) } };
     return;
   }
   if (metodo !== "POST") return erro(context, 404, "Ação inválida.");

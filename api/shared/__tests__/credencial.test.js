@@ -1,5 +1,5 @@
 // v8.4 — Credencial digital: a regra pura (shared/credencial.js), o texto da migração 159 e o PDF do cartão. O banco e as rotas são provados no LocalDB
-// (tools/e2e-localdb, e2e-59 a e2e-61).
+// (tools/e2e-localdb, e2e-59 e e2e-60).
 const fs = require("fs");
 const path = require("path");
 const regra = require("../credencial");
@@ -42,6 +42,25 @@ describe("o que o QR mostra (Art. 76 §1º)", () => {
     expect(regra.situacaoPublica({ situacao: "SUBSTITUIDA", via: 1 }, membro({ cargo: "PASTOR" }))).toEqual({ situacao: "SUBSTITUIDA", nome: "Ana" });
     expect(regra.situacaoPublica({ situacao: "CANCELADA", via: 2 }, membro())).toEqual({ situacao: "CANCELADA", nome: "Ana" });
     expect(regra.situacaoPublica(null, membro())).toEqual({ situacao: "NAO_ENCONTRADA" });
+  });
+});
+
+describe("revisão independente (28/10/2026): a disciplina e a licença", () => {
+  test("excluído e fora da comunhão (Disciplina Rigorosa): inativa, sem dizer por quê, e não recebe credencial", () => {
+    const exc = regra.situacaoPublica(valida, membro({ excluido: true }));
+    expect(exc).toEqual({ situacao: "INATIVA", nome: "Ana", categoria: "Membro", congregacao: "Central", via: 1 });
+    expect(regra.situacaoPublica(valida, membro({ foraDaComunhao: true })).situacao).toBe("INATIVA");
+    expect(regra.situacaoPublica(valida, membro({ cargo: "PASTOR", statusMatricula: "ATIVA", foraDaComunhao: true }))).toMatchObject({ situacao: "INATIVA", funcao: "INATIVO" });
+    expect(regra.podeReceber(membro({ excluido: true })).mensagem).toMatch(/Art\. 95 §2º, IV, a/);
+    expect(regra.podeReceber(membro({ foraDaComunhao: true })).pode).toBe(false);
+  });
+  test("de licença (inclusive a de candidatura): continua membro ativo; o obreiro fica inativo nas funções", () => {
+    for (const status of ["LICENÇA", "LICENCA_CANDIDATURA"]) {
+      expect(regra.situacaoPublica(valida, membro({ status })).situacao).toBe("ATIVA");
+      expect(regra.situacaoPublica(valida, membro({ status, cargo: "DIACONO", statusMatricula: "ATIVA" }))).toMatchObject({ situacao: "ATIVA", funcao: "INATIVO" });
+      expect(regra.podeReceber(membro({ status })).pode).toBe(true);
+    }
+    expect(regra.situacaoPublica(valida, membro({ status: "LICENÇA", situacaoMembro: null })).situacao).toBe("ATIVA");
   });
 });
 

@@ -671,7 +671,8 @@ let credMinhaOcupada = false;
 async function credCarregarMinhaAcao() {
   const token = authToken;
   const caixa = document.getElementById("credMinha");
-  const res = await fetchProtegido(`${API_BASE}/credenciais/minha`);
+  let res;
+  try { res = await fetchProtegido(`${API_BASE}/credenciais/minha`); } catch (e) { if (authToken === token) caixa.innerHTML = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>"; return; }
   if (authToken !== token) return;
   const data = await jsonDaTela(res, caixa, "objeto");
   if (data === null || authToken !== token) return;
@@ -684,7 +685,7 @@ async function credCarregarMinhaAcao() {
   } catch (e) { /* sem o QR, o código em texto continua */ }
   if (authToken !== token) return;
   const agora = c.situacaoAgora || {};
-  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : "obreiro(a) inativo(a) no momento (Regimento, Art. 69 §3º)"}` : "";
+  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : "sem licença para oficiar no momento"}` : "";
   const impressao = c.impressaEm ? `Impressa pela Secretaria em ${credDataBr(c.impressaEm)}.` : c.impressaoSolicitadaEm ? `Impressão pedida em ${credDataBr(c.impressaoSolicitadaEm)}: a Secretaria Geral avisa quando estiver pronta.` : "";
   caixa.innerHTML = `<div class="credencial-cartao">
       <div class="credencial-topo">IEADESPA — Identidade Eclesiástica</div>
@@ -719,7 +720,7 @@ async function credPedirImpressaoAcao() {
   const token = authToken;
   try {
     const res = await fetchProtegido(`${API_BASE}/credenciais/pedir-impressao`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Não foi possível pedir agora. Tente de novo." }));
     if (authToken !== token) return;
     msg.textContent = data.mensagem || "";
     if (data.sucesso) credCarregarMinhaAcao();

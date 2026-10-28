@@ -16,5 +16,5 @@ credencial, a resposta que chega depois da saída; a lista da Secretaria (pedido
 com duplo clique, nova via e cancelar pedindo o motivo, marcar impressa, lote) e a sub-aba que some fora do nível geral; a página pública (consulta
 sozinha pelo QR, ativa, obreiro inativo, substituída, cancelada, não encontrada, código incompleto) sempre com o texto do servidor como texto.
 
-Resultado de 28/10/2026: 41 verificações, 0 falhas. Três mutações (a página pública usar innerHTML; mostrar a sub-aba fora do nível geral; tirar o
+Resultado de 28/10/2026: 42 verificações, 0 falhas (com a busca no servidor e a resposta atrasada descartada, pedidos da revisão independente). Três mutações (a página pública usar innerHTML; mostrar a sub-aba fora do nível geral; tirar o
 escape do nome no cartão) foram acusadas.

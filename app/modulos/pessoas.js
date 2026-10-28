@@ -214,13 +214,14 @@ function moverFormPessoaPara(slotId) {
 const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais" };
 
 function mostrarSubAbaPessoas(sub) {
+  // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
+  // do nível geral e herdou "credenciais" de outra sessão cai na busca, nunca numa tela em branco.
+  const credGeral = geralPara("pessoas");
+  if (sub === "credenciais" && !credGeral) sub = "buscar";
   subAbaPessoasAtual = sub;
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
   document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
-  // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere)
-  const credGeral = geralPara("pessoas");
-  if (sub === "credenciais" && !credGeral) sub = "buscar";
   document.getElementById("subPessoasCredenciais").style.display = sub === "credenciais" ? "block" : "none";
   document.getElementById("btnSubPessoasCredenciais").style.display = credGeral ? "" : "none";
   document.getElementById("btnSubPessoasCredenciais").classList.toggle("ativo", sub === "credenciais");
@@ -1709,24 +1710,31 @@ function credLimparTela() {
   for (const id of ["credMatricula", "credFiltro"]) { const el = document.getElementById(id); if (el) el.value = ""; }
 }
 
+// A lista vem do servidor: sem busca, os pedidos de impressão e as mais recentes; com busca (nome ou matrícula), as que batem — nenhuma fica fora do alcance.
+let credPedidoLista = 0;
 async function credCarregarListaAcao() {
   const token = authToken;
+  const pedido = ++credPedidoLista;
   const caixa = document.getElementById("credLista");
-  const res = await fetchProtegido(`${API_BASE}/credenciais`);
-  if (authToken !== token) return;
+  const busca = String((document.getElementById("credFiltro") || {}).value || "").trim();
+  const res = await fetchProtegido(`${API_BASE}/credenciais${busca ? `?busca=${encodeURIComponent(busca)}` : ""}`);
+  if (authToken !== token || pedido !== credPedidoLista) return;
   const data = await jsonDaTela(res, caixa, "objeto");
-  if (data === null || authToken !== token) return;
+  if (data === null || authToken !== token || pedido !== credPedidoLista) return;
   credCache = data.itens || [];
+  credBuscaAtual = busca;
   const msg = document.getElementById("credResultado");
-  if (msg && !msg.textContent) msg.textContent = data.semCredencial ? `${data.semCredencial} membro(s) ativo(s) ainda sem credencial.` : "Todos os membros ativos têm credencial.";
+  if (msg && !msg.textContent) msg.textContent = data.semCredencial ? `${data.semCredencial} membro(s) adulto(s) ativo(s) que nunca tiveram credencial.` : "Todos os membros adultos ativos já receberam credencial.";
   credFiltrarAcao();
 }
+let credBuscaAtual = "";
+
+function credBuscarAcao() { return credCarregarListaAcao(); }
 
 function credFiltrarAcao() {
   const caixa = document.getElementById("credLista");
-  const filtro = String((document.getElementById("credFiltro") || {}).value || "").trim().toLowerCase();
-  const itens = credCache.filter((c) => !filtro || String(c.nome || "").toLowerCase().includes(filtro) || String(c.congregacao || "").toLowerCase().includes(filtro));
-  if (!itens.length) { caixa.innerHTML = `<p class='subtitle'>${credCache.length ? "Nenhuma credencial com esse filtro." : "Nenhuma credencial emitida ainda."}</p>`; return; }
+  const itens = credCache;
+  if (!itens.length) { caixa.innerHTML = `<p class='subtitle'>${credBuscaAtual ? "Nenhuma credencial encontrada com essa busca." : "Nenhuma credencial emitida ainda."}</p>`; return; }
   const mostrados = itens.slice(0, 300);
   caixa.innerHTML = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Categoria</th><th>Congregação</th><th>Via</th><th>Situação</th><th>Impressão</th><th></th></tr></thead><tbody>`
     + mostrados.map((c) => {
@@ -1744,7 +1752,7 @@ function credFiltrarAcao() {
         <td>${impressao}</td><td class="acoes-inline">${acoes}</td>
       </tr>`;
     }).join("") + "</tbody></table>"
-    + (itens.length > mostrados.length ? `<p class="subtitle">Mostrando ${mostrados.length} de ${itens.length}: use o filtro.</p>` : "");
+    + (!credBuscaAtual && itens.length >= 300 ? `<p class="subtitle">Mostrando as 300 mais recentes: use a busca (nome ou matrícula) para achar qualquer outra.</p>` : "");
 }
 
 async function credPost(acao, corpo) {
@@ -1755,7 +1763,9 @@ async function credPost(acao, corpo) {
   let data;
   try {
     const res = await fetchProtegido(`${API_BASE}/credenciais/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo || {}) });
-    data = await res.json();
+    data = await res.json().catch(() => ({ sucesso: false, mensagem: "O servidor não respondeu a tempo. Atualize a lista e confira antes de repetir." }));
+  } catch (e) {
+    data = { sucesso: false, mensagem: "Sem conexão com o servidor. Tente de novo." };
   } finally {
     credOcupada = false;
   }
@@ -1796,15 +1806,20 @@ async function credMarcarImpressaAcao(credencialId, nome) {
 
 // O PDF do cartão (o titular baixa o próprio; a Secretaria Geral, o de qualquer um).
 async function credBaixarPdf(membroId, msgId) {
+  const token = authToken;
   const consulta = membroId ? `?membroId=${encodeURIComponent(String(membroId))}` : "";
-  const res = await fetchProtegido(`${API_BASE}/credenciais/pdf${consulta}`);
+  let res;
+  try { res = await fetchProtegido(`${API_BASE}/credenciais/pdf${consulta}`); } catch (e) { res = null; }
+  if (authToken !== token) return;   // saiu (ou trocou de login) enquanto o PDF era gerado: não baixa o cartão de outra sessão
   const msg = document.getElementById(msgId);
+  if (!res) { if (msg) msg.textContent = "Sem conexão com o servidor. Tente de novo."; return; }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     if (msg) msg.textContent = (data && data.mensagem) || "Não foi possível gerar o PDF.";
     return;
   }
   const blob = await res.blob();
+  if (authToken !== token) return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1824,5 +1839,5 @@ registrarAcoes({
   registrarMarcoMembroAcao, registrarRetornoLicencaAcao, removerVinculoFamiliar, salvarApresentacaoCrianca, salvarCasamento,
   salvarLicencaCandidatura, salvarPessoa, salvarVinculoFamiliar, solicitarCarta, voltarBuscaPessoas,
   // v8.4
-  credEmitirAcao, credEmitirLoteAcao, credFiltrarAcao, credNovaViaAcao, credCancelarAcao, credMarcarImpressaAcao, credPdfDeAcao,
+  credEmitirAcao, credEmitirLoteAcao, credBuscarAcao, credNovaViaAcao, credCancelarAcao, credMarcarImpressaAcao, credPdfDeAcao,
 });

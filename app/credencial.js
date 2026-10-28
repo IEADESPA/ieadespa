@@ -49,7 +49,7 @@
       var res = await fetch("/api/verificacao-credencial/" + encodeURIComponent(codigo), { headers: { Accept: "application/json" }, cache: "no-store" });
       var r = await res.json();
       if (r.situacao === "ATIVA" && r.funcao !== "INATIVO") mostrar("valido", "✅ Credencial ativa", "Membro da IEADESPA em plena comunhão, conforme o registro da Sede agora.", dadosDaCredencial(r));
-      else if (r.situacao === "ATIVA") mostrar("vencido", "⚠️ Credencial ativa — obreiro(a) inativo(a)", "É membro em comunhão, mas no momento não está habilitado(a) para oficiar atos (Regimento, Art. 69 §3º).", dadosDaCredencial(r));
+      else if (r.situacao === "ATIVA") mostrar("vencido", "⚠️ Credencial ativa — obreiro(a) inativo(a)", "É membro em comunhão, mas no momento não está habilitado(a) para oficiar atos.", dadosDaCredencial(r));
       else if (r.situacao === "INATIVA") mostrar("invalido", "⛔ Credencial INATIVA", "Esta credencial é da IEADESPA, mas a pessoa não está ativa no momento.", dadosDaCredencial(r));
       else if (r.situacao === "SUBSTITUIDA") mostrar("invalido", "⛔ Credencial substituída", "Esta via foi substituída por uma nova e não vale mais. Peça a credencial atual.", [["Nome", r.nome]]);
       else if (r.situacao === "CANCELADA") mostrar("invalido", "⛔ Credencial cancelada", "Esta credencial foi cancelada pela Secretaria Geral e não tem validade.", [["Nome", r.nome]]);

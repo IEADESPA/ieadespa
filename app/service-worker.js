@@ -69,6 +69,8 @@ self.addEventListener("fetch", (evento) => {
   // vezes compartilhado) não deve guardá-lo. Também nunca cai no index.html
   // quando offline: melhor o erro do navegador do que o app no lugar dela.
   if (url.pathname === "/verificar.html") return;
+  // v8.4 — a página do QR da credencial também passa direto: o endereço leva o código de segurança, que não pode ficar guardado no aparelho de quem leu (revisão independente)
+  if (url.pathname === "/credencial.html" || url.pathname === "/credencial.js") return;
 
   evento.respondWith(
     fetch(evento.request)

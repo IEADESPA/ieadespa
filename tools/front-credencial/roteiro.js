@@ -38,7 +38,7 @@ function extrairDoTexto(codigo, nomes, rel) {
   return nomes.map((x) => achados.get(x)).join("\n");
 }
 
-const DA_PESSOAS = ["ROTULO_SITUACAO_CREDENCIAL", "credCache", "credOcupada", "credDataBr", "credLimparTela", "credCarregarListaAcao", "credFiltrarAcao", "credPost", "credEmitirAcao",
+const DA_PESSOAS = ["ROTULO_SITUACAO_CREDENCIAL", "credCache", "credOcupada", "credDataBr", "credLimparTela", "credPedidoLista", "credCarregarListaAcao", "credBuscaAtual", "credBuscarAcao", "credFiltrarAcao", "credPost", "credEmitirAcao",
   "credEmitirLoteAcao", "credNovaViaAcao", "credCancelarAcao", "credMarcarImpressaAcao", "credBaixarPdf", "credPdfDeAcao", "TITULOS_SUB_PESSOAS", "mostrarSubAbaPessoas"];
 const DO_PAINEL = ["ROTULO_SITUACAO_AGORA", "credMinhaOcupada", "credCarregarMinhaAcao", "credBaixarMinhaAcao", "credPedirImpressaoAcao"];
 
@@ -50,7 +50,7 @@ function montar({ permissoes = ["pessoas"], gerais = ["pessoas"] } = {}) {
   ev("function moverFormPessoaPara() {} function limparFormPessoa() {} function carregarFilaAprovacoes() {}", "stubs-pessoas");
   ev(extrairDe("modulos/pessoas.js", DA_PESSOAS), "pessoas.js(credencial)");
   ev(extrairDe("modulos/meu-painel.js", DO_PAINEL), "meu-painel.js(credencial)");
-  ev("registrarAcoes({ credEmitirAcao, credEmitirLoteAcao, credFiltrarAcao, credNovaViaAcao, credCancelarAcao, credMarcarImpressaAcao, credPdfDeAcao, credBaixarMinhaAcao, credPedirImpressaoAcao, mostrarSubAbaPessoas });", "acoes");
+  ev("registrarAcoes({ credEmitirAcao, credEmitirLoteAcao, credBuscarAcao, credNovaViaAcao, credCancelarAcao, credMarcarImpressaAcao, credPdfDeAcao, credBaixarMinhaAcao, credPedirImpressaoAcao, mostrarSubAbaPessoas });", "acoes");
   amb.sessao({ matricula: 9202, token: "tok", nivel: gerais.length ? "GLOBAL" : "CONGREGACAO", permissoes, geral: gerais.length > 0 });
   amb.__minha = R.minha;
   amb.__respostas = {};
@@ -58,7 +58,7 @@ function montar({ permissoes = ["pessoas"], gerais = ["pessoas"] } = {}) {
   const fetchOriginal = amb.ctx.fetch;
   amb.ctx.fetch = async (url, opts) => { const r = await fetchOriginal(url, opts); if (/credenciais\/qr/.test(String(url))) r.text = async () => '<svg xmlns="http://www.w3.org/2000/svg"></svg>'; return r; };
   amb.api.servidor = (c) => {
-    if (c.chave === "GET credenciais") return { corpo: R.lista };
+    if (c.chave === "GET credenciais") return { corpo: c.consulta.busca ? { ...R.lista, itens: R.lista.itens.filter((x) => REAL.lista.itens.find((y) => y.credencialId === x.credencialId).nome.toLowerCase().includes(String(c.consulta.busca).toLowerCase())) } : R.lista };
     if (c.chave === "GET credenciais/minha") return { corpo: amb.__minha };
     if (c.chave === "GET credenciais/qr") return { corpo: '<svg xmlns="http://www.w3.org/2000/svg"></svg>', naoJson: true };
     if (amb.__respostas[c.chave]) return amb.__respostas[c.chave];
@@ -140,15 +140,33 @@ async function prova() {
   ok(amb.e("btnSubPessoasCredenciais").style.display !== "none" && amb.e("subPessoasCredenciais").style.display === "block", "no nível geral de 'pessoas': a sub-aba aparece e abre");
   t = amb.e("credLista").textContent;
   ok(R.lista.itens.slice(0, 5).every((c) => t.includes(REAL.lista.itens.find((x) => x.credencialId === c.credencialId).nome)) && /pedida em/.test(t), "a lista com os nomes e o pedido de impressão");
-  ok(/sem credencial|têm credencial/.test(amb.e("credResultado").textContent), "quantos ainda não têm");
+  ok(/nunca tiveram credencial|já receberam credencial/.test(amb.e("credResultado").textContent), "quantos ainda não têm");
   semAtaque(amb, "lista de credenciais");
   const validas = REAL.lista.itens.filter((c) => c.situacao === "VALIDA");
   ok(botoes(amb, "credLista", "credNovaViaAcao").length === validas.length && botoes(amb, "credLista", "credCancelarAcao").length === validas.length, "nova via e cancelar só nas válidas");
-  amb.doc.digitar(amb.e("credFiltro"), REAL.lista.itens[0].nome.slice(0, 12).toLowerCase());
-  ok(todos(amb, "credLista").filter((x) => x.localName === "tr").length - 1 >= 1 && !amb.e("credLista").textContent.includes("Nenhuma"), "o filtro pelo nome");
+  // a busca é no servidor (nome ou matrícula): nenhuma credencial fica fora do alcance, por maior que seja a lista
+  amb.limparRegistro();
+  amb.doc.digitar(amb.e("credFiltro"), REAL.lista.itens[0].nome.slice(0, 12));
+  await amb.g("credBuscarAcao")();
+  await amb.ocioso();
+  const pedidoBusca = amb.api.chamadas.find((c) => c.chave === "GET credenciais");
+  ok(pedidoBusca && pedidoBusca.consulta.busca === REAL.lista.itens[0].nome.slice(0, 12) && todos(amb, "credLista").filter((x) => x.localName === "tr").length - 1 >= 1, "a busca vai ao servidor com o texto e mostra o que voltou", pedidoBusca && pedidoBusca.consulta);
   amb.doc.digitar(amb.e("credFiltro"), "zzzz-ninguem");
-  ok(/Nenhuma credencial com esse filtro/.test(amb.e("credLista").textContent), "filtro sem resultado: diz isso");
+  await amb.g("credBuscarAcao")();
+  await amb.ocioso();
+  ok(/Nenhuma credencial encontrada com essa busca/.test(amb.e("credLista").textContent), "busca sem resultado: diz isso");
+  // duas buscas seguidas: a resposta atrasada da primeira não pinta por cima da segunda
+  const retBusca = amb.retem((c) => c.chave === "GET credenciais" && c.consulta.busca === "primeira");
+  amb.doc.digitar(amb.e("credFiltro"), "primeira");
+  amb.g("credBuscarAcao")();
+  await amb.ocioso();
   amb.doc.digitar(amb.e("credFiltro"), "");
+  await amb.g("credBuscarAcao")();
+  await amb.ocioso();
+  const depois = amb.e("credLista").textContent;
+  retBusca.liberar();
+  await amb.ocioso();
+  ok(amb.e("credLista").textContent === depois && !/Nenhuma credencial encontrada/.test(depois), "a resposta atrasada da busca anterior é descartada");
   // emitir
   amb.limparRegistro();
   amb.g("credEmitirAcao")();
@@ -203,7 +221,7 @@ async function prova() {
   ok(/Credencial ativa/.test(pg.texto) && pg.texto.includes(REAL.publicaAtiva.nome) && /Habilitado/.test(pg.texto) && /Consultado em/.test(pg.texto), "ativa: nome, categoria, habilitado e a hora da consulta", pg.texto.slice(0, 200));
   ok(pg.xss.length === 0 && pg.doc._ataques.length === 0 && pg.texto.includes(ATAQUE), "o texto do servidor entra como TEXTO (nunca HTML)");
   pg = await paginaPublica(R.publicaObreiroInativo, REAL.minha.credencial.codigo);
-  ok(/obreiro\(a\) inativo/i.test(pg.texto) && /não pode oficiar/.test(pg.texto), "obreiro inativo: diz que não pode oficiar no momento");
+  ok(/obreiro\(a\) inativo/i.test(pg.texto) && /não pode oficiar/.test(pg.texto) && !/Art\./.test(pg.texto), "obreiro inativo: diz que não pode oficiar no momento (sem citar o motivo)");
   pg = await paginaPublica(R.publicaSubstituida, REAL.minha.credencial.codigo);
   ok(/substituída/.test(pg.texto) && /não vale mais/.test(pg.texto), "substituída");
   pg = await paginaPublica(R.publicaCancelada, REAL.minha.credencial.codigo);

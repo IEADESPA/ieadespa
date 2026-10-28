@@ -22,7 +22,7 @@ module.exports = async function (context, req) {
   try {
     const pool = await getPool();
     const certificado = await certificados.buscarCertificadoPorId(pool, certificadoId);
-    const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId);
+    const temGestao = !!certificado && certificado.membroId !== usuario.membroId && await certificados.gestorAlcancaMembro(pool, usuario, certificado.membroId, certificado.natureza);
     if (!certificados.podeAcessarCertificado(certificado, { membroIdSolicitante: usuario.membroId, temGestao }) || !certificado.codigoVerificacao) {
       context.res = { status: 404, body: { sucesso: false, mensagem: "Certificado não encontrado." } };
       return;

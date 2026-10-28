@@ -1,0 +1,331 @@
+// e2e-55-consagracao-fluxos.js — v8.3 (Consagração e documentação): os fluxos com os handlers e o banco REAIS, sobre a base "cenario-escada" (já com a 158).
+// Os documentos da indicação; o parecer do CEI (sabatina, escrutínio do divorciado, INAPTO, processo antigo sem parecer); a homologação (Presidente e CLI, em lote); a taxa;
+// a cerimônia (comissão, candidatos, roteiro com casal e diplomação, diplomas impressos com o código reservado, presença, ausência, taxa fora do prazo, cancelamento); o
+// diploma e o CHM como documentos verificáveis; quem vê cada documento; Meus Dados; a minimização.
+const L = require("./lib");
+const { ok, fim, q, um, escalar, obterPool, path, API, hojeBr } = L;
+const E = require("./lib-escada");
+const { P, TIPO, SEC, LIDER, protocolar, evoluir, esteira, cerimonias, parecer, homologar, pagarTaxa, novaCerimonia, statusDe, chamarRota, afmPost, diasAtras } = E;
+
+console.error = () => { };
+// com E2E_CONTRATO=1, as respostas reais vão para tools/front-consagracao/contrato-real.json (a prova da tela usa exatamente o que o servidor devolve)
+const contrato = {};
+const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
+const LISTA = () => chamarRota("ListarConsagracoes/index.js", { token: SEC() });
+const cargo = (m) => escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = @m", { m });
+const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desde, Origem FROM CargosMinisteriaisHistorico WHERE MembroId = @m AND Ate IS NULL", { m });
+const proc = (id) => um(`SELECT Status, MotivoEncerramento, CerimoniaId, DiplomaCodigo, DiplomaCertificadoId, PresenteCerimonia, CONVERT(varchar(10), DataConclusao, 120) AS DataConclusao,
+                          HomologacaoSessaoId, HomologacaoAto, CONVERT(varchar(10), HomologadoEm, 120) AS HomologadoEm, TaxaValor, TaxaForma FROM Consagracoes WHERE ConsagracaoId = @id`, { id });
+const verificar = (codigo) => chamarRota("VerificarCertificado/index.js", { binding: { codigo }, headers: { "x-forwarded-for": "9.9.9.9, 177.8.9.10:443, 10.0.0.1:80" } });
+const pdf = (certificadoId, token) => chamarRota("CertificadoPdf/index.js", { binding: { id: String(certificadoId) }, token });
+const ehPdf = (r) => r.status === 200 && Buffer.isBuffer(r.body) && r.body.slice(0, 5).toString() === "%PDF-";
+const MEMBRO = (m) => L.sessao(m, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() } });
+
+(async () => {
+  await obterPool();
+  const hoje = hojeBr();
+  await E.montarCenario();
+  const LID = LIDER();
+  const id = (r) => r.body.consagracao.consagracaoId;
+
+  console.log("== documentos da indicação (Art. 74, II) ==");
+  let r = await protocolar({ membroId: P.auxiliar, assunto: TIPO.MISSIONARIO, proponenteMembroId: P.lider }, LID, { documento: false });
+  ok(r.status === 201, "o Dirigente protocola Auxiliar → Missionário(a)", r.body);
+  const idAux = id(r);
+  const numAux = await escalar("SELECT Numero FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux });
+  ok(Number.isInteger(numAux) && numAux > 0, "o processo tem número (os documentos são anexos dele)", numAux);
+  await q("UPDATE MembroReferencia SET FotoUrl = NULL WHERE MembroId = @m", { m: P.auxiliar });
+  r = await evoluir(idAux, "AVANCAR");
+  ok(r.body.sucesso === false && /foto atualizada/.test(r.body.mensagem) && /documentos pessoais/.test(r.body.mensagem) && /Art\. 74, II/.test(r.body.mensagem), "sem foto e sem documento: não vai ao CEI", r.body);
+  guardar("envioSemDossie", r);
+  guardar("listaInicio", await LISTA());
+  await q("UPDATE MembroReferencia SET FotoUrl = N'https://e2e.local/foto.jpg' WHERE MembroId = @m", { m: P.auxiliar });
+  r = await evoluir(idAux, "AVANCAR");
+  ok(r.body.sucesso === false && !/foto/.test(r.body.mensagem) && /documentos pessoais/.test(r.body.mensagem), "com foto e sem documento: ainda não", r.body);
+  await E.anexarDocumento(idAux);
+  r = await chamarRota("AnexosGenericos/index.js", { token: LID, query: { tabela: "Consagracoes", registroId: numAux } });
+  ok(r.status === 200, "o Dirigente que protocolou vê os documentos do processo", r.body);
+  r = await chamarRota("AnexosGenericos/index.js", { token: L.LIDER(P.lider, ["consagracoes"], ["Vila Nova E2E"]), query: { tabela: "Consagracoes", registroId: numAux } });
+  ok(r.status === 403, "o de outra congregação, não", r.body);
+  r = await chamarRota("AnexosGenericos/index.js", { token: L.GERAL(1003, ["cei"]), query: { tabela: "Consagracoes", registroId: numAux } });
+  ok(r.status === 200, "o CEI vê (analisa o prontuário — Art. 74, III)", r.body);
+  r = await chamarRota("AnexosGenericos/index.js", { token: L.GERAL(1003, ["financeiro"]), query: { tabela: "Consagracoes", registroId: numAux } });
+  ok(r.status === 403, "quem não tem consagracoes nem cei, não", r.body);
+  r = await evoluir(idAux, "AVANCAR");
+  ok(r.body.sucesso && /enviado ao CEI/.test(r.body.mensagem) && (await statusDe(idAux)) === "EM_ANALISE_CONSELHO", "com os dois: enviado ao CEI", r.body);
+  r = await evoluir(idAux, "AVANCAR");
+  ok(r.status === 409 && /parecer do CEI/.test(r.body.mensagem), "'Avançar' de novo: o parecer é do CEI (409)", r.body);
+
+  console.log("== parecer do CEI ==");
+  r = guardar("filaCEI", await esteira("cei", undefined, SEC(), "GET"));
+  const naFila = (r.body.itens || []).find((x) => String(x.consagracaoId).toLowerCase() === String(idAux).toLowerCase());
+  ok(r.status === 200 && naFila && naFila.sabatina === false && naFila.escrutinio === false && naFila.documentos === 1, "a fila do CEI traz o processo (sem sabatina do Art. 9º, sem escrutínio)", naFila);
+  r = await esteira("cei", undefined, L.GERAL(1003, ["consagracoes"]), "GET");
+  ok(r.status === 403, "a fila do CEI é só do CEI", r.body);
+  r = await parecer(idAux, { fundamentacao: "curta" });
+  ok(r.status === 422 && /fundamentação/i.test(r.body.mensagem), "fundamentação curta: recusada", r.body);
+  r = await parecer(idAux, { fundamentacao: "Testemunho examinado; o CEI nada encontrou que impeça (e2e)." });
+  ok(r.status === 200 && /homologação/.test(r.body.mensagem) && /Pastor Presidente/.test(r.body.mensagem), "APTO: segue para a homologação do Presidente", r.body);
+  ok((await statusDe(idAux)) === "AGUARDANDO_PLENARIO", "etapa: aguardando homologação");
+  r = await parecer(idAux);
+  ok(r.status === 409, "segundo parecer do mesmo processo: 409", r.body);
+  r = await esteira("parecer", undefined, SEC(), "GET", { consagracaoId: idAux });
+  ok(r.status === 200 && r.body.parecer.resultado === "APTO" && /nada encontrou/.test(r.body.parecer.fundamentacao) && r.body.parecer.sabatinaEm === hoje, "o CEI relê o parecer inteiro", r.body);
+  r = await esteira("parecer", undefined, L.GERAL(1003, ["consagracoes"]), "GET", { consagracaoId: idAux });
+  ok(r.status === 403, "a Secretaria não lê a fundamentação", r.body);
+  r = await chamarRota("ListarConsagracoes/index.js", { token: SEC() });
+  const naLista = r.body.find((x) => String(x.consagracaoId).toLowerCase() === String(idAux).toLowerCase());
+  ok(naLista && naLista.parecerCEI === "APTO" && !JSON.stringify(r.body).includes("nada encontrou"), "a lista diz APTO e nunca a fundamentação", naLista);
+  ok(naLista && naLista.temFoto === true && naLista.documentos === 1 && naLista.numero === numAux && naLista.homologacaoPelaCLI === false, "a lista traz número, foto, documentos e quem homologa", naLista);
+
+  console.log("== Presbítero → Evangelista (nomeação): sabatina do Art. 9º e homologação da CLI ==");
+  r = await protocolar({ membroId: P.presbitero, assunto: TIPO.EVANGELISTA, proponenteMembroId: 1001, modalidade: "NOMEACAO_PRESIDENCIAL", atoReferencia: "Ato 9/2026" });
+  const idEv = id(r);
+  await evoluir(idEv, "AVANCAR");
+  guardar("filaCEISabatina", await esteira("cei", undefined, SEC(), "GET"));
+  r = await parecer(idEv, { sabatina: { vidaPregressa: true, regularidadeFinanceira: true } });
+  ok(r.status === 422 && /Art\. 9º §1º/.test(r.body.mensagem), "sem o alinhamento doutrinário: o APTO não passa", r.body);
+  r = await parecer(idEv);
+  ok(r.status === 200 && /da CLI em plenário/.test(r.body.mensagem), "APTO: segue para a CLI", r.body);
+  const pc = await um("SELECT SabatinaVidaPregressa AS v, SabatinaFinanceira AS f, SabatinaDoutrina AS d, EscrutinioConjugal AS e FROM PareceresCEIConsagracao WHERE ConsagracaoId = @id", { id: idEv });
+  ok(pc.v === true && pc.f === true && pc.d === true && pc.e === false, "a sabatina fica gravada", pc);
+
+  console.log("== homologação ==");
+  r = guardar("homologarFalhou", await esteira("homologar", { ids: [idAux], sessaoId: await E.reuniaoCLI() }));
+  ok(r.status === 422 && /ato e a data/.test(r.body.resultados[0].mensagem), "Missionário(a) sem o ato do Presidente: não", r.body);
+  r = await esteira("homologar", { ids: [idEv], ato: "Lista validada", data: hoje });
+  ok(r.status === 422 && /CLI em plenário/.test(r.body.resultados[0].mensagem), "Evangelista sem a reunião da CLI: não", r.body);
+  const aberta1 = await escalar(`INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, TipoSessao, Status) OUTPUT INSERTED.SessaoId SELECT OrgaoId, N'Aberta E2E', @d, 'ORDINARIA', 'ABERTA' FROM Orgaos WHERE Sigla = 'CLI'`, { d: hoje });
+  r = await esteira("homologar", { ids: [idEv], sessaoId: aberta1 });
+  ok(r.status === 422 && /já realizada e encerrada/.test(r.body.mensagem), "reunião ainda aberta: não", r.body);
+  const reuniaoDeOutroOrgao = await escalar(`INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, TipoSessao, Status) OUTPUT INSERTED.SessaoId SELECT TOP 1 OrgaoId, N'Outro órgão E2E', @d, 'ORDINARIA', 'ENCERRADA' FROM Orgaos WHERE Sigla <> 'CLI'`, { d: hoje });
+  r = await esteira("homologar", { ids: [idEv], sessaoId: reuniaoDeOutroOrgao });
+  ok(r.status === 422, "reunião de outro órgão: não", r.body);
+  r = guardar("reunioesCLI", await esteira("reunioes-cli", undefined, SEC(), "GET"));
+  ok(r.status === 200 && r.body.itens.some((s) => s.sessaoId === (null || s.sessaoId)) && !r.body.itens.some((s) => s.sessaoId === aberta1 || s.sessaoId === reuniaoDeOutroOrgao), "a lista de reuniões traz só as da CLI encerradas", r.body.itens);
+  r = guardar("homologarOk", await homologar([idAux, idEv]));
+  ok(r.status === 200 && r.body.resultados.every((x) => x.sucesso), "em lote: os dois homologados (cada um com o seu ato)", r.body);
+  let pa = await proc(idAux);
+  let pe = await proc(idEv);
+  ok(pa.Status === "HOMOLOGADO" && pa.HomologacaoAto && pa.HomologacaoSessaoId === null && pa.HomologadoEm === hoje, "Missionário(a): ato do Presidente, sem reunião", pa);
+  ok(pe.Status === "HOMOLOGADO" && pe.HomologacaoAto === null && pe.HomologacaoSessaoId === (await E.reuniaoCLI()), "Evangelista: a reunião da CLI, sem ato", pe);
+  r = await homologar([idAux]);
+  ok(r.status === 422 && /Não está aguardando/.test(r.body.resultados[0].mensagem), "homologar de novo: não", r.body);
+  r = await evoluir(idAux, "AVANCAR");
+  ok(r.status === 409 && /cerimônia/.test(r.body.mensagem), "'Avançar' no homologado: conclui na cerimônia (409)", r.body);
+
+  console.log("== taxa (Art. 75, I) ==");
+  r = await protocolar({ membroId: P.missionario, assunto: TIPO.DIACONO, proponenteMembroId: 1002 });
+  const idDi = id(r);
+  r = await pagarTaxa(idDi);
+  ok(r.status === 422 && /candidato aprovado/.test(r.body.mensagem), "antes do APTO não há taxa", r.body);
+  r = await pagarTaxa(idAux, { forma: "DINHEIRO" });
+  ok(r.status === 400 && /PIX ou boleto/.test(r.body.mensagem), "dinheiro: não (PIX ou boleto)", r.body);
+  r = await pagarTaxa(idAux, {}, L.GERAL(1003, ["financeiro"]));
+  ok(r.status === 200 && /tesouraria/.test(r.body.mensagem), "a tesouraria (nível geral do financeiro) registra", r.body);
+  r = await pagarTaxa(idAux, {}, L.LIDER(P.lider, ["consagracoes", "financeiro"], [E.CENTRAL]));
+  ok(r.status === 403, "o Dirigente local, não", r.body);
+  r = await pagarTaxa(idAux, {}, L.GERAL(P.auxiliar, ["consagracoes"]));
+  ok(r.status === 422 && /própria taxa/.test(r.body.mensagem), "ninguém registra a própria taxa", r.body);
+  r = await esteira("taxa", { consagracaoId: idAux, remover: true });
+  ok(r.status === 200 && !(await proc(idAux)).TaxaValor, "o registro pode ser removido (lançado errado)", r.body);
+  r = await pagarTaxa(idAux, { valor: "75.40", forma: "BOLETO" });
+  pa = await proc(idAux);
+  ok(r.status === 200 && Number(pa.TaxaValor) === 75.4 && pa.TaxaForma === "BOLETO", "R$ 75,40 por boleto: gravado com os centavos", pa);
+  guardar("taxaOk", await pagarTaxa(idEv));
+  guardar("listaHomologados", await LISTA());
+
+  console.log("== CHM como documento (Art. 67) ==");
+  const chmAntes = await um("SELECT CHMCertificadoId FROM Matriculas_AFM WHERE MembroId = @m", { m: P.auxiliar });
+  r = await afmPost("chm", { membroId: P.auxiliar, conceder: true, data: diasAtras(10) });
+  ok(r.status === 200 && r.body.certificadoId && /Meus Certificados/.test(r.body.mensagem), "conceder o CHM emite o certificado", r.body);
+  const chm1 = r.body.certificadoId;
+  let cert = await um("SELECT Natureza, Titulo, RevogadoEm, CodigoVerificacao FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: chm1 });
+  ok(cert.Natureza === "CHM" && /Habilitação Ministerial/.test(cert.Titulo) && !cert.RevogadoEm, "certificado CHM, válido", cert);
+  ok(!chmAntes.CHMCertificadoId && (await escalar("SELECT CHMCertificadoId FROM Matriculas_AFM WHERE MembroId = @m", { m: P.auxiliar })) === chm1, "a matrícula aponta o documento");
+  r = await verificar(cert.CodigoVerificacao);
+  ok(r.status === 200 && r.body.situacao === "VALIDO" && /CHM/.test(r.body.titulo), "a verificação pública confere o CHM", r.body);
+  r = await afmPost("chm", { membroId: P.auxiliar, conceder: true, data: diasAtras(5) });
+  const chm2 = r.body.certificadoId;
+  ok(r.status === 200 && chm2 !== chm1 && (await escalar("SELECT RevogadoEm FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: chm1 })) && /Substituído/.test(await escalar("SELECT MotivoRevogacao FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: chm1 })), "concedido de novo: o anterior é revogado (substituído)", r.body);
+  r = guardar("matriculas", await E.afmGet("matriculas"));
+  ok((r.body.itens.find((m) => Number(m.membroId) === P.auxiliar) || {}).chmCertificadoId === chm2, "a Academia mostra o documento do CHM", r.body.itens.find((m) => Number(m.membroId) === P.auxiliar));
+  r = await pdf(chm2, L.GERAL(1003, ["afm"]));
+  ok(ehPdf(r), "a AFM baixa o PDF do CHM", r.status);
+  r = await pdf(chm2, L.GERAL(1003, ["ebd_gestao"]));
+  ok(r.status === 404, "a gestão da EBD não alcança o CHM", r.status);
+  r = await chamarRota("GestaoCertificados/index.js", { metodo: "POST", binding: { acao: "revogar" }, token: L.GERAL(1003, ["ebd_gestao", "trilhas_gestao"]), corpo: { certificadoId: chm2, motivo: "Tentativa pela EBD" } });
+  ok(r.status === 404 && !(await escalar("SELECT RevogadoEm FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: chm2 })), "nem revoga pela tela da EBD", r.body);
+
+  console.log("== cerimônia: criação, comissão, candidatos, roteiro ==");
+  r = await cerimonias("criar", { dataCerimonia: hoje, local: "Templo Sede E2E", ocasiao: "CULTO" });
+  ok(r.status === 400, "ocasião fora do Art. 75: 400", r.body);
+  r = await cerimonias("criar", { dataCerimonia: hoje, local: "Templo Sede E2E", ocasiao: "AGO" });
+  ok(r.status === 201 && /taxa precisa estar paga até/.test(r.body.mensagem), "criada (R$ 70,00 se o valor não vier); diz o prazo da taxa", r.body);
+  const ce = r.body.cerimoniaId;
+  ok(Number(await escalar("SELECT ValorTaxa FROM CerimoniasConsagracao WHERE CerimoniaId = @c", { c: ce })) === 70, "valor de referência de 2026");
+  r = await cerimonias("comissao", { cerimoniaId: ce, membroIds: [P.pastor1, P.pastor2, P.pastor3] });
+  ok(r.status === 200 && /Faltam 1/.test(r.body.mensagem), "três pastores: salva, mas avisa que falta um", r.body);
+  r = await cerimonias("comissao", { cerimoniaId: ce, membroIds: [P.pastor1, P.pastor2, P.pastor3, P.missionario] });
+  ok(r.status === 422 && /não é Pastor/.test(r.body.mensagem), "Missionário na Comissão de Unção: não", r.body);
+  r = await cerimonias("comissao", { cerimoniaId: ce, membroIds: [P.pastor1, P.pastor2, P.pastor3, 99999] });
+  ok(r.status === 422 && /99999/.test(r.body.mensagem), "matrícula inexistente: diz qual", r.body);
+  await q("UPDATE MembroReferencia SET Status = 'LICENCA' WHERE MembroId = @m", { m: P.pastor4 });
+  r = await cerimonias("comissao", { cerimoniaId: ce, membroIds: E.COMISSAO });
+  ok(r.status === 422 && /em atividade/.test(r.body.mensagem), "pastor de licença: não", r.body);
+  await q("UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = @m", { m: P.pastor4 });
+  r = await cerimonias("comissao", { cerimoniaId: ce, membroIds: E.COMISSAO });
+  ok(r.status === 200 && /4 pastores/.test(r.body.mensagem), "a comissão completa", r.body);
+
+  // o casal (Art. 75, III, b): o Auxiliar e o Missionário passam a ser casados no registro de casamentos
+  await q("INSERT INTO Casamentos (MembroId, MembroConjugeId, Modalidade, DataCasamento) VALUES (@a, @b, 'CIVIL_E_RELIGIOSO', '2012-05-05')", { a: P.auxiliar, b: P.vetado });
+  r = await protocolar({ membroId: P.vetado, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 });
+  const idVet = id(r);
+  await evoluir(idVet, "AVANCAR"); await parecer(idVet); await homologar(idVet);
+  await pagarTaxa(idVet, { pagoEm: hoje });   // fora do prazo (a cerimônia é hoje: o prazo era 45 dias atrás)
+  r = await protocolar({ membroId: P.forasteiro, assunto: TIPO.PASTOR, proponenteMembroId: 1002, modalidade: "OUTRA_CONVENCAO", atoReferencia: "Igreja de origem E2E" });
+  const idFor = id(r);
+  await evoluir(idFor, "AVANCAR"); await parecer(idFor); await homologar(idFor); await pagarTaxa(idFor);
+  r = await cerimonias("incluir", { cerimoniaId: ce, ids: [idAux, idEv, idVet, idFor, idDi] });
+  ok(r.status === 200 && r.body.resultados.filter((x) => x.sucesso).length === 4 && /4 de 5/.test(r.body.mensagem), "incluídos os quatro homologados (o não homologado fica de fora)", r.body);
+  r = await cerimonias("detalhe", undefined, SEC(), "GET", { cerimoniaId: ce });
+  const d = r.body;
+  ok(r.status === 200 && d.comissaoValida.valida === true && d.candidatos.length === 4, "detalhe: comissão válida, quatro candidatos", { valida: d.comissaoValida, n: d.candidatos && d.candidatos.length });
+  ok(d.roteiro.pendentes.length === 1 && d.roteiro.pendentes[0].membroId === P.vetado && /depois do prazo/.test(d.roteiro.pendentes[0].motivo), "a taxa paga hoje está fora do prazo (pendente)", d.roteiro.pendentes);
+  ok(d.roteiro.posicoes.length === 3 && d.roteiro.posicoes.every((x) => !x.casal), "sem o cônjuge em dia, não há par (três posições)", d.roteiro.posicoes);
+  const pos = d.roteiro.posicoes.map((x) => x.pessoas.map((y) => `${y.cargoAlvo}:${y.ato}`).join("+"));
+  ok(JSON.stringify(pos) === JSON.stringify(["MISSIONARIO:UNCAO", "EVANGELISTA:UNCAO", "PASTOR:DIPLOMACAO"]), "por patente; o de outra convenção é diplomação (Art. 10)", pos);
+  ok(JSON.stringify(d.roteiro.insignias.map((x) => [x.cargo, x.quantidade])) === JSON.stringify([["MISSIONARIO", 1], ["EVANGELISTA", 1], ["PASTOR", 1]]), "insígnias por patente", d.roteiro.insignias);
+  await pagarTaxa(idVet, { pagoEm: diasAtras(50) });
+  r = guardar("detalhePlanejada", await cerimonias("detalhe", undefined, SEC(), "GET", { cerimoniaId: ce }));
+  ok(r.body.roteiro.posicoes.some((x) => x.casal && x.pessoas.map((y) => y.membroId).sort().join() === [P.auxiliar, P.vetado].sort().join()), "taxa corrigida: o casal lado a lado (Art. 75, III, b)", r.body.roteiro.posicoes);
+  ok(r.body.disponiveis.every((x) => ![idAux, idEv, idVet, idFor].map((y) => y.toLowerCase()).includes(String(x.consagracaoId).toLowerCase())), "os incluídos saem da lista dos disponíveis");
+
+  console.log("== diplomas impressos antes (código reservado) ==");
+  r = await cerimonias("diplomas", undefined, SEC(), "GET", { cerimoniaId: ce });
+  ok(ehPdf(r), "o PDF dos diplomas sai", r.status);
+  const codAux = (await proc(idAux)).DiplomaCodigo;
+  ok(codAux && (await proc(idVet)).DiplomaCodigo && (await proc(idFor)).DiplomaCodigo, "cada candidato em dia tem o código reservado", codAux);
+  r = await cerimonias("diplomas", undefined, SEC(), "GET", { cerimoniaId: ce });
+  ok(ehPdf(r) && (await proc(idAux)).DiplomaCodigo === codAux, "imprimir de novo mantém o mesmo código");
+  r = await verificar(codAux);
+  ok(r.status === 404, "antes da cerimônia, a verificação pública não encontra o diploma", r.body);
+
+  console.log("== registro da cerimônia ==");
+  const amanha = await cerimonias("criar", { dataCerimonia: require(path.join(API, "shared/afm.js")).somarDias(hoje, 1), local: "Templo E2E", ocasiao: "SOLENE_CLI" });
+  await cerimonias("comissao", { cerimoniaId: amanha.body.cerimoniaId, membroIds: E.COMISSAO });
+  r = await cerimonias("registrar", { cerimoniaId: amanha.body.cerimoniaId, presentes: [], ausentes: [] });
+  ok(r.status === 422 && /no dia da cerimônia/.test(r.body.mensagem), "cerimônia de amanhã: a presença ainda não se registra", r.body);
+  r = await cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux, idEv, idFor], ausentes: [idVet] }, L.GERAL(P.vetado, ["consagracoes"]));
+  ok(r.status === 422 && /candidato nesta cerimônia/.test(r.body.mensagem), "candidato não registra a própria cerimônia", r.body);
+  r = guardar("registro", await cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux, idEv, idFor], ausentes: [idVet] }));
+  ok(r.status === 200 && /3 consagrado\(s\), 1 ausente/.test(r.body.mensagem), "registrada: três consagrados, um ausente", r.body);
+  ok((await escalar("SELECT Status FROM CerimoniasConsagracao WHERE CerimoniaId = @c", { c: ce })) === "REALIZADA", "a cerimônia fica realizada");
+  // o consagrado: cargo, histórico, Função, CHM usado, diploma com o código reservado
+  ok((await cargo(P.auxiliar)) === "MISSIONARIO" && (await aberta(P.auxiliar)).Desde === hoje && (await aberta(P.auxiliar)).Origem === "CONSAGRACAO", "Missionário(a) desde a cerimônia", await aberta(P.auxiliar));
+  ok((await escalar("SELECT Funcao FROM MembroReferencia WHERE MembroId = @m", { m: P.auxiliar })) === TIPO.MISSIONARIO, "a Função é o assunto");
+  const mat = await um("SELECT CertificadoHabilitacao AS c, CHMCertificadoId AS cert FROM Matriculas_AFM WHERE MembroId = @m", { m: P.auxiliar });
+  ok(mat.c === false && mat.cert === null && /Usado na consagração a Missionário/.test(await escalar("SELECT MotivoRevogacao FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: chm2 })), "o CHM foi usado: a matrícula perde e o documento é revogado (Art. 67 §1º)", mat);
+  pa = await proc(idAux);
+  const dip = await um("SELECT CertificadoId, Natureza, Titulo, CodigoVerificacao, MembroId FROM CertificadosEmitidos WHERE CertificadoId = @id", { id: pa.DiplomaCertificadoId });
+  ok(pa.Status === "CONCLUIDO" && pa.PresenteCerimonia === true && pa.DataConclusao === hoje && dip.Natureza === "DIPLOMA" && dip.CodigoVerificacao === codAux && /Consagração — Missionário/.test(dip.Titulo), "o diploma nasce com o código impresso", { pa, dip });
+  r = await verificar(codAux);
+  ok(r.status === 200 && r.body.situacao === "VALIDO" && r.body.selo === "COM_SELO", "agora a verificação pública confere o diploma", r.body);
+  ok((await cargo(P.forasteiro)) === "PASTOR" && (await aberta(P.forasteiro)).Origem === "OUTRA_CONVENCAO" && /Reconhecimento Ministerial/.test(await escalar("SELECT Titulo FROM CertificadosEmitidos WHERE CertificadoId = (SELECT DiplomaCertificadoId FROM Consagracoes WHERE ConsagracaoId = @id)", { id: idFor })), "o de outra convenção: Pastor, com o diploma de reconhecimento");
+  ok((await cargo(P.presbitero)) === "EVANGELISTA" && (await aberta(P.presbitero)).Origem === "NOMEACAO_PRESIDENCIAL", "Evangelista pela nomeação");
+  // o ausente
+  const pv = await proc(idVet);
+  ok(pv.Status === "REPROVADO" && pv.MotivoEncerramento === "AUSENCIA_CERIMONIA" && pv.PresenteCerimonia === false && pv.DataConclusao === hoje && !pv.DiplomaCodigo && (await cargo(P.vetado)) === "AUXILIAR", "o ausente perde a consagração (Art. 75, II, b)", pv);
+  ok(!(await escalar("SELECT COUNT(*) FROM CertificadosEmitidos WHERE MembroId = @m AND Natureza = 'DIPLOMA'", { m: P.vetado })), "e não tem diploma");
+  r = await protocolar({ membroId: P.vetado, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 });
+  ok(r.status === 422 && /ano que vem/.test(r.body.mensagem), "novo protocolo no mesmo ano: não", r.body);
+  r = await cerimonias("registrar", { cerimoniaId: ce, presentes: [], ausentes: [] });
+  ok(r.status === 409, "registrar de novo: 409", r.body);
+  r = guardar("detalheRealizada", await cerimonias("detalhe", undefined, SEC(), "GET", { cerimoniaId: ce }));
+  ok(r.status === 200 && r.body.resultado.length === 4 && r.body.resultado.filter((x) => x.presente).length === 3 && r.body.resultado.find((x) => x.motivoEncerramento === "AUSENCIA_CERIMONIA"), "o detalhe da cerimônia realizada traz o resultado", r.body.resultado);
+  r = await cerimonias("diplomas", undefined, SEC(), "GET", { cerimoniaId: ce });
+  ok(r.status === 409, "depois de realizada, os diplomas são os emitidos (não se reimprime por aqui)", r.body);
+
+  console.log("== quem vê o diploma ==");
+  ok(ehPdf(await pdf(pa.DiplomaCertificadoId, MEMBRO(P.auxiliar))), "o titular baixa o próprio diploma");
+  ok(ehPdf(await pdf(pa.DiplomaCertificadoId, SEC())), "a Secretaria (consagracoes) também");
+  ok((await pdf(pa.DiplomaCertificadoId, L.GERAL(1003, ["ebd_gestao", "trilhas_gestao"]))).status === 404, "a gestão da EBD não");
+  ok((await pdf(pa.DiplomaCertificadoId, MEMBRO(P.missionario))).status === 404, "outro membro não");
+  r = await chamarRota("GestaoCertificados/index.js", { token: MEMBRO(P.auxiliar) });
+  ok(r.status === 200 && r.body.certificados.some((c) => c.natureza === "DIPLOMA") && r.body.certificados.some((c) => c.natureza === "CHM"), "Meus Certificados: o diploma e o CHM (revogado) do titular", r.body.certificados.map((c) => c.natureza));
+  r = await chamarRota("GestaoCertificados/index.js", { token: L.GERAL(1003, ["ebd_gestao"]), query: { membroId: P.auxiliar } });
+  ok(r.status === 200 && !r.body.certificados.some((c) => c.natureza), "a gestão da EBD não vê os documentos ministeriais de outra pessoa", r.body.certificados);
+
+  console.log("== INAPTO; divorciado; processo antigo sem parecer ==");
+  await q("UPDATE MembroReferencia SET EstadoCivil = 'DIVORCIADO' WHERE MembroId = @m", { m: P.missionario });
+  await evoluir(idDi, "AVANCAR");
+  r = guardar("filaCEIDivorciado", await esteira("cei", undefined, SEC(), "GET"));
+  ok((r.body.itens.find((x) => String(x.consagracaoId).toLowerCase() === String(idDi).toLowerCase()) || {}).escrutinio === true, "divorciado: a fila avisa o escrutínio especial");
+  r = guardar("parecerRecusado", await parecer(idDi, { escrutinio: {} }));
+  ok(r.status === 422 && /tempo da ignorância/.test(r.body.mensagem), "APTO sem o escrutínio: não (Art. 73, III)", r.body);
+  r = await parecer(idDi, { escrutinio: { fundamento: "EXCECAO_BIBLICA", documental: true, recasado: true, casamentoEstavel: true } });
+  ok(r.status === 200, "com o escrutínio completo: APTO", r.body);
+  const esc = await um("SELECT EscrutinioConjugal AS e, EscrutinioFundamento AS f, Recasado AS r, CasamentoAtualEstavel AS c FROM PareceresCEIConsagracao WHERE ConsagracaoId = @id", { id: idDi });
+  ok(esc.e === true && esc.f === "EXCECAO_BIBLICA" && esc.r === true && esc.c === true, "o escrutínio fica gravado", esc);
+  r = await protocolar({ membroId: P.semSexo, assunto: TIPO.DIACONO, proponenteMembroId: 1002 });
+  if (r.status !== 201) { await E.salvarPessoa(P.semSexo, { sexo: "M" }); r = await protocolar({ membroId: P.semSexo, assunto: TIPO.DIACONO, proponenteMembroId: 1002 }); }
+  const idIn = id(r);
+  await evoluir(idIn, "AVANCAR");
+  r = await parecer(idIn, { resultado: "INAPTO", fundamentacao: "Testemunho público em desacordo (e2e).", sabatina: {} });
+  ok(r.status === 200 && /arquivado/.test(r.body.mensagem), "INAPTO: arquivado (Art. 9º §2º)", r.body);
+  ok((await proc(idIn)).MotivoEncerramento === "INAPTO_CEI" && (await proc(idIn)).Status === "REPROVADO", "encerrado como INAPTO do CEI");
+  r = await chamarRota("ListarConsagracoes/index.js", { token: SEC() });
+  ok(r.body.some((x) => String(x.consagracaoId).toLowerCase() === String(idIn).toLowerCase() && x.motivoEncerramento === "INAPTO_CEI") && r.body.some((x) => String(x.consagracaoId).toLowerCase() === String(idAux).toLowerCase() && x.diplomaCertificadoId), "os encerrados ficam na lista (INAPTO e o consagrado com o diploma)");
+  // processo de antes da v8.3: aguardando homologação sem parecer — o CEI o vê e dá o parecer, que o mantém na homologação
+  r = await protocolar({ membroId: P.nomeado, assunto: TIPO.PRESBITERO, proponenteMembroId: 1001, modalidade: "NOMEACAO_PRESIDENCIAL", atoReferencia: "Ato 10/2026" });
+  const idAnt = id(r);
+  await q("UPDATE Consagracoes SET Status = 'AGUARDANDO_PLENARIO' WHERE ConsagracaoId = @id", { id: idAnt });
+  r = await homologar(idAnt);
+  ok(r.status === 422 && /parecer APTO do CEI/.test(r.body.resultados[0].mensagem), "o antigo sem parecer não é homologado", r.body);
+  r = await esteira("cei", undefined, SEC(), "GET");
+  ok(r.body.itens.some((x) => String(x.consagracaoId).toLowerCase() === String(idAnt).toLowerCase() && x.status === "AGUARDANDO_PLENARIO"), "e aparece na fila do CEI");
+  r = await parecer(idAnt);
+  ok(r.status === 200 && (await statusDe(idAnt)) === "AGUARDANDO_PLENARIO", "recebe o parecer e continua na homologação");
+
+  console.log("== cancelar a cerimônia; retirar candidato ==");
+  r = await protocolar({ membroId: P.missionaria, assunto: TIPO.MISSIONARIO, proponenteMembroId: 1002 });
+  const ce2 = await novaCerimonia();
+  await homologar(idAnt); await pagarTaxa(idAnt);
+  r = await cerimonias("incluir", { cerimoniaId: ce2, ids: [idAnt] });
+  ok(r.status === 200, "incluído na segunda cerimônia", r.body);
+  r = await cerimonias("retirar", { cerimoniaId: ce2, consagracaoId: idAnt });
+  ok(r.status === 200 && !(await proc(idAnt)).CerimoniaId, "retirado: volta para a fila", r.body);
+  await cerimonias("incluir", { cerimoniaId: ce2, ids: [idAnt] });
+  await cerimonias("diplomas", undefined, SEC(), "GET", { cerimoniaId: ce2 });
+  r = await cerimonias("cancelar", { cerimoniaId: ce2, motivo: "x" });
+  ok(r.status === 400, "cancelar sem motivo: 400", r.body);
+  r = await cerimonias("cancelar", { cerimoniaId: ce2, motivo: "Chuva forte no dia (e2e)" });
+  const pAnt = await proc(idAnt);
+  ok(r.status === 200 && pAnt.Status === "HOMOLOGADO" && !pAnt.CerimoniaId && !pAnt.DiplomaCodigo, "cancelada: o candidato volta para a fila, sem o código reservado", { r: r.body, pAnt });
+  r = await cerimonias("incluir", { cerimoniaId: ce2, ids: [idAnt] });
+  ok(r.status === 409, "a cancelada não recebe ninguém", r.body);
+  guardar("listaFinal", await LISTA());
+  r = guardar("cerimonias", await cerimonias(undefined, undefined, SEC(), "GET"));
+  ok(r.status === 200 && r.body.itens.some((c) => c.cerimoniaId === ce && c.status === "REALIZADA" && c.consagrados === 3) && r.body.itens.some((c) => c.cerimoniaId === ce2 && c.status === "CANCELADA"), "a lista das cerimônias", r.body.itens);
+
+  console.log("== Meus Dados e a minimização ==");
+  r = guardar("meusDados", await chamarRota("MeusDadosLGPD/index.js", { token: MEMBRO(P.vetado), binding: { matricula: String(P.vetado) } }));
+  const md = r.body && (r.body.dados || r.body);
+  const cons = JSON.stringify(md).includes("Ausente na cerimônia");
+  ok(r.status === 200 && cons, "Meus Dados traz o processo (ausente na cerimônia)", r.status);
+  ok(!JSON.stringify(md).includes("examinados pelo CEI"), "e nunca a fundamentação do CEI");
+  const mini = require(path.join(API, "shared/minimizacaoLgpd.js"));
+  await mini.minimizarCamposExMembro(await obterPool(), P.missionario, { dataSaida: hoje, motivo: "Carta de Mudança" });
+  const pm = await um("SELECT Resultado, Fundamentacao, Recasado, EscrutinioFundamento, SabatinaDoutrina FROM PareceresCEIConsagracao WHERE ConsagracaoId = @id", { id: idDi });
+  ok(pm.Resultado === "APTO" && pm.Fundamentacao === null && pm.Recasado === null && pm.EscrutinioFundamento === null, "minimização: a fundamentação e as marcas do escrutínio saem, o resultado fica", pm);
+  ok((await escalar("SELECT COUNT(*) FROM AnexosGenericos a JOIN Consagracoes c ON c.Numero = a.RegistroId WHERE a.Tabela = 'Consagracoes' AND c.MembroId = @m", { m: P.missionario })) === 0, "e os documentos da indicação saem");
+
+  if (process.env.E2E_CONTRATO) {
+    // o link assinado da foto (assinado com a chave pública do emulador) não vai para o repositório: a prova da tela não precisa dele
+    if (contrato.meusDados && contrato.meusDados.membro) contrato.meusDados.membro.fotoUrl = null;
+    require("fs").mkdirSync(path.join(__dirname, "..", "front-consagracao"), { recursive: true });
+    require("fs").writeFileSync(path.join(__dirname, "..", "front-consagracao", "contrato-real.json"), JSON.stringify(contrato, null, 2));
+    console.log("contrato gravado em tools/front-consagracao/contrato-real.json");
+  }
+  fim("e2e-55 consagração (fluxos)");
+})().catch((e) => { console.log("ERRO", e); process.exit(1); });

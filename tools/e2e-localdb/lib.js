@@ -2,6 +2,9 @@
 const path = require("path");
 const API = path.resolve(__dirname, "..", "..", "api");
 process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-e2e-" + "x".repeat(24);
+// v8.3 — a foto da indicação (Art. 74, II) faz o cadastro assinar o link do armazenamento: o emulador de desenvolvimento assina sem rede (não é segredo — é o atalho público
+// do Azurite) e nunca é usado fora do banco local.
+process.env.AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING || "UseDevelopmentStorage=true";
 const sql = require("mssql");
 const auth = require(path.join(API, "shared/auth.js"));
 

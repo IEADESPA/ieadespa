@@ -141,7 +141,8 @@ module.exports = async function (context, req) {
   // v8.1 — AFM e CLI: as matrículas (com o nível), as desmatrículas, as exclusões da CLI por faltas e o corpo docente.
   const afmCli = await require("../shared/afmDb").dadosDoTitular(pool, alvo);
   // v8.2 — escada ministerial: o histórico de cargos (de quando a quando, e por onde chegou).
-  const escada = { cargos: await require("../shared/escadaDb").historicoDe(pool, alvo) };
+  // v8.3 — os processos de consagração (parecer do CEI só com o resultado e a data; a fundamentação fica com o CEI), a taxa e a cerimônia.
+  const escada = { cargos: await require("../shared/escadaDb").historicoDe(pool, alvo), consagracoes: await require("../shared/consagracaoDb").dadosDoTitular(pool, alvo) };
   // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
   // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);

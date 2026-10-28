@@ -1,0 +1,1650 @@
+{
+  "envioSemDossie": {
+    "sucesso": false,
+    "mensagem": "Para enviar ao CEI falta a foto atualizada (no cadastro da pessoa) e a cópia dos documentos pessoais (em \"Documentos\" do processo) (Regimento, Art. 74, II)."
+  },
+  "listaInicio": [
+    {
+      "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+      "membroId": 9202,
+      "nome": "Auxiliar Promovido E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Missionário(a)",
+      "proponente": "Dirigente Central E2E",
+      "status": "PROTOCOLADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "MISSIONARIO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 1,
+      "temFoto": false,
+      "documentos": 0,
+      "parecerCEI": null,
+      "parecerEm": null,
+      "homologadoEm": null,
+      "homologacaoSessaoId": null,
+      "homologacaoAto": null,
+      "taxaPagaEm": null,
+      "taxaValor": null,
+      "taxaForma": null,
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": null
+    }
+  ],
+  "filaCEI": {
+    "sucesso": true,
+    "itens": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "numero": 1,
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "congregacao": "Central E2E",
+        "assunto": "Consagração a Missionário(a)",
+        "cargoAlvo": "MISSIONARIO",
+        "cargoAlvoRotulo": "Missionário(a)",
+        "modalidade": "INDICACAO",
+        "dataProtocolo": "2026-10-28",
+        "status": "EM_ANALISE_CONSELHO",
+        "estadoCivil": "CASADO",
+        "sabatina": false,
+        "escrutinio": false,
+        "excecaoPastor": false,
+        "documentos": 1
+      }
+    ]
+  },
+  "filaCEISabatina": {
+    "sucesso": true,
+    "itens": [
+      {
+        "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+        "numero": 2,
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "congregacao": "Central E2E",
+        "assunto": "Consagração a Evangelista",
+        "cargoAlvo": "EVANGELISTA",
+        "cargoAlvoRotulo": "Evangelista",
+        "modalidade": "NOMEACAO_PRESIDENCIAL",
+        "dataProtocolo": "2026-10-28",
+        "status": "EM_ANALISE_CONSELHO",
+        "estadoCivil": "CASADO",
+        "sabatina": true,
+        "escrutinio": false,
+        "excecaoPastor": false,
+        "documentos": 1
+      }
+    ]
+  },
+  "homologarFalhou": {
+    "sucesso": false,
+    "resultados": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "nome": "Auxiliar Promovido E2E",
+        "sucesso": false,
+        "mensagem": "Auxiliar, Missionário(a) e Diácono: informe o ato e a data da validação do Pastor Presidente (Regimento, Art. 74, IV)."
+      }
+    ],
+    "mensagem": "0 de 1 homologado(s). Veja os que não passaram."
+  },
+  "reunioesCLI": {
+    "sucesso": true,
+    "itens": [
+      {
+        "sessaoId": 9,
+        "data": "2026-10-28",
+        "descricao": "Homologação E2E",
+        "tipo": "EXTRAORDINARIA"
+      }
+    ]
+  },
+  "homologarOk": {
+    "sucesso": true,
+    "resultados": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "nome": "Auxiliar Promovido E2E",
+        "sucesso": true,
+        "mensagem": "Homologado."
+      },
+      {
+        "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+        "nome": "Presbitero Evangelista E2E",
+        "sucesso": true,
+        "mensagem": "Homologado."
+      }
+    ],
+    "mensagem": "2 processos homologados: agora esperam a cerimônia."
+  },
+  "taxaOk": {
+    "sucesso": true,
+    "mensagem": "Taxa registrada: R$ 70,00 em 29/08/2026 (PIX). O lançamento no caixa é da tesouraria, no financeiro."
+  },
+  "listaHomologados": [
+    {
+      "consagracaoId": "e44e31ad-bd3d-4bdf-8626-941b53160a19",
+      "membroId": 9203,
+      "nome": "Missionario Diacono E2E",
+      "cargoAtual": null,
+      "assunto": "Separação ao Diaconato",
+      "proponente": "Secretário Geral E2E",
+      "status": "PROTOCOLADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "DIACONO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 3,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": null,
+      "parecerEm": null,
+      "homologadoEm": null,
+      "homologacaoSessaoId": null,
+      "homologacaoAto": null,
+      "taxaPagaEm": null,
+      "taxaValor": null,
+      "taxaForma": null,
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": null
+    },
+    {
+      "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+      "membroId": 9202,
+      "nome": "Auxiliar Promovido E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Missionário(a)",
+      "proponente": "Dirigente Central E2E",
+      "status": "HOMOLOGADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "MISSIONARIO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 1,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": null,
+      "homologacaoAto": "Validação da lista dos aptos (e2e)",
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 75.4,
+      "taxaForma": "BOLETO",
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": null
+    },
+    {
+      "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+      "membroId": 9206,
+      "nome": "Presbitero Evangelista E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Evangelista",
+      "proponente": "Presidente E2E",
+      "status": "HOMOLOGADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "EVANGELISTA",
+      "modalidade": "NOMEACAO_PRESIDENCIAL",
+      "atoReferencia": "Ato 9/2026",
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 2,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": 9,
+      "homologacaoAto": null,
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 70,
+      "taxaForma": "PIX",
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": true,
+      "taxaEmDia": null
+    }
+  ],
+  "matriculas": {
+    "sucesso": true,
+    "geral": true,
+    "itens": [
+      {
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-10-23",
+        "chmCertificadoId": 2,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9214,
+        "nome": "Auxiliar Vila Nova E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Vila Nova E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9213,
+        "nome": "Diacono Inativo E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "INATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": false,
+          "motivo": "Obreiro inativo na AFM: mantém o título, mas está sem licença para oficiar até nova matrícula e aprovação na reciclagem (Regimento, Art. 69 §3º)."
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9209,
+        "nome": "Diacono Legado E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "AVANCADO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9205,
+        "nome": "Diacono Nomeado E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "BASICO",
+        "nivelConcluido": false,
+        "nivelAtende": false,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 3001,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PRESBITERO",
+        "cargoNome": "Presbítero",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima — Art. 72, IV, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9220,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "BACHAREL",
+        "nivelConcluido": true,
+        "nivelAtende": true,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9204,
+        "nome": "Missionaria Teto E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9203,
+        "nome": "Missionario Diacono E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9208,
+        "nome": "Missionario Disciplinado E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9211,
+        "nome": "Missionario Sem Sexo E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9222,
+        "nome": "Pastor Comissao Dois E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-28",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9224,
+        "nome": "Pastor Comissao Quatro E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-28",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9223,
+        "nome": "Pastor Comissao Tres E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-28",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9221,
+        "nome": "Pastor Comissao Um E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-28",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 3003,
+        "nome": "Pastor de Área Alfa E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 7001,
+        "nome": "Pastor do Comite E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "cargo": "PRESBITERO",
+        "cargoNome": "Presbítero",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "AVANCADO",
+        "nivelConcluido": true,
+        "nivelAtende": true,
+        "nivelExigido": "Avançado ou acima — Art. 72, IV, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "chmCertificadoId": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 8001,
+        "nome": "Superintendente Norte E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "chmCertificadoId": null,
+        "nivelamento": false
+      }
+    ]
+  },
+  "detalhePlanejada": {
+    "sucesso": true,
+    "cerimonia": {
+      "cerimoniaId": 1,
+      "dataCerimonia": "2026-10-28",
+      "local": "Templo Sede E2E",
+      "ocasiao": "AGO",
+      "ocasiaoRotulo": "Assembleia Geral Ordinária",
+      "valorTaxa": 70,
+      "status": "PLANEJADA",
+      "motivoCancelamento": null,
+      "prazoTaxa": "2026-09-13"
+    },
+    "comissao": [
+      {
+        "membroId": 9221,
+        "nome": "Pastor Comissao Um E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9222,
+        "nome": "Pastor Comissao Dois E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9223,
+        "nome": "Pastor Comissao Tres E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9224,
+        "nome": "Pastor Comissao Quatro E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      }
+    ],
+    "comissaoValida": {
+      "valida": true,
+      "validos": 4,
+      "problemas": []
+    },
+    "candidatos": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "cargoAlvo": "MISSIONARIO",
+        "cargoAlvoRotulo": "Missionário(a)",
+        "modalidade": "INDICACAO",
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 75.4,
+        "taxa": {
+          "emDia": true,
+          "motivo": null
+        },
+        "diplomaImpresso": false
+      },
+      {
+        "consagracaoId": "6ce5676b-aa80-416a-acef-3e7dcd607fce",
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "cargoAlvo": "MISSIONARIO",
+        "cargoAlvoRotulo": "Missionário(a)",
+        "modalidade": "INDICACAO",
+        "taxaPagaEm": "2026-09-08",
+        "taxaValor": 70,
+        "taxa": {
+          "emDia": true,
+          "motivo": null
+        },
+        "diplomaImpresso": false
+      },
+      {
+        "consagracaoId": "4a56259a-5240-4dea-945b-b34ee0a76d14",
+        "membroId": 9207,
+        "nome": "Pastor de Outra Convencao E2E",
+        "cargoAlvo": "PASTOR",
+        "cargoAlvoRotulo": "Pastor",
+        "modalidade": "OUTRA_CONVENCAO",
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 70,
+        "taxa": {
+          "emDia": true,
+          "motivo": null
+        },
+        "diplomaImpresso": false
+      },
+      {
+        "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "cargoAlvo": "EVANGELISTA",
+        "cargoAlvoRotulo": "Evangelista",
+        "modalidade": "NOMEACAO_PRESIDENCIAL",
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 70,
+        "taxa": {
+          "emDia": true,
+          "motivo": null
+        },
+        "diplomaImpresso": false
+      }
+    ],
+    "roteiro": {
+      "posicoes": [
+        {
+          "casal": true,
+          "patente": "MISSIONARIO",
+          "pessoas": [
+            {
+              "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+              "membroId": 9202,
+              "nome": "Auxiliar Promovido E2E",
+              "cargoAlvo": "MISSIONARIO",
+              "cargoRotulo": "Missionário(a)",
+              "ato": "UNCAO"
+            },
+            {
+              "consagracaoId": "6ce5676b-aa80-416a-acef-3e7dcd607fce",
+              "membroId": 9210,
+              "nome": "Auxiliar Vetado E2E",
+              "cargoAlvo": "MISSIONARIO",
+              "cargoRotulo": "Missionário(a)",
+              "ato": "UNCAO"
+            }
+          ]
+        },
+        {
+          "casal": false,
+          "patente": "EVANGELISTA",
+          "pessoas": [
+            {
+              "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+              "membroId": 9206,
+              "nome": "Presbitero Evangelista E2E",
+              "cargoAlvo": "EVANGELISTA",
+              "cargoRotulo": "Evangelista",
+              "ato": "UNCAO"
+            }
+          ]
+        },
+        {
+          "casal": false,
+          "patente": "PASTOR",
+          "pessoas": [
+            {
+              "consagracaoId": "4a56259a-5240-4dea-945b-b34ee0a76d14",
+              "membroId": 9207,
+              "nome": "Pastor de Outra Convencao E2E",
+              "cargoAlvo": "PASTOR",
+              "cargoRotulo": "Pastor",
+              "ato": "DIPLOMACAO"
+            }
+          ]
+        }
+      ],
+      "insignias": [
+        {
+          "cargo": "MISSIONARIO",
+          "rotulo": "Missionário(a)",
+          "quantidade": 2
+        },
+        {
+          "cargo": "EVANGELISTA",
+          "rotulo": "Evangelista",
+          "quantidade": 1
+        },
+        {
+          "cargo": "PASTOR",
+          "rotulo": "Pastor",
+          "quantidade": 1
+        }
+      ],
+      "pendentes": [],
+      "prazoTaxa": "2026-09-13"
+    },
+    "disponiveis": []
+  },
+  "registro": {
+    "sucesso": true,
+    "resultados": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "resultado": "CONSAGRADO",
+        "certificadoId": 3,
+        "nivelamento": false,
+        "motivo": "Agora é Missionário(a).",
+        "cargoAlvoRotulo": "Missionário(a)"
+      },
+      {
+        "consagracaoId": "6ce5676b-aa80-416a-acef-3e7dcd607fce",
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "resultado": "AUSENTE",
+        "motivo": "Ausente: perde a consagração neste ano; novo processo só no ano que vem (Regimento, Art. 75, II, b).",
+        "cargoAlvoRotulo": "Missionário(a)"
+      },
+      {
+        "consagracaoId": "4a56259a-5240-4dea-945b-b34ee0a76d14",
+        "membroId": 9207,
+        "nome": "Pastor de Outra Convencao E2E",
+        "resultado": "CONSAGRADO",
+        "certificadoId": 4,
+        "nivelamento": true,
+        "motivo": "Agora é Pastor. Fica em nivelamento obrigatório na AFM (Regimento, Art. 66 §5º).",
+        "cargoAlvoRotulo": "Pastor"
+      },
+      {
+        "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "resultado": "CONSAGRADO",
+        "certificadoId": 5,
+        "nivelamento": false,
+        "motivo": "Agora é Evangelista.",
+        "cargoAlvoRotulo": "Evangelista"
+      }
+    ],
+    "mensagem": "Cerimônia registrada: 3 consagrado(s), 1 ausente(s), 0 de volta à fila."
+  },
+  "detalheRealizada": {
+    "sucesso": true,
+    "cerimonia": {
+      "cerimoniaId": 1,
+      "dataCerimonia": "2026-10-28",
+      "local": "Templo Sede E2E",
+      "ocasiao": "AGO",
+      "ocasiaoRotulo": "Assembleia Geral Ordinária",
+      "valorTaxa": 70,
+      "status": "REALIZADA",
+      "motivoCancelamento": null,
+      "prazoTaxa": "2026-09-13"
+    },
+    "comissao": [
+      {
+        "membroId": 9221,
+        "nome": "Pastor Comissao Um E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9222,
+        "nome": "Pastor Comissao Dois E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9223,
+        "nome": "Pastor Comissao Tres E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      },
+      {
+        "membroId": 9224,
+        "nome": "Pastor Comissao Quatro E2E",
+        "cargo": "PASTOR",
+        "status": "ATIVO",
+        "emComunhao": true
+      }
+    ],
+    "resultado": [
+      {
+        "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+        "numero": 1,
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "status": "CONCLUIDO",
+        "assunto": "Consagração a Missionário(a)",
+        "cargoAlvo": "MISSIONARIO",
+        "modalidade": "INDICACAO",
+        "dataProtocolo": "2026-10-28",
+        "estadoCivil": "CASADO",
+        "temFoto": true,
+        "documentos": 1,
+        "congregacaoNome": "Central E2E",
+        "extensaoNome": null,
+        "cerimoniaId": 1,
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 75.4,
+        "taxaForma": "BOLETO",
+        "diplomaCodigo": "KTHBUF92EGZDV8RL",
+        "homologadoEm": "2026-10-28",
+        "parecer": "APTO",
+        "parecerEm": "2026-10-28",
+        "casamentos": 1,
+        "presente": true,
+        "diplomaCertificadoId": 3,
+        "motivoEncerramento": null,
+        "cargoAlvoRotulo": "Missionário(a)"
+      },
+      {
+        "consagracaoId": "6ce5676b-aa80-416a-acef-3e7dcd607fce",
+        "numero": 4,
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "status": "REPROVADO",
+        "assunto": "Consagração a Missionário(a)",
+        "cargoAlvo": "MISSIONARIO",
+        "modalidade": "INDICACAO",
+        "dataProtocolo": "2026-10-28",
+        "estadoCivil": "CASADO",
+        "temFoto": true,
+        "documentos": 1,
+        "congregacaoNome": "Central E2E",
+        "extensaoNome": null,
+        "cerimoniaId": 1,
+        "taxaPagaEm": "2026-09-08",
+        "taxaValor": 70,
+        "taxaForma": "PIX",
+        "diplomaCodigo": null,
+        "homologadoEm": "2026-10-28",
+        "parecer": "APTO",
+        "parecerEm": "2026-10-28",
+        "casamentos": 1,
+        "presente": false,
+        "diplomaCertificadoId": null,
+        "motivoEncerramento": "AUSENCIA_CERIMONIA",
+        "cargoAlvoRotulo": "Missionário(a)"
+      },
+      {
+        "consagracaoId": "4a56259a-5240-4dea-945b-b34ee0a76d14",
+        "numero": 5,
+        "membroId": 9207,
+        "nome": "Pastor de Outra Convencao E2E",
+        "status": "CONCLUIDO",
+        "assunto": "Consagração a Pastor",
+        "cargoAlvo": "PASTOR",
+        "modalidade": "OUTRA_CONVENCAO",
+        "dataProtocolo": "2026-10-28",
+        "estadoCivil": "CASADO",
+        "temFoto": true,
+        "documentos": 1,
+        "congregacaoNome": "Central E2E",
+        "extensaoNome": null,
+        "cerimoniaId": 1,
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 70,
+        "taxaForma": "PIX",
+        "diplomaCodigo": "32EBH72T88UUWPUX",
+        "homologadoEm": "2026-10-28",
+        "parecer": "APTO",
+        "parecerEm": "2026-10-28",
+        "casamentos": 0,
+        "presente": true,
+        "diplomaCertificadoId": 4,
+        "motivoEncerramento": null,
+        "cargoAlvoRotulo": "Pastor"
+      },
+      {
+        "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+        "numero": 2,
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "status": "CONCLUIDO",
+        "assunto": "Consagração a Evangelista",
+        "cargoAlvo": "EVANGELISTA",
+        "modalidade": "NOMEACAO_PRESIDENCIAL",
+        "dataProtocolo": "2026-10-28",
+        "estadoCivil": "CASADO",
+        "temFoto": true,
+        "documentos": 1,
+        "congregacaoNome": "Central E2E",
+        "extensaoNome": null,
+        "cerimoniaId": 1,
+        "taxaPagaEm": "2026-08-29",
+        "taxaValor": 70,
+        "taxaForma": "PIX",
+        "diplomaCodigo": "GLQRYJW3BAU9ARJA",
+        "homologadoEm": "2026-10-28",
+        "parecer": "APTO",
+        "parecerEm": "2026-10-28",
+        "casamentos": 0,
+        "presente": true,
+        "diplomaCertificadoId": 5,
+        "motivoEncerramento": null,
+        "cargoAlvoRotulo": "Evangelista"
+      }
+    ]
+  },
+  "filaCEIDivorciado": {
+    "sucesso": true,
+    "itens": [
+      {
+        "consagracaoId": "e44e31ad-bd3d-4bdf-8626-941b53160a19",
+        "numero": 3,
+        "membroId": 9203,
+        "nome": "Missionario Diacono E2E",
+        "congregacao": "Central E2E",
+        "assunto": "Separação ao Diaconato",
+        "cargoAlvo": "DIACONO",
+        "cargoAlvoRotulo": "Diácono",
+        "modalidade": "INDICACAO",
+        "dataProtocolo": "2026-10-28",
+        "status": "EM_ANALISE_CONSELHO",
+        "estadoCivil": "DIVORCIADO",
+        "sabatina": false,
+        "escrutinio": true,
+        "excecaoPastor": false,
+        "documentos": 1
+      }
+    ]
+  },
+  "parecerRecusado": {
+    "sucesso": false,
+    "mensagem": "Escrutínio especial: diga se o divórcio foi no \"tempo da ignorância\" ou com fundamento em cláusula de exceção bíblica (Regimento, Art. 73, III, c)."
+  },
+  "listaFinal": [
+    {
+      "consagracaoId": "eb3a4d5a-39a4-460b-827d-6c66f787fe30",
+      "membroId": 9205,
+      "nome": "Diacono Nomeado E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Presbítero",
+      "proponente": "Presidente E2E",
+      "status": "HOMOLOGADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "PRESBITERO",
+      "modalidade": "NOMEACAO_PRESIDENCIAL",
+      "atoReferencia": "Ato 10/2026",
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 7,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": 9,
+      "homologacaoAto": null,
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 70,
+      "taxaForma": "PIX",
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": true,
+      "taxaEmDia": null
+    },
+    {
+      "consagracaoId": "e44e31ad-bd3d-4bdf-8626-941b53160a19",
+      "membroId": 9203,
+      "nome": "Missionario Diacono E2E",
+      "cargoAtual": null,
+      "assunto": "Separação ao Diaconato",
+      "proponente": "Secretário Geral E2E",
+      "status": "AGUARDANDO_PLENARIO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "DIACONO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 3,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": null,
+      "homologacaoSessaoId": null,
+      "homologacaoAto": null,
+      "taxaPagaEm": null,
+      "taxaValor": null,
+      "taxaForma": null,
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": null,
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": null
+    },
+    {
+      "consagracaoId": "4a56259a-5240-4dea-945b-b34ee0a76d14",
+      "membroId": 9207,
+      "nome": "Pastor de Outra Convencao E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Pastor",
+      "proponente": "Secretário Geral E2E",
+      "status": "CONCLUIDO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "PASTOR",
+      "modalidade": "OUTRA_CONVENCAO",
+      "atoReferencia": "Igreja de origem E2E",
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 5,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": 9,
+      "homologacaoAto": null,
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 70,
+      "taxaForma": "PIX",
+      "cerimoniaId": 1,
+      "cerimoniaData": "2026-10-28",
+      "cerimoniaValorTaxa": 70,
+      "dataConclusao": "2026-10-28",
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": 4,
+      "homologacaoPelaCLI": true,
+      "taxaEmDia": true
+    },
+    {
+      "consagracaoId": "d81632b8-76a8-4c7c-a208-cbba88c40e5b",
+      "membroId": 9202,
+      "nome": "Auxiliar Promovido E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Missionário(a)",
+      "proponente": "Dirigente Central E2E",
+      "status": "CONCLUIDO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "MISSIONARIO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 1,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": null,
+      "homologacaoAto": "Validação da lista dos aptos (e2e)",
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 75.4,
+      "taxaForma": "BOLETO",
+      "cerimoniaId": 1,
+      "cerimoniaData": "2026-10-28",
+      "cerimoniaValorTaxa": 70,
+      "dataConclusao": "2026-10-28",
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": 3,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": true
+    },
+    {
+      "consagracaoId": "3e837984-a269-41ce-9bad-cbc0d16fe5e9",
+      "membroId": 9206,
+      "nome": "Presbitero Evangelista E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Evangelista",
+      "proponente": "Presidente E2E",
+      "status": "CONCLUIDO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "EVANGELISTA",
+      "modalidade": "NOMEACAO_PRESIDENCIAL",
+      "atoReferencia": "Ato 9/2026",
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 2,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": 9,
+      "homologacaoAto": null,
+      "taxaPagaEm": "2026-08-29",
+      "taxaValor": 70,
+      "taxaForma": "PIX",
+      "cerimoniaId": 1,
+      "cerimoniaData": "2026-10-28",
+      "cerimoniaValorTaxa": 70,
+      "dataConclusao": "2026-10-28",
+      "motivoEncerramento": null,
+      "diplomaCertificadoId": 5,
+      "homologacaoPelaCLI": true,
+      "taxaEmDia": true
+    },
+    {
+      "consagracaoId": "05ba521a-4e9c-4782-a538-fd3bced5258f",
+      "membroId": 9211,
+      "nome": "Missionario Sem Sexo E2E",
+      "cargoAtual": null,
+      "assunto": "Separação ao Diaconato",
+      "proponente": "Secretário Geral E2E",
+      "status": "REPROVADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "DIACONO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 6,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "INAPTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": null,
+      "homologacaoSessaoId": null,
+      "homologacaoAto": null,
+      "taxaPagaEm": null,
+      "taxaValor": null,
+      "taxaForma": null,
+      "cerimoniaId": null,
+      "cerimoniaData": null,
+      "cerimoniaValorTaxa": null,
+      "dataConclusao": "2026-10-28",
+      "motivoEncerramento": "INAPTO_CEI",
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": null
+    },
+    {
+      "consagracaoId": "6ce5676b-aa80-416a-acef-3e7dcd607fce",
+      "membroId": 9210,
+      "nome": "Auxiliar Vetado E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Missionário(a)",
+      "proponente": "Secretário Geral E2E",
+      "status": "REPROVADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "MISSIONARIO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null,
+      "numero": 4,
+      "temFoto": true,
+      "documentos": 1,
+      "parecerCEI": "APTO",
+      "parecerEm": "2026-10-28",
+      "homologadoEm": "2026-10-28",
+      "homologacaoSessaoId": null,
+      "homologacaoAto": "Validação da lista dos aptos (e2e)",
+      "taxaPagaEm": "2026-09-08",
+      "taxaValor": 70,
+      "taxaForma": "PIX",
+      "cerimoniaId": 1,
+      "cerimoniaData": "2026-10-28",
+      "cerimoniaValorTaxa": 70,
+      "dataConclusao": "2026-10-28",
+      "motivoEncerramento": "AUSENCIA_CERIMONIA",
+      "diplomaCertificadoId": null,
+      "homologacaoPelaCLI": false,
+      "taxaEmDia": true
+    }
+  ],
+  "cerimonias": {
+    "sucesso": true,
+    "itens": [
+      {
+        "cerimoniaId": 2,
+        "dataCerimonia": "2026-10-29",
+        "local": "Templo E2E",
+        "ocasiao": "SOLENE_CLI",
+        "ocasiaoRotulo": "Sessão Solene da CLI",
+        "valorTaxa": 70,
+        "status": "PLANEJADA",
+        "motivoCancelamento": null,
+        "prazoTaxa": "2026-09-14",
+        "candidatos": 0,
+        "consagrados": 0,
+        "comissao": 4
+      },
+      {
+        "cerimoniaId": 3,
+        "dataCerimonia": "2026-10-28",
+        "local": "Templo Sede E2E",
+        "ocasiao": "AGO",
+        "ocasiaoRotulo": "Assembleia Geral Ordinária",
+        "valorTaxa": 70,
+        "status": "CANCELADA",
+        "motivoCancelamento": "Chuva forte no dia (e2e)",
+        "prazoTaxa": "2026-09-13",
+        "candidatos": 0,
+        "consagrados": 0,
+        "comissao": 4
+      },
+      {
+        "cerimoniaId": 1,
+        "dataCerimonia": "2026-10-28",
+        "local": "Templo Sede E2E",
+        "ocasiao": "AGO",
+        "ocasiaoRotulo": "Assembleia Geral Ordinária",
+        "valorTaxa": 70,
+        "status": "REALIZADA",
+        "motivoCancelamento": null,
+        "prazoTaxa": "2026-09-13",
+        "candidatos": 0,
+        "consagrados": 3,
+        "comissao": 4
+      }
+    ],
+    "valorReferencia": 70,
+    "ocasioes": {
+      "AGO": "Assembleia Geral Ordinária",
+      "MAGNA_CLI": "Sessão Magna da CLI",
+      "SOLENE_CLI": "Sessão Solene da CLI"
+    }
+  },
+  "meusDados": {
+    "sucesso": true,
+    "geradoEm": "2026-10-28T16:15:54.772Z",
+    "membro": {
+      "membroId": 9210,
+      "nome": "Auxiliar Vetado E2E",
+      "funcao": null,
+      "congregacao": "Central E2E",
+      "status": "ATIVO",
+      "dataNascimento": "1990-01-01",
+      "dataAdmissao": "2010-01-01",
+      "dataBatismo": null,
+      "formaAdmissao": null,
+      "origem": null,
+      "igrejaAnterior": null,
+      "dataRitoRecebimento": null,
+      "nomeLidoRito": null,
+      "ministranteRito": null,
+      "sexo": "M",
+      "dizimistaFiel": true,
+      "situacaoMembro": "EM_COMUNHAO",
+      "departamento": null,
+      "cargoMinisterial": "AUXILIAR",
+      "telefone": null,
+      "email": "escada9210@e2e.local",
+      "endereco": null,
+      "extensao": null,
+      "fotoUrl": null,
+      "criadoEm": "2026-10-28T16:15:51.0385773"
+    },
+    "liderancas": [],
+    "assentos": [],
+    "processosDisciplinares": [],
+    "vinculosFamiliares": [],
+    "consentimentos": [],
+    "solicitacoesLgpd": [],
+    "casamentos": [],
+    "licencasCandidatura": [],
+    "voluntariado": {
+      "adesao": null,
+      "adesoesAnteriores": [],
+      "responsaveisLegais": [],
+      "menoresSobMinhaResponsabilidade": [],
+      "aceitesComoResponsavel": [],
+      "equipes": [],
+      "servicos": [],
+      "indisponibilidades": [],
+      "remocoesDaEscala": [],
+      "gruposDeRodizio": [],
+      "aviso": "O motivo escrito de uma remoção da escala e o nome de quem registrou cada ato ficam com a Secretaria: peça-os pelo canal do Encarregado de Dados (LGPD art. 18)."
+    },
+    "setoresTecnicos": {
+      "vinculos": [],
+      "atosQueEmiti": [],
+      "aviso": "As observações escritas por quem aprovou, encerrou ou decidiu cada ato ficam com a Secretaria: peça-as pelo canal do Encarregado de Dados (LGPD art. 18)."
+    },
+    "vistoriasAntecedentes": {
+      "vistorias": [],
+      "aviso": "A Igreja guarda só o código (hash) de cada certidão, nunca o documento. Quem assinou cada termo fica com a Diretoria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18)."
+    },
+    "consentimentosMenores": {
+      "comoResponsavel": [],
+      "comoMenor": [],
+      "aviso": "O nome de quem registrou cada ficha fica com a Secretaria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18). O IP de uma autorização dada pelo responsável é dado do responsável."
+    },
+    "ministerioMenores": {
+      "politicaDeComunicacao": [],
+      "fichaConfirmadaEm": null,
+      "retiradasDaEscala": [],
+      "comunicacoesADiretoria": [],
+      "consultasAoCadastroNacional": [],
+      "aviso": "A validade das certidões é calculada pela data de emissão das certidões do Termo de Vistoria (que aparece no bloco de vistorias). A Igreja guarda só o código (hash) de cada certidão, nunca o documento."
+    },
+    "checkinInfantil": {
+      "comoCrianca": {
+        "registros": 0,
+        "ultimo": null,
+        "saudeGuardada": false
+      },
+      "comoQuemTrouxeOuRetirou": {
+        "registros": 0,
+        "ultimo": null
+      },
+      "comoAutorizado": {
+        "criancas": 0
+      }
+    },
+    "cuidadoPastoral": {
+      "pedidosDeOracao": [],
+      "notasPastoraisSobreVoce": {
+        "quantidade": 0,
+        "primeira": null,
+        "ultima": null,
+        "comoPedirOTexto": "O texto escrito pela liderança pode ser pedido ao Encarregado de Dados (Meus Dados → Solicitações)."
+      },
+      "acompanhamentosEncerradosSobreVoce": {
+        "quantidade": 0,
+        "primeiro": null,
+        "ultimo": null
+      },
+      "acompanhamentosComoResponsavel": {
+        "abertos": 0
+      }
+    },
+    "comunicacao": {
+      "consentimentos": [],
+      "comunicadosRecebidos": 0,
+      "comunicados": []
+    },
+    "identidadeVisual": {
+      "sugestoesDeTema": [],
+      "artesEnviadas": []
+    },
+    "afmCli": {
+      "matriculasAFM": [
+        {
+          "matriculaId": 12,
+          "origem": "AUTOMATICA",
+          "status": "ATIVA",
+          "nivel": "MEDIO",
+          "nivelConcluido": false,
+          "dataMatricula": "2024-01-01",
+          "reciclagemAprovadaEm": null,
+          "observacao": null
+        }
+      ],
+      "desmatriculasAFM": [],
+      "exclusoesCLI": [],
+      "corpoDocenteAFM": []
+    },
+    "escada": {
+      "cargos": [
+        {
+          "cargo": "AUXILIAR",
+          "cargoRotulo": "Auxiliar",
+          "desde": "2020-01-01",
+          "ate": null,
+          "origem": "LEGADO"
+        }
+      ],
+      "consagracoes": [
+        {
+          "numero": 4,
+          "assunto": "Consagração a Missionário(a)",
+          "cargo": "Missionário(a)",
+          "etapa": "Encerrado",
+          "protocolo": "2026-10-28",
+          "parecerCEI": "APTO em 28/10/2026",
+          "homologadoEm": "2026-10-28",
+          "taxaPagaEm": "2026-09-08",
+          "taxaValor": 70,
+          "cerimonia": "2026-10-28",
+          "presente": false,
+          "encerramento": "Ausente na cerimônia",
+          "conclusao": "2026-10-28"
+        }
+      ]
+    },
+    "criseSeguranca": {
+      "equipeSeguranca": [],
+      "portaVozEmCrises": [],
+      "registrosNaCrise": {
+        "pedidosDeImprensa": 0,
+        "manifestacoes": 0,
+        "respostas": 0,
+        "atosDoRegime": 0
+      },
+      "atosNoRegimeDeCrise": []
+    },
+    "tesouraria": {
+      "fornecedor": null,
+      "avisosDePagamento": []
+    }
+  }
+}

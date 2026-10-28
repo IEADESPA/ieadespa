@@ -266,7 +266,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "estrutura") montarEstrutura();
   if (aba === "catalogos") montarCatalogos();
   if (aba === "permissoes") { carregarOpcoesEscopoPermissao(); carregarPermissoes(); carregarNotificacaoRegras(); }
-  if (aba === "consagracoes") { carregarTiposConsagracao(); carregarConsagracoes(); carregarTurmasBatismo(); carregarCandidatosBatismo(); }
+  if (aba === "consagracoes") consAbrirAba();   // v8.3: o CEI vê só os pareceres; as cerimônias são do nível geral
   if (aba === "enquetes") { ajustarFormEnquetePorNivel(); carregarEnquetes(); }
   if (aba === "arquivos") { carregarOpcoesFormDocumentos(); carregarDocumentos(); carregarPoliticasRetencao(); carregarTextoMestre(); }
   if (aba === "disciplina") { carregarOpcoesFormDisciplina(); carregarProcessosDisciplinares(); }

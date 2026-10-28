@@ -937,12 +937,18 @@ describe("EvoluirConsagracao: os passos do Conselho e do Plenário são do geral
   const CONSAGRACOES = {
     [GUID(1)]: { membroId: 40, status: "PROTOCOLADO", assunto: "Diaconato" },
     [GUID(2)]: { membroId: 40, status: "AGUARDANDO_PLENARIO", assunto: "Diaconato" },
-    [GUID(3)]: { membroId: 40, status: "CONCLUIDO", assunto: "Diaconato" }
+    [GUID(3)]: { membroId: 40, status: "CONCLUIDO", assunto: "Diaconato" },
+    [GUID(4)]: { membroId: 40, status: "AGUARDANDO_PLENARIO", assunto: "Dirigente de Círculo de Oração" }   // v8.3: sem cargo — a esteira de sempre
   };
-  const preparar = ({ afetadasUpdate = 1 } = {}) => {
+  // v8.3 — o processo como a camada da esteira o lê (foto e documentos da indicação, Art. 74, II)
+  const processo = (i, { foto = 1, documentos = 1 } = {}) => (CONSAGRACOES[i.id]
+    ? [{ ConsagracaoId: i.id, Numero: 1, MembroId: CONSAGRACOES[i.id].membroId, Nome: "Fulano", Status: CONSAGRACOES[i.id].status, Assunto: CONSAGRACOES[i.id].assunto,
+      CargoAlvo: "DIACONO", Modalidade: "INDICACAO", DataProtocolo: "2026-01-01", TemFoto: foto, Documentos: documentos }] : []);
+  const preparar = ({ afetadasUpdate = 1, foto = 1, documentos = 1 } = {}) => {
     quando(/FROM Consagracoes WHERE ConsagracaoId = @id/, (i) => (CONSAGRACOES[i.id] ? [{ ...CONSAGRACOES[i.id] }] : []));
+    quando(/ParecerResultado/, (i) => processo(i, { foto, documentos }));
     quando(/UPDATE Consagracoes SET/, [], afetadasUpdate);
-    quando(/SELECT TOP 1 CargoMinisterialResultante AS cargo FROM TiposConsagracao/, [{ cargo: "DIACONO" }]);
+    quando(/SELECT TOP 1 CargoMinisterialResultante AS cargo FROM TiposConsagracao/, (i) => (i.nome === "Diaconato" ? [{ cargo: "DIACONO" }] : []));
     quando(/sp_getapplock/, [{ resultado: 0 }]);
   };
   const evoluir = (token, consagracaoId, corpo) => chamar(hEvolCons, { token, corpo, ligado: { consagracaoId } });
@@ -967,21 +973,35 @@ describe("EvoluirConsagracao: os passos do Conselho e do Plenário são do geral
     expect(upd[0].sql).toMatch(/AND Status = @etapaAtual/);
     expect(upd[0].inputs).toMatchObject({ status: "EM_ANALISE_CONSELHO", etapaAtual: "PROTOCOLADO" });
   });
-  test("concluir grava a função e o cargo ministerial do membro", async () => {
+  test("v8.3: sem a foto ou os documentos da indicação, o processo de cargo não vai ao CEI (Art. 74, II)", async () => {
+    preparar({ documentos: 0 });
+    const r = await evoluir(geral(["consagracoes"]), GUID(1), { acao: "AVANCAR" });
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/documentos pessoais.*Art\. 74, II/);
+    expect(rodou(/UPDATE Consagracoes SET/)).toHaveLength(0);
+  });
+  test("v8.3: o processo de cargo aguardando homologação não avança por aqui (o parecer, a homologação e a cerimônia têm dono)", async () => {
     preparar();
     const r = await evoluir(geral(["consagracoes"]), GUID(2), { acao: "AVANCAR" });
+    expect(r.status).toBe(409);
+    expect(r.body.mensagem).toMatch(/Homologar/);
+    expect(rodou(/UPDATE Consagracoes SET/)).toHaveLength(0);
+    expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
+  });
+  test("concluir o processo sem cargo grava a função (o cargo ministerial não muda)", async () => {
+    preparar();
+    const r = await evoluir(geral(["consagracoes"]), GUID(4), { acao: "AVANCAR" });
     expect(r.body).toMatchObject({ sucesso: true, novoStatus: "CONCLUIDO" });
-    // v8.2: cargo, Função e histórico juntos, na mesma transação (shared/escadaDb.trocarCargoNaTransacao)
-    const troca = rodou(/UPDATE MembroReferencia SET CargoMinisterial/);
-    expect(troca).toHaveLength(1);
-    expect(troca[0].inputs).toMatchObject({ m: 40, c: "DIACONO", f: "Diaconato", mudaFuncao: 1 });
-    expect(rodou(/INSERT INTO CargosMinisteriaisHistorico/)[0].inputs).toMatchObject({ m: 40, c: "DIACONO", o: "CONSAGRACAO" });
-    expect(troca[0].transacao).not.toBeNull();
+    const funcao = rodou(/UPDATE MembroReferencia SET Funcao = @funcao/);
+    expect(funcao).toHaveLength(1);
+    expect(funcao[0].inputs).toMatchObject({ membroId: 40, funcao: "Dirigente de Círculo de Oração" });
+    expect(rodou(/CargoMinisterial = @c/)).toHaveLength(0);
+    expect(funcao[0].transacao).not.toBeNull();
     expect(mockTransacoes[mockTransacoes.length - 1].estado).toBe("confirmada");
   });
   test("o processo mudou de etapa no meio (UPDATE sem linha): não aplica função nem cargo", async () => {
     preparar({ afetadasUpdate: 0 });
-    const r = await evoluir(geral(["consagracoes"]), GUID(2), { acao: "AVANCAR" });
+    const r = await evoluir(geral(["consagracoes"]), GUID(4), { acao: "AVANCAR" });
     expect(r.body.sucesso).toBe(false);
     expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
     expect(registrarAuditoria).not.toHaveBeenCalled();

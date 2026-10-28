@@ -200,7 +200,7 @@ processos que podem ser vetados.
 
 ### Como ficou (entregue em 28/10/2026)
 
-Migração **157**; regra pura em `api/shared/escada.js`, banco em `api/shared/escadaDb.js`, rota nova `/api/escada/requisitos` (`RequisitosEscada`) e as ações `vetaveis`,
+**Em produção desde 28/10/2026** (merge `9ee1968`; para desfazer: `git revert -m 1 9ee1968`). Migração **157**; regra pura em `api/shared/escada.js`, banco em `api/shared/escadaDb.js`, rota nova `/api/escada/requisitos` (`RequisitosEscada`) e as ações `vetaveis`,
 `chm`, `matricular-candidato` e `vetar` em `/api/afm/<ação>`; `CriarConsagracao`, `EvoluirConsagracao`, `ListarConsagracoes`, `GestaoPessoas`, a vacância e a minimização
 mudaram. Tela: Consagrações (modalidade, "Conferir requisitos", destino e veto na esteira), cadastro (Sexo, "No cargo desde"), Academia (coluna CHM, filtros "Nivelamento
 obrigatório", "Sem CHM" e "Candidatos", seção **Escada e veto**), Meus Dados (histórico de cargos). Casca do service worker **v43**. O login passou a dizer em quais
@@ -234,9 +234,87 @@ revisões pediram 25; tela (`tools/front-escada`, com as respostas reais gravada
 
 ## v8.3 — Consagração e documentação
 
-- [ ] Esteira de consagrações (PROTOCOLADO → EM_ANALISE → AGUARDANDO_PLENARIO → CONCLUÍDO).
-- [ ] Consagração coletiva (Comissão de Unção) + diplomação.
-- [ ] Documentação: CHM (Certificado de Habilitação Ministerial).
+- [x] Esteira de consagrações (PROTOCOLADO → EM_ANALISE → AGUARDANDO_PLENARIO → CONCLUÍDO).
+- [x] Consagração coletiva (Comissão de Unção) + diplomação.
+- [x] Documentação: CHM (Certificado de Habilitação Ministerial).
+
+### Desenho da v8.3 (contrato, 28/10/2026)
+
+Base legal: Regimento Art. 7º, III; 9º; 10; 67; 73, II e III; 74 e 75. A v8.2 pôs os requisitos dentro da esteira, mas cada etapa ainda é um clique de "Avançar" do nível
+geral, sem dizer **quem** decidiu. A v8.3 dá a cada etapa o seu dono, como o Art. 74 manda ("fica abolido o papelório"), e leva a consagração até o altar e o diploma.
+Vale para os processos que levam a cargo; Integração e Reintegração (sem cargo) continuam com a esteira simples de hoje.
+
+**1. Proposta digital (Art. 74, II).** O processo protocolado ganha os **documentos da indicação**: foto atualizada (a do cadastro da pessoa) e cópia dos documentos
+pessoais (anexo no próprio processo, PDF ou imagem). O certificado da Academia é o **CHM**, que o sistema já conhece — não se anexa. "Enviar ao CEI" só com a foto e pelo menos
+um documento.
+
+**2. Parecer do CEI (Art. 74, III; Art. 9º; Art. 73, III).** Em "Em análise", só quem tem a permissão **`cei`** (nível geral) registra o parecer: **APTO** ou **INAPTO**, a
+data da sabatina e a fundamentação (sigilosa: só quem tem `cei` lê). Para Presbítero, Evangelista e Pastor, a sabatina do Art. 9º §1º: vida pregressa e antecedentes,
+regularidade financeira (dízimo) e alinhamento doutrinário, cada um marcado. **Escrutínio especial** (Art. 73, III) quando o cadastro diz divorciado(a) ou quando o CEI marca
+que há histórico de ruptura conjugal: o fundamento (no "tempo da ignorância", antes da conversão, ou cláusula de exceção bíblica), a verificação documental e, se recasado(a),
+o casamento atual estável e legalizado — sem isso não há APTO. **Pastor não casado** (Art. 73, II): o CEI escreve o motivo da exceção (b: celibato) ou não há APTO.
+INAPTO arquiva o processo (Art. 9º §2º); APTO leva à homologação. Ninguém dá parecer no próprio processo.
+
+**3. Homologação (Art. 74, IV; Art. 7º, III).** Auxiliar, Missionário(a) e Diácono: o Pastor Presidente valida a lista dos aptos — a Secretaria (nível geral de
+`consagracoes`) registra o ato, podendo marcar vários de uma vez. Presbítero, Evangelista e Pastor: homologação **da CLI** em plenário — o registro aponta a reunião da CLI
+(já realizada) em que foi votada. Homologado, o processo espera a cerimônia.
+
+**4. Taxa de consagração (Art. 75, I).** Valor da cerimônia (R$ 70,00 em 2026, corrigido a cada ano), pago por PIX ou boleto até **45 dias antes** da cerimônia. A
+Secretaria ou a tesouraria (nível geral de `consagracoes` ou `financeiro`) registra o pagamento (data, valor, forma; o comprovante vai como documento do processo). Sem
+pagamento no prazo, a pessoa não é consagrada naquela cerimônia: o processo continua homologado e espera a próxima. O lançamento no caixa continua sendo da tesouraria, no
+financeiro, como hoje.
+
+**5. Cerimônia de consagração (Art. 75).** Nasce a cerimônia: data, local, ocasião (Assembleia Geral Ordinária, Sessão Magna ou Sessão Solene da CLI), valor da taxa e a
+**Comissão de Unção** (no mínimo 4 pastores titulares em atividade, nenhum deles candidato). Entram os processos homologados. A tela monta o **roteiro**: candidatos por
+patente, casais consagrados na mesma cerimônia lado a lado (Art. 75, III, b), quem vem de outra convenção como **diplomação** (Art. 10, parágrafo único — não há nova unção),
+a conta das **insígnias** por patente e quem está com a taxa pendente. Depois do culto, a Secretaria registra **quem estava presente**: presente e com a taxa em dia →
+consagrado (cargo, histórico e diploma, com os requisitos conferidos de novo dentro da trava); **ausente → perde a consagração naquele ano** (Art. 75, II, b: "não existe
+justificativa"), o processo é encerrado e um novo protocolo para a pessoa só no ano seguinte.
+
+**6. Documentos (Art. 67; Art. 75, IV, e).** O **CHM** passa a ser um documento de verdade: quando a AFM concede, o sistema emite o certificado com QR e código de
+verificação pública (o mesmo dos certificados da v6.9); revogado ou usado numa subida, o certificado é revogado junto. Cada consagração concluída emite o **diploma** (ou o
+diploma de reconhecimento, para quem vem de outra convenção), também verificável, que o titular baixa em Meus Certificados.
+
+**7. Onde aparece.** Consagrações: em cada processo, "Documentos", "Enviar ao CEI", "Parecer do CEI" (só `cei`), "Homologar" (com seleção em lote), "Taxa"; o diploma no
+concluído; seção nova **Cerimônias** (criar, comissão, incluir candidatos, roteiro para imprimir, registrar presença). Academia: o CHM com o link do certificado.
+
+### Como ficou a v8.3 (entregue em 28/10/2026)
+
+Migração **158**; regra pura em `api/shared/consagracao.js`, banco em `api/shared/consagracaoDb.js`, rotas novas `/api/esteira-consagracao/<ação>` (`EsteiraConsagracao`:
+fila e parecer do CEI, reuniões da CLI, homologação, taxa) e `/api/cerimonias-consagracao/<ação>` (`CerimoniasConsagracao`); a página dos documentos em
+`api/shared/pdfDocumentoMinisterial.js`. "Avançar" passou a ser "Enviar ao CEI" nos processos que levam a cargo (e só com a foto e um documento); os de Integração e
+Reintegração seguem a esteira antiga. Tela: a aba Consagrações também para quem só tem `cei` (vê só os pareceres); cerimônias só no nível geral. Casca do service worker
+**v44**.
+
+**O que mudou depois da revisão independente do servidor** (1 alto, 4 médios, 8 baixos — todos tratados):
+
+- **A cerimônia exige a lista inteira** (presentes **e** ausentes). Se alguém entrou na cerimônia por outra tela depois que a Secretaria a abriu, o registro volta sem
+  mudar nada — ninguém perde o ano por um nome que não viu. A tela já marca como presente quem está com a taxa em dia e pergunta quantos perdem o ano antes de gravar.
+- A cerimônia **nunca fica antes da homologação** nem da entrada no cargo atual (incluir, alterar a data e registrar conferem). A homologação não é anterior ao parecer do CEI.
+- O registro relê os candidatos **com trava** (a taxa e o código do diploma de agora); o código que valeu fica no processo.
+- **Dossiê da indicação:** ninguém vê nem mexe no próprio; depois do envio ao CEI só o nível geral acrescenta (o comprovante da taxa) e ninguém apaga; sai na minimização.
+- O **CEI não vê o próprio processo** na fila nem lê o próprio parecer. Reprovar e vetar tiram o processo da cerimônia e soltam o código reservado. Ex-cônjuge não fica
+  lado a lado (só o casamento mais recente conta). Dois casamentos registrados pedem o escrutínio, mesmo com o cadastro dizendo "casado". A minimização apaga também as
+  marcas do escrutínio e da sabatina.
+
+**O que mudou depois da revisão independente da tela** (4 médios, 8 baixos): o botão "Homologar os marcados" aparecia para todos no navegador de verdade (o
+estilo da barra vencia o "escondido"); um ato sobre a cerimônia podia ir para outra aberta depois (agora vai a que estava na tela no clique); a fila do CEI que chegava
+depois da saída aparecia (agora é descartada, e o formulário do parecer é limpo); o resultado de cada pessoa sumia depois do registro; a presença desmarcada voltava a
+ficar marcada depois de imprimir os diplomas ou salvar a comissão; o valor da taxa que o navegador não entende não vira R$ 70,00 calado; aviso para quem é do CEI fora
+do nível geral; rótulos com o nome em cada caixinha; a lista do que falta perto do painel da homologação; reuniões da CLI relidas ao homologar. A taxa pela tela fica
+com a Secretaria (o servidor aceita também o nível geral do financeiro, mas a tesouraria não chega à aba Consagrações).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** o "Conselho" da esteira é o **CEI** (Art. 74, III) e quem dá o parecer é quem tem a
+permissão `cei` no nível geral; o parecer vale também para a nomeação do Presidente e para quem vem de outra convenção (o Art. 66 §4º só dispensa o veto da AFM); Auxiliar,
+Missionário(a) e Diácono são homologados pelo **ato do Presidente** (a Secretaria registra) e Presbítero, Evangelista e Pastor **pela CLI** (a reunião já encerrada); o
+**Pastor não casado** só passa com o motivo escrito pelo CEI; a taxa só vale se paga **até 45 dias antes** e no valor da cerimônia (quem pagou depois espera a próxima, não
+perde o ano); a cerimônia pode ser criada com data passada (até 1 ano) para registrar a que já aconteceu; quem falta **perde no ano civil** e o registro **não se desfaz**
+pelo sistema; o diploma é impresso antes com o código reservado e só vale depois do registro; o CHM usado numa subida é **revogado** (a verificação pública diz
+"revogado"); o lançamento da taxa no caixa continua com a tesouraria, no financeiro; em Meus Dados o titular vê o resultado e a data do parecer, não a fundamentação.
+
+**Provas:** jest 6.136 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 158): `e2e-55` fluxos 112, `e2e-56` segurança e lixo 86, `e2e-57` corridas 19,
+`e2e-58` o que a revisão pediu 25; os da v8.2 passam pela esteira nova (`e2e-51` 121, `e2e-52` 53, `e2e-53` 25, `e2e-54` 26); tela (`tools/front-consagracao`, com as
+respostas reais gravadas pelo `e2e-55`) 98, com três mutações acusadas; as outras provas de tela continuam passando.
 
 ## v8.4 — Credencial digital com QR Code
 

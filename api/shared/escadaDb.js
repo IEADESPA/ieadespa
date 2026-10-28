@@ -250,7 +250,7 @@ async function vetar(pool, { consagracaoId, motivo, por }) {
   if (Number(atual.MembroId) === Number(por)) return { sucesso: false, mensagem: "Ninguém veta o próprio processo." };
   // só a indicação a um cargo da escada (Integração, Reintegração e texto livre não são "consagração ou promoção" do Art. 66 §3º)
   const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("motivo", sql.NVarChar(500), motivo).input("por", sql.Int, por).input("hoje", sql.Date, hojeBrasilia())
-    .query(`UPDATE c SET Status = N'REPROVADO', DataConclusao = @hoje, VetoAFMEm = SYSUTCDATETIME(), VetoAFMPor = @por, VetoAFMMotivo = @motivo
+    .query(`UPDATE c SET Status = N'REPROVADO', DataConclusao = @hoje, VetoAFMEm = SYSUTCDATETIME(), VetoAFMPor = @por, VetoAFMMotivo = @motivo, CerimoniaId = NULL, DiplomaCodigo = NULL
             FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
             WHERE c.ConsagracaoId = @id AND c.Modalidade = N'INDICACAO' AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')
               AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL`);

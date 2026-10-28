@@ -92,13 +92,13 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   await E.cerimonias("incluir", { cerimoniaId: ce, ids: [idAux] });
   // entre a homologação e a cerimônia, a AFM revoga o CHM direto no banco (a conferência é feita de novo dentro da transação do registro)
   await q("UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0 WHERE MembroId = @m", { m: P.auxiliar });
-  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux] });
+  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux], ausentes: [] });
   ok(r.body.sucesso && r.body.resultados[0].resultado === "VOLTOU" && (await cargo(P.auxiliar)) === "AUXILIAR", "sem o CHM, a cerimônia não muda o cargo: volta para a fila", r.body);
   ok((await E.statusDe(idAux)) === "HOMOLOGADO" && !(await escalar("SELECT CerimoniaId FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux })), "continua homologado, fora da cerimônia");
   await q("UPDATE Matriculas_AFM SET CertificadoHabilitacao = 1 WHERE MembroId = @m", { m: P.auxiliar });
   ce = await E.novaCerimonia();
   await E.cerimonias("incluir", { cerimoniaId: ce, ids: [idAux] });
-  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux] });
+  r = await E.cerimonias("registrar", { cerimoniaId: ce, presentes: [idAux], ausentes: [] });
   ok(r.body.sucesso && r.body.resultados[0].resultado === "CONSAGRADO" && (await escalar("SELECT CONVERT(varchar(10), DataConclusao, 120) FROM Consagracoes WHERE ConsagracaoId = @id", { id: idAux })) === hoje, "concluída com a data da cerimônia (Brasília)", r.body);
 
   console.log("== a pessoa que sumiu nunca passa ==");

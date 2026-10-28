@@ -31,7 +31,7 @@ function conteudoCombinaComTipo(buffer, mimeType) {
 
 // Porta única das três operações. `uniforme`: toda recusa devolve a MESMA resposta (usado no DELETE, onde o anexo pode nem existir).
 // Ordem: tabela conhecida → permissão da tabela → exigência de nível geral → registro-pai existe e está no escopo.
-async function autorizar(context, pool, usuario, tabela, registroId, { escrita, uniforme }) {
+async function autorizar(context, pool, usuario, tabela, registroId, { escrita, uniforme, exclusao = false }) {
   const recusar = (status, mensagem) => {
     context.res = uniforme ? { status: 403, body: FORA_DO_ESCOPO } : { status, body: { sucesso: false, mensagem } };
     return false;
@@ -42,7 +42,7 @@ async function autorizar(context, pool, usuario, tabela, registroId, { escrita, 
   const visao = auth.visaoDaPermissao(usuario, regra.permissoes);
   if (!visao) return recusar(403, MSG_SEM_PERMISSAO);
   if ((regra.soGeral || (escrita && regra.escritaSoGeral)) && !ehGeral(visao)) return recusar(403, MSG_GERAL);
-  if (!(await regra.alcance(pool, visao, registroId))) {
+  if (!(await regra.alcance(pool, visao, registroId, { escrita, exclusao }))) {   // v8.3: a regra pode olhar a operação (os documentos da consagração)
     context.res = { status: 403, body: FORA_DO_ESCOPO };
     return false;
   }
@@ -155,7 +155,7 @@ module.exports = async function (context, req) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
-    if (!(await autorizar(context, pool, usuario, anexo.Tabela, anexo.RegistroId, { escrita: true, uniforme: true }))) return;
+    if (!(await autorizar(context, pool, usuario, anexo.Tabela, anexo.RegistroId, { escrita: true, uniforme: true, exclusao: true }))) return;
     const regraAnexo = regraDaTabela(anexo.Tabela) || {};
     if (regraAnexo.semExclusao) { context.res = { status: 403, body: { sucesso: false, mensagem: "Este anexo é prova e não pode ser excluído." } }; return; }
     await pool.request().input("id", sql.Int, anexoId).query(`DELETE FROM AnexosGenericos WHERE AnexoId = @id`);

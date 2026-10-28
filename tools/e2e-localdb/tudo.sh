@@ -64,4 +64,5 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-54-escada-revisao.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-55-consagracao-fluxos.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-56-consagracao-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-57-consagracao-corridas.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-58-consagracao-revisao.js
 echo TUDO-PRONTO

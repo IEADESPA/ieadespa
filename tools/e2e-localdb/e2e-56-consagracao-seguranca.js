@@ -97,7 +97,7 @@ async function fuzz(rotulo, chamar, base, campos, preparar) {
   ok((await cerimonias("comissao", { cerimoniaId: ce, membroIds: Array.from({ length: 21 }, (_, i) => 9000 + i) })).status === 400, "comissão com 21: 400");
   ok((await cerimonias("comissao", { cerimoniaId: ce, membroIds: ["abc"] })).status === 400, "comissão com matrícula malformada: 400");
   ok((await cerimonias("registrar", { cerimoniaId: ce, presentes: "todos" })).status === 400, "presentes que não é lista: 400");
-  ok((await cerimonias("registrar", { cerimoniaId: ce, presentes: [idCEI] })).status === 422, "cerimônia sem candidato: 422 (nada muda)");
+  ok((await cerimonias("registrar", { cerimoniaId: ce, presentes: [idCEI], ausentes: [] })).status === 422, "cerimônia sem candidato: 422 (nada muda)");
 
   console.log("== ninguém age no próprio processo ==");
   ok((await esteira("parecer", { consagracaoId: idCEI, ...E.PARECER_APTO, sabatinaEm: hoje }, L.GERAL(P.auxiliar, ["cei"]))).status === 422, "o candidato não dá o próprio parecer");
@@ -109,7 +109,7 @@ async function fuzz(rotulo, chamar, base, campos, preparar) {
 
   console.log("== presente de fora da cerimônia; a disciplina não vaza pelo parecer ==");
   await cerimonias("incluir", { cerimoniaId: ce, ids: [idHom] });
-  r = await cerimonias("registrar", { cerimoniaId: ce, presentes: [idHom, idCEI] });
+  r = await cerimonias("registrar", { cerimoniaId: ce, presentes: [idHom, idCEI], ausentes: [] });
   ok(r.status === 409 && (await escalar("SELECT Status FROM CerimoniasConsagracao WHERE CerimoniaId = @c", { c: ce })) === "PLANEJADA", "presença de quem não está na cerimônia: 409, nada muda", r.body);
   await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.auxiliar, d: hoje });
   r = await esteira("parecer", { consagracaoId: idCEI, ...E.PARECER_APTO, sabatinaEm: hoje }, L.GERAL(1003, ["cei"]));
@@ -144,7 +144,7 @@ async function fuzz(rotulo, chamar, base, campos, preparar) {
   await fuzz("comissão", (corpo) => cerimonias("comissao", corpo), { cerimoniaId: ce, membroIds: E.COMISSAO }, ["cerimoniaId", "membroIds"]);
   await fuzz("incluir", (corpo) => cerimonias("incluir", corpo), { cerimoniaId: ce, ids: [idHom] }, ["cerimoniaId", "ids"]);
   await fuzz("cancelar", (corpo) => cerimonias("cancelar", corpo), { cerimoniaId: 99999999, motivo: "Motivo de teste" }, ["cerimoniaId", "motivo"]);
-  await fuzz("registrar", (corpo) => cerimonias("registrar", corpo), { cerimoniaId: 99999999, presentes: [] }, ["cerimoniaId", "presentes"]);
+  await fuzz("registrar", (corpo) => cerimonias("registrar", corpo), { cerimoniaId: 99999999, presentes: [], ausentes: [] }, ["cerimoniaId", "presentes", "ausentes"]);
 
   console.log("== texto que parece código é guardado como texto ==");
   r = await cerimonias("criar", { dataCerimonia: hoje, local: "'; DROP TABLE Consagracoes; -- <img src=x onerror=alert(1)>", ocasiao: "SOLENE_CLI" });

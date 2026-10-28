@@ -93,10 +93,10 @@ async function principal() {
   const comissaoOk = await E.cerimonias("comissao", { cerimoniaId: outra, membroIds: E.COMISSAO });
   ok(comissaoOk.status === 200, "a outra cerimônia também tem comissão");
   rs = await disparar([
-    { tipo: "registrar", corpo: { cerimoniaId: onde, presentes: [idB, idC] } },
+    { tipo: "registrar", corpo: { cerimoniaId: onde, presentes: [idB, idC], ausentes: [] } },
     { tipo: "cancelar", corpo: { cerimoniaId: onde, motivo: "Cancelada na corrida (e2e)" } },
     { tipo: "retirar", corpo: { cerimoniaId: onde, consagracaoId: idB } },
-    { tipo: "registrar", corpo: { cerimoniaId: onde, presentes: [idB, idC] } }
+    { tipo: "registrar", corpo: { cerimoniaId: onde, presentes: [idB, idC], ausentes: [] } }
   ]);
   ok(semErro(rs), "nenhum erro", rs);
   const st = await escalar("SELECT Status FROM CerimoniasConsagracao WHERE CerimoniaId = @c", { c: onde });

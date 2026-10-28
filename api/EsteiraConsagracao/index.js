@@ -30,15 +30,17 @@ module.exports = async function (context, req) {
   const sessaoInteira = () => auth.exigirLoginIgnorandoTermos(req, {});
 
   if (acao === "cei" && metodo === "GET") {
-    if (!exigirGeral(req, context, "cei")) return;
-    context.res = { status: 200, body: { sucesso: true, itens: await db.filaDoCEI(await getPool()) } };
+    const usuario = exigirGeral(req, context, "cei");
+    if (!usuario) return;
+    context.res = { status: 200, body: { sucesso: true, itens: await db.filaDoCEI(await getPool(), usuario.membroId) } };
     return;
   }
   if (acao === "parecer" && metodo === "GET") {
-    if (!exigirGeral(req, context, "cei")) return;
+    const usuario = exigirGeral(req, context, "cei");
+    if (!usuario) return;
     const id = (req.query || {}).consagracaoId;
     if (!db.ehGuid(id)) return erro(context, 404, "Parecer não encontrado.");
-    const parecer = await db.lerParecer(await getPool(), id);
+    const parecer = await db.lerParecer(await getPool(), id, usuario.membroId);
     if (!parecer) return erro(context, 404, "Parecer não encontrado.");
     context.res = { status: 200, body: { sucesso: true, parecer } };
     return;

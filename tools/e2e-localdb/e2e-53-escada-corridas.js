@@ -65,7 +65,7 @@ async function principal() {
   await E.parecer(idM); await E.homologar(idM); await E.pagarTaxa(idM);
   const ceM = await E.novaCerimonia();
   await E.cerimonias("incluir", { cerimoniaId: ceM, ids: [idM] });
-  rs = await disparar(Array.from({ length: 4 }, () => ({ tipo: "registrar", corpo: { cerimoniaId: ceM, presentes: [idM] } })));
+  rs = await disparar(Array.from({ length: 4 }, () => ({ tipo: "registrar", corpo: { cerimoniaId: ceM, presentes: [idM], ausentes: [] } })));
   ok(semErro(rs), "nenhum erro", rs);
   ok(rs.filter((x) => x.sucesso === true).length === 1, "uma conclusão", rs.map((x) => [x.status, x.sucesso]));
   ok((await escalar("SELECT COUNT(*) FROM CertificadosEmitidos WHERE MembroId = @m AND Natureza = 'DIPLOMA'", { m: P.missionario })) === 1, "um diploma");
@@ -82,9 +82,9 @@ async function principal() {
   await E.cerimonias("incluir", { cerimoniaId: ceV, ids: [idV] });
   rs = await disparar([
     { tipo: "vetar", corpo: { consagracaoId: idV, motivo: "Reprovou na avaliação regimental (corrida)" } },
-    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV] } },
+    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV], ausentes: [] } },
     { tipo: "vetar", corpo: { consagracaoId: idV, motivo: "Reprovou na avaliação regimental (corrida)" } },
-    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV] } }
+    { tipo: "registrar", corpo: { cerimoniaId: ceV, presentes: [idV], ausentes: [] } }
   ]);
   ok(semErro(rs), "nenhum erro", rs);
   const cv = await um("SELECT Status, VetoAFMEm FROM Consagracoes WHERE ConsagracaoId = @id", { id: idV });

@@ -81,8 +81,8 @@ module.exports = async function (context, req) {
   if (acao === "REPROVAR") {
     const reprovou = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId)
       .input("hoje", sql.Date, hojeBrasilia())
-      .query(`UPDATE Consagracoes SET Status = 'REPROVADO', DataConclusao = @hoje
-              WHERE ConsagracaoId = @id AND Status NOT IN ('CONCLUIDO', 'REPROVADO')`);
+      .query(`UPDATE Consagracoes SET Status = 'REPROVADO', DataConclusao = @hoje, CerimoniaId = NULL, DiplomaCodigo = NULL
+              WHERE ConsagracaoId = @id AND Status NOT IN ('CONCLUIDO', 'REPROVADO')`);   // v8.3: sai da cerimônia e solta o código reservado do diploma
     if (afetadas(reprovou) !== 1) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo já foi concluído ou reprovado." } };
       return;
@@ -96,6 +96,10 @@ module.exports = async function (context, req) {
 
   if (acao === "AVANCAR") {
     const novoStatus = PROXIMA_ETAPA_CONSAGRACAO[atual.status];
+    if (!novoStatus && atual.status === "HOMOLOGADO" && !(atual.cargoAlvo || (await escadaDb.cargoDoTipo(pool, atual.assunto)))) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Este processo está homologado, mas o tipo dele não leva mais a um cargo: reprove-o e protocole de novo." } };
+      return;
+    }
     if (!novoStatus && atual.status !== "HOMOLOGADO") {   // v8.3: o homologado tem resposta própria logo abaixo
       context.res = { status: 400, body: { sucesso: false, mensagem: atual.status === "REPROVADO" ? "Este processo foi reprovado." : "Este processo já está em CONCLUIDO." } };
       return;

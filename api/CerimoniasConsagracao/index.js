@@ -10,7 +10,7 @@
 //  POST comissao   {cerimoniaId, membroIds:[...]}
 //  POST incluir    {cerimoniaId, ids:[consagracaoId...]}
 //  POST retirar    {cerimoniaId, consagracaoId}
-//  POST registrar  {cerimoniaId, presentes:[consagracaoId...]}   (no dia da cerimônia ou depois; ausente perde a consagração no ano — Art. 75, II, b)
+//  POST registrar  {cerimoniaId, presentes:[...], ausentes:[...]}   (a lista inteira; no dia da cerimônia ou depois; ausente perde a consagração no ano — Art. 75, II, b)
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const { exigirGeral } = require("../shared/escopoRotas");
@@ -98,9 +98,13 @@ module.exports = async function (context, req) {
     return resposta(context, await db.retirarCandidato(pool, { cerimoniaId, consagracaoId: corpo.consagracaoId, por }));
   }
   if (acao === "registrar") {
+    // v8.3 (revisão independente): a lista INTEIRA — presentes e ausentes —, para ninguém perder o ano por um nome que a Secretaria não viu
     const presentes = listaDeGuids(corpo.presentes);
-    if (!presentes || presentes.length > 200 || presentes.some((x) => !db.ehGuid(x))) return erro(context, 400, "Informe a lista de presentes (pode ser vazia).");
-    return resposta(context, await db.registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessao: auth.exigirLoginIgnorandoTermos(req, {}) || usuario }));
+    const ausentes = listaDeGuids(corpo.ausentes);
+    if (!presentes || !ausentes || presentes.length + ausentes.length > 200 || [...presentes, ...ausentes].some((x) => !db.ehGuid(x))) {
+      return erro(context, 400, "Informe a lista de presentes e a de ausentes (cada uma pode ser vazia).");
+    }
+    return resposta(context, await db.registrarCerimonia(pool, { cerimoniaId, presentes, ausentes, usuario, sessao: auth.exigirLoginIgnorandoTermos(req, {}) || usuario }));
   }
   erro(context, 404, "Ação inválida.");
 };

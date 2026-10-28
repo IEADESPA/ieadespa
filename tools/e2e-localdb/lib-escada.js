@@ -167,7 +167,7 @@ async function concluir(consagracaoId, token, { presente = true } = {}) {
   const cerimoniaId = await novaCerimonia(tk);
   r = await cerimonias("incluir", { cerimoniaId, ids: [consagracaoId] }, tk);
   if (!r.body || !r.body.sucesso) return r;
-  r = await cerimonias("registrar", { cerimoniaId, presentes: presente ? [consagracaoId] : [] }, tk);
+  r = await cerimonias("registrar", { cerimoniaId, presentes: presente ? [consagracaoId] : [], ausentes: presente ? [] : [consagracaoId] }, tk);
   if (!r.body || !r.body.sucesso) return r;
   const x = (r.body.resultados || []).find((y) => String(y.consagracaoId).toLowerCase() === String(consagracaoId).toLowerCase()) || {};
   return { status: r.status, body: { sucesso: x.resultado === "CONSAGRADO", novoStatus: x.resultado === "CONSAGRADO" ? "CONCLUIDO" : x.resultado, nivelamento: !!x.nivelamento,

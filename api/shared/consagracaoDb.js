@@ -33,7 +33,8 @@ const SELECT_PROCESSO = `
          ISNULL(c.Modalidade, N'INDICACAO') AS Modalidade, CONVERT(varchar(10), c.DataProtocolo, 120) AS DataProtocolo, m.EstadoCivil,
          CASE WHEN m.FotoUrl IS NULL OR m.FotoUrl = N'' THEN 0 ELSE 1 END AS TemFoto, cg.Nome AS Congregacao, ex.Nome AS Extensao,
          c.CerimoniaId, CONVERT(varchar(10), c.TaxaPagaEm, 120) AS TaxaPagaEm, c.TaxaValor, c.TaxaForma, c.DiplomaCodigo,
-         CONVERT(varchar(10), c.HomologadoEm, 120) AS HomologadoEm, p.Resultado AS ParecerResultado,
+         CONVERT(varchar(10), c.HomologadoEm, 120) AS HomologadoEm, CONVERT(varchar(10), p.SabatinaEm, 120) AS ParecerEm,
+         (SELECT COUNT(*) FROM Casamentos k WHERE k.MembroId = c.MembroId OR k.MembroConjugeId = c.MembroId) AS Casamentos, p.Resultado AS ParecerResultado,
          (SELECT COUNT(*) FROM AnexosGenericos a WHERE a.Tabela = N'Consagracoes' AND a.RegistroId = c.Numero) AS Documentos
   FROM Consagracoes c
   JOIN MembroReferencia m ON m.MembroId = c.MembroId
@@ -48,7 +49,8 @@ function mapearProcesso(l) {
     cargoAlvo: alvoValido(l.CargoAlvo), modalidade: l.Modalidade, dataProtocolo: l.DataProtocolo, estadoCivil: l.EstadoCivil || null,
     temFoto: !!l.TemFoto, documentos: Number(l.Documentos) || 0, congregacaoNome: l.Congregacao || null, extensaoNome: l.Extensao || null,
     cerimoniaId: numero(l.CerimoniaId), taxaPagaEm: l.TaxaPagaEm || null, taxaValor: l.TaxaValor == null ? null : Number(l.TaxaValor), taxaForma: l.TaxaForma || null,
-    diplomaCodigo: l.DiplomaCodigo || null, homologadoEm: l.HomologadoEm || null, parecer: l.ParecerResultado || null
+    diplomaCodigo: l.DiplomaCodigo || null, homologadoEm: l.HomologadoEm || null, parecer: l.ParecerResultado || null, parecerEm: l.ParecerEm || null,
+    casamentos: Number(l.Casamentos) || 0
   };
 }
 
@@ -86,12 +88,13 @@ const SQL_AGUARDA_CEI = `ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NO
   AND (c.Status = N'EM_ANALISE_CONSELHO' OR (c.Status = N'AGUARDANDO_PLENARIO' AND p.ParecerId IS NULL))`;
 
 // A fila do CEI: o que espera parecer, com o que o formulário precisa saber (sabatina, escrutínio, Pastor não casado).
-async function filaDoCEI(pool) {
-  const r = await pool.request().query(`${SELECT_PROCESSO} WHERE ${SQL_AGUARDA_CEI} ORDER BY c.DataProtocolo, m.Nome`);
+// Quem é do CEI e também candidato não vê o próprio processo (nem o estado civil dele na fila) — revisão independente, 28/10/2026.
+async function filaDoCEI(pool, eu) {
+  const r = await pool.request().input("eu", sql.Int, Number(eu) || 0).query(`${SELECT_PROCESSO} WHERE ${SQL_AGUARDA_CEI} AND c.MembroId <> @eu ORDER BY c.DataProtocolo, m.Nome`);
   return r.recordset.map(mapearProcesso).filter((p) => p.cargoAlvo).map((p) => ({
     consagracaoId: p.consagracaoId, numero: p.numero, membroId: p.membroId, nome: p.nome, congregacao: p.congregacaoNome, assunto: p.assunto,
     cargoAlvo: p.cargoAlvo, cargoAlvoRotulo: escada.ROTULO_CARGO[p.cargoAlvo], modalidade: p.modalidade, dataProtocolo: p.dataProtocolo, status: p.status,
-    estadoCivil: p.estadoCivil, sabatina: regra.homologacaoPelaCLI(p.cargoAlvo), escrutinio: regra.precisaEscrutinio(p.estadoCivil, false),
+    estadoCivil: p.estadoCivil, sabatina: regra.homologacaoPelaCLI(p.cargoAlvo), escrutinio: regra.precisaEscrutinio(p.estadoCivil, false, p.casamentos),
     excecaoPastor: regra.precisaExcecaoPastor(p.cargoAlvo, p.estadoCivil), documentos: p.documentos
   }));
 }
@@ -103,7 +106,7 @@ async function registrarParecer(pool, { consagracaoId, corpo, usuario, sessao })
   const legado = p.status === "AGUARDANDO_PLENARIO" && !p.parecer;
   if (p.status !== "EM_ANALISE_CONSELHO" && !legado) return MUDOU("Este processo não está aguardando o parecer do CEI. Atualize a lista.");
   if (Number(p.membroId) === Number(usuario.membroId)) return { sucesso: false, mensagem: "Ninguém dá parecer no próprio processo." };
-  const v = regra.validarParecer(corpo, { alvo: p.cargoAlvo, estadoCivil: p.estadoCivil, hojeIso: hojeBrasilia(), dataProtocolo: p.dataProtocolo });
+  const v = regra.validarParecer(corpo, { alvo: p.cargoAlvo, estadoCivil: p.estadoCivil, casamentos: p.casamentos, hojeIso: hojeBrasilia(), dataProtocolo: p.dataProtocolo });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const pa = v.parecer;
   const apto = pa.resultado === "APTO";
@@ -145,11 +148,13 @@ async function registrarParecer(pool, { consagracaoId, corpo, usuario, sessao })
 }
 
 // O parecer inteiro (só a rota do CEI chama).
-async function lerParecer(pool, consagracaoId) {
+async function lerParecer(pool, consagracaoId, eu) {
   if (!ehGuid(consagracaoId)) return null;
-  const r = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).query(`
+  // o próprio parecer, não: a mesma resposta de "não encontrado"
+  const r = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("eu", sql.Int, Number(eu) || 0).query(`
     SELECT p.*, CONVERT(varchar(10), p.SabatinaEm, 120) AS Sabatina, e.Nome AS EmitidoPorNome
-    FROM PareceresCEIConsagracao p LEFT JOIN MembroReferencia e ON e.MembroId = p.EmitidoPor WHERE p.ConsagracaoId = @id`);
+    FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId LEFT JOIN MembroReferencia e ON e.MembroId = p.EmitidoPor
+    WHERE p.ConsagracaoId = @id AND c.MembroId <> @eu`);
   const l = r.recordset[0];
   if (!l) return null;
   return {
@@ -205,6 +210,8 @@ async function homologar(pool, { ids, sessaoId, ato, data, usuario, sessao }) {
     if (pelaCLI && reuniao.DataSessao < p.dataProtocolo) { falha("A reunião da CLI escolhida é anterior ao protocolo do processo."); continue; }
     if (!pelaCLI && !atoTexto) { falha("Auxiliar, Missionário(a) e Diácono: informe o ato e a data da validação do Pastor Presidente (Regimento, Art. 74, IV)."); continue; }
     if (!pelaCLI && dataAto < p.dataProtocolo) { falha("A validação do Pastor Presidente não pode ser anterior ao protocolo."); continue; }
+    // o APTO vai à homologação (Art. 9º §2º e §3º): a homologação não é anterior ao parecer
+    if (p.parecerEm && (pelaCLI ? reuniao.DataSessao : dataAto) < p.parecerEm) { falha(`A homologação não pode ser anterior ao parecer do CEI (${regra.br(p.parecerEm)}).`); continue; }
     const c = await conferirDeNovo(pool, p, sessao);
     if (!c.sucesso) { resultados.push({ consagracaoId: id, nome: p.nome, sucesso: false, mensagem: c.mensagem, requisitos: c.requisitos }); continue; }
     const quando = pelaCLI ? reuniao.DataSessao : dataAto;
@@ -290,6 +297,10 @@ async function comCerimoniaPlanejada(pool, cerimoniaId, fazer) {
 
 async function editarCerimonia(pool, { cerimoniaId, dados, por }) {
   const r = await comCerimoniaPlanejada(pool, cerimoniaId, async (t, ce) => {
+    const depois = await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia)
+      .query(`SELECT TOP 1 m.Nome FROM Consagracoes c JOIN MembroReferencia m ON m.MembroId = c.MembroId
+              WHERE c.CerimoniaId = @id AND c.Status = N'HOMOLOGADO' AND c.HomologadoEm > @d`);
+    if (depois.recordset[0]) return { sucesso: false, mensagem: `${depois.recordset[0].Nome} foi homologado(a) depois dessa data: a cerimônia não pode ser antes da homologação.` };
     await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia).input("l", sql.NVarChar(200), dados.local)
       .input("o", sql.NVarChar(12), dados.ocasiao).input("v", sql.Decimal(10, 2), dados.valorTaxa)
       .query(`UPDATE CerimoniasConsagracao SET DataCerimonia = @d, Local = @l, Ocasiao = @o, ValorTaxa = @v WHERE CerimoniaId = @id`);
@@ -329,9 +340,11 @@ async function pessoasPorId(conexao, membroIds) {
   }));
 }
 
-async function candidatosDaCerimonia(conexao, cerimoniaId) {
+// `travar`: dentro da transação do registro, lê o que está gravado agora e segura as linhas (com o "instantâneo" do Azure SQL, a leitura comum pode trazer a versão de
+// antes de uma taxa corrigida ou de um código de diploma reservado por outra tela — revisão independente, 28/10/2026).
+async function candidatosDaCerimonia(conexao, cerimoniaId, { travar = false } = {}) {
   const r = await new sql.Request(conexao).input("c", sql.Int, Number(cerimoniaId))
-    .query(`${SELECT_PROCESSO} WHERE c.CerimoniaId = @c AND c.Status = N'HOMOLOGADO' ORDER BY m.Nome`);
+    .query(`${travar ? SELECT_PROCESSO.replace(/FROM Consagracoes c(\r?\n)/, "FROM Consagracoes c WITH (UPDLOCK, ROWLOCK)$1") : SELECT_PROCESSO} WHERE c.CerimoniaId = @c AND c.Status = N'HOMOLOGADO' ORDER BY m.Nome`);
   return r.recordset.map(mapearProcesso);
 }
 
@@ -365,12 +378,13 @@ async function definirComissao(pool, { cerimoniaId, membroIds, por }) {
 }
 
 async function incluirCandidatos(pool, { cerimoniaId, ids, por }) {
-  const r = await comCerimoniaPlanejada(pool, cerimoniaId, async (t) => {
+  const r = await comCerimoniaPlanejada(pool, cerimoniaId, async (t, ce) => {
     const resultados = [];
     for (const id of ids) {
-      const upd = await new sql.Request(t).input("id", sql.UniqueIdentifier, id).input("c", sql.Int, Number(cerimoniaId)).input("por", sql.Int, por)
+      const upd = await new sql.Request(t).input("id", sql.UniqueIdentifier, id).input("c", sql.Int, Number(cerimoniaId)).input("por", sql.Int, por).input("d", sql.Date, ce.dataCerimonia)
         .query(`UPDATE c SET CerimoniaId = @c FROM Consagracoes c
                 WHERE c.ConsagracaoId = @id AND c.Status = N'HOMOLOGADO' AND c.CerimoniaId IS NULL AND c.MembroId <> @por
+                  AND (c.HomologadoEm IS NULL OR c.HomologadoEm <= @d)
                   AND NOT EXISTS (SELECT 1 FROM CerimoniasComissaoUncao u WHERE u.CerimoniaId = @c AND u.MembroId = c.MembroId)`);
       resultados.push({ consagracaoId: id, sucesso: !!upd.rowsAffected[0] });
     }
@@ -379,7 +393,7 @@ async function incluirCandidatos(pool, { cerimoniaId, ids, por }) {
   if (!r.sucesso) return r;
   const ok = r.resultados.filter((x) => x.sucesso).length;
   await registrarAuditoria({ tabela: "CerimoniasConsagracao", registroId: Number(cerimoniaId), acao: "CERIMONIA_CANDIDATOS_INCLUIDOS", usuarioId: por, dadosDepois: { incluidos: r.resultados.filter((x) => x.sucesso).map((x) => x.consagracaoId) } });
-  return { sucesso: ok > 0, resultados: r.resultados, mensagem: ok === ids.length ? `${ok} candidato(s) incluído(s) na cerimônia.` : `${ok} de ${ids.length} incluído(s): os outros já estão em outra cerimônia, não estão homologados, são da comissão ou são você.` };
+  return { sucesso: ok > 0, resultados: r.resultados, mensagem: ok === ids.length ? `${ok} candidato(s) incluído(s) na cerimônia.` : `${ok} de ${ids.length} incluído(s): os outros já estão em outra cerimônia, não estão homologados, foram homologados depois da data desta cerimônia, são da comissão ou são você.` };
 }
 
 async function retirarCandidato(pool, { cerimoniaId, consagracaoId, por }) {
@@ -397,8 +411,12 @@ async function retirarCandidato(pool, { cerimoniaId, consagracaoId, por }) {
 async function conjugesEntre(conexao, membroIds) {
   const lista = listaDeIds(membroIds);
   if (!lista) return [];
+  // só o casamento mais recente de cada um conta (o registro não tem "fim": o ex-cônjuge não fica lado a lado — revisão independente, 28/10/2026)
   const r = await new sql.Request(conexao).query(`
-    SELECT MembroId, MembroConjugeId FROM Casamentos WHERE MembroConjugeId IS NOT NULL AND MembroId IN (${lista}) AND MembroConjugeId IN (${lista})`);
+    SELECT k.MembroId, k.MembroConjugeId FROM Casamentos k
+    WHERE k.MembroConjugeId IS NOT NULL AND k.MembroId IN (${lista}) AND k.MembroConjugeId IN (${lista})
+      AND NOT EXISTS (SELECT 1 FROM Casamentos d WHERE d.DataCasamento > k.DataCasamento
+                      AND (d.MembroId IN (k.MembroId, k.MembroConjugeId) OR d.MembroConjugeId IN (k.MembroId, k.MembroConjugeId)))`);
   return r.recordset.map((l) => [Number(l.MembroId), Number(l.MembroConjugeId)]);
 }
 
@@ -454,7 +472,9 @@ async function diplomasParaImprimir(pool, cerimoniaId) {
 }
 
 // O registro da cerimônia: quem estava presente. Tudo ou nada (uma transação), com a cerimônia e cada candidato travados.
-async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessao }) {
+// `presentes` e `ausentes`: a lista INTEIRA que a Secretaria classificou. Quem não está em nenhuma das duas (incluído por outra tela depois que ela abriu a cerimônia) faz o
+// registro voltar sem mudar nada — ninguém perde o ano por um nome que a Secretaria não viu (revisão independente, 28/10/2026).
+async function registrarCerimonia(pool, { cerimoniaId, presentes, ausentes, usuario, sessao }) {
   const hoje = hojeBrasilia();
   const ce0 = await carregarCerimonia(pool, cerimoniaId);
   if (!ce0) return NAO_EXISTE;
@@ -464,7 +484,10 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessa
   if (!candidatos0.length) return { sucesso: false, mensagem: "Nenhum candidato nesta cerimônia." };
   const ids = new Set(candidatos0.map((p) => String(p.consagracaoId).toLowerCase()));
   const marcados = new Set(presentes.map((x) => String(x).toLowerCase()));
+  const faltaram = new Set(ausentes.map((x) => String(x).toLowerCase()));
+  const listaConfere = (conjunto) => [...marcados].every((x) => !faltaram.has(x)) && marcados.size + faltaram.size === conjunto.size && [...conjunto].every((x) => marcados.has(x) || faltaram.has(x));
   if ([...marcados].some((x) => !ids.has(x))) return MUDOU("Há presença marcada para quem não está nesta cerimônia. Atualize a tela.");
+  if (!listaConfere(ids)) return MUDOU("A lista de candidatos desta cerimônia mudou desde que você a abriu (ou falta marcar alguém). Abra a cerimônia de novo e confira a presença de todos.");
   if (candidatos0.some((p) => Number(p.membroId) === Number(usuario.membroId))) return { sucesso: false, mensagem: "Quem é candidato nesta cerimônia não registra a presença dela." };
   // A formação exigida (v6.9) é conferida ANTES da transação: a leitura dela usa outra conexão, que esperaria pelas linhas que a transação já gravou.
   const formacaoTravada = new Map();
@@ -481,16 +504,21 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessa
     ce = await carregarCerimonia(t, cerimoniaId, { travar: true });
     if (!ce || ce.status !== "PLANEJADA") { await fecharTransacao(t, false); return MUDOU("Esta cerimônia já foi registrada ou cancelada."); }
     const comissao = await comissaoDaCerimonia(t, cerimoniaId);
-    const candidatos = await candidatosDaCerimonia(t, cerimoniaId);
+    const quem = await candidatosDaCerimonia(t, cerimoniaId);
+    for (const id of [...new Set(quem.map((p) => p.membroId))].sort((a, b) => a - b)) {
+      if (!(await obterTrava(() => new sql.Request(t), `escada_${id}`))) { await fecharTransacao(t, false); return MUDOU("Outra alteração de um dos candidatos está em andamento. Tente de novo."); }
+    }
+    // relidos com trava (a taxa, o código reservado do diploma e a etapa de agora)
+    const candidatos = await candidatosDaCerimonia(t, cerimoniaId, { travar: true });
     // vetados ou reprovados em outra tela enquanto isso: sem ninguém, a cerimônia não vira "realizada" vazia
     if (!candidatos.length) { await fecharTransacao(t, false); return MUDOU("Os candidatos desta cerimônia mudaram enquanto isso. Atualize a tela."); }
+    // quem saiu (veto, reprovação) pode sair; quem entrou sem a Secretaria ver, não
+    const agora = new Set(candidatos.map((p) => String(p.consagracaoId).toLowerCase()));
+    if ([...agora].some((x) => !marcados.has(x) && !faltaram.has(x))) { await fecharTransacao(t, false); return MUDOU("A lista de candidatos desta cerimônia mudou enquanto isso. Abra a cerimônia de novo e confira a presença de todos."); }
     const v = regra.validarComissao(comissao, new Set(candidatos.map((p) => p.membroId)));
     if (!v.valida) {
       await fecharTransacao(t, false);
       return { sucesso: false, mensagem: `A Comissão de Unção precisa de pelo menos ${regra.MINIMO_COMISSAO_UNCAO} pastores titulares em atividade (Regimento, Art. 75, IV, c)${v.problemas.length ? `: ${v.problemas.join("; ")}` : `; hoje tem ${v.validos}`}.` };
-    }
-    for (const id of [...new Set(candidatos.map((p) => p.membroId))].sort((a, b) => a - b)) {
-      if (!(await obterTrava(() => new sql.Request(t), `escada_${id}`))) { await fecharTransacao(t, false); return MUDOU("Outra alteração de um dos candidatos está em andamento. Tente de novo."); }
     }
     await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("por", sql.Int, usuario.membroId)
       .query(`UPDATE CerimoniasConsagracao SET Status = N'REALIZADA', RealizadaPor = @por, RealizadaEm = SYSUTCDATETIME() WHERE CerimoniaId = @id`);
@@ -504,6 +532,8 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessa
       };
       const taxa = regra.situacaoDaTaxa(p, ce);
       if (!taxa.emDia) { await devolver(`${taxa.motivo}: volta para a fila (Regimento, Art. 75, I, c)`); continue; }
+      // a consagração não fica com data anterior à homologação (cerimônia criada com data passada — revisão independente, 28/10/2026)
+      if (p.homologadoEm && p.homologadoEm > ce.dataCerimonia) { await devolver(`homologado em ${regra.br(p.homologadoEm)}, depois da data desta cerimônia: volta para a fila`); continue; }
       if (!marcados.has(String(p.consagracaoId).toLowerCase())) {
         const upd = await new sql.Request(t).input("id", sql.UniqueIdentifier, p.consagracaoId).input("d", sql.Date, ce.dataCerimonia)
           .query(`UPDATE Consagracoes SET Status = N'REPROVADO', MotivoEncerramento = N'AUSENCIA_CERIMONIA', PresenteCerimonia = 0, DataConclusao = @d, DiplomaCodigo = NULL
@@ -518,6 +548,11 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessa
         const ve = escadaDb.veDisciplinaDe(sessao, { congregacaoNome: p.congregacaoNome, extensaoNome: p.extensaoNome });
         const av = conf.avaliacao ? (ve ? conf.avaliacao : escada.mascararParaEscopo(conf.avaliacao)) : null;
         await devolver(`um requisito deixou de valer (${(av && av.mensagemBloqueio) || "pessoa não encontrada"}): volta para a fila`, { requisitos: av });
+        continue;
+      }
+      // nem antes da entrada no cargo atual (o histórico não pode ter um cargo que começa antes do anterior)
+      if (conf.dados && conf.dados.cargoDesde && conf.dados.cargoDesde > ce.dataCerimonia) {
+        await devolver(`no cargo atual desde ${regra.br(conf.dados.cargoDesde)}, depois da data desta cerimônia: volta para a fila`);
         continue;
       }
       const concluiu = await new sql.Request(t).input("id", sql.UniqueIdentifier, p.consagracaoId).input("d", sql.Date, ce.dataCerimonia)
@@ -539,8 +574,10 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, usuario, sessa
       const diploma = await certificados.emitirCertificado(escadaDb.naTransacao(t), { membroId: p.membroId, titulo: texto.titulo, descricao: texto.descricao, emitidoPorMembroId: usuario.membroId,
         natureza: "DIPLOMA", codigo: p.diplomaCodigo || null, auditar: false });
       if (!diploma.sucesso) throw new Error(`diploma não emitido: ${diploma.mensagem}`);
+      // o código que valeu fica no processo (o reservado na impressão, ou o novo, se ninguém imprimiu)
       await new sql.Request(t).input("id", sql.UniqueIdentifier, p.consagracaoId).input("cert", sql.Int, diploma.certificadoId)
-        .query(`UPDATE Consagracoes SET DiplomaCertificadoId = @cert WHERE ConsagracaoId = @id`);
+        .input("cod", sql.NVarChar(20), certificados.normalizarCodigo(diploma.codigoVerificacao))
+        .query(`UPDATE Consagracoes SET DiplomaCertificadoId = @cert, DiplomaCodigo = @cod WHERE ConsagracaoId = @id`);
       resultados.push({ ...base, resultado: "CONSAGRADO", certificadoId: diploma.certificadoId, nivelamento: !!conf.avaliacao.nivelamento,
         motivo: `Agora é ${escada.ROTULO_CARGO[p.cargoAlvo]}.${conf.avaliacao.nivelamento ? " Fica em nivelamento obrigatório na AFM (Regimento, Art. 66 §5º)." : ""}` });
     }

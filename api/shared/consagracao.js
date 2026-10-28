@@ -37,8 +37,9 @@ const DIAS_PRAZO_TAXA = 45;          // Art. 75, I, b
 const VALOR_TAXA_REFERENCIA = 70;    // Art. 75, I, a (valor de 2026)
 const MINIMO_COMISSAO_UNCAO = 4;     // Art. 75, IV, c
 
-// Art. 73, III: o escrutínio especial é obrigatório para quem tem histórico de ruptura conjugal — o cadastro diz "divorciado(a)", ou o CEI marca.
-const precisaEscrutinio = (estadoCivil, marcado) => estadoCivil === "DIVORCIADO" || marcado === true;
+// Art. 73, III: o escrutínio especial é obrigatório para quem tem histórico de ruptura conjugal — o cadastro diz "divorciado(a)", há mais de um casamento registrado em
+// nome da pessoa (o recasado aparece como "casado" no cadastro — III, d), ou o CEI marca.
+const precisaEscrutinio = (estadoCivil, marcado, casamentos = 0) => estadoCivil === "DIVORCIADO" || Number(casamentos) > 1 || marcado === true;
 // Art. 73, II: Pastor "geralmente" casado; a exceção (b: celibato) é do CEI, por escrito.
 const precisaExcecaoPastor = (alvo, estadoCivil) => alvo === "PASTOR" && estadoCivil !== "CASADO";
 
@@ -72,7 +73,7 @@ function validarParecer(corpo, ctx) {
     }
   }
   const esc = c.escrutinio || {};
-  if (precisaEscrutinio(ctx.estadoCivil, esc.historico === true)) {
+  if (precisaEscrutinio(ctx.estadoCivil, esc.historico === true, ctx.casamentos)) {
     parecer.escrutinioConjugal = true;
     parecer.escrutinioFundamento = Object.prototype.hasOwnProperty.call(FUNDAMENTOS_ESCRUTINIO, esc.fundamento) ? esc.fundamento : null;
     parecer.escrutinioDocumental = simNao(esc.documental);

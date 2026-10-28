@@ -1,5 +1,5 @@
 // GestaoAFM (v8.1 — Academia de Formação Ministerial e faltas da CLI)
-// Estatuto Art. 15 §1º e Art. 27; Regimento Art. 22, 66 a 69, 72, 149 e 310. Regra pura em shared/afm.js; banco em shared/afmDb.js; desenho em
+// Estatuto Art. 15 §1º e Art. 27; Regimento Art. 22, 56 §2º, 66 a 69, 72 e 149. Regra pura em shared/afm.js; banco em shared/afmDb.js; desenho em
 // docs/plano/fase-8-ministerial-afm.md. A exclusão da CLI e a desmatrícula por faltas NÃO têm rota: só o sistema as apura, a partir das presenças (ao encerrar a reunião, ao
 // justificar ou corrigir uma presença, e na rotina diária).
 //
@@ -14,6 +14,11 @@
 //  POST nomear-reitor    body:{membroId,dataInicio,titulacao?,homologadoCLIEm?,homologacaoAto?}
 //  POST homologar-reitor body:{data,ato}                 POST reconduzir-reitor body:{ano}
 //  POST docente          body:{membroId,titulacao,dataInicio}     POST encerrar-corpo body:{corpoDocenteId,data,motivo}
+// ---- v8.2 — Escada ministerial (Regimento Art. 66 §§3º–5º, 67, 72; regra em shared/escada.js, banco em shared/escadaDb.js) ----------------------------------------------
+//  GET  vetaveis         -> { itens[] }   (processos por INDICAÇÃO em andamento com cargo de destino — só o nível geral)
+//  POST chm              body:{membroId,conceder:true|false,data?}   (concede, com a data, ou revoga o CHM da matrícula atual; ninguém mexe no próprio)
+//  POST matricular-candidato body:{membroId,nivel,data}             (quem ainda não é oficial — o candidato a Auxiliar cursa o Básico)
+//  POST vetar            body:{consagracaoId,motivo}                 (veto técnico: encerra a indicação; a nomeação do Presidente não é vetável)
 // ---- CLI (permissões de reuniões; os atos são do nível geral) ----------------------------------------------------------------------------------
 //  GET  faltas-cli       -> { limite, emRisco[], exclusoes[], inativosAFM[] }
 //  POST comunicar-exclusao body:{exclusaoId,data}        POST readmitir body:{exclusaoId,data,ato}
@@ -30,8 +35,10 @@ const db = require("../shared/afmDb");
 const { composicaoCLI } = require("../shared/universo");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { comConflito } = require("../shared/violacaoUnica");
+const escadaDb = require("../shared/escadaDb");
 
 const PERMISSOES_CLI = ["reunioes", "assembleia", "cli"];
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const idDe = vol.inteiroPositivo;
 
 function erro(context, status, mensagem) { context.res = { status, body: { sucesso: false, mensagem } }; }
@@ -135,6 +142,41 @@ async function principal(context, req) {
     }
     context.res = { status: 200, body: { sucesso: true, itens: await db.sessoesMagnas(pool) } };
     return;
+  }
+
+  // ---- v8.2: escada (nível geral da permissão afm) ----
+  if (metodo === "GET" && acao === "vetaveis") {
+    if (!esc.exigirGeral(req, context, db.PERMISSAO)) return;
+    context.res = { status: 200, body: { sucesso: true, itens: await escadaDb.processosVetaveis(await getPool()) } };
+    return;
+  }
+  if (metodo === "POST" && ["chm", "matricular-candidato", "vetar"].includes(acao)) {
+    const usuario = esc.exigirGeral(req, context, db.PERMISSAO);
+    if (!usuario) return;
+    const por = usuario.membroId;
+    const pool = await getPool();
+    if (acao === "vetar") {
+      if (typeof corpo.consagracaoId !== "string" || !GUID.test(corpo.consagracaoId)) return erro(context, 400, "Informe o processo.");
+      const m = afm.textoObrigatorio(corpo.motivo, { minimo: 10, maximo: 500, rotulo: "O motivo do veto (a avaliação em que reprovou ou o requisito técnico)" });
+      if (!m.valido) return erro(context, 400, m.mensagem);
+      return resposta(context, await escadaDb.vetar(pool, { consagracaoId: corpo.consagracaoId, motivo: m.texto, por }));
+    }
+    const membroId = idDe(corpo.membroId) ? Number(corpo.membroId) : null;
+    if (!membroId) return erro(context, 400, "Informe a matrícula.");
+    if (acao === "chm") {
+      if (typeof corpo.conceder !== "boolean") return erro(context, 400, "Diga se é para conceder ou revogar o CHM.");
+      if (membroId === Number(por)) return erro(context, 422, "Ninguém concede nem revoga o próprio CHM.");
+      let data = null;
+      if (corpo.conceder) {
+        const d = dataDe(corpo.data, "a data da concessão do CHM");
+        if (!d.valido) return erro(context, 400, d.mensagem);
+        data = d.data;
+      }
+      return resposta(context, await escadaDb.definirCHM(pool, { membroId, conceder: corpo.conceder, data, por }));
+    }
+    const d = dataDe(corpo.data, "a data da matrícula");
+    if (!d.valido) return erro(context, 400, d.mensagem);
+    return resposta(context, await escadaDb.matricularCandidato(pool, { membroId, nivel: corpo.nivel, data: d.data, por }), 201);
   }
 
   // ---- Academia: atos (nível geral) ----

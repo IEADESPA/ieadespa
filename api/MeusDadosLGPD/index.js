@@ -57,7 +57,7 @@ module.exports = async function (context, req) {
            CONVERT(varchar(10), m.DataBatismo, 120) AS dataBatismo,
            m.FormaAdmissao AS formaAdmissao, m.Origem AS origem, m.IgrejaAnterior AS igrejaAnterior,
            CONVERT(varchar(10), m.DataRitoRecebimento, 120) AS dataRitoRecebimento,
-           m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
+           m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito, m.Sexo AS sexo,
            m.DizimistaFiel AS dizimistaFiel,
            m.SituacaoMembro AS situacaoMembro, d.Nome AS departamento, m.CargoMinisterial AS cargoMinisterial,
            m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco, e.Nome AS extensao,
@@ -140,6 +140,8 @@ module.exports = async function (context, req) {
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
   // v8.1 — AFM e CLI: as matrículas (com o nível), as desmatrículas, as exclusões da CLI por faltas e o corpo docente.
   const afmCli = await require("../shared/afmDb").dadosDoTitular(pool, alvo);
+  // v8.2 — escada ministerial: o histórico de cargos (de quando a quando, e por onde chegou).
+  const escada = { cargos: await require("../shared/escadaDb").historicoDe(pool, alvo) };
   // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
   // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);
@@ -171,6 +173,7 @@ module.exports = async function (context, req) {
       comunicacao,
       identidadeVisual,
       afmCli,
+      escada,
       criseSeguranca,
       tesouraria
     }

@@ -239,6 +239,7 @@ describe("GestaoPessoas respeita o escopo de quem altera (POST e DELETE)", () =>
     quando(/SELECT TOP 1 Nome FROM Congregacoes WHERE CongregacaoId = @id/, (i) => (congregacoes[i.id] ? [{ Nome: congregacoes[i.id] }] : []));
     quando(/m\.Email AS EmailAnterior/, existente ? [existente] : []);
     quando(/m\.FotoUrl AS fotoUrl/, [{ membroId: 7, nome: "Ana", status: "ATIVO", situacaoMembro: "EM_COMUNHAO", dataNascimento: null, dataAdmissao: null, fotoUrl: null }]);
+    quando(/UPDATE MembroReferencia SET Nome/, [], 1);   // v8.2: o UPDATE confere o cargo lido (0 linhas = mudou no meio → 409)
   };
   const gravou = () => rodou(/UPDATE MembroReferencia SET Nome|INSERT INTO MembroReferencia/).length;
   const corpo = (extra = {}) => ({ membroId: 7, nome: "Ana Souza", congregacaoId: 2, status: "ATIVO", ...extra });

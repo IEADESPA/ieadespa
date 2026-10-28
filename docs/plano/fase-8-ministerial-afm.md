@@ -146,9 +146,9 @@ AFM" (Art. 69) pra não contar errado a cada 3 meses.
 
 ## v8.2 — Escada ministerial e ascensão
 
-- [ ] Escada: Membro → Auxiliar → Missionário → Diácono → Presbítero → Evangelista → Pastor.
-- [ ] Interstícios e requisitos por cargo (idade, tempo, escolaridade, batismo no Espírito).
-- [ ] Veto técnico da AFM (CHM) + soberania presidencial.
+- [x] Escada: Membro → Auxiliar → Missionário → Diácono → Presbítero → Evangelista → Pastor.
+- [x] Interstícios e requisitos por cargo (idade, tempo, escolaridade, batismo no Espírito).
+- [x] Veto técnico da AFM (CHM) + soberania presidencial.
 
 ### Desenho da v8.2 (contrato, 28/10/2026)
 
@@ -185,7 +185,7 @@ põe a pessoa na CLI por Ordenação. Passa a ser **só o nível geral** (a Secr
 **5. Modalidades do processo.** **Indicação** (o comum: JAI e Dirigente, Art. 74, II — tudo vale, inclusive o veto da AFM); **Nomeação direta do Pastor Presidente** (Art. 66
 §4º — só o nível geral registra, com a referência do ato; dispensa os requisitos **técnicos** — escolaridade, CHM e matrícula de candidato — e a AFM não veta; o obreiro fica
 em **nivelamento obrigatório** depois da posse, §5º, e aparece assim na Academia até atingir o nível do cargo. Os demais requisitos continuam valendo, e para Evangelista e
-Pastor o curso concluído também, porque o Art. 72, V, b é regra própria do cargo que só nasce por indicação presidencial); **Ministro de outra convenção** (Art. 71, parte
+Pastor o curso concluído também, porque o Art. 72, V, b é regra própria do cargo que só nasce por indicação presidencial); **Ministro de outra convenção** (ver "Como ficou": dispensa também o técnico) (Art. 71, parte
 final — já ordenado fora: dispensa o degrau e o interstício; só o nível geral, com a igreja ou convenção de origem).
 
 **6. Veto técnico da AFM (Art. 66 §3º e 67 §2º).** Quem tem o nível geral da permissão `afm` vê na aba Academia os processos por **indicação** em andamento e pode **vetar**
@@ -197,6 +197,40 @@ continua sendo dos oficiais.
 **7. Onde aparece.** Consagrações: escolher a modalidade, botão **"Conferir requisitos"** (lista antes de protocolar) e, se travar, a lista do que falta; na lista dos
 processos, a modalidade e o veto. Cadastro da pessoa: **Sexo** e **"No cargo desde"** (este só no nível geral). Academia: CHM, candidatos, nivelamento obrigatório e os
 processos que podem ser vetados.
+
+### Como ficou (entregue em 28/10/2026)
+
+Migração **157**; regra pura em `api/shared/escada.js`, banco em `api/shared/escadaDb.js`, rota nova `/api/escada/requisitos` (`RequisitosEscada`) e as ações `vetaveis`,
+`chm`, `matricular-candidato` e `vetar` em `/api/afm/<ação>`; `CriarConsagracao`, `EvoluirConsagracao`, `ListarConsagracoes`, `GestaoPessoas`, a vacância e a minimização
+mudaram. Tela: Consagrações (modalidade, "Conferir requisitos", destino e veto na esteira), cadastro (Sexo, "No cargo desde"), Academia (coluna CHM, filtros "Nivelamento
+obrigatório", "Sem CHM" e "Candidatos", seção **Escada e veto**), Meus Dados (histórico de cargos). Casca do service worker **v43**. O login passou a dizer em quais
+permissões a pessoa é do nível geral (`permissoesGerais`): a tela não oferece a quem é geral só no financeiro o que é do geral das consagrações ou do cadastro.
+
+**O que mudou depois das duas revisões independentes** (servidor: 2 altos, 5 médios, 9 baixos; tela: 1 alto, 4 médios, 8 baixos — todos tratados):
+
+- **Ninguém mexe no que conta para a própria escada:** protocolar, avançar, conceder CHM, vetar, matricular-se como candidato e, no cadastro, o próprio cargo, a data no
+  cargo, o dízimo e o sexo.
+- **Ficha aberta antes de uma conclusão não desfaz a promoção:** a tela manda o cargo que leu; se o banco já tem outro, a resposta é 409 ("abra a ficha de novo").
+- **Disciplina não vaza pela lista:** quem não tem a permissão "disciplina" sobre a pessoa vê, para todos, o mesmo aviso ("a Secretaria confere no avanço") e o protocolo
+  segue; o avanço, do nível geral, confere de verdade (e, para quem avança sem "disciplina", diz que travou sem dizer o motivo).
+- A conclusão **refaz a conferência dentro da trava** (um CHM revogado ou uma disciplina aberta no meio não deixa o cargo mudar) e usa a **data de Brasília**.
+- O **CHM é usado na promoção**: a próxima subida pede um novo ("válido e atualizado", Art. 67 §1º). A rematrícula leva o CHM com a data e quem concedeu.
+- O preenchimento inicial do histórico roda **uma vez só** (as migrações rodam a cada publicação). "No cargo desde" aceita datas desde 1950. O sexo não se apaga quando o
+  pedido não o traz. Veto só em processo que leva a cargo. Candidato só membro em plena comunhão (congregado não). Matrícula inexistente nunca "passa".
+- **Trocar o cargo no cadastro limpa a data** do cargo antigo e pede a do novo; cargo fora do catálogo não se perde ao salvar; a lista de requisitos e o formulário saem da
+  página na troca de login; "Aguarde" em vez de clique perdido; o avanço travado mostra o nome da pessoa e leva a tela até a lista.
+- **Ministro de outra convenção** dispensa o degrau, o interstício e os requisitos técnicos (escolaridade, matrícula e CHM, com nivelamento depois da posse), **mas não o
+  teto das obreiras**: a ressalva "salvo ordenação convencional específica" (Art. 71, III) pode ser a da própria CIADSETA, e o sistema não a decide.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** Missionário(a) é degrau obrigatório entre Auxiliar e Diácono (Art. 72, III, "patente
+anterior"); Missionária é o teto também para quem vem de outra convenção; a nomeação direta do Presidente dispensa só o técnico (interstício, idade, membresia, batismo no
+Espírito, dízimo e comunhão continuam), e Evangelista e Pastor precisam do curso concluído mesmo nomeados; idade preferencial de 30 anos do Presbítero e o Pastor casado são
+só avisos (o Regimento diz "preferencial" e "geralmente"); divorciado(a) gera aviso do escrutínio do CEI (a análise é da v8.3); dado que falta no cadastro trava; o CHM vale
+para uma subida; o veto encerra a indicação (nova só por novo protocolo); quem não tem a permissão "disciplina" protocola sem ver a disciplina. Processos de Evangelista ou
+Pastor protocolados **antes** da v8.2 como indicação travam no avanço: reprova-se e protocola-se de novo como nomeação direta.
+
+**Provas:** jest 6.112 testes; banco local (`bash rodar.sh preparar-escada`): `e2e-51` fluxos 122, `e2e-52` segurança e lixo 53, `e2e-53` corridas 22, `e2e-54` o que as
+revisões pediram 25; tela (`tools/front-escada`, com as respostas reais gravadas pelo `e2e-51`) 75, com duas mutações acusadas.
 
 ## v8.3 — Consagração e documentação
 

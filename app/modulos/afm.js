@@ -10,14 +10,17 @@ let afmSecaoAtual = "matriculas";
 let afmFiltroMatriculas = "TODOS";
 let afmMatriculasCache = [];
 let afmFaltasCache = null;
-let afmGeralMatriculas = false;   // o "geral" da permissão afm, como o servidor disse (não o authGeral, que vale para qualquer concessão)
+let afmGeralMatriculas = false;
+let afmVetaveisCache = [];          // v8.2: as indicações que a AFM pode vetar   // o "geral" da permissão afm, como o servidor disse (não o authGeral, que vale para qualquer concessão)
 let afmEnviando = false;          // duplo clique: o segundo envio espera o primeiro voltar
 const AFM_DETALHE_MAX = 250;      // o texto gravado é "rótulo — detalhe" (até 300): o rótulo mais longo cabe com folga
 
 // Troca de login ou saída: nada da pessoa anterior (nomes, faltas, reprovação, a própria situação) fica na página.
 function afmLimparTela() {
-  afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false;
-  for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
+  afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false; afmVetaveisCache = [];
+  const pilulaEscada = afmEl("btnAfmSecaoEscada");
+  if (pilulaEscada) pilulaEscada.style.display = "none";
+  for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER", "afmListaVetaveis"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) resumo.textContent = "";
 }
@@ -117,8 +120,8 @@ function afmAbrirAba() {
 }
 
 function afmMostrarSecaoAcao(secao) {
-  afmSecaoAtual = ["matriculas", "corpo", "magnas"].includes(secao) ? secao : "matriculas";
-  for (const s of ["matriculas", "corpo", "magnas"]) {
+  afmSecaoAtual = ["matriculas", "corpo", "magnas", "escada"].includes(secao) ? secao : "matriculas";
+  for (const s of ["matriculas", "corpo", "magnas", "escada"]) {
     const div = afmEl(`afmSecao${s[0].toUpperCase()}${s.slice(1)}`);
     if (div) div.style.display = s === afmSecaoAtual ? "block" : "none";
     const btn = afmEl(`btnAfmSecao${s[0].toUpperCase()}${s.slice(1)}`);
@@ -128,6 +131,7 @@ function afmMostrarSecaoAcao(secao) {
   if (afmSecaoAtual === "matriculas") afmCarregarMatriculasAcao();
   if (afmSecaoAtual === "corpo") afmCarregarCorpoAcao();
   if (afmSecaoAtual === "magnas") afmCarregarMagnasAcao();
+  if (afmSecaoAtual === "escada") afmCarregarVetaveisAcao();
 }
 
 function afmFecharFormAcao() {
@@ -168,22 +172,32 @@ function afmFiltrarMatriculasAcao(filtro) {
 
 function afmRenderMatriculas(geral) {
   const cx = afmEl("afmListaMatriculas");
-  const todos = afmMatriculasCache.filter(m => m.oficial || m.status === "INATIVA");
+  // a seção "Escada e veto" (CHM, candidato, veto) é só do nível geral da Academia
+  const pilulaEscada = afmEl("btnAfmSecaoEscada");
+  if (pilulaEscada) pilulaEscada.style.display = geral ? "" : "none";
+  // v8.2: o candidato (ainda não oficial, matriculado para cursar o Básico) também aparece
+  const candidato = (m) => !m.oficial && m.origem === "CANDIDATO" && m.status === "ATIVA";
+  const todos = afmMatriculasCache.filter(m => m.oficial || m.status === "INATIVA" || candidato(m));
   const filtros = {
-    TODOS: () => true, INATIVOS: m => m.status === "INATIVA", ABAIXO: m => m.nivelAtende === false, SEM_NIVEL: m => !m.nivel, RISCO: m => m.faltasSeguidas >= 2
+    TODOS: () => true, INATIVOS: m => m.status === "INATIVA", ABAIXO: m => m.nivelAtende === false, SEM_NIVEL: m => !m.nivel, RISCO: m => m.faltasSeguidas >= 2,
+    NIVELAMENTO: m => !!m.nivelamento, SEM_CHM: m => !m.chm && m.status === "ATIVA", CANDIDATOS: candidato
   };
   const lista = todos.filter(filtros[afmFiltroMatriculas] || filtros.TODOS);
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) {
-    resumo.textContent = `${todos.length} oficial(is) matriculado(s) · ${todos.filter(m => m.status === "INATIVA").length} inativo(s) · ${todos.filter(m => m.nivelAtende === false).length} abaixo do nível do cargo · ${todos.filter(m => !m.nivel).length} com o nível a informar`;
+    resumo.textContent = `${todos.filter(m => !candidato(m)).length} oficial(is) matriculado(s) · ${todos.filter(m => m.status === "INATIVA").length} inativo(s) · ${todos.filter(m => m.nivelAtende === false).length} abaixo do nível do cargo · ${todos.filter(m => !m.nivel).length} com o nível a informar · ${todos.filter(m => m.nivelamento).length} em nivelamento obrigatório · ${todos.filter(candidato).length} candidato(s)`;
   }
   if (!lista.length) { cx.innerHTML = "<p class='subtitle'>Ninguém nesta lista.</p>"; return; }
-  let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Congregação</th><th>Situação</th><th>Nível</th><th>Magnas seguidas sem justificativa</th>${geral ? "<th></th>" : ""}</tr></thead><tbody>`;
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Congregação</th><th>Situação</th><th>Nível</th><th>CHM</th><th>Magnas seguidas sem justificativa</th>${geral ? "<th></th>" : ""}</tr></thead><tbody>`;
   for (const m of lista) {
-    const nivelAviso = m.nivelAtende === false ? ` <span class="tag-pendente" title="${escaparHtmlEbd(m.nivelExigido || "")}">abaixo do exigido</span>` : "";
+    const nivelAviso = (m.nivelAtende === false ? ` <span class="tag-pendente" title="${escaparHtmlEbd(m.nivelExigido || "")}">abaixo do exigido</span>` : "")
+      + (m.nivelamento ? ` <span class="tag-pendente" title="Nomeado direto pelo Pastor Presidente ou vindo de outra convenção: faz o nivelamento depois da posse (Regimento, Art. 66 §5º)">nivelamento obrigatório</span>` : "");
+    const chm = m.chm ? `✔ ${afmData(m.chmEm)}` : "—";
     let acoes = "";
     if (geral) {
       acoes += `<button class="btn-link" data-on-click="afmFormNivelAcao" data-args-click="${argsAttr(m.membroId)}">Nível…</button>`;
+      if (m.status === "ATIVA" && !m.chm) acoes += ` <button class="btn-link btn-link-sucesso" data-on-click="afmFormCHMAcao" data-args-click="${argsAttr(m.membroId)}">Conceder CHM…</button>`;
+      if (m.chm) acoes += ` <button class="btn-link btn-link-perigo" data-on-click="afmRevogarCHMAcao" data-args-click="${argsAttr(m.membroId)}">Revogar CHM</button>`;
       if (m.status === "ATIVA") acoes += ` <button class="btn-link btn-link-perigo" data-on-click="afmFormReprovarAcao" data-args-click="${argsAttr(m.membroId)}">Reprovação…</button>`;
       if (m.status === "INATIVA") acoes += ` <button class="btn-link btn-link-sucesso" data-on-click="afmFormRematricularAcao" data-args-click="${argsAttr(m.membroId)}">Nova matrícula…</button>`;
       if (m.desmatricula && m.desmatricula.motivo === "REPROVACAO") acoes += ` <button class="btn-link" data-on-click="afmFormAnularReprovacaoAcao" data-args-click="${argsAttr(m.membroId)}">Anular reprovação…</button>`;
@@ -191,10 +205,11 @@ function afmRenderMatriculas(geral) {
     html += `<tr>
       <td>${escaparHtmlEbd(m.membroId)}</td>
       <td>${escaparHtmlEbd(m.nome)}</td>
-      <td>${escaparHtmlEbd(m.cargoNome || "-")}</td>
+      <td>${candidato(m) ? "Candidato" : escaparHtmlEbd(m.cargoNome || "-")}</td>
       <td>${escaparHtmlEbd(m.congregacao || "-")}</td>
       <td>${afmBadgeSituacao(m)}</td>
       <td>${afmTextoNivel(m)}${nivelAviso}</td>
+      <td>${chm}</td>
       <td>${escaparHtmlEbd(m.faltasSeguidas)}${m.faltasSeguidas >= 2 && m.status === "ATIVA" ? " ⚠️" : ""}</td>
       ${geral ? `<td>${acoes}</td>` : ""}
     </tr>`;
@@ -282,6 +297,87 @@ async function afmEnviarRematricularAcao(membroId) {
   const data = await afmPost("rematricular", { membroId, reciclagemAprovadaEm: afmEl("afmRemData").value, observacao: afmEl("afmRemObs").value });
   avisarResultado(data);
   if (data.sucesso) { afmFecharFormAcao(); afmCarregarMatriculasAcao(); }
+}
+
+// ---- v8.2: CHM, candidato e veto técnico (Regimento Art. 66 §§3º–5º, 67, 72) ----
+function afmFormCHMAcao(membroId) {
+  afmEl("afmForm").innerHTML = `<div class="cartao-perfil">
+    <h4>Conceder o CHM — ${escaparHtmlEbd(afmNomeDaMatricula(membroId))}</h4>
+    <p class="subtitle">O Certificado de Habilitação Ministerial é da AFM (Art. 67): sem ele, ninguém é indicado para mudar de cargo nem assume a direção de congregação (§1º).</p>
+    ${afmCampoData("afmChmData", "Data da concessão")}
+    ${afmBotoesForm("afmEnviarCHMAcao", [membroId], "Conceder CHM")}</div>`;
+  afmMostrarForm();
+}
+async function afmEnviarCHMAcao(membroId) {
+  const data = await afmPost("chm", { membroId, conceder: true, data: afmEl("afmChmData").value });
+  avisarResultado(data);
+  if (data.sucesso) { afmFecharFormAcao(); afmCarregarMatriculasAcao(); }
+}
+async function afmRevogarCHMAcao(membroId) {
+  if (!(await confirmarAcao(`Revogar o CHM de ${afmNomeDaMatricula(membroId)}? Sem ele, os processos de consagração desta pessoa travam na próxima etapa.`, "Revogar"))) return;
+  const data = await afmPost("chm", { membroId, conceder: false });
+  avisarResultado(data);
+  if (data.sucesso) afmCarregarMatriculasAcao();
+}
+
+function afmFormCandidatoAcao() {
+  const opcoes = (afmCatalogo ? afmCatalogo.niveis : []).map(n => `<option value="${escaparHtmlEbd(n.codigo)}">${escaparHtmlEbd(n.rotulo)}</option>`).join("");
+  afmEl("afmForm").innerHTML = `<div class="cartao-perfil">
+    <h4>Matricular candidato</h4>
+    <p class="subtitle">Para quem ainda não é oficial: o membro indicado a Auxiliar precisa estar matriculado e cursando o Básico (Regimento, Art. 72, I, b). Oficial já é matriculado sozinho.</p>
+    ${afmCampoMatricula("afmCandMatricula", "Matrícula do candidato")}
+    <div class="input-group"><label for="afmCandNivel">Nível que vai cursar</label><select id="afmCandNivel">${opcoes}</select></div>
+    ${afmCampoData("afmCandData", "Data da matrícula")}
+    ${afmBotoesForm("afmEnviarCandidatoAcao", [], "Matricular")}</div>`;
+  afmMostrarForm();
+}
+async function afmEnviarCandidatoAcao() {
+  const data = await afmPost("matricular-candidato", { membroId: afmEl("afmCandMatricula").value, nivel: afmEl("afmCandNivel").value, data: afmEl("afmCandData").value });
+  avisarResultado(data);
+  if (data.sucesso) { afmFecharFormAcao(); afmCarregarVetaveisAcao(); }
+}
+
+async function afmCarregarVetaveisAcao() {
+  const cx = afmEl("afmListaVetaveis");
+  if (!cx) return;
+  if (!afmGeralMatriculas) { cx.innerHTML = "<p class='subtitle'>O veto técnico é do nível geral da Academia.</p>"; return; }
+  cx.innerHTML = "<p class='subtitle'>Carregando…</p>";
+  const token = authToken;   // resposta que chega depois de outro login (ou da saída) não pinta a tela
+  await afmCarregarCatalogo();
+  const res = await fetchProtegido(`${API_BASE}/afm/vetaveis`);
+  if (authToken !== token) return;
+  if (res.status === 403) { cx.innerHTML = "<p class='subtitle'>O veto técnico é do nível geral da Academia.</p>"; return; }
+  const data = await jsonDaTela(res, cx, "objeto");
+  if (data === null || authToken !== token) return;
+  afmVetaveisCache = Array.isArray(data.itens) ? data.itens : [];
+  if (!afmVetaveisCache.length) { cx.innerHTML = "<p class='subtitle'>Nenhuma indicação em andamento.</p>"; return; }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Congregação</th><th>Para</th><th>Etapa</th><th>Protocolo</th><th></th></tr></thead><tbody>`;
+  for (const p of afmVetaveisCache) {
+    html += `<tr>
+      <td>${escaparHtmlEbd(p.nome)}</td>
+      <td>${escaparHtmlEbd(p.congregacao || "-")}</td>
+      <td>${escaparHtmlEbd(p.cargoAlvoRotulo || p.cargoAlvo)}</td>
+      <td>${escaparHtmlEbd((typeof ROTULO_STATUS_CONSAGRACAO !== "undefined" && ROTULO_STATUS_CONSAGRACAO[p.status]) || p.status)}</td>
+      <td>${afmData(p.dataProtocolo)}</td>
+      <td><button class="btn-link btn-link-perigo" data-on-click="afmFormVetarAcao" data-args-click="${argsAttr(String(p.consagracaoId))}">Vetar…</button></td>
+    </tr>`;
+  }
+  cx.innerHTML = html + "</tbody></table>";
+}
+function afmFormVetarAcao(consagracaoId) {
+  const p = afmVetaveisCache.find(x => String(x.consagracaoId) === String(consagracaoId)) || {};
+  afmEl("afmForm").innerHTML = `<div class="cartao-perfil">
+    <h4>Veto técnico — ${escaparHtmlEbd(p.nome || "")}${p.cargoAlvoRotulo ? ` (para ${escaparHtmlEbd(p.cargoAlvoRotulo)})` : ""}</h4>
+    <p class="subtitle">O veto encerra a indicação (Regimento, Art. 67 §2º). Uma nova indicação só por novo protocolo. Quem indicou vê o motivo na lista de Consagrações.</p>
+    ${afmCampoTexto("afmVetoMotivo", "Motivo (10 a 500 caracteres)", "Ex.: reprovou na prova de liturgia do Seminário de novembro", 500)}
+    ${afmBotoesForm("afmEnviarVetarAcao", [String(consagracaoId)], "Vetar a indicação")}</div>`;
+  afmMostrarForm();
+}
+async function afmEnviarVetarAcao(consagracaoId) {
+  if (!(await confirmarAcao("Confirma o veto? A indicação é encerrada e não volta.", "Vetar"))) return;
+  const data = await afmPost("vetar", { consagracaoId, motivo: afmEl("afmVetoMotivo").value });
+  avisarResultado(data);
+  if (data.sucesso || data.mudou) { afmFecharFormAcao(); afmCarregarVetaveisAcao(); }
 }
 
 // ---- Corpo docente ----
@@ -553,6 +649,7 @@ async function afmCarregarMinhaSituacao() {
 }
 
 registrarAcoes({
+  afmEnviarCandidatoAcao, afmEnviarCHMAcao, afmEnviarVetarAcao, afmFormCandidatoAcao, afmFormCHMAcao, afmFormVetarAcao, afmRevogarCHMAcao,
   afmEnviarAnularReprovacaoAcao, afmEnviarComunicarAcao, afmEnviarDocenteAcao, afmEnviarEncerrarAcao, afmEnviarHomologarAcao, afmEnviarNivelAcao, afmEnviarNomearReitorAcao,
   afmEnviarReadmitirAcao, afmEnviarReconduzirAcao, afmEnviarRematricularAcao, afmEnviarReprovarAcao, afmFecharFormAcao, afmFiltrarMatriculasAcao, afmFormAnularReprovacaoAcao,
   afmFormComunicarAcao, afmFormDocenteAcao, afmFormEncerrarAcao, afmFormHomologarAcao, afmFormNivelAcao, afmFormNomearReitorAcao, afmFormReadmitirAcao, afmFormReconduzirAcao,

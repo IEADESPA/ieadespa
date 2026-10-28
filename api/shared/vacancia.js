@@ -24,6 +24,12 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
     .input("id", sql.Int, membroId)
     .query(`UPDATE MembroReferencia SET CargoMinisterial = NULL, DepartamentoId = NULL, Funcao = NULL
             WHERE MembroId = @id`);
+  // v8.2 — o histórico de cargos fecha junto (a data de saída nunca fica antes da de entrada).
+  await pool.request()
+    .input("id", sql.Int, membroId)
+    .input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .query(`UPDATE CargosMinisteriaisHistorico SET Ate = CASE WHEN Desde IS NOT NULL AND Desde > @hoje THEN Desde ELSE @hoje END
+            WHERE MembroId = @id AND Ate IS NULL`);
 
   // Trava 6-B — EBD: lecionar é função, então sai junto com as outras
   // (quem saiu continuava professor ativo, recebendo aviso de ausência e

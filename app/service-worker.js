@@ -34,7 +34,9 @@
 // de crianças em script.js) — e o cartão da tesouraria em Meus Dados (meu-painel.js); index.html mudou junto.
 // v42 (27/10/2026): v8.1 — Academia (AFM) e faltas da CLI: o módulo novo modulos/afm.js (aba Academia, quadro "Faltas e cadeiras" da CLI, catálogo da justificativa
 // e a situação no Meu Painel) e as telas de reunião, frequência e comissões que passaram a usá-lo.
-const CACHE_NOME = "ieadespa-app-shell-v42";
+// v43 (28/10/2026): v8.2 — Escada ministerial: Consagrações (modalidade, "Conferir requisitos", destino e veto), cadastro da pessoa (Sexo, "No cargo desde"), Academia
+// (CHM, candidatos, nivelamento e a seção "Escada e veto"), Meus Dados (histórico de cargos; data pura sem o dia a menos) e o estilo da lista de requisitos.
+const CACHE_NOME = "ieadespa-app-shell-v43";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/enquetes.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

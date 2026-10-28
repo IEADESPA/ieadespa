@@ -392,6 +392,9 @@ let authMatricula = sessionStorage.getItem("authMatricula") || null;
 let authNivel = sessionStorage.getItem("authNivel") || null;
 // "Geral" = papel de nível Global E escopo de todas as congregações (o servidor confere de novo em cada rota; aqui só decide o que aparece na tela).
 let authGeral = sessionStorage.getItem("authGeral") === "1";
+// v8.2 — em QUAIS permissões a sessão é do nível geral (o login diz). Sem a lista (sessão de antes da v8.2, servidor antigo), vale o authGeral de sempre.
+let authPermissoesGerais = (() => { try { const l = JSON.parse(sessionStorage.getItem("authPermissoesGerais") || "null"); return Array.isArray(l) ? l : null; } catch (_) { return null; } })();
+function geralPara(permissao) { return Array.isArray(authPermissoesGerais) ? authPermissoesGerais.includes(permissao) : authGeral; }
 // Elementos com a classe "so-geral" (index.html) só aparecem para o nível geral: a regra de visibilidade fica no CSS, ligada por esta classe no <body>.
 function marcarSessaoGeralNaPagina() { if (typeof document !== "undefined" && document.body) document.body.classList.toggle("sessao-geral", authGeral); }
 document.addEventListener("DOMContentLoaded", marcarSessaoGeralNaPagina);
@@ -399,7 +402,7 @@ document.addEventListener("DOMContentLoaded", marcarSessaoGeralNaPagina);
 // professor da aba EBD) — recarregada a cada abrirPainelConteudo.
 let ebdTurmasProfessor = [];
 
-function salvarSessao(token, nome, permissoes, matricula, nivel, escopo, geral) {
+function salvarSessao(token, nome, permissoes, matricula, nivel, escopo, geral, permissoesGerais) {
   authToken = token;
   authNome = nome;
   authPermissoes = permissoes || [];
@@ -409,6 +412,8 @@ function salvarSessao(token, nome, permissoes, matricula, nivel, escopo, geral) 
   // próprio com delegações e enganavam a tela. Resposta sem o campo (servidor antigo durante a publicação): a regra antiga.
   authGeral = typeof geral === "boolean" ? geral : (authNivel === "GLOBAL" && escopo === "TODAS");
   sessionStorage.setItem("authGeral", authGeral ? "1" : "0");
+  authPermissoesGerais = Array.isArray(permissoesGerais) ? permissoesGerais : null;
+  if (authPermissoesGerais) sessionStorage.setItem("authPermissoesGerais", JSON.stringify(authPermissoesGerais)); else sessionStorage.removeItem("authPermissoesGerais");
   marcarSessaoGeralNaPagina();
   sessionStorage.setItem("authToken", token);
   sessionStorage.setItem("authNome", nome || "");
@@ -436,6 +441,8 @@ function limparSessao() {
   if (typeof enqLimparMeu === "function") enqLimparMeu();
   // v8.1: as matrículas da AFM (com reprovação), o quadro de faltas da CLI e a situação da pessoa no Meu Painel saem da página junto com a sessão — mesma guarda
   if (typeof afmLimparTela === "function") afmLimparTela();
+  // v8.2: a lista de requisitos (com o motivo de quem está sob disciplina, para o nível geral) e o formulário de consagração saem da página junto com a sessão — mesma guarda
+  if (typeof consLimparTela === "function") consLimparTela();
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -447,6 +454,8 @@ function limparSessao() {
   authNivel = null;
   authGeral = false;
   sessionStorage.removeItem("authGeral");
+  authPermissoesGerais = null;
+  sessionStorage.removeItem("authPermissoesGerais");
   marcarSessaoGeralNaPagina();
   sessionStorage.removeItem("authToken");
   sessionStorage.removeItem("authNome");
@@ -625,7 +634,7 @@ async function acessarPainel() {
   // vD.4 — senha certa da liderança abre a SEGUNDA ETAPA (chave de acesso do aparelho ou código por e-mail), não a sessão
   if (data.segundoFator) { mostrarSegundoFator(data, matricula); return; }
 
-  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral);
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral, data.permissoesGerais);
   document.getElementById("senhaPainel").value = "";
   msg.textContent = "";
   if (data.avisoFator) mostrarToast(data.avisoFator, "erro");
@@ -712,7 +721,7 @@ function cancelarSegundoFatorAcao() {
 async function concluirEntradaLideranca(data, matricula) {
   segundoFatorPendente = null;
   document.getElementById("cxSegundoFator").style.display = "none";
-  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral);
+  salvarSessao(data.token, data.nome, data.permissoes, matricula, data.nivel, data.escopo, data.geral, data.permissoesGerais);
   document.getElementById("senhaPainel").value = "";
   document.getElementById("resultadoLogin").textContent = "";
   if (data.termosPendentes && data.termosPendentes.length > 0) { await mostrarModalTermos(data.termosPendentes); return; }

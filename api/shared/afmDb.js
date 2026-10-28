@@ -13,6 +13,8 @@ const afm = require("./afm");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
+const escada = require("./escada");
+const escadaDb = require("./escadaDb");
 
 const PERMISSAO = "afm";
 const OFICIAIS_SQL = afm.CARGOS_OFICIAIS.map((c) => `N'${c}'`).join(", ");
@@ -391,10 +393,11 @@ async function rematricular(pool, { membroId, reciclagemAprovadaEm, observacao, 
     const ins = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("cargo", sql.NVarChar(30), pessoa.CargoMinisterial)
       .input("nivel", sql.NVarChar(30), mat.NivelEscolaridade || null).input("conc", sql.Bit, !!mat.NivelConcluido)
       .input("rec", sql.Date, v.data).input("obs", sql.NVarChar(300), v.observacao).input("por", sql.Int, por).input("anterior", sql.Int, mat.MatriculaId)
-      .query(`INSERT INTO Matriculas_AFM (MembroId, NivelAtual, StatusMatricula, Origem, DataMatricula, NivelEscolaridade, NivelConcluido, ReciclagemAprovadaEm, Observacao, CriadoPor, ContagemAposSessaoId, CertificadoHabilitacao)
+      .query(`INSERT INTO Matriculas_AFM (MembroId, NivelAtual, StatusMatricula, Origem, DataMatricula, NivelEscolaridade, NivelConcluido, ReciclagemAprovadaEm, Observacao, CriadoPor, ContagemAposSessaoId, CertificadoHabilitacao, CHMEm, CHMPor)
               OUTPUT INSERTED.MatriculaId
-              VALUES (@m, @cargo, N'ATIVA', N'REMATRICULA', CAST(SYSUTCDATETIME() AS DATE), @nivel, @conc, @rec, @obs, @por, (SELECT ISNULL(MAX(SessaoId), 0) FROM Sessoes),
-                      (SELECT ISNULL(CertificadoHabilitacao, 0) FROM Matriculas_AFM WHERE MatriculaId = @anterior))   -- o CHM não se perde na rematrícula (a CEI o lê da matrícula atual)`);
+              SELECT @m, @cargo, N'ATIVA', N'REMATRICULA', CAST(SYSUTCDATETIME() AS DATE), @nivel, @conc, @rec, @obs, @por, (SELECT ISNULL(MAX(SessaoId), 0) FROM Sessoes),
+                     ISNULL(ant.CertificadoHabilitacao, 0), ant.CHMEm, ant.CHMPor   -- o CHM (com a data e quem concedeu) não se perde na rematrícula (a CEI o lê da matrícula atual)
+              FROM (SELECT 1 AS x) um LEFT JOIN Matriculas_AFM ant ON ant.MatriculaId = @anterior`);
     return { sucesso: true, matriculaId: ins.recordset[0].MatriculaId, mensagem: "Nova matrícula registrada: o obreiro voltou a ficar ativo, com a licença para oficiar. A contagem de faltas recomeça hoje." };
   });
   if (r.sucesso) await registrarAuditoria({ tabela: "Matriculas_AFM", registroId: r.matriculaId, acao: "AFM_REMATRICULA", usuarioId: por, dadosDepois: { membroId: Number(membroId), reciclagemAprovadaEm } });
@@ -567,6 +570,7 @@ async function listarMatriculas(pool) {
   const r = await pool.request().query(`
     SELECT m.MembroId, m.Nome, m.CargoMinisterial, cm.Nome AS CargoNome, m.Status, c.Nome AS Congregacao,
            a.MatriculaId, a.StatusMatricula, a.NivelEscolaridade, a.NivelConcluido, a.Origem, CONVERT(varchar(10), a.DataMatricula, 120) AS DataMatricula,
+           a.CertificadoHabilitacao, CONVERT(varchar(10), a.CHMEm, 120) AS CHMEm,
            d.Motivo AS DesmatriculaMotivo, CONVERT(varchar(10), d.DataDesmatricula, 120) AS DataDesmatricula, d.Detalhe AS DesmatriculaDetalhe, d.SessoesGatilho
     FROM Matriculas_AFM a
     JOIN MembroReferencia m ON m.MembroId = a.MembroId
@@ -576,6 +580,7 @@ async function listarMatriculas(pool) {
     WHERE a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = a.MembroId)
     ORDER BY m.Nome`);
   const seq = await sequenciasAtuais(pool, "AFM");
+  const origens = await escadaDb.origensDoCargoAtual(pool);   // v8.2: nivelamento obrigatório (Art. 66 §5º)
   return r.recordset.map((l) => {
     const oficial = l.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
     const nivel = afm.avaliarNivel(l.CargoMinisterial, l.NivelEscolaridade, l.NivelConcluido);
@@ -584,7 +589,9 @@ async function listarMatriculas(pool) {
       status: l.StatusMatricula, nivel: l.NivelEscolaridade, nivelConcluido: !!l.NivelConcluido, nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
       origem: l.Origem, dataMatricula: l.DataMatricula, faltasSeguidas: seq.get(Number(l.MembroId)) || 0,
       desmatricula: l.DesmatriculaMotivo ? { motivo: l.DesmatriculaMotivo, data: l.DataDesmatricula, detalhe: l.DesmatriculaDetalhe, sessoes: l.SessoesGatilho } : null,
-      licenca: afm.licencaLiturgica({ cargo: oficial ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula })
+      licenca: afm.licencaLiturgica({ cargo: oficial ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula }),
+      chm: !!l.CertificadoHabilitacao, chmEm: l.CHMEm || null,
+      nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido)
     };
   });
 }

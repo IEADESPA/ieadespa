@@ -1,0 +1,979 @@
+{
+  "requisitosCandidatoSemMatricula": {
+    "sucesso": true,
+    "alvo": "AUXILIAR",
+    "alvoRotulo": "Auxiliar",
+    "requisitos": {
+      "alvo": "AUXILIAR",
+      "alvoRotulo": "Auxiliar",
+      "modalidade": "INDICACAO",
+      "itens": [
+        {
+          "chave": "degrau",
+          "rotulo": "Degrau da escada",
+          "artigo": "Art. 71",
+          "situacao": "ATENDE",
+          "detalhe": "De Membro para Auxiliar.",
+          "tecnico": false
+        },
+        {
+          "chave": "comunhao",
+          "rotulo": "Membro ativo em plena comunhão",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "dizimo",
+          "rotulo": "Dizimista fiel",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "idade",
+          "rotulo": "Idade mínima de 17 anos",
+          "artigo": "Art. 72, I, a",
+          "situacao": "ATENDE",
+          "detalhe": "31 anos.",
+          "tecnico": false
+        },
+        {
+          "chave": "membresia",
+          "rotulo": "1 ano de membresia ininterrupta",
+          "artigo": "Art. 72, I, a; Art. 131 §4º, II",
+          "situacao": "ATENDE",
+          "detalhe": "Membro desde 01/02/2020.",
+          "tecnico": false
+        },
+        {
+          "chave": "matricula",
+          "rotulo": "Matrícula ativa na AFM",
+          "artigo": "Art. 72, I, b",
+          "situacao": "FALTA",
+          "detalhe": "O candidato precisa estar matriculado na AFM cursando o Básico (a Academia matricula o candidato).",
+          "tecnico": true
+        },
+        {
+          "chave": "escolaridade",
+          "rotulo": "Escolaridade: Básico ou acima",
+          "artigo": "Art. 72, I, b",
+          "situacao": "SEM_DADO",
+          "detalhe": "O nível na AFM não foi informado.",
+          "tecnico": true
+        },
+        {
+          "chave": "chm",
+          "rotulo": "Certificado de Habilitação Ministerial (CHM)",
+          "artigo": "Art. 67 §1º; Art. 74, I",
+          "situacao": "FALTA",
+          "detalhe": "A AFM ainda não concedeu o CHM.",
+          "tecnico": true
+        }
+      ],
+      "bloqueado": true,
+      "nivelamento": false,
+      "mensagemBloqueio": "Requisitos da escada não atendidos (Auxiliar): Matrícula ativa na AFM; Escolaridade: Básico ou acima; Certificado de Habilitação Ministerial (CHM)."
+    }
+  },
+  "requisitosCandidatoPronto": {
+    "sucesso": true,
+    "alvo": "AUXILIAR",
+    "alvoRotulo": "Auxiliar",
+    "requisitos": {
+      "alvo": "AUXILIAR",
+      "alvoRotulo": "Auxiliar",
+      "modalidade": "INDICACAO",
+      "itens": [
+        {
+          "chave": "degrau",
+          "rotulo": "Degrau da escada",
+          "artigo": "Art. 71",
+          "situacao": "ATENDE",
+          "detalhe": "De Membro para Auxiliar.",
+          "tecnico": false
+        },
+        {
+          "chave": "comunhao",
+          "rotulo": "Membro ativo em plena comunhão",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "AVISO",
+          "detalhe": "A Secretaria confere no avanço do processo.",
+          "tecnico": false
+        },
+        {
+          "chave": "dizimo",
+          "rotulo": "Dizimista fiel",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "idade",
+          "rotulo": "Idade mínima de 17 anos",
+          "artigo": "Art. 72, I, a",
+          "situacao": "ATENDE",
+          "detalhe": "31 anos.",
+          "tecnico": false
+        },
+        {
+          "chave": "membresia",
+          "rotulo": "1 ano de membresia ininterrupta",
+          "artigo": "Art. 72, I, a; Art. 131 §4º, II",
+          "situacao": "ATENDE",
+          "detalhe": "Membro desde 01/02/2020.",
+          "tecnico": false
+        },
+        {
+          "chave": "matricula",
+          "rotulo": "Matrícula ativa na AFM",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "escolaridade",
+          "rotulo": "Escolaridade: Básico ou acima",
+          "artigo": "Art. 72, I, b",
+          "situacao": "ATENDE",
+          "detalhe": "Básico (cursando)",
+          "tecnico": false
+        },
+        {
+          "chave": "chm",
+          "rotulo": "Certificado de Habilitação Ministerial (CHM)",
+          "artigo": "Art. 67 §1º; Art. 74, I",
+          "situacao": "ATENDE",
+          "detalhe": "Concedido em 28/10/2026.",
+          "tecnico": false
+        }
+      ],
+      "bloqueado": false,
+      "nivelamento": false,
+      "mensagemBloqueio": null
+    }
+  },
+  "protocoloCriado": {
+    "sucesso": true,
+    "mensagem": "✅ Processo protocolado e enviado para a Secretaria.",
+    "consagracao": {
+      "consagracaoId": "a2544685-bde7-4093-b873-809ca97ea0e6",
+      "membroId": 9201,
+      "nome": "Candidato Auxiliar E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Auxiliar",
+      "proponente": "Dirigente Central E2E",
+      "status": "PROTOCOLADO",
+      "dataProtocolo": "2026-10-28",
+      "cargoAlvo": "AUXILIAR",
+      "modalidade": "INDICACAO"
+    },
+    "alertasFormacao": [],
+    "requisitos": {
+      "alvo": "AUXILIAR",
+      "alvoRotulo": "Auxiliar",
+      "modalidade": "INDICACAO",
+      "itens": [
+        {
+          "chave": "degrau",
+          "rotulo": "Degrau da escada",
+          "artigo": "Art. 71",
+          "situacao": "ATENDE",
+          "detalhe": "De Membro para Auxiliar.",
+          "tecnico": false
+        },
+        {
+          "chave": "comunhao",
+          "rotulo": "Membro ativo em plena comunhão",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "AVISO",
+          "detalhe": "A Secretaria confere no avanço do processo.",
+          "tecnico": false
+        },
+        {
+          "chave": "dizimo",
+          "rotulo": "Dizimista fiel",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "idade",
+          "rotulo": "Idade mínima de 17 anos",
+          "artigo": "Art. 72, I, a",
+          "situacao": "ATENDE",
+          "detalhe": "31 anos.",
+          "tecnico": false
+        },
+        {
+          "chave": "membresia",
+          "rotulo": "1 ano de membresia ininterrupta",
+          "artigo": "Art. 72, I, a; Art. 131 §4º, II",
+          "situacao": "ATENDE",
+          "detalhe": "Membro desde 01/02/2020.",
+          "tecnico": false
+        },
+        {
+          "chave": "matricula",
+          "rotulo": "Matrícula ativa na AFM",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "escolaridade",
+          "rotulo": "Escolaridade: Básico ou acima",
+          "artigo": "Art. 72, I, b",
+          "situacao": "ATENDE",
+          "detalhe": "Básico (cursando)",
+          "tecnico": false
+        },
+        {
+          "chave": "chm",
+          "rotulo": "Certificado de Habilitação Ministerial (CHM)",
+          "artigo": "Art. 67 §1º; Art. 74, I",
+          "situacao": "ATENDE",
+          "detalhe": "Concedido em 28/10/2026.",
+          "tecnico": false
+        }
+      ],
+      "bloqueado": false,
+      "nivelamento": false,
+      "mensagemBloqueio": null
+    }
+  },
+  "requisitosTravados": {
+    "sucesso": true,
+    "alvo": "DIACONO",
+    "alvoRotulo": "Diácono",
+    "requisitos": {
+      "alvo": "DIACONO",
+      "alvoRotulo": "Diácono",
+      "modalidade": "INDICACAO",
+      "itens": [
+        {
+          "chave": "degrau",
+          "rotulo": "Degrau da escada",
+          "artigo": "Art. 71",
+          "situacao": "ATENDE",
+          "detalhe": "De Missionário(a) para Diácono.",
+          "tecnico": false
+        },
+        {
+          "chave": "comunhao",
+          "rotulo": "Membro ativo em plena comunhão",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "dizimo",
+          "rotulo": "Dizimista fiel",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "intersticio",
+          "rotulo": "2 anos como Missionário(a)",
+          "artigo": "Art. 72, III, a",
+          "situacao": "ATENDE",
+          "detalhe": "Missionário(a) desde 10/01/2015.",
+          "tecnico": false
+        },
+        {
+          "chave": "sexo",
+          "rotulo": "Acima de Missionário(a): obreiro",
+          "artigo": "Art. 71, III",
+          "situacao": "FALTA",
+          "detalhe": "Missionária é a patente máxima para obreiras, salvo ordenação convencional específica.",
+          "tecnico": false
+        },
+        {
+          "chave": "batismoEspirito",
+          "rotulo": "Batismo no Espírito Santo",
+          "artigo": "Art. 72, III, a",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "matricula",
+          "rotulo": "Matrícula ativa na AFM",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "escolaridade",
+          "rotulo": "Escolaridade: Médio ou acima",
+          "artigo": "Art. 72, III, b",
+          "situacao": "ATENDE",
+          "detalhe": "Médio (cursando)",
+          "tecnico": false
+        },
+        {
+          "chave": "chm",
+          "rotulo": "Certificado de Habilitação Ministerial (CHM)",
+          "artigo": "Art. 67 §1º; Art. 74, I",
+          "situacao": "ATENDE",
+          "detalhe": "Concedido em 10/01/2026.",
+          "tecnico": false
+        }
+      ],
+      "bloqueado": true,
+      "nivelamento": false,
+      "mensagemBloqueio": "Requisitos da escada não atendidos (Diácono): Acima de Missionário(a): obreiro."
+    }
+  },
+  "listaEmAndamento": [
+    {
+      "consagracaoId": "0a10513e-317d-481b-bd46-328f814ee748",
+      "membroId": 9205,
+      "nome": "Diacono Nomeado E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Presbítero",
+      "proponente": "Presidente E2E",
+      "status": "PROTOCOLADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "PRESBITERO",
+      "modalidade": "NOMEACAO_PRESIDENCIAL",
+      "atoReferencia": "Ato da Presidência nº 2/2026",
+      "vetoAFMEm": null,
+      "vetoAFMMotivo": null
+    }
+  ],
+  "matriculas": {
+    "sucesso": true,
+    "geral": true,
+    "itens": [
+      {
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9214,
+        "nome": "Auxiliar Vila Nova E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Vila Nova E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9201,
+        "nome": "Candidato Auxiliar E2E",
+        "cargo": "AUXILIAR",
+        "cargoNome": "Auxiliar",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "BASICO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Básico ou acima — Art. 72, I, b",
+        "origem": "CANDIDATO",
+        "dataMatricula": "2026-10-28",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9213,
+        "nome": "Diacono Inativo E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "INATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": false,
+          "motivo": "Obreiro inativo na AFM: mantém o título, mas está sem licença para oficiar até nova matrícula e aprovação na reciclagem (Regimento, Art. 69 §3º)."
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9209,
+        "nome": "Diacono Legado E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "AVANCADO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9205,
+        "nome": "Diacono Nomeado E2E",
+        "cargo": "PRESBITERO",
+        "cargoNome": "Presbítero",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "BASICO",
+        "nivelConcluido": false,
+        "nivelAtende": false,
+        "nivelExigido": "Avançado ou acima — Art. 72, IV, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": true
+      },
+      {
+        "membroId": 9220,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "BACHAREL",
+        "nivelConcluido": true,
+        "nivelAtende": true,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 3001,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PRESBITERO",
+        "cargoNome": "Presbítero",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima — Art. 72, IV, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9204,
+        "nome": "Missionaria Teto E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9203,
+        "nome": "Missionario Diacono E2E",
+        "cargo": "DIACONO",
+        "cargoNome": "Diácono",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, III, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9208,
+        "nome": "Missionario Disciplinado E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 9211,
+        "nome": "Missionario Sem Sexo E2E",
+        "cargo": "MISSIONARIO",
+        "cargoNome": "Missionário(a)",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "MEDIO",
+        "nivelConcluido": false,
+        "nivelAtende": true,
+        "nivelExigido": "Médio ou acima — Art. 72, II, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 3003,
+        "nome": "Pastor de Área Alfa E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 7001,
+        "nome": "Pastor do Comite E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      },
+      {
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "cargo": "PRESBITERO",
+        "cargoNome": "Presbítero",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": "AVANCADO",
+        "nivelConcluido": true,
+        "nivelAtende": true,
+        "nivelExigido": "Avançado ou acima — Art. 72, IV, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2024-01-01",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": true,
+        "chmEm": "2026-01-10",
+        "nivelamento": false
+      },
+      {
+        "membroId": 8001,
+        "nome": "Superintendente Norte E2E",
+        "cargo": "PASTOR",
+        "cargoNome": "Pastor",
+        "congregacao": "Central E2E",
+        "oficial": true,
+        "status": "ATIVA",
+        "nivel": null,
+        "nivelConcluido": false,
+        "nivelAtende": null,
+        "nivelExigido": "Avançado ou acima (concluído) — Art. 72, V, b",
+        "origem": "AUTOMATICA",
+        "dataMatricula": "2026-10-27",
+        "faltasSeguidas": 0,
+        "desmatricula": null,
+        "licenca": {
+          "podeOficiar": true,
+          "motivo": null
+        },
+        "chm": false,
+        "chmEm": null,
+        "nivelamento": false
+      }
+    ]
+  },
+  "listaConsagracoes": [
+    {
+      "consagracaoId": "78b5e51b-eae2-4d8d-ba15-1ed46572207b",
+      "membroId": 9210,
+      "nome": "Auxiliar Vetado E2E",
+      "cargoAtual": null,
+      "assunto": "Consagração a Missionário(a)",
+      "proponente": "Dirigente Central E2E",
+      "status": "REPROVADO",
+      "dataProtocolo": "2026-10-28",
+      "congregacao": "Central E2E",
+      "extensao": null,
+      "cargoAlvo": "MISSIONARIO",
+      "modalidade": "INDICACAO",
+      "atoReferencia": null,
+      "vetoAFMEm": "2026-10-28",
+      "vetoAFMMotivo": "Reprovou na prova de liturgia do Seminário de novembro"
+    }
+  ],
+  "pessoa": {
+    "membroId": 9209,
+    "nome": "Diacono Legado E2E",
+    "funcao": "Diácono",
+    "congregacaoId": 1,
+    "congregacao": "Central E2E",
+    "status": "ATIVO",
+    "dataNascimento": "1980-01-01",
+    "dataAdmissao": "2000-01-01",
+    "dataBatismo": null,
+    "formaAdmissao": null,
+    "origem": null,
+    "igrejaAnterior": null,
+    "dataRitoRecebimento": null,
+    "nomeLidoRito": null,
+    "ministranteRito": null,
+    "dizimistaFiel": true,
+    "situacaoMembro": "EM_COMUNHAO",
+    "departamentoId": null,
+    "cargoMinisterial": "DIACONO",
+    "telefone": null,
+    "email": "escada9209@e2e.local",
+    "endereco": null,
+    "extensaoId": null,
+    "extensao": null,
+    "estadoCivil": "CASADO",
+    "dataAfastamento": null,
+    "dataSaida": null,
+    "motivoSaida": null,
+    "fotoUrl": null,
+    "sexo": "M",
+    "cargoDesde": "2019-05-01",
+    "processoDisciplinarAtivo": false,
+    "capacidade": {
+      "emComunhao": true,
+      "categoria": "Membro Elegível",
+      "capacidadeAtiva": true,
+      "elegivelDiretoriaConselhoFiscal": true,
+      "elegivelCEIouDepartamentos": true,
+      "elegivelFuncaoAuxiliar": true,
+      "emPeriodoIntegracao": false,
+      "diasIntegracao": 9797,
+      "diasRestantesIntegracao": null,
+      "motivo": null
+    },
+    "menorDeIdade": false
+  },
+  "avancarTravado": {
+    "sucesso": false,
+    "mensagem": "Requisitos da escada não atendidos (Diácono): Certificado de Habilitação Ministerial (CHM).",
+    "requisitos": {
+      "alvo": "DIACONO",
+      "alvoRotulo": "Diácono",
+      "modalidade": "INDICACAO",
+      "itens": [
+        {
+          "chave": "degrau",
+          "rotulo": "Degrau da escada",
+          "artigo": "Art. 71",
+          "situacao": "ATENDE",
+          "detalhe": "De Missionário(a) para Diácono.",
+          "tecnico": false
+        },
+        {
+          "chave": "comunhao",
+          "rotulo": "Membro ativo em plena comunhão",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "disciplina",
+          "rotulo": "Sem disciplina em curso nem carta de mudança",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "dizimo",
+          "rotulo": "Dizimista fiel",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "intersticio",
+          "rotulo": "2 anos como Missionário(a)",
+          "artigo": "Art. 72, III, a",
+          "situacao": "ATENDE",
+          "detalhe": "Missionário(a) desde 10/01/2015.",
+          "tecnico": false
+        },
+        {
+          "chave": "sexo",
+          "rotulo": "Acima de Missionário(a): obreiro",
+          "artigo": "Art. 71, III",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "batismoEspirito",
+          "rotulo": "Batismo no Espírito Santo",
+          "artigo": "Art. 72, III, a",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "matricula",
+          "rotulo": "Matrícula ativa na AFM",
+          "artigo": "Art. 72, caput",
+          "situacao": "ATENDE",
+          "detalhe": null,
+          "tecnico": false
+        },
+        {
+          "chave": "escolaridade",
+          "rotulo": "Escolaridade: Médio ou acima",
+          "artigo": "Art. 72, III, b",
+          "situacao": "ATENDE",
+          "detalhe": "Médio (cursando)",
+          "tecnico": false
+        },
+        {
+          "chave": "chm",
+          "rotulo": "Certificado de Habilitação Ministerial (CHM)",
+          "artigo": "Art. 67 §1º; Art. 74, I",
+          "situacao": "FALTA",
+          "detalhe": "A AFM ainda não concedeu o CHM.",
+          "tecnico": true
+        }
+      ],
+      "bloqueado": true,
+      "nivelamento": false,
+      "mensagemBloqueio": "Requisitos da escada não atendidos (Diácono): Certificado de Habilitação Ministerial (CHM)."
+    }
+  },
+  "vetaveis": {
+    "sucesso": true,
+    "itens": [
+      {
+        "consagracaoId": "78b5e51b-eae2-4d8d-ba15-1ed46572207b",
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "congregacao": "Central E2E",
+        "assunto": "Consagração a Missionário(a)",
+        "cargoAlvo": "MISSIONARIO",
+        "cargoAlvoRotulo": "Missionário(a)",
+        "status": "PROTOCOLADO",
+        "dataProtocolo": "2026-10-28"
+      }
+    ]
+  }
+}

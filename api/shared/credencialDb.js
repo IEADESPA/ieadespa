@@ -6,12 +6,11 @@
 // - A situação pública é calculada na hora da leitura (Art. 76 §1º). Para o obreiro, só a sanção aplicada ou o afastamento cautelar suspendem a credencial — um
 //   processo apenas aberto, ainda sem julgamento, não aparece para quem lê o QR.
 // - A disciplina não muda o cadastro: a exclusão em vigor e a Disciplina Rigorosa em vigor vêm do processo (revisão independente, 28/10/2026). O recurso não tem
-//   efeito suspensivo: o processo original "em recurso" continua valendo até o recurso ser julgado (aí vale o resultado do recurso). Exclusão ainda pendente de
-//   homologação do CEI (HomologadoPeloCEI = 0) ainda não vale.
+//   efeito suspensivo (Art. 92 §2º): o processo original "em recurso" continua valendo até o recurso ser julgado. A exclusão ainda pendente de homologação do CEI
+//   não tira a membresia, mas já afasta das funções (o QR diz "Obreiro inativo") — Trava 8-A, o mesmo critério da licença para oficiar e da Comissão de Unção.
 const { sql } = require("./db");
 const regra = require("./credencial");
 const certificados = require("./certificados");
-const { CONDICAO_SQL_ATIVO } = require("./disciplina");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { violouUnicidade } = require("./violacaoUnica");
@@ -21,23 +20,12 @@ const MUDOU = (mensagem) => ({ sucesso: false, mudou: true, mensagem });
 // a data de Brasília (UTC−3, sem horário de verão) de um instante gravado em UTC
 const dia = (v) => (v == null ? null : new Date(new Date(v).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
-// O processo original "em recurso" vale enquanto o recurso não é julgado (Regimento: o recurso não suspende a pena).
-const EM_RECURSO_VALE = `(pd.Status = N'EM_RECURSO' AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares r WHERE r.ProcessoOrigemId = pd.ProcessoId AND r.Status = N'JULGADO'))`;
-const HOMOLOGACAO_VALE = `ISNULL(pd.HomologadoPeloCEI, 1) = 1`;
-// As três marcas da disciplina, para a pessoa `m`: excluída, fora da comunhão (Disciplina Rigorosa) e afastada das funções (sanção ou afastamento cautelar).
-const MARCAS_DISCIPLINA = `
-  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd WHERE pd.MembroId = m.MembroId AND pd.Resultado = N'EXCLUSAO' AND ${HOMOLOGACAO_VALE}
-                    AND (pd.Status = N'JULGADO' OR ${EM_RECURSO_VALE})) THEN 1 ELSE 0 END AS Excluido,
-  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
-                    WHERE pd.MembroId = m.MembroId AND tp.Codigo = N'DISCIPLINA_RIGOROSA' AND ${HOMOLOGACAO_VALE} AND ((${CONDICAO_SQL_ATIVO}) OR ${EM_RECURSO_VALE})) THEN 1 ELSE 0 END AS ForaDaComunhao,
-  CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
-                    WHERE pd.MembroId = m.MembroId AND ${HOMOLOGACAO_VALE}
-                      AND ((pd.Status <> N'EM_ANDAMENTO' AND ${CONDICAO_SQL_ATIVO})
-                           OR (${EM_RECURSO_VALE} AND pd.Resultado IN (N'SANCAO', N'EXCLUSAO') AND ISNULL(tp.Codigo, N'') <> N'ADVERTENCIA'))) THEN 1 ELSE 0 END AS Afastado`;
+// As marcas da disciplina (excluída, fora da comunhão, afastada das funções) e a matrícula da AFM vêm do lugar único da Trava 8-A (shared/habilitacao.js).
+const { MARCAS_DISCIPLINA, STATUS_MATRICULA } = require("./habilitacao");
 
 const SELECT_PESSOA = `
   SELECT m.MembroId, m.Nome, m.Status, m.SituacaoMembro, m.CargoMinisterial, m.FotoUrl, cg.Nome AS Congregacao, ex.Nome AS Extensao,
-         (SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula,
+         ${STATUS_MATRICULA},
          ${MARCAS_DISCIPLINA}
   FROM MembroReferencia m
   LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
@@ -158,6 +146,29 @@ async function novaVia(pool, { membroId, motivo, por }) {
   return { sucesso: true, credencialId: r.credencialId, mensagem: `Nova via emitida (via ${r.via}): a anterior deixou de valer.` };
 }
 
+// Trava 8-A — a diplomação entrega a Credencial Ministerial (Regimento Art. 10) e a v8.4 prometeu "mudou o cargo → nova via". Depois da cerimônia: quem NUNCA teve
+// credencial recebe a primeira (quem teve a sua cancelada pela Secretaria não volta a receber sozinho, como no lote); quem tem o cartão IMPRESSO ganha uma nova via
+// já com o pedido de impressão (o cartão impresso mostra o cargo anterior; o QR dele passa a dizer "substituída"); a credencial só digital já mostra o cargo novo.
+// Nunca derruba a cerimônia: devolve "EMITIDA", "NOVA_VIA", "ATUAL" ou null.
+async function aposConsagracao(pool, { membroId, cargoRotulo, por }) {
+  try {
+    const atual = await credencialValida(pool, membroId);
+    if (!atual) {
+      const teve = (await pool.request().input("m", sql.Int, Number(membroId)).query(`SELECT TOP 1 1 AS x FROM CredenciaisEclesiasticas WHERE MembroId = @m`)).recordset.length;
+      if (teve) return null;
+      return (await emitir(pool, { membroId, por })).sucesso ? "EMITIDA" : null;
+    }
+    if (!atual.impressaEm) return "ATUAL";
+    const r = await novaVia(pool, { membroId, motivo: `Consagração a ${cargoRotulo}: o cartão impresso tem o cargo anterior.`, por });
+    if (!r.sucesso) return null;
+    await pool.request().input("id", sql.Int, r.credencialId).query(`UPDATE CredenciaisEclesiasticas SET ImpressaoSolicitadaEm = SYSUTCDATETIME() WHERE CredencialId = @id AND ImpressaoSolicitadaEm IS NULL`);
+    return "NOVA_VIA";
+  } catch (e) {
+    console.error("[credencial] depois da consagração:", e && e.message);
+    return null;
+  }
+}
+
 async function cancelar(pool, { membroId, motivo, por }) {
   const r = await comTrava(pool, membroId, async (t) => {
     const atual = await credencialValida(t, membroId);
@@ -270,6 +281,7 @@ async function dadosDoTitular(pool, membroId) {
 }
 
 module.exports = {
+  aposConsagracao,
   pessoa, credencialValida, urlCredencial, emitir, emitirEmLote, novaVia, cancelar, cancelarNoDesligamento, recolherSemFalhar, pedirImpressao, registrarImpressao, listar, minha,
   verificarPublica, dadosDoCartao, dadosDoTitular
 };

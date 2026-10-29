@@ -63,7 +63,12 @@ function consLimparTela() {
     const el = document.getElementById(idEl);
     if (el) { if ("value" in el && el.tagName !== "P") el.value = ""; else el.textContent = ""; }
   }
-  for (const idEl of ["consFormParecer", "consPainelHomologar", "consPainelTaxa", "consCerimoniaDetalhe", "consBarraHomologar"]) { const el = document.getElementById(idEl); if (el) el.hidden = true; }
+  for (const idEl of ["consFormParecer", "consPainelHomologar", "consPainelTaxa", "consPainelConvencao", "consCerimoniaDetalhe", "consBarraHomologar", "consTesPainel"]) { const el = document.getElementById(idEl); if (el) el.hidden = true; }
+  consConvAtual = null;
+  consTesAtual = null;
+  consTaxasCache = [];
+  const tes = document.getElementById("consListaTaxas");
+  if (tes) tes.innerHTML = "";
   // o formulário do parecer pela metade (nome, sabatina, escrutínio) e o ato da homologação também saem
   const titulo = document.getElementById("consParecerTitulo");
   if (titulo) titulo.textContent = "Parecer";
@@ -280,6 +285,9 @@ let consFilaCEI = [];
 let consParecerAtual = null;
 let consTaxaAtual = null;
 let consCerimoniaAberta = null;
+let consConvAtual = null;      // Trava 8-A: o processo da homologação da CIADSETA aberto no painel
+let consTesAtual = null;       // Trava 8-A: o processo da taxa aberto no painel da tesouraria
+let consTaxasCache = [];
 const moedaCons = (v) => Number(v || 0).toFixed(2).replace(".", ",");
 // hoje no fuso de Brasília (UTC-3), para os campos de data
 const hojeCons = () => new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -291,17 +299,25 @@ function consAbrirAba() {
   consEl("consSecaoSecretaria").hidden = !temConsagracoes;
   consEl("consSecaoCEI").hidden = !geralPara("cei");
   consEl("consSecaoCerimonias").hidden = !geralPara("consagracoes");
+  // Trava 8-A: a tesouraria (nível geral do financeiro, sem a esteira) registra a taxa pela lista dela
+  const soTesouraria = !temConsagracoes && geralPara("financeiro");
+  consEl("consSecaoTaxas").hidden = !soTesouraria;
+  if (soTesouraria) consCarregarTaxas();
   if (temConsagracoes) { carregarTiposConsagracao(); carregarConsagracoes(); carregarTurmasBatismo(); carregarCandidatosBatismo(); }
   if (geralPara("cei")) consCarregarFilaCEI();
   if (geralPara("consagracoes")) { consCarregarCerimonias(); consCarregarReunioesCLI(); }
   const aviso = consEl("consAvisoSemSecao");
-  if (aviso) aviso.hidden = temConsagracoes || geralPara("cei");
+  if (aviso) aviso.hidden = temConsagracoes || geralPara("cei") || soTesouraria;
 }
+
+// Trava 8-A: o processo que a vacância encerrou (a pessoa saiu, foi afastada pela disciplina ou tirou licença de candidatura)
+const ROTULO_ENCERRAMENTO_VACANCIA = { DISCIPLINA: "Encerrado pela decisão disciplinar", LICENCA_CANDIDATURA: "Encerrado pela licença de candidatura", SAIDA_DO_ROL: "Encerrado pela saída do rol" };
 
 function consStatusTexto(c) {
   if (c.vetoAFMEm) return `Vetado pela AFM em ${escaparHtmlEbd(dataBrEscada(c.vetoAFMEm))}<br><small>${escaparHtmlEbd(c.vetoAFMMotivo)}</small>`;
   if (c.status === "REPROVADO" && c.motivoEncerramento === "INAPTO_CEI") return `INAPTO pelo CEI${c.dataConclusao ? ` em ${escaparHtmlEbd(dataBrEscada(c.dataConclusao))}` : ""}<br><small>Processo arquivado (Art. 9º §2º)</small>`;
   if (c.status === "REPROVADO" && c.motivoEncerramento === "AUSENCIA_CERIMONIA") return `Ausente na cerimônia de ${escaparHtmlEbd(dataBrEscada(c.dataConclusao))}<br><small>Perde a consagração neste ano; novo processo no ano que vem (Art. 75, II, b)</small>`;
+  if (c.status === "REPROVADO" && ROTULO_ENCERRAMENTO_VACANCIA[c.motivoEncerramento]) return `${ROTULO_ENCERRAMENTO_VACANCIA[c.motivoEncerramento]}${c.dataConclusao ? ` em ${escaparHtmlEbd(dataBrEscada(c.dataConclusao))}` : ""}`;
   if (c.status === "CONCLUIDO") return `${c.cargoAlvo ? "Consagrado(a)" : "Concluído"}${c.dataConclusao ? ` em ${escaparHtmlEbd(dataBrEscada(c.dataConclusao))}` : ""}`;
   if (c.status === "REPROVADO") return `Reprovado${c.dataConclusao ? ` em ${escaparHtmlEbd(dataBrEscada(c.dataConclusao))}` : ""}`;
   if (!c.cargoAlvo) return escaparHtmlEbd(ROTULO_STATUS_CONSAGRACAO[c.status] || c.status);
@@ -310,6 +326,7 @@ function consStatusTexto(c) {
   if (c.parecerCEI) partes.push(`CEI: ${c.parecerCEI}${c.parecerEm ? ` em ${dataBrEscada(c.parecerEm)}` : ""}`);
   if (c.status === "AGUARDANDO_PLENARIO") partes.push(c.homologacaoPelaCLI ? "homologa: a CLI em plenário" : "homologa: o Pastor Presidente");
   if (c.homologadoEm) partes.push(`homologado em ${dataBrEscada(c.homologadoEm)}`);
+  if (c.status === "HOMOLOGADO" && c.precisaConvencao) partes.push(c.convencaoHomologadaEm ? `CIADSETA em ${dataBrEscada(c.convencaoHomologadaEm)}` : "aguarda a homologação da CIADSETA");
   if (["AGUARDANDO_PLENARIO", "HOMOLOGADO"].includes(c.status)) {
     partes.push(c.taxaPagaEm ? `taxa R$ ${moedaCons(c.taxaValor)} em ${dataBrEscada(c.taxaPagaEm)}${c.cerimoniaId && c.taxaEmDia === false ? " (fora do prazo ou abaixo do valor da cerimônia)" : ""}` : "taxa pendente");
   }
@@ -330,6 +347,8 @@ function consAcoes(c, indice) {
       b.push(`<label class="rotulo-inline"><input type="checkbox" id="consMarcar_${Number(indice)}" aria-label="Homologar: ${escaparHtmlEbd(c.nome)}" /> homologar</label>`);
     }
     if (c.cargoAlvo && ["AGUARDANDO_PLENARIO", "HOMOLOGADO"].includes(c.status)) b.push(`<button class="btn-link" data-on-click="consTaxaAcao" data-args-click="${argsAttr(id)}">Taxa…</button>`);
+    if (c.status === "HOMOLOGADO" && c.precisaConvencao && !c.cerimoniaId) b.push(`<button class="btn-link" data-on-click="consConvencaoAcao" data-args-click="${argsAttr(id)}">CIADSETA…</button>`);
+    if ((c.cargoAlvo === "EVANGELISTA" || c.cargoAlvo === "PASTOR") && (c.modalidade || "INDICACAO") === "INDICACAO") b.push(`<button class="btn-link" data-on-click="consConverterNomeacaoAcao" data-args-click="${argsAttr(id)}">Virar nomeação…</button>`);
     b.push(`<button class="btn-link btn-link-perigo" data-on-click="reprovarConsagracaoAcao" data-args-click="${argsAttr(id)}">Reprovar</button>`);
   }
   return b.length ? b.join(" ") : "-";
@@ -340,8 +359,9 @@ function consDocumentosAcao(numero, nome) {
 }
 
 function consFecharPaineisAcao() {
-  for (const idEl of ["consPainelHomologar", "consPainelTaxa"]) { const el = consEl(idEl); if (el) el.hidden = true; }
+  for (const idEl of ["consPainelHomologar", "consPainelTaxa", "consPainelConvencao"]) { const el = consEl(idEl); if (el) el.hidden = true; }
   consTaxaAtual = null;
+  consConvAtual = null;
 }
 
 // ---- homologação (Art. 74, IV; Art. 7º, III) ----
@@ -439,6 +459,109 @@ async function consRemoverTaxaAcao() {
   const alvo = consTaxaAtual;
   if (!(await confirmarAcao(`Remover o registro da taxa de ${alvo.nome}? (Use quando foi lançado errado.)`, "Remover"))) return;
   await consEnviarTaxa({ consagracaoId: String(alvo.consagracaoId), remover: true });
+}
+
+// ---- Trava 8-A — homologação da CIADSETA (Art. 72, V, a) ----
+function consConvencaoAcao(id) {
+  const c = consagracoesCache.find((x) => String(x.consagracaoId) === String(id));
+  if (!c) return;
+  consFecharPaineisAcao();
+  consConvAtual = c;
+  consEl("consConvTitulo").textContent = `Homologação da CIADSETA — ${c.nome}`;
+  consEl("consConvData").value = c.convencaoHomologadaEm ? String(c.convencaoHomologadaEm).slice(0, 10) : hojeCons();
+  consEl("consConvAto").value = c.convencaoAto || "";
+  consEl("consPainelConvencao").hidden = false;
+  if (typeof consEl("consConvAto").focus === "function") consEl("consConvAto").focus();
+}
+
+async function consPostEsteira(acao, corpo, msgId, depois) {
+  const msg = consEl(msgId);
+  if (consagracaoOcupada) { msg.textContent = MSG_AGUARDE_CONSAGRACAO; return null; }
+  consagracaoOcupada = true;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/esteira-consagracao/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    const data = await res.json();
+    msg.textContent = data.mensagem || "";
+    if (data.sucesso) depois();
+    return data;
+  } finally {
+    consagracaoOcupada = false;
+  }
+}
+
+async function consRegistrarConvencaoAcao() {
+  if (!consConvAtual) return;
+  const ato = String(consEl("consConvAto").value || "").trim();
+  if (!consEl("consConvData").value || ato.length < 3) { consEl("consResultadoEsteira").textContent = "Informe a data e o ato da CIADSETA."; return; }
+  await consPostEsteira("convencao", { consagracaoId: String(consConvAtual.consagracaoId), data: consEl("consConvData").value, ato }, "consResultadoEsteira",
+    () => { consFecharPaineisAcao(); carregarConsagracoes(); });
+}
+
+// A indicação antiga a Evangelista ou Pastor vira nomeação direta do Pastor Presidente (Art. 72, V, a), com o ato.
+async function consConverterNomeacaoAcao(id) {
+  const c = consagracoesCache.find((x) => String(x.consagracaoId) === String(id));
+  if (!c) return;
+  const ato = await pedirTexto(`Virar nomeação do Pastor Presidente — ${c.nome}`, "O ato de nomeação (ex.: Ato da Presidência nº 12/2026)");
+  if (!ato) return;
+  await consPostEsteira("converter-nomeacao", { consagracaoId: String(c.consagracaoId), ato }, "consResultadoEsteira", () => carregarConsagracoes());
+}
+
+// ---- Trava 8-A — a lista da tesouraria (Art. 75, I, a) ----
+async function consCarregarTaxas() {
+  const container = consEl("consListaTaxas");
+  const res = await fetchProtegido(`${API_BASE}/esteira-consagracao/taxas`);
+  const data = await jsonDaTela(res, container, "objeto");
+  if (data === null) return;
+  consTaxasCache = Array.isArray(data.itens) ? data.itens : [];
+  if (!consTaxasCache.length) { container.innerHTML = "<p class='subtitle'>Nenhum candidato aprovado esperando a taxa.</p>"; return; }
+  let html = `<table class="tabela-frequencia"><thead><tr><th>Nome</th><th>Congregação</th><th>Destino</th><th>Cerimônia</th><th>Taxa</th><th></th></tr></thead><tbody>`;
+  for (const t of consTaxasCache) {
+    const taxa = t.taxaPagaEm
+      ? `R$ ${moedaCons(t.taxaValor)} em ${dataBrEscada(t.taxaPagaEm)}${t.taxaEmDia === false ? " (fora do prazo ou abaixo do valor da cerimônia)" : ""}`
+      : "pendente";
+    html += `<tr>
+      <td>${escaparHtmlEbd(t.nome)}</td>
+      <td>${escaparHtmlEbd(t.congregacao) || "-"}</td>
+      <td>${escaparHtmlEbd(t.cargoAlvoRotulo || t.cargoAlvo)}</td>
+      <td>${t.cerimoniaData ? `${escaparHtmlEbd(dataBrEscada(t.cerimoniaData))} (R$ ${escaparHtmlEbd(moedaCons(t.cerimoniaValorTaxa))})` : "-"}</td>
+      <td>${escaparHtmlEbd(taxa)}</td>
+      <td class="acoes-inline"><button class="btn-link" data-on-click="consTesAbrirAcao" data-args-click="${argsAttr(String(t.consagracaoId ?? ""))}">Taxa…</button></td>
+    </tr>`;
+  }
+  container.innerHTML = `${html}</tbody></table>`;
+}
+
+function consTesAbrirAcao(id) {
+  const t = consTaxasCache.find((x) => String(x.consagracaoId) === String(id));
+  if (!t) return;
+  consTesAtual = t;
+  consEl("consTesTitulo").textContent = `Taxa de consagração — ${t.nome}`;
+  consEl("consTesData").value = t.taxaPagaEm ? String(t.taxaPagaEm).slice(0, 10) : hojeCons();
+  consEl("consTesValor").value = String(t.taxaValor || t.cerimoniaValorTaxa || 70);
+  consEl("consTesForma").value = t.taxaForma || "PIX";
+  consEl("consTesRemover").hidden = !t.taxaPagaEm;
+  consEl("consTesPainel").hidden = false;
+  if (typeof consEl("consTesData").focus === "function") consEl("consTesData").focus();
+}
+
+function consTesFecharAcao() {
+  consEl("consTesPainel").hidden = true;
+  consTesAtual = null;
+}
+
+async function consTesRegistrarAcao() {
+  if (!consTesAtual) return;
+  const valor = Number(String(consEl("consTesValor").value).replace(",", "."));
+  if (!consEl("consTesData").value || !(valor > 0)) { consEl("consResultadoTaxas").textContent = "Informe a data e o valor pago."; return; }
+  await consPostEsteira("taxa", { consagracaoId: String(consTesAtual.consagracaoId), pagoEm: consEl("consTesData").value, valor, forma: consEl("consTesForma").value },
+    "consResultadoTaxas", () => { consTesFecharAcao(); consCarregarTaxas(); });
+}
+
+async function consTesRemoverAcao() {
+  if (!consTesAtual) return;
+  const alvo = consTesAtual;
+  if (!(await confirmarAcao(`Remover o registro da taxa de ${alvo.nome}? (Use quando foi lançado errado.)`, "Remover"))) return;
+  await consPostEsteira("taxa", { consagracaoId: String(alvo.consagracaoId), remover: true }, "consResultadoTaxas", () => { consTesFecharAcao(); consCarregarTaxas(); });
 }
 
 // ---- CEI (Art. 74, III; 9º; 73) ----
@@ -974,5 +1097,7 @@ registrarAcoes({
   consDocumentosAcao, consFecharPaineisAcao, consAbrirHomologarAcao, consHomologarAcao, consTaxaAcao, consRegistrarTaxaAcao, consRemoverTaxaAcao,
   consDarParecerAcao, consMostrarEscrutinioAcao, consFecharParecerAcao, consEnviarParecerAcao, consCriarCerimoniaAcao, consAbrirCerimoniaAcao,
   consSalvarComissaoAcao, consEditarCerimoniaAcao, consIncluirCandidatosAcao, consRetirarCandidatoAcao, consCancelarCerimoniaAcao, consRegistrarCerimoniaAcao,
-  consBaixarDiplomasAcao
+  consBaixarDiplomasAcao,
+  // Trava 8-A
+  consConvencaoAcao, consRegistrarConvencaoAcao, consConverterNomeacaoAcao, consTesAbrirAcao, consTesRegistrarAcao, consTesRemoverAcao, consTesFecharAcao
 });

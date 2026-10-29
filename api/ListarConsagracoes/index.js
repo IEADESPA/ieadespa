@@ -32,6 +32,7 @@ module.exports = async function (context, req) {
            CONVERT(varchar(10), c.HomologadoEm, 120) AS homologadoEm, c.HomologacaoSessaoId AS homologacaoSessaoId, c.HomologacaoAto AS homologacaoAto,
            CONVERT(varchar(10), c.TaxaPagaEm, 120) AS taxaPagaEm, c.TaxaValor AS taxaValor, c.TaxaForma AS taxaForma,
            c.CerimoniaId AS cerimoniaId, CONVERT(varchar(10), ce.DataCerimonia, 120) AS cerimoniaData, ce.ValorTaxa AS cerimoniaValorTaxa,
+           CONVERT(varchar(10), c.ConvencaoHomologadaEm, 120) AS convencaoHomologadaEm, c.ConvencaoAto AS convencaoAto,
            CONVERT(varchar(10), c.DataConclusao, 120) AS dataConclusao, c.MotivoEncerramento AS motivoEncerramento, c.DiplomaCertificadoId AS diplomaCertificadoId
     FROM Consagracoes c
     LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
@@ -53,6 +54,7 @@ module.exports = async function (context, req) {
     taxaValor: c.taxaValor == null ? null : Number(c.taxaValor),
     cerimoniaValorTaxa: c.cerimoniaValorTaxa == null ? null : Number(c.cerimoniaValorTaxa),
     homologacaoPelaCLI: regra.homologacaoPelaCLI(c.cargoAlvo || cargoDoTipo),
+    precisaConvencao: regra.precisaConvencao(c.cargoAlvo || cargoDoTipo, c.modalidade || "INDICACAO"),   // Trava 8-A: CIADSETA (Art. 72, V, a)
     taxaEmDia: c.cerimoniaId ? regra.situacaoDaTaxa(c, { dataCerimonia: c.cerimoniaData, valorTaxa: c.cerimoniaValorTaxa }).emDia : null
   }));
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: doEscopo };

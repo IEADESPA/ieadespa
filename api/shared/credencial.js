@@ -4,7 +4,7 @@
 // A credencial não tem validade impressa (Art. 76 §1º): a situação é calculada na hora da leitura, a partir do cadastro e da Academia. A página pública mostra o mínimo
 // para conferir quem está na frente — nunca o motivo de uma inatividade, a matrícula, a foto ou um contato.
 const { calcularCapacidadeEleitoral } = require("./estatuto");
-const { CARGOS_OFICIAIS } = require("./afm");
+const { CARGOS_OFICIAIS, licencaLiturgica } = require("./afm");
 const { ROTULO_CARGO } = require("./escada");
 
 // Membro de verdade: ativo ou de licença (a licença — inclusive a de candidatura política, Regimento Art. 157 — não tira a membresia: "senta-se como membro comum"),
@@ -40,7 +40,9 @@ function situacaoPublica(credencial, pessoa) {
   if (ehObreiro(pessoa.cargo)) {
     // Art. 69 §3º: a matrícula da AFM inativa suspende a credencial do obreiro ("Obreiro Inativo"); o afastamento disciplinar também (Art. 95 §2º, II, b; Art. 77);
     // e a licença afasta das funções enquanto dura.
-    r.funcao = ativa && pessoa.status === "ATIVO" && pessoa.statusMatricula !== "INATIVA" && !pessoa.sobDisciplina ? "HABILITADO" : "INATIVO";
+    // Trava 8-A: a mesma regra da licença para oficiar (shared/afm.js) — o QR, a turma de batismo e a Comissão de Unção dizem a mesma coisa da mesma pessoa.
+    r.funcao = ativa && licencaLiturgica({ cargo: pessoa.cargo, statusMatricula: pessoa.statusMatricula, status: pessoa.status, situacaoMembro: pessoa.situacaoMembro,
+      excluido: pessoa.excluido, foraDaComunhao: pessoa.foraDaComunhao, afastado: pessoa.sobDisciplina }).podeOficiar ? "HABILITADO" : "INATIVO";
   }
   return r;
 }

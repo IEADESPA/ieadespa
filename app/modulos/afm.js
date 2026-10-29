@@ -1,5 +1,5 @@
 // modulos/afm.js — v8.1: Academia de Formação Ministerial (AFM) e faltas da CLI.
-// Regimento Art. 22, 66 a 69, 72, 149 e 310; Estatuto Art. 15 §1º e 27. Toda regra mora no servidor (api/shared/afm.js e afmDb.js); aqui só se monta a tela.
+// Regimento Art. 22, 56 §2º, 66 a 69, 72 e 149; Estatuto Art. 15 §1º e 27. Toda regra mora no servidor (api/shared/afm.js e afmDb.js); aqui só se monta a tela.
 //  - aba "Academia (AFM)" (permissão afm): Matrículas, Corpo docente (Reitor, docentes) e Sessões Magnas; os atos são do nível geral (o servidor confere);
 //  - na CLI (Órgãos Centrais → CLI): o quadro "Faltas e cadeiras" (quem está com faltas seguidas, as exclusões com as providências, comunicar e readmitir);
 //  - o catálogo fechado da justificativa de falta (Art. 149 §2º), usado pela Secretaria (Ver frequência) e pelo obreiro (Meu Painel);

@@ -15,6 +15,7 @@ const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
 const escada = require("./escada");
 const escadaDb = require("./escadaDb");
+const habilitacao = require("./habilitacao");
 
 const PERMISSAO = "afm";
 const OFICIAIS_SQL = afm.CARGOS_OFICIAIS.map((c) => `N'${c}'`).join(", ");
@@ -568,7 +569,7 @@ async function sequenciasAtuais(pool, tipo, ids = null) {
 async function listarMatriculas(pool) {
   await garantirMatriculas(pool);
   const r = await pool.request().query(`
-    SELECT m.MembroId, m.Nome, m.CargoMinisterial, cm.Nome AS CargoNome, m.Status, c.Nome AS Congregacao,
+    SELECT m.MembroId, m.Nome, m.CargoMinisterial, cm.Nome AS CargoNome, m.Status, m.SituacaoMembro, c.Nome AS Congregacao, ${habilitacao.MARCAS_DISCIPLINA},
            a.MatriculaId, a.StatusMatricula, a.NivelEscolaridade, a.NivelConcluido, a.Origem, CONVERT(varchar(10), a.DataMatricula, 120) AS DataMatricula,
            a.CertificadoHabilitacao, CONVERT(varchar(10), a.CHMEm, 120) AS CHMEm, a.CHMCertificadoId,
            d.Motivo AS DesmatriculaMotivo, CONVERT(varchar(10), d.DataDesmatricula, 120) AS DataDesmatricula, d.Detalhe AS DesmatriculaDetalhe, d.SessoesGatilho
@@ -589,7 +590,8 @@ async function listarMatriculas(pool) {
       status: l.StatusMatricula, nivel: l.NivelEscolaridade, nivelConcluido: !!l.NivelConcluido, nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
       origem: l.Origem, dataMatricula: l.DataMatricula, faltasSeguidas: seq.get(Number(l.MembroId)) || 0,
       desmatricula: l.DesmatriculaMotivo ? { motivo: l.DesmatriculaMotivo, data: l.DataDesmatricula, detalhe: l.DesmatriculaDetalhe, sessoes: l.SessoesGatilho } : null,
-      licenca: afm.licencaLiturgica({ cargo: oficial ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula }),
+      licenca: afm.licencaLiturgica({ cargo: l.CargoMinisterial, statusMatricula: l.StatusMatricula, status: l.Status, situacaoMembro: l.SituacaoMembro,
+        excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao, afastado: !!l.Afastado }),
       chm: !!l.CertificadoHabilitacao, chmEm: l.CHMEm || null, chmCertificadoId: l.CertificadoHabilitacao ? l.CHMCertificadoId || null : null,   // v8.3: o documento
       nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido)
     };
@@ -671,7 +673,7 @@ async function minhaSituacao(pool, membroId) {
       status: mat ? mat.StatusMatricula : "ATIVA", nivel: mat ? mat.NivelEscolaridade : null, nivelConcluido: !!(mat && mat.NivelConcluido), nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
       faltasSeguidas: (await sequenciasAtuais(pool, "AFM", [id])).get(id) || 0,
       desmatricula: mat && mat.DesmatriculaId ? { motivo: mat.DesmatriculaMotivo, data: mat.DataDesmatricula } : null,
-      licenca: afm.licencaLiturgica({ cargo: pessoa.CargoMinisterial, statusMatricula: mat ? mat.StatusMatricula : "ATIVA" })
+      licenca: afm.licencaLiturgica({ ...(await habilitacao.situacaoMinisterial(pool, [id])).get(id), statusMatricula: mat ? mat.StatusMatricula : "ATIVA" })
     };
   }
   return {
@@ -681,20 +683,11 @@ async function minhaSituacao(pool, membroId) {
   };
 }
 
-// Licença para oficiar de cada pessoa (turma de batismo): Map membroId -> { podeOficiar, motivo }.
+// Licença para oficiar de cada pessoa (turma de batismo): Map membroId -> { podeOficiar, motivo, nome }. Trava 8-A: com a disciplina e a licença (shared/habilitacao.js).
 async function licencasDe(pool, membroIds) {
-  const ids = listaDeIds(membroIds);
   const out = new Map();
-  if (!ids || !ids.length) return out;
-  const req = pool.request();
-  const filtro = filtroIds(req, "m.MembroId", ids);
-  const r = await req.query(`
-    SELECT m.MembroId, m.Nome, m.Status, m.CargoMinisterial,
-           (SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula
-    FROM MembroReferencia m WHERE 1 = 1 ${filtro}`);
-  for (const l of r.recordset) {
-    const lic = afm.licencaLiturgica({ cargo: l.Status === "ATIVO" ? l.CargoMinisterial : null, statusMatricula: l.StatusMatricula || "ATIVA" });
-    out.set(Number(l.MembroId), { ...lic, nome: l.Nome });
+  for (const [id, p] of await habilitacao.situacaoMinisterial(pool, membroIds)) {
+    out.set(id, { ...afm.licencaLiturgica({ ...p, statusMatricula: p.statusMatricula || "ATIVA" }), nome: p.nome });
   }
   return out;
 }
@@ -845,7 +838,8 @@ async function dadosDoTitular(pool, membroId) {
   const id = Number(membroId);
   const mats = (await pool.request().input("id", sql.Int, id).query(`
     SELECT MatriculaId AS matriculaId, Origem AS origem, StatusMatricula AS status, NivelEscolaridade AS nivel, NivelConcluido AS nivelConcluido,
-           CONVERT(varchar(10), DataMatricula, 120) AS dataMatricula, CONVERT(varchar(10), ReciclagemAprovadaEm, 120) AS reciclagemAprovadaEm, Observacao AS observacao
+           CONVERT(varchar(10), DataMatricula, 120) AS dataMatricula, CONVERT(varchar(10), ReciclagemAprovadaEm, 120) AS reciclagemAprovadaEm, Observacao AS observacao,
+           CAST(CertificadoHabilitacao AS bit) AS chm, CONVERT(varchar(10), CHMEm, 120) AS chmEm, CHMCertificadoId AS chmCertificadoId   -- Trava 8-A: o CHM e o documento dele
     FROM Matriculas_AFM WHERE MembroId = @id ORDER BY MatriculaId`)).recordset;
   const desm = (await pool.request().input("id", sql.Int, id).query(`
     SELECT Motivo AS motivo, CONVERT(varchar(10), DataDesmatricula, 120) AS data, Detalhe AS detalhe, CONVERT(varchar(10), AnuladaEm, 120) AS anuladaEm, MotivoAnulacao AS motivoAnulacao

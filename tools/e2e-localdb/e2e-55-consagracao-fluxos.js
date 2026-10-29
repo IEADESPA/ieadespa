@@ -315,10 +315,13 @@ const MEMBRO = (m) => L.sessao(m, { via: "SENHA", fator: { via: "CHAVE", em: Dat
   ok(r.status === 200 && cons, "Meus Dados traz o processo (ausente na cerimônia)", r.status);
   ok(!JSON.stringify(md).includes("examinados pelo CEI"), "e nunca a fundamentação do CEI");
   const mini = require(path.join(API, "shared/minimizacaoLgpd.js"));
+  const numerosDi = (await L.q("SELECT Numero FROM Consagracoes WHERE MembroId = @m", { m: P.missionario })).map((x) => x.Numero);
+  ok(numerosDi.length > 0 && (await escalar(`SELECT COUNT(*) FROM AnexosGenericos WHERE Tabela = 'Consagracoes' AND RegistroId IN (${numerosDi.join(",")})`)) > 0, "antes da minimização, há documentos da indicação");
   await mini.minimizarCamposExMembro(await obterPool(), P.missionario, { dataSaida: hoje, motivo: "Carta de Mudança" });
-  const pm = await um("SELECT Resultado, Fundamentacao, Recasado, EscrutinioFundamento, SabatinaDoutrina FROM PareceresCEIConsagracao WHERE ConsagracaoId = @id", { id: idDi });
-  ok(pm.Resultado === "APTO" && pm.Fundamentacao === null && pm.Recasado === null && pm.EscrutinioFundamento === null, "minimização: a fundamentação e as marcas do escrutínio saem, o resultado fica", pm);
-  ok((await escalar("SELECT COUNT(*) FROM AnexosGenericos a JOIN Consagracoes c ON c.Numero = a.RegistroId WHERE a.Tabela = 'Consagracoes' AND c.MembroId = @m", { m: P.missionario })) === 0, "e os documentos da indicação saem");
+  // Trava 8-A — Regimento Art. 132 §2º, II ("serão eliminados ... registros eclesiásticos de conversão e consagração"): o parecer inteiro e o processo saem
+  ok(!(await um("SELECT Resultado FROM PareceresCEIConsagracao WHERE ConsagracaoId = @id", { id: idDi })) && !(await escalar("SELECT COUNT(*) FROM Consagracoes WHERE MembroId = @m", { m: P.missionario })),
+    "minimização: o parecer do CEI e os processos de consagração saem (Art. 132 §2º, II)");
+  ok((await escalar(`SELECT COUNT(*) FROM AnexosGenericos WHERE Tabela = 'Consagracoes' AND RegistroId IN (${numerosDi.join(",")})`)) === 0, "e os documentos da indicação saem");
 
   if (process.env.E2E_CONTRATO) {
     // o link assinado da foto (assinado com a chave pública do emulador) não vai para o repositório: a prova da tela não precisa dele

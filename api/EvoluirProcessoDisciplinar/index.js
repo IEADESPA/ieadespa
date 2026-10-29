@@ -44,7 +44,7 @@ module.exports = async function (context, req) {
   const pool = await getPool();
   const atualResult = await pool.request().input("id", sql.Int, processoId)
     .query(`SELECT MembroId, Status, Resultado, DiasSancao, DataAbertura, DataTerminoPrevisao, DataCitacao, PenalidadeId,
-                   OrgaoResponsavelId, OrgaoLocalId, HomologadoPeloCEI
+                   OrgaoResponsavelId, OrgaoLocalId, HomologadoPeloCEI, CEIRecusouEm
             FROM ProcessosDisciplinares WHERE ProcessoId = @id`);
   const atual = atualResult.recordset[0];
   // Auditoria de escopo (02/10/2026): o processo só existe para quem alcança o RÉU (congregação do membro) — e processo de órgão CENTRAL (sem órgão territorial) só
@@ -269,7 +269,8 @@ module.exports = async function (context, req) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Requer a permissão 'cei'." } };
       return;
     }
-    if (atual.HomologadoPeloCEI !== false && atual.HomologadoPeloCEI !== 0) {
+    // Trava 8-A: a recusa fica gravada (CEIRecusouEm) — antes ela gravava o mesmo 0 de "pendente", e a pessoa ficava sob disciplina para sempre.
+    if ((atual.HomologadoPeloCEI !== false && atual.HomologadoPeloCEI !== 0) || atual.CEIRecusouEm) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo não está pendente de homologação." } };
       return;
     }
@@ -278,8 +279,13 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'homologado' (true ou false)." } };
       return;
     }
-    await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
-      .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor WHERE ProcessoId = @id`);
+    const gravou = await pool.request().input("id", sql.Int, processoId).input("valor", sql.Bit, homologado)
+      .query(`UPDATE ProcessosDisciplinares SET HomologadoPeloCEI = @valor, CEIRecusouEm = CASE WHEN @valor = 0 THEN SYSUTCDATETIME() ELSE NULL END
+              WHERE ProcessoId = @id AND HomologadoPeloCEI = 0 AND CEIRecusouEm IS NULL`);
+    if (!((gravou.rowsAffected && gravou.rowsAffected[0]) || 0)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Este processo não está mais pendente de homologação (outra decisão chegou antes)." } };
+      return;
+    }
     if (homologado) {
       await vacancia.encerrarVinculos(pool, sql, atual.MembroId, "DISCIPLINA");
       // v8.4 — exclusão homologada: a credencial é recolhida (Regimento Art. 95 §2º, IV, a). Na Disciplina Rigorosa ela só fica "inativa" no QR, enquanto durar.

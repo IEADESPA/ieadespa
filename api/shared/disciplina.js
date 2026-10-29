@@ -13,7 +13,9 @@
 // sozinho) usa a regra de prazo por dias que já existia.
 const { sql } = require("./db");
 
-const CONDICAO_SQL_ATIVO = `(
+// Trava 8-A (migração 160): a decisão do TER que o CEI RECUSOU homologar (Art. 94, II) não tem efeito — CEIRecusouEm preenchido tira o processo daqui. Antes, a
+// recusa gravava o mesmo 0 de "pendente" e a pessoa ficava sob disciplina para sempre.
+const CONDICAO_SQL_ATIVO = `(CEIRecusouEm IS NULL AND (
   Status = 'EM_ANDAMENTO'
   OR Status = 'AFASTAMENTO_CAUTELAR'
   OR (Status = 'JULGADO' AND Resultado = 'EXCLUSAO')
@@ -24,7 +26,7 @@ const CONDICAO_SQL_ATIVO = `(
           AND (DataTerminoPrevisao IS NULL OR DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))
         )
       ))
-)`;
+))`;
 
 async function membrosSobDisciplina(pool) {
   const result = await pool.request().query(

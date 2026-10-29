@@ -7,15 +7,20 @@
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { pessoaAlcancavel } = require("../shared/escopoRotas");
+const { pessoaAlcancavel, exigirGeral } = require("../shared/escopoRotas");
 const { dataISOValida } = require("../shared/escopoFichas");
 
 const TIPOS_MARCO = ["CONVERSAO", "MINISTERIO_ANTERIOR", "BATISMO_ESPIRITO_SANTO", "OUTRO"];
 
 // ESCOPO: o marco entra na linha do tempo de uma PESSOA — só lança quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo vale a mesma resposta de
 // "Matrícula não encontrada".
+// Trava 8-A: o batismo no Espírito Santo é requisito da escada (Diácono em diante, Regimento Art. 72, III, a) — só o nível geral lança, e nunca em si mesmo (a mesma
+// regra de cargo, "no cargo desde", dízimo e sexo no cadastro).
+const MARCO_DA_ESCADA = "BATISMO_ESPIRITO_SANTO";
+
 module.exports = async function (context, req) {
-  const usuario = auth.exigirPermissao(req, context, "pessoas");
+  const daEscada = !!req.body && req.body.tipo === MARCO_DA_ESCADA;
+  const usuario = daEscada ? exigirGeral(req, context, "pessoas") : auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
 
   const { membroId: membroIdBruto, tipo, descricao, dataMarco, dataAproximada } = req.body || {};
@@ -39,6 +44,10 @@ module.exports = async function (context, req) {
     return;
   }
   const membroId = pessoa.membroId;
+  if (daEscada && Number(membroId) === Number(usuario.membroId)) {
+    context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém lança o próprio batismo no Espírito Santo (conta para a escada ministerial): peça a outra pessoa do nível geral." } };
+    return;
+  }
 
   const result = await pool.request()
     .input("membroId", sql.Int, membroId)

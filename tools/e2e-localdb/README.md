@@ -124,6 +124,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   homologada, no desligamento e no abandono, o lote que não desfaz um cancelamento e anda de 60 em 60, licença como membro ativo) e
   `e2e-60` (corridas: emitir, nova via, emitir × cancelar × nova via, dois lotes). Com `E2E_CONTRATO=1` o `e2e-59` grava as respostas reais para
   `tools/front-credencial`.
+- **Trava 8-A** (migração 160), mesma base `cenario-escada` (a `preparar-escada` aplica a 160 duas vezes). `e2e-61`: a regra única de "quem está nas funções" (a
+  licença para oficiar, a Comissão de Unção e o QR dizem o mesmo do suspenso, do de licença, do que tem a AFM inativa e da exclusão pendente do CEI); a recusa do CEI
+  gravada e sem efeito; ninguém mexe no que conta para a própria escada (AFM, batismo no Espírito Santo, nascimento, admissão, estado civil); a matrícula inativa que
+  recomeça como candidato; a saída que fecha os processos de cargo e revoga o CHM (a licença de candidatura não); a CLI que não homologa no Seminário nem na reunião
+  "não conta"; a CIADSETA; a indicação antiga que vira nomeação; o processo antigo sem destino; a lista da tesouraria; a credencial na diplomação (nova via para o
+  cartão impresso); a minimização que elimina diploma, CHM e processos; o tempo de Presbítero pelo histórico; a readmissão; Meus Dados. Desde a trava, o `rodar.sh`
+  para quando uma migração ou uma base não fica pronta de verdade.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

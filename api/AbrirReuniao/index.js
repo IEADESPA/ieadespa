@@ -116,7 +116,7 @@ module.exports = async function (context, req) {
       return;
     }
     tipo = tipoSessao;
-    // Uma reunião que conta falta por dia (Regimento Art. 78, III, b: a reunião da CLI ou da AFM é no último domingo): a segunda no mesmo dia daria duas faltas à mesma pessoa.
+    // Uma reunião que conta falta por dia (Regimento Art. 79, III, b: a reunião da CLI ou da AFM é no último domingo): a segunda no mesmo dia daria duas faltas à mesma pessoa.
     if (afm.TIPOS_SESSAO_CLI[tipo].contaFaltas) {
       const jaHoje = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId)
         .query(`SELECT TOP 1 1 AS x FROM Sessoes WHERE OrgaoId = @orgaoId AND ContaFaltasCLI = 1 AND DataSessao = CAST(SYSUTCDATETIME() AS DATE)`);

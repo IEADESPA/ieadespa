@@ -118,6 +118,19 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Trava 8-A: o processo de ANTES da v8.2 (sem o cargo de destino gravado) não entra no índice único — confere aqui, pelo tipo, para não abrir um segundo processo de
+  // cargo ao lado dele (os processos novos já gravam o destino; não há corrida: nenhum processo antigo nasce mais).
+  if (conferencia.alvo) {
+    const antigo = await pool.request().input("membroId", sql.Int, membroId).query(`
+      SELECT TOP 1 1 AS x FROM Consagracoes c JOIN TiposConsagracao t ON t.Nome = c.Assunto
+      WHERE c.MembroId = @membroId AND c.CargoAlvo IS NULL AND t.CargoMinisterialResultante IS NOT NULL
+        AND c.Status IN ('PROTOCOLADO', 'EM_ANALISE_CONSELHO', 'AGUARDANDO_PLENARIO', 'HOMOLOGADO')`);
+    if (antigo.recordset.length) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa já tem um processo de consagração em andamento. Conclua ou reprove o atual antes." } };
+      return;
+    }
+  }
+
   let result;
   try {
     result = await pool.request()

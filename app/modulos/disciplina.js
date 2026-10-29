@@ -128,11 +128,12 @@ async function carregarProcessosDisciplinares() {
       : (p.prazoDefesa && p.prazoDefesa.emRevelia ? "<span class='badge-status badge-desligado'>Revelia</span>" : (p.dataCitacao ? "Aguardando" : "-"));
     const podeRegistrarProva = p.emCarenciaAdministrativa;
     const podeRecorrer = p.podeRecorrer && !p.prazoRecursoVencido;
-    const podeHomologar = p.homologadoPeloCei === false && authPermissoes.includes("cei");
+    const podeHomologar = p.homologadoPeloCei === false && !p.ceiRecusouEm && authPermissoes.includes("cei");
     let penalidadeTexto = escaparHtmlEbd(p.penalidadeNome) || "-";
     if (p.emCarenciaAdministrativa) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Em Carência Administrativa</span>";
     else if (p.resultadoProvaReintegracao) penalidadeTexto += `<br /><span class="subtitle">Prova de Reintegração: ${escaparHtmlEbd(p.resultadoProvaReintegracao)}</span>`;
-    if (p.homologadoPeloCei === false) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Aguardando homologação do CEI</span>";
+    if (p.homologadoPeloCei === false && p.ceiRecusouEm) penalidadeTexto += "<br /><span class='subtitle'>Não homologado pelo CEI — sem efeito</span>";
+    else if (p.homologadoPeloCei === false) penalidadeTexto += "<br /><span class='badge-status badge-licenca'>Aguardando homologação do CEI</span>";
     else if (p.homologadoPeloCei === true) penalidadeTexto += "<br /><span class='subtitle'>Homologado pelo CEI</span>";
     html += `<tr>
       <td>${escaparHtmlEbd(p.nome)}${p.sigiloso ? " 🔒" : ""}${p.defensorNome ? `<br /><span class="subtitle">Defensor: ${escaparHtmlEbd(p.defensorNome)}</span>` : ""}

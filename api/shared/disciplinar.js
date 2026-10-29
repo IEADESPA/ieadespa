@@ -39,7 +39,7 @@ const SELECT_PROCESSO_BASE = `
          p.PenalidadeId AS penalidadeId, tp.Codigo AS penalidadeCodigo, tp.Nome AS penalidadeNome,
          CONVERT(varchar(10), p.DataProvaReintegracao, 120) AS dataProvaReintegracao,
          p.ResultadoProvaReintegracao AS resultadoProvaReintegracao,
-         p.ProcessoOrigemId AS processoOrigemId, p.HomologadoPeloCEI AS homologadoPeloCei,
+         p.ProcessoOrigemId AS processoOrigemId, p.HomologadoPeloCEI AS homologadoPeloCei, p.CEIRecusouEm AS ceiRecusouEm,
          cgr.Nome AS congregacaoReu, extr.Nome AS extensaoReu
   FROM ProcessosDisciplinares p
   JOIN MembroReferencia m ON m.MembroId = p.MembroId

@@ -105,13 +105,18 @@ describe("gestor que alcança o titular do certificado", () => {
   });
 });
 
+const tudo0 = (chamadas) => chamadas.map((c) => c.sql).join("\n");
 describe("vacância e a EBD", () => {
   const { encerrarVinculos } = require("../vacancia");
   const { sqlFalso } = require("./testUtils");
   test("disciplina e licença de candidatura tiram o professor, mas mantêm a matrícula de aluno", async () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
-      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], []]);
+      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], []]);
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
+      // Trava 8-A — primeiro os processos de cargo em andamento (com o motivo); o CHM só cai na disciplina (a licença de candidatura é temporária)
+      expect(chamadas[0].sql).toMatch(/UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo/);
+      expect(chamadas[0].inputs.motivo).toBe(motivo);
+      expect(/Natureza = N'CHM'/.test(tudo0(chamadas))).toBe(motivo === "DISCIPLINA");
       const tudo = chamadas.map(c => c.sql).join("\n");
       expect(tudo).toMatch(/EbdTurmaProfessores/);
       expect(tudo).not.toMatch(/EbdAlunos/);

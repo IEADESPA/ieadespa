@@ -127,8 +127,18 @@ async function reuniaoCLI() {
   return escalar(`INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, TipoSessao, Status) OUTPUT INSERTED.SessaoId
                   SELECT OrgaoId, N'Homologação E2E', @d, 'EXTRAORDINARIA', 'ENCERRADA' FROM Orgaos WHERE Sigla = 'CLI'`, { d: L.hojeBr() });
 }
-async function homologar(ids, token) {
-  return esteira("homologar", { ids: [].concat(ids), sessaoId: await reuniaoCLI(), ato: "Validação da lista dos aptos (e2e)", data: L.hojeBr() }, token);
+// Trava 8-A: Evangelista e Pastor só entram na cerimônia depois da homologação da CIADSETA (Art. 72, V, a). Por padrão o ajudante já a registra (os roteiros das
+// v8.2 a v8.4 testam outra coisa); o e2e-61 passa { ciadseta: false } para provar a exigência.
+async function homologar(ids, token, { ciadseta = true } = {}) {
+  const r = await esteira("homologar", { ids: [].concat(ids), sessaoId: await reuniaoCLI(), ato: "Validação da lista dos aptos (e2e)", data: L.hojeBr() }, token);
+  if (ciadseta) {
+    for (const id of [].concat(ids)) {
+      const precisa = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR') AND c.Modalidade <> 'OUTRA_CONVENCAO'
+          AND c.ConvencaoHomologadaEm IS NULL AND c.Status = 'HOMOLOGADO' THEN 1 ELSE 0 END FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto WHERE c.ConsagracaoId = @id`, { id });
+      if (precisa) await esteira("convencao", { consagracaoId: id, data: L.hojeBr(), ato: "Resolução da CIADSETA (e2e)" }, token);
+    }
+  }
+  return r;
 }
 const pagarTaxa = (consagracaoId, extra = {}, token) => esteira("taxa", { consagracaoId, pagoEm: diasAtras(60), valor: 70, forma: "PIX", ...extra }, token);
 // Uma cerimônia de hoje, com a Comissão de Unção completa; devolve o id.
@@ -159,6 +169,13 @@ async function concluir(consagracaoId, token, { presente = true } = {}) {
       const primeiro = (r.body && r.body.resultados && r.body.resultados[0]) || {};
       return { status: r.status, body: { sucesso: false, mensagem: primeiro.mensagem || (r.body && r.body.mensagem), requisitos: primeiro.requisitos } };
     }
+  }
+  // Trava 8-A: Evangelista e Pastor (fora quem vem de outra convenção) só entram na cerimônia depois da homologação da CIADSETA (Art. 72, V, a)
+  const precisaCIADSETA = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR') AND c.Modalidade <> 'OUTRA_CONVENCAO'
+      AND c.ConvencaoHomologadaEm IS NULL AND c.Status = 'HOMOLOGADO' THEN 1 ELSE 0 END FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto WHERE c.ConsagracaoId = @id`, { id: consagracaoId });
+  if (precisaCIADSETA) {
+    r = await esteira("convencao", { consagracaoId, data: L.hojeBr(), ato: "Resolução da CIADSETA (e2e)" }, tk);
+    if (!r.body || !r.body.sucesso) return r;
   }
   if (!(await escalar("SELECT TaxaPagaEm FROM Consagracoes WHERE ConsagracaoId = @id", { id: consagracaoId }))) {
     r = await pagarTaxa(consagracaoId, {}, tk);

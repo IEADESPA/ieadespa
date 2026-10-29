@@ -9,18 +9,23 @@ async function dadosElegibilidadeCEI(pool, sql, membroId) {
     .query(`SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = @id`);
   const cargoMinisterial = membroResult.recordset[0] ? membroResult.recordset[0].CargoMinisterial : null;
 
+  // Trava 8-A: o tempo de Presbítero vem do histórico de cargos da v8.2 (o primeiro dia como Presbítero, ou acima — quem já é Evangelista ou Pastor passou por lá),
+  // que cobre também quem veio por nomeação, outra convenção ou o cadastro antigo; sem histórico, vale a consagração concluída como antes.
   const consagracaoResult = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT TOP 1 CONVERT(varchar(10), DataConclusao, 120) AS dataConclusao
-    FROM Consagracoes
-    WHERE MembroId = @id AND Status = 'CONCLUIDO' AND Assunto LIKE '%Presb%'
-    ORDER BY DataConclusao DESC
+    SELECT COALESCE(
+      (SELECT CONVERT(varchar(10), MIN(h.Desde), 120) FROM CargosMinisteriaisHistorico h WHERE h.MembroId = @id AND h.Cargo IN (N'PRESBITERO', N'EVANGELISTA', N'PASTOR')),
+      (SELECT TOP 1 CONVERT(varchar(10), DataConclusao, 120) FROM Consagracoes WHERE MembroId = @id AND Status = 'CONCLUIDO' AND Assunto LIKE '%Presb%' ORDER BY DataConclusao DESC)
+    ) AS dataConclusao
   `);
   const dataConsagracaoPresbitero = consagracaoResult.recordset[0] ? consagracaoResult.recordset[0].dataConclusao : null;
   const diasDesdeConsagracao = dataConsagracaoPresbitero ? estatuto.diasDesde(dataConsagracaoPresbitero) : null;
   const anosDesdeConsagracaoPresbitero = diasDesdeConsagracao !== null ? diasDesdeConsagracao / 365 : null;
 
   const afmResult = await pool.request().input("id", sql.Int, membroId).query(`
-    SELECT TOP 1 NivelEscolaridade AS nivelEscolaridade, CertificadoHabilitacao AS certificadoHabilitacao, StatusMatricula AS statusMatricula
+    SELECT TOP 1 NivelEscolaridade AS nivelEscolaridade, StatusMatricula AS statusMatricula,
+           -- Trava 8-A: a cerimônia "usa" o CHM (a marca da matrícula zera na promoção), mas o certificado continua válido — a habilitação conta pelos dois
+           CASE WHEN CertificadoHabilitacao = 1 OR EXISTS (SELECT 1 FROM CertificadosEmitidos ce WHERE ce.MembroId = @id AND ce.Natureza = N'CHM' AND (ce.RevogadoEm IS NULL OR ce.MotivoRevogacao LIKE N'Usado na consagração%'))
+                THEN 1 ELSE 0 END AS certificadoHabilitacao
     FROM Matriculas_AFM
     WHERE MembroId = @id
     ORDER BY MatriculaId DESC

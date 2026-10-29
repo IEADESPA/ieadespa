@@ -17,6 +17,7 @@ const certificados = require("./certificados");
 const estatuto = require("./estatuto");
 const trilhas = require("./trilhas");
 const afm = require("./afm");
+const habilitacao = require("./habilitacao");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
@@ -32,6 +33,7 @@ const SELECT_PROCESSO = `
   SELECT c.ConsagracaoId, c.Numero, c.MembroId, m.Nome, c.Status, c.Assunto, ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) AS CargoAlvo,
          ISNULL(c.Modalidade, N'INDICACAO') AS Modalidade, CONVERT(varchar(10), c.DataProtocolo, 120) AS DataProtocolo, m.EstadoCivil,
          CASE WHEN m.FotoUrl IS NULL OR m.FotoUrl = N'' THEN 0 ELSE 1 END AS TemFoto, cg.Nome AS Congregacao, ex.Nome AS Extensao,
+         CONVERT(varchar(10), c.ConvencaoHomologadaEm, 120) AS ConvencaoHomologadaEm, c.ConvencaoAto,
          c.CerimoniaId, CONVERT(varchar(10), c.TaxaPagaEm, 120) AS TaxaPagaEm, c.TaxaValor, c.TaxaForma, c.DiplomaCodigo,
          CONVERT(varchar(10), c.HomologadoEm, 120) AS HomologadoEm, CONVERT(varchar(10), p.SabatinaEm, 120) AS ParecerEm,
          (SELECT COUNT(*) FROM Casamentos k WHERE k.MembroId = c.MembroId OR k.MembroConjugeId = c.MembroId) AS Casamentos, p.Resultado AS ParecerResultado,
@@ -50,7 +52,7 @@ function mapearProcesso(l) {
     temFoto: !!l.TemFoto, documentos: Number(l.Documentos) || 0, congregacaoNome: l.Congregacao || null, extensaoNome: l.Extensao || null,
     cerimoniaId: numero(l.CerimoniaId), taxaPagaEm: l.TaxaPagaEm || null, taxaValor: l.TaxaValor == null ? null : Number(l.TaxaValor), taxaForma: l.TaxaForma || null,
     diplomaCodigo: l.DiplomaCodigo || null, homologadoEm: l.HomologadoEm || null, parecer: l.ParecerResultado || null, parecerEm: l.ParecerEm || null,
-    casamentos: Number(l.Casamentos) || 0
+    casamentos: Number(l.Casamentos) || 0, convencaoHomologadaEm: l.ConvencaoHomologadaEm || null, convencaoAto: l.ConvencaoAto || null
   };
 }
 
@@ -167,12 +169,16 @@ async function lerParecer(pool, consagracaoId, eu) {
 
 // ============================== Homologação ==============================
 
+// Trava 8-A: o Seminário de novembro não tem pauta da CLI (Regimento Art. 70 §1º: "suspende-se a pauta administrativa ordinária") e a reunião marcada "não conta
+// falta" foi aberta por engano — nenhuma das duas homologa.
+const SESSAO_DE_PLENARIO = `ISNULL(s.TipoSessao, N'') <> N'SEMINARIO_AFM' AND s.NaoContaEm IS NULL`;
+
 // As reuniões da CLI já encerradas (para a homologação em plenário), as mais recentes primeiro.
 async function reunioesCLIEncerradas(pool) {
   const r = await pool.request().query(`
     SELECT TOP 40 s.SessaoId, CONVERT(varchar(10), s.DataSessao, 120) AS DataSessao, s.Descricao, s.TipoSessao
     FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
-    WHERE o.Sigla = N'CLI' AND s.Status = N'ENCERRADA'
+    WHERE o.Sigla = N'CLI' AND s.Status = N'ENCERRADA' AND ${SESSAO_DE_PLENARIO}
     ORDER BY s.DataSessao DESC, s.SessaoId DESC`);
   return r.recordset.map((l) => ({ sessaoId: l.SessaoId, data: l.DataSessao, descricao: l.Descricao, tipo: l.TipoSessao }));
 }
@@ -183,7 +189,7 @@ async function homologar(pool, { ids, sessaoId, ato, data, usuario, sessao }) {
   if (sessaoId != null && sessaoId !== "") {
     const r = await pool.request().input("s", sql.Int, Number(sessaoId)).query(`
       SELECT s.SessaoId, CONVERT(varchar(10), s.DataSessao, 120) AS DataSessao, s.Status FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
-      WHERE s.SessaoId = @s AND o.Sigla = N'CLI'`);
+      WHERE s.SessaoId = @s AND o.Sigla = N'CLI' AND ${SESSAO_DE_PLENARIO}`);
     reuniao = r.recordset[0] || null;
     if (!reuniao || reuniao.Status !== "ENCERRADA" || reuniao.DataSessao > hoje) return { sucesso: false, mensagem: "Escolha uma reunião da CLI já realizada e encerrada." };
   }
@@ -245,6 +251,76 @@ async function registrarTaxa(pool, { consagracaoId, taxa, usuario }) {
   await registrarAuditoria({ tabela: "Consagracoes", registroId: p.membroId, acao: taxa ? "CONSAGRACAO_TAXA_REGISTRADA" : "CONSAGRACAO_TAXA_REMOVIDA", usuarioId: usuario.membroId,
     dadosAntes: { pagoEm: p.taxaPagaEm, valor: p.taxaValor, forma: p.taxaForma }, dadosDepois: taxa ? { consagracaoId, ...taxa } : { consagracaoId } });
   return { sucesso: true, mensagem: taxa ? `Taxa registrada: R$ ${regra.moeda(taxa.valor)} em ${regra.br(taxa.pagoEm)} (${regra.FORMAS_TAXA[taxa.forma]}). O lançamento no caixa é da tesouraria, no financeiro.` : "Registro da taxa removido." };
+}
+
+// A lista da tesouraria (Trava 8-A): o que o nível geral do financeiro vê para registrar a taxa — só os aprovados pelo CEI (aguardando homologação ou homologados),
+// com o mínimo para conferir o pagamento (nome, congregação, cargo de destino, cerimônia e a taxa). Sem parecer, disciplina ou documentos.
+async function listarTaxas(pool, eu) {
+  const r = await pool.request().input("eu", sql.Int, Number(eu) || 0).query(`
+    SELECT c.ConsagracaoId, c.MembroId, m.Nome, cg.Nome AS Congregacao, ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) AS CargoAlvo, c.Status,
+           CONVERT(varchar(10), c.TaxaPagaEm, 120) AS TaxaPagaEm, c.TaxaValor, c.TaxaForma, CONVERT(varchar(10), ce.DataCerimonia, 120) AS CerimoniaData, ce.ValorTaxa AS CerimoniaValorTaxa
+    FROM Consagracoes c
+    JOIN MembroReferencia m ON m.MembroId = c.MembroId
+    LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
+    LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+    LEFT JOIN CerimoniasConsagracao ce ON ce.CerimoniaId = c.CerimoniaId
+    WHERE c.Status IN (N'AGUARDANDO_PLENARIO', N'HOMOLOGADO') AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL AND c.MembroId <> @eu
+    ORDER BY CASE WHEN c.TaxaPagaEm IS NULL THEN 0 ELSE 1 END, ce.DataCerimonia, m.Nome`);
+  return r.recordset.filter((l) => alvoValido(l.CargoAlvo)).map((l) => {
+    const taxaValor = l.TaxaValor == null ? null : Number(l.TaxaValor);
+    const cerimoniaValorTaxa = l.CerimoniaValorTaxa == null ? null : Number(l.CerimoniaValorTaxa);
+    return {
+      consagracaoId: l.ConsagracaoId, membroId: Number(l.MembroId), nome: l.Nome, congregacao: l.Congregacao || null, cargoAlvo: alvoValido(l.CargoAlvo),
+      cargoAlvoRotulo: escada.ROTULO_CARGO[alvoValido(l.CargoAlvo)], status: l.Status, taxaPagaEm: l.TaxaPagaEm || null, taxaValor, taxaForma: l.TaxaForma || null,
+      cerimoniaData: l.CerimoniaData || null, cerimoniaValorTaxa,
+      taxaEmDia: l.CerimoniaData ? regra.situacaoDaTaxa({ taxaPagaEm: l.TaxaPagaEm, taxaValor }, { dataCerimonia: l.CerimoniaData, valorTaxa: cerimoniaValorTaxa }).emDia : null
+    };
+  });
+}
+
+// ============================== CIADSETA (Trava 8-A) ==============================
+
+// Art. 72, V, a — a homologação da Convenção Estadual para Evangelista e Pastor: a data e o ato, depois da homologação da CLI e antes de entrar numa cerimônia
+// (enquanto não está numa cerimônia, a Secretaria pode corrigir).
+async function registrarConvencao(pool, { consagracaoId, data, ato, usuario }) {
+  const p = await carregarProcesso(pool, consagracaoId);
+  if (!p) return NAO_EXISTE;
+  if (!regra.precisaConvencao(p.cargoAlvo, p.modalidade)) return { sucesso: false, mensagem: "Só a consagração a Evangelista e a Pastor depende da homologação da CIADSETA (Regimento, Art. 72, V, a)." };
+  if (p.status !== "HOMOLOGADO") return { sucesso: false, mensagem: "Primeiro a homologação da CLI; depois a da Convenção Estadual." };
+  if (p.cerimoniaId) return { sucesso: false, mensagem: "O candidato já está numa cerimônia: retire-o dela para corrigir a homologação da CIADSETA." };
+  if (Number(p.membroId) === Number(usuario.membroId)) return { sucesso: false, mensagem: "Ninguém registra a homologação do próprio processo." };
+  const d = afm.dataDoAto(data, hojeBrasilia(), "a data da homologação da CIADSETA");
+  if (!d.valido) return { sucesso: false, mensagem: d.mensagem };
+  if (p.homologadoEm && d.data < p.homologadoEm) return { sucesso: false, mensagem: `A homologação da CIADSETA não pode ser anterior à da CLI (${regra.br(p.homologadoEm)}).` };
+  const a = afm.textoObrigatorio(ato, { minimo: 3, maximo: 200, rotulo: "O ato da CIADSETA (resolução, ata ou ofício)" });
+  if (!a.valido) return { sucesso: false, mensagem: a.mensagem };
+  const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("d", sql.Date, d.data).input("ato", sql.NVarChar(200), a.texto).input("por", sql.Int, usuario.membroId)
+    .query(`UPDATE Consagracoes SET ConvencaoHomologadaEm = @d, ConvencaoAto = @ato, ConvencaoRegistradaPor = @por
+            WHERE ConsagracaoId = @id AND Status = N'HOMOLOGADO' AND CerimoniaId IS NULL`);
+  if (!upd.rowsAffected[0]) return MUDOU("Este processo mudou enquanto isso (entrou numa cerimônia ou saiu da etapa). Atualize a lista.");
+  await registrarAuditoria({ tabela: "Consagracoes", registroId: p.membroId, acao: "CONSAGRACAO_CIADSETA", usuarioId: usuario.membroId,
+    dadosAntes: { em: p.convencaoHomologadaEm, ato: p.convencaoAto }, dadosDepois: { consagracaoId, em: d.data, ato: a.texto } });
+  return { sucesso: true, mensagem: `Homologação da CIADSETA registrada (${regra.br(d.data)}): o candidato já pode entrar numa cerimônia.` };
+}
+
+// Trava 8-A — a indicação a Evangelista ou Pastor protocolada antes da v8.2 (quando a modalidade ainda não existia) vira, num clique, a nomeação direta do Pastor
+// Presidente (Art. 72, V, a), com o ato. Antes era preciso reprovar e protocolar de novo.
+async function converterEmNomeacao(pool, { consagracaoId, ato, usuario }) {
+  const p = await carregarProcesso(pool, consagracaoId);
+  if (!p) return NAO_EXISTE;
+  if (p.cargoAlvo !== "EVANGELISTA" && p.cargoAlvo !== "PASTOR") return { sucesso: false, mensagem: "Só a indicação a Evangelista ou a Pastor vira nomeação do Pastor Presidente." };
+  if (p.modalidade !== "INDICACAO") return { sucesso: false, mensagem: "Este processo já não é uma indicação." };
+  if (!["PROTOCOLADO", "EM_ANALISE_CONSELHO", "AGUARDANDO_PLENARIO", "HOMOLOGADO"].includes(p.status)) return { sucesso: false, mensagem: "Este processo já foi encerrado." };
+  if (Number(p.membroId) === Number(usuario.membroId)) return { sucesso: false, mensagem: "Ninguém converte o próprio processo." };
+  const a = afm.textoObrigatorio(ato, { minimo: 3, maximo: 200, rotulo: "O ato de nomeação do Pastor Presidente" });
+  if (!a.valido) return { sucesso: false, mensagem: a.mensagem };
+  const upd = await pool.request().input("id", sql.UniqueIdentifier, consagracaoId).input("ato", sql.NVarChar(200), a.texto)
+    .query(`UPDATE Consagracoes SET Modalidade = N'NOMEACAO_PRESIDENCIAL', AtoReferencia = @ato
+            WHERE ConsagracaoId = @id AND Modalidade = N'INDICACAO' AND Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')`);
+  if (!upd.rowsAffected[0]) return MUDOU("Este processo mudou enquanto isso. Atualize a lista.");
+  await registrarAuditoria({ tabela: "Consagracoes", registroId: p.membroId, acao: "CONSAGRACAO_VIROU_NOMEACAO", usuarioId: usuario.membroId,
+    dadosAntes: { modalidade: "INDICACAO" }, dadosDepois: { consagracaoId, modalidade: "NOMEACAO_PRESIDENCIAL", ato: a.texto } });
+  return { sucesso: true, mensagem: "A indicação virou nomeação direta do Pastor Presidente (Regimento, Art. 72, V, a). O processo segue de onde estava." };
 }
 
 // ============================== Cerimônia ==============================
@@ -327,16 +403,14 @@ async function cancelarCerimonia(pool, { cerimoniaId, motivo, por }) {
 
 const listaDeIds = (ids) => [...new Set(ids.map(Number))].filter((n) => Number.isInteger(n) && n > 0).join(",");
 
-// As pessoas (para a Comissão de Unção), com a situação de comunhão.
+// As pessoas (para a Comissão de Unção), com a situação de comunhão e a habilitação para as funções — Trava 8-A: a mesma regra da licença para oficiar (matrícula
+// da AFM inativa, sanção, afastamento cautelar, Disciplina Rigorosa ou exclusão tiram o Pastor da comissão; shared/habilitacao.js).
 async function pessoasPorId(conexao, membroIds) {
-  const lista = listaDeIds(membroIds);
-  if (!lista) return [];
-  const r = await new sql.Request(conexao).query(`
-    SELECT MembroId, Nome, CargoMinisterial, Status, SituacaoMembro, CONVERT(varchar(10), DataNascimento, 120) AS DataNascimento, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao
-    FROM MembroReferencia WHERE MembroId IN (${lista})`);
-  return r.recordset.map((l) => ({
-    membroId: Number(l.MembroId), nome: l.Nome, cargo: l.CargoMinisterial, status: l.Status,
-    emComunhao: estatuto.calcularCapacidadeEleitoral({ situacaoMembro: l.SituacaoMembro, status: l.Status, dataNascimento: l.DataNascimento, dataAdmissao: l.DataAdmissao }).emComunhao
+  const pessoas = await habilitacao.situacaoMinisterial(conexao, membroIds);
+  return [...pessoas.values()].map((p) => ({
+    membroId: p.membroId, nome: p.nome, cargo: p.cargo, status: p.status,
+    emComunhao: estatuto.calcularCapacidadeEleitoral({ situacaoMembro: p.situacaoMembro, status: p.status, dataNascimento: p.dataNascimento, dataAdmissao: p.dataAdmissao }).emComunhao,
+    habilitado: afm.licencaLiturgica({ ...p, statusMatricula: p.statusMatricula || "ATIVA" }).podeOficiar
   }));
 }
 
@@ -382,9 +456,11 @@ async function incluirCandidatos(pool, { cerimoniaId, ids, por }) {
     const resultados = [];
     for (const id of ids) {
       const upd = await new sql.Request(t).input("id", sql.UniqueIdentifier, id).input("c", sql.Int, Number(cerimoniaId)).input("por", sql.Int, por).input("d", sql.Date, ce.dataCerimonia)
-        .query(`UPDATE c SET CerimoniaId = @c FROM Consagracoes c
+        .query(`UPDATE c SET CerimoniaId = @c FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
                 WHERE c.ConsagracaoId = @id AND c.Status = N'HOMOLOGADO' AND c.CerimoniaId IS NULL AND c.MembroId <> @por
                   AND (c.HomologadoEm IS NULL OR c.HomologadoEm <= @d)
+                  AND (ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) NOT IN (N'EVANGELISTA', N'PASTOR') OR c.Modalidade = N'OUTRA_CONVENCAO'
+                       OR (c.ConvencaoHomologadaEm IS NOT NULL AND c.ConvencaoHomologadaEm <= @d))
                   AND NOT EXISTS (SELECT 1 FROM CerimoniasComissaoUncao u WHERE u.CerimoniaId = @c AND u.MembroId = c.MembroId)`);
       resultados.push({ consagracaoId: id, sucesso: !!upd.rowsAffected[0] });
     }
@@ -393,7 +469,7 @@ async function incluirCandidatos(pool, { cerimoniaId, ids, por }) {
   if (!r.sucesso) return r;
   const ok = r.resultados.filter((x) => x.sucesso).length;
   await registrarAuditoria({ tabela: "CerimoniasConsagracao", registroId: Number(cerimoniaId), acao: "CERIMONIA_CANDIDATOS_INCLUIDOS", usuarioId: por, dadosDepois: { incluidos: r.resultados.filter((x) => x.sucesso).map((x) => x.consagracaoId) } });
-  return { sucesso: ok > 0, resultados: r.resultados, mensagem: ok === ids.length ? `${ok} candidato(s) incluído(s) na cerimônia.` : `${ok} de ${ids.length} incluído(s): os outros já estão em outra cerimônia, não estão homologados, foram homologados depois da data desta cerimônia, são da comissão ou são você.` };
+  return { sucesso: ok > 0, resultados: r.resultados, mensagem: ok === ids.length ? `${ok} candidato(s) incluído(s) na cerimônia.` : `${ok} de ${ids.length} incluído(s): os outros já estão em outra cerimônia, não estão homologados, foram homologados depois da data desta cerimônia, esperam a homologação da CIADSETA (Evangelista e Pastor), são da comissão ou são você.` };
 }
 
 async function retirarCandidato(pool, { cerimoniaId, consagracaoId, por }) {
@@ -590,6 +666,14 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, ausentes, usua
     await registrarAuditoria({ tabela: "Consagracoes", registroId: x.membroId, acao: `CERIMONIA_${x.resultado}`, usuarioId: usuario.membroId,
       dadosDepois: { consagracaoId: x.consagracaoId, cerimoniaId: Number(cerimoniaId), cargoNovo: x.resultado === "CONSAGRADO" ? x.cargoAlvo : undefined, diplomaCertificadoId: x.certificadoId } });
   }
+  // Trava 8-A — Art. 10: a diplomação entrega a Credencial Ministerial (a primeira, ou a nova via para quem tem o cartão impresso com o cargo antigo).
+  const credencialDb = require("./credencialDb");
+  for (const x of resultados) {
+    if (x.resultado !== "CONSAGRADO") continue;
+    const cred = await credencialDb.aposConsagracao(pool, { membroId: x.membroId, cargoRotulo: escada.ROTULO_CARGO[x.cargoAlvo], por: usuario.membroId });
+    if (cred === "EMITIDA") x.motivo += " Credencial emitida (já está no Meu Painel).";
+    else if (cred === "NOVA_VIA") x.motivo += " Nova via da credencial emitida, com o pedido de impressão (o cartão impresso tinha o cargo anterior).";
+  }
   const conta = (r) => resultados.filter((x) => x.resultado === r).length;
   return {
     sucesso: true, resultados: resultados.map(({ cargoAlvo, ...x }) => ({ ...x, cargoAlvoRotulo: escada.ROTULO_CARGO[cargoAlvo] })),
@@ -606,12 +690,20 @@ async function perdeuNoAno(pool, membroId, hojeIso) {
 }
 
 // Meus Dados (LGPD): os processos da pessoa. Do parecer do CEI, o resultado e a data (a fundamentação é deliberação sigilosa do Conselho).
+// Os motivos de encerramento que a pessoa lê (Trava 8-A: os da vacância também).
+const ROTULO_ENCERRAMENTO = {
+  INAPTO_CEI: "Parecer INAPTO do CEI", AUSENCIA_CERIMONIA: "Ausente na cerimônia", DISCIPLINA: "Encerrado pela decisão disciplinar",
+  LICENCA_CANDIDATURA: "Encerrado pela licença de candidatura", SAIDA_DO_ROL: "Encerrado pela saída do rol de membros"
+};
+
 async function dadosDoTitular(pool, membroId) {
   const r = await pool.request().input("m", sql.Int, Number(membroId)).query(`
     SELECT c.Numero, c.Assunto, ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) AS CargoAlvo, c.Status, CONVERT(varchar(10), c.DataProtocolo, 120) AS DataProtocolo,
            p.Resultado AS Parecer, CONVERT(varchar(10), p.SabatinaEm, 120) AS ParecerEm, CONVERT(varchar(10), c.HomologadoEm, 120) AS HomologadoEm,
            CONVERT(varchar(10), c.TaxaPagaEm, 120) AS TaxaPagaEm, c.TaxaValor, CONVERT(varchar(10), ce.DataCerimonia, 120) AS Cerimonia, c.PresenteCerimonia,
-           c.MotivoEncerramento, CONVERT(varchar(10), c.DataConclusao, 120) AS DataConclusao
+           c.MotivoEncerramento, CONVERT(varchar(10), c.DataConclusao, 120) AS DataConclusao,
+           c.Modalidade, c.AtoReferencia, CONVERT(varchar(10), c.VetoAFMEm, 120) AS VetoAFMEm, c.VetoAFMMotivo,
+           CONVERT(varchar(10), c.ConvencaoHomologadaEm, 120) AS ConvencaoHomologadaEm, c.ConvencaoAto
     FROM Consagracoes c
     LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
     LEFT JOIN PareceresCEIConsagracao p ON p.ConsagracaoId = c.ConsagracaoId
@@ -621,12 +713,23 @@ async function dadosDoTitular(pool, membroId) {
     numero: l.Numero, assunto: l.Assunto, cargo: escada.ROTULO_CARGO[alvoValido(l.CargoAlvo)] || null, etapa: regra.ROTULO_ETAPA[l.Status] || l.Status, protocolo: l.DataProtocolo,
     parecerCEI: l.Parecer ? `${l.Parecer} em ${regra.br(l.ParecerEm)}` : null, homologadoEm: l.HomologadoEm, taxaPagaEm: l.TaxaPagaEm, taxaValor: l.TaxaValor == null ? null : Number(l.TaxaValor),
     cerimonia: l.Cerimonia, presente: l.PresenteCerimonia === null ? null : !!l.PresenteCerimonia,
-    encerramento: l.MotivoEncerramento === "INAPTO_CEI" ? "Parecer INAPTO do CEI" : l.MotivoEncerramento === "AUSENCIA_CERIMONIA" ? "Ausente na cerimônia" : null, conclusao: l.DataConclusao
+    encerramento: ROTULO_ENCERRAMENTO[l.MotivoEncerramento] || (l.VetoAFMEm ? "Veto técnico da AFM" : null), conclusao: l.DataConclusao,
+    // Trava 8-A: a modalidade com o ato, o veto da AFM com o motivo e a homologação da CIADSETA
+    modalidade: (escada.MODALIDADES[l.Modalidade || "INDICACAO"] || {}).rotulo || l.Modalidade, ato: l.AtoReferencia || null,
+    veto: l.VetoAFMEm ? { em: l.VetoAFMEm, motivo: l.VetoAFMMotivo } : null, ciadseta: l.ConvencaoHomologadaEm ? { em: l.ConvencaoHomologadaEm, ato: l.ConvencaoAto } : null
   }));
+}
+
+// Trava 8-A — as cerimônias em que a pessoa esteve na Comissão de Unção (Meus Dados).
+async function comissoesDoTitular(pool, membroId) {
+  const r = await pool.request().input("m", sql.Int, Number(membroId)).query(`
+    SELECT CONVERT(varchar(10), ce.DataCerimonia, 120) AS data, ce.Local AS local, ce.Status AS situacao
+    FROM CerimoniasComissaoUncao u JOIN CerimoniasConsagracao ce ON ce.CerimoniaId = u.CerimoniaId WHERE u.MembroId = @m ORDER BY ce.DataCerimonia DESC`);
+  return r.recordset;
 }
 
 module.exports = {
   dadosDoTitular, ehGuid, carregarProcesso, faltaNoDossie, filaDoCEI, registrarParecer, lerParecer, reunioesCLIEncerradas, homologar, registrarTaxa,
   listarCerimonias, criarCerimonia, editarCerimonia, cancelarCerimonia, definirComissao, incluirCandidatos, retirarCandidato, detalheCerimonia,
-  diplomasParaImprimir, registrarCerimonia, perdeuNoAno
+  diplomasParaImprimir, registrarCerimonia, perdeuNoAno, listarTaxas, registrarConvencao, converterEmNomeacao, comissoesDoTitular, ROTULO_ENCERRAMENTO
 };

@@ -128,6 +128,19 @@ const RIPDS = [
     riscoResidual: "Médio — o risco humano permanece: um responsável que entrega o código a quem não devia, ou um voluntário que vê o código na etiqueta de uma criança (a etiqueta fica no peito dela). Mitigado pela retirada divergente com a liderança (a pessoa que pega o código ainda precisa ser aprovada se não estiver na lista), pelo aviso na hora aos responsáveis e pelo registro de tudo."
   },
   {
+    chave: "PARECER_CEI_CONSAGRACAO",
+    tratamento: "Parecer do CEI na consagração (v8.3 — Regimento Art. 9º §1º, I; Art. 73; Art. 74, III): a sabatina (vida pregressa e antecedentes, vida financeira, doutrina), o escrutínio do casamento (recasado, fundamento bíblico, documentos) e a exceção do Pastor não casado, com a fundamentação escrita; e, em público, o diploma e o CHM verificáveis pelo código e a credencial com QR (v8.4), que mostram a situação religiosa da pessoa.",
+    riscoIdentificado: "O parecer fala de antecedentes, da vida conjugal e da vida pregressa: lido por quem não devia, expõe a pessoa a dano grave; um INAPTO que vaza vira julgamento público. Do lado público, o código do diploma, do CHM e o QR dizem a quem os tem que a pessoa é membro ou obreiro (convicção religiosa) — se continuassem respondendo depois da saída, diriam o que já não é verdade.",
+    medidasMitigacao: [
+      "A fundamentação só o CEI lê (nível geral da permissão \"cei\"); a Secretaria e a própria pessoa veem só o resultado e a data; quem é do CEI e também candidato não vê o próprio processo nem o estado civil dele na fila",
+      "A disciplina por trás de um requisito (sanção, afastamento) só aparece ao nível geral; a recusa mostrada à liderança local é genérica",
+      "Ninguém dá parecer, homologa, registra a taxa ou a cerimônia do próprio processo, nem altera o que conta para a própria escada (cargo, datas, estado civil, dízimo, sexo, batismo no Espírito Santo, nível da AFM)",
+      "A minimização do ex-membro (Regimento Art. 132 §2º, II) elimina o parecer inteiro, os processos, o dossiê, o diploma e o CHM; a saída revoga o CHM e cancela a credencial — o código e o QR deixam de dizer que a pessoa é membro ou obreiro (Trava 8-A)",
+      "As páginas públicas de conferência não listam nem buscam por nome, têm limite por origem e não mostram motivo, matrícula, foto ou contato"
+    ],
+    riscoResidual: "Baixo — o parecer fica com um grupo pequeno e identificado (o CEI), e o que é público é o mínimo para conferir um documento que a própria pessoa mostra."
+  },
+  {
     chave: "DADO_DE_SAUDE_EM_EVENTO",
     tratamento: "Alergia ou condição de saúde da criança, informada pelo responsável para constar no crachá do check-in infantil (v7.10): dado sensível de criança (LGPD Art. 11, I; Art. 14).",
     riscoIdentificado: "Dado de saúde de criança é sensível por natureza; impresso num crachá no peito dela, qualquer pessoa o lê; guardado depois do consentimento, vira dado sem finalidade; e um erro de transcrição pode ser tão perigoso quanto a falta do aviso.",

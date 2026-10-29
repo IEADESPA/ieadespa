@@ -187,6 +187,10 @@ async function principal(context, req) {
     const por = usuario.membroId;
     const pool = await getPool();
     const membroId = idDe(corpo.membroId) ? Number(corpo.membroId) : null;
+    // Trava 8-A: o que conta para a própria escada (nível de escolaridade, reprovação, rematrícula) ninguém mexe em si mesmo — a mesma regra do CHM, do candidato e do veto.
+    if (["nivel", "reprovar", "anular-reprovacao", "rematricular"].includes(acao) && membroId && membroId === Number(por)) {
+      return erro(context, 422, "Ninguém altera a própria matrícula da AFM (nível, reprovação ou rematrícula): peça a outra pessoa do nível geral.");
+    }
 
     if (acao === "nivel") {
       if (!membroId) return erro(context, 400, "Informe a matrícula.");

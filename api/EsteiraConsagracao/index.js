@@ -6,6 +6,9 @@
 //  GET  reunioes-cli              (nível geral de "consagracoes")  as reuniões da CLI já encerradas (homologação de Presbítero, Evangelista e Pastor)
 //  POST homologar                 (nível geral de "consagracoes")  body:{ids:[...], sessaoId?, ato?, data?}
 //  POST taxa                      (nível geral de "consagracoes" ou "financeiro")  body:{consagracaoId, pagoEm, valor, forma} ou {consagracaoId, remover:true}
+//  GET  taxas                     (nível geral de "consagracoes" ou "financeiro")  Trava 8-A: a lista da tesouraria (os aprovados pelo CEI, com a taxa e a cerimônia)
+//  POST convencao                 (nível geral de "consagracoes")  Trava 8-A: body:{consagracaoId, data, ato} — a homologação da CIADSETA (Evangelista e Pastor, Art. 72, V, a)
+//  POST converter-nomeacao        (nível geral de "consagracoes")  Trava 8-A: body:{consagracaoId, ato} — a indicação antiga a Evangelista/Pastor vira nomeação do Presidente
 // Ninguém age no próprio processo. Fora do nível geral: 403. Processo inexistente ou id malformado: 404.
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
@@ -77,6 +80,20 @@ module.exports = async function (context, req) {
       taxa = v.taxa;
     }
     return resposta(context, await db.registrarTaxa(await getPool(), { consagracaoId: corpo.consagracaoId, taxa, usuario }));
+  }
+  if (acao === "taxas" && metodo === "GET") {
+    const usuario = exigirGeral(req, context, ["consagracoes", "financeiro"]);
+    if (!usuario) return;
+    context.res = { status: 200, body: { sucesso: true, itens: await db.listarTaxas(await getPool(), usuario.membroId) } };
+    return;
+  }
+  if ((acao === "convencao" || acao === "converter-nomeacao") && metodo === "POST") {
+    const usuario = exigirGeral(req, context, "consagracoes");
+    if (!usuario) return;
+    if (!db.ehGuid(corpo.consagracaoId)) return erro(context, 404, "Processo não encontrado.");
+    const pool = await getPool();
+    if (acao === "convencao") return resposta(context, await db.registrarConvencao(pool, { consagracaoId: corpo.consagracaoId, data: corpo.data, ato: corpo.ato, usuario }));
+    return resposta(context, await db.converterEmNomeacao(pool, { consagracaoId: corpo.consagracaoId, ato: corpo.ato, usuario }));
   }
   erro(context, 404, "Ação inválida.");
 };

@@ -48,14 +48,15 @@ BASE=cenario-trava7c bash rodar.sh roteiro e2e-43-trava7c-voluntario-pagamento.j
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-44-trava7c-funcoes-menores.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-45-trava7c-decisoes-seguranca.js
 BASE=cenario-trava7c bash rodar.sh roteiro e2e-46-trava7c-decisoes-corridas.js
-# v8.1 (AFM e faltas da CLI, migração 156): cada roteiro sobre a base sozinho
+# v8.1 a v8.4 (migrações 156 a 159): a "cenario-afm" é só o degrau; todo roteiro roda sobre a "cenario-escada", o esquema completo como no deploy
+# (desde a v8.3 o código da AFM lê as colunas do CHM da 158 — Trava 8-A)
 bash rodar.sh preparar-afm
-BASE=cenario-afm bash rodar.sh roteiro e2e-47-afm-fluxos.js
-BASE=cenario-afm bash rodar.sh roteiro e2e-48-afm-seguranca.js
-BASE=cenario-afm bash rodar.sh roteiro e2e-49-afm-corridas.js
-BASE=cenario-afm bash rodar.sh roteiro e2e-50-afm-revisao.js
-# v8.2 (Escada ministerial, migração 157): cada roteiro sobre a base sozinho
 bash rodar.sh preparar-escada
+BASE=cenario-escada bash rodar.sh roteiro e2e-47-afm-fluxos.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-48-afm-seguranca.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-49-afm-corridas.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-50-afm-revisao.js
+# v8.2 (Escada ministerial, migração 157): cada roteiro sobre a base sozinho
 BASE=cenario-escada bash rodar.sh roteiro e2e-51-escada-fluxos.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-52-escada-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-53-escada-corridas.js
@@ -68,4 +69,6 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-58-consagracao-revisao.js
 # v8.4 (Credencial digital, migração 159 — a "preparar-escada" já a aplica)
 BASE=cenario-escada bash rodar.sh roteiro e2e-59-credencial.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-60-credencial-corridas.js
+# Trava 8-A (migração 160 — a "preparar-escada" já a aplica)
+BASE=cenario-escada bash rodar.sh roteiro e2e-61-trava8a.js
 echo TUDO-PRONTO

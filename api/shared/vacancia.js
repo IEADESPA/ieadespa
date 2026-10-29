@@ -6,7 +6,32 @@
 // saída (desligamento manual, Carta de Mudança, abandono material).
 const MOTIVOS_QUE_MANTEM_ALUNO_EBD = new Set(["DISCIPLINA", "LICENCA_CANDIDATURA"]);
 
+// Trava 8-A — o motivo gravado no processo de cargo que a vacância encerra (CK_Consagracoes_Encerramento, migração 160).
+const motivoDoProcesso = (motivo) => (motivo === "DISCIPLINA" ? "DISCIPLINA" : motivo === "LICENCA_CANDIDATURA" ? "LICENCA_CANDIDATURA" : "SAIDA_DO_ROL");
+
 async function encerrarVinculos(pool, sql, membroId, motivo) {
+  // Trava 8-A — PRIMEIRO os processos de cargo em andamento (protocolado até homologado): fecham como REPROVADO com o motivo, soltando a cerimônia e o código de
+  // diploma reservado. Vem antes de zerar o cargo de propósito: se uma cerimônia está registrando esta pessoa agora, ela segura a linha do processo; este UPDATE
+  // espera ela terminar e só então o cargo é zerado — a cerimônia nunca escreve o cargo DEPOIS da vacância (revisão independente da Trava 8-A).
+  await pool.request()
+    .input("id", sql.Int, membroId)
+    .input("motivo", sql.NVarChar(24), motivoDoProcesso(motivo))
+    .input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .query(`UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo, DataConclusao = @hoje, CerimoniaId = NULL, DiplomaCodigo = NULL
+            FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
+            WHERE c.MembroId = @id AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')
+              AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL`);
+  // Trava 8-A — o CHM (Art. 67) não sobrevive à saída nem à exclusão / Disciplina Rigorosa: o certificado público é revogado e a matrícula perde a marca (quem volta,
+  // volta sem o CHM antigo). A licença de candidatura é temporária (Art. 157): o CHM fica.
+  if (motivo !== "LICENCA_CANDIDATURA") {
+    await pool.request()
+      .input("id", sql.Int, membroId)
+      .input("motivoRev", sql.NVarChar(300), motivo === "DISCIPLINA" ? "Revogado pela decisão disciplinar (Regimento, Art. 95 §2º, III e IV)." : "Revogado na saída do rol de membros.")
+      .query(`UPDATE ce SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = @motivoRev
+              FROM CertificadosEmitidos ce WHERE ce.MembroId = @id AND ce.Natureza = N'CHM' AND ce.RevogadoEm IS NULL;
+              UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL WHERE MembroId = @id AND CertificadoHabilitacao = 1;`);
+  }
+
   await pool.request()
     .input("id", sql.Int, membroId)
     .input("motivo", sql.NVarChar(200), motivo)

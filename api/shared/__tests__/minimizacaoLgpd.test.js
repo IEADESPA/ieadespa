@@ -27,27 +27,31 @@ describe("diasMinimizacaoExMembro", () => {
 
 describe("minimizarCamposExMembro", () => {
   test("encerra vínculos (Assentos/Lideranca/Cargo e, desde a Trava 6-B, professor e aluno da EBD) antes de zerar os campos operacionais", async () => {
-    const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], [], []]);
+    const { pool, chamadas } = criarPoolFalso(Array.from({ length: 14 }, () => []));
     await minimizarCamposExMembro(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
-    // 7 de encerrarVinculos (a 4ª, v8.2, fecha o histórico de cargos; a 7ª, v7.6, derruba as sessões abertas) + o UPDATE final + (v8.2) o histórico de cargos apagado
-    // + (v8.3) o texto e as marcas do parecer do CEI apagados + (v8.4) a credencial cancelada + (v8.3) os documentos da indicação apagados
-    expect(chamadas).toHaveLength(12);
-    expect(chamadas[3].sql).toMatch(/UPDATE CargosMinisteriaisHistorico SET Ate/);
-    expect(chamadas[4].sql).toMatch(/UPDATE EbdTurmaProfessores SET Ativo = 0/);
-    expect(chamadas[5].sql).toMatch(/UPDATE EbdAlunos SET Ativo = 0/); // saiu da igreja: a matrícula de aluno também se encerra
-    expect(chamadas[6].sql).toMatch(/UPDATE SessoesAtivas SET Encerrada = 1/);
-    expect(chamadas[6].inputs.membroId).toBe(42);
-    expect(chamadas[7].sql).toMatch(/Telefone = NULL, Email = NULL, Endereco = NULL/);
-    expect(chamadas[7].sql).toMatch(/Sexo = NULL/);
-    expect(chamadas[7].sql).not.toMatch(/Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo
-    expect(chamadas[7].inputs.id).toBe(42);
-    expect(chamadas[8].sql).toMatch(/DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id/);
-    expect(chamadas[9].sql).toMatch(/Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL/);
-    expect(chamadas[9].sql).toMatch(/Recasado = NULL/);
-    expect(chamadas[9].sql).not.toMatch(/Resultado\s*=/);   // o resultado e a data do parecer ficam como registro
-    expect(chamadas[10].sql).toMatch(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);
-    expect(chamadas[10].inputs.m).toBe(42);
-    expect(chamadas[11].sql).toMatch(/DELETE a OUTPUT DELETED\.Url FROM AnexosGenericos a/);
-    expect(chamadas[11].sql).toMatch(/N'Consagracoes'/);
+    // 9 de encerrarVinculos (Trava 8-A: a 1ª fecha os processos de cargo em andamento e a 2ª revoga o CHM; a 6ª, v8.2, fecha o histórico de cargos; a 9ª, v7.6,
+    // derruba as sessões abertas) + o UPDATE final + (v8.2) o histórico de cargos apagado + (v8.4) a credencial cancelada + (v8.3) os documentos da indicação
+    // apagados + (Trava 8-A) o diploma, o CHM, o parecer do CEI e os processos de consagração eliminados (Art. 132 §2º, II)
+    expect(chamadas).toHaveLength(14);
+    expect(chamadas[0].sql).toMatch(/UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo/);
+    expect(chamadas[0].inputs.motivo).toBe("SAIDA_DO_ROL");
+    expect(chamadas[1].sql).toMatch(/Natureza = N'CHM'/);
+    expect(chamadas[5].sql).toMatch(/UPDATE CargosMinisteriaisHistorico SET Ate/);
+    expect(chamadas[6].sql).toMatch(/UPDATE EbdTurmaProfessores SET Ativo = 0/);
+    expect(chamadas[7].sql).toMatch(/UPDATE EbdAlunos SET Ativo = 0/); // saiu da igreja: a matrícula de aluno também se encerra
+    expect(chamadas[8].sql).toMatch(/UPDATE SessoesAtivas SET Encerrada = 1/);
+    expect(chamadas[8].inputs.membroId).toBe(42);
+    expect(chamadas[9].sql).toMatch(/Telefone = NULL, Email = NULL, Endereco = NULL/);
+    expect(chamadas[9].sql).toMatch(/Sexo = NULL/);
+    expect(chamadas[9].sql).not.toMatch(/Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo
+    expect(chamadas[9].inputs.id).toBe(42);
+    expect(chamadas[10].sql).toMatch(/DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id/);
+    expect(chamadas[11].sql).toMatch(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);
+    expect(chamadas[11].inputs.m).toBe(42);
+    expect(chamadas[12].sql).toMatch(/DELETE a OUTPUT DELETED\.Url FROM AnexosGenericos a/);
+    expect(chamadas[12].sql).toMatch(/N'Consagracoes'/);
+    expect(chamadas[13].sql).toMatch(/DELETE FROM CertificadosEmitidos WHERE MembroId = @id AND Natureza IN \(N'CHM', N'DIPLOMA'\)/);
+    expect(chamadas[13].sql).toMatch(/DELETE p FROM PareceresCEIConsagracao/);
+    expect(chamadas[13].sql).toMatch(/DELETE FROM Consagracoes WHERE MembroId = @id/);
   });
 });

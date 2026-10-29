@@ -204,7 +204,11 @@ module.exports = async function (context, req) {
     }
 
     const existente = await pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
+             CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
+             CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs WHERE cs.MembroId = m.MembroId AND cs.CargoAlvo IS NOT NULL
+                               AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
+             c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
@@ -238,6 +242,21 @@ module.exports = async function (context, req) {
     if (existia && Number(membroId) === Number(usuario.membroId) && (cargoMuda || cargoDesdeFinal || dizimistaAnterior !== dizimistaNovo || sexoAnterior !== sexoFinal)) {
       context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém altera o próprio cargo, a data no cargo, o dízimo nem o sexo no cadastro: peça a outra pessoa da Secretaria." } };
       return;
+    }
+    // Trava 8-A: nascimento e admissão (idade e tempo de membro do Auxiliar) e estado civil (escrutínio do CEI, "Pastor casado") também contam para a escada: ninguém
+    // os muda em si mesmo, e com um processo de cargo em andamento só o nível geral muda.
+    if (existia) {
+      const ant = existente.recordset[0];
+      const igual = (a, b) => (a ? String(a).slice(0, 10) : null) === (b ? String(b).slice(0, 10) : null);
+      const mudouEscada = !igual(ant.NascimentoAnterior, dataNascimento) || !igual(ant.AdmissaoAnterior, dataAdmissao) || (ant.EstadoCivilAnterior || null) !== (estadoCivil || null);
+      if (mudouEscada && Number(membroId) === Number(usuario.membroId)) {
+        context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém altera a própria data de nascimento, de admissão nem o estado civil no cadastro: peça a outra pessoa da Secretaria." } };
+        return;
+      }
+      if (mudouEscada && !geral && ant.EmProcessoDeCargo) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem um processo de cargo em andamento: nascimento, admissão e estado civil só a Secretaria (nível geral) altera." } };
+        return;
+      }
     }
     // A ficha aberta antes de uma consagração concluída não desfaz a promoção: a tela manda o cargo que leu (cargoOriginal); se o banco já tem outro, 409.
     const lido = req.body && Object.prototype.hasOwnProperty.call(req.body, "cargoOriginal") ? (req.body.cargoOriginal || null) : undefined;

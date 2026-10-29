@@ -37,13 +37,7 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
             WHERE MembroId = @id`);
   // v8.2 — o histórico de cargos é registro eclesiástico de consagração: sai com a minimização (Regimento Art. 132 §2º, II).
   await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id`);
-  // v8.3 — o texto do parecer do CEI (a fundamentação e a exceção do Pastor não casado falam da vida conjugal e pregressa) sai; o resultado e a data ficam como registro.
-  // As marcas do escrutínio (recasado, fundamento) e da sabatina falam da vida conjugal tanto quanto o texto: saem também (revisão independente, 28/10/2026).
-  await pool.request().input("id", sql.Int, membroId).query(`
-    UPDATE p SET Fundamentacao = NULL, ExcecaoPastorNaoCasado = NULL, EscrutinioFundamento = NULL, EscrutinioDocumental = NULL, Recasado = NULL, CasamentoAtualEstavel = NULL,
-                 SabatinaVidaPregressa = NULL, SabatinaFinanceira = NULL, SabatinaDoutrina = NULL
-    FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id`);
-  // v8.4 — o recolhimento da credencial (Regimento Art. 95 §2º, IV, a): a via válida é cancelada (o QR passa a dizer "cancelada").
+  // v8.4 — o recolhimento da credencial (Regimento Art. 131 §3º, III; Art. 132 §2º, II): a via válida é cancelada (o QR passa a dizer "cancelada").
   await require("./credencialDb").cancelarNoDesligamento(pool, membroId, motivo || "Desligamento");
   // A cópia dos documentos pessoais da indicação (Art. 74, II) não é registro que o Regimento mande guardar: sai do banco e do armazenamento.
   const docs = await pool.request().input("id", sql.Int, membroId).query(`
@@ -51,6 +45,14 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
   for (const d of (docs && docs.recordset) || []) {
     try { await require("./storage").excluirDocumento(d.Url); } catch (e) { /* o arquivo pode já não existir; o registro já saiu */ }
   }
+  // Trava 8-A — Regimento Art. 132 §2º, II: "serão eliminados ... registros eclesiásticos de conversão e consagração". O diploma e o CHM deixam de existir (a
+  // verificação pública passa a dizer "não encontrado" — antes ela seguia mostrando o nome), e os processos de consagração saem com o parecer do CEI. Os livros de
+  // batismo e casamento ficam (o próprio parágrafo os preserva); a auditoria guarda que a minimização aconteceu.
+  await pool.request().input("id", sql.Int, membroId).query(`
+    DELETE FROM CertificadosEmitidos WHERE MembroId = @id AND Natureza IN (N'CHM', N'DIPLOMA');
+    UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL WHERE MembroId = @id;
+    DELETE p FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id;
+    DELETE FROM Consagracoes WHERE MembroId = @id;`);
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

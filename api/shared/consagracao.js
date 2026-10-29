@@ -22,6 +22,9 @@ const EM_ANDAMENTO_SQL = "N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_P
 // (Art. 74, IV: "valida a lista dos Aptos").
 const CARGOS_DA_CLI = new Set(["PRESBITERO", "EVANGELISTA", "PASTOR"]);
 const homologacaoPelaCLI = (alvo) => CARGOS_DA_CLI.has(alvo);
+// Trava 8-A — Art. 72, V, a: a consagração a Evangelista e a Pastor é "sujeita à homologação da Convenção Estadual (CIADSETA)". O ministro que vem de outra convenção
+// já foi ordenado lá (Art. 10, parágrafo único — é diplomação): fica de fora (decisão que o responsável pode mudar).
+const precisaConvencao = (alvo, modalidade) => (alvo === "EVANGELISTA" || alvo === "PASTOR") && modalidade !== "OUTRA_CONVENCAO";
 
 const OCASIOES = {
   AGO: "Assembleia Geral Ordinária",
@@ -134,19 +137,19 @@ function validarCerimonia(corpo, hojeIso) {
   if (data > somarDias(hojeIso, 2 * 366)) return { valido: false, mensagem: "A data da cerimônia está longe demais (no máximo 2 anos)." };
   const local = textoObrigatorio(c.local, { minimo: 3, maximo: 200, rotulo: "O local" });
   if (!local.valido) return local;
-  if (!Object.prototype.hasOwnProperty.call(OCASIOES, c.ocasiao)) return { valido: false, mensagem: "A consagração ocorre na Assembleia Geral Ordinária ou em Sessão Magna ou Solene da CLI (Regimento, Art. 75)." };
+  if (!Object.prototype.hasOwnProperty.call(OCASIOES, c.ocasiao)) return { valido: false, mensagem: "A consagração ocorre na Assembleia Geral Ordinária ou em Sessão Magna ou Solene da CLI (Regimento, Art. 75, caput, e Art. 15, II)." };
   const valor = c.valorTaxa == null || c.valorTaxa === "" ? VALOR_TAXA_REFERENCIA : Number(c.valorTaxa);
   if (!Number.isFinite(valor) || valor <= 0 || valor > 10000 || !centavosExatos(valor)) return { valido: false, mensagem: "Valor da taxa inválido (em reais, com até 2 casas)." };
   return { valido: true, cerimonia: { dataCerimonia: data, local: local.texto, ocasiao: c.ocasiao, valorTaxa: valor } };
 }
 
 // Art. 75, IV, c: Comissão de Unção — pastores titulares em atividade, no mínimo 4, nenhum deles candidato na mesma cerimônia. `pastores`: [{membroId, nome, cargo,
-// status, emComunhao}] lidos do banco; `candidatos`: Set dos membroId dos candidatos.
+// status, emComunhao, habilitado}] lidos do banco ("em atividade" = a licença para oficiar da Trava 8-A: AFM ativa e sem afastamento disciplinar); `candidatos`: Set dos membroId dos candidatos.
 function validarComissao(pastores, candidatos) {
   const problemas = [];
   for (const p of pastores) {
     if (p.cargo !== "PASTOR") problemas.push(`${p.nome}: não é Pastor`);
-    else if (p.status !== "ATIVO" || !p.emComunhao) problemas.push(`${p.nome}: não está em atividade`);
+    else if (p.status !== "ATIVO" || !p.emComunhao || p.habilitado === false) problemas.push(`${p.nome}: não está em atividade`);
     else if (candidatos && candidatos.has(Number(p.membroId))) problemas.push(`${p.nome}: é candidato nesta cerimônia`);
   }
   const validos = pastores.length - problemas.length;
@@ -209,6 +212,6 @@ function moeda(v) { return Number(v).toFixed(2).replace(".", ","); }
 
 module.exports = {
   ROTULO_ETAPA, EM_ANDAMENTO, EM_ANDAMENTO_SQL, CARGOS_DA_CLI, OCASIOES, FORMAS_TAXA, FUNDAMENTOS_ESCRUTINIO, DIAS_PRAZO_TAXA, VALOR_TAXA_REFERENCIA, MINIMO_COMISSAO_UNCAO,
-  homologacaoPelaCLI, precisaEscrutinio, precisaExcecaoPastor, validarParecer, prazoDaTaxa, situacaoDaTaxa, validarTaxa, validarCerimonia, validarComissao, montarRoteiro,
+  homologacaoPelaCLI, precisaConvencao, precisaEscrutinio, precisaExcecaoPastor, validarParecer, prazoDaTaxa, situacaoDaTaxa, validarTaxa, validarCerimonia, validarComissao, montarRoteiro,
   textoDiploma, textoCHM, br, moeda
 };

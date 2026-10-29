@@ -58,7 +58,8 @@ module.exports = async function (context, req) {
       return;
     }
     // só a foto que está no cadastro: a que foi tirada (consentimento revogado) não volta pelo arquivo que sobrou no armazenamento
-    const buffer = await pdfDaCredencial(c, c.fotoUrlCrua ? await storage.lerFoto(membroId) : null);
+    // Trava 8-A: o PDF que a própria pessoa baixa sai marcado "via digital" (Art. 76 §2º: a impressão é da Secretaria Geral)
+    const buffer = await pdfDaCredencial(c, c.fotoUrlCrua ? await storage.lerFoto(membroId) : null, { viaDigital: Number(membroId) === Number(usuario.membroId) });
     context.res = { status: 200, headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="credencial-${membroId}-via${c.via}.pdf"`, "Cache-Control": "no-store" }, body: buffer, isRaw: true };
     return;
   }

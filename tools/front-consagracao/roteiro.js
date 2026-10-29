@@ -402,9 +402,79 @@ async function prova() {
   ok(/ainda não pode seguir/.test(rv.e("consRequisitosEsteira").textContent) && rv.e("consagracaoRequisitos").innerHTML === "", "a lista do que falta vai para perto do painel (não para o formulário do protocolo)");
   semAtaque(rv, "revisão da tela");
 
+  console.log("== Trava 8-A: CIADSETA, indicação antiga e a tesouraria ==");
+  {
+    const base = R.listaHomologados.find((c) => c.status === "HOMOLOGADO");
+    const evang = { ...base, consagracaoId: "aaaaaaaa-0000-0000-0000-000000000001", cargoAlvo: "EVANGELISTA", modalidade: "NOMEACAO_PRESIDENCIAL", precisaConvencao: true,
+      convencaoHomologadaEm: null, convencaoAto: null, cerimoniaId: null, nome: `Evangelista ${ATAQUE}` };
+    const antigo = { ...base, consagracaoId: "aaaaaaaa-0000-0000-0000-000000000002", cargoAlvo: "PASTOR", modalidade: "INDICACAO", status: "EM_ANALISE_CONSELHO", precisaConvencao: true,
+      nome: `Indicado antigo ${ATAQUE}` };
+    const saiu = { ...base, consagracaoId: "aaaaaaaa-0000-0000-0000-000000000003", status: "REPROVADO", motivoEncerramento: "SAIDA_DO_ROL", dataConclusao: "2026-10-29", nome: "Saiu" };
+    const t8 = montar();
+    t8.__lista = [evang, antigo, saiu];
+    t8.g("consAbrirAba")();
+    await t8.ocioso();
+    const txt8 = t8.e("resultadoListaConsagracoes").textContent;
+    ok(/aguarda a homologação da CIADSETA/.test(txt8), "o homologado a Evangelista mostra que espera a CIADSETA");
+    ok(/Encerrado pela saída do rol/.test(txt8), "o processo que a vacância fechou diz por quê");
+    const bConv = botoes(t8, "resultadoListaConsagracoes", "consConvencaoAcao");
+    ok(bConv.length === 1 && args(bConv[0])[0] === evang.consagracaoId, "'CIADSETA…' só no homologado a Evangelista/Pastor fora de cerimônia");
+    const bConv2 = botoes(t8, "resultadoListaConsagracoes", "consConverterNomeacaoAcao");
+    ok(bConv2.length === 1 && args(bConv2[0])[0] === antigo.consagracaoId, "'Virar nomeação…' só na indicação a Evangelista/Pastor");
+    t8.limparRegistro();
+    t8.doc.clicar(bConv[0]);
+    ok(!t8.e("consPainelConvencao").hidden && t8.e("consConvTitulo").textContent.includes(evang.nome), "o painel da CIADSETA abre com o nome (como texto)");
+    t8.doc.digitar(t8.e("consConvAto"), "Resolução 7/2026");
+    t8.__respostas["POST esteira-consagracao/convencao"] = { corpo: { sucesso: true, mensagem: `Registrada ${ATAQUE}` } };
+    t8.g("consRegistrarConvencaoAcao")();
+    t8.g("consRegistrarConvencaoAcao")();
+    await t8.ocioso();
+    let pc = posts(t8, "esteira-consagracao/convencao");
+    ok(pc.length === 1 && pc[0].corpo.ato === "Resolução 7/2026" && /^\d{4}-\d{2}-\d{2}$/.test(pc[0].corpo.data) && pc[0].corpo.consagracaoId === evang.consagracaoId, "duplo clique: um envio, com a data e o ato", pc.map((x) => x.corpo));
+    ok(t8.e("consPainelConvencao").hidden && gets(t8, "consagracoes").length === 1, "registrada: o painel fecha e a lista é relida");
+    t8.limparRegistro();
+    t8.doc.clicar(bConv2[0]);
+    for (let i = 0; i < 60 && t8.e("modalOverlay").classList.contains("escondido"); i++) await new Promise((r) => setImmediate(r));
+    t8.e("modalTexto").value = "Ato da Presidência 9/2026";
+    await t8.responderModal(true);
+    await t8.ocioso();
+    pc = posts(t8, "esteira-consagracao/converter-nomeacao");
+    ok(pc.length === 1 && pc[0].corpo.ato === "Ato da Presidência 9/2026" && pc[0].corpo.consagracaoId === antigo.consagracaoId, "'Virar nomeação…' pede o ato e envia", pc.map((x) => x.corpo));
+    semAtaque(t8, "Trava 8-A na esteira");
+    // a tesouraria: só o financeiro do nível geral, sem a esteira
+    const tes = montar({ permissoes: ["financeiro"], gerais: ["financeiro"] });
+    tes.api.rotas["GET esteira-consagracao/taxas"] = { corpo: { sucesso: true, itens: [
+      { consagracaoId: "bbbbbbbb-0000-0000-0000-000000000001", nome: `Candidato ${ATAQUE}`, congregacao: `Central ${ATAQUE}`, cargoAlvo: "MISSIONARIO", cargoAlvoRotulo: `Missionário(a) ${ATAQUE}`,
+        status: "HOMOLOGADO", taxaPagaEm: null, taxaValor: null, taxaForma: null, cerimoniaData: "2026-12-10", cerimoniaValorTaxa: 75.4, taxaEmDia: null }] } };
+    tes.g("consAbrirAba")();
+    await tes.ocioso();
+    ok(tes.e("consSecaoSecretaria").hidden && !tes.e("consSecaoTaxas").hidden && tes.e("consSecaoCEI").hidden && tes.e("consAvisoSemSecao").hidden, "a tesouraria vê só a lista das taxas");
+    ok(gets(tes, "consagracoes").length === 0 && gets(tes, "esteira-consagracao/taxas").length === 1, "e não pede a esteira");
+    ok(/pendente/.test(tes.e("consListaTaxas").textContent) && /R\$ 75,40/.test(tes.e("consListaTaxas").textContent), "a taxa pendente e o valor da cerimônia");
+    tes.doc.clicar(botoes(tes, "consListaTaxas", "consTesAbrirAcao")[0]);
+    ok(!tes.e("consTesPainel").hidden && tes.e("consTesRemover").hidden && Number(tes.e("consTesValor").value) === 75.4, "o painel abre com o valor da cerimônia, sem 'Remover'");
+    tes.limparRegistro();
+    tes.g("consTesRegistrarAcao")();
+    await tes.ocioso();
+    pc = posts(tes, "esteira-consagracao/taxa");
+    ok(pc.length === 1 && pc[0].corpo.valor === 75.4 && pc[0].corpo.consagracaoId === "bbbbbbbb-0000-0000-0000-000000000001" && gets(tes, "esteira-consagracao/taxas").length === 1,
+      "registra a taxa e relê a lista", pc.map((x) => x.corpo));
+    semAtaque(tes, "lista da tesouraria");
+    const loc = montar({ permissoes: ["financeiro"], gerais: [] });
+    loc.g("consAbrirAba")();
+    await loc.ocioso();
+    ok(loc.e("consSecaoTaxas").hidden && gets(loc, "esteira-consagracao/taxas").length === 0, "o financeiro local não vê a lista");
+    loc.g("limparSessao")();
+  }
+  {
+    const html = require("fs").readFileSync(require("path").join(__dirname, "../../app/index.html"), "utf8");
+    ok(/<option value="MAGNA_AFM">Sessão Magna da AFM \(trimestral — conta para a CLI e para a Academia\)<\/option>/.test(html), "o rótulo da Sessão Magna não fala mais do Seminário (Art. 70 §1º)");
+  }
+
   console.log("== saída da sessão ==");
   amb.g("limparSessao")();
   ok(amb.e("consListaCEI").innerHTML === "" && amb.e("consCerimoniaDetalhe").hidden && amb.e("consCerimoniaDetalhe").innerHTML === "" && amb.e("consFormParecer").hidden && amb.e("consPainelTaxa").hidden, "saiu: a fila do CEI, o detalhe da cerimônia e os painéis somem");
+  ok(amb.e("consPainelConvencao").hidden && amb.e("consTesPainel").hidden && amb.e("consListaTaxas").innerHTML === "", "e o painel da CIADSETA e a lista da tesouraria também");
 
   return { total, falhas };
 }
@@ -412,7 +482,10 @@ async function prova() {
 const MUTACOES = [
   ["tirar o escape do destino do candidato na cerimônia", ['${escaparHtmlEbd(p.cargoAlvoRotulo || p.cargoAlvo)}${p.modalidade === "OUTRA_CONVENCAO"', '${p.cargoAlvoRotulo || p.cargoAlvo}${p.modalidade === "OUTRA_CONVENCAO"']],
   ["mandar só os presentes (sem a lista de ausentes)", ['{ presentes, ausentes: ausenteIds }', "{ presentes }"]],
-  ["mostrar as cerimônias a quem não é do nível geral", ['consEl("consSecaoCerimonias").hidden = !geralPara("consagracoes");', 'consEl("consSecaoCerimonias").hidden = false;']]
+  ["mostrar as cerimônias a quem não é do nível geral", ['consEl("consSecaoCerimonias").hidden = !geralPara("consagracoes");', 'consEl("consSecaoCerimonias").hidden = false;']],
+  // Trava 8-A
+  ["mostrar a lista da tesouraria a quem não é do nível geral", ['const soTesouraria = !temConsagracoes && geralPara("financeiro");', 'const soTesouraria = !temConsagracoes;']],
+  ["tirar o escape do nome na lista da tesouraria", ['<td>${escaparHtmlEbd(t.nome)}</td>', '<td>${t.nome}</td>']]
 ];
 
 (async () => {

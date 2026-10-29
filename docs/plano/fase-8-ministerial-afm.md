@@ -91,7 +91,7 @@ segurança, na rotina das 7h (que também apaga o detalhe escrito das justificat
 - **Só o nível geral** (Secretaria Geral) abre e encerra reunião da CLI, justifica, recusa pedido, corrige presença e marca "não conta falta". Antes, um Dirigente (que tem
   "reuniões" na congregação) conseguiria abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo. E **ninguém justifica nem corrige a própria falta** (Estatuto
   Art. 27 §1º: a justificativa é apresentada à Secretaria).
-- **O tipo da reunião da CLI é obrigatório** e **só uma reunião que conta falta por dia** (Regimento Art. 78, III, b: a da CLI ou da AFM é no último domingo). A reunião
+- **O tipo da reunião da CLI é obrigatório** e **só uma reunião que conta falta por dia** (Regimento Art. 79, III, b: a da CLI ou da AFM é no último domingo). A reunião
   aberta ou encerrada por engano é marcada pelo nível geral como **"não conta falta"** (com o motivo; não se desfaz) e a apuração é refeita na hora.
 - **Seminário de novembro** é um tipo próprio: conta para a Academia, **não para a CLI** (Art. 70 §1º: "suspende-se a pauta administrativa ordinária da CLI").
 - **Período fora interrompe a sequência:** reunião que conta, mas em que a pessoa não era esperada (fora da CLI, sob disciplina, ainda não oficial), quebra a contagem —
@@ -345,7 +345,7 @@ pedidos de impressão. A página pública `credencial.html`.
 
 ### Como ficou a v8.4 (entregue em 28/10/2026)
 
-Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
+**Em produção desde 29/10/2026** (merge `ab26201`; para desfazer: `git revert -m 1 ab26201`). Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
 crédito, para a impressora de PVC) em `api/shared/pdfCredencial.js`; rotas `/api/credenciais/<ação>` (`GestaoCredenciais`) e a pública
 `/api/verificacao-credencial/{código}` (`VerificarCredencial`, com limite de 30 leituras por minuto por origem); a página `app/credencial.html` (autônoma, como a de
 certificados, e fora do cache do aparelho: o endereço leva o código). Tela: "Minha Credencial" no Meu Painel e a sub-aba **Credenciais** da Pessoas (só o nível geral).
@@ -401,9 +401,18 @@ departamento, primeiro serviço voluntário.
 - [ ] Carga horária mínima periódica por cargo ministerial para manter a
       credencial ativa — padrão consolidado em denominações internacionais, e
       que dá sentido prático à AFM (v8.1) além da formação inicial.
-- [ ] **Pré-requisito verificado automaticamente** no fluxo de consagração
-      (v8.3): o veto técnico da AFM (v8.2) deixa de depender de conferência
-      manual de certificado em papel.
+- [ ] **Curso anual de Reciclagem e Prática Pastoral** (Regimento Art. 68 §3º):
+      "critério indispensável e eliminatório para a renovação e manutenção da
+      credencial de obreiro ativo no exercício seguinte" — a aprovação do ano
+      registrada por obreiro; sem ela, o QR (v8.4) passa a "obreiro inativo" no
+      exercício seguinte. *(achado da Trava 8-A: nem implementado nem planejado)*
+- [ ] **Exame bienal de proficiência** (Regimento Art. 70 §3º): reprovado fica
+      "sob observação" (I) — uma situação nova no QR e na escada —, e a ausência
+      "equivale à reprovação por abandono … suspensão imediata" (II).
+      *(achado da Trava 8-A)*
+- [ ] Os requisitos de formação da v6.9 (trilhas) ligados aos cursos da AFM: o
+      CHM e o nível já são conferidos sozinhos na escada e na esteira (v8.2 e
+      v8.3); falta conferir as disciplinas cursadas, quando a v8.7 existir.
 - [ ] Histórico de formação no perfil, com certificados verificáveis (v6.9).
 - [ ] Alerta de credencial em risco por educação continuada vencida — antes de
       expirar, não depois.
@@ -420,7 +429,8 @@ que a Convenção e outras instituições vão pedir.
 - [ ] Emissão de declaração de matrícula, histórico e diploma.
 - [ ] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
       registrado de quem aprovou — hoje isso é decisão informal do Reitor.
-- [ ] Corpo docente com titulação registrada (conecta com a CDER, v8.1).
+- [ ] Cada disciplina com o seu docente (o corpo docente com a titulação, o
+      Reitor e a CDER já existem desde a v8.1).
       *(Classter; Populi — SIS para seminários)*
 
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9

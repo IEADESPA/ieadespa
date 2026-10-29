@@ -1,5 +1,8 @@
 # bases.ps1 salvar <nome> | restaurar <nome> — cópias do banco ieadespa_local no LocalDB (o executor de migrações leva ~9 minutos; restaurar leva segundos).
 param([string]$Acao, [string]$Nome)
+# Trava 8-A: erro do banco PARA o script (antes, uma restauração recusada ainda imprimia "restaurado" e os roteiros rodavam sobre uma base suja)
+$ErrorActionPreference = 'Stop'
+trap { Write-Output "FALHOU: $($_.Exception.Message)"; exit 1 }
 Add-Type -AssemblyName System.Data
 $pasta = Join-Path $PSScriptRoot 'bak'
 New-Item -ItemType Directory -Force -Path $pasta | Out-Null

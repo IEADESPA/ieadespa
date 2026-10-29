@@ -161,7 +161,9 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDis
   // 9. AFM: matrícula, escolaridade e CHM. A matrícula INATIVA (Art. 69 §3º) é suspensão da credencial, não lacuna técnica: nenhuma modalidade dispensa.
   const afm = d.afm || null;
   if (afm && afm.statusMatricula === "INATIVA") {
-    itens.push(item("matricula", "Matrícula ativa na AFM", "Art. 72, caput; Art. 69 §3º", "FALTA", "Obreiro inativo na AFM: precisa de nova matrícula com a reciclagem."));
+    itens.push(item("matricula", "Matrícula ativa na AFM", "Art. 72, caput; Art. 69 §3º", "FALTA", alvo === "AUXILIAR"
+      ? "A matrícula na AFM está inativa: a Academia matricula a pessoa de novo como candidata."
+      : "Obreiro inativo na AFM: precisa de nova matrícula com a reciclagem."));
   } else if (!afm) {
     itens.push(item("matricula", "Matrícula ativa na AFM", alvo === "AUXILIAR" ? "Art. 72, I, b" : "Art. 72, caput", "FALTA",
       alvo === "AUXILIAR" ? "O candidato precisa estar matriculado na AFM cursando o Básico (a Academia matricula o candidato)." : "Sem matrícula na AFM.", true));

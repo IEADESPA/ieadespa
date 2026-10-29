@@ -10,10 +10,14 @@ const MOTIVOS_QUE_MANTEM_ALUNO_EBD = new Set(["DISCIPLINA", "LICENCA_CANDIDATURA
 const motivoDoProcesso = (motivo) => (motivo === "DISCIPLINA" ? "DISCIPLINA" : motivo === "LICENCA_CANDIDATURA" ? "LICENCA_CANDIDATURA" : "SAIDA_DO_ROL");
 
 async function encerrarVinculos(pool, sql, membroId, motivo) {
+  // Decisão do responsável (29/10/2026) — Regimento Art. 157 §2º: a licença de candidatura afasta das FUNÇÕES (púlpito, Ceia, dirigir culto — a licença para
+  // oficiar já cai com o status) e dos cargos que poderiam servir à campanha (dirigente, tesouraria, diretoria, conselho: Assentos e Liderança), mas não tira o
+  // título (o Presbítero continua Presbítero e volta a exercer depois do pleito, "a critério da Diretoria") nem trava os processos de consagração.
+  const licenca = motivo === "LICENCA_CANDIDATURA";
   // Trava 8-A — PRIMEIRO os processos de cargo em andamento (protocolado até homologado): fecham como REPROVADO com o motivo, soltando a cerimônia e o código de
   // diploma reservado. Vem antes de zerar o cargo de propósito: se uma cerimônia está registrando esta pessoa agora, ela segura a linha do processo; este UPDATE
   // espera ela terminar e só então o cargo é zerado — a cerimônia nunca escreve o cargo DEPOIS da vacância (revisão independente da Trava 8-A).
-  await pool.request()
+  if (!licenca) await pool.request()
     .input("id", sql.Int, membroId)
     .input("motivo", sql.NVarChar(24), motivoDoProcesso(motivo))
     .input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
@@ -23,7 +27,7 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
               AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL`);
   // Trava 8-A — o CHM (Art. 67) não sobrevive à saída nem à exclusão / Disciplina Rigorosa: o certificado público é revogado e a matrícula perde a marca (quem volta,
   // volta sem o CHM antigo). A licença de candidatura é temporária (Art. 157): o CHM fica.
-  if (motivo !== "LICENCA_CANDIDATURA") {
+  if (!licenca) {
     await pool.request()
       .input("id", sql.Int, membroId)
       .input("motivoRev", sql.NVarChar(300), motivo === "DISCIPLINA" ? "Revogado pela decisão disciplinar (Regimento, Art. 95 §2º, III e IV)." : "Revogado na saída do rol de membros.")
@@ -49,10 +53,11 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
 
   await pool.request()
     .input("id", sql.Int, membroId)
-    .query(`UPDATE MembroReferencia SET CargoMinisterial = NULL, DepartamentoId = NULL, Funcao = NULL
-            WHERE MembroId = @id`);
-  // v8.2 — o histórico de cargos fecha junto (a data de saída nunca fica antes da de entrada).
-  await pool.request()
+    .query(licenca
+      ? `UPDATE MembroReferencia SET DepartamentoId = NULL WHERE MembroId = @id`
+      : `UPDATE MembroReferencia SET CargoMinisterial = NULL, DepartamentoId = NULL, Funcao = NULL WHERE MembroId = @id`);
+  // v8.2 — o histórico de cargos fecha junto (a data de saída nunca fica antes da de entrada). Na licença de candidatura o cargo fica, e o histórico também.
+  if (!licenca) await pool.request()
     .input("id", sql.Int, membroId)
     .input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
     .query(`UPDATE CargosMinisteriaisHistorico SET Ate = CASE WHEN Desde IS NOT NULL AND Desde > @hoje THEN Desde ELSE @hoje END

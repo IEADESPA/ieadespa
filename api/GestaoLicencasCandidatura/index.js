@@ -9,7 +9,8 @@
 // POST /api/licencas-candidatura/{id}         -> registra o retorno: body { retornou, observacao? }
 //
 // ESCOPO: a licença é da PESSOA — só enxerga e só lança quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo vale a resposta de "não existe". O RETORNO é
-// decisão da Diretoria (Art. 157 §2º): só o nível GERAL registra. Licença põe a pessoa fora de Assentos/Liderança/Cargo (vacância) — não pode ser lançada contra quem é de outra área.
+// decisão da Diretoria (Art. 157 §2º): só o nível GERAL registra. Licença põe a pessoa fora de Assentos e Liderança (vacância) e das funções (sem licença para
+// oficiar enquanto durar), mas o título ministerial e os processos de consagração ficam (decisão de 29/10/2026) — não pode ser lançada contra quem é de outra área.
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");

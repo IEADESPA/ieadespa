@@ -39,10 +39,10 @@ describe("licença para oficiar: a mesma regra em todo lugar", () => {
 });
 
 describe("CIADSETA (Art. 72, V, a)", () => {
-  test("Evangelista e Pastor precisam; quem vem de outra convenção, não; os outros cargos, não", () => {
+  test("Evangelista e Pastor precisam, também quem vem de outra convenção (decisão de 29/10/2026); os outros cargos, não", () => {
     expect(consagracao.precisaConvencao("EVANGELISTA", "NOMEACAO_PRESIDENCIAL")).toBe(true);
     expect(consagracao.precisaConvencao("PASTOR", "INDICACAO")).toBe(true);
-    expect(consagracao.precisaConvencao("PASTOR", "OUTRA_CONVENCAO")).toBe(false);
+    expect(consagracao.precisaConvencao("PASTOR", "OUTRA_CONVENCAO")).toBe(true);
     expect(consagracao.precisaConvencao("PRESBITERO", "INDICACAO")).toBe(false);
     expect(consagracao.precisaConvencao(null, "INDICACAO")).toBe(false);
   });
@@ -66,5 +66,32 @@ describe("o PDF da credencial", () => {
     } finally {
       PDFDocument.prototype.text = original;
     }
+  });
+});
+
+describe("Art. 77 — a suspensão terminada não devolve a função (decisão de 29/10/2026)", () => {
+  const { CARENCIA_SQL } = require("../disciplina");
+  const { anexarInfracoesEPrazo } = require("../disciplinar");
+  const { criarPoolFalso } = require("./testUtils");
+  const { sqlFalso } = require("./testUtils");
+  test("a carência vale para a suspensão com o prazo vencido, sem a prova aprovada (nunca para a advertência nem para a recusa do CEI)", () => {
+    expect(CARENCIA_SQL).toMatch(/DataTerminoPrevisao < CAST\(SYSUTCDATETIME\(\) AS DATE\)/);
+    expect(CARENCIA_SQL).toMatch(/ResultadoProvaReintegracao, ''\) <> 'APROVADO'/);
+    expect(CARENCIA_SQL).toMatch(/NOT IN \('ADVERTENCIA', 'DISCIPLINA_RIGOROSA'\)/);
+    expect(CARENCIA_SQL).toMatch(/CEIRecusouEm IS NULL/);
+  });
+  test("a lista dos processos marca a carência e oferece a prova", async () => {
+    const base = { processoId: 1, status: "JULGADO", resultado: "SANCAO", penalidadeCodigo: "SUSPENSAO_TEMPORARIA", orgaoSigla: "TER", dataConclusao: "2026-01-01" };
+    const { pool } = criarPoolFalso([[], [], [], [], [], [], [], []]);
+    const [vencida, correndo, aprovada, advertencia] = await anexarInfracoesEPrazo(pool, sqlFalso, [
+      { ...base, dataTerminoPrevisao: "2026-02-01" },
+      { ...base, processoId: 2, dataTerminoPrevisao: "2999-01-01" },
+      { ...base, processoId: 3, dataTerminoPrevisao: "2026-02-01", resultadoProvaReintegracao: "APROVADO" },
+      { ...base, processoId: 4, dataTerminoPrevisao: "2026-02-01", penalidadeCodigo: "ADVERTENCIA" }
+    ]);
+    expect(vencida.emCarenciaAdministrativa).toBe(true);
+    expect(correndo.emCarenciaAdministrativa).toBe(false);
+    expect(aprovada.emCarenciaAdministrativa).toBe(false);
+    expect(advertencia.emCarenciaAdministrativa).toBe(false);
   });
 });

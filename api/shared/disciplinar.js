@@ -86,8 +86,11 @@ async function anexarInfracoesEPrazo(pool, sql, processos) {
       infracoes: infracoesPorProcesso.get(p.processoId) || [],
       prazoDefesa: p.status === "JULGADO" ? null : estatuto.avaliarPrazoDefesa(p.dataCitacao, p.defesaProtocolada, hoje),
       envolveMinistro: CARGOS_JURISDICAO_DUPLA.includes(p.cargoMinisterialReu),
-      emCarenciaAdministrativa: p.penalidadeCodigo === "DISCIPLINA_RIGOROSA" &&
-        (p.resultadoProvaReintegracao == null || p.resultadoProvaReintegracao === "REPROVADO"),
+      // Art. 77: a Disciplina Rigorosa até a prova; e (decisão de 29/10/2026) a suspensão terminada também — a função não volta sozinha
+      emCarenciaAdministrativa: (p.penalidadeCodigo === "DISCIPLINA_RIGOROSA" &&
+        (p.resultadoProvaReintegracao == null || p.resultadoProvaReintegracao === "REPROVADO"))
+        || (p.status === "JULGADO" && p.resultado === "SANCAO" && !p.ceiRecusouEm && !["ADVERTENCIA", "DISCIPLINA_RIGOROSA"].includes(p.penalidadeCodigo)
+            && !!p.dataTerminoPrevisao && p.dataTerminoPrevisao < hoje && p.resultadoProvaReintegracao !== "APROVADO"),
       podeRecorrer,
       prazoRecursoVencido: diasDesdeConclusao !== null ? diasDesdeConclusao > 5 : null
     });

@@ -345,7 +345,7 @@ pedidos de impressão. A página pública `credencial.html`.
 
 ### Como ficou a v8.4 (entregue em 28/10/2026)
 
-Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
+**Em produção desde 29/10/2026** (merge `ab26201`; para desfazer: `git revert -m 1 ab26201`). Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
 crédito, para a impressora de PVC) em `api/shared/pdfCredencial.js`; rotas `/api/credenciais/<ação>` (`GestaoCredenciais`) e a pública
 `/api/verificacao-credencial/{código}` (`VerificarCredencial`, com limite de 30 leituras por minuto por origem); a página `app/credencial.html` (autônoma, como a de
 certificados, e fora do cache do aparelho: o endereço leva o código). Tela: "Minha Credencial" no Meu Painel e a sub-aba **Credenciais** da Pessoas (só o nível geral).

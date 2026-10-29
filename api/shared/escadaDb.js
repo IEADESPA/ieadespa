@@ -10,7 +10,7 @@ const { sql } = require("./db");
 const escada = require("./escada");
 const estatuto = require("./estatuto");
 const afm = require("./afm");
-const { CONDICAO_SQL_ATIVO, foraDaReadmissao } = require("./disciplina");
+const { CONDICAO_SQL_ATIVO, CARENCIA_SQL, foraDaReadmissao } = require("./disciplina");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
@@ -57,7 +57,7 @@ async function dadosDaPessoa(conexao, membroId) {
            h.Cargo AS HistCargo, CONVERT(varchar(10), h.Desde, 120) AS HistDesde, h.Origem AS HistOrigem,
            CASE WHEN EXISTS (SELECT 1 FROM MarcosMembro mm WHERE mm.MembroId = m.MembroId AND mm.Tipo = N'BATISMO_ESPIRITO_SANTO') THEN 1 ELSE 0 END AS BatismoEspirito,
            CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
-                             WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO} AND ${foraDaReadmissao("m")}) THEN 1 ELSE 0 END AS SobDisciplina,
+                             WHERE ProcessosDisciplinares.MembroId = m.MembroId AND (${CONDICAO_SQL_ATIVO} OR ${CARENCIA_SQL}) AND ${foraDaReadmissao("m")}) THEN 1 ELSE 0 END AS SobDisciplina,
            CASE WHEN EXISTS (SELECT 1 FROM CartasTransito ct WHERE ct.MembroId = m.MembroId AND ct.Tipo = N'MUDANCA' AND ct.Status = N'EMITIDA') THEN 1 ELSE 0 END AS CartaMudanca,
            a.StatusMatricula, a.NivelEscolaridade, a.NivelConcluido, a.CertificadoHabilitacao, CONVERT(varchar(10), a.CHMEm, 120) AS CHMEm, a.Origem AS MatriculaOrigem
     FROM MembroReferencia m

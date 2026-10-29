@@ -38,7 +38,8 @@ function situacaoPublica(credencial, pessoa) {
   const ativa = membroEmComunhao(pessoa);
   const r = { situacao: ativa ? "ATIVA" : "INATIVA", nome: pessoa.nome, categoria: categoria(pessoa.cargo), congregacao: pessoa.congregacao || null, via: credencial.via };
   if (ehObreiro(pessoa.cargo)) {
-    // Art. 69 §3º: a matrícula da AFM inativa suspende a credencial do obreiro ("Obreiro Inativo"); o afastamento disciplinar também (Art. 95 §2º, II, b; Art. 77);
+    // Art. 69 §3º: a matrícula da AFM inativa suspende a credencial do obreiro ("Obreiro Inativo"); o afastamento disciplinar também (Art. 95 §2º, II, b), e a
+    // Carência Administrativa depois da suspensão, até a Prova de Reintegração (Art. 77 — decisão de 29/10/2026);
     // e a licença afasta das funções enquanto dura.
     // Trava 8-A: a mesma regra da licença para oficiar (shared/afm.js) — o QR, a turma de batismo e a Comissão de Unção dizem a mesma coisa da mesma pessoa.
     r.funcao = ativa && licencaLiturgica({ cargo: pessoa.cargo, statusMatricula: pessoa.statusMatricula, status: pessoa.status, situacaoMembro: pessoa.situacaoMembro,

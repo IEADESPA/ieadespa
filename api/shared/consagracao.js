@@ -22,9 +22,9 @@ const EM_ANDAMENTO_SQL = "N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_P
 // (Art. 74, IV: "valida a lista dos Aptos").
 const CARGOS_DA_CLI = new Set(["PRESBITERO", "EVANGELISTA", "PASTOR"]);
 const homologacaoPelaCLI = (alvo) => CARGOS_DA_CLI.has(alvo);
-// Trava 8-A — Art. 72, V, a: a consagração a Evangelista e a Pastor é "sujeita à homologação da Convenção Estadual (CIADSETA)". O ministro que vem de outra convenção
-// já foi ordenado lá (Art. 10, parágrafo único — é diplomação): fica de fora (decisão que o responsável pode mudar).
-const precisaConvencao = (alvo, modalidade) => (alvo === "EVANGELISTA" || alvo === "PASTOR") && modalidade !== "OUTRA_CONVENCAO";
+// Trava 8-A — Art. 72, V, a: a consagração a Evangelista e a Pastor é "sujeita à homologação da Convenção Estadual (CIADSETA)". Vale também para o ministro que vem
+// de outra convenção (decisão do responsável, 29/10/2026: "a gente não sabe como era essa outra convenção — tem que passar pelo mesmo processo").
+const precisaConvencao = (alvo) => alvo === "EVANGELISTA" || alvo === "PASTOR";
 
 const OCASIOES = {
   AGO: "Assembleia Geral Ordinária",

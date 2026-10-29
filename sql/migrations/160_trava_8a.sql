@@ -4,7 +4,7 @@
 --   1. ProcessosDisciplinares.CEIRecusouEm: a RECUSA da homologação pelo CEI (Art. 94, II) passa a ficar gravada. Antes ela gravava o mesmo 0 de "pendente" e a
 --      decisão do TER seguia valendo para sempre (escada, CLI, credencial). Preenche a partir da auditoria ("Não homologou (CEI)").
 --   2. Consagracoes.ConvencaoHomologadaEm / ConvencaoAto / ConvencaoRegistradaPor: a homologação da Convenção Estadual (CIADSETA) para Evangelista e Pastor
---      (Regimento Art. 72, V, a) — a cerimônia só recebe o candidato depois dela.
+--      (Regimento Art. 72, V, a) — a cerimônia só recebe o candidato depois dela (também quem vem de outra convenção).
 --   3. CK_Consagracoes_Encerramento: os motivos novos do processo que a vacância encerra (DISCIPLINA, LICENCA_CANDIDATURA, SAIDA_DO_ROL).
 --   4. Limpeza única: quem já está fora do rol (desligado ou falecido — os status em que a vacância roda) com processo de cargo em andamento ou com CHM — o que a vacância passa a
 --      fazer daqui em diante.

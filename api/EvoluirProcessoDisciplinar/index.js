@@ -9,7 +9,7 @@
 //   DESIGNAR_DEFENSOR-> { defensorNome } (Art. 102 — texto livre, pode ser advogado externo)
 //   JULGAR           -> { resultado: 'ARQUIVADO'|'SANCAO'|'EXCLUSAO', penalidadeId? (obrigatório se SANCAO), diasSancao? }
 //   AJUSTAR_PRAZO    -> { novoDiasSancao?, prazoIndeterminado?, justificativa } (justificativa obrigatória)
-//   REGISTRAR_PROVA_REINTEGRACAO -> { resultadoProva: 'APROVADO'|'REPROVADO', dataProva? } (Art. 77 — só p/ Disciplina Rigorosa já julgada)
+//   REGISTRAR_PROVA_REINTEGRACAO -> { resultadoProva: 'APROVADO'|'REPROVADO', dataProva? } (Art. 77 — Disciplina Rigorosa julgada, ou suspensão com o prazo terminado)
 //   RECORRER         -> { orgaoDestinoTipo: 'CENTRAL'|'LOCAL', orgaoDestinoId, justificativa } (v3.6 — JAI/JEA, Art. 108 §3º/123)
 //   HOMOLOGAR_EXCLUSAO -> { homologado: true|false } (v3.6 — Exclusão/Disciplina Rigorosa votada por TER, Art. 94 II, exige permissão "cei")
 // Exige a permissão "disciplina" (HOMOLOGAR_EXCLUSAO exige também "cei").
@@ -160,18 +160,29 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ---- REGISTRAR_PROVA_REINTEGRACAO: Art. 77 — só cabe pra quem já foi
-  // julgado com Disciplina Rigorosa (perda de mandato sem prazo fixo de
-  // dias); Suspensão Temporária já retoma sozinha quando os dias terminam.
+  // ---- REGISTRAR_PROVA_REINTEGRACAO: Art. 77 — a Disciplina Rigorosa (sem prazo fixo) e, por decisão do responsável (29/10/2026), também a
+  // Suspensão Temporária depois que o prazo termina: "o cumprimento do tempo da pena ... não devolve automaticamente a função" (Carência Administrativa).
   if (acao === "REGISTRAR_PROVA_REINTEGRACAO") {
     if (atual.Status !== "JULGADO" || atual.Resultado !== "SANCAO") {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Só é possível registrar Prova de Reintegração de um processo julgado com resultado SANCAO." } };
       return;
     }
     const penalidadeAtual = await pool.request().input("id", sql.Int, atual.PenalidadeId || 0).query(`SELECT Codigo FROM TiposPenalidade WHERE PenalidadeId = @id`);
-    if (!penalidadeAtual.recordset[0] || penalidadeAtual.recordset[0].Codigo !== "DISCIPLINA_RIGOROSA") {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Prova de Reintegração Ética só se aplica a Disciplina Rigorosa." } };
+    const codigoPena = penalidadeAtual.recordset[0] ? penalidadeAtual.recordset[0].Codigo : null;
+    if (codigoPena === "ADVERTENCIA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "A advertência não afasta das funções: não há Prova de Reintegração." } };
       return;
+    }
+    if (codigoPena !== "DISCIPLINA_RIGOROSA") {
+      const fim = atual.DataTerminoPrevisao ? new Date(atual.DataTerminoPrevisao).toISOString().slice(0, 10) : null;
+      if (!fim) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Suspensão por prazo indeterminado: ajuste o prazo antes; a Prova de Reintegração vem depois que ele termina (Regimento, Art. 77 §1º)." } };
+        return;
+      }
+      if (fim >= new Date().toISOString().slice(0, 10)) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "A suspensão ainda não terminou: a Prova de Reintegração vem depois do prazo (Regimento, Art. 77 §1º)." } };
+        return;
+      }
     }
     const { resultadoProva, dataProva } = req.body || {};
     if (!["APROVADO", "REPROVADO"].includes(resultadoProva)) {

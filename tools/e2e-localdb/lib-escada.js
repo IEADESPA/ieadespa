@@ -133,7 +133,7 @@ async function homologar(ids, token, { ciadseta = true } = {}) {
   const r = await esteira("homologar", { ids: [].concat(ids), sessaoId: await reuniaoCLI(), ato: "Validação da lista dos aptos (e2e)", data: L.hojeBr() }, token);
   if (ciadseta) {
     for (const id of [].concat(ids)) {
-      const precisa = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR') AND c.Modalidade <> 'OUTRA_CONVENCAO'
+      const precisa = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR')
           AND c.ConvencaoHomologadaEm IS NULL AND c.Status = 'HOMOLOGADO' THEN 1 ELSE 0 END FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto WHERE c.ConsagracaoId = @id`, { id });
       if (precisa) await esteira("convencao", { consagracaoId: id, data: L.hojeBr(), ato: "Resolução da CIADSETA (e2e)" }, token);
     }
@@ -170,8 +170,8 @@ async function concluir(consagracaoId, token, { presente = true } = {}) {
       return { status: r.status, body: { sucesso: false, mensagem: primeiro.mensagem || (r.body && r.body.mensagem), requisitos: primeiro.requisitos } };
     }
   }
-  // Trava 8-A: Evangelista e Pastor (fora quem vem de outra convenção) só entram na cerimônia depois da homologação da CIADSETA (Art. 72, V, a)
-  const precisaCIADSETA = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR') AND c.Modalidade <> 'OUTRA_CONVENCAO'
+  // Trava 8-A: Evangelista e Pastor (também quem vem de outra convenção) só entram na cerimônia depois da homologação da CIADSETA (Art. 72, V, a)
+  const precisaCIADSETA = await escalar(`SELECT CASE WHEN ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN ('EVANGELISTA', 'PASTOR')
       AND c.ConvencaoHomologadaEm IS NULL AND c.Status = 'HOMOLOGADO' THEN 1 ELSE 0 END FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto WHERE c.ConsagracaoId = @id`, { id: consagracaoId });
   if (precisaCIADSETA) {
     r = await esteira("convencao", { consagracaoId, data: L.hojeBr(), ato: "Resolução da CIADSETA (e2e)" }, tk);

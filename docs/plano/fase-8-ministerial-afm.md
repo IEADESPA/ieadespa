@@ -365,9 +365,8 @@ Casca do service worker **v45**.
 **Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** uma credencial só para membro e obreiro (a categoria diz o cargo); processo
 disciplinar **apenas aberto** não aparece no QR (só a sanção aplicada ou o afastamento cautelar suspendem o obreiro — presunção de inocência); a página pública mostra
 nome, categoria, congregação e o número da via; o **lote é só para adultos** (o menor recebe pela emissão individual, a pedido da família); a credencial é **recolhida**
-na exclusão, no desligamento e no abandono, mas na Disciplina Rigorosa só fica inativa enquanto ela durar; a credencial do obreiro volta a "habilitado" quando a
-suspensão temporária termina, como o sistema já fazia — o Art. 77 ("não devolve automaticamente a função") hoje só é aplicado à Disciplina Rigorosa, que exige a Prova
-de Reintegração.
+na exclusão, no desligamento e no abandono, mas na Disciplina Rigorosa só fica inativa enquanto ela durar. *(A volta automática a "habilitado" ao fim da suspensão
+temporária foi decidida pelo responsável na Trava 8-A: agora exige a Prova de Reintegração — Art. 77.)*
 
 **Provas:** jest 6.151 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 159): `e2e-59` fluxos, segurança e lixo 68, `e2e-60` corridas 9; tela
 (`tools/front-credencial`, com as respostas reais gravadas pelo `e2e-59`) 42, com três mutações acusadas.
@@ -423,15 +422,23 @@ Audita v8.1 a v8.4 pelas 5 perguntas do checklist.
     "via digital"; o processo antigo sem destino segura um segundo processo; o CEI conta o tempo de Presbítero pelo histórico e o CHM usado;
     Meus Dados com o CHM, a modalidade, o veto, a CIADSETA e a Comissão de Unção.
 
+  **Decididas pelo responsável (29/10/2026, depois da trava):**
+  - **Art. 77 — toda suspensão temporária exige o ato de retorno:** terminado o prazo, a punição acaba (a pessoa volta a ser membro em
+    dia: Ceia, voto), mas o obreiro fica em **Carência Administrativa**, fora das funções (não oficia, não unge, não sobe na escada, o QR
+    diz "obreiro inativo"), até a aprovação na **Prova de Reintegração Ética** da AFM (§ 2º) — como a Disciplina Rigorosa. "Quando você é
+    suspenso, você saiu; ninguém sabe depois do prazo como essa pessoa está." A prova só se registra depois do fim do prazo; o processo em
+    carência continua na lista da Disciplina, com o botão da prova.
+  - **Outra convenção também passa pela CIADSETA:** o ministro que vem de outra convenção precisa da homologação da nossa Convenção
+    Estadual antes da cerimônia, como os demais Evangelistas e Pastores ("a gente não sabe como era essa outra convenção").
+  - **Licença de candidatura (Art. 157 §2º) afasta das funções e da liderança, não do processo:** enquanto dura, o obreiro não oficia
+    (púlpito, Ceia, dirigir culto) e sai dos cargos que poderiam servir à campanha (dirigente, tesouraria, diretoria, conselho — Assentos
+    e Liderança); o **título fica** (o Presbítero continua Presbítero e volta a exercer depois do pleito, a critério da Diretoria), o CHM
+    fica e **os processos de consagração seguem** — a escada não trava pela licença.
+
   **Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):**
-  - **Art. 77 — conflito com o texto, para decidir:** o Regimento diz que cumprir a pena "não devolve automaticamente a função", para
-    qualquer pena; o sistema devolve a função quando a suspensão temporária termina e só exige a Prova de Reintegração na Disciplina
-    Rigorosa (como desde a v3.5).
   - A exclusão julgada pelo TER e ainda pendente do CEI já afasta das funções (não oficia, não unge, o QR diz "obreiro inativo"), mas a
     pessoa continua membro até o CEI homologar.
-  - Quem vem de outra convenção (diplomação, Art. 10, parágrafo único) não precisa da homologação da CIADSETA; o celibato do Pastor
-    "reconhecido pela Convenção" (Art. 73, II, b) fica registrado só no parecer do CEI.
-  - A licença de candidatura fecha os processos de cargo, mas não revoga o CHM (é temporária).
+  - O celibato do Pastor "reconhecido pela Convenção" (Art. 73, II, b) fica registrado só no parecer do CEI.
   - A minimização também apaga os processos de Integração e Reintegração da pessoa.
 
 ## v8.5 — Trilha de discipulado como entidade de primeira classe *(7ª rodada)*

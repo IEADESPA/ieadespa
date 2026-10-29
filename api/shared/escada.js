@@ -96,7 +96,8 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDis
   }
 
   // 3. Plena comunhão (Art. 72, caput; Estatuto Art. 23): a situação do cadastro (que quem tem "pessoas" já vê) e, à parte, disciplina e carta de mudança.
-  itens.push(d.status !== "ATIVO" || !d.emComunhao
+  // a licença de candidatura não trava a escada (decisão do responsável, 29/10/2026 — Art. 157 §2º afasta das funções, não do processo)
+  itens.push((d.status !== "ATIVO" && d.status !== "LICENCA_CANDIDATURA") || !d.emComunhao
     ? item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "FALTA", "A pessoa não está ativa em plena comunhão.")
     : item("comunhao", "Membro ativo em plena comunhão", "Art. 72, caput", "ATENDE"));
   const ROT_DISC = "Sem disciplina em curso nem carta de mudança";

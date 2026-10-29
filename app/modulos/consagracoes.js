@@ -311,7 +311,8 @@ function consAbrirAba() {
 }
 
 // Trava 8-A: o processo que a vacância encerrou (a pessoa saiu, foi afastada pela disciplina ou tirou licença de candidatura)
-const ROTULO_ENCERRAMENTO_VACANCIA = { DISCIPLINA: "Encerrado pela decisão disciplinar", LICENCA_CANDIDATURA: "Encerrado pela licença de candidatura", SAIDA_DO_ROL: "Encerrado pela saída do rol" };
+const ROTULO_ENCERRAMENTO_VACANCIA = { DISCIPLINA: "Encerrado pela decisão disciplinar", LICENCA_CANDIDATURA: "Encerrado pela licença de candidatura", SAIDA_DO_ROL: "Encerrado pela saída do rol",
+  VACANCIA: "Encerrado (vacância do cargo)" };
 
 function consStatusTexto(c) {
   if (c.vetoAFMEm) return `Vetado pela AFM em ${escaparHtmlEbd(dataBrEscada(c.vetoAFMEm))}<br><small>${escaparHtmlEbd(c.vetoAFMMotivo)}</small>`;

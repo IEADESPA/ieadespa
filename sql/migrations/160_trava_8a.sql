@@ -6,7 +6,7 @@
 --   2. Consagracoes.ConvencaoHomologadaEm / ConvencaoAto / ConvencaoRegistradaPor: a homologação da Convenção Estadual (CIADSETA) para Evangelista e Pastor
 --      (Regimento Art. 72, V, a) — a cerimônia só recebe o candidato depois dela.
 --   3. CK_Consagracoes_Encerramento: os motivos novos do processo que a vacância encerra (DISCIPLINA, LICENCA_CANDIDATURA, SAIDA_DO_ROL).
---   4. Limpeza única: quem já está fora do rol (status que não é de membro: desligado, falecido...) com processo de cargo em andamento ou com CHM — o que a vacância passa a
+--   4. Limpeza única: quem já está fora do rol (desligado ou falecido — os status em que a vacância roda) com processo de cargo em andamento ou com CHM — o que a vacância passa a
 --      fazer daqui em diante.
 --   5. PoliticasRetencao: a escada e a consagração (v8.2 e v8.3) e a credencial (v8.4).
 --
@@ -40,19 +40,19 @@ UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = N'SAIDA_DO_ROL', DataCo
 FROM dbo.Consagracoes c
 JOIN dbo.MembroReferencia m ON m.MembroId = c.MembroId
 LEFT JOIN dbo.TiposConsagracao t ON t.Nome = c.Assunto
-WHERE m.Status NOT IN (N'ATIVO', N'LICENÇA', N'LICENCA_CANDIDATURA')
+WHERE m.Status IN (N'DESLIGADO', N'FALECIDO')
   AND c.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')
   AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IS NOT NULL;
 GO
 UPDATE ce SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Revogado na saída do rol de membros.'
 FROM dbo.CertificadosEmitidos ce
 JOIN dbo.MembroReferencia m ON m.MembroId = ce.MembroId
-WHERE ce.Natureza = N'CHM' AND ce.RevogadoEm IS NULL AND m.Status NOT IN (N'ATIVO', N'LICENÇA', N'LICENCA_CANDIDATURA');
+WHERE ce.Natureza = N'CHM' AND ce.RevogadoEm IS NULL AND m.Status IN (N'DESLIGADO', N'FALECIDO');
 GO
 UPDATE a SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL
 FROM dbo.Matriculas_AFM a
 JOIN dbo.MembroReferencia m ON m.MembroId = a.MembroId
-WHERE a.CertificadoHabilitacao = 1 AND m.Status NOT IN (N'ATIVO', N'LICENÇA', N'LICENCA_CANDIDATURA');
+WHERE a.CertificadoHabilitacao = 1 AND m.Status IN (N'DESLIGADO', N'FALECIDO');
 GO
 
 -- 5. Retenção (LGPD art. 16; Regimento Art. 132 §2º, II — a minimização do ex-membro elimina os registros de consagração).

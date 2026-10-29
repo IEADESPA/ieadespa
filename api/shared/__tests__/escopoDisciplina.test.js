@@ -379,6 +379,8 @@ describe("EvoluirProcedimentoAbandono", () => {
     // a releitura com trava, dentro da transação da homologação
     quando(/FROM ProcedimentosAbandono WITH \(UPDLOCK, HOLDLOCK\) WHERE ProcedimentoId = @id/, (i) => (PROCEDIMENTOS[i.id] ? [{ Status: statusTravado || PROCEDIMENTOS[i.id].Status, MembroId: PROCEDIMENTOS[i.id].MembroId }] : []));
     quando(/SELECT Status FROM MembroReferencia WITH \(UPDLOCK, HOLDLOCK\)/, (i) => (PESSOAS[i.id] ? [{ Status: PESSOAS[i.id].Status }] : []));
+    // Trava 8-A: a trava da escada da pessoa (a vacância fecha os processos de cargo sem disputar com a cerimônia)
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
     quando(/FROM Lideranca l JOIN Papeis p/, (i) => [{ MembroId: 2, Nome: "Secretário Geral" }, { MembroId: 1, Nome: "Presidente" }].filter(x => x.MembroId !== i.exceto));
     quando(/UPDATE ProcedimentosAbandono SET Status = 'HOMOLOGADO'/, [], afetadasHomologar);
     quando(/UPDATE ProcedimentosAbandono SET Status = 'ARQUIVADO'/, [], afetadasArquivar);

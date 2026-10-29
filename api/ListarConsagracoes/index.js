@@ -9,7 +9,7 @@
 // sigilosa), a homologação, a taxa, a cerimônia e o diploma. Os encerrados (consagrados, inaptos, ausentes e vetados) ficam na lista por 60 dias, com o motivo.
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
-const { filtrarPorEscopo } = require("../shared/escopoRotas");
+const { filtrarPorEscopo, ehGeral } = require("../shared/escopoRotas");
 const escada = require("../shared/escada");
 const regra = require("../shared/consagracao");
 
@@ -47,10 +47,13 @@ module.exports = async function (context, req) {
        OR (c.DataConclusao IS NOT NULL AND c.DataConclusao >= DATEADD(day, -60, CAST(SYSUTCDATETIME() AS date)))
     ORDER BY CASE WHEN c.Status IN ('CONCLUIDO', 'REPROVADO') THEN 1 ELSE 0 END, c.DataProtocolo ASC
   `);
+  const geral = ehGeral(usuario);
   const doEscopo = filtrarPorEscopo(usuario, result.recordset, (c) => c.congregacao, (c) => c.extensao).map(({ cargoDoTipo, ...c }) => ({
     ...c,
     // o cargo de destino (do tipo, para o processo de antes da v8.2) diz se o processo passa pelo CEI, pela homologação e pela cerimônia
     cargoAlvo: c.cargoAlvo || (escada.ESCADA.includes(cargoDoTipo) && cargoDoTipo !== "MEMBRO" ? cargoDoTipo : null),
+    // Trava 8-A (revisão): quem não é do nível geral vê "vacância" — não fica sabendo que houve decisão disciplinar
+    motivoEncerramento: c.motivoEncerramento === "DISCIPLINA" && !geral ? "VACANCIA" : c.motivoEncerramento,
     taxaValor: c.taxaValor == null ? null : Number(c.taxaValor),
     cerimoniaValorTaxa: c.cerimoniaValorTaxa == null ? null : Number(c.cerimoniaValorTaxa),
     homologacaoPelaCLI: regra.homologacaoPelaCLI(c.cargoAlvo || cargoDoTipo),

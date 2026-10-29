@@ -1283,7 +1283,7 @@ const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
-  consagracoes: ["consagracoes", "cei"],   // v8.3: o CEI chega à aba para dar o parecer (Regimento Art. 74, III)
+  consagracoes: ["consagracoes", "cei", "financeiro"],   // v8.3: o CEI chega à aba para dar o parecer (Regimento Art. 74, III); Trava 8-A: a tesouraria, para a taxa
   enquetes: ["reunioes", "assembleia"],
   arquivos: ["reunioes", "assembleia", "cli"],
   relatoriosdepto: ["relatorios_departamentais"],

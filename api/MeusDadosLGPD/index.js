@@ -143,8 +143,9 @@ module.exports = async function (context, req) {
   // v8.2 — escada ministerial: o histórico de cargos (de quando a quando, e por onde chegou).
   // v8.3 — os processos de consagração (parecer do CEI só com o resultado e a data; a fundamentação fica com o CEI), a taxa e a cerimônia.
   // v8.4 — as vias da credencial (sem o código de segurança do QR).
+  // Trava 8-A — e as cerimônias em que a pessoa esteve na Comissão de Unção.
   const escada = { cargos: await require("../shared/escadaDb").historicoDe(pool, alvo), consagracoes: await require("../shared/consagracaoDb").dadosDoTitular(pool, alvo),
-    credenciais: await require("../shared/credencialDb").dadosDoTitular(pool, alvo) };
+    credenciais: await require("../shared/credencialDb").dadosDoTitular(pool, alvo), comissaoUncao: await require("../shared/consagracaoDb").comissoesDoTitular(pool, alvo) };
   // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
   // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);

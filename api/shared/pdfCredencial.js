@@ -10,7 +10,8 @@ const ALTURA = 153.07;    // 54 mm
 const br = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 
 // `c`: { nome, matricula, categoria, congregacao, via, codigo, url, emitidaEmDia }; `foto`: Buffer (JPEG/PNG) ou null.
-async function pdfDaCredencial(c, foto) {
+// `viaDigital` (Trava 8-A): o PDF que a própria pessoa baixa diz que é a via digital — o cartão impresso é só o da Secretaria Geral (Art. 76 §2º).
+async function pdfDaCredencial(c, foto, { viaDigital = false } = {}) {
   const doc = new PDFDocument({ size: [LARGURA, ALTURA], margin: 0, info: { Title: `Credencial — ${c.nome}`, Author: "IEADESPA", Lang: "pt-BR" } });
   // faixa do topo
   doc.rect(0, 0, LARGURA, 26).fill(MARINHO);
@@ -35,7 +36,8 @@ async function pdfDaCredencial(c, foto) {
   if (c.congregacao) doc.text(c.congregacao, tx, 67, { width: tw, height: 9, ellipsis: true });
   doc.text(`Cartão de Membro nº ${c.matricula}  ·  Via ${c.via}`, tx, 78, { width: tw });
   doc.text(`Emitida em ${br(c.emitidaEmDia)}`, tx, 87, { width: tw });
-  doc.fillColor(CINZA).fontSize(5.6).text("Sem data de validade: a situação é a do QR, consultada na hora.", tx, 96, { width: tw });
+  doc.fillColor(CINZA).fontSize(5.6).text(viaDigital ? "VIA DIGITAL — o cartão impresso é só o da Secretaria Geral. A situação é a do QR."
+    : "Sem data de validade: a situação é a do QR, consultada na hora.", tx, 96, { width: tw });
   // QR e código
   const q = 58;
   desenharQrNoPdf(doc, c.url, { x: LARGURA - q - 6, y: 32, tamanho: q });

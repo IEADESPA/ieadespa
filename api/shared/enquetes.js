@@ -10,7 +10,7 @@
 // agendada, com o resultado da vinculante contando só os votos de antes do instante marcado) e encerrarVencidas fecha as que passaram do instante (rotina diária).
 const { sql: sqlPadrao } = require("./db");
 const { universoDoOrgao } = require("./universo");
-const { CONDICAO_SQL_ATIVO } = require("./disciplina");
+const { CONDICAO_SQL_ATIVO, foraDaReadmissao } = require("./disciplina");
 const estatuto = require("./estatuto");
 const { registrarAuditoria } = require("./auditoria");
 
@@ -29,7 +29,7 @@ async function aptoEmComunhao(pool, membroId, sql = sqlPadrao) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT CASE WHEN m.Status = 'ATIVO' AND ISNULL(m.SituacaoMembro, '') <> 'SEM_COMUNHAO'
                  AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
-                                 WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO})
+                                 WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO} AND ${foraDaReadmissao("m")})
            THEN 1 ELSE 0 END AS apto
     FROM MembroReferencia m WHERE m.MembroId = @m`);
   return !!(r.recordset[0] && Number(r.recordset[0].apto) === 1);

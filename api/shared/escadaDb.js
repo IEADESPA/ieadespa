@@ -10,7 +10,7 @@ const { sql } = require("./db");
 const escada = require("./escada");
 const estatuto = require("./estatuto");
 const afm = require("./afm");
-const { CONDICAO_SQL_ATIVO } = require("./disciplina");
+const { CONDICAO_SQL_ATIVO, foraDaReadmissao } = require("./disciplina");
 const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
@@ -57,7 +57,7 @@ async function dadosDaPessoa(conexao, membroId) {
            h.Cargo AS HistCargo, CONVERT(varchar(10), h.Desde, 120) AS HistDesde, h.Origem AS HistOrigem,
            CASE WHEN EXISTS (SELECT 1 FROM MarcosMembro mm WHERE mm.MembroId = m.MembroId AND mm.Tipo = N'BATISMO_ESPIRITO_SANTO') THEN 1 ELSE 0 END AS BatismoEspirito,
            CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
-                             WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO}) THEN 1 ELSE 0 END AS SobDisciplina,
+                             WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO} AND ${foraDaReadmissao("m")}) THEN 1 ELSE 0 END AS SobDisciplina,
            CASE WHEN EXISTS (SELECT 1 FROM CartasTransito ct WHERE ct.MembroId = m.MembroId AND ct.Tipo = N'MUDANCA' AND ct.Status = N'EMITIDA') THEN 1 ELSE 0 END AS CartaMudanca,
            a.StatusMatricula, a.NivelEscolaridade, a.NivelConcluido, a.CertificadoHabilitacao, CONVERT(varchar(10), a.CHMEm, 120) AS CHMEm, a.Origem AS MatriculaOrigem
     FROM MembroReferencia m
@@ -198,7 +198,7 @@ async function definirCHM(pool, { membroId, conceder, data, por }) {
   return { sucesso: true, certificadoId: r.certificadoId, mensagem: conceder ? "CHM concedido (Regimento, Art. 67): o certificado, com QR de verificação, já está em Meus Certificados da pessoa." : "CHM revogado (o certificado também)." };
 }
 
-// Matricula na AFM quem ainda não é oficial (o candidato a Auxiliar cursa o Básico — Art. 72, I, b). Uma matrícula por vez: quem já tem não ganha outra aqui.
+// Matricula na AFM quem ainda não é oficial (o candidato a Auxiliar cursa o Básico — Art. 72, I, b). Uma matrícula ATIVA por vez.
 async function matricularCandidato(pool, { membroId, nivel, data, por }) {
   if (!Object.prototype.hasOwnProperty.call(afm.NIVEIS, nivel)) return { sucesso: false, mensagem: "Nível inválido: Básico, Médio, Avançado ou Bacharel Livre." };
   const r = await comTravaDaPessoa(pool, membroId, async (t) => {
@@ -209,8 +209,11 @@ async function matricularCandidato(pool, { membroId, nivel, data, por }) {
       return { sucesso: false, mensagem: "Só membro ativo em plena comunhão é matriculado como candidato (congregado ainda não)." };
     }
     if (OFICIAIS.has(p.CargoMinisterial)) return { sucesso: false, mensagem: "Esta pessoa já é oficial: a matrícula dela é automática." };
-    const ja = await new sql.Request(t).input("m", sql.Int, Number(membroId)).query(`SELECT TOP 1 1 AS x FROM Matriculas_AFM WHERE MembroId = @m`);
-    if (ja.recordset.length) return { sucesso: false, mensagem: "Esta pessoa já tem matrícula na AFM." };
+    // Trava 8-A: a matrícula INATIVA (candidato reprovado, ex-oficial que perdeu o cargo, quem saiu e voltou) não é beco sem saída — a pessoa, não sendo oficial,
+    // recomeça como candidata, numa matrícula nova (sem levar o CHM da antiga). Quem tem matrícula ATIVA não ganha outra.
+    const ja = await new sql.Request(t).input("m", sql.Int, Number(membroId))
+      .query(`SELECT TOP 1 StatusMatricula FROM Matriculas_AFM WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @m ORDER BY MatriculaId DESC`);
+    if (ja.recordset.length && ja.recordset[0].StatusMatricula !== "INATIVA") return { sucesso: false, mensagem: "Esta pessoa já tem matrícula ativa na AFM." };
     const ins = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("n", sql.NVarChar(30), nivel).input("d", sql.Date, data).input("por", sql.Int, por)
       .query(`INSERT INTO Matriculas_AFM (MembroId, NivelAtual, StatusMatricula, Origem, DataMatricula, NivelEscolaridade, NivelConcluido, CriadoPor)
               OUTPUT INSERTED.MatriculaId VALUES (@m, N'MEMBRO', N'ATIVA', N'CANDIDATO', @d, @n, 0, @por)`);

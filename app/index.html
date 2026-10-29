@@ -1602,7 +1602,7 @@
               <label for="reuniaoTipoSessao">Tipo da reunião da CLI:</label>
               <select id="reuniaoTipoSessao">
                 <option value="ORDINARIA">Ordinária (a mensal — conta falta)</option>
-                <option value="MAGNA_AFM">Sessão Magna da AFM (trimestral e o Seminário de novembro — conta para a CLI e para a Academia)</option>
+                <option value="MAGNA_AFM">Sessão Magna da AFM (trimestral — conta para a CLI e para a Academia)</option>
                 <option value="EXTRAORDINARIA">Extraordinária (registra presença, não conta falta)</option>
                 <option value="SEMINARIO_AFM">Seminário Anual de novembro (Art. 70 §1º: só da Academia — não conta falta da CLI)</option>
               </select>
@@ -2589,6 +2589,33 @@
           <hr />
         </div>
 
+        <!-- Trava 8-A — a tesouraria (nível geral do financeiro) registra a taxa de consagração sem precisar da esteira (Regimento Art. 75, I, a) -->
+        <div id="consSecaoTaxas" hidden>
+          <h3>💰 Taxas de consagração</h3>
+          <p class="subtitle">Os candidatos aprovados pelo CEI. A taxa é paga por PIX ou boleto até 45 dias antes da cerimônia (Art. 75, I); o lançamento no caixa é feito
+            no Financeiro.</p>
+          <div id="consTesPainel" class="cons-painel" hidden>
+            <h4 id="consTesTitulo">Taxa de consagração</h4>
+            <div class="input-group">
+              <label for="consTesData">Pago em:</label>
+              <input type="date" id="consTesData" />
+            </div>
+            <div class="input-group">
+              <label for="consTesValor">Valor (R$):</label>
+              <input type="number" id="consTesValor" min="0.01" step="0.01" value="70" />
+            </div>
+            <div class="input-group">
+              <label for="consTesForma">Forma:</label>
+              <select id="consTesForma"><option value="PIX">PIX</option><option value="BOLETO">Boleto bancário</option></select>
+            </div>
+            <button class="btn-confirmar" type="button" data-on-click="consTesRegistrarAcao">Registrar pagamento</button>
+            <button class="btn-confirmar btn-secundario" type="button" id="consTesRemover" data-on-click="consTesRemoverAcao" hidden>Remover registro</button>
+            <button class="btn-confirmar btn-secundario" type="button" data-on-click="consTesFecharAcao">Cancelar</button>
+          </div>
+          <p id="consResultadoTaxas" role="status" aria-live="polite"></p>
+          <div class="rolagem-tabela"><div id="consListaTaxas"></div></div>
+        </div>
+
         <div id="consSecaoSecretaria">
         <h3>Protocolar Processo</h3>
         <form data-on-submit="salvarConsagracao" data-prevent="submit">
@@ -2668,6 +2695,22 @@
           </div>
           <button class="btn-confirmar" type="button" data-on-click="consRegistrarTaxaAcao">Registrar pagamento</button>
           <button class="btn-confirmar btn-secundario" type="button" id="consTaxaRemover" data-on-click="consRemoverTaxaAcao" hidden>Remover registro</button>
+          <button class="btn-confirmar btn-secundario" type="button" data-on-click="consFecharPaineisAcao">Cancelar</button>
+        </div>
+        <!-- Trava 8-A — a homologação da Convenção Estadual (CIADSETA) para Evangelista e Pastor (Regimento Art. 72, V, a) -->
+        <div id="consPainelConvencao" class="cons-painel" hidden>
+          <h4 id="consConvTitulo">Homologação da CIADSETA</h4>
+          <p class="subtitle">A consagração a Evangelista e a Pastor depende da homologação da Convenção Estadual (Art. 72, V, a). Sem ela, o candidato não entra na
+            cerimônia. A cópia da resolução ou do ofício vai em "Documentos" do processo.</p>
+          <div class="input-group">
+            <label for="consConvData">Homologada em:</label>
+            <input type="date" id="consConvData" />
+          </div>
+          <div class="input-group">
+            <label for="consConvAto">Ato da CIADSETA:</label>
+            <input type="text" id="consConvAto" maxlength="200" placeholder="Ex.: Resolução nº 7/2026 da AGO da CIADSETA" />
+          </div>
+          <button class="btn-confirmar" type="button" data-on-click="consRegistrarConvencaoAcao">Registrar homologação</button>
           <button class="btn-confirmar btn-secundario" type="button" data-on-click="consFecharPaineisAcao">Cancelar</button>
         </div>
         <p id="consResultadoEsteira" role="status" aria-live="polite"></p>

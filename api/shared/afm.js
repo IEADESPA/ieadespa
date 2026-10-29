@@ -171,9 +171,16 @@ function avaliarNivel(cargo, nivel, concluido) {
   return { atende, exigido };
 }
 
-// Art. 66 §2º, I e II; Art. 69 §3º — licença para oficiar (batizar, ceia, casamento, dirigir culto oficial). Só oficial com matrícula ATIVA.
-function licencaLiturgica({ cargo, statusMatricula }) {
+// Art. 66 §2º, I e II; Art. 69 §3º — licença para oficiar (batizar, ceia, casamento, dirigir culto oficial). Só oficial EM ATIVIDADE (não de licença), em plena
+// comunhão, sem afastamento disciplinar e com a matrícula da AFM ATIVA. Trava 8-A: a MESMA regra serve à turma de batismo, ao Meu Painel, à Comissão de Unção e à
+// função que o QR da credencial mostra (as marcas da disciplina vêm de shared/habilitacao.js). O motivo da disciplina nunca aparece: quem lê a recusa pode ser a
+// liderança local.
+function licencaLiturgica({ cargo, statusMatricula, status = "ATIVO", situacaoMembro = null, excluido = false, foraDaComunhao = false, afastado = false }) {
   if (!CARGOS_OFICIAIS.includes(cargo)) return { podeOficiar: false, motivo: "Só oficiais do Campo oficiam atos litúrgicos (Regimento, Art. 66 §2º, I)." };
+  if (status !== "ATIVO") return { podeOficiar: false, motivo: "Não está em atividade (licença ou fora do rol): sem licença para oficiar enquanto durar." };
+  if (excluido || foraDaComunhao || afastado || (situacaoMembro != null && situacaoMembro !== "EM_COMUNHAO")) {
+    return { podeOficiar: false, motivo: "Afastado das funções ministeriais no momento: sem licença para oficiar (Regimento, Art. 77 e 95). Detalhes na Secretaria Geral." };
+  }
   if (statusMatricula === "INATIVA") {
     return { podeOficiar: false, motivo: "Obreiro inativo na AFM: mantém o título, mas está sem licença para oficiar até nova matrícula e aprovação na reciclagem (Regimento, Art. 69 §3º)." };
   }

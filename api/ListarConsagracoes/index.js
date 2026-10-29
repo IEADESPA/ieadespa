@@ -9,7 +9,7 @@
 // sigilosa), a homologação, a taxa, a cerimônia e o diploma. Os encerrados (consagrados, inaptos, ausentes e vetados) ficam na lista por 60 dias, com o motivo.
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
-const { filtrarPorEscopo } = require("../shared/escopoRotas");
+const { filtrarPorEscopo, ehGeral } = require("../shared/escopoRotas");
 const escada = require("../shared/escada");
 const regra = require("../shared/consagracao");
 
@@ -32,6 +32,7 @@ module.exports = async function (context, req) {
            CONVERT(varchar(10), c.HomologadoEm, 120) AS homologadoEm, c.HomologacaoSessaoId AS homologacaoSessaoId, c.HomologacaoAto AS homologacaoAto,
            CONVERT(varchar(10), c.TaxaPagaEm, 120) AS taxaPagaEm, c.TaxaValor AS taxaValor, c.TaxaForma AS taxaForma,
            c.CerimoniaId AS cerimoniaId, CONVERT(varchar(10), ce.DataCerimonia, 120) AS cerimoniaData, ce.ValorTaxa AS cerimoniaValorTaxa,
+           CONVERT(varchar(10), c.ConvencaoHomologadaEm, 120) AS convencaoHomologadaEm, c.ConvencaoAto AS convencaoAto,
            CONVERT(varchar(10), c.DataConclusao, 120) AS dataConclusao, c.MotivoEncerramento AS motivoEncerramento, c.DiplomaCertificadoId AS diplomaCertificadoId
     FROM Consagracoes c
     LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
@@ -46,13 +47,17 @@ module.exports = async function (context, req) {
        OR (c.DataConclusao IS NOT NULL AND c.DataConclusao >= DATEADD(day, -60, CAST(SYSUTCDATETIME() AS date)))
     ORDER BY CASE WHEN c.Status IN ('CONCLUIDO', 'REPROVADO') THEN 1 ELSE 0 END, c.DataProtocolo ASC
   `);
+  const geral = ehGeral(usuario);
   const doEscopo = filtrarPorEscopo(usuario, result.recordset, (c) => c.congregacao, (c) => c.extensao).map(({ cargoDoTipo, ...c }) => ({
     ...c,
     // o cargo de destino (do tipo, para o processo de antes da v8.2) diz se o processo passa pelo CEI, pela homologação e pela cerimônia
     cargoAlvo: c.cargoAlvo || (escada.ESCADA.includes(cargoDoTipo) && cargoDoTipo !== "MEMBRO" ? cargoDoTipo : null),
+    // Trava 8-A (revisão): quem não é do nível geral vê "vacância" — não fica sabendo que houve decisão disciplinar
+    motivoEncerramento: c.motivoEncerramento === "DISCIPLINA" && !geral ? "VACANCIA" : c.motivoEncerramento,
     taxaValor: c.taxaValor == null ? null : Number(c.taxaValor),
     cerimoniaValorTaxa: c.cerimoniaValorTaxa == null ? null : Number(c.cerimoniaValorTaxa),
     homologacaoPelaCLI: regra.homologacaoPelaCLI(c.cargoAlvo || cargoDoTipo),
+    precisaConvencao: regra.precisaConvencao(c.cargoAlvo || cargoDoTipo, c.modalidade || "INDICACAO"),   // Trava 8-A: CIADSETA (Art. 72, V, a)
     taxaEmDia: c.cerimoniaId ? regra.situacaoDaTaxa(c, { dataCerimonia: c.cerimoniaData, valorTaxa: c.cerimoniaValorTaxa }).emDia : null
   }));
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: doEscopo };

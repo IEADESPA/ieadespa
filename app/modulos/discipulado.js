@@ -39,7 +39,8 @@ function discLimparTela() {
 async function discCarregarCatalogo() {
   const data = await discBuscar("discipulado/catalogo");
   if (data === null) return null;
-  discCatalogo = data && data.sucesso ? data : null;
+  // só um catálogo com as listas certas vale (uma resposta de outro formato não deixa a tela quebrar depois)
+  discCatalogo = data && data.sucesso && Array.isArray(data.etapas) && Array.isArray(data.tiposMarco) && Array.isArray(data.trilhas) && data.fontes ? data : null;
   return discCatalogo;
 }
 
@@ -91,7 +92,7 @@ async function discPreencherTiposMarco() {
 }
 // o nome do tipo (para o "Corrigir marco"), pelo catálogo carregado
 function discNomeTipoMarco(codigo) {
-  const t = discCatalogo && discCatalogo.tiposMarco.find((x) => x.codigo === codigo);
+  const t = discCatalogo && Array.isArray(discCatalogo.tiposMarco) ? discCatalogo.tiposMarco.find((x) => x.codigo === codigo) : null;
   return t ? t.nome : null;
 }
 

@@ -142,6 +142,7 @@
           <div class="submenu-aba" id="submenuMeupainel">
             <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone">🪪</span><span class="rotulo">Minha Credencial</span></button>
             <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
             <button class="btn-subaba" id="btnSubMeupainelContribuicoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["contribuicoes"]'><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
             <button class="btn-subaba" id="btnSubMeupainelLgpd" data-on-click="mostrarSubAbaMeupainel" data-args-click='["lgpd"]'><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
@@ -231,6 +232,7 @@
               <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
               <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
               <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
             </div>
             <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
             <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
@@ -1141,6 +1143,16 @@
           <h4>📖 Boletim de oração da minha congregação</h4>
           <p class="subtitle">Pedidos sem nome que a liderança aprovou. Ore junto!</p>
           <div id="cpaBoletimMeu"></div>
+        </div>
+
+        <!-- SUB-ABA: MINHA CREDENCIAL (v8.4 — Identidade Eclesiástica digital, Regimento Art. 76): a credencial com o QR que qualquer pessoa confere, o PDF e o
+             pedido de impressão (só a Secretaria Geral imprime). -->
+        <div id="subMeupainelCredencial" class="sub-aba-secretaria" style="display:none;">
+          <h3>🪪 Minha Credencial</h3>
+          <p class="subtitle">Sua Identidade Eclesiástica digital. Não tem data de validade: quem lê o QR vê a sua situação de agora, consultada na Sede. A emissão é
+            gratuita; a impressão em cartão, se você quiser, é feita só pela Secretaria Geral (Regimento, Art. 76).</p>
+          <div id="credMinha"></div>
+          <p id="credMinhaResultado" role="status" aria-live="polite"></p>
         </div>
 
         <!-- SUB-ABA: MINHA FORMAÇÃO (v6.9 — Trilhas de formação e
@@ -2107,6 +2119,30 @@
           <p class="subtitle">Pedidos de correção que o próprio membro enviou pelo Meu Painel — cada campo pode
             ser aprovado ou rejeitado separadamente, ou tudo de uma vez.</p>
           <div id="resultadoFilaAprovacoes"></div>
+        </div>
+
+        <!-- SUB-ABA: CREDENCIAIS (v8.4 — Regimento Art. 76 §2º: emissão e impressão só na Secretaria Geral) -->
+        <div id="subPessoasCredenciais" class="sub-aba-secretaria" style="display:none;">
+          <h3>🪪 Credenciais (Identidade Eclesiástica)</h3>
+          <p class="subtitle">Só a Secretaria Geral emite, emite nova via, cancela e imprime. Nova via (perda, roubo, foto ou cargo novo) faz a anterior deixar de valer
+            na hora. Os pedidos de impressão feitos pelos membros aparecem primeiro.</p>
+          <form data-on-submit="credEmitirAcao" data-prevent="submit">
+            <div class="barra-lista">
+              <label for="credMatricula">Matrícula:</label>
+              <input type="number" id="credMatricula" placeholder="Ex: 15" />
+              <button class="btn-confirmar" style="width:auto;margin:0;" type="submit">Emitir credencial</button>
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" type="button" data-on-click="credEmitirLoteAcao">Emitir para todos os que não têm</button>
+            </div>
+          </form>
+          <p id="credResultado" role="status" aria-live="polite"></p>
+          <form data-on-submit="credBuscarAcao" data-prevent="submit">
+            <div class="barra-lista">
+              <label for="credFiltro">Buscar:</label>
+              <input type="search" id="credFiltro" placeholder="Nome ou matrícula" />
+              <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" type="submit">Buscar</button>
+            </div>
+          </form>
+          <div class="rolagem-tabela"><div id="credLista"></div></div>
         </div>
 
         <!-- PERFIL DA PESSOA — não é sub-aba do submenu lateral, é uma visão

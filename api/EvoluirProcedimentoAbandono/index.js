@@ -136,6 +136,8 @@ module.exports = async function (context, req) {
       await desfazer();
       throw erro;
     }
+    // v8.4 — o recolhimento da credencial (depois do commit; melhor esforço: o QR já mostra "inativa")
+    await require("../shared/credencialDb").recolherSemFalhar(pool, atual.MembroId, motivoSaida, usuario.membroId);
 
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Abandono homologado — membresia encerrada." } };
     return;

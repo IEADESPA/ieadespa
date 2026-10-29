@@ -35,6 +35,7 @@ let chaveAjudaAtual = "meupainel";
 const AJUDA_POR_ABA = {
   "meupainel:perfil": "Sua página inicial: o painel do dia (pendências que precisam de você) e os módulos que você tem permissão de acessar.",
   "meupainel:dados": "Seus dados cadastrais. Pedidos de correção passam pela Secretaria — não é edição direta.",
+  "meupainel:credencial": "Sua Identidade Eclesiástica digital com o QR: quem lê vê a sua situação de agora. Baixe o PDF ou peça a impressão à Secretaria Geral (gratuita).",
   "meupainel:cartas": "Solicite Carta de Recomendação, Carta de Mudança ou Atestado Supletivo — os dois primeiros saem na hora, o de Mudança tem um segundo passo de confirmação.",
   "meupainel:tarefas": "Fluxos de aprovação que estão parados esperando por você, de qualquer módulo do sistema.",
   "meupainel:minhaformacao": "Suas trilhas de formação, o progresso e a validade de cada certificado — com o QR/código pra quem quiser conferir a autenticidade, sem login.",
@@ -443,6 +444,7 @@ function limparSessao() {
   if (typeof afmLimparTela === "function") afmLimparTela();
   // v8.2: a lista de requisitos (com o motivo de quem está sob disciplina, para o nível geral) e o formulário de consagração saem da página junto com a sessão — mesma guarda
   if (typeof consLimparTela === "function") consLimparTela();
+  if (typeof credLimparTela === "function") credLimparTela();   // v8.4: a credencial (com o QR) e a lista da Secretaria saem da página
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -1522,9 +1524,9 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", vinculos: "Vínculos Familiares",
+  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha Credencial", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1560,6 +1562,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "identidade" && typeof idvCarregarMeuPainelAcao === "function") idvCarregarMeuPainelAcao();
   if (sub === "minhasconquistas") carregarMinhasConquistasAcao();
   if (sub === "minhaformacao") carregarMinhaFormacaoAcao();
+  if (sub === "credencial" && typeof credCarregarMinhaAcao === "function") credCarregarMinhaAcao();   // v8.4
   if (sub === "agenda") carregarMinhaAgendaCalAcao();
   if (sub === "canais") carregarMeuPainelCanaisAcao();
   if (sub === "eventos") carregarMeuPainelEventosAcao();

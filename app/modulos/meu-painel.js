@@ -202,6 +202,7 @@ async function alternarMeusDadosLGPD() {
       ${linhaLgpd("Função", m.funcao)}
       ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
       ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? String(c.desde).slice(0, 10).split("-").reverse().join("/") : "início não informado"} a ${c.ate ? String(c.ate).slice(0, 10).split("-").reverse().join("/") : "hoje"})`).join("; "))}
+      ${linhaLgpd("Credencial (vias)", ((data.escada && data.escada.credenciais) || []).map((c) => `via ${c.via}: ${({ VALIDA: "válida", SUBSTITUIDA: "substituída", CANCELADA: "cancelada" })[c.situacao] || c.situacao}, emitida em ${String(c.emitidaEm || "").split("-").reverse().join("/")}${c.impressaEm ? `, impressa em ${String(c.impressaEm).split("-").reverse().join("/")}` : ""}`).join("; "))}
       ${linhaLgpd("Processos de consagração", ((data.escada && data.escada.consagracoes) || []).map((c) => [`nº ${c.numero}`, c.cargo || c.assunto, c.etapa, c.parecerCEI ? `CEI: ${c.parecerCEI}` : null,
         c.taxaPagaEm ? `taxa paga em ${String(c.taxaPagaEm).slice(0, 10).split("-").reverse().join("/")}` : null, c.cerimonia ? `cerimônia de ${String(c.cerimonia).slice(0, 10).split("-").reverse().join("/")}` : null,
         c.encerramento].filter(Boolean).join(", ")).join("; "))}
@@ -663,9 +664,76 @@ async function carregarComunicacoesCoafAcao() {
   container.innerHTML = html;
 }
 
+// ---- v8.4 — MINHA CREDENCIAL (Identidade Eclesiástica digital; Regimento Art. 76) ----
+const ROTULO_SITUACAO_AGORA = { ATIVA: "Ativa", INATIVA: "Inativa", SUBSTITUIDA: "Substituída", CANCELADA: "Cancelada" };
+let credMinhaOcupada = false;
+
+async function credCarregarMinhaAcao() {
+  const token = authToken;
+  const caixa = document.getElementById("credMinha");
+  let res;
+  try { res = await fetchProtegido(`${API_BASE}/credenciais/minha`); } catch (e) { if (authToken === token) caixa.innerHTML = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>"; return; }
+  if (authToken !== token) return;
+  const data = await jsonDaTela(res, caixa, "objeto");
+  if (data === null || authToken !== token) return;
+  const c = data.credencial;
+  if (!c) { caixa.innerHTML = "<p class='subtitle'>Sua credencial ainda não foi emitida. A emissão é feita pela Secretaria Geral e é gratuita.</p>"; return; }
+  let qr = "";
+  try {
+    const rq = await fetchProtegido(`${API_BASE}/credenciais/qr`);
+    if (rq.ok) qr = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await rq.text())}`;
+  } catch (e) { /* sem o QR, o código em texto continua */ }
+  if (authToken !== token) return;
+  const agora = c.situacaoAgora || {};
+  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : "sem licença para oficiar no momento"}` : "";
+  const impressao = c.impressaEm ? `Impressa pela Secretaria em ${credDataBr(c.impressaEm)}.` : c.impressaoSolicitadaEm ? `Impressão pedida em ${credDataBr(c.impressaoSolicitadaEm)}: a Secretaria Geral avisa quando estiver pronta.` : "";
+  caixa.innerHTML = `<div class="credencial-cartao">
+      <div class="credencial-topo">IEADESPA — Identidade Eclesiástica</div>
+      <div class="credencial-corpo">
+        ${c.fotoUrl ? `<img class="credencial-foto" src="${urlSegura(c.fotoUrl)}" alt="Foto de ${escaparHtmlEbd(c.nome)}" />` : `<div class="credencial-foto credencial-semfoto">sem foto</div>`}
+        <div class="credencial-dados">
+          <strong>${escaparHtmlEbd(c.nome)}</strong>
+          <span>${escaparHtmlEbd(c.categoria)}</span>
+          ${c.congregacao ? `<span>${escaparHtmlEbd(c.congregacao)}</span>` : ""}
+          <small>Cartão de Membro nº ${escaparHtmlEbd(String(c.matricula))} · Via ${escaparHtmlEbd(String(c.via))}</small>
+          <small>Emitida em ${escaparHtmlEbd(credDataBr(c.emitidaEm))} · sem data de validade</small>
+        </div>
+        ${qr ? `<img class="credencial-qr" src="${qr}" alt="QR Code da credencial" width="110" height="110" />` : ""}
+      </div>
+      <div class="credencial-codigo">Código: <strong>${escaparHtmlEbd(c.codigo)}</strong></div>
+    </div>
+    <p><strong>Situação agora:</strong> ${escaparHtmlEbd(ROTULO_SITUACAO_AGORA[agora.situacao] || agora.situacao || "-")}${escaparHtmlEbd(funcao)}</p>
+    <p class="subtitle">Quem quiser conferir abre o QR (ou ${escaparHtmlEbd(String(c.url || "").split("?")[0])} com o código). ${escaparHtmlEbd(impressao)}</p>
+    <div class="barra-lista">
+      <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" type="button" data-on-click="credBaixarMinhaAcao">📄 Baixar o PDF</button>
+      ${c.impressaEm || c.impressaoSolicitadaEm ? "" : `<button class="btn-confirmar" style="width:auto;margin:0;" type="button" data-on-click="credPedirImpressaoAcao">🖨️ Pedir a impressão à Secretaria</button>`}
+    </div>`;
+}
+
+function credBaixarMinhaAcao() { return credBaixarPdf(null, "credMinhaResultado"); }
+
+async function credPedirImpressaoAcao() {
+  const msg = document.getElementById("credMinhaResultado");
+  if (credMinhaOcupada) { msg.textContent = "Aguarde: o pedido anterior ainda não voltou."; return; }
+  if (!(await confirmarAcao("Pedir à Secretaria Geral a impressão da sua credencial em cartão? É gratuita.", "Pedir"))) return;
+  credMinhaOcupada = true;
+  const token = authToken;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/credenciais/pedir-impressao`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Não foi possível pedir agora. Tente de novo." }));
+    if (authToken !== token) return;
+    msg.textContent = data.mensagem || "";
+    if (data.sucesso) credCarregarMinhaAcao();
+  } finally {
+    credMinhaOcupada = false;
+  }
+}
+
 registrarAcoes({
   alternarMeusDadosLGPD, carregarAlertasComplianceAcao, carregarAuditoria, carregarIndicadoresAcao, carregarRecertificacoesAcao,
   criarSolicitacaoLGPD, decidirRecertificacaoAcao, decidirSinalizacaoNifAcao, registrarAncoragemAcao, registrarAuditoriaNivelAcao,
   registrarComunicacaoCoafAcao, registrarParecerConselhoAcao, registrarPrestacaoContasAcao, registrarSinalizacaoNifAcao,
-  resolverAlertaComplianceAcao, salvarConsentimentoLGPD, solicitarJustificativaAcao, verificarCadeiaAuditoriaAcao
+  resolverAlertaComplianceAcao, salvarConsentimentoLGPD, solicitarJustificativaAcao, verificarCadeiaAuditoriaAcao,
+  // v8.4
+  credBaixarMinhaAcao, credPedirImpressaoAcao,
 });

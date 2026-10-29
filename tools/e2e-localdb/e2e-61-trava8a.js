@@ -68,6 +68,26 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   ok(r.status === 422 && /Dirigente Central E2E: não está em atividade/.test(r.body.mensagem), "Pastor com a AFM inativa não unge (Art. 69 §3º)", r.body);
   await q("UPDATE Matriculas_AFM SET StatusMatricula = 'ATIVA' WHERE MembroId = @m", { m: P.lider });
 
+  console.log("== Art. 77: a suspensão terminada não devolve a função (decisão de 29/10/2026) ==");
+  const susp = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado, DataConclusao, DiasSancao, DataTerminoPrevisao)
+    OUTPUT INSERTED.ProcessoId VALUES (@m, '2026-06-01', 'JULGADO', 'SANCAO', '2026-06-10', 30, @fim)`, { m: P.pastor4, fim: somar(10) });
+  ok(!(await licenca(P.pastor4)).podeOficiar, "suspenso, no prazo: fora das funções");
+  const prova = (resultadoProva) => chamarRota("EvoluirProcessoDisciplinar/index.js", { metodo: "POST", binding: { processoId: String(susp) }, token: SEC(), corpo: { acao: "REGISTRAR_PROVA_REINTEGRACAO", resultadoProva } });
+  r = await prova("APROVADO");
+  ok(r.body.sucesso === false && /ainda não terminou/.test(r.body.mensagem), "a prova não vem antes do fim da suspensão", r.body);
+  await q("UPDATE ProcessosDisciplinares SET DataTerminoPrevisao = @fim WHERE ProcessoId = @p", { p: susp, fim: somar(-3) });
+  ok(!(await req("shared/disciplina.js").membrosSobDisciplina(pool)).has(P.pastor4), "o prazo acabou: a punição terminou (volta a ser membro em dia)");
+  ok(!(await licenca(P.pastor4)).podeOficiar && (await funcaoNoQR(P.pastor4)).funcao === "INATIVO", "mas a função NÃO volta sozinha: carência administrativa (Art. 77 §1º)");
+  r = await cerimonias("comissao", { cerimoniaId: ceA, membroIds: COMISSAO });
+  ok(r.status === 422 && /Quatro E2E: não está em atividade/.test(r.body.mensagem), "nem unge na cerimônia", r.body);
+  r = await chamarRota("ListarProcessosDisciplinares/index.js", { token: SEC() });
+  const linhaSusp = ((r.body && (r.body.processos || r.body)) || []).find((x) => Number(x.processoId) === Number(susp));
+  ok(linhaSusp && linhaSusp.emCarenciaAdministrativa === true, "a lista dos processos mostra a carência (e o botão da prova)", linhaSusp && { c: linhaSusp.emCarenciaAdministrativa });
+  r = await prova("REPROVADO");
+  ok(r.body.sucesso && !(await licenca(P.pastor4)).podeOficiar, "reprovado na prova: continua sem função até a próxima (§ 2º, II)");
+  r = await prova("APROVADO");
+  ok(r.body.sucesso && (await licenca(P.pastor4)).podeOficiar && (await funcaoNoQR(P.pastor4)).funcao === "HABILITADO", "aprovado: a função volta na hora (§ 2º, I)", r.body);
+
   console.log("== ninguém mexe no que conta para a própria escada ==");
   const eu = (m, perms) => GERAL(m, perms);
   for (const [acao, corpo] of [["nivel", { nivel: "BACHAREL", concluido: true }], ["rematricular", { reciclagemAprovadaEm: hoje }], ["anular-reprovacao", { motivo: "Lançada por engano (e2e)" }],
@@ -123,6 +143,18 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   ok((await afmPost("chm", { membroId: P.semSexo, conceder: true, data: hoje })).body.sucesso, "CHM de outro obreiro");
   await vacancia.encerrarVinculos(pool, sql, P.semSexo, "LICENCA_CANDIDATURA");
   ok((await escalar("SELECT CertificadoHabilitacao FROM Matriculas_AFM WHERE MembroId = @m", { m: P.semSexo })) === true, "a licença de candidatura é temporária: o CHM fica");
+  // decisão de 29/10/2026 (Art. 157 §2º): a licença afasta das funções e da liderança; o título, o histórico e os processos ficam
+  const pLic = await escalar(`INSERT INTO Consagracoes (MembroId, Assunto, ProponenteMembroId, Status, CargoAlvo, Modalidade) OUTPUT INSERTED.ConsagracaoId
+    VALUES (@m, @a, 1002, 'PROTOCOLADO', 'DIACONO', 'INDICACAO')`, { m: P.disciplinado, a: TIPO.DIACONO });
+  await q("UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @m", { m: P.disciplinado });
+  await vacancia.encerrarVinculos(pool, sql, P.disciplinado, "LICENCA_CANDIDATURA");
+  ok((await statusDe(pLic)) === "PROTOCOLADO", "a licença de candidatura não fecha o processo de consagração");
+  ok((await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = @m", { m: P.disciplinado })) === "MISSIONARIO"
+    && (await escalar("SELECT COUNT(*) FROM CargosMinisteriaisHistorico WHERE MembroId = @m AND Ate IS NULL", { m: P.disciplinado })) === 1, "nem tira o título (o histórico continua aberto)");
+  ok(!(await licenca(P.disciplinado)).podeOficiar, "mas, enquanto dura, não oficia (Art. 157 §2º, II, a)");
+  const comLicenca = await E.req(TIPO.DIACONO, P.disciplinado);
+  ok((((comLicenca.body.requisitos || {}).itens || []).find((i) => i.chave === "comunhao") || {}).situacao === "ATENDE", "e a escada não trava pela licença", comLicenca.body);
+  await q("UPDATE MembroReferencia SET Status = 'ATIVO' WHERE MembroId = @m", { m: P.disciplinado });
 
   console.log("== a CLI não homologa no Seminário nem na reunião 'não conta' ==");
   const sessao = (tipo, naoConta) => escalar(`INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, TipoSessao, Status${naoConta ? ", NaoContaMotivo, NaoContaEm" : ""}) OUTPUT INSERTED.SessaoId
@@ -161,9 +193,12 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   r = await esteira("convencao", { consagracaoId: pe, data: hoje, ato: "Outra resolução" });
   ok(r.status === 422 && /já está numa cerimônia/.test(r.body.mensagem), "na cerimônia, não se corrige mais", r.body);
   const pf = id(await protocolar({ membroId: P.forasteiro, assunto: TIPO.PASTOR, proponenteMembroId: 1001, modalidade: "OUTRA_CONVENCAO", atoReferencia: "Convenção de origem e2e" }));
-  await evoluir(pf, "AVANCAR"); await parecer(pf); await homologar(pf);
-  r = await esteira("convencao", { consagracaoId: pf, data: hoje, ato: "Resolução" });
-  ok(r.status === 422 && /Só a consagração a Evangelista e a Pastor depende/.test(r.body.mensagem), "quem vem de outra convenção não precisa (diplomação — Art. 10, parágrafo único)", r.body);
+  await evoluir(pf, "AVANCAR"); await parecer(pf); await homologar(pf, undefined, { ciadseta: false }); await pagarTaxa(pf);
+  const ceF = await novaCerimonia();
+  r = await cerimonias("incluir", { cerimoniaId: ceF, ids: [pf] });
+  ok(r.body.sucesso === false && /CIADSETA/.test(r.body.mensagem), "quem vem de outra convenção também precisa da CIADSETA (decisão de 29/10/2026)", r.body);
+  r = await esteira("convencao", { consagracaoId: pf, data: hoje, ato: "Resolução 2/2026 da CIADSETA" });
+  ok(r.status === 200 && (await cerimonias("incluir", { cerimoniaId: ceF, ids: [pf] })).body.sucesso, "com ela registrada, entra na cerimônia", r.body);
 
   // o processo que entrou na cerimônia antes da trava (sem a CIADSETA): a edição da data recusa e o registro devolve à fila
   await q("UPDATE Consagracoes SET ConvencaoHomologadaEm = NULL, ConvencaoAto = NULL WHERE ConsagracaoId = @id", { id: pe });

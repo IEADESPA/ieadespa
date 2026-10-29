@@ -381,7 +381,7 @@ async function editarCerimonia(pool, { cerimoniaId, dados, por }) {
     const semConvencao = await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia)
       .query(`SELECT TOP 1 m.Nome FROM Consagracoes c JOIN MembroReferencia m ON m.MembroId = c.MembroId LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
               WHERE c.CerimoniaId = @id AND c.Status = N'HOMOLOGADO' AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN (N'EVANGELISTA', N'PASTOR')
-                AND c.Modalidade <> N'OUTRA_CONVENCAO' AND (c.ConvencaoHomologadaEm IS NULL OR c.ConvencaoHomologadaEm > @d)`);
+                AND (c.ConvencaoHomologadaEm IS NULL OR c.ConvencaoHomologadaEm > @d)`);
     if (semConvencao.recordset[0]) return { sucesso: false, mensagem: `${semConvencao.recordset[0].Nome}: a homologação da CIADSETA é depois dessa data (ou ainda não veio) — a cerimônia não pode ser antes dela (Regimento, Art. 72, V, a).` };
     await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia).input("l", sql.NVarChar(200), dados.local)
       .input("o", sql.NVarChar(12), dados.ocasiao).input("v", sql.Decimal(10, 2), dados.valorTaxa)
@@ -465,7 +465,7 @@ async function incluirCandidatos(pool, { cerimoniaId, ids, por }) {
         .query(`UPDATE c SET CerimoniaId = @c FROM Consagracoes c LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
                 WHERE c.ConsagracaoId = @id AND c.Status = N'HOMOLOGADO' AND c.CerimoniaId IS NULL AND c.MembroId <> @por
                   AND (c.HomologadoEm IS NULL OR c.HomologadoEm <= @d)
-                  AND (ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) NOT IN (N'EVANGELISTA', N'PASTOR') OR c.Modalidade = N'OUTRA_CONVENCAO'
+                  AND (ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) NOT IN (N'EVANGELISTA', N'PASTOR')
                        OR (c.ConvencaoHomologadaEm IS NOT NULL AND c.ConvencaoHomologadaEm <= @d))
                   AND NOT EXISTS (SELECT 1 FROM CerimoniasComissaoUncao u WHERE u.CerimoniaId = @c AND u.MembroId = c.MembroId)`);
       resultados.push({ consagracaoId: id, sucesso: !!upd.rowsAffected[0] });

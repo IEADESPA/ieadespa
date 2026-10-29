@@ -8,10 +8,11 @@
 //  - ForaDaComunhao: Disciplina Rigorosa em vigor, homologada (Art. 95 §2º, III — o "afastamento total da comunhão").
 //  - Afastado: das FUNÇÕES — sanção em vigor (não a advertência), afastamento cautelar, exclusão ou Disciplina Rigorosa. Aqui a decisão do TER ainda pendente de
 //    homologação do CEI JÁ afasta (decisão da Trava 8-A): a pessoa continua membro até o CEI homologar, mas não oficia nem unge. O processo só aberto, sem
-//    julgamento, não afasta (Art. 95 §3º, III).
+//    julgamento, não afasta (Art. 95 §3º, III). E a Carência Administrativa do Art. 77: a suspensão terminada não devolve a função — só a aprovação na Prova de
+//    Reintegração Ética (decisão do responsável, 29/10/2026).
 //  A recusa da homologação pelo CEI (CEIRecusouEm, migração 160) tira o efeito da decisão.
 const { sql } = require("./db");
-const { CONDICAO_SQL_ATIVO } = require("./disciplina");
+const { CONDICAO_SQL_ATIVO, CARENCIA_SQL } = require("./disciplina");
 
 const EM_RECURSO_VALE = `(pd.Status = N'EM_RECURSO' AND pd.CEIRecusouEm IS NULL
   AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares r WHERE r.ProcessoOrigemId = pd.ProcessoId AND r.Status = N'JULGADO'))`;
@@ -27,6 +28,8 @@ const MARCAS_DISCIPLINA = `
   CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
                     WHERE pd.MembroId = m.MembroId AND (pd.Resultado <> N'EXCLUSAO' OR ${DEPOIS_DA_ADMISSAO})
                       AND ((pd.Status <> N'EM_ANDAMENTO' AND ${CONDICAO_SQL_ATIVO})
+                           -- Art. 77 (decisão de 29/10/2026): a suspensão terminada deixa o obreiro fora das funções até a Prova de Reintegração
+                           OR ${CARENCIA_SQL}
                            OR (${EM_RECURSO_VALE} AND pd.Resultado IN (N'SANCAO', N'EXCLUSAO') AND ISNULL(tp.Codigo, N'') <> N'ADVERTENCIA'
                                -- a suspensão com prazo vencido não afasta mais, mesmo com o recurso pendente (revisão da Trava 8-A)
                                AND (pd.Resultado = N'EXCLUSAO' OR tp.Codigo = N'DISCIPLINA_RIGOROSA' OR pd.DataTerminoPrevisao IS NULL

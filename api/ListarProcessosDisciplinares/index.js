@@ -69,7 +69,8 @@ module.exports = async function (context, req) {
   processos = redigirSeSigiloso(processos, usuario);
 
   if (!incluirEncerrados) {
-    processos = processos.filter(p => SITUACOES_ATIVAS.includes(p.situacaoEfetiva));
+    // Art. 77 (decisão de 29/10/2026): a pena cumprida em Carência Administrativa continua na lista — é dali que sai a Prova de Reintegração
+    processos = processos.filter(p => SITUACOES_ATIVAS.includes(p.situacaoEfetiva) || p.emCarenciaAdministrativa);
   }
 
   responder(processos);

@@ -365,9 +365,8 @@ Casca do service worker **v45**.
 **Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** uma credencial só para membro e obreiro (a categoria diz o cargo); processo
 disciplinar **apenas aberto** não aparece no QR (só a sanção aplicada ou o afastamento cautelar suspendem o obreiro — presunção de inocência); a página pública mostra
 nome, categoria, congregação e o número da via; o **lote é só para adultos** (o menor recebe pela emissão individual, a pedido da família); a credencial é **recolhida**
-na exclusão, no desligamento e no abandono, mas na Disciplina Rigorosa só fica inativa enquanto ela durar; a credencial do obreiro volta a "habilitado" quando a
-suspensão temporária termina, como o sistema já fazia — o Art. 77 ("não devolve automaticamente a função") hoje só é aplicado à Disciplina Rigorosa, que exige a Prova
-de Reintegração.
+na exclusão, no desligamento e no abandono, mas na Disciplina Rigorosa só fica inativa enquanto ela durar. *(A volta automática a "habilitado" ao fim da suspensão
+temporária foi decidida pelo responsável na Trava 8-A: agora exige a Prova de Reintegração — Art. 77.)*
 
 **Provas:** jest 6.151 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 159): `e2e-59` fluxos, segurança e lixo 68, `e2e-60` corridas 9; tela
 (`tools/front-credencial`, com as respostas reais gravadas pelo `e2e-59`) 42, com três mutações acusadas.
@@ -376,6 +375,71 @@ de Reintegração.
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v8.1 a v8.4 pelas 5 perguntas do checklist.
+
+- [x] **Fechada em 29/10/2026** — auditoria de v8.1 a v8.4. Duas revisões independentes, só de leitura: uma das costuras ENTRE as versões
+  (quem conta como "ativo", o que a saída da igreja desfaz, o que cada pessoa pode mexer em si mesma) e outra da lei, do plano e do README;
+  depois das correções, uma terceira revisão do próprio diff. **Nenhum achado crítico; 4 altos, 15 médios e 21 baixos, todos corrigidos com
+  teste** (migração 160; `e2e-61`, 90 verificações; casca v46). Em produção desde 29/10/2026 (merge `b8af4e1`; reverter =
+  `git revert -m 1 b8af4e1`). As 5 perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria da fase 8 inteira contra o banco local (`e2e-47` a `e2e-61`, 1.018
+     verificações) com as migrações 156 a 160 aplicadas duas vezes cada. A trava achou um defeito na própria ferramenta: a restauração da base
+     falhava calada e os roteiros rodavam sobre base suja; agora o `rodar.sh` para quando a base ou a migração não fica pronta, e os roteiros
+     da v8.1 rodam sobre o esquema completo (o código da AFM já lê o CHM da 158).
+  2. **Toda tela nova abre?** Sim. Teste de tela completo na produção (execução 40880685665): 5.678 ações iguais, 0 divergência, 0 violação
+     de CSP. Na homologação, a única diferença foram os dois painéis novos e escondidos (+5 botões, +5 campos em toda tela) — base aprovada
+     (execução 40894991238; confirmação 40900701520, 0 divergência). Provas de tela sem navegador: AFM 80, escada 75, consagração 116 (5 mutações
+     acusadas), credencial 42.
+  3. **O README e o código contam a mesma história?** Agora sim: "Planejadas: FASES 9 a 12", 318 tabelas (migrações 001 a 160), a v8.4 em
+     29/10; o rótulo da Sessão Magna não fala mais do Seminário; três artigos corrigidos (Art. 79, III, b; Art. 56 §2º no lugar da "linha
+     310"; Art. 75 e 15, II); o README dos roteiros com o `e2e-58` e o `e2e-61`.
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim: a taxa pela tesouraria, a homologação da CIADSETA, a indicação
+     antiga que vira nomeação, a credencial na diplomação. O que ficou são decisões do responsável (abaixo) e dois itens novos do Regimento
+     que entraram na v8.6 (reciclagem anual, Art. 68 §3º; exame bienal, Art. 70 §3º).
+  5. **Houve deploy real?** Sim: as migrações 156 a 159 rodaram no deploy da produção (log), as rotas novas respondem 401 sem sessão, a
+     página pública do QR responde, a casca estava na v45; a 160 e a casca v46 entraram com esta trava.
+
+  O que mudou:
+  - **Uma regra só para "quem está nas funções" (alto).** A licença para oficiar (batismo, Meu Painel, Academia), a Comissão de Unção e o QR
+    da credencial passaram a ler o mesmo lugar (`api/shared/habilitacao.js`): sanção ou afastamento cautelar, Disciplina Rigorosa, exclusão,
+    licença e matrícula da AFM inativa tiram a pessoa das funções em todos eles. Antes, um Pastor suspenso podia batizar e ungir enquanto o
+    QR dizia "obreiro inativo". A recusa mostrada à liderança local nunca diz o motivo.
+  - **A recusa do CEI ficou gravada (alto, de antes da fase 8).** "Não homologar" gravava o mesmo valor de "pendente": a pessoa ficava sob
+    disciplina para sempre e podia ser homologada depois. Agora a recusa tem data (`CEIRecusouEm`) e tira o efeito da decisão em toda parte.
+  - **Ninguém mexe no que conta para a própria escada (alto).** O nível, a reprovação e a rematrícula da AFM; o batismo no Espírito Santo
+    (só o nível geral lança); nascimento, admissão e estado civil (com processo de cargo aberto, só o nível geral). A data de admissão nova de
+    quem tem exclusão julgada é a readmissão: só o nível geral a registra, e ela vale igual na credencial, na escada, na CLI e na assembleia.
+  - **LGPD (alto).** ROPA com a escada e a consagração e com a credencial; RIPD do parecer do CEI e das páginas públicas; retenção na 160.
+  - **A saída da igreja desfaz o que tem de desfazer (médios).** A vacância fecha os processos de cargo em andamento (antes eles ficavam na
+    fila do CEI e na cerimônia para sempre) e revoga o CHM — primeiro os processos, para a cerimônia nunca escrever o cargo depois da
+    vacância; o abandono pega a trava da escada. A minimização elimina o diploma, o CHM, o parecer e os processos (Regimento Art. 132 §2º,
+    II: "registros eclesiásticos de conversão e consagração"); a verificação pública passa a dizer "não encontrado".
+  - **A matrícula inativa não é beco sem saída:** o candidato reprovado recomeça numa matrícula nova.
+  - **CLI:** não homologa no Seminário de novembro nem na reunião marcada "não conta falta".
+  - **CIADSETA (Art. 72, V, a):** a Secretaria registra a data e o ato; sem ela, Evangelista e Pastor não entram na cerimônia, a data não muda
+    para antes dela e o registro devolve à fila.
+  - **Sobras fechadas:** a lista da tesouraria para a taxa; "Virar nomeação" para a indicação antiga; a credencial na diplomação (Art. 10 —
+    a primeira, ou uma nova via já pedida para impressão quando o cartão impresso tinha o cargo anterior); o PDF que a pessoa baixa sai
+    "via digital"; o processo antigo sem destino segura um segundo processo; o CEI conta o tempo de Presbítero pelo histórico e o CHM usado;
+    Meus Dados com o CHM, a modalidade, o veto, a CIADSETA e a Comissão de Unção.
+
+  **Decididas pelo responsável (29/10/2026, depois da trava):**
+  - **Art. 77 — toda suspensão temporária exige o ato de retorno:** terminado o prazo, a punição acaba (a pessoa volta a ser membro em
+    dia: Ceia, voto), mas o obreiro fica em **Carência Administrativa**, fora das funções (não oficia, não unge, não sobe na escada, o QR
+    diz "obreiro inativo"), até a aprovação na **Prova de Reintegração Ética** da AFM (§ 2º) — como a Disciplina Rigorosa. "Quando você é
+    suspenso, você saiu; ninguém sabe depois do prazo como essa pessoa está." A prova só se registra depois do fim do prazo; o processo em
+    carência continua na lista da Disciplina, com o botão da prova.
+  - **Outra convenção também passa pela CIADSETA:** o ministro que vem de outra convenção precisa da homologação da nossa Convenção
+    Estadual antes da cerimônia, como os demais Evangelistas e Pastores ("a gente não sabe como era essa outra convenção").
+  - **Licença de candidatura (Art. 157 §2º) afasta das funções e da liderança, não do processo:** enquanto dura, o obreiro não oficia
+    (púlpito, Ceia, dirigir culto) e sai dos cargos que poderiam servir à campanha (dirigente, tesouraria, diretoria, conselho — Assentos
+    e Liderança); o **título fica** (o Presbítero continua Presbítero e volta a exercer depois do pleito, a critério da Diretoria), o CHM
+    fica e **os processos de consagração seguem** — a escada não trava pela licença.
+
+  **Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):**
+  - A exclusão julgada pelo TER e ainda pendente do CEI já afasta das funções (não oficia, não unge, o QR diz "obreiro inativo"), mas a
+    pessoa continua membro até o CEI homologar.
+  - O celibato do Pastor "reconhecido pela Convenção" (Art. 73, II, b) fica registrado só no parecer do CEI.
+  - A minimização também apaga os processos de Integração e Reintegração da pessoa.
 
 ## v8.5 — Trilha de discipulado como entidade de primeira classe *(7ª rodada)*
 

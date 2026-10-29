@@ -113,10 +113,15 @@ describe("vacância e a EBD", () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
       const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], []]);
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
-      // Trava 8-A — primeiro os processos de cargo em andamento (com o motivo); o CHM só cai na disciplina (a licença de candidatura é temporária)
-      expect(chamadas[0].sql).toMatch(/UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo/);
-      expect(chamadas[0].inputs.motivo).toBe(motivo);
-      expect(/Natureza = N'CHM'/.test(tudo0(chamadas))).toBe(motivo === "DISCIPLINA");
+      // Trava 8-A — a disciplina fecha primeiro os processos de cargo em andamento (com o motivo) e revoga o CHM; a licença de candidatura (decisão de 29/10/2026,
+      // Art. 157 §2º) não fecha processo, não revoga o CHM e não tira o cargo nem fecha o histórico — só a liderança e as funções
+      const licenca = motivo === "LICENCA_CANDIDATURA";
+      expect(/UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo/.test(tudo0(chamadas))).toBe(!licenca);
+      if (!licenca) expect(chamadas[0].inputs.motivo).toBe(motivo);
+      expect(/Natureza = N'CHM'/.test(tudo0(chamadas))).toBe(!licenca);
+      expect(/CargoMinisterial = NULL/.test(tudo0(chamadas))).toBe(!licenca);
+      expect(/UPDATE CargosMinisteriaisHistorico/.test(tudo0(chamadas))).toBe(!licenca);
+      expect(tudo0(chamadas)).toMatch(/UPDATE Assentos SET DataFim/);
       const tudo = chamadas.map(c => c.sql).join("\n");
       expect(tudo).toMatch(/EbdTurmaProfessores/);
       expect(tudo).not.toMatch(/EbdAlunos/);

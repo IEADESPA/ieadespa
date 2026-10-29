@@ -88,7 +88,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   Diretoria × da Proteção, o aviso pelo motor que nunca vai à própria pessoa e se repete no mês seguinte), `e2e-45` (atores, território, sondas e lixo) e `e2e-46` (corridas).
 
 - **v8.1** (AFM e faltas da CLI, migração 156), base `cenario-afm` (`bash rodar.sh preparar-afm`: a `cenario-trava7c` com a 153 a 155 reaplicadas e a 156 duas
-  vezes). Cada roteiro monta o próprio cenário (`lib-afm.js`): `e2e-47` (esquema da 156; tipo da reunião; 3 faltas seguidas com exclusão só pelo sistema, sem perder o
+  vezes) — hoje só o degrau da `cenario-escada`: desde a v8.3 o código da AFM lê as colunas do CHM (158), então os roteiros da v8.1 rodam com
+  `BASE=cenario-escada` (Trava 8-A). Cada roteiro monta o próprio cenário (`lib-afm.js`): `e2e-47` (esquema da 156; tipo da reunião; 3 faltas seguidas com exclusão só pelo sistema, sem perder o
   cargo; providências, comunicação e readmissão que recomeça a contagem pela ordem das reuniões; catálogo da justificativa no pedido e na Secretaria; Extraordinária que não
   conta; Sessão Magna com as duas turmas e a falta dupla; desmatrícula, reprovação, licença para oficiar no batismo, rematrícula; Reitor, docentes e CDER; Meu Painel, Meus
   Dados, avisos, rotina, retenção e auditoria — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-afm`), `e2e-48` (401 em toda ação, PIN, território, nível
@@ -112,11 +113,15 @@ Cada versão parte da base da anterior (`BASE=...`):
   quem registra; CHM como documento — emitido, substituído, usado na subida, quem baixa; cerimônia — comissão, candidatos, roteiro com casal e diplomação, diplomas
   impressos com o código reservado, presença, ausência que perde no ano, taxa fora do prazo, retirar, cancelar; diploma verificável; Meus Dados; minimização), `e2e-56`
   (401, PIN, liderança local, geral sem a permissão certa; ids ruins; ninguém no próprio processo; a disciplina que não vaza pelo parecer; lixo em todo campo sem 500 nem
-  mudança no banco) e `e2e-57` (corridas: pareceres, homologações, o mesmo processo em duas cerimônias, impressões dos diplomas, registrar × cancelar × retirar, CHM).
+  mudança no banco) e `e2e-57` (corridas: pareceres, homologações, o mesmo processo em duas cerimônias, impressões dos diplomas, registrar × cancelar × retirar, CHM) e
+  `e2e-58` (o que a revisão independente do servidor pediu: a lista inteira da cerimônia, presentes e ausentes; a cerimônia não antes da homologação; o dossiê da
+  indicação; o CEI fora do próprio processo; a homologação não anterior ao parecer; reprovar solta a cerimônia e o código; ex-cônjuges; dois casamentos e o escrutínio).
   O cadastro assina o link da foto: o `lib.js` usa a conexão pública de desenvolvimento do armazenamento (`UseDevelopmentStorage=true`), que assina sem rede.
 - **v8.4** (Credencial digital, migração 159), mesma base `cenario-escada` (a `preparar-escada` aplica a 159 duas vezes). `e2e-59` (emitir; a credencial no Meu
   Painel com o QR e o PDF; a leitura pública do QR só com o mínimo e a situação de agora — AFM inativa, processo só aberto que não aparece, afastamento, sem comunhão —;
-  códigos ruins; o limitador; nova via, cancelar; pedido e registro de impressão; lote; Meus Dados; a minimização que recolhe a credencial; quem pode o quê; lixo) e
+  códigos ruins; o limitador; nova via, cancelar; pedido e registro de impressão; lote; Meus Dados; a minimização que recolhe a credencial; quem pode o quê; lixo; e o
+  que a revisão pediu: exclusão e Disciplina Rigorosa lidas do processo, recurso que não suspende, exclusão pendente do CEI que não vale, recolhimento na exclusão
+  homologada, no desligamento e no abandono, o lote que não desfaz um cancelamento e anda de 60 em 60, licença como membro ativo) e
   `e2e-60` (corridas: emitir, nova via, emitir × cancelar × nova via, dois lotes). Com `E2E_CONTRATO=1` o `e2e-59` grava as respostas reais para
   `tools/front-credencial`.
 

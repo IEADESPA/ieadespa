@@ -1209,7 +1209,7 @@ function pedirCorrecaoMarco(marco) {
   return new Promise(resolve => {
     const caixa = document.getElementById("modalCaixa");
     caixa.innerHTML = `
-      <h3>Corrigir marco: ${ROTULO_TIPO_MARCO[marco.tipo] || escaparHtmlEbd(marco.tipo)}</h3>
+      <h3>Corrigir marco: ${escaparHtmlEbd((typeof discNomeTipoMarco === "function" && discNomeTipoMarco(marco.tipo)) || ROTULO_TIPO_MARCO[marco.tipo] || marco.tipo)}</h3>
       <div class="input-group">
         <label>Descrição:</label>
         <input type="text" id="modalDescricao" value="${escaparHtmlEbd(marco.descricao || "")}" />

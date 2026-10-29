@@ -10,9 +10,10 @@ const ATAQUE = '<img src=x onerror="__xss(1)">';
 let total = 0, falhas = 0;
 const ok = (c, d, det) => { total++; if (!c) { falhas++; if (!process.env.CALADO) console.log(`  ✗ ${d}${det !== undefined ? ` — ${JSON.stringify(det).slice(0, 300)}` : ""}`); } else if (process.env.LISTA) console.log(`  ✓ ${d}`); };
 
-const CAMPOS_TEXTO = ["nome", "descricao", "fonteRotulo", "trilhaNome", "mensagem"];
+// (os códigos e as chaves são identificadores: o servidor só os aceita em [A-Z0-9_] — validarTipoMarco/validarEtapa — então não carregam HTML)
+const CAMPOS_TEXTO = ["nome", "descricao", "fonteRotulo", "trilhaNome", "mensagem", "preRequisitosPendentes", "MARCO", "BATISMO_AGUAS", "TRILHA", "SERVICO_VOLUNTARIO"];
 function envenenar(v, chave) {
-  if (Array.isArray(v)) return v.map((x) => envenenar(x));
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "string" && CAMPOS_TEXTO.includes(chave) ? `${x} ${ATAQUE}` : envenenar(x)));
   if (v && typeof v === "object") { const o = {}; for (const [k, x] of Object.entries(v)) o[k] = envenenar(x, k); return o; }
   if (typeof v === "string" && CAMPOS_TEXTO.includes(chave)) return `${v} ${ATAQUE}`;
   return v;
@@ -50,7 +51,12 @@ const gets = (amb, caminho) => amb.api.chamadas.filter((c) => c.metodo === "GET"
 async function prova() {
   total = 0; falhas = 0;
   console.log("== contrato real ==");
-  for (const k of ["catalogo", "funilLocal", "funilGeral", "parados", "pessoa", "minha", "minhaVazia"]) ok(REAL[k] && REAL[k].sucesso, `o e2e-62 gravou a resposta real de ${k}`);
+  for (const k of ["catalogo", "funilLocal", "funilGeral", "parados", "pessoa", "minha", "minhaVazia", "posBatismal"]) ok(REAL[k] && REAL[k].sucesso, `o e2e-62 gravou a resposta real de ${k}`);
+  ok(["etapas", "tiposMarco", "fontes", "trilhas"].every((k) => k in REAL.catalogo) && REAL.catalogo.etapas.every((e) => ["etapaId", "chave", "fonte", "tipoMarco", "preRequisitos", "geraAcompanhamento", "ativa"].every((k) => k in e)), "catálogo: os campos que a tela lê");
+  ok(["proximo", "iniciada", "etapas"].every((k) => k in REAL.pessoa.caminhada) && ["total", "etapas", "diasParado"].every((k) => k in REAL.funilGeral), "caminhada e funil: o próximo passo, o total e as etapas");
+  ok(REAL.funilGeral.congregacoes.length >= 2, "o funil do nível geral tem mais de uma congregação (a tabela 'Todas')");
+  ok(REAL.posBatismal.caminhada.etapas.some((e) => e.posBatismal), "uma caminhada com o batismo antes do curso (pós-batismal)");
+  ok(REAL.catalogo.tiposMarco.some((t) => !t.ativo), "um tipo de marco desativado no catálogo");
   ok(REAL.funilLocal.congregacoes.every((c) => ["congregacaoId", "nome", "iniciadas", "concluiram", "etapas"].every((k) => k in c)) && REAL.funilLocal.congregacoes[0].etapas.every((e) => ["etapaId", "nome", "fizeram", "proximoPasso", "parados"].every((k) => k in e)), "funil: os campos que a tela lê");
   ok(REAL.parados.itens.every((p) => ["membroId", "nome", "ultimoPasso", "diasSemPasso"].every((k) => k in p)), "parados: os campos que a tela lê");
   ok(REAL.pessoa.caminhada.etapas.every((e) => ["nome", "feita", "data", "fonteRotulo", "foraDeOrdem"].every((k) => k in e)), "caminhada: os campos que a tela lê");
@@ -80,7 +86,8 @@ async function prova() {
   amb = montar({ gerais: ["pessoas"] });
   await amb.g("discAbrirSubAba")();
   await amb.ocioso();
-  ok(!amb.e("discCatalogo").hidden && /Tipos de marco|Curso de Discipulado/.test(amb.e("discCatalogo").textContent), "o catálogo aparece");
+  ok(!amb.e("discCatalogo").hidden && amb.e("discEtapasLista").textContent.includes(R.catalogo.etapas[0].nome) && amb.e("discTiposLista").textContent.includes(R.catalogo.tiposMarco[0].nome), "o catálogo aparece, com o que veio do servidor");
+  ok(/Todas/.test(amb.e("discFunil").textContent), "mais de uma congregação: a tabela 'Todas'");
   const editar = botoes(amb, "discEtapasLista", "discEditarEtapaAcao");
   ok(editar.length === R.catalogo.etapas.length, "um 'Editar' por etapa");
   const curso = R.catalogo.etapas.find((e) => e.chave === "CURSO_DISCIPULADO");
@@ -127,8 +134,15 @@ async function prova() {
   amb.__respostas["GET discipulado/minha"] = { corpo: R.minhaVazia };
   await amb.g("discCarregarMinhaCaminhada")();
   ok(/Ainda não há passos/.test(amb.e("discMinhaCaminhada").textContent), "quem não começou lê o convite, não uma lista vazia");
+  amb.__respostas["GET discipulado/pessoa"] = { corpo: R.posBatismal };
+  amb.ctx._membroPerfilAtual = 17;
+  await amb.g("discCarregarCaminhadaPerfil")(17);
+  ok(/Discipulado Pós-Batismal/.test(amb.e("discCaminhadaPerfil").textContent), "o batismo antes do curso: o Discipulado Pós-Batismal (Art. 70 §5º)");
+  delete amb.__respostas["GET discipulado/pessoa"];
   await amb.g("discPreencherTiposMarco")();
   const opcoes = [...amb.e("marcoTipo").options].map((o) => o.value);
+  const inativo = R.catalogo.tiposMarco.find((t) => !t.ativo);
+  ok(!opcoes.includes(inativo.codigo), "o tipo desativado não aparece no formulário de marco", opcoes);
   ok(opcoes.includes("CONVERSAO") && !opcoes.includes("BATISMO_ESPIRITO_SANTO"), "o formulário de marco: os tipos do catálogo, sem o 'só do nível geral' para a liderança local", opcoes);
   semAtaque(amb, "caminhada");
   const geral = montar({ gerais: ["pessoas"] });
@@ -136,15 +150,56 @@ async function prova() {
   ok([...geral.e("marcoTipo").options].map((o) => o.value).includes("BATISMO_ESPIRITO_SANTO"), "o nível geral vê o batismo no Espírito Santo");
 
   console.log("== saída da sessão ==");
-  amb.g("discLimparTela")();
-  ok(amb.e("discFunil").innerHTML === "" && amb.e("discCaminhadaPerfil").innerHTML === "" && amb.e("discMinhaCaminhada").innerHTML === "" && amb.e("discParados").hidden, "saiu: o funil e as caminhadas somem");
+  const sai = montar({ gerais: ["pessoas"] });
+  await sai.g("discAbrirSubAba")();
+  await sai.ocioso();
+  await sai.g("discVerParadosAcao")(...args(botoes(sai, "discFunil", "discVerParadosAcao")[0]));
+  await sai.g("discPreencherTiposMarco")();
+  sai.ctx._membroPerfilAtual = 15;
+  await sai.g("discCarregarCaminhadaPerfil")(15);
+  await sai.g("discCarregarMinhaCaminhada")();
+  ok(sai.e("discFunil").innerHTML !== "" && sai.e("discParadosLista").innerHTML !== "" && sai.e("discEtapasLista").innerHTML !== "" && sai.e("marcoTipo").options.length > 0, "antes de sair, tudo carregado");
+  sai.g("discLimparTela")();
+  ok(["discFunil", "discParadosLista", "discEtapasLista", "discTiposLista", "discCaminhadaPerfil", "discMinhaCaminhada", "marcoTipo"].every((idEl) => sai.e(idEl).innerHTML === "")
+    && sai.e("discParados").hidden && sai.e("discCatalogo").hidden && sai.g("discCatalogo") === null, "saiu: o funil, os parados, o catálogo, as caminhadas e os tipos do marco somem");
+  // a resposta que chega depois da troca de login não volta para a tela
+  const atr = montar();
+  const ret = atr.retem((c) => c.chave === "GET discipulado/funil");
+  const atrasada = atr.g("discCarregarFunilAcao")();
+  await atr.ocioso();
+  atr.g("discLimparTela")();
+  atr.sessao({ matricula: 2002, token: "tok-b", nivel: "CONGREGACAO", permissoes: ["pessoas"], geral: false });
+  ret.liberar(); await atrasada; await atr.ocioso();
+  ok(atr.e("discFunil").innerHTML === "" && atr.g("discFunilAtual") === null, "a resposta atrasada do login anterior não aparece para o novo");
+  // a "Minha caminhada" pedida por A e respondida depois que B entrou (sem passar pela limpeza): só a conferência do login segura
+  const mc = montar();
+  const retM = mc.retem((c) => c.chave === "GET discipulado/minha");
+  const pm = mc.g("discCarregarMinhaCaminhada")();
+  await mc.ocioso();
+  mc.sessao({ matricula: 2003, token: "tok-c", nivel: "CONGREGACAO", permissoes: ["pessoas"], geral: false });
+  retM.liberar(); await pm; await mc.ocioso();
+  ok(mc.e("discMinhaCaminhada").innerHTML === "", "a caminhada de A não aparece para B", mc.e("discMinhaCaminhada").textContent.slice(0, 80));
+  // dois "Atualizar" seguidos: vale o último
+  const dois = montar();
+  const ret1 = dois.retem((c) => c.chave === "GET discipulado/funil" && c.consulta.diasParado === "30");
+  dois.e("discDiasParado").value = "30";
+  const p1 = dois.g("discCarregarFunilAcao")();
+  await dois.ocioso();
+  dois.__respostas["GET discipulado/funil"] = { corpo: { ...R.funilLocal, diasParado: 180 } };
+  dois.e("discDiasParado").value = "180";
+  await dois.g("discCarregarFunilAcao")();
+  ret1.liberar(); await p1; await dois.ocioso();
+  ok(/180 dias/.test(dois.e("discFunil").textContent) && !/ 30 dias/.test(dois.e("discFunil").textContent), "dois 'Atualizar' seguidos: a tela fica com o último filtro");
   return { total, falhas };
 }
 
 const MUTACOES = [
   ["tirar o escape do nome da etapa na caminhada", ['<strong>${escaparHtmlEbd(e.nome)}</strong>${e.feita', "<strong>${e.nome}</strong>${e.feita"]],
   ["mostrar o catálogo à liderança local", ['discEl("discCatalogo").hidden = !geral;', 'discEl("discCatalogo").hidden = false;']],
-  ["oferecer o 'só do nível geral' a todos", ['cat.tiposMarco.filter((t) => t.ativo && (!t.soNivelGeral || geralPara("pessoas")))', "cat.tiposMarco.filter((t) => t.ativo)"]]
+  ["oferecer o 'só do nível geral' a todos", ['cat.tiposMarco.filter((t) => t.ativo && (!t.soNivelGeral || geralPara("pessoas")))', "cat.tiposMarco.filter((t) => t.ativo)"]],
+  ["esquecer o funil na saída", ['for (const idEl of ["discFunil", "discParadosLista",', 'for (const idEl of ["discParadosLista",']],
+  ["não conferir o login depois do pedido", ["return authToken === token ? data : null;", "return data;"]],
+  ["não conferir o pedido mais recente do funil", ["if (data === null || pedido !== discPedidoFunil) return;", "if (data === null) return;"]]
 ];
 
 (async () => {

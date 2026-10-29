@@ -1168,8 +1168,7 @@
             formação vigente. Qualquer pessoa confere a autenticidade de um certificado seu, sem login,
             pelo QR Code ou pelo código impresso nele.</p>
           <div id="resultadoMinhaFormacao"></div>
-          <!-- v8.5 — a minha caminhada na trilha de discipulado -->
-          <h4>🌱 Minha caminhada</h4>
+          <!-- v8.5 — a minha caminhada na trilha de discipulado (o título vem com o conteúdo: sem resposta, o bloco não aparece) -->
           <div id="discMinhaCaminhada"></div>
         </div>
 
@@ -2140,7 +2139,7 @@
           </div>
           <p id="discResultado" role="status" aria-live="polite"></p>
           <div class="rolagem-tabela"><div id="discFunil"></div></div>
-          <div id="discParados" class="cons-painel" hidden>
+          <div id="discParados" class="cons-painel" tabindex="-1" hidden>
             <h4 id="discParadosTitulo"></h4>
             <div class="rolagem-tabela"><div id="discParadosLista"></div></div>
           </div>
@@ -2158,8 +2157,10 @@
               <div class="input-group"><label for="discEtapaFonte">De onde vem:</label><select id="discEtapaFonte" data-on-change="discMudouFonteAcao"></select></div>
               <div class="input-group" id="discGrupoTipoMarco"><label for="discEtapaTipoMarco">Tipo de marco:</label><select id="discEtapaTipoMarco"></select></div>
               <div class="input-group" id="discGrupoTrilha" hidden><label for="discEtapaTrilha">Trilha de formação:</label><select id="discEtapaTrilha"></select></div>
-              <p class="subtitle">Pré-requisitos (informativos — a ordem real é a que aconteceu):</p>
-              <div id="discEtapaPre"></div>
+              <fieldset>
+                <legend>Pré-requisitos (informativos — a ordem real é a que aconteceu)</legend>
+                <div id="discEtapaPre"></div>
+              </fieldset>
               <label class="rotulo-inline"><input type="checkbox" id="discEtapaGera" /> Abre acompanhamento quando é o próximo passo</label>
               <label class="rotulo-inline"><input type="checkbox" id="discEtapaAtiva" /> Ativa</label>
               <div>

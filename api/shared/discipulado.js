@@ -45,19 +45,28 @@ function caminhada(etapas, fatos) {
   });
   const proximo = lista.find((e) => !e.feita) || null;
   const base = ordenadas.find((e) => proximo && e.etapaId === proximo.etapaId);
+  // a data do passo imediatamente anterior ao próximo (a última etapa feita antes dele, na ordem): é ela que diz se a pessoa "acabou de andar"
+  let dataPassoAnterior = null;
+  if (proximo) for (const e of lista) if (e.ordem <= proximo.ordem && e.etapaId !== proximo.etapaId && e.feita && e.data && (!dataPassoAnterior || e.data > dataPassoAnterior)) dataPassoAnterior = e.data;
+  // o Discipulado Pós-Batismal (Art. 70 §5º): o batismo nas águas feito sem o curso
+  for (const e of lista) e.posBatismal = e.feita && e.fonte === "BATISMO_AGUAS" && lista.some((x) => !x.feita && x.chave === "CURSO_DISCIPULADO");
   return {
     etapas: lista,
     proximo: proximo ? { etapaId: proximo.etapaId, chave: proximo.chave, nome: proximo.nome, geraAcompanhamento: !!(base && base.geraAcompanhamento) } : null,
     ultimoPasso,
-    iniciada: feitas.size > 0,
+    dataPassoAnterior,
+    // a trilha COMEÇA na primeira etapa (a conversão): o membro antigo só com o batismo do cadastro ou uma escala, sem a conversão lançada, não entra no funil nem na
+    // fila (revisão independente: senão o rol inteiro apareceria "parado antes da conversão")
+    iniciada: lista.length > 0 && lista[0].feita,
     concluida: lista.length > 0 && !proximo
   };
 }
 
-// Abrir o acompanhamento do próximo passo? Só para quem COMEÇOU, deu um passo recente (dentro da janela) e tem um próximo passo que pede acompanhamento.
+// Abrir o acompanhamento do próximo passo? Só para quem COMEÇOU, deu o passo ANTERIOR ao próximo recentemente (dentro da janela; data conhecida) e tem um próximo passo
+// que pede acompanhamento. Um passo recente que vem depois do próximo (a escala, o batismo no Espírito Santo lançado para a escada) não reabre a trilha antiga.
 function deveAcompanhar(c, hojeIso, janelaDias = JANELA_ACOMPANHAMENTO_DIAS) {
-  if (!c || !c.iniciada || !c.proximo || !c.proximo.geraAcompanhamento || !c.ultimoPasso) return false;
-  return c.ultimoPasso >= somarDias(hojeIso, -janelaDias) && c.ultimoPasso <= hojeIso;
+  if (!c || !c.iniciada || !c.proximo || !c.proximo.geraAcompanhamento || !c.dataPassoAnterior) return false;
+  return c.dataPassoAnterior >= somarDias(hojeIso, -janelaDias) && c.dataPassoAnterior <= hojeIso;
 }
 
 // O funil de UMA congregação. `pessoas`: [{ membroId, caminhada }] (as caminhadas já calculadas). Só entra quem começou. Para cada etapa: quantos fizeram e quantos estão
@@ -139,7 +148,7 @@ function validarEtapa(c) {
 
 // O texto do acompanhamento (vai para a fila do cuidado pastoral).
 function textoDoAcompanhamento(c) {
-  const ultima = [...c.etapas].filter((e) => e.feita && e.data).sort((a, b) => (a.data < b.data ? 1 : -1))[0];
+  const ultima = [...c.etapas].filter((e) => e.feita && e.data && e.data === c.dataPassoAnterior)[0];
   return {
     motivo: `Próximo passo: ${c.proximo.nome}.`,
     resumo: ultima ? `Último passo: ${ultima.nome} em ${ultima.data.split("-").reverse().join("/")}.` : "Começou a caminhada."

@@ -55,21 +55,27 @@ module.exports = async function (context, req) {
     const usuario = auth.exigirPermissao(req, context, "pessoas");
     if (!usuario) return;
     const pool = await getPool();
-    if (acao === "pessoa") {
-      const p = await pessoaAlcancavel(pool, usuario, query.membroId);
-      if (!p) return erro(context, 404, "Matrícula não encontrada.");
-      context.res = { status: 200, body: { sucesso: true, caminhada: await db.caminhadaDe(pool, p.membroId) } };
+    if (acao !== "pessoa") {
+      // o funil e os nomes de quem parou são TERRITORIAIS (revisão independente): a concessão de uma Extensão (que enxergaria a congregação-mãe inteira pelo nome) e a de
+      // Departamento não os veem — o mesmo critério do cuidado pastoral; quem cuida da Extensão é o Dirigente da congregação-mãe
+      const visao = auth.restringirVisao(usuario, (c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO" && !c.departamentoId);
+      if (!visao || !auth.temPermissao(visao, "pessoas")) return erro(context, 403, "O funil do discipulado é da liderança da congregação para cima.");
+      const noEscopo = (congregacao, extensao) => noEscopoDaPessoa(visao, congregacao, extensao);
+      const diasParado = diasParadoDe(query.diasParado);
+      if (acao === "funil") {
+        context.res = { status: 200, body: { sucesso: true, ...(await db.funil(pool, { noEscopo, diasParado })) } };
+        return;
+      }
+      const congregacaoId = auth.idDeRota(query.congregacaoId);
+      const etapaId = auth.idDeRota(query.etapaId);
+      if (!congregacaoId || !etapaId || !(await congregacaoNoEscopo(pool, visao, congregacaoId))) return erro(context, 404, "Congregação não encontrada.");
+      context.res = { status: 200, body: { sucesso: true, itens: await db.parados(pool, { congregacaoId, etapaId, noEscopo, diasParado }) } };
       return;
     }
-    const diasParado = diasParadoDe(query.diasParado);
-    if (acao === "funil") {
-      context.res = { status: 200, body: { sucesso: true, ...(await db.funil(pool, { noEscopo: (nome) => noEscopoDaPessoa(usuario, nome, null), diasParado })) } };
-      return;
-    }
-    const congregacaoId = auth.idDeRota(query.congregacaoId);
-    const etapaId = auth.idDeRota(query.etapaId);
-    if (!congregacaoId || !etapaId || !(await congregacaoNoEscopo(pool, usuario, congregacaoId))) return erro(context, 404, "Congregação não encontrada.");
-    context.res = { status: 200, body: { sucesso: true, itens: await db.parados(pool, { congregacaoId, etapaId, diasParado }) } };
+    // a caminhada de UMA pessoa: quem alcança a pessoa (a extensão dela inclusive) a vê
+    const p = await pessoaAlcancavel(pool, usuario, query.membroId);
+    if (!p) return erro(context, 404, "Matrícula não encontrada.");
+    context.res = { status: 200, body: { sucesso: true, caminhada: await db.caminhadaDe(pool, p.membroId) } };
     return;
   }
   erro(context, 404, "Ação inválida.");

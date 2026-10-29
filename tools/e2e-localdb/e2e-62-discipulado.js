@@ -129,6 +129,37 @@ const N = { nova: 9401, batizada: 9402, servo: 9403, antiga: 9404, trilha: 9405,
   r = await disc("funil", { token: SEC(), query: { diasParado: "abc" } });
   ok(r.status === 200 && r.body.diasParado === 90, "dias inválidos: o padrão (90)");
 
+  console.log("== revisão independente ==");
+  // o membro antigo só com o batismo do cadastro (sem a conversão lançada) não entra no funil
+  await pessoa(9407, "Membro antigo E2E", central);
+  await q("UPDATE MembroReferencia SET DataBatismo = '2005-05-05' WHERE MembroId = 9407");
+  r = await disc("parados", { token: LOCAL(), query: { congregacaoId: central, etapaId: id("CONVERSAO") } });
+  ok(r.status === 200 && !r.body.itens.some((p) => p.membroId === 9407), "o batizado antigo sem a conversão lançada não aparece como 'parado antes da conversão'", r.body.itens);
+  // o dirigente de uma Extensão não vê o funil nem os nomes da congregação-mãe (o mesmo critério do cuidado pastoral)
+  const EXT = L.sessao(E.P.lider, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: [E.CENTRAL], escopoExtensaoNome: "Extensão Discipulado E2E", permissoes: ["pessoas"] });
+  ok((await disc("funil", { token: EXT })).status === 403 && (await disc("parados", { token: EXT, query: { congregacaoId: central, etapaId: curso.etapaId } })).status === 403, "a Extensão: 403 no funil e nos parados");
+  const DEP = L.sessao(E.P.lider, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "DEPARTAMENTO", escopoCongregacoes: [E.CENTRAL], departamentoId: 1, permissoes: ["pessoas"] });
+  ok((await disc("funil", { token: DEP })).status === 403, "a concessão de departamento: 403");
+  // o curso atestado na esteira de batismo conta (nada é lançado duas vezes)
+  await pessoa(9408, "Batizado pela esteira E2E", central);
+  await marco(9408, "CONVERSAO", { dataMarco: somar(-40) });
+  await q("INSERT INTO CandidatosBatismo (MembroId, Status, DiscipuladoConcluidoManual) VALUES (9408, 'BATIZADO', 1)");
+  await q("UPDATE MembroReferencia SET DataBatismo = @d WHERE MembroId = 9408", { d: somar(-5) });
+  c = (await disc("pessoa", { token: LOCAL(), query: { membroId: 9408 } })).body.caminhada;
+  ok(c.etapas.find((e) => e.chave === "CURSO_DISCIPULADO").feita && !c.etapas.find((e) => e.chave === "BATISMO_AGUAS").posBatismal, "o discipulado atestado na esteira de batismo conta como o curso", c.etapas.map((e) => [e.chave, e.feita]));
+  // o marco sem data é data desconhecida (não a data em que foi lançado)
+  await pessoa(9409, "Conversão sem data E2E", central);
+  await marco(9409, "CONVERSAO");
+  c = (await disc("pessoa", { token: LOCAL(), query: { membroId: 9409 } })).body.caminhada;
+  ok(c.etapas[0].feita && c.etapas[0].data === null && c.dataPassoAnterior === null, "a conversão lançada sem data: feita, com a data desconhecida", c.etapas[0]);
+  // o tipo do sistema não se desativa
+  r = await disc("tipo-marco", { metodo: "POST", corpo: { codigo: "CONVERSAO", nome: "Conversão", unico: true, ativo: false } });
+  ok(r.status === 422 && /sistema/.test(r.body.mensagem), "os tipos do sistema não se desativam", r.body);
+  // a data no futuro também na correção do marco
+  const marcoId = await escalar("SELECT TOP 1 MarcoId FROM MarcosMembro WHERE MembroId = 9409");
+  r = await chamarRota("EditarMarcoMembro/index.js", { metodo: "POST", binding: { marcoId: String(marcoId) }, token: GERAL(1002, ["pessoas"]), corpo: { dataMarco: somar(3), justificativa: "Corrigindo (e2e)" } });
+  ok(r.status === 400 && /futuro/.test(r.body.mensagem), "corrigir o marco para uma data no futuro: 400", r.body);
+
   console.log("== o próximo passo vira acompanhamento ==");
   const rotina = () => req("shared/discipuladoDb.js").rotinaDiaria(pool);
   let rr = await rotina();
@@ -136,6 +167,7 @@ const N = { nova: 9401, batizada: 9402, servo: 9403, antiga: 9404, trilha: 9405,
   let it = await itensDe(N.nova);
   ok(it.length === 1 && it[0].Status === "ABERTO" && it[0].Origem === "DISCIPULADO" && it[0].EtapaDiscipuladoId === curso.etapaId && /Curso de Discipulado/.test(it[0].Motivo), "quem andou há pouco: o item do próximo passo (o curso)", it);
   ok((await itensDe(N.antiga)).length === 0, "quem parou há anos não inunda a fila (fora da janela de 180 dias)");
+  ok((await itensDe(9409)).length === 0 && (await itensDe(9407)).length === 0, "nem a conversão sem data, nem o batizado antigo sem a conversão");
   ok((await itensDe(N.servo)).length === 0, "quem concluiu a trilha não tem próximo passo");
   rr = await rotina();
   ok((await itensDe(N.nova)).length === 1 && rr.abertos === 0, "a rotina de novo não abre outro", rr);
@@ -155,10 +187,14 @@ const N = { nova: 9401, batizada: 9402, servo: 9403, antiga: 9404, trilha: 9405,
   // no máximo 20 por congregação por dia
   for (let i = 0; i < 25; i++) { await pessoa(9500 + i, `Convertido ${i} E2E`, central); await q("INSERT INTO MarcosMembro (MembroId, Tipo, Descricao, DataMarco) VALUES (@m, 'CONVERSAO', N'e2e', @d)", { m: 9500 + i, d: somar(-i - 1) }); }
   rr = await rotina();
-  ok(rr.abertos === 20, "25 convertidos novos: 20 itens hoje (o resto amanhã)", rr);
-  ok((await contar("SELECT COUNT(*) FROM CuidadoItens WHERE Tipo = 'DISCIPULADO' AND MembroId BETWEEN 9500 AND 9524")) === 20 && (await contar("SELECT COUNT(*) FROM CuidadoItens WHERE MembroId = 9524")) === 0,
-    "os passos mais recentes primeiro");
-  ok((await rotina()).abertos === 5, "no dia seguinte, os outros 5");
+  const hojeCentral = () => contar("SELECT COUNT(*) FROM CuidadoItens WHERE Origem = 'DISCIPULADO' AND CongregacaoId = @c AND CriadoEm >= DATEADD(hour, 3, CAST(CAST(DATEADD(hour, -3, SYSUTCDATETIME()) AS date) AS datetime2))", { c: central });
+  ok((await hojeCentral()) === 20, "25 convertidos novos: a congregação fica com 20 itens hoje, contando os que já tinham aberto (o resto amanhã)", rr);
+  const novos25 = await contar("SELECT COUNT(*) FROM CuidadoItens WHERE Tipo = 'DISCIPULADO' AND MembroId BETWEEN 9500 AND 9524");
+  ok(novos25 < 25 && (await contar("SELECT COUNT(*) FROM CuidadoItens WHERE MembroId = 9524")) === 0, "os passos mais recentes primeiro (o mais antigo fica para amanhã)", novos25);
+  ok((await rotina()).abertos === 0, "rodar de novo no mesmo dia não passa do teto (o teto é por dia)");
+  const amanha = new Date(Date.now() + 24 * 3600 * 1000);
+  ok((await req("shared/discipuladoDb.js").rotinaDiaria(pool, { agora: amanha })).abertos === 25 - novos25
+    && (await contar("SELECT COUNT(*) FROM CuidadoItens WHERE Tipo = 'DISCIPULADO' AND MembroId BETWEEN 9500 AND 9524")) === 25, "no dia seguinte, os outros");
   ok((await contar("SELECT COUNT(*) FROM CuidadoItens WHERE Tipo = 'DISCIPULADO' AND Origem = 'DISCIPULADO' AND PrazoEm > SYSUTCDATETIME()")) > 0, "com o prazo do tipo (Catálogos → Prazos)");
   // a rotina do cuidado chama a do discipulado
   const cuidado = await req("shared/cuidadoPastoralDb.js").rotinaDiaria(pool);
@@ -166,6 +202,24 @@ const N = { nova: 9401, batizada: 9402, servo: 9403, antiga: 9404, trilha: 9405,
   // a fila do cuidado mostra o item com a origem e o resumo
   const g = await chamarRota("GestaoCuidadoPastoral/index.js", { binding: { acao: "fila" }, token: GERAL(1002, ["cuidado_pastoral"]) }).catch(() => null);
   if (g && g.status === 200) ok(JSON.stringify(g.body).includes("Próximo passo do discipulado"), "a fila mostra o tipo novo");
+
+  await q("UPDATE MembroReferencia SET CongregacaoId = @v WHERE MembroId = @m", { v: vila, m: N.trilha });
+  await req("shared/cuidadoPastoralDb.js").acompanharQuemMudou(pool);
+  itT = await itensDe(N.trilha);
+  ok(itT.length === 1, "o item cancelado não é transferido (já estava encerrado)", itT);
+  await q("UPDATE MembroReferencia SET CongregacaoId = @c WHERE MembroId = @m", { c: central, m: N.trilha });
+  await pessoa(9410, "Muda de congregação E2E", central);
+  await marco(9410, "CONVERSAO", { dataMarco: somar(-4) });
+  const depoisDeAmanha = new Date(Date.now() + 2 * 24 * 3600 * 1000);   // o teto de hoje e o de amanhã já foram usados acima
+  await req("shared/discipuladoDb.js").rotinaDiaria(pool, { agora: depoisDeAmanha });
+  const antes = await itensDe(9410);
+  await q("UPDATE MembroReferencia SET CongregacaoId = @v WHERE MembroId = 9410", { v: vila });
+  await req("shared/cuidadoPastoralDb.js").acompanharQuemMudou(pool);
+  const depois = await itensDe(9410);
+  ok(antes.length === 1 && depois.length === 2 && depois[1].Status === "ABERTO" && depois[1].EtapaDiscipuladoId === antes[0].EtapaDiscipuladoId, "mudou de congregação: o item vai junto, com a etapa", depois);
+  await q("INSERT INTO MarcosMembro (MembroId, Tipo, Descricao, DataMarco) VALUES (9410, 'CURSO_DISCIPULADO', N'e2e', @d)", { d: somar(-1) });
+  await req("shared/discipuladoDb.js").rotinaDiaria(pool, { agora: depoisDeAmanha });
+  ok((await itensDe(9410))[1].Status === "CONCLUIDO", "e fecha sozinho na congregação nova quando a pessoa dá o passo");
 
   console.log("== Meus Dados e a minimização ==");
   const md = await req("shared/discipuladoDb.js").dadosDoTitular(pool, N.nova);
@@ -175,11 +229,17 @@ const N = { nova: 9401, batizada: 9402, servo: 9403, antiga: 9404, trilha: 9405,
   ok((await contar("SELECT COUNT(*) FROM MarcosMembro WHERE MembroId = @m", { m: N.sai })) === 0, "minimizado: os marcos (registros de conversão) saem — Art. 132 §2º, II");
 
   if (process.env.E2E_CONTRATO) {
+    // para a tela: alguém batizado antes do curso (pós-batismal) e uma segunda congregação no funil do nível geral
+    await pessoa(9411, "Pós-batismal E2E", central);
+    await marco(9411, "CONVERSAO", { dataMarco: somar(-12) });
+    await q("UPDATE MembroReferencia SET DataBatismo = @d WHERE MembroId = 9411", { d: somar(-6) });
+    await marco(N.fora, "CONVERSAO", { dataMarco: somar(-200) }, SEC());
     const contrato = {
+      posBatismal: (await disc("pessoa", { token: LOCAL(), query: { membroId: 9411 } })).body,
       catalogo: (await disc("catalogo")).body, funilLocal: (await disc("funil", { token: LOCAL() })).body, funilGeral: (await disc("funil")).body,
       parados: (await disc("parados", { token: LOCAL(), query: { congregacaoId: central, etapaId: curso.etapaId } })).body,
       pessoa: (await disc("pessoa", { token: LOCAL(), query: { membroId: N.nova } })).body, minha: (await disc("minha", { token: MEMBRO(N.nova) })).body,
-      minhaVazia: (await disc("minha", { token: MEMBRO(N.fora) })).body
+      minhaVazia: (await disc("minha", { token: MEMBRO(9407) })).body
     };
     require("fs").mkdirSync(path.join(__dirname, "..", "front-discipulado"), { recursive: true });
     require("fs").writeFileSync(path.join(__dirname, "..", "front-discipulado", "contrato-real.json"), JSON.stringify(contrato, null, 2));

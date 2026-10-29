@@ -138,6 +138,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   perfil e a minha; o funil e os parados só do território; a rotina que abre o "próximo passo" na fila do cuidado — só passo recente, no máximo 20 por congregação,
   nunca de novo para a mesma etapa — e o fecha sozinho; a minimização que apaga os marcos; Meus Dados; lixo — com `E2E_CONTRATO=1` grava as respostas reais para
   `tools/front-discipulado`) e `e2e-63` (corridas em processos separados: quatro conversões da mesma pessoa, quatro rotinas, quatro etapas e quatro tipos iguais).
+  Desde a v8.5 a `preparar-pastoral` aplica também da 156 à 161: a rotina diária do cuidado roda a da trilha de discipulado e o Meus Dados lê as colunas da
+  fase 8 — a base do cuidado tem o esquema inteiro, como no deploy (o setup `e2e-23` confere os 11 prazos do cuidado, com o do discipulado).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

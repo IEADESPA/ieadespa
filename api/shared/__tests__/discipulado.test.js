@@ -116,3 +116,27 @@ describe("o cuidado pastoral conhece o tipo novo", () => {
     expect(cp.DESFECHOS_CONCLUSAO.PASSO_DADO).toBeUndefined();   // ninguém conclui à mão com "passo dado": só o sistema
   });
 });
+
+describe("revisão independente da v8.5", () => {
+  const hoje = "2026-10-29";
+  test("o membro antigo só com o batismo do cadastro (sem a conversão lançada) não começou: fora do funil e da fila", () => {
+    const c = d.caminhada(ETAPAS, fatos({ 3: "2005-05-05" }));
+    expect(c.iniciada).toBe(false);
+    expect(d.funil([{ membroId: 1, caminhada: c }], ETAPAS, { hojeIso: hoje }).iniciadas).toBe(0);
+    expect(d.estaParado(c, hoje)).toBe(false);
+  });
+  test("um passo recente DEPOIS do próximo (a escala de hoje) não reabre a trilha antiga: vale a data do passo anterior ao próximo", () => {
+    const c = d.caminhada(ETAPAS, fatos({ 1: "2010-01-01", 4: "2026-10-20" }));
+    expect(c.proximo.etapaId).toBe(2);
+    expect(c.dataPassoAnterior).toBe("2010-01-01");
+    expect(d.deveAcompanhar(c, hoje)).toBe(false);
+  });
+  test("o passo anterior sem data conhecida (marco sem data) não abre acompanhamento", () => {
+    expect(d.deveAcompanhar(d.caminhada(ETAPAS, fatos({ 1: null })), hoje)).toBe(false);
+  });
+  test("o batismo sem o curso é marcado como pós-batismal (Art. 70 §5º); com o curso, não", () => {
+    const E2 = ETAPAS.map((e) => (e.etapaId === 2 ? { ...e, chave: "CURSO_DISCIPULADO" } : e));
+    expect(d.caminhada(E2, fatos({ 1: "2026-10-01", 3: "2026-10-10" })).etapas.find((e) => e.etapaId === 3).posBatismal).toBe(true);
+    expect(d.caminhada(E2, fatos({ 1: "2026-10-01", 2: "2026-10-05", 3: "2026-10-10" })).etapas.find((e) => e.etapaId === 3).posBatismal).toBe(false);
+  });
+});

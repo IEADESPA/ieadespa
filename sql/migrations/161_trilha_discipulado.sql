@@ -127,9 +127,17 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CuidadoItens_UmAberto
     CREATE UNIQUE INDEX UX_CuidadoItens_UmAbertoPorPessoa ON dbo.CuidadoItens (Tipo, MembroId)
         WHERE Status = N'ABERTO' AND MembroId IS NOT NULL AND Tipo IN (N'NOVO_CONVERTIDO', N'AFASTAMENTO', N'PEDIDO_VISITA', N'POS_INTERNACAO', N'DISCIPULADO');
 GO
--- nunca reabre para a mesma etapa: um item por pessoa e etapa, de qualquer situação
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CuidadoItens_UmPorEtapa' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
-    CREATE UNIQUE INDEX UX_CuidadoItens_UmPorEtapa ON dbo.CuidadoItens (MembroId, EtapaDiscipuladoId) WHERE EtapaDiscipuladoId IS NOT NULL;
+-- (revisão independente) sem índice único por pessoa e etapa: a anonimização (exclusão LGPD, retenção) deixa MembroId NULL e o item transferido de congregação repete a
+-- etapa — o "um aberto por pessoa" acima segura a duplicata e o "nunca reabre para a mesma etapa" é da rotina. O índice da primeira versão sai das bases de teste.
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CuidadoItens_UmPorEtapa' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
+    DROP INDEX UX_CuidadoItens_UmPorEtapa ON dbo.CuidadoItens;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CuidadoItens_Etapa' AND object_id = OBJECT_ID(N'dbo.CuidadoItens'))
+    CREATE INDEX IX_CuidadoItens_Etapa ON dbo.CuidadoItens (MembroId, EtapaDiscipuladoId) WHERE EtapaDiscipuladoId IS NOT NULL;
+GO
+-- o prazo do tipo novo em Catálogos → Prazos (ajustável)
+IF NOT EXISTS (SELECT 1 FROM dbo.Prazos WHERE Sigla = 'CUIDADO_PRAZO_DISCIPULADO_DIAS')
+    INSERT INTO dbo.Prazos (Sigla, Nome, Dias) VALUES ('CUIDADO_PRAZO_DISCIPULADO_DIAS', N'Cuidado pastoral — dias para acompanhar o próximo passo da trilha de discipulado', 30);
 GO
 -- os marcos por pessoa e tipo (a trilha e o "único" leem por aqui)
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_MarcosMembro_Membro_Tipo' AND object_id = OBJECT_ID(N'dbo.MarcosMembro'))

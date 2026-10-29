@@ -1,4 +1,101 @@
 {
+  "posBatismal": {
+    "sucesso": true,
+    "caminhada": {
+      "etapas": [
+        {
+          "etapaId": 1,
+          "chave": "CONVERSAO",
+          "nome": "Conversão",
+          "ordem": 1,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": true,
+          "data": "2026-10-17",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 2,
+          "chave": "CURSO_DISCIPULADO",
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fonte": "TRILHA",
+          "fonteRotulo": "Trilha de formação concluída",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 3,
+          "chave": "BATISMO_AGUAS",
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fonte": "BATISMO_AGUAS",
+          "fonteRotulo": "Batismo nas águas (data do cadastro)",
+          "feita": true,
+          "data": "2026-10-23",
+          "foraDeOrdem": true,
+          "preRequisitosPendentes": [
+            "Curso de Discipulado"
+          ],
+          "posBatismal": true
+        },
+        {
+          "etapaId": 4,
+          "chave": "BATISMO_ESPIRITO",
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 5,
+          "chave": "DEPARTAMENTO",
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 6,
+          "chave": "SERVICO_VOLUNTARIO",
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fonte": "SERVICO_VOLUNTARIO",
+          "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        }
+      ],
+      "proximo": {
+        "etapaId": 2,
+        "chave": "CURSO_DISCIPULADO",
+        "nome": "Curso de Discipulado",
+        "geraAcompanhamento": true
+      },
+      "ultimoPasso": "2026-10-23",
+      "dataPassoAnterior": "2026-10-17",
+      "iniciada": true,
+      "concluida": false
+    }
+  },
   "catalogo": {
     "sucesso": true,
     "etapas": [
@@ -215,30 +312,30 @@
       {
         "congregacaoId": 1,
         "nome": "Central E2E",
-        "iniciadas": 34,
+        "iniciadas": 33,
         "concluiram": 1,
         "etapas": [
           {
             "etapaId": 1,
             "nome": "Conversão",
             "ordem": 1,
-            "fizeram": 30,
-            "proximoPasso": 4,
-            "parados": 4
+            "fizeram": 33,
+            "proximoPasso": 0,
+            "parados": 0
           },
           {
             "etapaId": 2,
             "nome": "Curso de Discipulado",
             "ordem": 2,
-            "fizeram": 4,
-            "proximoPasso": 26,
-            "parados": 1
+            "fizeram": 5,
+            "proximoPasso": 28,
+            "parados": 2
           },
           {
             "etapaId": 3,
             "nome": "Batismo nas águas",
             "ordem": 3,
-            "fizeram": 3,
+            "fizeram": 5,
             "proximoPasso": 1,
             "parados": 0
           },
@@ -246,8 +343,8 @@
             "etapaId": 4,
             "nome": "Batismo no Espírito Santo",
             "ordem": 4,
-            "fizeram": 5,
-            "proximoPasso": 2,
+            "fizeram": 1,
+            "proximoPasso": 3,
             "parados": 0
           },
           {
@@ -270,30 +367,30 @@
       }
     ],
     "total": {
-      "iniciadas": 34,
+      "iniciadas": 33,
       "concluiram": 1,
       "etapas": [
         {
           "etapaId": 1,
           "nome": "Conversão",
           "ordem": 1,
-          "fizeram": 30,
-          "proximoPasso": 4,
-          "parados": 4
+          "fizeram": 33,
+          "proximoPasso": 0,
+          "parados": 0
         },
         {
           "etapaId": 2,
           "nome": "Curso de Discipulado",
           "ordem": 2,
-          "fizeram": 4,
-          "proximoPasso": 26,
-          "parados": 1
+          "fizeram": 5,
+          "proximoPasso": 28,
+          "parados": 2
         },
         {
           "etapaId": 3,
           "nome": "Batismo nas águas",
           "ordem": 3,
-          "fizeram": 3,
+          "fizeram": 5,
           "proximoPasso": 1,
           "parados": 0
         },
@@ -301,8 +398,8 @@
           "etapaId": 4,
           "nome": "Batismo no Espírito Santo",
           "ordem": 4,
-          "fizeram": 5,
-          "proximoPasso": 2,
+          "fizeram": 1,
+          "proximoPasso": 3,
           "parados": 0
         },
         {
@@ -363,30 +460,30 @@
       {
         "congregacaoId": 1,
         "nome": "Central E2E",
-        "iniciadas": 34,
+        "iniciadas": 33,
         "concluiram": 1,
         "etapas": [
           {
             "etapaId": 1,
             "nome": "Conversão",
             "ordem": 1,
-            "fizeram": 30,
-            "proximoPasso": 4,
-            "parados": 4
+            "fizeram": 33,
+            "proximoPasso": 0,
+            "parados": 0
           },
           {
             "etapaId": 2,
             "nome": "Curso de Discipulado",
             "ordem": 2,
-            "fizeram": 4,
-            "proximoPasso": 26,
-            "parados": 1
+            "fizeram": 5,
+            "proximoPasso": 28,
+            "parados": 2
           },
           {
             "etapaId": 3,
             "nome": "Batismo nas águas",
             "ordem": 3,
-            "fizeram": 3,
+            "fizeram": 5,
             "proximoPasso": 1,
             "parados": 0
           },
@@ -394,8 +491,8 @@
             "etapaId": 4,
             "nome": "Batismo no Espírito Santo",
             "ordem": 4,
-            "fizeram": 5,
-            "proximoPasso": 2,
+            "fizeram": 1,
+            "proximoPasso": 3,
             "parados": 0
           },
           {
@@ -415,42 +512,98 @@
             "parados": 0
           }
         ]
+      },
+      {
+        "congregacaoId": 2,
+        "nome": "Vila Nova E2E",
+        "iniciadas": 2,
+        "concluiram": 0,
+        "etapas": [
+          {
+            "etapaId": 1,
+            "nome": "Conversão",
+            "ordem": 1,
+            "fizeram": 2,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 2,
+            "nome": "Curso de Discipulado",
+            "ordem": 2,
+            "fizeram": 1,
+            "proximoPasso": 1,
+            "parados": 1
+          },
+          {
+            "etapaId": 3,
+            "nome": "Batismo nas águas",
+            "ordem": 3,
+            "fizeram": 0,
+            "proximoPasso": 1,
+            "parados": 0
+          },
+          {
+            "etapaId": 4,
+            "nome": "Batismo no Espírito Santo",
+            "ordem": 4,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 5,
+            "nome": "Primeira participação em departamento",
+            "ordem": 5,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 6,
+            "nome": "Primeiro serviço voluntário",
+            "ordem": 6,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          }
+        ]
       }
     ],
     "total": {
-      "iniciadas": 34,
+      "iniciadas": 35,
       "concluiram": 1,
       "etapas": [
         {
           "etapaId": 1,
           "nome": "Conversão",
           "ordem": 1,
-          "fizeram": 30,
-          "proximoPasso": 4,
-          "parados": 4
+          "fizeram": 35,
+          "proximoPasso": 0,
+          "parados": 0
         },
         {
           "etapaId": 2,
           "nome": "Curso de Discipulado",
           "ordem": 2,
-          "fizeram": 4,
-          "proximoPasso": 26,
-          "parados": 1
+          "fizeram": 6,
+          "proximoPasso": 29,
+          "parados": 3
         },
         {
           "etapaId": 3,
           "nome": "Batismo nas águas",
           "ordem": 3,
-          "fizeram": 3,
-          "proximoPasso": 1,
+          "fizeram": 5,
+          "proximoPasso": 2,
           "parados": 0
         },
         {
           "etapaId": 4,
           "nome": "Batismo no Espírito Santo",
           "ordem": 4,
-          "fizeram": 5,
-          "proximoPasso": 2,
+          "fizeram": 1,
+          "proximoPasso": 3,
           "parados": 0
         },
         {
@@ -476,6 +629,12 @@
     "sucesso": true,
     "itens": [
       {
+        "membroId": 9409,
+        "nome": "Conversão sem data E2E",
+        "ultimoPasso": null,
+        "diasSemPasso": null
+      },
+      {
         "membroId": 9404,
         "nome": "Discipulado antiga E2E",
         "ultimoPasso": "2010-01-01",
@@ -497,7 +656,8 @@
           "feita": true,
           "data": "2026-10-09",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 2,
@@ -509,7 +669,8 @@
           "feita": true,
           "data": "2026-10-28",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 3,
@@ -521,7 +682,8 @@
           "feita": true,
           "data": "2026-10-27",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 4,
@@ -533,7 +695,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 5,
@@ -545,7 +708,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 6,
@@ -557,7 +721,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         }
       ],
       "proximo": {
@@ -567,6 +732,7 @@
         "geraAcompanhamento": false
       },
       "ultimoPasso": "2026-10-28",
+      "dataPassoAnterior": "2026-10-28",
       "iniciada": true,
       "concluida": false
     }
@@ -585,7 +751,8 @@
           "feita": true,
           "data": "2026-10-09",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 2,
@@ -597,7 +764,8 @@
           "feita": true,
           "data": "2026-10-28",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 3,
@@ -609,7 +777,8 @@
           "feita": true,
           "data": "2026-10-27",
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 4,
@@ -621,7 +790,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 5,
@@ -633,7 +803,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 6,
@@ -645,7 +816,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         }
       ],
       "proximo": {
@@ -655,6 +827,7 @@
         "geraAcompanhamento": false
       },
       "ultimoPasso": "2026-10-28",
+      "dataPassoAnterior": "2026-10-28",
       "iniciada": true,
       "concluida": false
     }
@@ -673,7 +846,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 2,
@@ -687,7 +861,8 @@
           "foraDeOrdem": false,
           "preRequisitosPendentes": [
             "Conversão"
-          ]
+          ],
+          "posBatismal": false
         },
         {
           "etapaId": 3,
@@ -696,12 +871,13 @@
           "ordem": 3,
           "fonte": "BATISMO_AGUAS",
           "fonteRotulo": "Batismo nas águas (data do cadastro)",
-          "feita": false,
-          "data": null,
-          "foraDeOrdem": false,
+          "feita": true,
+          "data": "2005-05-05",
+          "foraDeOrdem": true,
           "preRequisitosPendentes": [
             "Curso de Discipulado"
-          ]
+          ],
+          "posBatismal": true
         },
         {
           "etapaId": 4,
@@ -713,7 +889,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 5,
@@ -725,7 +902,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         },
         {
           "etapaId": 6,
@@ -737,7 +915,8 @@
           "feita": false,
           "data": null,
           "foraDeOrdem": false,
-          "preRequisitosPendentes": []
+          "preRequisitosPendentes": [],
+          "posBatismal": false
         }
       ],
       "proximo": {
@@ -746,7 +925,8 @@
         "nome": "Conversão",
         "geraAcompanhamento": false
       },
-      "ultimoPasso": null,
+      "ultimoPasso": "2005-05-05",
+      "dataPassoAnterior": null,
       "iniciada": false,
       "concluida": false
     }

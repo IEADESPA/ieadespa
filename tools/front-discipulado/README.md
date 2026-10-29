@@ -14,4 +14,5 @@ O `contrato-real.json` é gravado pelo roteiro do banco local, com os handlers e
 O que a prova cobre: o funil do território e a lista de quem parou (a liderança local não vê nem pede o catálogo); o catálogo do nível geral (o formulário
 da etapa conforme a fonte, o duplo clique que envia uma vez, o tipo de marco com o código travado na edição); a caminhada no perfil (a resposta de outra
 pessoa não sobrescreve) e a minha (com o convite para quem não começou); os tipos do formulário de marco vindos do catálogo (sem o "só do nível geral" para
-a liderança local); a saída da sessão. Três mutações acusadas.
+a liderança local; o tipo desativado fora dele); o batismo antes do curso (o Discipulado Pós-Batismal); a saída da sessão com tudo carregado; a resposta
+atrasada do login anterior e o "Atualizar" duas vezes (vale o último). Seis mutações acusadas.

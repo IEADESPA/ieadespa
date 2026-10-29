@@ -101,7 +101,7 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   r = await marco(P.candidato, LIDER(P.lider, ["pessoas"], [CENTRAL]));
   ok(r.status === 403, "batismo no Espírito Santo: a liderança local não lança (conta para Diácono)", r.body);
   r = await marco(P.candidato, eu(P.candidato, ["pessoas"]));
-  ok(r.status === 422 && /próprio batismo/.test(r.body.mensagem), "nem a própria pessoa, mesmo no nível geral", r.body);
+  ok(r.status === 422 && /em si mesmo/.test(r.body.mensagem), "nem a própria pessoa, mesmo no nível geral", r.body);
   ok((await marco(P.candidato, SEC())).body.sucesso, "o nível geral lança o de outra pessoa");
   ok((await marco(P.candidato, LIDER(P.lider, ["pessoas"], [CENTRAL]), "CONVERSAO")).body.sucesso, "os outros marcos continuam com a liderança local");
   r = await salvarPessoa(P.auxiliar, { dataNascimento: "1991-01-01" }, eu(P.auxiliar, ["pessoas"]));

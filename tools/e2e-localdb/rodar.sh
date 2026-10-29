@@ -70,6 +70,8 @@ case "$1" in
     migrar 154
     # e a 155 (as decisões de 23/10/2026: a rotina diária já usa as regras e as colunas dela)
     migrar 155
+    # v8.5: e da 156 à 161 — a rotina diária do cuidado roda a da trilha de discipulado (161) e o Meus Dados lê as colunas da fase 8: o esquema inteiro, como no deploy
+    for m in 156 157 158 159 160 161; do migrar $m; done
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"

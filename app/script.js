@@ -444,8 +444,8 @@ function limparSessao() {
   if (typeof afmLimparTela === "function") afmLimparTela();
   // v8.2: a lista de requisitos (com o motivo de quem está sob disciplina, para o nível geral) e o formulário de consagração saem da página junto com a sessão — mesma guarda
   if (typeof consLimparTela === "function") consLimparTela();
-  if (typeof credLimparTela === "function") credLimparTela();
-  if (typeof discLimparTela === "function") discLimparTela();   // v8.5: o funil, os nomes de quem parou e as caminhadas saem da página   // v8.4: a credencial (com o QR) e a lista da Secretaria saem da página
+  if (typeof credLimparTela === "function") credLimparTela();   // v8.4: a credencial (com o QR) e a lista da Secretaria saem da página
+  if (typeof discLimparTela === "function") discLimparTela();   // v8.5: o funil, os nomes de quem parou, as caminhadas e os tipos do marco saem da página
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });

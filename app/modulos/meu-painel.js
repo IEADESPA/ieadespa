@@ -201,6 +201,8 @@ async function alternarMeusDadosLGPD() {
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Dados Ministeriais</h4>
       ${linhaLgpd("Função", m.funcao)}
       ${linhaLgpd("Cargo Ministerial", m.cargoMinisterial)}
+      ${linhaLgpd("Trilha de discipulado (v8.5)", ((data.escada && data.escada.discipulado && data.escada.discipulado.etapas) || []).filter((e) => e.feita).map((e) => `${e.etapa}${e.data ? ` em ${String(e.data).split("-").reverse().join("/")}` : ""}`).join("; ")
+        + (data.escada && data.escada.discipulado && data.escada.discipulado.proximoPasso ? ` — próximo passo: ${data.escada.discipulado.proximoPasso}` : ""))}
       ${linhaLgpd("Histórico de cargos", ((data.escada && data.escada.cargos) || []).map((c) => `${c.cargoRotulo} (${c.desde ? String(c.desde).slice(0, 10).split("-").reverse().join("/") : "início não informado"} a ${c.ate ? String(c.ate).slice(0, 10).split("-").reverse().join("/") : "hoje"})`).join("; "))}
       ${linhaLgpd("Credencial (vias)", ((data.escada && data.escada.credenciais) || []).map((c) => `via ${c.via}: ${({ VALIDA: "válida", SUBSTITUIDA: "substituída", CANCELADA: "cancelada" })[c.situacao] || c.situacao}, emitida em ${String(c.emitidaEm || "").split("-").reverse().join("/")}${c.impressaEm ? `, impressa em ${String(c.impressaEm).split("-").reverse().join("/")}` : ""}`).join("; "))}
       ${linhaLgpd("Processos de consagração", ((data.escada && data.escada.consagracoes) || []).map((c) => [`nº ${c.numero}`, c.cargo || c.assunto, c.etapa, c.parecerCEI ? `CEI: ${c.parecerCEI}` : null,

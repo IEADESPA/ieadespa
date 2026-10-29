@@ -50,6 +50,7 @@ async function salvarTipoMarco(pool, { tipo, por }) {
       const sistema = (await pool.request().input("c", sql.NVarChar(30), tipo.codigo).query(`SELECT Sistema FROM TiposMarco WHERE Codigo = @c`)).recordset[0].Sistema;
       // o "só do nível geral" do batismo no Espírito Santo é a trava da escada (Art. 72, III, a): não se desliga pela tela
       if (sistema && tipo.codigo === "BATISMO_ESPIRITO_SANTO" && !tipo.soNivelGeral) return { sucesso: false, mensagem: "O batismo no Espírito Santo conta para a escada: continua só do nível geral." };
+      if (sistema && !tipo.ativo) return { sucesso: false, mensagem: "Os tipos do sistema não se desativam (a trilha e a escada dependem deles): mude o nome ou a descrição." };
       await pool.request().input("c", sql.NVarChar(30), tipo.codigo).input("n", sql.NVarChar(80), tipo.nome).input("d", sql.NVarChar(300), tipo.descricao)
         .input("u", sql.Bit, tipo.unico).input("g", sql.Bit, tipo.soNivelGeral).input("a", sql.Bit, tipo.ativo).input("por", sql.Int, por)
         .query(`UPDATE TiposMarco SET Nome = @n, Descricao = @d, Unico = @u, SoNivelGeral = @g, Ativo = @a, AtualizadoEm = SYSUTCDATETIME(), AtualizadoPor = @por WHERE Codigo = @c`);
@@ -131,12 +132,13 @@ async function fatos(rq, lista, populacao) {
     const atual = porPessoa.get(id).get(etapaId);
     const nova = regra.dataIso(data);
     // duas fontes para a mesma etapa (o curso pela trilha E pelo marco antigo): vale a primeira data
-    if (!atual || (nova && (!atual.data || nova < atual.data))) porPessoa.get(id).set(etapaId, { data: nova });
+    if (!atual || (nova && (!atual.data || nova < atual.data))) porPessoa.get(id).set(etapaId, { data: nova });   // conhecida vence a desconhecida; a mais antiga vence
   };
   // o marco vale para a etapa de marco e, se configurado, também para a etapa de trilha (o marco antigo não se perde quando a AFM liga a trilha)
   const marcos = lista.filter((e) => e.tipoMarco);
   if (marcos.length) {
-    const r = await rq().query(`SELECT MembroId, Tipo, MIN(COALESCE(DataMarco, CAST(CriadoEm AS date))) AS Data FROM MarcosMembro
+    // o marco sem data é "data desconhecida" (não a data em que foi lançado: a conversão de 2010 lançada hoje não é um passo de hoje)
+    const r = await rq().query(`SELECT MembroId, Tipo, MIN(DataMarco) AS Data FROM MarcosMembro
       WHERE MembroId IN (${populacao}) GROUP BY MembroId, Tipo`);
     for (const l of r.recordset) for (const e of marcos) if (e.tipoMarco === l.Tipo) marcar(l.MembroId, e.etapaId, l.Data);
   }
@@ -149,6 +151,17 @@ async function fatos(rq, lista, populacao) {
   if (trilhas.length) {
     const r = await rq().query(`SELECT MembroId, TrilhaId, MIN(ConcluidaEm) AS Data FROM TrilhaMatriculas WHERE Status = 'CONCLUIDA' AND MembroId IN (${populacao}) GROUP BY MembroId, TrilhaId`);
     for (const l of r.recordset) for (const e of trilhas) if (Number(e.trilhaId) === Number(l.TrilhaId)) marcar(l.MembroId, e.etapaId, l.Data);
+  }
+  // o Curso de Discipulado também vem da esteira de batismo (revisão independente): o discipulado atestado no candidato e a trilha configurada como requisito do
+  // batismo (contexto BATISMO_DISCIPULADO, v6.9) — nada é lançado duas vezes
+  const curso = lista.filter((e) => e.chave === "CURSO_DISCIPULADO" || e.tipoMarco === "CURSO_DISCIPULADO");
+  if (curso.length) {
+    const a = await rq().query(`SELECT MembroId FROM CandidatosBatismo WHERE DiscipuladoConcluidoManual = 1 AND MembroId IN (${populacao})`);
+    for (const l of a.recordset) for (const e of curso) marcar(l.MembroId, e.etapaId, null);
+    const t = await rq().query(`SELECT tm.MembroId, MIN(tm.ConcluidaEm) AS Data FROM TrilhaMatriculas tm
+      WHERE tm.Status = 'CONCLUIDA' AND tm.MembroId IN (${populacao})
+        AND tm.TrilhaId IN (SELECT TrilhaId FROM TrilhaRequisitos WHERE Contexto = 'BATISMO_DISCIPULADO' AND Ativo = 1) GROUP BY tm.MembroId`);
+    for (const l of t.recordset) for (const e of curso) marcar(l.MembroId, e.etapaId, l.Data);
   }
   const servico = lista.filter((e) => e.fonte === "SERVICO_VOLUNTARIO");
   if (servico.length) {
@@ -173,18 +186,19 @@ async function pessoasDasCongregacoes(pool, congregacaoIds, lista) {
   const populacao = `SELECT MembroId FROM MembroReferencia WHERE Status IN (${STATUS_NA_TRILHA}) AND CongregacaoId IN (${ids.join(",")})`;
   const f = await fatos(() => pool.request(), lista, populacao);
   if (!f.size) return [];
-  const quem = await pool.request().query(`SELECT m.MembroId, m.Nome, m.CongregacaoId, c.Nome AS Congregacao FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+  const quem = await pool.request().query(`SELECT m.MembroId, m.Nome, m.CongregacaoId, c.Nome AS Congregacao, ex.Nome AS Extensao FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
     WHERE m.MembroId IN (${populacao})`);
   return quem.recordset.filter((l) => f.has(Number(l.MembroId))).map((l) => ({
-    membroId: Number(l.MembroId), nome: l.Nome, congregacaoId: l.CongregacaoId, congregacao: l.Congregacao, caminhada: regra.caminhada(lista, f.get(Number(l.MembroId)))
+    membroId: Number(l.MembroId), nome: l.Nome, congregacaoId: l.CongregacaoId, congregacao: l.Congregacao, extensao: l.Extensao || null, caminhada: regra.caminhada(lista, f.get(Number(l.MembroId)))
   }));
 }
 
-// O funil de cada congregação do território de quem vê. `noEscopo(nome)`: a congregação está no território?
+// O funil de cada congregação do território de quem vê. `noEscopo(congregacao, extensao)`: a pessoa (pela congregação e pela extensão) está no território?
 async function funil(pool, { noEscopo, diasParado = regra.DIAS_PARADO_PADRAO, hojeIso = hojeBrasilia() }) {
-  const congs = (await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes ORDER BY Nome`)).recordset.filter((c) => noEscopo(c.Nome));
+  const congs = (await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes ORDER BY Nome`)).recordset.filter((c) => noEscopo(c.Nome, null));
   const lista = await etapas(pool);
-  const pessoas = await pessoasDasCongregacoes(pool, congs.map((c) => c.CongregacaoId), lista);
+  const pessoas = (await pessoasDasCongregacoes(pool, congs.map((c) => c.CongregacaoId), lista)).filter((p) => noEscopo(p.congregacao, p.extensao));
   const porCong = new Map(congs.map((c) => [c.CongregacaoId, []]));
   for (const p of pessoas) if (porCong.has(p.congregacaoId)) porCong.get(p.congregacaoId).push(p);
   return {
@@ -196,9 +210,9 @@ async function funil(pool, { noEscopo, diasParado = regra.DIAS_PARADO_PADRAO, ho
 }
 
 // Quem está parado antes de uma etapa, numa congregação (nomes: só para quem alcança a congregação — o handler confere).
-async function parados(pool, { congregacaoId, etapaId, diasParado = regra.DIAS_PARADO_PADRAO, hojeIso = hojeBrasilia() }) {
+async function parados(pool, { congregacaoId, etapaId, noEscopo, diasParado = regra.DIAS_PARADO_PADRAO, hojeIso = hojeBrasilia() }) {
   const lista = await etapas(pool);
-  const pessoas = await pessoasDasCongregacoes(pool, [congregacaoId], lista);
+  const pessoas = (await pessoasDasCongregacoes(pool, [congregacaoId], lista)).filter((p) => !noEscopo || noEscopo(p.congregacao, p.extensao));
   return pessoas.filter((p) => p.caminhada.proximo && p.caminhada.proximo.etapaId === Number(etapaId) && regra.estaParado(p.caminhada, hojeIso, diasParado))
     .map((p) => ({ membroId: p.membroId, nome: p.nome, ultimoPasso: p.caminhada.ultimoPasso, diasSemPasso: p.caminhada.ultimoPasso ? regra.diasEntre(p.caminhada.ultimoPasso, hojeIso) : null }))
     .sort((a, b) => (a.ultimoPasso || "") < (b.ultimoPasso || "") ? -1 : 1);
@@ -238,8 +252,14 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   const ja = new Set((await pool.request().query(`SELECT MembroId, EtapaDiscipuladoId FROM CuidadoItens WHERE EtapaDiscipuladoId IS NOT NULL`)).recordset
     .map((l) => `${l.MembroId}:${l.EtapaDiscipuladoId}`));
   const abertoDoTipo = new Set((await pool.request().query(`SELECT MembroId FROM CuidadoItens WHERE Tipo = N'DISCIPULADO' AND Status = N'ABERTO'`)).recordset.map((l) => Number(l.MembroId)));
+  // quem pediu e teve a exclusão LGPD atendida não volta para a fila (o item anonimizado não guarda mais a pessoa)
+  const excluidos = new Set((await pool.request().query(`SELECT MembroId FROM SolicitacoesTitularLGPD WHERE Tipo = 'EXCLUSAO' AND Status = 'ATENDIDA'`)).recordset.map((l) => Number(l.MembroId)));
+  // o teto é por DIA (de Brasília): uma segunda rodada no mesmo dia só completa o que faltou
+  const hojeAbertos = new Map((await pool.request().input("ini", sql.DateTime2, new Date(Date.parse(`${hojeIso}T03:00:00Z`)))
+    .query(`SELECT CongregacaoId, COUNT(*) AS n FROM CuidadoItens WHERE Origem = N'DISCIPULADO' AND CriadoEm >= @ini GROUP BY CongregacaoId`)).recordset.map((l) => [l.CongregacaoId, Number(l.n)]));
   const porCong = new Map();
   for (const p of pessoas) {
+    if (excluidos.has(p.membroId)) continue;
     if (!regra.deveAcompanhar(p.caminhada, hojeIso)) continue;
     if (abertoDoTipo.has(p.membroId) || ja.has(`${p.membroId}:${p.caminhada.proximo.etapaId}`)) continue;
     const l = porCong.get(p.congregacaoId) || [];
@@ -249,7 +269,8 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   const prazos = await cuidado.lerPrazos(pool);
   for (const [congregacaoId, lista0] of porCong) {
     // os passos mais recentes primeiro (quem acabou de andar é quem mais precisa do próximo empurrão)
-    const escolhidos = lista0.sort((a, b) => (a.caminhada.ultimoPasso < b.caminhada.ultimoPasso ? 1 : -1)).slice(0, regra.MAX_NOVOS_POR_CONGREGACAO);
+    const vagas = Math.max(0, regra.MAX_NOVOS_POR_CONGREGACAO - (hojeAbertos.get(congregacaoId) || 0));
+    const escolhidos = lista0.sort((a, b) => (a.caminhada.dataPassoAnterior < b.caminhada.dataPassoAnterior ? 1 : -1)).slice(0, vagas);
     const cong = await cuidado.congregacao(pool, congregacaoId);
     for (const p of escolhidos) {
       const texto = regra.textoDoAcompanhamento(p.caminhada);

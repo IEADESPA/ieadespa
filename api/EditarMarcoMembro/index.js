@@ -32,6 +32,11 @@ module.exports = async function (context, req) {
     context.res = { status: 400, body: { sucesso: false, mensagem: "dataMarco inválida — use AAAA-MM-DD." } };
     return;
   }
+  // v8.5: como no registro, a data do marco não é no futuro (um passo "futuro" travaria a trilha de discipulado da pessoa)
+  if (dataMarco && String(dataMarco).slice(0, 10) > require("../shared/dataBrasilia").hojeBrasilia()) {
+    context.res = { status: 400, body: { sucesso: false, mensagem: "A data do marco não pode ser no futuro." } };
+    return;
+  }
 
   const pool = await getPool();
   const atualResult = marcoId ? await pool.request().input("id", sql.Int, marcoId).query(`SELECT * FROM MarcosMembro WHERE MarcoId = @id`) : { recordset: [] };

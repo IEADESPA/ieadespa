@@ -375,8 +375,9 @@ async function gravarItem(pool, d, { transaction: externa = null } = {}) {
       .input("o", sql.NVarChar(16), d.origem).input("po", sql.Int, d.pedidoOracaoId || null).input("u", sql.Bit, d.urgente ? 1 : 0).input("sg", sql.Bit, d.soGeral ? 1 : 0)
       .input("dr", sql.NVarChar(200), d.deteccaoResumo || null).input("r", sql.Int, d.responsavelMembroId || null).input("pz", sql.DateTime2, d.prazoEm)
       .input("nv", sql.NVarChar(12), d.nivel || "CONGREGACAO").input("cp", sql.Int, d.criadoPor || null).input("et", sql.Int, d.etapaDiscipuladoId || null)
-      .query(`INSERT INTO CuidadoItens (Tipo, CongregacaoId, MembroId, PessoaNome, PessoaContato, Motivo, Origem, PedidoOracaoId, Urgente, SoNivelGeral, DeteccaoResumo, ResponsavelMembroId, PrazoEm, Nivel, CriadoPorMembroId, EtapaDiscipuladoId)
-              VALUES (@t, @c, @m, @pn, @pc, @mo, @o, @po, @u, @sg, @dr, @r, @pz, @nv, @cp, @et); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+      // a etapa (v8.5) só entra quando há: o item comum não depende da coluna nova
+      .query(`INSERT INTO CuidadoItens (Tipo, CongregacaoId, MembroId, PessoaNome, PessoaContato, Motivo, Origem, PedidoOracaoId, Urgente, SoNivelGeral, DeteccaoResumo, ResponsavelMembroId, PrazoEm, Nivel, CriadoPorMembroId${d.etapaDiscipuladoId ? ", EtapaDiscipuladoId" : ""})
+              VALUES (@t, @c, @m, @pn, @pc, @mo, @o, @po, @u, @sg, @dr, @r, @pz, @nv, @cp${d.etapaDiscipuladoId ? ", @et" : ""}); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
     const itemId = ins.recordset[0].id;
     const eventoCriado = await inserirEvento(new sql.Request(transaction), { itemId, tipo: "CRIADO", membroId: d.criadoPor || null, prazoNovo: d.prazoEm, nivelPara: d.nivel && d.nivel !== "CONGREGACAO" ? d.nivel : null });
     let eventoAtribuido = null;
@@ -480,7 +481,7 @@ async function meusItens(pool, membroId, { agora = new Date() } = {}) {
     if (i.Status === "ABERTO") return null;                                                     // a pessoa mudou de congregação: o item vai para a outra
     if (ehMenor(i, hoje) && bloqueado(ver)) return null;                                         // (Trava 7-C) nem a lembrança do item de um menor
     return { itemId: i.ItemId, tipo: i.Tipo, tipoRotulo: (cp.TIPOS[i.Tipo] || {}).rotulo, pessoaNome: cp.primeiroNome(i.PessoaNomeExibido) || null, status: i.Status,
-      desfechoRotulo: cp.DESFECHOS_CONCLUSAO[i.Desfecho] || cp.DESFECHOS_CANCELAMENTO[i.Desfecho] || null, encerradoEm: iso(i.EncerradoEm), encerrado: true };
+      desfechoRotulo: cp.DESFECHOS_CONCLUSAO[i.Desfecho] || cp.DESFECHOS_CANCELAMENTO[i.Desfecho] || cp.DESFECHO_PASSO_DADO[i.Desfecho] || null, encerradoEm: iso(i.EncerradoEm), encerrado: true };
   }).filter(Boolean);
 }
 
@@ -1196,7 +1197,7 @@ async function congregacoesDoTerritorio(pool, { ver }) {
 // lá como responsável (ou o degrau de cima) e o aviso. Licença, candidatura e outras situações não mexem no item (revisão: a rotina fechava até o item urgente de risco).
 async function acompanharQuemMudou(pool, { agora = new Date() } = {}) {
   const r = await pool.request().query(`
-    SELECT i.ItemId, i.Tipo, i.CongregacaoId, i.MembroId, i.Motivo, i.Origem, i.PedidoOracaoId, i.Urgente, i.SoNivelGeral, i.DeteccaoResumo, m.Status AS MembroStatus, m.Nome AS MembroNome,
+    SELECT i.ItemId, i.Tipo, i.CongregacaoId, i.MembroId, i.Motivo, i.Origem, i.PedidoOracaoId, i.Urgente, i.SoNivelGeral, i.DeteccaoResumo, i.EtapaDiscipuladoId, m.Status AS MembroStatus, m.Nome AS MembroNome,
            m.CongregacaoId AS NovaCongregacaoId, nc.Nome AS NovaCongregacaoNome
     FROM CuidadoItens i JOIN MembroReferencia m ON m.MembroId = i.MembroId LEFT JOIN Congregacoes nc ON nc.CongregacaoId = m.CongregacaoId
     WHERE i.Status = 'ABERTO' AND (m.Status = 'DESLIGADO' OR (m.Status = 'ATIVO' AND m.CongregacaoId IS NOT NULL AND m.CongregacaoId <> i.CongregacaoId))`);
@@ -1216,7 +1217,8 @@ async function acompanharQuemMudou(pool, { agora = new Date() } = {}) {
         if (muda) {
           prazoEm = cp.prazoInicial(it.Tipo, agora, prazos, { urgente: !!it.Urgente });
           g = (await abertoDoTipo(t, it.MembroId, it.Tipo)) ? { repetido: true } : await gravarItem(pool, { tipo: it.Tipo, congregacaoId: it.NovaCongregacaoId, membroId: it.MembroId, motivo: it.Motivo, origem: it.Origem, pedidoOracaoId: it.PedidoOracaoId,
-            urgente: !!it.Urgente, soGeral: !!it.SoNivelGeral, deteccaoResumo: it.DeteccaoResumo, prazoEm, responsavelMembroId: destino.responsavel ? destino.responsavel.membroId : null, nivel: destino.nivel }, { transaction: t });
+            urgente: !!it.Urgente, soGeral: !!it.SoNivelGeral, deteccaoResumo: it.DeteccaoResumo, prazoEm, responsavelMembroId: destino.responsavel ? destino.responsavel.membroId : null, nivel: destino.nivel,
+            etapaDiscipuladoId: it.EtapaDiscipuladoId || null }, { transaction: t });   // v8.5: a etapa vai junto (senão o item da congregação nova nunca fecha sozinho)
           if (g.repetido) g = null;                                                              // já há um igual aberto na congregação nova: ele segue
         }
         await t.commit();

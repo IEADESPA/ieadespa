@@ -488,9 +488,14 @@ urgência, o "Discipulado Pós-Batismal" vem depois); Art. 80, IV (ninguém é b
 6. **LGPD:** os marcos da trilha são dados da membresia (ROPA "DISCIPULADO"); a minimização do ex-membro elimina os marcos (Art. 132 §2º, II:
    "registros eclesiásticos de conversão") — o batismo nas águas fica, como assentamento do sacramento.
 
-**Decisões por interpretação (o responsável pode mudar):** quem entra no funil é quem tem ao menos uma etapa feita (o membro antigo, sem marcos
-lançados, não aparece como "parado"); o curso conta pelo marco até a AFM configurar a trilha de formação; "parado" = sem nenhum passo há 90 dias;
-a pessoa pode registrar marcos de outros só no seu território, e nunca os "só do nível geral" em si mesma.
+**Decisões por interpretação (o responsável pode mudar):** a trilha **começa na conversão** — o membro antigo que só tem o batismo no cadastro ou
+uma escala, sem a conversão lançada, não entra no funil nem na fila (senão o rol inteiro apareceria "parado antes da conversão"); o curso conta pelo
+marco, pela trilha de formação que a AFM configurar e pelo discipulado atestado na esteira de batismo (nada é lançado duas vezes); "parado" = sem
+nenhum passo há 90 dias; o acompanhamento só abre quando o passo **anterior** ao próximo foi nos últimos 180 dias (um passo recente lá na frente —
+uma escala — não reabre a trilha antiga) e o marco sem data não conta como passo recente; no máximo 20 itens novos por congregação **por dia**; o
+funil e os nomes de quem parou são da liderança territorial (a concessão de Extensão e a de Departamento não os veem, como no cuidado pastoral; quem
+cuida da Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; a pessoa registra marcos de outros só no seu
+território, e nunca os "só do nível geral" em si mesma.
 
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 

@@ -149,6 +149,11 @@ async function prova() {
   await geral.g("discPreencherTiposMarco")();
   ok([...geral.e("marcoTipo").options].map((o) => o.value).includes("BATISMO_ESPIRITO_SANTO"), "o nível geral vê o batismo no Espírito Santo");
 
+  // o catálogo de formato estranho (o simulador do teste de tela responde assim): o "Corrigir marco" não quebra
+  const estranho = montar();
+  estranho.__respostas["GET discipulado/catalogo"] = { corpo: { sucesso: true } };
+  await estranho.g("discCarregarCatalogo")();
+  ok(estranho.g("discCatalogo") === null && estranho.g("discNomeTipoMarco")("CONVERSAO") === null, "catálogo sem as listas: não vale, e o nome do tipo não quebra");
   console.log("== saída da sessão ==");
   const sai = montar({ gerais: ["pessoas"] });
   await sai.g("discAbrirSubAba")();

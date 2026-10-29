@@ -377,6 +377,12 @@ async function editarCerimonia(pool, { cerimoniaId, dados, por }) {
       .query(`SELECT TOP 1 m.Nome FROM Consagracoes c JOIN MembroReferencia m ON m.MembroId = c.MembroId
               WHERE c.CerimoniaId = @id AND c.Status = N'HOMOLOGADO' AND c.HomologadoEm > @d`);
     if (depois.recordset[0]) return { sucesso: false, mensagem: `${depois.recordset[0].Nome} foi homologado(a) depois dessa data: a cerimônia não pode ser antes da homologação.` };
+    // Trava 8-A (revisão): nem antes da homologação da CIADSETA (Evangelista e Pastor — Art. 72, V, a)
+    const semConvencao = await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia)
+      .query(`SELECT TOP 1 m.Nome FROM Consagracoes c JOIN MembroReferencia m ON m.MembroId = c.MembroId LEFT JOIN TiposConsagracao t ON t.Nome = c.Assunto
+              WHERE c.CerimoniaId = @id AND c.Status = N'HOMOLOGADO' AND ISNULL(c.CargoAlvo, t.CargoMinisterialResultante) IN (N'EVANGELISTA', N'PASTOR')
+                AND c.Modalidade <> N'OUTRA_CONVENCAO' AND (c.ConvencaoHomologadaEm IS NULL OR c.ConvencaoHomologadaEm > @d)`);
+    if (semConvencao.recordset[0]) return { sucesso: false, mensagem: `${semConvencao.recordset[0].Nome}: a homologação da CIADSETA é depois dessa data (ou ainda não veio) — a cerimônia não pode ser antes dela (Regimento, Art. 72, V, a).` };
     await new sql.Request(t).input("id", sql.Int, Number(cerimoniaId)).input("d", sql.Date, dados.dataCerimonia).input("l", sql.NVarChar(200), dados.local)
       .input("o", sql.NVarChar(12), dados.ocasiao).input("v", sql.Decimal(10, 2), dados.valorTaxa)
       .query(`UPDATE CerimoniasConsagracao SET DataCerimonia = @d, Local = @l, Ocasiao = @o, ValorTaxa = @v WHERE CerimoniaId = @id`);
@@ -610,6 +616,10 @@ async function registrarCerimonia(pool, { cerimoniaId, presentes, ausentes, usua
       if (!taxa.emDia) { await devolver(`${taxa.motivo}: volta para a fila (Regimento, Art. 75, I, c)`); continue; }
       // a consagração não fica com data anterior à homologação (cerimônia criada com data passada — revisão independente, 28/10/2026)
       if (p.homologadoEm && p.homologadoEm > ce.dataCerimonia) { await devolver(`homologado em ${regra.br(p.homologadoEm)}, depois da data desta cerimônia: volta para a fila`); continue; }
+      // Trava 8-A (revisão): o processo que entrou na cerimônia antes da trava, ou virou nomeação já dentro dela, também espera a CIADSETA (Art. 72, V, a)
+      if (regra.precisaConvencao(p.cargoAlvo, p.modalidade) && (!p.convencaoHomologadaEm || p.convencaoHomologadaEm > ce.dataCerimonia)) {
+        await devolver("sem a homologação da CIADSETA até a data desta cerimônia (Regimento, Art. 72, V, a): volta para a fila"); continue;
+      }
       if (!marcados.has(String(p.consagracaoId).toLowerCase())) {
         const upd = await new sql.Request(t).input("id", sql.UniqueIdentifier, p.consagracaoId).input("d", sql.Date, ce.dataCerimonia)
           .query(`UPDATE Consagracoes SET Status = N'REPROVADO', MotivoEncerramento = N'AUSENCIA_CERIMONIA', PresenteCerimonia = 0, DataConclusao = @d, DiplomaCodigo = NULL

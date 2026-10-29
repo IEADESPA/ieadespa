@@ -24,7 +24,7 @@ async function dadosElegibilidadeCEI(pool, sql, membroId) {
   const afmResult = await pool.request().input("id", sql.Int, membroId).query(`
     SELECT TOP 1 NivelEscolaridade AS nivelEscolaridade, StatusMatricula AS statusMatricula,
            -- Trava 8-A: a cerimônia "usa" o CHM (a marca da matrícula zera na promoção), mas o certificado continua válido — a habilitação conta pelos dois
-           CASE WHEN CertificadoHabilitacao = 1 OR EXISTS (SELECT 1 FROM CertificadosEmitidos ce WHERE ce.MembroId = @id AND ce.Natureza = N'CHM' AND (ce.RevogadoEm IS NULL OR ce.MotivoRevogacao LIKE N'Usado na consagração%'))
+           CASE WHEN CertificadoHabilitacao = 1 OR EXISTS (SELECT 1 FROM CertificadosEmitidos ce WHERE ce.MembroId = @id AND ce.Natureza = N'CHM' AND (ce.RevogadoEm IS NULL OR (ce.MotivoRevogacao LIKE N'Usado na consagração%' AND ce.MotivoRevogacao NOT LIKE N'%Perdeu o efeito%')))
                 THEN 1 ELSE 0 END AS certificadoHabilitacao
     FROM Matriculas_AFM
     WHERE MembroId = @id
@@ -39,7 +39,7 @@ async function dadosElegibilidadeCEI(pool, sql, membroId) {
   const hoje = new Date().toISOString().slice(0, 10);
   const disciplinaResult = await pool.request().input("id", sql.Int, membroId).query(`
     SELECT TOP 1 ProcessoId FROM ProcessosDisciplinares
-    WHERE MembroId = @id AND Resultado IN ('SANCAO', 'EXCLUSAO')
+    WHERE MembroId = @id AND Resultado IN ('SANCAO', 'EXCLUSAO') AND CEIRecusouEm IS NULL
       AND DataAbertura >= DATEADD(year, -10, CAST('${hoje}' AS DATE))
   `);
   const disciplinaRigorosaUltimos10Anos = disciplinaResult.recordset.length > 0;

@@ -114,6 +114,12 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   await vacancia.encerrarVinculos(pool, sql, P.missionaria, "DISCIPLINA");
   ok((await escalar("SELECT RevogadoEm FROM CertificadosEmitidos WHERE CertificadoId = @c", { c: certMis })) && (await escalar("SELECT CertificadoHabilitacao FROM Matriculas_AFM WHERE MembroId = @m", { m: P.missionaria })) === false,
     "disciplina homologada: o documento do CHM é revogado (a verificação pública diz revogado)");
+  // o processo que a disciplina encerrou: a liderança local lê só "vacância"
+  await q(`INSERT INTO Consagracoes (MembroId, Assunto, ProponenteMembroId, Status, CargoAlvo, Modalidade, MotivoEncerramento, DataConclusao)
+           VALUES (@m, @a, 1002, 'REPROVADO', 'DIACONO', 'INDICACAO', 'DISCIPLINA', @d)`, { m: P.missionaria, a: TIPO.DIACONO, d: hoje });
+  const daLista = async (token) => ((await chamarRota("ListarConsagracoes/index.js", { token })).body || []).filter((c) => Number(c.membroId) === P.missionaria).map((c) => c.motivoEncerramento);
+  ok((await daLista(LIDER(P.lider, ["consagracoes"], [CENTRAL]))).includes("VACANCIA") && !(await daLista(LIDER(P.lider, ["consagracoes"], [CENTRAL]))).includes("DISCIPLINA"), "a liderança local lê 'vacância' (revisão)");
+  ok((await daLista(SEC())).includes("DISCIPLINA"), "o nível geral lê o motivo");
   ok((await afmPost("chm", { membroId: P.semSexo, conceder: true, data: hoje })).body.sucesso, "CHM de outro obreiro");
   await vacancia.encerrarVinculos(pool, sql, P.semSexo, "LICENCA_CANDIDATURA");
   ok((await escalar("SELECT CertificadoHabilitacao FROM Matriculas_AFM WHERE MembroId = @m", { m: P.semSexo })) === true, "a licença de candidatura é temporária: o CHM fica");
@@ -127,6 +133,8 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   const lista = (r.body.itens || []).map((x) => x.sessaoId);
   ok(!lista.includes(sem) && !lista.includes(nc), "nem o Seminário nem a reunião 'não conta' aparecem para a homologação");
   const pe = id(await protocolar({ membroId: P.presbitero, assunto: TIPO.EVANGELISTA, proponenteMembroId: 1001, modalidade: "NOMEACAO_PRESIDENCIAL", atoReferencia: "Ato e2e-61" }));
+  // o CHM com o documento (o cenário só tem a marca): a cerimônia o "usa" e o CEI o lê depois
+  ok((await afmPost("chm", { membroId: P.presbitero, conceder: true, data: hoje })).body.sucesso, "o Presbítero tem o CHM como documento");
   await evoluir(pe, "AVANCAR"); await parecer(pe);
   for (const s of [sem, nc]) {
     r = await esteira("homologar", { ids: [pe], sessaoId: s });
@@ -157,9 +165,19 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   r = await esteira("convencao", { consagracaoId: pf, data: hoje, ato: "Resolução" });
   ok(r.status === 422 && /Só a consagração a Evangelista e a Pastor depende/.test(r.body.mensagem), "quem vem de outra convenção não precisa (diplomação — Art. 10, parágrafo único)", r.body);
 
+  // o processo que entrou na cerimônia antes da trava (sem a CIADSETA): a edição da data recusa e o registro devolve à fila
+  await q("UPDATE Consagracoes SET ConvencaoHomologadaEm = NULL, ConvencaoAto = NULL WHERE ConsagracaoId = @id", { id: pe });
+  r = await cerimonias("editar", { cerimoniaId: ceB, dataCerimonia: hoje, local: "Templo Sede E2E", ocasiao: "AGO", valorTaxa: 70 });
+  ok(r.status === 422 && /CIADSETA/.test(r.body.mensagem), "a cerimônia com candidato sem a CIADSETA não muda de data (revisão)", r.body);
+  r = await cerimonias("registrar", { cerimoniaId: ceB, presentes: [pe], ausentes: [] });
+  ok(r.body.sucesso && r.body.resultados[0].resultado === "VOLTOU" && /CIADSETA/.test(r.body.resultados[0].motivo) && (await statusDe(pe)) === "HOMOLOGADO", "e o registro o devolve à fila, sem consagrar", r.body);
+  ok((await esteira("convencao", { consagracaoId: pe, data: hoje, ato: "Resolução 1/2026 da AGO da CIADSETA" })).body.sucesso, "a CIADSETA registrada de novo");
+  const ceB2 = await novaCerimonia();
+  ok((await cerimonias("incluir", { cerimoniaId: ceB2, ids: [pe] })).body.sucesso, "e ele entra noutra cerimônia");
+
   console.log("== a credencial na diplomação (Art. 10) ==");
   ok(!(await escalar("SELECT COUNT(*) FROM CredenciaisEclesiasticas WHERE MembroId = @m", { m: P.presbitero })), "antes da cerimônia, o Presbítero não tem credencial");
-  r = await cerimonias("registrar", { cerimoniaId: ceB, presentes: [pe], ausentes: [] });
+  r = await cerimonias("registrar", { cerimoniaId: ceB2, presentes: [pe], ausentes: [] });
   const xr = (r.body.resultados || [])[0] || {};
   ok(xr.resultado === "CONSAGRADO" && /Credencial emitida/.test(xr.motivo), "consagrado: a credencial é emitida junto", xr);
   // quem tem o cartão IMPRESSO: nova via, já pedida para impressão
@@ -213,12 +231,25 @@ const somar = (n) => req("shared/afm.js").somarDias(hojeBr(), n);
   const cei = await req("shared/cei.js").dadosElegibilidadeCEI(pool, sql, P.lider);
   ok(cei.anosDesdeConsagracaoPresbitero > 20, "o tempo de Presbítero (ou acima) vem do histórico de cargos", cei);
   ok(cei.afmAvancadoComCertificado === true, "Bacharel com o CHM: conta", cei);
+  // o CHM usado na consagração do Presbítero (e2e: o Evangelista de agora) conta; depois da vacância por disciplina, não conta mais (revisão)
+  ok((await req("shared/cei.js").dadosElegibilidadeCEI(pool, sql, P.presbitero)).afmAvancadoComCertificado === true, "o CHM usado na consagração ainda conta para o CEI");
+  await vacancia.encerrarVinculos(pool, sql, P.presbitero, "DISCIPLINA");
+  ok((await req("shared/cei.js").dadosElegibilidadeCEI(pool, sql, P.presbitero)).afmAvancadoComCertificado === false, "depois da decisão disciplinar, o CHM usado perde o efeito também para o CEI");
+  ok((await req("shared/cei.js").dadosElegibilidadeCEI(pool, sql, P.pastor3)).disciplinaRigorosaUltimos10Anos === false, "a exclusão que o CEI recusou não pesa na elegibilidade");
 
   console.log("== a readmissão depois da exclusão ==");
   await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado, DataConclusao) VALUES (@m, '2025-01-01', 'JULGADO', 'EXCLUSAO', '2025-03-01')", { m: P.menor });
   ok((await credDb.pessoa(pool, P.menor)).excluido, "excluído");
   await q("UPDATE MembroReferencia SET DataAdmissao = '2026-01-01' WHERE MembroId = @m", { m: P.menor });
   ok(!(await credDb.pessoa(pool, P.menor)).excluido, "readmitido depois (admissão nova): já não conta como excluído");
+  ok(!(await req("shared/disciplina.js").membrosSobDisciplina(pool)).has(P.menor), "e não está mais 'sob disciplina' na CLI e na assembleia (a mesma leitura)");
+  r = await E.req(TIPO.AUXILIAR, P.menor);
+  ok((((r.body.requisitos || {}).itens || []).find((i) => i.chave === "disciplina") || {}).situacao === "ATENDE", "nem na escada", r.body);
+  await q("UPDATE MembroReferencia SET DataAdmissao = '2020-01-01' WHERE MembroId = @m", { m: P.menor });
+  r = await salvarPessoa(P.menor, { dataAdmissao: "2026-02-01" }, LIDER(P.lider, ["pessoas"], [CENTRAL]));
+  ok(r.status === 403 && /readmissão/.test(r.body.mensagem) && (await credDb.pessoa(pool, P.menor)).excluido, "a liderança local não 'readmite' mudando a data de admissão (revisão)", r.body);
+  r = await salvarPessoa(P.menor, { dataAdmissao: "2026-02-01" });
+  ok(r.status === 200 && !(await credDb.pessoa(pool, P.menor)).excluido, "a Secretaria (nível geral) registra a readmissão", r.body);
 
   console.log("== Meus Dados ==");
   const md = await req("shared/consagracaoDb.js").comissoesDoTitular(pool, P.pastor1);

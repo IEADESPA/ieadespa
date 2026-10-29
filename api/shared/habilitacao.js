@@ -27,7 +27,10 @@ const MARCAS_DISCIPLINA = `
   CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pd LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = pd.PenalidadeId
                     WHERE pd.MembroId = m.MembroId AND (pd.Resultado <> N'EXCLUSAO' OR ${DEPOIS_DA_ADMISSAO})
                       AND ((pd.Status <> N'EM_ANDAMENTO' AND ${CONDICAO_SQL_ATIVO})
-                           OR (${EM_RECURSO_VALE} AND pd.Resultado IN (N'SANCAO', N'EXCLUSAO') AND ISNULL(tp.Codigo, N'') <> N'ADVERTENCIA'))) THEN 1 ELSE 0 END AS Afastado`;
+                           OR (${EM_RECURSO_VALE} AND pd.Resultado IN (N'SANCAO', N'EXCLUSAO') AND ISNULL(tp.Codigo, N'') <> N'ADVERTENCIA'
+                               -- a suspensão com prazo vencido não afasta mais, mesmo com o recurso pendente (revisão da Trava 8-A)
+                               AND (pd.Resultado = N'EXCLUSAO' OR tp.Codigo = N'DISCIPLINA_RIGOROSA' OR pd.DataTerminoPrevisao IS NULL
+                                    OR pd.DataTerminoPrevisao >= CAST(SYSUTCDATETIME() AS DATE))))) THEN 1 ELSE 0 END AS Afastado`;
 
 // A matrícula mais recente da AFM (o mesmo critério em toda a fase 8).
 const STATUS_MATRICULA = `(SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula`;

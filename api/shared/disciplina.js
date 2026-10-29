@@ -28,14 +28,21 @@ const CONDICAO_SQL_ATIVO = `(CEIRecusouEm IS NULL AND (
       ))
 ))`;
 
+// Trava 8-A (revisão): a exclusão julgada ANTES da última admissão (a readmissão, que só o nível geral registra — GestaoPessoas) já não conta. `m`: o alias de
+// MembroReferencia na consulta de quem chama; as colunas do processo ficam sem alias, como no CONDICAO_SQL_ATIVO.
+const foraDaReadmissao = (m) => `NOT (ISNULL(Resultado, '') = 'EXCLUSAO' AND ISNULL(DataConclusao, '99991231') < ISNULL(${m}.DataAdmissao, '19000101'))`;
+
 async function membrosSobDisciplina(pool) {
   const result = await pool.request().query(
     `SELECT DISTINCT ProcessosDisciplinares.MembroId AS MembroId
      FROM ProcessosDisciplinares
      LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
-     WHERE ${CONDICAO_SQL_ATIVO}`
+     WHERE ${CONDICAO_SQL_ATIVO}
+       -- a readmissão (Trava 8-A), sem juntar MembroReferencia aqui: as colunas do CONDICAO_SQL_ATIVO não têm alias (Status ficaria ambíguo)
+       AND NOT EXISTS (SELECT 1 FROM MembroReferencia mr WHERE mr.MembroId = ProcessosDisciplinares.MembroId AND ISNULL(ProcessosDisciplinares.Resultado, '') = 'EXCLUSAO'
+                       AND ISNULL(ProcessosDisciplinares.DataConclusao, '99991231') < ISNULL(mr.DataAdmissao, '19000101'))`
   );
   return new Set(result.recordset.map(r => r.MembroId));
 }
 
-module.exports = { CONDICAO_SQL_ATIVO, membrosSobDisciplina };
+module.exports = { CONDICAO_SQL_ATIVO, foraDaReadmissao, membrosSobDisciplina };

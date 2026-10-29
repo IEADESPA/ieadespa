@@ -206,8 +206,11 @@ module.exports = async function (context, req) {
     const existente = await pool.request().input("id", sql.Int, membroId).query(`
       SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
              CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
-             CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs WHERE cs.MembroId = m.MembroId AND cs.CargoAlvo IS NOT NULL
+             CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
+                               WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
                                AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
+             CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pdx WHERE pdx.MembroId = m.MembroId AND pdx.Resultado = N'EXCLUSAO' AND pdx.CEIRecusouEm IS NULL
+                               AND pdx.Status IN (N'JULGADO', N'EM_RECURSO')) THEN 1 ELSE 0 END AS TemExclusao,
              c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
@@ -251,6 +254,11 @@ module.exports = async function (context, req) {
       const mudouEscada = !igual(ant.NascimentoAnterior, dataNascimento) || !igual(ant.AdmissaoAnterior, dataAdmissao) || (ant.EstadoCivilAnterior || null) !== (estadoCivil || null);
       if (mudouEscada && Number(membroId) === Number(usuario.membroId)) {
         context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém altera a própria data de nascimento, de admissão nem o estado civil no cadastro: peça a outra pessoa da Secretaria." } };
+        return;
+      }
+      // a data de admissão nova de quem tem exclusão julgada é a READMISSÃO (desfaz o "excluído" na credencial, na escada e na CLI): ato só do nível geral
+      if (!igual(ant.AdmissaoAnterior, dataAdmissao) && !geral && ant.TemExclusao) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem exclusão julgada: a data de admissão nova é a readmissão, e só a Secretaria (nível geral) a registra." } };
         return;
       }
       if (mudouEscada && !geral && ant.EmProcessoDeCargo) {

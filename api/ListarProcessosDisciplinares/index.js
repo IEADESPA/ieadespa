@@ -13,6 +13,7 @@ function situacaoEfetiva(p, hoje) {
   if (p.status === "EM_ANDAMENTO") return "EM_ANDAMENTO";
   if (p.status === "EM_RECURSO") return "EM_RECURSO";
   if (p.resultado === "ARQUIVADO") return "ARQUIVADO";
+  if (p.ceiRecusouEm) return "NAO_HOMOLOGADO";   // Trava 8-A: o CEI recusou a homologação — a decisão não tem efeito
   if (p.resultado === "EXCLUSAO") return "EXCLUIDO";
   if (p.resultado === "SANCAO") {
     if (!p.dataTerminoPrevisao) return "PRAZO_INDETERMINADO";

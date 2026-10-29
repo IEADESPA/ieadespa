@@ -26,6 +26,7 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const abandonoDigital = require("../shared/abandonoDigital");
 const vacancia = require("../shared/vacancia");
+const { obterTrava } = require("../shared/financeiroSeguro");
 const { exigirGeral, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const RESULTADOS_RECURSO_VALIDOS = ["PENDENTE", "MANTIDO", "REVERTIDO"];
@@ -99,6 +100,13 @@ module.exports = async function (context, req) {
     try {
       const travado = (await rq().input("id", sql.Int, procedimentoId)
         .query(`SELECT Status, MembroId FROM ProcedimentosAbandono WITH (UPDLOCK, HOLDLOCK) WHERE ProcedimentoId = @id`)).recordset[0];
+      // Trava 8-A (revisão): a vacância fecha os processos de cargo; a cerimônia segura o processo e depois a pessoa — a trava da escada põe os dois em fila
+      // (sem ela, abandono e cerimônia da mesma pessoa podiam se travar um ao outro).
+      if (travado && !(await obterTrava(rq, `escada_${Number(travado.MembroId)}`))) {
+        await desfazer();
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Há uma consagração desta pessoa sendo registrada agora. Tente de novo em instantes." } };
+        return;
+      }
       const membroAgora = travado && (await rq().input("id", sql.Int, travado.MembroId)
         .query(`SELECT Status FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @id`)).recordset[0];
       if (!travado || travado.Status !== "NOTIFICADO" || !membroAgora || STATUS_TERMINAIS.includes(membroAgora.Status)) {

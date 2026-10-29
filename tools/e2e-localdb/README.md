@@ -132,6 +132,15 @@ Cada versão parte da base da anterior (`BASE=...`):
   cartão impresso); a minimização que elimina diploma, CHM e processos; o tempo de Presbítero pelo histórico; a readmissão; Meus Dados. Desde a trava, o `rodar.sh`
   para quando uma migração ou uma base não fica pronta de verdade.
 
+- **v8.5** (Trilha de discipulado, migração 161), mesma base `cenario-escada` (a `preparar-escada` aplica a 161 duas vezes). `e2e-62` (o catálogo de etapas e de
+  tipos de marco só no nível geral, com pré-requisito em círculo recusado; o marco único, o só do nível geral, a data no futuro; as quatro fontes da etapa — marco,
+  batismo nas águas, trilha de formação e escala realizada —, inclusive o curso pela trilha E pelo marco antigo; o batismo de urgência fora de ordem; a caminhada no
+  perfil e a minha; o funil e os parados só do território; a rotina que abre o "próximo passo" na fila do cuidado — só passo recente, no máximo 20 por congregação,
+  nunca de novo para a mesma etapa — e o fecha sozinho; a minimização que apaga os marcos; Meus Dados; lixo — com `E2E_CONTRATO=1` grava as respostas reais para
+  `tools/front-discipulado`) e `e2e-63` (corridas em processos separados: quatro conversões da mesma pessoa, quatro rotinas, quatro etapas e quatro tipos iguais).
+  Desde a v8.5 a `preparar-pastoral` aplica também da 156 à 161: a rotina diária do cuidado roda a da trilha de discipulado e o Meus Dados lê as colunas da
+  fase 8 — a base do cuidado tem o esquema inteiro, como no deploy (o setup `e2e-23` confere os 11 prazos do cuidado, com o do discipulado).
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

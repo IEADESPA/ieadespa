@@ -43,7 +43,9 @@ const TIPOS = {
   AFASTAMENTO: { rotulo: "Membro afastado", sigla: "CUIDADO_PRAZO_AFASTAMENTO_DIAS", horas: false, padrao: 14, descricao: "Membro que deixou de vir (pela detecção do sistema ou porque alguém percebeu). Procurar antes que vire abandono." },
   PEDIDO_VISITA: { rotulo: "Pedido de visita", sigla: "CUIDADO_PRAZO_PEDIDO_VISITA_DIAS", horas: false, padrao: 7, descricao: "Alguém pediu uma visita da liderança." },
   PEDIDO_ORACAO: { rotulo: "Pedido de oração", sigla: "CUIDADO_PRAZO_PEDIDO_ORACAO_DIAS", horas: false, padrao: 3, descricao: "Quem pediu oração e pediu que alguém da liderança falasse com ele." },
-  POS_INTERNACAO: { rotulo: "Pós-internação", sigla: "CUIDADO_PRAZO_POS_INTERNACAO_DIAS", horas: false, padrao: 3, descricao: "Quem está ou esteve internado: visitar no hospital ou em casa." }
+  POS_INTERNACAO: { rotulo: "Pós-internação", sigla: "CUIDADO_PRAZO_POS_INTERNACAO_DIAS", horas: false, padrao: 3, descricao: "Quem está ou esteve internado: visitar no hospital ou em casa." },
+  // v8.5 — o sistema abre (nunca à mão): a pessoa deu um passo na trilha de discipulado e o seguinte está pendente; fecha sozinho quando ela dá o passo
+  DISCIPULADO: { rotulo: "Próximo passo do discipulado", sigla: "CUIDADO_PRAZO_DISCIPULADO_DIAS", horas: false, padrao: 30, descricao: "Quem deu um passo na trilha de discipulado (conversão, curso, batismo...): acompanhar até o passo seguinte (Regimento Art. 70 §4º e Art. 128)." }
 };
 const CODIGOS_TIPO = Object.keys(TIPOS);
 // tipos que a liderança abre à mão (pedido de oração nasce de um pedido; os outros também podem nascer à mão)
@@ -51,13 +53,14 @@ const TIPOS_ABERTURA_MANUAL = ["VISITANTE", "NOVO_CONVERTIDO", "AFASTAMENTO", "P
 // tipos em que a pessoa precisa estar no cadastro (os outros aceitam só o nome e o contato)
 const TIPOS_SO_MEMBRO = ["AFASTAMENTO"];
 // tipos com no máximo um item aberto por pessoa do cadastro (o índice único do banco é o mesmo)
-const TIPOS_UM_ABERTO = ["NOVO_CONVERTIDO", "AFASTAMENTO", "PEDIDO_VISITA", "POS_INTERNACAO"];
+const TIPOS_UM_ABERTO = ["NOVO_CONVERTIDO", "AFASTAMENTO", "PEDIDO_VISITA", "POS_INTERNACAO", "DISCIPULADO"];
 
 const ORIGENS = {
   LIDERANCA: "Aberto pela liderança",
   DETECCAO: "Detectado pelo sistema (a frequência caiu)",
   PEDIDO_MEMBRO: "Pedido do próprio membro",
-  PEDIDO_ORACAO: "Pedido de oração com pedido de contato"
+  PEDIDO_ORACAO: "Pedido de oração com pedido de contato",
+  DISCIPULADO: "Próximo passo da trilha de discipulado (a etapa anterior foi concluída)"
 };
 
 const FORMAS_CONTATO = {
@@ -81,6 +84,8 @@ const DESFECHOS_CONCLUSAO = {
 const DESFECHOS_CANCELAMENTO = { DUPLICADO: "Duplicado (já existe outro item igual)", ENGANO: "Aberto por engano" };
 // concluir um "membro afastado" assim mostra o caminho do abandono (v1.5), que segue manual
 const DESFECHOS_ABANDONO = ["NAO_LOCALIZADO", "RECUSOU_CONTATO"];
+// v8.5 — o desfecho que só o sistema grava: a pessoa deu o passo da trilha de discipulado (o item fecha sozinho)
+const DESFECHO_PASSO_DADO = { PASSO_DADO: "Deu o passo: a etapa da trilha de discipulado foi concluída" };
 
 const DEGRAUS = { CONGREGACAO: "Congregação (Dirigente)", AREA: "Área (Pastor de Área)", REGIAO: "Região (Superintendente Regional)", GERAL: "Nível geral (Diretoria)" };
 const ORDEM_DEGRAUS = ["CONGREGACAO", "AREA", "REGIAO", "GERAL"];
@@ -620,7 +625,7 @@ function referenciaDoDia(hojeIso) {
 
 module.exports = {
   TIPOS, CODIGOS_TIPO, TIPOS_ABERTURA_MANUAL, TIPOS_SO_MEMBRO, TIPOS_UM_ABERTO, ORIGENS, FORMAS_CONTATO, FORMAS_PRESENCIAIS, DESFECHOS_CONCLUSAO, DESFECHOS_CANCELAMENTO,
-  DESFECHOS_ABANDONO, DEGRAUS, ORDEM_DEGRAUS, NIVEIS_NOTA, CODIGOS_NIVEL_NOTA, CATEGORIAS_ORACAO, PARA_QUEM, CONTATOS_DE_AJUDA, FONTES,
+  DESFECHOS_ABANDONO, DESFECHO_PASSO_DADO, DEGRAUS, ORDEM_DEGRAUS, NIVEIS_NOTA, CODIGOS_NIVEL_NOTA, CATEGORIAS_ORACAO, PARA_QUEM, CONTATOS_DE_AJUDA, FONTES,
   MAX_NOME, MAX_CONTATO, MAX_MOTIVO, MAX_OBSERVACAO, MAX_NOTA, MAX_PEDIDO, MAX_BOLETIM, MAX_ADIAR_DIAS, CONTATO_RETROATIVO_DIAS, PRAZO_RISCO_HORAS, BOLETIM_DIAS,
   LEMBRETES_GERAIS_MAXIMO, LIMITE_PEDIDOS_ORACAO_DIA, LIMITE_PEDIDOS_VISITA_DIA, LIMITE_NOTAS_DIA, MAIORIDADE,
   DETECCAO_BASE_DIAS, DETECCAO_MIN_BASE, DETECCAO_MIN_RECENTES, DETECCAO_MAX_POR_CONGREGACAO, DETECCAO_CARENCIA_DIAS, PARAMETROS, SIGLAS_PRAZO,

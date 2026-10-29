@@ -5,9 +5,9 @@
       "credencialId": 1,
       "membroId": 9202,
       "via": 1,
-      "codigo": "NJJS-L8TJ-P5PX-ULD6",
+      "codigo": "GH6Z-KRR9-WTT8-XHDM",
       "situacao": "VALIDA",
-      "emitidaEm": "2026-10-28T19:21:04.357Z",
+      "emitidaEm": "2026-10-29T19:42:43.493Z",
       "encerradaEm": null,
       "motivoEncerramento": null,
       "impressaoSolicitadaEm": null,
@@ -17,7 +17,7 @@
       "categoria": "Obreiro(a) — Auxiliar",
       "congregacao": "Central E2E",
       "fotoUrl": "https://ieadespaarmazenamento.blob.core.windows.net/fotos-membros/membro-1",
-      "url": "https://app.ieadespa.org.br/credencial.html?c=NJJS-L8TJ-P5PX-ULD6",
+      "url": "https://app.ieadespa.org.br/credencial.html?c=GH6Z-KRR9-WTT8-XHDM",
       "situacaoAgora": {
         "situacao": "ATIVA",
         "nome": "Auxiliar Promovido E2E",
@@ -40,7 +40,7 @@
     "congregacao": "Central E2E",
     "via": 1,
     "funcao": "HABILITADO",
-    "consultadoEm": "2026-10-28T19:21:14.642Z"
+    "consultadoEm": "2026-10-29T19:42:53.702Z"
   },
   "publicaObreiroInativo": {
     "sucesso": true,
@@ -50,13 +50,13 @@
     "congregacao": "Central E2E",
     "via": 1,
     "funcao": "INATIVO",
-    "consultadoEm": "2026-10-28T19:21:14.692Z"
+    "consultadoEm": "2026-10-29T19:42:53.740Z"
   },
   "publicaSubstituida": {
     "sucesso": true,
     "situacao": "SUBSTITUIDA",
     "nome": "Auxiliar Promovido E2E",
-    "consultadoEm": "2026-10-28T19:21:15.181Z"
+    "consultadoEm": "2026-10-29T19:42:54.131Z"
   },
   "lista": {
     "sucesso": true,
@@ -66,10 +66,10 @@
         "membroId": 9202,
         "via": 3,
         "situacao": "VALIDA",
-        "emitidaEm": "2026-10-28T19:21:15.284Z",
+        "emitidaEm": "2026-10-29T19:42:54.214Z",
         "encerradaEm": null,
         "motivoEncerramento": null,
-        "impressaoSolicitadaEm": "2026-10-28T19:21:15.308Z",
+        "impressaoSolicitadaEm": "2026-10-29T19:42:54.241Z",
         "impressaEm": null,
         "nome": "Auxiliar Promovido E2E",
         "categoria": "Obreiro(a) — Auxiliar",
@@ -80,8 +80,8 @@
         "membroId": 9202,
         "via": 2,
         "situacao": "CANCELADA",
-        "emitidaEm": "2026-10-28T19:21:15.154Z",
-        "encerradaEm": "2026-10-28T19:21:15.212Z",
+        "emitidaEm": "2026-10-29T19:42:54.112Z",
+        "encerradaEm": "2026-10-29T19:42:54.160Z",
         "motivoEncerramento": "Pedido do próprio membro (e2e)",
         "impressaoSolicitadaEm": null,
         "impressaEm": null,
@@ -94,8 +94,8 @@
         "membroId": 9202,
         "via": 1,
         "situacao": "SUBSTITUIDA",
-        "emitidaEm": "2026-10-28T19:21:04.357Z",
-        "encerradaEm": "2026-10-28T19:21:15.150Z",
+        "emitidaEm": "2026-10-29T19:42:43.493Z",
+        "encerradaEm": "2026-10-29T19:42:54.110Z",
         "motivoEncerramento": "Perda do cartão (e2e)",
         "impressaoSolicitadaEm": null,
         "impressaEm": null,
@@ -115,6 +115,6 @@
     "sucesso": true,
     "situacao": "CANCELADA",
     "nome": "Missionario Diacono E2E",
-    "consultadoEm": "2026-10-28T19:21:22.974Z"
+    "consultadoEm": "2026-10-29T19:43:02.181Z"
   }
 }

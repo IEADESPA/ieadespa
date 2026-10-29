@@ -46,8 +46,9 @@ const P = {
   ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Dirigente de Congregação' AND (',' + Permissoes + ',') LIKE '%,cuidado_pastoral,%cuidado_pastoral,%'")) === 0, "reaplicar não duplicou a permissão no papel");
   const prazos = Object.fromEntries((await q("SELECT Sigla, Dias FROM Prazos WHERE Sigla LIKE 'CUIDADO[_]%'")).map((p) => [p.Sigla, p.Dias]));
   const esperados = { CUIDADO_PRAZO_VISITANTE_HORAS: 48, CUIDADO_PRAZO_NOVO_CONVERTIDO_DIAS: 7, CUIDADO_PRAZO_AFASTAMENTO_DIAS: 14, CUIDADO_PRAZO_PEDIDO_VISITA_DIAS: 7, CUIDADO_PRAZO_PEDIDO_ORACAO_DIAS: 3,
-    CUIDADO_PRAZO_POS_INTERNACAO_DIAS: 3, CUIDADO_PRAZO_DEGRAU_DIAS: 3, CUIDADO_DETECCAO_SEMANAS: 6, CUIDADO_DETECCAO_COSTUME_PCT: 50, CUIDADO_DETECCAO_QUEDA_PCT: 60 };
-  ok(JSON.stringify(prazos, Object.keys(esperados).sort()) === JSON.stringify(esperados, Object.keys(esperados).sort()) && Object.keys(prazos).length === 10, "os 10 prazos nascem com os valores do contrato (48 h do visitante)", prazos);
+    CUIDADO_PRAZO_POS_INTERNACAO_DIAS: 3, CUIDADO_PRAZO_DEGRAU_DIAS: 3, CUIDADO_DETECCAO_SEMANAS: 6, CUIDADO_DETECCAO_COSTUME_PCT: 50, CUIDADO_DETECCAO_QUEDA_PCT: 60,
+    CUIDADO_PRAZO_DISCIPULADO_DIAS: 30 };   // v8.5 (161): o próximo passo da trilha de discipulado — a base do cuidado tem o esquema inteiro, como no deploy
+  ok(JSON.stringify(prazos, Object.keys(esperados).sort()) === JSON.stringify(esperados, Object.keys(esperados).sort()) && Object.keys(prazos).length === 11, "os 11 prazos nascem com os valores do contrato (48 h do visitante)", prazos);
   ok((await escalar("SELECT COUNT(*) FROM (SELECT Sigla FROM Prazos WHERE Sigla LIKE 'CUIDADO[_]%' GROUP BY Sigla HAVING COUNT(*) > 1) x")) === 0, "reaplicar não duplicou prazos");
   // (a Trava 7-C, migração 154, acrescenta CUIDADO_RISCO_CRIANCA, também obrigatória: aqui contam só as 5 da 148, com a base montada antes ou depois da 154)
   const regras = await q("SELECT Chave, Obrigatoria, CanalEmail, CanalPush, Categoria, Ativa FROM NotificacaoRegras WHERE Chave LIKE 'CUIDADO[_]%' AND Chave <> 'CUIDADO_RISCO_CRIANCA' ORDER BY Chave");

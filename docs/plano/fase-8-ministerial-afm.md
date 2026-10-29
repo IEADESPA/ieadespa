@@ -460,6 +460,43 @@ departamento, primeiro serviço voluntário.
 - [ ] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
       (v6.9). *(Rock RMS Steps)*
 
+### Desenho da v8.5 (contrato, 29/10/2026)
+
+**Base legal:** Regimento Art. 70 §4º (a AFM conduz o Curso de Discipulado para novos convertidos em todas as congregações) e §5º (no batismo de
+urgência, o "Discipulado Pós-Batismal" vem depois); Art. 80, IV (ninguém é batizado sem o curso); Art. 128 (a classe de novos convertidos e a
+"Busca Ativa" medem a congregação); Art. 132 §2º, II (na saída, os "registros eclesiásticos de conversão" são eliminados).
+
+1. **Catálogo de tipos de marco** (`TiposMarco`): os quatro de hoje (Conversão, Ministério/Igreja anterior, Batismo no Espírito Santo, Outro) mais
+   **Curso de Discipulado** e **Primeira participação em departamento**. Cada tipo diz se é **único** (Conversão, Curso, Batismo no Espírito Santo,
+   Departamento — um segundo é recusado) ou **repetível**, e se é **só do nível geral** (Batismo no Espírito Santo, que conta para a escada). O nível
+   geral de "pessoas" cria, renomeia e desativa tipos; os do sistema não se apagam.
+2. **A trilha** (`EtapasDiscipulado`): etapas em ordem, cada uma com a **fonte** de onde o sistema sabe que ela foi feita, sem ninguém lançar duas
+   vezes — um **marco** do perfil, o **batismo nas águas** (a data do batismo no cadastro, que a esteira de batismo já grava), uma **trilha de
+   formação** concluída (v6.9: quando a AFM configurar o curso como trilha, a etapa passa a ler a conclusão dela) ou o **primeiro serviço
+   voluntário** (a primeira escala aceita ou confirmada, já realizada). Trilha inicial: Conversão → Curso de Discipulado → Batismo nas águas →
+   Batismo no Espírito Santo → Primeira participação em departamento → Primeiro serviço voluntário. Pré-requisitos são informativos: a ordem
+   real é a que aconteceu (o batismo de urgência antes do curso aparece como "curso pendente — Discipulado Pós-Batismal").
+3. **A caminhada da pessoa**: no perfil (aba "Caminhada"), cada etapa feita com a data e de onde veio, e o **próximo passo**. A própria pessoa vê
+   a sua em "Minha Formação" no Meu Painel, e em Meus Dados.
+4. **Funil por congregação** (sub-aba Discipulado da Pessoas, liderança com "pessoas" no seu território; o nível geral vê todas): quantos fizeram
+   cada etapa, quantos passaram para a seguinte e **quantos estão parados** entre uma e outra há mais de N dias (90 por padrão), com a lista
+   nominal de quem parou (só do território de quem vê).
+5. **O próximo passo vira acompanhamento** (v7.11): a rotina diária abre um item **"Próximo passo do discipulado"** na fila do cuidado pastoral
+   para quem deu um passo **recente** (nos últimos 180 dias) e tem o seguinte pendente, se a etapa seguinte pede acompanhamento; o item tem o
+   responsável e a escada de sempre, e **fecha sozinho** quando a pessoa dá o passo. Um item por pessoa; nunca reabre para a mesma etapa; no
+   máximo 20 novos por congregação por dia (o primeiro dia não inunda a fila com o histórico de quem já é membro antigo).
+6. **LGPD:** os marcos da trilha são dados da membresia (ROPA "DISCIPULADO"); a minimização do ex-membro elimina os marcos (Art. 132 §2º, II:
+   "registros eclesiásticos de conversão") — o batismo nas águas fica, como assentamento do sacramento.
+
+**Decisões por interpretação (o responsável pode mudar):** a trilha **começa na conversão** — o membro antigo que só tem o batismo no cadastro ou
+uma escala, sem a conversão lançada, não entra no funil nem na fila (senão o rol inteiro apareceria "parado antes da conversão"); o curso conta pelo
+marco, pela trilha de formação que a AFM configurar e pelo discipulado atestado na esteira de batismo (nada é lançado duas vezes); "parado" = sem
+nenhum passo há 90 dias; o acompanhamento só abre quando o passo **anterior** ao próximo foi nos últimos 180 dias (um passo recente lá na frente —
+uma escala — não reabre a trilha antiga) e o marco sem data não conta como passo recente; no máximo 20 itens novos por congregação **por dia**; o
+funil e os nomes de quem parou são da liderança territorial (a concessão de Extensão e a de Departamento não os veem, como no cuidado pastoral; quem
+cuida da Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; a pessoa registra marcos de outros só no seu
+território, e nunca os "só do nível geral" em si mesma.
+
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 
 - [ ] Carga horária mínima periódica por cargo ministerial para manter a

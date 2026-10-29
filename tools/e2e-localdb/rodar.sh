@@ -70,6 +70,8 @@ case "$1" in
     migrar 154
     # e a 155 (as decisões de 23/10/2026: a rotina diária já usa as regras e as colunas dela)
     migrar 155
+    # v8.5: e da 156 à 161 — a rotina diária do cuidado roda a da trilha de discipulado (161) e o Meus Dados lê as colunas da fase 8: o esquema inteiro, como no deploy
+    for m in 156 157 158 159 160 161; do migrar $m; done
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"
@@ -117,6 +119,8 @@ case "$1" in
     migrar 159 2
     # Trava 8-A: a 160 também, duas vezes (a recusa do CEI, a CIADSETA, os motivos novos do encerramento, a limpeza única e a retenção); e2e-61
     migrar 160 2
+    # v8.5 (Trilha de discipulado): a 161 também, duas vezes; e2e-62 e e2e-63
+    migrar 161 2
     base salvar cenario-escada
     ;;
   roteiro)

@@ -233,6 +233,7 @@
               <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
               <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
               <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
+              <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone">🌱</span><span class="rotulo">Discipulado</span></button>
             </div>
             <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
             <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
@@ -1167,6 +1168,9 @@
             formação vigente. Qualquer pessoa confere a autenticidade de um certificado seu, sem login,
             pelo QR Code ou pelo código impresso nele.</p>
           <div id="resultadoMinhaFormacao"></div>
+          <!-- v8.5 — a minha caminhada na trilha de discipulado -->
+          <h4>🌱 Minha caminhada</h4>
+          <div id="discMinhaCaminhada"></div>
         </div>
 
         <!-- SUB-ABA: AGENDA (v7.2 — Calendário Oficial e Agenda Unificada).
@@ -2122,6 +2126,64 @@
         </div>
 
         <!-- SUB-ABA: CREDENCIAIS (v8.4 — Regimento Art. 76 §2º: emissão e impressão só na Secretaria Geral) -->
+        <!-- v8.5 — Trilha de discipulado (Regimento Art. 70 §4º e §5º, Art. 80, IV, Art. 128): o funil do território e, para o nível geral, o catálogo -->
+        <div id="subPessoasDiscipulado" class="sub-aba-secretaria" style="display:none;">
+          <h3>🌱 Trilha de discipulado</h3>
+          <p class="subtitle">O caminho de quem chega: conversão, Curso de Discipulado (AFM), batismo nas águas, batismo no Espírito Santo, primeira participação em
+            departamento e primeiro serviço voluntário. Cada etapa é lida de onde a informação já está (o marco no Histórico do perfil, a data do batismo, a trilha de
+            formação, a escala). Quem deu um passo recente e tem o próximo pendente ganha um acompanhamento na fila do Cuidado pastoral, que fecha sozinho quando a
+            pessoa dá o passo.</p>
+          <div class="barra-lista">
+            <label for="discDiasParado">Parado há mais de:</label>
+            <select id="discDiasParado"><option value="30">30 dias</option><option value="60">60 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option></select>
+            <button class="btn-confirmar btn-secundario" style="width:auto;margin:0;" type="button" data-on-click="discCarregarFunilAcao">Atualizar</button>
+          </div>
+          <p id="discResultado" role="status" aria-live="polite"></p>
+          <div class="rolagem-tabela"><div id="discFunil"></div></div>
+          <div id="discParados" class="cons-painel" hidden>
+            <h4 id="discParadosTitulo"></h4>
+            <div class="rolagem-tabela"><div id="discParadosLista"></div></div>
+          </div>
+          <div id="discCatalogo" hidden>
+            <hr />
+            <h3>Catálogo da trilha (nível geral)</h3>
+            <div class="rolagem-tabela"><div id="discEtapasLista"></div></div>
+            <button class="btn-confirmar btn-secundario" style="width:auto;" type="button" data-on-click="discNovaEtapaAcao">➕ Nova etapa</button>
+            <div id="discFormEtapa" class="cons-painel" hidden>
+              <h4 id="discFormEtapaTitulo">Nova etapa</h4>
+              <div class="input-group"><label for="discEtapaChave">Chave (ex.: CLASSE_NOVOS):</label><input type="text" id="discEtapaChave" maxlength="30" /></div>
+              <div class="input-group"><label for="discEtapaNome">Nome:</label><input type="text" id="discEtapaNome" maxlength="80" /></div>
+              <div class="input-group"><label for="discEtapaDescricao">Descrição:</label><input type="text" id="discEtapaDescricao" maxlength="300" /></div>
+              <div class="input-group"><label for="discEtapaOrdem">Ordem:</label><input type="number" id="discEtapaOrdem" min="1" max="99" /></div>
+              <div class="input-group"><label for="discEtapaFonte">De onde vem:</label><select id="discEtapaFonte" data-on-change="discMudouFonteAcao"></select></div>
+              <div class="input-group" id="discGrupoTipoMarco"><label for="discEtapaTipoMarco">Tipo de marco:</label><select id="discEtapaTipoMarco"></select></div>
+              <div class="input-group" id="discGrupoTrilha" hidden><label for="discEtapaTrilha">Trilha de formação:</label><select id="discEtapaTrilha"></select></div>
+              <p class="subtitle">Pré-requisitos (informativos — a ordem real é a que aconteceu):</p>
+              <div id="discEtapaPre"></div>
+              <label class="rotulo-inline"><input type="checkbox" id="discEtapaGera" /> Abre acompanhamento quando é o próximo passo</label>
+              <label class="rotulo-inline"><input type="checkbox" id="discEtapaAtiva" /> Ativa</label>
+              <div>
+                <button class="btn-confirmar" type="button" data-on-click="discSalvarEtapaAcao">Salvar etapa</button>
+                <button class="btn-confirmar btn-secundario" type="button" data-on-click="discFecharFormEtapaAcao">Cancelar</button>
+              </div>
+            </div>
+            <h4>Tipos de marco</h4>
+            <div class="rolagem-tabela"><div id="discTiposLista"></div></div>
+            <div class="cons-painel">
+              <div class="input-group"><label for="discTipoCodigo">Código:</label><input type="text" id="discTipoCodigo" maxlength="30" /></div>
+              <div class="input-group"><label for="discTipoNome">Nome:</label><input type="text" id="discTipoNome" maxlength="80" /></div>
+              <div class="input-group"><label for="discTipoDescricao">Descrição:</label><input type="text" id="discTipoDescricao" maxlength="300" /></div>
+              <label class="rotulo-inline"><input type="checkbox" id="discTipoUnico" /> Único (um por pessoa)</label>
+              <label class="rotulo-inline"><input type="checkbox" id="discTipoSoGeral" /> Só o nível geral lança</label>
+              <label class="rotulo-inline"><input type="checkbox" id="discTipoAtivo" checked /> Ativo</label>
+              <div>
+                <button class="btn-confirmar" type="button" data-on-click="discSalvarTipoAcao">Salvar tipo</button>
+                <button class="btn-confirmar btn-secundario" type="button" data-on-click="discNovoTipoAcao">Novo tipo</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="subPessoasCredenciais" class="sub-aba-secretaria" style="display:none;">
           <h3>🪪 Credenciais (Identidade Eclesiástica)</h3>
           <p class="subtitle">Só a Secretaria Geral emite, emite nova via, cancela e imprime. Nova via (perda, roubo, foto ou cargo novo) faz a anterior deixar de valer
@@ -2163,6 +2225,7 @@
             <button class="btn-tab-perfil ativo" id="btnTabPerfilDados" data-on-click="mostrarAbaPerfil" data-args-click='["dados"]'>📋 Dados</button>
             <button class="btn-tab-perfil" id="btnTabPerfilEditar" data-on-click="mostrarAbaPerfil" data-args-click='["editar"]'>✏️ Editar</button>
             <button class="btn-tab-perfil" id="btnTabPerfilHistorico" data-on-click="mostrarAbaPerfil" data-args-click='["historico"]'>🕒 Histórico</button>
+            <button class="btn-tab-perfil" id="btnTabPerfilCaminhada" data-on-click="mostrarAbaPerfil" data-args-click='["caminhada"]'>🌱 Caminhada</button>
             <button class="btn-tab-perfil" id="btnTabPerfilFoto" data-on-click="mostrarAbaPerfil" data-args-click='["foto"]'>📷 Foto</button>
             <button class="btn-tab-perfil" id="btnTabPerfilCasamentos" data-on-click="mostrarAbaPerfil" data-args-click='["casamentos"]'>💍 Casamentos</button>
             <button class="btn-tab-perfil" id="btnTabPerfilApresentacoes" data-on-click="mostrarAbaPerfil" data-args-click='["apresentacoes"]'>👶 Apresentação de Filhos</button>
@@ -2194,6 +2257,13 @@
               <button class="btn-confirmar" style="width:auto;margin:0;" data-on-click="registrarMarcoMembroAcao">➕ Registrar</button>
             </div>
             <p id="resultadoMarcoMembro"></p>
+          </div>
+
+          <!-- v8.5 — a caminhada na trilha de discipulado -->
+          <div id="tabPerfilCaminhada" class="tab-conteudo-perfil" style="display:none;">
+            <p class="subtitle">A trilha de discipulado desta pessoa. Os marcos (conversão, curso, departamento...) se registram na aba Histórico; o batismo vem do cadastro e
+              da esteira de batismo; o serviço voluntário, das escalas.</p>
+            <div id="discCaminhadaPerfil"></div>
           </div>
 
           <div id="tabPerfilFoto" class="tab-conteudo-perfil" style="display:none;">
@@ -7190,6 +7260,7 @@
   <script src="modulos/crise-seguranca.js"></script>
   <script src="modulos/cuidado-pastoral.js"></script>
   <script src="modulos/disciplina.js"></script>
+  <script src="modulos/discipulado.js"></script>
   <script src="modulos/doacoes.js"></script>
   <script src="modulos/ebd.js"></script>
   <script src="modulos/enquetes.js"></script>

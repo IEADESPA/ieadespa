@@ -270,11 +270,11 @@ function formatarItem(i, { agora = new Date(), acesso = "GESTAO", completo = fal
     pessoaNome: i.PessoaNomeExibido || (i.AnonimizadoEm ? "(anonimizado)" : null), menor: ehMenor(i, hoje), origem: i.Origem, origemRotulo: cp.ORIGENS[i.Origem] || i.Origem,
     urgente: !!i.Urgente, soNivelGeral: !!i.SoNivelGeral, responsavel: i.ResponsavelMembroId ? { membroId: i.ResponsavelMembroId, nome: i.ResponsavelNome } : null,
     prazoEm: iso(i.PrazoEm), prazo: i.Status === "ABERTO" ? cp.situacaoDoPrazo(i.PrazoEm, agora) : null, nivel: i.Nivel, nivelRotulo: cp.DEGRAUS[i.Nivel] || i.Nivel,
-    status: i.Status, desfecho: i.Desfecho, desfechoRotulo: cp.DESFECHOS_CONCLUSAO[i.Desfecho] || cp.DESFECHOS_CANCELAMENTO[i.Desfecho] || null,
+    status: i.Status, desfecho: i.Desfecho, desfechoRotulo: cp.DESFECHOS_CONCLUSAO[i.Desfecho] || cp.DESFECHOS_CANCELAMENTO[i.Desfecho] || cp.DESFECHO_PASSO_DADO[i.Desfecho] || null,
     encerradoEm: iso(i.EncerradoEm), criadoEm: iso(i.CriadoEm), primeiroContatoEm: iso(i.PrimeiroContatoEm)
   };
   if (acesso === "GESTAO") { base.membroId = i.MembroId || null; base.pedidoOracaoId = i.PedidoOracaoId || null; base.deteccaoResumo = i.DeteccaoResumo || null; }
-  else if (i.Origem === "DETECCAO") base.deteccaoResumo = i.DeteccaoResumo || null;
+  else if (i.Origem === "DETECCAO" || i.Origem === "DISCIPULADO") base.deteccaoResumo = i.DeteccaoResumo || null;
   if (completo) {
     base.motivo = i.Motivo || null;
     // o contato é o de agora no cadastro: só sai com o item aberto (o encerrado não é porta para o telefone novo de quem já foi atendido)
@@ -365,7 +365,7 @@ async function avisarDestino(pool, { destino, g, membroId, pessoaNome, congregac
 }
 
 // Grava um item novo (e o evento CRIADO, e o ATRIBUIDO se houver responsável) numa transação. `d`: { tipo, congregacaoId, membroId, pessoaNome, pessoaContato, motivo,
-// origem, pedidoOracaoId, urgente, soGeral, deteccaoResumo, prazoEm, responsavelMembroId, nivel, criadoPor }. Devolve { itemId, eventoCriado, eventoAtribuido } ou { repetido:true }.
+// origem, pedidoOracaoId, urgente, soGeral, deteccaoResumo, prazoEm, responsavelMembroId, nivel, criadoPor, etapaDiscipuladoId (v8.5) }. Devolve { itemId, eventoCriado, eventoAtribuido } ou { repetido:true }.
 async function gravarItem(pool, d, { transaction: externa = null } = {}) {
   const transaction = externa || new sql.Transaction(pool);
   try {
@@ -374,9 +374,9 @@ async function gravarItem(pool, d, { transaction: externa = null } = {}) {
       .input("pn", sql.NVarChar(150), d.pessoaNome || null).input("pc", sql.NVarChar(150), d.pessoaContato || null).input("mo", sql.NVarChar(300), d.motivo || null)
       .input("o", sql.NVarChar(16), d.origem).input("po", sql.Int, d.pedidoOracaoId || null).input("u", sql.Bit, d.urgente ? 1 : 0).input("sg", sql.Bit, d.soGeral ? 1 : 0)
       .input("dr", sql.NVarChar(200), d.deteccaoResumo || null).input("r", sql.Int, d.responsavelMembroId || null).input("pz", sql.DateTime2, d.prazoEm)
-      .input("nv", sql.NVarChar(12), d.nivel || "CONGREGACAO").input("cp", sql.Int, d.criadoPor || null)
-      .query(`INSERT INTO CuidadoItens (Tipo, CongregacaoId, MembroId, PessoaNome, PessoaContato, Motivo, Origem, PedidoOracaoId, Urgente, SoNivelGeral, DeteccaoResumo, ResponsavelMembroId, PrazoEm, Nivel, CriadoPorMembroId)
-              VALUES (@t, @c, @m, @pn, @pc, @mo, @o, @po, @u, @sg, @dr, @r, @pz, @nv, @cp); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
+      .input("nv", sql.NVarChar(12), d.nivel || "CONGREGACAO").input("cp", sql.Int, d.criadoPor || null).input("et", sql.Int, d.etapaDiscipuladoId || null)
+      .query(`INSERT INTO CuidadoItens (Tipo, CongregacaoId, MembroId, PessoaNome, PessoaContato, Motivo, Origem, PedidoOracaoId, Urgente, SoNivelGeral, DeteccaoResumo, ResponsavelMembroId, PrazoEm, Nivel, CriadoPorMembroId, EtapaDiscipuladoId)
+              VALUES (@t, @c, @m, @pn, @pc, @mo, @o, @po, @u, @sg, @dr, @r, @pz, @nv, @cp, @et); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`);
     const itemId = ins.recordset[0].id;
     const eventoCriado = await inserirEvento(new sql.Request(transaction), { itemId, tipo: "CRIADO", membroId: d.criadoPor || null, prazoNovo: d.prazoEm, nivelPara: d.nivel && d.nivel !== "CONGREGACAO" ? d.nivel : null });
     let eventoAtribuido = null;
@@ -1454,6 +1454,7 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   const passo = async (nome, f) => { try { r[nome] = await f(); } catch (e) { r.falhas.push(nome); console.error(`[CUIDADO] a rotina "${nome}" falhou:`, e && e.message); } };
   await passo("quemMudou", () => acompanharQuemMudou(pool, { agora }));
   await passo("deteccao", () => detectarAfastamentos(pool, { agora }));
+  await passo("discipulado", () => require("./discipuladoDb").rotinaDiaria(pool, { agora }));   // v8.5
   await passo("escada", () => subirEscada(pool, { agora }));
   await passo("notasApagadas", () => apagarNotasDeQuemSaiu(pool, { agora }));
   await passo("retencao", () => aplicarRetencao(pool, { agora }));
@@ -1690,6 +1691,6 @@ module.exports = {
   listarNotas, escreverNota, notaLegivel, lerNota, leiturasDaNota,
   pedirOracao, registrarPedidoRecebido, pedirVisita, meusPedidos, listarPedidos, moderar, marcarRisco, acompanharPedido, boletim,
   buscarPessoas, painel, congregacoesDoTerritorio, regioesSemSuperintendente,
-  rotinaDiaria, acompanharQuemMudou, detectarAfastamentos, subirEscada, apagarNotasDeQuemSaiu, aplicarRetencao,
+  rotinaDiaria, acompanharQuemMudou, detectarAfastamentos, gravarItem, destinoDoItem, avisarDestino, inserirEvento, lerPrazos, congregacao, subirEscada, apagarNotasDeQuemSaiu, aplicarRetencao,
   detectarResumoDiario, detectarDegraus, detectarModeracao, dadosDoTitular, exclusaoLgpd
 };

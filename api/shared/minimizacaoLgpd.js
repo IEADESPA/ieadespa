@@ -53,6 +53,9 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
     UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL WHERE MembroId = @id;
     DELETE p FROM PareceresCEIConsagracao p JOIN Consagracoes c ON c.ConsagracaoId = p.ConsagracaoId WHERE c.MembroId = @id;
     DELETE FROM Consagracoes WHERE MembroId = @id;`);
+  // v8.5 — os marcos do perfil (conversão, curso de discipulado, ministério anterior...) são "registros eclesiásticos de conversão" (Art. 132 §2º, II): saem. A trilha
+  // de discipulado não guarda nada próprio (lê os marcos, o batismo, as trilhas e as escalas); o batismo nas águas fica, como assentamento do sacramento.
+  await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM MarcosMembro WHERE MembroId = @id`);
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

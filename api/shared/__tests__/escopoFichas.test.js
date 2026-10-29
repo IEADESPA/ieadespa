@@ -1145,7 +1145,11 @@ describe("ListarMarcosMembro e RegistrarMarcoMembro", () => {
   });
   describe("registrar", () => {
     const registrar = (corpo, token = LOCAL()) => chamar(hRegistrarMarco, { metodo: "POST", token, corpo: { tipo: "CONVERSAO", descricao: "Aceitou a Jesus", ...corpo } });
-    beforeEach(() => quando(/INSERT INTO MarcosMembro/, [{ MarcoId: 3 }]));
+    beforeEach(() => {
+      quando(/INSERT INTO MarcosMembro/, [{ MarcoId: 3 }]);
+      // v8.5 — o tipo vem do catálogo (TiposMarco)
+      quando(/FROM TiposMarco WHERE Codigo = @c/, [{ Codigo: "CONVERSAO", Nome: "Conversão", Unico: false, SoNivelGeral: false, Ativo: true }]);
+    });
     test("pessoa da congregação: grava e audita", async () => {
       const r = await registrar({ membroId: 10, dataMarco: "2001-05-06" });
       expect(r.status).toBe(201);

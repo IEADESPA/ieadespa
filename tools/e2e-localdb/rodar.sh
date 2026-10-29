@@ -117,6 +117,8 @@ case "$1" in
     migrar 159 2
     # Trava 8-A: a 160 também, duas vezes (a recusa do CEI, a CIADSETA, os motivos novos do encerramento, a limpeza única e a retenção); e2e-61
     migrar 160 2
+    # v8.5 (Trilha de discipulado): a 161 também, duas vezes; e2e-62 e e2e-63
+    migrar 161 2
     base salvar cenario-escada
     ;;
   roteiro)

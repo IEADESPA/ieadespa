@@ -211,7 +211,7 @@ function moverFormPessoaPara(slotId) {
   document.getElementById(slotId).appendChild(bloco);
 }
 
-const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais" };
+const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais", discipulado: "Discipulado" };
 
 function mostrarSubAbaPessoas(sub) {
   // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
@@ -223,6 +223,8 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
   document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
   document.getElementById("subPessoasCredenciais").style.display = sub === "credenciais" ? "block" : "none";
+  document.getElementById("subPessoasDiscipulado").style.display = sub === "discipulado" ? "block" : "none";   // v8.5
+  document.getElementById("btnSubPessoasDiscipulado").classList.toggle("ativo", sub === "discipulado");
   document.getElementById("btnSubPessoasCredenciais").style.display = credGeral ? "" : "none";
   document.getElementById("btnSubPessoasCredenciais").classList.toggle("ativo", sub === "credenciais");
   document.getElementById("subPessoasPerfil").style.display = "none";
@@ -236,6 +238,7 @@ function mostrarSubAbaPessoas(sub) {
   }
   if (sub === "aprovacoes") carregarFilaAprovacoes();
   if (sub === "credenciais") credCarregarListaAcao();
+  if (sub === "discipulado") discAbrirSubAba();
 }
 
 function voltarBuscaPessoas() {
@@ -268,7 +271,7 @@ function abrirPerfilPessoa(membroId) {
   mostrarAbaPerfil("dados");
 }
 
-const ABAS_PERFIL = ["dados", "editar", "historico", "foto", "casamentos", "apresentacoes", "licenca", "vinculos"];
+const ABAS_PERFIL = ["dados", "editar", "historico", "caminhada", "foto", "casamentos", "apresentacoes", "licenca", "vinculos"];
 
 function mostrarAbaPerfil(aba) {
   const membroId = window._membroPerfilAtual;
@@ -283,7 +286,8 @@ function mostrarAbaPerfil(aba) {
     document.getElementById("resultadoPessoa").textContent = "";
     editarPessoa(membroId);
   }
-  if (aba === "historico") carregarHistoricoMembro(membroId);
+  if (aba === "historico") { carregarHistoricoMembro(membroId); discPreencherTiposMarco(); }   // v8.5: os tipos do marco vêm do catálogo
+  if (aba === "caminhada") discCarregarCaminhadaPerfil(membroId);
   if (aba === "foto") carregarAbaFoto(membroId);
   if (aba === "casamentos") carregarCasamentos(membroId);
   if (aba === "apresentacoes") carregarApresentacoesCrianca(membroId);

@@ -145,7 +145,9 @@ module.exports = async function (context, req) {
   // v8.4 — as vias da credencial (sem o código de segurança do QR).
   // Trava 8-A — e as cerimônias em que a pessoa esteve na Comissão de Unção.
   const escada = { cargos: await require("../shared/escadaDb").historicoDe(pool, alvo), consagracoes: await require("../shared/consagracaoDb").dadosDoTitular(pool, alvo),
-    credenciais: await require("../shared/credencialDb").dadosDoTitular(pool, alvo), comissaoUncao: await require("../shared/consagracaoDb").comissoesDoTitular(pool, alvo) };
+    credenciais: await require("../shared/credencialDb").dadosDoTitular(pool, alvo), comissaoUncao: await require("../shared/consagracaoDb").comissoesDoTitular(pool, alvo),
+    // v8.5 — a caminhada na trilha de discipulado (o que está feito, de onde veio, e o próximo passo)
+    discipulado: await require("../shared/discipuladoDb").dadosDoTitular(pool, alvo) };
   // Trava 7-C — tesouraria: o cadastro de fornecedor ligado à pessoa (quando ela presta serviço e recebe da Igreja) e os avisos registrados nos pagamentos a ela
   // (voluntário, pagamento habitual, cachê/comissão: o tesoureiro leu e confirmou), com a data.
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);

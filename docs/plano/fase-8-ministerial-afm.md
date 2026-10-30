@@ -448,16 +448,16 @@ A escada ministerial (v8.2) cobre do Auxiliar pra cima. Falta o percurso que vem
 Espírito Santo, curso de novos convertidos, primeira participação em
 departamento, primeiro serviço voluntário.
 
-- [ ] Catálogo de **tipos de marco** configurável (único vs. repetível,
+- [x] Catálogo de **tipos de marco** configurável (único vs. repetível,
       pré-requisitos), com marcos datados no perfil — a tabela `MarcosMembro`
       (v1.6) já existe e hoje é usada só para eventos avulsos; aqui ela vira
       trilha estruturada.
-- [ ] **Funil por congregação**: quantos pararam entre "convertido" e "batizado",
+- [x] **Funil por congregação**: quantos pararam entre "convertido" e "batizado",
       entre "batizado" e "primeiro serviço". É o número que mostra onde a
       assimilação trava — e ele é invisível hoje.
-- [ ] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
+- [x] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
       (v7.11), em vez de depender de alguém lembrar.
-- [ ] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
+- [x] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
       (v6.9). *(Rock RMS Steps)*
 
 ### Desenho da v8.5 (contrato, 29/10/2026)
@@ -496,6 +496,42 @@ uma escala — não reabre a trilha antiga) e o marco sem data não conta como p
 funil e os nomes de quem parou são da liderança territorial (a concessão de Extensão e a de Departamento não os veem, como no cuidado pastoral; quem
 cuida da Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; a pessoa registra marcos de outros só no seu
 território, e nunca os "só do nível geral" em si mesma.
+
+### Como ficou a v8.5 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `2e2ea5d`; para desfazer: `git revert -m 1 2e2ea5d`). Migração **161** (`TiposMarco`, `EtapasDiscipulado`,
+`EtapasDiscipuladoPreRequisitos`; na fila do cuidado, o tipo `DISCIPULADO`, a origem `DISCIPULADO`, o desfecho `PASSO_DADO`, a etapa do item e o prazo
+`CUIDADO_PRAZO_DISCIPULADO_DIAS`, 30 dias, em Catálogos → Prazos). Regra pura em `api/shared/discipulado.js`, banco em `api/shared/discipuladoDb.js`, rota
+`/api/discipulado/<ação>` (`GestaoDiscipulado`). Os marcos do perfil passaram a vir do catálogo (`RegistrarMarcoMembro`: tipo inativo recusado, o "único" com
+trava, o "só do nível geral" nunca em si mesmo, data no futuro recusada — também na correção). Tela: sub-aba **Discipulado** da Pessoas (o funil, quem parou e,
+para o nível geral, o catálogo), aba **Caminhada** no perfil, **Minha caminhada** em Minha Formação e a trilha em Meus Dados (módulo novo
+`app/modulos/discipulado.js`). Casca do service worker **v47**. A rotina diária do cuidado pastoral roda a da trilha (abre e fecha os "próximos passos").
+
+**O que mudou depois das revisões independentes** (servidor: 2 altos, 3 médios, 6 baixos; tela: 4 médios, 7 baixos — tratados):
+
+- O índice único "um item por pessoa e etapa" saiu: com a anonimização da exclusão LGPD e da retenção (que zeram a pessoa no item), ele travaria a exclusão a
+  partir da segunda pessoa e, daqui a 5 anos, a retenção inteira. O "um aberto por pessoa" segura a duplicata; o "nunca reabre para a mesma etapa" é da rotina.
+- O funil e os nomes de quem parou são da liderança **territorial**: a concessão de Extensão e a de Departamento não os veem (o mesmo critério do cuidado
+  pastoral).
+- A trilha **começa na conversão**: o rol antigo, só com o batismo do cadastro, não aparece "parado antes da conversão". O acompanhamento mede a data do passo
+  **anterior** ao próximo (uma escala recente não reabre a trilha antiga); o marco sem data é data desconhecida; no máximo 20 por congregação **por dia**; quem
+  teve a exclusão LGPD atendida não volta à fila; o item que muda de congregação leva a etapa e fecha sozinho na congregação nova.
+- O curso também vem da **esteira de batismo** (o discipulado atestado no candidato e a trilha configurada como requisito do batismo) — nada é lançado duas vezes;
+  e, quando a AFM liga o curso a uma trilha de formação, o marco antigo continua valendo.
+- Tela: toda resposta confere se o login ainda é o mesmo e se é a do pedido mais recente; o Discipulado Pós-Batismal (Art. 70 §5º) aparece para quem foi batizado
+  antes do curso; o "Corrigir marco" usa o nome do catálogo (o teste de tela da homologação achou ele quebrando com um catálogo de outro formato — corrigido).
+- A base do cuidado pastoral nos testes do banco local passou a ter o esquema inteiro (156 a 161), como no deploy.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a trilha começa na conversão lançada (o membro antigo sem a conversão no
+perfil não entra no funil nem na fila); "parado" = nenhum passo há 90 dias (a tela deixa escolher 30, 60, 90 ou 180); o acompanhamento só abre quando o passo
+anterior ao próximo foi nos últimos 180 dias; no máximo 20 acompanhamentos novos por congregação por dia; Extensão e Departamento não veem o funil (quem cuida da
+Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; o batismo no Espírito Santo e a conversão não pedem acompanhamento na
+trilha inicial (o nível geral pode mudar no catálogo).
+
+**Provas:** jest 6.186 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 161): `e2e-62` fluxos, segurança e lixo 66, `e2e-63` corridas 10
+(em processos separados); o cuidado pastoral (`e2e-23` a `e2e-28`) segue verde sobre a base com o esquema inteiro; tela (`tools/front-discipulado`, com as
+respostas reais gravadas pelo `e2e-62`) 52, com seis mutações acusadas; teste de tela da homologação 40953092973 sem divergência e sem violação de CSP (base
+aprovada na execução 40943177680).
 
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 

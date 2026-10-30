@@ -198,5 +198,12 @@ const P = {
     ENABLE TRIGGER ALL ON dbo.CuidadoEventos; ENABLE TRIGGER ALL ON dbo.CuidadoItens; ENABLE TRIGGER ALL ON dbo.PedidosOracao; ENABLE TRIGGER ALL ON dbo.NotasPastorais; ENABLE TRIGGER ALL ON dbo.NotasPastoraisLeituras;`);
   ok((await escalar("SELECT COUNT(*) FROM sys.triggers WHERE parent_id IN (OBJECT_ID('dbo.CuidadoEventos'), OBJECT_ID('dbo.CuidadoItens'), OBJECT_ID('dbo.PedidosOracao'), OBJECT_ID('dbo.NotasPastorais'), OBJECT_ID('dbo.NotasPastoraisLeituras')) AND is_disabled = 0")) === 5, "os 5 gatilhos voltaram ligados");
   ok((await escalar("SELECT (SELECT COUNT(*) FROM CuidadoItens) + (SELECT COUNT(*) FROM PedidosOracao) + (SELECT COUNT(*) FROM NotasPastorais)")) === 0, "a base sai limpa (sem item, pedido nem nota)");
+  // os oficiais que este setup criou direto na tabela ganham a linha aberta do histórico de cargos, como o cadastro do sistema faz (a 157 já rodou antes deste setup:
+  // sem isto, eles ficariam sem a data de entrada no cargo — o e2e-51 confere)
+  await q(`IF OBJECT_ID('dbo.CargosMinisteriaisHistorico') IS NOT NULL
+    INSERT INTO CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Origem, Observacao)
+    SELECT m.MembroId, m.CargoMinisterial, NULL, N'CADASTRO', N'Setup e2e-23.' FROM MembroReferencia m
+    WHERE m.CargoMinisterial IN ('AUXILIAR', 'MISSIONARIO', 'DIACONO', 'PRESBITERO', 'EVANGELISTA', 'PASTOR')
+      AND NOT EXISTS (SELECT 1 FROM CargosMinisteriaisHistorico h WHERE h.MembroId = m.MembroId AND h.Ate IS NULL)`);
   fim("e2e-23 (migração 148 e cenário do cuidado pastoral)");
 })().catch((e) => { console.log("ERRO FATAL:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

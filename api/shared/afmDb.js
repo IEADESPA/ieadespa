@@ -582,6 +582,7 @@ async function listarMatriculas(pool) {
     ORDER BY m.Nome`);
   const seq = await sequenciasAtuais(pool, "AFM");
   const origens = await escadaDb.origensDoCargoAtual(pool);   // v8.2: nivelamento obrigatório (Art. 66 §5º)
+  const educacao = await require("./educacaoContinuadaDb").situacoes(pool, r.recordset.map((l) => l.MembroId));   // v8.6
   return r.recordset.map((l) => {
     const oficial = l.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
     const nivel = afm.avaliarNivel(l.CargoMinisterial, l.NivelEscolaridade, l.NivelConcluido);
@@ -591,7 +592,8 @@ async function listarMatriculas(pool) {
       origem: l.Origem, dataMatricula: l.DataMatricula, faltasSeguidas: seq.get(Number(l.MembroId)) || 0,
       desmatricula: l.DesmatriculaMotivo ? { motivo: l.DesmatriculaMotivo, data: l.DataDesmatricula, detalhe: l.DesmatriculaDetalhe, sessoes: l.SessoesGatilho } : null,
       licenca: afm.licencaLiturgica({ cargo: l.CargoMinisterial, statusMatricula: l.StatusMatricula, status: l.Status, situacaoMembro: l.SituacaoMembro,
-        excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao, afastado: !!l.Afastado }),
+        excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao, afastado: !!l.Afastado, educacao: educacao.get(Number(l.MembroId)) || null }),
+      educacao: (educacao.get(Number(l.MembroId)) || { pendencias: [] }).pendencias,   // v8.6: a reciclagem e o exame (Art. 68 §3º; Art. 70 §3º)
       chm: !!l.CertificadoHabilitacao, chmEm: l.CHMEm || null, chmCertificadoId: l.CertificadoHabilitacao ? l.CHMCertificadoId || null : null,   // v8.3: o documento
       nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido)
     };
@@ -824,6 +826,8 @@ async function aplicarRetencao(pool, { hoje = hojeBrasilia() } = {}) {
 async function rotinaDiaria(pool) {
   const out = { matriculadas: 0, exclusoes: 0, anuladasCLI: 0, desmatriculas: 0, anuladasAFM: 0, detalhesApagados: 0, falhas: [] };
   try { out.detalhesApagados = (await aplicarRetencao(pool)).detalhesApagados; } catch (e) { out.falhas.push("retencao"); }
+  // v8.6 — a justificativa de ausência no exame bienal sai 2 anos depois (pode citar saúde)
+  try { out.justificativasExame = (await require("./educacaoContinuadaDb").aplicarRetencao(pool)).justificativasApagadas; } catch (e) { out.falhas.push("retencaoExame"); }
   try { out.matriculadas = await garantirMatriculas(pool); } catch (e) { out.falhas.push("matriculas"); }
   try {
     const r = await apurar(pool, {});

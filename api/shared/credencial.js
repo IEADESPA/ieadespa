@@ -42,8 +42,10 @@ function situacaoPublica(credencial, pessoa) {
     // Carência Administrativa depois da suspensão, até a Prova de Reintegração (Art. 77 — decisão de 29/10/2026);
     // e a licença afasta das funções enquanto dura.
     // Trava 8-A: a mesma regra da licença para oficiar (shared/afm.js) — o QR, a turma de batismo e a Comissão de Unção dizem a mesma coisa da mesma pessoa.
-    r.funcao = ativa && licencaLiturgica({ cargo: pessoa.cargo, statusMatricula: pessoa.statusMatricula, status: pessoa.status, situacaoMembro: pessoa.situacaoMembro,
-      excluido: pessoa.excluido, foraDaComunhao: pessoa.foraDaComunhao, afastado: pessoa.sobDisciplina }).podeOficiar ? "HABILITADO" : "INATIVO";
+    const habilitado = ativa && licencaLiturgica({ cargo: pessoa.cargo, statusMatricula: pessoa.statusMatricula, status: pessoa.status, situacaoMembro: pessoa.situacaoMembro,
+      excluido: pessoa.excluido, foraDaComunhao: pessoa.foraDaComunhao, afastado: pessoa.sobDisciplina, educacao: pessoa.educacao }).podeOficiar;
+    // v8.6 — reprovado no exame bienal: continua oficiando, mas "sob observação" até a repescagem (Regimento Art. 70 §3º, I)
+    r.funcao = !habilitado ? "INATIVO" : pessoa.educacao && pessoa.educacao.sobObservacao ? "SOB_OBSERVACAO" : "HABILITADO";
   }
   return r;
 }

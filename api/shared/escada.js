@@ -159,6 +159,15 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDis
       : item("batismoEspirito", "Batismo no Espírito Santo", "Art. 72, III, a", "FALTA", "Registre o marco \"Batismo no Espírito Santo\" no perfil da pessoa."));
   }
 
+  // 8b. v8.6 — a educação continuada do obreiro em dia: a reciclagem anual aprovada (Art. 68 §3º) e o exame bienal sem pendência (Art. 70 §3º — reprovado fica "sob
+  // observação" e não sobe; ausente sem justificativa fica suspenso). Não se dispensa em nenhuma modalidade. A ausência JUSTIFICADA é "sem sanção": só avisa.
+  const ed = d.educacao || null;
+  if (ed && (ed.reciclagemPendente || ed.suspensoExame || ed.sobObservacao)) {
+    itens.push(item("educacao", "Educação continuada em dia", "Art. 68 §3º; Art. 70 §3º", "FALTA", ed.pendencias.join(" ")));
+  } else if (ed && ed.devendoRepescagem) {
+    itens.push(item("educacao", "Educação continuada em dia", "Art. 70 §3º", "AVISO", "Falta a repescagem do exame bienal (a ausência foi justificada: não impede)."));
+  }
+
   // 9. AFM: matrícula, escolaridade e CHM. A matrícula INATIVA (Art. 69 §3º) é suspensão da credencial, não lacuna técnica: nenhuma modalidade dispensa.
   const afm = d.afm || null;
   if (afm && afm.statusMatricula === "INATIVA") {

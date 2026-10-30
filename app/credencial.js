@@ -33,7 +33,8 @@
   function dadosDaCredencial(r) {
     var dados = [["Nome", r.nome], ["Categoria", r.categoria]];
     if (r.congregacao) dados.push(["Congregação", r.congregacao]);
-    if (r.funcao) dados.push(["Funções ministeriais", r.funcao === "HABILITADO" ? "Habilitado(a) — pode oficiar" : "Obreiro(a) inativo(a) — não pode oficiar no momento"]);
+    if (r.funcao) dados.push(["Funções ministeriais", r.funcao === "HABILITADO" ? "Habilitado(a) — pode oficiar"
+      : r.funcao === "SOB_OBSERVACAO" ? "Habilitado(a), sob observação da AFM até o exame de repescagem" : "Obreiro(a) inativo(a) — não pode oficiar no momento"]);
     if (r.via) dados.push(["Via", String(r.via)]);
     dados.push(["Consultado em", agora(r.consultadoEm)]);
     return dados;

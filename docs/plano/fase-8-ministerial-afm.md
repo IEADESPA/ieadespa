@@ -554,6 +554,41 @@ aprovada na execução 40943177680).
 - [ ] Alerta de credencial em risco por educação continuada vencida — antes de
       expirar, não depois.
 
+### Desenho da v8.6 (contrato, 30/10/2026)
+
+**Base legal:** Regimento Art. 68 §3º (o Curso de Reciclagem e Prática Pastoral, anual, com "frequência mínima e aprovação", é "critério indispensável e
+eliminatório para a renovação e manutenção da credencial de obreiro ativo no exercício seguinte"); Art. 70 §3º (a cada 2 anos, no Seminário de novembro, a
+Prova de Suficiência e Reciclagem "para todos os obreiros e membros da Câmara": I — reprovado fica "sob observação" até a repescagem; II — a ausência
+injustificada "equivale à reprovação por abandono, sujeitando o infrator à suspensão imediata das funções ministeriais"); Art. 70 §2º (o currículo de
+Liderança, Administração Eclesiástica e Compliance Estatutário); Estatuto Art. 30 §2º (o exercício é o ano civil).
+
+1. **Reciclagem anual** (Art. 68 §3º): a AFM (nível geral) registra a edição do ano (data, carga horária, frequência mínima em %) e, por obreiro, as horas
+   presentes e o resultado (aprovado, reprovado, ausente). A carga horária mínima periódica é esta: sem a frequência mínima, não há aprovação. Quem não foi
+   aprovado na edição do ano anterior fica **sem a credencial renovada** no exercício seguinte: **obreiro inativo** (não oficia, não unge, não sobe na escada,
+   o QR diz "Obreiro inativo") até o resultado da edição ser corrigido para aprovado (a reposição). Só vale para quem já era obreiro na data da edição (quem foi
+   consagrado depois não tinha como ir — e a promoção não zera essa contagem: vale o primeiro dia como oficial sem interrupção) e só a partir do primeiro ano
+   em que a edição foi registrada (nada retroage).
+2. **Exame bienal** (Art. 70 §3º): a AFM registra o exame (data, e se é o bienal ou uma repescagem dele) e o resultado de cada obreiro e membro da Câmara
+   (aprovado, reprovado, ausente com justificativa, ausente sem justificativa). Reprovado → **sob observação** (continua oficiando; o QR diz "sob
+   observação"; não sobe na escada) até ser aprovado numa repescagem; ausente sem justificativa → **suspenso das funções** (não oficia) até a repescagem;
+   ausente com justificativa → deve a repescagem, sem sanção (a escada só avisa). A sanção só cai com uma **aprovação**: faltar com justificativa à
+   repescagem, ser reprovado nela depois de faltar ou o bienal seguinte sem registro da pessoa não a tiram. O sistema não presume ausência: só vale o que a
+   AFM registrou.
+3. **A mesma regra em todo lugar** (a regra única da Trava 8-A): a licença para oficiar, a Comissão de Unção, o QR da credencial e a escada leem a educação
+   continuada do mesmo lugar.
+4. **Alerta antes, não depois**: de 1º de outubro a 31 de dezembro, o obreiro sem a reciclagem do ano aprovada recebe um aviso por mês ("sem ela, a
+   credencial não é renovada em 1º de janeiro"); a AFM do nível geral recebe a contagem, e a lista com os nomes fica na seção da Academia. Quem está sob
+   observação ou suspenso pelo exame é avisado uma vez por mês até a repescagem.
+5. **Histórico de formação**: no perfil (aba Caminhada) e na Minha Formação, as reciclagens, os exames, a situação de agora e as trilhas de formação
+   concluídas com o código do certificado verificável (v6.9); em Meus Dados.
+6. **Fica para a v8.7**: ligar os requisitos de formação (v6.9) às disciplinas da AFM — as disciplinas só existem quando a v8.7 criar a estrutura acadêmica.
+
+**Decisões por interpretação (o responsável pode mudar):** "sob observação" não suspende as funções (o texto só suspende na ausência sem justificativa),
+mas impede a promoção na escada; o exame alcança os obreiros e quem está na Câmara (o membro da Câmara que não é obreiro fica com o resultado registrado, sem
+efeito na credencial); a reposição da reciclagem é a correção do resultado da mesma edição (não há "edição extra"); a ausência justificada que ainda deve a
+repescagem não impede a promoção (só avisa); a justificativa da ausência (pode citar saúde) sai 2 anos depois do exame (prazo ajustável em Proteção de
+Dados → Políticas de retenção).
+
 ## v8.7 — Seminário como sistema acadêmico, não como curso online *(7ª rodada)*
 
 Achado de pesquisa que muda o desenho: formação ministerial séria precisa de

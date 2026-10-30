@@ -140,6 +140,8 @@ module.exports = async function (context, req) {
   const criseSeguranca = await criseSegurancaDb.dadosDoTitular(pool, alvo);
   // v8.1 — AFM e CLI: as matrículas (com o nível), as desmatrículas, as exclusões da CLI por faltas e o corpo docente.
   const afmCli = await require("../shared/afmDb").dadosDoTitular(pool, alvo);
+  // v8.6 — a educação continuada: as reciclagens, os exames (com a justificativa da própria pessoa) e o que está pendente
+  afmCli.educacaoContinuada = await require("../shared/educacaoContinuadaDb").dadosDoTitular(pool, alvo);
   // v8.2 — escada ministerial: o histórico de cargos (de quando a quando, e por onde chegou).
   // v8.3 — os processos de consagração (parecer do CEI só com o resultado e a data; a fundamentação fica com o CEI), a taxa e a cerimônia.
   // v8.4 — as vias da credencial (sem o código de segurança do QR).

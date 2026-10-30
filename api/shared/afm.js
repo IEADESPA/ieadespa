@@ -175,11 +175,19 @@ function avaliarNivel(cargo, nivel, concluido) {
 // comunhão, sem afastamento disciplinar e com a matrícula da AFM ATIVA. Trava 8-A: a MESMA regra serve à turma de batismo, ao Meu Painel, à Comissão de Unção e à
 // função que o QR da credencial mostra (as marcas da disciplina vêm de shared/habilitacao.js). O motivo da disciplina nunca aparece: quem lê a recusa pode ser a
 // liderança local.
-function licencaLiturgica({ cargo, statusMatricula, status = "ATIVO", situacaoMembro = null, excluido = false, foraDaComunhao = false, afastado = false }) {
+function licencaLiturgica({ cargo, statusMatricula, status = "ATIVO", situacaoMembro = null, excluido = false, foraDaComunhao = false, afastado = false, educacao = null }) {
   if (!CARGOS_OFICIAIS.includes(cargo)) return { podeOficiar: false, motivo: "Só oficiais do Campo oficiam atos litúrgicos (Regimento, Art. 66 §2º, I)." };
   if (status !== "ATIVO") return { podeOficiar: false, motivo: "Não está em atividade (licença ou fora do rol): sem licença para oficiar enquanto durar." };
   if (excluido || foraDaComunhao || afastado || (situacaoMembro != null && situacaoMembro !== "EM_COMUNHAO")) {
     return { podeOficiar: false, motivo: "Afastado das funções ministeriais no momento: sem licença para oficiar (Regimento, Art. 77 e 95). Detalhes na Secretaria Geral." };
+  }
+  // v8.6 — a educação continuada: sem a reciclagem anual aprovada a credencial não é renovada (Art. 68 §3º); a ausência sem justificativa no exame bienal suspende as
+  // funções (Art. 70 §3º, II). "Sob observação" (reprovado no exame) não suspende.
+  if (educacao && educacao.reciclagemPendente) {
+    return { podeOficiar: false, motivo: "Sem a Reciclagem e Prática Pastoral do ano anterior aprovada: a credencial de obreiro não foi renovada até a reposição (Regimento, Art. 68 §3º)." };
+  }
+  if (educacao && educacao.suspensoExame) {
+    return { podeOficiar: false, motivo: "Suspenso das funções pela ausência sem justificativa no exame bienal, até a aprovação na repescagem (Regimento, Art. 70 §3º, II)." };
   }
   if (statusMatricula === "INATIVA") {
     return { podeOficiar: false, motivo: "Obreiro inativo na AFM: mantém o título, mas está sem licença para oficiar até nova matrícula e aprovação na reciclagem (Regimento, Art. 69 §3º)." };

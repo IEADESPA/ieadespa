@@ -141,6 +141,14 @@ Cada versão parte da base da anterior (`BASE=...`):
   Desde a v8.5 a `preparar-pastoral` aplica também da 156 à 161: a rotina diária do cuidado roda a da trilha de discipulado e o Meus Dados lê as colunas da
   fase 8 — a base do cuidado tem o esquema inteiro, como no deploy (o setup `e2e-23` confere os 11 prazos do cuidado, com o do discipulado).
 
+- **v8.6** (Educação continuada, migração 162), mesma base `cenario-escada` (a `preparar-escada` aplica a 162 duas vezes; a `preparar-pastoral` também).
+  `e2e-64` (a reciclagem anual: a edição, o aprovado só com a frequência mínima, ninguém lança o próprio resultado, a credencial não renovada para quem não foi
+  aprovado no ano anterior — a licença, a Comissão de Unção, o QR e a escada dizem o mesmo —, a reposição, quem virou obreiro depois da edição; o exame bienal: sob
+  observação, suspenso pela ausência, a ausência justificada só com o motivo, a repescagem depois do bienal, um bienal por ano; o painel, o perfil sem o texto da
+  justificativa e a minha com ele; os avisos só de outubro em diante; a retenção de 2 anos e a exclusão LGPD da justificativa; Meus Dados; lixo — com
+  `E2E_CONTRATO=1` grava as respostas reais para `tools/front-educacao`) e `e2e-65` (corridas em processos separados: quatro edições do mesmo ano, quatro bienais
+  do mesmo ano, quatro lançamentos da mesma pessoa e quatro retenções).
+
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 
 **Banco compartilhado:** quando dois trabalhos rodam ao mesmo tempo na mesma máquina, o LocalDB (e o banco `ieadespa_local`) é UM só. Pegue a trava antes de restaurar, migrar ou

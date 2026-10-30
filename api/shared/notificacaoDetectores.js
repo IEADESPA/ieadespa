@@ -248,7 +248,11 @@ const DETECTORES = {
   CLI_EXCLUSAO_FALTAS: { tabela: "CLIExclusoesFaltas", detectar: (pool) => require("./afmDb").detectarExclusoesCLI(pool) },
   AFM_FALTAS_ALERTA: { tabela: "Sessoes", detectar: (pool) => require("./afmDb").detectarAlertaAFM(pool) },
   AFM_DESMATRICULA: { tabela: "AFMDesmatriculas", detectar: (pool) => require("./afmDb").detectarDesmatriculas(pool) },
-  AFM_REITORIA: { tabela: "AFMCorpoDocente", detectar: (pool) => require("./afmDb").detectarReitoria(pool) }
+  AFM_REITORIA: { tabela: "AFMCorpoDocente", detectar: (pool) => require("./afmDb").detectarReitoria(pool) },
+  // v8.6 — educação continuada (Regimento Art. 68 §3º e Art. 70 §3º): antes de vencer, não depois — de outubro a dezembro, quem ainda não tem a reciclagem do ano aprovada (e
+  // a AFM do nível geral, com a contagem); e, uma vez por mês, quem está sob observação, suspenso ou devendo a repescagem do exame bienal.
+  AFM_RECICLAGEM_PENDENTE: { tabela: "AFMReciclagemEdicoes", detectar: (pool) => require("./educacaoContinuadaDb").detectarReciclagemPendente(pool) },
+  AFM_EXAME_PENDENTE: { tabela: "AFMExames", detectar: (pool) => require("./educacaoContinuadaDb").detectarExamePendente(pool) }
 };
 
 module.exports = { DETECTORES };

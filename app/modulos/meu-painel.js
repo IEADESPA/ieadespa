@@ -687,7 +687,8 @@ async function credCarregarMinhaAcao() {
   } catch (e) { /* sem o QR, o código em texto continua */ }
   if (authToken !== token) return;
   const agora = c.situacaoAgora || {};
-  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : "sem licença para oficiar no momento"}` : "";
+  // v8.6: "sob observação" (reprovado no exame bienal) continua oficiando — Regimento Art. 70 §3º, I
+  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : agora.funcao === "SOB_OBSERVACAO" ? "habilitado(a) para oficiar, sob observação da Academia até a repescagem" : "sem licença para oficiar no momento"}` : "";
   const impressao = c.impressaEm ? `Impressa pela Secretaria em ${credDataBr(c.impressaEm)}.` : c.impressaoSolicitadaEm ? `Impressão pedida em ${credDataBr(c.impressaoSolicitadaEm)}: a Secretaria Geral avisa quando estiver pronta.` : "";
   caixa.innerHTML = `<div class="credencial-cartao">
       <div class="credencial-topo">IEADESPA — Identidade Eclesiástica</div>

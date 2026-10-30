@@ -98,6 +98,7 @@ async function avaliar(conexao, { membroId, assunto, modalidade = "INDICACAO", a
   const alvo = alvoDado || (await cargoDoTipo(conexao, assunto));
   if (!alvo) return { alvo: null, avaliacao: null };
   const dados = await dadosDaPessoa(conexao, membroId);
+  if (dados) dados.educacao = (await require("./educacaoContinuadaDb").situacoes(conexao, [membroId])).get(Number(membroId)) || null;   // v8.6
   if (!dados) return { alvo, naoExiste: true, avaliacao: PESSOA_SUMIU(alvo, modalidade) };
   return { alvo, dados, avaliacao: escada.avaliarAscensao(dados, alvo, { modalidade, hojeIso: hojeBrasilia(), veDisciplina }) };
 }

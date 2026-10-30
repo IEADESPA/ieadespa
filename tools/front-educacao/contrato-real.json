@@ -1,0 +1,606 @@
+{
+  "painel": {
+    "sucesso": true,
+    "edicoes": [
+      {
+        "edicaoId": 2,
+        "ano": 2026,
+        "data": "2026-08-10",
+        "cargaHoraria": 20,
+        "frequenciaMinimaPct": 75,
+        "observacao": null,
+        "horasMinimas": 15,
+        "aprovados": 0,
+        "registrados": 0
+      },
+      {
+        "edicaoId": 1,
+        "ano": 2025,
+        "data": "2025-08-12",
+        "cargaHoraria": 20,
+        "frequenciaMinimaPct": 75,
+        "observacao": null,
+        "horasMinimas": 15,
+        "aprovados": 4,
+        "registrados": 4
+      }
+    ],
+    "exames": [
+      {
+        "exameId": 2,
+        "tipo": "REPESCAGEM",
+        "tipoRotulo": "Repescagem",
+        "data": "2025-12-15",
+        "exameOrigemId": 1,
+        "observacao": null,
+        "registrados": 2,
+        "aprovados": 1
+      },
+      {
+        "exameId": 1,
+        "tipo": "BIENAL",
+        "tipoRotulo": "Exame bienal (Seminário de novembro)",
+        "data": "2025-11-30",
+        "exameOrigemId": null,
+        "observacao": null,
+        "registrados": 5,
+        "aprovados": 1
+      }
+    ],
+    "edicaoDoAno": {
+      "edicaoId": 2,
+      "ano": 2026,
+      "data": "2026-08-10"
+    },
+    "pessoas": [
+      {
+        "membroId": 9202,
+        "nome": "Auxiliar Promovido E2E",
+        "cargo": "AUXILIAR",
+        "congregacao": "Central E2E",
+        "desde": "2024-01-15",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9210,
+        "nome": "Auxiliar Vetado E2E",
+        "cargo": "AUXILIAR",
+        "congregacao": "Central E2E",
+        "desde": "2025-09-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": []
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9214,
+        "nome": "Auxiliar Vila Nova E2E",
+        "cargo": "AUXILIAR",
+        "congregacao": "Vila Nova E2E",
+        "desde": "2020-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9213,
+        "nome": "Diacono Inativo E2E",
+        "cargo": "DIACONO",
+        "congregacao": "Central E2E",
+        "desde": "2015-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9209,
+        "nome": "Diacono Legado E2E",
+        "cargo": "DIACONO",
+        "congregacao": "Central E2E",
+        "desde": null,
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9205,
+        "nome": "Diacono Nomeado E2E",
+        "cargo": "DIACONO",
+        "congregacao": "Central E2E",
+        "desde": "2018-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 3004,
+        "nome": "Dirigente Beta E2E",
+        "cargo": null,
+        "congregacao": "Beta E2E",
+        "desde": null,
+        "obreiro": false,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": []
+        },
+        "semAprovacaoNoAno": false
+      },
+      {
+        "membroId": 3001,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PRESBITERO",
+        "congregacao": "Central E2E",
+        "desde": null,
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9220,
+        "nome": "Dirigente Central E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": "2000-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 3002,
+        "nome": "Dirigente Vila Nova E2E",
+        "cargo": null,
+        "congregacao": "Vila Nova E2E",
+        "desde": null,
+        "obreiro": false,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": []
+        },
+        "semAprovacaoNoAno": false
+      },
+      {
+        "membroId": 9204,
+        "nome": "Missionaria Teto E2E",
+        "cargo": "MISSIONARIO",
+        "congregacao": "Central E2E",
+        "desde": "2015-01-10",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9203,
+        "nome": "Missionario Diacono E2E",
+        "cargo": "MISSIONARIO",
+        "congregacao": "Central E2E",
+        "desde": "2022-01-10",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9208,
+        "nome": "Missionario Disciplinado E2E",
+        "cargo": "MISSIONARIO",
+        "congregacao": "Central E2E",
+        "desde": "2015-01-10",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9211,
+        "nome": "Missionario Sem Sexo E2E",
+        "cargo": "MISSIONARIO",
+        "congregacao": "Central E2E",
+        "desde": "2015-01-10",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9222,
+        "nome": "Pastor Comissao Dois E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": "1996-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": true,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Reprovado(a) no exame bienal: sob observação até a aprovação na repescagem (Regimento, Art. 70 §3º, I)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9224,
+        "nome": "Pastor Comissao Quatro E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": "1998-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": true,
+          "pendencias": [
+            "Ausência justificada no exame bienal: falta fazer a repescagem."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9223,
+        "nome": "Pastor Comissao Tres E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": "1997-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": []
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9221,
+        "nome": "Pastor Comissao Um E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": "1995-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": false,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": []
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 3003,
+        "nome": "Pastor de Área Alfa E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": null,
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 7001,
+        "nome": "Pastor do Comite E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": null,
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 9206,
+        "nome": "Presbitero Evangelista E2E",
+        "cargo": "PRESBITERO",
+        "congregacao": "Central E2E",
+        "desde": "2015-01-01",
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": true,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º).",
+            "Reprovado(a) no exame bienal: sob observação até a aprovação na repescagem (Regimento, Art. 70 §3º, I)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      },
+      {
+        "membroId": 8001,
+        "nome": "Superintendente Norte E2E",
+        "cargo": "PASTOR",
+        "congregacao": "Central E2E",
+        "desde": null,
+        "obreiro": true,
+        "situacao": {
+          "reciclagemPendente": true,
+          "sobObservacao": false,
+          "suspensoExame": false,
+          "devendoRepescagem": false,
+          "pendencias": [
+            "Sem a aprovação na Reciclagem e Prática Pastoral de 2025: a credencial não foi renovada para 2026 (Regimento, Art. 68 §3º)."
+          ]
+        },
+        "semAprovacaoNoAno": true
+      }
+    ],
+    "resultados": {
+      "APROVADO": "Aprovado",
+      "REPROVADO": "Reprovado",
+      "AUSENTE": "Ausente"
+    },
+    "resultadosExame": {
+      "APROVADO": "Aprovado",
+      "REPROVADO": "Reprovado",
+      "AUSENTE_JUSTIFICADO": "Ausente com justificativa",
+      "AUSENTE": "Ausente sem justificativa"
+    }
+  },
+  "edicao": {
+    "sucesso": true,
+    "itens": [
+      {
+        "membroId": 9221,
+        "horasPresentes": 16,
+        "resultado": "APROVADO"
+      },
+      {
+        "membroId": 9222,
+        "horasPresentes": 15,
+        "resultado": "APROVADO"
+      },
+      {
+        "membroId": 9223,
+        "horasPresentes": 18,
+        "resultado": "APROVADO"
+      },
+      {
+        "membroId": 9224,
+        "horasPresentes": 15,
+        "resultado": "APROVADO"
+      }
+    ]
+  },
+  "exame": {
+    "sucesso": true,
+    "itens": [
+      {
+        "membroId": 9206,
+        "resultado": "REPROVADO",
+        "justificativa": null
+      },
+      {
+        "membroId": 9221,
+        "resultado": "APROVADO",
+        "justificativa": null
+      },
+      {
+        "membroId": 9222,
+        "resultado": "REPROVADO",
+        "justificativa": null
+      },
+      {
+        "membroId": 9223,
+        "resultado": "AUSENTE",
+        "justificativa": null
+      },
+      {
+        "membroId": 9224,
+        "resultado": "AUSENTE_JUSTIFICADO",
+        "justificativa": "Internado no hospital (e2e)"
+      }
+    ]
+  },
+  "pessoa": {
+    "sucesso": true,
+    "obreiro": true,
+    "situacao": {
+      "reciclagemPendente": false,
+      "sobObservacao": true,
+      "suspensoExame": false,
+      "devendoRepescagem": false,
+      "pendencias": [
+        "Reprovado(a) no exame bienal: sob observação até a aprovação na repescagem (Regimento, Art. 70 §3º, I)."
+      ]
+    },
+    "reciclagens": [
+      {
+        "ano": 2025,
+        "data": "2025-08-12",
+        "cargaHoraria": 20,
+        "horasPresentes": 15,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      }
+    ],
+    "exames": [
+      {
+        "tipo": "REPESCAGEM",
+        "tipoRotulo": "Repescagem",
+        "data": "2025-12-15",
+        "resultado": "REPROVADO",
+        "resultadoRotulo": "Reprovado"
+      },
+      {
+        "tipo": "BIENAL",
+        "tipoRotulo": "Exame bienal (Seminário de novembro)",
+        "data": "2025-11-30",
+        "resultado": "REPROVADO",
+        "resultadoRotulo": "Reprovado"
+      }
+    ],
+    "trilhas": [
+      {
+        "trilha": "Curso de Obreiros E2E",
+        "concluidaEm": "2025-06-20",
+        "validoAte": null,
+        "codigo": null
+      }
+    ]
+  },
+  "minha": {
+    "sucesso": true,
+    "obreiro": true,
+    "situacao": {
+      "reciclagemPendente": false,
+      "sobObservacao": false,
+      "suspensoExame": false,
+      "devendoRepescagem": true,
+      "pendencias": [
+        "Ausência justificada no exame bienal: falta fazer a repescagem."
+      ]
+    },
+    "reciclagens": [
+      {
+        "ano": 2025,
+        "data": "2025-08-12",
+        "cargaHoraria": 20,
+        "horasPresentes": 15,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      }
+    ],
+    "exames": [
+      {
+        "tipo": "BIENAL",
+        "tipoRotulo": "Exame bienal (Seminário de novembro)",
+        "data": "2025-11-30",
+        "resultado": "AUSENTE_JUSTIFICADO",
+        "resultadoRotulo": "Ausente com justificativa",
+        "justificativa": "Internado no hospital (e2e)"
+      }
+    ],
+    "trilhas": []
+  },
+  "minhaVazia": {
+    "sucesso": true,
+    "obreiro": false,
+    "situacao": {
+      "reciclagemPendente": false,
+      "sobObservacao": false,
+      "suspensoExame": false,
+      "devendoRepescagem": false,
+      "pendencias": []
+    },
+    "reciclagens": [],
+    "exames": [],
+    "trilhas": []
+  }
+}

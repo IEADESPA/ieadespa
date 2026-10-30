@@ -40,7 +40,10 @@ function mapearPessoa(l) {
 }
 async function pessoa(conexao, membroId) {
   const r = await new sql.Request(conexao).input("m", sql.Int, Number(membroId)).query(`${SELECT_PESSOA} WHERE m.MembroId = @m`);
-  return r.recordset[0] ? mapearPessoa(r.recordset[0]) : null;
+  if (!r.recordset[0]) return null;
+  const p = mapearPessoa(r.recordset[0]);
+  p.educacao = (await require("./educacaoContinuadaDb").situacoes(conexao, [p.membroId])).get(p.membroId) || null;   // v8.6
+  return p;
 }
 
 function mapearCredencial(l) {

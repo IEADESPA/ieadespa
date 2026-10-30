@@ -535,23 +535,24 @@ aprovada na execução 40943177680).
 
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 
-- [ ] Carga horária mínima periódica por cargo ministerial para manter a
+- [x] Carga horária mínima periódica por cargo ministerial para manter a
       credencial ativa — padrão consolidado em denominações internacionais, e
       que dá sentido prático à AFM (v8.1) além da formação inicial.
-- [ ] **Curso anual de Reciclagem e Prática Pastoral** (Regimento Art. 68 §3º):
+- [x] **Curso anual de Reciclagem e Prática Pastoral** (Regimento Art. 68 §3º):
       "critério indispensável e eliminatório para a renovação e manutenção da
       credencial de obreiro ativo no exercício seguinte" — a aprovação do ano
       registrada por obreiro; sem ela, o QR (v8.4) passa a "obreiro inativo" no
       exercício seguinte. *(achado da Trava 8-A: nem implementado nem planejado)*
-- [ ] **Exame bienal de proficiência** (Regimento Art. 70 §3º): reprovado fica
+- [x] **Exame bienal de proficiência** (Regimento Art. 70 §3º): reprovado fica
       "sob observação" (I) — uma situação nova no QR e na escada —, e a ausência
       "equivale à reprovação por abandono … suspensão imediata" (II).
       *(achado da Trava 8-A)*
-- [ ] Os requisitos de formação da v6.9 (trilhas) ligados aos cursos da AFM: o
+- [x] Os requisitos de formação da v6.9 (trilhas) ligados aos cursos da AFM: o
       CHM e o nível já são conferidos sozinhos na escada e na esteira (v8.2 e
-      v8.3); falta conferir as disciplinas cursadas, quando a v8.7 existir.
-- [ ] Histórico de formação no perfil, com certificados verificáveis (v6.9).
-- [ ] Alerta de credencial em risco por educação continuada vencida — antes de
+      v8.3); conferir as disciplinas cursadas **passou para a v8.7** (as
+      disciplinas só existem com ela — item na lista da v8.7).
+- [x] Histórico de formação no perfil, com certificados verificáveis (v6.9).
+- [x] Alerta de credencial em risco por educação continuada vencida — antes de
       expirar, não depois.
 
 ### Desenho da v8.6 (contrato, 30/10/2026)
@@ -589,6 +590,44 @@ efeito na credencial); a reposição da reciclagem é a correção do resultado 
 repescagem não impede a promoção (só avisa); a justificativa da ausência (pode citar saúde) sai 2 anos depois do exame (prazo ajustável em Proteção de
 Dados → Políticas de retenção).
 
+### Como ficou a v8.6 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `3b6ab7a`; para desfazer: `git revert -m 1 3b6ab7a`). Migração **162** (`AFMReciclagemEdicoes`,
+`AFMReciclagemResultados`, `AFMExames`, `AFMExameResultados`; os avisos `AFM_RECICLAGEM_PENDENTE` e `AFM_EXAME_PENDENTE`; a política de retenção "AFM —
+justificativa de ausência no exame", 730 dias). Regra pura em `api/shared/educacaoContinuada.js`, banco em `api/shared/educacaoContinuadaDb.js`, rota
+`/api/educacao-continuada/<ação>` (`GestaoEducacaoContinuada`). A regra única da Trava 8-A (`habilitacao.js` → `afm.licencaLiturgica`) passou a ler a
+educação continuada: a licença para oficiar, a Comissão de Unção, o QR (agora com "sob observação"), a lista da AFM e a escada dizem o mesmo. Tela: seção
+**Educação continuada** na aba Academia (só o nível geral: quem está pendente, quem ainda não foi aprovado na reciclagem do ano, as edições, os exames e o
+lançamento dos resultados), **Minha educação continuada** em Minha Formação, a **formação ministerial** na aba Caminhada do perfil (com o link do certificado
+das trilhas) e o "sob observação" na credencial do Meu Painel (módulo novo `app/modulos/educacao-continuada.js`). Casca do service worker **v48**. A rotina
+diária da AFM roda a retenção da justificativa; a exclusão LGPD a apaga na hora; Meus Dados mostra tudo.
+
+**O que mudou depois das revisões independentes** (servidor: 4 altos, 3 médios, 5 baixos; tela: 1 alto, 4 médios, 4 baixos — tratados):
+
+- A sanção do exame **só cai com uma aprovação**: antes, faltar com justificativa à repescagem tirava a suspensão, e um bienal novo em que a pessoa não foi
+  registrada apagava a pendência antiga. Agora vale a sequência inteira dos exames da pessoa.
+- A **promoção não zera** o "já era obreiro na data da edição": vale o primeiro dia como oficial sem interrupção (o Diácono reprovado em março e promovido a
+  Presbítero em dezembro continua devendo a reciclagem).
+- A ausência justificada só **avisa** na escada (o texto diz "sem sanção").
+- Mudar a carga ou a frequência de uma edição que deixaria um "aprovado" abaixo do novo mínimo é recusado; a auditoria guarda o antes; resultado de exame ou
+  de reciclagem que ainda não aconteceu é recusado; edição ou exame inexistente dá 404.
+- O prazo da justificativa ficou em **Proteção de Dados → Políticas de retenção** (como o da CLI), e o ROPA o descreve.
+- Tela: a credencial do Meu Painel dizia "sem licença" para quem está sob observação (corrigido); o painel mostra os nomes de quem ainda não foi aprovado
+  na reciclagem do ano (o aviso mensal só leva a contagem); a linha recusada volta com o que foi digitado; o ano inteiro vai em lotes de 100; a própria
+  linha vem travada; as horas aceitam vírgula; a seção só do nível geral fecha na saída; o bloco não aparece para quem não é obreiro e nunca teve registro.
+- Nos testes do banco local, o setup do cuidado (`e2e-23`) abre a linha de cargo dos oficiais que cria — o `e2e-51` falhava desde a v8.5 por isso (só a base
+  de teste; o sistema sempre abre a linha no cadastro e na consagração).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** "sob observação" não suspende as funções, mas impede a promoção; o exame vale
+para os obreiros e para quem está na Câmara (o membro da Câmara que não é obreiro só fica com o resultado registrado); a reposição da reciclagem é corrigir o
+resultado da mesma edição (não há "edição extra"); a ausência justificada que ainda deve a repescagem não impede a promoção; quem virou oficial depois da
+data da edição não deve aquela edição; nada retroage (antes da primeira edição registrada, ninguém fica pendente); a justificativa sai 2 anos depois do exame.
+
+**Provas:** jest 6.204 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 162): `e2e-64` fluxos, segurança e lixo 57, `e2e-65` corridas
+11 (em processos separados); a bateria da fase 8 (`e2e-47` a `e2e-63`), o cuidado (`e2e-23` a `e2e-28`) e a Trava 7-C (`e2e-36`, `e2e-40`) verdes sobre as
+bases recriadas do zero; tela (`tools/front-educacao`, com as respostas reais gravadas pelo `e2e-64`) 65, com dezesseis mutações acusadas; teste de tela da
+homologação 41068846668 sem divergência e sem violação de CSP (base aprovada na execução 41066251721).
+
 ## v8.7 — Seminário como sistema acadêmico, não como curso online *(7ª rodada)*
 
 Achado de pesquisa que muda o desenho: formação ministerial séria precisa de
@@ -603,6 +642,8 @@ que a Convenção e outras instituições vão pedir.
       registrado de quem aprovou — hoje isso é decisão informal do Reitor.
 - [ ] Cada disciplina com o seu docente (o corpo docente com a titulação, o
       Reitor e a CDER já existem desde a v8.1).
+- [ ] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
+      disciplinas cursadas *(veio da v8.6: lá só existiam a reciclagem e o exame)*.
       *(Classter; Populi — SIS para seminários)*
 
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9

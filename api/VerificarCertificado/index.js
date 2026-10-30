@@ -56,6 +56,16 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // v8.7 — o histórico escolar: a fotografia precisa conferir com o selo do título; e a resposta leva o resumo (as disciplinas com nota e resultado) para conferir
+    if (certificado.natureza === "HISTORICO") {
+      const conf = await require("../shared/seminarioDb").conferirHistoricoPublico(pool, certificado);
+      if (!conf.ok) {
+        context.log.warn(`[VerificarCertificado] histórico escolar com o conteúdo divergente (certificado ${certificado.certificadoId}).`);
+        context.res = { status: 200, headers: cabecalhos, body: { sucesso: true, situacao: "INTEGRIDADE_FALHOU", mensagem: "O conteúdo registrado para este histórico não confere com o selo de emissão. Procure a Secretaria da IEADESPA antes de confiar neste documento." } };
+        return;
+      }
+      avaliacao.historico = conf.resumo;
+    }
     context.res = { status: 200, headers: cabecalhos, body: { sucesso: true, ...avaliacao } };
   } catch (e) {
     context.log.error("[VerificarCertificado] erro:", e);

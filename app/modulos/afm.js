@@ -23,6 +23,8 @@ function afmLimparTela() {
   if (pilulaEscada) pilulaEscada.style.display = "none";
   const pilulaEducacao = afmEl("btnAfmSecaoEducacao");
   if (pilulaEducacao) pilulaEducacao.style.display = "none";
+  const pilulaSeminario = afmEl("btnAfmSecaoSeminario");   // v8.7
+  if (pilulaSeminario) pilulaSeminario.style.display = "none";
   for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER", "afmListaVetaveis"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) resumo.textContent = "";
@@ -123,8 +125,8 @@ function afmAbrirAba() {
 }
 
 function afmMostrarSecaoAcao(secao) {
-  afmSecaoAtual = ["matriculas", "corpo", "magnas", "escada", "educacao"].includes(secao) ? secao : "matriculas";
-  for (const s of ["matriculas", "corpo", "magnas", "escada", "educacao"]) {
+  afmSecaoAtual = ["matriculas", "corpo", "magnas", "escada", "educacao", "seminario"].includes(secao) ? secao : "matriculas";
+  for (const s of ["matriculas", "corpo", "magnas", "escada", "educacao", "seminario"]) {
     const div = afmEl(`afmSecao${s[0].toUpperCase()}${s.slice(1)}`);
     if (div) div.style.display = s === afmSecaoAtual ? "block" : "none";
     const btn = afmEl(`btnAfmSecao${s[0].toUpperCase()}${s.slice(1)}`);
@@ -136,6 +138,7 @@ function afmMostrarSecaoAcao(secao) {
   if (afmSecaoAtual === "magnas") afmCarregarMagnasAcao();
   if (afmSecaoAtual === "escada") afmCarregarVetaveisAcao();
   if (afmSecaoAtual === "educacao" && typeof edcCarregarPainelAcao === "function") edcCarregarPainelAcao();   // v8.6
+  if (afmSecaoAtual === "seminario" && typeof semCarregarPainelAcao === "function") semCarregarPainelAcao();   // v8.7
 }
 
 function afmFecharFormAcao() {
@@ -148,10 +151,13 @@ function afmBadgeSituacao(m) {
   if (m.status === "INATIVA") return `<span class="badge-status badge-desligado">Inativa${m.desmatricula ? ` (${m.desmatricula.motivo === "FALTAS" ? "faltas" : "reprovação"}, ${afmData(m.desmatricula.data)})` : ""}</span>`;
   return `<span class="badge-status badge-ativo">Ativa</span>`;
 }
+// v8.7: o nível que vem do histórico escolar (o curso que a pessoa cursa ou concluiu no Seminário) aparece junto do registrado à mão
+const afmSemNivel = (m) => !m.nivel && !(m.nivelHistorico || []).length;
 function afmTextoNivel(m) {
-  if (!m.nivel) return "<em>a informar</em>";
+  const hist = (m.nivelHistorico || []).length ? `${m.nivel ? " · " : ""}pelo histórico: ${m.nivelHistorico.map((x) => escaparHtmlEbd(x)).join("; ")}` : "";
+  if (!m.nivel) return hist || "<em>a informar</em>";
   const rot = (afmCatalogo && (afmCatalogo.niveis.find(n => n.codigo === m.nivel) || {}).rotulo) || m.nivel;
-  return `${escaparHtmlEbd(rot)} (${m.nivelConcluido ? "concluído" : "cursando"})`;
+  return `${escaparHtmlEbd(rot)} (${m.nivelConcluido ? "concluído" : "cursando"})${hist}`;
 }
 
 async function afmCarregarMatriculasAcao() {
@@ -181,17 +187,19 @@ function afmRenderMatriculas(geral) {
   if (pilulaEscada) pilulaEscada.style.display = geral ? "" : "none";
   const pilulaEducacao = afmEl("btnAfmSecaoEducacao");   // v8.6: a educação continuada também é do nível geral
   if (pilulaEducacao) pilulaEducacao.style.display = geral ? "" : "none";
+  const pilulaSeminario = afmEl("btnAfmSecaoSeminario");   // v8.7: o Seminário também é do nível geral
+  if (pilulaSeminario) pilulaSeminario.style.display = geral ? "" : "none";
   // v8.2: o candidato (ainda não oficial, matriculado para cursar o Básico) também aparece
   const candidato = (m) => !m.oficial && m.origem === "CANDIDATO" && m.status === "ATIVA";
   const todos = afmMatriculasCache.filter(m => m.oficial || m.status === "INATIVA" || candidato(m));
   const filtros = {
-    TODOS: () => true, INATIVOS: m => m.status === "INATIVA", ABAIXO: m => m.nivelAtende === false, SEM_NIVEL: m => !m.nivel, RISCO: m => m.faltasSeguidas >= 2,
+    TODOS: () => true, INATIVOS: m => m.status === "INATIVA", ABAIXO: m => m.nivelAtende === false, SEM_NIVEL: afmSemNivel, RISCO: m => m.faltasSeguidas >= 2,
     NIVELAMENTO: m => !!m.nivelamento, SEM_CHM: m => !m.chm && m.status === "ATIVA", CANDIDATOS: candidato
   };
   const lista = todos.filter(filtros[afmFiltroMatriculas] || filtros.TODOS);
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) {
-    resumo.textContent = `${todos.filter(m => !candidato(m)).length} oficial(is) matriculado(s) · ${todos.filter(m => m.status === "INATIVA").length} inativo(s) · ${todos.filter(m => m.nivelAtende === false).length} abaixo do nível do cargo · ${todos.filter(m => !m.nivel).length} com o nível a informar · ${todos.filter(m => m.nivelamento).length} em nivelamento obrigatório · ${todos.filter(candidato).length} candidato(s)`;
+    resumo.textContent = `${todos.filter(m => !candidato(m)).length} oficial(is) matriculado(s) · ${todos.filter(m => m.status === "INATIVA").length} inativo(s) · ${todos.filter(m => m.nivelAtende === false).length} abaixo do nível do cargo · ${todos.filter(afmSemNivel).length} com o nível a informar · ${todos.filter(m => m.nivelamento).length} em nivelamento obrigatório · ${todos.filter(candidato).length} candidato(s)`;
   }
   if (!lista.length) { cx.innerHTML = "<p class='subtitle'>Ninguém nesta lista.</p>"; return; }
   let html = `<table class="tabela-frequencia"><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Congregação</th><th>Situação</th><th>Nível</th><th>CHM</th><th>Magnas seguidas sem justificativa</th>${geral ? "<th></th>" : ""}</tr></thead><tbody>`;
@@ -648,7 +656,7 @@ async function afmCarregarMinhaSituacao() {
   }
   if (data.afm) {
     const a = data.afm;
-    const nivel = a.nivel ? `${escaparHtmlEbd((afmCatalogo && (afmCatalogo.niveis.find(x => x.codigo === a.nivel) || {}).rotulo) || a.nivel)} (${a.nivelConcluido ? "concluído" : "cursando"})` : "a informar";
+    const nivel = afmSemNivel(a) ? "a informar" : afmTextoNivel(a);   // v8.7: com o do histórico escolar
     partes.push(`<p class="linha-perfil">🎓 <strong>AFM:</strong> matrícula ${a.status === "INATIVA" ? "<strong>INATIVA</strong>" : "ativa"} · nível ${nivel}${a.nivelAtende === false ? ` — abaixo do exigido (${escaparHtmlEbd(a.nivelExigido || "")})` : ""} · Sessões Magnas seguidas sem justificativa: ${escaparHtmlEbd(a.faltasSeguidas)} de ${escaparHtmlEbd(data.limite)}.</p>`);
     if (a.licenca && !a.licenca.podeOficiar) partes.push(`<p class="linha-perfil">⚠️ ${escaparHtmlEbd(a.licenca.motivo)}</p>`);
   }

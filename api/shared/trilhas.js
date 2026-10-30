@@ -305,7 +305,8 @@ function resumirRequisitos(avaliacoes) {
   const lista = avaliacoes || [];
   const naoAtendidos = lista.filter(a => !a.ok);
   const bloqueantes = naoAtendidos.filter(a => a.modo === "BLOQUEIA");
-  const descricao = (a) => `trilha "${a.trilhaNome}": ${a.detalhe}`;
+  // v8.7: o requisito também pode exigir uma disciplina da AFM (shared/seminarioDb.js — o mesmo formato de avaliação)
+  const descricao = (a) => (a.tipo === "DISCIPLINA" ? `disciplina "${a.disciplinaNome}" da AFM: ${a.detalhe}` : `trilha "${a.trilhaNome}": ${a.detalhe}`);
   const alertas = [
     ...naoAtendidos.filter(a => a.modo === "ALERTA").map(descricao),
     ...lista.filter(a => a.ok && a.situacao === "VENCENDO").map(descricao)
@@ -760,9 +761,10 @@ async function listarRequisitos(pool, { contexto, apenasAtivos = true } = {}) {
 async function avaliarRequisitos(pool, { contexto, alvoChave = "", membroId, hojeIso = hojeIsoLocal() }) {
   const reqs = await listarRequisitos(pool, { contexto });
   const aplicaveis = reqs.filter(r => alvoCorresponde(r.alvoChave, alvoChave));
-  if (!aplicaveis.length) return resumirRequisitos([]);
-  const mapa = await carregarSituacoes(pool, { membroIds: [membroId], trilhaIds: aplicaveis.map(r => r.trilhaId), hojeIso });
-  return resumirRequisitos(aplicaveis.map(r => avaliarRequisito({ requisito: r, melhor: escolherMelhor(mapa.get(`${membroId}|${r.trilhaId}`) || []) })));
+  const mapa = aplicaveis.length ? await carregarSituacoes(pool, { membroIds: [membroId], trilhaIds: aplicaveis.map(r => r.trilhaId), hojeIso }) : new Map();
+  // v8.7: e as disciplinas da AFM exigidas no mesmo contexto (aprovada em turma encerrada ou aproveitada)
+  const disciplinas = (await require("./seminarioDb").avaliacoesDeRequisitos(pool, { contexto, alvoChave, membroIds: [membroId] })).get(Number(membroId)) || [];
+  return resumirRequisitos([...aplicaveis.map(r => avaliarRequisito({ requisito: r, melhor: escolherMelhor(mapa.get(`${membroId}|${r.trilhaId}`) || []) })), ...disciplinas]);
 }
 
 // Versão em lote (escala: toda a equipe de uma vez). `bloqueados` traz o
@@ -770,13 +772,16 @@ async function avaliarRequisitos(pool, { contexto, alvoChave = "", membroId, hoj
 async function filtrarMembrosQueAtendem(pool, { contexto, alvoChave = "", membroIds, hojeIso = hojeIsoLocal() }) {
   const ids = [...new Set((membroIds || []).map(Number))].filter(Boolean);
   const reqs = (await listarRequisitos(pool, { contexto })).filter(r => alvoCorresponde(r.alvoChave, alvoChave));
-  if (!reqs.length || !ids.length) return { temRequisitos: reqs.length > 0, atendem: new Set(ids), bloqueados: new Map() };
+  if (!ids.length) return { temRequisitos: reqs.length > 0, atendem: new Set(ids), bloqueados: new Map() };
 
-  const mapa = await carregarSituacoes(pool, { membroIds: ids, trilhaIds: reqs.map(r => r.trilhaId), hojeIso });
+  const mapa = reqs.length ? await carregarSituacoes(pool, { membroIds: ids, trilhaIds: reqs.map(r => r.trilhaId), hojeIso }) : new Map();
+  // v8.7: e as disciplinas da AFM exigidas no mesmo contexto (vazio: nenhuma configurada)
+  const disciplinas = await require("./seminarioDb").avaliacoesDeRequisitos(pool, { contexto, alvoChave, membroIds: ids });
+  if (!reqs.length && !disciplinas.size) return { temRequisitos: false, atendem: new Set(ids), bloqueados: new Map() };
   const atendem = new Set();
   const bloqueados = new Map();
   for (const id of ids) {
-    const resumo = resumirRequisitos(reqs.map(r => avaliarRequisito({ requisito: r, melhor: escolherMelhor(mapa.get(`${id}|${r.trilhaId}`) || []) })));
+    const resumo = resumirRequisitos([...reqs.map(r => avaliarRequisito({ requisito: r, melhor: escolherMelhor(mapa.get(`${id}|${r.trilhaId}`) || []) })), ...(disciplinas.get(id) || [])]);
     if (resumo.bloqueado) bloqueados.set(id, resumo.mensagemBloqueio); else atendem.add(id);
   }
   return { temRequisitos: true, atendem, bloqueados };

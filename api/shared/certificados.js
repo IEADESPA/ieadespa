@@ -71,11 +71,13 @@ function podeAcessarCertificado(certificado, { membroIdSolicitante, temGestao })
 // e revogava certificado de qualquer membro da igreja.
 // v8.3 — os documentos ministeriais têm dono próprio: o CHM é da AFM (permissão "afm") e o diploma de consagração é das Consagrações ("consagracoes"); a gestão da EBD e
 // das trilhas não os alcança (nem para ver, nem para revogar).
-const PERMISSOES_DA_NATUREZA = { CHM: ["afm"], DIPLOMA: ["consagracoes"] };
+const PERMISSOES_DA_NATUREZA = { CHM: ["afm"], DIPLOMA: ["consagracoes"], DIPLOMA_AFM: ["afm"], HISTORICO: ["afm"], DECLARACAO: ["afm"] };   // v8.7: os documentos acadêmicos da AFM
 async function gestorAlcancaMembro(pool, usuario, membroId, natureza = null) {
   // v7.6 — o escopo conferido é o das concessões que têm ebd_gestao/trilhas_gestao (shared/auth.js, "Concessões"), não o somado de outro cargo ou delegação.
   const visao = require("./auth").visaoDaPermissao(usuario, (natureza && PERMISSOES_DA_NATUREZA[natureza]) || ["ebd_gestao", "trilhas_gestao"]);
   if (!visao) return false;
+  // v8.7: os documentos acadêmicos (notas e frequência) são do nível geral da Academia — a mesma regra da rota do Seminário
+  if (["DIPLOMA_AFM", "HISTORICO", "DECLARACAO"].includes(natureza) && !require("./escopoRotas").ehGeral(visao)) return false;
   // Inexistente, malformado e fora do escopo (congregação, ou Extensão da Tenda para quem tem escopo de Extensão) dão o mesmo `false`.
   return !!(await require("./escopoRotas").pessoaAlcancavel(pool, visao, membroId));
 }
@@ -202,7 +204,7 @@ function mapearCertificado(row) {
     revogadoEm: row.RevogadoEm || null,
     motivoRevogacao: row.MotivoRevogacao || null,
     hashIntegridade: row.HashIntegridade || null,
-    natureza: row.Natureza || null   // v8.3: CHM | DIPLOMA (null: certificado comum da EBD/trilhas)
+    natureza: row.Natureza || null   // v8.3: CHM | DIPLOMA; v8.7: DIPLOMA_AFM | HISTORICO | DECLARACAO (null: certificado comum da EBD/trilhas)
   };
 }
 

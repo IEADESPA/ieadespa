@@ -77,4 +77,7 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-63-discipulado-corridas.js
 # v8.6 (Educação continuada, migração 162 — a "preparar-escada" já a aplica)
 BASE=cenario-escada bash rodar.sh roteiro e2e-64-educacao-continuada.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-65-educacao-corridas.js
+# v8.7 (Seminário, migração 163 — a "preparar-escada" já a aplica)
+BASE=cenario-escada bash rodar.sh roteiro e2e-66-seminario.js
+BASE=cenario-escada bash rodar.sh roteiro e2e-67-seminario-corridas.js
 echo TUDO-PRONTO

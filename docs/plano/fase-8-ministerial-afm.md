@@ -535,23 +535,24 @@ aprovada na execução 40943177680).
 
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 
-- [ ] Carga horária mínima periódica por cargo ministerial para manter a
+- [x] Carga horária mínima periódica por cargo ministerial para manter a
       credencial ativa — padrão consolidado em denominações internacionais, e
       que dá sentido prático à AFM (v8.1) além da formação inicial.
-- [ ] **Curso anual de Reciclagem e Prática Pastoral** (Regimento Art. 68 §3º):
+- [x] **Curso anual de Reciclagem e Prática Pastoral** (Regimento Art. 68 §3º):
       "critério indispensável e eliminatório para a renovação e manutenção da
       credencial de obreiro ativo no exercício seguinte" — a aprovação do ano
       registrada por obreiro; sem ela, o QR (v8.4) passa a "obreiro inativo" no
       exercício seguinte. *(achado da Trava 8-A: nem implementado nem planejado)*
-- [ ] **Exame bienal de proficiência** (Regimento Art. 70 §3º): reprovado fica
+- [x] **Exame bienal de proficiência** (Regimento Art. 70 §3º): reprovado fica
       "sob observação" (I) — uma situação nova no QR e na escada —, e a ausência
       "equivale à reprovação por abandono … suspensão imediata" (II).
       *(achado da Trava 8-A)*
-- [ ] Os requisitos de formação da v6.9 (trilhas) ligados aos cursos da AFM: o
+- [x] Os requisitos de formação da v6.9 (trilhas) ligados aos cursos da AFM: o
       CHM e o nível já são conferidos sozinhos na escada e na esteira (v8.2 e
-      v8.3); falta conferir as disciplinas cursadas, quando a v8.7 existir.
-- [ ] Histórico de formação no perfil, com certificados verificáveis (v6.9).
-- [ ] Alerta de credencial em risco por educação continuada vencida — antes de
+      v8.3); conferir as disciplinas cursadas **passou para a v8.7** (as
+      disciplinas só existem com ela — item na lista da v8.7).
+- [x] Histórico de formação no perfil, com certificados verificáveis (v6.9).
+- [x] Alerta de credencial em risco por educação continuada vencida — antes de
       expirar, não depois.
 
 ### Desenho da v8.6 (contrato, 30/10/2026)
@@ -589,6 +590,44 @@ efeito na credencial); a reposição da reciclagem é a correção do resultado 
 repescagem não impede a promoção (só avisa); a justificativa da ausência (pode citar saúde) sai 2 anos depois do exame (prazo ajustável em Proteção de
 Dados → Políticas de retenção).
 
+### Como ficou a v8.6 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `3b6ab7a`; para desfazer: `git revert -m 1 3b6ab7a`). Migração **162** (`AFMReciclagemEdicoes`,
+`AFMReciclagemResultados`, `AFMExames`, `AFMExameResultados`; os avisos `AFM_RECICLAGEM_PENDENTE` e `AFM_EXAME_PENDENTE`; a política de retenção "AFM —
+justificativa de ausência no exame", 730 dias). Regra pura em `api/shared/educacaoContinuada.js`, banco em `api/shared/educacaoContinuadaDb.js`, rota
+`/api/educacao-continuada/<ação>` (`GestaoEducacaoContinuada`). A regra única da Trava 8-A (`habilitacao.js` → `afm.licencaLiturgica`) passou a ler a
+educação continuada: a licença para oficiar, a Comissão de Unção, o QR (agora com "sob observação"), a lista da AFM e a escada dizem o mesmo. Tela: seção
+**Educação continuada** na aba Academia (só o nível geral: quem está pendente, quem ainda não foi aprovado na reciclagem do ano, as edições, os exames e o
+lançamento dos resultados), **Minha educação continuada** em Minha Formação, a **formação ministerial** na aba Caminhada do perfil (com o link do certificado
+das trilhas) e o "sob observação" na credencial do Meu Painel (módulo novo `app/modulos/educacao-continuada.js`). Casca do service worker **v48**. A rotina
+diária da AFM roda a retenção da justificativa; a exclusão LGPD a apaga na hora; Meus Dados mostra tudo.
+
+**O que mudou depois das revisões independentes** (servidor: 4 altos, 3 médios, 5 baixos; tela: 1 alto, 4 médios, 4 baixos — tratados):
+
+- A sanção do exame **só cai com uma aprovação**: antes, faltar com justificativa à repescagem tirava a suspensão, e um bienal novo em que a pessoa não foi
+  registrada apagava a pendência antiga. Agora vale a sequência inteira dos exames da pessoa.
+- A **promoção não zera** o "já era obreiro na data da edição": vale o primeiro dia como oficial sem interrupção (o Diácono reprovado em março e promovido a
+  Presbítero em dezembro continua devendo a reciclagem).
+- A ausência justificada só **avisa** na escada (o texto diz "sem sanção").
+- Mudar a carga ou a frequência de uma edição que deixaria um "aprovado" abaixo do novo mínimo é recusado; a auditoria guarda o antes; resultado de exame ou
+  de reciclagem que ainda não aconteceu é recusado; edição ou exame inexistente dá 404.
+- O prazo da justificativa ficou em **Proteção de Dados → Políticas de retenção** (como o da CLI), e o ROPA o descreve.
+- Tela: a credencial do Meu Painel dizia "sem licença" para quem está sob observação (corrigido); o painel mostra os nomes de quem ainda não foi aprovado
+  na reciclagem do ano (o aviso mensal só leva a contagem); a linha recusada volta com o que foi digitado; o ano inteiro vai em lotes de 100; a própria
+  linha vem travada; as horas aceitam vírgula; a seção só do nível geral fecha na saída; o bloco não aparece para quem não é obreiro e nunca teve registro.
+- Nos testes do banco local, o setup do cuidado (`e2e-23`) abre a linha de cargo dos oficiais que cria — o `e2e-51` falhava desde a v8.5 por isso (só a base
+  de teste; o sistema sempre abre a linha no cadastro e na consagração).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** "sob observação" não suspende as funções, mas impede a promoção; o exame vale
+para os obreiros e para quem está na Câmara (o membro da Câmara que não é obreiro só fica com o resultado registrado); a reposição da reciclagem é corrigir o
+resultado da mesma edição (não há "edição extra"); a ausência justificada que ainda deve a repescagem não impede a promoção; quem virou oficial depois da
+data da edição não deve aquela edição; nada retroage (antes da primeira edição registrada, ninguém fica pendente); a justificativa sai 2 anos depois do exame.
+
+**Provas:** jest 6.204 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 162): `e2e-64` fluxos, segurança e lixo 57, `e2e-65` corridas
+11 (em processos separados); a bateria da fase 8 (`e2e-47` a `e2e-63`), o cuidado (`e2e-23` a `e2e-28`) e a Trava 7-C (`e2e-36`, `e2e-40`) verdes sobre as
+bases recriadas do zero; tela (`tools/front-educacao`, com as respostas reais gravadas pelo `e2e-64`) 65, com dezesseis mutações acusadas; teste de tela da
+homologação 41068846668 sem divergência e sem violação de CSP (base aprovada na execução 41066251721).
+
 ## v8.7 — Seminário como sistema acadêmico, não como curso online *(7ª rodada)*
 
 Achado de pesquisa que muda o desenho: formação ministerial séria precisa de
@@ -603,7 +642,50 @@ que a Convenção e outras instituições vão pedir.
       registrado de quem aprovou — hoje isso é decisão informal do Reitor.
 - [ ] Cada disciplina com o seu docente (o corpo docente com a titulação, o
       Reitor e a CDER já existem desde a v8.1).
+- [ ] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
+      disciplinas cursadas *(veio da v8.6: lá só existiam a reciclagem e o exame)*.
       *(Classter; Populi — SIS para seminários)*
+
+### Desenho da v8.7 (contrato, 30/10/2026)
+
+**Base legal:** Regimento Art. 66 (a AFM é o órgão oficial de ensino e habilitação), Art. 68 (o Reitor dirige a parte pedagógica, com o Corpo Docente), Art. 70 §2º
+(o currículo obrigatório abrange Liderança, Administração Eclesiástica e Compliance Estatutário) e Art. 72 (os quatro níveis — Básico, Médio, Avançado, Bacharel Livre —
+"matriculado e cursando" para Auxiliar a Presbítero; o **certificado de conclusão** do Avançado ou do Bacharel para Evangelista e Pastor). O Regimento não fala de notas,
+turmas nem aproveitamento: o resto é decisão da Academia, e fica configurável.
+
+1. **Cursos e currículo.** Os **quatro cursos** são os níveis do Art. 72 (a migração cria os quatro; não se criam outros). Cada curso tem a nota mínima (7,0 de 10) e a
+   frequência mínima (75%) — a Academia muda. As **disciplinas** de cada curso (nome, área, carga horária, obrigatória ou optativa, ementa, ativa) e os **pré-requisitos**
+   entre disciplinas (até de outro curso; sem ciclo) são cadastrados pela Academia — a migração não inventa currículo. Área: Bíblia e Teologia, Liturgia, Liderança,
+   Administração Eclesiástica, Compliance Estatutário (Regimento) ou outra; a tela **avisa** o curso cujas obrigatórias ainda não cobrem as três áreas do Art. 70 §2º.
+2. **Matrícula no curso.** Só quem tem a **matrícula ativa na AFM** (todo oficial, sozinho; quem ainda não é oficial, matriculado antes como candidato — v8.2). Situação:
+   cursando, concluído ou cancelado (com o motivo); cancelado pode voltar numa matrícula nova, e as disciplinas já aprovadas continuam valendo.
+3. **Turma** = a oferta de uma disciplina, **com o seu docente** (Reitor ou docente em exercício no Corpo Docente — v8.1), as datas, o local e a regra de aprovação
+   congelada do curso no dia da abertura (nota, frequência e carga horária: mudar o curso depois não muda a turma). Inscrição: matriculado no curso **cursando**, com os
+   pré-requisitos aprovados, sem já ter sido aprovado na disciplina e sem estar em outra turma aberta dela; o docente não é aluno da própria turma.
+4. **Nota e frequência.** Lança-se a nota (0 a 10, com vírgula) e as horas presentes; o resultado sai sozinho: **aprovado**, **reprovado por nota** ou **reprovado por
+   frequência**. Lança e encerra quem tem o nível geral da Academia **ou o docente da turma** (em Minha Formação, "Turmas em que leciono"); ninguém lança a própria nota.
+   Só a turma **encerrada** vale para o histórico, os pré-requisitos, a conclusão e os requisitos (a nota de turma aberta ainda pode mudar). Reabrir a turma é do nível
+   geral, com o motivo; a nota de quem já concluiu o curso com aquela disciplina não pode deixar de ser "aprovado" (anule a conclusão antes).
+5. **Aproveitamento de disciplina** cursada em outra instituição: o nível geral registra a instituição, a disciplina e a carga de origem, o ano, a decisão (deferido ou
+   indeferido) e o **parecer escrito de quem decidiu** — o Reitor ou um docente em exercício (nunca o próprio aluno), com o documento de origem conferido. O deferido vale
+   como disciplina cumprida ("AP" no histórico); anular pede o motivo e tem a mesma trava da conclusão.
+6. **Conclusão e documentos.** O nível geral registra a conclusão quando **todas as obrigatórias** do curso estão aprovadas ou aproveitadas (o sistema confere) e o
+   **diploma** sai na hora, com código de verificação público (como o CHM e o diploma de consagração). A **declaração de matrícula** (vale 30 dias) e o **histórico escolar**
+   (a fotografia do dia em que foi emitido: a correção posterior não muda um histórico já emitido) são emitidos pela própria pessoa (Minha Formação) ou pela Academia,
+   em PDF com QR. Anular a conclusão (motivo) revoga o diploma e devolve o curso a "cursando".
+7. **A escada e os requisitos conferem o que foi cursado.** O nível do Art. 72 passa a vir **também do histórico**: "cursando" o curso em que a pessoa está matriculada, e
+   "concluído" o que ela concluiu — junto com o nível registrado à mão até hoje (para quem estudou antes do sistema), valendo o que atender o cargo (quem concluiu o Avançado e
+   cursa o Bacharel atende o Pastor). A mesma leitura vale para a lista da Academia, o Meu Painel, o nivelamento e o CEI. E o **requisito de formação** (v6.9: consagração,
+   liderança, escala, professor da EBD, voluntariado, batismo) passa a poder exigir **uma disciplina da AFM**, além de uma trilha — a disciplina aprovada (turma encerrada) ou
+   aproveitada atende. *Exemplo: o tipo de consagração "Diácono" exige a disciplina "Liturgia" (Art. 72, III, b: "com foco em liturgia").*
+8. **Onde aparece.** Seção nova **Seminário** na aba Academia (só o nível geral): currículo, turmas, alunos (histórico, matrícula no curso, conclusão, documentos,
+   aproveitamento) e os requisitos de disciplina. **Meu histórico escolar** e **Turmas em que leciono** em Minha Formação; o histórico escolar no perfil (aba Caminhada) e em
+   Meus Dados.
+
+**Decisões por interpretação (o responsável pode mudar):** os cursos são exatamente os quatro níveis do Art. 72; nota mínima 7,0 e frequência 75% (configuráveis por curso);
+só a turma encerrada conta; o docente lança e encerra a própria turma (reabrir é só do nível geral); o parecer do aproveitamento é do Reitor ou de um docente em exercício;
+a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou antes do sistema; o aviso das três áreas do
+Art. 70 §2º é por curso e não trava nada; o histórico escolar é assentamento da Academia e fica (a exclusão LGPD tira a identificação da pessoa, como nas matrículas).
 
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9
 

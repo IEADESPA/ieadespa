@@ -1616,7 +1616,7 @@ async function conferirRequisitoAcao() {
   const a = data.avaliacao;
   if (!a.temRequisitos) { container.innerHTML = "<p class='subtitle'>Nenhum requisito configurado para este contexto/alvo — a pessoa não precisa de formação específica aqui.</p>"; return; }
   container.innerHTML = `<p><strong>${a.bloqueado ? "⛔ NÃO cumpre (bloqueia)" : "✅ Cumpre"}</strong></p>
-    <ul>${a.avaliacoes.map(x => `<li>${x.ok ? "✅" : (x.modo === "BLOQUEIA" ? "⛔" : "⚠️")} Trilha "${escaparHtmlEbd(x.trilhaNome)}": ${escaparHtmlEbd(x.detalhe)} <span class="subtitle">(${x.modo === "BLOQUEIA" ? "bloqueia" : "só alerta"})</span></li>`).join("")}</ul>`;
+    <ul>${a.avaliacoes.map(x => `<li>${x.ok ? "✅" : (x.modo === "BLOQUEIA" ? "⛔" : "⚠️")} ${x.tipo === "DISCIPLINA" ? `Disciplina da AFM "${escaparHtmlEbd(x.disciplinaNome)}"` : `Trilha "${escaparHtmlEbd(x.trilhaNome)}"`}: ${escaparHtmlEbd(x.detalhe)} <span class="subtitle">(${x.modo === "BLOQUEIA" ? "bloqueia" : "só alerta"})</span></li>`).join("")}</ul>`;
 }
 
 // -- Pendências de validade --

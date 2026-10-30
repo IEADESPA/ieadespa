@@ -85,6 +85,15 @@ class Elemento extends No {
   get options() { return this.localName === "select" ? [...this.descendentes()].filter(e => e.localName === "option") : []; }
   get selectedIndex() { const o = this.options; const i = o.findIndex(x => x._selecionada === true || (x._selecionada === null && x.hasAttribute("selected"))); return i >= 0 ? i : (o.length ? 0 : -1); }
   set selectedIndex(i) { this.options.forEach((o, k) => { o._selecionada = k === i; }); }
+  // v8.7: o select de escolha múltipla (os pré-requisitos do Seminário) — como no navegador
+  get selected() { return this._selecionada === true || (this._selecionada === null && this.hasAttribute("selected")); }
+  set selected(v) { this._selecionada = !!v; }
+  get selectedOptions() {
+    if (this.localName !== "select") return [];
+    if (this.hasAttribute("multiple")) return this.options.filter((o) => o.selected);
+    const o = this.options[this.selectedIndex];
+    return o ? [o] : [];
+  }
   get value() {
     if (this.localName === "select") { const o = this.options[this.selectedIndex]; return o ? o.value : ""; }
     if (this.localName === "option") return this.hasAttribute("value") ? this.getAttribute("value") : this.textContent;

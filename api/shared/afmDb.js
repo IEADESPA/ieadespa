@@ -583,19 +583,22 @@ async function listarMatriculas(pool) {
   const seq = await sequenciasAtuais(pool, "AFM");
   const origens = await escadaDb.origensDoCargoAtual(pool);   // v8.2: nivelamento obrigatório (Art. 66 §5º)
   const educacao = await require("./educacaoContinuadaDb").situacoes(pool, r.recordset.map((l) => l.MembroId));   // v8.6
+  const doHistorico = await require("./seminarioDb").niveisHistorico(pool, r.recordset.map((l) => l.MembroId));   // v8.7: o nível que vem do histórico escolar
   return r.recordset.map((l) => {
     const oficial = l.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
-    const nivel = afm.avaliarNivel(l.CargoMinisterial, l.NivelEscolaridade, l.NivelConcluido);
+    const pares = doHistorico.get(Number(l.MembroId)) || [];
+    const nivel = afm.avaliarNivel(l.CargoMinisterial, l.NivelEscolaridade, l.NivelConcluido, pares);
     return {
       membroId: l.MembroId, nome: l.Nome, cargo: l.CargoMinisterial, cargoNome: l.CargoNome || l.CargoMinisterial, congregacao: l.Congregacao, oficial,
       status: l.StatusMatricula, nivel: l.NivelEscolaridade, nivelConcluido: !!l.NivelConcluido, nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
+      nivelHistorico: pares.map(afm.rotuloDoPar),   // v8.7: o que o histórico escolar diz (cursando / concluído)
       origem: l.Origem, dataMatricula: l.DataMatricula, faltasSeguidas: seq.get(Number(l.MembroId)) || 0,
       desmatricula: l.DesmatriculaMotivo ? { motivo: l.DesmatriculaMotivo, data: l.DataDesmatricula, detalhe: l.DesmatriculaDetalhe, sessoes: l.SessoesGatilho } : null,
       licenca: afm.licencaLiturgica({ cargo: l.CargoMinisterial, statusMatricula: l.StatusMatricula, status: l.Status, situacaoMembro: l.SituacaoMembro,
         excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao, afastado: !!l.Afastado, educacao: educacao.get(Number(l.MembroId)) || null }),
       educacao: (educacao.get(Number(l.MembroId)) || { pendencias: [] }).pendencias,   // v8.6: a reciclagem e o exame (Art. 68 §3º; Art. 70 §3º)
       chm: !!l.CertificadoHabilitacao, chmEm: l.CHMEm || null, chmCertificadoId: l.CertificadoHabilitacao ? l.CHMCertificadoId || null : null,   // v8.3: o documento
-      nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido)
+      nivelamento: oficial && escada.emNivelamento(l.CargoMinisterial, origens.get(Number(l.MembroId)), l.NivelEscolaridade, l.NivelConcluido, pares)
     };
   });
 }
@@ -670,9 +673,11 @@ async function minhaSituacao(pool, membroId) {
   const oficial = pessoa.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(pessoa.CargoMinisterial);
   let afmInfo = null;
   if (oficial) {
-    const nivel = afm.avaliarNivel(pessoa.CargoMinisterial, mat && mat.NivelEscolaridade, mat && mat.NivelConcluido);
+    const pares = (await require("./seminarioDb").niveisHistorico(pool, [id])).get(id) || [];   // v8.7: o nível do histórico escolar
+    const nivel = afm.avaliarNivel(pessoa.CargoMinisterial, mat && mat.NivelEscolaridade, mat && mat.NivelConcluido, pares);
     afmInfo = {
       status: mat ? mat.StatusMatricula : "ATIVA", nivel: mat ? mat.NivelEscolaridade : null, nivelConcluido: !!(mat && mat.NivelConcluido), nivelAtende: nivel.atende, nivelExigido: nivel.exigido,
+      nivelHistorico: pares.map(afm.rotuloDoPar),
       faltasSeguidas: (await sequenciasAtuais(pool, "AFM", [id])).get(id) || 0,
       desmatricula: mat && mat.DesmatriculaId ? { motivo: mat.DesmatriculaMotivo, data: mat.DataDesmatricula } : null,
       licenca: afm.licencaLiturgica({ ...(await habilitacao.situacaoMinisterial(pool, [id])).get(id), statusMatricula: mat ? mat.StatusMatricula : "ATIVA" })

@@ -4,7 +4,7 @@
 // Cada requisito vira um item da lista que a tela mostra: ATENDE, FALTA (trava), SEM_DADO (trava: dado que falta no cadastro nunca conta como atendido — mesmo espírito do
 // Estatuto Art. 23 em estatuto.calcularCapacidadeEleitoral), AVISO (não trava) e DISPENSADO (a modalidade dispensa, com o artigo).
 const { idadeEm } = require("./estatuto");
-const { NIVEIS, avaliarNivel } = require("./afm");
+const { avaliarNivel, rotuloDoPar } = require("./afm");
 
 // Art. 71 — a ordem ascendente. "Membro" é a base (cargo em branco também é membro).
 const ESCADA = ["MEMBRO", "AUXILIAR", "MISSIONARIO", "DIACONO", "PRESBITERO", "EVANGELISTA", "PASTOR"];
@@ -180,8 +180,9 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDis
   } else {
     itens.push(item("matricula", "Matrícula ativa na AFM", "Art. 72, caput", "ATENDE"));
   }
-  const nivel = avaliarNivel(alvo, afm && afm.nivel, afm && afm.concluido);
-  const nivelRotulo = afm && afm.nivel && NIVEIS[afm.nivel] ? `${NIVEIS[afm.nivel].rotulo}${afm.concluido ? " (concluído)" : " (cursando)"}` : null;
+  // v8.7: o nível vem também do histórico escolar (o curso que a pessoa cursa e o que concluiu — afm.niveisHistorico), junto com o registrado à mão
+  const nivel = avaliarNivel(alvo, afm && afm.nivel, afm && afm.concluido, (afm && afm.niveisHistorico) || []);
+  const nivelRotulo = rotuloDoPar(nivel.melhor);
   // O curso concluído de Evangelista e Pastor (Art. 72, V, b) é regra do CANDIDATO a ministro: não se dispensa nem na nomeação do Presidente. O ministro já ordenado que
   // vem de outra convenção não é candidato — o assento dele depende só do reconhecimento da função (Regimento Art. 8º e 10) — e faz o nivelamento depois.
   const ministro = (alvo === "EVANGELISTA" || alvo === "PASTOR") && !outra;
@@ -252,9 +253,9 @@ function retrato(avaliacao, hojeIso) {
 }
 
 // Em nivelamento obrigatório (Art. 66 §5º): chegou ao cargo por nomeação direta ou como ministro de outra convenção e ainda não tem o nível que o cargo exige.
-function emNivelamento(cargo, origemCargo, nivel, concluido) {
+function emNivelamento(cargo, origemCargo, nivel, concluido, doHistorico = []) {
   if (origemCargo !== "NOMEACAO_PRESIDENCIAL" && origemCargo !== "OUTRA_CONVENCAO") return false;
-  return avaliarNivel(cargo, nivel, concluido).atende !== true;
+  return avaliarNivel(cargo, nivel, concluido, doHistorico).atende !== true;
 }
 
 module.exports = {

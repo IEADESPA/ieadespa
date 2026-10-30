@@ -162,14 +162,21 @@ function situacaoReitor(linha, hojeIso) {
 }
 
 // Art. 72 — o nível atende o cargo? null quando o cargo não é de oficial (não há exigência) ou o nível não foi informado ainda (a tela mostra "a informar").
-function avaliarNivel(cargo, nivel, concluido) {
+// v8.7: `doHistorico` são os pares { nivel, concluido } que vêm do histórico escolar (o curso que a pessoa cursa e o que concluiu — seminario.paresDeNivel), somados
+// ao nível registrado à mão (quem estudou antes do sistema). Vale o par que atende o cargo: quem concluiu o Avançado e cursa o Bacharel atende o Pastor. `melhor` é o
+// par a mostrar (o que atende, ou o mais alto).
+function avaliarNivel(cargo, nivel, concluido, doHistorico = []) {
+  const pares = [...(nivel && NIVEIS[nivel] ? [{ nivel, concluido: !!concluido }] : []), ...(doHistorico || []).filter((p) => p && NIVEIS[p.nivel]).map((p) => ({ nivel: p.nivel, concluido: !!p.concluido }))];
+  const maisAlto = pares.slice().sort((a, b) => (NIVEIS[b.nivel].ordem - NIVEIS[a.nivel].ordem) || (Number(b.concluido) - Number(a.concluido)))[0] || null;
   const req = REQUISITO_NIVEL[cargo];
-  if (!req) return { atende: null, exigido: null };
+  if (!req) return { atende: null, exigido: null };   // cargo sem exigência (não oficial): nada a mostrar
   const exigido = `${NIVEIS[req.minimo].rotulo} ou acima${req.concluido ? " (concluído)" : ""} — ${req.artigo}`;
-  if (!nivel || !NIVEIS[nivel]) return { atende: null, exigido };
-  const atende = NIVEIS[nivel].ordem >= NIVEIS[req.minimo].ordem && (!req.concluido || !!concluido);
-  return { atende, exigido };
+  if (!pares.length) return { atende: null, exigido, melhor: null };
+  const bom = pares.filter((p) => NIVEIS[p.nivel].ordem >= NIVEIS[req.minimo].ordem && (!req.concluido || p.concluido))
+    .sort((a, b) => (Number(b.concluido) - Number(a.concluido)) || (NIVEIS[b.nivel].ordem - NIVEIS[a.nivel].ordem))[0];
+  return { atende: !!bom, exigido, melhor: bom || maisAlto };
 }
+const rotuloDoPar = (p) => (p && NIVEIS[p.nivel] ? `${NIVEIS[p.nivel].rotulo}${p.concluido ? " (concluído)" : " (cursando)"}` : null);
 
 // Art. 66 §2º, I e II; Art. 69 §3º — licença para oficiar (batizar, ceia, casamento, dirigir culto oficial). Só oficial EM ATIVIDADE (não de licença), em plena
 // comunhão, sem afastamento disciplinar e com a matrícula da AFM ATIVA. Trava 8-A: a MESMA regra serve à turma de batismo, ao Meu Painel, à Comissão de Unção e à
@@ -228,6 +235,6 @@ function textoObrigatorio(valor, { minimo = 5, maximo = 300, rotulo }) {
 
 module.exports = {
   CARGOS_OFICIAIS, CARGOS_ORDENACAO_CLI, NIVEIS, REQUISITO_NIVEL, TIPOS_SESSAO_CLI, TIPOS_AFM_SQL, MOTIVOS_ACEITOS, MOTIVOS_VEDADOS, MENSAGEM_VEDADO, FALTAS_PARA_PERDA, DIAS_PRAZO_AGE,
-  validarJustificativa, textoDaJustificativa, apurarSequencia, providenciasDaExclusao, somarDias, fimDoMandatoReitor, situacaoReitor, avaliarNivel, licencaLiturgica,
+  validarJustificativa, textoDaJustificativa, apurarSequencia, providenciasDaExclusao, somarDias, fimDoMandatoReitor, situacaoReitor, avaliarNivel, rotuloDoPar, licencaLiturgica,
   validarRematricula, dataDoAto, textoObrigatorio
 };

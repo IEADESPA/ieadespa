@@ -30,9 +30,11 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
   // v6.9: a aptidão consulta TrilhaRequisitos (BATISMO_DISCIPULADO) — 1 query a
   // mais, sempre a ÚLTIMA da aptidão. Lista vazia = nenhuma trilha configurada.
   const SEM_REQUISITO_DE_TRILHA = [];
+  // v8.7: depois dela, os requisitos de DISCIPLINA da AFM no mesmo contexto (vazio = nenhum)
+  const SEM_REQUISITO_DE_DISCIPLINA = [];
 
   test("candidato apto: todos os 4 itens ok", async () => {
-    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA]);
+    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA, SEM_REQUISITO_DE_DISCIPLINA]);
     const r = await batismo.calcularAptidaoBatismo(pool, {
       membroId: 1, dataNascimento: "2010-01-01", estadoCivil: "SOLTEIRO",
       parecerVidaPregressa: "FAVORAVEL", discipuladoConcluidoManual: true
@@ -44,7 +46,7 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
   });
 
   test("menor de 12 anos nunca é apto, mesmo com tudo mais ok", async () => {
-    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA]);
+    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA, SEM_REQUISITO_DE_DISCIPLINA]);
     const r = await batismo.calcularAptidaoBatismo(pool, {
       membroId: 1, dataNascimento: new Date().toISOString().slice(0, 10), estadoCivil: "SOLTEIRO",
       parecerVidaPregressa: "FAVORAVEL", discipuladoConcluidoManual: true
@@ -54,18 +56,18 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
   });
 
   test("união estável sem casamento civil registrado reprova só esse item", async () => {
-    const { pool, chamadas } = criarPoolFalso([[], SEM_REQUISITO_DE_TRILHA]); // casamento civil -> nenhum; requisitos de trilha -> nenhum
+    const { pool, chamadas } = criarPoolFalso([[], SEM_REQUISITO_DE_TRILHA, SEM_REQUISITO_DE_DISCIPLINA]); // casamento civil -> nenhum; requisitos de trilha e de disciplina -> nenhum
     const r = await batismo.calcularAptidaoBatismo(pool, {
       membroId: 1, dataNascimento: "2000-01-01", estadoCivil: "UNIAO_ESTAVEL",
       parecerVidaPregressa: "FAVORAVEL", discipuladoConcluidoManual: true
     });
     expect(r.apto).toBe(false);
     expect(r.itens.certidaoCivil.ok).toBe(false);
-    expect(chamadas).toHaveLength(2);
+    expect(chamadas).toHaveLength(3);
   });
 
   test("união estável COM casamento civil registrado passa nesse item", async () => {
-    const { pool } = criarPoolFalso([[{ x: 1 }], SEM_REQUISITO_DE_TRILHA]);
+    const { pool } = criarPoolFalso([[{ x: 1 }], SEM_REQUISITO_DE_TRILHA, SEM_REQUISITO_DE_DISCIPLINA]);
     const r = await batismo.calcularAptidaoBatismo(pool, {
       membroId: 1, dataNascimento: "2000-01-01", estadoCivil: "UNIAO_ESTAVEL",
       parecerVidaPregressa: "FAVORAVEL", discipuladoConcluidoManual: true
@@ -74,7 +76,7 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
   });
 
   test("sem parecer favorável, nunca apto", async () => {
-    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA]);
+    const { pool } = criarPoolFalso([SEM_REQUISITO_DE_TRILHA, SEM_REQUISITO_DE_DISCIPLINA]);
     const r = await batismo.calcularAptidaoBatismo(pool, {
       membroId: 1, dataNascimento: "2000-01-01", estadoCivil: "SOLTEIRO",
       parecerVidaPregressa: null, discipuladoConcluidoManual: true
@@ -97,7 +99,7 @@ describe("calcularAptidaoBatismo — item IV verificado por trilha de formação
   });
 
   test("trilha configurada e nunca iniciada: reprova o item, mesmo com a atestação manual marcada", async () => {
-    const { pool } = criarPoolFalso([[requisito], []]); // requisitos; matrículas do membro -> nenhuma
+    const { pool } = criarPoolFalso([[requisito], [], []]); // requisitos; matrículas do membro -> nenhuma; requisitos de disciplina -> nenhum
     const r = await batismo.calcularAptidaoBatismo(pool, candidato);
     expect(r.apto).toBe(false);
     expect(r.itens.discipulado.ok).toBe(false);
@@ -106,14 +108,14 @@ describe("calcularAptidaoBatismo — item IV verificado por trilha de formação
   });
 
   test("trilha configurada e concluída com certificado vigente: item ok, sem depender do manual", async () => {
-    const { pool } = criarPoolFalso([[requisito], [matricula()]]);
+    const { pool } = criarPoolFalso([[requisito], [matricula()], []]);
     const r = await batismo.calcularAptidaoBatismo(pool, { ...candidato, discipuladoConcluidoManual: false });
     expect(r.apto).toBe(true);
     expect(r.itens.discipulado.detalhe).toBe("Verificado pela trilha de formação");
   });
 
   test("certificado da trilha revogado: item reprovado", async () => {
-    const { pool } = criarPoolFalso([[requisito], [matricula({ RevogadoEm: "2026-03-01" })]]);
+    const { pool } = criarPoolFalso([[requisito], [matricula({ RevogadoEm: "2026-03-01" })], []]);
     const r = await batismo.calcularAptidaoBatismo(pool, candidato);
     expect(r.itens.discipulado.ok).toBe(false);
     expect(r.itens.discipulado.detalhe).toMatch(/certificado revogado/);

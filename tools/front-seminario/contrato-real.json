@@ -1,0 +1,1110 @@
+{
+  "painel": {
+    "sucesso": true,
+    "cursos": [
+      {
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "nivelRotulo": "Básico",
+        "nome": "Nível Básico em Teologia",
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "disciplinas": [
+          {
+            "disciplinaId": 1,
+            "cursoId": 1,
+            "nome": "Bibliologia E2E",
+            "area": "TEOLOGIA",
+            "areaRotulo": "Bíblia e Teologia",
+            "cargaHoraria": 20,
+            "obrigatoria": true,
+            "ativa": true,
+            "ementa": null,
+            "preRequisitos": []
+          },
+          {
+            "disciplinaId": 3,
+            "cursoId": 1,
+            "nome": "Liderança E2E",
+            "area": "LIDERANCA",
+            "areaRotulo": "Liderança",
+            "cargaHoraria": 8,
+            "obrigatoria": false,
+            "ativa": true,
+            "ementa": null,
+            "preRequisitos": []
+          },
+          {
+            "disciplinaId": 2,
+            "cursoId": 1,
+            "nome": "Liturgia E2E",
+            "area": "LITURGIA",
+            "areaRotulo": "Liturgia",
+            "cargaHoraria": 10,
+            "obrigatoria": true,
+            "ativa": true,
+            "ementa": null,
+            "preRequisitos": [
+              1
+            ]
+          }
+        ],
+        "lacunasGovernanca": [
+          "Liderança",
+          "Administração Eclesiástica",
+          "Compliance Estatutário (Regimento)"
+        ],
+        "cursando": 2,
+        "concluidos": 1
+      },
+      {
+        "cursoId": 2,
+        "nivel": "MEDIO",
+        "nivelRotulo": "Médio",
+        "nome": "Nível Médio em Teologia",
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "disciplinas": [
+          {
+            "disciplinaId": 4,
+            "cursoId": 2,
+            "nome": "Homilética E2E",
+            "area": "TEOLOGIA",
+            "areaRotulo": "Bíblia e Teologia",
+            "cargaHoraria": 12,
+            "obrigatoria": true,
+            "ativa": true,
+            "ementa": null,
+            "preRequisitos": [
+              2
+            ]
+          }
+        ],
+        "lacunasGovernanca": [
+          "Liderança",
+          "Administração Eclesiástica",
+          "Compliance Estatutário (Regimento)"
+        ],
+        "cursando": 1,
+        "concluidos": 0
+      },
+      {
+        "cursoId": 3,
+        "nivel": "AVANCADO",
+        "nivelRotulo": "Avançado",
+        "nome": "Nível Avançado em Teologia",
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "disciplinas": [],
+        "lacunasGovernanca": [
+          "Liderança",
+          "Administração Eclesiástica",
+          "Compliance Estatutário (Regimento)"
+        ],
+        "cursando": 1,
+        "concluidos": 0
+      },
+      {
+        "cursoId": 4,
+        "nivel": "BACHAREL",
+        "nivelRotulo": "Bacharel Livre",
+        "nome": "Bacharel Livre em Teologia",
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "disciplinas": [],
+        "lacunasGovernanca": [
+          "Liderança",
+          "Administração Eclesiástica",
+          "Compliance Estatutário (Regimento)"
+        ],
+        "cursando": 0,
+        "concluidos": 0
+      }
+    ],
+    "turmas": [
+      {
+        "turmaId": 6,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "obrigatoria": true,
+        "docenteMembroId": 9222,
+        "docente": "Pastor Comissao Dois E2E",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "local": "Templo Central",
+        "cargaHoraria": 10,
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "horasMinimas": 7.5,
+        "situacao": "ABERTA",
+        "encerradaEm": null,
+        "jaEncerrada": false,
+        "inscritos": 1,
+        "lancados": 0
+      },
+      {
+        "turmaId": 5,
+        "disciplinaId": 4,
+        "disciplina": "Homilética E2E",
+        "cursoId": 2,
+        "nivel": "MEDIO",
+        "curso": "Nível Médio em Teologia",
+        "obrigatoria": true,
+        "docenteMembroId": 9222,
+        "docente": "Pastor Comissao Dois E2E",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "local": "Templo Central",
+        "cargaHoraria": 12,
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "horasMinimas": 9,
+        "situacao": "ABERTA",
+        "encerradaEm": null,
+        "jaEncerrada": false,
+        "inscritos": 0,
+        "lancados": 0
+      },
+      {
+        "turmaId": 4,
+        "disciplinaId": 1,
+        "disciplina": "Bibliologia E2E",
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "obrigatoria": true,
+        "docenteMembroId": 9221,
+        "docente": "Pastor Comissao Um E2E",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "local": "Templo Central",
+        "cargaHoraria": 20,
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "horasMinimas": 15,
+        "situacao": "ABERTA",
+        "encerradaEm": null,
+        "jaEncerrada": false,
+        "inscritos": 0,
+        "lancados": 0
+      },
+      {
+        "turmaId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "obrigatoria": true,
+        "docenteMembroId": 9221,
+        "docente": "Pastor Comissao Um E2E",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "local": "Templo Central",
+        "cargaHoraria": 10,
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "horasMinimas": 7.5,
+        "situacao": "ENCERRADA",
+        "encerradaEm": "2026-10-30",
+        "jaEncerrada": true,
+        "inscritos": 1,
+        "lancados": 1
+      },
+      {
+        "turmaId": 1,
+        "disciplinaId": 1,
+        "disciplina": "Bibliologia E2E",
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "obrigatoria": true,
+        "docenteMembroId": 9222,
+        "docente": "Pastor Comissao Dois E2E",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "local": "Templo Central",
+        "cargaHoraria": 20,
+        "notaMinima": 7,
+        "frequenciaMinimaPct": 75,
+        "horasMinimas": 15,
+        "situacao": "ENCERRADA",
+        "encerradaEm": "2026-10-30",
+        "jaEncerrada": true,
+        "inscritos": 3,
+        "lancados": 3
+      }
+    ],
+    "prontos": [],
+    "docentes": [
+      {
+        "membroId": 9222,
+        "nome": "Pastor Comissao Dois E2E",
+        "reitor": false
+      },
+      {
+        "membroId": 9221,
+        "nome": "Pastor Comissao Um E2E",
+        "reitor": true
+      }
+    ],
+    "requisitos": [],
+    "areas": {
+      "TEOLOGIA": "Bíblia e Teologia",
+      "LITURGIA": "Liturgia",
+      "LIDERANCA": "Liderança",
+      "ADMINISTRACAO": "Administração Eclesiástica",
+      "COMPLIANCE": "Compliance Estatutário (Regimento)",
+      "OUTRA": "Outra"
+    },
+    "resultados": {
+      "APROVADO": "Aprovado",
+      "REPROVADO_NOTA": "Reprovado por nota",
+      "REPROVADO_FREQ": "Reprovado por frequência"
+    },
+    "contextos": {
+      "CONSAGRACAO": "Consagração",
+      "LIDERANCA": "Nomeação de liderança",
+      "HABILITACAO_TREINAMENTO": "Habilitação de voluntário (treinamento)",
+      "BATISMO_DISCIPULADO": "Batismo (curso de discipulado)",
+      "ESCALA_EQUIPE": "Equipe de escala",
+      "EBD_PROFESSOR": "Professor de EBD"
+    },
+    "contextosComAlvo": [
+      "CONSAGRACAO",
+      "LIDERANCA",
+      "ESCALA_EQUIPE"
+    ]
+  },
+  "turma": {
+    "sucesso": true,
+    "turma": {
+      "turmaId": 1,
+      "disciplinaId": 1,
+      "disciplina": "Bibliologia E2E",
+      "cursoId": 1,
+      "nivel": "BASICO",
+      "curso": "Nível Básico em Teologia",
+      "obrigatoria": true,
+      "docenteMembroId": 9222,
+      "docente": "Pastor Comissao Dois E2E",
+      "dataInicio": "2026-02-01",
+      "dataFim": "2026-06-30",
+      "local": "Templo Central",
+      "cargaHoraria": 20,
+      "notaMinima": 7,
+      "frequenciaMinimaPct": 75,
+      "horasMinimas": 15,
+      "situacao": "ENCERRADA",
+      "encerradaEm": "2026-10-30",
+      "jaEncerrada": true,
+      "inscritos": 3,
+      "lancados": 3,
+      "alunos": [
+        {
+          "membroId": 9202,
+          "nome": "Auxiliar Promovido E2E",
+          "congregacao": "Central E2E",
+          "situacao": "INSCRITO",
+          "nota": 8.5,
+          "horasPresentes": 18,
+          "resultado": "APROVADO",
+          "resultadoRotulo": "Aprovado",
+          "motivoCancelamento": null
+        },
+        {
+          "membroId": 9210,
+          "nome": "Auxiliar Vetado E2E",
+          "congregacao": "Central E2E",
+          "situacao": "INSCRITO",
+          "nota": 9,
+          "horasPresentes": 14.5,
+          "resultado": "REPROVADO_FREQ",
+          "resultadoRotulo": "Reprovado por frequência",
+          "motivoCancelamento": null
+        },
+        {
+          "membroId": 9205,
+          "nome": "Diacono Nomeado E2E",
+          "congregacao": "Central E2E",
+          "situacao": "INSCRITO",
+          "nota": 7.5,
+          "horasPresentes": 16,
+          "resultado": "APROVADO",
+          "resultadoRotulo": "Aprovado",
+          "motivoCancelamento": null
+        }
+      ]
+    }
+  },
+  "turmaAberta": {
+    "sucesso": true,
+    "turma": {
+      "turmaId": 6,
+      "disciplinaId": 2,
+      "disciplina": "Liturgia E2E",
+      "cursoId": 1,
+      "nivel": "BASICO",
+      "curso": "Nível Básico em Teologia",
+      "obrigatoria": true,
+      "docenteMembroId": 9222,
+      "docente": "Pastor Comissao Dois E2E",
+      "dataInicio": "2026-02-01",
+      "dataFim": "2026-06-30",
+      "local": "Templo Central",
+      "cargaHoraria": 10,
+      "notaMinima": 7,
+      "frequenciaMinimaPct": 75,
+      "horasMinimas": 7.5,
+      "situacao": "ABERTA",
+      "encerradaEm": null,
+      "jaEncerrada": false,
+      "inscritos": 1,
+      "lancados": 0,
+      "alunos": [
+        {
+          "membroId": 9205,
+          "nome": "Diacono Nomeado E2E",
+          "congregacao": "Central E2E",
+          "situacao": "INSCRITO",
+          "nota": null,
+          "horasPresentes": null,
+          "resultado": null,
+          "resultadoRotulo": null,
+          "motivoCancelamento": null
+        }
+      ]
+    }
+  },
+  "aluno": {
+    "sucesso": true,
+    "membroId": 9202,
+    "nome": "Auxiliar Promovido E2E",
+    "matriculaAFMAtiva": true,
+    "cursos": [
+      {
+        "cursoMatriculaId": 1,
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "situacao": "CONCLUIDO",
+        "situacaoRotulo": "Concluído",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": "2026-10-30",
+        "canceladaEm": null,
+        "motivoCancelamento": null,
+        "diploma": {
+          "certificadoId": 2,
+          "codigo": "LCE6-KTXG-UEJD-EX56"
+        },
+        "cargaCumprida": 38,
+        "cargaObrigatoria": 30,
+        "faltam": [],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 1,
+            "nome": "Bibliologia E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 20,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 3,
+            "nome": "Liderança E2E",
+            "area": "Liderança",
+            "cargaHoraria": 8,
+            "obrigatoria": false,
+            "estado": "APROVEITADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 2,
+            "nome": "Liturgia E2E",
+            "area": "Liturgia",
+            "cargaHoraria": 10,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          }
+        ]
+      },
+      {
+        "cursoMatriculaId": 6,
+        "cursoId": 2,
+        "nivel": "MEDIO",
+        "curso": "Nível Médio em Teologia",
+        "situacao": "CANCELADA",
+        "situacaoRotulo": "Cancelada",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": null,
+        "canceladaEm": "2026-10-30",
+        "motivoCancelamento": "Mudou de cidade (e2e)",
+        "diploma": null,
+        "cargaCumprida": 0,
+        "cargaObrigatoria": 12,
+        "faltam": [
+          "Homilética E2E"
+        ],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 4,
+            "nome": "Homilética E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 12,
+            "obrigatoria": true,
+            "estado": "PENDENTE",
+            "data": null
+          }
+        ]
+      }
+    ],
+    "turmas": [
+      {
+        "turmaId": 1,
+        "disciplinaId": 1,
+        "disciplina": "Bibliologia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 20,
+        "situacao": "INSCRITO",
+        "nota": 8.5,
+        "horasPresentes": 18,
+        "frequenciaPct": 90,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Um E2E",
+        "cargaHoraria": 10,
+        "situacao": "INSCRITO",
+        "nota": 10,
+        "horasPresentes": 10,
+        "frequenciaPct": 100,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 5,
+        "disciplinaId": 4,
+        "disciplina": "Homilética E2E",
+        "curso": "Nível Médio em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": null,
+        "turmaSituacao": "ABERTA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 12,
+        "situacao": "CANCELADO",
+        "nota": null,
+        "horasPresentes": null,
+        "frequenciaPct": null,
+        "resultado": null,
+        "resultadoRotulo": null
+      }
+    ],
+    "aproveitamentos": [
+      {
+        "aproveitamentoId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "INDEFERIDO",
+        "decisaoRotulo": "Indeferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "parecer": "Conteúdo e carga horária equivalentes à disciplina de Liderança da AFM.",
+        "anulado": false,
+        "motivoAnulacao": null
+      },
+      {
+        "aproveitamentoId": 3,
+        "disciplinaId": 3,
+        "disciplina": "Liderança E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "DEFERIDO",
+        "decisaoRotulo": "Deferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "parecer": "Conteúdo e carga horária equivalentes à disciplina de Liderança da AFM.",
+        "anulado": false,
+        "motivoAnulacao": null
+      }
+    ],
+    "documentos": [
+      {
+        "certificadoId": 5,
+        "natureza": "HISTORICO",
+        "rotulo": "Histórico escolar",
+        "titulo": "Histórico escolar (AFM) — selo D324C88EED0A",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "RRU8-KNSN-FKT3-3FMR"
+      },
+      {
+        "certificadoId": 4,
+        "natureza": "DECLARACAO",
+        "rotulo": "Declaração de matrícula",
+        "titulo": "Declaração de matrícula — Nível Médio em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": "2026-11-29",
+        "revogado": true,
+        "codigo": null
+      },
+      {
+        "certificadoId": 3,
+        "natureza": "HISTORICO",
+        "rotulo": "Histórico escolar",
+        "titulo": "Histórico escolar (AFM) — selo 8A04BE16228D",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "P629-TP4G-J6GB-A69J"
+      },
+      {
+        "certificadoId": 2,
+        "natureza": "DIPLOMA_AFM",
+        "rotulo": "Diploma",
+        "titulo": "Diploma — Nível Básico em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "LCE6-KTXG-UEJD-EX56"
+      },
+      {
+        "certificadoId": 1,
+        "natureza": "DIPLOMA_AFM",
+        "rotulo": "Diploma",
+        "titulo": "Diploma — Nível Básico em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": true,
+        "codigo": null
+      }
+    ]
+  },
+  "minha": {
+    "sucesso": true,
+    "cursos": [
+      {
+        "cursoMatriculaId": 1,
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "situacao": "CONCLUIDO",
+        "situacaoRotulo": "Concluído",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": "2026-10-30",
+        "canceladaEm": null,
+        "motivoCancelamento": null,
+        "diploma": {
+          "certificadoId": 2,
+          "codigo": "LCE6-KTXG-UEJD-EX56"
+        },
+        "cargaCumprida": 38,
+        "cargaObrigatoria": 30,
+        "faltam": [],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 1,
+            "nome": "Bibliologia E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 20,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 3,
+            "nome": "Liderança E2E",
+            "area": "Liderança",
+            "cargaHoraria": 8,
+            "obrigatoria": false,
+            "estado": "APROVEITADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 2,
+            "nome": "Liturgia E2E",
+            "area": "Liturgia",
+            "cargaHoraria": 10,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          }
+        ]
+      },
+      {
+        "cursoMatriculaId": 6,
+        "cursoId": 2,
+        "nivel": "MEDIO",
+        "curso": "Nível Médio em Teologia",
+        "situacao": "CANCELADA",
+        "situacaoRotulo": "Cancelada",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": null,
+        "canceladaEm": "2026-10-30",
+        "motivoCancelamento": "Mudou de cidade (e2e)",
+        "diploma": null,
+        "cargaCumprida": 0,
+        "cargaObrigatoria": 12,
+        "faltam": [
+          "Homilética E2E"
+        ],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 4,
+            "nome": "Homilética E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 12,
+            "obrigatoria": true,
+            "estado": "PENDENTE",
+            "data": null
+          }
+        ]
+      }
+    ],
+    "turmas": [
+      {
+        "turmaId": 1,
+        "disciplinaId": 1,
+        "disciplina": "Bibliologia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 20,
+        "situacao": "INSCRITO",
+        "nota": 8.5,
+        "horasPresentes": 18,
+        "frequenciaPct": 90,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Um E2E",
+        "cargaHoraria": 10,
+        "situacao": "INSCRITO",
+        "nota": 10,
+        "horasPresentes": 10,
+        "frequenciaPct": 100,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 5,
+        "disciplinaId": 4,
+        "disciplina": "Homilética E2E",
+        "curso": "Nível Médio em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": null,
+        "turmaSituacao": "ABERTA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 12,
+        "situacao": "CANCELADO",
+        "nota": null,
+        "horasPresentes": null,
+        "frequenciaPct": null,
+        "resultado": null,
+        "resultadoRotulo": null
+      }
+    ],
+    "aproveitamentos": [
+      {
+        "aproveitamentoId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "INDEFERIDO",
+        "decisaoRotulo": "Indeferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "anulado": false
+      },
+      {
+        "aproveitamentoId": 3,
+        "disciplinaId": 3,
+        "disciplina": "Liderança E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "DEFERIDO",
+        "decisaoRotulo": "Deferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "anulado": false
+      }
+    ],
+    "documentos": [
+      {
+        "certificadoId": 5,
+        "natureza": "HISTORICO",
+        "rotulo": "Histórico escolar",
+        "titulo": "Histórico escolar (AFM) — selo D324C88EED0A",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "RRU8-KNSN-FKT3-3FMR"
+      },
+      {
+        "certificadoId": 4,
+        "natureza": "DECLARACAO",
+        "rotulo": "Declaração de matrícula",
+        "titulo": "Declaração de matrícula — Nível Médio em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": "2026-11-29",
+        "revogado": true,
+        "codigo": null
+      },
+      {
+        "certificadoId": 3,
+        "natureza": "HISTORICO",
+        "rotulo": "Histórico escolar",
+        "titulo": "Histórico escolar (AFM) — selo 8A04BE16228D",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "P629-TP4G-J6GB-A69J"
+      },
+      {
+        "certificadoId": 2,
+        "natureza": "DIPLOMA_AFM",
+        "rotulo": "Diploma",
+        "titulo": "Diploma — Nível Básico em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": false,
+        "codigo": "LCE6-KTXG-UEJD-EX56"
+      },
+      {
+        "certificadoId": 1,
+        "natureza": "DIPLOMA_AFM",
+        "rotulo": "Diploma",
+        "titulo": "Diploma — Nível Básico em Teologia",
+        "emitidoEm": "2026-10-30",
+        "validoAte": null,
+        "revogado": true,
+        "codigo": null
+      }
+    ],
+    "docencia": {
+      "emExercicio": false,
+      "turmas": []
+    }
+  },
+  "minhaDocente": {
+    "sucesso": true,
+    "cursos": [],
+    "turmas": [],
+    "aproveitamentos": [],
+    "documentos": [],
+    "docencia": {
+      "emExercicio": true,
+      "turmas": [
+        {
+          "turmaId": 5,
+          "disciplinaId": 4,
+          "disciplina": "Homilética E2E",
+          "cursoId": 2,
+          "nivel": "MEDIO",
+          "curso": "Nível Médio em Teologia",
+          "obrigatoria": true,
+          "docenteMembroId": 9222,
+          "docente": "Pastor Comissao Dois E2E",
+          "dataInicio": "2026-02-01",
+          "dataFim": "2026-06-30",
+          "local": "Templo Central",
+          "cargaHoraria": 12,
+          "notaMinima": 7,
+          "frequenciaMinimaPct": 75,
+          "horasMinimas": 9,
+          "situacao": "ABERTA",
+          "encerradaEm": null,
+          "jaEncerrada": false,
+          "inscritos": 0,
+          "lancados": 0
+        },
+        {
+          "turmaId": 6,
+          "disciplinaId": 2,
+          "disciplina": "Liturgia E2E",
+          "cursoId": 1,
+          "nivel": "BASICO",
+          "curso": "Nível Básico em Teologia",
+          "obrigatoria": true,
+          "docenteMembroId": 9222,
+          "docente": "Pastor Comissao Dois E2E",
+          "dataInicio": "2026-02-01",
+          "dataFim": "2026-06-30",
+          "local": "Templo Central",
+          "cargaHoraria": 10,
+          "notaMinima": 7,
+          "frequenciaMinimaPct": 75,
+          "horasMinimas": 7.5,
+          "situacao": "ABERTA",
+          "encerradaEm": null,
+          "jaEncerrada": false,
+          "inscritos": 1,
+          "lancados": 0
+        },
+        {
+          "turmaId": 1,
+          "disciplinaId": 1,
+          "disciplina": "Bibliologia E2E",
+          "cursoId": 1,
+          "nivel": "BASICO",
+          "curso": "Nível Básico em Teologia",
+          "obrigatoria": true,
+          "docenteMembroId": 9222,
+          "docente": "Pastor Comissao Dois E2E",
+          "dataInicio": "2026-02-01",
+          "dataFim": "2026-06-30",
+          "local": "Templo Central",
+          "cargaHoraria": 20,
+          "notaMinima": 7,
+          "frequenciaMinimaPct": 75,
+          "horasMinimas": 15,
+          "situacao": "ENCERRADA",
+          "encerradaEm": "2026-10-30",
+          "jaEncerrada": true,
+          "inscritos": 3,
+          "lancados": 3
+        }
+      ]
+    }
+  },
+  "pessoa": {
+    "sucesso": true,
+    "cursos": [
+      {
+        "cursoMatriculaId": 1,
+        "cursoId": 1,
+        "nivel": "BASICO",
+        "curso": "Nível Básico em Teologia",
+        "situacao": "CONCLUIDO",
+        "situacaoRotulo": "Concluído",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": "2026-10-30",
+        "canceladaEm": null,
+        "motivoCancelamento": null,
+        "diploma": {
+          "certificadoId": null,
+          "codigo": null
+        },
+        "cargaCumprida": 38,
+        "cargaObrigatoria": 30,
+        "faltam": [],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 1,
+            "nome": "Bibliologia E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 20,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 3,
+            "nome": "Liderança E2E",
+            "area": "Liderança",
+            "cargaHoraria": 8,
+            "obrigatoria": false,
+            "estado": "APROVEITADA",
+            "data": "2026-10-30"
+          },
+          {
+            "disciplinaId": 2,
+            "nome": "Liturgia E2E",
+            "area": "Liturgia",
+            "cargaHoraria": 10,
+            "obrigatoria": true,
+            "estado": "APROVADA",
+            "data": "2026-10-30"
+          }
+        ]
+      },
+      {
+        "cursoMatriculaId": 6,
+        "cursoId": 2,
+        "nivel": "MEDIO",
+        "curso": "Nível Médio em Teologia",
+        "situacao": "CANCELADA",
+        "situacaoRotulo": "Cancelada",
+        "dataInicio": "2026-01-15",
+        "dataConclusao": null,
+        "canceladaEm": "2026-10-30",
+        "motivoCancelamento": "Mudou de cidade (e2e)",
+        "diploma": null,
+        "cargaCumprida": 0,
+        "cargaObrigatoria": 12,
+        "faltam": [
+          "Homilética E2E"
+        ],
+        "prontoParaConcluir": false,
+        "disciplinas": [
+          {
+            "disciplinaId": 4,
+            "nome": "Homilética E2E",
+            "area": "Bíblia e Teologia",
+            "cargaHoraria": 12,
+            "obrigatoria": true,
+            "estado": "PENDENTE",
+            "data": null
+          }
+        ]
+      }
+    ],
+    "turmas": [
+      {
+        "turmaId": 1,
+        "disciplinaId": 1,
+        "disciplina": "Bibliologia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 20,
+        "situacao": "INSCRITO",
+        "nota": 8.5,
+        "horasPresentes": 18,
+        "frequenciaPct": 90,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": "2026-10-30",
+        "turmaSituacao": "ENCERRADA",
+        "docente": "Pastor Comissao Um E2E",
+        "cargaHoraria": 10,
+        "situacao": "INSCRITO",
+        "nota": 10,
+        "horasPresentes": 10,
+        "frequenciaPct": 100,
+        "resultado": "APROVADO",
+        "resultadoRotulo": "Aprovado"
+      },
+      {
+        "turmaId": 5,
+        "disciplinaId": 4,
+        "disciplina": "Homilética E2E",
+        "curso": "Nível Médio em Teologia",
+        "periodo": "2026-02-01 a 2026-06-30",
+        "dataInicio": "2026-02-01",
+        "dataFim": "2026-06-30",
+        "encerradaEm": null,
+        "turmaSituacao": "ABERTA",
+        "docente": "Pastor Comissao Dois E2E",
+        "cargaHoraria": 12,
+        "situacao": "CANCELADO",
+        "nota": null,
+        "horasPresentes": null,
+        "frequenciaPct": null,
+        "resultado": null,
+        "resultadoRotulo": null
+      }
+    ],
+    "aproveitamentos": [
+      {
+        "aproveitamentoId": 2,
+        "disciplinaId": 2,
+        "disciplina": "Liturgia E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "INDEFERIDO",
+        "decisaoRotulo": "Indeferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "anulado": false
+      },
+      {
+        "aproveitamentoId": 3,
+        "disciplinaId": 3,
+        "disciplina": "Liderança E2E",
+        "curso": "Nível Básico em Teologia",
+        "instituicao": "Instituto Bíblico E2E",
+        "disciplinaOrigem": "Liderança Cristã",
+        "cargaHorariaOrigem": 30,
+        "anoOrigem": 2019,
+        "notaOrigem": null,
+        "decisao": "DEFERIDO",
+        "decisaoRotulo": "Deferido",
+        "parecerista": "Pastor Comissao Um E2E",
+        "dataParecer": "2026-10-30",
+        "anulado": false
+      }
+    ],
+    "documentos": []
+  }
+}

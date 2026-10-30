@@ -6,10 +6,13 @@ const { cabecalhoInstitucional, MARINHO, OURO, CINZA } = require("./pdfInstituci
 const { desenharQrNoPdf } = require("./certificadoQr");
 const certificados = require("./certificados");
 
-const CABECALHO = { CHM: "CERTIFICADO DE HABILITAÇÃO MINISTERIAL", DIPLOMA: "DIPLOMA" };
-const ASSINATURAS = { CHM: ["Reitor(a) da AFM", "Pastor Presidente"], DIPLOMA: ["Pastor Presidente", "Secretário(a) Geral"] };
+// v8.7: o diploma de conclusão de curso da AFM e a declaração de matrícula (o histórico escolar tem página própria: shared/pdfHistoricoEscolar.js)
+const CABECALHO = { CHM: "CERTIFICADO DE HABILITAÇÃO MINISTERIAL", DIPLOMA: "DIPLOMA", DIPLOMA_AFM: "DIPLOMA", DECLARACAO: "DECLARAÇÃO DE MATRÍCULA" };
+const ASSINATURAS = { CHM: ["Reitor(a) da AFM", "Pastor Presidente"], DIPLOMA: ["Pastor Presidente", "Secretário(a) Geral"], DIPLOMA_AFM: ["Reitor(a) da AFM", "Pastor Presidente"],
+  DECLARACAO: ["Reitor(a) da AFM", "Secretário(a) Geral"] };
+const ABERTURA = { DECLARACAO: "Declaramos que" };
 
-// `d`: { natureza, nome, membroId, titulo, descricao, revogadoEm (texto já formatado ou null), codigo, rodape }
+// `d`: { natureza, nome, membroId, titulo, descricao, revogadoEm (texto já formatado ou null), codigo, rodape, reitor? (o nome, sobre a linha do Reitor) }
 function desenharDocumentoMinisterial(doc, d) {
   cabecalhoInstitucional(doc);
   doc.fontSize(20).font("Helvetica-Bold").fillColor(MARINHO).text(CABECALHO[d.natureza] || "CERTIFICADO", { align: "center" });
@@ -19,14 +22,15 @@ function desenharDocumentoMinisterial(doc, d) {
       .text(`DOCUMENTO REVOGADO em ${d.revogadoEm} — não tem validade.`, { align: "center" })
       .fillColor("#000000").moveDown(1);
   }
-  doc.fontSize(13).font("Helvetica").text(`Certificamos que ${d.nome} (Cartão de Membro nº ${d.membroId}) ${d.descricao}`, { align: "justify", lineGap: 3 }).moveDown(4);
+  doc.fontSize(13).font("Helvetica").text(`${ABERTURA[d.natureza] || "Certificamos que"} ${d.nome} (Cartão de Membro nº ${d.membroId}) ${d.descricao}`, { align: "justify", lineGap: 3 }).moveDown(4);
 
   const [esq, dir] = ASSINATURAS[d.natureza] || ["", ""];
   const largura = 200;
   const y = doc.y;
   doc.fontSize(11);
   doc.text("_______________________________", doc.page.margins.left, y, { width: largura, align: "center" });
-  doc.text(esq, doc.page.margins.left, doc.y, { width: largura, align: "center" });
+  doc.text(d.reitor && esq.startsWith("Reitor") ? `${d.reitor}
+${esq}` : esq, doc.page.margins.left, doc.y, { width: largura, align: "center" });
   doc.text("_______________________________", doc.page.width - doc.page.margins.right - largura, y, { width: largura, align: "center" });
   doc.text(dir, doc.page.width - doc.page.margins.right - largura, doc.y, { width: largura, align: "center" });
 

@@ -35,7 +35,10 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
               FROM CertificadosEmitidos ce WHERE ce.MembroId = @id AND ce.Natureza = N'CHM' AND ce.RevogadoEm IS NULL;
               UPDATE CertificadosEmitidos SET MotivoRevogacao = LEFT(MotivoRevogacao + N' Perdeu o efeito na saída ou na decisão disciplinar.', 300)
               WHERE MembroId = @id AND Natureza = N'CHM' AND MotivoRevogacao LIKE N'Usado na consagração%' AND MotivoRevogacao NOT LIKE N'%Perdeu o efeito%';
-              UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL WHERE MembroId = @id AND CertificadoHabilitacao = 1;`);
+              UPDATE Matriculas_AFM SET CertificadoHabilitacao = 0, CHMEm = NULL, CHMPor = NULL, CHMCertificadoId = NULL WHERE MembroId = @id AND CertificadoHabilitacao = 1;
+              -- v8.7: a declaração de matrícula da AFM que ainda valia deixa de dizer "regularmente matriculado"
+              UPDATE CertificadosEmitidos SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Saída do rol ou decisão disciplinar: a matrícula deixou de valer.'
+              WHERE MembroId = @id AND Natureza = N'DECLARACAO' AND RevogadoEm IS NULL;`);
   }
 
   await pool.request()

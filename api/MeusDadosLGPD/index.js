@@ -142,6 +142,8 @@ module.exports = async function (context, req) {
   const afmCli = await require("../shared/afmDb").dadosDoTitular(pool, alvo);
   // v8.6 — a educação continuada: as reciclagens, os exames (com a justificativa da própria pessoa) e o que está pendente
   afmCli.educacaoContinuada = await require("../shared/educacaoContinuadaDb").dadosDoTitular(pool, alvo);
+  // v8.7 — o histórico escolar da AFM: as matrículas nos cursos, as turmas (nota, frequência, resultado), os aproveitamentos (com o parecer), os documentos emitidos e as turmas em que leciona
+  afmCli.historicoEscolar = await require("../shared/seminarioDb").dadosDoTitular(pool, alvo);
   // v8.2 — escada ministerial: o histórico de cargos (de quando a quando, e por onde chegou).
   // v8.3 — os processos de consagração (parecer do CEI só com o resultado e a data; a fundamentação fica com o CEI), a taxa e a cerimônia.
   // v8.4 — as vias da credencial (sem o código de segurança do QR).

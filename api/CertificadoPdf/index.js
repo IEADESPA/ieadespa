@@ -18,6 +18,8 @@ const certificados = require("../shared/certificados");
 const { novoDocumento, cabecalhoInstitucional, rodapeInstitucional, gerarBuffer, MARINHO, CINZA } = require("../shared/pdfInstitucional");
 const { desenharQrNoPdf } = require("../shared/certificadoQr");
 const { desenharDocumentoMinisterial } = require("../shared/pdfDocumentoMinisterial");
+const { desenharHistoricoEscolar } = require("../shared/pdfHistoricoEscolar");
+const ARQUIVO_DA_NATUREZA = { CHM: "chm", DIPLOMA: "diploma", DIPLOMA_AFM: "diploma-afm", HISTORICO: "historico-escolar", DECLARACAO: "declaracao-matricula" };
 
 function fmtData(valor) {
   if (!valor) return null;
@@ -54,17 +56,22 @@ async function gerar(context, usuario) {
   }
 
   const doc = novoDocumento({ titulo: `CERTIFICADO — ${certificado.titulo}` });
-  // v8.3 — CHM e diploma de consagração: página própria (cabeçalho, texto e assinaturas do documento ministerial).
+  // v8.3 — CHM e diploma de consagração: página própria (cabeçalho, texto e assinaturas do documento ministerial). v8.7 — os documentos acadêmicos da AFM: o diploma e a
+  // declaração na mesma página (com o nome do Reitor em exercício); o histórico escolar, com a tabela da fotografia gravada na emissão.
   if (certificado.natureza) {
-    desenharDocumentoMinisterial(doc, {
-      natureza: certificado.natureza, nome: certificado.nome, membroId: certificado.membroId, titulo: certificado.titulo, descricao: certificado.descricao || "",
-      revogadoEm: certificado.revogadoEm ? fmtData(certificado.revogadoEm) || "—" : null, codigo: certificado.codigoVerificacao,
+    const seminarioDb = require("../shared/seminarioDb");
+    const academico = seminarioDb.NATUREZAS.includes(certificado.natureza);
+    const comum = {
+      nome: certificado.nome, membroId: certificado.membroId, revogadoEm: certificado.revogadoEm ? fmtData(certificado.revogadoEm) || "—" : null, codigo: certificado.codigoVerificacao,
+      reitor: academico ? await seminarioDb.reitorEm(pool, require("../shared/dataBrasilia").hojeBrasilia(new Date(certificado.dataEmissao))) : null,   // o dia da emissão em Brasília
       rodape: `Protocolo ${certificado.protocolo} — emitido em ${fmtData(certificado.dataEmissao) || "—"} — documento gerado eletronicamente pelo sistema de governança da IEADESPA.`
-    });
+    };
+    if (certificado.natureza === "HISTORICO") desenharHistoricoEscolar(doc, { ...comum, conteudo: await seminarioDb.conteudoDoDocumento(pool, certificado.certificadoId), selo: (/selo ([0-9A-F]{12})$/.exec(certificado.titulo || "") || [])[1] || null });
+    else desenharDocumentoMinisterial(doc, { ...comum, natureza: certificado.natureza, titulo: certificado.titulo, descricao: certificado.descricao || "" });
     const bufferMinisterial = await gerarBuffer(doc);
     context.res = {
       status: 200,
-      headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${certificado.natureza === "CHM" ? "chm" : "diploma"}-${certificado.certificadoId}.pdf"` },
+      headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${ARQUIVO_DA_NATUREZA[certificado.natureza] || "documento"}-${certificado.certificadoId}.pdf"` },
       body: bufferMinisterial,
       isRaw: true
     };

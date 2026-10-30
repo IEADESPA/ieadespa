@@ -32,8 +32,10 @@ async function dadosElegibilidadeCEI(pool, sql, membroId) {
   `);
   const afm = afmResult.recordset[0] || null;
   // v8.1: a matrícula inativa (desmatriculado por faltas ou reprovação) não habilita — Regimento Art. 72 exige a Matrícula Ativa
+  // v8.7: o nível vem também do histórico escolar (o curso que cursa ou concluiu)
+  const doHistorico = ((await require("./seminarioDb").niveisHistorico(pool, [membroId])).get(Number(membroId)) || []).map((p) => p.nivel);
   const afmAvancadoComCertificado = !!(afm && afm.statusMatricula !== "INATIVA" &&
-    ["AVANCADO", "BACHAREL"].includes(afm.nivelEscolaridade) &&
+    [afm.nivelEscolaridade, ...doHistorico].some((n) => ["AVANCADO", "BACHAREL"].includes(n)) &&
     afm.certificadoHabilitacao);
 
   const hoje = new Date().toISOString().slice(0, 10);

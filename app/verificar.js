@@ -32,6 +32,14 @@
     var dados = [["Titular", r.nome], ["Certificado", r.titulo], ["Protocolo", r.protocolo], ["Emitido em", dataBr(r.dataEmissao)]];
     dados.push(["Validade", r.validoAte ? "até " + dataBr(r.validoAte) : "não vence"]);
     if (r.revogadoEm) dados.push(["Revogado em", dataBr(r.revogadoEm)]);
+    // v8.7 — o histórico escolar: os cursos e as disciplinas registrados na emissão (para conferir com o papel)
+    if (r.historico) {
+      (r.historico.cursos || []).forEach(function (c) { dados.push(["Curso", c.curso + " — " + c.situacao + (c.conclusao ? " em " + dataBr(c.conclusao) : "")]); });
+      (r.historico.disciplinas || []).forEach(function (d) {
+        dados.push(["Disciplina", d.disciplina + " (" + d.curso + ")" + (d.nota != null ? " — nota " + String(d.nota).replace(".", ",") : "") +
+          (d.frequenciaPct != null ? " — frequência " + String(d.frequenciaPct).replace(".", ",") + "%" : "") + " — " + d.resultado]);
+      });
+    }
     return dados;
   }
 

@@ -646,6 +646,47 @@ que a Convenção e outras instituições vão pedir.
       disciplinas cursadas *(veio da v8.6: lá só existiam a reciclagem e o exame)*.
       *(Classter; Populi — SIS para seminários)*
 
+### Desenho da v8.7 (contrato, 30/10/2026)
+
+**Base legal:** Regimento Art. 66 (a AFM é o órgão oficial de ensino e habilitação), Art. 68 (o Reitor dirige a parte pedagógica, com o Corpo Docente), Art. 70 §2º
+(o currículo obrigatório abrange Liderança, Administração Eclesiástica e Compliance Estatutário) e Art. 72 (os quatro níveis — Básico, Médio, Avançado, Bacharel Livre —
+"matriculado e cursando" para Auxiliar a Presbítero; o **certificado de conclusão** do Avançado ou do Bacharel para Evangelista e Pastor). O Regimento não fala de notas,
+turmas nem aproveitamento: o resto é decisão da Academia, e fica configurável.
+
+1. **Cursos e currículo.** Os **quatro cursos** são os níveis do Art. 72 (a migração cria os quatro; não se criam outros). Cada curso tem a nota mínima (7,0 de 10) e a
+   frequência mínima (75%) — a Academia muda. As **disciplinas** de cada curso (nome, área, carga horária, obrigatória ou optativa, ementa, ativa) e os **pré-requisitos**
+   entre disciplinas (até de outro curso; sem ciclo) são cadastrados pela Academia — a migração não inventa currículo. Área: Bíblia e Teologia, Liturgia, Liderança,
+   Administração Eclesiástica, Compliance Estatutário (Regimento) ou outra; a tela **avisa** o curso cujas obrigatórias ainda não cobrem as três áreas do Art. 70 §2º.
+2. **Matrícula no curso.** Só quem tem a **matrícula ativa na AFM** (todo oficial, sozinho; quem ainda não é oficial, matriculado antes como candidato — v8.2). Situação:
+   cursando, concluído ou cancelado (com o motivo); cancelado pode voltar numa matrícula nova, e as disciplinas já aprovadas continuam valendo.
+3. **Turma** = a oferta de uma disciplina, **com o seu docente** (Reitor ou docente em exercício no Corpo Docente — v8.1), as datas, o local e a regra de aprovação
+   congelada do curso no dia da abertura (nota, frequência e carga horária: mudar o curso depois não muda a turma). Inscrição: matriculado no curso **cursando**, com os
+   pré-requisitos aprovados, sem já ter sido aprovado na disciplina e sem estar em outra turma aberta dela; o docente não é aluno da própria turma.
+4. **Nota e frequência.** Lança-se a nota (0 a 10, com vírgula) e as horas presentes; o resultado sai sozinho: **aprovado**, **reprovado por nota** ou **reprovado por
+   frequência**. Lança e encerra quem tem o nível geral da Academia **ou o docente da turma** (em Minha Formação, "Turmas em que leciono"); ninguém lança a própria nota.
+   Só a turma **encerrada** vale para o histórico, os pré-requisitos, a conclusão e os requisitos (a nota de turma aberta ainda pode mudar). Reabrir a turma é do nível
+   geral, com o motivo; a nota de quem já concluiu o curso com aquela disciplina não pode deixar de ser "aprovado" (anule a conclusão antes).
+5. **Aproveitamento de disciplina** cursada em outra instituição: o nível geral registra a instituição, a disciplina e a carga de origem, o ano, a decisão (deferido ou
+   indeferido) e o **parecer escrito de quem decidiu** — o Reitor ou um docente em exercício (nunca o próprio aluno), com o documento de origem conferido. O deferido vale
+   como disciplina cumprida ("AP" no histórico); anular pede o motivo e tem a mesma trava da conclusão.
+6. **Conclusão e documentos.** O nível geral registra a conclusão quando **todas as obrigatórias** do curso estão aprovadas ou aproveitadas (o sistema confere) e o
+   **diploma** sai na hora, com código de verificação público (como o CHM e o diploma de consagração). A **declaração de matrícula** (vale 30 dias) e o **histórico escolar**
+   (a fotografia do dia em que foi emitido: a correção posterior não muda um histórico já emitido) são emitidos pela própria pessoa (Minha Formação) ou pela Academia,
+   em PDF com QR. Anular a conclusão (motivo) revoga o diploma e devolve o curso a "cursando".
+7. **A escada e os requisitos conferem o que foi cursado.** O nível do Art. 72 passa a vir **também do histórico**: "cursando" o curso em que a pessoa está matriculada, e
+   "concluído" o que ela concluiu — junto com o nível registrado à mão até hoje (para quem estudou antes do sistema), valendo o que atender o cargo (quem concluiu o Avançado e
+   cursa o Bacharel atende o Pastor). A mesma leitura vale para a lista da Academia, o Meu Painel, o nivelamento e o CEI. E o **requisito de formação** (v6.9: consagração,
+   liderança, escala, professor da EBD, voluntariado, batismo) passa a poder exigir **uma disciplina da AFM**, além de uma trilha — a disciplina aprovada (turma encerrada) ou
+   aproveitada atende. *Exemplo: o tipo de consagração "Diácono" exige a disciplina "Liturgia" (Art. 72, III, b: "com foco em liturgia").*
+8. **Onde aparece.** Seção nova **Seminário** na aba Academia (só o nível geral): currículo, turmas, alunos (histórico, matrícula no curso, conclusão, documentos,
+   aproveitamento) e os requisitos de disciplina. **Meu histórico escolar** e **Turmas em que leciono** em Minha Formação; o histórico escolar no perfil (aba Caminhada) e em
+   Meus Dados.
+
+**Decisões por interpretação (o responsável pode mudar):** os cursos são exatamente os quatro níveis do Art. 72; nota mínima 7,0 e frequência 75% (configuráveis por curso);
+só a turma encerrada conta; o docente lança e encerra a própria turma (reabrir é só do nível geral); o parecer do aproveitamento é do Reitor ou de um docente em exercício;
+a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou antes do sistema; o aviso das três áreas do
+Art. 70 §2º é por curso e não trava nada; o histórico escolar é assentamento da Academia e fica (a exclusão LGPD tira a identificação da pessoa, como nas matrículas).
+
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).

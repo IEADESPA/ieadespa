@@ -298,24 +298,25 @@ describe("avaliarRequisito e resumirRequisitos", () => {
 });
 
 describe("avaliarRequisitos / filtrarMembrosQueAtendem (com pool falso)", () => {
-  test("sem requisito configurado: uma única consulta e nada bloqueia", async () => {
-    const { pool, chamadas } = criarPoolFalso([[]]);
+  // v8.7: depois dos requisitos de trilha vêm os de DISCIPLINA da AFM (vazio = nenhum) — uma consulta a mais
+  test("sem requisito configurado: duas consultas (trilha e disciplina) e nada bloqueia", async () => {
+    const { pool, chamadas } = criarPoolFalso([[], []]);
     const r = await t.avaliarRequisitos(pool, { contexto: "CONSAGRACAO", alvoChave: "Diácono", membroId: 1 });
     expect(r.temRequisitos).toBe(false);
     expect(r.bloqueado).toBe(false);
-    expect(chamadas).toHaveLength(1);
+    expect(chamadas).toHaveLength(2);
   });
 
   test("requisito de OUTRO alvo no mesmo contexto não se aplica a este alvo", async () => {
     const outro = { RequisitoId: 1, Contexto: "CONSAGRACAO", AlvoChave: "Pastor", TrilhaId: 5, Modo: "BLOQUEIA", Ativo: true, TrilhaNome: "Pastoreio", TrilhaAtiva: true };
-    const { pool, chamadas } = criarPoolFalso([[outro]]);
+    const { pool, chamadas } = criarPoolFalso([[outro], []]);
     const r = await t.avaliarRequisitos(pool, { contexto: "CONSAGRACAO", alvoChave: "Diácono", membroId: 1 });
     expect(r.temRequisitos).toBe(false);
-    expect(chamadas).toHaveLength(1);
+    expect(chamadas).toHaveLength(2);
   });
 
   test("escala: só quem não cumpre requisito BLOQUEIA sai; sem requisito, toda a equipe fica", async () => {
-    const semRequisito = criarPoolFalso([[]]);
+    const semRequisito = criarPoolFalso([[], []]);
     const livre = await t.filtrarMembrosQueAtendem(semRequisito.pool, { contexto: "ESCALA_EQUIPE", alvoChave: "9", membroIds: [1, 2, 3] });
     expect(livre.temRequisitos).toBe(false);
     expect([...livre.atendem]).toEqual([1, 2, 3]);
@@ -323,7 +324,7 @@ describe("avaliarRequisitos / filtrarMembrosQueAtendem (com pool falso)", () => 
     const requisito = { RequisitoId: 1, Contexto: "ESCALA_EQUIPE", AlvoChave: "9", TrilhaId: 5, Modo: "BLOQUEIA", Ativo: true, TrilhaNome: "Ministério Infantil", TrilhaAtiva: true };
     const vigente = { MatriculaId: 10, TrilhaId: 5, MembroId: 1, Status: "CONCLUIDA", IniciadaEm: "2026-01-01", ConcluidaEm: "2026-02-01", ValidoAte: "2030-01-01", TrilhaNome: "Ministério Infantil", PapelAlvo: null, AvisoDias: 60, CertificadoId: 3, CodigoVerificacao: "ABCDEFGHJKLMNPQR", Protocolo: "CERT-1", RevogadoEm: null, ObrigConcluidos: 2, ObrigTotal: 2 };
     const vencida = { ...vigente, MatriculaId: 11, MembroId: 2, ValidoAte: "2025-01-01" };
-    const { pool } = criarPoolFalso([[requisito], [vigente, vencida]]);
+    const { pool } = criarPoolFalso([[requisito], [vigente, vencida], []]);
     const r = await t.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: "9", membroIds: [1, 2, 3], hojeIso: "2026-09-30" });
     expect(r.temRequisitos).toBe(true);
     expect([...r.atendem]).toEqual([1]);
@@ -334,7 +335,7 @@ describe("avaliarRequisitos / filtrarMembrosQueAtendem (com pool falso)", () => 
 
   test("escala: requisito em modo ALERTA não tira ninguém da escala", async () => {
     const requisito = { RequisitoId: 1, Contexto: "ESCALA_EQUIPE", AlvoChave: "9", TrilhaId: 5, Modo: "ALERTA", Ativo: true, TrilhaNome: "Recepção", TrilhaAtiva: true };
-    const { pool } = criarPoolFalso([[requisito], []]);
+    const { pool } = criarPoolFalso([[requisito], [], []]);
     const r = await t.filtrarMembrosQueAtendem(pool, { contexto: "ESCALA_EQUIPE", alvoChave: "9", membroIds: [1, 2] });
     expect([...r.atendem]).toEqual([1, 2]);
     expect(r.bloqueados.size).toBe(0);

@@ -447,6 +447,7 @@ function limparSessao() {
   if (typeof credLimparTela === "function") credLimparTela();   // v8.4: a credencial (com o QR) e a lista da Secretaria saem da página
   if (typeof discLimparTela === "function") discLimparTela();   // v8.5: o funil, os nomes de quem parou, as caminhadas e os tipos do marco saem da página
   if (typeof edcLimparTela === "function") edcLimparTela();   // v8.6: a educação continuada (o painel da AFM, a minha, a do perfil)
+  if (typeof semLimparTela === "function") semLimparTela();   // v8.7: o Seminário (as turmas, a ficha do aluno, o meu histórico, o do perfil)
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -1567,6 +1568,7 @@ function mostrarSubAbaMeupainel(sub) {
     carregarMinhaFormacaoAcao();
     if (typeof discCarregarMinhaCaminhada === "function") discCarregarMinhaCaminhada();   // v8.5: a minha caminhada
     if (typeof edcCarregarMinha === "function") edcCarregarMinha();                       // v8.6: a minha educação continuada
+    if (typeof semCarregarMinha === "function") semCarregarMinha();                       // v8.7: o meu histórico escolar e as turmas em que leciono
   }
   if (sub === "credencial" && typeof credCarregarMinhaAcao === "function") credCarregarMinhaAcao();   // v8.4
   if (sub === "agenda") carregarMinhaAgendaCalAcao();

@@ -148,6 +148,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   justificativa e a minha com ele; os avisos só de outubro em diante; a retenção de 2 anos e a exclusão LGPD da justificativa; Meus Dados; lixo — com
   `E2E_CONTRATO=1` grava as respostas reais para `tools/front-educacao`) e `e2e-65` (corridas em processos separados: quatro edições do mesmo ano, quatro bienais
   do mesmo ano, quatro lançamentos da mesma pessoa e quatro retenções).
+- **v8.7** (o Seminário como sistema acadêmico, migração 163), mesma base `cenario-escada` (a `preparar-escada` aplica a 163 duas vezes; a `preparar-pastoral`
+  também). `e2e-66` (o currículo e o ciclo de pré-requisitos; a matrícula no curso só com a matrícula ativa na AFM; a turma com o docente em exercício; a
+  inscrição — fora do curso, o docente, o pré-requisito, outra turma aberta; a nota e a frequência pelo docente, só a turma encerrada vale, reabrir com o motivo; o
+  aproveitamento com o parecer do Corpo Docente; a conclusão com o diploma, a trava de quem já concluiu e a anulação; a escada lendo o nível do histórico; o
+  requisito de formação que exige uma disciplina; a declaração, o histórico e o diploma em PDF e na verificação pública; o perfil, a minha, a ficha e Meus Dados;
+  lixo — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-seminario`) e `e2e-67` (corridas em processos separados: quatro matrículas no mesmo
+  curso, quatro inscrições em turmas da mesma disciplina, pré-requisitos cruzados, quatro aproveitamentos, quatro conclusões e quatro históricos no mesmo dia).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

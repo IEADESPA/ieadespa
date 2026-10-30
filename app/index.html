@@ -1172,6 +1172,10 @@
           <div id="discMinhaCaminhada"></div>
           <!-- v8.6 — a minha educação continuada -->
           <div id="edcMinha"></div>
+          <!-- v8.7 — o meu histórico escolar (AFM) e as turmas em que leciono -->
+          <div id="semMinha"></div>
+          <p id="semMsgMinha" role="status" aria-live="polite"></p>
+          <div id="semMinhaTurma"></div>
         </div>
 
         <!-- SUB-ABA: AGENDA (v7.2 — Calendário Oficial e Agenda Unificada).
@@ -2269,6 +2273,8 @@
             <div id="discCaminhadaPerfil"></div>
             <!-- v8.6 — a formação ministerial: a reciclagem, o exame e as trilhas concluídas -->
             <div id="edcFormacaoPerfil"></div>
+            <!-- v8.7 — o histórico escolar da AFM -->
+            <div id="semHistoricoPerfil"></div>
           </div>
 
           <div id="tabPerfilFoto" class="tab-conteudo-perfil" style="display:none;">
@@ -5371,6 +5377,7 @@
           <button type="button" class="cal-pilula" id="btnAfmSecaoMagnas" aria-pressed="false" data-on-click="afmMostrarSecaoAcao" data-args-click='["magnas"]'>📅 Sessões Magnas</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoEscada" aria-pressed="false" style="display:none;" data-on-click="afmMostrarSecaoAcao" data-args-click='["escada"]'>🪜 Escada e veto</button>
           <button type="button" class="cal-pilula" id="btnAfmSecaoEducacao" aria-pressed="false" style="display:none;" data-on-click="afmMostrarSecaoAcao" data-args-click='["educacao"]'>📝 Educação continuada</button>
+          <button type="button" class="cal-pilula" id="btnAfmSecaoSeminario" aria-pressed="false" style="display:none;" data-on-click="afmMostrarSecaoAcao" data-args-click='["seminario"]'>🏛️ Seminário</button>
         </div>
         <div id="afmForm"></div>
         <div id="afmSecaoMatriculas">
@@ -5431,6 +5438,70 @@
           </div>
           <div class="rolagem-tabela"><div id="edcListaExames"></div></div>
           <div class="rolagem-tabela"><div id="edcLancamento"></div></div>
+        </div>
+        <!-- v8.7 — o Seminário como sistema acadêmico (Regimento Art. 66, 68, 70 §2º e 72): só o nível geral da Academia. A tela é montada por modulos/seminario.js. -->
+        <div id="afmSecaoSeminario" style="display:none;">
+          <p class="subtitle">Os <strong>quatro cursos</strong> são os níveis do Art. 72 (Básico, Médio, Avançado, Bacharel Livre). Cada disciplina é oferecida numa <strong>turma</strong>
+            com o seu docente; a nota e a frequência só valem no histórico depois que a turma é <strong>encerrada</strong>. Quem conclui todas as obrigatórias recebe o
+            <strong>diploma</strong>, e o curso que a pessoa cursa ou concluiu passa a contar na escada. <em>Exemplo: o Auxiliar aprovado em todas as obrigatórias do Básico
+            aparece em "Prontos para concluir"; registrada a conclusão, o diploma sai com o código de verificação.</em></p>
+          <p id="semMsg" role="status" aria-live="polite"></p>
+          <div class="cal-pilulas" id="semPilulas">
+            <button type="button" class="cal-pilula ativo" id="btnSemParteTurmas" aria-pressed="true" data-on-click="semMostrarParteAcao" data-args-click='["turmas"]'>Turmas</button>
+            <button type="button" class="cal-pilula" id="btnSemParteAlunos" aria-pressed="false" data-on-click="semMostrarParteAcao" data-args-click='["alunos"]'>Alunos</button>
+            <button type="button" class="cal-pilula" id="btnSemParteCurriculo" aria-pressed="false" data-on-click="semMostrarParteAcao" data-args-click='["curriculo"]'>Currículo</button>
+            <button type="button" class="cal-pilula" id="btnSemParteRequisitos" aria-pressed="false" data-on-click="semMostrarParteAcao" data-args-click='["requisitos"]'>Requisitos de disciplina</button>
+          </div>
+          <div id="semParteTurmas">
+            <div id="semProntos"></div>
+            <h4>Abrir turma</h4>
+            <div class="cons-painel">
+              <div class="input-group"><label for="semTurmaDisciplina">Disciplina:</label><select id="semTurmaDisciplina"></select></div>
+              <div class="input-group"><label for="semTurmaDocente">Docente (Reitor ou docente em exercício):</label><select id="semTurmaDocente"></select></div>
+              <div class="input-group"><label for="semTurmaInicio">Início:</label><input type="date" id="semTurmaInicio" /></div>
+              <div class="input-group"><label for="semTurmaFim">Fim:</label><input type="date" id="semTurmaFim" /></div>
+              <div class="input-group"><label for="semTurmaLocal">Local:</label><input type="text" id="semTurmaLocal" maxlength="150" /></div>
+              <button class="btn-confirmar" type="button" data-on-click="semAbrirTurmaNovaAcao">Abrir a turma</button>
+            </div>
+            <div class="rolagem-tabela"><div id="semListaTurmas"></div></div>
+            <div id="semTurmaDetalhe"></div>
+          </div>
+          <div id="semParteAlunos" hidden>
+            <div class="cons-painel">
+              <div class="input-group"><label for="semAlunoMatricula">Matrícula (Cartão de Membro):</label><input type="text" inputmode="numeric" maxlength="10" id="semAlunoMatricula" /></div>
+              <button class="btn-confirmar" type="button" data-on-click="semBuscarAlunoAcao">Abrir a ficha</button>
+            </div>
+            <div id="semFichaAluno"></div>
+          </div>
+          <div id="semParteCurriculo" hidden>
+            <div id="semListaCursos"></div>
+            <h4 id="semDiscTitulo" tabindex="-1">Nova disciplina</h4>
+            <div class="cons-painel">
+              <input type="hidden" id="semDiscId" />
+              <div class="input-group"><label for="semDiscCurso">Curso:</label><select id="semDiscCurso"></select></div>
+              <div class="input-group"><label for="semDiscNome">Nome:</label><input type="text" id="semDiscNome" maxlength="150" /></div>
+              <div class="input-group"><label for="semDiscArea">Área:</label><select id="semDiscArea"></select></div>
+              <div class="input-group"><label for="semDiscCarga">Carga horária (h):</label><input type="text" inputmode="decimal" maxlength="6" id="semDiscCarga" placeholder="ex.: 20 ou 20,5" /></div>
+              <label class="afm-check"><input type="checkbox" id="semDiscObrigatoria" checked /> obrigatória</label>
+              <label class="afm-check"><input type="checkbox" id="semDiscAtiva" checked /> ativa</label>
+              <div class="input-group"><label for="semDiscEmenta">Ementa:</label><input type="text" id="semDiscEmenta" maxlength="600" /></div>
+              <div class="input-group"><label for="semDiscPre">Pré-requisitos (segure Ctrl para escolher vários):</label><select id="semDiscPre" multiple size="5"></select></div>
+              <button class="btn-confirmar" type="button" data-on-click="semSalvarDisciplinaAcao">Salvar a disciplina</button>
+              <button class="btn-link" type="button" data-on-click="semNovaDisciplinaAcao">Limpar (nova disciplina)</button>
+            </div>
+          </div>
+          <div id="semParteRequisitos" hidden>
+            <p class="subtitle">Exigir uma disciplina da AFM num fluxo, como já se exige uma trilha de formação: a disciplina aprovada (turma encerrada) ou aproveitada atende.
+              <em>Exemplo: fluxo "Consagração", alvo "Separação ao Diaconato", disciplina "Liturgia" — o Regimento pede o Médio "com foco em liturgia" (Art. 72, III, b).</em></p>
+            <div class="cons-painel">
+              <div class="input-group"><label for="semReqContexto">Fluxo:</label><select id="semReqContexto"></select></div>
+              <div class="input-group"><label for="semReqAlvo">Alvo (o tipo de consagração, o Id do papel ou da equipe; em branco nos outros):</label><input type="text" id="semReqAlvo" maxlength="100" /></div>
+              <div class="input-group"><label for="semReqDisciplina">Disciplina:</label><select id="semReqDisciplina"></select></div>
+              <div class="input-group"><label for="semReqModo">Modo:</label><select id="semReqModo"><option value="BLOQUEIA">Bloqueia</option><option value="ALERTA">Só alerta</option></select></div>
+              <button class="btn-confirmar" type="button" data-on-click="semSalvarRequisitoAcao">Exigir a disciplina</button>
+            </div>
+            <div class="rolagem-tabela"><div id="semListaRequisitos"></div></div>
+          </div>
         </div>
       </div>
 
@@ -7317,6 +7388,7 @@
   <script src="modulos/psc.js"></script>
   <script src="modulos/relatorios-departamentos.js"></script>
   <script src="modulos/reunioes.js"></script>
+  <script src="modulos/seminario.js"></script>
   <script src="modulos/setores-tecnicos.js"></script>
   <script src="modulos/voluntariado.js"></script>
 </body>

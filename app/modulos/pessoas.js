@@ -287,7 +287,7 @@ function mostrarAbaPerfil(aba) {
     editarPessoa(membroId);
   }
   if (aba === "historico") { carregarHistoricoMembro(membroId); discPreencherTiposMarco(); }   // v8.5: os tipos do marco vêm do catálogo
-  if (aba === "caminhada") { discCarregarCaminhadaPerfil(membroId); if (typeof edcCarregarPessoa === "function") edcCarregarPessoa(membroId); }   // v8.6: e a formação
+  if (aba === "caminhada") { discCarregarCaminhadaPerfil(membroId); if (typeof edcCarregarPessoa === "function") edcCarregarPessoa(membroId); if (typeof semCarregarPessoa === "function") semCarregarPessoa(membroId); }   // v8.6: e a formação; v8.7: o histórico escolar
   if (aba === "foto") carregarAbaFoto(membroId);
   if (aba === "casamentos") carregarCasamentos(membroId);
   if (aba === "apresentacoes") carregarApresentacoesCrianca(membroId);

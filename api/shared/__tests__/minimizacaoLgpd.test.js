@@ -27,12 +27,12 @@ describe("diasMinimizacaoExMembro", () => {
 
 describe("minimizarCamposExMembro", () => {
   test("encerra vínculos (Assentos/Lideranca/Cargo e, desde a Trava 6-B, professor e aluno da EBD) antes de zerar os campos operacionais", async () => {
-    const { pool, chamadas } = criarPoolFalso(Array.from({ length: 14 }, () => []));
+    const { pool, chamadas } = criarPoolFalso(Array.from({ length: 15 }, () => []));
     await minimizarCamposExMembro(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
     // 9 de encerrarVinculos (Trava 8-A: a 1ª fecha os processos de cargo em andamento e a 2ª revoga o CHM; a 6ª, v8.2, fecha o histórico de cargos; a 9ª, v7.6,
     // derruba as sessões abertas) + o UPDATE final + (v8.2) o histórico de cargos apagado + (v8.4) a credencial cancelada + (v8.3) os documentos da indicação
-    // apagados + (Trava 8-A) o diploma, o CHM, o parecer do CEI e os processos de consagração eliminados (Art. 132 §2º, II)
-    expect(chamadas).toHaveLength(14);
+    // apagados + (Trava 8-A) o diploma, o CHM, o parecer do CEI e os processos de consagração eliminados (Art. 132 §2º, II) + (v8.5) os marcos
+    expect(chamadas).toHaveLength(15);
     expect(chamadas[0].sql).toMatch(/UPDATE c SET Status = N'REPROVADO', MotivoEncerramento = @motivo/);
     expect(chamadas[0].inputs.motivo).toBe("SAIDA_DO_ROL");
     expect(chamadas[1].sql).toMatch(/Natureza = N'CHM'/);
@@ -53,5 +53,6 @@ describe("minimizarCamposExMembro", () => {
     expect(chamadas[13].sql).toMatch(/DELETE FROM CertificadosEmitidos WHERE MembroId = @id AND Natureza IN \(N'CHM', N'DIPLOMA'\)/);
     expect(chamadas[13].sql).toMatch(/DELETE p FROM PareceresCEIConsagracao/);
     expect(chamadas[13].sql).toMatch(/DELETE FROM Consagracoes WHERE MembroId = @id/);
+    expect(chamadas[14].sql).toMatch(/DELETE FROM MarcosMembro WHERE MembroId = @id/);   // v8.5: os registros de conversão (Art. 132 §2º, II)
   });
 });

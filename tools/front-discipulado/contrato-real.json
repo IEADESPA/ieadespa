@@ -1,0 +1,934 @@
+{
+  "posBatismal": {
+    "sucesso": true,
+    "caminhada": {
+      "etapas": [
+        {
+          "etapaId": 1,
+          "chave": "CONVERSAO",
+          "nome": "Conversão",
+          "ordem": 1,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": true,
+          "data": "2026-10-17",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 2,
+          "chave": "CURSO_DISCIPULADO",
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fonte": "TRILHA",
+          "fonteRotulo": "Trilha de formação concluída",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 3,
+          "chave": "BATISMO_AGUAS",
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fonte": "BATISMO_AGUAS",
+          "fonteRotulo": "Batismo nas águas (data do cadastro)",
+          "feita": true,
+          "data": "2026-10-23",
+          "foraDeOrdem": true,
+          "preRequisitosPendentes": [
+            "Curso de Discipulado"
+          ],
+          "posBatismal": true
+        },
+        {
+          "etapaId": 4,
+          "chave": "BATISMO_ESPIRITO",
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 5,
+          "chave": "DEPARTAMENTO",
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 6,
+          "chave": "SERVICO_VOLUNTARIO",
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fonte": "SERVICO_VOLUNTARIO",
+          "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        }
+      ],
+      "proximo": {
+        "etapaId": 2,
+        "chave": "CURSO_DISCIPULADO",
+        "nome": "Curso de Discipulado",
+        "geraAcompanhamento": true
+      },
+      "ultimoPasso": "2026-10-23",
+      "dataPassoAnterior": "2026-10-17",
+      "iniciada": true,
+      "concluida": false
+    }
+  },
+  "catalogo": {
+    "sucesso": true,
+    "etapas": [
+      {
+        "etapaId": 1,
+        "chave": "CONVERSAO",
+        "nome": "Conversão",
+        "descricao": "Aceitou a Jesus.",
+        "ordem": 1,
+        "fonte": "MARCO",
+        "fonteRotulo": "Marco do perfil",
+        "tipoMarco": "CONVERSAO",
+        "trilhaId": null,
+        "trilhaNome": null,
+        "geraAcompanhamento": false,
+        "ativa": true,
+        "preRequisitos": []
+      },
+      {
+        "etapaId": 2,
+        "chave": "CURSO_DISCIPULADO",
+        "nome": "Curso de Discipulado",
+        "descricao": null,
+        "ordem": 2,
+        "fonte": "TRILHA",
+        "fonteRotulo": "Trilha de formação concluída",
+        "tipoMarco": "CURSO_DISCIPULADO",
+        "trilhaId": 1,
+        "trilhaNome": "Curso de Discipulado E2E",
+        "geraAcompanhamento": true,
+        "ativa": true,
+        "preRequisitos": [
+          1
+        ]
+      },
+      {
+        "etapaId": 3,
+        "chave": "BATISMO_AGUAS",
+        "nome": "Batismo nas águas",
+        "descricao": "A data do batismo no cadastro (a esteira de batismo a grava).",
+        "ordem": 3,
+        "fonte": "BATISMO_AGUAS",
+        "fonteRotulo": "Batismo nas águas (data do cadastro)",
+        "tipoMarco": null,
+        "trilhaId": null,
+        "trilhaNome": null,
+        "geraAcompanhamento": true,
+        "ativa": true,
+        "preRequisitos": [
+          2
+        ]
+      },
+      {
+        "etapaId": 4,
+        "chave": "BATISMO_ESPIRITO",
+        "nome": "Batismo no Espírito Santo",
+        "descricao": null,
+        "ordem": 4,
+        "fonte": "MARCO",
+        "fonteRotulo": "Marco do perfil",
+        "tipoMarco": "BATISMO_ESPIRITO_SANTO",
+        "trilhaId": null,
+        "trilhaNome": null,
+        "geraAcompanhamento": false,
+        "ativa": true,
+        "preRequisitos": []
+      },
+      {
+        "etapaId": 5,
+        "chave": "DEPARTAMENTO",
+        "nome": "Primeira participação em departamento",
+        "descricao": null,
+        "ordem": 5,
+        "fonte": "MARCO",
+        "fonteRotulo": "Marco do perfil",
+        "tipoMarco": "PARTICIPACAO_DEPARTAMENTO",
+        "trilhaId": null,
+        "trilhaNome": null,
+        "geraAcompanhamento": true,
+        "ativa": true,
+        "preRequisitos": []
+      },
+      {
+        "etapaId": 6,
+        "chave": "SERVICO_VOLUNTARIO",
+        "nome": "Primeiro serviço voluntário",
+        "descricao": "A primeira escala aceita ou confirmada, já realizada.",
+        "ordem": 6,
+        "fonte": "SERVICO_VOLUNTARIO",
+        "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+        "tipoMarco": null,
+        "trilhaId": null,
+        "trilhaNome": null,
+        "geraAcompanhamento": true,
+        "ativa": true,
+        "preRequisitos": []
+      }
+    ],
+    "tiposMarco": [
+      {
+        "codigo": "BATISMO_ESPIRITO_SANTO",
+        "nome": "Batismo no Espírito Santo",
+        "descricao": "Requisito da escada a partir de Diácono (Regimento Art. 72, III, a): só o nível geral lança.",
+        "unico": true,
+        "soNivelGeral": true,
+        "sistema": true,
+        "ativo": true
+      },
+      {
+        "codigo": "CLASSE_NOVOS",
+        "nome": "Classe de novos convertidos",
+        "descricao": null,
+        "unico": true,
+        "soNivelGeral": false,
+        "sistema": false,
+        "ativo": false
+      },
+      {
+        "codigo": "CONVERSAO",
+        "nome": "Conversão",
+        "descricao": "O dia em que a pessoa aceitou a Jesus.",
+        "unico": true,
+        "soNivelGeral": false,
+        "sistema": true,
+        "ativo": true
+      },
+      {
+        "codigo": "CURSO_DISCIPULADO",
+        "nome": "Curso de Discipulado",
+        "descricao": "Curso de Discipulado para Novos Convertidos, conduzido pela AFM (Regimento Art. 70 §4º; Art. 80, IV).",
+        "unico": true,
+        "soNivelGeral": false,
+        "sistema": true,
+        "ativo": true
+      },
+      {
+        "codigo": "MINISTERIO_ANTERIOR",
+        "nome": "Ministério/Igreja anterior",
+        "descricao": "Onde a pessoa serviu antes de chegar.",
+        "unico": false,
+        "soNivelGeral": false,
+        "sistema": true,
+        "ativo": true
+      },
+      {
+        "codigo": "OUTRO",
+        "nome": "Outro",
+        "descricao": null,
+        "unico": false,
+        "soNivelGeral": false,
+        "sistema": true,
+        "ativo": true
+      },
+      {
+        "codigo": "PARTICIPACAO_DEPARTAMENTO",
+        "nome": "Primeira participação em departamento",
+        "descricao": "A primeira vez que a pessoa participou de um departamento.",
+        "unico": true,
+        "soNivelGeral": false,
+        "sistema": true,
+        "ativo": true
+      }
+    ],
+    "fontes": {
+      "MARCO": "Marco do perfil",
+      "BATISMO_AGUAS": "Batismo nas águas (data do cadastro)",
+      "TRILHA": "Trilha de formação concluída",
+      "SERVICO_VOLUNTARIO": "Primeiro serviço voluntário (escala realizada)"
+    },
+    "trilhas": [
+      {
+        "trilhaId": 1,
+        "nome": "Curso de Discipulado E2E"
+      }
+    ],
+    "diasParado": 90
+  },
+  "funilLocal": {
+    "sucesso": true,
+    "etapas": [
+      {
+        "etapaId": 1,
+        "nome": "Conversão",
+        "ordem": 1
+      },
+      {
+        "etapaId": 2,
+        "nome": "Curso de Discipulado",
+        "ordem": 2
+      },
+      {
+        "etapaId": 3,
+        "nome": "Batismo nas águas",
+        "ordem": 3
+      },
+      {
+        "etapaId": 4,
+        "nome": "Batismo no Espírito Santo",
+        "ordem": 4
+      },
+      {
+        "etapaId": 5,
+        "nome": "Primeira participação em departamento",
+        "ordem": 5
+      },
+      {
+        "etapaId": 6,
+        "nome": "Primeiro serviço voluntário",
+        "ordem": 6
+      }
+    ],
+    "diasParado": 90,
+    "congregacoes": [
+      {
+        "congregacaoId": 1,
+        "nome": "Central E2E",
+        "iniciadas": 33,
+        "concluiram": 1,
+        "etapas": [
+          {
+            "etapaId": 1,
+            "nome": "Conversão",
+            "ordem": 1,
+            "fizeram": 33,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 2,
+            "nome": "Curso de Discipulado",
+            "ordem": 2,
+            "fizeram": 5,
+            "proximoPasso": 28,
+            "parados": 2
+          },
+          {
+            "etapaId": 3,
+            "nome": "Batismo nas águas",
+            "ordem": 3,
+            "fizeram": 5,
+            "proximoPasso": 1,
+            "parados": 0
+          },
+          {
+            "etapaId": 4,
+            "nome": "Batismo no Espírito Santo",
+            "ordem": 4,
+            "fizeram": 1,
+            "proximoPasso": 3,
+            "parados": 0
+          },
+          {
+            "etapaId": 5,
+            "nome": "Primeira participação em departamento",
+            "ordem": 5,
+            "fizeram": 1,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 6,
+            "nome": "Primeiro serviço voluntário",
+            "ordem": 6,
+            "fizeram": 1,
+            "proximoPasso": 0,
+            "parados": 0
+          }
+        ]
+      }
+    ],
+    "total": {
+      "iniciadas": 33,
+      "concluiram": 1,
+      "etapas": [
+        {
+          "etapaId": 1,
+          "nome": "Conversão",
+          "ordem": 1,
+          "fizeram": 33,
+          "proximoPasso": 0,
+          "parados": 0
+        },
+        {
+          "etapaId": 2,
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fizeram": 5,
+          "proximoPasso": 28,
+          "parados": 2
+        },
+        {
+          "etapaId": 3,
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fizeram": 5,
+          "proximoPasso": 1,
+          "parados": 0
+        },
+        {
+          "etapaId": 4,
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fizeram": 1,
+          "proximoPasso": 3,
+          "parados": 0
+        },
+        {
+          "etapaId": 5,
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fizeram": 1,
+          "proximoPasso": 0,
+          "parados": 0
+        },
+        {
+          "etapaId": 6,
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fizeram": 1,
+          "proximoPasso": 0,
+          "parados": 0
+        }
+      ]
+    }
+  },
+  "funilGeral": {
+    "sucesso": true,
+    "etapas": [
+      {
+        "etapaId": 1,
+        "nome": "Conversão",
+        "ordem": 1
+      },
+      {
+        "etapaId": 2,
+        "nome": "Curso de Discipulado",
+        "ordem": 2
+      },
+      {
+        "etapaId": 3,
+        "nome": "Batismo nas águas",
+        "ordem": 3
+      },
+      {
+        "etapaId": 4,
+        "nome": "Batismo no Espírito Santo",
+        "ordem": 4
+      },
+      {
+        "etapaId": 5,
+        "nome": "Primeira participação em departamento",
+        "ordem": 5
+      },
+      {
+        "etapaId": 6,
+        "nome": "Primeiro serviço voluntário",
+        "ordem": 6
+      }
+    ],
+    "diasParado": 90,
+    "congregacoes": [
+      {
+        "congregacaoId": 1,
+        "nome": "Central E2E",
+        "iniciadas": 33,
+        "concluiram": 1,
+        "etapas": [
+          {
+            "etapaId": 1,
+            "nome": "Conversão",
+            "ordem": 1,
+            "fizeram": 33,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 2,
+            "nome": "Curso de Discipulado",
+            "ordem": 2,
+            "fizeram": 5,
+            "proximoPasso": 28,
+            "parados": 2
+          },
+          {
+            "etapaId": 3,
+            "nome": "Batismo nas águas",
+            "ordem": 3,
+            "fizeram": 5,
+            "proximoPasso": 1,
+            "parados": 0
+          },
+          {
+            "etapaId": 4,
+            "nome": "Batismo no Espírito Santo",
+            "ordem": 4,
+            "fizeram": 1,
+            "proximoPasso": 3,
+            "parados": 0
+          },
+          {
+            "etapaId": 5,
+            "nome": "Primeira participação em departamento",
+            "ordem": 5,
+            "fizeram": 1,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 6,
+            "nome": "Primeiro serviço voluntário",
+            "ordem": 6,
+            "fizeram": 1,
+            "proximoPasso": 0,
+            "parados": 0
+          }
+        ]
+      },
+      {
+        "congregacaoId": 2,
+        "nome": "Vila Nova E2E",
+        "iniciadas": 2,
+        "concluiram": 0,
+        "etapas": [
+          {
+            "etapaId": 1,
+            "nome": "Conversão",
+            "ordem": 1,
+            "fizeram": 2,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 2,
+            "nome": "Curso de Discipulado",
+            "ordem": 2,
+            "fizeram": 1,
+            "proximoPasso": 1,
+            "parados": 1
+          },
+          {
+            "etapaId": 3,
+            "nome": "Batismo nas águas",
+            "ordem": 3,
+            "fizeram": 0,
+            "proximoPasso": 1,
+            "parados": 0
+          },
+          {
+            "etapaId": 4,
+            "nome": "Batismo no Espírito Santo",
+            "ordem": 4,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 5,
+            "nome": "Primeira participação em departamento",
+            "ordem": 5,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          },
+          {
+            "etapaId": 6,
+            "nome": "Primeiro serviço voluntário",
+            "ordem": 6,
+            "fizeram": 0,
+            "proximoPasso": 0,
+            "parados": 0
+          }
+        ]
+      }
+    ],
+    "total": {
+      "iniciadas": 35,
+      "concluiram": 1,
+      "etapas": [
+        {
+          "etapaId": 1,
+          "nome": "Conversão",
+          "ordem": 1,
+          "fizeram": 35,
+          "proximoPasso": 0,
+          "parados": 0
+        },
+        {
+          "etapaId": 2,
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fizeram": 6,
+          "proximoPasso": 29,
+          "parados": 3
+        },
+        {
+          "etapaId": 3,
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fizeram": 5,
+          "proximoPasso": 2,
+          "parados": 0
+        },
+        {
+          "etapaId": 4,
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fizeram": 1,
+          "proximoPasso": 3,
+          "parados": 0
+        },
+        {
+          "etapaId": 5,
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fizeram": 1,
+          "proximoPasso": 0,
+          "parados": 0
+        },
+        {
+          "etapaId": 6,
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fizeram": 1,
+          "proximoPasso": 0,
+          "parados": 0
+        }
+      ]
+    }
+  },
+  "parados": {
+    "sucesso": true,
+    "itens": [
+      {
+        "membroId": 9409,
+        "nome": "Conversão sem data E2E",
+        "ultimoPasso": null,
+        "diasSemPasso": null
+      },
+      {
+        "membroId": 9404,
+        "nome": "Discipulado antiga E2E",
+        "ultimoPasso": "2010-01-01",
+        "diasSemPasso": 6145
+      }
+    ]
+  },
+  "pessoa": {
+    "sucesso": true,
+    "caminhada": {
+      "etapas": [
+        {
+          "etapaId": 1,
+          "chave": "CONVERSAO",
+          "nome": "Conversão",
+          "ordem": 1,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": true,
+          "data": "2026-10-09",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 2,
+          "chave": "CURSO_DISCIPULADO",
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fonte": "TRILHA",
+          "fonteRotulo": "Trilha de formação concluída",
+          "feita": true,
+          "data": "2026-10-28",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 3,
+          "chave": "BATISMO_AGUAS",
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fonte": "BATISMO_AGUAS",
+          "fonteRotulo": "Batismo nas águas (data do cadastro)",
+          "feita": true,
+          "data": "2026-10-27",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 4,
+          "chave": "BATISMO_ESPIRITO",
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 5,
+          "chave": "DEPARTAMENTO",
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 6,
+          "chave": "SERVICO_VOLUNTARIO",
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fonte": "SERVICO_VOLUNTARIO",
+          "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        }
+      ],
+      "proximo": {
+        "etapaId": 4,
+        "chave": "BATISMO_ESPIRITO",
+        "nome": "Batismo no Espírito Santo",
+        "geraAcompanhamento": false
+      },
+      "ultimoPasso": "2026-10-28",
+      "dataPassoAnterior": "2026-10-28",
+      "iniciada": true,
+      "concluida": false
+    }
+  },
+  "minha": {
+    "sucesso": true,
+    "caminhada": {
+      "etapas": [
+        {
+          "etapaId": 1,
+          "chave": "CONVERSAO",
+          "nome": "Conversão",
+          "ordem": 1,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": true,
+          "data": "2026-10-09",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 2,
+          "chave": "CURSO_DISCIPULADO",
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fonte": "TRILHA",
+          "fonteRotulo": "Trilha de formação concluída",
+          "feita": true,
+          "data": "2026-10-28",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 3,
+          "chave": "BATISMO_AGUAS",
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fonte": "BATISMO_AGUAS",
+          "fonteRotulo": "Batismo nas águas (data do cadastro)",
+          "feita": true,
+          "data": "2026-10-27",
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 4,
+          "chave": "BATISMO_ESPIRITO",
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 5,
+          "chave": "DEPARTAMENTO",
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 6,
+          "chave": "SERVICO_VOLUNTARIO",
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fonte": "SERVICO_VOLUNTARIO",
+          "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        }
+      ],
+      "proximo": {
+        "etapaId": 4,
+        "chave": "BATISMO_ESPIRITO",
+        "nome": "Batismo no Espírito Santo",
+        "geraAcompanhamento": false
+      },
+      "ultimoPasso": "2026-10-28",
+      "dataPassoAnterior": "2026-10-28",
+      "iniciada": true,
+      "concluida": false
+    }
+  },
+  "minhaVazia": {
+    "sucesso": true,
+    "caminhada": {
+      "etapas": [
+        {
+          "etapaId": 1,
+          "chave": "CONVERSAO",
+          "nome": "Conversão",
+          "ordem": 1,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 2,
+          "chave": "CURSO_DISCIPULADO",
+          "nome": "Curso de Discipulado",
+          "ordem": 2,
+          "fonte": "TRILHA",
+          "fonteRotulo": "Trilha de formação concluída",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [
+            "Conversão"
+          ],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 3,
+          "chave": "BATISMO_AGUAS",
+          "nome": "Batismo nas águas",
+          "ordem": 3,
+          "fonte": "BATISMO_AGUAS",
+          "fonteRotulo": "Batismo nas águas (data do cadastro)",
+          "feita": true,
+          "data": "2005-05-05",
+          "foraDeOrdem": true,
+          "preRequisitosPendentes": [
+            "Curso de Discipulado"
+          ],
+          "posBatismal": true
+        },
+        {
+          "etapaId": 4,
+          "chave": "BATISMO_ESPIRITO",
+          "nome": "Batismo no Espírito Santo",
+          "ordem": 4,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 5,
+          "chave": "DEPARTAMENTO",
+          "nome": "Primeira participação em departamento",
+          "ordem": 5,
+          "fonte": "MARCO",
+          "fonteRotulo": "Marco do perfil",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        },
+        {
+          "etapaId": 6,
+          "chave": "SERVICO_VOLUNTARIO",
+          "nome": "Primeiro serviço voluntário",
+          "ordem": 6,
+          "fonte": "SERVICO_VOLUNTARIO",
+          "fonteRotulo": "Primeiro serviço voluntário (escala realizada)",
+          "feita": false,
+          "data": null,
+          "foraDeOrdem": false,
+          "preRequisitosPendentes": [],
+          "posBatismal": false
+        }
+      ],
+      "proximo": {
+        "etapaId": 1,
+        "chave": "CONVERSAO",
+        "nome": "Conversão",
+        "geraAcompanhamento": false
+      },
+      "ultimoPasso": "2005-05-05",
+      "dataPassoAnterior": null,
+      "iniciada": false,
+      "concluida": false
+    }
+  }
+}

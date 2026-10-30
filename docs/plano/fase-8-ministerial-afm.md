@@ -635,14 +635,14 @@ Achado de pesquisa que muda o desenho: formação ministerial séria precisa de
 seminário precisa entregar **declaração, histórico e aproveitamento** — que é o
 que a Convenção e outras instituições vão pedir.
 
-- [ ] Estrutura acadêmica: curso → disciplina (carga horária, pré-requisito) →
+- [x] Estrutura acadêmica: curso → disciplina (carga horária, pré-requisito) →
       turma → matrícula → nota e frequência → **histórico escolar**.
-- [ ] Emissão de declaração de matrícula, histórico e diploma.
-- [ ] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
+- [x] Emissão de declaração de matrícula, histórico e diploma.
+- [x] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
       registrado de quem aprovou — hoje isso é decisão informal do Reitor.
-- [ ] Cada disciplina com o seu docente (o corpo docente com a titulação, o
+- [x] Cada disciplina com o seu docente (o corpo docente com a titulação, o
       Reitor e a CDER já existem desde a v8.1).
-- [ ] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
+- [x] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
       disciplinas cursadas *(veio da v8.6: lá só existiam a reciclagem e o exame)*.
       *(Classter; Populi — SIS para seminários)*
 
@@ -686,6 +686,46 @@ turmas nem aproveitamento: o resto é decisão da Academia, e fica configurável
 só a turma encerrada conta; o docente lança e encerra a própria turma (reabrir é só do nível geral); o parecer do aproveitamento é do Reitor ou de um docente em exercício;
 a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou antes do sistema; o aviso das três áreas do
 Art. 70 §2º é por curso e não trava nada; o histórico escolar é assentamento da Academia e fica (a exclusão LGPD tira a identificação da pessoa, como nas matrículas).
+
+### Como ficou a v8.7 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `81a2548`; para desfazer: `git revert -m 1 81a2548`). Migração **163** (`AFMCursos` — os quatro níveis, criados pela migração —,
+`AFMDisciplinas`, `AFMDisciplinaPreRequisitos`, `AFMCursoMatriculas`, `AFMTurmas`, `AFMTurmaAlunos`, `AFMAproveitamentos`, `AFMDisciplinaRequisitos`,
+`AFMDocumentosAcademicos`; `CertificadosEmitidos.Natureza` ganhou `DIPLOMA_AFM`, `HISTORICO` e `DECLARACAO`). Regra pura em `api/shared/seminario.js`, banco em
+`api/shared/seminarioDb.js`, rota `/api/seminario/<ação>` (`GestaoSeminario`); o PDF do histórico em `api/shared/pdfHistoricoEscolar.js` (o diploma e a declaração usam a
+página dos documentos ministeriais, com o nome do Reitor em exercício no dia da emissão). A escada, a lista da Academia, o Meu Painel, o nivelamento e o CEI leem o nível
+também do histórico (`afm.avaliarNivel` com os pares do histórico; vale o par que atende o cargo); o requisito de formação (`trilhas.avaliarRequisitos` e
+`filtrarMembrosQueAtendem`) soma as disciplinas exigidas. Tela: seção **Seminário** na aba Academia (Turmas, Alunos, Currículo, Requisitos de disciplina — só o nível
+geral), **Meu histórico escolar** e **Turmas em que leciono** em Minha Formação, o histórico escolar na aba Caminhada do perfil (módulo novo `app/modulos/seminario.js`);
+a verificação pública do histórico mostra os cursos e as disciplinas com nota e resultado. Casca do service worker **v49**.
+
+**O que mudou depois das revisões independentes** (servidor: 1 alto, 3 médios, 8 baixos; tela: 1 alto, 3 médios, 10 baixos — tratados):
+
+- **Reabrir não apaga o que já valeu:** a turma encerrada uma vez guarda a data do primeiro encerramento — não se exclui, e a inscrição com nota nela não se cancela
+  (antes: reabrir, cancelar e excluir tirava a aprovação que concluiu um curso, ou uma reprovação). A nota de quem concluiu o curso não deixa de ser "aprovado" em
+  disciplina nenhuma do curso (obrigatória ou optativa).
+- **Ninguém age sobre o próprio percurso:** nem se inscreve, nem cancela a própria inscrição, nem reabre a turma em que é aluno.
+- **O histórico emitido é conferível:** o título leva o selo do conteúdo (o começo do hash da fotografia), coberto pelo selo do certificado; a verificação pública confere
+  e mostra as disciplinas com nota e resultado — conteúdo mexido no banco aparece como "não confere".
+- O requisito de disciplina **não vale no treinamento do voluntariado** (a aptidão do ministério com menores é reavaliada só pelas trilhas); desativar a disciplina exigida
+  num fluxo ou pré-requisito de outra ativa é recusado; reabrir que deixaria alguém em duas turmas abertas da mesma disciplina é recusado.
+- A declaração de matrícula só sai para quem tem a matrícula ativa na AFM e é revogada quando a matrícula no curso é cancelada ou a pessoa sai do rol; o diploma só para
+  quem está no rol; a conclusão não pode ter data antes da última obrigatória cumprida; o PDF dos documentos acadêmicos é do nível geral da Academia (como a rota); o
+  perfil não leva os códigos nem os documentos; a frequência do histórico não arredonda para cima.
+- Tela: a turma da Academia e a de Minha Formação (o Reitor é das duas) têm estados e ids separados, e cada botão leva o lugar e a turma — antes, encerrar ou salvar
+  numa podia agir na outra; encerrar com nota digitada e não salva é recusado; as releituras não apagam o que foi digitado (a ficha relê só o histórico); a própria ficha
+  não oferece os atos que o servidor recusa; o docente fora de exercício só vê; matrícula inválida no "Inscrever" fica no campo.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** os cursos são exatamente os quatro níveis do Art. 72; nota mínima 7,0 e frequência 75%
+(configuráveis por curso); só a turma encerrada conta; o docente lança e encerra a própria turma (reabrir é só do nível geral); o parecer do aproveitamento é do Reitor
+ou de um docente em exercício na data; a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou
+antes do sistema; o aviso das três áreas do Art. 70 §2º é por curso e não trava nada; o requisito de disciplina não vale no treinamento do voluntariado; o histórico
+escolar é assentamento da Academia e fica.
+
+**Provas:** jest 6.227 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 163): `e2e-66` fluxos, segurança, a revisão e lixo 159, `e2e-67`
+corridas 12 (em processos separados); a fase 8 (`e2e-47` a `e2e-65`), o cuidado (`e2e-24` a `e2e-27`) e a Trava 7-C (`e2e-36`, `e2e-37`, `e2e-40`) verdes; tela
+(`tools/front-seminario`, com as respostas reais gravadas pelo `e2e-66`) 85, com 28 mutações acusadas; teste de tela da homologação 41112302426 sem divergência e sem
+violação de CSP (base aprovada na execução 41109146078).
 
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9
 

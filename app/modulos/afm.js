@@ -18,8 +18,11 @@ const AFM_DETALHE_MAX = 250;      // o texto gravado é "rótulo — detalhe" (a
 // Troca de login ou saída: nada da pessoa anterior (nomes, faltas, reprovação, a própria situação) fica na página.
 function afmLimparTela() {
   afmMatriculasCache = []; afmFaltasCache = null; afmGeralMatriculas = false; afmEnviando = false; afmVetaveisCache = [];
+  afmSecaoAtual = "matriculas";   // a seção só do nível geral (escada, educação continuada) não fica aberta para o próximo login
   const pilulaEscada = afmEl("btnAfmSecaoEscada");
   if (pilulaEscada) pilulaEscada.style.display = "none";
+  const pilulaEducacao = afmEl("btnAfmSecaoEducacao");
+  if (pilulaEducacao) pilulaEducacao.style.display = "none";
   for (const id of ["afmListaMatriculas", "afmCorpo", "afmListaMagnas", "afmFaltasCLI", "afmForm", "cartaoAfmCli", "resultadoListaCDER", "afmListaVetaveis"]) { const el = afmEl(id); if (el) el.innerHTML = ""; }
   const resumo = afmEl("afmResumoMatriculas");
   if (resumo) resumo.textContent = "";
@@ -120,8 +123,8 @@ function afmAbrirAba() {
 }
 
 function afmMostrarSecaoAcao(secao) {
-  afmSecaoAtual = ["matriculas", "corpo", "magnas", "escada"].includes(secao) ? secao : "matriculas";
-  for (const s of ["matriculas", "corpo", "magnas", "escada"]) {
+  afmSecaoAtual = ["matriculas", "corpo", "magnas", "escada", "educacao"].includes(secao) ? secao : "matriculas";
+  for (const s of ["matriculas", "corpo", "magnas", "escada", "educacao"]) {
     const div = afmEl(`afmSecao${s[0].toUpperCase()}${s.slice(1)}`);
     if (div) div.style.display = s === afmSecaoAtual ? "block" : "none";
     const btn = afmEl(`btnAfmSecao${s[0].toUpperCase()}${s.slice(1)}`);
@@ -132,6 +135,7 @@ function afmMostrarSecaoAcao(secao) {
   if (afmSecaoAtual === "corpo") afmCarregarCorpoAcao();
   if (afmSecaoAtual === "magnas") afmCarregarMagnasAcao();
   if (afmSecaoAtual === "escada") afmCarregarVetaveisAcao();
+  if (afmSecaoAtual === "educacao" && typeof edcCarregarPainelAcao === "function") edcCarregarPainelAcao();   // v8.6
 }
 
 function afmFecharFormAcao() {
@@ -175,6 +179,8 @@ function afmRenderMatriculas(geral) {
   // a seção "Escada e veto" (CHM, candidato, veto) é só do nível geral da Academia
   const pilulaEscada = afmEl("btnAfmSecaoEscada");
   if (pilulaEscada) pilulaEscada.style.display = geral ? "" : "none";
+  const pilulaEducacao = afmEl("btnAfmSecaoEducacao");   // v8.6: a educação continuada também é do nível geral
+  if (pilulaEducacao) pilulaEducacao.style.display = geral ? "" : "none";
   // v8.2: o candidato (ainda não oficial, matriculado para cursar o Básico) também aparece
   const candidato = (m) => !m.oficial && m.origem === "CANDIDATO" && m.status === "ATIVA";
   const todos = afmMatriculasCache.filter(m => m.oficial || m.status === "INATIVA" || candidato(m));

@@ -448,16 +448,16 @@ A escada ministerial (v8.2) cobre do Auxiliar pra cima. Falta o percurso que vem
 Espírito Santo, curso de novos convertidos, primeira participação em
 departamento, primeiro serviço voluntário.
 
-- [ ] Catálogo de **tipos de marco** configurável (único vs. repetível,
+- [x] Catálogo de **tipos de marco** configurável (único vs. repetível,
       pré-requisitos), com marcos datados no perfil — a tabela `MarcosMembro`
       (v1.6) já existe e hoje é usada só para eventos avulsos; aqui ela vira
       trilha estruturada.
-- [ ] **Funil por congregação**: quantos pararam entre "convertido" e "batizado",
+- [x] **Funil por congregação**: quantos pararam entre "convertido" e "batizado",
       entre "batizado" e "primeiro serviço". É o número que mostra onde a
       assimilação trava — e ele é invisível hoje.
-- [ ] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
+- [x] Conclusão de etapa disparando o próximo passo na fila de acompanhamento
       (v7.11), em vez de depender de alguém lembrar.
-- [ ] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
+- [x] Integração com a esteira de batismo (vB.11) e com as trilhas de formação
       (v6.9). *(Rock RMS Steps)*
 
 ### Desenho da v8.5 (contrato, 29/10/2026)
@@ -497,6 +497,42 @@ funil e os nomes de quem parou são da liderança territorial (a concessão de E
 cuida da Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; a pessoa registra marcos de outros só no seu
 território, e nunca os "só do nível geral" em si mesma.
 
+### Como ficou a v8.5 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `2e2ea5d`; para desfazer: `git revert -m 1 2e2ea5d`). Migração **161** (`TiposMarco`, `EtapasDiscipulado`,
+`EtapasDiscipuladoPreRequisitos`; na fila do cuidado, o tipo `DISCIPULADO`, a origem `DISCIPULADO`, o desfecho `PASSO_DADO`, a etapa do item e o prazo
+`CUIDADO_PRAZO_DISCIPULADO_DIAS`, 30 dias, em Catálogos → Prazos). Regra pura em `api/shared/discipulado.js`, banco em `api/shared/discipuladoDb.js`, rota
+`/api/discipulado/<ação>` (`GestaoDiscipulado`). Os marcos do perfil passaram a vir do catálogo (`RegistrarMarcoMembro`: tipo inativo recusado, o "único" com
+trava, o "só do nível geral" nunca em si mesmo, data no futuro recusada — também na correção). Tela: sub-aba **Discipulado** da Pessoas (o funil, quem parou e,
+para o nível geral, o catálogo), aba **Caminhada** no perfil, **Minha caminhada** em Minha Formação e a trilha em Meus Dados (módulo novo
+`app/modulos/discipulado.js`). Casca do service worker **v47**. A rotina diária do cuidado pastoral roda a da trilha (abre e fecha os "próximos passos").
+
+**O que mudou depois das revisões independentes** (servidor: 2 altos, 3 médios, 6 baixos; tela: 4 médios, 7 baixos — tratados):
+
+- O índice único "um item por pessoa e etapa" saiu: com a anonimização da exclusão LGPD e da retenção (que zeram a pessoa no item), ele travaria a exclusão a
+  partir da segunda pessoa e, daqui a 5 anos, a retenção inteira. O "um aberto por pessoa" segura a duplicata; o "nunca reabre para a mesma etapa" é da rotina.
+- O funil e os nomes de quem parou são da liderança **territorial**: a concessão de Extensão e a de Departamento não os veem (o mesmo critério do cuidado
+  pastoral).
+- A trilha **começa na conversão**: o rol antigo, só com o batismo do cadastro, não aparece "parado antes da conversão". O acompanhamento mede a data do passo
+  **anterior** ao próximo (uma escala recente não reabre a trilha antiga); o marco sem data é data desconhecida; no máximo 20 por congregação **por dia**; quem
+  teve a exclusão LGPD atendida não volta à fila; o item que muda de congregação leva a etapa e fecha sozinho na congregação nova.
+- O curso também vem da **esteira de batismo** (o discipulado atestado no candidato e a trilha configurada como requisito do batismo) — nada é lançado duas vezes;
+  e, quando a AFM liga o curso a uma trilha de formação, o marco antigo continua valendo.
+- Tela: toda resposta confere se o login ainda é o mesmo e se é a do pedido mais recente; o Discipulado Pós-Batismal (Art. 70 §5º) aparece para quem foi batizado
+  antes do curso; o "Corrigir marco" usa o nome do catálogo (o teste de tela da homologação achou ele quebrando com um catálogo de outro formato — corrigido).
+- A base do cuidado pastoral nos testes do banco local passou a ter o esquema inteiro (156 a 161), como no deploy.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a trilha começa na conversão lançada (o membro antigo sem a conversão no
+perfil não entra no funil nem na fila); "parado" = nenhum passo há 90 dias (a tela deixa escolher 30, 60, 90 ou 180); o acompanhamento só abre quando o passo
+anterior ao próximo foi nos últimos 180 dias; no máximo 20 acompanhamentos novos por congregação por dia; Extensão e Departamento não veem o funil (quem cuida da
+Extensão é o Dirigente da congregação-mãe); os tipos de marco do sistema não se desativam; o batismo no Espírito Santo e a conversão não pedem acompanhamento na
+trilha inicial (o nível geral pode mudar no catálogo).
+
+**Provas:** jest 6.186 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 161): `e2e-62` fluxos, segurança e lixo 66, `e2e-63` corridas 10
+(em processos separados); o cuidado pastoral (`e2e-23` a `e2e-28`) segue verde sobre a base com o esquema inteiro; tela (`tools/front-discipulado`, com as
+respostas reais gravadas pelo `e2e-62`) 52, com seis mutações acusadas; teste de tela da homologação 40953092973 sem divergência e sem violação de CSP (base
+aprovada na execução 40943177680).
+
 ## v8.6 — Educação continuada e requisito verificável de promoção *(7ª rodada)*
 
 - [ ] Carga horária mínima periódica por cargo ministerial para manter a
@@ -517,6 +553,41 @@ território, e nunca os "só do nível geral" em si mesma.
 - [ ] Histórico de formação no perfil, com certificados verificáveis (v6.9).
 - [ ] Alerta de credencial em risco por educação continuada vencida — antes de
       expirar, não depois.
+
+### Desenho da v8.6 (contrato, 30/10/2026)
+
+**Base legal:** Regimento Art. 68 §3º (o Curso de Reciclagem e Prática Pastoral, anual, com "frequência mínima e aprovação", é "critério indispensável e
+eliminatório para a renovação e manutenção da credencial de obreiro ativo no exercício seguinte"); Art. 70 §3º (a cada 2 anos, no Seminário de novembro, a
+Prova de Suficiência e Reciclagem "para todos os obreiros e membros da Câmara": I — reprovado fica "sob observação" até a repescagem; II — a ausência
+injustificada "equivale à reprovação por abandono, sujeitando o infrator à suspensão imediata das funções ministeriais"); Art. 70 §2º (o currículo de
+Liderança, Administração Eclesiástica e Compliance Estatutário); Estatuto Art. 30 §2º (o exercício é o ano civil).
+
+1. **Reciclagem anual** (Art. 68 §3º): a AFM (nível geral) registra a edição do ano (data, carga horária, frequência mínima em %) e, por obreiro, as horas
+   presentes e o resultado (aprovado, reprovado, ausente). A carga horária mínima periódica é esta: sem a frequência mínima, não há aprovação. Quem não foi
+   aprovado na edição do ano anterior fica **sem a credencial renovada** no exercício seguinte: **obreiro inativo** (não oficia, não unge, não sobe na escada,
+   o QR diz "Obreiro inativo") até o resultado da edição ser corrigido para aprovado (a reposição). Só vale para quem já era obreiro na data da edição (quem foi
+   consagrado depois não tinha como ir — e a promoção não zera essa contagem: vale o primeiro dia como oficial sem interrupção) e só a partir do primeiro ano
+   em que a edição foi registrada (nada retroage).
+2. **Exame bienal** (Art. 70 §3º): a AFM registra o exame (data, e se é o bienal ou uma repescagem dele) e o resultado de cada obreiro e membro da Câmara
+   (aprovado, reprovado, ausente com justificativa, ausente sem justificativa). Reprovado → **sob observação** (continua oficiando; o QR diz "sob
+   observação"; não sobe na escada) até ser aprovado numa repescagem; ausente sem justificativa → **suspenso das funções** (não oficia) até a repescagem;
+   ausente com justificativa → deve a repescagem, sem sanção (a escada só avisa). A sanção só cai com uma **aprovação**: faltar com justificativa à
+   repescagem, ser reprovado nela depois de faltar ou o bienal seguinte sem registro da pessoa não a tiram. O sistema não presume ausência: só vale o que a
+   AFM registrou.
+3. **A mesma regra em todo lugar** (a regra única da Trava 8-A): a licença para oficiar, a Comissão de Unção, o QR da credencial e a escada leem a educação
+   continuada do mesmo lugar.
+4. **Alerta antes, não depois**: de 1º de outubro a 31 de dezembro, o obreiro sem a reciclagem do ano aprovada recebe um aviso por mês ("sem ela, a
+   credencial não é renovada em 1º de janeiro"); a AFM do nível geral recebe a contagem, e a lista com os nomes fica na seção da Academia. Quem está sob
+   observação ou suspenso pelo exame é avisado uma vez por mês até a repescagem.
+5. **Histórico de formação**: no perfil (aba Caminhada) e na Minha Formação, as reciclagens, os exames, a situação de agora e as trilhas de formação
+   concluídas com o código do certificado verificável (v6.9); em Meus Dados.
+6. **Fica para a v8.7**: ligar os requisitos de formação (v6.9) às disciplinas da AFM — as disciplinas só existem quando a v8.7 criar a estrutura acadêmica.
+
+**Decisões por interpretação (o responsável pode mudar):** "sob observação" não suspende as funções (o texto só suspende na ausência sem justificativa),
+mas impede a promoção na escada; o exame alcança os obreiros e quem está na Câmara (o membro da Câmara que não é obreiro fica com o resultado registrado, sem
+efeito na credencial); a reposição da reciclagem é a correção do resultado da mesma edição (não há "edição extra"); a ausência justificada que ainda deve a
+repescagem não impede a promoção (só avisa); a justificativa da ausência (pode citar saúde) sai 2 anos depois do exame (prazo ajustável em Proteção de
+Dados → Políticas de retenção).
 
 ## v8.7 — Seminário como sistema acadêmico, não como curso online *(7ª rodada)*
 

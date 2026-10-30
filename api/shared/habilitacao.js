@@ -58,6 +58,9 @@ async function situacaoMinisterial(conexao, membroIds) {
       excluido: !!l.Excluido, foraDaComunhao: !!l.ForaDaComunhao, afastado: !!l.Afastado
     });
   }
+  // v8.6 — a educação continuada (a reciclagem anual e o exame bienal), do mesmo lugar para todos
+  const educacao = await require("./educacaoContinuadaDb").situacoes(conexao, [...out.keys()]);
+  for (const [id, p] of out) p.educacao = educacao.get(id) || null;
   return out;
 }
 

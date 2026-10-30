@@ -114,6 +114,8 @@ module.exports = async function (context, req) {
 
     await r().input("mat", sql.Int, solicitacao.MembroId)
       .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL WHERE MembroId = @mat`);
+    // v8.6 — a justificativa de ausência no exame bienal da AFM (pode citar saúde) sai junto, na mesma transação
+    await require("../shared/educacaoContinuadaDb").aplicarRetencao({ request: r }, { membroId: solicitacao.MembroId });
 
     await r()
       .input("mat", sql.Int, solicitacao.MembroId)

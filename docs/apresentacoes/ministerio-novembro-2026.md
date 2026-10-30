@@ -1,6 +1,6 @@
 # Apresentação ao Ministério — a igreja 100% digital
 
-> **Para a IA que vai montar os slides:** crie de 10 a 12 slides em português, com linguagem simples, para uma reunião de
+> **Para a IA que vai montar os slides:** crie de 12 a 14 slides em português, com linguagem simples, para uma reunião de
 > pastores e obreiros (o Ministério: a Câmara e a Academia reunidas). A apresentação dura de 5 a 10 minutos. Não use
 > capturas de tela nem fotos do sistema: só títulos curtos, poucos tópicos por slide e ícones simples. Tom respeitoso e
 > pastoral, sem palavras técnicas de informática. Cada slide abaixo traz o título, os tópicos e uma "fala" (o que o
@@ -8,35 +8,48 @@
 
 ---
 
-## Slide 1 — Uma igreja organizada, sem papel
+## Slide 1 — Como tudo começou
 
-- Um sistema próprio da IEADESPA, feito para a nossa realidade
-- Do cadastro do membro à formação do obreiro: tudo num só lugar
-- No celular, no computador, em qualquer congregação
-- Implantação a partir de janeiro de 2027, por etapas
+- A IEADESPA é uma organização sem fins lucrativos
+- Por isso tem acesso a programas de benefícios da Microsoft e do Google: créditos de nuvem, e-mails institucionais e descontos
+- Com uma ferramenta de programação com inteligência artificial (Claude Code), de custo baixo, a Secretaria passou a programar
+- Desde agosto de 2026, a Secretaria constrói o sistema de processos da igreja
 
-**Fala:** "Irmãos, o que vamos mostrar em poucos minutos é como os processos da nossa igreja vão deixar o papel e passar
-a ser digitais, organizados e seguros."
+**Fala:** "Irmãos, por sermos uma organização sem fins lucrativos, conseguimos benefícios da Microsoft e do Google. Com
+eles e com uma ferramenta de programação de baixo custo, a Secretaria vem construindo, desde agosto, o nosso próprio
+sistema."
 
-## Slide 2 — Por que mudar
+## Slide 2 — O que ele é (e o que ele não é)
 
-- Fichas, livros de ata e cartas em papel se perdem, se molham e dependem de quem guardou
-- Cada congregação faz de um jeito; a Sede nem sempre sabe o que acontece
-- A informação existe, mas não chega a quem precisa decidir
-- O Estatuto e o Regimento pedem prazos, registros e transparência
+- **Não é** um novo sistema de membros: o sistema de gestão que usamos hoje continua
+- **É** o sistema dos **processos** da igreja: a parte burocrática que o sistema de membros não consegue fazer
+- Exemplos: ofícios, relatórios, cartas, atas, consagrações, credenciais, cursos e certificados
+- O objetivo: uma igreja totalmente digital, sem depender de papel
 
-**Fala:** "Hoje muita coisa importante está numa gaveta. Quando o secretário muda, o histórico vai embora com ele."
+**Fala:** "Não estamos trocando o sistema de membros. Estamos criando o que ele não faz: os ofícios, os relatórios, as
+cartas e os processos que o nosso Estatuto e o nosso Regimento pedem."
 
-## Slide 3 — O membro no centro
+## Slide 3 — Por que sair do papel
 
-- Cadastro único do membro, com foto, família e histórico
-- Admissão, batismo, apresentação de crianças, cartas de mudança e recomendação
+- O papel molha, rasga, se perde e ocupa caixas e mais caixas
+- Fica embaralhado: é difícil achar um registro antigo
+- No digital, os registros ficam guardados e seguros
+- As somas, os relatórios e os prazos saem automáticos, sem refazer contas à mão
+
+**Fala:** "Quantas vezes já procuramos uma ata ou uma ficha e não achamos? No digital, o registro não se perde, e o
+relatório do mês sai sozinho."
+
+## Slide 4 — Por que o sistema guarda o membro e o histórico
+
+- Cartas de mudança e de recomendação precisam do histórico certo da pessoa
+- Admissão, batismo, apresentação de crianças e a situação de cada membro, conforme o Estatuto e a lei
 - O próprio membro vê os seus dados e pede correção pelo celular ("Meu Painel")
-- Proteção dos dados pessoais conforme a lei (LGPD)
+- Os dados pessoais protegidos conforme a Lei Geral de Proteção de Dados (LGPD)
 
-**Fala:** "O irmão que muda de congregação leva a carta digital; a congregação que o recebe já vê tudo, sem papel."
+**Fala:** "O cadastro aqui não é para gerir a congregação: é para que a carta, o ofício e o documento saiam certos, com o
+histórico de cada irmão, e de acordo com a lei."
 
-## Slide 4 — Reuniões e decisões registradas
+## Slide 5 — Reuniões e decisões registradas
 
 - Assembleias, Câmara, Diretoria, Conselho Fiscal e comissões
 - Convocação, presença, quórum, votação e ata no sistema
@@ -45,7 +58,7 @@ a ser digitais, organizados e seguros."
 
 **Fala:** "A ata não se perde mais, e a presença de cada um é registrada na hora, na portaria."
 
-## Slide 5 — Finanças com transparência
+## Slide 6 — Finanças com transparência
 
 - Tesouraria das congregações e repasses à Sede
 - Prestação de contas, conferência e aprovação em etapas
@@ -54,7 +67,7 @@ a ser digitais, organizados e seguros."
 
 **Fala:** "Cada real tem registro, comprovante e responsável. Isso protege o tesoureiro e protege a igreja."
 
-## Slide 6 — Departamentos, EBD e eventos
+## Slide 7 — Departamentos, EBD e eventos
 
 - Relatórios dos departamentos, com consolidação automática
 - EBD: chamada, caderneta digital, lições, revistas e certificados
@@ -63,7 +76,7 @@ a ser digitais, organizados e seguros."
 
 **Fala:** "O professor da EBD faz a chamada pelo celular, e o relatório do mês sai sozinho."
 
-## Slide 7 — Cuidado com as pessoas e proteção das crianças
+## Slide 8 — Cuidado com as pessoas e proteção das crianças
 
 - Acompanhamento pastoral: quem precisa de visita, com responsável e prazo
 - Discipulado: do novo convertido ao batismo e ao primeiro serviço
@@ -72,7 +85,7 @@ a ser digitais, organizados e seguros."
 
 **Fala:** "Ninguém fica esquecido: se um irmão some, alguém é avisado para ir atrás. E as nossas crianças ficam mais protegidas."
 
-## Slide 8 — A vida ministerial do obreiro
+## Slide 9 — A vida ministerial do obreiro
 
 - Matrícula na Academia, frequência nas reuniões e níveis de estudo
 - Escada ministerial: os requisitos de cada cargo conferidos pelo sistema
@@ -82,7 +95,7 @@ a ser digitais, organizados e seguros."
 **Fala:** "A credencial de papel dá lugar à credencial no celular. Quem apontar a câmera para o QR vê se o obreiro está em
 dia, sem precisar ligar para a Secretaria."
 
-## Slide 9 — Formação, cursos e certificados
+## Slide 10 — Formação, cursos e certificados
 
 - Cursos da Academia com turmas, professor, notas e frequência
 - Histórico escolar, declaração de matrícula e diploma emitidos pelo sistema
@@ -92,25 +105,26 @@ dia, sem precisar ligar para a Secretaria."
 **Fala:** "Se outra igreja ou convenção pedir o histórico de um obreiro, ele mesmo emite, e quem recebe confere a
 autenticidade pelo código."
 
-## Slide 10 — O que já está pronto e o que vem
+## Slide 11 — O que já está pronto e o que vem
 
-- Já construído: membros, reuniões, disciplina, finanças, departamentos, EBD, eventos, cuidado pastoral e a área ministerial
+- Já construído: cartas e histórico do membro, reuniões, disciplina, finanças, departamentos, EBD, eventos, cuidado pastoral e a área ministerial
 - Próximas etapas: entidades vinculadas, missões e expansão de congregações
 - Depois: integração completa com o site, pagamento online pelo Pix e painéis de acompanhamento para a liderança
-- O sistema já é testado todos os dias, de forma automática, antes de cada mudança
+- O sistema é testado todos os dias, de forma automática, antes de cada mudança
 
-**Fala:** "A maior parte já está construída. O que falta é a gente implantar com calma e ensinar cada um a usar."
+**Fala:** "A maior parte já está construída. Ainda faltam ajustes técnicos, e o que vem agora é implantar com calma e
+ensinar cada um a usar."
 
-## Slide 11 — Como será a implantação (a partir de janeiro de 2027)
+## Slide 12 — Como será a implantação (a partir de janeiro de 2027)
 
-- Por etapas, começando pela Secretaria e pelos cadastros
+- Por etapas, começando pela Secretaria
 - Treinamento para secretários, tesoureiros, dirigentes e professores
 - Adaptado aos órgãos que estiverem valendo (até a aprovação do novo Estatuto e Regimento)
 - Acompanhamento de perto nos primeiros meses
 
 **Fala:** "Ninguém vai ser deixado para trás. Vamos aprender juntos, congregação por congregação."
 
-## Slide 12 — O que pedimos ao Ministério
+## Slide 13 — O que pedimos ao Ministério
 
 - Apoio para a implantação a partir de janeiro
 - Indicar, em cada congregação, quem será treinado primeiro

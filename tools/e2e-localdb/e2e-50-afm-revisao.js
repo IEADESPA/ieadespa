@@ -133,7 +133,7 @@ const afmPost = (acao, corpo, token = SEC) => chamarRota("GestaoAFM/index.js", {
   ok((await cei.dadosElegibilidadeCEI(pool, require("mssql"), P.reprovado)).afmAvancadoComCertificado === true, "com nível e certificado, conta para a CEI");
   await afmPost("reprovar", { membroId: P.reprovado, data: L.hojeBr(), detalhe: "Prova de liturgia do Seminário" });
   ok((await cei.dadosElegibilidadeCEI(pool, require("mssql"), P.reprovado)).afmAvancadoComCertificado === false, "com a matrícula inativa, não conta (Art. 72: Matrícula Ativa)");
-  await afmPost("rematricular", { membroId: P.reprovado, reciclagemAprovadaEm: L.hojeBr() });
+  await afmPost("rematricular", { membroId: P.reprovado, reciclagemAprovadaEm: L.hojeBr(), observacao: "Reciclagem feita no Seminário regional" });
   ok((await escalar("SELECT TOP 1 CertificadoHabilitacao FROM Matriculas_AFM WHERE MembroId = @m ORDER BY MatriculaId DESC", { m: P.reprovado })) === true, "a rematrícula leva o certificado junto");
   ok((await cei.dadosElegibilidadeCEI(pool, require("mssql"), P.reprovado)).afmAvancadoComCertificado === true, "e volta a contar para a CEI");
 

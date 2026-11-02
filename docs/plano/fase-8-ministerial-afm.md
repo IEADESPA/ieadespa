@@ -343,7 +343,7 @@ recolhimento do Art. 95 §2º, IV, a vira automático). Limite de consultas por 
 **4. Onde aparece.** Meu Painel: "Minha credencial". Pessoas (nível geral): a seção **Credenciais** — emitir, emitir em lote, nova via, cancelar, PDF para impressão e os
 pedidos de impressão. A página pública `credencial.html`.
 
-### Como ficou a v8.4 (entregue em 28/10/2026)
+### Como ficou a v8.4 (entregue em 29/10/2026)
 
 **Em produção desde 29/10/2026** (merge `ab26201`; para desfazer: `git revert -m 1 ab26201`). Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
 crédito, para a impressora de PVC) em `api/shared/pdfCredencial.js`; rotas `/api/credenciais/<ação>` (`GestaoCredenciais`) e a pública
@@ -732,3 +732,77 @@ violação de CSP (base aprovada na execução 41109146078).
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v8.5 a v8.7 pelas 5 perguntas do checklist, e faz uma varredura final
 na FASE 8 inteira antes de fechar.
+
+- [x] **Fechada em 02/11/2026** — auditoria de v8.5 a v8.7 e varredura final da FASE 8. Duas revisões independentes, só de leitura: uma
+  das costuras ENTRE as versões (quem conta como "ativo" ou "no rol", o que a saída da igreja desfaz, o que cada pessoa pode mexer em si mesma)
+  e outra da conformidade com o Regimento, o Estatuto, o plano e o README. **Nenhum achado crítico; todos os que o código resolve,
+  corrigidos com teste** (migração 164; `e2e-68`, 53 verificações; casca v50). As 5 perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria inteira do banco local, recriado do zero (`rodar.sh preparar` e
+     `tudo.sh`, do `e2e-1` ao `e2e-68`), toda verde; as migrações 156 a 164 aplicadas duas vezes cada. Os roteiros antigos que mudaram foram
+     os que esta trava pediu: a rematrícula com a observação (`e2e-49`, `e2e-50`), o campo novo da página do QR (`e2e-59`) e o Reitor
+     homologado como docente (`e2e-66`, `e2e-67`).
+  2. **Toda tela nova abre?** Sim. Antes da trava, teste de tela completo na produção (execução 41122712170): 1.178 ações iguais, 0
+     divergência. Provas de tela sem navegador: consagração 116 (5 mutações acusadas), discipulado 52 (6 de 6), educação continuada 65
+     (16 de 16), Seminário 85 (28 de 28), credencial. O teste de tela da homologação e o da produção depois do deploy estão em "Como
+     ficou", abaixo.
+  3. **O README e o código contam a mesma história?** Agora sim: a contagem de tabelas estava errada (334; o certo é 338, porque a conta
+     não descontava as duas tabelas apagadas depois, `VotosEnquete` na 034 e `CampanhaSorteioNumeros` na 051); a FASE 8 tinha frase
+     escondida dentro do item da FASE 7; a v8.4 dizia "entregue em 28/10" (foi em 29/10); o item "perda de assento por faltas" da fase 2
+     ainda aparecia aberto (entrou na v8.1); o ROPA dizia que a minimização guarda o histórico acadêmico (não guarda, e não deve: Art. 132
+     §2º, II); o comentário da regra única citava o artigo errado (é o Art. 95 §3º).
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável, listadas no fim.
+  5. **Houve deploy real?** Sim: ver "Como ficou", abaixo.
+
+  O que mudou:
+  - **Só quem celebra, celebra (alto).** Diácono, Auxiliar e Missionário apareciam "habilitados para oficiar" o batismo, o casamento e a
+    apresentação. O Regimento (Art. 78 §1º; Art. 80 §1º, II) só deixa Presbíteros, Evangelistas e Pastores celebrarem. A licença agora diz
+    à parte se a pessoa **celebra ofícios**: a turma de batismo recusa o oficiante que não celebra; o Meu Painel diz "habilitado(a) para
+    oficiar" só a quem celebra e "credencial em dia" aos demais; a página do QR mostra a linha "Ofícios"; os campos do celebrante no
+    casamento e na apresentação avisam a regra.
+  - **CLI por Ordenação é de quem tem a credencial em dia (alto, Estatuto Art. 15 §1º, I).** A composição da CLI e o quadro da Academia
+    usavam só o cargo: um Pastor sob disciplina continuava contando. Agora usam a mesma regra única da habilitação, e o quadro mostra
+    "Fora da CLI por Ordenação: credencial suspensa".
+  - **A saída da igreja desfaz a Academia e o Seminário (alto).** A vacância fecha o corpo docente sempre; quando é saída de verdade (não
+    disciplina nem licença de candidatura), a matrícula da AFM fica inativa, as inscrições em turmas abertas são canceladas e o curso em
+    andamento também. A minimização (Art. 132 §2º, II) elimina a reciclagem, os exames, as turmas, os aproveitamentos, os cursos, os
+    documentos acadêmicos e o diploma, a declaração e o histórico verificáveis.
+  - **O Seminário só aceita quem está no rol e o docente em exercício (médio).** A conclusão do curso exige a matrícula ativa e a pessoa
+    no rol (sem exclusão nem fora da comunhão); docente é quem está ativo e sem marca de disciplina, e o Reitor só depois de homologado
+    pela CLI; o aluno inscrito não encerra a própria turma; a declaração de matrícula é revogada quando o curso termina ou a pessoa é
+    desmatriculada; cancelar o curso desfaz o nível lançado à mão do mesmo grau; reabrir uma turma não apaga a aprovação de quem já passou
+    (vale a data do primeiro encerramento); o histórico mostra o motivo do cancelamento só a quem pode ver parecer. A reunião do
+    Seminário só abre em novembro (Art. 70 §1º).
+  - **Rematrícula com a reciclagem registrada (médio, Art. 69 §3º).** A rematrícula procura a aprovação na Reciclagem (v8.6) entre a
+    desmatrícula e a data informada; sem ela, a Secretaria escreve onde a reciclagem foi feita (observação de 10 caracteres ou mais).
+  - **Ninguém mexe no que é seu (médio).** O responsável não registra a própria Prova de Reintegração (que também precisa de data válida,
+    não futura e depois do fim da pena), nem corrige o próprio marco que só o nível geral lança.
+  - **Batismo de urgência (médio, Art. 70 §5º).** O nível geral registra o motivo (urgência espiritual, conversão notória, risco de
+    morte), o detalhe e a data do termo de compromisso; com isso o discipulado não segura o batismo, e o Discipulado Pós-Batismal fica
+    lembrado. A auditoria guarda o motivo, não o detalhe.
+  - **Taxa de consagração atualizável (baixo, Art. 65 e 75, I, a).** Os R$ 70,00 viraram um valor monetário (`TAXA_CONSAGRACAO`, IPCA),
+    que a cerimônia lê como padrão.
+  - **Discipulado (baixo).** A trilha não oferece passo a quem foi excluído ou está fora da comunhão; a rotina fecha os itens de etapa
+    desativada e não cria passo para quem já tem o de novo convertido aberto; Meus Dados mostra os marcos.
+  - **Os outros baixos.** Outra convenção só para Evangelista e Pastor (Art. 71: "ministros já ordenados"); o requisito disciplinar das
+    disciplinas só no contexto da consagração (o único que alguém lê); a nomeação ou exoneração do Reitor avisa que o acesso dele muda; o
+    dirigente de congregação sem CHM recebe um aviso (Art. 67 §1º); o motivo do cancelamento pede que não se escreva diagnóstico de
+    saúde; o ROPA do discipulado inclui os candidatos ao batismo.
+
+  **Decisões que o responsável pode mudar** (o sistema já está fazendo assim):
+  - **Art. 67 §1º — dirigente sem CHM só recebe um aviso, não é barrado:** bloquear deixaria congregações sem dirigente até a Secretaria
+    lançar os CHMs de quem já dirige.
+  - **Prova de Reintegração:** quem registra é quem tem a permissão de disciplina (a Secretaria lança a prova que a AFM aplicou), sem ligar
+    a uma reunião trimestral específica.
+  - **Requisito disciplinar das disciplinas:** só vale na consagração.
+  - **Turma reaberta:** quem já foi aprovado continua aprovado enquanto ninguém mudar a nota.
+  - **Minimização:** elimina também o histórico acadêmico (o Regimento só manda guardar o Registro Histórico Mínimo).
+  - **Urgência do batismo:** só o nível geral registra.
+  - **Outra convenção:** só para Evangelista e Pastor.
+  - **Seminário:** a reunião só abre em novembro.
+  - **Diácono, Auxiliar e Missionário:** não celebram batismo, casamento nem apresentação.
+
+  **Leituras que o sistema já faz e o responsável pode corrigir:** a AFM é facultativa para o Presidente (basta dar a permissão `afm`); o
+  catálogo da trilha de discipulado fica sob a permissão `pessoas`; a liturgia do Art. 72, III, b só é exigida se for cadastrada como
+  requisito; a carga da educação continuada é a mesma para todos os cargos.
+
+  **Como ficou:** (preenchido depois do deploy)

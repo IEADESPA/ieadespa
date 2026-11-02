@@ -333,7 +333,7 @@ async function semCancelarInscricaoAcao(lugarBruto, turmaId, membroId) {
   const lugar = semLugar(lugarBruto);
   const st = semTurmaDoBotao(lugar, turmaId);
   if (!st) return;
-  const motivo = semMotivo("Motivo do cancelamento da inscrição", lugar);
+  const motivo = semMotivo("Motivo do cancelamento da inscrição (sem diagnóstico de saúde)", lugar);
   if (!motivo) return;
   await semAtoDeTurma(lugar, st.turmaId, "cancelar-inscricao", { membroId: Number(membroId), motivo });
 }

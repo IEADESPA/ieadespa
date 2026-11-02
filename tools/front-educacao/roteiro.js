@@ -63,7 +63,8 @@ async function prova() {
   ok(REAL.minha.exames.some((e) => e.justificativa) && REAL.minha.obreiro === true && REAL.minhaVazia.reciclagens.length === 0 && REAL.minhaVazia.obreiro === false, "a minha: com a justificativa; e a de quem não é obreiro e não tem nada");
   ok(REAL.painel.edicaoDoAno && REAL.painel.pessoas.some((p) => p.semAprovacaoNoAno), "o painel: a edição do ano e quem ainda não foi aprovado nela");
   // fora do módulo: o Meu Painel e a Academia (revisão)
-  ok(/agora\.funcao === "SOB_OBSERVACAO" \? "habilitado\(a\) para oficiar, sob observação/.test(lerApp("modulos/meu-painel.js")), "a credencial no Meu Painel: 'sob observação' continua oficiando");
+  ok(/agora\.funcao === "SOB_OBSERVACAO" \? `\$\{emDia\}, sob observação/.test(lerApp("modulos/meu-painel.js")) && /const emDia = agora\.celebraOficios \? "habilitado\(a\) para oficiar"/.test(lerApp("modulos/meu-painel.js")),
+    "a credencial no Meu Painel: 'sob observação' continua oficiando (e só quem celebra lê 'para oficiar' — Trava 8-B, Art. 78 §1º)");
   ok(/function afmLimparTela\(\) \{[^}]*afmSecaoAtual = "matriculas"/.test(lerApp("modulos/afm.js")), "a saída fecha a seção só do nível geral da Academia");
 
   console.log("== a Academia (nível geral): o painel ==");

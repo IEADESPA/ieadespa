@@ -29,7 +29,7 @@ const post = (acao, corpo, token) => sem(acao, { metodo: "POST", corpo, token })
   ok(/DIPLOMA_AFM/.test(await escalar("SELECT definition FROM sys.check_constraints WHERE name = 'CK_CertificadosEmitidos_Natureza'")), "a natureza dos documentos acadêmicos");
 
   // o Corpo Docente: o Reitor (pastor1), um docente (pastor2) e um que já saiu (pastor3) — pelas funções da v8.1
-  await afmDb.nomearReitor(pool, { membroId: P.pastor1, dataInicio: `${ano}-01-10`, titulacao: "Mestre em Teologia", por: 1002 });
+  await afmDb.nomearReitor(pool, { membroId: P.pastor1, dataInicio: `${ano}-01-10`, titulacao: "Mestre em Teologia", homologadoCLIEm: `${ano}-01-15`, homologacaoAto: "Ata da CLI (e2e)", por: 1002 });   // Trava 8-B: o Reitor só está em exercício homologado
   for (const m of [P.pastor2, P.pastor3]) await afmDb.cadastrarDocente(pool, { membroId: m, titulacao: "Bacharel em Teologia", dataInicio: "2025-01-01", por: 1002 });
   const cd3 = await escalar("SELECT CorpoDocenteId FROM AFMCorpoDocente WHERE MembroId = @m AND DataFim IS NULL", { m: P.pastor3 });
   await afmDb.encerrarCorpoDocente(pool, { corpoDocenteId: cd3, data: E.diasAtras(1), motivo: "Mudou de cidade (e2e)", por: 1002 });

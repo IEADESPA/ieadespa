@@ -688,7 +688,9 @@ async function credCarregarMinhaAcao() {
   if (authToken !== token) return;
   const agora = c.situacaoAgora || {};
   // v8.6: "sob observação" (reprovado no exame bienal) continua oficiando — Regimento Art. 70 §3º, I
-  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? "habilitado(a) para oficiar" : agora.funcao === "SOB_OBSERVACAO" ? "habilitado(a) para oficiar, sob observação da Academia até a repescagem" : "sem licença para oficiar no momento"}` : "";
+  // Trava 8-B — Art. 78 §1º: só Pastores, Evangelistas e Presbíteros celebram os ofícios; o Auxiliar, o Missionário e o Diácono estão com a credencial em dia
+  const emDia = agora.celebraOficios ? "habilitado(a) para oficiar" : "credencial em dia";
+  const funcao = agora.funcao ? ` — ${agora.funcao === "HABILITADO" ? emDia : agora.funcao === "SOB_OBSERVACAO" ? `${emDia}, sob observação da Academia até a repescagem` : "sem licença para oficiar no momento"}` : "";
   const impressao = c.impressaEm ? `Impressa pela Secretaria em ${credDataBr(c.impressaEm)}.` : c.impressaoSolicitadaEm ? `Impressão pedida em ${credDataBr(c.impressaoSolicitadaEm)}: a Secretaria Geral avisa quando estiver pronta.` : "";
   caixa.innerHTML = `<div class="credencial-cartao">
       <div class="credencial-topo">IEADESPA — Identidade Eclesiástica</div>

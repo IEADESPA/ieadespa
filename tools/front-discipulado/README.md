@@ -16,3 +16,5 @@ da etapa conforme a fonte, o duplo clique que envia uma vez, o tipo de marco com
 pessoa não sobrescreve) e a minha (com o convite para quem não começou); os tipos do formulário de marco vindos do catálogo (sem o "só do nível geral" para
 a liderança local; o tipo desativado fora dele); o batismo antes do curso (o Discipulado Pós-Batismal); a saída da sessão com tudo carregado; a resposta
 atrasada do login anterior e o "Atualizar" duas vezes (vale o último). Seis mutações acusadas.
+
+Resultado (v8.5, conferido na Trava 8-B em 02/11/2026): 52 verificações, 0 falhas; 6 mutações, 6 acusadas.

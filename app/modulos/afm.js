@@ -318,7 +318,7 @@ async function afmEnviarRematricularAcao(membroId) {
 function afmFormCHMAcao(membroId) {
   afmEl("afmForm").innerHTML = `<div class="cartao-perfil">
     <h4>Conceder o CHM — ${escaparHtmlEbd(afmNomeDaMatricula(membroId))}</h4>
-    <p class="subtitle">O Certificado de Habilitação Ministerial é da AFM (Art. 67): sem ele, ninguém é indicado para mudar de cargo nem assume a direção de congregação (§1º).</p>
+    <p class="subtitle">O Certificado de Habilitação Ministerial é da AFM (Art. 67): sem ele, ninguém é indicado para mudar de cargo (a escada trava) nem deve assumir a direção de congregação (§1º — o sistema avisa ao dar o papel de Dirigente).</p>
     ${afmCampoData("afmChmData", "Data da concessão")}
     ${afmBotoesForm("afmEnviarCHMAcao", [membroId], "Conceder CHM")}</div>`;
   afmMostrarForm();
@@ -556,9 +556,9 @@ async function afmCarregarFaltasCLI() {
   html += vig.length ? vig.map(e => afmCartaoExclusao(e)).join("") : "<p class='subtitle'>Nenhuma exclusão vigente.</p>";
   const inat = data.inativosAFM || [];
   if (inat.length) {
-    html += `<h5 style="margin:16px 0 6px;">Fora da CLI por estar inativo na AFM (Estatuto, Art. 15 §1º, I)</h5>
-      <p class="subtitle">Entrariam por Ordenação, mas a credencial está suspensa (Regimento, Art. 69 §3º). Voltam sozinhos com a nova matrícula.</p>
-      <ul>${inat.map(m => `<li>${escaparHtmlEbd(m.nome)} (${escaparHtmlEbd(m.cargo || "")}, ${escaparHtmlEbd(m.congregacao || "-")}) — inativo desde ${afmData(m.desde)}</li>`).join("")}</ul>`;
+    html += `<h5 style="margin:16px 0 6px;">Fora da CLI por Ordenação: credencial suspensa (Estatuto, Art. 15 §1º, I)</h5>
+      <p class="subtitle">Entrariam por Ordenação, mas não estão "devidamente credenciados": a matrícula da AFM inativa (Regimento, Art. 69 §3º), a reciclagem não renovada ou a ausência no exame (Art. 68 §3º e 70 §3º), ou o afastamento das funções. Voltam sozinhos quando a credencial volta.</p>
+      <ul>${inat.map(m => `<li>${escaparHtmlEbd(m.nome)} (${escaparHtmlEbd(m.cargo || "")}, ${escaparHtmlEbd(m.congregacao || "-")}) — ${m.motivo === "CREDENCIAL" ? escaparHtmlEbd(m.detalhe || "fora das funções") : `inativo na AFM desde ${afmData(m.desde)}`}</li>`).join("")}</ul>`;
   }
   const hist = (data.exclusoes || []).filter(e => !e.vigente);
   if (hist.length) {

@@ -21,3 +21,5 @@ atos da Academia, a própria pessoa emite o seu documento, quem nunca estudou ne
 inscrever, cancelar nem reabrir); o perfil (sem emitir documento de ninguém; a resposta da pessoa anterior não sobrescreve); a saída com tudo carregado e o que foi
 digitado; a resposta atrasada do login anterior e dois pedidos do painel. Fora do módulo, confere no texto o nível pelo histórico na lista da Academia e os
 ganchos da saída, de Minha Formação e do perfil. O DOM simulado (`tools/front-menores/dom.js`) ganhou o `select` de escolha múltipla (`selectedOptions`).
+
+Resultado (v8.7, conferido na Trava 8-B em 02/11/2026): 85 verificações, 0 falhas; 28 mutações, 28 acusadas.

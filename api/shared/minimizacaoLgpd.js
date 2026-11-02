@@ -56,6 +56,26 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
   // v8.5 — os marcos do perfil (conversão, curso de discipulado, ministério anterior...) são "registros eclesiásticos de conversão" (Art. 132 §2º, II): saem. A trilha
   // de discipulado não guarda nada próprio (lê os marcos, o batismo, as trilhas e as escalas); o batismo nas águas fica, como assentamento do sacramento.
   await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM MarcosMembro WHERE MembroId = @id`);
+  // Trava 8-B — Art. 132 §2º, II: fica só o "Registro Histórico Mínimo"; "serão eliminados todos os demais dados". Os resultados da reciclagem e do exame (v8.6) e o
+  // histórico escolar (v8.7: a matrícula nos cursos, as notas, os aproveitamentos) saem, com os documentos verificáveis (o diploma, o histórico e a declaração: a
+  // verificação pública passa a dizer "não encontrado", como o CHM e o diploma de consagração na Trava 8-A). Fica o que é de outras pessoas: a turma que a pessoa
+  // lecionou (as notas dos alunos dependem dela) e o parecer que ela deu no aproveitamento de outro aluno.
+  await pool.request().input("id", sql.Int, membroId).query(`
+    IF OBJECT_ID(N'dbo.AFMReciclagemResultados', N'U') IS NOT NULL
+    BEGIN
+      DELETE FROM AFMReciclagemResultados WHERE MembroId = @id;
+      DELETE FROM AFMExameResultados WHERE MembroId = @id;
+    END
+    IF OBJECT_ID(N'dbo.AFMCursoMatriculas', N'U') IS NOT NULL
+    BEGIN
+      DELETE da FROM AFMDocumentosAcademicos da JOIN CertificadosEmitidos ce ON ce.CertificadoId = da.CertificadoId WHERE ce.MembroId = @id;
+      DELETE FROM AFMDocumentosAcademicos WHERE CursoMatriculaId IN (SELECT CursoMatriculaId FROM AFMCursoMatriculas WHERE MembroId = @id);
+      UPDATE AFMCursoMatriculas SET DiplomaCertificadoId = NULL WHERE MembroId = @id;
+      DELETE FROM CertificadosEmitidos WHERE MembroId = @id AND Natureza IN (N'DIPLOMA_AFM', N'HISTORICO', N'DECLARACAO');
+      DELETE FROM AFMTurmaAlunos WHERE MembroId = @id;
+      DELETE FROM AFMAproveitamentos WHERE MembroId = @id;
+      DELETE FROM AFMCursoMatriculas WHERE MembroId = @id;
+    END`);
 }
 
 module.exports = { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

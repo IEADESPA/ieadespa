@@ -81,7 +81,7 @@ async function principal() {
   rs = await disparar([1, 2, 3, 4].map(() => ({ tipo: "reprovar", corpo: { membroId: P.auxiliar, data: hoje, detalhe: "Prova de doutrina de outubro" } })));
   ok(rs.every((x) => x.ok && x.r.status !== 500), "sem erro", rs.map((x) => x.r || x.erro));
   ok(rs.filter((x) => x.r.sucesso).length === 1 && (await escalar("SELECT COUNT(*) FROM AFMDesmatriculas WHERE MembroId = @m", { m: P.auxiliar })) === 1, "uma desmatrícula");
-  rs = await disparar([1, 2, 3, 4].map(() => ({ tipo: "rematricular", corpo: { membroId: P.auxiliar, reciclagemAprovadaEm: hoje } })));
+  rs = await disparar([1, 2, 3, 4].map(() => ({ tipo: "rematricular", corpo: { membroId: P.auxiliar, reciclagemAprovadaEm: hoje, observacao: "Reciclagem feita no Seminário regional" } })));
   ok(rs.every((x) => x.ok && x.r.status !== 500), "sem erro", rs.map((x) => x.r || x.erro));
   ok(rs.filter((x) => x.r.sucesso).length === 1 && (await escalar("SELECT COUNT(*) FROM Matriculas_AFM WHERE MembroId = @m AND Origem = 'REMATRICULA'", { m: P.auxiliar })) === 1, "uma rematrícula");
   ok((await escalar("SELECT TOP 1 StatusMatricula FROM Matriculas_AFM WHERE MembroId = @m ORDER BY MatriculaId DESC", { m: P.auxiliar })) === "ATIVA", "e a matrícula atual está ativa");

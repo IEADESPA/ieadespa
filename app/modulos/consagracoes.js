@@ -1008,7 +1008,7 @@ async function carregarCandidatosBatismo() {
       <td>${badgeAptidaoBatismo(c.aptidao.itens.idadeMinima)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.certidaoCivil)}</td>
       <td>${badgeAptidaoBatismo(c.aptidao.itens.parecerVidaPregressa)} <button class="btn-link" data-on-click="parecerCandidatoBatismoAcao" data-args-click="${argsAttr(c.candidatoId)}">Dar parecer</button></td>
-      <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} <button class="btn-link" data-on-click="alternarDiscipuladoBatismoAcao" data-args-click="${argsAttr(c.candidatoId, !c.discipuladoConcluidoManual)}">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
+      <td>${badgeAptidaoBatismo(c.aptidao.itens.discipulado)} ${c.status !== "BATIZADO" ? `<button class="btn-link" data-on-click="urgenciaBatismoAcao" data-args-click="${argsAttr(c.candidatoId, !!c.urgenciaTermoEm)}">${c.urgenciaTermoEm ? "Retirar urgência" : "Urgência (Art. 70 §5º)"}</button>` : ""} <button class="btn-link" data-on-click="alternarDiscipuladoBatismoAcao" data-args-click="${argsAttr(c.candidatoId, !c.discipuladoConcluidoManual)}">${c.discipuladoConcluidoManual ? "Desmarcar" : "Marcar concluído"}</button></td>
       <td>${c.aceiteTermoAssinadoId ? "✅" : `<button class="btn-link" data-on-click="acaoCandidatoBatismo" data-args-click="${argsAttr(c.candidatoId, "ACEITAR_ESTATUTO")}">Registrar aceite</button>`}</td>
       <td>${escaparHtmlEbd(c.status)}</td>
       <td class="acoes-inline">
@@ -1035,6 +1035,22 @@ async function parecerCandidatoBatismoAcao(id) {
   const favoravel = await confirmarAcao("O parecer de vida pregressa é favorável? (Cancelar = desfavorável)", "Favorável");
   const observacao = await pedirTexto("Observação do parecer (opcional)", "");
   await acaoCandidatoBatismo(id, "PARECER", { parecerVidaPregressa: favoravel ? "FAVORAVEL" : "DESFAVORAVEL", observacao });
+}
+
+// Trava 8-B — o batismo de urgência (Regimento Art. 70 §5º): o motivo, a situação e a data do termo de compromisso do Discipulado Pós-Batismal (o nível geral registra).
+async function urgenciaBatismoAcao(id, jaTem) {
+  if (jaTem) {
+    if (await confirmarAcao("Retirar o batismo de urgência? O curso de discipulado volta a ser exigido antes do batismo.", "Retirar")) await acaoCandidatoBatismo(id, "URGENCIA", { remover: true });
+    return;
+  }
+  const codigo = await pedirTexto("Motivo (Art. 70 §5º): 1 = urgência espiritual, 2 = conversão notória, 3 = risco de morte", "1, 2 ou 3", "");
+  const motivo = { 1: "URGENCIA_ESPIRITUAL", 2: "CONVERSAO_NOTORIA", 3: "RISCO_DE_MORTE" }[String(codigo || "").trim()];
+  if (!motivo) { if (codigo) mostrarToast("Escolha 1, 2 ou 3.", "erro"); return; }
+  const detalhe = await pedirTexto("Descreva a situação (sem diagnóstico de saúde)", "de 10 a 300 caracteres", "");
+  if (!detalhe) return;
+  const termoEm = await pedirTexto("Data em que o candidato assinou o termo de compromisso do Discipulado Pós-Batismal (AAAA-MM-DD)", "ex.: 2026-11-02", "");
+  if (!termoEm) return;
+  await acaoCandidatoBatismo(id, "URGENCIA", { motivo, detalhe, termoEm: termoEm.trim() });
 }
 
 async function alternarDiscipuladoBatismoAcao(id, concluido) {
@@ -1090,7 +1106,7 @@ async function reprovarConsagracaoAcao(id) {
   if (data.sucesso) carregarConsagracoes();
 }
 
-registrarAcoes({
+registrarAcoes({ urgenciaBatismoAcao,
   acaoCandidatoBatismo, acaoTurmaBatismo, alternarDiscipuladoBatismoAcao, atribuirTurmaBatismoAcao, avancarConsagracaoAcao, conferirRequisitosConsagracaoAcao, limparRequisitosEscada, mudouModalidadeConsagracaoAcao,
   inscreverCandidatoBatismoAcao, parecerCandidatoBatismoAcao, reprovarCandidatoBatismoAcao, reprovarConsagracaoAcao, salvarConsagracao,
   salvarTurmaBatismoAcao,

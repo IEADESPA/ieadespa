@@ -41,6 +41,10 @@ const TIPOS_SESSAO_CLI = {
   SEMINARIO_AFM: { rotulo: "Seminário Anual de novembro (só da Academia; não conta falta da CLI)", contaFaltas: true, contaCLI: false, contaAFM: true, magna: true }
 };
 const TIPOS_AFM_SQL = "N'MAGNA_AFM', N'SEMINARIO_AFM'";
+// Trava 8-B — Regimento Art. 78 §1º: "Estão aptos a celebrar os ofícios, mediante autorização, apenas: Pastores, Evangelistas e Presbíteros que estejam com a
+// matrícula ativa na Academia"; Art. 80 §1º, II: a imersão "privativamente por Ministros do Evangelho e Presbíteros". O Auxiliar, o Missionário e o Diácono estão
+// nas funções (credencial em dia), mas não celebram.
+const CARGOS_CELEBRANTES = ["PRESBITERO", "EVANGELISTA", "PASTOR"];
 
 // Regimento Art. 149 §2º, I — só fator EXTERNO à rotina da igreja justifica.
 const MOTIVOS_ACEITOS = {
@@ -199,7 +203,7 @@ function licencaLiturgica({ cargo, statusMatricula, status = "ATIVO", situacaoMe
   if (statusMatricula === "INATIVA") {
     return { podeOficiar: false, motivo: "Obreiro inativo na AFM: mantém o título, mas está sem licença para oficiar até nova matrícula e aprovação na reciclagem (Regimento, Art. 69 §3º)." };
   }
-  return { podeOficiar: true, motivo: null };
+  return { podeOficiar: true, motivo: null, celebraOficios: CARGOS_CELEBRANTES.includes(cargo) };
 }
 
 // Rematrícula (Art. 69 §3º): exige a data de aprovação no curso de reciclagem, que não pode ser no futuro nem antes da desmatrícula.
@@ -234,7 +238,7 @@ function textoObrigatorio(valor, { minimo = 5, maximo = 300, rotulo }) {
 }
 
 module.exports = {
-  CARGOS_OFICIAIS, CARGOS_ORDENACAO_CLI, NIVEIS, REQUISITO_NIVEL, TIPOS_SESSAO_CLI, TIPOS_AFM_SQL, MOTIVOS_ACEITOS, MOTIVOS_VEDADOS, MENSAGEM_VEDADO, FALTAS_PARA_PERDA, DIAS_PRAZO_AGE,
+  CARGOS_OFICIAIS, CARGOS_ORDENACAO_CLI, CARGOS_CELEBRANTES, NIVEIS, REQUISITO_NIVEL, TIPOS_SESSAO_CLI, TIPOS_AFM_SQL, MOTIVOS_ACEITOS, MOTIVOS_VEDADOS, MENSAGEM_VEDADO, FALTAS_PARA_PERDA, DIAS_PRAZO_AGE,
   validarJustificativa, textoDaJustificativa, apurarSequencia, providenciasDaExclusao, somarDias, fimDoMandatoReitor, situacaoReitor, avaliarNivel, rotuloDoPar, licencaLiturgica,
   validarRematricula, dataDoAto, textoObrigatorio
 };

@@ -46,6 +46,8 @@ function situacaoPublica(credencial, pessoa) {
       excluido: pessoa.excluido, foraDaComunhao: pessoa.foraDaComunhao, afastado: pessoa.sobDisciplina, educacao: pessoa.educacao }).podeOficiar;
     // v8.6 — reprovado no exame bienal: continua oficiando, mas "sob observação" até a repescagem (Regimento Art. 70 §3º, I)
     r.funcao = !habilitado ? "INATIVO" : pessoa.educacao && pessoa.educacao.sobObservacao ? "SOB_OBSERVACAO" : "HABILITADO";
+    // Trava 8-B — Art. 78 §1º: celebram os ofícios só Pastores, Evangelistas e Presbíteros em dia (com a autorização do Pastor Presidente)
+    r.celebraOficios = !!habilitado && ["PRESBITERO", "EVANGELISTA", "PASTOR"].includes(pessoa.cargo);
   }
   return r;
 }

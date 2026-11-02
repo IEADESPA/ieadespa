@@ -11,6 +11,7 @@ const { obterTrava } = require("./financeiroSeguro");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
 const certificados = require("./certificados");
+const { MARCAS_DISCIPLINA } = require("./habilitacao");
 
 const rqDe = (c) => (typeof c.request === "function" ? c.request() : new sql.Request(c));
 const naTransacao = (t) => ({ request: () => new sql.Request(t) });
@@ -20,8 +21,9 @@ const num = (v) => (v == null ? null : Number(v));
 const NAO_EXISTE = { sucesso: false, naoExiste: true };
 const MUDOU = (mensagem) => ({ sucesso: false, mudou: true, mensagem });
 const NATUREZAS = ["DIPLOMA_AFM", "HISTORICO", "DECLARACAO"];
-// O treinamento do voluntariado (HABILITACAO_TREINAMENTO) não aceita disciplina: a aptidão do ministério com menores o reavalia só pelas trilhas (revisão, 30/10/2026).
-const CONTEXTOS_DISCIPLINA = ["CONSAGRACAO", "LIDERANCA", "BATISMO_DISCIPULADO", "ESCALA_EQUIPE", "EBD_PROFESSOR"];
+// A disciplina da AFM só se exige na CONSAGRAÇÃO (Trava 8-B): nos outros fluxos (batismo, escala, EBD, liderança) quem não é obreiro nem candidato não consegue se
+// matricular na Academia e ficaria travado para sempre; o treinamento do voluntariado segue só pelas trilhas (a aptidão do ministério com menores o reavalia).
+const CONTEXTOS_DISCIPLINA = ["CONSAGRACAO"];
 const sha256 = (texto) => require("crypto").createHash("sha256").update(String(texto), "utf8").digest("hex");
 const seloDoConteudo = (hash) => String(hash).slice(0, 12).toUpperCase();
 const ROTULO_NATUREZA = { DIPLOMA_AFM: "Diploma", HISTORICO: "Histórico escolar", DECLARACAO: "Declaração de matrícula" };
@@ -63,13 +65,15 @@ async function estados(conexao, ids) {
   const lista = listaDeIds(ids);
   if (!lista.length) return out;
   const tent = (await rqDe(conexao).query(`
-    SELECT ta.MembroId, t.DisciplinaId, t.Situacao AS TurmaSituacao, ta.Situacao, ta.Resultado, CONVERT(varchar(10), t.EncerradaEm, 120) AS EncerradaEm
+    SELECT ta.MembroId, t.DisciplinaId, t.Situacao AS TurmaSituacao, ta.Situacao, ta.Resultado, CONVERT(varchar(10), t.EncerradaEm, 120) AS EncerradaEm,
+           CONVERT(varchar(10), t.PrimeiroEncerramentoEm, 120) AS PrimeiroEncerramentoEm
     FROM AFMTurmaAlunos ta JOIN AFMTurmas t ON t.TurmaId = ta.TurmaId WHERE ta.MembroId IN (${lista.join(",")})`)).recordset;
   const apr = (await rqDe(conexao).query(`
     SELECT MembroId, DisciplinaId, Decisao, AnuladoEm, CONVERT(varchar(10), DataParecer, 120) AS DataParecer FROM AFMAproveitamentos WHERE MembroId IN (${lista.join(",")})`)).recordset;
   for (const id of lista) {
     out.set(id, regra.estadoDasDisciplinas(
-      tent.filter((l) => Number(l.MembroId) === id).map((l) => ({ disciplinaId: l.DisciplinaId, turmaSituacao: l.TurmaSituacao, situacao: l.Situacao, resultado: l.Resultado, encerradaEm: l.EncerradaEm })),
+      tent.filter((l) => Number(l.MembroId) === id).map((l) => ({ disciplinaId: l.DisciplinaId, turmaSituacao: l.TurmaSituacao, situacao: l.Situacao, resultado: l.Resultado, encerradaEm: l.EncerradaEm,
+        primeiroEncerramentoEm: l.PrimeiroEncerramentoEm })),
       apr.filter((l) => Number(l.MembroId) === id).map((l) => ({ disciplinaId: l.DisciplinaId, decisao: l.Decisao, anuladoEm: l.AnuladoEm, dataParecer: l.DataParecer }))));
   }
   return out;
@@ -106,7 +110,7 @@ async function criarRequisito(pool, { contexto, alvoChave, disciplinaId, modo, p
   const trilhas = require("./trilhas");
   const v = trilhas.validarRequisito({ contexto, alvoChave, trilhaId: disciplinaId, modo });   // a mesma validação do contexto, do alvo e do modo
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem.replace("Informe a trilha exigida.", "Escolha a disciplina exigida.") };
-  if (!CONTEXTOS_DISCIPLINA.includes(v.dados.contexto)) return { sucesso: false, mensagem: "O treinamento do voluntariado se exige por trilha de formação (a aptidão do ministério com menores é conferida pelas trilhas)." };
+  if (!CONTEXTOS_DISCIPLINA.includes(v.dados.contexto)) return { sucesso: false, mensagem: "A disciplina da AFM só se exige na consagração (nos outros fluxos, quem não é obreiro nem candidato não consegue cursá-la): use uma trilha de formação." };
   const d = (await pool.request().input("d", sql.Int, v.dados.trilhaId).query(`SELECT Ativa FROM AFMDisciplinas WHERE DisciplinaId = @d`)).recordset[0];
   if (!d) return { sucesso: false, mensagem: "Disciplina não encontrada." };
   if (!d.Ativa) return { sucesso: false, mensagem: "A disciplina está desativada: ative-a antes de exigi-la." };
@@ -205,10 +209,15 @@ async function salvarDisciplina(pool, { disciplina, por }) {
 // ---------------------------------------------------------------- o corpo docente em exercício (o docente da turma e o parecerista do aproveitamento)
 // Em exercício na data (hoje, sem data): a linha começou e não terminou; o Reitor, também dentro do mandato (vencido o mandato sem recondução, a Reitoria fica vaga — v8.1).
 async function docentesEmExercicio(conexao, { naData = null } = {}) {
-  const r = await rqDe(conexao).input("d", sql.Date, naData || hojeBrasilia()).query(`SELECT cd.MembroId, MAX(m.Nome) AS Nome, MAX(CASE WHEN cd.Papel = N'REITOR' THEN 1 ELSE 0 END) AS Reitor
-    FROM AFMCorpoDocente cd JOIN MembroReferencia m ON m.MembroId = cd.MembroId
-    WHERE cd.DataInicio <= @d AND (cd.DataFim IS NULL OR cd.DataFim >= @d) AND (cd.Papel = N'DOCENTE' OR cd.MandatoAte >= @d)
-    GROUP BY cd.MembroId ORDER BY MAX(m.Nome)`);
+  // Trava 8-B: no rol e sem as marcas da disciplina (excluído, fora da comunhão, afastado das funções — a disciplina não muda o cadastro); o Reitor, dentro do mandato e
+  // já homologado pela CLI (Art. 68 §1º: antes disso a Reitoria está "aguardando a homologação")
+  const r = await rqDe(conexao).input("d", sql.Date, naData || hojeBrasilia()).query(`SELECT x.MembroId, MAX(x.Nome) AS Nome, MAX(x.Reitor) AS Reitor FROM (
+      SELECT cd.MembroId, m.Nome, CASE WHEN cd.Papel = N'REITOR' THEN 1 ELSE 0 END AS Reitor, ${MARCAS_DISCIPLINA}
+      FROM AFMCorpoDocente cd JOIN MembroReferencia m ON m.MembroId = cd.MembroId
+      WHERE m.Status = N'ATIVO' AND cd.DataInicio <= @d AND (cd.DataFim IS NULL OR cd.DataFim >= @d)
+        AND (cd.Papel = N'DOCENTE' OR (cd.MandatoAte >= @d AND cd.HomologadoCLIEm IS NOT NULL AND cd.HomologadoCLIEm <= @d))) x
+    WHERE x.Excluido = 0 AND x.ForaDaComunhao = 0 AND x.Afastado = 0
+    GROUP BY x.MembroId ORDER BY MAX(x.Nome)`);
   return r.recordset.map((l) => ({ membroId: Number(l.MembroId), nome: l.Nome, reitor: !!l.Reitor }));
 }
 async function ehDocenteEmExercicio(conexao, membroId, naData = null) {
@@ -377,6 +386,9 @@ async function encerrarTurma(pool, { turmaId, por, hojeIso = hojeBrasilia() }) {
     if (!tu) return NAO_EXISTE;
     if (tu.situacao !== "ABERTA") return MUDOU("A turma já está encerrada.");
     if (tu.dataInicio > hojeIso) return { sucesso: false, mensagem: "A turma ainda não começou." };
+    if ((await new sql.Request(t).input("t", sql.Int, tu.turmaId).input("m", sql.Int, Number(por)).query(`SELECT 1 AS x FROM AFMTurmaAlunos WHERE TurmaId = @t AND MembroId = @m AND Situacao = N'INSCRITO'`)).recordset.length) {
+      return { sucesso: false, mensagem: "Você é aluno desta turma: outra pessoa da Academia a encerra." };
+    }
     if (!tu.inscritos) return { sucesso: false, mensagem: "A turma não tem aluno inscrito: exclua-a em vez de encerrar." };
     if (tu.lancados < tu.inscritos) return { sucesso: false, mensagem: `Falta lançar a nota de ${tu.inscritos - tu.lancados} aluno(s) (ou cancelar a inscrição de quem desistiu).` };
     await new sql.Request(t).input("t", sql.Int, tu.turmaId).input("h", sql.Date, hojeIso).input("por", sql.Int, por)
@@ -411,11 +423,13 @@ async function reabrirTurma(pool, { turmaId, motivo, por }) {
 // A pessoa precisa da matrícula ATIVA na AFM: o oficial em atividade (a matrícula é automática — sem linha, conta como ativa) ou o candidato matriculado (v8.2).
 async function matriculaAFMAtiva(conexao, membroId) {
   const l = (await rqDe(conexao).input("m", sql.Int, Number(membroId)).query(`SELECT m.Status, m.CargoMinisterial,
-    (SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula
+    (SELECT TOP 1 a.StatusMatricula FROM Matriculas_AFM a WHERE a.MembroId = m.MembroId ORDER BY a.MatriculaId DESC) AS StatusMatricula, ${MARCAS_DISCIPLINA}
     FROM MembroReferencia m WHERE m.MembroId = @m`)).recordset[0];
   if (!l) return null;
-  const oficial = l.Status === "ATIVO" && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
-  return { existe: true, ativa: l.Status === "ATIVO" && (l.StatusMatricula ? l.StatusMatricula === "ATIVA" : oficial) };
+  // Trava 8-B: a exclusão e a Disciplina Rigorosa não mudam o cadastro, mas tiram a pessoa da comunhão — não estuda nem recebe documento de "regularmente matriculado"
+  const noRol = l.Status === "ATIVO" && !l.Excluido && !l.ForaDaComunhao;
+  const oficial = noRol && afm.CARGOS_OFICIAIS.includes(l.CargoMinisterial);
+  return { existe: true, noRol, ativa: noRol && (l.StatusMatricula ? l.StatusMatricula === "ATIVA" : oficial) };
 }
 
 async function matricularNoCurso(pool, { membroId, cursoId, data, por, hojeIso = hojeBrasilia() }) {
@@ -457,10 +471,17 @@ async function cancelarCursoMatricula(pool, { cursoMatriculaId, motivo, por, hoj
     if (abertas.length) return { sucesso: false, mensagem: `Está inscrito(a) em turma aberta deste curso (${abertas.map((x) => x.Nome).join(", ")}): cancele a inscrição antes.` };
     await new sql.Request(t).input("id", sql.Int, m.CursoMatriculaId).input("h", sql.Date, hojeIso).input("mo", sql.NVarChar(300), motivo)
       .query(`UPDATE AFMCursoMatriculas SET Situacao = N'CANCELADA', CanceladaEm = @h, MotivoCancelamento = @mo WHERE CursoMatriculaId = @id AND Situacao = N'CURSANDO'`);
+    // Trava 8-B — o "cursando" do mesmo nível registrado à mão (a matrícula de candidato grava o Básico) cai junto: quem largou o curso não está "cursando" (Art. 72)
+    const manual = (await new sql.Request(t).input("m", sql.Int, m.MembroId).input("n", sql.NVarChar(30), m.Nivel).query(`UPDATE a SET NivelEscolaridade = NULL
+      OUTPUT DELETED.MatriculaId FROM Matriculas_AFM a WHERE a.MembroId = @m AND a.NivelEscolaridade = @n AND a.NivelConcluido = 0
+        AND a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = @m)`)).recordset;
     await new sql.Request(t).input("id", sql.Int, m.CursoMatriculaId).input("por", sql.Int, por).query(`UPDATE ce SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Matrícula no curso cancelada.', RevogadoPorMembroId = @por
       FROM CertificadosEmitidos ce JOIN AFMDocumentosAcademicos da ON da.CertificadoId = ce.CertificadoId WHERE da.CursoMatriculaId = @id AND ce.Natureza = N'DECLARACAO' AND ce.RevogadoEm IS NULL`);
-    return { sucesso: true };
+    return { sucesso: true, nivelManual: manual.length ? { matriculaId: manual[0].MatriculaId, nivel: m.Nivel } : null };
   });
+  // a auditoria depois da transação (como no resto do arquivo)
+  if (r.sucesso && r.nivelManual) await registrarAuditoria({ tabela: "Matriculas_AFM", registroId: r.nivelManual.matriculaId, acao: "AFM_NIVEL", usuarioId: por,
+    dadosAntes: { nivel: r.nivelManual.nivel, concluido: false }, dadosDepois: { nivel: null, motivo: "curso cancelado" } });
   if (r.sucesso) await registrarAuditoria({ tabela: "AFMCursoMatriculas", registroId: Number(cursoMatriculaId), acao: "AFM_CURSO_MATRICULA_CANCELADA", usuarioId: por, dadosAntes: { situacao: "CURSANDO" }, dadosDepois: { situacao: "CANCELADA", motivo } });
   return r.sucesso ? { sucesso: true, mensagem: "Matrícula no curso cancelada. As disciplinas aprovadas continuam valendo numa matrícula nova." } : r;
 }
@@ -475,8 +496,8 @@ async function concluirCurso(pool, { cursoMatriculaId, data, por, hojeIso = hoje
     const m = await linhaCursoMatricula(naTransacao(t), cursoMatriculaId);
     if (m.Situacao !== "CURSANDO") return MUDOU(m.Situacao === "CONCLUIDO" ? "O curso já foi concluído." : "A matrícula no curso está cancelada.");
     if (data < m.DataInicio) return { sucesso: false, mensagem: "A conclusão não pode ser antes da matrícula no curso." };
-    const ativo = (await new sql.Request(t).input("m", sql.Int, Number(m.MembroId)).query(`SELECT Status FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
-    if (!ativo || ativo.Status !== "ATIVO") return { sucesso: false, mensagem: "A pessoa não está no rol de membros ativos: o diploma não se emite." };
+    const ativo = await matriculaAFMAtiva(naTransacao(t), m.MembroId);
+    if (!ativo || !ativo.noRol) return { sucesso: false, mensagem: "A pessoa não está no rol de membros ativos (ou está excluída ou fora da comunhão): o diploma não se emite." };
     const { cursos } = await curriculo(naTransacao(t));
     const curso = cursos.find((c) => c.cursoId === m.CursoId);
     const est = (await estados(naTransacao(t), [m.MembroId])).get(Number(m.MembroId)) || new Map();
@@ -490,7 +511,9 @@ async function concluirCurso(pool, { cursoMatriculaId, data, por, hojeIso = hoje
       descricao: regra.descricaoDiploma({ curso: m.Curso, dataConclusao: data, cargaCumprida: av.cargaCumprida, disciplinas: cumpridas }), emitidoPorMembroId: por, natureza: "DIPLOMA_AFM", auditar: false });
     if (!diploma.sucesso) throw new Error(`diploma não emitido: ${diploma.mensagem}`);
     await new sql.Request(t).input("id", sql.Int, m.CursoMatriculaId).input("d", sql.Date, data).input("cert", sql.Int, diploma.certificadoId)
-      .query(`UPDATE AFMCursoMatriculas SET Situacao = N'CONCLUIDO', DataConclusao = @d, DiplomaCertificadoId = @cert WHERE CursoMatriculaId = @id AND Situacao = N'CURSANDO'`);
+      .query(`UPDATE AFMCursoMatriculas SET Situacao = N'CONCLUIDO', DataConclusao = @d, DiplomaCertificadoId = @cert WHERE CursoMatriculaId = @id AND Situacao = N'CURSANDO';
+              UPDATE ce SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Curso concluído (vale o diploma).' FROM CertificadosEmitidos ce
+              JOIN AFMDocumentosAcademicos da ON da.CertificadoId = ce.CertificadoId WHERE da.CursoMatriculaId = @id AND ce.Natureza = N'DECLARACAO' AND ce.RevogadoEm IS NULL`);
     return { sucesso: true, certificadoId: diploma.certificadoId, codigo: diploma.codigoVerificacao, curso: m.Curso, carga: av.cargaCumprida };
   });
   if (!r.sucesso) return r;
@@ -576,13 +599,14 @@ async function historicoDe(conexao, membroId, { comParecer = false, comCodigos =
     FROM AFMCursoMatriculas m LEFT JOIN CertificadosEmitidos ce ON ce.CertificadoId = m.DiplomaCertificadoId WHERE m.MembroId = @m ORDER BY m.CursoMatriculaId`)).recordset;
   const tent = (await rqDe(conexao).input("m", sql.Int, id).query(`SELECT t.TurmaId, t.DisciplinaId, t.Situacao AS TurmaSituacao, CONVERT(varchar(10), t.DataInicio, 120) AS DataInicio,
     CONVERT(varchar(10), t.DataFim, 120) AS DataFim, CONVERT(varchar(10), t.EncerradaEm, 120) AS EncerradaEm, t.CargaHoraria, md.Nome AS Docente,
+    CONVERT(varchar(10), t.PrimeiroEncerramentoEm, 120) AS PrimeiroEncerramentoEm, ta.MotivoCancelamento,
     ta.Situacao, ta.Nota, ta.HorasPresentes, ta.Resultado FROM AFMTurmaAlunos ta JOIN AFMTurmas t ON t.TurmaId = ta.TurmaId JOIN MembroReferencia md ON md.MembroId = t.DocenteMembroId
     WHERE ta.MembroId = @m ORDER BY t.DataInicio, t.TurmaId`)).recordset;
   const apr = (await rqDe(conexao).input("m", sql.Int, id).query(`SELECT a.AproveitamentoId, a.DisciplinaId, a.Instituicao, a.DisciplinaOrigem, a.CargaHorariaOrigem, a.AnoOrigem, a.NotaOrigem, a.Decisao,
     a.Parecer, mp.Nome AS Parecerista, CONVERT(varchar(10), a.DataParecer, 120) AS DataParecer, a.AnuladoEm, a.MotivoAnulacao
     FROM AFMAproveitamentos a JOIN MembroReferencia mp ON mp.MembroId = a.PareceristaMembroId WHERE a.MembroId = @m ORDER BY a.AproveitamentoId`)).recordset;
   const est = regra.estadoDasDisciplinas(
-    tent.map((l) => ({ disciplinaId: l.DisciplinaId, turmaSituacao: l.TurmaSituacao, situacao: l.Situacao, resultado: l.Resultado, encerradaEm: l.EncerradaEm })),
+    tent.map((l) => ({ disciplinaId: l.DisciplinaId, turmaSituacao: l.TurmaSituacao, situacao: l.Situacao, resultado: l.Resultado, encerradaEm: l.EncerradaEm, primeiroEncerramentoEm: l.PrimeiroEncerramentoEm })),
     apr.map((l) => ({ disciplinaId: l.DisciplinaId, decisao: l.Decisao, anuladoEm: l.AnuladoEm, dataParecer: l.DataParecer })));
   const nomeDisc = (dId) => (disciplinas.get(dId) || {}).nome || "—";
   const cursoDaDisc = (dId) => cursos.find((c) => c.cursoId === (disciplinas.get(dId) || {}).cursoId) || null;
@@ -604,7 +628,7 @@ async function historicoDe(conexao, membroId, { comParecer = false, comCodigos =
     }),
     turmas: tent.map((l) => ({ turmaId: l.TurmaId, disciplinaId: l.DisciplinaId, disciplina: nomeDisc(l.DisciplinaId), curso: (cursoDaDisc(l.DisciplinaId) || {}).nome || "—",
       periodo: `${l.DataInicio} a ${l.DataFim}`, dataInicio: l.DataInicio, dataFim: l.DataFim, encerradaEm: l.EncerradaEm || null, turmaSituacao: l.TurmaSituacao, docente: l.Docente,
-      cargaHoraria: Number(l.CargaHoraria), situacao: l.Situacao,
+      cargaHoraria: Number(l.CargaHoraria), situacao: l.Situacao, motivoCancelamento: comParecer ? l.MotivoCancelamento || null : undefined,
       // a nota só aparece da turma encerrada (a da aberta ainda pode mudar)
       nota: l.TurmaSituacao === "ENCERRADA" ? num(l.Nota) : null, horasPresentes: l.TurmaSituacao === "ENCERRADA" ? num(l.HorasPresentes) : null,
       frequenciaPct: l.TurmaSituacao === "ENCERRADA" && l.HorasPresentes != null ? Math.floor((Number(l.HorasPresentes) / Number(l.CargaHoraria)) * 1000) / 10 : null,
@@ -705,7 +729,8 @@ async function conteudoDoDocumento(pool, certificadoId) {
 // O Reitor em exercício no dia da emissão (o nome sobre a assinatura do diploma, da declaração e do histórico).
 async function reitorEm(pool, naData) {
   const l = (await pool.request().input("d", sql.Date, naData).query(`SELECT TOP 1 m.Nome FROM AFMCorpoDocente cd JOIN MembroReferencia m ON m.MembroId = cd.MembroId
-    WHERE cd.Papel = N'REITOR' AND cd.DataInicio <= @d AND (cd.DataFim IS NULL OR cd.DataFim >= @d) AND cd.MandatoAte >= @d ORDER BY cd.DataInicio DESC`)).recordset[0];
+    WHERE cd.Papel = N'REITOR' AND cd.DataInicio <= @d AND (cd.DataFim IS NULL OR cd.DataFim >= @d) AND cd.MandatoAte >= @d
+      AND cd.HomologadoCLIEm IS NOT NULL AND cd.HomologadoCLIEm <= @d ORDER BY cd.DataInicio DESC`)).recordset[0];
   return l ? l.Nome : null;
 }
 
@@ -728,7 +753,7 @@ async function painel(pool) {
   }
   const trilhas = require("./trilhas");
   return { cursos, turmas, prontos, docentes: await docentesEmExercicio(pool), requisitos: await listarRequisitos(pool),
-    areas: regra.AREAS, resultados: regra.RESULTADOS, contextos: trilhas.ROTULO_CONTEXTO, contextosComAlvo: trilhas.CONTEXTOS_COM_ALVO };
+    areas: regra.AREAS, resultados: regra.RESULTADOS, contextos: Object.fromEntries(CONTEXTOS_DISCIPLINA.map((c) => [c, trilhas.ROTULO_CONTEXTO[c]])), contextosComAlvo: trilhas.CONTEXTOS_COM_ALVO };
 }
 
 // Meus Dados (LGPD): o histórico escolar inteiro (com o parecer do aproveitamento) e a docência.

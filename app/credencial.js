@@ -33,8 +33,10 @@
   function dadosDaCredencial(r) {
     var dados = [["Nome", r.nome], ["Categoria", r.categoria]];
     if (r.congregacao) dados.push(["Congregação", r.congregacao]);
-    if (r.funcao) dados.push(["Funções ministeriais", r.funcao === "HABILITADO" ? "Habilitado(a) — pode oficiar"
+    if (r.funcao) dados.push(["Funções ministeriais", r.funcao === "HABILITADO" ? "Habilitado(a) — credencial em dia"
       : r.funcao === "SOB_OBSERVACAO" ? "Habilitado(a), sob observação da AFM até o exame de repescagem" : "Obreiro(a) inativo(a) — não pode oficiar no momento"]);
+    // Trava 8-B — Regimento Art. 78 §1º: só Pastores, Evangelistas e Presbíteros em dia celebram os ofícios (com a autorização do Pastor Presidente)
+    if (r.funcao && r.funcao !== "INATIVO") dados.push(["Ofícios (batismo, Ceia, casamento)", r.celebraOficios ? "Celebra, com a autorização do Pastor Presidente (Regimento, Art. 78)" : "Não celebra (só Pastores, Evangelistas e Presbíteros — Regimento, Art. 78 §1º)"]);
     if (r.via) dados.push(["Via", String(r.via)]);
     dados.push(["Consultado em", agora(r.consultadoEm)]);
     return dados;

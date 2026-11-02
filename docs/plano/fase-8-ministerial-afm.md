@@ -343,7 +343,7 @@ recolhimento do Art. 95 §2º, IV, a vira automático). Limite de consultas por 
 **4. Onde aparece.** Meu Painel: "Minha credencial". Pessoas (nível geral): a seção **Credenciais** — emitir, emitir em lote, nova via, cancelar, PDF para impressão e os
 pedidos de impressão. A página pública `credencial.html`.
 
-### Como ficou a v8.4 (entregue em 28/10/2026)
+### Como ficou a v8.4 (entregue em 29/10/2026)
 
 **Em produção desde 29/10/2026** (merge `ab26201`; para desfazer: `git revert -m 1 ab26201`). Migração **159** (`CredenciaisEclesiasticas`); regra pura em `api/shared/credencial.js`, banco em `api/shared/credencialDb.js`, o cartão em PDF (tamanho de cartão de
 crédito, para a impressora de PVC) em `api/shared/pdfCredencial.js`; rotas `/api/credenciais/<ação>` (`GestaoCredenciais`) e a pública
@@ -635,14 +635,14 @@ Achado de pesquisa que muda o desenho: formação ministerial séria precisa de
 seminário precisa entregar **declaração, histórico e aproveitamento** — que é o
 que a Convenção e outras instituições vão pedir.
 
-- [ ] Estrutura acadêmica: curso → disciplina (carga horária, pré-requisito) →
+- [x] Estrutura acadêmica: curso → disciplina (carga horária, pré-requisito) →
       turma → matrícula → nota e frequência → **histórico escolar**.
-- [ ] Emissão de declaração de matrícula, histórico e diploma.
-- [ ] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
+- [x] Emissão de declaração de matrícula, histórico e diploma.
+- [x] **Aproveitamento de disciplina** cursada em outra instituição, com parecer
       registrado de quem aprovou — hoje isso é decisão informal do Reitor.
-- [ ] Cada disciplina com o seu docente (o corpo docente com a titulação, o
+- [x] Cada disciplina com o seu docente (o corpo docente com a titulação, o
       Reitor e a CDER já existem desde a v8.1).
-- [ ] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
+- [x] Os requisitos de formação da v6.9 (trilhas) e da escada conferindo as
       disciplinas cursadas *(veio da v8.6: lá só existiam a reciclagem e o exame)*.
       *(Classter; Populi — SIS para seminários)*
 
@@ -687,8 +687,122 @@ só a turma encerrada conta; o docente lança e encerra a própria turma (reabri
 a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou antes do sistema; o aviso das três áreas do
 Art. 70 §2º é por curso e não trava nada; o histórico escolar é assentamento da Academia e fica (a exclusão LGPD tira a identificação da pessoa, como nas matrículas).
 
+### Como ficou a v8.7 (entregue em 30/10/2026)
+
+**Em produção desde 30/10/2026** (merge `81a2548`; para desfazer: `git revert -m 1 81a2548`). Migração **163** (`AFMCursos` — os quatro níveis, criados pela migração —,
+`AFMDisciplinas`, `AFMDisciplinaPreRequisitos`, `AFMCursoMatriculas`, `AFMTurmas`, `AFMTurmaAlunos`, `AFMAproveitamentos`, `AFMDisciplinaRequisitos`,
+`AFMDocumentosAcademicos`; `CertificadosEmitidos.Natureza` ganhou `DIPLOMA_AFM`, `HISTORICO` e `DECLARACAO`). Regra pura em `api/shared/seminario.js`, banco em
+`api/shared/seminarioDb.js`, rota `/api/seminario/<ação>` (`GestaoSeminario`); o PDF do histórico em `api/shared/pdfHistoricoEscolar.js` (o diploma e a declaração usam a
+página dos documentos ministeriais, com o nome do Reitor em exercício no dia da emissão). A escada, a lista da Academia, o Meu Painel, o nivelamento e o CEI leem o nível
+também do histórico (`afm.avaliarNivel` com os pares do histórico; vale o par que atende o cargo); o requisito de formação (`trilhas.avaliarRequisitos` e
+`filtrarMembrosQueAtendem`) soma as disciplinas exigidas. Tela: seção **Seminário** na aba Academia (Turmas, Alunos, Currículo, Requisitos de disciplina — só o nível
+geral), **Meu histórico escolar** e **Turmas em que leciono** em Minha Formação, o histórico escolar na aba Caminhada do perfil (módulo novo `app/modulos/seminario.js`);
+a verificação pública do histórico mostra os cursos e as disciplinas com nota e resultado. Casca do service worker **v49**.
+
+**O que mudou depois das revisões independentes** (servidor: 1 alto, 3 médios, 8 baixos; tela: 1 alto, 3 médios, 10 baixos — tratados):
+
+- **Reabrir não apaga o que já valeu:** a turma encerrada uma vez guarda a data do primeiro encerramento — não se exclui, e a inscrição com nota nela não se cancela
+  (antes: reabrir, cancelar e excluir tirava a aprovação que concluiu um curso, ou uma reprovação). A nota de quem concluiu o curso não deixa de ser "aprovado" em
+  disciplina nenhuma do curso (obrigatória ou optativa).
+- **Ninguém age sobre o próprio percurso:** nem se inscreve, nem cancela a própria inscrição, nem reabre a turma em que é aluno.
+- **O histórico emitido é conferível:** o título leva o selo do conteúdo (o começo do hash da fotografia), coberto pelo selo do certificado; a verificação pública confere
+  e mostra as disciplinas com nota e resultado — conteúdo mexido no banco aparece como "não confere".
+- O requisito de disciplina **não vale no treinamento do voluntariado** (a aptidão do ministério com menores é reavaliada só pelas trilhas); desativar a disciplina exigida
+  num fluxo ou pré-requisito de outra ativa é recusado; reabrir que deixaria alguém em duas turmas abertas da mesma disciplina é recusado.
+- A declaração de matrícula só sai para quem tem a matrícula ativa na AFM e é revogada quando a matrícula no curso é cancelada ou a pessoa sai do rol; o diploma só para
+  quem está no rol; a conclusão não pode ter data antes da última obrigatória cumprida; o PDF dos documentos acadêmicos é do nível geral da Academia (como a rota); o
+  perfil não leva os códigos nem os documentos; a frequência do histórico não arredonda para cima.
+- Tela: a turma da Academia e a de Minha Formação (o Reitor é das duas) têm estados e ids separados, e cada botão leva o lugar e a turma — antes, encerrar ou salvar
+  numa podia agir na outra; encerrar com nota digitada e não salva é recusado; as releituras não apagam o que foi digitado (a ficha relê só o histórico); a própria ficha
+  não oferece os atos que o servidor recusa; o docente fora de exercício só vê; matrícula inválida no "Inscrever" fica no campo.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** os cursos são exatamente os quatro níveis do Art. 72; nota mínima 7,0 e frequência 75%
+(configuráveis por curso); só a turma encerrada conta; o docente lança e encerra a própria turma (reabrir é só do nível geral); o parecer do aproveitamento é do Reitor
+ou de um docente em exercício na data; a declaração vale 30 dias; o histórico emitido não muda depois; o nível registrado à mão continua valendo para quem estudou
+antes do sistema; o aviso das três áreas do Art. 70 §2º é por curso e não trava nada; o requisito de disciplina não vale no treinamento do voluntariado; o histórico
+escolar é assentamento da Academia e fica.
+
+**Provas:** jest 6.227 testes; banco local (`bash rodar.sh preparar-escada`, que já aplica a 163): `e2e-66` fluxos, segurança, a revisão e lixo 159, `e2e-67`
+corridas 12 (em processos separados); a fase 8 (`e2e-47` a `e2e-65`), o cuidado (`e2e-24` a `e2e-27`) e a Trava 7-C (`e2e-36`, `e2e-37`, `e2e-40`) verdes; tela
+(`tools/front-seminario`, com as respostas reais gravadas pelo `e2e-66`) 85, com 28 mutações acusadas; teste de tela da homologação 41112302426 sem divergência e sem
+violação de CSP (base aprovada na execução 41109146078).
+
 ## 🔒 Trava de Revisão 8-B — antes de encerrar a FASE 8 e avançar para a FASE 9
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v8.5 a v8.7 pelas 5 perguntas do checklist, e faz uma varredura final
 na FASE 8 inteira antes de fechar.
+
+- [x] **Fechada em 02/11/2026** — auditoria de v8.5 a v8.7 e varredura final da FASE 8. Duas revisões independentes, só de leitura: uma
+  das costuras ENTRE as versões (quem conta como "ativo" ou "no rol", o que a saída da igreja desfaz, o que cada pessoa pode mexer em si mesma)
+  e outra da conformidade com o Regimento, o Estatuto, o plano e o README. **Nenhum achado crítico; todos os que o código resolve,
+  corrigidos com teste** (migração 164; `e2e-68`, 53 verificações; casca v50). As 5 perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria inteira do banco local, recriado do zero (`rodar.sh preparar` e
+     `tudo.sh`, do `e2e-1` ao `e2e-68`), toda verde; as migrações 156 a 164 aplicadas duas vezes cada. Os roteiros antigos que mudaram foram
+     os que esta trava pediu: a rematrícula com a observação (`e2e-49`, `e2e-50`), o campo novo da página do QR (`e2e-59`) e o Reitor
+     homologado como docente (`e2e-66`, `e2e-67`).
+  2. **Toda tela nova abre?** Sim. Antes da trava, teste de tela completo na produção (execução 41122712170): 1.178 ações iguais, 0
+     divergência. Provas de tela sem navegador: consagração 116 (5 mutações acusadas), discipulado 52 (6 de 6), educação continuada 65
+     (16 de 16), Seminário 85 (28 de 28), credencial. O teste de tela da homologação e o da produção depois do deploy estão em "Como
+     ficou", abaixo.
+  3. **O README e o código contam a mesma história?** Agora sim: a contagem de tabelas estava errada (334; o certo é 338, porque a conta
+     não descontava as duas tabelas apagadas depois, `VotosEnquete` na 034 e `CampanhaSorteioNumeros` na 051); a FASE 8 tinha frase
+     escondida dentro do item da FASE 7; a v8.4 dizia "entregue em 28/10" (foi em 29/10); o item "perda de assento por faltas" da fase 2
+     ainda aparecia aberto (entrou na v8.1); o ROPA dizia que a minimização guarda o histórico acadêmico (não guarda, e não deve: Art. 132
+     §2º, II); o comentário da regra única citava o artigo errado (é o Art. 95 §3º).
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável, listadas no fim.
+  5. **Houve deploy real?** Sim: ver "Como ficou", abaixo.
+
+  O que mudou:
+  - **Só quem celebra, celebra (alto).** Diácono, Auxiliar e Missionário apareciam "habilitados para oficiar" o batismo, o casamento e a
+    apresentação. O Regimento (Art. 78 §1º; Art. 80 §1º, II) só deixa Presbíteros, Evangelistas e Pastores celebrarem. A licença agora diz
+    à parte se a pessoa **celebra ofícios**: a turma de batismo recusa o oficiante que não celebra; o Meu Painel diz "habilitado(a) para
+    oficiar" só a quem celebra e "credencial em dia" aos demais; a página do QR mostra a linha "Ofícios"; os campos do celebrante no
+    casamento e na apresentação avisam a regra.
+  - **CLI por Ordenação é de quem tem a credencial em dia (alto, Estatuto Art. 15 §1º, I).** A composição da CLI e o quadro da Academia
+    usavam só o cargo: um Pastor sob disciplina continuava contando. Agora usam a mesma regra única da habilitação, e o quadro mostra
+    "Fora da CLI por Ordenação: credencial suspensa".
+  - **A saída da igreja desfaz a Academia e o Seminário (alto).** A vacância fecha o corpo docente sempre; quando é saída de verdade (não
+    disciplina nem licença de candidatura), a matrícula da AFM fica inativa, as inscrições em turmas abertas são canceladas e o curso em
+    andamento também. A minimização (Art. 132 §2º, II) elimina a reciclagem, os exames, as turmas, os aproveitamentos, os cursos, os
+    documentos acadêmicos e o diploma, a declaração e o histórico verificáveis.
+  - **O Seminário só aceita quem está no rol e o docente em exercício (médio).** A conclusão do curso exige a matrícula ativa e a pessoa
+    no rol (sem exclusão nem fora da comunhão); docente é quem está ativo e sem marca de disciplina, e o Reitor só depois de homologado
+    pela CLI; o aluno inscrito não encerra a própria turma; a declaração de matrícula é revogada quando o curso termina ou a pessoa é
+    desmatriculada; cancelar o curso desfaz o nível lançado à mão do mesmo grau; reabrir uma turma não apaga a aprovação de quem já passou
+    (vale a data do primeiro encerramento); o histórico mostra o motivo do cancelamento só a quem pode ver parecer. A reunião do
+    Seminário só abre em novembro (Art. 70 §1º).
+  - **Rematrícula com a reciclagem registrada (médio, Art. 69 §3º).** A rematrícula procura a aprovação na Reciclagem (v8.6) entre a
+    desmatrícula e a data informada; sem ela, a Secretaria escreve onde a reciclagem foi feita (observação de 10 caracteres ou mais).
+  - **Ninguém mexe no que é seu (médio).** O responsável não registra a própria Prova de Reintegração (que também precisa de data válida,
+    não futura e depois do fim da pena), nem corrige o próprio marco que só o nível geral lança.
+  - **Batismo de urgência (médio, Art. 70 §5º).** O nível geral registra o motivo (urgência espiritual, conversão notória, risco de
+    morte), o detalhe e a data do termo de compromisso; com isso o discipulado não segura o batismo, e o Discipulado Pós-Batismal fica
+    lembrado. A auditoria guarda o motivo, não o detalhe.
+  - **Taxa de consagração atualizável (baixo, Art. 65 e 75, I, a).** Os R$ 70,00 viraram um valor monetário (`TAXA_CONSAGRACAO`, IPCA),
+    que a cerimônia lê como padrão.
+  - **Discipulado (baixo).** A trilha não oferece passo a quem foi excluído ou está fora da comunhão; a rotina fecha os itens de etapa
+    desativada e não cria passo para quem já tem o de novo convertido aberto; Meus Dados mostra os marcos.
+  - **Os outros baixos.** Outra convenção só para Evangelista e Pastor (Art. 71: "ministros já ordenados"); o requisito disciplinar das
+    disciplinas só no contexto da consagração (o único que alguém lê); a nomeação ou exoneração do Reitor avisa que o acesso dele muda; o
+    dirigente de congregação sem CHM recebe um aviso (Art. 67 §1º); o motivo do cancelamento pede que não se escreva diagnóstico de
+    saúde; o ROPA do discipulado inclui os candidatos ao batismo.
+
+  **Decisões que o responsável pode mudar** (o sistema já está fazendo assim):
+  - **Art. 67 §1º — dirigente sem CHM só recebe um aviso, não é barrado:** bloquear deixaria congregações sem dirigente até a Secretaria
+    lançar os CHMs de quem já dirige.
+  - **Prova de Reintegração:** quem registra é quem tem a permissão de disciplina (a Secretaria lança a prova que a AFM aplicou), sem ligar
+    a uma reunião trimestral específica.
+  - **Requisito disciplinar das disciplinas:** só vale na consagração.
+  - **Turma reaberta:** quem já foi aprovado continua aprovado enquanto ninguém mudar a nota.
+  - **Minimização:** elimina também o histórico acadêmico (o Regimento só manda guardar o Registro Histórico Mínimo).
+  - **Urgência do batismo:** só o nível geral registra.
+  - **Outra convenção:** só para Evangelista e Pastor.
+  - **Seminário:** a reunião só abre em novembro.
+  - **Diácono, Auxiliar e Missionário:** não celebram batismo, casamento nem apresentação.
+
+  **Leituras que o sistema já faz e o responsável pode corrigir:** a AFM é facultativa para o Presidente (basta dar a permissão `afm`); o
+  catálogo da trilha de discipulado fica sob a permissão `pessoas`; a liturgia do Art. 72, III, b só é exigida se for cadastrada como
+  requisito; a carga da educação continuada é a mesma para todos os cargos.
+
+  **Como ficou:** (preenchido depois do deploy)

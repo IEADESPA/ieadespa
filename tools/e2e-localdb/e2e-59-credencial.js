@@ -16,7 +16,7 @@ const ler = (codigo, ip) => chamarRota("VerificarCredencial/index.js", { binding
 const MEMBRO = (m) => L.sessao(m, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() } });
 const ehPdf = (r) => r.status === 200 && Buffer.isBuffer(r.body) && r.body.slice(0, 5).toString() === "%PDF-";
 const valida = (m) => um("SELECT CredencialId, Via, Codigo, Situacao FROM CredenciaisEclesiasticas WHERE MembroId = @m AND Situacao = 'VALIDA'", { m });
-const PUBLICAS = new Set(["sucesso", "situacao", "nome", "categoria", "congregacao", "via", "funcao", "consultadoEm", "mensagem"]);
+const PUBLICAS = new Set(["sucesso", "situacao", "nome", "categoria", "congregacao", "via", "funcao", "consultadoEm", "mensagem", "celebraOficios"]);   // Trava 8-B: se celebra ofícios (Art. 78 §1º) — deriva do cargo, que a categoria já mostra
 
 (async () => {
   await obterPool();

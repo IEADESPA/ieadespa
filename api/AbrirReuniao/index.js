@@ -116,6 +116,11 @@ module.exports = async function (context, req) {
       return;
     }
     tipo = tipoSessao;
+    // Trava 8-B — Regimento Art. 70 §1º: o Seminário Anual é no último domingo de novembro (aberto em outro mês, deixaria de contar a falta da CLI)
+    if (tipo === "SEMINARIO_AFM" && Number(require("../shared/dataBrasilia").hojeBrasilia().slice(5, 7)) !== 11) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: "O Seminário Anual de Obreiros é em novembro (Regimento, Art. 70 §1º). Em outro mês, abra como Ordinária ou Sessão Magna." } };
+      return;
+    }
     // Uma reunião que conta falta por dia (Regimento Art. 79, III, b: a reunião da CLI ou da AFM é no último domingo): a segunda no mesmo dia daria duas faltas à mesma pessoa.
     if (afm.TIPOS_SESSAO_CLI[tipo].contaFaltas) {
       const jaHoje = await pool.request().input("orgaoId", sql.Int, orgao.orgaoId)

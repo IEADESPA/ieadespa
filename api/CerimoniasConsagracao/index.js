@@ -69,7 +69,9 @@ module.exports = async function (context, req) {
   if (metodo !== "POST") return erro(context, 404, "Ação inválida.");
 
   if (acao === "criar" || acao === "editar") {
-    const v = regra.validarCerimonia(corpo, hojeBrasilia());
+    // Trava 8-B — a taxa padrão é a do Anexo de Parâmetros Monetários (corrigida todo ano — Regimento Art. 65 e 75, I, a)
+    const taxa = (await pool.request().query(`SELECT TOP 1 Valor FROM ValoresMonetarios WHERE Sigla = N'TAXA_CONSAGRACAO' AND Ativo = 1`)).recordset[0];
+    const v = regra.validarCerimonia(corpo, hojeBrasilia(), taxa ? Number(taxa.Valor) : regra.VALOR_TAXA_REFERENCIA);
     if (!v.valido) return erro(context, 400, v.mensagem);
     if (acao === "criar") return resposta(context, await db.criarCerimonia(pool, { dados: v.cerimonia, por }), 201);
     const cerimoniaId = auth.idDeRota(corpo.cerimoniaId);

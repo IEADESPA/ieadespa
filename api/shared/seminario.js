@@ -166,16 +166,20 @@ function textoMotivo(v, minimo = 10) {
 }
 
 // ---- o que a pessoa já cumpriu ----
-// `tentativas`: as inscrições da pessoa, [{ disciplinaId, turmaSituacao, situacao, resultado, encerradaEm }]; `aproveitamentos`: [{ disciplinaId, decisao, anuladoEm, dataParecer }].
-// Devolve Map disciplinaId -> { cumprida, fonte: "TURMA"|"APROVEITAMENTO"|null, data, cursando }. Só a turma ENCERRADA vale (a nota da aberta ainda pode mudar).
+// `tentativas`: as inscrições da pessoa, [{ disciplinaId, turmaSituacao, situacao, resultado, encerradaEm, primeiroEncerramentoEm }]; `aproveitamentos`: [{ disciplinaId,
+// decisao, anuladoEm, dataParecer }]. Devolve Map disciplinaId -> { cumprida, fonte: "TURMA"|"APROVEITAMENTO"|null, data, cursando }. Só a turma ENCERRADA vale (a nota da
+// aberta ainda pode mudar) — mas a turma REABERTA (já encerrada uma vez) não suspende o "aprovado" de quem não teve a nota mexida (Trava 8-B: reabrir para corrigir
+// um aluno não tira a disciplina dos outros, nem trava a cerimônia de quem já cumpria).
 function estadoDasDisciplinas(tentativas, aproveitamentos) {
   const out = new Map();
   const de = (id) => out.get(Number(id)) || { cumprida: false, fonte: null, data: null, cursando: false };
   for (const t of tentativas || []) {
     const atual = de(t.disciplinaId);
     if (t.situacao !== "INSCRITO") continue;
-    if (t.turmaSituacao === "ABERTA") atual.cursando = true;
-    else if (t.resultado === "APROVADO" && (!atual.cumprida || (t.encerradaEm && atual.data && t.encerradaEm < atual.data))) Object.assign(atual, { cumprida: true, fonte: "TURMA", data: t.encerradaEm || null });
+    const reaberta = t.turmaSituacao === "ABERTA" && !!t.primeiroEncerramentoEm;
+    const quando = t.turmaSituacao === "ABERTA" ? t.primeiroEncerramentoEm : t.encerradaEm;
+    if (t.turmaSituacao === "ABERTA" && !(reaberta && t.resultado === "APROVADO")) atual.cursando = true;
+    else if (t.resultado === "APROVADO" && (!atual.cumprida || (quando && atual.data && quando < atual.data))) Object.assign(atual, { cumprida: true, fonte: "TURMA", data: quando || null });
     out.set(Number(t.disciplinaId), atual);
   }
   for (const a of aproveitamentos || []) {

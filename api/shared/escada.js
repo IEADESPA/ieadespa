@@ -72,6 +72,11 @@ function avaliarAscensao(dados, alvo, { modalidade = "INDICACAO", hojeIso, veDis
     itens.push(item("degrau", "Cargo de destino", "Art. 71", "FALTA", "O tipo de consagração não leva a um cargo da escada."));
     return fechar(itens, alvo, modalidade);
   }
+  // Trava 8-B — Art. 71: a dispensa da escada é do "ministro já ordenado" vindo de outra convenção — Ministro do Evangelho é o Evangelista e o Pastor (VI e VII)
+  if (outra && alvo !== "EVANGELISTA" && alvo !== "PASTOR") {
+    itens.push(item("modalidade", "Ministro já ordenado de outra convenção", "Art. 71", "FALTA", "Só o Evangelista ou o Pastor ordenado em outra convenção é recebido sem subir a escada; para os demais cargos, a indicação segue degrau por degrau."));
+    return fechar(itens, alvo, modalidade);
+  }
 
   // 1. O degrau (Art. 71): vedada a queima de etapas, salvo ministro já ordenado vindo de outra convenção.
   const iAtual = indice(d.cargoAtual);

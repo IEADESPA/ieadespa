@@ -8,7 +8,8 @@
 //  - ForaDaComunhao: Disciplina Rigorosa em vigor, homologada (Art. 95 §2º, III — o "afastamento total da comunhão").
 //  - Afastado: das FUNÇÕES — sanção em vigor (não a advertência), afastamento cautelar, exclusão ou Disciplina Rigorosa. Aqui a decisão do TER ainda pendente de
 //    homologação do CEI JÁ afasta (decisão da Trava 8-A): a pessoa continua membro até o CEI homologar, mas não oficia nem unge. O processo só aberto, sem
-//    julgamento, não afasta (Art. 95 §3º, III). E a Carência Administrativa do Art. 77: a suspensão terminada não devolve a função — só a aprovação na Prova de
+//    julgamento, não afasta (o afastamento preventivo do Art. 95 §3º é uma medida cautelar própria — registrada como cautelar — e o inciso III lembra que ele "não é
+//    antecipação de culpa"). E a Carência Administrativa do Art. 77: a suspensão terminada não devolve a função — só a aprovação na Prova de
 //    Reintegração Ética (decisão do responsável, 29/10/2026).
 //  A recusa da homologação pelo CEI (CEIRecusouEm, migração 160) tira o efeito da decisão.
 const { sql } = require("./db");

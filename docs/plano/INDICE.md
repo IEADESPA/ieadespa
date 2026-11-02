@@ -36,14 +36,14 @@ Arquivo: [`fase-1-membresia.md`](fase-1-membresia.md) — 11 bloco(s) · itens 4
 
 ## FASE 2 — Governança (órgãos e deliberações)
 
-Arquivo: [`fase-2-governanca.md`](fase-2-governanca.md) — 11 bloco(s) · itens 40/42 concluídos.
+Arquivo: [`fase-2-governanca.md`](fase-2-governanca.md) — 11 bloco(s) · itens 41/42 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | v2.0 | [Submenu por órgão na aba Reuniões (pré-requisito de navegação)](fase-2-governanca.md#v20--submenu-por-órgão-na-aba-reuniões-pré-requisito-de-navegação) | ✅ 4/4 |
 | v2.1 | [Assembleia Geral (sessão e quórum)](fase-2-governanca.md#v21--assembleia-geral-sessão-e-quórum) | ✅ 5/5 |
 | v2.2 | [Assembleia Geral (pautas especiais)](fase-2-governanca.md#v22--assembleia-geral-pautas-especiais) | ✅ 3/3 |
-| v2.3 | [CLI (composição e sessões)](fase-2-governanca.md#v23--cli-composição-e-sessões) | 🟡 3/4 |
+| v2.3 | [CLI (composição e sessões)](fase-2-governanca.md#v23--cli-composição-e-sessões) | ✅ 4/4 |
 | v2.4 | [CLI (Comissões Permanentes)](fase-2-governanca.md#v24--cli-comissões-permanentes) | ✅ 3/3 |
 | v2.5 | [Diretoria Executiva](fase-2-governanca.md#v25--diretoria-executiva) | ✅ 5/5 |
 | v2.6 | [Conselho Fiscal](fase-2-governanca.md#v26--conselho-fiscal) | ✅ 4/4 |
@@ -204,7 +204,7 @@ Arquivo: [`fase-d-robustez-e-operacao.md`](fase-d-robustez-e-operacao.md) — 10
 
 ## FASE 8 — Ministerial (AFM)
 
-Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 28/33 concluídos.
+Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s) · itens 34/34 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -215,8 +215,8 @@ Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s)
 | 🔒 8-A | [antes de avançar para a v8.5](fase-8-ministerial-afm.md#-trava-de-revisão-8-a--antes-de-avançar-para-a-v85) | ✅ 1/1 |
 | v8.5 | [Trilha de discipulado como entidade de primeira classe *(7ª rodada)*](fase-8-ministerial-afm.md#v85--trilha-de-discipulado-como-entidade-de-primeira-classe-7ª-rodada) | ✅ 4/4 |
 | v8.6 | [Educação continuada e requisito verificável de promoção *(7ª rodada)*](fase-8-ministerial-afm.md#v86--educação-continuada-e-requisito-verificável-de-promoção-7ª-rodada) | ✅ 6/6 |
-| v8.7 | [Seminário como sistema acadêmico, não como curso online *(7ª rodada)*](fase-8-ministerial-afm.md#v87--seminário-como-sistema-acadêmico-não-como-curso-online-7ª-rodada) | ⬜ 0/5 |
-| 🔒 8-B | [antes de encerrar a FASE 8 e avançar para a FASE 9](fase-8-ministerial-afm.md#-trava-de-revisão-8-b--antes-de-encerrar-a-fase-8-e-avançar-para-a-fase-9) | — |
+| v8.7 | [Seminário como sistema acadêmico, não como curso online *(7ª rodada)*](fase-8-ministerial-afm.md#v87--seminário-como-sistema-acadêmico-não-como-curso-online-7ª-rodada) | ✅ 5/5 |
+| 🔒 8-B | [antes de encerrar a FASE 8 e avançar para a FASE 9](fase-8-ministerial-afm.md#-trava-de-revisão-8-b--antes-de-encerrar-a-fase-8-e-avançar-para-a-fase-9) | ✅ 1/1 |
 
 ## FASE 9 — Entidades Vinculadas e Expansão
 

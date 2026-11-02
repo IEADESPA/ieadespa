@@ -108,6 +108,15 @@ async function idsInativosAFM(pool) {
   return new Set(r.recordset.map((l) => Number(l.MembroId)));
 }
 
+// Trava 8-B — de uma lista de pessoas, quem está com a credencial em dia (a licença da regra única: matrícula, educação continuada, disciplina e Carência).
+async function idsComCredencialEmDia(pool, membroIds) {
+  const out = new Set();
+  for (const [id, p] of await habilitacao.situacaoMinisterial(pool, membroIds)) {
+    if (afm.licencaLiturgica({ ...p, statusMatricula: p.statusMatricula || "ATIVA" }).podeOficiar) out.add(id);
+  }
+  return out;
+}
+
 // Quem está excluído da CLI por faltas agora (exclusão vigente: nem readmitida, nem anulada).
 async function idsExcluidosCLI(pool) {
   const r = await pool.request().query(`SELECT MembroId FROM CLIExclusoesFaltas WHERE ReadmitidaEm IS NULL AND AnuladaEm IS NULL`);
@@ -267,7 +276,8 @@ async function apurar(pool, { membroIds = null } = {}) {
         const ins = await req().input("mat", sql.Int, mat.MatriculaId).input("m", sql.Int, id).input("data", sql.Date, gatilho.data)
           .input("sessoes", sql.NVarChar(60), gatilho.sessoes.join(","))
           .query(`INSERT INTO AFMDesmatriculas (MatriculaId, MembroId, Motivo, DataDesmatricula, SessoesGatilho) OUTPUT INSERTED.DesmatriculaId VALUES (@mat, @m, N'FALTAS', @data, @sessoes);
-                  UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;`);
+                  UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;
+                  UPDATE CertificadosEmitidos SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Desmatriculado da AFM.' WHERE MembroId = @m AND Natureza = N'DECLARACAO' AND RevogadoEm IS NULL;`);
         out.desmatriculas.push({ desmatriculaId: ins.recordset[0].DesmatriculaId, membroId: id, data: gatilho.data });
       };
       const anular = async (motivo) => {
@@ -356,7 +366,8 @@ async function registrarReprovacao(pool, { membroId, data, detalhe, por }) {
     const ins = await new sql.Request(t).input("mat", sql.Int, mat.MatriculaId).input("m", sql.Int, Number(membroId)).input("data", sql.Date, data)
       .input("detalhe", sql.NVarChar(500), detalhe).input("por", sql.Int, por)
       .query(`INSERT INTO AFMDesmatriculas (MatriculaId, MembroId, Motivo, DataDesmatricula, Detalhe, RegistradoPor) OUTPUT INSERTED.DesmatriculaId VALUES (@mat, @m, N'REPROVACAO', @data, @detalhe, @por);
-              UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;`);
+              UPDATE Matriculas_AFM SET StatusMatricula = N'INATIVA' WHERE MatriculaId = @mat;
+                  UPDATE CertificadosEmitidos SET RevogadoEm = SYSUTCDATETIME(), MotivoRevogacao = N'Desmatriculado da AFM.' WHERE MembroId = @m AND Natureza = N'DECLARACAO' AND RevogadoEm IS NULL;`);
     return { sucesso: true, desmatriculaId: ins.recordset[0].DesmatriculaId, mensagem: "Reprovação registrada: a matrícula ficou inativa e o obreiro perdeu a licença para oficiar (Regimento, Art. 66 §2º, II)." };
   });
   if (r.sucesso) await registrarAuditoria({ tabela: "AFMDesmatriculas", registroId: r.desmatriculaId, acao: "AFM_REPROVACAO", usuarioId: por, dadosDepois: { membroId: Number(membroId), data, detalhe } });
@@ -391,6 +402,13 @@ async function rematricular(pool, { membroId, reciclagemAprovadaEm, observacao, 
     if (mat.StatusMatricula !== "INATIVA") return { sucesso: false, mensagem: "A matrícula desta pessoa está ativa: não há o que regularizar." };
     const v = afm.validarRematricula({ reciclagemAprovadaEm, observacao }, { hojeIso: hojeBrasilia(agora), desmatriculaEm: mat.DataDesmatricula });
     if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
+    // Trava 8-B — Art. 69 §3º: a aprovação na reciclagem que a AFM registrou (v8.6) entre a desmatrícula e a data informada; sem ela, a observação diz onde foi feita
+    const registrada = (await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("de", sql.Date, mat.DataDesmatricula || "1900-01-01").input("ate", sql.Date, v.data)
+      .query(`IF OBJECT_ID(N'dbo.AFMReciclagemResultados', N'U') IS NOT NULL SELECT COUNT(*) AS n FROM AFMReciclagemResultados r JOIN AFMReciclagemEdicoes e ON e.EdicaoId = r.EdicaoId
+              WHERE r.MembroId = @m AND r.Resultado = N'APROVADO' AND e.DataRealizacao >= @de AND e.DataRealizacao <= @ate ELSE SELECT 1 AS n`)).recordset[0];
+    if (!Number(registrada && registrada.n) && (!v.observacao || v.observacao.length < 10)) {
+      return { sucesso: false, mensagem: "Não há aprovação registrada na Reciclagem (Educação continuada) entre a desmatrícula e esta data. Registre o resultado lá, ou escreva na observação onde a reciclagem foi feita (pelo menos 10 caracteres)." };
+    }
     const ins = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("cargo", sql.NVarChar(30), pessoa.CargoMinisterial)
       .input("nivel", sql.NVarChar(30), mat.NivelEscolaridade || null).input("conc", sql.Bit, !!mat.NivelConcluido)
       .input("rec", sql.Date, v.data).input("obs", sql.NVarChar(300), v.observacao).input("por", sql.Int, por).input("anterior", sql.Int, mat.MatriculaId)
@@ -485,9 +503,10 @@ async function nomearReitor(pool, { membroId, dataInicio, titulacao, homologadoC
       .input("por", sql.Int, por)
       .query(`INSERT INTO AFMCorpoDocente (MembroId, Papel, Titulacao, DataInicio, MandatoAte, HomologadoCLIEm, HomologacaoAto, CriadoPor) OUTPUT INSERTED.CorpoDocenteId
               VALUES (@m, N'REITOR', @tit, @ini, @ate, @hom, @ato, @por)`);
-    return { sucesso: true, corpoDocenteId: ins.recordset[0].CorpoDocenteId, anteriorId: anterior ? anterior.CorpoDocenteId : null,
+    return { sucesso: true, corpoDocenteId: ins.recordset[0].CorpoDocenteId, anteriorId: anterior ? anterior.CorpoDocenteId : null, anteriorMembroId: anterior ? anterior.MembroId : null,
       mensagem: `${pessoa.Nome} registrado(a) como Reitor(a) da AFM, com mandato até 31/12/${String(dataInicio).slice(0, 4)}.${homologadoCLIEm ? "" : " Falta registrar a homologação técnica da CLI."}` };
   });
+  if (r.sucesso && r.anteriorMembroId) r.mensagem += await avisoAcessoReitor(pool, r.anteriorMembroId);
   if (r.sucesso) await registrarAuditoria({ tabela: "AFMCorpoDocente", registroId: r.corpoDocenteId, acao: "AFM_REITOR_NOMEADO", usuarioId: por, dadosDepois: { membroId: Number(membroId), dataInicio, homologadoCLIEm: homologadoCLIEm || null, anterior: r.anteriorId } });
   return r;
 }
@@ -521,9 +540,17 @@ async function reconduzirReitor(pool, { ano, por, agora = new Date() }) {
 }
 
 // Encerra o Reitor (exoneração) ou um docente.
+// Trava 8-B — quem deixa a Reitoria e ainda tem o papel de acesso "Reitor da AFM" (Global, "afm") continua com o nível geral da Academia: o aviso pede para retirar.
+async function avisoAcessoReitor(pool, membroId) {
+  if (!membroId) return "";
+  const l = (await pool.request().input("m", sql.Int, Number(membroId)).query(`SELECT TOP 1 1 AS x FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
+    WHERE l.MembroId = @m AND p.Nome = N'Reitor da AFM' AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))`)).recordset[0];
+  return l ? " Atenção: o acesso de liderança \"Reitor da AFM\" continua com a pessoa — retire em Permissões (o sistema não tira acesso sozinho)." : "";
+}
+
 async function encerrarCorpoDocente(pool, { corpoDocenteId, data, motivo, por }) {
   const atual = (await pool.request().input("id", sql.Int, corpoDocenteId).query(`
-    SELECT CorpoDocenteId, Papel, CONVERT(varchar(10), DataInicio, 120) AS DataInicio, DataFim FROM AFMCorpoDocente WHERE CorpoDocenteId = @id`)).recordset[0];
+    SELECT CorpoDocenteId, MembroId, Papel, CONVERT(varchar(10), DataInicio, 120) AS DataInicio, DataFim FROM AFMCorpoDocente WHERE CorpoDocenteId = @id`)).recordset[0];
   if (!atual) return NAO_EXISTE;
   if (atual.DataFim) return { sucesso: false, mensagem: "Já está encerrado." };
   if (data < atual.DataInicio) return { sucesso: false, mensagem: "O encerramento não pode ser antes do início." };
@@ -531,7 +558,7 @@ async function encerrarCorpoDocente(pool, { corpoDocenteId, data, motivo, por })
     .query(`UPDATE AFMCorpoDocente SET DataFim = @data, MotivoFim = @motivo WHERE CorpoDocenteId = @id AND DataFim IS NULL`);
   if (!upd.rowsAffected[0]) return MUDOU("Mudou enquanto isso. Atualize a tela.");
   await registrarAuditoria({ tabela: "AFMCorpoDocente", registroId: Number(corpoDocenteId), acao: atual.Papel === "REITOR" ? "AFM_REITOR_EXONERADO" : "AFM_DOCENTE_ENCERRADO", usuarioId: por, dadosDepois: { data, motivo } });
-  return { sucesso: true, mensagem: atual.Papel === "REITOR" ? "Exoneração registrada: a Reitoria fica vaga." : "Docente encerrado." };
+  return { sucesso: true, mensagem: atual.Papel === "REITOR" ? `Exoneração registrada: a Reitoria fica vaga.${await avisoAcessoReitor(pool, atual.MembroId)}` : "Docente encerrado." };
 }
 
 async function cadastrarDocente(pool, { membroId, titulacao, dataInicio, por }) {
@@ -638,8 +665,23 @@ async function painelFaltasCLI(pool, composicao) {
     ORDER BY m.Nome`);
   return {
     limite: afm.FALTAS_PARA_PERDA, emRisco, exclusoes,
-    inativosAFM: inativos.recordset.map((l) => ({ membroId: l.MembroId, nome: l.Nome, congregacao: l.Congregacao, cargo: l.CargoNome, desde: l.DataDesmatricula, motivo: l.Motivo }))
+    inativosAFM: [...inativos.recordset.map((l) => ({ membroId: l.MembroId, nome: l.Nome, congregacao: l.Congregacao, cargo: l.CargoNome, desde: l.DataDesmatricula, motivo: l.Motivo })),
+      ...(await foraPorOutroMotivo(pool, new Set(inativos.recordset.map((l) => Number(l.MembroId)))))]
   };
+}
+
+// Trava 8-B — quem entraria na CLI por Ordenação, tem a matrícula ativa, mas está fora pela educação continuada, pela disciplina ou pela Carência (o motivo da
+// disciplina nunca aparece: o quadro é da Secretaria Geral, mas a frase é a mesma da licença).
+async function foraPorOutroMotivo(pool, jaListados) {
+  const r = await pool.request().query(`SELECT m.MembroId, m.Nome, c.Nome AS Congregacao, cm.Nome AS CargoNome FROM MembroReferencia m
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
+    WHERE m.Status = N'ATIVO' AND m.CargoMinisterial IN (${ORDENACAO_SQL})`);
+  const ids = r.recordset.map((l) => Number(l.MembroId)).filter((id) => !jaListados.has(id));
+  const sit = await habilitacao.situacaoMinisterial(pool, ids);
+  return r.recordset.filter((l) => !jaListados.has(Number(l.MembroId))).map((l) => {
+    const lic = afm.licencaLiturgica({ ...(sit.get(Number(l.MembroId)) || {}), statusMatricula: ((sit.get(Number(l.MembroId)) || {}).statusMatricula) || "ATIVA" });
+    return lic.podeOficiar ? null : { membroId: l.MembroId, nome: l.Nome, congregacao: l.Congregacao, cargo: l.CargoNome, desde: null, motivo: "CREDENCIAL", detalhe: lic.motivo };
+  }).filter(Boolean);
 }
 
 // Sessões Magnas (aba Academia): data, situação, presentes e faltas dos esperados pela Academia.
@@ -666,7 +708,8 @@ async function minhaSituacao(pool, membroId) {
   const exVig = (await pool.request().input("id", sql.Int, id).query(`
     SELECT TOP 1 CONVERT(varchar(10), DataExclusao, 120) AS DataExclusao FROM CLIExclusoesFaltas WHERE MembroId = @id AND ReadmitidaEm IS NULL AND AnuladaEm IS NULL`)).recordset[0];
   const mat = (await matriculasAtuais(() => pool.request(), [id])).get(id);
-  const inativaAFM = !!(mat && mat.StatusMatricula === "INATIVA");
+  // Trava 8-B: a Ordenação vale só com a credencial em dia (a mesma regra da composição da CLI)
+  const inativaAFM = !(await idsComCredencialEmDia(pool, [id])).has(id);
   const caminhos = (await caminhosNaCLI(pool, id)).filter((c) => !(c.via === "ORDENACAO" && inativaAFM));
   const naCLI = caminhos.length > 0 && !exVig;
   const seqCLI = naCLI ? (await sequenciasAtuais(pool, "CLI", [id])).get(id) || 0 : 0;
@@ -865,7 +908,7 @@ async function dadosDoTitular(pool, membroId) {
 }
 
 module.exports = {
-  PERMISSAO, garantirMatriculas, marcarNaoConta, matriculasAtuais, universoAFM, idsInativosAFM, idsExcluidosCLI, caminhosNaCLI, historico, apurar, apurarSemFalhar, resumoDaApuracao,
+  PERMISSAO, garantirMatriculas, marcarNaoConta, matriculasAtuais, universoAFM, idsInativosAFM, idsComCredencialEmDia, idsExcluidosCLI, caminhosNaCLI, historico, apurar, apurarSemFalhar, resumoDaApuracao,
   definirNivel, registrarReprovacao, anularReprovacao, rematricular, comunicarExclusao, readmitir,
   corpoDocente, reitorAtual, nomearReitor, homologarReitor, reconduzirReitor, encerrarCorpoDocente, cadastrarDocente,
   sequenciasAtuais, listarMatriculas, painelFaltasCLI, sessoesMagnas, minhaSituacao, licencasDe,

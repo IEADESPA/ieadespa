@@ -43,7 +43,7 @@ async function principal() {
   await E.montarCenario();
   const ano = Number(hojeBr().slice(0, 4));
   const afmDb = require(path.join(L.API, "shared/afmDb.js"));
-  await afmDb.nomearReitor(pool, { membroId: P.pastor1, dataInicio: `${ano}-01-10`, titulacao: "Mestre em Teologia", por: 1002 });
+  await afmDb.nomearReitor(pool, { membroId: P.pastor1, dataInicio: `${ano}-01-10`, titulacao: "Mestre em Teologia", homologadoCLIEm: `${ano}-01-15`, homologacaoAto: "Ata da CLI (e2e)", por: 1002 });   // Trava 8-B: o Reitor só está em exercício homologado
   await afmDb.cadastrarDocente(pool, { membroId: P.pastor2, titulacao: "Bacharel em Teologia", dataInicio: "2025-01-01", por: 1002 });
   const sem = (acao, corpo) => E.chamarRota("GestaoSeminario/index.js", { metodo: "POST", binding: { acao }, token: GERAL(1002, ["afm", "pessoas"]), corpo });
   const basico = await escalar("SELECT CursoId FROM AFMCursos WHERE Nivel = 'BASICO'");

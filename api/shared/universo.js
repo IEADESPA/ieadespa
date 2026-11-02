@@ -67,8 +67,10 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   `);
   // v8.1 — obreiro com a matrícula da AFM inativa está com a credencial suspensa (Regimento Art. 69 §3º) e deixa de ser "devidamente credenciado" (Estatuto Art. 15 §1º, I): não
   // entra por Ordenação enquanto durar (mantém o cargo). Se também ocupa uma cadeira por Função, entra por ela.
-  const inativosAFM = await afmDb.idsInativosAFM(pool);
-  const ordenacaoValida = porOrdenacao.recordset.filter(m => !inativosAFM.has(Number(m.membroId)));
+  // Trava 8-B — "devidamente credenciados e sem restrições disciplinares" pela regra única (shared/habilitacao.js + afm.licencaLiturgica): a matrícula da AFM inativa
+  // (v8.1), a reciclagem não renovada e a suspensão pelo exame (v8.6), o afastamento disciplinar e a Carência do Art. 77 tiram a pessoa da CLI por Ordenação
+  const credenciados = await afmDb.idsComCredencialEmDia(pool, porOrdenacao.recordset.map(m => m.membroId));
+  const ordenacaoValida = porOrdenacao.recordset.filter(m => credenciados.has(Number(m.membroId)));
   const idsPorOrdenacao = new Set(ordenacaoValida.map(m => m.membroId));
   const comOrdenacao = ordenacaoValida.map(m => Object.assign({}, m, {
     viaOrdenacao: true, viaFuncao: false, cargoOuFuncao: null, orgaoOrigemNome: null

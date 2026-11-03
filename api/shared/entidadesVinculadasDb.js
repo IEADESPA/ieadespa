@@ -360,7 +360,8 @@ async function nepotismo(pool, { membroId, remunerado, externo, declaracaoParent
     WHERE o.Sigla = 'DIRETORIA_EXECUTIVA' AND a.DataFim IS NULL AND a.MembroId IS NOT NULL`);
   const diretoria = r.recordset.map((x) => Number(x.MembroId)).filter((id) => id !== Number(membroId));
   if (diretoria.length === 0) return null;
-  if (await existeParentescoAte2Grau(pool, sql, membroId, diretoria)) {
+  const achou = await existeParentescoAte2Grau(pool, sql, membroId, new Set(diretoria));
+  if (achou && achou.encontrado) {
     return "Vedado: cargo remunerado em entidade vinculada não vai a parente até o 2º grau de membro da Diretoria Executiva (Estatuto, Art. 76 §2º).";
   }
   return null;
@@ -393,7 +394,7 @@ async function indicarDirigente(pool, { entidadeId, dados, por, hoje = hojeBrasi
                 IndicadoEm, IndicacaoAto, IndicacaoRegistradaPor, MandatoAte)
               OUTPUT inserted.DirigenteId
               SELECT @e, @f, @fd, @m, @ne, @rem, @fo, @rp, @dp, @ie, @ia, @por, @ma
-              WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WHERE EntidadeId = @e AND Status IN (N'PROPOSTA', N'ATIVA'))`);
+              WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Status IN (N'PROPOSTA', N'ATIVA'))`);
     if (!r.recordset[0]) return MUDOU();
     const dirigenteId = r.recordset[0].DirigenteId;
     await registrarAuditoria({ tabela: "EntidadeDirigentes", registroId: dirigenteId, acao: "ENTIDADE_DIRIGENTE_INDICADO", usuarioId: por, dadosDepois: { entidadeId, ...d } });
@@ -543,7 +544,7 @@ async function abrirApuracao(pool, { entidadeId, dados, por, hoje = hojeBrasilia
     const r = await pool.request().input("e", sql.Int, entidadeId).input("m", sql.NVarChar(20), v.dados.motivo).input("f", sql.NVarChar(2000), v.dados.fatos)
       .input("h", sql.Date, hoje).input("por", sql.Int, por)
       .query(`INSERT INTO EntidadeIntervencoes (EntidadeId, Motivo, Fatos, AbertaEm, AbertaPor) OUTPUT inserted.IntervencaoId
-              SELECT @e, @m, @f, @h, @por WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WHERE EntidadeId = @e AND Status = N'ATIVA')`);
+              SELECT @e, @m, @f, @h, @por WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Status = N'ATIVA')`);
     if (!r.recordset[0]) return MUDOU();
     const intervencaoId = r.recordset[0].IntervencaoId;
     await registrarAuditoria({ tabela: "EntidadeIntervencoes", registroId: intervencaoId, acao: "ENTIDADE_APURACAO_ABERTA", usuarioId: por, dadosDepois: { entidadeId, ...v.dados } });
@@ -687,7 +688,7 @@ async function reabrirApuracao(pool, { intervencaoId, por, hoje = hojeBrasilia()
       .input("por", sql.Int, por).input("ne", sql.Date, l.NotificadoEm).input("nf", sql.NVarChar(200), l.NotificacaoForma).input("me", sql.Date, l.ManifestacaoEm).input("mr", sql.NVarChar(1000), l.ManifestacaoResumo)
       .query(`INSERT INTO EntidadeIntervencoes (EntidadeId, Motivo, Fatos, AbertaEm, AbertaPor, NotificadoEm, NotificacaoForma, NotificacaoRegistradaPor, ManifestacaoEm, ManifestacaoResumo)
               OUTPUT inserted.IntervencaoId
-              SELECT @e, @m, @f, @h, @por, @ne, @nf, @por, @me, @mr WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WHERE EntidadeId = @e AND Status = N'ATIVA')`);
+              SELECT @e, @m, @f, @h, @por, @ne, @nf, @por, @me, @mr WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Status = N'ATIVA')`);
     if (!r.recordset[0]) return { sucesso: false, mensagem: "Só entidade ativa passa por apuração." };
     const novo = r.recordset[0].IntervencaoId;
     await registrarAuditoria({ tabela: "EntidadeIntervencoes", registroId: novo, acao: "ENTIDADE_APURACAO_REABERTA", usuarioId: por, dadosDepois: { origem: intervencaoId, entidadeId: l.EntidadeId } });

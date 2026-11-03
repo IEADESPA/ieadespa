@@ -65,7 +65,7 @@ function texto(valor, { minimo = 0, maximo, rotulo, obrigatorio = true, multilin
 
 // Identificador numérico estrito: "0x10", "1e1", true, [5] e 1.5 não são identificadores.
 function idDe(valor) {
-  if (typeof valor === "number") return Number.isSafeInteger(valor) && valor > 0 ? valor : null;
+  if (typeof valor === "number") return Number.isInteger(valor) && valor > 0 && valor <= 2147483647 ? valor : null;
   if (typeof valor !== "string" || !/^[1-9][0-9]{0,9}$/.test(valor.trim())) return null;
   const n = Number(valor.trim());
   return n <= 2147483647 ? n : null;
@@ -189,7 +189,7 @@ function validarIndicacao(dados, { hoje }) {
   let mandatoAte = null;
   if (d.mandatoAte != null && d.mandatoAte !== "") {
     const m = typeof d.mandatoAte === "string" ? d.mandatoAte.trim() : "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(m) || new Date(`${m}T00:00:00Z`).toISOString().slice(0, 10) !== m) return { valido: false, mensagem: "Data do fim do mandato inválida." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(m) || Number.isNaN(Date.parse(`${m}T00:00:00Z`)) || new Date(`${m}T00:00:00Z`).toISOString().slice(0, 10) !== m) return { valido: false, mensagem: "Data do fim do mandato inválida." };
     if (m <= data.data) return { valido: false, mensagem: "O fim do mandato vem depois da indicação." };
     if (m > "2100-12-31") return { valido: false, mensagem: "O fim do mandato está longe demais." };
     mandatoAte = m;

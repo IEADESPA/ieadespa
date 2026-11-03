@@ -219,9 +219,9 @@ BEGIN
         -- sem urgência, só depois dos 5 dias da notificação; com urgência, a justificativa
         CONSTRAINT CK_EntidadeIntervencoes_Defesa CHECK (DecretadaEm IS NULL OR (Urgencia = 1 AND UrgenciaJustificativa IS NOT NULL)
             OR (Urgencia = 0 AND NotificadoEm IS NOT NULL AND DecretadaEm >= DATEADD(DAY, 5, NotificadoEm))),
-        -- ratificada só por reunião dentro do prazo
-        CONSTRAINT CK_EntidadeIntervencoes_Ratif CHECK (Status <> N'RATIFICADA' AND Status <> N'NAO_RATIFICADA'
-            OR (RatificacaoSessaoId IS NOT NULL AND RatificacaoEm IS NOT NULL AND RatificacaoEm >= DecretadaEm AND RatificacaoEm <= PrazoRatificacao)),
+        -- ratificada (ou não) só por reunião dentro do prazo — e a data da reunião continua dentro dele em qualquer etapa seguinte (a encerrada também)
+        CONSTRAINT CK_EntidadeIntervencoes_Ratif CHECK ((Status NOT IN (N'RATIFICADA', N'NAO_RATIFICADA') OR RatificacaoEm IS NOT NULL)
+            AND (RatificacaoEm IS NULL OR (RatificacaoSessaoId IS NOT NULL AND RatificacaoEm >= DecretadaEm AND RatificacaoEm <= PrazoRatificacao))),
         CONSTRAINT CK_EntidadeIntervencoes_Caduca CHECK (Status <> N'CADUCADA' OR (CaducadaEm IS NOT NULL AND CaducadaEm > PrazoRatificacao))
     );
 END
@@ -301,11 +301,11 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'ENTIDADE_PRES
 GO
 
 -- ---- retenção: os atos de nomeação, a intervenção e a prestação de contas são prova institucional (Art. 64 a 68) ----
-IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Entidades vinculadas: dirigentes, intervenções e prestações de contas')
+IF NOT EXISTS (SELECT 1 FROM dbo.PoliticasRetencao WHERE Categoria = N'Entidades vinculadas: atos de governança')
     INSERT INTO dbo.PoliticasRetencao (Categoria, BaseLegal, DiasRetencao)
-    VALUES (N'Entidades vinculadas: dirigentes, intervenções e prestações de contas', N'x', 1825);
+    VALUES (N'Entidades vinculadas: atos de governança', N'x', 1825);
 GO
 UPDATE dbo.PoliticasRetencao
 SET BaseLegal = N'Atos de governança das entidades vinculadas (Estatuto Art. 64 a 68; Reg. Art. 47-A e 153): indicação, homologação, intervenção e prestação de contas são prova institucional, guardada sem prazo final. Do profissional de fora só o nome, a formação e o registro.'
-WHERE Categoria = N'Entidades vinculadas: dirigentes, intervenções e prestações de contas' AND BaseLegal = N'x';
+WHERE Categoria = N'Entidades vinculadas: atos de governança' AND BaseLegal = N'x';
 GO

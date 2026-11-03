@@ -168,6 +168,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Vínculo, Termo (forma, data, versão, hash) e atos cautelares: sem prazo final — são prova e não se apagam (gatilhos no banco). IP e cabeçalhos do aceite digital: anonimizados 5 anos depois que o vínculo termina (parâmetro VOLUNTARIADO_IP_RETENCAO_DIAS; rotina diária; CF art. 7º, XXIX; LGPD art. 16). O titular recebe tudo isto, a pedido, em Meus Dados."
   },
   {
+    chave: "ENTIDADES_VINCULADAS",
+    finalidade: "Registrar as entidades vinculadas (hospitais, escolas, ONGs e associações com CNPJ próprio), quem a IEADESPA põe na direção delas (indicação do Pastor Presidente, homologação da CLI, formação do gestor técnico e a vedação de nepotismo), a intervenção com o prazo de ratificação e a prestação de contas à CLI (Estatuto Art. 64 a 68 e 76 §2º; Regimento Art. 47-A e 153) — v9.1",
+    titulares: "Membros e profissionais de fora indicados para a direção de uma entidade vinculada; o interventor; quem registra os atos (a Secretaria Geral e o Pastor Presidente)",
+    categoriasDados: ["Do membro: a matrícula, a função, se é remunerada, a formação e o registro profissional", "Do profissional de fora: só o nome, a formação, o registro profissional e a declaração de que não é parente da Diretoria Executiva", "Datas e atos: indicação, homologação, recusa, encerramento do mandato e o motivo (inclusive a destituição pela intervenção)", "Da intervenção: os fatos apurados, a notificação, o resumo da manifestação do gestor, a fundamentação, o interventor e a defesa no Conselho de Ética"],
+    baseLegal: "LGPD Art. 7º, II — cumprimento de obrigação legal e estatutária (o controle de governança do Estatuto Art. 64 a 68; a exigência legal de formação do gestor, Regimento Art. 153); Art. 7º, VI — exercício regular de direitos em processo administrativo (a apuração e a defesa do Art. 47-A); Art. 7º, IX — legítimo interesse em provar a separação entre a Igreja e as entidades (Art. 66). A filiação religiosa do membro é dado sensível: o cadastro mostra só a função, nunca a situação de comunhão",
+    tabelasEnvolvidas: ["EntidadeTipos", "EntidadeTipoFormacoes", "EntidadesVinculadas", "EntidadeDirigentes", "EntidadeIntervencoes", "EntidadePrestacoes"],
+    retencao: "Atos de nomeação, intervenção e prestação de contas: prova institucional, sem prazo final (PoliticasRetencao 'Entidades vinculadas: dirigentes, intervenções e prestações de contas'). Acesso só ao nível geral com a permissão entidades_vinculadas. O membro vê em Meus Dados as funções que ocupa ou ocupou e as intervenções em que foi o interventor."
+  },
+  {
     chave: "VISTORIA_ANTECEDENTES",
     finalidade: "Lavrar o Termo de Vistoria quando a Diretoria confere certidão de antecedentes criminais e de distribuição cível de quem assume liderança ou confiança, muda para área sensível, é alvo de suspeita fundada ou é solicitado pela Diretoria — guardando só o hash da certidão, nunca o documento (Regimento Art. 133 §5º; Lei 14.811/2024) — v7.6",
     titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",

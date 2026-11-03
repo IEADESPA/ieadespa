@@ -85,6 +85,26 @@ const REGRAS = {
     permissoes: ["financeiro"],
     soGeral: true,
     alcance: async (pool, _usuario, registroId) => !!(await registroExiste(pool, `SELECT FornecedorId FROM Fornecedores WHERE FornecedorId = @id`, registroId))
+  },
+  // v9.1 — entidades vinculadas (institucional, só o nível geral): o estatuto da entidade, o cartão do CNPJ e a ata da CLI; a notificação escrita, a manifestação e a
+  // fundamentação da intervenção; o relatório de atividades, o balanço auditado e o parecer do Conselho Fiscal. São prova: ninguém os apaga.
+  EntidadesVinculadas: {
+    permissoes: ["entidades_vinculadas"],
+    soGeral: true,
+    semExclusao: true,
+    alcance: async (pool, _usuario, registroId) => !!(await registroExiste(pool, `SELECT EntidadeId FROM EntidadesVinculadas WHERE EntidadeId = @id`, registroId))
+  },
+  EntidadeIntervencoes: {
+    permissoes: ["entidades_vinculadas"],
+    soGeral: true,
+    semExclusao: true,
+    alcance: async (pool, _usuario, registroId) => !!(await registroExiste(pool, `SELECT IntervencaoId FROM EntidadeIntervencoes WHERE IntervencaoId = @id`, registroId))
+  },
+  EntidadePrestacoes: {
+    permissoes: ["entidades_vinculadas"],
+    soGeral: true,
+    semExclusao: true,
+    alcance: async (pool, _usuario, registroId) => !!(await registroExiste(pool, `SELECT PrestacaoId FROM EntidadePrestacoes WHERE PrestacaoId = @id`, registroId))
   }
 };
 

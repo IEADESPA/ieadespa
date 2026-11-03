@@ -1,0 +1,1394 @@
+{
+ "catalogosSec": {
+  "sucesso": true,
+  "naturezas": [
+   {
+    "codigo": "ASSISTENCIA_SOCIAL",
+    "rotulo": "Assistência social"
+   },
+   {
+    "codigo": "SAUDE",
+    "rotulo": "Saúde"
+   },
+   {
+    "codigo": "EDUCACAO",
+    "rotulo": "Educação"
+   },
+   {
+    "codigo": "OUTRA",
+    "rotulo": "Outra"
+   }
+  ],
+  "funcoes": [
+   {
+    "codigo": "DIRETOR_PRESIDENTE",
+    "rotulo": "Diretor-Presidente"
+   },
+   {
+    "codigo": "DIRETOR_VICE",
+    "rotulo": "Diretor Vice-Presidente"
+   },
+   {
+    "codigo": "DIRETOR_ADMIN",
+    "rotulo": "Diretor Administrativo"
+   },
+   {
+    "codigo": "DIRETOR_FINANCEIRO",
+    "rotulo": "Diretor Financeiro"
+   },
+   {
+    "codigo": "SECRETARIO",
+    "rotulo": "Secretário(a)"
+   },
+   {
+    "codigo": "GESTOR_TECNICO",
+    "rotulo": "Gestor técnico (Reg. Art. 153)"
+   },
+   {
+    "codigo": "CONSELHEIRO_FISCAL",
+    "rotulo": "Conselheiro(a) fiscal"
+   },
+   {
+    "codigo": "OUTRA",
+    "rotulo": "Outra função"
+   }
+  ],
+  "motivosEncerramento": [
+   {
+    "codigo": "EXONERACAO",
+    "rotulo": "Exoneração (Art. 65)"
+   },
+   {
+    "codigo": "FIM_MANDATO",
+    "rotulo": "Fim do mandato"
+   },
+   {
+    "codigo": "RENUNCIA",
+    "rotulo": "Renúncia"
+   },
+   {
+    "codigo": "FALECIMENTO",
+    "rotulo": "Falecimento"
+   },
+   {
+    "codigo": "OUTRO",
+    "rotulo": "Outro"
+   }
+  ],
+  "motivosIntervencao": [
+   {
+    "codigo": "GESTAO_TEMERARIA",
+    "rotulo": "Gestão temerária"
+   },
+   {
+    "codigo": "DESVIO_FINALIDADE",
+    "rotulo": "Desvio de finalidade"
+   },
+   {
+    "codigo": "INADIMPLENCIA_FISCAL",
+    "rotulo": "Inadimplência fiscal"
+   },
+   {
+    "codigo": "RISCO_IMAGEM",
+    "rotulo": "Risco à imagem da Igreja"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "ANUAL",
+    "rotulo": "Anual"
+   },
+   {
+    "codigo": "SEMESTRAL",
+    "rotulo": "Semestral"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "resultadosApreciacao": [
+   {
+    "codigo": "APROVADA",
+    "rotulo": "Aprovada"
+   },
+   {
+    "codigo": "APROVADA_COM_RESSALVAS",
+    "rotulo": "Aprovada com ressalvas"
+   },
+   {
+    "codigo": "REPROVADA",
+    "rotulo": "Reprovada"
+   }
+  ],
+  "resultadosCF": [
+   {
+    "codigo": "SEM_CONFUSAO",
+    "rotulo": "Sem confusão patrimonial"
+   },
+   {
+    "codigo": "IRREGULARIDADE",
+    "rotulo": "Irregularidade encontrada"
+   }
+  ],
+  "resultadosAG": [
+   {
+    "codigo": "RATIFICADA",
+    "rotulo": "Ratificada pela Assembleia"
+   },
+   {
+    "codigo": "NAO_RATIFICADA",
+    "rotulo": "Não ratificada pela Assembleia"
+   }
+  ],
+  "destinos": [
+   {
+    "codigo": "SAUDE_OUTRA_INSTITUICAO",
+    "rotulo": "Outra instituição de saúde sem fins lucrativos (Art. 68, I)",
+    "naturezas": [
+     "SAUDE"
+    ]
+   },
+   {
+    "codigo": "SAUDE_MATRIZ_ASSISTENCIAL",
+    "rotulo": "A Matriz, com afetação exclusiva a fins assistenciais (Art. 68, I — só se a IEADESPA mantiver atividade assistencial do mesmo tipo)",
+    "naturezas": [
+     "SAUDE"
+    ]
+   },
+   {
+    "codigo": "EDUCACAO_CONGENERE",
+    "rotulo": "Instituição de ensino congênere (Art. 68, II)",
+    "naturezas": [
+     "EDUCACAO"
+    ]
+   },
+   {
+    "codigo": "CONGENERE_SEM_FINS",
+    "rotulo": "Entidade congênere sem fins econômicos (regra do Terceiro Setor)",
+    "naturezas": [
+     "ASSISTENCIA_SOCIAL",
+     "OUTRA"
+    ]
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazos": {
+   "ratificacaoDias": 15,
+   "manifestacaoDias": 5
+  },
+  "papeis": {
+   "presidente": false
+  }
+ },
+ "catalogos": {
+  "sucesso": true,
+  "naturezas": [
+   {
+    "codigo": "ASSISTENCIA_SOCIAL",
+    "rotulo": "Assistência social"
+   },
+   {
+    "codigo": "SAUDE",
+    "rotulo": "Saúde"
+   },
+   {
+    "codigo": "EDUCACAO",
+    "rotulo": "Educação"
+   },
+   {
+    "codigo": "OUTRA",
+    "rotulo": "Outra"
+   }
+  ],
+  "funcoes": [
+   {
+    "codigo": "DIRETOR_PRESIDENTE",
+    "rotulo": "Diretor-Presidente"
+   },
+   {
+    "codigo": "DIRETOR_VICE",
+    "rotulo": "Diretor Vice-Presidente"
+   },
+   {
+    "codigo": "DIRETOR_ADMIN",
+    "rotulo": "Diretor Administrativo"
+   },
+   {
+    "codigo": "DIRETOR_FINANCEIRO",
+    "rotulo": "Diretor Financeiro"
+   },
+   {
+    "codigo": "SECRETARIO",
+    "rotulo": "Secretário(a)"
+   },
+   {
+    "codigo": "GESTOR_TECNICO",
+    "rotulo": "Gestor técnico (Reg. Art. 153)"
+   },
+   {
+    "codigo": "CONSELHEIRO_FISCAL",
+    "rotulo": "Conselheiro(a) fiscal"
+   },
+   {
+    "codigo": "OUTRA",
+    "rotulo": "Outra função"
+   }
+  ],
+  "motivosEncerramento": [
+   {
+    "codigo": "EXONERACAO",
+    "rotulo": "Exoneração (Art. 65)"
+   },
+   {
+    "codigo": "FIM_MANDATO",
+    "rotulo": "Fim do mandato"
+   },
+   {
+    "codigo": "RENUNCIA",
+    "rotulo": "Renúncia"
+   },
+   {
+    "codigo": "FALECIMENTO",
+    "rotulo": "Falecimento"
+   },
+   {
+    "codigo": "OUTRO",
+    "rotulo": "Outro"
+   }
+  ],
+  "motivosIntervencao": [
+   {
+    "codigo": "GESTAO_TEMERARIA",
+    "rotulo": "Gestão temerária"
+   },
+   {
+    "codigo": "DESVIO_FINALIDADE",
+    "rotulo": "Desvio de finalidade"
+   },
+   {
+    "codigo": "INADIMPLENCIA_FISCAL",
+    "rotulo": "Inadimplência fiscal"
+   },
+   {
+    "codigo": "RISCO_IMAGEM",
+    "rotulo": "Risco à imagem da Igreja"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "ANUAL",
+    "rotulo": "Anual"
+   },
+   {
+    "codigo": "SEMESTRAL",
+    "rotulo": "Semestral"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "resultadosApreciacao": [
+   {
+    "codigo": "APROVADA",
+    "rotulo": "Aprovada"
+   },
+   {
+    "codigo": "APROVADA_COM_RESSALVAS",
+    "rotulo": "Aprovada com ressalvas"
+   },
+   {
+    "codigo": "REPROVADA",
+    "rotulo": "Reprovada"
+   }
+  ],
+  "resultadosCF": [
+   {
+    "codigo": "SEM_CONFUSAO",
+    "rotulo": "Sem confusão patrimonial"
+   },
+   {
+    "codigo": "IRREGULARIDADE",
+    "rotulo": "Irregularidade encontrada"
+   }
+  ],
+  "resultadosAG": [
+   {
+    "codigo": "RATIFICADA",
+    "rotulo": "Ratificada pela Assembleia"
+   },
+   {
+    "codigo": "NAO_RATIFICADA",
+    "rotulo": "Não ratificada pela Assembleia"
+   }
+  ],
+  "destinos": [
+   {
+    "codigo": "SAUDE_OUTRA_INSTITUICAO",
+    "rotulo": "Outra instituição de saúde sem fins lucrativos (Art. 68, I)",
+    "naturezas": [
+     "SAUDE"
+    ]
+   },
+   {
+    "codigo": "SAUDE_MATRIZ_ASSISTENCIAL",
+    "rotulo": "A Matriz, com afetação exclusiva a fins assistenciais (Art. 68, I — só se a IEADESPA mantiver atividade assistencial do mesmo tipo)",
+    "naturezas": [
+     "SAUDE"
+    ]
+   },
+   {
+    "codigo": "EDUCACAO_CONGENERE",
+    "rotulo": "Instituição de ensino congênere (Art. 68, II)",
+    "naturezas": [
+     "EDUCACAO"
+    ]
+   },
+   {
+    "codigo": "CONGENERE_SEM_FINS",
+    "rotulo": "Entidade congênere sem fins econômicos (regra do Terceiro Setor)",
+    "naturezas": [
+     "ASSISTENCIA_SOCIAL",
+     "OUTRA"
+    ]
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazos": {
+   "ratificacaoDias": 15,
+   "manifestacaoDias": 5
+  },
+  "papeis": {
+   "presidente": true
+  }
+ },
+ "tipos": {
+  "sucesso": true,
+  "tipos": [
+   {
+    "tipoId": 2,
+    "nome": "Escola",
+    "natureza": "EDUCACAO",
+    "naturezaRotulo": "Educação",
+    "ativo": true,
+    "entidades": 0,
+    "formacoes": [
+     "Pedagogia"
+    ]
+   },
+   {
+    "tipoId": 1,
+    "nome": "Hospital",
+    "natureza": "SAUDE",
+    "naturezaRotulo": "Saúde",
+    "ativo": true,
+    "entidades": 0,
+    "formacoes": [
+     "Gestão hospitalar",
+     "Medicina"
+    ]
+   },
+   {
+    "tipoId": 3,
+    "nome": "ONG / Associação de assistência social",
+    "natureza": "ASSISTENCIA_SOCIAL",
+    "naturezaRotulo": "Assistência social",
+    "ativo": true,
+    "entidades": 0,
+    "formacoes": []
+   },
+   {
+    "tipoId": 4,
+    "nome": "Outra entidade",
+    "natureza": "OUTRA",
+    "naturezaRotulo": "Outra",
+    "ativo": true,
+    "entidades": 0,
+    "formacoes": []
+   }
+  ]
+ },
+ "painel": {
+  "sucesso": true,
+  "hoje": "2026-11-03",
+  "intervencoesCorrendo": [],
+  "apuracoes": [],
+  "prestacoesAtrasadas": [],
+  "aguardandoApreciacao": [],
+  "cfPendente": [],
+  "propostas": [],
+  "aguardandoAG": [
+   {
+    "entidadeId": 4,
+    "entidade": "Associação Ação Social E2E",
+    "objeto": "VINCULO",
+    "desde": "2026-11-03"
+   },
+   {
+    "entidadeId": 1,
+    "entidade": "Escola Cristã Esperança E2E",
+    "objeto": "VINCULO",
+    "desde": "2026-11-03"
+   },
+   {
+    "entidadeId": 3,
+    "entidade": "HB E2E",
+    "objeto": "VINCULO",
+    "desde": "2026-11-03"
+   }
+  ],
+  "indicacoes": [
+   {
+    "entidadeId": 1,
+    "entidade": "Escola Cristã Esperança E2E",
+    "quantidade": 2
+   }
+  ],
+  "mandatosVencidos": [],
+  "semGestor": [
+   {
+    "entidadeId": 3,
+    "entidade": "HB E2E",
+    "mensagem": "Sem gestor técnico homologado com a formação exigida (Gestão hospitalar ou Medicina — Regimento, Art. 153)."
+   }
+  ]
+ },
+ "entidade": {
+  "sucesso": true,
+  "entidade": {
+   "entidadeId": 1,
+   "razaoSocial": "Escola Cristã Esperança E2E",
+   "nomeFantasia": null,
+   "cnpj": "11444777000161",
+   "cnpjFormatado": "11.444.777/0001-61",
+   "tipoId": 2,
+   "tipoNome": "Escola",
+   "natureza": "EDUCACAO",
+   "naturezaRotulo": "Educação",
+   "finalidade": "Educação infantil e fundamental para o bairro.",
+   "municipio": null,
+   "uf": null,
+   "status": "ATIVA",
+   "statusRotulo": "Ativa",
+   "vinculo": {
+    "sessaoId": 9,
+    "em": "2024-03-01"
+   },
+   "naoAprovada": null,
+   "vinculoAG": {
+    "sessaoId": 10,
+    "resultado": "RATIFICADA",
+    "resultadoRotulo": "Ratificada pela Assembleia",
+    "em": "2026-11-03",
+    "obs": null
+   },
+   "periodicidade": "ANUAL",
+   "periodicidadeRotulo": "Anual",
+   "prazoEntregaDias": 120,
+   "extincao": null,
+   "extincaoAG": null,
+   "aguardandoAG": null,
+   "formacoesExigidas": [
+    "Pedagogia"
+   ],
+   "dirigentes": [
+    {
+     "dirigenteId": 5,
+     "entidadeId": 1,
+     "funcao": "CONSELHEIRO_FISCAL",
+     "funcaoRotulo": "Conselheiro(a) fiscal",
+     "membroId": null,
+     "nome": "Contadora Externa E2E",
+     "externo": true,
+     "remunerado": true,
+     "formacao": "Ciências Contábeis",
+     "registroProfissional": null,
+     "declaracaoParentesco": true,
+     "status": "INDICADO",
+     "situacao": "INDICADO",
+     "situacaoRotulo": "Indicado pelo Pastor Presidente (aguardando a CLI)",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 4,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_FINANCEIRO",
+     "funcaoRotulo": "Diretor Financeiro",
+     "membroId": 9303,
+     "nome": "Filho do Secretario E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "INDICADO",
+     "situacao": "INDICADO",
+     "situacaoRotulo": "Indicado pelo Pastor Presidente (aguardando a CLI)",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 2,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_PRESIDENTE",
+     "funcaoRotulo": "Diretor-Presidente",
+     "membroId": 9307,
+     "nome": "Diretor Presidente E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "HOMOLOGADO",
+     "situacao": "HOMOLOGADO",
+     "situacaoRotulo": "Homologado pela CLI",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 1,
+     "entidadeId": 1,
+     "funcao": "GESTOR_TECNICO",
+     "funcaoRotulo": "Gestor técnico (Reg. Art. 153)",
+     "membroId": 9301,
+     "nome": "Pedagoga Membro E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": "pedagogia",
+     "registroProfissional": "MEC 123",
+     "declaracaoParentesco": false,
+     "status": "HOMOLOGADO",
+     "situacao": "HOMOLOGADO",
+     "situacaoRotulo": "Homologado pela CLI",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": false
+    }
+   ],
+   "intervencoes": [],
+   "periodos": [
+    {
+     "codigo": "2026",
+     "inicio": "2026-01-01",
+     "fim": "2026-12-31",
+     "prazo": "2027-04-30",
+     "situacao": "EM_CURSO",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2025",
+     "inicio": "2025-01-01",
+     "fim": "2025-12-31",
+     "prazo": "2026-04-30",
+     "situacao": "ATRASADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2024",
+     "inicio": "2024-01-01",
+     "fim": "2024-12-31",
+     "prazo": "2025-04-30",
+     "situacao": "ATRASADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    }
+   ],
+   "emIntervencao": false,
+   "pendencias": [
+    "Prestação de contas do período 2024 atrasada (venceu em 30/04/2025).",
+    "Prestação de contas do período 2025 atrasada (venceu em 30/04/2026)."
+   ]
+  }
+ },
+ "entidadeIntervencao": {
+  "sucesso": true,
+  "entidade": {
+   "entidadeId": 1,
+   "razaoSocial": "Escola Cristã Esperança E2E",
+   "nomeFantasia": null,
+   "cnpj": "11444777000161",
+   "cnpjFormatado": "11.444.777/0001-61",
+   "tipoId": 2,
+   "tipoNome": "Escola",
+   "natureza": "EDUCACAO",
+   "naturezaRotulo": "Educação",
+   "finalidade": "Educação infantil e fundamental para o bairro.",
+   "municipio": null,
+   "uf": null,
+   "status": "ATIVA",
+   "statusRotulo": "Ativa",
+   "vinculo": {
+    "sessaoId": 9,
+    "em": "2024-03-01"
+   },
+   "naoAprovada": null,
+   "vinculoAG": {
+    "sessaoId": 10,
+    "resultado": "RATIFICADA",
+    "resultadoRotulo": "Ratificada pela Assembleia",
+    "em": "2026-11-03",
+    "obs": null
+   },
+   "periodicidade": "ANUAL",
+   "periodicidadeRotulo": "Anual",
+   "prazoEntregaDias": 120,
+   "extincao": null,
+   "extincaoAG": null,
+   "aguardandoAG": null,
+   "formacoesExigidas": [
+    "Pedagogia"
+   ],
+   "dirigentes": [
+    {
+     "dirigenteId": 5,
+     "entidadeId": 1,
+     "funcao": "CONSELHEIRO_FISCAL",
+     "funcaoRotulo": "Conselheiro(a) fiscal",
+     "membroId": null,
+     "nome": "Contadora Externa E2E",
+     "externo": true,
+     "remunerado": true,
+     "formacao": "Ciências Contábeis",
+     "registroProfissional": null,
+     "declaracaoParentesco": true,
+     "status": "INDICADO",
+     "situacao": "INDICADO",
+     "situacaoRotulo": "Indicado pelo Pastor Presidente (aguardando a CLI)",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": true
+    },
+    {
+     "dirigenteId": 4,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_FINANCEIRO",
+     "funcaoRotulo": "Diretor Financeiro",
+     "membroId": 9303,
+     "nome": "Filho do Secretario E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "INDICADO",
+     "situacao": "INDICADO",
+     "situacaoRotulo": "Indicado pelo Pastor Presidente (aguardando a CLI)",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": true
+    },
+    {
+     "dirigenteId": 2,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_PRESIDENTE",
+     "funcaoRotulo": "Diretor-Presidente",
+     "membroId": 9307,
+     "nome": "Diretor Presidente E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "HOMOLOGADO",
+     "situacao": "HOMOLOGADO",
+     "situacaoRotulo": "Homologado pela CLI",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": true
+    },
+    {
+     "dirigenteId": 1,
+     "entidadeId": 1,
+     "funcao": "GESTOR_TECNICO",
+     "funcaoRotulo": "Gestor técnico (Reg. Art. 153)",
+     "membroId": 9301,
+     "nome": "Pedagoga Membro E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": "pedagogia",
+     "registroProfissional": "MEC 123",
+     "declaracaoParentesco": false,
+     "status": "HOMOLOGADO",
+     "situacao": "HOMOLOGADO",
+     "situacaoRotulo": "Homologado pela CLI",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": null,
+     "motivoEncerramento": null,
+     "motivoEncerramentoRotulo": null,
+     "encerramentoObs": null,
+     "intervencaoId": null,
+     "afastadoPelaIntervencao": true
+    }
+   ],
+   "intervencoes": [
+    {
+     "intervencaoId": 1,
+     "entidadeId": 1,
+     "status": "DECRETADA",
+     "statusRotulo": "Decretada — aguardando a ratificação da CLI",
+     "motivo": "DESVIO_FINALIDADE",
+     "motivoRotulo": "Desvio de finalidade",
+     "fatos": "Recursos da mensalidade usados para pagar evento da igreja (e2e).",
+     "abertaEm": "2026-10-24",
+     "notificadoEm": "2026-10-29",
+     "notificacaoForma": "Carta entregue em mãos ao diretor",
+     "manifestacaoEm": "2026-11-01",
+     "manifestacaoResumo": "O diretor nega o desvio e pede prazo para explicar.",
+     "decretavelDesde": "2026-11-03",
+     "urgencia": false,
+     "urgenciaJustificativa": null,
+     "decretadaEm": "2026-11-03",
+     "fundamentacao": "Desvio de finalidade comprovado pelos extratos (e2e).",
+     "interventor": "Interventor Membro E2E",
+     "interventorMembroId": 9306,
+     "afastaDiretoria": true,
+     "prazoRatificacao": "2026-11-18",
+     "diasRestantes": 15,
+     "ratificacaoSessaoId": null,
+     "ratificacaoEm": null,
+     "ratificacaoObs": null,
+     "caducadaEm": null,
+     "defesaCEIEm": null,
+     "defesaCEIReferencia": null,
+     "encerradaEm": null,
+     "encerramentoMotivo": null,
+     "vale": true
+    }
+   ],
+   "periodos": [
+    {
+     "codigo": "2026",
+     "inicio": "2026-01-01",
+     "fim": "2026-12-31",
+     "prazo": "2027-04-30",
+     "situacao": "EM_CURSO",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2025",
+     "inicio": "2025-01-01",
+     "fim": "2025-12-31",
+     "prazo": "2026-04-30",
+     "situacao": "ATRASADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2024",
+     "inicio": "2024-01-01",
+     "fim": "2024-12-31",
+     "prazo": "2025-04-30",
+     "situacao": "APRECIADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": {
+      "prestacaoId": 1,
+      "entidadeId": 1,
+      "periodo": "2024",
+      "inicio": "2024-01-01",
+      "fim": "2024-12-31",
+      "entregueEm": "2025-03-15",
+      "relatorioAtividades": true,
+      "balancoAuditado": true,
+      "auditoriaOrgao": "Auditoria corrigida E2E",
+      "observacao": null,
+      "apreciacaoSessaoId": 9,
+      "apreciadaEm": "2026-11-03",
+      "resultado": "APROVADA",
+      "resultadoRotulo": "Aprovada",
+      "apreciacaoObs": null,
+      "cfVerificadaEm": "2025-04-10",
+      "cfResultado": "SEM_CONFUSAO",
+      "cfResultadoRotulo": "Sem confusão patrimonial",
+      "cfObs": null
+     }
+    }
+   ],
+   "emIntervencao": true,
+   "pendencias": [
+    "Prestação de contas do período 2025 atrasada (venceu em 30/04/2026)."
+   ]
+  }
+ },
+ "entidades": {
+  "sucesso": true,
+  "entidades": [
+   {
+    "entidadeId": 4,
+    "razaoSocial": "Associação Ação Social E2E",
+    "nomeFantasia": null,
+    "cnpj": "ZZ9ABC12000178",
+    "cnpjFormatado": "ZZ.9AB.C12/0001-78",
+    "tipoId": 3,
+    "tipoNome": "ONG / Associação de assistência social",
+    "natureza": "ASSISTENCIA_SOCIAL",
+    "naturezaRotulo": "Assistência social",
+    "finalidade": "Assistência social às famílias carentes.",
+    "municipio": null,
+    "uf": null,
+    "status": "DESFEITA",
+    "statusRotulo": "Vínculo desfeito (a Assembleia não ratificou)",
+    "vinculo": {
+     "sessaoId": 9,
+     "em": "2026-11-03"
+    },
+    "naoAprovada": null,
+    "vinculoAG": {
+     "sessaoId": 10,
+     "resultado": "NAO_RATIFICADA",
+     "resultadoRotulo": "Não ratificada pela Assembleia",
+     "em": "2026-11-03",
+     "obs": "A Assembleia não quer a associação vinculada."
+    },
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
+    "extincao": null,
+    "extincaoAG": null,
+    "aguardandoAG": null,
+    "intervencao": null,
+    "atrasadas": [],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": null
+   },
+   {
+    "entidadeId": 1,
+    "razaoSocial": "Escola Cristã Esperança E2E",
+    "nomeFantasia": null,
+    "cnpj": "11444777000161",
+    "cnpjFormatado": "11.444.777/0001-61",
+    "tipoId": 2,
+    "tipoNome": "Escola",
+    "natureza": "EDUCACAO",
+    "naturezaRotulo": "Educação",
+    "finalidade": "Educação infantil e fundamental para o bairro.",
+    "municipio": null,
+    "uf": null,
+    "status": "ATIVA",
+    "statusRotulo": "Ativa",
+    "vinculo": {
+     "sessaoId": 9,
+     "em": "2024-03-01"
+    },
+    "naoAprovada": null,
+    "vinculoAG": {
+     "sessaoId": 10,
+     "resultado": "RATIFICADA",
+     "resultadoRotulo": "Ratificada pela Assembleia",
+     "em": "2026-11-03",
+     "obs": null
+    },
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
+    "extincao": null,
+    "extincaoAG": null,
+    "aguardandoAG": null,
+    "intervencao": null,
+    "atrasadas": [
+     {
+      "codigo": "2025",
+      "prazo": "2026-04-30"
+     }
+    ],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": "Sem gestor técnico homologado com a formação exigida (Pedagogia — Regimento, Art. 153)."
+   },
+   {
+    "entidadeId": 3,
+    "razaoSocial": "Hospital Beneficente E2E",
+    "nomeFantasia": "HB E2E",
+    "cnpj": "12ABC345000188",
+    "cnpjFormatado": "12.ABC.345/0001-88",
+    "tipoId": 1,
+    "tipoNome": "Hospital",
+    "natureza": "SAUDE",
+    "naturezaRotulo": "Saúde",
+    "finalidade": "Atendimento hospitalar sem fins lucrativos.",
+    "municipio": null,
+    "uf": null,
+    "status": "ATIVA",
+    "statusRotulo": "Ativa",
+    "vinculo": {
+     "sessaoId": 9,
+     "em": "2026-11-03"
+    },
+    "naoAprovada": null,
+    "vinculoAG": {
+     "sessaoId": 10,
+     "resultado": "RATIFICADA",
+     "resultadoRotulo": "Ratificada pela Assembleia",
+     "em": "2026-11-03",
+     "obs": null
+    },
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
+    "extincao": null,
+    "extincaoAG": null,
+    "aguardandoAG": null,
+    "intervencao": null,
+    "atrasadas": [],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": "Sem gestor técnico homologado com a formação exigida (Gestão hospitalar ou Medicina — Regimento, Art. 153)."
+   },
+   {
+    "entidadeId": 5,
+    "razaoSocial": "Projeto Recusado E2E",
+    "nomeFantasia": null,
+    "cnpj": "45723174000110",
+    "cnpjFormatado": "45.723.174/0001-10",
+    "tipoId": 3,
+    "tipoNome": "ONG / Associação de assistência social",
+    "natureza": "ASSISTENCIA_SOCIAL",
+    "naturezaRotulo": "Assistência social",
+    "finalidade": "Projeto que a CLI não aprovou.",
+    "municipio": null,
+    "uf": null,
+    "status": "NAO_APROVADA",
+    "statusRotulo": "Não aprovada pela CLI",
+    "vinculo": null,
+    "naoAprovada": {
+     "em": "2026-11-03",
+     "motivo": "A CLI entendeu que a finalidade não é da Igreja."
+    },
+    "vinculoAG": null,
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
+    "extincao": null,
+    "extincaoAG": null,
+    "aguardandoAG": null,
+    "intervencao": null,
+    "atrasadas": [],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": null
+   }
+  ]
+ },
+ "entidadeFinal": {
+  "sucesso": true,
+  "entidade": {
+   "entidadeId": 1,
+   "razaoSocial": "Escola Cristã Esperança E2E",
+   "nomeFantasia": null,
+   "cnpj": "11444777000161",
+   "cnpjFormatado": "11.444.777/0001-61",
+   "tipoId": 2,
+   "tipoNome": "Escola",
+   "natureza": "EDUCACAO",
+   "naturezaRotulo": "Educação",
+   "finalidade": "Educação infantil e fundamental para o bairro.",
+   "municipio": null,
+   "uf": null,
+   "status": "ATIVA",
+   "statusRotulo": "Ativa",
+   "vinculo": {
+    "sessaoId": 9,
+    "em": "2024-03-01"
+   },
+   "naoAprovada": null,
+   "vinculoAG": {
+    "sessaoId": 10,
+    "resultado": "RATIFICADA",
+    "resultadoRotulo": "Ratificada pela Assembleia",
+    "em": "2026-11-03",
+    "obs": null
+   },
+   "periodicidade": "ANUAL",
+   "periodicidadeRotulo": "Anual",
+   "prazoEntregaDias": 120,
+   "extincao": null,
+   "extincaoAG": null,
+   "aguardandoAG": null,
+   "formacoesExigidas": [
+    "Pedagogia"
+   ],
+   "dirigentes": [
+    {
+     "dirigenteId": 5,
+     "entidadeId": 1,
+     "funcao": "CONSELHEIRO_FISCAL",
+     "funcaoRotulo": "Conselheiro(a) fiscal",
+     "membroId": null,
+     "nome": "Contadora Externa E2E",
+     "externo": true,
+     "remunerado": true,
+     "formacao": "Ciências Contábeis",
+     "registroProfissional": null,
+     "declaracaoParentesco": true,
+     "status": "ENCERRADO",
+     "situacao": "ENCERRADO",
+     "situacaoRotulo": "Encerrado",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": "2026-10-26",
+     "motivoEncerramento": "DESTITUICAO_INTERVENCAO",
+     "motivoEncerramentoRotulo": "Destituído pela intervenção ratificada",
+     "encerramentoObs": "Destituído pela intervenção ratificada pela CLI (Regimento, Art. 47-A). Direito de defesa no Conselho de Ética.",
+     "intervencaoId": 1,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 4,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_FINANCEIRO",
+     "funcaoRotulo": "Diretor Financeiro",
+     "membroId": 9303,
+     "nome": "Filho do Secretario E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "ENCERRADO",
+     "situacao": "ENCERRADO",
+     "situacaoRotulo": "Encerrado",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": null,
+     "homologacaoSessaoId": null,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": "2026-10-26",
+     "motivoEncerramento": "DESTITUICAO_INTERVENCAO",
+     "motivoEncerramentoRotulo": "Destituído pela intervenção ratificada",
+     "encerramentoObs": "Destituído pela intervenção ratificada pela CLI (Regimento, Art. 47-A). Direito de defesa no Conselho de Ética.",
+     "intervencaoId": 1,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 2,
+     "entidadeId": 1,
+     "funcao": "DIRETOR_PRESIDENTE",
+     "funcaoRotulo": "Diretor-Presidente",
+     "membroId": 9307,
+     "nome": "Diretor Presidente E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": null,
+     "registroProfissional": null,
+     "declaracaoParentesco": false,
+     "status": "ENCERRADO",
+     "situacao": "ENCERRADO",
+     "situacaoRotulo": "Encerrado",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": "2026-10-26",
+     "motivoEncerramento": "DESTITUICAO_INTERVENCAO",
+     "motivoEncerramentoRotulo": "Destituído pela intervenção ratificada",
+     "encerramentoObs": "Destituído pela intervenção ratificada pela CLI (Regimento, Art. 47-A). Direito de defesa no Conselho de Ética.",
+     "intervencaoId": 1,
+     "afastadoPelaIntervencao": false
+    },
+    {
+     "dirigenteId": 1,
+     "entidadeId": 1,
+     "funcao": "GESTOR_TECNICO",
+     "funcaoRotulo": "Gestor técnico (Reg. Art. 153)",
+     "membroId": 9301,
+     "nome": "Pedagoga Membro E2E",
+     "externo": false,
+     "remunerado": false,
+     "formacao": "pedagogia",
+     "registroProfissional": "MEC 123",
+     "declaracaoParentesco": false,
+     "status": "ENCERRADO",
+     "situacao": "ENCERRADO",
+     "situacaoRotulo": "Encerrado",
+     "indicadoEm": "2026-09-24",
+     "indicacaoAto": "Ato da Presidência 1/2026",
+     "homologadoEm": "2026-11-03",
+     "homologacaoSessaoId": 9,
+     "mandatoAte": null,
+     "recusadoEm": null,
+     "encerradoEm": "2026-10-26",
+     "motivoEncerramento": "DESTITUICAO_INTERVENCAO",
+     "motivoEncerramentoRotulo": "Destituído pela intervenção ratificada",
+     "encerramentoObs": "Destituído pela intervenção ratificada pela CLI (Regimento, Art. 47-A). Direito de defesa no Conselho de Ética.",
+     "intervencaoId": 1,
+     "afastadoPelaIntervencao": false
+    }
+   ],
+   "intervencoes": [
+    {
+     "intervencaoId": 1,
+     "entidadeId": 1,
+     "status": "ENCERRADA",
+     "statusRotulo": "Encerrada (gestão devolvida)",
+     "motivo": "DESVIO_FINALIDADE",
+     "motivoRotulo": "Desvio de finalidade",
+     "fatos": "Recursos da mensalidade usados para pagar evento da igreja (e2e).",
+     "abertaEm": "2026-10-24",
+     "notificadoEm": "2026-10-08",
+     "notificacaoForma": "Carta entregue em mãos ao diretor",
+     "manifestacaoEm": null,
+     "manifestacaoResumo": "O diretor nega o desvio e pede prazo para explicar.",
+     "decretavelDesde": "2026-10-13",
+     "urgencia": false,
+     "urgenciaJustificativa": null,
+     "decretadaEm": "2026-10-14",
+     "fundamentacao": "Desvio de finalidade comprovado pelos extratos (e2e).",
+     "interventor": "Interventor Membro E2E",
+     "interventorMembroId": 9306,
+     "afastaDiretoria": true,
+     "prazoRatificacao": "2026-10-29",
+     "diasRestantes": null,
+     "ratificacaoSessaoId": 14,
+     "ratificacaoEm": "2026-10-26",
+     "ratificacaoObs": null,
+     "caducadaEm": null,
+     "defesaCEIEm": "2026-11-03",
+     "defesaCEIReferencia": "Protocolo CEI 12/2026",
+     "encerradaEm": "2026-11-03",
+     "encerramentoMotivo": "Gestão devolvida à nova diretoria.",
+     "vale": false
+    }
+   ],
+   "periodos": [
+    {
+     "codigo": "2026",
+     "inicio": "2026-01-01",
+     "fim": "2026-12-31",
+     "prazo": "2027-04-30",
+     "situacao": "EM_CURSO",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2025",
+     "inicio": "2025-01-01",
+     "fim": "2025-12-31",
+     "prazo": "2026-04-30",
+     "situacao": "ATRASADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": null
+    },
+    {
+     "codigo": "2024",
+     "inicio": "2024-01-01",
+     "fim": "2024-12-31",
+     "prazo": "2025-04-30",
+     "situacao": "APRECIADA",
+     "fechaAno": true,
+     "cfPendente": false,
+     "prestacao": {
+      "prestacaoId": 1,
+      "entidadeId": 1,
+      "periodo": "2024",
+      "inicio": "2024-01-01",
+      "fim": "2024-12-31",
+      "entregueEm": "2025-03-15",
+      "relatorioAtividades": true,
+      "balancoAuditado": true,
+      "auditoriaOrgao": "Auditoria corrigida E2E",
+      "observacao": null,
+      "apreciacaoSessaoId": 9,
+      "apreciadaEm": "2026-11-03",
+      "resultado": "APROVADA",
+      "resultadoRotulo": "Aprovada",
+      "apreciacaoObs": null,
+      "cfVerificadaEm": "2025-04-10",
+      "cfResultado": "SEM_CONFUSAO",
+      "cfResultadoRotulo": "Sem confusão patrimonial",
+      "cfObs": null
+     }
+    }
+   ],
+   "emIntervencao": false,
+   "pendencias": [
+    "Sem gestor técnico homologado com a formação exigida (Pedagogia — Regimento, Art. 153).",
+    "Prestação de contas do período 2025 atrasada (venceu em 30/04/2026)."
+   ]
+  }
+ },
+ "reunioesCLI": {
+  "sucesso": true,
+  "reunioes": [
+   {
+    "sessaoId": 12,
+    "data": "2026-11-06",
+    "descricao": "CLI E2E futura"
+   },
+   {
+    "sessaoId": 9,
+    "data": "2026-11-03",
+    "descricao": "CLI E2E entidades (hoje)"
+   },
+   {
+    "sessaoId": 14,
+    "data": "2026-10-26",
+    "descricao": "CLI E2E dentro do prazo"
+   }
+  ]
+ },
+ "reunioesAG": {
+  "sucesso": true,
+  "reunioes": [
+   {
+    "sessaoId": 10,
+    "data": "2026-11-03",
+    "descricao": "AG E2E entidades (hoje)"
+   }
+  ]
+ }
+}

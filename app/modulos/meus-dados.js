@@ -309,6 +309,7 @@ function mostrarAbaSecretaria(aba) {
   if (aba === "eventos") carregarOpcoesEventosAcao();
   if (aba === "setores") carregarOpcoesSetoresAcao();
   if (aba === "vistoria") carregarOpcoesVistoriaAcao();
+  if (aba === "entidades" && typeof carregarOpcoesEntidadesAcao === "function") carregarOpcoesEntidadesAcao();   // v9.1
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -347,7 +348,7 @@ const TITULOS_MODULOS = {
   assistenciasocial: "Assistência Social", ebd: "EBD (Escola Bíblica Dominical)",
   conquistas: "Conquistas e Gamificação", trilhas: "Formação e Certificação",
   psc: "Saúde Congregacional (PSC)", calendario: "Calendário Oficial", canais: "Canais e Comunicação", eventos: "Eventos e Congressos",
-  setores: "Setores Técnicos", vistoria: "Vistoria de Antecedentes", afm: "Academia de Formação Ministerial (AFM)"
+  setores: "Setores Técnicos", vistoria: "Vistoria de Antecedentes", entidades: "Entidades Vinculadas", afm: "Academia de Formação Ministerial (AFM)"
 };
 
 registrarAcoes({

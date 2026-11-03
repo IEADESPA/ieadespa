@@ -319,8 +319,8 @@ diz em que arquivo ela está e em que pé ela anda.
   congressos, Escalas e voluntariado, Setores Técnicos, Ministério com menores, Incidentes de proteção de crianças, Check-in
   infantil, Cuidado pastoral com o mural de oração do site, Comunicados com consentimento por canal e categoria, Eventos no site com lotes, pagamento informado, credenciamento por sala e crachá, Identidade visual anual, Gestão de crise com porta-voz único e segurança das congregações). As 🔒 Travas 7-A (08/10), 7-B (20/10) e 7-C (27/10/2026) estão fechadas;
   a antiga v7.9 (faltas na CLI) foi fundida à v8.1 em 15/10/2026. Histórico: [parte 1](docs/plano/fase-7-saude-eventos-e-comunicacao.md) (com o resumo em prosa) e [parte 2](docs/plano/fase-7-parte-2-menores-cuidado-e-crise.md).
-- **FASE 8 encerrada em 02/11/2026:** v8.1 a v8.7 no ar (AFM e faltas da CLI, escada ministerial, consagração, credencial digital,
-  trilha de discipulado, educação continuada e Seminário); as 🔒 Travas 8-A (29/10) e 8-B (02/11/2026) estão fechadas. Próxima: FASE 9.
+- **FASE 8 encerrada em 03/11/2026:** v8.1 a v8.7 no ar (AFM e faltas da CLI, escada ministerial, consagração, credencial digital,
+  trilha de discipulado, educação continuada e Seminário); as 🔒 Travas 8-A (29/10) e 8-B (03/11/2026) estão fechadas. Próxima: FASE 9.
 - **FASE D (retrofit de robustez e operação):** vD.1 a vD.8 feitas e Trava D-B fechada (06 a 08/10/2026): prova de
   tela no CI, front em módulos, homologação, chave de acesso (passkey) e site na raiz `ieadespa.org.br`. Ficam só
   decisões do responsável (ensaio de restauração, Search Console, teste de carga).
@@ -342,7 +342,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | 6 | EBD (Escola Bíblica Dominical) | concluída | [fase-6-ebd](docs/plano/fase-6-ebd.md) |
 | 7 | Saúde, eventos e comunicação | concluída em 27/10/2026 (v7.1 a v7.8 e v7.10 a v7.15; Travas 7-A, 7-B e 7-C; a antiga v7.9 foi fundida à v8.1 na fase 8) | [parte 1](docs/plano/fase-7-saude-eventos-e-comunicacao.md) e [parte 2](docs/plano/fase-7-parte-2-menores-cuidado-e-crise.md) |
 | D | Robustez, operação, celular e domínio raiz (retrofit das fases 0 a 7, antes da Trava 7-A) | vD.1–vD.8 feitas e Trava D-B fechada (06–08/10/2026); ficam só decisões do responsável | [fase-d-robustez-e-operacao](docs/plano/fase-d-robustez-e-operacao.md) |
-| 8 | Ministerial (AFM) | encerrada em 02/11/2026 (Trava 8-B): v8.1 (AFM e faltas da CLI) em 27/10/2026; v8.2 (escada) e v8.3 (consagração) em 28/10/2026; v8.4 (credencial digital) e a Trava 8-A em 29/10/2026; v8.5 (trilha de discipulado), v8.6 (educação continuada) e v8.7 (Seminário) em 30/10/2026 | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
+| 8 | Ministerial (AFM) | encerrada em 03/11/2026 (Trava 8-B): v8.1 (AFM e faltas da CLI) em 27/10/2026; v8.2 (escada) e v8.3 (consagração) em 28/10/2026; v8.4 (credencial digital) e a Trava 8-A em 29/10/2026; v8.5 (trilha de discipulado), v8.6 (educação continuada) e v8.7 (Seminário) em 30/10/2026 | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | planejada | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
 | 10 | Experiência, design e performance | planejada | [fase-10-experiencia-design-performance](docs/plano/fase-10-experiencia-design-performance.md) |
 | 11 | Sistema campal (multi-campo) | planejada | [fase-11-sistema-campal](docs/plano/fase-11-sistema-campal.md) |

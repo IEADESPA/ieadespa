@@ -20,6 +20,66 @@
 - [ ] Prestação de contas da entidade vinculada à CLI, com periodicidade e alerta
       de atraso (mesmo mecanismo da v5.4).
 
+### Desenho da v9.1 (contrato, 03/11/2026)
+
+Base legal: Estatuto Art. 64 a 68 (Capítulo XIII: natureza, "cordão umbilical", blindagem, prestação de contas e dissolução), Art. 59 (autonomia econômica),
+Art. 61, II (auditoria anual pelos órgãos da própria entidade), Art. 18, VII, "b", e Art. 19 (criação e extinção de entidade vinculada: a CLI delibera com efeito
+imediato e a Assembleia Geral ratifica na reunião seguinte), Art. 33, IV (fiscalização e intervenção são do Pastor Presidente) e Art. 76 §2º (nepotismo em cargo
+remunerado); Regimento Art. 47-A (intervenção) e Art. 153 (formação do gestor).
+
+**1. O cadastro (o "anexo próprio aprovado pela CLI", Art. 64, parágrafo único).** Cada entidade tem razão social, nome fantasia, **CNPJ próprio de matriz
+(0001)** — com os dígitos conferidos, inclusive no CNPJ alfanumérico que a Receita emite desde julho de 2026 —, o **tipo** e a finalidade. O tipo vem de um
+catálogo do nível geral (Hospital, Escola, ONG/Associação de assistência social, Outra), cada um com a **natureza** (saúde, educação, assistência social, outra) e a
+lista das **formações aceitas para o gestor** (Art. 153: Hospital = Gestão hospitalar ou Medicina; Escola = Pedagogia). A entidade nasce **proposta**; vira
+**ativa** quando se registra a reunião da CLI (já realizada e encerrada) que aprovou o vínculo, ou fica **não aprovada** com o motivo. A aprovação da CLI vale na
+hora (Art. 19), mas entra na lista **"aguardando a Assembleia"** até se registrar a Assembleia Geral que a ratificou; se a Assembleia não ratificar, o vínculo é
+**desfeito**. Documentos (estatuto da entidade, cartão do CNPJ, ata) pelo anexo de sempre.
+
+**2. Vínculo e controle de participação (Art. 65 §1º, Art. 76 §2º, Art. 153).** O controle da IEADESPA sobre a entidade é **quem ela põe na direção**: cada
+dirigente tem a função (Diretor-Presidente, Vice, Administrativo, Financeiro, Secretário, **Gestor técnico**, Conselheiro fiscal, outra), é um membro (pela
+matrícula) ou um profissional de fora (o Art. 153 permite; guarda-se só o nome, a formação e o registro profissional), e passa por **indicação do Pastor
+Presidente** (o ato e a data) e **homologação da CLI** (a reunião), ou é recusado. Mandato com data opcional (vencido aparece, não some). Regras:
+
+- **Gestor técnico com a formação exigida pelo tipo** (Art. 153): a formação precisa ser uma das aceitas — conferido na indicação e de novo na homologação. Um só
+  gestor técnico e um só Diretor-Presidente em aberto por entidade. A entidade ativa sem gestor homologado com a formação exigida aparece nas pendências.
+- **Nepotismo** (Art. 76 §2º): cargo **remunerado** não vai a parente até o 2º grau de quem está na Diretoria Executiva (o mesmo cálculo de parentesco do
+  Conselho Fiscal). Para o profissional de fora, que não está na árvore de famílias, exige-se a **declaração** de que não é parente.
+- Ninguém indica nem homologa a si mesmo.
+
+**3. Intervenção (Estatuto Art. 65 §§2º e 3º; Regimento Art. 47-A).** Um processo por entidade de cada vez, em etapas:
+
+- **Apuração** (Art. 47-A §1º): aberta com o motivo — gestão temerária, desvio de finalidade, inadimplência fiscal ou risco à imagem da Igreja — e os fatos.
+  Sem apuração aberta não há intervenção. Pode ser arquivada com o motivo.
+- **Notificação** do gestor por escrito e **5 dias** para ele se manifestar (Art. 65 §3º); a manifestação fica registrada.
+- **Decretação**, **só pelo Pastor Presidente em exercício** (a cadeira de Presidente na Diretoria Executiva): exige a fundamentação escrita (os motivos técnicos,
+  disciplinares ou de gestão) e os 5 dias corridos desde a notificação — salvo **urgência** com risco iminente ao patrimônio ou à continuidade dos serviços,
+  justificada. Nomeia o interventor e diz se afasta a diretoria. A data é a do dia (não se decreta com data passada).
+- **Ratificação pela CLI em 15 dias, sob pena de perder a eficácia** (Art. 47-A §2º): o prazo fatal aparece com a contagem regressiva; a CLI ratifica ou não
+  ratifica numa reunião **realizada dentro do prazo**. Passado o 15º dia sem ratificação, a intervenção **caduca sozinha** (o sistema a marca como "perdeu a
+  eficácia", registra na auditoria e avisa) e não se ratifica mais — só uma nova decretação, sobre a mesma apuração. Quem decretou não registra a ratificação.
+- A diretoria afastada fica **afastada enquanto a intervenção vale**; com a ratificação, os mandatos são **encerrados por destituição**; se caducar ou não for
+  ratificada, nada muda neles. Os diretores destituídos têm direito a defesa no Conselho de Ética (Art. 47-A §2º): registra-se a data e a referência.
+- **Encerramento** da intervenção (a gestão devolvida), pelo Pastor Presidente, com o motivo.
+- Avisos: a decretação avisa na hora quem administra as entidades; enquanto corre o prazo, um aviso **por dia** com quantos dias faltam; a caducidade avisa.
+
+**4. Prestação de contas (Art. 67; Art. 61, II; Art. 66 §3º).** Cada entidade tem a **periodicidade** (anual — o mínimo do Art. 67 —, semestral ou trimestral) e o
+**prazo de entrega** em dias depois do fim do período (padrão em Prazos: 120 dias, ou seja, o relatório anual até 30 de abril). Os períodos são **calculados**
+a partir da data do vínculo, sem cadastro prévio. Para cada período registra-se a entrega (relatório de atividades e balanço auditado pelo órgão de fiscalização
+da própria entidade), a **apreciação da CLI** (aprovada, aprovada com ressalvas ou reprovada, na reunião) e — no período que fecha o ano — a **verificação anual do
+Conselho Fiscal** de que não há confusão patrimonial (Art. 66 §3º). Período vencido sem entrega = **atrasada**, calculado na leitura (o mesmo mecanismo da
+v5.4: nada a fechar à mão), com aviso mensal. A periodicidade fica fixa depois da primeira prestação registrada.
+
+**5. Extinção (Art. 68; Art. 18, VII, "b").** Registrada com a reunião da CLI e o **destino do patrimônio conforme a natureza**: saúde → outra instituição de
+saúde sem fins lucrativos ou a Matriz com afetação exclusiva a fins assistenciais (só se a IEADESPA mantiver atividade assistencial do mesmo tipo); educação →
+instituição de ensino congênere; as demais → entidade congênere sem fins econômicos. Os **bens da Matriz cedidos em comodato** são listados e voltam à
+IEADESPA (inciso III). Os mandatos se encerram. Também espera a ratificação da Assembleia; se ela não ratificar, a entidade volta a ativa.
+
+**6. Quem faz o quê.** Permissão nova **`entidades_vinculadas`**, só no nível geral (vem para o Presidente e o Secretário Geral; o Conselho Fiscal recebe em
+Permissões): cadastro, tipos, dirigentes, apuração, ratificação, prestação de contas, extinção. Decretar e encerrar a intervenção: só o Pastor Presidente em
+exercício. Tela: card novo **"Entidades Vinculadas"** no portal, com Painel (pendências: prazo de ratificação correndo, prestações atrasadas, aguardando CLI ou
+Assembleia, sem gestor habilitado), Entidades (lista e ficha) e Tipos. Meus Dados mostra à pessoa as funções que ela ocupa em entidade vinculada; ROPA e
+política de retenção atualizadas (os atos de nomeação, intervenção e prestação são prova institucional e ficam).
+
 ## v9.2 — Expansão (Extensões e novas congregações)
 
 - [ ] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.

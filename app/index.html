@@ -427,6 +427,14 @@
             <button class="btn-aba" id="btnAbaVistoria" data-on-click="mostrarAbaSecretaria" data-args-click='["vistoria"]'><span class="icone">🔎</span><span class="rotulo">Vistoria de Antecedentes</span></button>
           </div>
 
+          <!-- MÓDULO: ENTIDADES VINCULADAS (v9.1) — Estatuto Art. 64 a 68; Regimento Art. 47-A e 153: hospitais, escolas, ONGs e associações com
+               CNPJ próprio, a direção indicada pelo Pastor Presidente e homologada pela CLI, a intervenção com o prazo de 15 dias e a prestação de contas.
+               Permissão própria "entidades_vinculadas", só do nível geral. -->
+          <div class="grupo-modulo" id="grupoModuloEntidades" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaEntidades" data-on-click="mostrarAbaSecretaria" data-args-click='["entidades"]'><span class="icone">🏥</span><span class="rotulo">Entidades Vinculadas</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -5915,6 +5923,74 @@
         </div>
       </div>
 
+      <!-- ABA: ENTIDADES VINCULADAS (v9.1) — Estatuto Art. 64 a 68; Regimento Art. 47-A e 153. Exige "entidades_vinculadas" no nível geral. Toda regra mora
+           no servidor (shared/entidadesVinculadas.js, rota /api/entidades-vinculadas); a ficha e os formulários de cada ato são montados por modulos/entidades-vinculadas.js
+           e o que o servidor devolve passa por escaparHtmlEbd. -->
+      <div id="abaEntidades" class="aba-secretaria" style="display:none;">
+        <h3>🏥 Entidades Vinculadas</h3>
+        <p class="subtitle">Hospitais, escolas, ONGs e associações com <strong>CNPJ próprio</strong> ligadas à IEADESPA (Estatuto, Art. 64 a 68). Cada uma tem dinheiro e
+          contabilidade separados da Igreja; o controle da Igreja é <strong>quem ela põe na direção</strong> (indicação do Pastor Presidente, homologação da CLI), a
+          <strong>prestação de contas</strong> à CLI e, se houver má gestão, a <strong>intervenção</strong> — que a CLI precisa ratificar em 15 dias.</p>
+        <div class="cal-pilulas" id="entPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnEntSecaoPainel" data-on-click="entMostrarSecaoAcao" data-args-click='["painel"]'>📋 Painel</button>
+          <button type="button" class="cal-pilula" id="btnEntSecaoEntidades" data-on-click="entMostrarSecaoAcao" data-args-click='["entidades"]'>🏥 Entidades</button>
+          <button type="button" class="cal-pilula" id="btnEntSecaoTipos" data-on-click="entMostrarSecaoAcao" data-args-click='["tipos"]'>🏷️ Tipos</button>
+        </div>
+
+        <div id="entSecaoPainel" class="cal-secao">
+          <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="entCarregarPainelAcao">🔄 Atualizar</button></div>
+          <p id="entMsgPainel" class="subtitle" role="status"></p>
+          <div id="entPainel"></div>
+        </div>
+
+        <div id="entSecaoEntidades" class="cal-secao" style="display:none;">
+          <details id="entNovaDetalhes" class="vol-form evt-form-detalhes">
+            <summary>➕ Cadastrar uma entidade (nasce proposta, até a CLI aprovar)</summary>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="entNovaRazao">Razão social (3 a 150)</label><input type="text" id="entNovaRazao" maxlength="150" /></div>
+                <div class="input-group"><label for="entNovaFantasia">Nome fantasia (opcional)</label><input type="text" id="entNovaFantasia" maxlength="100" /></div>
+                <div class="input-group"><label for="entNovaCnpj">CNPJ da matriz (final 0001; aceita o CNPJ com letras)</label><input type="text" id="entNovaCnpj" maxlength="18" placeholder="00.000.000/0001-00" /></div>
+                <div class="input-group"><label for="entNovaTipo">Tipo</label><select id="entNovaTipo"></select></div>
+                <div class="input-group"><label for="entNovaMunicipio">Município (opcional)</label><input type="text" id="entNovaMunicipio" maxlength="80" /></div>
+                <div class="input-group"><label for="entNovaUf">UF (opcional)</label><select id="entNovaUf"></select></div>
+                <div class="input-group"><label for="entNovaAutorizacao">Autorização da Assembleia (só se a Assembleia já desfez um vínculo deste CNPJ — Estatuto, Art. 19 §1º)</label><select id="entNovaAutorizacao"></select></div>
+              </div>
+              <div class="input-group"><label for="entNovaFinalidade">Finalidade (10 a 500 caracteres)</label><textarea id="entNovaFinalidade" rows="3" maxlength="500" style="width:100%;"></textarea></div>
+              <button type="button" class="btn-confirmar" style="width:auto;" data-on-click="entSalvarNovaAcao">Cadastrar</button>
+              <p id="entMsgNova" class="subtitle" role="status"></p>
+            </div>
+          </details>
+          <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="entCarregarListaAcao">🔄 Atualizar</button></div>
+          <p id="entMsgLista" class="subtitle" role="status"></p>
+          <div id="entLista"></div>
+          <div id="entBlocoFicha" style="display:none;">
+            <hr />
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="entFecharFichaAcao">✖ Fechar a ficha</button></div>
+            <p id="entMsgFicha" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="entFicha"></div>
+          </div>
+        </div>
+
+        <div id="entSecaoTipos" class="cal-secao" style="display:none;">
+          <p class="subtitle">O tipo diz a <strong>natureza</strong> da entidade (ela decide para onde vai o patrimônio na extinção, Art. 68) e as <strong>formações aceitas</strong>
+            para o gestor técnico (Regimento, Art. 153: Pedagogia na escola; gestão hospitalar ou Medicina no hospital). Sem formação na lista, o tipo não exige nenhuma.</p>
+          <div id="entListaTipos"></div>
+          <details id="entTipoDetalhes" class="vol-form evt-form-detalhes">
+            <summary id="entTipoTitulo">Cadastrar um tipo novo</summary>
+            <div class="cal-form">
+              <div class="input-group"><label for="entTipoNome">Nome</label><input type="text" id="entTipoNome" maxlength="80" /></div>
+              <div class="input-group"><label for="entTipoNatureza">Natureza</label><select id="entTipoNatureza"></select></div>
+              <div class="input-group"><label for="entTipoFormacoes">Formações aceitas para o gestor (uma por linha; vazio = sem exigência)</label><textarea id="entTipoFormacoes" rows="3" style="width:100%;"></textarea></div>
+              <div class="input-group" id="entTipoAtivoBloco" style="display:none;"><label><input type="checkbox" id="entTipoAtivo" checked /> Ativo (aparece no cadastro)</label></div>
+              <button type="button" class="btn-confirmar" style="width:auto;" data-on-click="entSalvarTipoAcao">Salvar</button>
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;" data-on-click="entNovoTipoAcao">Limpar</button>
+              <p id="entMsgTipos" class="subtitle" role="status"></p>
+            </div>
+          </details>
+        </div>
+      </div>
+
       <!-- ABA: SETORES TÉCNICOS (v7.6) — Regimento Art. 48 a 52. Exige "setores_tecnicos" (a gestão: catálogo
            dos setores, vínculos, Termo de Adesão e a visão de todos os atos) e/ou "setores_ratificacao" (a
            Diretoria Executiva: ratificar ou revogar as interdições e os pedidos de remoção); as duas só
@@ -7375,6 +7451,7 @@
   <script src="modulos/ebd.js"></script>
   <script src="modulos/educacao-continuada.js"></script>
   <script src="modulos/enquetes.js"></script>
+  <script src="modulos/entidades-vinculadas.js"></script>
   <script src="modulos/escalas.js"></script>
   <script src="modulos/eventos-congressos.js"></script>
   <script src="modulos/financeiro.js"></script>

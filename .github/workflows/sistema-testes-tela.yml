@@ -41,7 +41,9 @@ concurrency:
 jobs:
   telas:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 150 (03/11/2026, Trava 8-B): a rodada completa logo depois de uma base nova refaz a 1ª rodada da base (~62 min, 5.828
+    # ações) e depois a da versão atual (~60 min); com 90 ela era cortada no meio (execução 41646275902)
+    timeout-minutes: 150
     env:
       NAVEGADOR: /usr/bin/google-chrome
     steps:

@@ -78,6 +78,7 @@ const AJUDA_POR_ABA = {
   checkininfantil: "Check-in infantil (ECA arts. 70, 70-A e 70-B; Lei 14.811/2024): as salas de hoje com crianças, as aprovações de retirada por quem não está na lista (confirme com o responsável pelo telefone antes de decidir; o ato pede confirmação reforçada), as crianças travadas por erros do código e as fichas assinadas dos responsáveis. Na sala você vê a lotação, os voluntários, o relatório do dia e pode tirar quem esqueceu de sair.",
   "meupainel:cuidado": "Cuidado: peça oração ou uma visita da liderança da sua congregação. Diga se o pedido pode ir ao boletim de oração (sempre sem o seu nome) ou se é só para a liderança, e se quer que alguém fale com você. Se a liderança nomeou você para acompanhar alguém, os seus acompanhamentos aparecem aqui: registre cada contato (visita sempre com mais alguém) e conclua quando terminar. Precisa de ajuda agora? CVV 188 (de graça, 24 horas), Polícia 190, Mulher 180, Disque 100.",
   cuidadopastoral: "Cuidado pastoral: a fila mostra quem precisa de alguém da igreja, com o responsável e o prazo (visitante: 48 horas, Regimento Art. 128 §5º). Prazo vencido sobe um degrau (Congregação → Área → Região → nível geral) para chamar ajuda. Abra o acompanhamento para registrar contato, trocar o responsável, adiar, concluir ou cancelar, e para ler ou escrever notas pastorais (cada abertura fica registrada; \"somente pastor\" pede a confirmação reforçada). Em Pedidos de oração, modere antes de ir ao boletim (sem nome) e atenda primeiro os que têm sinal de risco.",
+  entidades: "Entidades vinculadas (Estatuto Art. 64 a 68): hospitais, escolas, ONGs e associações com CNPJ próprio. A CLI aprova o vínculo e a Assembleia ratifica; o Pastor Presidente indica a direção e a CLI homologa (o gestor técnico com a formação exigida por lei, Regimento Art. 153). A intervenção exige apuração, notificação do gestor com 5 dias e a ratificação da CLI em 15 dias, senão perde a eficácia (Art. 47-A). A prestação de contas à CLI é por período; a atrasada aparece no Painel.",
   vistoria: "Termo de Vistoria de antecedentes (Art. 133 §5º), só da Diretoria Executiva e do Conselho de Ética: veja quem falta, lavre o Termo e solicite certidões. A certidão nunca sobe ao sistema: o navegador calcula o código (hash) do arquivo e só ele é enviado.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
@@ -448,6 +449,7 @@ function limparSessao() {
   if (typeof discLimparTela === "function") discLimparTela();   // v8.5: o funil, os nomes de quem parou, as caminhadas e os tipos do marco saem da página
   if (typeof edcLimparTela === "function") edcLimparTela();   // v8.6: a educação continuada (o painel da AFM, a minha, a do perfil)
   if (typeof semLimparTela === "function") semLimparTela();   // v8.7: o Seminário (as turmas, a ficha do aluno, o meu histórico, o do perfil)
+  if (typeof entLimparTela === "function") entLimparTela();   // v9.1: as entidades vinculadas (a ficha aberta, a intervenção, o que foi digitado)
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -1276,7 +1278,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1382,6 +1384,9 @@ const ABA_PERMISSOES_ALT = {
   // A candidatura, o aceite do Termo e os atos de quem serve ficam em Meu Painel → Setores Técnicos, abertos a qualquer login.
   setores: ["setores_tecnicos", "setores_ratificacao"],
   vistoria: ["vistoria_antecedentes"],
+  // v9.1 — Entidades vinculadas (Estatuto Art. 64 a 68): permissão própria, só do nível geral (vem para o Presidente e o Secretário Geral; o Conselho Fiscal recebe em
+  // Permissões). Decretar e encerrar a intervenção: o servidor confere, além dela, se é o Pastor Presidente em exercício.
+  entidades: ["entidades_vinculadas"],
   // v5.4 (correção) — quem só tem "tesouraria_departamental" (líder local/
   // geral de departamento) também acessa Financeiro → Saídas, pra gastar o
   // saldo do próprio departamento (Centro de Custo DEPTO_<SIGLA>) pelo
@@ -1396,7 +1401,7 @@ function permissoesDaAba(nome) {
 // backend já o deixava lançar chamada/resposta/pedido da própria turma desde
 // a v6.2, mas ele nunca via a tela (ebdTurmasProfessor: junto do estado de sessão).
 // Abas cujo servidor agora só atende o nível GERAL (catálogos e permissões: quem cadastra congregações, cargos e papéis): para os demais nem aparecem.
-const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados", "setores", "vistoria", "identidade"]);
+const ABAS_SO_DO_GERAL = new Set(["catalogos", "permissoes", "auditoria", "protecaodedados", "setores", "vistoria", "identidade", "entidades"]);
 function temPermissaoDaAba(nome) {
   if (ABAS_SO_DO_GERAL.has(nome) && !authGeral) return false;
   if (permissoesDaAba(nome).some(chave => authPermissoes.includes(chave))) return true;
@@ -1475,6 +1480,7 @@ const MODULOS = {
   crise: { titulo: "Crise e Segurança", icone: "🚨", abaEntrada: "crise", abas: ["crise"] },
   eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
   setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
+  entidades: { titulo: "Entidades Vinculadas", icone: "🏥", abaEntrada: "entidades", abas: ["entidades"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };

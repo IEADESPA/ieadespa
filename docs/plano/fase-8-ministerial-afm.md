@@ -733,7 +733,7 @@ Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3)
 Audita v8.5 a v8.7 pelas 5 perguntas do checklist, e faz uma varredura final
 na FASE 8 inteira antes de fechar.
 
-- [x] **Fechada em 02/11/2026** — auditoria de v8.5 a v8.7 e varredura final da FASE 8. Duas revisões independentes, só de leitura: uma
+- [x] **Fechada em 03/11/2026 (auditoria em 02/11, produção em 03/11)** — auditoria de v8.5 a v8.7 e varredura final da FASE 8. Duas revisões independentes, só de leitura: uma
   das costuras ENTRE as versões (quem conta como "ativo" ou "no rol", o que a saída da igreja desfaz, o que cada pessoa pode mexer em si mesma)
   e outra da conformidade com o Regimento, o Estatuto, o plano e o README. **Nenhum achado crítico; todos os que o código resolve,
   corrigidos com teste** (migração 164; `e2e-68`, 53 verificações; casca v50). As 5 perguntas:
@@ -751,7 +751,8 @@ na FASE 8 inteira antes de fechar.
      ainda aparecia aberto (entrou na v8.1); o ROPA dizia que a minimização guarda o histórico acadêmico (não guarda, e não deve: Art. 132
      §2º, II); o comentário da regra única citava o artigo errado (é o Art. 95 §3º).
   4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável, listadas no fim.
-  5. **Houve deploy real?** Sim: ver "Como ficou", abaixo.
+  5. **Houve deploy real?** Sim: a 164 rodou no deploy da produção em 03/11/2026, com o teste de tela completo sem divergência (ver
+     "Como ficou", abaixo).
 
   O que mudou:
   - **Só quem celebra, celebra (alto).** Diácono, Auxiliar e Missionário apareciam "habilitados para oficiar" o batismo, o casamento e a
@@ -805,4 +806,13 @@ na FASE 8 inteira antes de fechar.
   catálogo da trilha de discipulado fica sob a permissão `pessoas`; a liturgia do Art. 72, III, b só é exigida se for cadastrada como
   requisito; a carga da educação continuada é a mesma para todos os cargos.
 
-  **Como ficou:** (preenchido depois do deploy)
+  **Como ficou:** em produção desde 03/11/2026 (merge `adfd7d7`; reverter = `git revert -m 1 adfd7d7`). A migração 164 rodou no deploy
+  (log: `164_trava_8b.sql (5 batch(es))`); as rotas tocadas respondem 401 sem sessão; a casca está na v50; o QR inválido responde 404.
+  Homologação: a primeira rodada (41470762085) mostrou só as diferenças intencionais (os dois avisos de quem celebra, +2 nós em toda tela;
+  o botão Urgência em cada candidato ao batismo; o texto do quadro da CLI) e nenhum erro novo; base aprovada (`940c242`); confirmação
+  41635650092: 1.179 + 153 ações iguais, 0 divergência, 0 violação de CSP. Produção, teste de tela completo (41661600155): 5.818 ações
+  iguais no computador e 745 no celular, 0 divergência, 0 violação de CSP. A trava achou um limite da própria ferramenta: a rodada
+  completa logo depois de uma base nova refaz a rodada da base (~62 min) e a da versão atual (~60 min), e o teto de 90 minutos a cortava
+  no meio (41646275902, sem nenhuma divergência até ali); o teto passou para 150 minutos (`61e16b6`).
+
+  **A FASE 8 está encerrada.** Próxima: FASE 9 (Entidades vinculadas).

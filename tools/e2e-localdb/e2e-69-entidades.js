@@ -81,7 +81,8 @@ async function sessao(orgao, descricao, data) {
   ok(await escalar("SELECT COUNT(*) FROM EntidadeTipos WHERE Nome IN (N'Hospital', N'Escola', N'ONG / Associação de assistência social', N'Outra entidade')") === 4, "os 4 tipos semeados");
   ok(await escalar("SELECT COUNT(*) FROM EntidadeTipoFormacoes f JOIN EntidadeTipos t ON t.TipoId = f.TipoId WHERE t.Nome = N'Hospital'") === 2, "Hospital: Gestão hospitalar e Medicina (Art. 153)");
   ok(await escalar("SELECT COUNT(*) FROM Funcionalidades WHERE Chave = 'entidades_vinculadas'") === 1, "a permissão entidades_vinculadas");
-  ok(await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE N'ENTIDADE[_]%' AND NivelAlvo = N'GLOBAL'") === 4, "as 4 regras de aviso (nível geral)");
+  ok(await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave LIKE N'ENTIDADE[_]%' AND NivelAlvo = N'GLOBAL'") === 5, "as 5 regras de aviso (nível geral)");
+  ok(await escalar("SELECT COUNT(*) FROM EntidadeTipos") === 4, "a semente só uma vez (a 165 rodou duas vezes)");
   ok(await escalar("SELECT COUNT(*) FROM PoliticasRetencao WHERE Categoria = N'Entidades vinculadas: atos de governança' AND BaseLegal <> N'x'") === 1, "a política de retenção com o texto");
   ok(await escalar("SELECT COUNT(*) FROM Prazos WHERE Sigla = 'ENTIDADE_PRESTACAO_PRAZO_DIAS' AND Dias = 120") === 1, "o prazo padrão da entrega (120 dias)");
 
@@ -171,7 +172,8 @@ async function sessao(orgao, descricao, data) {
   ok(r.status === 422, "ativa não volta a não aprovada");
   r = await POST("entidade", { razaoSocial: "Projeto Recusado E2E", cnpj: "45723174000110", tipoId: tipoOng.tipoId, finalidade: "Projeto que a CLI não aprovou." });
   const recusada = r.body.entidadeId;
-  r = await POST("vinculo-nao-aprovar", { entidadeId: recusada, motivo: "A CLI entendeu que a finalidade não é da Igreja." });
+  ok((await POST("vinculo-nao-aprovar", { entidadeId: recusada, motivo: "A CLI entendeu que a finalidade não é da Igreja." })).status === 422, "a recusa da CLI exige a reunião");
+  r = await POST("vinculo-nao-aprovar", { entidadeId: recusada, sessaoId: cliHoje, motivo: "A CLI entendeu que a finalidade não é da Igreja." });
   ok(r.status === 200 && (await escalar("SELECT Status FROM EntidadesVinculadas WHERE EntidadeId = @e", { e: recusada })) === "NAO_APROVADA", "não aprovada, com o motivo");
 
   console.log("== homologação ==");
@@ -195,7 +197,8 @@ async function sessao(orgao, descricao, data) {
   ok(per.length === 3 && per[0].situacao === "EM_CURSO" && per[1].situacao === "ATRASADA" && per[2].situacao === "ATRASADA", "3 exercícios: o corrente em curso e os dois anteriores atrasados", per.map((p) => `${p.codigo}:${p.situacao}`));
   ok((await GET("painel")).body.prestacoesAtrasadas.filter((x) => x.entidadeId === esc).length === 2, "o painel mostra as duas atrasadas");
   const fatos = await evDb.detectarPrestacoesAtrasadas(await obterPool());
-  ok(fatos.filter((f) => /Escola Cristã/.test(f.fatoGerador)).length === 2 && new Set(fatos.map((f) => f.referenciaId)).size === fatos.length, "o aviso mensal: um fato por período, sem referência repetida", fatos.length);
+  const daEscola = fatos.filter((f) => /Escola Cristã/.test(f.fatoGerador));
+  ok(daEscola.length === 1 && /2024.*2025|2025.*2024/.test(daEscola[0].fatoGerador) && new Set(fatos.map((f) => f.referenciaId)).size === fatos.length, "o aviso mensal: um por entidade, com os dois períodos, sem referência repetida", fatos);
   const anoAnt = String(ano - 2);
   const ENTREGA = { entidadeId: esc, periodo: anoAnt, entregueEm: `${ano - 1}-03-15`, relatorioAtividades: true, balancoAuditado: true, auditoriaOrgao: "Conselho Fiscal da Escola E2E" };
   ok((await POST("prestacao-registrar", { ...ENTREGA, periodo: String(ano) })).body.mensagem.includes("não terminou"), "o exercício corrente ainda não se presta");
@@ -207,8 +210,9 @@ async function sessao(orgao, descricao, data) {
   r = await POST("prestacao-registrar", { ...ENTREGA, auditoriaOrgao: "Auditoria corrigida E2E" });
   ok(r.status === 200 && /corrigida/.test(r.body.mensagem), "antes da CLI, a entrega se corrige");
   ok((await POST("prestacao-config", { entidadeId: esc, periodicidade: "SEMESTRAL", prazoEntregaDias: 120 })).status === 422, "a periodicidade fica fixa depois da primeira prestação");
-  ok((await POST("prestacao-config", { entidadeId: esc, periodicidade: "ANUAL", prazoEntregaDias: 90 })).status === 200, "o prazo de entrega muda");
-  ok((await POST("prestacao-config", { entidadeId: esc, periodicidade: "ANUAL", prazoEntregaDias: 120 })).status === 200, "e volta");
+  ok((await POST("prestacao-config", { entidadeId: esc, periodicidade: "ANUAL", prazoEntregaDias: 365 })).body.mensagem.includes("primeiro período"), "depois de vencido um período, o prazo não muda (apagaria o atraso para trás)");
+  ok((await POST("prestacao-config", { entidadeId: ong, periodicidade: "SEMESTRAL", prazoEntregaDias: 60 })).status === 200, "antes de terminar o primeiro período, muda");
+  ok((await POST("prestacao-config", { entidadeId: ong, periodicidade: "ANUAL", prazoEntregaDias: 120 })).status === 200, "e volta");
   ok((await POST("prestacao-apreciar", { prestacaoId: prest, sessaoId: cliHoje, resultado: "APROVADA_COM_RESSALVAS" })).status === 422, "com ressalvas, sem escrever as ressalvas: recusado");
   r = await POST("prestacao-apreciar", { prestacaoId: prest, sessaoId: cliHoje, resultado: "APROVADA" });
   ok(r.status === 200, "a CLI apreciou");
@@ -238,10 +242,16 @@ async function sessao(orgao, descricao, data) {
   ok((await POST("apuracao-notificar", { intervencaoId: iv, notificadoEm: dias(-5), forma: "Carta entregue em mãos ao diretor" })).body.mensagem.includes("abertura"), "notificação anterior à abertura da apuração: recusada");
   await q("UPDATE EntidadeIntervencoes SET AbertaEm = @d WHERE IntervencaoId = @i", { i: iv, d: dias(-10) });   // a apuração foi aberta há 10 dias
   ok((await POST("apuracao-notificar", { intervencaoId: iv, notificadoEm: dias(-5), forma: "Carta entregue em mãos ao diretor" })).status === 200, "a notificação de 5 dias atrás");
+  r = await POST("intervencao-decretar", { intervencaoId: iv, fundamentacao: "Desvio de finalidade comprovado pelos extratos (e2e).", interventorMembroId: P.interventor }, PRES());
+  ok(r.status === 422 && r.body.mensagem.includes(`manifestar até ${ev.br(hojeBr())}`), "no 5º dia o gestor ainda pode se manifestar: decretar só amanhã (revisão de 03/11/2026)", r.body);
+  ok((await POST("apuracao-notificar", { intervencaoId: iv, notificadoEm: dias(-6), forma: "Carta entregue em mãos ao diretor" })).status === 200, "a notificação de 6 dias atrás");
   r = await POST("apuracao-manifestacao", { intervencaoId: iv, manifestacaoEm: dias(-2), resumo: "O diretor nega o desvio e pede prazo para explicar." });
   ok(r.status === 200, "a manifestação do gestor");
   r = await POST("intervencao-decretar", { intervencaoId: iv, fundamentacao: "Desvio de finalidade comprovado pelos extratos (e2e).", interventorMembroId: P.desligado, afastaDiretoria: true }, PRES());
   ok(r.status === 422 && /Interventor/.test(r.body.mensagem), "interventor desligado: recusado");
+  const presSemFator = L.sessao(PRES_ID, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["entidades_vinculadas"] });
+  r = await POST("intervencao-decretar", { intervencaoId: iv, fundamentacao: "Desvio de finalidade comprovado pelos extratos (e2e).", interventorMembroId: P.interventor, afastaDiretoria: true }, presSemFator);
+  ok(r.status === 428 && r.body.precisaFator, "sem a confirmação recente (chave do aparelho ou código): 428");
   r = await POST("intervencao-decretar", { intervencaoId: iv, fundamentacao: "Desvio de finalidade comprovado pelos extratos (e2e).", interventorMembroId: P.interventor, afastaDiretoria: true }, PRES());
   ok(r.status === 200 && r.body.mensagem.includes(ev.br(dias(15))), "decretada pelo Presidente: prazo de 15 dias", r.body);
   let linha = await um("SELECT Status, CONVERT(varchar(10), DecretadaEm, 120) AS De, CONVERT(varchar(10), PrazoRatificacao, 120) AS Pr FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: iv });
@@ -269,11 +279,24 @@ async function sessao(orgao, descricao, data) {
   ok((await POST("intervencao-encerrar", { intervencaoId: iv, motivo: "Gestão devolvida ao diretor." }, PRES())).status === 422, "a caducada não se encerra (já não vale)");
   const cliNoPrazo = await sessao("CLI", "CLI E2E dentro do prazo", dias(-8));
   r = await POST("intervencao-ratificar", { intervencaoId: iv, sessaoId: cliNoPrazo, resultado: "RATIFICADA" });
+  ok(r.status === 422 && /ata/.test(r.body.mensagem), "a correção da caducidade exige a referência da ata", r.body);
+  await q("UPDATE EntidadeIntervencoes SET PrazoRatificacao = @p, DecretadaEm = @d, NotificadoEm = @n WHERE IntervencaoId = @i", { i: iv, p: dias(-11), d: dias(-26), n: dias(-32) });
+  r = await POST("intervencao-ratificar", { intervencaoId: iv, sessaoId: await sessao("CLI", "CLI E2E antiga", dias(-15)), resultado: "RATIFICADA", ataReferencia: "Ata 7/2026" });
+  ok(r.status === 422 && /correção só cabia/.test(r.body.mensagem), "passados 10 dias do prazo, a correção não cabe mais", r.body);
+  await q("UPDATE EntidadeIntervencoes SET PrazoRatificacao = @p, DecretadaEm = @d, NotificadoEm = @n WHERE IntervencaoId = @i", { i: iv, p: dias(-5), d: dias(-20), n: dias(-26) });
+  r = await POST("intervencao-ratificar", { intervencaoId: iv, sessaoId: cliNoPrazo, resultado: "RATIFICADA", ataReferencia: "Ata 8/2026 da CLI" });
+  ok(await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = N'ENTIDADE_INTERVENCAO_CORRIGIDA'") >= 0 && (await escalar("SELECT CorrecaoAta FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: iv })) === "Ata 8/2026 da CLI", "a correção guarda a ata (e avisa)");
   ok(r.status === 200 && r.body.destituidos === 4, "a reunião feita DENTRO do prazo, registrada tarde: corrige a caducidade e destitui a diretoria de antes da decretação", r.body);
   linha = await um("SELECT Status, CaducadaEm FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: iv });
   ok(linha.Status === "RATIFICADA" && linha.CaducadaEm === null, "ratificada, sem a marca de caducada", linha);
   ok(await escalar("SELECT COUNT(*) FROM EntidadeDirigentes WHERE EntidadeId = @e AND MotivoEncerramento = 'DESTITUICAO_INTERVENCAO' AND IntervencaoId = @i", { e: esc, i: iv }) === 4, "os mandatos encerrados por destituição, ligados à intervenção");
   ok((await POST("intervencao-defesa", { intervencaoId: iv, defesaEm: hojeBr(), referencia: "Protocolo CEI 12/2026" })).status === 200, "a defesa no Conselho de Ética");
+  let pnl = await GET("painel");
+  ok(pnl.body.aguardandoAG.some((x) => x.objeto === "DESTITUICAO" && x.entidadeId === esc && x.assembleiaJaHouve === true), "a destituição espera a Assembleia (Art. 18, VII, c) — e uma Assembleia já houve depois", pnl.body.aguardandoAG);
+  ok((await POST("intervencao-assembleia", { intervencaoId: iv, sessaoId: cliHoje, resultado: "RATIFICADA" })).status === 422, "a destituição: só a Assembleia");
+  ok((await POST("intervencao-assembleia", { intervencaoId: iv, sessaoId: agHoje, resultado: "RATIFICADA" })).status === 200, "a Assembleia ratificou a destituição");
+  ok((await POST("intervencao-assembleia", { intervencaoId: iv, sessaoId: agHoje, resultado: "RATIFICADA" })).status === 422, "e não de novo");
+  ok((await POST("intervencao-encerrar", { intervencaoId: iv, motivo: "Gestão devolvida à nova diretoria." }, presSemFator)).status === 428, "encerrar também exige a confirmação recente");
   ok((await POST("intervencao-encerrar", { intervencaoId: iv, motivo: "Gestão devolvida à nova diretoria." })).status === 403, "a Secretaria não encerra a intervenção");
   ok((await POST("intervencao-encerrar", { intervencaoId: iv, motivo: "Gestão devolvida à nova diretoria." }, PRES())).status === 200, "o Presidente encerra");
 
@@ -291,6 +314,10 @@ async function sessao(orgao, descricao, data) {
   ok(r.status === 201, "nova apuração com os mesmos fatos", r.body);
   const iv3 = r.body.intervencaoId;
   ok((await POST("apuracao-reabrir", { intervencaoId: iv2 })).status === 422, "não reabre duas vezes (uma em curso)");
+  ok((await escalar("SELECT NotificadoEm FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: iv3 })) === null, "a reabertura NÃO aproveita a notificação antiga (revisão de 03/11/2026)");
+  r = await POST("intervencao-decretar", { intervencaoId: iv3, fundamentacao: "Contas bloqueadas e folha de pagamento em risco (e2e).", urgencia: true,
+    urgenciaJustificativa: "Penhora marcada para amanhã sobre o caixa do hospital.", interventorNome: "Administrador Hospitalar Externo E2E" }, PRES());
+  ok(r.status === 422 && /sem urgência/.test(r.body.mensagem), "depois da recusa da CLI, a urgência não contorna a notificação e os 5 dias", r.body);
   ok((await POST("apuracao-arquivar", { intervencaoId: iv3, motivo: "Tributos quitados pela própria diretoria." })).status === 200, "arquivada");
 
   console.log("== garantias do banco (CHECK e índice) ==");
@@ -320,8 +347,35 @@ async function sessao(orgao, descricao, data) {
   r = await POST("assembleia", { entidadeId: hosp, sessaoId: agHoje, resultado: "NAO_RATIFICADA", observacao: "A Assembleia quer manter o hospital." });
   linha = await um("SELECT Status, ExtincaoEm, DestinoPatrimonio FROM EntidadesVinculadas WHERE EntidadeId = @e", { e: hosp });
   ok(r.status === 200 && linha.Status === "ATIVA" && linha.ExtincaoEm === null && linha.DestinoPatrimonio === null, "a Assembleia não ratificou: volta a ativa, a extinção fica sem efeito", linha);
+  ok((await escalar("SELECT CONVERT(varchar(10), ExtincaoVetadaEm, 120) FROM EntidadesVinculadas WHERE EntidadeId = @e", { e: hosp })) === hojeBr(), "a recusa da Assembleia fica guardada (Art. 19 §1º)");
+  const EXT = { entidadeId: hosp, sessaoId: cliHoje, destinoPatrimonio: "SAUDE_OUTRA_INSTITUICAO", destinatarioNome: "Santa Casa E2E" };
+  r = await POST("extinguir", EXT);
+  ok(r.status === 422 && /19 §1º/.test(r.body.mensagem), "a CLI não renova a extinção sem nova autorização da Assembleia", r.body);
+  const agAutoriza = await sessao("ASSEMBLEIA_GERAL", "AG E2E autoriza", hojeBr());
+  // uma intervenção em curso no hospital: a extinção a encerra
+  r = await POST("apuracao-abrir", { entidadeId: hosp, motivo: "RISCO_IMAGEM", fatos: "Fatos que deixam de importar com a extinção (e2e)." });
+  const ivHosp = r.body.intervencaoId;
+  r = await POST("extinguir", { ...EXT, autorizacaoAGSessaoId: agAutoriza });
+  ok(r.status === 200 && (await escalar("SELECT Status FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: ivHosp })) === "ARQUIVADA", "com a autorização: extinta, e a apuração em curso arquivada", r.body);
+  // uma intervenção decretada na ONG: o vínculo desfeito a encerra
+  r = await POST("apuracao-abrir", { entidadeId: ong, motivo: "RISCO_IMAGEM", fatos: "Fatos da associação antes do desfazimento (e2e)." });
+  const ivOng = r.body.intervencaoId;
+  await q("UPDATE EntidadeIntervencoes SET Status = 'DECRETADA', NotificadoEm = @n, DecretadaEm = @d, DecretadaPor = 1001, Fundamentacao = N'Fundamentação (e2e)', InterventorNome = N'Interventor E2E', PrazoRatificacao = @p WHERE IntervencaoId = @i",
+    { i: ivOng, n: dias(-8), d: hojeBr(), p: dias(15) });
   r = await POST("assembleia", { entidadeId: ong, sessaoId: agHoje, resultado: "NAO_RATIFICADA", observacao: "A Assembleia não quer a associação vinculada." });
   ok(r.status === 200 && (await escalar("SELECT Status FROM EntidadesVinculadas WHERE EntidadeId = @e", { e: ong })) === "DESFEITA", "criação não ratificada: vínculo desfeito");
+  ok((await escalar("SELECT Status FROM EntidadeIntervencoes WHERE IntervencaoId = @i", { i: ivOng })) === "ENCERRADA", "e a intervenção decretada nela se encerra (nada fica valendo nem avisando)");
+  ok(!(await evDb.detectarPrazoIntervencao(await obterPool())).some((f) => f.referenciaId - (f.referenciaId % 10000) === ivOng * 10000), "o aviso diário não fala dela");
+  const cnpjOng = await escalar("SELECT Cnpj FROM EntidadesVinculadas WHERE EntidadeId = @e", { e: ong });
+  const NOVA = { razaoSocial: "Associação Ação Social de novo E2E", cnpj: cnpjOng, tipoId: tipoOng.tipoId, finalidade: "Assistência social às famílias carentes." };
+  r = await POST("entidade", NOVA);
+  ok(r.status === 422 && /19 §1º/.test(r.body.mensagem), "o CNPJ do vínculo desfeito só volta com a autorização da Assembleia", r.body);
+  r = await POST("entidade", { ...NOVA, autorizacaoAGSessaoId: agAutoriza });
+  ok(r.status === 201, "com a autorização: nova proposta com o mesmo CNPJ", r.body);
+  r = await POST("entidade", { ...NOVA, autorizacaoAGSessaoId: agAutoriza });
+  ok(r.status === 422 && /Já existe/.test(r.body.mensagem), "mas não duas propostas vivas com o mesmo CNPJ");
+  r = await POST("entidade", { razaoSocial: "Projeto Recusado de novo E2E", cnpj: "45723174000110", tipoId: tipoOng.tipoId, finalidade: "Nova proposta depois da recusa da CLI." });
+  ok(r.status === 201, "a proposta que a CLI recusou pode ser apresentada de novo");
 
   console.log("== Meus Dados, contrato e auditoria ==");
   r = await chamarRota("MeusDadosLGPD/index.js", { binding: { matricula: String(P.pedagoga) }, token: L.sessao(P.pedagoga, { via: "PIN" }) });
@@ -337,10 +391,10 @@ async function sessao(orgao, descricao, data) {
 
   console.log("== lixo em cada campo ==");
   await fuzz("entidade", "entidade", { razaoSocial: "Lixo E2E", cnpj: "45723174000110", tipoId: tipoOng.tipoId, finalidade: "Finalidade de teste com lixo." }, ["razaoSocial", "cnpj", "tipoId", "finalidade", "uf", "nomeFantasia"]);
-  await fuzz("dirigente-indicar", "dirigente-indicar", { entidadeId: hosp, funcao: "SECRETARIO", membroId: P.diretor, ...IND }, ["entidadeId", "funcao", "membroId", "nomeExterno", "indicadoEm", "mandatoAte", "remunerado"]);
+  await fuzz("dirigente-indicar", "dirigente-indicar", { entidadeId: esc, funcao: "SECRETARIO", membroId: P.diretor, ...IND }, ["entidadeId", "funcao", "membroId", "nomeExterno", "indicadoEm", "mandatoAte", "remunerado"]);
   await fuzz("apuracao-abrir", "apuracao-abrir", { entidadeId: recusada, motivo: "RISCO_IMAGEM", fatos: "Fatos de teste suficientemente longos." }, ["entidadeId", "motivo", "fatos"]);
   await fuzz("prestacao-registrar", "prestacao-registrar", { entidadeId: esc, periodo: "1999", entregueEm: hojeBr(), relatorioAtividades: true, balancoAuditado: true, auditoriaOrgao: "Órgão" }, ["entidadeId", "periodo", "entregueEm", "auditoriaOrgao"]);
-  await fuzz("extinguir", "extinguir", { entidadeId: recusada, sessaoId: cliHoje, destinoPatrimonio: "CONGENERE_SEM_FINS", destinatarioNome: "Destino E2E" }, ["entidadeId", "sessaoId", "destinoPatrimonio", "destinatarioCnpj", "bensComodato"]);
+  await fuzz("extinguir", "extinguir", { entidadeId: esc, sessaoId: cliHoje, destinoPatrimonio: "CONGENERE_SEM_FINS", destinatarioNome: "Destino E2E" }, ["entidadeId", "sessaoId", "destinoPatrimonio", "destinatarioCnpj", "bensComodato", "autorizacaoAGSessaoId"]);
   await fuzz("decretar", "intervencao-decretar", { intervencaoId: iv3, fundamentacao: "x".repeat(40), interventorNome: "Fulano de Tal" }, ["intervencaoId", "fundamentacao", "urgencia", "interventorMembroId"], PRES());
 
   if (process.env.E2E_CONTRATO === "1") {

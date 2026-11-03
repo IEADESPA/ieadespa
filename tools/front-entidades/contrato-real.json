@@ -479,19 +479,22 @@
     "entidadeId": 4,
     "entidade": "Associação Ação Social E2E",
     "objeto": "VINCULO",
-    "desde": "2026-11-03"
+    "desde": "2026-11-03",
+    "assembleiaJaHouve": true
    },
    {
     "entidadeId": 1,
     "entidade": "Escola Cristã Esperança E2E",
     "objeto": "VINCULO",
-    "desde": "2026-11-03"
+    "desde": "2026-11-03",
+    "assembleiaJaHouve": true
    },
    {
     "entidadeId": 3,
     "entidade": "HB E2E",
     "objeto": "VINCULO",
-    "desde": "2026-11-03"
+    "desde": "2026-11-03",
+    "assembleiaJaHouve": true
    }
   ],
   "indicacoes": [
@@ -543,6 +546,8 @@
    "periodicidadeRotulo": "Anual",
    "prazoEntregaDias": 120,
    "extincao": null,
+   "extincaoVetadaEm": null,
+   "renovacaoAutorizada": false,
    "extincaoAG": null,
    "aguardandoAG": null,
    "formacoesExigidas": [
@@ -735,6 +740,8 @@
    "periodicidadeRotulo": "Anual",
    "prazoEntregaDias": 120,
    "extincao": null,
+   "extincaoVetadaEm": null,
+   "renovacaoAutorizada": false,
    "extincaoAG": null,
    "aguardandoAG": null,
    "formacoesExigidas": [
@@ -864,10 +871,11 @@
      "motivoRotulo": "Desvio de finalidade",
      "fatos": "Recursos da mensalidade usados para pagar evento da igreja (e2e).",
      "abertaEm": "2026-10-24",
-     "notificadoEm": "2026-10-29",
+     "notificadoEm": "2026-10-28",
      "notificacaoForma": "Carta entregue em mãos ao diretor",
      "manifestacaoEm": "2026-11-01",
      "manifestacaoResumo": "O diretor nega o desvio e pede prazo para explicar.",
+     "manifestacaoAte": "2026-11-02",
      "decretavelDesde": "2026-11-03",
      "urgencia": false,
      "urgenciaJustificativa": null,
@@ -886,7 +894,12 @@
      "defesaCEIReferencia": null,
      "encerradaEm": null,
      "encerramentoMotivo": null,
-     "vale": true
+     "vale": true,
+     "decretadaPorMim": false,
+     "correcaoAta": null,
+     "destituidos": 0,
+     "destituicaoAG": null,
+     "destituicaoAguardandoAG": false
     }
    ],
    "periodos": [
@@ -951,6 +964,40 @@
   "sucesso": true,
   "entidades": [
    {
+    "entidadeId": 6,
+    "razaoSocial": "Associação Ação Social de novo E2E",
+    "nomeFantasia": null,
+    "cnpj": "ZZ9ABC12000178",
+    "cnpjFormatado": "ZZ.9AB.C12/0001-78",
+    "tipoId": 3,
+    "tipoNome": "ONG / Associação de assistência social",
+    "natureza": "ASSISTENCIA_SOCIAL",
+    "naturezaRotulo": "Assistência social",
+    "finalidade": "Assistência social às famílias carentes.",
+    "municipio": null,
+    "uf": null,
+    "status": "PROPOSTA",
+    "statusRotulo": "Proposta (aguardando a CLI)",
+    "vinculo": null,
+    "naoAprovada": null,
+    "vinculoAG": null,
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
+    "extincao": null,
+    "extincaoVetadaEm": null,
+    "renovacaoAutorizada": true,
+    "extincaoAG": null,
+    "aguardandoAG": null,
+    "intervencao": null,
+    "atrasadas": [],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": null
+   },
+   {
     "entidadeId": 4,
     "razaoSocial": "Associação Ação Social E2E",
     "nomeFantasia": null,
@@ -981,6 +1028,8 @@
     "periodicidadeRotulo": "Anual",
     "prazoEntregaDias": 120,
     "extincao": null,
+    "extincaoVetadaEm": null,
+    "renovacaoAutorizada": false,
     "extincaoAG": null,
     "aguardandoAG": null,
     "intervencao": null,
@@ -1022,6 +1071,8 @@
     "periodicidadeRotulo": "Anual",
     "prazoEntregaDias": 120,
     "extincao": null,
+    "extincaoVetadaEm": null,
+    "renovacaoAutorizada": false,
     "extincaoAG": null,
     "aguardandoAG": null,
     "intervencao": null,
@@ -1050,8 +1101,8 @@
     "finalidade": "Atendimento hospitalar sem fins lucrativos.",
     "municipio": null,
     "uf": null,
-    "status": "ATIVA",
-    "statusRotulo": "Ativa",
+    "status": "EXTINTA",
+    "statusRotulo": "Extinta",
     "vinculo": {
      "sessaoId": 9,
      "em": "2026-11-03"
@@ -1067,7 +1118,51 @@
     "periodicidade": "ANUAL",
     "periodicidadeRotulo": "Anual",
     "prazoEntregaDias": 120,
+    "extincao": {
+     "sessaoId": 9,
+     "em": "2026-11-03",
+     "destino": "SAUDE_OUTRA_INSTITUICAO",
+     "destinoRotulo": "Outra instituição de saúde sem fins lucrativos (Art. 68, I)",
+     "destinatarioNome": "Santa Casa E2E",
+     "destinatarioCnpj": null,
+     "bensComodato": null
+    },
+    "extincaoVetadaEm": "2026-11-03",
+    "renovacaoAutorizada": false,
+    "extincaoAG": null,
+    "aguardandoAG": "EXTINCAO",
+    "intervencao": null,
+    "atrasadas": [],
+    "aguardandoApreciacao": [],
+    "cfPendente": [],
+    "indicadosAguardando": 0,
+    "mandatosVencidos": 0,
+    "pendenciaGestor": null
+   },
+   {
+    "entidadeId": 8,
+    "razaoSocial": "Projeto Recusado de novo E2E",
+    "nomeFantasia": null,
+    "cnpj": "45723174000110",
+    "cnpjFormatado": "45.723.174/0001-10",
+    "tipoId": 3,
+    "tipoNome": "ONG / Associação de assistência social",
+    "natureza": "ASSISTENCIA_SOCIAL",
+    "naturezaRotulo": "Assistência social",
+    "finalidade": "Nova proposta depois da recusa da CLI.",
+    "municipio": null,
+    "uf": null,
+    "status": "PROPOSTA",
+    "statusRotulo": "Proposta (aguardando a CLI)",
+    "vinculo": null,
+    "naoAprovada": null,
+    "vinculoAG": null,
+    "periodicidade": "ANUAL",
+    "periodicidadeRotulo": "Anual",
+    "prazoEntregaDias": 120,
     "extincao": null,
+    "extincaoVetadaEm": null,
+    "renovacaoAutorizada": false,
     "extincaoAG": null,
     "aguardandoAG": null,
     "intervencao": null,
@@ -1076,7 +1171,7 @@
     "cfPendente": [],
     "indicadosAguardando": 0,
     "mandatosVencidos": 0,
-    "pendenciaGestor": "Sem gestor técnico homologado com a formação exigida (Gestão hospitalar ou Medicina — Regimento, Art. 153)."
+    "pendenciaGestor": null
    },
    {
     "entidadeId": 5,
@@ -1103,6 +1198,8 @@
     "periodicidadeRotulo": "Anual",
     "prazoEntregaDias": 120,
     "extincao": null,
+    "extincaoVetadaEm": null,
+    "renovacaoAutorizada": false,
     "extincaoAG": null,
     "aguardandoAG": null,
     "intervencao": null,
@@ -1148,6 +1245,8 @@
    "periodicidadeRotulo": "Anual",
    "prazoEntregaDias": 120,
    "extincao": null,
+   "extincaoVetadaEm": null,
+   "renovacaoAutorizada": false,
    "extincaoAG": null,
    "aguardandoAG": null,
    "formacoesExigidas": [
@@ -1281,7 +1380,8 @@
      "notificacaoForma": "Carta entregue em mãos ao diretor",
      "manifestacaoEm": null,
      "manifestacaoResumo": "O diretor nega o desvio e pede prazo para explicar.",
-     "decretavelDesde": "2026-10-13",
+     "manifestacaoAte": "2026-10-13",
+     "decretavelDesde": "2026-10-14",
      "urgencia": false,
      "urgenciaJustificativa": null,
      "decretadaEm": "2026-10-14",
@@ -1299,7 +1399,18 @@
      "defesaCEIReferencia": "Protocolo CEI 12/2026",
      "encerradaEm": "2026-11-03",
      "encerramentoMotivo": "Gestão devolvida à nova diretoria.",
-     "vale": false
+     "vale": false,
+     "decretadaPorMim": false,
+     "correcaoAta": "Ata 8/2026 da CLI",
+     "destituidos": 4,
+     "destituicaoAG": {
+      "sessaoId": 10,
+      "resultado": "RATIFICADA",
+      "resultadoRotulo": "Ratificada pela Assembleia",
+      "em": "2026-11-03",
+      "obs": null
+     },
+     "destituicaoAguardandoAG": false
     }
    ],
    "periodos": [
@@ -1378,12 +1489,22 @@
     "sessaoId": 14,
     "data": "2026-10-26",
     "descricao": "CLI E2E dentro do prazo"
+   },
+   {
+    "sessaoId": 15,
+    "data": "2026-10-19",
+    "descricao": "CLI E2E antiga"
    }
   ]
  },
  "reunioesAG": {
   "sucesso": true,
   "reunioes": [
+   {
+    "sessaoId": 16,
+    "data": "2026-11-03",
+    "descricao": "AG E2E autoriza"
+   },
    {
     "sessaoId": 10,
     "data": "2026-11-03",

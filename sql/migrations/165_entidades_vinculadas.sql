@@ -38,25 +38,17 @@ BEGIN
     );
 END
 GO
--- Os tipos do Estatuto (Art. 64 e 68) e o exemplo do Regimento Art. 153. Semeados só se não existirem: o nível geral renomeia, desativa e mexe nas formações.
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'Hospital')
-    INSERT INTO dbo.EntidadeTipos (Nome, Natureza) VALUES (N'Hospital', N'SAUDE');
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'Escola')
-    INSERT INTO dbo.EntidadeTipos (Nome, Natureza) VALUES (N'Escola', N'EDUCACAO');
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'ONG / Associação de assistência social')
-    INSERT INTO dbo.EntidadeTipos (Nome, Natureza) VALUES (N'ONG / Associação de assistência social', N'ASSISTENCIA_SOCIAL');
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'Outra entidade')
-    INSERT INTO dbo.EntidadeTipos (Nome, Natureza) VALUES (N'Outra entidade', N'OUTRA');
-GO
--- As formações só entram quando o tipo acaba de nascer sem nenhuma (rodar de novo não desfaz o que a tela mudou).
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipoFormacoes f JOIN dbo.EntidadeTipos t ON t.TipoId = f.TipoId WHERE t.Nome = N'Hospital')
-    AND NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'Hospital' AND AtualizadoEm IS NOT NULL)
+-- Os tipos do Estatuto (Art. 64 e 68) e o exemplo do Regimento Art. 153. Semeados UMA vez, só com o catálogo vazio: o nível geral renomeia, desativa e mexe
+-- nas formações, e o deploy seguinte não recria nada (semear pelo nome recriaria o "Hospital" depois de renomeado — revisão de 03/11/2026).
+IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos)
+BEGIN
+    INSERT INTO dbo.EntidadeTipos (Nome, Natureza) VALUES (N'Hospital', N'SAUDE'), (N'Escola', N'EDUCACAO'),
+        (N'ONG / Associação de assistência social', N'ASSISTENCIA_SOCIAL'), (N'Outra entidade', N'OUTRA');
     INSERT INTO dbo.EntidadeTipoFormacoes (TipoId, Formacao)
     SELECT TipoId, v.F FROM dbo.EntidadeTipos CROSS JOIN (VALUES (N'Gestão hospitalar'), (N'Medicina')) v(F) WHERE Nome = N'Hospital';
-IF NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipoFormacoes f JOIN dbo.EntidadeTipos t ON t.TipoId = f.TipoId WHERE t.Nome = N'Escola')
-    AND NOT EXISTS (SELECT 1 FROM dbo.EntidadeTipos WHERE Nome = N'Escola' AND AtualizadoEm IS NOT NULL)
     INSERT INTO dbo.EntidadeTipoFormacoes (TipoId, Formacao)
     SELECT TipoId, N'Pedagogia' FROM dbo.EntidadeTipos WHERE Nome = N'Escola';
+END
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.EntidadesVinculadas') AND type = N'U')
@@ -80,7 +72,10 @@ BEGIN
         VinculoEm               DATE NULL,
         VinculoRegistradoPor    INT NULL,
         NaoAprovadaEm           DATE NULL,
+        NaoAprovadaSessaoId     INT NULL CONSTRAINT FK_EntidadesVinculadas_NaoAprov REFERENCES dbo.Sessoes(SessaoId),
         NaoAprovadaMotivo       NVARCHAR(500) NULL,
+        -- Art. 19 §1º: o mesmo CNPJ de um vínculo desfeito pela Assembleia só volta com a autorização dela (a Assembleia que autorizou)
+        RenovacaoAGSessaoId     INT NULL CONSTRAINT FK_EntidadesVinculadas_Renov REFERENCES dbo.Sessoes(SessaoId),
         -- a ratificação da Assembleia Geral (Art. 18, VII, "b"; Art. 19)
         VinculoAGSessaoId       INT NULL CONSTRAINT FK_EntidadesVinculadas_VincAG REFERENCES dbo.Sessoes(SessaoId),
         VinculoAGResultado      NVARCHAR(15) NULL,
@@ -101,7 +96,10 @@ BEGIN
         ExtincaoAGResultado     NVARCHAR(15) NULL,
         ExtincaoAGEm            DATE NULL,
         ExtincaoAGObs           NVARCHAR(500) NULL,
-        CONSTRAINT UQ_EntidadesVinculadas_Cnpj UNIQUE (Cnpj),
+        -- Art. 19 §1º: a extinção que a Assembleia não ratificou fica guardada; a CLI só a renova com nova autorização da Assembleia
+        ExtincaoVetadaEm        DATE NULL,
+        ExtincaoVetadaSessaoId  INT NULL CONSTRAINT FK_EntidadesVinculadas_ExtVeto REFERENCES dbo.Sessoes(SessaoId),
+        ExtincaoAutorizacaoAGSessaoId INT NULL CONSTRAINT FK_EntidadesVinculadas_ExtAut REFERENCES dbo.Sessoes(SessaoId),
         CONSTRAINT CK_EntidadesVinculadas_Cnpj CHECK (LEN(Cnpj) = 14 AND SUBSTRING(Cnpj, 9, 4) = '0001'),
         CONSTRAINT CK_EntidadesVinculadas_Status CHECK (Status IS NOT NULL AND Status IN (N'PROPOSTA', N'ATIVA', N'NAO_APROVADA', N'DESFEITA', N'EXTINTA')),
         CONSTRAINT CK_EntidadesVinculadas_Period CHECK (Periodicidade IS NOT NULL AND Periodicidade IN (N'ANUAL', N'SEMESTRAL', N'TRIMESTRAL')),
@@ -115,6 +113,11 @@ BEGIN
         CONSTRAINT CK_EntidadesVinculadas_Extinta CHECK (Status <> N'EXTINTA' OR (ExtincaoSessaoId IS NOT NULL AND ExtincaoEm IS NOT NULL AND DestinoPatrimonio IS NOT NULL AND DestinatarioNome IS NOT NULL))
     );
 END
+GO
+-- o CNPJ é único entre as entidades vivas ou extintas; a proposta não aprovada e o vínculo desfeito liberam o CNPJ para nova proposta (a desfeita, com a autorização
+-- da Assembleia — Art. 19 §1º — conferida no servidor)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_EntidadesVinculadas_Cnpj' AND object_id = OBJECT_ID(N'dbo.EntidadesVinculadas'))
+    CREATE UNIQUE INDEX UX_EntidadesVinculadas_Cnpj ON dbo.EntidadesVinculadas (Cnpj) WHERE Status IN (N'PROPOSTA', N'ATIVA', N'EXTINTA');
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.EntidadeDirigentes') AND type = N'U')
@@ -203,6 +206,13 @@ BEGIN
         RatificacaoRegistradaPor INT NULL,
         RatificacaoObs          NVARCHAR(500) NULL,
         CaducadaEm              DATE NULL,
+        -- a correção da caducidade (a reunião da CLI foi dentro do prazo, o registro chegou depois): a referência da ata, obrigatória
+        CorrecaoAta             NVARCHAR(200) NULL,
+        -- Art. 18, VII, "c", e Art. 19: a destituição que a ratificação produziu espera a Assembleia Geral
+        DestituicaoAGSessaoId   INT NULL CONSTRAINT FK_EntidadeIntervencoes_DestAG REFERENCES dbo.Sessoes(SessaoId),
+        DestituicaoAGResultado  NVARCHAR(15) NULL,
+        DestituicaoAGEm         DATE NULL,
+        DestituicaoAGObs        NVARCHAR(500) NULL,
         -- a defesa dos diretores destituídos no Conselho de Ética
         DefesaCEIEm             DATE NULL,
         DefesaCEIReferencia     NVARCHAR(200) NULL,
@@ -216,9 +226,11 @@ BEGIN
         -- decretada (e o que vem depois dela) só com a data, quem decretou, a fundamentação, o interventor e o prazo de 15 dias
         CONSTRAINT CK_EntidadeIntervencoes_Decreto CHECK (Status IN (N'APURACAO', N'ARQUIVADA') OR (DecretadaEm IS NOT NULL AND DecretadaPor IS NOT NULL AND Fundamentacao IS NOT NULL
             AND PrazoRatificacao = DATEADD(DAY, 15, DecretadaEm) AND (InterventorMembroId IS NOT NULL OR InterventorNome IS NOT NULL))),
-        -- sem urgência, só depois dos 5 dias da notificação; com urgência, a justificativa
+        -- sem urgência, só DEPOIS dos 5 dias da notificação (o gestor se manifesta até o 5º dia inteiro: a decretação, do 6º em diante); com urgência, a justificativa
         CONSTRAINT CK_EntidadeIntervencoes_Defesa CHECK (DecretadaEm IS NULL OR (Urgencia = 1 AND UrgenciaJustificativa IS NOT NULL)
-            OR (Urgencia = 0 AND NotificadoEm IS NOT NULL AND DecretadaEm >= DATEADD(DAY, 5, NotificadoEm))),
+            OR (Urgencia = 0 AND NotificadoEm IS NOT NULL AND DecretadaEm > DATEADD(DAY, 5, NotificadoEm))),
+        CONSTRAINT CK_EntidadeIntervencoes_DestAG CHECK (DestituicaoAGResultado IS NULL OR (DestituicaoAGResultado IN (N'RATIFICADA', N'NAO_RATIFICADA')
+            AND DestituicaoAGSessaoId IS NOT NULL AND DestituicaoAGEm IS NOT NULL)),
         -- ratificada (ou não) só por reunião dentro do prazo — e a data da reunião continua dentro dele em qualquer etapa seguinte (a encerrada também)
         CONSTRAINT CK_EntidadeIntervencoes_Ratif CHECK ((Status NOT IN (N'RATIFICADA', N'NAO_RATIFICADA') OR RatificacaoEm IS NOT NULL)
             AND (RatificacaoEm IS NULL OR (RatificacaoSessaoId IS NOT NULL AND RatificacaoEm >= DecretadaEm AND RatificacaoEm <= PrazoRatificacao))),
@@ -295,6 +307,9 @@ IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'ENTIDADE_INTE
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'ENTIDADE_INTERVENCAO_CADUCADA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
     VALUES (N'ENTIDADE_INTERVENCAO_CADUCADA', N'Intervenção em entidade vinculada perdeu a eficácia (sem ratificação da CLI em 15 dias)', N'ENTIDADES', N'entidades_vinculadas', N'GLOBAL', 1, 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'ENTIDADE_INTERVENCAO_CORRIGIDA')
+    INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail, Obrigatoria)
+    VALUES (N'ENTIDADE_INTERVENCAO_CORRIGIDA', N'Intervenção dada como caducada foi corrigida: a CLI a ratificou dentro do prazo', N'ENTIDADES', N'entidades_vinculadas', N'GLOBAL', 1, 1);
 IF NOT EXISTS (SELECT 1 FROM dbo.NotificacaoRegras WHERE Chave = N'ENTIDADE_PRESTACAO_ATRASADA')
     INSERT INTO dbo.NotificacaoRegras (Chave, Titulo, Categoria, PermissaoAlvo, NivelAlvo, CanalEmail)
     VALUES (N'ENTIDADE_PRESTACAO_ATRASADA', N'Prestação de contas de entidade vinculada em atraso', N'ENTIDADES', N'entidades_vinculadas', N'GLOBAL', 1);

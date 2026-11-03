@@ -142,11 +142,16 @@ describe("intervenção: 5 dias para o gestor (Art. 65 §3º) e 15 dias para a C
     expect(ev.reuniaoNoPrazo("2026-11-02", iv)).toBe(false);
     expect(ev.reuniaoNoPrazo(null, iv)).toBe(false);
   });
-  test("sem urgência: só depois dos 5 dias da notificação", () => {
-    expect(ev.validarDecretacao(DEC, { iv: APUR, hoje: "2026-11-05" }).mensagem).toMatch(/06\/11\/2026/);
-    const v = ev.validarDecretacao(DEC, { iv: APUR, hoje: "2026-11-06" });
+  test("sem urgência: só DEPOIS dos 5 dias da notificação — o 5º dia inteiro é do gestor (revisão de 03/11/2026)", () => {
+    expect(ev.validarDecretacao(DEC, { iv: APUR, hoje: "2026-11-05" }).mensagem).toMatch(/07\/11\/2026/);
+    const noQuinto = ev.validarDecretacao(DEC, { iv: APUR, hoje: "2026-11-06" });
+    expect(noQuinto.valido).toBe(false);
+    expect(noQuinto.mensagem).toMatch(/se manifestar até 06\/11\/2026/);
+    const v = ev.validarDecretacao(DEC, { iv: APUR, hoje: "2026-11-07" });
     expect(v.valido).toBe(true);
-    expect(v.dados).toMatchObject({ decretadaEm: "2026-11-06", prazoRatificacao: "2026-11-21", urgencia: false, afastaDiretoria: false });
+    expect(v.dados).toMatchObject({ decretadaEm: "2026-11-07", prazoRatificacao: "2026-11-22", urgencia: false, afastaDiretoria: false });
+    expect(ev.manifestacaoAte("2026-11-01")).toBe("2026-11-06");
+    expect(ev.decretavelDesde("2026-11-01")).toBe("2026-11-07");
     expect(ev.validarDecretacao(DEC, { iv: { status: "APURACAO", notificadoEm: null }, hoje: "2026-11-06" }).valido).toBe(false);
   });
   test("com urgência: sem esperar, mas com a justificativa", () => {
@@ -155,11 +160,11 @@ describe("intervenção: 5 dias para o gestor (Art. 65 §3º) e 15 dias para a C
     expect(ev.validarDecretacao({ ...DEC, urgencia: true, urgenciaJustificativa: "Saque iminente de toda a conta do hospital." }, { iv, hoje: "2026-11-03" }).valido).toBe(true);
   });
   test("só sobre apuração aberta; fundamentação de verdade; interventor membro OU nome", () => {
-    expect(ev.validarDecretacao(DEC, { iv: { ...APUR, status: "DECRETADA" }, hoje: "2026-11-06" }).valido).toBe(false);
-    expect(ev.validarDecretacao({ ...DEC, fundamentacao: "curta" }, { iv: APUR, hoje: "2026-11-06" }).valido).toBe(false);
-    expect(ev.validarDecretacao({ ...DEC, interventorMembroId: "9" }, { iv: APUR, hoje: "2026-11-06" }).valido).toBe(false);
-    expect(ev.validarDecretacao({ ...DEC, interventorNome: null }, { iv: APUR, hoje: "2026-11-06" }).valido).toBe(false);
-    expect(ev.validarDecretacao({ ...DEC, interventorNome: null, interventorMembroId: 9 }, { iv: APUR, hoje: "2026-11-06" }).dados.interventorMembroId).toBe(9);
+    expect(ev.validarDecretacao(DEC, { iv: { ...APUR, status: "DECRETADA" }, hoje: "2026-11-07" }).valido).toBe(false);
+    expect(ev.validarDecretacao({ ...DEC, fundamentacao: "curta" }, { iv: APUR, hoje: "2026-11-07" }).valido).toBe(false);
+    expect(ev.validarDecretacao({ ...DEC, interventorMembroId: "9" }, { iv: APUR, hoje: "2026-11-07" }).valido).toBe(false);
+    expect(ev.validarDecretacao({ ...DEC, interventorNome: null }, { iv: APUR, hoje: "2026-11-07" }).valido).toBe(false);
+    expect(ev.validarDecretacao({ ...DEC, interventorNome: null, interventorMembroId: 9 }, { iv: APUR, hoje: "2026-11-07" }).dados.interventorMembroId).toBe(9);
   });
   test("apuração: motivo do Art. 47-A §1º e os fatos", () => {
     expect(ev.validarApuracao({ motivo: "desvio_finalidade", fatos: "Recursos da escola usados em evento da igreja." }).dados.motivo).toBe("DESVIO_FINALIDADE");
@@ -247,6 +252,7 @@ describe("textos e identificadores", () => {
     expect(ev.textoPrazoIntervencao({ entidade: "Hospital X", prazo: "2026-11-18", hoje: "2026-11-03" })).toMatch(/faltam 15 dias/);
     expect(ev.textoPrazoIntervencao({ entidade: "Hospital X", prazo: "2026-11-18", hoje: "2026-11-17" })).toMatch(/amanhã/);
     expect(ev.textoPrazoIntervencao({ entidade: "Hospital X", prazo: "2026-11-18", hoje: "2026-11-18" })).toMatch(/HOJE/);
+    expect(ev.textoPrestacaoAtrasada({ entidade: "Escola", periodos: [{ codigo: "2024", prazo: "2025-04-30" }, { codigo: "2025", prazo: "2026-04-30" }] })).toMatch(/2024 \(venceu em 30\/04\/2025\), 2025/);
   });
 });
 
@@ -282,6 +288,11 @@ describe("a porta da rota /api/entidades-vinculadas", () => {
   test("reuniões: só CLI ou AG", async () => {
     expect((await chamar("reunioes", { query: { orgao: "CEI" }, token: GERAL() })).status).toBe(400);
     expect((await chamar("reunioes", { query: { orgao: "cli" }, token: GERAL() })).status).toBe(200);
+  });
+  test("decretar e encerrar sem a confirmação recente (chave ou código): 428 antes de qualquer consulta", async () => {
+    const semFator = tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["entidades_vinculadas"] });
+    for (const acao of ["intervencao-decretar", "intervencao-encerrar"]) expect((await chamar(acao, { metodo: "POST", corpo: { intervencaoId: "4" }, token: semFator })).status).toBe(428);
+    expect(mockConsultas.filter((c) => !/CaducadaEm = @h/.test(c.sql))).toHaveLength(0);
   });
   test("decretar sem ser o Pastor Presidente em exercício: 403, nada gravado", async () => {
     quando(/FROM EntidadeIntervencoes i LEFT JOIN MembroReferencia mi/, [{ IntervencaoId: 4, EntidadeId: 2, Status: "APURACAO", NotificadoEm: "2026-10-01", Motivo: "RISCO_IMAGEM", Fatos: "x" }]);

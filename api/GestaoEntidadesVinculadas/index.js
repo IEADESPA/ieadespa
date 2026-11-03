@@ -39,6 +39,8 @@
 //  intervencao-ratificar {intervencaoId, sessaoId, resultado:RATIFICADA|NAO_RATIFICADA, observacao?}   (não quem decretou)
 //  intervencao-defesa    {intervencaoId, defesaEm, referencia}
 //  intervencao-encerrar  {intervencaoId, motivo}          (só o Pastor Presidente)
+//  intervencao-assembleia {intervencaoId, sessaoId, resultado, observacao?}   a Assembleia sobre a destituição que a ratificação produziu (Art. 18, VII, "c")
+// Decretar e encerrar a intervenção exigem, além disso, a confirmação recente de quem é (chave de acesso ou código por e-mail; 428 sem ela), como os atos da crise.
 //  prestacao-registrar   {entidadeId, periodo, entregueEm, relatorioAtividades:true, balancoAuditado:true, auditoriaOrgao, observacao?}
 //  prestacao-apreciar    {prestacaoId, sessaoId, resultado, observacao?}
 //  prestacao-cf          {prestacaoId, verificadaEm, resultado:SEM_CONFUSAO|IRREGULARIDADE, observacao?}
@@ -66,7 +68,7 @@ const ESCRITA = {
   "assembleia": "entidadeId", "prestacao-config": "entidadeId", "dirigente-indicar": "entidadeId", "dirigente-homologar": "dirigenteId", "dirigente-recusar": "dirigenteId",
   "dirigente-encerrar": "dirigenteId", "apuracao-abrir": "entidadeId", "apuracao-notificar": "intervencaoId", "apuracao-manifestacao": "intervencaoId",
   "apuracao-arquivar": "intervencaoId", "apuracao-reabrir": "intervencaoId", "intervencao-decretar": "intervencaoId", "intervencao-ratificar": "intervencaoId",
-  "intervencao-defesa": "intervencaoId", "intervencao-encerrar": "intervencaoId", "prestacao-registrar": "entidadeId", "prestacao-apreciar": "prestacaoId",
+  "intervencao-defesa": "intervencaoId", "intervencao-encerrar": "intervencaoId", "intervencao-assembleia": "intervencaoId", "prestacao-registrar": "entidadeId", "prestacao-apreciar": "prestacaoId",
   "prestacao-cf": "prestacaoId", "extinguir": "entidadeId"
 };
 const CRIA = new Set(["tipo", "entidade", "dirigente-indicar", "apuracao-abrir", "apuracao-reabrir"]);
@@ -117,7 +119,7 @@ module.exports = async function (context, req) {
       if (acao === "entidade") {
         const entidadeId = ev.idDe(consulta.entidadeId == null ? null : String(consulta.entidadeId));
         if (!entidadeId) return erro(context, 400, "Informe entidadeId.");
-        const entidade = await db.detalharEntidade(pool, { entidadeId, hoje });
+        const entidade = await db.detalharEntidade(pool, { entidadeId, hoje, membroId: por });
         if (!entidade) return erro(context, 404, "Entidade não encontrada.");
         context.res = { status: 200, body: { sucesso: true, entidade } };
         return;
@@ -137,6 +139,7 @@ module.exports = async function (context, req) {
 
     if (metodo !== "POST") return erro(context, 405, "Método não suportado.");
     if (!Object.prototype.hasOwnProperty.call(ESCRITA, acao)) return erro(context, 404, "Ação inválida.");
+    if (["intervencao-decretar", "intervencao-encerrar"].includes(acao) && !auth.exigirFatorRecente(req, context)) return;
     const campoId = ESCRITA[acao];
     const id = campoId ? ev.idDe(corpo[campoId]) : null;
     if (campoId && !id) return erro(context, 400, `Informe ${campoId}.`);
@@ -164,6 +167,7 @@ module.exports = async function (context, req) {
       case "intervencao-ratificar": r = await db.ratificar(pool, { ...base, intervencaoId: id }); break;
       case "intervencao-defesa": r = await db.registrarDefesa(pool, { ...base, intervencaoId: id }); break;
       case "intervencao-encerrar": r = await db.encerrarIntervencao(pool, { ...base, intervencaoId: id }); break;
+      case "intervencao-assembleia": r = await db.registrarAssembleiaDestituicao(pool, { ...base, intervencaoId: id }); break;
       case "prestacao-registrar": r = await db.registrarPrestacao(pool, { ...base, entidadeId: id }); break;
       case "prestacao-apreciar": r = await db.apreciarPrestacao(pool, { ...base, prestacaoId: id }); break;
       case "prestacao-cf": r = await db.verificacaoConselhoFiscal(pool, { ...base, prestacaoId: id }); break;

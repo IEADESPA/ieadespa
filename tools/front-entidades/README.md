@@ -17,4 +17,4 @@ servidor, a ficha relida); o duplo clique (um pedido só); a recusa (o formulár
 verdadeiro/falso; a entrega da prestação (o período e a entidade fixos); a extinção só com os destinos da natureza (Art. 68); os documentos; os tipos (as formações
 uma por linha); o cadastro; o cartão de Meus Dados; a saída da sessão e a troca de login (a resposta atrasada não pinta).
 
-Resultado (v9.1, 03/11/2026): 58 verificações, 0 falhas; 12 mutações, 12 acusadas.
+Resultado (v9.1, 03/11/2026, depois das duas revisões independentes): 70 verificações, 0 falhas; 16 mutações, 16 acusadas.

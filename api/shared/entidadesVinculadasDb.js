@@ -11,6 +11,9 @@ const { ehPresidenteAtual } = require("./diretoria");
 const NAO_EXISTE = { sucesso: false, naoExiste: true, mensagem: "Não encontrado." };
 const MUDOU = (mensagem = "Isto mudou enquanto você olhava. Atualize a tela.") => ({ sucesso: false, mensagem });
 const iso = (v) => (v == null ? null : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)));
+// O fim de um mandato encerrado por uma deliberação (a reunião @em) nunca fica antes da própria indicação: quem foi indicado depois da reunião, mas antes do
+// registro, encerra no dia da indicação (revisão de 03/11/2026).
+const ENCERRA_EM = "CASE WHEN @em < IndicadoEm THEN IndicadoEm ELSE @em END";
 const STATUS_MEMBRO_ATIVO = "m.Status IN (N'ATIVO', N'LICENÇA', N'LICENCA_CANDIDATURA')";
 
 async function emTransacao(pool, fazer) {
@@ -135,7 +138,8 @@ const COLUNAS_ENTIDADE = `
   e.VinculoAGSessaoId, e.VinculoAGResultado, CONVERT(varchar(10), e.VinculoAGEm, 120) AS VinculoAGEm, e.VinculoAGObs,
   e.Periodicidade, e.PrazoEntregaDias,
   e.ExtincaoSessaoId, CONVERT(varchar(10), e.ExtincaoEm, 120) AS ExtincaoEm, e.DestinoPatrimonio, e.DestinatarioNome, e.DestinatarioCnpj, e.BensComodato,
-  e.ExtincaoAGSessaoId, e.ExtincaoAGResultado, CONVERT(varchar(10), e.ExtincaoAGEm, 120) AS ExtincaoAGEm, e.ExtincaoAGObs`;
+  e.ExtincaoAGSessaoId, e.ExtincaoAGResultado, CONVERT(varchar(10), e.ExtincaoAGEm, 120) AS ExtincaoAGEm, e.ExtincaoAGObs,
+  CONVERT(varchar(10), e.ExtincaoVetadaEm, 120) AS ExtincaoVetadaEm, e.RenovacaoAGSessaoId`;
 function formaEntidade(l) {
   return {
     entidadeId: l.EntidadeId, razaoSocial: l.RazaoSocial, nomeFantasia: l.NomeFantasia, cnpj: l.Cnpj, cnpjFormatado: ev.formatarCnpj(l.Cnpj), tipoId: l.TipoId, tipoNome: l.TipoNome,
@@ -149,6 +153,8 @@ function formaEntidade(l) {
       sessaoId: l.ExtincaoSessaoId, em: l.ExtincaoEm, destino: l.DestinoPatrimonio, destinoRotulo: ev.DESTINOS[l.DestinoPatrimonio] ? ev.DESTINOS[l.DestinoPatrimonio].rotulo : l.DestinoPatrimonio,
       destinatarioNome: l.DestinatarioNome, destinatarioCnpj: l.DestinatarioCnpj ? ev.formatarCnpj(l.DestinatarioCnpj) : null, bensComodato: l.BensComodato
     } : null,
+    // Art. 19 §1º: a extinção que a Assembleia já recusou só se renova com a autorização dela
+    extincaoVetadaEm: l.ExtincaoVetadaEm || null, renovacaoAutorizada: !!l.RenovacaoAGSessaoId,
     extincaoAG: l.ExtincaoAGResultado ? { sessaoId: l.ExtincaoAGSessaoId, resultado: l.ExtincaoAGResultado, resultadoRotulo: ev.RESULTADOS_AG[l.ExtincaoAGResultado], em: l.ExtincaoAGEm, obs: l.ExtincaoAGObs } : null,
     // Art. 18, VII, "b": a deliberação da CLI que criou ou extinguiu espera a Assembleia
     aguardandoAG: (l.Status === "ATIVA" && !l.VinculoAGResultado) ? "VINCULO" : (l.Status === "EXTINTA" && !l.ExtincaoAGResultado ? "EXTINCAO" : null)
@@ -164,18 +170,30 @@ async function criarEntidade(pool, { dados, por, hoje = hojeBrasilia() }) {
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const tipo = await lerTipo(pool, v.dados.tipoId);
   if (!tipo || !tipo.ativo) return { sucesso: false, mensagem: "Escolha um tipo de entidade ativo." };
+  // Art. 19 §1º: o CNPJ de um vínculo que a Assembleia desfez só volta com nova autorização dela (uma Assembleia posterior, já encerrada)
+  const desfeita = await pool.request().input("c", sql.Char(14), v.dados.cnpj)
+    .query(`SELECT TOP 1 CONVERT(varchar(10), VinculoAGEm, 120) AS Em FROM EntidadesVinculadas WHERE Cnpj = @c AND Status = N'DESFEITA' ORDER BY VinculoAGEm DESC`);
+  let renovacao = null;
+  if (desfeita.recordset[0]) {
+    const desde = desfeita.recordset[0].Em;
+    if (dados.autorizacaoAGSessaoId == null || dados.autorizacaoAGSessaoId === "") {
+      return { sucesso: false, mensagem: `A Assembleia Geral desfez o vínculo deste CNPJ em ${ev.br(desde)}: a nova proposta precisa da autorização de uma Assembleia posterior (Estatuto, Art. 19 §1º). Escolha a Assembleia que autorizou.` };
+    }
+    renovacao = await lerReuniao(pool, dados.autorizacaoAGSessaoId, "AG", hoje);
+    if (!renovacao || renovacao.data < desde) return { sucesso: false, mensagem: `Escolha uma Assembleia Geral encerrada, posterior a ${ev.br(desde)}, que autorizou a nova proposta.` };
+  }
   const prazo = await lerPrazoDias(pool, "ENTIDADE_PRESTACAO_PRAZO_DIAS", ev.PRAZO_ENTREGA_PADRAO);
   try {
     const r = await pool.request().input("rs", sql.NVarChar(150), v.dados.razaoSocial).input("nf", sql.NVarChar(100), v.dados.nomeFantasia).input("c", sql.Char(14), v.dados.cnpj)
       .input("t", sql.Int, v.dados.tipoId).input("f", sql.NVarChar(500), v.dados.finalidade).input("mu", sql.NVarChar(80), v.dados.municipio).input("uf", sql.Char(2), v.dados.uf)
-      .input("por", sql.Int, por).input("p", sql.Int, prazo)
-      .query(`INSERT INTO EntidadesVinculadas (RazaoSocial, NomeFantasia, Cnpj, TipoId, Finalidade, Municipio, UF, CadastradaPor, PrazoEntregaDias)
-              OUTPUT inserted.EntidadeId VALUES (@rs, @nf, @c, @t, @f, @mu, @uf, @por, @p)`);
+      .input("por", sql.Int, por).input("p", sql.Int, prazo).input("ren", sql.Int, renovacao ? renovacao.sessaoId : null)
+      .query(`INSERT INTO EntidadesVinculadas (RazaoSocial, NomeFantasia, Cnpj, TipoId, Finalidade, Municipio, UF, CadastradaPor, PrazoEntregaDias, RenovacaoAGSessaoId)
+              OUTPUT inserted.EntidadeId VALUES (@rs, @nf, @c, @t, @f, @mu, @uf, @por, @p, @ren)`);
     const entidadeId = r.recordset[0].EntidadeId;
-    await registrarAuditoria({ tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_CADASTRADA", usuarioId: por, dadosDepois: { ...v.dados, hoje } });
+    await registrarAuditoria({ tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_CADASTRADA", usuarioId: por, dadosDepois: { ...v.dados, hoje, renovacaoAGSessaoId: renovacao ? renovacao.sessaoId : null } });
     return { sucesso: true, entidadeId, mensagem: "Entidade cadastrada como proposta. O vínculo vale quando a aprovação da CLI for registrada (Estatuto, Art. 64, parágrafo único)." };
   } catch (e) {
-    if (violouUnicidade(e)) return { sucesso: false, mensagem: "Já existe uma entidade com este CNPJ." };
+    if (violouUnicidade(e)) return { sucesso: false, mensagem: "Já existe uma entidade proposta, ativa ou extinta com este CNPJ." };
     throw e;
   }
 }
@@ -230,17 +248,21 @@ async function naoAprovar(pool, { entidadeId, dados, por, hoje = hojeBrasilia() 
   const atual = await lerEntidade(pool, entidadeId);
   if (!atual) return NAO_EXISTE;
   if (atual.status !== "PROPOSTA") return { sucesso: false, mensagem: "Só a entidade proposta pode ficar sem aprovação." };
+  const reuniao = await lerReuniao(pool, dados.sessaoId, "CLI", hoje);
+  if (!reuniao) return { sucesso: false, mensagem: ESCOLHA_CLI };
   const motivo = ev.texto(dados.motivo, { minimo: 10, maximo: 500, rotulo: "O motivo", multilinha: true });
   if (!motivo.valido) return { sucesso: false, mensagem: motivo.mensagem };
-  const u = await pool.request().input("id", sql.Int, entidadeId).input("em", sql.Date, hoje).input("m", sql.NVarChar(500), motivo.texto)
-    .query(`UPDATE EntidadesVinculadas SET Status = N'NAO_APROVADA', NaoAprovadaEm = @em, NaoAprovadaMotivo = @m WHERE EntidadeId = @id AND Status = N'PROPOSTA'`);
-  if (!u.rowsAffected[0]) return MUDOU();
-  // as indicações que esperavam a CLI caem junto
-  await pool.request().input("id", sql.Int, entidadeId).input("em", sql.Date, hoje).input("por", sql.Int, por)
-    .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = @em, MotivoEncerramento = N'OUTRO', EncerramentoObs = N'A entidade não foi aprovada pela CLI.', EncerradoPor = @por
-            WHERE EntidadeId = @id AND Status = N'INDICADO'`);
-  await registrarAuditoria({ tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_NAO_APROVADA", usuarioId: por, dadosDepois: { motivo: motivo.texto } });
-  return { sucesso: true, mensagem: "Registrado: a entidade não foi aprovada." };
+  return emTransacao(pool, async (t, rq) => {
+    const u = await rq().input("id", sql.Int, entidadeId).input("em", sql.Date, reuniao.data).input("s", sql.Int, reuniao.sessaoId).input("m", sql.NVarChar(500), motivo.texto)
+      .query(`UPDATE EntidadesVinculadas SET Status = N'NAO_APROVADA', NaoAprovadaEm = @em, NaoAprovadaSessaoId = @s, NaoAprovadaMotivo = @m WHERE EntidadeId = @id AND Status = N'PROPOSTA'`);
+    if (!u.rowsAffected[0]) return MUDOU();
+    // as indicações que esperavam a CLI caem junto
+    await rq().input("id", sql.Int, entidadeId).input("em", sql.Date, reuniao.data).input("por", sql.Int, por)
+      .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = ${ENCERRA_EM}, MotivoEncerramento = N'OUTRO', EncerramentoObs = N'A entidade não foi aprovada pela CLI.', EncerradoPor = @por
+              WHERE EntidadeId = @id AND Status = N'INDICADO'`);
+    await registrarAuditoriaNaTransacao(t, { tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_NAO_APROVADA", usuarioId: por, dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, motivo: motivo.texto } });
+    return { sucesso: true, mensagem: "Registrado: a CLI não aprovou. O CNPJ fica livre para uma nova proposta, se um dia houver." };
+  });
 }
 
 // A Assembleia Geral ratificou (ou não) a deliberação da CLI que criou ou extinguiu a entidade (Art. 18, VII, "b"; Art. 19).
@@ -265,33 +287,37 @@ async function registrarAssembleia(pool, { entidadeId, dados, por, hoje = hojeBr
         .query(`UPDATE EntidadesVinculadas SET VinculoAGSessaoId = @s, VinculoAGResultado = @r, VinculoAGEm = @em, VinculoAGObs = @o, Status = @novo
                 WHERE EntidadeId = @id AND Status = N'ATIVA' AND VinculoAGResultado IS NULL`);
     } else {
+      // a extinção não ratificada: a entidade volta a ativa e a deliberação fica sem efeito, mas a recusa fica GUARDADA (ExtincaoVetadaEm): pelo Art. 19 §1º a CLI só
+      // renova a extinção com nova autorização da Assembleia
       u = await rq().input("id", sql.Int, entidadeId).input("s", sql.Int, reuniao.sessaoId).input("r", sql.NVarChar(15), resultado).input("em", sql.Date, reuniao.data).input("o", sql.NVarChar(500), obs.texto)
-        .input("novo", sql.NVarChar(15), resultado === "RATIFICADA" ? "EXTINTA" : "ATIVA")
-        .query(`UPDATE EntidadesVinculadas SET ExtincaoAGSessaoId = @s, ExtincaoAGResultado = @r, ExtincaoAGEm = @em, ExtincaoAGObs = @o, Status = @novo
-                WHERE EntidadeId = @id AND Status = N'EXTINTA' AND ExtincaoAGResultado IS NULL`);
-      // a Assembleia não ratificou a extinção: a entidade volta a ativa e a deliberação (a extinção) fica sem efeito — a ratificação seguinte será de nova extinção
-      if (u.rowsAffected[0] && resultado === "NAO_RATIFICADA") {
-        await rq().input("id", sql.Int, entidadeId).query(`UPDATE EntidadesVinculadas SET ExtincaoSessaoId = NULL, ExtincaoEm = NULL, ExtincaoRegistradaPor = NULL, DestinoPatrimonio = NULL,
-          DestinatarioNome = NULL, DestinatarioCnpj = NULL, BensComodato = NULL, ExtincaoAGSessaoId = NULL, ExtincaoAGResultado = NULL, ExtincaoAGEm = NULL, ExtincaoAGObs = NULL WHERE EntidadeId = @id`);
-      }
+        .query(resultado === "RATIFICADA"
+          ? `UPDATE EntidadesVinculadas SET ExtincaoAGSessaoId = @s, ExtincaoAGResultado = @r, ExtincaoAGEm = @em, ExtincaoAGObs = @o
+             WHERE EntidadeId = @id AND Status = N'EXTINTA' AND ExtincaoAGResultado IS NULL`
+          : `UPDATE EntidadesVinculadas SET Status = N'ATIVA', ExtincaoVetadaEm = @em, ExtincaoVetadaSessaoId = @s, ExtincaoSessaoId = NULL, ExtincaoEm = NULL, ExtincaoRegistradaPor = NULL,
+               DestinoPatrimonio = NULL, DestinatarioNome = NULL, DestinatarioCnpj = NULL, BensComodato = NULL, ExtincaoAutorizacaoAGSessaoId = NULL,
+               ExtincaoAGSessaoId = NULL, ExtincaoAGResultado = NULL, ExtincaoAGEm = NULL, ExtincaoAGObs = NULL
+             WHERE EntidadeId = @id AND Status = N'EXTINTA' AND ExtincaoAGResultado IS NULL`);
     }
     if (!u.rowsAffected[0]) return MUDOU();
-    // o vínculo desfeito encerra os mandatos em aberto
+    // o vínculo desfeito encerra os mandatos em aberto e os processos de intervenção
     if (objeto === "VINCULO" && resultado === "NAO_RATIFICADA") {
       await rq().input("id", sql.Int, entidadeId).input("em", sql.Date, reuniao.data).input("por", sql.Int, por)
-        .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = @em, MotivoEncerramento = N'OUTRO', EncerramentoObs = N'Vínculo desfeito: a Assembleia Geral não ratificou a criação.', EncerradoPor = @por
+        .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = ${ENCERRA_EM}, MotivoEncerramento = N'OUTRO', EncerramentoObs = N'Vínculo desfeito: a Assembleia Geral não ratificou a criação.', EncerradoPor = @por
                 WHERE EntidadeId = @id AND Status IN (N'INDICADO', N'HOMOLOGADO')`);
+      await fecharProcessosDaEntidade(rq, { entidadeId, hoje, por, motivo: "Vínculo desfeito: a Assembleia Geral não ratificou a criação." });
     }
     await registrarAuditoriaNaTransacao(t, { tabela: "EntidadesVinculadas", registroId: entidadeId, acao: `ENTIDADE_AG_${objeto}_${resultado}`, usuarioId: por,
       dadosAntes: objeto === "EXTINCAO" ? atual.extincao : null, dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, observacao: obs.texto } });
     const msg = objeto === "VINCULO"
-      ? (resultado === "RATIFICADA" ? "A Assembleia ratificou o vínculo." : "Registrado: a Assembleia não ratificou; o vínculo foi desfeito e os mandatos encerrados.")
-      : (resultado === "RATIFICADA" ? "A Assembleia ratificou a extinção." : "Registrado: a Assembleia não ratificou a extinção; a entidade volta a ativa (os mandatos encerrados pela extinção precisam de nova indicação).");
+      ? (resultado === "RATIFICADA" ? "A Assembleia ratificou o vínculo." : "Registrado: a Assembleia não ratificou; o vínculo foi desfeito e os mandatos encerrados. O mesmo CNPJ só volta com nova autorização da Assembleia (Art. 19 §1º).")
+      : (resultado === "RATIFICADA" ? "A Assembleia ratificou a extinção." : "Registrado: a Assembleia não ratificou a extinção; a entidade volta a ativa (os mandatos encerrados pela extinção precisam de nova indicação). Nova extinção só com autorização da Assembleia (Art. 19 §1º).");
     return { sucesso: true, mensagem: msg };
   });
 }
 
-async function configurarPrestacao(pool, { entidadeId, dados, por }) {
+// A periodicidade e o prazo valem desde o vínculo (os períodos são calculados): mudá-los depois que um período já acabou mudaria para trás o que está atrasado ou
+// em dia. Por isso só mudam enquanto nenhum período terminou (revisão de 03/11/2026).
+async function configurarPrestacao(pool, { entidadeId, dados, por, hoje = hojeBrasilia() }) {
   const atual = await lerEntidade(pool, entidadeId);
   if (!atual) return NAO_EXISTE;
   if (!["PROPOSTA", "ATIVA"].includes(atual.status)) return { sucesso: false, mensagem: "Só a entidade proposta ou ativa." };
@@ -299,15 +325,16 @@ async function configurarPrestacao(pool, { entidadeId, dados, por }) {
   if (!ev.PERIODICIDADES[periodicidade]) return { sucesso: false, mensagem: "Escolha a periodicidade (anual, semestral ou trimestral)." };
   const prazo = typeof dados.prazoEntregaDias === "number" ? dados.prazoEntregaDias : ev.idDe(dados.prazoEntregaDias);
   if (!Number.isInteger(prazo) || prazo < 1 || prazo > 365) return { sucesso: false, mensagem: "O prazo de entrega vai de 1 a 365 dias depois do fim do período." };
-  if (periodicidade !== atual.periodicidade) {
-    const n = await pool.request().input("id", sql.Int, entidadeId).query(`SELECT COUNT(*) AS n FROM EntidadePrestacoes WHERE EntidadeId = @id`);
-    if (Number(n.recordset[0].n) > 0) return { sucesso: false, mensagem: "A periodicidade fica fixa depois da primeira prestação de contas registrada (os períodos já entregues não se refazem)." };
+  const mudou = periodicidade !== atual.periodicidade || prazo !== atual.prazoEntregaDias;
+  if (!mudou) return { sucesso: true, mensagem: "Nada mudou." };
+  const primeiro = atual.vinculo ? ev.periodosDesde(atual.vinculo.em, atual.periodicidade, atual.prazoEntregaDias, hoje)[0] : null;
+  if (primeiro && hoje > primeiro.fim) {
+    return { sucesso: false, mensagem: `A periodicidade e o prazo só mudam antes de terminar o primeiro período (${primeiro.codigo}): depois, mudariam para trás o que já está em dia ou atrasado.` };
   }
   const u = await pool.request().input("id", sql.Int, entidadeId).input("p", sql.NVarChar(10), periodicidade).input("d", sql.Int, prazo).input("por", sql.Int, por)
-    .input("pa", sql.NVarChar(10), atual.periodicidade)
+    .input("pa", sql.NVarChar(10), atual.periodicidade).input("da", sql.Int, atual.prazoEntregaDias)
     .query(`UPDATE EntidadesVinculadas SET Periodicidade = @p, PrazoEntregaDias = @d, AtualizadaPor = @por, AtualizadaEm = SYSUTCDATETIME()
-            WHERE EntidadeId = @id AND Periodicidade = @pa
-              AND (@p = @pa OR NOT EXISTS (SELECT 1 FROM EntidadePrestacoes x WHERE x.EntidadeId = @id))`);
+            WHERE EntidadeId = @id AND Periodicidade = @pa AND PrazoEntregaDias = @da AND NOT EXISTS (SELECT 1 FROM EntidadePrestacoes x WHERE x.EntidadeId = @id)`);
   if (!u.rowsAffected[0]) return MUDOU();
   await registrarAuditoria({ tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_PRESTACAO_CONFIGURADA", usuarioId: por,
     dadosAntes: { periodicidade: atual.periodicidade, prazoEntregaDias: atual.prazoEntregaDias }, dadosDepois: { periodicidade, prazoEntregaDias: prazo } });
@@ -476,8 +503,10 @@ const COLUNAS_INTERVENCAO = `
   i.Urgencia, i.UrgenciaJustificativa, CONVERT(varchar(10), i.DecretadaEm, 120) AS DecretadaEm, i.DecretadaPor, i.Fundamentacao, i.InterventorMembroId, mi.Nome AS InterventorMembroNome,
   i.InterventorNome, i.AfastaDiretoria, CONVERT(varchar(10), i.PrazoRatificacao, 120) AS PrazoRatificacao, i.RatificacaoSessaoId, CONVERT(varchar(10), i.RatificacaoEm, 120) AS RatificacaoEm,
   i.RatificacaoObs, CONVERT(varchar(10), i.CaducadaEm, 120) AS CaducadaEm, CONVERT(varchar(10), i.DefesaCEIEm, 120) AS DefesaCEIEm, i.DefesaCEIReferencia,
-  CONVERT(varchar(10), i.EncerradaEm, 120) AS EncerradaEm, i.EncerramentoMotivo`;
-function formaIntervencao(l, hoje) {
+  CONVERT(varchar(10), i.EncerradaEm, 120) AS EncerradaEm, i.EncerramentoMotivo, i.CorrecaoAta, i.DestituicaoAGSessaoId, i.DestituicaoAGResultado,
+  CONVERT(varchar(10), i.DestituicaoAGEm, 120) AS DestituicaoAGEm, i.DestituicaoAGObs,
+  (SELECT COUNT(*) FROM EntidadeDirigentes dd WHERE dd.IntervencaoId = i.IntervencaoId) AS Destituidos`;
+function formaIntervencao(l, hoje, membroId = null) {
   const estado = ev.estadoEfetivo({ status: l.Status, prazoRatificacao: l.PrazoRatificacao }, hoje);
   const correndo = estado === "DECRETADA";
   return {
@@ -485,13 +514,19 @@ function formaIntervencao(l, hoje) {
     motivo: l.Motivo, motivoRotulo: ev.MOTIVOS_INTERVENCAO[l.Motivo] || l.Motivo, fatos: l.Fatos, abertaEm: l.AbertaEm,
     notificadoEm: l.NotificadoEm, notificacaoForma: l.NotificacaoForma, manifestacaoEm: l.ManifestacaoEm, manifestacaoResumo: l.ManifestacaoResumo,
     // sem urgência, a decretação só a partir do 5º dia depois da notificação
-    decretavelDesde: l.NotificadoEm ? ev.somarDias(l.NotificadoEm, ev.PRAZO_MANIFESTACAO_DIAS) : null,
+    manifestacaoAte: l.NotificadoEm ? ev.manifestacaoAte(l.NotificadoEm) : null, decretavelDesde: l.NotificadoEm ? ev.decretavelDesde(l.NotificadoEm) : null,
     urgencia: !!l.Urgencia, urgenciaJustificativa: l.UrgenciaJustificativa, decretadaEm: l.DecretadaEm, fundamentacao: l.Fundamentacao,
     interventor: l.InterventorMembroId ? l.InterventorMembroNome : l.InterventorNome, interventorMembroId: l.InterventorMembroId, afastaDiretoria: !!l.AfastaDiretoria,
     prazoRatificacao: l.PrazoRatificacao, diasRestantes: correndo ? ev.diasEntre(hoje, l.PrazoRatificacao) : null,
     ratificacaoSessaoId: l.RatificacaoSessaoId, ratificacaoEm: l.RatificacaoEm, ratificacaoObs: l.RatificacaoObs, caducadaEm: l.CaducadaEm || (estado === "CADUCADA" ? ev.somarDias(l.PrazoRatificacao, 1) : null),
     defesaCEIEm: l.DefesaCEIEm, defesaCEIReferencia: l.DefesaCEIReferencia, encerradaEm: l.EncerradaEm, encerramentoMotivo: l.EncerramentoMotivo,
-    vale: ev.intervencaoVale({ status: l.Status, prazoRatificacao: l.PrazoRatificacao }, hoje)
+    vale: ev.intervencaoVale({ status: l.Status, prazoRatificacao: l.PrazoRatificacao }, hoje),
+    // quem decretou não registra a decisão da CLI (o servidor recusa): a tela esconde o botão para ele
+    decretadaPorMim: membroId != null && l.DecretadaPor != null && Number(l.DecretadaPor) === Number(membroId),
+    correcaoAta: l.CorrecaoAta, destituidos: Number(l.Destituidos || 0),
+    destituicaoAG: l.DestituicaoAGResultado ? { sessaoId: l.DestituicaoAGSessaoId, resultado: l.DestituicaoAGResultado, resultadoRotulo: ev.RESULTADOS_AG[l.DestituicaoAGResultado], em: l.DestituicaoAGEm, obs: l.DestituicaoAGObs } : null,
+    // Art. 18, VII, "c": a destituição que a CLI ratificou espera a Assembleia
+    destituicaoAguardandoAG: !!(l.RatificacaoEm && l.Status !== "NAO_RATIFICADA" && Number(l.Destituidos || 0) > 0 && !l.DestituicaoAGResultado)
   };
 }
 async function lerIntervencao(pool, intervencaoId) {
@@ -614,6 +649,13 @@ async function decretar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia()
   const v = ev.validarDecretacao(dados, { iv: { status: l.Status, notificadoEm: l.NotificadoEm }, hoje });
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const d = v.dados;
+  // Depois de uma intervenção que a CLI não ratificou ou que caducou, a nova não usa a urgência: o gestor é notificado de novo e tem os 5 dias — senão a recusa
+  // da CLI (Reg. Art. 47-A §2º) se contornaria decretando outra vez no mesmo dia (revisão de 03/11/2026).
+  if (d.urgencia) {
+    const antes = await pool.request().input("e", sql.Int, l.EntidadeId).input("i", sql.Int, intervencaoId)
+      .query(`SELECT COUNT(*) AS n FROM EntidadeIntervencoes WHERE EntidadeId = @e AND IntervencaoId <> @i AND Status IN (N'NAO_RATIFICADA', N'CADUCADA')`);
+    if (Number(antes.recordset[0].n) > 0) return { sucesso: false, mensagem: "Esta entidade já teve intervenção sem ratificação da CLI (recusada ou caducada): a nova exige a notificação do gestor e os 5 dias, sem urgência (Regimento, Art. 47-A §2º; Estatuto, Art. 65 §3º)." };
+  }
   if (d.interventorMembroId) {
     const m = await membroParaDirigir(pool, d.interventorMembroId, hoje);
     if (!m.ok) return { sucesso: false, mensagem: `Interventor: ${m.mensagem}` };
@@ -625,7 +667,8 @@ async function decretar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia()
     .input("in", sql.NVarChar(120), d.interventorNome).input("af", sql.Bit, d.afastaDiretoria).input("pr", sql.Date, d.prazoRatificacao)
     .query(`UPDATE EntidadeIntervencoes SET Status = N'DECRETADA', Urgencia = @urg, UrgenciaJustificativa = @uj, DecretadaEm = @de, DecretadaPor = @por, Fundamentacao = @f,
               InterventorMembroId = @im, InterventorNome = @in, AfastaDiretoria = @af, PrazoRatificacao = @pr
-            WHERE IntervencaoId = @id AND Status = N'APURACAO'`);
+            WHERE IntervencaoId = @id AND Status = N'APURACAO'
+              AND EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = EntidadeIntervencoes.EntidadeId AND Status = N'ATIVA')`);
   if (!u.rowsAffected[0]) return MUDOU();
   await registrarAuditoria({ tabela: "EntidadeIntervencoes", registroId: intervencaoId, acao: "ENTIDADE_INTERVENCAO_DECRETADA", usuarioId: por, dadosDepois: { entidadeId: l.EntidadeId, ...d } });
   await avisar(pool, { regraChave: "ENTIDADE_INTERVENCAO_DECRETADA", mensagem: ev.textoDecretada({ entidade: ent.razaoSocial, prazo: d.prazoRatificacao }), referenciaId: intervencaoId, fora: por, deps });
@@ -633,12 +676,14 @@ async function decretar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia()
 }
 
 // A CLI ratificou (ou não) numa reunião dentro dos 15 dias. Se o registro chega depois do prazo e a rotina já marcou "perdeu a eficácia", a reunião feita a
-// tempo prevalece: a marca é corrigida (a CLI decidiu dentro do prazo — quem atrasou foi o registro).
-async function ratificar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia() }) {
+// tempo prevalece — mas só até PRAZO_CORRECAO_CADUCIDADE_DIAS depois do prazo e com a referência da ata, e a correção avisa todo mundo (revisão de 03/11/2026).
+async function ratificar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia(), deps = {} }) {
   const l = await lerIntervencao(pool, intervencaoId);
   if (!l) return NAO_EXISTE;
   if (!["DECRETADA", "CADUCADA"].includes(l.Status)) return { sucesso: false, mensagem: "Só a intervenção decretada espera a ratificação da CLI." };
   if (Number(l.DecretadaPor) === Number(por)) return { sucesso: false, mensagem: "Quem decretou a intervenção não registra a decisão da CLI sobre ela." };
+  const ent = await lerEntidade(pool, l.EntidadeId);
+  if (!ent || ent.status !== "ATIVA") return { sucesso: false, mensagem: "A entidade não está mais ativa (extinta ou com o vínculo desfeito): a intervenção já foi encerrada." };
   const resultado = typeof dados.resultado === "string" ? dados.resultado.trim().toUpperCase() : "";
   if (!["RATIFICADA", "NAO_RATIFICADA"].includes(resultado)) return { sucesso: false, mensagem: "Informe se a CLI ratificou ou não." };
   const reuniao = await lerReuniao(pool, dados.sessaoId, "CLI", hoje);
@@ -646,37 +691,53 @@ async function ratificar(pool, { intervencaoId, dados, por, hoje = hojeBrasilia(
   if (!ev.reuniaoNoPrazo(reuniao.data, { decretadaEm: l.DecretadaEm, prazoRatificacao: l.PrazoRatificacao })) {
     return { sucesso: false, mensagem: `A reunião precisa ser entre a decretação (${ev.br(l.DecretadaEm)}) e o fim do prazo (${ev.br(l.PrazoRatificacao)}). Depois disso a intervenção perdeu a eficácia (Regimento, Art. 47-A §2º).` };
   }
+  const corrigindo = l.Status === "CADUCADA" || hoje > l.PrazoRatificacao;
+  let ata = null;
+  if (corrigindo) {
+    const limite = ev.somarDias(l.PrazoRatificacao, ev.PRAZO_CORRECAO_CADUCIDADE_DIAS);
+    if (hoje > limite) return { sucesso: false, mensagem: `O prazo fatal venceu em ${ev.br(l.PrazoRatificacao)} e a correção só cabia até ${ev.br(limite)}: a intervenção perdeu a eficácia. Uma nova exige nova apuração.` };
+    const a = ev.texto(dados.ataReferencia, { minimo: 3, maximo: 200, rotulo: "A referência da ata da reunião da CLI (o registro chega depois do prazo)" });
+    if (!a.valido) return { sucesso: false, mensagem: a.mensagem };
+    ata = a.texto;
+  }
   const obs = ev.texto(dados.observacao, { maximo: 500, rotulo: "A observação", obrigatorio: false, multilinha: true });
   if (!obs.valido) return { sucesso: false, mensagem: obs.mensagem };
+  let r;
   try {
-    return await emTransacao(pool, async (t, rq) => {
+    r = await emTransacao(pool, async (t, rq) => {
       const u = await rq().input("id", sql.Int, intervencaoId).input("st", sql.NVarChar(15), resultado).input("s", sql.Int, reuniao.sessaoId).input("em", sql.Date, reuniao.data)
-        .input("por", sql.Int, por).input("o", sql.NVarChar(500), obs.texto).input("ant", sql.NVarChar(15), l.Status)
-        .query(`UPDATE EntidadeIntervencoes SET Status = @st, RatificacaoSessaoId = @s, RatificacaoEm = @em, RatificacaoRegistradaPor = @por, RatificacaoObs = @o, CaducadaEm = NULL
-                WHERE IntervencaoId = @id AND Status = @ant`);
+        .input("por", sql.Int, por).input("o", sql.NVarChar(500), obs.texto).input("ant", sql.NVarChar(15), l.Status).input("ata", sql.NVarChar(200), ata)
+        .query(`UPDATE EntidadeIntervencoes SET Status = @st, RatificacaoSessaoId = @s, RatificacaoEm = @em, RatificacaoRegistradaPor = @por, RatificacaoObs = @o, CaducadaEm = NULL, CorrecaoAta = @ata
+                WHERE IntervencaoId = @id AND Status = @ant
+                  AND EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = EntidadeIntervencoes.EntidadeId AND Status = N'ATIVA')`);
       if (!u.rowsAffected[0]) return MUDOU();
       let destituidos = 0;
       // ratificada com o afastamento da diretoria: os mandatos que existiam na decretação se encerram por destituição (os indicados depois dela, não)
       if (resultado === "RATIFICADA" && l.AfastaDiretoria) {
         const d = await rq().input("e", sql.Int, l.EntidadeId).input("em", sql.Date, reuniao.data).input("de", sql.Date, l.DecretadaEm).input("iv", sql.Int, intervencaoId).input("por", sql.Int, por)
-          .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = @em, MotivoEncerramento = N'DESTITUICAO_INTERVENCAO', IntervencaoId = @iv, EncerradoPor = @por,
+          .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = ${ENCERRA_EM}, MotivoEncerramento = N'DESTITUICAO_INTERVENCAO', IntervencaoId = @iv, EncerradoPor = @por,
                     EncerramentoObs = N'Destituído pela intervenção ratificada pela CLI (Regimento, Art. 47-A). Direito de defesa no Conselho de Ética.'
                   WHERE EntidadeId = @e AND Status IN (N'INDICADO', N'HOMOLOGADO') AND IndicadoEm <= @de`);
         destituidos = d.rowsAffected[0] || 0;
       }
       await registrarAuditoriaNaTransacao(t, { tabela: "EntidadeIntervencoes", registroId: intervencaoId, acao: resultado === "RATIFICADA" ? "ENTIDADE_INTERVENCAO_RATIFICADA" : "ENTIDADE_INTERVENCAO_NAO_RATIFICADA",
-        usuarioId: por, dadosAntes: { status: l.Status }, dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, destituidos, observacao: obs.texto, corrigiuCaducidade: l.Status === "CADUCADA" } });
+        usuarioId: por, dadosAntes: { status: l.Status }, dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, destituidos, observacao: obs.texto, corrigiuCaducidade: corrigindo, ata } });
       return { sucesso: true, destituidos, mensagem: resultado === "RATIFICADA"
-        ? `Intervenção ratificada pela CLI.${destituidos ? ` ${destituidos} mandato(s) encerrado(s) por destituição; os destituídos têm direito de defesa no Conselho de Ética.` : ""}`
+        ? `Intervenção ratificada pela CLI.${destituidos ? ` ${destituidos} mandato(s) encerrado(s) por destituição; os destituídos têm direito de defesa no Conselho de Ética, e a destituição vai à próxima Assembleia Geral (Estatuto, Art. 18, VII, "c").` : ""}`
         : "Registrado: a CLI não ratificou; a intervenção ficou sem efeito." };
     });
   } catch (e) {
     if (violouUnicidade(e)) return { sucesso: false, mensagem: "Já há outro processo em curso nesta entidade: a correção da caducidade não cabe." };
     throw e;
   }
+  if (r.sucesso && corrigindo && resultado === "RATIFICADA") {
+    await avisar(pool, { regraChave: "ENTIDADE_INTERVENCAO_CORRIGIDA", mensagem: ev.textoCorrigida({ entidade: ent.razaoSocial, reuniao: reuniao.data }), referenciaId: intervencaoId, fora: por, deps });
+  }
+  return r;
 }
 
-// Depois da caducidade ou da não ratificação, uma nova decretação parte de uma nova apuração com os mesmos fatos (a notificação já feita continua valendo).
+// Depois da caducidade ou da não ratificação, uma nova decretação parte de uma nova apuração com os mesmos fatos. A notificação NÃO se aproveita: o gestor é
+// notificado de novo e tem outros 5 dias (revisão de 03/11/2026: copiar a notificação deixava decretar no mesmo dia e contornar a recusa da CLI).
 async function reabrirApuracao(pool, { intervencaoId, por, hoje = hojeBrasilia() }) {
   const l = await lerIntervencao(pool, intervencaoId);
   if (!l) return NAO_EXISTE;
@@ -684,15 +745,14 @@ async function reabrirApuracao(pool, { intervencaoId, por, hoje = hojeBrasilia()
   if (!["CADUCADA", "NAO_RATIFICADA"].includes(estado)) return { sucesso: false, mensagem: "Só depois que a intervenção perdeu a eficácia ou não foi ratificada." };
   if (l.Status === "DECRETADA") await caducarVencidas(pool, { hoje });
   try {
-    const r = await pool.request().input("e", sql.Int, l.EntidadeId).input("m", sql.NVarChar(20), l.Motivo).input("f", sql.NVarChar(2000), l.Fatos).input("h", sql.Date, hoje)
-      .input("por", sql.Int, por).input("ne", sql.Date, l.NotificadoEm).input("nf", sql.NVarChar(200), l.NotificacaoForma).input("me", sql.Date, l.ManifestacaoEm).input("mr", sql.NVarChar(1000), l.ManifestacaoResumo)
-      .query(`INSERT INTO EntidadeIntervencoes (EntidadeId, Motivo, Fatos, AbertaEm, AbertaPor, NotificadoEm, NotificacaoForma, NotificacaoRegistradaPor, ManifestacaoEm, ManifestacaoResumo)
+    const r = await pool.request().input("e", sql.Int, l.EntidadeId).input("m", sql.NVarChar(20), l.Motivo).input("f", sql.NVarChar(2000), l.Fatos).input("h", sql.Date, hoje).input("por", sql.Int, por)
+      .query(`INSERT INTO EntidadeIntervencoes (EntidadeId, Motivo, Fatos, AbertaEm, AbertaPor)
               OUTPUT inserted.IntervencaoId
-              SELECT @e, @m, @f, @h, @por, @ne, @nf, @por, @me, @mr WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Status = N'ATIVA')`);
+              SELECT @e, @m, @f, @h, @por WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Status = N'ATIVA')`);
     if (!r.recordset[0]) return { sucesso: false, mensagem: "Só entidade ativa passa por apuração." };
     const novo = r.recordset[0].IntervencaoId;
     await registrarAuditoria({ tabela: "EntidadeIntervencoes", registroId: novo, acao: "ENTIDADE_APURACAO_REABERTA", usuarioId: por, dadosDepois: { origem: intervencaoId, entidadeId: l.EntidadeId } });
-    return { sucesso: true, intervencaoId: novo, mensagem: "Nova apuração aberta com os mesmos fatos e a notificação já feita. A nova decretação conta outros 15 dias." };
+    return { sucesso: true, intervencaoId: novo, mensagem: "Nova apuração aberta com os mesmos fatos. O gestor precisa ser notificado de novo e ter 5 dias; a urgência não vale mais nesta entidade." };
   } catch (e) {
     if (violouUnicidade(e)) return { sucesso: false, mensagem: "Já há um processo de apuração ou intervenção em curso nesta entidade." };
     throw e;
@@ -783,8 +843,11 @@ async function registrarPrestacao(pool, { entidadeId, dados, por, hoje = hojeBra
     }
     const r = await pool.request().input("e", sql.Int, entidadeId).input("p", sql.NVarChar(7), p.codigo).input("i", sql.Date, p.inicio).input("f", sql.Date, p.fim)
       .input("em", sql.Date, v.dados.entregueEm).input("ao", sql.NVarChar(150), v.dados.auditoriaOrgao).input("o", sql.NVarChar(1000), v.dados.observacao).input("por", sql.Int, por)
+      .input("per", sql.NVarChar(10), ent.periodicidade)
       .query(`INSERT INTO EntidadePrestacoes (EntidadeId, Periodo, Inicio, Fim, EntregueEm, RelatorioAtividades, BalancoAuditado, AuditoriaOrgao, Observacao, RegistradaPor)
-              OUTPUT inserted.PrestacaoId VALUES (@e, @p, @i, @f, @em, 1, 1, @ao, @o, @por)`);
+              OUTPUT inserted.PrestacaoId SELECT @e, @p, @i, @f, @em, 1, 1, @ao, @o, @por
+              WHERE EXISTS (SELECT 1 FROM EntidadesVinculadas WITH (UPDLOCK, ROWLOCK) WHERE EntidadeId = @e AND Periodicidade = @per)`);
+    if (!r.recordset[0]) return MUDOU("A periodicidade desta entidade mudou enquanto isso. Atualize a tela.");
     const prestacaoId = r.recordset[0].PrestacaoId;
     await registrarAuditoria({ tabela: "EntidadePrestacoes", registroId: prestacaoId, acao: "ENTIDADE_PRESTACAO_ENTREGUE", usuarioId: por, dadosDepois: { entidadeId, periodo: p.codigo, ...v.dados } });
     return { sucesso: true, prestacaoId, mensagem: "Prestação de contas registrada. Falta a apreciação da CLI." };
@@ -852,25 +915,62 @@ async function extinguir(pool, { entidadeId, dados, por, hoje = hojeBrasilia() }
   const reuniao = await lerReuniao(pool, dados.sessaoId, "CLI", hoje);
   if (!reuniao) return { sucesso: false, mensagem: ESCOLHA_CLI };
   if (reuniao.data < ent.vinculo.em) return { sucesso: false, mensagem: "A reunião da extinção é anterior à do vínculo." };
+  // Art. 19 §1º: a Assembleia já recusou uma extinção desta entidade — a CLI só a renova com nova autorização da Assembleia
+  let autorizacao = null;
+  if (ent.extincaoVetadaEm) {
+    autorizacao = dados.autorizacaoAGSessaoId == null || dados.autorizacaoAGSessaoId === "" ? null : await lerReuniao(pool, dados.autorizacaoAGSessaoId, "AG", hoje);
+    if (!autorizacao || autorizacao.data < ent.extincaoVetadaEm) {
+      return { sucesso: false, mensagem: `A Assembleia Geral não ratificou a extinção desta entidade em ${ev.br(ent.extincaoVetadaEm)}: a CLI só a renova com nova autorização da Assembleia (Estatuto, Art. 19 §1º). Escolha a Assembleia posterior que autorizou.` };
+    }
+  }
   return emTransacao(pool, async (t, rq) => {
     const u = await rq().input("id", sql.Int, entidadeId).input("s", sql.Int, reuniao.sessaoId).input("em", sql.Date, reuniao.data).input("por", sql.Int, por)
       .input("d", sql.NVarChar(30), v.dados.destinoPatrimonio).input("n", sql.NVarChar(150), v.dados.destinatarioNome).input("c", sql.Char(14), v.dados.destinatarioCnpj)
-      .input("b", sql.NVarChar(1000), v.dados.bensComodato)
+      .input("b", sql.NVarChar(1000), v.dados.bensComodato).input("aut", sql.Int, autorizacao ? autorizacao.sessaoId : null)
       .query(`UPDATE EntidadesVinculadas SET Status = N'EXTINTA', ExtincaoSessaoId = @s, ExtincaoEm = @em, ExtincaoRegistradaPor = @por, DestinoPatrimonio = @d, DestinatarioNome = @n,
-                DestinatarioCnpj = @c, BensComodato = @b, ExtincaoAGSessaoId = NULL, ExtincaoAGResultado = NULL, ExtincaoAGEm = NULL, ExtincaoAGObs = NULL
+                DestinatarioCnpj = @c, BensComodato = @b, ExtincaoAutorizacaoAGSessaoId = @aut, ExtincaoAGSessaoId = NULL, ExtincaoAGResultado = NULL, ExtincaoAGEm = NULL, ExtincaoAGObs = NULL
               WHERE EntidadeId = @id AND Status = N'ATIVA'`);
     if (!u.rowsAffected[0]) return MUDOU();
     const d = await rq().input("e", sql.Int, entidadeId).input("em", sql.Date, reuniao.data).input("por", sql.Int, por)
-      .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = @em, MotivoEncerramento = N'EXTINCAO', EncerradoPor = @por
+      .query(`UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = ${ENCERRA_EM}, MotivoEncerramento = N'EXTINCAO', EncerradoPor = @por
               WHERE EntidadeId = @e AND Status IN (N'INDICADO', N'HOMOLOGADO')`);
-    // a apuração aberta perde o objeto
-    await rq().input("e", sql.Int, entidadeId).input("h", sql.Date, hoje).input("por", sql.Int, por)
-      .query(`UPDATE EntidadeIntervencoes SET Status = N'ARQUIVADA', EncerradaEm = @h, EncerradaPor = @por, EncerramentoMotivo = N'Entidade extinta (Estatuto, Art. 68).'
-              WHERE EntidadeId = @e AND Status = N'APURACAO'`);
+    // a intervenção em vigor se encerra e a apuração aberta perde o objeto
+    await fecharProcessosDaEntidade(rq, { entidadeId, hoje, por, motivo: "Entidade extinta (Estatuto, Art. 68)." });
     await registrarAuditoriaNaTransacao(t, { tabela: "EntidadesVinculadas", registroId: entidadeId, acao: "ENTIDADE_EXTINTA", usuarioId: por,
-      dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, ...v.dados, mandatosEncerrados: d.rowsAffected[0] || 0 } });
-    return { sucesso: true, mensagem: "Extinção registrada; os mandatos foram encerrados. Leve à próxima Assembleia Geral para a ratificação (Estatuto, Art. 18, VII, \"b\")." };
+      dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, ...v.dados, autorizacaoAGSessaoId: autorizacao ? autorizacao.sessaoId : null, mandatosEncerrados: d.rowsAffected[0] || 0 } });
+    return { sucesso: true, mensagem: "Extinção registrada; os mandatos e a intervenção em vigor foram encerrados. Leve à próxima Assembleia Geral para a ratificação (Estatuto, Art. 18, VII, \"b\")." };
   });
+}
+
+// A entidade deixou de existir para a Igreja (extinta ou com o vínculo desfeito): a intervenção em vigor se encerra e a apuração aberta se arquiva — nada fica
+// "valendo" nem avisando sobre uma entidade que não é mais vinculada.
+async function fecharProcessosDaEntidade(rq, { entidadeId, hoje, por, motivo }) {
+  await rq().input("e", sql.Int, entidadeId).input("h", sql.Date, hoje).input("por", sql.Int, por).input("m", sql.NVarChar(1000), motivo)
+    .query(`UPDATE EntidadeIntervencoes SET Status = CASE WHEN Status = N'APURACAO' THEN N'ARQUIVADA' ELSE N'ENCERRADA' END, EncerradaEm = @h, EncerradaPor = @por, EncerramentoMotivo = @m
+            WHERE EntidadeId = @e AND Status IN (N'APURACAO', N'RATIFICADA', N'DECRETADA') AND (Status <> N'DECRETADA' OR PrazoRatificacao >= @h)`);
+  await rq().input("e", sql.Int, entidadeId).input("h", sql.Date, hoje)
+    .query(`UPDATE EntidadeIntervencoes SET Status = N'CADUCADA', CaducadaEm = @h WHERE EntidadeId = @e AND Status = N'DECRETADA' AND PrazoRatificacao < @h`);
+}
+
+// Art. 18, VII, "c", e Art. 19: a Assembleia Geral sobre a destituição que a ratificação da intervenção produziu. Não ratificada, a destituição não se renova sem nova
+// autorização da Assembleia; os destituídos podem ser indicados de novo pelo caminho de sempre (indicação e homologação).
+async function registrarAssembleiaDestituicao(pool, { intervencaoId, dados, por, hoje = hojeBrasilia() }) {
+  const l = await lerIntervencao(pool, intervencaoId);
+  if (!l) return NAO_EXISTE;
+  const iv = formaIntervencao(l, hoje);
+  if (!iv.destituicaoAguardandoAG) return { sucesso: false, mensagem: "Esta intervenção não tem destituição esperando a Assembleia." };
+  const resultado = typeof dados.resultado === "string" ? dados.resultado.trim().toUpperCase() : "";
+  if (!ev.RESULTADOS_AG[resultado]) return { sucesso: false, mensagem: "Informe se a Assembleia ratificou ou não." };
+  const reuniao = await lerReuniao(pool, dados.sessaoId, "AG", hoje);
+  if (!reuniao) return { sucesso: false, mensagem: ESCOLHA_AG };
+  if (reuniao.data < l.RatificacaoEm) return { sucesso: false, mensagem: `A Assembleia escolhida é anterior à ratificação da CLI (${ev.br(l.RatificacaoEm)}).` };
+  const obs = ev.texto(dados.observacao, { maximo: 500, rotulo: "A observação", obrigatorio: resultado === "NAO_RATIFICADA", minimo: resultado === "NAO_RATIFICADA" ? 10 : 0, multilinha: true });
+  if (!obs.valido) return { sucesso: false, mensagem: obs.mensagem };
+  const u = await pool.request().input("id", sql.Int, intervencaoId).input("s", sql.Int, reuniao.sessaoId).input("r", sql.NVarChar(15), resultado).input("em", sql.Date, reuniao.data).input("o", sql.NVarChar(500), obs.texto)
+    .query(`UPDATE EntidadeIntervencoes SET DestituicaoAGSessaoId = @s, DestituicaoAGResultado = @r, DestituicaoAGEm = @em, DestituicaoAGObs = @o WHERE IntervencaoId = @id AND DestituicaoAGResultado IS NULL`);
+  if (!u.rowsAffected[0]) return MUDOU();
+  await registrarAuditoria({ tabela: "EntidadeIntervencoes", registroId: intervencaoId, acao: `ENTIDADE_AG_DESTITUICAO_${resultado}`, usuarioId: por, dadosDepois: { sessaoId: reuniao.sessaoId, em: reuniao.data, observacao: obs.texto } });
+  return { sucesso: true, mensagem: resultado === "RATIFICADA" ? "A Assembleia ratificou a destituição." : "Registrado: a Assembleia não ratificou a destituição. Quem foi destituído pode ser indicado de novo (indicação do Presidente e homologação da CLI)." };
 }
 
 // ================================================================ leitura: ficha, lista e painel ================================================================
@@ -880,10 +980,10 @@ async function dirigentesDa(pool, entidadeId, hoje) {
             ORDER BY CASE WHEN d.Status IN (N'INDICADO', N'HOMOLOGADO') THEN 0 ELSE 1 END, d.IndicadoEm DESC, d.DirigenteId DESC`);
   return r.recordset.map((l) => formaDirigente(l, hoje));
 }
-async function intervencoesDa(pool, entidadeId, hoje) {
+async function intervencoesDa(pool, entidadeId, hoje, membroId = null) {
   const r = await pool.request().input("e", sql.Int, entidadeId)
     .query(`SELECT ${COLUNAS_INTERVENCAO} FROM EntidadeIntervencoes i LEFT JOIN MembroReferencia mi ON mi.MembroId = i.InterventorMembroId WHERE i.EntidadeId = @e ORDER BY i.IntervencaoId DESC`);
-  return r.recordset.map((l) => formaIntervencao(l, hoje));
+  return r.recordset.map((l) => formaIntervencao(l, hoje, membroId));
 }
 // O gestor técnico habilitado (Art. 153): homologado e com a formação aceita hoje pelo tipo. Tipo sem formação exigida não pede nada.
 function pendenciaGestor(ent, dirigentes, formacoesDoTipo) {
@@ -892,10 +992,10 @@ function pendenciaGestor(ent, dirigentes, formacoesDoTipo) {
   return ok ? null : `Sem gestor técnico homologado com a formação exigida (${formacoesDoTipo.join(" ou ")} — Regimento, Art. 153).`;
 }
 
-async function detalharEntidade(pool, { entidadeId, hoje = hojeBrasilia() }) {
+async function detalharEntidade(pool, { entidadeId, hoje = hojeBrasilia(), membroId = null }) {
   const ent = await lerEntidade(pool, entidadeId);
   if (!ent) return null;
-  const [dirigentes, intervencoes, prestacoes, tipo] = [await dirigentesDa(pool, entidadeId, hoje), await intervencoesDa(pool, entidadeId, hoje), await prestacoesDa(pool, entidadeId), await lerTipo(pool, ent.tipoId)];
+  const [dirigentes, intervencoes, prestacoes, tipo] = [await dirigentesDa(pool, entidadeId, hoje), await intervencoesDa(pool, entidadeId, hoje, membroId), await prestacoesDa(pool, entidadeId), await lerTipo(pool, ent.tipoId)];
   const periodos = periodosDaEntidade(ent, prestacoes, hoje);
   const emVigor = intervencoes.find((i) => i.vale) || null;
   return {
@@ -950,6 +1050,14 @@ async function listarEntidades(pool, { hoje = hojeBrasilia(), status = null } = 
 async function painel(pool, { hoje = hojeBrasilia() } = {}) {
   const lista = await listarEntidades(pool, { hoje });
   const nome = (e) => e.nomeFantasia || e.razaoSocial;
+  // Art. 19: a ratificação é na PRIMEIRA reunião da Assembleia depois da CLI — se uma Assembleia já aconteceu e nada foi registrado, o painel avisa
+  const ags = (await reunioesEncerradas(pool, "AG")).map((s) => s.data);
+  const jaHouve = (desde) => ags.some((d) => d >= desde);
+  const destituicoes = await pool.request().query(`
+    SELECT i.EntidadeId, CONVERT(varchar(10), i.RatificacaoEm, 120) AS RatificacaoEm FROM EntidadeIntervencoes i
+    WHERE i.RatificacaoEm IS NOT NULL AND i.Status IN (N'RATIFICADA', N'ENCERRADA') AND i.DestituicaoAGResultado IS NULL
+      AND EXISTS (SELECT 1 FROM EntidadeDirigentes d WHERE d.IntervencaoId = i.IntervencaoId)`);
+  const porId = new Map(lista.map((e) => [e.entidadeId, e]));
   return {
     hoje,
     intervencoesCorrendo: lista.filter((e) => e.intervencao && e.intervencao.status === "DECRETADA")
@@ -961,7 +1069,13 @@ async function painel(pool, { hoje = hojeBrasilia() } = {}) {
     aguardandoApreciacao: lista.flatMap((e) => e.aguardandoApreciacao.map((p) => ({ entidadeId: e.entidadeId, entidade: nome(e), periodo: p.codigo, prestacaoId: p.prestacaoId }))),
     cfPendente: lista.flatMap((e) => e.cfPendente.map((p) => ({ entidadeId: e.entidadeId, entidade: nome(e), periodo: p.codigo, prestacaoId: p.prestacaoId }))),
     propostas: lista.filter((e) => e.status === "PROPOSTA").map((e) => ({ entidadeId: e.entidadeId, entidade: nome(e) })),
-    aguardandoAG: lista.filter((e) => e.aguardandoAG).map((e) => ({ entidadeId: e.entidadeId, entidade: nome(e), objeto: e.aguardandoAG, desde: e.aguardandoAG === "VINCULO" ? e.vinculo.em : e.extincao.em })),
+    aguardandoAG: [
+      ...lista.filter((e) => e.aguardandoAG).map((e) => {
+        const desde = e.aguardandoAG === "VINCULO" ? e.vinculo.em : e.extincao.em;
+        return { entidadeId: e.entidadeId, entidade: nome(e), objeto: e.aguardandoAG, desde, assembleiaJaHouve: jaHouve(desde) };
+      }),
+      ...destituicoes.recordset.filter((x) => porId.has(x.EntidadeId)).map((x) => ({ entidadeId: x.EntidadeId, entidade: nome(porId.get(x.EntidadeId)), objeto: "DESTITUICAO", desde: x.RatificacaoEm, assembleiaJaHouve: jaHouve(x.RatificacaoEm) }))
+    ],
     indicacoes: lista.filter((e) => e.indicadosAguardando > 0).map((e) => ({ entidadeId: e.entidadeId, entidade: nome(e), quantidade: e.indicadosAguardando })),
     mandatosVencidos: lista.filter((e) => e.mandatosVencidos > 0).map((e) => ({ entidadeId: e.entidadeId, entidade: nome(e), quantidade: e.mandatosVencidos })),
     semGestor: lista.filter((e) => e.pendenciaGestor).map((e) => ({ entidadeId: e.entidadeId, entidade: nome(e), mensagem: e.pendenciaGestor }))
@@ -970,12 +1084,11 @@ async function painel(pool, { hoje = hojeBrasilia() } = {}) {
 
 // ================================================================ avisos (detectores) e LGPD ================================================================
 const diaDoAviso = (hoje) => Number(hoje.replace(/-/g, "")) % 10000;   // MMDD: um aviso por dia
-// Enquanto corre o prazo, um aviso por dia a quem administra as entidades (o motor não duplica no mesmo dia).
 async function detectarPrazoIntervencao(pool, { hoje = hojeBrasilia() } = {}) {
   await caducarVencidas(pool, { hoje });
   const r = await pool.request().query(`
     SELECT i.IntervencaoId, CONVERT(varchar(10), i.PrazoRatificacao, 120) AS Prazo, e.RazaoSocial FROM EntidadeIntervencoes i JOIN EntidadesVinculadas e ON e.EntidadeId = i.EntidadeId
-    WHERE i.Status = N'DECRETADA'`);
+    WHERE i.Status = N'DECRETADA' AND e.Status = N'ATIVA'`);
   return r.recordset.filter((x) => x.Prazo >= hoje).map((x) => ({
     referenciaId: x.IntervencaoId * 10000 + diaDoAviso(hoje),
     fatoGerador: ev.textoPrazoIntervencao({ entidade: x.RazaoSocial, prazo: x.Prazo, hoje })
@@ -989,15 +1102,14 @@ async function detectarCaducadas(pool, { hoje = hojeBrasilia() } = {}) {
     WHERE i.Status = N'CADUCADA' AND i.CaducadaEm >= DATEADD(DAY, -30, @h)`);
   return r.recordset.map((x) => ({ referenciaId: x.IntervencaoId, fatoGerador: ev.textoCaducada({ entidade: x.RazaoSocial, prazo: x.Prazo }) }));
 }
-// A prestação atrasada: um aviso por mês por período.
+// A prestação atrasada: um aviso por mês por ENTIDADE (com todos os períodos atrasados dela), só das ativas — a referência cabe no INT para qualquer EntidadeId.
 async function detectarPrestacoesAtrasadas(pool, { hoje = hojeBrasilia() } = {}) {
-  const lista = await listarEntidades(pool, { hoje });
+  const lista = await listarEntidades(pool, { hoje, status: "ATIVA" });
   const mes = (Number(hoje.slice(0, 4)) * 12 + Number(hoje.slice(5, 7))) % 1000;
-  const numero = (codigo) => (Number(codigo.slice(0, 4)) % 100) * 10 + (codigo.length > 4 ? Number(codigo.slice(6)) : 0);
-  return lista.filter((e) => e.entidadeId <= 2000).flatMap((e) => e.atrasadas.map((p) => ({
-    referenciaId: e.entidadeId * 1000000 + numero(p.codigo) * 1000 + mes,
-    fatoGerador: ev.textoPrestacaoAtrasada({ entidade: e.razaoSocial, periodo: p.codigo, prazo: p.prazo })
-  })));
+  return lista.filter((e) => e.atrasadas.length && e.entidadeId <= 2000000).map((e) => ({
+    referenciaId: e.entidadeId * 1000 + mes,
+    fatoGerador: ev.textoPrestacaoAtrasada({ entidade: e.razaoSocial, periodos: e.atrasadas })
+  }));
 }
 
 // Meus Dados (LGPD Art. 18): as funções que a pessoa ocupa ou ocupou em entidade vinculada.
@@ -1022,7 +1134,7 @@ async function dadosDoTitular(pool, membroId) {
 module.exports = {
   NAO_EXISTE, reunioesEncerradas, lerReuniao, listarTipos, lerTipo, criarTipo, editarTipo, lerEntidade, criarEntidade, editarEntidade, aprovarVinculo, naoAprovar,
   registrarAssembleia, configurarPrestacao, lerDirigente, indicarDirigente, homologarDirigente, recusarDirigente, encerrarDirigente, lerIntervencao, caducarVencidas,
-  abrirApuracao, registrarNotificacao, registrarManifestacao, arquivarApuracao, ehPresidente, decretar, ratificar, reabrirApuracao, registrarDefesa, encerrarIntervencao,
+  abrirApuracao, registrarAssembleiaDestituicao, registrarNotificacao, registrarManifestacao, arquivarApuracao, ehPresidente, decretar, ratificar, reabrirApuracao, registrarDefesa, encerrarIntervencao,
   registrarPrestacao, lerPrestacao, apreciarPrestacao, verificacaoConselhoFiscal, extinguir, detalharEntidade, listarEntidades, painel,
   detectarPrazoIntervencao, detectarCaducadas, detectarPrestacoesAtrasadas, dadosDoTitular, periodosDaEntidade
 };

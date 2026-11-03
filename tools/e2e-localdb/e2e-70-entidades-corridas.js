@@ -101,7 +101,7 @@ async function principal() {
 
   console.log("== duas ratificações (a reunião foi dentro do prazo) ==");
   const cliPrazo = await escalar(`INSERT INTO Sessoes (OrgaoId, Descricao, DataSessao, TipoSessao, Status) OUTPUT INSERTED.SessaoId SELECT OrgaoId, N'CLI prazo corrida', @d, 'EXTRAORDINARIA', 'ENCERRADA' FROM Orgaos WHERE Sigla = 'CLI'`, { d: dias(-10) });
-  rs = await disparar([{ acao: "intervencao-ratificar", corpo: { intervencaoId: iv, sessaoId: cliPrazo, resultado: "RATIFICADA" } }, { acao: "intervencao-ratificar", corpo: { intervencaoId: iv, sessaoId: cliPrazo, resultado: "NAO_RATIFICADA" } }]);
+  rs = await disparar([{ acao: "intervencao-ratificar", corpo: { intervencaoId: iv, sessaoId: cliPrazo, resultado: "RATIFICADA", ataReferencia: "Ata corrida 1" } }, { acao: "intervencao-ratificar", corpo: { intervencaoId: iv, sessaoId: cliPrazo, resultado: "NAO_RATIFICADA", ataReferencia: "Ata corrida 2" } }]);
   ok(semErro(rs) && ganhos(rs) === 1, "uma decisão só", rs.map((x) => [x.status, x.sucesso]));
 
   console.log("== extinção junto com novas indicações ==");

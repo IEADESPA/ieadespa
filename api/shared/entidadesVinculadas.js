@@ -38,7 +38,11 @@ const DESTINOS = {
 };
 
 const PRAZO_RATIFICACAO_DIAS = 15;   // Reg. Art. 47-A §2º — fixo: é o próprio prazo fatal do Regimento
-const PRAZO_MANIFESTACAO_DIAS = 5;   // Estatuto Art. 65 §3º — o mínimo para o gestor se manifestar
+const PRAZO_MANIFESTACAO_DIAS = 5;   // Estatuto Art. 65 §3º — o mínimo para o gestor se manifestar (o 5º dia inteiro é dele: a decretação, do 6º em diante)
+const PRAZO_CORRECAO_CADUCIDADE_DIAS = 10;   // até quantos dias depois do prazo fatal a reunião feita a tempo (registro atrasado) ainda corrige a caducidade, com a ata
+// O último dia em que o gestor se manifesta e o primeiro em que a decretação sem urgência é possível.
+const manifestacaoAte = (notificadoEm) => somarDias(notificadoEm, PRAZO_MANIFESTACAO_DIAS);
+const decretavelDesde = (notificadoEm) => somarDias(notificadoEm, PRAZO_MANIFESTACAO_DIAS + 1);
 const PRAZO_ENTREGA_PADRAO = 120;    // Prazos ENTIDADE_PRESTACAO_PRAZO_DIAS (cada entidade tem o seu)
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
@@ -249,8 +253,8 @@ function validarDecretacao(dados, { iv, hoje }) {
     justificativa = j.texto;
   } else {
     if (!iv.notificadoEm) return { valido: false, mensagem: "Antes de decretar, o gestor precisa ser notificado por escrito e ter 5 dias para se manifestar (Estatuto, Art. 65 §3º) — ou marque a urgência, com a justificativa." };
-    const libera = somarDias(iv.notificadoEm, PRAZO_MANIFESTACAO_DIAS);
-    if (hoje < libera) return { valido: false, mensagem: `O gestor tem até ${br(libera)} para se manifestar (5 dias desde a notificação, Estatuto, Art. 65 §3º). Sem urgência, a decretação só a partir desse dia.` };
+    const libera = decretavelDesde(iv.notificadoEm);
+    if (hoje < libera) return { valido: false, mensagem: `O gestor pode se manifestar até ${br(manifestacaoAte(iv.notificadoEm))} (5 dias desde a notificação, Estatuto, Art. 65 §3º). Sem urgência, a decretação só a partir de ${br(libera)}.` };
   }
   const interventorMembroId = d.interventorMembroId == null || d.interventorMembroId === "" ? null : idDe(d.interventorMembroId);
   if (d.interventorMembroId != null && d.interventorMembroId !== "" && !interventorMembroId) return { valido: false, mensagem: "Matrícula do interventor inválida." };
@@ -377,14 +381,18 @@ function textoDecretada({ entidade, prazo }) {
 function textoCaducada({ entidade, prazo }) {
   return `A intervenção em ${entidade} perdeu a eficácia: a CLI não a ratificou até ${br(prazo)} (Regimento, Art. 47-A §2º). A diretoria afastada volta; uma nova intervenção exige nova decretação.`;
 }
-function textoPrestacaoAtrasada({ entidade, periodo, prazo }) {
-  return `A prestação de contas de ${entidade} (período ${periodo}) venceu em ${br(prazo)} e ainda não foi entregue à CLI (Estatuto, Art. 67).`;
+function textoPrestacaoAtrasada({ entidade, periodos }) {
+  const lista = (periodos || []).map((p) => `${p.codigo} (venceu em ${br(p.prazo)})`).join(", ");
+  return `A prestação de contas de ${entidade} está atrasada: ${lista}. Ainda não foi entregue à CLI (Estatuto, Art. 67).`;
+}
+function textoCorrigida({ entidade, reuniao }) {
+  return `A intervenção em ${entidade}, dada como caducada, foi corrigida: a CLI a ratificou na reunião de ${br(reuniao)}, dentro do prazo de 15 dias (Regimento, Art. 47-A §2º). A diretoria de antes da decretação foi destituída.`;
 }
 
 module.exports = {
   NATUREZAS, STATUS_ENTIDADE, FUNCOES, FUNCOES_UNICAS, STATUS_DIRIGENTE, MOTIVOS_ENCERRAMENTO, MOTIVOS_ENCERRAMENTO_MANUAL, MOTIVOS_INTERVENCAO, STATUS_INTERVENCAO, EM_CURSO,
   PERIODICIDADES, RESULTADOS_APRECIACAO, RESULTADOS_CF, RESULTADOS_AG, DESTINOS, PRAZO_RATIFICACAO_DIAS, PRAZO_MANIFESTACAO_DIAS, PRAZO_ENTREGA_PADRAO, UFS,
-  ROTULO_SITUACAO_PERIODO,
+  ROTULO_SITUACAO_PERIODO, PRAZO_CORRECAO_CADUCIDADE_DIAS, manifestacaoAte, decretavelDesde, textoCorrigida,
   texto, idDe, booleano, chaveDeComparacao, normalizarCnpj, validarCnpj, formatarCnpj, validarTipo, formacaoAtende, mensagemFormacao, validarEntidade, validarIndicacao,
   situacaoDirigente, prazoRatificacao, diasEntre, estadoEfetivo, intervencaoVale, validarApuracao, validarDecretacao, reuniaoNoPrazo, periodoDoCodigo, periodosDesde,
   situacaoDosPeriodos, validarEntrega, validarExtincao, br, textoPrazoIntervencao, textoDecretada, textoCaducada, textoPrestacaoAtrasada, somarDias, dataDoAto

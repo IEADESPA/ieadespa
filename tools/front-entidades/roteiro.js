@@ -109,32 +109,92 @@ async function prova() {
 
   console.log("== a decisão da CLI ==");
   await amb.g("entAbrirFormAcao")("ratificar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
+  ok(/Decisão da CLI sobre a intervenção — processo aberto em/.test(amb.e("entFormAcao").textContent), "o título diz de qual processo é o ato");
   const sel = amb.e("entCampo_sessaoId");
-  ok(sel && sel.options.filter((o) => o.value).length === REAL.reunioesCLI.reunioes.length, "as reuniões da CLI na escolha");
-  sel.value = String(REAL.reunioesCLI.reunioes[0].sessaoId);
+  const naJanela = REAL.reunioesCLI.reunioes.filter((x) => x.data >= IV.decretadaEm && x.data <= IV.prazoRatificacao);
+  ok(sel && naJanela.length && sel.options.filter((o) => o.value).length === naJanela.length && naJanela.length < REAL.reunioesCLI.reunioes.length,
+    "só as reuniões da CLI entre a decretação e o fim do prazo", { naJanela: naJanela.length, todas: REAL.reunioesCLI.reunioes.length });
+  ok(!amb.e("entCampo_ataReferencia"), "a ata só é pedida na correção da caducidade");
+  sel.value = String(naJanela[0].sessaoId);
   amb.e("entCampo_resultado").value = "RATIFICADA";
   amb.e("entCampo_observacao").value = "  dentro do prazo  ";
   amb.limparRegistro();
-  await amb.g("entEnviarFormAcao")(); await amb.ocioso();
+  let pend = amb.g("entEnviarFormAcao")();
+  let modal = await amb.responderModal(false);
+  await pend; await amb.ocioso();
+  ok(modal.aberto && /destituição/.test(modal.texto) && posts(amb, "entidades-vinculadas/intervencao-ratificar").length === 0, "ratificar com a diretoria afastada pede confirmação (destitui) — cancelado, nada vai", modal);
+  pend = amb.g("entEnviarFormAcao")();
+  await amb.responderModal(true);
+  await pend; await amb.ocioso();
   let p = posts(amb, "entidades-vinculadas/intervencao-ratificar");
-  ok(p.length === 1 && p[0].corpo.intervencaoId === IV.intervencaoId && p[0].corpo.sessaoId === String(REAL.reunioesCLI.reunioes[0].sessaoId) && p[0].corpo.resultado === "RATIFICADA" && p[0].corpo.observacao === "dentro do prazo",
-    "manda a intervenção, a reunião, o resultado e a observação", p[0] && p[0].corpo);
+  ok(p.length === 1 && p[0].corpo.intervencaoId === IV.intervencaoId && p[0].corpo.sessaoId === String(naJanela[0].sessaoId) && p[0].corpo.resultado === "RATIFICADA" && p[0].corpo.observacao === "dentro do prazo",
+    "confirmado: manda a intervenção, a reunião, o resultado e a observação", p[0] && p[0].corpo);
   ok(gets(amb, "entidades-vinculadas/entidade").length === 1 && !amb.e("entFormAcao").innerHTML, "depois de gravar: relê a ficha e fecha o formulário");
   ok(amb.e("entMsgFicha").textContent.includes("Salvo"), "a mensagem do servidor (como texto)");
   semAtaque(amb, "a mensagem");
+  // a caducada: a correção pede a ata
+  amb.__respostas["GET entidades-vinculadas/entidade"] = { corpo: { sucesso: true, entidade: { ...R.entidadeIntervencao.entidade, intervencoes: [{ ...R.entidadeIntervencao.entidade.intervencoes[0], status: "CADUCADA", caducadaEm: "2026-11-19" }] } } };
+  await abrirFicha(amb);
+  await amb.g("entAbrirFormAcao")(...args(botaoForm(amb, "ratificar"))); await amb.ocioso();
+  ok(!!amb.e("entCampo_ataReferencia"), "caducada: a decisão da CLI pede a referência da ata");
+  // quem decretou não vê a decisão da CLI; a indicação de entidade proposta não mostra a homologação
+  amb.__respostas["GET entidades-vinculadas/entidade"] = { corpo: { sucesso: true, entidade: { ...R.entidadeIntervencao.entidade, status: "PROPOSTA",
+    intervencoes: [{ ...R.entidadeIntervencao.entidade.intervencoes[0], decretadaPorMim: true }] } } };
+  await abrirFicha(amb);
+  ok(!botaoForm(amb, "ratificar") && /Quem decretou não registra/.test(amb.e("entFicha").textContent), "quem decretou: sem o botão da decisão da CLI, com o aviso");
+  ok(!botaoForm(amb, "homologar") && /depois da aprovação do vínculo/.test(amb.e("entFicha").textContent), "entidade ainda proposta: sem a homologação (o servidor exige o vínculo aprovado)");
+  delete amb.__respostas["GET entidades-vinculadas/entidade"];
+  await abrirFicha(amb);
+  const dirIndicado = FICHA_IV.dirigentes.find((d) => d.status === "INDICADO");
+  await amb.g("entAbrirFormAcao")("homologar", { dirigenteId: dirIndicado.dirigenteId }); await amb.ocioso();
+  ok(amb.e("entFormAcao").textContent.includes(dirIndicado.nome), "a homologação diz o nome de quem", amb.e("entFormAcao").textContent.slice(0, 120));
+  ok(amb.e("entCampo_sessaoId").options.filter((o) => o.value).every((o) => { const s = REAL.reunioesCLI.reunioes.find((x) => String(x.sessaoId) === o.value); return s && s.data >= dirIndicado.indicadoEm; }), "só as reuniões a partir da indicação");
+  ok(amb.foco() === amb.e("entCampo_sessaoId"), "o foco vai para o primeiro campo do formulário");
 
   console.log("== o duplo clique e a recusa ==");
-  await amb.g("entAbrirFormAcao")("arquivar", { intervencaoId: 77 }); await amb.ocioso();
+  await amb.g("entAbrirFormAcao")("arquivar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
   amb.e("entCampo_motivo").value = "Motivo do arquivamento";
   amb.limparRegistro();
-  await Promise.all([amb.g("entEnviarFormAcao")(), amb.g("entEnviarFormAcao")()]); await amb.ocioso();
-  ok(posts(amb, "entidades-vinculadas/apuracao-arquivar").length === 1, "dois cliques: um pedido só");
-  await amb.g("entAbrirFormAcao")("arquivar", { intervencaoId: 77 }); await amb.ocioso();
+  const c1 = amb.g("entEnviarFormAcao")(); const c2 = amb.g("entEnviarFormAcao")();
+  await amb.responderModal(true);
+  await c1; await c2; await amb.ocioso();
+  ok(posts(amb, "entidades-vinculadas/apuracao-arquivar").length === 1, "dois cliques: uma pergunta e um pedido só");
+  await amb.g("entAbrirFormAcao")("arquivar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
   amb.__respostas["POST entidades-vinculadas/apuracao-arquivar"] = { status: 422, corpo: { sucesso: false, mensagem: `Recusado ${ATAQUE}` } };
   amb.e("entCampo_motivo").value = "Outro motivo";
-  await amb.g("entEnviarFormAcao")(); await amb.ocioso();
-  ok(amb.e("entFormAcao").innerHTML && amb.e("entCampo_motivo").value === "Outro motivo" && /Recusado/.test(amb.e("entMsgFicha").textContent), "recusado: o formulário fica com o que foi digitado e a mensagem aparece");
+  pend = amb.g("entEnviarFormAcao")(); await amb.responderModal(true); await pend; await amb.ocioso();
+  ok(amb.e("entFormAcao").innerHTML && amb.e("entCampo_motivo").value === "Outro motivo" && /Recusado/.test(amb.e("entMsgForm").textContent), "recusado: o formulário fica com o que foi digitado e a mensagem aparece DENTRO dele (perto do Salvar)");
   semAtaque(amb, "a recusa");
+  // trocar de ficha durante a gravação: a resposta (recusa) não aparece na ficha nova
+  await amb.g("entAbrirFormAcao")("notificar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
+  amb.__respostas["POST entidades-vinculadas/apuracao-notificar"] = { status: 422, corpo: { sucesso: false, mensagem: "Recusa da ficha anterior" } };
+  amb.__respostas["GET entidades-vinculadas/entidade"] = { corpo: R.entidadeFinal };
+  amb.limparRegistro();
+  pend = amb.g("entEnviarFormAcao")();
+  await amb.g("entAbrirFichaAcao")(999);
+  await pend; await amb.ocioso();
+  ok(!/Recusa da ficha anterior/.test(amb.e("entFicha").textContent + amb.e("entMsgFicha").textContent), "trocou de ficha durante a gravação: a recusa da anterior não aparece na nova");
+  // e se a gravação da anterior der certo, a tela não volta sozinha para ela
+  delete amb.__respostas["GET entidades-vinculadas/entidade"];
+  await abrirFicha(amb);
+  await amb.g("entAbrirFormAcao")("notificar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
+  delete amb.__respostas["POST entidades-vinculadas/apuracao-notificar"];
+  amb.__respostas["GET entidades-vinculadas/entidade"] = { corpo: R.entidadeFinal };
+  amb.limparRegistro();
+  pend = amb.g("entEnviarFormAcao")();
+  await amb.g("entAbrirFichaAcao")(999);
+  await pend; await amb.ocioso();
+  ok(amb.e("entFicha").textContent.includes(REAL.entidadeFinal.entidade.razaoSocial) && !gets(amb, "entidades-vinculadas/entidade").some((c) => c.consulta.entidadeId === String(FICHA_IV.entidadeId)),
+    "trocou de ficha e a gravação anterior deu certo: a tela fica na nova (a anterior não é reaberta)");
+  delete amb.__respostas["GET entidades-vinculadas/entidade"];
+  await abrirFicha(amb);
+  // duplo clique num ato sem pergunta de confirmação (a notificação): um pedido só
+  await amb.g("entAbrirFormAcao")("notificar", { intervencaoId: IV.intervencaoId }); await amb.ocioso();
+  amb.e("entCampo_notificadoEm").value = "2026-11-01";
+  amb.e("entCampo_forma").value = "Carta entregue";
+  amb.limparRegistro();
+  await Promise.all([amb.g("entEnviarFormAcao")(), amb.g("entEnviarFormAcao")()]); await amb.ocioso();
+  ok(posts(amb, "entidades-vinculadas/apuracao-notificar").length === 1, "dois cliques num ato sem pergunta: um pedido só");
 
   console.log("== decretar (o Presidente) ==");
   pres.__respostas["GET entidades-vinculadas/entidade"] = { corpo: { sucesso: true, entidade: { ...R.entidadeIntervencao.entidade, intervencoes: [{ ...R.entidadeIntervencao.entidade.intervencoes[0], status: "APURACAO", decretadaEm: null }] } } };
@@ -148,12 +208,10 @@ async function prova() {
   pres.e("entCampo_fundamentacao").value = "Fundamentação suficiente para a prova";
   pres.e("entCampo_interventorNome").value = "Interventor Externo";
   pres.e("entCampo_afastaDiretoria").checked = true;
-  pres.__confirmar = false;
   pres.limparRegistro();
-  await pres.g("entEnviarFormAcao")(); await pres.ocioso();
-  ok(posts(pres, "entidades-vinculadas/intervencao-decretar").length === 0, "sem confirmar: nada é enviado");
-  pres.__confirmar = true;
-  await pres.g("entEnviarFormAcao")(); await pres.ocioso();
+  pend = pres.g("entEnviarFormAcao")(); modal = await pres.responderModal(false); await pend; await pres.ocioso();
+  ok(modal.aberto && /afastada/.test(modal.texto) && posts(pres, "entidades-vinculadas/intervencao-decretar").length === 0, "sem confirmar: nada é enviado (a pergunta diz que a diretoria fica afastada)", modal);
+  pend = pres.g("entEnviarFormAcao")(); await pres.responderModal(true); await pend; await pres.ocioso();
   p = posts(pres, "entidades-vinculadas/intervencao-decretar");
   ok(p.length === 1 && p[0].corpo.afastaDiretoria === true && p[0].corpo.urgencia === false && p[0].corpo.intervencaoId === 9 && p[0].corpo.interventorNome === "Interventor Externo", "confirmado: as marcas vão como verdadeiro/falso", p[0] && p[0].corpo);
 
@@ -240,8 +298,12 @@ const MUTACOES = [
   ["deixar o duplo clique gravar duas vezes", ["  if (entOcupado) { entMensagem(alvoMsg, \"Aguarde: a gravação anterior ainda está em andamento.\"); return null; }", ""]],
   ["esquecer os valores fixos do ato", ["const corpo = { ...entForm.fixos };", "const corpo = {};"]],
   ["mandar a marca como texto", ["corpo[c.id] = c.tipo === \"check\" ? !!el.checked : String(el.value || \"\").trim();", "corpo[c.id] = String(el.value || \"\").trim();"]],
-  ["decretar sem confirmar", ["if (entForm.chave === \"decretar\" && !window.confirm(", "if (false && !window.confirm("]],
-  ["pintar a resposta de outro login", ["  return authToken === token ? data : null;\n}\nasync function entPost", "  return data;\n}\nasync function entPost"]],
+  ["atos sem volta sem confirmar", ["    try { sim = await confirmarAcao(pergunta, \"Confirmar\"); } finally { entConfirmando = false; }", "    try { sim = true; } finally { entConfirmando = false; }"]],
+  ["mostrar todas as reuniões", ["const validas = lista.filter((s) => (!desde || s.data >= desde) && (!ate || s.data <= ate));", "const validas = lista;"]],
+  ["recusa fora do formulário", ["entMensagem(\"entMsgForm\", msg);\n    const el = entEl(\"entMsgForm\");", "entMensagem(\"entMsgFicha\", msg);\n    const el = entEl(\"entMsgForm\");"]],
+  ["a resposta da ficha anterior na nova", ["if (!r || ficha !== entPedidoFicha) return;", "if (!r) return;"]],
+  ["mostrar a decisão da CLI a quem decretou", ["&& !i.decretadaPorMim;", ";"]],
+  ["pintar a resposta de outro login", ["  return authToken === token ? data : null;\n}\n// Grava.", "  return data;\n}\n// Grava."]],
   ["não limpar a ficha na saída", ["for (const idEl of [\"entPainel\", \"entLista\", \"entFicha\",", "for (const idEl of [\"entPainel\", \"entLista\","]],
   ["mostrar todos os destinos na extinção", [".filter((d) => Array.isArray(d.naturezas) && d.naturezas.includes(e.natureza))", ""]],
   ["tirar o escape de Meus Dados", ["${entH(f.funcao)} — ${entH(f.entidade)}", "${f.funcao} — ${f.entidade}"]]

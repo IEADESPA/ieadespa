@@ -5948,12 +5948,13 @@
             <summary>➕ Cadastrar uma entidade (nasce proposta, até a CLI aprovar)</summary>
             <div class="cal-form">
               <div class="cal-form-grade">
-                <div class="input-group"><label for="entNovaRazao">Razão social</label><input type="text" id="entNovaRazao" maxlength="150" /></div>
+                <div class="input-group"><label for="entNovaRazao">Razão social (3 a 150)</label><input type="text" id="entNovaRazao" maxlength="150" /></div>
                 <div class="input-group"><label for="entNovaFantasia">Nome fantasia (opcional)</label><input type="text" id="entNovaFantasia" maxlength="100" /></div>
                 <div class="input-group"><label for="entNovaCnpj">CNPJ da matriz (final 0001; aceita o CNPJ com letras)</label><input type="text" id="entNovaCnpj" maxlength="18" placeholder="00.000.000/0001-00" /></div>
                 <div class="input-group"><label for="entNovaTipo">Tipo</label><select id="entNovaTipo"></select></div>
                 <div class="input-group"><label for="entNovaMunicipio">Município (opcional)</label><input type="text" id="entNovaMunicipio" maxlength="80" /></div>
-                <div class="input-group"><label for="entNovaUf">UF (opcional)</label><input type="text" id="entNovaUf" maxlength="2" placeholder="PA" /></div>
+                <div class="input-group"><label for="entNovaUf">UF (opcional)</label><select id="entNovaUf"></select></div>
+                <div class="input-group"><label for="entNovaAutorizacao">Autorização da Assembleia (só se a Assembleia já desfez um vínculo deste CNPJ — Estatuto, Art. 19 §1º)</label><select id="entNovaAutorizacao"></select></div>
               </div>
               <div class="input-group"><label for="entNovaFinalidade">Finalidade (10 a 500 caracteres)</label><textarea id="entNovaFinalidade" rows="3" maxlength="500" style="width:100%;"></textarea></div>
               <button type="button" class="btn-confirmar" style="width:auto;" data-on-click="entSalvarNovaAcao">Cadastrar</button>
@@ -5981,7 +5982,7 @@
               <div class="input-group"><label for="entTipoNome">Nome</label><input type="text" id="entTipoNome" maxlength="80" /></div>
               <div class="input-group"><label for="entTipoNatureza">Natureza</label><select id="entTipoNatureza"></select></div>
               <div class="input-group"><label for="entTipoFormacoes">Formações aceitas para o gestor (uma por linha; vazio = sem exigência)</label><textarea id="entTipoFormacoes" rows="3" style="width:100%;"></textarea></div>
-              <div class="input-group"><label><input type="checkbox" id="entTipoAtivo" checked /> Ativo (aparece no cadastro)</label></div>
+              <div class="input-group" id="entTipoAtivoBloco" style="display:none;"><label><input type="checkbox" id="entTipoAtivo" checked /> Ativo (aparece no cadastro)</label></div>
               <button type="button" class="btn-confirmar" style="width:auto;" data-on-click="entSalvarTipoAcao">Salvar</button>
               <button type="button" class="btn-confirmar btn-secundario" style="width:auto;" data-on-click="entNovoTipoAcao">Limpar</button>
               <p id="entMsgTipos" class="subtitle" role="status"></p>

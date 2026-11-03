@@ -30,7 +30,7 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
   // v6.9: a aptidão consulta TrilhaRequisitos (BATISMO_DISCIPULADO) — 1 query a
   // mais, sempre a ÚLTIMA da aptidão. Lista vazia = nenhuma trilha configurada.
   const SEM_REQUISITO_DE_TRILHA = [];
-  // v8.7: depois dela, os requisitos de DISCIPLINA da AFM no mesmo contexto (vazio = nenhum)
+  // v8.7/Trava 8-B: a disciplina da AFM só se exige na CONSAGRAÇÃO — o batismo não consulta esse requisito (a fila sobra vazia)
   const SEM_REQUISITO_DE_DISCIPLINA = [];
 
   test("candidato apto: todos os 4 itens ok", async () => {
@@ -63,7 +63,7 @@ describe("calcularAptidaoBatismo (Art. 80 §2º)", () => {
     });
     expect(r.apto).toBe(false);
     expect(r.itens.certidaoCivil.ok).toBe(false);
-    expect(chamadas).toHaveLength(3);
+    expect(chamadas).toHaveLength(2);
   });
 
   test("união estável COM casamento civil registrado passa nesse item", async () => {

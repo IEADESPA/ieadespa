@@ -19,3 +19,5 @@ resultados", o ano inteiro em lotes de 100 com a vez segurada) e do exame (os ob
 repetir as trilhas; quem não é obreiro e não tem nada não vê o bloco) e a do perfil (com a trilha e o link do certificado; a resposta da pessoa anterior não
 sobrescreve); a saída da sessão com tudo carregado e o que foi digitado nos formulários; a resposta atrasada do login anterior e dois pedidos do painel (vale o
 último). Fora do módulo, confere no texto o "sob observação" da credencial no Meu Painel e a seção da Academia que fecha na saída. Dezesseis mutações acusadas.
+
+Resultado (v8.6, conferido na Trava 8-B em 02/11/2026): 65 verificações, 0 falhas; 16 mutações, 16 acusadas.

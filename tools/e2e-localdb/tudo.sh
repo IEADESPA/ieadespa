@@ -80,4 +80,6 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-65-educacao-corridas.js
 # v8.7 (Seminário, migração 163 — a "preparar-escada" já a aplica)
 BASE=cenario-escada bash rodar.sh roteiro e2e-66-seminario.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-67-seminario-corridas.js
+# Trava 8-B (migração 164 — a "preparar-escada" já a aplica): as costuras da fase 8
+BASE=cenario-escada bash rodar.sh roteiro e2e-68-trava8b.js
 echo TUDO-PRONTO

@@ -110,7 +110,7 @@ async function prova() {
   await amb.ocioso();
   let t = amb.e("credMinha").textContent;
   const mc = REAL.minha.credencial;
-  ok(t.includes(mc.nome) && t.includes(mc.categoria) && t.includes(mc.codigo) && /sem data de validade/.test(t) && /Ativa/.test(t) && /habilitado/.test(t), "o cartão com nome, categoria, código, sem validade e a situação de agora", t.slice(0, 200));
+  ok(t.includes(mc.nome) && t.includes(mc.categoria) && t.includes(mc.codigo) && /sem data de validade/.test(t) && /Ativa/.test(t) && /credencial em dia/.test(t) && !/para oficiar/.test(t), "o cartão com nome, categoria, código, sem validade e a situação de agora (Trava 8-B: o Auxiliar está com a credencial em dia, mas não celebra — Art. 78 §1º)", t.slice(0, 200));
   ok(todos(amb, "credMinha").some((x) => x.localName === "img" && /^data:image\/svg\+xml/.test(x.getAttribute("src") || "")), "o QR (SVG pela sessão, como data:)");
   ok(botoes(amb, "credMinha", "credPedirImpressaoAcao").length === 1 && botoes(amb, "credMinha", "credBaixarMinhaAcao").length === 1, "baixar o PDF e pedir a impressão");
   semAtaque(amb, "Minha Credencial");

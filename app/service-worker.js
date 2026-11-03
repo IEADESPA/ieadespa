@@ -48,7 +48,10 @@
 // "sob observação" na página do QR (credencial.js, fora da casca).
 // v49 (30/10/2026): v8.7 — o Seminário como sistema acadêmico: o módulo novo modulos/seminario.js (seção Seminário da Academia, Meu histórico escolar e Turmas em que
 // leciono, o histórico no perfil) e o nível que vem do histórico na lista da Academia.
-const CACHE_NOME = "ieadespa-app-shell-v49";
+// v50 (02/11/2026): Trava 8-B — o botão da urgência do batismo (consagracoes.js), "habilitado(a) para oficiar" só para quem celebra (meu-painel.js),
+// o quadro "credencial suspensa" da Academia (afm.js), os avisos de quem celebra no casamento e na apresentação (index.html) e o motivo do
+// cancelamento sem saúde (seminario.js); a página do QR diz se a pessoa celebra ofícios (credencial.js, fora da casca).
+const CACHE_NOME = "ieadespa-app-shell-v50";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/enquetes.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

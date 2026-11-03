@@ -25,7 +25,9 @@ const afetadas = (r) => (r && r.rowsAffected && r.rowsAffected[0]) || 0;
 // Frase de recusa com os nomes de quem não pode oficiar (null = todos podem).
 async function oficiantesSemLicenca(pool, ids) {
   const licencas = await afmDb.licencasDe(pool, ids);
-  const sem = [...licencas.values()].filter((l) => !l.podeOficiar);
+  // Trava 8-B: além da licença (em dia nas funções), só Pastores, Evangelistas e Presbíteros celebram (Regimento Art. 78 §1º; Art. 80 §1º, II)
+  const sem = [...licencas.values()].filter((l) => !l.celebraOficios)
+    .map((l) => (l.podeOficiar ? { ...l, motivo: "só Pastores, Evangelistas e Presbíteros celebram o batismo — Regimento, Art. 78 §1º e Art. 80 §1º, II" } : l));
   if (!sem.length) return null;
   return `Sem licença para oficiar o batismo: ${sem.map((l) => `${l.nome} (${l.motivo})`).join("; ")}`;
 }

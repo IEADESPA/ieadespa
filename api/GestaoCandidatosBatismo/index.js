@@ -19,7 +19,9 @@ const { getPool, sql } = require("../shared/db");
 const { calcularAptidaoBatismo, registrarAceiteEstatuto, turmaNoEscopo } = require("../shared/batismo");
 const { registrarAceiteClausulaCompromissoria } = require("../shared/mediacaoArbitragem");
 const trilhas = require("../shared/trilhas");
-const { noEscopoDaPessoa, pessoaAlcancavel } = require("../shared/escopoRotas");
+const { noEscopoDaPessoa, pessoaAlcancavel, ehGeral } = require("../shared/escopoRotas");
+// Trava 8-B — Regimento Art. 70 §5º: "em casos de urgência espiritual, conversão notória ou risco de morte, autoriza-se o batismo antes da conclusão do curso"
+const MOTIVOS_URGENCIA = { URGENCIA_ESPIRITUAL: "Urgência espiritual", CONVERSAO_NOTORIA: "Conversão notória", RISCO_DE_MORTE: "Risco de morte" };
 
 const SELECT_CANDIDATO = `
   SELECT c.CandidatoId AS candidatoId, c.MembroId AS membroId, m.Nome AS nome,
@@ -28,6 +30,7 @@ const SELECT_CANDIDATO = `
          c.ParecerObservacao AS parecerObservacao, c.DiscipuladoConcluidoManual AS discipuladoConcluidoManual,
          c.MotivoReprovacao AS motivoReprovacao, c.AceiteTermoAssinadoId AS aceiteTermoAssinadoId,
          CONVERT(varchar(10), c.DataInscricao, 120) AS dataInscricao,
+         c.UrgenciaMotivo AS urgenciaMotivo, c.UrgenciaDetalhe AS urgenciaDetalhe, CONVERT(varchar(10), c.UrgenciaTermoEm, 120) AS urgenciaTermoEm,
          cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome
   FROM CandidatosBatismo c JOIN MembroReferencia m ON m.MembroId = c.MembroId
   LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
@@ -172,6 +175,38 @@ module.exports = async function (context, req) {
       await registrarAceiteClausulaCompromissoria(pool, candidato.membroId);
       await registrarAuditoria({ tabela: "CandidatosBatismo", registroId: id, acao: "Registrou aceite eletrônico do Estatuto/Regimento (Art. 80 §2º, V)", usuarioId: usuario.membroId });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Aceite do Estatuto/Regimento registrado." } };
+      return;
+    }
+
+    // Trava 8-B — o batismo de urgência (Art. 70 §5º): o batismo é Ato do Campo, presidido pelo Pastor Presidente (Art. 80 §1º) — registra o nível geral, com o
+    // motivo, o detalhe e a data do termo de compromisso do Discipulado Pós-Batismal. Com ele o curso não trava a aptidão; a trilha de discipulado (v8.5) mostra o
+    // pós-batismal pendente. `remover: true` desfaz (antes do batismo).
+    if (acao === "URGENCIA") {
+      if (!ehGeral(auth.visaoDaPermissao(usuario, "consagracoes"))) {
+        context.res = { status: 403, body: { sucesso: false, mensagem: "O batismo de urgência é autorizado pela Presidência: registra o nível geral (Regimento, Art. 70 §5º e Art. 80 §1º)." } };
+        return;
+      }
+      if (candidato.status === "BATIZADO") { context.res = { status: 200, body: { sucesso: false, mensagem: "O candidato já foi batizado." } }; return; }
+      if (Number(candidato.membroId) === Number(usuario.membroId)) { context.res = { status: 200, body: { sucesso: false, mensagem: "Ninguém registra a urgência do próprio batismo." } }; return; }
+      const { motivo, detalhe, termoEm, remover } = req.body || {};
+      if (remover === true) {
+        await pool.request().input("id", sql.Int, id)
+          .query(`UPDATE CandidatosBatismo SET UrgenciaMotivo = NULL, UrgenciaDetalhe = NULL, UrgenciaTermoEm = NULL, UrgenciaPor = NULL, UrgenciaRegistradaEm = NULL WHERE CandidatoId = @id`);
+        await registrarAuditoria({ tabela: "CandidatosBatismo", registroId: id, acao: "Retirou o batismo de urgência", usuarioId: usuario.membroId });
+        context.res = { status: 200, body: { sucesso: true, mensagem: "Urgência retirada: o curso de discipulado volta a ser exigido antes do batismo." } };
+        return;
+      }
+      const textoDetalhe = typeof detalhe === "string" ? detalhe.replace(/\s+/g, " ").trim() : "";
+      const hoje = require("../shared/dataBrasilia").hojeBrasilia();
+      const dataOk = typeof termoEm === "string" && /^\d{4}-\d{2}-\d{2}$/.test(termoEm) && new Date(`${termoEm}T00:00:00Z`).toISOString().slice(0, 10) === termoEm && termoEm <= hoje;
+      if (!Object.prototype.hasOwnProperty.call(MOTIVOS_URGENCIA, motivo)) { context.res = { status: 400, body: { sucesso: false, mensagem: "Escolha o motivo: urgência espiritual, conversão notória ou risco de morte (Art. 70 §5º)." } }; return; }
+      if (textoDetalhe.length < 10 || textoDetalhe.length > 300) { context.res = { status: 400, body: { sucesso: false, mensagem: "Descreva a situação (de 10 a 300 caracteres; sem diagnóstico de saúde)." } }; return; }
+      if (!dataOk) { context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a data em que o candidato assinou o termo de compromisso do Discipulado Pós-Batismal (até hoje)." } }; return; }
+      await pool.request().input("id", sql.Int, id).input("mo", sql.NVarChar(30), motivo).input("de", sql.NVarChar(300), textoDetalhe).input("te", sql.Date, termoEm).input("por", sql.Int, usuario.membroId)
+        .query(`UPDATE CandidatosBatismo SET UrgenciaMotivo = @mo, UrgenciaDetalhe = @de, UrgenciaTermoEm = @te, UrgenciaPor = @por, UrgenciaRegistradaEm = SYSUTCDATETIME() WHERE CandidatoId = @id`);
+      // a auditoria guarda o motivo, não o detalhe (pode citar saúde)
+      await registrarAuditoria({ tabela: "CandidatosBatismo", registroId: id, acao: "Registrou o batismo de urgência (Art. 70 §5º)", usuarioId: usuario.membroId, dadosDepois: { motivo, termoEm } });
+      context.res = { status: 200, body: { sucesso: true, mensagem: `Batismo de urgência registrado (${MOTIVOS_URGENCIA[motivo]}): o curso não trava a aptidão, e o Discipulado Pós-Batismal fica obrigatório depois.` } };
       return;
     }
 

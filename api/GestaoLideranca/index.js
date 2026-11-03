@@ -136,6 +136,15 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
     const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "LIDERANCA", alvoChave: String(papelId), membroId });
     if (formacao.bloqueado) return { sucesso: false, mensagem: formacao.mensagemBloqueio };
   }
+  // Trava 8-B — Regimento Art. 67 §1º: ninguém assume a direção de congregação sem o CHM válido. Aviso (não trava): até o cadastro dos obreiros e dos CHMs estar
+  // completo, travar deixaria congregações sem dirigente — decisão que fica com o responsável.
+  let avisoCHM = "";
+  const nomePapel = !mesmoPapel ? ((await pool.request().input("id", sql.Int, papelId).query(`SELECT Nome FROM Papeis WHERE PapelId = @id`)).recordset[0] || {}).Nome : null;
+  if (!mesmoPapel && /^Dirigente de Congrega/.test(String(nomePapel || ""))) {
+    const chm = (await pool.request().input("m", sql.Int, membroId).query(`SELECT CASE WHEN EXISTS (SELECT 1 FROM Matriculas_AFM a WHERE a.MembroId = @m AND a.CertificadoHabilitacao = 1
+      AND a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = @m)) THEN 1 ELSE 0 END AS tem`)).recordset[0];
+    if (!chm.tem) avisoCHM = " ⚠️ Esta pessoa não tem o CHM: o Regimento (Art. 67 §1º) pede o Certificado de Habilitação Ministerial para assumir a direção de congregação — a AFM concede em Academia → Matrículas.";
+  }
 
   if (jaTemAcesso) {
     const request = pool.request()
@@ -202,8 +211,8 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
   });
 
   return avisoMenores
-    ? { sucesso: true, mensagem: `✅ Liderança registrada. ${avisoMenores}`, avisoMenores }
-    : { sucesso: true, mensagem: "✅ Liderança registrada." };
+    ? { sucesso: true, mensagem: `✅ Liderança registrada. ${avisoMenores}${avisoCHM}`, avisoMenores }
+    : { sucesso: true, mensagem: `✅ Liderança registrada.${avisoCHM}` };
 }
 
 module.exports = comConflito(async function (context, req) {

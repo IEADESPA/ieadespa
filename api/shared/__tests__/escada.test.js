@@ -48,10 +48,18 @@ describe("a escada (Art. 71)", () => {
     expect(situacao(av, "degrau")).toBe("DISPENSADO");
     expect(situacao(av, "dizimo")).toBe("FALTA");
     expect(av.bloqueado).toBe(true);
-    const ok = avaliar(base({ cargoAtual: "MEMBRO", cargoDesde: null, afm: null }), "PRESBITERO", "OUTRA_CONVENCAO");
-    expect(situacao(ok, "intersticio")).toBe("DISPENSADO");
+    const ok = avaliar(base({ cargoAtual: "MEMBRO", cargoDesde: null, afm: null }), "EVANGELISTA", "OUTRA_CONVENCAO");
+    expect(situacao(ok, "degrau")).toBe("DISPENSADO");
     expect(ok.bloqueado).toBe(false);
     expect(ok.nivelamento).toBe(true);   // sem matrícula, nível e CHM: dispensados agora, nivelamento depois da posse
+  });
+  // Trava 8-B — Art. 71: "ministros já ordenados" = Evangelista e Pastor (Ministro do Evangelho, VI e VII); os demais cargos sobem a escada
+  test("outra convenção só para Evangelista ou Pastor: Presbítero, Diácono e os outros, não", () => {
+    for (const alvo of ["AUXILIAR", "MISSIONARIO", "DIACONO", "PRESBITERO"]) {
+      const av = avaliar(base({ cargoAtual: "MEMBRO", cargoDesde: null }), alvo, "OUTRA_CONVENCAO");
+      expect(situacao(av, "modalidade")).toBe("FALTA");
+      expect(av.bloqueado).toBe(true);
+    }
   });
   test("o tipo que não leva a cargo da escada trava (nunca 'sobe' para Membro)", () => {
     expect(avaliar(base(), "MEMBRO").bloqueado).toBe(true);
@@ -176,7 +184,7 @@ describe("AFM: matrícula, CHM e a soberania presidencial (Art. 66 §§3º–5º
   });
   test("matrícula INATIVA trava em qualquer modalidade (é suspensão, não lacuna técnica)", () => {
     for (const m of ["INDICACAO", "NOMEACAO_PRESIDENCIAL", "OUTRA_CONVENCAO"]) {
-      expect(situacao(avaliar(base({ afm: { statusMatricula: "INATIVA", nivel: "MEDIO", chm: true } }), "DIACONO", m), "matricula")).toBe("FALTA");
+      expect(situacao(avaliar(base({ afm: { statusMatricula: "INATIVA", nivel: "MEDIO", chm: true } }), m === "OUTRA_CONVENCAO" ? "PASTOR" : "DIACONO", m), "matricula")).toBe("FALTA");
     }
   });
   test("Evangelista e Pastor só por indicação do Presidente (indicação comum trava); CIADSETA e Pastor casado são avisos", () => {

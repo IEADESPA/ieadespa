@@ -2301,7 +2301,8 @@
               <input type="text" id="casamentoConjugeNome" placeholder="Nome do cônjuge (se não for membro)" style="min-width:220px;" />
             </div>
             <div class="barra-lista">
-              <input type="text" id="casamentoCelebrante" placeholder="Celebrante" style="min-width:180px;" />
+              <input type="text" id="casamentoCelebrante" placeholder="Celebrante" style="min-width:180px;" title="Só Pastores, Evangelistas e Presbíteros com a matrícula ativa na AFM celebram, com a autorização do Pastor Presidente (Regimento, Art. 78 §1º)" aria-describedby="avisoCelebranteCasamento" />
+              <small id="avisoCelebranteCasamento" class="subtitle">Celebrante: só Pastor, Evangelista ou Presbítero em dia com a AFM (Regimento, Art. 78 §1º).</small>
               <select id="casamentoModalidade">
                 <option value="CIVIL_E_RELIGIOSO">Civil e Religioso</option>
                 <option value="SOMENTE_RELIGIOSO">Somente Religioso</option>
@@ -2334,7 +2335,8 @@
             </div>
             <div class="barra-lista">
               <input type="number" id="apresentacaoOutroPaiMatricula" placeholder="Matrícula do outro pai/mãe (se membro)" style="min-width:240px;" />
-              <input type="text" id="apresentacaoOficiante" placeholder="Oficiante" style="min-width:180px;" />
+              <input type="text" id="apresentacaoOficiante" placeholder="Oficiante" style="min-width:180px;" title="Só Pastores, Evangelistas e Presbíteros com a matrícula ativa na AFM celebram, com a autorização do Pastor Presidente (Regimento, Art. 78 §1º)" aria-describedby="avisoOficianteApresentacao" />
+              <small id="avisoOficianteApresentacao" class="subtitle">Oficiante: só Pastor, Evangelista ou Presbítero em dia com a AFM (Regimento, Art. 78 §1º).</small>
               <select id="apresentacaoModalidade">
                 <option value="SOLENE">Solene</option>
                 <option value="RESERVADA">Reservada (não gera certificado)</option>

@@ -155,6 +155,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   requisito de formação que exige uma disciplina; a declaração, o histórico e o diploma em PDF e na verificação pública; o perfil, a minha, a ficha e Meus Dados;
   lixo — com `E2E_CONTRATO=1` grava as respostas reais para `tools/front-seminario`) e `e2e-67` (corridas em processos separados: quatro matrículas no mesmo
   curso, quatro inscrições em turmas da mesma disciplina, pré-requisitos cruzados, quatro aproveitamentos, quatro conclusões e quatro históricos no mesmo dia).
+- **Trava 8-B** (migração 164), mesma base `cenario-escada` (a `preparar-escada` e a `preparar-pastoral` aplicam a 164). `e2e-68` (só quem celebra oficia o
+  batismo; a CLI por Ordenação com a credencial em dia; a vacância e a minimização na Academia e no Seminário; o docente em exercício e o Reitor homologado; a
+  rematrícula com a reciclagem registrada; a Prova de Reintegração e o marco de si mesmo; a urgência do batismo; a taxa da consagração; o Seminário só em
+  novembro; o nível lançado à mão desfeito pelo cancelamento do curso).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

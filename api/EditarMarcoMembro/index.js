@@ -46,6 +46,15 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Trava 8-B — a mesma regra do registro: o marco "só do nível geral" (o batismo no Espírito Santo conta para a escada) não se corrige na própria pessoa
+  if (Number(atual.MembroId) === Number(usuario.membroId)) {
+    const tipo = (await pool.request().input("c", sql.NVarChar(30), atual.Tipo).query(`SELECT TOP 1 SoNivelGeral FROM TiposMarco WHERE Codigo = @c`)).recordset[0];
+    if (tipo && tipo.SoNivelGeral) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém corrige em si mesmo um marco só do nível geral: peça a outra pessoa do nível geral." } };
+      return;
+    }
+  }
+
   const descricaoFinal = descricao !== undefined ? String(descricao).trim().slice(0, 500) : atual.Descricao;
   const dataMarcoFinal = dataMarco !== undefined ? dataMarco : atual.DataMarco;
   const dataAproximadaFinal = dataAproximada !== undefined ? Boolean(dataAproximada) : atual.DataAproximada;

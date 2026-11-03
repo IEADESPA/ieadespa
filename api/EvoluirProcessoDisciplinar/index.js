@@ -189,6 +189,25 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Informe 'resultadoProva' válido: APROVADO ou REPROVADO." } };
       return;
     }
+    // Trava 8-B — ninguém registra a prova do próprio processo; a data é válida, não é futura e não é antes do fim da pena (Art. 77 §1º: a prova vem depois)
+    if (Number(atual.MembroId) === Number(usuario.membroId)) {
+      context.res = { status: 422, body: { sucesso: false, mensagem: "Ninguém registra a Prova de Reintegração do próprio processo." } };
+      return;
+    }
+    const hojeProva = require("../shared/dataBrasilia").hojeBrasilia();
+    if (dataProva != null && dataProva !== "") {
+      const d = String(dataProva);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`)) || new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) !== d) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Data da prova inválida (dia/mês/ano)." } };
+        return;
+      }
+      if (d > hojeProva) { context.res = { status: 400, body: { sucesso: false, mensagem: "A data da prova não pode ser no futuro." } }; return; }
+      const fimPena = atual.DataTerminoPrevisao ? new Date(atual.DataTerminoPrevisao).toISOString().slice(0, 10) : null;
+      if (codigoPena !== "DISCIPLINA_RIGOROSA" && fimPena && d <= fimPena) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "A prova é depois do fim da suspensão (Regimento, Art. 77 §1º)." } };
+        return;
+      }
+    }
     await pool.request().input("id", sql.Int, processoId).input("resultado", sql.NVarChar(20), resultadoProva).input("data", sql.Date, dataProva || null)
       .query(`UPDATE ProcessosDisciplinares SET ResultadoProvaReintegracao = @resultado, DataProvaReintegracao = COALESCE(@data, CAST(SYSUTCDATETIME() AS DATE)) WHERE ProcessoId = @id`);
     await registrarAuditoria({

@@ -127,7 +127,7 @@ function validarTaxa(corpo, hojeIso) {
   return { valido: true, taxa: { pagoEm: d.data, valor, forma: c.forma } };
 }
 
-function validarCerimonia(corpo, hojeIso) {
+function validarCerimonia(corpo, hojeIso, valorPadrao = VALOR_TAXA_REFERENCIA) {
   const c = corpo || {};
   const data = typeof c.dataCerimonia === "string" ? c.dataCerimonia.trim() : "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || Number.isNaN(Date.parse(`${data}T00:00:00Z`)) || new Date(`${data}T00:00:00Z`).toISOString().slice(0, 10) !== data) {
@@ -138,7 +138,7 @@ function validarCerimonia(corpo, hojeIso) {
   const local = textoObrigatorio(c.local, { minimo: 3, maximo: 200, rotulo: "O local" });
   if (!local.valido) return local;
   if (!Object.prototype.hasOwnProperty.call(OCASIOES, c.ocasiao)) return { valido: false, mensagem: "A consagração ocorre na Assembleia Geral Ordinária ou em Sessão Magna ou Solene da CLI (Regimento, Art. 75, caput, e Art. 15, II)." };
-  const valor = c.valorTaxa == null || c.valorTaxa === "" ? VALOR_TAXA_REFERENCIA : Number(c.valorTaxa);
+  const valor = c.valorTaxa == null || c.valorTaxa === "" ? Number(valorPadrao) : Number(c.valorTaxa);
   if (!Number.isFinite(valor) || valor <= 0 || valor > 10000 || !centavosExatos(valor)) return { valido: false, mensagem: "Valor da taxa inválido (em reais, com até 2 casas)." };
   return { valido: true, cerimonia: { dataCerimonia: data, local: local.texto, ocasiao: c.ocasiao, valorTaxa: valor } };
 }

@@ -81,6 +81,27 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
       .query(`UPDATE EbdAlunos SET Ativo = 0, EncerradoEm = SYSUTCDATETIME(), AtualizadoEm = SYSUTCDATETIME() WHERE MembroId = @id AND Ativo = 1`);
   }
 
+  // Trava 8-B — AFM e Seminário (v8.1, v8.7). O Corpo Docente é função (como lecionar na EBD): sai em toda vacância — a Reitoria fica vaga. Quem deixa a igreja
+  // (não a disciplina nem a licença de candidatura, que mantêm o aluno, como na EBD): a matrícula atual da AFM fica INATIVA (quem voltar recomeça como candidato — o
+  // Regimento Art. 132 §2º, III: "não se restaurando registro anterior"), os cursos "cursando" e as inscrições em turma ainda aberta se cancelam.
+  await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .query(`IF OBJECT_ID(N'dbo.AFMCorpoDocente', N'U') IS NOT NULL
+              UPDATE AFMCorpoDocente SET DataFim = CASE WHEN DataInicio > @hoje THEN DataInicio ELSE @hoje END, MotivoFim = N'Vacância (saída, disciplina ou licença)'
+              WHERE MembroId = @id AND DataFim IS NULL`);
+  if (!MOTIVOS_QUE_MANTEM_ALUNO_EBD.has(motivo)) {
+    await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+      .query(`UPDATE a SET StatusMatricula = N'INATIVA' FROM Matriculas_AFM a WHERE a.MembroId = @id AND a.StatusMatricula = N'ATIVA'
+                AND a.MatriculaId = (SELECT MAX(a2.MatriculaId) FROM Matriculas_AFM a2 WHERE a2.MembroId = @id);
+              IF OBJECT_ID(N'dbo.AFMCursoMatriculas', N'U') IS NOT NULL
+              BEGIN
+                UPDATE ta SET Situacao = N'CANCELADO', CanceladoEm = SYSUTCDATETIME(), MotivoCancelamento = N'Saída do rol de membros', Nota = NULL, HorasPresentes = NULL,
+                       Resultado = NULL, LancadoPor = NULL, LancadoEm = NULL
+                FROM AFMTurmaAlunos ta JOIN AFMTurmas t ON t.TurmaId = ta.TurmaId
+                WHERE ta.MembroId = @id AND ta.Situacao = N'INSCRITO' AND t.Situacao = N'ABERTA' AND NOT (t.PrimeiroEncerramentoEm IS NOT NULL AND ta.Resultado IS NOT NULL);
+                UPDATE AFMCursoMatriculas SET Situacao = N'CANCELADA', CanceladaEm = @hoje, MotivoCancelamento = N'Saída do rol de membros' WHERE MembroId = @id AND Situacao = N'CURSANDO';
+              END`);
+  }
+
   // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
   // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).
   await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);

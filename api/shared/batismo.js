@@ -64,7 +64,9 @@ async function calcularAptidaoBatismo(pool, candidato) {
   // atestação manual só vale quando nenhuma trilha foi configurada.
   const formacao = await trilhas.avaliarRequisitos(pool, { contexto: "BATISMO_DISCIPULADO", membroId: candidato.membroId });
   const verificadoPorTrilha = formacao.temRequisitos;
-  const discipuladoOk = verificadoPorTrilha ? !formacao.bloqueado : !!candidato.discipuladoConcluidoManual;
+  // Trava 8-B — Art. 70 §5º: o batismo de urgência (com o termo de compromisso do Discipulado Pós-Batismal) não espera o curso
+  const urgencia = !!candidato.urgenciaTermoEm;
+  const discipuladoOk = urgencia || (verificadoPorTrilha ? !formacao.bloqueado : !!candidato.discipuladoConcluidoManual);
 
   return {
     apto: idadeOk && certidaoCivilOk && parecerOk && discipuladoOk,
@@ -78,7 +80,10 @@ async function calcularAptidaoBatismo(pool, candidato) {
       discipulado: {
         ok: discipuladoOk,
         verificadoPorTrilha,
-        detalhe: verificadoPorTrilha
+        urgencia,
+        detalhe: urgencia
+          ? `Batismo de urgência (Regimento, Art. 70 §5º) — termo de compromisso em ${String(candidato.urgenciaTermoEm).split("-").reverse().join("/")}: o Discipulado Pós-Batismal é obrigatório depois`
+          : verificadoPorTrilha
           ? (discipuladoOk
               ? "Verificado pela trilha de formação" + (formacao.alertas.length ? ` (atenção: ${formacao.alertas.join("; ")})` : "")
               : formacao.mensagemBloqueio)

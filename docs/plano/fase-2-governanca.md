@@ -183,7 +183,7 @@ que a AFM nascer, e teria que ser refeito.
       contador de 3 faltas em si existe (é esse item aqui, ainda `[ ]`). Quando
       ambos nascerem, essa soma entre órgãos "fundidos" precisa entrar no desenho.
 
-- [ ] Verificação de perda de assento por faltas.
+- [x] Verificação de perda de assento por faltas. *(entregue na v8.1 — a antiga v7.9 —, com a soma CLI + Academia pelo Regimento Art. 69 §1º: ver [fase-8-ministerial-afm.md](fase-8-ministerial-afm.md#v81--afm-academia-de-formação-ministerial-e-cli-comparecimento-e-perda-de-assento-a-antiga-v79); a nota acima é o histórico do problema, já resolvido)*
 
 ## v2.4 — CLI (Comissões Permanentes)
 

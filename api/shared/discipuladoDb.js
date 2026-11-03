@@ -7,6 +7,7 @@ const { sql } = require("./db");
 const regra = require("./discipulado");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { registrarAuditoria } = require("./auditoria");
+const { MARCAS_DISCIPLINA } = require("./habilitacao");
 
 // a requisição no pool ou na transação (a transação do mssql não tem .request() em todas as versões)
 const rqDe = (c) => (typeof c.request === "function" ? c.request() : new sql.Request(c));
@@ -183,7 +184,9 @@ async function caminhadaDe(pool, membroId) {
 async function pessoasDasCongregacoes(pool, congregacaoIds, lista) {
   const ids = [...new Set((congregacaoIds || []).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
   if (!ids.length) return [];
-  const populacao = `SELECT MembroId FROM MembroReferencia WHERE Status IN (${STATUS_NA_TRILHA}) AND CongregacaoId IN (${ids.join(",")})`;
+  // Trava 8-B: sem quem está excluído ou fora da comunhão (a disciplina não muda o cadastro) — não entra no funil nem ganha o "próximo passo"
+  const populacao = `SELECT x.MembroId FROM (SELECT m.MembroId, ${MARCAS_DISCIPLINA} FROM MembroReferencia m WHERE m.Status IN (${STATUS_NA_TRILHA}) AND m.CongregacaoId IN (${ids.join(",")})) x
+    WHERE x.Excluido = 0 AND x.ForaDaComunhao = 0`;
   const f = await fatos(() => pool.request(), lista, populacao);
   if (!f.size) return [];
   const quem = await pool.request().query(`SELECT m.MembroId, m.Nome, m.CongregacaoId, c.Nome AS Congregacao, ex.Nome AS Extensao FROM MembroReferencia m
@@ -230,16 +233,20 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   if (abertos.length) {
     const ids = [...new Set(abertos.map((a) => Number(a.MembroId)))];
     const f = await fatos(() => pool.request(), await etapas(pool, { soAtivas: false }), `SELECT MembroId FROM MembroReferencia WHERE MembroId IN (${ids.join(",")})`);
+    const ativas = new Set(lista.map((e) => Number(e.etapaId)));
     for (const a of abertos) {
       const feita = f.get(Number(a.MembroId)) && f.get(Number(a.MembroId)).has(a.EtapaDiscipuladoId);
-      if (!feita) continue;
+      // Trava 8-B: a etapa que saiu da trilha (desativada) também fecha o item — o acompanhamento era daquele passo
+      const saiu = !ativas.has(Number(a.EtapaDiscipuladoId));
+      if (!feita && !saiu) continue;
       const t = new sql.Transaction(pool);
       await t.begin();
       try {
         const u = await new sql.Request(t).input("id", sql.Int, a.ItemId)
-          .query(`UPDATE CuidadoItens SET Status = N'CONCLUIDO', Desfecho = N'PASSO_DADO', EncerradoEm = SYSUTCDATETIME() WHERE ItemId = @id AND Status = N'ABERTO'`);
+          .input("d", sql.NVarChar(20), feita ? "PASSO_DADO" : "OUTRO")
+          .query(`UPDATE CuidadoItens SET Status = N'CONCLUIDO', Desfecho = @d, EncerradoEm = SYSUTCDATETIME() WHERE ItemId = @id AND Status = N'ABERTO'`);
         if (u.rowsAffected[0]) {
-          await cuidado.inserirEvento(new sql.Request(t), { itemId: a.ItemId, tipo: "CONCLUIDO", membroId: null, observacao: "A pessoa deu o passo da trilha de discipulado." });
+          await cuidado.inserirEvento(new sql.Request(t), { itemId: a.ItemId, tipo: "CONCLUIDO", membroId: null, observacao: feita ? "A pessoa deu o passo da trilha de discipulado." : "A etapa saiu da trilha de discipulado (desativada)." });
           r.fechados++;
         }
         await t.commit();
@@ -251,7 +258,8 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   const pessoas = await pessoasDasCongregacoes(pool, congs.map((c) => c.CongregacaoId), lista);
   const ja = new Set((await pool.request().query(`SELECT MembroId, EtapaDiscipuladoId FROM CuidadoItens WHERE EtapaDiscipuladoId IS NOT NULL`)).recordset
     .map((l) => `${l.MembroId}:${l.EtapaDiscipuladoId}`));
-  const abertoDoTipo = new Set((await pool.request().query(`SELECT MembroId FROM CuidadoItens WHERE Tipo = N'DISCIPULADO' AND Status = N'ABERTO'`)).recordset.map((l) => Number(l.MembroId)));
+  // Trava 8-B: quem já tem o acompanhamento de NOVO CONVERTIDO aberto (v7.11) não ganha outro para o mesmo Dirigente — o do discipulado vem quando aquele fechar
+  const abertoDoTipo = new Set((await pool.request().query(`SELECT MembroId FROM CuidadoItens WHERE Tipo IN (N'DISCIPULADO', N'NOVO_CONVERTIDO') AND Status = N'ABERTO'`)).recordset.map((l) => Number(l.MembroId)));
   // quem pediu e teve a exclusão LGPD atendida não volta para a fila (o item anonimizado não guarda mais a pessoa)
   const excluidos = new Set((await pool.request().query(`SELECT MembroId FROM SolicitacoesTitularLGPD WHERE Tipo = 'EXCLUSAO' AND Status = 'ATENDIDA'`)).recordset.map((l) => Number(l.MembroId)));
   // o teto é por DIA (de Brasília): uma segunda rodada no mesmo dia só completa o que faltou
@@ -286,10 +294,13 @@ async function rotinaDiaria(pool, { agora = new Date() } = {}) {
   return r;
 }
 
-// Meus Dados: a caminhada da pessoa (o que é derivado — os marcos já saem como marcos).
+// Meus Dados: a caminhada da pessoa e os marcos do perfil (o tipo, a data, a descrição — Trava 8-B: antes só saía o que é derivado).
 async function dadosDoTitular(pool, membroId) {
   const c = await caminhadaDe(pool, membroId);
-  return { etapas: c.etapas.map((e) => ({ etapa: e.nome, feita: e.feita, data: e.data, fonte: e.fonteRotulo })), proximoPasso: c.proximo ? c.proximo.nome : null };
+  const marcos = (await pool.request().input("m", sql.Int, Number(membroId)).query(`SELECT mm.Tipo, t.Nome AS TipoNome, CONVERT(varchar(10), mm.DataMarco, 120) AS DataMarco, mm.DataAproximada, mm.Descricao
+    FROM MarcosMembro mm LEFT JOIN TiposMarco t ON t.Codigo = mm.Tipo WHERE mm.MembroId = @m ORDER BY mm.DataMarco`)).recordset;
+  return { etapas: c.etapas.map((e) => ({ etapa: e.nome, feita: e.feita, data: e.data, fonte: e.fonteRotulo })), proximoPasso: c.proximo ? c.proximo.nome : null,
+    marcos: marcos.map((l) => ({ tipo: l.TipoNome || l.Tipo, data: l.DataMarco || null, dataAproximada: !!l.DataAproximada, descricao: l.Descricao || null })) };
 }
 
 module.exports = { tiposMarco, tipoMarco, etapas, catalogo, salvarTipoMarco, salvarEtapa, temCiclo, fatos, caminhadaDe, pessoasDasCongregacoes, funil, parados, rotinaDiaria, dadosDoTitular };

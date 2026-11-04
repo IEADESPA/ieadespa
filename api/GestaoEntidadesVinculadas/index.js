@@ -131,7 +131,7 @@ module.exports = async function (context, req) {
       if (acao === "reunioes") {
         const orgao = String(consulta.orgao || "").toUpperCase();
         if (orgao !== "CLI" && orgao !== "AG") return erro(context, 400, "orgao: CLI ou AG.");
-        context.res = { status: 200, body: { sucesso: true, reunioes: await db.reunioesEncerradas(pool, orgao) } };
+        context.res = { status: 200, body: { sucesso: true, reunioes: await db.reunioesEncerradas(pool, orgao, hoje) } };
         return;
       }
       return erro(context, 404, "Ação inválida.");

@@ -177,6 +177,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Atos de nomeação, intervenção e prestação de contas: prova institucional, sem prazo final (PoliticasRetencao 'Entidades vinculadas: atos de governança'). Acesso só ao nível geral com a permissão entidades_vinculadas. O membro vê em Meus Dados as funções que ocupa ou ocupou e as intervenções em que foi o interventor."
   },
   {
+    chave: "EXPANSAO",
+    finalidade: "Registrar os pedidos de abertura de Extensão da Tenda, de emancipação de Extensão em congregação e de nova congregação, o parecer da CME, a decisão da CLI e o Encarregado de cada Extensão (Estatuto Art. 5º §§2º, 3º e 5º; Regimento Art. 23, 24 e 109-A) — v9.2",
+    titulares: "O Encarregado de cada Extensão; quem pede, emite o parecer ou registra a decisão (Dirigentes, Pastores de Área, o Secretário de Missões e a Secretaria Geral); os membros da Extensão emancipada, que passam para a congregação nova",
+    categoriasDados: ["Do Encarregado: a matrícula, as datas de início e fim e o motivo da troca", "De quem age: a matrícula e a data do pedido, do parecer, da decisão ou da desistência", "Dos membros da Extensão emancipada: só a troca da congregação no cadastro (a lista das matrículas fica na auditoria)"],
+    baseLegal: "LGPD Art. 7º, II — cumprimento de obrigação estatutária (a criação das unidades pela CLI, Estatuto Art. 5º §5º; o Encarregado de confiança do Dirigente, Regimento Art. 109-A); Art. 11, II, \"a\" para a filiação religiosa implícita no vínculo do membro com a unidade",
+    tabelasEnvolvidas: ["PedidosExpansao", "ExtensaoEncarregados", "ExtensoesTenda", "Congregacoes", "MembroReferencia"],
+    retencao: "A abertura e a emancipação são a certidão de nascimento da unidade: sem prazo final (PoliticasRetencao 'Expansão: abertura e emancipação'). O Dirigente vê só o que é da congregação dele; a CME e o nível geral veem tudo. O membro vê em Meus Dados as Extensões que encarregou ou encarrega."
+  },
+  {
     chave: "VISTORIA_ANTECEDENTES",
     finalidade: "Lavrar o Termo de Vistoria quando a Diretoria confere certidão de antecedentes criminais e de distribuição cível de quem assume liderança ou confiança, muda para área sensível, é alvo de suspeita fundada ou é solicitado pela Diretoria — guardando só o hash da certidão, nunca o documento (Regimento Art. 133 §5º; Lei 14.811/2024) — v7.6",
     titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",

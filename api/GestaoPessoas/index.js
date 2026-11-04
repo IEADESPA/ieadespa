@@ -139,9 +139,13 @@ module.exports = async function (context, req) {
       }
     }
     if (extensaoId) {
-      const ex = await pool.request().input("id", sql.Int, extensaoId).query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id`);
+      // v9.2 — a Extensão precisa estar ativa (a emancipada ou desativada só vale para quem já está nela: o registro histórico) e ser da congregação da pessoa
+      const ex = await pool.request().input("id", sql.Int, extensaoId).input("m", sql.Int, auth.idDeRota(membroId)).input("c", sql.Int, congregacaoId || null)
+        .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id
+                  AND (Ativa = 1 OR ExtensaoId = (SELECT ExtensaoId FROM MembroReferencia WHERE MembroId = @m))
+                  AND (@c IS NULL OR CongregacaoMaeId = @c)`);
       if (ex.recordset.length === 0) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida." } };
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." } };
         return;
       }
       destinoExtensaoNome = ex.recordset[0].Nome;

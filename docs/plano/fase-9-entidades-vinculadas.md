@@ -5,19 +5,19 @@
 
 ## v9.1 — Entidades vinculadas
 
-- [ ] Cadastro de entidades (hospitais, escolas, ONGs com CNPJ próprio — Art. 64-68).
-- [ ] Vínculo com a IEADESPA e controle de participação.
+- [x] Cadastro de entidades (hospitais, escolas, ONGs com CNPJ próprio — Art. 64-68).
+- [x] Vínculo com a IEADESPA e controle de participação.
 
 **Expandido pela varredura normativa (7ª rodada):**
 
-- [ ] **Intervenção com prazo fatal de ratificação** (Art. 47-A §§1º-2º): a
+- [x] **Intervenção com prazo fatal de ratificação** (Art. 47-A §§1º-2º): a
       intervenção em entidade vinculada precisa ser **ratificada pela CLI em 15
       dias, sob pena de perder a eficácia**. Contador com caducidade automática —
       é o tipo de prazo que, perdido, derruba o ato inteiro.
-- [ ] **Requisito legal de formação do gestor** (Art. 153): pedagogia para
+- [x] **Requisito legal de formação do gestor** (Art. 153): pedagogia para
       escolas, gestão hospitalar/medicina para hospitais — validado no cadastro
       da entidade, não descoberto numa fiscalização.
-- [ ] Prestação de contas da entidade vinculada à CLI, com periodicidade e alerta
+- [x] Prestação de contas da entidade vinculada à CLI, com periodicidade e alerta
       de atraso (mesmo mecanismo da v5.4).
 
 ### Desenho da v9.1 (contrato, 03/11/2026)
@@ -79,6 +79,42 @@ Permissões): cadastro, tipos, dirigentes, apuração, ratificação, prestaçã
 exercício. Tela: card novo **"Entidades Vinculadas"** no portal, com Painel (pendências: prazo de ratificação correndo, prestações atrasadas, aguardando CLI ou
 Assembleia, sem gestor habilitado), Entidades (lista e ficha) e Tipos. Meus Dados mostra à pessoa as funções que ela ocupa em entidade vinculada; ROPA e
 política de retenção atualizadas (os atos de nomeação, intervenção e prestação são prova institucional e ficam).
+
+### Como ficou a v9.1 (entregue em 04/11/2026)
+
+**Em produção desde 04/11/2026** (merge `8f5063a`; para desfazer: `git revert -m 1 8f5063a`). Migração **165** (`EntidadeTipos`, `EntidadeTipoFormacoes`,
+`EntidadesVinculadas`, `EntidadeDirigentes`, `EntidadeIntervencoes`, `EntidadePrestacoes`; permissão `entidades_vinculadas`; o prazo `ENTIDADE_PRESTACAO_PRAZO_DIAS`; cinco
+avisos; a política de retenção). Regra pura em `api/shared/entidadesVinculadas.js`, banco em `api/shared/entidadesVinculadasDb.js`, rota `/api/entidades-vinculadas/<ação>`
+(`GestaoEntidadesVinculadas`). Tela: card **Entidades Vinculadas** no portal (Painel, Entidades, Tipos), cartão em Meus Dados. Casca do service worker **v51**.
+
+**O que mudou depois das duas revisões independentes** (servidor: 2 altos, 5 médios, 7 baixos; tela: 4 médios, 10 baixos — tratados):
+
+- **O 5º dia é do gestor** (Art. 65 §3º): notificado no dia 1º, ele se manifesta até o dia 6 inteiro; a decretação sem urgência só a partir do dia 7 (antes saía
+  no dia 6). Vale na tela, no servidor e no banco.
+- **A recusa da CLI não se contorna:** a nova apuração depois de uma intervenção recusada ou caducada não aproveita a notificação antiga (o gestor é notificado de
+  novo e tem outros 5 dias), e a urgência não vale mais naquela entidade.
+- **A correção da caducidade** (a CLI ratificou a tempo, mas o registro chegou depois do 15º dia) só cabe até **10 dias** depois do prazo, exige a referência da ata e
+  avisa a todos.
+- **Extinção e vínculo desfeito encerram** a intervenção em vigor e arquivam a apuração: nada fica valendo nem avisando sobre entidade que não é mais vinculada.
+- **Art. 19 §1º:** a extinção que a Assembleia não ratificou fica guardada e só se renova com nova autorização dela; o CNPJ de um vínculo desfeito pela Assembleia só
+  volta com a autorização dela; o CNPJ de uma proposta que a CLI recusou fica livre para nova proposta. A recusa da CLI exige a reunião.
+- **A destituição** que a ratificação produz vai à Assembleia (Art. 18, VII, "c"); o Painel avisa quando uma Assembleia já passou sem o registro do que ela decidiu.
+- **Periodicidade e prazo** da prestação de contas só mudam antes de terminar o primeiro período (depois, mudariam para trás o que está em dia ou atrasado).
+- Decretar e encerrar a intervenção pedem a **confirmação recente** (chave do aparelho ou código por e-mail), como os atos da crise. A semente dos tipos só entra com o
+  catálogo vazio (renomear "Hospital" não o recria). A data de encerramento de um mandato nunca fica antes da indicação. O aviso de atraso sai um por entidade.
+- **Tela:** todo ato que não se desfaz pede confirmação no aviso do sistema, dizendo a consequência; o título do formulário diz de quem é o ato (o dirigente, o
+  período, o processo); só aparecem as reuniões que valem para o ato; a recusa aparece dentro do formulário; tabelas no padrão do app (rolagem no celular); UF em
+  lista; "Corrigir entrega" vem preenchido; trocar de ficha durante uma gravação não mistura as respostas; botões que o servidor recusaria não aparecem.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** o nepotismo do Art. 76 §2º é conferido contra quem está na **Diretoria Executiva** (o
+Estatuto não diz de quem é o parente); só o Pastor Presidente com a cadeira de Presidente decreta e encerra (na vacância, quem assumir a cadeira); a correção da
+caducidade cabe até 10 dias; depois de intervenção recusada ou caducada, sem urgência; a destituição vai à Assembleia; a verificação anual do Conselho Fiscal
+(Art. 66 §3º) anda com a prestação do ano (sem prestação entregue, o Painel já acusa o atraso); a prestação é anual por padrão, com 120 dias para entregar; o
+profissional de fora tem só nome, formação e registro (sem CPF).
+
+**Provas:** jest 6.267; banco local (`bash rodar.sh preparar-entidades`): `e2e-69` 160 (fluxos, garantias do banco, segurança e lixo), `e2e-70` corridas 11 e 12 com o
+READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-entidades`) 70, com 16 mutações acusadas; homologação: a 165 aplicada no Azure SQL, rotas com 401, teste de tela
+41704106591 só com as diferenças intencionais (base aprovada em `7be3b82`) e 41825543147 (0 divergência, 0 violação de CSP) contra a base nova.
 
 ## v9.2 — Expansão (Extensões e novas congregações)
 

@@ -126,6 +126,48 @@ READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-entidades`) 70, com 16 muta
       Missões", que precisa nascer aqui (Pastor de Área já existe — só falta
       esse cargo). Reaproveita `shared/comissoes.js`, mesmo padrão de CFO/CEP.
 
+### Desenho da v9.2 (contrato, 04/11/2026)
+
+Base legal: Estatuto Art. 5º §§2º, 3º e 5º (as congregações são filiais; as Tendas são extensões subordinadas a uma filial; a IEADESPA institui suas unidades
+"conforme deliberação da CLI") e Art. 50; Regimento Art. 23 (CME: composição e competência), Art. 24 §2º (15 dias para o parecer; sem ele, só em regime de
+urgência por 2/3), Art. 43 e 44 (Secretarias de livre nomeação do Pastor Presidente; SEMIADESPA), Art. 104-B, I (Nível 0), Art. 106, III, Art. 109-A (a Extensão:
+Encarregado de confiança do Dirigente, 100% da arrecadação à Congregação-Mãe, sem JAI) e Art. 128 §5º, V (a congregação que gera a filha "arca com o aluguel e a
+estrutura inicial").
+
+**1. O cargo e a CME.** Nasce o papel **"Secretário de Missões"** (nível Departamento, o mesmo do Líder Geral: entra na CLI pelo mesmo caminho), dado em
+Liderança à pessoa nomeada para a SEMIADESPA. A **CME é calculada** (nunca cadastro manual, o mesmo padrão da CFO e da CEP): quem lidera a SEMIADESPA hoje (o
+papel novo ou o Líder Geral antigo) e todos os **Pastores de Área** com o cargo em vigor. Ela aparece na tela das Comissões e passa a ser comissão temática
+possível dos Projetos (Art. 24).
+
+**2. O pedido de expansão.** Um processo por pedido, de três tipos:
+
+- **Abertura de Extensão da Tenda** (Nível 0): pedida pelo Dirigente da Congregação-Mãe (ou pelo nível geral), com o nome, o endereço, a justificativa (público,
+  local, como a Mãe vai sustentar) e o **Encarregado** — um membro ativo, em comunhão, da própria Congregação-Mãe (Art. 109-A, I). A Mãe precisa ser
+  congregação ativa e não rebaixada (a rebaixada pelo PSC perdeu a autonomia, Art. 129 §3º). Não passa pela CME (o Art. 23 fala em congregações e emancipações):
+  vai direto à CLI.
+- **Emancipação** de uma Extensão em Congregação: pedida pelo Dirigente da Mãe ou pelo nível geral, com o nome da nova congregação (sem homônima) e a Área
+  (a da Mãe, por padrão). Uma Extensão só tem um pedido em andamento por vez.
+- **Nova congregação** sem passar por Extensão: só o nível geral pede.
+
+**Parecer da CME** (emancipação e nova congregação): favorável ou contrário, com a fundamentação, emitido por um membro da CME que não seja quem pediu. O prazo
+de **15 dias** desde o pedido aparece na tela; vencido, o Painel acusa. Sem o parecer, a CLI só decide registrando o **regime de urgência** (2/3, como nos
+Projetos).
+
+**Decisão da CLI**: o nível geral registra a reunião da CLI (realizada e encerrada, em data igual ou posterior ao pedido e ao parecer) e o resultado. **Aprovado,
+o sistema executa na mesma gravação:** a Extensão nasce ativa com o Encarregado; a nova congregação nasce na Área escolhida; na **emancipação**, a congregação
+nasce, os membros da Extensão passam para ela (deixam de estar na Extensão), a Extensão fica inativa com a marca "emancipada em" e o acesso de quem tinha o
+escopo daquela Extensão se encerra. Toda sessão aberta cai (o escopo está no bilhete de acesso). Recusado, fica com o motivo. Quem pediu (ou o nível geral) pode
+desistir antes da decisão.
+
+**3. Depois de aberta.** O Dirigente da Mãe troca o Encarregado (com o motivo; a troca fica no histórico). Pendências calculadas no Painel: parecer da CME
+vencido, pedido esperando a CLI, Extensão ativa sem Encarregado em comunhão, congregação nascida da emancipação ainda sem Dirigente, e o Secretário de Missões
+ausente (CME sem a SEMIADESPA).
+
+**4. Quem faz o quê.** Permissão nova **`expansao`** (vem para o Secretário Geral, o Presidente, o Dirigente de Congregação, o Pastor de Área e o Secretário de
+Missões). O Dirigente vê e pede só para a congregação dele; a CME e o nível geral veem tudo; a decisão da CLI é só do nível geral. Tela: card novo **"Expansão"**
+no portal, com Painel, Pedidos (lista e ficha) e Extensões. ROPA e política de retenção atualizadas (os atos de abertura e emancipação são a certidão de
+nascimento da unidade e ficam).
+
 ## v9.3 — Distrito e macroexpansão
 
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.

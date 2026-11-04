@@ -129,6 +129,14 @@ case "$1" in
     migrar 164 2
     base salvar cenario-escada
     ;;
+  preparar-entidades)
+    # v9.1 (Entidades vinculadas): a partir da base "cenario-escada" (o esquema inteiro da FASE 8), aplica a 165 duas vezes (prova a idempotência); salva
+    # "cenario-entidades" (e2e-69 e e2e-70: cada roteiro monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-escada
+    migrar 165 2
+    base salvar cenario-entidades
+    ;;
   roteiro)
     shift
     cd "$AQUI"

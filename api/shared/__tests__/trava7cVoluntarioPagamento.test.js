@@ -323,7 +323,7 @@ describe("o resumo do mês, Meus Dados, o ROPA e a migração 155", () => {
     expect(d).toEqual({ fornecedor: { nome: "Maria", tipo: "PF", ativo: true }, avisosDePagamento: [{ codigo: "VOLUNTARIO_ATIVO", rotulo: "Pessoa voluntária", em: "2026-10-23T10:00:00" }] });
     const fonte = fs.readFileSync(path.join(__dirname, "..", "..", "MeusDadosLGPD", "index.js"), "utf8");
     expect(fonte).toMatch(/const tesouraria = await voluntarioPagamentoDb\.dadosDoTitular\(pool, alvo\);/);
-    expect(fonte).toMatch(/criseSeguranca,\s+tesouraria\s+\}/);
+    expect(fonte).toMatch(/criseSeguranca,\s+tesouraria\s*[,}]/);   // v9.1: depois dela vem o bloco das entidades vinculadas
   });
   test("ROPA: a entrada nova cita as tabelas, a base do Art. 11 (dado sensível) e a retenção", () => {
     const r = REGISTROS_TRATAMENTO.find((x) => x.chave === "VOLUNTARIO_PAGAMENTO");

@@ -252,7 +252,12 @@ const DETECTORES = {
   // v8.6 — educação continuada (Regimento Art. 68 §3º e Art. 70 §3º): antes de vencer, não depois — de outubro a dezembro, quem ainda não tem a reciclagem do ano aprovada (e
   // a AFM do nível geral, com a contagem); e, uma vez por mês, quem está sob observação, suspenso ou devendo a repescagem do exame bienal.
   AFM_RECICLAGEM_PENDENTE: { tabela: "AFMReciclagemEdicoes", detectar: (pool) => require("./educacaoContinuadaDb").detectarReciclagemPendente(pool) },
-  AFM_EXAME_PENDENTE: { tabela: "AFMExames", detectar: (pool) => require("./educacaoContinuadaDb").detectarExamePendente(pool) }
+  AFM_EXAME_PENDENTE: { tabela: "AFMExames", detectar: (pool) => require("./educacaoContinuadaDb").detectarExamePendente(pool) },
+  // v9.1 — entidades vinculadas: a decretação avisa NA HORA, no ato (sem detector). Aqui ficam o aviso DIÁRIO enquanto corre o prazo de 15 dias da ratificação pela CLI
+  // (Regimento Art. 47-A §2º), a caducidade (a rotina também a marca: a intervenção sem ratificação perde a eficácia) e, uma vez por mês, a prestação de contas atrasada (Art. 67).
+  ENTIDADE_INTERVENCAO_PRAZO: { tabela: "EntidadeIntervencoes", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrazoIntervencao(pool) },
+  ENTIDADE_INTERVENCAO_CADUCADA: { tabela: "EntidadeIntervencoes", detectar: (pool) => require("./entidadesVinculadasDb").detectarCaducadas(pool) },
+  ENTIDADE_PRESTACAO_ATRASADA: { tabela: "EntidadesVinculadas", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrestacoesAtrasadas(pool) }
 };
 
 module.exports = { DETECTORES };

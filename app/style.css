@@ -1244,3 +1244,8 @@ input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda);
 .credencial-dados { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
 .credencial-qr { width: 110px; height: 110px; }
 .credencial-codigo { padding: 6px 12px 10px; font-size: 0.85rem; letter-spacing: 0.04em; }
+
+/* v9.1 — Entidades vinculadas: o prazo fatal da CLI em destaque, o cartão de cada processo e o formulário de ação */
+.ent-prazo { border-left: 4px solid var(--cor-erro); background: var(--cor-erro-suave); padding: 8px 12px; border-radius: 6px; }
+.ent-cartao, .ent-form { margin: 10px 0; }
+.ent-form { border: 1px solid var(--cor-borda); }

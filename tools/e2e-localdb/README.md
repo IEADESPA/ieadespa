@@ -159,6 +159,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   batismo; a CLI por Ordenação com a credencial em dia; a vacância e a minimização na Academia e no Seminário; o docente em exercício e o Reitor homologado; a
   rematrícula com a reciclagem registrada; a Prova de Reintegração e o marco de si mesmo; a urgência do batismo; a taxa da consagração; o Seminário só em
   novembro; o nível lançado à mão desfeito pelo cancelamento do curso).
+- **v9.1** (Entidades vinculadas, migração 165), base `cenario-entidades` (`bash rodar.sh preparar-entidades`: a `cenario-escada` com a 165 aplicada duas vezes).
+  `e2e-69` (a migração; a porta; tipos e a formação do gestor; CNPJ de matriz e o alfanumérico; a CLI e a Assembleia; indicação, homologação e nepotismo; prestação de
+  contas por período, atraso, apreciação e Conselho Fiscal; apuração, os 5 dias, a decretação só do Presidente, a caducidade dos 15 dias e a correção dela pela reunião
+  feita a tempo; urgência, não ratificação e nova apuração; os CHECK e o índice; extinção e a Assembleia; Meus Dados; lixo em cada campo; `E2E_CONTRATO=1` grava
+  `tools/front-entidades/contrato-real.json`) e `e2e-70` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

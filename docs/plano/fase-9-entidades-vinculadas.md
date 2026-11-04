@@ -211,6 +211,55 @@ READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-expansao`) 79, com 25 muta�
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
 - [ ] Blindagem contra desvinculação (intervenção imediata).
 
+### Desenho da v9.3 (contrato, 04/11/2026)
+
+Base legal: Estatuto Art. 5º §5º (a CLI institui as unidades); Regimento Art. 6-A, III e IV (Pastores Distritais, Vice-Presidentes de Quadrante e
+Superintendentes Regionais são membros natos da CLI), Art. 53-D, I (o NIF recebe e aprova os Balanços Consolidados dos Distritos), Art. 126-K a 126-N (o
+Distrito: gatilho, CDE, autonomia, Dízimo Institucional, destituição sumária), Art. 126-P (avocação e intervenção imediata) e Art. 144, II (atraso no repasse
+é infração de intervenção). O que já existia e é reaproveitado: o cadastro de Distritos (com Quadrantes ligados a ele) e o órgão CDE criado com ele; o
+escopo DISTRITO nos acessos; a tabela de repasses institucionais (v4.15) com o percentual de 10% e a tolerância ajustáveis.
+
+**1. Ativação e desativação pela CLI.** O Distrito só fica ativo por **decreto da CLI** (Art. 126-K §2º), registrado pelo nível geral com a confirmação recente:
+a reunião da CLI (realizada e encerrada), o **gatilho** — (a) capital ou região metropolitana fora da sede de origem, ou (b) cidade com mais de 1.000.000 de
+habitantes, com a cidade, a UF, a população e a fonte (IBGE) — e o **Pastor Distrital**. O território é o que o cadastro já liga ao Distrito (Quadrantes →
+Regiões → Áreas → Congregações); a tela mostra as congregações que ele cobre e recusa o decreto sem nenhuma congregação ativa. A desativação também é decreto
+da CLI (com o motivo): encerra o acesso de toda a liderança de escopo do Distrito e derruba as sessões. Cada período de atividade fica no histórico. O cadastro
+deixa de ligar e desligar o Distrito (continua criando, renomeando e montando o território). Um Distrito que já estivesse marcado como ativo no cadastro antes
+desta versão fica ativo desde a migração, com o aviso "sem o decreto da CLI registrado" no Painel até o nível geral registrar o decreto.
+
+**2. Pastor Distrital e CDE.** Papel novo **"Pastor Distrital"** (nível Distrito, com as permissões do Pastor de Área e a nova `distritos`), nomeado e trocado
+**só pelo Pastor Presidente em exercício** ("escolhido a dedo", Art. 126-L, I), com a confirmação recente: membro ativo, em comunhão, sem processo
+disciplinar, de cargo ministerial Pastor e com a credencial em dia; o anterior sai na mesma gravação. O papel não se dá nem se tira pela tela de Liderança.
+Papel novo **"Vice-Presidente de Quadrante"** (nível Quadrante). O **CDE é calculado** (Art. 126-L, II): o Pastor Distrital (ou o Interventor, durante a
+intervenção), os Vice-Presidentes dos Quadrantes do Distrito e os Superintendentes Regionais das Regiões do Distrito. **CLI:** o Pastor Distrital, o
+Vice-Presidente de Quadrante e o Superintendente Regional passam a entrar na composição calculada da CLI por função (Art. 6-A, III e IV).
+
+**3. Autonomia financeira e Dízimo Institucional.** Do mês do decreto em diante (e até o mês anterior à desativação), o fechamento das congregações do
+território **não entra no Rateio Geral da Sede**: o repasse delas vai para o Distrito, que gere 100% (Art. 126-N, I) na conta dele; a Tesouraria Local mostra
+"repasse ao Distrito ...". O **Dízimo Institucional** do mês é **calculado, nunca digitado**: 10% (o percentual ajustável) da soma do Total Final (o mesmo valor
+que o repasse institucional da congregação já usa) dos fechamentos do mês das congregações do território; o registro na tela de Repasses só é aceito com
+todas as congregações ativas do território com o mês fechado, e mostra quais faltam. Ao ser marcado como repassado, o valor passa a contar no saldo do
+Tesouro Geral (antes o repasse de Distrito não creditava em lugar nenhum). **Balanço anual ao NIF** (Art. 126-M, II e 53-D, I): o Distrito (Pastor Distrital,
+Tesoureiro de Distrito ou Interventor) envia o balanço consolidado do ano — receitas, despesas, saldo em 31/12 e observações — até 31/03 do ano seguinte, ao
+lado do que o sistema já sabe (soma dos fechamentos do ano e Dízimo Institucional repassado); um membro do Conselho Fiscal aprova ou devolve com o motivo;
+devolvido, o Distrito reenvia (as versões ficam).
+
+**4. Blindagem e intervenção imediata.** Sinais calculados no Painel, com aviso ao Presidente: **Dízimo Institucional vencido** (mês passado da tolerância sem
+repasse: "retenção da cota", Art. 126-N, III), balanço anual não enviado ou devolvido sem reenvio depois de 31/03, Distrito ativo sem Pastor Distrital.
+**Intervenção** (Art. 126-N, III e 126-P, II): ato **só do Pastor Presidente em exercício**, com a confirmação recente, o motivo (tentativa de
+desvinculação, estatuto próprio, retenção da cota de repasse ou outra ameaça à integridade do Ministério), a fundamentação, o **Interventor** (membro ativo, em
+comunhão, sem processo, de fora da liderança destituída) e as medidas determinadas que dependem de gente (bloqueio das contas bancárias, revogação da
+procuração, providência policial ou judicial). **Na mesma gravação:** toda a liderança do Distrito é destituída (todo acesso de escopo do Distrito, mais os
+Vice-Presidentes de Quadrante e os Superintendentes Regionais do território, que compõem o CDE), as sessões deles caem, o Interventor recebe o papel novo
+**"Interventor Distrital"** (as mesmas permissões do Pastor Distrital). Uma intervenção aberta por Distrito. O **encerramento** também é do Presidente, com o
+resultado, e pode nomear o novo Pastor Distrital na mesma gravação (o acesso do Interventor termina).
+
+**5. Quem faz o quê e tela.** Permissão nova **`distritos`** (vem para o Presidente, o Secretário Geral, o Pastor Distrital, o Interventor Distrital e o
+Tesoureiro de Distrito; o Conselho Fiscal recebe em Permissões). O nível geral vê todos os Distritos; quem tem escopo de Distrito vê só o dele (posição
+financeira, balanços, CDE). Tela: aba nova **"Distritos"** dentro do card Expansão (Distritos ativos e no cadastro, a ficha com o território, o mês a mês do
+Dízimo Institucional, os balanços, o CDE, os períodos e as intervenções). Avisos, ROPA e política de retenção (os decretos e as intervenções são história
+da instituição e ficam).
+
 ## 🔒 Trava de Revisão 9-A — antes de avançar para a v9.4
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).

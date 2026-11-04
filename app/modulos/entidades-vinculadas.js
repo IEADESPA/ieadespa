@@ -26,26 +26,29 @@ const entH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const ENT_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
 const ENT_SECOES = ["painel", "entidades", "tipos"];
 
+// O dono da resposta: a matrícula e o tipo de sessão — não o bilhete, que a confirmação reforçada (428) troca no meio do ato (a resposta do próprio ato era
+// descartada e a tela ficava muda depois de gravar; revisão de 04/11/2026). A troca de login ou a saída mudam o dono.
+const entDono = () => (authToken ? `${authMatricula}|${typeof sessaoDeLiderancaNaTela === "function" && sessaoDeLiderancaNaTela() ? "senha" : "pin"}` : null);
 async function entBuscar(caminho) {
-  const token = authToken;
+  const dono = entDono();
   let res;
-  try { res = await fetchProtegido(`${API_BASE}/entidades-vinculadas/${caminho}`); } catch (e) { return authToken === token ? { semConexao: true } : null; }
+  try { res = await fetchProtegido(`${API_BASE}/entidades-vinculadas/${caminho}`); } catch (e) { return entDono() === dono ? { semConexao: true } : null; }
   const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-  return authToken === token ? data : null;
+  return entDono() === dono ? data : null;
 }
 // Grava. A mensagem (de sucesso ou de recusa) vai para `alvoMsg` só se o login ainda é o mesmo; quem chama confere se a tela ainda é a mesma.
 async function entPost(acao, corpo, alvoMsg) {
   if (entOcupado) { entMensagem(alvoMsg, "Aguarde: a gravação anterior ainda está em andamento."); return null; }
   entOcupado = true;
-  const token = authToken;
+  const dono = entDono();
   try {
     let res;
     try { res = await fetchProtegido(`${API_BASE}/entidades-vinculadas/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }); } catch (e) {
-      if (authToken === token) entMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
+      if (entDono() === dono) entMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
       return null;
     }
     const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-    if (authToken !== token) return null;
+    if (entDono() !== dono) return null;
     return data;
   } finally {
     entOcupado = false;

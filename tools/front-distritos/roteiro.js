@@ -250,6 +250,60 @@ async function prova() {
   ok(/Outro Distrito/.test(troca.e("dstFicha").textContent) && !/Salvo/.test(troca.e("dstMsgFicha").textContent) && troca.toasts().some((t) => /Salvo/.test(t)),
     "a resposta da ficha anterior vira aviso e não pinta a ficha aberta agora");
 
+  console.log("== a confirmação reforçada (428) no meio do ato ==");
+  // o servidor pede a confirmação: a tela confirma, ganha um bilhete novo e repete o pedido — a resposta continua sendo desta pessoa e aparece
+  const fator = montar({ ficha: "fichaPresidente" });
+  await abrirDistritos(fator); await abrirFicha(fator);
+  let tentativas = 0;
+  fator.__respostas["POST distritos/intervir"] = undefined;
+  fator.api.rotas["POST distritos/intervir"] = () => (++tentativas === 1 ? { status: 428, corpo: { sucesso: false, exigeFator: true, mensagem: "Confirme quem você é." } } : { status: 200, corpo: { sucesso: true, mensagem: "Intervenção decretada." } });
+  fator.ev("window.__fatorConfirmar = async () => { authToken = 'bilhete-novo'; return true; };", "fator");
+  await fator.g("dstAbrirFormAcao")("intervir"); await fator.ocioso();
+  fator.e("dstCampo_motivo").value = "DESVINCULACAO";
+  fator.e("dstCampo_fundamentacao").value = "Estatuto paralelo registrado.";
+  fator.e("dstCampo_interventorMembroId").value = "9505";
+  await confirmarEnvio(fator, true);
+  ok(tentativas === 2 && /Intervenção decretada/.test(fator.e("dstMsgFicha").textContent) && fator.e("dstFormAcao").innerHTML === "",
+    "depois da confirmação reforçada o resultado aparece e o formulário fecha (o bilhete novo é da mesma pessoa)", { tentativas, msg: fator.e("dstMsgFicha").textContent });
+
+  console.log("== o Distrito do cadastro antigo (legado) ==");
+  const leg = montar();
+  const fichaLegada = { ...R.fichaGeral.distrito, periodoAberto: { ...R.fichaGeral.distrito.periodoAberto, legado: true }, periodos: [{ ...R.fichaGeral.distrito.periodos[0], legado: true, desativadoEm: null }],
+    acoes: { ...R.fichaGeral.distrito.acoes, ativar: true } };
+  leg.__respostas["GET distritos/ficha"] = { corpo: { sucesso: true, distrito: fichaLegada } };
+  await abrirDistritos(leg); await abrirFicha(leg);
+  ficha = leg.e("dstFicha").textContent;
+  ok(/Até o decreto ser registrado, o repasse das congregações do território continua com a Sede/.test(ficha) && !/repasse das congregações do território é do Distrito/.test(ficha) && botaoForm(leg, "ativar"), "a ficha do legado diz que o repasse continua com a Sede até o decreto", ficha.slice(0, 300));
+  await leg.g("dstAbrirFormAcao")("ativar"); await leg.ocioso();
+  ok(/deixa o Rateio Geral da Sede e vai para o Distrito/.test(leg.e("dstFormAcao").textContent), "o aviso do decreto do legado diz o que acontece com o dinheiro");
+
+  console.log("== o próprio balanço, as reuniões relidas, a ficha que não relê, o Distrito sem território ==");
+  const proprio = montar({ permissoes: ["distritos"], geral: false, catalogo: "catalogosNIF", ficha: "fichaNIF" });
+  proprio.__respostas["GET distritos/ficha"] = { corpo: { sucesso: true, distrito: { ...R.fichaNIF.distrito, balancos: R.fichaNIF.distrito.balancos.map((b) => ({ ...b, enviadoPor: 1002 })) } } };
+  await abrirAba(proprio); await abrirFicha(proprio);
+  ok(!botoes(proprio, "dstFicha", "dstAbrirFormAcao").some((b) => args(b)[0] === "analisar"), "quem enviou o balanço não vê os botões de análise dele");
+  amb.g("expMostrarSecaoAcao")("painel"); await amb.ocioso();
+  amb.g("expMostrarSecaoAcao")("distritos"); await amb.ocioso();
+  ok(gets(amb, "distritos/reunioes").length >= 2, "voltar à pílula relê as reuniões da CLI (a reunião registrada depois aparece)");
+  const sem = montar({ ficha: "fichaDesativada" });
+  await abrirDistritos(sem); await abrirFicha(sem);
+  sem.__respostas["GET distritos/ficha"] = { status: 404, corpo: { sucesso: false, mensagem: "Distrito não encontrado." } };
+  await sem.g("dstAbrirFormAcao")("ativar"); await sem.ocioso();
+  sem.e("dstCampo_sessaoId").value = String(REAL.reunioes.reunioes[0].sessaoId);
+  sem.e("dstCampo_gatilho").value = "METROPOLE"; sem.e("dstCampo_cidade").value = "Belém"; sem.e("dstCampo_uf").value = "PA"; sem.e("dstCampo_fundamentacao").value = "Decreto da CLI.";
+  await confirmarEnvio(sem, true);
+  ok(sem.toasts().some((t) => /Salvo/.test(t)), "gravou e a ficha não pôde ser relida: o resultado aparece num aviso", sem.toasts());
+  const vazio = montar();
+  vazio.__respostas["GET distritos/ficha"] = { corpo: { sucesso: true, distrito: { ...R.fichaDesativada.distrito, territorio: { quadrantes: [], regioes: [], congregacoes: [] } } } };
+  await abrirDistritos(vazio); await abrirFicha(vazio);
+  await vazio.g("dstAbrirFormAcao")("ativar"); await vazio.ocioso();
+  vazio.e("dstCampo_sessaoId").value = String(REAL.reunioes.reunioes[0].sessaoId);
+  vazio.e("dstCampo_gatilho").value = "METROPOLE"; vazio.e("dstCampo_cidade").value = "Belém"; vazio.e("dstCampo_uf").value = "PA"; vazio.e("dstCampo_fundamentacao").value = "Decreto da CLI.";
+  vazio.limparRegistro();
+  await vazio.g("dstEnviarFormAcao")(); await vazio.ocioso();
+  ok(/nenhuma congregação ativa/.test(vazio.e("dstMsgForm").textContent) && vazio.e("modalOverlay").classList.contains("escondido") && posts(vazio, "distritos/ativar").length === 0,
+    "Distrito sem território: avisa antes da pergunta e da confirmação reforçada");
+
   console.log("== Meus Dados ==");
   const cartao = amb.g("dstCartaoMeusDados")({ distritos: { balancosEnviados: [{ distrito: `Belém ${ATAQUE}`, ano: 2025, versao: 1, status: `Enviado ${ATAQUE}`, enviadoEm: "2026-01-10" }],
     intervencoesComoInterventor: [{ distrito: `Manaus ${ATAQUE}`, decretadaEm: "2026-02-01", encerradaEm: null }] } });
@@ -275,13 +329,19 @@ async function prova() {
 }
 
 const MUTACOES = [
-  ["distritos", "tirar o escape do nome na lista", ["<td><strong>${dstH(d.nome)}</strong></td>", "<td><strong>${d.nome}</strong></td>"]],
+  ["distritos", "tirar o escape do nome na lista", ["<strong>${dstH(d.nome)}</strong></button></td>", "<strong>${d.nome}</strong></button></td>"]],
   ["distritos", "tirar o escape do território", ["<tr><td>${dstH(c.nome)}${c.ativa", "<tr><td>${c.nome}${c.ativa"]],
   ["distritos", "tirar o escape da fundamentação da intervenção", ["<span class=\"subtitle\">${dstH(i.fundamentacao)}</span>", "<span class=\"subtitle\">${i.fundamentacao}</span>"]],
   ["distritos", "tirar o escape das medidas", ["medidas: ${i.medidas.map(dstH).join", "medidas: ${i.medidas.join"]],
   ["distritos", "tirar o escape dos rótulos do catálogo", ["`<option value=\"${dstH(o.codigo)}\">${dstH(o.rotulo)}</option>`", "`<option value=\"${dstH(o.codigo)}\">${o.rotulo}</option>`"]],
   ["distritos", "mostrar a intervenção a quem o servidor nega", ["a.intervir ? dstBotao(\"🛑 Decretar intervenção\", \"intervir\") : \"\"", "dstBotao(\"🛑 Decretar intervenção\", \"intervir\")"]],
-  ["distritos", "mostrar a análise a quem não é do NIF", ["${a.analisarBalanco && b.status === \"ENVIADO\" ?", "${b.status === \"ENVIADO\" ?"]],
+  ["distritos", "mostrar a análise a quem não é do NIF", ["${a.analisarBalanco && b.status === \"ENVIADO\" &&", "${b.status === \"ENVIADO\" &&"]],
+  ["distritos", "a análise do próprio balanço", [" && Number(b.enviadoPor) !== Number(authMatricula) ?", " ?"]],
+  ["distritos", "conferir o dono pelo bilhete (a confirmação reforçada o troca)", ["const dstDono = () => (authToken ? `${authMatricula}|", "const dstDono = () => (authToken ? `${authToken}|"]],
+  ["distritos", "o legado dizendo que o repasse já é do Distrito", ["Até o decreto ser registrado, o repasse das congregações do território continua com a Sede.", "O repasse das congregações do território é do Distrito."]],
+  ["distritos", "as reuniões lidas uma vez só", ["  if (dstCatalogos.papeis && dstCatalogos.papeis.geral) {", "  if (dstCatalogos.papeis && dstCatalogos.papeis.geral && !dstReunioes.length) {"]],
+  ["distritos", "a ficha que não relê esconde o resultado", ["  } else mostrarToast(msg, \"sucesso\");", "  }"]],
+  ["distritos", "ativar sem território pede a confirmação", ["          if (!legado && !congs.some((x) => x.ativa)) return", "          if (false) return"]],
   ["distritos", "deixar o duplo clique gravar duas vezes", ["  if (dstOcupado) { dstMensagem(alvoMsg, \"Aguarde: a gravação anterior ainda está em andamento.\"); return null; }", ""]],
   ["distritos", "a pergunta aberta duas vezes", ["    if (dstConfirmando) return;\n", ""]],
   ["distritos", "esquecer o Distrito no ato", [": { distritoId: Number(dstFicha.distritoId) };", ": {};"]],
@@ -290,11 +350,11 @@ const MUTACOES = [
   ["distritos", "recusa fora do formulário", ["dstMensagem(\"dstMsgForm\", msg);\n    const el = dstEl(\"dstMsgForm\");", "dstMensagem(\"dstMsgFicha\", msg);\n    const el = dstEl(\"dstMsgForm\");"]],
   ["distritos", "a resposta da ficha anterior na nova", ["  if (ficha !== dstPedidoFicha) {\n    // trocou", "  if (false) {\n    // trocou"]],
   ["distritos", "perguntar antes de conferir o que falta", ["  if (problema) { dstMensagem(\"dstMsgForm\", problema); return; }", ""]],
-  ["distritos", "não conferir o gatilho (b)", ["conferir: (c) => (c.gatilho === \"MILHAO\"", "conferir: (c) => (false"]],
+  ["distritos", "não conferir o gatilho (b)", ["if (c.gatilho === \"MILHAO\" && !(", "if (false && !("]],
   ["distritos", "mandar a população em branco", ["  if (corpo.populacao === \"\") delete corpo.populacao;", ""]],
-  ["distritos", "pintar a resposta de outro login", ["  return authToken === token ? data : null;\n}\nasync function dstPost", "  return data;\n}\nasync function dstPost"]],
+  ["distritos", "pintar a resposta de outro login", ["  return dstDono() === dono ? data : null;\n}\nasync function dstPost", "  return data;\n}\nasync function dstPost"]],
   ["distritos", "não limpar a ficha na saída", ["for (const idEl of [\"dstLista\", \"dstFicha\",", "for (const idEl of [\"dstLista\","]],
-  ["distritos", "quem não é do nível geral pede as reuniões", ["    if (cat.papeis && cat.papeis.geral) {", "    if (true) {"]],
+  ["distritos", "quem não é do nível geral pede as reuniões", ["  if (dstCatalogos.papeis && dstCatalogos.papeis.geral) {", "  if (true) {"]],
   ["distritos", "tirar o escape de Meus Dados", ["Balanço de ${dstH(b.ano)} do ${dstH(b.distrito)}", "Balanço de ${dstH(b.ano)} do ${b.distrito}"]],
   ["distritos", "a análise sem o balanço", ["{ balancoId: Number(fixos.balancoId), decisao: fixos.decisao }", "{ decisao: fixos.decisao }"]],
   ["expansao", "a pílula dos Distritos sem a permissão", ["if (b) b.style.display = expPermite(s) ? \"\" : \"none\";", "if (b) b.style.display = \"\";"]],

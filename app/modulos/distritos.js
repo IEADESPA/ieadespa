@@ -26,26 +26,29 @@ const DST_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente 
 const DST_SITUACAO_MES = { REPASSADO: "✅ repassado à Sede", REGISTRADO: "registrado, esperando o repasse", APURAVEL: "todas fecharam: pronto para registrar", ABERTO: "falta fechamento",
   SEM_MOVIMENTO: "sem movimento a apurar" };
 
+// O dono da resposta: a matrícula e o tipo de sessão — não o bilhete, que a confirmação reforçada (428) troca no meio do ato (a resposta do próprio ato era
+// descartada e a tela ficava muda depois de gravar; revisão de 04/11/2026). A troca de login ou a saída mudam o dono.
+const dstDono = () => (authToken ? `${authMatricula}|${typeof sessaoDeLiderancaNaTela === "function" && sessaoDeLiderancaNaTela() ? "senha" : "pin"}` : null);
 async function dstBuscar(caminho) {
-  const token = authToken;
-  if (!token) return null;
+  const dono = dstDono();
+  if (!dono) return null;
   let res;
-  try { res = await fetchProtegido(`${API_BASE}/distritos/${caminho}`); } catch (e) { return authToken === token ? { semConexao: true } : null; }
+  try { res = await fetchProtegido(`${API_BASE}/distritos/${caminho}`); } catch (e) { return dstDono() === dono ? { semConexao: true } : null; }
   const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-  return authToken === token ? data : null;
+  return dstDono() === dono ? data : null;
 }
 async function dstPost(acao, corpo, alvoMsg) {
   if (dstOcupado) { dstMensagem(alvoMsg, "Aguarde: a gravação anterior ainda está em andamento."); return null; }
   dstOcupado = true;
-  const token = authToken;
+  const dono = dstDono();
   try {
     let res;
     try { res = await fetchProtegido(`${API_BASE}/distritos/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }); } catch (e) {
-      if (authToken === token) dstMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
+      if (dstDono() === dono) dstMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
       return null;
     }
     const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-    if (authToken !== token) return null;
+    if (dstDono() !== dono) return null;
     return data;
   } finally {
     dstOcupado = false;
@@ -71,13 +74,14 @@ async function dstAbrirAcao() {
     if (cat === null || meu !== dstPedidoOpcoes) return;
     if (!cat.sucesso) { dstEl("dstLista").innerHTML = cat.semConexao ? DST_SEM_CONEXAO : `<p class='subtitle'>${dstH(cat.mensagem)}</p>`; return; }
     dstCatalogos = cat;
-    // as reuniões da CLI só servem a quem registra os decretos (o nível geral): os demais nem pedem
-    if (cat.papeis && cat.papeis.geral) {
-      const reu = await dstBuscar("reunioes");
-      if (reu === null || meu !== dstPedidoOpcoes) return;
-      dstReunioesFalhou = !(reu && reu.sucesso && Array.isArray(reu.reunioes));
-      dstReunioes = dstReunioesFalhou ? [] : reu.reunioes;
-    }
+  }
+  // as reuniões da CLI só servem a quem registra os decretos (o nível geral): os demais nem pedem. Relidas a cada abertura da pílula — quem registra e encerra a
+  // reunião em Órgãos Centrais e volta encontra a reunião na lista (revisão de 04/11/2026)
+  if (dstCatalogos.papeis && dstCatalogos.papeis.geral) {
+    const reu = await dstBuscar("reunioes");
+    if (reu === null || meu !== dstPedidoOpcoes) return;
+    dstReunioesFalhou = !(reu && reu.sucesso && Array.isArray(reu.reunioes));
+    dstReunioes = dstReunioesFalhou ? [] : reu.reunioes;
   }
   await dstCarregarListaAcao();
   if (dstFicha && meu === dstPedidoOpcoes) dstRenderFicha();
@@ -116,14 +120,15 @@ async function dstCarregarListaAcao() {
     alvo.innerHTML = "<p class='subtitle'>Nenhum Distrito cadastrado no seu alcance. O Distrito nasce no cadastro (Catálogos → Distritos, com os Quadrantes, as Regiões e as Áreas) e fica ativo pelo decreto da CLI, registrado aqui.</p>";
     return;
   }
-  alvo.innerHTML = `<div class="tabela-rolagem"><table class="tabela-frequencia"><thead><tr><th>Distrito</th><th>Situação</th><th>Congregações</th><th>Pastor Distrital</th><th>Sinais</th><th></th></tr></thead><tbody>${lista.map((d) => {
+  // o nome é o botão de abrir (primeira coluna: no celular ele não fica depois da coluna larga dos sinais)
+  alvo.innerHTML = `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Distrito</th><th>Situação</th><th>Congregações</th><th>Pastor Distrital</th><th>Sinais</th></tr></thead><tbody>${lista.map((d) => {
     const painel = porId.get(Number(d.distritoId));
     const extra = painel && Array.isArray(painel.aguardandoNIF) && painel.aguardandoNIF.length ? [`📨 Balanço esperando o NIF: ${painel.aguardandoNIF.map((b) => b.ano).join(", ")}.`] : [];
     const sinais = dstSinais(painel && painel.sinais, extra);
     const situacao = d.intervencaoAberta ? "🛑 Sob intervenção" : (d.ativo ? `Ativo${d.ativadoEm ? ` desde ${dstH(dstBr(d.ativadoEm))}` : ""}${d.legado ? " (sem o decreto registrado)" : ""}` : "Inativo (só no cadastro)");
-    return `<tr><td><strong>${dstH(d.nome)}</strong></td><td>${situacao}</td><td>${dstH(d.congregacoes)}</td><td>${dstH(d.pastor || "—")}</td>
-      <td>${sinais.length ? `<ul>${sinais.map((s) => `<li>${dstH(s)}</li>`).join("")}</ul>` : "—"}</td>
-      <td><button type="button" class="btn-link" aria-label="Abrir o Distrito ${dstH(d.nome)}" data-on-click="dstAbrirFichaAcao" data-args-click="${argsAttr(Number(d.distritoId))}">Abrir</button></td></tr>`;
+    return `<tr><td><button type="button" class="btn-link" id="dstAbrir_${Number(d.distritoId)}" aria-label="Abrir o Distrito ${dstH(d.nome)}" data-on-click="dstAbrirFichaAcao" data-args-click="${argsAttr(Number(d.distritoId))}"><strong>${dstH(d.nome)}</strong></button></td>
+      <td>${situacao}</td><td>${dstH(d.congregacoes)}</td><td>${dstH(d.pastor || "—")}</td>
+      <td style="white-space:normal;min-width:16em;">${sinais.length ? `<ul>${sinais.map((s) => `<li>${dstH(s)}</li>`).join("")}</ul>` : "—"}</td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
@@ -142,12 +147,15 @@ async function dstAbrirFichaAcao(distritoId) {
   dstFicha = r.distrito;
   dstRenderFicha();
   if (bloco && typeof bloco.scrollIntoView === "function") bloco.scrollIntoView({ behavior: "smooth", block: "start" });
+  const titulo = dstEl("dstFichaTitulo"); if (titulo && typeof titulo.focus === "function") titulo.focus();   // o leitor de tela começa pela ficha aberta
 }
 function dstFecharFichaAcao() {
+  const aberto = dstFicha ? Number(dstFicha.distritoId) : null;
   dstPedidoFicha++; dstFicha = null; dstForm = null;
   dstEl("dstFicha").innerHTML = "";
   dstMensagem("dstMsgFicha", "");
   const bloco = dstEl("dstBlocoFicha"); if (bloco) bloco.style.display = "none";
+  const volta = aberto ? dstEl(`dstAbrir_${aberto}`) : null; if (volta && typeof volta.focus === "function") volta.focus();   // o foco volta à linha da lista
 }
 const dstBotao = (rotulo, chave, fixos) => `<button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:2px;" data-on-click="dstAbrirFormAcao" data-args-click="${argsAttr(String(chave), fixos || {})}">${rotulo}</button>`;
 const dstPessoas = (lista, vazio) => (Array.isArray(lista) && lista.length ? lista.map((p) => `${dstH(p.nome)} <small>(mat. ${dstH(p.membroId)})</small>`).join(", ") : vazio);
@@ -159,9 +167,9 @@ function dstRenderFicha() {
   const a = d.acoes || {};
   const per = d.periodoAberto;
   const decreto = per
-    ? (per.legado ? "<p>Ativo pelo cadastro antigo, <strong>sem o decreto da CLI registrado</strong>.</p>"
+    ? (per.legado ? "<p>Ativo pelo cadastro antigo, <strong>sem o decreto da CLI registrado</strong>. Até o decreto ser registrado, o repasse das congregações do território continua com a Sede.</p>"
       : `<p>Ativo desde <strong>${dstH(dstBr(per.ativadoEm))}</strong> por decreto da CLI — ${dstH(per.gatilhoRotulo)}: ${dstH(per.cidade)}/${dstH(per.uf)}${per.populacao ? `, ${dstH(Number(per.populacao).toLocaleString("pt-BR"))} habitantes (${dstH(per.fontePopulacao)})` : ""}.</p>
-         <p class="subtitle">${dstH(per.fundamentacao)}</p>`) + `<p><small>O repasse das congregações do território é do Distrito desde ${dstH(dstMes(per.financeiroDesdeMes))}.</small></p>`
+         <p class="subtitle">${dstH(per.fundamentacao)}</p><p><small>O repasse das congregações do território é do Distrito desde ${dstH(dstMes(per.financeiroDesdeMes))}.</small></p>`)
     : "<p>Inativo: só no cadastro. Fica ativo pelo decreto da CLI (Regimento, Art. 126-K §2º).</p>";
   const sinais = dstSinais(d.sinais);
   const terr = d.territorio || {};
@@ -180,20 +188,20 @@ function dstRenderFicha() {
     a.enviarBalanco && Array.isArray(d.anosParaBalanco) && d.anosParaBalanco.length ? dstBotao("📨 Enviar o balanço anual ao NIF", "balanco") : ""
   ].filter(Boolean).join(" ");
   dstEl("dstFicha").innerHTML = `
-    <h4>🗺️ ${dstH(d.nome)}</h4>
+    <h4 id="dstFichaTitulo" tabindex="-1">🗺️ ${dstH(d.nome)}</h4>
     ${decreto}
     ${sinais.length ? `<ul>${sinais.map((s) => `<li>${dstH(s)}</li>`).join("")}</ul>` : ""}
     ${botoes ? `<div class="barra-lista">${botoes}</div>` : ""}
     <div id="dstFormAcao"></div>
     <h4>📍 Território (${dstH((terr.quadrantes || []).length)} Quadrante(s), ${dstH((terr.regioes || []).length)} Região(ões))</h4>
-    ${congs.length ? `<div class="tabela-rolagem"><table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Área</th><th>Região</th><th>Quadrante</th></tr></thead><tbody>${congs.map((c) => `
+    ${congs.length ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Área</th><th>Região</th><th>Quadrante</th></tr></thead><tbody>${congs.map((c) => `
       <tr><td>${dstH(c.nome)}${c.ativa ? "" : " <small>(inativa)</small>"}</td><td>${dstH(c.area)}</td><td>${dstH(c.regiao)}</td><td>${dstH(c.quadrante)}</td></tr>`).join("")}</tbody></table></div>`
       : "<p class='subtitle'>Nenhuma congregação ligada: monte o território em Catálogos (Quadrantes → Regiões → Áreas).</p>"}
     <h4>🧭 CDE — Conselho Distrital Eclesiástico (Regimento, Art. 126-L, II)</h4>
     <ul><li>Pastor Distrital: ${dstPessoas(cde.pastor, "—")}</li>${Array.isArray(cde.interventor) && cde.interventor.length ? `<li>Interventor: ${dstPessoas(cde.interventor, "—")}</li>` : ""}
       <li>Vice-Presidentes de Quadrante: ${dstPessoas(cde.vices, "nenhum")}</li><li>Superintendentes Regionais: ${dstPessoas(cde.superintendentes, "nenhum")}</li></ul>
-    <h4>💰 Dízimo Institucional (${dstH(fin.percentual == null ? "" : fin.percentual)}% da arrecadação líquida consolidada — Art. 126-N, I)</h4>
-    ${meses.length ? `<div class="tabela-rolagem"><table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Fechamentos</th><th>Soma do Total Final</th><th>Dízimo</th><th>Situação</th><th>Vence</th></tr></thead><tbody>${meses.map((m) => `
+    <h4>💰 Dízimo Institucional (${fin.percentual == null ? "" : `${dstH(fin.percentual)}% `}da arrecadação líquida consolidada — Art. 126-N, I)</h4>
+    ${meses.length ? `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Fechamentos</th><th>Soma do Total Final</th><th>Dízimo</th><th>Situação</th><th>Vence</th></tr></thead><tbody>${meses.map((m) => `
       <tr><td>${dstH(dstMes(m.mes))}</td><td>${dstH(m.fechadas)} de ${dstH(m.congregacoes)}${Array.isArray(m.faltam) && m.faltam.length ? `<br><small>falta: ${m.faltam.map((c) => dstH(c.nome)).join(", ")}</small>` : ""}</td>
       <td>${dstH(dstReais(m.soma))}</td><td>${dstH(dstReais(m.valor))}</td><td>${dstH(DST_SITUACAO_MES[m.situacao] || m.situacao)}${m.motivoVencido === "RETENCAO" ? " <strong>🚩 vencido</strong>" : (m.motivoVencido === "FECHAMENTO" ? " <strong>⏳ atrasado</strong>" : "")}</td><td>${dstH(dstBr(m.venceEm))}</td></tr>`).join("")}</tbody></table></div>
       <p class="subtitle">O registro do repasse fica em Financeiro → Repasses Institucionais (origem Distrito): o valor é calculado dos fechamentos, nunca digitado.</p>`
@@ -204,7 +212,7 @@ function dstRenderFicha() {
     ${bals.length ? `<ul>${bals.map((b) => `<li><strong>${dstH(b.ano)}</strong> (versão ${dstH(b.versao)}) — ${dstH(b.statusRotulo)}: receitas ${dstH(dstReais(b.receitas))}, despesas ${dstH(dstReais(b.despesas))}, saldo ${dstH(dstReais(b.saldoFinal))}
       <small>— enviado por ${dstH(b.enviadoPorNome)} em ${dstH(dstBr(b.enviadoEm))}${b.analisadoPorNome ? `; analisado por ${dstH(b.analisadoPorNome)} em ${dstH(dstBr(b.analisadoEm))}` : ""}</small>
       ${b.observacoes ? `<br><span class="subtitle">${dstH(b.observacoes)}</span>` : ""}${b.motivoDevolucao ? `<br><strong>Devolvido:</strong> ${dstH(b.motivoDevolucao)}` : ""}
-      ${a.analisarBalanco && b.status === "ENVIADO" ? `<br>${dstBotao("✅ Aprovar", "analisar", { balancoId: Number(b.balancoId), decisao: "APROVAR", ano: Number(b.ano) })} ${dstBotao("↩️ Devolver", "analisar", { balancoId: Number(b.balancoId), decisao: "DEVOLVER", ano: Number(b.ano) })}` : ""}</li>`).join("")}</ul>`
+      ${a.analisarBalanco && b.status === "ENVIADO" && Number(b.enviadoPor) !== Number(authMatricula) ? `<br>${dstBotao("✅ Aprovar", "analisar", { balancoId: Number(b.balancoId), decisao: "APROVAR", ano: Number(b.ano) })} ${dstBotao("↩️ Devolver", "analisar", { balancoId: Number(b.balancoId), decisao: "DEVOLVER", ano: Number(b.ano) })}` : ""}</li>`).join("")}</ul>`
       : "<p class='subtitle'>Nenhum balanço enviado.</p>"}
     <h4>🛑 Intervenções (Art. 126-N, III, e 126-P, II)</h4>
     ${ivs.length ? `<ul>${ivs.map((i) => `<li><strong>${dstH(i.motivoRotulo)}</strong> — decretada em ${dstH(dstBr(i.decretadaEm))}; Interventor: ${dstH(i.interventor && i.interventor.nome)};
@@ -212,7 +220,7 @@ function dstRenderFicha() {
       <br><span class="subtitle">${dstH(i.fundamentacao)}</span>${i.aberta ? "<br><strong>Aberta.</strong>" : `<br>Encerrada em ${dstH(dstBr(i.encerradaEm))}: ${dstH(i.resultado)}`}</li>`).join("")}</ul>`
       : "<p class='subtitle'>Nenhuma.</p>"}
     <h4>📜 Períodos de atividade</h4>
-    ${pers.length ? `<ul>${pers.map((p) => `<li>${p.legado ? "Ativo pelo cadastro antigo" : `Decreto de ${dstH(dstBr(p.ativadoEm))}`} — repasse do Distrito desde ${dstH(dstMes(p.financeiroDesdeMes))}${p.desativadoEm
+    ${pers.length ? `<ul>${pers.map((p) => `<li>${p.legado ? "Ativo pelo cadastro antigo, sem decreto — o repasse continua com a Sede até o decreto ser registrado" : `Decreto de ${dstH(dstBr(p.ativadoEm))} — repasse do Distrito desde ${dstH(dstMes(p.financeiroDesdeMes))}`}${p.desativadoEm
       ? `; desativado em ${dstH(dstBr(p.desativadoEm))} (a Sede volta a receber em ${dstH(dstMes(p.financeiroAteMes))}): ${dstH(p.desativacaoMotivo)}` : "; em vigor"}.</li>`).join("")}</ul>` : "<p class='subtitle'>Nunca esteve ativo.</p>"}`;
   if (dstForm) { dstRenderForm(); dstRestaurarCampos(digitado); }
 }
@@ -227,7 +235,7 @@ function dstRestaurarCampos(v) {
     const el = dstEl(`dstCampo_${id}`);
     if (!el) continue;
     if (typeof valor === "boolean") el.checked = valor;
-    else if (el.tagName !== "SELECT" || (el.options || []).some((o) => o.value === valor)) el.value = valor;
+    else if (el.tagName !== "SELECT" || Array.from(el.options || []).some((o) => o.value === valor)) el.value = valor;
   }
 }
 
@@ -248,10 +256,15 @@ function dstEspec(chave) {
         { id: "populacao", rotulo: "População (habitantes; obrigatória no gatilho b)", tipo: "texto", max: 13 },
         { id: "fontePopulacao", rotulo: "Fonte da população (ex.: IBGE, Censo 2022; obrigatória quando há população)", tipo: "texto", max: 200 },
         { id: "fundamentacao", rotulo: "Fundamentação do decreto (10 a 2.000)", tipo: "area", max: 2000, obrigatorio: true }],
-        aviso: legado ? "O Distrito já estava ativo pelo cadastro antigo: o decreto só fica registrado (o mês do repasse não muda)."
+        aviso: legado ? "O Distrito já estava ativo pelo cadastro antigo, mas sem efeito no dinheiro. Com o decreto registrado, a partir deste mês o repasse das congregações do território deixa o Rateio Geral da Sede e vai para o Distrito."
           : "O território é o que o cadastro liga ao Distrito. A partir deste mês, o repasse das congregações dele vai para o Distrito (não entra no Rateio Geral da Sede).",
-        conferir: (c) => (c.gatilho === "MILHAO" && !(Number(String(c.populacao || "").replace(/[.\s]/g, "")) > 1000000) ? "No gatilho (b), informe a população: mais de 1.000.000 de habitantes." : null),
-        confirmar: () => (legado ? `Registrar o decreto da CLI para o Distrito "${nome}"?`
+        conferir: (c) => {
+          if (c.gatilho === "MILHAO" && !(Number(String(c.populacao || "").replace(/[.\s]/g, "")) > 1000000)) return "No gatilho (b), informe a população: mais de 1.000.000 de habitantes.";
+          const congs = (d.territorio && Array.isArray(d.territorio.congregacoes)) ? d.territorio.congregacoes : [];
+          if (!legado && !congs.some((x) => x.ativa)) return "O Distrito ainda não cobre nenhuma congregação ativa: monte o território em Catálogos (Quadrantes → Regiões → Áreas) antes do decreto.";
+          return null;
+        },
+        confirmar: () => (legado ? `Registrar o decreto da CLI para o Distrito "${nome}"? A partir deste mês o repasse das congregações do território deixa o Rateio Geral da Sede e vai para o Distrito, que repassa só o Dízimo Institucional.`
           : `Ativar o Distrito "${nome}" pelo decreto da CLI? A partir deste mês o repasse das congregações do território vai para o Distrito, que repassa só o Dízimo Institucional à Sede.`) };
     }
     case "desativar": return { titulo: `Desativar — ${nome}`, acao: "desativar", campos: [
@@ -371,7 +384,7 @@ async function dstEnviarFormAcao() {
   if (dstFicha && Number(dstFicha.distritoId) === Number(distritoId)) {
     dstMensagem("dstMsgFicha", msg);
     const m = dstEl("dstMsgFicha"); if (m && typeof m.focus === "function") m.focus();   // o formulário sumiu: o foco vai para o resultado
-  }
+  } else mostrarToast(msg, "sucesso");   // gravou, mas a ficha não pôde ser relida: o resultado não fica escondido
   dstCarregarListaAcao();
 }
 

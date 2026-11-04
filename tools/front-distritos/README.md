@@ -16,4 +16,8 @@ lista com os sinais; a ficha (o decreto, o território, o CDE, o mês a mês, o 
 que a pessoa pode usar; o decreto (o gatilho b conferido antes da pergunta, a população em branco não vai, a pergunta com a consequência); a intervenção (a
 matrícula conferida, as medidas como verdadeiro/falso); o encerramento com o duplo clique e o segundo envio durante a gravação; o balanço (só os anos que o
 servidor oferece, a recusa dentro do formulário); a análise do NIF (devolver exige o motivo; quem não é do NIF não vê); a troca de ficha durante a gravação; o
-cartão de Meus Dados; a saída da sessão e a troca de login (a resposta atrasada não pinta).
+cartão de Meus Dados; a saída da sessão e a troca de login (a resposta atrasada não pinta); a confirmação reforçada (428) que troca o bilhete no meio do ato
+(o resultado aparece); o Distrito legado (o repasse continua com a Sede até o decreto); o próprio balanço sem a análise; as reuniões relidas ao voltar; a ficha
+que não relê depois de gravar (o resultado num aviso); o Distrito sem território avisado antes da confirmação.
+
+Resultado (v9.3, 04/11/2026, depois das duas revisões independentes): 72 verificações, 0 falhas; 32 mutações, 32 acusadas.

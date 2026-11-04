@@ -22,7 +22,10 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { round2 } = require("../shared/tesouraria");
 const { mesReferenciaValido, idOpcional, obterTrava } = require("../shared/financeiroSeguro");
+const { REPASSE_DO_DISTRITO } = require("../shared/distritos");
 
+// v9.3 — o repasse das congregações de um Distrito ativo por decreto da CLI, nos meses do período dele, é do Distrito (Regimento Art. 126-N, I: ele retém 100% e
+// repassa só o Dízimo Institucional): não entra no malote da Sede.
 async function buscarPendentes(executor) {
   const result = await executor().query(`
     SELECT f.FechamentoId AS fechamentoId, f.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
@@ -33,6 +36,7 @@ async function buscarPendentes(executor) {
     JOIN Congregacoes c ON c.CongregacaoId = f.CongregacaoId
     WHERE f.Status = 'REPASSADO'
       AND NOT EXISTS (SELECT 1 FROM RateioGeralItens ri WHERE ri.FechamentoId = f.FechamentoId)
+      AND NOT ${REPASSE_DO_DISTRITO("f", "c")}
     ORDER BY f.MesReferencia, c.Nome
   `);
   return result.recordset;

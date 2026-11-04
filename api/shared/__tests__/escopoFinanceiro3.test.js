@@ -1025,7 +1025,7 @@ describe("GestaoRepassesInstitucionais", () => {
     expect(mockConsultas).toHaveLength(0);
   });
   test("registrar: mês fora do formato, origemId malformado e nome que não é texto dão 400 sem gravar", async () => {
-    const base = { origemTipo: "DISTRITO", origemId: 1, origemNome: "Distrito 1", mesReferencia: "2026-09", valorArrecadadoLiquido: 1000 };
+    const base = { origemTipo: "DEPARTAMENTO", origemId: 1, origemNome: "Departamento 1", mesReferencia: "2026-09", valorArrecadadoLiquido: 1000 };
     for (const ruim of [{ mesReferencia: "2026-13" }, { origemId: "0x1" }, { origemNome: 5 }]) {
       expect((await chamar(hRepasses, { metodo: "POST", token: geral(), corpo: { ...base, ...ruim } })).status).toBe(400);
     }
@@ -1035,7 +1035,7 @@ describe("GestaoRepassesInstitucionais", () => {
     quando(/FROM ParametrosRepasseInstitucional/, [{ PercentualDizimoInstitucional: 10, DiasTolerancia: 5 }]);
     quando(/SELECT RepasseId FROM RepassesInstitucionais WHERE OrigemTipo/, []);
     quando(/INSERT INTO RepassesInstitucionais/, [{ RepasseId: 3 }]);
-    const r = await chamar(hRepasses, { metodo: "POST", token: geral(), corpo: { origemTipo: "DISTRITO", origemId: "1", origemNome: "Distrito 1", mesReferencia: "2026-09", valorArrecadadoLiquido: 1000 } });
+    const r = await chamar(hRepasses, { metodo: "POST", token: geral(), corpo: { origemTipo: "DEPARTAMENTO", origemId: "1", origemNome: "Departamento 1", mesReferencia: "2026-09", valorArrecadadoLiquido: 1000 } });
     expect(r.status).toBe(201);
     expect(rodou(/INSERT INTO RepassesInstitucionais/)[0].inputs).toMatchObject({ origem: 1, mes: "2026-09", valor: 100 });
   });

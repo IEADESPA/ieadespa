@@ -8,6 +8,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const tesouraria = require("../shared/tesouraria");
+const { DISTRITO_DO_MES } = require("../shared/distritos");
 
 const REGEX_MES = /^\d{4}-\d{2}$/;
 
@@ -89,12 +90,14 @@ module.exports = async function (context, req) {
     .input("valorRetidoLocal", sql.Decimal(10, 2), valorRetidoLocal)
     .input("valorRepasseGeral", sql.Decimal(10, 2), valorRepasseGeral)
     .input("fechadoPor", sql.Int, usuario.membroId)
+    // v9.3 — RepasseDistritoId: o Distrito que recebe o repasse deste mês, decidido AGORA (o território de hoje e o período com decreto da CLI); NULL = a Sede.
+    // Gravado aqui para que mudar o território depois não reescreva o passado (shared/distritos.js, DISTRITO_DO_MES).
     .query(`INSERT INTO FechamentosTesouraria
               (CongregacaoId, MesReferencia, TotalRecebido, ValorAluguel, ValorLote, TotalFinal,
-               PercentualRetencaoLocal, ValorRetidoLocal, ValorRepasseGeral, FechadoPor)
+               PercentualRetencaoLocal, ValorRetidoLocal, ValorRepasseGeral, FechadoPor, RepasseDistritoId)
             OUTPUT INSERTED.FechamentoId
-            VALUES (@congregacaoId, @mesReferencia, @totalRecebido, @valorAluguel, @valorLote, @totalFinal,
-                    @percentualRetencaoLocal, @valorRetidoLocal, @valorRepasseGeral, @fechadoPor)`);
+            SELECT @congregacaoId, @mesReferencia, @totalRecebido, @valorAluguel, @valorLote, @totalFinal,
+                   @percentualRetencaoLocal, @valorRetidoLocal, @valorRepasseGeral, @fechadoPor, ${DISTRITO_DO_MES("@congregacaoId", "@mesReferencia")}`);
   const fechamentoId = criado.recordset[0].FechamentoId;
 
   await pool.request().input("fechamentoId", sql.Int, fechamentoId)

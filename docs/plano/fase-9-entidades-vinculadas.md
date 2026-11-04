@@ -118,9 +118,9 @@ READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-entidades`) 70, com 16 muta
 
 ## v9.2 — Expansão (Extensões e novas congregações)
 
-- [ ] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.
-- [ ] Emancipação de Extensão → Congregação (CLI).
-- [ ] **CME** — Comissão de Missões e Expansão Estratégica (Regimento, Art.
+- [x] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.
+- [x] Emancipação de Extensão → Congregação (CLI).
+- [x] **CME** — Comissão de Missões e Expansão Estratégica (Regimento, Art.
       23): Secretário de Missões + Pastores de Área. Vinha adiada de v2.4
       (Comissões Permanentes) porque dependia do cargo "Secretário de
       Missões", que precisa nascer aqui (Pastor de Área já existe — só falta
@@ -164,14 +164,101 @@ vencido, pedido esperando a CLI, Extensão ativa sem Encarregado em comunhão, c
 ausente (CME sem a SEMIADESPA).
 
 **4. Quem faz o quê.** Permissão nova **`expansao`** (vem para o Secretário Geral, o Presidente, o Dirigente de Congregação, o Pastor de Área e o Secretário de
-Missões). O Dirigente vê e pede só para a congregação dele; a CME e o nível geral veem tudo; a decisão da CLI é só do nível geral. Tela: card novo **"Expansão"**
+Missões). O Dirigente vê e pede só para a congregação dele (a divisão final de quem pede cada tipo está em "Como ficou a v9.2"); a CME e o nível geral veem tudo; a decisão da CLI é só do nível geral. Tela: card novo **"Expansão"**
 no portal, com Painel, Pedidos (lista e ficha) e Extensões. ROPA e política de retenção atualizadas (os atos de abertura e emancipação são a certidão de
 nascimento da unidade e ficam).
+
+### Como ficou a v9.2 (entregue em 04/11/2026)
+
+**Em produção desde 04/11/2026** (merge `c98a250`; para desfazer: `git revert -m 1 c98a250`). Migração **166** (`PedidosExpansao`, `ExtensaoEncarregados`, o endereço, a
+abertura e a emancipação em `ExtensoesTenda`; o papel **Secretário de Missões**; a permissão `expansao`; três avisos; a política de retenção). Regra pura em
+`api/shared/expansao.js`, banco em `api/shared/expansaoDb.js`, rota `/api/expansao/<ação>` (`GestaoExpansao`); a CME calculada em `api/shared/comissoes.js`
+(`composicaoCME`), na tela das Comissões e como comissão temática dos Projetos. Tela: card **Expansão** no portal (Painel, Pedidos, Extensões), cartão em Meus Dados.
+Casca do service worker **v52**.
+
+**Quem faz o quê (como ficou, depois da revisão):** a **abertura de Extensão** e a **troca do Encarregado** são do Dirigente da Congregação-Mãe (ou do nível geral) —
+o Encarregado é "de confiança do Dirigente Local" (Art. 109-A, I); a **emancipação** pode ser pedida também pelo Pastor de Área; a **nova congregação**, só pelo nível
+geral; o **parecer** é de quem compõe a CME (nunca sobre o pedido que fez); a **decisão da CLI**, só do nível geral, com a confirmação recente (chave do aparelho ou
+código por e-mail). O Secretário de Missões age pela CME: o escopo de departamento não alcança congregação. A CME e o nível geral veem todos os pedidos; a pendência e
+o histórico do Encarregado ficam com quem cuida da Mãe.
+
+**O que mudou depois das duas revisões independentes** (servidor: 1 alta, 5 médias, 9 baixas; tela: 5 médias, 10 baixas — tratadas):
+
+- **A recusa do Encarregado não conta nada de quem é de fora:** a congregação é conferida primeiro, com a mesma resposta para a matrícula que não existe e a de outra
+  congregação. Antes, a ordem das recusas deixava um Dirigente descobrir se uma pessoa de qualquer congregação estava sob disciplina.
+- **A emancipação** passa só quem é membro (o desligado e o falecido ficam: a ficha deles é história da Mãe), leva o cadastro do dízimo para a tesouraria nova, cria a
+  JAI na hora, confere que a Extensão ainda é da mesma Mãe e encerra as sessões na própria gravação. As decisões são gravadas uma de cada vez (sem travamento cruzado).
+- A pendência do Encarregado não diz o motivo (ativo, comunhão, disciplina ou congregação); a CME de outra Área não a vê, nem o histórico.
+- "Congregação nova sem Dirigente" só sai com o papel de Dirigente (o Membro da JAI não conta). A CME deixa de fora quem está sob disciplina ou sem comunhão.
+- A permissão `expansao` é dada aos papéis **uma vez**: se a administração a tirar em Permissões, o deploy não a devolve.
+- Ninguém dá parecer de Projeto sobre o projeto que protocolou. Pessoas e Liderança não usam Extensão emancipada; o cadastro não reativa a emancipada nem exclui
+  congregação ou Extensão em uso (sem erro). O endereço da emancipada é completado campo a campo pela Extensão. O primeiro Encarregado se define sem motivo.
+- **Tela:** o que falta no formulário é avisado antes da pergunta de confirmação; voltar à aba não apaga o que foi digitado; a mensagem do pedido novo aparece na
+  ficha; o tipo do pedido diz se passa pela CME e avisa quando não há Mãe ou Extensão para escolher; a lista que não chegou não manda "registrar a reunião"; o
+  histórico tem o seu contador; rolagem no celular, nomes nos botões para o leitor de tela; a saída da sessão volta ao Painel.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a abertura de Extensão vai direto à CLI, sem a CME (o Art. 23 fala em congregações
+e emancipações); sem o parecer da CME em 15 dias, a CLI só decide registrando a urgência por 2/3 (o mesmo dos Projetos, Art. 24 §2º); na emancipação, a matrícula na
+EBD da Mãe e os cargos locais na Mãe não mudam sozinhos (o Superintendente e o Dirigente ajustam); o acesso de escopo da Extensão emancipada termina e todas as
+sessões caem; a numeração de abertura das congregações (Estatuto Art. 5º §2º) não está no sistema; o cadastro de Congregações e Extensões continua servindo para
+registrar as que já existem.
+
+**Provas:** jest 6.296; banco local (`bash rodar.sh preparar-expansao`): `e2e-71` 172 (fluxos, garantias do banco, segurança e lixo), `e2e-72` corridas 20 e 21 com o
+READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-expansao`) 79, com 25 mutações acusadas; homologação: a 166 aplicada no Azure SQL, rotas com 401, teste de tela da homologação com 0 divergência e 0 violação de CSP (execução 41855454625, 1.363 ações).
 
 ## v9.3 — Distrito e macroexpansão
 
 - [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
 - [ ] Blindagem contra desvinculação (intervenção imediata).
+
+### Desenho da v9.3 (contrato, 04/11/2026)
+
+Base legal: Estatuto Art. 5º §5º (a CLI institui as unidades); Regimento Art. 6-A, III e IV (Pastores Distritais, Vice-Presidentes de Quadrante e
+Superintendentes Regionais são membros natos da CLI), Art. 53-D, I (o NIF recebe e aprova os Balanços Consolidados dos Distritos), Art. 126-K a 126-N (o
+Distrito: gatilho, CDE, autonomia, Dízimo Institucional, destituição sumária), Art. 126-P (avocação e intervenção imediata) e Art. 144, II (atraso no repasse
+é infração de intervenção). O que já existia e é reaproveitado: o cadastro de Distritos (com Quadrantes ligados a ele) e o órgão CDE criado com ele; o
+escopo DISTRITO nos acessos; a tabela de repasses institucionais (v4.15) com o percentual de 10% e a tolerância ajustáveis.
+
+**1. Ativação e desativação pela CLI.** O Distrito só fica ativo por **decreto da CLI** (Art. 126-K §2º), registrado pelo nível geral com a confirmação recente:
+a reunião da CLI (realizada e encerrada), o **gatilho** — (a) capital ou região metropolitana fora da sede de origem, ou (b) cidade com mais de 1.000.000 de
+habitantes, com a cidade, a UF, a população e a fonte (IBGE) — e o **Pastor Distrital**. O território é o que o cadastro já liga ao Distrito (Quadrantes →
+Regiões → Áreas → Congregações); a tela mostra as congregações que ele cobre e recusa o decreto sem nenhuma congregação ativa. A desativação também é decreto
+da CLI (com o motivo): encerra o acesso de toda a liderança de escopo do Distrito e derruba as sessões. Cada período de atividade fica no histórico. O cadastro
+deixa de ligar e desligar o Distrito (continua criando, renomeando e montando o território). Um Distrito que já estivesse marcado como ativo no cadastro antes
+desta versão fica ativo desde a migração, com o aviso "sem o decreto da CLI registrado" no Painel até o nível geral registrar o decreto.
+
+**2. Pastor Distrital e CDE.** Papel novo **"Pastor Distrital"** (nível Distrito, com as permissões do Pastor de Área e a nova `distritos`), nomeado e trocado
+**só pelo Pastor Presidente em exercício** ("escolhido a dedo", Art. 126-L, I), com a confirmação recente: membro ativo, em comunhão, sem processo
+disciplinar, de cargo ministerial Pastor e com a credencial em dia; o anterior sai na mesma gravação. O papel não se dá nem se tira pela tela de Liderança.
+Papel novo **"Vice-Presidente de Quadrante"** (nível Quadrante). O **CDE é calculado** (Art. 126-L, II): o Pastor Distrital (ou o Interventor, durante a
+intervenção), os Vice-Presidentes dos Quadrantes do Distrito e os Superintendentes Regionais das Regiões do Distrito. **CLI:** o Pastor Distrital, o
+Vice-Presidente de Quadrante e o Superintendente Regional passam a entrar na composição calculada da CLI por função (Art. 6-A, III e IV).
+
+**3. Autonomia financeira e Dízimo Institucional.** Do mês do decreto em diante (e até o mês anterior à desativação), o fechamento das congregações do
+território **não entra no Rateio Geral da Sede**: o repasse delas vai para o Distrito, que gere 100% (Art. 126-N, I) na conta dele; a Tesouraria Local mostra
+"repasse ao Distrito ...". O **Dízimo Institucional** do mês é **calculado, nunca digitado**: 10% (o percentual ajustável) da soma do Total Final (o mesmo valor
+que o repasse institucional da congregação já usa) dos fechamentos do mês das congregações do território; o registro na tela de Repasses só é aceito com
+todas as congregações ativas do território com o mês fechado, e mostra quais faltam. Ao ser marcado como repassado, o valor passa a contar no saldo do
+Tesouro Geral (antes o repasse de Distrito não creditava em lugar nenhum). **Balanço anual ao NIF** (Art. 126-M, II e 53-D, I): o Distrito (Pastor Distrital,
+Tesoureiro de Distrito ou Interventor) envia o balanço consolidado do ano — receitas, despesas, saldo em 31/12 e observações — até 31/03 do ano seguinte, ao
+lado do que o sistema já sabe (soma dos fechamentos do ano e Dízimo Institucional repassado); um membro do Conselho Fiscal aprova ou devolve com o motivo;
+devolvido, o Distrito reenvia (as versões ficam).
+
+**4. Blindagem e intervenção imediata.** Sinais calculados no Painel, com aviso ao Presidente: **Dízimo Institucional vencido** (mês passado da tolerância sem
+repasse: "retenção da cota", Art. 126-N, III), balanço anual não enviado ou devolvido sem reenvio depois de 31/03, Distrito ativo sem Pastor Distrital.
+**Intervenção** (Art. 126-N, III e 126-P, II): ato **só do Pastor Presidente em exercício**, com a confirmação recente, o motivo (tentativa de
+desvinculação, estatuto próprio, retenção da cota de repasse ou outra ameaça à integridade do Ministério), a fundamentação, o **Interventor** (membro ativo, em
+comunhão, sem processo, de fora da liderança destituída) e as medidas determinadas que dependem de gente (bloqueio das contas bancárias, revogação da
+procuração, providência policial ou judicial). **Na mesma gravação:** toda a liderança do Distrito é destituída (todo acesso de escopo do Distrito, mais os
+Vice-Presidentes de Quadrante e os Superintendentes Regionais do território, que compõem o CDE), as sessões deles caem, o Interventor recebe o papel novo
+**"Interventor Distrital"** (as mesmas permissões do Pastor Distrital). Uma intervenção aberta por Distrito. O **encerramento** também é do Presidente, com o
+resultado, e pode nomear o novo Pastor Distrital na mesma gravação (o acesso do Interventor termina).
+
+**5. Quem faz o quê e tela.** Permissão nova **`distritos`** (vem para o Presidente, o Secretário Geral, o Pastor Distrital, o Interventor Distrital e o
+Tesoureiro de Distrito; o Conselho Fiscal recebe em Permissões). O nível geral vê todos os Distritos; quem tem escopo de Distrito vê só o dele (posição
+financeira, balanços, CDE). Tela: aba nova **"Distritos"** dentro do card Expansão (Distritos ativos e no cadastro, a ficha com o território, o mês a mês do
+Dízimo Institucional, os balanços, o CDE, os períodos e as intervenções). Avisos, ROPA e política de retenção (os decretos e as intervenções são história
+da instituição e ficam).
 
 ## 🔒 Trava de Revisão 9-A — antes de avançar para a v9.4
 

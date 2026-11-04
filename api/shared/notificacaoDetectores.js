@@ -260,7 +260,11 @@ const DETECTORES = {
   ENTIDADE_PRESTACAO_ATRASADA: { tabela: "EntidadesVinculadas", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrestacoesAtrasadas(pool) },
   // v9.2 — expansão: o pedido novo e a decisão da CLI avisam NA HORA, no ato. Aqui fica o parecer da CME vencido (15 dias, Regimento Art. 24 §2º): um aviso por pedido,
   // à CME e ao nível geral (o próprio fato traz os destinatários).
-  EXPANSAO_PARECER_VENCIDO: { tabela: "PedidosExpansao", detectar: (pool) => require("./expansaoDb").detectarParecerVencido(pool) }
+  EXPANSAO_PARECER_VENCIDO: { tabela: "PedidosExpansao", detectar: (pool) => require("./expansaoDb").detectarParecerVencido(pool) },
+  // v9.3 — Distrito: o Dízimo Institucional vencido sem repasse (a "retenção da cota", Regimento Art. 126-N, III; um aviso por Distrito e mês) e o balanço anual não
+  // enviado ao NIF até 31/03 (um por Distrito e ano), ao nível geral e a quem tem acesso de escopo do Distrito. A análise do NIF avisa NA HORA quem enviou.
+  DISTRITO_REPASSE_VENCIDO: { tabela: "RepassesInstitucionais", detectar: (pool) => require("./distritosDb").detectarRepasseVencido(pool) },
+  DISTRITO_BALANCO_ATRASADO: { tabela: "DistritoBalancos", detectar: (pool) => require("./distritosDb").detectarBalancoAtrasado(pool) }
 };
 
 module.exports = { DETECTORES };

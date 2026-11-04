@@ -186,6 +186,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "A abertura e a emancipação são a certidão de nascimento da unidade: sem prazo final (PoliticasRetencao 'Expansão: abertura e emancipação'). O Dirigente vê só o que é da congregação dele; a CME e o nível geral veem tudo. O membro vê em Meus Dados as Extensões que encarregou ou encarrega."
   },
   {
+    chave: "DISTRITOS",
+    finalidade: "Registrar os decretos da CLI que ativam e desativam o Distrito, o Dízimo Institucional calculado dos fechamentos, o balanço anual ao NIF e a intervenção do Pastor Presidente (Estatuto Art. 5º §5º; Regimento Art. 53-D, 126-K a 126-N e 126-P) — v9.3",
+    titulares: "O Interventor e a liderança distrital destituída na intervenção; quem envia e quem analisa o balanço anual; quem registra os decretos (a Secretaria Geral e o Pastor Presidente)",
+    categoriasDados: ["Do Interventor: a matrícula e as datas da intervenção", "Da liderança destituída: o fim do acesso no cadastro de Liderança (a lista das matrículas fica na auditoria)", "De quem age: a matrícula e a data do decreto, do envio ou da análise do balanço"],
+    baseLegal: "LGPD Art. 7º, II — cumprimento de obrigação estatutária (a criação das unidades pela CLI, Estatuto Art. 5º §5º; a prestação de contas ao NIF e a intervenção, Regimento Art. 53-D, 126-M, 126-N e 126-P)",
+    tabelasEnvolvidas: ["DistritoPeriodos", "DistritoIntervencoes", "DistritoBalancos", "Distritos", "RepassesInstitucionais", "Lideranca"],
+    retencao: "Os decretos, as intervenções e os balanços são história da instituição: sem prazo final (PoliticasRetencao 'Distritos: decretos, intervenções e balanços'). O nível geral e o NIF veem todos os Distritos; quem tem acesso de escopo de Distrito, só o dele. A pessoa vê em Meus Dados os balanços que enviou e as intervenções em que teve a função de Interventor."
+  },
+  {
     chave: "VISTORIA_ANTECEDENTES",
     finalidade: "Lavrar o Termo de Vistoria quando a Diretoria confere certidão de antecedentes criminais e de distribuição cível de quem assume liderança ou confiança, muda para área sensível, é alvo de suspeita fundada ou é solicitado pela Diretoria — guardando só o hash da certidão, nunca o documento (Regimento Art. 133 §5º; Lei 14.811/2024) — v7.6",
     titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",

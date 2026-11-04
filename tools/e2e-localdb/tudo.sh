@@ -92,4 +92,9 @@ bash rodar.sh preparar-expansao
 BASE=cenario-expansao bash rodar.sh roteiro e2e-71-expansao.js
 BASE=cenario-expansao bash rodar.sh roteiro e2e-72-expansao-corridas.js
 E2E_RCSI=1 BASE=cenario-expansao bash rodar.sh roteiro e2e-72-expansao-corridas.js
+# v9.3 (Distrito, migração 167): a base própria
+bash rodar.sh preparar-distritos
+BASE=cenario-distritos bash rodar.sh roteiro e2e-73-distritos.js
+BASE=cenario-distritos bash rodar.sh roteiro e2e-74-distritos-corridas.js
+E2E_RCSI=1 BASE=cenario-distritos bash rodar.sh roteiro e2e-74-distritos-corridas.js
 echo TUDO-PRONTO

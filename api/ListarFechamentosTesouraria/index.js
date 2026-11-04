@@ -14,6 +14,8 @@
 // GET /api/tesouraria-fechamentos?mesReferencia=
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
+// v9.3 — repasseDistrito: o Distrito ativo que recebe o repasse do fechamento (Regimento Art. 126-N, I), ou null quando vai para a Sede
+const { NOME_DO_DISTRITO_DO_REPASSE } = require("../shared/distritos");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
@@ -30,7 +32,8 @@ module.exports = async function (context, req) {
            f.MesReferencia AS mesReferencia, f.TotalRecebido AS totalRecebido, f.ValorAluguel AS valorAluguel,
            f.ValorLote AS valorLote, f.TotalFinal AS totalFinal, f.PercentualRetencaoLocal AS percentualRetencaoLocal,
            f.ValorRetidoLocal AS valorRetidoLocal, f.ValorRepasseGeral AS valorRepasseGeral, f.Status AS status,
-           f.FormaRepasse AS formaRepasse, CONVERT(varchar(33), f.DataRepasse, 126) AS dataRepasse
+           f.FormaRepasse AS formaRepasse, CONVERT(varchar(33), f.DataRepasse, 126) AS dataRepasse,
+           ${NOME_DO_DISTRITO_DO_REPASSE("f", "c")} AS repasseDistrito
     FROM FechamentosTesouraria f
     JOIN Congregacoes c ON c.CongregacaoId = f.CongregacaoId
     WHERE ${where}
@@ -49,11 +52,19 @@ module.exports = async function (context, req) {
   // recém-fechados que a Geral ainda não olhou (mesma conferência única,
   // não tem uma etapa própria só pros 60% — quando a Geral libera o
   // fechamento, libera os dois lados de uma vez).
-  const centroCustoGeral = fechamentos.reduce((acc, f) => {
+  // v9.3 — o repasse das congregações de um Distrito ativo é do Distrito (Regimento Art. 126-N, I), não do Centro de Custo Geral: sai da soma da Geral e aparece por
+  // Distrito em repasseDistritos.
+  const centroCustoGeral = fechamentos.filter(f => !f.repasseDistrito).reduce((acc, f) => {
     const alvo = f.status === "REPASSADO" ? "liberado" : "pendente";
     acc[alvo] += f.valorRepasseGeral;
     return acc;
   }, { liberado: 0, pendente: 0 });
+  const porDistrito = new Map();
+  fechamentos.filter(f => f.repasseDistrito).forEach(f => {
+    if (!porDistrito.has(f.repasseDistrito)) porDistrito.set(f.repasseDistrito, { distrito: f.repasseDistrito, total: 0 });
+    porDistrito.get(f.repasseDistrito).total += f.valorRepasseGeral;
+  });
+  const repasseDistritos = Array.from(porDistrito.values()).sort((a, b) => a.distrito.localeCompare(b.distrito));
 
   // Centro de Custo Local: quanto cada congregação já pode gastar (saldo
   // liberado) vs. quanto ainda está esperando a Geral conferir.
@@ -68,5 +79,5 @@ module.exports = async function (context, req) {
   });
   const porCongregacao = Array.from(porCongregacaoMap.values()).sort((a, b) => a.congregacaoNome.localeCompare(b.congregacaoNome));
 
-  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { fechamentos, consolidado, centroCustoGeral, porCongregacao } };
+  context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { fechamentos, consolidado, centroCustoGeral, repasseDistritos, porCongregacao } };
 };

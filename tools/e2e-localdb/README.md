@@ -169,6 +169,12 @@ Cada versão parte da base da anterior (`BASE=...`):
   parecer da CME e a decisão da CLI movendo os membros, encerrando o acesso e derrubando as sessões; a nova congregação com a urgência e o parecer vencido;
   desistência e recusa; o que muda entre o pedido e a decisão; os CHECK e os índices; Meus Dados, Comissões e Projetos; lixo em cada campo; `E2E_CONTRATO=1` grava
   `tools/front-expansao/contrato-real.json`) e `e2e-72` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
+- **v9.3** (Distrito, migração 167), base `cenario-distritos` (`bash rodar.sh preparar-distritos`: a `cenario-expansao` com a 167 aplicada duas vezes).
+  `e2e-73` (o período legado da migração; o cadastro que não liga nem desliga; o decreto da CLI com o gatilho; o Pastor Distrital só pelo Presidente em Liderança;
+  as cadeiras da CLI; o repasse do território fora do Rateio Geral e da situação do Tesouro; o Dízimo Institucional calculado e creditado no Tesouro Geral; o
+  balanço anual com o NIF, a devolução e a versão 2; os avisos; quem vê o quê; a intervenção destituindo o CDE, cancelando a delegação e derrubando as sessões; o
+  encerramento; a desativação; os CHECK e os índices; lixo em cada campo; Meus Dados; `E2E_CONTRATO=1` grava `tools/front-distritos/contrato-real.json`) e
+  `e2e-74` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

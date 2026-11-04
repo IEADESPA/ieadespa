@@ -71,6 +71,14 @@
       "quadrante": "Quadrante Norte E2E"
      },
      {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
       "congregacaoId": 2,
       "nome": "Vila Nova E2E",
       "ativa": true,
@@ -123,9 +131,16 @@
       "valor": 170.06,
       "venceEm": "2026-12-05",
       "vencido": false,
+      "motivoVencido": null,
       "repasse": null
      }
-    ]
+    ],
+    "caixa": {
+     "recebido": 1020.33,
+     "pendente": 0,
+     "dizimoRepassado": 0,
+     "saldo": 1020.33
+    }
    },
    "anosParaBalanco": [],
    "sinais": {
@@ -133,6 +148,7 @@
     "semPastor": false,
     "intervencaoSemInterventorComAcesso": false,
     "repasseVencido": [],
+    "fechamentoAtrasado": [],
     "balancoAtrasado": []
    },
    "acoes": {
@@ -145,10 +161,729 @@
    }
   }
  },
+ "fichaDistritoEnvio": {
+  "sucesso": true,
+  "distrito": {
+   "distritoId": 1,
+   "nome": "Distrito Belém E2E",
+   "ativo": true,
+   "periodoAberto": {
+    "periodoId": 2,
+    "legado": false,
+    "ativadoEm": "2026-11-01",
+    "financeiroDesdeMes": "2025-11",
+    "ativacaoSessaoId": 9,
+    "gatilho": "MILHAO",
+    "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+    "cidade": "Belém",
+    "uf": "PA",
+    "populacao": 1303389,
+    "fontePopulacao": "IBGE, Censo 2022",
+    "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+    "desativadoEm": null,
+    "financeiroAteMes": null,
+    "desativacaoSessaoId": null,
+    "desativacaoMotivo": null
+   },
+   "periodos": [
+    {
+     "periodoId": 2,
+     "legado": false,
+     "ativadoEm": "2026-11-01",
+     "financeiroDesdeMes": "2025-11",
+     "ativacaoSessaoId": 9,
+     "gatilho": "MILHAO",
+     "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+     "cidade": "Belém",
+     "uf": "PA",
+     "populacao": 1303389,
+     "fontePopulacao": "IBGE, Censo 2022",
+     "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+     "desativadoEm": null,
+     "financeiroAteMes": null,
+     "desativacaoSessaoId": null,
+     "desativacaoMotivo": null
+    }
+   ],
+   "territorio": {
+    "quadrantes": [
+     {
+      "quadranteId": 1,
+      "nome": "Quadrante Norte E2E"
+     }
+    ],
+    "regioes": [
+     {
+      "regiaoId": 2,
+      "nome": "Região Norte E2E"
+     }
+    ],
+    "congregacoes": [
+     {
+      "congregacaoId": 1,
+      "nome": "Central E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 2,
+      "nome": "Vila Nova E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     }
+    ]
+   },
+   "cde": {
+    "pastor": [
+     {
+      "membroId": 9501,
+      "nome": "Pastor Distrital E2E",
+      "escopoId": 1,
+      "papel": "Pastor Distrital"
+     }
+    ],
+    "interventor": [],
+    "vices": [
+     {
+      "membroId": 9507,
+      "nome": "Vice Quadrante E2E",
+      "escopoId": 1,
+      "papel": "Vice-Presidente de Quadrante"
+     }
+    ],
+    "superintendentes": [
+     {
+      "membroId": 9506,
+      "nome": "Superintendente Dist E2E",
+      "escopoId": 2,
+      "papel": "Superintendente Regional"
+     }
+    ]
+   },
+   "intervencoes": [],
+   "balancos": [],
+   "financeiro": {
+    "percentual": 10,
+    "diasTolerancia": 5,
+    "meses": [
+     {
+      "mes": "2026-11",
+      "situacao": "REPASSADO",
+      "faltam": [],
+      "fechadas": 2,
+      "congregacoes": 2,
+      "soma": 1700.55,
+      "valor": 170.06,
+      "venceEm": "2026-12-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": {
+       "repasseId": 1,
+       "status": "REPASSADO",
+       "valorRepasse": 170.06,
+       "valorArrecadadoLiquido": 1700.55,
+       "dataRepasse": "2026-11-04"
+      }
+     },
+     {
+      "mes": "2026-10",
+      "situacao": "APURAVEL",
+      "faltam": [],
+      "fechadas": 2,
+      "congregacoes": 2,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-11-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-09",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-10-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-08",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-09-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-07",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-08-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-06",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-07-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-05",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-06-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-04",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-05-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-03",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-04-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-02",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-03-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-01",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-02-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2025-12",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-01-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2025-11",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2025-12-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     }
+    ],
+    "caixa": {
+     "recebido": 1020.33,
+     "pendente": 0,
+     "dizimoRepassado": 170.06,
+     "saldo": 850.27
+    }
+   },
+   "anosParaBalanco": [
+    2025
+   ],
+   "sinais": {
+    "semDecreto": false,
+    "semPastor": false,
+    "intervencaoSemInterventorComAcesso": false,
+    "repasseVencido": [],
+    "fechamentoAtrasado": [],
+    "balancoAtrasado": [
+     2025
+    ]
+   },
+   "acoes": {
+    "ativar": false,
+    "desativar": false,
+    "intervir": false,
+    "encerrarIntervencao": false,
+    "enviarBalanco": true,
+    "analisarBalanco": false
+   }
+  }
+ },
  "balancoEnviado": {
   "sucesso": true,
   "balancoId": 1,
   "mensagem": "Balanço de 2025 enviado ao NIF."
+ },
+ "catalogosNIF": {
+  "sucesso": true,
+  "gatilhos": {
+   "METROPOLE": "Capital ou região metropolitana fora da sede de origem (Art. 126-K §2º, a)",
+   "MILHAO": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)"
+  },
+  "motivos": {
+   "DESVINCULACAO": "Tentativa de desvincular o Distrito do Ministério IEADESPA",
+   "ESTATUTO_PROPRIO": "Alteração ou adoção de estatuto próprio",
+   "RETENCAO_REPASSE": "Retenção da cota de repasse (Dízimo Institucional)",
+   "OUTRA": "Outra ameaça à integridade do Ministério (Art. 126-P, II)"
+  },
+  "medidas": {
+   "bloqueioContas": "Bloqueio das contas bancárias do Distrito",
+   "procuracao": "Revogação da procuração pública do Pastor Distrital",
+   "judicial": "Providência policial ou judicial"
+  },
+  "statusBalanco": {
+   "ENVIADO": "Enviado, aguardando o NIF",
+   "APROVADO": "Aprovado pelo NIF",
+   "DEVOLVIDO": "Devolvido pelo NIF"
+  },
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "limitePopulacao": 1000000,
+  "papeis": {
+   "geral": false,
+   "presidente": false,
+   "nif": true,
+   "distritos": []
+  }
+ },
+ "fichaNIF": {
+  "sucesso": true,
+  "distrito": {
+   "distritoId": 1,
+   "nome": "Distrito Belém E2E",
+   "ativo": true,
+   "periodoAberto": {
+    "periodoId": 2,
+    "legado": false,
+    "ativadoEm": "2026-11-01",
+    "financeiroDesdeMes": "2025-11",
+    "ativacaoSessaoId": 9,
+    "gatilho": "MILHAO",
+    "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+    "cidade": "Belém",
+    "uf": "PA",
+    "populacao": 1303389,
+    "fontePopulacao": "IBGE, Censo 2022",
+    "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+    "desativadoEm": null,
+    "financeiroAteMes": null,
+    "desativacaoSessaoId": null,
+    "desativacaoMotivo": null
+   },
+   "periodos": [
+    {
+     "periodoId": 2,
+     "legado": false,
+     "ativadoEm": "2026-11-01",
+     "financeiroDesdeMes": "2025-11",
+     "ativacaoSessaoId": 9,
+     "gatilho": "MILHAO",
+     "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+     "cidade": "Belém",
+     "uf": "PA",
+     "populacao": 1303389,
+     "fontePopulacao": "IBGE, Censo 2022",
+     "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+     "desativadoEm": null,
+     "financeiroAteMes": null,
+     "desativacaoSessaoId": null,
+     "desativacaoMotivo": null
+    }
+   ],
+   "territorio": {
+    "quadrantes": [
+     {
+      "quadranteId": 1,
+      "nome": "Quadrante Norte E2E"
+     }
+    ],
+    "regioes": [
+     {
+      "regiaoId": 2,
+      "nome": "Região Norte E2E"
+     }
+    ],
+    "congregacoes": [
+     {
+      "congregacaoId": 1,
+      "nome": "Central E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 2,
+      "nome": "Vila Nova E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     }
+    ]
+   },
+   "cde": {
+    "pastor": [
+     {
+      "membroId": 9501,
+      "nome": "Pastor Distrital E2E",
+      "escopoId": 1,
+      "papel": "Pastor Distrital"
+     }
+    ],
+    "interventor": [],
+    "vices": [
+     {
+      "membroId": 9507,
+      "nome": "Vice Quadrante E2E",
+      "escopoId": 1,
+      "papel": "Vice-Presidente de Quadrante"
+     }
+    ],
+    "superintendentes": [
+     {
+      "membroId": 9506,
+      "nome": "Superintendente Dist E2E",
+      "escopoId": 2,
+      "papel": "Superintendente Regional"
+     }
+    ]
+   },
+   "intervencoes": [],
+   "balancos": [
+    {
+     "balancoId": 1,
+     "ano": 2025,
+     "versao": 1,
+     "receitas": 120000,
+     "despesas": 95500.5,
+     "saldoFinal": 24499.5,
+     "observacoes": "Balanço consolidado da metrópole.",
+     "status": "ENVIADO",
+     "statusRotulo": "Enviado, aguardando o NIF",
+     "enviadoPor": 9503,
+     "enviadoPorNome": "Tesoureira Dist E2E",
+     "enviadoEm": "2026-11-04",
+     "analisadoPorNome": null,
+     "analisadoEm": null,
+     "motivoDevolucao": null
+    }
+   ],
+   "financeiro": {
+    "percentual": 10,
+    "diasTolerancia": 5,
+    "meses": [
+     {
+      "mes": "2026-11",
+      "situacao": "REPASSADO",
+      "faltam": [],
+      "fechadas": 2,
+      "congregacoes": 2,
+      "soma": 1700.55,
+      "valor": 170.06,
+      "venceEm": "2026-12-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": {
+       "repasseId": 1,
+       "status": "REPASSADO",
+       "valorRepasse": 170.06,
+       "valorArrecadadoLiquido": 1700.55,
+       "dataRepasse": "2026-11-04"
+      }
+     },
+     {
+      "mes": "2026-10",
+      "situacao": "APURAVEL",
+      "faltam": [],
+      "fechadas": 2,
+      "congregacoes": 2,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-11-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-09",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-10-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-08",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-09-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-07",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-08-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-06",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-07-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-05",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-06-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-04",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-05-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-03",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-04-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-02",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-03-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2026-01",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-02-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2025-12",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2026-01-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     },
+     {
+      "mes": "2025-11",
+      "situacao": "SEM_MOVIMENTO",
+      "faltam": [],
+      "fechadas": 0,
+      "congregacoes": 0,
+      "soma": 0,
+      "valor": 0,
+      "venceEm": "2025-12-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": null
+     }
+    ],
+    "caixa": {
+     "recebido": 1020.33,
+     "pendente": 0,
+     "dizimoRepassado": 170.06,
+     "saldo": 850.27
+    }
+   },
+   "anosParaBalanco": [],
+   "sinais": {
+    "semDecreto": false,
+    "semPastor": false,
+    "intervencaoSemInterventorComAcesso": false,
+    "repasseVencido": [],
+    "fechamentoAtrasado": [],
+    "balancoAtrasado": []
+   },
+   "acoes": {
+    "ativar": false,
+    "desativar": false,
+    "intervir": false,
+    "encerrarIntervencao": false,
+    "enviarBalanco": false,
+    "analisarBalanco": true
+   }
+  }
  },
  "catalogosGeral": {
   "sucesso": true,
@@ -280,7 +1015,7 @@
     "legado": false,
     "ativadoEm": "2026-11-01",
     "quadrantes": 1,
-    "congregacoes": 2,
+    "congregacoes": 3,
     "pastor": "Pastor Distrital E2E",
     "intervencaoAberta": false
    }
@@ -296,7 +1031,7 @@
     "legado": false,
     "ativadoEm": "2026-11-01",
     "quadrantes": 1,
-    "congregacoes": 2,
+    "congregacoes": 3,
     "pastor": "Pastor Distrital E2E",
     "intervencaoAberta": false
    },
@@ -305,7 +1040,7 @@
     "nome": "Distrito Legado E2E",
     "ativo": true,
     "legado": false,
-    "ativadoEm": "2026-11-04",
+    "ativadoEm": "2026-11-01",
     "quadrantes": 0,
     "congregacoes": 0,
     "pastor": null,
@@ -339,6 +1074,7 @@
      "semPastor": false,
      "intervencaoSemInterventorComAcesso": false,
      "repasseVencido": [],
+     "fechamentoAtrasado": [],
      "balancoAtrasado": []
     },
     "aguardandoNIF": []
@@ -354,6 +1090,7 @@
      "semPastor": true,
      "intervencaoSemInterventorComAcesso": false,
      "repasseVencido": [],
+     "fechamentoAtrasado": [],
      "balancoAtrasado": []
     },
     "aguardandoNIF": []
@@ -422,6 +1159,14 @@
      {
       "congregacaoId": 1,
       "nome": "Central E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
       "ativa": true,
       "area": "Área Alfa E2E",
       "regiao": "Região Norte E2E",
@@ -515,6 +1260,7 @@
       "valor": 170.06,
       "venceEm": "2026-12-05",
       "vencido": false,
+      "motivoVencido": null,
       "repasse": {
        "repasseId": 1,
        "status": "REPASSADO",
@@ -523,7 +1269,13 @@
        "dataRepasse": "2026-11-04"
       }
      }
-    ]
+    ],
+    "caixa": {
+     "recebido": 1440.33,
+     "pendente": 0,
+     "dizimoRepassado": 170.06,
+     "saldo": 1270.27
+    }
    },
    "anosParaBalanco": [],
    "sinais": {
@@ -531,6 +1283,7 @@
     "semPastor": false,
     "intervencaoSemInterventorComAcesso": false,
     "repasseVencido": [],
+    "fechamentoAtrasado": [],
     "balancoAtrasado": []
    },
    "acoes": {
@@ -610,6 +1363,14 @@
       "quadrante": "Quadrante Norte E2E"
      },
      {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
       "congregacaoId": 2,
       "nome": "Vila Nova E2E",
       "ativa": true,
@@ -697,6 +1458,7 @@
       "valor": 170.06,
       "venceEm": "2026-12-05",
       "vencido": false,
+      "motivoVencido": null,
       "repasse": {
        "repasseId": 1,
        "status": "REPASSADO",
@@ -705,7 +1467,13 @@
        "dataRepasse": "2026-11-04"
       }
      }
-    ]
+    ],
+    "caixa": {
+     "recebido": 1440.33,
+     "pendente": 0,
+     "dizimoRepassado": 170.06,
+     "saldo": 1270.27
+    }
    },
    "anosParaBalanco": [],
    "sinais": {
@@ -713,6 +1481,7 @@
     "semPastor": false,
     "intervencaoSemInterventorComAcesso": false,
     "repasseVencido": [],
+    "fechamentoAtrasado": [],
     "balancoAtrasado": []
    },
    "acoes": {
@@ -741,6 +1510,203 @@
   "destituidos": 4,
   "mensagem": "Intervenção decretada: 4 acesso(s) da liderança do Distrito encerrado(s) e as sessões derrubadas. Agora dê ao Interventor o acesso \"Interventor Distrital\" em Liderança (só o Pastor Presidente pode). As medidas marcadas (contas, procuração, polícia ou Justiça) dependem de providência fora do sistema."
  },
+ "fichaSobIntervencao": {
+  "sucesso": true,
+  "distrito": {
+   "distritoId": 1,
+   "nome": "Distrito Belém E2E",
+   "ativo": true,
+   "periodoAberto": {
+    "periodoId": 2,
+    "legado": false,
+    "ativadoEm": "2026-11-01",
+    "financeiroDesdeMes": "2026-11",
+    "ativacaoSessaoId": 9,
+    "gatilho": "MILHAO",
+    "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+    "cidade": "Belém",
+    "uf": "PA",
+    "populacao": 1303389,
+    "fontePopulacao": "IBGE, Censo 2022",
+    "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+    "desativadoEm": null,
+    "financeiroAteMes": null,
+    "desativacaoSessaoId": null,
+    "desativacaoMotivo": null
+   },
+   "periodos": [
+    {
+     "periodoId": 2,
+     "legado": false,
+     "ativadoEm": "2026-11-01",
+     "financeiroDesdeMes": "2026-11",
+     "ativacaoSessaoId": 9,
+     "gatilho": "MILHAO",
+     "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+     "cidade": "Belém",
+     "uf": "PA",
+     "populacao": 1303389,
+     "fontePopulacao": "IBGE, Censo 2022",
+     "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+     "desativadoEm": null,
+     "financeiroAteMes": null,
+     "desativacaoSessaoId": null,
+     "desativacaoMotivo": null
+    }
+   ],
+   "territorio": {
+    "quadrantes": [
+     {
+      "quadranteId": 1,
+      "nome": "Quadrante Norte E2E"
+     }
+    ],
+    "regioes": [
+     {
+      "regiaoId": 2,
+      "nome": "Região Norte E2E"
+     }
+    ],
+    "congregacoes": [
+     {
+      "congregacaoId": 1,
+      "nome": "Central E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 2,
+      "nome": "Vila Nova E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     }
+    ]
+   },
+   "cde": {
+    "pastor": [],
+    "interventor": [],
+    "vices": [],
+    "superintendentes": []
+   },
+   "intervencoes": [
+    {
+     "intervencaoId": 1,
+     "motivo": "DESVINCULACAO",
+     "motivoRotulo": "Tentativa de desvincular o Distrito do Ministério IEADESPA",
+     "fundamentacao": "O Pastor Distrital registrou estatuto próprio em cartório, sem a Sede.",
+     "interventor": {
+      "membroId": 9505,
+      "nome": "Interventor Dist E2E"
+     },
+     "medidas": [
+      "Bloqueio das contas bancárias do Distrito",
+      "Revogação da procuração pública do Pastor Distrital"
+     ],
+     "liderancasDestituidas": 4,
+     "decretadaEm": "2026-11-04",
+     "encerradaEm": null,
+     "resultado": null,
+     "aberta": true
+    }
+   ],
+   "balancos": [
+    {
+     "balancoId": 2,
+     "ano": 2025,
+     "versao": 2,
+     "receitas": 120000,
+     "despesas": 95500.5,
+     "saldoFinal": 24499.5,
+     "observacoes": "Com o extrato de dezembro.",
+     "status": "APROVADO",
+     "statusRotulo": "Aprovado pelo NIF",
+     "enviadoPor": 9503,
+     "enviadoPorNome": "Tesoureira Dist E2E",
+     "enviadoEm": "2026-11-04",
+     "analisadoPorNome": "Conselheiro NIF E2E",
+     "analisadoEm": "2026-11-04",
+     "motivoDevolucao": null
+    },
+    {
+     "balancoId": 1,
+     "ano": 2025,
+     "versao": 1,
+     "receitas": 120000,
+     "despesas": 95500.5,
+     "saldoFinal": 24499.5,
+     "observacoes": "Balanço consolidado da metrópole.",
+     "status": "DEVOLVIDO",
+     "statusRotulo": "Devolvido pelo NIF",
+     "enviadoPor": 9503,
+     "enviadoPorNome": "Tesoureira Dist E2E",
+     "enviadoEm": "2026-11-04",
+     "analisadoPorNome": "Conselheiro NIF E2E",
+     "analisadoEm": "2026-11-04",
+     "motivoDevolucao": "Falta o extrato de dezembro."
+    }
+   ],
+   "financeiro": {
+    "percentual": 10,
+    "diasTolerancia": 5,
+    "meses": [
+     {
+      "mes": "2026-11",
+      "situacao": "REPASSADO",
+      "faltam": [],
+      "fechadas": 2,
+      "congregacoes": 2,
+      "soma": 1700.55,
+      "valor": 170.06,
+      "venceEm": "2026-12-05",
+      "vencido": false,
+      "motivoVencido": null,
+      "repasse": {
+       "repasseId": 1,
+       "status": "REPASSADO",
+       "valorRepasse": 170.06,
+       "valorArrecadadoLiquido": 1700.55,
+       "dataRepasse": "2026-11-04"
+      }
+     }
+    ],
+    "caixa": {
+     "recebido": 1440.33,
+     "pendente": 0,
+     "dizimoRepassado": 170.06,
+     "saldo": 1270.27
+    }
+   },
+   "anosParaBalanco": [],
+   "sinais": {
+    "semDecreto": false,
+    "semPastor": false,
+    "intervencaoSemInterventorComAcesso": true,
+    "repasseVencido": [],
+    "fechamentoAtrasado": [],
+    "balancoAtrasado": []
+   },
+   "acoes": {
+    "ativar": false,
+    "desativar": false,
+    "intervir": false,
+    "encerrarIntervencao": true,
+    "enviarBalanco": false,
+    "analisarBalanco": false
+   }
+  }
+ },
  "encerrar": {
   "sucesso": true,
   "mensagem": "Intervenção encerrada. O acesso do Interventor terminou. O novo Pastor Distrital recebe o acesso em Liderança (só o Pastor Presidente pode)."
@@ -749,5 +1715,165 @@
   "sucesso": true,
   "mensagem": "Distrito desativado por decreto da CLI. A partir deste mês o repasse das congregações volta para a Sede. 1 acesso(s) de escopo do Distrito encerrado(s).",
   "acessosEncerrados": 1
+ },
+ "fichaDesativada": {
+  "sucesso": true,
+  "distrito": {
+   "distritoId": 1,
+   "nome": "Distrito Belém E2E",
+   "ativo": false,
+   "periodoAberto": null,
+   "periodos": [
+    {
+     "periodoId": 2,
+     "legado": false,
+     "ativadoEm": "2026-11-01",
+     "financeiroDesdeMes": "2026-11",
+     "ativacaoSessaoId": 9,
+     "gatilho": "MILHAO",
+     "gatilhoRotulo": "Cidade com mais de 1.000.000 de habitantes (Art. 126-K §2º, b)",
+     "cidade": "Belém",
+     "uf": "PA",
+     "populacao": 1303389,
+     "fontePopulacao": "IBGE, Censo 2022",
+     "fundamentacao": "A CLI decretou a elevação da base de Belém a Distrito, pela população da capital.",
+     "desativadoEm": "2026-11-04",
+     "financeiroAteMes": "2026-11",
+     "desativacaoSessaoId": 11,
+     "desativacaoMotivo": "A base de Belém volta a ser administrada pela Sede."
+    }
+   ],
+   "territorio": {
+    "quadrantes": [
+     {
+      "quadranteId": 1,
+      "nome": "Quadrante Norte E2E"
+     }
+    ],
+    "regioes": [
+     {
+      "regiaoId": 2,
+      "nome": "Região Norte E2E"
+     }
+    ],
+    "congregacoes": [
+     {
+      "congregacaoId": 1,
+      "nome": "Central E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 4,
+      "nome": "Nova do Distrito E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     },
+     {
+      "congregacaoId": 2,
+      "nome": "Vila Nova E2E",
+      "ativa": true,
+      "area": "Área Alfa E2E",
+      "regiao": "Região Norte E2E",
+      "quadrante": "Quadrante Norte E2E"
+     }
+    ]
+   },
+   "cde": {
+    "pastor": [],
+    "interventor": [],
+    "vices": [],
+    "superintendentes": []
+   },
+   "intervencoes": [
+    {
+     "intervencaoId": 1,
+     "motivo": "DESVINCULACAO",
+     "motivoRotulo": "Tentativa de desvincular o Distrito do Ministério IEADESPA",
+     "fundamentacao": "O Pastor Distrital registrou estatuto próprio em cartório, sem a Sede.",
+     "interventor": {
+      "membroId": 9505,
+      "nome": "Interventor Dist E2E"
+     },
+     "medidas": [
+      "Bloqueio das contas bancárias do Distrito",
+      "Revogação da procuração pública do Pastor Distrital"
+     ],
+     "liderancasDestituidas": 4,
+     "decretadaEm": "2026-11-04",
+     "encerradaEm": "2026-11-04",
+     "resultado": "O estatuto paralelo foi anulado e as contas regularizadas.",
+     "aberta": false
+    }
+   ],
+   "balancos": [
+    {
+     "balancoId": 2,
+     "ano": 2025,
+     "versao": 2,
+     "receitas": 120000,
+     "despesas": 95500.5,
+     "saldoFinal": 24499.5,
+     "observacoes": "Com o extrato de dezembro.",
+     "status": "APROVADO",
+     "statusRotulo": "Aprovado pelo NIF",
+     "enviadoPor": 9503,
+     "enviadoPorNome": "Tesoureira Dist E2E",
+     "enviadoEm": "2026-11-04",
+     "analisadoPorNome": "Conselheiro NIF E2E",
+     "analisadoEm": "2026-11-04",
+     "motivoDevolucao": null
+    },
+    {
+     "balancoId": 1,
+     "ano": 2025,
+     "versao": 1,
+     "receitas": 120000,
+     "despesas": 95500.5,
+     "saldoFinal": 24499.5,
+     "observacoes": "Balanço consolidado da metrópole.",
+     "status": "DEVOLVIDO",
+     "statusRotulo": "Devolvido pelo NIF",
+     "enviadoPor": 9503,
+     "enviadoPorNome": "Tesoureira Dist E2E",
+     "enviadoEm": "2026-11-04",
+     "analisadoPorNome": "Conselheiro NIF E2E",
+     "analisadoEm": "2026-11-04",
+     "motivoDevolucao": "Falta o extrato de dezembro."
+    }
+   ],
+   "financeiro": {
+    "percentual": null,
+    "diasTolerancia": null,
+    "meses": [],
+    "caixa": {
+     "recebido": 420,
+     "pendente": 0,
+     "dizimoRepassado": 0,
+     "saldo": 420
+    }
+   },
+   "anosParaBalanco": [],
+   "sinais": {
+    "semDecreto": false,
+    "semPastor": false,
+    "intervencaoSemInterventorComAcesso": false,
+    "repasseVencido": [],
+    "fechamentoAtrasado": [],
+    "balancoAtrasado": []
+   },
+   "acoes": {
+    "ativar": true,
+    "desativar": false,
+    "intervir": false,
+    "encerrarIntervencao": false,
+    "enviarBalanco": true,
+    "analisarBalanco": false
+   }
+  }
  }
 }

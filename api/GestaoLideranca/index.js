@@ -378,12 +378,12 @@ module.exports = comConflito(async function (context, req) {
     }
 
     // v9.3 — tirar o Pastor Distrital ou o Interventor Distrital é só do Pastor Presidente em exercício (Regimento Art. 126-L, I, e 126-P, II)
-    const linhaRemovida = (await pool.request().input("id", sql.Int, auth.idDeRota(membroIdRota)).query(`SELECT PapelId, EscopoTipo, EscopoId,
-      CASE WHEN AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END AS Vigente FROM Lideranca WHERE MembroId = @id`)).recordset[0];
+    // (a vigência pela data de Brasília — linhaVigente —, não pela de Greenwich: entre 21h e meia-noite o "hoje" de Greenwich já é amanhã)
+    const linhaRemovida = (await pool.request().input("id", sql.Int, auth.idDeRota(membroIdRota)).query(`SELECT PapelId, EscopoTipo, EscopoId FROM Lideranca WHERE MembroId = @id`)).recordset[0];
     if (linhaRemovida) {
       const recusaDistrito = await distritosDb.conferirPapelReservado(pool, {
         usuarioId, membroId: auth.idDeRota(membroIdRota),
-        antes: { PapelId: linhaRemovida.PapelId, EscopoTipo: linhaRemovida.EscopoTipo, EscopoId: linhaRemovida.EscopoId, vigente: !!linhaRemovida.Vigente }, depois: null
+        antes: { PapelId: linhaRemovida.PapelId, EscopoTipo: linhaRemovida.EscopoTipo, EscopoId: linhaRemovida.EscopoId, vigente: await distritosDb.linhaVigente(pool, auth.idDeRota(membroIdRota)) }, depois: null
       });
       if (recusaDistrito) {
         context.res = { status: 200, body: { sucesso: false, mensagem: recusaDistrito } };

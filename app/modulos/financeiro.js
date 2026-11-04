@@ -1826,6 +1826,12 @@ async function carregarSituacaoTesouroAcao() {
   if (d.malotePendente.totalItens > 0) {
     html += `<p class="subtitle" style="margin-top:8px;">⚠️ ${escaparHtmlEbd(d.malotePendente.totalItens)} repasse(s) aguardando o próximo fechamento do Rateio Geral — esse valor ainda não está em nenhum Centro de Custo gastável.</p>`;
   }
+  // v9.3 — o caixa dos Distritos: o repasse das congregações deles é do Distrito (Regimento Art. 126-N, I), fora do Tesouro Geral, mas na mesma conta única
+  if (Array.isArray(d.porDistrito) && d.porDistrito.length > 0) {
+    html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">🗺️ Caixa dos Distritos (dinheiro do Distrito na conta única — não é do Tesouro Geral)</h4>
+      <table class="tabela-frequencia"><thead><tr><th>Distrito</th><th>Recebido</th><th>Pendente de conferência</th><th>Dízimo Institucional repassado</th><th>Saldo do Distrito</th></tr></thead><tbody>${d.porDistrito.map((x) =>
+      `<tr><td>${escaparHtmlEbd(x.nome)}</td><td>R$ ${Number(x.recebido).toFixed(2)}</td><td>R$ ${Number(x.pendente).toFixed(2)}</td><td>R$ ${Number(x.dizimoRepassado).toFixed(2)}</td><td>R$ ${Number(x.saldo).toFixed(2)}</td></tr>`).join("")}</tbody></table>`;
+  }
 
   html += `<h4 style="margin:18px 0 8px; color: var(--cor-primaria);">Saldo Local por congregação</h4>
     <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Local</th></tr></thead><tbody>`;

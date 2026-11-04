@@ -59,7 +59,17 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_DistritoPeriodos_Distrito' AND object_id = OBJECT_ID(N'dbo.DistritoPeriodos'))
     CREATE INDEX IX_DistritoPeriodos_Distrito ON dbo.DistritoPeriodos (DistritoId, FinanceiroDesdeMes);
 GO
--- o Distrito que o cadastro já marcava como ativo antes desta versão: fica ativo desde hoje, sem o decreto registrado (o Painel avisa)
+-- ---- o Distrito de cada fechamento, gravado quando o mês é fechado (revisão de 04/11/2026) ----
+-- O repasse do mês é do Distrito quando, NO FECHAMENTO, a congregação está no território dele e o mês cai num período com decreto. Gravar aqui (e não recalcular
+-- pelo cadastro de hoje) impede que mudar um Quadrante, uma Região ou uma Área de lugar reescreva meses passados (já rateados pela Sede ou já somados no Dízimo).
+IF COL_LENGTH('dbo.FechamentosTesouraria', 'RepasseDistritoId') IS NULL
+    ALTER TABLE dbo.FechamentosTesouraria ADD RepasseDistritoId INT NULL CONSTRAINT FK_FechamentosTesouraria_Distrito REFERENCES dbo.Distritos(DistritoId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FechamentosTesouraria_Distrito' AND object_id = OBJECT_ID(N'dbo.FechamentosTesouraria'))
+    CREATE INDEX IX_FechamentosTesouraria_Distrito ON dbo.FechamentosTesouraria (RepasseDistritoId, MesReferencia) WHERE RepasseDistritoId IS NOT NULL;
+GO
+-- o Distrito que o cadastro já marcava como ativo antes desta versão: ganha um período "legado", sem o decreto e SEM efeito no dinheiro (o repasse continua com a
+-- Sede) até o nível geral registrar o decreto; o Painel avisa
 INSERT INTO dbo.DistritoPeriodos (DistritoId, Legado, AtivadoEm, FinanceiroDesdeMes)
 SELECT d.DistritoId, 1, CAST(SYSUTCDATETIME() AS DATE), CONVERT(char(7), SYSUTCDATETIME(), 126)
 FROM dbo.Distritos d

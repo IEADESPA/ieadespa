@@ -70,9 +70,10 @@ async function falhaNoBanco(rotulo, texto, params) {
 const vigente = async (m) => escalar("SELECT CASE WHEN AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END FROM Lideranca WHERE MembroId = @m", { m });
 const papelId = (nome) => escalar("SELECT PapelId FROM Papeis WHERE Nome = @n", { n: nome });
 // os valores vão como texto (o shim do LocalDB arredondaria o número para inteiro) e o banco converte para DECIMAL
+// o Distrito do repasse é decidido no fechamento, com o mesmo trecho que o FecharMesTesouraria usa (shared/distritos.js, DISTRITO_DO_MES)
 const fechar = (congregacaoId, mesRef, totalFinal, status = "REPASSADO") => q(`INSERT INTO FechamentosTesouraria (CongregacaoId, MesReferencia, TotalRecebido, TotalFinal, PercentualRetencaoLocal,
-  ValorRetidoLocal, ValorRepasseGeral, Status, FechadoPor) VALUES (@c, @m, CAST(@t AS DECIMAL(10,2)), CAST(@t AS DECIMAL(10,2)), 40, CAST(@l AS DECIMAL(10,2)), CAST(@g AS DECIMAL(10,2)), @s, 1002)`,
-{ c: congregacaoId, m: mesRef, t: totalFinal.toFixed(2), l: (totalFinal * 0.4).toFixed(2), g: (totalFinal * 0.6).toFixed(2), s: status });
+  ValorRetidoLocal, ValorRepasseGeral, Status, FechadoPor, RepasseDistritoId) SELECT @c, @m, CAST(@t AS DECIMAL(10,2)), CAST(@t AS DECIMAL(10,2)), 40, CAST(@l AS DECIMAL(10,2)), CAST(@g AS DECIMAL(10,2)), @s, 1002,
+  ${di.DISTRITO_DO_MES("@c", "@m")}`, { c: congregacaoId, m: mesRef, t: totalFinal.toFixed(2), l: (totalFinal * 0.4).toFixed(2), g: (totalFinal * 0.6).toFixed(2), s: status });
 const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await escalar("SELECT OrgaoId FROM Orgaos WHERE Sigla = N'CLI'"))).map((m) => Number(m.membroId)));
 
 (async () => {
@@ -156,6 +157,17 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   r = await POST("ativar", { ...ativ, distritoId: legado, gatilho: "METROPOLE", populacao: null, fontePopulacao: null, cidade: "Manaus", uf: "AM" });
   ok(r.status === 200 && (await escalar("SELECT Legado FROM DistritoPeriodos WHERE DistritoId = @d AND DesativadoEm IS NULL", { d: legado })) === false
     && (await escalar("SELECT COUNT(*) FROM DistritoPeriodos WHERE DistritoId = @d", { d: legado })) === 1, "o Distrito legado ganha o decreto no mesmo período", r.body);
+  const perLeg = await um("SELECT CONVERT(varchar(10), AtivadoEm, 120) AS Em, FinanceiroDesdeMes FROM DistritoPeriodos WHERE DistritoId = @d", { d: legado });
+  ok(perLeg.FinanceiroDesdeMes === mes && perLeg.Em <= hojeBr(), "o decreto do legado vale do mês do registro em diante, com a data da reunião", perLeg);
+
+  console.log("== o cadastro dos papéis reservados ==");
+  const PAP = (corpo, id) => chamarRota("GestaoCatalogos/index.js", { metodo: "POST", binding: { catalogo: "papeis" }, token: L.GERAL(1002, ["permissoes"]), corpo: id ? { ...corpo, id } : corpo });
+  r = await PAP({ nome: "Pastor Distrital Renomeado" }, await papelId("Pastor Distrital"));
+  ok(r.body.sucesso === false && (await papelId("Pastor Distrital")), "o papel 'Pastor Distrital' não se renomeia", r.body);
+  r = await PAP({ nome: "  pastor distrital ", nivel: "DISTRITO", permissoes: ["distritos"] });
+  ok(r.body.sucesso === false && (await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome LIKE N'%astor %istrital%'")) === 1, "nenhum outro papel ganha o nome reservado", r.body);
+  r = await PAP({ permissoes: ["reunioes", "pessoas", "distritos"] }, await papelId("Interventor Distrital"));
+  ok(r.body.sucesso === true, "as permissões do papel reservado podem mudar", r.body);
 
   console.log("== o Pastor Distrital só pelo Presidente, em Liderança ==");
   const papelPastor = await papelId("Pastor Distrital");
@@ -189,6 +201,12 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   await fechar(central, mes, 1000);
   await fechar(beta, mes, 500);
   await fechar(central, mesAntes, 800);
+  await fechar(vila, mesAntes, 300);   // a Vila Nova já fechava a tesouraria antes: o mês do Distrito a exige
+  // uma congregação nova no território, que ainda nunca fechou a tesouraria: não trava o Dízimo
+  const nova = await escalar("INSERT INTO Congregacoes (Nome, AreaId) OUTPUT INSERTED.CongregacaoId VALUES (N'Nova do Distrito E2E', @a)", { a: area1 });
+  ok((await escalar("SELECT RepasseDistritoId FROM FechamentosTesouraria WHERE CongregacaoId = @c AND MesReferencia = @m", { c: central, m: mes })) === distrito
+    && (await escalar("SELECT RepasseDistritoId FROM FechamentosTesouraria WHERE CongregacaoId = @c AND MesReferencia = @m", { c: central, m: mesAntes })) === null,
+    "o fechamento grava o Distrito do repasse: o mês do decreto é dele, o de antes é da Sede");
   const RATEIO = (token) => chamarRota("GestaoRateioGeral/index.js", { metodo: "GET", binding: { id: "pendentes" }, token });
   r = await RATEIO(L.GERAL(1002, ["financeiro"]));
   const pend = (r.body && (r.body.itens || r.body.pendentes || r.body)) || [];
@@ -210,7 +228,7 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   console.log("== o Dízimo Institucional calculado ==");
   const REP = (corpo) => chamarRota("GestaoRepassesInstitucionais/index.js", { metodo: "POST", binding: {}, token: L.GERAL(1002, ["financeiro"]), corpo });
   r = await REP({ origemTipo: "DISTRITO", origemId: distrito, mesReferencia: mes, valorArrecadadoLiquido: 999999 });
-  ok(r.status === 400 && /Vila Nova E2E/.test(r.body.mensagem), "falta o fechamento da Vila Nova: recusado, dizendo quem falta", r.body);
+  ok(r.status === 400 && /Vila Nova E2E/.test(r.body.mensagem) && !/Nova do Distrito/.test(r.body.mensagem), "falta o fechamento da Vila Nova: recusado, dizendo quem falta (a congregação nova não é cobrada)", r.body);
   r = await REP({ origemTipo: "DISTRITO", origemId: distrito, mesReferencia: mesAntes });
   ok(r.status === 400 && /não estava ativo/.test(r.body.mensagem), "mês de antes do decreto: recusado", r.body);
   await fechar(vila, mes, 700.55);
@@ -227,6 +245,19 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.body.sucesso && Math.round((saldoDepois - saldoAntes) * 100) === 17006, "repassado, o Dízimo Institucional entra no saldo do Tesouro Geral", { saldoAntes, saldoDepois });
   r = await GET("ficha", { distritoId: distrito });
   ok(r.body.distrito.financeiro.meses.find((m) => m.mes === mes).situacao === "REPASSADO", "a ficha mostra o mês repassado");
+  const cx = r.body.distrito.financeiro.caixa;
+  ok(cx && Math.round(cx.recebido * 100) === Math.round((600 + 420.33) * 100) && Math.round(cx.dizimoRepassado * 100) === 17006 && Math.round(cx.saldo * 100) === Math.round((1020.33 - 170.06) * 100),
+    "o caixa do Distrito: o repasse das congregações dele menos o Dízimo repassado", cx);
+  r = await chamarRota("RelatorioSituacaoTesouro/index.js", { token: L.GERAL(1002, ["financeiro"]) });
+  ok((r.body.porDistrito || []).some((x) => x.distritoId === distrito && Math.round(x.saldo * 100) === Math.round(cx.saldo * 100)), "e a situação do Tesouro mostra o caixa do Distrito à parte", r.body.porDistrito);
+  // mudar o território depois não reescreve o passado: a Área sai do Distrito e o mês continua dele
+  await q("UPDATE Areas SET RegiaoId = NULL WHERE AreaId = @a", { a: area1 });
+  r = await GET("ficha", { distritoId: distrito });
+  const depoisDaMudanca = r.body.distrito.financeiro.meses.find((m) => m.mes === mes);
+  r = await RATEIO(L.GERAL(1002, ["financeiro"]));
+  ok(depoisDaMudanca.soma === 1700.55 && !(r.body.itens || r.body.pendentes || r.body || []).some((i) => Number(i.congregacaoId) === Number(central) && i.mesReferencia === mes),
+    "a Área tirada do Distrito: o mês já fechado continua do Distrito e fora do malote da Sede", depoisDaMudanca);
+  await q("UPDATE Areas SET RegiaoId = @r WHERE AreaId = @a", { r: regiao, a: area1 });
 
   console.log("== balanço anual ao NIF ==");
   // o Distrito estava ativo desde novembro do ano passado (para haver um ano terminado)
@@ -237,8 +268,13 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.status === 403, "o nível geral não envia o balanço do Distrito", r.body);
   r = await POST("balanco", { ...bal, ano: anoPassado + 1 }, DIST(P.tesoureiro));
   ok(r.status === 422, "o ano corrente ainda não tem balanço", r.body);
+  r = guardar("fichaDistritoEnvio", await GET("ficha", { distritoId: distrito }, DIST(P.tesoureiro)));
+  ok(r.body.distrito.acoes.enviarBalanco && r.body.distrito.anosParaBalanco.includes(anoPassado) && !r.body.distrito.acoes.desativar, "a ficha da Tesoureira: enviar o balanço do ano passado, sem os decretos");
   r = guardar("balancoEnviado", await POST("balanco", bal, DIST(P.tesoureiro)));
   ok(r.status === 200 && r.body.sucesso, "a Tesoureira do Distrito envia o balanço", r.body);
+  guardar("catalogosNIF", await GET("catalogos", {}, NIF()));
+  r = guardar("fichaNIF", await GET("ficha", { distritoId: distrito }, NIF()));
+  ok(r.body.distrito.acoes.analisarBalanco && r.body.distrito.balancos.some((b) => b.status === "ENVIADO") && !r.body.distrito.acoes.enviarBalanco, "a ficha do NIF: analisar o balanço enviado");
   r = await POST("balanco", bal, DIST(P.pastor));
   ok(r.status === 422 && /já está com o NIF/.test(r.body.mensagem), "dois balanços vivos do mesmo ano: recusado", r.body);
   const b1 = await escalar("SELECT BalancoId FROM DistritoBalancos WHERE DistritoId = @d AND Ano = @a AND Versao = 1", { d: distrito, a: anoPassado });
@@ -254,6 +290,8 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.body.sucesso && b2, "reenviado: versão 2 (a primeira fica)", r.body);
   r = await POST("analisar", { balancoId: b2, decisao: "APROVAR" }, NIF());
   ok(r.body.sucesso && (await escalar("SELECT Status FROM DistritoBalancos WHERE BalancoId = @b", { b: b2 })) === "APROVADO", "o NIF aprova", r.body);
+  ok((await escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = N'DISTRITO_BALANCO_ANALISADO' AND DestinatarioMembroId = @m", { m: P.tesoureiro })) === 2,
+    "o aviso da aprovação também chega (não é descartado como repetido da devolução)");
   r = await POST("analisar", { balancoId: b2, decisao: "APROVAR" }, NIF());
   ok(r.status === 422, "analisar de novo: recusado", r.body);
   // o atraso: um ano anterior sem balanço depois de 31/03
@@ -261,10 +299,14 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   let fatos = await diDb.detectarBalancoAtrasado(await obterPool(), { hoje: hojeBr() });
   ok(fatos.some((f) => f.referenciaId === (anoPassado - 1) * 10000 + distrito && f.destinatarios.some((d) => Number(d.membroId) === P.tesoureiro)),
     "o balanço de um ano sem envio depois de 31/03 vira aviso para o Distrito", fatos.map((f) => f.referenciaId));
-  // o Dízimo vencido: os meses do período sem repasse, depois da tolerância
+  // o Dízimo vencido: três meses atrás as duas fecharam para o Distrito e ninguém repassou (retenção); dois meses atrás a Vila não fechou (falta fechamento)
+  const m3 = di.mesAnterior(di.mesAnterior(mesAntes)), m2 = di.mesAnterior(mesAntes);
+  await fechar(central, m3, 400); await fechar(vila, m3, 100); await fechar(central, m2, 200);
   fatos = await diDb.detectarRepasseVencido(await obterPool(), { hoje: hojeBr() });
-  ok(fatos.length >= 1 && fatos.every((f) => /Art\. 126-N, III/.test(f.fatoGerador)) && new Set(fatos.map((f) => f.referenciaId)).size === fatos.length,
-    "os meses vencidos sem repasse viram avisos (um por mês, referências distintas)", fatos.length);
+  const fatoDe = (m) => fatos.find((f) => f.referenciaId === (Number(m.replace("-", "")) - 200000) * 10000 + distrito);
+  ok(fatoDe(m3) && /Art\. 126-N, III/.test(fatoDe(m3).fatoGerador) && fatoDe(m2) && /falta fechar/.test(fatoDe(m2).fatoGerador) && !/intervenção/.test(fatoDe(m2).fatoGerador)
+    && new Set(fatos.map((f) => f.referenciaId)).size === fatos.length, "o mês retido fala em intervenção; o que falta fechar só pede o fechamento", fatos.map((f) => f.fatoGerador.slice(0, 70)));
+  ok(!fatos.some((f) => /Nova do Distrito/.test(f.fatoGerador)), "a congregação nova não aparece como faltando");
   await q("UPDATE DistritoPeriodos SET FinanceiroDesdeMes = @m WHERE DistritoId = @d AND DesativadoEm IS NULL", { m: mes, d: distrito });
 
   console.log("== painel, lista, ficha e quem vê o quê ==");
@@ -306,10 +348,16 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.status === 428, "sem a confirmação recente: 428", r.status);
   r = await POST("intervir", { ...iv, interventorMembroId: P.sobProcesso }, PRES());
   ok(r.status === 422 && /processo/.test(r.body.mensagem), "Interventor sob processo: recusado", r.body);
+  r = await POST("intervir", { ...iv, interventorMembroId: 3003 }, PRES());
+  ok(r.status === 422 && /já tem o cargo/.test(r.body.mensagem), "Interventor que já tem outro cargo (o Pastor de Área): recusado, para não trocar o cargo dele", r.body);
+  r = await POST("intervir", { ...iv, interventorMembroId: 1001 }, PRES());
+  ok(r.status === 422 && /já tem o cargo/.test(r.body.mensagem) && (await vigente(1001)) === 1, "o próprio Presidente como Interventor: recusado (perderia o acesso geral)", r.body);
   r = await POST("intervir", { ...iv, interventorMembroId: P.superint }, PRES());
   ok(r.status === 422 && /liderança do Distrito/.test(r.body.mensagem), "Interventor da liderança destituída: recusado", r.body);
   r = guardar("intervir", await POST("intervir", iv, PRES()));
   ok(r.status === 200 && r.body.sucesso && r.body.destituidos === 4, "o Presidente decreta: 4 acessos da liderança distrital encerrados", r.body);
+  r = guardar("fichaSobIntervencao", await GET("ficha", { distritoId: distrito }, PRES()));
+  ok(r.body.distrito.acoes.encerrarIntervencao && !r.body.distrito.acoes.intervir && r.body.distrito.sinais.intervencaoSemInterventorComAcesso, "a ficha sob intervenção: encerrar, e o aviso do acesso do Interventor");
   const fora = [];
   for (const m of [P.pastor, P.tesoureiro, P.superint, P.vice]) if ((await vigente(m)) !== 0) fora.push(m);
   ok(fora.length === 0, "o Pastor, a Tesoureira, o Superintendente e o Vice saíram (AtivoAte = ontem)", fora);
@@ -324,6 +372,10 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   r = await POST("desativar", { distritoId: distrito, sessaoId: reuniao, motivo: "A CLI desativou o Distrito." });
   ok(r.status === 422 && /intervenção/.test(r.body.mensagem), "não se desativa durante a intervenção", r.body);
   const papelInterv = await papelId("Interventor Distrital");
+  r = await LID({ membroId: P.pastor, papelId: await papelId("Tesoureiro de Distrito"), escopoTipo: "DISTRITO", escopoId: distrito, duracaoMeses: 12 }, SEC());
+  ok(r.body.sucesso === false && /sob intervenção/.test(r.body.mensagem) && (await vigente(P.pastor)) === 0, "durante a intervenção a Secretaria não recoloca o destituído por outro papel do Distrito", r.body);
+  r = await LID({ membroId: P.superint, papelId: await papelId("Superintendente Regional"), escopoTipo: "REGIAO", escopoId: regiao, duracaoMeses: 12 }, SEC());
+  ok(r.body.sucesso === false && /sob intervenção/.test(r.body.mensagem), "nem o Superintendente de uma Região do território", r.body);
   r = await LID({ membroId: P.interventor, papelId: papelInterv, escopoTipo: "DISTRITO", escopoId: distrito, senha: "NovaSenha#2026" }, SEC());
   ok(r.body.sucesso === false, "o acesso do Interventor não é dado pela Secretaria", r.body);
   r = await LID({ membroId: P.outroPastor, papelId: papelInterv, escopoTipo: "DISTRITO", escopoId: distrito, senha: "NovaSenha#2026" }, PRES());
@@ -365,6 +417,15 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.status === 422 && /anterior à última desativação/.test(r.body.mensagem), "reativar com reunião anterior à desativação: recusado", r.body);
   r = await GET("ficha", { distritoId: distrito });
   ok(r.body.distrito.periodos.length === 1 && r.body.distrito.periodos[0].desativadoEm, "o período desativado fica no histórico");
+  guardar("fichaDesativada", r);
+  ok(r.body.distrito.acoes.ativar && !r.body.distrito.acoes.desativar, "desativado: o nível geral pode ativar de novo");
+  // desativado, ninguém tem escopo dele: o balanço que ficou devendo é enviado pelo nível geral
+  await q("UPDATE DistritoPeriodos SET FinanceiroDesdeMes = @m WHERE DistritoId = @d AND Legado = 0", { m: `${anoPassado - 1}-06`, d: distrito });
+  r = await GET("ficha", { distritoId: distrito });
+  ok(r.body.distrito.acoes.enviarBalanco && r.body.distrito.anosParaBalanco.includes(anoPassado - 1), "o Distrito desativado: o nível geral vê o balanço devido");
+  r = await POST("balanco", { ...bal, ano: anoPassado - 1 });
+  ok(r.body.sucesso === true, "e envia ao NIF", r.body);
+  await q("UPDATE DistritoPeriodos SET FinanceiroDesdeMes = @m WHERE DistritoId = @d AND Legado = 0", { m: mes, d: distrito });
 
   console.log("== garantias do banco ==");
   await falhaNoBanco("gatilho (b) com menos de um milhão", `INSERT INTO DistritoPeriodos (DistritoId, Legado, AtivadoEm, FinanceiroDesdeMes, AtivacaoSessaoId, Gatilho, Cidade, UF, Populacao, FontePopulacao, Fundamentacao, AtivacaoRegistradaPor)

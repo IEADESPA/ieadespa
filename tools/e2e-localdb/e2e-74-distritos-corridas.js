@@ -106,8 +106,8 @@ async function principal() {
   console.log("== quatro registros do mesmo Dízimo Institucional ==");
   const mes = hojeBr().slice(0, 7);
   for (const c of [central, vila]) {
-    await q(`INSERT INTO FechamentosTesouraria (CongregacaoId, MesReferencia, TotalRecebido, TotalFinal, PercentualRetencaoLocal, ValorRetidoLocal, ValorRepasseGeral, Status, FechadoPor)
-             VALUES (@c, @m, 1000, 1000, 40, 400, 600, 'REPASSADO', 1002)`, { c, m: mes });
+    await q(`INSERT INTO FechamentosTesouraria (CongregacaoId, MesReferencia, TotalRecebido, TotalFinal, PercentualRetencaoLocal, ValorRetidoLocal, ValorRepasseGeral, Status, FechadoPor, RepasseDistritoId)
+             VALUES (@c, @m, 1000, 1000, 40, 400, 600, 'REPASSADO', 1002, @d)`, { c, m: mes, d: dA });
   }
   rs = await disparar([1, 2, 3, 4].map(() => ({ rota: "repasse", corpo: { origemTipo: "DISTRITO", origemId: dA, mesReferencia: mes } })));
   ok(semErro(rs) && ganhos(rs) === 1, "um registro só (os outros: 'já existe', sem erro 500)", rs.map((x) => `${x.status} ${x.mensagem}`));

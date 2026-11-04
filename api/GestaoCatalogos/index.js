@@ -48,10 +48,15 @@ const CATALOGOS = {
     conferirEscrita: async (pool, dados, id) => {
       if (dados.ativo === undefined) return null;
       const quer = dados.ativo === true || dados.ativo === 1 || dados.ativo === "1" || dados.ativo === "true";
-      if (!id) return quer ? "O Distrito nasce inativo: a ativação é decreto da CLI, registrado em Expansão → Distritos." : null;
-      const r = await pool.request().input("id", sql.Int, id).query(`SELECT Ativo FROM Distritos WHERE DistritoId = @id`);
-      if (!r.recordset[0]) return null;
-      return !!r.recordset[0].Ativo !== quer ? "A ativação e a desativação do Distrito são decretos da CLI, registrados em Expansão → Distritos (não no cadastro)." : null;
+      let recusa = null;
+      if (!id) recusa = quer ? "O Distrito nasce inativo: a ativação é decreto da CLI, registrado em Expansão → Distritos." : null;
+      else {
+        const r = await pool.request().input("id", sql.Int, id).query(`SELECT Ativo FROM Distritos WHERE DistritoId = @id`);
+        if (r.recordset[0] && !!r.recordset[0].Ativo !== quer) recusa = "A ativação e a desativação do Distrito são decretos da CLI, registrados em Expansão → Distritos (não no cadastro).";
+      }
+      // o cadastro nunca grava o Ativo (nem o valor igual): uma edição que corresse junto com o decreto o desfaria (revisão de 04/11/2026)
+      delete dados.ativo;
+      return recusa;
     },
     // o Distrito com território, decreto, intervenção, balanço, repasse ou acesso de escopo não se exclui
     emUso: async (pool, id) => {
@@ -135,7 +140,28 @@ const CATALOGOS = {
     tabela: "Papeis", chave: "PapelId", idField: "papelId",
     campos: { nome: sql.NVarChar(100), nivel: sql.NVarChar(30), permissoes: sql.NVarChar(500) },
     arrayFields: ["permissoes"],
-    permissao: "permissoes"
+    permissao: "permissoes",
+    // v9.3 — "Pastor Distrital" e "Interventor Distrital" só o Pastor Presidente dá (a tela de Liderança reconhece os dois pelo nome): eles não se renomeiam, não
+    // mudam de nível, e nenhum outro papel ganha esses nomes (senão bastaria renomear, dar e renomear de volta)
+    conferirEscrita: async (pool, dados, id) => {
+      const RESERVADOS = ["Pastor Distrital", "Interventor Distrital"];
+      const chave = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+      const reservado = (t) => RESERVADOS.some((r) => chave(r) === chave(t));
+      const atual = id ? (await pool.request().input("id", sql.Int, id).query(`SELECT Nome, Nivel FROM Papeis WHERE PapelId = @id`)).recordset[0] : null;
+      if (atual && reservado(atual.Nome)) {
+        if ((dados.nome !== undefined && dados.nome !== atual.Nome) || (dados.nivel !== undefined && dados.nivel !== atual.Nivel)) {
+          return `O papel "${atual.Nome}" não se renomeia nem muda de nível: é ele que só o Pastor Presidente dá (Regimento, Art. 126-L, I, e 126-P, II). As permissões dele podem mudar.`;
+        }
+        return null;
+      }
+      if (dados.nome !== undefined && reservado(dados.nome)) return `O nome "${String(dados.nome).trim()}" é de um papel reservado ao Pastor Presidente: escolha outro nome.`;
+      return null;
+    },
+    // o papel reservado não se exclui
+    emUso: async (pool, id) => {
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT Nome FROM Papeis WHERE PapelId = @id`);
+      return !!(r.recordset[0] && ["Pastor Distrital", "Interventor Distrital"].includes(r.recordset[0].Nome));
+    }
   },
   tiposConsagracao: {
     tabela: "TiposConsagracao", chave: "TipoConsagracaoId", idField: "tipoConsagracaoId",

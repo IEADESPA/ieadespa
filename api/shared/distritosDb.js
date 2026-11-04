@@ -165,49 +165,76 @@ async function parametrosRepasse(rq) {
   const l = r.recordset[0] || { PercentualDizimoInstitucional: 10, DiasTolerancia: 5 };
   return { percentual: Number(l.PercentualDizimoInstitucional), diasTolerancia: Number(l.DiasTolerancia) };
 }
-// Os meses do Distrito até o mês de hoje (os mais recentes primeiro), no máximo `limite`.
+// Os meses do Distrito (só os períodos com decreto) até o mês de hoje (os mais recentes primeiro), no máximo `limite`.
 function mesesDosPeriodos(lista, hoje, limite = 24) {
   const mesHoje = di.mesDe(hoje);
   const todos = new Set();
-  for (const p of lista || []) {
+  for (const p of di.comDecreto(lista)) {
     const ate = p.financeiroAteMes ? di.mesAnterior(p.financeiroAteMes) : mesHoje;
     for (const m of di.mesesEntre(p.financeiroDesdeMes, ate < mesHoje ? ate : mesHoje)) todos.add(m);
   }
   return [...todos].sort().reverse().slice(0, limite);
 }
-// O mês a mês do Dízimo Institucional (os 24 meses mais recentes do Distrito).
+// Os dados de cada mês: as congregações que o mês exige (do território de hoje, ativas e que já fechavam a tesouraria naquele mês — a congregação nova ou a que
+// nunca usou a tesouraria do sistema não trava meses anteriores), quais delas fecharam (para qualquer destino) e os fechamentos com o repasse gravado para este
+// Distrito (os que entram na soma — inclusive o de uma congregação que depois saiu do território: o que foi do Distrito continua sendo).
+async function dadosDosMeses(rq, distritoId, meses, terr) {
+  const ativas = terr.congregacoes.filter((c) => c.ativa);
+  const ids = ativas.map((c) => Number(c.congregacaoId));
+  const lista = meses.map((m) => `'${m}'`).join(",");   // meses vêm de mesesEntre/ehMes (AAAA-MM): nada de fora entra no texto
+  const [primeiros, doMes, doDistrito] = await Promise.all([
+    ids.length ? rq().query(`SELECT CongregacaoId, MIN(MesReferencia) AS Primeiro FROM FechamentosTesouraria WHERE CongregacaoId IN (${ids.join(",")}) GROUP BY CongregacaoId`) : { recordset: [] },
+    ids.length ? rq().query(`SELECT CongregacaoId, MesReferencia FROM FechamentosTesouraria WHERE CongregacaoId IN (${ids.join(",")}) AND MesReferencia IN (${lista})`) : { recordset: [] },
+    rq().input("d", sql.Int, distritoId).query(`SELECT CongregacaoId, MesReferencia, TotalFinal FROM FechamentosTesouraria WHERE RepasseDistritoId = @d AND MesReferencia IN (${lista})`)
+  ]);
+  const primeiro = new Map(primeiros.recordset.map((l) => [Number(l.CongregacaoId), l.Primeiro]));
+  const porMes = new Map();
+  for (const mes of meses) {
+    porMes.set(mes, {
+      exigidas: ativas.filter((c) => primeiro.has(Number(c.congregacaoId)) && primeiro.get(Number(c.congregacaoId)) <= mes),
+      fecharam: doMes.recordset.filter((f) => f.MesReferencia === mes).map((f) => Number(f.CongregacaoId)),
+      fechamentos: doDistrito.recordset.filter((f) => f.MesReferencia === mes).map((f) => ({ congregacaoId: Number(f.CongregacaoId), totalFinal: Number(f.TotalFinal) }))
+    });
+  }
+  return porMes;
+}
+// O mês a mês do Dízimo Institucional (os 24 meses mais recentes do Distrito, só dos períodos com decreto).
 async function posicaoFinanceira(rq, distritoId, { lista, terr, hoje, limite = 24 }) {
   const meses = mesesDosPeriodos(lista, hoje, limite);
   if (!meses.length) return { percentual: null, diasTolerancia: null, meses: [] };
   const param = await parametrosRepasse(rq);
-  const todas = terr.congregacoes;
-  const ativas = todas.filter((c) => c.ativa);
-  const ids = todas.map((c) => Number(c.congregacaoId));
-  const fechamentos = ids.length
-    ? (await rq().query(`SELECT CongregacaoId, MesReferencia, TotalFinal FROM FechamentosTesouraria
-         WHERE CongregacaoId IN (${ids.join(",")}) AND MesReferencia IN (${meses.map((m) => `'${m}'`).join(",")})`)).recordset
-    : [];
+  const dados = await dadosDosMeses(rq, distritoId, meses, terr);
   const repasses = (await rq().input("d", sql.Int, distritoId).query(`
     SELECT RepasseId, MesReferencia, ValorArrecadadoLiquido, ValorRepasse, Status, CONVERT(varchar(10), DataRepasse, 120) AS DataRepasse
     FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND OrigemId = @d`)).recordset;
-  const nomes = new Map(todas.map((c) => [Number(c.congregacaoId), c.nome]));
   return {
     percentual: param.percentual, diasTolerancia: param.diasTolerancia,
     meses: meses.map((mes) => {
-      const doMes = fechamentos.filter((f) => f.MesReferencia === mes).map((f) => ({ congregacaoId: Number(f.CongregacaoId), totalFinal: Number(f.TotalFinal) }));
-      const consideradas = ativas.concat(doMes.filter((f) => !ativas.some((c) => Number(c.congregacaoId) === f.congregacaoId))
-        .map((f) => ({ congregacaoId: f.congregacaoId, nome: nomes.get(f.congregacaoId) || "" })));
-      const rep = repasses.find((x) => x.MesReferencia === mes);
+      const x = dados.get(mes);
+      const rep = repasses.find((y) => y.MesReferencia === mes);
       return di.situacaoDoMes({
-        mes, congregacoes: consideradas, fechamentos: doMes, percentual: param.percentual, diasTolerancia: param.diasTolerancia, hoje,
+        mes, congregacoes: x.exigidas, fecharam: x.fecharam, fechamentos: x.fechamentos, percentual: param.percentual, diasTolerancia: param.diasTolerancia, hoje,
         repasse: rep ? { repasseId: rep.RepasseId, status: rep.Status, valorRepasse: Number(rep.ValorRepasse), valorArrecadadoLiquido: Number(rep.ValorArrecadadoLiquido), dataRepasse: rep.DataRepasse } : null
       });
     })
   };
 }
+// O caixa do Distrito enquanto a igreja tem uma conta só: o repasse dos fechamentos gravados para ele (liberado e pendente de conferência) menos o Dízimo
+// Institucional já repassado à Sede. É dinheiro do Distrito (Art. 126-N, I) sob a guarda da conta única; o que ele gasta aparece no balanço anual ao NIF.
+async function caixaDoDistrito(rq, distritoId) {
+  const r = await rq().input("d", sql.Int, distritoId).query(`
+    SELECT (SELECT ISNULL(SUM(ValorRepasseGeral), 0) FROM FechamentosTesouraria WHERE RepasseDistritoId = @d AND Status = 'REPASSADO') AS Recebido,
+           (SELECT ISNULL(SUM(ValorRepasseGeral), 0) FROM FechamentosTesouraria WHERE RepasseDistritoId = @d AND Status <> 'REPASSADO') AS Pendente,
+           (SELECT ISNULL(SUM(ri.ValorRepasse), 0) FROM RepassesInstitucionais ri WHERE ri.OrigemTipo = N'DISTRITO' AND ri.OrigemId = @d AND ri.Status = N'REPASSADO'
+              AND EXISTS (SELECT 1 FROM DistritoPeriodos dp WHERE dp.DistritoId = ri.OrigemId AND dp.Legado = 0
+                AND ri.MesReferencia >= dp.FinanceiroDesdeMes AND (dp.FinanceiroAteMes IS NULL OR ri.MesReferencia < dp.FinanceiroAteMes))) AS DizimoRepassado`);
+  const l = r.recordset[0] || {};
+  const recebido = di.round2(Number(l.Recebido || 0)), dizimoRepassado = di.round2(Number(l.DizimoRepassado || 0));
+  return { recebido, pendente: di.round2(Number(l.Pendente || 0)), dizimoRepassado, saldo: di.round2(recebido - dizimoRepassado) };
+}
 
-// Para a tela de Repasses (GestaoRepassesInstitucionais): a arrecadação líquida consolidada do mês, calculada — nunca digitada. Recusa o mês fora de um período do
-// Distrito e o mês com congregação ativa do território ainda sem fechamento (diz quais).
+// Para a tela de Repasses (GestaoRepassesInstitucionais): a arrecadação líquida consolidada do mês, calculada — nunca digitada. Recusa o mês fora de um período com
+// decreto e o mês com congregação exigida ainda sem fechamento (diz quais).
 async function apuracaoParaRepasse(pool, distritoId, mes) {
   const rq = () => pool.request();
   const d = await lerDistrito(rq, distritoId);
@@ -217,19 +244,14 @@ async function apuracaoParaRepasse(pool, distritoId, mes) {
   if (!di.mesDoDistrito(mes, lista)) {
     return { erro: "Neste mês o Distrito não estava ativo por decreto da CLI: o repasse das congregações do território foi para a Sede (Rateio Geral)." };
   }
-  const terr = await territorio(rq, distritoId);
-  const ativas = terr.congregacoes.filter((c) => c.ativa);
-  const ids = terr.congregacoes.map((c) => Number(c.congregacaoId));
-  const fechamentos = ids.length
-    ? (await pool.request().input("m", sql.Char(7), mes).query(`SELECT CongregacaoId, TotalFinal FROM FechamentosTesouraria WHERE MesReferencia = @m AND CongregacaoId IN (${ids.join(",")})`)).recordset
-    : [];
-  const fechadas = new Set(fechamentos.map((f) => Number(f.CongregacaoId)));
-  const faltam = ativas.filter((c) => !fechadas.has(Number(c.congregacaoId)));
+  const x = (await dadosDosMeses(rq, distritoId, [mes], await territorio(rq, distritoId))).get(mes);
+  const fecharam = new Set(x.fecharam);
+  const faltam = x.exigidas.filter((c) => !fecharam.has(Number(c.congregacaoId)));
   if (faltam.length) {
     return { erro: `Ainda falta fechar o mês na Tesouraria Local de: ${faltam.map((c) => c.nome).join(", ")}. O Dízimo Institucional é calculado sobre todas as congregações do Distrito.` };
   }
-  if (!fechamentos.length) return { erro: "Nenhuma congregação do território fechou este mês." };
-  return { nome: d.nome, soma: di.round2(fechamentos.reduce((s, f) => s + Number(f.TotalFinal || 0), 0)) };
+  if (!x.fechamentos.length) return { erro: "Nenhum fechamento deste mês tem o repasse para este Distrito: não há Dízimo Institucional a registrar." };
+  return { nome: d.nome, soma: di.round2(x.fechamentos.reduce((s, f) => s + Number(f.totalFinal || 0), 0)) };
 }
 
 // ================================================================ listas e ficha ================================================================
@@ -256,8 +278,10 @@ function acoesDaFicha(alcance, d, aberto, intervencaoAberta) {
     desativar: !!alcance.geral && d.ativo && !!aberto && !intervencaoAberta,
     intervir: !!alcance.presidente && d.ativo && !intervencaoAberta,
     encerrarIntervencao: !!alcance.presidente && !!intervencaoAberta,
-    enviarBalanco: ehDoDistrito(alcance, d.distritoId),
-    analisarBalanco: !!alcance.nif
+    // o Distrito envia o próprio balanço; desativado (sem ninguém de escopo dele), o nível geral envia o que ficou devendo (revisão de 04/11/2026)
+    enviarBalanco: ehDoDistrito(alcance, d.distritoId) || (!!alcance.geral && !d.ativo),
+    // o NIF analisa — menos quem é da liderança do próprio Distrito
+    analisarBalanco: !!alcance.nif && !ehDoDistrito(alcance, d.distritoId)
   };
 }
 
@@ -270,8 +294,10 @@ async function detalharDistrito(pool, { distritoId, alcance, hoje = hojeBrasilia
   const aberto = periodoAberto(lista);
   const cde = await composicaoCDE(rq, distritoId, hoje, terr);
   const financeiro = await posicaoFinanceira(rq, distritoId, { lista, terr, hoje });
+  financeiro.caixa = await caixaDoDistrito(rq, distritoId);
   const intervencaoAberta = ivs.find((i) => i.aberta) || null;
-  const vencidos = financeiro.meses.filter((m) => m.vencido).map((m) => m.mes).sort();
+  const vencidos = financeiro.meses.filter((m) => m.motivoVencido === "RETENCAO").map((m) => m.mes).sort();
+  const semFechamento = financeiro.meses.filter((m) => m.motivoVencido === "FECHAMENTO").map((m) => m.mes).sort();
   const atrasados = di.balancosAtrasados(lista, bals, hoje);
   return {
     distritoId: d.distritoId, nome: d.nome, ativo: d.ativo, periodoAberto: aberto, periodos: lista.slice().reverse(), territorio: terr, cde, intervencoes: ivs,
@@ -281,7 +307,7 @@ async function detalharDistrito(pool, { distritoId, alcance, hoje = hojeBrasilia
       semDecreto: !!(aberto && aberto.legado),
       semPastor: d.ativo && !cde.pastor.length && !intervencaoAberta,
       intervencaoSemInterventorComAcesso: !!intervencaoAberta && !cde.interventor.some((p) => Number(p.membroId) === Number(intervencaoAberta.interventor.membroId)),
-      repasseVencido: vencidos, balancoAtrasado: atrasados
+      repasseVencido: vencidos, fechamentoAtrasado: semFechamento, balancoAtrasado: atrasados
     },
     acoes: acoesDaFicha(alcance, d, aberto, intervencaoAberta)
   };
@@ -324,10 +350,11 @@ async function ativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alc
       .input("fund", sql.NVarChar(2000), v.dados.fundamentacao).input("por", sql.Int, por);
     let periodoId;
     if (aberto) {
-      // o período legado (ativo no cadastro antes da v9.3) ganha o decreto; o mês financeiro não muda
-      const u = await decreto.input("p", sql.Int, aberto.periodoId).query(`
-        UPDATE DistritoPeriodos SET Legado = 0, AtivacaoSessaoId = @s, Gatilho = @g, Cidade = @cid, UF = @uf, Populacao = @pop, FontePopulacao = @fonte,
-               Fundamentacao = @fund, AtivacaoRegistradaPor = @por, AtivacaoRegistradaEm = SYSUTCDATETIME()
+      // o período legado (ativo no cadastro antes da v9.3, sem efeito no dinheiro) ganha o decreto: a data é a da reunião e o dinheiro passa ao Distrito a partir
+      // do mês deste registro (revisão de 04/11/2026)
+      const u = await decreto.input("p", sql.Int, aberto.periodoId).input("em", sql.Date, reuniao.data).input("desde", sql.Char(7), di.mesDe(hoje)).query(`
+        UPDATE DistritoPeriodos SET Legado = 0, AtivadoEm = @em, FinanceiroDesdeMes = @desde, AtivacaoSessaoId = @s, Gatilho = @g, Cidade = @cid, UF = @uf,
+               Populacao = @pop, FontePopulacao = @fonte, Fundamentacao = @fund, AtivacaoRegistradaPor = @por, AtivacaoRegistradaEm = SYSUTCDATETIME()
         WHERE PeriodoId = @p AND Legado = 1 AND DesativadoEm IS NULL`);
       if (!u.rowsAffected[0]) return MUDOU;
       periodoId = aberto.periodoId;
@@ -346,23 +373,35 @@ async function ativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alc
       if (!u.rowsAffected[0]) return MUDOU;
     }
     await garantirCDE(rq, d);
+    // o mês do registro já fechado por alguma congregação do território (e ainda fora de um Rateio Geral) passa para o Distrito
+    const ids = terr.congregacoes.map((c) => Number(c.congregacaoId));
+    const passados = ids.length ? (await rq().input("d", sql.Int, distritoId).input("desde", sql.Char(7), di.mesDe(hoje)).query(`
+      UPDATE f SET RepasseDistritoId = @d OUTPUT inserted.FechamentoId FROM FechamentosTesouraria f
+      WHERE f.CongregacaoId IN (${ids.join(",")}) AND f.MesReferencia >= @desde AND f.RepasseDistritoId IS NULL
+        AND NOT EXISTS (SELECT 1 FROM RateioGeralItens ri WHERE ri.FechamentoId = f.FechamentoId)`)).recordset.map((l) => l.FechamentoId) : [];
     await registrarAuditoriaNaTransacao(t, { tabela: "Distritos", registroId: distritoId, acao: aberto ? "DISTRITO_DECRETO_REGISTRADO" : "DISTRITO_ATIVADO", usuarioId: por,
-      dadosAntes: { ativo: d.ativo, legado: !!aberto }, dadosDepois: { ...v.dados, reuniao: reuniao.data, periodoId, congregacoesAtivas: ativas } });
+      dadosAntes: { ativo: d.ativo, legado: !!aberto }, dadosDepois: { ...v.dados, reuniao: reuniao.data, periodoId, congregacoesAtivas: ativas, fechamentosPassados: passados } });
     return {
       sucesso: true, periodoId,
-      mensagem: aberto ? "Decreto da CLI registrado para o Distrito que já estava ativo."
+      mensagem: aberto ? "Decreto da CLI registrado para o Distrito que já estava ativo. A partir deste mês o repasse das congregações dele vai para o Distrito."
         : `Distrito ativado por decreto da CLI, cobrindo ${ativas} congregação(ões). A partir deste mês o repasse delas vai para o Distrito. O Pastor Presidente dá o acesso de Pastor Distrital em Liderança.`
     };
   });
 }
 
+// Quem sai da liderança obriga a troca das senhas dos canais oficiais dele (Regimento Art. 160 §4º, I) — a mesma conferência que a tela de Liderança faz. Falha aqui
+// nunca desfaz o ato: a rodada diária dos avisos repete a conferência.
+async function sucessaoDeCanais(pool, por, deps = {}) {
+  try { await (deps.canaisDb || require("./canaisDb")).sincronizarSucessoes(pool, { por }); } catch (e) { console.error("[DISTRITOS] sucessão de canais:", e.message); }
+}
 // Encerra o acesso das linhas de Liderança (AtivoAte = ontem), cancela as delegações delas e derruba as sessões das pessoas e dos delegados — na transação.
+// Quem fez o ato nunca perde a própria linha nem a própria sessão.
 async function encerrarAcessos(rq, liderancaIds, { hoje, excetoMembroId = null }) {
   const ids = [...new Set((liderancaIds || []).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
   if (!ids.length) return { membros: [], sessoes: [] };
-  const fim = await rq().input("h", sql.Date, hoje).query(`
+  const fim = await rq().input("h", sql.Date, hoje).input("exceto", sql.Int, excetoMembroId).query(`
     UPDATE Lideranca SET AtivoAte = DATEADD(DAY, -1, @h) OUTPUT inserted.MembroId
-    WHERE LiderancaId IN (${ids.join(",")}) AND ${VIGENTE("Lideranca")}`);
+    WHERE LiderancaId IN (${ids.join(",")}) AND ${VIGENTE("Lideranca")} AND (@exceto IS NULL OR MembroId <> @exceto)`);
   const membros = [...new Set(fim.recordset.map((l) => Number(l.MembroId)))];
   const deleg = await rq().query(`
     UPDATE DelegacoesAcesso SET Status = 'CANCELADA' OUTPUT inserted.DelegadoMembroId
@@ -400,6 +439,9 @@ async function desativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), 
       WHERE PeriodoId = @p AND DesativadoEm IS NULL`);
     if (!u.rowsAffected[0]) return MUDOU;
     await rq().input("d", sql.Int, distritoId).query(`UPDATE Distritos SET Ativo = 0 WHERE DistritoId = @d`);
+    // o mês da desativação em diante volta para a Sede: o fechamento já feito desses meses deixa de ser do Distrito
+    await rq().input("d", sql.Int, distritoId).input("ate", sql.Char(7), di.mesDe(hoje))
+      .query(`UPDATE FechamentosTesouraria SET RepasseDistritoId = NULL WHERE RepasseDistritoId = @d AND MesReferencia >= @ate`);
     // o acesso de toda a liderança de escopo do Distrito termina (o Distrito deixou de existir como nível ativo)
     const linhas = await rq().input("d", sql.Int, distritoId).input("h", sql.Date, hoje)
       .query(`SELECT LiderancaId FROM Lideranca WHERE EscopoTipo = 'DISTRITO' AND EscopoId = @d AND ${VIGENTE("Lideranca")}`);
@@ -410,6 +452,7 @@ async function desativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), 
   });
   if (!r.sucesso) return r;
   (deps.auth || require("./auth")).marcarRevogadas(r.sessoes);
+  await sucessaoDeCanais(pool, por, deps);
   return { sucesso: true, mensagem: `Distrito desativado por decreto da CLI. A partir deste mês o repasse das congregações volta para a Sede.${r.acessos ? ` ${r.acessos} acesso(s) de escopo do Distrito encerrado(s).` : ""}`, acessosEncerrados: r.acessos };
 }
 
@@ -444,6 +487,11 @@ async function intervir(pool, { distritoId, dados, por, hoje = hojeBrasilia(), a
     if (!m) return { sucesso: false, mensagem: "Matrícula do Interventor não encontrada." };
     if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || sob.has(m.MembroId)) return { sucesso: false, mensagem: "O Interventor precisa ser membro ativo e em comunhão, sem processo disciplinar em curso." };
     if (lideres.some((l) => l.membroId === Number(m.MembroId))) return { sucesso: false, mensagem: "O Interventor não pode ser alguém da liderança do Distrito que está sendo destituída." };
+    // cada pessoa tem um só acesso: dar o de Interventor a quem já tem outro cargo em vigor (o Presidente, o Secretário Geral, um Pastor de Área) trocaria o cargo
+    // dele e, no encerramento, o deixaria sem acesso nenhum (revisão de 04/11/2026)
+    const outroCargo = (await rq().input("m", sql.Int, m.MembroId).input("h", sql.Date, hoje).query(`
+      SELECT TOP 1 p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = @m AND ${VIGENTE("l")}`)).recordset[0];
+    if (outroCargo) return { sucesso: false, mensagem: `O Interventor já tem o cargo "${outroCargo.Nome}" em vigor e cada pessoa tem um só acesso: escolha alguém sem cargo de acesso, ou tire o cargo dessa pessoa em Liderança antes.` };
     const ins = await rq().input("d", sql.Int, distritoId).input("mot", sql.NVarChar(20), v.dados.motivo).input("fund", sql.NVarChar(4000), v.dados.fundamentacao)
       .input("i", sql.Int, v.dados.interventorMembroId).input("b", sql.Bit, v.dados.bloqueioContas).input("pr", sql.Bit, v.dados.procuracao).input("j", sql.Bit, v.dados.judicial)
       .input("n", sql.Int, lideres.length).input("em", sql.Date, hoje).input("por", sql.Int, por).query(`
@@ -457,6 +505,7 @@ async function intervir(pool, { distritoId, dados, por, hoje = hojeBrasilia(), a
   });
   if (!r.sucesso) return r;
   (deps.auth || require("./auth")).marcarRevogadas(r.sessoes);
+  await sucessaoDeCanais(pool, por, deps);
   return {
     sucesso: true, intervencaoId: r.intervencaoId, destituidos: r.destituidos,
     mensagem: `Intervenção decretada: ${r.destituidos} acesso(s) da liderança do Distrito encerrado(s) e as sessões derrubadas. Agora dê ao Interventor o acesso "Interventor Distrital" em Liderança (só o Pastor Presidente pode). As medidas marcadas (contas, procuração, polícia ou Justiça) dependem de providência fora do sistema.`
@@ -488,18 +537,21 @@ async function encerrarIntervencao(pool, { distritoId, dados, por, hoje = hojeBr
   });
   if (!r.sucesso) return r;
   (deps.auth || require("./auth")).marcarRevogadas(r.sessoes);
+  await sucessaoDeCanais(pool, por, deps);
   return { sucesso: true, mensagem: "Intervenção encerrada. O acesso do Interventor terminou. O novo Pastor Distrital recebe o acesso em Liderança (só o Pastor Presidente pode)." };
 }
 
 // ================================================================ balanço anual ao NIF ================================================================
 async function enviarBalanco(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alcance }) {
-  if (!ehDoDistrito(alcance, distritoId)) return PROIBIDO("O balanço é enviado por quem tem acesso de escopo do Distrito (o Pastor Distrital, o Tesoureiro de Distrito ou o Interventor).");
+  const doDistrito = ehDoDistrito(alcance, distritoId);
+  if (!doDistrito && !alcance.geral) return PROIBIDO("O balanço é enviado por quem tem acesso de escopo do Distrito (o Pastor Distrital, o Tesoureiro de Distrito ou o Interventor).");
   const v = di.validarBalanco(dados);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   try {
     return await emTransacao(pool, async (t, rq) => {
       const d = await lerDistrito(rq, distritoId, { travar: true });
       if (!d) return NAO_EXISTE;
+      if (!doDistrito && d.ativo) return PROIBIDO("O balanço do Distrito ativo é enviado por quem tem acesso de escopo dele; o nível geral só envia o de um Distrito já desativado.");
       const [lista, bals] = await Promise.all([periodos(rq, distritoId), balancos(rq, distritoId)]);
       const pode = di.podeEnviarBalanco({ ano: v.dados.ano, periodos: lista, balancos: bals, hoje });
       if (!pode.pode) return { sucesso: false, mensagem: pode.mensagem };
@@ -530,6 +582,7 @@ async function analisarBalanco(pool, { balancoId, dados, por, hoje = hojeBrasili
     if (!b) return { sucesso: false, naoExiste: true, mensagem: "Balanço não encontrado." };
     if (b.Status !== "ENVIADO") return { sucesso: false, mensagem: "Este balanço já foi analisado." };
     if (Number(b.EnviadoPor) === Number(por)) return { sucesso: false, mensagem: "Quem enviou o balanço não o analisa: outra pessoa do NIF precisa fazer a análise." };
+    if (ehDoDistrito(alcance, b.DistritoId)) return { sucesso: false, mensagem: "Quem é da liderança do Distrito não analisa o balanço dele: outra pessoa do NIF precisa fazer a análise." };
     const aprovado = v.dados.decisao === "APROVAR";
     const u = await rq().input("b", sql.Int, balancoId).input("st", sql.NVarChar(10), aprovado ? "APROVADO" : "DEVOLVIDO").input("por", sql.Int, por)
       .input("mot", sql.NVarChar(2000), v.dados.motivo)
@@ -537,7 +590,7 @@ async function analisarBalanco(pool, { balancoId, dados, por, hoje = hojeBrasili
     if (!u.rowsAffected[0]) return MUDOU;
     await registrarAuditoriaNaTransacao(t, { tabela: "DistritoBalancos", registroId: balancoId, acao: aprovado ? "DISTRITO_BALANCO_APROVADO" : "DISTRITO_BALANCO_DEVOLVIDO", usuarioId: por,
       dadosAntes: { status: "ENVIADO" }, dadosDepois: v.dados });
-    return { sucesso: true, aprovado, balanco: { distrito: b.Distrito, ano: Number(b.Ano), enviadoPor: b.EnviadoPor } };
+    return { sucesso: true, aprovado, balanco: { balancoId, distrito: b.Distrito, ano: Number(b.Ano), enviadoPor: b.EnviadoPor } };
   });
   if (!r.sucesso) return r;
   await avisarAnalise(pool, { ...r.balanco, aprovado: r.aprovado, motivo: v.dados.motivo, deps });
@@ -575,17 +628,45 @@ async function linhaVigente(pool, membroId) {
     .query(`SELECT TOP 1 1 AS ok FROM Lideranca WHERE MembroId = @m AND ${VIGENTE("Lideranca")}`);
   return !!(r && r.recordset && r.recordset.length);
 }
+// O Distrito de um escopo de acesso (o próprio, o do Quadrante ou o da Região), ou null.
+async function distritoDoEscopo(pool, escopoTipo, escopoId) {
+  const id = Number(escopoId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  if (escopoTipo === "DISTRITO") return id;
+  if (escopoTipo === "QUADRANTE") return (await pool.request().input("id", sql.Int, id).query(`SELECT DistritoId FROM Quadrantes WHERE QuadranteId = @id`)).recordset.map((l) => l.DistritoId)[0] || null;
+  if (escopoTipo === "REGIAO") {
+    return (await pool.request().input("id", sql.Int, id).query(`SELECT q.DistritoId FROM Regioes r JOIN Quadrantes q ON q.QuadranteId = r.QuadranteId WHERE r.RegiaoId = @id`)).recordset.map((l) => l.DistritoId)[0] || null;
+  }
+  return null;
+}
 async function conferirPapelReservado(pool, { usuarioId, membroId, antes, depois, hoje = hojeBrasilia() }) {
-  const nomes = await pool.request().query(`SELECT PapelId, Nome FROM Papeis WHERE Nome IN (N'${PAPEL_PASTOR}', N'${PAPEL_INTERVENTOR}')`);
+  let presidente = null;
+  const ehPresidente = async () => (presidente === null ? (presidente = await ehPresidenteAtual(pool, sql, usuarioId)) : presidente);
+  const vigoraDepois = !!depois && depois.vigente !== false;
+  const mudou = !antes || !antes.vigente || !depois || Number(antes.PapelId) !== Number(depois.papelId) || antes.EscopoTipo !== depois.escopoTipo || Number(antes.EscopoId || 0) !== Number(depois.escopoId || 0);
+  // revisão de 04/11/2026: com a intervenção aberta, nenhum acesso novo no Distrito (escopo dele, de um Quadrante ou de uma Região do território) sem o Presidente —
+  // senão a Secretaria recolocaria o destituído por outro papel (Tesoureiro de Distrito, Membro do CDE, Superintendente)
+  if (vigoraDepois && mudou) {
+    const dId = await distritoDoEscopo(pool, depois.escopoTipo, depois.escopoId);
+    if (dId) {
+      const sobIntervencao = (await pool.request().input("d", sql.Int, dId).query(`SELECT TOP 1 1 AS ok FROM DistritoIntervencoes WHERE DistritoId = @d AND EncerradaEm IS NULL`)).recordset.length > 0;
+      if (sobIntervencao && !(await ehPresidente())) return "Este Distrito está sob intervenção: durante ela, só o Pastor Presidente em exercício dá acesso com escopo do Distrito ou do território dele (Regimento, Art. 126-P, II).";
+    }
+  }
+  const nomes = await pool.request().query(`SELECT PapelId, Nome, Nivel FROM Papeis WHERE Nome IN (N'${PAPEL_PASTOR}', N'${PAPEL_INTERVENTOR}')`);
   const nomeDe = new Map(nomes.recordset.map((l) => [Number(l.PapelId), l.Nome]));
   const papelAntes = antes && antes.vigente ? nomeDe.get(Number(antes.PapelId)) : null;
-  const papelDepois = depois && depois.vigente !== false ? nomeDe.get(Number(depois.papelId)) : null;
+  const papelDepois = vigoraDepois ? nomeDe.get(Number(depois.papelId)) : null;
   if (!papelAntes && !papelDepois) return null;
-  const mesmo = papelAntes && papelDepois && papelAntes === papelDepois && antes.EscopoTipo === depois.escopoTipo && Number(antes.EscopoId) === Number(depois.escopoId);
-  if (mesmo) return null;   // só a senha ou o mandato de quem já está no papel
-  if (!(await ehPresidenteAtual(pool, sql, usuarioId))) return `Os papéis "${PAPEL_PASTOR}" e "${PAPEL_INTERVENTOR}" só são dados, trocados ou tirados pelo Pastor Presidente em exercício (Regimento, Art. 126-L, I, e Art. 126-P, II).`;
+  if (!mudou) return null;   // só a senha ou o mandato de quem já está no papel
+  if (!(await ehPresidente())) return `Os papéis "${PAPEL_PASTOR}" e "${PAPEL_INTERVENTOR}" só são dados, trocados ou tirados pelo Pastor Presidente em exercício (Regimento, Art. 126-L, I, e Art. 126-P, II).`;
   if (!papelDepois) return null;
   if (depois.escopoTipo !== "DISTRITO") return `O papel "${papelDepois}" é dado com o escopo de um Distrito.`;
+  // cada pessoa tem um só acesso: dar o papel a quem tem um cargo do nível geral (o próprio Presidente, o Secretário Geral) trocaria esse cargo (revisão de 04/11/2026)
+  if (antes && antes.vigente) {
+    const nivelAntes = (await pool.request().input("p", sql.Int, Number(antes.PapelId)).query(`SELECT Nivel FROM Papeis WHERE PapelId = @p`)).recordset.map((l) => l.Nivel)[0];
+    if (nivelAntes === "GLOBAL") return `Esta pessoa tem um cargo do nível geral em vigor e cada pessoa tem um só acesso: dar o papel "${papelDepois}" trocaria esse cargo. Escolha outra pessoa.`;
+  }
   const distritoId = Number(depois.escopoId);
   const d = await lerDistrito(() => pool.request(), distritoId);
   if (!d || !d.ativo) return `O papel "${papelDepois}" só vale em Distrito ativo por decreto da CLI.`;
@@ -615,13 +696,14 @@ async function destinatariosGerais(pool) {
   const { resolverDestinatariosPorPermissao } = require("./notificacoes");
   return resolverDestinatariosPorPermissao(pool, { permissao: "distritos", nivel: "GLOBAL" });
 }
-async function avisarAnalise(pool, { distrito, ano, enviadoPor, aprovado, motivo, deps = {} }) {
+// A referência do aviso é o balanço (cada versão é uma linha): o aviso da aprovação da versão 2 não é descartado como repetido do aviso da devolução da versão 1.
+async function avisarAnalise(pool, { balancoId, distrito, ano, enviadoPor, aprovado, motivo, deps = {} }) {
   try {
     const canaisDb = deps.canaisDb || require("./canaisDb");
     const m = (await pool.request().input("m", sql.Int, enviadoPor).query(`SELECT MembroId, Nome, Email FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
     if (!m) return 0;
     await canaisDb.notificarAgora(pool, { regraChave: "DISTRITO_BALANCO_ANALISADO", destinatarios: [{ membroId: m.MembroId, nome: m.Nome, email: m.Email }],
-      mensagem: di.textoBalancoAnalisado({ distrito, ano, aprovado, motivo }), referenciaTabela: "DistritoBalancos", aguardarEntrega: false, deps });
+      mensagem: di.textoBalancoAnalisado({ distrito, ano, aprovado, motivo }), referenciaId: balancoId, referenciaTabela: "DistritoBalancos", aguardarEntrega: false, deps });
     return 1;
   } catch (e) {
     console.error("[DISTRITOS] falha ao avisar a análise do balanço:", e.message);
@@ -649,11 +731,13 @@ async function detectarRepasseVencido(pool, { hoje = hojeBrasilia() } = {}) {
     if (!d) continue;
     const [lista, terr] = await Promise.all([periodos(rq, distritoId), territorio(rq, distritoId)]);
     const fin = await posicaoFinanceira(rq, distritoId, { lista, terr, hoje, limite: 6 });
-    const vencidos = fin.meses.filter((m) => m.vencido).map((m) => m.mes).sort();
+    const vencidos = fin.meses.filter((m) => m.vencido);
     if (!vencidos.length) continue;
     const destinatarios = await destinatariosDoDistrito(pool, distritoId, hoje);
-    for (const mes of vencidos) {
-      fatos.push({ referenciaId: referenciaMes(mes, distritoId), destinatarios, fatoGerador: di.textoRepasseVencido({ distrito: d.nome, meses: [mes] }) });
+    // a retenção (apurável e não repassado) e o mês que nem pôde ser apurado (falta fechamento local) têm textos diferentes: só o primeiro fala em intervenção
+    for (const m of vencidos.sort((a, b) => (a.mes < b.mes ? -1 : 1))) {
+      fatos.push({ referenciaId: referenciaMes(m.mes, distritoId), destinatarios,
+        fatoGerador: di.textoRepasseVencido({ distrito: d.nome, meses: [m.mes], motivo: m.motivoVencido, faltam: m.faltam.map((c) => c.nome) }) });
     }
   }
   return fatos;
@@ -689,7 +773,7 @@ async function dadosDoTitular(pool, membroId) {
 
 module.exports = {
   PAPEL_PASTOR, PAPEL_INTERVENTOR, PAPEIS_RESERVADOS, REPASSE_DO_DISTRITO, NOME_DO_DISTRITO_DO_REPASSE,
-  montarAlcance, listarDistritos, detalharDistrito, territorio, composicaoCDE, posicaoFinanceira, apuracaoParaRepasse, reunioesEncerradas,
+  montarAlcance, listarDistritos, detalharDistrito, territorio, composicaoCDE, posicaoFinanceira, caixaDoDistrito, apuracaoParaRepasse, reunioesEncerradas,
   ativar, desativar, intervir, encerrarIntervencao, enviarBalanco, analisarBalanco, painel, conferirPapelReservado, linhaVigente,
   detectarRepasseVencido, detectarBalancoAtrasado, dadosDoTitular
 };

@@ -47,7 +47,9 @@ function mesesEntre(desde, ate) {
 }
 // O mês é do Distrito quando cai dentro de algum período: [FinanceiroDesdeMes, FinanceiroAteMes) — o mês da desativação já volta para a Sede.
 function mesNoPeriodo(mes, p) { return mes >= p.financeiroDesdeMes && (!p.financeiroAteMes || mes < p.financeiroAteMes); }
-const mesDoDistrito = (mes, periodos) => (periodos || []).some((p) => mesNoPeriodo(mes, p));
+// O período legado (ativo pelo cadastro antes da v9.3, sem decreto) não tem efeito no dinheiro nem no balanço até o decreto ser registrado.
+const comDecreto = (periodos) => (periodos || []).filter((p) => !p.legado);
+const mesDoDistrito = (mes, periodos) => comDecreto(periodos).some((p) => mesNoPeriodo(mes, p));
 
 // O mês M vence no dia da tolerância do mês seguinte (o mesmo critério dos repasses institucionais, v4.15): depois disso, sem repasse, a cota está retida.
 // O último dia dentro do prazo: o dia da tolerância do mês seguinte (tolerância 0 = o último dia do próprio mês) — o mesmo de repassesInstitucionais.estaAtrasado.
@@ -61,23 +63,32 @@ const mesVencido = (mes, hoje, diasTolerancia) => hoje > venceEm(mes, diasTolera
 // O Dízimo Institucional (Art. 126-N, I): o percentual sobre a arrecadação líquida consolidada (a soma do Total Final dos fechamentos do território).
 const dizimoInstitucional = (soma, percentual) => round2(Number(soma) * Number(percentual) / 100);
 
-// A posição de um mês do Distrito, dados os fechamentos (das congregações ativas do território) e o repasse registrado.
-//   situacao: REPASSADO · REGISTRADO (pendente de repasse) · APURAVEL (todas fecharam) · ABERTO (falta fechamento) — e `vencido` quando passou da tolerância sem repasse.
-function situacaoDoMes({ mes, congregacoes, fechamentos, repasse, percentual, diasTolerancia, hoje }) {
-  const fechadas = new Map((fechamentos || []).map((f) => [Number(f.congregacaoId), f]));
-  const faltam = (congregacoes || []).filter((c) => !fechadas.has(Number(c.congregacaoId))).map((c) => ({ congregacaoId: c.congregacaoId, nome: c.nome }));
+// A posição de um mês do Distrito.
+//   `congregacoes`: as que o mês exige (do território, ativas e que já fechavam a tesouraria naquele mês — a congregação nova não trava meses anteriores a ela);
+//   `fechamentos`: os do mês com o repasse gravado para este Distrito (os que entram na soma); `fecharam`: ids das congregações exigidas que fecharam o mês (para
+//   qualquer destino).
+//   situacao: REPASSADO · REGISTRADO (pendente de repasse) · APURAVEL (todas fecharam) · ABERTO (falta fechamento) · SEM_MOVIMENTO (nada a apurar).
+//   `vencido`: passou da tolerância sem repasse e havia o que repassar; `motivoVencido`: RETENCAO (apurável ou registrado e não repassado) ou FECHAMENTO (falta o
+//   fechamento local: o Dízimo nem pôde ser calculado — não é a retenção do Art. 126-N, III).
+function situacaoDoMes({ mes, congregacoes, fechamentos, fecharam, repasse, percentual, diasTolerancia, hoje }) {
+  const exigidas = congregacoes || [];
+  const fechou = new Set((fecharam || (fechamentos || []).map((f) => f.congregacaoId)).map(Number));
+  const faltam = exigidas.filter((c) => !fechou.has(Number(c.congregacaoId))).map((c) => ({ congregacaoId: c.congregacaoId, nome: c.nome }));
   const soma = round2((fechamentos || []).reduce((s, f) => s + Number(f.totalFinal || 0), 0));
+  const valor = repasse ? round2(repasse.valorRepasse) : dizimoInstitucional(soma, percentual);
   let situacao;
   if (repasse && repasse.status === "REPASSADO") situacao = "REPASSADO";
   else if (repasse) situacao = "REGISTRADO";
-  else if (!faltam.length && (congregacoes || []).length) situacao = "APURAVEL";
+  else if (!exigidas.length && !(fechamentos || []).length) situacao = "SEM_MOVIMENTO";
+  else if (!faltam.length) situacao = "APURAVEL";
   else situacao = "ABERTO";
+  const passou = mesVencido(mes, hoje, diasTolerancia);
+  let motivoVencido = null;
+  if (passou && (situacao === "REGISTRADO" || (situacao === "APURAVEL" && valor > 0))) motivoVencido = "RETENCAO";
+  else if (passou && situacao === "ABERTO") motivoVencido = "FECHAMENTO";
   return {
-    mes, situacao, faltam, fechadas: fechadas.size, congregacoes: (congregacoes || []).length, soma,
-    valor: repasse ? round2(repasse.valorRepasse) : dizimoInstitucional(soma, percentual),
-    venceEm: venceEm(mes, diasTolerancia),
-    vencido: situacao !== "REPASSADO" && mesVencido(mes, hoje, diasTolerancia),
-    repasse: repasse || null
+    mes, situacao, faltam, fechadas: exigidas.length - faltam.length, congregacoes: exigidas.length, soma, valor,
+    venceEm: venceEm(mes, diasTolerancia), vencido: !!motivoVencido, motivoVencido, repasse: repasse || null
   };
 }
 
@@ -85,7 +96,7 @@ function situacaoDoMes({ mes, congregacoes, fechamentos, repasse, percentual, di
 function anosDoDistrito(periodos, hoje) {
   const anoAtual = Number(String(hoje).slice(0, 4));
   const anos = new Set();
-  for (const p of periodos || []) {
+  for (const p of comDecreto(periodos)) {
     const ultimo = p.financeiroAteMes ? mesAnterior(p.financeiroAteMes) : `${anoAtual}-12`;
     if (ultimo < p.financeiroDesdeMes) continue;
     for (let a = Number(p.financeiroDesdeMes.slice(0, 4)); a <= Number(ultimo.slice(0, 4)); a++) if (a < anoAtual) anos.add(a);
@@ -101,18 +112,23 @@ function balancosAtrasados(periodos, balancos, hoje) {
 }
 
 // ================================================================ trechos de SQL ================================================================
-// O fechamento (alias `f`, com a congregação de alias `c`) cujo repasse é do Distrito: a congregação está no território de um Distrito e o mês cai num período dele.
-// Usado no Rateio Geral (o que é do Distrito não entra no malote da Sede) e na Tesouraria Local (o rótulo do repasse). Só nomes de alias fixos entram no texto.
+// O Distrito do repasse é gravado no fechamento (FechamentosTesouraria.RepasseDistritoId), na hora em que o mês é fechado (DISTRITO_DO_MES): mudar o território
+// depois não reescreve o passado (revisão de 04/11/2026). Usado no Rateio Geral (o que é do Distrito não entra no malote da Sede) e na Tesouraria Local (o rótulo).
+// Só nomes de alias e de parâmetro fixos entram no texto.
 const ALIAS = /^[a-z]{1,3}$/;
-function trechoDistrito(f, c, seleciona) {
-  if (!ALIAS.test(f) || !ALIAS.test(c)) throw new Error("alias inválido");
-  return `${seleciona} FROM Areas dta JOIN Regioes dtr ON dtr.RegiaoId = dta.RegiaoId
-  JOIN Quadrantes dtq ON dtq.QuadranteId = dtr.QuadranteId JOIN DistritoPeriodos dtp ON dtp.DistritoId = dtq.DistritoId JOIN Distritos dtd ON dtd.DistritoId = dtq.DistritoId
-  WHERE dta.AreaId = ${c}.AreaId AND ${f}.MesReferencia >= dtp.FinanceiroDesdeMes AND (dtp.FinanceiroAteMes IS NULL OR ${f}.MesReferencia < dtp.FinanceiroAteMes)`;
-}
-const REPASSE_DO_DISTRITO = (f = "f", c = "c") => `EXISTS (${trechoDistrito(f, c, "SELECT 1")})`;
+const PARAM = /^@[a-zA-Z]{1,30}$/;
+function conferirAlias(...nomes) { for (const n of nomes) if (!ALIAS.test(n)) throw new Error("alias inválido"); }
+const REPASSE_DO_DISTRITO = (f = "f") => { conferirAlias(f); return `${f}.RepasseDistritoId IS NOT NULL`; };
 // O nome do Distrito que recebe o repasse do fechamento (ou NULL: vai para a Sede).
-const NOME_DO_DISTRITO_DO_REPASSE = (f = "f", c = "c") => `(${trechoDistrito(f, c, "SELECT TOP 1 dtd.Nome")})`;
+const NOME_DO_DISTRITO_DO_REPASSE = (f = "f") => { conferirAlias(f); return `(SELECT dtd.Nome FROM Distritos dtd WHERE dtd.DistritoId = ${f}.RepasseDistritoId)`; };
+// O Distrito que recebe o repasse da congregação naquele mês, decidido agora (no fechamento): o território de hoje e um período COM DECRETO (o legado não conta)
+// que cubra o mês. NULL: vai para a Sede. Os argumentos são nomes de parâmetro ou expressões de coluna com alias.
+function DISTRITO_DO_MES(congregacao, mes) {
+  for (const x of [congregacao, mes]) if (!PARAM.test(x) && !/^[a-z]{1,3}\.[A-Za-z]{1,40}$/.test(x)) throw new Error("expressão inválida");
+  return `(SELECT TOP 1 dtq.DistritoId FROM Congregacoes dtc JOIN Areas dta ON dta.AreaId = dtc.AreaId JOIN Regioes dtr ON dtr.RegiaoId = dta.RegiaoId
+    JOIN Quadrantes dtq ON dtq.QuadranteId = dtr.QuadranteId JOIN DistritoPeriodos dtp ON dtp.DistritoId = dtq.DistritoId
+    WHERE dtc.CongregacaoId = ${congregacao} AND dtp.Legado = 0 AND ${mes} >= dtp.FinanceiroDesdeMes AND (dtp.FinanceiroAteMes IS NULL OR ${mes} < dtp.FinanceiroAteMes))`;
+}
 
 // ================================================================ validações ================================================================
 function validarAtivacao(dados) {
@@ -224,8 +240,11 @@ function podeEnviarBalanco({ ano, periodos, balancos, hoje }) {
 }
 
 // ================================================================ textos dos avisos ================================================================
-function textoRepasseVencido({ distrito, meses }) {
+function textoRepasseVencido({ distrito, meses, motivo = "RETENCAO", faltam = [] }) {
   const lista = (meses || []).map((m) => `${m.slice(5, 7)}/${m.slice(0, 4)}`).join(", ");
+  if (motivo === "FECHAMENTO") {
+    return `O Dízimo Institucional do Distrito ${distrito} de ${lista} ainda não pôde ser calculado: falta fechar o mês na Tesouraria Local de ${(faltam || []).join(", ") || "uma congregação do território"}. Feche os meses para apurar o repasse à Sede.`;
+  }
   return `O Dízimo Institucional do Distrito ${distrito} está vencido sem repasse à Sede: ${lista}. A retenção da cota de repasse é causa de intervenção imediata (Regimento, Art. 126-N, III, e Art. 144, II).`;
 }
 function textoBalancoAtrasado({ distrito, anos }) {
@@ -240,7 +259,7 @@ function textoBalancoAnalisado({ distrito, ano, aprovado, motivo }) {
 module.exports = {
   GATILHOS, LIMITE_POPULACAO, MOTIVOS_INTERVENCAO, MEDIDAS, STATUS_BALANCO, DECISOES_BALANCO, PRAZO_BALANCO_MES_DIA,
   round2, ehMes, mesDe, proximoMes, mesAnterior, mesesEntre, mesNoPeriodo, mesDoDistrito, venceEm, mesVencido, dizimoInstitucional, situacaoDoMes,
-  anosDoDistrito, prazoBalanco, balancoVivo, balancosAtrasados, REPASSE_DO_DISTRITO, NOME_DO_DISTRITO_DO_REPASSE,
+  anosDoDistrito, prazoBalanco, balancoVivo, balancosAtrasados, REPASSE_DO_DISTRITO, NOME_DO_DISTRITO_DO_REPASSE, DISTRITO_DO_MES, comDecreto,
   validarAtivacao, validarDesativacao, validarIntervencao, validarEncerramento, valorEmReais, validarBalanco, validarAnalise, podeEnviarBalanco,
   textoRepasseVencido, textoBalancoAtrasado, textoBalancoAnalisado, idDe, br
 };

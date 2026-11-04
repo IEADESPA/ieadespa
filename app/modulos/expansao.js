@@ -26,7 +26,10 @@ const expEl = (idEl) => document.getElementById(idEl);
 const expBr = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 const expH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const EXP_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
-const EXP_SECOES = ["painel", "pedidos", "extensoes"];
+const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos"];
+// v9.3 — a aba abre com "expansao" ou "distritos": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js), da permissão própria
+const expPermite = (secao) => (typeof authPermissoes !== "undefined" && Array.isArray(authPermissoes)
+  ? authPermissoes.includes(secao === "distritos" ? "distritos" : "expansao") : secao !== "distritos");
 
 async function expBuscar(caminho) {
   const token = authToken;
@@ -67,11 +70,15 @@ function expLimparTela() {
   for (const idEl of ["expNovoNome", "expNovoEncarregado", "expNovoEndereco", "expNovoBairro", "expNovoCidade", "expNovoJustificativa"]) { const el = expEl(idEl); if (el) el.value = ""; }
   const todas = expEl("expExtensoesTodas"); if (todas) todas.checked = false;
   const bloco = expEl("expBlocoFicha"); if (bloco) bloco.style.display = "none";
+  if (typeof dstLimparTela === "function") dstLimparTela();   // v9.3: a pílula dos Distritos
 }
 
 // ================================================================ abrir a aba ================================================================
 async function carregarOpcoesExpansaoAcao() {
   const meu = ++expPedidoOpcoes;
+  for (const s of EXP_SECOES) { const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) b.style.display = expPermite(s) ? "" : "none"; }
+  // quem só tem "distritos" (o Tesoureiro de Distrito, o NIF) não pede nada da Expansão: vai direto aos Distritos
+  if (!expPermite("painel")) { expMostrarSecaoAcao("distritos"); return; }
   const cat = await expBuscar("catalogos");
   if (cat === null || meu !== expPedidoOpcoes) return;
   if (!cat.sucesso) { expEl("expPainel").innerHTML = cat.semConexao ? EXP_SEM_CONEXAO : `<p class='subtitle'>${expH(cat.mensagem)}</p>`; return; }
@@ -88,7 +95,8 @@ async function carregarOpcoesExpansaoAcao() {
   if (expFicha) expRenderFicha();
 }
 function expMarcarSecao(secao) {
-  expSecaoAtual = EXP_SECOES.includes(secao) ? secao : "painel";
+  const permitidas = EXP_SECOES.filter(expPermite);
+  expSecaoAtual = EXP_SECOES.includes(secao) && expPermite(secao) ? secao : (permitidas[0] || "painel");
   for (const s of EXP_SECOES) {
     const div = expEl(`expSecao${capitalize(s)}`); if (div) div.style.display = s === expSecaoAtual ? "block" : "none";
     const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) { b.classList.toggle("ativo", s === expSecaoAtual); b.setAttribute("aria-pressed", s === expSecaoAtual ? "true" : "false"); }
@@ -99,6 +107,7 @@ function expMostrarSecaoAcao(secao) {
   if (expSecaoAtual === "painel") expCarregarPainelAcao();
   if (expSecaoAtual === "pedidos") expCarregarListaAcao();
   if (expSecaoAtual === "extensoes") expCarregarExtensoesAcao();
+  if (expSecaoAtual === "distritos" && typeof dstAbrirAcao === "function") dstAbrirAcao();
 }
 
 // ================================================================ painel ================================================================

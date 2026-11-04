@@ -68,10 +68,17 @@ module.exports = async function (context, req) {
     ORDER BY d.Numero
   `);
 
+  // v9.3 — o caixa de cada Distrito ativo ou que já teve decreto: o repasse das congregações dele, que é do Distrito (Regimento Art. 126-N, I), sob a guarda da conta
+  // única enquanto ela existir — fora do Tesouro Geral, mas na mesma foto, para a soma dos saldos bater com o banco
+  const distritosComCaixa = (await pool.request().query(`SELECT DISTINCT d.DistritoId, d.Nome FROM Distritos d JOIN DistritoPeriodos p ON p.DistritoId = d.DistritoId AND p.Legado = 0 ORDER BY d.Nome`)).recordset;
+  const { caixaDoDistrito } = require("../shared/distritosDb");
+  const porDistrito = [];
+  for (const d of distritosComCaixa) porDistrito.push({ distritoId: d.DistritoId, nome: d.Nome, ...(await caixaDoDistrito(() => pool.request(), d.DistritoId)) });
+
   context.res = {
     status: 200, headers: { "Content-Type": "application/json" },
     body: {
-      tesouroGeral, convencao, prebendaPastoral, pdq,
+      tesouroGeral, convencao, prebendaPastoral, pdq, porDistrito,
       malotePendente: { totalItens: malote.recordset[0].totalItens, totalBase: tesouraria.round2(malote.recordset[0].totalBase) },
       porCongregacao: porCongregacao.recordset.map(c => ({ congregacaoId: c.congregacaoId, congregacaoNome: c.congregacaoNome, saldoLocal: tesouraria.round2(c.saldoLocal) })),
       totalLocalConsolidado: tesouraria.round2(porCongregacao.recordset.reduce((soma, c) => soma + Number(c.saldoLocal), 0)),

@@ -6011,6 +6011,7 @@
           <button type="button" class="cal-pilula ativo" id="btnExpSecaoPainel" aria-pressed="true" data-on-click="expMostrarSecaoAcao" data-args-click='["painel"]'>📋 Painel</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoPedidos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["pedidos"]'>📨 Pedidos</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoDistritos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["distritos"]'>🗺️ Distritos</button>
         </div>
 
         <div id="expSecaoPainel" class="cal-secao">
@@ -6059,6 +6060,24 @@
           <p id="expMsgExtensoes" class="subtitle" role="status"></p>
           <div id="expListaExtensoes"></div>
           <div id="expFormExtensao"></div>
+        </div>
+
+        <!-- v9.3 — Distritos (Regimento Art. 126-K a 126-N e 126-P): a pílula só aparece com a permissão "distritos"; a tela é montada por modulos/distritos.js
+             (rota /api/distritos) e o que o servidor devolve passa por escaparHtmlEbd. -->
+        <div id="expSecaoDistritos" class="cal-secao" style="display:none;">
+          <p class="subtitle">O <strong>Distrito</strong> é o "semi-campo" de uma capital ou metrópole fora da sede (Regimento, Art. 126-K): fica ativo por decreto da CLI, é
+            governado pelo <strong>Pastor Distrital</strong> que o Pastor Presidente escolhe, gere 100% do que as congregações dele arrecadam e repassa à Sede só o
+            <strong>Dízimo Institucional</strong> (10%). Uma vez por ano, manda o balanço ao NIF. Se tentar se desligar da IEADESPA ou reter o repasse, o Pastor
+            Presidente intervém na hora.</p>
+          <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="dstCarregarListaAcao">🔄 Atualizar</button></div>
+          <p id="dstMsgLista" class="subtitle" role="status"></p>
+          <div id="dstLista"></div>
+          <div id="dstBlocoFicha" style="display:none;">
+            <hr />
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="dstFecharFichaAcao">✖ Fechar a ficha</button></div>
+            <p id="dstMsgFicha" class="subtitle" role="status" aria-live="polite" tabindex="-1"></p>
+            <div id="dstFicha"></div>
+          </div>
         </div>
       </div>
 
@@ -7518,6 +7537,7 @@
   <script src="modulos/cuidado-pastoral.js"></script>
   <script src="modulos/disciplina.js"></script>
   <script src="modulos/discipulado.js"></script>
+  <script src="modulos/distritos.js"></script>
   <script src="modulos/doacoes.js"></script>
   <script src="modulos/ebd.js"></script>
   <script src="modulos/educacao-continuada.js"></script>

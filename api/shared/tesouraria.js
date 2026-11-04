@@ -78,14 +78,18 @@ function podeOperarCentroCusto(usuario, centroCusto, siglaDepartamentoUsuario) {
   return !!siglaDepartamentoUsuario && centroCusto === `DEPTO_${siglaDepartamentoUsuario}`;
 }
 
+// v9.3 — o Dízimo Institucional (alias `ri`) de um mês coberto por um período do Distrito com decreto da CLI
+const DIZIMO_COM_DECRETO = `EXISTS (SELECT 1 FROM DistritoPeriodos dp WHERE dp.DistritoId = ri.OrigemId AND dp.Legado = 0
+  AND ri.MesReferencia >= dp.FinanceiroDesdeMes AND (dp.FinanceiroAteMes IS NULL OR ri.MesReferencia < dp.FinanceiroAteMes))`;
 async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
   const siglaDepartamento = centroCustoDepartamental(centroCusto);
   let liberado;
   if (centroCusto === "GERAL") {
     // v9.3 — o Dízimo Institucional do Distrito, quando confirmado como repassado, entra no Tesouro Geral (Regimento Art. 126-N, I: "para a Sede Geral a título de
     // manutenção da estrutura global"); antes o repasse de Distrito não creditava em lugar nenhum.
+    // Só o dos meses de um período com decreto (o calculado desde a v9.3): o repasse de Distrito digitado à mão antes disso não entra de repente no saldo.
     liberado = await pool.request().query(`SELECT (SELECT ISNULL(SUM(ValorTesouroGeral), 0) FROM RateiosGerais)
-      + (SELECT ISNULL(SUM(ValorRepasse), 0) FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND Status = N'REPASSADO') AS total`);
+      + (SELECT ISNULL(SUM(ri.ValorRepasse), 0) FROM RepassesInstitucionais ri WHERE ri.OrigemTipo = N'DISTRITO' AND ri.Status = N'REPASSADO' AND ${DIZIMO_COM_DECRETO}) AS total`);
   } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
     liberado = await pool.request().input("codigo", sql.NVarChar(30), centroCusto)
       .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM RateioGeralValores WHERE DestinoCodigo = @codigo`);
@@ -159,7 +163,7 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
   if (centroCusto === "GERAL") {
     entradas = await pool.request().query(`SELECT TOP 3 MesReferencia, SUM(total) AS total FROM (
       SELECT MesReferencia, ValorTesouroGeral AS total FROM RateiosGerais
-      UNION ALL SELECT MesReferencia, ValorRepasse FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND Status = N'REPASSADO') e
+      UNION ALL SELECT ri.MesReferencia, ri.ValorRepasse FROM RepassesInstitucionais ri WHERE ri.OrigemTipo = N'DISTRITO' AND ri.Status = N'REPASSADO' AND ${DIZIMO_COM_DECRETO}) e
       GROUP BY MesReferencia ORDER BY MesReferencia DESC`);
   } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
     entradas = await pool.request().input("codigo", sql.NVarChar(30), centroCusto).query(`

@@ -61,8 +61,20 @@ describe("situação de um mês", () => {
     expect(di.situacaoDoMes({ ...base, fechamentos: fech, repasse: { status: "REPASSADO", valorRepasse: 150.03 }, hoje: "2027-12-01" }))
       .toMatchObject({ situacao: "REPASSADO", vencido: false });
   });
-  test("território sem congregação nunca é APURAVEL", () => {
-    expect(di.situacaoDoMes({ ...base, congregacoes: [], fechamentos: [], repasse: null, hoje: "2026-10-10" }).situacao).toBe("ABERTO");
+  test("sem congregação exigida e sem fechamento: SEM_MOVIMENTO, que nunca vence", () => {
+    expect(di.situacaoDoMes({ ...base, congregacoes: [], fechamentos: [], repasse: null, hoje: "2027-10-10" })).toMatchObject({ situacao: "SEM_MOVIMENTO", vencido: false, motivoVencido: null });
+  });
+  test("os dois motivos do atraso: falta fechamento (FECHAMENTO) e apurável não repassado (RETENCAO); valor zero não é retenção", () => {
+    expect(di.situacaoDoMes({ ...base, fechamentos: [{ congregacaoId: 1, totalFinal: 10 }], repasse: null, hoje: "2026-12-01" }).motivoVencido).toBe("FECHAMENTO");
+    expect(di.situacaoDoMes({ ...base, fechamentos: [{ congregacaoId: 1, totalFinal: 10 }, { congregacaoId: 2, totalFinal: 0 }], repasse: null, hoje: "2026-12-01" }).motivoVencido).toBe("RETENCAO");
+    expect(di.situacaoDoMes({ ...base, fechamentos: [{ congregacaoId: 1, totalFinal: 0 }, { congregacaoId: 2, totalFinal: 0 }], repasse: null, hoje: "2026-12-01" }).vencido).toBe(false);
+    // quem fechou para outro destino (a Sede) conta como fechado, mas não entra na soma
+    expect(di.situacaoDoMes({ ...base, fecharam: [1, 2], fechamentos: [{ congregacaoId: 1, totalFinal: 100 }], repasse: null, hoje: "2026-11-01" })).toMatchObject({ situacao: "APURAVEL", soma: 100 });
+  });
+  test("o período legado (sem decreto) não conta no dinheiro nem no balanço", () => {
+    const legado = [{ legado: true, financeiroDesdeMes: "2025-01", financeiroAteMes: null }];
+    expect(di.mesDoDistrito("2026-01", legado)).toBe(false);
+    expect(di.anosDoDistrito(legado, "2027-01-01")).toEqual([]);
   });
 });
 
@@ -141,14 +153,20 @@ describe("validações", () => {
 });
 
 describe("trechos de SQL e textos", () => {
-  test("o trecho do Distrito só aceita alias simples (nada de texto de fora no SQL)", () => {
-    expect(di.REPASSE_DO_DISTRITO("f", "c")).toMatch(/^EXISTS \(SELECT 1 FROM Areas dta/);
-    expect(di.NOME_DO_DISTRITO_DO_REPASSE("f", "c")).toMatch(/^\(SELECT TOP 1 dtd\.Nome/);
-    expect(() => di.REPASSE_DO_DISTRITO("f; DROP TABLE x", "c")).toThrow();
-    expect(() => di.NOME_DO_DISTRITO_DO_REPASSE("f", "c.Nome")).toThrow();
+  test("os trechos do Distrito só aceitam alias e parâmetro simples (nada de texto de fora no SQL)", () => {
+    expect(di.REPASSE_DO_DISTRITO("f")).toBe("f.RepasseDistritoId IS NOT NULL");
+    expect(di.NOME_DO_DISTRITO_DO_REPASSE("f")).toMatch(/^\(SELECT dtd\.Nome FROM Distritos dtd WHERE dtd\.DistritoId = f\.RepasseDistritoId\)$/);
+    expect(di.DISTRITO_DO_MES("@congregacaoId", "@mesReferencia")).toMatch(/dtp\.Legado = 0/);
+    expect(() => di.REPASSE_DO_DISTRITO("f; DROP TABLE x")).toThrow();
+    expect(() => di.NOME_DO_DISTRITO_DO_REPASSE("c.Nome")).toThrow();
+    expect(() => di.DISTRITO_DO_MES("1; DROP TABLE x", "@m")).toThrow();
+    expect(() => di.DISTRITO_DO_MES("@c", "'2026-01'")).toThrow();
   });
-  test("os textos dos avisos citam o artigo", () => {
+  test("os textos dos avisos citam o artigo; o mês sem fechamento não fala em intervenção", () => {
     expect(di.textoRepasseVencido({ distrito: "Belém", meses: ["2026-10"] })).toMatch(/10\/2026.*Art\. 126-N, III/);
+    const falta = di.textoRepasseVencido({ distrito: "Belém", meses: ["2026-10"], motivo: "FECHAMENTO", faltam: ["Vila"] });
+    expect(falta).toMatch(/falta fechar.*Vila/);
+    expect(falta).not.toMatch(/interven/);
     expect(di.textoBalancoAtrasado({ distrito: "Belém", anos: [2025] })).toMatch(/2025.*Art\. 126-M/);
     expect(di.textoBalancoAnalisado({ distrito: "Belém", ano: 2025, aprovado: false, motivo: "Falta o extrato." })).toMatch(/devolveu.*Falta o extrato/);
   });

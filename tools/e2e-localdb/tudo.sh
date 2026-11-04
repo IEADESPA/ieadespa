@@ -87,4 +87,9 @@ bash rodar.sh preparar-entidades
 BASE=cenario-entidades bash rodar.sh roteiro e2e-69-entidades.js
 BASE=cenario-entidades bash rodar.sh roteiro e2e-70-entidades-corridas.js
 E2E_RCSI=1 BASE=cenario-entidades bash rodar.sh roteiro e2e-70-entidades-corridas.js
+# v9.2 (Expansão, migração 166): a base própria
+bash rodar.sh preparar-expansao
+BASE=cenario-expansao bash rodar.sh roteiro e2e-71-expansao.js
+BASE=cenario-expansao bash rodar.sh roteiro e2e-72-expansao-corridas.js
+E2E_RCSI=1 BASE=cenario-expansao bash rodar.sh roteiro e2e-72-expansao-corridas.js
 echo TUDO-PRONTO

@@ -18,16 +18,18 @@ const { exigirGeral, ehGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
-const { composicaoCCJ, composicaoCFO, composicaoCEP } = require("../shared/comissoes");
+const { composicaoCCJ, composicaoCFO, composicaoCEP, composicaoCME } = require("../shared/comissoes");
 const { gerarProtocolo } = require("../shared/protocolo");
 
 const DIAS_PARECER = 15; // Regimento, Art. 24 §2º
-const COMISSOES_TEMATICAS_VALIDAS = ["CFO", "CEP"];
+// v9.2 — a CME (Art. 23, calculada) também é comissão temática: projetos de expansão e missões.
+const COMISSOES_TEMATICAS_VALIDAS = ["CFO", "CEP", "CME"];
 
 async function membroEhDaComissao(pool, sigla, membroId) {
   const composicao = sigla === "CCJ" ? await composicaoCCJ(pool)
     : sigla === "CFO" ? await composicaoCFO(pool)
     : sigla === "CEP" ? await composicaoCEP(pool)
+    : sigla === "CME" ? await composicaoCME(pool)
     : [];
   return composicao.some(m => Number(m.membroId) === Number(membroId));
 }
@@ -153,7 +155,7 @@ module.exports = async function (context, req) {
       return;
     }
     if (!COMISSOES_TEMATICAS_VALIDAS.includes(comissaoTematica)) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Comissão temática inválida (use CFO ou CEP)." } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Comissão temática inválida (use CFO, CEP ou CME)." } };
       return;
     }
     // O autor é quem protocola: só o GERAL protocola em nome de outra pessoa (antes o papel local punha qualquer matrícula como autora).

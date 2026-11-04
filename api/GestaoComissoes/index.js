@@ -15,7 +15,7 @@ const auth = require("../shared/auth");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
-const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER } = require("../shared/comissoes");
+const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER, composicaoCME } = require("../shared/comissoes");
 const { comConflito } = require("../shared/violacaoUnica");
 const { composicaoCLI } = require("../shared/universo");
 const { reitorAtual } = require("../shared/afmDb");
@@ -48,7 +48,9 @@ module.exports = comConflito(async function (context, req) {
     if (!usuario) return;
     const [ccj, cfo, cep, pmo] = await Promise.all([composicaoCCJ(pool), composicaoCFO(pool), composicaoCEP(pool), composicaoPorSiglaEleita(pool, "PMO")]);
     const cder = await composicaoCDER(pool, hojeBrasilia(), await idsDaCLI(pool));
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { CCJ: ccj, CFO: cfo, CEP: cep, PMO: pmo, CDER: cder } };
+    // v9.2 — CME (Art. 23): calculada (o Secretário de Missões e os Pastores de Área); o e-mail, que a composição traz para os avisos, não sai daqui.
+    const cme = (await composicaoCME(pool)).map((m) => ({ membroId: m.membroId, nome: m.nome, cargoOuFuncao: m.cargoOuFuncao, origemSigla: m.origemSigla }));
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { CCJ: ccj, CFO: cfo, CEP: cep, PMO: pmo, CDER: cder, CME: cme } };
     return;
   }
 

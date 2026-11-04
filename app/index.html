@@ -435,6 +435,13 @@
             <button class="btn-aba" id="btnAbaEntidades" data-on-click="mostrarAbaSecretaria" data-args-click='["entidades"]'><span class="icone">🏥</span><span class="rotulo">Entidades Vinculadas</span></button>
           </div>
 
+          <!-- MÓDULO: EXPANSÃO (v9.2) — Estatuto Art. 5º §§3º e 5º; Regimento Art. 23, 24 §2º e 109-A: abertura de Extensão da Tenda, emancipação e nova
+               congregação, com o parecer da CME e a decisão da CLI. Permissão própria "expansao" (o Dirigente vê só a congregação dele); a CME entra também. -->
+          <div class="grupo-modulo" id="grupoModuloExpansao" style="display:none;">
+            <hr class="divisor-sidebar" />
+            <button class="btn-aba" id="btnAbaExpansao" data-on-click="mostrarAbaSecretaria" data-args-click='["expansao"]'><span class="icone">⛺</span><span class="rotulo">Expansão</span></button>
+          </div>
+
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
@@ -5991,6 +5998,70 @@
         </div>
       </div>
 
+      <!-- ABA: EXPANSÃO (v9.2) — Estatuto Art. 5º §§3º e 5º; Regimento Art. 23, 24 §2º e 109-A. Exige "expansao" (ou compor a CME). Toda regra mora no servidor
+           (shared/expansao.js, rota /api/expansao); a ficha e os formulários de cada ato são montados por modulos/expansao.js e o que o servidor devolve passa por
+           escaparHtmlEbd. -->
+      <div id="abaExpansao" class="aba-secretaria" style="display:none;">
+        <h3>⛺ Expansão</h3>
+        <p class="subtitle">Aqui nascem as unidades novas. A <strong>Extensão da Tenda</strong> é um ponto de pregação de uma Congregação-Mãe, dirigido por um
+          <strong>Encarregado</strong> de confiança do Dirigente (Regimento, Art. 109-A). Quando cresce, ela pode <strong>se emancipar</strong> e virar congregação. A
+          <strong>CME</strong> (o Secretário de Missões e os Pastores de Área) dá o parecer em 15 dias e a <strong>CLI</strong> decide (Estatuto, Art. 5º §5º); aprovado, o
+          sistema já cria a unidade.</p>
+        <div class="cal-pilulas" id="expPilulas">
+          <button type="button" class="cal-pilula ativo" id="btnExpSecaoPainel" data-on-click="expMostrarSecaoAcao" data-args-click='["painel"]'>📋 Painel</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoPedidos" data-on-click="expMostrarSecaoAcao" data-args-click='["pedidos"]'>📨 Pedidos</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
+        </div>
+
+        <div id="expSecaoPainel" class="cal-secao">
+          <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="expCarregarPainelAcao">🔄 Atualizar</button></div>
+          <p id="expMsgPainel" class="subtitle" role="status"></p>
+          <div id="expPainel"></div>
+        </div>
+
+        <div id="expSecaoPedidos" class="cal-secao" style="display:none;">
+          <details id="expNovoDetalhes" class="vol-form evt-form-detalhes">
+            <summary>➕ Fazer um pedido (abertura de Extensão, emancipação ou nova congregação)</summary>
+            <div class="cal-form">
+              <div class="cal-form-grade">
+                <div class="input-group"><label for="expNovoTipo">Tipo do pedido</label><select id="expNovoTipo" data-on-change="expTipoNovoAcao"></select></div>
+                <div class="input-group" id="expNovoBlocoMae" style="display:none;"><label for="expNovoMae">Congregação-Mãe</label><select id="expNovoMae"></select></div>
+                <div class="input-group" id="expNovoBlocoEncarregado" style="display:none;"><label for="expNovoEncarregado">Matrícula do Encarregado (membro da Mãe, em comunhão)</label><input type="text" id="expNovoEncarregado" inputmode="numeric" maxlength="10" /></div>
+                <div class="input-group" id="expNovoBlocoExtensao" style="display:none;"><label for="expNovoExtensao">A Extensão que vai se emancipar</label><select id="expNovoExtensao"></select></div>
+                <div class="input-group" id="expNovoBlocoArea" style="display:none;"><label for="expNovoArea">Área (opcional)</label><select id="expNovoArea"></select></div>
+                <div class="input-group"><label for="expNovoNome" id="expNovoNomeRotulo">Nome (2 a 150)</label><input type="text" id="expNovoNome" maxlength="150" /></div>
+                <div class="input-group"><label for="expNovoEndereco">Endereço (opcional)</label><input type="text" id="expNovoEndereco" maxlength="300" /></div>
+                <div class="input-group"><label for="expNovoBairro">Bairro (opcional)</label><input type="text" id="expNovoBairro" maxlength="150" /></div>
+                <div class="input-group"><label for="expNovoCidade">Cidade (opcional)</label><input type="text" id="expNovoCidade" maxlength="150" /></div>
+                <div class="input-group"><label for="expNovoUf">UF (opcional)</label><select id="expNovoUf"></select></div>
+              </div>
+              <div class="input-group"><label for="expNovoJustificativa">Justificativa: o público, o local e como a obra será sustentada (10 a 2.000)</label><textarea id="expNovoJustificativa" rows="3" maxlength="2000" style="width:100%;"></textarea></div>
+              <button type="button" class="btn-confirmar" style="width:auto;" data-on-click="expSalvarNovoAcao">Registrar o pedido</button>
+              <p id="expMsgNovo" class="subtitle" role="status"></p>
+            </div>
+          </details>
+          <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="expCarregarListaAcao">🔄 Atualizar</button></div>
+          <p id="expMsgLista" class="subtitle" role="status"></p>
+          <div id="expLista"></div>
+          <div id="expBlocoFicha" style="display:none;">
+            <hr />
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="expFecharFichaAcao">✖ Fechar a ficha</button></div>
+            <p id="expMsgFicha" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="expFicha"></div>
+          </div>
+        </div>
+
+        <div id="expSecaoExtensoes" class="cal-secao" style="display:none;">
+          <div class="barra-lista">
+            <label><input type="checkbox" id="expExtensoesTodas" data-on-change="expCarregarExtensoesAcao" /> Mostrar também as inativas e as emancipadas</label>
+            <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="expCarregarExtensoesAcao">🔄 Atualizar</button>
+          </div>
+          <p id="expMsgExtensoes" class="subtitle" role="status"></p>
+          <div id="expListaExtensoes"></div>
+          <div id="expFormExtensao"></div>
+        </div>
+      </div>
+
       <!-- ABA: SETORES TÉCNICOS (v7.6) — Regimento Art. 48 a 52. Exige "setores_tecnicos" (a gestão: catálogo
            dos setores, vínculos, Termo de Adesão e a visão de todos os atos) e/ou "setores_ratificacao" (a
            Diretoria Executiva: ratificar ou revogar as interdições e os pedidos de remoção); as duas só
@@ -7454,6 +7525,7 @@
   <script src="modulos/entidades-vinculadas.js"></script>
   <script src="modulos/escalas.js"></script>
   <script src="modulos/eventos-congressos.js"></script>
+  <script src="modulos/expansao.js"></script>
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
   <script src="modulos/meu-painel.js"></script>

@@ -41,12 +41,13 @@ async function lerPrazoDias(pool, sigla, padrao) {
 // ================================================================ reuniões ================================================================
 // As reuniões já realizadas e encerradas da CLI (sem o Seminário e sem a que "não conta" — as mesmas da homologação da consagração) e da Assembleia Geral.
 const PLENARIO_CLI = `ISNULL(s.TipoSessao, N'') <> N'SEMINARIO_AFM' AND s.NaoContaEm IS NULL`;
-async function reunioesEncerradas(pool, orgao) {
+// Só as de data até hoje: a reunião "encerrada" com data futura (erro de digitação) seria recusada por lerReuniao — a lista não a oferece (v9.2).
+async function reunioesEncerradas(pool, orgao, hoje = hojeBrasilia()) {
   const filtro = orgao === "CLI" ? `o.Sigla = N'CLI' AND ${PLENARIO_CLI}` : `o.Sigla = N'ASSEMBLEIA_GERAL'`;
-  const r = await pool.request().query(`
+  const r = await pool.request().input("h", sql.Date, hoje).query(`
     SELECT TOP 60 s.SessaoId, CONVERT(varchar(10), s.DataSessao, 120) AS DataSessao, s.Descricao
     FROM Sessoes s JOIN Orgaos o ON o.OrgaoId = s.OrgaoId
-    WHERE ${filtro} AND s.Status = N'ENCERRADA' AND s.DataSessao IS NOT NULL
+    WHERE ${filtro} AND s.Status = N'ENCERRADA' AND s.DataSessao IS NOT NULL AND s.DataSessao <= @h
     ORDER BY s.DataSessao DESC, s.SessaoId DESC`);
   return r.recordset.map((l) => ({ sessaoId: l.SessaoId, data: l.DataSessao, descricao: l.Descricao }));
 }

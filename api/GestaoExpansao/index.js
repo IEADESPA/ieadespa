@@ -98,7 +98,7 @@ module.exports = async function (context, req) {
       }
       if (acao === "reunioes") {
         if (!alcance.geral) return erro(context, 403, esc.MSG_GERAL);
-        context.res = { status: 200, body: { sucesso: true, reunioes: await db.reunioesEncerradas(pool, "CLI") } };
+        context.res = { status: 200, body: { sucesso: true, reunioes: await db.reunioesEncerradas(pool, "CLI", hoje) } };
         return;
       }
       return erro(context, 404, "Ação inválida.");

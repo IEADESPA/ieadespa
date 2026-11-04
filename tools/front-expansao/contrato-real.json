@@ -4107,11 +4107,6 @@
   "sucesso": true,
   "reunioes": [
    {
-    "sessaoId": 13,
-    "data": "2026-11-07",
-    "descricao": "CLI E2E expansão futura"
-   },
-   {
     "sessaoId": 9,
     "data": "2026-11-04",
     "descricao": "CLI E2E expansão (hoje)"

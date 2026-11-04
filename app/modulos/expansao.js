@@ -20,6 +20,8 @@ let expPedidoExtensoes = 0;
 let expPedidoOpcoes = 0;
 let expSecaoAtual = "painel";
 let expExtensoes = [];
+let expPedidoHistorico = 0;     // o histórico tem o seu contador: a lista recarregada não o deixa preso em "Carregando…"
+let expReunioesFalhou = false;  // a lista das reuniões não chegou: o formulário diz isso, e não "registre a reunião"
 const expEl = (idEl) => document.getElementById(idEl);
 const expBr = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 const expH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
@@ -28,6 +30,7 @@ const EXP_SECOES = ["painel", "pedidos", "extensoes"];
 
 async function expBuscar(caminho) {
   const token = authToken;
+  if (!token) return null;   // sem login (saiu no meio de uma sequência de leituras): nada vai para a tela
   let res;
   try { res = await fetchProtegido(`${API_BASE}/expansao/${caminho}`); } catch (e) { return authToken === token ? { semConexao: true } : null; }
   const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
@@ -55,8 +58,10 @@ const expLista = (nome) => (expCatalogos && Array.isArray(expCatalogos[nome]) ? 
 
 // Troca de login ou saída: nada da sessão anterior fica na página (nem o que foi digitado).
 function expLimparTela() {
-  expCatalogos = null; expReunioes = []; expFicha = null; expForm = null; expExtensoes = [];
-  expPedidoFicha++; expPedidoPainel++; expPedidoLista++; expPedidoExtensoes++; expPedidoOpcoes++; expConfirmando = false;
+  expCatalogos = null; expReunioes = []; expFicha = null; expForm = null; expExtensoes = []; expReunioesFalhou = false;
+  expPedidoFicha++; expPedidoPainel++; expPedidoLista++; expPedidoExtensoes++; expPedidoOpcoes++; expPedidoHistorico++; expConfirmando = false;
+  expMarcarSecao("painel");   // o próximo login no mesmo aparelho começa no Painel, com o formulário fechado
+  const det = expEl("expNovoDetalhes"); if (det) det.open = false;
   for (const idEl of ["expPainel", "expLista", "expFicha", "expListaExtensoes", "expFormExtensao", "expMsgPainel", "expMsgLista", "expMsgFicha", "expMsgNovo", "expMsgExtensoes",
     "expNovoTipo", "expNovoMae", "expNovoExtensao", "expNovoArea", "expNovoUf"]) { const el = expEl(idEl); if (el) el.innerHTML = ""; }
   for (const idEl of ["expNovoNome", "expNovoEncarregado", "expNovoEndereco", "expNovoBairro", "expNovoCidade", "expNovoJustificativa"]) { const el = expEl(idEl); if (el) el.value = ""; }
@@ -75,7 +80,8 @@ async function carregarOpcoesExpansaoAcao() {
   if (cat.papeis && cat.papeis.geral) {
     const reu = await expBuscar("reunioes");
     if (reu === null || meu !== expPedidoOpcoes) return;
-    expReunioes = reu && Array.isArray(reu.reunioes) ? reu.reunioes : [];
+    expReunioesFalhou = !(reu && reu.sucesso && Array.isArray(reu.reunioes));
+    expReunioes = expReunioesFalhou ? [] : reu.reunioes;
   } else expReunioes = [];
   expPreencherNovo();
   expMostrarSecaoAcao(expSecaoAtual);
@@ -85,7 +91,7 @@ function expMarcarSecao(secao) {
   expSecaoAtual = EXP_SECOES.includes(secao) ? secao : "painel";
   for (const s of EXP_SECOES) {
     const div = expEl(`expSecao${capitalize(s)}`); if (div) div.style.display = s === expSecaoAtual ? "block" : "none";
-    const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) b.classList.toggle("ativo", s === expSecaoAtual);
+    const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) { b.classList.toggle("ativo", s === expSecaoAtual); b.setAttribute("aria-pressed", s === expSecaoAtual ? "true" : "false"); }
   }
 }
 function expMostrarSecaoAcao(secao) {
@@ -97,7 +103,7 @@ function expMostrarSecaoAcao(secao) {
 
 // ================================================================ painel ================================================================
 const expItemPedido = (p, texto) => `<li><strong>${expH(p.tipoRotulo)}: ${expH(p.nome)}</strong>${p.maeNome ? ` <small>(${expH(p.maeNome)})</small>` : ""} — ${texto}
-  <button type="button" class="btn-link" data-on-click="expAbrirFichaAcao" data-args-click="${argsAttr(Number(p.pedidoId))}">Abrir</button></li>`;
+  <button type="button" class="btn-link" aria-label="Abrir o pedido ${expH(p.nome)}" data-on-click="expAbrirFichaAcao" data-args-click="${argsAttr(Number(p.pedidoId))}">Abrir</button></li>`;
 async function expCarregarPainelAcao() {
   const alvo = expEl("expPainel");
   if (!alvo) return;
@@ -125,12 +131,16 @@ async function expCarregarPainelAcao() {
 
 // ================================================================ novo pedido e lista ================================================================
 function expPreencherNovo() {
+  // a aba reaberta refaz as listas: o que a pessoa já tinha escolhido volta (se ainda é uma opção válida)
+  const antes = {};
+  for (const idEl of ["expNovoTipo", "expNovoMae", "expNovoExtensao", "expNovoArea", "expNovoUf"]) { const el = expEl(idEl); antes[idEl] = el ? el.value : ""; }
   const opcoes = (lista, valor, rotulo, vazio = "— escolha —") => `<option value="">${expH(vazio)}</option>${lista.map((x) => `<option value="${expH(x[valor])}">${expH(rotulo(x))}</option>`).join("")}`;
   const tipo = expEl("expNovoTipo"); if (tipo) tipo.innerHTML = opcoes(expLista("tipos"), "codigo", (t) => t.rotulo);
   const mae = expEl("expNovoMae"); if (mae) mae.innerHTML = opcoes(expLista("maes"), "congregacaoId", (c) => c.nome);
   const ext = expEl("expNovoExtensao"); if (ext) ext.innerHTML = opcoes(expLista("extensoes"), "extensaoId", (e) => `${e.nome} (${e.maeNome})`);
   const area = expEl("expNovoArea"); if (area) area.innerHTML = opcoes(expLista("areas"), "areaId", (a) => a.nome, "— a da Congregação-Mãe (ou nenhuma) —");
   const uf = expEl("expNovoUf"); if (uf) uf.innerHTML = `<option value="">— nenhuma —</option>${expLista("ufs").map((u) => `<option value="${expH(u)}">${expH(u)}</option>`).join("")}`;
+  for (const [idEl, v] of Object.entries(antes)) { const el = expEl(idEl); if (el && v && (el.options || []).some((o) => o.value === v)) el.value = v; }
   expTipoNovoAcao();
 }
 // Cada tipo mostra só os campos dele: a Extensão nasce de uma Mãe com o Encarregado; a emancipação parte de uma Extensão; a nova congregação escolhe a Área.
@@ -142,6 +152,17 @@ function expTipoNovoAcao() {
   mostrar("expNovoBlocoExtensao", tipo === "EMANCIPACAO");
   mostrar("expNovoBlocoArea", tipo === "EMANCIPACAO" || tipo === "NOVA_CONGREGACAO");
   const rot = expEl("expNovoNomeRotulo"); if (rot) rot.textContent = tipo === "ABERTURA_EXTENSAO" ? "Nome da Extensão (2 a 150)" : "Nome da nova congregação (2 a 150; não pode repetir o de outra)";
+  const area = expEl("expNovoArea");
+  if (area && area.options && area.options[0]) area.options[0].textContent = tipo === "EMANCIPACAO" ? "— a da Congregação-Mãe —" : "— nenhuma por enquanto —";
+  const end = expEl("expNovoEnderecoRotulo");
+  if (end) end.textContent = tipo === "EMANCIPACAO" ? "Endereço (opcional; o que ficar em branco vem da Extensão)" : "Endereço (opcional)";
+  // o que vai acontecer com o pedido, e o aviso quando não há o que escolher (antes de a pessoa preencher tudo)
+  const avisos = {
+    ABERTURA_EXTENSAO: expLista("maes").length ? "A abertura de Extensão vai direto à CLI (não passa pela CME)." : "Você não tem uma congregação inteira no seu escopo para ser a Congregação-Mãe (ou ela foi rebaixada pela Saúde Congregacional).",
+    EMANCIPACAO: expLista("extensoes").length ? "A emancipação passa pelo parecer da CME (15 dias) e depois pela CLI." : "Não há Extensão ativa da sua congregação disponível (as que já têm pedido de emancipação em andamento não aparecem).",
+    NOVA_CONGREGACAO: "A nova congregação passa pelo parecer da CME (15 dias) e depois pela CLI."
+  };
+  expMensagem("expMsgTipo", avisos[tipo] || "");
 }
 async function expSalvarNovoAcao() {
   const tipo = expEl("expNovoTipo").value;
@@ -154,14 +175,16 @@ async function expSalvarNovoAcao() {
   if (tipo === "EMANCIPACAO" || tipo === "NOVA_CONGREGACAO") corpo.areaId = expEl("expNovoArea").value;
   const r = await expPost("pedido", corpo, "expMsgNovo");
   if (!r) return;
-  expMensagem("expMsgNovo", r.mensagem || (r.sucesso ? "Pedido registrado." : "Não foi possível."));
-  if (!r.sucesso) return;
+  if (!r.sucesso) { expMensagem("expMsgNovo", r.mensagem || "Não foi possível."); return; }
+  expMensagem("expMsgNovo", "");
   for (const idEl of ["expNovoNome", "expNovoEncarregado", "expNovoEndereco", "expNovoBairro", "expNovoCidade", "expNovoJustificativa"]) expEl(idEl).value = "";
   for (const idEl of ["expNovoTipo", "expNovoMae", "expNovoExtensao", "expNovoArea", "expNovoUf"]) expEl(idEl).value = "";
   expTipoNovoAcao();
   const det = expEl("expNovoDetalhes"); if (det) det.open = false;
   await carregarOpcoesExpansaoAcao();   // a Extensão com pedido em andamento sai da lista dos catálogos
   if (r.pedidoId) await expAbrirFichaAcao(r.pedidoId);
+  if (expFicha && Number(expFicha.pedidoId) === Number(r.pedidoId)) expMensagem("expMsgFicha", r.mensagem || "Pedido registrado.");
+  else if (authToken) mostrarToast(r.mensagem || "Pedido registrado.", "sucesso");
 }
 async function expCarregarListaAcao() {
   const alvo = expEl("expLista");
@@ -176,7 +199,7 @@ async function expCarregarListaAcao() {
   alvo.innerHTML = `<div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Pedido</th><th>Mãe</th><th>Situação</th><th>Pedido em</th><th></th></tr></thead><tbody>${lista.map((p) => `
     <tr><td><strong>${expH(p.nome)}</strong><br><small>${expH(p.tipoRotulo)}</small></td><td>${expH(p.maeNome || "—")}</td>
     <td>${expH(p.statusRotulo)}${p.parecerVencido ? "<br><strong>🚩 parecer vencido</strong>" : ""}</td><td>${expH(expBr(p.solicitadoEm))}</td>
-    <td><button type="button" class="btn-link" data-on-click="expAbrirFichaAcao" data-args-click="${argsAttr(Number(p.pedidoId))}">Abrir</button></td></tr>`).join("")}</tbody></table></div>`;
+    <td><button type="button" class="btn-link" aria-label="Abrir o pedido ${expH(p.nome)}" data-on-click="expAbrirFichaAcao" data-args-click="${argsAttr(Number(p.pedidoId))}">Abrir</button></td></tr>`).join("")}</tbody></table></div>`;
 }
 
 // ================================================================ a ficha do pedido ================================================================
@@ -207,6 +230,7 @@ const expBotao = (rotulo, chave) => `<button type="button" class="btn-confirmar 
 function expRenderFicha() {
   const p = expFicha;
   if (!p) return;
+  const digitado = expForm ? expCamposDigitados() : null;   // a ficha repintada (a aba reaberta) não apaga o que foi escrito
   const a = p.acoes || {};
   const local = [p.endereco, p.bairro, p.cidade && p.uf ? `${p.cidade}/${p.uf}` : (p.cidade || p.uf)].filter(Boolean).join(" · ");
   const prazo = p.status === "EM_PARECER" && p.prazoParecer
@@ -218,7 +242,7 @@ function expRenderFicha() {
     <h4>${expH(p.tipoRotulo)}: ${expH(p.nome)}</h4>
     <p><strong>${expH(p.statusRotulo)}</strong>${p.maeNome ? ` · Congregação-Mãe: ${expH(p.maeNome)}` : ""}${p.extensaoNome ? ` · Extensão: ${expH(p.extensaoNome)}` : ""}${p.areaNome ? ` · Área: ${expH(p.areaNome)}` : ""}</p>
     ${local ? `<p>${expH(local)}</p>` : ""}
-    ${p.encarregado ? `<p>Encarregado proposto: ${expH(p.encarregado.nome)} (mat. ${expH(p.encarregado.membroId)})</p>` : ""}
+    ${p.encarregado ? `<p>Encarregado indicado no pedido: ${expH(p.encarregado.nome)} (mat. ${expH(p.encarregado.membroId)})</p>` : ""}
     <p class="subtitle">${expH(p.justificativa)}</p>
     <p><small>Pedido por ${expH(p.solicitanteNome || p.solicitadoPor)} em ${expH(expBr(p.solicitadoEm))}.</small></p>
     ${prazo}
@@ -228,7 +252,21 @@ function expRenderFicha() {
     ${p.desistencia ? `<p>Desistência em ${expH(expBr(p.desistencia.em))}: ${expH(p.desistencia.motivo)}</p>` : ""}
     ${botoes ? `<div class="barra-lista">${botoes}</div>` : ""}
     <div id="expFormAcao"></div>`;
-  if (expForm) expRenderForm();
+  if (expForm) { expRenderForm(); expRestaurarCampos(digitado); }
+}
+function expCamposDigitados() {
+  const esp = expForm ? expEspec(expForm.chave) : null;
+  const v = {};
+  for (const c of (esp ? esp.campos : [])) { const el = expEl(`expCampo_${c.id}`); if (el) v[c.id] = c.tipo === "check" ? !!el.checked : el.value; }
+  return v;
+}
+function expRestaurarCampos(v) {
+  for (const [id, valor] of Object.entries(v || {})) {
+    const el = expEl(`expCampo_${id}`);
+    if (!el) continue;
+    if (typeof valor === "boolean") el.checked = valor;
+    else if (el.tagName !== "SELECT" || (el.options || []).some((o) => o.value === valor)) el.value = valor;
+  }
 }
 
 // As especificações de cada ato. Campos: id, rotulo, tipo (texto, area, select, check, reuniaoCLI), max, desde. `confirmar(corpo)`: a pergunta do ato que não se desfaz.
@@ -237,18 +275,20 @@ function expEspec(chave) {
   const quem = `${p.tipoRotulo || ""}: ${p.nome || ""}`;
   switch (chave) {
     case "parecer": return { titulo: `Parecer da CME — ${quem}`, acao: "parecer", campos: [
-      { id: "parecer", rotulo: "Parecer", tipo: "select", opcoes: expLista("pareceres") },
-      { id: "fundamentacao", rotulo: "Fundamentação: a viabilidade estratégica (10 a 2.000)", tipo: "area", max: 2000 }],
+      { id: "parecer", rotulo: "Parecer", tipo: "select", opcoes: expLista("pareceres"), obrigatorio: true },
+      { id: "fundamentacao", rotulo: "Fundamentação: a viabilidade estratégica (10 a 2.000)", tipo: "area", max: 2000, obrigatorio: true }],
       confirmar: (c) => `Emitir o parecer ${c.parecer === "CONTRARIO" ? "CONTRÁRIO" : "FAVORÁVEL"} da CME? Ele não muda depois e o pedido segue para a CLI.` };
     case "decidir": {
       const desde = [p.solicitadoEm, p.parecerEm].filter(Boolean).sort().pop();
       const semParecer = p.status === "EM_PARECER";
       return { titulo: `Decisão da CLI — ${quem}`, acao: "decidir", campos: [
-        { id: "sessaoId", rotulo: "Reunião da CLI (já realizada e encerrada)", tipo: "reuniaoCLI", desde },
-        { id: "resultado", rotulo: "A CLI…", tipo: "select", opcoes: expLista("resultados") },
+        { id: "sessaoId", rotulo: "Reunião da CLI (já realizada e encerrada)", tipo: "reuniaoCLI", desde, obrigatorio: true },
+        { id: "resultado", rotulo: "A CLI…", tipo: "select", opcoes: expLista("resultados"), obrigatorio: true },
         ...(semParecer ? [{ id: "urgencia", rotulo: "Votado em regime de urgência, aprovado por 2/3 do Plenário (dispensa o parecer da CME — Regimento, Art. 24 §2º)", tipo: "check" }] : []),
         { id: "motivo", rotulo: "Motivo (obrigatório na recusa; até 1.000)", tipo: "area", max: 1000 }],
         aviso: semParecer ? "A CME ainda não emitiu o parecer: sem a urgência marcada, a decisão é recusada." : "Vale a reunião feita no dia do pedido ou depois dele e do parecer.",
+        // o que a tela já sabe que o servidor recusaria, antes de perguntar e de pedir a confirmação de quem é
+        conferir: (c) => (semParecer && !c.urgencia ? "Sem o parecer da CME, marque a urgência (2/3) — ou espere o parecer." : (c.resultado === "REJEITADO" && !c.motivo ? "Na recusa, escreva o motivo." : null)),
         confirmar: (c) => {
           if (c.resultado !== "APROVADO") return "Registrar a RECUSA da CLI? Isto não se desfaz.";
           if (p.tipo === "EMANCIPACAO") return `Registrar a APROVAÇÃO? A congregação "${p.nome}" nasce agora, os membros da Extensão passam para ela, a Extensão fica emancipada, o acesso de quem tinha o escopo dela termina e todas as sessões abertas no sistema caem (cada um entra de novo). Isto não se desfaz.`;
@@ -256,7 +296,7 @@ function expEspec(chave) {
           return `Registrar a APROVAÇÃO? A Extensão "${p.nome}" é aberta agora, com o Encarregado. Isto não se desfaz.`;
         } };
     }
-    case "desistir": return { titulo: `Desistir do pedido — ${quem}`, acao: "desistir", campos: [{ id: "motivo", rotulo: "Motivo (5 a 1.000)", tipo: "area", max: 1000 }],
+    case "desistir": return { titulo: `Desistir do pedido — ${quem}`, acao: "desistir", campos: [{ id: "motivo", rotulo: "Motivo (5 a 1.000)", tipo: "area", max: 1000, obrigatorio: true }],
       confirmar: () => "Desistir deste pedido? Isto não se desfaz (um novo pedido continua possível)." };
     default: return null;
   }
@@ -272,6 +312,7 @@ function expAbrirFormAcao(chave) {
   if (primeiro && typeof primeiro.focus === "function") primeiro.focus();
 }
 function expOpcoesReuniao(desde) {
+  if (expReunioesFalhou) return "<option value=\"\">Não foi possível carregar as reuniões da CLI — saia da aba e entre de novo</option>";
   const validas = expReunioes.filter((s) => !desde || s.data >= desde);
   if (!validas.length) return "<option value=\"\">Nenhuma reunião da CLI encerrada nas datas que valem — registre-a em Órgãos Centrais</option>";
   return `<option value="">— escolha —</option>${validas.map((s) => `<option value="${expH(s.sessaoId)}">${expH(expBr(s.data))} — ${expH(s.descricao || "reunião")}</option>`).join("")}`;
@@ -310,6 +351,9 @@ async function expEnviarFormAcao() {
     if (!el) continue;
     corpo[c.id] = c.tipo === "check" ? !!el.checked : String(el.value || "").trim();
   }
+  const faltando = esp.campos.filter((c) => c.obrigatorio && !corpo[c.id]).map((c) => c.rotulo.replace(/ \(.*$/, ""));
+  const problema = faltando.length ? `Preencha: ${faltando.join("; ")}.` : (typeof esp.conferir === "function" ? esp.conferir(corpo) : null);
+  if (problema) { expMensagem("expMsgForm", problema); return; }
   const pergunta = typeof esp.confirmar === "function" ? esp.confirmar(corpo) : null;
   const ficha = expPedidoFicha;
   if (pergunta) {
@@ -322,7 +366,12 @@ async function expEnviarFormAcao() {
   if (ficha !== expPedidoFicha || !expForm) return;   // trocou de ficha (ou saiu) enquanto a pergunta estava aberta
   const pedidoId = expFicha.pedidoId;
   const r = await expPost(esp.acao, corpo, "expMsgForm");
-  if (!r || ficha !== expPedidoFicha) return;
+  if (!r) return;
+  if (ficha !== expPedidoFicha) {
+    // trocou de ficha durante a gravação: nada vai para a ficha de agora; o que foi gravado aparece num aviso e a lista se atualiza
+    if (r.sucesso && authToken) { mostrarToast(r.mensagem || "Feito.", "sucesso"); expCarregarListaAcao(); carregarOpcoesExpansaoAcao(); }
+    return;
+  }
   const msg = r.mensagem || (r.sucesso ? "Feito." : "Não foi possível.");
   if (!r.sucesso) {
     expMensagem("expMsgForm", msg);
@@ -331,7 +380,11 @@ async function expEnviarFormAcao() {
   }
   expForm = null;
   await expAbrirFichaAcao(pedidoId);
-  if (expFicha && Number(expFicha.pedidoId) === Number(pedidoId)) expMensagem("expMsgFicha", msg);
+  if (!authToken) return;   // saiu enquanto relia a ficha
+  if (expFicha && Number(expFicha.pedidoId) === Number(pedidoId)) {
+    expMensagem("expMsgFicha", msg);
+    const m = expEl("expMsgFicha"); if (m && typeof m.focus === "function") m.focus();   // o formulário sumiu: o foco vai para o resultado
+  }
   expCarregarListaAcao();
   if (esp.acao === "decidir" || esp.acao === "desistir") carregarOpcoesExpansaoAcao();   // a Extensão aberta ou liberada muda os catálogos
 }
@@ -343,6 +396,7 @@ async function expCarregarExtensoesAcao() {
   const meu = ++expPedidoExtensoes;
   alvo.innerHTML = "<p class='subtitle'>Carregando…</p>";
   const todas = expEl("expExtensoesTodas") && expEl("expExtensoesTodas").checked;
+  if (!expOcupado) expMensagem("expMsgExtensoes", "");
   const r = await expBuscar(`extensoes${todas ? "?todas=1" : ""}`);
   if (r === null || meu !== expPedidoExtensoes) return;
   if (!r.sucesso) { alvo.innerHTML = r.semConexao ? EXP_SEM_CONEXAO : `<p class='subtitle'>${expH(r.mensagem)}</p>`; return; }
@@ -352,7 +406,7 @@ async function expCarregarExtensoesAcao() {
     <tr><td><strong>${expH(e.nome)}</strong>${e.abertaEm ? `<br><small>aberta em ${expH(expBr(e.abertaEm))}</small>` : ""}${e.emancipadaEm ? `<br><small>emancipada em ${expH(expBr(e.emancipadaEm))} → ${expH(e.emancipadaNome)}</small>` : (e.ativa ? "" : "<br><small>inativa</small>")}${e.pedidoEmAndamento ? "<br><small>🏛️ pedido de emancipação em andamento</small>" : ""}</td>
     <td>${expH(e.maeNome)}</td><td>${e.encarregado ? `${expH(e.encarregado.nome)}<br><small>desde ${expH(expBr(e.encarregado.desde))}</small>` : "—"}${e.pendencia ? `<br><strong>⚠️ ${expH(e.pendencia)}</strong>` : ""}</td>
     <td>${expH(e.membros)}</td>
-    <td>${e.podeEditar ? `<button type="button" class="btn-link" data-on-click="expTrocarEncarregadoAcao" data-args-click="${argsAttr(Number(e.extensaoId))}">${e.encarregado ? "Trocar Encarregado" : "Definir Encarregado"}</button><br>` : ""}<button type="button" class="btn-link" data-on-click="expHistoricoAcao" data-args-click="${argsAttr(Number(e.extensaoId))}">Histórico</button></td></tr>`).join("")}</tbody></table></div>`;
+    <td>${e.podeEditar ? `<button type="button" class="btn-link" aria-label="${e.encarregado ? "Trocar" : "Definir"} o Encarregado de ${expH(e.nome)}" data-on-click="expTrocarEncarregadoAcao" data-args-click="${argsAttr(Number(e.extensaoId))}">${e.encarregado ? "Trocar Encarregado" : "Definir Encarregado"}</button><br>` : ""}${e.podeVerHistorico ? `<button type="button" class="btn-link" aria-label="Histórico dos Encarregados de ${expH(e.nome)}" data-on-click="expHistoricoAcao" data-args-click="${argsAttr(Number(e.extensaoId))}">Histórico</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function expTrocarEncarregadoAcao(extensaoId) {
   const e = expExtensoes.find((x) => Number(x.extensaoId) === Number(extensaoId));
@@ -362,30 +416,35 @@ function expTrocarEncarregadoAcao(extensaoId) {
     <h4>${e.encarregado ? "Trocar" : "Definir"} o Encarregado — ${expH(e.nome)} <small>(${expH(e.maeNome)})</small></h4>
     <p class="subtitle">De confiança do Dirigente: membro ativo, em comunhão, da própria Congregação-Mãe (Regimento, Art. 109-A, I).</p>
     <div class="input-group"><label for="expEncMembro">Matrícula do novo Encarregado</label><input type="text" id="expEncMembro" inputmode="numeric" maxlength="10" /></div>
-    <div class="input-group"><label for="expEncMotivo">Motivo (5 a 1.000)</label><textarea id="expEncMotivo" rows="2" style="width:100%;" maxlength="1000"></textarea></div>
+    ${e.encarregado ? `<div class="input-group"><label for="expEncMotivo">Motivo da troca (5 a 1.000)</label><textarea id="expEncMotivo" rows="2" style="width:100%;" maxlength="1000"></textarea></div>` : ""}
     <p id="expMsgEnc" class="subtitle" role="status" aria-live="polite"></p>
     <div class="barra-lista"><button type="button" class="btn-confirmar" style="width:auto;" data-on-click="expSalvarEncarregadoAcao" data-args-click="${argsAttr(Number(e.extensaoId))}">Salvar</button>
     <button type="button" class="btn-confirmar btn-secundario" style="width:auto;" data-on-click="expFecharFormExtensaoAcao">Cancelar</button></div></div>`;
+  if (typeof alvo.scrollIntoView === "function") alvo.scrollIntoView({ behavior: "smooth", block: "start" });
   const campo = expEl("expEncMembro"); if (campo && typeof campo.focus === "function") campo.focus();
 }
 function expFecharFormExtensaoAcao() { const alvo = expEl("expFormExtensao"); if (alvo) alvo.innerHTML = ""; }
 async function expSalvarEncarregadoAcao(extensaoId) {
   const meu = expPedidoExtensoes;
-  const r = await expPost("encarregado", { extensaoId: Number(extensaoId), membroId: expEl("expEncMembro").value.trim(), motivo: expEl("expEncMotivo").value }, "expMsgEnc");
+  const motivo = expEl("expEncMotivo");
+  const r = await expPost("encarregado", { extensaoId: Number(extensaoId), membroId: expEl("expEncMembro").value.trim(), motivo: motivo ? motivo.value : "" }, "expMsgEnc");
   if (!r) return;
   if (!r.sucesso) { expMensagem("expMsgEnc", r.mensagem || "Não foi possível."); return; }
   expFecharFormExtensaoAcao();
+  if (meu === expPedidoExtensoes) await expCarregarExtensoesAcao();
+  if (!authToken) return;
   expMensagem("expMsgExtensoes", r.mensagem || "Salvo.");
-  if (meu === expPedidoExtensoes) expCarregarExtensoesAcao();
+  const m = expEl("expMsgExtensoes"); if (m && typeof m.scrollIntoView === "function") m.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 async function expHistoricoAcao(extensaoId) {
   const e = expExtensoes.find((x) => Number(x.extensaoId) === Number(extensaoId));
   const alvo = expEl("expFormExtensao");
   if (!e || !alvo) return;
-  const meu = ++expPedidoExtensoes;
+  const meu = ++expPedidoHistorico;
   alvo.innerHTML = "<p class='subtitle'>Carregando…</p>";
+  if (typeof alvo.scrollIntoView === "function") alvo.scrollIntoView({ behavior: "smooth", block: "start" });
   const r = await expBuscar(`extensao-historico?extensaoId=${encodeURIComponent(Number(extensaoId))}`);
-  if (r === null || meu !== expPedidoExtensoes) return;
+  if (r === null || meu !== expPedidoHistorico) return;
   if (!r.sucesso) { alvo.innerHTML = r.semConexao ? EXP_SEM_CONEXAO : `<p class='subtitle'>${expH(r.mensagem)}</p>`; return; }
   const hist = Array.isArray(r.encarregados) ? r.encarregados : [];
   alvo.innerHTML = `<div class="cartao-perfil ent-form"><h4>Encarregados — ${expH(e.nome)}</h4>

@@ -62,8 +62,11 @@ module.exports = async function (context, req) {
     const alcance = {
       geral: !!visao && esc.ehGeral(visao),
       cme,
-      // a congregação inteira (o escopo de uma Extensão é mais estreito que a Mãe e não conta)
-      cobreMae: (nome) => concessoes.some((c) => !c.escopoExtensaoNome && auth.estaNoEscopo(c, nome))
+      // a congregação inteira por um cargo TERRITORIAL (o Dirigente, o Pastor de Área...): o escopo de uma Extensão é mais estreito que a Mãe e não conta, e o de um
+      // departamento (o Secretário de Missões, um Líder Geral) vale para o campo todo só no departamento dele — não alcança congregação (revisão de 04/11/2026)
+      cobreMae: (nome) => concessoes.some((c) => !c.escopoExtensaoNome && c.nivel !== "DEPARTAMENTO" && auth.estaNoEscopo(c, nome)),
+      // o Dirigente da Mãe: o cargo de nível Congregação com ela no escopo (escolhe o Encarregado, "de confiança do Dirigente Local" — Regimento Art. 109-A, I)
+      dirigeMae: (nome) => concessoes.some((c) => !c.escopoExtensaoNome && c.nivel === "CONGREGACAO" && auth.estaNoEscopo(c, nome))
     };
 
     if (metodo === "GET") {
@@ -91,7 +94,8 @@ module.exports = async function (context, req) {
       if (acao === "extensao-historico") {
         const extensaoId = ex.idDe(consulta.extensaoId == null ? null : String(consulta.extensaoId));
         if (!extensaoId) return erro(context, 400, "Informe extensaoId.");
-        const visivel = (await db.listarExtensoes(pool, { alcance, todas: true })).some((e) => e.extensaoId === extensaoId);
+        // o histórico (com o motivo de cada saída) é de quem cuida da Mãe — a CME de outra Área não o lê
+        const visivel = (await db.listarExtensoes(pool, { alcance, todas: true })).some((e) => e.extensaoId === extensaoId && e.podeVerHistorico);
         if (!visivel) return erro(context, 404, "Extensão não encontrada.");
         context.res = { status: 200, body: { sucesso: true, encarregados: await db.historicoEncarregados(pool, extensaoId) } };
         return;

@@ -155,20 +155,21 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_PedidosExpansao_Mae' 
 GO
 
 -- ---- permissão e o papel "Secretário de Missões" (Regimento Art. 23, I, e Art. 43-44) ----
+-- Tudo num lote só e UMA vez (quando a funcionalidade ainda não existe): o papel novo nasce com as permissões do Líder Geral de Departamento/Secretaria de hoje mais
+-- a de expansão (nível Departamento: assento na CLI pelo mesmo caminho), e a permissão vai aos cinco papéis. Nos deploys seguintes nada se repete — se a
+-- administração tirar "expansao" de um papel em Permissões, o deploy não a devolve (revisão de 04/11/2026).
 IF NOT EXISTS (SELECT 1 FROM dbo.Funcionalidades WHERE Chave = 'expansao')
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM dbo.Papeis WHERE Nome = N'Secretário de Missões')
+        INSERT INTO dbo.Papeis (Nome, Nivel, Permissoes)
+        SELECT N'Secretário de Missões', 'DEPARTAMENTO', ISNULL(MAX(Permissoes), 'reunioes,pessoas')
+        FROM dbo.Papeis WHERE Nome = N'Líder Geral de Departamento/Secretaria';
+    UPDATE dbo.Papeis
+    SET Permissoes = CASE WHEN ISNULL(Permissoes, '') = '' THEN 'expansao' ELSE Permissoes + ',expansao' END
+    WHERE Nome IN (N'Presidente', N'Secretário Geral', N'Dirigente de Congregação', N'Pastor de Área', N'Secretário de Missões')
+      AND (',' + ISNULL(Permissoes, '') + ',') NOT LIKE '%,expansao,%';
     INSERT INTO dbo.Funcionalidades (Chave, Nome) VALUES ('expansao', N'Expansão — Extensões da Tenda, emancipação e nova congregação');
-GO
--- O papel nasce com as permissões do Líder Geral de Departamento/Secretaria de hoje mais a de expansão (nível Departamento: assento na CLI pelo mesmo caminho).
-IF NOT EXISTS (SELECT 1 FROM dbo.Papeis WHERE Nome = N'Secretário de Missões')
-    INSERT INTO dbo.Papeis (Nome, Nivel, Permissoes)
-    SELECT N'Secretário de Missões', 'DEPARTAMENTO',
-           CASE WHEN ISNULL(MAX(Permissoes), '') = '' THEN 'reunioes,pessoas,expansao' ELSE MAX(Permissoes) + ',expansao' END
-    FROM dbo.Papeis WHERE Nome = N'Líder Geral de Departamento/Secretaria';
-GO
-UPDATE dbo.Papeis
-SET Permissoes = CASE WHEN ISNULL(Permissoes, '') = '' THEN 'expansao' ELSE Permissoes + ',expansao' END
-WHERE Nome IN (N'Presidente', N'Secretário Geral', N'Dirigente de Congregação', N'Pastor de Área', N'Secretário de Missões')
-  AND (',' + ISNULL(Permissoes, '') + ',') NOT LIKE '%,expansao,%';
+END
 GO
 
 -- ---- avisos ----

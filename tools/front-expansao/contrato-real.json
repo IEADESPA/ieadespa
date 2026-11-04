@@ -225,11 +225,13 @@
     "abertaEm": "2026-11-04",
     "emancipadaEm": "2026-11-04",
     "emancipadaNome": "Betel E2E",
-    "membros": 0,
+    "membros": 1,
     "encarregado": null,
     "pendencia": null,
     "pedidoEmAndamento": null,
-    "podeEditar": false
+    "podeEditar": false,
+    "podeEmancipar": false,
+    "podeVerHistorico": true
    }
   ]
  },
@@ -316,7 +318,9 @@
     },
     "pendencia": null,
     "pedidoEmAndamento": null,
-    "podeEditar": true
+    "podeEditar": true,
+    "podeEmancipar": true,
+    "podeVerHistorico": true
    }
   ]
  },
@@ -435,6 +439,11 @@
     "extensaoId": 3,
     "nome": "Tenda Quatro E2E",
     "maeNome": "Central E2E"
+   },
+   {
+    "extensaoId": 4,
+    "nome": "Tenda Sem Encarregado E2E",
+    "maeNome": "Central E2E"
    }
   ],
   "areas": [
@@ -536,20 +545,16 @@
    "TO"
   ],
   "prazoParecerDias": 15,
-  "maes": [
-   {
-    "congregacaoId": 1,
-    "nome": "Central E2E"
-   },
-   {
-    "congregacaoId": 2,
-    "nome": "Vila Nova E2E"
-   }
-  ],
+  "maes": [],
   "extensoes": [
    {
     "extensaoId": 3,
     "nome": "Tenda Quatro E2E",
+    "maeNome": "Central E2E"
+   },
+   {
+    "extensaoId": 4,
+    "nome": "Tenda Sem Encarregado E2E",
     "maeNome": "Central E2E"
    }
   ],
@@ -4127,7 +4132,7 @@
   "sucesso": true,
   "encarregados": [
    {
-    "encarregadoId": 3,
+    "encarregadoId": 2,
     "membroId": 9403,
     "nome": "Encarregado B E2E",
     "desde": "2026-11-04",

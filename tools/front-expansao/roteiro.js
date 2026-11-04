@@ -54,6 +54,10 @@ const args = (b) => JSON.parse(b.getAttribute("data-args-click") || "[]");
 const posts = (amb, caminho) => amb.api.chamadas.filter((c) => c.metodo === "POST" && c.caminho === caminho);
 const gets = (amb, caminho) => amb.api.chamadas.filter((c) => c.metodo === "GET" && c.caminho === caminho);
 const botaoForm = (amb, chave) => botoes(amb, "expFicha", "expAbrirFormAcao").find((b) => args(b)[0] === chave);
+// a Extensão da lista sem Encarregado (as que o servidor devolve já têm um)
+function expExtensoesSemEncarregado(amb, e) {
+  amb.ev(`expExtensoes = expExtensoes.map((x) => (x.extensaoId === ${Number(e.extensaoId)} ? { ...x, encarregado: null } : x));`, "sem-encarregado");
+}
 async function abrirAba(amb) { amb.g("mostrarAbaSecretaria")("expansao"); await amb.ocioso(); }
 async function abrirFicha(amb, id = APROVADO.pedidoId) { await amb.g("expAbrirFichaAcao")(id); await amb.ocioso(); }
 
@@ -112,7 +116,7 @@ async function prova() {
   ok(p.length === 1 && p[0].corpo.tipo === "ABERTURA_EXTENSAO" && p[0].corpo.encarregadoMembroId === "9402" && p[0].corpo.congregacaoMaeId === String(REAL.catalogosGeral.maes[0].congregacaoId) && !("extensaoId" in p[0].corpo) && !("areaId" in p[0].corpo),
     "abertura: manda a Mãe e o Encarregado, nunca a Extensão escondida", p[0] && p[0].corpo);
   ok(amb.e("expNovoNome").value === "" && gets(amb, "expansao/pedido").length === 1 && gets(amb, "expansao/catalogos").length === 1, "limpa o formulário, relê os catálogos e abre a ficha nova");
-  ok(amb.e("expMsgNovo").textContent.includes("Pedido registrado"), "a mensagem do servidor (como texto)");
+  ok(amb.e("expMsgFicha").textContent.includes("Pedido registrado") && amb.e("expMsgNovo").textContent === "", "a mensagem do servidor (como texto) aparece na ficha aberta, não no formulário fechado");
   semAtaque(amb, "o pedido novo");
 
   console.log("== a ficha e a decisão da CLI ==");
@@ -207,6 +211,53 @@ async function prova() {
   p = posts(geralSemParecer, "expansao/decidir");
   ok(p.length === 1 && p[0].corpo.urgencia === true, "a urgência vai como verdadeiro/falso", p[0] && p[0].corpo);
 
+  console.log("== o que a revisão da tela pediu ==");
+  // campo obrigatório vazio: avisa no formulário, sem perguntar nem gravar
+  await abrirFicha(amb);
+  await amb.g("expAbrirFormAcao")("decidir"); await amb.ocioso();
+  amb.limparRegistro();
+  pend = amb.g("expEnviarFormAcao")();
+  modal = await amb.responderModal(true);
+  await pend; await amb.ocioso();
+  ok(!modal.aberto && /Preencha: Reunião da CLI; A CLI…/.test(amb.e("expMsgForm").textContent) && posts(amb, "expansao/decidir").length === 0, "sem a reunião e o resultado: avisa o que falta, sem perguntar 'recusa' nem gravar", amb.e("expMsgForm").textContent);
+  amb.e("expCampo_sessaoId").value = String(validas[0].sessaoId);
+  amb.e("expCampo_resultado").value = "REJEITADO";
+  pend = amb.g("expEnviarFormAcao")();
+  modal = await amb.responderModal(true);
+  await pend; await amb.ocioso();
+  ok(!modal.aberto && /motivo/.test(amb.e("expMsgForm").textContent) && posts(amb, "expansao/decidir").length === 0, "a recusa sem motivo: avisa antes de perguntar");
+  geralSemParecer.limparRegistro();
+  await geralSemParecer.g("expAbrirFormAcao")("decidir"); await geralSemParecer.ocioso();
+  geralSemParecer.e("expCampo_sessaoId").value = String(REAL.reunioes.reunioes[0].sessaoId);
+  geralSemParecer.e("expCampo_resultado").value = "APROVADO";
+  pend = geralSemParecer.g("expEnviarFormAcao")();
+  modal = await geralSemParecer.responderModal(true);
+  await pend; await geralSemParecer.ocioso();
+  ok(!modal.aberto && /marque a urgência/.test(geralSemParecer.e("expMsgForm").textContent) && posts(geralSemParecer, "expansao/decidir").length === 0, "sem o parecer e sem a urgência: avisa antes (o servidor recusaria)");
+  // a aba reaberta não apaga o que foi digitado (o formulário do ato e as escolhas do pedido novo)
+  amb.e("expCampo_motivo").value = "Texto longo que a pessoa escreveu";
+  amb.e("expNovoTipo").value = "EMANCIPACAO";
+  amb.g("expTipoNovoAcao")();
+  await abrirAba(amb);
+  ok(amb.e("expCampo_motivo") && amb.e("expCampo_motivo").value === "Texto longo que a pessoa escreveu" && amb.e("expCampo_resultado").value === "REJEITADO" && amb.e("expNovoTipo").value === "EMANCIPACAO" && amb.e("expNovoBlocoExtensao").style.display !== "none",
+    "voltar à aba não apaga o que foi digitado");
+  amb.e("expNovoTipo").value = ""; amb.g("expTipoNovoAcao")();
+  amb.g("expCancelarFormAcao")();
+  // sem Mãe possível: o aviso aparece ao escolher o tipo, antes de preencher tudo
+  const semMae = montar({ geral: false, catalogo: "catalogosDirigente" });
+  semMae.__respostas["GET expansao/catalogos"] = { corpo: { ...R.catalogosDirigente, maes: [], extensoes: [] } };
+  await abrirAba(semMae);
+  semMae.e("expNovoTipo").value = "ABERTURA_EXTENSAO"; semMae.g("expTipoNovoAcao")();
+  ok(/não tem uma congregação inteira/.test(semMae.e("expMsgTipo").textContent), "sem Mãe no escopo: avisa ao escolher a abertura");
+  semMae.e("expNovoTipo").value = "EMANCIPACAO"; semMae.g("expTipoNovoAcao")();
+  ok(/Não há Extensão ativa/.test(semMae.e("expMsgTipo").textContent), "sem Extensão disponível: avisa ao escolher a emancipação");
+  // as reuniões que não chegaram não mandam cadastrar reunião
+  const semReu = montar();
+  semReu.__respostas["GET expansao/reunioes"] = { status: 500, corpo: { sucesso: false, mensagem: "falhou" } };
+  await abrirAba(semReu); await abrirFicha(semReu);
+  await semReu.g("expAbrirFormAcao")("decidir"); await semReu.ocioso();
+  ok(/Não foi possível carregar as reuniões/.test(semReu.e("expCampo_sessaoId").textContent), "as reuniões não chegaram: o formulário diz isso");
+
   console.log("== as Extensões ==");
   amb.g("expMostrarSecaoAcao")("extensoes"); await amb.ocioso();
   const lista = amb.e("expListaExtensoes").textContent;
@@ -236,6 +287,20 @@ async function prova() {
   ok(posts(amb, "expansao/encarregado").length === 1, "dois cliques num ato sem pergunta: um pedido só");
   await amb.g("expHistoricoAcao")(ext.extensaoId); await amb.ocioso();
   ok(gets(amb, "expansao/extensao-historico").length === 1 && /Emancipação da Extensão/.test(amb.e("expFormExtensao").textContent), "o histórico dos Encarregados, com o motivo da saída");
+  const cmeFora = montar({ geral: false, catalogo: "catalogosCME" });
+  cmeFora.__respostas["GET expansao/extensoes"] = { corpo: { sucesso: true, extensoes: R.extensoesAtivas.extensoes.map((e) => ({ ...e, podeEditar: false, podeVerHistorico: false, pendencia: null })) } };
+  await abrirAba(cmeFora);
+  cmeFora.g("expMostrarSecaoAcao")("extensoes"); await cmeFora.ocioso();
+  ok(botoes(cmeFora, "expListaExtensoes", "expHistoricoAcao").length === 0 && botoes(cmeFora, "expListaExtensoes", "expTrocarEncarregadoAcao").length === 0, "a CME de fora: sem o histórico e sem a troca (o servidor diz)");
+  const hPend = amb.g("expHistoricoAcao")(ext.extensaoId);
+  const lPend = amb.g("expCarregarExtensoesAcao")();
+  await hPend; await lPend; await amb.ocioso();
+  ok(/Encarregados —/.test(amb.e("expFormExtensao").textContent), "o histórico pedido junto com a lista recarregada não fica preso em 'Carregando…'");
+  const semEnc = REAL.extensoesAtivas.extensoes.find((e) => e.podeEditar);
+  expExtensoesSemEncarregado(amb, semEnc);
+  amb.g("expTrocarEncarregadoAcao")(semEnc.extensaoId);
+  ok(!amb.e("expEncMotivo") && /Definir o Encarregado/.test(amb.e("expFormExtensao").textContent), "definir o primeiro Encarregado não pede motivo (ninguém está saindo)");
+  amb.g("expFecharFormExtensaoAcao")();
   semAtaque(amb, "o histórico");
 
   console.log("== Meus Dados ==");
@@ -272,7 +337,14 @@ const MUTACOES = [
   ["atos sem volta sem confirmar", ["    try { sim = await confirmarAcao(pergunta, \"Confirmar\"); } finally { expConfirmando = false; }", "    try { sim = true; } finally { expConfirmando = false; }"]],
   ["mostrar todas as reuniões", ["const validas = expReunioes.filter((s) => !desde || s.data >= desde);", "const validas = expReunioes;"]],
   ["recusa fora do formulário", ["expMensagem(\"expMsgForm\", msg);\n    const el = expEl(\"expMsgForm\");", "expMensagem(\"expMsgFicha\", msg);\n    const el = expEl(\"expMsgForm\");"]],
-  ["a resposta da ficha anterior na nova", ["if (!r || ficha !== expPedidoFicha) return;", "if (!r) return;"]],
+  ["a resposta da ficha anterior na nova", ["  if (ficha !== expPedidoFicha) {\n    // trocou", "  if (false) {\n    // trocou"]],
+  ["perguntar antes de conferir o que falta", ["  if (problema) { expMensagem(\"expMsgForm\", problema); return; }", ""]],
+  ["voltar à aba apaga o formulário do ato", ["  if (expForm) { expRenderForm(); expRestaurarCampos(digitado); }", "  if (expForm) { expRenderForm(); }"]],
+  ["voltar à aba apaga as escolhas do pedido novo", ["if (el && v && (el.options || []).some((o) => o.value === v)) el.value = v;", "if (false) el.value = v;"]],
+  ["histórico e lista no mesmo contador", ["  if (r === null || meu !== expPedidoHistorico) return;", "  if (r === null || meu !== expPedidoExtensoes) return;"]],
+  ["pedir motivo ao definir o primeiro Encarregado", ["${e.encarregado ? `<div class=\"input-group\"><label for=\"expEncMotivo\">", "${true ? `<div class=\"input-group\"><label for=\"expEncMotivo\">"]],
+  ["mostrar o histórico a quem o servidor nega", ["${e.podeVerHistorico ? `<button", "${true ? `<button"]],
+  ["mandar cadastrar reunião quando a lista falhou", ["  if (expReunioesFalhou) return", "  if (false) return"]],
   ["pintar a resposta de outro login", ["  return authToken === token ? data : null;\n}\nasync function expPost", "  return data;\n}\nasync function expPost"]],
   ["não limpar a ficha na saída", ["for (const idEl of [\"expPainel\", \"expLista\", \"expFicha\",", "for (const idEl of [\"expPainel\", \"expLista\","]],
   ["mandar a Extensão escondida na abertura", ["  if (tipo === \"EMANCIPACAO\") corpo.extensaoId = expEl(\"expNovoExtensao\").value;", "  corpo.extensaoId = expEl(\"expNovoExtensao\").value;"]],

@@ -17,4 +17,4 @@ usar; a decisão da CLI (só as reuniões a partir do pedido e do parecer, a urg
 emancipação); o parecer da CME; a recusa dentro do formulário; o duplo clique (um pedido só); a troca de ficha durante a gravação; as Extensões (as ativas e todas,
 a troca do Encarregado, o histórico); o cartão de Meus Dados; a saída da sessão e a troca de login (a resposta atrasada não pinta).
 
-Resultado (v9.2, 04/11/2026): 69 verificações, 0 falhas; 18 mutações, 18 acusadas.
+Resultado (v9.2, 04/11/2026, depois das duas revisões independentes): 79 verificações, 0 falhas; 25 mutações, 25 acusadas.

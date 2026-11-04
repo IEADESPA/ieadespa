@@ -21,7 +21,8 @@ const GET = (acao, query, token) => rota(acao, { query, token: token === undefin
 const dias = (n) => somarDias(hojeBr(), n);
 
 // do cenário de base (e2e-1): 1001 Presidente, 1002 Secretário Geral, 3001 Dirigente da Central, 3002 Dirigente da Vila Nova, 3003 Pastor da Área Alfa, 3004 Dirigente da Beta
-const P = { missoes: 9401, encA: 9402, encB: 9403, vila: 9404, desligado: 9405, semComunhao: 9406, disciplina: 9407, m1: 9408, m2: 9409, m3: 9410, jea: 9411, pastorVencido: 9412 };
+const P = { missoes: 9401, encA: 9402, encB: 9403, vila: 9404, desligado: 9405, semComunhao: 9406, disciplina: 9407, m1: 9408, m2: 9409, m3: 9410, jea: 9411, pastorVencido: 9412,
+  vilaDisciplina: 9413, exMembro: 9414 };
 const SID_SEC = crypto.randomUUID();
 const SEC = () => L.sessao(1002, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["expansao", "reunioes"], sid: SID_SEC });
 const PRES = () => L.GERAL(1001, ["expansao"]);
@@ -77,12 +78,14 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
     [P.encB, "Encarregado B E2E", central, "ATIVO", "EM_COMUNHAO"], [P.vila, "Membro Vila E2E", vila, "ATIVO", "EM_COMUNHAO"], [P.desligado, "Desligado Exp E2E", central, "DESLIGADO", "EM_COMUNHAO"],
     [P.semComunhao, "Sem Comunhao Exp E2E", central, "ATIVO", "SEM_COMUNHAO"], [P.disciplina, "Disciplina Exp E2E", central, "ATIVO", "EM_COMUNHAO"],
     [P.m1, "Membro Tenda 1 E2E", central, "ATIVO", "EM_COMUNHAO"], [P.m2, "Membro Tenda 2 E2E", central, "ATIVO", "EM_COMUNHAO"], [P.m3, "Membro Tenda 3 E2E", central, "ATIVO", "EM_COMUNHAO"],
-    [P.jea, "Membro JEA E2E", central, "ATIVO", "EM_COMUNHAO"], [P.pastorVencido, "Pastor Vencido E2E", central, "ATIVO", "EM_COMUNHAO"]];
+    [P.jea, "Membro JEA E2E", central, "ATIVO", "EM_COMUNHAO"], [P.pastorVencido, "Pastor Vencido E2E", central, "ATIVO", "EM_COMUNHAO"],
+    [P.vilaDisciplina, "Disciplina Vila E2E", vila, "ATIVO", "EM_COMUNHAO"], [P.exMembro, "Ex-membro da Tenda E2E", central, "DESLIGADO", "EM_COMUNHAO"]];
   for (const [m, nome, c, st, sit] of pessoas) {
     await q(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, DataAdmissao, Email) VALUES (@m, @n, @c, @s, @sit, '1980-01-01', '2010-01-01', @e)`,
       { m, n: nome, c, s: st, sit, e: `exp${m}@e2e.local` });
   }
   await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.disciplina, d: hojeBr() });
+  await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.vilaDisciplina, d: hojeBr() });
   const papel = (nome) => escalar("SELECT PapelId FROM Papeis WHERE Nome = @n", { n: nome });
   const papelMissoes = await papel("Secretário de Missões");
   await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) VALUES (@m, @p, 'DEPARTAMENTO', @e)", { m: P.missoes, p: papelMissoes, e: semiadespa });
@@ -130,6 +133,10 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
     r = await POST("pedido", { ...ABRE, encarregadoMembroId: m }, DIR());
     ok(r.status === 422, `Encarregado ${rot}: recusado`);
   }
+  // a recusa não conta nada de quem é de outra congregação: a matrícula inexistente, a de outra congregação e a de outra congregação SOB DISCIPLINA dão a mesma resposta
+  const respostas = [];
+  for (const m of [99999, P.vila, P.vilaDisciplina]) respostas.push((await POST("pedido", { ...ABRE, encarregadoMembroId: m }, DIR())).body.mensagem);
+  ok(new Set(respostas).size === 1 && /própria Congregação-Mãe/.test(respostas[0]), "a recusa do Encarregado de fora não revela se ele existe nem se está sob disciplina", respostas);
   ok(await escalar("SELECT COUNT(*) FROM PedidosExpansao") === 0, "nenhuma recusa gravou pedido");
   r = guardar("pedidoAbertura", await POST("pedido", ABRE, DIR()));
   ok(r.status === 201, "o Dirigente pede a abertura", [JSON.stringify(r.body)]);
@@ -185,8 +192,15 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   r = await POST("encarregado", { extensaoId: ext, membroId: P.encB, motivo: "Troca indevida." }, DIRV());
   ok(r.status === 404, "o Dirigente de outra congregação não troca (404)");
   r = await POST("encarregado", { extensaoId: ext, membroId: P.encB, motivo: "Troca indevida." }, PASTOR());
-  ok(r.status === 200 || r.status === 403, "o Pastor da Área (escopo cobre a Central) troca ou é recusado — nunca erro");
-  if (r.status === 200) await q("DELETE FROM ExtensaoEncarregados WHERE ExtensaoId = @e AND MembroId = @m; UPDATE ExtensaoEncarregados SET Ate = NULL, MotivoSaida = NULL, EncerradoPor = NULL WHERE ExtensaoId = @e AND MembroId = @a", { e: ext, m: P.encB, a: P.encA });
+  ok(r.status === 403, "o Pastor da Área vê, mas quem troca o Encarregado é o Dirigente da Mãe (Art. 109-A, I)");
+  r = await POST("encarregado", { extensaoId: ext, membroId: P.encB, motivo: "Troca indevida." }, MISS());
+  ok(r.status === 403 || r.status === 404, "o Secretário de Missões (escopo de departamento) não troca o Encarregado de congregação nenhuma");
+  r = await POST("pedido", { ...ABRE, nome: "Tenda do Secretario E2E" }, MISS());
+  ok(r.status === 422 && /escopo/.test(r.body.mensagem), "nem pede abertura de Extensão por uma Mãe (o escopo de departamento não alcança congregação)");
+  r = await POST("pedido", { ...ABRE, nome: "Tenda do Pastor E2E" }, PASTOR());
+  ok(r.status === 422 && /Dirigente/.test(r.body.mensagem), "a abertura (com o Encarregado de confiança) é pedida pelo Dirigente da Mãe, não pelo Pastor da Área");
+  ok(!(await GET("extensoes", {}, MISS())).body.extensoes.some((e) => e.pendencia || e.podeEditar || e.podeVerHistorico), "a CME sem escopo na Mãe vê a Extensão, mas não a pendência do Encarregado nem o histórico");
+  ok((await GET("extensao-historico", { extensaoId: ext }, MISS())).status === 404, "o histórico (com os motivos de saída) não vai à CME de fora");
   r = await POST("encarregado", { extensaoId: ext, membroId: P.encB, motivo: "A irmã mudou de cidade." }, DIR());
   ok(r.status === 200, "o Dirigente troca o Encarregado");
   const hist = (await GET("extensao-historico", { extensaoId: ext }, DIR())).body.encarregados;
@@ -200,7 +214,8 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.status === 422, "o escopo da Extensão não pede pela Mãe");
 
   console.log("== emancipação (CME em 15 dias e a CLI) ==");
-  await q("UPDATE MembroReferencia SET ExtensaoId = @e WHERE MembroId IN (@a, @b, @c)", { e: ext, a: P.m1, b: P.m2, c: P.m3 });
+  await q("UPDATE MembroReferencia SET ExtensaoId = @e WHERE MembroId IN (@a, @b, @c, @x)", { e: ext, a: P.m1, b: P.m2, c: P.m3, x: P.exMembro });
+  await q("INSERT INTO Dizimistas (CongregacaoId, Nome, MembroId) VALUES (@c, N'Membro Tenda 1 E2E', @m)", { c: central, m: P.m1 });
   await q("INSERT INTO SessoesAtivas (SessaoId, MembroId) VALUES (@s, 1002)", { s: SID_SEC });
   const sidEnc = crypto.randomUUID();
   await q("INSERT INTO SessoesAtivas (SessaoId, MembroId) VALUES (@s, @m)", { s: sidEnc, m: P.encB });
@@ -240,6 +255,10 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   lin = await um("SELECT * FROM Congregacoes WHERE CongregacaoId = @c", { c: betel });
   ok(lin.Ativa && lin.AreaId === area1 && lin.Endereco === "Rua A, 10" && lin.Estado === "PA" && lin.FundacaoAno === Number(hojeBr().slice(0, 4)) && (lin.Categoria || "CONGREGACAO") === "CONGREGACAO", "a congregação nova: ativa, na Área da Mãe, com o endereço da Extensão e o ano de fundação");
   ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (@a, @b, @c) AND CongregacaoId = @n AND ExtensaoId IS NULL", { a: P.m1, b: P.m2, c: P.m3, n: betel }) === 3, "os membros da Extensão estão na congregação nova (e fora da Extensão)");
+  lin = await um("SELECT CongregacaoId, ExtensaoId FROM MembroReferencia WHERE MembroId = @m", { m: P.exMembro });
+  ok(lin.CongregacaoId === central && lin.ExtensaoId === ext, "quem já saiu (desligado) fica onde estava: a ficha dele é história da Mãe");
+  ok(await escalar("SELECT CongregacaoId FROM Dizimistas WHERE MembroId = @m", { m: P.m1 }) === betel, "o dízimo de quem passou vai à tesouraria da congregação nova");
+  ok(await escalar("SELECT COUNT(*) FROM OrgaosLocais WHERE Nivel = 1 AND ReferenciaId = @c AND Sigla = N'JAI' AND Ativo = 1", { c: betel }) === 1, "a JAI da congregação nova já existe (sem esperar o próximo deploy)");
   lin = await um("SELECT * FROM ExtensoesTenda WHERE ExtensaoId = @e", { e: ext });
   ok(!lin.Ativa && lin.CongregacaoEmancipadaId === betel && lin.EmancipadaEm, "a Extensão ficou inativa, emancipada, apontando para a congregação nova");
   ok(await escalar("SELECT COUNT(*) FROM ExtensaoEncarregados WHERE ExtensaoId = @e AND Ate IS NULL", { e: ext }) === 0, "o Encarregado da Extensão foi encerrado");
@@ -250,6 +269,15 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.status === 422 && /já foi emancipada/.test(r.body.mensagem), "a Extensão emancipada não se emancipa de novo");
   r = guardar("painelDepois", await GET("painel"));
   ok(r.body.congregacoesSemDirigente.some((c) => c.congregacaoId === betel), "o Painel: a congregação nova ainda sem Dirigente");
+  await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) VALUES (@m, @p, 'CONGREGACAO', @c)", { m: P.m2, p: await papel("Membro da JAI"), c: betel });
+  ok((await GET("painel")).body.congregacoesSemDirigente.some((c) => c.congregacaoId === betel), "outro papel de nível Congregação (Membro da JAI) não tira a pendência: só o Dirigente");
+  // depois da emancipação, a Extensão não serve mais de escopo nem de cadastro
+  r = await chamarRota("GestaoPessoas/index.js", { metodo: "POST", token: L.GERAL(1002, ["pessoas"]), corpo: { membroId: P.m3, nome: "Membro Tenda 3 E2E", congregacaoId: central, status: "ATIVO", extensaoId: ext } });
+  ok(r.body && r.body.sucesso === false && /Extensão da Tenda inválida/.test(r.body.mensagem), "o cadastro de pessoas não põe ninguém na Extensão emancipada", [JSON.stringify(r.body)]);
+  r = await chamarRota("GestaoCatalogos/index.js", { metodo: "POST", binding: { catalogo: "extensoes" }, token: L.GERAL(1002, ["pessoas"]), corpo: { id: ext, nome: "Tenda Esperança E2E", congregacaoMaeId: central, ativa: true } });
+  ok(r.body && r.body.sucesso === false && /emancipada/.test(r.body.mensagem) && !(await escalar("SELECT Ativa FROM ExtensoesTenda WHERE ExtensaoId = @e", { e: ext })), "o cadastro de Extensões não reativa a emancipada (sem erro)", [r.status, JSON.stringify(r.body)]);
+  r = await chamarRota("GestaoCatalogos/index.js", { metodo: "DELETE", binding: { catalogo: "congregacoes", id: String(betel) }, token: L.GERAL(1002, ["pessoas"]) });
+  ok(r.status !== 500 && r.body && r.body.sucesso === false && await escalar("SELECT COUNT(*) FROM Congregacoes WHERE CongregacaoId = @c", { c: betel }) === 1, "a congregação nascida de um pedido não se exclui (em uso, sem erro)", [r.status, JSON.stringify(r.body)]);
   await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) VALUES (@m, @p, 'CONGREGACAO', @c)", { m: P.m1, p: await papel("Dirigente de Congregação"), c: betel });
   ok(!(await GET("painel")).body.congregacoesSemDirigente.some((c) => c.congregacaoId === betel), "com o Dirigente cadastrado em Liderança, a pendência some sozinha");
   guardar("extensoesTodas", await GET("extensoes", { todas: 1 }));
@@ -320,7 +348,7 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.body.extensoes.some((e) => e.extensaoId === ext4 && e.encarregado && e.encarregado.membroId === P.encA && !e.pendencia), "a Extensão nova sem pendência");
   await q("UPDATE MembroReferencia SET CongregacaoId = @v WHERE MembroId = @m", { v: vila, m: P.encA });
   r = await GET("extensoes", {}, DIR());
-  ok(/não é mais membro da Congregação-Mãe/.test(r.body.extensoes.find((e) => e.extensaoId === ext4).pendencia || ""), "o Encarregado mudou de congregação: a pendência aparece");
+  ok(/não preenche mais os requisitos/.test(r.body.extensoes.find((e) => e.extensaoId === ext4).pendencia || ""), "o Encarregado mudou de congregação: a pendência aparece");
   ok((await GET("painel", {}, DIR())).body.extensoesComPendencia.some((e) => e.extensaoId === ext4), "e vai ao Painel do Dirigente");
   await q("UPDATE MembroReferencia SET CongregacaoId = @c WHERE MembroId = @m", { c: central, m: P.encA });
 
@@ -342,13 +370,31 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(meus.length === 2 && meus.some((x) => x.extensao === "Tenda Esperança E2E" && x.ate) && meus.some((x) => x.extensao === "Tenda Quatro E2E" && !x.ate), "Meus Dados: a Encarregada vê as Extensões que encarregou e encarrega");
   r = await chamarRota("GestaoComissoes/index.js", { token: SEC() });
   ok(r.status === 200 && r.body.CME.length === 2 && r.body.CME.every((m) => !("email" in m)), "a tela das Comissões mostra a CME, sem o e-mail");
-  r = await chamarRota("GestaoProjetos/index.js", { metodo: "POST", token: L.GERAL(1002, ["reunioes", "cli"]), corpo: { autorMembroId: 1002, titulo: "Plano de expansão E2E", texto: "Texto do projeto de expansão.", comissaoTematica: "CME" } });
+  r = await chamarRota("GestaoProjetos/index.js", { metodo: "POST", token: L.GERAL(1002, ["reunioes", "cli"]), corpo: { autorMembroId: P.missoes, titulo: "Plano de expansão E2E", texto: "Texto do projeto de expansão.", comissaoTematica: "CME" } });
   ok(r.body && r.body.sucesso === true, "um projeto pode ir à CME como comissão temática", [JSON.stringify(r.body)]);
   const projeto = await escalar("SELECT TOP 1 ProjetoId FROM Projetos WHERE ComissaoTematica = 'CME' ORDER BY ProjetoId DESC");
   r = await chamarRota("GestaoProjetos/index.js", { metodo: "POST", binding: { id: String(projeto), acao: "parecer", sigla: "CME" }, token: MISS(), corpo: { parecer: "FAVORAVEL" } });
-  ok(r.body && r.body.sucesso === true, "o Secretário de Missões emite o parecer da CME no projeto", [JSON.stringify(r.body)]);
+  ok(r.body && r.body.sucesso === false && /protocolou/.test(r.body.mensagem), "o autor do projeto (o Secretário de Missões) não emite o parecer sobre ele", [JSON.stringify(r.body)]);
   r = await chamarRota("GestaoProjetos/index.js", { metodo: "POST", binding: { id: String(projeto), acao: "parecer", sigla: "CME" }, token: DIRV(), corpo: { parecer: "FAVORAVEL" } });
   ok(!(r.body && r.body.sucesso === true), "quem não é da CME não emite o parecer da CME no projeto");
+  r = await chamarRota("GestaoProjetos/index.js", { metodo: "POST", binding: { id: String(projeto), acao: "parecer", sigla: "CME" }, token: PASTOR(), corpo: { parecer: "FAVORAVEL" } });
+  ok(r.body && r.body.sucesso === true, "o Pastor de Área (CME) emite o parecer da CME no projeto", [JSON.stringify(r.body)]);
+
+  console.log("== a CME sem quem está sob disciplina; o primeiro Encarregado sem motivo; a 166 não devolve a permissão ==");
+  await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.missoes, d: hojeBr() });
+  ok(!(await exDb.composicaoCME(await obterPool())).some((m) => m.membroId === P.missoes), "o Secretário de Missões sob disciplina sai da CME (não dá parecer)");
+  await q("DELETE FROM ProcessosDisciplinares WHERE MembroId = @m", { m: P.missoes });
+  const semEnc = await escalar("INSERT INTO ExtensoesTenda (Nome, CongregacaoMaeId, Ativa) OUTPUT INSERTED.ExtensaoId VALUES (N'Tenda Sem Encarregado E2E', @c, 1)", { c: central });
+  r = await POST("encarregado", { extensaoId: semEnc, membroId: P.encB }, DIR());
+  ok(r.status === 200 && /definido/.test(r.body.mensagem), "o primeiro Encarregado se define sem motivo (ninguém sai)", [JSON.stringify(r.body)]);
+  r = await POST("encarregado", { extensaoId: semEnc, membroId: P.encA }, DIR());
+  ok(r.status === 422 && /motivo/.test(r.body.mensagem), "a troca pede o motivo (quem sai fica com o registro)");
+  await q("UPDATE Papeis SET Permissoes = REPLACE(',' + Permissoes + ',', ',expansao,', ',') WHERE Nome = N'Dirigente de Congregação'");
+  await q("UPDATE Papeis SET Permissoes = SUBSTRING(Permissoes, 2, LEN(Permissoes) - 2) WHERE Nome = N'Dirigente de Congregação'");
+  const mig = require("child_process").spawnSync(process.execPath, ["-r", "./shim-mssql.js", "aplicar-migracao.js", "166"], { cwd: __dirname, encoding: "utf8" });
+  ok(/aplicada/.test(mig.stdout || ""), "a 166 aplicada de novo (o próximo deploy)", [(mig.stdout || "") + (mig.stderr || "")]);
+  ok(await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Dirigente de Congregação' AND (',' + Permissoes + ',') LIKE '%,expansao,%'") === 0, "a permissão tirada em Permissões não volta com o deploy");
+  ok(await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Dirigente de Congregação' AND (',' + Permissoes + ',') LIKE '%,reunioes,%'") === 1, "e as outras permissões do papel ficaram intactas");
 
   console.log("== auditoria ==");
   ok(await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela IN (N'PedidosExpansao', N'ExtensoesTenda', N'Congregacoes') AND (Acao LIKE N'EXPANSAO%' OR Acao LIKE N'EXTENSAO%' OR Acao LIKE N'CONGREGACAO[_]%')") >= 15, "auditoria: cada ato gravou a sua linha");

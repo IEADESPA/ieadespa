@@ -46,7 +46,18 @@ const CATALOGOS = {
   },
   extensoes: {
     tabela: "ExtensoesTenda", chave: "ExtensaoId", idField: "extensaoId",
-    campos: { nome: sql.NVarChar(150), congregacaoMaeId: sql.Int, ativa: sql.Bit }
+    campos: { nome: sql.NVarChar(150), congregacaoMaeId: sql.Int, ativa: sql.Bit },
+    // v9.2 — a Extensão com membros, Encarregado ou pedido de expansão não se exclui (desativa-se); a emancipada é história: não se edita (a congregação que nasceu dela, sim)
+    emUso: async (pool, id) => {
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM (
+        SELECT 1 AS x FROM MembroReferencia WHERE ExtensaoId = @id UNION ALL SELECT 1 FROM ExtensaoEncarregados WHERE ExtensaoId = @id
+        UNION ALL SELECT 1 FROM PedidosExpansao WHERE ExtensaoId = @id OR ExtensaoCriadaId = @id) u`);
+      return Number((r.recordset[0] || {}).Total) > 0;
+    },
+    bloqueioDeEdicao: async (pool, id) => {
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT EmancipadaEm FROM ExtensoesTenda WHERE ExtensaoId = @id`);
+      return r.recordset && r.recordset[0] && r.recordset[0].EmancipadaEm ? "Esta Extensão já foi emancipada em congregação: ela fica como registro histórico e não se edita. Edite a congregação que nasceu dela." : null;
+    }
   },
   congregacoes: {
     tabela: "Congregacoes", chave: "CongregacaoId", idField: "congregacaoId",
@@ -69,8 +80,13 @@ const CATALOGOS = {
       fundacaoAno: sql.SmallInt
     },
     emUso: async (pool, id) => {
+      // v9.2 — também a Congregação-Mãe de alguma Extensão e a congregação de um pedido de expansão (a certidão de nascimento dela)
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
-      return r.recordset[0].Total > 0;
+      if (Number((r.recordset[0] || {}).Total) > 0) return true;
+      const x = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM (
+        SELECT 1 AS x FROM ExtensoesTenda WHERE CongregacaoMaeId = @id OR CongregacaoEmancipadaId = @id
+        UNION ALL SELECT 1 FROM PedidosExpansao WHERE CongregacaoMaeId = @id OR CongregacaoCriadaId = @id) u`);
+      return Number((x.recordset[0] || {}).Total) > 0;
     },
     // Só pra este catálogo: acrescenta o dirigente atual calculado (nunca
     // marcação manual) em cada item já devolvido por listar().
@@ -393,6 +409,11 @@ module.exports = comConflito(async function (context, req) {
       }
     }
     if (idCorpo) {
+      const bloqueio = config.bloqueioDeEdicao && auth.idDeRota(idCorpo) ? await config.bloqueioDeEdicao(pool, auth.idDeRota(idCorpo)) : null;
+      if (bloqueio) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: bloqueio } };
+        return;
+      }
       const dadosAntes = await buscarPorId(pool, config, idCorpo);
       const registro = await atualizar(pool, config, idCorpo, dados);
       if (!registro) {

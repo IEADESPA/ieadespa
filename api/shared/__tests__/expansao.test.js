@@ -116,7 +116,9 @@ describe("a decisão da CLI", () => {
     for (const status of ["APROVADO", "REJEITADO", "DESISTIDO"]) expect(ex.podeDecidir({ ...comParecer, status }, { reuniao: { data: "2026-11-10" } }).pode).toBe(false);
   });
   test("troca de Encarregado e desistência pedem o motivo", () => {
-    expect(ex.validarTrocaEncarregado({ membroId: "8" }).valido).toBe(false);
+    // sem motivo vale na regra pura: o primeiro Encarregado não tem quem saia (o banco exige o motivo quando há alguém em aberto)
+    expect(ex.validarTrocaEncarregado({ membroId: "8" }).dados).toEqual({ membroId: 8, motivo: null });
+    expect(ex.validarTrocaEncarregado({ membroId: "8", motivo: "abc" }).valido).toBe(false);
     expect(ex.validarTrocaEncarregado({ membroId: "x", motivo: "mudou de cidade" }).valido).toBe(false);
     expect(ex.validarTrocaEncarregado({ membroId: "8", motivo: "mudou de cidade" }).dados).toEqual({ membroId: 8, motivo: "mudou de cidade" });
     expect(ex.validarMotivo({ motivo: "" }).valido).toBe(false);
@@ -142,7 +144,7 @@ describe("a porta da rota /api/expansao", () => {
   });
   test("liderança sem a permissão e fora da CME: 403, só a composição da CME é lida, nada gravado", async () => {
     for (const [metodo, acao] of TODAS) expect((await chamar(acao, { metodo, token: LOCAL(["pessoas"]) })).status).toBe(403);
-    expect(mockConsultas.every((c) => CME_SQL.test(c.sql))).toBe(true);
+    expect(mockConsultas.every((c) => CME_SQL.test(c.sql) || /FROM ProcessosDisciplinares/.test(c.sql))).toBe(true);
     expect(escritas()).toHaveLength(0);
   });
   test("quem compõe a CME entra mesmo sem a permissão (o Secretário de Missões com o papel antigo)", async () => {
@@ -189,7 +191,7 @@ describe("a porta da rota /api/expansao", () => {
     expect(r.body.mensagem).toMatch(/não encontrada no seu escopo/);
     // o Dirigente da mesma congregação (escopo inteiro) passa dessa porta e chega à conferência do Encarregado
     const doDirigente = await chamar("pedido", { metodo: "POST", token: LOCAL(), corpo });
-    expect(doDirigente.body.mensagem).toMatch(/Matrícula do Encarregado não encontrada/);
+    expect(doDirigente.body.mensagem).toMatch(/Informe a matrícula de um membro da própria Congregação-Mãe/);
     expect(escritas()).toHaveLength(0);
   });
   test("Mãe rebaixada pelo PSC não abre Extensão (Art. 129 §3º)", async () => {

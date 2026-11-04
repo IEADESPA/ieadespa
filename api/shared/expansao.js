@@ -112,13 +112,14 @@ function validarMotivo(dados, rotulo = "O motivo") {
   return { valido: true, dados: { motivo: m.texto } };
 }
 
+// O motivo é de quem SAI: na troca é obrigatório (o banco confere se havia alguém); ao definir o primeiro Encarregado, ninguém sai e ele pode faltar.
 function validarTrocaEncarregado(dados) {
   const d = dados && typeof dados === "object" ? dados : {};
   const membroId = idDe(d.membroId);
   if (!membroId) return { valido: false, mensagem: "Informe a matrícula do novo Encarregado." };
-  const m = validarMotivo(d, "O motivo da troca");
+  const m = texto(d.motivo, { minimo: 5, maximo: 1000, rotulo: "O motivo da troca", obrigatorio: false, multilinha: true });
   if (!m.valido) return m;
-  return { valido: true, dados: { membroId, motivo: m.dados.motivo } };
+  return { valido: true, dados: { membroId, motivo: m.texto } };
 }
 
 // ---- textos dos avisos ----

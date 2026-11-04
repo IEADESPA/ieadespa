@@ -54,6 +54,8 @@ module.exports = async function (context, req) {
   if (req.method === "POST" && id && acao === "parecer" && sigla) {
     const usuario = auth.exigirLogin(req, context);
     if (!usuario) return;
+    // A sessão de PIN continua valendo: o membro da CCJ é eleito pelo Plenário e pode não ter a senha de liderança. O que se confere é a composição da comissão — e,
+    // desde a v9.2 (revisão), que ninguém dá parecer sobre o projeto que ele mesmo protocolou.
     const { parecer } = req.body || {};
     if (!["FAVORAVEL", "CONTRARIO"].includes(parecer)) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Parecer deve ser FAVORAVEL ou CONTRARIO." } };
@@ -68,6 +70,11 @@ module.exports = async function (context, req) {
     }
     if (!projetoId) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Parecer não encontrado pra essa comissão/projeto." } };
+      return;
+    }
+    const autor = (await pool.request().input("id", sql.Int, projetoId).query(`SELECT AutorMembroId FROM Projetos WHERE ProjetoId = @id`)).recordset[0];
+    if (autor && Number(autor.AutorMembroId) === Number(usuario.membroId)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Quem protocolou o projeto não emite o parecer sobre ele." } };
       return;
     }
     // O parecer se emite UMA vez e só com o projeto ainda em parecer (antes qualquer membro da comissão reescrevia o parecer a qualquer momento, até depois de apto à votação).

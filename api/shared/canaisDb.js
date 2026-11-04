@@ -927,7 +927,7 @@ const SQL_LIDERES_ATUAIS = `
   WHERE l.EscopoId IS NOT NULL AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
     AND ((p.Nome = N'Dirigente de Congregação' AND l.EscopoTipo = 'CONGREGACAO')
       OR (p.Nome = N'Pastor de Área' AND l.EscopoTipo = 'AREA')
-      OR (p.Nome LIKE N'Líder Geral de Departamento%' AND l.EscopoTipo = 'DEPARTAMENTO'))`;
+      OR ((p.Nome LIKE N'Líder Geral de Departamento%' OR p.Nome = N'Secretário de Missões') AND l.EscopoTipo = 'DEPARTAMENTO'))`;
 
 // Compara quem lidera cada congregação, Área e departamento com o último estado conhecido. Se alguém
 // SAIU, abre a pendência de troca de senha/acesso dos canais daquele escopo e dos que a pessoa

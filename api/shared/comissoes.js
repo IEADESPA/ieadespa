@@ -89,7 +89,9 @@ async function composicaoCDER(pool, hojeIso, idsNaCLI) {
 // v9.2 — Art. 23 — Comissão de Missões e Expansão Estratégica: o Secretário de Missões e os Pastores de Área, CALCULADA da Lideranca em vigor (nunca cadastro
 // manual, mesmo princípio da CFO e da CEP). O Secretário de Missões é quem lidera a SEMIADESPA com um papel de nível Departamento (o papel "Secretário de Missões"
 // da migração 166 ou o Líder Geral de antes); o Pastor de Área é o papel com esse nome no escopo de uma Área (o nível AREA sozinho também pega Membro da JEA/JUC).
-// Só quem está com o cadastro ATIVO. `email` vai junto: a CME é avisada dos pedidos que precisam do parecer dela.
+// Só quem está com o cadastro ATIVO e em comunhão (sem disciplina em curso — revisão de 04/11/2026: quem está afastado não dá parecer). Na SEMIADESPA, só o papel
+// "Secretário de Missões" ou o Líder Geral (um papel novo de nível Departamento, de "vice" por exemplo, não entra sozinho). `email` vai junto: a CME é avisada dos
+// pedidos que precisam do parecer dela.
 async function composicaoCME(pool) {
   const result = await pool.request().query(`
     SELECT m.MembroId AS membroId, MAX(m.Nome) AS nome, MAX(m.Email) AS email,
@@ -102,16 +104,17 @@ async function composicaoCME(pool) {
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
     LEFT JOIN Departamentos dep ON l.EscopoTipo = 'DEPARTAMENTO' AND dep.DepartamentoId = l.EscopoId
     LEFT JOIN Areas ar ON l.EscopoTipo = 'AREA' AND ar.AreaId = l.EscopoId
-    WHERE m.Status = 'ATIVO'
+    WHERE m.Status = 'ATIVO' AND ISNULL(m.SituacaoMembro, N'') <> N'SEM_COMUNHAO'
       AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
       AND (
-        (p.Nivel = 'DEPARTAMENTO' AND l.EscopoTipo = 'DEPARTAMENTO' AND dep.Sigla = 'SEMIADESPA')
+        (p.Nome IN (N'Secretário de Missões', N'Líder Geral de Departamento/Secretaria') AND l.EscopoTipo = 'DEPARTAMENTO' AND dep.Sigla = 'SEMIADESPA')
         OR (p.Nome = N'Pastor de Área' AND l.EscopoTipo = 'AREA' AND l.EscopoId IS NOT NULL)
       )
     GROUP BY m.MembroId
     ORDER BY MAX(CASE WHEN l.EscopoTipo = 'DEPARTAMENTO' THEN 0 ELSE 1 END), MAX(m.Nome)
   `);
-  return result.recordset.map((l) => ({ ...l, secretarioMissoes: !!l.secretarioMissoes, comAcessoTela: !!l.comAcessoTela }));
+  const sobDisciplina = await require("./disciplina").membrosSobDisciplina(pool);
+  return result.recordset.filter((l) => !sobDisciplina.has(Number(l.membroId))).map((l) => ({ ...l, secretarioMissoes: !!l.secretarioMissoes, comAcessoTela: !!l.comAcessoTela }));
 }
 
 module.exports = { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER, composicaoCME };

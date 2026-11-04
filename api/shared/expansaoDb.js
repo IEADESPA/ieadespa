@@ -35,6 +35,8 @@ async function emTransacao(pool, fazer) {
 
 const alcanceVeTudo = (alcance) => !!alcance && (alcance.geral || alcance.cme);
 const alcanceCobre = (alcance, nomeMae) => !!alcance && (alcance.geral || (!!nomeMae && typeof alcance.cobreMae === "function" && alcance.cobreMae(nomeMae)));
+// O Dirigente da Mãe (papel de nível Congregação com ela no escopo) ou o nível geral: quem escolhe o Encarregado, "de confiança do Dirigente Local" (Art. 109-A, I).
+const alcanceDirige = (alcance, nomeMae) => !!alcance && (alcance.geral || (!!nomeMae && typeof alcance.dirigeMae === "function" && alcance.dirigeMae(nomeMae)));
 
 // ================================================================ leitura básica ================================================================
 async function lerCongregacao(rq, congregacaoId, { travar = false } = {}) {
@@ -60,27 +62,33 @@ async function lerArea(rq, areaId) {
   return r.recordset[0] ? { areaId: r.recordset[0].AreaId, nome: r.recordset[0].Nome, ativa: !!r.recordset[0].Ativa } : null;
 }
 
-// O Encarregado (Art. 109-A, I): membro ATIVO, em comunhão (não "sem comunhão" nem sob disciplina) e da própria Congregação-Mãe. Devolve a mensagem da recusa ou null.
+// O Encarregado (Art. 109-A, I): membro da própria Congregação-Mãe, ATIVO e em comunhão (nem "sem comunhão" nem sob disciplina). Devolve a mensagem da recusa ou null.
+// A congregação é conferida PRIMEIRO, com a mesma resposta para "não existe" e "é de outra congregação": só depois a situação da pessoa é dita — e ela já está no
+// escopo de quem pergunta (revisão de 04/11/2026: na ordem antiga, a recusa contava se uma matrícula de qualquer congregação estava sob disciplina).
 async function problemaDoEncarregado(pool, rq, membroId, congregacaoMaeId) {
   const r = await rq().input("m", sql.Int, membroId)
     .query(`SELECT MembroId, Nome, Status, SituacaoMembro, CongregacaoId FROM MembroReferencia WHERE MembroId = @m`);
   const m = r.recordset[0];
-  if (!m) return "Matrícula do Encarregado não encontrada.";
-  if (m.Status !== "ATIVO") return "O Encarregado precisa ser membro ativo.";
-  if (m.SituacaoMembro === "SEM_COMUNHAO" || (await membrosSobDisciplina(pool)).has(m.MembroId)) return "O Encarregado precisa estar em comunhão (sem disciplina em curso).";
-  if (Number(m.CongregacaoId) !== Number(congregacaoMaeId)) return "O Encarregado é de confiança do Dirigente Local: precisa ser membro da própria Congregação-Mãe (Regimento, Art. 109-A, I).";
+  if (!m || Number(m.CongregacaoId) !== Number(congregacaoMaeId)) return "Informe a matrícula de um membro da própria Congregação-Mãe: o Encarregado é de confiança do Dirigente Local (Regimento, Art. 109-A, I).";
+  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || (await membrosSobDisciplina(pool)).has(m.MembroId)) return "O Encarregado precisa ser membro ativo e em comunhão (sem disciplina em curso).";
   return null;
 }
 
-async function haHomonimaExtensao(rq, congregacaoMaeId, nome, { travar = false } = {}) {
+async function haHomonimaExtensao(rq, congregacaoMaeId, nome) {
   const r = await rq().input("mae", sql.Int, congregacaoMaeId).input("nome", sql.NVarChar(150), nome)
-    .query(`SELECT TOP 1 ExtensaoId FROM ExtensoesTenda ${travar ? "WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE CongregacaoMaeId = @mae AND ${MESMO_NOME}`);
+    .query(`SELECT TOP 1 ExtensaoId FROM ExtensoesTenda WHERE CongregacaoMaeId = @mae AND ${MESMO_NOME}`);
   return r.recordset.length > 0;
 }
-async function haHomonimaCongregacao(rq, nome, { travar = false } = {}) {
+async function haHomonimaCongregacao(rq, nome) {
   const r = await rq().input("nome", sql.NVarChar(150), nome)
-    .query(`SELECT TOP 1 CongregacaoId FROM Congregacoes ${travar ? "WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE ${MESMO_NOME}`);
+    .query(`SELECT TOP 1 CongregacaoId FROM Congregacoes WHERE ${MESMO_NOME}`);
   return r.recordset.length > 0;
+}
+// As decisões da CLI executadas uma de cada vez (trava de aplicação, dentro da transação): duas aberturas ou congregações homônimas não passam juntas, e as decisões
+// não travam linhas umas das outras em ordem cruzada (revisão de 04/11/2026: a varredura com HOLDLOCK podia dar deadlock).
+async function enfileirarDecisao(rq) {
+  const r = await rq().query(`DECLARE @r INT; EXEC @r = sp_getapplock @Resource = N'ieadespa-expansao-decisao', @LockMode = N'Exclusive', @LockOwner = N'Transaction', @LockTimeout = 20000; SELECT @r AS r`);
+  return Number(r.recordset[0].r) >= 0;
 }
 const HOMONIMA_EXTENSAO = "Essa Congregação-Mãe já tem uma Extensão com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome.";
 const HOMONIMA_CONGREGACAO = "Já existe uma congregação com esse nome (maiúsculas, acentos e espaços nas pontas não diferenciam). Escolha outro nome.";
@@ -162,7 +170,7 @@ async function criarPedido(pool, { dados, por, hoje = hojeBrasilia(), alcance })
     if (!alcance.geral) return PROIBIDO("O pedido de nova congregação (sem passar por Extensão) é do nível geral.");
   } else if (d.tipo === "ABERTURA_EXTENSAO") {
     const mae = await lerCongregacao(rq, d.congregacaoMaeId);
-    if (!mae || !alcanceCobre(alcance, mae.nome)) return { sucesso: false, mensagem: "Congregação-Mãe não encontrada no seu escopo." };
+    if (!mae || !alcanceDirige(alcance, mae.nome)) return { sucesso: false, mensagem: "Congregação-Mãe não encontrada no seu escopo (a abertura de Extensão é pedida pelo Dirigente dela)." };
     if (!mae.ativa) return { sucesso: false, mensagem: "A Congregação-Mãe está inativa." };
     if (mae.categoria !== "CONGREGACAO") return { sucesso: false, mensagem: "Esta unidade foi rebaixada a Extensão da Tenda (PSC) e perdeu a autonomia (Regimento, Art. 129 §3º): não abre Extensão própria." };
     const problema = await problemaDoEncarregado(pool, rq, d.encarregadoMembroId, mae.congregacaoId);
@@ -251,7 +259,9 @@ async function decidir(pool, { pedidoId, dados, por, hoje = hojeBrasilia(), alca
   const reuniao = await lerReuniao(pool, v.dados.sessaoId, "CLI", hoje);
   if (!reuniao) return { sucesso: false, mensagem: "Escolha uma reunião da CLI já realizada e encerrada." };
   let executado = null;
+  const auth = deps.auth || require("./auth");
   const r = await emTransacao(pool, async (t, rq) => {
+    if (!(await enfileirarDecisao(rq))) return { sucesso: false, mensagem: "Outra decisão de expansão está sendo gravada agora. Tente de novo em instantes." };
     const p = await lerPedido(rq, pedidoId, hoje, { travar: true });
     if (!p) return NAO_EXISTE;
     const pode = ex.podeDecidir(p, { reuniao, urgencia: v.dados.urgencia });
@@ -259,7 +269,7 @@ async function decidir(pool, { pedidoId, dados, por, hoje = hojeBrasilia(), alca
     const aprovado = v.dados.resultado === "APROVADO";
     let extensaoCriadaId = null, congregacaoCriadaId = null, membrosTransferidos = null;
     if (aprovado) {
-      const feito = await executar(t, rq, pool, p, { reuniao, por, hoje });
+      const feito = await executar(t, rq, pool, p, { reuniao, por, hoje, sid });
       if (feito.sucesso === false) return feito;
       ({ extensaoCriadaId, congregacaoCriadaId, membrosTransferidos } = feito);
       executado = feito;
@@ -279,13 +289,9 @@ async function decidir(pool, { pedidoId, dados, por, hoje = hojeBrasilia(), alca
     return { sucesso: true, pedido: p, aprovado, extensaoCriadaId, congregacaoCriadaId, membrosTransferidos };
   });
   if (!r.sucesso) return r;
-  // A emancipação muda a congregação de pessoas e encerra o acesso do escopo da Extensão: os bilhetes de acesso abertos guardam os nomes do escopo — todas as
-  // sessões caem (menos a de quem registrou, do nível geral) e o login seguinte monta o escopo novo (o mesmo que o cadastro faz ao renomear).
-  let sessoesEncerradas = 0;
-  if (executado && r.pedido.tipo === "EMANCIPACAO") {
-    const auth = deps.auth || require("./auth");
-    sessoesEncerradas = await auth.revogarTodasAsSessoes(pool, sql, { exceto: sid });
-  }
+  // as sessões encerradas na transação da emancipação passam a valer já neste processo (os outros releem a lista a cada 3 s)
+  const sessoesEncerradas = executado && Array.isArray(executado.sessoesEncerradas) ? executado.sessoesEncerradas.length : 0;
+  if (sessoesEncerradas) auth.marcarRevogadas(executado.sessoesEncerradas);
   await avisarDecisao(pool, { pedido: r.pedido, resultado: v.dados.resultado, motivo: v.dados.motivo, deps });
   const mensagem = !r.aprovado ? "Recusa da CLI registrada."
     : r.pedido.tipo === "ABERTURA_EXTENSAO" ? "Aprovado: a Extensão da Tenda foi aberta com o Encarregado."
@@ -294,13 +300,13 @@ async function decidir(pool, { pedidoId, dados, por, hoje = hojeBrasilia(), alca
   return { sucesso: true, mensagem, extensaoCriadaId: r.extensaoCriadaId, congregacaoCriadaId: r.congregacaoCriadaId, membrosTransferidos: r.membrosTransferidos, sessoesEncerradas };
 }
 
-async function executar(t, rq, pool, p, { reuniao, por, hoje }) {
+async function executar(t, rq, pool, p, { reuniao, por, hoje, sid = null }) {
   if (p.tipo === "ABERTURA_EXTENSAO") {
     const mae = await lerCongregacao(rq, p.congregacaoMaeId, { travar: true });
     if (!mae || !mae.ativa || mae.categoria !== "CONGREGACAO") return { sucesso: false, mensagem: "A Congregação-Mãe não está mais ativa como congregação: a Extensão não pode ser aberta." };
     const problema = await problemaDoEncarregado(pool, rq, p.encarregado.membroId, mae.congregacaoId);
     if (problema) return { sucesso: false, mensagem: `${problema} Peça a desistência e faça um novo pedido com outro Encarregado.` };
-    if (await haHomonimaExtensao(rq, mae.congregacaoId, p.nome, { travar: true })) return { sucesso: false, mensagem: HOMONIMA_EXTENSAO };
+    if (await haHomonimaExtensao(rq, mae.congregacaoId, p.nome)) return { sucesso: false, mensagem: HOMONIMA_EXTENSAO };
     const ins = await rq().input("nome", sql.NVarChar(150), p.nome).input("mae", sql.Int, mae.congregacaoId).input("end", sql.NVarChar(300), p.endereco)
       .input("bai", sql.NVarChar(150), p.bairro).input("cid", sql.NVarChar(150), p.cidade).input("uf", sql.NVarChar(2), p.uf).input("em", sql.Date, reuniao.data)
       .query(`INSERT INTO ExtensoesTenda (Nome, CongregacaoMaeId, Ativa, Endereco, Bairro, Cidade, UF, AbertaEm) OUTPUT inserted.ExtensaoId
@@ -317,28 +323,41 @@ async function executar(t, rq, pool, p, { reuniao, por, hoje }) {
   if (p.tipo === "EMANCIPACAO") {
     ext = await lerExtensao(rq, p.extensaoId, { travar: true });
     if (!ext || !ext.ativa) return { sucesso: false, mensagem: "A Extensão não está mais ativa: a emancipação não pode ser executada." };
+    if (Number(ext.congregacaoMaeId) !== Number(p.congregacaoMaeId)) return { sucesso: false, mensagem: "A Extensão mudou de Congregação-Mãe depois do pedido. Peça a desistência e faça um novo pedido." };
     if (!areaId) areaId = ext.maeAreaId || null;
   }
   if (areaId) {
     const area = await lerArea(rq, areaId);
     if (!area || !area.ativa) return { sucesso: false, mensagem: "A Área escolhida não está mais ativa. Peça a desistência e faça um novo pedido." };
   }
-  if (await haHomonimaCongregacao(rq, p.nome, { travar: true })) return { sucesso: false, mensagem: HOMONIMA_CONGREGACAO };
-  const fonte = ext && !p.endereco ? ext : p; // a emancipada leva o endereço da Extensão quando o pedido não trouxe outro
-  const ins = await rq().input("nome", sql.NVarChar(150), p.nome).input("area", sql.Int, areaId).input("end", sql.NVarChar(300), fonte.endereco)
-    .input("bai", sql.NVarChar(150), fonte.bairro).input("cid", sql.NVarChar(150), fonte.cidade).input("uf", sql.NVarChar(2), fonte.uf)
+  if (await haHomonimaCongregacao(rq, p.nome)) return { sucesso: false, mensagem: HOMONIMA_CONGREGACAO };
+  // o endereço campo a campo: o que o pedido trouxe vale; o que ficou em branco vem da Extensão emancipada
+  const campo = (nome) => p[nome] || (ext ? ext[nome] : null) || null;
+  const ins = await rq().input("nome", sql.NVarChar(150), p.nome).input("area", sql.Int, areaId).input("end", sql.NVarChar(300), campo("endereco"))
+    .input("bai", sql.NVarChar(150), campo("bairro")).input("cid", sql.NVarChar(150), campo("cidade")).input("uf", sql.NVarChar(2), campo("uf"))
     .input("ano", sql.SmallInt, Number(reuniao.data.slice(0, 4)))
     .query(`INSERT INTO Congregacoes (Nome, Ativa, AreaId, Endereco, Bairro, Cidade, Estado, FundacaoAno) OUTPUT inserted.CongregacaoId
             VALUES (@nome, 1, @area, @end, @bai, @cid, @uf, @ano)`);
   const congregacaoCriadaId = ins.recordset[0].CongregacaoId;
+  // a JAI da congregação nova (o mesmo órgão que o cadastro de congregações cria — Regimento Art. 105), sem esperar o próximo deploy
+  await rq().input("ref", sql.Int, congregacaoCriadaId).input("nome", sql.NVarChar(200), `Junta de Articulação Institucional — ${p.nome}`)
+    .query(`IF NOT EXISTS (SELECT 1 FROM OrgaosLocais WHERE Nivel = 1 AND ReferenciaId = @ref AND Sigla = N'JAI')
+              INSERT INTO OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (N'JAI', @nome, 1, @ref, 1)`);
   await registrarAuditoriaNaTransacao(t, { tabela: "Congregacoes", registroId: congregacaoCriadaId, acao: p.tipo === "EMANCIPACAO" ? "CONGREGACAO_EMANCIPADA" : "CONGREGACAO_CRIADA",
     usuarioId: por, dadosDepois: { nome: p.nome, areaId, pedidoId: p.pedidoId, extensaoId: p.extensaoId || null } });
   if (p.tipo !== "EMANCIPACAO") return { extensaoCriadaId: null, congregacaoCriadaId, membrosTransferidos: null };
 
-  // os membros da Extensão passam para a congregação nova (deixam de estar na Extensão)
+  // os membros da Extensão passam para a congregação nova (deixam de estar na Extensão). Quem já saiu (desligado ou falecido) fica onde estava: a ficha dele é
+  // história da Mãe e da Extensão, e o Dirigente novo não passa a alcançá-la (revisão de 04/11/2026).
   const mov = await rq().input("ext", sql.Int, ext.extensaoId).input("nova", sql.Int, congregacaoCriadaId)
-    .query(`UPDATE MembroReferencia SET CongregacaoId = @nova, ExtensaoId = NULL OUTPUT inserted.MembroId WHERE ExtensaoId = @ext`);
+    .query(`UPDATE MembroReferencia SET CongregacaoId = @nova, ExtensaoId = NULL OUTPUT inserted.MembroId WHERE ExtensaoId = @ext AND Status NOT IN (N'DESLIGADO', N'FALECIDO')`);
   const transferidos = mov.recordset.map((l) => l.MembroId);
+  // o dízimo deles passa a ser registrado na tesouraria da congregação nova (antes, 100% ia à Mãe — Art. 109-A, II)
+  if (transferidos.length) {
+    await rq().input("nova", sql.Int, congregacaoCriadaId).input("mae", sql.Int, ext.congregacaoMaeId).input("ext", sql.Int, ext.extensaoId)
+      .query(`UPDATE d SET CongregacaoId = @nova FROM Dizimistas d JOIN MembroReferencia m ON m.MembroId = d.MembroId
+              WHERE m.CongregacaoId = @nova AND d.CongregacaoId = @mae AND d.Ativo = 1`);
+  }
   const fim = await rq().input("ext", sql.Int, ext.extensaoId).input("em", sql.Date, reuniao.data).input("nova", sql.Int, congregacaoCriadaId)
     .query(`UPDATE ExtensoesTenda SET Ativa = 0, EmancipadaEm = @em, CongregacaoEmancipadaId = @nova WHERE ExtensaoId = @ext AND Ativa = 1`);
   if (!fim.rowsAffected[0]) return MUDOU;
@@ -349,10 +368,14 @@ async function executar(t, rq, pool, p, { reuniao, por, hoje }) {
   const acessos = await rq().input("ext", sql.Int, ext.extensaoId).input("h", sql.Date, hoje)
     .query(`UPDATE Lideranca SET AtivoAte = DATEADD(DAY, -1, @h) OUTPUT inserted.LiderancaId, inserted.MembroId
             WHERE EscopoTipo = 'EXTENSAO' AND EscopoId = @ext AND (AtivoAte IS NULL OR AtivoAte >= @h)`);
+  // os bilhetes de acesso abertos guardam os nomes do escopo: todas as sessões caem (menos a de quem registrou, do nível geral) — na mesma transação
+  const sessoes = await rq().input("exceto", sql.NVarChar(40), sid ? String(sid).toLowerCase() : null)
+    .query(`UPDATE SessoesAtivas SET Encerrada = 1, EncerradaEm = SYSUTCDATETIME() OUTPUT inserted.SessaoId
+            WHERE Encerrada = 0 AND CriadoEm >= DATEADD(HOUR, -14, SYSUTCDATETIME()) AND (@exceto IS NULL OR LOWER(CAST(SessaoId AS NVARCHAR(40))) <> @exceto)`);
   await registrarAuditoriaNaTransacao(t, { tabela: "ExtensoesTenda", registroId: ext.extensaoId, acao: "EXTENSAO_EMANCIPADA", usuarioId: por,
     dadosAntes: { ativa: true, congregacaoMaeId: ext.congregacaoMaeId },
     dadosDepois: { congregacaoEmancipadaId: congregacaoCriadaId, membrosTransferidos: transferidos, acessosEncerrados: acessos.recordset.map((l) => l.LiderancaId) } });
-  return { extensaoCriadaId: null, congregacaoCriadaId, membrosTransferidos: transferidos.length };
+  return { extensaoCriadaId: null, congregacaoCriadaId, membrosTransferidos: transferidos.length, sessoesEncerradas: sessoes.recordset.map((l) => l.SessaoId) };
 }
 
 // ================================================================ extensões ================================================================
@@ -374,16 +397,21 @@ async function listarExtensoes(pool, { alcance, todas = false }) {
   const sobDisciplina = await membrosSobDisciplina(pool);
   return r.recordset.filter((l) => alcanceVeTudo(alcance) || alcanceCobre(alcance, l.MaeNome)).map((l) => {
     const encarregado = l.EncarregadoId ? { membroId: l.EncMembroId, nome: l.EncNome, desde: l.EncDesde } : null;
+    // A pendência diz algo da pessoa do Encarregado: só aparece a quem cuida da Mãe (o Dirigente, a Área, o nível geral) — a CME de outra Área não a vê — e nunca diz
+    // o motivo (ativo, comunhão, disciplina ou congregação): quem pode ver a ficha confere lá (revisão de 04/11/2026).
     let pendencia = null;
-    if (l.Ativa) {
+    if (l.Ativa && alcanceCobre(alcance, l.MaeNome)) {
       if (!encarregado) pendencia = "Sem Encarregado: defina quem dirige a Extensão (Regimento, Art. 109-A, I).";
-      else if (l.EncStatus !== "ATIVO" || l.EncSituacao === "SEM_COMUNHAO" || sobDisciplina.has(l.EncMembroId)) pendencia = "O Encarregado não está mais ativo e em comunhão: troque o Encarregado.";
-      else if (Number(l.EncCongregacaoId) !== Number(l.CongregacaoMaeId)) pendencia = "O Encarregado não é mais membro da Congregação-Mãe: troque o Encarregado.";
+      else if (l.EncStatus !== "ATIVO" || l.EncSituacao === "SEM_COMUNHAO" || sobDisciplina.has(l.EncMembroId) || Number(l.EncCongregacaoId) !== Number(l.CongregacaoMaeId)) {
+        pendencia = "O Encarregado não preenche mais os requisitos (membro ativo, em comunhão, da Congregação-Mãe): confira a ficha dele e, se for o caso, troque o Encarregado.";
+      }
     }
     return {
       extensaoId: l.ExtensaoId, nome: l.Nome, congregacaoMaeId: l.CongregacaoMaeId, maeNome: l.MaeNome, ativa: !!l.Ativa, endereco: l.Endereco, bairro: l.Bairro,
       cidade: l.Cidade, uf: l.UF, abertaEm: l.AbertaEm, emancipadaEm: l.EmancipadaEm, emancipadaNome: l.EmancipadaNome, membros: Number(l.Membros), encarregado,
-      pendencia, pedidoEmAndamento: l.PedidoEmAndamento || null, podeEditar: !!l.Ativa && alcanceCobre(alcance, l.MaeNome)
+      pendencia, pedidoEmAndamento: l.PedidoEmAndamento || null, podeEditar: !!l.Ativa && alcanceDirige(alcance, l.MaeNome),
+      // a emancipação pode ser pedida por quem cuida da Mãe (o Dirigente ou o Pastor da Área); o histórico dos Encarregados, idem
+      podeEmancipar: !!l.Ativa && alcanceCobre(alcance, l.MaeNome), podeVerHistorico: alcanceCobre(alcance, l.MaeNome)
     };
   });
 }
@@ -402,13 +430,14 @@ async function trocarEncarregado(pool, { extensaoId, dados, por, hoje = hojeBras
     return await emTransacao(pool, async (t, rq) => {
       const ext = await lerExtensao(rq, extensaoId, { travar: true });
       if (!ext || !(alcanceVeTudo(alcance) || alcanceCobre(alcance, ext.maeNome))) return NAO_EXISTE;
-      if (!alcanceCobre(alcance, ext.maeNome)) return PROIBIDO("Quem troca o Encarregado é o Dirigente da Congregação-Mãe (ou o nível geral).");
+      if (!alcanceDirige(alcance, ext.maeNome)) return PROIBIDO("Quem troca o Encarregado é o Dirigente da Congregação-Mãe (ou o nível geral): ele é de confiança do Dirigente Local (Regimento, Art. 109-A, I).");
       if (!ext.ativa) return { sucesso: false, mensagem: "Esta Extensão está inativa." };
       const problema = await problemaDoEncarregado(pool, rq, v.dados.membroId, ext.congregacaoMaeId);
       if (problema) return { sucesso: false, mensagem: problema };
       const atual = (await rq().input("ext", sql.Int, extensaoId)
         .query(`SELECT EncarregadoId, MembroId, CONVERT(varchar(10), Desde, 120) AS Desde FROM ExtensaoEncarregados WITH (UPDLOCK, ROWLOCK) WHERE ExtensaoId = @ext AND Ate IS NULL`)).recordset[0];
       if (atual && Number(atual.MembroId) === v.dados.membroId) return { sucesso: false, mensagem: "Essa pessoa já é a Encarregada desta Extensão." };
+      if (atual && !v.dados.motivo) return { sucesso: false, mensagem: "Informe o motivo da troca (quem sai fica com o registro)." };
       if (atual) {
         await rq().input("id", sql.Int, atual.EncarregadoId).input("h", sql.Date, hoje).input("m", sql.NVarChar(1000), v.dados.motivo).input("por", sql.Int, por)
           .query(`UPDATE ExtensaoEncarregados SET Ate = CASE WHEN @h < Desde THEN Desde ELSE @h END, MotivoSaida = @m, EncerradoPor = @por WHERE EncarregadoId = @id AND Ate IS NULL`);
@@ -434,9 +463,9 @@ async function catalogos(pool, { alcance }) {
   return {
     tipos: lista(ex.TIPOS).filter((t) => alcance.geral || t.codigo !== "NOVA_CONGREGACAO"),
     status: lista(ex.STATUS), pareceres: lista(ex.PARECERES), resultados: lista(ex.RESULTADOS_CLI), ufs: ex.UFS, prazoParecerDias: ex.PRAZO_PARECER_DIAS,
-    // as Mães possíveis: congregações ativas, não rebaixadas, que o escopo cobre por inteiro
-    maes: cong.recordset.filter((c) => c.Categoria === "CONGREGACAO" && alcanceCobre(alcance, c.Nome)).map((c) => ({ congregacaoId: c.CongregacaoId, nome: c.Nome })),
-    extensoes: extensoes.filter((e) => e.podeEditar && !e.pedidoEmAndamento).map((e) => ({ extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome })),
+    // as Mães possíveis: congregações ativas, não rebaixadas, que a pessoa dirige (ou todas, no nível geral)
+    maes: cong.recordset.filter((c) => c.Categoria === "CONGREGACAO" && alcanceDirige(alcance, c.Nome)).map((c) => ({ congregacaoId: c.CongregacaoId, nome: c.Nome })),
+    extensoes: extensoes.filter((e) => e.podeEmancipar && !e.pedidoEmAndamento).map((e) => ({ extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome })),
     areas: areas.recordset.map((a) => ({ areaId: a.AreaId, nome: a.Nome })),
     papeis: { geral: !!alcance.geral, cme: !!alcance.cme }
   };
@@ -452,7 +481,7 @@ async function painel(pool, { alcance, hoje = hojeBrasilia() }) {
     FROM PedidosExpansao p JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoCriadaId
     WHERE p.Status = N'APROVADO' AND c.Ativa = 1
       AND NOT EXISTS (SELECT 1 FROM Lideranca l JOIN Papeis pa ON pa.PapelId = l.PapelId
-                      WHERE l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = c.CongregacaoId AND pa.Nivel = 'CONGREGACAO'
+                      WHERE l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = c.CongregacaoId AND pa.Nome = N'Dirigente de Congregação'
                         AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE)))
     ORDER BY p.DecisaoEm DESC`)).recordset
     .filter(() => alcanceVeTudo(alcance))

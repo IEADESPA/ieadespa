@@ -6005,12 +6005,12 @@
         <h3>⛺ Expansão</h3>
         <p class="subtitle">Aqui nascem as unidades novas. A <strong>Extensão da Tenda</strong> é um ponto de pregação de uma Congregação-Mãe, dirigido por um
           <strong>Encarregado</strong> de confiança do Dirigente (Regimento, Art. 109-A). Quando cresce, ela pode <strong>se emancipar</strong> e virar congregação. A
-          <strong>CME</strong> (o Secretário de Missões e os Pastores de Área) dá o parecer em 15 dias e a <strong>CLI</strong> decide (Estatuto, Art. 5º §5º); aprovado, o
-          sistema já cria a unidade.</p>
+          <strong>CME</strong> (o Secretário de Missões e os Pastores de Área) dá o parecer em 15 dias sobre a emancipação e a congregação nova; a abertura de Extensão vai
+          direto à <strong>CLI</strong>, que decide tudo (Estatuto, Art. 5º §5º). Aprovado, o sistema já cria a unidade.</p>
         <div class="cal-pilulas" id="expPilulas">
-          <button type="button" class="cal-pilula ativo" id="btnExpSecaoPainel" data-on-click="expMostrarSecaoAcao" data-args-click='["painel"]'>📋 Painel</button>
-          <button type="button" class="cal-pilula" id="btnExpSecaoPedidos" data-on-click="expMostrarSecaoAcao" data-args-click='["pedidos"]'>📨 Pedidos</button>
-          <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
+          <button type="button" class="cal-pilula ativo" id="btnExpSecaoPainel" aria-pressed="true" data-on-click="expMostrarSecaoAcao" data-args-click='["painel"]'>📋 Painel</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoPedidos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["pedidos"]'>📨 Pedidos</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
         </div>
 
         <div id="expSecaoPainel" class="cal-secao">
@@ -6024,13 +6024,13 @@
             <summary>➕ Fazer um pedido (abertura de Extensão, emancipação ou nova congregação)</summary>
             <div class="cal-form">
               <div class="cal-form-grade">
-                <div class="input-group"><label for="expNovoTipo">Tipo do pedido</label><select id="expNovoTipo" data-on-change="expTipoNovoAcao"></select></div>
+                <div class="input-group"><label for="expNovoTipo">Tipo do pedido</label><select id="expNovoTipo" data-on-change="expTipoNovoAcao"></select><p id="expMsgTipo" class="subtitle" role="status"></p></div>
                 <div class="input-group" id="expNovoBlocoMae" style="display:none;"><label for="expNovoMae">Congregação-Mãe</label><select id="expNovoMae"></select></div>
                 <div class="input-group" id="expNovoBlocoEncarregado" style="display:none;"><label for="expNovoEncarregado">Matrícula do Encarregado (membro da Mãe, em comunhão)</label><input type="text" id="expNovoEncarregado" inputmode="numeric" maxlength="10" /></div>
                 <div class="input-group" id="expNovoBlocoExtensao" style="display:none;"><label for="expNovoExtensao">A Extensão que vai se emancipar</label><select id="expNovoExtensao"></select></div>
                 <div class="input-group" id="expNovoBlocoArea" style="display:none;"><label for="expNovoArea">Área (opcional)</label><select id="expNovoArea"></select></div>
                 <div class="input-group"><label for="expNovoNome" id="expNovoNomeRotulo">Nome (2 a 150)</label><input type="text" id="expNovoNome" maxlength="150" /></div>
-                <div class="input-group"><label for="expNovoEndereco">Endereço (opcional)</label><input type="text" id="expNovoEndereco" maxlength="300" /></div>
+                <div class="input-group"><label for="expNovoEndereco" id="expNovoEnderecoRotulo">Endereço (opcional)</label><input type="text" id="expNovoEndereco" maxlength="300" /></div>
                 <div class="input-group"><label for="expNovoBairro">Bairro (opcional)</label><input type="text" id="expNovoBairro" maxlength="150" /></div>
                 <div class="input-group"><label for="expNovoCidade">Cidade (opcional)</label><input type="text" id="expNovoCidade" maxlength="150" /></div>
                 <div class="input-group"><label for="expNovoUf">UF (opcional)</label><select id="expNovoUf"></select></div>

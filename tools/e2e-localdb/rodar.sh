@@ -137,6 +137,14 @@ case "$1" in
     migrar 165 2
     base salvar cenario-entidades
     ;;
+  preparar-expansao)
+    # v9.2 (Expansão): a partir da base "cenario-entidades", aplica a 166 duas vezes (prova a idempotência); salva "cenario-expansao" (e2e-71 e e2e-72: cada roteiro
+    # monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-entidades
+    migrar 166 2
+    base salvar cenario-expansao
+    ;;
   roteiro)
     shift
     cd "$AQUI"

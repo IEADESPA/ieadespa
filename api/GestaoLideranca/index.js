@@ -86,7 +86,8 @@ async function derrubarAcessos(pool, membroId, { delegados = [], exceto } = {}) 
 async function escopoExiste(pool, escopoTipo, escopoId) {
   const alvo = TABELA_DO_ESCOPO[escopoTipo];
   if (!alvo) return true;                       // GLOBAL
-  const r = await pool.request().input("id", sql.Int, auth.idDeRota(escopoId)).query(`SELECT 1 AS ok FROM ${alvo[0]} WHERE ${alvo[1]} = @id`);
+  // v9.2 — o escopo de uma Extensão só vale enquanto ela está ativa (a emancipada deixou de existir como unidade)
+  const r = await pool.request().input("id", sql.Int, auth.idDeRota(escopoId)).query(`SELECT 1 AS ok FROM ${alvo[0]} WHERE ${alvo[1]} = @id${escopoTipo === "EXTENSAO" ? " AND Ativa = 1" : ""}`);
   return r.recordset.length > 0;
 }
 

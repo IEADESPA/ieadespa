@@ -79,6 +79,7 @@ const AJUDA_POR_ABA = {
   "meupainel:cuidado": "Cuidado: peça oração ou uma visita da liderança da sua congregação. Diga se o pedido pode ir ao boletim de oração (sempre sem o seu nome) ou se é só para a liderança, e se quer que alguém fale com você. Se a liderança nomeou você para acompanhar alguém, os seus acompanhamentos aparecem aqui: registre cada contato (visita sempre com mais alguém) e conclua quando terminar. Precisa de ajuda agora? CVV 188 (de graça, 24 horas), Polícia 190, Mulher 180, Disque 100.",
   cuidadopastoral: "Cuidado pastoral: a fila mostra quem precisa de alguém da igreja, com o responsável e o prazo (visitante: 48 horas, Regimento Art. 128 §5º). Prazo vencido sobe um degrau (Congregação → Área → Região → nível geral) para chamar ajuda. Abra o acompanhamento para registrar contato, trocar o responsável, adiar, concluir ou cancelar, e para ler ou escrever notas pastorais (cada abertura fica registrada; \"somente pastor\" pede a confirmação reforçada). Em Pedidos de oração, modere antes de ir ao boletim (sem nome) e atenda primeiro os que têm sinal de risco.",
   entidades: "Entidades vinculadas (Estatuto Art. 64 a 68): hospitais, escolas, ONGs e associações com CNPJ próprio. A CLI aprova o vínculo e a Assembleia ratifica; o Pastor Presidente indica a direção e a CLI homologa (o gestor técnico com a formação exigida por lei, Regimento Art. 153). A intervenção exige apuração, notificação do gestor com 5 dias e a ratificação da CLI em 15 dias, senão perde a eficácia (Art. 47-A). A prestação de contas à CLI é por período; a atrasada aparece no Painel.",
+  expansao: "Expansão (Estatuto Art. 5º §5º; Regimento Art. 23 e 109-A): o Dirigente pede a abertura de uma Extensão da Tenda com o Encarregado (membro da Congregação-Mãe, em comunhão) ou a emancipação dela em congregação; o nível geral pede também uma congregação nova. Na emancipação e na congregação nova, a CME (o Secretário de Missões e os Pastores de Área) dá o parecer em 15 dias; a abertura de Extensão vai direto à CLI, que decide tudo: aprovado, o sistema cria a unidade na hora (na emancipação, os membros da Extensão passam para a congregação nova).",
   vistoria: "Termo de Vistoria de antecedentes (Art. 133 §5º), só da Diretoria Executiva e do Conselho de Ética: veja quem falta, lavre o Termo e solicite certidões. A certidão nunca sobe ao sistema: o navegador calcula o código (hash) do arquivo e só ele é enviado.",
   protecaodedados: "Solicitações de titular (LGPD), políticas de retenção e o Registro de Operações de Tratamento (ROPA/RIPD)."
 };
@@ -450,6 +451,7 @@ function limparSessao() {
   if (typeof edcLimparTela === "function") edcLimparTela();   // v8.6: a educação continuada (o painel da AFM, a minha, a do perfil)
   if (typeof semLimparTela === "function") semLimparTela();   // v8.7: o Seminário (as turmas, a ficha do aluno, o meu histórico, o do perfil)
   if (typeof entLimparTela === "function") entLimparTela();   // v9.1: as entidades vinculadas (a ficha aberta, a intervenção, o que foi digitado)
+  if (typeof expLimparTela === "function") expLimparTela();   // v9.2: a expansão (o pedido aberto, o Encarregado, o que foi digitado)
   // v7.15: a faixa da crise, os pedidos da imprensa e a equipe de segurança saem da página junto com a sessão — mesma guarda
   if (typeof crsLimparTela === "function") crsLimparTela();
   ["painelDetalheServicoEscala", "painelEquipesFlag"].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
@@ -1278,7 +1280,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1481,6 +1483,7 @@ const MODULOS = {
   eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
   setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
   entidades: { titulo: "Entidades Vinculadas", icone: "🏥", abaEntrada: "entidades", abas: ["entidades"] },
+  expansao: { titulo: "Expansão", icone: "⛺", abaEntrada: "expansao", abas: ["expansao"] },
   conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
   acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
 };

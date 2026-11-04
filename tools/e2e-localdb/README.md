@@ -164,6 +164,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   contas por período, atraso, apreciação e Conselho Fiscal; apuração, os 5 dias, a decretação só do Presidente, a caducidade dos 15 dias e a correção dela pela reunião
   feita a tempo; urgência, não ratificação e nova apuração; os CHECK e o índice; extinção e a Assembleia; Meus Dados; lixo em cada campo; `E2E_CONTRATO=1` grava
   `tools/front-entidades/contrato-real.json`) e `e2e-70` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
+- **v9.2** (Expansão, migração 166), base `cenario-expansao` (`bash rodar.sh preparar-expansao`: a `cenario-entidades` com a 166 aplicada duas vezes).
+  `e2e-71` (a migração e o papel novo; a CME calculada; a abertura de Extensão com o Encarregado; o que cada um vê; a troca do Encarregado; a emancipação com o
+  parecer da CME e a decisão da CLI movendo os membros, encerrando o acesso e derrubando as sessões; a nova congregação com a urgência e o parecer vencido;
+  desistência e recusa; o que muda entre o pedido e a decisão; os CHECK e os índices; Meus Dados, Comissões e Projetos; lixo em cada campo; `E2E_CONTRATO=1` grava
+  `tools/front-expansao/contrato-real.json`) e `e2e-72` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

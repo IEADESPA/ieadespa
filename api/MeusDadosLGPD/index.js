@@ -157,6 +157,8 @@ module.exports = async function (context, req) {
   const tesouraria = await voluntarioPagamentoDb.dadosDoTitular(pool, alvo);
   // v9.1 — entidades vinculadas: as funções que a pessoa ocupa ou ocupou na direção de uma entidade e as intervenções em que foi o interventor
   const entidadesVinculadas = await require("../shared/entidadesVinculadasDb").dadosDoTitular(pool, alvo);
+  // v9.2 — expansão: as Extensões da Tenda que a pessoa encarregou ou encarrega (Regimento Art. 109-A, I)
+  const extensoesEncarregadas = await require("../shared/expansaoDb").dadosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -188,7 +190,8 @@ module.exports = async function (context, req) {
       escada,
       criseSeguranca,
       tesouraria,
-      entidadesVinculadas
+      entidadesVinculadas,
+      extensoesEncarregadas
     }
   };
 };

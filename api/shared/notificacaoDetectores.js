@@ -257,7 +257,10 @@ const DETECTORES = {
   // (Regimento Art. 47-A §2º), a caducidade (a rotina também a marca: a intervenção sem ratificação perde a eficácia) e, uma vez por mês, a prestação de contas atrasada (Art. 67).
   ENTIDADE_INTERVENCAO_PRAZO: { tabela: "EntidadeIntervencoes", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrazoIntervencao(pool) },
   ENTIDADE_INTERVENCAO_CADUCADA: { tabela: "EntidadeIntervencoes", detectar: (pool) => require("./entidadesVinculadasDb").detectarCaducadas(pool) },
-  ENTIDADE_PRESTACAO_ATRASADA: { tabela: "EntidadesVinculadas", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrestacoesAtrasadas(pool) }
+  ENTIDADE_PRESTACAO_ATRASADA: { tabela: "EntidadesVinculadas", detectar: (pool) => require("./entidadesVinculadasDb").detectarPrestacoesAtrasadas(pool) },
+  // v9.2 — expansão: o pedido novo e a decisão da CLI avisam NA HORA, no ato. Aqui fica o parecer da CME vencido (15 dias, Regimento Art. 24 §2º): um aviso por pedido,
+  // à CME e ao nível geral (o próprio fato traz os destinatários).
+  EXPANSAO_PARECER_VENCIDO: { tabela: "PedidosExpansao", detectar: (pool) => require("./expansaoDb").detectarParecerVencido(pool) }
 };
 
 module.exports = { DETECTORES };

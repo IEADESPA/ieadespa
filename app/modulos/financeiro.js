@@ -2655,12 +2655,12 @@ async function registrarRepasseInstitucionalAcao() {
   const mesReferencia = document.getElementById("repasseMes").value;
   const valorArrecadadoLiquido = document.getElementById("repasseArrecadado").value;
   const resultado = document.getElementById("resultadoRepasse");
-  const ehCongregacao = origemTipo === "CONGREGACAO";
-  if (!origemId || !origemNome || !mesReferencia || (!ehCongregacao && !valorArrecadadoLiquido)) { resultado.textContent = "Preencha todos os campos."; return; }
-  // CONGREGACAO: arrecadação líquida vem do fechamento da Tesouraria Local
-  // (calculada no backend) — nunca envia o valor digitado nesse caso.
+  // CONGREGACAO e (v9.3) DISTRITO: a arrecadação líquida vem dos fechamentos da Tesouraria Local (calculada no servidor) — nunca envia o valor digitado nesses casos;
+  // o nome do Distrito também vem do cadastro.
+  const calculado = origemTipo === "CONGREGACAO" || origemTipo === "DISTRITO";
+  if (!origemId || (!origemNome && origemTipo !== "DISTRITO") || !mesReferencia || (!calculado && !valorArrecadadoLiquido)) { resultado.textContent = "Preencha todos os campos."; return; }
   const body = { origemTipo, origemId: Number(origemId), origemNome, mesReferencia };
-  if (!ehCongregacao) body.valorArrecadadoLiquido = Number(valorArrecadadoLiquido);
+  if (!calculado) body.valorArrecadadoLiquido = Number(valorArrecadadoLiquido);
   const res = await fetchProtegido(`${API_BASE}/repasses-institucionais`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const d = await res.json();
   avisarResultado(d);
@@ -3615,7 +3615,7 @@ async function carregarResumoFechamento() {
       ${linhaValor("Lote", f.valorLote)}
       ${linhaValor("Total Final", f.totalFinal)}
       ${linhaValor(`Centro de Custo Local (${f.percentualRetencaoLocal}%)`, f.valorRetidoLocal)}
-      ${linhaValor(`Centro de Custo Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
+      ${linhaValor(f.repasseDistrito ? `Repasse ao Distrito ${f.repasseDistrito} (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)` : `Centro de Custo Geral (${(100 - f.percentualRetencaoLocal).toFixed(2)}%)`, f.valorRepasseGeral)}
     </tbody>
   </table>
   <!-- v4.1.3 — hoje existe uma única conta bancária pra toda a
@@ -3705,7 +3705,7 @@ async function gerarRelatorioTesourariaAcao(modo) {
   if (data.fechamento) {
     const f = data.fechamento;
     html += `<p class="subtitle">Total Recebido: R$ ${Number(f.totalRecebido).toFixed(2)} · Total Final: R$ ${Number(f.totalFinal).toFixed(2)} ·
-      Repasse Geral: R$ ${Number(f.valorRepasseGeral).toFixed(2)}</p>`;
+      ${f.repasseDistrito ? `Repasse ao Distrito ${escaparHtmlEbd(f.repasseDistrito)}` : "Repasse Geral"}: R$ ${Number(f.valorRepasseGeral).toFixed(2)}</p>`;
   }
   container.innerHTML = html;
 }
@@ -3764,6 +3764,11 @@ async function carregarConsolidadoTesouraria() {
       <p class="linha-perfil">Pendente de conferência: R$ ${data.centroCustoGeral.pendente.toFixed(2)}</p>
     </div>`;
   }
+  // v9.3 — o repasse das congregações de Distrito ativo é do Distrito (Regimento Art. 126-N, I), fora do Centro de Custo Geral
+  if (Array.isArray(data.repasseDistritos) && data.repasseDistritos.length > 0) {
+    html += `<div class="cartao-perfil"><p class="linha-perfil"><strong>🗺️ Repasse aos Distritos</strong> (não entra no Centro de Custo Geral)</p>`
+      + data.repasseDistritos.map(d => `<p class="linha-perfil">${escaparHtmlEbd(d.distrito)}: R$ ${Number(d.total).toFixed(2)}</p>`).join("") + `</div>`;
+  }
   if (data.porCongregacao && data.porCongregacao.length > 0) {
     html += `<h4 style="margin:16px 0 10px; color: var(--cor-primaria);">📍 Centro de Custo Local (por congregação)</h4>
       <table class="tabela-frequencia"><thead><tr><th>Congregação</th><th>Saldo Liberado</th><th>Pendente de Liberação</th></tr></thead><tbody>`;
@@ -3778,7 +3783,7 @@ async function carregarConsolidadoTesouraria() {
   fechamentos.forEach(f => {
     html += `<tr>
       <td>${escaparHtmlEbd(f.congregacaoNome)}</td><td>${escaparHtmlEbd(f.mesReferencia)}</td>
-      <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}</td>
+      <td>R$ ${Number(f.totalFinal).toFixed(2)}</td><td>R$ ${Number(f.valorRepasseGeral).toFixed(2)}${f.repasseDistrito ? ` <small>(ao Distrito ${escaparHtmlEbd(f.repasseDistrito)})</small>` : ""}</td>
       <td><span class="badge-status ${f.status === "REPASSADO" ? "badge-ativo" : "badge-licenca"}">${f.status === "REPASSADO" ? "Liberado" : "Pendente"}</span></td>
     </tr>`;
   });

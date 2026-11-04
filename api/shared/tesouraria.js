@@ -82,7 +82,10 @@ async function saldoCentroCusto(pool, sql, centroCusto, congregacaoId) {
   const siglaDepartamento = centroCustoDepartamental(centroCusto);
   let liberado;
   if (centroCusto === "GERAL") {
-    liberado = await pool.request().query(`SELECT ISNULL(SUM(ValorTesouroGeral), 0) AS total FROM RateiosGerais`);
+    // v9.3 — o Dízimo Institucional do Distrito, quando confirmado como repassado, entra no Tesouro Geral (Regimento Art. 126-N, I: "para a Sede Geral a título de
+    // manutenção da estrutura global"); antes o repasse de Distrito não creditava em lugar nenhum.
+    liberado = await pool.request().query(`SELECT (SELECT ISNULL(SUM(ValorTesouroGeral), 0) FROM RateiosGerais)
+      + (SELECT ISNULL(SUM(ValorRepasse), 0) FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND Status = N'REPASSADO') AS total`);
   } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
     liberado = await pool.request().input("codigo", sql.NVarChar(30), centroCusto)
       .query(`SELECT ISNULL(SUM(Valor), 0) AS total FROM RateioGeralValores WHERE DestinoCodigo = @codigo`);
@@ -154,7 +157,10 @@ async function projetarFluxoCaixa(pool, sql, centroCusto, congregacaoId, meses) 
 
   let entradas;
   if (centroCusto === "GERAL") {
-    entradas = await pool.request().query(`SELECT TOP 3 MesReferencia, SUM(ValorTesouroGeral) AS total FROM RateiosGerais GROUP BY MesReferencia ORDER BY MesReferencia DESC`);
+    entradas = await pool.request().query(`SELECT TOP 3 MesReferencia, SUM(total) AS total FROM (
+      SELECT MesReferencia, ValorTesouroGeral AS total FROM RateiosGerais
+      UNION ALL SELECT MesReferencia, ValorRepasse FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND Status = N'REPASSADO') e
+      GROUP BY MesReferencia ORDER BY MesReferencia DESC`);
   } else if (DESTINOS_RATEIO_GERAL.includes(centroCusto)) {
     entradas = await pool.request().input("codigo", sql.NVarChar(30), centroCusto).query(`
       SELECT TOP 3 rg.MesReferencia, SUM(rv.Valor) AS total FROM RateioGeralValores rv JOIN RateiosGerais rg ON rg.RateioGeralId = rv.RateioGeralId

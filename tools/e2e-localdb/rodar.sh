@@ -145,6 +145,14 @@ case "$1" in
     migrar 166 2
     base salvar cenario-expansao
     ;;
+  preparar-distritos)
+    # v9.3 (Distrito): a partir da base "cenario-expansao", aplica a 167 duas vezes (prova a idempotência); salva "cenario-distritos" (e2e-73 e e2e-74: cada roteiro
+    # monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-expansao
+    migrar 167 2
+    base salvar cenario-distritos
+    ;;
   roteiro)
     shift
     cd "$AQUI"

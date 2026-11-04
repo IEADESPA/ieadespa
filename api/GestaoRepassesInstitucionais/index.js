@@ -16,6 +16,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const repasses = require("../shared/repassesInstitucionais");
 const { mesReferenciaValido } = require("../shared/financeiroSeguro");
+const { violouUnicidade } = require("../shared/violacaoUnica");
 
 const ORIGENS = ["CONGREGACAO", "DEPARTAMENTO", "DISTRITO"];
 
@@ -86,8 +87,10 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && !recurso) {
     const { origemTipo, origemId: origemIdBruto, origemNome, mesReferencia, valorArrecadadoLiquido } = req.body || {};
-    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemIdBruto || typeof origemNome !== "string" || !origemNome.trim() || !mesReferencia) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: origemTipo (${ORIGENS.join("|")}), origemId, origemNome, mesReferencia${origemTipo === "CONGREGACAO" ? "" : ", valorArrecadadoLiquido"}.` } };
+    // v9.3 — no DISTRITO o nome vem do cadastro (o digitado não vale)
+    const nomeExigido = origemTipo !== "DISTRITO";
+    if (!origemTipo || !ORIGENS.includes(origemTipo) || !origemIdBruto || (nomeExigido && (typeof origemNome !== "string" || !origemNome.trim())) || !mesReferencia) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: `Campos obrigatórios: origemTipo (${ORIGENS.join("|")}), origemId, ${nomeExigido ? "origemNome, " : ""}mesReferencia${origemTipo === "DEPARTAMENTO" ? ", valorArrecadadoLiquido" : ""}.` } };
       return;
     }
     const origemId = auth.idDeRota(origemIdBruto);
@@ -102,10 +105,20 @@ module.exports = async function (context, req) {
     // Trava de Revisão 4-A: para CONGREGACAO a arrecadação líquida vem do
     // fechamento mensal real da Tesouraria Local (nunca digitada — evita
     // divergência entre o valor reportado à Sede e o valor do fechamento).
-    // DEPARTAMENTO/DISTRITO não têm fechamento eletrônico próprio ainda,
-    // então continuam com digitação manual.
+    // DEPARTAMENTO não tem fechamento eletrônico próprio ainda, então continua com digitação manual.
+    // v9.3 — o DISTRITO também é calculado, nunca digitado: a soma do Total Final dos fechamentos do mês das congregações do território (Regimento Art. 126-N, I),
+    // só num mês em que ele estava ativo por decreto da CLI e com todas as congregações ativas dele com o mês fechado. O nome vem do cadastro.
     let valorArrecadadoLiquidoFinal;
-    if (origemTipo === "CONGREGACAO") {
+    let nomeDaOrigem = typeof origemNome === "string" ? origemNome.trim() : "";
+    if (origemTipo === "DISTRITO") {
+      const apurado = await require("../shared/distritosDb").apuracaoParaRepasse(pool, origemId, mesReferencia);
+      if (apurado.erro) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: apurado.erro } };
+        return;
+      }
+      valorArrecadadoLiquidoFinal = apurado.soma;
+      nomeDaOrigem = apurado.nome;
+    } else if (origemTipo === "CONGREGACAO") {
       const arrecadacaoFechamento = await repasses.arrecadacaoLiquidaFechamento(pool, sql, origemId, mesReferencia);
       if (arrecadacaoFechamento === null) {
         context.res = { status: 400, body: { sucesso: false, mensagem: "Mês ainda não fechado na Tesouraria Local para esta congregação — feche o mês antes de registrar o repasse institucional." } };
@@ -128,15 +141,23 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Já existe repasse para esta origem e mês." } };
       return;
     }
-    const criado = await pool.request().input("tipo", sql.NVarChar(20), origemTipo).input("origem", sql.Int, origemId)
-      .input("nome", sql.NVarChar(200), origemNome.trim()).input("mes", sql.Char(7), mesReferencia)
-      .input("arrecadado", sql.Decimal(12, 2), valorArrecadadoLiquidoFinal).input("percentual", sql.Decimal(5, 2), percentual)
-      .input("valor", sql.Decimal(12, 2), valorRepasse).input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO RepassesInstitucionais (OrigemTipo, OrigemId, OrigemNome, MesReferencia, ValorArrecadadoLiquido, Percentual, ValorRepasse, RegistradoPor)
-              OUTPUT INSERTED.RepasseId VALUES (@tipo, @origem, @nome, @mes, @arrecadado, @percentual, @valor, @por)`);
+    let criado;
+    try {
+      criado = await pool.request().input("tipo", sql.NVarChar(20), origemTipo).input("origem", sql.Int, origemId)
+        .input("nome", sql.NVarChar(200), nomeDaOrigem).input("mes", sql.Char(7), mesReferencia)
+        .input("arrecadado", sql.Decimal(12, 2), valorArrecadadoLiquidoFinal).input("percentual", sql.Decimal(5, 2), percentual)
+        .input("valor", sql.Decimal(12, 2), valorRepasse).input("por", sql.Int, usuario.membroId)
+        .query(`INSERT INTO RepassesInstitucionais (OrigemTipo, OrigemId, OrigemNome, MesReferencia, ValorArrecadadoLiquido, Percentual, ValorRepasse, RegistradoPor)
+                OUTPUT INSERTED.RepasseId VALUES (@tipo, @origem, @nome, @mes, @arrecadado, @percentual, @valor, @por)`);
+    } catch (e) {
+      // v9.3 — dois registros do mesmo mês ao mesmo tempo: a UQ_RepasseOrigemMes recusa o segundo (antes virava erro 500)
+      if (!violouUnicidade(e)) throw e;
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Já existe repasse para esta origem e mês." } };
+      return;
+    }
     await registrarAuditoria({
       tabela: "RepassesInstitucionais", registroId: criado.recordset[0].RepasseId, acao: "Registrou repasse institucional", usuarioId: usuario.membroId,
-      dadosDepois: { origemTipo, origemId, origemNome, mesReferencia, valorArrecadadoLiquido: valorArrecadadoLiquidoFinal, percentual, valorRepasse }
+      dadosDepois: { origemTipo, origemId, origemNome: nomeDaOrigem, mesReferencia, valorArrecadadoLiquido: valorArrecadadoLiquidoFinal, percentual, valorRepasse }
     });
     context.res = { status: 201, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Repasse institucional registrado (${percentual}% = R$ ${valorRepasse.toFixed(2)}).`, repasseId: criado.recordset[0].RepasseId } };
     return;

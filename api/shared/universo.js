@@ -106,9 +106,11 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   // GestaoLideranca) vence calculado na leitura, igual DataTerminoPrevisao
   // de Assentos — sem isso, quem já perdeu o acesso de login continuaria
   // aparecendo na composição da CLI.
+  // v9.3 — Regimento Art. 6-A, III e IV: os Pastores Distritais, os Vice-Presidentes de Quadrante e os Superintendentes Regionais em exercício também são membros
+  // natos (Cadeira Cativa), pelo papel com o escopo do próprio nível (o Interventor Distrital não: ele não é o Pastor Distrital). A "congregação" desses é a da pessoa.
   const porLiderancaEscopo = await pool.request().query(`
     SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome,
-           COALESCE(cg.Nome, dep.Nome) AS congregacao,
+           COALESCE(cg.Nome, dep.Nome, propria.Nome) AS congregacao,
            m.SituacaoMembro AS situacaoMembro, p.Nome AS cargoOuFuncao,
            NULL AS orgaoOrigemNome, NULL AS orgaoOrigemId
     FROM Lideranca l
@@ -116,9 +118,11 @@ async function composicaoCLI(pool, orgaoIdCLI) {
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
     LEFT JOIN Congregacoes cg ON l.EscopoTipo = 'CONGREGACAO' AND cg.CongregacaoId = l.EscopoId
     LEFT JOIN Departamentos dep ON l.EscopoTipo = 'DEPARTAMENTO' AND dep.DepartamentoId = l.EscopoId
+    LEFT JOIN Congregacoes propria ON l.EscopoTipo IN ('REGIAO', 'QUADRANTE', 'DISTRITO') AND propria.CongregacaoId = m.CongregacaoId
     WHERE (
       (p.Nivel = 'CONGREGACAO' AND l.EscopoTipo = 'CONGREGACAO')
       OR (p.Nivel = 'DEPARTAMENTO' AND l.EscopoTipo = 'DEPARTAMENTO')
+      OR (p.Nome IN (N'Pastor Distrital', N'Vice-Presidente de Quadrante', N'Superintendente Regional') AND l.EscopoTipo = p.Nivel)
     )
     AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
   `);

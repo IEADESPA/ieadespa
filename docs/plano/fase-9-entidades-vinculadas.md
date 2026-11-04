@@ -118,9 +118,9 @@ READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-entidades`) 70, com 16 muta
 
 ## v9.2 — Expansão (Extensões e novas congregações)
 
-- [ ] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.
-- [ ] Emancipação de Extensão → Congregação (CLI).
-- [ ] **CME** — Comissão de Missões e Expansão Estratégica (Regimento, Art.
+- [x] Abertura de Extensão da Tenda (nível 0) por congregação-mãe.
+- [x] Emancipação de Extensão → Congregação (CLI).
+- [x] **CME** — Comissão de Missões e Expansão Estratégica (Regimento, Art.
       23): Secretário de Missões + Pastores de Área. Vinha adiada de v2.4
       (Comissões Permanentes) porque dependia do cargo "Secretário de
       Missões", que precisa nascer aqui (Pastor de Área já existe — só falta
@@ -164,9 +164,47 @@ vencido, pedido esperando a CLI, Extensão ativa sem Encarregado em comunhão, c
 ausente (CME sem a SEMIADESPA).
 
 **4. Quem faz o quê.** Permissão nova **`expansao`** (vem para o Secretário Geral, o Presidente, o Dirigente de Congregação, o Pastor de Área e o Secretário de
-Missões). O Dirigente vê e pede só para a congregação dele; a CME e o nível geral veem tudo; a decisão da CLI é só do nível geral. Tela: card novo **"Expansão"**
+Missões). O Dirigente vê e pede só para a congregação dele (a divisão final de quem pede cada tipo está em "Como ficou a v9.2"); a CME e o nível geral veem tudo; a decisão da CLI é só do nível geral. Tela: card novo **"Expansão"**
 no portal, com Painel, Pedidos (lista e ficha) e Extensões. ROPA e política de retenção atualizadas (os atos de abertura e emancipação são a certidão de
 nascimento da unidade e ficam).
+
+### Como ficou a v9.2 (entregue em 04/11/2026)
+
+**Em produção desde 04/11/2026** (merge `c98a250`; para desfazer: `git revert -m 1 c98a250`). Migração **166** (`PedidosExpansao`, `ExtensaoEncarregados`, o endereço, a
+abertura e a emancipação em `ExtensoesTenda`; o papel **Secretário de Missões**; a permissão `expansao`; três avisos; a política de retenção). Regra pura em
+`api/shared/expansao.js`, banco em `api/shared/expansaoDb.js`, rota `/api/expansao/<ação>` (`GestaoExpansao`); a CME calculada em `api/shared/comissoes.js`
+(`composicaoCME`), na tela das Comissões e como comissão temática dos Projetos. Tela: card **Expansão** no portal (Painel, Pedidos, Extensões), cartão em Meus Dados.
+Casca do service worker **v52**.
+
+**Quem faz o quê (como ficou, depois da revisão):** a **abertura de Extensão** e a **troca do Encarregado** são do Dirigente da Congregação-Mãe (ou do nível geral) —
+o Encarregado é "de confiança do Dirigente Local" (Art. 109-A, I); a **emancipação** pode ser pedida também pelo Pastor de Área; a **nova congregação**, só pelo nível
+geral; o **parecer** é de quem compõe a CME (nunca sobre o pedido que fez); a **decisão da CLI**, só do nível geral, com a confirmação recente (chave do aparelho ou
+código por e-mail). O Secretário de Missões age pela CME: o escopo de departamento não alcança congregação. A CME e o nível geral veem todos os pedidos; a pendência e
+o histórico do Encarregado ficam com quem cuida da Mãe.
+
+**O que mudou depois das duas revisões independentes** (servidor: 1 alta, 5 médias, 9 baixas; tela: 5 médias, 10 baixas — tratadas):
+
+- **A recusa do Encarregado não conta nada de quem é de fora:** a congregação é conferida primeiro, com a mesma resposta para a matrícula que não existe e a de outra
+  congregação. Antes, a ordem das recusas deixava um Dirigente descobrir se uma pessoa de qualquer congregação estava sob disciplina.
+- **A emancipação** passa só quem é membro (o desligado e o falecido ficam: a ficha deles é história da Mãe), leva o cadastro do dízimo para a tesouraria nova, cria a
+  JAI na hora, confere que a Extensão ainda é da mesma Mãe e encerra as sessões na própria gravação. As decisões são gravadas uma de cada vez (sem travamento cruzado).
+- A pendência do Encarregado não diz o motivo (ativo, comunhão, disciplina ou congregação); a CME de outra Área não a vê, nem o histórico.
+- "Congregação nova sem Dirigente" só sai com o papel de Dirigente (o Membro da JAI não conta). A CME deixa de fora quem está sob disciplina ou sem comunhão.
+- A permissão `expansao` é dada aos papéis **uma vez**: se a administração a tirar em Permissões, o deploy não a devolve.
+- Ninguém dá parecer de Projeto sobre o projeto que protocolou. Pessoas e Liderança não usam Extensão emancipada; o cadastro não reativa a emancipada nem exclui
+  congregação ou Extensão em uso (sem erro). O endereço da emancipada é completado campo a campo pela Extensão. O primeiro Encarregado se define sem motivo.
+- **Tela:** o que falta no formulário é avisado antes da pergunta de confirmação; voltar à aba não apaga o que foi digitado; a mensagem do pedido novo aparece na
+  ficha; o tipo do pedido diz se passa pela CME e avisa quando não há Mãe ou Extensão para escolher; a lista que não chegou não manda "registrar a reunião"; o
+  histórico tem o seu contador; rolagem no celular, nomes nos botões para o leitor de tela; a saída da sessão volta ao Painel.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a abertura de Extensão vai direto à CLI, sem a CME (o Art. 23 fala em congregações
+e emancipações); sem o parecer da CME em 15 dias, a CLI só decide registrando a urgência por 2/3 (o mesmo dos Projetos, Art. 24 §2º); na emancipação, a matrícula na
+EBD da Mãe e os cargos locais na Mãe não mudam sozinhos (o Superintendente e o Dirigente ajustam); o acesso de escopo da Extensão emancipada termina e todas as
+sessões caem; a numeração de abertura das congregações (Estatuto Art. 5º §2º) não está no sistema; o cadastro de Congregações e Extensões continua servindo para
+registrar as que já existem.
+
+**Provas:** jest 6.296; banco local (`bash rodar.sh preparar-expansao`): `e2e-71` 172 (fluxos, garantias do banco, segurança e lixo), `e2e-72` corridas 20 e 21 com o
+READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-expansao`) 79, com 25 mutações acusadas; homologação: a 166 aplicada no Azure SQL, rotas com 401, teste de tela da homologação com 0 divergência e 0 violação de CSP (execução 41855454625, 1.363 ações).
 
 ## v9.3 — Distrito e macroexpansão
 

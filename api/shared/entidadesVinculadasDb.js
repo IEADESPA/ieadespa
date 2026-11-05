@@ -367,16 +367,22 @@ async function lerDirigente(pool, dirigenteId) {
 }
 
 // O membro indicado: existe, está ativo e é maior de idade (dirige pessoa jurídica).
+// Trava 9-A — a mesma régua do Interventor Distrital e do Encarregado: membro ativo, em comunhão e sem processo disciplinar em curso; a licença de candidatura afasta
+// da diretoria (Regimento Art. 157 §2º), então quem está licenciado não é indicado (antes bastava estar no rol e ser maior de idade).
 async function membroParaDirigir(pool, membroId, hoje) {
   const r = await pool.request().input("id", sql.Int, membroId).input("h", sql.Date, hoje).query(`
-    SELECT m.MembroId, m.Nome,
+    SELECT m.MembroId, m.Nome, m.Status, m.SituacaoMembro,
       CASE WHEN ${STATUS_MEMBRO_ATIVO} THEN 1 ELSE 0 END AS Ativo,
       CASE WHEN m.DataNascimento IS NOT NULL AND m.DataNascimento > DATEADD(YEAR, -18, @h) THEN 1 ELSE 0 END AS Menor
     FROM MembroReferencia m WHERE m.MembroId = @id`);
   const m = r.recordset[0];
   if (!m) return { ok: false, mensagem: "Matrícula não encontrada." };
   if (!m.Ativo) return { ok: false, mensagem: "Só membro ativo é indicado para a direção de entidade vinculada." };
+  if (m.Status === "LICENCA_CANDIDATURA") return { ok: false, mensagem: "Quem está de licença de candidatura fica afastado de diretoria (Regimento, Art. 157 §2º)." };
   if (m.Menor) return { ok: false, mensagem: "Menor de idade não dirige entidade vinculada." };
+  if (m.SituacaoMembro === "SEM_COMUNHAO" || (await require("./disciplina").membrosSobDisciplina(pool)).has(Number(m.MembroId))) {
+    return { ok: false, mensagem: "Para dirigir entidade vinculada é preciso estar em comunhão e sem processo disciplinar em curso." };
+  }
   return { ok: true, nome: m.Nome };
 }
 // Art. 76 §2º: cargo remunerado nas entidades vinculadas não vai a parente até o 2º grau de quem está na Diretoria Executiva.
@@ -484,6 +490,9 @@ async function encerrarDirigente(pool, { dirigenteId, dados, por, hoje = hojeBra
   if (!["INDICADO", "HOMOLOGADO"].includes(l.Status)) return { sucesso: false, mensagem: "Este mandato já não está em aberto." };
   const motivo = typeof dados.motivo === "string" ? dados.motivo.trim().toUpperCase() : "";
   if (!ev.MOTIVOS_ENCERRAMENTO_MANUAL.includes(motivo)) return { sucesso: false, mensagem: "Escolha o motivo do encerramento." };
+  // Trava 9-A — a exoneração é do Pastor Presidente, que nomeia e exonera (Estatuto Art. 65, caput e §1º); a Secretaria registra os demais motivos (fim do mandato,
+  // renúncia, falecimento). A exoneração individual não é a "destituição de diretoria" do Regimento Art. 47-A §1º, que só vem pela intervenção ratificada.
+  if (motivo === "EXONERACAO" && !(await ehPresidente(pool, por))) return { sucesso: false, proibido: true, mensagem: "Só o Pastor Presidente em exercício exonera o dirigente da entidade (Estatuto, Art. 65)." };
   const data = ev.dataDoAto(dados.data, hoje, "a data do encerramento");
   if (!data.valido) return { sucesso: false, mensagem: data.mensagem };
   if (data.data < l.IndicadoEm) return { sucesso: false, mensagem: "O encerramento não é anterior à indicação." };
@@ -514,7 +523,7 @@ function formaIntervencao(l, hoje, membroId = null) {
     intervencaoId: l.IntervencaoId, entidadeId: l.EntidadeId, status: estado, statusRotulo: ev.STATUS_INTERVENCAO[estado] || estado,
     motivo: l.Motivo, motivoRotulo: ev.MOTIVOS_INTERVENCAO[l.Motivo] || l.Motivo, fatos: l.Fatos, abertaEm: l.AbertaEm,
     notificadoEm: l.NotificadoEm, notificacaoForma: l.NotificacaoForma, manifestacaoEm: l.ManifestacaoEm, manifestacaoResumo: l.ManifestacaoResumo,
-    // sem urgência, a decretação só a partir do 5º dia depois da notificação
+    // sem urgência, a decretação só a partir do 6º dia depois da notificação (os 5 dias do gestor correm inteiros — decretavelDesde = notificação + 6, o mesmo do CHECK)
     manifestacaoAte: l.NotificadoEm ? ev.manifestacaoAte(l.NotificadoEm) : null, decretavelDesde: l.NotificadoEm ? ev.decretavelDesde(l.NotificadoEm) : null,
     urgencia: !!l.Urgencia, urgenciaJustificativa: l.UrgenciaJustificativa, decretadaEm: l.DecretadaEm, fundamentacao: l.Fundamentacao,
     interventor: l.InterventorMembroId ? l.InterventorMembroNome : l.InterventorNome, interventorMembroId: l.InterventorMembroId, afastaDiretoria: !!l.AfastaDiretoria,
@@ -890,6 +899,11 @@ async function verificacaoConselhoFiscal(pool, { prestacaoId, dados, por, hoje =
   if (!p) return NAO_EXISTE;
   if (p.fim.slice(5) !== "12-31") return { sucesso: false, mensagem: "A verificação anual do Conselho Fiscal vai no período que fecha o ano (Estatuto, Art. 66 §3º)." };
   if (p.cfResultado) return { sucesso: false, mensagem: "A verificação deste ano já foi registrada." };
+  // Trava 9-A — quem registra a verificação é um conselheiro com assento vigente no Conselho Fiscal (a mesma régua do balanço do Distrito, v9.3)
+  const conselheiro = await pool.request().input("m", sql.Int, por).input("h", sql.Date, hoje).query(`
+    SELECT TOP 1 1 AS ok FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId
+    WHERE o.Sigla = N'CONSELHO_FISCAL' AND a.MembroId = @m AND a.DataFim IS NULL AND (a.DataTerminoPrevisao IS NULL OR a.DataTerminoPrevisao >= @h)`);
+  if (!conselheiro.recordset.length) return { sucesso: false, proibido: true, mensagem: "A verificação anual é do Conselho Fiscal (Estatuto, Art. 66 §3º): quem registra precisa ter assento vigente nele." };
   const resultado = typeof dados.resultado === "string" ? dados.resultado.trim().toUpperCase() : "";
   if (!ev.RESULTADOS_CF[resultado]) return { sucesso: false, mensagem: "Informe o resultado da verificação do Conselho Fiscal." };
   const data = ev.dataDoAto(dados.verificadaEm, hoje, "a data da verificação");

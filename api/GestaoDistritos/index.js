@@ -19,6 +19,7 @@
 //  desativar    {distritoId, sessaoId, motivo}                                                         nível geral; confirmação recente (428)
 //  intervir     {distritoId, motivo, fundamentacao, interventorMembroId, bloqueioContas?, procuracao?, judicial?}   Presidente; 428
 //  encerrar     {distritoId, resultado}                                                                Presidente; 428
+//  interventor  {distritoId, interventorMembroId}                                                      Presidente; 428 (Trava 9-A: a troca do Interventor)
 //  balanco      {distritoId, ano, receitas, despesas, saldoFinal, observacoes?}                         escopo do Distrito
 //  analisar     {balancoId, decisao:APROVAR|DEVOLVER, motivo?}                                         NIF
 //
@@ -41,7 +42,7 @@ function resposta(context, r) {
 // As ações de escrita, o identificador que cada uma exige e se pede a confirmação recente (chave do aparelho ou código por e-mail).
 const ESCRITA = {
   ativar: { id: "distritoId", fator: true }, desativar: { id: "distritoId", fator: true },
-  intervir: { id: "distritoId", fator: true }, encerrar: { id: "distritoId", fator: true },
+  intervir: { id: "distritoId", fator: true }, encerrar: { id: "distritoId", fator: true }, interventor: { id: "distritoId", fator: true },
   balanco: { id: "distritoId", fator: false }, analisar: { id: "balancoId", fator: false }
 };
 
@@ -93,7 +94,7 @@ module.exports = async function (context, req) {
     if (!def) return erro(context, 404, "Ação inválida.");
     // quem não pode fazer o ato é recusado antes de pedir a confirmação recente
     if ((acao === "ativar" || acao === "desativar") && !alcance.geral) return erro(context, 403, "O decreto da CLI é registrado pelo nível geral.");
-    if ((acao === "intervir" || acao === "encerrar") && !alcance.presidente) return erro(context, 403, "Só o Pastor Presidente em exercício faz este ato (Regimento, Art. 126-L, I, e Art. 126-P, II).");
+    if ((acao === "intervir" || acao === "encerrar" || acao === "interventor") && !alcance.presidente) return erro(context, 403, "Só o Pastor Presidente em exercício faz este ato (Regimento, Art. 126-N, III, e Art. 126-P, II).");
     if (def.fator && !auth.exigirFatorRecente(req, context)) return;
     const id = di.idDe(corpo[def.id]);
     if (!id) return erro(context, 400, `Informe ${def.id}.`);
@@ -104,6 +105,7 @@ module.exports = async function (context, req) {
       case "desativar": r = await db.desativar(pool, { ...base, distritoId: id }); break;
       case "intervir": r = await db.intervir(pool, { ...base, distritoId: id }); break;
       case "encerrar": r = await db.encerrarIntervencao(pool, { ...base, distritoId: id }); break;
+      case "interventor": r = await db.trocarInterventor(pool, { ...base, distritoId: id }); break;
       case "balanco": r = await db.enviarBalanco(pool, { ...base, distritoId: id }); break;
       case "analisar": r = await db.analisarBalanco(pool, { ...base, balancoId: id }); break;
       default: return erro(context, 404, "Ação inválida.");

@@ -188,10 +188,10 @@ const REGISTROS_TRATAMENTO = [
   {
     chave: "DISTRITOS",
     finalidade: "Registrar os decretos da CLI que ativam e desativam o Distrito, o Dízimo Institucional calculado dos fechamentos, o balanço anual ao NIF e a intervenção do Pastor Presidente (Estatuto Art. 5º §5º; Regimento Art. 53-D, 126-K a 126-N e 126-P) — v9.3",
-    titulares: "O Interventor e a liderança distrital destituída na intervenção; quem envia e quem analisa o balanço anual; quem registra os decretos (a Secretaria Geral e o Pastor Presidente)",
+    titulares: "O Pastor Distrital, o Interventor e a liderança distrital destituída na intervenção; quem envia e quem analisa o balanço anual; quem registra os decretos (a Secretaria Geral e o Pastor Presidente)",
     categoriasDados: ["Do Interventor: a matrícula e as datas da intervenção", "Da liderança destituída: o fim do acesso no cadastro de Liderança (a lista das matrículas fica na auditoria)", "De quem age: a matrícula e a data do decreto, do envio ou da análise do balanço"],
     baseLegal: "LGPD Art. 7º, II — cumprimento de obrigação estatutária (a criação das unidades pela CLI, Estatuto Art. 5º §5º; a prestação de contas ao NIF e a intervenção, Regimento Art. 53-D, 126-M, 126-N e 126-P)",
-    tabelasEnvolvidas: ["DistritoPeriodos", "DistritoIntervencoes", "DistritoBalancos", "Distritos", "RepassesInstitucionais", "Lideranca"],
+    tabelasEnvolvidas: ["DistritoPeriodos", "DistritoIntervencoes", "DistritoBalancos", "Distritos", "RepassesInstitucionais", "FechamentosTesouraria", "Lideranca"],
     retencao: "Os decretos, as intervenções e os balanços são história da instituição: sem prazo final (PoliticasRetencao 'Distritos: decretos, intervenções e balanços'). O nível geral e o NIF veem todos os Distritos; quem tem acesso de escopo de Distrito, só o dele. A pessoa vê em Meus Dados os balanços que enviou e as intervenções em que teve a função de Interventor."
   },
   {

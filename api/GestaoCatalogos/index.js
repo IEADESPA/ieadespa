@@ -15,6 +15,38 @@ const { violouUnicidade, comConflito } = require("../shared/violacaoUnica");
 // Catálogos que, mesmo tendo uma permissão de escrita própria, podem ser LIDOS por qualquer pessoa logada (o membro os usa no Meu Painel).
 const LEITURA_SO_COM_LOGIN = new Set(["categoriasEntrada"]);
 
+// Trava 9-A — o Distrito a que uma unidade do território pertence hoje (pela cadeia Congregação → Área → Região → Quadrante → Distrito), ou null.
+const SUBIR = {
+  CONGREGACAO: `SELECT q.DistritoId FROM Congregacoes c JOIN Areas a ON a.AreaId = c.AreaId JOIN Regioes r ON r.RegiaoId = a.RegiaoId JOIN Quadrantes q ON q.QuadranteId = r.QuadranteId WHERE c.CongregacaoId = @id`,
+  AREA: `SELECT q.DistritoId FROM Areas a JOIN Regioes r ON r.RegiaoId = a.RegiaoId JOIN Quadrantes q ON q.QuadranteId = r.QuadranteId WHERE a.AreaId = @id`,
+  REGIAO: `SELECT q.DistritoId FROM Regioes r JOIN Quadrantes q ON q.QuadranteId = r.QuadranteId WHERE r.RegiaoId = @id`,
+  QUADRANTE: `SELECT DistritoId FROM Quadrantes WHERE QuadranteId = @id`,
+  DISTRITO: `SELECT DistritoId FROM Distritos WHERE DistritoId = @id`
+};
+async function distritoDe(pool, tipo, id) {
+  const n = auth.idDeRota(id);
+  if (!n || !SUBIR[tipo]) return null;
+  const r = await pool.request().input("id", sql.Int, n).query(SUBIR[tipo]);
+  return r.recordset[0] && r.recordset[0].DistritoId ? Number(r.recordset[0].DistritoId) : null;
+}
+// A troca do ponteiro da unidade (para `novo`, quando vem no corpo) que sai de um Distrito sob intervenção ou entra nele: recusada (mensagem) ou null.
+async function territorioSobIntervencao(pool, tipo, id, novo) {
+  if (novo === undefined || !id) return null;   // criar unidade nova no território continua livre (o CDE expande — Art. 126-M, III)
+  const antes = await distritoDe(pool, tipo, id);
+  const depois = novo.id === null || novo.id === "" ? null : await distritoDe(pool, novo.tipo, novo.id);
+  if (antes === depois) return null;
+  const ids = [antes, depois].filter(Boolean);
+  if (!ids.length) return null;
+  const r = await pool.request().query(`SELECT TOP 1 DistritoId FROM DistritoIntervencoes WHERE EncerradaEm IS NULL AND DistritoId IN (${ids.join(",")})`);
+  return r.recordset.length ? "O território de um Distrito sob intervenção não muda até o Pastor Presidente encerrar a intervenção (Regimento, Art. 126-P, II)." : null;
+}
+// A unidade com algo embaixo (`subordinados`, SQL com @id), com liderança de escopo dela ou citada num pedido de expansão: não se exclui.
+async function unidadeEmUso(pool, escopoTipo, id, subordinados) {
+  const r = await pool.request().input("id", sql.Int, id).input("t", sql.NVarChar(30), escopoTipo).query(`SELECT COUNT(*) AS Total FROM (
+    ${subordinados} UNION ALL SELECT 1 FROM Lideranca WHERE EscopoTipo = @t AND EscopoId = @id) u`);
+  return Number((r.recordset[0] || {}).Total) > 0;
+}
+
 const CATALOGOS = {
   situacoes: {
     tabela: "SituacoesMembro", chave: "SituacaoId", idField: "situacaoId",
@@ -28,17 +60,26 @@ const CATALOGOS = {
     tabela: "Departamentos", chave: "DepartamentoId", idField: "departamentoId",
     campos: { sigla: sql.NVarChar(30), nome: sql.NVarChar(150), numero: sql.Int, tipo: sql.NVarChar(30), ativo: sql.Bit }
   },
+  // Trava 9-A — a Área, a Região e o Quadrante: o território de um Distrito sob intervenção não muda (senão a Secretaria tiraria do Distrito interditado a unidade de
+  // um Vice ou Superintendente destituído e o recolocaria sem o Presidente); e a unidade com liderança, pedido de expansão ou território embaixo não se exclui
+  // (antes o Pastor de Área de uma Área apagada continuava na CME, e a Área citada num pedido dava erro 500).
   areas: {
     tabela: "Areas", chave: "AreaId", idField: "areaId",
-    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, ativadaEm: sql.Date, regiaoId: sql.Int }
+    campos: { nome: sql.NVarChar(150), ativa: sql.Bit, ativadaEm: sql.Date, regiaoId: sql.Int },
+    conferirEscrita: (pool, dados, id) => territorioSobIntervencao(pool, "AREA", id, dados.regiaoId === undefined ? undefined : { tipo: "REGIAO", id: dados.regiaoId }),
+    emUso: (pool, id) => unidadeEmUso(pool, "AREA", id, `SELECT 1 AS x FROM Congregacoes WHERE AreaId = @id UNION ALL SELECT 1 FROM PedidosExpansao WHERE AreaId = @id`)
   },
   regioes: {
     tabela: "Regioes", chave: "RegiaoId", idField: "regiaoId",
-    campos: { nome: sql.NVarChar(150), subsede: sql.Bit, ativa: sql.Bit, quadranteId: sql.Int }
+    campos: { nome: sql.NVarChar(150), subsede: sql.Bit, ativa: sql.Bit, quadranteId: sql.Int },
+    conferirEscrita: (pool, dados, id) => territorioSobIntervencao(pool, "REGIAO", id, dados.quadranteId === undefined ? undefined : { tipo: "QUADRANTE", id: dados.quadranteId }),
+    emUso: (pool, id) => unidadeEmUso(pool, "REGIAO", id, `SELECT 1 AS x FROM Areas WHERE RegiaoId = @id`)
   },
   quadrantes: {
     tabela: "Quadrantes", chave: "QuadranteId", idField: "quadranteId",
-    campos: { nome: sql.NVarChar(150), ativo: sql.Bit, distritoId: sql.Int }
+    campos: { nome: sql.NVarChar(150), ativo: sql.Bit, distritoId: sql.Int },
+    conferirEscrita: (pool, dados, id) => territorioSobIntervencao(pool, "QUADRANTE", id, dados.distritoId === undefined ? undefined : { tipo: "DISTRITO", id: dados.distritoId }),
+    emUso: (pool, id) => unidadeEmUso(pool, "QUADRANTE", id, `SELECT 1 AS x FROM Regioes WHERE QuadranteId = @id`)
   },
   distritos: {
     tabela: "Distritos", chave: "DistritoId", idField: "distritoId",
@@ -71,6 +112,21 @@ const CATALOGOS = {
   extensoes: {
     tabela: "ExtensoesTenda", chave: "ExtensaoId", idField: "extensaoId",
     campos: { nome: sql.NVarChar(150), congregacaoMaeId: sql.Int, ativa: sql.Bit },
+    // Trava 9-A — desativar a Extensão pelo cadastro faz o que a emancipação faz com ela: recusa com pedido de emancipação em andamento (a decisão da CLI
+    // ficaria sem objeto) e, desativada, encerra o Encarregado e o acesso de escopo dela (as sessões caem: "ativa" está entre os campos do bilhete)
+    conferirEscrita: async (pool, dados, id) => {
+      if (!id || dados.ativa === undefined || dados.ativa === true || dados.ativa === 1 || dados.ativa === "1" || dados.ativa === "true") return null;
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT TOP 1 1 AS ok FROM PedidosExpansao WHERE ExtensaoId = @id AND Status IN (N'EM_PARECER', N'AGUARDANDO_CLI')`);
+      return r.recordset.length ? "Esta Extensão tem pedido de emancipação em andamento: peça a desistência (ou espere a decisão da CLI) antes de desativá-la." : null;
+    },
+    aposAtualizar: async (pool, antes, depois, usuario) => {
+      if (!antes || !antes.ativa || depois.ativa) return;
+      const hoje = require("../shared/dataBrasilia").hojeBrasilia();
+      await pool.request().input("id", sql.Int, depois.extensaoId).input("h", sql.Date, hoje).input("por", sql.Int, usuario.membroId).query(`
+        UPDATE ExtensaoEncarregados SET Ate = CASE WHEN Desde > @h THEN Desde ELSE @h END, MotivoSaida = N'Extensão desativada no cadastro', EncerradoPor = @por
+        WHERE ExtensaoId = @id AND Ate IS NULL;
+        UPDATE Lideranca SET AtivoAte = DATEADD(DAY, -1, @h) WHERE EscopoTipo = 'EXTENSAO' AND EscopoId = @id AND (AtivoAte IS NULL OR AtivoAte >= @h)`);
+    },
     // v9.2 — a Extensão com membros, Encarregado ou pedido de expansão não se exclui (desativa-se); a emancipada é história: não se edita (a congregação que nasceu dela, sim)
     emUso: async (pool, id) => {
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM (
@@ -103,6 +159,8 @@ const CATALOGOS = {
       cep: sql.NVarChar(10), notaEndereco: sql.NVarChar(300), googleMapsPlaceQuery: sql.NVarChar(300),
       fundacaoAno: sql.SmallInt
     },
+    // Trava 9-A — a congregação não troca de Área para dentro ou para fora de um Distrito sob intervenção
+    conferirEscrita: (pool, dados, id) => territorioSobIntervencao(pool, "CONGREGACAO", id, dados.areaId === undefined ? undefined : { tipo: "AREA", id: dados.areaId }),
     emUso: async (pool, id) => {
       // v9.2 — também a Congregação-Mãe de alguma Extensão e a congregação de um pedido de expansão (a certidão de nascimento dela)
       const r = await pool.request().input("id", sql.Int, id).query(`SELECT COUNT(*) AS Total FROM MembroReferencia WHERE CongregacaoId = @id`);
@@ -142,25 +200,30 @@ const CATALOGOS = {
     arrayFields: ["permissoes"],
     permissao: "permissoes",
     // v9.3 — "Pastor Distrital" e "Interventor Distrital" só o Pastor Presidente dá (a tela de Liderança reconhece os dois pelo nome): eles não se renomeiam, não
-    // mudam de nível, e nenhum outro papel ganha esses nomes (senão bastaria renomear, dar e renomear de volta)
+    // mudam de nível, e nenhum outro papel ganha esses nomes (senão bastaria renomear, dar e renomear de volta).
+    // Trava 9-A — o mesmo vale para os papéis cujo NOME o sistema usa nas contas: a CLI (Art. 6-A), a CME (Art. 23), o CDE, a destituição da intervenção, o
+    // Presidente de hoje, o Reitor e a sucessão dos canais. Renomear um deles tiraria as pessoas dessas contas sem aviso; as permissões continuam editáveis.
     conferirEscrita: async (pool, dados, id) => {
-      const RESERVADOS = ["Pastor Distrital", "Interventor Distrital"];
+      const RESERVADOS = ["Pastor Distrital", "Interventor Distrital", "Presidente", "Secretário Geral", "Dirigente de Congregação", "Pastor de Área", "Superintendente Regional",
+        "Vice-Presidente de Quadrante", "Secretário de Missões", "Líder Geral de Departamento/Secretaria", "Reitor da AFM", "Tesoureiro de Distrito"];
       const chave = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
       const reservado = (t) => RESERVADOS.some((r) => chave(r) === chave(t));
       const atual = id ? (await pool.request().input("id", sql.Int, id).query(`SELECT Nome, Nivel FROM Papeis WHERE PapelId = @id`)).recordset[0] : null;
       if (atual && reservado(atual.Nome)) {
         if ((dados.nome !== undefined && dados.nome !== atual.Nome) || (dados.nivel !== undefined && dados.nivel !== atual.Nivel)) {
-          return `O papel "${atual.Nome}" não se renomeia nem muda de nível: é ele que só o Pastor Presidente dá (Regimento, Art. 126-L, I, e 126-P, II). As permissões dele podem mudar.`;
+          return `O papel "${atual.Nome}" não se renomeia nem muda de nível: o sistema usa o nome dele (na CLI, nas comissões, no Distrito ou na Liderança). As permissões dele podem mudar.`;
         }
         return null;
       }
-      if (dados.nome !== undefined && reservado(dados.nome)) return `O nome "${String(dados.nome).trim()}" é de um papel reservado ao Pastor Presidente: escolha outro nome.`;
+      if (dados.nome !== undefined && reservado(dados.nome)) return `O nome "${String(dados.nome).trim()}" é de um papel que o sistema já usa: escolha outro nome.`;
       return null;
     },
-    // o papel reservado não se exclui
+    // o papel de que o sistema depende não se exclui; o que está dado a alguém em Liderança também não (a chave estrangeira daria erro)
     emUso: async (pool, id) => {
-      const r = await pool.request().input("id", sql.Int, id).query(`SELECT Nome FROM Papeis WHERE PapelId = @id`);
-      return !!(r.recordset[0] && ["Pastor Distrital", "Interventor Distrital"].includes(r.recordset[0].Nome));
+      const r = await pool.request().input("id", sql.Int, id).query(`SELECT Nome, (SELECT COUNT(*) FROM Lideranca WHERE PapelId = @id) AS Usos FROM Papeis WHERE PapelId = @id`);
+      const l = r.recordset[0];
+      return !!(l && (Number(l.Usos) > 0 || ["Pastor Distrital", "Interventor Distrital", "Presidente", "Secretário Geral", "Dirigente de Congregação", "Pastor de Área",
+        "Superintendente Regional", "Vice-Presidente de Quadrante", "Secretário de Missões", "Líder Geral de Departamento/Secretaria", "Reitor da AFM", "Tesoureiro de Distrito"].includes(l.Nome)));
     }
   },
   tiposConsagracao: {
@@ -330,7 +393,7 @@ async function nomeHomonimo(pool, catalogoNome, dados, idCorpo) {
 // alcançando o que não devem (ou deixando de alcançar) até expirar: todas as sessões abertas caem (menos a de quem fez a mudança, que é do nível geral) e o
 // login seguinte já monta o escopo novo. Os campos de endereço, horário, mapa etc. não estão no token e não derrubam ninguém.
 const CAMPOS_NO_TOKEN = {
-  congregacoes: ["nome", "areaId"], extensoes: ["nome", "congregacaoMaeId"], areas: ["regiaoId"], regioes: ["quadranteId"], quadrantes: ["distritoId"],
+  congregacoes: ["nome", "areaId"], extensoes: ["nome", "congregacaoMaeId", "ativa"], areas: ["regiaoId"], regioes: ["quadranteId"], quadrantes: ["distritoId"],
   distritos: [], papeis: ["nivel", "permissoes"]
 };
 async function derrubarSessoesSeMudouOToken(pool, catalogoNome, antes, depois, usuario) {
@@ -470,6 +533,7 @@ module.exports = comConflito(async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Registro não encontrado." } };
         return;
       }
+      if (config.aposAtualizar) await config.aposAtualizar(pool, dadosAntes, registro, usuario);   // Trava 9-A — o efeito que a mudança pede (ex.: a Extensão desativada)
       const sessoesEncerradas = await derrubarSessoesSeMudouOToken(pool, catalogoNome, dadosAntes, registro, usuario);
       await registrarAuditoria({
         tabela: config.tabela, registroId: Number(idCorpo), acao: "Atualizou registro",

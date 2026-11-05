@@ -333,6 +333,9 @@ consegue responder com número.
 - [ ] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
       para exibição pública/mural.
 - [ ] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
+      *(Trava 9-A: a v9.2 entrega a CME calculada (`composicaoCME`) e o parecer dela só dentro dos pedidos de expansão — os 3 tipos do CHECK de
+      `PedidosExpansao`. O envio de missionários (Reg. Art. 23, II) vai pedir um parecer próprio, o Art. 44 §2º (envio para fora do Estado: só a CLI e o
+      Pastor Presidente) e o Art. 44 §1º (a SEMIADESPA abre Frentes de Trabalho Missionário no município com autonomia) — entra no desenho da v9.4.)*
       *(MissionaryConnect; Missions21)*
 
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
@@ -345,6 +348,8 @@ consegue responder com número.
 - [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
       Congregação, calculado a partir dos dados que já existem (membresia, PSC da
       v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
+      *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da
+      simulação são decisão do responsável, a pedir no desenho da v9.5.)*
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 

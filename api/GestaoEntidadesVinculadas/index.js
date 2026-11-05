@@ -139,7 +139,13 @@ module.exports = async function (context, req) {
 
     if (metodo !== "POST") return erro(context, 405, "Método não suportado.");
     if (!Object.prototype.hasOwnProperty.call(ESCRITA, acao)) return erro(context, 404, "Ação inválida.");
-    if (["intervencao-decretar", "intervencao-encerrar"].includes(acao) && !auth.exigirFatorRecente(req, context)) return;
+    // Trava 9-A — quem não é o Pastor Presidente é recusado ANTES de pedir a confirmação recente (antes passava pela confirmação e só depois recebia o 403);
+    // e a confirmação recente vale também nos outros atos de efeito grave: a ratificação (que destitui a diretoria), a extinção (o destino do patrimônio) e a
+    // aprovação do vínculo pela CLI — o mesmo critério dos decretos dos Distritos e da decisão da Expansão
+    if (["intervencao-decretar", "intervencao-encerrar"].includes(acao) && !(await db.ehPresidente(pool, por))) {
+      return erro(context, 403, "Só o Pastor Presidente em exercício decreta e encerra a intervenção (Estatuto, Art. 65 §2º).");
+    }
+    if (["intervencao-decretar", "intervencao-encerrar", "intervencao-ratificar", "extinguir", "vinculo-aprovar"].includes(acao) && !auth.exigirFatorRecente(req, context)) return;
     const campoId = ESCRITA[acao];
     const id = campoId ? ev.idDe(corpo[campoId]) : null;
     if (campoId && !id) return erro(context, 400, `Informe ${campoId}.`);

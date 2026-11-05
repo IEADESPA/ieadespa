@@ -98,7 +98,7 @@ async function composicaoCME(pool) {
            MAX(CASE WHEN l.EscopoTipo = 'DEPARTAMENTO' THEN N'Secretário de Missões' ELSE N'Pastor de Área' END) AS cargoOuFuncao,
            MAX(COALESCE(ar.Nome, dep.Nome)) AS origemSigla,
            MAX(CASE WHEN l.EscopoTipo = 'DEPARTAMENTO' THEN 1 ELSE 0 END) AS secretarioMissoes,
-           MAX(CASE WHEN l.EscopoTipo = 'DEPARTAMENTO' AND (',' + ISNULL(p.Permissoes, '') + ',') LIKE '%,expansao,%' THEN 1 ELSE 0 END) AS comAcessoTela
+           MAX(CASE WHEN (',' + ISNULL(p.Permissoes, '') + ',') LIKE '%,expansao,%' THEN 1 ELSE 0 END) AS comAcessoTela
     FROM Lideranca l
     JOIN Papeis p ON p.PapelId = l.PapelId
     JOIN MembroReferencia m ON m.MembroId = l.MembroId

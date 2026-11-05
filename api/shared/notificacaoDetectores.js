@@ -52,6 +52,7 @@ async function detectarRepasseMaloteParado(pool) {
     SELECT RepasseId, OrigemNome, MesReferencia, ValorRepasse
     FROM RepassesInstitucionais
     WHERE Status = 'PENDENTE' AND MesReferencia < @mesAtual
+      AND OrigemTipo <> N'DISTRITO'   -- Trava 9-A: o do Distrito tem o aviso próprio (DISTRITO_REPASSE_VENCIDO), com o motivo; aqui sairia em dobro
   `);
   return result.recordset.map(r => ({
     referenciaId: r.RepasseId,

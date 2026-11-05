@@ -386,7 +386,8 @@ modelados como estrutura compartilhada, não repetida por tipo:
     distintos (achado confirmado lendo o código: nem o repasse de
     Departamento/Distrito daquele mecanismo credita em saldo real hoje —
     lacuna pré-existente da v4.15, não desta versão, registrada mas não
-    corrigida aqui). Continua em `TesourariasDepartamento`/
+    corrigida aqui; *nota da Trava 9-A: desde a v9.3 o Dízimo Institucional
+    do Distrito, dos meses com decreto da CLI, credita no Tesouro Geral*). Continua em `TesourariasDepartamento`/
     `DespesasTesourariaDepartamento` (já existente) — mas agora **visível
     no mesmo relatório que a Tesouraria Geral já usa**
     (`RelatorioSituacaoTesouro`, v4.10): nova seção "Departamentos e

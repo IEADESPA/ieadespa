@@ -304,10 +304,32 @@ async function prova() {
   ok(/nenhuma congregação ativa/.test(vazio.e("dstMsgForm").textContent) && vazio.e("modalOverlay").classList.contains("escondido") && posts(vazio, "distritos/ativar").length === 0,
     "Distrito sem território: avisa antes da pergunta e da confirmação reforçada");
 
+  console.log("== a troca do Interventor (Trava 9-A) ==");
+  const troca2 = montar({ ficha: "fichaSobIntervencao" });
+  troca2.__respostas["GET distritos/ficha"] = { corpo: { sucesso: true, distrito: { ...R.fichaSobIntervencao.distrito, acoes: { ...R.fichaSobIntervencao.distrito.acoes, trocarInterventor: true } } } };
+  await abrirDistritos(troca2); await abrirFicha(troca2);
+  ok(botaoForm(troca2, "interventor"), "sob intervenção, o Presidente vê a troca do Interventor");
+  ok(!botaoForm(sobIv, "interventor"), "sem a ação do servidor, o botão não aparece");
+  await troca2.g("dstAbrirFormAcao")("interventor"); await troca2.ocioso();
+  troca2.e("dstCampo_interventorMembroId").value = "x9";
+  troca2.limparRegistro();
+  await troca2.g("dstEnviarFormAcao")(); await troca2.ocioso();
+  ok(/é um número/.test(troca2.e("dstMsgForm").textContent) && posts(troca2, "distritos/interventor").length === 0, "matrícula que não é número: avisa, nada vai");
+  troca2.e("dstCampo_interventorMembroId").value = " 9508 ";
+  modal = await confirmarEnvio(troca2, true);
+  p = posts(troca2, "distritos/interventor");
+  ok(modal.aberto && /acesso do Interventor de agora termina/.test(modal.texto) && p.length === 1 && p[0].corpo.distritoId === ID && p[0].corpo.interventorMembroId === "9508",
+    "a pergunta diz a consequência; manda o Distrito e a matrícula", p[0] && p[0].corpo);
+
   console.log("== Meus Dados ==");
   const cartao = amb.g("dstCartaoMeusDados")({ distritos: { balancosEnviados: [{ distrito: `Belém ${ATAQUE}`, ano: 2025, versao: 1, status: `Enviado ${ATAQUE}`, enviadoEm: "2026-01-10" }],
     intervencoesComoInterventor: [{ distrito: `Manaus ${ATAQUE}`, decretadaEm: "2026-02-01", encerradaEm: null }] } });
   ok(/Belém/.test(cartao) && /Manaus/.test(cartao) && !/<img/.test(cartao) && /em curso/.test(cartao), "o cartão de Meus Dados escapa o texto");
+  const cartao2 = amb.g("dstCartaoMeusDados")({ distritos: { balancosEnviados: [], intervencoesComoInterventor: [],
+    balancosAnalisados: [{ distrito: `Santarém ${ATAQUE}`, ano: 2025, versao: 2, status: `Aprovado ${ATAQUE}`, analisadoEm: "2026-02-10" }],
+    decretosRegistrados: [{ distrito: `Marabá ${ATAQUE}`, ato: "ativação", em: "2026-03-01" }] } });
+  ok(/Analisou \(NIF\) o balanço de 2025 do Santarém/.test(cartao2) && /Registrou o decreto de ativação do Marabá/.test(cartao2) && !/<img/.test(cartao2),
+    "Meus Dados mostra também os balanços analisados e os decretos registrados, escapados (Trava 9-A)");
   ok(amb.g("dstCartaoMeusDados")({}) === "" && amb.g("dstCartaoMeusDados")(null) === "" && amb.g("dstCartaoMeusDados")({ distritos: { balancosEnviados: [], intervencoesComoInterventor: [] } }) === "",
     "sem nada: o cartão não aparece");
 
@@ -341,6 +363,8 @@ const MUTACOES = [
   ["distritos", "o legado dizendo que o repasse já é do Distrito", ["Até o decreto ser registrado, o repasse das congregações do território continua com a Sede.", "O repasse das congregações do território é do Distrito."]],
   ["distritos", "as reuniões lidas uma vez só", ["  if (dstCatalogos.papeis && dstCatalogos.papeis.geral) {", "  if (dstCatalogos.papeis && dstCatalogos.papeis.geral && !dstReunioes.length) {"]],
   ["distritos", "a ficha que não relê esconde o resultado", ["  } else mostrarToast(msg, \"sucesso\");", "  }"]],
+  ["distritos", "a troca do Interventor a quem o servidor nega", ["a.trocarInterventor ? dstBotao(\"🔁 Trocar o Interventor\", \"interventor\") : \"\"", "dstBotao(\"🔁 Trocar o Interventor\", \"interventor\")"]],
+  ["distritos", "tirar o escape dos decretos em Meus Dados", ["Registrou o decreto de ${dstH(d.ato)} do ${dstH(d.distrito)}", "Registrou o decreto de ${d.ato} do ${d.distrito}"]],
   ["distritos", "ativar sem território pede a confirmação", ["          if (!legado && !congs.some((x) => x.ativa)) return", "          if (false) return"]],
   ["distritos", "deixar o duplo clique gravar duas vezes", ["  if (dstOcupado) { dstMensagem(alvoMsg, \"Aguarde: a gravação anterior ainda está em andamento.\"); return null; }", ""]],
   ["distritos", "a pergunta aberta duas vezes", ["    if (dstConfirmando) return;\n", ""]],

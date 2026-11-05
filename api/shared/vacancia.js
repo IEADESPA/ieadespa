@@ -102,6 +102,18 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
               END`);
   }
 
+  // Trava 9-A — as funções das v9.1 e v9.2 saem como os outros cargos: o Encarregado da Extensão (Regimento Art. 109-A) e o dirigente de entidade vinculada
+  // (indicado ou homologado; a licença de candidatura também afasta da diretoria, Art. 157 §2º). Antes, o falecido ou desligado continuava "dirigente atual".
+  await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .input("motivoEnt", sql.NVarChar(25), motivo === "FALECIMENTO" ? "FALECIMENTO" : "OUTRO")
+    .input("obs", sql.NVarChar(500), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : motivo === "LICENCA_CANDIDATURA" ? "licença de candidatura" : "saída do rol de membros"}) — Regimento, Art. 11.`)
+    .query(`IF OBJECT_ID(N'dbo.ExtensaoEncarregados', N'U') IS NOT NULL
+              UPDATE ExtensaoEncarregados SET Ate = CASE WHEN Desde > @hoje THEN Desde ELSE @hoje END, MotivoSaida = @obs WHERE MembroId = @id AND Ate IS NULL;
+            IF OBJECT_ID(N'dbo.EntidadeDirigentes', N'U') IS NOT NULL
+              UPDATE EntidadeDirigentes SET Status = N'ENCERRADO', EncerradoEm = CASE WHEN IndicadoEm > @hoje THEN IndicadoEm ELSE @hoje END, MotivoEncerramento = @motivoEnt,
+                     EncerramentoObs = @obs
+              WHERE MembroId = @id AND Status IN (N'INDICADO', N'HOMOLOGADO')`);
+
   // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
   // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).
   await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);

@@ -159,6 +159,8 @@ module.exports = async function (context, req) {
   const entidadesVinculadas = await require("../shared/entidadesVinculadasDb").dadosDoTitular(pool, alvo);
   // v9.2 — expansão: as Extensões da Tenda que a pessoa encarregou ou encarrega (Regimento Art. 109-A, I)
   const extensoesEncarregadas = await require("../shared/expansaoDb").dadosDoTitular(pool, alvo);
+  // Trava 9-A — e os atos dela nos pedidos de expansão (pediu, deu o parecer, desistiu, registrou a decisão)
+  const expansaoAtos = await require("../shared/expansaoDb").atosDoTitular(pool, alvo);
   // v9.3 — Distritos: os balanços anuais que a pessoa enviou ao NIF e as intervenções em que teve a função de Interventor
   const distritos = await require("../shared/distritosDb").dadosDoTitular(pool, alvo);
 
@@ -194,6 +196,7 @@ module.exports = async function (context, req) {
       tesouraria,
       entidadesVinculadas,
       extensoesEncarregadas,
+      expansaoAtos,
       distritos
     }
   };

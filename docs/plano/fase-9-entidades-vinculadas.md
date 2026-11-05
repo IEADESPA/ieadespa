@@ -397,6 +397,59 @@ consegue responder com número.
       Pastor Presidente) e o Art. 44 §1º (a SEMIADESPA abre Frentes de Trabalho Missionário no município com autonomia) — entra no desenho da v9.4.)*
       *(MissionaryConnect; Missions21)*
 
+### Desenho da v9.4 (contrato, 05/11/2026)
+
+Base legal: Regimento Art. 23 (a CME dá parecer sobre o envio de missionários antes da decisão da CLI), Art. 24 §2º (15 dias; sem o parecer, só em regime de
+urgência por 2/3), Art. 43 e 44 (a SEMIADESPA coordena a obra missionária; §1º abre e gere Frentes de Trabalho Missionário em Parauapebas e nas zonas rurais
+adjacentes com autonomia; §2º o envio para outros Estados ou Países e os convênios externos são da CLI e do Pastor Presidente), Art. 126-N, I (o dinheiro da Sede
+sustenta "o envio missionário do Ministério"), Art. 133-C (a falta de prestação de contas bloqueia novos recursos) e Art. 134 §6º, I (sustento de missionário só
+por determinação expressa da Mesa Diretora). O que já existe e é reaproveitado: a CME calculada e o papel Secretário de Missões (v9.2), as reuniões da CLI
+encerradas, o Contas a Pagar com o fornecedor de dados bancários confirmados por outra pessoa (v4.5), o Tesouro Geral que sobra do Rateio Geral (v4.10), a folha
+da prebenda como molde da geração mensal (a Saída já aprovada, uma por pessoa e mês, sob trava) e a vacância (Trava 9-A).
+
+**1. Campo missionário.** Cadastro operacional da SEMIADESPA (o Secretário de Missões, o Líder Geral dela ou o nível geral): o nome, onde fica (o país; no
+Brasil, a UF e a cidade; a marca "zona rural adjacente a Parauapebas"), a congregação mantenedora (opcional), a divulgação (pública ou restrita; o padrão é
+restrita) e uma descrição. A **abrangência é calculada** pelo lugar, nunca escolhida: **Local** (Parauapebas, ou zona rural adjacente no Pará — Art. 44 §1º),
+**Estadual** (outra cidade do Pará), **Nacional** (outro Estado) ou **Transcultural** (outro país). O campo se encerra com o motivo, e não com envio vivo nele.
+
+**2. Envio do missionário (o ato controlado).** A SEMIADESPA registra o pedido: o missionário (membro ativo, em comunhão, sem processo disciplinar e sem outro
+envio vivo), o campo ativo, o sustento mensal proposto (zero = sem sustento), de onde ele sai (o **Tesouro Geral** ou o **caixa local da congregação
+mantenedora**), quem recebe (um fornecedor do Contas a Pagar: a pessoa física do missionário ou a pessoa jurídica de uma agência ou igreja parceira), o
+documento do envio (o termo de compromisso, obrigatório com sustento), a periodicidade do relatório (mensal ou trimestral), se o missionário autorizou divulgar
+o nome e a justificativa. As etapas são calculadas pelo caso: campo Local sem sustento fica ativo na hora (Art. 44 §1º); campo Local com sustento passa só pela
+concordância do Pastor Presidente (Art. 134 §6º, I); campo Estadual passa pelo parecer da CME e pela decisão da CLI (e pelo Presidente, se tiver sustento);
+campo Nacional ou Transcultural, ou quem recebe é pessoa jurídica (convênio externo), passa pela CME, pela CLI e **sempre** pelo Presidente (Art. 44 §2º). O
+parecer é de quem compõe a CME (nunca de quem pediu); a decisão da CLI é registrada pelo nível geral com a reunião encerrada (a urgência por 2/3 dispensa o
+parecer que falta); a concordância ou a recusa (com o motivo) é do Pastor Presidente em exercício, com a confirmação recente. A última etapa ativa o envio: o
+sustento e a obrigação do relatório começam no mês da ativação. Quem pediu (ou o nível geral) desiste enquanto o envio não ativou; a SEMIADESPA ou o nível geral
+encerra o envio ativo (retorno, troca de campo), com o motivo e o último mês de sustento.
+
+**3. Sustento mensal (Contas a Pagar).** A Tesouraria Geral (permissão `financeiro` do nível geral) gera o sustento do mês na pílula Missões: uma Saída **já
+aprovada** por envio (a decisão colegiada é a autorização, como na prebenda), com o documento do envio, na categoria nova **Sustento missionário** (Tesouro
+Geral) ou **Sustento missionário (caixa local)** (a congregação mantenedora), paga pelo caminho de sempre (o comprovante, a remessa e o saldo do centro de
+custo). Uma por envio e mês (trava de aplicação e restrição no banco). O valor vigente tem histórico: o **reajuste** (o valor, a fonte ou quem recebe) é ato do
+Pastor Presidente com a confirmação recente e vale de um mês ainda não gerado em diante.
+
+**4. Relatório de campo e suspensão.** Cada período (o mês ou o trimestre, contado do mês da ativação) tem o seu relatório: batismos, conversões, pessoas em
+discipulado, atividades (texto), pedidos (texto, opcional) e um anexo opcional. O prazo é o dia 10 do mês seguinte ao fim do período. A SEMIADESPA lança o que
+o missionário envia (a correção fica registrada). **Relatório vencido suspende o sustento**: enquanto houver um período vencido sem relatório, a geração pula
+aquele envio e diz o motivo (calculado na leitura, nunca marcação manual); chegou o relatório, a geração volta a ser possível, inclusive a dos meses que ficaram
+para trás (suspende, não cancela). Um aviso por período vencido à SEMIADESPA e ao nível geral.
+
+**5. Painel e mural.** O painel usa os mesmos dados, sem redigitar: os campos ativos por abrangência, os missionários ativos, o sustento mensal comprometido, o
+sustento pago no ano, **os meses de sustento pago sem relatório recebido** (o número que a Assembleia cobra), os relatórios em dia e atrasados, os sustentos
+suspensos, os batismos e as conversões do ano e os pedidos em andamento (parecer vencido, aguardando a CLI, aguardando o Presidente). A **versão mural** (para
+imprimir e expor) mostra só os campos públicos, com o lugar e os números do ano; o nome do missionário só com a autorização registrada; os campos restritos
+entram só na contagem; nenhum valor por pessoa, só o total investido no ano.
+
+**6. Costuras.** A vacância encerra o envio vivo da pessoa. Meus Dados mostra os envios da pessoa e os atos dela (pediu, deu o parecer, registrou a decisão,
+concordou). ROPA e retenção (sem prazo final: é a história da obra missionária e a prestação de contas à Assembleia). A permissão nova `missoes` vai ao
+Presidente, ao Secretário Geral, ao Secretário de Missões e aos Pastores de Área (a CME); a pílula Missões entra na aba Expansão.
+
+**Fora desta versão (escopo):** o missionário que não é membro (sem ficha não entra no cadastro), o relatório enviado pelo próprio missionário no Meu Painel, a
+retenção de imposto sobre o sustento (a natureza fiscal fica com a contabilidade; o sistema paga o valor decidido), o site público (o mural impresso cobre a
+"exibição pública") e um percentual do Rateio Geral reservado para missões (a Tesouraria pode criar esse destino em Catálogos).
+
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
 - [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —

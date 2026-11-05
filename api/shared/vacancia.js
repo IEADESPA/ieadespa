@@ -114,6 +114,19 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
                      EncerramentoObs = @obs
               WHERE MembroId = @id AND Status IN (N'INDICADO', N'HOMOLOGADO')`);
 
+  // v9.4 — o envio missionário (Regimento Art. 44): quem sai do rol (ou perde o mandato por disciplina) deixa o campo — o pedido em andamento é retirado e o envio
+  // ativo se encerra; o último mês de sustento é o mês da vacância (ainda pode ser gerado). A licença de candidatura não tira do campo: ela afasta de cargos que
+  // poderiam servir à campanha, e o sustento de quem está no campo não é um deles (decisão de 05/11/2026, que o responsável pode mudar).
+  if (!licenca) await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .input("obs", sql.NVarChar(1000), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : "saída do rol de membros"}) — Regimento, Art. 11.`)
+    .query(`IF OBJECT_ID(N'dbo.EnviosMissionarios', N'U') IS NOT NULL
+            BEGIN
+              UPDATE EnviosMissionarios SET Status = N'DESISTIDO', DesistidoEm = @hoje, DesistenciaMotivo = @obs
+              WHERE MembroId = @id AND Status IN (N'EM_PARECER', N'AGUARDANDO_CLI', N'AGUARDANDO_PRESIDENTE');
+              UPDATE EnviosMissionarios SET Status = N'ENCERRADO', EncerradoEm = @hoje, FimMes = CONVERT(char(7), @hoje, 120), MotivoEncerramento = @obs
+              WHERE MembroId = @id AND Status = N'ATIVO';
+            END`);
+
   // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
   // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).
   await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);

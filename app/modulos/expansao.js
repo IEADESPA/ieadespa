@@ -26,10 +26,12 @@ const expEl = (idEl) => document.getElementById(idEl);
 const expBr = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 const expH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const EXP_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
-const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos"];
-// v9.3 — a aba abre com "expansao" ou "distritos": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js), da permissão própria
+const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos", "missoes"];
+// v9.3 — a aba abre com "expansao", "distritos" ou (v9.4) "missoes": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js) e a de Missões
+// (modulos/missoes.js), cada uma da permissão própria
+const EXP_PERMISSAO_DA_SECAO = { distritos: "distritos", missoes: "missoes" };
 const expPermite = (secao) => (typeof authPermissoes !== "undefined" && Array.isArray(authPermissoes)
-  ? authPermissoes.includes(secao === "distritos" ? "distritos" : "expansao") : secao !== "distritos");
+  ? authPermissoes.includes(EXP_PERMISSAO_DA_SECAO[secao] || "expansao") : !EXP_PERMISSAO_DA_SECAO[secao]);
 
 // O dono da resposta: a matrícula e o tipo de sessão — não o bilhete, que a confirmação reforçada (428) troca no meio do ato (a resposta do próprio ato era
 // descartada e a tela ficava muda depois de gravar; revisão de 04/11/2026). A troca de login ou a saída mudam o dono.
@@ -74,6 +76,7 @@ function expLimparTela() {
   const todas = expEl("expExtensoesTodas"); if (todas) todas.checked = false;
   const bloco = expEl("expBlocoFicha"); if (bloco) bloco.style.display = "none";
   if (typeof dstLimparTela === "function") dstLimparTela();   // v9.3: a pílula dos Distritos
+  if (typeof misLimparTela === "function") misLimparTela();   // v9.4: a pílula de Missões
 }
 
 // ================================================================ abrir a aba ================================================================
@@ -82,8 +85,8 @@ async function carregarOpcoesExpansaoAcao() {
   for (const s of EXP_SECOES) { const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) b.style.display = expPermite(s) ? "" : "none"; }
   // a explicação das Extensões e da CME é para quem usa a Expansão: quem só cuida de Distrito vê só a explicação da pílula dele
   const explicacao = expEl("expExplicacao"); if (explicacao) explicacao.style.display = expPermite("painel") ? "" : "none";
-  // quem só tem "distritos" (o Tesoureiro de Distrito, o NIF) não pede nada da Expansão: vai direto aos Distritos
-  if (!expPermite("painel")) { expMostrarSecaoAcao("distritos"); return; }
+  // quem só tem "distritos" (o Tesoureiro de Distrito, o NIF) ou "missoes" (o Tesoureiro) não pede nada da Expansão: vai direto à pílula dele
+  if (!expPermite("painel")) { expMostrarSecaoAcao(expPermite("distritos") ? "distritos" : "missoes"); return; }
   const cat = await expBuscar("catalogos");
   if (cat === null || meu !== expPedidoOpcoes) return;
   if (!cat.sucesso) { expEl("expPainel").innerHTML = cat.semConexao ? EXP_SEM_CONEXAO : `<p class='subtitle'>${expH(cat.mensagem)}</p>`; return; }
@@ -113,6 +116,7 @@ function expMostrarSecaoAcao(secao) {
   if (expSecaoAtual === "pedidos") expCarregarListaAcao();
   if (expSecaoAtual === "extensoes") expCarregarExtensoesAcao();
   if (expSecaoAtual === "distritos" && typeof dstAbrirAcao === "function") dstAbrirAcao();
+  if (expSecaoAtual === "missoes" && typeof misAbrirAcao === "function") misAbrirAcao();
 }
 
 // ================================================================ painel ================================================================

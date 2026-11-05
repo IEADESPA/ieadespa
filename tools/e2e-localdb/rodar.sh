@@ -160,6 +160,14 @@ case "$1" in
     migrar 168 2
     base salvar cenario-trava9a
     ;;
+  preparar-missoes)
+    # v9.4 (Missões): a partir da base "cenario-trava9a", aplica a 169 duas vezes (prova a idempotência); salva "cenario-missoes" (e2e-76 e e2e-77: cada roteiro
+    # monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-trava9a
+    migrar 169 2
+    base salvar cenario-missoes
+    ;;
   roteiro)
     shift
     cd "$AQUI"

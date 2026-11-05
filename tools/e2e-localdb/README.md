@@ -180,6 +180,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   Presidente; o Pastor Distrital que não troca cargo nem vale no legado; os papéis de nome protegido; a Área em uso; o território parado na intervenção; a troca
   do Interventor; o CDE calculado na reunião; a Extensão desativada no cadastro; a emancipação no território da Mãe; Meus Dados; a desativação com o Dízimo já
   registrado; a referência do aviso por motivo; a CME sem acesso).
+- **v9.4** (Missões, migração 169), base `cenario-missoes` (`bash rodar.sh preparar-missoes`: a `cenario-trava9a` com a 169 aplicada duas vezes). `e2e-76` (as
+  categorias, a permissão e a retenção da migração; quem entra; os campos com a abrangência calculada; o envio por cada caminho — Local sem sustento direto, Local
+  com sustento pelo Presidente, Estadual pela CME e CLI, Transcultural e convênio externo sempre pelo Presidente, a urgência sem parecer; as recusas do pedido; a
+  desistência; o sustento do mês gerado no Contas a Pagar, suspenso pelo relatório vencido e impedido pelos dados bancários; o relatório e a correção; o reajuste e
+  o encerramento; o painel com o pago sem relatório; o mural; a vacância; os avisos da rotina; os CHECK e os índices; lixo em cada campo; Meus Dados;
+  `E2E_CONTRATO=1` grava `tools/front-missoes/contrato-real.json`) e `e2e-77` (corridas: a geração sozinha, com o reajuste e com o encerramento, o parecer, a
+  decisão com a desistência, o Presidente, o pedido, o relatório e o campo homônimo; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

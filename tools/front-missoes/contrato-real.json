@@ -1,0 +1,2534 @@
+{
+ "catalogosCMESemPermissao": {
+  "sucesso": true,
+  "abrangencias": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)"
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)"
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)"
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)"
+   }
+  ],
+  "divulgacoes": [
+   {
+    "codigo": "PUBLICA",
+    "rotulo": "Pública (aparece no mural)"
+   },
+   {
+    "codigo": "RESTRITA",
+    "rotulo": "Restrita (no mural, só na contagem)"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "MENSAL",
+    "rotulo": "Mensal"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "fontes": [
+   {
+    "codigo": "GERAL",
+    "rotulo": "Tesouro Geral"
+   },
+   {
+    "codigo": "CONGREGACAO",
+    "rotulo": "Caixa local da congregação mantenedora"
+   }
+  ],
+  "status": [
+   {
+    "codigo": "EM_PARECER",
+    "rotulo": "Aguardando o parecer da CME"
+   },
+   {
+    "codigo": "AGUARDANDO_CLI",
+    "rotulo": "Aguardando a decisão da CLI"
+   },
+   {
+    "codigo": "AGUARDANDO_PRESIDENTE",
+    "rotulo": "Aguardando o Pastor Presidente"
+   },
+   {
+    "codigo": "ATIVO",
+    "rotulo": "Ativo (no campo)"
+   },
+   {
+    "codigo": "ENCERRADO",
+    "rotulo": "Encerrado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   },
+   {
+    "codigo": "DESISTIDO",
+    "rotulo": "Desistência"
+   }
+  ],
+  "pareceres": [
+   {
+    "codigo": "FAVORAVEL",
+    "rotulo": "Favorável"
+   },
+   {
+    "codigo": "CONTRARIO",
+    "rotulo": "Contrário"
+   }
+  ],
+  "resultados": [
+   {
+    "codigo": "APROVADO",
+    "rotulo": "Aprovado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   }
+  ],
+  "resultadosPresidente": [
+   {
+    "codigo": "CONCORDA",
+    "rotulo": "Concorda"
+   },
+   {
+    "codigo": "RECUSA",
+    "rotulo": "Recusa"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazoParecerDias": 15,
+  "diaPrazoRelatorio": 10,
+  "sustentoMaximo": 100000,
+  "congregacoes": [
+   {
+    "congregacaoId": 3,
+    "nome": "Beta E2E"
+   },
+   {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   {
+    "congregacaoId": 2,
+    "nome": "Vila Nova E2E"
+   }
+  ],
+  "fornecedores": [],
+  "campos": [],
+  "papeis": {
+   "geral": false,
+   "semiadespa": false,
+   "cme": true,
+   "presidente": false,
+   "tesouraria": false
+  }
+ },
+ "catalogosSemi": {
+  "sucesso": true,
+  "abrangencias": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)"
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)"
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)"
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)"
+   }
+  ],
+  "divulgacoes": [
+   {
+    "codigo": "PUBLICA",
+    "rotulo": "Pública (aparece no mural)"
+   },
+   {
+    "codigo": "RESTRITA",
+    "rotulo": "Restrita (no mural, só na contagem)"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "MENSAL",
+    "rotulo": "Mensal"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "fontes": [
+   {
+    "codigo": "GERAL",
+    "rotulo": "Tesouro Geral"
+   },
+   {
+    "codigo": "CONGREGACAO",
+    "rotulo": "Caixa local da congregação mantenedora"
+   }
+  ],
+  "status": [
+   {
+    "codigo": "EM_PARECER",
+    "rotulo": "Aguardando o parecer da CME"
+   },
+   {
+    "codigo": "AGUARDANDO_CLI",
+    "rotulo": "Aguardando a decisão da CLI"
+   },
+   {
+    "codigo": "AGUARDANDO_PRESIDENTE",
+    "rotulo": "Aguardando o Pastor Presidente"
+   },
+   {
+    "codigo": "ATIVO",
+    "rotulo": "Ativo (no campo)"
+   },
+   {
+    "codigo": "ENCERRADO",
+    "rotulo": "Encerrado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   },
+   {
+    "codigo": "DESISTIDO",
+    "rotulo": "Desistência"
+   }
+  ],
+  "pareceres": [
+   {
+    "codigo": "FAVORAVEL",
+    "rotulo": "Favorável"
+   },
+   {
+    "codigo": "CONTRARIO",
+    "rotulo": "Contrário"
+   }
+  ],
+  "resultados": [
+   {
+    "codigo": "APROVADO",
+    "rotulo": "Aprovado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   }
+  ],
+  "resultadosPresidente": [
+   {
+    "codigo": "CONCORDA",
+    "rotulo": "Concorda"
+   },
+   {
+    "codigo": "RECUSA",
+    "rotulo": "Recusa"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazoParecerDias": 15,
+  "diaPrazoRelatorio": 10,
+  "sustentoMaximo": 100000,
+  "congregacoes": [
+   {
+    "congregacaoId": 3,
+    "nome": "Beta E2E"
+   },
+   {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   {
+    "congregacaoId": 2,
+    "nome": "Vila Nova E2E"
+   }
+  ],
+  "fornecedores": [
+   {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 2,
+    "nome": "Missionária Eva E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 3,
+    "nome": "Missionário Bruno E2E",
+    "tipo": "PF",
+    "confirmado": true
+   }
+  ],
+  "campos": [],
+  "papeis": {
+   "geral": false,
+   "semiadespa": true,
+   "cme": true,
+   "presidente": false,
+   "tesouraria": false
+  }
+ },
+ "catalogosPres": {
+  "sucesso": true,
+  "abrangencias": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)"
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)"
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)"
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)"
+   }
+  ],
+  "divulgacoes": [
+   {
+    "codigo": "PUBLICA",
+    "rotulo": "Pública (aparece no mural)"
+   },
+   {
+    "codigo": "RESTRITA",
+    "rotulo": "Restrita (no mural, só na contagem)"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "MENSAL",
+    "rotulo": "Mensal"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "fontes": [
+   {
+    "codigo": "GERAL",
+    "rotulo": "Tesouro Geral"
+   },
+   {
+    "codigo": "CONGREGACAO",
+    "rotulo": "Caixa local da congregação mantenedora"
+   }
+  ],
+  "status": [
+   {
+    "codigo": "EM_PARECER",
+    "rotulo": "Aguardando o parecer da CME"
+   },
+   {
+    "codigo": "AGUARDANDO_CLI",
+    "rotulo": "Aguardando a decisão da CLI"
+   },
+   {
+    "codigo": "AGUARDANDO_PRESIDENTE",
+    "rotulo": "Aguardando o Pastor Presidente"
+   },
+   {
+    "codigo": "ATIVO",
+    "rotulo": "Ativo (no campo)"
+   },
+   {
+    "codigo": "ENCERRADO",
+    "rotulo": "Encerrado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   },
+   {
+    "codigo": "DESISTIDO",
+    "rotulo": "Desistência"
+   }
+  ],
+  "pareceres": [
+   {
+    "codigo": "FAVORAVEL",
+    "rotulo": "Favorável"
+   },
+   {
+    "codigo": "CONTRARIO",
+    "rotulo": "Contrário"
+   }
+  ],
+  "resultados": [
+   {
+    "codigo": "APROVADO",
+    "rotulo": "Aprovado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   }
+  ],
+  "resultadosPresidente": [
+   {
+    "codigo": "CONCORDA",
+    "rotulo": "Concorda"
+   },
+   {
+    "codigo": "RECUSA",
+    "rotulo": "Recusa"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazoParecerDias": 15,
+  "diaPrazoRelatorio": 10,
+  "sustentoMaximo": 100000,
+  "congregacoes": [
+   {
+    "congregacaoId": 3,
+    "nome": "Beta E2E"
+   },
+   {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   {
+    "congregacaoId": 2,
+    "nome": "Vila Nova E2E"
+   }
+  ],
+  "fornecedores": [
+   {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 2,
+    "nome": "Missionária Eva E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 3,
+    "nome": "Missionário Bruno E2E",
+    "tipo": "PF",
+    "confirmado": true
+   }
+  ],
+  "campos": [],
+  "papeis": {
+   "geral": true,
+   "semiadespa": false,
+   "cme": false,
+   "presidente": true,
+   "tesouraria": false
+  }
+ },
+ "catalogosSec": {
+  "sucesso": true,
+  "abrangencias": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)"
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)"
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)"
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)"
+   }
+  ],
+  "divulgacoes": [
+   {
+    "codigo": "PUBLICA",
+    "rotulo": "Pública (aparece no mural)"
+   },
+   {
+    "codigo": "RESTRITA",
+    "rotulo": "Restrita (no mural, só na contagem)"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "MENSAL",
+    "rotulo": "Mensal"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "fontes": [
+   {
+    "codigo": "GERAL",
+    "rotulo": "Tesouro Geral"
+   },
+   {
+    "codigo": "CONGREGACAO",
+    "rotulo": "Caixa local da congregação mantenedora"
+   }
+  ],
+  "status": [
+   {
+    "codigo": "EM_PARECER",
+    "rotulo": "Aguardando o parecer da CME"
+   },
+   {
+    "codigo": "AGUARDANDO_CLI",
+    "rotulo": "Aguardando a decisão da CLI"
+   },
+   {
+    "codigo": "AGUARDANDO_PRESIDENTE",
+    "rotulo": "Aguardando o Pastor Presidente"
+   },
+   {
+    "codigo": "ATIVO",
+    "rotulo": "Ativo (no campo)"
+   },
+   {
+    "codigo": "ENCERRADO",
+    "rotulo": "Encerrado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   },
+   {
+    "codigo": "DESISTIDO",
+    "rotulo": "Desistência"
+   }
+  ],
+  "pareceres": [
+   {
+    "codigo": "FAVORAVEL",
+    "rotulo": "Favorável"
+   },
+   {
+    "codigo": "CONTRARIO",
+    "rotulo": "Contrário"
+   }
+  ],
+  "resultados": [
+   {
+    "codigo": "APROVADO",
+    "rotulo": "Aprovado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   }
+  ],
+  "resultadosPresidente": [
+   {
+    "codigo": "CONCORDA",
+    "rotulo": "Concorda"
+   },
+   {
+    "codigo": "RECUSA",
+    "rotulo": "Recusa"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazoParecerDias": 15,
+  "diaPrazoRelatorio": 10,
+  "sustentoMaximo": 100000,
+  "congregacoes": [
+   {
+    "congregacaoId": 3,
+    "nome": "Beta E2E"
+   },
+   {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   {
+    "congregacaoId": 2,
+    "nome": "Vila Nova E2E"
+   }
+  ],
+  "fornecedores": [
+   {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 2,
+    "nome": "Missionária Eva E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 3,
+    "nome": "Missionário Bruno E2E",
+    "tipo": "PF",
+    "confirmado": true
+   }
+  ],
+  "campos": [],
+  "papeis": {
+   "geral": true,
+   "semiadespa": false,
+   "cme": false,
+   "presidente": false,
+   "tesouraria": true
+  }
+ },
+ "catalogosTes": {
+  "sucesso": true,
+  "abrangencias": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)"
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)"
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)"
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)"
+   }
+  ],
+  "divulgacoes": [
+   {
+    "codigo": "PUBLICA",
+    "rotulo": "Pública (aparece no mural)"
+   },
+   {
+    "codigo": "RESTRITA",
+    "rotulo": "Restrita (no mural, só na contagem)"
+   }
+  ],
+  "periodicidades": [
+   {
+    "codigo": "MENSAL",
+    "rotulo": "Mensal"
+   },
+   {
+    "codigo": "TRIMESTRAL",
+    "rotulo": "Trimestral"
+   }
+  ],
+  "fontes": [
+   {
+    "codigo": "GERAL",
+    "rotulo": "Tesouro Geral"
+   },
+   {
+    "codigo": "CONGREGACAO",
+    "rotulo": "Caixa local da congregação mantenedora"
+   }
+  ],
+  "status": [
+   {
+    "codigo": "EM_PARECER",
+    "rotulo": "Aguardando o parecer da CME"
+   },
+   {
+    "codigo": "AGUARDANDO_CLI",
+    "rotulo": "Aguardando a decisão da CLI"
+   },
+   {
+    "codigo": "AGUARDANDO_PRESIDENTE",
+    "rotulo": "Aguardando o Pastor Presidente"
+   },
+   {
+    "codigo": "ATIVO",
+    "rotulo": "Ativo (no campo)"
+   },
+   {
+    "codigo": "ENCERRADO",
+    "rotulo": "Encerrado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   },
+   {
+    "codigo": "DESISTIDO",
+    "rotulo": "Desistência"
+   }
+  ],
+  "pareceres": [
+   {
+    "codigo": "FAVORAVEL",
+    "rotulo": "Favorável"
+   },
+   {
+    "codigo": "CONTRARIO",
+    "rotulo": "Contrário"
+   }
+  ],
+  "resultados": [
+   {
+    "codigo": "APROVADO",
+    "rotulo": "Aprovado"
+   },
+   {
+    "codigo": "REJEITADO",
+    "rotulo": "Recusado"
+   }
+  ],
+  "resultadosPresidente": [
+   {
+    "codigo": "CONCORDA",
+    "rotulo": "Concorda"
+   },
+   {
+    "codigo": "RECUSA",
+    "rotulo": "Recusa"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "prazoParecerDias": 15,
+  "diaPrazoRelatorio": 10,
+  "sustentoMaximo": 100000,
+  "congregacoes": [
+   {
+    "congregacaoId": 3,
+    "nome": "Beta E2E"
+   },
+   {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   {
+    "congregacaoId": 2,
+    "nome": "Vila Nova E2E"
+   }
+  ],
+  "fornecedores": [
+   {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 2,
+    "nome": "Missionária Eva E2E",
+    "tipo": "PF",
+    "confirmado": true
+   },
+   {
+    "fornecedorId": 3,
+    "nome": "Missionário Bruno E2E",
+    "tipo": "PF",
+    "confirmado": true
+   }
+  ],
+  "campos": [],
+  "papeis": {
+   "geral": true,
+   "semiadespa": false,
+   "cme": false,
+   "presidente": false,
+   "tesouraria": true
+  }
+ },
+ "campos": {
+  "sucesso": true,
+  "campos": [
+   {
+    "campoId": 4,
+    "nome": "<img src=x onerror=alert(1)> Campo Ataque",
+    "pais": "Brasil",
+    "uf": "MA",
+    "cidade": "Imperatriz",
+    "zonaRural": false,
+    "abrangencia": "NACIONAL",
+    "abrangenciaRotulo": "Nacional (outro Estado)",
+    "mantenedora": null,
+    "divulgacao": "PUBLICA",
+    "divulgacaoRotulo": "Pública (aparece no mural)",
+    "descricao": "<script>alert(2)</script>",
+    "status": "ATIVO",
+    "statusRotulo": "Ativo",
+    "abertoEm": "2026-11-05",
+    "encerradoEm": null,
+    "motivoEncerramento": null,
+    "enviosVivos": 0,
+    "enviosAtivos": 0,
+    "lugar": "Imperatriz/MA",
+    "podeEditar": true
+   },
+   {
+    "campoId": 3,
+    "nome": "Campo Maputo",
+    "pais": "Moçambique",
+    "uf": null,
+    "cidade": "Maputo",
+    "zonaRural": false,
+    "abrangencia": "TRANSCULTURAL",
+    "abrangenciaRotulo": "Transcultural (outro país)",
+    "mantenedora": null,
+    "divulgacao": "RESTRITA",
+    "divulgacaoRotulo": "Restrita (no mural, só na contagem)",
+    "descricao": null,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo",
+    "abertoEm": "2026-11-05",
+    "encerradoEm": null,
+    "motivoEncerramento": null,
+    "enviosVivos": 0,
+    "enviosAtivos": 0,
+    "lugar": "Maputo, Moçambique",
+    "podeEditar": true
+   },
+   {
+    "campoId": 2,
+    "nome": "Campo Marabá Centro",
+    "pais": "Brasil",
+    "uf": "PA",
+    "cidade": "Marabá",
+    "zonaRural": false,
+    "abrangencia": "ESTADUAL",
+    "abrangenciaRotulo": "Estadual (outra cidade do Pará)",
+    "mantenedora": null,
+    "divulgacao": "PUBLICA",
+    "divulgacaoRotulo": "Pública (aparece no mural)",
+    "descricao": null,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo",
+    "abertoEm": "2026-11-05",
+    "encerradoEm": null,
+    "motivoEncerramento": null,
+    "enviosVivos": 0,
+    "enviosAtivos": 0,
+    "lugar": "Marabá/PA",
+    "podeEditar": true
+   },
+   {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "pais": "Brasil",
+    "uf": "PA",
+    "cidade": "Parauapebas",
+    "zonaRural": false,
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "mantenedora": null,
+    "divulgacao": "PUBLICA",
+    "divulgacaoRotulo": "Pública (aparece no mural)",
+    "descricao": null,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo",
+    "abertoEm": "2026-11-05",
+    "encerradoEm": null,
+    "motivoEncerramento": null,
+    "enviosVivos": 0,
+    "enviosAtivos": 0,
+    "lugar": "Parauapebas/PA",
+    "podeEditar": true
+   },
+   {
+    "campoId": 1,
+    "nome": "Frente Vila Sansão",
+    "pais": "Brasil",
+    "uf": "PA",
+    "cidade": "Parauapebas",
+    "zonaRural": true,
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "mantenedora": {
+     "congregacaoId": 2,
+     "nome": "Vila Nova E2E"
+    },
+    "divulgacao": "PUBLICA",
+    "divulgacaoRotulo": "Pública (aparece no mural)",
+    "descricao": "Pontos de pregação na zona rural.",
+    "status": "ATIVO",
+    "statusRotulo": "Ativo",
+    "abertoEm": "2026-11-05",
+    "encerradoEm": null,
+    "motivoEncerramento": null,
+    "enviosVivos": 0,
+    "enviosAtivos": 0,
+    "lugar": "Parauapebas/PA (zona rural adjacente)",
+    "podeEditar": true
+   }
+  ]
+ },
+ "envioLocalSemSustento": {
+  "sucesso": true,
+  "envioId": 1,
+  "status": "ATIVO",
+  "mensagem": "Envio registrado e ativo: frente local sem sustento é da autonomia da SEMIADESPA (Regimento, Art. 44 §1º)."
+ },
+ "envioLocalComSustento": {
+  "sucesso": true,
+  "envioId": 2,
+  "status": "AGUARDANDO_PRESIDENTE",
+  "mensagem": "Pedido registrado. Agora aguarda a concordância do Pastor Presidente (o sustento é determinação dele — Regimento, Art. 134 §6º, I)."
+ },
+ "fichaAguardandoPresidente": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 2,
+   "status": "AGUARDANDO_PRESIDENTE",
+   "statusRotulo": "Aguardando o Pastor Presidente",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9707,
+    "nome": "Missionária Dora E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": false,
+    "cli": false,
+    "presidente": true
+   },
+   "sustentoProposto": 500,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Evangelismo no bairro novo da cidade.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": null,
+   "ativadoEm": null,
+   "inicioMes": null,
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": null,
+   "parecerVencido": false,
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-43384-1?sas",
+   "sustentoVigente": null,
+   "valores": [],
+   "geracoes": [],
+   "periodos": [],
+   "suspenso": false,
+   "relatorios": [],
+   "ultimoGerado": null,
+   "acoes": {
+    "parecer": false,
+    "decidir": false,
+    "presidente": true,
+    "desistir": true,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "envioEstadual": {
+  "sucesso": true,
+  "envioId": 3,
+  "status": "EM_PARECER",
+  "mensagem": "Pedido registrado. Agora a CME tem 15 dias para o parecer; depois decide a CLI."
+ },
+ "reunioes": {
+  "sucesso": true,
+  "reunioes": [
+   {
+    "sessaoId": 9,
+    "data": "2026-11-05",
+    "descricao": "CLI decide envios E2E"
+   }
+  ]
+ },
+ "fichaRecusada": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 3,
+   "status": "REJEITADO",
+   "statusRotulo": "Recusado",
+   "campo": {
+    "campoId": 2,
+    "nome": "Campo Marabá Centro",
+    "abrangencia": "ESTADUAL",
+    "abrangenciaRotulo": "Estadual (outra cidade do Pará)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Marabá/PA"
+   },
+   "missionario": {
+    "membroId": 9703,
+    "nome": "Missionário Bruno E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": true,
+    "cli": true,
+    "presidente": true
+   },
+   "sustentoProposto": 800,
+   "fonte": "CONGREGACAO",
+   "fonteRotulo": "Caixa local da congregação mantenedora",
+   "congregacaoFonte": {
+    "congregacaoId": 1,
+    "nome": "Central E2E"
+   },
+   "recebedor": {
+    "fornecedorId": 3,
+    "nome": "Missionário Bruno E2E",
+    "tipo": "PF"
+   },
+   "temDocumento": true,
+   "periodicidade": "TRIMESTRAL",
+   "periodicidadeRotulo": "Trimestral",
+   "divulgarNome": false,
+   "justificativa": "Plantar uma igreja em Marabá, sustentada pela Central.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": {
+    "resultado": "FAVORAVEL",
+    "rotulo": "Favorável",
+    "fundamentacao": "Viável: Marabá tem membros transferidos.",
+    "por": 3003,
+    "porNome": "Pastor de Área Alfa E2E",
+    "em": "2026-11-05"
+   },
+   "parecerEm": "2026-11-05",
+   "decisao": {
+    "sessaoId": 9,
+    "em": "2026-11-05",
+    "resultado": "APROVADO",
+    "rotulo": "Aprovado",
+    "urgencia": false,
+    "motivo": null
+   },
+   "presidente": {
+    "resultado": "RECUSA",
+    "rotulo": "Recusa",
+    "motivo": "Sem recurso para sustentar agora.",
+    "em": "2026-11-05"
+   },
+   "ativadoEm": null,
+   "inicioMes": null,
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": "2026-11-20",
+   "parecerVencido": false,
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-43384-2?sas",
+   "sustentoVigente": null,
+   "valores": [],
+   "geracoes": [],
+   "periodos": [],
+   "suspenso": false,
+   "relatorios": [],
+   "ultimoGerado": null,
+   "acoes": {
+    "parecer": false,
+    "decidir": false,
+    "presidente": false,
+    "desistir": false,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "fichaEmParecerCME": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 5,
+   "status": "EM_PARECER",
+   "statusRotulo": "Aguardando o parecer da CME",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9708,
+    "nome": "Missionário Fábio E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": true,
+    "cli": true,
+    "presidente": true
+   },
+   "sustentoProposto": 300,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Frente no bairro com a agência parceira.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": null,
+   "ativadoEm": null,
+   "inicioMes": null,
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": "2026-11-20",
+   "parecerVencido": false,
+   "documentoUrl": null,
+   "sustentoVigente": null,
+   "valores": [],
+   "geracoes": [],
+   "periodos": [],
+   "suspenso": false,
+   "relatorios": [],
+   "ultimoGerado": null,
+   "acoes": {
+    "parecer": true,
+    "decidir": false,
+    "presidente": false,
+    "desistir": false,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "fichaEmParecerGeral": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 5,
+   "status": "EM_PARECER",
+   "statusRotulo": "Aguardando o parecer da CME",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9708,
+    "nome": "Missionário Fábio E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": true,
+    "cli": true,
+    "presidente": true
+   },
+   "sustentoProposto": 300,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Frente no bairro com a agência parceira.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": null,
+   "ativadoEm": null,
+   "inicioMes": null,
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": "2026-11-20",
+   "parecerVencido": false,
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-43384-4?sas",
+   "sustentoVigente": null,
+   "valores": [],
+   "geracoes": [],
+   "periodos": [],
+   "suspenso": false,
+   "relatorios": [],
+   "ultimoGerado": null,
+   "acoes": {
+    "parecer": false,
+    "decidir": true,
+    "presidente": false,
+    "desistir": true,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "fichaEmParecerSemi": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 5,
+   "status": "EM_PARECER",
+   "statusRotulo": "Aguardando o parecer da CME",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9708,
+    "nome": "Missionário Fábio E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": true,
+    "cli": true,
+    "presidente": true
+   },
+   "sustentoProposto": 300,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 4,
+    "nome": "Agência Missionária Parceira E2E",
+    "tipo": "PJ"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Frente no bairro com a agência parceira.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": null,
+   "ativadoEm": null,
+   "inicioMes": null,
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": "2026-11-20",
+   "parecerVencido": false,
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-43384-4?sas",
+   "sustentoVigente": null,
+   "valores": [],
+   "geracoes": [],
+   "periodos": [],
+   "suspenso": false,
+   "relatorios": [],
+   "ultimoGerado": null,
+   "acoes": {
+    "parecer": false,
+    "decidir": false,
+    "presidente": false,
+    "desistir": true,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "previaSuspensa": {
+  "sucesso": true,
+  "mes": "2026-11",
+  "linhas": [
+   {
+    "envioId": 2,
+    "missionario": "Missionária Dora E2E",
+    "campo": "Frente Bairro Novo",
+    "valor": 500,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "recebedor": {
+     "nome": "Missionária Dora E2E",
+     "tipo": "PF"
+    },
+    "congregacaoFonte": null,
+    "situacao": "SUSPENSO",
+    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026). Lance o relatório e gere de novo (Regimento, Art. 133-C §2º)."
+   },
+   {
+    "envioId": 6,
+    "missionario": "Missionária Eva E2E",
+    "campo": "Frente Bairro Novo",
+    "valor": 300,
+    "fonte": "CONGREGACAO",
+    "fonteRotulo": "Caixa local da congregação mantenedora",
+    "recebedor": {
+     "nome": "Missionária Eva E2E",
+     "tipo": "PF"
+    },
+    "congregacaoFonte": {
+     "nome": "Central E2E"
+    },
+    "situacao": "IMPEDIDO",
+    "motivo": "Os dados bancários de quem recebe estão incompletos ou esperando a confirmação de outra pessoa (Fornecedores)."
+   },
+   {
+    "envioId": 4,
+    "missionario": "Missionário Caio E2E",
+    "campo": "Campo Maputo",
+    "valor": 1200,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "recebedor": {
+     "nome": "Agência Missionária Parceira E2E",
+     "tipo": "PJ"
+    },
+    "congregacaoFonte": null,
+    "situacao": "A_GERAR"
+   }
+  ],
+  "totais": {
+   "aGerar": 1200,
+   "gerado": 0,
+   "suspenso": 500,
+   "impedido": 300
+  },
+  "podeGerar": false
+ },
+ "gerarParcial": {
+  "sucesso": true,
+  "mes": "2026-11",
+  "geradas": [
+   {
+    "envioId": 4,
+    "missionario": "Missionário Caio E2E",
+    "valor": 1200,
+    "saidaId": 1
+   }
+  ],
+  "fora": [
+   {
+    "envioId": 2,
+    "missionario": "Missionária Dora E2E",
+    "situacao": "SUSPENSO",
+    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026). Lance o relatório e gere de novo (Regimento, Art. 133-C §2º)."
+   },
+   {
+    "envioId": 6,
+    "missionario": "Missionária Eva E2E",
+    "situacao": "IMPEDIDO",
+    "motivo": "Os dados bancários de quem recebe estão incompletos ou esperando a confirmação de outra pessoa (Fornecedores)."
+   }
+  ],
+  "mensagem": "Sustento de 11/2026 gerado: 1 pagamento(s), R$ 1.200,00, já aprovados no Contas a Pagar. 2 ficou(aram) de fora (suspenso ou impedido)."
+ },
+ "fichaAtiva": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 2,
+   "status": "ATIVO",
+   "statusRotulo": "Ativo (no campo)",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9707,
+    "nome": "Missionária Dora E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": false,
+    "cli": false,
+    "presidente": true
+   },
+   "sustentoProposto": 500,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Evangelismo no bairro novo da cidade.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": {
+    "resultado": "CONCORDA",
+    "rotulo": "Concorda",
+    "motivo": null,
+    "em": "2026-11-05"
+   },
+   "ativadoEm": "2026-08-01",
+   "inicioMes": "2026-08",
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": null,
+   "parecerVencido": false,
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-43384-1?sas",
+   "sustentoVigente": 500,
+   "valores": [
+    {
+     "desdeMes": "2026-08",
+     "valor": 500,
+     "fonteRotulo": "Tesouro Geral",
+     "congregacaoFonte": null,
+     "recebedor": "Missionária Dora E2E (PF)",
+     "motivo": "Ativação do envio",
+     "registradoEm": "2026-11-05"
+    }
+   ],
+   "geracoes": [
+    {
+     "mes": "2026-08",
+     "valor": 500,
+     "saidaId": 4,
+     "saidaStatus": "PAGA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-09",
+     "valor": 500,
+     "saidaId": 5,
+     "saidaStatus": "APROVADA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-10",
+     "valor": 500,
+     "saidaId": 6,
+     "saidaStatus": "APROVADA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-11",
+     "valor": 500,
+     "saidaId": 3,
+     "saidaStatus": "PAGA",
+     "semRelatorio": true
+    }
+   ],
+   "periodos": [
+    {
+     "inicio": "2026-08",
+     "fim": "2026-08",
+     "prazo": "2026-09-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-09",
+     "fim": "2026-09",
+     "prazo": "2026-10-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-10",
+     "fim": "2026-10",
+     "prazo": "2026-11-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-11",
+     "fim": "2026-11",
+     "prazo": "2026-12-10",
+     "entregue": false,
+     "vencido": false
+    }
+   ],
+   "suspenso": false,
+   "relatorios": [
+    {
+     "relatorioId": 4,
+     "periodoInicio": "2026-10",
+     "batismos": 1,
+     "conversoes": 1,
+     "discipulado": 1,
+     "atividades": "Relatório de 2026-10: cultos e visitas.",
+     "pedidos": null,
+     "anexoUrl": null,
+     "temAnexo": false,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": null
+    },
+    {
+     "relatorioId": 3,
+     "periodoInicio": "2026-09",
+     "batismos": 1,
+     "conversoes": 1,
+     "discipulado": 1,
+     "atividades": "Relatório de 2026-09: cultos e visitas.",
+     "pedidos": null,
+     "anexoUrl": null,
+     "temAnexo": false,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": null
+    },
+    {
+     "relatorioId": 1,
+     "periodoInicio": "2026-08",
+     "batismos": 4,
+     "conversoes": 5,
+     "discipulado": 3,
+     "atividades": "Cultos nos lares, evangelismo de rua e um batismo a mais.",
+     "pedidos": null,
+     "anexoUrl": "https://blob.e2e/documentos/doc-missoes-43384-6?sas",
+     "temAnexo": true,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": "2026-11-05"
+    }
+   ],
+   "ultimoGerado": "2026-11",
+   "acoes": {
+    "parecer": false,
+    "decidir": false,
+    "presidente": false,
+    "desistir": false,
+    "encerrar": true,
+    "reajustar": false,
+    "relatorio": true
+   }
+  }
+ },
+ "fichaCME": {
+  "sucesso": true,
+  "envio": {
+   "envioId": 2,
+   "status": "ATIVO",
+   "statusRotulo": "Ativo (no campo)",
+   "campo": {
+    "campoId": 5,
+    "nome": "Frente Bairro Novo",
+    "abrangencia": "LOCAL",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "divulgacao": "PUBLICA",
+    "status": "ATIVO",
+    "lugar": "Parauapebas/PA"
+   },
+   "missionario": {
+    "membroId": 9707,
+    "nome": "Missionária Dora E2E",
+    "congregacaoId": 1
+   },
+   "etapas": {
+    "cme": false,
+    "cli": false,
+    "presidente": true
+   },
+   "sustentoProposto": 500,
+   "fonte": "GERAL",
+   "fonteRotulo": "Tesouro Geral",
+   "congregacaoFonte": null,
+   "recebedor": {
+    "fornecedorId": 1,
+    "nome": "Missionária Dora E2E",
+    "tipo": "PF"
+   },
+   "temDocumento": true,
+   "periodicidade": "MENSAL",
+   "periodicidadeRotulo": "Mensal",
+   "divulgarNome": false,
+   "justificativa": "Evangelismo no bairro novo da cidade.",
+   "solicitadoPor": 9701,
+   "solicitanteNome": "Secretário de Missões E2E",
+   "solicitadoEm": "2026-11-05",
+   "parecer": null,
+   "parecerEm": null,
+   "decisao": null,
+   "presidente": {
+    "resultado": "CONCORDA",
+    "rotulo": "Concorda",
+    "motivo": null,
+    "em": "2026-11-05"
+   },
+   "ativadoEm": "2026-08-01",
+   "inicioMes": "2026-08",
+   "encerradoEm": null,
+   "fimMes": null,
+   "motivoEncerramento": null,
+   "desistencia": null,
+   "prazoParecer": null,
+   "parecerVencido": false,
+   "documentoUrl": null,
+   "sustentoVigente": 500,
+   "valores": [
+    {
+     "desdeMes": "2026-08",
+     "valor": 500,
+     "fonteRotulo": "Tesouro Geral",
+     "congregacaoFonte": null,
+     "recebedor": "Missionária Dora E2E (PF)",
+     "motivo": "Ativação do envio",
+     "registradoEm": "2026-11-05"
+    }
+   ],
+   "geracoes": [
+    {
+     "mes": "2026-08",
+     "valor": 500,
+     "saidaId": 4,
+     "saidaStatus": "PAGA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-09",
+     "valor": 500,
+     "saidaId": 5,
+     "saidaStatus": "APROVADA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-10",
+     "valor": 500,
+     "saidaId": 6,
+     "saidaStatus": "APROVADA",
+     "semRelatorio": false
+    },
+    {
+     "mes": "2026-11",
+     "valor": 500,
+     "saidaId": 3,
+     "saidaStatus": "PAGA",
+     "semRelatorio": true
+    }
+   ],
+   "periodos": [
+    {
+     "inicio": "2026-08",
+     "fim": "2026-08",
+     "prazo": "2026-09-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-09",
+     "fim": "2026-09",
+     "prazo": "2026-10-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-10",
+     "fim": "2026-10",
+     "prazo": "2026-11-10",
+     "entregue": true,
+     "vencido": false
+    },
+    {
+     "inicio": "2026-11",
+     "fim": "2026-11",
+     "prazo": "2026-12-10",
+     "entregue": false,
+     "vencido": false
+    }
+   ],
+   "suspenso": false,
+   "relatorios": [
+    {
+     "relatorioId": 4,
+     "periodoInicio": "2026-10",
+     "batismos": 1,
+     "conversoes": 1,
+     "discipulado": 1,
+     "atividades": "Relatório de 2026-10: cultos e visitas.",
+     "pedidos": null,
+     "anexoUrl": null,
+     "temAnexo": false,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": null
+    },
+    {
+     "relatorioId": 3,
+     "periodoInicio": "2026-09",
+     "batismos": 1,
+     "conversoes": 1,
+     "discipulado": 1,
+     "atividades": "Relatório de 2026-09: cultos e visitas.",
+     "pedidos": null,
+     "anexoUrl": null,
+     "temAnexo": false,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": null
+    },
+    {
+     "relatorioId": 1,
+     "periodoInicio": "2026-08",
+     "batismos": 4,
+     "conversoes": 5,
+     "discipulado": 3,
+     "atividades": "Cultos nos lares, evangelismo de rua e um batismo a mais.",
+     "pedidos": null,
+     "anexoUrl": null,
+     "temAnexo": true,
+     "recebidoEm": "2026-11-05",
+     "registradoPorNome": "Secretário de Missões E2E",
+     "retificadoEm": "2026-11-05"
+    }
+   ],
+   "ultimoGerado": "2026-11",
+   "acoes": {
+    "parecer": false,
+    "decidir": false,
+    "presidente": false,
+    "desistir": false,
+    "encerrar": false,
+    "reajustar": false,
+    "relatorio": false
+   }
+  }
+ },
+ "painel": {
+  "sucesso": true,
+  "hoje": "2026-11-05",
+  "ano": "2026",
+  "mesAtual": "2026-11",
+  "totais": {
+   "camposAtivos": 4,
+   "missionariosAtivos": 3,
+   "sustentoComprometido": 1500,
+   "pagoNoAno": 1000,
+   "geradoNaoPago": 2500,
+   "batismos": 6,
+   "conversoes": 7,
+   "discipulado": 5,
+   "mesesPagosSemRelatorio": 1,
+   "valorPagoSemRelatorio": 500
+  },
+  "porAbrangencia": [
+   {
+    "codigo": "LOCAL",
+    "rotulo": "Local (Parauapebas e zona rural adjacente)",
+    "campos": 2
+   },
+   {
+    "codigo": "ESTADUAL",
+    "rotulo": "Estadual (outra cidade do Pará)",
+    "campos": 1
+   },
+   {
+    "codigo": "NACIONAL",
+    "rotulo": "Nacional (outro Estado)",
+    "campos": 0
+   },
+   {
+    "codigo": "TRANSCULTURAL",
+    "rotulo": "Transcultural (outro país)",
+    "campos": 1
+   }
+  ],
+  "parecerVencido": [],
+  "emParecer": [],
+  "aguardandoCLI": [],
+  "aguardandoPresidente": [],
+  "relatoriosAtrasados": [],
+  "suspensos": [],
+  "pagosSemRelatorio": [
+   {
+    "envioId": 2,
+    "missionario": "Missionária Dora E2E",
+    "campo": "Frente Bairro Novo",
+    "status": "ENCERRADO",
+    "statusRotulo": "Encerrado",
+    "meses": [
+     "2026-11"
+    ],
+    "valor": 500
+   }
+  ],
+  "semSecretario": false
+ },
+ "mural": {
+  "sucesso": true,
+  "ano": "2026",
+  "campos": [
+   {
+    "nome": "Campo Marabá Centro",
+    "lugar": "Marabá/PA",
+    "abrangenciaRotulo": "Estadual (outra cidade do Pará)",
+    "missionarios": [],
+    "outrosMissionarios": 0,
+    "batismos": 0,
+    "conversoes": 0,
+    "discipulado": 0
+   },
+   {
+    "nome": "Frente Bairro Novo",
+    "lugar": "Parauapebas/PA",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "missionarios": [
+     "Missionária Eva E2E"
+    ],
+    "outrosMissionarios": 0,
+    "batismos": 6,
+    "conversoes": 7,
+    "discipulado": 5
+   },
+   {
+    "nome": "Frente Vila Sansão",
+    "lugar": "Parauapebas/PA (zona rural adjacente)",
+    "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+    "missionarios": [
+     "Missionária Ana E2E"
+    ],
+    "outrosMissionarios": 0,
+    "batismos": 0,
+    "conversoes": 0,
+    "discipulado": 0
+   }
+  ],
+  "camposRestritos": 1,
+  "missionariosRestritos": 1,
+  "totais": {
+   "batismos": 6,
+   "conversoes": 7,
+   "discipulado": 5,
+   "campos": 4,
+   "missionarios": 3,
+   "investidoNoAno": 1000
+  }
+ },
+ "envios": {
+  "sucesso": true,
+  "envios": [
+   {
+    "envioId": 6,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo (no campo)",
+    "campo": {
+     "campoId": 5,
+     "nome": "Frente Bairro Novo",
+     "abrangencia": "LOCAL",
+     "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+     "divulgacao": "PUBLICA",
+     "status": "ATIVO",
+     "lugar": "Parauapebas/PA"
+    },
+    "missionario": {
+     "membroId": 9710,
+     "nome": "Missionária Eva E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": false,
+     "cli": false,
+     "presidente": true
+    },
+    "sustentoProposto": 300,
+    "fonte": "CONGREGACAO",
+    "fonteRotulo": "Caixa local da congregação mantenedora",
+    "congregacaoFonte": {
+     "congregacaoId": 1,
+     "nome": "Central E2E"
+    },
+    "recebedor": {
+     "fornecedorId": 2,
+     "nome": "Missionária Eva E2E",
+     "tipo": "PF"
+    },
+    "temDocumento": true,
+    "periodicidade": "MENSAL",
+    "periodicidadeRotulo": "Mensal",
+    "divulgarNome": true,
+    "justificativa": "Frente no bairro novo, sustentada pela Central.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": null,
+    "parecerEm": null,
+    "decisao": null,
+    "presidente": {
+     "resultado": "CONCORDA",
+     "rotulo": "Concorda",
+     "motivo": null,
+     "em": "2026-11-05"
+    },
+    "ativadoEm": "2026-11-05",
+    "inicioMes": "2026-11",
+    "encerradoEm": null,
+    "fimMes": null,
+    "motivoEncerramento": null,
+    "desistencia": null,
+    "prazoParecer": null,
+    "parecerVencido": false,
+    "sustentoVigente": 300,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   },
+   {
+    "envioId": 4,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo (no campo)",
+    "campo": {
+     "campoId": 3,
+     "nome": "Campo Maputo",
+     "abrangencia": "TRANSCULTURAL",
+     "abrangenciaRotulo": "Transcultural (outro país)",
+     "divulgacao": "RESTRITA",
+     "status": "ATIVO",
+     "lugar": "Maputo, Moçambique"
+    },
+    "missionario": {
+     "membroId": 9704,
+     "nome": "Missionário Caio E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": true,
+     "cli": true,
+     "presidente": true
+    },
+    "sustentoProposto": 1200,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "congregacaoFonte": null,
+    "recebedor": {
+     "fornecedorId": 4,
+     "nome": "Agência Missionária Parceira E2E",
+     "tipo": "PJ"
+    },
+    "temDocumento": true,
+    "periodicidade": "TRIMESTRAL",
+    "periodicidadeRotulo": "Trimestral",
+    "divulgarNome": false,
+    "justificativa": "Apoio à obra em Maputo pela agência parceira.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": null,
+    "parecerEm": null,
+    "decisao": {
+     "sessaoId": 9,
+     "em": "2026-11-05",
+     "resultado": "APROVADO",
+     "rotulo": "Aprovado",
+     "urgencia": true,
+     "motivo": null
+    },
+    "presidente": {
+     "resultado": "CONCORDA",
+     "rotulo": "Concorda",
+     "motivo": null,
+     "em": "2026-11-05"
+    },
+    "ativadoEm": "2026-11-05",
+    "inicioMes": "2026-11",
+    "encerradoEm": null,
+    "fimMes": null,
+    "motivoEncerramento": null,
+    "desistencia": null,
+    "prazoParecer": "2026-11-20",
+    "parecerVencido": false,
+    "sustentoVigente": 1200,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   },
+   {
+    "envioId": 1,
+    "status": "ATIVO",
+    "statusRotulo": "Ativo (no campo)",
+    "campo": {
+     "campoId": 1,
+     "nome": "Frente Vila Sansão",
+     "abrangencia": "LOCAL",
+     "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+     "divulgacao": "PUBLICA",
+     "status": "ATIVO",
+     "lugar": "Parauapebas/PA (zona rural adjacente)"
+    },
+    "missionario": {
+     "membroId": 9702,
+     "nome": "Missionária Ana E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": false,
+     "cli": false,
+     "presidente": false
+    },
+    "sustentoProposto": 0,
+    "fonte": null,
+    "fonteRotulo": null,
+    "congregacaoFonte": null,
+    "recebedor": null,
+    "temDocumento": false,
+    "periodicidade": "MENSAL",
+    "periodicidadeRotulo": "Mensal",
+    "divulgarNome": true,
+    "justificativa": "Evangelismo nas casas da zona rural.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": null,
+    "parecerEm": null,
+    "decisao": null,
+    "presidente": null,
+    "ativadoEm": "2026-11-05",
+    "inicioMes": "2026-11",
+    "encerradoEm": null,
+    "fimMes": null,
+    "motivoEncerramento": null,
+    "desistencia": null,
+    "prazoParecer": null,
+    "parecerVencido": false,
+    "sustentoVigente": 0,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   },
+   {
+    "envioId": 5,
+    "status": "DESISTIDO",
+    "statusRotulo": "Desistência",
+    "campo": {
+     "campoId": 5,
+     "nome": "Frente Bairro Novo",
+     "abrangencia": "LOCAL",
+     "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+     "divulgacao": "PUBLICA",
+     "status": "ATIVO",
+     "lugar": "Parauapebas/PA"
+    },
+    "missionario": {
+     "membroId": 9708,
+     "nome": "Missionário Fábio E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": true,
+     "cli": true,
+     "presidente": true
+    },
+    "sustentoProposto": 300,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "congregacaoFonte": null,
+    "recebedor": {
+     "fornecedorId": 4,
+     "nome": "Agência Missionária Parceira E2E",
+     "tipo": "PJ"
+    },
+    "temDocumento": true,
+    "periodicidade": "MENSAL",
+    "periodicidadeRotulo": "Mensal",
+    "divulgarNome": false,
+    "justificativa": "Frente no bairro com a agência parceira.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": null,
+    "parecerEm": null,
+    "decisao": null,
+    "presidente": null,
+    "ativadoEm": null,
+    "inicioMes": null,
+    "encerradoEm": null,
+    "fimMes": null,
+    "motivoEncerramento": null,
+    "desistencia": {
+     "em": "2026-11-05",
+     "motivo": "A agência desistiu."
+    },
+    "prazoParecer": "2026-11-20",
+    "parecerVencido": false,
+    "sustentoVigente": null,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   },
+   {
+    "envioId": 3,
+    "status": "REJEITADO",
+    "statusRotulo": "Recusado",
+    "campo": {
+     "campoId": 2,
+     "nome": "Campo Marabá Centro",
+     "abrangencia": "ESTADUAL",
+     "abrangenciaRotulo": "Estadual (outra cidade do Pará)",
+     "divulgacao": "PUBLICA",
+     "status": "ATIVO",
+     "lugar": "Marabá/PA"
+    },
+    "missionario": {
+     "membroId": 9703,
+     "nome": "Missionário Bruno E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": true,
+     "cli": true,
+     "presidente": true
+    },
+    "sustentoProposto": 800,
+    "fonte": "CONGREGACAO",
+    "fonteRotulo": "Caixa local da congregação mantenedora",
+    "congregacaoFonte": {
+     "congregacaoId": 1,
+     "nome": "Central E2E"
+    },
+    "recebedor": {
+     "fornecedorId": 3,
+     "nome": "Missionário Bruno E2E",
+     "tipo": "PF"
+    },
+    "temDocumento": true,
+    "periodicidade": "TRIMESTRAL",
+    "periodicidadeRotulo": "Trimestral",
+    "divulgarNome": false,
+    "justificativa": "Plantar uma igreja em Marabá, sustentada pela Central.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": {
+     "resultado": "FAVORAVEL",
+     "rotulo": "Favorável",
+     "fundamentacao": "Viável: Marabá tem membros transferidos.",
+     "por": 3003,
+     "porNome": "Pastor de Área Alfa E2E",
+     "em": "2026-11-05"
+    },
+    "parecerEm": "2026-11-05",
+    "decisao": {
+     "sessaoId": 9,
+     "em": "2026-11-05",
+     "resultado": "APROVADO",
+     "rotulo": "Aprovado",
+     "urgencia": false,
+     "motivo": null
+    },
+    "presidente": {
+     "resultado": "RECUSA",
+     "rotulo": "Recusa",
+     "motivo": "Sem recurso para sustentar agora.",
+     "em": "2026-11-05"
+    },
+    "ativadoEm": null,
+    "inicioMes": null,
+    "encerradoEm": null,
+    "fimMes": null,
+    "motivoEncerramento": null,
+    "desistencia": null,
+    "prazoParecer": "2026-11-20",
+    "parecerVencido": false,
+    "sustentoVigente": null,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   },
+   {
+    "envioId": 2,
+    "status": "ENCERRADO",
+    "statusRotulo": "Encerrado",
+    "campo": {
+     "campoId": 5,
+     "nome": "Frente Bairro Novo",
+     "abrangencia": "LOCAL",
+     "abrangenciaRotulo": "Local (Parauapebas e zona rural adjacente)",
+     "divulgacao": "PUBLICA",
+     "status": "ATIVO",
+     "lugar": "Parauapebas/PA"
+    },
+    "missionario": {
+     "membroId": 9707,
+     "nome": "Missionária Dora E2E",
+     "congregacaoId": 1
+    },
+    "etapas": {
+     "cme": false,
+     "cli": false,
+     "presidente": true
+    },
+    "sustentoProposto": 500,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "congregacaoFonte": null,
+    "recebedor": {
+     "fornecedorId": 1,
+     "nome": "Missionária Dora E2E",
+     "tipo": "PF"
+    },
+    "temDocumento": true,
+    "periodicidade": "MENSAL",
+    "periodicidadeRotulo": "Mensal",
+    "divulgarNome": false,
+    "justificativa": "Evangelismo no bairro novo da cidade.",
+    "solicitadoPor": 9701,
+    "solicitanteNome": "Secretário de Missões E2E",
+    "solicitadoEm": "2026-11-05",
+    "parecer": null,
+    "parecerEm": null,
+    "decisao": null,
+    "presidente": {
+     "resultado": "CONCORDA",
+     "rotulo": "Concorda",
+     "motivo": null,
+     "em": "2026-11-05"
+    },
+    "ativadoEm": "2026-08-01",
+    "inicioMes": "2026-08",
+    "encerradoEm": "2026-11-05",
+    "fimMes": "2026-11",
+    "motivoEncerramento": "Retorno da missionária.",
+    "desistencia": null,
+    "prazoParecer": null,
+    "parecerVencido": false,
+    "sustentoVigente": 500,
+    "relatoriosVencidos": 0,
+    "suspenso": false
+   }
+  ]
+ },
+ "previaGerada": {
+  "sucesso": true,
+  "mes": "2026-11",
+  "linhas": [
+   {
+    "envioId": 2,
+    "missionario": "Missionária Dora E2E",
+    "campo": "Frente Bairro Novo",
+    "situacao": "GERADO",
+    "valor": 500,
+    "saidaId": 3,
+    "saidaStatus": "PAGA"
+   },
+   {
+    "envioId": 6,
+    "missionario": "Missionária Eva E2E",
+    "campo": "Frente Bairro Novo",
+    "situacao": "GERADO",
+    "valor": 300,
+    "saidaId": 2,
+    "saidaStatus": "APROVADA"
+   },
+   {
+    "envioId": 4,
+    "missionario": "Missionário Caio E2E",
+    "campo": "Campo Maputo",
+    "situacao": "GERADO",
+    "valor": 1200,
+    "saidaId": 1,
+    "saidaStatus": "APROVADA"
+   }
+  ],
+  "totais": {
+   "aGerar": 0,
+   "gerado": 2000,
+   "suspenso": 0,
+   "impedido": 0
+  },
+  "podeGerar": true
+ },
+ "previaTranscultural": {
+  "sucesso": true,
+  "mes": "2026-09",
+  "linhas": [
+   {
+    "envioId": 2,
+    "missionario": "Missionária Dora E2E",
+    "campo": "Frente Bairro Novo",
+    "situacao": "GERADO",
+    "valor": 500,
+    "saidaId": 5,
+    "saidaStatus": "APROVADA"
+   },
+   {
+    "envioId": 4,
+    "missionario": "Missionário Caio E2E",
+    "campo": "Campo Maputo",
+    "valor": 1200,
+    "fonte": "GERAL",
+    "fonteRotulo": "Tesouro Geral",
+    "recebedor": {
+     "nome": "Agência Missionária Parceira E2E",
+     "tipo": "PJ"
+    },
+    "congregacaoFonte": null,
+    "situacao": "SUSPENSO",
+    "motivo": "Relatório de campo vencido: 05/2026 a 07/2026 (venceu em 10/08/2026). Lance o relatório e gere de novo (Regimento, Art. 133-C §2º)."
+   }
+  ],
+  "totais": {
+   "aGerar": 0,
+   "gerado": 500,
+   "suspenso": 1200,
+   "impedido": 0
+  },
+  "podeGerar": true
+ },
+ "meusDados": {
+  "missoes": [
+   {
+    "campo": "Frente Bairro Novo",
+    "status": "Encerrado",
+    "pedidoEm": "2026-11-05",
+    "inicio": "2026-08",
+    "fim": "2026-11",
+    "motivoEncerramento": "Retorno da missionária.",
+    "autorizouDivulgarNome": false,
+    "periodicidade": "Mensal",
+    "relatoriosRecebidos": 3,
+    "sustento": [
+     {
+      "desde": "2026-08",
+      "valor": 500
+     },
+     {
+      "desde": "2026-12",
+      "valor": 700
+     }
+    ]
+   }
+  ],
+  "missoesAtos": []
+ }
+}

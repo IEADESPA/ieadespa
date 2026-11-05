@@ -195,6 +195,15 @@ const REGISTROS_TRATAMENTO = [
     retencao: "Os decretos, as intervenções e os balanços são história da instituição: sem prazo final (PoliticasRetencao 'Distritos: decretos, intervenções e balanços'). O nível geral e o NIF veem todos os Distritos; quem tem acesso de escopo de Distrito, só o dele. A pessoa vê em Meus Dados os balanços que enviou e as intervenções em que teve a função de Interventor."
   },
   {
+    chave: "MISSOES",
+    finalidade: "Registrar os campos missionários, o envio de missionários (o pedido da SEMIADESPA, o parecer da CME, a decisão da CLI e a concordância do Pastor Presidente), o sustento mensal pago pelo Contas a Pagar e os relatórios de campo que condicionam o sustento (Regimento Art. 23, 24, 44, 133-C e 134 §6º, I) — v9.4",
+    titulares: "Os missionários enviados (membros); quem pede, dá o parecer, registra a decisão, concorda, encerra ou lança o relatório; quem recebe o sustento (o fornecedor do Contas a Pagar)",
+    categoriasDados: ["Do missionário: a matrícula, o campo, as datas do envio, o sustento mensal e o histórico dos reajustes, se autorizou divulgar o nome no mural", "Dos relatórios de campo: os números (batismos, conversões, discipulado), as atividades e os pedidos que o missionário envia, e o anexo", "De quem age: a matrícula e a data de cada ato", "Do sustento: a Saída gerada no Contas a Pagar e a situação do pagamento"],
+    baseLegal: "LGPD Art. 7º, II — cumprimento de obrigação estatutária (a decisão colegiada do envio e do sustento, Regimento Art. 23, 44 e 134 §6º, I; a prestação de contas, Art. 133-C); Art. 11, II, \"a\" para a filiação religiosa implícita no vínculo do missionário com a Igreja. O nome só vai ao mural com a autorização registrada; os campos de divulgação restrita aparecem só na contagem.",
+    tabelasEnvolvidas: ["CamposMissionarios", "EnviosMissionarios", "EnvioSustentoValores", "RelatoriosCampo", "SustentoGeracoes", "SaidasTesouraria"],
+    retencao: "A obra missionária e o sustento pago são história da instituição e prestação de contas à Assembleia: sem prazo final (PoliticasRetencao 'Missões: campos, envios, sustento e relatórios de campo'). Veem o nível geral, a SEMIADESPA, a CME e o Pastor Presidente; o documento do envio e o anexo dos relatórios, só quem gere e o Presidente. O missionário vê em Meus Dados os envios, o sustento e quantos relatórios chegaram."
+  },
+  {
     chave: "VISTORIA_ANTECEDENTES",
     finalidade: "Lavrar o Termo de Vistoria quando a Diretoria confere certidão de antecedentes criminais e de distribuição cível de quem assume liderança ou confiança, muda para área sensível, é alvo de suspeita fundada ou é solicitado pela Diretoria — guardando só o hash da certidão, nunca o documento (Regimento Art. 133 §5º; Lei 14.811/2024) — v7.6",
     titulares: "Membros e congregados vistoriados; a Diretoria Executiva e o Conselho de Ética, que conferem e assinam",

@@ -208,8 +208,8 @@ READ_COMMITTED_SNAPSHOT do Azure; tela (`tools/front-expansao`) 79, com 25 muta�
 
 ## v9.3 — Distrito e macroexpansão
 
-- [ ] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
-- [ ] Blindagem contra desvinculação (intervenção imediata).
+- [x] Ativação de Distrito (nível 5) com autonomia financeira + dízimo institucional 10%.
+- [x] Blindagem contra desvinculação (intervenção imediata).
 
 ### Desenho da v9.3 (contrato, 04/11/2026)
 
@@ -259,6 +259,58 @@ Tesoureiro de Distrito; o Conselho Fiscal recebe em Permissões). O nível geral
 financeira, balanços, CDE). Tela: aba nova **"Distritos"** dentro do card Expansão (Distritos ativos e no cadastro, a ficha com o território, o mês a mês do
 Dízimo Institucional, os balanços, o CDE, os períodos e as intervenções). Avisos, ROPA e política de retenção (os decretos e as intervenções são história
 da instituição e ficam).
+
+### Como ficou a v9.3 (entregue em 05/11/2026)
+
+**Em produção desde 05/11/2026** (merge `8434bea`; para desfazer: `git revert -m 1 8434bea`). Migração **167** (`DistritoPeriodos` com o decreto da CLI e o mês
+financeiro, `DistritoIntervencoes`, `DistritoBalancos` com as versões, `FechamentosTesouraria.RepasseDistritoId`; os papéis **Pastor Distrital**, **Interventor
+Distrital** e **Vice-Presidente de Quadrante**; a permissão `distritos`; três avisos; a política de retenção). Regra pura em `api/shared/distritos.js`, banco em
+`api/shared/distritosDb.js`, rota `/api/distritos/<ação>` (`GestaoDistritos`). Tela: pílula **Distritos** na aba Expansão (abre também para quem só tem
+`distritos`), o caixa dos Distritos na situação do Tesouro, o repasse ao Distrito na Tesouraria Local, cartão em Meus Dados. Casca do service worker **v53**.
+
+**O que mudou do desenho (durante a construção e depois das duas revisões independentes — servidor: 1 alta, 7 médias, 8 baixas; tela: 2 altas, 3 médias, 6
+baixas — tratadas):**
+
+- **O Pastor Distrital e o Interventor recebem o acesso na tela de Liderança** (cada pessoa tem um só acesso, com a senha): lá, só o Pastor Presidente em
+  exercício dá, troca ou tira esses dois papéis, com as conferências (Pastor de cargo ministerial, em comunhão, credencial em dia, um por Distrito; o
+  Interventor é só a pessoa nomeada na intervenção aberta). Os dois papéis não se renomeiam no cadastro. O decreto e a intervenção não criam acesso: eles
+  avisam o que falta fazer em Liderança.
+- **O Distrito do repasse fica gravado no fechamento do mês** (na hora em que a Tesouraria Local fecha): mudar um Quadrante, uma Região ou uma Área de lugar
+  depois não reescreve o passado (o que a Sede já rateou continua da Sede; o que foi do Distrito continua dele).
+- **A igreja tem uma conta só:** o dinheiro do Distrito aparece como **caixa do Distrito** (o repasse das congregações dele menos o Dízimo Institucional
+  repassado) na ficha e na situação do Tesouro, fora do Tesouro Geral; os gastos dele vão no balanço anual ao NIF. Só o Dízimo dos meses com decreto entra no
+  Tesouro Geral (o repasse de Distrito digitado à mão antes da v9.3 não entra de repente).
+- **O Distrito "legado"** (marcado ativo no cadastro antes desta versão) não muda o destino do dinheiro até o decreto ser registrado; o decreto do legado vale
+  do mês do registro em diante, com a data da reunião.
+- **O mês do Dízimo** só exige as congregações que já fechavam a tesouraria naquele mês (a congregação nova não trava meses antigos); o mês em que falta o
+  fechamento local avisa "feche o mês" — só o mês apurável e não repassado fala em retenção e intervenção.
+- **Intervenção:** o Interventor que já tem outro cargo de acesso é recusado (trocaria o cargo dele — inclusive o do Presidente); durante a intervenção,
+  qualquer acesso novo com escopo do Distrito ou do território dele é só do Presidente; quem faz o ato nunca perde o próprio acesso; a troca das senhas dos
+  canais oficiais (Art. 160 §4º) é conferida na hora.
+- **Balanço:** desativado o Distrito, o nível geral envia o que ficou devendo; quem é da liderança do Distrito não analisa o balanço dele (nem quem o enviou);
+  o aviso da análise chega a cada versão.
+- **Tela:** a confirmação reforçada (chave do aparelho ou código) troca o bilhete de acesso no meio do ato — a tela passou a conferir a pessoa (matrícula e
+  tipo de sessão), não o bilhete; o mesmo defeito, que deixava a tela muda depois de gravar, foi corrigido na decisão da Expansão (v9.2) e na intervenção das
+  Entidades Vinculadas (v9.1), que já estavam em produção. O que foi digitado volta ao repintar a ficha (também na Expansão); as reuniões da CLI são relidas a
+  cada abertura; a lista abre pelo nome; o Distrito sem território é avisado antes da confirmação.
+- O Pastor Distrital, o Vice-Presidente de Quadrante e o **Superintendente Regional** entram na composição calculada da CLI por função (Regimento Art. 6-A, III e
+  IV) — o Superintendente, que já existia desde a v7.11, também passou a contar.
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** o Dízimo Institucional é 10% da soma do Total Final dos fechamentos das
+congregações do território (a "arrecadação líquida consolidada", a mesma base do repasse institucional da congregação); o mês financeiro do Distrito começa no
+mês em que o decreto é registrado e volta para a Sede no mês da desativação; o balanço anual vai ao NIF até 31/03 do ano seguinte; a intervenção destitui todo
+acesso de escopo do Distrito e os Vice-Presidentes de Quadrante e Superintendentes Regionais do território (o CDE), não os Dirigentes nem os Pastores de Área;
+as medidas de bloqueio de contas, procuração e polícia ou Justiça só ficam registradas (quem executa é gente); enquanto houver uma conta só, a Tesouraria Geral
+continua liberando os 40% das congregações do Distrito; o CDE não cria Áreas, Regiões e Quadrantes sozinho (o cadastro continua com o nível geral, a pedido
+dele). **Aceito e registrado:** o NIF precisa receber a permissão `distritos` em Permissões; o Vice-Presidente "em exercício" não é tratado como Presidente; a
+Secretaria pode renovar o mandato de um Pastor Distrital que está em vigor (não dar nem tirar); dois pedidos simultâneos do mesmo Presidente em Liderança não
+são enfileirados (só ele concede).
+
+**Provas:** jest 6.318; banco local (`bash rodar.sh preparar-distritos`): `e2e-73` 146 (a migração e o legado, o cadastro, o decreto, o Pastor Distrital só
+pelo Presidente, a CLI, o repasse fora do Rateio Geral, o Dízimo calculado e creditado, o caixa, o território mudado sem reescrever o passado, o balanço com o
+NIF, os avisos, a intervenção, a desativação, os CHECK e os índices, lixo em cada campo, Meus Dados), `e2e-74` corridas 16 e 17 com o READ_COMMITTED_SNAPSHOT
+do Azure; `e2e-71` da v9.2 172 sobre a base nova; tela (`tools/front-distritos`) 72, com 32 mutações acusadas (Expansão 79 e Entidades 70 de novo, com as
+mutações); homologação: a 167 aplicada no Azure SQL, rotas com 401, teste de tela da homologação com 0 divergência e 0 violação de CSP (execução 41901967482, 1.367 ações).
 
 ## 🔒 Trava de Revisão 9-A — antes de avançar para a v9.4
 

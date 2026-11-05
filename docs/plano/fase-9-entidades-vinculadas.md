@@ -382,16 +382,16 @@ O risco real em missões não é falta de recurso — é **sustento enviado sem
 relatório recebido**, que é exatamente o que a Assembleia cobra e ninguém
 consegue responder com número.
 
-- [ ] Cadastro de campo missionário (local, status, congregação mantenedora) e de
+- [x] Cadastro de campo missionário (local, status, congregação mantenedora) e de
       missionário sustentado, com valor mensal amarrado ao Contas a Pagar (v4.5) e
       ao Rateio Geral (v4.10).
-- [ ] **Relatório de campo com periodicidade obrigatória** (batismos, atividades,
+- [x] **Relatório de campo com periodicidade obrigatória** (batismos, atividades,
       pedidos) — e **relatório atrasado sinaliza/suspende o repasse**, mesma
       lógica do balancete departamental (v5.4). Não é punição: é a condição que a
       própria prestação de contas à Assembleia exige.
-- [ ] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
+- [x] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
       para exibição pública/mural.
-- [ ] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
+- [x] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
       *(Trava 9-A: a v9.2 entrega a CME calculada (`composicaoCME`) e o parecer dela só dentro dos pedidos de expansão — os 3 tipos do CHECK de
       `PedidosExpansao`. O envio de missionários (Reg. Art. 23, II) vai pedir um parecer próprio, o Art. 44 §2º (envio para fora do Estado: só a CLI e o
       Pastor Presidente) e o Art. 44 §1º (a SEMIADESPA abre Frentes de Trabalho Missionário no município com autonomia) — entra no desenho da v9.4.)*

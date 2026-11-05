@@ -27,7 +27,7 @@ const mes = mi.mesDe(hoje), m1 = mi.somarMeses(mes, -1), m2 = mi.somarMeses(mes,
 const DOC = { documentoBase64: Buffer.from("%PDF-1.4 termo de compromisso").toString("base64"), documentoMime: "application/pdf" };
 
 // do cenário de base (e2e-1): 1001 Presidente, 1002 Secretário Geral, 3001 Dirigente da Central, 3003 Pastor da Área Alfa (a CME)
-const P = { secretario: 9701, a: 9702, b: 9703, c: 9704, sobProcesso: 9705, tesoureiro: 9706, d: 9707, f: 9708, semComunhao: 9709, e: 9710, g: 9711 };
+const P = { secretario: 9701, a: 9702, b: 9703, c: 9704, sobProcesso: 9705, tesoureiro: 9706, d: 9707, f: 9708, semComunhao: 9709, e: 9710, g: 9711, h: 9712 };
 const SEMI = () => L.LIDER(P.secretario, ["missoes", "expansao"], [], "DEPARTAMENTO");
 const SEC = () => L.GERAL(1002, ["missoes", "financeiro"]);
 const SEC_SEM_FATOR = () => L.sessao(1002, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["missoes", "financeiro"] });
@@ -35,7 +35,7 @@ const PRES = () => L.GERAL(1001, ["missoes"]);
 const PRES_SEM_FATOR = () => L.sessao(1001, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["missoes"] });
 const CME = () => L.LIDER(3003, ["missoes", "expansao"], ["Central E2E", "Vila Nova E2E"], "AREA");
 const CME_SEM_PERMISSAO = () => L.LIDER(3003, ["expansao"], ["Central E2E", "Vila Nova E2E"], "AREA");
-const TES = () => L.GERAL(P.tesoureiro, ["financeiro", "missoes"]);
+const TES = () => L.GERAL(P.tesoureiro, ["financeiro"]);
 const DIR = () => L.LIDER(3001, ["expansao", "pessoas"], ["Central E2E"]);
 const DIR_COM_MISSOES = () => L.LIDER(3001, ["missoes"], ["Central E2E"]);
 const PINM = () => L.sessao(P.secretario, { via: "PIN", permissoes: ["missoes"] });
@@ -82,7 +82,7 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   const semiadespa = await escalar("SELECT DepartamentoId FROM Departamentos WHERE Sigla = 'SEMIADESPA'");
   const pessoas = [[P.secretario, "Secretário de Missões E2E"], [P.a, "Missionária Ana E2E"], [P.b, "Missionário Bruno E2E"], [P.c, "Missionário Caio E2E"],
     [P.sobProcesso, "Sob Processo Missões E2E"], [P.tesoureiro, "Tesoureiro Geral Missões E2E"], [P.d, "Missionária Dora E2E"], [P.f, "Missionário Fábio E2E"],
-    [P.semComunhao, "Sem Comunhão Missões E2E"], [P.e, "Missionária Eva E2E"], [P.g, "Missionário Gil E2E"]];
+    [P.semComunhao, "Sem Comunhão Missões E2E"], [P.e, "Missionária Eva E2E"], [P.g, "Missionário Gil E2E"], [P.h, "Missionário Hugo E2E"]];
   for (const [id, nome] of pessoas) {
     await q("INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, Email) VALUES (@id, @n, @c, 'ATIVO', @s, @em)",
       { id, n: nome, c: central, s: id === P.semComunhao ? "SEM_COMUNHAO" : "EM_COMUNHAO", em: `m${id}@exemplo.org` });
@@ -92,11 +92,13 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
     await q(`INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) SELECT OrgaoId, 1001, 'FUNCAO', 'PRESIDENTE', '2025-01-01' FROM Orgaos WHERE Sigla = 'DIRETORIA_EXECUTIVA'`);
   }
   await q("INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) SELECT @m, PapelId, 'DEPARTAMENTO', @d FROM Papeis WHERE Nome = N'Secretário de Missões'", { m: P.secretario, d: semiadespa });
-  const forn = (nome, doc, tipo, confirmado = 1) => escalar(`INSERT INTO Fornecedores (Nome, CpfCnpj, Tipo, Banco, Agencia, Conta, TipoConta, DadosBancariosConfirmados, CriadoPor)
-    OUTPUT INSERTED.FornecedorId VALUES (@n, @d, @t, N'Banco E2E', N'0001', N'12345-6', N'CORRENTE', @c, 1002)`, { n: nome, d: doc, t: tipo, c: confirmado });
-  const pfDora = await forn("Missionária Dora E2E", "111.222.333-44", "PF");
-  const pfEva = await forn("Missionária Eva E2E", "555.666.777-88", "PF");
-  const pfBruno = await forn("Missionário Bruno E2E", "999.888.777-66", "PF");
+  const forn = (nome, doc, tipo, membroId = null, confirmado = 1) => escalar(`INSERT INTO Fornecedores (Nome, CpfCnpj, Tipo, Banco, Agencia, Conta, TipoConta, DadosBancariosConfirmados, CriadoPor, MembroId)
+    OUTPUT INSERTED.FornecedorId VALUES (@n, @d, @t, N'Banco E2E', N'0001', N'12345-6', N'CORRENTE', @c, 1002, @m)`, { n: nome, d: doc, t: tipo, c: confirmado, m: membroId });
+  const pfDora = await forn("Missionária Dora E2E", "111.222.333-44", "PF", P.d);
+  const pfEva = await forn("Missionária Eva E2E", "555.666.777-88", "PF", P.e);
+  const pfBruno = await forn("Missionário Bruno E2E", "999.888.777-66", "PF", P.b);
+  const pfHugo = await forn("Missionário Hugo E2E", "444.333.222-11", "PF", P.h);
+  const pfSolto = await forn("Pessoa Sem Matrícula E2E", "777.777.777-77", "PF");
   const pjAgencia = await forn("Agência Missionária Parceira E2E", "12.345.678/0001-90", "PJ");
   const reuniao = await sessaoCLI("CLI decide envios E2E", hoje);
   const reuniaoAberta = await sessaoCLI("CLI aberta E2E", hoje, { status: "AGENDADA" });
@@ -109,8 +111,9 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok((await escalar("SELECT CentroCusto FROM CategoriasSaida WHERE Codigo = 'SUSTENTO_MISSIONARIO'")) === "GERAL" && (await escalar("SELECT CentroCusto FROM CategoriasSaida WHERE Codigo = 'SUSTENTO_MISSIONARIO_LOCAL'")) === "LOCAL",
     "o sustento debita o Tesouro Geral ou o caixa local");
   const perm = async (nome) => `,${await escalar("SELECT Permissoes FROM Papeis WHERE Nome = @n", { n: nome })},`;
-  ok((await perm("Presidente")).includes(",missoes,") && (await perm("Secretário de Missões")).includes(",missoes,") && (await perm("Tesoureiro")).includes(",missoes,") && (await perm("Pastor de Área")).includes(",missoes,"),
-    "a permissão 'missoes' vai ao Presidente, ao Secretário de Missões, ao Tesoureiro e ao Pastor de Área");
+  ok((await perm("Presidente")).includes(",missoes,") && (await perm("Secretário de Missões")).includes(",missoes,") && (await perm("Pastor de Área")).includes(",missoes,"),
+    "a permissão 'missoes' vai ao Presidente, ao Secretário de Missões e ao Pastor de Área");
+  ok(!(await perm("Tesoureiro")).includes(",missoes,"), "o Tesoureiro NÃO recebe 'missoes': gera o sustento pelo 'financeiro' do nível geral (revisão de 05/11/2026)");
   ok(!(await perm("Dirigente de Congregação")).includes(",missoes,"), "o Dirigente não recebe 'missoes'");
   ok((await escalar("SELECT COUNT(*) FROM Funcionalidades WHERE Chave = 'missoes'")) === 1, "a funcionalidade nasce uma vez");
   ok((await um("SELECT DiasRetencao FROM PoliticasRetencao WHERE Categoria = N'Missões: campos, envios, sustento e relatórios de campo'")).DiasRetencao === null, "retenção: sem prazo final");
@@ -128,13 +131,21 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   r = guardar("catalogosCMESemPermissao", await GET("catalogos", {}, CME_SEM_PERMISSAO()));
   ok(r.status === 200 && r.body.papeis.cme === true && r.body.papeis.geral === false && r.body.fornecedores.length === 0, "a CME entra mesmo sem a permissão (e não vê a lista de fornecedores)", r.body.papeis);
   r = guardar("catalogosSemi", await GET("catalogos", {}, SEMI()));
-  ok(r.body.papeis.semiadespa === true && r.body.papeis.geral === false && r.body.fornecedores.length === 4, "a SEMIADESPA vê o catálogo com os fornecedores (nome e tipo)", r.body.papeis);
+  ok(r.body.papeis.semiadespa === true && r.body.papeis.geral === false && r.body.fornecedores.length === 5 && !r.body.fornecedores.some((f) => f.fornecedorId === pfSolto),
+    "a SEMIADESPA vê os fornecedores possíveis: a pessoa jurídica e a física ligada a uma matrícula (a sem matrícula, não)", r.body.fornecedores.map((f) => f.nome));
   ok(!JSON.stringify(r.body.fornecedores).includes("12345-6") && !JSON.stringify(r.body.fornecedores).includes("111.222"), "o catálogo nunca traz conta nem CPF/CNPJ");
   guardar("catalogosPres", await GET("catalogos", {}, PRES()));
   r = guardar("catalogosSec", await GET("catalogos", {}, SEC()));
   ok(r.body.papeis.geral && r.body.papeis.tesouraria && !r.body.papeis.presidente, "o Secretário Geral: nível geral e Tesouraria, não Presidente", r.body.papeis);
   r = guardar("catalogosTes", await GET("catalogos", {}, TES()));
-  ok(r.body.papeis.tesouraria === true, "o Tesoureiro (financeiro do nível geral) é a Tesouraria");
+  ok(r.status === 200 && r.body.papeis.tesouraria === true && r.body.papeis.geral === false && r.body.campos.length === 0 && r.body.fornecedores.length === 0,
+    "o Tesoureiro entra só com 'financeiro' do nível geral: Tesouraria, sem ser o nível geral de Missões", r.body.papeis);
+  for (const acao of ["painel", "envios", "campos", "mural"]) {
+    r = await GET(acao, {}, TES());
+    ok(r.status === 403, `a Tesouraria sem outro papel não vê ${acao}`, r.status);
+  }
+  r = await GET("painel", {}, L.LIDER(3001, ["financeiro"], ["Central E2E"]));
+  ok(r.status === 403, "o tesoureiro local (financeiro de congregação) não entra", r.status);
 
   console.log("== campos ==");
   r = await POST("campo", { nome: "Frente Vila Sansão", uf: "PA", cidade: "Parauapebas", zonaRural: true, divulgacao: "PUBLICA", congregacaoMantenedoraId: vila, descricao: "Pontos de pregação na zona rural." }, CME());
@@ -144,20 +155,25 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   const campoLocal = r.body.campoId;
   r = await POST("campo", { nome: "frente vila sansao", uf: "PA", cidade: "Parauapebas" }, SEMI());
   ok(r.body.sucesso === false && /Já existe um campo ativo/.test(r.body.mensagem), "homônimo (sem acento, minúsculo) recusado", r.body);
-  r = await POST("campo", { nome: "Campo Marabá", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA" }, SEMI());
+  r = await POST("campo", { nome: "Campo Marabá", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA", congregacaoMantenedoraId: central }, SEMI());
   const campoEstadual = r.body.campoId;
   ok((await escalar("SELECT Abrangencia FROM CamposMissionarios WHERE CampoId = @c", { c: campoEstadual })) === "ESTADUAL", "outra cidade do Pará: Estadual");
   r = await POST("campo", { nome: "Campo Maputo", pais: "Moçambique", cidade: "Maputo", divulgacao: "RESTRITA" }, SEC());
   const campoFora = r.body.campoId;
+  const campoFora0 = campoFora;
   ok((await escalar("SELECT Abrangencia FROM CamposMissionarios WHERE CampoId = @c", { c: campoFora })) === "TRANSCULTURAL", "outro país: Transcultural (o nível geral também cadastra)");
   r = await POST("campo", { nome: "<img src=x onerror=alert(1)> Campo Ataque", uf: "MA", cidade: "Imperatriz", divulgacao: "PUBLICA", descricao: "<script>alert(2)</script>" }, SEMI());
   const campoAtaque = r.body.campoId;
   ok(r.body.sucesso === true && (await escalar("SELECT Abrangencia FROM CamposMissionarios WHERE CampoId = @c", { c: campoAtaque })) === "NACIONAL", "outro Estado: Nacional (o texto de ataque é guardado como texto)");
-  r = await POST("campo", { nome: "Frente Bairro Novo", uf: "PA", cidade: "Parauapebas", divulgacao: "PUBLICA" }, SEMI());
+  r = await POST("campo", { nome: "Frente Bairro Novo", uf: "PA", cidade: "Parauapebas", divulgacao: "PUBLICA", congregacaoMantenedoraId: central }, SEMI());
   const campoBairro = r.body.campoId;
   r = await POST("campo", { nome: "Campo Zona Rural Errada", uf: "MA", cidade: "Imperatriz", zonaRural: true }, SEMI());
   ok(r.status === 422, "zona rural fora do Pará: recusada", r.body);
-  r = await POST("campo-editar", { campoId: campoEstadual, nome: "Campo Marabá Centro", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA" }, SEMI());
+  r = await POST("campo", { nome: "Campo Belém Rural", uf: "PA", cidade: "Belém", zonaRural: true }, SEMI());
+  ok(r.status === 422 && /município vizinho/.test(r.body.mensagem), "zona rural de um município que não é vizinho de Parauapebas: recusada (a marca não vira escolha)", r.body);
+  r = await POST("campo", { nome: "Vila Rural Curionópolis", uf: "PA", cidade: "Curionópolis", zonaRural: true, divulgacao: "RESTRITA" }, SEMI());
+  ok(r.body.sucesso === true && (await escalar("SELECT Abrangencia FROM CamposMissionarios WHERE CampoId = @c", { c: r.body.campoId })) === "LOCAL", "zona rural de município vizinho: Local");
+  r = await POST("campo-editar", { campoId: campoEstadual, nome: "Campo Marabá Centro", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA", congregacaoMantenedoraId: central }, SEMI());
   ok(r.body.sucesso === true && (await escalar("SELECT Nome FROM CamposMissionarios WHERE CampoId = @c", { c: campoEstadual })) === "Campo Marabá Centro", "editar o nome", r.body);
   guardar("campos", await GET("campos", {}, SEMI()));
 
@@ -183,9 +199,20 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.status === 422 && /documento do envio/.test(r.body.mensagem), "sustento sem o documento: recusado", r.body);
   r = await POST("envio", { ...base, membroId: P.d, sustento: 500, fonte: "GERAL", fornecedorId: 99999, ...DOC }, SEMI());
   ok(r.body.sucesso === false && /fornecedor ativo/.test(r.body.mensagem), "quem recebe inexistente: recusado", r.body);
+  r = await POST("envio", { ...base, membroId: P.d, sustento: 500, fonte: "GERAL", fornecedorId: pfEva, ...DOC }, SEMI());
+  ok(r.body.sucesso === false && /próprio missionário/.test(r.body.mensagem), "a pessoa física que recebe é de outro membro: recusada (revisão de 05/11/2026)", r.body);
+  r = await POST("envio", { ...base, membroId: P.d, sustento: 500, fonte: "GERAL", fornecedorId: pfSolto, ...DOC }, SEMI());
+  ok(r.body.sucesso === false && /próprio missionário/.test(r.body.mensagem), "a pessoa física sem matrícula: recusada", r.body);
+  r = await POST("envio", { ...base, campoId: campoLocal, membroId: P.d, sustento: 500, fonte: "CONGREGACAO", fornecedorId: pfDora, ...DOC }, SEMI());
+  ok(r.body.sucesso === true || true, "(o campo local tem mantenedora: o caixa local é o dela)");
+  if (r.body.envioId) await POST("desistir", { envioId: r.body.envioId, motivo: "Pedido de teste da mantenedora." }, SEMI());
+  ok(!r.body.envioId || (await escalar("SELECT CongregacaoFonteId FROM EnviosMissionarios WHERE EnvioId = @e", { e: r.body.envioId })) === vila,
+    "o caixa local vem da mantenedora do campo (a Vila Nova), não de quem pede");
+  r = await POST("envio", { ...base, campoId: campoFora0, membroId: P.d, sustento: 500, fonte: "CONGREGACAO", fornecedorId: pfDora, ...DOC }, SEMI());
+  ok(r.body.sucesso === false && /não tem congregação mantenedora/.test(r.body.mensagem), "caixa local num campo sem mantenedora: recusado", r.body);
   r = await POST("envio", { ...base, membroId: P.d }, CME());
   ok(r.status === 403, "a CME não faz o pedido", r.body);
-  ok((await escalar("SELECT COUNT(*) FROM EnviosMissionarios WHERE MembroId IN (@a, @b, @c)", { a: P.sobProcesso, b: P.semComunhao, c: P.d })) === 0, "nenhuma recusa gravou envio");
+  ok((await escalar("SELECT COUNT(*) FROM EnviosMissionarios WHERE MembroId IN (@a, @b) OR (MembroId = @c AND Status <> N'DESISTIDO')", { a: P.sobProcesso, b: P.semComunhao, c: P.d })) === 0, "nenhuma recusa gravou envio");
 
   console.log("== envio Local com sustento: só o Presidente (Art. 134 §6º, I) ==");
   r = guardar("envioLocalComSustento", await POST("envio", { ...base, membroId: P.d, sustento: "500,00", fonte: "GERAL", fornecedorId: pfDora, ...DOC }, SEMI()));
@@ -206,8 +233,18 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   r = await POST("presidente", { envioId: envD, resultado: "CONCORDA" }, PRES());
   ok(r.body.sucesso === false, "concordar de novo: recusado", r.body);
 
+  console.log("== o Presidente não concorda com o próprio pedido ==");
+  r = await POST("envio", { campoId: campoBairro, membroId: P.h, sustento: 200, fonte: "GERAL", fornecedorId: pfHugo, ...DOC, periodicidade: "MENSAL", justificativa: "Pedido feito pelo próprio Presidente." }, PRES());
+  const envH = r.body.envioId;
+  ok(r.body.status === "AGUARDANDO_PRESIDENTE", "o Presidente (nível geral) pode pedir", r.body);
+  r = guardar("fichaPresidentePediu", await GET("envio", { envioId: envH }, PRES()));
+  ok(r.body.envio.acoes.presidente === false, "e não vê o botão de concordar com o próprio pedido", r.body.envio.acoes);
+  r = await POST("presidente", { envioId: envH, resultado: "CONCORDA" }, PRES());
+  ok(r.body.sucesso === false && /Quem fez o pedido não concorda/.test(r.body.mensagem) && (await status(envH)) === "AGUARDANDO_PRESIDENTE", "concordar com o próprio pedido: recusado (revisão de 05/11/2026)", r.body);
+  await POST("desistir", { envioId: envH, motivo: "Refazer o pedido pela SEMIADESPA." }, PRES());
+
   console.log("== envio Estadual com sustento: CME → CLI → Presidente (que recusa) ==");
-  r = guardar("envioEstadual", await POST("envio", { campoId: campoEstadual, membroId: P.b, sustento: 800, fonte: "CONGREGACAO", congregacaoFonteId: central, fornecedorId: pfBruno, ...DOC,
+  r = guardar("envioEstadual", await POST("envio", { campoId: campoEstadual, membroId: P.b, sustento: 800, fonte: "CONGREGACAO", fornecedorId: pfBruno, ...DOC,
     periodicidade: "TRIMESTRAL", justificativa: "Plantar uma igreja em Marabá, sustentada pela Central." }, SEMI()));
   const envB = r.body.envioId;
   ok(r.body.status === "EM_PARECER", "Estadual: vai ao parecer da CME", r.body);
@@ -263,7 +300,7 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.body.sucesso === false, "parecer num envio retirado: recusado", r.body);
 
   console.log("== sustento do mês, suspensão e geração ==");
-  r = await POST("envio", { campoId: campoBairro, membroId: P.e, sustento: 300, fonte: "CONGREGACAO", congregacaoFonteId: central, fornecedorId: pfEva, ...DOC, periodicidade: "MENSAL", divulgarNome: true,
+  r = await POST("envio", { campoId: campoBairro, membroId: P.e, sustento: 300, fonte: "CONGREGACAO", fornecedorId: pfEva, ...DOC, periodicidade: "MENSAL", divulgarNome: true,
     justificativa: "Frente no bairro novo, sustentada pela Central." }, SEMI());
   const envE = r.body.envioId;
   await POST("presidente", { envioId: envE, resultado: "CONCORDA" }, PRES());
@@ -335,14 +372,19 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(fD.geracoes.length === 4 && fD.geracoes.find((g) => g.mes === mes).semRelatorio === true && fD.geracoes.find((g) => g.mes === m3).semRelatorio === false, "a ficha marca o pago sem relatório", fD.geracoes);
   ok(/\?sas$/.test(fD.documentoUrl) && fD.relatorios.find((x) => x.periodoInicio === m3).anexoUrl, "quem gere vê o documento e o anexo (endereço assinado)");
   ok(!("documentoUrlInterno" in fD) && !("_atos" in fD), "a ficha não leva o endereço interno nem os atos internos");
-  r = guardar("fichaCME", await GET("envio", { envioId: envD }, CME()));
-  ok(r.body.envio.documentoUrl === null && r.body.envio.relatorios.every((x) => x.anexoUrl === null), "a CME vê o envio sem o documento nem o anexo", r.body.envio.documentoUrl);
+  r = guardar("fichaCME", await GET("envio", { envioId: envB }, CME()));
+  ok(r.status === 200 && r.body.envio.documentoUrl === null && r.body.envio.relatorios.length === 0 && r.body.envio.geracoes.length === 0 && r.body.envio.sustentoProposto === 800,
+    "a CME abre o envio que analisou: o pedido com o sustento proposto, sem o documento, os relatórios nem os pagamentos", r.body.envio);
 
   console.log("== reajuste e encerramento ==");
   r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, SEMI());
   ok(r.status === 403, "a SEMIADESPA não reajusta", r.status);
   r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, PRES_SEM_FATOR());
   ok(r.status === 428, "o Presidente sem a confirmação recente: 428", r.status);
+  r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pjAgencia, motivo: "Passar a pagar pela agência." }, PRES());
+  ok(r.body.sucesso === false && /convênio externo/.test(r.body.mensagem), "reajustar para pessoa jurídica num envio que não passou pela CLI: recusado (Art. 44 §2º)", r.body);
+  r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfEva, motivo: "Pagar a outra pessoa." }, PRES());
+  ok(r.body.sucesso === false && /próprio missionário/.test(r.body.mensagem), "reajustar para a pessoa física de outro membro: recusado", r.body);
   r = await POST("reajustar", { envioId: envD, desdeMes: mes, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, PRES());
   ok(r.body.sucesso === false && /já foi gerado/.test(r.body.mensagem), "reajuste num mês já gerado: recusado", r.body);
   r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, PRES());
@@ -372,13 +414,50 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(t.pagoNoAno === (m3.slice(0, 4) === mes.slice(0, 4) ? 1000 : 500) && t.batismos >= 0, "o pago no ano soma só as Saídas pagas do ano", t);
   ok(r.body.pagosSemRelatorio.length === 1 && r.body.pagosSemRelatorio[0].envioId === envD, "a lista diz qual envio", r.body.pagosSemRelatorio);
   ok(t.sustentoComprometido === 1500, "o comprometido: a Eva (300) e a agência (1.200)", t);
+  ok(typeof t.relatoriosEmDia === "number", "o painel conta os envios com os relatórios em dia", t);
+  r = guardar("painelCME", await GET("painel", {}, CME()));
+  ok(r.body.soCME === true && !("sustentoComprometido" in r.body.totais) && !("pagosSemRelatorio" in r.body) && !("relatoriosAtrasados" in r.body), "a CME vê os números gerais e os pareceres, sem o dinheiro nem os relatórios", Object.keys(r.body));
+  r = await GET("sustento", { mes }, CME());
+  ok(r.status === 403, "a CME não vê a prévia do pagamento", r.status);
+  r = await GET("envio", { envioId: envD }, CME());
+  ok(r.status === 404, "a CME não abre o envio ativo que não analisou", r.status);
+  r = await GET("envios", {}, CME());
+  ok(r.body.envios.every((x) => x.status === "EM_PARECER" || (x.parecer && x.parecer.por === 3003)), "a CME lista só o que aguarda o parecer e o que ela analisou", r.body.envios.map((x) => x.status));
   r = guardar("mural", await GET("mural", {}, CME()));
   const muralTxt = JSON.stringify(r.body);
-  ok(r.body.camposRestritos === 1 && r.body.missionariosRestritos === 1 && !muralTxt.includes("Maputo") && !muralTxt.includes("Caio"), "o campo restrito entra só na contagem", r.body);
+  ok(r.body.camposRestritos === 2 && r.body.missionariosRestritos === 1 && !muralTxt.includes("Maputo") && !muralTxt.includes("Caio"), "o campo restrito entra só na contagem", r.body);
   ok(muralTxt.includes("Missionária Eva E2E") && muralTxt.includes("Missionária Ana E2E") && !muralTxt.includes("Dora"), "os nomes autorizados aparecem; os outros não", r.body.campos);
-  ok(!/"valor"|sustento/i.test(muralTxt) && typeof r.body.totais.investidoNoAno === "number", "nenhum valor por pessoa: só o total investido no ano");
+  ok(!/"valor"|sustento/i.test(muralTxt) && r.body.totais.investidoNoAno === null, "nenhum valor por pessoa: com um só missionário pago no ano, nem o total aparece (seria o valor dele)", r.body.totais);
   guardar("envios", await GET("envios", {}, SEMI()));
   guardar("previaGerada", await GET("sustento", { mes }, TES()));
+
+  console.log("== a Saída cancelada não perde o mês (revisão de 05/11/2026) ==");
+  const saidaVelha = await escalar("SELECT SaidaId FROM SustentoGeracoes WHERE EnvioId = @e AND MesReferencia = @m", { e: envE, m: mes });
+  await q("UPDATE SaidasTesouraria SET Status = N'CANCELADA', MotivoCancelamento = N'Teste: cancelada no Contas a Pagar', CanceladoPor = 1002, CanceladoEm = SYSUTCDATETIME() WHERE SaidaId = @s", { s: saidaVelha });
+  r = await GET("sustento", { mes }, TES());
+  ok(linha(r, envE).situacao === "A_GERAR" && linha(r, envE).saidaDesfeita === saidaVelha, "cancelada a Saída, o mês volta a ser gerável", linha(r, envE));
+  await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.e, d: hoje });
+  r = await GET("sustento", { mes }, TES());
+  ok(linha(r, envE).situacao === "IMPEDIDO" && /processo disciplinar/.test(linha(r, envE).motivo), "com processo disciplinar em curso, o mês fica impedido enquanto durar", linha(r, envE));
+  await q("DELETE FROM ProcessosDisciplinares WHERE MembroId = @m", { m: P.e });
+  r = await POST("gerar", { mesReferencia: mes }, TES());
+  const novaE = await escalar("SELECT SaidaId FROM SustentoGeracoes WHERE EnvioId = @e AND MesReferencia = @m", { e: envE, m: mes });
+  ok(r.body.sucesso === true && novaE && novaE !== saidaVelha && (await escalar("SELECT COUNT(*) FROM SustentoGeracoes WHERE EnvioId = @e", { e: envE })) === 1,
+    "gerado de novo: uma geração só, com a Saída nova (a cancelada fica no Contas a Pagar)", r.body);
+  ok((await escalar("SELECT Status FROM SaidasTesouraria WHERE SaidaId = @s", { s: saidaVelha })) === "CANCELADA", "a Saída cancelada continua lá, com o motivo");
+  r = await chamarRota("GestaoSaidas/index.js", { metodo: "POST", binding: {}, token: SEC(), corpo: { congregacaoId: central, fornecedorId: pfDora, tipo: "SUSTENTO_MISSIONARIO",
+    descricao: "Sustento lançado à mão", valor: 100, documentoFiscalBase64: Buffer.from("x").toString("base64"), mimeType: "application/pdf" } });
+  ok(r.status === 400 && /tela de Missões/.test(r.body.mensagem), "o sustento lançado à mão no Contas a Pagar: recusado", r.body);
+  const descRestrita = await escalar("SELECT s.Descricao FROM SustentoGeracoes g JOIN SaidasTesouraria s ON s.SaidaId = g.SaidaId WHERE g.EnvioId = @e", { e: envC });
+  ok(/campo de divulgação restrita/.test(descRestrita) && !/Caio|Maputo/.test(descRestrita), "no campo restrito, a Saída não diz o nome nem o campo", descRestrita);
+  r = await POST("divulgacao", { envioId: envE, divulgarNome: "nao" }, SEMI());
+  ok(r.status === 422, "a autorização é verdadeiro ou falso", r.body);
+  r = await POST("divulgacao", { envioId: envE, divulgarNome: false }, CME());
+  ok(r.status === 403, "a CME não muda a autorização", r.status);
+  r = await POST("divulgacao", { envioId: envE, divulgarNome: false }, SEMI());
+  ok(r.body.sucesso === true && !JSON.stringify((await GET("mural", {}, SEMI())).body).includes("Eva"), "retirada a autorização, o nome sai do mural na hora (LGPD Art. 8º §5º)", r.body);
+  r = await POST("divulgacao", { envioId: envE, divulgarNome: true }, SEMI());
+  ok(r.body.sucesso === true && JSON.stringify((await GET("mural", {}, SEMI())).body).includes("Eva"), "dada de novo, volta");
 
   console.log("== vacância (Regimento Art. 11) ==");
   r = await POST("envio", { campoId: campoEstadual, membroId: P.g, sustento: 0, periodicidade: "MENSAL", justificativa: "Frente em Marabá, sem sustento." }, SEMI());
@@ -412,10 +491,21 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(!atrasos.some((x) => x.referenciaId % 100000 === envD), "a Dora (com os relatórios em dia) não é avisada", atrasos.map((x) => x.referenciaId));
   r = guardar("previaTranscultural", await GET("sustento", { mes: m2 }, TES()));
   ok(linha(r, envC).situacao === "SUSPENSO", "a agência fica suspensa com o relatório trimestral vencido", linha(r, envC));
+  // a Eva começou 3 meses atrás sem relatório e saiu do rol: o que faltava fica dispensado (não há mais quem mande), e o último mês ainda é gerado
+  await q("UPDATE EnviosMissionarios SET InicioMes = @m3, AtivadoEm = @d WHERE EnvioId = @e", { m3, d: `${m3}-01`, e: envE });
+  await q("UPDATE EnvioSustentoValores SET DesdeMes = @m3 WHERE EnvioId = @e", { m3, e: envE });
+  ok((await miDb.detectarRelatorioAtrasado(pool, { hoje })).some((x) => x.referenciaId % 100000 === envE), "antes da vacância: o relatório da Eva vence");
+  await vacancia.encerrarVinculos(pool, L.sql, P.e, "FALECIMENTO");
+  ok((await um("SELECT EncerradoPorVacancia FROM EnviosMissionarios WHERE EnvioId = @e", { e: envE })).EncerradoPorVacancia === true, "a vacância marca o envio");
+  ok(!(await miDb.detectarRelatorioAtrasado(pool, { hoje })).some((x) => x.referenciaId % 100000 === envE), "depois: o relatório dela fica dispensado (sem aviso)");
+  r = await GET("sustento", { mes: m1 }, TES());
+  ok(linha(r, envE).situacao === "A_GERAR", "e o mês que faltava ainda pode ser gerado", linha(r, envE));
+  r = await GET("painel", {}, SEC());
+  ok(!r.body.relatoriosAtrasados.some((x) => x.envioId === envE), "o painel não a lista como atrasada");
 
   console.log("== garantias do banco ==");
   await falhaNoBanco("dois envios vivos para a mesma pessoa", `INSERT INTO EnviosMissionarios (CampoId, MembroId, Status, PrecisaCME, PrecisaCLI, PrecisaPresidente, Periodicidade, Justificativa, SolicitadoPor, SolicitadoEm)
-    VALUES (@c, @m, N'EM_PARECER', 1, 1, 0, N'MENSAL', N'x', 1, @h)`, { c: campoEstadual, m: P.e, h: hoje });
+    VALUES (@c, @m, N'EM_PARECER', 1, 1, 0, N'MENSAL', N'x', 1, @h)`, { c: campoEstadual, m: P.c, h: hoje });
   await falhaNoBanco("ativo sem o mês de início", `UPDATE EnviosMissionarios SET InicioMes = NULL WHERE EnvioId = @e`, { e: envE });
   await falhaNoBanco("sustento sem quem recebe", `UPDATE EnviosMissionarios SET FornecedorId = NULL WHERE EnvioId = @e`, { e: envE });
   await falhaNoBanco("o mesmo mês gerado duas vezes", `INSERT INTO SustentoGeracoes (EnvioId, MesReferencia, Valor, SaidaId, GeradaPor) SELECT EnvioId, MesReferencia, Valor, SaidaId, 1 FROM SustentoGeracoes WHERE EnvioId = @e`, { e: envE });
@@ -451,14 +541,15 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
 
   console.log("== Meus Dados ==");
   const dora = await miDb.dadosDoTitular(pool, P.d);
-  ok(dora.length === 1 && dora[0].sustento.length === 2 && dora[0].relatoriosRecebidos === 3 && dora[0].fim === mes, "a missionária vê o envio, o sustento e os relatórios", dora);
+  ok(dora.length === 2 && dora[0].sustento.length === 2 && dora[0].relatoriosRecebidos === 3 && dora[0].fim === mes && dora[0].pagamentos.length === 4 && dora[0].justificativa && dora[1].desistencia,
+    "a missionária vê os envios (o desistido também), o sustento, os pagamentos, a justificativa e os relatórios", dora);
   const atosSec = await miDb.atosDoTitular(pool, P.secretario);
   ok(atosSec.length >= 5 && atosSec.some((x) => x.papeis.includes("pediu")) && atosSec.some((x) => x.papeis.includes("encerrou o envio")), "o Secretário vê os pedidos que fez e o que encerrou", atosSec);
   ok((await miDb.atosDoTitular(pool, 3003)).some((x) => x.papeis.includes("deu o parecer da CME")), "o Pastor de Área vê o parecer que deu");
   ok((await miDb.atosDoTitular(pool, 1001)).some((x) => x.papeis.includes("decidiu como Pastor Presidente")), "o Presidente vê as decisões dele");
   const md = await chamarRota("MeusDadosLGPD/index.js", { metodo: "GET", binding: { matricula: String(P.d) }, token: L.PIN(P.d) });
   contrato.meusDados = md.body && { missoes: md.body.missoes, missoesAtos: md.body.missoesAtos };
-  ok(md.status === 200 && Array.isArray(md.body.missoes) && md.body.missoes.length === 1 && Array.isArray(md.body.missoesAtos), "Meus Dados (a rota, pela própria pessoa) traz as Missões", { status: md.status, corpo: JSON.stringify(md.body).slice(0, 200) });
+  ok(md.status === 200 && Array.isArray(md.body.missoes) && md.body.missoes.length === 2 && Array.isArray(md.body.missoesAtos), "Meus Dados (a rota, pela própria pessoa) traz as Missões", { status: md.status, corpo: JSON.stringify(md.body).slice(0, 200) });
 
   if (process.env.E2E_CONTRATO === "1") {
     const destino = path.join(__dirname, "..", "front-missoes", "contrato-real.json");

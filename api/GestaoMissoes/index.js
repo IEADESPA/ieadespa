@@ -7,7 +7,8 @@
 //   - SEMIADESPA (o Secretário de Missões ou o Líder Geral dela): os campos, os pedidos de envio, os relatórios de campo e o encerramento;
 //   - CME: vê e dá o parecer sobre o envio (nunca o de quem pediu);
 //   - Pastor Presidente em exercício (assento de Presidente na Diretoria Executiva): concorda ou recusa e reajusta o sustento, com a confirmação recente;
-//   - Tesouraria Geral (permissão "financeiro" do nível geral): gera o sustento do mês, com a confirmação recente.
+//   - Tesouraria Geral (permissão "financeiro" do nível geral, mesmo sem "missoes"): vê a prévia e gera o sustento do mês, com a confirmação recente — e nada mais
+//     (revisão de 05/11/2026: quem paga não lança o relatório que levanta a suspensão nem registra a decisão da CLI).
 //
 // ---- Leitura (GET /api/missoes/...) ----
 //  catalogos            -> { abrangencias[], divulgacoes[], periodicidades[], fontes[], status[], pareceres[], resultados[], resultadosPresidente[], ufs[], congregacoes[],
@@ -32,6 +33,7 @@
 //  encerrar           {envioId, motivo, ultimoMes}                                                                           SEMIADESPA ou nível geral
 //  reajustar          {envioId, desdeMes, sustento, fonte?, congregacaoFonteId?, fornecedorId?, motivo, documentoBase64?, documentoMime?}   Presidente; 428
 //  relatorio          {envioId, periodoInicio, batismos, conversoes, discipulado, atividades, pedidos?, anexoBase64?, anexoMime?}            SEMIADESPA ou nível geral
+//  divulgacao         {envioId, divulgarNome:true|false}                                                                     SEMIADESPA ou nível geral (LGPD Art. 8º §5º)
 //  relatorio-corrigir {relatorioId, batismos, conversoes, discipulado, atividades, pedidos?, anexoBase64?, anexoMime?}                     SEMIADESPA ou nível geral
 //  gerar              {mesReferencia}                                                                                        Tesouraria Geral; 428
 //
@@ -45,6 +47,8 @@ const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const SEM_PERMISSAO = "Você não tem permissão para isso. Fale com quem administra as Permissões.";
 const SEM_ALCANCE = "Missões é da SEMIADESPA, da CME, do Pastor Presidente e do nível geral.";
+// o que a Tesouraria Geral sem outro papel em Missões pode pedir
+const SO_TESOURARIA = new Set(["GET catalogos", "GET sustento", "POST gerar"]);
 
 function erro(context, status, mensagem) { context.res = { status, body: { sucesso: false, mensagem } }; }
 function resposta(context, r) {
@@ -55,7 +59,7 @@ function resposta(context, r) {
 const ESCRITA = {
   campo: { id: null }, "campo-editar": { id: "campoId" }, "campo-encerrar": { id: "campoId" },
   envio: { id: null }, parecer: { id: "envioId" }, decidir: { id: "envioId" }, presidente: { id: "envioId", fator: true }, desistir: { id: "envioId" },
-  encerrar: { id: "envioId" }, reajustar: { id: "envioId", fator: true }, relatorio: { id: "envioId" }, "relatorio-corrigir": { id: "relatorioId" },
+  encerrar: { id: "envioId" }, divulgacao: { id: "envioId" }, reajustar: { id: "envioId", fator: true }, relatorio: { id: "envioId" }, "relatorio-corrigir": { id: "relatorioId" },
   gerar: { id: null, fator: true }
 };
 
@@ -75,10 +79,13 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   try {
-    const alcance = await db.montarAlcance(pool, { membroId: por, geral: !!visao && esc.ehGeral(visao), tesouraria: !!visao && !!visaoFinanceiro && esc.ehGeral(visaoFinanceiro), hoje });
-    // a permissão "missoes" ou compor a CME (como na Expansão); e, com ela, ser de quem cuida de Missões
-    if (!visao && !alcance.cme) return erro(context, 403, SEM_PERMISSAO);
-    if (!db.veMissoes(alcance)) return erro(context, 403, SEM_ALCANCE);
+    const alcance = await db.montarAlcance(pool, { membroId: por, geral: !!visao && esc.ehGeral(visao), tesouraria: !!visaoFinanceiro && esc.ehGeral(visaoFinanceiro), hoje });
+    // a permissão "missoes", compor a CME (como na Expansão) ou ser a Tesouraria Geral; e, com a permissão, ser de quem cuida de Missões
+    if (!visao && !alcance.cme && !alcance.tesouraria) return erro(context, 403, SEM_PERMISSAO);
+    if (!db.veMissoes(alcance)) {
+      if (!alcance.tesouraria) return erro(context, 403, SEM_ALCANCE);
+      if (!SO_TESOURARIA.has(`${metodo} ${acao}`)) return erro(context, 403, "A Tesouraria Geral vê aqui só a prévia e a geração do sustento do mês.");
+    }
 
     if (metodo === "GET") {
       if (acao === "catalogos") { context.res = { status: 200, body: { sucesso: true, ...(await db.catalogos(pool, { alcance })) } }; return; }
@@ -89,7 +96,7 @@ module.exports = async function (context, req) {
       }
       if (acao === "envios") {
         const status = typeof consulta.status === "string" && mi.STATUS_ENVIO[consulta.status] ? consulta.status : null;
-        context.res = { status: 200, body: { sucesso: true, envios: await db.listarEnvios(pool, { alcance, hoje, status }) } };
+        context.res = { status: 200, body: { sucesso: true, envios: await db.listarEnvios(pool, { alcance, hoje, status, membroId: por }) } };
         return;
       }
       if (acao === "envio") {
@@ -138,6 +145,7 @@ module.exports = async function (context, req) {
       case "presidente": r = await db.decidirPresidente(pool, { ...base, envioId: id }); break;
       case "desistir": r = await db.desistir(pool, { ...base, envioId: id }); break;
       case "encerrar": r = await db.encerrarEnvio(pool, { ...base, envioId: id }); break;
+      case "divulgacao": r = await db.alterarDivulgacao(pool, { ...base, envioId: id }); break;
       case "reajustar": r = await db.reajustar(pool, { ...base, envioId: id }); break;
       case "relatorio": r = await db.registrarRelatorio(pool, { ...base, envioId: id }); break;
       case "relatorio-corrigir": r = await db.retificarRelatorio(pool, { ...base, relatorioId: id }); break;

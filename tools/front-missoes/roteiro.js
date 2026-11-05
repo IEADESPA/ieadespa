@@ -113,6 +113,19 @@ async function prova() {
   await abrirAba(soMis);
   ok(!visivel(soMis, "btnExpSecaoPainel") && visivel(soMis, "btnExpSecaoMissoes") && soMis.e("expSecaoMissoes").style.display === "block", "só com 'missoes' (o Tesoureiro): a pílula de Missões, aberta direto");
   ok(soMis.api.chamadas.filter((c) => c.caminho.startsWith("expansao/")).length === 0, "não pede nada da Expansão");
+  ok(visivel(soMis, "btnMisSubSustento") && !visivel(soMis, "btnMisSubPainel") && !visivel(soMis, "btnMisSubEnvios") && !visivel(soMis, "btnMisSubCampos") && !visivel(soMis, "btnMisSubMural")
+    && soMis.e("misSubSustento").style.display === "block" && gets(soMis, "missoes/painel").length === 0, "a Tesouraria sem outro papel: só o sustento do mês, aberto direto (o painel nem é pedido)");
+  const soFin = montar({ permissoes: ["financeiro"], geral: true, catalogo: "catalogosTes", matricula: 9706 });
+  await abrirAba(soFin);
+  ok(soFin.g("temPermissaoDaAba")("expansao") && visivel(soFin, "btnExpSecaoMissoes") && soFin.e("expSecaoMissoes").style.display === "block", "a Tesouraria Geral entra só com 'financeiro' do nível geral (sem 'missoes')");
+  const finLocal = montar({ permissoes: ["financeiro"], geral: false, catalogo: "catalogosTes", matricula: 3001 });
+  ok(!finLocal.g("temPermissaoDaAba")("expansao"), "o tesoureiro local não vê a aba");
+  const soCme = montar({ permissoes: ["expansao", "missoes"], catalogo: "catalogosCMESemPermissao", matricula: 3003 });
+  soCme.__respostas["GET missoes/painel"] = { corpo: R.painelCME };
+  await abrirMissoes(soCme);
+  ok(!visivel(soCme, "btnMisSubSustento") && visivel(soCme, "btnMisSubEnvios"), "a CME sem outro papel: sem o sustento do mês");
+  ok(/aguardam o parecer/.test(soCme.e("misPainel").textContent) && !/Sustento mensal comprometido/.test(soCme.e("misPainel").textContent), "o painel da CME: os pareceres e os números gerais, sem o dinheiro");
+  semAtaque(soCme, "o painel da CME");
   const soExp = montar({ permissoes: ["expansao"] });
   await abrirAba(soExp);
   ok(!visivel(soExp, "btnExpSecaoMissoes"), "só com 'expansao': sem a pílula de Missões");
@@ -213,6 +226,13 @@ async function prova() {
   amb.doc.escolher(campo(amb, "fornecedorId"), String(REAL.catalogosSemi.fornecedores[0].fornecedorId));
   await amb.g("misEnviarFormAcao")(); await amb.ocioso();
   ok(/anexe o documento/.test(amb.e("misMsgForm").textContent) && posts(amb, "missoes/envio").length === 0, "com sustento, sem o documento: avisado e nada vai");
+  const pfOutro = R.catalogosSemi.fornecedores.find((f) => f.tipo === "PF" && String(f.membroId) !== "9707");
+  amb.doc.escolher(campo(amb, "fornecedorId"), String(pfOutro.fornecedorId));
+  await amb.g("misEnviarFormAcao")(); await amb.ocioso();
+  ok(/próprio missionário/.test(amb.e("misMsgForm").textContent) && posts(amb, "missoes/envio").length === 0, "a pessoa física de outro membro: avisado antes de mandar");
+  ok(/mat\. \d+/.test(campo(amb, "fornecedorId").options.find((o) => o.value === String(pfOutro.fornecedorId)).textContent), "a pessoa física aparece com a matrícula");
+  ok(!campo(amb, "congregacaoFonteId"), "não se escolhe a congregação que paga: é a mantenedora do campo");
+  amb.doc.escolher(campo(amb, "fornecedorId"), String(R.catalogosSemi.fornecedores.find((f) => f.tipo === "PJ").fornecedorId));
   campo(amb, "documento").files = [{ name: "termo.gif", type: "image/gif", size: 100 }];
   await amb.g("misEnviarFormAcao")(); await amb.ocioso();
   ok(/PDF, JPG ou PNG/.test(amb.e("misMsgForm").textContent) && posts(amb, "missoes/envio").length === 0, "arquivo de outro tipo: recusado na tela");
@@ -275,6 +295,28 @@ async function prova() {
   await dup.responderModal(true); await r1; await r2; await dup.ocioso();
   ok(posts(dup, "missoes/encerrar").length === 1, "o segundo clique com a pergunta aberta não abre outra nem grava duas vezes");
 
+  // o duplo clique sem pergunta (a correção do relatório não pergunta): a segunda gravação espera a primeira
+  const dup2 = montar();
+  await abrirMissoes(dup2); await abrirFicha(dup2);
+  const corr2 = botoes(dup2, "misFicha", "misAbrirFormAcao").find((b) => args(b)[0] === "relatorio-corrigir");
+  dup2.g("misAbrirFormAcao")(...args(corr2)); await dup2.ocioso();
+  const c1 = dup2.g("misEnviarFormAcao")();
+  const c2 = dup2.g("misEnviarFormAcao")();
+  await c1; await c2; await dup2.ocioso();
+  ok(posts(dup2, "missoes/relatorio-corrigir").length === 1, "o duplo clique num ato sem pergunta grava uma vez só");
+
+  console.log("== o nome no mural ==");
+  amb = montar();
+  await abrirMissoes(amb); await abrirFicha(amb);
+  const bDiv = botaoForm(amb, "divulgacao");
+  ok(bDiv && (FICHA.divulgarNome ? /Tirar o nome/ : /Autorizar o nome/).test(bDiv.textContent), "o botão diz o que vai fazer (dar ou tirar a autorização)");
+  amb.g("misAbrirFormAcao")("divulgacao", {}); await amb.ocioso();
+  ok(campo(amb, "divulgarNome").checked === !!FICHA.divulgarNome, "o formulário vem com a autorização de agora");
+  amb.doc.marcar(campo(amb, "divulgarNome"), !FICHA.divulgarNome);
+  modal = await enviar(amb);
+  p = posts(amb, "missoes/divulgacao");
+  ok(modal.aberto && p.length === 1 && p[0].corpo.envioId === ID && p[0].corpo.divulgarNome === !FICHA.divulgarNome, "pergunta e manda verdadeiro/falso com o envio", p[0] && p[0].corpo);
+
   console.log("== campos ==");
   amb = montar();
   await abrirMissoes(amb); await sub(amb, "campos");
@@ -311,8 +353,13 @@ async function prova() {
   amb = montar();
   await abrirMissoes(amb); await sub(amb, "mural");
   const mural = amb.e("misMural").textContent;
-  ok(/Missionária Eva E2E/.test(mural) && !/Dora/.test(mural) && /acesso restrito/.test(mural) && /Investido/.test(mural), "o mural: os nomes autorizados, a contagem dos restritos e o total investido");
+  ok(/Missionária Eva E2E/.test(mural) && !/Dora/.test(mural) && /acesso restrito/.test(mural), "o mural: os nomes autorizados e a contagem dos restritos");
+  ok(REAL.mural.totais.investidoNoAno === null && !/Investido/.test(mural), "com um só missionário pago no ano, o total investido não aparece (seria o valor dele)");
   semAtaque(amb, "o mural");
+  const mur2 = montar();
+  mur2.__respostas["GET missoes/mural"] = { corpo: { ...R.mural, totais: { ...R.mural.totais, investidoNoAno: 2500 } } };
+  await abrirMissoes(mur2); await sub(mur2, "mural");
+  ok(/Investido no sustento missionário/.test(mur2.e("misMural").textContent) && /2\.500,00/.test(mur2.e("misMural").textContent), "com dois ou mais, o total aparece");
   let classeNaImpressao = null;
   amb.ctx.print = () => { classeNaImpressao = amb.doc.body.classList.contains("mis-imprimindo"); };
   amb.g("misImprimirMuralAcao")();
@@ -387,6 +434,11 @@ const MUTACOES = [
   ["missoes", "imprimir a página inteira", ["  if (classes) classes.add(\"mis-imprimindo\");", ""]],
   ["missoes", "a correção sem o relatório", ["  else if (form.chave === \"relatorio-corrigir\") corpo.relatorioId = Number(fixos.relatorioId);", ""]],
   ["missoes", "quem não é do nível geral pede as reuniões", ["  if (misPapel(\"geral\")) {\n    const reu", "  if (true) {\n    const reu"]],
+  ["missoes", "a Tesouraria vê as outras subseções", ["  if (misSoTesouraria()) return s === \"sustento\";", ""]],
+  ["missoes", "a CME vê o sustento do mês", ["  if (misSoCME()) return s !== \"sustento\";", ""]],
+  ["missoes", "o botão do nome no mural a quem não gere", ["    a.divulgacao ? misBotao(e.divulgarNome", "    true ? misBotao(e.divulgarNome"]],
+  ["missoes", "não conferir a pessoa física", ["    if (f && f.tipo === \"PF\" && String(f.membroId) !== String(membroId)) return", "    if (false) return"]],
+  ["missoes", "mostrar o total investido de um só missionário", ["      ${t.investidoNoAno == null ? \"\" :", "      ${false ? \"\" :"]],
   ["expansao", "a pílula de Missões sem a permissão", ["const EXP_PERMISSAO_DA_SECAO = { distritos: \"distritos\", missoes: \"missoes\" };", "const EXP_PERMISSAO_DA_SECAO = { distritos: \"distritos\", missoes: \"expansao\" };"]],
   ["expansao", "quem só tem 'missoes' pede a Expansão", ["  if (!expPermite(\"painel\")) { expMostrarSecaoAcao(expPermite(\"distritos\") ? \"distritos\" : \"missoes\"); return; }\n", ""]],
   ["expansao", "a saída não limpa Missões", ["  if (typeof misLimparTela === \"function\") misLimparTela();   // v9.4: a pílula de Missões\n", ""]]
@@ -398,20 +450,29 @@ const MUTACOES = [
   if (process.env.MUTAR !== "1") { if (r.falhas) process.exitCode = 1; return; }
   let acusadas = 0;
   const vivas = [];
+  // uma mutação que deixa a tela esperando para sempre esvaziaria o laço de eventos e o processo terminaria calado: o intervalo o mantém vivo até o prazo de 60 s;
+  // e a exceção solta na tela conta como acusada (a prova não termina limpa)
+  const vivo = setInterval(() => {}, 1000);
+  let soltas = 0;
+  const naoTratada = () => { soltas++; };
+  process.on("unhandledRejection", naoTratada); process.on("uncaughtException", naoTratada);
   for (const [arquivo, nome, [de, para]] of MUTACOES) {
     const original = lerApp(`modulos/${arquivo}.js`);
     const n = original.split(de).length - 1;
     if (n !== 1) { vivas.push(`${nome} (trecho achado ${n} vez(es))`); continue; }
     MUTADO = { arquivo, texto: original.replace(de, () => para) };
     process.env.CALADO = "1";
+    const soltasAntes = soltas;
     let res;
     try {
       res = await Promise.race([prova(), new Promise((resolve) => { const t = setTimeout(() => resolve({ total: 1, falhas: 1, travou: true }), 60000); t.unref(); })]);
     } catch (e) { res = { total: 1, falhas: 1 }; }
     delete process.env.CALADO;
     MUTADO = null;
-    if (res.falhas > 0) acusadas++; else vivas.push(nome);
+    if (res.falhas > 0 || soltas > soltasAntes) acusadas++; else vivas.push(nome);
   }
+  clearInterval(vivo);
+  process.off("unhandledRejection", naoTratada); process.off("uncaughtException", naoTratada);
   console.log(`mutações: ${acusadas}/${MUTACOES.length} acusadas${vivas.length ? ` — vivas: ${vivas.join("; ")}` : ""}`);
   if (r.falhas || vivas.length) process.exitCode = 1;
 })();

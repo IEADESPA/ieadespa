@@ -30,8 +30,10 @@ const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos", "missoes"];
 // v9.3 — a aba abre com "expansao", "distritos" ou (v9.4) "missoes": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js) e a de Missões
 // (modulos/missoes.js), cada uma da permissão própria
 const EXP_PERMISSAO_DA_SECAO = { distritos: "distritos", missoes: "missoes" };
+// a pílula de Missões abre também à Tesouraria Geral (o "financeiro" do nível geral), só para o sustento do mês (o servidor confere de novo)
 const expPermite = (secao) => (typeof authPermissoes !== "undefined" && Array.isArray(authPermissoes)
-  ? authPermissoes.includes(EXP_PERMISSAO_DA_SECAO[secao] || "expansao") : !EXP_PERMISSAO_DA_SECAO[secao]);
+  ? (authPermissoes.includes(EXP_PERMISSAO_DA_SECAO[secao] || "expansao") || (secao === "missoes" && typeof authGeral !== "undefined" && !!authGeral && authPermissoes.includes("financeiro")))
+  : !EXP_PERMISSAO_DA_SECAO[secao]);
 
 // O dono da resposta: a matrícula e o tipo de sessão — não o bilhete, que a confirmação reforçada (428) troca no meio do ato (a resposta do próprio ato era
 // descartada e a tela ficava muda depois de gravar; revisão de 04/11/2026). A troca de login ou a saída mudam o dono.

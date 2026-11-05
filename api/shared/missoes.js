@@ -48,11 +48,15 @@ const mesBr = (mes) => (mes ? `${mes.slice(5, 7)}/${mes.slice(0, 4)}` : "");
 
 // ---------------------------------------------------------------- o campo ----------------------------------------------------------------
 const ehBrasil = (pais) => ["brasil", "brazil"].includes(chaveDeComparacao(pais));
+// "Zonas rurais adjacentes" (Art. 44 §1º): a zona rural de Parauapebas e a dos municípios que fazem divisa com ele — uma lista fechada, para a marca não virar escolha
+// (revisão de 05/11/2026: com a marca livre, Belém ou Marabá-cidade ficariam "Local" e escapariam da CME e da CLI). Decisão que o responsável pode mudar.
+const MUNICIPIOS_ZONA_RURAL = ["Parauapebas", "Canaã dos Carajás", "Curionópolis", "Eldorado do Carajás", "Marabá", "Água Azul do Norte", "São Félix do Xingu"];
+const zonaRuralAceita = (cidade) => MUNICIPIOS_ZONA_RURAL.some((m) => chaveDeComparacao(m) === chaveDeComparacao(cidade));
 // A abrangência sai do lugar, nunca da escolha de quem cadastra: é ela que diz por onde o envio passa (Art. 44 §§1º e 2º).
 function abrangenciaDe({ pais, uf, cidade, zonaRural }) {
   if (!ehBrasil(pais)) return "TRANSCULTURAL";
   if (uf !== "PA") return "NACIONAL";
-  if (chaveDeComparacao(cidade) === "parauapebas" || zonaRural) return "LOCAL";
+  if (chaveDeComparacao(cidade) === "parauapebas" || (zonaRural && zonaRuralAceita(cidade))) return "LOCAL";
   return "ESTADUAL";
 }
 
@@ -71,7 +75,9 @@ function validarCampo(dados) {
     const c = texto(d.cidade, { minimo: 2, maximo: 150, rotulo: "A cidade do campo" });
     if (!c.valido) return c;
     cidade = c.texto;
-    if (zonaRural && uf !== "PA") return { valido: false, mensagem: "A zona rural adjacente é a de Parauapebas, no Pará (Regimento, Art. 44 §1º)." };
+    if (zonaRural && (uf !== "PA" || !zonaRuralAceita(cidade))) {
+      return { valido: false, mensagem: `A zona rural adjacente (Regimento, Art. 44 §1º) é a de Parauapebas ou de um município vizinho: ${MUNICIPIOS_ZONA_RURAL.join(", ")} (PA).` };
+    }
   } else {
     if (zonaRural) return { valido: false, mensagem: "A zona rural adjacente é a de Parauapebas, no Pará (Regimento, Art. 44 §1º)." };
     const c = texto(d.cidade, { minimo: 2, maximo: 150, rotulo: "A cidade do campo", obrigatorio: false });
@@ -121,14 +127,10 @@ function validarDinheiro(d, { rotuloValor = "O sustento mensal" } = {}) {
   if (sustento === 0) return { valido: true, dados: { sustento: 0, fonte: null, congregacaoFonteId: null, fornecedorId: null } };
   const fonte = typeof d.fonte === "string" ? d.fonte.toUpperCase() : "";
   if (!FONTES[fonte]) return { valido: false, mensagem: "Escolha de onde sai o sustento: o Tesouro Geral ou o caixa local da congregação mantenedora." };
-  let congregacaoFonteId = null;
-  if (fonte === "CONGREGACAO") {
-    congregacaoFonteId = idDe(d.congregacaoFonteId);
-    if (!congregacaoFonteId) return { valido: false, mensagem: "Escolha a congregação mantenedora que paga o sustento." };
-  }
   const fornecedorId = idDe(d.fornecedorId);
   if (!fornecedorId) return { valido: false, mensagem: "Escolha quem recebe o sustento (um fornecedor do Contas a Pagar)." };
-  return { valido: true, dados: { sustento, fonte, congregacaoFonteId, fornecedorId } };
+  // o caixa local é sempre o da congregação mantenedora do campo (o banco a põe aqui; revisão de 05/11/2026: antes dava para escolher qualquer congregação)
+  return { valido: true, dados: { sustento, fonte, congregacaoFonteId: null, fornecedorId } };
 }
 
 function validarEnvio(dados) {
@@ -214,11 +216,13 @@ function periodosDoEnvio({ inicioMes, fimMes, periodicidade }, hoje) {
   return lista;
 }
 // A situação de cada período: entregue, em aberto (dentro do prazo) ou vencido. Relatório vencido suspende o sustento (Desenho da v9.4, item 4).
+// O envio encerrado pela vacância (a pessoa faleceu ou saiu do rol): o relatório que faltava fica dispensado — não vence nem suspende.
 function situacaoRelatorios(envio, entregues, hoje) {
   const feitos = entregues instanceof Set ? entregues : new Set(entregues || []);
+  const dispensado = !!(envio && envio.encerradoPorVacancia);
   const periodos = periodosDoEnvio(envio, hoje).map((p) => {
     const entregue = feitos.has(p.inicio);
-    return { ...p, entregue, vencido: !entregue && p.prazo < hoje };
+    return { ...p, entregue, dispensado: !entregue && dispensado, vencido: !entregue && !dispensado && p.prazo < hoje };
   });
   const vencidos = periodos.filter((p) => p.vencido);
   return { periodos, vencidos, suspenso: vencidos.length > 0 };
@@ -299,21 +303,28 @@ function textoParecerVencido({ missionario, campo, prazo, hoje }) {
   const atraso = diasEntre(prazo, hoje);
   return `O parecer da CME sobre o envio de ${missionario} para o campo ${campo} venceu em ${br(prazo)} (${atraso} dia${atraso === 1 ? "" : "s"} de atraso). Sem ele, a CLI só decide em regime de urgência (Regimento, Art. 24 §2º).`;
 }
-function textoAguardandoPresidente({ missionario, campo }) {
-  return `O envio de ${missionario} para o campo ${campo} aguarda a concordância do Pastor Presidente (Regimento, Art. 44 §2º e Art. 134 §6º, I).`;
+// O artigo pelo caso: outro Estado, outro país ou convênio externo é o Art. 44 §2º; o sustento é o Art. 134 §6º, I.
+function fundamentoPresidente({ abrangencia, sustento, recebedorPJ }) {
+  const partes = [];
+  if (abrangencia === "NACIONAL" || abrangencia === "TRANSCULTURAL" || recebedorPJ) partes.push("Art. 44 §2º");
+  if (Number(sustento) > 0) partes.push("Art. 134 §6º, I");
+  return partes.length ? `Regimento, ${partes.join(" e ")}` : "Regimento, Art. 44";
+}
+function textoAguardandoPresidente({ missionario, campo, fundamento }) {
+  return `O envio de ${missionario} para o campo ${campo} aguarda a concordância do Pastor Presidente (${fundamento || "Regimento, Art. 44 §2º"}).`;
 }
 function textoDecidido({ missionario, campo, ativo, recusadoPor, motivo }) {
   if (ativo) return `O envio de ${missionario} para o campo ${campo} foi aprovado e está ativo.`;
   return `O envio de ${missionario} para o campo ${campo} foi recusado ${recusadoPor === "PRESIDENTE" ? "pelo Pastor Presidente" : "pela CLI"}.${motivo ? ` Motivo: ${motivo}` : ""}`;
 }
-function textoRelatorioAtrasado({ missionario, campo, periodo, prazo, hoje }) {
+function textoRelatorioAtrasado({ missionario, campo, periodo, prazo, hoje, suspende = true }) {
   const atraso = diasEntre(prazo, hoje);
-  return `O relatório de campo de ${missionario} (${campo}) do período ${mesBr(periodo.inicio)}${periodo.fim !== periodo.inicio ? ` a ${mesBr(periodo.fim)}` : ""} venceu em ${br(prazo)} (${atraso} dia${atraso === 1 ? "" : "s"} de atraso). Enquanto não chegar, o sustento fica suspenso.`;
+  return `O relatório de campo de ${missionario} (${campo}) do período ${mesBr(periodo.inicio)}${periodo.fim !== periodo.inicio ? ` a ${mesBr(periodo.fim)}` : ""} venceu em ${br(prazo)} (${atraso} dia${atraso === 1 ? "" : "s"} de atraso).${suspende ? " Enquanto não chegar, o sustento fica suspenso." : " É a prestação de contas do envio."}`;
 }
 
 module.exports = {
   ABRANGENCIAS, DIVULGACOES, STATUS_CAMPO, STATUS_ENVIO, EM_ANDAMENTO, VIVOS, PERIODICIDADES, FONTES, RESULTADOS_PRESIDENTE, PARECERES, RESULTADOS_CLI,
-  PRAZO_PARECER_DIAS, DIA_PRAZO_RELATORIO, SUSTENTO_MAXIMO, CATEGORIA_SAIDA, MIME_DOCUMENTO, UFS,
+  PRAZO_PARECER_DIAS, DIA_PRAZO_RELATORIO, SUSTENTO_MAXIMO, CATEGORIA_SAIDA, MIME_DOCUMENTO, UFS, MUNICIPIOS_ZONA_RURAL, zonaRuralAceita, fundamentoPresidente,
   mesValido, mesDe, somarMeses, mesesEntre, mesBr, ehBrasil, abrangenciaDe, validarCampo, mudouOLugar, valorDe, inteiroDe, validarDinheiro, validarEnvio,
   etapasDoEnvio, statusInicial, statusDepoisDaCLI, prazoParecer, parecerVencido, podeDecidirCLI, validarParecer, validarDecisao, validarMotivo, validarPresidente,
   periodoDoMes, periodosDoEnvio, situacaoRelatorios, validarRelatorio, validarGeracao, validarReajuste, validarEncerramentoEnvio, referenciaPeriodo,

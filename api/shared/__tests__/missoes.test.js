@@ -6,7 +6,14 @@ describe("abrangência do campo (Regimento Art. 44 §§1º e 2º)", () => {
     expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "Parauapebas" })).toBe("LOCAL");
     expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "  PARAUAPEBAS " })).toBe("LOCAL");
     expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "Marabá" })).toBe("ESTADUAL");
-    expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "Vila Sansão", zonaRural: true })).toBe("LOCAL");
+    expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "Canaã dos Carajás", zonaRural: true })).toBe("LOCAL");
+    expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "canaa dos carajas", zonaRural: true })).toBe("LOCAL");
+  });
+  test("a zona rural só vale para Parauapebas e os municípios vizinhos: Belém com a marca continua Estadual (revisão de 05/11/2026)", () => {
+    expect(mi.abrangenciaDe({ pais: "Brasil", uf: "PA", cidade: "Belém", zonaRural: true })).toBe("ESTADUAL");
+    expect(mi.validarCampo({ nome: "Campo Belém", uf: "PA", cidade: "Belém", zonaRural: true }).valido).toBe(false);
+    expect(mi.validarCampo({ nome: "Vila Rural", uf: "PA", cidade: "Curionópolis", zonaRural: true }).dados.abrangencia).toBe("LOCAL");
+    expect(mi.validarCampo({ nome: "Vila Rural", uf: "PA", cidade: "Curionópolis" }).dados.abrangencia).toBe("ESTADUAL");
   });
   test("outro Estado é Nacional; outro país é Transcultural (Brazil em inglês ainda é o Brasil)", () => {
     expect(mi.abrangenciaDe({ pais: "Brasil", uf: "MA", cidade: "Imperatriz" })).toBe("NACIONAL");
@@ -52,7 +59,8 @@ describe("o envio: dinheiro e etapas", () => {
     const base = { campoId: 1, membroId: 5, sustento: 800, periodicidade: "TRIMESTRAL", justificativa: "Sustento do casal missionário no campo." };
     expect(mi.validarEnvio(base).valido).toBe(false);
     expect(mi.validarEnvio({ ...base, fonte: "GERAL" }).mensagem).toMatch(/quem recebe/);
-    expect(mi.validarEnvio({ ...base, fonte: "CONGREGACAO", fornecedorId: 3 }).mensagem).toMatch(/congregação mantenedora/);
+    // o caixa local é o da mantenedora do campo (o banco a põe): não se escolhe congregação
+    expect(mi.validarEnvio({ ...base, fonte: "CONGREGACAO", fornecedorId: 3, congregacaoFonteId: 7 }).mensagem).toMatch(/documento do envio/);
     expect(mi.validarEnvio({ ...base, fonte: "GERAL", fornecedorId: 3 }).mensagem).toMatch(/documento do envio/);
     expect(mi.validarEnvio({ ...base, fonte: "GERAL", fornecedorId: 3, documentoBase64: "AAAA", documentoMime: "text/html" }).valido).toBe(false);
     const ok = mi.validarEnvio({ ...base, fonte: "GERAL", fornecedorId: 3, documentoBase64: "AAAA", documentoMime: "application/pdf", divulgarNome: "true" });
@@ -133,6 +141,18 @@ describe("os períodos do relatório e a suspensão (Art. 133-C §2º)", () => {
     expect(mi.situacaoRelatorios(envio, ["2026-09"], "2026-11-05").suspenso).toBe(false);
     expect(mi.situacaoRelatorios(envio, new Set(["2026-09"]), "2026-11-11").vencidos.map((p) => p.inicio)).toEqual(["2026-10"]);
     expect(mi.situacaoRelatorios(envio, ["2026-09"], "2026-11-10").suspenso).toBe(false);
+  });
+  test("o envio encerrado pela vacância: o relatório que faltava fica dispensado, não vence nem suspende", () => {
+    const s = mi.situacaoRelatorios({ inicioMes: "2026-09", fimMes: "2026-10", periodicidade: "MENSAL", encerradoPorVacancia: true }, [], "2026-12-20");
+    expect(s.vencidos).toEqual([]);
+    expect(s.suspenso).toBe(false);
+    expect(s.periodos.every((p) => p.dispensado)).toBe(true);
+  });
+  test("o fundamento do Presidente pelo caso: Art. 44 §2º (longe ou convênio), Art. 134 §6º, I (sustento)", () => {
+    expect(mi.fundamentoPresidente({ abrangencia: "LOCAL", sustento: 300 })).toBe("Regimento, Art. 134 §6º, I");
+    expect(mi.fundamentoPresidente({ abrangencia: "NACIONAL", sustento: 0 })).toBe("Regimento, Art. 44 §2º");
+    expect(mi.fundamentoPresidente({ abrangencia: "TRANSCULTURAL", sustento: 10 })).toBe("Regimento, Art. 44 §2º e Art. 134 §6º, I");
+    expect(mi.textoRelatorioAtrasado({ missionario: "Ana", campo: "X", periodo: { inicio: "2026-09", fim: "2026-09" }, prazo: "2026-10-10", hoje: "2026-10-12", suspende: false })).not.toMatch(/suspenso/);
   });
   test("periodoDoMes encontra o início do período de um mês", () => {
     expect(mi.periodoDoMes("2026-05", "TRIMESTRAL", "2026-09")).toBe("2026-08");

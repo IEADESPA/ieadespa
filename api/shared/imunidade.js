@@ -10,7 +10,9 @@
 //   - Carga tributária embutida (LC 214/2025 — IBS/CBS não recuperável).
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
-const RUBRICAS_VALIDAS = ["PREBENDA_PASTORAL", "AUXILIO_MORADIA", "AUXILIO_TRANSPORTE", "AUXILIO_SAUDE", "AUXILIO_OUTROS"];
+// v9.4 — o sustento missionário é rubrica própria (decidido pela CLI e pelo Pastor Presidente, Regimento Art. 44 e 134 §6º, I): o ministro que também é missionário
+// sustentado não conta como "pago fora de rubrica".
+const RUBRICAS_VALIDAS = ["PREBENDA_PASTORAL", "AUXILIO_MORADIA", "AUXILIO_TRANSPORTE", "AUXILIO_SAUDE", "AUXILIO_OUTROS", "SUSTENTO_MISSIONARIO", "SUSTENTO_MISSIONARIO_LOCAL"];
 
 async function calcularSemaforo(pool, sql) {
   // (I) pagamentos a ministros (CPF casa com Prebendados).

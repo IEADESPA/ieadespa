@@ -67,6 +67,11 @@ async function montarAlcance(pool, { membroId, geral, tesouraria, hoje = hojeBra
 }
 const veMissoes = (a) => !!a && (a.geral || a.semiadespa || a.cme || a.presidente);
 const gere = (a) => !!a && (a.geral || a.semiadespa);
+// Revisão de 05/11/2026 — a CME (que não é também da SEMIADESPA, do nível geral nem o Presidente) vê o que precisa para o parecer: os envios aguardando o parecer, os que
+// ela mesma já analisou e os números gerais; não o sustento de cada um, os relatórios nem a prévia do pagamento.
+const soCME = (a) => !!a && a.cme && !a.geral && !a.semiadespa && !a.presidente;
+// A Tesouraria Geral (financeiro do nível geral) sem nenhum outro papel em Missões: só a prévia e a geração do sustento.
+const soTesouraria = (a) => !!a && a.tesouraria && !veMissoes(a);
 
 // ================================================================ pessoas ================================================================
 // O missionário: membro ativo, em comunhão e sem processo disciplinar em curso. Devolve a recusa ou null.
@@ -80,23 +85,37 @@ async function problemaDoMissionario(pool, rq, membroId) {
 }
 async function lerFornecedor(rq, fornecedorId) {
   const f = (await rq().input("f", sql.Int, fornecedorId).query(`
-    SELECT FornecedorId, Nome, Tipo, Ativo, DadosBancariosConfirmados, Banco, Agencia, Conta FROM Fornecedores WHERE FornecedorId = @f`)).recordset[0];
-  return f ? { fornecedorId: f.FornecedorId, nome: f.Nome, tipo: f.Tipo, ativo: !!f.Ativo, confirmado: !!f.DadosBancariosConfirmados, bancoCompleto: !!(f.Banco && f.Agencia && f.Conta) } : null;
+    SELECT FornecedorId, Nome, Tipo, Ativo, DadosBancariosConfirmados, Banco, Agencia, Conta, MembroId FROM Fornecedores WHERE FornecedorId = @f`)).recordset[0];
+  return f ? { fornecedorId: f.FornecedorId, nome: f.Nome, tipo: f.Tipo, ativo: !!f.Ativo, confirmado: !!f.DadosBancariosConfirmados, bancoCompleto: !!(f.Banco && f.Agencia && f.Conta),
+    membroId: f.MembroId == null ? null : Number(f.MembroId) } : null;
 }
 async function lerCongregacao(rq, congregacaoId) {
   const c = (await rq().input("c", sql.Int, congregacaoId).query(`SELECT CongregacaoId, Nome, Ativa FROM Congregacoes WHERE CongregacaoId = @c`)).recordset[0];
   return c ? { congregacaoId: c.CongregacaoId, nome: c.Nome, ativa: !!c.Ativa } : null;
 }
-// A fonte e quem recebe, conferidos no banco (o pedido e o reajuste usam o mesmo).
-async function problemaDoDinheiro(rq, d) {
+// A fonte e quem recebe, conferidos no banco (o pedido e o reajuste usam o mesmo). Revisão de 05/11/2026:
+//  - a pessoa física que recebe é o próprio missionário (o fornecedor ligado à matrícula dele, como a prebenda confere o CPF); outra pessoa, só como pessoa jurídica
+//    (agência ou igreja parceira: convênio externo);
+//  - o caixa local é o da congregação mantenedora do CAMPO (preenchido aqui, em `d.congregacaoFonteId`): ninguém compromete o caixa de outra congregação.
+async function problemaDoDinheiro(rq, d, { membroId, campo }) {
   if (!d.sustento) return { problema: null, recebedor: null };
   const f = await lerFornecedor(rq, d.fornecedorId);
   if (!f || !f.ativo) return { problema: "Quem recebe precisa ser um fornecedor ativo do Contas a Pagar." };
+  if (f.tipo === "PF" && f.membroId !== Number(membroId)) {
+    return { problema: "A pessoa física que recebe é o próprio missionário: escolha o fornecedor ligado à matrícula dele (em Fornecedores). Outra pessoa só recebe como pessoa jurídica (agência ou igreja parceira — convênio externo)." };
+  }
   if (d.fonte === "CONGREGACAO") {
-    const c = await lerCongregacao(rq, d.congregacaoFonteId);
-    if (!c || !c.ativa) return { problema: "A congregação mantenedora precisa estar ativa." };
+    const mant = campo && campo.mantenedora ? await lerCongregacao(rq, campo.mantenedora.congregacaoId) : null;
+    if (!mant) return { problema: "O campo não tem congregação mantenedora: cadastre-a no campo, ou escolha o Tesouro Geral." };
+    if (!mant.ativa) return { problema: "A congregação mantenedora do campo está inativa." };
+    d.congregacaoFonteId = mant.congregacaoId;
   }
   return { problema: null, recebedor: f };
+}
+// A trava da pessoa antes da do envio (a mesma ordem da vacância, que trava a ficha e depois mexe no envio): os dois ao mesmo tempo não se travam um no outro.
+async function travarMissionarioDoEnvio(rq, envioId) {
+  const m = (await rq().input("id", sql.Int, envioId).query(`SELECT MembroId FROM EnviosMissionarios WHERE EnvioId = @id`)).recordset[0];
+  if (m) await rq().input("m", sql.Int, m.MembroId).query(`SELECT MembroId FROM MembroReferencia WITH (UPDLOCK, ROWLOCK) WHERE MembroId = @m`);
 }
 async function salvarArquivo(arquivo) {
   if (!arquivo) return { url: null };
@@ -178,7 +197,8 @@ async function editarCampo(pool, { campoId, dados, por, alcance }) {
   const d = v.dados;
   try {
     return await emTransacao(pool, async (t, rq) => {
-      if (!(await enfileirar(rq, "campo"))) return OCUPADO;
+      // a trava dos envios também: um pedido que está sendo gravado agora não pega a abrangência de antes da mudança do lugar (revisão de 05/11/2026)
+      if (!(await enfileirar(rq, "campo")) || !(await enfileirar(rq, "envio"))) return OCUPADO;
       const c = await lerCampo(rq, campoId, { travar: true });
       if (!c) return NAO_EXISTE;
       if (c.status !== "ATIVO") return { sucesso: false, mensagem: "Este campo está encerrado." };
@@ -226,7 +246,7 @@ async function encerrarCampo(pool, { campoId, dados, por, hoje = hojeBrasilia(),
 // ================================================================ envios ================================================================
 const COLUNAS_ENVIO = `
   e.EnvioId, e.CampoId, c.Nome AS CampoNome, c.Abrangencia, c.Divulgacao, c.Pais, c.UF, c.Cidade, c.ZonaRuralAdjacente, c.Status AS CampoStatus,
-  e.MembroId, m.Nome AS MissionarioNome, m.CongregacaoId AS MissionarioCongregacaoId, e.Status, e.PrecisaCME, e.PrecisaCLI, e.PrecisaPresidente,
+  e.MembroId, m.Nome AS MissionarioNome, m.CongregacaoId AS MissionarioCongregacaoId, m.Status AS MissionarioStatus, m.SituacaoMembro AS MissionarioSituacao, e.EncerradoPorVacancia, e.Status, e.PrecisaCME, e.PrecisaCLI, e.PrecisaPresidente,
   e.SustentoMensal, e.Fonte, e.CongregacaoFonteId, cf.Nome AS CongregacaoFonteNome, e.FornecedorId, f.Nome AS FornecedorNome, f.Tipo AS FornecedorTipo,
   e.DocumentoUrl, e.Periodicidade, e.DivulgarNome, e.Justificativa, e.SolicitadoPor, sol.Nome AS SolicitanteNome, CONVERT(varchar(10), e.SolicitadoEm, 120) AS SolicitadoEm,
   e.ParecerCME, e.ParecerFundamentacao, e.ParecerPor, pp.Nome AS ParecerPorNome, CONVERT(varchar(10), e.ParecerEm, 120) AS ParecerEm,
@@ -248,6 +268,7 @@ function formaEnvio(l, hoje) {
     campo: { campoId: l.CampoId, nome: l.CampoNome, abrangencia: l.Abrangencia, abrangenciaRotulo: mi.ABRANGENCIAS[l.Abrangencia] || l.Abrangencia, divulgacao: l.Divulgacao,
       status: l.CampoStatus, lugar: lugarDe({ pais: l.Pais, uf: l.UF, cidade: l.Cidade, zonaRural: !!l.ZonaRuralAdjacente }) },
     missionario: { membroId: l.MembroId, nome: l.MissionarioNome, congregacaoId: l.MissionarioCongregacaoId },
+    encerradoPorVacancia: !!l.EncerradoPorVacancia,
     etapas: { cme: !!l.PrecisaCME, cli: !!l.PrecisaCLI, presidente: !!l.PrecisaPresidente },
     sustentoProposto: Number(l.SustentoMensal), fonte: l.Fonte, fonteRotulo: l.Fonte ? mi.FONTES[l.Fonte] : null,
     congregacaoFonte: l.CongregacaoFonteId ? { congregacaoId: l.CongregacaoFonteId, nome: l.CongregacaoFonteNome } : null,
@@ -261,14 +282,15 @@ function formaEnvio(l, hoje) {
     presidente: l.PresidenteResultado ? { resultado: l.PresidenteResultado, rotulo: mi.RESULTADOS_PRESIDENTE[l.PresidenteResultado], motivo: l.PresidenteMotivo, em: l.PresidenteEm } : null,
     ativadoEm: l.AtivadoEm || null, inicioMes: mes7(l.InicioMes), encerradoEm: l.EncerradoEm || null, fimMes: mes7(l.FimMes), motivoEncerramento: l.MotivoEncerramento,
     desistencia: l.DesistidoEm ? { em: l.DesistidoEm, motivo: l.DesistenciaMotivo } : null,
-    _atos: { decisaoPor: l.DecisaoRegistradaPor, presidentePor: l.PresidentePor, encerradoPor: l.EncerradoPor, desistidoPor: l.DesistidoPor }
+    _atos: { decisaoPor: l.DecisaoRegistradaPor, presidentePor: l.PresidentePor, encerradoPor: l.EncerradoPor, desistidoPor: l.DesistidoPor },
+    _pessoa: { status: l.MissionarioStatus, situacao: l.MissionarioSituacao }
   };
   envio.prazoParecer = envio.etapas.cme ? mi.prazoParecer(envio.solicitadoEm) : null;
   envio.parecerVencido = mi.parecerVencido(envio, hoje);
   return envio;
 }
 // O que sai para a tela: sem a URL interna do documento (a ficha dá o endereço assinado a quem gere) e sem os atos internos.
-const publico = ({ documentoUrlInterno, _atos, ...resto }) => resto;
+const publico = ({ documentoUrlInterno, _atos, _pessoa, ...resto }) => resto;
 async function lerEnvio(rq, envioId, hoje, { travar = false } = {}) {
   const r = await rq().input("id", sql.Int, envioId).query(`SELECT ${COLUNAS_ENVIO} ${JUNCOES_ENVIO(travar)} WHERE e.EnvioId = @id`);
   return r.recordset[0] ? formaEnvio(r.recordset[0], hoje) : null;
@@ -303,22 +325,39 @@ async function carregarDinheiro(rq, envioIds = null) {
   return (id) => porEnvio.get(id) || { valores: [], relatorios: [], geracoes: [] };
 }
 const vigenteNoMes = (valores, mes) => valores.filter((v) => v.desdeMes <= mes).reduce((a, v) => (!a || v.desdeMes > a.desdeMes ? v : a), null);
-const ultimoGerado = (geracoes) => geracoes.reduce((a, g) => (!a || g.mes > a ? g.mes : a), null);
+// A geração que vale: a Saída cancelada ou rejeitada no Contas a Pagar não conta (revisão de 05/11/2026: antes o mês ficava "gerado" para sempre e o missionário
+// nunca o recebia) — o mês volta a ser gerável, e o reajuste e o encerramento não esbarram nela.
+const SAIDA_DESFEITA = ["CANCELADA", "REJEITADA"];
+const geracoesValidas = (geracoes) => geracoes.filter((g) => !SAIDA_DESFEITA.includes(g.saidaStatus));
+const ultimoGerado = (geracoes) => geracoesValidas(geracoes).reduce((a, g) => (!a || g.mes > a ? g.mes : a), null);
+// A pessoa que não pode receber o sustento agora (revisão de 05/11/2026): saiu do estado ativo (licença de candidatura, por exemplo), perdeu a comunhão ou tem processo
+// disciplinar em curso — o mês fica impedido enquanto durar (não se perde: volta quando a situação se resolve). O envio encerrado pela vacância não passa por aqui: o
+// último mês dele ainda é gerado.
+function impedimentoDaPessoa(envio, sob) {
+  if (envio.encerradoPorVacancia || !envio._pessoa) return null;
+  if (envio._pessoa.status !== "ATIVO") return "O missionário não está ativo no rol agora (licença de candidatura ou outra situação): o sustento fica parado enquanto durar.";
+  if (envio._pessoa.situacao === "SEM_COMUNHAO") return "O missionário está sem comunhão: o sustento fica parado enquanto durar.";
+  if (sob && sob.has(Number(envio.missionario.membroId))) return "O missionário tem processo disciplinar em curso: o sustento fica parado até a decisão.";
+  return null;
+}
 
 // O mês de um envio para a Tesouraria: já gerado, a gerar, suspenso (relatório vencido) ou impedido (o motivo diz o que falta). `null` = o envio não tem sustento
-// nesse mês (fora do período, ou o valor vigente é zero).
-function avaliarMes(envio, din, mes, hoje) {
+// nesse mês (fora do período, ou o valor vigente é zero). `sob`: quem está sob disciplina (lido uma vez por quem chama).
+function avaliarMes(envio, din, mes, hoje, sob = null) {
   if (!["ATIVO", "ENCERRADO"].includes(envio.status) || !envio.inicioMes || mes < envio.inicioMes || (envio.fimMes && mes > envio.fimMes)) return null;
-  const gerado = din.geracoes.find((g) => g.mes === mes);
+  const gerado = geracoesValidas(din.geracoes).find((g) => g.mes === mes);
   if (gerado) return { situacao: "GERADO", valor: gerado.valor, saidaId: gerado.saidaId, saidaStatus: gerado.saidaStatus };
+  const desfeita = din.geracoes.find((g) => g.mes === mes);
   const v = vigenteNoMes(din.valores, mes);
   if (!v || !v.valor) return null;
   const base = { valor: v.valor, fonte: v.fonte, fonteRotulo: v.fonteRotulo, recebedor: v.recebedor ? { nome: v.recebedor.nome, tipo: v.recebedor.tipo } : null,
-    congregacaoFonte: v.congregacaoFonte ? { nome: v.congregacaoFonte.nome } : null };
+    congregacaoFonte: v.congregacaoFonte ? { nome: v.congregacaoFonte.nome } : null, saidaDesfeita: desfeita ? desfeita.saidaId : null };
   const sit = mi.situacaoRelatorios(envio, din.relatorios.map((r) => r.periodoInicio), hoje);
   if (sit.suspenso) {
-    return { ...base, situacao: "SUSPENSO", motivo: `Relatório de campo vencido: ${sit.vencidos.map((p) => `${mi.mesBr(p.inicio)}${p.fim !== p.inicio ? ` a ${mi.mesBr(p.fim)}` : ""} (venceu em ${mi.br(p.prazo)})`).join(", ")}. Lance o relatório e gere de novo (Regimento, Art. 133-C §2º).` };
+    return { ...base, situacao: "SUSPENSO", motivo: `Relatório de campo vencido: ${sit.vencidos.map((p) => `${mi.mesBr(p.inicio)}${p.fim !== p.inicio ? ` a ${mi.mesBr(p.fim)}` : ""} (venceu em ${mi.br(p.prazo)})`).join(", ")}. Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º).` };
   }
+  const pessoa = impedimentoDaPessoa(envio, sob);
+  if (pessoa) return { ...base, situacao: "IMPEDIDO", motivo: pessoa };
   const r = v.recebedor;
   if (!r || !r.ativo) return { ...base, situacao: "IMPEDIDO", motivo: "Quem recebe não é um fornecedor ativo: o Presidente precisa reajustar o sustento com outro recebedor." };
   if (!r.confirmado || !r.bancoCompleto) return { ...base, situacao: "IMPEDIDO", motivo: "Os dados bancários de quem recebe estão incompletos ou esperando a confirmação de outra pessoa (Fornecedores)." };
@@ -328,12 +367,14 @@ function avaliarMes(envio, din, mes, hoje) {
   return { ...base, situacao: "A_GERAR", _v: v };
 }
 
-async function listarEnvios(pool, { alcance, hoje = hojeBrasilia(), status = null }) {
+// A CME que só é CME vê os envios aguardando o parecer e os que ela mesma analisou (revisão de 05/11/2026: minimização).
+const cmeAlcanca = (e, membroId) => e.status === "EM_PARECER" || (e.parecer && Number(e.parecer.por) === Number(membroId));
+async function listarEnvios(pool, { alcance, hoje = hojeBrasilia(), status = null, membroId = null }) {
   if (!veMissoes(alcance)) return [];
   const r = await pool.request().input("s", sql.NVarChar(25), status)
     .query(`SELECT ${COLUNAS_ENVIO} ${JUNCOES_ENVIO(false)} WHERE (@s IS NULL OR e.Status = @s)
             ORDER BY CASE WHEN e.Status IN (N'EM_PARECER', N'AGUARDANDO_CLI', N'AGUARDANDO_PRESIDENTE') THEN 0 WHEN e.Status = N'ATIVO' THEN 1 ELSE 2 END, e.SolicitadoEm DESC, e.EnvioId DESC`);
-  const envios = r.recordset.map((l) => formaEnvio(l, hoje));
+  const envios = r.recordset.map((l) => formaEnvio(l, hoje)).filter((e) => !soCME(alcance) || cmeAlcanca(e, membroId));
   const din = await carregarDinheiro(() => pool.request());
   const atual = mi.mesDe(hoje);
   return envios.map((e) => {
@@ -350,11 +391,14 @@ function acoesDoEnvio(e, alcance, membroId, temPeriodos) {
   return {
     parecer: e.status === "EM_PARECER" && !!alcance.cme && !ehSolicitante,
     decidir: !!alcance.geral && (e.status === "AGUARDANDO_CLI" || e.status === "EM_PARECER"),
-    presidente: e.status === "AGUARDANDO_PRESIDENTE" && !!alcance.presidente,
+    // o Presidente não concorda com o envio que ele mesmo pediu (revisão de 05/11/2026: quem pede não autoriza o próprio pedido)
+    presidente: e.status === "AGUARDANDO_PRESIDENTE" && !!alcance.presidente && !ehSolicitante,
     desistir: andamento && (ehSolicitante || !!alcance.geral),
     encerrar: e.status === "ATIVO" && gere(alcance),
     reajustar: e.status === "ATIVO" && !!alcance.presidente,
-    relatorio: ["ATIVO", "ENCERRADO"].includes(e.status) && gere(alcance) && temPeriodos
+    relatorio: ["ATIVO", "ENCERRADO"].includes(e.status) && gere(alcance) && temPeriodos,
+    // a autorização do nome no mural se dá e se retira (LGPD Art. 8º §5º): a SEMIADESPA registra o que o missionário pediu
+    divulgacao: mi.VIVOS.includes(e.status) && gere(alcance)
   };
 }
 
@@ -362,6 +406,11 @@ async function detalharEnvio(pool, { envioId, alcance, hoje = hojeBrasilia(), me
   if (!veMissoes(alcance)) return null;
   const e = await lerEnvio(() => pool.request(), envioId, hoje);
   if (!e) return null;
+  if (soCME(alcance)) {
+    if (!cmeAlcanca(e, membroId)) return null;
+    // a CME vê o pedido (com o sustento proposto e quem recebe, para a viabilidade), nunca o documento, os relatórios nem os pagamentos
+    return { ...publico(e), documentoUrl: null, valores: [], geracoes: [], periodos: [], relatorios: [], ultimoGerado: null, acoes: acoesDoEnvio(e, alcance, membroId, false) };
+  }
   const din = (await carregarDinheiro(() => pool.request(), [envioId]))(envioId);
   const rel = await pool.request().input("id", sql.Int, envioId).query(`
     SELECT r.RelatorioId, r.PeriodoInicio, r.Batismos, r.Conversoes, r.Discipulado, r.Atividades, r.Pedidos, r.AnexoUrl, CONVERT(varchar(10), r.RecebidoEm, 120) AS RecebidoEm,
@@ -377,8 +426,8 @@ async function detalharEnvio(pool, { envioId, alcance, hoje = hojeBrasilia(), me
     sustentoVigente: vig ? vig.valor : (e.inicioMes ? 0 : null),
     valores: din.valores.map((v) => ({ desdeMes: v.desdeMes, valor: v.valor, fonteRotulo: v.fonteRotulo, congregacaoFonte: v.congregacaoFonte ? v.congregacaoFonte.nome : null,
       recebedor: v.recebedor ? `${v.recebedor.nome} (${v.recebedor.tipo})` : null, motivo: v.motivo, registradoEm: v.registradoEm })),
-    geracoes: din.geracoes.map((g) => ({ mes: g.mes, valor: g.valor, saidaId: g.saidaId, saidaStatus: g.saidaStatus,
-      semRelatorio: !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim) })),
+    geracoes: din.geracoes.map((g) => ({ mes: g.mes, valor: g.valor, saidaId: g.saidaId, saidaStatus: g.saidaStatus, desfeita: SAIDA_DESFEITA.includes(g.saidaStatus),
+      semRelatorio: !SAIDA_DESFEITA.includes(g.saidaStatus) && !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim) })),
     periodos: sit.periodos, suspenso: sit.suspenso && e.status === "ATIVO",
     relatorios: rel.recordset.map((l) => ({
       relatorioId: l.RelatorioId, periodoInicio: mes7(l.PeriodoInicio), batismos: Number(l.Batismos), conversoes: Number(l.Conversoes), discipulado: Number(l.Discipulado),
@@ -401,18 +450,23 @@ async function criarEnvio(pool, { dados, por, hoje = hojeBrasilia(), alcance, de
   if (!campo || campo.status !== "ATIVO") return { sucesso: false, mensagem: "Escolha um campo ativo." };
   const problema = await problemaDoMissionario(pool, rq0, d.membroId);
   if (problema) return { sucesso: false, mensagem: problema };
-  const dinheiro = await problemaDoDinheiro(rq0, d);
+  const dinheiro = await problemaDoDinheiro(rq0, d, { membroId: d.membroId, campo });
   if (dinheiro.problema) return { sucesso: false, mensagem: dinheiro.problema };
-  const etapas = mi.etapasDoEnvio({ abrangencia: campo.abrangencia, sustento: d.sustento, recebedorPJ: !!dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" });
-  const status = mi.statusInicial(etapas);
+  const recebedorPJ = !!dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ";
   const doc = await salvarArquivo(d.documento);
   if (doc.erro) return { sucesso: false, mensagem: `Documento do envio: ${doc.erro}` };
-  let envioId;
+  let envioId, status, etapas, fundamento;
   try {
     const r = await emTransacao(pool, async (t, rq) => {
       if (!(await enfileirar(rq, "envio"))) return OCUPADO;
+      await rq().input("m", sql.Int, d.membroId).query(`SELECT MembroId FROM MembroReferencia WITH (UPDLOCK, ROWLOCK) WHERE MembroId = @m`);
       const c = await lerCampo(rq, d.campoId, { travar: true });
       if (!c || c.status !== "ATIVO") return { sucesso: false, mensagem: "Escolha um campo ativo." };
+      // as etapas e a mantenedora pelo campo lido AQUI, sob a trava (revisão de 05/11/2026: com o campo lido antes, uma mudança do lugar no meio passava o envio pelas etapas erradas)
+      if (d.fonte === "CONGREGACAO" && (!c.mantenedora || Number(c.mantenedora.congregacaoId) !== Number(d.congregacaoFonteId))) return MUDOU;
+      etapas = mi.etapasDoEnvio({ abrangencia: c.abrangencia, sustento: d.sustento, recebedorPJ });
+      status = mi.statusInicial(etapas);
+      fundamento = mi.fundamentoPresidente({ abrangencia: c.abrangencia, sustento: d.sustento, recebedorPJ });
       const vivo = (await rq().input("m", sql.Int, d.membroId).query(`SELECT TOP 1 EnvioId FROM EnviosMissionarios WHERE MembroId = @m AND Status IN (N'EM_PARECER', N'AGUARDANDO_CLI', N'AGUARDANDO_PRESIDENTE', N'ATIVO')`)).recordset[0];
       if (vivo) return { sucesso: false, mensagem: "Esse missionário já tem um envio em andamento ou ativo: encerre (ou desista d)ele antes." };
       const ins = await rq().input("campo", sql.Int, d.campoId).input("m", sql.Int, d.membroId).input("st", sql.NVarChar(25), status)
@@ -443,11 +497,11 @@ async function criarEnvio(pool, { dados, por, hoje = hojeBrasilia(), alcance, de
   }
   const quem = await nomeDoMembro(pool, d.membroId);
   if (status === "EM_PARECER") await avisar(pool, "MISSOES_ENVIO_NOVO", (await composicaoCME(pool)).filter((x) => Number(x.membroId) !== Number(por)), mi.textoEnvioNovo({ missionario: quem, campo: campo.nome }), envioId, deps);
-  if (status === "AGUARDANDO_PRESIDENTE") await avisar(pool, "MISSOES_AGUARDANDO_PRESIDENTE", await presidentes(pool), mi.textoAguardandoPresidente({ missionario: quem, campo: campo.nome }), envioId, deps);
+  if (status === "AGUARDANDO_PRESIDENTE") await avisar(pool, "MISSOES_AGUARDANDO_PRESIDENTE", await presidentes(pool), mi.textoAguardandoPresidente({ missionario: quem, campo: campo.nome, fundamento }), envioId, deps);
   const mensagem = {
     EM_PARECER: "Pedido registrado. Agora a CME tem 15 dias para o parecer; depois decide a CLI.",
     AGUARDANDO_CLI: "Pedido registrado. Agora aguarda a decisão da CLI.",
-    AGUARDANDO_PRESIDENTE: "Pedido registrado. Agora aguarda a concordância do Pastor Presidente (o sustento é determinação dele — Regimento, Art. 134 §6º, I).",
+    AGUARDANDO_PRESIDENTE: `Pedido registrado. Agora aguarda a concordância do Pastor Presidente (${fundamento}).`,
     ATIVO: "Envio registrado e ativo: frente local sem sustento é da autonomia da SEMIADESPA (Regimento, Art. 44 §1º)."
   }[status];
   return { sucesso: true, envioId, status, mensagem };
@@ -525,6 +579,7 @@ async function decidir(pool, { envioId, dados, por, hoje = hojeBrasilia(), alcan
   if (!reuniao) return { sucesso: false, mensagem: "Escolha uma reunião da CLI já realizada e encerrada." };
   const r = await emTransacao(pool, async (t, rq) => {
     if (!(await enfileirar(rq, "envio"))) return OCUPADO;
+    await travarMissionarioDoEnvio(rq, envioId);
     const e = await lerEnvio(rq, envioId, hoje, { travar: true });
     if (!e) return NAO_EXISTE;
     const pode = mi.podeDecidirCLI(e, { reuniao, urgencia: v.dados.urgencia });
@@ -548,7 +603,10 @@ async function decidir(pool, { envioId, dados, por, hoje = hojeBrasilia(), alcan
   });
   if (!r.sucesso) return r;
   const quem = r.envio.missionario.nome, campo = r.envio.campo.nome;
-  if (r.novo === "AGUARDANDO_PRESIDENTE") await avisar(pool, "MISSOES_AGUARDANDO_PRESIDENTE", await presidentes(pool), mi.textoAguardandoPresidente({ missionario: quem, campo }), envioId, deps);
+  if (r.novo === "AGUARDANDO_PRESIDENTE") {
+    const fundamento = mi.fundamentoPresidente({ abrangencia: r.envio.campo.abrangencia, sustento: r.envio.sustentoProposto, recebedorPJ: !!r.envio.recebedor && r.envio.recebedor.tipo === "PJ" });
+    await avisar(pool, "MISSOES_AGUARDANDO_PRESIDENTE", await presidentes(pool), mi.textoAguardandoPresidente({ missionario: quem, campo, fundamento }), envioId, deps);
+  }
   if (r.novo !== "AGUARDANDO_PRESIDENTE") {
     await avisar(pool, "MISSOES_ENVIO_DECIDIDO", await pessoas(pool, [r.envio.solicitadoPor]), mi.textoDecidido({ missionario: quem, campo, ativo: r.novo === "ATIVO", recusadoPor: "CLI", motivo: v.dados.motivo }), envioId, deps);
   }
@@ -563,9 +621,11 @@ async function decidirPresidente(pool, { envioId, dados, por, hoje = hojeBrasili
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const r = await emTransacao(pool, async (t, rq) => {
     if (!(await enfileirar(rq, "envio"))) return OCUPADO;
+    await travarMissionarioDoEnvio(rq, envioId);
     const e = await lerEnvio(rq, envioId, hoje, { travar: true });
     if (!e) return NAO_EXISTE;
     if (e.status !== "AGUARDANDO_PRESIDENTE") return { sucesso: false, mensagem: "Este envio não está aguardando o Pastor Presidente." };
+    if (Number(e.solicitadoPor) === Number(por)) return { sucesso: false, mensagem: "Quem fez o pedido não concorda com ele: o pedido feito pelo Pastor Presidente precisa de outro pedido, da SEMIADESPA (quem pede não autoriza o próprio pedido)." };
     const concorda = v.dados.resultado === "CONCORDA";
     const u = await rq().input("id", sql.Int, envioId).input("res", sql.NVarChar(10), v.dados.resultado).input("mot", sql.NVarChar(1000), v.dados.motivo)
       .input("por", sql.Int, por).input("h", sql.Date, hoje).input("novo", sql.NVarChar(25), concorda ? "AGUARDANDO_PRESIDENTE" : "REJEITADO")
@@ -612,8 +672,15 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
   // a validação de forma primeiro (sem banco); o mês é conferido de novo dentro da trava
   const pre = mi.validarReajuste(dados, { inicioMes: null, ultimoGerado: null, hoje });
   if (!pre.valido) return { sucesso: false, mensagem: pre.mensagem };
-  const dinheiro = await problemaDoDinheiro(() => pool.request(), pre.dados);
+  const e0 = await lerEnvio(() => pool.request(), envioId, hoje);
+  if (!e0) return NAO_EXISTE;
+  const campo0 = await lerCampo(() => pool.request(), e0.campo.campoId);
+  const dinheiro = await problemaDoDinheiro(() => pool.request(), pre.dados, { membroId: e0.missionario.membroId, campo: campo0 });
   if (dinheiro.problema) return { sucesso: false, mensagem: dinheiro.problema };
+  // o convênio externo (quem recebe é pessoa jurídica) é da CLI com o Presidente (Art. 44 §2º): num envio que não passou pela CLI, ele não entra por reajuste
+  if (dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" && !e0.etapas.cli) {
+    return { sucesso: false, mensagem: "Pagar a uma pessoa jurídica é convênio externo, que passa pela CME e pela CLI (Regimento, Art. 44 §2º): este envio não passou por elas. Encerre-o e faça um novo pedido." };
+  }
   const doc = await salvarArquivo(pre.dados.documento);
   if (doc.erro) return { sucesso: false, mensagem: `Documento: ${doc.erro}` };
   return emTransacao(pool, async (t, rq) => {
@@ -625,6 +692,7 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
     const v = mi.validarReajuste(dados, { inicioMes: e.inicioMes, ultimoGerado: ultimoGerado(din.geracoes), hoje });
     if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
     const d = v.dados;
+    d.congregacaoFonteId = pre.dados.congregacaoFonteId;   // a mantenedora do campo, conferida acima
     if (d.sustento > 0 && !e.documentoUrlInterno && !doc.url) return { sucesso: false, mensagem: "O envio não tem o documento (o termo de compromisso): anexe-o com o reajuste, porque ele acompanha cada pagamento." };
     const existente = din.valores.find((x) => x.desdeMes === d.desdeMes);
     const comum = (q) => q.input("id", sql.Int, envioId).input("desde", sql.Char(7), d.desdeMes).input("v", sql.Decimal(10, 2), d.sustento).input("fonte", sql.NVarChar(12), d.fonte)
@@ -707,14 +775,16 @@ async function enviosComSustento(rq, hoje) {
   return r.recordset.map((l) => formaEnvio(l, hoje));
 }
 async function previaSustento(pool, { mes, hoje = hojeBrasilia(), alcance }) {
-  if (!veMissoes(alcance)) return { sucesso: false, proibido: true, mensagem: "Sem acesso." };
+  // a prévia do pagamento: quem gere, o Presidente e a Tesouraria Geral (não a CME, que só dá o parecer)
+  if (!(veMissoes(alcance) && !soCME(alcance)) && !alcance.tesouraria) return { sucesso: false, proibido: true, mensagem: "A prévia do sustento é da SEMIADESPA, do Pastor Presidente, do nível geral e da Tesouraria Geral." };
   const v = mi.validarGeracao({ mesReferencia: mes }, hoje);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const envios = await enviosComSustento(() => pool.request(), hoje);
   const din = await carregarDinheiro(() => pool.request());
+  const sob = await membrosSobDisciplina(pool);
   const linhas = [];
   for (const e of envios) {
-    const a = avaliarMes(e, din(e.envioId), v.dados.mesReferencia, hoje);
+    const a = avaliarMes(e, din(e.envioId), v.dados.mesReferencia, hoje, sob);
     if (!a) continue;
     const { _v, ...resto } = a;
     linhas.push({ envioId: e.envioId, missionario: e.missionario.nome, campo: e.campo.nome, ...resto });
@@ -730,6 +800,7 @@ async function gerarSustento(pool, { dados, por, hoje = hojeBrasilia(), alcance 
   const v = mi.validarGeracao(dados, hoje);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const mes = v.dados.mesReferencia;
+  const sob = await membrosSobDisciplina(pool);
   try {
     return await emTransacao(pool, async (t, rq) => {
       if (!(await obterTrava(rq, TRAVA_SUSTENTO))) return { sucesso: false, mensagem: "Já existe uma geração do sustento em andamento: aguarde e confira o resultado antes de tentar de novo." };
@@ -737,20 +808,26 @@ async function gerarSustento(pool, { dados, por, hoje = hojeBrasilia(), alcance 
       const din = await carregarDinheiro(rq);
       const geradas = [], fora = [];
       for (const e of envios) {
-        const a = avaliarMes(e, din(e.envioId), mes, hoje);
+        const a = avaliarMes(e, din(e.envioId), mes, hoje, sob);
         if (!a || a.situacao === "GERADO") continue;
         if (a.situacao !== "A_GERAR") { fora.push({ envioId: e.envioId, missionario: e.missionario.nome, situacao: a.situacao, motivo: a.motivo }); continue; }
         const val = a._v;
+        // a geração do mês cuja Saída foi cancelada ou rejeitada sai da frente (a Saída desfeita fica no Contas a Pagar, com o motivo): o mês é gerado de novo
+        if (a.saidaDesfeita) await rq().input("id", sql.Int, e.envioId).input("mes", sql.Char(7), mes).input("s", sql.Int, a.saidaDesfeita)
+          .query(`DELETE FROM SustentoGeracoes WHERE EnvioId = @id AND MesReferencia = @mes AND SaidaId = @s`);
         const congregacaoId = val.fonte === "CONGREGACAO" ? val.congregacaoFonte.congregacaoId : e.missionario.congregacaoId;
+        // campo de divulgação restrita: a descrição da Saída não diz o nome nem o campo (o Contas a Pagar é visto por mais gente; quem recebe já está no fornecedor)
+        const descricao = e.campo.divulgacao === "RESTRITA" ? `Sustento missionário — ${mi.mesBr(mes)} — envio nº ${e.envioId} (campo de divulgação restrita)`
+          : `Sustento missionário — ${mi.mesBr(mes)} — ${e.missionario.nome} (campo ${e.campo.nome})`;
         const saida = await rq().input("cong", sql.Int, congregacaoId).input("forn", sql.Int, val.recebedor.fornecedorId).input("tipo", sql.NVarChar(30), mi.CATEGORIA_SAIDA[val.fonte])
-          .input("desc", sql.NVarChar(300), `Sustento missionário — ${mi.mesBr(mes)} — ${e.missionario.nome} (campo ${e.campo.nome})`.slice(0, 300))
+          .input("desc", sql.NVarChar(300), descricao.slice(0, 300))
           .input("valor", sql.Decimal(10, 2), val.valor).input("doc", sql.NVarChar(500), e.documentoUrlInterno).input("por", sql.Int, por)
           .query(`INSERT INTO SaidasTesouraria (CongregacaoId, FornecedorId, Tipo, Descricao, Valor, DocumentoFiscalUrl, SolicitadoPor, Status)
                   OUTPUT inserted.SaidaId VALUES (@cong, @forn, @tipo, @desc, @valor, @doc, @por, N'APROVADA')`);
         const saidaId = saida.recordset[0].SaidaId;
         await rq().input("id", sql.Int, e.envioId).input("mes", sql.Char(7), mes).input("valor", sql.Decimal(10, 2), val.valor).input("saida", sql.Int, saidaId).input("por", sql.Int, por)
           .query(`INSERT INTO SustentoGeracoes (EnvioId, MesReferencia, Valor, SaidaId, GeradaPor) VALUES (@id, @mes, @valor, @saida, @por)`);
-        geradas.push({ envioId: e.envioId, missionario: e.missionario.nome, valor: val.valor, saidaId });
+        geradas.push({ envioId: e.envioId, missionario: e.missionario.nome, valor: val.valor, saidaId, refeita: !!a.saidaDesfeita });
       }
       if (!geradas.length) {
         return { sucesso: false, mensagem: fora.length ? `Nenhum sustento gerado em ${mi.mesBr(mes)}: ${fora.length} envio(s) suspenso(s) ou impedido(s) — veja o motivo de cada um.` : `Nada a gerar em ${mi.mesBr(mes)}.`, fora };
@@ -770,6 +847,15 @@ async function gerarSustento(pool, { dados, por, hoje = hojeBrasilia(), alcance 
 
 // ================================================================ painel e mural ================================================================
 async function painel(pool, { alcance, hoje = hojeBrasilia() }) {
+  const completo = await painelCompleto(pool, { alcance, hoje });
+  if (!soCME(alcance)) return completo;
+  // a CME: os números gerais e os envios aguardando o parecer, nada de sustento nem de relatório por pessoa
+  const t = completo.totais;
+  return { hoje: completo.hoje, ano: completo.ano, mesAtual: completo.mesAtual, soCME: true,
+    totais: { camposAtivos: t.camposAtivos, missionariosAtivos: t.missionariosAtivos, batismos: t.batismos, conversoes: t.conversoes, discipulado: t.discipulado },
+    porAbrangencia: completo.porAbrangencia, parecerVencido: completo.parecerVencido, emParecer: completo.emParecer, semSecretario: completo.semSecretario };
+}
+async function painelCompleto(pool, { alcance, hoje }) {
   const envios = (await pool.request().query(`SELECT ${COLUNAS_ENVIO} ${JUNCOES_ENVIO(false)}`)).recordset.map((l) => formaEnvio(l, hoje));
   const campos = await listarCampos(pool, { alcance });
   const din = await carregarDinheiro(() => pool.request());
@@ -778,6 +864,7 @@ async function painel(pool, { alcance, hoje = hojeBrasilia() }) {
   const item = (e, extra = {}) => ({ envioId: e.envioId, missionario: e.missionario.nome, campo: e.campo.nome, status: e.status, statusRotulo: e.statusRotulo, ...extra });
   const ativos = envios.filter((e) => e.status === "ATIVO");
   const atrasados = [], suspensos = [], semRelatorio = [];
+  let emDia = 0;
   let comprometido = 0, pagoNoAno = 0, geradoNaoPago = 0, batismos = 0, conversoes = 0, discipulado = 0;
   for (const e of envios) {
     const d = din(e.envioId);
@@ -789,17 +876,18 @@ async function painel(pool, { alcance, hoje = hojeBrasilia() }) {
     if (!e.inicioMes) continue;
     if (e.status === "ATIVO") { const vig = vigenteNoMes(d.valores, atual); comprometido += vig ? vig.valor : 0; }
     const sit = mi.situacaoRelatorios(e, d.relatorios.map((r) => r.periodoInicio), hoje);
+    if (e.status === "ATIVO" && !sit.vencidos.length) emDia++;
     if (sit.vencidos.length) atrasados.push(item(e, { periodos: sit.vencidos.map((p) => ({ inicio: p.inicio, fim: p.fim, prazo: p.prazo })) }));
     if (sit.suspenso && e.status === "ATIVO" && vigenteNoMes(d.valores, atual) && vigenteNoMes(d.valores, atual).valor > 0) suspensos.push(item(e));
     // o número que a Assembleia cobra: sustento PAGO de um mês cujo período não tem relatório recebido
-    const pagosSem = d.geracoes.filter((g) => g.saidaStatus === "PAGA" && !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim));
+    const pagosSem = geracoesValidas(d.geracoes).filter((g) => g.saidaStatus === "PAGA" && !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim));
     if (pagosSem.length) semRelatorio.push(item(e, { meses: pagosSem.map((g) => g.mes), valor: pagosSem.reduce((s, g) => s + g.valor, 0) }));
   }
   const porAbrangencia = Object.keys(mi.ABRANGENCIAS).map((k) => ({ codigo: k, rotulo: mi.ABRANGENCIAS[k], campos: campos.filter((c) => c.abrangencia === k).length }));
   return {
     hoje, ano, mesAtual: atual,
     totais: { camposAtivos: campos.length, missionariosAtivos: ativos.length, sustentoComprometido: comprometido, pagoNoAno, geradoNaoPago, batismos, conversoes, discipulado,
-      mesesPagosSemRelatorio: semRelatorio.reduce((s, x) => s + x.meses.length, 0), valorPagoSemRelatorio: semRelatorio.reduce((s, x) => s + x.valor, 0) },
+      relatoriosEmDia: emDia, mesesPagosSemRelatorio: semRelatorio.reduce((s, x) => s + x.meses.length, 0), valorPagoSemRelatorio: semRelatorio.reduce((s, x) => s + x.valor, 0) },
     porAbrangencia,
     parecerVencido: andamento.filter((e) => e.parecerVencido).map((e) => item(e, { prazo: e.prazoParecer })),
     emParecer: andamento.filter((e) => e.status === "EM_PARECER" && !e.parecerVencido).map((e) => item(e, { prazo: e.prazoParecer })),
@@ -819,7 +907,8 @@ async function mural(pool, { hoje = hojeBrasilia() }) {
     SELECT e.CampoId, SUM(r.Batismos) AS Batismos, SUM(r.Conversoes) AS Conversoes, SUM(r.Discipulado) AS Discipulado
     FROM RelatoriosCampo r JOIN EnviosMissionarios e ON e.EnvioId = r.EnvioId WHERE LEFT(r.PeriodoInicio, 4) = @a GROUP BY e.CampoId`);
   const invR = await pool.request().input("a", sql.NVarChar(4), ano).query(`
-    SELECT ISNULL(SUM(g.Valor), 0) AS Total FROM SustentoGeracoes g JOIN SaidasTesouraria s ON s.SaidaId = g.SaidaId WHERE s.Status = N'PAGA' AND LEFT(g.MesReferencia, 4) = @a`);
+    SELECT ISNULL(SUM(g.Valor), 0) AS Total, COUNT(DISTINCT g.EnvioId) AS Envios FROM SustentoGeracoes g JOIN SaidasTesouraria s ON s.SaidaId = g.SaidaId
+    WHERE s.Status = N'PAGA' AND LEFT(g.MesReferencia, 4) = @a`);
   const numeros = new Map(relR.recordset.map((l) => [l.CampoId, { batismos: Number(l.Batismos), conversoes: Number(l.Conversoes), discipulado: Number(l.Discipulado) }]));
   const publicos = [];
   let camposRestritos = 0, missionariosRestritos = 0;
@@ -833,7 +922,8 @@ async function mural(pool, { hoje = hojeBrasilia() }) {
       missionarios: nomes, outrosMissionarios: doCampo.length - nomes.length, ...(numeros.get(c.CampoId) || { batismos: 0, conversoes: 0, discipulado: 0 }) });
   }
   return { ano, campos: publicos, camposRestritos, missionariosRestritos, totais: { ...totais, campos: camposR.recordset.length, missionarios: enviosR.recordset.length,
-    investidoNoAno: Number(invR.recordset[0].Total) } };
+    // com um só missionário pago no ano, o total seria o valor dele: o mural não mostra (revisão de 05/11/2026)
+    investidoNoAno: Number(invR.recordset[0].Envios) >= 2 ? Number(invR.recordset[0].Total) : null } };
 }
 
 // ================================================================ catálogos ================================================================
@@ -842,8 +932,9 @@ async function catalogos(pool, { alcance }) {
   const congs = await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes WHERE Ativa = 1 ORDER BY Nome`);
   // quem recebe: só para quem pede (a SEMIADESPA e o nível geral) e para o Presidente (reajuste) — o nome e o tipo, nunca os dados bancários nem o documento
   const forn = gere(alcance) || alcance.presidente
-    ? (await pool.request().query(`SELECT FornecedorId, Nome, Tipo, DadosBancariosConfirmados FROM Fornecedores WHERE Ativo = 1 ORDER BY Nome`)).recordset
-      .map((f) => ({ fornecedorId: f.FornecedorId, nome: f.Nome, tipo: f.Tipo, confirmado: !!f.DadosBancariosConfirmados }))
+    // a pessoa física só aparece se estiver ligada a uma matrícula (é o próprio missionário que recebe); a jurídica é a agência ou igreja parceira
+    ? (await pool.request().query(`SELECT FornecedorId, Nome, Tipo, DadosBancariosConfirmados, MembroId FROM Fornecedores WHERE Ativo = 1 AND (Tipo = 'PJ' OR MembroId IS NOT NULL) ORDER BY Nome`)).recordset
+      .map((f) => ({ fornecedorId: f.FornecedorId, nome: f.Nome, tipo: f.Tipo, confirmado: !!f.DadosBancariosConfirmados, membroId: f.MembroId == null ? null : Number(f.MembroId) }))
     : [];
   return {
     abrangencias: lista(mi.ABRANGENCIAS), divulgacoes: lista(mi.DIVULGACOES), periodicidades: lista(mi.PERIODICIDADES), fontes: lista(mi.FONTES),
@@ -916,49 +1007,97 @@ async function detectarRelatorioAtrasado(pool, { hoje = hojeBrasilia() } = {}) {
   const envios = (await pool.request().query(`SELECT ${COLUNAS_ENVIO} ${JUNCOES_ENVIO(false)} WHERE e.Status IN (N'ATIVO', N'ENCERRADO')`)).recordset.map((l) => formaEnvio(l, hoje));
   if (!envios.length) return [];
   const din = await carregarDinheiro(() => pool.request());
+  const atual = mi.mesDe(hoje);
   const fatos = [];
   for (const e of envios) {
-    const sit = mi.situacaoRelatorios(e, din(e.envioId).relatorios.map((r) => r.periodoInicio), hoje);
-    for (const p of sit.vencidos) fatos.push({ e, p });
+    const d = din(e.envioId);
+    const sit = mi.situacaoRelatorios(e, d.relatorios.map((r) => r.periodoInicio), hoje);
+    // o texto só diz "suspenso" quando suspende de fato: o envio ativo com sustento neste mês
+    const vig = vigenteNoMes(d.valores, atual);
+    const suspende = e.status === "ATIVO" && !!vig && vig.valor > 0;
+    for (const p of sit.vencidos) fatos.push({ e, p, suspende });
   }
   if (!fatos.length) return [];
   const destinatarios = semRepetir([await destinatariosSemiadespa(pool, hoje), await destinatariosGerais(pool)]);
-  return fatos.map(({ e, p }) => ({ referenciaId: mi.referenciaPeriodo(p.inicio, e.envioId), destinatarios,
-    fatoGerador: mi.textoRelatorioAtrasado({ missionario: e.missionario.nome, campo: e.campo.nome, periodo: p, prazo: p.prazo, hoje }) }));
+  return fatos.map(({ e, p, suspende }) => ({ referenciaId: mi.referenciaPeriodo(p.inicio, e.envioId), destinatarios,
+    fatoGerador: mi.textoRelatorioAtrasado({ missionario: e.missionario.nome, campo: e.campo.nome, periodo: p, prazo: p.prazo, hoje, suspende }) }));
+}
+
+// ================================================================ a autorização do nome no mural ================================================================
+// O missionário dá ou retira a autorização de ter o nome no mural (LGPD Art. 8º §5º e Art. 18, IX): a SEMIADESPA (ou o nível geral) registra o que ele pediu.
+async function alterarDivulgacao(pool, { envioId, dados, por, hoje = hojeBrasilia(), alcance }) {
+  if (!gere(alcance)) return PROIBIDO(SO_GESTAO);
+  const d = dados && typeof dados === "object" ? dados : {};
+  if (typeof d.divulgarNome !== "boolean") return { sucesso: false, mensagem: "Diga se o missionário autoriza (verdadeiro) ou não (falso) o nome no mural." };
+  return emTransacao(pool, async (t, rq) => {
+    const e = await lerEnvio(rq, envioId, hoje, { travar: true });
+    if (!e) return NAO_EXISTE;
+    if (!mi.VIVOS.includes(e.status)) return { sucesso: false, mensagem: "O envio não está em andamento nem ativo: ele já não aparece no mural." };
+    if (e.divulgarNome === d.divulgarNome) return { sucesso: true, mensagem: d.divulgarNome ? "O nome já estava autorizado." : "O nome já não aparecia no mural." };
+    const u = await rq().input("id", sql.Int, envioId).input("v", sql.Bit, d.divulgarNome).input("st", sql.NVarChar(25), e.status)
+      .query(`UPDATE EnviosMissionarios SET DivulgarNome = @v WHERE EnvioId = @id AND Status = @st`);
+    if (!u.rowsAffected[0]) return MUDOU;
+    await registrarAuditoriaNaTransacao(t, { tabela: "EnviosMissionarios", registroId: envioId, acao: d.divulgarNome ? "MISSOES_NOME_AUTORIZADO" : "MISSOES_NOME_RETIRADO", usuarioId: por,
+      dadosAntes: { divulgarNome: e.divulgarNome }, dadosDepois: { divulgarNome: d.divulgarNome } });
+    return { sucesso: true, mensagem: d.divulgarNome ? "Autorização registrada: o nome aparece no mural (se o campo for público)." : "Autorização retirada: o nome sai do mural na hora." };
+  });
 }
 
 // ================================================================ Meus Dados (LGPD Art. 18) ================================================================
+// O que se registrou sobre a pessoa como missionária: o envio, o que se disse dele (a justificativa, o parecer, os motivos da decisão), o sustento e os pagamentos.
 async function dadosDoTitular(pool, membroId) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT e.EnvioId, c.Nome AS Campo, e.Status, CONVERT(varchar(10), e.SolicitadoEm, 120) AS SolicitadoEm, e.InicioMes, e.FimMes, e.MotivoEncerramento, e.DivulgarNome, e.Periodicidade,
+           e.Justificativa, e.ParecerCME, e.ParecerFundamentacao, e.DecisaoResultado, e.DecisaoMotivo, e.PresidenteResultado, e.PresidenteMotivo, e.DesistenciaMotivo,
            (SELECT COUNT(*) FROM RelatoriosCampo r WHERE r.EnvioId = e.EnvioId) AS Relatorios
     FROM EnviosMissionarios e JOIN CamposMissionarios c ON c.CampoId = e.CampoId WHERE e.MembroId = @m ORDER BY e.SolicitadoEm DESC, e.EnvioId DESC`);
   const valores = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT v.EnvioId, v.DesdeMes, v.Valor FROM EnvioSustentoValores v JOIN EnviosMissionarios e ON e.EnvioId = v.EnvioId WHERE e.MembroId = @m ORDER BY v.DesdeMes`);
+  const pagamentos = await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT g.EnvioId, g.MesReferencia, g.Valor, s.Status FROM SustentoGeracoes g JOIN EnviosMissionarios e ON e.EnvioId = g.EnvioId JOIN SaidasTesouraria s ON s.SaidaId = g.SaidaId
+    WHERE e.MembroId = @m ORDER BY g.MesReferencia`);
   return r.recordset.map((l) => ({
     campo: l.Campo, status: mi.STATUS_ENVIO[l.Status] || l.Status, pedidoEm: iso(l.SolicitadoEm), inicio: mes7(l.InicioMes), fim: mes7(l.FimMes),
     motivoEncerramento: l.MotivoEncerramento, autorizouDivulgarNome: !!l.DivulgarNome, periodicidade: mi.PERIODICIDADES[l.Periodicidade] || l.Periodicidade,
-    relatoriosRecebidos: Number(l.Relatorios),
-    sustento: valores.recordset.filter((v) => v.EnvioId === l.EnvioId).map((v) => ({ desde: mes7(v.DesdeMes), valor: Number(v.Valor) }))
+    relatoriosRecebidos: Number(l.Relatorios), justificativa: l.Justificativa,
+    parecerCME: l.ParecerCME ? { resultado: mi.PARECERES[l.ParecerCME], fundamentacao: l.ParecerFundamentacao } : null,
+    decisaoCLI: l.DecisaoResultado ? { resultado: mi.RESULTADOS_CLI[l.DecisaoResultado], motivo: l.DecisaoMotivo } : null,
+    presidente: l.PresidenteResultado ? { resultado: mi.RESULTADOS_PRESIDENTE[l.PresidenteResultado], motivo: l.PresidenteMotivo } : null,
+    desistencia: l.DesistenciaMotivo || null,
+    sustento: valores.recordset.filter((v) => v.EnvioId === l.EnvioId).map((v) => ({ desde: mes7(v.DesdeMes), valor: Number(v.Valor) })),
+    pagamentos: pagamentos.recordset.filter((g) => g.EnvioId === l.EnvioId).map((g) => ({ mes: mes7(g.MesReferencia), valor: Number(g.Valor), situacao: g.Status }))
   }));
 }
+// Os atos da pessoa em Missões: nos envios (pediu, parecer, decisão, Presidente, desistência, encerramento) e no resto (relatórios, campos, reajustes, gerações).
 async function atosDoTitular(pool, membroId) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
     SELECT e.EnvioId, c.Nome AS Campo, mm.Nome AS Missionario, CONVERT(varchar(10), e.SolicitadoEm, 120) AS SolicitadoEm,
            CASE WHEN e.SolicitadoPor = @m THEN 1 ELSE 0 END AS Pediu, CASE WHEN e.ParecerPor = @m THEN 1 ELSE 0 END AS DeuParecer,
            CASE WHEN e.DecisaoRegistradaPor = @m THEN 1 ELSE 0 END AS RegistrouDecisao, CASE WHEN e.PresidentePor = @m THEN 1 ELSE 0 END AS Presidente,
-           CASE WHEN e.DesistidoPor = @m THEN 1 ELSE 0 END AS Desistiu, CASE WHEN e.EncerradoPor = @m THEN 1 ELSE 0 END AS Encerrou
+           CASE WHEN e.DesistidoPor = @m THEN 1 ELSE 0 END AS Desistiu, CASE WHEN e.EncerradoPor = @m THEN 1 ELSE 0 END AS Encerrou,
+           (SELECT COUNT(*) FROM RelatoriosCampo r WHERE r.EnvioId = e.EnvioId AND (r.RegistradoPor = @m OR r.RetificadoPor = @m)) AS Relatorios,
+           (SELECT COUNT(*) FROM EnvioSustentoValores v WHERE v.EnvioId = e.EnvioId AND v.RegistradoPor = @m AND v.Motivo <> N'Ativação do envio') AS Reajustes,
+           (SELECT COUNT(*) FROM SustentoGeracoes g WHERE g.EnvioId = e.EnvioId AND g.GeradaPor = @m) AS Geracoes
     FROM EnviosMissionarios e JOIN CamposMissionarios c ON c.CampoId = e.CampoId JOIN MembroReferencia mm ON mm.MembroId = e.MembroId
-    WHERE @m IN (e.SolicitadoPor, e.ParecerPor, e.DecisaoRegistradaPor, e.PresidentePor, e.DesistidoPor, e.EncerradoPor) ORDER BY e.SolicitadoEm DESC, e.EnvioId DESC`);
+    WHERE @m IN (e.SolicitadoPor, e.ParecerPor, e.DecisaoRegistradaPor, e.PresidentePor, e.DesistidoPor, e.EncerradoPor)
+       OR EXISTS (SELECT 1 FROM RelatoriosCampo r WHERE r.EnvioId = e.EnvioId AND (r.RegistradoPor = @m OR r.RetificadoPor = @m))
+       OR EXISTS (SELECT 1 FROM EnvioSustentoValores v WHERE v.EnvioId = e.EnvioId AND v.RegistradoPor = @m AND v.Motivo <> N'Ativação do envio')
+       OR EXISTS (SELECT 1 FROM SustentoGeracoes g WHERE g.EnvioId = e.EnvioId AND g.GeradaPor = @m)
+    ORDER BY e.SolicitadoEm DESC, e.EnvioId DESC`);
+  const campos = await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT Nome, CONVERT(varchar(10), AbertoEm, 120) AS AbertoEm, CASE WHEN AbertoPor = @m THEN 1 ELSE 0 END AS Abriu, CASE WHEN EncerradoPor = @m THEN 1 ELSE 0 END AS Encerrou
+    FROM CamposMissionarios WHERE @m IN (AbertoPor, EncerradoPor) ORDER BY AbertoEm DESC`);
   return r.recordset.map((l) => ({
     envio: `${l.Missionario} — campo ${l.Campo}`, em: iso(l.SolicitadoEm),
     papeis: [l.Pediu ? "pediu" : null, l.DeuParecer ? "deu o parecer da CME" : null, l.RegistrouDecisao ? "registrou a decisão da CLI" : null,
-      l.Presidente ? "decidiu como Pastor Presidente" : null, l.Desistiu ? "desistiu" : null, l.Encerrou ? "encerrou o envio" : null].filter(Boolean)
-  }));
+      l.Presidente ? "decidiu como Pastor Presidente" : null, l.Desistiu ? "desistiu" : null, l.Encerrou ? "encerrou o envio" : null,
+      Number(l.Relatorios) ? `lançou ou corrigiu ${l.Relatorios} relatório(s)` : null, Number(l.Reajustes) ? `reajustou o sustento ${l.Reajustes} vez(es)` : null,
+      Number(l.Geracoes) ? `gerou ${l.Geracoes} pagamento(s)` : null].filter(Boolean)
+  })).concat(campos.recordset.map((c) => ({ envio: `Campo ${c.Nome}`, em: iso(c.AbertoEm), papeis: [c.Abriu ? "abriu o campo" : null, c.Encerrou ? "encerrou o campo" : null].filter(Boolean) })));
 }
 
 module.exports = {
-  montarAlcance, veMissoes, gere, reunioesEncerradas, listarCampos, lerCampo, criarCampo, editarCampo, encerrarCampo, listarEnvios, detalharEnvio, criarEnvio, emitirParecer,
-  desistir, decidir, decidirPresidente, encerrarEnvio, reajustar, registrarRelatorio, retificarRelatorio, previaSustento, gerarSustento, painel, mural, catalogos,
-  detectarParecerVencido, detectarRelatorioAtrasado, dadosDoTitular, atosDoTitular, avaliarMes, vigenteNoMes
+  montarAlcance, veMissoes, gere, soCME, soTesouraria, reunioesEncerradas, listarCampos, lerCampo, criarCampo, editarCampo, encerrarCampo, listarEnvios, detalharEnvio, criarEnvio,
+  emitirParecer, desistir, decidir, decidirPresidente, encerrarEnvio, reajustar, alterarDivulgacao, registrarRelatorio, retificarRelatorio, previaSustento, gerarSustento, painel,
+  mural, catalogos, detectarParecerVencido, detectarRelatorioAtrasado, dadosDoTitular, atosDoTitular, avaliarMes, vigenteNoMes
 };

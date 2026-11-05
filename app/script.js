@@ -1412,6 +1412,8 @@ function temPermissaoDaAba(nome) {
   if (nome === "crise") return sessaoDeLiderancaNaTela();   // v7.15: todo líder registra o pedido da imprensa que chegou a ele
   // Trava 7-C: a aba "Ministério com Menores" abre também à Proteção de crianças do NÍVEL GERAL, só para a seção "Funções com menores" (o servidor confere de novo)
   if (nome === "menores" && authGeral && authPermissoes.includes("protecao_menores")) return true;
+  // v9.4: a aba Expansão abre também à Tesouraria Geral, só para a pílula de Missões (a geração do sustento do mês; o servidor confere de novo)
+  if (nome === "expansao" && authGeral && authPermissoes.includes("financeiro")) return true;
   return nome === "ebd" && ebdTurmasProfessor.length > 0;
 }
 async function carregarTurmasProfessorEbd() {

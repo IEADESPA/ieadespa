@@ -95,10 +95,20 @@ async function misAbrirAcao() {
   }
   const novo = misEl("btnMisNovoEnvio"); if (novo) novo.style.display = misGere() ? "" : "none";
   const novoCampo = misEl("btnMisNovoCampo"); if (novoCampo) novoCampo.style.display = misGere() ? "" : "none";
-  misMostrarSubAcao(misSub);
+  for (const s of MIS_SUBS) { const b = misEl(`btnMisSub${capitalize(s)}`); if (b) b.style.display = misSubPermitida(s) ? "" : "none"; }
+  misMostrarSubAcao(misSubPermitida(misSub) ? misSub : MIS_SUBS.find(misSubPermitida));
+}
+// O que cada um vê (o servidor confere de novo): a Tesouraria Geral sem outro papel, só o sustento do mês; a CME sem outro papel, tudo menos o sustento.
+const misSoTesouraria = () => misPapel("tesouraria") && !misPapel("geral") && !misPapel("semiadespa") && !misPapel("cme") && !misPapel("presidente");
+const misSoCME = () => misPapel("cme") && !misPapel("geral") && !misPapel("semiadespa") && !misPapel("presidente");
+function misSubPermitida(s) {
+  if (!misCatalogos) return s === "painel";
+  if (misSoTesouraria()) return s === "sustento";
+  if (misSoCME()) return s !== "sustento";
+  return MIS_SUBS.includes(s);
 }
 function misMarcarSub(sub) {
-  misSub = MIS_SUBS.includes(sub) ? sub : "painel";
+  misSub = MIS_SUBS.includes(sub) && misSubPermitida(sub) ? sub : (MIS_SUBS.find(misSubPermitida) || "painel");
   for (const s of MIS_SUBS) {
     const div = misEl(`misSub${capitalize(s)}`); if (div) div.style.display = s === misSub ? "block" : "none";
     const b = misEl(`btnMisSub${capitalize(s)}`); if (b) { b.classList.toggle("ativo", s === misSub); b.setAttribute("aria-pressed", s === misSub ? "true" : "false"); }
@@ -128,10 +138,18 @@ async function misCarregarPainelAcao() {
   if (!p.sucesso) { alvo.innerHTML = p.semConexao ? MIS_SEM_CONEXAO : `<p class='subtitle'>${misH(p.mensagem)}</p>`; return; }
   const t = p.totais || {};
   const arr = (x) => (Array.isArray(x) ? x : []);
+  if (p.soCME) {
+    alvo.innerHTML = `
+      <p class="subtitle">A CME vê os pedidos que aguardam o parecer e os números gerais (o sustento e os relatórios de cada missionário ficam com a SEMIADESPA).</p>
+      <p>${misH(t.camposAtivos)} campo(s) ativo(s) · ${misH(t.missionariosAtivos)} missionário(s) no campo · em ${misH(p.ano)}: ${misH(t.batismos)} batismo(s), ${misH(t.conversoes)} conversão(ões)</p>
+      ${misBloco("⏰ Parecer da CME vencido (15 dias)", arr(p.parecerVencido).map((e) => misItemEnvio(e, `venceu em ${misH(misBr(e.prazo))}`)), "Nenhum.")}
+      ${misBloco("🧭 Aguardando o parecer da CME", arr(p.emParecer).map((e) => misItemEnvio(e, `até ${misH(misBr(e.prazo))}`)), "Nenhum.")}`;
+    return;
+  }
   alvo.innerHTML = `
     ${p.semSecretario ? "<p>⚠️ Ninguém com o papel de Secretário de Missões (ou de Líder Geral da SEMIADESPA) em vigor: a CME fica sem ele (Regimento, Art. 23, I). Dê o acesso em Liderança.</p>" : ""}
     <div class="rolagem-tabela"><table class="tabela-frequencia"><tbody>
-      <tr><th>Campos ativos</th><td>${misH(t.camposAtivos)}</td><th>Missionários no campo</th><td>${misH(t.missionariosAtivos)}</td></tr>
+      <tr><th>Campos ativos</th><td>${misH(t.camposAtivos)}</td><th>Missionários no campo</th><td>${misH(t.missionariosAtivos)} <small>(com os relatórios em dia: ${misH(t.relatoriosEmDia)})</small></td></tr>
       <tr><th>Sustento mensal comprometido</th><td>${misH(misReais(t.sustentoComprometido))}</td><th>Sustento pago em ${misH(p.ano)}</th><td>${misH(misReais(t.pagoNoAno))}</td></tr>
       <tr><th>Gerado e ainda não pago</th><td>${misH(misReais(t.geradoNaoPago))}</td><th>Meses pagos sem relatório recebido</th><td><strong>${misH(t.mesesPagosSemRelatorio)}</strong> (${misH(misReais(t.valorPagoSemRelatorio))})</td></tr>
       <tr><th>Batismos em ${misH(p.ano)}</th><td>${misH(t.batismos)}</td><th>Conversões em ${misH(p.ano)}</th><td>${misH(t.conversoes)} <small>(em discipulado: ${misH(t.discipulado)})</small></td></tr>
@@ -217,7 +235,8 @@ function misRenderFicha() {
     a.relatorio && pendentes.length ? misBotao("📨 Lançar relatório de campo", "relatorio") : "",
     a.reajustar ? misBotao("💵 Reajustar o sustento", "reajustar") : "",
     a.encerrar ? misBotao("🏁 Encerrar o envio", "encerrar") : "",
-    a.desistir ? misBotao("↩️ Registrar a desistência", "desistir") : ""
+    a.desistir ? misBotao("↩️ Registrar a desistência", "desistir") : "",
+    a.divulgacao ? misBotao(e.divulgarNome ? "🙈 Tirar o nome do mural" : "📣 Autorizar o nome no mural", "divulgacao") : ""
   ].filter(Boolean).join(" ");
   const sustento = e.sustentoVigente == null ? `${misH(misReais(e.sustentoProposto))} <small>(proposto)</small>` : `${misH(misReais(e.sustentoVigente))} <small>(vigente neste mês)</small>`;
   misEl("misFicha").innerHTML = `
@@ -242,7 +261,7 @@ function misRenderFicha() {
     ${botoes ? `<div class="barra-lista">${botoes}</div>` : ""}
     <div id="misFormAcao"></div>
     ${arr(e.periodos).length ? `<h4>📨 Relatórios de campo</h4><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Período</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>${arr(e.periodos).map((p) => `
-      <tr><td>${misH(misMes(p.inicio))}${p.fim !== p.inicio ? ` a ${misH(misMes(p.fim))}` : ""}</td><td>${misH(misBr(p.prazo))}</td><td>${p.entregue ? "✅ recebido" : (p.vencido ? "<strong>🚩 vencido</strong>" : "em aberto")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <tr><td>${misH(misMes(p.inicio))}${p.fim !== p.inicio ? ` a ${misH(misMes(p.fim))}` : ""}</td><td>${misH(misBr(p.prazo))}</td><td>${p.entregue ? "✅ recebido" : (p.dispensado ? "dispensado (vacância)" : (p.vencido ? "<strong>🚩 vencido</strong>" : "em aberto"))}</td></tr>`).join("")}</tbody></table></div>` : ""}
     ${arr(e.relatorios).length ? `<ul>${arr(e.relatorios).map((r) => `<li><strong>${misH(misMes(r.periodoInicio))}</strong>: ${misH(r.batismos)} batismo(s), ${misH(r.conversoes)} conversão(ões), ${misH(r.discipulado)} em discipulado
       <small>— recebido em ${misH(misBr(r.recebidoEm))} (${misH(r.registradoPorNome)})${r.retificadoEm ? `, corrigido em ${misH(misBr(r.retificadoEm))}` : ""}</small>
       <br><span class="subtitle">${misH(r.atividades)}</span>${r.pedidos ? `<br><small>Pedidos: ${misH(r.pedidos)}</small>` : ""}
@@ -250,7 +269,7 @@ function misRenderFicha() {
       ${a.relatorio ? `<br>${misBotao("✏️ Corrigir", "relatorio-corrigir", { relatorioId: Number(r.relatorioId) })}` : ""}</li>`).join("")}</ul>` : ""}
     ${arr(e.valores).length ? `<h4>💵 Sustento: valor e reajustes</h4><ul>${arr(e.valores).map((v) => `<li>Desde ${misH(misMes(v.desdeMes))}: <strong>${misH(misReais(v.valor))}</strong>${v.fonteRotulo ? ` — ${misH(v.fonteRotulo)}${v.congregacaoFonte ? ` (${misH(v.congregacaoFonte)})` : ""}` : ""}${v.recebedor ? `; recebe ${misH(v.recebedor)}` : ""}${v.motivo ? ` <small>— ${misH(v.motivo)}</small>` : ""}</li>`).join("")}</ul>` : ""}
     ${arr(e.geracoes).length ? `<h4>🧾 Pagamentos gerados (Contas a Pagar)</h4><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Valor</th><th>Saída</th><th>Relatório</th></tr></thead><tbody>${arr(e.geracoes).map((g) => `
-      <tr><td>${misH(misMes(g.mes))}</td><td>${misH(misReais(g.valor))}</td><td>nº ${misH(g.saidaId)} — ${misH(MIS_SAIDA[g.saidaStatus] || g.saidaStatus)}</td><td>${g.semRelatorio ? "<strong>🚩 sem relatório</strong>" : "✅"}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+      <tr><td>${misH(misMes(g.mes))}</td><td>${misH(misReais(g.valor))}</td><td>nº ${misH(g.saidaId)} — ${misH(MIS_SAIDA[g.saidaStatus] || g.saidaStatus)}</td><td>${g.desfeita ? "Saída desfeita: o mês volta a ser gerado" : (g.semRelatorio ? "<strong>🚩 sem relatório</strong>" : "✅")}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
   if (misForm && misForm.alvo === "misFormAcao") { misRenderForm(); misRestaurarCampos(digitado); }
 }
 
@@ -343,7 +362,7 @@ async function misCarregarMuralAcao() {
     <div id="misMuralImprimivel" class="cartao-perfil">
       <h3>🌍 Missões IEADESPA — ${misH(r.ano)}</h3>
       <p><strong>${misH(t.missionarios)}</strong> missionário(s) em <strong>${misH(t.campos)}</strong> campo(s) · ${misH(t.batismos)} batismo(s) · ${misH(t.conversoes)} conversão(ões) · ${misH(t.discipulado)} pessoa(s) em discipulado</p>
-      <p>Investido no sustento missionário em ${misH(r.ano)}: <strong>${misH(misReais(t.investidoNoAno))}</strong></p>
+      ${t.investidoNoAno == null ? "" : `<p>Investido no sustento missionário em ${misH(r.ano)}: <strong>${misH(misReais(t.investidoNoAno))}</strong></p>`}
       ${campos.length ? campos.map((c) => `<div class="mis-mural-campo"><h4>${misH(c.nome)} <small>— ${misH(c.lugar)}</small></h4>
         <p>${c.missionarios.length ? `Missionário(s): ${c.missionarios.map(misH).join(", ")}${c.outrosMissionarios ? ` e mais ${misH(c.outrosMissionarios)}` : ""}` : (c.outrosMissionarios ? `${misH(c.outrosMissionarios)} missionário(s)` : "Frente sem missionário enviado")}</p>
         <p><small>${misH(c.batismos)} batismo(s) · ${misH(c.conversoes)} conversão(ões) · ${misH(c.discipulado)} em discipulado</small></p></div>`).join("") : "<p class='subtitle'>Nenhum campo de divulgação pública.</p>"}
@@ -363,21 +382,21 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 // ================================================================ formulários ================================================================
 const misOpcoes = (nome) => misLista(nome).map((o) => ({ codigo: o.codigo, rotulo: o.rotulo }));
 const misOpcoesCongregacoes = () => misLista("congregacoes").map((c) => ({ codigo: String(c.congregacaoId), rotulo: c.nome }));
-const misOpcoesFornecedores = () => misLista("fornecedores").map((f) => ({ codigo: String(f.fornecedorId), rotulo: `${f.nome} (${f.tipo === "PJ" ? "pessoa jurídica — convênio externo" : "pessoa física"})${f.confirmado ? "" : " — dados bancários a confirmar"}` }));
+const misOpcoesFornecedores = () => misLista("fornecedores").map((f) => ({ codigo: String(f.fornecedorId), rotulo: `${f.nome} (${f.tipo === "PJ" ? "pessoa jurídica — convênio externo" : `pessoa física, mat. ${f.membroId}`})${f.confirmado ? "" : " — dados bancários a confirmar"}` }));
 const MIS_CAMPOS_DINHEIRO = () => [
   { id: "sustento", rotulo: "Sustento mensal (R$; 0 = sem sustento)", tipo: "texto", max: 12 },
-  { id: "fonte", rotulo: "De onde sai o sustento", tipo: "select", opcoes: misOpcoes("fontes") },
-  { id: "congregacaoFonteId", rotulo: "Congregação mantenedora que paga (quando sai do caixa local)", tipo: "select", opcoes: misOpcoesCongregacoes() },
-  { id: "fornecedorId", rotulo: "Quem recebe (fornecedor do Contas a Pagar)", tipo: "select", opcoes: misOpcoesFornecedores() }
+  { id: "fonte", rotulo: "De onde sai o sustento (o caixa local é o da congregação mantenedora do campo)", tipo: "select", opcoes: misOpcoes("fontes") },
+  { id: "fornecedorId", rotulo: "Quem recebe: o próprio missionário (pessoa física ligada à matrícula) ou uma agência ou igreja parceira (pessoa jurídica)", tipo: "select", opcoes: misOpcoesFornecedores() }
 ];
 const misValorOk = (v) => /^\d{1,9}([.,]\d{1,2})?$/.test(String(v || "0").trim());
 const misNumero = (v) => Number(String(v || "0").trim().replace(",", "."));
-function misConferirDinheiro(c) {
+function misConferirDinheiro(c, membroId) {
   if (!misValorOk(c.sustento)) return "O sustento é um valor em reais (ex.: 1500,00), sem ponto de milhar.";
   if (misNumero(c.sustento) > 0) {
     if (!c.fonte) return "Com sustento, escolha de onde ele sai.";
-    if (c.fonte === "CONGREGACAO" && !c.congregacaoFonteId) return "Escolha a congregação mantenedora que paga.";
     if (!c.fornecedorId) return "Com sustento, escolha quem recebe.";
+    const f = misLista("fornecedores").find((x) => String(x.fornecedorId) === String(c.fornecedorId));
+    if (f && f.tipo === "PF" && String(f.membroId) !== String(membroId)) return "A pessoa física que recebe é o próprio missionário: escolha o fornecedor com a matrícula dele.";
   }
   return null;
 }
@@ -393,7 +412,7 @@ function misEspec(chave) {
       { id: "pais", rotulo: "País (em branco = Brasil)", tipo: "texto", max: 80 },
       { id: "uf", rotulo: "UF (no Brasil)", tipo: "select", opcoes: misLista("ufs").map((u) => ({ codigo: u, rotulo: u })) },
       { id: "cidade", rotulo: "Cidade (obrigatória no Brasil)", tipo: "texto", max: 150 },
-      { id: "zonaRural", rotulo: "Zona rural adjacente a Parauapebas (no Pará)", tipo: "check" },
+      { id: "zonaRural", rotulo: "Zona rural adjacente (de Parauapebas ou de um município vizinho: Canaã dos Carajás, Curionópolis, Eldorado do Carajás, Marabá, Água Azul do Norte, São Félix do Xingu)", tipo: "check" },
       { id: "congregacaoMantenedoraId", rotulo: "Congregação mantenedora (opcional)", tipo: "select", opcoes: misOpcoesCongregacoes() },
       { id: "divulgacao", rotulo: "Divulgação no mural", tipo: "select", opcoes: misOpcoes("divulgacoes"), obrigatorio: true },
       { id: "descricao", rotulo: "Descrição (até 1.000)", tipo: "area", max: 1000 }],
@@ -410,11 +429,11 @@ function misEspec(chave) {
       { id: "periodicidade", rotulo: "Relatório de campo", tipo: "select", opcoes: misOpcoes("periodicidades"), obrigatorio: true },
       { id: "divulgarNome", rotulo: "O missionário autorizou divulgar o nome no mural", tipo: "check" },
       { id: "justificativa", rotulo: "Justificativa: a obra, o público e como será sustentada (10 a 2.000)", tipo: "area", max: 2000, obrigatorio: true }],
-      aviso: "Campo Local sem sustento fica ativo na hora. Com sustento, passa pelo Pastor Presidente (Art. 134 §6º, I). Fora do município, ou com convênio externo, passa pela CME e pela CLI (Art. 23, II); outro Estado ou país passa sempre pelo Presidente (Art. 44 §2º).",
+      aviso: "Campo Local sem sustento fica ativo na hora. Com sustento, passa pelo Pastor Presidente (Art. 134 §6º, I). Fora do município (a zona rural adjacente conta como Local), ou pagando a uma pessoa jurídica (convênio externo), passa pela CME e pela CLI (Art. 23, II); outro Estado, outro país e o convênio externo passam sempre pelo Presidente (Art. 44 §2º).",
       valoresIniciais: { sustento: "0", periodicidade: "MENSAL" },
       conferir: (c) => {
         if (!/^[1-9][0-9]{0,9}$/.test(c.membroId)) return "A matrícula do missionário é um número.";
-        const p = misConferirDinheiro(c); if (p) return p;
+        const p = misConferirDinheiro(c, c.membroId); if (p) return p;
         if (misNumero(c.sustento) > 0 && !c.documento) return "Com sustento, anexe o documento do envio (ele acompanha cada pagamento).";
         return null;
       },
@@ -433,9 +452,15 @@ function misEspec(chave) {
     case "presidente": return { titulo: `Pastor Presidente — ${quem}`, acao: "presidente", campos: [
       { id: "resultado", rotulo: "Decisão", tipo: "select", opcoes: misOpcoes("resultadosPresidente"), obrigatorio: true },
       { id: "motivo", rotulo: "Motivo (obrigatório na recusa; até 1.000)", tipo: "area", max: 1000 }],
-      aviso: `Sustento proposto: ${misReais(e.sustentoProposto)}${e.recebedor ? `, para ${e.recebedor.nome} (${e.recebedor.tipo})` : ""}. A concordância é a determinação expressa do sustento (Regimento, Art. 134 §6º, I) e ativa o envio.`,
+      aviso: Number(e.sustentoProposto) > 0
+        ? `Sustento proposto: ${misReais(e.sustentoProposto)}${e.recebedor ? `, para ${e.recebedor.nome} (${e.recebedor.tipo})` : ""}. A concordância é a determinação expressa do sustento (Regimento, Art. 134 §6º, I) e ativa o envio.`
+        : "Envio sem sustento, para outro Estado ou outro país: a concordância é a do Pastor Presidente com a CLI (Regimento, Art. 44 §2º) e ativa o envio.",
       conferir: (c) => (c.resultado === "RECUSA" && String(c.motivo || "").length < 5 ? "Na recusa, informe o motivo." : null),
-      confirmar: (c) => (c.resultado === "RECUSA" ? `Recusar o envio de ${quem}?` : `Concordar com o envio de ${quem}? O envio fica ativo e o sustento passa a ser gerado todo mês.`) };
+      confirmar: (c) => (c.resultado === "RECUSA" ? `Recusar o envio de ${quem}?` : `Concordar com o envio de ${quem}? O envio fica ativo${Number(e.sustentoProposto) > 0 ? " e o sustento passa a ser gerado todo mês" : ""}.`) };
+    case "divulgacao": return { titulo: `O nome no mural — ${quem}`, acao: "divulgacao", campos: [
+      { id: "divulgarNome", rotulo: "O missionário autoriza o nome dele no mural (pode retirar quando quiser)", tipo: "check" }],
+      valoresIniciais: { divulgarNome: !!e.divulgarNome },
+      confirmar: (c) => (c.divulgarNome ? `Registrar que ${quem} autoriza o nome no mural?` : `Registrar que ${quem} não autoriza (ou retirou) o nome no mural? O nome sai na hora.`) };
     case "desistir": return { titulo: `Desistência — ${quem}`, acao: "desistir", campos: [
       { id: "motivo", rotulo: "Motivo (5 a 1.000)", tipo: "area", max: 1000, obrigatorio: true }],
       confirmar: () => `Registrar a desistência do envio de ${quem}? Não se desfaz.` };
@@ -451,7 +476,7 @@ function misEspec(chave) {
       { id: "motivo", rotulo: "Motivo (5 a 1.000)", tipo: "area", max: 1000, obrigatorio: true }],
       aviso: "O reajuste vale do mês escolhido em diante (nunca para trás, nem num mês já gerado).",
       valoresIniciais: { desdeMes: misMesAtual(), sustento: e.sustentoVigente == null ? "" : String(e.sustentoVigente).replace(".", ",") },
-      conferir: misConferirDinheiro,
+      conferir: (c) => misConferirDinheiro(c, e.missionario && e.missionario.membroId),
       confirmar: (c) => `Reajustar o sustento de ${quem} para ${misReais(misNumero(c.sustento))} a partir de ${misMes(c.desdeMes)}?` };
     case "relatorio":
     case "relatorio-corrigir": {

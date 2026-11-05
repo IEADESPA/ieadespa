@@ -97,6 +97,8 @@ BEGIN
         FimMes                  CHAR(7) NULL,
         EncerradoPor            INT NULL,
         MotivoEncerramento      NVARCHAR(1000) NULL,
+        -- encerrado pela vacância (Estatuto Art. 11 §7º): o relatório que faltava não tem mais quem mande — fica dispensado, não vencido
+        EncerradoPorVacancia    BIT NOT NULL CONSTRAINT DF_EnviosMissionarios_Vacancia DEFAULT 0,
         DesistidoEm             DATE NULL,
         DesistidoPor            INT NULL,
         DesistenciaMotivo       NVARCHAR(1000) NULL,
@@ -205,14 +207,15 @@ IF NOT EXISTS (SELECT 1 FROM dbo.CategoriasSaida WHERE Codigo = 'SUSTENTO_MISSIO
 GO
 
 -- ---- a permissão "missoes" ----
--- UMA vez (quando a funcionalidade ainda não existe): vai ao Presidente, ao Secretário Geral, ao Tesoureiro (o nível geral que gera o sustento), ao Secretário de
--- Missões (a SEMIADESPA) e ao Pastor de Área (a CME dá o parecer sobre o envio). Nos deploys seguintes nada se repete: se a administração tirar "missoes" de um
+-- UMA vez (quando a funcionalidade ainda não existe): vai ao Presidente, ao Secretário Geral, ao Secretário de Missões (a SEMIADESPA) e ao Pastor de Área (a CME dá
+-- o parecer sobre o envio). O Tesoureiro NÃO recebe: ele gera o sustento do mês com a permissão "financeiro" do nível geral, sem os poderes de Missões (revisão de
+-- 05/11/2026: quem paga não lança o relatório que levanta a suspensão). Nos deploys seguintes nada se repete: se a administração tirar "missoes" de um
 -- papel em Permissões, o deploy não a devolve.
 IF NOT EXISTS (SELECT 1 FROM dbo.Funcionalidades WHERE Chave = 'missoes')
 BEGIN
     UPDATE dbo.Papeis
     SET Permissoes = CASE WHEN ISNULL(Permissoes, '') = '' THEN 'missoes' ELSE Permissoes + ',missoes' END
-    WHERE Nome IN (N'Presidente', N'Secretário Geral', N'Tesoureiro', N'Secretário de Missões', N'Pastor de Área')
+    WHERE Nome IN (N'Presidente', N'Secretário Geral', N'Secretário de Missões', N'Pastor de Área')
       AND (',' + ISNULL(Permissoes, '') + ',') NOT LIKE '%,missoes,%';
     INSERT INTO dbo.Funcionalidades (Chave, Nome) VALUES ('missoes', N'Missões — campos, envio de missionários, sustento e relatórios de campo');
 END

@@ -289,10 +289,22 @@ describe("a porta da rota /api/entidades-vinculadas", () => {
     expect((await chamar("reunioes", { query: { orgao: "CEI" }, token: GERAL() })).status).toBe(400);
     expect((await chamar("reunioes", { query: { orgao: "cli" }, token: GERAL() })).status).toBe(200);
   });
-  test("decretar e encerrar sem a confirmação recente (chave ou código): 428 antes de qualquer consulta", async () => {
+  test("decretar e encerrar sem a confirmação recente (chave ou código): 428 antes de gravar — e só depois de conferir que é o Presidente (Trava 9-A)", async () => {
     const semFator = tokenDe(1, { via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["entidades_vinculadas"] });
+    quando(/SELECT TOP 1 OrgaoId FROM Orgaos WHERE Sigla = 'DIRETORIA_EXECUTIVA'/, [{ OrgaoId: 3 }]);
+    quando(/FROM Assentos WHERE OrgaoId = @orgaoId AND CargoOuFuncao = 'PRESIDENTE'/, [{ AssentoId: 1 }]);
     for (const acao of ["intervencao-decretar", "intervencao-encerrar"]) expect((await chamar(acao, { metodo: "POST", corpo: { intervencaoId: "4" }, token: semFator })).status).toBe(428);
-    expect(mockConsultas.filter((c) => !/CaducadaEm = @h/.test(c.sql))).toHaveLength(0);
+    // só as leituras do Presidente de hoje (e a caducidade da rotina): nada de intervenção lida nem gravada
+    expect(mockConsultas.filter((c) => !/CaducadaEm = @h|DIRETORIA_EXECUTIVA|CargoOuFuncao = 'PRESIDENTE'/.test(c.sql))).toHaveLength(0);
+    // e quem não é o Presidente recebe 403 sem passar pela confirmação
+    mockRegras = [];
+    quando(/SELECT TOP 1 OrgaoId FROM Orgaos WHERE Sigla = 'DIRETORIA_EXECUTIVA'/, [{ OrgaoId: 3 }]);
+    quando(/FROM Assentos WHERE OrgaoId = @orgaoId AND CargoOuFuncao = 'PRESIDENTE'/, []);
+    expect((await chamar("intervencao-decretar", { metodo: "POST", corpo: { intervencaoId: "4" }, token: semFator })).status).toBe(403);
+    // a ratificação, a extinção e a aprovação do vínculo também pedem a confirmação recente
+    for (const [acao, corpo] of [["intervencao-ratificar", { intervencaoId: "4" }], ["extinguir", { entidadeId: "2" }], ["vinculo-aprovar", { entidadeId: "2" }]]) {
+      expect((await chamar(acao, { metodo: "POST", corpo, token: semFator })).status).toBe(428);
+    }
   });
   test("decretar sem ser o Pastor Presidente em exercício: 403, nada gravado", async () => {
     quando(/FROM EntidadeIntervencoes i LEFT JOIN MembroReferencia mi/, [{ IntervencaoId: 4, EntidadeId: 2, Status: "APURACAO", NotificadoEm: "2026-10-01", Motivo: "RISCO_IMAGEM", Fatos: "x" }]);

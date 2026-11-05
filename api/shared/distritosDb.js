@@ -18,7 +18,7 @@ const NAO_EXISTE = { sucesso: false, naoExiste: true, mensagem: "Distrito não e
 const PROIBIDO = (mensagem) => ({ sucesso: false, proibido: true, mensagem });
 const MUDOU = { sucesso: false, mensagem: "Isto mudou enquanto você olhava. Atualize a tela." };
 const iso = (v) => (v == null ? null : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)));
-const SO_PRESIDENTE = "Só o Pastor Presidente em exercício faz este ato (Regimento, Art. 126-L, I, e Art. 126-P, II).";
+const SO_PRESIDENTE = "Só o Pastor Presidente em exercício faz este ato (Regimento, Art. 126-N, III, e Art. 126-P, II).";
 const PAPEL_PASTOR = "Pastor Distrital";
 const PAPEL_INTERVENTOR = "Interventor Distrital";
 const PAPEIS_RESERVADOS = [PAPEL_PASTOR, PAPEL_INTERVENTOR];
@@ -278,6 +278,7 @@ function acoesDaFicha(alcance, d, aberto, intervencaoAberta) {
     desativar: !!alcance.geral && d.ativo && !!aberto && !intervencaoAberta,
     intervir: !!alcance.presidente && d.ativo && !intervencaoAberta,
     encerrarIntervencao: !!alcance.presidente && !!intervencaoAberta,
+    trocarInterventor: !!alcance.presidente && !!intervencaoAberta,
     // o Distrito envia o próprio balanço; desativado (sem ninguém de escopo dele), o nível geral envia o que ficou devendo (revisão de 04/11/2026)
     enviarBalanco: ehDoDistrito(alcance, d.distritoId) || (!!alcance.geral && !d.ativo),
     // o NIF analisa — menos quem é da liderança do próprio Distrito
@@ -332,6 +333,10 @@ async function ativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alc
   if (!reuniao) return { sucesso: false, mensagem: "Escolha uma reunião da CLI já realizada e encerrada." };
   return emTransacao(pool, async (t, rq) => {
     if (!(await enfileirar(rq))) return OCUPADO;
+    // Trava 9-A — também a trava do Rateio Geral (a mesma de GestaoRateioGeral): o decreto passa ao Distrito o fechamento do mês que ainda não está num Rateio; sem
+    // ela, um Rateio fechado ao mesmo tempo levaria o mesmo fechamento e o dinheiro contaria duas vezes (no Tesouro Geral e no caixa do Distrito). Ordem fixa:
+    // primeiro a dos Distritos, depois a do Rateio (o Rateio só pega a dele) — sem travamento cruzado.
+    if (!(await require("./financeiroSeguro").obterTrava(rq, "RateioGeral"))) return { sucesso: false, mensagem: "Um Rateio Geral está sendo fechado agora. Tente de novo em instantes." };
     const d = await lerDistrito(rq, distritoId, { travar: true });
     if (!d) return NAO_EXISTE;
     const lista = await periodos(rq, distritoId, { travar: true });
@@ -432,7 +437,12 @@ async function desativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), 
     if (reuniao.data < aberto.ativadoEm) return { sucesso: false, mensagem: "A reunião da desativação não pode ser anterior à ativação do Distrito." };
     const iv = await rq().input("d", sql.Int, distritoId).query(`SELECT TOP 1 IntervencaoId FROM DistritoIntervencoes WITH (UPDLOCK) WHERE DistritoId = @d AND EncerradaEm IS NULL`);
     if (iv.recordset.length) return { sucesso: false, mensagem: "O Distrito está sob intervenção: o Pastor Presidente encerra a intervenção antes da desativação." };
-    const u = await rq().input("p", sql.Int, aberto.periodoId).input("em", sql.Date, reuniao.data).input("ate", sql.Char(7), di.mesDe(hoje))
+    // Trava 9-A — o mês que já tem o Dízimo Institucional registrado continua do Distrito: a Sede volta a receber a partir do mês seguinte ao último registrado
+    // (senão o registro ficaria órfão e os mesmos fechamentos entrariam também no Rateio Geral)
+    const ultimoRegistrado = (await rq().input("d", sql.Int, distritoId).query(`
+      SELECT MAX(MesReferencia) AS Mes FROM RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND OrigemId = @d`)).recordset.map((l) => l.Mes)[0];
+    const ate = ultimoRegistrado && di.proximoMes(ultimoRegistrado) > di.mesDe(hoje) ? di.proximoMes(ultimoRegistrado) : di.mesDe(hoje);
+    const u = await rq().input("p", sql.Int, aberto.periodoId).input("em", sql.Date, reuniao.data).input("ate", sql.Char(7), ate)
       .input("s", sql.Int, reuniao.sessaoId).input("mot", sql.NVarChar(2000), v.dados.motivo).input("por", sql.Int, por).query(`
       UPDATE DistritoPeriodos SET DesativadoEm = @em, FinanceiroAteMes = CASE WHEN @ate < FinanceiroDesdeMes THEN FinanceiroDesdeMes ELSE @ate END,
              DesativacaoSessaoId = @s, DesativacaoMotivo = @mot, DesativacaoRegistradaPor = @por
@@ -440,7 +450,7 @@ async function desativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), 
     if (!u.rowsAffected[0]) return MUDOU;
     await rq().input("d", sql.Int, distritoId).query(`UPDATE Distritos SET Ativo = 0 WHERE DistritoId = @d`);
     // o mês da desativação em diante volta para a Sede: o fechamento já feito desses meses deixa de ser do Distrito
-    await rq().input("d", sql.Int, distritoId).input("ate", sql.Char(7), di.mesDe(hoje))
+    await rq().input("d", sql.Int, distritoId).input("ate", sql.Char(7), ate)
       .query(`UPDATE FechamentosTesouraria SET RepasseDistritoId = NULL WHERE RepasseDistritoId = @d AND MesReferencia >= @ate`);
     // o acesso de toda a liderança de escopo do Distrito termina (o Distrito deixou de existir como nível ativo)
     const linhas = await rq().input("d", sql.Int, distritoId).input("h", sql.Date, hoje)
@@ -448,12 +458,12 @@ async function desativar(pool, { distritoId, dados, por, hoje = hojeBrasilia(), 
     const enc = await encerrarAcessos(rq, linhas.recordset.map((l) => l.LiderancaId), { hoje, excetoMembroId: por });
     await registrarAuditoriaNaTransacao(t, { tabela: "Distritos", registroId: distritoId, acao: "DISTRITO_DESATIVADO", usuarioId: por,
       dadosAntes: { ativo: true, periodoId: aberto.periodoId }, dadosDepois: { ...v.dados, reuniao: reuniao.data, acessosEncerrados: enc.membros } });
-    return { sucesso: true, acessos: enc.membros.length, sessoes: enc.sessoes };
+    return { sucesso: true, acessos: enc.membros.length, sessoes: enc.sessoes, ate };
   });
   if (!r.sucesso) return r;
   (deps.auth || require("./auth")).marcarRevogadas(r.sessoes);
   await sucessaoDeCanais(pool, por, deps);
-  return { sucesso: true, mensagem: `Distrito desativado por decreto da CLI. A partir deste mês o repasse das congregações volta para a Sede.${r.acessos ? ` ${r.acessos} acesso(s) de escopo do Distrito encerrado(s).` : ""}`, acessosEncerrados: r.acessos };
+  return { sucesso: true, mensagem: `Distrito desativado por decreto da CLI. O repasse das congregações volta para a Sede a partir de ${r.ate.slice(5, 7)}/${r.ate.slice(0, 4)}.${r.acessos ? ` ${r.acessos} acesso(s) de escopo do Distrito encerrado(s).` : ""}`, acessosEncerrados: r.acessos };
 }
 
 // ================================================================ intervenção ================================================================
@@ -470,6 +480,52 @@ async function liderancaDistrital(rq, distritoId, hoje, terr) {
   return r.recordset.map((l) => ({ liderancaId: l.LiderancaId, membroId: Number(l.MembroId) }));
 }
 
+// O Interventor: membro ativo, em comunhão, sem processo disciplinar, de fora da liderança destituída e sem outro cargo de acesso em vigor (cada pessoa tem um só
+// acesso: dar o de Interventor a quem já tem outro cargo — o Presidente, o Secretário Geral, um Pastor de Área — trocaria o cargo dele e, no encerramento, o
+// deixaria sem acesso nenhum; revisão de 04/11/2026). Devolve a mensagem da recusa ou null.
+async function problemaDoInterventor(rq, membroId, { lideres = [], hoje, sob }) {
+  const m = (await rq().input("m", sql.Int, membroId).query(`SELECT MembroId, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
+  if (!m) return "Matrícula do Interventor não encontrada.";
+  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || sob.has(m.MembroId)) return "O Interventor precisa ser membro ativo e em comunhão, sem processo disciplinar em curso.";
+  if (lideres.some((l) => l.membroId === Number(m.MembroId))) return "O Interventor não pode ser alguém da liderança do Distrito que está sendo destituída.";
+  const outroCargo = (await rq().input("m", sql.Int, m.MembroId).input("h", sql.Date, hoje).query(`
+    SELECT TOP 1 p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = @m AND ${VIGENTE("l")}`)).recordset[0];
+  if (outroCargo) return `O Interventor já tem o cargo "${outroCargo.Nome}" em vigor e cada pessoa tem um só acesso: escolha alguém sem cargo de acesso, ou tire o cargo dessa pessoa em Liderança antes.`;
+  return null;
+}
+
+// Trava 9-A — a troca do Interventor durante a intervenção (o nomeado faleceu, saiu ou não pode seguir): só o Presidente, com a confirmação recente; o acesso de
+// Interventor Distrital do anterior termina na mesma gravação e as sessões dele caem; o novo recebe o acesso em Liderança.
+async function trocarInterventor(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alcance, deps = {} }) {
+  if (!alcance.presidente) return PROIBIDO(SO_PRESIDENTE);
+  const d0 = dados && typeof dados === "object" ? dados : {};
+  const novo = di.idDe(d0.interventorMembroId);
+  if (!novo) return { sucesso: false, mensagem: "Informe a matrícula do novo Interventor." };
+  const sob = await membrosSobDisciplina(pool);
+  const r = await emTransacao(pool, async (t, rq) => {
+    if (!(await enfileirar(rq))) return OCUPADO;
+    const d = await lerDistrito(rq, distritoId, { travar: true });
+    if (!d) return NAO_EXISTE;
+    const iv = (await rq().input("d", sql.Int, distritoId).query(`SELECT IntervencaoId, InterventorMembroId FROM DistritoIntervencoes WITH (UPDLOCK) WHERE DistritoId = @d AND EncerradaEm IS NULL`)).recordset[0];
+    if (!iv) return { sucesso: false, mensagem: "Não há intervenção aberta neste Distrito." };
+    if (Number(iv.InterventorMembroId) === novo) return { sucesso: false, mensagem: "Esta pessoa já é o Interventor." };
+    // o Interventor de agora tem o acesso de Interventor Distrital: ele não conta como "outro cargo" para si, mas o novo não pode ter nenhum
+    const problema = await problemaDoInterventor(rq, novo, { lideres: await liderancaDistrital(rq, distritoId, hoje), hoje, sob });
+    if (problema) return { sucesso: false, mensagem: problema };
+    const u = await rq().input("i", sql.Int, iv.IntervencaoId).input("novo", sql.Int, novo).input("antes", sql.Int, iv.InterventorMembroId)
+      .query(`UPDATE DistritoIntervencoes SET InterventorMembroId = @novo WHERE IntervencaoId = @i AND EncerradaEm IS NULL AND InterventorMembroId = @antes`);
+    if (!u.rowsAffected[0]) return MUDOU;
+    const linhas = await pessoasDoPapel(rq, PAPEL_INTERVENTOR, "DISTRITO", [distritoId], hoje);
+    const enc = await encerrarAcessos(rq, linhas.map((l) => l.liderancaId), { hoje, excetoMembroId: por });
+    await registrarAuditoriaNaTransacao(t, { tabela: "DistritoIntervencoes", registroId: iv.IntervencaoId, acao: "DISTRITO_INTERVENTOR_TROCADO", usuarioId: por,
+      dadosAntes: { interventorMembroId: iv.InterventorMembroId }, dadosDepois: { interventorMembroId: novo, acessosEncerrados: enc.membros } });
+    return { sucesso: true, sessoes: enc.sessoes };
+  });
+  if (!r.sucesso) return r;
+  (deps.auth || require("./auth")).marcarRevogadas(r.sessoes);
+  return { sucesso: true, mensagem: "Interventor trocado. O acesso do anterior terminou; dê ao novo o acesso \"Interventor Distrital\" em Liderança (só o Pastor Presidente pode)." };
+}
+
 async function intervir(pool, { distritoId, dados, por, hoje = hojeBrasilia(), alcance, deps = {} }) {
   if (!alcance.presidente) return PROIBIDO(SO_PRESIDENTE);
   const v = di.validarIntervencao(dados);
@@ -483,15 +539,8 @@ async function intervir(pool, { distritoId, dados, por, hoje = hojeBrasilia(), a
     const iv = await rq().input("d", sql.Int, distritoId).query(`SELECT TOP 1 IntervencaoId FROM DistritoIntervencoes WITH (UPDLOCK, HOLDLOCK) WHERE DistritoId = @d AND EncerradaEm IS NULL`);
     if (iv.recordset.length) return { sucesso: false, mensagem: "Já existe uma intervenção aberta neste Distrito." };
     const lideres = await liderancaDistrital(rq, distritoId, hoje);
-    const m = (await rq().input("m", sql.Int, v.dados.interventorMembroId).query(`SELECT MembroId, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
-    if (!m) return { sucesso: false, mensagem: "Matrícula do Interventor não encontrada." };
-    if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || sob.has(m.MembroId)) return { sucesso: false, mensagem: "O Interventor precisa ser membro ativo e em comunhão, sem processo disciplinar em curso." };
-    if (lideres.some((l) => l.membroId === Number(m.MembroId))) return { sucesso: false, mensagem: "O Interventor não pode ser alguém da liderança do Distrito que está sendo destituída." };
-    // cada pessoa tem um só acesso: dar o de Interventor a quem já tem outro cargo em vigor (o Presidente, o Secretário Geral, um Pastor de Área) trocaria o cargo
-    // dele e, no encerramento, o deixaria sem acesso nenhum (revisão de 04/11/2026)
-    const outroCargo = (await rq().input("m", sql.Int, m.MembroId).input("h", sql.Date, hoje).query(`
-      SELECT TOP 1 p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = @m AND ${VIGENTE("l")}`)).recordset[0];
-    if (outroCargo) return { sucesso: false, mensagem: `O Interventor já tem o cargo "${outroCargo.Nome}" em vigor e cada pessoa tem um só acesso: escolha alguém sem cargo de acesso, ou tire o cargo dessa pessoa em Liderança antes.` };
+    const problema = await problemaDoInterventor(rq, v.dados.interventorMembroId, { lideres, hoje, sob });
+    if (problema) return { sucesso: false, mensagem: problema };
     const ins = await rq().input("d", sql.Int, distritoId).input("mot", sql.NVarChar(20), v.dados.motivo).input("fund", sql.NVarChar(4000), v.dados.fundamentacao)
       .input("i", sql.Int, v.dados.interventorMembroId).input("b", sql.Bit, v.dados.bloqueioContas).input("pr", sql.Bit, v.dados.procuracao).input("j", sql.Bit, v.dados.judicial)
       .input("n", sql.Int, lideres.length).input("em", sql.Date, hoje).input("por", sql.Int, por).query(`
@@ -662,14 +711,17 @@ async function conferirPapelReservado(pool, { usuarioId, membroId, antes, depois
   if (!(await ehPresidente())) return `Os papéis "${PAPEL_PASTOR}" e "${PAPEL_INTERVENTOR}" só são dados, trocados ou tirados pelo Pastor Presidente em exercício (Regimento, Art. 126-L, I, e Art. 126-P, II).`;
   if (!papelDepois) return null;
   if (depois.escopoTipo !== "DISTRITO") return `O papel "${papelDepois}" é dado com o escopo de um Distrito.`;
-  // cada pessoa tem um só acesso: dar o papel a quem tem um cargo do nível geral (o próprio Presidente, o Secretário Geral) trocaria esse cargo (revisão de 04/11/2026)
-  if (antes && antes.vigente) {
-    const nivelAntes = (await pool.request().input("p", sql.Int, Number(antes.PapelId)).query(`SELECT Nivel FROM Papeis WHERE PapelId = @p`)).recordset.map((l) => l.Nivel)[0];
-    if (nivelAntes === "GLOBAL") return `Esta pessoa tem um cargo do nível geral em vigor e cada pessoa tem um só acesso: dar o papel "${papelDepois}" trocaria esse cargo. Escolha outra pessoa.`;
+  // cada pessoa tem um só acesso: dar o papel a quem já tem outro cargo em vigor (o Presidente, o Pastor de Área, um Dirigente, o Secretário de Missões) trocaria
+  // esse cargo em silêncio — a Área ou a congregação ficaria sem líder e a CME ou a CLI perderiam a pessoa sem aviso (Trava 9-A: antes só o cargo geral era barrado)
+  if (antes && antes.vigente && !papelAntes) {
+    const nomeAntes = (await pool.request().input("p", sql.Int, Number(antes.PapelId)).query(`SELECT Nome FROM Papeis WHERE PapelId = @p`)).recordset.map((l) => l.Nome)[0] || "outro cargo";
+    return `Esta pessoa tem o cargo "${nomeAntes}" em vigor e cada pessoa tem um só acesso: dar o papel "${papelDepois}" trocaria esse cargo sem ninguém no lugar. Tire o cargo atual dela (e ponha outra pessoa nele) antes.`;
   }
   const distritoId = Number(depois.escopoId);
   const d = await lerDistrito(() => pool.request(), distritoId);
-  if (!d || !d.ativo) return `O papel "${papelDepois}" só vale em Distrito ativo por decreto da CLI.`;
+  // Trava 9-A — "ativo por decreto": o Distrito legado (ativo no cadastro antigo, sem o decreto registrado) ainda não recebe Pastor Distrital nem Interventor
+  const aberto = d ? periodoAberto(await periodos(() => pool.request(), distritoId)) : null;
+  if (!d || !d.ativo || !aberto || aberto.legado) return `O papel "${papelDepois}" só vale em Distrito ativo por decreto da CLI (registre o decreto antes).`;
   const ivAberta = (await pool.request().input("d", sql.Int, distritoId).query(`SELECT InterventorMembroId FROM DistritoIntervencoes WHERE DistritoId = @d AND EncerradaEm IS NULL`)).recordset[0];
   if (papelDepois === PAPEL_INTERVENTOR) {
     if (!ivAberta || Number(ivAberta.InterventorMembroId) !== Number(membroId)) return "O acesso de Interventor Distrital é só da pessoa nomeada na intervenção aberta deste Distrito (a intervenção é decretada na aba Distritos da Expansão).";
@@ -719,9 +771,12 @@ async function destinatariosDoDistrito(pool, distritoId, hoje) {
   return [...(await destinatariosGerais(pool)), ...locais].filter((x) => !vistos.has(Number(x.membroId)) && vistos.add(Number(x.membroId)))
     .map((x) => ({ membroId: x.membroId, nome: x.nome, email: x.email }));
 }
-// O Dízimo Institucional vencido: um aviso por Distrito e mês. A referência do aviso junta os dois num número só: (AAAAMM − 200000) × 10000 + Distrito
-// (novembro de 2026 no Distrito 3 = 26110003), distinto enquanto houver menos de 10.000 Distritos.
-const referenciaMes = (mes, distritoId) => (Number(mes.replace("-", "")) - 200000) * 10000 + Number(distritoId);
+// O Dízimo Institucional vencido: um aviso por Distrito, mês e MOTIVO. A referência junta os três num número só:
+// ((AAAAMM − 200000) × 10000 + Distrito) × 10 + motivo (1 = falta fechamento, 2 = apurável e não registrado, 3 = registrado e não repassado) — novembro de 2026 no
+// Distrito 3, retenção = 261100032. Trava 9-A: sem o motivo na referência, o aviso de retenção do mês que antes avisou "falta fechar" era descartado como repetido
+// (o motor avisa uma vez por regra, pessoa e referência). Distinto enquanto houver menos de 10.000 Distritos; cabe num INT até 2099.
+const CODIGO_MOTIVO = { FECHAMENTO: 1, APURAVEL: 2, REGISTRADO: 3 };
+const referenciaMes = (mes, distritoId, codigo = 2) => ((Number(mes.replace("-", "")) - 200000) * 10000 + Number(distritoId)) * 10 + codigo;
 async function detectarRepasseVencido(pool, { hoje = hojeBrasilia() } = {}) {
   const ativos = (await pool.request().query(`SELECT DISTINCT DistritoId FROM DistritoPeriodos`)).recordset.map((l) => Number(l.DistritoId));
   const fatos = [];
@@ -736,7 +791,8 @@ async function detectarRepasseVencido(pool, { hoje = hojeBrasilia() } = {}) {
     const destinatarios = await destinatariosDoDistrito(pool, distritoId, hoje);
     // a retenção (apurável e não repassado) e o mês que nem pôde ser apurado (falta fechamento local) têm textos diferentes: só o primeiro fala em intervenção
     for (const m of vencidos.sort((a, b) => (a.mes < b.mes ? -1 : 1))) {
-      fatos.push({ referenciaId: referenciaMes(m.mes, distritoId), destinatarios,
+      const codigo = m.motivoVencido === "FECHAMENTO" ? CODIGO_MOTIVO.FECHAMENTO : (m.situacao === "REGISTRADO" ? CODIGO_MOTIVO.REGISTRADO : CODIGO_MOTIVO.APURAVEL);
+      fatos.push({ referenciaId: referenciaMes(m.mes, distritoId, codigo), destinatarios,
         fatoGerador: di.textoRepasseVencido({ distrito: d.nome, meses: [m.mes], motivo: m.motivoVencido, faltam: m.faltam.map((c) => c.nome) }) });
     }
   }
@@ -759,21 +815,29 @@ async function detectarBalancoAtrasado(pool, { hoje = hojeBrasilia() } = {}) {
 
 // Meus Dados (LGPD Art. 18): os balanços que a pessoa enviou e as intervenções em que foi Interventor.
 async function dadosDoTitular(pool, membroId) {
-  const [bals, ivs] = await Promise.all([
+  const [bals, ivs, analisados, decretos] = await Promise.all([
     pool.request().input("m", sql.Int, membroId).query(`SELECT d.Nome AS Distrito, b.Ano, b.Versao, b.Status, CONVERT(varchar(10), b.EnviadoEm, 120) AS EnviadoEm
       FROM DistritoBalancos b JOIN Distritos d ON d.DistritoId = b.DistritoId WHERE b.EnviadoPor = @m ORDER BY b.EnviadoEm DESC`),
     pool.request().input("m", sql.Int, membroId).query(`SELECT d.Nome AS Distrito, CONVERT(varchar(10), i.DecretadaEm, 120) AS DecretadaEm, CONVERT(varchar(10), i.EncerradaEm, 120) AS EncerradaEm
-      FROM DistritoIntervencoes i JOIN Distritos d ON d.DistritoId = i.DistritoId WHERE i.InterventorMembroId = @m ORDER BY i.DecretadaEm DESC`)
+      FROM DistritoIntervencoes i JOIN Distritos d ON d.DistritoId = i.DistritoId WHERE i.InterventorMembroId = @m ORDER BY i.DecretadaEm DESC`),
+    // Trava 9-A — também os balanços que a pessoa analisou (pelo NIF) e os decretos da CLI que registrou (o ROPA a lista como titular)
+    pool.request().input("m", sql.Int, membroId).query(`SELECT d.Nome AS Distrito, b.Ano, b.Versao, b.Status, CONVERT(varchar(10), b.AnalisadoEm, 120) AS AnalisadoEm
+      FROM DistritoBalancos b JOIN Distritos d ON d.DistritoId = b.DistritoId WHERE b.AnalisadoPor = @m ORDER BY b.AnalisadoEm DESC`),
+    pool.request().input("m", sql.Int, membroId).query(`SELECT d.Nome AS Distrito, CONVERT(varchar(10), p.AtivadoEm, 120) AS AtivadoEm, CONVERT(varchar(10), p.DesativadoEm, 120) AS DesativadoEm,
+        CASE WHEN p.AtivacaoRegistradaPor = @m THEN 1 ELSE 0 END AS Ativou, CASE WHEN p.DesativacaoRegistradaPor = @m THEN 1 ELSE 0 END AS Desativou
+      FROM DistritoPeriodos p JOIN Distritos d ON d.DistritoId = p.DistritoId WHERE @m IN (p.AtivacaoRegistradaPor, p.DesativacaoRegistradaPor) ORDER BY p.AtivadoEm DESC`)
   ]);
   return {
     balancosEnviados: bals.recordset.map((l) => ({ distrito: l.Distrito, ano: Number(l.Ano), versao: Number(l.Versao), status: di.STATUS_BALANCO[l.Status] || l.Status, enviadoEm: iso(l.EnviadoEm) })),
-    intervencoesComoInterventor: ivs.recordset.map((l) => ({ distrito: l.Distrito, decretadaEm: iso(l.DecretadaEm), encerradaEm: iso(l.EncerradaEm) }))
+    intervencoesComoInterventor: ivs.recordset.map((l) => ({ distrito: l.Distrito, decretadaEm: iso(l.DecretadaEm), encerradaEm: iso(l.EncerradaEm) })),
+    balancosAnalisados: analisados.recordset.map((l) => ({ distrito: l.Distrito, ano: Number(l.Ano), versao: Number(l.Versao), status: di.STATUS_BALANCO[l.Status] || l.Status, analisadoEm: iso(l.AnalisadoEm) })),
+    decretosRegistrados: decretos.recordset.flatMap((l) => [l.Ativou ? { distrito: l.Distrito, ato: "ativação", em: iso(l.AtivadoEm) } : null, l.Desativou ? { distrito: l.Distrito, ato: "desativação", em: iso(l.DesativadoEm) } : null].filter(Boolean))
   };
 }
 
 module.exports = {
   PAPEL_PASTOR, PAPEL_INTERVENTOR, PAPEIS_RESERVADOS, REPASSE_DO_DISTRITO, NOME_DO_DISTRITO_DO_REPASSE,
   montarAlcance, listarDistritos, detalharDistrito, territorio, composicaoCDE, posicaoFinanceira, caixaDoDistrito, apuracaoParaRepasse, reunioesEncerradas,
-  ativar, desativar, intervir, encerrarIntervencao, enviarBalanco, analisarBalanco, painel, conferirPapelReservado, linhaVigente,
+  ativar, desativar, intervir, encerrarIntervencao, trocarInterventor, enviarBalanco, analisarBalanco, painel, conferirPapelReservado, linhaVigente,
   detectarRepasseVencido, detectarBalancoAtrasado, dadosDoTitular
 };

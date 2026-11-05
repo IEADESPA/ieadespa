@@ -57,6 +57,11 @@ async function lerExtensao(rq, extensaoId, { travar = false } = {}) {
     endereco: l.Endereco, bairro: l.Bairro, cidade: l.Cidade, uf: l.UF, abertaEm: l.AbertaEm, emancipadaEm: l.EmancipadaEm, congregacaoEmancipadaId: l.CongregacaoEmancipadaId
   } : null;
 }
+// O Distrito a que a Área pertence hoje (Área → Região → Quadrante → Distrito), ou null.
+async function distritoDaArea(rq, areaId) {
+  const r = await rq().input("id", sql.Int, areaId).query(`SELECT q.DistritoId FROM Areas a JOIN Regioes r ON r.RegiaoId = a.RegiaoId JOIN Quadrantes q ON q.QuadranteId = r.QuadranteId WHERE a.AreaId = @id`);
+  return r.recordset[0] && r.recordset[0].DistritoId ? Number(r.recordset[0].DistritoId) : null;
+}
 async function lerArea(rq, areaId) {
   const r = await rq().input("id", sql.Int, areaId).query(`SELECT AreaId, Nome, Ativa FROM Areas WHERE AreaId = @id`);
   return r.recordset[0] ? { areaId: r.recordset[0].AreaId, nome: r.recordset[0].Nome, ativa: !!r.recordset[0].Ativa } : null;
@@ -189,6 +194,12 @@ async function criarPedido(pool, { dados, por, hoje = hojeBrasilia(), alcance })
     if (d.areaId) {
       const area = await lerArea(rq, d.areaId);
       if (!area || !area.ativa) return { sucesso: false, mensagem: "Escolha uma Área ativa (ou deixe em branco)." };
+      // Trava 9-A — a congregação que nasce da emancipação fica no território da Mãe: uma Área de outro Distrito mudaria, sem decreto, para onde vai o repasse dela
+      if (d.tipo === "EMANCIPACAO") {
+        const ext = await lerExtensao(rq, d.extensaoId);
+        const [daArea, daMae] = [await distritoDaArea(rq, d.areaId), ext && ext.maeAreaId ? await distritoDaArea(rq, ext.maeAreaId) : null];
+        if (daArea !== daMae) return { sucesso: false, mensagem: "A Área escolhida é de outro Distrito (ou fora de Distrito) que a Congregação-Mãe: a congregação nova fica no mesmo território. Deixe a Área em branco ou escolha uma do mesmo Distrito." };
+      }
     }
   }
   const status = ex.precisaCME(d.tipo) ? "EM_PARECER" : "AGUARDANDO_CLI";
@@ -328,7 +339,11 @@ async function executar(t, rq, pool, p, { reuniao, por, hoje, sid = null }) {
   }
   if (areaId) {
     const area = await lerArea(rq, areaId);
-    if (!area || !area.ativa) return { sucesso: false, mensagem: "A Área escolhida não está mais ativa. Peça a desistência e faça um novo pedido." };
+    // Trava 9-A — quando ninguém escolheu a Área (ela vem da Mãe), a mensagem diz isso: a saída é reativar a Área em Catálogos, não desistir do pedido
+    if (!area || !area.ativa) {
+      return { sucesso: false, mensagem: p.areaId ? "A Área escolhida não está mais ativa. Peça a desistência e faça um novo pedido."
+        : "A Área da Congregação-Mãe (que a congregação nova herdaria) está inativa: reative a Área em Catálogos antes de registrar a decisão." };
+    }
   }
   if (await haHomonimaCongregacao(rq, p.nome)) return { sucesso: false, mensagem: HOMONIMA_CONGREGACAO };
   // o endereço campo a campo: o que o pedido trouxe vale; o que ficou em branco vem da Extensão emancipada
@@ -498,7 +513,9 @@ async function painel(pool, { alcance, hoje = hojeBrasilia() }) {
     cme: {
       membros: cme.map((m) => ({ membroId: m.membroId, nome: m.nome, cargo: m.cargoOuFuncao, origem: m.origemSigla })),
       semSecretario: secretario.length === 0,
-      secretarioSemAcesso: secretario.filter((m) => !m.comAcessoTela).map((m) => ({ membroId: m.membroId, nome: m.nome }))
+      secretarioSemAcesso: secretario.filter((m) => !m.comAcessoTela).map((m) => ({ membroId: m.membroId, nome: m.nome })),
+      // Trava 9-A — o Pastor de Área da CME a quem tiraram a permissão "expansao" recebe o aviso do pedido e não abre a tela: o painel acusa também
+      pastoresSemAcesso: cme.filter((m) => !m.secretarioMissoes && !m.comAcessoTela).map((m) => ({ membroId: m.membroId, nome: m.nome }))
     }
   };
 }
@@ -561,8 +578,20 @@ async function dadosDoTitular(pool, membroId) {
     WHERE h.MembroId = @m ORDER BY h.Desde DESC`);
   return r.recordset.map((l) => ({ extensao: l.Extensao, congregacaoMae: l.Mae, desde: iso(l.Desde), ate: iso(l.Ate), motivoSaida: l.MotivoSaida }));
 }
+// Trava 9-A — Meus Dados também mostra os atos da pessoa nos pedidos de expansão (o ROPA a lista como titular: quem pede, dá o parecer, desiste ou registra a decisão).
+async function atosDoTitular(pool, membroId) {
+  const r = await pool.request().input("m", sql.Int, membroId).query(`
+    SELECT p.PedidoId, p.Tipo, p.Nome, CONVERT(varchar(10), p.SolicitadoEm, 120) AS SolicitadoEm,
+           CASE WHEN p.SolicitadoPor = @m THEN 1 ELSE 0 END AS Pediu, CASE WHEN p.ParecerPor = @m THEN 1 ELSE 0 END AS DeuParecer,
+           CASE WHEN p.DesistidoPor = @m THEN 1 ELSE 0 END AS Desistiu, CASE WHEN p.DecisaoRegistradaPor = @m THEN 1 ELSE 0 END AS RegistrouDecisao
+    FROM PedidosExpansao p WHERE @m IN (p.SolicitadoPor, p.ParecerPor, p.DesistidoPor, p.DecisaoRegistradaPor) ORDER BY p.SolicitadoEm DESC, p.PedidoId DESC`);
+  return r.recordset.map((l) => ({
+    pedido: `${ex.TIPOS[l.Tipo] || l.Tipo}: ${l.Nome}`, em: iso(l.SolicitadoEm),
+    papeis: [l.Pediu ? "pediu" : null, l.DeuParecer ? "deu o parecer da CME" : null, l.Desistiu ? "desistiu" : null, l.RegistrouDecisao ? "registrou a decisão da CLI" : null].filter(Boolean)
+  }));
+}
 
 module.exports = {
   reunioesEncerradas, lerPedido, listarPedidos, detalharPedido, criarPedido, emitirParecer, desistir, decidir, listarExtensoes, historicoEncarregados, trocarEncarregado,
-  catalogos, painel, detectarParecerVencido, dadosDoTitular, composicaoCME
+  catalogos, painel, detectarParecerVencido, dadosDoTitular, atosDoTitular, composicaoCME
 };

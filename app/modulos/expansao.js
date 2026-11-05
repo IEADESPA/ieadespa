@@ -131,7 +131,8 @@ async function expCarregarPainelAcao() {
   const cme = p.cme || {};
   const avisosCME = [
     cme.semSecretario ? "<li>⚠️ A CME está sem o <strong>Secretário de Missões</strong>: dê em Liderança o papel \"Secretário de Missões\" a quem lidera a SEMIADESPA.</li>" : "",
-    ...arr(cme.secretarioSemAcesso).map((m) => `<li>⚠️ ${expH(m.nome)} lidera a SEMIADESPA com o papel antigo e não abre esta tela: troque para o papel "Secretário de Missões" em Liderança.</li>`)
+    ...arr(cme.secretarioSemAcesso).map((m) => `<li>⚠️ ${expH(m.nome)} lidera a SEMIADESPA com o papel antigo e não abre esta tela: troque para o papel "Secretário de Missões" em Liderança.</li>`),
+    ...arr(cme.pastoresSemAcesso).map((m) => `<li>⚠️ ${expH(m.nome)} é da CME (Pastor de Área), mas o papel desta pessoa está sem a permissão "expansao": não abre esta tela para dar o parecer. Devolva a permissão em Permissões.</li>`)
   ].join("");
   alvo.innerHTML = [
     bloco("🚩 Parecer da CME vencido (15 dias — Regimento, Art. 24 §2º)", arr(p.parecerVencido).map((x) => expItemPedido(x, `venceu em ${expH(expBr(x.prazoParecer))}; sem ele, a CLI só decide em urgência (2/3)`)).join(""), "Nenhum vencido."),
@@ -467,6 +468,16 @@ async function expHistoricoAcao(extensaoId) {
 }
 
 // Meus Dados (LGPD): as Extensões que a pessoa encarregou ou encarrega.
+// Trava 9-A — os atos da pessoa nos pedidos de expansão (pediu, deu o parecer, desistiu, registrou a decisão). Sem nada, o cartão não aparece.
+function expCartaoAtosMeusDados(lista) {
+  const itens = Array.isArray(lista) ? lista : [];
+  if (!itens.length) return "";
+  return `
+    <div class="cartao-perfil" style="margin-top:12px;">
+      <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Pedidos de expansão</h4>
+      ${itens.map((x) => `<p class="linha-perfil">${expH(x.pedido)} (${expH(expBr(x.em))}) — ${expH((Array.isArray(x.papeis) ? x.papeis : []).join(", "))}</p>`).join("")}
+    </div>`;
+}
 function expCartaoMeusDados(lista) {
   const itens = Array.isArray(lista) ? lista : [];
   if (!itens.length) return "";

@@ -218,6 +218,11 @@ async function sessao(orgao, descricao, data) {
   ok(r.status === 200, "a CLI apreciou");
   ok((await POST("prestacao-apreciar", { prestacaoId: prest, sessaoId: cliHoje, resultado: "REPROVADA", observacao: "tentando mudar depois" })).status === 422, "apreciada não muda");
   ok((await POST("prestacao-registrar", ENTREGA)).status === 422, "nem a entrega");
+  // Trava 9-A — a verificação anual é registrada por quem tem assento no Conselho Fiscal: sem ele, recusada; com ele, valem as regras de antes
+  ok((await POST("prestacao-cf", { prestacaoId: prest, verificadaEm: `${ano - 1}-04-10`, resultado: "SEM_CONFUSAO" })).status === 403, "quem não é do Conselho Fiscal não registra a verificação (Trava 9-A)");
+  if (!(await escalar("SELECT COUNT(*) FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId WHERE o.Sigla = 'CONSELHO_FISCAL' AND a.MembroId = @m AND a.DataFim IS NULL", { m: SEC_ID }))) {
+    await q(`INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) SELECT OrgaoId, @m, 'FUNCAO', 'MEMBRO', '2025-01-01' FROM Orgaos WHERE Sigla = 'CONSELHO_FISCAL'`, { m: SEC_ID });
+  }
   ok((await POST("prestacao-cf", { prestacaoId: prest, verificadaEm: `${ano - 2}-12-31`, resultado: "SEM_CONFUSAO" })).status === 422, "a verificação do Conselho Fiscal é depois do fim do exercício");
   r = await POST("prestacao-cf", { prestacaoId: prest, verificadaEm: `${ano - 1}-04-10`, resultado: "SEM_CONFUSAO" });
   ok(r.status === 200, "a verificação anual do Conselho Fiscal (Art. 66 §3º)");

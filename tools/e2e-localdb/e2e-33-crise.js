@@ -91,7 +91,9 @@ async function fuzz(rotulo, { base, campos, chamarCom }) {
   }
   const papeis = async (perm) => (await q(`SELECT Nome FROM Papeis WHERE (',' + Permissoes + ',') LIKE '%,${perm},%' ORDER BY Nome`)).map((p) => p.Nome);
   ok(JSON.stringify(await papeis("crise_gestao")) === JSON.stringify(["Presidente", "Secretário Geral"]), "crise_gestao só no Presidente e no Secretário Geral", await papeis("crise_gestao"));
-  ok(JSON.stringify(await papeis("seguranca_congregacao")) === JSON.stringify(["Dirigente de Congregação", "Pastor de Área", "Presidente", "Secretário Geral"]), "seguranca_congregacao nos 4 papéis");
+  // v9.3 (migração 167) — o Pastor Distrital e o Interventor Distrital copiam as permissões do Pastor de Área (Trava 9-A: com o banco recriado com todas as migrações)
+  ok(JSON.stringify((await papeis("seguranca_congregacao")).filter((n) => !["Interventor Distrital", "Pastor Distrital"].includes(n))) === JSON.stringify(["Dirigente de Congregação", "Pastor de Área", "Presidente", "Secretário Geral"]),
+    "seguranca_congregacao nos 4 papéis (mais os dois do Distrito, que copiam o Pastor de Área)");
   ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Permissoes LIKE '%crise_gestao%crise_gestao%' OR Permissoes LIKE '%seguranca_congregacao%seguranca_congregacao%'")) === 0, "reaplicar não duplicou a permissão");
   const prazos = Object.fromEntries((await q("SELECT Sigla, COUNT(*) n, MAX(Dias) d FROM Prazos WHERE Sigla LIKE 'SEGURANCA[_]%' GROUP BY Sigla")).map((p) => [p.Sigla, [p.n, p.d]]));
   ok(JSON.stringify(prazos) === JSON.stringify({ SEGURANCA_PLANO_REVISAO_DIAS: [1, 365], SEGURANCA_SIMULADO_MAX_DIAS: [1, 365], SEGURANCA_VISTORIA_MAX_DIAS: [1, 180] }), "os 3 prazos, uma vez cada", prazos);

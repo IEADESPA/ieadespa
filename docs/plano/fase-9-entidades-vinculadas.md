@@ -317,6 +317,65 @@ mutações); homologação: a 167 aplicada no Azure SQL, rotas com 401, teste de
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v9.1 a v9.3 pelas 5 perguntas do checklist.
 
+- [x] **Fechada em 05/11/2026** — auditoria de v9.1 a v9.3. Duas revisões independentes, só de leitura: uma das costuras ENTRE as versões e com o sistema
+  antigo (a saída da igreja, a Liderança de uma linha por pessoa, o cadastro, os avisos, o dinheiro) e outra da conformidade com o Estatuto, o Regimento, o
+  plano e o README. **Nenhum achado alto; todos os que o código resolve, corrigidos com teste** (migração 168; `e2e-75`, 37 verificações; casca v54). As 5
+  perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria inteira do banco local, recriado do zero (`rodar.sh preparar` e `tudo.sh`, do `e2e-1` ao
+     `e2e-75`), toda verde; as migrações 165 a 168 aplicadas duas vezes cada. O roteiro antigo que mudou foi o `e2e-23`: o Pastor Distrital e o Interventor
+     Distrital (v9.3) nascem com as permissões do Pastor de Área e passaram a contar entre os papéis do cuidado pastoral — a expectativa antiga travava o
+     preparo da base com o banco recriado.
+  2. **Toda tela nova abre?** Sim. Antes da trava, teste de tela completo na produção (execução 42026895152): 6.738 ações iguais, 0 divergência, 0 violação de
+     CSP. Provas de tela sem navegador: Entidades 70 (16 mutações acusadas), Expansão 83 (27 de 27), Distritos 77 (34 de 34). O teste de tela da homologação e
+     o da produção depois do deploy: na homologação, a execução 42054960655 (1.367 ações iguais, 0 divergência, 0 violação de CSP) e na produção, a execução 42057812952 (1.214 ações das telas e 153 do celular iguais, 0 divergência, 0 violação de CSP; o celular repetido uma vez porque o navegador do equipamento não abriu).
+  3. **O README e o código contam a mesma história?** Sim, conferido item por item (a contagem de 349 tabelas, as migrações 001 a 168, a seção 4, o índice, as
+     datas e os merges, os artigos citados). Corrigidos: a mensagem da intervenção do Distrito citava o Art. 126-L, I (é o 126-N, III e o 126-P, II); um
+     comentário da v9.1 dizia "5º dia" (é o 6º); as três políticas de retenção gravavam 5 anos com o texto "sem prazo final" (migração 168: NULL); o ROPA do
+     Distrito não listava o Pastor Distrital nem os fechamentos; o plano da v4 dizia que o repasse de Distrito não creditava em lugar nenhum.
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável, listadas no fim.
+  5. **Houve deploy real?** Sim: a 168 rodou no deploy da produção em 05/11/2026 (execução 42057813308, merge 75e5be0), com o teste de tela depois do deploy.
+
+  O que mudou:
+  - **A saída da igreja alcança a FASE 9 (médio, Reg. Art. 11).** A vacância encerra o Encarregado da Extensão e o mandato de dirigente de entidade vinculada
+    (indicado ou homologado; falecimento com o motivo FALECIMENTO); antes, o falecido ou desligado continuava "dirigente atual". Para dirigir entidade, a
+    mesma régua do Interventor e do Encarregado: em comunhão, sem processo disciplinar e sem licença de candidatura (Art. 157 §2º).
+  - **O aviso de retenção do Distrito chega (médio).** A referência do aviso leva o motivo (falta fechamento, apurável e não registrado, registrado e não
+    repassado): antes, o mês que avisou "falta fechar" nunca mais avisava a retenção. O aviso antigo de repasse parado não sai mais em dobro para o Distrito.
+  - **Ninguém perde cargo em silêncio (médio).** O Pastor Distrital, como o Interventor, não é dado a quem já tem outro cargo em vigor (a Área ou a
+    congregação ficaria sem líder e a CME ou a CLI perderiam a pessoa); nem em Distrito legado, sem o decreto.
+  - **Os papéis cujo nome o sistema usa ficam protegidos (médio).** Presidente, Secretário Geral, Dirigente de Congregação, Pastor de Área, Superintendente
+    Regional, Vice-Presidente de Quadrante, Pastor e Interventor Distrital, Secretário de Missões, Líder Geral de Departamento/Secretaria, Reitor da AFM e
+    Tesoureiro de Distrito não se renomeiam, não mudam de nível nem se excluem (as permissões continuam editáveis); o papel dado a alguém não se exclui.
+  - **Conformidade (médio):** a exoneração de dirigente de entidade é só do Pastor Presidente (Estatuto Art. 65); a verificação anual do Conselho Fiscal (Art. 66
+    §3º) é registrada só por quem tem assento nele; a reunião do CDE espera só quem o compõe (Art. 126-L, II), não a metrópole inteira; a retenção sem prazo final.
+  - **O dinheiro (baixo).** O decreto do Distrito pega também a trava do Rateio Geral (os dois ao mesmo tempo contariam o mesmo fechamento duas vezes); a
+    desativação respeita o Dízimo do mês já registrado (a Sede volta no mês seguinte ao último registrado, e o registro não fica órfão).
+  - **O cadastro (baixo).** A Área, a Região e o Quadrante com liderança, pedido ou unidade embaixo não se excluem (antes o Pastor de Área de uma Área apagada
+    continuava na CME); o território de um Distrito sob intervenção não muda; desativar a Extensão pelo cadastro faz o que a emancipação faz (encerra o
+    Encarregado e o acesso de escopo dela; recusa com pedido em andamento).
+  - **A intervenção (baixo).** O Interventor pode ser trocado sem encerrar a intervenção; nas Entidades, quem não é o Presidente é recusado antes de pedir a
+    confirmação recente, e a ratificação, a extinção e a aprovação do vínculo passaram a pedir a confirmação recente.
+  - **Os outros baixos.** A emancipação fica no território da Mãe (a Área de outro Distrito mudaria o destino do repasse sem decreto); a Área herdada inativa diz
+    o que fazer; o gatilho (a) do Distrito não aceita a própria sede, Parauapebas/PA (Estatuto Art. 2º); Meus Dados mostra os atos da pessoa nos pedidos de
+    expansão, os balanços que analisou e os decretos que registrou; o painel da Expansão avisa o Pastor de Área da CME sem a permissão da tela; a nota da v9.4
+    (a CME no envio de missionários, Art. 23, II e 44) e da v9.5 (os critérios de emancipação são decisão do responsável) no plano.
+
+  **Decisões que o responsável pode mudar** (o sistema já está fazendo assim):
+  - **O NIF analisa o balanço do Distrito por um conselheiro** (o Regimento, Art. 53 e 54, fala do colegiado de 5 com quórum): o conselheiro registra no sistema
+    a deliberação do colegiado, tomada na reunião do Conselho Fiscal. O mesmo para a verificação anual das entidades.
+  - **O "Filtro Máximo" do Distrito (Art. 126-M, I) e a dispensa dos balancetes (126-M, II, primeira parte) não estão no sistema:** enquanto houver uma conta só
+    e nenhum Distrito de fato, os processos, os relatórios e a prestação de contas mensal das congregações do território continuam como hoje (a Sede mantém a
+    avocação do Art. 126-P, I). Fazer quando o primeiro Distrito existir.
+  - **A desativação do Distrito e a emancipação encerram acessos de funções não eletivas sem ir à Assembleia** (Estatuto Art. 18, VII, "c" fala da destituição de
+    não eletivos): são atos de escopo que acabaram, não destituições de pessoas.
+  - **O Secretário de Missões é dado em Liderança pela Secretaria** (o Regimento, Art. 43, diz que os Secretários são de livre nomeação do Pastor Presidente: a
+    Secretaria registra a nomeação dele), sem a restrição do Pastor Distrital.
+  - **Entidades:** o destino "congênere sem fins lucrativos" para a assistência social e as outras naturezas na extinção (o Estatuto, Art. 68, só fala em saúde,
+    educação e comodato); a alienação de participação (Art. 18, VII, "b") e a fiança ou aval (Art. 59 §2º) ficam fora do sistema (atos de cartório e banco).
+  - **Aceito:** a mudança de território enquanto um fechamento está sendo gravado (instantes) pode deixar aquele mês com a Sede.
+  - **Defeitos do próprio texto das normas, para conhecimento:** o Regimento chama a Sede de nível 5 no Art. 104-B, VI e de nível 6 no Art. 126-O (o sistema
+    segue o 126-K: Distrito 5, Sede 6); o Estatuto, Art. 61, II remete aos "arts. 72, § 3º, e 73", que não tratam de entidades (provavelmente o 66 §3º e o 67).
+
 ## v9.4 — Missões: campos, missionários e prestação de contas *(7ª rodada)*
 
 O risco real em missões não é falta de recurso — é **sustento enviado sem

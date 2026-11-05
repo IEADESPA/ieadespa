@@ -1,7 +1,7 @@
 // shared/distritos.js — v9.3: Distrito e macroexpansão. A regra pura, sem banco; o banco está em distritosDb.js.
 // Estatuto Art. 5º §5º; Regimento Art. 6-A, III e IV, Art. 53-D, I, Art. 126-K a 126-N, Art. 126-P e Art. 144, II.
 // Desenho em docs/plano/fase-9-entidades-vinculadas.md ("Desenho da v9.3").
-const { texto, idDe, booleano, br, UFS } = require("./entidadesVinculadas");
+const { texto, idDe, booleano, br, UFS, chaveDeComparacao } = require("./entidadesVinculadas");
 
 // Art. 126-K §2º: o Distrito não nasce por quantidade de congregações, mas por um destes dois gatilhos.
 const GATILHOS = {
@@ -141,6 +141,10 @@ function validarAtivacao(dados) {
   if (!cidade.valido) return cidade;
   const uf = typeof d.uf === "string" ? d.uf.trim().toUpperCase() : "";
   if (!UFS.includes(uf)) return { valido: false, mensagem: "Escolha a UF." };
+  // Trava 9-A — o gatilho (a) é "fora da sede de origem": a sede da IEADESPA é Parauapebas/PA (Estatuto, Art. 2º)
+  if (gatilho === "METROPOLE" && uf === "PA" && chaveDeComparacao(cidade.texto) === "parauapebas") {
+    return { valido: false, mensagem: "O gatilho (a) é para capital ou região metropolitana FORA da sede de origem — e a sede é Parauapebas/PA (Estatuto, Art. 2º)." };
+  }
   let populacao = null;
   if (d.populacao != null && d.populacao !== "") {
     const bruto = typeof d.populacao === "number" ? String(d.populacao) : (typeof d.populacao === "string" ? d.populacao.replace(/[.\s]/g, "") : "");

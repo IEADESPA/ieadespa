@@ -220,13 +220,13 @@ Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s)
 
 ## FASE 9 — Entidades Vinculadas e Expansão
 
-Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 8 bloco(s) · itens 0/21 concluídos.
+Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 8 bloco(s) · itens 10/21 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
-| v9.1 | [Entidades vinculadas](fase-9-entidades-vinculadas.md#v91--entidades-vinculadas) | ⬜ 0/5 |
-| v9.2 | [Expansão (Extensões e novas congregações)](fase-9-entidades-vinculadas.md#v92--expansão-extensões-e-novas-congregações) | ⬜ 0/3 |
-| v9.3 | [Distrito e macroexpansão](fase-9-entidades-vinculadas.md#v93--distrito-e-macroexpansão) | ⬜ 0/2 |
+| v9.1 | [Entidades vinculadas](fase-9-entidades-vinculadas.md#v91--entidades-vinculadas) | ✅ 5/5 |
+| v9.2 | [Expansão (Extensões e novas congregações)](fase-9-entidades-vinculadas.md#v92--expansão-extensões-e-novas-congregações) | ✅ 3/3 |
+| v9.3 | [Distrito e macroexpansão](fase-9-entidades-vinculadas.md#v93--distrito-e-macroexpansão) | ✅ 2/2 |
 | 🔒 9-A | [antes de avançar para a v9.4](fase-9-entidades-vinculadas.md#-trava-de-revisão-9-a--antes-de-avançar-para-a-v94) | — |
 | v9.4 | [Missões: campos, missionários e prestação de contas *(7ª rodada)*](fase-9-entidades-vinculadas.md#v94--missões-campos-missionários-e-prestação-de-contas-7ª-rodada) | ⬜ 0/4 |
 | v9.5 | [Mapa territorial e inteligência de expansão *(7ª rodada)*](fase-9-entidades-vinculadas.md#v95--mapa-territorial-e-inteligência-de-expansão-7ª-rodada) | ⬜ 0/3 |

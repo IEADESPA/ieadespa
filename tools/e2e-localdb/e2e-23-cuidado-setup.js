@@ -41,7 +41,11 @@ const P = {
   console.log("== migração 148: permissão, papel, prazos, avisos, retenção ==");
   ok((await escalar("SELECT COUNT(*) FROM Funcionalidades WHERE Chave = 'cuidado_pastoral' AND LEN(Nome) <= 100")) === 1, "a permissão cuidado_pastoral existe (nome cabe em 100)");
   const comPerm = (await q("SELECT Nome FROM Papeis WHERE (',' + Permissoes + ',') LIKE '%,cuidado_pastoral,%' ORDER BY Nome")).map((p) => p.Nome);
-  ok(["Dirigente de Congregação", "Pastor de Área", "Presidente", "Secretário Geral", "Superintendente Regional"].every((n) => comPerm.includes(n)) && comPerm.length === 5, "só os 5 papéis do cuidado têm a permissão", comPerm);
+  // v9.3 (migração 167) — o Pastor Distrital e o Interventor Distrital nascem com as permissões do Pastor de Área (Trava 9-A: a expectativa antiga travava o preparo
+  // quando o banco é recriado com TODAS as migrações): são 5 papéis do cuidado, mais esses dois quando a 167 já está aplicada
+  const da167 = ["Interventor Distrital", "Pastor Distrital"].filter((n) => comPerm.includes(n));
+  ok(["Dirigente de Congregação", "Pastor de Área", "Presidente", "Secretário Geral", "Superintendente Regional"].every((n) => comPerm.includes(n)) && comPerm.length === 5 + da167.length,
+    "só os 5 papéis do cuidado têm a permissão (mais o Pastor e o Interventor Distrital, que copiam o Pastor de Área)", comPerm);
   ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Superintendente Regional' AND Nivel = 'REGIAO'")) === 1, "o papel Superintendente Regional existe no nível Região");
   ok((await escalar("SELECT COUNT(*) FROM Papeis WHERE Nome = N'Dirigente de Congregação' AND (',' + Permissoes + ',') LIKE '%,cuidado_pastoral,%cuidado_pastoral,%'")) === 0, "reaplicar não duplicou a permissão no papel");
   const prazos = Object.fromEntries((await q("SELECT Sigla, Dias FROM Prazos WHERE Sigla LIKE 'CUIDADO[_]%'")).map((p) => [p.Sigla, p.Dias]));

@@ -23,7 +23,9 @@ async function filho() {
   try {
     const res = spec.rota === "repasse"
       ? await chamarRota("GestaoRepassesInstitucionais/index.js", { metodo: "POST", binding: {}, token: TOKENS.SEC(), corpo: spec.corpo })
-      : await chamarRota("GestaoDistritos/index.js", { metodo: "POST", binding: { acao: spec.acao }, token: TOKENS[spec.quem || "SEC"](), corpo: spec.corpo || {} });
+      : spec.rota === "rateio"
+        ? await chamarRota("GestaoRateioGeral/index.js", { metodo: "POST", binding: {}, token: TOKENS.SEC(), corpo: spec.corpo })
+        : await chamarRota("GestaoDistritos/index.js", { metodo: "POST", binding: { acao: spec.acao }, token: TOKENS[spec.quem || "SEC"](), corpo: spec.corpo || {} });
     const b = res.body || {};
     process.stdout.write("@@RESULTADO@@" + JSON.stringify({ ok: true, status: res.status, sucesso: b.sucesso, mensagem: b.mensagem }) + "\n");
   } catch (e) {
@@ -129,6 +131,20 @@ async function principal() {
     .map((c) => ({ acao: "analisar", quem: "NIF", corpo: { balancoId: bId, ...c } })));
   ok(semErro(rs) && ganhos(rs) === 1, "uma análise só", rs.map((x) => `${x.status} ${x.mensagem}`));
   ok(["APROVADO", "DEVOLVIDO"].includes(await escalar("SELECT Status FROM DistritoBalancos WHERE BalancoId = @b", { b: bId })), "o balanço tem uma situação final");
+
+  console.log("== o decreto junto com o fechamento do Rateio Geral (Trava 9-A) ==");
+  // um fechamento do mês, já liberado e fora de um Rateio, numa congregação do território de um Distrito ainda inativo: o decreto o passa ao Distrito e o Rateio
+  // o levaria para a Sede — os dois ao mesmo tempo, o fechamento fica num lado só
+  const area3 = await escalar("INSERT INTO Areas (Nome) OUTPUT INSERTED.AreaId VALUES (N'Área Corrida C E2E')");
+  const dC = await novo("Distrito Corrida C E2E", area3);
+  const congC = await escalar("INSERT INTO Congregacoes (Nome, AreaId) OUTPUT INSERTED.CongregacaoId VALUES (N'Congregação Corrida C E2E', @a)", { a: area3 });
+  const fC = await escalar(`INSERT INTO FechamentosTesouraria (CongregacaoId, MesReferencia, TotalRecebido, TotalFinal, PercentualRetencaoLocal, ValorRetidoLocal, ValorRepasseGeral, Status, FechadoPor)
+           OUTPUT INSERTED.FechamentoId VALUES (@c, @m, 1000, 1000, 40, 400, 600, 'REPASSADO', 1002)`, { c: congC, m: mes });
+  rs = await disparar([{ acao: "ativar", corpo: ativ(dC) }, { rota: "rateio", corpo: { mesReferencia: mes } }]);
+  ok(semErro(rs), "nenhum erro 500", rs.map((x) => `${x.status} ${x.mensagem}`));
+  const noRateio = await escalar("SELECT COUNT(*) FROM RateioGeralItens WHERE FechamentoId = @f", { f: fC });
+  const doDistrito = await escalar("SELECT RepasseDistritoId FROM FechamentosTesouraria WHERE FechamentoId = @f", { f: fC });
+  ok(!(noRateio > 0 && doDistrito), "o fechamento não ficou ao mesmo tempo no Rateio da Sede e no Distrito (o dinheiro não conta duas vezes)", { noRateio, doDistrito });
 
   fim(`e2e-74 distritos: corridas${process.env.E2E_RCSI === "1" ? " (READ_COMMITTED_SNAPSHOT)" : ""}`);
 }

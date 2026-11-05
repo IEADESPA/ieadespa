@@ -185,6 +185,7 @@ function dstRenderFicha() {
     a.desativar ? dstBotao("🏛️ Desativar (decreto da CLI)", "desativar") : "",
     a.intervir ? dstBotao("🛑 Decretar intervenção", "intervir") : "",
     a.encerrarIntervencao ? dstBotao("✅ Encerrar a intervenção", "encerrar") : "",
+    a.trocarInterventor ? dstBotao("🔁 Trocar o Interventor", "interventor") : "",
     a.enviarBalanco && Array.isArray(d.anosParaBalanco) && d.anosParaBalanco.length ? dstBotao("📨 Enviar o balanço anual ao NIF", "balanco") : ""
   ].filter(Boolean).join(" ");
   dstEl("dstFicha").innerHTML = `
@@ -282,6 +283,10 @@ function dstEspec(chave) {
     case "encerrar": return { titulo: `Encerrar a intervenção — ${nome}`, acao: "encerrar", campos: [
       { id: "resultado", rotulo: "Resultado da intervenção (10 a 2.000)", tipo: "area", max: 2000, obrigatorio: true }],
       confirmar: () => `Encerrar a intervenção no Distrito "${nome}"? O acesso do Interventor termina; o novo Pastor Distrital recebe o acesso em Liderança.` };
+    case "interventor": return { titulo: `Trocar o Interventor — ${nome}`, acao: "interventor", campos: [
+      { id: "interventorMembroId", rotulo: "Matrícula do novo Interventor (membro ativo, em comunhão, sem outro cargo de acesso)", tipo: "texto", max: 10, obrigatorio: true }],
+      conferir: (c) => (/^[1-9][0-9]{0,9}$/.test(c.interventorMembroId) ? null : "A matrícula do Interventor é um número."),
+      confirmar: () => `Trocar o Interventor do Distrito "${nome}"? O acesso do Interventor de agora termina na hora e as sessões dele caem; o novo recebe o acesso em Liderança.` };
     case "balanco": return { titulo: `Balanço anual ao NIF — ${nome}`, acao: "balanco", campos: [
       { id: "ano", rotulo: "Ano", tipo: "select", opcoes: (Array.isArray(d.anosParaBalanco) ? d.anosParaBalanco : []).map((x) => ({ codigo: String(x), rotulo: String(x) })), obrigatorio: true },
       { id: "receitas", rotulo: "Receitas do ano (R$)", tipo: "texto", max: 20, obrigatorio: true },
@@ -394,10 +399,14 @@ function dstCartaoMeusDados(t) {
   const x = t && t.distritos;
   const bals = x && Array.isArray(x.balancosEnviados) ? x.balancosEnviados : [];
   const ivs = x && Array.isArray(x.intervencoesComoInterventor) ? x.intervencoesComoInterventor : [];
-  if (!bals.length && !ivs.length) return "";
+  const analisados = x && Array.isArray(x.balancosAnalisados) ? x.balancosAnalisados : [];
+  const decretos = x && Array.isArray(x.decretosRegistrados) ? x.decretosRegistrados : [];
+  if (!bals.length && !ivs.length && !analisados.length && !decretos.length) return "";
   return `<div class="cartao-perfil"><p class="linha-perfil"><strong>🗺️ Distritos</strong></p>
     ${bals.map((b) => `<p class="linha-perfil">Balanço de ${dstH(b.ano)} do ${dstH(b.distrito)} (versão ${dstH(b.versao)}) — ${dstH(b.status)}, enviado em ${dstH(dstBr(b.enviadoEm))}</p>`).join("")}
-    ${ivs.map((i) => `<p class="linha-perfil">Interventor no ${dstH(i.distrito)} desde ${dstH(dstBr(i.decretadaEm))}${i.encerradaEm ? ` até ${dstH(dstBr(i.encerradaEm))}` : " (em curso)"}</p>`).join("")}</div>`;
+    ${ivs.map((i) => `<p class="linha-perfil">Interventor no ${dstH(i.distrito)} desde ${dstH(dstBr(i.decretadaEm))}${i.encerradaEm ? ` até ${dstH(dstBr(i.encerradaEm))}` : " (em curso)"}</p>`).join("")}
+    ${analisados.map((b) => `<p class="linha-perfil">Analisou (NIF) o balanço de ${dstH(b.ano)} do ${dstH(b.distrito)} (versão ${dstH(b.versao)}) — ${dstH(b.status)}, em ${dstH(dstBr(b.analisadoEm))}</p>`).join("")}
+    ${decretos.map((d) => `<p class="linha-perfil">Registrou o decreto de ${dstH(d.ato)} do ${dstH(d.distrito)} (${dstH(dstBr(d.em))})</p>`).join("")}</div>`;
 }
 
 registrarAcoes({ dstAbrirFichaAcao, dstFecharFichaAcao, dstAbrirFormAcao, dstCancelarFormAcao, dstEnviarFormAcao, dstCarregarListaAcao });

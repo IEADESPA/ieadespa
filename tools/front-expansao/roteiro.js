@@ -307,6 +307,16 @@ async function prova() {
   const cartao = amb.g("expCartaoMeusDados")([{ extensao: `Tenda ${ATAQUE}`, congregacaoMae: `Central ${ATAQUE}`, desde: "2026-11-01", ate: null }]);
   ok(/Tenda/.test(cartao) && !/<img/.test(cartao) && /\(atual\)/.test(cartao), "o cartão de Meus Dados escapa o texto");
   ok(amb.g("expCartaoMeusDados")([]) === "" && amb.g("expCartaoMeusDados")(null) === "", "sem Extensão: o cartão não aparece");
+  // Trava 9-A — os atos da pessoa nos pedidos de expansão
+  const atos = amb.g("expCartaoAtosMeusDados")([{ pedido: `Emancipação: Nova ${ATAQUE}`, em: "2026-11-01", papeis: ["pediu", `deu o parecer ${ATAQUE}`] }]);
+  ok(/Pedidos de expansão/.test(atos) && /pediu/.test(atos) && !/<img/.test(atos), "o cartão dos pedidos de expansão escapa o texto (Trava 9-A)");
+  ok(amb.g("expCartaoAtosMeusDados")([]) === "" && amb.g("expCartaoAtosMeusDados")(null) === "", "sem ato: o cartão não aparece");
+  // e o painel acusa o Pastor de Área da CME sem a permissão da tela
+  const amb9 = montar();
+  amb9.__respostas["GET expansao/painel"] = { corpo: { ...R.painelVencido, cme: { ...R.painelVencido.cme, pastoresSemAcesso: [{ membroId: 3003, nome: `Pastor ${ATAQUE}` }] } } };
+  await abrirAba(amb9);
+  ok(/sem a permissão "expansao"/.test(amb9.e("expPainel").textContent), "o painel avisa o Pastor de Área da CME sem acesso (Trava 9-A)");
+  semAtaque(amb9, "o aviso da CME sem acesso");
 
   console.log("== a saída da sessão ==");
   const amb3 = montar();
@@ -351,6 +361,8 @@ const MUTACOES = [
   ["urgência sempre no formulário", ["...(semParecer ? [{ id: \"urgencia\"", "...(true ? [{ id: \"urgencia\""]],
   ["trocar o Encarregado da emancipada", ["<td>${e.podeEditar ? `<button", "<td>${true ? `<button"]],
   ["tirar o escape de Meus Dados", ["${expH(x.extensao)} (${expH(x.congregacaoMae)})", "${x.extensao} (${x.congregacaoMae})"]],
+  ["tirar o escape dos pedidos em Meus Dados", ["${expH(x.pedido)} (${expH(expBr(x.em))})", "${x.pedido} (${expH(expBr(x.em))})"]],
+  ["não avisar a CME sem acesso", ["    ...arr(cme.pastoresSemAcesso).map(", "    ...[].map("]],
   ["o Dirigente pede as reuniões da CLI", ["  if (cat.papeis && cat.papeis.geral) {", "  if (true) {"]]
 ];
 

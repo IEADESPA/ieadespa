@@ -174,7 +174,12 @@ Cada versão parte da base da anterior (`BASE=...`):
   as cadeiras da CLI; o repasse do território fora do Rateio Geral e da situação do Tesouro; o Dízimo Institucional calculado e creditado no Tesouro Geral; o
   balanço anual com o NIF, a devolução e a versão 2; os avisos; quem vê o quê; a intervenção destituindo o CDE, cancelando a delegação e derrubando as sessões; o
   encerramento; a desativação; os CHECK e os índices; lixo em cada campo; Meus Dados; `E2E_CONTRATO=1` grava `tools/front-distritos/contrato-real.json`) e
-  `e2e-74` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
+  `e2e-74` (corridas; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL; desde a Trava 9-A, também o decreto junto com o fechamento do Rateio Geral).
+- **Trava 9-A** (migração 168), base `cenario-trava9a` (`bash rodar.sh preparar-trava9a`: a `cenario-distritos` com a 168 aplicada duas vezes). `e2e-75` (a
+  retenção sem prazo final; a vacância que tira o Encarregado e o dirigente de entidade; a direção de entidade em comunhão e sem licença; a exoneração só pelo
+  Presidente; o Pastor Distrital que não troca cargo nem vale no legado; os papéis de nome protegido; a Área em uso; o território parado na intervenção; a troca
+  do Interventor; o CDE calculado na reunião; a Extensão desativada no cadastro; a emancipação no território da Mãe; Meus Dados; a desativação com o Dízimo já
+  registrado; a referência do aviso por motivo; a CME sem acesso).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

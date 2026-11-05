@@ -117,6 +117,13 @@ describe("validações", () => {
     expect(di.validarAtivacao({ ...ativacao, populacao: "1,5 milhão" }).valido).toBe(false);
     expect(di.validarAtivacao({ ...ativacao, fundamentacao: "curta" }).valido).toBe(false);
   });
+  test("o gatilho (a) é fora da sede de origem: Parauapebas/PA não serve (Estatuto Art. 2º; Trava 9-A)", () => {
+    const base = { sessaoId: 4, gatilho: "METROPOLE", uf: "PA", fundamentacao: "Decreto da CLI na reunião de outubro." };
+    expect(di.validarAtivacao({ ...base, cidade: "Parauapebas" }).valido).toBe(false);
+    expect(di.validarAtivacao({ ...base, cidade: " PARAUAPEBAS " }).valido).toBe(false);
+    expect(di.validarAtivacao({ ...base, cidade: "Belém" }).valido).toBe(true);
+    expect(di.validarAtivacao({ ...base, cidade: "Parauapebas", uf: "MG" }).valido).toBe(true);
+  });
   test("desativação: reunião e motivo", () => {
     expect(di.validarDesativacao({ sessaoId: 3, motivo: "O Distrito voltou para a Sede." }).valido).toBe(true);
     expect(di.validarDesativacao({ sessaoId: 3, motivo: "curto" }).valido).toBe(false);

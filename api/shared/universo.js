@@ -215,6 +215,19 @@ async function universoDoOrgao(pool, orgao, opcoes = {}) {
   // hierarquia territorial (resolverEscopoCongregacoes), nunca "todo mundo
   // ATIVO do sistema inteiro" (senão uma reunião da JAI de 1 congregação
   // computaria falta pra denominação toda).
+  // Trava 9-A — o CDE (Regimento Art. 126-L, II) é calculado: o Pastor Distrital (ou o Interventor), os Vice-Presidentes dos Quadrantes e os Superintendentes das
+  // Regiões do Distrito — não todos os membros do território (antes a reunião do CDE esperava a metrópole inteira).
+  if (orgao.orgaoLocalId && Number(orgao.nivel) === 5 && orgao.sigla === "CDE") {
+    const { composicaoCDE } = require("./distritosDb");
+    const cde = await composicaoCDE(() => pool.request(), Number(orgao.referenciaId), require("./dataBrasilia").hojeBrasilia());
+    const ids = [...new Set([...cde.pastor, ...cde.interventor, ...cde.vices, ...cde.superintendentes].map((p) => Number(p.membroId)))].filter((n) => Number.isInteger(n) && n > 0);
+    if (!ids.length) return [];
+    const result = await pool.request().query(`
+      SELECT m.MembroId AS membroId, m.Nome AS nome, c.Nome AS congregacao, m.SituacaoMembro AS situacaoMembro
+      FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+      WHERE m.Status = 'ATIVO' AND m.MembroId IN (${ids.join(",")})`);
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+  }
   if (orgao.orgaoLocalId) {
     const escopoTipo = escopo.NIVEL_PARA_ESCOPO_TIPO[orgao.nivel];
     const nomesOuTodas = await escopo.resolverEscopoCongregacoes(pool, escopoTipo, orgao.referenciaId);

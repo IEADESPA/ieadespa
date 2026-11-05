@@ -240,6 +240,7 @@ async function alternarMeusDadosLGPD() {
     ${typeof finCartaoMeusDados === "function" ? finCartaoMeusDados(data.tesouraria) : ""}
     ${typeof entCartaoMeusDados === "function" ? entCartaoMeusDados(data.entidadesVinculadas) : ""}
     ${typeof expCartaoMeusDados === "function" ? expCartaoMeusDados(data.extensoesEncarregadas) : ""}
+    ${typeof expCartaoAtosMeusDados === "function" ? expCartaoAtosMeusDados(data.expansaoAtos) : ""}
     ${typeof dstCartaoMeusDados === "function" ? dstCartaoMeusDados(data) : ""}
 
     <div class="cartao-perfil" style="margin-top:12px;">

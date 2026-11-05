@@ -153,6 +153,13 @@ case "$1" in
     migrar 167 2
     base salvar cenario-distritos
     ;;
+  preparar-trava9a)
+    # Trava 9-A: a partir da base "cenario-distritos", aplica a 168 duas vezes (prova a idempotência); salva "cenario-trava9a" (e2e-75 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-distritos
+    migrar 168 2
+    base salvar cenario-trava9a
+    ;;
   roteiro)
     shift
     cd "$AQUI"

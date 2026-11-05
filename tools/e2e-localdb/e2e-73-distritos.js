@@ -303,7 +303,8 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   const m3 = di.mesAnterior(di.mesAnterior(mesAntes)), m2 = di.mesAnterior(mesAntes);
   await fechar(central, m3, 400); await fechar(vila, m3, 100); await fechar(central, m2, 200);
   fatos = await diDb.detectarRepasseVencido(await obterPool(), { hoje: hojeBr() });
-  const fatoDe = (m) => fatos.find((f) => f.referenciaId === (Number(m.replace("-", "")) - 200000) * 10000 + distrito);
+  // a referência: ((AAAAMM − 200000) × 10000 + Distrito) × 10 + o código do motivo (Trava 9-A)
+  const fatoDe = (m) => fatos.find((f) => Math.floor(f.referenciaId / 10) === (Number(m.replace("-", "")) - 200000) * 10000 + distrito);
   ok(fatoDe(m3) && /Art\. 126-N, III/.test(fatoDe(m3).fatoGerador) && fatoDe(m2) && /falta fechar/.test(fatoDe(m2).fatoGerador) && !/intervenção/.test(fatoDe(m2).fatoGerador)
     && new Set(fatos.map((f) => f.referenciaId)).size === fatos.length, "o mês retido fala em intervenção; o que falta fechar só pede o fechamento", fatos.map((f) => f.fatoGerador.slice(0, 70)));
   ok(!fatos.some((f) => /Nova do Distrito/.test(f.fatoGerador)), "a congregação nova não aparece como faltando");
@@ -406,10 +407,14 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   await q("INSERT INTO SessoesAtivas (SessaoId, MembroId) VALUES (@s, @m)", { s: sidPastor, m: P.pastor });
   r = guardar("desativar", await POST("desativar", { distritoId: distrito, sessaoId: reuniaoFim, motivo: "A base de Belém volta a ser administrada pela Sede." }));
   const perFim = await um("SELECT * FROM DistritoPeriodos WHERE DistritoId = @d AND Legado = 0 ORDER BY PeriodoId DESC", { d: distrito });
-  ok(r.body.sucesso && perFim.FinanceiroAteMes === mes && (await escalar("SELECT Ativo FROM Distritos WHERE DistritoId = @d", { d: distrito })) === false, "desativado: o período fecha neste mês", perFim);
+  // Trava 9-A — o Dízimo deste mês já foi registrado (acima): o mês continua do Distrito e a Sede volta a receber no mês seguinte
+  ok(r.body.sucesso && perFim.FinanceiroAteMes === di.proximoMes(mes) && (await escalar("SELECT Ativo FROM Distritos WHERE DistritoId = @d", { d: distrito })) === false,
+    "desativado: o período fecha no mês seguinte ao último Dízimo registrado", perFim);
   ok((await vigente(P.pastor)) === 0 && (await escalar("SELECT Encerrada FROM SessoesAtivas WHERE SessaoId = @s", { s: sidPastor })) === true, "o acesso de escopo do Distrito termina e a sessão cai");
   r = await RATEIO(L.GERAL(1002, ["financeiro"]));
-  ok((r.body.itens || r.body.pendentes || r.body || []).some((i) => Number(i.congregacaoId) === Number(central) && i.mesReferencia === mes), "o mês da desativação volta para o malote da Sede");
+  ok(!(r.body.itens || r.body.pendentes || r.body || []).some((i) => Number(i.congregacaoId) === Number(central) && i.mesReferencia === mes)
+    && (await escalar("SELECT RepasseDistritoId FROM FechamentosTesouraria WHERE CongregacaoId = @c AND MesReferencia = @m", { c: central, m: mes })) === distrito,
+    "o mês com o Dízimo registrado não volta para o malote da Sede (o registro não fica órfão)");
   r = await POST("desativar", { distritoId: distrito, sessaoId: reuniaoFim, motivo: "A base de Belém volta a ser administrada pela Sede." });
   ok(r.status === 422, "desativar de novo: recusado", r.body);
   const reuniaoVelha = await sessaoCLI("CLI antiga E2E", "2020-01-10");

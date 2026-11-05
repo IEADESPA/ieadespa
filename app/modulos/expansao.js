@@ -26,28 +26,34 @@ const expEl = (idEl) => document.getElementById(idEl);
 const expBr = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 const expH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const EXP_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
-const EXP_SECOES = ["painel", "pedidos", "extensoes"];
+const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos"];
+// v9.3 — a aba abre com "expansao" ou "distritos": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js), da permissão própria
+const expPermite = (secao) => (typeof authPermissoes !== "undefined" && Array.isArray(authPermissoes)
+  ? authPermissoes.includes(secao === "distritos" ? "distritos" : "expansao") : secao !== "distritos");
 
+// O dono da resposta: a matrícula e o tipo de sessão — não o bilhete, que a confirmação reforçada (428) troca no meio do ato (a resposta do próprio ato era
+// descartada e a tela ficava muda depois de gravar; revisão de 04/11/2026). A troca de login ou a saída mudam o dono.
+const expDono = () => (authToken ? `${authMatricula}|${typeof sessaoDeLiderancaNaTela === "function" && sessaoDeLiderancaNaTela() ? "senha" : "pin"}` : null);
 async function expBuscar(caminho) {
-  const token = authToken;
-  if (!token) return null;   // sem login (saiu no meio de uma sequência de leituras): nada vai para a tela
+  const dono = expDono();
+  if (!dono) return null;   // sem login (saiu no meio de uma sequência de leituras): nada vai para a tela
   let res;
-  try { res = await fetchProtegido(`${API_BASE}/expansao/${caminho}`); } catch (e) { return authToken === token ? { semConexao: true } : null; }
+  try { res = await fetchProtegido(`${API_BASE}/expansao/${caminho}`); } catch (e) { return expDono() === dono ? { semConexao: true } : null; }
   const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-  return authToken === token ? data : null;
+  return expDono() === dono ? data : null;
 }
 async function expPost(acao, corpo, alvoMsg) {
   if (expOcupado) { expMensagem(alvoMsg, "Aguarde: a gravação anterior ainda está em andamento."); return null; }
   expOcupado = true;
-  const token = authToken;
+  const dono = expDono();
   try {
     let res;
     try { res = await fetchProtegido(`${API_BASE}/expansao/${acao}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) }); } catch (e) {
-      if (authToken === token) expMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
+      if (expDono() === dono) expMensagem(alvoMsg, "Sem conexão com o servidor. Tente de novo.");
       return null;
     }
     const data = await res.json().catch(() => ({ sucesso: false, mensagem: "Resposta inválida do servidor." }));
-    if (authToken !== token) return null;
+    if (expDono() !== dono) return null;
     return data;
   } finally {
     expOcupado = false;
@@ -67,11 +73,17 @@ function expLimparTela() {
   for (const idEl of ["expNovoNome", "expNovoEncarregado", "expNovoEndereco", "expNovoBairro", "expNovoCidade", "expNovoJustificativa"]) { const el = expEl(idEl); if (el) el.value = ""; }
   const todas = expEl("expExtensoesTodas"); if (todas) todas.checked = false;
   const bloco = expEl("expBlocoFicha"); if (bloco) bloco.style.display = "none";
+  if (typeof dstLimparTela === "function") dstLimparTela();   // v9.3: a pílula dos Distritos
 }
 
 // ================================================================ abrir a aba ================================================================
 async function carregarOpcoesExpansaoAcao() {
   const meu = ++expPedidoOpcoes;
+  for (const s of EXP_SECOES) { const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) b.style.display = expPermite(s) ? "" : "none"; }
+  // a explicação das Extensões e da CME é para quem usa a Expansão: quem só cuida de Distrito vê só a explicação da pílula dele
+  const explicacao = expEl("expExplicacao"); if (explicacao) explicacao.style.display = expPermite("painel") ? "" : "none";
+  // quem só tem "distritos" (o Tesoureiro de Distrito, o NIF) não pede nada da Expansão: vai direto aos Distritos
+  if (!expPermite("painel")) { expMostrarSecaoAcao("distritos"); return; }
   const cat = await expBuscar("catalogos");
   if (cat === null || meu !== expPedidoOpcoes) return;
   if (!cat.sucesso) { expEl("expPainel").innerHTML = cat.semConexao ? EXP_SEM_CONEXAO : `<p class='subtitle'>${expH(cat.mensagem)}</p>`; return; }
@@ -88,7 +100,8 @@ async function carregarOpcoesExpansaoAcao() {
   if (expFicha) expRenderFicha();
 }
 function expMarcarSecao(secao) {
-  expSecaoAtual = EXP_SECOES.includes(secao) ? secao : "painel";
+  const permitidas = EXP_SECOES.filter(expPermite);
+  expSecaoAtual = EXP_SECOES.includes(secao) && expPermite(secao) ? secao : (permitidas[0] || "painel");
   for (const s of EXP_SECOES) {
     const div = expEl(`expSecao${capitalize(s)}`); if (div) div.style.display = s === expSecaoAtual ? "block" : "none";
     const b = expEl(`btnExpSecao${capitalize(s)}`); if (b) { b.classList.toggle("ativo", s === expSecaoAtual); b.setAttribute("aria-pressed", s === expSecaoAtual ? "true" : "false"); }
@@ -99,6 +112,7 @@ function expMostrarSecaoAcao(secao) {
   if (expSecaoAtual === "painel") expCarregarPainelAcao();
   if (expSecaoAtual === "pedidos") expCarregarListaAcao();
   if (expSecaoAtual === "extensoes") expCarregarExtensoesAcao();
+  if (expSecaoAtual === "distritos" && typeof dstAbrirAcao === "function") dstAbrirAcao();
 }
 
 // ================================================================ painel ================================================================
@@ -140,7 +154,7 @@ function expPreencherNovo() {
   const ext = expEl("expNovoExtensao"); if (ext) ext.innerHTML = opcoes(expLista("extensoes"), "extensaoId", (e) => `${e.nome} (${e.maeNome})`);
   const area = expEl("expNovoArea"); if (area) area.innerHTML = opcoes(expLista("areas"), "areaId", (a) => a.nome, "— a da Congregação-Mãe (ou nenhuma) —");
   const uf = expEl("expNovoUf"); if (uf) uf.innerHTML = `<option value="">— nenhuma —</option>${expLista("ufs").map((u) => `<option value="${expH(u)}">${expH(u)}</option>`).join("")}`;
-  for (const [idEl, v] of Object.entries(antes)) { const el = expEl(idEl); if (el && v && (el.options || []).some((o) => o.value === v)) el.value = v; }
+  for (const [idEl, v] of Object.entries(antes)) { const el = expEl(idEl); if (el && v && Array.from(el.options || []).some((o) => o.value === v)) el.value = v; }
   expTipoNovoAcao();
 }
 // Cada tipo mostra só os campos dele: a Extensão nasce de uma Mãe com o Encarregado; a emancipação parte de uma Extensão; a nova congregação escolhe a Área.
@@ -265,7 +279,7 @@ function expRestaurarCampos(v) {
     const el = expEl(`expCampo_${id}`);
     if (!el) continue;
     if (typeof valor === "boolean") el.checked = valor;
-    else if (el.tagName !== "SELECT" || (el.options || []).some((o) => o.value === valor)) el.value = valor;
+    else if (el.tagName !== "SELECT" || Array.from(el.options || []).some((o) => o.value === valor)) el.value = valor;
   }
 }
 

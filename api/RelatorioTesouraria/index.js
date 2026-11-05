@@ -7,6 +7,7 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const tesouraria = require("../shared/tesouraria");
+const { NOME_DO_DISTRITO_DO_REPASSE } = require("../shared/distritos");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "financeiro");
@@ -41,7 +42,10 @@ module.exports = async function (context, req) {
 
   const fechamentoResult = await pool.request()
     .input("congregacaoId", sql.Int, congregacaoId).input("mesReferencia", sql.Char(7), mesReferencia)
-    .query(`SELECT * FROM FechamentosTesouraria WHERE CongregacaoId = @congregacaoId AND MesReferencia = @mesReferencia`);
+    // v9.3 — RepasseDistrito: o Distrito ativo que recebe o repasse deste mês (Regimento Art. 126-N, I), ou NULL quando vai para a Sede
+    .query(`SELECT f.*, ${NOME_DO_DISTRITO_DO_REPASSE("f", "c")} AS RepasseDistrito
+            FROM FechamentosTesouraria f JOIN Congregacoes c ON c.CongregacaoId = f.CongregacaoId
+            WHERE f.CongregacaoId = @congregacaoId AND f.MesReferencia = @mesReferencia`);
   const f = fechamentoResult.recordset[0];
 
   context.res = {
@@ -55,7 +59,7 @@ module.exports = async function (context, req) {
       fechamento: f ? {
         totalRecebido: f.TotalRecebido, valorAluguel: f.ValorAluguel, valorLote: f.ValorLote, totalFinal: f.TotalFinal,
         percentualRetencaoLocal: f.PercentualRetencaoLocal, valorRetidoLocal: f.ValorRetidoLocal, valorRepasseGeral: f.ValorRepasseGeral,
-        status: f.Status, dataRepasse: f.DataRepasse, formaRepasse: f.FormaRepasse
+        status: f.Status, dataRepasse: f.DataRepasse, formaRepasse: f.FormaRepasse, repasseDistrito: f.RepasseDistrito || null
       } : null
     }
   };

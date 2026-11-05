@@ -303,7 +303,7 @@ const MUTACOES = [
   ["recusa fora do formulário", ["entMensagem(\"entMsgForm\", msg);\n    const el = entEl(\"entMsgForm\");", "entMensagem(\"entMsgFicha\", msg);\n    const el = entEl(\"entMsgForm\");"]],
   ["a resposta da ficha anterior na nova", ["if (!r || ficha !== entPedidoFicha) return;", "if (!r) return;"]],
   ["mostrar a decisão da CLI a quem decretou", ["&& !i.decretadaPorMim;", ";"]],
-  ["pintar a resposta de outro login", ["  return authToken === token ? data : null;\n}\n// Grava.", "  return data;\n}\n// Grava."]],
+  ["pintar a resposta de outro login", ["  return entDono() === dono ? data : null;\n}\n// Grava.", "  return data;\n}\n// Grava."]],
   ["não limpar a ficha na saída", ["for (const idEl of [\"entPainel\", \"entLista\", \"entFicha\",", "for (const idEl of [\"entPainel\", \"entLista\","]],
   ["mostrar todos os destinos na extinção", [".filter((d) => Array.isArray(d.naturezas) && d.naturezas.includes(e.natureza))", ""]],
   ["tirar o escape de Meus Dados", ["${entH(f.funcao)} — ${entH(f.entidade)}", "${f.funcao} — ${f.entidade}"]]

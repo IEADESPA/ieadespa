@@ -32,6 +32,7 @@ const canaisDb = require("../shared/canaisDb");
 const funcoesMenoresDb = require("../shared/funcoesMenoresDb");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { comConflito, violouUnicidade } = require("../shared/violacaoUnica");
+const distritosDb = require("../shared/distritosDb");
 
 // v7.3 — quem sai da liderança de uma congregação/Área/departamento obriga a troca de senha dos canais
 // oficiais dele (Regimento Art. 160, §4º, I). Falha aqui nunca derruba a operação de liderança: a próxima
@@ -126,6 +127,15 @@ async function concederOuAtualizarLideranca(pool, dados, usuarioId) {
   if (!jaTemAcesso && !senha) {
     return { sucesso: false, mensagem: "Defina uma senha para o primeiro acesso desta pessoa." };
   }
+  // v9.3 — "Pastor Distrital" e "Interventor Distrital": só o Pastor Presidente em exercício dá, troca ou tira (Regimento Art. 126-L, I, e 126-P, II), com as
+  // conferências do Distrito (ver shared/distritosDb.js, conferirPapelReservado). A linha expirada que volta a valer (mandato renovado) conta como dar o papel.
+  const vigenteAntes = linhaAtual ? await distritosDb.linhaVigente(pool, membroId) : false;
+  const recusaDistrito = await distritosDb.conferirPapelReservado(pool, {
+    usuarioId, membroId,
+    antes: linhaAtual ? { PapelId: linhaAtual.PapelId, EscopoTipo: linhaAtual.EscopoTipo, EscopoId: linhaAtual.EscopoId, vigente: vigenteAntes } : null,
+    depois: { papelId, escopoTipo, escopoId: escopoTipo === "GLOBAL" ? null : escopoId, vigente: !linhaAtual || vigenteAntes || !!duracaoMeses }
+  });
+  if (recusaDistrito) return { sucesso: false, mensagem: recusaDistrito };
 
   // v6.9 — formação exigida para este papel (TrilhaRequisitos, contexto
   // LIDERANCA, alvo = PapelId). Vale para nomeação nova, troca de papel e
@@ -365,6 +375,20 @@ module.exports = comConflito(async function (context, req) {
         body: { sucesso: false, mensagem: "Não é possível remover: essa pessoa é a única com a permissão \"permissoes\" — ninguém mais conseguiria gerenciar acesso depois. Conceda a permissão a outra pessoa antes." }
       };
       return;
+    }
+
+    // v9.3 — tirar o Pastor Distrital ou o Interventor Distrital é só do Pastor Presidente em exercício (Regimento Art. 126-L, I, e 126-P, II)
+    // (a vigência pela data de Brasília — linhaVigente —, não pela de Greenwich: entre 21h e meia-noite o "hoje" de Greenwich já é amanhã)
+    const linhaRemovida = (await pool.request().input("id", sql.Int, auth.idDeRota(membroIdRota)).query(`SELECT PapelId, EscopoTipo, EscopoId FROM Lideranca WHERE MembroId = @id`)).recordset[0];
+    if (linhaRemovida) {
+      const recusaDistrito = await distritosDb.conferirPapelReservado(pool, {
+        usuarioId, membroId: auth.idDeRota(membroIdRota),
+        antes: { PapelId: linhaRemovida.PapelId, EscopoTipo: linhaRemovida.EscopoTipo, EscopoId: linhaRemovida.EscopoId, vigente: await distritosDb.linhaVigente(pool, auth.idDeRota(membroIdRota)) }, depois: null
+      });
+      if (recusaDistrito) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: recusaDistrito } };
+        return;
+      }
     }
 
     // v7.6 — as delegações deste cargo saem junto (a chave estrangeira impedia remover quem já tinha delegado: dava erro 500), e as sessões abertas da

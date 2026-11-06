@@ -500,12 +500,12 @@ Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do te
 
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
-- [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
+- [x] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
       insumo direto e objetivo para abertura de Extensão da Tenda (v9.2), em vez
       de decidir por percepção.
-- [ ] Densidade de membresia por região e distância média até a congregação de
+- [x] Densidade de membresia por região e distância média até a congregação de
       vínculo.
-- [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
+- [x] Simulação de emancipação: quais Extensões já atendem os critérios para virar
       Congregação, calculado a partir dos dados que já existem (membresia, PSC da
       v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
       *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da

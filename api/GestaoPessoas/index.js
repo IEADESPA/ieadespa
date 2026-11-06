@@ -306,7 +306,7 @@ module.exports = async function (context, req) {
     // linha não mudou e são limpas se mudou (deixariam de corresponder).
     let enderecoFinal = endereco || null, partesFinais = null;
     if (enderecoPartes !== undefined && enderecoPartes !== null) {
-      const prep = await territorioDb.prepararEnderecoMembro(() => pool.request(), enderecoPartes);
+      const prep = await territorioDb.prepararEnderecoMembro(() => pool.request(), enderecoPartes, { membroId: existia ? membroId : null });
       if (!prep.sucesso) { context.res = { status: 200, body: { sucesso: false, mensagem: prep.mensagem } }; return; }
       enderecoFinal = prep.endereco; partesFinais = prep.partes;
     } else if (existia) {

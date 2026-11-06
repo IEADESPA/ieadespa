@@ -68,14 +68,21 @@ async function lerCriterios(rq) {
 
 // ================================================================ o endereço do membro em linhas ================================================================
 // Usado pelo cadastro (GestaoPessoas) e pelo Meus Dados (AtualizarMeusDados). Recebe as linhas que a tela mandou e devolve os valores a gravar, com a linha única
-// montada; o bairro da lista precisa existir e estar ativo (o bairro dá a cidade e a UF).
-async function prepararEnderecoMembro(rq, dados) {
+// montada; o bairro da lista precisa existir e estar ativo (o bairro dá a cidade e a UF). Exceção: o bairro que a pessoa JÁ tem (desativado num instante em que
+// alguém a gravava nele — a corrida que a desativação "só sem moradores" não fecha sozinha) continua aceito, para a ficha dela poder ser salva; o nível geral
+// o junta a outro (juntar aceita o bairro desativado que ainda tem moradores).
+async function prepararEnderecoMembro(rq, dados, { membroId = null } = {}) {
   const v = tr.validarEnderecoPartes(dados);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   let partes = v.partes, nomeBairro = null;
   if (partes.bairroId) {
     const b = await lerBairro(rq, partes.bairroId);
-    if (!b || !b.ativo) return { sucesso: false, mensagem: "O bairro escolhido não está mais na lista. Escolha de novo." };
+    let aceito = !!b && b.ativo;
+    if (b && !b.ativo && membroId) {
+      const atual = await rq().input("id", sql.Int, membroId).query(`SELECT EnderecoBairroId FROM MembroReferencia WHERE MembroId = @id`);
+      aceito = !!atual.recordset[0] && Number(atual.recordset[0].EnderecoBairroId) === b.bairroId;
+    }
+    if (!aceito) return { sucesso: false, mensagem: "O bairro escolhido não está mais na lista. Escolha de novo." };
     partes = tr.aplicarBairro(partes, b);
     nomeBairro = b.nome;
   }
@@ -350,8 +357,12 @@ async function juntarBairros(pool, { dados, por, alcance }) {
     const origem = a === origemId ? primeiro : segundo, destino = a === origemId ? segundo : primeiro;
     if (!origem || !destino) return NAO_EXISTE;
     if (origem.versao !== versao) return MUDOU;
-    if (!origem.ativo) return { sucesso: false, mensagem: "O bairro repetido já está desativado." };
     if (!destino.ativo) return { sucesso: false, mensagem: "O bairro que fica precisa estar ativo." };
+    // o desativado só entra se ainda tem moradores (sobra de uma corrida com a desativação): juntar é o jeito de levá-los ao bairro certo
+    if (!origem.ativo) {
+      const n = await rq().input("o", sql.Int, origem.bairroId).query(`SELECT COUNT(*) AS N FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE EnderecoBairroId = @o`);
+      if (!Number(n.recordset[0].N)) return { sucesso: false, mensagem: "O bairro repetido já está desativado e não tem moradores: não há o que juntar." };
+    }
     const mov = await rq().input("o", sql.Int, origem.bairroId).input("d", sql.Int, destino.bairroId)
       .query(`UPDATE MembroReferencia SET EnderecoBairroId = @d OUTPUT inserted.MembroId WHERE EnderecoBairroId = @o`);
     await recomporMembrosDoBairro(rq, destino);

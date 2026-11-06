@@ -31,7 +31,7 @@ BEGIN
         Versao       INT NOT NULL CONSTRAINT DF_Bairros_Versao DEFAULT 0,
         CONSTRAINT CK_Bairros_Nome CHECK (LEN(Nome) >= 2 AND Nome = LTRIM(RTRIM(Nome))),
         CONSTRAINT CK_Bairros_Cidade CHECK (LEN(Cidade) >= 2 AND Cidade = LTRIM(RTRIM(Cidade))),
-        CONSTRAINT CK_Bairros_UF CHECK (UF LIKE N'[A-Z][A-Z]'),
+        CONSTRAINT CK_Bairros_UF CHECK (UF COLLATE Latin1_General_BIN LIKE N'[A-Z][A-Z]'),
         CONSTRAINT CK_Bairros_Ponto CHECK ((Lat IS NULL AND Lng IS NULL)
             OR (Lat IS NOT NULL AND Lng IS NOT NULL AND Lat BETWEEN -90 AND 90 AND Lng BETWEEN -180 AND 180))
     );
@@ -71,7 +71,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MembroRefer
     ALTER TABLE dbo.MembroReferencia ADD CONSTRAINT CK_MembroReferencia_BairroUmSo CHECK (EnderecoBairroId IS NULL OR EnderecoBairroTexto IS NULL);
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MembroReferencia_EnderecoUF')
-    ALTER TABLE dbo.MembroReferencia ADD CONSTRAINT CK_MembroReferencia_EnderecoUF CHECK (EnderecoUF IS NULL OR EnderecoUF LIKE N'[A-Z][A-Z]');
+    ALTER TABLE dbo.MembroReferencia ADD CONSTRAINT CK_MembroReferencia_EnderecoUF CHECK (EnderecoUF IS NULL OR EnderecoUF COLLATE Latin1_General_BIN LIKE N'[A-Z][A-Z]');
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_MembroReferencia_EnderecoCep')
     ALTER TABLE dbo.MembroReferencia ADD CONSTRAINT CK_MembroReferencia_EnderecoCep CHECK (EnderecoCep IS NULL OR EnderecoCep LIKE N'[0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9]');

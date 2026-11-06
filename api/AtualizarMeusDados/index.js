@@ -64,7 +64,7 @@ module.exports = async function (context, req) {
   // o endereço: as linhas novas (a linha única montada com elas) ou só a linha única (tela antiga: as linhas ficam se ela não mudou, somem se mudou)
   let enderecoFinal = atual.Endereco, partesFinais, mexeuNoEndereco = false;
   if (enderecoPartes !== undefined && enderecoPartes !== null) {
-    const prep = await territorioDb.prepararEnderecoMembro(() => pool.request(), enderecoPartes);
+    const prep = await territorioDb.prepararEnderecoMembro(() => pool.request(), enderecoPartes, { membroId: matricula });
     if (!prep.sucesso) { context.res = { status: 200, body: { sucesso: false, mensagem: prep.mensagem } }; return; }
     enderecoFinal = prep.endereco; partesFinais = prep.partes; mexeuNoEndereco = true;
   } else if (endereco !== undefined) {

@@ -35,6 +35,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
+const { LIMPAR_ENDERECO_LINHAS } = require("../shared/territorio");   // v9.5: as linhas do endereço saem junto com a linha única
 const { exigirGeral } = require("../shared/escopoRotas");
 const mcDb = require("../shared/menoresConsentimentoDb");
 const cuidadoDb = require("../shared/cuidadoPastoralDb");
@@ -113,7 +114,7 @@ module.exports = async function (context, req) {
     }
 
     await r().input("mat", sql.Int, solicitacao.MembroId)
-      .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL WHERE MembroId = @mat`);
+      .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL, ${LIMPAR_ENDERECO_LINHAS} WHERE MembroId = @mat`);
     // v8.6 — a justificativa de ausência no exame bienal da AFM (pode citar saúde) sai junto, na mesma transação
     await require("../shared/educacaoContinuadaDb").aplicarRetencao({ request: r }, { membroId: solicitacao.MembroId });
 

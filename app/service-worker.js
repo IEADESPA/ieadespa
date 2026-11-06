@@ -56,8 +56,11 @@
 // v53 (04/11/2026): v9.3 — Distritos: o módulo novo modulos/distritos.js (a pílula Distritos na aba Expansão: decretos da CLI, Dízimo Institucional, balanço ao NIF e intervenção).
 // v54 (05/11/2026): Trava 9-A — a troca do Interventor, os atos da pessoa em Meus Dados (pedidos de expansão, balanços analisados, decretos) e o aviso da CME sem acesso.
 // v55 (05/11/2026): v9.4 — Missões: o módulo novo modulos/missoes.js (a pílula Missões na aba Expansão: campos, envio de missionários, sustento do mês e relatórios de campo).
-const CACHE_NOME = "ieadespa-app-shell-v55";
-const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
+// v56 (06/11/2026): v9.5 — Território: os módulos novos modulos/territorio.js (a pílula Território na aba Expansão: mapa de cobertura, simulação de emancipação, bairros,
+// critérios e pontos das Extensões) e modulos/endereco.js (o endereço em linhas na Pessoas e no Meus Dados). A página do mapa do Google (mapa-territorial.*) não
+// entra na casca nem no cache: é autônoma, presa numa moldura com sandbox.
+const CACHE_NOME = "ieadespa-app-shell-v56";
+const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {
   evento.waitUntil(caches.open(CACHE_NOME).then((cache) => cache.addAll(ARQUIVOS_SHELL)));
@@ -87,6 +90,8 @@ self.addEventListener("fetch", (evento) => {
   if (url.pathname === "/verificar.html") return;
   // v8.4 — a página do QR da credencial também passa direto: o endereço leva o código de segurança, que não pode ficar guardado no aparelho de quem leu (revisão independente)
   if (url.pathname === "/credencial.html" || url.pathname === "/credencial.js") return;
+  // v9.5 — a página do mapa do Google (moldura com sandbox) passa direto: nunca cai no index.html nem fica guardada
+  if (url.pathname.startsWith("/mapa-territorial.")) return;
 
   evento.respondWith(
     fetch(evento.request)

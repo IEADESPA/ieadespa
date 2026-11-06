@@ -8,6 +8,7 @@
 // exige guardar (Reg. Art. 132 §2º).
 const { sql } = require("./db");
 const vacancia = require("./vacancia");
+const { LIMPAR_ENDERECO_LINHAS } = require("./territorio");   // v9.5: as linhas do endereço saem junto com a linha única
 
 const DIAS_MINIMIZACAO_PADRAO = 30; // usado só se a política estiver ausente/inativa — nunca destrava sozinho um prazo maior
 
@@ -28,7 +29,7 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
     .input("motivo", sql.NVarChar(200), motivo || "Carta de Mudança")
     .query(`UPDATE MembroReferencia SET
             Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
-            Telefone = NULL, Email = NULL, Endereco = NULL,
+            Telefone = NULL, Email = NULL, Endereco = NULL, ${LIMPAR_ENDERECO_LINHAS},
             Funcao = NULL, CargoMinisterial = NULL, DepartamentoId = NULL,
             Origem = NULL, IgrejaAnterior = NULL, DataRitoRecebimento = NULL,
             NomeLidoRito = NULL, MinistranteRito = NULL, DizimistaFiel = NULL,

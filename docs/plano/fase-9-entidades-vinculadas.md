@@ -500,16 +500,72 @@ Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do te
 
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
-- [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
+- [x] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
       insumo direto e objetivo para abertura de Extensão da Tenda (v9.2), em vez
       de decidir por percepção.
-- [ ] Densidade de membresia por região e distância média até a congregação de
+- [x] Densidade de membresia por região e distância média até a congregação de
       vínculo.
-- [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
+- [x] Simulação de emancipação: quais Extensões já atendem os critérios para virar
       Congregação, calculado a partir dos dados que já existem (membresia, PSC da
       v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
       *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da
       simulação são decisão do responsável, a pedir no desenho da v9.5.)*
+
+### Desenho da v9.5 (contrato, 06/11/2026)
+
+Decisões do responsável (06/11/2026): o endereço do membro passa a ter **todas as linhas separadas** (não só o bairro); o mapa usa a **chave do Google Maps**,
+com a opção **lista e desenho simples** ao lado, escolhida na hora conforme a conveniência; os critérios de emancipação ficam numa **tabela que ele monta**
+(nenhuma régua fixa no código). O que já existe e é reaproveitado: a posição (latitude e longitude) das congregações em Catálogos (vC.2), o endereço das
+Extensões e a data de abertura (v9.2), o escopo da aba Expansão (o nível geral e a CME veem tudo; o Dirigente e o Pastor de Área, só as congregações que o
+escopo cobre por inteiro), o pedido de emancipação da v9.2, o dízimo confirmado da Tesouraria Local (v4) e a avaliação homologada do PSC (v7.1).
+
+**1. Endereço do membro em linhas.** O cadastro (Pessoas) e o Meus Dados ganham: logradouro, número, complemento, **bairro** (escolhido numa lista; se o
+bairro não está nela, a pessoa escreve o nome e ele entra na fila "bairros a cadastrar"), cidade, UF e CEP. A linha única de hoje (`Endereco`) continua e passa
+a ser **montada pelo sistema** com as linhas (tudo o que já lê o endereço segue funcionando); um endereço antigo, só com a linha única, aparece como está e
+conta como "sem localização" até ganhar o bairro. A anonimização e a exclusão da LGPD limpam as linhas novas junto com a antiga.
+
+**2. Bairros e posições.** Um cadastro de **bairros** (nome, cidade, UF e o ponto central, marcado uma vez), do nível geral. Ao cadastrar um bairro que estava na
+fila, o sistema liga a ele, de uma vez, os membros que escreveram aquele nome na mesma cidade. As **Extensões** ganham o ponto no mapa, marcado pelo Dirigente
+da Mãe ou pelo nível geral; as congregações continuam com o ponto de Catálogos (a tela avisa a que não tem). Marcar o ponto: um clique no mapa do Google, ou
+colar o link do Google Maps do lugar, ou digitar a latitude e a longitude.
+
+**3. Mapa de cobertura.** Uma pílula nova **Território** na aba Expansão (permissão `expansao` ou a CME, como a v9.2). Duas formas, escolhidas na hora: **Google
+Maps** (ruas de verdade, as congregações e as Extensões com o ponto, e um círculo em cada bairro com o número de membros, maior quanto mais gente) e **lista e
+desenho** (a tabela por bairro e um desenho simples dos pontos, sem nada de fora). Cada bairro com ponto mostra os membros que moram nele, a unidade mais perto
+(congregação ou Extensão ativa) e a distância em linha reta; **bairro descoberto** é o que tem membros e nenhuma unidade dentro do raio de cobertura
+(parâmetro do nível geral, começa em 3 km). Contagem, nunca nome: o mapa não mostra quem mora onde. O nível geral e a CME veem todos os membros; o Dirigente e o
+Pastor de Área, os das congregações deles (as unidades de todos aparecem, porque são públicas). Do bairro descoberto sai o atalho para o pedido de abertura de
+Extensão da v9.2.
+
+**4. Densidade e distância.** Por bairro: os membros e o descoberto. Por unidade (congregação ou Extensão): os membros com bairro marcado, a **distância média**
+do bairro deles até a unidade e **quantos moram mais perto de outra unidade**. No total: os membros sem localização (a medida de quanto o cadastro ainda
+precisa ser completado) e os bairros sem ponto.
+
+**5. Simulação de emancipação (a tabela que o responsável monta).** Os critérios são linhas de uma tabela do nível geral: o **indicador** (escolhido de uma
+lista que o sistema sabe calcular), a comparação (**pelo menos**, **no máximo** ou, nos de sim/não, **precisa ser sim**), o valor, ativo ou não, a ordem e uma
+observação. Pode-se criar, mudar, desligar e apagar linhas; cada mudança fica registrada (quem e quando). Indicadores: meses desde a abertura da Extensão;
+membros em comunhão; Encarregado em comunhão (sim/não); obreiros consagrados entre os membros (auxiliar a pastor); dízimo confirmado dos membros na média dos
+últimos 12 meses fechados; dizimistas (membros que deram dízimo nos últimos 12 meses); distância até a Mãe (km); nível do PSC homologado mais recente da Mãe.
+Para cada Extensão ativa no alcance, a simulação mostra cada critério ativo com o valor medido e se atende, não atende ou **não dá para medir** (falta o dado:
+sem data de abertura, sem ponto no mapa, Mãe sem PSC homologado); **atende tudo** só quando todos os ativos atendem. A simulação **só aponta**: quem decide
+continua sendo a CME e a CLI pelo pedido da v9.2 (o atalho abre o pedido de emancipação já com a Extensão escolhida). Sem nenhum critério ativo, a tela diz
+isso em vez de apontar. Para começar, a tabela vem com a régua média sugerida em 06/11 (2 anos de aberta, 50 membros em comunhão, Encarregado em comunhão, 1
+obreiro, R$ 3.000 de dízimo médio) — ele muda ou apaga.
+
+**6. O mapa do Google e a segurança.** O sistema roda com a política de segurança forte (CSP: só scripts dele mesmo). O mapa do Google precisa de scripts do
+Google, então mora numa **página separada** (`mapa-territorial.html`), presa numa moldura dentro do sistema, com a política dela (só os endereços do Google
+que o mapa usa) e sem o acesso de quem está logado: o sistema manda para a moldura só o que é para desenhar (os pontos e as contagens) e recebe dela só o clique
+de marcar um ponto, conferindo a origem das mensagens dos dois lados. A chave do Maps fica nas configurações do servidor (`GOOGLE_MAPS_CHAVE_NAVEGADOR`), fora
+do código público, e só é entregue a quem entra na pílula; ela precisa aceitar o endereço do sistema (`app.ieadespa.org.br`) e o da homologação no Google
+Cloud. Sem a chave, ou se o Google recusar, a tela diz o motivo e fica na lista e desenho.
+
+**7. Costuras.** Meus Dados mostra o endereço em linhas e os atos da pessoa no território (bairros cadastrados, critérios mudados, pontos marcados). ROPA: a
+finalidade "planejamento territorial (contagem por bairro, sem nome)" no cadastro de membros; o cadastro de bairros e os critérios não têm dado pessoal. A
+emancipação da v9.2 leva o ponto da Extensão para a congregação que nasce. O teste de tela ganha a pílula nova (base a aprovar, como na v9.4).
+
+**Fora desta versão (escopo):** localizar a casa exata do membro (mandaria os endereços a um serviço de fora — o bairro basta para a cobertura), rota e tempo
+de viagem (só a linha reta), o contorno desenhado dos bairros (o ponto central basta), a importação do cadastro antigo de membros (quando vier, já preenche as
+linhas e o bairro) e aviso automático de Extensão que passou a atender os critérios (o painel mostra).
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 

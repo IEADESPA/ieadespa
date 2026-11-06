@@ -73,14 +73,20 @@ module.exports = async function (context, req) {
     mexeuNoEndereco = true;
   }
 
-  const gravar = pool.request()
-    .input("id", sql.Int, matricula)
-    .input("telefone", sql.NVarChar(20), telefone !== undefined ? (telefone || null) : atual.Telefone)
-    .input("email", sql.NVarChar(150), email !== undefined ? (email || null) : atual.Email)
-    .input("endereco", sql.NVarChar(300), enderecoFinal)
-    .input("estadoCivil", sql.NVarChar(20), estadoCivil !== undefined ? (estadoCivil || null) : atual.EstadoCivil);
-  if (mexeuNoEndereco) territorioDb.entradasEndereco(gravar, partesFinais);
-  await gravar.query(`UPDATE MembroReferencia SET Telefone = @telefone, Email = @email, Endereco = @endereco, EstadoCivil = @estadoCivil${mexeuNoEndereco ? `, ${territorioDb.SET_ENDERECO}` : ""} WHERE MembroId = @id`);
+  // (revisão de 06/11/2026: com um bairro da lista, a gravação trava o bairro antes e refaz a linha única com ele — a mesma ordem da renomeação do bairro)
+  const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
+  const gravarPessoa = async (gravar) => {
+    gravar.input("id", sql.Int, matricula)
+      .input("telefone", sql.NVarChar(20), telefone !== undefined ? (telefone || null) : atual.Telefone)
+      .input("email", sql.NVarChar(150), email !== undefined ? (email || null) : atual.Email)
+      .input("endereco", sql.NVarChar(300), prepEnd.endereco)
+      .input("estadoCivil", sql.NVarChar(20), estadoCivil !== undefined ? (estadoCivil || null) : atual.EstadoCivil);
+    if (mexeuNoEndereco) territorioDb.entradasEndereco(gravar, prepEnd.partes);
+    await gravar.query(`UPDATE MembroReferencia SET Telefone = @telefone, Email = @email, Endereco = @endereco, EstadoCivil = @estadoCivil${mexeuNoEndereco ? `, ${territorioDb.SET_ENDERECO}` : ""} WHERE MembroId = @id`);
+  };
+  if (mexeuNoEndereco && partesFinais && partesFinais.bairroId) await territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(rq()));
+  else await gravarPessoa(pool.request());
+  enderecoFinal = prepEnd.endereco;
 
   await registrarAuditoria({
     tabela: "MembroReferencia",

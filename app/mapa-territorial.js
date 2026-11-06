@@ -11,9 +11,12 @@
   var marcador = null;
   var carregou = false;
   var aviso = document.getElementById("aviso");
+  // a origem do sistema (o endereço desta página: a moldura é sempre do mesmo site); só ela fala com esta página e só a ela esta página responde
+  var ORIGEM = /^https?:\/\//.test(location.origin) ? location.origin : (location.protocol + "//" + location.host);
+  var PRAZO_MS = 15000;
 
   function avisar(texto) { if (!aviso) return; aviso.textContent = texto || ""; aviso.hidden = !texto; }
-  function enviar(msg) { msg.fonte = "ieadespa-mapa"; try { mae.postMessage(msg, "*"); } catch (e) { /* a mãe saiu */ } }
+  function enviar(msg) { msg.fonte = "ieadespa-mapa"; try { mae.postMessage(msg, ORIGEM); } catch (e) { /* a mãe saiu */ } }
   function numero(v) { return typeof v === "number" && isFinite(v) ? v : null; }
   function pontoValido(p) { return p && numero(p.lat) !== null && numero(p.lng) !== null && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180; }
 
@@ -36,6 +39,8 @@
     s.async = true;
     s.onerror = function () { avisar("Não foi possível falar com o Google agora."); enviar({ tipo: "erro", motivo: "rede" }); };
     document.head.appendChild(s);
+    // o Google não chamou nem o "pronto" nem o "recusou" no prazo: avisa a moldura-mãe (ela volta à lista e desenho)
+    setTimeout(function () { if (!mapa) { avisar("O mapa do Google não respondeu."); enviar({ tipo: "erro", motivo: "tempo" }); } }, PRAZO_MS);
   }
 
   function limites(pontos) {
@@ -85,10 +90,11 @@
       });
       avisar("Clique no mapa para marcar o ponto.");
     } else avisar("");
+    enviar({ tipo: "desenhado" });
   }
 
   window.addEventListener("message", function (ev) {
-    if (ev.source !== mae) return;
+    if (ev.source !== mae || ev.origin !== ORIGEM) return;
     var m = ev.data;
     if (!m || typeof m !== "object" || m.fonte !== "ieadespa-sistema" || m.tipo !== "desenhar") return;
     dados = { modo: m.modo === "marcar" ? "marcar" : "ver", bairros: m.bairros, unidades: m.unidades, ponto: m.ponto || null };

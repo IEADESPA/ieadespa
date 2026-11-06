@@ -353,7 +353,9 @@ async function executar(t, rq, pool, p, { reuniao, por, hoje, sid = null }) {
     .input("bai", sql.NVarChar(150), campo("bairro")).input("cid", sql.NVarChar(150), campo("cidade")).input("uf", sql.NVarChar(2), campo("uf"))
     .input("ano", sql.SmallInt, Number(reuniao.data.slice(0, 4)))
     // v9.5 — a congregação que nasce da emancipação herda o ponto da Extensão no mapa (a nova congregação sem Extensão nasce sem ponto: Catálogos)
-    .input("lat", sql.Decimal(9, 6), ext && ext.lat != null ? ext.lat : null).input("lng", sql.Decimal(9, 6), ext && ext.lng != null ? ext.lng : null)
+    // (revisão de 06/11/2026: só quando o pedido não trouxe outro endereço — num endereço novo, o ponto da Extensão estaria errado; a congregação nasce sem ponto)
+    .input("lat", sql.Decimal(9, 6), ext && ext.lat != null && (!p.endereco || p.endereco === ext.endereco) ? ext.lat : null)
+    .input("lng", sql.Decimal(9, 6), ext && ext.lng != null && (!p.endereco || p.endereco === ext.endereco) ? ext.lng : null)
     .query(`INSERT INTO Congregacoes (Nome, Ativa, AreaId, Endereco, Bairro, Cidade, Estado, FundacaoAno, Lat, Lng) OUTPUT inserted.CongregacaoId
             VALUES (@nome, 1, @area, @end, @bai, @cid, @uf, @ano, @lat, @lng)`);
   const congregacaoCriadaId = ins.recordset[0].CongregacaoId;

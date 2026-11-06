@@ -13,6 +13,7 @@ console.error = () => { };
 const contrato = {};
 const guardar = (nome, r) => { contrato[nome] = r && r.body; return r; };
 const tr = require(path.join(API, "shared/territorio.js"));
+const terDb = require(path.join(API, "shared/territorioDb.js"));
 const rota = (acao, { token, metodo = "GET", corpo, query } = {}) => chamarRota("GestaoTerritorio/index.js", { metodo, binding: acao ? { acao } : {}, token, corpo, query });
 const POST = (acao, corpo, token) => rota(acao, { metodo: "POST", corpo, token });
 const GET = (acao, query, token) => rota(acao, { query, token });
@@ -102,12 +103,17 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   await membro(P.semCom, "Sem Comunhão Tenda E2E", central, { ext, situacao: "SEM_COMUNHAO", cargo: "DIACONO" });
   await membro(P.sobProc, "Sob Processo Tenda E2E", central, { ext, cargo: "PRESBITERO" });
   await membro(P.extDeslig, "Desligado Tenda E2E", central, { ext, status: "DESLIGADO", situacao: "SEM_COMUNHAO", cargo: "PRESBITERO" });
+  // revisão de 06/11/2026: o congregado e o novo convertido não são membros (Estatuto Art. 7º, I) — nem no mapa nem na simulação
+  await membro(9828, "Congregado Tenda E2E", central, { ext, situacao: "CONGREGADO", cargo: "PRESBITERO" });
+  await membro(9829, "Novo Convertido Tenda E2E", central, { ext, situacao: "NOVO_CONVERTIDO" });
+  await membro(9808, "Congregado Central E2E", central, { situacao: "CONGREGADO" });
   await q("INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status) VALUES (@m, @d, 'EM_ANDAMENTO')", { m: P.sobProc, d: hoje });
   await q("INSERT INTO ExtensaoEncarregados (ExtensaoId, MembroId, Desde, RegistradoPor) VALUES (@e, @m, @d, 1002)", { e: ext, m: P.enc, d: mesesAtras(30) });
   await q("INSERT INTO SessoesAtivas (SessaoId, MembroId) VALUES (@s, 1002)", { s: SID_SEC });
   process.env.GOOGLE_MAPS_CHAVE_NAVEGADOR = "AIzaTESTE_e2e_chave_de_mentira_0001";
 
   console.log("== acesso ==");
+  let m, x;
   let r = await rota("mapa", {});
   ok(r.status === 401, "sem login: 401", r.status);
   r = await GET("mapa", {}, PINM());
@@ -214,6 +220,10 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
     r = await meusDados(id, { enderecoPartes: { bairroTexto: id === P.v1 ? "São Jorge E2E" : "sao jorge e2e ", cidade: "parauapebas", uf: "pa" } });
     ok(r.body.sucesso === true, `o membro ${id} escreve o bairro que não está na lista`);
   }
+  r = await meusDados(P.v3, { enderecoPartes: { bairroTexto: " centro e2e ", cidade: "PARAUAPEBAS", uf: "pa" } });
+  lin = await linhaMembro(P.v3);
+  ok(r.body.sucesso === true && lin.EnderecoBairroId === b1 && lin.EnderecoBairroTexto === null && lin.EnderecoCidade === "Parauapebas" && lin.Endereco === "Centro E2E — Parauapebas/PA",
+    "o bairro escrito que já está na lista vira o bairro da lista (não fica preso na fila)", lin);
   r = guardar("mapaComFila", await GET("mapa", {}, SEC()));
   ok(r.body.fila.length === 1 && r.body.fila[0].membros === 2, "a fila dos escritos agrupa sem maiúscula e sem acento (2 pessoas, 1 bairro)", r.body.fila);
   ok(!JSON.stringify(r.body.fila).includes("Vila Um"), "a fila não tem nome de ninguém");
@@ -227,6 +237,7 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
     "a pessoa da fila: ligada ao bairro, cidade corrigida e a linha única refeita", lin);
   await q("UPDATE MembroReferencia SET EnderecoBairroId = @b WHERE MembroId = @m", { b: b3, m: P.v3 });
   await q("UPDATE MembroReferencia SET EnderecoBairroId = @b WHERE ExtensaoId = @e", { b: b2, e: ext });
+  await q("UPDATE MembroReferencia SET EnderecoBairroId = @b WHERE MembroId = 9808", { b: b1 });
 
   console.log("== editar, desativar e juntar bairros ==");
   r = guardar("bairros", await GET("bairros", {}, SEC()));
@@ -266,6 +277,9 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   ok(r.body.sucesso === false, "o bairro desativado não pode mais ser escolhido");
   await q("DELETE FROM Bairros WHERE BairroId = @b", { b: bMaraba2 });
 
+  m = (await GET("mapa", {}, SEC())).body;
+  x = bairroDoMapa(m, "Bairro Longe E2E");
+  ok(x && x.descoberto === false && x.aConferir === true && m.totais.aConferir === 1, "antes do ponto da Tenda: o Longe (moradores da Tenda sem ponto) fica \"a conferir\", não \"descoberto\"", x);
   console.log("== o ponto das Extensões ==");
   r = guardar("extensoesDirigente", await GET("extensoes", {}, DIR()));
   const e1 = r.body.extensoes.find((e) => e.extensaoId === ext);
@@ -294,9 +308,9 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
 
   console.log("== o mapa de cobertura ==");
   r = guardar("mapaGeral", await GET("mapa", {}, SEC()));
-  let m = r.body;
+  m = r.body;
   ok(r.status === 200 && m.escopo === "TODOS" && m.raioKm === 3, "o nível geral vê todos");
-  let x = bairroDoMapa(m, "Centro E2E");
+  x = bairroDoMapa(m, "Centro E2E");
   ok(x && x.membros === 4 && x.maisPerto && x.maisPerto.nome === "Central E2E" && x.distanciaKm === 0.1 && x.descoberto === false, "Centro: 4 moradores, a Central a 0,1 km, coberto", x);
   x = bairroDoMapa(m, "Bairro Longe E2E");
   ok(x && x.membros === 7 && x.maisPerto.nome === "Tenda Território E2E" && x.maisPerto.tipo === "EXTENSAO" && x.descoberto === false, "Longe: 7 moradores, a Tenda (com ponto) logo ao lado: coberto", x);
@@ -304,8 +318,9 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   ok(x && x.membros === 2 && x.maisPerto.nome === "Vila Nova E2E" && x.distanciaKm === 2.2 && !x.descoberto, "São Jorge: a Vila a 2,2 km, coberto com o raio de 3 km", x);
   x = bairroDoMapa(m, "Sem Ponto E2E");
   ok(x && x.semPonto === true && x.membros === 1 && x.descoberto === false, "o bairro sem ponto: contado, sem distância");
-  const ativos = await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Status = N'ATIVO'");
-  const semBairro = await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Status = N'ATIVO' AND EnderecoBairroId IS NULL");
+  const ativos = await escalar(`SELECT COUNT(*) FROM MembroReferencia m WHERE ${terDb.SO_MEMBROS}`);
+  const semBairro = await escalar(`SELECT COUNT(*) FROM MembroReferencia m WHERE ${terDb.SO_MEMBROS} AND EnderecoBairroId IS NULL`);
+  ok(ativos < (await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Status = N'ATIVO'")), "o mapa conta membros: os congregados e o novo convertido ficam fora");
   ok(m.totais.membros === ativos && m.totais.semLocalizacao === semBairro && m.totais.localizados === ativos - semBairro, "os totais batem com o banco (só os ativos; o desligado não conta)", m.totais);
   ok(m.totais.bairrosSemPonto === 1 && m.totais.descobertos === 0, "um bairro com gente sem ponto; nenhum descoberto");
   const dens = (nome) => m.densidade.find((d) => d.nome === nome);
@@ -374,11 +389,18 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   r = guardar("simulacaoGeral", await GET("simulacao", {}, SEC()));
   ok(r.status === 200 && r.body.janelaDizimo.de === jan.de && r.body.janelaDizimo.ate === jan.ate, "a simulação diz a janela do dízimo");
   let s1 = r.body.extensoes.find((e) => e.extensaoId === ext);
-  const med = s1.medidas;
+  const brutas = await terDb.medidasDasExtensoes(pool, [
+    { extensaoId: ext, congregacaoMaeId: central, abertaEm: mesesAtras(30), lat: -6.151, lng: -49.951, maeLat: -6.0675, maeLng: -49.9025 },
+    { extensaoId: extVila, congregacaoMaeId: vila, abertaEm: null, lat: null, lng: null, maeLat: -6.08, maeLng: -49.88 }], hoje);
+  const med = brutas.get(ext);
+  ok(Object.keys(s1.medidas).sort().join() === s1.avaliacao.itens.map((i) => i.indicador).sort().join(), "a resposta traz só as medidas dos critérios ativos", Object.keys(s1.medidas));
+  const itDiz = s1.avaliacao.itens.find((i) => i.indicador === "DIZIMO_MEDIO_12M");
+  ok(s1.medidas.DIZIMO_MEDIO_12M === null && itDiz.medido === null && itDiz.oculto === true && !("DIZIMISTAS_12M" in s1.medidas), "com 2 dizimistas, o dízimo médio sai sem o valor (seria o de uma pessoa)");
+  ok(!/"(medido|DIZIMO_MEDIO_12M)":300\b/.test(JSON.stringify(r.body)) && !/"DIZIMISTAS_12M"/.test(JSON.stringify(r.body)), "o valor do dízimo (R$ 300) não aparece em lugar nenhum da resposta");
   ok(med.MESES_ABERTA === 30, "meses desde a abertura: 30", med.MESES_ABERTA);
-  ok(med.MEMBROS_EM_COMUNHAO === 4, "membros em comunhão: 4 (sem o sem comunhão, o sob disciplina e o desligado)", med.MEMBROS_EM_COMUNHAO);
+  ok(med.MEMBROS_EM_COMUNHAO === 4, "membros em comunhão: 4 (sem o sem comunhão, o sob disciplina, o desligado, o congregado e o novo convertido)", med.MEMBROS_EM_COMUNHAO);
   ok(med.ENCARREGADO_EM_COMUNHAO === true, "o Encarregado em comunhão, da Mãe");
-  ok(med.OBREIROS === 2, "obreiros em comunhão: 2 (o presbítero sob disciplina, o diácono sem comunhão e o desligado não contam)", med.OBREIROS);
+  ok(med.OBREIROS === 2, "obreiros em comunhão: 2 (o presbítero sob disciplina, o diácono sem comunhão, o desligado e o congregado não contam)", med.OBREIROS);
   ok(med.DIZIMO_MEDIO_12M === 300, "dízimo médio: R$ 3.600 / 12 = R$ 300 (só o que vale)", med.DIZIMO_MEDIO_12M);
   ok(med.DIZIMISTAS_12M === 2, "dizimistas: 2", med.DIZIMISTAS_12M);
   const kmMae = Math.round(tr.distanciaKm({ lat: -6.151, lng: -49.951 }, { lat: -6.0675, lng: -49.9025 }) * 10) / 10;
@@ -387,9 +409,10 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   ok(s1.avaliacao.situacao === "NAO_ATENDE" && s1.avaliacao.total === 6 && !s1.podePedir, "com a régua inicial (50 membros, R$ 3.000): ainda não atende", s1.avaliacao);
   ok(!s1.avaliacao.itens.some((i) => i.criterioId === cDist), "o critério desligado não aparece");
   const s2 = r.body.extensoes.find((e) => e.extensaoId === extVila);
-  ok(s2 && s2.medidas.MESES_ABERTA === null && s2.medidas.DISTANCIA_MAE_KM === null && s2.medidas.NIVEL_PSC_MAE === null && s2.avaliacao.itens.find((i) => i.indicador === "MESES_ABERTA").resultado === "SEM_DADO",
-    "a Extensão sem data de abertura, sem ponto e com a Mãe sem PSC: não dá para medir (nunca conta como atendido)", s2 && s2.medidas);
-  ok(s2.medidas.ENCARREGADO_EM_COMUNHAO === false, "sem Encarregado: não");
+  const medVila = brutas.get(extVila);
+  ok(s2 && medVila.MESES_ABERTA === null && medVila.DISTANCIA_MAE_KM === null && medVila.NIVEL_PSC_MAE === null && s2.avaliacao.itens.find((i) => i.indicador === "MESES_ABERTA").resultado === "SEM_DADO",
+    "a Extensão sem data de abertura, sem ponto e com a Mãe sem PSC: não dá para medir (nunca conta como atendido)", medVila);
+  ok(medVila.ENCARREGADO_EM_COMUNHAO === false, "sem Encarregado: não");
   r = await POST("criterio-editar", { criterioId: cMembros.criterioId, versao: cMembros.versao, indicador: "MEMBROS_EM_COMUNHAO", operador: "MINIMO", valor: 4, ordem: 20 }, SEC());
   ok(r.status === 200, "o nível geral baixa o mínimo de membros para 4");
   r = await POST("criterio-editar", { criterioId: cDiz.criterioId, versao: cDiz.versao, indicador: "DIZIMO_MEDIO_12M", operador: "MINIMO", valor: "300,00", ordem: 50 }, SEC());
@@ -402,6 +425,11 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   ok(s1.avaliacao.situacao === "ATENDE_TUDO" && s1.podePedir === true, "agora a Tenda atende tudo, e o Dirigente da Mãe pode pedir", s1.avaliacao);
   ok(!r.body.extensoes.some((e) => e.extensaoId === extVila), "o Dirigente não vê a Extensão da Vila");
   ok(r.body.extensoes[0].extensaoId === ext, "quem atende tudo vem primeiro");
+  const diz3 = await escalar("INSERT INTO Dizimistas (CongregacaoId, Nome, MembroId) OUTPUT INSERTED.DizimistaId VALUES (@c, N'Membro Quatro Tenda E2E', @m)", { c: central, m: P.m4 });
+  await lanc(diz3, "1200.00", jan.ate);
+  s1 = (await GET("simulacao", {}, DIR())).body.extensoes.find((e) => e.extensaoId === ext);
+  const itDiz3 = s1.avaliacao.itens.find((i) => i.indicador === "DIZIMO_MEDIO_12M");
+  ok(itDiz3.medido === 400 && !itDiz3.oculto && s1.medidas.DIZIMO_MEDIO_12M === 400, "com 3 dizimistas, o valor aparece: R$ 4.800 / 12 = R$ 400", itDiz3);
   r = await GET("simulacao", {}, DIR_VILA());
   ok(!r.body.extensoes.some((e) => e.extensaoId === ext), "o Dirigente da Vila não vê a Tenda da Central");
   r = guardar("simulacaoCME", await GET("simulacao", {}, CME()));

@@ -313,7 +313,8 @@ module.exports = async function (context, req) {
       partesFinais = await territorioDb.linhasDiantedaLinhaLegada(() => pool.request(), membroId, enderecoFinal);
     }
 
-    const request = pool.request()
+    // os parâmetros da gravação (o endereço entra à parte: com um bairro da lista, a linha única é refeita com o bairro travado — revisão de 06/11/2026)
+    const preencher = (request) => request
       .input("id", sql.Int, membroId)
       .input("nome", sql.NVarChar(200), nome)
       .input("congregacaoId", sql.Int, congregacaoId || null)
@@ -326,7 +327,6 @@ module.exports = async function (context, req) {
       .input("cargoMinisterial", sql.NVarChar(30), cargoMinisterial || null)
       .input("telefone", sql.NVarChar(20), telefone || null)
       .input("email", sql.NVarChar(150), email || null)
-      .input("endereco", sql.NVarChar(300), enderecoFinal)
       .input("extensaoId", sql.Int, extensaoId || null)
       .input("dataBatismo", sql.Date, dataBatismo || null)
       .input("formaAdmissao", sql.NVarChar(30), formaAdmissao || null)
@@ -341,13 +341,14 @@ module.exports = async function (context, req) {
       .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
       .input("sexo", sql.NChar(1), sexoFinal)
       .input("cargoLido", sql.NVarChar(30), cargoAnterior);
-    territorioDb.entradasEndereco(request, partesFinais);
-
-    if (existia) {
+    const gravarPessoa = async (request, prepEnd) => {
+      request.input("endereco", sql.NVarChar(300), prepEnd.endereco);
+      territorioDb.entradasEndereco(request, prepEnd.partes);
+      if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
       // esteira de Consagrações (ver EvoluirConsagracao) — salvar a pessoa
       // nunca deve apagar o que já estava lá.
-      const gravou = await request.query(`
+        const gravou = await request.query(`
         UPDATE MembroReferencia SET Nome = @nome, CongregacaoId = @congregacaoId, Status = @status,
                DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
                SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId, CargoMinisterial = @cargoMinisterial,
@@ -357,14 +358,21 @@ module.exports = async function (context, req) {
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
                DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
         WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
-      if (!(gravou && gravou.rowsAffected && gravou.rowsAffected[0])) {
-        context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
-        return;
+        const passou = !!(gravou && gravou.rowsAffected && gravou.rowsAffected[0]);
+        return { gravou: passou, desfazer: !passou };
       }
-    } else {
       await request.query(`
         INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo, ${territorioDb.COLUNAS_ENDERECO})
         VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo, ${territorioDb.VALORES_ENDERECO})`);
+      return { gravou: true };
+    };
+    const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
+    const resultadoGravacao = partesFinais && partesFinais.bairroId
+      ? await territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
+      : await gravarPessoa(preencher(pool.request()), prepEnd);
+    if (!resultadoGravacao.gravou) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+      return;
     }
 
     // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a

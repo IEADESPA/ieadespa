@@ -18,6 +18,11 @@ const SO_GERAL = "Só o nível geral mexe no cadastro de bairros, no raio de cob
 const HOMONIMO = "Já existe um bairro ativo com este nome nesta cidade.";
 const OFICIAIS_SQL = CARGOS_OFICIAIS.map((c) => `N'${c}'`).join(", ");
 const num = (v) => (v == null ? null : Number(v));
+// Revisão de 06/11/2026 — o mapa e a simulação contam MEMBROS: o congregado "não integra o quadro de membros" (Estatuto Art. 7º, I) e o novo convertido ainda não é
+// membro; o mesmo recorte do rol do PSC e da credencial. "Em comunhão" é a régua do estatuto.js: EM_COMUNHAO (ou situação vazia de membro ativo) e sem disciplina.
+const SO_MEMBROS = `m.Status = N'ATIVO' AND ISNULL(m.SituacaoMembro, N'EM_COMUNHAO') NOT IN (N'CONGREGADO', N'NOVO_CONVERTIDO')`;
+// abaixo de 3 dizimistas, o dízimo médio revelaria o de uma pessoa: a simulação diz só se atende (revisão de 06/11/2026)
+const MINIMO_DIZIMISTAS_PARA_MOSTRAR = 3;
 const iso = (v) => (v == null ? null : (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)));
 const instante = (v) => (v == null ? null : (v instanceof Date ? v.toISOString() : String(v)));
 
@@ -85,8 +90,42 @@ async function prepararEnderecoMembro(rq, dados, { membroId = null } = {}) {
     if (!aceito) return { sucesso: false, mensagem: "O bairro escolhido não está mais na lista. Escolha de novo." };
     partes = tr.aplicarBairro(partes, b);
     nomeBairro = b.nome;
+  } else if (partes.bairroTexto) {
+    // o nome escrito que já está cadastrado (mesmo nome, cidade e UF, sem maiúscula nem acento) vira o bairro da lista: senão ficaria na fila para sempre (o
+    // cadastro recusaria o homônimo) — revisão de 06/11/2026
+    const ja = await rq().input("nome", sql.NVarChar(150), partes.bairroTexto).input("cid", sql.NVarChar(150), partes.cidade).input("uf", sql.NChar(2), partes.uf)
+      .query(`SELECT TOP 1 BairroId, Nome, Cidade, UF FROM Bairros WHERE Ativo = 1 AND Nome = @nome COLLATE Latin1_General_CI_AI
+              AND Cidade = LTRIM(RTRIM(@cid)) COLLATE Latin1_General_CI_AI AND UF = @uf`);
+    const l = ja.recordset[0];
+    if (l) {
+      partes = { ...partes, bairroId: l.BairroId, bairroTexto: null, cidade: l.Cidade, uf: String(l.UF).trim() };
+      nomeBairro = l.Nome;
+    }
   }
   return { sucesso: true, partes, endereco: tr.montarLinhaEndereco(partes, nomeBairro) };
+}
+// Revisão de 06/11/2026 — a ficha que grava um bairro da lista o trava antes de gravar a pessoa (Bairros, depois MembroReferencia: a mesma ordem do editar e do
+// juntar, então os dois não se travam um ao outro) e relê o nome, a cidade e a UF sob a trava (a linha única nunca sai com o nome de antes de uma renomeação).
+// `fazer(rq)` grava a pessoa com as Requests da transação; devolve o que ele devolver (`{ desfazer: true }` desfaz).
+async function gravarComBairroTravado(pool, prep, fazer) {
+  const t = new sql.Transaction(pool);
+  await t.begin();
+  const rq = () => new sql.Request(t);
+  try {
+    if (prep && prep.partes && prep.partes.bairroId) {
+      const b = await lerBairro(rq, prep.partes.bairroId, { travar: true });
+      if (b) {
+        prep.partes = tr.aplicarBairro(prep.partes, b);
+        prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
+      }
+    }
+    const r = await fazer(rq);
+    if (r && r.desfazer) await t.rollback(); else await t.commit();
+    return r;
+  } catch (e) {
+    try { await t.rollback(); } catch (_) { /* já desfeita */ }
+    throw e;
+  }
 }
 // Os parâmetros SQL das colunas novas (na mesma Request que grava o resto).
 function entradasEndereco(request, partes) {
@@ -178,7 +217,7 @@ async function mapa(pool, { alcance }) {
     SELECT m.EnderecoBairroId AS BairroId, m.CongregacaoId, m.ExtensaoId, c.Nome AS CongNome,
            CASE WHEN m.EnderecoBairroTexto IS NOT NULL THEN 1 ELSE 0 END AS Escrito, COUNT(*) AS N
     FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
-    WHERE m.Status = N'ATIVO'
+    WHERE ${SO_MEMBROS}
     GROUP BY m.EnderecoBairroId, m.CongregacaoId, m.ExtensaoId, c.Nome, CASE WHEN m.EnderecoBairroTexto IS NOT NULL THEN 1 ELSE 0 END`);
   const todos = veTudo(alcance);
   const linhas = r.recordset.filter((l) => todos || cobre(alcance, l.CongNome));
@@ -201,7 +240,12 @@ async function mapa(pool, { alcance }) {
     const ri = await rq().query(`SELECT BairroId, Nome, Cidade, UF, Lat, Lng FROM Bairros WHERE BairroId IN (${faltantes.map((x) => Number(x)).join(",")})`);
     for (const l of ri.recordset) bairrosTodos.push({ bairroId: l.BairroId, nome: l.Nome, cidade: l.Cidade, uf: String(l.UF).trim(), lat: num(l.Lat), lng: num(l.Lng), inativo: true });
   }
+  // Revisão de 06/11/2026 — o bairro cujos moradores são de uma unidade SEM ponto no mapa não é "descoberto" (falta o dado, não a cobertura): fica "a conferir",
+  // sem o atalho de pedir Extensão, até a unidade ganhar o ponto
+  const semPontoChaves = new Set(unis.filter((u) => u.lat == null || u.lng == null).map((u) => u.chave));
+  const bairrosAConferir = new Set(densidade.filter((d) => semPontoChaves.has(d.unidadeChave)).map((d) => Number(d.bairroId)));
   const bairros = tr.cobertura(bairrosTodos.map((x) => ({ ...x, membros: porBairro.get(x.bairroId) || 0 })), unis, par.raioKm)
+    .map((x) => (x.descoberto && bairrosAConferir.has(Number(x.bairroId)) ? { ...x, descoberto: false, aConferir: true } : { ...x, aConferir: false }))
     .filter((x) => !x.inativo || x.membros > 0)
     .sort((a, b2) => (Number(b2.descoberto) - Number(a.descoberto)) || (b2.membros - a.membros) || a.nome.localeCompare(b2.nome, "pt-BR"));
   // a densidade por unidade: o nível geral e a CME veem todas; os demais, as das congregações deles
@@ -214,7 +258,7 @@ async function mapa(pool, { alcance }) {
   if (alcance && alcance.geral) {
     const f = await rq().query(`
       SELECT MIN(m.EnderecoBairroTexto) AS Nome, MIN(m.EnderecoCidade) AS Cidade, MIN(m.EnderecoUF) AS UF, COUNT(*) AS N
-      FROM MembroReferencia m WHERE m.Status = N'ATIVO' AND m.EnderecoBairroTexto IS NOT NULL
+      FROM MembroReferencia m WHERE ${SO_MEMBROS} AND m.EnderecoBairroTexto IS NOT NULL
       GROUP BY m.EnderecoBairroTexto COLLATE Latin1_General_CI_AI, m.EnderecoCidade COLLATE Latin1_General_CI_AI, m.EnderecoUF
       ORDER BY COUNT(*) DESC`);
     fila = f.recordset.map((l) => ({ nome: l.Nome, cidade: l.Cidade, uf: l.UF ? String(l.UF).trim() : null, membros: Number(l.N) }));
@@ -223,13 +267,14 @@ async function mapa(pool, { alcance }) {
     raioKm: par.raioKm,
     bairros: bairros.map((x) => ({
       bairroId: x.bairroId, nome: x.nome, cidade: x.cidade, uf: x.uf, lat: x.lat, lng: x.lng, membros: x.membros, semPonto: x.semPonto,
-      maisPerto: x.maisPerto, distanciaKm: x.distanciaKm, descoberto: x.descoberto, inativo: !!x.inativo
+      maisPerto: x.maisPerto, distanciaKm: x.distanciaKm, descoberto: x.descoberto, aConferir: !!x.aConferir, inativo: !!x.inativo
     })),
     unidades: unis.map((u) => ({ chave: u.chave, id: u.id, tipo: u.tipo, nome: u.nome, maeNome: u.maeNome, lat: u.lat, lng: u.lng })),
     densidade: dens,
     totais: {
       membros, localizados: membros - semLocalizacao, semLocalizacao, bairroEscritoNaFila: escritos,
       bairrosSemPonto: bairros.filter((x) => x.semPonto && x.membros > 0).length, descobertos: bairros.filter((x) => x.descoberto).length,
+      aConferir: bairros.filter((x) => x.aConferir).length,
       unidadesSemPonto: unis.filter((u) => u.lat == null).length
     },
     fila,
@@ -241,7 +286,7 @@ async function mapa(pool, { alcance }) {
 async function listarBairros(pool) {
   const r = await pool.request().query(`
     SELECT b.BairroId, b.Nome, b.Cidade, b.UF, b.Lat, b.Lng, b.Ativo, b.Versao,
-           (SELECT COUNT(*) FROM MembroReferencia m WHERE m.EnderecoBairroId = b.BairroId AND m.Status = N'ATIVO') AS Membros
+           (SELECT COUNT(*) FROM MembroReferencia m WHERE m.EnderecoBairroId = b.BairroId AND ${SO_MEMBROS}) AS Membros
     FROM Bairros b ORDER BY b.Ativo DESC, b.Cidade, b.Nome`);
   return r.recordset.map((l) => ({
     bairroId: l.BairroId, nome: l.Nome, cidade: l.Cidade, uf: String(l.UF).trim(), lat: num(l.Lat), lng: num(l.Lng), ativo: !!l.Ativo, versao: l.Versao, membros: Number(l.Membros)
@@ -300,8 +345,9 @@ async function editarBairro(pool, { dados, por, alcance }) {
       const bairro = { ...v.bairro, bairroId };
       // o nome, a cidade ou a UF mudou: a linha única dos membros dele acompanha (e a fila do novo nome entra)
       const mudouNome = atual.nome !== bairro.nome || atual.cidade !== bairro.cidade || atual.uf !== bairro.uf;
-      let ligados = 0;
-      if (mudouNome) { ligados = await ligarFila(rq, bairro); await recomporMembrosDoBairro(rq, bairro); }
+      // a fila liga sempre (quem escreveu este nome enquanto o bairro já existia — revisão de 06/11/2026); a linha única é refeita se algo mudou
+      const ligados = await ligarFila(rq, bairro);
+      if (mudouNome || ligados) await recomporMembrosDoBairro(rq, bairro);
       await registrarAuditoriaNaTransacao(t, { tabela: "Bairros", registroId: bairroId, acao: "BAIRRO_ALTERADO", usuarioId: por,
         dadosAntes: { nome: atual.nome, cidade: atual.cidade, uf: atual.uf, lat: atual.lat, lng: atual.lng }, dadosDepois: { ...v.bairro, membrosLigadosDaFila: ligados } });
       return { sucesso: true, bairroId, membrosLigados: ligados };
@@ -502,7 +548,7 @@ async function medidasDasExtensoes(pool, extensoes, hoje) {
   const diz = await rq().input("de", sql.Char(7), j.de).input("ate", sql.Char(7), j.ate).query(`
     SELECT m.ExtensaoId, SUM(l.Valor) AS Total, COUNT(DISTINCT m.MembroId) AS Dizimistas
     FROM LancamentosTesouraria l JOIN Dizimistas d ON d.DizimistaId = l.DizimistaId JOIN MembroReferencia m ON m.MembroId = d.MembroId
-    WHERE m.ExtensaoId IN (${lista}) AND m.Status = N'ATIVO' AND l.Tipo = N'DIZIMO' AND l.Status = N'ATIVO' AND l.StatusConfirmacao = N'CONFIRMADO'
+    WHERE m.ExtensaoId IN (${lista}) AND ${SO_MEMBROS} AND l.Tipo = N'DIZIMO' AND l.Status = N'ATIVO' AND l.StatusConfirmacao = N'CONFIRMADO'
       AND l.MesReferencia >= @de AND l.MesReferencia <= @ate
     GROUP BY m.ExtensaoId`);
   const psc = await rq().query(`
@@ -510,7 +556,7 @@ async function medidasDasExtensoes(pool, extensoes, hoje) {
     WHERE a.Status = N'HOMOLOGADA' AND a.NivelFinal IS NOT NULL
       AND a.Ano = (SELECT MAX(b.Ano) FROM PscAvaliacoes b WHERE b.CongregacaoId = a.CongregacaoId AND b.Status = N'HOMOLOGADA' AND b.NivelFinal IS NOT NULL)`);
   const nivelPsc = new Map(psc.recordset.map((l) => [l.CongregacaoId, Number(l.NivelFinal)]));
-  const emComunhao = (m) => m.Status === "ATIVO" && m.SituacaoMembro !== "SEM_COMUNHAO" && !sobDisciplina.has(m.MembroId);
+  const emComunhao = (m) => m.Status === "ATIVO" && (m.SituacaoMembro === "EM_COMUNHAO" || m.SituacaoMembro == null) && !sobDisciplina.has(m.MembroId);
   const saida = new Map();
   for (const e of extensoes) {
     const meus = membros.recordset.filter((m) => m.ExtensaoId === e.extensaoId);
@@ -551,8 +597,14 @@ async function simulacao(pool, { alcance, hoje = hojeBrasilia() }) {
     extensoes: extensoes.map((e) => {
       const m = medidas.get(e.extensaoId) || {};
       const avaliacao = tr.avaliarExtensao(criterios, m);
+      // só o que os critérios ativos usam sai da resposta (o resto nem é preciso para a tela); o dízimo médio de menos de 3 dizimistas sai sem o valor
+      const ativos = new Set(avaliacao.itens.map((i) => i.indicador));
+      const ocultarDizimo = (Number(m.DIZIMISTAS_12M) || 0) < MINIMO_DIZIMISTAS_PARA_MOSTRAR;
+      const visiveis = {};
+      for (const k of ativos) visiveis[k] = k === "DIZIMO_MEDIO_12M" && ocultarDizimo ? null : m[k];
+      avaliacao.itens = avaliacao.itens.map((i) => (i.indicador === "DIZIMO_MEDIO_12M" && ocultarDizimo ? { ...i, medido: null, oculto: true } : i));
       return {
-        extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome, abertaEm: e.abertaEm, medidas: m, avaliacao, pedidoEmAndamento: e.pedidoEmAndamento,
+        extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome, abertaEm: e.abertaEm, medidas: visiveis, avaliacao, pedidoEmAndamento: e.pedidoEmAndamento,
         // o atalho para o pedido de emancipação da v9.2: quem cuida da Mãe (o Dirigente, o Pastor da Área) ou o nível geral, e sem pedido já correndo
         podePedir: avaliacao.situacao === "ATENDE_TUDO" && !e.pedidoEmAndamento && cobre(alcance, e.maeNome)
       };
@@ -600,7 +652,7 @@ async function bairrosParaEscolher(pool) {
 }
 
 module.exports = {
-  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher,
+  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher, gravarComBairroTravado, SO_MEMBROS, MINIMO_DIZIMISTAS_PARA_MOSTRAR,
   SO_GERAL, catalogos, mapa, listarBairros, criarBairro, editarBairro, ativarBairro, juntarBairros, marcarPontoExtensao, extensoesDoMapa, mudarRaio,
   listarCriterios, criarCriterio, editarCriterio, apagarCriterio, simulacao, medidasDasExtensoes, dadosDoTitular, atosDoTitular,
   prepararEnderecoMembro, entradasEndereco, linhasDiantedaLinhaLegada, SET_ENDERECO, COLUNAS_ENDERECO, VALORES_ENDERECO, partesDaLinha, iso

@@ -92,6 +92,8 @@ async function prova() {
   ok(cfg.globalHeaders["Content-Security-Policy"].includes("script-src 'self';") && !/maps\.googleapis|maps\.gstatic|\*\.gstatic|\*\.google\.com/.test(cfg.globalHeaders["Content-Security-Policy"]), "o sistema continua com a política forte (nenhum endereço do Google)");
   const pagina = lerApp("mapa-territorial.html");
   ok(!/<script>/.test(pagina) && !/\son[a-z]+="/.test(pagina) && /src="mapa-territorial\.js"/.test(pagina), "a página do mapa sem código escrito dentro do HTML");
+  ok(/ev\.source !== mae \|\| ev\.origin !== ORIGEM/.test(lerApp("mapa-territorial.js")) && /mae\.postMessage\(msg, ORIGEM\)/.test(lerApp("mapa-territorial.js")) && /tipo: "desenhado"/.test(lerApp("mapa-territorial.js"))
+    && /motivo: "tempo"/.test(lerApp("mapa-territorial.js")), "a página do mapa confere a janela e a origem, responde só à origem do sistema, avisa quando desenhou e quando o Google não respondeu");
   ok(/ev\.source !== mae/.test(lerApp("mapa-territorial.js")) && /textContent/.test(lerApp("mapa-territorial.js")) && !/innerHTML/.test(lerApp("mapa-territorial.js")), "a página do mapa só ouve a moldura-mãe e nunca monta HTML com texto");
 
   console.log("== o mapa (nível geral, lista e desenho) ==");
@@ -146,6 +148,18 @@ async function prova() {
   mensagem(amb, f.contentWindow, { fonte: "ieadespa-mapa", tipo: "erro", motivo: "chave" });
   ok(!moldura(amb, "terMolduraGoogle") && !visivel(amb, "terMolduraGoogle") && todos(amb, "terDesenho").some((x) => x.localName === "svg") && /recusou a chave/.test(amb.e("terMsgMapa").textContent),
     "o Google recusou: a moldura sai e a lista e desenho volta, dizendo o motivo");
+  ok(amb.e("terModo").value === "lista" && amb.gravacoes.filter((x) => x.onde === "localStorage").pop().valor === "lista", "e a escolha guardada volta para a lista (a próxima visita não fica esperando o Google)");
+  amb.doc.escolher(amb.e("terModo"), "google"); await amb.ocioso();
+  f = moldura(amb, "terMolduraGoogle");
+  mensagem(amb, f.contentWindow, { fonte: "ieadespa-mapa", tipo: "pronto" });
+  amb.dispararTemporizador(20000); await amb.ocioso();
+  ok(!moldura(amb, "terMolduraGoogle") && todos(amb, "terDesenho").some((x) => x.localName === "svg") && /não abriu/.test(amb.e("terMsgMapa").textContent), "o Google sem resposta em 20 s: volta à lista e desenho");
+  amb.doc.escolher(amb.e("terModo"), "google"); await amb.ocioso();
+  f = moldura(amb, "terMolduraGoogle");
+  mensagem(amb, f.contentWindow, { fonte: "ieadespa-mapa", tipo: "pronto" });
+  mensagem(amb, f.contentWindow, { fonte: "ieadespa-mapa", tipo: "desenhado" });
+  amb.dispararTemporizador(20000); await amb.ocioso();
+  ok(moldura(amb, "terMolduraGoogle") && amb.e("terModo").value === "google", "desenhado a tempo: o prazo não derruba o mapa");
   const semChave = montar({ geral: false, catalogo: "catalogosDirigente", mapa: "mapaDirigente", simulacao: "simulacaoDirigente", matricula: 3001 });
   await abrirTerritorio(semChave);
   const opGoogle = semChave.e("terModo").options.find((o) => o.value === "google");
@@ -160,13 +174,20 @@ async function prova() {
   ok(guardado.e("terSubBairros").style.display === "none" && guardado.e("terSubMapa").style.display === "block" && gets(guardado, "territorio/bairros").length === 0, "o Dirigente pedindo os Bairros fica no Mapa (e nem pede a lista)");
   ok(!visivel(semChave, "btnTerSubBairros") && /suas congregações/.test(semChave.e("terResumo").textContent) && semChave.e("terFila").innerHTML === "", "o Dirigente: sem Bairros, sem fila, \"nas suas congregações\"");
 
+  amb = montar();
+  amb.__respostas["GET territorio/mapa"] = { corpo: { ...R.mapaGeral, bairros: R.mapaGeral.bairros.map((b, i) => (i === 0 ? { ...b, descoberto: false, aConferir: true } : b)), totais: { ...R.mapaGeral.totais, aConferir: 1 } } };
+  await abrirTerritorio(amb);
+  const primeiraLinha = todos(amb, "terTabelaBairros").filter((x) => x.localName === "tr")[1];
+  ok(/a conferir/.test(primeiraLinha.textContent) && !botoes(amb, "terTabelaBairros", "terAbrirPedidoAcao").some((b) => args(b)[2] && String(args(b)[2]).startsWith(R.mapaGeral.bairros[0].nome.split(" <")[0]))
+    && /a conferir/.test(amb.e("terResumo").textContent), "o bairro de unidade sem ponto: \"a conferir\", sem o atalho de pedir Extensão, e o aviso no resumo");
+  ok(/com ponto no mapa/.test(amb.e("terDensidade").textContent), "a tabela por unidade diz que conta os membros em bairro com ponto");
   console.log("== simulação ==");
   amb = montar({ geral: false, catalogo: "catalogosDirigente", mapa: "mapaDirigente", simulacao: "simulacaoDirigente", matricula: 3001 });
   await abrirTerritorio(amb);
   await sub(amb, "simulacao");
   const sim = amb.e("terSimulacao").textContent;
   ok(/Atende todos os critérios/.test(sim) && /Critérios ativos/.test(sim) && /só aponta/.test(sim), "a simulação: a situação, os critérios e o aviso de que só aponta");
-  ok(/R\$ 300,00/.test(sim) && /pelo menos 24 meses/.test(sim), "os valores medidos e as regras escritas por extenso (R$ e meses)", sim.slice(0, 300));
+  ok(/oculto \(menos de 3 dizimistas/.test(sim) && /pelo menos R\$ 300,00/.test(sim) && (sim.match(/R\$ 300,00/g) || []).length === (sim.match(/pelo menos R\$ 300,00/g) || []).length && /pelo menos 24 meses/.test(sim), "o dízimo de 2 dizimistas aparece oculto; as regras por extenso (R$ e meses)", sim.slice(0, 300));
   const pedirEma = botoes(amb, "terSimulacao", "terAbrirPedidoAcao");
   ok(pedirEma.length === REAL.simulacaoDirigente.extensoes.filter((e) => e.podePedir).length && pedirEma.every((b) => args(b)[0] === "EMANCIPACAO" && typeof args(b)[1] === "number"),
     "\"Pedir a emancipação\" só onde o servidor diz que pode");
@@ -174,8 +195,12 @@ async function prova() {
   ok(amb.e("expNovoTipo").value === "EMANCIPACAO" && amb.e("expSecaoPedidos").style.display === "block", "o atalho abre o pedido de emancipação");
   semAtaque(amb, "a simulação");
   amb = montar();
+  await abrirTerritorio(amb); await sub(amb, "simulacao");
+  ok(/não tem a data de abertura/.test(amb.e("terSimulacao").textContent), "\"não dá para medir\" diz o que falta");
+  amb = montar();
   amb.__respostas["GET territorio/simulacao"] = { corpo: { ...R.simulacaoGeral, criterios: [], extensoes: R.simulacaoGeral.extensoes.map((e) => ({ ...e, podePedir: false, avaliacao: { situacao: "SEM_CRITERIOS", itens: [], atendidos: 0, total: 0 } })) } };
   await abrirTerritorio(amb); await sub(amb, "simulacao");
+  ok(true, "(a simulação geral é lida abaixo)");
   ok(/Nenhum critério ativo/.test(amb.e("terSimulacao").textContent) && botoes(amb, "terSimulacao", "terAbrirPedidoAcao").length === 0, "sem critério ativo: diz isso e não aponta ninguém");
 
   console.log("== bairros (nível geral) ==");
@@ -276,10 +301,16 @@ async function prova() {
   await amb.g("carregarMeusDadosForm")(); await amb.ocioso();
   const selB = amb.e("meuEndBairro");
   ok(selB.options.length === R.meusDadosGet.bairros.length + 2 && selB.options[selB.options.length - 1].value === "OUTRO" && amb.e("meuEndUf").options.length === 28, "o seletor: os bairros, \"não está na lista\" e as UFs");
-  ok(amb.e("meuEndereco").value === "Rua Velha, 1" && !amb.e("meuEndereco").readOnly && /linha só/.test(amb.e("meuEndDica").textContent), "o endereço antigo numa linha: editável, com a dica de passar para as linhas");
+  ok(amb.e("meuEndLogradouro").value === "Rua Velha, 1" && amb.e("meuEndereco").value === "Rua Velha, 1" && amb.e("meuEndereco").readOnly, "o endereço antigo numa linha vai para a Rua (não se perde ao escolher o bairro)");
   await amb.g("salvarMeusDadosAcao")(); await amb.ocioso();
   p = posts(amb, "meus-dados/9804");
-  ok(p.length === 1 && p[0].corpo.endereco === "Rua Velha, 1" && !("enderecoPartes" in p[0].corpo), "sem nenhuma linha: vai a linha única, como antes");
+  ok(p.length === 1 && p[0].corpo.enderecoPartes && p[0].corpo.enderecoPartes.logradouro === "Rua Velha, 1" && !("endereco" in p[0].corpo), "salvar sem mexer guarda o endereço antigo como Rua");
+  for (const c of ["meuEndLogradouro"]) amb.doc.digitar(amb.e(c), "");
+  await amb.ocioso();
+  ok(!amb.e("meuEndereco").readOnly && JSON.stringify(amb.g("endLerParaEnviar")("meuEnd")) === JSON.stringify({ enderecoPartes: {} }), "apagar todas as linhas (sem escrever outra linha única) apaga o endereço de propósito");
+  amb.doc.digitar(amb.e("meuEndereco"), "Outro lugar escrito");
+  ok(amb.g("endLerParaEnviar")("meuEnd").endereco === "Outro lugar escrito", "escrevendo outra linha única, ela vale");
+  amb.doc.digitar(amb.e("meuEndLogradouro"), "Rua Velha, 1");
   const b1 = R.meusDadosGet.bairros[0];
   amb.doc.escolher(selB, String(b1.bairroId)); await amb.ocioso();
   ok(amb.e("meuEndCidade").value === b1.cidade && amb.e("meuEndCidade").readOnly && amb.e("meuEndUf").disabled && amb.e("meuEndereco").readOnly, "o bairro da lista preenche e trava a cidade e a UF; a linha única fica só para ler");
@@ -297,6 +328,8 @@ async function prova() {
   ok(amb.g("endLerParaEnviar")("qualquer") && Object.keys(amb.g("endLerParaEnviar")("qualquer")).length === 0, "prefixo desconhecido: nada");
   amb.g("endPreencher")("meuEnd", { bairroId: 999, bairroNome: `Antigo ${ATAQUE}` }, "x");
   ok(selB.value === "999" && /fora da lista/.test(selB.options[1].textContent), "o bairro desativado que a pessoa já tem aparece como \"fora da lista\"");
+  amb.g("endPreencherBairros")("meuEnd", R.meusDadosGet.bairros);
+  ok(selB.value === "999" && selB.options.some((o) => o.value === "999" && /fora da lista/.test(o.textContent)), "a lista dos bairros chegando depois da ficha não apaga o bairro \"fora da lista\"");
   semAtaque(amb, "o endereço em linhas");
   amb.g("endLimpar")("meuEnd");
   ok(selB.value === "" && amb.e("meuEndLogradouro").value === "" && amb.e("meuEndereco").value === "", "limpar apaga as linhas e a linha única");
@@ -359,9 +392,17 @@ const MUTACOES = [
   ["territorio", "a saída não desmonta a moldura", ["  terPedidoSub++; terPedidoOpcoes++;\n  terDesmontarMoldura();\n", "  terPedidoSub++; terPedidoOpcoes++;\n"]],
   ["territorio", "resposta de outro login aparece", ["  return terDono() === dono ? data : null;\n}\nasync function terPost", "  return data;\n}\nasync function terPost"]],
   ["endereco", "tirar o escape do nome do bairro no seletor", ["${escaparHtmlEbd(b.nome)} (${escaparHtmlEbd(b.cidade)}", "${b.nome} (${escaparHtmlEbd(b.cidade)}"]],
+  ["endereco", "o endereço antigo não vai para a Rua", ["    const rua = endEl(p, \"Logradouro\"); if (rua) rua.value = t.slice(0, 200);\n", ""]],
+  ["endereco", "apagar as linhas não apaga", ["    if (endAberta[p].tinhaLinhas && linha && linha.value === endAberta[p].linha) return { enderecoPartes: {} };\n", ""]],
+  ["endereco", "a lista nova apaga o fora da lista", ["  if (fora && !Array.from(sel.options).some((o) => o.value === fora.valor)) endInserirForaDaLista(p, sel, fora.valor, fora.nome);\n", ""]],
+  ["territorio", "o \"a conferir\" com o atalho", ["(b.aConferir ? \"a conferir (unidade sem ponto)\" : \"coberto\")", "\"coberto\""]],
+  ["territorio", "mostrar o dízimo oculto", ["<td>${i.oculto ? \"<small>oculto", "<td>${false ? \"<small>oculto"]],
+  ["territorio", "o prazo da moldura não cai", ["if (terMoldura === esta && !esta.desenhou) terMensagemDaMoldura(", "if (false) terMensagemDaMoldura("]],
+  ["territorio", "o erro não guarda a lista", ["try { window.localStorage.setItem(TER_MODO_CHAVE, \"lista\"); } catch (e) { /* sem armazenamento */ }", ""]],
+  ["territorio", "sem o motivo do não dá para medir", ["${i.resultado === \"SEM_DADO\" && TER_FALTA[i.indicador] ?", "${false ?"]],
   ["endereco", "o bairro da lista não manda na cidade", ["    if (cidade) cidade.value = doBairro.cidade;\n", ""]],
   ["endereco", "a linha única editável com linhas", ["  if (linha) linha.readOnly = comLinhas;\n", ""]],
-  ["endereco", "mandar a linha única com as linhas", ["  if (!endTemLinhas(p)) return { endereco: linha ? (linha.value.trim() || null) : null };", "  if (true) return { endereco: linha ? (linha.value.trim() || null) : null };"]],
+  ["endereco", "mandar a linha única com as linhas", ["  if (!endTemLinhas(p)) {\n    // tinha linhas", "  if (true) {\n    // tinha linhas"]],
   ["endereco", "o escrito ao lado do bairro da lista", ["bairroTexto: bairro === END_OUTRO ? (v(\"BairroTexto\") || null) : null,", "bairroTexto: v(\"BairroTexto\") || null,"]],
   ["expansao", "a saída não limpa o Território", ["  if (typeof terLimparTela === \"function\") terLimparTela();   // v9.5: a pílula do Território\n", ""]],
   ["expansao", "a moldura fica fora da pílula", ["  if (expSecaoAtual !== \"territorio\" && typeof terDesmontarMoldura === \"function\") terDesmontarMoldura();\n", ""]]

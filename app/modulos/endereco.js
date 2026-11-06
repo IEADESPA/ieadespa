@@ -9,6 +9,9 @@ const END_OUTRO = "OUTRO";
 const END_CAMPOS_TEXTO = ["Logradouro", "Numero", "Complemento", "BairroTexto", "Cidade", "Cep"];
 const END_UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 const endBairros = { pessoaEnd: [], meuEnd: [] };
+// como a ficha abriu (revisão de 06/11/2026): se ela tinha linhas e a pessoa apagou todas, o endereço é apagado (e não volta pela linha única montada antes)
+const endAberta = { pessoaEnd: { tinhaLinhas: false, linha: "" }, meuEnd: { tinhaLinhas: false, linha: "" } };
+const endOpcaoForaDaLista = { pessoaEnd: null, meuEnd: null };
 const endEl = (p, campo) => document.getElementById(`${p}${campo}`);
 const endPrefixoValido = (p) => Object.prototype.hasOwnProperty.call(END_LINHA_UNICA, p);
 
@@ -19,36 +22,56 @@ function endPreencherBairros(p, bairros) {
   const sel = endEl(p, "Bairro");
   if (!sel) return;
   const antes = sel.value;
+  const fora = endOpcaoForaDaLista[p];
   sel.innerHTML = `<option value="">— escolha o bairro —</option>${endBairros[p].map((b) => `<option value="${Number(b.bairroId)}">${escaparHtmlEbd(b.nome)} (${escaparHtmlEbd(b.cidade)}/${escaparHtmlEbd(b.uf)})</option>`).join("")}`
     + `<option value="${END_OUTRO}">O bairro não está na lista (escrever o nome)</option>`;
+  // a lista chegou depois de a ficha abrir com um bairro desativado: a opção "fora da lista" volta (senão o bairro sumiria ao salvar)
+  if (fora && !Array.from(sel.options).some((o) => o.value === fora.valor)) endInserirForaDaLista(p, sel, fora.valor, fora.nome);
   if (antes && Array.from(sel.options).some((o) => o.value === antes)) sel.value = antes;
+  endPreencherUfs(p);
+}
+function endPreencherUfs(p) {
   const uf = endEl(p, "Uf");
-  if (uf && uf.options.length <= 1) {
-    const ufAntes = uf.value;
-    uf.innerHTML = `<option value="">— UF —</option>${END_UFS.map((u) => `<option value="${u}">${u}</option>`).join("")}`;
-    if (ufAntes) uf.value = ufAntes;
-  }
+  if (!uf || uf.options.length > 1) return;
+  const ufAntes = uf.value;
+  uf.innerHTML = `<option value="">— UF —</option>${END_UFS.map((u) => `<option value="${u}">${u}</option>`).join("")}`;
+  if (ufAntes) uf.value = ufAntes;
+}
+function endInserirForaDaLista(p, sel, valor, nome) {
+  const op = document.createElement("option");
+  op.setAttribute("value", valor);
+  op.textContent = `${nome || "Bairro"} (fora da lista)`;
+  sel.insertBefore(op, sel.options[1] || null);
 }
 
 // Põe na tela o endereço guardado (as linhas e a linha única).
 function endPreencher(p, partes, linhaUnica) {
   if (!endPrefixoValido(p)) return;
   const x = partes || {};
+  endPreencherUfs(p);
   const pares = { Logradouro: x.logradouro, Numero: x.numero, Complemento: x.complemento, BairroTexto: x.bairroTexto, Cidade: x.cidade, Cep: x.cep };
   for (const [campo, v] of Object.entries(pares)) { const el = endEl(p, campo); if (el) el.value = v || ""; }
   const sel = endEl(p, "Bairro");
   if (sel) {
     // um bairro desativado depois não está mais na lista: ele aparece como opção só desta ficha (para não sumir sem a pessoa ver)
+    endOpcaoForaDaLista[p] = null;
     if (x.bairroId && !Array.from(sel.options).some((o) => o.value === String(Number(x.bairroId)))) {
-      const op = document.createElement("option");
-      op.setAttribute("value", String(Number(x.bairroId)));
-      op.textContent = `${x.bairroNome || "Bairro"} (fora da lista)`;
-      sel.insertBefore(op, sel.options[1] || null);
+      endOpcaoForaDaLista[p] = { valor: String(Number(x.bairroId)), nome: x.bairroNome };
+      endInserirForaDaLista(p, sel, String(Number(x.bairroId)), x.bairroNome);
     }
     sel.value = x.bairroId ? String(Number(x.bairroId)) : (x.bairroTexto ? END_OUTRO : "");
   }
   const uf = endEl(p, "Uf"); if (uf) uf.value = x.uf || "";
   const linha = document.getElementById(END_LINHA_UNICA[p]); if (linha) linha.value = linhaUnica || "";
+  // o endereço antigo, só numa linha: vai para a Rua (e o que passar de 200 caracteres, para o complemento), para não se perder quando a pessoa escolher o bairro
+  // (a linha única passaria a ser montada só com as linhas — revisão de 06/11/2026)
+  const semLinhas = !END_CAMPOS_TEXTO.some((c) => pares[c] || (c === "BairroTexto" && x.bairroTexto)) && !x.bairroId && !x.uf;
+  if (semLinhas && linhaUnica && String(linhaUnica).trim()) {
+    const t = String(linhaUnica).trim();
+    const rua = endEl(p, "Logradouro"); if (rua) rua.value = t.slice(0, 200);
+    const comp = endEl(p, "Complemento"); if (comp && t.length > 200) comp.value = t.slice(200, 300);
+  }
+  endAberta[p] = { tinhaLinhas: endTemLinhas(p), linha: linha ? linha.value : "" };
   endAtualizarAcao(p);
 }
 
@@ -66,7 +89,11 @@ function endTemLinhas(p) {
 function endLerParaEnviar(p) {
   if (!endPrefixoValido(p)) return {};
   const linha = document.getElementById(END_LINHA_UNICA[p]);
-  if (!endTemLinhas(p)) return { endereco: linha ? (linha.value.trim() || null) : null };
+  if (!endTemLinhas(p)) {
+    // tinha linhas e a pessoa apagou todas, sem escrever outra linha única: o endereço é apagado de propósito
+    if (endAberta[p].tinhaLinhas && linha && linha.value === endAberta[p].linha) return { enderecoPartes: {} };
+    return { endereco: linha ? (linha.value.trim() || null) : null };
+  }
   const v = (c) => { const el = endEl(p, c); return el ? el.value.trim() : ""; };
   const bairro = v("Bairro");
   return {
@@ -100,8 +127,11 @@ function endAtualizarAcao(p) {
   if (dica) {
     dica.textContent = comLinhas
       ? "A linha única abaixo é montada pelo sistema com as linhas ao salvar."
-      : (linha && linha.value.trim() ? "Este endereço ainda está numa linha só: passe-o para as linhas acima (com o bairro) para ele entrar no mapa." : "");
+      : (linha && linha.value.trim() ? "Com as linhas vazias, a linha única abaixo vale como está (ou, se ela é a de antes, o endereço é apagado ao salvar)." : "");
   }
 }
+
+// as UFs já na abertura da página (a lista dos bairros pode chegar depois da ficha)
+for (const p of Object.keys(END_LINHA_UNICA)) endPreencherUfs(p);
 
 registrarAcoes({ endAtualizarAcao });

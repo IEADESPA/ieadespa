@@ -103,6 +103,19 @@ async function principal() {
     ok(j.body.sucesso === true && j.body.membrosMovidos === 1, "e a junção leva o morador ao bairro certo");
   } else ok(true, "a corrida não deixou sobra desta vez (o morador ficou num bairro ativo ou foi recusado)");
 
+  console.log("== renomear o bairro enquanto três fichas são gravadas nele (revisão de 06/11/2026) ==");
+  const bR = (await POST("bairro", { nome: "Corrida Renomear E2E", cidade: "Parauapebas", uf: "PA" })).body.bairroId;
+  const vR = await versaoBairro(bR);
+  rs = await disparar([
+    { acao: "bairro-editar", corpo: { bairroId: bR, versao: vR, nome: "Corrida Renomeado E2E", cidade: "Parauapebas", uf: "PA" } },
+    { meusDados: 9801, corpo: { enderecoPartes: { logradouro: "Rua Um", bairroId: bR } } },
+    { meusDados: 9802, corpo: { enderecoPartes: { logradouro: "Rua Dois", bairroId: bR } } },
+    { meusDados: 9806, corpo: { enderecoPartes: { logradouro: "Rua Seis", bairroId: bR } } }
+  ]);
+  ok(semErro(rs) && ganhos(rs) === 4, "nenhuma trava mútua: a renomeação e as três fichas passam", rs);
+  const linhasR = await q("SELECT MembroId, Endereco FROM MembroReferencia WHERE EnderecoBairroId = @b", { b: bR });
+  ok(linhasR.length === 3 && linhasR.every((l) => /Corrida Renomeado E2E/.test(l.Endereco)), "a linha única de todos sai com o nome novo (nenhuma com o de antes)", linhasR);
+
   console.log("== quatro mudanças do raio ==");
   const vRaio = await escalar("SELECT Versao FROM TerritorioParametros WHERE Id = 1");
   rs = await disparar(["1", "2", "4", "5"].map((raioKm) => ({ acao: "raio", corpo: { raioKm, versao: vRaio } })));

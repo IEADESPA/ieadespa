@@ -445,6 +445,7 @@
     },
     "distanciaKm": 10.6,
     "descoberto": true,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -454,7 +455,7 @@
     "uf": "PA",
     "lat": -6.068,
     "lng": -49.903,
-    "membros": 3,
+    "membros": 4,
     "semPonto": false,
     "maisPerto": {
      "chave": "C1",
@@ -463,6 +464,7 @@
     },
     "distanciaKm": 0.1,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -477,6 +479,7 @@
     "maisPerto": null,
     "distanciaKm": null,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -491,6 +494,7 @@
     "maisPerto": null,
     "distanciaKm": null,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    }
   ],
@@ -556,9 +560,9 @@
     "tipo": "CONGREGACAO",
     "nome": "Vila Nova E2E",
     "semPonto": false,
-    "membrosLocalizados": 0,
-    "distanciaMediaKm": null,
-    "maisPertoDeOutra": 0
+    "membrosLocalizados": 1,
+    "distanciaMediaKm": 2.9,
+    "maisPertoDeOutra": 1
    },
    {
     "chave": "C3",
@@ -590,11 +594,12 @@
   ],
   "totais": {
    "membros": 81,
-   "localizados": 4,
-   "semLocalizacao": 77,
+   "localizados": 5,
+   "semLocalizacao": 76,
    "bairroEscritoNaFila": 2,
    "bairrosSemPonto": 0,
    "descobertos": 1,
+   "aConferir": 0,
    "unidadesSemPonto": 3
   },
   "fila": [
@@ -707,6 +712,7 @@
     },
     "distanciaKm": 0.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -725,6 +731,7 @@
     },
     "distanciaKm": 0.1,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -743,6 +750,7 @@
     },
     "distanciaKm": 2.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -757,6 +765,7 @@
     "maisPerto": null,
     "distanciaKm": null,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    }
   ],
@@ -861,6 +870,7 @@
    "bairroEscritoNaFila": 0,
    "bairrosSemPonto": 1,
    "descobertos": 0,
+   "aConferir": 0,
    "unidadesSemPonto": 2
   },
   "fila": [],
@@ -886,6 +896,7 @@
     },
     "distanciaKm": 0.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -904,6 +915,7 @@
     },
     "distanciaKm": 0.1,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -922,6 +934,7 @@
     },
     "distanciaKm": 2.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -936,6 +949,7 @@
     "maisPerto": null,
     "distanciaKm": null,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    }
   ],
@@ -1013,6 +1027,7 @@
    "bairroEscritoNaFila": 0,
    "bairrosSemPonto": 0,
    "descobertos": 0,
+   "aConferir": 0,
    "unidadesSemPonto": 2
   },
   "fila": [],
@@ -1038,6 +1053,7 @@
     },
     "distanciaKm": 0.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -1056,6 +1072,7 @@
     },
     "distanciaKm": 0.1,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -1074,6 +1091,7 @@
     },
     "distanciaKm": 2.2,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    },
    {
@@ -1088,6 +1106,7 @@
     "maisPerto": null,
     "distanciaKm": null,
     "descoberto": false,
+    "aConferir": false,
     "inativo": false
    }
   ],
@@ -1192,6 +1211,7 @@
    "bairroEscritoNaFila": 0,
    "bairrosSemPonto": 1,
    "descobertos": 0,
+   "aConferir": 0,
    "unidadesSemPonto": 2
   },
   "fila": [],
@@ -1209,7 +1229,7 @@
     "ordem": 10,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 7,
@@ -1220,7 +1240,7 @@
     "ordem": 20,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 8,
@@ -1231,7 +1251,7 @@
     "ordem": 30,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 9,
@@ -1242,7 +1262,7 @@
     "ordem": 40,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 10,
@@ -1253,7 +1273,7 @@
     "ordem": 50,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    }
   ],
   "raioKm": 2,
@@ -1280,7 +1300,7 @@
     "ordem": 10,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 7,
@@ -1291,7 +1311,7 @@
     "ordem": 20,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 8,
@@ -1302,7 +1322,7 @@
     "ordem": 30,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 9,
@@ -1313,7 +1333,7 @@
     "ordem": 40,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 10,
@@ -1324,7 +1344,7 @@
     "ordem": 50,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 11,
@@ -1335,7 +1355,7 @@
     "ordem": 60,
     "observacao": "Mãe saudável",
     "versao": 0,
-    "em": "2026-11-06T17:48:30.5157899"
+    "em": "2026-11-06T18:27:48.5625827"
    }
   ],
   "extensoes": [
@@ -1349,9 +1369,7 @@
      "MEMBROS_EM_COMUNHAO": 4,
      "ENCARREGADO_EM_COMUNHAO": true,
      "OBREIROS": 2,
-     "DIZIMO_MEDIO_12M": 300,
-     "DIZIMISTAS_12M": 2,
-     "DISTANCIA_MAE_KM": 10.7,
+     "DIZIMO_MEDIO_12M": null,
      "NIVEL_PSC_MAE": 4
     },
     "avaliacao": {
@@ -1394,8 +1412,9 @@
        "indicador": "DIZIMO_MEDIO_12M",
        "operador": "MINIMO",
        "valor": 3000,
-       "medido": 300,
-       "resultado": "NAO_ATENDE"
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
       },
       {
        "criterioId": 11,
@@ -1422,9 +1441,7 @@
      "MEMBROS_EM_COMUNHAO": 0,
      "ENCARREGADO_EM_COMUNHAO": false,
      "OBREIROS": 0,
-     "DIZIMO_MEDIO_12M": 0,
-     "DIZIMISTAS_12M": 0,
-     "DISTANCIA_MAE_KM": null,
+     "DIZIMO_MEDIO_12M": null,
      "NIVEL_PSC_MAE": null
     },
     "avaliacao": {
@@ -1467,8 +1484,9 @@
        "indicador": "DIZIMO_MEDIO_12M",
        "operador": "MINIMO",
        "valor": 3000,
-       "medido": 0,
-       "resultado": "NAO_ATENDE"
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
       },
       {
        "criterioId": 11,
@@ -1504,7 +1522,7 @@
     "ordem": 10,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 7,
@@ -1515,7 +1533,7 @@
     "ordem": 20,
     "observacao": null,
     "versao": 1,
-    "em": "2026-11-06T17:48:30.7683557"
+    "em": "2026-11-06T18:27:48.8227005"
    },
    {
     "criterioId": 8,
@@ -1526,7 +1544,7 @@
     "ordem": 30,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 9,
@@ -1537,7 +1555,7 @@
     "ordem": 40,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 10,
@@ -1548,7 +1566,7 @@
     "ordem": 50,
     "observacao": null,
     "versao": 1,
-    "em": "2026-11-06T17:48:30.8032204"
+    "em": "2026-11-06T18:27:48.8544789"
    },
    {
     "criterioId": 11,
@@ -1559,7 +1577,7 @@
     "ordem": 60,
     "observacao": "Mãe saudável",
     "versao": 0,
-    "em": "2026-11-06T17:48:30.5157899"
+    "em": "2026-11-06T18:27:48.5625827"
    }
   ],
   "extensoes": [
@@ -1573,9 +1591,7 @@
      "MEMBROS_EM_COMUNHAO": 4,
      "ENCARREGADO_EM_COMUNHAO": true,
      "OBREIROS": 2,
-     "DIZIMO_MEDIO_12M": 300,
-     "DIZIMISTAS_12M": 2,
-     "DISTANCIA_MAE_KM": 10.7,
+     "DIZIMO_MEDIO_12M": null,
      "NIVEL_PSC_MAE": 4
     },
     "avaliacao": {
@@ -1618,8 +1634,9 @@
        "indicador": "DIZIMO_MEDIO_12M",
        "operador": "MINIMO",
        "valor": 300,
-       "medido": 300,
-       "resultado": "ATENDE"
+       "medido": null,
+       "resultado": "ATENDE",
+       "oculto": true
       },
       {
        "criterioId": 11,
@@ -1655,7 +1672,7 @@
     "ordem": 10,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 7,
@@ -1666,7 +1683,7 @@
     "ordem": 20,
     "observacao": null,
     "versao": 1,
-    "em": "2026-11-06T17:48:30.7683557"
+    "em": "2026-11-06T18:27:48.8227005"
    },
    {
     "criterioId": 8,
@@ -1677,7 +1694,7 @@
     "ordem": 30,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 9,
@@ -1688,7 +1705,7 @@
     "ordem": 40,
     "observacao": null,
     "versao": 0,
-    "em": "2026-11-06T17:48:27.1020366"
+    "em": "2026-11-06T18:27:44.7263253"
    },
    {
     "criterioId": 10,
@@ -1699,7 +1716,7 @@
     "ordem": 50,
     "observacao": null,
     "versao": 1,
-    "em": "2026-11-06T17:48:30.8032204"
+    "em": "2026-11-06T18:27:48.8544789"
    },
    {
     "criterioId": 11,
@@ -1710,7 +1727,7 @@
     "ordem": 60,
     "observacao": "Mãe saudável",
     "versao": 0,
-    "em": "2026-11-06T17:48:30.5157899"
+    "em": "2026-11-06T18:27:48.5625827"
    }
   ],
   "extensoes": [
@@ -1724,9 +1741,7 @@
      "MEMBROS_EM_COMUNHAO": 4,
      "ENCARREGADO_EM_COMUNHAO": true,
      "OBREIROS": 2,
-     "DIZIMO_MEDIO_12M": 300,
-     "DIZIMISTAS_12M": 2,
-     "DISTANCIA_MAE_KM": 10.7,
+     "DIZIMO_MEDIO_12M": 400,
      "NIVEL_PSC_MAE": 4
     },
     "avaliacao": {
@@ -1769,7 +1784,7 @@
        "indicador": "DIZIMO_MEDIO_12M",
        "operador": "MINIMO",
        "valor": 300,
-       "medido": 300,
+       "medido": 400,
        "resultado": "ATENDE"
       },
       {
@@ -1797,9 +1812,7 @@
      "MEMBROS_EM_COMUNHAO": 0,
      "ENCARREGADO_EM_COMUNHAO": false,
      "OBREIROS": 0,
-     "DIZIMO_MEDIO_12M": 0,
-     "DIZIMISTAS_12M": 0,
-     "DISTANCIA_MAE_KM": null,
+     "DIZIMO_MEDIO_12M": null,
      "NIVEL_PSC_MAE": null
     },
     "avaliacao": {
@@ -1842,8 +1855,9 @@
        "indicador": "DIZIMO_MEDIO_12M",
        "operador": "MINIMO",
        "valor": 300,
-       "medido": 0,
-       "resultado": "NAO_ATENDE"
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
       },
       {
        "criterioId": 11,
@@ -1864,7 +1878,7 @@
  },
  "meusDadosLgpd": {
   "sucesso": true,
-  "geradoEm": "2026-11-06T17:48:32.694Z",
+  "geradoEm": "2026-11-06T18:27:50.474Z",
   "membro": {
    "membroId": 9801,
    "nome": "Central Um E2E",
@@ -1890,7 +1904,7 @@
    "endereco": "Rua A, 10 — Centro E2E — Parauapebas/PA",
    "extensao": null,
    "fotoUrl": null,
-   "criadoEm": "2026-11-06T17:48:27.2827936"
+   "criadoEm": "2026-11-06T18:27:44.9065345"
   },
   "liderancas": [],
   "assentos": [],
@@ -2092,7 +2106,7 @@
  },
  "meusDadosLgpdSec": {
   "sucesso": true,
-  "geradoEm": "2026-11-06T17:48:33.087Z",
+  "geradoEm": "2026-11-06T18:27:50.862Z",
   "membro": {
    "membroId": 1002,
    "nome": "Secretário Geral E2E",
@@ -2329,38 +2343,38 @@
      {
       "bairro": "Centro E2E (Parauapebas/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:27.7381850",
+      "cadastradoEm": "2026-11-06T18:27:45.3299163",
       "ultimaMudancaEm": null
      },
      {
       "bairro": "Centro E2E (Marabá/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:27.8278957",
-      "ultimaMudancaEm": "2026-11-06T17:48:29.8176543"
+      "cadastradoEm": "2026-11-06T18:27:45.4219529",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.7127616"
      },
      {
       "bairro": "Bairro Longe E2E (Parauapebas/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:27.8569970",
+      "cadastradoEm": "2026-11-06T18:27:45.4368581",
       "ultimaMudancaEm": null
      },
      {
       "bairro": "Sem Ponto E2E (Parauapebas/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:27.8809112",
+      "cadastradoEm": "2026-11-06T18:27:45.4741127",
       "ultimaMudancaEm": null
      },
      {
       "bairro": "São Jorge II E2E (Parauapebas/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:29.5844865",
-      "ultimaMudancaEm": "2026-11-06T17:48:29.7164899"
+      "cadastradoEm": "2026-11-06T18:27:47.4188838",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.5769025"
      },
      {
       "bairro": "Centro Repetido E2E (Parauapebas/PA)",
       "cadastrou": true,
-      "cadastradoEm": "2026-11-06T17:48:29.8802705",
-      "ultimaMudancaEm": "2026-11-06T17:48:29.9852679"
+      "cadastradoEm": "2026-11-06T18:27:47.7830744",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.8942947"
      }
     ],
     "criterios": [
@@ -2368,30 +2382,30 @@
       "indicador": "Membros em comunhão",
       "criou": false,
       "criadoEm": null,
-      "ultimaMudancaEm": "2026-11-06T17:48:30.7683557"
+      "ultimaMudancaEm": "2026-11-06T18:27:48.8227005"
      },
      {
       "indicador": "Dízimo confirmado dos membros: média por mês dos últimos 12 meses fechados",
       "criou": false,
       "criadoEm": null,
-      "ultimaMudancaEm": "2026-11-06T17:48:30.8032204"
+      "ultimaMudancaEm": "2026-11-06T18:27:48.8544789"
      },
      {
       "indicador": "Distância até a Congregação-Mãe (km, em linha reta)",
       "criou": true,
-      "criadoEm": "2026-11-06T17:48:30.5365286",
+      "criadoEm": "2026-11-06T18:27:48.5834519",
       "ultimaMudancaEm": null
      }
     ],
     "pontosDeExtensao": [
      {
       "extensao": "Tenda Vila E2E",
-      "marcadoEm": "2026-11-06T17:48:30.1869279"
+      "marcadoEm": "2026-11-06T18:27:48.1820721"
      }
     ],
     "raioDeCobertura": [
      {
-      "mudadoEm": "2026-11-06T17:48:30.3860523"
+      "mudadoEm": "2026-11-06T18:27:48.4208986"
      }
     ]
    }

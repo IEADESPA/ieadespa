@@ -22,6 +22,13 @@ let terPedidoSub = 0;
 let terPedidoOpcoes = 0;
 const TER_SUBS = ["mapa", "simulacao", "bairros", "criterios", "pontos"];
 const TER_MODO_CHAVE = "ieadespa.territorio.modo";
+const TER_PRAZO_MOLDURA_MS = 20000;   // sem resposta do mapa do Google nesse tempo, volta à lista e desenho (revisão de 06/11/2026)
+// por que "não dá para medir" (revisão de 06/11/2026): o que falta para o indicador ser medido
+const TER_FALTA = {
+  MESES_ABERTA: "a Extensão não tem a data de abertura",
+  DISTANCIA_MAE_KM: "falta o ponto da Extensão (em Pontos das Extensões) ou o da Mãe (em Catálogos)",
+  NIVEL_PSC_MAE: "a Mãe não tem avaliação do PSC homologada"
+};
 const terEl = (idEl) => document.getElementById(idEl);
 const terH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const terKm = (v) => (v == null ? "—" : `${String(v).replace(".", ",")} km`);
@@ -140,7 +147,10 @@ function terMontarMoldura(alvoId, modo, extra) {
   f.src = "mapa-territorial.html";
   alvo.innerHTML = "";
   alvo.appendChild(f);
-  terMoldura = { el: f, modo, enviado: false, ...extra };
+  terMoldura = { el: f, modo, enviado: false, desenhou: false, ...extra };
+  const esta = terMoldura;
+  // a página do Google não respondeu (nem "pronto", nem "desenhado", nem "erro") no prazo: tratada como erro
+  setTimeout(() => { if (terMoldura === esta && !esta.desenhou) terMensagemDaMoldura({ source: esta.el.contentWindow, data: { fonte: "ieadespa-mapa", tipo: "erro", motivo: "tempo" } }); }, TER_PRAZO_MOLDURA_MS);
   return true;
 }
 function terDadosParaMoldura() {
@@ -161,6 +171,7 @@ function terMensagemDaMoldura(ev) {
     terMoldura.el.contentWindow.postMessage({ fonte: "ieadespa-sistema", tipo: "desenhar", chave: terChave(), modo: terMoldura.modo, ...base, ponto: terMoldura.ponto || null }, "*");
     return;
   }
+  if (m.tipo === "desenhado") { terMoldura.desenhou = true; return; }
   if (m.tipo === "clique" && terMoldura.modo === "marcar") {
     const lat = Number(m.lat), lng = Number(m.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
@@ -173,6 +184,8 @@ function terMensagemDaMoldura(ev) {
     const msg = m.motivo === "chave" ? "O Google recusou a chave do mapa (o endereço do sistema precisa estar autorizado nela). Use a lista e desenho, ou cole o link do Google Maps."
       : "O mapa do Google não abriu agora. Use a lista e desenho, ou cole o link do Google Maps.";
     terMensagem(terMoldura.modo === "marcar" ? terMoldura.alvoMsg : "terMsgMapa", msg);
+    // a escolha guardada volta para a lista (a próxima visita não fica esperando o Google de novo; a pessoa escolhe o Google quando quiser)
+    if (terMoldura.modo === "ver") { try { window.localStorage.setItem(TER_MODO_CHAVE, "lista"); } catch (e) { /* sem armazenamento */ } const sel = terEl("terModo"); if (sel) sel.value = "lista"; }
     if (terMoldura.modo === "ver") { terDesmontarMoldura(); const g = terEl("terMolduraGoogle"); if (g) g.style.display = "none"; terDesenharLista(); }
   }
 }
@@ -205,7 +218,9 @@ function terDesenharMapa() {
     <p><strong>${terH(t.membros)}</strong> membro(s) ativo(s) ${d.escopo === "TODOS" ? "no campo" : "nas suas congregações"} · <strong>${terH(t.localizados)}</strong> com bairro marcado ·
       <strong>${terH(t.semLocalizacao)}</strong> sem localização${t.bairroEscritoNaFila ? ` (${terH(t.bairroEscritoNaFila)} com o bairro escrito, esperando o cadastro)` : ""}</p>
     <p><strong>${terH(t.descobertos)}</strong> bairro(s) descoberto(s) (com membros e nenhuma unidade a até ${terH(terKm(d.raioKm))}) ·
-      ${terH(t.bairrosSemPonto)} bairro(s) com membros e sem ponto · ${terH(t.unidadesSemPonto)} unidade(s) sem ponto no mapa</p></div>`;
+      ${terH(t.bairrosSemPonto)} bairro(s) com membros e sem ponto · ${terH(t.unidadesSemPonto)} unidade(s) sem ponto no mapa</p>
+    ${t.aConferir ? `<p><strong>${terH(t.aConferir)}</strong> bairro(s) a conferir: os moradores são de uma congregação ou Extensão ainda sem ponto no mapa — marque o ponto
+      dela (Extensão em "Pontos das Extensões"; congregação em Catálogos) para saber se o bairro está coberto.</p>` : ""}</div>`;
   const google = terModo() === "google";
   const moldura = terEl("terMolduraGoogle");
   if (google && moldura) {
@@ -258,7 +273,7 @@ function terDesenharTabelas() {
   const bairros = Array.isArray(d.bairros) ? d.bairros : [];
   const podePedir = typeof expLista === "function" && expLista("maes").length > 0;
   const linhas = bairros.map((b) => {
-    const situacao = b.semPonto ? "sem ponto" : (b.descoberto ? "🔴 descoberto" : "coberto");
+    const situacao = b.semPonto ? "sem ponto" : (b.descoberto ? "🔴 descoberto" : (b.aConferir ? "a conferir (unidade sem ponto)" : "coberto"));
     const unidade = b.maisPerto ? `${terH(b.maisPerto.nome)}${b.maisPerto.tipo === "EXTENSAO" ? " (Extensão)" : ""}` : "—";
     const acao = b.descoberto && podePedir
       ? `<button type="button" class="btn-link" data-on-click="terAbrirPedidoAcao" data-args-click="${argsAttr("ABERTURA_EXTENSAO", null, b.nome, b.cidade, b.uf)}">Pedir Extensão aqui</button>` : "";
@@ -269,7 +284,7 @@ function terDesenharTabelas() {
     <th>Unidade mais perto</th><th>Distância</th><th>Situação</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`
     : "<p class='subtitle'>Nenhum bairro cadastrado ainda. O nível geral cadastra os bairros na sub-aba Bairros.</p>"}`;
   const dens = Array.isArray(d.densidade) ? d.densidade : [];
-  terEl("terDensidade").innerHTML = `<h4>Por unidade</h4>${dens.length ? `<div class="tabela-rolavel"><table class="tabela-simples"><thead><tr><th>Unidade</th><th>Membros com bairro marcado</th>
+  terEl("terDensidade").innerHTML = `<h4>Por unidade</h4>${dens.length ? `<div class="tabela-rolavel"><table class="tabela-simples"><thead><tr><th>Unidade</th><th>Membros em bairro com ponto no mapa</th>
     <th>Distância média até a unidade</th><th>Moram mais perto de outra unidade</th></tr></thead><tbody>${dens.map((u) => `<tr><td>${terH(u.nome)}${u.tipo === "EXTENSAO" ? " (Extensão)" : ""}</td>
     <td>${u.semPonto ? "<small>a unidade não tem ponto no mapa</small>" : terH(u.membrosLocalizados)}</td><td>${terH(terKm(u.distanciaMediaKm))}</td><td>${u.semPonto ? "—" : terH(u.maisPertoDeOutra)}</td></tr>`).join("")}
     </tbody></table></div>` : "<p class='subtitle'>Nenhuma unidade no seu alcance.</p>"}`;
@@ -336,8 +351,8 @@ async function terCarregarSimulacaoAcao() {
     return `<div class="cartao-perfil ter-simulacao-item"><p class="linha-perfil"><strong>${terH(e.nome)}</strong> <small>(Extensão de ${terH(e.maeNome)})</small> —
       ${terH(TER_SITUACAO[a.situacao] || a.situacao)}${a.total ? ` (${terH(a.atendidos)} de ${terH(a.total)})` : ""}</p>
       ${itens.length ? `<div class="tabela-rolavel"><table class="tabela-simples"><thead><tr><th>Critério</th><th>Regra</th><th>Medido</th><th>Resultado</th></tr></thead><tbody>
-      ${itens.map((i) => `<tr><td>${terH((terIndicador(i.indicador) || {}).rotulo || i.indicador)}</td><td>${terH(terRegra(i))}</td><td>${terH(terMedido(i.indicador, i.medido))}</td>
-      <td>${terH(TER_RESULTADO[i.resultado] || i.resultado)}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      ${itens.map((i) => `<tr><td>${terH((terIndicador(i.indicador) || {}).rotulo || i.indicador)}</td><td>${terH(terRegra(i))}</td><td>${i.oculto ? "<small>oculto (menos de 3 dizimistas: o valor seria o de uma pessoa)</small>" : terH(terMedido(i.indicador, i.medido))}</td>
+      <td>${terH(TER_RESULTADO[i.resultado] || i.resultado)}${i.resultado === "SEM_DADO" && TER_FALTA[i.indicador] ? `<br><small>${terH(TER_FALTA[i.indicador])}</small>` : ""}</td></tr>`).join("")}</tbody></table></div>` : ""}
       ${e.pedidoEmAndamento ? "<p class='subtitle'>Já há um pedido de emancipação desta Extensão em andamento.</p>" : ""}${botao}</div>`;
   }).join("");
 }

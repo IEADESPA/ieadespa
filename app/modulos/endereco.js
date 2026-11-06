@@ -41,7 +41,7 @@ function endPreencher(p, partes, linhaUnica) {
     // um bairro desativado depois não está mais na lista: ele aparece como opção só desta ficha (para não sumir sem a pessoa ver)
     if (x.bairroId && !Array.from(sel.options).some((o) => o.value === String(Number(x.bairroId)))) {
       const op = document.createElement("option");
-      op.value = String(Number(x.bairroId));
+      op.setAttribute("value", String(Number(x.bairroId)));
       op.textContent = `${x.bairroNome || "Bairro"} (fora da lista)`;
       sel.insertBefore(op, sel.options[1] || null);
     }

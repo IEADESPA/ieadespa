@@ -152,7 +152,7 @@ function terDadosParaMoldura() {
   };
 }
 function terMensagemDaMoldura(ev) {
-  if (!terMoldura || !terMoldura.el || ev.source !== terMoldura.el.contentWindow) return;
+  if (!terMoldura || !terMoldura.el || !terMoldura.el.contentWindow || !ev || ev.source !== terMoldura.el.contentWindow) return;
   const m = ev.data;
   if (!m || typeof m !== "object" || m.fonte !== "ieadespa-mapa") return;
   if (m.tipo === "pronto" && !terMoldura.enviado) {
@@ -512,7 +512,7 @@ function terAbrirFormCriterio(item) {
     <div class="input-group"><label for="terCritIndicador">Indicador</label><select id="terCritIndicador" data-on-change="terCriterioIndicadorAcao">
       ${inds.map((i) => `<option value="${terH(i.codigo)}"${item && item.indicador === i.codigo ? " selected" : ""}>${terH(i.rotulo)}</option>`).join("")}</select></div>
     <div class="input-group"><label for="terCritOperador">Comparação</label><select id="terCritOperador"></select></div>
-    <div class="input-group" id="terCritValorGrupo"><label for="terCritValor">Valor</label><input type="text" id="terCritValor" inputmode="decimal" maxlength="14" value="${terH(item && item.valor != null ? String(item.valor).replace(".", ",") : "")}" /></div>
+    <div class="input-group" id="terCritValorGrupo"><label for="terCritValor" id="terCritValorRotulo">Valor</label><input type="text" id="terCritValor" inputmode="decimal" maxlength="14" value="${terH(item && item.valor != null ? String(item.valor).replace(".", ",") : "")}" /></div>
     <div class="input-group"><label for="terCritOrdem">Ordem (0 a 999: a posição na lista)</label><input type="text" id="terCritOrdem" inputmode="numeric" maxlength="3" value="${terH(item ? item.ordem : "")}" /></div>
     <div class="input-group"><label for="terCritObs">Observação (opcional, até 300)</label><input type="text" id="terCritObs" maxlength="300" value="${terH(item && item.observacao ? item.observacao : "")}" /></div>
     <label><input type="checkbox" id="terCritAtivo"${!item || item.ativo ? " checked" : ""} /> ativo (conta na simulação)</label>
@@ -531,7 +531,7 @@ function terCriterioIndicadorAcao(operadorAtual) {
   op.innerHTML = opcoes.map(([v, r]) => `<option value="${escaparHtmlEbd(v)}">${escaparHtmlEbd(r)}</option>`).join("");
   if (opcoes.some(([v]) => v === antes)) op.value = antes;
   const grupo = terEl("terCritValorGrupo"); if (grupo) grupo.style.display = simnao ? "none" : "";
-  const rot = grupo ? grupo.querySelector("label") : null;
+  const rot = terEl("terCritValorRotulo");
   if (rot) rot.textContent = ind && ind.unidade ? `Valor (${ind.unidade}${ind.inteiro ? ", número inteiro" : ""}${ind.maximo != null ? `, até ${ind.maximo}` : ""})` : "Valor";
 }
 async function terSalvarCriterioAcao() {

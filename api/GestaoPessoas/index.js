@@ -79,6 +79,12 @@ module.exports = async function (context, req) {
   const membroIdRota = context.bindingData.membroId;
   const pool = await getPool();
 
+  // ---- GET ?lista=bairros: o catálogo dos bairros para o endereço em linhas (v9.5) — nome, cidade e UF, sem dado de ninguém ----
+  if (method === "GET" && req.query && req.query.lista === "bairros") {
+    context.res = { status: 200, body: { sucesso: true, bairros: await territorioDb.bairrosParaEscolher(pool) } };
+    return;
+  }
+
   // ---- GET: listar (só quem está no escopo de quem está logado) ----
   if (method === "GET") {
     // Mascaramento intencional (sigilo do processo disciplinar): só quem tem a

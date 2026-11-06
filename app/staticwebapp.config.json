@@ -2,6 +2,16 @@
   "platform": {
     "apiRuntime": "node:22"
   },
+  "routes": [
+    {
+      "route": "/mapa-territorial.html",
+      "headers": {
+        "Content-Security-Policy": "default-src 'none'; script-src 'self' https://maps.googleapis.com https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://*.googleusercontent.com blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.ggpht.com https://*.googleusercontent.com; connect-src https://*.googleapis.com https://*.google.com https://*.gstatic.com data: blob:; worker-src blob:; frame-src https://*.google.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://app.ieadespa.org.br https://white-grass-048208e0f.6.azurestaticapps.net https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net; sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox",
+        "X-Frame-Options": "SAMEORIGIN",
+        "Cache-Control": "no-store"
+      }
+    }
+  ],
   "globalHeaders": {
     "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://ieadespaarmazenamento.blob.core.windows.net; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
     "X-Frame-Options": "DENY"

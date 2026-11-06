@@ -26,7 +26,7 @@ const expEl = (idEl) => document.getElementById(idEl);
 const expBr = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
 const expH = (v) => escaparHtmlEbd(v == null ? "" : String(v));
 const EXP_SEM_CONEXAO = "<p class='subtitle'>Sem conexão com o servidor. Tente de novo.</p>";
-const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos", "missoes"];
+const EXP_SECOES = ["painel", "pedidos", "extensoes", "distritos", "missoes", "territorio"];
 // v9.3 — a aba abre com "expansao", "distritos" ou (v9.4) "missoes": as três primeiras pílulas são da Expansão; a dos Distritos (modulos/distritos.js) e a de Missões
 // (modulos/missoes.js), cada uma da permissão própria
 const EXP_PERMISSAO_DA_SECAO = { distritos: "distritos", missoes: "missoes" };
@@ -79,6 +79,7 @@ function expLimparTela() {
   const bloco = expEl("expBlocoFicha"); if (bloco) bloco.style.display = "none";
   if (typeof dstLimparTela === "function") dstLimparTela();   // v9.3: a pílula dos Distritos
   if (typeof misLimparTela === "function") misLimparTela();   // v9.4: a pílula de Missões
+  if (typeof terLimparTela === "function") terLimparTela();   // v9.5: a pílula do Território
 }
 
 // ================================================================ abrir a aba ================================================================
@@ -119,6 +120,9 @@ function expMostrarSecaoAcao(secao) {
   if (expSecaoAtual === "extensoes") expCarregarExtensoesAcao();
   if (expSecaoAtual === "distritos" && typeof dstAbrirAcao === "function") dstAbrirAcao();
   if (expSecaoAtual === "missoes" && typeof misAbrirAcao === "function") misAbrirAcao();
+  if (expSecaoAtual === "territorio" && typeof terAbrirAcao === "function") terAbrirAcao();
+  // a moldura do mapa do Google só fica aberta enquanto a pílula do Território está na tela
+  if (expSecaoAtual !== "territorio" && typeof terDesmontarMoldura === "function") terDesmontarMoldura();
 }
 
 // ================================================================ painel ================================================================

@@ -105,4 +105,9 @@ bash rodar.sh preparar-missoes
 BASE=cenario-missoes bash rodar.sh roteiro e2e-76-missoes.js
 BASE=cenario-missoes bash rodar.sh roteiro e2e-77-missoes-corridas.js
 E2E_RCSI=1 BASE=cenario-missoes bash rodar.sh roteiro e2e-77-missoes-corridas.js
+# v9.5 (Mapa territorial, migração 170): a base própria
+bash rodar.sh preparar-territorio
+BASE=cenario-territorio bash rodar.sh roteiro e2e-78-territorio.js
+BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
+E2E_RCSI=1 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
 echo TUDO-PRONTO

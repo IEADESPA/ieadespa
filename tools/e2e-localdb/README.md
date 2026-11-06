@@ -187,6 +187,12 @@ Cada versão parte da base da anterior (`BASE=...`):
   o encerramento; o painel com o pago sem relatório; o mural; a vacância; os avisos da rotina; os CHECK e os índices; lixo em cada campo; Meus Dados;
   `E2E_CONTRATO=1` grava `tools/front-missoes/contrato-real.json`) e `e2e-77` (corridas: a geração sozinha, com o reajuste e com o encerramento, o parecer, a
   decisão com a desistência, o Presidente, o pedido, o relatório e o campo homônimo; `E2E_RCSI=1` liga o READ_COMMITTED_SNAPSHOT do Azure SQL).
+- **v9.5** (Mapa territorial, migração 170), base `cenario-territorio` (`bash rodar.sh preparar-territorio`: a `cenario-missoes` com a 170 aplicada duas vezes).
+  `e2e-78` (a régua inicial semeada uma vez só, mesmo apagada; quem entra; o endereço em linhas pela Pessoas e pelo Meus Dados, a linha única montada e a tela
+  antiga; a fila dos bairros escritos ligada ao cadastrar; renomear, desativar e juntar bairros; o ponto das Extensões; o mapa de cobertura, o descoberto pelo
+  raio e o escopo do Dirigente; a densidade; os critérios; a simulação com cada indicador medido de verdade; a emancipação levando o ponto; a LGPD; os CHECK;
+  lixo em cada campo; `E2E_CONTRATO=1` grava `tools/front-territorio/contrato-real.json`) e `e2e-79` (corridas: o bairro homônimo, a edição com a mesma versão,
+  as junções cruzadas, a desativação junto com a gravação de um morador, o raio, o critério editado e apagado, o ponto da Extensão; `E2E_RCSI=1`).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

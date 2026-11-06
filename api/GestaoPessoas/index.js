@@ -11,6 +11,8 @@ const disciplina = require("../shared/disciplina");
 const vacancia = require("../shared/vacancia");
 const storage = require("../shared/storage");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
+// v9.5 — o endereço em linhas (o bairro da lista alimenta o mapa territorial); a linha única Endereco passa a ser montada com elas
+const territorioDb = require("../shared/territorioDb");
 
 // fecho da v7.5 — o POST e o DELETE não conferiam o escopo: quem tinha "pessoas" numa congregação alterava, trocava o e-mail ou desligava QUALQUER membro de QUALQUER
 // congregação (só o GET filtrava). E o e-mail virou a raiz da entrada por código ("primeiro acesso / esqueci o PIN"). Agora o alvo E o destino precisam estar no escopo.
@@ -55,6 +57,9 @@ const SELECT_MEMBRO = `
          m.NomeLidoRito AS nomeLidoRito, m.MinistranteRito AS ministranteRito,
          m.DizimistaFiel AS dizimistaFiel, m.SituacaoMembro AS situacaoMembro, m.DepartamentoId AS departamentoId,
          m.CargoMinisterial AS cargoMinisterial, m.Telefone AS telefone, m.Email AS email, m.Endereco AS endereco,
+         m.EnderecoLogradouro AS enderecoLogradouro, m.EnderecoNumero AS enderecoNumero, m.EnderecoComplemento AS enderecoComplemento,
+         m.EnderecoBairroId AS enderecoBairroId, bm.Nome AS enderecoBairroNome, m.EnderecoBairroTexto AS enderecoBairroTexto,
+         m.EnderecoCidade AS enderecoCidade, m.EnderecoUF AS enderecoUF, m.EnderecoCep AS enderecoCep,
          m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil,
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
          CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
@@ -62,6 +67,7 @@ const SELECT_MEMBRO = `
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
+  LEFT JOIN Bairros bm ON bm.BairroId = m.EnderecoBairroId
   LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
   LEFT JOIN CargosMinisteriaisHistorico hc ON hc.MembroId = m.MembroId AND hc.Ate IS NULL AND hc.Cargo = m.CargoMinisterial`;
 
@@ -72,6 +78,12 @@ module.exports = async function (context, req) {
   const method = req.method;
   const membroIdRota = context.bindingData.membroId;
   const pool = await getPool();
+
+  // ---- GET ?lista=bairros: o catálogo dos bairros para o endereço em linhas (v9.5) — nome, cidade e UF, sem dado de ninguém ----
+  if (method === "GET" && req.query && req.query.lista === "bairros") {
+    context.res = { status: 200, body: { sucesso: true, bairros: await territorioDb.bairrosParaEscolher(pool) } };
+    return;
+  }
 
   // ---- GET: listar (só quem está no escopo de quem está logado) ----
   if (method === "GET") {
@@ -109,7 +121,7 @@ module.exports = async function (context, req) {
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
       dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
-      dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde
+      dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde, enderecoPartes
     } = req.body || {};
     if (!membroId || !nome) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
@@ -290,7 +302,19 @@ module.exports = async function (context, req) {
       : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
     const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaida || hojeISO) : (dataSaida || null);
 
-    const request = pool.request()
+    // v9.5 — o endereço em linhas: vindo da tela nova (enderecoPartes), a linha única é montada com ele; vindo só a linha única (tela antiga), as linhas ficam se a
+    // linha não mudou e são limpas se mudou (deixariam de corresponder).
+    let enderecoFinal = endereco || null, partesFinais = null;
+    if (enderecoPartes !== undefined && enderecoPartes !== null) {
+      const prep = await territorioDb.prepararEnderecoMembro(() => pool.request(), enderecoPartes, { membroId: existia ? membroId : null });
+      if (!prep.sucesso) { context.res = { status: 200, body: { sucesso: false, mensagem: prep.mensagem } }; return; }
+      enderecoFinal = prep.endereco; partesFinais = prep.partes;
+    } else if (existia) {
+      partesFinais = await territorioDb.linhasDiantedaLinhaLegada(() => pool.request(), membroId, enderecoFinal);
+    }
+
+    // os parâmetros da gravação (o endereço entra à parte: com um bairro da lista, a linha única é refeita com o bairro travado — revisão de 06/11/2026)
+    const preencher = (request) => request
       .input("id", sql.Int, membroId)
       .input("nome", sql.NVarChar(200), nome)
       .input("congregacaoId", sql.Int, congregacaoId || null)
@@ -303,7 +327,6 @@ module.exports = async function (context, req) {
       .input("cargoMinisterial", sql.NVarChar(30), cargoMinisterial || null)
       .input("telefone", sql.NVarChar(20), telefone || null)
       .input("email", sql.NVarChar(150), email || null)
-      .input("endereco", sql.NVarChar(300), endereco || null)
       .input("extensaoId", sql.Int, extensaoId || null)
       .input("dataBatismo", sql.Date, dataBatismo || null)
       .input("formaAdmissao", sql.NVarChar(30), formaAdmissao || null)
@@ -318,29 +341,38 @@ module.exports = async function (context, req) {
       .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
       .input("sexo", sql.NChar(1), sexoFinal)
       .input("cargoLido", sql.NVarChar(30), cargoAnterior);
-
-    if (existia) {
+    const gravarPessoa = async (request, prepEnd) => {
+      request.input("endereco", sql.NVarChar(300), prepEnd.endereco);
+      territorioDb.entradasEndereco(request, prepEnd.partes);
+      if (existia) {
       // Funcao não entra aqui de propósito: é campo histórico gerido só pela
       // esteira de Consagrações (ver EvoluirConsagracao) — salvar a pessoa
       // nunca deve apagar o que já estava lá.
-      const gravou = await request.query(`
+        const gravou = await request.query(`
         UPDATE MembroReferencia SET Nome = @nome, CongregacaoId = @congregacaoId, Status = @status,
                DataNascimento = @dataNascimento, DataAdmissao = @dataAdmissao, DizimistaFiel = @dizimistaFiel,
                SituacaoMembro = @situacaoMembro, DepartamentoId = @departamentoId, CargoMinisterial = @cargoMinisterial,
-               Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId,
+               Telefone = @telefone, Email = @email, Endereco = @endereco, ExtensaoId = @extensaoId, ${territorioDb.SET_ENDERECO},
                DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
                DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
         WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
-      if (!(gravou && gravou.rowsAffected && gravou.rowsAffected[0])) {
-        context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
-        return;
+        const passou = !!(gravou && gravou.rowsAffected && gravou.rowsAffected[0]);
+        return { gravou: passou, desfazer: !passou };
       }
-    } else {
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo)
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo)`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo, ${territorioDb.COLUNAS_ENDERECO})
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo, ${territorioDb.VALORES_ENDERECO})`);
+      return { gravou: true };
+    };
+    const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
+    const resultadoGravacao = partesFinais && partesFinais.bairroId
+      ? await territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
+      : await gravarPessoa(preencher(pool.request()), prepEnd);
+    if (!resultadoGravacao.gravou) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+      return;
     }
 
     // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a

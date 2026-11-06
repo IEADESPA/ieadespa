@@ -450,18 +450,122 @@ Presidente, ao Secretário Geral, ao Secretário de Missões e aos Pastores de �
 retenção de imposto sobre o sustento (a natureza fiscal fica com a contabilidade; o sistema paga o valor decidido), o site público (o mural impresso cobre a
 "exibição pública") e um percentual do Rateio Geral reservado para missões (a Tesouraria pode criar esse destino em Catálogos).
 
+### Como ficou a v9.4 (entregue em 06/11/2026)
+
+**Em produção desde 06/11/2026** (merge `a052c5e`; para desfazer: `git revert -m 1 a052c5e`). Migração **169** (`CamposMissionarios`,
+`EnviosMissionarios`, `EnvioSustentoValores`, `RelatoriosCampo`, `SustentoGeracoes`; as categorias de Saída **Sustento missionário** e **Sustento missionário
+(caixa local)** na conta 5.1.5; a permissão `missoes`; cinco avisos; a política de retenção). Regra pura em `api/shared/missoes.js`, banco em
+`api/shared/missoesDb.js`, rota `/api/missoes/<ação>` (`GestaoMissoes`). Tela: pílula **Missões** na aba Expansão (painel, envios, campos, sustento do mês e
+mural para imprimir), cartão em Meus Dados. Casca do service worker **v55**.
+
+**O que mudou do desenho (depois das duas revisões independentes — costuras: 1 alta, 5 médias, 2 baixas; conformidade: 1 alta, 6 médias, 4 baixas —
+tratadas):**
+
+- **A Saída cancelada não perde o mês:** se a Tesouraria cancela ou rejeita no Contas a Pagar uma Saída de sustento, o mês volta a ser gerado (a Saída
+  desfeita fica lá, com o motivo); o reajuste e o encerramento não esbarram nela.
+- **O Tesoureiro não recebe a permissão `missoes`:** a Tesouraria Geral (a permissão `financeiro` do nível geral) vê só a prévia e gera o sustento do mês.
+  Assim, quem paga não lança o relatório que levanta a suspensão nem registra a decisão da CLI.
+- **Quem recebe:** a pessoa física é sempre o próprio missionário (o fornecedor ligado à matrícula dele, em Fornecedores); outra pessoa só recebe como pessoa
+  jurídica (agência ou igreja parceira), que é convênio externo e passa pela CME, pela CLI e pelo Presidente. O caixa local é sempre o da congregação
+  mantenedora do campo (não se escolhe outra). O reajuste não transforma em convênio externo um envio que não passou pela CLI.
+- **O Pastor Presidente não concorda com o envio que ele mesmo pediu** (pede-se pela SEMIADESPA).
+- **A zona rural adjacente** vale para Parauapebas e os municípios que fazem divisa com ele (Canaã dos Carajás, Curionópolis, Eldorado do Carajás, Marabá,
+  Água Azul do Norte e São Félix do Xingu): marcar a zona rural em outra cidade é recusado (a marca não vira escolha para fugir da CME e da CLI).
+- **O sustento para enquanto a pessoa não pode recebê-lo:** licença de candidatura, sem comunhão ou processo disciplinar em curso deixam o mês impedido;
+  resolvida a situação, volta (não se perde).
+- **Vacância:** encerra o envio no mês dela (esse mês ainda é gerado) e dispensa o relatório que faltava (não há mais quem o mande); o motivo cita o Estatuto,
+  Art. 11 §7º.
+- **O nome no mural** se autoriza e se retira a qualquer momento (botão na ficha, LGPD Art. 8º §5º); o mural não mostra o total investido no ano quando há
+  um só missionário pago (seria o valor dele); a Saída do campo de divulgação restrita não leva o nome nem o campo.
+- **A CME** (sem outro papel) vê os pedidos aguardando o parecer, os que ela analisou e os números gerais — não o sustento, os relatórios nem a prévia do
+  pagamento.
+- **O sustento não se lança à mão** no Contas a Pagar (só nasce da geração do mês); o painel de imunidade aceita a rubrica do sustento.
+- As etapas do envio são calculadas pelo campo lido dentro da transação (a mudança do lugar do campo no meio de um pedido não o faz passar pelas etapas
+  erradas); a pessoa é travada antes do envio (a mesma ordem da vacância). Meus Dados mostra também a justificativa, o parecer, os motivos e os pagamentos (ao
+  missionário) e os relatórios, os reajustes, as gerações e os campos (a quem agiu).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a "determinação expressa da Mesa Diretora" (Regimento Art. 134 §6º, I) é a
+concordância do Pastor Presidente (não se exige também o 1º Tesoureiro nem a ata da Diretoria Executiva); a frente local (Art. 44 §1º) é da SEMIADESPA, sem
+CME nem CLI; outra cidade do Pará passa pela CME e pela CLI; pagar a pessoa jurídica é convênio externo; o parecer da CME é dado por um membro dela (como na
+v9.2); o sustento sai do Tesouro Geral ou do caixa local da mantenedora (não da tesouraria da SEMIADESPA); a licença de candidatura para o sustento sem
+encerrar o envio; o relatório vence no dia 10 do mês seguinte ao período; os pedidos recusados e as desistências ficam guardados sem prazo final, como o
+resto. **Aceito e registrado:** o Líder Geral antigo da SEMIADESPA conta na CME, mas só entra na tela com a permissão `missoes` (o caminho é o papel
+Secretário de Missões); a remessa ao exterior (fornecedor estrangeiro) continua acusada no painel de imunidade, de propósito.
+
+**Provas:** jest 6.348; banco local (`bash rodar.sh preparar-missoes`): `e2e-76` 203 (a migração, quem entra, os campos e a abrangência, cada caminho do
+envio, as recusas, o sustento gerado, suspenso, impedido e cancelado, o relatório e a correção, o reajuste e o encerramento, o painel, o mural, a autorização
+do nome, a vacância, os avisos, os CHECK e os índices, lixo em cada campo, Meus Dados), `e2e-77` corridas 19 e 20 com o READ_COMMITTED_SNAPSHOT do Azure; a
+bateria inteira do banco recriado do zero, do `e2e-1` ao `e2e-77`, verde; tela (`tools/front-missoes`) 114, com 39 mutações acusadas (Distritos 77,
+Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42218344325) mostrou só as diferenças de propósito (a pílula e a seção de Missões, escondidas, em toda tela), a base nova foi aprovada e a segunda (42220757930) deu 1.237 e 153 ações iguais, 0 divergência e 0 violação de CSP; produção: a migração 169 aplicada, a rota responde 401 sem login, a casca v55 e o teste de tela (42229580970) com 1.237 e 153 ações iguais, 0 divergência e 0 violação de CSP.
+
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
-- [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
+- [x] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
       insumo direto e objetivo para abertura de Extensão da Tenda (v9.2), em vez
       de decidir por percepção.
-- [ ] Densidade de membresia por região e distância média até a congregação de
+- [x] Densidade de membresia por região e distância média até a congregação de
       vínculo.
-- [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
+- [x] Simulação de emancipação: quais Extensões já atendem os critérios para virar
       Congregação, calculado a partir dos dados que já existem (membresia, PSC da
       v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
       *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da
       simulação são decisão do responsável, a pedir no desenho da v9.5.)*
+
+### Desenho da v9.5 (contrato, 06/11/2026)
+
+Decisões do responsável (06/11/2026): o endereço do membro passa a ter **todas as linhas separadas** (não só o bairro); o mapa usa a **chave do Google Maps**,
+com a opção **lista e desenho simples** ao lado, escolhida na hora conforme a conveniência; os critérios de emancipação ficam numa **tabela que ele monta**
+(nenhuma régua fixa no código). O que já existe e é reaproveitado: a posição (latitude e longitude) das congregações em Catálogos (vC.2), o endereço das
+Extensões e a data de abertura (v9.2), o escopo da aba Expansão (o nível geral e a CME veem tudo; o Dirigente e o Pastor de Área, só as congregações que o
+escopo cobre por inteiro), o pedido de emancipação da v9.2, o dízimo confirmado da Tesouraria Local (v4) e a avaliação homologada do PSC (v7.1).
+
+**1. Endereço do membro em linhas.** O cadastro (Pessoas) e o Meus Dados ganham: logradouro, número, complemento, **bairro** (escolhido numa lista; se o
+bairro não está nela, a pessoa escreve o nome e ele entra na fila "bairros a cadastrar"), cidade, UF e CEP. A linha única de hoje (`Endereco`) continua e passa
+a ser **montada pelo sistema** com as linhas (tudo o que já lê o endereço segue funcionando); um endereço antigo, só com a linha única, aparece como está e
+conta como "sem localização" até ganhar o bairro. A anonimização e a exclusão da LGPD limpam as linhas novas junto com a antiga.
+
+**2. Bairros e posições.** Um cadastro de **bairros** (nome, cidade, UF e o ponto central, marcado uma vez), do nível geral. Ao cadastrar um bairro que estava na
+fila, o sistema liga a ele, de uma vez, os membros que escreveram aquele nome na mesma cidade. As **Extensões** ganham o ponto no mapa, marcado pelo Dirigente
+da Mãe ou pelo nível geral; as congregações continuam com o ponto de Catálogos (a tela avisa a que não tem). Marcar o ponto: um clique no mapa do Google, ou
+colar o link do Google Maps do lugar, ou digitar a latitude e a longitude.
+
+**3. Mapa de cobertura.** Uma pílula nova **Território** na aba Expansão (permissão `expansao` ou a CME, como a v9.2). Duas formas, escolhidas na hora: **Google
+Maps** (ruas de verdade, as congregações e as Extensões com o ponto, e um círculo em cada bairro com o número de membros, maior quanto mais gente) e **lista e
+desenho** (a tabela por bairro e um desenho simples dos pontos, sem nada de fora). Cada bairro com ponto mostra os membros que moram nele, a unidade mais perto
+(congregação ou Extensão ativa) e a distância em linha reta; **bairro descoberto** é o que tem membros e nenhuma unidade dentro do raio de cobertura
+(parâmetro do nível geral, começa em 3 km). Contagem, nunca nome: o mapa não mostra quem mora onde. O nível geral e a CME veem todos os membros; o Dirigente e o
+Pastor de Área, os das congregações deles (as unidades de todos aparecem, porque são públicas). Do bairro descoberto sai o atalho para o pedido de abertura de
+Extensão da v9.2.
+
+**4. Densidade e distância.** Por bairro: os membros e o descoberto. Por unidade (congregação ou Extensão): os membros com bairro marcado, a **distância média**
+do bairro deles até a unidade e **quantos moram mais perto de outra unidade**. No total: os membros sem localização (a medida de quanto o cadastro ainda
+precisa ser completado) e os bairros sem ponto.
+
+**5. Simulação de emancipação (a tabela que o responsável monta).** Os critérios são linhas de uma tabela do nível geral: o **indicador** (escolhido de uma
+lista que o sistema sabe calcular), a comparação (**pelo menos**, **no máximo** ou, nos de sim/não, **precisa ser sim**), o valor, ativo ou não, a ordem e uma
+observação. Pode-se criar, mudar, desligar e apagar linhas; cada mudança fica registrada (quem e quando). Indicadores: meses desde a abertura da Extensão;
+membros em comunhão; Encarregado em comunhão (sim/não); obreiros consagrados entre os membros (auxiliar a pastor); dízimo confirmado dos membros na média dos
+últimos 12 meses fechados; dizimistas (membros que deram dízimo nos últimos 12 meses); distância até a Mãe (km); nível do PSC homologado mais recente da Mãe.
+Para cada Extensão ativa no alcance, a simulação mostra cada critério ativo com o valor medido e se atende, não atende ou **não dá para medir** (falta o dado:
+sem data de abertura, sem ponto no mapa, Mãe sem PSC homologado); **atende tudo** só quando todos os ativos atendem. A simulação **só aponta**: quem decide
+continua sendo a CME e a CLI pelo pedido da v9.2 (o atalho abre o pedido de emancipação já com a Extensão escolhida). Sem nenhum critério ativo, a tela diz
+isso em vez de apontar. Para começar, a tabela vem com a régua média sugerida em 06/11 (2 anos de aberta, 50 membros em comunhão, Encarregado em comunhão, 1
+obreiro, R$ 3.000 de dízimo médio) — ele muda ou apaga.
+
+**6. O mapa do Google e a segurança.** O sistema roda com a política de segurança forte (CSP: só scripts dele mesmo). O mapa do Google precisa de scripts do
+Google, então mora numa **página separada** (`mapa-territorial.html`), presa numa moldura dentro do sistema, com a política dela (só os endereços do Google
+que o mapa usa) e sem o acesso de quem está logado: o sistema manda para a moldura só o que é para desenhar (os pontos e as contagens) e recebe dela só o clique
+de marcar um ponto, conferindo a origem das mensagens dos dois lados. A chave do Maps fica nas configurações do servidor (`GOOGLE_MAPS_CHAVE_NAVEGADOR`), fora
+do código público, e só é entregue a quem entra na pílula; ela precisa aceitar o endereço do sistema (`app.ieadespa.org.br`) e o da homologação no Google
+Cloud. Sem a chave, ou se o Google recusar, a tela diz o motivo e fica na lista e desenho.
+
+**7. Costuras.** Meus Dados mostra o endereço em linhas e os atos da pessoa no território (bairros cadastrados, critérios mudados, pontos marcados). ROPA: a
+finalidade "planejamento territorial (contagem por bairro, sem nome)" no cadastro de membros; o cadastro de bairros e os critérios não têm dado pessoal. A
+emancipação da v9.2 leva o ponto da Extensão para a congregação que nasce. O teste de tela ganha a pílula nova (base a aprovar, como na v9.4).
+
+**Fora desta versão (escopo):** localizar a casa exata do membro (mandaria os endereços a um serviço de fora — o bairro basta para a cobertura), rota e tempo
+de viagem (só a linha reta), o contorno desenhado dos bairros (o ponto central basta), a importação do cadastro antigo de membros (quando vier, já preenche as
+linhas e o bairro) e aviso automático de Extensão que passou a atender os critérios (o painel mostra).
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 

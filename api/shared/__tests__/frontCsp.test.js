@@ -325,9 +325,9 @@ if (typeof describe === "function") {
       expect(ler("credencial.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
     });
 
-    test("service-worker: cache novo (v55), eventos.js e todos os módulos na casca offline", () => {
+    test("service-worker: cache novo (v56), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v55";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v56";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });

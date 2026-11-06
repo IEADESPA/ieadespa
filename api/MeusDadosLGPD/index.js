@@ -166,6 +166,8 @@ module.exports = async function (context, req) {
   // v9.4 — Missões: os envios da pessoa como missionária (o campo, as datas, o sustento e quantos relatórios chegaram) e os atos dela nos envios
   const missoes = await require("../shared/missoesDb").dadosDoTitular(pool, alvo);
   const missoesAtos = await require("../shared/missoesDb").atosDoTitular(pool, alvo);
+  // v9.5 — Território: o endereço em linhas (o bairro da lista) e os atos da pessoa (bairros cadastrados, critérios, pontos de Extensão)
+  const territorio = { endereco: await require("../shared/territorioDb").dadosDoTitular(pool, alvo), atos: await require("../shared/territorioDb").atosDoTitular(pool, alvo) };
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -202,7 +204,8 @@ module.exports = async function (context, req) {
       expansaoAtos,
       distritos,
       missoes,
-      missoesAtos
+      missoesAtos,
+      territorio
     }
   };
 };

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Mapa territorial</title>
+  <!-- v9.5 — o mapa do Google mora nesta página separada, presa numa moldura (iframe com sandbox) dentro do sistema: o sistema continua com a política de
+       segurança forte (só scripts dele mesmo) e esta página, com a dela (só os endereços do Google que o mapa usa), sem acesso ao login de ninguém
+       (staticwebapp.config.json: o cabeçalho próprio desta rota, com "sandbox"). Ela só recebe do sistema o que é para desenhar (os pontos e as contagens) e só
+       devolve o clique de marcar um ponto. Abrir esta página sozinha não mostra nada. -->
+  <link rel="stylesheet" href="mapa-territorial.css" />
+</head>
+<body>
+  <div id="mapa" role="application" aria-label="Mapa territorial"></div>
+  <p id="aviso">Carregando o mapa…</p>
+  <script src="mapa-territorial.js"></script>
+</body>
+</html>

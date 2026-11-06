@@ -83,7 +83,7 @@ async function prova() {
   ok(["gatilhos", "motivos", "medidas", "statusBalanco", "ufs", "papeis"].every((k) => k in REAL.catalogosGeral), "catálogos: as listas que a tela lê");
   ok(REAL.fichaNIF.distrito.balancos.some((b) => b.status === "ENVIADO") && REAL.fichaSobIntervencao.distrito.intervencoes[0].aberta && REAL.fichaDesativada.distrito.acoes.ativar,
     "as fichas: a do NIF (balanço enviado), sob intervenção e desativada");
-  ok(/expansao: \["expansao", "distritos"\]/.test(lerApp("script.js")) && /dstCartaoMeusDados\(data\)/.test(lerApp("modulos/meu-painel.js")), "os ganchos: a aba abre com 'distritos' e o cartão de Meus Dados");
+  ok(/expansao: \["expansao", "distritos"(, "missoes")?\]/.test(lerApp("script.js")) && /dstCartaoMeusDados\(data\)/.test(lerApp("modulos/meu-painel.js")), "os ganchos: a aba abre com 'distritos' e o cartão de Meus Dados");
   ok(/\/modulos\/distritos\.js/.test(lerApp("service-worker.js")) && /modulos\/distritos\.js/.test(lerApp("index.html")) && /id="btnExpSecaoDistritos"/.test(lerApp("index.html")), "o módulo na casca do aparelho, no index.html e a pílula");
 
   console.log("== abrir a pílula ==");
@@ -382,7 +382,7 @@ const MUTACOES = [
   ["distritos", "tirar o escape de Meus Dados", ["Balanço de ${dstH(b.ano)} do ${dstH(b.distrito)}", "Balanço de ${dstH(b.ano)} do ${b.distrito}"]],
   ["distritos", "a análise sem o balanço", ["{ balancoId: Number(fixos.balancoId), decisao: fixos.decisao }", "{ decisao: fixos.decisao }"]],
   ["expansao", "a pílula dos Distritos sem a permissão", ["if (b) b.style.display = expPermite(s) ? \"\" : \"none\";", "if (b) b.style.display = \"\";"]],
-  ["expansao", "quem só tem 'distritos' pede a Expansão", ["  if (!expPermite(\"painel\")) { expMostrarSecaoAcao(\"distritos\"); return; }\n", ""]],
+  ["expansao", "quem só tem 'distritos' pede a Expansão", ["  if (!expPermite(\"painel\")) { expMostrarSecaoAcao(expPermite(\"distritos\") ? \"distritos\" : \"missoes\"); return; }\n", ""]],
   ["expansao", "abrir a seção sem a permissão", ["expSecaoAtual = EXP_SECOES.includes(secao) && expPermite(secao) ? secao", "expSecaoAtual = EXP_SECOES.includes(secao) ? secao"]],
   ["expansao", "a saída não limpa os Distritos", ["  if (typeof dstLimparTela === \"function\") dstLimparTela();", ""]]
 ];

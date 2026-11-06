@@ -6012,6 +6012,7 @@
           <button type="button" class="cal-pilula" id="btnExpSecaoPedidos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["pedidos"]'>📨 Pedidos</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoDistritos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["distritos"]'>🗺️ Distritos</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoMissoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["missoes"]'>🌍 Missões</button>
         </div>
 
         <div id="expSecaoPainel" class="cal-secao">
@@ -6077,6 +6078,61 @@
             <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="dstFecharFichaAcao">✖ Fechar a ficha</button></div>
             <p id="dstMsgFicha" class="subtitle" role="status" aria-live="polite" tabindex="-1"></p>
             <div id="dstFicha"></div>
+          </div>
+        </div>
+
+        <!-- v9.4 — Missões (Regimento Art. 23, 44, 133-C e 134 §6º, I): modulos/missoes.js monta tudo; permissão própria "missoes" (ou compor a CME). -->
+        <div id="expSecaoMissoes" class="cal-secao" style="display:none;">
+          <p class="subtitle">A <strong>SEMIADESPA</strong> coordena a obra missionária: abre as frentes em Parauapebas com autonomia e pede o <strong>envio</strong> de
+            missionários. Fora do município, a <strong>CME</strong> dá o parecer e a <strong>CLI</strong> decide; outro Estado, outro país e todo sustento passam pelo
+            <strong>Pastor Presidente</strong> (pagar a uma agência ou igreja parceira é convênio externo: passa pela CME e pela CLI também). O sustento sai pelo Contas a Pagar
+            todo mês, gerado pela Tesouraria Geral, e o <strong>relatório de campo</strong> vencido suspende o pagamento até chegar.</p>
+          <div class="cal-pilulas" id="misPilulas">
+            <button type="button" class="cal-pilula ativo" id="btnMisSubPainel" aria-pressed="true" data-on-click="misMostrarSubAcao" data-args-click='["painel"]'>📋 Painel</button>
+            <button type="button" class="cal-pilula" id="btnMisSubEnvios" aria-pressed="false" data-on-click="misMostrarSubAcao" data-args-click='["envios"]'>🧭 Envios</button>
+            <button type="button" class="cal-pilula" id="btnMisSubCampos" aria-pressed="false" data-on-click="misMostrarSubAcao" data-args-click='["campos"]'>🌍 Campos</button>
+            <button type="button" class="cal-pilula" id="btnMisSubSustento" aria-pressed="false" data-on-click="misMostrarSubAcao" data-args-click='["sustento"]'>💵 Sustento do mês</button>
+            <button type="button" class="cal-pilula" id="btnMisSubMural" aria-pressed="false" data-on-click="misMostrarSubAcao" data-args-click='["mural"]'>🖨️ Mural</button>
+          </div>
+          <div id="misSubPainel">
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="misCarregarPainelAcao">🔄 Atualizar</button></div>
+            <div id="misPainel"></div>
+          </div>
+          <div id="misSubEnvios" style="display:none;">
+            <div class="barra-lista">
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="misCarregarEnviosAcao">🔄 Atualizar</button>
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;display:none;" id="btnMisNovoEnvio" data-on-click="misNovoEnvioAcao">➕ Novo envio</button>
+            </div>
+            <p id="misMsgEnvios" class="subtitle" role="status"></p>
+            <div id="misFormNovo"></div>
+            <div id="misEnvios"></div>
+            <div id="misBlocoFicha" style="display:none;">
+              <hr />
+              <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="misFecharFichaAcao">✖ Fechar a ficha</button></div>
+              <p id="misMsgFicha" class="subtitle" role="status" aria-live="polite" tabindex="-1"></p>
+              <div id="misFicha"></div>
+            </div>
+          </div>
+          <div id="misSubCampos" style="display:none;">
+            <div class="barra-lista">
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="misCarregarCamposAcao">🔄 Atualizar</button>
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;display:none;" id="btnMisNovoCampo" data-on-click="misNovoCampoAcao">➕ Novo campo</button>
+              <label style="margin-left:8px;"><input type="checkbox" id="misCamposTodos" data-on-change="misCarregarCamposAcao" /> mostrar os encerrados</label>
+            </div>
+            <p id="misMsgCampos" class="subtitle" role="status"></p>
+            <div id="misFormCampo"></div>
+            <div id="misCamposLista"></div>
+          </div>
+          <div id="misSubSustento" style="display:none;">
+            <div class="barra-lista">
+              <label for="misSustentoMes">Mês</label> <input type="month" id="misSustentoMes" />
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="misCarregarSustentoAcao">🔎 Ver</button>
+            </div>
+            <p id="misMsgSustento" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="misSustento"></div>
+          </div>
+          <div id="misSubMural" style="display:none;">
+            <div id="misMural"></div>
           </div>
         </div>
       </div>
@@ -7551,6 +7607,7 @@
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
   <script src="modulos/ministerio-menores.js"></script>
+  <script src="modulos/missoes.js"></script>
   <script src="modulos/ouvidoria.js"></script>
   <script src="modulos/permissoes.js"></script>
   <script src="modulos/pessoas.js"></script>

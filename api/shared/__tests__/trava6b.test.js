@@ -111,7 +111,7 @@ describe("vacância e a EBD", () => {
   const { sqlFalso } = require("./testUtils");
   test("disciplina e licença de candidatura tiram o professor, mas mantêm a matrícula de aluno", async () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
-      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], []]);
+      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], []]);
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
       expect(tudo0(chamadas)).toMatch(/UPDATE ExtensaoEncarregados SET Ate/);   // Trava 9-A — a vacância também tira o Encarregado e o dirigente de entidade
       // Trava 8-A — a disciplina fecha primeiro os processos de cargo em andamento (com o motivo) e revoga o CHM; a licença de candidatura (decisão de 29/10/2026,

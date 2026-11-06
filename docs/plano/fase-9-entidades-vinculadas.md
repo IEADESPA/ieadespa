@@ -317,26 +317,138 @@ mutações); homologação: a 167 aplicada no Azure SQL, rotas com 401, teste de
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v9.1 a v9.3 pelas 5 perguntas do checklist.
 
+- [x] **Fechada em 05/11/2026** — auditoria de v9.1 a v9.3. Duas revisões independentes, só de leitura: uma das costuras ENTRE as versões e com o sistema
+  antigo (a saída da igreja, a Liderança de uma linha por pessoa, o cadastro, os avisos, o dinheiro) e outra da conformidade com o Estatuto, o Regimento, o
+  plano e o README. **Nenhum achado alto; todos os que o código resolve, corrigidos com teste** (migração 168; `e2e-75`, 37 verificações; casca v54). As 5
+  perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria inteira do banco local, recriado do zero (`rodar.sh preparar` e `tudo.sh`, do `e2e-1` ao
+     `e2e-75`), toda verde; as migrações 165 a 168 aplicadas duas vezes cada. O roteiro antigo que mudou foi o `e2e-23`: o Pastor Distrital e o Interventor
+     Distrital (v9.3) nascem com as permissões do Pastor de Área e passaram a contar entre os papéis do cuidado pastoral — a expectativa antiga travava o
+     preparo da base com o banco recriado.
+  2. **Toda tela nova abre?** Sim. Antes da trava, teste de tela completo na produção (execução 42026895152): 6.738 ações iguais, 0 divergência, 0 violação de
+     CSP. Provas de tela sem navegador: Entidades 70 (16 mutações acusadas), Expansão 83 (27 de 27), Distritos 77 (34 de 34). O teste de tela da homologação e
+     o da produção depois do deploy: na homologação, a execução 42054960655 (1.367 ações iguais, 0 divergência, 0 violação de CSP) e na produção, a execução 42057812952 (1.214 ações das telas e 153 do celular iguais, 0 divergência, 0 violação de CSP; o celular repetido uma vez porque o navegador do equipamento não abriu).
+  3. **O README e o código contam a mesma história?** Sim, conferido item por item (a contagem de 349 tabelas, as migrações 001 a 168, a seção 4, o índice, as
+     datas e os merges, os artigos citados). Corrigidos: a mensagem da intervenção do Distrito citava o Art. 126-L, I (é o 126-N, III e o 126-P, II); um
+     comentário da v9.1 dizia "5º dia" (é o 6º); as três políticas de retenção gravavam 5 anos com o texto "sem prazo final" (migração 168: NULL); o ROPA do
+     Distrito não listava o Pastor Distrital nem os fechamentos; o plano da v4 dizia que o repasse de Distrito não creditava em lugar nenhum.
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável, listadas no fim.
+  5. **Houve deploy real?** Sim: a 168 rodou no deploy da produção em 05/11/2026 (execução 42057813308, merge 75e5be0), com o teste de tela depois do deploy.
+
+  O que mudou:
+  - **A saída da igreja alcança a FASE 9 (médio, Reg. Art. 11).** A vacância encerra o Encarregado da Extensão e o mandato de dirigente de entidade vinculada
+    (indicado ou homologado; falecimento com o motivo FALECIMENTO); antes, o falecido ou desligado continuava "dirigente atual". Para dirigir entidade, a
+    mesma régua do Interventor e do Encarregado: em comunhão, sem processo disciplinar e sem licença de candidatura (Art. 157 §2º).
+  - **O aviso de retenção do Distrito chega (médio).** A referência do aviso leva o motivo (falta fechamento, apurável e não registrado, registrado e não
+    repassado): antes, o mês que avisou "falta fechar" nunca mais avisava a retenção. O aviso antigo de repasse parado não sai mais em dobro para o Distrito.
+  - **Ninguém perde cargo em silêncio (médio).** O Pastor Distrital, como o Interventor, não é dado a quem já tem outro cargo em vigor (a Área ou a
+    congregação ficaria sem líder e a CME ou a CLI perderiam a pessoa); nem em Distrito legado, sem o decreto.
+  - **Os papéis cujo nome o sistema usa ficam protegidos (médio).** Presidente, Secretário Geral, Dirigente de Congregação, Pastor de Área, Superintendente
+    Regional, Vice-Presidente de Quadrante, Pastor e Interventor Distrital, Secretário de Missões, Líder Geral de Departamento/Secretaria, Reitor da AFM e
+    Tesoureiro de Distrito não se renomeiam, não mudam de nível nem se excluem (as permissões continuam editáveis); o papel dado a alguém não se exclui.
+  - **Conformidade (médio):** a exoneração de dirigente de entidade é só do Pastor Presidente (Estatuto Art. 65); a verificação anual do Conselho Fiscal (Art. 66
+    §3º) é registrada só por quem tem assento nele; a reunião do CDE espera só quem o compõe (Art. 126-L, II), não a metrópole inteira; a retenção sem prazo final.
+  - **O dinheiro (baixo).** O decreto do Distrito pega também a trava do Rateio Geral (os dois ao mesmo tempo contariam o mesmo fechamento duas vezes); a
+    desativação respeita o Dízimo do mês já registrado (a Sede volta no mês seguinte ao último registrado, e o registro não fica órfão).
+  - **O cadastro (baixo).** A Área, a Região e o Quadrante com liderança, pedido ou unidade embaixo não se excluem (antes o Pastor de Área de uma Área apagada
+    continuava na CME); o território de um Distrito sob intervenção não muda; desativar a Extensão pelo cadastro faz o que a emancipação faz (encerra o
+    Encarregado e o acesso de escopo dela; recusa com pedido em andamento).
+  - **A intervenção (baixo).** O Interventor pode ser trocado sem encerrar a intervenção; nas Entidades, quem não é o Presidente é recusado antes de pedir a
+    confirmação recente, e a ratificação, a extinção e a aprovação do vínculo passaram a pedir a confirmação recente.
+  - **Os outros baixos.** A emancipação fica no território da Mãe (a Área de outro Distrito mudaria o destino do repasse sem decreto); a Área herdada inativa diz
+    o que fazer; o gatilho (a) do Distrito não aceita a própria sede, Parauapebas/PA (Estatuto Art. 2º); Meus Dados mostra os atos da pessoa nos pedidos de
+    expansão, os balanços que analisou e os decretos que registrou; o painel da Expansão avisa o Pastor de Área da CME sem a permissão da tela; a nota da v9.4
+    (a CME no envio de missionários, Art. 23, II e 44) e da v9.5 (os critérios de emancipação são decisão do responsável) no plano.
+
+  **Decisões que o responsável pode mudar** (o sistema já está fazendo assim):
+  - **O NIF analisa o balanço do Distrito por um conselheiro** (o Regimento, Art. 53 e 54, fala do colegiado de 5 com quórum): o conselheiro registra no sistema
+    a deliberação do colegiado, tomada na reunião do Conselho Fiscal. O mesmo para a verificação anual das entidades.
+  - **O "Filtro Máximo" do Distrito (Art. 126-M, I) e a dispensa dos balancetes (126-M, II, primeira parte) não estão no sistema:** enquanto houver uma conta só
+    e nenhum Distrito de fato, os processos, os relatórios e a prestação de contas mensal das congregações do território continuam como hoje (a Sede mantém a
+    avocação do Art. 126-P, I). Fazer quando o primeiro Distrito existir.
+  - **A desativação do Distrito e a emancipação encerram acessos de funções não eletivas sem ir à Assembleia** (Estatuto Art. 18, VII, "c" fala da destituição de
+    não eletivos): são atos de escopo que acabaram, não destituições de pessoas.
+  - **O Secretário de Missões é dado em Liderança pela Secretaria** (o Regimento, Art. 43, diz que os Secretários são de livre nomeação do Pastor Presidente: a
+    Secretaria registra a nomeação dele), sem a restrição do Pastor Distrital.
+  - **Entidades:** o destino "congênere sem fins lucrativos" para a assistência social e as outras naturezas na extinção (o Estatuto, Art. 68, só fala em saúde,
+    educação e comodato); a alienação de participação (Art. 18, VII, "b") e a fiança ou aval (Art. 59 §2º) ficam fora do sistema (atos de cartório e banco).
+  - **Aceito:** a mudança de território enquanto um fechamento está sendo gravado (instantes) pode deixar aquele mês com a Sede.
+  - **Defeitos do próprio texto das normas, para conhecimento:** o Regimento chama a Sede de nível 5 no Art. 104-B, VI e de nível 6 no Art. 126-O (o sistema
+    segue o 126-K: Distrito 5, Sede 6); o Estatuto, Art. 61, II remete aos "arts. 72, § 3º, e 73", que não tratam de entidades (provavelmente o 66 §3º e o 67).
+
 ## v9.4 — Missões: campos, missionários e prestação de contas *(7ª rodada)*
 
 O risco real em missões não é falta de recurso — é **sustento enviado sem
 relatório recebido**, que é exatamente o que a Assembleia cobra e ninguém
 consegue responder com número.
 
-- [ ] Cadastro de campo missionário (local, status, congregação mantenedora) e de
+- [x] Cadastro de campo missionário (local, status, congregação mantenedora) e de
       missionário sustentado, com valor mensal amarrado ao Contas a Pagar (v4.5) e
       ao Rateio Geral (v4.10).
-- [ ] **Relatório de campo com periodicidade obrigatória** (batismos, atividades,
+- [x] **Relatório de campo com periodicidade obrigatória** (batismos, atividades,
       pedidos) — e **relatório atrasado sinaliza/suspende o repasse**, mesma
       lógica do balancete departamental (v5.4). Não é punição: é a condição que a
       própria prestação de contas à Assembleia exige.
-- [ ] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
+- [x] Painel de missões alimentado pelos mesmos dados, sem redigitação — inclusive
       para exibição pública/mural.
-- [ ] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
+- [x] Conexão com a CME (Comissão de Missões e Expansão, v9.2).
       *(Trava 9-A: a v9.2 entrega a CME calculada (`composicaoCME`) e o parecer dela só dentro dos pedidos de expansão — os 3 tipos do CHECK de
       `PedidosExpansao`. O envio de missionários (Reg. Art. 23, II) vai pedir um parecer próprio, o Art. 44 §2º (envio para fora do Estado: só a CLI e o
       Pastor Presidente) e o Art. 44 §1º (a SEMIADESPA abre Frentes de Trabalho Missionário no município com autonomia) — entra no desenho da v9.4.)*
       *(MissionaryConnect; Missions21)*
+
+### Desenho da v9.4 (contrato, 05/11/2026)
+
+Base legal: Regimento Art. 23 (a CME dá parecer sobre o envio de missionários antes da decisão da CLI), Art. 24 §2º (15 dias; sem o parecer, só em regime de
+urgência por 2/3), Art. 43 e 44 (a SEMIADESPA coordena a obra missionária; §1º abre e gere Frentes de Trabalho Missionário em Parauapebas e nas zonas rurais
+adjacentes com autonomia; §2º o envio para outros Estados ou Países e os convênios externos são da CLI e do Pastor Presidente), Art. 126-N, I (o dinheiro da Sede
+sustenta "o envio missionário do Ministério"), Art. 133-C (a falta de prestação de contas bloqueia novos recursos) e Art. 134 §6º, I (sustento de missionário só
+por determinação expressa da Mesa Diretora). O que já existe e é reaproveitado: a CME calculada e o papel Secretário de Missões (v9.2), as reuniões da CLI
+encerradas, o Contas a Pagar com o fornecedor de dados bancários confirmados por outra pessoa (v4.5), o Tesouro Geral que sobra do Rateio Geral (v4.10), a folha
+da prebenda como molde da geração mensal (a Saída já aprovada, uma por pessoa e mês, sob trava) e a vacância (Trava 9-A).
+
+**1. Campo missionário.** Cadastro operacional da SEMIADESPA (o Secretário de Missões, o Líder Geral dela ou o nível geral): o nome, onde fica (o país; no
+Brasil, a UF e a cidade; a marca "zona rural adjacente a Parauapebas"), a congregação mantenedora (opcional), a divulgação (pública ou restrita; o padrão é
+restrita) e uma descrição. A **abrangência é calculada** pelo lugar, nunca escolhida: **Local** (Parauapebas, ou zona rural adjacente no Pará — Art. 44 §1º),
+**Estadual** (outra cidade do Pará), **Nacional** (outro Estado) ou **Transcultural** (outro país). O campo se encerra com o motivo, e não com envio vivo nele.
+
+**2. Envio do missionário (o ato controlado).** A SEMIADESPA registra o pedido: o missionário (membro ativo, em comunhão, sem processo disciplinar e sem outro
+envio vivo), o campo ativo, o sustento mensal proposto (zero = sem sustento), de onde ele sai (o **Tesouro Geral** ou o **caixa local da congregação
+mantenedora**), quem recebe (um fornecedor do Contas a Pagar: a pessoa física do missionário ou a pessoa jurídica de uma agência ou igreja parceira), o
+documento do envio (o termo de compromisso, obrigatório com sustento), a periodicidade do relatório (mensal ou trimestral), se o missionário autorizou divulgar
+o nome e a justificativa. As etapas são calculadas pelo caso: campo Local sem sustento fica ativo na hora (Art. 44 §1º); campo Local com sustento passa só pela
+concordância do Pastor Presidente (Art. 134 §6º, I); campo Estadual passa pelo parecer da CME e pela decisão da CLI (e pelo Presidente, se tiver sustento);
+campo Nacional ou Transcultural, ou quem recebe é pessoa jurídica (convênio externo), passa pela CME, pela CLI e **sempre** pelo Presidente (Art. 44 §2º). O
+parecer é de quem compõe a CME (nunca de quem pediu); a decisão da CLI é registrada pelo nível geral com a reunião encerrada (a urgência por 2/3 dispensa o
+parecer que falta); a concordância ou a recusa (com o motivo) é do Pastor Presidente em exercício, com a confirmação recente. A última etapa ativa o envio: o
+sustento e a obrigação do relatório começam no mês da ativação. Quem pediu (ou o nível geral) desiste enquanto o envio não ativou; a SEMIADESPA ou o nível geral
+encerra o envio ativo (retorno, troca de campo), com o motivo e o último mês de sustento.
+
+**3. Sustento mensal (Contas a Pagar).** A Tesouraria Geral (permissão `financeiro` do nível geral) gera o sustento do mês na pílula Missões: uma Saída **já
+aprovada** por envio (a decisão colegiada é a autorização, como na prebenda), com o documento do envio, na categoria nova **Sustento missionário** (Tesouro
+Geral) ou **Sustento missionário (caixa local)** (a congregação mantenedora), paga pelo caminho de sempre (o comprovante, a remessa e o saldo do centro de
+custo). Uma por envio e mês (trava de aplicação e restrição no banco). O valor vigente tem histórico: o **reajuste** (o valor, a fonte ou quem recebe) é ato do
+Pastor Presidente com a confirmação recente e vale de um mês ainda não gerado em diante.
+
+**4. Relatório de campo e suspensão.** Cada período (o mês ou o trimestre, contado do mês da ativação) tem o seu relatório: batismos, conversões, pessoas em
+discipulado, atividades (texto), pedidos (texto, opcional) e um anexo opcional. O prazo é o dia 10 do mês seguinte ao fim do período. A SEMIADESPA lança o que
+o missionário envia (a correção fica registrada). **Relatório vencido suspende o sustento**: enquanto houver um período vencido sem relatório, a geração pula
+aquele envio e diz o motivo (calculado na leitura, nunca marcação manual); chegou o relatório, a geração volta a ser possível, inclusive a dos meses que ficaram
+para trás (suspende, não cancela). Um aviso por período vencido à SEMIADESPA e ao nível geral.
+
+**5. Painel e mural.** O painel usa os mesmos dados, sem redigitar: os campos ativos por abrangência, os missionários ativos, o sustento mensal comprometido, o
+sustento pago no ano, **os meses de sustento pago sem relatório recebido** (o número que a Assembleia cobra), os relatórios em dia e atrasados, os sustentos
+suspensos, os batismos e as conversões do ano e os pedidos em andamento (parecer vencido, aguardando a CLI, aguardando o Presidente). A **versão mural** (para
+imprimir e expor) mostra só os campos públicos, com o lugar e os números do ano; o nome do missionário só com a autorização registrada; os campos restritos
+entram só na contagem; nenhum valor por pessoa, só o total investido no ano.
+
+**6. Costuras.** A vacância encerra o envio vivo da pessoa. Meus Dados mostra os envios da pessoa e os atos dela (pediu, deu o parecer, registrou a decisão,
+concordou). ROPA e retenção (sem prazo final: é a história da obra missionária e a prestação de contas à Assembleia). A permissão nova `missoes` vai ao
+Presidente, ao Secretário Geral, ao Secretário de Missões e aos Pastores de Área (a CME); a pílula Missões entra na aba Expansão.
+
+**Fora desta versão (escopo):** o missionário que não é membro (sem ficha não entra no cadastro), o relatório enviado pelo próprio missionário no Meu Painel, a
+retenção de imposto sobre o sustento (a natureza fiscal fica com a contabilidade; o sistema paga o valor decidido), o site público (o mural impresso cobre a
+"exibição pública") e um percentual do Rateio Geral reservado para missões (a Tesouraria pode criar esse destino em Catálogos).
 
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 

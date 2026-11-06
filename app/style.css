@@ -1128,6 +1128,21 @@ body:not(.sessao-geral) .so-geral { display: none !important; }
   body.cpa-imprimindo #cpaBolImprimivel, body.cpa-imprimindo #cpaBolImprimivel * { visibility: visible !important; }
   body.cpa-imprimindo #cpaBolImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; }
 }
+/* v9.4 — "Imprimir o mural" de Missões imprime só #misMuralImprimivel (só campos públicos, sem valor por pessoa): a classe .mis-imprimindo existe só durante window.print()
+   (missoes.js → misImprimirMuralAcao), como o boletim de oração. */
+@media print {
+  body.mis-imprimindo * { visibility: hidden !important; }
+  body.mis-imprimindo #misMuralImprimivel, body.mis-imprimindo #misMuralImprimivel * { visibility: visible !important; }
+  body.mis-imprimindo #misMuralImprimivel { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; color: #000; box-shadow: none; }
+}
+.mis-mural-campo { border-top: 1px solid var(--cor-borda, #ddd); padding-top: 6px; margin-top: 6px; }
+@supports selector(:has(*)) {
+  @media print {
+    body.mis-imprimindo *:not(#misMuralImprimivel):not(#misMuralImprimivel *):not(:has(#misMuralImprimivel)) { display: none !important; }
+    body.mis-imprimindo *:has(#misMuralImprimivel) { display: block !important; position: static !important; width: auto !important; max-width: none !important; min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; }
+    body.mis-imprimindo #misMuralImprimivel { position: static; width: auto; }
+  }
+}
 @supports selector(:has(*)) {
   @media print {
     body.cpa-imprimindo *:not(#cpaBolImprimivel):not(#cpaBolImprimivel *):not(:has(#cpaBolImprimivel)) { display: none !important; }

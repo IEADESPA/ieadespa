@@ -48,13 +48,14 @@ async function lerCongregacao(rq, congregacaoId, { travar = false } = {}) {
 async function lerExtensao(rq, extensaoId, { travar = false } = {}) {
   const r = await rq().input("id", sql.Int, extensaoId).query(`
     SELECT e.ExtensaoId, e.Nome, e.CongregacaoMaeId, e.Ativa, e.Endereco, e.Bairro, e.Cidade, e.UF, CONVERT(varchar(10), e.AbertaEm, 120) AS AbertaEm,
-           CONVERT(varchar(10), e.EmancipadaEm, 120) AS EmancipadaEm, e.CongregacaoEmancipadaId, c.Nome AS MaeNome, c.AreaId AS MaeAreaId
+           CONVERT(varchar(10), e.EmancipadaEm, 120) AS EmancipadaEm, e.CongregacaoEmancipadaId, c.Nome AS MaeNome, c.AreaId AS MaeAreaId, e.Lat, e.Lng
     FROM ExtensoesTenda e ${travar ? "WITH (UPDLOCK, ROWLOCK)" : ""} JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoMaeId
     WHERE e.ExtensaoId = @id`);
   const l = r.recordset[0];
   return l ? {
     extensaoId: l.ExtensaoId, nome: l.Nome, congregacaoMaeId: l.CongregacaoMaeId, maeNome: l.MaeNome, maeAreaId: l.MaeAreaId, ativa: !!l.Ativa,
-    endereco: l.Endereco, bairro: l.Bairro, cidade: l.Cidade, uf: l.UF, abertaEm: l.AbertaEm, emancipadaEm: l.EmancipadaEm, congregacaoEmancipadaId: l.CongregacaoEmancipadaId
+    endereco: l.Endereco, bairro: l.Bairro, cidade: l.Cidade, uf: l.UF, abertaEm: l.AbertaEm, emancipadaEm: l.EmancipadaEm, congregacaoEmancipadaId: l.CongregacaoEmancipadaId,
+    lat: l.Lat == null ? null : Number(l.Lat), lng: l.Lng == null ? null : Number(l.Lng)
   } : null;
 }
 // O Distrito a que a Área pertence hoje (Área → Região → Quadrante → Distrito), ou null.
@@ -351,8 +352,10 @@ async function executar(t, rq, pool, p, { reuniao, por, hoje, sid = null }) {
   const ins = await rq().input("nome", sql.NVarChar(150), p.nome).input("area", sql.Int, areaId).input("end", sql.NVarChar(300), campo("endereco"))
     .input("bai", sql.NVarChar(150), campo("bairro")).input("cid", sql.NVarChar(150), campo("cidade")).input("uf", sql.NVarChar(2), campo("uf"))
     .input("ano", sql.SmallInt, Number(reuniao.data.slice(0, 4)))
-    .query(`INSERT INTO Congregacoes (Nome, Ativa, AreaId, Endereco, Bairro, Cidade, Estado, FundacaoAno) OUTPUT inserted.CongregacaoId
-            VALUES (@nome, 1, @area, @end, @bai, @cid, @uf, @ano)`);
+    // v9.5 — a congregação que nasce da emancipação herda o ponto da Extensão no mapa (a nova congregação sem Extensão nasce sem ponto: Catálogos)
+    .input("lat", sql.Decimal(9, 6), ext && ext.lat != null ? ext.lat : null).input("lng", sql.Decimal(9, 6), ext && ext.lng != null ? ext.lng : null)
+    .query(`INSERT INTO Congregacoes (Nome, Ativa, AreaId, Endereco, Bairro, Cidade, Estado, FundacaoAno, Lat, Lng) OUTPUT inserted.CongregacaoId
+            VALUES (@nome, 1, @area, @end, @bai, @cid, @uf, @ano, @lat, @lng)`);
   const congregacaoCriadaId = ins.recordset[0].CongregacaoId;
   // a JAI da congregação nova (o mesmo órgão que o cadastro de congregações cria — Regimento Art. 105), sem esperar o próximo deploy
   await rq().input("ref", sql.Int, congregacaoCriadaId).input("nome", sql.NVarChar(200), `Junta de Articulação Institucional — ${p.nome}`)

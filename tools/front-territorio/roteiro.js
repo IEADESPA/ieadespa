@@ -166,6 +166,12 @@ async function prova() {
   ok(opGoogle.disabled && /sem a chave/.test(opGoogle.textContent), "sem a chave: o Mapa do Google aparece desligado");
   semChave.doc.escolher(semChave.e("terModo"), "google"); await semChave.ocioso();
   ok(!moldura(semChave, "terMolduraGoogle") && semChave.e("terModo").value === "lista", "e escolher o Google mesmo assim fica na lista");
+  const chaveTorta = montar();
+  chaveTorta.__respostas["GET territorio/catalogos"] = { corpo: { ...R.catalogosGeral, mapa: { ...R.catalogosGeral.mapa, chave: "Chave A" } } };
+  chaveTorta.ctx.localStorage.setItem("ieadespa.territorio.modo", "google");
+  await abrirTerritorio(chaveTorta);
+  ok(chaveTorta.e("terModo").options.find((o) => o.value === "google").disabled && !moldura(chaveTorta, "terMolduraGoogle") && chaveTorta.e("terModo").value === "lista",
+    "um texto que não tem a forma de chave (\"Chave A\") vale como sem a chave: nada de moldura esperando o Google");
   const guardado = montar({ geral: false, catalogo: "catalogosDirigente", mapa: "mapaDirigente", simulacao: "simulacaoDirigente", matricula: 3001 });
   guardado.ctx.localStorage.setItem("ieadespa.territorio.modo", "google");
   await abrirTerritorio(guardado);
@@ -361,6 +367,7 @@ async function prova() {
 }
 
 const MUTACOES = [
+  ["territorio", "aceitar qualquer texto como chave", ["typeof c === \"string\" && TER_FORMA_CHAVE.test(c) ? c : null", "c || null"]],
   ["territorio", "tirar o escape do nome do bairro na tabela", ["<tr><td>${terH(b.nome)}${b.inativo", "<tr><td>${b.nome}${b.inativo"]],
   ["territorio", "tirar o escape da unidade mais perto", ["const unidade = b.maisPerto ? `${terH(b.maisPerto.nome)}", "const unidade = b.maisPerto ? `${b.maisPerto.nome}"]],
   ["territorio", "tirar o escape da densidade", ["<tr><td>${terH(u.nome)}${u.tipo === \"EXTENSAO\" ? \" (Extensão)\" : \"\"}</td>\n", "<tr><td>${u.nome}${u.tipo === \"EXTENSAO\" ? \" (Extensão)\" : \"\"}</td>\n"]],

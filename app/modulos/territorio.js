@@ -67,7 +67,9 @@ async function terPost(acao, corpo, alvoMsg) {
 }
 function terMensagem(idEl, texto) { const el = terEl(idEl); if (el) el.textContent = texto || ""; }
 const terGeral = () => !!(terCatalogos && terCatalogos.papeis && terCatalogos.papeis.geral);
-const terChave = () => (terCatalogos && terCatalogos.mapa && terCatalogos.mapa.chave) || null;
+// só uma chave com a forma de chave de verdade (a mesma regra do servidor): qualquer outro texto vale como "sem a chave" e não abre a moldura
+const TER_FORMA_CHAVE = /^[A-Za-z0-9_-]{20,80}$/;
+const terChave = () => { const c = terCatalogos && terCatalogos.mapa && terCatalogos.mapa.chave; return typeof c === "string" && TER_FORMA_CHAVE.test(c) ? c : null; };
 const terIndicador = (codigo) => (terCatalogos && Array.isArray(terCatalogos.indicadores) ? terCatalogos.indicadores.find((i) => i.codigo === codigo) : null);
 function terModo() {
   let m = null;

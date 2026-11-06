@@ -450,6 +450,54 @@ Presidente, ao Secretário Geral, ao Secretário de Missões e aos Pastores de �
 retenção de imposto sobre o sustento (a natureza fiscal fica com a contabilidade; o sistema paga o valor decidido), o site público (o mural impresso cobre a
 "exibição pública") e um percentual do Rateio Geral reservado para missões (a Tesouraria pode criar esse destino em Catálogos).
 
+### Como ficou a v9.4 (entregue em 06/11/2026)
+
+**Em produção desde 06/11/2026** (merge `a052c5e`; para desfazer: `git revert -m 1 a052c5e`). Migração **169** (`CamposMissionarios`,
+`EnviosMissionarios`, `EnvioSustentoValores`, `RelatoriosCampo`, `SustentoGeracoes`; as categorias de Saída **Sustento missionário** e **Sustento missionário
+(caixa local)** na conta 5.1.5; a permissão `missoes`; cinco avisos; a política de retenção). Regra pura em `api/shared/missoes.js`, banco em
+`api/shared/missoesDb.js`, rota `/api/missoes/<ação>` (`GestaoMissoes`). Tela: pílula **Missões** na aba Expansão (painel, envios, campos, sustento do mês e
+mural para imprimir), cartão em Meus Dados. Casca do service worker **v55**.
+
+**O que mudou do desenho (depois das duas revisões independentes — costuras: 1 alta, 5 médias, 2 baixas; conformidade: 1 alta, 6 médias, 4 baixas —
+tratadas):**
+
+- **A Saída cancelada não perde o mês:** se a Tesouraria cancela ou rejeita no Contas a Pagar uma Saída de sustento, o mês volta a ser gerado (a Saída
+  desfeita fica lá, com o motivo); o reajuste e o encerramento não esbarram nela.
+- **O Tesoureiro não recebe a permissão `missoes`:** a Tesouraria Geral (a permissão `financeiro` do nível geral) vê só a prévia e gera o sustento do mês.
+  Assim, quem paga não lança o relatório que levanta a suspensão nem registra a decisão da CLI.
+- **Quem recebe:** a pessoa física é sempre o próprio missionário (o fornecedor ligado à matrícula dele, em Fornecedores); outra pessoa só recebe como pessoa
+  jurídica (agência ou igreja parceira), que é convênio externo e passa pela CME, pela CLI e pelo Presidente. O caixa local é sempre o da congregação
+  mantenedora do campo (não se escolhe outra). O reajuste não transforma em convênio externo um envio que não passou pela CLI.
+- **O Pastor Presidente não concorda com o envio que ele mesmo pediu** (pede-se pela SEMIADESPA).
+- **A zona rural adjacente** vale para Parauapebas e os municípios que fazem divisa com ele (Canaã dos Carajás, Curionópolis, Eldorado do Carajás, Marabá,
+  Água Azul do Norte e São Félix do Xingu): marcar a zona rural em outra cidade é recusado (a marca não vira escolha para fugir da CME e da CLI).
+- **O sustento para enquanto a pessoa não pode recebê-lo:** licença de candidatura, sem comunhão ou processo disciplinar em curso deixam o mês impedido;
+  resolvida a situação, volta (não se perde).
+- **Vacância:** encerra o envio no mês dela (esse mês ainda é gerado) e dispensa o relatório que faltava (não há mais quem o mande); o motivo cita o Estatuto,
+  Art. 11 §7º.
+- **O nome no mural** se autoriza e se retira a qualquer momento (botão na ficha, LGPD Art. 8º §5º); o mural não mostra o total investido no ano quando há
+  um só missionário pago (seria o valor dele); a Saída do campo de divulgação restrita não leva o nome nem o campo.
+- **A CME** (sem outro papel) vê os pedidos aguardando o parecer, os que ela analisou e os números gerais — não o sustento, os relatórios nem a prévia do
+  pagamento.
+- **O sustento não se lança à mão** no Contas a Pagar (só nasce da geração do mês); o painel de imunidade aceita a rubrica do sustento.
+- As etapas do envio são calculadas pelo campo lido dentro da transação (a mudança do lugar do campo no meio de um pedido não o faz passar pelas etapas
+  erradas); a pessoa é travada antes do envio (a mesma ordem da vacância). Meus Dados mostra também a justificativa, o parecer, os motivos e os pagamentos (ao
+  missionário) e os relatórios, os reajustes, as gerações e os campos (a quem agiu).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a "determinação expressa da Mesa Diretora" (Regimento Art. 134 §6º, I) é a
+concordância do Pastor Presidente (não se exige também o 1º Tesoureiro nem a ata da Diretoria Executiva); a frente local (Art. 44 §1º) é da SEMIADESPA, sem
+CME nem CLI; outra cidade do Pará passa pela CME e pela CLI; pagar a pessoa jurídica é convênio externo; o parecer da CME é dado por um membro dela (como na
+v9.2); o sustento sai do Tesouro Geral ou do caixa local da mantenedora (não da tesouraria da SEMIADESPA); a licença de candidatura para o sustento sem
+encerrar o envio; o relatório vence no dia 10 do mês seguinte ao período; os pedidos recusados e as desistências ficam guardados sem prazo final, como o
+resto. **Aceito e registrado:** o Líder Geral antigo da SEMIADESPA conta na CME, mas só entra na tela com a permissão `missoes` (o caminho é o papel
+Secretário de Missões); a remessa ao exterior (fornecedor estrangeiro) continua acusada no painel de imunidade, de propósito.
+
+**Provas:** jest 6.348; banco local (`bash rodar.sh preparar-missoes`): `e2e-76` 203 (a migração, quem entra, os campos e a abrangência, cada caminho do
+envio, as recusas, o sustento gerado, suspenso, impedido e cancelado, o relatório e a correção, o reajuste e o encerramento, o painel, o mural, a autorização
+do nome, a vacância, os avisos, os CHECK e os índices, lixo em cada campo, Meus Dados), `e2e-77` corridas 19 e 20 com o READ_COMMITTED_SNAPSHOT do Azure; a
+bateria inteira do banco recriado do zero, do `e2e-1` ao `e2e-77`, verde; tela (`tools/front-missoes`) 114, com 39 mutações acusadas (Distritos 77,
+Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42218344325) mostrou só as diferenças de propósito (a pílula e a seção de Missões, escondidas, em toda tela), a base nova foi aprovada e a segunda (42220757930) deu 1.237 e 153 ações iguais, 0 divergência e 0 violação de CSP; produção: a migração 169 aplicada, a rota responde 401 sem login, a casca v55 e o teste de tela (42229580970) com 1.237 e 153 ações iguais, 0 divergência e 0 violação de CSP.
+
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
 - [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —

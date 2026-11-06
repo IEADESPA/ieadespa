@@ -100,4 +100,9 @@ E2E_RCSI=1 BASE=cenario-distritos bash rodar.sh roteiro e2e-74-distritos-corrida
 # Trava 9-A (migração 168): a base própria
 bash rodar.sh preparar-trava9a
 BASE=cenario-trava9a bash rodar.sh roteiro e2e-75-trava9a.js
+# v9.4 (Missões, migração 169): a base própria
+bash rodar.sh preparar-missoes
+BASE=cenario-missoes bash rodar.sh roteiro e2e-76-missoes.js
+BASE=cenario-missoes bash rodar.sh roteiro e2e-77-missoes-corridas.js
+E2E_RCSI=1 BASE=cenario-missoes bash rodar.sh roteiro e2e-77-missoes-corridas.js
 echo TUDO-PRONTO

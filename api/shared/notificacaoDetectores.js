@@ -265,7 +265,11 @@ const DETECTORES = {
   // v9.3 — Distrito: o Dízimo Institucional vencido sem repasse (a "retenção da cota", Regimento Art. 126-N, III; um aviso por Distrito e mês) e o balanço anual não
   // enviado ao NIF até 31/03 (um por Distrito e ano), ao nível geral e a quem tem acesso de escopo do Distrito. A análise do NIF avisa NA HORA quem enviou.
   DISTRITO_REPASSE_VENCIDO: { tabela: "RepassesInstitucionais", detectar: (pool) => require("./distritosDb").detectarRepasseVencido(pool) },
-  DISTRITO_BALANCO_ATRASADO: { tabela: "DistritoBalancos", detectar: (pool) => require("./distritosDb").detectarBalancoAtrasado(pool) }
+  DISTRITO_BALANCO_ATRASADO: { tabela: "DistritoBalancos", detectar: (pool) => require("./distritosDb").detectarBalancoAtrasado(pool) },
+  // v9.4 — Missões: o pedido de envio, a espera do Presidente e a decisão avisam NA HORA, no ato. Aqui ficam o parecer da CME vencido (15 dias, Regimento Art. 24 §2º;
+  // um por envio, à CME e ao nível geral) e o relatório de campo vencido, que suspende o sustento (um por envio e período, à SEMIADESPA e ao nível geral).
+  MISSOES_PARECER_VENCIDO: { tabela: "EnviosMissionarios", detectar: (pool) => require("./missoesDb").detectarParecerVencido(pool) },
+  MISSOES_RELATORIO_ATRASADO: { tabela: "RelatoriosCampo", detectar: (pool) => require("./missoesDb").detectarRelatorioAtrasado(pool) }
 };
 
 module.exports = { DETECTORES };

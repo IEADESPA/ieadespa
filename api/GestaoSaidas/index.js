@@ -207,6 +207,12 @@ module.exports = async function (context, req) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "Fora do seu escopo de atuação." } };
       return;
     }
+    // v9.4 — o sustento missionário só nasce da geração do mês, na tela de Missões (com a decisão do envio e o relatório de campo em dia): lançado à mão, ele não
+    // passaria pela determinação do Pastor Presidente (Regimento, Art. 134 §6º, I) nem entraria nas contas da prestação de contas das Missões
+    if (["SUSTENTO_MISSIONARIO", "SUSTENTO_MISSIONARIO_LOCAL"].includes(String(tipo || "").toUpperCase())) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "O sustento missionário é gerado pela Tesouraria Geral na tela de Missões (aba Expansão), nunca lançado à mão." } };
+      return;
+    }
     const categoria = await pool.request().input("codigo", sql.NVarChar(30), tipo).query(`SELECT * FROM CategoriasSaida WHERE Codigo = @codigo AND Ativa = 1`);
     if (categoria.recordset.length === 0) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Categoria de saída inválida ou inativa. Cadastre-a em Financeiro → Plano de Contas → Categorias de Saída." } };

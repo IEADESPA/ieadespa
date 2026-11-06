@@ -163,6 +163,9 @@ module.exports = async function (context, req) {
   const expansaoAtos = await require("../shared/expansaoDb").atosDoTitular(pool, alvo);
   // v9.3 — Distritos: os balanços anuais que a pessoa enviou ao NIF e as intervenções em que teve a função de Interventor
   const distritos = await require("../shared/distritosDb").dadosDoTitular(pool, alvo);
+  // v9.4 — Missões: os envios da pessoa como missionária (o campo, as datas, o sustento e quantos relatórios chegaram) e os atos dela nos envios
+  const missoes = await require("../shared/missoesDb").dadosDoTitular(pool, alvo);
+  const missoesAtos = await require("../shared/missoesDb").atosDoTitular(pool, alvo);
 
   await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(matricula), acao: "Acessou os próprios dados (LGPD)", usuarioId: Number(matricula) });
 
@@ -197,7 +200,9 @@ module.exports = async function (context, req) {
       entidadesVinculadas,
       extensoesEncarregadas,
       expansaoAtos,
-      distritos
+      distritos,
+      missoes,
+      missoesAtos
     }
   };
 };

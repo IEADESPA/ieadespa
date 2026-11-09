@@ -567,6 +567,55 @@ emancipação da v9.2 leva o ponto da Extensão para a congregação que nasce. 
 de viagem (só a linha reta), o contorno desenhado dos bairros (o ponto central basta), a importação do cadastro antigo de membros (quando vier, já preenche as
 linhas e o bairro) e aviso automático de Extensão que passou a atender os critérios (o painel mostra).
 
+### Como ficou a v9.5 (RASCUNHO no ramo — completar na entrega; ainda NÃO está em produção)
+
+> Rascunho guardado na parada de 09/11/2026 (ver o "Ponto seguro da v9.5" na `main`). Na entrega: trocar `DATA_ENTREGA`, `MERGE_HASH` e
+> `PROD_RUN`, conferir o número do jest e da bateria do banco e tirar este aviso.
+
+**Em produção desde DATA_ENTREGA** (merge `MERGE_HASH`; para desfazer: `git revert -m 1 MERGE_HASH`). Migração **170** (`Bairros`, o endereço do membro em
+linhas em `MembroReferencia`, o ponto das Extensões em `ExtensoesTenda`, `TerritorioParametros` e `CriteriosEmancipacao` com a régua inicial semeada uma vez
+só). Regra pura em `api/shared/territorio.js`, banco em `api/shared/territorioDb.js`, rota `/api/territorio/<ação>` (`GestaoTerritorio`). Tela: pílula
+**Território** na aba Expansão (Mapa, Simulação de emancipação, Critérios, Pontos das Extensões e, no nível geral, Bairros), o endereço em linhas na Pessoas e
+no Meus Dados (`app/modulos/endereco.js`), o cartão em Meus Dados e a página do mapa do Google à parte (`app/mapa-territorial.*`, moldura com sandbox e a
+política de segurança só dessa rota). Casca do service worker **v56**.
+
+**O que mudou do desenho (depois das duas revisões independentes — costuras: 3 médias, 5 baixas; conformidade: 1 alta, 3 médias, 6 baixas — tratadas):**
+
+- **O mapa e a simulação contam membros:** o congregado e o novo convertido não entram (Estatuto Art. 7º, I: o congregado "não integra o quadro de membros"),
+  o mesmo recorte do rol do PSC e da credencial; "em comunhão" é a régua do estatuto (em comunhão e sem disciplina), também para o Encarregado.
+- **Unidade sem ponto não vira "descoberto":** o bairro cujos moradores são de uma congregação ou Extensão ainda sem ponto no mapa fica **"a conferir"**, sem
+  o atalho de pedir Extensão, e o resumo avisa onde marcar o ponto (Extensão em Pontos das Extensões; congregação em Catálogos).
+- **O dízimo na simulação:** só saem do servidor as medidas dos critérios ativos; com menos de 3 dizimistas na Extensão, o dízimo médio aparece só como
+  "atende / não atende" (o valor seria o de uma pessoa). "Não dá para medir" diz o que falta.
+- **O endereço não se perde:** o endereço antigo numa linha vai para a Rua quando a ficha abre (escolher o bairro não apaga a rua e o número); apagar todas as
+  linhas apaga o endereço de propósito; o nome escrito que já é um bairro cadastrado vira o bairro da lista (não fica na fila para sempre) e editar o bairro
+  liga a fila; a ficha grava o bairro travado (a renomeação do bairro e a ficha nunca se travam uma à outra, e a linha única sai com o nome novo); as UFs e o
+  bairro "fora da lista" não somem quando a lista dos bairros chega depois da ficha.
+- **O mapa do Google:** sem resposta em 20 s, volta à lista e desenho; no erro, a escolha guardada volta para a lista; a página do mapa confere a janela e a
+  origem e só responde à origem do sistema; a tela só aceita uma chave com a forma de chave de verdade (a mesma regra do servidor — o teste de tela usa
+  uma chave de mentira e a moldura ficava esperando o Google). A congregação que nasce da emancipação herda o ponto da Extensão só quando o pedido não
+  trouxe outro endereço.
+- Documentados a configuração da chave do Maps (`SECRETS.md`) e a exceção do script do Google (`docs/PLATAFORMAS.md`).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a localização é **pelo bairro** (ponto central marcado uma vez), não a casa
+exata (o endereço nunca sai do sistema); a distância é em linha reta; o raio de cobertura começa em **3 km** (muda na sub-aba Critérios); a tabela de critérios
+começou com a régua média sugerida (2 anos de aberta, 50 membros em comunhão, Encarregado em comunhão, 1 obreiro, R$ 3.000 de dízimo médio) — ele muda, desliga
+ou apaga; o mapa conta só membros; o dízimo médio só aparece com 3 ou mais dizimistas; o Dirigente e o Pastor de Área veem os membros das congregações deles e
+as unidades de todos; só o nível geral cadastra bairros, muda o raio e os critérios; o Dirigente da Mãe marca o ponto das Extensões; os atos em Meus Dados
+mostram quem cadastrou e quem mudou por último (o histórico inteiro fica na auditoria). **Ação humana:** no Google Cloud, a chave do Maps precisa aceitar o
+endereço do sistema (`app.ieadespa.org.br`) e o da homologação; e a chave precisa ser gravada nas configurações do Azure (`GOOGLE_MAPS_CHAVE_NAVEGADOR`, em
+produção e na homologação). Até lá, a pílula funciona na lista e desenho.
+
+**Provas:** jest 6.368; banco local (`bash rodar.sh preparar-territorio`): `e2e-78` 190 (a régua semeada uma vez, mesmo apagada; quem entra; o endereço em
+linhas e a tela antiga; a fila; os bairros; os pontos; o mapa, o "a conferir", o descoberto pelo raio e o escopo do Dirigente; a densidade; os critérios; a
+simulação com cada indicador medido de verdade, o congregado e o novo convertido fora, o dízimo oculto; a emancipação levando o ponto; a LGPD; os CHECK; lixo em
+cada campo), `e2e-79` corridas 16 e 18 com o READ_COMMITTED_SNAPSHOT do Azure (inclusive a renomeação do bairro com três fichas gravando nele); a bateria
+inteira do banco recriado do zero, do `e2e-1` ao `e2e-79`: **A RODAR na retomada** (foi interrompida pela parada); tela (`tools/front-territorio`) 122, com
+46 mutações acusadas (Expansão 83, Distritos 77, Missões 114 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42274057968) mostrou
+só as diferenças de propósito (a pílula e a seção do Território e o endereço em linhas) e a base foi aprovada; a segunda (42276436948) teve 5 divergências só de
+tempo (o aviso do Google sem resposta caindo em momentos diferentes), corrigidas pela chave com forma de chave e a base nova aprovada; a terceira
+(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: PROD_RUN.
+
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 
 Só se aplica se a igreja mantiver ação assistencial estruturada (v5.9) — mas se

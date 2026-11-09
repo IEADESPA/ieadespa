@@ -66,6 +66,7 @@ const tipoPerguntaOpcoes = [
 
       <div hidden class="tab-bar mt-8" data-tabs role="tablist">
         <button type="button" class="tab-btn is-active" data-tab="dados">Dados do evento</button>
+        <button type="button" class="tab-btn" data-tab="imagem">Imagem</button>
         <button type="button" class="tab-btn" data-tab="inscricao">Perguntas de inscrição</button>
         <button type="button" class="tab-btn" data-tab="pesquisa">Pesquisa pós-evento</button>
         <button type="button" class="tab-btn" data-tab="agenda">Agenda (sessões)</button>
@@ -303,6 +304,39 @@ const tipoPerguntaOpcoes = [
       </form>
       </div>
 
+      <div data-tab-panel="imagem" hidden>
+        <div hidden class="mt-8 grid gap-4 max-w-2xl" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;" data-imagem-secao>
+          <div>
+            <p class="text-sm font-semibold">Imagem do evento</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              É a imagem principal do evento: aparece no alto da página do evento e na prévia quando o link é compartilhado
+              (WhatsApp, redes sociais etc.) — sem ela, a prévia mostra a logo da Igreja. Se uma campanha de camisetas estiver
+              vinculada a este evento, a prévia do link da camiseta também usa esta imagem.
+            </p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Use de preferência uma imagem deitada (mais larga que alta, como um banner — por exemplo 1200 × 630), em JPG,
+              PNG ou WebP, de até 10 MB. O site atualiza sozinho em até uns 15 minutos. O WhatsApp guarda a prévia de um link
+              que já foi enviado antes: se a imagem antiga continuar aparecendo numa conversa, ela some com o tempo.
+            </p>
+          </div>
+
+          <div data-imagem-preview-wrap hidden>
+            <img data-imagem-preview alt="Imagem atual do evento" style="max-width: 24rem; width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border);" />
+            <button type="button" class="btn btn-outline mt-2" data-imagem-remover>Remover imagem</button>
+          </div>
+          <p class="text-sm text-muted-foreground" data-imagem-vazio>Nenhuma imagem enviada ainda — a prévia do link mostra a logo da Igreja.</p>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-imagem-arquivo">Enviar nova imagem</label>
+            <input id="f-imagem-arquivo" type="file" accept="image/jpeg,image/png,image/webp" class="field" />
+          </div>
+          <div class="flex items-center gap-4">
+            <button type="button" class="btn btn-solid" data-imagem-enviar>Enviar</button>
+            <p class="text-sm" data-imagem-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
       <div data-tab-panel="inscricao" hidden>
       <section hidden class="mt-8" data-perguntas-secao-inscricao aria-labelledby="perguntas-heading">
         <h2 id="perguntas-heading" class="section-title">Perguntas do formulário de inscrição</h2>
@@ -531,6 +565,8 @@ const tipoPerguntaOpcoes = [
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { contarRespostas, desenharGraficoBarrasPDF, graficoBarrasSvg } from "@/lib/graficos";
     import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { directusAssetUrl } from "@/lib/directus";
+    import { problemaDaImagem } from "@/lib/imagemEvento";
     import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
     import { normalizarConfigCracha } from "@/lib/cracha";
     import { problemaDosLotes } from "@/lib/inscricoesPainel";
@@ -547,6 +583,8 @@ const tipoPerguntaOpcoes = [
       id: number;
       title: string;
       slug: string | null;
+      /** A imagem principal (id do arquivo no Directus): topo da página do evento e prévia do link no WhatsApp. */
+      cover: string | null;
       description: string | null;
       body: string | null;
       event_date: string | null;
@@ -1206,6 +1244,98 @@ const tipoPerguntaOpcoes = [
       if (zonaPerigo) zonaPerigo.hidden = false;
       const zonaEncerrar = document.querySelector<HTMLElement>("[data-zona-encerrar]");
       if (zonaEncerrar) zonaEncerrar.hidden = false;
+
+      // ---------- imagem do evento (`cover`): topo da página e prévia do link no WhatsApp ----------
+      // Grava SÓ o campo `cover` (o "Salvar evento" não manda `cover`, então um não apaga o outro). O arquivo antigo continua no Directus.
+      const imagemSecao = document.querySelector<HTMLElement>("[data-imagem-secao]");
+      const imagemPreviewWrap = document.querySelector<HTMLElement>("[data-imagem-preview-wrap]");
+      const imagemPreview = document.querySelector<HTMLImageElement>("[data-imagem-preview]");
+      const imagemVazio = document.querySelector<HTMLElement>("[data-imagem-vazio]");
+      const imagemArquivo = el<HTMLInputElement>("f-imagem-arquivo");
+      const imagemStatus = document.querySelector<HTMLElement>("[data-imagem-status]");
+      const imagemEnviar = document.querySelector<HTMLButtonElement>("[data-imagem-enviar]");
+      const imagemRemover = document.querySelector<HTMLButtonElement>("[data-imagem-remover]");
+      const avisoImagem = (texto: string) => {
+        if (imagemStatus) imagemStatus.textContent = texto;
+      };
+      function renderizarImagem() {
+        const temImagem = Boolean(evento.cover);
+        if (imagemPreviewWrap) imagemPreviewWrap.hidden = !temImagem;
+        if (imagemVazio) imagemVazio.hidden = temImagem;
+        if (imagemPreview) {
+          if (evento.cover) imagemPreview.src = directusAssetUrl(evento.cover, { width: 800, quality: 80, format: "webp" });
+          else imagemPreview.removeAttribute("src");
+        }
+      }
+      renderizarImagem();
+      if (imagemSecao) imagemSecao.hidden = false;
+      let imagemOcupada = false; // um envio/remoção por vez (o duplo clique não sobe dois arquivos)
+      const travarImagem = (ocupada: boolean) => {
+        imagemOcupada = ocupada;
+        if (imagemEnviar) imagemEnviar.disabled = ocupada;
+        if (imagemRemover) imagemRemover.disabled = ocupada;
+      };
+
+      imagemEnviar?.addEventListener("click", async () => {
+        if (imagemOcupada) return;
+        const arquivo = imagemArquivo.files?.[0] ?? null;
+        const problemaImagem = problemaDaImagem(arquivo);
+        if (problemaImagem || !arquivo) {
+          avisoImagem(problemaImagem ?? "Escolha um arquivo primeiro.");
+          return;
+        }
+        travarImagem(true);
+        avisoImagem("Enviando…");
+        try {
+          const formData = new FormData();
+          formData.append("title", `Imagem do evento ${evento.title}`); // o Directus só lê os campos que vêm ANTES do arquivo
+          formData.append("file", arquivo);
+          const resUpload = await fetch(`${directusUrl}/files`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+          if (!resUpload.ok) throw new Error(resUpload.status === 400 || resUpload.status === 403 ? "tipo" : "envio");
+          const arquivoId: string = (await resUpload.json()).data.id;
+
+          const resPatch = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cover: arquivoId }),
+          });
+          if (!resPatch.ok) throw new Error("salvar");
+          evento.cover = arquivoId;
+          renderizarImagem();
+          imagemArquivo.value = "";
+          avisoImagem("✅ Imagem enviada. O site atualiza sozinho em até uns 15 minutos.");
+        } catch (e) {
+          avisoImagem(
+            e instanceof Error && e.message === "tipo"
+              ? "O servidor não aceitou esse arquivo. Envie uma imagem JPG, PNG ou WebP."
+              : "Não foi possível enviar agora. Tente de novo em instantes.",
+          );
+        } finally {
+          travarImagem(false);
+        }
+      });
+
+      imagemRemover?.addEventListener("click", async () => {
+        if (imagemOcupada) return;
+        if (!confirm("Tirar a imagem deste evento? A prévia do link volta a mostrar a logo da Igreja (o arquivo continua guardado no Directus).")) return;
+        travarImagem(true);
+        avisoImagem("Removendo…");
+        try {
+          const res = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cover: null }),
+          });
+          if (!res.ok) throw new Error("remover");
+          evento.cover = null;
+          renderizarImagem();
+          avisoImagem("✅ Imagem removida. O site atualiza sozinho em até uns 15 minutos.");
+        } catch {
+          avisoImagem("Não foi possível remover agora. Tente de novo em instantes.");
+        } finally {
+          travarImagem(false);
+        }
+      });
 
       await carregarPerguntas(token, eventoIdNumero);
       await carregarSessoes(token, eventoIdNumero);

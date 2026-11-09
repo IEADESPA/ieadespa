@@ -541,6 +541,15 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   imagem em si na tela). Se a campanha estiver vinculada a um evento, mostra as duas imagens (a da
   campanha e a do evento) lado a lado na página — a prévia de link (que só tem espaço pra uma)
   continua com prioridade pro evento.
+- **Imagem do evento pelo painel (09/11/2026)** — aba "Imagem" na edição do evento
+  (`/painel-eventos/evento/?id=…`): envia a imagem principal para `eventos.cover` (antes só dava
+  pelo Directus "cru", e sem ela a prévia do link do evento no WhatsApp mostrava a logo). A página
+  `/evento/<slug>/` já usava `cover` no topo e no `og:image`; a camiseta vinculada também. O painel
+  confere o arquivo antes (`src/lib/imagemEvento.ts`: JPG, PNG ou WebP, até 10 MB — a permissão
+  "Editor de eventos" no Directus aceita só imagem) e grava **só** o campo `cover` (o "Salvar
+  evento" não manda `cover`, então um não apaga o outro); remover desvincula e o arquivo fica no
+  Directus. O site remonta sozinho (a versão do conteúdo lê `eventos` inteira). Teste sem rede:
+  `scripts/testes/imagem-evento-unidade.cjs`.
 
 ### Painel de conteúdo
 

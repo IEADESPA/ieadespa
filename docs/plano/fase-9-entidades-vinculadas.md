@@ -511,6 +511,32 @@ Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do te
       *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da
       simulação são decisão do responsável, a pedir no desenho da v9.5.)*
 
+### ⏸️ Ponto seguro da v9.5 (parada em 09/11/2026, para cuidar do site)
+
+**A produção não tem a v9.5:** o sistema no ar segue na v9.4 (merge `a052c5e`). Não há nada a desfazer. A v9.5 está **pronta e guardada**, à espera da
+retomada:
+
+- **Onde está:** no ramo `v9.5` do GitHub (último commit `c3f6bb9`, 11 commits à frente da `main`) e na **homologação** (ramo `homolog`, merge `22e9dbf`),
+  que roda a v9.5 inteira com o banco da homologação já na migração 170.
+- **O que já está feito e provado:** o desenho (com as três escolhas do responsável: o endereço em linhas, o mapa do Google com a opção da lista e desenho, e
+  a tabela de critérios que ele monta), o servidor, a tela, as duas revisões independentes com tudo corrigido, o jest (6.368), a bateria do banco local da
+  v9.5 (`e2e-78` 190 e `e2e-79` corridas 16 e 18), a prova da tela (122, com 46 mutações acusadas) e o teste de tela da homologação (execução 42290840200:
+  1.277 e 155 ações iguais, 0 divergência, 0 violação de CSP). O desenho completo e o rascunho do "Como ficou" estão neste mesmo plano, **no ramo `v9.5`**.
+- **O que falta, na ordem, ao retomar:**
+  1. Trazer para o ramo `v9.5` o que entrou na `main` durante a parada (o trabalho do site) e rodar o jest de novo. **Se alguma mudança do sistema entrar na
+     `main` antes, conferir os números:** a v9.5 usa a migração **170** e a casca **v56** do service worker; se já estiverem tomados, a v9.5 passa para os
+     seguintes.
+  2. Rodar a bateria inteira do banco local, do `e2e-1` ao `e2e-79` (estava rodando quando veio a parada e foi interrompida).
+  3. Levar de novo para a homologação e repetir o teste de tela (base aprovada no commit `3595b01`; mudanças da `main` no meio podem pedir base nova).
+  4. Mesclar na `main` (`git merge --no-ff v9.5`), acompanhar o deploy e conferir na produção: a migração 170 no registro, `/api/territorio/mapa`
+     respondendo 401 sem login, a casca v56, a página do mapa com a sua política própria (sandbox) e o teste de tela da produção.
+  5. Completar o "Como ficou" (data, merge, execução da produção) no lugar deste aviso, gerar o índice e fechar.
+- **Ação humana (do responsável, não trava a retomada):** autorizar na chave do Google Maps, no Google Cloud, o endereço do sistema
+  (`app.ieadespa.org.br`) e os dois endereços do Azure (produção e homologação); e gravar a chave nas configurações do Azure como
+  `GOOGLE_MAPS_CHAVE_NAVEGADOR` (produção e homologação). Sem a chave, o Território funciona na lista e desenho.
+- **Enquanto isso, a homologação fica com a v9.5.** Se for preciso testar outra mudança do sistema lá, ela entra no `homolog` junto (nunca mesclar o
+  `homolog` na `main`).
+
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 
 Só se aplica se a igreja mantiver ação assistencial estruturada (v5.9) — mas se

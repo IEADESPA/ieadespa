@@ -113,7 +113,7 @@ function lerTlv(texto) {
     eq(G.normalizarPagamento({ pix: { tipo: "pix", chave: "10743586000138", nome: "X" } }).pix, null, "tipo desconhecido: o Pix não aparece");
     eq(G.normalizarPagamento({ dinheiro: { contato: "Maria", telefone: "", onde: "" } }).dinheiro, null, "dinheiro sem telefone nem lugar: não aparece");
     eq(G.normalizarPagamento({ dinheiro: { contato: "Maria", telefone: "+55 (94) 99123-4567", onde: "" } }).dinheiro.telefone, "94991234567", "telefone com +55: só DDD e número");
-    const sujo = G.normalizarPagamento({ pix: { tipo: "cnpj", chave: "10743586000138", nome: "IEA‮DESPA\u0007\n" }, observacao: "linha 1 linha 2​ " + "x".repeat(400) });
+    const sujo = G.normalizarPagamento({ pix: { tipo: "cnpj", chave: "10743586000138", nome: "IEA\u202eDESPA\u0007\n" }, observacao: "linha 1\u2028linha 2\u200b " + "x".repeat(400) });
     eq(sujo.pix.nome, "IEA DESPA", "caractere invisível, de controle e de inverter o texto vira espaço");
     verdade(sujo.observacao.startsWith("linha 1 linha 2") && sujo.observacao.length === 300, "o recado: uma linha só, cortado em 300");
     eq(G.normalizarPagamento({ pix: { tipo: "cnpj", chave: "10743586000138", nome: "N".repeat(90) } }).pix.nome.length, 60, "o nome cortado em 60");
@@ -156,17 +156,86 @@ function lerTlv(texto) {
   });
 
   await tentar("o painel", async () => {
-    console.log("== o painel (aba Pagamento) ==");
-    const p = ler("pages/painel-eventos/evento/index.astro");
-    verdade(/data-tab="pagamento">Pagamento<\/button>/.test(p) && /data-tab-panel="pagamento"/.test(p), "a aba Pagamento existe");
-    const lerForm = p.slice(p.indexOf("function lerFormulario()"), p.indexOf("// ---------- v7.13: crachá"));
-    verdade(lerForm.length > 100 && !/pagamento_config/.test(lerForm), "o \"Salvar evento\" não manda `pagamento_config` (um não apaga o outro)");
-    const salvar = p.slice(p.indexOf("pagamentoForm?.addEventListener(\"submit\""), p.indexOf("await carregarPerguntas(token, eventoIdNumero);"));
+    console.log("== os painéis (aba Pagamento: eventos e camisetas) ==");
+    const lib = fs.readFileSync(path.join(__dirname, "../../src/lib/painelPagamento.ts"), "utf8");
+    const comp = ler("components/PainelPagamento.astro");
+    verdade(/data-igreja-cnpj=\{siteConfig\.cnpj\}/.test(comp) && /fPixTipo\.value = "cnpj";/.test(lib), "o botão da chave Pix da Igreja usa o CNPJ do site");
+    const salvar = lib.slice(lib.indexOf("form.addEventListener(\"submit\""));
     verdade(/body: JSON\.stringify\(\{ pagamento_config: valor \}\)/.test(salvar), "a aba grava SÓ `pagamento_config`");
-    verdade(salvar.indexOf("problemaPagamento(dados)") > -1 && salvar.indexOf("problemaPagamento(dados)") < salvar.indexOf("fetch("), "confere antes de gravar");
-    verdade(salvar.indexOf("if (!pagamentoDisponivel)") > -1 && salvar.indexOf("if (!pagamentoDisponivel)") < salvar.indexOf("fetch("), "sem o campo no Directus, não grava (avisa)");
-    verdade(/if \(!pagamentoStatus \|\| pagamentoOcupado\) return;/.test(salvar) && /finally \{\s*pagamentoOcupado = false;/.test(salvar), "um salvamento por vez");
-    verdade(/data-igreja-cnpj=\{siteConfig\.cnpj\}/.test(p) && /fPixTipo\.value = "cnpj";/.test(p), "o botão da chave Pix da Igreja usa o CNPJ do site");
+    verdade(salvar.indexOf("problemaPagamento(dados)") > -1 && salvar.indexOf("problemaPagamento(dados)") < salvar.indexOf("await pedir("), "confere antes de gravar");
+    verdade(salvar.indexOf("if (!disponivel)") > -1 && salvar.indexOf("if (!disponivel)") < salvar.indexOf("await pedir("), "sem o campo no Directus, não grava (avisa)");
+    verdade(/if \(ocupado\) return;/.test(salvar) && /finally \{\s*ocupado = false;/.test(salvar), "um salvamento por vez");
+    verdade(/hasOwnProperty\.call\(op\.registro, "pagamento_config"\)/.test(lib), "sabe se o campo existe pelo registro lido com `*`");
+    const ev = ler("pages/painel-eventos/evento/index.astro");
+    verdade(/data-tab="pagamento">Pagamento<\/button>/.test(ev) && /<PainelPagamento alvo="evento" \/>/.test(ev) && /ligarPainelPagamento\(\{[\s\S]{0,200}colecao: "eventos"/.test(ev), "painel de eventos: a aba usa o componente e grava em `eventos`");
+    const lerForm = ev.slice(ev.indexOf("function lerFormulario()"), ev.indexOf("// ---------- v7.13: crachá"));
+    verdade(lerForm.length > 100 && !/pagamento_config/.test(lerForm), "o \"Salvar evento\" não manda `pagamento_config` (um não apaga o outro)");
+    verdade(!/f-pix-tipo/.test(ev), "o formulário não ficou duplicado no painel de eventos");
+    const cam = ler("pages/painel-camisetas/grupo/index.astro");
+    verdade(/data-tab="pagamento">Pagamento<\/button>/.test(cam) && /<PainelPagamento alvo="campanha" \/>/.test(cam) && /colecao: "camiseta_grupos"/.test(cam) && /herdado: pagamentoDoEvento/.test(cam) && /pedir: api/.test(cam), "painel de camisetas: a aba grava em `camiseta_grupos`, mostra o herdado do evento e renova a sessão");
+    verdade(/\/items\/eventos\/\$\{grupo\.evento\}\?fields=\*/.test(cam), "o evento vinculado é lido com `*` (sem o campo, nada de 403)");
+    const lerFormCam = cam.slice(cam.indexOf("evento: fEvento.value"), cam.indexOf("ativo: fAtivo.checked"));
+    verdade(lerFormCam.length > 50 && !/pagamento_config/.test(lerFormCam), "o \"Salvar\" da campanha não manda `pagamento_config`");
+  });
+
+  await tentar("camisetas", async () => {
+    console.log("== camisetas: o como pagar da campanha ou do evento ==");
+    const propria = { pix: { tipo: "cnpj", chave: "10743586000138", nome: "IEADESPA" } };
+    const doEvento = { dinheiro: { contato: "Maria", telefone: "94991234567", onde: "" } };
+    eq(G.pagamentoDaCampanha(propria, doEvento).pix.chave, "10743586000138", "a campanha com o seu: vale o dela");
+    eq(G.pagamentoDaCampanha(propria, doEvento).dinheiro, null, "e não mistura com o do evento");
+    eq(G.pagamentoDaCampanha(null, doEvento).dinheiro.contato, "Maria", "a campanha vazia: vale o do evento vinculado");
+    eq(G.pagamentoDaCampanha({ observacao: "só recado" }, doEvento).dinheiro.contato, "Maria", "só um recado na campanha (sem forma de pagamento): vale o do evento");
+    eq(G.temFormaDePagamento(G.pagamentoDaCampanha(null, null)), false, "nenhum dos dois: vazio (a página avisa)");
+    eq(G.temFormaDePagamento(G.pagamentoDaCampanha({ pix: { tipo: "cnpj", chave: "1", nome: "X" } }, "lixo")), false, "Pix errado na campanha e lixo no evento: vazio");
+    const pg = ler("pages/camiseta/[slug].astro");
+    verdade(/fields=\*,evento\.\*,ministerio\.name/.test(pg), "a página da camiseta lê o evento com `evento.*` (sem o campo, nada de 403 no build)");
+    verdade(/const pagamento = pagamentoDaCampanha\(lote\.pagamento_config, lote\.evento\?\.pagamento_config\);/.test(pg), "e escolhe pela regra da campanha");
+    verdade(/\{temPreco && <ComoPagar pagamento=\{pagamento\} cidade=\{config\.address_city\} depoisDe="fazer o pedido"/.test(pg) && pg.indexOf("<ComoPagar") < pg.indexOf("<AvisoGolpe"), "o \"Como pagar\" só quando há preço, antes do aviso contra golpe");
+    verdade(/const totalPedido = Math\.round\(itens\.reduce\(\(soma, item\) => soma \+ item\.quantidade \* precoTamanho\(item\.tamanho\), 0\) \* 100\) \/ 100;/.test(pg) && pg.indexOf("const totalPedido") < pg.indexOf("form.reset();"), "depois do pedido: o valor é calculado dos itens ANTES de limpar o formulário");
+    verdade(/window\.ieadespaPagamento\.mostrarValor\(pagarAgora, totalPedido, "Depois de pagar, informe o pagamento em \\"Meus pedidos\\"/.test(pg), "e o texto diz para informar em \"Meus pedidos\"");
+    for (const [arq, nome] of [["pages/meus-pedidos-camiseta.astro", "Meus pedidos"], ["pages/minha-conta.astro", "Minha Conta"]]) {
+      const t = ler(arq);
+      verdade(/preencherComoPagarPedido\(caixa, p\.comoPagar, /.test(t) && /data-como-pagar-pedido="\$\{p\.id\}"/.test(t) && /data-pix-cidade=\{config\.address_city\}/.test(t), `${nome}: o pedido que deve mostra como pagar o que falta`);
+    }
+    const nav = fs.readFileSync(path.join(__dirname, "../../src/lib/pagamentoNavegador.ts"), "utf8");
+    const pedido = nav.slice(nav.indexOf("export function preencherComoPagarPedido"), nav.indexOf("function iniciar()"));
+    verdade(pedido.length > 500 && !/innerHTML/.test(pedido) && /buildPixPayload\(\{ \.\.\.codigo, valor: falta \}\)/.test(pedido), "o como pagar do pedido: sem innerHTML e com o Pix de exatamente o que falta");
+    verdade(/a\.href = `tel:\+55\$\{tel\.replace\(\/\\D\/g, ""\)\}`;/.test(pedido), "o link de ligar só com dígitos");
+  });
+
+  await tentar("as consultas de pedidos", async () => {
+    console.log("== as consultas de pedidos (api) ==");
+    const { pagamentoDosGrupos } = require("../../api/src/lib/comoPagar.js");
+    const chamadas = [];
+    const fetchOriginal = global.fetch;
+    let modo = "ok";
+    global.fetch = async (url) => {
+      chamadas.push(String(url));
+      if (modo === "fora") return { ok: false, status: 503, json: async () => ({}) };
+      if (modo === "lança") throw new Error("rede");
+      if (String(url).includes("/items/camiseta_grupos")) return { ok: true, json: async () => ({ data: [{ id: 10, evento: 304, pagamento_config: null }, { id: 11, evento: null, pagamento_config: { pix: 1 } }] }) };
+      if (String(url).includes("/items/eventos")) return { ok: true, json: async () => ({ data: [{ id: 304, pagamento_config: { dinheiro: 2 } }] }) };
+      return { ok: false, status: 404, json: async () => ({}) };
+    };
+    try {
+      let m = await pagamentoDosGrupos("http://d", {}, [10, 11, 10, "x", null]);
+      eq([m.get(10), m.get(11)], [{ campanha: null, evento: { dinheiro: 2 } }, { campanha: { pix: 1 }, evento: null }], "devolve o da campanha e o do evento vinculado, crus");
+      verdade(chamadas.every((u) => /fields=\*&/.test(u)) && /filter\[id\]\[_in\]=10,11&/.test(chamadas[0]), "lê com `fields=*` (sem o campo, nada de 403) e só os grupos pedidos, sem repetir");
+      chamadas.length = 0;
+      m = await pagamentoDosGrupos("http://d", {}, []);
+      eq([m.size, chamadas.length], [0, 0], "nenhum pedido devendo: nem pergunta ao Directus");
+      modo = "fora";
+      eq((await pagamentoDosGrupos("http://d", {}, [10])).size, 0, "Directus fora: mapa vazio (a consulta segue sem o como pagar)");
+      modo = "lança";
+      eq((await pagamentoDosGrupos("http://d", {}, [10])).size, 0, "erro de rede: mapa vazio, sem quebrar");
+    } finally {
+      global.fetch = fetchOriginal;
+    }
+    for (const arq of ["ConsultarPedidosCamiseta", "ConsultarMinhaConta"]) {
+      const t = fs.readFileSync(path.join(__dirname, `../../api/${arq}/index.js`), "utf8");
+      verdade(/grupo\.id,grupo\.nome/.test(t) && /await pagamentoDosGrupos\(DIRECTUS_URL, headers, devendo\.map\(\(p\) => p\.grupo\?\.id\)\)/.test(t) && /comoPagar: .*valorTotal > Number\(p\.valor_pago \?\? 0\) \? comoPagar\.get\(Number\(p\.grupo\?\.id\)\) \?\? null : null/.test(t), `${arq}: o como pagar só no pedido que ainda deve`);
+    }
   });
 
   await tentar("o script do esquema", async () => {
@@ -180,10 +249,12 @@ function lerTlv(texto) {
           req.on("end", () => {
             chamadas.push({ metodo: req.method, url: req.url, corpo: corpo ? JSON.parse(corpo) : null });
             const responder = (data, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify({ data })); };
-            if (req.method === "GET" && req.url === "/fields/eventos") return responder(estado.campos.map((field) => ({ field })));
+            const col = (req.url.match(/^\/fields\/([a-z_]+)/) || [])[1];
+            if (req.method === "GET" && col) return responder((estado.campos[col] || []).map((field) => ({ field })));
             if (req.method === "GET" && req.url.startsWith("/policies")) return responder(estado.politicas);
-            if (req.method === "GET" && req.url.startsWith("/permissions")) return responder(estado.permissoes);
-            if (req.method === "POST" && req.url === "/fields/eventos") return responder({});
+            const colPerm = decodeURIComponent(req.url).match(/filter\[collection\]\[_eq\]=([a-z_]+)/);
+            if (req.method === "GET" && req.url.startsWith("/permissions")) return responder(estado.permissoes.filter((p) => !colPerm || (p.collection || "eventos") === colPerm[1]));
+            if (req.method === "POST" && col) return responder({});
             if (req.method === "PATCH" && req.url.startsWith("/permissions/")) return responder({});
             responder(null, 404);
           });
@@ -198,22 +269,48 @@ function lerTlv(texto) {
           filho.on("close", (codigo) => srv.close(() => ok({ codigo, saida, chamadas })));
         });
       });
-    const politicas = [{ id: "pub", name: null, admin_access: false }, { id: "ed", name: "Editor de eventos", admin_access: false }, { id: "adm", name: "Administrator", admin_access: true }];
-    const hoje = [{ id: 1, policy: null, action: "read", fields: ["*"] }, { id: 2, policy: "ed", action: "read", fields: ["*"] }, { id: 3, policy: "ed", action: "update", fields: ["*"] }];
-    let r = await rodar({ campos: ["id", "title"], politicas, permissoes: hoje }, []);
-    const criou = r.chamadas.filter((c) => c.metodo === "POST" && c.url === "/fields/eventos");
-    eq([r.codigo, criou.length, criou[0] && criou[0].corpo.field, criou[0] && criou[0].corpo.type], [0, 1, "pagamento_config", "json"], "sem o campo: cria eventos.pagamento_config (json) e termina bem");
-    eq(r.chamadas.filter((c) => c.metodo === "PATCH").length, 0, "com \"*\" nas permissões: não mexe em nenhuma");
-    r = await rodar({ campos: ["id", "pagamento_config"], politicas, permissoes: hoje }, []);
-    eq([r.codigo, r.chamadas.filter((c) => c.metodo !== "GET").length], [0, 0], "rodar de novo (o campo já existe): não grava nada");
-    r = await rodar({ campos: ["id"], politicas, permissoes: [{ id: 7, policy: null, action: "read", fields: ["id", "title"] }, { id: 8, policy: "ed", action: "update", fields: ["title"] }] }, []);
-    const patches = r.chamadas.filter((c) => c.metodo === "PATCH");
-    eq(patches.map((c) => [c.url, c.corpo.fields]), [["/permissions/7", ["id", "title", "pagamento_config"]], ["/permissions/8", ["title", "pagamento_config"]]], "permissão com lista de campos: o campo entra na lista (leitura pública e alteração da equipe)");
-    r = await rodar({ campos: ["id"], politicas, permissoes: hoje }, ["--simular"]);
-    eq([r.codigo, r.chamadas.filter((c) => c.metodo !== "GET").length, /\[simular\] eventos\.pagamento_config/.test(r.saida)], [0, 0, true], "--simular: só diz o que faria, não grava nada");
-    r = await rodar({ campos: ["id", "pagamento_config"], politicas, permissoes: [...hoje, { id: 9, policy: null, action: "update", fields: ["*"] }] }, []);
-    eq([r.codigo, /o PÚBLICO pode alterar eventos/.test(r.saida)], [1, true], "o público podendo alterar eventos: avisa e termina com erro");
+    const politicas = [{ id: "pub", name: null, admin_access: false }, { id: "ed", name: "Editor de eventos", admin_access: false }, { id: "gc", name: "Gestor de Camisetas", admin_access: false }, { id: "adm", name: "Administrator", admin_access: true }];
+    // o retrato de produção em 09/11/2026: eventos tudo "*"; camiseta_grupos com a leitura PÚBLICA numa lista
+    const hoje = [
+      { id: 1, collection: "eventos", policy: null, action: "read", fields: ["*"] },
+      { id: 2, collection: "eventos", policy: "ed", action: "read", fields: ["*"] },
+      { id: 3, collection: "eventos", policy: "ed", action: "update", fields: ["*"] },
+      { id: 4, collection: "camiseta_grupos", policy: null, action: "read", fields: ["id", "slug", "nome"] },
+      { id: 5, collection: "camiseta_grupos", policy: "gc", action: "update", fields: ["*"] },
+      { id: 6, collection: "camiseta_grupos", policy: "adm", action: "read", fields: ["id"] },
+    ];
+    const semCampo = { eventos: ["id", "title"], camiseta_grupos: ["id", "nome"] };
+    const comCampo = { eventos: ["id", "pagamento_config"], camiseta_grupos: ["id", "pagamento_config"] };
+    let r = await rodar({ campos: semCampo, politicas, permissoes: hoje }, []);
+    const criou = r.chamadas.filter((c) => c.metodo === "POST").map((c) => [c.url, c.corpo.field, c.corpo.type]);
+    eq([r.codigo, criou], [0, [["/fields/eventos", "pagamento_config", "json"], ["/fields/camiseta_grupos", "pagamento_config", "json"]]], "sem os campos: cria os dois (eventos e camiseta_grupos, json) e termina bem");
+    eq(r.chamadas.filter((c) => c.metodo === "PATCH").map((c) => [c.url, c.corpo.fields]), [["/permissions/4", ["id", "slug", "nome", "pagamento_config"]]], "só a leitura pública das camisetas (uma lista) ganha o campo; \"*\" e administrador ficam como estão");
+    r = await rodar({ campos: comCampo, politicas, permissoes: hoje.map((p) => (p.id === 4 ? { ...p, fields: [...p.fields, "pagamento_config"] } : p)) }, []);
+    eq([r.codigo, r.chamadas.filter((c) => c.metodo !== "GET").length], [0, 0], "rodar de novo (tudo já feito): não grava nada");
+    r = await rodar({ campos: semCampo, politicas, permissoes: hoje }, ["--simular"]);
+    eq([r.codigo, r.chamadas.filter((c) => c.metodo !== "GET").length, /\[simular\] eventos\.pagamento_config/.test(r.saida) && /\[simular\] camiseta_grupos\.pagamento_config/.test(r.saida)], [0, 0, true], "--simular: só diz o que faria, não grava nada");
+    r = await rodar({ campos: comCampo, politicas, permissoes: [...hoje, { id: 9, collection: "camiseta_grupos", policy: null, action: "update", fields: ["*"] }] }, []);
+    eq([r.codigo, /o PÚBLICO pode alterar camiseta_grupos/.test(r.saida)], [1, true], "o público podendo alterar campanhas: avisa e termina com erro");
     verdade(!/token-de-teste/.test(r.saida), "o token nunca aparece na saída");
+  });
+
+  await tentar("o tutorial", async () => {
+    console.log("== o tutorial \"Como participar\" ==");
+    const t = ler("pages/como-participar.astro");
+    for (const id of ["antes", "inscricao", "pagar", "pix", "informar", "no-dia", "depois", "camisetas", "golpe", "duvidas"])
+      verdade(new RegExp(`id: "${id}"`).test(t) && new RegExp(`id="${id}"`).test(t), `a seção #${id} está no índice e na página`);
+    verdade(/<AvisoGolpe/.test(t) && /Pix Copia e Cola/.test(t) && /não pague/i.test(t), "o tutorial ensina o Pix Copia e Cola e traz o aviso contra golpe");
+    const links = [
+      ["pages/evento/[slug].astro", 'href="/como-participar/"'],
+      ["pages/eventos.astro", 'href="/como-participar/"'],
+      ["pages/camiseta/[slug].astro", 'href="/como-participar/#camisetas"'],
+      ["pages/informar-pagamento/[slug].astro", 'href="/como-participar/#pix"'],
+      ["pages/meus-pedidos-camiseta.astro", 'href="/como-participar/#camisetas"'],
+    ];
+    for (const [arq, href] of links) verdade(ler(arq).includes(href), `${arq} aponta para o tutorial`);
+    verdade(fs.readFileSync(path.join(__dirname, "../../src/config/site.ts"), "utf8").includes('{ label: "Como participar dos eventos", href: "/como-participar/" }'), "o rodapé tem o link");
+    const ev = ler("pages/evento/[slug].astro");
+    verdade(/Para quem se inscreveu/.test(ev) && ev.indexOf("Para quem se inscreveu") < ev.indexOf("abrir o check-in de presença"), "os atalhos de quem se inscreveu vêm antes do check-in da equipe");
   });
 
   console.log(`\ncomo pagar: ${total - falhas}/${total} verificações ok${falhas ? ` — ${falhas} FALHA(S)` : ""}`);

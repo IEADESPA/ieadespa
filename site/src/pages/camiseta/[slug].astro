@@ -1,10 +1,12 @@
 ---
 import AvisoGolpe from "@/components/AvisoGolpe.astro";
+import ComoPagar from "@/components/ComoPagar.astro";
+import { pagamentoDaCampanha } from "@/lib/pagamentoEvento";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
-import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, STATUS_CAMISETA_URL, directusAssetUrl, fetchItems } from "@/lib/directus";
+import { CRIAR_PEDIDO_CAMISETA_URL, DIRECTUS_URL, STATUS_CAMISETA_URL, directusAssetUrl, fetchConfiguracoes, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
@@ -19,10 +21,13 @@ interface Lote {
   precos_tamanho: Record<string, number> | null;
   limite_uma_por_pessoa: boolean;
   pedidos_ate: string | null;
-  evento: { title: string; cover: string | null } | null;
+  /** `evento.*`: o evento inteiro (inclusive `pagamento_config` quando o campo existe — pedir pelo nome daria 403 sem ele). */
+  evento: { title: string; cover: string | null; pagamento_config?: unknown } | null;
   ministerio: { name: string } | null;
   pedir_congregacao: boolean;
   imagem: string | null;
+  /** 09/11/2026: como pagar (aba "Pagamento" do painel de camisetas); vazio = o do evento vinculado. */
+  pagamento_config?: unknown;
 }
 
 type TipoPergunta = "texto_curto" | "texto_longo" | "selecao_unica" | "selecao_multipla" | "numero" | "data";
@@ -39,7 +44,7 @@ interface Pergunta {
 export async function getStaticPaths() {
   const grupos = await fetchItems<Lote>(
     "camiseta_grupos",
-    "filter[ativo][_eq]=true&fields=*,evento.title,evento.cover,ministerio.name",
+    "filter[ativo][_eq]=true&fields=*,evento.*,ministerio.name",
   );
   return grupos.map((lote) => ({ params: { slug: lote.slug }, props: { lote } }));
 }
@@ -83,6 +88,11 @@ const precosPorTamanhoVariam = tamanhos.length > 0 && new Set(tamanhos.map((t) =
 // padrão do site (BaseLayout já resolve isso sozinho quando `image` não é
 // passada).
 const imagemId = lote.evento?.cover ?? lote.imagem ?? null;
+
+// 09/11/2026 — como pagar: o da campanha; vazio, o do evento vinculado (só aparece quando há o que pagar).
+const pagamento = pagamentoDaCampanha(lote.pagamento_config, lote.evento?.pagamento_config);
+const temPreco = Number(lote.valor_venda) > 0 || Object.values(lote.precos_tamanho ?? {}).some((v) => Number(v) > 0);
+const config = await fetchConfiguracoes();
 const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 1600, quality: 80, format: "webp" }) : undefined;
 ---
 
@@ -146,6 +156,10 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
         )}
       </ul>
 
+      {temPreco && <ComoPagar pagamento={pagamento} cidade={config.address_city} depoisDe="fazer o pedido" class="mt-6" />}
+      <p class="mt-2 text-xs">
+        Primeira vez? <a href="/como-participar/#camisetas" class="text-accent underline underline-offset-2">Veja o passo a passo</a> do pedido e do pagamento.
+      </p>
       <AvisoGolpe class="mt-6" />
 
       {
@@ -229,6 +243,7 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
               <button type="submit" class="btn btn-solid">Fazer pedido</button>
               <p class="text-sm leading-relaxed text-muted-foreground" role="status" aria-live="polite" data-pedido-status />
             </div>
+            <div class="pagar-agora mt-2" data-pagar-agora hidden aria-live="polite"></div>
           </form>
         )
       }
@@ -527,6 +542,13 @@ const imagemCompartilhamento = imagemId ? directusAssetUrl(imagemId, { width: 16
             }
 
             if (status) status.textContent = "✅ Pedido registrado! Acompanhe em \"Meus pedidos\", com o seu telefone.";
+            // 09/11/2026 — o valor do pedido (a mesma conta do total na tela e do servidor: peças × preço do tamanho) e, com Pix, o
+            // código que já abre com esse valor (`ComoPagar.astro` / `pagamentoNavegador.ts`).
+            const totalPedido = Math.round(itens.reduce((soma, item) => soma + item.quantidade * precoTamanho(item.tamanho), 0) * 100) / 100;
+            const pagarAgora = form.querySelector("[data-pagar-agora]");
+            if (pagarAgora && window.ieadespaPagamento) {
+              window.ieadespaPagamento.mostrarValor(pagarAgora, totalPedido, "Depois de pagar, informe o pagamento em \"Meus pedidos\", com o seu telefone: a equipe confere no extrato.");
+            }
             form.reset();
             document.querySelectorAll(".item-linha, .item-linha-preco").forEach((linha, indice) => { if (indice > 1) linha.remove(); });
             atualizarTotal();

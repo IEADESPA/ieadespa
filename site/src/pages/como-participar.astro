@@ -1,0 +1,187 @@
+---
+/*
+ * Tutorial "Como participar" (09/11/2026, pedido do responsável): o passo a passo para quem NUNCA participou de um evento da Igreja —
+ * gente de fora, de outra igreja ou de outra cidade (o próximo ano terá evento regional). Quem é da Igreja já sabe para quem mandar o
+ * dinheiro; quem é de fora fica perdido. Cobre a inscrição, o pagamento (Pix com o valor certo ou dinheiro), informar o pagamento, o dia
+ * do evento (QR Code, crachá), o depois (certificado, pesquisa), as camisetas e o cuidado com golpe. Linkado da página de cada evento,
+ * da camiseta, da "Informar pagamento", de "Meus pedidos" e do rodapé. Texto fixo aqui (não no Directus): muda junto com o site.
+ */
+import AvisoGolpe from "@/components/AvisoGolpe.astro";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { siteConfig } from "@/config/site";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const secoes = [
+  { id: "antes", titulo: "Antes de começar" },
+  { id: "inscricao", titulo: "1. Inscreva-se" },
+  { id: "pagar", titulo: "2. Pague" },
+  { id: "pix", titulo: "Pagar com Pix, passo a passo" },
+  { id: "informar", titulo: "3. Informe o pagamento" },
+  { id: "no-dia", titulo: "4. No dia do evento" },
+  { id: "depois", titulo: "5. Depois do evento" },
+  { id: "camisetas", titulo: "Camisetas" },
+  { id: "golpe", titulo: "Cuidado com golpe" },
+  { id: "duvidas", titulo: "Dúvidas comuns" },
+];
+---
+
+<BaseLayout
+  title="Como participar dos eventos"
+  description={`Passo a passo para se inscrever, pagar e participar dos eventos da ${siteConfig.name} — também para quem é de fora, de outra igreja ou de outra cidade.`}
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="outer">
+    <div class="canvas como-participar">
+      <header class="pagehead">
+        <p class="eyebrow">Eventos</p>
+        <h1 class="pagehead-title">Como participar</h1>
+        <p class="pagehead-description">
+          Primeira vez num evento da {siteConfig.name}? Vem de outra igreja ou de outra cidade? Aqui está o caminho inteiro: da inscrição
+          ao certificado. Não precisa criar conta nem senha.
+        </p>
+      </header>
+
+      <nav class="como-participar-indice" aria-label="Nesta página">
+        <p class="text-sm font-semibold">Nesta página</p>
+        <ol>
+          {secoes.map((s) => <li><a href={`#${s.id}`}>{s.titulo}</a></li>)}
+        </ol>
+      </nav>
+
+      <div class="prose mt-10">
+        <h2 id="antes">Antes de começar</h2>
+        <ul>
+          <li>Você só precisa do <strong>nome</strong> e de um <strong>telefone</strong> (de preferência o seu WhatsApp). Guarde: é esse mesmo telefone que confirma que a inscrição é sua depois.</li>
+          <li>O <strong>e-mail é opcional</strong>. Se você colocar, recebe a confirmação por e-mail e encontra tudo depois em <a href="/minha-conta/">Minha conta</a>.</li>
+          <li>Os eventos estão na <a href="/eventos/">agenda</a>. Abra o evento: lá estão a data, o local, os valores e o formulário de inscrição.</li>
+        </ul>
+
+        <h2 id="inscricao">1. Inscreva-se</h2>
+        <ol>
+          <li>Na página do evento, escolha o <strong>valor</strong> (o "lote"), se o evento tiver mais de um.</li>
+          <li>Preencha o nome, o telefone e as perguntas do evento (por exemplo, a sua igreja e a sua cidade). Tem cupom de desconto? Coloque no campo do cupom.</li>
+          <li>Vai inscrever mais gente junto (família, grupo da igreja)? Quando o evento permite, dá para inscrever várias pessoas de uma vez — cada uma recebe o seu código.</li>
+          <li>Clique em <strong>Confirmar inscrição</strong>. Aparece o seu <strong>código de 6 letras</strong> (por exemplo, <code>A3F9K2</code>). <strong>Anote ou tire um print</strong>: é com ele que você entra no evento.</li>
+        </ol>
+        <p>
+          Se aparecer <strong>"lista de espera"</strong> ou <strong>"aguardando aprovação"</strong>, ainda <strong>não pague</strong>: espere a vaga ser
+          confirmada (a confirmação acontece sozinha, com o mesmo código).
+        </p>
+
+        <h2 id="pagar">2. Pague</h2>
+        <p>
+          Logo depois da inscrição, a própria página mostra o <strong>valor a pagar</strong> e, quando o evento recebe por Pix, um
+          <strong>QR Code e um código "Copia e Cola" que já vêm com o valor certo</strong>. O bloco <strong>"Como pagar"</strong> da página do
+          evento também mostra a chave Pix, o nome de quem recebe e, quando dá para pagar em dinheiro, com quem falar.
+        </p>
+        <ul>
+          <li><strong>Pix:</strong> o jeito mais fácil, principalmente para quem é de outra cidade (veja o passo a passo logo abaixo).</li>
+          <li><strong>Dinheiro:</strong> fale com a pessoa indicada em "Como pagar" (telefone e WhatsApp estão lá) e combine a entrega.</li>
+          <li>Inscreveu um grupo? Dá para pagar tudo de uma vez: o valor que aparece já é a soma de quem ficou confirmado.</li>
+        </ul>
+
+        <h2 id="pix">Pagar com Pix, passo a passo</h2>
+        <ol>
+          <li>Abra o aplicativo do seu banco e entre na área <strong>Pix</strong>.</li>
+          <li>
+            Escolha <strong>"Pagar com QR Code"</strong> e aponte a câmera para o QR Code da página. Está no celular e não dá para apontar?
+            Toque em <strong>"Copiar código Pix (Copia e Cola)"</strong> na página, volte ao app do banco e escolha <strong>"Pix Copia e Cola"</strong>
+            — cole o código.
+          </li>
+          <li>O app mostra o <strong>valor</strong> e o <strong>nome de quem recebe</strong>. Confira os dois com o que está na página do evento.</li>
+          <li>Tudo certo? Confirme. Se o nome for outro, <strong>não pague</strong> e avise a Secretaria.</li>
+        </ol>
+        <p>Preferiu digitar a chave à mão? Use a chave mostrada em "Como pagar" e digite o valor da sua inscrição.</p>
+
+        <h2 id="informar">3. Informe o pagamento</h2>
+        <p>
+          Pagou? Avise a equipe: na página do evento, clique em <strong>"Informe o pagamento"</strong> (ou entre em <a href="/minha-conta/">Minha conta</a>).
+          Digite o seu código e o telefone da inscrição e diga a data, o meio, o valor e o nome de quem pagou. <strong>Não precisa mandar
+          comprovante</strong>: a equipe confere no extrato e confirma.
+        </p>
+
+        <h2 id="no-dia">4. No dia do evento</h2>
+        <ul>
+          <li>Na entrada, mostre o seu <strong>código</strong> (o print serve). Na página do evento há o <strong>"Meu QR Code"</strong>: com o código e o telefone, ele aparece na tela para a portaria escanear — dá para fazer ali mesmo na fila.</li>
+          <li>Se o evento tiver <strong>crachá</strong>, dá para baixar o seu já com o nome, com o mesmo código, e imprimir.</li>
+          <li>Não vai poder ir? <strong>Cancele</strong> a inscrição pela página do evento: se alguém estiver na lista de espera, essa pessoa fica com a vaga.</li>
+        </ul>
+
+        <h2 id="depois">5. Depois do evento</h2>
+        <ul>
+          <li><strong>Certificado:</strong> quem teve a presença confirmada baixa o certificado na página do evento, com o código e o telefone.</li>
+          <li><strong>Pesquisa:</strong> conte o que achou — leva menos de um minuto.</li>
+        </ul>
+
+        <h2 id="camisetas">Camisetas</h2>
+        <ol>
+          <li>Em <a href="/camisetas/">Camisetas e uniformes</a>, abra a campanha, escolha os tamanhos e as quantidades e faça o pedido com o seu telefone.</li>
+          <li>Depois do pedido, a página mostra o valor e como pagar (Pix com o valor certo, ou dinheiro).</li>
+          <li>Acompanhe em <a href="/meus-pedidos-camiseta/">Meus pedidos</a>, só com o telefone: lá aparecem o que falta pagar, como pagar e quando chegou. Pagou? Use <strong>"Informar pagamento"</strong> ali mesmo.</li>
+        </ol>
+      </div>
+
+      <section id="golpe" class="mt-10">
+        <h2 class="text-xl font-semibold tracking-tight">Cuidado com golpe</h2>
+        <AvisoGolpe class="mt-3" />
+        <ul class="mt-3 grid gap-1.5 text-sm leading-relaxed">
+          <li>Pague só pelos dados que aparecem <strong>aqui no site</strong>, na página do evento ou da camiseta.</li>
+          <li>Antes de confirmar o Pix, confira o <strong>nome de quem recebe</strong> no app do banco.</li>
+          <li>Recebeu mensagem, ligação ou e-mail pedindo Pix "da inscrição"? É golpe. Avise a <a href="/contato/" class="underline underline-offset-2">Secretaria</a>.</li>
+        </ul>
+      </section>
+
+      <div class="prose mt-10">
+        <h2 id="duvidas">Dúvidas comuns</h2>
+        <h3>Perdi o meu código.</h3>
+        <p>
+          Se você colocou o e-mail na inscrição, ele está no e-mail de confirmação e em <a href="/minha-conta/">Minha conta</a>. Se não colocou,
+          fale com a organização do evento (o contato está na página do evento) ou com a <a href="/contato/">Secretaria</a>.
+        </p>
+        <h3>Sou de outra igreja ou de outra cidade. Posso participar?</h3>
+        <p>Quando o evento é aberto, sim: a inscrição é igual para todos. Pague pelo Pix e informe o pagamento — não precisa vir antes à sede.</p>
+        <h3>Paguei um valor diferente, ou paguei duas vezes.</h3>
+        <p>Informe o pagamento com o valor que você pagou de verdade e fale com o contato de "Como pagar": a equipe confere no extrato e acerta.</p>
+        <h3>A página diz que a forma de pagamento ainda não foi publicada.</h3>
+        <p>Espere: a equipe ainda vai colocar os dados. Não pague para ninguém que entrar em contato pedindo — os dados certos aparecem na página.</p>
+        <h3>Ainda tenho dúvida.</h3>
+        <p>Fale com a <a href="/contato/">Secretaria</a> ou veja as <a href="/duvidas-frequentes/">dúvidas frequentes</a>.</p>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <style>
+    .como-participar {
+      max-width: 44rem;
+    }
+
+    .como-participar-indice {
+      margin-top: 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 0.875rem 1rem;
+    }
+
+    .como-participar-indice ol {
+      margin: 0.5rem 0 0;
+      padding-left: 1.25rem;
+      display: grid;
+      gap: 0.25rem;
+      font-size: 0.9375rem;
+    }
+
+    .como-participar-indice a {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .como-participar :global(h2[id]),
+    .como-participar section[id] {
+      scroll-margin-top: 5rem;
+    }
+  </style>
+</BaseLayout>

@@ -21,9 +21,11 @@ interface Props {
   pagamento: PagamentoEvento;
   /** Cidade do recebedor no código Pix (a mesma da página de doações: a da configuração do site). */
   cidade: string;
+  /** O que a pessoa faz para ganhar o código com o valor certo: "se inscrever" (evento) ou "fazer o pedido" (camiseta). */
+  depoisDe?: string;
   class?: string;
 }
-const { pagamento, cidade, class: classe = "" } = Astro.props;
+const { pagamento, cidade, depoisDe = "se inscrever", class: classe = "" } = Astro.props;
 const codigo = dadosDoCodigoPix(pagamento, cidade);
 const payload = codigo ? buildPixPayload(codigo) : null;
 const chaveCopiar = pagamento.pix ? chaveParaPix(pagamento.pix.tipo, pagamento.pix.chave) : null;
@@ -63,7 +65,7 @@ const whatsapp = telefone ? linkWhatsApp(telefone) : null;
               Copiar código Pix (Copia e Cola)
             </button>
             <p class="como-pagar-texto text-xs mt-1">
-              Neste QR Code você digita o valor no app. Depois de se inscrever, aparece aqui um código que já vem com o valor certo.
+              Neste QR Code você digita o valor no app. Depois de {depoisDe}, aparece um código que já vem com o valor certo.
             </p>
           </>
         )}
@@ -139,14 +141,5 @@ const whatsapp = telefone ? linkWhatsApp(telefone) : null;
     word-break: break-all;
   }
 
-  /* global: o QR com o valor certo é criado depois da inscrição, fora deste componente */
-  :global(.como-pagar-qr img) {
-    display: block;
-    width: 12rem;
-    max-width: 100%;
-    height: auto;
-    image-rendering: pixelated;
-    background: #fff;
-    border-radius: var(--radius-md);
-  }
+  /* .pagar-agora e .como-pagar-qr img ficam em src/styles/global.css (também usados fora deste componente) */
 </style>

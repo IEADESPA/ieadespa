@@ -52,6 +52,9 @@ const config = await fetchConfiguracoes();
       </header>
 
       <ComoPagar pagamento={pagamento} cidade={config.address_city} class="mt-6" />
+      <p class="mt-2 text-xs">
+        Dúvida sobre como pagar com Pix? <a href="/como-participar/#pix" class="text-accent underline underline-offset-2">Veja o passo a passo</a>.
+      </p>
       <AvisoGolpe class="mt-4" />
 
       <form class="mt-8 grid gap-4 max-w-sm" data-pagamento-busca>

@@ -184,6 +184,17 @@ export function normalizarPagamento(bruto: unknown): PagamentoEvento {
 
 export const temFormaDePagamento = (p: PagamentoEvento) => Boolean(p.pix || p.dinheiro);
 
+/**
+ * Camiseta (09/11/2026): o "como pagar" da própria campanha; sem forma de pagamento nela, o do evento vinculado; sem nenhum dos dois,
+ * vazio (a página avisa que ainda não foi publicado). Nunca mistura os dois (o Pix de um com o dinheiro do outro confundiria).
+ */
+export function pagamentoDaCampanha(daCampanha: unknown, doEvento: unknown): PagamentoEvento {
+  const proprio = normalizarPagamento(daCampanha);
+  if (temFormaDePagamento(proprio)) return proprio;
+  const herdado = normalizarPagamento(doEvento);
+  return temFormaDePagamento(herdado) ? herdado : proprio;
+}
+
 /** "(94) 99123-4567" a partir dos dígitos com DDD. */
 export function formatarTelefone(d: string): string {
   if (/^\d{11}$/.test(d)) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;

@@ -570,6 +570,20 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   `src/lib/pagamentoEvento.ts` (CPF/CNPJ com dígito, celular +55, e-mail até 77, chave aleatória;
   o campo é lido por `normalizarPagamento`, que nunca quebra a montagem). Teste sem rede:
   `scripts/testes/pagamento-evento-unidade.cjs`.
+- **Como pagar nas camisetas e o tutorial (09/11/2026)** — a aba "Pagamento" virou um componente
+  só (`src/components/PainelPagamento.astro` + `src/lib/painelPagamento.ts`), usado no painel de
+  eventos e no de camisetas (`camiseta_grupos.pagamento_config`; vazio = vale o do evento
+  vinculado, regra `pagamentoDaCampanha`, nunca misturando os dois). A página da camiseta mostra o
+  "Como pagar" quando há preço e, depois do pedido, o valor com o Pix certo; "Meus pedidos" e
+  "Minha Conta" mostram, no pedido que ainda deve, como pagar exatamente o que falta (as consultas
+  devolvem o JSON cru por `api/src/lib/comoPagar.js`, lido com `fields=*` para não dar 403 sem o
+  campo; o QR só quando a pessoa pede). Tutorial **`/como-participar/`** para quem nunca participou
+  (de fora, de outra igreja ou cidade — pensado também para o evento regional): inscrição, Pix passo
+  a passo, informar o pagamento, o dia do evento, certificado, camisetas, golpe e dúvidas; linkado
+  da agenda, da página do evento (que ganhou a lista "Para quem se inscreveu"), da camiseta, da
+  "Informar pagamento", de "Meus pedidos" e do rodapé. O esquema
+  (`scripts/directus-pagamento-evento-esquema.mjs`) cria os dois campos e põe o da camiseta na
+  leitura pública (que é uma lista de campos).
 
 ### Painel de conteúdo
 

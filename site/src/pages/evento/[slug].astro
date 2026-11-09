@@ -2,6 +2,8 @@
 import { renderizarMarkdown } from "@/lib/markdownSeguro";
 import Breadcrumbs from "@/components/Breadcrumbs.astro";
 import AvisoGolpe from "@/components/AvisoGolpe.astro";
+import ComoPagar from "@/components/ComoPagar.astro";
+import { normalizarPagamento } from "@/lib/pagamentoEvento";
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
@@ -54,6 +56,8 @@ interface Evento {
   description: string;
   body: string | null;
   cover: string | null;
+  /** 09/11/2026: como pagar (Pix e/ou dinheiro), da aba "Pagamento" do painel; lido só por `normalizarPagamento`. */
+  pagamento_config?: unknown;
   registration_url: string | null;
   aceita_inscricao: boolean;
   vagas_limite: number | null;
@@ -87,6 +91,7 @@ const bodyHtml = event.body ? await renderizarMarkdown(event.body) : "";
 const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const cover = event.cover ? directusAssetUrl(event.cover, { width: 1600, quality: 80, format: "webp" }) : undefined;
 const coverSrcset = event.cover ? directusAssetSrcset(event.cover, COVER_WIDTHS, { quality: 80, format: "webp" }) : undefined;
+const pagamento = normalizarPagamento(event.pagamento_config);
 const config = await fetchConfiguracoes();
 
 const timeRange = event.time ? `${event.time}${event.end_time ? ` às ${event.end_time}` : ""}` : null;
@@ -382,6 +387,7 @@ const structuredData = startDate
                       </li>
                     ))}
                   </ul>
+                  <ComoPagar pagamento={pagamento} cidade={config.address_city} class="mt-4" />
                   <p class="mt-2 text-xs">
                     Já se inscreveu e pagou?{" "}
                     <a href={`/informar-pagamento/${event.slug}/`} class="text-accent underline underline-offset-2">Informe o pagamento</a> — a equipe confere no extrato.
@@ -487,6 +493,7 @@ const structuredData = startDate
                   <button type="submit" class="btn btn-solid">Confirmar inscrição</button>
                   <p class="text-sm leading-relaxed text-muted-foreground" role="status" aria-live="polite" data-inscricao-status />
                 </div>
+                <div class="pagar-agora mt-2" data-pagar-agora hidden aria-live="polite"></div>
               </form>
 
               <div class="mt-4" data-lembrete-bloco hidden>
@@ -860,6 +867,14 @@ const structuredData = startDate
                 }
               }
 
+              // 09/11/2026 — o valor a pagar (só de quem ficou confirmado: lista de espera e aprovação pendente ainda não pagam) e, com
+              // Pix no evento, o código que já abre com esse valor (`ComoPagar.astro` / `pagamentoNavegador.ts`).
+              const pagarAgora = form.querySelector("[data-pagar-agora]");
+              const totalAPagar = resultados
+                .filter((r) => !r.pendenteAprovacao && !r.aguardandoVaga)
+                .reduce((soma, r) => soma + (Number(r.valor) > 0 ? Number(r.valor) : 0), 0);
+              if (pagarAgora && window.ieadespaPagamento) window.ieadespaPagamento.mostrarValor(pagarAgora, Math.round(totalAPagar * 100) / 100);
+
               // Confirmação por e-mail (Fase 21): melhor esforço, nunca
               // bloqueia nem aparece pra quem se inscreveu se falhar — a
               // inscrição em si já está gravada antes desta chamada.
@@ -914,6 +929,15 @@ const structuredData = startDate
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
       padding: 0.9rem 1.1rem;
+    }
+
+    /* o valor a pagar logo depois da inscrição (preenchido por `pagamentoNavegador.ts`) */
+    .pagar-agora {
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      max-width: 40rem;
     }
 
     .inscricao-card {

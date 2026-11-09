@@ -162,6 +162,7 @@ const allPosts = visiblePosts(await getAllMensagens());
           ${data ? `<p class="minha-conta-card-detalhe">${escapeHtml(data)}</p>` : ""}
           <p class="minha-conta-card-detalhe">Código: ${escapeHtml(i.codigo)} — ${escapeHtml(situacaoInscricao(i))}</p>
           ${i.faixa || i.valor != null ? `<p class="minha-conta-card-detalhe">${escapeHtml([i.faixa, i.valor != null ? formatarReais(i.valor) : null].filter(Boolean).join(" · "))}</p>` : ""}
+          ${podeInformarInscricao(i) && i.eventoSlug ? `<p class="minha-conta-card-detalhe"><a href="/informar-pagamento/${escapeHtml(i.eventoSlug)}/#como-pagar" class="link-sweep text-accent" data-como-pagar-link>Como pagar (Pix ou dinheiro)</a></p>` : ""}
           ${blocoPagamentoHtml("inscricao", i.id, i.pagamentoInformado, podeInformarInscricao(i))}
         </div>
       `;

@@ -584,10 +584,7 @@ const structuredData = startDate
           criarInscricaoUrl: CRIAR_INSCRICAO_URL,
           statusInscricaoUrl: `${STATUS_INSCRICAO_URL}/${event.id}`,
           enviarConfirmacaoUrl: ENVIAR_CONFIRMACAO_URL,
-          eventoTitulo: event.title,
           eventoSlug: event.slug,
-          eventoPeriodo: [event.event_date ? dateFormatter.format(new Date(event.event_date)) : null, timeRange].filter(Boolean).join(", "),
-          eventoLocal: localNome,
           vagasLimite: event.vagas_limite,
           requerAprovacao: event.requer_aprovacao,
           vapidPublicKey: "BGhp6vLgCjC9Hb9GyEeu5m_HdshobUuFfe6N9XoDqa4RdPfQQ60CgQVhlMtrs709q-aqUlXr7tVq3WX4z1jyokk",
@@ -882,13 +879,9 @@ const structuredData = startDate
                 fetch(enviarConfirmacaoUrl, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    email,
-                    eventoTitulo,
-                    eventoPeriodo,
-                    eventoLocal,
-                    pessoas: resultados.map((r) => ({ nome: r.nome, codigo: r.codigo, aguardandoVaga: r.aguardandoVaga, pendenteAprovacao: r.pendenteAprovacao })),
-                  }),
+                  // 09/11/2026: só o e-mail, o evento e os códigos — o título, a data, o local, os nomes e o valor o servidor lê do
+                  // Directus (antes ia tudo daqui, e qualquer um podia mandar um e-mail da Igreja com qualquer texto).
+                  body: JSON.stringify({ email, eventoId: Number(form.dataset.eventoId), codigos: resultados.map((r) => r.codigo) }),
                 }).catch(() => {});
               }
 

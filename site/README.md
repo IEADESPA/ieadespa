@@ -162,7 +162,13 @@ O modelo atual:
   seleção única/múltipla, número, data), respondidas em `respostas_inscricao`. Recursos por cima
   disso: vagas limite e prazo de inscrição automáticos, lista de espera com promoção automática ao
   cancelar, aprovação manual opcional (`pendente_aprovacao`), cupom de desconto, inscrição em grupo,
-  faixas de valor, e-mail de confirmação opcional (Azure Communication Services).
+  faixas de valor, e-mail de confirmação opcional (Azure Communication Services). Desde 09/11/2026
+  o navegador manda à `api/EnviarConfirmacaoInscricao` **só** o e-mail, o evento e os códigos: o
+  título, a data, o local, os nomes e o valor saem do Directus, e só se as inscrições forem daquele
+  evento e de até 30 minutos atrás, um e-mail por inscrição (antes o texto vinha do navegador e
+  qualquer um podia mandar, do e-mail da Igreja, um "Inscrição em (qualquer texto)" para qualquer
+  endereço). O e-mail leva o valor e o link do "Como pagar", nunca a chave Pix. Teste sem rede:
+  `scripts/testes/confirmacao-email-unidade.cjs`.
 - **Check-in sem exigir login de quem está na porta** — código curto de 6 caracteres (sem
   caracteres ambíguos) gerado na inscrição; `/checkin/<slug>/` (a tela usada pela equipe) exige
   login real do Directus; o autoatendimento (`/qrcode/<slug>/`) e o crachá/certificado usam

@@ -1,9 +1,11 @@
 ---
 import SiteFooter from "@/components/SiteFooter.astro";
 import AvisoGolpe from "@/components/AvisoGolpe.astro";
+import ComoPagar from "@/components/ComoPagar.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { INFORMAR_PAGAMENTO_URL, VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { INFORMAR_PAGAMENTO_URL, VERIFICAR_INSCRICAO_URL, fetchConfiguracoes, fetchItems } from "@/lib/directus";
+import { normalizarPagamento } from "@/lib/pagamentoEvento";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 /*
@@ -16,6 +18,8 @@ interface Evento {
   slug: string;
   title: string;
   aceita_inscricao: boolean;
+  /** 09/11/2026: como pagar (Pix e/ou dinheiro) — o mesmo bloco da página do evento. */
+  pagamento_config?: unknown;
 }
 
 export async function getStaticPaths() {
@@ -30,6 +34,8 @@ interface Props {
 
 const { event } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
+const pagamento = normalizarPagamento(event.pagamento_config);
+const config = await fetchConfiguracoes();
 ---
 
 <BaseLayout title={`Informar pagamento — ${event.title}`} description="Avise a equipe que você pagou a inscrição." noindex>
@@ -45,7 +51,8 @@ const allPosts = visiblePosts(await getAllMensagens());
         </p>
       </header>
 
-      <AvisoGolpe class="mt-6" />
+      <ComoPagar pagamento={pagamento} cidade={config.address_city} class="mt-6" />
+      <AvisoGolpe class="mt-4" />
 
       <form class="mt-8 grid gap-4 max-w-sm" data-pagamento-busca>
         <div class="grid gap-2">

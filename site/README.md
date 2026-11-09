@@ -550,6 +550,20 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   evento" não manda `cover`, então um não apaga o outro); remover desvincula e o arquivo fica no
   Directus. O site remonta sozinho (a versão do conteúdo lê `eventos` inteira). Teste sem rede:
   `scripts/testes/imagem-evento-unidade.cjs`.
+- **Como pagar a inscrição (09/11/2026)** — o aviso contra golpe mandava pagar "só pelos dados
+  mostrados aqui no site", mas nenhuma tela mostrava dado nenhum. Aba "Pagamento" na edição do
+  evento: chave Pix (tipo, chave e o nome que o banco mostra; botão "usar a chave Pix da Igreja",
+  o CNPJ do site) e/ou quem recebe em dinheiro (nome, telefone/WhatsApp, onde e quando) e um recado
+  — grava só o campo JSON `eventos.pagamento_config` (público de propósito; esquema por
+  `scripts/directus-pagamento-evento-esquema.mjs`). O bloco `src/components/ComoPagar.astro` aparece
+  junto dos valores na página do evento e na "Informar pagamento" (sem nada preenchido, avisa que a
+  forma de pagamento ainda não foi publicada e manda não pagar a quem pedir); depois da inscrição
+  aparece o valor a pagar (só de quem ficou confirmado) com um Pix Copia e Cola e QR que já abrem
+  com o valor certo (`src/lib/pix.ts` ganhou o campo 54; sem valor o código sai igual ao de antes,
+  o da página de doações); Minha Conta liga a inscrição que ainda deve ao "Como pagar". Regras em
+  `src/lib/pagamentoEvento.ts` (CPF/CNPJ com dígito, celular +55, e-mail até 77, chave aleatória;
+  o campo é lido por `normalizarPagamento`, que nunca quebra a montagem). Teste sem rede:
+  `scripts/testes/pagamento-evento-unidade.cjs`.
 
 ### Painel de conteúdo
 

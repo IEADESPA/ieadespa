@@ -86,6 +86,7 @@ export const footerNavigation = [
   {
     label: "Participe",
     items: [
+      { label: "Como participar dos eventos", href: "/como-participar/" },
       { label: "Doações", href: "/doacoes/" },
       { label: "Kids", href: "/kids/" },
       { label: "Assista ao vivo", href: "/ao-vivo/" },

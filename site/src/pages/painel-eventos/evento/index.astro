@@ -3,6 +3,7 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
+import PainelPagamento from "@/components/PainelPagamento.astro";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
@@ -339,77 +340,7 @@ const tipoPerguntaOpcoes = [
       </div>
 
       <div data-tab-panel="pagamento" hidden>
-        <form hidden class="mt-8 grid gap-5 max-w-2xl" data-pagamento-form data-igreja-cnpj={siteConfig.cnpj} data-igreja-nome={siteConfig.name}>
-          <div>
-            <p class="text-sm font-semibold">Como pagar a inscrição</p>
-            <p class="mt-1 text-sm text-muted-foreground">
-              O que você puser aqui aparece para todo mundo no bloco "Como pagar" da página do evento e na página "Informar pagamento" —
-              é para onde a pessoa manda o dinheiro. Preencha o Pix, o dinheiro ou os dois. Sem nada preenchido, a página avisa que a forma
-              de pagamento ainda não foi publicada.
-            </p>
-            <p class="mt-2 text-sm font-semibold" data-pagamento-alerta hidden>
-              ⚠️ Este evento tem valor de inscrição e ainda não diz como pagar.
-            </p>
-          </div>
-
-          <fieldset class="grid gap-4" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-            <legend class="text-sm font-semibold">Pix</legend>
-            <button type="button" class="btn btn-outline" data-pix-igreja>Usar a chave Pix da Igreja (CNPJ {siteConfig.cnpj})</button>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div class="grid gap-2">
-                <label class="text-sm font-semibold" for="f-pix-tipo">Tipo da chave</label>
-                <select id="f-pix-tipo" class="field">
-                  <option value="">— Sem Pix —</option>
-                  <option value="cnpj">CNPJ</option>
-                  <option value="cpf">CPF</option>
-                  <option value="email">E-mail</option>
-                  <option value="celular">Celular</option>
-                  <option value="aleatoria">Chave aleatória</option>
-                </select>
-              </div>
-              <div class="grid gap-2">
-                <label class="text-sm font-semibold" for="f-pix-chave">Chave Pix</label>
-                <input id="f-pix-chave" class="field" maxlength="120" autocomplete="off" />
-              </div>
-            </div>
-            <div class="grid gap-2">
-              <label class="text-sm font-semibold" for="f-pix-nome">Nome que o banco mostra para essa chave</label>
-              <input id="f-pix-nome" class="field" maxlength="60" />
-              <p class="text-xs text-muted-foreground">
-                Quem vai pagar confere esse nome no app do banco antes de confirmar (é a defesa contra o Pix trocado). Escreva como o banco mostra.
-              </p>
-            </div>
-          </fieldset>
-
-          <fieldset class="grid gap-4" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
-            <legend class="text-sm font-semibold">Em dinheiro</legend>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div class="grid gap-2">
-                <label class="text-sm font-semibold" for="f-din-contato">Quem recebe</label>
-                <input id="f-din-contato" class="field" maxlength="80" placeholder="Ex.: Irmã Maria (Tesouraria)" />
-              </div>
-              <div class="grid gap-2">
-                <label class="text-sm font-semibold" for="f-din-telefone">Telefone / WhatsApp</label>
-                <input id="f-din-telefone" type="tel" class="field" maxlength="20" placeholder="(94) 99123-4567" />
-              </div>
-            </div>
-            <div class="grid gap-2">
-              <label class="text-sm font-semibold" for="f-din-onde">Onde e quando entregar</label>
-              <input id="f-din-onde" class="field" maxlength="160" placeholder="Ex.: Secretaria da sede, de terça a sexta, das 8h às 12h" />
-              <p class="text-xs text-muted-foreground">O nome e o telefone ficam públicos na página do evento: use um contato que pode aparecer lá.</p>
-            </div>
-          </fieldset>
-
-          <div class="grid gap-2">
-            <label class="text-sm font-semibold" for="f-pag-obs">Recado (opcional)</label>
-            <input id="f-pag-obs" class="field" maxlength="300" placeholder="Ex.: Pague até 20/11. Depois, informe o pagamento aqui no site." />
-          </div>
-
-          <div class="flex items-center gap-4">
-            <button type="submit" class="btn btn-solid" data-pagamento-salvar>Salvar forma de pagamento</button>
-            <p class="text-sm" data-pagamento-status role="status" aria-live="polite"></p>
-          </div>
-        </form>
+        <PainelPagamento alvo="evento" />
       </div>
 
       <div data-tab-panel="inscricao" hidden>
@@ -642,7 +573,7 @@ const tipoPerguntaOpcoes = [
     import { exigirAutenticacao } from "@/lib/painelAuth";
     import { directusAssetUrl } from "@/lib/directus";
     import { problemaDaImagem } from "@/lib/imagemEvento";
-    import { normalizarPagamento, problemaPagamento, temFormaDePagamento } from "@/lib/pagamentoEvento";
+    import { ligarPainelPagamento } from "@/lib/painelPagamento";
     import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
     import { normalizarConfigCracha } from "@/lib/cracha";
     import { problemaDosLotes } from "@/lib/inscricoesPainel";
@@ -1416,94 +1347,14 @@ const tipoPerguntaOpcoes = [
       });
 
       // ---------- como pagar (`pagamento_config`): Pix e/ou dinheiro, mostrado na página do evento e na "Informar pagamento" ----------
-      // Grava SÓ `pagamento_config` (o "Salvar evento" não manda esse campo). Sem o campo no Directus (esquema ainda não aplicado),
-      // a aba avisa e não grava — mesmo cuidado do crachá.
-      const pagamentoForm = document.querySelector<HTMLFormElement>("[data-pagamento-form]");
-      const pagamentoStatus = document.querySelector<HTMLElement>("[data-pagamento-status]");
-      const pagamentoAlerta = document.querySelector<HTMLElement>("[data-pagamento-alerta]");
-      const fPixTipo = el<HTMLSelectElement>("f-pix-tipo");
-      const fPixChave = el<HTMLInputElement>("f-pix-chave");
-      const fPixNome = el<HTMLInputElement>("f-pix-nome");
-      const fDinContato = el<HTMLInputElement>("f-din-contato");
-      const fDinTelefone = el<HTMLInputElement>("f-din-telefone");
-      const fDinOnde = el<HTMLInputElement>("f-din-onde");
-      const fPagObs = el<HTMLInputElement>("f-pag-obs");
-      const pagamentoDisponivel = Object.prototype.hasOwnProperty.call(evento, "pagamento_config");
-      const temValor = () => (evento.faixas_valor ?? []).some((f) => Number(f.valor) > 0);
-      const atualizarAlertaPagamento = () => {
-        if (pagamentoAlerta) pagamentoAlerta.hidden = !(temValor() && !temFormaDePagamento(normalizarPagamento(evento.pagamento_config)));
-      };
-      const textoDe = (o: unknown, chave: string) => {
-        const v = o && typeof o === "object" ? (o as Record<string, unknown>)[chave] : null;
-        return typeof v === "string" ? v : "";
-      };
-      function preencherPagamento(bruto: unknown) {
-        const o = bruto && typeof bruto === "object" ? (bruto as Record<string, unknown>) : {};
-        const pix = o.pix && typeof o.pix === "object" ? o.pix : null;
-        const din = o.dinheiro && typeof o.dinheiro === "object" ? o.dinheiro : null;
-        fPixTipo.value = textoDe(pix, "tipo");
-        if (fPixTipo.value !== textoDe(pix, "tipo")) fPixTipo.value = "";
-        fPixChave.value = textoDe(pix, "chave");
-        fPixNome.value = textoDe(pix, "nome");
-        fDinContato.value = textoDe(din, "contato");
-        fDinTelefone.value = textoDe(din, "telefone");
-        fDinOnde.value = textoDe(din, "onde");
-        fPagObs.value = textoDe(o, "observacao");
-      }
-      function lerPagamento() {
-        const pix = fPixTipo.value ? { tipo: fPixTipo.value, chave: fPixChave.value.trim(), nome: fPixNome.value.trim() } : null;
-        const dinheiro =
-          fDinContato.value.trim() || fDinTelefone.value.trim() || fDinOnde.value.trim()
-            ? { contato: fDinContato.value.trim(), telefone: fDinTelefone.value.trim(), onde: fDinOnde.value.trim() }
-            : null;
-        return { pix, dinheiro, observacao: fPagObs.value.trim() };
-      }
-      preencherPagamento(evento.pagamento_config);
-      atualizarAlertaPagamento();
-      if (pagamentoForm) pagamentoForm.hidden = false;
-      if (!pagamentoDisponivel && pagamentoStatus) pagamentoStatus.textContent = "O Directus ainda não tem o campo da forma de pagamento: fale com o administrador.";
-
-      document.querySelector("[data-pix-igreja]")?.addEventListener("click", () => {
-        fPixTipo.value = "cnpj";
-        fPixChave.value = pagamentoForm?.dataset.igrejaCnpj ?? "";
-        fPixNome.value = pagamentoForm?.dataset.igrejaNome ?? "";
-        if (pagamentoStatus) pagamentoStatus.textContent = "Chave da Igreja preenchida. Confira o nome e clique em Salvar.";
-      });
-
-      let pagamentoOcupado = false;
-      pagamentoForm?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!pagamentoStatus || pagamentoOcupado) return;
-        if (!pagamentoDisponivel) {
-          pagamentoStatus.textContent = "O Directus ainda não tem o campo da forma de pagamento: fale com o administrador.";
-          return;
-        }
-        const dados = lerPagamento();
-        const problema = problemaPagamento(dados);
-        if (problema) {
-          pagamentoStatus.textContent = problema;
-          return;
-        }
-        const valor = dados.pix || dados.dinheiro || dados.observacao ? dados : null;
-        pagamentoOcupado = true;
-        pagamentoStatus.textContent = "Salvando…";
-        try {
-          const res = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
-            method: "PATCH",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ pagamento_config: valor }),
-          });
-          if (!res.ok) throw new Error("salvar");
-          evento.pagamento_config = valor;
-          atualizarAlertaPagamento();
-          pagamentoStatus.textContent = valor
-            ? "✅ Forma de pagamento salva. A página do evento atualiza sozinha em até uns 15 minutos."
-            : "✅ Forma de pagamento apagada. A página do evento vai avisar que ainda não foi publicada.";
-        } catch {
-          pagamentoStatus.textContent = "Não foi possível salvar agora. Tente de novo em instantes.";
-        } finally {
-          pagamentoOcupado = false;
-        }
+      // O formulário é `PainelPagamento.astro` e a lógica `ligarPainelPagamento` (a mesma do painel de camisetas): grava SÓ `pagamento_config`.
+      ligarPainelPagamento({
+        directusUrl,
+        token,
+        colecao: "eventos",
+        id: eventoIdNumero,
+        registro: evento as unknown as Record<string, unknown>,
+        temValor: () => (evento.faixas_valor ?? []).some((f) => Number(f.valor) > 0),
       });
 
       await carregarPerguntas(token, eventoIdNumero);

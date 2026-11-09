@@ -3,10 +3,12 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import AvisoGolpe from "@/components/AvisoGolpe.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { SOLICITAR_CODIGO_CONTA_URL, CONFIRMAR_CODIGO_CONTA_URL, CONSULTAR_MINHA_CONTA_URL, INFORMAR_PAGAMENTO_URL } from "@/lib/directus";
+import { SOLICITAR_CODIGO_CONTA_URL, CONFIRMAR_CODIGO_CONTA_URL, CONSULTAR_MINHA_CONTA_URL, INFORMAR_PAGAMENTO_URL, fetchConfiguracoes } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
 const allPosts = visiblePosts(await getAllMensagens());
+// a cidade do recebedor no código Pix do "como pagar" do pedido de camiseta (a mesma da página de doações)
+const config = await fetchConfiguracoes();
 ---
 
 <BaseLayout
@@ -31,6 +33,7 @@ const allPosts = visiblePosts(await getAllMensagens());
         data-confirmar-url={CONFIRMAR_CODIGO_CONTA_URL}
         data-consultar-url={CONSULTAR_MINHA_CONTA_URL}
         data-informar-url={INFORMAR_PAGAMENTO_URL}
+        data-pix-cidade={config.address_city}
       >
         <form class="mt-8 grid gap-4 max-w-sm" data-form-email>
           <div class="grid gap-2">
@@ -71,6 +74,7 @@ const allPosts = visiblePosts(await getAllMensagens());
   <script>
     import { contaSalvar, contaToken, contaEmail, contaSair } from "@/lib/contaAuth";
     import { formularioPagamentoHtml, formatarReais, ligarFormularioPagamento, textoPagamentoInformado, type PagamentoInformado } from "@/lib/informarPagamento";
+    import { preencherComoPagarPedido } from "@/lib/pagamentoNavegador";
 
     interface Inscricao {
       id: number;
@@ -105,6 +109,8 @@ const allPosts = visiblePosts(await getAllMensagens());
       valorPago: number;
       separado: boolean;
       itens: ItemPedido[];
+      /** 09/11/2026: o "como pagar" cru da campanha e do evento (só no pedido que ainda deve). */
+      comoPagar?: { campanha?: unknown; evento?: unknown } | null;
     }
 
     const wrap = document.querySelector<HTMLElement>("[data-solicitar-url]");
@@ -194,6 +200,7 @@ const allPosts = visiblePosts(await getAllMensagens());
           ${avisoRetirada}
           <p class="minha-conta-card-detalhe">${totalPedido(p)} peça(s) — ${itensTexto || "sem itens"}</p>
           <p class="minha-conta-card-detalhe">Valor pago: R$ ${Number(p.valorPago ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${p.valorTotal ? ` de ${formatarReais(p.valorTotal)}` : ""}</p>
+          ${podeInformarPedido(p) ? `<div class="pagar-agora mt-3" data-como-pagar-pedido="${p.id}" hidden></div>` : ""}
           ${blocoPagamentoHtml("pedido", p.id, p.pagamentoInformado, podeInformarPedido(p))}
         </div>
       `;
@@ -231,6 +238,11 @@ const allPosts = visiblePosts(await getAllMensagens());
           ${inscricoes.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Meus eventos</h2><div class="grid gap-3 sm:grid-cols-2 mb-8">${inscricoes.map(inscricaoCardHtml).join("")}</div>` : ""}
           ${pedidos.length > 0 ? `<h2 class="text-sm font-semibold mb-3">Pedidos de camiseta</h2><div class="grid gap-3 sm:grid-cols-2">${pedidos.map(pedidoCardHtml).join("")}</div>` : ""}
         `;
+        // 09/11/2026 — como pagar o que falta no pedido de camiseta (montado sem innerHTML: o que vem do Directus vira texto)
+        for (const p of pedidos) {
+          const caixa = conteudo.querySelector<HTMLElement>(`[data-como-pagar-pedido="${p.id}"]`);
+          if (caixa) preencherComoPagarPedido(caixa, p.comoPagar, Math.max(Number(p.valorTotal) - Number(p.valorPago ?? 0), 0), wrap?.dataset.pixCidade ?? "");
+        }
       } catch {
         conteudo.innerHTML = `<p class="text-sm text-muted-foreground">Não foi possível carregar agora. Tente novamente em instantes.</p>`;
       }

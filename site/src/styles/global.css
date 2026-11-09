@@ -1024,3 +1024,25 @@
     color: var(--foreground);
   }
 }
+
+/* "Como pagar" (09/11/2026): a caixa do valor a pagar logo depois da inscrição ou do pedido e a de "Meus pedidos"/"Minha Conta"
+   (montadas por src/lib/pagamentoNavegador.ts, fora do componente ComoPagar.astro), e o QR Code Pix. */
+@layer components {
+  .pagar-agora {
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    max-width: 40rem;
+  }
+
+  .como-pagar-qr img {
+    display: block;
+    width: 12rem;
+    max-width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    background: #fff;
+    border-radius: var(--radius-md);
+  }
+}

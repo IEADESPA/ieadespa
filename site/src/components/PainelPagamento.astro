@@ -1,0 +1,93 @@
+---
+/*
+ * A aba "Pagamento" dos painéis (09/11/2026): o formulário de "como pagar" — Pix (tipo, chave, nome que o banco mostra; botão da chave
+ * da Igreja) e/ou dinheiro (quem recebe, telefone, onde e quando) e um recado. Usado no painel de eventos (grava `eventos.pagamento_config`)
+ * e no de camisetas (grava `camiseta_grupos.pagamento_config`). A lógica fica em `src/lib/painelPagamento.ts` (`ligarPainelPagamento`).
+ * Um por página (os ids são fixos).
+ */
+import { siteConfig } from "@/config/site";
+
+interface Props {
+  /** "evento": a página do evento e a "Informar pagamento"; "campanha": a página da camiseta e os pedidos. */
+  alvo: "evento" | "campanha";
+}
+const { alvo } = Astro.props;
+const onde =
+  alvo === "evento"
+    ? `no bloco "Como pagar" da página do evento e na página "Informar pagamento"`
+    : `no bloco "Como pagar" da página da camiseta, logo depois do pedido e em "Meus pedidos"`;
+---
+
+<form hidden class="mt-8 grid gap-5 max-w-2xl" data-pagamento-form data-igreja-cnpj={siteConfig.cnpj} data-igreja-nome={siteConfig.name}>
+  <div>
+    <p class="text-sm font-semibold">Como pagar</p>
+    <p class="mt-1 text-sm text-muted-foreground">
+      O que você puser aqui aparece para todo mundo {onde} — é para onde a pessoa manda o dinheiro. Preencha o Pix, o dinheiro ou os dois.
+      {
+        alvo === "campanha"
+          ? " Sem nada preenchido, vale o \"como pagar\" do evento vinculado (se houver); sem nenhum dos dois, a página avisa que a forma de pagamento ainda não foi publicada."
+          : " Sem nada preenchido, a página avisa que a forma de pagamento ainda não foi publicada."
+      }
+    </p>
+    <p class="mt-2 text-sm" data-pagamento-herdado hidden></p>
+    <p class="mt-2 text-sm font-semibold" data-pagamento-alerta hidden>⚠️ Tem valor a pagar e ainda não diz como pagar.</p>
+  </div>
+
+  <fieldset class="grid gap-4" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+    <legend class="text-sm font-semibold">Pix</legend>
+    <button type="button" class="btn btn-outline" data-pix-igreja>Usar a chave Pix da Igreja (CNPJ {siteConfig.cnpj})</button>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="f-pix-tipo">Tipo da chave</label>
+        <select id="f-pix-tipo" class="field">
+          <option value="">— Sem Pix —</option>
+          <option value="cnpj">CNPJ</option>
+          <option value="cpf">CPF</option>
+          <option value="email">E-mail</option>
+          <option value="celular">Celular</option>
+          <option value="aleatoria">Chave aleatória</option>
+        </select>
+      </div>
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="f-pix-chave">Chave Pix</label>
+        <input id="f-pix-chave" class="field" maxlength="120" autocomplete="off" />
+      </div>
+    </div>
+    <div class="grid gap-2">
+      <label class="text-sm font-semibold" for="f-pix-nome">Nome que o banco mostra para essa chave</label>
+      <input id="f-pix-nome" class="field" maxlength="60" />
+      <p class="text-xs text-muted-foreground">
+        Quem vai pagar confere esse nome no app do banco antes de confirmar (é a defesa contra o Pix trocado). Escreva como o banco mostra.
+      </p>
+    </div>
+  </fieldset>
+
+  <fieldset class="grid gap-4" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+    <legend class="text-sm font-semibold">Em dinheiro</legend>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="f-din-contato">Quem recebe</label>
+        <input id="f-din-contato" class="field" maxlength="80" placeholder="Ex.: Irmã Maria (Tesouraria)" />
+      </div>
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="f-din-telefone">Telefone / WhatsApp</label>
+        <input id="f-din-telefone" type="tel" class="field" maxlength="20" placeholder="(94) 99123-4567" />
+      </div>
+    </div>
+    <div class="grid gap-2">
+      <label class="text-sm font-semibold" for="f-din-onde">Onde e quando entregar</label>
+      <input id="f-din-onde" class="field" maxlength="160" placeholder="Ex.: Secretaria da sede, de terça a sexta, das 8h às 12h" />
+      <p class="text-xs text-muted-foreground">O nome e o telefone ficam públicos no site: use um contato que pode aparecer lá.</p>
+    </div>
+  </fieldset>
+
+  <div class="grid gap-2">
+    <label class="text-sm font-semibold" for="f-pag-obs">Recado (opcional)</label>
+    <input id="f-pag-obs" class="field" maxlength="300" placeholder="Ex.: Pague até 20/11. Depois, informe o pagamento aqui no site." />
+  </div>
+
+  <div class="flex items-center gap-4">
+    <button type="submit" class="btn btn-solid" data-pagamento-salvar>Salvar forma de pagamento</button>
+    <p class="text-sm" data-pagamento-status role="status" aria-live="polite"></p>
+  </div>
+</form>

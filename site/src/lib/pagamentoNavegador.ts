@@ -26,7 +26,7 @@ const BIBLIOTECA_QR = "/vendor/qrcode-generator-2.0.4.min.js";
 let carregandoQr: Promise<void> | null = null;
 
 /** A biblioteca do QR (a mesma do crachá e do check-in). Na troca de página ela pode não estar carregada: busca uma vez só. */
-function bibliotecaQr(): Promise<void> {
+export function bibliotecaQr(): Promise<void> {
   if (window.qrcode) return Promise.resolve();
   if (!carregandoQr) {
     carregandoQr = new Promise((ok, falha) => {

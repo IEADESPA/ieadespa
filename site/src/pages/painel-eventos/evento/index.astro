@@ -4,6 +4,7 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import PainelPagamento from "@/components/PainelPagamento.astro";
+import PainelArte from "@/components/PainelArte.astro";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
@@ -69,6 +70,7 @@ const tipoPerguntaOpcoes = [
         <button type="button" class="tab-btn is-active" data-tab="dados">Dados do evento</button>
         <button type="button" class="tab-btn" data-tab="imagem">Imagem</button>
         <button type="button" class="tab-btn" data-tab="pagamento">Pagamento</button>
+        <button type="button" class="tab-btn" data-tab="arte">Crachá e certificado</button>
         <button type="button" class="tab-btn" data-tab="inscricao">Perguntas de inscrição</button>
         <button type="button" class="tab-btn" data-tab="pesquisa">Pesquisa pós-evento</button>
         <button type="button" class="tab-btn" data-tab="agenda">Agenda (sessões)</button>
@@ -278,21 +280,6 @@ const tipoPerguntaOpcoes = [
           <button type="button" class="btn btn-outline mt-1" data-local-checkin-adicionar>+ Adicionar local</button>
         </fieldset>
 
-        <fieldset class="grid gap-2" data-cracha-config>
-          <legend class="text-sm font-semibold">Crachá</legend>
-          <p class="text-xs text-muted-foreground">
-            O nome sempre vai no crachá. Escolha o que mais vai junto — vale para o crachá que a pessoa baixa em
-            /cracha/ e para "Baixar crachás de todos os confirmados" na lista de inscritos.
-          </p>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-tipo /> Tipo de participante (Participante, Preletor, Equipe, Imprensa, Convidado — muda-se na lista de inscritos)</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-igreja /> Igreja/congregação — da resposta à pergunta:</label>
-          <select class="field" data-cracha-pergunta-igreja><option value="">Escolha a pergunta…</option></select>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-cidade /> Cidade — da resposta à pergunta:</label>
-          <select class="field" data-cracha-pergunta-cidade><option value="">Escolha a pergunta…</option></select>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-qr /> QR do credenciamento (o mesmo código do check-in, para entrar mais rápido)</label>
-          <p class="text-xs text-muted-foreground" data-cracha-aviso></p>
-        </fieldset>
-
         <div class="grid gap-3">
           <label class="flex items-center gap-2 text-sm">
             <input id="f-inscricoes-encerradas" type="checkbox" /> Encerrar inscrições manualmente agora
@@ -341,6 +328,35 @@ const tipoPerguntaOpcoes = [
 
       <div data-tab-panel="pagamento" hidden>
         <PainelPagamento alvo="evento" />
+      </div>
+
+      <div data-tab-panel="arte" hidden>
+        <form hidden class="mt-8 grid gap-5 max-w-2xl" data-arte-form>
+          <p class="text-sm text-muted-foreground">
+            O crachá e o certificado que cada pessoa baixa em /cracha/ e /certificado/ (e os de "todos" na lista de inscritos). Mude aqui,
+            veja o exemplo e salve: as páginas usam na hora (o certificado, depois que o site se atualizar sozinho, em até uns 15 minutos).
+          </p>
+          <fieldset class="grid gap-2" data-cracha-config>
+            <legend class="text-sm font-semibold">O que vai no crachá</legend>
+            <p class="text-xs text-muted-foreground">
+              O nome sempre vai no crachá. Escolha o que mais vai junto — vale para o crachá que a pessoa baixa em
+              /cracha/ e para "Baixar crachás de todos os confirmados" na lista de inscritos.
+            </p>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-tipo /> Tipo de participante (Participante, Preletor, Equipe, Imprensa, Convidado — muda-se na lista de inscritos)</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-igreja /> Igreja/congregação — da resposta à pergunta:</label>
+            <select class="field" data-cracha-pergunta-igreja><option value="">Escolha a pergunta…</option></select>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-cidade /> Cidade — da resposta à pergunta:</label>
+            <select class="field" data-cracha-pergunta-cidade><option value="">Escolha a pergunta…</option></select>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-qr /> QR do credenciamento (o mesmo código do check-in, para entrar mais rápido)</label>
+            <p class="text-xs text-muted-foreground" data-cracha-aviso></p>
+          </fieldset>
+
+          <PainelArte />
+          <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-solid" data-arte-salvar>Salvar crachá e certificado</button>
+            <p class="text-sm" data-arte-status role="status" aria-live="polite"></p>
+          </div>
+        </form>
       </div>
 
       <div data-tab-panel="inscricao" hidden>
@@ -574,6 +590,8 @@ const tipoPerguntaOpcoes = [
     import { directusAssetUrl } from "@/lib/directus";
     import { problemaDaImagem } from "@/lib/imagemEvento";
     import { ligarPainelPagamento } from "@/lib/painelPagamento";
+    import { ligarAssinaturas, ligarPrevias, lerArte, preencherArte, problemaArte } from "@/lib/painelArte";
+    import { periodoPorExtenso } from "@/lib/arteEventoRegras";
     import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
     import { normalizarConfigCracha } from "@/lib/cracha";
     import { problemaDosLotes } from "@/lib/inscricoesPainel";
@@ -1357,6 +1375,65 @@ const tipoPerguntaOpcoes = [
         temValor: () => (evento.faixas_valor ?? []).some((f) => Number(f.valor) > 0),
       });
 
+      // ---------- crachá e certificado (`cracha_config`: o que vai no crachá + `visual` + `certificado`) ----------
+      // Um "Salvar" para a aba toda; grava SÓ `cracha_config`, mantendo as chaves que já estavam lá.
+      const arteForm = document.querySelector<HTMLFormElement>("[data-arte-form]");
+      const arteStatus = document.querySelector<HTMLElement>("[data-arte-status]");
+      const dizerArte = (t: string) => {
+        if (arteStatus) arteStatus.textContent = t;
+      };
+      const configNaTela = () => {
+        const atual = evento.cracha_config && typeof evento.cracha_config === "object" ? (evento.cracha_config as Record<string, unknown>) : {};
+        return { ...atual, ...lerCracha(), ...lerArte() };
+      };
+      preencherArte(evento.cracha_config);
+      ligarAssinaturas({ directusUrl, token });
+      ligarPrevias({
+        obterConfig: configNaTela,
+        evento: () => ({
+          titulo: fTitle.value.trim() || evento.title,
+          subtitulo: [periodoPorExtenso(fEventDate.value, fEndDate.value, true), fLocation.value.trim()].filter(Boolean).join(" · "),
+          capa: evento.cover ?? null,
+          periodo: periodoPorExtenso(fEventDate.value, fEndDate.value),
+          dataEmissao: periodoPorExtenso(fEndDate.value || fEventDate.value, null),
+          slug: evento.slug ?? "",
+          siteUrl: "https://ieadespa.org.br",
+        }),
+      });
+      if (arteForm) arteForm.hidden = false;
+      if (!crachaDisponivel) dizerArte("O Directus não devolveu o campo do crachá: fale com o administrador.");
+      let arteOcupada = false;
+      arteForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (arteOcupada) return;
+        if (!crachaDisponivel) {
+          dizerArte("O Directus não devolveu o campo do crachá: fale com o administrador.");
+          return;
+        }
+        const problema = problemaCracha() ?? problemaArte();
+        if (problema) {
+          dizerArte(problema);
+          return;
+        }
+        const valor = configNaTela();
+        arteOcupada = true;
+        dizerArte("Salvando…");
+        try {
+          const res = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cracha_config: valor }),
+          });
+          if (!res.ok) throw new Error("salvar");
+          evento.cracha_config = valor;
+          dizerArte("✅ Crachá e certificado salvos.");
+        } catch {
+          dizerArte("Não foi possível salvar agora. Tente de novo em instantes.");
+        } finally {
+          arteOcupada = false;
+        }
+      });
+
       await carregarPerguntas(token, eventoIdNumero);
       await carregarSessoes(token, eventoIdNumero);
       await carregarHistorico(token, evento);
@@ -1619,7 +1696,7 @@ const tipoPerguntaOpcoes = [
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!statusEl) return;
-        const problema = problemaDosLotes(lerFaixas(), inscritosPorLote) ?? (crachaDisponivel ? problemaCracha() : null);
+        const problema = problemaDosLotes(lerFaixas(), inscritosPorLote);
         if (problema) {
           statusEl.textContent = problema;
           return;
@@ -1631,7 +1708,7 @@ const tipoPerguntaOpcoes = [
           const res = await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(crachaDisponivel ? { ...dadosForm, cracha_config: lerCracha() } : dadosForm),
+            body: JSON.stringify(dadosForm), // 10/11/2026: o crachá (`cracha_config`) é gravado pela aba "Crachá e certificado"
           });
           if (!res.ok) throw new Error("falha ao salvar");
           evento.vagas_limite = dadosForm.vagas_limite;

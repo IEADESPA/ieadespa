@@ -167,8 +167,9 @@ const allPosts = visiblePosts(await getAllMensagens());
   <script>
     import { jsPDF } from "jspdf";
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
-    import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
-    import { camposDoCracha, desenharCracha, matrizQr, normalizarConfigCracha, perguntasDoCracha, respostaParaCracha, TIPOS_PARTICIPANTE, type ConfigCracha } from "@/lib/cracha";
+    import { desenharCertificado as desenharCertificadoNovo, desenharCracha as desenharCrachaNovo, ESCALA_LOTE_CERTIFICADO, ESCALA_LOTE_CRACHA, lotesEmPdf, prepararRecursos } from "@/lib/arteEvento";
+    import { nomeDeArquivo, normalizarCertificado, periodoPorExtenso, urlVerificacao } from "@/lib/arteEventoRegras";
+    import { camposDoCracha, normalizarConfigCracha, perguntasDoCracha, respostaParaCracha, TIPOS_PARTICIPANTE, type ConfigCracha } from "@/lib/cracha";
     import { contagemPorLote, passaNoFiltroPagamento, situacaoPagamento, textoConferencia, textoCortesia, totaisPagamento, type InscricaoPagamento } from "@/lib/inscricoesPainel";
     import { textoPagamentoInformado } from "@/lib/informarPagamento";
     import { agruparAusentes, contarPorLocal, listarAusentes, normalizarLocais, resumoAusencia, type Entrada, type LocalCheckin } from "@/lib/credenciamento";
@@ -993,6 +994,13 @@ const allPosts = visiblePosts(await getAllMensagens());
       if (carregando) carregando.hidden = true;
       if (conteudo) conteudo.hidden = false;
 
+      // 10/11/2026 — o crachá e o certificado novos (`src/lib/arteEvento.ts`): o mesmo desenho do /cracha/ e do /certificado/, desenhado UM
+      // de cada vez e posto no PDF (centenas de uma vez estourariam a memória), em arquivos de até 100 pessoas, com o andamento no botão.
+      const crachaBruto: unknown = evento.cracha_config ?? null;
+      const subtituloCracha = [periodoPorExtenso(evento.event_date, evento.end_date, true), String(evento.location ?? "").trim()].filter(Boolean).join(" · ");
+      const dataEmissao = periodoPorExtenso(evento.end_date || evento.event_date, null);
+      const periodoCertificado = periodoPorExtenso(evento.event_date, evento.end_date);
+
       const baixarCrachasBtn = document.querySelector<HTMLButtonElement>("[data-baixar-crachas]");
       if (baixarCrachasBtn) baixarCrachasBtn.hidden = false;
       baixarCrachasBtn?.addEventListener("click", async () => {
@@ -1002,43 +1010,33 @@ const allPosts = visiblePosts(await getAllMensagens());
           return;
         }
         baixarCrachasBtn.disabled = true;
-        baixarCrachasBtn.textContent = "Gerando…";
+        baixarCrachasBtn.textContent = "Preparando…";
         try {
-          const logo = await carregarLogoCertificado();
-          const doc = new jsPDF({ unit: "pt", format: "a4" });
-          configurarAcessibilidadePdf(doc, `Crachás — ${eventoTitulo}`);
-          const margem = 24;
-          const largura = doc.internal.pageSize.getWidth();
-          const altura = doc.internal.pageSize.getHeight();
-          const larguraCel = (largura - margem * 2) / 2;
-          const alturaCel = (altura - margem * 2) / 2;
-
-          confirmados.forEach((pessoa, index) => {
-            const posicaoNaPagina = index % 4;
-            if (index > 0 && posicaoNaPagina === 0) doc.addPage();
-
-            const coluna = posicaoNaPagina % 2;
-            const linha = Math.floor(posicaoNaPagina / 2);
-            const x = margem + coluna * larguraCel;
-            const y = margem + linha * alturaCel;
-
-            // v7.13: o que vai no crachá segue a configuração do evento (tipo, igreja, cidade, QR do credenciamento).
-            // Revisão de 22/10/2026: a mesma regra do /cracha/ (`respostaParaCracha`): só a resposta mais antiga, de pergunta da inscrição, feita junto com a inscrição.
-            const respostas = respostasPorInscricao.get(pessoa.id) ?? [];
-            const opcoesResposta = { perguntasValidas: perguntasDoCracha([...perguntasPorId.values()], null), inscricaoCriadaEm: (pessoa as { date_created?: string | null }).date_created ?? null };
-            const resposta = (perguntaId: number | null) => respostaParaCracha(respostas, perguntaId, opcoesResposta);
-            const campos = camposDoCracha(configCracha, { nome: pessoa.nome, codigo: pessoa.codigo, tipo: pessoa.tipo_participante, igreja: resposta(configCracha.pergunta_igreja), cidade: resposta(configCracha.pergunta_cidade) }, eventoId);
-            desenharCracha(doc, { x, y, largura: larguraCel, altura: alturaCel }, { nome: campos.nome, eventoTitulo, tema: eventoTema || null, logo }, { tipo: campos.tipo, linhas: campos.linhas, qr: matrizQr(campos.qr) });
-
-            // Linha pontilhada de corte, igual ao modelo físico usado hoje.
-            doc.setDrawColor(120);
-            doc.setLineDashPattern([2, 2], 0);
-            if (coluna === 0) doc.line(x + larguraCel, margem, x + larguraCel, altura - margem);
-            if (linha === 0) doc.line(margem, y + alturaCel, largura - margem, y + alturaCel);
-            doc.setLineDashPattern([], 0);
+          const recursos = await prepararRecursos({ capa: evento.cover ?? null });
+          // a mesma regra do /cracha/ (`respostaParaCracha`): só a resposta mais antiga, de pergunta da inscrição, feita junto com a inscrição.
+          const validas = perguntasDoCracha([...perguntasPorId.values()], null);
+          await lotesEmPdf({
+            tipo: "cracha",
+            itens: confirmados,
+            nomeBase: `crachas-${nomeDeArquivo(eventoTitulo)}`,
+            titulo: `Crachás — ${eventoTitulo}`,
+            desenhar: (canvas, pessoa) => {
+              const respostas = respostasPorInscricao.get(pessoa.id) ?? [];
+              const opcoes = { perguntasValidas: validas, inscricaoCriadaEm: (pessoa as { date_created?: string | null }).date_created ?? null };
+              const resposta = (perguntaId: number | null) => respostaParaCracha(respostas, perguntaId, opcoes);
+              const campos = camposDoCracha(configCracha, { nome: pessoa.nome, codigo: pessoa.codigo, tipo: pessoa.tipo_participante, igreja: resposta(configCracha.pergunta_igreja), cidade: resposta(configCracha.pergunta_cidade) }, eventoId);
+              desenharCrachaNovo(
+                canvas,
+                { nome: campos.nome || pessoa.nome, evento: eventoTitulo, subtitulo: subtituloCracha || null, tipo: campos.tipo, linhas: campos.linhas, qr: campos.qr, codigo: campos.qr ? pessoa.codigo : null },
+                crachaBruto,
+                recursos,
+                ESCALA_LOTE_CRACHA,
+              );
+            },
+            andamento: (feitos, total) => {
+              baixarCrachasBtn.textContent = `Gerando ${feitos} de ${total}…`;
+            },
           });
-
-          doc.save(`crachas-${eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`);
         } finally {
           baixarCrachasBtn.disabled = false;
           baixarCrachasBtn.textContent = "Baixar crachás de todos os confirmados";
@@ -1054,24 +1052,39 @@ const allPosts = visiblePosts(await getAllMensagens());
           return;
         }
         baixarCertificadosBtn.disabled = true;
-        baixarCertificadosBtn.textContent = "Gerando…";
+        baixarCertificadosBtn.textContent = "Preparando…";
         try {
-          const logo = await carregarLogoCertificado();
-          const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
-          configurarAcessibilidadePdf(doc, `Certificados — ${eventoTitulo}`);
-          presentes.forEach((pessoa, index) => {
-            if (index > 0) doc.addPage();
-            desenharCertificado(doc, {
-              nome: pessoa.nome,
-              eventoTitulo,
-              eventoPeriodo,
-              logo,
-              codigo: pessoa.codigo ?? undefined,
-              eventoSlug,
-              siteUrl,
-            });
+          const assinaturas = normalizarCertificado(crachaBruto).assinantes.map((a) => a.assinatura);
+          const recursos = await prepararRecursos({ assinaturas });
+          const host = siteUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+          await lotesEmPdf({
+            tipo: "certificado",
+            itens: presentes,
+            nomeBase: `certificados-${nomeDeArquivo(eventoTitulo)}`,
+            titulo: `Certificados — ${eventoTitulo}`,
+            desenhar: (canvas, pessoa) => {
+              const codigo = pessoa.codigo ?? null;
+              desenharCertificadoNovo(
+                canvas,
+                {
+                  nome: pessoa.nome,
+                  evento: eventoTitulo,
+                  data: periodoCertificado,
+                  dataEmissao,
+                  tipo: pessoa.tipo_participante ?? null,
+                  codigo,
+                  urlVerificacao: codigo ? urlVerificacao(siteUrl, eventoSlug, codigo) : null,
+                  verificacaoCurta: `${host}/verificar-certificado/${eventoSlug}/`,
+                },
+                crachaBruto,
+                recursos,
+                ESCALA_LOTE_CERTIFICADO,
+              );
+            },
+            andamento: (feitos, total) => {
+              baixarCertificadosBtn.textContent = `Gerando ${feitos} de ${total}…`;
+            },
           });
-          doc.save(`certificados-${eventoTitulo.toLowerCase().replace(/\s+/g, "-")}.pdf`);
         } finally {
           baixarCertificadosBtn.disabled = false;
           baixarCertificadosBtn.textContent = "Baixar certificados de todos os presentes";

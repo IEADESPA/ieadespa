@@ -186,7 +186,8 @@ O modelo atual:
   primeiro nome grande, igreja/cidade, o QR do credenciamento e a faixa na cor do tipo (Preletor
   dourado, Equipe verde…). As páginas `/cracha/` e `/certificado/` mostram o desenho na tela com
   "Baixar PDF", "Salvar imagem" e "Compartilhar"; o lote da lista de inscritos desenha um de cada
-  vez (arquivos de até 100). Tudo se configura na aba **"Crachá e certificado"** do painel do
+  vez (arquivos de até 100), quatro por folha A4: cada crachá centrado no seu quarto (um A6, como
+  a Igreja já corta a A4 ao meio duas vezes), com as linhas de corte nas metades da folha. Tudo se configura na aba **"Crachá e certificado"** do painel do
   evento (o bloco do crachá saiu da aba Dados; cores, imagem no topo, título, texto, carga horária,
   cidade, assinaturas e a prévia com um nome de exemplo), guardado dentro de `eventos.cracha_config`
   (`visual` e `certificado`) — sem campo novo no Directus; o "Salvar evento" não grava mais o

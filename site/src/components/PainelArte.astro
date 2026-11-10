@@ -1,0 +1,96 @@
+---
+/*
+ * A parte da aparência e do certificado da aba "Crachá e certificado" do painel do evento (10/11/2026). O que vai no crachá (tipo,
+ * igreja, cidade, QR) fica no bloco que já existia (data-cracha-config), na mesma aba. A lógica fica em `src/lib/painelArte.ts`.
+ */
+import { CODIGOS_TEXTO, TEMAS, TEXTO_PADRAO, TITULOS_CERTIFICADO } from "@/lib/arteEventoRegras";
+---
+
+<fieldset class="grid gap-3" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;" data-arte-bloco>
+  <legend class="text-sm font-semibold">Aparência (crachá e certificado)</legend>
+  <div class="grid gap-2">
+    <label class="text-sm font-semibold" for="arte-tema">Cores</label>
+    <select id="arte-tema" class="field" data-arte-tema>
+      {TEMAS.map((t) => <option value={t.valor}>{t.rotulo}</option>)}
+    </select>
+  </div>
+  <label class="flex items-center gap-2 text-sm">
+    <input type="checkbox" data-arte-capa /> Usar a imagem do evento (aba "Imagem") no topo do crachá
+  </label>
+</fieldset>
+
+<fieldset class="grid gap-3" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;">
+  <legend class="text-sm font-semibold">Certificado</legend>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div class="grid gap-2">
+      <label class="text-sm font-semibold" for="cert-titulo">Certificado de…</label>
+      <input id="cert-titulo" class="field" list="cert-titulos" maxlength="40" placeholder="Participação" data-cert-titulo />
+      <datalist id="cert-titulos">
+        {TITULOS_CERTIFICADO.map((t) => <option value={t} />)}
+      </datalist>
+    </div>
+    <div class="grid gap-2">
+      <label class="text-sm font-semibold" for="cert-carga">Carga horária (opcional)</label>
+      <input id="cert-carga" class="field" maxlength="40" placeholder="Ex.: 8 horas" data-cert-carga />
+    </div>
+  </div>
+  <div class="grid gap-2">
+    <label class="text-sm font-semibold" for="cert-local">Cidade (embaixo do texto)</label>
+    <input id="cert-local" class="field" maxlength="60" placeholder="Parauapebas/PA" data-cert-local />
+  </div>
+  <div class="grid gap-2">
+    <label class="text-sm font-semibold" for="cert-texto">Texto depois do nome</label>
+    <textarea id="cert-texto" class="field" rows="3" maxlength="400" placeholder={TEXTO_PADRAO} data-cert-texto></textarea>
+    <p class="text-xs text-muted-foreground">
+      Vazio = o texto padrão. Os códigos entre chaves são trocados pelos dados de cada um:
+      {CODIGOS_TEXTO.map((k, i) => <><code>{k.codigo}</code> {k.explica}{i < CODIGOS_TEXTO.length - 1 ? "; " : "."}</>)}
+    </p>
+  </div>
+
+  <p class="text-sm font-semibold mt-2">Assinaturas (até duas; vazias = sem assinatura)</p>
+  {
+    [0, 1].map((i) => (
+      <div class="grid gap-2 arte-assinante" data-assinante={i}>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <input class="field" maxlength="80" placeholder={i === 0 ? "Nome (ex.: Pr. José da Silva)" : "Nome da segunda assinatura"} aria-label={`Nome da assinatura ${i + 1}`} data-ass-nome />
+          <input class="field" maxlength="80" placeholder="Cargo (ex.: Pastor Presidente)" aria-label={`Cargo da assinatura ${i + 1}`} data-ass-cargo />
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <img class="arte-assinatura-previa" alt={`Assinatura ${i + 1}`} data-ass-previa hidden />
+          <label class="text-xs text-muted-foreground">
+            Imagem da assinatura (opcional — foto ou escaneada, de preferência em fundo branco):
+            <input type="file" accept="image/jpeg,image/png,image/webp" class="field mt-1" data-ass-arquivo />
+          </label>
+          <button type="button" class="btn btn-outline" data-ass-remover hidden>Tirar a imagem</button>
+          <input type="hidden" data-ass-id />
+          <p class="text-xs" role="status" aria-live="polite" data-ass-status></p>
+        </div>
+      </div>
+    ))
+  }
+</fieldset>
+
+<div class="grid gap-3">
+  <p class="text-sm font-semibold">Ver como fica (com um nome de exemplo, antes de salvar)</p>
+  <div class="flex flex-wrap gap-3">
+    <button type="button" class="btn btn-outline" data-previa-cracha>Ver o crachá</button>
+    <button type="button" class="btn btn-outline" data-previa-certificado>Ver o certificado</button>
+  </div>
+  <img class="arte-previa" alt="Prévia com um nome de exemplo" data-previa-img hidden />
+  <p class="text-xs text-muted-foreground" data-previa-aviso></p>
+</div>
+
+<style>
+  .arte-assinante {
+    border-top: 1px dashed var(--border);
+    padding-top: 0.75rem;
+  }
+
+  .arte-assinatura-previa {
+    max-height: 3.5rem;
+    max-width: 12rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+</style>

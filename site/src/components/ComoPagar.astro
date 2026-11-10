@@ -1,0 +1,145 @@
+---
+/*
+ * "Como pagar" da inscrição de um evento (09/11/2026): a chave Pix (com o QR Code e o Copia e Cola) e/ou o contato de quem recebe em
+ * dinheiro, como a equipe preencheu na aba "Pagamento" do painel de eventos (`eventos.pagamento_config`, lido por
+ * `normalizarPagamento`). Sem nada preenchido, diz que a forma de pagamento ainda não foi publicada — nunca deixa a pessoa sem saber,
+ * e combina com o aviso contra golpe ("pague só pelos dados mostrados aqui no site"). O script em `src/lib/pagamentoNavegador.ts`
+ * desenha o QR, liga os botões de copiar e mostra o valor certo depois da inscrição.
+ */
+import { buildPixPayload } from "@/lib/pix";
+import {
+  chaveParaPix,
+  dadosDoCodigoPix,
+  formatarTelefone,
+  linkWhatsApp,
+  rotuloTipoChave,
+  temFormaDePagamento,
+  type PagamentoEvento,
+} from "@/lib/pagamentoEvento";
+
+interface Props {
+  pagamento: PagamentoEvento;
+  /** Cidade do recebedor no código Pix (a mesma da página de doações: a da configuração do site). */
+  cidade: string;
+  /** O que a pessoa faz para ganhar o código com o valor certo: "se inscrever" (evento) ou "fazer o pedido" (camiseta). */
+  depoisDe?: string;
+  class?: string;
+}
+const { pagamento, cidade, depoisDe = "se inscrever", class: classe = "" } = Astro.props;
+const codigo = dadosDoCodigoPix(pagamento, cidade);
+const payload = codigo ? buildPixPayload(codigo) : null;
+const chaveCopiar = pagamento.pix ? chaveParaPix(pagamento.pix.tipo, pagamento.pix.chave) : null;
+const telefone = pagamento.dinheiro?.telefone ?? "";
+const whatsapp = telefone ? linkWhatsApp(telefone) : null;
+---
+
+<section id="como-pagar" class={`como-pagar ${classe}`} aria-labelledby="como-pagar-titulo" data-como-pagar data-pix-codigo={codigo ? JSON.stringify(codigo) : undefined}>
+  <p id="como-pagar-titulo" class="como-pagar-titulo">Como pagar</p>
+  {
+    !temFormaDePagamento(pagamento) && (
+      <p class="como-pagar-texto" data-como-pagar-vazio>
+        A forma de pagamento deste evento ainda não foi publicada aqui. Não pague a ninguém que entrar em contato pedindo: espere os
+        dados aparecerem nesta página.
+      </p>
+    )
+  }
+  {
+    pagamento.pix && (
+      <div class="como-pagar-bloco" data-como-pagar-pix>
+        <p class="font-semibold">Pix</p>
+        <p class="como-pagar-texto">
+          Chave ({rotuloTipoChave(pagamento.pix.tipo)}): <span class="como-pagar-chave">{pagamento.pix.chave}</span>
+        </p>
+        {chaveCopiar && (
+          <button type="button" class="btn btn-outline mt-2" data-copiar={chaveCopiar}>
+            Copiar a chave
+          </button>
+        )}
+        <p class="como-pagar-texto mt-2">
+          Antes de confirmar, confira no app do banco se o recebedor é <strong>{pagamento.pix.nome}</strong>.
+        </p>
+        {payload && (
+          <>
+            <div class="como-pagar-qr mt-3" data-pix-qrcode data-pix-payload={payload} aria-hidden="true" />
+            <button type="button" class="btn btn-outline mt-2" data-copiar={payload}>
+              Copiar código Pix (Copia e Cola)
+            </button>
+            <p class="como-pagar-texto text-xs mt-1">
+              Neste QR Code você digita o valor no app. Depois de {depoisDe}, aparece um código que já vem com o valor certo.
+            </p>
+          </>
+        )}
+      </div>
+    )
+  }
+  {
+    pagamento.dinheiro && (
+      <div class="como-pagar-bloco" data-como-pagar-dinheiro>
+        <p class="font-semibold">Em dinheiro</p>
+        <p class="como-pagar-texto">
+          Fale com <strong>{pagamento.dinheiro.contato}</strong>
+          {telefone && (
+            <>
+              {" "}
+              pelo telefone <a href={`tel:+55${telefone}`} class="text-accent underline underline-offset-2">{formatarTelefone(telefone)}</a>
+              {whatsapp && (
+                <>
+                  {" "}
+                  (
+                  <a href={whatsapp} target="_blank" rel="noopener noreferrer" class="text-accent underline underline-offset-2">
+                    WhatsApp
+                  </a>
+                  )
+                </>
+              )}
+            </>
+          )}
+          .
+        </p>
+        {pagamento.dinheiro.onde && <p class="como-pagar-texto">{pagamento.dinheiro.onde}</p>}
+      </div>
+    )
+  }
+  {pagamento.observacao && <p class="como-pagar-texto mt-2">{pagamento.observacao}</p>}
+</section>
+
+<script>
+  import { instalarComoPagar } from "@/lib/pagamentoNavegador";
+  instalarComoPagar();
+</script>
+
+<style>
+  .como-pagar {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.875rem 1rem;
+    max-width: 40rem;
+    background: var(--background);
+  }
+
+  .como-pagar-titulo {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .como-pagar-bloco {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .como-pagar-texto {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .como-pagar-chave {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+    word-break: break-all;
+  }
+
+  /* .pagar-agora e .como-pagar-qr img ficam em src/styles/global.css (também usados fora deste componente) */
+</style>

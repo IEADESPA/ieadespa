@@ -1,6 +1,7 @@
 const { conferirHash, chaveTelefone, normalizarNome, cifrarTelefone } = require("../src/lib/telefone");
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { avisoDoRegistro } = require("../src/lib/pagamentoInformado");
+const { pagamentoDosGrupos } = require("../src/lib/comoPagar");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -42,7 +43,7 @@ const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
  */
 // v7.13: `*` (e não a lista dos campos do pedido) para trazer o aviso de pagamento (`pagamento_informado_*`) sem quebrar num Directus ainda sem esses campos.
 const CAMPOS_PEDIDO =
-  "*,lote.numero,lote.status,lote.fechado_em,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo,grupo.retirada_liberada";
+  "*,lote.numero,lote.status,lote.fechado_em,grupo.id,grupo.nome,grupo.valor_venda,grupo.precos_tamanho,grupo.retirada_local,grupo.email_retirada_corpo,grupo.retirada_liberada";
 const MAX_CANDIDATOS_ANTIGOS = 12;
 
 function precoTamanho(grupo, tamanho) {
@@ -168,12 +169,19 @@ module.exports = async function (context, req) {
   );
   const todosItens = itensRes.ok ? (await itensRes.json()).data || [] : [];
 
+  const totalDe = (p) => todosItens.filter((i) => i.pedido === p.id).reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
+  // 09/11/2026 — "como pagar" só das campanhas dos pedidos que ainda devem (nunca quebra a consulta: falhou, vem sem).
+  const devendo = meusPedidos.filter((p) => totalDe(p) > Number(p.valor_pago ?? 0));
+  const comoPagar = await pagamentoDosGrupos(DIRECTUS_URL, headers, devendo.map((p) => p.grupo?.id));
+
   const resultado = meusPedidos.map((p) => {
     const itensDoPedido = todosItens.filter((i) => i.pedido === p.id);
     const itensComAlocacao = alocarPagamento(itensDoPedido, Number(p.valor_pago ?? 0), p.grupo);
     const valorTotal = itensDoPedido.reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
 
     return {
+      // 09/11/2026: o `pagamento_config` cru da campanha e do evento vinculado (só no pedido que ainda deve); a página escolhe e mostra.
+      comoPagar: valorTotal > Number(p.valor_pago ?? 0) ? comoPagar.get(Number(p.grupo?.id)) ?? null : null,
       // v7.13: o id serve para "Informar o pagamento" (rota `informar-pagamento`, que confere de novo o telefone deste pedido).
       id: p.id,
       pagamentoInformado: avisoDoRegistro(p),

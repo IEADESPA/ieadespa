@@ -82,6 +82,22 @@ jobs:
           echo "Testando: $url" | tee -a "$GITHUB_STEP_SUMMARY"
           # Espera o endereço responder (a pré-visualização leva uns segundos depois do deploy).
           for i in $(seq 1 12); do curl -sf -o /dev/null -m 20 "$url/" && break; sleep 10; done
+          # 10/11/2026 — e espera as FUNÇÕES (a API) acordarem: em 3 de 5 PRs seguidos a primeira rodada na pré-visualização falhou
+          # nos primeiros segundos (status da camiseta, duplicado, telefone-pedido) e passou ao repetir — a página já respondia, as
+          # funções ainda não. As duas rotas de status respondem rápido "inexistente" para um id que não existe (e já passam pelo
+          # Directus). Só começa depois de 3 respostas certas seguidas; no máximo ~3 minutos (depois disso, segue e o erro real aparece).
+          seguidas=0
+          for i in $(seq 1 36); do
+            if curl -sf -m 15 "$url/api/status-camiseta/999999" | grep -q '"inexistente"' && curl -sf -m 15 "$url/api/status-inscricao/999999" | grep -q '"inexistente"'; then
+              seguidas=$((seguidas + 1))
+              [ "$seguidas" -ge 3 ] && break
+              sleep 2
+            else
+              seguidas=0
+              sleep 5
+            fi
+          done
+          echo "API pronta: $seguidas resposta(s) certa(s) seguidas" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Camisetas
         if: steps.alvo.outputs.url != ''

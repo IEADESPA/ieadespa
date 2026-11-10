@@ -2,6 +2,7 @@
 import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import PainelPagamento from "@/components/PainelPagamento.astro";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
@@ -32,6 +33,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         <button type="button" class="tab-btn" data-tab="perguntas">Perguntas personalizadas</button>
         <button type="button" class="tab-btn" data-tab="retirada">E-mail de retirada</button>
         <button type="button" class="tab-btn" data-tab="imagem">Imagem</button>
+        <button type="button" class="tab-btn" data-tab="pagamento">Pagamento</button>
         <button type="button" class="tab-btn" data-tab="consolidado">Consolidado</button>
         <button type="button" class="tab-btn" data-tab="excluir">Excluir</button>
       </div>
@@ -317,6 +319,10 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
         </div>
       </div>
 
+      <div data-tab-panel="pagamento" hidden>
+        <PainelPagamento alvo="campanha" />
+      </div>
+
       <div data-tab-panel="consolidado" hidden>
         <div data-consolidado-carregando class="text-sm text-muted-foreground">Carregando…</div>
         <div hidden data-consolidado-conteudo>
@@ -393,6 +399,7 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
     import { elegiveisParaExcluir, filtrarAlvo, limiteDaExclusao, descreverEscolha, levouAlgumaPeca, resumoDaExclusao, type CopiaDaExclusao, type PedidoParaExcluir, type LoteParaExcluir } from "@/lib/exclusaoEmMassa";
     import { excluirPedidos, desfazerExclusao, type AmbienteExclusao } from "@/lib/exclusaoEmMassaAcao";
     import { avaliar, limitesDoGrupo, pedidoDosItens, resumoDoUso, temLimite, usoDoAgregado, type Limites } from "@/lib/limitePedidos";
+    import { ligarPainelPagamento } from "@/lib/painelPagamento";
 
     const AUTH = { tokenKey: "painel_camisetas_token", loginPath: "/painel-camisetas/entrar/" };
 
@@ -810,6 +817,28 @@ const ministerios = await fetchItems<{ id: number; name: string }>("ministerios"
       if (form) form.hidden = false;
       const tabsBar = document.querySelector<HTMLElement>("[data-tabs]");
       if (tabsBar) tabsBar.hidden = false;
+
+      // 09/11/2026 — aba "Pagamento": grava SÓ `camiseta_grupos.pagamento_config`. Vazio, vale o "como pagar" do evento vinculado
+      // (lido com `*`: sem o campo no Directus não dá 403, só não vem nada).
+      let pagamentoDoEvento: unknown = null;
+      if (grupo.evento) {
+        try {
+          const resEvento = await api(`${directusUrl}/items/eventos/${grupo.evento}?fields=*`, { headers: { Authorization: `Bearer ${token}` } });
+          if (resEvento.ok) pagamentoDoEvento = ((await resEvento.json()).data ?? {}).pagamento_config ?? null;
+        } catch {
+          /* sem o evento: a aba só não mostra o que é herdado */
+        }
+      }
+      ligarPainelPagamento({
+        directusUrl,
+        token,
+        colecao: "camiseta_grupos",
+        id: grupo.id,
+        registro: grupo as unknown as Record<string, unknown>,
+        herdado: pagamentoDoEvento,
+        temValor: () => Number(grupo.valor_venda) > 0 || Object.values(grupo.precos_tamanho ?? {}).some((v) => Number(v) > 0),
+        pedir: api,
+      });
 
       // 08/10/2026 — aviso EM MASSA de retirada: lotes de 40 até acabar; token do painel em x-painel-token (401 renova e repete).
       const avisoStatus = document.querySelector<HTMLElement>("[data-aviso-status]");

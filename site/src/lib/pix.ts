@@ -14,6 +14,11 @@ interface PixPayloadInput {
   nome: string;
   /** Cidade do recebedor. Máx. 15 caracteres, maiúsculo, sem acento. */
   cidade: string;
+  /**
+   * Valor fixo em reais (09/11/2026, inscrição de evento: o app do banco já abre com o valor certo). Sem valor (ou zero), o
+   * payload sai byte a byte igual ao de antes — a pessoa digita o valor no app (é o caso da página de doações).
+   */
+  valor?: number | null;
 }
 
 const semAcento = (texto: string) =>
@@ -25,7 +30,7 @@ const semAcento = (texto: string) =>
 const campo = (id: string, valor: string) => `${id}${String(valor.length).padStart(2, "0")}${valor}`;
 
 /** CRC16-CCITT (polinômio 0x1021, valor inicial 0xFFFF) — algoritmo exigido pelo padrão BR Code. */
-function crc16(payload: string): string {
+export function crc16(payload: string): string {
   let crc = 0xffff;
   for (const char of payload) {
     crc ^= char.charCodeAt(0) << 8;
@@ -36,8 +41,16 @@ function crc16(payload: string): string {
   return crc.toString(16).toUpperCase().padStart(4, "0");
 }
 
-export function buildPixPayload({ chave, nome, cidade }: PixPayloadInput): string {
+/** O valor no formato do BR Code: ponto como separador e 2 casas ("150.00"); `null` quando não há valor a fixar. */
+export function valorPix(valor: number | null | undefined): string | null {
+  if (valor == null || !Number.isFinite(valor) || valor <= 0) return null;
+  const texto = (Math.round(valor * 100) / 100).toFixed(2);
+  return texto.length <= 13 ? texto : null; // o campo 54 aceita no máximo 13 caracteres
+}
+
+export function buildPixPayload({ chave, nome, cidade, valor }: PixPayloadInput): string {
   const merchantAccountInfo = campo("00", "br.gov.bcb.pix") + campo("01", chave);
+  const valorTexto = valorPix(valor);
 
   const semCrc =
     campo("00", "01") + // Payload Format Indicator
@@ -45,6 +58,7 @@ export function buildPixPayload({ chave, nome, cidade }: PixPayloadInput): strin
     campo("26", merchantAccountInfo) +
     campo("52", "0000") + // Merchant Category Code (não classificado)
     campo("53", "986") + // Moeda: 986 = Real (BRL)
+    (valorTexto ? campo("54", valorTexto) : "") + // Transaction Amount (opcional; entre a moeda e o país, na ordem do padrão)
     campo("58", "BR") +
     campo("59", semAcento(nome).slice(0, 25)) +
     campo("60", semAcento(cidade).slice(0, 15)) +

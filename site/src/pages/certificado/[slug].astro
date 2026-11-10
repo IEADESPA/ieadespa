@@ -4,8 +4,14 @@ import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
 import { VERIFICAR_INSCRICAO_URL, fetchItems } from "@/lib/directus";
+import { periodoPorExtenso } from "@/lib/arteEventoRegras";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
 
+/*
+ * Certificado (10/11/2026: o desenho novo, em `src/lib/arteEvento.ts`): com o código e o telefone da inscrição, quem teve a presença
+ * confirmada vê o certificado na tela e pode baixar o PDF (imprimir), salvar a imagem ou compartilhar (WhatsApp). A aparência, o título,
+ * o texto, a carga horária e as assinaturas vêm de `eventos.cracha_config` (aba "Crachá e certificado" do painel do evento).
+ */
 interface Evento {
   id: number;
   slug: string;
@@ -13,6 +19,7 @@ interface Evento {
   event_date: string | null;
   end_date: string | null;
   aceita_inscricao: boolean;
+  cracha_config?: unknown;
 }
 
 export async function getStaticPaths() {
@@ -28,13 +35,8 @@ interface Props {
 
 const { event } = Astro.props;
 const allPosts = visiblePosts(await getAllMensagens());
-
-const dateFormatter = new Intl.DateTimeFormat(siteConfig.dateLocale, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const periodoEvento = event.event_date
-  ? event.end_date && event.end_date !== event.event_date
-    ? `${dateFormatter.format(new Date(event.event_date))} a ${dateFormatter.format(new Date(event.end_date))}`
-    : dateFormatter.format(new Date(event.event_date))
-  : "";
+const periodoEvento = periodoPorExtenso(event.event_date, event.end_date);
+const dataEmissao = periodoPorExtenso(event.end_date || event.event_date, null);
 ---
 
 <BaseLayout title={`Certificado — ${event.title}`} description="Baixe seu certificado de participação no evento." noindex>
@@ -45,8 +47,8 @@ const periodoEvento = event.event_date
         <p class="eyebrow">Certificado</p>
         <h1 class="pagehead-title">{event.title}</h1>
         <p class="pagehead-description">
-          Digite o mesmo código usado no check-in do evento pra baixar seu certificado de
-          participação.
+          Digite o mesmo código usado no check-in do evento e o telefone da inscrição: o certificado aparece aqui, para baixar em PDF,
+          salvar a imagem no celular ou compartilhar.
         </p>
       </header>
 
@@ -57,6 +59,8 @@ const periodoEvento = event.event_date
         data-evento-slug={event.slug}
         data-evento-titulo={event.title}
         data-evento-periodo={periodoEvento}
+        data-evento-data-emissao={dataEmissao}
+        data-cracha-config={JSON.stringify(event.cracha_config ?? null)}
         data-verificar-url={VERIFICAR_INSCRICAO_URL}
         data-site-url={siteConfig.siteUrl}
       >
@@ -87,18 +91,27 @@ const periodoEvento = event.event_date
             Confere que o certificado é mesmo seu — evita que alguém baixe usando só o código.
           </p>
         </div>
-        <button type="submit" class="btn btn-solid">Buscar certificado</button>
+        <button type="submit" class="btn btn-solid">Ver meu certificado</button>
       </form>
 
       <p class="mt-6 text-lg font-semibold" data-certificado-resultado role="status" aria-live="polite" />
+
+      <section class="mt-6 arte-pronta" data-certificado-pronto hidden aria-label="Seu certificado">
+        <img class="arte-previa arte-previa-deitada" data-certificado-previa alt="Prévia do seu certificado" />
+        <div class="mt-4 flex flex-wrap gap-3">
+          <button type="button" class="btn btn-solid" data-arte-pdf>Baixar PDF (para imprimir)</button>
+          <button type="button" class="btn btn-outline" data-arte-imagem>Salvar imagem</button>
+          <button type="button" class="btn btn-outline" data-arte-compartilhar hidden>Compartilhar</button>
+        </div>
+        <canvas data-certificado-canvas hidden></canvas>
+      </section>
     </div>
   </main>
   <SiteFooter />
 
   <script>
-    import { jsPDF } from "jspdf";
-    import { carregarLogoCertificado, desenharCertificado } from "@/lib/certificado";
-    import { configurarAcessibilidadePdf } from "@/lib/pdf";
+    import { certificadosEmPdf, desenharCertificado, ligarSaida, prepararRecursos } from "@/lib/arteEvento";
+    import { nomeDeArquivo, normalizarCertificado, urlVerificacao } from "@/lib/arteEventoRegras";
 
     const form = document.querySelector<HTMLFormElement>("[data-certificado-form]");
     if (!form) throw new Error("formulário de certificado ausente");
@@ -107,18 +120,59 @@ const periodoEvento = event.event_date
     const eventoSlug = form.dataset.eventoSlug ?? "";
     const eventoTitulo = form.dataset.eventoTitulo ?? "";
     const eventoPeriodo = form.dataset.eventoPeriodo ?? "";
+    const dataEmissao = form.dataset.eventoDataEmissao ?? "";
     const verificarUrl = form.dataset.verificarUrl ?? "";
     const siteUrl = form.dataset.siteUrl ?? "";
+    let crachaConfig: unknown = null;
+    try {
+      crachaConfig = JSON.parse(form.dataset.crachaConfig ?? "null");
+    } catch {
+      crachaConfig = null;
+    }
     const resultado = document.querySelector<HTMLElement>("[data-certificado-resultado]");
+    const pronto = document.querySelector<HTMLElement>("[data-certificado-pronto]");
+    const previa = document.querySelector<HTMLImageElement>("[data-certificado-previa]");
+    const canvas = document.querySelector<HTMLCanvasElement>("[data-certificado-canvas]");
     const codigoInput = document.getElementById("certificado-codigo") as HTMLInputElement;
     const telefoneInput = document.getElementById("certificado-telefone") as HTMLInputElement;
+    const avisar = (t: string) => {
+      if (resultado) resultado.textContent = t;
+    };
 
-    async function gerarCertificado(nome: string, codigo: string) {
-      const logo = await carregarLogoCertificado();
-      const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
-      configurarAcessibilidadePdf(doc, `Certificado — ${nome} — ${eventoTitulo}`);
-      desenharCertificado(doc, { nome, eventoTitulo, eventoPeriodo, logo, codigo, eventoSlug, siteUrl });
-      doc.save(`certificado-${nome.toLowerCase().replace(/\s+/g, "-")}.pdf`);
+    async function mostrarCertificado(nome: string, codigo: string, tipo: string | null) {
+      if (!canvas || !previa || !pronto) return;
+      const assinaturas = normalizarCertificado(crachaConfig).assinantes.map((a) => a.assinatura);
+      const recursos = await prepararRecursos({ assinaturas });
+      const host = siteUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+      desenharCertificado(
+        canvas,
+        {
+          nome,
+          evento: eventoTitulo,
+          data: eventoPeriodo,
+          dataEmissao,
+          tipo,
+          codigo,
+          urlVerificacao: urlVerificacao(siteUrl, eventoSlug, codigo),
+          verificacaoCurta: `${host}/verificar-certificado/${eventoSlug}/`,
+        },
+        crachaConfig,
+        recursos,
+      );
+      const titulo = `Certificado — ${nome} — ${eventoTitulo}`;
+      await ligarSaida({
+        canvas,
+        previa,
+        nomeBase: `certificado-${nomeDeArquivo(nome)}`,
+        titulo,
+        pdf: () => certificadosEmPdf([canvas], titulo),
+        botaoPdf: pronto.querySelector("[data-arte-pdf]"),
+        botaoImagem: pronto.querySelector("[data-arte-imagem]"),
+        botaoCompartilhar: pronto.querySelector("[data-arte-compartilhar]"),
+        avisar,
+      });
+      pronto.hidden = false;
+      pronto.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     form.addEventListener("submit", async (event) => {
@@ -126,43 +180,49 @@ const periodoEvento = event.event_date
       const codigo = codigoInput.value.trim().toUpperCase();
       const telefone = telefoneInput.value.trim();
       if (!resultado) return;
+      if (pronto) pronto.hidden = true;
 
       if (!telefone) {
-        resultado.textContent = "Digite o telefone usado na inscrição.";
+        avisar("Digite o telefone usado na inscrição.");
         return;
       }
 
-      resultado.textContent = "Verificando…";
+      avisar("Verificando…");
 
       try {
+        // `detalhes`: traz o tipo de participante (Preletor, Equipe…), que entra no texto do certificado
         const res = await fetch(verificarUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone }),
+          body: JSON.stringify({ evento: eventoId, modo: "codigo", codigo, telefone, detalhes: true }),
         });
         const pessoa = await res.json();
 
         if (!pessoa?.encontrado) {
-          resultado.textContent = "Código ou telefone não conferem. Confira e tente de novo.";
+          avisar("Código ou telefone não conferem. Confira e tente de novo.");
           return;
         }
         if (!pessoa.presente) {
-          resultado.textContent = "Ainda não encontramos sua confirmação de presença nesse evento.";
+          avisar("Ainda não encontramos sua confirmação de presença nesse evento.");
           return;
         }
 
-        resultado.textContent = "Gerando certificado…";
-        await gerarCertificado(pessoa.nome, pessoa.codigo);
-        resultado.textContent = `✅ Certificado de ${pessoa.nome} baixado!`;
+        avisar("Preparando o certificado…");
+        await mostrarCertificado(pessoa.nome, pessoa.codigo, pessoa.tipoParticipante ?? null);
+        avisar(`✅ Certificado de ${pessoa.nome}. Baixe o PDF, salve a imagem ou compartilhe.`);
       } catch {
-        resultado.textContent = "Não foi possível buscar agora. Tente novamente em instantes.";
+        avisar("Não foi possível buscar agora. Tente novamente em instantes.");
       }
     });
   </script>
 
   <style>
     .certificado-canvas {
-      max-width: 40rem;
+      max-width: 52rem;
+    }
+
+    .certificado-canvas form {
+      max-width: 24rem;
     }
 
     .certificado-codigo-input {

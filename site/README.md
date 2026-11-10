@@ -176,6 +176,22 @@ O modelo atual:
 - **Certificado e crachá** — PDF gerado no navegador (`jsPDF`), só para quem confirmou presença;
   `/verificar-certificado/<slug>/` permite que um terceiro confira a autenticidade só pelo código,
   sem precisar do telefone.
+- **Crachá e certificado novos (10/11/2026)** — desenho moderno feito no navegador em canvas
+  (`src/lib/arteEvento.ts`), com a fonte do site (Geist) e a logo inteira, a 300 dpi: um desenho
+  só vira a imagem (salvar no celular, compartilhar no WhatsApp) e o PDF (imprimir). Certificado A4
+  deitado: faixa e filete na cor do tema, título ("de Participação", "de Conclusão"…), o nome em
+  destaque, o texto com `{evento}`/`{data}`/`{carga}`/`{qualidade}`/`{local}`, até duas assinaturas
+  (nome, cargo e imagem opcional, que some o fundo branco) e um QR que abre a verificação já com o
+  código (a página confere sozinha). Crachá 10,5 × 14,8 cm: a imagem do evento no topo, a logo, o
+  primeiro nome grande, igreja/cidade, o QR do credenciamento e a faixa na cor do tipo (Preletor
+  dourado, Equipe verde…). As páginas `/cracha/` e `/certificado/` mostram o desenho na tela com
+  "Baixar PDF", "Salvar imagem" e "Compartilhar"; o lote da lista de inscritos desenha um de cada
+  vez (arquivos de até 100). Tudo se configura na aba **"Crachá e certificado"** do painel do
+  evento (o bloco do crachá saiu da aba Dados; cores, imagem no topo, título, texto, carga horária,
+  cidade, assinaturas e a prévia com um nome de exemplo), guardado dentro de `eventos.cracha_config`
+  (`visual` e `certificado`) — sem campo novo no Directus; o "Salvar evento" não grava mais o
+  crachá. Regras em `src/lib/arteEventoRegras.ts`; teste sem rede
+  `scripts/testes/arte-evento-unidade.cjs`. O desenho antigo (`src/lib/certificado.ts`) saiu.
 - **Pesquisa de satisfação pós-evento** — mesma verificação código+telefone, só depois de
   `presente: true`.
 - **Exportação em PDF da agenda** (`/eventos/exportar/`) — agrupável por mês ou responsável, com

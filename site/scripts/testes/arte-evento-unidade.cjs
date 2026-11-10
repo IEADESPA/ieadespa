@@ -109,6 +109,7 @@ const B = String.fromCharCode(92);
     const arte = ler("lib/arteEvento.ts");
     verdade(/export const POR_ARQUIVO = 100;/.test(arte) && /doc\.save\(partes > 1/.test(arte), "o lote sai em arquivos de até 100 pessoas");
     verdade(/globalCompositeOperation = "multiply"/.test(arte), "a assinatura em foto: o fundo branco some no papel");
+    verdade(arte.includes("mini.width = 40;") && arte.includes("ctx.drawImage(mini, 0, 0, L, topo)") && !arte.includes("cobrir(ctx, recursos.capa"), "a imagem do evento (o cartaz, cheio de texto) vai DESFOCADA no topo do crachá — miniatura ampliada, funciona no iPhone");
     verdade(/img\.crossOrigin = "anonymous"/.test(arte) && /img\.onerror = \(\) => ok\(null\)/.test(arte), "imagem que não carrega (CORS): o desenho segue sem ela");
     const painel = ler("pages/painel-eventos/evento/index.astro");
     verdade(/data-tab="arte">Crachá e certificado<\/button>/.test(painel) && /<PainelArte \/>/.test(painel), "a aba \"Crachá e certificado\" existe");

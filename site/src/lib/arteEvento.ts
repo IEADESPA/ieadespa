@@ -418,10 +418,25 @@ export function desenharCracha(canvas: HTMLCanvasElement, dados: DadosCracha, cr
 
   // o topo: a imagem do evento (escurecida) ou a cor do tema com listras finas
   if (visual.usarCapa && recursos.capa) {
-    cobrir(ctx, recursos.capa, 0, 0, L, topo);
-    // um véu da cor do tema e um escurecimento para baixo: o título fica legível em qualquer foto
+    // A imagem do evento costuma ser o CARTAZ (cheio de texto: horários, programação, preço) — nítida, ela briga com o título. Vai
+    // DESFOCADA: reduzida a uma miniatura e ampliada de volta (funciona em todo navegador, inclusive no iPhone, que não tem ctx.filter),
+    // ficando só as cores do cartaz, sem letra legível.
+    const mini = document.createElement("canvas");
+    mini.width = 40;
+    mini.height = Math.max(1, Math.round((40 * topo) / L));
+    const mctx = mini.getContext("2d");
+    if (mctx) {
+      mctx.imageSmoothingQuality = "high";
+      cobrir(mctx, recursos.capa, 0, 0, mini.width, mini.height);
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(mini, 0, 0, L, topo);
+      ctx.restore();
+    }
+    // um véu da cor do tema e um escurecimento para baixo: o título fica legível em qualquer imagem
     ctx.save();
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.62;
     ctx.fillStyle = p.escuro;
     ctx.fillRect(0, 0, L, topo);
     ctx.restore();

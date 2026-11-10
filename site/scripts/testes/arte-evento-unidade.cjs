@@ -108,6 +108,8 @@ const B = String.fromCharCode(92);
     verdade((ins.match(/await lotesEmPdf\(\{/g) || []).length === 2 && /tipo: "cracha"/.test(ins) && /tipo: "certificado"/.test(ins), "o lote (crachás e certificados) usa o desenho novo, um de cada vez");
     const arte = ler("lib/arteEvento.ts");
     verdade(/export const POR_ARQUIVO = 100;/.test(arte) && /doc\.save\(partes > 1/.test(arte), "o lote sai em arquivos de até 100 pessoas");
+    verdade(arte.includes("export const QUARTO_A4 = { largura: 105, altura: 148.5 } as const;") && arte.includes("doc.line(ql, 0, ql, 297);") && arte.includes("doc.line(0, qa, 210, qa);"), "lote: cada crachá num quarto da A4 (um A6), com as linhas de corte nas metades da folha");
+    verdade(arte.includes("const x = (pos % 2) * ql + (ql - l) / 2;") && arte.includes("const y = Math.floor(pos / 2) * qa + (qa - a) / 2;"), "lote: o crachá centrado no seu quarto (a mesma margem branca dos quatro lados)");
     verdade(/globalCompositeOperation = "multiply"/.test(arte), "a assinatura em foto: o fundo branco some no papel");
     verdade(arte.includes("mini.width = 40;") && arte.includes("ctx.drawImage(mini, 0, 0, L, topo)") && !arte.includes("cobrir(ctx, recursos.capa"), "a imagem do evento (o cartaz, cheio de texto) vai DESFOCADA no topo do crachá — miniatura ampliada, funciona no iPhone");
     verdade(/img\.crossOrigin = "anonymous"/.test(arte) && /img\.onerror = \(\) => ok\(null\)/.test(arte), "imagem que não carrega (CORS): o desenho segue sem ela");

@@ -667,18 +667,33 @@ function linhaDeCorte(doc: jsPDF, x: number, y: number, l: number, a: number) {
   doc.rect(x, y, l, a);
   doc.setLineDashPattern([], 0);
 }
-/** Quatro crachás por folha A4 (2 × 2, um pouco menores que o real para caber na margem da impressora), com a linha de corte. */
+/** Um quarto da folha A4 = uma folha A6 (a A4 cortada ao meio duas vezes, como a Igreja já faz). */
+export const QUARTO_A4 = { largura: 105, altura: 148.5 } as const;
+/** O crachá dentro do quarto: um pouco menor que o A6 inteiro, para a margem da impressora não cortar a faixa colorida das bordas. */
+export const CRACHA_NO_QUARTO = { largura: 98, altura: (98 * 148) / 105 } as const;
+
+/**
+ * Quatro crachás por folha A4 (10/11/2026, pedido do responsável: a Igreja corta a A4 ao meio duas vezes e cada pedaço — um A6 — é um
+ * crachá): cada crachá vai CENTRADO no seu quarto da folha, com a mesma margem branca dos quatro lados, e as linhas de corte são
+ * exatamente as metades da A4 (a vertical em 10,5 cm e a horizontal em 14,85 cm).
+ */
 function poeCrachaNaGrade(doc: jsPDF, canvas: HTMLCanvasElement, indice: number, qualidade: number) {
-  const l = 98;
-  const a = (98 * 148) / 105;
-  const mx = (210 - l * 2) / 2;
-  const my = (297 - a * 2) / 2;
+  const { largura: ql, altura: qa } = QUARTO_A4;
+  const { largura: l, altura: a } = CRACHA_NO_QUARTO;
   const pos = indice % 4;
   if (indice > 0 && pos === 0) doc.addPage();
-  const x = mx + (pos % 2) * l;
-  const y = my + Math.floor(pos / 2) * a;
+  if (pos === 0) {
+    // as duas linhas de corte da folha (as metades da A4)
+    doc.setDrawColor(150);
+    doc.setLineWidth(0.2);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.line(ql, 0, ql, 297);
+    doc.line(0, qa, 210, qa);
+    doc.setLineDashPattern([], 0);
+  }
+  const x = (pos % 2) * ql + (ql - l) / 2;
+  const y = Math.floor(pos / 2) * qa + (qa - a) / 2;
   doc.addImage(canvas.toDataURL("image/jpeg", qualidade), "JPEG", x, y, l, a, undefined, "FAST");
-  linhaDeCorte(doc, x, y, l, a);
 }
 
 /** Um certificado em PDF (A4 deitado). */

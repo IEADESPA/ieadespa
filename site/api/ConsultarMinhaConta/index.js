@@ -1,6 +1,7 @@
 const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
 const { verificar } = require("../src/lib/contaToken");
 const { avisoDoRegistro } = require("../src/lib/pagamentoInformado");
+const { pagamentoDosGrupos } = require("../src/lib/comoPagar");
 
 const DIRECTUS_URL = process.env.DIRECTUS_URL;
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
@@ -67,7 +68,7 @@ module.exports = async function (context, req) {
       { headers },
     ),
     fetch(
-      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=*,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
+      `${DIRECTUS_URL}/items/camiseta_pedidos?${filtroEmail}&fields=*,grupo.id,grupo.nome,grupo.valor_venda,grupo.precos_tamanho&sort=-id&limit=-1`,
       { headers },
     ),
   ]);
@@ -88,11 +89,18 @@ module.exports = async function (context, req) {
     }
   }
 
+  const totalDe = (p) => (itensPorPedido[p.id] || []).reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
+  // 09/11/2026 — "como pagar" só das campanhas dos pedidos que ainda devem (venda de balcão avulsa não); nunca quebra a consulta.
+  const devendo = pedidos.filter((p) => !p.avulso && totalDe(p) > Number(p.valor_pago ?? 0));
+  const comoPagar = await pagamentoDosGrupos(DIRECTUS_URL, headers, devendo.map((p) => p.grupo?.id));
+
   const pedidosResultado = pedidos.map((p) => {
     const itensComAlocacao = alocarPagamento(itensPorPedido[p.id] || [], Number(p.valor_pago ?? 0), p.grupo);
     const valorTotal = (itensPorPedido[p.id] || []).reduce((s, i) => s + i.quantidade * precoTamanho(p.grupo, i.tamanho), 0);
     return {
       id: p.id,
+      // 09/11/2026: o `pagamento_config` cru da campanha e do evento vinculado (só no pedido que ainda deve); a página escolhe e mostra.
+      comoPagar: !p.avulso && valorTotal > Number(p.valor_pago ?? 0) ? comoPagar.get(Number(p.grupo?.id)) ?? null : null,
       grupo: p.grupo?.nome ?? null,
       avulso: Boolean(p.avulso),
       valorTotal,

@@ -91,35 +91,8 @@ let C, K;
   eq(K.camposDoCracha(tudo, { nome: "Ana", codigo: null }, 9).qr, null, "sem código: sem QR");
   eq(K.camposDoCracha(tudo, { nome: "Ana", igreja: "x".repeat(200) }, 9).linhas[0].length, 60, "linha longa é cortada (cabe no crachá)");
 
-  console.log("== crachá: o QR e o desenho ==");
-  eq(K.matrizQr("9:ABC"), null, "sem a biblioteca do QR na página: sem QR (e sem erro)");
-  globalThis.qrcode = (tipo, correcao) => {
-    let dado = "";
-    return { addData: (t) => { dado = t; }, make() {}, getModuleCount: () => 21, isDark: (l, c) => (l + c + dado.length) % 2 === 0 };
-  };
-  const mq = K.matrizQr("9:ABC234");
-  eq([mq.tamanho, typeof mq.escuro(0, 0)], [21, "boolean"], "com a biblioteca: a matriz 21x21 do QR");
-  const docFalso = () => {
-    const chamadas = { texto: [], retangulosPretos: 0 };
-    let corPreta = false;
-    return {
-      chamadas,
-      setDrawColor() {}, setLineWidth() {}, setFont() {}, setFontSize() {}, setTextColor() {}, setLineDashPattern() {}, roundedRect() {}, addImage() {},
-      setFillColor: (r, g, b) => { corPreta = r === 0 && g === 0 && b === 0; },
-      rect: (_x, _y, _w, _h, estilo) => { if (estilo === "F" && corPreta) chamadas.retangulosPretos += 1; },
-      text: (t) => { chamadas.texto.push([].concat(t).join(" ")); },
-      splitTextToSize: (t) => [String(t)],
-    };
-  };
-  let doc = docFalso();
-  K.desenharCracha(doc, { x: 0, y: 0, largura: 260, altura: 340 }, { nome: "Maria", eventoTitulo: "Seminário", tema: "Tema do ano", logo: null });
-  eq([doc.chamadas.texto.includes("MARIA"), doc.chamadas.texto.includes("IDENTIFICAÇÃO"), doc.chamadas.texto.includes("Tema do ano"), doc.chamadas.retangulosPretos], [true, true, true, 0], "sem extras: o crachá de sempre (nome, 'IDENTIFICAÇÃO', tema, sem QR)");
-  doc = docFalso();
-  const campos = K.camposDoCracha(tudo, { nome: "Maria", codigo: "ABC234", tipo: "Preletor", igreja: "Betel", cidade: "Parauapebas" }, 9);
-  K.desenharCracha(doc, { x: 0, y: 0, largura: 260, altura: 340 }, { nome: campos.nome, eventoTitulo: "Seminário", tema: "Tema do ano", logo: null }, { tipo: campos.tipo, linhas: campos.linhas, qr: K.matrizQr(campos.qr) });
-  const escuros = Array.from({ length: 21 * 21 }, (_, k) => (Math.floor(k / 21) + (k % 21) + "9:ABC234".length) % 2 === 0).filter(Boolean).length;
-  eq([doc.chamadas.texto.includes("PRELETOR"), doc.chamadas.texto.includes("Betel"), doc.chamadas.texto.includes("Parauapebas"), doc.chamadas.retangulosPretos], [true, true, true, escuros], "com extras: o tipo em destaque, igreja, cidade e um quadradinho preto por módulo escuro do QR");
-  eq(doc.chamadas.texto.includes("IDENTIFICAÇÃO"), false, "com o tipo, o tipo ocupa o lugar do 'IDENTIFICAÇÃO'");
+  // O desenho antigo do crachá (jsPDF: matrizQr/desenharCracha) saiu em 10/11/2026 — o novo (canvas) é testado em
+  // `arte-evento-unidade.cjs` (as regras) e conferido no navegador (o QR desenhado lido de volta).
 
   console.log("== VerificarInscricao devolve os dados do crachá (só depois do telefone) ==");
   const TEL = "(94) 99123-4567";

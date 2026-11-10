@@ -103,6 +103,13 @@ const allPosts = visiblePosts(await getAllMensagens());
         resultado.textContent = "Não foi possível verificar agora. Tente novamente em instantes.";
       }
     });
+
+    // 10/11/2026 — o QR do certificado novo abre esta página com `?codigo=…`: já preenche e confere sozinha (quem escaneou não digita nada).
+    const codigoDoQr = (new URLSearchParams(window.location.search).get("codigo") ?? "").trim().toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(codigoDoQr)) {
+      codigoInput.value = codigoDoQr;
+      form.requestSubmit();
+    }
   </script>
 
   <style>

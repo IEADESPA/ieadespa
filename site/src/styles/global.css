@@ -1024,3 +1024,46 @@
     color: var(--foreground);
   }
 }
+
+/* "Como pagar" (09/11/2026): a caixa do valor a pagar logo depois da inscrição ou do pedido e a de "Meus pedidos"/"Minha Conta"
+   (montadas por src/lib/pagamentoNavegador.ts, fora do componente ComoPagar.astro), e o QR Code Pix. */
+@layer components {
+  .pagar-agora {
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    max-width: 40rem;
+  }
+
+  .como-pagar-qr img {
+    display: block;
+    width: 12rem;
+    max-width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    background: #fff;
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Crachá e certificado (10/11/2026): a prévia do desenho nas páginas /cracha/ e /certificado/ e no painel do evento. */
+@layer components {
+  .arte-previa {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  }
+
+  .arte-previa-deitada {
+    max-width: 52rem;
+  }
+
+  .arte-previa-em-pe {
+    max-width: 21rem;
+  }
+}

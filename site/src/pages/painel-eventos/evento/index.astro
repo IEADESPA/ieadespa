@@ -3,6 +3,8 @@ import SiteFooter from "@/components/SiteFooter.astro";
 import SiteHeader from "@/components/SiteHeader.astro";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/config/site";
+import PainelPagamento from "@/components/PainelPagamento.astro";
+import PainelArte from "@/components/PainelArte.astro";
 import { DIRECTUS_URL, fetchItems } from "@/lib/directus";
 import { fetchCongregacoesPublicas } from "@/lib/congregacoes";
 import { getAllMensagens, visiblePosts } from "@/lib/posts";
@@ -66,6 +68,9 @@ const tipoPerguntaOpcoes = [
 
       <div hidden class="tab-bar mt-8" data-tabs role="tablist">
         <button type="button" class="tab-btn is-active" data-tab="dados">Dados do evento</button>
+        <button type="button" class="tab-btn" data-tab="imagem">Imagem</button>
+        <button type="button" class="tab-btn" data-tab="pagamento">Pagamento</button>
+        <button type="button" class="tab-btn" data-tab="arte">Crachá e certificado</button>
         <button type="button" class="tab-btn" data-tab="inscricao">Perguntas de inscrição</button>
         <button type="button" class="tab-btn" data-tab="pesquisa">Pesquisa pós-evento</button>
         <button type="button" class="tab-btn" data-tab="agenda">Agenda (sessões)</button>
@@ -275,21 +280,6 @@ const tipoPerguntaOpcoes = [
           <button type="button" class="btn btn-outline mt-1" data-local-checkin-adicionar>+ Adicionar local</button>
         </fieldset>
 
-        <fieldset class="grid gap-2" data-cracha-config>
-          <legend class="text-sm font-semibold">Crachá</legend>
-          <p class="text-xs text-muted-foreground">
-            O nome sempre vai no crachá. Escolha o que mais vai junto — vale para o crachá que a pessoa baixa em
-            /cracha/ e para "Baixar crachás de todos os confirmados" na lista de inscritos.
-          </p>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-tipo /> Tipo de participante (Participante, Preletor, Equipe, Imprensa, Convidado — muda-se na lista de inscritos)</label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-igreja /> Igreja/congregação — da resposta à pergunta:</label>
-          <select class="field" data-cracha-pergunta-igreja><option value="">Escolha a pergunta…</option></select>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-cidade /> Cidade — da resposta à pergunta:</label>
-          <select class="field" data-cracha-pergunta-cidade><option value="">Escolha a pergunta…</option></select>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-qr /> QR do credenciamento (o mesmo código do check-in, para entrar mais rápido)</label>
-          <p class="text-xs text-muted-foreground" data-cracha-aviso></p>
-        </fieldset>
-
         <div class="grid gap-3">
           <label class="flex items-center gap-2 text-sm">
             <input id="f-inscricoes-encerradas" type="checkbox" /> Encerrar inscrições manualmente agora
@@ -301,6 +291,72 @@ const tipoPerguntaOpcoes = [
           <p class="text-sm" data-evento-status role="status" aria-live="polite"></p>
         </div>
       </form>
+      </div>
+
+      <div data-tab-panel="imagem" hidden>
+        <div hidden class="mt-8 grid gap-4 max-w-2xl" style="border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1rem 1.25rem;" data-imagem-secao>
+          <div>
+            <p class="text-sm font-semibold">Imagem do evento</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              É a imagem principal do evento: aparece no alto da página do evento e na prévia quando o link é compartilhado
+              (WhatsApp, redes sociais etc.) — sem ela, a prévia mostra a logo da Igreja. Se uma campanha de camisetas estiver
+              vinculada a este evento, a prévia do link da camiseta também usa esta imagem.
+            </p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Use de preferência uma imagem deitada (mais larga que alta, como um banner — por exemplo 1200 × 630), em JPG,
+              PNG ou WebP, de até 10 MB. O site atualiza sozinho em até uns 15 minutos. O WhatsApp guarda a prévia de um link
+              que já foi enviado antes: se a imagem antiga continuar aparecendo numa conversa, ela some com o tempo.
+            </p>
+          </div>
+
+          <div data-imagem-preview-wrap hidden>
+            <img data-imagem-preview alt="Imagem atual do evento" style="max-width: 24rem; width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border);" />
+            <button type="button" class="btn btn-outline mt-2" data-imagem-remover>Remover imagem</button>
+          </div>
+          <p class="text-sm text-muted-foreground" data-imagem-vazio>Nenhuma imagem enviada ainda — a prévia do link mostra a logo da Igreja.</p>
+
+          <div class="grid gap-2">
+            <label class="text-sm font-semibold" for="f-imagem-arquivo">Enviar nova imagem</label>
+            <input id="f-imagem-arquivo" type="file" accept="image/jpeg,image/png,image/webp" class="field" />
+          </div>
+          <div class="flex items-center gap-4">
+            <button type="button" class="btn btn-solid" data-imagem-enviar>Enviar</button>
+            <p class="text-sm" data-imagem-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
+      <div data-tab-panel="pagamento" hidden>
+        <PainelPagamento alvo="evento" />
+      </div>
+
+      <div data-tab-panel="arte" hidden>
+        <form hidden class="mt-8 grid gap-5 max-w-2xl" data-arte-form>
+          <p class="text-sm text-muted-foreground">
+            O crachá e o certificado que cada pessoa baixa em /cracha/ e /certificado/ (e os de "todos" na lista de inscritos). Mude aqui,
+            veja o exemplo e salve: as páginas usam na hora (o certificado, depois que o site se atualizar sozinho, em até uns 15 minutos).
+          </p>
+          <fieldset class="grid gap-2" data-cracha-config>
+            <legend class="text-sm font-semibold">O que vai no crachá</legend>
+            <p class="text-xs text-muted-foreground">
+              O nome sempre vai no crachá. Escolha o que mais vai junto — vale para o crachá que a pessoa baixa em
+              /cracha/ e para "Baixar crachás de todos os confirmados" na lista de inscritos.
+            </p>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-tipo /> Tipo de participante (Participante, Preletor, Equipe, Imprensa, Convidado — muda-se na lista de inscritos)</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-igreja /> Igreja/congregação — da resposta à pergunta:</label>
+            <select class="field" data-cracha-pergunta-igreja><option value="">Escolha a pergunta…</option></select>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-cidade /> Cidade — da resposta à pergunta:</label>
+            <select class="field" data-cracha-pergunta-cidade><option value="">Escolha a pergunta…</option></select>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" data-cracha-qr /> QR do credenciamento (o mesmo código do check-in, para entrar mais rápido)</label>
+            <p class="text-xs text-muted-foreground" data-cracha-aviso></p>
+          </fieldset>
+
+          <PainelArte />
+          <div class="flex items-center gap-4">
+            <button type="submit" class="btn btn-solid" data-arte-salvar>Salvar crachá e certificado</button>
+            <p class="text-sm" data-arte-status role="status" aria-live="polite"></p>
+          </div>
+        </form>
       </div>
 
       <div data-tab-panel="inscricao" hidden>
@@ -531,6 +587,11 @@ const tipoPerguntaOpcoes = [
     import { configurarAcessibilidadePdf } from "@/lib/pdf";
     import { contarRespostas, desenharGraficoBarrasPDF, graficoBarrasSvg } from "@/lib/graficos";
     import { exigirAutenticacao } from "@/lib/painelAuth";
+    import { directusAssetUrl } from "@/lib/directus";
+    import { problemaDaImagem } from "@/lib/imagemEvento";
+    import { ligarPainelPagamento } from "@/lib/painelPagamento";
+    import { ligarAssinaturas, ligarPrevias, lerArte, preencherArte, problemaArte } from "@/lib/painelArte";
+    import { periodoPorExtenso } from "@/lib/arteEventoRegras";
     import { normalizarLocais, serializarLocais, type LocalCheckin } from "@/lib/credenciamento";
     import { normalizarConfigCracha } from "@/lib/cracha";
     import { problemaDosLotes } from "@/lib/inscricoesPainel";
@@ -547,6 +608,10 @@ const tipoPerguntaOpcoes = [
       id: number;
       title: string;
       slug: string | null;
+      /** A imagem principal (id do arquivo no Directus): topo da página do evento e prévia do link no WhatsApp. */
+      cover: string | null;
+      /** Como pagar (Pix e/ou dinheiro) — aba "Pagamento"; ausente se o Directus ainda não tem o campo. */
+      pagamento_config?: unknown;
       description: string | null;
       body: string | null;
       event_date: string | null;
@@ -1207,6 +1272,168 @@ const tipoPerguntaOpcoes = [
       const zonaEncerrar = document.querySelector<HTMLElement>("[data-zona-encerrar]");
       if (zonaEncerrar) zonaEncerrar.hidden = false;
 
+      // ---------- imagem do evento (`cover`): topo da página e prévia do link no WhatsApp ----------
+      // Grava SÓ o campo `cover` (o "Salvar evento" não manda `cover`, então um não apaga o outro). O arquivo antigo continua no Directus.
+      const imagemSecao = document.querySelector<HTMLElement>("[data-imagem-secao]");
+      const imagemPreviewWrap = document.querySelector<HTMLElement>("[data-imagem-preview-wrap]");
+      const imagemPreview = document.querySelector<HTMLImageElement>("[data-imagem-preview]");
+      const imagemVazio = document.querySelector<HTMLElement>("[data-imagem-vazio]");
+      const imagemArquivo = el<HTMLInputElement>("f-imagem-arquivo");
+      const imagemStatus = document.querySelector<HTMLElement>("[data-imagem-status]");
+      const imagemEnviar = document.querySelector<HTMLButtonElement>("[data-imagem-enviar]");
+      const imagemRemover = document.querySelector<HTMLButtonElement>("[data-imagem-remover]");
+      const avisoImagem = (texto: string) => {
+        if (imagemStatus) imagemStatus.textContent = texto;
+      };
+      function renderizarImagem() {
+        const temImagem = Boolean(evento.cover);
+        if (imagemPreviewWrap) imagemPreviewWrap.hidden = !temImagem;
+        if (imagemVazio) imagemVazio.hidden = temImagem;
+        if (imagemPreview) {
+          if (evento.cover) imagemPreview.src = directusAssetUrl(evento.cover, { width: 800, quality: 80, format: "webp" });
+          else imagemPreview.removeAttribute("src");
+        }
+      }
+      renderizarImagem();
+      if (imagemSecao) imagemSecao.hidden = false;
+      let imagemOcupada = false; // um envio/remoção por vez (o duplo clique não sobe dois arquivos)
+      const travarImagem = (ocupada: boolean) => {
+        imagemOcupada = ocupada;
+        if (imagemEnviar) imagemEnviar.disabled = ocupada;
+        if (imagemRemover) imagemRemover.disabled = ocupada;
+      };
+
+      imagemEnviar?.addEventListener("click", async () => {
+        if (imagemOcupada) return;
+        const arquivo = imagemArquivo.files?.[0] ?? null;
+        const problemaImagem = problemaDaImagem(arquivo);
+        if (problemaImagem || !arquivo) {
+          avisoImagem(problemaImagem ?? "Escolha um arquivo primeiro.");
+          return;
+        }
+        travarImagem(true);
+        avisoImagem("Enviando…");
+        try {
+          const formData = new FormData();
+          formData.append("title", `Imagem do evento ${evento.title}`); // o Directus só lê os campos que vêm ANTES do arquivo
+          formData.append("file", arquivo);
+          const resUpload = await fetch(`${directusUrl}/files`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+          if (!resUpload.ok) throw new Error(resUpload.status === 400 || resUpload.status === 403 ? "tipo" : "envio");
+          const arquivoId: string = (await resUpload.json()).data.id;
+
+          const resPatch = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cover: arquivoId }),
+          });
+          if (!resPatch.ok) throw new Error("salvar");
+          evento.cover = arquivoId;
+          renderizarImagem();
+          imagemArquivo.value = "";
+          avisoImagem("✅ Imagem enviada. O site atualiza sozinho em até uns 15 minutos.");
+        } catch (e) {
+          avisoImagem(
+            e instanceof Error && e.message === "tipo"
+              ? "O servidor não aceitou esse arquivo. Envie uma imagem JPG, PNG ou WebP."
+              : "Não foi possível enviar agora. Tente de novo em instantes.",
+          );
+        } finally {
+          travarImagem(false);
+        }
+      });
+
+      imagemRemover?.addEventListener("click", async () => {
+        if (imagemOcupada) return;
+        if (!confirm("Tirar a imagem deste evento? A prévia do link volta a mostrar a logo da Igreja (o arquivo continua guardado no Directus).")) return;
+        travarImagem(true);
+        avisoImagem("Removendo…");
+        try {
+          const res = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cover: null }),
+          });
+          if (!res.ok) throw new Error("remover");
+          evento.cover = null;
+          renderizarImagem();
+          avisoImagem("✅ Imagem removida. O site atualiza sozinho em até uns 15 minutos.");
+        } catch {
+          avisoImagem("Não foi possível remover agora. Tente de novo em instantes.");
+        } finally {
+          travarImagem(false);
+        }
+      });
+
+      // ---------- como pagar (`pagamento_config`): Pix e/ou dinheiro, mostrado na página do evento e na "Informar pagamento" ----------
+      // O formulário é `PainelPagamento.astro` e a lógica `ligarPainelPagamento` (a mesma do painel de camisetas): grava SÓ `pagamento_config`.
+      ligarPainelPagamento({
+        directusUrl,
+        token,
+        colecao: "eventos",
+        id: eventoIdNumero,
+        registro: evento as unknown as Record<string, unknown>,
+        temValor: () => (evento.faixas_valor ?? []).some((f) => Number(f.valor) > 0),
+      });
+
+      // ---------- crachá e certificado (`cracha_config`: o que vai no crachá + `visual` + `certificado`) ----------
+      // Um "Salvar" para a aba toda; grava SÓ `cracha_config`, mantendo as chaves que já estavam lá.
+      const arteForm = document.querySelector<HTMLFormElement>("[data-arte-form]");
+      const arteStatus = document.querySelector<HTMLElement>("[data-arte-status]");
+      const dizerArte = (t: string) => {
+        if (arteStatus) arteStatus.textContent = t;
+      };
+      const configNaTela = () => {
+        const atual = evento.cracha_config && typeof evento.cracha_config === "object" ? (evento.cracha_config as Record<string, unknown>) : {};
+        return { ...atual, ...lerCracha(), ...lerArte() };
+      };
+      preencherArte(evento.cracha_config);
+      ligarAssinaturas({ directusUrl, token });
+      ligarPrevias({
+        obterConfig: configNaTela,
+        evento: () => ({
+          titulo: fTitle.value.trim() || evento.title,
+          subtitulo: [periodoPorExtenso(fEventDate.value, fEndDate.value, true), fLocation.value.trim()].filter(Boolean).join(" · "),
+          capa: evento.cover ?? null,
+          periodo: periodoPorExtenso(fEventDate.value, fEndDate.value),
+          dataEmissao: periodoPorExtenso(fEndDate.value || fEventDate.value, null),
+          slug: evento.slug ?? "",
+          siteUrl: "https://ieadespa.org.br",
+        }),
+      });
+      if (arteForm) arteForm.hidden = false;
+      if (!crachaDisponivel) dizerArte("O Directus não devolveu o campo do crachá: fale com o administrador.");
+      let arteOcupada = false;
+      arteForm?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (arteOcupada) return;
+        if (!crachaDisponivel) {
+          dizerArte("O Directus não devolveu o campo do crachá: fale com o administrador.");
+          return;
+        }
+        const problema = problemaCracha() ?? problemaArte();
+        if (problema) {
+          dizerArte(problema);
+          return;
+        }
+        const valor = configNaTela();
+        arteOcupada = true;
+        dizerArte("Salvando…");
+        try {
+          const res = await fetch(`${directusUrl}/items/eventos/${eventoIdNumero}`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ cracha_config: valor }),
+          });
+          if (!res.ok) throw new Error("salvar");
+          evento.cracha_config = valor;
+          dizerArte("✅ Crachá e certificado salvos.");
+        } catch {
+          dizerArte("Não foi possível salvar agora. Tente de novo em instantes.");
+        } finally {
+          arteOcupada = false;
+        }
+      });
+
       await carregarPerguntas(token, eventoIdNumero);
       await carregarSessoes(token, eventoIdNumero);
       await carregarHistorico(token, evento);
@@ -1469,7 +1696,7 @@ const tipoPerguntaOpcoes = [
       form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!statusEl) return;
-        const problema = problemaDosLotes(lerFaixas(), inscritosPorLote) ?? (crachaDisponivel ? problemaCracha() : null);
+        const problema = problemaDosLotes(lerFaixas(), inscritosPorLote);
         if (problema) {
           statusEl.textContent = problema;
           return;
@@ -1481,7 +1708,7 @@ const tipoPerguntaOpcoes = [
           const res = await fetch(`${directusUrl}/items/eventos/${eventoId}`, {
             method: "PATCH",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify(crachaDisponivel ? { ...dadosForm, cracha_config: lerCracha() } : dadosForm),
+            body: JSON.stringify(dadosForm), // 10/11/2026: o crachá (`cracha_config`) é gravado pela aba "Crachá e certificado"
           });
           if (!res.ok) throw new Error("falha ao salvar");
           evento.vagas_limite = dadosForm.vagas_limite;

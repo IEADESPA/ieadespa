@@ -162,7 +162,13 @@ O modelo atual:
   seleção única/múltipla, número, data), respondidas em `respostas_inscricao`. Recursos por cima
   disso: vagas limite e prazo de inscrição automáticos, lista de espera com promoção automática ao
   cancelar, aprovação manual opcional (`pendente_aprovacao`), cupom de desconto, inscrição em grupo,
-  faixas de valor, e-mail de confirmação opcional (Azure Communication Services).
+  faixas de valor, e-mail de confirmação opcional (Azure Communication Services). Desde 09/11/2026
+  o navegador manda à `api/EnviarConfirmacaoInscricao` **só** o e-mail, o evento e os códigos: o
+  título, a data, o local, os nomes e o valor saem do Directus, e só se as inscrições forem daquele
+  evento e de até 30 minutos atrás, um e-mail por inscrição (antes o texto vinha do navegador e
+  qualquer um podia mandar, do e-mail da Igreja, um "Inscrição em (qualquer texto)" para qualquer
+  endereço). O e-mail leva o valor e o link do "Como pagar", nunca a chave Pix. Teste sem rede:
+  `scripts/testes/confirmacao-email-unidade.cjs`.
 - **Check-in sem exigir login de quem está na porta** — código curto de 6 caracteres (sem
   caracteres ambíguos) gerado na inscrição; `/checkin/<slug>/` (a tela usada pela equipe) exige
   login real do Directus; o autoatendimento (`/qrcode/<slug>/`) e o crachá/certificado usam
@@ -170,6 +176,23 @@ O modelo atual:
 - **Certificado e crachá** — PDF gerado no navegador (`jsPDF`), só para quem confirmou presença;
   `/verificar-certificado/<slug>/` permite que um terceiro confira a autenticidade só pelo código,
   sem precisar do telefone.
+- **Crachá e certificado novos (10/11/2026)** — desenho moderno feito no navegador em canvas
+  (`src/lib/arteEvento.ts`), com a fonte do site (Geist) e a logo inteira, a 300 dpi: um desenho
+  só vira a imagem (salvar no celular, compartilhar no WhatsApp) e o PDF (imprimir). Certificado A4
+  deitado: faixa e filete na cor do tema, título ("de Participação", "de Conclusão"…), o nome em
+  destaque, o texto com `{evento}`/`{data}`/`{carga}`/`{qualidade}`/`{local}`, até duas assinaturas
+  (nome, cargo e imagem opcional, que some o fundo branco) e um QR que abre a verificação já com o
+  código (a página confere sozinha). Crachá 10,5 × 14,8 cm: a imagem do evento no topo, a logo, o
+  primeiro nome grande, igreja/cidade, o QR do credenciamento e a faixa na cor do tipo (Preletor
+  dourado, Equipe verde…). As páginas `/cracha/` e `/certificado/` mostram o desenho na tela com
+  "Baixar PDF", "Salvar imagem" e "Compartilhar"; o lote da lista de inscritos desenha um de cada
+  vez (arquivos de até 100), quatro por folha A4: cada crachá centrado no seu quarto (um A6, como
+  a Igreja já corta a A4 ao meio duas vezes), com as linhas de corte nas metades da folha. Tudo se configura na aba **"Crachá e certificado"** do painel do
+  evento (o bloco do crachá saiu da aba Dados; cores, imagem no topo, título, texto, carga horária,
+  cidade, assinaturas e a prévia com um nome de exemplo), guardado dentro de `eventos.cracha_config`
+  (`visual` e `certificado`) — sem campo novo no Directus; o "Salvar evento" não grava mais o
+  crachá. Regras em `src/lib/arteEventoRegras.ts`; teste sem rede
+  `scripts/testes/arte-evento-unidade.cjs`. O desenho antigo (`src/lib/certificado.ts`) saiu.
 - **Pesquisa de satisfação pós-evento** — mesma verificação código+telefone, só depois de
   `presente: true`.
 - **Exportação em PDF da agenda** (`/eventos/exportar/`) — agrupável por mês ou responsável, com
@@ -541,6 +564,43 @@ Arquitetura em carrinho, com atribuição por congregação e alocação de paga
   imagem em si na tela). Se a campanha estiver vinculada a um evento, mostra as duas imagens (a da
   campanha e a do evento) lado a lado na página — a prévia de link (que só tem espaço pra uma)
   continua com prioridade pro evento.
+- **Imagem do evento pelo painel (09/11/2026)** — aba "Imagem" na edição do evento
+  (`/painel-eventos/evento/?id=…`): envia a imagem principal para `eventos.cover` (antes só dava
+  pelo Directus "cru", e sem ela a prévia do link do evento no WhatsApp mostrava a logo). A página
+  `/evento/<slug>/` já usava `cover` no topo e no `og:image`; a camiseta vinculada também. O painel
+  confere o arquivo antes (`src/lib/imagemEvento.ts`: JPG, PNG ou WebP, até 10 MB — a permissão
+  "Editor de eventos" no Directus aceita só imagem) e grava **só** o campo `cover` (o "Salvar
+  evento" não manda `cover`, então um não apaga o outro); remover desvincula e o arquivo fica no
+  Directus. O site remonta sozinho (a versão do conteúdo lê `eventos` inteira). Teste sem rede:
+  `scripts/testes/imagem-evento-unidade.cjs`.
+- **Como pagar a inscrição (09/11/2026)** — o aviso contra golpe mandava pagar "só pelos dados
+  mostrados aqui no site", mas nenhuma tela mostrava dado nenhum. Aba "Pagamento" na edição do
+  evento: chave Pix (tipo, chave e o nome que o banco mostra; botão "usar a chave Pix da Igreja",
+  o CNPJ do site) e/ou quem recebe em dinheiro (nome, telefone/WhatsApp, onde e quando) e um recado
+  — grava só o campo JSON `eventos.pagamento_config` (público de propósito; esquema por
+  `scripts/directus-pagamento-evento-esquema.mjs`). O bloco `src/components/ComoPagar.astro` aparece
+  junto dos valores na página do evento e na "Informar pagamento" (sem nada preenchido, avisa que a
+  forma de pagamento ainda não foi publicada e manda não pagar a quem pedir); depois da inscrição
+  aparece o valor a pagar (só de quem ficou confirmado) com um Pix Copia e Cola e QR que já abrem
+  com o valor certo (`src/lib/pix.ts` ganhou o campo 54; sem valor o código sai igual ao de antes,
+  o da página de doações); Minha Conta liga a inscrição que ainda deve ao "Como pagar". Regras em
+  `src/lib/pagamentoEvento.ts` (CPF/CNPJ com dígito, celular +55, e-mail até 77, chave aleatória;
+  o campo é lido por `normalizarPagamento`, que nunca quebra a montagem). Teste sem rede:
+  `scripts/testes/pagamento-evento-unidade.cjs`.
+- **Como pagar nas camisetas e o tutorial (09/11/2026)** — a aba "Pagamento" virou um componente
+  só (`src/components/PainelPagamento.astro` + `src/lib/painelPagamento.ts`), usado no painel de
+  eventos e no de camisetas (`camiseta_grupos.pagamento_config`; vazio = vale o do evento
+  vinculado, regra `pagamentoDaCampanha`, nunca misturando os dois). A página da camiseta mostra o
+  "Como pagar" quando há preço e, depois do pedido, o valor com o Pix certo; "Meus pedidos" e
+  "Minha Conta" mostram, no pedido que ainda deve, como pagar exatamente o que falta (as consultas
+  devolvem o JSON cru por `api/src/lib/comoPagar.js`, lido com `fields=*` para não dar 403 sem o
+  campo; o QR só quando a pessoa pede). Tutorial **`/como-participar/`** para quem nunca participou
+  (de fora, de outra igreja ou cidade — pensado também para o evento regional): inscrição, Pix passo
+  a passo, informar o pagamento, o dia do evento, certificado, camisetas, golpe e dúvidas; linkado
+  da agenda, da página do evento (que ganhou a lista "Para quem se inscreveu"), da camiseta, da
+  "Informar pagamento", de "Meus pedidos" e do rodapé. O esquema
+  (`scripts/directus-pagamento-evento-esquema.mjs`) cria os dois campos e põe o da camiseta na
+  leitura pública (que é uma lista de campos).
 
 ### Painel de conteúdo
 

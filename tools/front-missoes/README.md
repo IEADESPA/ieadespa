@@ -6,7 +6,7 @@ Rodar da pasta `tools/front-missoes`:
 | Comando | O que prova |
 | --- | --- |
 | `node roteiro.js` | A pílula Missões da aba Expansão contra o front de verdade (`modulos/expansao.js` e `modulos/missoes.js`) em DOM simulado, com as respostas **reais** do servidor (`contrato-real.json`) e texto de ataque (`<img src=x onerror=...>`) em todo campo de texto e nos rótulos dos catálogos. |
-| `MUTAR=1 node roteiro.js` | O mesmo, e depois a prova inteira de novo com cada mutação dos dois módulos: cada uma precisa ser acusada (a que deixa a tela esperando para sempre conta como acusada depois de 60 s). |
+| `MUTAR=1 node roteiro.js` | O mesmo, e depois a prova inteira de novo com cada mutação dos dois módulos: cada uma precisa ser acusada (a que deixa a tela esperando para sempre conta como acusada depois de 60 s). `SO_MUTACAO=<parte do nome>` roda só as que batem (Trava 9-B). |
 
 O `contrato-real.json` é gravado pelo roteiro do banco local, com os handlers e o banco de verdade:
 `E2E_CONTRATO=1 BASE=cenario-missoes bash rodar.sh roteiro e2e-76-missoes.js` (em `tools/e2e-localdb`, depois de `bash rodar.sh preparar-missoes`).

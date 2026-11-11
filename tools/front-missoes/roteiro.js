@@ -462,7 +462,7 @@ const MUTACOES = [
   ["missoes", "recusa fora do formulário", ["      misMensagem(\"misMsgForm\", msg);\n      const el = misEl(\"misMsgForm\");", "      misMensagem(\"misMsgFicha\", msg);\n      const el = misEl(\"misMsgForm\");"]],
   ["missoes", "imprimir a página inteira", ["  if (classes) classes.add(\"mis-imprimindo\");", ""]],
   ["missoes", "a correção sem o relatório", ["  else if (form.chave === \"relatorio-corrigir\") corpo.relatorioId = Number(fixos.relatorioId);", ""]],
-  ["missoes", "quem não é do nível geral pede as reuniões", ["  if (misPapel(\"geral\")) {\n    const reu", "  if (true) {\n    const reu"]],
+  ["missoes", "quem não é do nível geral nem o Presidente pede as reuniões", ["  if (misPapel(\"geral\") || misPapel(\"presidente\")) {\n    const reu", "  if (true) {\n    const reu"]],
   ["missoes", "a Tesouraria vê as outras subseções", ["  if (misSoTesouraria()) return s === \"sustento\";", ""]],
   ["missoes", "a CME vê o sustento do mês", ["  if (misSoCME()) return s !== \"sustento\";", ""]],
   ["missoes", "o botão do nome no mural a quem não gere", ["    a.divulgacao ? misBotao(e.divulgarNome", "    true ? misBotao(e.divulgarNome"]],
@@ -493,7 +493,9 @@ const MUTACOES = [
   let soltas = 0;
   const naoTratada = () => { soltas++; };
   process.on("unhandledRejection", naoTratada); process.on("uncaughtException", naoTratada);
-  for (const [arquivo, nome, [de, para]] of MUTACOES) {
+  // SO_MUTACAO=<parte do nome>: roda só as mutações que batem (para conferir uma mutação nova sem esperar as 46)
+  const LISTA = process.env.SO_MUTACAO ? MUTACOES.filter((m) => m[1].includes(process.env.SO_MUTACAO)) : MUTACOES;
+  for (const [arquivo, nome, [de, para]] of LISTA) {
     const original = lerApp(`modulos/${arquivo}.js`);
     const n = original.split(de).length - 1;
     if (n !== 1) { vivas.push(`${nome} (trecho achado ${n} vez(es))`); continue; }
@@ -510,6 +512,6 @@ const MUTACOES = [
   }
   clearInterval(vivo);
   process.off("unhandledRejection", naoTratada); process.off("uncaughtException", naoTratada);
-  console.log(`mutações: ${acusadas}/${MUTACOES.length} acusadas${vivas.length ? ` — vivas: ${vivas.join("; ")}` : ""}`);
+  console.log(`mutações: ${acusadas}/${LISTA.length} acusadas${vivas.length ? ` — vivas: ${vivas.join("; ")}` : ""}`);
   if (r.falhas || vivas.length) process.exitCode = 1;
 })();

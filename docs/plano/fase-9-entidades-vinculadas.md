@@ -567,12 +567,10 @@ emancipação da v9.2 leva o ponto da Extensão para a congregação que nasce. 
 de viagem (só a linha reta), o contorno desenhado dos bairros (o ponto central basta), a importação do cadastro antigo de membros (quando vier, já preenche as
 linhas e o bairro) e aviso automático de Extensão que passou a atender os critérios (o painel mostra).
 
-### Como ficou a v9.5 (RASCUNHO no ramo — completar na entrega; ainda NÃO está em produção)
+### Como ficou a v9.5
 
-> Rascunho guardado na parada de 09/11/2026 (ver o "Ponto seguro da v9.5" na `main`). Na entrega: trocar `DATA_ENTREGA`, `MERGE_HASH` e
-> `PROD_RUN`, conferir o número do jest e da bateria do banco e tirar este aviso.
-
-**Em produção desde DATA_ENTREGA** (merge `MERGE_HASH`; para desfazer: `git revert -m 1 MERGE_HASH`). Migração **170** (`Bairros`, o endereço do membro em
+**Em produção desde 11/11/2026** (merge `0d16ee7`; para desfazer: `git revert -m 1 0d16ee7`). Parada de 09/11 a 10/11/2026 para o trabalho dos eventos
+no site (PRs #58 a #64); retomada em 10/11 a partir do ponto seguro. Migração **170** (`Bairros`, o endereço do membro em
 linhas em `MembroReferencia`, o ponto das Extensões em `ExtensoesTenda`, `TerritorioParametros` e `CriteriosEmancipacao` com a régua inicial semeada uma vez
 só). Regra pura em `api/shared/territorio.js`, banco em `api/shared/territorioDb.js`, rota `/api/territorio/<ação>` (`GestaoTerritorio`). Tela: pílula
 **Território** na aba Expansão (Mapa, Simulação de emancipação, Critérios, Pontos das Extensões e, no nível geral, Bairros), o endereço em linhas na Pessoas e
@@ -609,12 +607,15 @@ produção e na homologação). Até lá, a pílula funciona na lista e desenho.
 **Provas:** jest 6.368; banco local (`bash rodar.sh preparar-territorio`): `e2e-78` 190 (a régua semeada uma vez, mesmo apagada; quem entra; o endereço em
 linhas e a tela antiga; a fila; os bairros; os pontos; o mapa, o "a conferir", o descoberto pelo raio e o escopo do Dirigente; a densidade; os critérios; a
 simulação com cada indicador medido de verdade, o congregado e o novo convertido fora, o dízimo oculto; a emancipação levando o ponto; a LGPD; os CHECK; lixo em
-cada campo), `e2e-79` corridas 16 e 18 com o READ_COMMITTED_SNAPSHOT do Azure (inclusive a renomeação do bairro com três fichas gravando nele); a bateria
-inteira do banco recriado do zero, do `e2e-1` ao `e2e-79`: **A RODAR na retomada** (foi interrompida pela parada); tela (`tools/front-territorio`) 122, com
+cada campo), `e2e-79` corridas 16 (17 quando a corrida deixa a sobra) e 17 ou 18 com o READ_COMMITTED_SNAPSHOT do Azure (inclusive a renomeação do bairro
+com três fichas gravando nele); a bateria inteira do banco recriado do zero, do `e2e-1` ao `e2e-79`: 80 roteiros e 6.777 verificações ok — a sobra rara
+do `e2e-79` achou um defeito do próprio roteiro (juntava no bairro B, que as junções cruzadas às vezes desativam; juntar num desativado é recusado de
+propósito), corrigido e provado forçando a sobra (`61cd0c8`); e a `tudo.sh` agora recria as bases de partida antes de tudo (a primeira rodada de 10/11
+usou as bases de 05/11, sem a 169 e a 170, e acusou a tabela `Bairros` faltando); tela (`tools/front-territorio`) 122, com
 46 mutações acusadas (Expansão 83, Distritos 77, Missões 114 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42274057968) mostrou
 só as diferenças de propósito (a pílula e a seção do Território e o endereço em linhas) e a base foi aprovada; a segunda (42276436948) teve 5 divergências só de
 tempo (o aviso do Google sem resposta caindo em momentos diferentes), corrigidas pela chave com forma de chave e a base nova aprovada; a terceira
-(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: PROD_RUN.
+(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: deploy `43019675987`, teste de tela `43019675966`.
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 

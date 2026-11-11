@@ -627,10 +627,22 @@
             <label>E-mail:</label>
             <input type="email" id="meuEmail" placeholder="Ex: nome@exemplo.com" />
           </div>
-          <div class="input-group">
-            <label>Endereço:</label>
-            <input type="text" id="meuEndereco" placeholder="Rua, número, bairro, cidade" />
-          </div>
+          <fieldset class="end-linhas" id="meuEndBloco">
+            <legend>Endereço</legend>
+            <div class="input-group"><label for="meuEndLogradouro">Rua (logradouro):</label><input type="text" id="meuEndLogradouro" maxlength="200" autocomplete="address-line1" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <div class="input-group"><label for="meuEndNumero">Número:</label><input type="text" id="meuEndNumero" maxlength="20" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <div class="input-group"><label for="meuEndComplemento">Complemento:</label><input type="text" id="meuEndComplemento" maxlength="100" autocomplete="address-line2" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <div class="input-group"><label for="meuEndBairro">Bairro:</label><select id="meuEndBairro" data-on-change="endAtualizarAcao" data-args-change='["meuEnd"]'><option value="">— escolha o bairro —</option></select></div>
+            <div class="input-group" id="meuEndBairroTextoGrupo" style="display:none;"><label for="meuEndBairroTexto">Nome do bairro (entra na fila para a Secretaria cadastrar):</label><input type="text" id="meuEndBairroTexto" maxlength="150" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <div class="input-group"><label for="meuEndCidade">Cidade:</label><input type="text" id="meuEndCidade" maxlength="150" autocomplete="address-level2" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <div class="input-group"><label for="meuEndUf">UF:</label><select id="meuEndUf" data-on-change="endAtualizarAcao" data-args-change='["meuEnd"]'><option value="">— UF —</option></select></div>
+            <div class="input-group"><label for="meuEndCep">CEP:</label><input type="text" id="meuEndCep" maxlength="9" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' /></div>
+            <p class="subtitle" id="meuEndDica" role="status"></p>
+            <div class="input-group">
+              <label for="meuEndereco">Endereço numa linha só:</label>
+              <input type="text" id="meuEndereco" maxlength="300" placeholder="Rua, número, bairro, cidade" data-on-input="endAtualizarAcao" data-args-input='["meuEnd"]' />
+            </div>
+          </fieldset>
           <div class="input-group">
             <label>Estado Civil:</label>
             <select id="meuEstadoCivil">
@@ -2079,10 +2091,22 @@
               <label>E-mail:</label>
               <input type="email" id="pessoaEmail" placeholder="Ex: nome@exemplo.com" />
             </div>
-            <div class="input-group">
-              <label>Endereço:</label>
-              <input type="text" id="pessoaEndereco" placeholder="Rua, número, bairro, cidade" />
-            </div>
+            <fieldset class="end-linhas" id="pessoaEndBloco">
+              <legend>Endereço</legend>
+              <div class="input-group"><label for="pessoaEndLogradouro">Rua (logradouro):</label><input type="text" id="pessoaEndLogradouro" maxlength="200" autocomplete="address-line1" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <div class="input-group"><label for="pessoaEndNumero">Número:</label><input type="text" id="pessoaEndNumero" maxlength="20" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <div class="input-group"><label for="pessoaEndComplemento">Complemento:</label><input type="text" id="pessoaEndComplemento" maxlength="100" autocomplete="address-line2" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <div class="input-group"><label for="pessoaEndBairro">Bairro:</label><select id="pessoaEndBairro" data-on-change="endAtualizarAcao" data-args-change='["pessoaEnd"]'><option value="">— escolha o bairro —</option></select></div>
+              <div class="input-group" id="pessoaEndBairroTextoGrupo" style="display:none;"><label for="pessoaEndBairroTexto">Nome do bairro (entra na fila para a Secretaria cadastrar):</label><input type="text" id="pessoaEndBairroTexto" maxlength="150" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <div class="input-group"><label for="pessoaEndCidade">Cidade:</label><input type="text" id="pessoaEndCidade" maxlength="150" autocomplete="address-level2" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <div class="input-group"><label for="pessoaEndUf">UF:</label><select id="pessoaEndUf" data-on-change="endAtualizarAcao" data-args-change='["pessoaEnd"]'><option value="">— UF —</option></select></div>
+              <div class="input-group"><label for="pessoaEndCep">CEP:</label><input type="text" id="pessoaEndCep" maxlength="9" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' /></div>
+              <p class="subtitle" id="pessoaEndDica" role="status"></p>
+              <div class="input-group">
+                <label for="pessoaEndereco">Endereço numa linha só:</label>
+                <input type="text" id="pessoaEndereco" maxlength="300" placeholder="Rua, número, bairro, cidade" data-on-input="endAtualizarAcao" data-args-input='["pessoaEnd"]' />
+              </div>
+            </fieldset>
             <button class="btn-confirmar" type="submit">💾 Salvar Pessoa</button>
           </form>
           <p id="resultadoPessoa"></p>
@@ -6013,6 +6037,7 @@
           <button type="button" class="cal-pilula" id="btnExpSecaoExtensoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["extensoes"]'>⛺ Extensões</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoDistritos" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["distritos"]'>🗺️ Distritos</button>
           <button type="button" class="cal-pilula" id="btnExpSecaoMissoes" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["missoes"]'>🌍 Missões</button>
+          <button type="button" class="cal-pilula" id="btnExpSecaoTerritorio" aria-pressed="false" data-on-click="expMostrarSecaoAcao" data-args-click='["territorio"]'>🧭 Território</button>
         </div>
 
         <div id="expSecaoPainel" class="cal-secao">
@@ -6081,6 +6106,64 @@
           </div>
         </div>
 
+        <!-- v9.5 — Território (mapa de cobertura, densidade, simulação de emancipação): modulos/territorio.js monta tudo; a mesma permissão da Expansão ("expansao")
+             ou compor a CME. O mapa do Google mora numa página separada (mapa-territorial.html), presa numa moldura com sandbox. -->
+        <div id="expSecaoTerritorio" class="cal-secao" style="display:none;">
+          <p class="subtitle">Onde os membros moram, contados <strong>por bairro</strong> (nunca pelo nome): o bairro <strong>descoberto</strong> tem membros e nenhuma
+            congregação nem Extensão perto (dentro do raio de cobertura) — é onde vale pensar numa Extensão nova. A <strong>simulação</strong> mostra quais Extensões já
+            atendem os critérios que o nível geral definiu para virar congregação; ela só aponta: quem decide continua sendo a CME e a CLI.</p>
+          <div class="cal-pilulas" id="terPilulas">
+            <button type="button" class="cal-pilula ativo" id="btnTerSubMapa" aria-pressed="true" data-on-click="terMostrarSubAcao" data-args-click='["mapa"]'>🗺️ Mapa</button>
+            <button type="button" class="cal-pilula" id="btnTerSubSimulacao" aria-pressed="false" data-on-click="terMostrarSubAcao" data-args-click='["simulacao"]'>🌱 Simulação de emancipação</button>
+            <button type="button" class="cal-pilula" id="btnTerSubCriterios" aria-pressed="false" data-on-click="terMostrarSubAcao" data-args-click='["criterios"]'>📐 Critérios</button>
+            <button type="button" class="cal-pilula" id="btnTerSubPontos" aria-pressed="false" data-on-click="terMostrarSubAcao" data-args-click='["pontos"]'>📍 Pontos das Extensões</button>
+            <button type="button" class="cal-pilula" id="btnTerSubBairros" aria-pressed="false" style="display:none;" data-on-click="terMostrarSubAcao" data-args-click='["bairros"]'>🏘️ Bairros</button>
+          </div>
+          <div id="terSubMapa">
+            <div class="barra-lista">
+              <label for="terModo">Ver como</label>
+              <select id="terModo" data-on-change="terMudarModoAcao" data-args-change='[{"$":"value"}]'><option value="lista">Lista e desenho</option><option value="google">Mapa do Google</option></select>
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="terCarregarMapaAcao">🔄 Atualizar</button>
+            </div>
+            <p id="terMsgMapa" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="terResumo"></div>
+            <div id="terMolduraGoogle" class="ter-moldura-caixa" style="display:none;"></div>
+            <div id="terDesenho"></div>
+            <div id="terTabelaBairros"></div>
+            <div id="terDensidade"></div>
+            <div id="terFila"></div>
+          </div>
+          <div id="terSubSimulacao" style="display:none;">
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="terCarregarSimulacaoAcao">🔄 Atualizar</button></div>
+            <p id="terMsgSimulacao" class="subtitle" role="status"></p>
+            <div id="terSimulacao"></div>
+          </div>
+          <div id="terSubCriterios" style="display:none;">
+            <div class="barra-lista">
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="terCarregarCriteriosAcao">🔄 Atualizar</button>
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;display:none;" id="btnTerNovoCriterio" data-on-click="terNovoCriterioAcao">➕ Novo critério</button>
+            </div>
+            <p id="terMsgCriterios" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="terRaio"></div>
+            <div id="terFormCriterio"></div>
+            <div id="terCriterios"></div>
+          </div>
+          <div id="terSubPontos" style="display:none;">
+            <div class="barra-lista"><button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="terCarregarPontosAcao">🔄 Atualizar</button></div>
+            <p id="terMsgPontos" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="terFormPonto"></div>
+            <div id="terPontos"></div>
+          </div>
+          <div id="terSubBairros" style="display:none;">
+            <div class="barra-lista">
+              <button type="button" class="btn-confirmar btn-secundario" style="width:auto;margin:0;" data-on-click="terCarregarBairrosAcao">🔄 Atualizar</button>
+              <button type="button" class="btn-confirmar" style="width:auto;margin:0;display:none;" id="btnTerNovoBairro" data-on-click="terNovoBairroAcao">➕ Novo bairro</button>
+            </div>
+            <p id="terMsgBairros" class="subtitle" role="status" aria-live="polite"></p>
+            <div id="terFormBairro"></div>
+            <div id="terBairros"></div>
+          </div>
+        </div>
         <!-- v9.4 — Missões (Regimento Art. 23, 44, 133-C e 134 §6º, I): modulos/missoes.js monta tudo; permissão própria "missoes" (ou compor a CME). -->
         <div id="expSecaoMissoes" class="cal-secao" style="display:none;">
           <p class="subtitle">A <strong>SEMIADESPA</strong> coordena a obra missionária: abre as frentes em Parauapebas com autonomia e pede o <strong>envio</strong> de
@@ -7597,6 +7680,7 @@
   <script src="modulos/doacoes.js"></script>
   <script src="modulos/ebd.js"></script>
   <script src="modulos/educacao-continuada.js"></script>
+  <script src="modulos/endereco.js"></script>
   <script src="modulos/enquetes.js"></script>
   <script src="modulos/entidades-vinculadas.js"></script>
   <script src="modulos/escalas.js"></script>
@@ -7618,6 +7702,7 @@
   <script src="modulos/reunioes.js"></script>
   <script src="modulos/seminario.js"></script>
   <script src="modulos/setores-tecnicos.js"></script>
+  <script src="modulos/territorio.js"></script>
   <script src="modulos/voluntariado.js"></script>
 </body>
 </html>

@@ -42,6 +42,11 @@ na versão anterior tem motivo escrito aqui. Este arquivo é a referência para 
 Todas passaram a ser servidas **de dentro** do próprio sistema e do próprio site (pastas `vendor/`), cada uma com a licença ao lado, em
 vez de um CDN de terceiros (um CDN comprometido injetaria código nas telas de doação e de administração).
 
+**Exceção registrada (v9.5, 06/11/2026):** o mapa do Google da pílula Território carrega o script do próprio Google (`maps.googleapis.com`, versão
+`weekly`, que o Google não permite servir de dentro). Ele roda só na página separada `app/mapa-territorial.html`, presa numa moldura com sandbox **sem** a
+mesma origem (não alcança o login, o armazenamento nem a tela do sistema) e com a política de segurança própria dessa rota (`app/staticwebapp.config.json`);
+o resto do sistema continua com `script-src 'self'`. A página recebe só os pontos e as contagens, nunca nome nem endereço de pessoa.
+
 | Biblioteca | Versão | Onde | Observação |
 | --- | --- | --- | --- |
 | SheetJS (`xlsx`) | **0.20.3** | `app/vendor/` | Era 0.18.5 do jsDelivr (o `npm` parou nela; tem falhas conhecidas de poluição de protótipo e ReDoS, corrigidas na 0.19.3 e 0.20.2). Só o site oficial do SheetJS publica a 0.20. Comparada com a antiga no que o sistema faz: igual. |

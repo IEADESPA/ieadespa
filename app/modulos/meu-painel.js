@@ -243,6 +243,7 @@ async function alternarMeusDadosLGPD() {
     ${typeof expCartaoAtosMeusDados === "function" ? expCartaoAtosMeusDados(data.expansaoAtos) : ""}
     ${typeof dstCartaoMeusDados === "function" ? dstCartaoMeusDados(data) : ""}
     ${typeof misCartaoMeusDados === "function" ? misCartaoMeusDados(data) : ""}
+    ${typeof terCartaoMeusDados === "function" ? terCartaoMeusDados(data.territorio) : ""}
 
     <div class="cartao-perfil" style="margin-top:12px;">
       <h4 style="margin:0 0 8px; color: var(--cor-primaria);">Consentimentos LGPD</h4>

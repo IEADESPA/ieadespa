@@ -103,7 +103,6 @@ async function salvarPessoa() {
   const cargoDesde = geralPara("pessoas") && campoCargoDesde.value && (cargoMudou || campoCargoDesde.value !== (campoCargoDesde.getAttribute("data-original") || "")) ? campoCargoDesde.value : null;
   const telefone = document.getElementById("pessoaTelefone").value.trim() || null;
   const email = document.getElementById("pessoaEmail").value.trim() || null;
-  const endereco = document.getElementById("pessoaEndereco").value.trim() || null;
   const extensaoId = document.getElementById("pessoaExtensao").value || null;
   const msg = document.getElementById("resultadoPessoa");
 
@@ -117,7 +116,9 @@ async function salvarPessoa() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, situacaoMembro, dizimistaFiel,
-      departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
+      departamentoId, cargoMinisterial, telefone, email, extensaoId,
+      // v9.5 — o endereço em linhas (enderecoPartes) ou, sem nenhuma linha, a linha única de antes (endereco): modulos/endereco.js
+      ...endLerParaEnviar("pessoaEnd"),
       formaAdmissao, dataBatismo, origem, igrejaAnterior, dataRitoRecebimento, nomeLidoRito, ministranteRito,
       estadoCivil, dataAfastamento, motivoSaida, sexo, ...(cargoDesde ? { cargoDesde } : {}),
       // o cargo que a ficha leu: se uma consagração foi concluída enquanto ela estava aberta, o servidor recusa (409) em vez de desfazer a promoção
@@ -177,9 +178,10 @@ let subAbaPessoasAtual = "cadastrar";
 
 function limparFormPessoa() {
   ["pessoaMatricula", "pessoaNome", "pessoaOrigem", "pessoaIgrejaAnterior", "pessoaNomeLidoRito",
-    "pessoaMinistranteRito", "pessoaTelefone", "pessoaEmail", "pessoaEndereco"].forEach(id => {
+    "pessoaMinistranteRito", "pessoaTelefone", "pessoaEmail"].forEach(id => {
     document.getElementById(id).value = "";
   });
+  endLimpar("pessoaEnd");   // v9.5: as linhas do endereço e a linha única
   ["pessoaDataNascimento", "pessoaDataAdmissao", "pessoaDataBatismo", "pessoaDataRitoRecebimento",
     "pessoaDataAfastamento"].forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("pessoaCargoMinisterial").value = "";
@@ -443,7 +445,19 @@ const TAM_PAGINA = 20;
 let paginaAtualPessoas = 1;
 let pessoasFiltradas = [];
 
+// v9.5 — a lista dos bairros para o endereço em linhas (o catálogo do nível geral; nome, cidade e UF). Falhou? O seletor fica só com "não está na lista".
+async function endCarregarBairrosPessoas() {
+  const dono = authToken;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/pessoas?lista=bairros`);
+    const data = await res.json().catch(() => null);
+    if (authToken !== dono) return;
+    endPreencherBairros("pessoaEnd", data && data.sucesso && Array.isArray(data.bairros) ? data.bairros : []);
+  } catch (e) { if (authToken === dono) endPreencherBairros("pessoaEnd", []); }
+}
+
 async function carregarPessoas() {
+  endCarregarBairrosPessoas();
   const res = await fetchProtegido(`${API_BASE}/pessoas`);
   const lista = await jsonDaTela(res, document.getElementById("resultadoListaPessoas"), "lista");
   if (lista === null) { window._pessoasCache = []; return; } // recusa: o motivo fica no lugar da lista
@@ -828,7 +842,10 @@ function editarPessoa(membroId) {
   travarCamposDoGeralPessoa();
   document.getElementById("pessoaTelefone").value = pessoa.telefone || "";
   document.getElementById("pessoaEmail").value = pessoa.email || "";
-  document.getElementById("pessoaEndereco").value = pessoa.endereco || "";
+  endPreencher("pessoaEnd", {
+    logradouro: pessoa.enderecoLogradouro, numero: pessoa.enderecoNumero, complemento: pessoa.enderecoComplemento, bairroId: pessoa.enderecoBairroId,
+    bairroNome: pessoa.enderecoBairroNome, bairroTexto: pessoa.enderecoBairroTexto, cidade: pessoa.enderecoCidade, uf: pessoa.enderecoUF, cep: pessoa.enderecoCep
+  }, pessoa.endereco);
   document.getElementById("pessoaExtensao").value = pessoa.extensaoId != null ? String(pessoa.extensaoId) : "";
 }
 

@@ -500,42 +500,121 @@ Expansão 83 e Entidades 70 de novo); homologação: a primeira execução do te
 
 ## v9.5 — Mapa territorial e inteligência de expansão *(7ª rodada)*
 
-- [ ] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
+- [x] **Mapa de cobertura**: onde há membros cadastrados sem congregação próxima —
       insumo direto e objetivo para abertura de Extensão da Tenda (v9.2), em vez
       de decidir por percepção.
-- [ ] Densidade de membresia por região e distância média até a congregação de
+- [x] Densidade de membresia por região e distância média até a congregação de
       vínculo.
-- [ ] Simulação de emancipação: quais Extensões já atendem os critérios para virar
+- [x] Simulação de emancipação: quais Extensões já atendem os critérios para virar
       Congregação, calculado a partir dos dados que já existem (membresia, PSC da
       v7.1, arrecadação da FASE 4). *(Churchteams; GroupVitals — group finder)*
       *(Trava 9-A: nem o Regimento nem a v9.2 fixam critérios de emancipação — a v9.2 decide caso a caso, pela CME e pela CLI. Os critérios da
       simulação são decisão do responsável, a pedir no desenho da v9.5.)*
 
-### ⏸️ Ponto seguro da v9.5 (parada em 09/11/2026, para cuidar do site)
+### Desenho da v9.5 (contrato, 06/11/2026)
 
-**A produção não tem a v9.5:** o sistema no ar segue na v9.4 (merge `a052c5e`). Não há nada a desfazer. A v9.5 está **pronta e guardada**, à espera da
-retomada:
+Decisões do responsável (06/11/2026): o endereço do membro passa a ter **todas as linhas separadas** (não só o bairro); o mapa usa a **chave do Google Maps**,
+com a opção **lista e desenho simples** ao lado, escolhida na hora conforme a conveniência; os critérios de emancipação ficam numa **tabela que ele monta**
+(nenhuma régua fixa no código). O que já existe e é reaproveitado: a posição (latitude e longitude) das congregações em Catálogos (vC.2), o endereço das
+Extensões e a data de abertura (v9.2), o escopo da aba Expansão (o nível geral e a CME veem tudo; o Dirigente e o Pastor de Área, só as congregações que o
+escopo cobre por inteiro), o pedido de emancipação da v9.2, o dízimo confirmado da Tesouraria Local (v4) e a avaliação homologada do PSC (v7.1).
 
-- **Onde está:** no ramo `v9.5` do GitHub (último commit `c3f6bb9`, 11 commits à frente da `main`) e na **homologação** (ramo `homolog`, merge `22e9dbf`),
-  que roda a v9.5 inteira com o banco da homologação já na migração 170.
-- **O que já está feito e provado:** o desenho (com as três escolhas do responsável: o endereço em linhas, o mapa do Google com a opção da lista e desenho, e
-  a tabela de critérios que ele monta), o servidor, a tela, as duas revisões independentes com tudo corrigido, o jest (6.368), a bateria do banco local da
-  v9.5 (`e2e-78` 190 e `e2e-79` corridas 16 e 18), a prova da tela (122, com 46 mutações acusadas) e o teste de tela da homologação (execução 42290840200:
-  1.277 e 155 ações iguais, 0 divergência, 0 violação de CSP). O desenho completo e o rascunho do "Como ficou" estão neste mesmo plano, **no ramo `v9.5`**.
-- **O que falta, na ordem, ao retomar:**
-  1. Trazer para o ramo `v9.5` o que entrou na `main` durante a parada (o trabalho do site) e rodar o jest de novo. **Se alguma mudança do sistema entrar na
-     `main` antes, conferir os números:** a v9.5 usa a migração **170** e a casca **v56** do service worker; se já estiverem tomados, a v9.5 passa para os
-     seguintes.
-  2. Rodar a bateria inteira do banco local, do `e2e-1` ao `e2e-79` (estava rodando quando veio a parada e foi interrompida).
-  3. Levar de novo para a homologação e repetir o teste de tela (base aprovada no commit `3595b01`; mudanças da `main` no meio podem pedir base nova).
-  4. Mesclar na `main` (`git merge --no-ff v9.5`), acompanhar o deploy e conferir na produção: a migração 170 no registro, `/api/territorio/mapa`
-     respondendo 401 sem login, a casca v56, a página do mapa com a sua política própria (sandbox) e o teste de tela da produção.
-  5. Completar o "Como ficou" (data, merge, execução da produção) no lugar deste aviso, gerar o índice e fechar.
-- **Ação humana (do responsável, não trava a retomada):** autorizar na chave do Google Maps, no Google Cloud, o endereço do sistema
-  (`app.ieadespa.org.br`) e os dois endereços do Azure (produção e homologação); e gravar a chave nas configurações do Azure como
-  `GOOGLE_MAPS_CHAVE_NAVEGADOR` (produção e homologação). Sem a chave, o Território funciona na lista e desenho.
-- **Enquanto isso, a homologação fica com a v9.5.** Se for preciso testar outra mudança do sistema lá, ela entra no `homolog` junto (nunca mesclar o
-  `homolog` na `main`).
+**1. Endereço do membro em linhas.** O cadastro (Pessoas) e o Meus Dados ganham: logradouro, número, complemento, **bairro** (escolhido numa lista; se o
+bairro não está nela, a pessoa escreve o nome e ele entra na fila "bairros a cadastrar"), cidade, UF e CEP. A linha única de hoje (`Endereco`) continua e passa
+a ser **montada pelo sistema** com as linhas (tudo o que já lê o endereço segue funcionando); um endereço antigo, só com a linha única, aparece como está e
+conta como "sem localização" até ganhar o bairro. A anonimização e a exclusão da LGPD limpam as linhas novas junto com a antiga.
+
+**2. Bairros e posições.** Um cadastro de **bairros** (nome, cidade, UF e o ponto central, marcado uma vez), do nível geral. Ao cadastrar um bairro que estava na
+fila, o sistema liga a ele, de uma vez, os membros que escreveram aquele nome na mesma cidade. As **Extensões** ganham o ponto no mapa, marcado pelo Dirigente
+da Mãe ou pelo nível geral; as congregações continuam com o ponto de Catálogos (a tela avisa a que não tem). Marcar o ponto: um clique no mapa do Google, ou
+colar o link do Google Maps do lugar, ou digitar a latitude e a longitude.
+
+**3. Mapa de cobertura.** Uma pílula nova **Território** na aba Expansão (permissão `expansao` ou a CME, como a v9.2). Duas formas, escolhidas na hora: **Google
+Maps** (ruas de verdade, as congregações e as Extensões com o ponto, e um círculo em cada bairro com o número de membros, maior quanto mais gente) e **lista e
+desenho** (a tabela por bairro e um desenho simples dos pontos, sem nada de fora). Cada bairro com ponto mostra os membros que moram nele, a unidade mais perto
+(congregação ou Extensão ativa) e a distância em linha reta; **bairro descoberto** é o que tem membros e nenhuma unidade dentro do raio de cobertura
+(parâmetro do nível geral, começa em 3 km). Contagem, nunca nome: o mapa não mostra quem mora onde. O nível geral e a CME veem todos os membros; o Dirigente e o
+Pastor de Área, os das congregações deles (as unidades de todos aparecem, porque são públicas). Do bairro descoberto sai o atalho para o pedido de abertura de
+Extensão da v9.2.
+
+**4. Densidade e distância.** Por bairro: os membros e o descoberto. Por unidade (congregação ou Extensão): os membros com bairro marcado, a **distância média**
+do bairro deles até a unidade e **quantos moram mais perto de outra unidade**. No total: os membros sem localização (a medida de quanto o cadastro ainda
+precisa ser completado) e os bairros sem ponto.
+
+**5. Simulação de emancipação (a tabela que o responsável monta).** Os critérios são linhas de uma tabela do nível geral: o **indicador** (escolhido de uma
+lista que o sistema sabe calcular), a comparação (**pelo menos**, **no máximo** ou, nos de sim/não, **precisa ser sim**), o valor, ativo ou não, a ordem e uma
+observação. Pode-se criar, mudar, desligar e apagar linhas; cada mudança fica registrada (quem e quando). Indicadores: meses desde a abertura da Extensão;
+membros em comunhão; Encarregado em comunhão (sim/não); obreiros consagrados entre os membros (auxiliar a pastor); dízimo confirmado dos membros na média dos
+últimos 12 meses fechados; dizimistas (membros que deram dízimo nos últimos 12 meses); distância até a Mãe (km); nível do PSC homologado mais recente da Mãe.
+Para cada Extensão ativa no alcance, a simulação mostra cada critério ativo com o valor medido e se atende, não atende ou **não dá para medir** (falta o dado:
+sem data de abertura, sem ponto no mapa, Mãe sem PSC homologado); **atende tudo** só quando todos os ativos atendem. A simulação **só aponta**: quem decide
+continua sendo a CME e a CLI pelo pedido da v9.2 (o atalho abre o pedido de emancipação já com a Extensão escolhida). Sem nenhum critério ativo, a tela diz
+isso em vez de apontar. Para começar, a tabela vem com a régua média sugerida em 06/11 (2 anos de aberta, 50 membros em comunhão, Encarregado em comunhão, 1
+obreiro, R$ 3.000 de dízimo médio) — ele muda ou apaga.
+
+**6. O mapa do Google e a segurança.** O sistema roda com a política de segurança forte (CSP: só scripts dele mesmo). O mapa do Google precisa de scripts do
+Google, então mora numa **página separada** (`mapa-territorial.html`), presa numa moldura dentro do sistema, com a política dela (só os endereços do Google
+que o mapa usa) e sem o acesso de quem está logado: o sistema manda para a moldura só o que é para desenhar (os pontos e as contagens) e recebe dela só o clique
+de marcar um ponto, conferindo a origem das mensagens dos dois lados. A chave do Maps fica nas configurações do servidor (`GOOGLE_MAPS_CHAVE_NAVEGADOR`), fora
+do código público, e só é entregue a quem entra na pílula; ela precisa aceitar o endereço do sistema (`app.ieadespa.org.br`) e o da homologação no Google
+Cloud. Sem a chave, ou se o Google recusar, a tela diz o motivo e fica na lista e desenho.
+
+**7. Costuras.** Meus Dados mostra o endereço em linhas e os atos da pessoa no território (bairros cadastrados, critérios mudados, pontos marcados). ROPA: a
+finalidade "planejamento territorial (contagem por bairro, sem nome)" no cadastro de membros; o cadastro de bairros e os critérios não têm dado pessoal. A
+emancipação da v9.2 leva o ponto da Extensão para a congregação que nasce. O teste de tela ganha a pílula nova (base a aprovar, como na v9.4).
+
+**Fora desta versão (escopo):** localizar a casa exata do membro (mandaria os endereços a um serviço de fora — o bairro basta para a cobertura), rota e tempo
+de viagem (só a linha reta), o contorno desenhado dos bairros (o ponto central basta), a importação do cadastro antigo de membros (quando vier, já preenche as
+linhas e o bairro) e aviso automático de Extensão que passou a atender os critérios (o painel mostra).
+
+### Como ficou a v9.5 (RASCUNHO no ramo — completar na entrega; ainda NÃO está em produção)
+
+> Rascunho guardado na parada de 09/11/2026 (ver o "Ponto seguro da v9.5" na `main`). Na entrega: trocar `DATA_ENTREGA`, `MERGE_HASH` e
+> `PROD_RUN`, conferir o número do jest e da bateria do banco e tirar este aviso.
+
+**Em produção desde DATA_ENTREGA** (merge `MERGE_HASH`; para desfazer: `git revert -m 1 MERGE_HASH`). Migração **170** (`Bairros`, o endereço do membro em
+linhas em `MembroReferencia`, o ponto das Extensões em `ExtensoesTenda`, `TerritorioParametros` e `CriteriosEmancipacao` com a régua inicial semeada uma vez
+só). Regra pura em `api/shared/territorio.js`, banco em `api/shared/territorioDb.js`, rota `/api/territorio/<ação>` (`GestaoTerritorio`). Tela: pílula
+**Território** na aba Expansão (Mapa, Simulação de emancipação, Critérios, Pontos das Extensões e, no nível geral, Bairros), o endereço em linhas na Pessoas e
+no Meus Dados (`app/modulos/endereco.js`), o cartão em Meus Dados e a página do mapa do Google à parte (`app/mapa-territorial.*`, moldura com sandbox e a
+política de segurança só dessa rota). Casca do service worker **v56**.
+
+**O que mudou do desenho (depois das duas revisões independentes — costuras: 3 médias, 5 baixas; conformidade: 1 alta, 3 médias, 6 baixas — tratadas):**
+
+- **O mapa e a simulação contam membros:** o congregado e o novo convertido não entram (Estatuto Art. 7º, I: o congregado "não integra o quadro de membros"),
+  o mesmo recorte do rol do PSC e da credencial; "em comunhão" é a régua do estatuto (em comunhão e sem disciplina), também para o Encarregado.
+- **Unidade sem ponto não vira "descoberto":** o bairro cujos moradores são de uma congregação ou Extensão ainda sem ponto no mapa fica **"a conferir"**, sem
+  o atalho de pedir Extensão, e o resumo avisa onde marcar o ponto (Extensão em Pontos das Extensões; congregação em Catálogos).
+- **O dízimo na simulação:** só saem do servidor as medidas dos critérios ativos; com menos de 3 dizimistas na Extensão, o dízimo médio aparece só como
+  "atende / não atende" (o valor seria o de uma pessoa). "Não dá para medir" diz o que falta.
+- **O endereço não se perde:** o endereço antigo numa linha vai para a Rua quando a ficha abre (escolher o bairro não apaga a rua e o número); apagar todas as
+  linhas apaga o endereço de propósito; o nome escrito que já é um bairro cadastrado vira o bairro da lista (não fica na fila para sempre) e editar o bairro
+  liga a fila; a ficha grava o bairro travado (a renomeação do bairro e a ficha nunca se travam uma à outra, e a linha única sai com o nome novo); as UFs e o
+  bairro "fora da lista" não somem quando a lista dos bairros chega depois da ficha.
+- **O mapa do Google:** sem resposta em 20 s, volta à lista e desenho; no erro, a escolha guardada volta para a lista; a página do mapa confere a janela e a
+  origem e só responde à origem do sistema; a tela só aceita uma chave com a forma de chave de verdade (a mesma regra do servidor — o teste de tela usa
+  uma chave de mentira e a moldura ficava esperando o Google). A congregação que nasce da emancipação herda o ponto da Extensão só quando o pedido não
+  trouxe outro endereço.
+- Documentados a configuração da chave do Maps (`SECRETS.md`) e a exceção do script do Google (`docs/PLATAFORMAS.md`).
+
+**Decisões tomadas por interpretação (o responsável pode mudar qualquer uma):** a localização é **pelo bairro** (ponto central marcado uma vez), não a casa
+exata (o endereço nunca sai do sistema); a distância é em linha reta; o raio de cobertura começa em **3 km** (muda na sub-aba Critérios); a tabela de critérios
+começou com a régua média sugerida (2 anos de aberta, 50 membros em comunhão, Encarregado em comunhão, 1 obreiro, R$ 3.000 de dízimo médio) — ele muda, desliga
+ou apaga; o mapa conta só membros; o dízimo médio só aparece com 3 ou mais dizimistas; o Dirigente e o Pastor de Área veem os membros das congregações deles e
+as unidades de todos; só o nível geral cadastra bairros, muda o raio e os critérios; o Dirigente da Mãe marca o ponto das Extensões; os atos em Meus Dados
+mostram quem cadastrou e quem mudou por último (o histórico inteiro fica na auditoria). **Ação humana:** no Google Cloud, a chave do Maps precisa aceitar o
+endereço do sistema (`app.ieadespa.org.br`) e o da homologação; e a chave precisa ser gravada nas configurações do Azure (`GOOGLE_MAPS_CHAVE_NAVEGADOR`, em
+produção e na homologação). Até lá, a pílula funciona na lista e desenho.
+
+**Provas:** jest 6.368; banco local (`bash rodar.sh preparar-territorio`): `e2e-78` 190 (a régua semeada uma vez, mesmo apagada; quem entra; o endereço em
+linhas e a tela antiga; a fila; os bairros; os pontos; o mapa, o "a conferir", o descoberto pelo raio e o escopo do Dirigente; a densidade; os critérios; a
+simulação com cada indicador medido de verdade, o congregado e o novo convertido fora, o dízimo oculto; a emancipação levando o ponto; a LGPD; os CHECK; lixo em
+cada campo), `e2e-79` corridas 16 e 18 com o READ_COMMITTED_SNAPSHOT do Azure (inclusive a renomeação do bairro com três fichas gravando nele); a bateria
+inteira do banco recriado do zero, do `e2e-1` ao `e2e-79`: **A RODAR na retomada** (foi interrompida pela parada); tela (`tools/front-territorio`) 122, com
+46 mutações acusadas (Expansão 83, Distritos 77, Missões 114 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42274057968) mostrou
+só as diferenças de propósito (a pílula e a seção do Território e o endereço em linhas) e a base foi aprovada; a segunda (42276436948) teve 5 divergências só de
+tempo (o aviso do Google sem resposta caindo em momentos diferentes), corrigidas pela chave com forma de chave e a base nova aprovada; a terceira
+(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: PROD_RUN.
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
 

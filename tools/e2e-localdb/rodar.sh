@@ -168,6 +168,14 @@ case "$1" in
     migrar 169 2
     base salvar cenario-missoes
     ;;
+  preparar-territorio)
+    # v9.5 (Mapa territorial): a partir da base "cenario-missoes", aplica a 170 duas vezes (prova a idempotência e que a régua inicial dos critérios nasce uma vez
+    # só); salva "cenario-territorio" (e2e-78 e e2e-79: cada roteiro monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-missoes
+    migrar 170 2
+    base salvar cenario-territorio
+    ;;
   roteiro)
     shift
     cd "$AQUI"

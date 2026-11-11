@@ -68,7 +68,9 @@ async function carregarMeusDadosForm() {
   const d = data.dados;
   document.getElementById("meuTelefone").value = d.telefone || "";
   document.getElementById("meuEmail").value = d.email || "";
-  document.getElementById("meuEndereco").value = d.endereco || "";
+  // v9.5 — o endereço em linhas, com a lista dos bairros (modulos/endereco.js)
+  endPreencherBairros("meuEnd", Array.isArray(data.bairros) ? data.bairros : []);
+  endPreencher("meuEnd", d.enderecoPartes, d.endereco);
   document.getElementById("meuEstadoCivil").value = d.estadoCivil || "";
 
   const partes = [
@@ -88,13 +90,12 @@ async function salvarMeusDadosAcao() {
   const msg = document.getElementById("resultadoMeusDados");
   const telefone = document.getElementById("meuTelefone").value.trim();
   const email = document.getElementById("meuEmail").value.trim();
-  const endereco = document.getElementById("meuEndereco").value.trim();
   const estadoCivil = document.getElementById("meuEstadoCivil").value;
 
   const res = await fetchProtegido(`${API_BASE}/meus-dados/${authMatricula}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ telefone, email, endereco, estadoCivil })
+    body: JSON.stringify({ telefone, email, ...endLerParaEnviar("meuEnd"), estadoCivil })
   });
   const data = await res.json();
   avisarResultado(data);

@@ -1,0 +1,2414 @@
+{
+ "catalogosCMESemPermissao": {
+  "sucesso": true,
+  "indicadores": [
+   {
+    "codigo": "MESES_ABERTA",
+    "rotulo": "Meses desde a abertura da Extensão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "meses",
+    "maximo": null
+   },
+   {
+    "codigo": "MEMBROS_EM_COMUNHAO",
+    "rotulo": "Membros em comunhão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "ENCARREGADO_EM_COMUNHAO",
+    "rotulo": "Encarregado em comunhão",
+    "tipo": "simnao",
+    "inteiro": false,
+    "unidade": null,
+    "maximo": null
+   },
+   {
+    "codigo": "OBREIROS",
+    "rotulo": "Obreiros consagrados entre os membros (auxiliar a pastor)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "obreiros",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMO_MEDIO_12M",
+    "rotulo": "Dízimo confirmado dos membros: média por mês dos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "reais",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMISTAS_12M",
+    "rotulo": "Membros que deram dízimo nos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "DISTANCIA_MAE_KM",
+    "rotulo": "Distância até a Congregação-Mãe (km, em linha reta)",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "km",
+    "maximo": null
+   },
+   {
+    "codigo": "NIVEL_PSC_MAE",
+    "rotulo": "Nível do PSC homologado mais recente da Congregação-Mãe (0 a 5)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "nível",
+    "maximo": 5
+   }
+  ],
+  "operadores": [
+   {
+    "codigo": "MINIMO",
+    "rotulo": "pelo menos"
+   },
+   {
+    "codigo": "MAXIMO",
+    "rotulo": "no máximo"
+   },
+   {
+    "codigo": "SIM",
+    "rotulo": "precisa ser sim"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "raioKm": 3,
+  "versaoParametros": 0,
+  "bairros": [],
+  "mapa": {
+   "chave": "AIzaTESTE_e2e_chave_de_mentira_0001"
+  },
+  "papeis": {
+   "geral": false,
+   "cme": true
+  }
+ },
+ "catalogosGeral": {
+  "sucesso": true,
+  "indicadores": [
+   {
+    "codigo": "MESES_ABERTA",
+    "rotulo": "Meses desde a abertura da Extensão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "meses",
+    "maximo": null
+   },
+   {
+    "codigo": "MEMBROS_EM_COMUNHAO",
+    "rotulo": "Membros em comunhão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "ENCARREGADO_EM_COMUNHAO",
+    "rotulo": "Encarregado em comunhão",
+    "tipo": "simnao",
+    "inteiro": false,
+    "unidade": null,
+    "maximo": null
+   },
+   {
+    "codigo": "OBREIROS",
+    "rotulo": "Obreiros consagrados entre os membros (auxiliar a pastor)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "obreiros",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMO_MEDIO_12M",
+    "rotulo": "Dízimo confirmado dos membros: média por mês dos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "reais",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMISTAS_12M",
+    "rotulo": "Membros que deram dízimo nos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "DISTANCIA_MAE_KM",
+    "rotulo": "Distância até a Congregação-Mãe (km, em linha reta)",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "km",
+    "maximo": null
+   },
+   {
+    "codigo": "NIVEL_PSC_MAE",
+    "rotulo": "Nível do PSC homologado mais recente da Congregação-Mãe (0 a 5)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "nível",
+    "maximo": 5
+   }
+  ],
+  "operadores": [
+   {
+    "codigo": "MINIMO",
+    "rotulo": "pelo menos"
+   },
+   {
+    "codigo": "MAXIMO",
+    "rotulo": "no máximo"
+   },
+   {
+    "codigo": "SIM",
+    "rotulo": "precisa ser sim"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "raioKm": 3,
+  "versaoParametros": 0,
+  "bairros": [],
+  "mapa": {
+   "chave": "AIzaTESTE_e2e_chave_de_mentira_0001"
+  },
+  "papeis": {
+   "geral": true,
+   "cme": false
+  }
+ },
+ "catalogosDirigente": {
+  "sucesso": true,
+  "indicadores": [
+   {
+    "codigo": "MESES_ABERTA",
+    "rotulo": "Meses desde a abertura da Extensão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "meses",
+    "maximo": null
+   },
+   {
+    "codigo": "MEMBROS_EM_COMUNHAO",
+    "rotulo": "Membros em comunhão",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "ENCARREGADO_EM_COMUNHAO",
+    "rotulo": "Encarregado em comunhão",
+    "tipo": "simnao",
+    "inteiro": false,
+    "unidade": null,
+    "maximo": null
+   },
+   {
+    "codigo": "OBREIROS",
+    "rotulo": "Obreiros consagrados entre os membros (auxiliar a pastor)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "obreiros",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMO_MEDIO_12M",
+    "rotulo": "Dízimo confirmado dos membros: média por mês dos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "reais",
+    "maximo": null
+   },
+   {
+    "codigo": "DIZIMISTAS_12M",
+    "rotulo": "Membros que deram dízimo nos últimos 12 meses fechados",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "membros",
+    "maximo": null
+   },
+   {
+    "codigo": "DISTANCIA_MAE_KM",
+    "rotulo": "Distância até a Congregação-Mãe (km, em linha reta)",
+    "tipo": "numero",
+    "inteiro": false,
+    "unidade": "km",
+    "maximo": null
+   },
+   {
+    "codigo": "NIVEL_PSC_MAE",
+    "rotulo": "Nível do PSC homologado mais recente da Congregação-Mãe (0 a 5)",
+    "tipo": "numero",
+    "inteiro": true,
+    "unidade": "nível",
+    "maximo": 5
+   }
+  ],
+  "operadores": [
+   {
+    "codigo": "MINIMO",
+    "rotulo": "pelo menos"
+   },
+   {
+    "codigo": "MAXIMO",
+    "rotulo": "no máximo"
+   },
+   {
+    "codigo": "SIM",
+    "rotulo": "precisa ser sim"
+   }
+  ],
+  "ufs": [
+   "AC",
+   "AL",
+   "AP",
+   "AM",
+   "BA",
+   "CE",
+   "DF",
+   "ES",
+   "GO",
+   "MA",
+   "MT",
+   "MS",
+   "MG",
+   "PA",
+   "PB",
+   "PR",
+   "PE",
+   "PI",
+   "RJ",
+   "RN",
+   "RS",
+   "RO",
+   "RR",
+   "SC",
+   "SP",
+   "SE",
+   "TO"
+  ],
+  "raioKm": 3,
+  "versaoParametros": 0,
+  "bairros": [],
+  "mapa": {
+   "chave": null
+  },
+  "papeis": {
+   "geral": false,
+   "cme": false
+  }
+ },
+ "bairroCriado": {
+  "sucesso": true,
+  "bairroId": 1,
+  "membrosLigados": 0
+ },
+ "meusDadosGet": {
+  "sucesso": true,
+  "dados": {
+   "telefone": null,
+   "email": null,
+   "endereco": null,
+   "estadoCivil": null,
+   "dataNascimento": null,
+   "dataAdmissao": null,
+   "dataBatismo": null,
+   "formaAdmissao": null,
+   "origem": null,
+   "igrejaAnterior": null,
+   "dataRitoRecebimento": null,
+   "nomeLidoRito": null,
+   "ministranteRito": null,
+   "enderecoPartes": {
+    "logradouro": null,
+    "numero": null,
+    "complemento": null,
+    "bairroId": null,
+    "bairroNome": null,
+    "bairroTexto": null,
+    "cidade": null,
+    "uf": null,
+    "cep": null
+   }
+  },
+  "bairros": [
+   {
+    "bairroId": 3,
+    "nome": "Centro E2E",
+    "cidade": "Marabá",
+    "uf": "PA"
+   },
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA"
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA"
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA"
+   }
+  ]
+ },
+ "mapaComFila": {
+  "sucesso": true,
+  "raioKm": 3,
+  "bairros": [
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.15,
+    "lng": -49.95,
+    "membros": 1,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C1",
+     "tipo": "CONGREGACAO",
+     "nome": "Central E2E"
+    },
+    "distanciaKm": 10.6,
+    "descoberto": true,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.068,
+    "lng": -49.903,
+    "membros": 4,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C1",
+     "tipo": "CONGREGACAO",
+     "nome": "Central E2E"
+    },
+    "distanciaKm": 0.1,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 3,
+    "nome": "Centro E2E",
+    "cidade": "Marabá",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "membros": 0,
+    "semPonto": true,
+    "maisPerto": null,
+    "distanciaKm": null,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "membros": 0,
+    "semPonto": true,
+    "maisPerto": null,
+    "distanciaKm": null,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   }
+  ],
+  "unidades": [
+   {
+    "chave": "C1",
+    "id": 1,
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.0675,
+    "lng": -49.9025
+   },
+   {
+    "chave": "C2",
+    "id": 2,
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": -6.08,
+    "lng": -49.88
+   },
+   {
+    "chave": "C3",
+    "id": 3,
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "maeNome": "Beta E2E",
+    "lat": null,
+    "lng": null
+   },
+   {
+    "chave": "E1",
+    "id": 1,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "lat": null,
+    "lng": null
+   },
+   {
+    "chave": "E2",
+    "id": 2,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": null,
+    "lng": null
+   }
+  ],
+  "densidade": [
+   {
+    "chave": "C1",
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "semPonto": false,
+    "membrosLocalizados": 4,
+    "distanciaMediaKm": 2.7,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "C2",
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "semPonto": false,
+    "membrosLocalizados": 1,
+    "distanciaMediaKm": 2.9,
+    "maisPertoDeOutra": 1
+   },
+   {
+    "chave": "C3",
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E1",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E2",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   }
+  ],
+  "totais": {
+   "membros": 81,
+   "localizados": 5,
+   "semLocalizacao": 76,
+   "bairroEscritoNaFila": 2,
+   "bairrosSemPonto": 0,
+   "descobertos": 1,
+   "aConferir": 0,
+   "unidadesSemPonto": 3
+  },
+  "fila": [
+   {
+    "nome": "sao jorge e2e",
+    "cidade": "parauapebas",
+    "uf": "PA",
+    "membros": 2
+   }
+  ],
+  "escopo": "TODOS"
+ },
+ "bairros": {
+  "sucesso": true,
+  "bairros": [
+   {
+    "bairroId": 3,
+    "nome": "Centro E2E",
+    "cidade": "Marabá",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "ativo": true,
+    "versao": 0,
+    "membros": 0
+   },
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.15,
+    "lng": -49.95,
+    "ativo": true,
+    "versao": 0,
+    "membros": 7
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.068,
+    "lng": -49.903,
+    "ativo": true,
+    "versao": 0,
+    "membros": 3
+   },
+   {
+    "bairroId": 6,
+    "nome": "São Jorge E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.1,
+    "lng": -49.88,
+    "ativo": true,
+    "versao": 0,
+    "membros": 2
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "ativo": true,
+    "versao": 0,
+    "membros": 1
+   }
+  ]
+ },
+ "extensoesDirigente": {
+  "sucesso": true,
+  "extensoes": [
+   {
+    "extensaoId": 1,
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "lat": null,
+    "lng": null,
+    "endereco": "Rua da Tenda, 5 — Parauapebas/PA",
+    "podeMarcar": true
+   }
+  ]
+ },
+ "pontoMarcado": {
+  "sucesso": true,
+  "extensaoId": 1,
+  "lat": -6.151,
+  "lng": -49.951
+ },
+ "mapaGeral": {
+  "sucesso": true,
+  "raioKm": 3,
+  "bairros": [
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.15,
+    "lng": -49.95,
+    "membros": 7,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "E1",
+     "tipo": "EXTENSAO",
+     "nome": "Tenda Território E2E"
+    },
+    "distanciaKm": 0.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.068,
+    "lng": -49.903,
+    "membros": 4,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C1",
+     "tipo": "CONGREGACAO",
+     "nome": "Central E2E"
+    },
+    "distanciaKm": 0.1,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 6,
+    "nome": "São Jorge II E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.1,
+    "lng": -49.88,
+    "membros": 2,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C2",
+     "tipo": "CONGREGACAO",
+     "nome": "Vila Nova E2E"
+    },
+    "distanciaKm": 2.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "membros": 1,
+    "semPonto": true,
+    "maisPerto": null,
+    "distanciaKm": null,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   }
+  ],
+  "unidades": [
+   {
+    "chave": "C1",
+    "id": 1,
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.0675,
+    "lng": -49.9025
+   },
+   {
+    "chave": "C2",
+    "id": 2,
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": -6.08,
+    "lng": -49.88
+   },
+   {
+    "chave": "C3",
+    "id": 3,
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "maeNome": "Beta E2E",
+    "lat": null,
+    "lng": null
+   },
+   {
+    "chave": "E1",
+    "id": 1,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.151,
+    "lng": -49.951
+   },
+   {
+    "chave": "E2",
+    "id": 2,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": null,
+    "lng": null
+   }
+  ],
+  "densidade": [
+   {
+    "chave": "C1",
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "semPonto": false,
+    "membrosLocalizados": 5,
+    "distanciaMediaKm": 2.2,
+    "maisPertoDeOutra": 1
+   },
+   {
+    "chave": "C2",
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "semPonto": false,
+    "membrosLocalizados": 2,
+    "distanciaMediaKm": 2.2,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "C3",
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E1",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "semPonto": false,
+    "membrosLocalizados": 6,
+    "distanciaMediaKm": 0.2,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E2",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   }
+  ],
+  "totais": {
+   "membros": 81,
+   "localizados": 14,
+   "semLocalizacao": 67,
+   "bairroEscritoNaFila": 0,
+   "bairrosSemPonto": 1,
+   "descobertos": 0,
+   "aConferir": 0,
+   "unidadesSemPonto": 2
+  },
+  "fila": [],
+  "escopo": "TODOS"
+ },
+ "mapaDirigente": {
+  "sucesso": true,
+  "raioKm": 3,
+  "bairros": [
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.15,
+    "lng": -49.95,
+    "membros": 7,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "E1",
+     "tipo": "EXTENSAO",
+     "nome": "Tenda Território E2E"
+    },
+    "distanciaKm": 0.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.068,
+    "lng": -49.903,
+    "membros": 4,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C1",
+     "tipo": "CONGREGACAO",
+     "nome": "Central E2E"
+    },
+    "distanciaKm": 0.1,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 6,
+    "nome": "São Jorge II E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.1,
+    "lng": -49.88,
+    "membros": 0,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C2",
+     "tipo": "CONGREGACAO",
+     "nome": "Vila Nova E2E"
+    },
+    "distanciaKm": 2.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "membros": 0,
+    "semPonto": true,
+    "maisPerto": null,
+    "distanciaKm": null,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   }
+  ],
+  "unidades": [
+   {
+    "chave": "C1",
+    "id": 1,
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.0675,
+    "lng": -49.9025
+   },
+   {
+    "chave": "C2",
+    "id": 2,
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": -6.08,
+    "lng": -49.88
+   },
+   {
+    "chave": "C3",
+    "id": 3,
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "maeNome": "Beta E2E",
+    "lat": null,
+    "lng": null
+   },
+   {
+    "chave": "E1",
+    "id": 1,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.151,
+    "lng": -49.951
+   },
+   {
+    "chave": "E2",
+    "id": 2,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": null,
+    "lng": null
+   }
+  ],
+  "densidade": [
+   {
+    "chave": "C1",
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "semPonto": false,
+    "membrosLocalizados": 5,
+    "distanciaMediaKm": 2.2,
+    "maisPertoDeOutra": 1
+   },
+   {
+    "chave": "E1",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "semPonto": false,
+    "membrosLocalizados": 6,
+    "distanciaMediaKm": 0.2,
+    "maisPertoDeOutra": 0
+   }
+  ],
+  "totais": {
+   "membros": 64,
+   "localizados": 11,
+   "semLocalizacao": 53,
+   "bairroEscritoNaFila": 0,
+   "bairrosSemPonto": 0,
+   "descobertos": 0,
+   "aConferir": 0,
+   "unidadesSemPonto": 2
+  },
+  "fila": [],
+  "escopo": "MEUS"
+ },
+ "mapaCME": {
+  "sucesso": true,
+  "raioKm": 3,
+  "bairros": [
+   {
+    "bairroId": 4,
+    "nome": "Bairro Longe E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.15,
+    "lng": -49.95,
+    "membros": 7,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "E1",
+     "tipo": "EXTENSAO",
+     "nome": "Tenda Território E2E"
+    },
+    "distanciaKm": 0.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 1,
+    "nome": "Centro E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.068,
+    "lng": -49.903,
+    "membros": 4,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C1",
+     "tipo": "CONGREGACAO",
+     "nome": "Central E2E"
+    },
+    "distanciaKm": 0.1,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 6,
+    "nome": "São Jorge II E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": -6.1,
+    "lng": -49.88,
+    "membros": 2,
+    "semPonto": false,
+    "maisPerto": {
+     "chave": "C2",
+     "tipo": "CONGREGACAO",
+     "nome": "Vila Nova E2E"
+    },
+    "distanciaKm": 2.2,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   },
+   {
+    "bairroId": 5,
+    "nome": "Sem Ponto E2E",
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "lat": null,
+    "lng": null,
+    "membros": 1,
+    "semPonto": true,
+    "maisPerto": null,
+    "distanciaKm": null,
+    "descoberto": false,
+    "aConferir": false,
+    "inativo": false
+   }
+  ],
+  "unidades": [
+   {
+    "chave": "C1",
+    "id": 1,
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.0675,
+    "lng": -49.9025
+   },
+   {
+    "chave": "C2",
+    "id": 2,
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": -6.08,
+    "lng": -49.88
+   },
+   {
+    "chave": "C3",
+    "id": 3,
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "maeNome": "Beta E2E",
+    "lat": null,
+    "lng": null
+   },
+   {
+    "chave": "E1",
+    "id": 1,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "lat": -6.151,
+    "lng": -49.951
+   },
+   {
+    "chave": "E2",
+    "id": 2,
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "lat": null,
+    "lng": null
+   }
+  ],
+  "densidade": [
+   {
+    "chave": "C1",
+    "tipo": "CONGREGACAO",
+    "nome": "Central E2E",
+    "semPonto": false,
+    "membrosLocalizados": 5,
+    "distanciaMediaKm": 2.2,
+    "maisPertoDeOutra": 1
+   },
+   {
+    "chave": "C2",
+    "tipo": "CONGREGACAO",
+    "nome": "Vila Nova E2E",
+    "semPonto": false,
+    "membrosLocalizados": 2,
+    "distanciaMediaKm": 2.2,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "C3",
+    "tipo": "CONGREGACAO",
+    "nome": "Beta E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E1",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Território E2E",
+    "semPonto": false,
+    "membrosLocalizados": 6,
+    "distanciaMediaKm": 0.2,
+    "maisPertoDeOutra": 0
+   },
+   {
+    "chave": "E2",
+    "tipo": "EXTENSAO",
+    "nome": "Tenda Vila E2E",
+    "semPonto": true,
+    "membrosLocalizados": 0,
+    "distanciaMediaKm": null,
+    "maisPertoDeOutra": 0
+   }
+  ],
+  "totais": {
+   "membros": 81,
+   "localizados": 14,
+   "semLocalizacao": 67,
+   "bairroEscritoNaFila": 0,
+   "bairrosSemPonto": 1,
+   "descobertos": 0,
+   "aConferir": 0,
+   "unidadesSemPonto": 2
+  },
+  "fila": [],
+  "escopo": "TODOS"
+ },
+ "criteriosDirigente": {
+  "sucesso": true,
+  "criterios": [
+   {
+    "criterioId": 6,
+    "indicador": "MESES_ABERTA",
+    "operador": "MINIMO",
+    "valor": 24,
+    "ativo": true,
+    "ordem": 10,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 7,
+    "indicador": "MEMBROS_EM_COMUNHAO",
+    "operador": "MINIMO",
+    "valor": 50,
+    "ativo": true,
+    "ordem": 20,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 8,
+    "indicador": "ENCARREGADO_EM_COMUNHAO",
+    "operador": "SIM",
+    "valor": null,
+    "ativo": true,
+    "ordem": 30,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 9,
+    "indicador": "OBREIROS",
+    "operador": "MINIMO",
+    "valor": 1,
+    "ativo": true,
+    "ordem": 40,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 10,
+    "indicador": "DIZIMO_MEDIO_12M",
+    "operador": "MINIMO",
+    "valor": 3000,
+    "ativo": true,
+    "ordem": 50,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   }
+  ],
+  "raioKm": 2,
+  "versaoParametros": 1
+ },
+ "criterioCriado": {
+  "sucesso": true,
+  "criterioId": 11
+ },
+ "simulacaoGeral": {
+  "sucesso": true,
+  "hoje": "2026-11-06",
+  "janelaDizimo": {
+   "de": "2025-11",
+   "ate": "2026-10"
+  },
+  "criterios": [
+   {
+    "criterioId": 6,
+    "indicador": "MESES_ABERTA",
+    "operador": "MINIMO",
+    "valor": 24,
+    "ativo": true,
+    "ordem": 10,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 7,
+    "indicador": "MEMBROS_EM_COMUNHAO",
+    "operador": "MINIMO",
+    "valor": 50,
+    "ativo": true,
+    "ordem": 20,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 8,
+    "indicador": "ENCARREGADO_EM_COMUNHAO",
+    "operador": "SIM",
+    "valor": null,
+    "ativo": true,
+    "ordem": 30,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 9,
+    "indicador": "OBREIROS",
+    "operador": "MINIMO",
+    "valor": 1,
+    "ativo": true,
+    "ordem": 40,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 10,
+    "indicador": "DIZIMO_MEDIO_12M",
+    "operador": "MINIMO",
+    "valor": 3000,
+    "ativo": true,
+    "ordem": 50,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 11,
+    "indicador": "NIVEL_PSC_MAE",
+    "operador": "MINIMO",
+    "valor": 3,
+    "ativo": true,
+    "ordem": 60,
+    "observacao": "Mãe saudável",
+    "versao": 0,
+    "em": "2026-11-06T18:27:48.5625827"
+   }
+  ],
+  "extensoes": [
+   {
+    "extensaoId": 1,
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "abertaEm": "2024-05-06",
+    "medidas": {
+     "MESES_ABERTA": 30,
+     "MEMBROS_EM_COMUNHAO": 4,
+     "ENCARREGADO_EM_COMUNHAO": true,
+     "OBREIROS": 2,
+     "DIZIMO_MEDIO_12M": null,
+     "NIVEL_PSC_MAE": 4
+    },
+    "avaliacao": {
+     "situacao": "NAO_ATENDE",
+     "itens": [
+      {
+       "criterioId": 6,
+       "indicador": "MESES_ABERTA",
+       "operador": "MINIMO",
+       "valor": 24,
+       "medido": 30,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 7,
+       "indicador": "MEMBROS_EM_COMUNHAO",
+       "operador": "MINIMO",
+       "valor": 50,
+       "medido": 4,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 8,
+       "indicador": "ENCARREGADO_EM_COMUNHAO",
+       "operador": "SIM",
+       "valor": null,
+       "medido": true,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 9,
+       "indicador": "OBREIROS",
+       "operador": "MINIMO",
+       "valor": 1,
+       "medido": 2,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 10,
+       "indicador": "DIZIMO_MEDIO_12M",
+       "operador": "MINIMO",
+       "valor": 3000,
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
+      },
+      {
+       "criterioId": 11,
+       "indicador": "NIVEL_PSC_MAE",
+       "operador": "MINIMO",
+       "valor": 3,
+       "medido": 4,
+       "resultado": "ATENDE"
+      }
+     ],
+     "atendidos": 4,
+     "total": 6
+    },
+    "pedidoEmAndamento": null,
+    "podePedir": false
+   },
+   {
+    "extensaoId": 2,
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "abertaEm": null,
+    "medidas": {
+     "MESES_ABERTA": null,
+     "MEMBROS_EM_COMUNHAO": 0,
+     "ENCARREGADO_EM_COMUNHAO": false,
+     "OBREIROS": 0,
+     "DIZIMO_MEDIO_12M": null,
+     "NIVEL_PSC_MAE": null
+    },
+    "avaliacao": {
+     "situacao": "NAO_ATENDE",
+     "itens": [
+      {
+       "criterioId": 6,
+       "indicador": "MESES_ABERTA",
+       "operador": "MINIMO",
+       "valor": 24,
+       "medido": null,
+       "resultado": "SEM_DADO"
+      },
+      {
+       "criterioId": 7,
+       "indicador": "MEMBROS_EM_COMUNHAO",
+       "operador": "MINIMO",
+       "valor": 50,
+       "medido": 0,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 8,
+       "indicador": "ENCARREGADO_EM_COMUNHAO",
+       "operador": "SIM",
+       "valor": null,
+       "medido": false,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 9,
+       "indicador": "OBREIROS",
+       "operador": "MINIMO",
+       "valor": 1,
+       "medido": 0,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 10,
+       "indicador": "DIZIMO_MEDIO_12M",
+       "operador": "MINIMO",
+       "valor": 3000,
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
+      },
+      {
+       "criterioId": 11,
+       "indicador": "NIVEL_PSC_MAE",
+       "operador": "MINIMO",
+       "valor": 3,
+       "medido": null,
+       "resultado": "SEM_DADO"
+      }
+     ],
+     "atendidos": 0,
+     "total": 6
+    },
+    "pedidoEmAndamento": null,
+    "podePedir": false
+   }
+  ]
+ },
+ "simulacaoDirigente": {
+  "sucesso": true,
+  "hoje": "2026-11-06",
+  "janelaDizimo": {
+   "de": "2025-11",
+   "ate": "2026-10"
+  },
+  "criterios": [
+   {
+    "criterioId": 6,
+    "indicador": "MESES_ABERTA",
+    "operador": "MINIMO",
+    "valor": 24,
+    "ativo": true,
+    "ordem": 10,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 7,
+    "indicador": "MEMBROS_EM_COMUNHAO",
+    "operador": "MINIMO",
+    "valor": 4,
+    "ativo": true,
+    "ordem": 20,
+    "observacao": null,
+    "versao": 1,
+    "em": "2026-11-06T18:27:48.8227005"
+   },
+   {
+    "criterioId": 8,
+    "indicador": "ENCARREGADO_EM_COMUNHAO",
+    "operador": "SIM",
+    "valor": null,
+    "ativo": true,
+    "ordem": 30,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 9,
+    "indicador": "OBREIROS",
+    "operador": "MINIMO",
+    "valor": 1,
+    "ativo": true,
+    "ordem": 40,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 10,
+    "indicador": "DIZIMO_MEDIO_12M",
+    "operador": "MINIMO",
+    "valor": 300,
+    "ativo": true,
+    "ordem": 50,
+    "observacao": null,
+    "versao": 1,
+    "em": "2026-11-06T18:27:48.8544789"
+   },
+   {
+    "criterioId": 11,
+    "indicador": "NIVEL_PSC_MAE",
+    "operador": "MINIMO",
+    "valor": 3,
+    "ativo": true,
+    "ordem": 60,
+    "observacao": "Mãe saudável",
+    "versao": 0,
+    "em": "2026-11-06T18:27:48.5625827"
+   }
+  ],
+  "extensoes": [
+   {
+    "extensaoId": 1,
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "abertaEm": "2024-05-06",
+    "medidas": {
+     "MESES_ABERTA": 30,
+     "MEMBROS_EM_COMUNHAO": 4,
+     "ENCARREGADO_EM_COMUNHAO": true,
+     "OBREIROS": 2,
+     "DIZIMO_MEDIO_12M": null,
+     "NIVEL_PSC_MAE": 4
+    },
+    "avaliacao": {
+     "situacao": "ATENDE_TUDO",
+     "itens": [
+      {
+       "criterioId": 6,
+       "indicador": "MESES_ABERTA",
+       "operador": "MINIMO",
+       "valor": 24,
+       "medido": 30,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 7,
+       "indicador": "MEMBROS_EM_COMUNHAO",
+       "operador": "MINIMO",
+       "valor": 4,
+       "medido": 4,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 8,
+       "indicador": "ENCARREGADO_EM_COMUNHAO",
+       "operador": "SIM",
+       "valor": null,
+       "medido": true,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 9,
+       "indicador": "OBREIROS",
+       "operador": "MINIMO",
+       "valor": 1,
+       "medido": 2,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 10,
+       "indicador": "DIZIMO_MEDIO_12M",
+       "operador": "MINIMO",
+       "valor": 300,
+       "medido": null,
+       "resultado": "ATENDE",
+       "oculto": true
+      },
+      {
+       "criterioId": 11,
+       "indicador": "NIVEL_PSC_MAE",
+       "operador": "MINIMO",
+       "valor": 3,
+       "medido": 4,
+       "resultado": "ATENDE"
+      }
+     ],
+     "atendidos": 6,
+     "total": 6
+    },
+    "pedidoEmAndamento": null,
+    "podePedir": true
+   }
+  ]
+ },
+ "simulacaoCME": {
+  "sucesso": true,
+  "hoje": "2026-11-06",
+  "janelaDizimo": {
+   "de": "2025-11",
+   "ate": "2026-10"
+  },
+  "criterios": [
+   {
+    "criterioId": 6,
+    "indicador": "MESES_ABERTA",
+    "operador": "MINIMO",
+    "valor": 24,
+    "ativo": true,
+    "ordem": 10,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 7,
+    "indicador": "MEMBROS_EM_COMUNHAO",
+    "operador": "MINIMO",
+    "valor": 4,
+    "ativo": true,
+    "ordem": 20,
+    "observacao": null,
+    "versao": 1,
+    "em": "2026-11-06T18:27:48.8227005"
+   },
+   {
+    "criterioId": 8,
+    "indicador": "ENCARREGADO_EM_COMUNHAO",
+    "operador": "SIM",
+    "valor": null,
+    "ativo": true,
+    "ordem": 30,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 9,
+    "indicador": "OBREIROS",
+    "operador": "MINIMO",
+    "valor": 1,
+    "ativo": true,
+    "ordem": 40,
+    "observacao": null,
+    "versao": 0,
+    "em": "2026-11-06T18:27:44.7263253"
+   },
+   {
+    "criterioId": 10,
+    "indicador": "DIZIMO_MEDIO_12M",
+    "operador": "MINIMO",
+    "valor": 300,
+    "ativo": true,
+    "ordem": 50,
+    "observacao": null,
+    "versao": 1,
+    "em": "2026-11-06T18:27:48.8544789"
+   },
+   {
+    "criterioId": 11,
+    "indicador": "NIVEL_PSC_MAE",
+    "operador": "MINIMO",
+    "valor": 3,
+    "ativo": true,
+    "ordem": 60,
+    "observacao": "Mãe saudável",
+    "versao": 0,
+    "em": "2026-11-06T18:27:48.5625827"
+   }
+  ],
+  "extensoes": [
+   {
+    "extensaoId": 1,
+    "nome": "Tenda Território E2E",
+    "maeNome": "Central E2E",
+    "abertaEm": "2024-05-06",
+    "medidas": {
+     "MESES_ABERTA": 30,
+     "MEMBROS_EM_COMUNHAO": 4,
+     "ENCARREGADO_EM_COMUNHAO": true,
+     "OBREIROS": 2,
+     "DIZIMO_MEDIO_12M": 400,
+     "NIVEL_PSC_MAE": 4
+    },
+    "avaliacao": {
+     "situacao": "ATENDE_TUDO",
+     "itens": [
+      {
+       "criterioId": 6,
+       "indicador": "MESES_ABERTA",
+       "operador": "MINIMO",
+       "valor": 24,
+       "medido": 30,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 7,
+       "indicador": "MEMBROS_EM_COMUNHAO",
+       "operador": "MINIMO",
+       "valor": 4,
+       "medido": 4,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 8,
+       "indicador": "ENCARREGADO_EM_COMUNHAO",
+       "operador": "SIM",
+       "valor": null,
+       "medido": true,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 9,
+       "indicador": "OBREIROS",
+       "operador": "MINIMO",
+       "valor": 1,
+       "medido": 2,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 10,
+       "indicador": "DIZIMO_MEDIO_12M",
+       "operador": "MINIMO",
+       "valor": 300,
+       "medido": 400,
+       "resultado": "ATENDE"
+      },
+      {
+       "criterioId": 11,
+       "indicador": "NIVEL_PSC_MAE",
+       "operador": "MINIMO",
+       "valor": 3,
+       "medido": 4,
+       "resultado": "ATENDE"
+      }
+     ],
+     "atendidos": 6,
+     "total": 6
+    },
+    "pedidoEmAndamento": null,
+    "podePedir": true
+   },
+   {
+    "extensaoId": 2,
+    "nome": "Tenda Vila E2E",
+    "maeNome": "Vila Nova E2E",
+    "abertaEm": null,
+    "medidas": {
+     "MESES_ABERTA": null,
+     "MEMBROS_EM_COMUNHAO": 0,
+     "ENCARREGADO_EM_COMUNHAO": false,
+     "OBREIROS": 0,
+     "DIZIMO_MEDIO_12M": null,
+     "NIVEL_PSC_MAE": null
+    },
+    "avaliacao": {
+     "situacao": "NAO_ATENDE",
+     "itens": [
+      {
+       "criterioId": 6,
+       "indicador": "MESES_ABERTA",
+       "operador": "MINIMO",
+       "valor": 24,
+       "medido": null,
+       "resultado": "SEM_DADO"
+      },
+      {
+       "criterioId": 7,
+       "indicador": "MEMBROS_EM_COMUNHAO",
+       "operador": "MINIMO",
+       "valor": 4,
+       "medido": 0,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 8,
+       "indicador": "ENCARREGADO_EM_COMUNHAO",
+       "operador": "SIM",
+       "valor": null,
+       "medido": false,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 9,
+       "indicador": "OBREIROS",
+       "operador": "MINIMO",
+       "valor": 1,
+       "medido": 0,
+       "resultado": "NAO_ATENDE"
+      },
+      {
+       "criterioId": 10,
+       "indicador": "DIZIMO_MEDIO_12M",
+       "operador": "MINIMO",
+       "valor": 300,
+       "medido": null,
+       "resultado": "NAO_ATENDE",
+       "oculto": true
+      },
+      {
+       "criterioId": 11,
+       "indicador": "NIVEL_PSC_MAE",
+       "operador": "MINIMO",
+       "valor": 3,
+       "medido": null,
+       "resultado": "SEM_DADO"
+      }
+     ],
+     "atendidos": 0,
+     "total": 6
+    },
+    "pedidoEmAndamento": null,
+    "podePedir": false
+   }
+  ]
+ },
+ "meusDadosLgpd": {
+  "sucesso": true,
+  "geradoEm": "2026-11-06T18:27:50.474Z",
+  "membro": {
+   "membroId": 9801,
+   "nome": "Central Um E2E",
+   "funcao": null,
+   "congregacao": "Central E2E",
+   "status": "ATIVO",
+   "dataNascimento": null,
+   "dataAdmissao": null,
+   "dataBatismo": null,
+   "formaAdmissao": null,
+   "origem": null,
+   "igrejaAnterior": null,
+   "dataRitoRecebimento": null,
+   "nomeLidoRito": null,
+   "ministranteRito": null,
+   "sexo": null,
+   "dizimistaFiel": null,
+   "situacaoMembro": "EM_COMUNHAO",
+   "departamento": null,
+   "cargoMinisterial": null,
+   "telefone": null,
+   "email": null,
+   "endereco": "Rua A, 10 — Centro E2E — Parauapebas/PA",
+   "extensao": null,
+   "fotoUrl": null,
+   "criadoEm": "2026-11-06T18:27:44.9065345"
+  },
+  "liderancas": [],
+  "assentos": [],
+  "processosDisciplinares": [],
+  "vinculosFamiliares": [],
+  "consentimentos": [],
+  "solicitacoesLgpd": [],
+  "casamentos": [],
+  "licencasCandidatura": [],
+  "voluntariado": {
+   "adesao": null,
+   "adesoesAnteriores": [],
+   "responsaveisLegais": [],
+   "menoresSobMinhaResponsabilidade": [],
+   "aceitesComoResponsavel": [],
+   "equipes": [],
+   "servicos": [],
+   "indisponibilidades": [],
+   "remocoesDaEscala": [],
+   "gruposDeRodizio": [],
+   "aviso": "O motivo escrito de uma remoção da escala e o nome de quem registrou cada ato ficam com a Secretaria: peça-os pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "setoresTecnicos": {
+   "vinculos": [],
+   "atosQueEmiti": [],
+   "aviso": "As observações escritas por quem aprovou, encerrou ou decidiu cada ato ficam com a Secretaria: peça-as pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "vistoriasAntecedentes": {
+   "vistorias": [],
+   "aviso": "A Igreja guarda só o código (hash) de cada certidão, nunca o documento. Quem assinou cada termo fica com a Diretoria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "consentimentosMenores": {
+   "comoResponsavel": [],
+   "comoMenor": [],
+   "aviso": "O nome de quem registrou cada ficha fica com a Secretaria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18). O IP de uma autorização dada pelo responsável é dado do responsável."
+  },
+  "ministerioMenores": {
+   "politicaDeComunicacao": [],
+   "fichaConfirmadaEm": null,
+   "retiradasDaEscala": [],
+   "comunicacoesADiretoria": [],
+   "consultasAoCadastroNacional": [],
+   "aviso": "A validade das certidões é calculada pela data de emissão das certidões do Termo de Vistoria (que aparece no bloco de vistorias). A Igreja guarda só o código (hash) de cada certidão, nunca o documento."
+  },
+  "checkinInfantil": {
+   "comoCrianca": {
+    "registros": 0,
+    "ultimo": null,
+    "saudeGuardada": false
+   },
+   "comoQuemTrouxeOuRetirou": {
+    "registros": 0,
+    "ultimo": null
+   },
+   "comoAutorizado": {
+    "criancas": 0
+   }
+  },
+  "cuidadoPastoral": {
+   "pedidosDeOracao": [],
+   "notasPastoraisSobreVoce": {
+    "quantidade": 0,
+    "primeira": null,
+    "ultima": null,
+    "comoPedirOTexto": "O texto escrito pela liderança pode ser pedido ao Encarregado de Dados (Meus Dados → Solicitações)."
+   },
+   "acompanhamentosEncerradosSobreVoce": {
+    "quantidade": 0,
+    "primeiro": null,
+    "ultimo": null
+   },
+   "acompanhamentosComoResponsavel": {
+    "abertos": 0
+   }
+  },
+  "comunicacao": {
+   "consentimentos": [],
+   "comunicadosRecebidos": 0,
+   "comunicados": []
+  },
+  "identidadeVisual": {
+   "sugestoesDeTema": [],
+   "artesEnviadas": []
+  },
+  "afmCli": {
+   "matriculasAFM": [],
+   "desmatriculasAFM": [],
+   "exclusoesCLI": [],
+   "corpoDocenteAFM": [],
+   "educacaoContinuada": {
+    "reciclagens": [],
+    "exames": [],
+    "pendencias": []
+   },
+   "historicoEscolar": {
+    "cursos": [],
+    "turmas": [],
+    "aproveitamentos": [],
+    "documentos": [],
+    "turmasComoDocente": []
+   }
+  },
+  "escada": {
+   "cargos": [],
+   "consagracoes": [],
+   "credenciais": [],
+   "comissaoUncao": [],
+   "discipulado": {
+    "etapas": [
+     {
+      "etapa": "Conversão",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Curso de Discipulado",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Batismo nas águas",
+      "feita": false,
+      "data": null,
+      "fonte": "Batismo nas águas (data do cadastro)"
+     },
+     {
+      "etapa": "Batismo no Espírito Santo",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Primeira participação em departamento",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Primeiro serviço voluntário",
+      "feita": false,
+      "data": null,
+      "fonte": "Primeiro serviço voluntário (escala realizada)"
+     }
+    ],
+    "proximoPasso": "Conversão",
+    "marcos": []
+   }
+  },
+  "criseSeguranca": {
+   "equipeSeguranca": [],
+   "portaVozEmCrises": [],
+   "registrosNaCrise": {
+    "pedidosDeImprensa": 0,
+    "manifestacoes": 0,
+    "respostas": 0,
+    "atosDoRegime": 0
+   },
+   "atosNoRegimeDeCrise": []
+  },
+  "tesouraria": {
+   "fornecedor": null,
+   "avisosDePagamento": []
+  },
+  "entidadesVinculadas": {
+   "funcoes": [],
+   "comoInterventor": []
+  },
+  "extensoesEncarregadas": [],
+  "expansaoAtos": [],
+  "distritos": {
+   "balancosEnviados": [],
+   "intervencoesComoInterventor": [],
+   "balancosAnalisados": [],
+   "decretosRegistrados": []
+  },
+  "missoes": [],
+  "missoesAtos": [],
+  "territorio": {
+   "endereco": {
+    "logradouro": "Rua A",
+    "numero": "10",
+    "complemento": null,
+    "bairroId": 1,
+    "bairroNome": "Centro E2E",
+    "bairroTexto": null,
+    "cidade": "Parauapebas",
+    "uf": "PA",
+    "cep": null
+   },
+   "atos": {
+    "bairros": [],
+    "criterios": [],
+    "pontosDeExtensao": [],
+    "raioDeCobertura": []
+   }
+  }
+ },
+ "meusDadosLgpdSec": {
+  "sucesso": true,
+  "geradoEm": "2026-11-06T18:27:50.862Z",
+  "membro": {
+   "membroId": 1002,
+   "nome": "Secretário Geral E2E",
+   "funcao": null,
+   "congregacao": "Central E2E",
+   "status": "ATIVO",
+   "dataNascimento": "1970-05-01",
+   "dataAdmissao": null,
+   "dataBatismo": null,
+   "formaAdmissao": null,
+   "origem": null,
+   "igrejaAnterior": null,
+   "dataRitoRecebimento": null,
+   "nomeLidoRito": null,
+   "ministranteRito": null,
+   "sexo": null,
+   "dizimistaFiel": null,
+   "situacaoMembro": "EM_COMUNHAO",
+   "departamento": null,
+   "cargoMinisterial": null,
+   "telefone": null,
+   "email": "p1002@exemplo.org",
+   "endereco": null,
+   "extensao": null,
+   "fotoUrl": null,
+   "criadoEm": "2026-11-05T19:21:12.7735299"
+  },
+  "liderancas": [
+   {
+    "papel": "Secretário Geral",
+    "escopoTipo": "GLOBAL",
+    "desde": "2026-11-05T19:21:12.8869975"
+   }
+  ],
+  "assentos": [],
+  "processosDisciplinares": [],
+  "vinculosFamiliares": [],
+  "consentimentos": [],
+  "solicitacoesLgpd": [],
+  "casamentos": [],
+  "licencasCandidatura": [],
+  "voluntariado": {
+   "adesao": null,
+   "adesoesAnteriores": [],
+   "responsaveisLegais": [],
+   "menoresSobMinhaResponsabilidade": [],
+   "aceitesComoResponsavel": [],
+   "equipes": [],
+   "servicos": [],
+   "indisponibilidades": [],
+   "remocoesDaEscala": [],
+   "gruposDeRodizio": [],
+   "aviso": "O motivo escrito de uma remoção da escala e o nome de quem registrou cada ato ficam com a Secretaria: peça-os pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "setoresTecnicos": {
+   "vinculos": [],
+   "atosQueEmiti": [],
+   "aviso": "As observações escritas por quem aprovou, encerrou ou decidiu cada ato ficam com a Secretaria: peça-as pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "vistoriasAntecedentes": {
+   "vistorias": [],
+   "aviso": "A Igreja guarda só o código (hash) de cada certidão, nunca o documento. Quem assinou cada termo fica com a Diretoria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18)."
+  },
+  "consentimentosMenores": {
+   "comoResponsavel": [],
+   "comoMenor": [],
+   "aviso": "O nome de quem registrou cada ficha fica com a Secretaria: peça-o pelo canal do Encarregado de Dados (LGPD art. 18). O IP de uma autorização dada pelo responsável é dado do responsável."
+  },
+  "ministerioMenores": {
+   "politicaDeComunicacao": [],
+   "fichaConfirmadaEm": null,
+   "retiradasDaEscala": [],
+   "comunicacoesADiretoria": [],
+   "consultasAoCadastroNacional": [],
+   "aviso": "A validade das certidões é calculada pela data de emissão das certidões do Termo de Vistoria (que aparece no bloco de vistorias). A Igreja guarda só o código (hash) de cada certidão, nunca o documento."
+  },
+  "checkinInfantil": {
+   "comoCrianca": {
+    "registros": 0,
+    "ultimo": null,
+    "saudeGuardada": false
+   },
+   "comoQuemTrouxeOuRetirou": {
+    "registros": 0,
+    "ultimo": null
+   },
+   "comoAutorizado": {
+    "criancas": 0
+   }
+  },
+  "cuidadoPastoral": {
+   "pedidosDeOracao": [],
+   "notasPastoraisSobreVoce": {
+    "quantidade": 0,
+    "primeira": null,
+    "ultima": null,
+    "comoPedirOTexto": "O texto escrito pela liderança pode ser pedido ao Encarregado de Dados (Meus Dados → Solicitações)."
+   },
+   "acompanhamentosEncerradosSobreVoce": {
+    "quantidade": 0,
+    "primeiro": null,
+    "ultimo": null
+   },
+   "acompanhamentosComoResponsavel": {
+    "abertos": 0
+   }
+  },
+  "comunicacao": {
+   "consentimentos": [],
+   "comunicadosRecebidos": 0,
+   "comunicados": []
+  },
+  "identidadeVisual": {
+   "sugestoesDeTema": [],
+   "artesEnviadas": []
+  },
+  "afmCli": {
+   "matriculasAFM": [],
+   "desmatriculasAFM": [],
+   "exclusoesCLI": [],
+   "corpoDocenteAFM": [],
+   "educacaoContinuada": {
+    "reciclagens": [],
+    "exames": [],
+    "pendencias": []
+   },
+   "historicoEscolar": {
+    "cursos": [],
+    "turmas": [],
+    "aproveitamentos": [],
+    "documentos": [],
+    "turmasComoDocente": []
+   }
+  },
+  "escada": {
+   "cargos": [],
+   "consagracoes": [],
+   "credenciais": [],
+   "comissaoUncao": [],
+   "discipulado": {
+    "etapas": [
+     {
+      "etapa": "Conversão",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Curso de Discipulado",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Batismo nas águas",
+      "feita": false,
+      "data": null,
+      "fonte": "Batismo nas águas (data do cadastro)"
+     },
+     {
+      "etapa": "Batismo no Espírito Santo",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Primeira participação em departamento",
+      "feita": false,
+      "data": null,
+      "fonte": "Marco do perfil"
+     },
+     {
+      "etapa": "Primeiro serviço voluntário",
+      "feita": false,
+      "data": null,
+      "fonte": "Primeiro serviço voluntário (escala realizada)"
+     }
+    ],
+    "proximoPasso": "Conversão",
+    "marcos": []
+   }
+  },
+  "criseSeguranca": {
+   "equipeSeguranca": [],
+   "portaVozEmCrises": [],
+   "registrosNaCrise": {
+    "pedidosDeImprensa": 0,
+    "manifestacoes": 0,
+    "respostas": 0,
+    "atosDoRegime": 0
+   },
+   "atosNoRegimeDeCrise": []
+  },
+  "tesouraria": {
+   "fornecedor": null,
+   "avisosDePagamento": []
+  },
+  "entidadesVinculadas": {
+   "funcoes": [],
+   "comoInterventor": []
+  },
+  "extensoesEncarregadas": [],
+  "expansaoAtos": [
+   {
+    "pedido": "Emancipação de Extensão em Congregação: Betel Território E2E",
+    "em": "2026-11-06",
+    "papeis": [
+     "registrou a decisão da CLI"
+    ]
+   }
+  ],
+  "distritos": {
+   "balancosEnviados": [],
+   "intervencoesComoInterventor": [],
+   "balancosAnalisados": [],
+   "decretosRegistrados": []
+  },
+  "missoes": [],
+  "missoesAtos": [],
+  "territorio": {
+   "endereco": {
+    "logradouro": null,
+    "numero": null,
+    "complemento": null,
+    "bairroId": null,
+    "bairroNome": null,
+    "bairroTexto": null,
+    "cidade": null,
+    "uf": null,
+    "cep": null
+   },
+   "atos": {
+    "bairros": [
+     {
+      "bairro": "Centro E2E (Parauapebas/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:45.3299163",
+      "ultimaMudancaEm": null
+     },
+     {
+      "bairro": "Centro E2E (Marabá/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:45.4219529",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.7127616"
+     },
+     {
+      "bairro": "Bairro Longe E2E (Parauapebas/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:45.4368581",
+      "ultimaMudancaEm": null
+     },
+     {
+      "bairro": "Sem Ponto E2E (Parauapebas/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:45.4741127",
+      "ultimaMudancaEm": null
+     },
+     {
+      "bairro": "São Jorge II E2E (Parauapebas/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:47.4188838",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.5769025"
+     },
+     {
+      "bairro": "Centro Repetido E2E (Parauapebas/PA)",
+      "cadastrou": true,
+      "cadastradoEm": "2026-11-06T18:27:47.7830744",
+      "ultimaMudancaEm": "2026-11-06T18:27:47.8942947"
+     }
+    ],
+    "criterios": [
+     {
+      "indicador": "Membros em comunhão",
+      "criou": false,
+      "criadoEm": null,
+      "ultimaMudancaEm": "2026-11-06T18:27:48.8227005"
+     },
+     {
+      "indicador": "Dízimo confirmado dos membros: média por mês dos últimos 12 meses fechados",
+      "criou": false,
+      "criadoEm": null,
+      "ultimaMudancaEm": "2026-11-06T18:27:48.8544789"
+     },
+     {
+      "indicador": "Distância até a Congregação-Mãe (km, em linha reta)",
+      "criou": true,
+      "criadoEm": "2026-11-06T18:27:48.5834519",
+      "ultimaMudancaEm": null
+     }
+    ],
+    "pontosDeExtensao": [
+     {
+      "extensao": "Tenda Vila E2E",
+      "marcadoEm": "2026-11-06T18:27:48.1820721"
+     }
+    ],
+    "raioDeCobertura": [
+     {
+      "mudadoEm": "2026-11-06T18:27:48.4208986"
+     }
+    ]
+   }
+  }
+ }
+}

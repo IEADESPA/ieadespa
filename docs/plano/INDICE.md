@@ -235,12 +235,12 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 
 ## FASE 10 — Experiência, Design, Desempenho e Indicadores
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 21 bloco(s) · itens 0/79 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 21 bloco(s) · itens 0/83 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | · | [O que é "excelente" — as metas desta fase (medidas, não adjetivos)](fase-10-experiencia-design-performance.md#o-que-é-excelente--as-metas-desta-fase-medidas-não-adjetivos) | — |
-| v10.1 | [Raio-x e referências (a linha de base)](fase-10-experiencia-design-performance.md#v101--raio-x-e-referências-a-linha-de-base) | ⬜ 0/5 |
+| v10.1 | [A homologação de verdade, o raio-x e as referências (a linha de base)](fase-10-experiencia-design-performance.md#v101--a-homologação-de-verdade-o-raio-x-e-as-referências-a-linha-de-base) | ⬜ 0/9 |
 | v10.2 | [A porta de entrada (a página inicial e o login)](fase-10-experiencia-design-performance.md#v102--a-porta-de-entrada-a-página-inicial-e-o-login) | ⬜ 0/5 |
 | v10.3 | [Sistema de design (a "identidade" da tela)](fase-10-experiencia-design-performance.md#v103--sistema-de-design-a-identidade-da-tela) | ⬜ 0/6 |
 | v10.4 | [Linguagem limpa](fase-10-experiencia-design-performance.md#v104--linguagem-limpa) | ⬜ 0/5 |

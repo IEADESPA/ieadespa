@@ -41,11 +41,31 @@ algo excelente".
 nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **vê** as telas: uma galeria de capturas (computador e celular,
 antes e depois) acompanha cada parte redesenhada, e só vai à produção o que ele aprovar.
 
-## v10.1 — Raio-x e referências (a linha de base)
+## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
-Antes de mudar qualquer coisa, medir o que existe — para saber onde dói e provar depois que melhorou.
+Antes de mudar qualquer coisa, medir o que existe — para saber onde dói e provar depois que melhorou. E medir num lugar que se pareça com a
+Igreja de verdade.
 
-- [ ] Varredura automática de **todas** as telas (computador e celular): tempo para abrir, erros no console, texto cortado ou saindo da
+**A homologação de verdade (pedido do responsável, 11/11/2026).** A homologação existe (o ambiente do PR #21, com o banco `ieadespa-homolog`
+e os mesmos deploys do código), mas a massa fictícia de hoje é pequena demais para testar alguma coisa: 1 área, 3 congregações, 60 pessoas e
+20 dizimistas — nenhum lançamento, EBD, evento, escala ou histórico. O responsável quer um sistema de teste **permanente, cheio de dados de
+mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clicando como um usuário.
+
+- [ ] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
+      nome), do tamanho de uma Igreja grande: várias regiões e áreas, ~40 congregações e Extensões, ~5.000 membros com famílias, idades,
+      situações e cargos (a escada ministerial inteira), anos de lançamentos de dízimo e oferta, saídas, fechamentos e repasses, turmas e
+      chamadas da EBD, escalas, eventos e inscrições, cuidado pastoral, missões, distritos, enquetes — respeitando as regras e os vínculos do
+      banco.
+- [ ] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
+      a massa (não refaz a cada vez).
+- [ ] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
+      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação.
+- [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.
+
+**O raio-x e as referências:**
+
+- [ ] Varredura automática de **todas** as telas (computador e celular), **na homologação com a massa grande** (com volume de Igreja de
+      verdade a lentidão aparece; com 60 pessoas, não): tempo para abrir, erros no console, texto cortado ou saindo da
       caixa, rolagem para o lado, espaço branco sobrando, termos técnicos visíveis (códigos com sublinhado, siglas de banco), artigos de
       norma no meio do texto.
 - [ ] Galeria das telas de hoje (o "antes"), para o responsável marcar o que mais incomoda, com uma frase do porquê.

@@ -76,6 +76,13 @@ function estaSobDisciplina(membro) {
 // categorias "opera-se automaticamente" (Art. 7º §1º) a partir de dados objetivos — nunca é
 // marcação manual. Quando falta dado, NUNCA assume elegibilidade (mesmo espírito do Art. 23
 // §3º, que anula voto obtido por brecha de prazo/dado).
+// Trava 9-B — a régua única de "membro ativo e em comunhão" pelo cadastro (Estatuto, Art. 7º, I: o congregado "não integra o quadro de membros"; e quem está sem
+// comunhão também fica de fora). Antes, as conferências da FASE 9 só recusavam SEM_COMUNHAO e aceitavam o congregado como missionário, Encarregado, Interventor ou
+// dirigente de entidade. O processo disciplinar em curso é conferido à parte (membrosSobDisciplina).
+function membroEmComunhao(status, situacaoMembro) {
+  return status === "ATIVO" && (situacaoMembro === "EM_COMUNHAO" || situacaoMembro == null);
+}
+
 function calcularCapacidadeEleitoral(membro, hoje) {
   const emComunhao =
     membro.situacaoMembro === "EM_COMUNHAO" ||
@@ -424,6 +431,7 @@ module.exports = {
   idadeEm,
   diasDesde,
   estaSobDisciplina,
+  membroEmComunhao,
   calcularCapacidadeEleitoral,
   regraQuorumInstalacao,
   avaliarQuorumInstalacao,

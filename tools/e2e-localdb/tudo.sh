@@ -1,8 +1,11 @@
 #!/bin/bash
-# tudo.sh — a bateria inteira (v7.6, v7.7, v7.8, v7.10, v7.11, v7.11.1, v7.12, v7.14 e v7.15), cada grupo de roteiros sobre a sua base restaurada. Rode `bash rodar.sh preparar` antes se o esquema mudou.
+# tudo.sh — a bateria inteira (v7.6, v7.7, v7.8, v7.10, v7.11, v7.11.1, v7.12, v7.14 e v7.15), cada grupo de roteiros sobre a sua base restaurada. Recria sozinha as bases de partida (rodar.sh preparar) antes de tudo.
 AQUI="$(cd "$(dirname "$0")" && pwd)"
 cd "$AQUI"
 export LINHAS=${LINHAS:-40}
+# Sempre recria as bases de partida com TODAS as migrações (uns 2 minutos): em 10/11/2026 a bateria da v9.5 rodou sobre as bases de 05/11 (sem a 169 e a 170)
+# e acusou falhas que não eram do código (tabela Bairros faltando).
+bash rodar.sh preparar || { echo "O PREPARO DAS BASES FALHOU — a bateria parou aqui."; exit 1; }
 bash rodar.sh roteiro e2e-3-atos.js e2e-5-seguranca.js
 bash rodar.sh roteiro e2e-2-vinculos.js
 bash rodar.sh roteiro e2e-4-vistoria.js
@@ -110,4 +113,7 @@ bash rodar.sh preparar-territorio
 BASE=cenario-territorio bash rodar.sh roteiro e2e-78-territorio.js
 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
 E2E_RCSI=1 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
+# Trava 9-B (migração 171): a base própria — os achados das revisões da v9.4 e da v9.5
+bash rodar.sh preparar-trava9b
+BASE=cenario-trava9b bash rodar.sh roteiro e2e-80-trava9b.js
 echo TUDO-PRONTO

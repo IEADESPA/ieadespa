@@ -164,3 +164,16 @@ describe("idadeEm / diasDesde — funções de data puras (base de tudo acima)",
     expect(estatuto.diasDesde(comHora, "2026-06-15")).toBe(14);
   });
 });
+
+describe("membroEmComunhao (Art. 7º, I) — Trava 9-B", () => {
+  test("só o membro ativo em comunhão (ou sem situação marcada); o congregado e o sem comunhão ficam de fora", () => {
+    expect(estatuto.membroEmComunhao("ATIVO", "EM_COMUNHAO")).toBe(true);
+    expect(estatuto.membroEmComunhao("ATIVO", null)).toBe(true);
+    expect(estatuto.membroEmComunhao("ATIVO", undefined)).toBe(true);
+    expect(estatuto.membroEmComunhao("ATIVO", "CONGREGADO")).toBe(false);
+    expect(estatuto.membroEmComunhao("ATIVO", "SEM_COMUNHAO")).toBe(false);
+    expect(estatuto.membroEmComunhao("LICENCA_CANDIDATURA", "EM_COMUNHAO")).toBe(false);
+    expect(estatuto.membroEmComunhao("DESLIGADO", "EM_COMUNHAO")).toBe(false);
+    expect(estatuto.membroEmComunhao(null, null)).toBe(false);
+  });
+});

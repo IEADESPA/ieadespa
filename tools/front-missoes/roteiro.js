@@ -329,6 +329,7 @@ async function prova() {
   await amb.g("misEnviarFormAcao")(); await amb.ocioso();
   p = posts(amb, "missoes/campo-editar");
   ok(p.length === 1 && p[0].corpo.campoId === c0.campoId && typeof p[0].corpo.zonaRural === "boolean", "editar manda o campo e a zona rural como verdadeiro/falso", p[0] && p[0].corpo);
+  ok(Number.isInteger(c0.versao) && p[0].corpo.versao === c0.versao, "Trava 9-B: editar manda a versão do campo que leu (a resposta real traz a versão)", { versao: c0.versao, corpo: p[0] && p[0].corpo });
   ok(gets(amb, "missoes/catalogos").length >= 2, "depois de mexer nos campos, o catálogo é relido (a lista do pedido muda)");
 
   console.log("== sustento do mês ==");
@@ -367,9 +368,37 @@ async function prova() {
   amb.dispararJanela("afterprint");
   ok(!amb.doc.body.classList.contains("mis-imprimindo"), "depois de imprimir, a página volta");
 
+  console.log("== o reajuste com a reunião da CLI (Trava 9-B) ==");
+  // o Presidente que não é do nível geral também lê as reuniões da CLI (o aumento cita a que o aprovou)
+  R.catalogosSoPresidente = { ...R.catalogosPres, papeis: { ...R.catalogosPres.papeis, geral: false, presidente: true } };
+  const pr = montar({ permissoes: ["expansao", "missoes"], catalogo: "catalogosSoPresidente", matricula: 1001 });
+  const valorComCli = { desdeMes: "2026-12", valor: 650, fonteRotulo: "Tesouro Geral", congregacaoFonte: null, recebedor: "Recebedor E2E (PF)", motivo: "Aumento.", registradoEm: "2026-11-11", cliEm: "2026-11-10" };
+  pr.__respostas["GET missoes/envio"] = { corpo: { sucesso: true, envio: { ...R.fichaAtiva.envio, valores: [...(R.fichaAtiva.envio.valores || []), valorComCli], acoes: { ...R.fichaAtiva.envio.acoes, reajustar: true } } } };
+  await abrirMissoes(pr); await sub(pr, "envios"); await abrirFicha(pr);
+  ok(gets(pr, "missoes/reunioes").length === 1, "o Presidente (sem ser o nível geral) lê as reuniões da CLI");
+  ok(/aumento aprovado pela CLI em 10\/11\/2026/.test(pr.e("misFicha").textContent), "a ficha mostra a data da CLI que aprovou o aumento");
+  ok(botaoForm(pr, "reajustar"), "o botão do reajuste");
+  pr.g("misAbrirFormAcao")("reajustar", {}); await pr.ocioso();
+  const sel = campo(pr, "sessaoId");
+  ok(sel && sel.options.some((o) => o.value === String(REAL.reunioes.reunioes[0].sessaoId)) && /Art\. 58 §4º/.test(pr.e("misFormAcao").textContent), "o formulário tem a reunião da CLI e explica o aumento (Estatuto, Art. 58 §4º)");
+  pr.doc.digitar(campo(pr, "sustento"), "0");
+  pr.doc.digitar(campo(pr, "motivo"), "Fim do sustento combinado.");
+  pr.doc.escolher(sel, String(REAL.reunioes.reunioes[0].sessaoId));
+  modal = await enviar(pr);
+  p = posts(pr, "missoes/reajustar");
+  ok(modal.aberto && p.length === 1 && String(p[0].corpo.sessaoId) === String(REAL.reunioes.reunioes[0].sessaoId) && p[0].corpo.envioId === ID, "o reajuste manda a reunião escolhida", p[0] && p[0].corpo);
+  semAtaque(pr, "o reajuste");
+  // a CME que só é CME: a lista não traz o sustento nem os relatórios — a tela mostra "—", não "em dia"
+  const cm = montar({ permissoes: ["expansao", "missoes"], catalogo: "catalogosCMESemPermissao", matricula: 3003 });
+  cm.__respostas["GET missoes/envios"] = { corpo: { ...R.envios, envios: R.envios.envios.map((e) => ({ ...e, sustentoVigente: null, relatoriosVencidos: null, suspenso: null })) } };
+  await abrirMissoes(cm); await sub(cm, "envios");
+  ok(!/em dia/.test(cm.e("misEnvios").textContent) && /—/.test(cm.e("misEnvios").textContent), "a lista da CME mostra \"—\" nos relatórios (não \"em dia\")");
+
   console.log("== Meus Dados ==");
   const cartao = amb.g("misCartaoMeusDados")(R.meusDados || {});
   ok(/Envio ao campo/.test(cartao) && !/<img/.test(cartao), "o cartão de Meus Dados escapa o texto", cartao.slice(0, 200));
+  ok(/Justificativa:/.test(cartao) && /Decisão da CLI:/.test(cartao) && /Pastor Presidente:/.test(cartao) && /Pagamentos:/.test(cartao),
+    "Trava 9-B: o cartão mostra a justificativa, as decisões e os pagamentos que a API entrega (LGPD Art. 18)", cartao.slice(0, 600));
   ok(amb.g("misCartaoMeusDados")({}) === "" && amb.g("misCartaoMeusDados")(null) === "" && amb.g("misCartaoMeusDados")({ missoes: [], missoesAtos: [] }) === "", "sem nada: o cartão não aparece");
 
   console.log("== a saída da sessão e o bilhete trocado ==");
@@ -441,7 +470,15 @@ const MUTACOES = [
   ["missoes", "mostrar o total investido de um só missionário", ["      ${t.investidoNoAno == null ? \"\" :", "      ${false ? \"\" :"]],
   ["expansao", "a pílula de Missões sem a permissão", ["const EXP_PERMISSAO_DA_SECAO = { distritos: \"distritos\", missoes: \"missoes\" };", "const EXP_PERMISSAO_DA_SECAO = { distritos: \"distritos\", missoes: \"expansao\" };"]],
   ["expansao", "quem só tem 'missoes' pede a Expansão", ["  if (!expPermite(\"painel\")) { expMostrarSecaoAcao(expPermite(\"distritos\") ? \"distritos\" : \"missoes\"); return; }\n", ""]],
-  ["expansao", "a saída não limpa Missões", ["  if (typeof misLimparTela === \"function\") misLimparTela();   // v9.4: a pílula de Missões\n", ""]]
+  ["expansao", "a saída não limpa Missões", ["  if (typeof misLimparTela === \"function\") misLimparTela();   // v9.4: a pílula de Missões\n", ""]],
+  // Trava 9-B
+  ["missoes", "não mandar a versão do campo", ["  if (form.chave === \"campo-editar\") corpo.versao = Number(fixos.versao || 0);\n", ""]],
+  ["missoes", "tirar a reunião da CLI do reajuste", ["      { id: \"sessaoId\", rotulo: \"Reunião da CLI que aprovou o aumento (só no aumento)\", tipo: \"reuniaoCLI\" },\n", ""]],
+  ["missoes", "o Presidente não lê as reuniões da CLI", ["if (misPapel(\"geral\") || misPapel(\"presidente\")) {", "if (misPapel(\"geral\")) {"]],
+  ["missoes", "tirar o escape da justificativa em Meus Dados", ["Justificativa: ${misH(e.justificativa)}", "Justificativa: ${e.justificativa}"]],
+  ["missoes", "esconder as decisões em Meus Dados", ["${decisao(\"Parecer da CME\", e.parecerCME)}${decisao(\"Decisão da CLI\", e.decisaoCLI)}${decisao(\"Pastor Presidente\", e.presidente)}", ""]],
+  ["missoes", "\"em dia\" na lista da CME", ["e.relatoriosVencidos == null ? \"—\" : ", ""]],
+  ["missoes", "esconder a data da CLI no valor", ["${v.cliEm ? ` <small>(aumento aprovado pela CLI em ${misH(misBr(v.cliEm))})</small>` : \"\"}", ""]]
 ];
 
 (async () => {

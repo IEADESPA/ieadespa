@@ -86,8 +86,9 @@ async function misAbrirAcao() {
     if (!cat.sucesso) { misEl("misPainel").innerHTML = cat.semConexao ? MIS_SEM_CONEXAO : `<p class='subtitle'>${misH(cat.mensagem)}</p>`; misMarcarSub("painel"); return; }
     misCatalogos = cat;
   }
-  // as reuniões da CLI só servem a quem registra a decisão (o nível geral): relidas a cada abertura (quem encerra a reunião em Órgãos Centrais e volta a encontra)
-  if (misPapel("geral")) {
+  // as reuniões da CLI servem a quem registra a decisão (o nível geral) e ao Presidente (Trava 9-B: o aumento do sustento cita a reunião da CLI que o aprovou):
+  // relidas a cada abertura (quem encerra a reunião em Órgãos Centrais e volta a encontra)
+  if (misPapel("geral") || misPapel("presidente")) {
     const reu = await misBuscar("reunioes");
     if (reu === null || meu !== misPedidoOpcoes) return;
     misReunioesFalhou = !(reu && reu.sucesso && Array.isArray(reu.reunioes));
@@ -179,7 +180,7 @@ async function misCarregarEnviosAcao() {
     <tr><td><button type="button" class="btn-link" id="misAbrir_${Number(e.envioId)}" aria-label="Abrir o envio de ${misH(e.missionario && e.missionario.nome)}" data-on-click="misAbrirFichaAcao" data-args-click="${argsAttr(Number(e.envioId))}"><strong>${misH(e.missionario && e.missionario.nome)}</strong></button></td>
     <td>${misH(e.campo && e.campo.nome)} <small>(${misH(e.campo && e.campo.lugar)})</small></td><td>${misH(e.statusRotulo)}${e.suspenso ? " <strong>⏸️ sustento suspenso</strong>" : ""}</td>
     <td>${e.sustentoVigente == null ? misH(misReais(e.sustentoProposto)) + " <small>(proposto)</small>" : misH(misReais(e.sustentoVigente))}</td>
-    <td>${Number(e.relatoriosVencidos) ? `<strong>${misH(e.relatoriosVencidos)} vencido(s)</strong>` : "em dia"}</td></tr>`).join("")}</tbody></table></div>`;
+    <td>${e.relatoriosVencidos == null ? "—" : (Number(e.relatoriosVencidos) ? `<strong>${misH(e.relatoriosVencidos)} vencido(s)</strong>` : "em dia")}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function misNovoEnvioAcao() {
   if (!misGere()) return;
@@ -267,7 +268,7 @@ function misRenderFicha() {
       <br><span class="subtitle">${misH(r.atividades)}</span>${r.pedidos ? `<br><small>Pedidos: ${misH(r.pedidos)}</small>` : ""}
       ${r.anexoUrl ? `<br><a href="${urlSegura(r.anexoUrl)}" target="_blank" rel="noopener">📎 Anexo</a>` : ""}
       ${a.relatorio ? `<br>${misBotao("✏️ Corrigir", "relatorio-corrigir", { relatorioId: Number(r.relatorioId) })}` : ""}</li>`).join("")}</ul>` : ""}
-    ${arr(e.valores).length ? `<h4>💵 Sustento: valor e reajustes</h4><ul>${arr(e.valores).map((v) => `<li>Desde ${misH(misMes(v.desdeMes))}: <strong>${misH(misReais(v.valor))}</strong>${v.fonteRotulo ? ` — ${misH(v.fonteRotulo)}${v.congregacaoFonte ? ` (${misH(v.congregacaoFonte)})` : ""}` : ""}${v.recebedor ? `; recebe ${misH(v.recebedor)}` : ""}${v.motivo ? ` <small>— ${misH(v.motivo)}</small>` : ""}</li>`).join("")}</ul>` : ""}
+    ${arr(e.valores).length ? `<h4>💵 Sustento: valor e reajustes</h4><ul>${arr(e.valores).map((v) => `<li>Desde ${misH(misMes(v.desdeMes))}: <strong>${misH(misReais(v.valor))}</strong>${v.fonteRotulo ? ` — ${misH(v.fonteRotulo)}${v.congregacaoFonte ? ` (${misH(v.congregacaoFonte)})` : ""}` : ""}${v.recebedor ? `; recebe ${misH(v.recebedor)}` : ""}${v.cliEm ? ` <small>(aumento aprovado pela CLI em ${misH(misBr(v.cliEm))})</small>` : ""}${v.motivo ? ` <small>— ${misH(v.motivo)}</small>` : ""}</li>`).join("")}</ul>` : ""}
     ${arr(e.geracoes).length ? `<h4>🧾 Pagamentos gerados (Contas a Pagar)</h4><div class="rolagem-tabela"><table class="tabela-frequencia"><thead><tr><th>Mês</th><th>Valor</th><th>Saída</th><th>Relatório</th></tr></thead><tbody>${arr(e.geracoes).map((g) => `
       <tr><td>${misH(misMes(g.mes))}</td><td>${misH(misReais(g.valor))}</td><td>nº ${misH(g.saidaId)} — ${misH(MIS_SAIDA[g.saidaStatus] || g.saidaStatus)}</td><td>${g.desfeita ? "Saída desfeita: o mês volta a ser gerado" : (g.semRelatorio ? "<strong>🚩 sem relatório</strong>" : "✅")}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
   if (misForm && misForm.alvo === "misFormAcao") { misRenderForm(); misRestaurarCampos(digitado); }
@@ -298,6 +299,8 @@ function misAbrirFormCampoAcao(chave, campoId) {
   misAbrirFormEm(String(chave), { campoId: Number(c.campoId), nomeCampo: c.nome }, "misFormCampo",
     String(chave) === "campo-editar" ? { nome: c.nome, pais: c.pais, uf: c.uf || "", cidade: c.cidade || "", zonaRural: !!c.zonaRural,
       congregacaoMantenedoraId: c.mantenedora ? String(c.mantenedora.congregacaoId) : "", divulgacao: c.divulgacao, descricao: c.descricao || "" } : null);
+  // Trava 9-B: a versão do campo que este formulário leu (o servidor recusa se outra pessoa mudou o campo nesse meio-tempo)
+  if (misForm && String(chave) === "campo-editar") misForm.fixos.versao = Number(c.versao || 0);
 }
 
 // ================================================================ sustento do mês ================================================================
@@ -429,7 +432,7 @@ function misEspec(chave) {
       { id: "periodicidade", rotulo: "Relatório de campo", tipo: "select", opcoes: misOpcoes("periodicidades"), obrigatorio: true },
       { id: "divulgarNome", rotulo: "O missionário autorizou divulgar o nome no mural", tipo: "check" },
       { id: "justificativa", rotulo: "Justificativa: a obra, o público e como será sustentada (10 a 2.000)", tipo: "area", max: 2000, obrigatorio: true }],
-      aviso: "Campo Local sem sustento fica ativo na hora. Com sustento, passa pelo Pastor Presidente (Art. 134 §6º, I). Fora do município (a zona rural adjacente conta como Local), ou pagando a uma pessoa jurídica (convênio externo), passa pela CME e pela CLI (Art. 23, II); outro Estado, outro país e o convênio externo passam sempre pelo Presidente (Art. 44 §2º).",
+      aviso: "Campo Local sem sustento fica ativo na hora. Com sustento, passa pela CLI (Estatuto, Art. 58 §4º) e pelo Pastor Presidente (Art. 134 §6º, I). Fora do município (a zona rural adjacente conta como Local), ou pagando a uma pessoa jurídica (convênio externo), passa pela CME e pela CLI (Art. 23, II); outro Estado, outro país e o convênio externo passam sempre pelo Presidente (Art. 44 §2º).",
       valoresIniciais: { sustento: "0", periodicidade: "MENSAL" },
       conferir: (c) => {
         if (!/^[1-9][0-9]{0,9}$/.test(c.membroId)) return "A matrícula do missionário é um número.";
@@ -473,8 +476,9 @@ function misEspec(chave) {
       { id: "desdeMes", rotulo: "Vale a partir de", tipo: "mes", obrigatorio: true },
       ...MIS_CAMPOS_DINHEIRO(),
       { id: "documento", rotulo: "Novo documento (opcional; obrigatório se o envio ainda não tem)", tipo: "arquivo" },
+      { id: "sessaoId", rotulo: "Reunião da CLI que aprovou o aumento (só no aumento)", tipo: "reuniaoCLI" },
       { id: "motivo", rotulo: "Motivo (5 a 1.000)", tipo: "area", max: 1000, obrigatorio: true }],
-      aviso: "O reajuste vale do mês escolhido em diante (nunca para trás, nem num mês já gerado).",
+      aviso: "O reajuste vale do mês escolhido em diante (nunca para trás, nem num mês já gerado). O aumento depende da prévia aprovação da CLI (Estatuto, Art. 58 §4º): escolha a reunião da CLI que o aprovou. A redução e a troca de quem recebe não pedem.",
       valoresIniciais: { desdeMes: misMesAtual(), sustento: e.sustentoVigente == null ? "" : String(e.sustentoVigente).replace(".", ",") },
       conferir: (c) => misConferirDinheiro(c, e.missionario && e.missionario.membroId),
       confirmar: (c) => `Reajustar o sustento de ${quem} para ${misReais(misNumero(c.sustento))} a partir de ${misMes(c.desdeMes)}?` };
@@ -575,6 +579,7 @@ async function misEnviarFormAcao() {
   const fixos = form.fixos || {};
   const corpo = {};
   if (form.chave === "campo-editar" || form.chave === "campo-encerrar") corpo.campoId = Number(fixos.campoId);
+  if (form.chave === "campo-editar") corpo.versao = Number(fixos.versao || 0);
   else if (form.chave === "relatorio-corrigir") corpo.relatorioId = Number(fixos.relatorioId);
   else if (form.alvo === "misFormAcao" && misFicha) corpo.envioId = Number(misFicha.envioId);
   const arquivos = [];
@@ -660,10 +665,18 @@ function misCartaoMeusDados(t) {
   const envios = t && Array.isArray(t.missoes) ? t.missoes : [];
   const atos = t && Array.isArray(t.missoesAtos) ? t.missoesAtos : [];
   if (!envios.length && !atos.length) return "";
+  // Trava 9-B: o cartão mostra tudo o que a API entrega ao titular (LGPD Art. 18) — a justificativa, o parecer, as decisões, a desistência, o motivo do
+  // encerramento e os pagamentos; antes ficavam de fora
+  const decisao = (rotulo, d) => (d ? `<br><small>${rotulo}: ${misH(d.resultado)}${d.motivo ? ` — ${misH(d.motivo)}` : ""}${d.fundamentacao ? ` — ${misH(d.fundamentacao)}` : ""}</small>` : "");
   return `<div class="cartao-perfil"><p class="linha-perfil"><strong>🌍 Missões</strong></p>
-    ${envios.map((e) => `<p class="linha-perfil">Envio ao campo ${misH(e.campo)} — ${misH(e.status)}${e.inicio ? `, desde ${misH(misMes(e.inicio))}` : ""}${e.fim ? ` até ${misH(misMes(e.fim))}` : ""};
+    ${envios.map((e) => `<p class="linha-perfil">Envio ao campo ${misH(e.campo)} — ${misH(e.status)}${e.pedidoEm ? ` (pedido em ${misH(misBr(e.pedidoEm))})` : ""}${e.inicio ? `, desde ${misH(misMes(e.inicio))}` : ""}${e.fim ? ` até ${misH(misMes(e.fim))}` : ""};
       relatório ${misH(String(e.periodicidade || "").toLowerCase())}, ${misH(e.relatoriosRecebidos)} recebido(s); nome no mural ${e.autorizouDivulgarNome ? "autorizado" : "não autorizado"}
-      ${Array.isArray(e.sustento) && e.sustento.length ? `<br><small>Sustento: ${e.sustento.map((s) => `${misH(misReais(s.valor))} desde ${misH(misMes(s.desde))}`).join("; ")}</small>` : ""}</p>`).join("")}
+      ${e.justificativa ? `<br><small>Justificativa: ${misH(e.justificativa)}</small>` : ""}
+      ${decisao("Parecer da CME", e.parecerCME)}${decisao("Decisão da CLI", e.decisaoCLI)}${decisao("Pastor Presidente", e.presidente)}
+      ${e.desistencia ? `<br><small>Pedido retirado: ${misH(e.desistencia)}</small>` : ""}
+      ${e.motivoEncerramento ? `<br><small>Encerramento: ${misH(e.motivoEncerramento)}</small>` : ""}
+      ${Array.isArray(e.sustento) && e.sustento.length ? `<br><small>Sustento: ${e.sustento.map((s) => `${misH(misReais(s.valor))} desde ${misH(misMes(s.desde))}`).join("; ")}</small>` : ""}
+      ${Array.isArray(e.pagamentos) && e.pagamentos.length ? `<br><small>Pagamentos: ${e.pagamentos.map((g) => `${misH(misMes(g.mes))} ${misH(misReais(g.valor))} (${misH(MIS_SAIDA[g.situacao] || g.situacao)})`).join("; ")}</small>` : ""}</p>`).join("")}
     ${atos.map((x) => `<p class="linha-perfil">${misH(x.envio)} (${misH(misBr(x.em))}) — ${misH((Array.isArray(x.papeis) ? x.papeis : []).join(", "))}</p>`).join("")}</div>`;
 }
 

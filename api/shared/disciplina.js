@@ -54,4 +54,19 @@ async function membrosSobDisciplina(pool) {
   return new Set(result.recordset.map(r => r.MembroId));
 }
 
-module.exports = { CONDICAO_SQL_ATIVO, CARENCIA_SQL, foraDaReadmissao, membrosSobDisciplina };
+// Trava 9-B — os mesmos membros, com o mês (AAAA-MM) da abertura do processo mais antigo que conta: o Map responde a .has() como o Set acima e diz desde quando.
+// Serve ao sustento missionário do envio encerrado pela vacância por disciplina — os meses em que o processo já corria ficam parados (não se pagam na saída).
+async function membrosSobDisciplinaDesde(pool) {
+  const result = await pool.request().query(
+    `SELECT ProcessosDisciplinares.MembroId AS MembroId, CONVERT(char(7), MIN(ProcessosDisciplinares.DataAbertura), 120) AS Desde
+     FROM ProcessosDisciplinares
+     LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
+     WHERE ${CONDICAO_SQL_ATIVO}
+       AND NOT EXISTS (SELECT 1 FROM MembroReferencia mr WHERE mr.MembroId = ProcessosDisciplinares.MembroId AND ISNULL(ProcessosDisciplinares.Resultado, '') = 'EXCLUSAO'
+                       AND ISNULL(ProcessosDisciplinares.DataConclusao, '99991231') < ISNULL(mr.DataAdmissao, '19000101'))
+     GROUP BY ProcessosDisciplinares.MembroId`
+  );
+  return new Map(result.recordset.map(r => [r.MembroId, r.Desde]));
+}
+
+module.exports = { CONDICAO_SQL_ATIVO, CARENCIA_SQL, foraDaReadmissao, membrosSobDisciplina, membrosSobDisciplinaDesde };

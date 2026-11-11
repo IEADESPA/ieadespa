@@ -81,6 +81,8 @@ async function principal() {
   // envios ativos com sustento (Local + Presidente), para as corridas do sustento
   const ativo = async (membroId, valor) => {
     const p = await POST("envio", { campoId: campoLocal, membroId, sustento: valor, fonte: "GERAL", fornecedorId: fornDe[membroId], ...DOC, periodicidade: "MENSAL", justificativa: "Envio para as corridas do sustento." });
+    // Trava 9-B: o sustento passa pela CLI (Estatuto Art. 58 §4º) antes do Presidente
+    await POST("decidir", { envioId: p.body.envioId, resultado: "APROVADO", sessaoId: reuniao }, "SEC");
     await POST("presidente", { envioId: p.body.envioId, resultado: "CONCORDA" }, "PRES");
     return p.body.envioId;
   };
@@ -97,7 +99,7 @@ async function principal() {
   console.log("== a geração junto com o reajuste (a mesma trava) ==");
   // a geração do mês de hoje já existe; o reajuste deste mês e a geração do mês que começa já não existem: corrida com o reajuste do próximo e a geração do mês
   const e4 = await ativo(9805, 400);
-  rs = await disparar([{ acao: "gerar", quem: "SEC", corpo: { mesReferencia: mes } }, { acao: "reajustar", quem: "PRES", corpo: { envioId: e4, desdeMes: mes, sustento: 450, fonte: "GERAL", fornecedorId: fornDe[9805], motivo: "Reajuste na corrida." } }]);
+  rs = await disparar([{ acao: "gerar", quem: "SEC", corpo: { mesReferencia: mes } }, { acao: "reajustar", quem: "PRES", corpo: { envioId: e4, desdeMes: mes, sustento: 450, sessaoId: reuniao, fonte: "GERAL", fornecedorId: fornDe[9805], motivo: "Reajuste na corrida." } }]);
   ok(semErro(rs), "nenhum 500", rs);
   const gerado = await escalar("SELECT Valor FROM SustentoGeracoes WHERE EnvioId = @e AND MesReferencia = @m", { e: e4, m: mes });
   const vigente = await escalar("SELECT TOP 1 Valor FROM EnvioSustentoValores WHERE EnvioId = @e AND DesdeMes <= @m ORDER BY DesdeMes DESC", { e: e4, m: mes });
@@ -123,6 +125,7 @@ async function principal() {
   console.log("== quatro concordâncias do Presidente ==");
   r = await POST("envio", { campoId: campoLocal, membroId: 9808, sustento: 150, fonte: "GERAL", fornecedorId: fornDe[9808], ...DOC, periodicidade: "MENSAL", justificativa: "Envio para a corrida do Presidente." });
   const p2 = r.body.envioId;
+  await POST("decidir", { envioId: p2, resultado: "APROVADO", sessaoId: reuniao }, "SEC");
   rs = await disparar([1, 2, 3, 4].map(() => ({ acao: "presidente", quem: "PRES", corpo: { envioId: p2, resultado: "CONCORDA" } })));
   ok(semErro(rs) && ganhos(rs) === 1, "uma concordância só", rs);
   ok((await escalar("SELECT COUNT(*) FROM EnvioSustentoValores WHERE EnvioId = @e", { e: p2 })) === 1, "uma ativação só (um valor no histórico)");

@@ -72,6 +72,7 @@ async function falhaNoBanco(rotulo, texto, params) {
   ok(!!erro, `banco: ${rotulo}`, erro ? undefined : ["passou sem erro"]);
 }
 const status = (id) => escalar("SELECT Status FROM EnviosMissionarios WHERE EnvioId = @id", { id });
+const versaoCampo = (c) => escalar("SELECT Versao FROM CamposMissionarios WHERE CampoId = @c", { c });
 const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes WHERE RegraChave = @r AND DestinatarioMembroId = @m", { r: regra, m: membroId });
 
 (async () => {
@@ -173,7 +174,8 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.status === 422 && /município vizinho/.test(r.body.mensagem), "zona rural de um município que não é vizinho de Parauapebas: recusada (a marca não vira escolha)", r.body);
   r = await POST("campo", { nome: "Vila Rural Curionópolis", uf: "PA", cidade: "Curionópolis", zonaRural: true, divulgacao: "RESTRITA" }, SEMI());
   ok(r.body.sucesso === true && (await escalar("SELECT Abrangencia FROM CamposMissionarios WHERE CampoId = @c", { c: r.body.campoId })) === "LOCAL", "zona rural de município vizinho: Local");
-  r = await POST("campo-editar", { campoId: campoEstadual, nome: "Campo Marabá Centro", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA", congregacaoMantenedoraId: central }, SEMI());
+  // Trava 9-B: a edição leva a versão que o formulário leu
+  r = await POST("campo-editar", { campoId: campoEstadual, versao: await versaoCampo(campoEstadual), nome: "Campo Marabá Centro", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA", congregacaoMantenedoraId: central }, SEMI());
   ok(r.body.sucesso === true && (await escalar("SELECT Nome FROM CamposMissionarios WHERE CampoId = @c", { c: campoEstadual })) === "Campo Marabá Centro", "editar o nome", r.body);
   guardar("campos", await GET("campos", {}, SEMI()));
 
@@ -214,10 +216,12 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.status === 403, "a CME não faz o pedido", r.body);
   ok((await escalar("SELECT COUNT(*) FROM EnviosMissionarios WHERE MembroId IN (@a, @b) OR (MembroId = @c AND Status <> N'DESISTIDO')", { a: P.sobProcesso, b: P.semComunhao, c: P.d })) === 0, "nenhuma recusa gravou envio");
 
-  console.log("== envio Local com sustento: só o Presidente (Art. 134 §6º, I) ==");
+  console.log("== envio Local com sustento: a CLI (Estatuto Art. 58 §4º — Trava 9-B) e o Presidente (Art. 134 §6º, I) ==");
   r = guardar("envioLocalComSustento", await POST("envio", { ...base, membroId: P.d, sustento: "500,00", fonte: "GERAL", fornecedorId: pfDora, ...DOC }, SEMI()));
   const envD = r.body.envioId;
-  ok(r.body.sucesso === true && r.body.status === "AGUARDANDO_PRESIDENTE", "Local com sustento: aguarda o Presidente", r.body);
+  ok(r.body.sucesso === true && r.body.status === "AGUARDANDO_CLI", "Local com sustento: aguarda a CLI (sem a CME)", r.body);
+  r = await POST("decidir", { envioId: envD, resultado: "APROVADO", sessaoId: reuniao }, SEC());
+  ok(r.body.sucesso === true && (await status(envD)) === "AGUARDANDO_PRESIDENTE", "a CLI aprova: falta o Presidente", r.body);
   ok((await avisos("MISSOES_AGUARDANDO_PRESIDENTE", 1001)) >= 1, "o Presidente é avisado");
   r = await POST("presidente", { envioId: envD, resultado: "CONCORDA" }, CME());
   ok(r.status === 403, "quem não é o Presidente: 403 (antes da confirmação recente)", r.status);
@@ -236,7 +240,8 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   console.log("== o Presidente não concorda com o próprio pedido ==");
   r = await POST("envio", { campoId: campoBairro, membroId: P.h, sustento: 200, fonte: "GERAL", fornecedorId: pfHugo, ...DOC, periodicidade: "MENSAL", justificativa: "Pedido feito pelo próprio Presidente." }, PRES());
   const envH = r.body.envioId;
-  ok(r.body.status === "AGUARDANDO_PRESIDENTE", "o Presidente (nível geral) pode pedir", r.body);
+  ok(r.body.status === "AGUARDANDO_CLI", "o Presidente (nível geral) pode pedir", r.body);
+  await POST("decidir", { envioId: envH, resultado: "APROVADO", sessaoId: reuniao }, SEC());
   r = guardar("fichaPresidentePediu", await GET("envio", { envioId: envH }, PRES()));
   ok(r.body.envio.acoes.presidente === false, "e não vê o botão de concordar com o próprio pedido", r.body.envio.acoes);
   r = await POST("presidente", { envioId: envH, resultado: "CONCORDA" }, PRES());
@@ -303,6 +308,7 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   r = await POST("envio", { campoId: campoBairro, membroId: P.e, sustento: 300, fonte: "CONGREGACAO", fornecedorId: pfEva, ...DOC, periodicidade: "MENSAL", divulgarNome: true,
     justificativa: "Frente no bairro novo, sustentada pela Central." }, SEMI());
   const envE = r.body.envioId;
+  await POST("decidir", { envioId: envE, resultado: "APROVADO", sessaoId: reuniao }, SEC());
   await POST("presidente", { envioId: envE, resultado: "CONCORDA" }, PRES());
   ok((await status(envE)) === "ATIVO", "o envio da Eva ativo (caixa local da Central)");
   // a Dora começou 3 meses atrás e nunca mandou relatório: os períodos vencidos suspendem o sustento
@@ -388,8 +394,10 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   r = await POST("reajustar", { envioId: envD, desdeMes: mes, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, PRES());
   ok(r.body.sucesso === false && /já foi gerado/.test(r.body.mensagem), "reajuste num mês já gerado: recusado", r.body);
   r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo." }, PRES());
+  ok(r.body.sucesso === false && /Art\. 58 §4º/.test(r.body.mensagem), "Trava 9-B: o aumento sem a reunião da CLI que o aprovou: recusado", r.body);
+  r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 650, fonte: "GERAL", fornecedorId: pfDora, motivo: "Custo de vida no campo.", sessaoId: reuniao }, PRES());
   ok(r.body.sucesso === true, "o Presidente reajusta do mês seguinte em diante", r.body);
-  r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 700, fonte: "GERAL", fornecedorId: pfDora, motivo: "Corrigindo o valor do reajuste." }, PRES());
+  r = await POST("reajustar", { envioId: envD, desdeMes: proximo, sustento: 700, fonte: "GERAL", fornecedorId: pfDora, motivo: "Corrigindo o valor do reajuste.", sessaoId: reuniao }, PRES());
   ok(r.body.sucesso === true && (await escalar("SELECT COUNT(*) FROM EnvioSustentoValores WHERE EnvioId = @e", { e: envD })) === 2
     && (await escalar("SELECT Valor FROM EnvioSustentoValores WHERE EnvioId = @e AND DesdeMes = @p", { e: envD, p: proximo })) === 700, "o segundo reajuste do mesmo mês substitui o primeiro", r.body);
   r = await POST("encerrar", { envioId: envD, ultimoMes: m1, motivo: "Retorno da missionária." }, SEMI());
@@ -400,7 +408,7 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(r.body.sucesso === true && (await um("SELECT Status, FimMes FROM EnviosMissionarios WHERE EnvioId = @e", { e: envD })).FimMes === mes, "encerrado com o último mês", r.body);
   r = await POST("campo-encerrar", { campoId: campoBairro, motivo: "Frente concluída." }, SEMI());
   ok(r.body.sucesso === false && /envio em andamento ou ativo/.test(r.body.mensagem), "campo com envio ativo (a Eva) não se encerra", r.body);
-  r = await POST("campo-editar", { campoId: campoBairro, nome: "Frente Bairro Novo", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA" }, SEMI());
+  r = await POST("campo-editar", { campoId: campoBairro, versao: await versaoCampo(campoBairro), nome: "Frente Bairro Novo", uf: "PA", cidade: "Marabá", divulgacao: "PUBLICA" }, SEMI());
   ok(r.body.sucesso === false && /lugar/.test(r.body.mensagem), "o lugar do campo com envio vivo não muda", r.body);
   r = await POST("campo-encerrar", { campoId: campoAtaque, motivo: "Campo de teste encerrado." }, SEMI());
   ok(r.body.sucesso === true && (await escalar("SELECT Status FROM CamposMissionarios WHERE CampoId = @c", { c: campoAtaque })) === "ENCERRADO", "campo sem envio vivo se encerra", r.body);
@@ -491,15 +499,25 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok(!atrasos.some((x) => x.referenciaId % 100000 === envD), "a Dora (com os relatórios em dia) não é avisada", atrasos.map((x) => x.referenciaId));
   r = guardar("previaTranscultural", await GET("sustento", { mes: m2 }, TES()));
   ok(linha(r, envC).situacao === "SUSPENSO", "a agência fica suspensa com o relatório trimestral vencido", linha(r, envC));
-  // a Eva começou 3 meses atrás sem relatório e saiu do rol: o que faltava fica dispensado (não há mais quem mande), e o último mês ainda é gerado
+  // a Eva começou 3 meses atrás sem relatório e saiu do rol. Trava 9-B: o relatório que já tinha vencido ANTES da vacância continua vencido (o sustento desses
+  // meses segue suspenso — antes, a vacância soltava todos); só o que ainda estava no prazo no dia da vacância fica dispensado; o último mês ainda é gerado
   await q("UPDATE EnviosMissionarios SET InicioMes = @m3, AtivadoEm = @d WHERE EnvioId = @e", { m3, d: `${m3}-01`, e: envE });
   await q("UPDATE EnvioSustentoValores SET DesdeMes = @m3 WHERE EnvioId = @e", { m3, e: envE });
   ok((await miDb.detectarRelatorioAtrasado(pool, { hoje })).some((x) => x.referenciaId % 100000 === envE), "antes da vacância: o relatório da Eva vence");
   await vacancia.encerrarVinculos(pool, L.sql, P.e, "FALECIMENTO");
   ok((await um("SELECT EncerradoPorVacancia FROM EnviosMissionarios WHERE EnvioId = @e", { e: envE })).EncerradoPorVacancia === true, "a vacância marca o envio");
-  ok(!(await miDb.detectarRelatorioAtrasado(pool, { hoje })).some((x) => x.referenciaId % 100000 === envE), "depois: o relatório dela fica dispensado (sem aviso)");
+  r = await GET("sustento", { mes: m3 }, TES());
+  ok(linha(r, envE).situacao === "SUSPENSO", "Trava 9-B: o mês com o relatório vencido antes da vacância segue suspenso (a vacância não o libera)", linha(r, envE));
+  r = await GET("envio", { envioId: envE }, SEC());
+  const pDoMes = r.body.envio.periodos.find((p) => p.inicio === mes);
+  ok(pDoMes && pDoMes.dispensado === true && r.body.envio.periodos.filter((p) => p.vencido).length >= 2, "o do mês da vacância (ainda no prazo) fica dispensado; os de antes, vencidos", r.body.envio.periodos);
+  // a SEMIADESPA tinha os relatórios que faltavam e os lança: os meses voltam a ser gerados (o último também) e ninguém é mais avisado
+  for (const p of r.body.envio.periodos.filter((x) => x.vencido)) {
+    await POST("relatorio", { envioId: envE, periodoInicio: p.inicio, batismos: 0, conversoes: 1, discipulado: 2, atividades: "Relatório que chegou depois da vacância." }, SEMI());
+  }
+  ok(!(await miDb.detectarRelatorioAtrasado(pool, { hoje })).some((x) => x.referenciaId % 100000 === envE), "lançados os vencidos, o dispensado não gera aviso");
   r = await GET("sustento", { mes: m1 }, TES());
-  ok(linha(r, envE).situacao === "A_GERAR", "e o mês que faltava ainda pode ser gerado", linha(r, envE));
+  ok(linha(r, envE).situacao === "A_GERAR", "e o mês que faltava pode ser gerado", linha(r, envE));
   r = await GET("painel", {}, SEC());
   ok(!r.body.relatoriosAtrasados.some((x) => x.envioId === envE), "o painel não a lista como atrasada");
 

@@ -156,11 +156,13 @@ function validarEnvio(dados) {
 
 // As etapas do envio, pelo caso (Desenho da v9.4, item 2): campo Local fica com a SEMIADESPA (Art. 44 §1º); fora do município, ou com convênio externo (quem
 // recebe é pessoa jurídica), passa pela CME e pela CLI (Art. 23, II); Nacional, Transcultural, convênio externo ou qualquer sustento passam pelo Presidente
-// (Art. 44 §2º; Art. 134 §6º, I).
+// (Art. 44 §2º; Art. 134 §6º, I). Trava 9-B: qualquer sustento passa também pela CLI — o Estatuto, Art. 58 §4º, só aceita o pagamento a obreiros (que não é
+// distribuição de resultado, §3º) com a prévia aprovação da CLI; o campo Local com sustento vai à CLI sem a CME (a frente Local segue da SEMIADESPA, Art. 44 §1º).
 function etapasDoEnvio({ abrangencia, sustento, recebedorPJ }) {
   const longe = abrangencia === "NACIONAL" || abrangencia === "TRANSCULTURAL";
   const colegiado = abrangencia !== "LOCAL" || !!recebedorPJ;
-  return { cme: colegiado, cli: colegiado, presidente: longe || !!recebedorPJ || Number(sustento) > 0 };
+  const comSustento = Number(sustento) > 0;
+  return { cme: colegiado, cli: colegiado || comSustento, presidente: longe || !!recebedorPJ || comSustento };
 }
 function statusInicial(etapas) {
   if (etapas.cme) return "EM_PARECER";
@@ -216,13 +218,16 @@ function periodosDoEnvio({ inicioMes, fimMes, periodicidade }, hoje) {
   return lista;
 }
 // A situação de cada período: entregue, em aberto (dentro do prazo) ou vencido. Relatório vencido suspende o sustento (Desenho da v9.4, item 4).
-// O envio encerrado pela vacância (a pessoa faleceu ou saiu do rol): o relatório que faltava fica dispensado — não vence nem suspende.
+// O envio encerrado pela vacância (a pessoa faleceu ou saiu do rol): o relatório que ainda estava no prazo no dia da vacância fica dispensado — não vence nem
+// suspende. Trava 9-B: o que já tinha vencido ANTES da vacância continua vencido (antes, a vacância dispensava todos e liberava para pagamento os meses que
+// estavam suspensos por falta de relatório).
 function situacaoRelatorios(envio, entregues, hoje) {
   const feitos = entregues instanceof Set ? entregues : new Set(entregues || []);
-  const dispensado = !!(envio && envio.encerradoPorVacancia);
+  const vacancia = envio && envio.encerradoPorVacancia ? envio.encerradoEm || null : null;
   const periodos = periodosDoEnvio(envio, hoje).map((p) => {
     const entregue = feitos.has(p.inicio);
-    return { ...p, entregue, dispensado: !entregue && dispensado, vencido: !entregue && !dispensado && p.prazo < hoje };
+    const dispensado = !entregue && !!vacancia && p.prazo >= vacancia;
+    return { ...p, entregue, dispensado, vencido: !entregue && !dispensado && p.prazo < hoje };
   });
   const vencidos = periodos.filter((p) => p.vencido);
   return { periodos, vencidos, suspenso: vencidos.length > 0 };
@@ -277,7 +282,18 @@ function validarReajuste(dados, { inicioMes, ultimoGerado, hoje }) {
     if (typeof d.documentoBase64 !== "string" || !MIME_DOCUMENTO.includes(d.documentoMime)) return { valido: false, mensagem: "O documento é PDF, JPG ou PNG." };
     documento = { base64: d.documentoBase64, mime: d.documentoMime };
   }
-  return { valido: true, dados: { desdeMes, ...dinheiro.dados, motivo: motivo.texto, documento } };
+  // Trava 9-B: a reunião da CLI que aprovou o aumento (Estatuto, Art. 58 §4º) — conferida no banco por quem chama; só o aumento a exige
+  const sessaoId = d.sessaoId == null || d.sessaoId === "" ? null : idDe(d.sessaoId);
+  if (d.sessaoId != null && d.sessaoId !== "" && !sessaoId) return { valido: false, mensagem: "Escolha a reunião da CLI que aprovou o aumento." };
+  return { valido: true, dados: { desdeMes, ...dinheiro.dados, motivo: motivo.texto, documento, sessaoId } };
+}
+// Trava 9-B — o aumento do sustento (Estatuto, Art. 58 §4º): a CLI aprova antes, numa reunião já realizada, depois da ativação do envio e não depois de hoje.
+function problemaDaCLIdoAumento({ novo, vigente, reuniao, ativadoEm, hoje }) {
+  if (!(Number(novo) > Number(vigente || 0))) return null;
+  if (!reuniao) return "O aumento do sustento depende da prévia aprovação da CLI (Estatuto, Art. 58 §4º): escolha a reunião da CLI, já realizada e encerrada, que o aprovou.";
+  if (ativadoEm && reuniao.data < ativadoEm) return `A reunião é anterior à ativação do envio (${br(ativadoEm)}): escolha a reunião que aprovou este aumento.`;
+  if (reuniao.data > hoje) return "A reunião da CLI precisa já ter acontecido.";
+  return null;
 }
 // O último mês de sustento: não antes de um mês já gerado, nem depois do mês de hoje; o mês anterior ao início quer dizer "nenhum sustento".
 function validarEncerramentoEnvio(dados, { inicioMes, ultimoGerado, hoje }) {
@@ -327,6 +343,6 @@ module.exports = {
   PRAZO_PARECER_DIAS, DIA_PRAZO_RELATORIO, SUSTENTO_MAXIMO, CATEGORIA_SAIDA, MIME_DOCUMENTO, UFS, MUNICIPIOS_ZONA_RURAL, zonaRuralAceita, fundamentoPresidente,
   mesValido, mesDe, somarMeses, mesesEntre, mesBr, ehBrasil, abrangenciaDe, validarCampo, mudouOLugar, valorDe, inteiroDe, validarDinheiro, validarEnvio,
   etapasDoEnvio, statusInicial, statusDepoisDaCLI, prazoParecer, parecerVencido, podeDecidirCLI, validarParecer, validarDecisao, validarMotivo, validarPresidente,
-  periodoDoMes, periodosDoEnvio, situacaoRelatorios, validarRelatorio, validarGeracao, validarReajuste, validarEncerramentoEnvio, referenciaPeriodo,
+  periodoDoMes, periodosDoEnvio, situacaoRelatorios, validarRelatorio, validarGeracao, validarReajuste, problemaDaCLIdoAumento, validarEncerramentoEnvio, referenciaPeriodo,
   textoEnvioNovo, textoParecerVencido, textoAguardandoPresidente, textoDecidido, textoRelatorioAtrasado, idDe, br
 };

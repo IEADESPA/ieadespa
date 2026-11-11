@@ -11,7 +11,8 @@ const storage = require("./storage");
 const { registrarAuditoriaNaTransacao } = require("./auditoria");
 const { violouUnicidade } = require("./violacaoUnica");
 const { hojeBrasilia } = require("./dataBrasilia");
-const { membrosSobDisciplina } = require("./disciplina");
+const { membrosSobDisciplina, membrosSobDisciplinaDesde } = require("./disciplina");
+const { membroEmComunhao } = require("./estatuto");
 const { lerReuniao, reunioesEncerradas } = require("./entidadesVinculadasDb");
 const { ehPresidenteAtual } = require("./diretoria");
 const { composicaoCME } = require("./comissoes");
@@ -57,9 +58,11 @@ async function ehDaSemiadespa(pool, membroId, hoje) {
       AND p.Nome IN (N'Secretário de Missões', N'Líder Geral de Departamento/Secretaria') AND (l.AtivoAte IS NULL OR l.AtivoAte >= @h)`);
   return r.recordset.length > 0;
 }
-async function montarAlcance(pool, { membroId, geral, tesouraria, hoje = hojeBrasilia() }) {
+// Trava 9-B: gerir como SEMIADESPA exige também a permissão "missoes" (`permissao`) — antes, o Secretário de Missões ou o Líder Geral da SEMIADESPA sem a
+// permissão entrava pela CME e geria tudo pela API (a tela é que escondia a pílula). Sem a permissão, quem compõe a CME segue só como CME (o parecer).
+async function montarAlcance(pool, { membroId, geral, tesouraria, permissao = true, hoje = hojeBrasilia() }) {
   const [semiadespa, cme, presidente] = await Promise.all([
-    ehDaSemiadespa(pool, membroId, hoje),
+    permissao ? ehDaSemiadespa(pool, membroId, hoje) : false,
     composicaoCME(pool).then((l) => l.some((m) => Number(m.membroId) === Number(membroId))),
     ehPresidenteAtual(pool, sql, membroId)
   ]);
@@ -78,11 +81,11 @@ const soTesouraria = (a) => !!a && a.tesouraria && !veMissoes(a);
 async function problemaDoMissionario(pool, rq, membroId) {
   const m = (await rq().input("m", sql.Int, membroId).query(`SELECT MembroId, Nome, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
   if (!m) return "Matrícula do missionário não encontrada.";
-  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || (await membrosSobDisciplina(pool)).has(m.MembroId)) {
-    return "O missionário precisa ser membro ativo e em comunhão, sem processo disciplinar em curso.";
-  }
+  // Trava 9-B: a régua do Estatuto (Art. 7º, I) — o congregado não é membro; antes só o "sem comunhão" era recusado
+  if (!membroEmComunhao(m.Status, m.SituacaoMembro) || (await membrosSobDisciplina(pool)).has(m.MembroId)) return PESSOA_DO_ENVIO;
   return null;
 }
+const PESSOA_DO_ENVIO = "O missionário precisa ser membro ativo e em comunhão (o congregado ainda não integra o quadro de membros), sem processo disciplinar em curso.";
 async function lerFornecedor(rq, fornecedorId) {
   const f = (await rq().input("f", sql.Int, fornecedorId).query(`
     SELECT FornecedorId, Nome, Tipo, Ativo, DadosBancariosConfirmados, Banco, Agencia, Conta, MembroId FROM Fornecedores WHERE FornecedorId = @f`)).recordset[0];
@@ -135,7 +138,7 @@ function formaCampo(l) {
     mantenedora: l.CongregacaoMantenedoraId ? { congregacaoId: l.CongregacaoMantenedoraId, nome: l.MantenedoraNome } : null,
     divulgacao: l.Divulgacao, divulgacaoRotulo: mi.DIVULGACOES[l.Divulgacao] || l.Divulgacao, descricao: l.Descricao, status: l.Status,
     statusRotulo: mi.STATUS_CAMPO[l.Status] || l.Status, abertoEm: iso(l.AbertoEm), encerradoEm: iso(l.EncerradoEm), motivoEncerramento: l.MotivoEncerramento,
-    enviosVivos: Number(l.EnviosVivos || 0), enviosAtivos: Number(l.EnviosAtivos || 0)
+    enviosVivos: Number(l.EnviosVivos || 0), enviosAtivos: Number(l.EnviosAtivos || 0), versao: Number(l.Versao || 0)
   };
   c.lugar = lugarDe(c);
   return c;
@@ -153,6 +156,18 @@ async function listarCampos(pool, { alcance, todos = false }) {
   if (!veMissoes(alcance)) return [];
   const r = await pool.request().query(`${SQL_CAMPO(false)} ${todos ? "" : "WHERE c.Status = N'ATIVO'"} ORDER BY CASE WHEN c.Status = N'ATIVO' THEN 0 ELSE 1 END, c.Nome`);
   return r.recordset.map(formaCampo).map((c) => ({ ...c, podeEditar: gere(alcance) && c.status === "ATIVO" }));
+}
+// Trava 9-B — algum envio vivo deste campo tira o sustento do caixa desta congregação? O pedido em andamento pela fonte proposta; o envio ativo pelo valor
+// vigente no mês de hoje ou por um valor futuro já marcado.
+async function sustentoDoCaixaDe(rq, campoId, congregacaoId) {
+  const r = await rq().input("c", sql.Int, campoId).input("cg", sql.Int, congregacaoId).input("mes", sql.Char(7), mi.mesDe(hojeBrasilia())).query(`
+    SELECT TOP 1 1 AS x FROM EnviosMissionarios e
+    WHERE e.CampoId = @c AND (
+      (e.Status IN (N'EM_PARECER', N'AGUARDANDO_CLI', N'AGUARDANDO_PRESIDENTE') AND e.Fonte = N'CONGREGACAO' AND e.CongregacaoFonteId = @cg)
+      OR (e.Status = N'ATIVO' AND EXISTS (
+            SELECT 1 FROM EnvioSustentoValores v WHERE v.EnvioId = e.EnvioId AND v.Valor > 0 AND v.Fonte = N'CONGREGACAO' AND v.CongregacaoFonteId = @cg
+              AND v.DesdeMes >= ISNULL((SELECT MAX(w.DesdeMes) FROM EnvioSustentoValores w WHERE w.EnvioId = e.EnvioId AND w.DesdeMes <= @mes), '0000-00'))))`);
+  return r.recordset.length > 0;
 }
 // Nome igual a outro campo ativo, sem diferenciar maiúscula, acento nem espaço nas pontas.
 async function haHomonimo(rq, nome, excetoId = null) {
@@ -195,6 +210,9 @@ async function editarCampo(pool, { campoId, dados, por, alcance }) {
   const v = mi.validarCampo(dados);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const d = v.dados;
+  // Trava 9-B: a versão que o formulário leu (como Bairros e Critérios da v9.5) — quem salva um formulário velho não desfaz a mudança do outro
+  const versao = dados && dados.versao != null && dados.versao !== "" && Number.isInteger(Number(dados.versao)) ? Number(dados.versao) : null;
+  if (versao === null) return { sucesso: false, mensagem: "Abra o campo de novo antes de salvar (falta a versão do que você leu)." };
   try {
     return await emTransacao(pool, async (t, rq) => {
       // a trava dos envios também: um pedido que está sendo gravado agora não pega a abrangência de antes da mudança do lugar (revisão de 05/11/2026)
@@ -202,18 +220,27 @@ async function editarCampo(pool, { campoId, dados, por, alcance }) {
       const c = await lerCampo(rq, campoId, { travar: true });
       if (!c) return NAO_EXISTE;
       if (c.status !== "ATIVO") return { sucesso: false, mensagem: "Este campo está encerrado." };
+      if (c.versao !== versao) return MUDOU;
       // os envios vivos já passaram (ou estão passando) pelas etapas que a abrangência deste lugar pediu
       if (c.enviosVivos > 0 && mi.mudouOLugar(c, d)) return { sucesso: false, mensagem: "O campo tem envio em andamento ou ativo: o lugar (país, UF, cidade, zona rural) não muda, porque foi ele que decidiu por onde o envio passou. Encerre o campo e cadastre outro." };
-      if (d.congregacaoMantenedoraId && (!c.mantenedora || c.mantenedora.congregacaoId !== d.congregacaoMantenedoraId)) {
-        const mc = await lerCongregacao(rq, d.congregacaoMantenedoraId);
-        if (!mc || !mc.ativa) return { sucesso: false, mensagem: "A congregação mantenedora precisa estar ativa." };
+      const mantenedoraAntes = c.mantenedora ? c.mantenedora.congregacaoId : null;
+      if ((d.congregacaoMantenedoraId || null) !== mantenedoraAntes) {
+        // Trava 9-B: o sustento que sai do caixa da mantenedora (pedido em andamento, ou valor vigente ou futuro de um envio ativo) não muda de caixa sozinho —
+        // antes, trocar ou tirar a mantenedora deixava o sustento nascendo todo mês contra o caixa de quem já não mantinha o campo
+        if (mantenedoraAntes && (await sustentoDoCaixaDe(rq, campoId, mantenedoraAntes))) {
+          return { sucesso: false, mensagem: "Um envio deste campo tem o sustento saindo do caixa da congregação mantenedora: antes de trocar (ou tirar) a mantenedora, o Pastor Presidente reajusta a fonte do sustento (ou o envio é encerrado ou retirado)." };
+        }
+        if (d.congregacaoMantenedoraId) {
+          const mc = await lerCongregacao(rq, d.congregacaoMantenedoraId);
+          if (!mc || !mc.ativa) return { sucesso: false, mensagem: "A congregação mantenedora precisa estar ativa." };
+        }
       }
       if (await haHomonimo(rq, d.nome, campoId)) return { sucesso: false, mensagem: HOMONIMO };
       const u = await rq().input("id", sql.Int, campoId).input("nome", sql.NVarChar(150), d.nome).input("pais", sql.NVarChar(80), d.pais).input("uf", sql.NVarChar(2), d.uf)
         .input("cid", sql.NVarChar(150), d.cidade).input("zona", sql.Bit, d.zonaRural).input("abr", sql.NVarChar(15), d.abrangencia)
-        .input("mant", sql.Int, d.congregacaoMantenedoraId).input("div", sql.NVarChar(10), d.divulgacao).input("desc", sql.NVarChar(1000), d.descricao)
+        .input("mant", sql.Int, d.congregacaoMantenedoraId).input("div", sql.NVarChar(10), d.divulgacao).input("desc", sql.NVarChar(1000), d.descricao).input("ver", sql.Int, versao)
         .query(`UPDATE CamposMissionarios SET Nome = @nome, Pais = @pais, UF = @uf, Cidade = @cid, ZonaRuralAdjacente = @zona, Abrangencia = @abr,
-                       CongregacaoMantenedoraId = @mant, Divulgacao = @div, Descricao = @desc WHERE CampoId = @id AND Status = N'ATIVO'`);
+                       CongregacaoMantenedoraId = @mant, Divulgacao = @div, Descricao = @desc, Versao = Versao + 1 WHERE CampoId = @id AND Status = N'ATIVO' AND Versao = @ver`);
       if (!u.rowsAffected[0]) return MUDOU;
       await registrarAuditoriaNaTransacao(t, { tabela: "CamposMissionarios", registroId: campoId, acao: "MISSOES_CAMPO_EDITADO", usuarioId: por,
         dadosAntes: { nome: c.nome, lugar: c.lugar, divulgacao: c.divulgacao, mantenedora: c.mantenedora }, dadosDepois: d });
@@ -236,7 +263,7 @@ async function encerrarCampo(pool, { campoId, dados, por, hoje = hojeBrasilia(),
     if (c.status !== "ATIVO") return { sucesso: false, mensagem: "Este campo já está encerrado." };
     if (c.enviosVivos > 0) return { sucesso: false, mensagem: "O campo tem envio em andamento ou ativo: encerre o envio (ou registre a desistência) antes." };
     const u = await rq().input("id", sql.Int, campoId).input("h", sql.Date, hoje).input("por", sql.Int, por).input("m", sql.NVarChar(1000), v.dados.motivo)
-      .query(`UPDATE CamposMissionarios SET Status = N'ENCERRADO', EncerradoEm = @h, EncerradoPor = @por, MotivoEncerramento = @m WHERE CampoId = @id AND Status = N'ATIVO'`);
+      .query(`UPDATE CamposMissionarios SET Status = N'ENCERRADO', EncerradoEm = @h, EncerradoPor = @por, MotivoEncerramento = @m, Versao = Versao + 1 WHERE CampoId = @id AND Status = N'ATIVO'`);
     if (!u.rowsAffected[0]) return MUDOU;
     await registrarAuditoriaNaTransacao(t, { tabela: "CamposMissionarios", registroId: campoId, acao: "MISSOES_CAMPO_ENCERRADO", usuarioId: por, dadosDepois: v.dados });
     return { sucesso: true, mensagem: "Campo encerrado." };
@@ -300,9 +327,10 @@ async function lerEnvio(rq, envioId, hoje, { travar = false } = {}) {
 async function carregarDinheiro(rq, envioIds = null) {
   const filtro = (col) => (envioIds ? `WHERE ${col} IN (${envioIds.map((n) => Number(n)).filter(Number.isInteger).join(",") || "0"})` : "");
   // uma consulta depois da outra: dentro da transação (geração, reajuste, encerramento) a conexão não aceita duas ao mesmo tempo
-  const valores = await rq().query(`SELECT v.EnvioId, v.ValorId, v.DesdeMes, v.Valor, v.Fonte, v.CongregacaoFonteId, cg.Nome AS CongNome, cg.Ativa AS CongAtiva, v.FornecedorId, f.Nome AS FornNome, f.Tipo AS FornTipo,
+  const valores = await rq().query(`SELECT v.EnvioId, v.ValorId, v.DesdeMes, v.Valor, v.Fonte, v.CongregacaoFonteId, cg.Nome AS CongNome, cg.Ativa AS CongAtiva, cg.Categoria AS CongCategoria,
+                       v.FornecedorId, f.Nome AS FornNome, f.Tipo AS FornTipo,
                        f.Ativo AS FornAtivo, f.DadosBancariosConfirmados AS FornConfirmado, CASE WHEN f.Banco IS NOT NULL AND f.Agencia IS NOT NULL AND f.Conta IS NOT NULL THEN 1 ELSE 0 END AS FornBanco,
-                       v.Motivo, CONVERT(varchar(10), v.RegistradoEm, 120) AS RegistradoEm
+                       v.Motivo, CONVERT(varchar(10), v.RegistradoEm, 120) AS RegistradoEm, CONVERT(varchar(10), v.CliEm, 120) AS CliEm
                 FROM EnvioSustentoValores v LEFT JOIN Congregacoes cg ON cg.CongregacaoId = v.CongregacaoFonteId LEFT JOIN Fornecedores f ON f.FornecedorId = v.FornecedorId
                 ${filtro("v.EnvioId")} ORDER BY v.EnvioId, v.DesdeMes`);
   const relatorios = await rq().query(`SELECT RelatorioId, EnvioId, PeriodoInicio, Batismos, Conversoes, Discipulado FROM RelatoriosCampo ${filtro("EnvioId")}`);
@@ -312,9 +340,9 @@ async function carregarDinheiro(rq, envioIds = null) {
   const de = (id) => { if (!porEnvio.has(id)) porEnvio.set(id, { valores: [], relatorios: [], geracoes: [] }); return porEnvio.get(id); };
   for (const l of valores.recordset) {
     de(l.EnvioId).valores.push({ valorId: l.ValorId, desdeMes: mes7(l.DesdeMes), valor: Number(l.Valor), fonte: l.Fonte, fonteRotulo: l.Fonte ? mi.FONTES[l.Fonte] : null,
-      congregacaoFonte: l.CongregacaoFonteId ? { congregacaoId: l.CongregacaoFonteId, nome: l.CongNome, ativa: !!l.CongAtiva } : null,
+      congregacaoFonte: l.CongregacaoFonteId ? { congregacaoId: l.CongregacaoFonteId, nome: l.CongNome, ativa: !!l.CongAtiva, sobTutela: l.CongCategoria === "EXTENSAO_TENDA" } : null,
       recebedor: l.FornecedorId ? { fornecedorId: l.FornecedorId, nome: l.FornNome, tipo: l.FornTipo, ativo: !!l.FornAtivo, confirmado: !!l.FornConfirmado, bancoCompleto: !!l.FornBanco } : null,
-      motivo: l.Motivo, registradoEm: l.RegistradoEm });
+      motivo: l.Motivo, registradoEm: l.RegistradoEm, cliEm: l.CliEm || null });
   }
   for (const l of relatorios.recordset) {
     de(l.EnvioId).relatorios.push({ relatorioId: l.RelatorioId, periodoInicio: mes7(l.PeriodoInicio), batismos: Number(l.Batismos), conversoes: Number(l.Conversoes), discipulado: Number(l.Discipulado) });
@@ -331,13 +359,21 @@ const SAIDA_DESFEITA = ["CANCELADA", "REJEITADA"];
 const geracoesValidas = (geracoes) => geracoes.filter((g) => !SAIDA_DESFEITA.includes(g.saidaStatus));
 const ultimoGerado = (geracoes) => geracoesValidas(geracoes).reduce((a, g) => (!a || g.mes > a ? g.mes : a), null);
 // A pessoa que não pode receber o sustento agora (revisão de 05/11/2026): saiu do estado ativo (licença de candidatura, por exemplo), perdeu a comunhão ou tem processo
-// disciplinar em curso — o mês fica impedido enquanto durar (não se perde: volta quando a situação se resolve). O envio encerrado pela vacância não passa por aqui: o
-// último mês dele ainda é gerado.
-function impedimentoDaPessoa(envio, sob) {
-  if (envio.encerradoPorVacancia || !envio._pessoa) return null;
+// disciplinar em curso — o mês fica impedido enquanto durar (não se perde: volta quando a situação se resolve).
+// O envio encerrado pela vacância: o mês da vacância ainda é gerado (decisão de 05/11/2026). Trava 9-B: os meses de antes NÃO são liberados de uma vez — os que
+// caíram enquanto já corria o processo disciplinar que acabou na saída ficam parados (o sustento estava "parado até a decisão", e a decisão foi a disciplina);
+// antes, a vacância soltava todos. `sob`: Set ou Map (membrosSobDisciplinaDesde: o mês da abertura do processo).
+function impedimentoDaPessoa(envio, sob, mes) {
+  if (!envio._pessoa) return null;
+  const id = Number(envio.missionario.membroId);
+  if (envio.encerradoPorVacancia) {
+    if (!mes || !envio.fimMes || mes >= envio.fimMes) return null;
+    const desde = sob instanceof Map ? sob.get(id) : null;
+    return desde && mes >= desde ? "O missionário já estava sob o processo disciplinar que terminou na saída do envio: o sustento parado durante o processo não é pago." : null;
+  }
   if (envio._pessoa.status !== "ATIVO") return "O missionário não está ativo no rol agora (licença de candidatura ou outra situação): o sustento fica parado enquanto durar.";
-  if (envio._pessoa.situacao === "SEM_COMUNHAO") return "O missionário está sem comunhão: o sustento fica parado enquanto durar.";
-  if (sob && sob.has(Number(envio.missionario.membroId))) return "O missionário tem processo disciplinar em curso: o sustento fica parado até a decisão.";
+  if (!membroEmComunhao(envio._pessoa.status, envio._pessoa.situacao)) return "O missionário não está em comunhão no cadastro (sem comunhão, ou congregado): o sustento fica parado enquanto durar.";
+  if (sob && sob.has(id)) return "O missionário tem processo disciplinar em curso: o sustento fica parado até a decisão.";
   return null;
 }
 
@@ -356,12 +392,15 @@ function avaliarMes(envio, din, mes, hoje, sob = null) {
   if (sit.suspenso) {
     return { ...base, situacao: "SUSPENSO", motivo: `Relatório de campo vencido: ${sit.vencidos.map((p) => `${mi.mesBr(p.inicio)}${p.fim !== p.inicio ? ` a ${mi.mesBr(p.fim)}` : ""} (venceu em ${mi.br(p.prazo)})`).join(", ")}. Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º).` };
   }
-  const pessoa = impedimentoDaPessoa(envio, sob);
+  const pessoa = impedimentoDaPessoa(envio, sob, mes);
   if (pessoa) return { ...base, situacao: "IMPEDIDO", motivo: pessoa };
   const r = v.recebedor;
   if (!r || !r.ativo) return { ...base, situacao: "IMPEDIDO", motivo: "Quem recebe não é um fornecedor ativo: o Presidente precisa reajustar o sustento com outro recebedor." };
   if (!r.confirmado || !r.bancoCompleto) return { ...base, situacao: "IMPEDIDO", motivo: "Os dados bancários de quem recebe estão incompletos ou esperando a confirmação de outra pessoa (Fornecedores)." };
   if (v.fonte === "CONGREGACAO" && (!v.congregacaoFonte || !v.congregacaoFonte.ativa)) return { ...base, situacao: "IMPEDIDO", motivo: "A congregação mantenedora que paga está inativa: o Presidente precisa reajustar a fonte." };
+  // Trava 9-B: a mantenedora sob tutela (Extensão da Tenda, PSC — Regimento Art. 129 §3º) tem o caixa local recolhido: o pagamento seria barrado depois e a Saída
+  // ficaria empenhada sem sair (conferenciaPagamento, item 5) — então o mês fica impedido já na prévia, com o motivo
+  if (v.fonte === "CONGREGACAO" && v.congregacaoFonte.sobTutela) return { ...base, situacao: "IMPEDIDO", motivo: "A congregação mantenedora que paga está sob tutela (reclassificada como Extensão da Tenda, Regimento Art. 129 §3º): o caixa local está recolhido. O Presidente precisa reajustar a fonte para a Tesouraria Geral." };
   if (v.fonte === "GERAL" && !envio.missionario.congregacaoId) return { ...base, situacao: "IMPEDIDO", motivo: "O missionário está sem congregação no cadastro: corrija a ficha dele." };
   if (!envio.documentoUrlInterno) return { ...base, situacao: "IMPEDIDO", motivo: "O envio está sem o documento (termo de compromisso): o Presidente anexa no reajuste." };
   return { ...base, situacao: "A_GERAR", _v: v };
@@ -381,6 +420,8 @@ async function listarEnvios(pool, { alcance, hoje = hojeBrasilia(), status = nul
     const d = din(e.envioId);
     const vig = vigenteNoMes(d.valores, atual);
     const sit = e.inicioMes ? mi.situacaoRelatorios(e, d.relatorios.map((x) => x.periodoInicio), hoje) : null;
+    // Trava 9-B: a CME que só é CME não vê o sustento de cada um nem a situação dos relatórios também na lista (o detalhe já escondia — minimização)
+    if (soCME(alcance)) return { ...publico(e), sustentoVigente: null, relatoriosVencidos: null, suspenso: null };
     return { ...publico(e), sustentoVigente: vig ? vig.valor : (e.inicioMes ? 0 : null), relatoriosVencidos: sit ? sit.vencidos.length : 0, suspenso: !!(sit && sit.suspenso && e.status === "ATIVO") };
   });
 }
@@ -388,15 +429,17 @@ async function listarEnvios(pool, { alcance, hoje = hojeBrasilia(), status = nul
 function acoesDoEnvio(e, alcance, membroId, temPeriodos) {
   const andamento = mi.EM_ANDAMENTO.includes(e.status);
   const ehSolicitante = Number(e.solicitadoPor) === Number(membroId);
+  // Trava 9-B: o próprio missionário não age no envio dele (parecer, decisão, concordância, reajuste, relatório) — conflito de interesse
+  const ehMissionario = Number(e.missionario.membroId) === Number(membroId);
   return {
-    parecer: e.status === "EM_PARECER" && !!alcance.cme && !ehSolicitante,
-    decidir: !!alcance.geral && (e.status === "AGUARDANDO_CLI" || e.status === "EM_PARECER"),
+    parecer: e.status === "EM_PARECER" && !!alcance.cme && !ehSolicitante && !ehMissionario,
+    decidir: !!alcance.geral && (e.status === "AGUARDANDO_CLI" || e.status === "EM_PARECER") && !ehMissionario,
     // o Presidente não concorda com o envio que ele mesmo pediu (revisão de 05/11/2026: quem pede não autoriza o próprio pedido)
-    presidente: e.status === "AGUARDANDO_PRESIDENTE" && !!alcance.presidente && !ehSolicitante,
+    presidente: e.status === "AGUARDANDO_PRESIDENTE" && !!alcance.presidente && !ehSolicitante && !ehMissionario,
     desistir: andamento && (ehSolicitante || !!alcance.geral),
     encerrar: e.status === "ATIVO" && gere(alcance),
-    reajustar: e.status === "ATIVO" && !!alcance.presidente,
-    relatorio: ["ATIVO", "ENCERRADO"].includes(e.status) && gere(alcance) && temPeriodos,
+    reajustar: e.status === "ATIVO" && !!alcance.presidente && !ehMissionario,
+    relatorio: ["ATIVO", "ENCERRADO"].includes(e.status) && gere(alcance) && temPeriodos && !ehMissionario,
     // a autorização do nome no mural se dá e se retira (LGPD Art. 8º §5º): a SEMIADESPA registra o que o missionário pediu
     divulgacao: mi.VIVOS.includes(e.status) && gere(alcance)
   };
@@ -425,7 +468,7 @@ async function detalharEnvio(pool, { envioId, alcance, hoje = hojeBrasilia(), me
     documentoUrl: verArquivos && e.documentoUrlInterno ? storage.urlDocumentoComSas(e.documentoUrlInterno) : null,
     sustentoVigente: vig ? vig.valor : (e.inicioMes ? 0 : null),
     valores: din.valores.map((v) => ({ desdeMes: v.desdeMes, valor: v.valor, fonteRotulo: v.fonteRotulo, congregacaoFonte: v.congregacaoFonte ? v.congregacaoFonte.nome : null,
-      recebedor: v.recebedor ? `${v.recebedor.nome} (${v.recebedor.tipo})` : null, motivo: v.motivo, registradoEm: v.registradoEm })),
+      recebedor: v.recebedor ? `${v.recebedor.nome} (${v.recebedor.tipo})` : null, motivo: v.motivo, registradoEm: v.registradoEm, cliEm: v.cliEm })),
     geracoes: din.geracoes.map((g) => ({ mes: g.mes, valor: g.valor, saidaId: g.saidaId, saidaStatus: g.saidaStatus, desfeita: SAIDA_DESFEITA.includes(g.saidaStatus),
       semRelatorio: !SAIDA_DESFEITA.includes(g.saidaStatus) && !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim) })),
     periodos: sit.periodos, suspenso: sit.suspenso && e.status === "ATIVO",
@@ -529,9 +572,14 @@ async function ativar(t, rq, e, { pool, por, hoje, deStatus }) {
 async function problemaDoMissionarioNaTransacao(rq, membroId) {
   const m = (await rq().input("m", sql.Int, membroId).query(`SELECT MembroId, Status, SituacaoMembro FROM MembroReferencia WITH (UPDLOCK, ROWLOCK) WHERE MembroId = @m`)).recordset[0];
   if (!m) return "Matrícula do missionário não encontrada.";
-  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO") return "O missionário precisa ser membro ativo e em comunhão, sem processo disciplinar em curso.";
+  if (!membroEmComunhao(m.Status, m.SituacaoMembro)) return PESSOA_DO_ENVIO;
   return null;
 }
+
+// Trava 9-B — conflito de interesse: o próprio missionário (um Pastor de Área na CME, um Secretário de Missões, o nível geral) não dá o parecer, não registra a
+// decisão, não concorda, não reajusta o próprio sustento nem lança ou corrige o próprio relatório (que levantaria a própria suspensão).
+const ehOProprio = (e, por) => !!e && Number(e.missionario.membroId) === Number(por);
+const PROPRIO = { sucesso: false, mensagem: "O próprio missionário não age no envio dele (parecer, decisão, concordância, reajuste ou relatório): outra pessoa registra." };
 
 async function emitirParecer(pool, { envioId, dados, por, hoje = hojeBrasilia(), alcance }) {
   if (!alcance.cme) return PROIBIDO("Só quem compõe a CME (o Secretário de Missões e os Pastores de Área) emite o parecer (Regimento, Art. 23, II).");
@@ -542,6 +590,7 @@ async function emitirParecer(pool, { envioId, dados, por, hoje = hojeBrasilia(),
     if (!e) return NAO_EXISTE;
     if (e.status !== "EM_PARECER") return { sucesso: false, mensagem: "Este envio não está aguardando o parecer da CME." };
     if (Number(e.solicitadoPor) === Number(por)) return { sucesso: false, mensagem: "Quem fez o pedido não emite o parecer sobre ele." };
+    if (ehOProprio(e, por)) return PROPRIO;
     const u = await rq().input("id", sql.Int, envioId).input("par", sql.NVarChar(10), v.dados.parecer).input("f", sql.NVarChar(2000), v.dados.fundamentacao)
       .input("por", sql.Int, por).input("h", sql.Date, hoje)
       .query(`UPDATE EnviosMissionarios SET Status = N'AGUARDANDO_CLI', ParecerCME = @par, ParecerFundamentacao = @f, ParecerPor = @por, ParecerEm = @h
@@ -582,6 +631,7 @@ async function decidir(pool, { envioId, dados, por, hoje = hojeBrasilia(), alcan
     await travarMissionarioDoEnvio(rq, envioId);
     const e = await lerEnvio(rq, envioId, hoje, { travar: true });
     if (!e) return NAO_EXISTE;
+    if (ehOProprio(e, por)) return PROPRIO;
     const pode = mi.podeDecidirCLI(e, { reuniao, urgencia: v.dados.urgencia });
     if (!pode.pode) return { sucesso: false, mensagem: pode.mensagem };
     const aprovado = v.dados.resultado === "APROVADO";
@@ -626,6 +676,7 @@ async function decidirPresidente(pool, { envioId, dados, por, hoje = hojeBrasili
     if (!e) return NAO_EXISTE;
     if (e.status !== "AGUARDANDO_PRESIDENTE") return { sucesso: false, mensagem: "Este envio não está aguardando o Pastor Presidente." };
     if (Number(e.solicitadoPor) === Number(por)) return { sucesso: false, mensagem: "Quem fez o pedido não concorda com ele: o pedido feito pelo Pastor Presidente precisa de outro pedido, da SEMIADESPA (quem pede não autoriza o próprio pedido)." };
+    if (ehOProprio(e, por)) return PROPRIO;
     const concorda = v.dados.resultado === "CONCORDA";
     const u = await rq().input("id", sql.Int, envioId).input("res", sql.NVarChar(10), v.dados.resultado).input("mot", sql.NVarChar(1000), v.dados.motivo)
       .input("por", sql.Int, por).input("h", sql.Date, hoje).input("novo", sql.NVarChar(25), concorda ? "AGUARDANDO_PRESIDENTE" : "REJEITADO")
@@ -674,11 +725,16 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
   if (!pre.valido) return { sucesso: false, mensagem: pre.mensagem };
   const e0 = await lerEnvio(() => pool.request(), envioId, hoje);
   if (!e0) return NAO_EXISTE;
+  if (ehOProprio(e0, por)) return PROPRIO;
+  // Trava 9-B: o aumento passa pela CLI (Estatuto, Art. 58 §4º) — a reunião escolhida é conferida aqui; se é aumento, dentro da trava
+  const reuniao = pre.dados.sessaoId ? await lerReuniao(pool, pre.dados.sessaoId, "CLI", hoje) : null;
+  if (pre.dados.sessaoId && !reuniao) return { sucesso: false, mensagem: "Escolha uma reunião da CLI já realizada e encerrada." };
   const campo0 = await lerCampo(() => pool.request(), e0.campo.campoId);
   const dinheiro = await problemaDoDinheiro(() => pool.request(), pre.dados, { membroId: e0.missionario.membroId, campo: campo0 });
   if (dinheiro.problema) return { sucesso: false, mensagem: dinheiro.problema };
-  // o convênio externo (quem recebe é pessoa jurídica) é da CLI com o Presidente (Art. 44 §2º): num envio que não passou pela CLI, ele não entra por reajuste
-  if (dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" && !e0.etapas.cli) {
+  // o convênio externo (quem recebe é pessoa jurídica) é da CME e da CLI com o Presidente (Art. 44 §2º): num envio que não passou por elas, ele não entra por
+  // reajuste. Trava 9-B: confere a CME também — o Local com sustento passa pela CLI (Estatuto Art. 58 §4º) sem a CME, e não é convênio externo
+  if (dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" && !(e0.etapas.cme && e0.etapas.cli)) {
     return { sucesso: false, mensagem: "Pagar a uma pessoa jurídica é convênio externo, que passa pela CME e pela CLI (Regimento, Art. 44 §2º): este envio não passou por elas. Encerre-o e faça um novo pedido." };
   }
   const doc = await salvarArquivo(pre.dados.documento);
@@ -695,14 +751,23 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
     d.congregacaoFonteId = pre.dados.congregacaoFonteId;   // a mantenedora do campo, conferida acima
     if (d.sustento > 0 && !e.documentoUrlInterno && !doc.url) return { sucesso: false, mensagem: "O envio não tem o documento (o termo de compromisso): anexe-o com o reajuste, porque ele acompanha cada pagamento." };
     const existente = din.valores.find((x) => x.desdeMes === d.desdeMes);
+    // o aumento: mais do que o valor que valeria nesse mês sem esta mudança (o próprio registro do mês, se já existe, ou o vigente antes dele)
+    const atual = vigenteNoMes(din.valores, d.desdeMes);
+    const semCli = mi.problemaDaCLIdoAumento({ novo: d.sustento, vigente: atual ? atual.valor : 0, reuniao, ativadoEm: e.ativadoEm, hoje });
+    if (semCli) return { sucesso: false, mensagem: semCli };
+    const aumento = d.sustento > (atual ? atual.valor : 0);
+    const cli = aumento ? reuniao : null;
     const comum = (q) => q.input("id", sql.Int, envioId).input("desde", sql.Char(7), d.desdeMes).input("v", sql.Decimal(10, 2), d.sustento).input("fonte", sql.NVarChar(12), d.fonte)
-      .input("cf", sql.Int, d.congregacaoFonteId).input("forn", sql.Int, d.fornecedorId).input("mot", sql.NVarChar(1000), d.motivo).input("por", sql.Int, por);
+      .input("cf", sql.Int, d.congregacaoFonteId).input("forn", sql.Int, d.fornecedorId).input("mot", sql.NVarChar(1000), d.motivo).input("por", sql.Int, por)
+      .input("cs", sql.Int, cli ? cli.sessaoId : null).input("ce", sql.Date, cli ? cli.data : null);
     if (existente) {
-      await comum(rq()).query(`UPDATE EnvioSustentoValores SET Valor = @v, Fonte = @fonte, CongregacaoFonteId = @cf, FornecedorId = @forn, Motivo = @mot, RegistradoPor = @por, RegistradoEm = SYSUTCDATETIME()
+      // sem aumento, a aprovação da CLI que o registro já tinha fica (a redução e a troca de recebedor não a pedem)
+      await comum(rq()).query(`UPDATE EnvioSustentoValores SET Valor = @v, Fonte = @fonte, CongregacaoFonteId = @cf, FornecedorId = @forn, Motivo = @mot, RegistradoPor = @por, RegistradoEm = SYSUTCDATETIME(),
+                                      CliSessaoId = CASE WHEN @cs IS NULL THEN CliSessaoId ELSE @cs END, CliEm = CASE WHEN @cs IS NULL THEN CliEm ELSE @ce END
                                WHERE EnvioId = @id AND DesdeMes = @desde`);
     } else {
-      await comum(rq()).query(`INSERT INTO EnvioSustentoValores (EnvioId, DesdeMes, Valor, Fonte, CongregacaoFonteId, FornecedorId, Motivo, RegistradoPor)
-                               VALUES (@id, @desde, @v, @fonte, @cf, @forn, @mot, @por)`);
+      await comum(rq()).query(`INSERT INTO EnvioSustentoValores (EnvioId, DesdeMes, Valor, Fonte, CongregacaoFonteId, FornecedorId, Motivo, RegistradoPor, CliSessaoId, CliEm)
+                               VALUES (@id, @desde, @v, @fonte, @cf, @forn, @mot, @por, @cs, @ce)`);
     }
     if (doc.url) await rq().input("id", sql.Int, envioId).input("doc", sql.NVarChar(500), doc.url).query(`UPDATE EnviosMissionarios SET DocumentoUrl = @doc WHERE EnvioId = @id`);
     await registrarAuditoriaNaTransacao(t, { tabela: "EnviosMissionarios", registroId: envioId, acao: "MISSOES_SUSTENTO_REAJUSTADO", usuarioId: por,
@@ -717,6 +782,7 @@ async function registrarRelatorio(pool, { envioId, dados, por, hoje = hojeBrasil
   if (!gere(alcance)) return PROIBIDO(SO_GESTAO);
   const e0 = await lerEnvio(() => pool.request(), envioId, hoje);
   if (!e0) return NAO_EXISTE;
+  if (ehOProprio(e0, por)) return PROPRIO;
   if (!["ATIVO", "ENCERRADO"].includes(e0.status)) return { sucesso: false, mensagem: "O relatório de campo é do envio ativo (ou já encerrado)." };
   const v = mi.validarRelatorio(dados, e0, hoje);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
@@ -749,6 +815,7 @@ async function retificarRelatorio(pool, { relatorioId, dados, por, hoje = hojeBr
   const atual0 = (await pool.request().input("id", sql.Int, relatorioId).query(`SELECT EnvioId, PeriodoInicio FROM RelatoriosCampo WHERE RelatorioId = @id`)).recordset[0];
   if (!atual0) return NAO_EXISTE;
   const e0 = await lerEnvio(() => pool.request(), atual0.EnvioId, hoje);
+  if (ehOProprio(e0, por)) return PROPRIO;
   // o período não muda na correção: o servidor usa o do relatório gravado
   const v = mi.validarRelatorio({ ...(dados && typeof dados === "object" ? dados : {}), periodoInicio: mes7(atual0.PeriodoInicio) }, e0, hoje);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
@@ -781,7 +848,7 @@ async function previaSustento(pool, { mes, hoje = hojeBrasilia(), alcance }) {
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const envios = await enviosComSustento(() => pool.request(), hoje);
   const din = await carregarDinheiro(() => pool.request());
-  const sob = await membrosSobDisciplina(pool);
+  const sob = await membrosSobDisciplinaDesde(pool);   // Trava 9-B: o Map diz desde quando (a vacância por disciplina)
   const linhas = [];
   for (const e of envios) {
     const a = avaliarMes(e, din(e.envioId), v.dados.mesReferencia, hoje, sob);
@@ -800,7 +867,7 @@ async function gerarSustento(pool, { dados, por, hoje = hojeBrasilia(), alcance 
   const v = mi.validarGeracao(dados, hoje);
   if (!v.valido) return { sucesso: false, mensagem: v.mensagem };
   const mes = v.dados.mesReferencia;
-  const sob = await membrosSobDisciplina(pool);
+  const sob = await membrosSobDisciplinaDesde(pool);   // Trava 9-B: o Map diz desde quando (a vacância por disciplina)
   try {
     return await emTransacao(pool, async (t, rq) => {
       if (!(await obterTrava(rq, TRAVA_SUSTENTO))) return { sucesso: false, mensagem: "Já existe uma geração do sustento em andamento: aguarde e confira o resultado antes de tentar de novo." };

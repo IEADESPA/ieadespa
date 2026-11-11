@@ -99,7 +99,9 @@ async function principal() {
     // a sobra da corrida: a pessoa ainda salva a ficha dela, e o nível geral a leva ao bairro certo juntando
     const r = await chamarRota("AtualizarMeusDados/index.js", { metodo: "POST", binding: { matricula: "9805" }, token: L.PIN(9805), corpo: { enderecoPartes: { logradouro: "Rua da Corrida, 2", bairroId: bD } } });
     ok(r.body.sucesso === true, "o morador de um bairro desativado na corrida ainda salva a ficha");
-    const j = await POST("bairro-juntar", { bairroId: bD, versao: await versaoBairro(bD), destinoId: bB });
+    // o destino é um bairro que sobrou ATIVO das junções cruzadas (qual sobra é sorteio da corrida; juntar num desativado é recusado de propósito)
+    const destino = await escalar("SELECT TOP 1 BairroId FROM Bairros WHERE BairroId IN (@a, @b, @c) AND Ativo = 1 ORDER BY BairroId", { a: bA, b: bB, c: bC });
+    const j = await POST("bairro-juntar", { bairroId: bD, versao: await versaoBairro(bD), destinoId: destino });
     ok(j.body.sucesso === true && j.body.membrosMovidos === 1, "e a junção leva o morador ao bairro certo");
   } else ok(true, "a corrida não deixou sobra desta vez (o morador ficou num bairro ativo ou foi recusado)");
 

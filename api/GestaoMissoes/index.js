@@ -19,19 +19,19 @@
 //  envio?envioId=       -> { envio:{ ..., valores[], geracoes[], periodos[], relatorios[], acoes } }
 //  sustento?mes=AAAA-MM -> { mes, linhas[], totais{}, podeGerar }
 //  mural                -> { ano, campos[], camposRestritos, missionariosRestritos, totais{} }
-//  reunioes             -> { reunioes[] } as da CLI já realizadas e encerradas (só o nível geral)
+//  reunioes             -> { reunioes[] } as da CLI já realizadas e encerradas (o nível geral e o Presidente)
 //
 // ---- Escrita (POST /api/missoes/...) ----
 //  campo              {nome, pais?, uf?, cidade?, zonaRural?, congregacaoMantenedoraId?, divulgacao?, descricao?}          SEMIADESPA ou nível geral
-//  campo-editar       {campoId, ...os mesmos}                                                                                SEMIADESPA ou nível geral
+//  campo-editar       {campoId, versao, ...}                                                                                SEMIADESPA ou nível geral
 //  campo-encerrar     {campoId, motivo}                                                                                      SEMIADESPA ou nível geral
 //  envio              {campoId, membroId, sustento, fonte?, congregacaoFonteId?, fornecedorId?, documentoBase64?, documentoMime?, periodicidade, divulgarNome?, justificativa}
 //  parecer            {envioId, parecer, fundamentacao}                                                                      CME
-//  decidir            {envioId, resultado, sessaoId, urgencia?, motivo?}                                                     nível geral
+//  decidir            {envioId, resultado, sessaoId, urgencia?, motivo?}                                                     nível geral; confirmação recente (428)
 //  presidente         {envioId, resultado:CONCORDA|RECUSA, motivo?}                                                          Presidente; confirmação recente (428)
 //  desistir           {envioId, motivo}                                                                                      quem pediu ou o nível geral
 //  encerrar           {envioId, motivo, ultimoMes}                                                                           SEMIADESPA ou nível geral
-//  reajustar          {envioId, desdeMes, sustento, fonte?, congregacaoFonteId?, fornecedorId?, motivo, documentoBase64?, documentoMime?}   Presidente; 428
+//  reajustar          {envioId, desdeMes, sustento, fonte?, congregacaoFonteId?, fornecedorId?, motivo, sessaoId? (CLI do aumento), documentoBase64?, documentoMime?}   Presidente; 428
 //  relatorio          {envioId, periodoInicio, batismos, conversoes, discipulado, atividades, pedidos?, anexoBase64?, anexoMime?}            SEMIADESPA ou nível geral
 //  divulgacao         {envioId, divulgarNome:true|false}                                                                     SEMIADESPA ou nível geral (LGPD Art. 8º §5º)
 //  relatorio-corrigir {relatorioId, batismos, conversoes, discipulado, atividades, pedidos?, anexoBase64?, anexoMime?}                     SEMIADESPA ou nível geral
@@ -58,7 +58,8 @@ function resposta(context, r) {
 // As ações de escrita, o identificador que cada uma exige (null = nenhum) e se pede a confirmação recente (chave do aparelho ou código por e-mail).
 const ESCRITA = {
   campo: { id: null }, "campo-editar": { id: "campoId" }, "campo-encerrar": { id: "campoId" },
-  envio: { id: null }, parecer: { id: "envioId" }, decidir: { id: "envioId" }, presidente: { id: "envioId", fator: true }, desistir: { id: "envioId" },
+  // Trava 9-B: a decisão da CLI pede a confirmação recente, como na Expansão (v9.2) e nas Entidades (v9.1) — um envio pode ficar ativo só com ela
+  envio: { id: null }, parecer: { id: "envioId" }, decidir: { id: "envioId", fator: true }, presidente: { id: "envioId", fator: true }, desistir: { id: "envioId" },
   encerrar: { id: "envioId" }, divulgacao: { id: "envioId" }, reajustar: { id: "envioId", fator: true }, relatorio: { id: "envioId" }, "relatorio-corrigir": { id: "relatorioId" },
   gerar: { id: null, fator: true }
 };
@@ -79,7 +80,7 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   try {
-    const alcance = await db.montarAlcance(pool, { membroId: por, geral: !!visao && esc.ehGeral(visao), tesouraria: !!visaoFinanceiro && esc.ehGeral(visaoFinanceiro), hoje });
+    const alcance = await db.montarAlcance(pool, { membroId: por, geral: !!visao && esc.ehGeral(visao), tesouraria: !!visaoFinanceiro && esc.ehGeral(visaoFinanceiro), permissao: !!visao, hoje });
     // a permissão "missoes", compor a CME (como na Expansão) ou ser a Tesouraria Geral; e, com a permissão, ser de quem cuida de Missões
     if (!visao && !alcance.cme && !alcance.tesouraria) return erro(context, 403, SEM_PERMISSAO);
     if (!db.veMissoes(alcance)) {
@@ -114,7 +115,8 @@ module.exports = async function (context, req) {
       }
       if (acao === "mural") { context.res = { status: 200, body: { sucesso: true, ...(await db.mural(pool, { hoje })) } }; return; }
       if (acao === "reunioes") {
-        if (!alcance.geral) return erro(context, 403, esc.MSG_GERAL);
+        // Trava 9-B: o Presidente também (o aumento do sustento cita a reunião da CLI que o aprovou)
+        if (!alcance.geral && !alcance.presidente) return erro(context, 403, esc.MSG_GERAL);
         context.res = { status: 200, body: { sucesso: true, reunioes: await db.reunioesEncerradas(pool, "CLI", hoje) } };
         return;
       }

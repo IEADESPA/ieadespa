@@ -59,7 +59,9 @@
 // v56 (06/11/2026): v9.5 — Território: os módulos novos modulos/territorio.js (a pílula Território na aba Expansão: mapa de cobertura, simulação de emancipação, bairros,
 // critérios e pontos das Extensões) e modulos/endereco.js (o endereço em linhas na Pessoas e no Meus Dados). A página do mapa do Google (mapa-territorial.*) não
 // entra na casca nem no cache: é autônoma, presa numa moldura com sandbox.
-const CACHE_NOME = "ieadespa-app-shell-v56";
+// v57 (11/11/2026): Trava 9-B — a reunião da CLI no aumento do sustento e a versão do campo (missoes.js), o cartão completo do missionário em Meus Dados, a ajuda
+// da pílula Território (script.js) e o texto da prestação de contas da Assistência Social (index.html).
+const CACHE_NOME = "ieadespa-app-shell-v57";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

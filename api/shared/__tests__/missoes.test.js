@@ -71,9 +71,10 @@ describe("o envio: dinheiro e etapas", () => {
     expect(mi.validarEnvio({ campoId: 1, membroId: 5, justificativa: "Frente de evangelismo no bairro." }).mensagem).toMatch(/periodicidade/);
     expect(mi.validarEnvio({ campoId: 1, membroId: 5, periodicidade: "ANUAL", justificativa: "Frente de evangelismo no bairro." }).valido).toBe(false);
   });
-  test("etapas: Local sem sustento direto; Local com sustento só o Presidente; Estadual CME+CLI; longe e convênio externo sempre o Presidente", () => {
+  test("etapas: Local sem sustento direto; Local com sustento a CLI e o Presidente (Trava 9-B: Estatuto Art. 58 §4º); Estadual CME+CLI; longe e convênio externo sempre o Presidente", () => {
     expect(mi.etapasDoEnvio({ abrangencia: "LOCAL", sustento: 0 })).toEqual({ cme: false, cli: false, presidente: false });
-    expect(mi.etapasDoEnvio({ abrangencia: "LOCAL", sustento: 300 })).toEqual({ cme: false, cli: false, presidente: true });
+    expect(mi.etapasDoEnvio({ abrangencia: "LOCAL", sustento: 300 })).toEqual({ cme: false, cli: true, presidente: true });
+    expect(mi.statusInicial(mi.etapasDoEnvio({ abrangencia: "LOCAL", sustento: 300 }))).toBe("AGUARDANDO_CLI");
     expect(mi.etapasDoEnvio({ abrangencia: "LOCAL", sustento: 300, recebedorPJ: true })).toEqual({ cme: true, cli: true, presidente: true });
     expect(mi.etapasDoEnvio({ abrangencia: "ESTADUAL", sustento: 0 })).toEqual({ cme: true, cli: true, presidente: false });
     expect(mi.etapasDoEnvio({ abrangencia: "ESTADUAL", sustento: 1 })).toEqual({ cme: true, cli: true, presidente: true });
@@ -142,11 +143,26 @@ describe("os períodos do relatório e a suspensão (Art. 133-C §2º)", () => {
     expect(mi.situacaoRelatorios(envio, new Set(["2026-09"]), "2026-11-11").vencidos.map((p) => p.inicio)).toEqual(["2026-10"]);
     expect(mi.situacaoRelatorios(envio, ["2026-09"], "2026-11-10").suspenso).toBe(false);
   });
-  test("o envio encerrado pela vacância: o relatório que faltava fica dispensado, não vence nem suspende", () => {
-    const s = mi.situacaoRelatorios({ inicioMes: "2026-09", fimMes: "2026-10", periodicidade: "MENSAL", encerradoPorVacancia: true }, [], "2026-12-20");
+  test("o envio encerrado pela vacância: o relatório ainda no prazo no dia da vacância fica dispensado, não vence nem suspende", () => {
+    const s = mi.situacaoRelatorios({ inicioMes: "2026-09", fimMes: "2026-10", periodicidade: "MENSAL", encerradoPorVacancia: true, encerradoEm: "2026-10-05" }, [], "2026-12-20");
     expect(s.vencidos).toEqual([]);
     expect(s.suspenso).toBe(false);
     expect(s.periodos.every((p) => p.dispensado)).toBe(true);
+  });
+  test("Trava 9-B: o relatório que já tinha vencido ANTES da vacância continua vencido (a vacância não libera os meses suspensos)", () => {
+    // julho a outubro sem relatório; a vacância em 20/11: os prazos de julho (10/08) a setembro (10/10) e outubro (10/11) já tinham passado; novembro (10/12) não
+    const envio = { inicioMes: "2026-07", fimMes: "2026-11", periodicidade: "MENSAL", encerradoPorVacancia: true, encerradoEm: "2026-11-20" };
+    const s = mi.situacaoRelatorios(envio, [], "2026-12-20");
+    expect(s.vencidos.map((p) => p.inicio)).toEqual(["2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(s.periodos.filter((p) => p.dispensado).map((p) => p.inicio)).toEqual(["2026-11"]);
+    expect(s.suspenso).toBe(true);
+    // entregues os quatro, nada fica suspenso
+    expect(mi.situacaoRelatorios(envio, ["2026-07", "2026-08", "2026-09", "2026-10"], "2026-12-20").suspenso).toBe(false);
+    // o prazo que vence no próprio dia da vacância ainda estava no prazo: dispensado
+    const noDia = mi.situacaoRelatorios({ ...envio, encerradoEm: "2026-11-10" }, ["2026-07", "2026-08", "2026-09"], "2026-12-20");
+    expect(noDia.periodos.find((p) => p.inicio === "2026-10").dispensado).toBe(true);
+    // sem a data da vacância (não deveria acontecer), nada é dispensado: o dinheiro fica do lado seguro
+    expect(mi.situacaoRelatorios({ ...envio, encerradoEm: null }, [], "2026-12-20").periodos.some((p) => p.dispensado)).toBe(false);
   });
   test("o fundamento do Presidente pelo caso: Art. 44 §2º (longe ou convênio), Art. 134 §6º, I (sustento)", () => {
     expect(mi.fundamentoPresidente({ abrangencia: "LOCAL", sustento: 300 })).toBe("Regimento, Art. 134 §6º, I");
@@ -190,7 +206,23 @@ describe("sustento: geração, reajuste e encerramento", () => {
     expect(mi.validarReajuste({ ...base, motivo: "" }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).valido).toBe(false);
     const zero = mi.validarReajuste({ desdeMes: "2026-12", sustento: 0, motivo: "Fim do sustento." }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" });
     expect(zero.valido).toBe(true);
-    expect(zero.dados).toMatchObject({ sustento: 0, fonte: null, fornecedorId: null });
+    expect(zero.dados).toMatchObject({ sustento: 0, fonte: null, fornecedorId: null, sessaoId: null });
+    expect(mi.validarReajuste({ ...base, sessaoId: "7" }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).dados.sessaoId).toBe(7);
+    expect(mi.validarReajuste({ ...base, sessaoId: "x" }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).valido).toBe(false);
+    expect(mi.validarReajuste({ ...base, sessaoId: -2 }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).valido).toBe(false);
+  });
+  test("Trava 9-B: o aumento do sustento pede a reunião da CLI (Estatuto Art. 58 §4º); a redução e o mesmo valor não", () => {
+    const reuniao = { sessaoId: 7, data: "2026-11-03" };
+    const ctx = { ativadoEm: "2026-09-02", hoje: "2026-11-05" };
+    expect(mi.problemaDaCLIdoAumento({ novo: 900, vigente: 800, reuniao: null, ...ctx })).toMatch(/Art\. 58 §4º/);
+    expect(mi.problemaDaCLIdoAumento({ novo: 900, vigente: 800, reuniao, ...ctx })).toBeNull();
+    expect(mi.problemaDaCLIdoAumento({ novo: 700, vigente: 800, reuniao: null, ...ctx })).toBeNull();
+    expect(mi.problemaDaCLIdoAumento({ novo: 800, vigente: 800, reuniao: null, ...ctx })).toBeNull();
+    expect(mi.problemaDaCLIdoAumento({ novo: 300, vigente: 0, reuniao: null, ...ctx })).toMatch(/CLI/);
+    expect(mi.problemaDaCLIdoAumento({ novo: 300, vigente: null, reuniao: null, ...ctx })).toMatch(/CLI/);
+    expect(mi.problemaDaCLIdoAumento({ novo: 900, vigente: 800, reuniao: { sessaoId: 1, data: "2026-08-30" }, ...ctx })).toMatch(/anterior à ativação/);
+    expect(mi.problemaDaCLIdoAumento({ novo: 900, vigente: 800, reuniao: { sessaoId: 1, data: "2026-11-06" }, ...ctx })).toMatch(/já ter acontecido/);
+    expect(mi.problemaDaCLIdoAumento({ novo: 900, vigente: 800, reuniao: { sessaoId: 1, data: "2026-09-02" }, ...ctx })).toBeNull();
   });
   test("o encerramento: o último mês não antes do gerado, não depois de hoje; o anterior ao início = sem sustento", () => {
     const ctx = { inicioMes: "2026-09", ultimoGerado: "2026-10", hoje: "2026-11-05" };

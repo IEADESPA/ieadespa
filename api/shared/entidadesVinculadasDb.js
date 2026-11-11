@@ -380,8 +380,9 @@ async function membroParaDirigir(pool, membroId, hoje) {
   if (!m.Ativo) return { ok: false, mensagem: "Só membro ativo é indicado para a direção de entidade vinculada." };
   if (m.Status === "LICENCA_CANDIDATURA") return { ok: false, mensagem: "Quem está de licença de candidatura fica afastado de diretoria (Regimento, Art. 157 §2º)." };
   if (m.Menor) return { ok: false, mensagem: "Menor de idade não dirige entidade vinculada." };
-  if (m.SituacaoMembro === "SEM_COMUNHAO" || (await require("./disciplina").membrosSobDisciplina(pool)).has(Number(m.MembroId))) {
-    return { ok: false, mensagem: "Para dirigir entidade vinculada é preciso estar em comunhão e sem processo disciplinar em curso." };
+  // Trava 9-B: o congregado também fica de fora (Estatuto, Art. 7º, I: não integra o quadro de membros) — antes só o "sem comunhão" era recusado
+  if (!(m.SituacaoMembro === "EM_COMUNHAO" || m.SituacaoMembro == null) || (await require("./disciplina").membrosSobDisciplina(pool)).has(Number(m.MembroId))) {
+    return { ok: false, mensagem: "Para dirigir entidade vinculada é preciso ser membro em comunhão (o congregado ainda não integra o quadro de membros) e sem processo disciplinar em curso." };
   }
   return { ok: true, nome: m.Nome };
 }

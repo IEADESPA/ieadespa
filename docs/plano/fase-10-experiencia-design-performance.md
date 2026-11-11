@@ -35,11 +35,23 @@ algo excelente".
 | Assembleia com 1.000 membros votando | teste com 1.000 votantes de teste na homologação (o "modo assembleia") |
 | Zero erro no console e zero violação de segurança (CSP) | o teste de tela de sempre, completo |
 | Leitura confortável (contraste, tamanho de letra, teclado) | régua WCAG AA, conferida tela por tela |
-| **Aprovado pelo responsável** | galeria de telas "antes e depois" de cada módulo, aprovada por ele antes de ir ao ar |
+| **Aprovado pelo responsável** | ele viu e aprovou cada tela (3 a 5 opções por tela, claro e escuro) antes de ir ao ar — regras abaixo |
 
 **Como se trabalha nesta fase:** cada versão passa pela homologação; a mudança de tela é de propósito, então o teste de tela ganha uma base
-nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **vê** as telas: uma galeria de capturas (computador e celular,
-antes e depois) acompanha cada parte redesenhada, e só vai à produção o que ele aprovar.
+nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **vê** as telas e só vai à produção o que ele aprovar.
+
+**Regras de aprovação desta fase (ditadas pelo responsável em 11/11/2026 — valem para a FASE 10 inteira):**
+
+1. **Nada vai para a produção sem ele ver e aprovar — literalmente nada** (tela, cor, texto, comportamento). Ele aprova **vendo**: no
+   link da homologação (o Claude manda o link e ele entra) ou na página de propostas (artefato do Claude). Sem o "aprovado" dele, a
+   mudança não entra na `main`. As anotações deste plano continuam indo para o GitHub na hora (é por elas que ele acompanha).
+2. **Toda tela e toda situação vêm com no mínimo 3 e até 5 opções** (de tela e de cor), sempre em **modo claro e modo escuro**. Vale
+   também quando a linha geral já foi escolhida: a tela do módulo, a do submódulo, a do formulário... cada uma com as suas 3 a 5 opções.
+3. **Por quê:** "a IA é sempre tendente ao erro". Vendo as opções antes, se houver erro, corrige-se antes de ir ao ar; se houver algo
+   melhor, ele traz o melhor para a tela.
+4. **A página de propostas tem de ser fácil de ver.** O quadro grande (canvas) da primeira rodada ficou complicado para ele. A próxima
+   rodada é **clicável**: escolher a tela, escolher a opção (1 a 5) e ver a prévia daquela opção, claro ou escuro — páginas iniciais de
+   verdade para ele clicar, não um quadro solto.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -70,7 +82,9 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       norma no meio do texto.
 - [ ] **Propostas de tela, não fotos soltas** (decisão do responsável, 11/11/2026: "tudo está péssimo; não vou passar 2 horas olhando o
       que já sei que está ruim"): uma página do Claude (artefato) por partes, cada parte com o "antes" e **3 a 5 opções do novo**, para ele
-      escolher e aprovar parte por parte. A primeira (parte 1, porta de entrada; parte 2, menu e conteúdo) foi publicada em 11/11/2026.
+      escolher e aprovar parte por parte. A primeira (parte 1, porta de entrada; parte 2, menu e conteúdo) foi publicada em 11/11/2026;
+      as escolhas dele estão na v10.2 e na v10.5. A rodada seguinte segue as **regras de aprovação** do início deste arquivo (3 a 5 opções
+      por tela, clicável).
 - [x] **Pesquisa de referências** (11/11/2026, em [`docs/pesquisa/referencias-design-2026.md`](../pesquisa/referencias-design-2026.md)): como
       sistemas de gestão modernos (de igreja e de outros ramos) resolvem a entrada, o menu, o lançamento em lista, a data, o painel, as
       tabelas, os formulários e o celular, com o padrão a seguir em cada parte e as fontes; mais o contraste medido das cores de hoje (o
@@ -93,6 +107,9 @@ sem gravar nada):
   módulo muda de itens entre uma aba e outra.
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
+
+**Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da
+Igreja** e uma **foto** (a foto, ele manda). A Opção C saiu (simples demais). O desenho final ainda passa pelas regras de aprovação.
 
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
@@ -134,6 +151,16 @@ sem gravar nada):
 
 Pedido do responsável (11/11/2026): hoje a página inteira rola junto — quem desce pelo menu perde o conteúdo e fica um espaço branco; o menu
 tem informação demais; não há submenus.
+
+**Escolha dele na primeira rodada de propostas (11/11/2026):**
+
+- **Opção A (cartões à direita, menu da esquerda limpo) no Menu principal e na primeira tela dos módulos principais.** Quem tem acesso a
+  tudo vê todos os módulos; o membro vê **primeiro as pendências dele** e menos módulos.
+- **Opção B (menu lateral com os submódulos e setinhas) só quando a pessoa clica num submódulo** — é a tela do trabalho detalhado, com a
+  escolha do nível **Local / Área / Geral** (ex.: relatórios dos departamentos, escolhendo congregação ou área).
+- A Opção C (três colunas) saiu.
+- Cores por módulo à vontade, em modo claro e escuro. As telas do módulo e do submódulo ainda vêm em **3 a 5 opções** cada (regras de
+  aprovação).
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.
@@ -180,7 +207,7 @@ tem informação demais; não há submenus.
 ## v10.8 — Aplicação tela por tela (a varredura)
 
 - [ ] Passar a entrada, o design, a linguagem, a navegação e as peças por **todas** as telas, módulo a módulo, na ordem do ranking da v10.1.
-- [ ] Para cada módulo: a galeria antes e depois aprovada pelo responsável, a prova de tela sem navegador do módulo atualizada e a base do
+- [ ] Para cada módulo: as telas aprovadas pelo responsável (3 a 5 opções cada, vistas por ele), a prova de tela sem navegador do módulo atualizada e a base do
       teste de tela aprovada — registrado aqui (nada fica "meio migrado" sem registro de onde parou).
 - [ ] Ao fim, as metas da tabela do início conferidas de novo pela varredura da v10.1.
 

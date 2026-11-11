@@ -1,12 +1,12 @@
-# FASE 11 — Criador de sites próprio (no lugar do Directus)
+# FASE 12 — Criador de sites próprio (no lugar do Directus)
 
 > Histórico e checklist desta parte do plano de versões. As referências a “seção 2.x” e “seção 4” apontam para o
 > [README](../../README.md); cada versão tem seu lugar no [índice do plano](INDICE.md).
 
-**Redefinida em 11/11/2026 com o responsável.** Esta fase era o "Sistema Campal (multi-campo)", que **saiu do plano** na mesma data — não
-haverá sistema campal. No lugar dela entra o **criador de sites**, que antes era uma "visão de longo prazo" registrada no fim da antiga
-FASE 12 (19/10/2026). Vem **depois da FASE 10** e deve demorar, porque fica muito mais ligado ao sistema: na FASE 10 (v10.13) o que é "vivo"
-no site já terá passado para o sistema, e o site terá ficado só com páginas de conteúdo.
+**Definida em 11/11/2026 com o responsável** e, no mesmo dia, passada para **a última fase** (o cadastro de membros foi adiantado para a
+FASE 11). Era uma "visão de longo prazo" registrada em 19/10/2026 no fim da antiga FASE 12 de indicadores. Deve demorar, porque fica muito
+mais ligada ao sistema: na FASE 10 (v10.14) o que é "vivo" no site já terá passado para o sistema, e o site terá ficado só com páginas de
+conteúdo. (A FASE 11 de antes, "Sistema Campal", saiu do plano em 11/11/2026 — não haverá sistema campal.)
 
 ## O objetivo
 
@@ -31,6 +31,6 @@ sistema**, com um editor próprio, sem o Directus.
       (sem token novo).
 - [ ] A migração de todo o conteúdo do Directus com conferência (contagens antes e depois), ensaio na homologação e plano de volta; só então
       o Directus e o PostgreSQL são desligados (e o custo deles sai da conta).
-- [ ] Travas de Revisão próprias assim que as versões `v11.X` forem desenhadas.
+- [ ] Travas de Revisão próprias assim que as versões `v12.X` forem desenhadas.
 
-Decisão do responsável (19/10/2026, mantida): **não é prioridade** antes da FASE 10; a capacidade do site segue pelo caminho atual até lá.
+Decisão do responsável (19/10/2026, mantida): **não é prioridade** antes das FASES 10 e 11; a capacidade do site segue pelo caminho atual até lá.

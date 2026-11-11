@@ -176,6 +176,14 @@ case "$1" in
     migrar 170 2
     base salvar cenario-territorio
     ;;
+  preparar-trava9b)
+    # Trava 9-B: a partir da base "cenario-territorio", aplica a 171 duas vezes (prova a idempotência); salva "cenario-trava9b" (e2e-80 monta o próprio cenário;
+    # o e2e-76 e o e2e-77 também rodam sobre ela quando se quer a prova sem a bateria inteira).
+    cd "$AQUI"
+    base restaurar cenario-territorio
+    migrar 171 2
+    base salvar cenario-trava9b
+    ;;
   roteiro)
     shift
     cd "$AQUI"

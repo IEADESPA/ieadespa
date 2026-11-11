@@ -54,11 +54,14 @@ async function escanearAlertasCompliance(pool, sql) {
 
   // 2) Fracionamento: várias saídas ao mesmo fornecedor no mesmo dia somando
   //    acima do valor crítico, cada uma abaixo dele (indício de fuga de alçada).
+  //    Trava 9-B: fora as Saídas geradas por deliberação (o sustento missionário do mês e a prebenda), que não passam pela alçada de quem solicita — uma
+  //    agência que sustenta vários missionários, ou os meses atrasados gerados no mesmo dia, davam um alerta ALTO falso.
   const fracionados = await pool.request().input("critico", sql.Decimal(12, 2), criticos).query(`
     SELECT s.FornecedorId AS id, f.Nome AS nome, CONVERT(varchar(10), s.SolicitadoEm, 120) AS dia,
            SUM(s.Valor) AS total, COUNT(*) AS qtd
     FROM SaidasTesouraria s JOIN Fornecedores f ON f.FornecedorId = s.FornecedorId
     WHERE s.Status IN ('APROVADA', 'PAGA') AND s.Valor < @critico
+      AND ISNULL(s.Tipo, '') NOT IN ('SUSTENTO_MISSIONARIO', 'SUSTENTO_MISSIONARIO_LOCAL', 'PREBENDA_PASTORAL')
     GROUP BY s.FornecedorId, f.Nome, CONVERT(varchar(10), s.SolicitadoEm, 120)
     HAVING COUNT(*) > 1 AND SUM(s.Valor) >= @critico
   `);

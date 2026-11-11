@@ -367,7 +367,7 @@ async function historicoComRecorrencia(pool, familiaId, agora) {
 // Prestação de contas — separada do caixa comum (decisão 5 da migração
 // 100): agrega TesourariasDepartamento/DespesasTesourariaDepartamento do
 // departamento Ação da Fé (v5.4) com as entregas registradas aqui. Insumo
-// direto pra v9.6 (CEBAS/parceria pública) consumir depois.
+// pronto se um dia houver convênio público (a v9.6 — CEBAS/MROSC — saiu do plano em 11/11/2026).
 // ---------------------------------------------------------------
 async function relatorioPrestacaoContas(pool, { mesReferencia, anoReferencia }) {
   const dep = await pool.request().query(`SELECT DepartamentoId FROM Departamentos WHERE Sigla = 'ACAO_DA_FE'`);

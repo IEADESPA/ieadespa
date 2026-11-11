@@ -143,6 +143,11 @@ async function sessao(orgao, descricao, data) {
   ok(r.status === 422 && /em aberto/.test(r.body.mensagem), "um só Diretor-Presidente em aberto (índice único)", r.body);
   ok((await POST("dirigente-indicar", { entidadeId: esc, funcao: "SECRETARIO", membroId: P.menor, ...IND })).body.mensagem.includes("Menor"), "menor de idade não dirige");
   ok((await POST("dirigente-indicar", { entidadeId: esc, funcao: "SECRETARIO", membroId: P.desligado, ...IND })).body.mensagem.includes("ativo"), "desligado não é indicado");
+  // Trava 9-B: o congregado não dirige entidade (Estatuto Art. 7º, I) — antes só o "sem comunhão" era recusado
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'CONGREGADO' WHERE MembroId = @m", { m: P.interventor });
+  r = await POST("dirigente-indicar", { entidadeId: esc, funcao: "SECRETARIO", membroId: P.interventor, ...IND });
+  ok(r.status === 422 && /congregado/.test(r.body.mensagem), "Trava 9-B: congregado não é indicado", r.body);
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO' WHERE MembroId = @m", { m: P.interventor });
   ok((await POST("dirigente-indicar", { entidadeId: esc, funcao: "SECRETARIO", membroId: 999999, ...IND })).status === 422, "matrícula inexistente");
 
   console.log("== nepotismo (Art. 76 §2º) ==");

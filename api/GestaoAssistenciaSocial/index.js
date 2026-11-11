@@ -20,7 +20,7 @@
 // GET  /api/assistencia-social/pareceres?cadastroId=
 // POST /api/assistencia-social/entrega   body:{familiaId, tipoBeneficio, descricao?, valor?, dataEntrega, despesaTesourariaDepartamentoId?}
 // GET  /api/assistencia-social/historico?familiaId=             -> entregas + recorrência calculada
-// GET  /api/assistencia-social/prestacao-contas?mes=&ano=       -> separado do caixa comum (v5.4/Ação da Fé), insumo pra v9.6
+// GET  /api/assistencia-social/prestacao-contas?mes=&ano=       -> separado do caixa comum (v5.4/Ação da Fé); a v9.6 saiu do plano (11/11/2026)
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const as = require("../shared/assistenciaSocial");
@@ -188,7 +188,7 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // ---- Prestação de contas — separada do caixa comum (v5.4/Ação da Fé), insumo pra v9.6 ----
+    // ---- Prestação de contas — separada do caixa comum (v5.4/Ação da Fé); a v9.6 (convênio público) saiu do plano em 11/11/2026 ----
     if (acao === "prestacao-contas" && metodo === "GET") {
       const mes = Number(req.query && req.query.mes);
       const ano = Number(req.query && req.query.ano);

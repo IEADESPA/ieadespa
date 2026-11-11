@@ -982,7 +982,7 @@ inteiro (situação socioeconômica de família assistida).
 - [x] Isenção de taxa de cessão de templo quando o uso é ação social
       (Art. 156 §3º, III) — conecta com a v4.18/v4.21.
 - [x] Prestação de contas do programa social, separada do caixa comum — insumo
-      direto pra eventual CEBAS/parceria pública (v9.6).
+      direto pra eventual CEBAS/parceria pública (a v9.6 saiu do plano em 11/11/2026).
 
   `AssistenciaSocialFamilias` + `AssistenciaSocialCadastros` +
   `AssistenciaSocialProfissionais` + `AssistenciaSocialPareceres` +
@@ -1040,7 +1040,7 @@ inteiro (situação socioeconômica de família assistida).
   com essa tesouraria própria. `relatorioPrestacaoContas` só agrega
   `TesourariasDepartamento`/`DespesasTesourariaDepartamento` (filtradas por
   `Departamentos.Sigla = 'ACAO_DA_FE'`) com `AssistenciaSocialEntregas` do
-  mês — dado já formatado pra uma futura v9.6 (CEBAS) consumir, sem
+  mês — dado já formatado para um eventual convênio (a v9.6 saiu do plano em 11/11/2026), sem
   construir o módulo em si.
 
   Auditoria de tudo via `registrarAuditoria` (mesmo padrão de v5.7/vB.8):

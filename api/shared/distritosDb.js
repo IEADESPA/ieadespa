@@ -11,6 +11,7 @@ const { registrarAuditoriaNaTransacao } = require("./auditoria");
 const { violouUnicidade } = require("./violacaoUnica");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { membrosSobDisciplina } = require("./disciplina");
+const { membroEmComunhao } = require("./estatuto");
 const { lerReuniao, reunioesEncerradas } = require("./entidadesVinculadasDb");
 const { ehPresidenteAtual } = require("./diretoria");
 
@@ -486,7 +487,8 @@ async function liderancaDistrital(rq, distritoId, hoje, terr) {
 async function problemaDoInterventor(rq, membroId, { lideres = [], hoje, sob }) {
   const m = (await rq().input("m", sql.Int, membroId).query(`SELECT MembroId, Status, SituacaoMembro FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
   if (!m) return "Matrícula do Interventor não encontrada.";
-  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || sob.has(m.MembroId)) return "O Interventor precisa ser membro ativo e em comunhão, sem processo disciplinar em curso.";
+  // Trava 9-B: a régua do Estatuto (Art. 7º, I) — o congregado não é membro; antes só o "sem comunhão" era recusado
+  if (!membroEmComunhao(m.Status, m.SituacaoMembro) || sob.has(m.MembroId)) return "O Interventor precisa ser membro ativo e em comunhão (o congregado ainda não integra o quadro de membros), sem processo disciplinar em curso.";
   if (lideres.some((l) => l.membroId === Number(m.MembroId))) return "O Interventor não pode ser alguém da liderança do Distrito que está sendo destituída.";
   const outroCargo = (await rq().input("m", sql.Int, m.MembroId).input("h", sql.Date, hoje).query(`
     SELECT TOP 1 p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = @m AND ${VIGENTE("l")}`)).recordset[0];

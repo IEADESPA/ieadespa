@@ -113,4 +113,7 @@ bash rodar.sh preparar-territorio
 BASE=cenario-territorio bash rodar.sh roteiro e2e-78-territorio.js
 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
 E2E_RCSI=1 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corridas.js
+# Trava 9-B (migração 171): a base própria — os achados das revisões da v9.4 e da v9.5
+bash rodar.sh preparar-trava9b
+BASE=cenario-trava9b bash rodar.sh roteiro e2e-80-trava9b.js
 echo TUDO-PRONTO

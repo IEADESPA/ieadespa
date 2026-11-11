@@ -211,6 +211,17 @@ describe("sustento: geração, reajuste e encerramento", () => {
     expect(mi.validarReajuste({ ...base, sessaoId: "x" }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).valido).toBe(false);
     expect(mi.validarReajuste({ ...base, sessaoId: -2 }, { inicioMes: "2026-09", ultimoGerado: null, hoje: "2026-11-05" }).valido).toBe(false);
   });
+  test("decisão de 11/11/2026: sustento para fora do país só bem fundamentado (300 caracteres); sem sustento ou no Brasil, não pede", () => {
+    const curto = "Apoio ao missionário no Peru.";
+    const longo = "x".repeat(mi.MINIMO_FUNDAMENTACAO_EXTERIOR);
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 200, texto: curto })).toMatch(/Art\. 58 §3º.*pelo menos 300 caracteres \(hoje, 29\)/);
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 200, texto: longo })).toBeNull();
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 200, texto: `  ${"x".repeat(299)}  ` })).toMatch(/hoje, 299/);
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 0, texto: curto })).toBeNull();
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "NACIONAL", sustento: 900, texto: curto })).toBeNull();
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 200, texto: curto })).toMatch(/: na justificativa, diga por que/);
+    expect(mi.problemaDoSustentoNoExterior({ abrangencia: "TRANSCULTURAL", sustento: 50, texto: null, onde: "no motivo do aumento" })).toMatch(/: no motivo do aumento, diga.*hoje, 0/);
+  });
   test("Trava 9-B: o aumento do sustento pede a reunião da CLI (Estatuto Art. 58 §4º); a redução e o mesmo valor não", () => {
     const reuniao = { sessaoId: 7, data: "2026-11-03" };
     const ctx = { ativadoEm: "2026-09-02", hoje: "2026-11-05" };

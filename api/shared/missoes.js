@@ -287,6 +287,16 @@ function validarReajuste(dados, { inicioMes, ultimoGerado, hoje }) {
   if (d.sessaoId != null && d.sessaoId !== "" && !sessaoId) return { valido: false, mensagem: "Escolha a reunião da CLI que aprovou o aumento." };
   return { valido: true, dados: { desdeMes, ...dinheiro.dados, motivo: motivo.texto, documento, sessaoId } };
 }
+// Decisão do responsável (11/11/2026) — sustento para fora do país pode, mas só bem fundamentado (o Estatuto, Art. 58 §3º, manda aplicar os recursos "no
+// território nacional"; o Regimento, Art. 44 §2º, prevê o envio a outros países): no pedido com sustento para um campo Transcultural, e no aumento do sustento
+// de um envio Transcultural, o texto precisa dizer por que fora do país, quem mais sustenta o missionário e por que esse valor — pelo menos 300 caracteres.
+const MINIMO_FUNDAMENTACAO_EXTERIOR = 300;
+function problemaDoSustentoNoExterior({ abrangencia, sustento, texto: t, onde = "na justificativa" }) {
+  if (abrangencia !== "TRANSCULTURAL" || !(Number(sustento) > 0)) return null;
+  const n = typeof t === "string" ? t.trim().length : 0;
+  if (n >= MINIMO_FUNDAMENTACAO_EXTERIOR) return null;
+  return `Sustento para fora do país precisa estar bem fundamentado (Estatuto, Art. 58 §3º): ${onde}, diga por que o trabalho é fora do país, quem mais sustenta o missionário (outras igrejas, agências) e por que esse valor — pelo menos ${MINIMO_FUNDAMENTACAO_EXTERIOR} caracteres (hoje, ${n}).`;
+}
 // Trava 9-B — o aumento do sustento (Estatuto, Art. 58 §4º): a CLI aprova antes, numa reunião já realizada, depois da ativação do envio e não depois de hoje.
 function problemaDaCLIdoAumento({ novo, vigente, reuniao, ativadoEm, hoje }) {
   if (!(Number(novo) > Number(vigente || 0))) return null;
@@ -344,5 +354,6 @@ module.exports = {
   mesValido, mesDe, somarMeses, mesesEntre, mesBr, ehBrasil, abrangenciaDe, validarCampo, mudouOLugar, valorDe, inteiroDe, validarDinheiro, validarEnvio,
   etapasDoEnvio, statusInicial, statusDepoisDaCLI, prazoParecer, parecerVencido, podeDecidirCLI, validarParecer, validarDecisao, validarMotivo, validarPresidente,
   periodoDoMes, periodosDoEnvio, situacaoRelatorios, validarRelatorio, validarGeracao, validarReajuste, problemaDaCLIdoAumento, validarEncerramentoEnvio, referenciaPeriodo,
+  MINIMO_FUNDAMENTACAO_EXTERIOR, problemaDoSustentoNoExterior,
   textoEnvioNovo, textoParecerVencido, textoAguardandoPresidente, textoDecidido, textoRelatorioAtrasado, idDe, br
 };

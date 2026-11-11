@@ -277,7 +277,11 @@ const avisos = (regra, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   ok((await escalar("SELECT COUNT(*) FROM EnvioSustentoValores WHERE EnvioId = @e", { e: envB })) === 0, "o recusado não tem sustento");
 
   console.log("== envio Transcultural com convênio externo: sem parecer só com urgência; Presidente sempre ==");
-  r = await POST("envio", { campoId: campoFora, membroId: P.c, sustento: 1200, fonte: "GERAL", fornecedorId: pjAgencia, ...DOC, periodicidade: "TRIMESTRAL", justificativa: "Apoio à obra em Maputo pela agência parceira." }, SEMI());
+  // decisão do responsável (11/11/2026): sustento para fora do país só bem fundamentado (300 caracteres) — a prova da regra está no e2e-80
+  const MAPUTO = "Apoio à obra em Maputo pela agência parceira, que já mantém a família do missionário e cuida do visto e da moradia. A igreja entra com uma"
+    + " parte do sustento porque o missionário saiu daqui e a congregação mantenedora quer acompanhar a obra de perto; outras duas igrejas do Pará também"
+    + " ajudam. O valor segue a tabela da agência para Moçambique.";
+  r = await POST("envio", { campoId: campoFora, membroId: P.c, sustento: 1200, fonte: "GERAL", fornecedorId: pjAgencia, ...DOC, periodicidade: "TRIMESTRAL", justificativa: MAPUTO }, SEMI());
   const envC = r.body.envioId;
   ok(r.body.status === "EM_PARECER", "Transcultural: CME primeiro", r.body);
   ok((await um("SELECT PrecisaCME, PrecisaCLI, PrecisaPresidente FROM EnviosMissionarios WHERE EnvioId = @e", { e: envC })).PrecisaPresidente === true, "Presidente sempre (Art. 44 §2º)");

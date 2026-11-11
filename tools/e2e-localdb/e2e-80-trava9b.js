@@ -23,7 +23,7 @@ const mes = mi.mesDe(hoje), m1 = mi.somarMeses(mes, -1), m2 = mi.somarMeses(mes,
 const DOC = { documentoBase64: Buffer.from("%PDF-1.4 termo de compromisso").toString("base64"), documentoMime: "application/pdf" };
 
 // do cenário de base (e2e-1): 1001 Presidente, 1002 Secretário Geral, 3001 Dirigente da Central, 3003 Pastor da Área Alfa (a CME)
-const P = { secretario: 9851, ana: 9852, bia: 9853, davi: 9854, congregado: 9855, tesoureiro: 9856, extAtivo: 9857, extCongregado: 9858, extDesligado: 9859 };
+const P = { secretario: 9851, ana: 9852, bia: 9853, davi: 9854, congregado: 9855, tesoureiro: 9856, extAtivo: 9857, extCongregado: 9858, extDesligado: 9859, eli: 9860 };
 const SEMI = () => L.LIDER(P.secretario, ["missoes", "expansao"], [], "DEPARTAMENTO");
 const SEMI_SEM_PERMISSAO = () => L.LIDER(P.secretario, ["expansao"], [], "DEPARTAMENTO");
 const SEC = () => L.GERAL(1002, ["missoes", "financeiro"]);
@@ -217,6 +217,31 @@ async function sessaoCLI(descricao, data) {
   ok(linha(r, davi.id) && linha(r, davi.id).situacao === "IMPEDIDO", "o mês seguinte também", linha(r, davi.id));
   r = await GET("sustento", { mes }, TES());
   ok(linha(r, davi.id) && linha(r, davi.id).situacao === "A_GERAR", "o mês da vacância ainda é gerado (decisão de 05/11/2026)", linha(r, davi.id));
+
+  console.log("== sustento para fora do país: só bem fundamentado (decisão do responsável, 11/11/2026; Estatuto Art. 58 §3º) ==");
+  await q("INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, Email) VALUES (@id, N'Missionário Eli Trava E2E', @c, 'ATIVO', 'EM_COMUNHAO', N't9860@exemplo.org')", { id: P.eli, c: central });
+  const pfEli = await forn("Missionário Eli Trava E2E", "111.222.333-04", "PF", P.eli);
+  const FUNDAMENTO = "O missionário Eli serve em Lima desde 2024, na plantação de uma igreja entre migrantes brasileiros. Ele é sustentado por quatro igrejas"
+    + " daqui e de Belém e por uma agência; a SEMIADESPA entra com uma parte pequena, só para completar o aluguel. O valor foi conferido com o custo de vida"
+    + " de Lima e com o que as outras igrejas já mandam.";
+  ok(FUNDAMENTO.length >= mi.MINIMO_FUNDAMENTACAO_EXTERIOR, "o texto de prova tem o tamanho mínimo", FUNDAMENTO.length);
+  const pedidoEli = { campoId: campoFora, membroId: P.eli, sustento: 200, fonte: "GERAL", fornecedorId: pfEli, ...DOC, periodicidade: "TRIMESTRAL" };
+  r = await POST("envio", { ...pedidoEli, justificativa: "Apoio ao missionário no Peru." }, SEMI());
+  ok(r.status === 422 && /bem fundamentado/.test(r.body.mensagem) && /quem mais sustenta/.test(r.body.mensagem), "o pedido com sustento para fora do país e a justificativa curta: recusado, dizendo o que falta", r.body);
+  ok((await escalar("SELECT COUNT(*) FROM EnviosMissionarios WHERE MembroId = @m", { m: P.eli })) === 0, "a recusa não gravou nada");
+  r = await POST("envio", { ...pedidoEli, justificativa: FUNDAMENTO }, SEMI());
+  const envEli = r.body.envioId;
+  ok(r.body.sucesso === true && r.body.status === "EM_PARECER", "bem fundamentado: o pedido segue (CME, CLI e Presidente)", r.body);
+  await POST("parecer", { envioId: envEli, parecer: "FAVORAVEL", fundamentacao: "Parecer da CME sobre o envio a Lima." }, CME());
+  await POST("decidir", { envioId: envEli, resultado: "APROVADO", sessaoId: reuniao }, SEC());
+  await POST("presidente", { envioId: envEli, resultado: "CONCORDA" }, PRES());
+  ok((await status(envEli)) === "ATIVO", "o envio a Lima ativo");
+  r = await POST("reajustar", { envioId: envEli, desdeMes: proximo, sustento: 300, fonte: "GERAL", fornecedorId: pfEli, motivo: "Aumento do aluguel.", sessaoId: reuniao }, PRES());
+  ok(r.body.sucesso === false && /no motivo do aumento/.test(r.body.mensagem), "o aumento para fora do país com o motivo curto: recusado", r.body);
+  r = await POST("reajustar", { envioId: envEli, desdeMes: proximo, sustento: 300, fonte: "GERAL", fornecedorId: pfEli, motivo: FUNDAMENTO, sessaoId: reuniao }, PRES());
+  ok(r.body.sucesso === true, "o aumento bem fundamentado (e com a reunião da CLI): gravado", r.body);
+  r = await POST("reajustar", { envioId: envEli, desdeMes: proximo, sustento: 150, fonte: "GERAL", fornecedorId: pfEli, motivo: "Uma igreja nova passou a apoiar." }, PRES());
+  ok(r.body.sucesso === true, "a redução não pede a fundamentação longa", r.body);
 
   console.log("== o alerta de fracionamento não pega o que foi gerado por deliberação ==");
   const critico = await compliance.valorCriticoQuatroOlhos(pool, L.sql);

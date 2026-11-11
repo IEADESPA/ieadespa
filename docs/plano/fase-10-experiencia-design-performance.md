@@ -54,8 +54,19 @@ Antes de mudar qualquer coisa, medir o que existe — para saber onde dói e pro
 - [ ] Mapa do sistema de hoje: cada aba, pílula, sub-aba e formulário, quem usa (papel) e com que frequência — a base para reorganizar.
 - [ ] Relatório com o ranking dos problemas (o que atrapalha mais gente primeiro), registrado aqui.
 
-Já visto em 11/11/2026 (captura do equipamento de teste, com dados de mentira): o menu da esquerda do "Meu Painel" tem 26 itens; para ver o
-fim dele, a página inteira rola, o conteúdo da direita acaba, sobra um espaço branco e os cartões dos módulos ficam cortados pela metade.
+Já visto em 11/11/2026 — no equipamento de teste (dados de mentira) e na produção, no navegador do responsável, com ele logado (só olhando,
+sem gravar nada):
+
+- **Entrada:** `app.ieadespa.org.br` abre a "Frequência Ministerial" (matrícula e senha da reunião); o painel é um link pequeno embaixo.
+- **Meu Painel:** 26 itens no menu da esquerda; para ver o fim dele, a página inteira rola, o conteúdo da direita acaba e sobra um espaço
+  branco; os cartões dos módulos ficam numa caixa com uma rolagem própria minúscula (duas rolagens brigando na mesma tela).
+- **Financeiro › Lançamentos:** um formulário comprido, um campo por linha na largura toda, com "dizimista cadastrado" numa lista e "nome
+  avulso" noutro campo; o mês é o campo cru do navegador; a lista dos lançamentos fica **no fim da página**, depois do "Cadastrar dizimista" e
+  do "Conciliar PIX em lote" (o arquivo também é o botão cru do navegador).
+- **Pessoas:** **defeito** — ao entrar pelo cartão, "Cadastrar Pessoa" mostra só o título e a página em branco; o formulário só aparece
+  depois de trocar de aba e voltar. Na busca, a coluna "Situação" mostra o código `EM_COMUNHAO`; no cadastro, o rótulo traz o artigo no meio
+  ("Cargo Ministerial (escada — Art. 71; muda pela consagração, só o Geral corrige aqui)"); a data é o campo cru "dd/mm/aaaa"; o menu do
+  módulo muda de itens entre uma aba e outra.
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
 

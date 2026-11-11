@@ -615,7 +615,9 @@ usou as bases de 05/11, sem a 169 e a 170, e acusou a tabela `Bairros` faltando)
 46 mutações acusadas (Expansão 83, Distritos 77, Missões 114 e Entidades 70 de novo); homologação: a primeira execução do teste de tela (42274057968) mostrou
 só as diferenças de propósito (a pílula e a seção do Território e o endereço em linhas) e a base foi aprovada; a segunda (42276436948) teve 5 divergências só de
 tempo (o aviso do Google sem resposta caindo em momentos diferentes), corrigidas pela chave com forma de chave e a base nova aprovada; a terceira
-(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: deploy `43019675987`, teste de tela `43019675966`.
+(42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: o deploy `43019675987` aplicou a 170, a rota
+`/api/territorio/mapa` responde 401 sem login, a casca é a v56 e a página do mapa tem a política própria com sandbox; o teste de tela `43019675966` deu 1.277 e
+155 ações iguais, 0 divergência e 0 violação de CSP.
 
 ## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada — fora do plano em 11/11/2026)*
 
@@ -634,3 +636,54 @@ pública, o alerta de vencimento. Nada disso muda o financeiro do dia a dia.
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
 Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
 11/11/2026), e faz uma varredura final na FASE 9 inteira antes de fechar.
+
+- [ ] **EM ANDAMENTO (11/11/2026, ramo `trava-9b`)** — auditoria de v9.4 e v9.5 e varredura da FASE 9. Duas revisões independentes, só de leitura: uma das
+  costuras (Missões e Território entre si e com o sistema antigo: a vacância, o dinheiro, a LGPD, o escopo, os avisos) e outra da conformidade (o Estatuto, o
+  Regimento, o plano, o README). **Um achado alto (o dinheiro da vacância) e os médios e baixos — todos os que o código resolve, corrigidos com teste**
+  (migração 171; `e2e-80`, 48 verificações; casca v57). As 5 perguntas: *(a completar na entrega)*.
+
+  O que mudou:
+  - **A vacância não solta mais os meses parados (alto).** Antes, o envio encerrado pela vacância dispensava TODO relatório e ignorava o impedimento de todos os
+    meses: os meses suspensos por falta de relatório, ou parados pelo processo disciplinar que terminou na saída, ficavam "a gerar" e seriam pagos. Agora só o
+    relatório ainda no prazo no dia da vacância é dispensado, e os meses em que o processo já corria ficam impedidos (não se pagam); o mês da vacância segue pago.
+  - **Todo sustento passa pela CLI (médio, Estatuto Art. 58 §4º).** O pagamento a obreiros só não é distribuição de resultado (§3º) com a prévia aprovação da
+    CLI: o envio com sustento, inclusive o Local, vai à CLI (sem a CME) antes do Presidente; o **aumento** do sustento cita a reunião da CLI que o aprovou
+    (gravada com o valor, migração 171); a redução e a troca de quem recebe não pedem. O reajuste para pessoa jurídica (convênio externo) passa a conferir a CME
+    e a CLI.
+  - **O congregado não é membro (médio, Estatuto Art. 7º, I).** Missionário, Encarregado, Interventor e dirigente de entidade seguem uma régua só
+    (`membroEmComunhao`): antes só o "sem comunhão" era recusado, e o congregado passava (o Encarregado aceito na v9.2 aparecia como "não atende" na v9.5).
+  - **O caixa da mantenedora (médio).** A mantenedora não muda (nem sai) enquanto um envio tira o sustento do caixa dela — o Presidente reajusta a fonte antes;
+    a mantenedora sob tutela (Extensão da Tenda) deixa o mês impedido já na prévia (antes nascia a Saída que o pagamento barrava).
+  - **A edição do campo tem versão (médio, migração 171).** O formulário velho não desfaz a mudança do outro (a divulgação RESTRITA voltava a PÚBLICA).
+  - **Conflito de interesse (médio).** O próprio missionário não dá o parecer, não registra a decisão, não concorda, não reajusta nem lança ou corrige o relatório
+    do próprio envio.
+  - **O que o titular vê (médio, LGPD Art. 18).** O cartão de Missões em Meus Dados mostra a justificativa, o parecer, as decisões, a desistência, o
+    encerramento e os pagamentos que a API já entregava.
+  - **Os baixos.** A CME que só é CME não vê o sustento nem os relatórios também na lista; gerir como SEMIADESPA exige a permissão `missoes` (antes o Secretário
+    sem a permissão geria pela API); a decisão da CLI pede a confirmação recente; o sustento e a prebenda não disparam o alerta de fracionamento; o missionário
+    no campo não vira item de afastamento no Cuidado Pastoral; a pílula Extensões conta só os membros ativos (o recorte do mapa); o motivo da vacância cita o
+    artigo do caso (Regimento Art. 95 §2º na decisão disciplinar, Art. 157 §2º na licença, Estatuto Art. 11 §7º na saída do rol); o ROPA de Expansão, Distritos
+    e Missões no Art. 11, II, "d" da LGPD; a v9.6 não é mais chamada de "futura" na tela da Assistência Social; a ajuda da aba Expansão fala do Território; o
+    README (as tabelas que "ainda não existem", os 41 módulos).
+  - **O equipamento.** O `e2e-79` juntava num bairro que a corrida às vezes desativa (defeito do roteiro, `61cd0c8`); a `tudo.sh` recria as bases de partida
+    sozinha; a bateria completa fica para as Travas e cada versão roda a rápida (decisão do responsável, 11/11/2026).
+
+  **Decisões que o responsável pode mudar** (o sistema já está fazendo assim):
+  - **Missões (v9.4):** a "determinação expressa da Mesa Diretora" (Reg. Art. 134 §6º, I) é a concordância do Pastor Presidente; a frente Local fica com a
+    SEMIADESPA sem a CME (Art. 44 §1º) — com sustento, a CLI aprova; outra cidade do Pará passa pela CME e pela CLI (o Art. 44 §2º só fala de outro Estado e
+    país); pagar a pessoa jurídica é convênio externo; a zona rural adjacente inclui a de seis municípios vizinhos; o parecer da CME é registrado por um membro
+    e o Líder Geral da SEMIADESPA conta na CME; o sustento sai do Tesouro Geral ou do caixa da mantenedora (nunca do da SEMIADESPA, Art. 133-C §1º); a licença
+    de candidatura para o sustento sem encerrar o envio; o relatório vence no dia 10 do mês seguinte e a suspensão segue o Art. 133-C §2º por analogia; a
+    urgência por 2/3 (Art. 24 §2º) vale para o envio; o mês da vacância é pago (também na exclusão e na Disciplina Rigorosa), mas não os meses em que o
+    processo já corria; o missionário não precisa ter o cargo de Missionário nem ser obreiro; a retenção de INSS e IR sobre o sustento fica fora (o Art. 134
+    §3º trata da prebenda); o missionário no campo continua na contagem de faltas da CLI (Art. 27) e no aviso de ausência da EBD (a justificativa ou a saída
+    da turma é ato humano).
+  - **O sustento a outro país × Estatuto Art. 58 §3º** ("aplicando-os integralmente, no território nacional"): o Regimento (Art. 44 §2º) prevê o envio a outros
+    países com a CLI e o Presidente; o sistema aceita o sustento Transcultural e o painel de imunidade avisa. Se a leitura for a de que o §3º proíbe, basta
+    não aprovar sustento Transcultural (ou pedir para o sistema bloquear).
+  - **O CRA decide onde abrir frentes missionárias (Regimento Art. 126-B, II, "a"):** sem Região ativa, a Sede acumula a função (Art. 126-O §1º) e a SEMIADESPA
+    abre a frente Local com autonomia (Art. 44 §1º); quando houver Região ativa, o parecer do CRA entra no pedido.
+  - **Território (v9.5):** localização pelo bairro, linha reta, raio de 3 km, a régua inicial dos critérios; o mapa conta o membro sem comunhão e os obreiros só
+    entre os em comunhão; o dízimo médio só com 3 ou mais dizimistas; o Dirigente e o Pastor de Área veem os membros das congregações deles e as unidades de
+    todos; só o nível geral cadastra bairros e critérios, e o Dirigente da Mãe marca o ponto da Extensão; a congregação nascida da emancipação herda o ponto só
+    quando o pedido não trouxe outro endereço.

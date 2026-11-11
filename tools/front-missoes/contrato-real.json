@@ -955,11 +955,12 @@
     "descricao": "<script>alert(2)</script>",
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 0,
     "lugar": "Imperatriz/MA",
     "podeEditar": true
    },
@@ -978,11 +979,12 @@
     "descricao": null,
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 0,
     "lugar": "Maputo, Moçambique",
     "podeEditar": true
    },
@@ -1004,11 +1006,12 @@
     "descricao": null,
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 1,
     "lugar": "Marabá/PA",
     "podeEditar": true
    },
@@ -1030,11 +1033,12 @@
     "descricao": null,
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 0,
     "lugar": "Parauapebas/PA",
     "podeEditar": true
    },
@@ -1056,11 +1060,12 @@
     "descricao": "Pontos de pregação na zona rural.",
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 0,
     "lugar": "Parauapebas/PA (zona rural adjacente)",
     "podeEditar": true
    },
@@ -1079,11 +1084,12 @@
     "descricao": null,
     "status": "ATIVO",
     "statusRotulo": "Ativo",
-    "abertoEm": "2026-11-05",
+    "abertoEm": "2026-11-11",
     "encerradoEm": null,
     "motivoEncerramento": null,
     "enviosVivos": 0,
     "enviosAtivos": 0,
+    "versao": 0,
     "lugar": "Curionópolis/PA (zona rural adjacente)",
     "podeEditar": true
    }
@@ -1098,8 +1104,8 @@
  "envioLocalComSustento": {
   "sucesso": true,
   "envioId": 3,
-  "status": "AGUARDANDO_PRESIDENTE",
-  "mensagem": "Pedido registrado. Agora aguarda a concordância do Pastor Presidente (Regimento, Art. 134 §6º, I)."
+  "status": "AGUARDANDO_CLI",
+  "mensagem": "Pedido registrado. Agora aguarda a decisão da CLI."
  },
  "fichaAguardandoPresidente": {
   "sucesso": true,
@@ -1124,7 +1130,7 @@
    "encerradoPorVacancia": false,
    "etapas": {
     "cme": false,
-    "cli": false,
+    "cli": true,
     "presidente": true
    },
    "sustentoProposto": 500,
@@ -1143,10 +1149,17 @@
    "justificativa": "Evangelismo no bairro novo da cidade.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
-   "decisao": null,
+   "decisao": {
+    "sessaoId": 9,
+    "em": "2026-11-11",
+    "resultado": "APROVADO",
+    "rotulo": "Aprovado",
+    "urgencia": false,
+    "motivo": null
+   },
    "presidente": null,
    "ativadoEm": null,
    "inicioMes": null,
@@ -1156,7 +1169,7 @@
    "desistencia": null,
    "prazoParecer": null,
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-2?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-2?sas",
    "sustentoVigente": null,
    "valores": [],
    "geracoes": [],
@@ -1199,7 +1212,7 @@
    "encerradoPorVacancia": false,
    "etapas": {
     "cme": false,
-    "cli": false,
+    "cli": true,
     "presidente": true
    },
    "sustentoProposto": 200,
@@ -1218,10 +1231,17 @@
    "justificativa": "Pedido feito pelo próprio Presidente.",
    "solicitadoPor": 1001,
    "solicitanteNome": "Presidente E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
-   "decisao": null,
+   "decisao": {
+    "sessaoId": 9,
+    "em": "2026-11-11",
+    "resultado": "APROVADO",
+    "rotulo": "Aprovado",
+    "urgencia": false,
+    "motivo": null
+   },
    "presidente": null,
    "ativadoEm": null,
    "inicioMes": null,
@@ -1231,7 +1251,7 @@
    "desistencia": null,
    "prazoParecer": null,
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-3?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-3?sas",
    "sustentoVigente": null,
    "valores": [],
    "geracoes": [],
@@ -1262,7 +1282,7 @@
   "reunioes": [
    {
     "sessaoId": 9,
-    "data": "2026-11-05",
+    "data": "2026-11-11",
     "descricao": "CLI decide envios E2E"
    }
   ]
@@ -1312,19 +1332,19 @@
    "justificativa": "Plantar uma igreja em Marabá, sustentada pela Central.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": {
     "resultado": "FAVORAVEL",
     "rotulo": "Favorável",
     "fundamentacao": "Viável: Marabá tem membros transferidos.",
     "por": 3003,
     "porNome": "Pastor de Área Alfa E2E",
-    "em": "2026-11-05"
+    "em": "2026-11-11"
    },
-   "parecerEm": "2026-11-05",
+   "parecerEm": "2026-11-11",
    "decisao": {
     "sessaoId": 9,
-    "em": "2026-11-05",
+    "em": "2026-11-11",
     "resultado": "APROVADO",
     "rotulo": "Aprovado",
     "urgencia": false,
@@ -1334,7 +1354,7 @@
     "resultado": "RECUSA",
     "rotulo": "Recusa",
     "motivo": "Sem recurso para sustentar agora.",
-    "em": "2026-11-05"
+    "em": "2026-11-11"
    },
    "ativadoEm": null,
    "inicioMes": null,
@@ -1342,9 +1362,9 @@
    "fimMes": null,
    "motivoEncerramento": null,
    "desistencia": null,
-   "prazoParecer": "2026-11-20",
+   "prazoParecer": "2026-11-26",
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-4?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-4?sas",
    "sustentoVigente": null,
    "valores": [],
    "geracoes": [],
@@ -1406,7 +1426,7 @@
    "justificativa": "Frente no bairro com a agência parceira.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
    "decisao": null,
@@ -1417,7 +1437,7 @@
    "fimMes": null,
    "motivoEncerramento": null,
    "desistencia": null,
-   "prazoParecer": "2026-11-20",
+   "prazoParecer": "2026-11-26",
    "parecerVencido": false,
    "documentoUrl": null,
    "valores": [],
@@ -1479,7 +1499,7 @@
    "justificativa": "Frente no bairro com a agência parceira.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
    "decisao": null,
@@ -1490,9 +1510,9 @@
    "fimMes": null,
    "motivoEncerramento": null,
    "desistencia": null,
-   "prazoParecer": "2026-11-20",
+   "prazoParecer": "2026-11-26",
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-6?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-6?sas",
    "sustentoVigente": null,
    "valores": [],
    "geracoes": [],
@@ -1554,7 +1574,7 @@
    "justificativa": "Frente no bairro com a agência parceira.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
    "decisao": null,
@@ -1565,9 +1585,9 @@
    "fimMes": null,
    "motivoEncerramento": null,
    "desistencia": null,
-   "prazoParecer": "2026-11-20",
+   "prazoParecer": "2026-11-26",
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-6?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-6?sas",
    "sustentoVigente": null,
    "valores": [],
    "geracoes": [],
@@ -1605,7 +1625,7 @@
     "congregacaoFonte": null,
     "saidaDesfeita": null,
     "situacao": "SUSPENSO",
-    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
+    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026), 10/2026 (venceu em 10/11/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
    },
    {
     "envioId": 8,
@@ -1666,7 +1686,7 @@
     "envioId": 3,
     "missionario": "Missionária Dora E2E",
     "situacao": "SUSPENSO",
-    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
+    "motivo": "Relatório de campo vencido: 08/2026 (venceu em 10/09/2026), 09/2026 (venceu em 10/10/2026), 10/2026 (venceu em 10/11/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
    },
    {
     "envioId": 8,
@@ -1700,7 +1720,7 @@
    "encerradoPorVacancia": false,
    "etapas": {
     "cme": false,
-    "cli": false,
+    "cli": true,
     "presidente": true
    },
    "sustentoProposto": 500,
@@ -1719,15 +1739,22 @@
    "justificativa": "Evangelismo no bairro novo da cidade.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": null,
    "parecerEm": null,
-   "decisao": null,
+   "decisao": {
+    "sessaoId": 9,
+    "em": "2026-11-11",
+    "resultado": "APROVADO",
+    "rotulo": "Aprovado",
+    "urgencia": false,
+    "motivo": null
+   },
    "presidente": {
     "resultado": "CONCORDA",
     "rotulo": "Concorda",
     "motivo": null,
-    "em": "2026-11-05"
+    "em": "2026-11-11"
    },
    "ativadoEm": "2026-08-01",
    "inicioMes": "2026-08",
@@ -1737,7 +1764,7 @@
    "desistencia": null,
    "prazoParecer": null,
    "parecerVencido": false,
-   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-41716-2?sas",
+   "documentoUrl": "https://blob.e2e/documentos/doc-missoes-37360-2?sas",
    "sustentoVigente": 500,
    "valores": [
     {
@@ -1747,7 +1774,8 @@
      "congregacaoFonte": null,
      "recebedor": "Missionária Dora E2E (PF)",
      "motivo": "Ativação do envio",
-     "registradoEm": "2026-11-05"
+     "registradoEm": "2026-11-11",
+     "cliEm": null
     }
    ],
    "geracoes": [
@@ -1830,7 +1858,7 @@
      "pedidos": null,
      "anexoUrl": null,
      "temAnexo": false,
-     "recebidoEm": "2026-11-05",
+     "recebidoEm": "2026-11-11",
      "registradoPorNome": "Secretário de Missões E2E",
      "retificadoEm": null
     },
@@ -1844,7 +1872,7 @@
      "pedidos": null,
      "anexoUrl": null,
      "temAnexo": false,
-     "recebidoEm": "2026-11-05",
+     "recebidoEm": "2026-11-11",
      "registradoPorNome": "Secretário de Missões E2E",
      "retificadoEm": null
     },
@@ -1856,11 +1884,11 @@
      "discipulado": 3,
      "atividades": "Cultos nos lares, evangelismo de rua e um batismo a mais.",
      "pedidos": null,
-     "anexoUrl": "https://blob.e2e/documentos/doc-missoes-41716-8?sas",
+     "anexoUrl": "https://blob.e2e/documentos/doc-missoes-37360-8?sas",
      "temAnexo": true,
-     "recebidoEm": "2026-11-05",
+     "recebidoEm": "2026-11-11",
      "registradoPorNome": "Secretário de Missões E2E",
-     "retificadoEm": "2026-11-05"
+     "retificadoEm": "2026-11-11"
     }
    ],
    "ultimoGerado": "2026-11",
@@ -1921,19 +1949,19 @@
    "justificativa": "Plantar uma igreja em Marabá, sustentada pela Central.",
    "solicitadoPor": 9701,
    "solicitanteNome": "Secretário de Missões E2E",
-   "solicitadoEm": "2026-11-05",
+   "solicitadoEm": "2026-11-11",
    "parecer": {
     "resultado": "FAVORAVEL",
     "rotulo": "Favorável",
     "fundamentacao": "Viável: Marabá tem membros transferidos.",
     "por": 3003,
     "porNome": "Pastor de Área Alfa E2E",
-    "em": "2026-11-05"
+    "em": "2026-11-11"
    },
-   "parecerEm": "2026-11-05",
+   "parecerEm": "2026-11-11",
    "decisao": {
     "sessaoId": 9,
-    "em": "2026-11-05",
+    "em": "2026-11-11",
     "resultado": "APROVADO",
     "rotulo": "Aprovado",
     "urgencia": false,
@@ -1943,7 +1971,7 @@
     "resultado": "RECUSA",
     "rotulo": "Recusa",
     "motivo": "Sem recurso para sustentar agora.",
-    "em": "2026-11-05"
+    "em": "2026-11-11"
    },
    "ativadoEm": null,
    "inicioMes": null,
@@ -1951,7 +1979,7 @@
    "fimMes": null,
    "motivoEncerramento": null,
    "desistencia": null,
-   "prazoParecer": "2026-11-20",
+   "prazoParecer": "2026-11-26",
    "parecerVencido": false,
    "documentoUrl": null,
    "valores": [],
@@ -1973,7 +2001,7 @@
  },
  "painel": {
   "sucesso": true,
-  "hoje": "2026-11-05",
+  "hoje": "2026-11-11",
   "ano": "2026",
   "mesAtual": "2026-11",
   "totais": {
@@ -2034,7 +2062,7 @@
  },
  "painelCME": {
   "sucesso": true,
-  "hoje": "2026-11-05",
+  "hoje": "2026-11-11",
   "ano": "2026",
   "mesAtual": "2026-11",
   "soCME": true,
@@ -2145,7 +2173,7 @@
     "encerradoPorVacancia": false,
     "etapas": {
      "cme": false,
-     "cli": false,
+     "cli": true,
      "presidente": true
     },
     "sustentoProposto": 300,
@@ -2167,17 +2195,24 @@
     "justificativa": "Frente no bairro novo, sustentada pela Central.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
-    "decisao": null,
+    "decisao": {
+     "sessaoId": 9,
+     "em": "2026-11-11",
+     "resultado": "APROVADO",
+     "rotulo": "Aprovado",
+     "urgencia": false,
+     "motivo": null
+    },
     "presidente": {
      "resultado": "CONCORDA",
      "rotulo": "Concorda",
      "motivo": null,
-     "em": "2026-11-05"
+     "em": "2026-11-11"
     },
-    "ativadoEm": "2026-11-05",
+    "ativadoEm": "2026-11-11",
     "inicioMes": "2026-11",
     "encerradoEm": null,
     "fimMes": null,
@@ -2229,12 +2264,12 @@
     "justificativa": "Apoio à obra em Maputo pela agência parceira.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
     "decisao": {
      "sessaoId": 9,
-     "em": "2026-11-05",
+     "em": "2026-11-11",
      "resultado": "APROVADO",
      "rotulo": "Aprovado",
      "urgencia": true,
@@ -2244,15 +2279,15 @@
      "resultado": "CONCORDA",
      "rotulo": "Concorda",
      "motivo": null,
-     "em": "2026-11-05"
+     "em": "2026-11-11"
     },
-    "ativadoEm": "2026-11-05",
+    "ativadoEm": "2026-11-11",
     "inicioMes": "2026-11",
     "encerradoEm": null,
     "fimMes": null,
     "motivoEncerramento": null,
     "desistencia": null,
-    "prazoParecer": "2026-11-20",
+    "prazoParecer": "2026-11-26",
     "parecerVencido": false,
     "sustentoVigente": 1200,
     "relatoriosVencidos": 0,
@@ -2294,12 +2329,12 @@
     "justificativa": "Evangelismo nas casas da zona rural.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
     "decisao": null,
     "presidente": null,
-    "ativadoEm": "2026-11-05",
+    "ativadoEm": "2026-11-11",
     "inicioMes": "2026-11",
     "encerradoEm": null,
     "fimMes": null,
@@ -2351,7 +2386,7 @@
     "justificativa": "Frente no bairro com a agência parceira.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
     "decisao": null,
@@ -2362,10 +2397,10 @@
     "fimMes": null,
     "motivoEncerramento": null,
     "desistencia": {
-     "em": "2026-11-05",
+     "em": "2026-11-11",
      "motivo": "A agência desistiu."
     },
-    "prazoParecer": "2026-11-20",
+    "prazoParecer": "2026-11-26",
     "parecerVencido": false,
     "sustentoVigente": null,
     "relatoriosVencidos": 0,
@@ -2414,19 +2449,19 @@
     "justificativa": "Plantar uma igreja em Marabá, sustentada pela Central.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": {
      "resultado": "FAVORAVEL",
      "rotulo": "Favorável",
      "fundamentacao": "Viável: Marabá tem membros transferidos.",
      "por": 3003,
      "porNome": "Pastor de Área Alfa E2E",
-     "em": "2026-11-05"
+     "em": "2026-11-11"
     },
-    "parecerEm": "2026-11-05",
+    "parecerEm": "2026-11-11",
     "decisao": {
      "sessaoId": 9,
-     "em": "2026-11-05",
+     "em": "2026-11-11",
      "resultado": "APROVADO",
      "rotulo": "Aprovado",
      "urgencia": false,
@@ -2436,7 +2471,7 @@
      "resultado": "RECUSA",
      "rotulo": "Recusa",
      "motivo": "Sem recurso para sustentar agora.",
-     "em": "2026-11-05"
+     "em": "2026-11-11"
     },
     "ativadoEm": null,
     "inicioMes": null,
@@ -2444,7 +2479,7 @@
     "fimMes": null,
     "motivoEncerramento": null,
     "desistencia": null,
-    "prazoParecer": "2026-11-20",
+    "prazoParecer": "2026-11-26",
     "parecerVencido": false,
     "sustentoVigente": null,
     "relatoriosVencidos": 0,
@@ -2471,7 +2506,7 @@
     "encerradoPorVacancia": false,
     "etapas": {
      "cme": false,
-     "cli": false,
+     "cli": true,
      "presidente": true
     },
     "sustentoProposto": 200,
@@ -2490,10 +2525,17 @@
     "justificativa": "Pedido feito pelo próprio Presidente.",
     "solicitadoPor": 1001,
     "solicitanteNome": "Presidente E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
-    "decisao": null,
+    "decisao": {
+     "sessaoId": 9,
+     "em": "2026-11-11",
+     "resultado": "APROVADO",
+     "rotulo": "Aprovado",
+     "urgencia": false,
+     "motivo": null
+    },
     "presidente": null,
     "ativadoEm": null,
     "inicioMes": null,
@@ -2501,7 +2543,7 @@
     "fimMes": null,
     "motivoEncerramento": null,
     "desistencia": {
-     "em": "2026-11-05",
+     "em": "2026-11-11",
      "motivo": "Refazer o pedido pela SEMIADESPA."
     },
     "prazoParecer": null,
@@ -2531,7 +2573,7 @@
     "encerradoPorVacancia": false,
     "etapas": {
      "cme": false,
-     "cli": false,
+     "cli": true,
      "presidente": true
     },
     "sustentoProposto": 500,
@@ -2550,19 +2592,26 @@
     "justificativa": "Evangelismo no bairro novo da cidade.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
-    "decisao": null,
+    "decisao": {
+     "sessaoId": 9,
+     "em": "2026-11-11",
+     "resultado": "APROVADO",
+     "rotulo": "Aprovado",
+     "urgencia": false,
+     "motivo": null
+    },
     "presidente": {
      "resultado": "CONCORDA",
      "rotulo": "Concorda",
      "motivo": null,
-     "em": "2026-11-05"
+     "em": "2026-11-11"
     },
     "ativadoEm": "2026-08-01",
     "inicioMes": "2026-08",
-    "encerradoEm": "2026-11-05",
+    "encerradoEm": "2026-11-11",
     "fimMes": "2026-11",
     "motivoEncerramento": "Retorno da missionária.",
     "desistencia": null,
@@ -2593,7 +2642,7 @@
     "encerradoPorVacancia": false,
     "etapas": {
      "cme": false,
-     "cli": false,
+     "cli": true,
      "presidente": true
     },
     "sustentoProposto": 500,
@@ -2615,7 +2664,7 @@
     "justificativa": "Evangelismo no bairro novo da cidade.",
     "solicitadoPor": 9701,
     "solicitanteNome": "Secretário de Missões E2E",
-    "solicitadoEm": "2026-11-05",
+    "solicitadoEm": "2026-11-11",
     "parecer": null,
     "parecerEm": null,
     "decisao": null,
@@ -2626,7 +2675,7 @@
     "fimMes": null,
     "motivoEncerramento": null,
     "desistencia": {
-     "em": "2026-11-05",
+     "em": "2026-11-11",
      "motivo": "Pedido de teste da mantenedora."
     },
     "prazoParecer": null,
@@ -2704,7 +2753,7 @@
     "congregacaoFonte": null,
     "saidaDesfeita": null,
     "situacao": "SUSPENSO",
-    "motivo": "Relatório de campo vencido: 05/2026 a 07/2026 (venceu em 10/08/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
+    "motivo": "Relatório de campo vencido: 05/2026 a 07/2026 (venceu em 10/08/2026), 08/2026 a 10/2026 (venceu em 10/11/2026). Lance o relatório e gere de novo (a prestação de contas condiciona o recurso, como no Regimento, Art. 133-C §2º)."
    }
   ],
   "totais": {
@@ -2720,7 +2769,7 @@
    {
     "campo": "Frente Bairro Novo",
     "status": "Encerrado",
-    "pedidoEm": "2026-11-05",
+    "pedidoEm": "2026-11-11",
     "inicio": "2026-08",
     "fim": "2026-11",
     "motivoEncerramento": "Retorno da missionária.",
@@ -2729,7 +2778,10 @@
     "relatoriosRecebidos": 3,
     "justificativa": "Evangelismo no bairro novo da cidade.",
     "parecerCME": null,
-    "decisaoCLI": null,
+    "decisaoCLI": {
+     "resultado": "Aprovado",
+     "motivo": null
+    },
     "presidente": {
      "resultado": "Concorda",
      "motivo": null
@@ -2771,7 +2823,7 @@
    {
     "campo": "Frente Vila Sansão",
     "status": "Desistência",
-    "pedidoEm": "2026-11-05",
+    "pedidoEm": "2026-11-11",
     "inicio": null,
     "fim": null,
     "motivoEncerramento": null,

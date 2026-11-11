@@ -10,6 +10,7 @@ const { violouUnicidade } = require("./violacaoUnica");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { composicaoCME } = require("./comissoes");
 const { membrosSobDisciplina } = require("./disciplina");
+const { membroEmComunhao } = require("./estatuto");
 const { reunioesEncerradas, lerReuniao } = require("./entidadesVinculadasDb");
 
 const NAO_EXISTE = { sucesso: false, naoExiste: true, mensagem: "Não encontrado." };
@@ -76,7 +77,8 @@ async function problemaDoEncarregado(pool, rq, membroId, congregacaoMaeId) {
     .query(`SELECT MembroId, Nome, Status, SituacaoMembro, CongregacaoId FROM MembroReferencia WHERE MembroId = @m`);
   const m = r.recordset[0];
   if (!m || Number(m.CongregacaoId) !== Number(congregacaoMaeId)) return "Informe a matrícula de um membro da própria Congregação-Mãe: o Encarregado é de confiança do Dirigente Local (Regimento, Art. 109-A, I).";
-  if (m.Status !== "ATIVO" || m.SituacaoMembro === "SEM_COMUNHAO" || (await membrosSobDisciplina(pool)).has(m.MembroId)) return "O Encarregado precisa ser membro ativo e em comunhão (sem disciplina em curso).";
+  // Trava 9-B: a régua do Estatuto (Art. 7º, I) — o congregado não é membro; antes só o "sem comunhão" era recusado
+  if (!membroEmComunhao(m.Status, m.SituacaoMembro) || (await membrosSobDisciplina(pool)).has(m.MembroId)) return "O Encarregado precisa ser membro ativo e em comunhão (o congregado ainda não integra o quadro de membros), sem disciplina em curso.";
   return null;
 }
 

@@ -617,25 +617,20 @@ só as diferenças de propósito (a pílula e a seção do Território e o ender
 tempo (o aviso do Google sem resposta caindo em momentos diferentes), corrigidas pela chave com forma de chave e a base nova aprovada; a terceira
 (42290840200) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP; produção: deploy `43019675987`, teste de tela `43019675966`.
 
-## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*
+## v9.6 — Parcerias públicas, CEBAS e projetos sociais *(7ª rodada — fora do plano em 11/11/2026)*
 
-Só se aplica se a igreja mantiver ação assistencial estruturada (v5.9) — mas se
-mantiver, há um regime jurídico próprio que hoje não tem nenhuma cobertura.
-
-- [ ] **Contabilidade segregada por parceria/convênio** (exigência do MROSC,
-      Lei 13.019/2014) — centro de custo carimbado por termo de fomento ou
-      colaboração, reaproveitando o motor de Centro de Custo da FASE 4.
-- [ ] Prestação de contas no formato MROSC: relatório de execução do objeto +
-      execução financeira, com prazos e alertas.
-- [ ] Controle de vigência e renovação de certificações (**CEBAS** — LC 187/2021;
-      Utilidade Pública Federal/Estadual/Municipal; inscrição no CMAS/CNEAS),
-      com alerta antecipado — certificação vencida derruba benefício fiscal.
-- [ ] Requisitos cumulativos do CEBAS monitorados de forma contínua, não
-      conferidos só na hora de renovar.
+**FORA DO PLANO por decisão do responsável (11/11/2026): "se não melhora o financeiro, pode deixar quieto".** A igreja não tem convênio com dinheiro
+público hoje. A comparação que embasou a decisão: o MROSC (Lei 13.019/2014, Art. 2º, I, "c") aceita organização religiosa em parceria para projeto
+social distinto do culto (em geral por uma associação própria — cabe nas entidades vinculadas da v9.1), e o CEBAS é, em regra, para a entidade cuja
+atividade principal é a assistência; o financeiro já tem a essência do que a lei pede (fundo restrito que só se gasta na finalidade, orçamento com
+previsto × realizado, contas a pagar com comprovante e alçada, demonstrações na ITG 2002, trilha de auditoria inviolável, parecer do Conselho Fiscal e
+prazo de prestação de contas). O que só um convênio exigiria, se um dia vier: (1) a conta bancária só da parceria; (2) o plano de trabalho aprovado, com
+metas e itens de gasto, cada despesa ligada a um item; (3) o relatório de execução do objeto com as provas (fotos, lista de presença) e o financeiro;
+(4) a devolução do saldo com o rendimento; (5) a divulgação da parceria no site (Art. 11); e, se a entidade social tiver CEBAS ou títulos de utilidade
+pública, o alerta de vencimento. Nada disso muda o financeiro do dia a dia.
 
 ## 🔒 Trava de Revisão 9-B — antes de encerrar a FASE 9 e avançar para a FASE 10
 
 Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3).
-Audita v9.4 a v9.6 pelas 5 perguntas do checklist, e faz uma varredura final
-na FASE 9 inteira antes de fechar — v9.6 (CEBAS/MROSC) lida com parceria
-pública, então consistência de dado aqui tem peso extra.
+Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
+11/11/2026), e faz uma varredura final na FASE 9 inteira antes de fechar.

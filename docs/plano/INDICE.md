@@ -220,7 +220,7 @@ Arquivo: [`fase-8-ministerial-afm.md`](fase-8-ministerial-afm.md) — 9 bloco(s)
 
 ## FASE 9 — Entidades Vinculadas e Expansão
 
-Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 8 bloco(s) · itens 18/22 concluídos.
+Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 8 bloco(s) · itens 18/18 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
@@ -230,7 +230,7 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 | 🔒 9-A | [antes de avançar para a v9.4](fase-9-entidades-vinculadas.md#-trava-de-revisão-9-a--antes-de-avançar-para-a-v94) | ✅ 1/1 |
 | v9.4 | [Missões: campos, missionários e prestação de contas *(7ª rodada)*](fase-9-entidades-vinculadas.md#v94--missões-campos-missionários-e-prestação-de-contas-7ª-rodada) | ✅ 4/4 |
 | v9.5 | [Mapa territorial e inteligência de expansão *(7ª rodada)*](fase-9-entidades-vinculadas.md#v95--mapa-territorial-e-inteligência-de-expansão-7ª-rodada) | ✅ 3/3 |
-| v9.6 | [Parcerias públicas, CEBAS e projetos sociais *(7ª rodada)*](fase-9-entidades-vinculadas.md#v96--parcerias-públicas-cebas-e-projetos-sociais-7ª-rodada) | ⬜ 0/4 |
+| v9.6 | [Parcerias públicas, CEBAS e projetos sociais *(7ª rodada — fora do plano em 11/11/2026)*](fase-9-entidades-vinculadas.md#v96--parcerias-públicas-cebas-e-projetos-sociais-7ª-rodada--fora-do-plano-em-11112026) | — |
 | 🔒 9-B | [antes de encerrar a FASE 9 e avançar para a FASE 10](fase-9-entidades-vinculadas.md#-trava-de-revisão-9-b--antes-de-encerrar-a-fase-9-e-avançar-para-a-fase-10) | — |
 
 ## FASE 10 — Experiência, Design e Performance

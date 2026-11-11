@@ -468,7 +468,7 @@ async function detalharEnvio(pool, { envioId, alcance, hoje = hojeBrasilia(), me
     documentoUrl: verArquivos && e.documentoUrlInterno ? storage.urlDocumentoComSas(e.documentoUrlInterno) : null,
     sustentoVigente: vig ? vig.valor : (e.inicioMes ? 0 : null),
     valores: din.valores.map((v) => ({ desdeMes: v.desdeMes, valor: v.valor, fonteRotulo: v.fonteRotulo, congregacaoFonte: v.congregacaoFonte ? v.congregacaoFonte.nome : null,
-      recebedor: v.recebedor ? `${v.recebedor.nome} (${v.recebedor.tipo})` : null, motivo: v.motivo, registradoEm: v.registradoEm })),
+      recebedor: v.recebedor ? `${v.recebedor.nome} (${v.recebedor.tipo})` : null, motivo: v.motivo, registradoEm: v.registradoEm, cliEm: v.cliEm })),
     geracoes: din.geracoes.map((g) => ({ mes: g.mes, valor: g.valor, saidaId: g.saidaId, saidaStatus: g.saidaStatus, desfeita: SAIDA_DESFEITA.includes(g.saidaStatus),
       semRelatorio: !SAIDA_DESFEITA.includes(g.saidaStatus) && !sit.periodos.some((p) => p.entregue && p.inicio <= g.mes && g.mes <= p.fim) })),
     periodos: sit.periodos, suspenso: sit.suspenso && e.status === "ATIVO",
@@ -732,8 +732,9 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
   const campo0 = await lerCampo(() => pool.request(), e0.campo.campoId);
   const dinheiro = await problemaDoDinheiro(() => pool.request(), pre.dados, { membroId: e0.missionario.membroId, campo: campo0 });
   if (dinheiro.problema) return { sucesso: false, mensagem: dinheiro.problema };
-  // o convênio externo (quem recebe é pessoa jurídica) é da CLI com o Presidente (Art. 44 §2º): num envio que não passou pela CLI, ele não entra por reajuste
-  if (dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" && !e0.etapas.cli) {
+  // o convênio externo (quem recebe é pessoa jurídica) é da CME e da CLI com o Presidente (Art. 44 §2º): num envio que não passou por elas, ele não entra por
+  // reajuste. Trava 9-B: confere a CME também — o Local com sustento passa pela CLI (Estatuto Art. 58 §4º) sem a CME, e não é convênio externo
+  if (dinheiro.recebedor && dinheiro.recebedor.tipo === "PJ" && !(e0.etapas.cme && e0.etapas.cli)) {
     return { sucesso: false, mensagem: "Pagar a uma pessoa jurídica é convênio externo, que passa pela CME e pela CLI (Regimento, Art. 44 §2º): este envio não passou por elas. Encerre-o e faça um novo pedido." };
   }
   const doc = await salvarArquivo(pre.dados.documento);

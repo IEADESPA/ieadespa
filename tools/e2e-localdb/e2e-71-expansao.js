@@ -137,6 +137,11 @@ const avisos = (chave, membroId) => escalar("SELECT COUNT(*) FROM Notificacoes W
   const respostas = [];
   for (const m of [99999, P.vila, P.vilaDisciplina]) respostas.push((await POST("pedido", { ...ABRE, encarregadoMembroId: m }, DIR())).body.mensagem);
   ok(new Set(respostas).size === 1 && /própria Congregação-Mãe/.test(respostas[0]), "a recusa do Encarregado de fora não revela se ele existe nem se está sob disciplina", respostas);
+  // Trava 9-B: o congregado não é membro (Estatuto Art. 7º, I) — antes passava como "em comunhão"
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'CONGREGADO' WHERE MembroId = @m", { m: P.m3 });
+  r = await POST("pedido", { ...ABRE, encarregadoMembroId: P.m3 }, DIR());
+  ok(r.status === 422 && /congregado/.test(r.body.mensagem), "Trava 9-B: Encarregado congregado: recusado", r.body);
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO' WHERE MembroId = @m", { m: P.m3 });
   ok(await escalar("SELECT COUNT(*) FROM PedidosExpansao") === 0, "nenhuma recusa gravou pedido");
   r = guardar("pedidoAbertura", await POST("pedido", ABRE, DIR()));
   ok(r.status === 201, "o Dirigente pede a abertura", [JSON.stringify(r.body)]);

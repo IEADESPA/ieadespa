@@ -351,6 +351,11 @@ const cliIds = async () => new Set((await composicaoCLI(await obterPool(), await
   ok(r.status === 422 && /processo/.test(r.body.mensagem), "Interventor sob processo: recusado", r.body);
   r = await POST("intervir", { ...iv, interventorMembroId: 3003 }, PRES());
   ok(r.status === 422 && /já tem o cargo/.test(r.body.mensagem), "Interventor que já tem outro cargo (o Pastor de Área): recusado, para não trocar o cargo dele", r.body);
+  // Trava 9-B: o congregado não é Interventor (Estatuto Art. 7º, I) — antes só o "sem comunhão" era recusado
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'CONGREGADO' WHERE MembroId = @m", { m: P.interventor });
+  r = await POST("intervir", iv, PRES());
+  ok(r.status === 422 && /congregado/.test(r.body.mensagem), "Trava 9-B: Interventor congregado: recusado", r.body);
+  await q("UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO' WHERE MembroId = @m", { m: P.interventor });
   r = await POST("intervir", { ...iv, interventorMembroId: 1001 }, PRES());
   ok(r.status === 422 && /já tem o cargo/.test(r.body.mensagem) && (await vigente(1001)) === 1, "o próprio Presidente como Interventor: recusado (perderia o acesso geral)", r.body);
   r = await POST("intervir", { ...iv, interventorMembroId: P.superint }, PRES());

@@ -507,6 +507,9 @@ async function criarEnvio(pool, { dados, por, hoje = hojeBrasilia(), alcance, de
       if (!c || c.status !== "ATIVO") return { sucesso: false, mensagem: "Escolha um campo ativo." };
       // as etapas e a mantenedora pelo campo lido AQUI, sob a trava (revisão de 05/11/2026: com o campo lido antes, uma mudança do lugar no meio passava o envio pelas etapas erradas)
       if (d.fonte === "CONGREGACAO" && (!c.mantenedora || Number(c.mantenedora.congregacaoId) !== Number(d.congregacaoFonteId))) return MUDOU;
+      // decisão do responsável (11/11/2026): sustento para fora do país só bem fundamentado — conferido com o campo lido aqui, sob a trava
+      const exterior = mi.problemaDoSustentoNoExterior({ abrangencia: c.abrangencia, sustento: d.sustento, texto: d.justificativa });
+      if (exterior) return { sucesso: false, mensagem: exterior };
       etapas = mi.etapasDoEnvio({ abrangencia: c.abrangencia, sustento: d.sustento, recebedorPJ });
       status = mi.statusInicial(etapas);
       fundamento = mi.fundamentoPresidente({ abrangencia: c.abrangencia, sustento: d.sustento, recebedorPJ });
@@ -756,6 +759,9 @@ async function reajustar(pool, { envioId, dados, por, hoje = hojeBrasilia(), alc
     const semCli = mi.problemaDaCLIdoAumento({ novo: d.sustento, vigente: atual ? atual.valor : 0, reuniao, ativadoEm: e.ativadoEm, hoje });
     if (semCli) return { sucesso: false, mensagem: semCli };
     const aumento = d.sustento > (atual ? atual.valor : 0);
+    // decisão do responsável (11/11/2026): o aumento do sustento de quem está fora do país também precisa estar bem fundamentado (no motivo)
+    const exterior = aumento ? mi.problemaDoSustentoNoExterior({ abrangencia: e.campo.abrangencia, sustento: d.sustento, texto: d.motivo, onde: "no motivo do aumento" }) : null;
+    if (exterior) return { sucesso: false, mensagem: exterior };
     const cli = aumento ? reuniao : null;
     const comum = (q) => q.input("id", sql.Int, envioId).input("desde", sql.Char(7), d.desdeMes).input("v", sql.Decimal(10, 2), d.sustento).input("fonte", sql.NVarChar(12), d.fonte)
       .input("cf", sql.Int, d.congregacaoFonteId).input("forn", sql.Int, d.fornecedorId).input("mot", sql.NVarChar(1000), d.motivo).input("por", sql.Int, por)

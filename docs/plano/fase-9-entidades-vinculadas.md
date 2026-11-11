@@ -650,7 +650,7 @@ Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
      violação de CSP. Provas de tela sem navegador: Missões 123 (46 de 46 mutações acusadas), Território 122, Expansão 83, Distritos 77, Entidades 70. Na
      homologação, a primeira execução (43037680424) mostrou só as diferenças de propósito (15 na tela e 1 no celular: o texto da Assistência Social, o aviso do
      pedido de envio, a reunião da CLI no reajuste e o cartão de Meus Dados) e a base nova foi aprovada (`997c473`); a segunda (43040395374) deu 1.277 e 155
-     ações iguais, 0 divergência e 0 violação de CSP; na produção, o teste de tela depois do deploy: execução 43060034029 (resultado registrado ao terminar).
+     ações iguais, 0 divergência e 0 violação de CSP; na produção, o teste de tela depois do deploy (43060034029) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP.
   3. **O README e o código contam a mesma história?** Sim, conferido item por item (357 tabelas, as migrações 001 a 171, a seção 4, as linhas da FASE 9, as
      datas e os merges, o índice, `SECRETS.md` e `docs/PLATAFORMAS.md` da chave do Maps). Corrigidos: a seção 4 dizia que missões e obrigações fiscais "ainda
      não existem"; 30 módulos (são 41); a v9.6 citada como futura na tela e nos planos; o fundamento da vacância; a base legal do ROPA; a ajuda da aba Expansão.
@@ -695,9 +695,11 @@ Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
     processo já corria; o missionário não precisa ter o cargo de Missionário nem ser obreiro; a retenção de INSS e IR sobre o sustento fica fora (o Art. 134
     §3º trata da prebenda); o missionário no campo continua na contagem de faltas da CLI (Art. 27) e no aviso de ausência da EBD (a justificativa ou a saída
     da turma é ato humano).
-  - **O sustento a outro país × Estatuto Art. 58 §3º** ("aplicando-os integralmente, no território nacional"): o Regimento (Art. 44 §2º) prevê o envio a outros
-    países com a CLI e o Presidente; o sistema aceita o sustento Transcultural e o painel de imunidade avisa. Se a leitura for a de que o §3º proíbe, basta
-    não aprovar sustento Transcultural (ou pedir para o sistema bloquear).
+  - **O sustento a outro país × Estatuto Art. 58 §3º** ("aplicando-os integralmente, no território nacional") — **decidido pelo responsável em 11/11/2026:**
+    pode, mas só muito bem fundamentado ("a maioria dos casos não dá para fazer isso"; hoje a SEMIADESPA dá um apoio pequeno a um missionário fora do país,
+    que é sustentado por várias igrejas). O sistema exige: no pedido com sustento para um campo Transcultural, e no aumento do sustento de um envio
+    Transcultural, o texto diz por que fora do país, quem mais sustenta o missionário e por que esse valor, com pelo menos 300 caracteres
+    (`problemaDoSustentoNoExterior`); a CME, a CLI e o Presidente leem esse texto antes de aprovar, e o painel de imunidade continua avisando.
   - **O CRA decide onde abrir frentes missionárias (Regimento Art. 126-B, II, "a"):** sem Região ativa, a Sede acumula a função (Art. 126-O §1º) e a SEMIADESPA
     abre a frente Local com autonomia (Art. 44 §1º); quando houver Região ativa, o parecer do CRA entra no pedido.
   - **Território (v9.5):** localização pelo bairro, linha reta, raio de 3 km, a régua inicial dos critérios; o mapa conta o membro sem comunhão e os obreiros só

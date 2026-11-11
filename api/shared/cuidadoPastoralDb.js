@@ -1255,7 +1255,9 @@ async function oportunidadesParaDeteccao(pool, { hoje, semanas }) {
       AND d.MembroId IN (SELECT MembroId FROM porDia GROUP BY MembroId HAVING COUNT(DISTINCT Dia) >= ${cp.DETECCAO_MIN_BASE + cp.DETECCAO_MIN_RECENTES})
       AND NOT EXISTS (SELECT 1 FROM CuidadoItens ci WHERE ci.MembroId = m.MembroId AND ci.Tipo = 'AFASTAMENTO'
                       AND (ci.Status = 'ABERTO' OR ci.EncerradoEm >= DATEADD(DAY, -@car, SYSUTCDATETIME())))
-      AND NOT EXISTS (SELECT 1 FROM ProcedimentosAbandono pa WHERE pa.MembroId = m.MembroId AND pa.Status = 'NOTIFICADO')`);
+      AND NOT EXISTS (SELECT 1 FROM ProcedimentosAbandono pa WHERE pa.MembroId = m.MembroId AND pa.Status = 'NOTIFICADO')
+      -- Trava 9-B: o missionário com envio ativo está no campo, não afastado (a frequência dele na EBD e nas reuniões cai porque ele foi enviado)
+      AND NOT EXISTS (SELECT 1 FROM EnviosMissionarios em WHERE em.MembroId = m.MembroId AND em.Status = 'ATIVO')`);
   const porMembro = new Map();
   for (const l of r.recordset) {
     if (!porMembro.has(l.MembroId)) porMembro.set(l.MembroId, { membroId: l.MembroId, congregacaoId: l.CongregacaoId, ops: [] });

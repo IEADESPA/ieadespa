@@ -405,7 +405,10 @@ async function listarExtensoes(pool, { alcance, todas = false }) {
   const r = await pool.request().query(`
     SELECT e.ExtensaoId, e.Nome, e.CongregacaoMaeId, c.Nome AS MaeNome, e.Ativa, e.Endereco, e.Bairro, e.Cidade, e.UF, CONVERT(varchar(10), e.AbertaEm, 120) AS AbertaEm,
            CONVERT(varchar(10), e.EmancipadaEm, 120) AS EmancipadaEm, ce.Nome AS EmancipadaNome,
-           (SELECT COUNT(*) FROM MembroReferencia m WHERE m.ExtensaoId = e.ExtensaoId) AS Membros,
+           -- Trava 9-B: os membros ativos (sem o congregado e o novo convertido), o mesmo recorte do mapa e da simulação da v9.5 — antes contava também o
+           -- desligado, o falecido e o congregado, e a mesma aba mostrava dois números para a mesma Extensão
+           (SELECT COUNT(*) FROM MembroReferencia m WHERE m.ExtensaoId = e.ExtensaoId AND m.Status = N'ATIVO'
+              AND ISNULL(m.SituacaoMembro, N'EM_COMUNHAO') NOT IN (N'CONGREGADO', N'NOVO_CONVERTIDO')) AS Membros,
            enc.EncarregadoId, enc.MembroId AS EncMembroId, me.Nome AS EncNome, CONVERT(varchar(10), enc.Desde, 120) AS EncDesde, me.Status AS EncStatus,
            me.SituacaoMembro AS EncSituacao, me.CongregacaoId AS EncCongregacaoId,
            (SELECT TOP 1 p.PedidoId FROM PedidosExpansao p WHERE p.ExtensaoId = e.ExtensaoId AND p.Status IN (N'EM_PARECER', N'AGUARDANDO_CLI')) AS PedidoEmAndamento

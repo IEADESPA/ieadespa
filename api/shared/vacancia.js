@@ -1,5 +1,5 @@
 // shared/vacancia.js
-// Vacância automática ao perder a membresia (v1.5 — Regimento Art. 11): encerra
+// Vacância automática ao perder a membresia (v1.5 — Estatuto, Art. 11 §7º): encerra
 // Assentos ativos, desativa Liderança e zera Cargo Ministerial/Departamento/Função —
 // mesmo UPDATE de Assentos que já existia isolado em EvoluirProcessoDisciplinar
 // (exclusão disciplinar), agora generalizado e reaproveitado por qualquer fluxo de
@@ -8,6 +8,10 @@ const MOTIVOS_QUE_MANTEM_ALUNO_EBD = new Set(["DISCIPLINA", "LICENCA_CANDIDATURA
 
 // Trava 8-A — o motivo gravado no processo de cargo que a vacância encerra (CK_Consagracoes_Encerramento, migração 160).
 const motivoDoProcesso = (motivo) => (motivo === "DISCIPLINA" ? "DISCIPLINA" : motivo === "LICENCA_CANDIDATURA" ? "LICENCA_CANDIDATURA" : "SAIDA_DO_ROL");
+// Trava 9-B — o fundamento escrito no motivo, pelo caso (antes, todos citavam o Estatuto, Art. 11 §7º, que é a perda da membresia): a decisão disciplinar
+// (Disciplina Rigorosa tira o mandato sem tirar a membresia; a exclusão tira os direitos) é o Regimento, Art. 95 §2º, III e IV; a licença de candidatura, o
+// Art. 157 §2º; a saída do rol, o Estatuto, Art. 11 §7º.
+const fundamentoDaVacancia = (motivo) => (motivo === "DISCIPLINA" ? "Regimento, Art. 95 §2º, III e IV" : motivo === "LICENCA_CANDIDATURA" ? "Regimento, Art. 157 §2º" : "Estatuto, Art. 11 §7º");
 
 async function encerrarVinculos(pool, sql, membroId, motivo) {
   // Decisão do responsável (29/10/2026) — Regimento Art. 157 §2º: a licença de candidatura afasta das FUNÇÕES (púlpito, Ceia, dirigir culto — a licença para
@@ -106,7 +110,7 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
   // (indicado ou homologado; a licença de candidatura também afasta da diretoria, Art. 157 §2º). Antes, o falecido ou desligado continuava "dirigente atual".
   await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
     .input("motivoEnt", sql.NVarChar(25), motivo === "FALECIMENTO" ? "FALECIMENTO" : "OUTRO")
-    .input("obs", sql.NVarChar(500), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : motivo === "LICENCA_CANDIDATURA" ? "licença de candidatura" : "saída do rol de membros"}) — Estatuto, Art. 11 §7º.`)
+    .input("obs", sql.NVarChar(500), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : motivo === "LICENCA_CANDIDATURA" ? "licença de candidatura" : "saída do rol de membros"}) — ${fundamentoDaVacancia(motivo)}.`)
     .query(`IF OBJECT_ID(N'dbo.ExtensaoEncarregados', N'U') IS NOT NULL
               UPDATE ExtensaoEncarregados SET Ate = CASE WHEN Desde > @hoje THEN Desde ELSE @hoje END, MotivoSaida = @obs WHERE MembroId = @id AND Ate IS NULL;
             IF OBJECT_ID(N'dbo.EntidadeDirigentes', N'U') IS NOT NULL
@@ -119,7 +123,7 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
   // A licença de candidatura não encerra o envio: a pessoa fica fora do estado ativo e o sustento para enquanto durar (shared/missoesDb.js, impedimentoDaPessoa) —
   // volta sozinho no retorno (decisão de 05/11/2026, que o responsável pode mudar).
   if (!licenca) await pool.request().input("id", sql.Int, membroId).input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia())
-    .input("obs", sql.NVarChar(1000), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : "saída do rol de membros"}) — Estatuto, Art. 11 §7º.`)
+    .input("obs", sql.NVarChar(1000), `Vacância (${motivo === "DISCIPLINA" ? "decisão disciplinar" : "saída do rol de membros"}) — ${fundamentoDaVacancia(motivo)}.`)
     .query(`IF OBJECT_ID(N'dbo.EnviosMissionarios', N'U') IS NOT NULL
             BEGIN
               UPDATE EnviosMissionarios SET Status = N'DESISTIDO', DesistidoEm = @hoje, DesistenciaMotivo = @obs

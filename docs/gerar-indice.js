@@ -17,7 +17,7 @@ const FASES = [
   "fase-4-financeiro-e-patrimonio.md", "fase-b-consolidacao-da-base.md", "fase-c-integracao-com-o-site.md",
   "fase-5-departamentos-e-relatorios.md", "fase-6-ebd.md", "fase-7-saude-eventos-e-comunicacao.md", "fase-7-parte-2-menores-cuidado-e-crise.md",
   "fase-d-robustez-e-operacao.md", "fase-8-ministerial-afm.md", "fase-9-entidades-vinculadas.md", "fase-10-experiencia-design-performance.md",
-  "fase-11-sistema-campal.md", "fase-12-inteligencia-e-indicadores.md"
+  "fase-11-criador-de-sites.md", "fase-12-escuta-e-gestao-de-membros.md"
 ];
 
 // Âncora no estilo do GitHub: minúsculas, sem pontuação/emoji, espaço vira hífen; repetidos ganham -1, -2...

@@ -233,44 +233,49 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 | v9.6 | [Parcerias públicas, CEBAS e projetos sociais *(7ª rodada — fora do plano em 11/11/2026)*](fase-9-entidades-vinculadas.md#v96--parcerias-públicas-cebas-e-projetos-sociais-7ª-rodada--fora-do-plano-em-11112026) | — |
 | 🔒 9-B | [antes de encerrar a FASE 9 e avançar para a FASE 10](fase-9-entidades-vinculadas.md#-trava-de-revisão-9-b--antes-de-encerrar-a-fase-9-e-avançar-para-a-fase-10) | ✅ 1/1 |
 
-## FASE 10 — Experiência, Design e Performance
+## FASE 10 — Experiência, Design, Desempenho e Indicadores
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 13 bloco(s) · itens 0/42 concluídos.
-
-| Versão | Título | Itens |
-| --- | --- | --- |
-| v10.1 | [Fundamentos do sistema de design (tokens, tipografia, ícones)](fase-10-experiencia-design-performance.md#v101--fundamentos-do-sistema-de-design-tokens-tipografia-ícones) | ⬜ 0/4 |
-| v10.1.1 | [Redesenho da navegação e da grade de módulos](fase-10-experiencia-design-performance.md#v1011--redesenho-da-navegação-e-da-grade-de-módulos) | ⬜ 0/3 |
-| v10.1.2 | [Redesenho dos componentes recorrentes](fase-10-experiencia-design-performance.md#v1012--redesenho-dos-componentes-recorrentes) | ⬜ 0/7 |
-| v10.1.3 | [Aplicação módulo a módulo (varredura completa)](fase-10-experiencia-design-performance.md#v1013--aplicação-módulo-a-módulo-varredura-completa) | ⬜ 0/2 |
-| v10.2 | [Performance e cache (com análise de custo/benefício)](fase-10-experiencia-design-performance.md#v102--performance-e-cache-com-análise-de-custobenefício) | ⬜ 0/3 |
-| v10.3 | [Responsividade mobile](fase-10-experiencia-design-performance.md#v103--responsividade-mobile) | ⬜ 0/1 |
-| 🔒 10-A | [antes de avançar para a v10.4](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-a--antes-de-avançar-para-a-v104) | — |
-| v10.4 | [Modularização do front-end *(7ª rodada — dívida técnica real)*](fase-10-experiencia-design-performance.md#v104--modularização-do-front-end-7ª-rodada--dívida-técnica-real) | ⬜ 0/4 |
-| v10.5 | [Impressão institucional e exportação padronizada *(7ª rodada)*](fase-10-experiencia-design-performance.md#v105--impressão-institucional-e-exportação-padronizada-7ª-rodada) | ⬜ 0/2 |
-| v10.6 | [Integração total: o site vira conteúdo, o que é "vivo" vai para o sistema *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v106--integração-total-o-site-vira-conteúdo-o-que-é-vivo-vai-para-o-sistema-decisão-de-22102026) | ⬜ 0/5 |
-| v10.7 | [Domínio, DNS e segurança da borda *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v107--domínio-dns-e-segurança-da-borda-decisão-de-22102026) | ⬜ 0/7 |
-| v10.8 | [Pagamento online pelo Pix (conta da Igreja no banco Cora) *(decisão de 22/10/2026)*](fase-10-experiencia-design-performance.md#v108--pagamento-online-pelo-pix-conta-da-igreja-no-banco-cora-decisão-de-22102026) | ⬜ 0/4 |
-| 🔒 10-B | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-b--antes-de-encerrar-a-fase-10) | — |
-
-## FASE 11 — Sistema Campal (multi-campo)
-
-Arquivo: [`fase-11-sistema-campal.md`](fase-11-sistema-campal.md) — 0 bloco(s) · itens 0/0 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 20 bloco(s) · itens 0/70 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
+| · | [O que é "excelente" — as metas desta fase (medidas, não adjetivos)](fase-10-experiencia-design-performance.md#o-que-é-excelente--as-metas-desta-fase-medidas-não-adjetivos) | — |
+| v10.1 | [Raio-x da experiência (a linha de base)](fase-10-experiencia-design-performance.md#v101--raio-x-da-experiência-a-linha-de-base) | ⬜ 0/4 |
+| v10.2 | [Sistema de design (a "identidade" da tela)](fase-10-experiencia-design-performance.md#v102--sistema-de-design-a-identidade-da-tela) | ⬜ 0/6 |
+| v10.3 | [Linguagem limpa](fase-10-experiencia-design-performance.md#v103--linguagem-limpa) | ⬜ 0/5 |
+| v10.4 | [Estrutura da tela e navegação (o menu da esquerda e o conteúdo da direita)](fase-10-experiencia-design-performance.md#v104--estrutura-da-tela-e-navegação-o-menu-da-esquerda-e-o-conteúdo-da-direita) | ⬜ 0/6 |
+| v10.5 | [Organização das informações (módulos, submódulos e páginas)](fase-10-experiencia-design-performance.md#v105--organização-das-informações-módulos-submódulos-e-páginas) | ⬜ 0/5 |
+| v10.6 | [Peças padrão (componentes) e celular](fase-10-experiencia-design-performance.md#v106--peças-padrão-componentes-e-celular) | ⬜ 0/5 |
+| v10.7 | [Aplicação tela por tela (a varredura)](fase-10-experiencia-design-performance.md#v107--aplicação-tela-por-tela-a-varredura) | ⬜ 0/3 |
+| 🔒 10-A | [antes de avançar para a v10.8](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-a--antes-de-avançar-para-a-v108) | — |
+| v10.8 | [Desempenho e capacidade (100 pessoas sem travar; assembleia de 1.000)](fase-10-experiencia-design-performance.md#v108--desempenho-e-capacidade-100-pessoas-sem-travar-assembleia-de-1000) | ⬜ 0/7 |
+| v10.9 | [Importação periódica do cadastro de membros (o sistema que a Igreja paga)](fase-10-experiencia-design-performance.md#v109--importação-periódica-do-cadastro-de-membros-o-sistema-que-a-igreja-paga) | ⬜ 0/5 |
+| v10.10 | [Indicadores de saúde e comparação entre congregações *(a antiga v12.1 e v12.2)*](fase-10-experiencia-design-performance.md#v1010--indicadores-de-saúde-e-comparação-entre-congregações-a-antiga-v121-e-v122) | ⬜ 0/4 |
+| v10.11 | [Alerta de evasão e painel do Presidente *(a antiga v12.3 e v12.4)*](fase-10-experiencia-design-performance.md#v1011--alerta-de-evasão-e-painel-do-presidente-a-antiga-v123-e-v124) | ⬜ 0/4 |
+| v10.12 | [Impressão e planilhas padronizadas *(a antiga v10.5)*](fase-10-experiencia-design-performance.md#v1012--impressão-e-planilhas-padronizadas-a-antiga-v105) | ⬜ 0/2 |
+| 🔒 10-B | [antes de avançar para a v10.13](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-b--antes-de-avançar-para-a-v1013) | — |
+| v10.13 | [O site vira conteúdo; o que é "vivo" vai para o sistema *(a antiga v10.6; só depois do evento que está no ar)*](fase-10-experiencia-design-performance.md#v1013--o-site-vira-conteúdo-o-que-é-vivo-vai-para-o-sistema-a-antiga-v106-só-depois-do-evento-que-está-no-ar) | ⬜ 0/5 |
+| v10.14 | [Domínio, DNS e segurança da borda *(a antiga v10.7)*](fase-10-experiencia-design-performance.md#v1014--domínio-dns-e-segurança-da-borda-a-antiga-v107) | ⬜ 0/5 |
+| v10.15 | [Pagamento online pelo Pix (conta da Igreja no banco Cora) *(a antiga v10.8)*](fase-10-experiencia-design-performance.md#v1015--pagamento-online-pelo-pix-conta-da-igreja-no-banco-cora-a-antiga-v108) | ⬜ 0/4 |
+| 🔒 10-C | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-c--antes-de-encerrar-a-fase-10) | — |
+| · | [Números antigos desta fase (para quem achar uma citação antiga)](fase-10-experiencia-design-performance.md#números-antigos-desta-fase-para-quem-achar-uma-citação-antiga) | — |
 
-## FASE 12 — Inteligência, Indicadores e Benchmarking
+## FASE 11 — Criador de sites próprio (no lugar do Directus)
 
-Arquivo: [`fase-12-inteligencia-e-indicadores.md`](fase-12-inteligencia-e-indicadores.md) — 8 bloco(s) · itens 0/13 concluídos.
+Arquivo: [`fase-11-criador-de-sites.md`](fase-11-criador-de-sites.md) — 3 bloco(s) · itens 0/5 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
-| v12.1 | [Indicadores de saúde por congregação](fase-12-inteligencia-e-indicadores.md#v121--indicadores-de-saúde-por-congregação) | ⬜ 0/4 |
-| v12.2 | [Benchmarking interno anonimizado](fase-12-inteligencia-e-indicadores.md#v122--benchmarking-interno-anonimizado) | ⬜ 0/3 |
-| 🔒 12-A | [antes de avançar para a v12.3](fase-12-inteligencia-e-indicadores.md#-trava-de-revisão-12-a--antes-de-avançar-para-a-v123) | — |
-| v12.3 | [Engajamento e alerta precoce de evasão](fase-12-inteligencia-e-indicadores.md#v123--engajamento-e-alerta-precoce-de-evasão) | ⬜ 0/3 |
-| v12.4 | [Painel executivo denominacional](fase-12-inteligencia-e-indicadores.md#v124--painel-executivo-denominacional) | ⬜ 0/3 |
-| · | [📌 Pendência entre fases — Trilha de discipulado (self-service, vB.5)](fase-12-inteligencia-e-indicadores.md#-pendência-entre-fases--trilha-de-discipulado-self-service-vb5) | — |
-| 🔒 12-B | [antes de encerrar a FASE 12 (e o roadmap comprometido até aqui)](fase-12-inteligencia-e-indicadores.md#-trava-de-revisão-12-b--antes-de-encerrar-a-fase-12-e-o-roadmap-comprometido-até-aqui) | — |
-| · | [Visão de longo prazo — integração total e sistema próprio de criação de sites (registrada em 19/10/2026)](fase-12-inteligencia-e-indicadores.md#visão-de-longo-prazo--integração-total-e-sistema-próprio-de-criação-de-sites-registrada-em-19102026) | — |
+| · | [O objetivo](fase-11-criador-de-sites.md#o-objetivo) | — |
+| · | [O que já ajuda e não se perde](fase-11-criador-de-sites.md#o-que-já-ajuda-e-não-se-perde) | — |
+| · | [A desenhar quando a fase começar (sem versões comprometidas ainda)](fase-11-criador-de-sites.md#a-desenhar-quando-a-fase-começar-sem-versões-comprometidas-ainda) | ⬜ 0/5 |
+
+## FASE 12 — Escuta, ajustes e cadastro de membros próprio
+
+Arquivo: [`fase-12-escuta-e-gestao-de-membros.md`](fase-12-escuta-e-gestao-de-membros.md) — 3 bloco(s) · itens 0/8 concluídos.
+
+| Versão | Título | Itens |
+| --- | --- | --- |
+| · | [A escuta (comentários de quem usa)](fase-12-escuta-e-gestao-de-membros.md#a-escuta-comentários-de-quem-usa) | ⬜ 0/4 |
+| · | [O cadastro de membros próprio (para sair do sistema pago)](fase-12-escuta-e-gestao-de-membros.md#o-cadastro-de-membros-próprio-para-sair-do-sistema-pago) | ⬜ 0/4 |
+| · | [Registro](fase-12-escuta-e-gestao-de-membros.md#registro) | — |

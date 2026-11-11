@@ -637,10 +637,27 @@ Ponto de parada obrigatório (ver "Travas de Revisão" na abertura da seção 3)
 Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
 11/11/2026), e faz uma varredura final na FASE 9 inteira antes de fechar.
 
-- [ ] **EM ANDAMENTO (11/11/2026, ramo `trava-9b`)** — auditoria de v9.4 e v9.5 e varredura da FASE 9. Duas revisões independentes, só de leitura: uma das
-  costuras (Missões e Território entre si e com o sistema antigo: a vacância, o dinheiro, a LGPD, o escopo, os avisos) e outra da conformidade (o Estatuto, o
-  Regimento, o plano, o README). **Um achado alto (o dinheiro da vacância) e os médios e baixos — todos os que o código resolve, corrigidos com teste**
-  (migração 171; `e2e-80`, 48 verificações; casca v57). As 5 perguntas: *(a completar na entrega)*.
+- [x] **Fechada em 11/11/2026 — FASE 9 ENCERRADA** (merge `86a105f`; para desfazer: `git revert -m 1 86a105f`). Auditoria de v9.4 e v9.5 e varredura da
+  FASE 9. Duas revisões independentes, só de leitura: uma das costuras (Missões e Território entre si e com o sistema antigo: a vacância, o dinheiro, a LGPD,
+  o escopo, os avisos) e outra da conformidade (o Estatuto, o Regimento, o plano, o README). **Um achado alto (o dinheiro da vacância) e os médios e baixos —
+  todos os que o código resolve, corrigidos com teste** (migração 171; `e2e-80`, 48 verificações; casca v57). As 5 perguntas:
+  1. **Tudo roda de ponta a ponta no ambiente real?** Sim. A bateria inteira do banco recriado do zero (a `tudo.sh`, que agora roda o `rodar.sh preparar`
+     sozinha), do `e2e-1` ao `e2e-80`: 84 rodadas e 7.020 verificações; a única falha (`e2e-31`, 3 verificações) era do relógio do próprio roteiro — fechava
+     a votação no mesmo tique do último voto — corrigida (`c314e2e`) e provada três vezes seguidas (241/241). A 171 aplicada duas vezes; o `e2e-76` e o
+     `e2e-77` seguem a regra nova (a CLI no sustento; a vacância não solta os relatórios vencidos antes dela); o `e2e-69`, o `e2e-71` e o `e2e-73` recusam o
+     congregado; jest 6.371.
+  2. **Toda tela nova abre?** Sim. Antes da trava, teste de tela completo na produção (execução 43033317064): 6.308 e 755 ações iguais, 0 divergência, 0
+     violação de CSP. Provas de tela sem navegador: Missões 123 (46 de 46 mutações acusadas), Território 122, Expansão 83, Distritos 77, Entidades 70. Na
+     homologação, a primeira execução (43037680424) mostrou só as diferenças de propósito (15 na tela e 1 no celular: o texto da Assistência Social, o aviso do
+     pedido de envio, a reunião da CLI no reajuste e o cartão de Meus Dados) e a base nova foi aprovada (`997c473`); a segunda (43040395374) deu 1.277 e 155
+     ações iguais, 0 divergência e 0 violação de CSP; na produção, o teste de tela depois do deploy: execução 43060034029 (resultado registrado ao terminar).
+  3. **O README e o código contam a mesma história?** Sim, conferido item por item (357 tabelas, as migrações 001 a 171, a seção 4, as linhas da FASE 9, as
+     datas e os merges, o índice, `SECRETS.md` e `docs/PLATAFORMAS.md` da chave do Maps). Corrigidos: a seção 4 dizia que missões e obrigações fiscais "ainda
+     não existem"; 30 módulos (são 41); a v9.6 citada como futura na tela e nos planos; o fundamento da vacância; a base legal do ROPA; a ajuda da aba Expansão.
+  4. **As sobras foram mesmo resolvidas?** As que o código resolve, sim (abaixo). O que ficou são decisões do responsável (listadas no fim) e uma ação humana:
+     gravar a chave do Google Maps (a pílula Território funciona na lista e desenho até lá).
+  5. **Houve deploy real?** Sim: a 171 rodou no deploy da produção em 11/11/2026 (execução 43060034054, merge `86a105f`); `/api/missoes/painel` responde 401
+     sem login e a casca é a v57.
 
   O que mudou:
   - **A vacância não solta mais os meses parados (alto).** Antes, o envio encerrado pela vacância dispensava TODO relatório e ignorava o impedimento de todos os

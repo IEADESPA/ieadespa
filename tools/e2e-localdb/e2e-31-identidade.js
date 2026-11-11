@@ -296,7 +296,7 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   ok((await meu(M.carla)).ciclo.apuracao === null && (await escalar("SELECT Status FROM Enquetes WHERE EnqueteId = @e", { e: enq.EnqueteId })) === "ABERTA",
     "(revisão) quem decide que a votação fechou é a hora do BANCO (a mesma que o voto confere): sem ela, não apura");
   // o banco "chega" à data marcada: a data passa a ser AGORA (os votos do roteiro foram gravados antes)
-  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
+  await q("WAITFOR DELAY '00:00:00.050'; UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
   const previstaBanco = await escalar("SELECT CONVERT(varchar(33), DataFechamentoPrevista, 126) FROM Enquetes WHERE EnqueteId = @e", { e: enq.EnqueteId });
   const ma = await meu(M.carla);
   ok(ma.ciclo.fase === "ARTE" && ma.ciclo.apuracao === "VENCEDOR" && ma.ciclo.tema.texto === "Família: fé e missão" && ma.ciclo.tema.votos === 3 && ma.ciclo.votosTotal === 6, "passada a meia-noite, o primeiro acesso fecha e apura: vence a da Ana, 3 de 6", ma.ciclo);
@@ -445,7 +445,10 @@ async function fuzz(rotulo, { acao, token, base, campos, aceitos = [200, 201, 40
   await votar(M.beto, v29.enqueteId, v29.perguntaId, o29["Raízes e asas"]);
   await votar(M.carla, v29.enqueteId, v29.perguntaId, o29["Unidos no amor"]);
   em("2028-12-01T04:00:00Z");
-  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: v29.enqueteId });
+  // Trava 9-B: espera um tique do relógio do banco antes de fechar "agora" — no Windows o SYSUTCDATETIME() anda de ~15 ms em ~15 ms, e o último voto podia cair no
+  // mesmo instante do fechamento (DataResposta = DataFechamentoPrevista: fora da contagem, que é "<"). Em uso real o fechamento é marcado antes e o voto
+  // depois dele é recusado na mesma instrução que o grava, então o empate não acontece; era o roteiro (falhou 2 vezes em 11/11/2026: VotosTotal 1 em vez de 2)
+  await q("WAITFOR DELAY '00:00:00.050'; UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: v29.enqueteId });
   await db.rotinaDiaria(await obterPool());
   const c29 = await um("SELECT Apuracao, TemaSugestaoId, VotosTotal FROM IdentidadeCiclos WHERE CicloId = @c", { c: C29 });
   ok(c29.Apuracao === "EMPATE" && c29.TemaSugestaoId === null && c29.VotosTotal === 2, "a rotina diária apura: EMPATE, sem tema", c29);

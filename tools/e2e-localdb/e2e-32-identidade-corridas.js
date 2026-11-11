@@ -119,7 +119,7 @@ async function principal() {
   console.log("== a rotina e três acessos fecham e apuram juntos depois do dia 30 ==");
   const DEZ01 = "2027-12-01T10:00:00Z";
   // o banco "chega" à data marcada (a apuração decide pela hora do banco)
-  await q("UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
+  await q("WAITFOR DELAY '00:00:00.050'; UPDATE Enquetes SET DataFechamentoPrevista = SYSUTCDATETIME() WHERE EnqueteId = @e", { e: enq.EnqueteId });
   rs = await disparar([{ tipo: "rotina", agora: DEZ01 }, { tipo: "rotina", agora: DEZ01 }, ...Array.from({ length: 2 }, (_, i) => ({ tipo: "rota", acao: "meu", metodo: "GET", membroId: 9126 + i, agora: DEZ01 }))]);
   ok(rs.every((r) => r.ok && (r.resultado.status === 200 || (Array.isArray(r.resultado.falhas) && r.resultado.falhas.length === 0))), "os quatro terminam sem erro", rs.map((r) => r.resultado || r.erro));
   const ap = await L.um("SELECT Apuracao, VotosTotal, TemaTexto, TemaVotos FROM IdentidadeCiclos WHERE CicloId = @c", { c: CICLO });

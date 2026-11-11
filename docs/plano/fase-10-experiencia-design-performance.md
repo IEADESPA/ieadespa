@@ -116,7 +116,7 @@ com o redesenho de cada peça.)*
       não um redesenho "geral" solto, e sim uma varredura rastreável tela por tela,
       mesmo espírito de qualquer Trava de Revisão deste README (nada fica "meio
       migrado" sem registro de onde parou).
-- [ ] Auditoria final: nenhuma tela nova (FASE 11 em diante, se vier antes desta
+- [ ] Auditoria final: nenhuma tela nova (o que vier depois, se vier antes desta
       trava fechar) pode nascer fora do sistema de design novo — checagem cruzada
       igual às Travas de Revisão já fazem pra código/dado.
 
@@ -258,7 +258,4 @@ regressão desta versão é o motivo de existir a trava: dividir o arquivo sem
 quebrar nenhuma tela das fases 0-9 exige justamente o item 2 do checklist
 (clicar em cada tela, uma por uma) feito por inteiro, não por amostragem.
 
-**Nota sobre a FASE 11**: ela é especulativa/opcional (ver abertura da fase)
-e não tem roadmap de versões comprometido — por isso não recebe Trava de
-Revisão. Se um dia for desenhada de verdade, ganha as suas próprias travas
-na mesma hora em que ganhar suas próprias versões `v11.X`.
+**Nota sobre a FASE 11**: saiu do plano em 11/11/2026 por decisão do responsável — não haverá sistema campal (multi-campo).

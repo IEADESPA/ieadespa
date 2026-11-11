@@ -1,5 +1,8 @@
 # FASE 11 — Sistema Campal (multi-campo)
 
+**FORA DO PLANO desde 11/11/2026, por decisão do responsável: não haverá sistema campal.** O texto abaixo fica só como registro do que
+chegou a ser pensado; nada aqui é pendência.
+
 > Histórico e checklist desta parte do plano de versões. As referências a “seção 2.x” e “seção 4” apontam para o
 > [README](../../README.md); cada versão tem seu lugar no [índice do plano](INDICE.md).
 

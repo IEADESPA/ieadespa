@@ -345,7 +345,7 @@ diz em que arquivo ela está e em que pé ela anda.
 | 8 | Ministerial (AFM) | encerrada em 03/11/2026 (Trava 8-B): v8.1 (AFM e faltas da CLI) em 27/10/2026; v8.2 (escada) e v8.3 (consagração) em 28/10/2026; v8.4 (credencial digital) e a Trava 8-A em 29/10/2026; v8.5 (trilha de discipulado), v8.6 (educação continuada) e v8.7 (Seminário) em 30/10/2026 | [fase-8-ministerial-afm](docs/plano/fase-8-ministerial-afm.md) |
 | 9 | Entidades vinculadas e expansão | encerrada em 11/11/2026 (Trava 9-B): v9.1 a v9.5 (entidades vinculadas, expansão, Distrito, Missões e Mapa territorial) e as Travas 9-A (05/11) e 9-B (11/11/2026); a v9.6 saiu do plano | [fase-9-entidades-vinculadas](docs/plano/fase-9-entidades-vinculadas.md) |
 | 10 | Experiência, design e performance | planejada | [fase-10-experiencia-design-performance](docs/plano/fase-10-experiencia-design-performance.md) |
-| 11 | Sistema campal (multi-campo) | planejada | [fase-11-sistema-campal](docs/plano/fase-11-sistema-campal.md) |
+| 11 | Sistema campal (multi-campo) | fora do plano (11/11/2026): não haverá sistema campal | [fase-11-sistema-campal](docs/plano/fase-11-sistema-campal.md) |
 | 12 | Inteligência, indicadores e benchmarking | planejada | [fase-12-inteligencia-e-indicadores](docs/plano/fase-12-inteligencia-e-indicadores.md) |
 
 Pesquisa que embasa o plano (mercado e norma legal): [`docs/pesquisa/mercado-e-norma-2026.md`](docs/pesquisa/mercado-e-norma-2026.md),

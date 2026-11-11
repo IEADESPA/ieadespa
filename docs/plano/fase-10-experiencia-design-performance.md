@@ -68,7 +68,9 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       verdade a lentidão aparece; com 60 pessoas, não): tempo para abrir, erros no console, texto cortado ou saindo da
       caixa, rolagem para o lado, espaço branco sobrando, termos técnicos visíveis (códigos com sublinhado, siglas de banco), artigos de
       norma no meio do texto.
-- [ ] Galeria das telas de hoje (o "antes"), para o responsável marcar o que mais incomoda, com uma frase do porquê.
+- [ ] **Propostas de tela, não fotos soltas** (decisão do responsável, 11/11/2026: "tudo está péssimo; não vou passar 2 horas olhando o
+      que já sei que está ruim"): uma página do Claude (artefato) por partes, cada parte com o "antes" e **3 a 5 opções do novo**, para ele
+      escolher e aprovar parte por parte. A primeira (parte 1, porta de entrada; parte 2, menu e conteúdo) foi publicada em 11/11/2026.
 - [ ] **Pesquisa de referências:** como sistemas de gestão modernos (de igreja e de outros ramos) resolvem a entrada, o menu, o lançamento
       em lista, a data, o painel e o celular — anotado aqui como padrão a seguir (sem copiar marca nem imagem de ninguém).
 - [ ] Mapa do sistema de hoje: cada aba, pílula, sub-aba e formulário, quem usa (papel) e com que frequência — a base para reorganizar.

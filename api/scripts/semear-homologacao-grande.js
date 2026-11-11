@@ -10,7 +10,7 @@
 //   (nenhuma)               cria o que falta (todas as etapas); rodar de novo NÃO duplica nada
 //   --apagar                remove SÓ o que este gerador cria (pelas marcas abaixo), numa transação; nada mais
 //   --contar                só conta as linhas fictícias por tabela
-//   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, financeiro, ebd
+//   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, financeiro, ebd, escalas
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
@@ -50,8 +50,13 @@
 //      liberação), o mês da data-base aberto; fornecedores e saídas locais (energia, água, Santa Ceia...) aprovadas pela Tesouraria
 //      Geral (segregação: quem solicita nunca aprova) e pagas sem passar do saldo local liberado;
 //   5. EBD: revistas, turmas por faixa etária em cada congregação, alunos (membros), professores, lições, chamadas, ofertas e
-//      cadernetas dos últimos domingos.
-// O lote é por transação: cada bloco de pessoas, cada congregação da tesouraria e da EBD entra inteiro ou não entra.
+//      cadernetas dos últimos domingos (turmas sem a marca "com menores", como nascem na tela);
+//   6. escalas: equipes só de adultos (recepção, louvor, limpeza, cozinha), os cultos de domingo de 8 semanas antes a 4 depois da
+//      data-base, com convites confirmados, recusas seguidas do convite ao próximo, e convites ainda abertos.
+// O lote é por transação: cada bloco de pessoas, cada congregação da tesouraria, da EBD e das escalas entra inteiro ou não entra.
+// Fica de fora (e por quê): eventos/calendário, cuidado pastoral e consentimentos de comunicação — têm regras de sigilo, de ciclo e
+// de consentimento (com a impressão digital do texto aceito) que a massa teria de forjar; sem consentimento, nenhum comunicado sai
+// para a massa.
 "use strict";
 const crypto = require("crypto");
 const sql = require("mssql");
@@ -64,7 +69,7 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "financeiro", "ebd"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "financeiro", "ebd", "escalas"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
@@ -728,6 +733,54 @@ function gerarEbd(c) {
   });
   return { turmas, licoes };
 }
+// As escalas de uma congregação (pura): equipes só de ADULTOS e sem a marca de menores (assim nenhuma regra de adesão do menor nem de aptidão da v7.7 entra em
+// jogo — a marca é decisão da liderança na tela), e os cultos de domingo das 8 semanas antes da data-base (confirmados, com alguma recusa e o convite seguinte)
+// e das 4 depois (convidados ou aceitos).
+const EQUIPES_ESCALA = [["Recepção e Portaria", "PORTARIA"], ["Louvor e Liturgia", "LITURGIA"], ["Limpeza do Templo", "ZELADORIA"], ["Cozinha e Cantina", "COZINHA"]];
+function gerarEscalas(c) {
+  const r = criarRng(`escalas:${c.i}`);
+  const livres = c.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 18 && p.idade <= 72);
+  const usados = new Set();
+  const equipes = [];
+  for (const [nome, natureza] of EQUIPES_ESCALA.slice(0, c.pessoas.length >= 60 ? 4 : 2)) {
+    const tam = Math.min(r.int(4, 8), livres.length - usados.size);
+    if (tam < 2) break;
+    const membros = [];
+    while (membros.length < tam) {
+      const p = r.pick(livres);
+      if (usados.has(p)) continue;
+      usados.add(p);
+      membros.push({ pessoa: p, frequencia: r.pick([14, 30, 30, 30, 60]) });
+    }
+    equipes.push({ nome, natureza, membros, lider: membros[0].pessoa });
+  }
+  const servicos = [];
+  let primeiro = BASE - 7 * 8;
+  while (diaSemana(primeiro) !== 0) primeiro++;
+  for (let d = primeiro; d <= BASE + 7 * 4; d += 7) {
+    const publicada = Math.min(d - 10, BASE - 1);
+    const passado = d <= BASE;
+    const alocs = [];
+    for (const e of equipes) {
+      const vez = Math.round((d - primeiro) / 7);
+      for (let j = 0; j < Math.min(2, e.membros.length); j++) {
+        const m = e.membros[(vez * 2 + j) % e.membros.length].pessoa;
+        if (passado && r.chance(0.08) && e.membros.length > 3) {
+          // recusou: a cadeia convida o seguinte, que confirma
+          alocs.push({ equipe: e, pessoa: m, status: "RECUSADO", ordem: 1, respondido: publicada + 1 });
+          const subst = e.membros[(vez * 2 + j + 2) % e.membros.length].pessoa;
+          alocs.push({ equipe: e, pessoa: subst, status: "CONFIRMADO", ordem: 2, convidado: publicada + 1, respondido: publicada + 2, confirmado: d - 2 });
+        } else if (passado) alocs.push({ equipe: e, pessoa: m, status: "CONFIRMADO", ordem: 1, respondido: publicada + 1, confirmado: d - 2 });
+        else alocs.push({ equipe: e, pessoa: m, status: r.chance(0.5) ? "ACEITO" : "CONVIDADO", ordem: 1, respondido: null });
+      }
+    }
+    // a mesma pessoa não serve duas vezes no mesmo culto pela mesma equipe (índice único): a substituta pode já estar na escala
+    const vistos = new Set();
+    servicos.push({ dia: d, publicada, alocs: alocs.filter((a) => { const k = `${a.equipe.nome}:${a.pessoa.matricula}`; if (vistos.has(k)) return false; vistos.add(k); return true; }) });
+  }
+  return { equipes, servicos };
+}
+
 const TEMAS_LICAO = ["A fé que agrada a Deus", "O fruto do Espírito", "A oração do justo", "O amor ao próximo", "A Palavra como lâmpada", "Servir com alegria",
   "A família segundo a Bíblia", "Mordomia cristã", "O perdão", "A esperança da volta de Jesus", "Os dons espirituais", "A santificação", "O testemunho cristão"];
 const REVISTAS_EBD = ["Berçário", "Maternal", "Jardim de Infância", "Primários", "Juniores", "Adolescentes", "Juvenis", "Jovens", "Adultos"];
@@ -769,15 +822,24 @@ const Q_FORN = `SELECT FornecedorId FROM dbo.Fornecedores WHERE CpfCnpj LIKE '${
 const Q_SAIDA = `SELECT SaidaId FROM dbo.SaidasTesouraria WHERE CongregacaoId IN (${Q_CONG}) OR FornecedorId IN (${Q_FORN})`;
 const Q_TURMA = `SELECT TurmaId FROM dbo.EbdTurmas WHERE CongregacaoId IN (${Q_CONG})`;
 const Q_LICAO = `SELECT LicaoId FROM dbo.EbdLicoes WHERE CongregacaoId IN (${Q_CONG})`;
-const Q_ALUNO = `SELECT AlunoId FROM dbo.EbdAlunos WHERE MembroId ${M_PESSOA} OR TurmaId IN (${Q_TURMA})`;
+const Q_ALUNO = `SELECT AlunoId FROM dbo.EbdAlunos WHERE TurmaId IN (${Q_TURMA})`;
+const Q_EQUIPE = `SELECT EquipeId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG})`;
+const Q_SERVICO = `SELECT ServicoId FROM dbo.EscalasServicos WHERE CongregacaoId IN (${Q_CONG})`;
 // [tabela, condição] na ordem de APAGAR (filhos antes dos pais). --contar usa a mesma lista.
+// Regra: sai o que pertence às peças fictícias (congregações, turmas, equipes, lições...) e o que é da PRÓPRIA ficha da pessoa fictícia (liderança, histórico do
+// cargo, vínculos, rastros do login); uma linha que o app criou com a pessoa fictícia FORA das peças fictícias (um dízimo, um aluno, uma escala em outra
+// congregação, uma reunião...) faz o --apagar recusar inteiro e dizer a tabela.
 const ALVOS = [
+  ["EscalasAlocacoes", `ServicoId IN (${Q_SERVICO}) OR EquipeId IN (${Q_EQUIPE})`],
+  ["EscalasServicos", `CongregacaoId IN (${Q_CONG})`],
+  ["EscalasEquipeMembros", `EquipeId IN (${Q_EQUIPE})`],
+  ["EscalasEquipes", `CongregacaoId IN (${Q_CONG})`],
   ["EbdCadernetas", `LicaoId IN (${Q_LICAO}) OR TurmaId IN (${Q_TURMA})`],
   ["EbdOfertas", `LicaoId IN (${Q_LICAO})`],
   ["EbdChamadas", `LicaoId IN (${Q_LICAO}) OR TurmaId IN (${Q_TURMA}) OR AlunoId IN (${Q_ALUNO})`],
   ["EbdLicoes", `CongregacaoId IN (${Q_CONG})`],
-  ["EbdAlunos", `MembroId ${M_PESSOA} OR TurmaId IN (${Q_TURMA})`],
-  ["EbdTurmaProfessores", `MembroId ${M_PESSOA} OR TurmaId IN (${Q_TURMA})`],
+  ["EbdAlunos", `TurmaId IN (${Q_TURMA})`],
+  ["EbdTurmaProfessores", `TurmaId IN (${Q_TURMA})`],
   ["EbdTurmas", `CongregacaoId IN (${Q_CONG})`],
   ["EbdCatalogoRevistas", `Nome LIKE ${LIKE_F}`],
   ["SaidaAprovacoes", `SaidaId IN (${Q_SAIDA})`],
@@ -786,10 +848,10 @@ const ALVOS = [
   ["LancamentosTesouraria", `CongregacaoId IN (${Q_CONG})`],
   ["ConciliacoesTesouraria", `CongregacaoId IN (${Q_CONG})`],
   ["FechamentosTesouraria", `CongregacaoId IN (${Q_CONG})`],
-  ["Dizimistas", `CongregacaoId IN (${Q_CONG}) OR MembroId ${M_PESSOA}`],
+  ["Dizimistas", `CongregacaoId IN (${Q_CONG})`],
   ["Fornecedores", `FornecedorId IN (${Q_FORN})`],
   ["Lideranca", `MembroId ${M_PESSOA}`],
-  ["ExtensaoEncarregados", `ExtensaoId IN (${Q_EXT}) OR MembroId ${M_PESSOA}`],
+  ["ExtensaoEncarregados", `ExtensaoId IN (${Q_EXT})`],
   ["CargosMinisteriaisHistorico", `MembroId ${M_PESSOA}`],
   ["VinculosFamiliares", `MembroId ${M_PESSOA} OR MembroParenteId ${M_PESSOA}`],
   // rastros do login de quem "entrou como" um papel fictício na homologação
@@ -1112,6 +1174,40 @@ async function etapaEbd(pool, mod) {
   return feito;
 }
 
+async function etapaEscalas(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const existentes = new Set((await ler(req0, `SELECT MembroId FROM dbo.MembroReferencia WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
+  if (mod.pessoas.some((p) => !existentes.has(p.matricula))) throw new Error('faltam pessoas fictícias: rode a etapa "membros" antes');
+  const comEscala = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  const tot = { cong: 0, equipes: 0, membros: 0, servicos: 0, alocacoes: 0 };
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    if (comEscala.has(cid)) continue;
+    const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+    const quem = dir ? dir.matricula : MATRICULA_MIN + 2;
+    const esc = gerarEscalas(c);
+    if (!esc.equipes.length) continue;
+    await emTransacao(pool, async (req) => {
+      const criada = momento(BASE - 120, 12);
+      await inserir(req, "EscalasEquipes", ["Nome", "CongregacaoId", "LiderMembroId", "Ativa", "CriadaEm", "ContatoComMenores", "Natureza"],
+        esc.equipes.map((e) => [e.nome, cid, e.lider.matricula, true, criada, false, e.natureza]));
+      const eqId = new Map((await ler(req, `SELECT EquipeId, Nome FROM dbo.EscalasEquipes WHERE CongregacaoId = ${cid}`)).map((x) => [x.Nome, x.EquipeId]));
+      const membros = esc.equipes.flatMap((e) => e.membros.map((x) => [eqId.get(e.nome), x.pessoa.matricula, x.frequencia, true, criada]));
+      await inserir(req, "EscalasEquipeMembros", ["EquipeId", "MembroId", "FrequenciaPreferidaDias", "Ativo", "CriadoEm"], membros);
+      await inserir(req, "EscalasServicos", ["CongregacaoId", "DataHora", "Descricao", "Status", "PublicadaEm", "PrazoConfirmacaoDias", "CriadoPorMembroId", "CriadoEm"],
+        esc.servicos.map((s) => [cid, momento(s.dia, 21), "Culto de domingo", "PUBLICADA", momento(s.publicada, 20), 3, quem, momento(s.publicada - 2, 20)]));
+      const svId = new Map((await ler(req, `SELECT ServicoId, CONVERT(char(10), DataHora, 23) AS Dia FROM dbo.EscalasServicos WHERE CongregacaoId = ${cid}`)).map((x) => [x.Dia, x.ServicoId]));
+      const alocs = esc.servicos.flatMap((s) => s.alocs.map((a) => [svId.get(isoDe(s.dia)), eqId.get(a.equipe.nome), a.pessoa.matricula, a.status, a.ordem,
+        momento(a.convidado || s.publicada, 20, 5), a.respondido ? momento(a.respondido, 18) : null, a.confirmado ? momento(a.confirmado, 18, 30) : null]));
+      await inserir(req, "EscalasAlocacoes", ["ServicoId", "EquipeId", "MembroId", "Status", "OrdemConvite", "ConvidadoEm", "RespondidoEm", "ConfirmadoEm"], alocs, 1000);
+      tot.cong++; tot.equipes += esc.equipes.length; tot.membros += membros.length; tot.servicos += esc.servicos.length; tot.alocacoes += alocs.length;
+    });
+  }
+  return tot.cong ? [`escalas de ${tot.cong} congregações: ${tot.equipes} equipes, ${tot.membros} voluntários, ${tot.servicos} cultos, ${tot.alocacoes} convites`] : [];
+}
+
 // ------------------------------------------------------------------ principal ------------------------------------------------------------------
 async function main() {
   const t0 = Date.now();
@@ -1132,7 +1228,7 @@ async function main() {
     const tm = Date.now();
     const mod = gerarModelo();
     console.log(`Modelo (semente ${SEMENTE}, data-base ${DATA_BASE}): ${mod.congs.length} congregações, ${mod.pessoas.length} pessoas, ${mod.vinculos.length} vínculos, ${mod.lideres.length} lideranças — ${((Date.now() - tm) / 1000).toFixed(1)} s`);
-    const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, financeiro: etapaFinanceiro, ebd: etapaEbd };
+    const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, financeiro: etapaFinanceiro, ebd: etapaEbd, escalas: etapaEscalas };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

@@ -96,7 +96,8 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   cargo); 91 logins; 24 meses de tesouraria em cada congregação (48.450 lançamentos,
   960 fechamentos liberados pela Geral — o último, em parte das congregações,
   esperando a liberação —, 960 conciliações PIX, 4.899 saídas); EBD dos últimos 26
-  domingos (300 turmas, 2.478 alunos, 66.325 chamadas).
+  domingos (300 turmas, 2.478 alunos, 66.325 chamadas); escalas de 12 domingos
+  (140 equipes só de adultos, 869 voluntários, 3.847 convites).
 - **Logins de teste** (a senha do semeador pequeno, ou `SEED_SENHA`; sem e-mail,
   entram só com a senha): Presidente 700001, Secretário Geral 700002, Tesouraria
   Geral 700003, Superintendentes Regionais 700011 e 700012, Pastores de Área 700021
@@ -108,16 +109,20 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   terminados em " (Fictícia)"/" (Fictício)", CNPJ `99.999.999/…` — e os rastros do
   login dessas matrículas, numa transação. Se o app foi usado com essas pessoas
   (uma reunião, um casamento...), recusa inteiro e diz a tabela; o `AuditLog` fica.
-- **Opções:** `--contar`, `--etapas=territorio,membros,lideranca,financeiro,ebd`,
+- **Opções:** `--contar`, `--etapas=territorio,membros,lideranca,financeiro,ebd,escalas`,
   `--semente=N` (a mesma semente gera a mesma massa), `--data-base=AAAA-MM-DD`
   (padrão 2026-11-08; para atualizar a data, `--apagar` e rodar de novo),
   `--membros=N`, `--meses=N`, `--ebd-domingos=N`.
 - **Medido no LocalDB:** criar tudo ~45–60 s; rodar por cima ~3 s; `--apagar`
   ~70–80 s (quase tudo na remoção das pessoas, que confere ~400 chaves
   estrangeiras). No banco serverless da homologação conte alguns minutos.
-- **O que ficou de fora:** escalas, eventos, cuidado pastoral e consentimentos de
-  comunicação (sem consentimento nenhum comunicado sai para a massa). E-mails só em
+- **O que ficou de fora:** eventos/calendário, cuidado pastoral e consentimentos de
+  comunicação (regras de sigilo, de ciclo e de consentimento que a massa teria de
+  forjar; sem consentimento, nenhum comunicado sai para a massa). Turmas da EBD e
+  equipes das escalas nascem sem a marca "com menores", como na tela. E-mails só em
   `@example.org` (domínio reservado) e telefones com DDD (00).
+- **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos
+  papéis das migrações; na homologação o semeador pequeno as acrescenta.
 
 ## O que a homologação prova — e o que não prova (vD.3, 07/10/2026)
 

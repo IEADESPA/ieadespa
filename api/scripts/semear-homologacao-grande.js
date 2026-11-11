@@ -31,7 +31,8 @@
 //   - e-mails em @example.org (domínio reservado, RFC 2606: nenhum e-mail chega a ninguém) e telefones com DDD (00), que não existe.
 //   Se o app foi usado na homologação com essas pessoas (uma reunião, um item de cuidado...), o --apagar recusa INTEIRO (desfaz tudo) e
 //   diz a tabela que ainda aponta para elas: nada fica pela metade. Os rastros do login (sessões, tentativas, chaves, PIN, avisos do
-//   sininho) das matrículas fictícias são apagados junto.
+//   sininho, os termos assinados no primeiro acesso) das matrículas fictícias são apagados junto; o AuditLog fica (não tem chave para
+//   a pessoa e a trilha de auditoria não se apaga).
 //
 // O QUE CRIA (data-base 2026-11-08, padrão)
 //   1. território: 2 Regiões, 6 Áreas, 40 Congregações (com a Sede), 10 Extensões da Tenda, 36 Bairros, os órgãos automáticos
@@ -800,6 +801,7 @@ const ALVOS = [
   ["ChavesAcesso", `MembroId ${M_PESSOA}`, true],
   ["Notificacoes", `DestinatarioMembroId ${M_PESSOA}`, true],
   ["NotificacaoPreferencias", `MembroId ${M_PESSOA}`, true],
+  ["TermosAssinados", `MembroId ${M_PESSOA}`, true], // os termos que a liderança fictícia assina no primeiro acesso (POST /api/termos/{tipo})
   ["MembroReferencia", `MembroId ${M_PESSOA}`],
   ["OrgaosLocais", `(Nivel = 1 AND ReferenciaId IN (${Q_CONG})) OR (Nivel = 2 AND ReferenciaId IN (${Q_AREA})) OR (Nivel = 3 AND ReferenciaId IN (${Q_REG}))`],
   ["VinculoCongregacaoArea", `CongregacaoId IN (${Q_CONG}) OR AreaId IN (${Q_AREA})`],
@@ -829,9 +831,18 @@ async function apagar(pool) {
     await emTransacao(pool, async (req) => {
       for (const [tabela, cond] of ALVOS) {
         if (!existem.has(tabela)) continue;
-        const r = await req().query(`DELETE FROM dbo.${tabela} WHERE ${cond}`);
-        const n = r.rowsAffected.reduce((s, x) => s + x, 0);
-        if (n) feito.push(`${tabela}: ${n}`);
+        // Em fatias (cada comando curto, longe do prazo do driver), todas na MESMA transação: ou sai tudo, ou nada. A pessoa é a mais cara (o banco confere
+        // as ~400 chaves estrangeiras que apontam para MembroReferencia a cada linha).
+        const fatia = tabela === "MembroReferencia" ? 1000 : 20000;
+        const t0 = Date.now();
+        let n = 0;
+        for (;;) {
+          const r = await req().query(`DELETE TOP (${fatia}) FROM dbo.${tabela} WHERE ${cond}`);
+          const k = r.rowsAffected.reduce((s, x) => s + x, 0);
+          n += k;
+          if (k < fatia) break;
+        }
+        if (n) feito.push(`${tabela}: ${n}${Date.now() - t0 > 2000 ? ` (${((Date.now() - t0) / 1000).toFixed(0)} s)` : ""}`);
       }
     });
   } catch (e) {

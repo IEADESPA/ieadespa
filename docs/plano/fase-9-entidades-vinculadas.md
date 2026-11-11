@@ -650,7 +650,7 @@ Audita v9.4 e v9.5 pelas 5 perguntas do checklist (a v9.6 saiu do plano em
      violação de CSP. Provas de tela sem navegador: Missões 123 (46 de 46 mutações acusadas), Território 122, Expansão 83, Distritos 77, Entidades 70. Na
      homologação, a primeira execução (43037680424) mostrou só as diferenças de propósito (15 na tela e 1 no celular: o texto da Assistência Social, o aviso do
      pedido de envio, a reunião da CLI no reajuste e o cartão de Meus Dados) e a base nova foi aprovada (`997c473`); a segunda (43040395374) deu 1.277 e 155
-     ações iguais, 0 divergência e 0 violação de CSP; na produção, o teste de tela depois do deploy: execução 43060034029 (resultado registrado ao terminar).
+     ações iguais, 0 divergência e 0 violação de CSP; na produção, o teste de tela depois do deploy (43060034029) deu 1.277 e 155 ações iguais, 0 divergência e 0 violação de CSP.
   3. **O README e o código contam a mesma história?** Sim, conferido item por item (357 tabelas, as migrações 001 a 171, a seção 4, as linhas da FASE 9, as
      datas e os merges, o índice, `SECRETS.md` e `docs/PLATAFORMAS.md` da chave do Maps). Corrigidos: a seção 4 dizia que missões e obrigações fiscais "ainda
      não existem"; 30 módulos (são 41); a v9.6 citada como futura na tela e nos planos; o fundamento da vacância; a base legal do ROPA; a ajuda da aba Expansão.

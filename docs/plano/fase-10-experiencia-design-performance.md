@@ -53,6 +53,9 @@ nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **v�
 4. **A página de propostas tem de ser fácil de ver.** O quadro grande (canvas) da primeira rodada ficou complicado para ele. A próxima
    rodada é **clicável**: escolher a tela, escolher a opção (1 a 5) e ver a prévia daquela opção, claro ou escuro — páginas iniciais de
    verdade para ele clicar, não um quadro solto.
+5. **Toda tela vem também no celular** (12/11/2026): a maioria da liderança local e de área só usa o telefone; só da Região para cima e a
+   Secretaria costumam ter notebook. Cada opção é mostrada no notebook e no celular, e o que fica feio no celular (tabela larga, escadinha de
+   níveis, abas no alto) não passa.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -131,6 +134,9 @@ Igreja** e uma **foto** (a foto, ele manda). A Opção C saiu (simples demais). 
 à esquerda e o formulário num cartão à direita). No celular, aprovada a **"Campos já abertos"** (botão da digital e, logo abaixo, matrícula e
 senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **deitada no notebook e em pé (retrato) no celular**.
 
+**Rodada 3 (12/11/2026):** no celular, a foto fica **no alto e se desfaz** na cor de fundo, com o degradê **indo até o fim** da tela e a foto
+**um pouco desfocada** (fica bonita e, leve, carrega mais rápido que uma foto nítida).
+
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
       mesma). O "Preciso de ajuda" (proteção de crianças) **continua na entrada, sem login** — é canal de proteção.
@@ -200,6 +206,26 @@ tem informação demais; não há submenus.
 - **Princípio para todas as telas: escalabilidade dos níveis.** Os relatórios e as listas têm de continuar claros quando a Igreja crescer:
   Local → Área → Região → Quadrante → Distrito → Geral, com muitas áreas e regiões. Seis botões de área não servem quando forem trinta.
   As propostas mostram uma Igreja maior de mentira para provar isso.
+
+**Rodada 3 (12/11/2026) — escolhas e as misturas que ele pediu:**
+
+- **Início por papel:** aprovado o **menu da esquerda com "Meu trabalho" e "Minha vida na igreja"** (o item "Meu trabalho" aparece quando a
+  pessoa recebe um cargo; "Minha vida na igreja" — carteirinha, escalas, contribuições — é de todos, inclusive do Presidente). Os
+  cartões dos módulos de quem cuida de muitos (Região para cima, Geral) ficaram pequenos demais: voltam a ser **quadrados maiores, como os
+  "cartões coloridos" aprovados, com um resumo do que há em cada módulo**; o líder local e o de área, com poucos módulos, ficam com
+  retângulos. As abas no alto do Início saíram (feias no celular); no celular, o menu da esquerda se esconde num botão.
+- **Avisos:** aprovado **"só o que subiu até você"** (cada nível cobra o de baixo; o Secretário Geral não é cobrado pelos 320 relatórios,
+  só pelo que chega à esfera dele), **junto com o sino** do alto: o sino abre os avisos de qualquer página (sem voltar ao Início), com
+  filtros, e vale para todos — o membro recebe ali os avisos dele. Hoje o sino só liga a notificação do navegador; passa a ser a central
+  dos avisos.
+- **Menu do submódulo:** aprovado o **cabeçalho colorido do departamento** junto com as **funções em grupos**, e os grupos **abrem e
+  fecham com a setinha** (lista suspensa: só aparece o que a pessoa abriu, sem poluir). A **cor do departamento toma o painel inteiro** para
+  a pessoa saber onde está, com uma **paleta de mais de 20 cores** para escolher a de cada departamento e módulo. Os departamentos vão
+  ganhar funções: módulos de hoje podem entrar na aba do departamento (ex.: a Assistência Social).
+- **Andar pelos níveis:** aprovado **"quem precisa de atenção primeiro"** (comparar por Área, Região, Quadrante ou Distrito, do pior para o
+  melhor), com um **botão de busca (lupa)** e um **botão de filtros** para ir direto ao que se quer. A trilha de níveis e a árvore saíram
+  (a escadinha fica feia até no notebook; a tabela vira um horror no celular).
+- **Próxima rodada:** as misturas acima, cada uma ainda em 3 a 5 opções, **sempre no notebook e no celular**.
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.

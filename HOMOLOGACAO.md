@@ -12,7 +12,7 @@ reproduzir/manter** cada peça — não é mais um runbook pendente.
 | Recurso | Nome | Detalhe |
 | --- | --- | --- |
 | Banco de homologação | `ieadespa-homolog` (servidor `srv-app-sql`, brazilsouth) | Serverless GP_S_Gen5, auto-pause 60min, mesmo schema da produção (74 migrações rodadas) |
-| Ambiente de homologação | PR [#21](https://github.com/IEADESPA/ieadespa/pull/21) (branch `homolog`, **não fechar nem mesclar**; substituiu o #1 em 07/10/2026) | Ambiente de preview grátis do Static Web App (plano Standard já pago), `SQL_CONNECTION_STRING` apontada pro `ieadespa-homolog` em vez do banco de produção. URL: `https://white-grass-048208e0f-1.eastus2.6.azurestaticapps.net` |
+| Ambiente de homologação | PR [#21](https://github.com/IEADESPA/ieadespa/pull/21) (branch `homolog`, **não fechar nem mesclar**; substituiu o #1 em 07/10/2026) | Ambiente de preview grátis do Static Web App (plano Standard já pago), `SQL_CONNECTION_STRING` apontada pro `ieadespa-homolog` em vez do banco de produção. URL: `https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net` (o número depois do nome é o do PR: era `-1` no PR antigo) |
 | Application Insights | `ieadespa-appinsights` (eastus2) | Connection string configurada como `APPLICATIONINSIGHTS_CONNECTION_STRING` tanto no ambiente de produção (`default`) quanto no de homologação (`1`) |
 | Grupo de ação | `ieadespa-alertas` | E-mail: `presidente@ieadespa.org` |
 | Regra de alerta | `ieadespa-api-falhas` | Dispara quando `requests/failed` (Application Insights) passa de 5 numa janela de 15 min |

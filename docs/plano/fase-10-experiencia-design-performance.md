@@ -53,6 +53,9 @@ nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **v�
 4. **A página de propostas tem de ser fácil de ver.** O quadro grande (canvas) da primeira rodada ficou complicado para ele. A próxima
    rodada é **clicável**: escolher a tela, escolher a opção (1 a 5) e ver a prévia daquela opção, claro ou escuro — páginas iniciais de
    verdade para ele clicar, não um quadro solto.
+5. **Toda tela vem também no celular** (12/11/2026): a maioria da liderança local e de área só usa o telefone; só da Região para cima e a
+   Secretaria costumam ter notebook. Cada opção é mostrada no notebook e no celular, e o que fica feio no celular (tabela larga, escadinha de
+   níveis, abas no alto) não passa.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -64,15 +67,30 @@ e os mesmos deploys do código), mas a massa fictícia de hoje é pequena demais
 20 dizimistas — nenhum lançamento, EBD, evento, escala ou histórico. O responsável quer um sistema de teste **permanente, cheio de dados de
 mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clicando como um usuário.
 
-- [ ] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
+- [x] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
       nome), do tamanho de uma Igreja grande: várias regiões e áreas, ~40 congregações e Extensões, ~5.000 membros com famílias, idades,
       situações e cargos (a escada ministerial inteira), anos de lançamentos de dízimo e oferta, saídas, fechamentos e repasses, turmas e
       chamadas da EBD, escalas, eventos e inscrições, cuidado pastoral, missões, distritos, enquetes — respeitando as regras e os vínculos do
-      banco.
-- [ ] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
-      a massa (não refaz a cada vez).
-- [ ] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
-      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação.
+      banco. **Feito em 12/11/2026** (`api/scripts/semear-homologacao-grande.js`, por enquanto só no ramo `homolog`): 45 congregações, 3
+      Regiões, 9 Áreas, 2 Quadrantes, 1 Distrito, 10 Extensões, 5.047 pessoas, 36 meses de tesouraria (68.709 lançamentos, 1.620
+      fechamentos, 8.126 saídas), prestações de contas, 18 meses de relatórios dos departamentos (5.146), reuniões da CLI e da JAI, PSC de
+      2026, um ano de EBD (131.609 chamadas) e escalas. A história tem tendência: 27 congregações crescem, 11 ficam estáveis e 7 caem;
+      dezembro forte, janeiro e julho fracos; ~5% das pessoas se afastam aos poucos (o padrão do alerta de evasão da v10.12). Gerada na
+      homologação em 13 minutos.
+- [ ] **Segunda leva da massa:** missões, expansão, entidades vinculadas, consagração e credencial (esteiras com decisões da CME, da CLI e
+      do Presidente). **Não entram, de propósito:** calendário e eventos (o ano é uma linha única, sem marca de fictício, e o gatilho do ciclo
+      da CLI impede desfazer), vistorias de segurança (o banco proíbe apagar vistoria), cuidado pastoral (a rotina diária já detecta o
+      afastamento a partir da massa; itens e notas não se apagam) e termos e consentimentos (a massa não forja assinatura).
+- [x] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
+      a massa (não refaz a cada vez). Rodar de novo só completa o que falta; `--apagar` tira só o que tem a marca de fictício (matrículas
+      700000 a 799999, nomes "(Fictícia)"). O deploy do ramo `homolog` roda o gerador depois do semeador pequeno.
+- [x] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
+      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação. Presidente 700001,
+      Secretário Geral 700002, Tesouraria Geral 700003, Superintendentes 700011–700013, Pastores de Área 700021–700029, Pastor Distrital
+      700031, Dirigente da congregação k = 700100 + k e Tesoureiro Local = 700200 + k (k = 1 é a Sede).
+- [ ] **Defeito achado pela massa (12/11/2026):** a categoria de entrada "Oferta de Culto do Departamento" não pode ser lançada — o código
+      dela (`OFERTA_CULTO_DEPARTAMENTO`, 25 letras) não cabe no campo `LancamentosTesouraria.Tipo` (20). Correção: uma migração alargando o
+      campo. Mexe na produção: espera o "pode corrigir" do responsável.
 - [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.
 
 **O raio-x e as referências:**
@@ -115,6 +133,9 @@ Igreja** e uma **foto** (a foto, ele manda). A Opção C saiu (simples demais). 
 **Rodada 2 (12/11/2026, na página clicável):** no notebook, aprovada a **"Foto na tela inteira"** (a foto cobre a tela, escurecida; boas-vindas
 à esquerda e o formulário num cartão à direita). No celular, aprovada a **"Campos já abertos"** (botão da digital e, logo abaixo, matrícula e
 senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **deitada no notebook e em pé (retrato) no celular**.
+
+**Rodada 3 (12/11/2026):** no celular, a foto fica **no alto e se desfaz** na cor de fundo, com o degradê **indo até o fim** da tela e a foto
+**um pouco desfocada** (fica bonita e, leve, carrega mais rápido que uma foto nítida).
 
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
@@ -185,6 +206,26 @@ tem informação demais; não há submenus.
 - **Princípio para todas as telas: escalabilidade dos níveis.** Os relatórios e as listas têm de continuar claros quando a Igreja crescer:
   Local → Área → Região → Quadrante → Distrito → Geral, com muitas áreas e regiões. Seis botões de área não servem quando forem trinta.
   As propostas mostram uma Igreja maior de mentira para provar isso.
+
+**Rodada 3 (12/11/2026) — escolhas e as misturas que ele pediu:**
+
+- **Início por papel:** aprovado o **menu da esquerda com "Meu trabalho" e "Minha vida na igreja"** (o item "Meu trabalho" aparece quando a
+  pessoa recebe um cargo; "Minha vida na igreja" — carteirinha, escalas, contribuições — é de todos, inclusive do Presidente). Os
+  cartões dos módulos de quem cuida de muitos (Região para cima, Geral) ficaram pequenos demais: voltam a ser **quadrados maiores, como os
+  "cartões coloridos" aprovados, com um resumo do que há em cada módulo**; o líder local e o de área, com poucos módulos, ficam com
+  retângulos. As abas no alto do Início saíram (feias no celular); no celular, o menu da esquerda se esconde num botão.
+- **Avisos:** aprovado **"só o que subiu até você"** (cada nível cobra o de baixo; o Secretário Geral não é cobrado pelos 320 relatórios,
+  só pelo que chega à esfera dele), **junto com o sino** do alto: o sino abre os avisos de qualquer página (sem voltar ao Início), com
+  filtros, e vale para todos — o membro recebe ali os avisos dele. Hoje o sino só liga a notificação do navegador; passa a ser a central
+  dos avisos.
+- **Menu do submódulo:** aprovado o **cabeçalho colorido do departamento** junto com as **funções em grupos**, e os grupos **abrem e
+  fecham com a setinha** (lista suspensa: só aparece o que a pessoa abriu, sem poluir). A **cor do departamento toma o painel inteiro** para
+  a pessoa saber onde está, com uma **paleta de mais de 20 cores** para escolher a de cada departamento e módulo. Os departamentos vão
+  ganhar funções: módulos de hoje podem entrar na aba do departamento (ex.: a Assistência Social).
+- **Andar pelos níveis:** aprovado **"quem precisa de atenção primeiro"** (comparar por Área, Região, Quadrante ou Distrito, do pior para o
+  melhor), com um **botão de busca (lupa)** e um **botão de filtros** para ir direto ao que se quer. A trilha de níveis e a árvore saíram
+  (a escadinha fica feia até no notebook; a tabela vira um horror no celular).
+- **Próxima rodada:** as misturas acima, cada uma ainda em 3 a 5 opções, **sempre no notebook e no celular**.
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.

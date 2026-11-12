@@ -184,6 +184,14 @@ case "$1" in
     migrar 171 2
     base salvar cenario-trava9b
     ;;
+  preparar-172)
+    # FASE 10 (12/11/2026): a partir da base "cenario-trava9b", aplica a 172 duas vezes (o tipo do lançamento com 30 letras; prova a idempotência);
+    # salva "cenario-172" (e2e-81 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-trava9b
+    migrar 172 2
+    base salvar cenario-172
+    ;;
   roteiro)
     shift
     cd "$AQUI"

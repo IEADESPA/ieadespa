@@ -116,4 +116,7 @@ E2E_RCSI=1 BASE=cenario-territorio bash rodar.sh roteiro e2e-79-territorio-corri
 # Trava 9-B (migração 171): a base própria — os achados das revisões da v9.4 e da v9.5
 bash rodar.sh preparar-trava9b
 BASE=cenario-trava9b bash rodar.sh roteiro e2e-80-trava9b.js
+# FASE 10 (migração 172): o tipo do lançamento com 30 letras — a Oferta de Culto do Departamento volta a ser lançada
+bash rodar.sh preparar-172
+BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
 echo TUDO-PRONTO

@@ -35,11 +35,29 @@ algo excelente".
 | Assembleia com 1.000 membros votando | teste com 1.000 votantes de teste na homologação (o "modo assembleia") |
 | Zero erro no console e zero violação de segurança (CSP) | o teste de tela de sempre, completo |
 | Leitura confortável (contraste, tamanho de letra, teclado) | régua WCAG AA, conferida tela por tela |
-| **Aprovado pelo responsável** | galeria de telas "antes e depois" de cada módulo, aprovada por ele antes de ir ao ar |
+| Telas que aguentam a Igreja crescer (muitas áreas, regiões, quadrantes e distritos; centenas de pendências) | conferido na homologação com a massa grande e nas propostas com uma Igreja maior de mentira |
+| **Aprovado pelo responsável** | ele viu e aprovou cada tela (3 a 5 opções por tela, claro e escuro) antes de ir ao ar — regras abaixo |
 
 **Como se trabalha nesta fase:** cada versão passa pela homologação; a mudança de tela é de propósito, então o teste de tela ganha uma base
-nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **vê** as telas: uma galeria de capturas (computador e celular,
-antes e depois) acompanha cada parte redesenhada, e só vai à produção o que ele aprovar.
+nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **vê** as telas e só vai à produção o que ele aprovar.
+
+**Regras de aprovação desta fase (ditadas pelo responsável em 11/11/2026 — valem para a FASE 10 inteira):**
+
+1. **Nada vai para a produção sem ele ver e aprovar — literalmente nada** (tela, cor, texto, comportamento). Ele aprova **vendo**: no
+   link da homologação (o Claude manda o link e ele entra) ou na página de propostas (artefato do Claude). Sem o "aprovado" dele, a
+   mudança não entra na `main`. As anotações deste plano continuam indo para o GitHub na hora (é por elas que ele acompanha).
+2. **Toda tela e toda situação vêm com no mínimo 3 e até 5 opções** (de tela e de cor), sempre em **modo claro e modo escuro**. Vale
+   também quando a linha geral já foi escolhida: a tela do módulo, a do submódulo, a do formulário... cada uma com as suas 3 a 5 opções.
+3. **Por quê:** "a IA é sempre tendente ao erro". Vendo as opções antes, se houver erro, corrige-se antes de ir ao ar; se houver algo
+   melhor, ele traz o melhor para a tela.
+4. **A página de propostas tem de ser fácil de ver.** O quadro grande (canvas) da primeira rodada ficou complicado para ele. A próxima
+   rodada é **clicável**: escolher a tela, escolher a opção (1 a 5) e ver a prévia daquela opção, claro ou escuro — páginas iniciais de
+   verdade para ele clicar, não um quadro solto.
+5. **Toda tela vem também no celular** (12/11/2026): a maioria da liderança local e de área só usa o telefone; só da Região para cima e a
+   Secretaria costumam ter notebook. Cada opção é mostrada no notebook e no celular, e o que fica feio no celular (tabela larga, escadinha de
+   níveis, abas no alto) não passa.
+6. **Da rodada 4 em diante, quem aprova é o responsável junto com o Presidente** (12/11/2026): os dois veem as propostas juntos e respondem
+   juntos, para que a decisão já saia de quem está acima e não precise ser refeita depois.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -51,15 +69,31 @@ e os mesmos deploys do código), mas a massa fictícia de hoje é pequena demais
 20 dizimistas — nenhum lançamento, EBD, evento, escala ou histórico. O responsável quer um sistema de teste **permanente, cheio de dados de
 mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clicando como um usuário.
 
-- [ ] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
+- [x] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
       nome), do tamanho de uma Igreja grande: várias regiões e áreas, ~40 congregações e Extensões, ~5.000 membros com famílias, idades,
       situações e cargos (a escada ministerial inteira), anos de lançamentos de dízimo e oferta, saídas, fechamentos e repasses, turmas e
       chamadas da EBD, escalas, eventos e inscrições, cuidado pastoral, missões, distritos, enquetes — respeitando as regras e os vínculos do
-      banco.
-- [ ] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
-      a massa (não refaz a cada vez).
-- [ ] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
-      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação.
+      banco. **Feito em 12/11/2026** (`api/scripts/semear-homologacao-grande.js`, por enquanto só no ramo `homolog`): 45 congregações, 3
+      Regiões, 9 Áreas, 2 Quadrantes, 1 Distrito, 10 Extensões, 5.047 pessoas, 36 meses de tesouraria (68.709 lançamentos, 1.620
+      fechamentos, 8.126 saídas), prestações de contas, 18 meses de relatórios dos departamentos (5.146), reuniões da CLI e da JAI, PSC de
+      2026, um ano de EBD (131.609 chamadas) e escalas. A história tem tendência: 27 congregações crescem, 11 ficam estáveis e 7 caem;
+      dezembro forte, janeiro e julho fracos; ~5% das pessoas se afastam aos poucos (o padrão do alerta de evasão da v10.12). Gerada na
+      homologação em 13 minutos.
+- [ ] **Segunda leva da massa — tudo entra** (decisão do responsável, 12/11/2026: "é um banco de homologação, é tudo fictício; enche o
+      sistema, muita coisa mesmo, o mais aleatório possível"): calendário e eventos com inscrições, vistorias de segurança, cuidado pastoral,
+      termos e consentimentos dos membros fictícios, missões, expansão, entidades vinculadas, consagração, credencial, AFM e seminário,
+      discipulado, comunicação, proteção, governança e o que mais houver tela. O que o banco proíbe apagar (vistoria, o ciclo do calendário)
+      fica na homologação para sempre, documentado; o `--apagar` continua tirando todo o resto sem falhar no meio.
+- [x] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
+      a massa (não refaz a cada vez). Rodar de novo só completa o que falta; `--apagar` tira só o que tem a marca de fictício (matrículas
+      700000 a 799999, nomes "(Fictícia)"). O deploy do ramo `homolog` roda o gerador depois do semeador pequeno.
+- [x] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
+      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação. Presidente 700001,
+      Secretário Geral 700002, Tesouraria Geral 700003, Superintendentes 700011–700013, Pastores de Área 700021–700029, Pastor Distrital
+      700031, Dirigente da congregação k = 700100 + k e Tesoureiro Local = 700200 + k (k = 1 é a Sede).
+- [ ] **Defeito achado pela massa (12/11/2026):** a categoria de entrada "Oferta de Culto do Departamento" não pode ser lançada — o código
+      dela (`OFERTA_CULTO_DEPARTAMENTO`, 25 letras) não cabe no campo `LancamentosTesouraria.Tipo` (20). Correção: uma migração alargando o
+      campo. Mexe na produção: espera o "pode corrigir" do responsável.
 - [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.
 
 **O raio-x e as referências:**
@@ -68,9 +102,15 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       verdade a lentidão aparece; com 60 pessoas, não): tempo para abrir, erros no console, texto cortado ou saindo da
       caixa, rolagem para o lado, espaço branco sobrando, termos técnicos visíveis (códigos com sublinhado, siglas de banco), artigos de
       norma no meio do texto.
-- [ ] Galeria das telas de hoje (o "antes"), para o responsável marcar o que mais incomoda, com uma frase do porquê.
-- [ ] **Pesquisa de referências:** como sistemas de gestão modernos (de igreja e de outros ramos) resolvem a entrada, o menu, o lançamento
-      em lista, a data, o painel e o celular — anotado aqui como padrão a seguir (sem copiar marca nem imagem de ninguém).
+- [ ] **Propostas de tela, não fotos soltas** (decisão do responsável, 11/11/2026: "tudo está péssimo; não vou passar 2 horas olhando o
+      que já sei que está ruim"): uma página do Claude (artefato) por partes, cada parte com o "antes" e **3 a 5 opções do novo**, para ele
+      escolher e aprovar parte por parte. A primeira (parte 1, porta de entrada; parte 2, menu e conteúdo) foi publicada em 11/11/2026;
+      as escolhas dele estão na v10.2 e na v10.5. A rodada seguinte segue as **regras de aprovação** do início deste arquivo (3 a 5 opções
+      por tela, clicável).
+- [x] **Pesquisa de referências** (11/11/2026, em [`docs/pesquisa/referencias-design-2026.md`](../pesquisa/referencias-design-2026.md)): como
+      sistemas de gestão modernos (de igreja e de outros ramos) resolvem a entrada, o menu, o lançamento em lista, a data, o painel, as
+      tabelas, os formulários e o celular, com o padrão a seguir em cada parte e as fontes; mais o contraste medido das cores de hoje (o
+      dourado sobre branco, o texto suave, o verde de sucesso e a borda dos campos não passam) e a proposta de paleta, letras e espaços.
 - [ ] Mapa do sistema de hoje: cada aba, pílula, sub-aba e formulário, quem usa (papel) e com que frequência — a base para reorganizar.
 - [ ] Relatório com o ranking dos problemas (o que atrapalha mais gente primeiro), registrado aqui.
 
@@ -89,6 +129,16 @@ sem gravar nada):
   módulo muda de itens entre uma aba e outra.
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
+
+**Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da
+Igreja** e uma **foto** (a foto, ele manda). A Opção C saiu (simples demais). O desenho final ainda passa pelas regras de aprovação.
+
+**Rodada 2 (12/11/2026, na página clicável):** no notebook, aprovada a **"Foto na tela inteira"** (a foto cobre a tela, escurecida; boas-vindas
+à esquerda e o formulário num cartão à direita). No celular, aprovada a **"Campos já abertos"** (botão da digital e, logo abaixo, matrícula e
+senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **deitada no notebook e em pé (retrato) no celular**.
+
+**Rodada 3 (12/11/2026):** no celular, a foto fica **no alto e se desfaz** na cor de fundo, com o degradê **indo até o fim** da tela e a foto
+**um pouco desfocada** (fica bonita e, leve, carrega mais rápido que uma foto nítida).
 
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
@@ -130,6 +180,55 @@ sem gravar nada):
 
 Pedido do responsável (11/11/2026): hoje a página inteira rola junto — quem desce pelo menu perde o conteúdo e fica um espaço branco; o menu
 tem informação demais; não há submenus.
+
+**Escolha dele na primeira rodada de propostas (11/11/2026):**
+
+- **Opção A (cartões à direita, menu da esquerda limpo) no Menu principal e na primeira tela dos módulos principais.** Quem tem acesso a
+  tudo vê todos os módulos; o membro vê **primeiro as pendências dele** e menos módulos.
+- **Opção B (menu lateral com os submódulos e setinhas) só quando a pessoa clica num submódulo** — é a tela do trabalho detalhado, com a
+  escolha do nível **Local / Área / Geral** (ex.: relatórios dos departamentos, escolhendo congregação ou área).
+- A Opção C (três colunas) saiu.
+- Cores por módulo à vontade, em modo claro e escuro. As telas do módulo e do submódulo ainda vêm em **3 a 5 opções** cada (regras de
+  aprovação).
+
+**Rodada 2 (12/11/2026, na página clicável) — o que ele aprovou e o que mandou refazer:**
+
+- **Início de quem vê tudo:** aprovados os **"Cartões coloridos"** (pendências do dia e os módulos em cartões com a cor de cada um). Ficam
+  muito bons para o líder local, que vê poucos módulos.
+- **Avisos e pendências não podem crescer sem controle.** Um Líder Geral de departamento tem 40 pendências (uma por congregação); o
+  Secretário Geral, 40 × 8 = 320. Uma lista assim polui e não ajuda. É preciso uma central de avisos inteligente (o sino do alto), com o
+  número agrupado por assunto e o que é de fato dele separado do que só se acompanha. Vem na próxima rodada, com opções.
+- **Início do membro:** aprovado a contragosto ("ficou feio"). Falta mostrar o **encaixe**: a mesma pessoa é membro e, no mês seguinte,
+  pode virar líder local de um departamento, e aí ganha módulos. O Presidente e o Secretário também têm carteirinha, escalas e contribuições.
+  Não pode parecer que a pessoa tem duas abas com a mesma coisa. Refazer mostrando a mesma pessoa em várias situações (membro, líder local,
+  Secretário Geral).
+- **Primeira tela do módulo:** aprovados os **"Cartões com barra de progresso"** (quantas das congregações já enviaram, por departamento).
+- **Dentro do submódulo:** o conteúdo em cartões foi aprovado ("perfeito para relatório"); o **menu da esquerda foi reprovado**. Ele só
+  mostra as funções **daquele** departamento (visão geral, relatórios, equipe, escalas, check-in, proteção, as **finanças do
+  departamento**...), nunca os outros departamentos, nem para quem tem acesso a vários: cada departamento tem a sua aba.
+- **Princípio para todas as telas: escalabilidade dos níveis.** Os relatórios e as listas têm de continuar claros quando a Igreja crescer:
+  Local → Área → Região → Quadrante → Distrito → Geral, com muitas áreas e regiões. Seis botões de área não servem quando forem trinta.
+  As propostas mostram uma Igreja maior de mentira para provar isso.
+
+**Rodada 3 (12/11/2026) — escolhas e as misturas que ele pediu:**
+
+- **Início por papel:** aprovado o **menu da esquerda com "Meu trabalho" e "Minha vida na igreja"** (o item "Meu trabalho" aparece quando a
+  pessoa recebe um cargo; "Minha vida na igreja" — carteirinha, escalas, contribuições — é de todos, inclusive do Presidente). Os
+  cartões dos módulos de quem cuida de muitos (Região para cima, Geral) ficaram pequenos demais: voltam a ser **quadrados maiores, como os
+  "cartões coloridos" aprovados, com um resumo do que há em cada módulo**; o líder local e o de área, com poucos módulos, ficam com
+  retângulos. As abas no alto do Início saíram (feias no celular); no celular, o menu da esquerda se esconde num botão.
+- **Avisos:** aprovado **"só o que subiu até você"** (cada nível cobra o de baixo; o Secretário Geral não é cobrado pelos 320 relatórios,
+  só pelo que chega à esfera dele), **junto com o sino** do alto: o sino abre os avisos de qualquer página (sem voltar ao Início), com
+  filtros, e vale para todos — o membro recebe ali os avisos dele. Hoje o sino só liga a notificação do navegador; passa a ser a central
+  dos avisos.
+- **Menu do submódulo:** aprovado o **cabeçalho colorido do departamento** junto com as **funções em grupos**, e os grupos **abrem e
+  fecham com a setinha** (lista suspensa: só aparece o que a pessoa abriu, sem poluir). A **cor do departamento toma o painel inteiro** para
+  a pessoa saber onde está, com uma **paleta de mais de 20 cores** para escolher a de cada departamento e módulo. Os departamentos vão
+  ganhar funções: módulos de hoje podem entrar na aba do departamento (ex.: a Assistência Social).
+- **Andar pelos níveis:** aprovado **"quem precisa de atenção primeiro"** (comparar por Área, Região, Quadrante ou Distrito, do pior para o
+  melhor), com um **botão de busca (lupa)** e um **botão de filtros** para ir direto ao que se quer. A trilha de níveis e a árvore saíram
+  (a escadinha fica feia até no notebook; a tabela vira um horror no celular).
+- **Próxima rodada:** as misturas acima, cada uma ainda em 3 a 5 opções, **sempre no notebook e no celular**.
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.
@@ -176,7 +275,7 @@ tem informação demais; não há submenus.
 ## v10.8 — Aplicação tela por tela (a varredura)
 
 - [ ] Passar a entrada, o design, a linguagem, a navegação e as peças por **todas** as telas, módulo a módulo, na ordem do ranking da v10.1.
-- [ ] Para cada módulo: a galeria antes e depois aprovada pelo responsável, a prova de tela sem navegador do módulo atualizada e a base do
+- [ ] Para cada módulo: as telas aprovadas pelo responsável (3 a 5 opções cada, vistas por ele), a prova de tela sem navegador do módulo atualizada e a base do
       teste de tela aprovada — registrado aqui (nada fica "meio migrado" sem registro de onde parou).
 - [ ] Ao fim, as metas da tabela do início conferidas de novo pela varredura da v10.1.
 

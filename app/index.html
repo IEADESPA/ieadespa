@@ -2939,7 +2939,12 @@
               <option value="DOIS_TERCOS">Quórum: Dois terços</option>
               <option value="NOVENTA_POR_CENTO">Quórum: 90% (Núcleo Fundamental — Art. 71)</option>
             </select>
+            <select id="enqueteTipoApuracao" style="display:none;" data-on-change="onChangeVinculanteEnquete" aria-label="Tipo da votação">
+              <option value="PROPOSTA">Tipo: aprovar ou rejeitar uma proposta</option>
+              <option value="ESCOLHA">Tipo: escolher entre nomes ou opções</option>
+            </select>
           </div>
+          <p class="subtitle" id="enqueteAjudaTipo" style="display:none;"></p>
           <div class="input-group">
             <label for="enqueteFechamento">Fecha sozinha em (opcional — dia e hora de Brasília; depois disso ninguém mais responde):</label>
             <input type="datetime-local" id="enqueteFechamento" />

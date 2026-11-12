@@ -140,6 +140,9 @@ senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **d
 **Rodada 3 (12/11/2026):** no celular, a foto fica **no alto e se desfaz** na cor de fundo, com o degradê **indo até o fim** da tela e a foto
 **um pouco desfocada** (fica bonita e, leve, carrega mais rápido que uma foto nítida).
 
+**Rodada 4 (12/11/2026, ele e o Presidente):** aprovada a de **desfoque leve, com a foto mais visível**, com um ajuste: a linha onde o
+degradê termina desce até a altura do botão "Entrar". Com isso, a entrada do celular está aprovada.
+
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
       mesma). O "Preciso de ajuda" (proteção de crianças) **continua na entrada, sem login** — é canal de proteção.
@@ -164,6 +167,11 @@ senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **d
       a pessoa saber "onde estou"; cores de estado (ok, atenção, erro, informação) iguais em todo o sistema.
 - [ ] **Espaços** numa grade de 8 px, declarados uma vez (`:root`), no lugar dos valores soltos de hoje.
 - [ ] **Tema escuro** opcional (a pessoa escolhe; o padrão segue o aparelho).
+- [ ] **Cor própria de cada parte do sistema** (rodada 4, 12/11/2026): cada módulo e cada departamento tem a sua cor, que toma o menu, o
+      cabeçalho, os botões e as barras; a paleta tem pelo menos 50 cores em famílias, com tons claros e escuros, e uma cor escolhida fica
+      **reservada** (não se repete em outra parte).
+- [ ] **Acessibilidade e contraste das cores** (pedido do responsável e do Presidente, 12/11/2026): toda cor da paleta conferida em fundo
+      claro e escuro pela régua WCAG AA (texto 4,5:1, peças 3:1); a cor que não passa num dos modos ganha o tom certo para aquele modo.
 - [ ] Os estilos escritos dentro do HTML (`style="..."`) viram classes — prepara a v10.15 (CSP sem `'unsafe-inline'`).
 
 ## v10.4 — Linguagem limpa
@@ -229,6 +237,20 @@ tem informação demais; não há submenus.
   melhor), com um **botão de busca (lupa)** e um **botão de filtros** para ir direto ao que se quer. A trilha de níveis e a árvore saíram
   (a escadinha fica feia até no notebook; a tabela vira um horror no celular).
 - **Próxima rodada:** as misturas acima, cada uma ainda em 3 a 5 opções, **sempre no notebook e no celular**.
+
+**Rodada 4 (12/11/2026, ele junto com o Presidente) — aprovado, com os ajustes:**
+
+- **Início:** os cartões dos módulos em "Meu trabalho" mostram **as 2 principais pendências** daquele módulo e, quando há mais, só o número
+  ("9 pendências"). Os cartões com números grandes só fazem sentido com gráficos: ficam para o **painel executivo** dos indicadores
+  (v10.11 e v10.12).
+- **Avisos:** aprovado o **painel do lado** (no celular, a tela inteira), só com o que a pessoa precisa resolver e **filtros melhores**. A
+  linha "como chegou até você" (congregações, áreas, regiões, você) **sai**.
+- **Cor de cada parte do sistema:** aprovado o **menu todo na cor** — e vale para todos os módulos do sistema, não só os departamentos: cada
+  parte tem a sua cor e a pessoa sabe onde está. O contraste e a acessibilidade dessas cores ganham um trabalho próprio na v10.3.
+- **Paleta:** aprovada **por família**, mas **24 cores é pouco**: pelo menos umas **50**, com **tons mais claros e mais escuros** em cada
+  família, e **reserva de cor** — a cor de um departamento ou módulo não se repete em nenhuma outra parte do sistema.
+- **Níveis:** aprovados a **lupa e os filtros como botões** (bom e enxuto no celular); a lupa deixa **digitar** o nome da congregação,
+  área ou região, e os **filtros aumentam** (são poucos).
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.

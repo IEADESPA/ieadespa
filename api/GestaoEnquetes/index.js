@@ -35,6 +35,7 @@ const { membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { membrosElegiveis, membroElegivel, passouDoFechamento, encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
+const estatuto = require("../shared/estatuto");
 // O INSERT do voto: a enquete lida COM TRAVA (UPDLOCK, REPEATABLEREAD — uma leitura com trava mesmo com o banco em READ_COMMITTED_SNAPSHOT), aberta e antes do instante
 // marcado pela hora do banco. Exportado para o roteiro ponta a ponta provar a corrida com o encerramento (tools/e2e-localdb/e2e-39).
 const SQL_INSERIR_RESPOSTA = `INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
@@ -59,6 +60,7 @@ async function lerEnquete(pool, enqueteId) {
     SELECT EnqueteId AS enqueteId, Titulo AS titulo, Descricao AS descricao,
            Visibilidade AS visibilidade, PublicoTipo AS publicoTipo, Vinculante AS vinculante,
            QuorumTipo AS quorumTipo, Status AS status, ResultadoAprovado AS resultadoAprovado, CriadoPor AS criadoPor,
+           TipoApuracao AS tipoApuracao, OpcaoVencedoraId AS opcaoVencedoraId, ResultadoEmpate AS resultadoEmpate,
            CONVERT(varchar(33), DataAbertura, 126) AS dataAbertura,
            CONVERT(varchar(33), DataFechamento, 126) AS dataFechamento,
            CONVERT(varchar(33), DataFechamentoPrevista, 126) AS dataFechamentoPrevista
@@ -88,7 +90,7 @@ async function lerPerguntas(pool, enqueteId) {
   const perguntas = [];
   for (const pergunta of perguntasResult.recordset) {
     const opcoesResult = await pool.request().input("id", sql.Int, pergunta.perguntaId)
-      .query(`SELECT OpcaoId AS opcaoId, Texto AS texto FROM OpcoesEnquete WHERE PerguntaId = @id`);
+      .query(`SELECT OpcaoId AS opcaoId, Texto AS texto, Papel AS papel FROM OpcoesEnquete WHERE PerguntaId = @id ORDER BY OpcaoId`);
     perguntas.push(Object.assign({}, pergunta, { opcoes: opcoesResult.recordset }));
   }
   return perguntas;
@@ -457,9 +459,30 @@ module.exports = async function (context, req) {
         return;
       }
     }
-    if (vinculante && (perguntas.length !== 1 || perguntas[0].tipo !== "OPCOES" || !QUORUM_TIPOS_VALIDOS.includes(quorumTipo))) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Enquete vinculante precisa ter exatamente 1 pergunta, do tipo Opções, com um QuorumTipo válido." } };
-      return;
+    // FASE 10 (migração 173): a vinculante diz o TIPO — PROPOSTA (aprovar ou rejeitar: cada opção com o papel aprova, rejeita ou em branco, que não conta; precisa
+    // do quórum) ou ESCOLHA (nomes ou opções: ganha a mais votada, sem quórum). Sem tipo, deduz pelos textos (Sim/Não/Em branco → proposta). `papeis` vem na ordem
+    // das opções; sem `papeis`, sai do texto de cada opção.
+    let tipoApuracao = null, papeis = null;
+    if (vinculante) {
+      if (perguntas.length !== 1 || perguntas[0].tipo !== "OPCOES") {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Votação vinculante precisa ter exatamente 1 pergunta, do tipo Opções." } };
+        return;
+      }
+      const opcoesVinc = perguntas[0].opcoes;
+      tipoApuracao = corpo.tipoApuracao == null || corpo.tipoApuracao === "" ? estatuto.inferirApuracao(opcoesVinc).tipo : corpo.tipoApuracao;
+      if (!estatuto.TIPOS_APURACAO.includes(tipoApuracao)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Tipo de votação inválido: PROPOSTA (aprovar ou rejeitar) ou ESCOLHA (nomes ou opções)." } };
+        return;
+      }
+      if (tipoApuracao === "PROPOSTA") {
+        papeis = Array.isArray(corpo.papeis) ? corpo.papeis : opcoesVinc.map(estatuto.papelPeloTexto);
+        const erroPapel = papeis.length !== opcoesVinc.length ? "Informe o papel de cada opção (aprova, rejeita ou em branco)." : estatuto.validarPapeisProposta(papeis);
+        if (erroPapel) { context.res = { status: 200, body: { sucesso: false, mensagem: erroPapel } }; return; }
+        if (!QUORUM_TIPOS_VALIDOS.includes(quorumTipo)) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: "Informe o quórum da proposta (maioria simples, dois terços ou 90%)." } };
+          return;
+        }
+      }
     }
     // v7.14 — fecha sozinha: data e hora de Brasília (o campo datetime-local da tela), no futuro e em até 1 ano; guardada em UTC
     let previstaUtc = null;
@@ -536,15 +559,16 @@ module.exports = async function (context, req) {
       .input("visibilidade", sql.NVarChar(20), visibilidadeFinal)
       .input("publicoTipo", sql.NVarChar(20), publicoTipoFinal)
       .input("vinculante", sql.Bit, !!vinculante)
-      .input("quorumTipo", sql.NVarChar(30), vinculante ? quorumTipo : null)
+      .input("quorumTipo", sql.NVarChar(30), vinculante && QUORUM_TIPOS_VALIDOS.includes(quorumTipo) ? quorumTipo : null)
+      .input("tipoApuracao", sql.NVarChar(20), tipoApuracao)
       .input("orgaoId", sql.Int, orgaoId || null)
       .input("sessaoId", sql.Int, sessaoId || null)
       .input("criadoPor", sql.Int, usuario.membroId)
       .input("prevista", sql.NVarChar(19), previstaUtc)
       .query(`
-        INSERT INTO Enquetes (Titulo, Descricao, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, OrgaoId, SessaoId, CriadoPor, DataFechamentoPrevista)
+        INSERT INTO Enquetes (Titulo, Descricao, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, TipoApuracao, OrgaoId, SessaoId, CriadoPor, DataFechamentoPrevista)
         OUTPUT INSERTED.EnqueteId
-        VALUES (@titulo, @descricao, @visibilidade, @publicoTipo, @vinculante, @quorumTipo, @orgaoId, @sessaoId, @criadoPor, CONVERT(datetime2, @prevista, 126))
+        VALUES (@titulo, @descricao, @visibilidade, @publicoTipo, @vinculante, @quorumTipo, @tipoApuracao, @orgaoId, @sessaoId, @criadoPor, CONVERT(datetime2, @prevista, 126))
       `);
     const enqueteId = criada.recordset[0].EnqueteId;
 
@@ -558,9 +582,10 @@ module.exports = async function (context, req) {
           .query(`INSERT INTO PerguntasEnquete (EnqueteId, Ordem, Titulo, Tipo) OUTPUT INSERTED.PerguntaId VALUES (@enqueteId, @ordem, @titulo, @tipo)`);
         const perguntaId = perguntaCriada.recordset[0].PerguntaId;
         if (pergunta.tipo === "OPCOES") {
-          for (const textoOpcao of pergunta.opcoes) {
+          for (const [indice, textoOpcao] of pergunta.opcoes.entries()) {
             await pool.request().input("perguntaId", sql.Int, perguntaId).input("texto", sql.NVarChar(300), textoOpcao)
-              .query(`INSERT INTO OpcoesEnquete (PerguntaId, Texto) VALUES (@perguntaId, @texto)`);
+              .input("papel", sql.NVarChar(10), papeis ? papeis[indice] : null)
+              .query(`INSERT INTO OpcoesEnquete (PerguntaId, Texto, Papel) VALUES (@perguntaId, @texto, @papel)`);
           }
         }
       }
@@ -583,7 +608,7 @@ module.exports = async function (context, req) {
 
     await registrarAuditoria({
       tabela: "Enquetes", registroId: enqueteId, acao: "Criou enquete", usuarioId: usuario.membroId,
-      dadosDepois: { titulo, totalPerguntas: perguntas.length, visibilidade: visibilidadeFinal, vinculante: !!vinculante, publicoTipo: publicoTipoFinal }
+      dadosDepois: { titulo, totalPerguntas: perguntas.length, visibilidade: visibilidadeFinal, vinculante: !!vinculante, tipoApuracao, publicoTipo: publicoTipoFinal }
     });
 
     const enqueteCompleta = await montarEnqueteCompleta(pool, enqueteId);

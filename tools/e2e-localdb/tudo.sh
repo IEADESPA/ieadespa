@@ -119,4 +119,9 @@ BASE=cenario-trava9b bash rodar.sh roteiro e2e-80-trava9b.js
 # FASE 10 (migração 172): o tipo do lançamento com 30 letras — a Oferta de Culto do Departamento volta a ser lançada
 bash rodar.sh preparar-172
 BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
+# FASE 10: o número do recibo de doação numa transação travada (o maior do ano + 1), com corrida de 6 processos
+BASE=cenario-172 bash rodar.sh roteiro e2e-82-doacoes-recibo.js
+# FASE 10 (migração 173): a votação vinculante com o tipo — proposta (aprova, rejeita, em branco não conta) ou escolha (a mais votada, empate para a mesa)
+bash rodar.sh preparar-173
+BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
 echo TUDO-PRONTO

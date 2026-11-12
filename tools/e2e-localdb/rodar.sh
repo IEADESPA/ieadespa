@@ -192,6 +192,14 @@ case "$1" in
     migrar 172 2
     base salvar cenario-172
     ;;
+  preparar-173)
+    # FASE 10 (12/11/2026): a partir da base "cenario-172", aplica a 173 duas vezes (a votação vinculante com o tipo: proposta ou escolha); salva "cenario-173"
+    # (e2e-83 monta o próprio cenário e roda a 173 de novo sobre votações antigas).
+    cd "$AQUI"
+    base restaurar cenario-172
+    migrar 173 2
+    base salvar cenario-173
+    ;;
   roteiro)
     shift
     cd "$AQUI"

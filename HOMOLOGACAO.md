@@ -76,7 +76,7 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
   treinamento e um sem a política aceita —, para abrir o painel de conformidade. Nunca copiamos dado de membro real; o script se recusa a rodar
   fora de um banco com "homolog" no nome.
 
-## Massa grande (v10.1, 11/11/2026)
+## Massa grande (v10.1, 11 e 12/11/2026)
 
 Uma igreja grande inteira, inventada, para o raio-x rodar sobre volume de verdade e
 para "entrar como" cada papel: `api/scripts/semear-homologacao-grande.js`. **Não**
@@ -89,38 +89,58 @@ cd api && SQL_CONNECTION_STRING="<conexão do ieadespa-homolog>" node scripts/se
 cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/semear-homologacao-grande.js
 ```
 
-- **O que cria** (semente e data-base padrão): 2 Regiões, 6 Áreas, 40 Congregações
-  (com a Sede), 10 Extensões da Tenda, 36 Bairros e os órgãos automáticos; 5.045
-  pessoas em famílias (4.507 vínculos), de 0 a 90 anos, com situação, batismo,
-  admissão, endereço em linhas e cargo pela escada (2.099 linhas de histórico do
-  cargo); 91 logins; 24 meses de tesouraria em cada congregação (48.450 lançamentos,
-  960 fechamentos liberados pela Geral — o último, em parte das congregações,
-  esperando a liberação —, 960 conciliações PIX, 4.899 saídas); EBD dos últimos 26
-  domingos (300 turmas, 2.478 alunos, 66.325 chamadas); escalas de 12 domingos
-  (140 equipes só de adultos, 869 voluntários, 3.847 convites).
+- **Uma história, não ruído:** cada congregação cresce, fica estável ou cai no seu
+  ritmo (admissões, saídas, ofertas e dízimos acompanham), dezembro forte (13º),
+  janeiro e julho fracos, e ~5% das pessoas se afastam aos poucos — presença na EBD,
+  dízimo e escala minguando, ainda ativas no cadastro (o padrão do alerta de evasão
+  da v10.12).
+- **O que cria** (semente e data-base padrão; cada item é uma etapa de
+  `--etapas=`): `territorio` — 2 cidades, 3 Regiões, 9 Áreas, 45 Congregações
+  (com a Sede), 2 Quadrantes, 1 Distrito (a região metropolitana na capital), 10
+  Extensões, 48 Bairros e os órgãos automáticos; `membros` — 5.047 pessoas em
+  famílias (4.563 vínculos), com situação, batismo, admissão, endereço e cargo pela
+  escada; `lideranca` — 104 logins e os assentos da Diretoria e do Conselho Fiscal;
+  `reunioes` — 36 reuniões da CLI e 473 da JAI, com 4.428 presenças; `financeiro` —
+  36 meses: 68.709 lançamentos, 1.620 fechamentos (o Distrito do repasse gravado desde
+  o decreto), 1.620 conciliações PIX, 8.118 saídas; `prestacoes` — 1.579 prestações
+  de contas (224 com Ata de Pendência, 41 meses faltando); `distritos` — o decreto
+  da CLI, 19 meses de Dízimo Institucional e o balanço de 2025 (devolvido e aprovado
+  pelo Conselho Fiscal); `relatorios` — 5.146 relatórios de departamento em 18 meses
+  (1.021 atrasados, 380 faltando, rascunhos parados), com valores e trilha de
+  aprovação; `psc` — a avaliação do exercício de cada congregação (nível calculado
+  por `shared/psc.js`); `ebd` — um ano de aulas (325 turmas, 2.449 alunos, 131.609
+  chamadas); `escalas` — 30 domingos (158 equipes, 10.694 convites).
 - **Logins de teste** (a senha do semeador pequeno, ou `SEED_SENHA`; sem e-mail,
   entram só com a senha): Presidente 700001, Secretário Geral 700002, Tesouraria
-  Geral 700003, Superintendentes Regionais 700011 e 700012, Pastores de Área 700021
-  a 700026, Dirigente da congregação *k* = 700100 + *k* e Tesoureiro Local =
-  700200 + *k* (*k* = 1 é a Sede). No primeiro acesso cada um assina os termos,
-  como qualquer liderança.
+  Geral 700003, Superintendentes Regionais 700011 a 700013, Pastores de Área 700021
+  a 700029, Pastor Distrital 700031, Tesoureiro de Distrito 700032, Vice-Presidentes
+  de Quadrante 700035 e 700036, Dirigente da congregação *k* = 700100 + *k* e
+  Tesoureiro Local = 700200 + *k* (*k* = 1 é a Sede). No primeiro acesso cada um
+  assina os termos, como qualquer liderança.
 - **Refazível:** rodar de novo só completa o que falta (nada duplica);
   `--apagar` tira só o que o gerador cria — matrículas 700000 a 799999, nomes
   terminados em " (Fictícia)"/" (Fictício)", CNPJ `99.999.999/…` — e os rastros do
-  login dessas matrículas, numa transação. Se o app foi usado com essas pessoas
-  (uma reunião, um casamento...), recusa inteiro e diz a tabela; o `AuditLog` fica.
-- **Opções:** `--contar`, `--etapas=territorio,membros,lideranca,financeiro,ebd,escalas`,
-  `--semente=N` (a mesma semente gera a mesma massa), `--data-base=AAAA-MM-DD`
-  (padrão 2026-11-08; para atualizar a data, `--apagar` e rodar de novo),
-  `--membros=N`, `--meses=N`, `--ebd-domingos=N`.
-- **Medido no LocalDB:** criar tudo ~45–60 s; rodar por cima ~3 s; `--apagar`
-  ~70–80 s (quase tudo na remoção das pessoas, que confere ~400 chaves
-  estrangeiras). No banco serverless da homologação conte alguns minutos.
-- **O que ficou de fora:** eventos/calendário, cuidado pastoral e consentimentos de
-  comunicação (regras de sigilo, de ciclo e de consentimento que a massa teria de
-  forjar; sem consentimento, nenhum comunicado sai para a massa). Turmas da EBD e
-  equipes das escalas nascem sem a marca "com menores", como na tela. E-mails só em
-  `@example.org` (domínio reservado) e telefones com DDD (00).
+  login dessas matrículas, numa transação. Se o app foi usado com essas pessoas fora
+  das peças fictícias (um casamento, um aluno noutra congregação...), recusa inteiro e
+  diz a tabela; o `AuditLog` fica.
+- **Opções:** `--contar`, `--etapas=...`, `--semente=N` (a mesma semente gera a
+  mesma massa), `--data-base=AAAA-MM-DD` (padrão 2026-11-08; para atualizar a data,
+  `--apagar` e rodar de novo), `--membros=N`, `--meses=N` (padrão 36),
+  `--ebd-domingos=N` (padrão 52).
+- **Medido no LocalDB:** criar tudo ~3,5 min; rodar por cima ~8 s; `--apagar`
+  ~2,5 min (quase tudo na remoção das pessoas, que confere ~400 chaves
+  estrangeiras). No banco serverless da homologação conte alguns minutos a mais.
+- **O que ficou de fora, e por quê:** calendário (o ano é uma linha compartilhada,
+  sem marca, e os eventos seguem o ciclo anual da CLI com gatilho de imutabilidade:
+  o `--apagar` não devolveria o banco ao que era); vistorias de segurança/AVCB (o
+  banco proíbe apagar vistoria); cuidado pastoral (a rotina diária detecta o
+  afastamento a partir desta massa; forjar itens e notas, que não se apagam,
+  quebraria o refazer); consentimentos de comunicação, adesões de voluntário e termos
+  (aceites com a impressão digital do texto: a massa não forja assinatura); missões,
+  expansão, entidades, consagração e credencial (esteiras com decisões da CME, da CLI
+  e do Presidente — próxima rodada). Turmas da EBD e equipes das escalas nascem sem a
+  marca "com menores", como na tela. E-mails só em `@example.org` (domínio
+  reservado) e telefones com DDD (00).
 - **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos
   papéis das migrações; na homologação o semeador pequeno as acrescenta.
 

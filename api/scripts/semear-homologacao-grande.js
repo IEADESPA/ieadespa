@@ -10,12 +10,13 @@
 //   (nenhuma)               cria o que falta (todas as etapas); rodar de novo NÃO duplica nada
 //   --apagar                remove SÓ o que este gerador cria (pelas marcas abaixo), numa transação; nada mais
 //   --contar                só conta as linhas fictícias por tabela
-//   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, financeiro, ebd, escalas
+//   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, reunioes, financeiro, prestacoes, distritos,
+//                           relatorios, psc, ebd, escalas
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
-//   --meses=N               meses fechados da tesouraria antes do mês da data-base (padrão 24)
-//   --ebd-domingos=N        domingos de chamada da EBD até a data-base (padrão 26)
+//   --meses=N               meses fechados da tesouraria antes do mês da data-base (padrão 36)
+//   --ebd-domingos=N        domingos de chamada da EBD até a data-base (padrão 52)
 //   SEED_SENHA              senha de todos os logins de teste (padrão: a mesma do semeador pequeno)
 //   Para "atualizar" a massa para outra data: --apagar e rodar de novo com --data-base nova (rodar por cima só completa o que falta).
 //
@@ -25,38 +26,49 @@
 //
 // MARCAS (o que --apagar reconhece; nada fora delas é tocado)
 //   - pessoas: matrículas 700000 a 799999 (o semeador pequeno usa 900001+; o equipamento e2e, 1001 a 9999);
-//   - território: Regiões, Áreas, Congregações e Extensões com o nome terminando em " (Fictícia)"; Bairros em " (Fictício)";
+//   - território: Regiões, Áreas, Congregações e Extensões com o nome terminando em " (Fictícia)"; Bairros, Quadrantes e Distritos em " (Fictício)";
 //   - fornecedores: CNPJ "99.999.999/xxxx-00" (dígito verificador inválido de propósito: nunca é empresa real) e nome em " (Fictício)";
-//   - o resto (lançamentos, fechamentos, saídas, EBD, vínculos, liderança...) é achado pela congregação ou pela matrícula fictícia;
+//   - reuniões da CLI com " (Fictícia)" na descrição e todas as reuniões dos órgãos locais fictícios;
+//   - o resto (lançamentos, fechamentos, saídas, relatórios, PSC, EBD, escalas, vínculos, liderança, assentos...) é achado pela peça fictícia
+//     (congregação, turma, equipe, Distrito) ou, quando é da ficha da própria pessoa, pela matrícula fictícia;
 //   - e-mails em @example.org (domínio reservado, RFC 2606: nenhum e-mail chega a ninguém) e telefones com DDD (00), que não existe.
-//   Se o app foi usado na homologação com essas pessoas (uma reunião, um item de cuidado...), o --apagar recusa INTEIRO (desfaz tudo) e
-//   diz a tabela que ainda aponta para elas: nada fica pela metade. Os rastros do login (sessões, tentativas, chaves, PIN, avisos do
-//   sininho, os termos assinados no primeiro acesso) das matrículas fictícias são apagados junto; o AuditLog fica (não tem chave para
-//   a pessoa e a trilha de auditoria não se apaga).
+//   Se o app foi usado na homologação com essas pessoas FORA das peças fictícias (um casamento, um aluno noutra congregação...), o --apagar
+//   recusa INTEIRO (desfaz tudo) e diz a tabela que ainda aponta para elas: nada fica pela metade. Os rastros do login (sessões, tentativas,
+//   chaves, PIN, avisos do sininho, os termos assinados no primeiro acesso) das matrículas fictícias são apagados junto; o AuditLog fica (não
+//   tem chave para a pessoa e a trilha de auditoria não se apaga).
 //
-// O QUE CRIA (data-base 2026-11-08, padrão)
-//   1. território: 2 Regiões, 6 Áreas, 40 Congregações (com a Sede), 10 Extensões da Tenda, 36 Bairros, os órgãos automáticos
-//      (JAI, JEA/JUC, CRA/TER/CRAF, como a tela de catálogos faz) e o vínculo congregação × área;
-//   2. ~5.000 pessoas em famílias (cônjuge, pai/mãe e filhos, irmãos), idades de 0 a 90 anos, situação (congregado, em comunhão,
-//      sem comunhão), alguns desligados, falecidos e inativos, batismo e admissão coerentes com a idade, endereço em linhas com bairro,
-//      departamento pela idade e cargo ministerial pela escada do Art. 72 (poucos pastores e evangelistas, mais presbíteros, diáconos e
-//      auxiliares; obreira até Missionária), com o histórico do cargo respeitando o interstício;
-//   3. liderança com senha (SEED_SENHA): Presidente 700001, Secretário Geral 700002, Tesoureiro (Tesouraria Geral) 700003,
-//      Superintendentes Regionais 700011-700012, Pastores de Área 700021-700026, Dirigente da congregação k = 700100+k e Tesoureiro
-//      Local = 700200+k (k = 1 é a Sede); todos sem e-mail (entram só com a senha, como os do semeador pequeno);
-//   4. tesouraria: dizimistas, dízimos e ofertas de cada culto (domingo e quarta) por congregação desde 24 meses antes da data-base,
-//      com Termo nº contínuo, PIX conciliado em lote por mês, fechamentos mensais calculados como o FecharMesTesouraria (aluguel/lote,
-//      40% local / 60% geral) e liberados pela Tesouraria Geral (o último fechado fica, em parte das congregações, esperando a
-//      liberação), o mês da data-base aberto; fornecedores e saídas locais (energia, água, Santa Ceia...) aprovadas pela Tesouraria
-//      Geral (segregação: quem solicita nunca aprova) e pagas sem passar do saldo local liberado;
-//   5. EBD: revistas, turmas por faixa etária em cada congregação, alunos (membros), professores, lições, chamadas, ofertas e
-//      cadernetas dos últimos domingos (turmas sem a marca "com menores", como nascem na tela);
-//   6. escalas: equipes só de adultos (recepção, louvor, limpeza, cozinha), os cultos de domingo de 8 semanas antes a 4 depois da
-//      data-base, com convites confirmados, recusas seguidas do convite ao próximo, e convites ainda abertos.
-// O lote é por transação: cada bloco de pessoas, cada congregação da tesouraria, da EBD e das escalas entra inteiro ou não entra.
-// Fica de fora (e por quê): eventos/calendário, cuidado pastoral e consentimentos de comunicação — têm regras de sigilo, de ciclo e
-// de consentimento (com a impressão digital do texto aceito) que a massa teria de forjar; sem consentimento, nenhum comunicado sai
-// para a massa.
+// O QUE CRIA (data-base 2026-11-08, padrão) — uma história com tendência, não ruído: cada congregação cresce, fica estável ou cai no seu
+// ritmo (admissões, saídas, ofertas e dízimos acompanham), dezembro forte (13º), janeiro e julho fracos, e ~5% das pessoas se afastam aos
+// poucos (presença na EBD, dízimo e escala minguando até sumir, ainda ATIVAS no cadastro: o padrão do alerta de evasão da v10.12).
+//   territorio: 2 cidades, 3 Regiões, 9 Áreas, 45 Congregações (com a Sede), 2 Quadrantes, 1 Distrito (a Região Metropolitana na capital),
+//      10 Extensões da Tenda, 48 Bairros e os órgãos automáticos (JAI, JEA/JUC, CRA/TER/CRAF, CEQ/CAQ, como a tela de catálogos faz);
+//   membros: ~5.000 pessoas em famílias (cônjuge, pai/mãe e filhos, irmãos), 0 a 90 anos, situação, desligados, falecidos e inativos, batismo
+//      e admissão coerentes (e nunca antes da fundação da congregação), endereço em linhas com bairro, departamento pela idade e cargo pela
+//      escada do Art. 72 (obreira até Missionária), com o histórico do cargo respeitando o interstício;
+//   lideranca: logins com senha (SEED_SENHA), todos sem e-mail: Presidente 700001, Secretário Geral 700002, Tesouraria Geral 700003,
+//      Superintendentes Regionais 700011-700013, Pastores de Área 700021-700029, Pastor Distrital 700031, Tesoureiro de Distrito 700032,
+//      Vice-Presidentes de Quadrante 700035-700036, Dirigente da congregação k = 700100+k e Tesoureiro Local = 700200+k (k = 1 é a Sede);
+//      assentos da Diretoria (Presidente, 1º Vice, 1º Secretário, 1º Tesoureiro) e do Conselho Fiscal (700041-700043), encarregados das Extensões;
+//   reunioes: a CLI todo mês (ordinária, encerrada, só faltas justificadas) e a JAI de cada congregação no último ano, com presenças;
+//   financeiro: dizimistas (os que saíram, inativos), dízimos e ofertas de cada culto por 36 meses, Termo nº contínuo, PIX conciliado,
+//      fechamentos como o FecharMesTesouraria (com o Distrito do repasse gravado desde o decreto) e liberados pela Tesouraria Geral, o mês da
+//      data-base aberto; fornecedores e saídas locais aprovadas pela Geral (quem solicita nunca aprova) e pagas sem passar do saldo liberado;
+//   prestacoes: a prestação de contas mensal (completa, com Ata de Pendência, ou faltando);
+//   distritos: o decreto da CLI (período do dinheiro desde o mês do registro, CDE), o Dízimo Institucional de cada mês (10% do Total Final,
+//      calculado do banco) e o balanço anual (devolvido e aprovado pelo Conselho Fiscal);
+//   relatorios: 18 meses de relatórios dos departamentos (no prazo, atrasados, parados em rascunho ou faltando), com valores, trilha de
+//      aprovação (congregação → Área → Geral) e o rateio congelado na aprovação geral;
+//   psc: a avaliação do Programa de Saúde Congregacional do exercício (respostas pelo catálogo, esteira com segregação, nível pela Escada
+//      Bloqueada de shared/psc.js);
+//   ebd: revistas, turmas por faixa etária, alunos, professores, um ano de lições, chamadas, ofertas e cadernetas (turmas sem a marca "com menores");
+//   escalas: equipes só de adultos, os domingos de 26 semanas antes a 4 depois da data-base (confirmados, recusas com o convite ao próximo, abertos).
+// O lote é por transação: cada bloco de pessoas e cada congregação de cada etapa entra inteiro ou não entra.
+// Fica de fora (e por quê): calendário (o ano é uma linha compartilhada, sem marca, e os eventos seguem o ciclo anual da CLI com gatilho de
+// imutabilidade: o --apagar não devolveria o banco ao que era); vistorias de segurança/AVCB (o banco proíbe apagar vistoria — gatilho); cuidado
+// pastoral (a rotina diária já detecta o afastamento a partir desta massa: forjar os itens e as notas, que não se apagam, quebraria o refazer);
+// consentimentos de comunicação, adesões de voluntário e termos (registros de aceite com a impressão digital do texto: a massa não forja
+// assinatura); missões, expansão, entidades, consagração e credencial (esteiras com decisões da CME, da CLI e do Presidente, ficam para uma
+// próxima rodada).
 "use strict";
 const crypto = require("crypto");
 const sql = require("mssql");
@@ -69,12 +81,12 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "financeiro", "ebd", "escalas"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
-const MESES_FECHADOS = Math.max(3, Math.min(60, Number(opcao("meses", 24)) || 24));
-const EBD_DOMINGOS = Math.max(1, Math.min(104, Number(opcao("ebd-domingos", 26)) || 26));
+const MESES_FECHADOS = Math.max(3, Math.min(60, Number(opcao("meses", 36)) || 36));
+const EBD_DOMINGOS = Math.max(1, Math.min(104, Number(opcao("ebd-domingos", 52)) || 52));
 const SENHA = process.env.SEED_SENHA || "Homolog@2026";
 
 const MATRICULA_MIN = 700000;
@@ -168,14 +180,27 @@ const BAIRROS = ["Jardim das Palmeiras", "Vila Esperança", "Novo Horizonte", "P
   "Recanto Verde", "Vale do Sol", "Jardim Europa", "Vila Rica", "Monte Castelo", "Bom Retiro", "Santa Luzia", "São Francisco", "Jardim Tropical", "Residencial Araguaia",
   "Parque das Nações", "Vila Nova", "Jardim Canaã", "Alto Bonito", "Boa Esperança", "Cidade Nova", "Jardim Itacaiúnas", "Liberdade", "Paraíso", "Rio Verde",
   "Serra Azul", "Sol Nascente", "União", "Vitória", "Floresta", "Ipiranga", "Castanheiras", "Bosque Azul"];
+// Bairros inventados da segunda cidade (a do Distrito): nenhum nome de bairro de verdade.
+const BAIRROS_DISTRITO = ["Jardim das Mangueiras", "Vila do Açaí", "Parque Guajará", "Conjunto Maracajá", "Residencial Baía Azul", "Vila Marajoara", "Jardim Tapajós",
+  "Parque das Garças", "Conjunto Bela Maré", "Vila Tucunaré", "Jardim Samaúma", "Residencial Rio Azul"];
 const CONGREGACOES = ["Betel", "Betânia", "Canaã", "Monte Sinai", "Jerusalém", "Filadélfia", "Getsêmani", "Siloé", "Ebenézer", "Peniel", "Hebrom", "Monte Sião",
   "Jordão", "Galileia", "Belém", "Nazaré", "Emaús", "Gileade", "Monte Moriá", "Horebe", "Monte Carmelo", "Berseba", "Efraim", "Shalom", "Maranata", "Elim",
-  "Reobote", "Antioquia", "Éfeso", "Corinto", "Tessalônica", "Bereia", "Esmirna", "Pérgamo", "Laodiceia", "Sardes", "Tiatira", "Filipos", "Colossos"];
+  "Reobote", "Antioquia", "Éfeso", "Corinto", "Tessalônica", "Bereia", "Esmirna", "Pérgamo", "Laodiceia", "Sardes", "Tiatira", "Filipos", "Colossos",
+  "Monte Hermom", "Rocha Eterna", "Lírio dos Vales", "Rosa de Saron", "Alfa e Ômega"];
 const EXTENSOES = ["Vale da Bênção", "Nova Vida", "Água Viva", "Pão da Vida", "Luz do Mundo", "Sal da Terra", "Fonte de Vida", "Boas Novas", "Semente", "Videira"];
-const AREAS = [["Área Norte I", 0], ["Área Norte II", 0], ["Área Norte III", 0], ["Área Sul I", 1], ["Área Sul II", 1], ["Área Sul III", 1]];
-const REGIOES = ["Região Norte", "Região Sul"];
-const CONGS_POR_AREA = [6, 7, 6, 7, 6, 7]; // + a Sede, na Área Norte I = 40
-const CIDADE = "Parauapebas", UF = "PA", CENTRO_LAT = -6.0675, CENTRO_LNG = -49.9025;
+// O território: 2 cidades, 3 Regiões, 2 Quadrantes e 1 Distrito (a Região Metropolitana, numa capital fora da sede: o gatilho do Art. 126-K §2º, a).
+// Cidades com o centro aproximado (só para o mapa); a população da capital é um número redondo de referência, não um dado oficial.
+const CIDADES = [
+  { nome: "Parauapebas", uf: "PA", lat: -6.0675, lng: -49.9025, cep: (i) => `68515-${String(100 + i * 7).padStart(3, "0")}`, bairros: BAIRROS },
+  { nome: "Belém", uf: "PA", lat: -1.4558, lng: -48.4902, cep: (i) => `66${String(100 + i * 9).padStart(3, "0")}-000`, bairros: BAIRROS_DISTRITO }
+];
+const DISTRITOS = [{ nome: "Distrito Metropolitano de Belém", cidade: 1, decretoCli: "2025-03-15", registradoEm: "2025-04-02", desdeMes: "2025-04" }];
+const QUADRANTES = [["Quadrante Carajás", null, false], ["Quadrante Guajará", 0, true]]; // [nome, distrito, ativo] — o de Carajás segue latente (Regimento: nível 4)
+const REGIOES = [["Região Norte", 0, 0], ["Região Sul", 0, 0], ["Região Metropolitana de Belém", 1, 1]]; // [nome, cidade, quadrante]
+const AREAS = [["Área Norte I", 0], ["Área Norte II", 0], ["Área Norte III", 0], ["Área Sul I", 1], ["Área Sul II", 1], ["Área Sul III", 1],
+  ["Área Belém Centro", 2], ["Área Belém Norte", 2], ["Área Belém Sul", 2]];
+const CONGS_POR_AREA = [5, 6, 5, 6, 5, 6, 4, 3, 4]; // + a Sede, na Área Norte I = 45
+const UF = "PA";
 const ESCADA = ["MEMBRO", "AUXILIAR", "MISSIONARIO", "DIACONO", "PRESBITERO", "EVANGELISTA", "PASTOR"];
 // Art. 72: anos mínimos no degrau de baixo (Auxiliar→Missionário 1, Missionário→Diácono 2, Diácono→Presbítero 2). Evangelista e Pastor: 2 anos — escolha do gerador
 // (não há interstício escrito; a subida é por indicação do Presidente).
@@ -232,20 +257,33 @@ const semAcento = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase(
 function gerarModelo() {
   const rT = criarRng("territorio");
   const arred6 = (n) => Math.round(n * 1e6) / 1e6;
-  const bairros = BAIRROS.map((n, i) => ({
-    i, nome: `${n}${SUF_M}`, lat: arred6(CENTRO_LAT + (rT.real() - 0.5) * 0.09), lng: arred6(CENTRO_LNG + (rT.real() - 0.5) * 0.10),
-    cep: `68515-${String(100 + i * 7).padStart(3, "0")}`
-  }));
-  const regioes = REGIOES.map((n, i) => ({ i, nome: `${n}${SUF_F}` }));
+  const bairros = [];
+  CIDADES.forEach((cid, ci) => cid.bairros.forEach((n, j) => bairros.push({
+    i: bairros.length, cidade: ci, nomeCidade: cid.nome, nome: `${n}${SUF_M}`, cep: cid.cep(j),
+    lat: arred6(cid.lat + (rT.real() - 0.5) * 0.09), lng: arred6(cid.lng + (rT.real() - 0.5) * 0.10)
+  })));
+  const bairrosDa = (ci) => bairros.filter((b) => b.cidade === ci);
+  const distritos = DISTRITOS.map((d, i) => ({ i, ...d, nome: `${d.nome}${SUF_M}`, nomeCidade: CIDADES[d.cidade].nome }));
+  const quadrantes = QUADRANTES.map(([n, dist, ativo], i) => ({ i, nome: `${n}${SUF_M}`, distrito: dist, ativo }));
+  const regioes = REGIOES.map(([n, cidade, quad], i) => ({ i, nome: `${n}${SUF_F}`, cidade, quadrante: quad }));
   const areas = AREAS.map(([n, reg], i) => ({ i, nome: `${n}${SUF_F}`, regiao: reg, congs: [] }));
   const congs = [];
   const novaCong = (nome, area, sede) => {
-    const bairro = sede ? 0 : rT.int(0, bairros.length - 1);
+    const cidade = regioes[areas[area].regiao].cidade;
+    const doLugar = bairrosDa(cidade);
+    const bairro = sede ? doLugar[0].i : rT.pick(doLugar).i;
+    const noDistrito = distritos.find((d) => d.cidade === cidade) || null;
+    // A tendência de cada congregação (crescendo, estável, caindo) e o seu ritmo ao ano: dá forma à história (admissões, saídas, ofertas, relatórios).
+    const tendencia = sede ? "ESTAVEL" : noDistrito ? rT.pesos([["CRESCE", 70], ["ESTAVEL", 30]]) : rT.pesos([["CRESCE", 30], ["ESTAVEL", 45], ["CAI", 25]]);
+    const taxa = tendencia === "CRESCE" ? 0.07 + rT.real() * 0.08 : tendencia === "CAI" ? -(0.06 + rT.real() * 0.06) : -0.02 + rT.real() * 0.05;
     const c = {
-      i: congs.length, k: congs.length + 1, nome: `${nome}${SUF_F}`, area, sede, bairro, extensoes: [], pessoas: [],
+      i: congs.length, k: congs.length + 1, nome: `${nome}${SUF_F}`, area, sede, bairro, cidade, nomeCidade: CIDADES[cidade].nome, distrito: noDistrito,
+      extensoes: [], pessoas: [], tendencia, taxa,
+      // pontualidade nos relatórios dos departamentos: quem está caindo costuma atrasar mais
+      pontualidade: tendencia === "CAI" ? rT.pesos([["RUIM", 50], ["MEDIA", 35], ["BOA", 15]]) : rT.pesos([["BOA", 55], ["MEDIA", 35], ["RUIM", 10]]),
       endereco: `${rT.pick(LOGRADOUROS)}, ${rT.int(10, 1999)}`,
       lat: arred6(bairros[bairro].lat + (rT.real() - 0.5) * 0.006), lng: arred6(bairros[bairro].lng + (rT.real() - 0.5) * 0.006),
-      fundacao: sede ? 1972 : rT.int(1982, 2021),
+      fundacao: sede ? 1972 : noDistrito ? rT.int(2012, 2022) : rT.int(1982, 2021),
       horarios: sede ? "Dom 9h (EBD) · Dom 18h · Qua 19h30 · Sex 19h30 (oração)" : "Dom 9h (EBD) · Dom 19h · Qua 19h30"
     };
     congs.push(c);
@@ -270,7 +308,7 @@ function gerarModelo() {
   // Extensões da Tenda: nas 10 maiores congregações (fora a Sede), uma em cada.
   const maiores = congs.slice(1).sort((a, b) => b.alvo - a.alvo || a.i - b.i).slice(0, EXTENSOES.length);
   const extensoes = maiores.map((mae, i) => {
-    const bairro = rT.int(0, bairros.length - 1);
+    const bairro = rT.pick(bairrosDa(mae.cidade)).i;
     const e = {
       i, nome: `Extensão ${EXTENSOES[i]}${SUF_F}`, mae, bairro, endereco: `${rT.pick(LOGRADOUROS)}, ${rT.int(10, 1999)}`,
       aberta: diaDe(`${rT.int(2015, 2024)}-${String(rT.int(1, 12)).padStart(2, "0")}-${String(rT.int(1, 28)).padStart(2, "0")}`),
@@ -300,7 +338,7 @@ function gerarModelo() {
   // ---------------------------------------------------------- liderança (escolhida, com o cargo à altura) ----------------------------------------------------------
   const rL = criarRng("lideranca");
   const lideres = [];
-  const apto = (p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && !p.lider;
+  const apto = (p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && !p.lider && !p.assento;
   const escolher = (lista, filtro, cargoMin, cargoAlvo, papel, escopo, matricula) => {
     let cands = lista.filter((p) => apto(p) && filtro(p));
     const prontos = cands.filter((p) => ESCADA.indexOf(p.cargo || "MEMBRO") >= cargoMin);
@@ -333,12 +371,47 @@ function gerarModelo() {
     escolher(a.congs[0].pessoas, homem(38, 70), PASTOR, PASTOR, "Pastor de Área", { tipo: "AREA", area: a }, MATRICULA_MIN + 21 + i)
       || escolher(daArea(a), homem(38, 70), PASTOR, PASTOR, "Pastor de Área", { tipo: "AREA", area: a }, MATRICULA_MIN + 21 + i);
   });
+  // O Distrito (Pastor Distrital e Tesoureiro de Distrito, da cidade dele) e os Quadrantes (o Vice-Presidente de cada um).
+  distritos.forEach((d) => {
+    const doDist = regioes.filter((g) => g.cidade === d.cidade).flatMap((g) => areas.filter((a) => a.regiao === g.i)).flatMap(daArea);
+    escolher(doDist, homem(40, 70), PASTOR, PASTOR, "Pastor Distrital", { tipo: "DISTRITO", distrito: d }, MATRICULA_MIN + 31 + d.i * 2);
+    escolher(doDist, adulto(28, 65), 0, 0, "Tesoureiro de Distrito", { tipo: "DISTRITO", distrito: d }, MATRICULA_MIN + 32 + d.i * 2);
+  });
+  quadrantes.forEach((q, i) => {
+    const doQuad = regioes.filter((g) => g.quadrante === q.i).flatMap((g) => areas.filter((a) => a.regiao === g.i)).flatMap(daArea);
+    escolher(doQuad, homem(40, 72), PASTOR, PASTOR, "Vice-Presidente de Quadrante", { tipo: "QUADRANTE", quadrante: q }, MATRICULA_MIN + 35 + i);
+  });
+  // O Conselho Fiscal (o NIF, que analisa o balanço do Distrito): 3 titulares, oficiais de congregações diferentes, sem cargo na Diretoria (Estatuto Art. 43).
+  const conselhoFiscal = [];
+  for (const c of congs.slice(1)) {
+    if (conselhoFiscal.length >= 3) break;
+    const cand = c.pessoas.filter((p) => apto(p) && p.idade >= 35 && ["DIACONO", "PRESBITERO"].includes(p.cargo));
+    if (!cand.length) continue;
+    const p = rL.pick(cand);
+    p.matricula = MATRICULA_MIN + 41 + conselhoFiscal.length;
+    p.assento = { orgao: "CONSELHO_FISCAL", cargo: `TITULAR_${conselhoFiscal.length + 1}` };
+    conselhoFiscal.push(p);
+  }
   for (const c of congs) {
     const alvo = c.sede ? PASTOR : rL.pesos([[PRESBITERO, 60], [EVANGELISTA, 25], [PASTOR, 15]]);
     escolher(daCong(c), homem(32, 72), alvo, alvo, "Dirigente de Congregação", { tipo: "CONGREGACAO", cong: c }, MATRICULA_MIN + 100 + c.k)
       || escolher(daCong(c), homem(25, 80), PRESBITERO, PRESBITERO, "Dirigente de Congregação", { tipo: "CONGREGACAO", cong: c }, MATRICULA_MIN + 100 + c.k);
     escolher(daCong(c), adulto(25, 66), 0, 0, "Tesoureiro Local", { tipo: "CONGREGACAO", cong: c }, MATRICULA_MIN + 200 + c.k)
       || escolher(daCong(c), adulto(18, 80), 0, 0, "Tesoureiro Local", { tipo: "CONGREGACAO", cong: c }, MATRICULA_MIN + 200 + c.k);
+  }
+  // Assentos da Diretoria Executiva (o Presidente em exercício é quem tem o assento PRESIDENTE: diretoria.js::ehPresidenteAtual).
+  const lider = (papel, k = 0) => lideres.filter((p) => p.lider.papel === papel)[k];
+  for (const [papel, k, cargo] of [["Presidente", 0, "PRESIDENTE"], ["Superintendente Regional", 0, "VICE_PRESIDENTE_1"], ["Secretário Geral", 0, "SECRETARIO_1"], ["Tesoureiro", 0, "TESOUREIRO_1"]]) {
+    const p = lider(papel, k);
+    if (p) p.assento = { orgao: "DIRETORIA_EXECUTIVA", cargo };
+  }
+  // Quem está se afastando aos poucos (o padrão que o alerta de evasão da v10.12 precisa achar): segue ATIVO no cadastro, mas a presença na EBD, o dízimo e a
+  // escala vão minguando a partir de `inicio` até sumir em `duracao` dias. Mais comum na congregação que cai. Nunca a liderança.
+  const rV = criarRng("evasao");
+  for (const p of pessoas) {
+    if (p.lider || p.assento || p.status !== "ATIVO" || p.situacao !== "EM_COMUNHAO" || p.idade < 16) continue;
+    if (!rV.chance(p.cong.tendencia === "CAI" ? 0.09 : p.cong.tendencia === "CRESCE" ? 0.03 : 0.05)) continue;
+    p.evasao = { inicio: BASE - rV.int(45, 330), duracao: rV.int(90, 210) };
   }
   // Matrículas: liderança nos números fixos; o resto a partir de 701001, na ordem em que nasceu no modelo.
   let proxima = MATRICULA_MIN + 1001;
@@ -359,25 +432,32 @@ function gerarModelo() {
   // Dizimistas: metade dos adultos em comunhão (a liderança, todos), cada um com o seu jeito de dizimar.
   const rD = criarRng("dizimistas");
   const RENDAS = [[1300, 14], [1500, 16], [1700, 14], [2000, 13], [2400, 10], [2800, 8], [3200, 7], [3800, 6], [4500, 4], [5500, 3], [7000, 2], [9000, 2], [12000, 1]];
+  // Quem saiu (desligado ou falecido) também dizimava até sair: o cadastro de dizimista fica inativo e os lançamentos param na data da saída — é daí
+  // que vem a queda da arrecadação na congregação que perde gente.
   for (const p of pessoas) {
-    if (p.status !== "ATIVO" || p.situacao !== "EM_COMUNHAO" || p.idade < 18) continue;
-    if (!p.lider && !rD.chance(0.5)) continue;
+    const saiu = (p.status === "DESLIGADO" || p.status === "FALECIDO") && p.admissao && p.saida && p.saida > INICIO_FIN;
+    if (!saiu && (p.status !== "ATIVO" || p.situacao !== "EM_COMUNHAO" || p.idade < 18)) continue;
+    if (saiu && idadeEm(p.nasc, p.saida) < 18) continue;
+    if (!p.lider && !p.assento && !rD.chance(0.5)) continue;
     const renda = rD.pesos(RENDAS) * (0.9 + rD.real() * 0.25);
     p.dizimista = {
-      regular: p.lider ? true : rD.chance(0.75),
+      regular: p.lider || p.assento ? true : rD.chance(0.75),
       mensal: Math.max(5000, Math.round(renda * 10)), // 10% da renda, em centavos
       pix: rD.chance(p.idade < 40 ? 0.7 : p.idade < 60 ? 0.5 : 0.25),
-      desde: Math.max(INICIO_FIN, p.admissao || INICIO_FIN)
+      desde: Math.max(INICIO_FIN, p.admissao || INICIO_FIN),
+      ate: saiu ? p.saida : null,
+      ativo: !saiu
     };
-    p.dizimistaFiel = p.dizimista.regular;
+    if (!saiu) p.dizimistaFiel = p.evasao ? false : p.dizimista.regular;
   }
-  return { bairros, regioes, areas, congs, extensoes, pessoas, vinculos, lideres };
+  return { bairros, distritos, quadrantes, regioes, areas, congs, extensoes, pessoas, vinculos, lideres, conselhoFiscal };
 }
 
 // Uma família (ou pessoa sozinha) na congregação c: mesmo endereço, sobrenomes que se herdam, vínculos.
 function gerarFamilia(r, c, bairros, pessoas, vinculos) {
+  const daCidade = bairros.filter((b) => b.cidade === c.cidade);
   const casa = {
-    bairro: r.chance(0.55) ? c.bairro : r.int(0, bairros.length - 1),
+    bairro: r.chance(0.55) ? c.bairro : r.pick(daCidade).i,
     logradouro: r.pick(LOGRADOUROS), numero: String(r.int(1, 2500)), complemento: r.chance(0.12) ? r.pick(COMPLEMENTOS) : null,
     extensao: c.extensoes.length && r.chance(0.3) ? r.pick(c.extensoes) : null
   };
@@ -451,13 +531,18 @@ function vidaEclesial(r, p) {
   const anoMin = Math.max(p.nasc + Math.ceil(12 * 365.25), diaDe("1968-01-01"));
   const forma = r.pesos([["BATISMO", 72], ["CARTA_MUDANCA", 18], ["RECONCILIACAO", 5], ["ACLAMACAO", 5]]);
   const entre = (a, b) => (b <= a ? a : a + r.int(0, b - a));
+  // A tendência da congregação puxa as datas: a que cresce tem mais gente chegando nos últimos anos; a que cai, mais gente antiga. Ninguém entra antes
+  // da fundação da congregação (quem é mais antigo que ela veio por carta de outra).
+  const tend = p.cong.tendencia;
+  const puxar = (a, b) => (b <= a ? a : a + Math.floor(Math.pow(r.real(), tend === "CRESCE" ? 0.55 : tend === "CAI" ? 1.7 : 1) * (b - a)));
+  const fundada = diaDe(`${p.cong.fundacao}-01-01`);
   p.forma = forma;
   if (forma === "BATISMO") {
-    p.batismo = entre(anoMin, BASE - 20);
+    p.batismo = puxar(Math.max(anoMin, fundada), BASE - 20);
     p.admissao = p.batismo;
   } else {
     p.batismo = entre(anoMin, BASE - 400);
-    p.admissao = entre(p.batismo + 200, BASE - 20);
+    p.admissao = puxar(Math.max(p.batismo + 200, fundada), BASE - 20);
     if (forma === "CARTA_MUDANCA" || forma === "ACLAMACAO") p.igrejaAnterior = `Igreja de origem ${r.int(1, 40)} (fictícia)`;
   }
   // Quem acabou de fazer 12 anos: nada depois da data-base, e o batismo nunca depois da admissão.
@@ -469,8 +554,9 @@ function vidaEclesial(r, p) {
   if (desde < BASE - 10) {
     if (idade >= 65 ? r.chance(0.05) : idade >= 40 && r.chance(0.004)) {
       p.status = "FALECIDO"; p.saida = entre(desde, BASE - 10); p.motivoSaida = "FALECIMENTO";
-    } else if (r.chance(0.02)) {
-      p.status = "DESLIGADO"; p.situacao = "SEM_COMUNHAO"; p.saida = entre(desde, BASE - 10);
+    } else if (r.chance(tend === "CAI" ? 0.07 : tend === "CRESCE" ? 0.015 : 0.025)) {
+      // na congregação que cai, as saídas se concentram nos anos recentes
+      p.status = "DESLIGADO"; p.situacao = "SEM_COMUNHAO"; p.saida = tend === "CAI" ? puxar(Math.max(desde, BASE - 3 * 365), BASE - 10) : entre(desde, BASE - 10);
       p.motivoSaida = r.pesos([["DESLIGAMENTO", 30], ["CARTA_MUDANCA", 40], ["ABANDONO_MATERIAL", 30]]);
     } else if (r.chance(0.01)) {
       p.status = "INATIVO"; p.afastamento = entre(desde, BASE - 10);
@@ -525,8 +611,13 @@ function departamentoDe(p) {
 function enderecoDe(p, bairros) {
   const b = bairros[p.casa.bairro];
   const rua = [p.casa.logradouro, p.casa.numero, p.casa.complemento].filter(Boolean).join(", ");
-  return { linha: `${rua} — ${b.nome} — ${CIDADE}/${UF} — CEP ${b.cep}`.slice(0, 300), bairro: b };
+  return { linha: `${rua} — ${b.nome} — ${b.nomeCidade}/${UF} — CEP ${b.cep}`.slice(0, 300), bairro: b };
 }
+// Quanto a pessoa ainda "está" na igreja no dia d: 1 antes de começar a se afastar, caindo até 0 (evasão aos poucos).
+const atividade = (p, d) => (!p.evasao || d < p.evasao.inicio ? 1 : Math.max(0, 1 - (d - p.evasao.inicio) / p.evasao.duracao));
+// Sazonalidade e tendência da arrecadação: dezembro forte, janeiro e julho (férias) fracos; a congregação cresce ou cai no seu ritmo ao ano.
+const fatorMesAno = (d) => { const m = Number(isoDe(d).slice(5, 7)); return m === 12 ? 1.25 : m === 1 ? 0.9 : m === 7 ? 0.85 : m === 6 ? 0.95 : 1; };
+const tendenciaEm = (c, d) => Math.pow(1 + c.taxa, (d - BASE) / 365);
 const telefoneDe = (m) => { const s = String(m).padStart(8, "0"); return `(00) 9${s.slice(0, 4)}-${s.slice(4)}`; };
 const emailDe = (p) => `${semAcento(p.primeiro)}.${semAcento(p.sobrenomes[p.sobrenomes.length - 1])}.${p.matricula}@example.org`;
 
@@ -538,8 +629,9 @@ function gerarFinanceiro(c) {
   const lancs = [];
   const domingos = [], quartas = [];
   for (let d = INICIO_FIN; d <= BASE; d++) { if (diaSemana(d) === 0) domingos.push(d); else if (diaSemana(d) === 3) quartas.push(d); }
-  const fatorMes = (d) => { const m = Number(isoDe(d).slice(5, 7)); return m === 12 ? 1.25 : m === 1 ? 0.9 : 1; };
-  const crescimento = (d) => 1 + 0.04 * ((d - INICIO_FIN) / 365);
+  const fatorMes = fatorMesAno;
+  // inflação (~4% ao ano) × a tendência da congregação (crescendo, estável ou caindo: a oferta acompanha o tamanho da igreja naquele dia)
+  const crescimento = (d) => (1 + 0.04 * ((d - INICIO_FIN) / 365)) * tendenciaEm(c, d);
   const forma = (prefPix) => {
     const f = prefPix ? r.pesos([["PIX", 90], ["MISTO", 3], ["DINHEIRO", 7]]) : r.pesos([["DINHEIRO", 85], ["PIX", 12], ["MISTO", 3]]);
     return f;
@@ -572,20 +664,39 @@ function gerarFinanceiro(c) {
     const z = p.dizimista;
     for (const m of MESES) {
       if (m.fim < z.desde) continue;
-      if (!r.chance(z.regular ? 0.93 : 0.45)) continue;
-      const doMes = domingos.filter((d) => d >= Math.max(m.inicio, z.desde) && d <= m.fim);
+      if (z.ate && m.inicio >= z.ate) break; // saiu (desligado/falecido): os dízimos param ali
+      // quem está se afastando dizima cada vez menos vezes e menos (atividade caindo até 0)
+      const at = atividade(p, m.inicio);
+      if (!r.chance((z.regular ? 0.93 : 0.45) * at)) continue;
+      const doMes = domingos.filter((d) => d >= Math.max(m.inicio, z.desde) && d <= m.fim && (!z.ate || d < z.ate));
       if (!doMes.length) continue;
-      const anos = Math.floor((m.inicio - INICIO_FIN) / 365);
-      const total = Math.round(z.mensal * Math.pow(1.05, anos) * (z.regular ? 1 : 0.5 + r.real() * 0.5));
+      // o valor de cada pessoa (regular ou não, e minguando se está se afastando); a curva do mês (inflação, 13º, tendência) vem na normalização abaixo
+      const total = Math.round(z.mensal * (z.regular ? 1 : 0.5 + r.real() * 0.5) * (0.4 + 0.6 * at));
       const partes = z.regular && r.chance(0.15) && doMes.length >= 2 ? 2 : 1;
       const dias = partes === 2 ? [doMes[0], doMes[doMes.length - 1]] : [doMes[r.pesos([[0, 60], [Math.min(1, doMes.length - 1), 25], [doMes.length - 1, 15]])]];
       for (let k = 0; k < partes; k++) {
         const valor = partes === 2 ? (k === 0 ? Math.round(total / 2) : total - Math.round(total / 2)) : total;
         const f = forma(z.pix);
-        novo(dias[k], 10 + j, { tipo: "DIZIMO", valor, forma: f, valorPix: f === "MISTO" ? Math.round(valor * (0.3 + r.real() * 0.4)) : null, dizimista: p });
+        novo(dias[k], 10 + j, { tipo: "DIZIMO", valor, forma: f, pixFrac: f === "MISTO" ? 0.3 + r.real() * 0.4 : null, dizimista: p });
       }
     }
   });
+  // A curva da congregação no total do dízimo de cada mês: inflação (~5% ao ano), dezembro com o 13º, janeiro e julho fracos, e a TENDÊNCIA (crescendo,
+  // estável ou caindo no seu ritmo). Sem isto as admissões dentro da janela faziam quase toda congregação "crescer". O nível dos últimos 12 meses fechados
+  // fica o que as pessoas deram; os meses de antes se ajustam à curva — e quem se afasta continua minguando em relação aos outros.
+  const curva = (mm) => (1 + 0.05 * ((mm.inicio - INICIO_FIN) / 365)) * (mm.mes === 12 ? 1.3 : mm.mes === 1 ? 0.92 : mm.mes === 7 ? 0.95 : 1) * tendenciaEm(c, mm.inicio);
+  const somaDz = new Map();
+  for (const l of lancs) if (l.tipo === "DIZIMO") somaDz.set(mesDe(l.dia), (somaDz.get(mesDe(l.dia)) || 0) + l.valor);
+  const fechadosDz = MESES.filter((mm) => !mm.aberto && somaDz.get(mm.chave));
+  const ult12 = fechadosDz.slice(-12);
+  const K = ult12.reduce((s, mm) => s + somaDz.get(mm.chave), 0) / Math.max(1e-9, ult12.reduce((s, mm) => s + curva(mm), 0));
+  const fatorDz = new Map(fechadosDz.map((mm) => [mm.chave, (K * curva(mm)) / somaDz.get(mm.chave)]));
+  const ultimoFator = fechadosDz.length ? fatorDz.get(fechadosDz[fechadosDz.length - 1].chave) : 1;
+  for (const l of lancs) {
+    if (l.tipo !== "DIZIMO") continue;
+    l.valor = Math.max(500, Math.round(l.valor * (fatorDz.get(mesDe(l.dia)) || ultimoFator)));
+    l.valorPix = l.forma === "MISTO" ? Math.min(l.valor - 100, Math.max(100, Math.round(l.valor * l.pixFrac))) : null;
+  }
   // Folhas canceladas (lançado em duplicidade): ~0,3% dos dízimos ganham uma cópia cancelada logo depois.
   for (const l of lancs.slice()) {
     if (l.tipo === "DIZIMO" && r.chance(0.003)) {
@@ -612,13 +723,16 @@ function gerarFinanceiro(c) {
     const totalCent = doMes.filter((l) => !l.cancelado).reduce((s, l) => s + l.valor, 0);
     if (!doMes.length) continue;
     const calc = calcularFechamento({ totalRecebido: totalCent / 100, valorAluguel: c.aluguel / 100, valorLote: c.lote / 100, percentualRetencao: 40 });
-    const diaFech = m.fim + r.int(2, 5);
+    // No Distrito (desde o mês do decreto) o repasse vai para ele (RepasseDistritoId, gravado no fechamento como faz o FecharMesTesouraria) e o
+    // tesoureiro fecha cedo: o Dízimo Institucional do mês vence no dia 5 do mês seguinte e só é calculado com todas as congregações fechadas.
+    const noDistrito = !!(c.distrito && m.chave >= c.distrito.desdeMes);
+    const diaFech = m.fim + (noDistrito ? r.int(1, 3) : r.int(2, 5));
     const repassado = !(m.chave === ultimoFechado && esperaLiberacao);
     const diaRep = diaFech + r.int(1, 6);
     fechamentos.push({
       mes: m.chave, totalRecebido: totalCent, ...calc, dataFechamento: momento(diaFech, 21, r.int(0, 59)),
       repassado, dataRepasse: repassado ? momento(diaRep, 15, r.int(0, 59)) : null, diaRepasse: repassado ? diaRep : null,
-      formaRepasse: repassado ? r.pick(["PIX", "DEPOSITO"]) : null
+      formaRepasse: repassado ? r.pick(["PIX", "DEPOSITO"]) : null, distrito: noDistrito ? c.distrito : null
     });
     for (const l of doMes) l.fechado = true;
   }
@@ -721,7 +835,7 @@ function gerarEbd(c) {
     for (const t of turmas) {
       let presentes = 0, ausentes = 0, visitantes = 0;
       for (const a of t.alunos) {
-        const presente = r.chance(a.assiduidade);
+        const presente = r.chance(a.assiduidade * atividade(a.pessoa, d) * ([1, 7].includes(Number(isoDe(d).slice(5, 7))) ? 0.85 : 1));
         chamadas.push({ turma: t, aluno: a, status: presente ? "PRESENTE" : "AUSENTE" });
         if (presente) presentes++; else ausentes++;
       }
@@ -755,7 +869,7 @@ function gerarEscalas(c) {
     equipes.push({ nome, natureza, membros, lider: membros[0].pessoa });
   }
   const servicos = [];
-  let primeiro = BASE - 7 * 8;
+  let primeiro = BASE - 7 * 26;
   while (diaSemana(primeiro) !== 0) primeiro++;
   for (let d = primeiro; d <= BASE + 7 * 4; d += 7) {
     const publicada = Math.min(d - 10, BASE - 1);
@@ -765,7 +879,7 @@ function gerarEscalas(c) {
       const vez = Math.round((d - primeiro) / 7);
       for (let j = 0; j < Math.min(2, e.membros.length); j++) {
         const m = e.membros[(vez * 2 + j) % e.membros.length].pessoa;
-        if (passado && r.chance(0.08) && e.membros.length > 3) {
+        if (passado && (r.chance(0.08) || atividade(m, d) < 0.6) && e.membros.length > 3) {
           // recusou: a cadeia convida o seguinte, que confirma
           alocs.push({ equipe: e, pessoa: m, status: "RECUSADO", ordem: 1, respondido: publicada + 1 });
           const subst = e.membros[(vez * 2 + j + 2) % e.membros.length].pessoa;
@@ -825,11 +939,32 @@ const Q_LICAO = `SELECT LicaoId FROM dbo.EbdLicoes WHERE CongregacaoId IN (${Q_C
 const Q_ALUNO = `SELECT AlunoId FROM dbo.EbdAlunos WHERE TurmaId IN (${Q_TURMA})`;
 const Q_EQUIPE = `SELECT EquipeId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG})`;
 const Q_SERVICO = `SELECT ServicoId FROM dbo.EscalasServicos WHERE CongregacaoId IN (${Q_CONG})`;
+const Q_DIST = `SELECT DistritoId FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M}`;
+const Q_QUAD = `SELECT QuadranteId FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}`;
+const Q_REL = `SELECT RelatorioDepartamentalId FROM dbo.RelatoriosDepartamentais WHERE CongregacaoId IN (${Q_CONG})`;
+// as reuniões: as da CLI com a marca no nome e TODAS as dos órgãos locais fictícios (JAI, JEA...: são peças fictícias)
+const Q_SESSAO = `SELECT SessaoId FROM dbo.Sessoes WHERE (Descricao LIKE ${LIKE_F} AND OrgaoId IN (SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'CLI'))
+  OR OrgaoLocalId IN (SELECT OrgaoLocalId FROM dbo.OrgaosLocais WHERE (Nivel = 1 AND ReferenciaId IN (${Q_CONG})) OR (Nivel = 2 AND ReferenciaId IN (${Q_AREA}))
+    OR (Nivel = 3 AND ReferenciaId IN (${Q_REG})) OR (Nivel = 4 AND ReferenciaId IN (SELECT QuadranteId FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}))
+    OR (Nivel = 5 AND ReferenciaId IN (SELECT DistritoId FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M})))`;
 // [tabela, condição] na ordem de APAGAR (filhos antes dos pais). --contar usa a mesma lista.
 // Regra: sai o que pertence às peças fictícias (congregações, turmas, equipes, lições...) e o que é da PRÓPRIA ficha da pessoa fictícia (liderança, histórico do
 // cargo, vínculos, rastros do login); uma linha que o app criou com a pessoa fictícia FORA das peças fictícias (um dízimo, um aluno, uma escala em outra
 // congregação, uma reunião...) faz o --apagar recusar inteiro e dizer a tabela.
 const ALVOS = [
+  ["PscRespostas", `AvaliacaoId IN (SELECT AvaliacaoId FROM dbo.PscAvaliacoes WHERE CongregacaoId IN (${Q_CONG}))`],
+  ["PscReclassificacoes", `CongregacaoId IN (${Q_CONG})`],
+  ["PscAvaliacoes", `CongregacaoId IN (${Q_CONG})`],
+  ["PrestacoesContas", `CongregacaoId IN (${Q_CONG})`],
+  ["AprovacoesRelatorioDepartamental", `RelatorioDepartamentalId IN (${Q_REL})`],
+  ["ValoresCampoRelatorioDepartamental", `RelatorioDepartamentalId IN (${Q_REL})`],
+  ["RelatoriosDepartamentais", `CongregacaoId IN (${Q_CONG})`],
+  ["RepassesInstitucionais", `OrigemTipo = N'DISTRITO' AND OrigemId IN (${Q_DIST})`],
+  ["DistritoBalancos", `DistritoId IN (${Q_DIST})`],
+  ["DistritoIntervencoes", `DistritoId IN (${Q_DIST})`],
+  ["DistritoPeriodos", `DistritoId IN (${Q_DIST})`],
+  ["Presencas", `SessaoId IN (${Q_SESSAO})`],
+  ["Sessoes", `SessaoId IN (${Q_SESSAO})`],
   ["EscalasAlocacoes", `ServicoId IN (${Q_SERVICO}) OR EquipeId IN (${Q_EQUIPE})`],
   ["EscalasServicos", `CongregacaoId IN (${Q_CONG})`],
   ["EscalasEquipeMembros", `EquipeId IN (${Q_EQUIPE})`],
@@ -851,6 +986,7 @@ const ALVOS = [
   ["Dizimistas", `CongregacaoId IN (${Q_CONG})`],
   ["Fornecedores", `FornecedorId IN (${Q_FORN})`],
   ["Lideranca", `MembroId ${M_PESSOA}`],
+  ["Assentos", `MembroId ${M_PESSOA}`],
   ["ExtensaoEncarregados", `ExtensaoId IN (${Q_EXT})`],
   ["CargosMinisteriaisHistorico", `MembroId ${M_PESSOA}`],
   ["VinculosFamiliares", `MembroId ${M_PESSOA} OR MembroParenteId ${M_PESSOA}`],
@@ -865,12 +1001,15 @@ const ALVOS = [
   ["NotificacaoPreferencias", `MembroId ${M_PESSOA}`, true],
   ["TermosAssinados", `MembroId ${M_PESSOA}`, true], // os termos que a liderança fictícia assina no primeiro acesso (POST /api/termos/{tipo})
   ["MembroReferencia", `MembroId ${M_PESSOA}`],
-  ["OrgaosLocais", `(Nivel = 1 AND ReferenciaId IN (${Q_CONG})) OR (Nivel = 2 AND ReferenciaId IN (${Q_AREA})) OR (Nivel = 3 AND ReferenciaId IN (${Q_REG}))`],
+  ["OrgaosLocais", `(Nivel = 1 AND ReferenciaId IN (${Q_CONG})) OR (Nivel = 2 AND ReferenciaId IN (${Q_AREA})) OR (Nivel = 3 AND ReferenciaId IN (${Q_REG}))
+    OR (Nivel = 4 AND ReferenciaId IN (${Q_QUAD})) OR (Nivel = 5 AND ReferenciaId IN (${Q_DIST}))`],
   ["VinculoCongregacaoArea", `CongregacaoId IN (${Q_CONG}) OR AreaId IN (${Q_AREA})`],
   ["ExtensoesTenda", `ExtensaoId IN (${Q_EXT})`],
   ["Congregacoes", `CongregacaoId IN (${Q_CONG})`],
   ["Areas", `AreaId IN (${Q_AREA})`],
   ["Regioes", `RegiaoId IN (${Q_REG})`],
+  ["Quadrantes", `QuadranteId IN (${Q_QUAD})`],
+  ["Distritos", `DistritoId IN (${Q_DIST})`],
   ["Bairros", `Nome LIKE ${LIKE_M}`]
 ];
 async function tabelasExistentes(pool) {
@@ -923,10 +1062,21 @@ async function etapaTerritorio(pool, mod) {
   await emTransacao(pool, async (req) => {
     const temBairro = new Set((await ler(req, `SELECT Nome FROM dbo.Bairros WHERE Nome LIKE ${LIKE_M} AND Ativo = 1`)).map((x) => x.Nome));
     const nb = await inserir(req, "Bairros", ["Nome", "Cidade", "UF", "Lat", "Lng"],
-      mod.bairros.filter((b) => !temBairro.has(b.nome)).map((b) => [b.nome, CIDADE, UF, cru(b.lat.toFixed(6)), cru(b.lng.toFixed(6))]));
+      mod.bairros.filter((b) => !temBairro.has(b.nome)).map((b) => [b.nome, b.nomeCidade, UF, cru(b.lat.toFixed(6)), cru(b.lng.toFixed(6))]));
     if (nb) feito.push(`${nb} bairros`);
+    // Distrito (nasce inativo: só o decreto da CLI, na etapa "distritos", o ativa — como a tela faz) e Quadrantes ligados a ele.
+    const temDist = new Set((await ler(req, `SELECT Nome FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M}`)).map((x) => x.Nome));
+    const nd = await inserir(req, "Distritos", ["Nome", "Ativo"], mod.distritos.filter((d) => !temDist.has(d.nome)).map((d) => [d.nome, false]));
+    if (nd) feito.push(`${nd} distrito`);
+    const distId = new Map((await ler(req, `SELECT DistritoId, Nome FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M}`)).map((x) => [x.Nome, x.DistritoId]));
+    const temQuad = new Set((await ler(req, `SELECT Nome FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}`)).map((x) => x.Nome));
+    const nq = await inserir(req, "Quadrantes", ["Nome", "Ativo", "DistritoId"], mod.quadrantes.filter((q) => !temQuad.has(q.nome))
+      .map((q) => [q.nome, q.ativo, q.distrito === null ? null : distId.get(mod.distritos[q.distrito].nome)]));
+    if (nq) feito.push(`${nq} quadrantes`);
+    const quadId = new Map((await ler(req, `SELECT QuadranteId, Nome FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}`)).map((x) => [x.Nome, x.QuadranteId]));
     const temReg = new Set((await ler(req, `SELECT Nome FROM dbo.Regioes WHERE Nome LIKE ${LIKE_F}`)).map((x) => x.Nome));
-    const nr = await inserir(req, "Regioes", ["Nome", "Subsede", "Ativa"], mod.regioes.filter((x) => !temReg.has(x.nome)).map((x) => [x.nome, false, true]));
+    const nr = await inserir(req, "Regioes", ["Nome", "Subsede", "Ativa", "QuadranteId"],
+      mod.regioes.filter((x) => !temReg.has(x.nome)).map((x) => [x.nome, x.cidade === 1, true, quadId.get(mod.quadrantes[x.quadrante].nome)]));
     if (nr) feito.push(`${nr} regiões`);
     const regId = new Map((await ler(req, `SELECT RegiaoId, Nome FROM dbo.Regioes WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.RegiaoId]));
     const temArea = new Set((await ler(req, `SELECT Nome FROM dbo.Areas WHERE Nome LIKE ${LIKE_F}`)).map((x) => x.Nome));
@@ -938,7 +1088,7 @@ async function etapaTerritorio(pool, mod) {
     const nc = await inserir(req, "Congregacoes",
       ["Nome", "Ativa", "AreaId", "ValorAluguelMensal", "ValorLoteMensal", "Endereco", "Bairro", "Cidade", "Estado", "Cep", "Horarios", "Lat", "Lng", "FundacaoAno", "Categoria"],
       mod.congs.filter((c) => !temCong.has(c.nome)).map((c) => [c.nome, true, areaId.get(mod.areas[c.area].nome), c.aluguel ? reais(c.aluguel) : null, c.lote ? reais(c.lote) : null,
-        c.endereco, mod.bairros[c.bairro].nome, CIDADE, UF, mod.bairros[c.bairro].cep, c.horarios, cru(c.lat.toFixed(6)), cru(c.lng.toFixed(6)), c.fundacao, "CONGREGACAO"]));
+        c.endereco, mod.bairros[c.bairro].nome, c.nomeCidade, UF, mod.bairros[c.bairro].cep, c.horarios, cru(c.lat.toFixed(6)), cru(c.lng.toFixed(6)), c.fundacao, "CONGREGACAO"]));
     if (nc) feito.push(`${nc} congregações`);
     const congId = new Map((await ler(req, `SELECT CongregacaoId, Nome FROM dbo.Congregacoes WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.CongregacaoId]));
     const comVinculo = new Set((await ler(req, `SELECT CongregacaoId FROM dbo.VinculoCongregacaoArea WHERE DataFim IS NULL AND CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
@@ -950,12 +1100,13 @@ async function etapaTerritorio(pool, mod) {
     for (const c of mod.congs) orgaos.push(["JAI", `Junta de Articulação Institucional — ${c.nome}`, 1, congId.get(c.nome)]);
     for (const a of mod.areas) { orgaos.push(["JEA", `Junta Executiva de Área — ${a.nome}`, 2, areaId.get(a.nome)]); orgaos.push(["JUC", `Junta de Contas de Área — ${a.nome}`, 2, areaId.get(a.nome)]); }
     for (const g of mod.regioes) for (const [s, n] of [["CRA", "Conselho Regional de Administração"], ["TER", "Tribunal Eclesiástico Regional"], ["CRAF", "Conselho Regional de Auditoria e Fiscalização"]]) orgaos.push([s, `${n} — ${g.nome}`, 3, regId.get(g.nome)]);
+    for (const q of mod.quadrantes) for (const [s, n] of [["CEQ", "Colegiado Estratégico de Quadrante"], ["CAQ", "Câmara de Arbitragem do Quadrante"]]) orgaos.push([s, `${n} — ${q.nome}`, 4, quadId.get(q.nome)]);
     const temOrgao = new Set((await ler(req, "SELECT Nivel, ReferenciaId, Sigla FROM dbo.OrgaosLocais WHERE ReferenciaId IS NOT NULL")).map((x) => `${x.Nivel}:${x.ReferenciaId}:${x.Sigla}`));
     const no = await inserir(req, "OrgaosLocais", ["Sigla", "Nome", "Nivel", "ReferenciaId", "Ativo"], orgaos.filter((o) => !temOrgao.has(`${o[2]}:${o[3]}:${o[0]}`)).map((o) => [...o, true]));
     if (no) feito.push(`${no} órgãos locais`);
     const temExt = new Set((await ler(req, `SELECT Nome FROM dbo.ExtensoesTenda WHERE Nome LIKE ${LIKE_F}`)).map((x) => x.Nome));
     const ne = await inserir(req, "ExtensoesTenda", ["Nome", "CongregacaoMaeId", "Ativa", "Endereco", "Bairro", "Cidade", "UF", "AbertaEm", "Lat", "Lng"],
-      mod.extensoes.filter((e) => !temExt.has(e.nome)).map((e) => [e.nome, congId.get(e.mae.nome), true, e.endereco, mod.bairros[e.bairro].nome, CIDADE, UF, isoDe(e.aberta), cru(e.lat.toFixed(6)), cru(e.lng.toFixed(6))]));
+      mod.extensoes.filter((e) => !temExt.has(e.nome)).map((e) => [e.nome, congId.get(e.mae.nome), true, e.endereco, mod.bairros[e.bairro].nome, e.mae.nomeCidade, UF, isoDe(e.aberta), cru(e.lat.toFixed(6)), cru(e.lng.toFixed(6))]));
     if (ne) feito.push(`${ne} extensões`);
   });
   return feito;
@@ -967,6 +1118,8 @@ async function mapas(pool) {
     cong: new Map((await ler(req, `SELECT CongregacaoId, Nome FROM dbo.Congregacoes WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.CongregacaoId])),
     area: new Map((await ler(req, `SELECT AreaId, Nome FROM dbo.Areas WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.AreaId])),
     regiao: new Map((await ler(req, `SELECT RegiaoId, Nome FROM dbo.Regioes WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.RegiaoId])),
+    distrito: new Map((await ler(req, `SELECT DistritoId, Nome FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M}`)).map((x) => [x.Nome, x.DistritoId])),
+    quadrante: new Map((await ler(req, `SELECT QuadranteId, Nome FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}`)).map((x) => [x.Nome, x.QuadranteId])),
     ext: new Map((await ler(req, `SELECT ExtensaoId, Nome FROM dbo.ExtensoesTenda WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Nome, x.ExtensaoId])),
     bairro: new Map((await ler(req, `SELECT BairroId, Nome FROM dbo.Bairros WHERE Nome LIKE ${LIKE_M} AND Ativo = 1`)).map((x) => [x.Nome, x.BairroId])),
     depto: new Map((await ler(req, "SELECT DepartamentoId, Sigla FROM dbo.Departamentos")).map((x) => [x.Sigla, x.DepartamentoId])),
@@ -996,7 +1149,7 @@ async function etapaMembros(pool, mod) {
       p.forma || null, p.igrejaAnterior || null, p.estadoCivil || null, p.sexo, temContato && (p.lider || (p.matricula % 100) < 85) ? telefoneDe(p.matricula) : null,
       temContato && !p.lider && p.idade >= 16 && (p.matricula % 100) < 55 ? emailDe(p) : null, depto ? m.depto.get(depto) || null : null, p.cargo,
       p.dizimistaFiel === undefined ? null : p.dizimistaFiel, p.extensao ? m.ext.get(p.extensao.nome) : null, p.saida ? isoDe(p.saida) : null, p.motivoSaida || null,
-      p.afastamento ? isoDe(p.afastamento) : null, end.linha, p.casa.logradouro, p.casa.numero, p.casa.complemento, m.bairro.get(end.bairro.nome), CIDADE, UF, end.bairro.cep];
+      p.afastamento ? isoDe(p.afastamento) : null, end.linha, p.casa.logradouro, p.casa.numero, p.casa.complemento, m.bairro.get(end.bairro.nome), end.bairro.nomeCidade, UF, end.bairro.cep];
   };
   for (let i = 0; i < faltam.length; i += 500) {
     const bloco = faltam.slice(i, i + 500);
@@ -1041,7 +1194,8 @@ async function etapaLideranca(pool, mod) {
       const papelId = m.papel.get(p.lider.papel);
       if (!papelId) { avisos.push(`papel "${p.lider.papel}" não existe neste banco: ${p.matricula} ficou sem login`); continue; }
       const e = p.lider.escopo;
-      const escopoId = e.tipo === "CONGREGACAO" ? m.cong.get(e.cong.nome) : e.tipo === "AREA" ? m.area.get(e.area.nome) : e.tipo === "REGIAO" ? m.regiao.get(e.regiao.nome) : null;
+      const escopoId = e.tipo === "CONGREGACAO" ? m.cong.get(e.cong.nome) : e.tipo === "AREA" ? m.area.get(e.area.nome) : e.tipo === "REGIAO" ? m.regiao.get(e.regiao.nome)
+        : e.tipo === "DISTRITO" ? m.distrito.get(e.distrito.nome) : e.tipo === "QUADRANTE" ? m.quadrante.get(e.quadrante.nome) : null;
       linhas.push([p.matricula, papelId, e.tipo, escopoId, hashSenha(SENHA)]);
     }
     const n = await inserir(req, "Lideranca", ["MembroId", "PapelId", "EscopoTipo", "EscopoId", "SenhaHash"], linhas);
@@ -1052,9 +1206,429 @@ async function etapaLideranca(pool, mod) {
       .map((e) => [m.ext.get(e.nome), e.encarregado.pessoa.matricula, isoDe(e.encarregado.desde), MATRICULA_MIN + 2, momento(e.encarregado.desde, 15)]);
     const ne = await inserir(req, "ExtensaoEncarregados", ["ExtensaoId", "MembroId", "Desde", "RegistradoPor", "RegistradoEm"], enc);
     if (ne) feito.push(`${ne} encarregados de Extensão`);
+    // Assentos da Diretoria Executiva e do Conselho Fiscal (mandato 2023–2027). Assento já ocupado por outra pessoa (o índice único do cargo) fica como está:
+    // a massa nunca tira ninguém de um assento.
+    const orgaoId = new Map((await ler(req, "SELECT OrgaoId, Sigla FROM dbo.Orgaos")).map((x) => [x.Sigla, x.OrgaoId]));
+    const ocupados = new Set((await ler(req, "SELECT OrgaoId, CargoOuFuncao, MembroId FROM dbo.Assentos WHERE DataFim IS NULL"))
+      .flatMap((x) => [`${x.OrgaoId}:${x.CargoOuFuncao}`, `p:${x.MembroId}:${x.OrgaoId}`]));
+    const assentos = [];
+    for (const p of mod.pessoas.filter((x) => x.assento)) {
+      const oid = orgaoId.get(p.assento.orgao);
+      if (!oid || ocupados.has(`p:${p.matricula}:${oid}`)) continue;
+      if (ocupados.has(`${oid}:${p.assento.cargo}`)) { avisos.push(`o assento ${p.assento.cargo} (${p.assento.orgao}) já tem titular: ${p.matricula} ficou sem ele`); continue; }
+      assentos.push([oid, p.matricula, "FUNCAO", p.assento.cargo, "2023-01-15", "2027-01-14"]);
+    }
+    const na = await inserir(req, "Assentos", ["OrgaoId", "MembroId", "TipoAssento", "CargoOuFuncao", "DataInicio", "DataTerminoPrevisao"], assentos);
+    if (na) feito.push(`${na} assentos (Diretoria e Conselho Fiscal)`);
   });
   for (const a of avisos) console.log(`  (aviso: ${a})`);
   return feito;
+}
+
+// ------------------------------------------------------------------ reuniões (CLI e JAI) ------------------------------------------------------------------
+// A CLI: uma reunião ordinária por mês (o 3º sábado), encerrada, com a presença de quem é dela (pastores, evangelistas e dirigentes, cada um desde que está no
+// cargo). Ninguém leva falta sem justificativa: a ausência vem justificada (com o motivo do catálogo do Art. 149 §2º) — assim a apuração das 3 faltas da v8.1
+// nunca exclui ninguém da massa. A JAI de cada congregação: uma por mês no último ano, com o dirigente, o tesoureiro e os oficiais dela.
+const MOTIVOS_FALTA = [["SAUDE", "Consulta médica (dado fictício)."], ["VIAGEM_PROFISSIONAL", "Viagem a trabalho (dado fictício)."], ["EMERGENCIA_FAMILIAR", "Emergência na família (dado fictício)."], ["LUTO", "Falecimento na família (dado fictício)."]];
+const terceiroSabado = (ano, mes) => { let d = primeiroDiaMes(ano, mes); while (diaSemana(d) !== 6) d++; return d + 14; };
+function gerarReunioes(mod) {
+  const r = criarRng("reunioes");
+  const cli = [];
+  const oficiais = mod.pessoas.filter((p) => p.status === "ATIVO" && (["PASTOR", "EVANGELISTA"].includes(p.cargo) || (p.lider && p.lider.papel === "Dirigente de Congregação")));
+  const desdeNoCargo = (p) => (p.carreira && p.carreira.length ? p.carreira[p.carreira.length - 1].desde : BASE - 3650);
+  for (const mes of MESES) {
+    const dia = terceiroSabado(mes.ano, mes.mes);
+    if (dia > BASE) continue;
+    const pres = [];
+    for (const p of oficiais) {
+      if (!(p.lider && p.lider.papel === "Dirigente de Congregação") && desdeNoCargo(p) > dia) continue;
+      const presente = r.chance(0.88 * (0.3 + 0.7 * atividade(p, dia)));
+      const motivo = presente ? null : r.pick(MOTIVOS_FALTA);
+      pres.push({ pessoa: p, presente, motivo });
+    }
+    const decreto = mod.distritos.find((d) => d.decretoCli === isoDe(dia));
+    cli.push({ dia, pres, decreto: decreto || null,
+      pauta: decreto ? `Leitura da ata anterior; relatórios das Áreas; decreto de ativação do ${decreto.nome} (Art. 126-K); consagrações; avisos.`
+        : r.pick(["Leitura da ata anterior; relatórios das Áreas; calendário do trimestre; consagrações; avisos.", "Leitura da ata anterior; prestação de contas do mês; missões; avisos.",
+          "Leitura da ata anterior; relatórios dos departamentos; escalas da Santa Ceia; avisos."]) });
+  }
+  const jai = [];
+  for (const c of mod.congs) {
+    const membrosJai = c.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && (p.lider || ["PRESBITERO", "DIACONO", "EVANGELISTA", "PASTOR"].includes(p.cargo))).slice(0, 9);
+    for (const mes of MESES.slice(-12)) {
+      const dia = terceiroSabado(mes.ano, mes.mes) - 7; // o 2º sábado
+      if (dia > BASE || membrosJai.length < 2) continue;
+      jai.push({ cong: c, dia, pres: membrosJai.map((p) => ({ pessoa: p, presente: r.chance(0.85 * (0.3 + 0.7 * atividade(p, dia))) })) });
+    }
+  }
+  return { cli, jai };
+}
+async function etapaReunioes(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const orgaoCli = (await ler(req0, "SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'CLI'"))[0];
+  if (!orgaoCli) return ["(sem o órgão CLI neste banco: reuniões puladas)"];
+  const reun = gerarReunioes(mod);
+  const feito = [];
+  // CLI: identificadas pela descrição com a marca; refazer pula as que já existem (pela data).
+  const temCli = new Set((await ler(req0, `SELECT CONVERT(char(10), DataSessao, 23) AS d FROM dbo.Sessoes WHERE OrgaoId = ${orgaoCli.OrgaoId} AND Descricao LIKE ${LIKE_F}`)).map((x) => x.d));
+  const novasCli = reun.cli.filter((s) => !temCli.has(isoDe(s.dia)));
+  if (novasCli.length) {
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "Sessoes", ["OrgaoId", "Descricao", "DataSessao", "TipoSessao", "Status", "QuorumAtingido", "DataConvocacao", "DataPrevista", "Pauta", "ContaFaltasCLI"],
+        novasCli.map((s) => [orgaoCli.OrgaoId, `Reunião ordinária da CLI — ${isoDe(s.dia).split("-").reverse().join("/")}${SUF_F}`, isoDe(s.dia), "ORDINARIA", "ENCERRADA", true,
+          isoDe(s.dia - 15), isoDe(s.dia), s.pauta, true]));
+      const sid = new Map((await ler(req, `SELECT SessaoId, CONVERT(char(10), DataSessao, 23) AS d FROM dbo.Sessoes WHERE OrgaoId = ${orgaoCli.OrgaoId} AND Descricao LIKE ${LIKE_F}`)).map((x) => [x.d, x.SessaoId]));
+      const pres = novasCli.flatMap((s) => s.pres.map((x) => [sid.get(isoDe(s.dia)), x.pessoa.matricula, x.presente, !x.presente, x.motivo ? x.motivo[1] : null, true, x.motivo ? x.motivo[0] : null]));
+      await inserir(req, "Presencas", ["SessaoId", "MembroId", "Presente", "FaltaJustificada", "MotivoJustificativa", "EsperadoCLI", "MotivoCodigo"], pres, 1000);
+      feito.push(`${novasCli.length} reuniões da CLI com ${pres.length} presenças`);
+    });
+  }
+  // JAI: por congregação, numa transação cada; congregação que já tem reunião da JAI fictícia é pulada.
+  const jaiId = new Map((await ler(req0, `SELECT OrgaoLocalId, ReferenciaId FROM dbo.OrgaosLocais WHERE Nivel = 1 AND Sigla = N'JAI' AND ReferenciaId IN (${Q_CONG})`)).map((x) => [x.ReferenciaId, x.OrgaoLocalId]));
+  const comJai = new Set((await ler(req0, `SELECT DISTINCT OrgaoLocalId FROM dbo.Sessoes WHERE OrgaoLocalId IS NOT NULL AND Descricao LIKE ${LIKE_F}`)).map((x) => x.OrgaoLocalId));
+  let nj = 0, np = 0;
+  for (const c of mod.congs) {
+    const olId = jaiId.get(m.cong.get(c.nome));
+    if (!olId || comJai.has(olId)) continue;
+    const sessoes = reun.jai.filter((s) => s.cong === c);
+    if (!sessoes.length) continue;
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "Sessoes", ["OrgaoLocalId", "Descricao", "DataSessao", "TipoSessao", "Status", "QuorumAtingido", "DataConvocacao", "DataPrevista", "Pauta", "ContaFaltasCLI"],
+        sessoes.map((s) => [olId, `Reunião da JAI — ${c.nome.replace(SUF_F, "")} — ${isoDe(s.dia).split("-").reverse().join("/")}${SUF_F}`, isoDe(s.dia), "ORDINARIA", "ENCERRADA", true,
+          isoDe(s.dia - 7), isoDe(s.dia), "Leitura da ata anterior; tesouraria do mês; relatórios dos departamentos; manutenção do templo; avisos.", false]));
+      const sid = new Map((await ler(req, `SELECT SessaoId, CONVERT(char(10), DataSessao, 23) AS d FROM dbo.Sessoes WHERE OrgaoLocalId = ${olId} AND Descricao LIKE ${LIKE_F}`)).map((x) => [x.d, x.SessaoId]));
+      const pres = sessoes.flatMap((s) => s.pres.map((x) => [sid.get(isoDe(s.dia)), x.pessoa.matricula, x.presente]));
+      await inserir(req, "Presencas", ["SessaoId", "MembroId", "Presente"], pres, 1000);
+      nj += sessoes.length; np += pres.length;
+    });
+  }
+  if (nj) feito.push(`${nj} reuniões da JAI com ${np} presenças`);
+  return feito;
+}
+
+// ------------------------------------------------------------------ o Distrito (decreto, Dízimo Institucional, balanço) ------------------------------------------------------------------
+// Depois da tesouraria: o decreto da CLI (a reunião de março/2025) ativa o Distrito com o período do dinheiro desde o mês do registro (como distritosDb.ativar), o CDE
+// nasce junto; o Dízimo Institucional de cada mês (10% do Total Final dos fechamentos com o repasse gravado para o Distrito — calculado do banco, nunca digitado)
+// é registrado e repassado pelo Tesoureiro de Distrito até o dia 5 do mês seguinte; o balanço de 2025 foi devolvido uma vez pelo NIF (Conselho Fiscal) e aprovado na
+// segunda versão (quem analisa nunca é quem enviou).
+async function etapaDistritos(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const feito = [];
+  const orgaoCli = (await ler(req0, "SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'CLI'"))[0];
+  const param = (await ler(req0, "SELECT PercentualDizimoInstitucional AS p FROM dbo.ParametrosRepasseInstitucional WHERE ParametroId = 1"))[0];
+  const percentual = param ? Number(param.p) : 10;
+  const pastor = (d) => mod.lideres.find((p) => p.lider.papel === "Pastor Distrital" && p.lider.escopo.distrito === d);
+  const tesoureiro = (d) => mod.lideres.find((p) => p.lider.papel === "Tesoureiro de Distrito" && p.lider.escopo.distrito === d);
+  for (const d of mod.distritos) {
+    const did = m.distrito.get(d.nome);
+    if (!did) throw new Error('falta o Distrito fictício: rode a etapa "territorio" antes');
+    const sessao = orgaoCli && (await ler(req0, `SELECT SessaoId FROM dbo.Sessoes WHERE OrgaoId = ${orgaoCli.OrgaoId} AND DataSessao = '${d.decretoCli}' AND Status = N'ENCERRADA' AND Descricao LIKE ${LIKE_F}`))[0];
+    if (!sessao) throw new Error('falta a reunião da CLI do decreto: rode a etapa "reunioes" antes');
+    const pd = pastor(d), td = tesoureiro(d);
+    const quemRegistra = td ? td.matricula : MATRICULA_MIN + 3;
+    await emTransacao(pool, async (req) => {
+      if (!(await ler(req, `SELECT TOP 1 1 AS x FROM dbo.DistritoPeriodos WHERE DistritoId = ${did}`)).length) {
+        await inserir(req, "DistritoPeriodos", ["DistritoId", "Legado", "AtivadoEm", "FinanceiroDesdeMes", "AtivacaoSessaoId", "Gatilho", "Cidade", "UF", "Fundamentacao", "AtivacaoRegistradaPor", "AtivacaoRegistradaEm"],
+          [[did, false, d.decretoCli, d.desdeMes, sessao.SessaoId, "METROPOLE", d.nomeCidade, UF,
+            `Capital fora da sede de origem, com congregações bastantes para a administração própria (decreto da CLI de ${d.decretoCli.split("-").reverse().join("/")}; dado fictício).`, MATRICULA_MIN + 2, `${d.registradoEm}T14:00:00`]]);
+        await req().query(`UPDATE dbo.Distritos SET Ativo = 1 WHERE DistritoId = ${did}`);
+        await req().query(`IF NOT EXISTS (SELECT 1 FROM dbo.OrgaosLocais WHERE Nivel = 5 AND ReferenciaId = ${did} AND Sigla = N'CDE')
+          INSERT INTO dbo.OrgaosLocais (Sigla, Nome, Nivel, ReferenciaId, Ativo) VALUES (N'CDE', ${lit(`Conselho Distrital Eclesiástico — ${d.nome}`)}, 5, ${did}, 1)`);
+        feito.push(`${d.nome}: decreto, período desde ${d.desdeMes} e CDE`);
+      }
+      // Dízimo Institucional: um por mês fechado do período (todas as congregações do território fecharam), do banco.
+      const meses = await ler(req, `SELECT f.MesReferencia AS mes, SUM(f.TotalFinal) AS soma, MAX(f.DataFechamento) AS ultimo FROM dbo.FechamentosTesouraria f
+        WHERE f.RepasseDistritoId = ${did} AND NOT EXISTS (SELECT 1 FROM dbo.RepassesInstitucionais ri WHERE ri.OrigemTipo = N'DISTRITO' AND ri.OrigemId = ${did} AND ri.MesReferencia = f.MesReferencia)
+        GROUP BY f.MesReferencia ORDER BY f.MesReferencia`);
+      const r = criarRng(`distrito:${d.i}`);
+      const linhas = meses.map((x) => {
+        const soma = Math.round(Number(x.soma) * 100);
+        const valor = Math.round(soma * percentual / 100);
+        const fech = new Date(x.ultimo).getTime() / DIA_MS;
+        // um mês de 2025 repassado com atraso (o aviso de retenção da v9.3 o mostraria), os outros no prazo
+        const atraso = x.mes === `${d.desdeMes.slice(0, 4)}-12` ? r.int(6, 10) : 0;
+        const dia = Math.floor(fech) + 1 + atraso;
+        return [N_DISTRITO, did, d.nome, x.mes, reais(soma), cru(percentual.toFixed(2)), reais(valor), "REPASSADO", momento(dia, 16, r.int(0, 59)), quemRegistra, quemRegistra, momento(dia, 11, r.int(0, 59))];
+      });
+      await inserir(req, "RepassesInstitucionais", ["OrigemTipo", "OrigemId", "OrigemNome", "MesReferencia", "ValorArrecadadoLiquido", "Percentual", "ValorRepasse", "Status", "DataRepasse",
+        "RepassadoPor", "RegistradoPor", "CriadoEm"], linhas);
+      if (linhas.length) feito.push(`${d.nome}: ${linhas.length} meses de Dízimo Institucional`);
+      // Balanço de cada ano inteiro do período até o ano anterior à data-base (prazo 31/03 do ano seguinte): devolvido uma vez, aprovado na 2ª versão.
+      const anos = (await ler(req, `SELECT DISTINCT LEFT(MesReferencia, 4) AS ano FROM dbo.FechamentosTesouraria WHERE RepasseDistritoId = ${did}`)).map((x) => Number(x.ano)).filter((a) => a < ANO_BASE);
+      const cf = mod.conselhoFiscal[0];
+      for (const ano of anos) {
+        if ((await ler(req, `SELECT TOP 1 1 AS x FROM dbo.DistritoBalancos WHERE DistritoId = ${did} AND Ano = ${ano}`)).length) continue;
+        const t = (await ler(req, `SELECT (SELECT ISNULL(SUM(ValorRepasseGeral), 0) FROM dbo.FechamentosTesouraria WHERE RepasseDistritoId = ${did} AND Status = 'REPASSADO' AND LEFT(MesReferencia, 4) = '${ano}') AS rec,
+          (SELECT ISNULL(SUM(ValorRepasse), 0) FROM dbo.RepassesInstitucionais WHERE OrigemTipo = N'DISTRITO' AND OrigemId = ${did} AND Status = N'REPASSADO' AND LEFT(MesReferencia, 4) = '${ano}') AS diz`))[0];
+        const rec = Math.round(Number(t.rec) * 100), desp = Math.round(Number(t.diz) * 100) + Math.round(rec * 0.55);
+        const enviou = pd ? pd.matricula : quemRegistra;
+        const analisa = cf ? cf.matricula : MATRICULA_MIN + 3;
+        await inserir(req, "DistritoBalancos", ["DistritoId", "Ano", "Versao", "Receitas", "Despesas", "SaldoFinal", "Observacoes", "Status", "EnviadoPor", "EnviadoEm", "AnalisadoPor", "AnalisadoEm", "MotivoDevolucao"], [
+          [did, ano, 1, reais(rec), reais(desp), reais(rec - desp), "Balanço anual do Distrito (dado fictício).", "DEVOLVIDO", enviou, `${ano + 1}-02-20T15:00:00`, analisa, `${ano + 1}-03-02T10:00:00`,
+            "Faltou o extrato da conta do Distrito de dezembro (dado fictício)."],
+          [did, ano, 2, reais(rec), reais(desp), reais(rec - desp), "Balanço anual do Distrito, com o extrato de dezembro (dado fictício).", "APROVADO", enviou, `${ano + 1}-03-10T15:00:00`, analisa, `${ano + 1}-03-20T10:00:00`, null]
+        ]);
+        feito.push(`${d.nome}: balanço de ${ano}`);
+      }
+    });
+  }
+  return feito;
+}
+const N_DISTRITO = "DISTRITO";
+
+// ------------------------------------------------------------------ prestação de contas mensal (Reg. Art. 120, migração 062) ------------------------------------------------------------------
+// Cada mês fechado: os comprovantes de água e luz até o dia 5 do mês seguinte (COMPLETA); quem atrasa fica com a Ata de Pendência (ATA_PENDENCIA) — com o
+// repasse bloqueado só nos 2 últimos meses (os antigos já foram regularizados e desbloqueados); alguns meses, nas congregações menos pontuais, nem têm
+// prestação (o aviso PRESTACAO_CONTAS_ATRASADA as acharia). Os arquivos são nomes de mentira (o link abre vazio, como os comprovantes da tesouraria).
+async function etapaPrestacoes(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const comPrest = new Set((await ler(() => pool.request(), `SELECT DISTINCT CongregacaoId FROM dbo.PrestacoesContas WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  const fechados = MESES.filter((x) => !x.aberto);
+  let n = 0, atas = 0, faltam = 0, nc = 0;
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    if (comPrest.has(cid)) continue;
+    const r = criarRng(`prestacoes:${c.i}`);
+    const tes = mod.lideres.find((p) => p.lider.papel === "Tesoureiro Local" && p.lider.escopo.cong === c);
+    const quem = tes ? tes.matricula : MATRICULA_MIN + 3;
+    const completa = { BOA: 0.95, MEDIA: 0.85, RUIM: 0.65 }[c.pontualidade];
+    const linhas = [];
+    fechados.forEach((mes, j) => {
+      if (r.chance(c.pontualidade === "RUIM" ? 0.08 : 0.02)) { faltam++; return; }
+      const ok = r.chance(completa);
+      const recentes = j >= fechados.length - 2;
+      const arq = (t) => `homolog-ficticio-${t}-${c.k}-${mes.chave}.pdf`;
+      const semAgua = !ok && r.chance(0.5);
+      linhas.push([cid, mes.chave, semAgua ? null : arq("agua"), ok || semAgua ? arq("luz") : null, ok ? "COMPLETA" : "ATA_PENDENCIA", ok ? null : arq("ata-pendencia"),
+        !ok && recentes, quem, momento(mes.fim + (ok ? r.int(1, 5) : r.int(6, 20)), 14, r.int(0, 59))]);
+      if (!ok) atas++;
+    });
+    await emTransacao(pool, (req) => inserir(req, "PrestacoesContas", ["CongregacaoId", "MesReferencia", "ComprovanteAguaUrl", "ComprovanteLuzUrl", "Status", "AtaPendenciaUrl",
+      "BloqueioRepasse", "RegistradoPor", "CriadoEm"], linhas));
+    n += linhas.length; nc++;
+  }
+  return nc ? [`prestações de contas de ${nc} congregações: ${n} meses (${atas} com Ata de Pendência, ${faltam} meses sem prestação)`] : [];
+}
+
+// ------------------------------------------------------------------ PSC: Programa de Saúde Congregacional (v7.1, migração 113) ------------------------------------------------------------------
+// Uma avaliação por congregação e exercício, desde o primeiro exercício obrigatório (PscParametros) até o da data-base. As respostas copiam o catálogo
+// vigente (como a tela faz ao abrir) e sobem a Escada Bloqueada até o nível que a congregação sustenta (pela tendência): tudo atendido até ali, alguma
+// alínea não atendida no degrau seguinte, o resto bloqueado. O nível, a classificação e o JSON dos sinais vêm de shared/psc.js::montarEscada (o mesmo
+// cálculo da homologação). Esteira com segregação: o Dirigente preenche e envia, o Pastor de Área valida, o Presidente homologa. Ninguém fica reprovado no
+// Nível 1 em dois exercícios seguidos (a reclassificação compulsória é decisão da CLI, não da massa).
+async function etapaPsc(pool, mod) {
+  const psc = require("../shared/psc");
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const param = (await ler(req0, "SELECT PrimeiroExercicio FROM dbo.PscParametros WHERE ParametroId = 1"))[0];
+  const primeiro = param ? Number(param.PrimeiroExercicio) : ANO_BASE;
+  const criterios = await ler(req0, `SELECT c.CriterioId, c.SinalId, c.Nivel, c.Codigo, c.Texto, c.Orientacao FROM dbo.PscCriterios c JOIN dbo.PscSinaisVitais s ON s.SinalId = c.SinalId
+    WHERE c.Ativo = 1 AND s.Ativo = 1 ORDER BY c.SinalId, c.Nivel, c.Codigo`);
+  const sinaisMeta = (await ler(req0, "SELECT SinalId, Codigo, Nome, Ordem FROM dbo.PscSinaisVitais")).map((s) => ({ sinalId: s.SinalId, codigo: s.Codigo, nome: s.Nome, ordem: s.Ordem }));
+  if (!criterios.length) return ["(catálogo do PSC vazio: PSC pulado)"];
+  const sinais = [...new Set(criterios.map((x) => x.SinalId))];
+  const anos = [];
+  for (let a = Math.max(primeiro, ANO_BASE - 2); a <= ANO_BASE; a++) anos.push(a);
+  const tem = new Set((await ler(req0, `SELECT CongregacaoId, Ano FROM dbo.PscAvaliacoes WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => `${x.CongregacaoId}:${x.Ano}`));
+  const tot = { aval: 0, resp: 0, homolog: 0 };
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    const r = criarRng(`psc:${c.i}`);
+    const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+    const pa = mod.lideres.find((p) => p.lider.papel === "Pastor de Área" && p.lider.escopo.area === mod.areas[c.area]);
+    const prep = dir ? dir.matricula : MATRICULA_MIN + 2, valida = pa ? pa.matricula : MATRICULA_MIN + 2;
+    const base = c.tendencia === "CRESCE" ? 4 : c.tendencia === "CAI" ? 2 : 3;
+    let reprovouAntes = false;
+    for (const ano of anos) {
+      if (tem.has(`${cid}:${ano}`)) continue;
+      const atual = ano === ANO_BASE;
+      const status = !atual ? r.pesos([["HOMOLOGADA", 90], ["VALIDADA", 10]]) : r.pesos([["RASCUNHO", 55], ["ENVIADA", 25], ["VALIDADA", 15], ["HOMOLOGADA", 5]]);
+      // o nível que cada Sinal sustenta; 0 = reprovado no Nível 1 (só a congregação que cai, no exercício da data-base, e nunca dois seguidos)
+      const reprova = atual && !reprovouAntes && c.tendencia === "CAI" && r.chance(0.25);
+      const alvo = new Map(sinais.map((s) => [s, reprova && s === sinais[0] ? 0 : Math.max(1, Math.min(5, base + r.int(-1, 1)))]));
+      reprovouAntes = reprova;
+      const parcial = status === "RASCUNHO";
+      const respostas = criterios.map((x) => {
+        const L = alvo.get(x.SinalId);
+        let sit = "PENDENTE";
+        if (x.Nivel <= L) sit = "ATENDIDO";
+        else if (x.Nivel === L + 1) sit = "ATENDIDO_OU_NAO";
+        if (parcial && x.Nivel > Math.max(1, L - 1)) sit = "PENDENTE";
+        return { ...x, sit };
+      });
+      // no degrau de parada: pelo menos uma alínea não atendida em cada Sinal
+      for (const s of sinais) {
+        const doDegrau = respostas.filter((x) => x.SinalId === s && x.sit === "ATENDIDO_OU_NAO");
+        doDegrau.forEach((x, k) => { x.sit = k === 0 || r.chance(0.4) ? "NAO_ATENDIDO" : "ATENDIDO"; });
+      }
+      const esc = psc.montarEscada(respostas.map((x) => ({ sinalId: x.SinalId, nivel: x.Nivel, situacao: x.sit, codigo: x.Codigo })), sinaisMeta);
+      const homologada = status === "HOMOLOGADA" && esc.concluido && esc.classificacao != null;
+      const st = status === "HOMOLOGADA" && !homologada ? "VALIDADA" : status;
+      const aberta = atual ? BASE - r.int(40, 120) : diaDe(`${ano}-11-20`) + r.int(0, 20);
+      const enviada = st !== "RASCUNHO" ? Math.min(BASE - 3, atual ? aberta + r.int(10, 30) : diaDe(`${ano + 1}-01-10`) + r.int(0, 40)) : null;
+      const validada = st === "VALIDADA" || st === "HOMOLOGADA" ? Math.min(BASE - 2, enviada + r.int(3, 20)) : null;
+      const homolog = st === "HOMOLOGADA" ? Math.min(BASE - 1, validada + r.int(5, 30)) : null;
+      const json = homologada ? JSON.stringify(esc.sinais.map((s) => ({ sinalId: s.sinalId, codigo: s.codigo, nivel: s.nivel, nivelDeParada: s.nivelDeParada,
+        niveis: s.niveis.map((nv) => ({ nivel: nv.nivel, situacao: nv.situacao, atendidos: nv.atendidos, naoAtendidos: nv.naoAtendidos, total: nv.total })) }))) : null;
+      await emTransacao(pool, async (req) => {
+        await inserir(req, "PscAvaliacoes", ["CongregacaoId", "Ano", "Status", "AbertaPorMembroId", "AbertaEm", "EnviadaPorMembroId", "EnviadaEm", "ValidadaPorMembroId", "ValidadaEm",
+          "ParecerValidacao", "HomologadaPorMembroId", "HomologadaEm", "ResolucaoReferencia", "NivelFinal", "ReprovadaNivel1", "Classificacao", "ResultadoSinaisJson", "AtualizadaEm"],
+        [[cid, ano, st, prep, momento(aberta, 13), enviada ? prep : null, enviada ? momento(enviada, 15) : null, validada ? valida : null, validada ? momento(validada, 16) : null,
+          validada ? "Conferido com a Secretaria da congregação (dado fictício)." : null, homologada ? MATRICULA_MIN + 1 : null, homologada ? momento(homolog, 17) : null,
+          homologada ? `Resolução CLI nº ${r.int(10, 99)}/${ano + 1} (fictícia)` : null, homologada ? esc.nivelFinal : null, homologada ? esc.reprovadaNivel1 : null,
+          homologada ? esc.classificacao : null, json, momento(homolog || validada || enviada || aberta, 18)]]);
+        const aid = (await ler(req, `SELECT AvaliacaoId FROM dbo.PscAvaliacoes WHERE CongregacaoId = ${cid} AND Ano = ${ano}`))[0].AvaliacaoId;
+        const resp = respostas.map((x) => [aid, x.CriterioId, x.SinalId, x.Nivel, x.Codigo, x.Texto, x.Orientacao, x.sit === "PENDENTE" ? "PENDENTE" : x.sit,
+          x.sit === "PENDENTE" ? null : prep, x.sit === "PENDENTE" ? null : momento(aberta + r.int(1, 9), 14)]);
+        await inserir(req, "PscRespostas", ["AvaliacaoId", "CriterioId", "SinalId", "Nivel", "Codigo", "Texto", "Orientacao", "Situacao", "RespondidaPorMembroId", "RespondidaEm"], resp);
+        tot.aval++; tot.resp += resp.length; if (homologada) tot.homolog++;
+      });
+    }
+  }
+  return tot.aval ? [`PSC: ${tot.aval} avaliações (${tot.homolog} homologadas, exercícios ${anos.join(", ")}), ${tot.resp} respostas`] : [];
+}
+
+// ------------------------------------------------------------------ relatórios mensais dos departamentos (v5.3/v5.8, migração 094) ------------------------------------------------------------------
+// Os últimos 18 meses fechados, por congregação e departamento que ela tem (pelo número de pessoas de cada um). Prazo: o último dia do mês seguinte
+// (relatoriosDepartamentais.calcularPrazoEnvio). Cada congregação tem a sua pontualidade: a boa manda quase tudo no prazo; a ruim atrasa (Atrasado = 1) ou
+// nem manda (rascunho parado, ou nenhum relatório: o "pendente" do semáforo da v10.12). A trilha (Aprovações) segue a máquina de estados do app: ENVIAR
+// (congregação) → APROVAR_AREA (Pastor de Área) → APROVAR_GERAL (Secretaria Geral) → às vezes RETIFICAR; o rateio (ValorParaGeral/Local) é congelado na
+// aprovação geral com o perfil do departamento, como GestaoRelatoriosDepartamentais::congelarRateio.
+const PONTUALIDADE = { BOA: { envia: 0.97, noPrazo: 0.92 }, MEDIA: { envia: 0.88, noPrazo: 0.7 }, RUIM: { envia: 0.7, noPrazo: 0.4 } };
+function rateioDoPerfil(perfil, total, manual) {
+  // o mesmo de shared/tesourariaDepartamental.js::calcularRateio (copiado: aquele módulo depende do banco do app)
+  if (!perfil) return { geral: 0, local: total };
+  const met = perfil.Metodo;
+  if (met === "INTEGRAL_GERAL") return { geral: total, local: 0 };
+  if (met === "INTEGRAL_LOCAL") return { geral: 0, local: total };
+  if (met === "VARIAVEL_MANUAL") return { geral: manual || 0, local: total - (manual || 0) };
+  if (met === "PERCENTUAL" || met === "MENSALIDADE_FIXA") {
+    if (perfil.ModoEntrada === "LIQUIDO_MANUAL") return { geral: total, local: null };
+    const geral = Math.round(total * (Number(perfil.PercentualGeral) || 0) / 100);
+    return { geral, local: total - geral };
+  }
+  return { geral: 0, local: total };
+}
+async function etapaRelatorios(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const schemas = await ler(req0, `SELECT s.SchemaRelatorioId, s.DepartamentoId, d.Sigla FROM dbo.SchemasRelatorioDepartamental s JOIN dbo.Departamentos d ON d.DepartamentoId = s.DepartamentoId
+    WHERE s.DataVigenciaFim IS NULL`);
+  const campos = await ler(req0, "SELECT CampoFormularioId, SchemaRelatorioId, NomeCampo, Grupo, Comportamento, TipoDado, PermiteSemanal FROM dbo.CamposFormularioDepartamental ORDER BY Ordem, CampoFormularioId");
+  const perfis = new Map((await ler(req0, "SELECT * FROM dbo.PerfisRateioDepartamental")).map((x) => [x.SchemaRelatorioId, x]));
+  const schemaDe = new Map(schemas.map((s) => [s.Sigla, s]));
+  const comRel = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.RelatoriosDepartamentais WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  const meses = MESES.filter((x) => !x.aberto).slice(-18);
+  const tot = { cong: 0, rel: 0, valores: 0, trilha: 0, atrasados: 0, pendentes: 0 };
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    if (comRel.has(cid)) continue;
+    const r = criarRng(`relatorios:${c.i}`);
+    const vivos = c.pessoas.filter((p) => p.status === "ATIVO");
+    const porDepto = new Map();
+    for (const p of vivos) { const s = departamentoDe(p); if (s) porDepto.set(s, (porDepto.get(s) || 0) + 1); }
+    const deptos = ["UCADESPA", "UMADESPA", "USADESPA", "UHADESPA"].filter((s) => (porDepto.get(s) || 0) >= 3);
+    deptos.push("EBD");
+    if (vivos.length >= 60) deptos.push("SEMIADESPA");
+    if (vivos.length >= 80) deptos.push("FAMILIA");
+    if (vivos.length >= 100) deptos.push("ACAO_DA_FE");
+    const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+    const pa = mod.lideres.find((p) => p.lider.papel === "Pastor de Área" && p.lider.escopo.area === mod.areas[c.area]);
+    const quem = dir ? dir.matricula : MATRICULA_MIN + 2;
+    const pont = PONTUALIDADE[c.pontualidade];
+    const rels = [];
+    for (const sigla of deptos) {
+      const sch = schemaDe.get(sigla);
+      if (!sch) continue;
+      const cs = campos.filter((x) => x.SchemaRelatorioId === sch.SchemaRelatorioId);
+      const n = sigla === "EBD" ? Math.round(vivos.length * 0.6) : (porDepto.get(sigla) || Math.round(vivos.length * 0.15));
+      for (const mes of meses) {
+        const t2 = mes.ano * 12 + (mes.mes - 1) + 2; // o 1º dia de dois meses depois, menos um = o último dia do mês seguinte
+        const prazo = primeiroDiaMes(Math.floor(t2 / 12), (t2 % 12) + 1) - 1;
+        const venceu = prazo < BASE;
+        let status = null, envio = null;
+        if (venceu) {
+          if (r.chance(pont.envia)) {
+            envio = r.chance(pont.noPrazo) ? mes.fim + r.int(1, prazo - mes.fim) : prazo + r.int(1, 45);
+            if (envio > BASE - 1) envio = BASE - 1;
+            status = "ENVIADO";
+          } else if (r.chance(0.5)) status = "RASCUNHO";
+        } else if (r.chance(0.7)) {
+          status = r.chance(0.5) && BASE > mes.fim + 1 ? "ENVIADO" : "RASCUNHO";
+          if (status === "ENVIADO") envio = mes.fim + r.int(1, BASE - mes.fim - 1);
+        }
+        if (!status) { tot.pendentes++; continue; }
+        const trilha = [];
+        let ultimo = envio || mes.fim + r.int(1, 10);
+        if (status === "ENVIADO") {
+          trilha.push(["ENVIAR", "CONGREGACAO", quem, envio]);
+          const area = envio + r.int(3, 12), geral = area + r.int(2, 12);
+          if (pa && area < BASE) { status = "APROVADO_AREA"; trilha.push(["APROVAR_AREA", "AREA", pa.matricula, area]); ultimo = area; }
+          if (status === "APROVADO_AREA" && geral < BASE && r.chance(0.95)) { status = "APROVADO_GERAL"; trilha.push(["APROVAR_GERAL", "GLOBAL", MATRICULA_MIN + 2, geral]); ultimo = geral; }
+          const retif = geral + r.int(5, 20);
+          if (status === "APROVADO_GERAL" && retif < BASE && r.chance(0.03)) { status = "RETIFICADO"; trilha.push(["RETIFICAR", "GLOBAL", MATRICULA_MIN + 2, retif]); ultimo = retif; }
+        }
+        const prazoIso = isoDe(prazo);
+        const atrasado = !!envio && isoDe(envio) > prazoIso;
+        if (atrasado) tot.atrasados++;
+        // valores do formulário (os semanais, um por domingo do mês)
+        const domingos = [];
+        for (let d = mes.inicio; d <= mes.fim; d++) if (diaSemana(d) === 0) domingos.push(d);
+        const valores = [];
+        let financeiro = 0;
+        const sazonal = fatorMesAno(mes.inicio) * tendenciaEm(c, mes.inicio);
+        for (const f of cs) {
+          const gera = () => {
+            if (f.Grupo === "FINANCEIRO") return Math.round(r.int(0, 30) * 500 * Math.max(0.5, n / 25) * sazonal); // centavos
+            if (f.Comportamento === "ESTADO") return Math.max(0, Math.round(n * (0.85 + r.real() * 0.2) * Math.min(1.2, sazonal)));
+            if (/presen/i.test(f.NomeCampo)) return Math.round(n * (0.55 + r.real() * 0.25) * sazonal);
+            if (/ausen/i.test(f.NomeCampo)) return Math.round(n * (0.1 + r.real() * 0.2));
+            return r.int(0, Math.max(2, Math.round(n / 6)));
+          };
+          if (f.PermiteSemanal) {
+            domingos.forEach((d, k) => { const v = gera(); valores.push([f.CampoFormularioId, k + 1, f.TipoDado === "MOEDA" ? reais(v) : v]); });
+          } else {
+            const v = gera();
+            if (f.Grupo === "FINANCEIRO") financeiro += v;
+            valores.push([f.CampoFormularioId, null, f.TipoDado === "MOEDA" ? reais(v) : v]);
+          }
+        }
+        let paraGeral = null, paraLocal = null, manual = null;
+        const perfil = perfis.get(sch.SchemaRelatorioId);
+        if (perfil && perfil.Metodo === "VARIAVEL_MANUAL") manual = Math.round(financeiro * 0.5);
+        if (status === "APROVADO_GERAL" || status === "RETIFICADO") {
+          const rt = rateioDoPerfil(perfil, financeiro, manual);
+          paraGeral = rt.geral; paraLocal = rt.local;
+        }
+        rels.push({ sch, sigla, mes, status, envio, atrasado, trilha, valores, paraGeral, paraLocal, manual, criado: Math.min(envio || ultimo, mes.fim + r.int(1, 8)), ultimo,
+          eventos: [r.int(0, 4), r.int(0, 2), r.int(0, 1)], integracao: [r.int(0, 3), r.int(0, 1), r.int(0, 1)] });
+      }
+    }
+    if (!rels.length) continue;
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "RelatoriosDepartamentais", ["CongregacaoId", "DepartamentoId", "MesReferencia", "AnoReferencia", "SchemaRelatorioId", "Status", "Atrasado", "EventosLocal", "EventosArea",
+        "EventosGeral", "IntegracaoConversao", "IntegracaoReconciliacao", "IntegracaoDeOutraIgreja", "CriadoPor", "DataEnvio", "CriadoEm", "AtualizadoEm", "ValorManualParaGeral", "ValorParaGeral", "ValorParaLocal"],
+      rels.map((x) => [cid, x.sch.DepartamentoId, x.mes.mes, x.mes.ano, x.sch.SchemaRelatorioId, x.status, x.atrasado, ...x.eventos, ...x.integracao, quem,
+        x.envio ? momento(x.envio, 18, 30) : null, momento(x.criado, 12), momento(x.ultimo, 19), x.manual === null ? null : reais(x.manual),
+        x.paraGeral === null ? null : reais(x.paraGeral), x.paraLocal === null ? null : reais(x.paraLocal)]));
+      const relId = new Map((await ler(req, `SELECT RelatorioDepartamentalId AS id, DepartamentoId AS d, MesReferencia AS m, AnoReferencia AS a FROM dbo.RelatoriosDepartamentais WHERE CongregacaoId = ${cid}`))
+        .map((x) => [`${x.d}:${x.m}:${x.a}`, x.id]));
+      const idDe = (x) => relId.get(`${x.sch.DepartamentoId}:${x.mes.mes}:${x.mes.ano}`);
+      const vals = rels.flatMap((x) => x.valores.map((v) => [idDe(x), ...v]));
+      await inserir(req, "ValoresCampoRelatorioDepartamental", ["RelatorioDepartamentalId", "CampoFormularioId", "NumeroDomingo", "Valor"], vals, 1000);
+      const trilha = rels.flatMap((x) => x.trilha.map(([acao, nivel, por, dia]) => [idDe(x), nivel, acao, acao === "RETIFICAR" ? "Correção de digitação (dado fictício)." : null, por, momento(dia, 19)]));
+      await inserir(req, "AprovacoesRelatorioDepartamental", ["RelatorioDepartamentalId", "NivelAprovador", "Acao", "Comentario", "MembroId", "CriadoEm"], trilha, 1000);
+      tot.cong++; tot.rel += rels.length; tot.valores += vals.length; tot.trilha += trilha.length;
+    });
+  }
+  return tot.cong ? [`relatórios de ${tot.cong} congregações: ${tot.rel} relatórios (${tot.atrasados} entregues com atraso, ${tot.pendentes} meses sem relatório), ${tot.valores} valores, ${tot.trilha} passos da trilha`] : [];
 }
 
 async function etapaFinanceiro(pool, mod) {
@@ -1066,7 +1640,7 @@ async function etapaFinanceiro(pool, mod) {
   const feito = [];
   // Dizimistas (um por pessoa, na congregação dela).
   const temDiz = new Set((await ler(req0, `SELECT MembroId FROM dbo.Dizimistas WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
-  const diz = mod.pessoas.filter((p) => p.dizimista && !temDiz.has(p.matricula)).map((p) => [m.cong.get(p.cong.nome), p.nome, p.matricula, true, momento(p.dizimista.desde, 12)]);
+  const diz = mod.pessoas.filter((p) => p.dizimista && !temDiz.has(p.matricula)).map((p) => [m.cong.get(p.cong.nome), p.nome, p.matricula, p.dizimista.ativo, momento(p.dizimista.desde, 12)]);
   if (diz.length) { await emTransacao(pool, (req) => inserir(req, "Dizimistas", ["CongregacaoId", "Nome", "MembroId", "Ativo", "CriadoEm"], diz, 1000)); feito.push(`${diz.length} dizimistas`); }
   // Fornecedores (cadastrados pela Secretaria Geral, dados bancários confirmados pelo Presidente: quem aprova as saídas — a Tesouraria Geral — não cadastrou nenhum).
   const temForn = new Set((await ler(req0, `SELECT CpfCnpj FROM dbo.Fornecedores WHERE CpfCnpj LIKE '${CNPJ_PREFIXO}%'`)).map((x) => x.CpfCnpj));
@@ -1092,9 +1666,10 @@ async function etapaFinanceiro(pool, mod) {
       await inserir(req, "ConciliacoesTesouraria", ["CongregacaoId", "MesReferencia", "ValorTotal", "ComprovanteUrl", "CriadoPor", "CriadoEm"],
         fin.conciliacoes.map((x) => [cid, x.mes, reais(x.valorTotal), `homolog-ficticio-extrato-pix-${c.k}-${x.mes}.pdf`, tes.matricula, x.criadoEm]));
       await inserir(req, "FechamentosTesouraria", ["CongregacaoId", "MesReferencia", "TotalRecebido", "ValorAluguel", "ValorLote", "TotalFinal", "PercentualRetencaoLocal",
-        "ValorRetidoLocal", "ValorRepasseGeral", "Status", "DataFechamento", "FechadoPor", "DataRepasse", "RepassadoPor", "FormaRepasse"],
+        "ValorRetidoLocal", "ValorRepasseGeral", "Status", "DataFechamento", "FechadoPor", "DataRepasse", "RepassadoPor", "FormaRepasse", "RepasseDistritoId"],
         fin.fechamentos.map((f) => [cid, f.mes, reais(f.totalRecebido), reais(c.aluguel), reais(c.lote), cru(f.totalFinal.toFixed(2)), cru("40.00"), cru(f.valorRetidoLocal.toFixed(2)),
-          cru(f.valorRepasseGeral.toFixed(2)), f.repassado ? "REPASSADO" : "FECHADO", f.dataFechamento, tes.matricula, f.dataRepasse, f.repassado ? tesGeral : null, f.formaRepasse]));
+          cru(f.valorRepasseGeral.toFixed(2)), f.repassado ? "REPASSADO" : "FECHADO", f.dataFechamento, tes.matricula, f.dataRepasse, f.repassado ? tesGeral : null, f.formaRepasse,
+          f.distrito ? m.distrito.get(f.distrito.nome) : null]));
       const fechId = new Map((await ler(req, `SELECT FechamentoId, MesReferencia FROM dbo.FechamentosTesouraria WHERE CongregacaoId = ${cid}`)).map((x) => [x.MesReferencia, x.FechamentoId]));
       const concId = new Map((await ler(req, `SELECT ConciliacaoId, MesReferencia FROM dbo.ConciliacoesTesouraria WHERE CongregacaoId = ${cid}`)).map((x) => [x.MesReferencia, x.ConciliacaoId]));
       const dizId = new Map((await ler(req, `SELECT DizimistaId, MembroId FROM dbo.Dizimistas WHERE CongregacaoId = ${cid} AND MembroId IS NOT NULL`)).map((x) => [x.MembroId, x.DizimistaId]));
@@ -1228,7 +1803,8 @@ async function main() {
     const tm = Date.now();
     const mod = gerarModelo();
     console.log(`Modelo (semente ${SEMENTE}, data-base ${DATA_BASE}): ${mod.congs.length} congregações, ${mod.pessoas.length} pessoas, ${mod.vinculos.length} vínculos, ${mod.lideres.length} lideranças — ${((Date.now() - tm) / 1000).toFixed(1)} s`);
-    const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, financeiro: etapaFinanceiro, ebd: etapaEbd, escalas: etapaEscalas };
+    const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, reunioes: etapaReunioes, financeiro: etapaFinanceiro, distritos: etapaDistritos,
+      relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

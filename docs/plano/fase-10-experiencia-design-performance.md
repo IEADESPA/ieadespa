@@ -91,9 +91,21 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação. Presidente 700001,
       Secretário Geral 700002, Tesouraria Geral 700003, Superintendentes 700011–700013, Pastores de Área 700021–700029, Pastor Distrital
       700031, Dirigente da congregação k = 700100 + k e Tesoureiro Local = 700200 + k (k = 1 é a Sede).
-- [ ] **Defeito achado pela massa (12/11/2026):** a categoria de entrada "Oferta de Culto do Departamento" não pode ser lançada — o código
-      dela (`OFERTA_CULTO_DEPARTAMENTO`, 25 letras) não cabe no campo `LancamentosTesouraria.Tipo` (20). Correção: uma migração alargando o
-      campo. Mexe na produção: espera o "pode corrigir" do responsável.
+**Defeitos do sistema achados pela massa (12/11/2026):**
+
+- [x] **Oferta de Culto do Departamento** não podia ser lançada — o código dela (`OFERTA_CULTO_DEPARTAMENTO`, 25 letras) não cabia no campo
+      `LancamentosTesouraria.Tipo` (20). Corrigido pela migração 172 (o campo com 30 letras), aprovada pelo responsável; **em produção desde
+      12/11/2026** (prova: e2e-81).
+- [x] **Número do recibo de doação** repetido: era a contagem do ano + 1, sem trava; dois registros ao mesmo tempo (ou um buraco na
+      sequência) davam o mesmo número e erro 500. Agora nasce numa transação com a faixa do ano travada e é o maior do ano + 1. Aprovado pelo
+      responsável e pelo Presidente; **em produção desde 12/11/2026** (prova: e2e-82, com corrida de 6 processos).
+- [ ] **Apuração das votações vinculantes** (o mais grave): a opção mais votada — fosse o Sim ou o Não — "aprovava". Regra decidida pelo
+      responsável e pelo Presidente: a votação tem **tipo** — **proposta** (a Secretaria marca qual opção aprova, qual rejeita e qual é voto em
+      branco, que não conta; aprovada quando quem aprova atinge o quórum sobre os válidos) ou **escolha** (nomes ou opções: ganha a mais
+      votada, mesmo com 30%; empate fica para a mesa). Migração 173 no ramo `v10-votacao` (prova: e2e-83 e os testes de regras); **na
+      homologação para os dois testarem**; vai para a produção depois do "aprovado" deles.
+- A "matrícula da AFM sem nível" **não é defeito**: a tela da AFM já mostra essas pessoas com o nível "a informar", conta quantas são e tem o
+  filtro "Sem nível" para a Secretaria completar (conferido no código em 12/11/2026).
 - [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.
 
 **O raio-x e as referências:**

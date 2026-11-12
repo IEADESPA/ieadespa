@@ -11,7 +11,8 @@
 //   --apagar                remove SÓ o que este gerador cria (pelas marcas abaixo), numa transação; nada mais
 //   --contar                só conta as linhas fictícias por tabela
 //   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, reunioes, financeiro, prestacoes, distritos,
-//                           relatorios, psc, ebd, escalas, calendario, cuidado, missoes, expansao, entidades, ministerio
+//                           relatorios, psc, ebd, escalas, calendario, cuidado, missoes, expansao, entidades, ministerio,
+//                           seguranca, consentimentos, enquetes, campanhas, comunicacao, conquistas
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
@@ -74,14 +75,33 @@
 //   entidades: Assembleias Gerais de março, entidades vinculadas (ativa ratificada, aguardando a AG, proposta, não aprovada), dirigentes,
 //      prestações de contas apreciadas e verificadas pelo Conselho Fiscal, uma intervenção ratificada e encerrada;
 //   ministerio: marcos da caminhada, credencial digital (algumas na 2ª via), matrícula da AFM, corpo docente, seminário (disciplinas, turmas e
-//      notas), exame bienal e consagrações em andamento e reprovadas pelo CEI (a reciclagem anual não entra: pegaria os oficiais reais).
+//      notas), exame bienal e consagrações em andamento e reprovadas pelo CEI (a reciclagem anual não entra: pegaria os oficiais reais); a
+//      matrícula AUTOMÁTICA que o app cria sozinho sem nível de escolaridade recebe o nível pelo cargo (sem ele a AFM não a conta);
+//   seguranca: plano de segurança (1ª e 2ª versão), simulados, vistorias com os 10 itens (pendências, parte resolvida), equipe; o templo como
+//      imóvel com AVCB (vigente, a vencer, vencido) e parte com apólice de seguro; profissionais nos Setores Técnicos com a adesão por ficha física;
+//   consentimentos: só dos MEMBROS (matrícula 700300+), nunca dos logins de liderança de teste: LGPD por ficha da Secretaria, comunicação por
+//      e-mail por ficha de papel (texto e hash de shared/comunicacao.js) e a adesão ao Termo do Voluntário de quem serve nas escalas;
+//   enquetes: votações das Assembleias Gerais (contas do exercício, reforma da Sede por dois terços) com o resultado apurado como o app apura,
+//      consultas aos membros (uma encerrada e uma aberta) e as respostas dos adultos em comunhão;
+//   campanhas: campanha ativa (metas por congregação, ofertas no mês aberto) e uma encerrada, doações com recibo próprio (REC-FICT, fora da
+//      numeração DOA-ano do app; acima do limite de identificação, doador pessoa jurídica fictícia), contas a receber previstas e canceladas,
+//      cessões de templo (a autorizada com taxa nasce com a conta a receber e a receita acessória, como o app faz) e os orçamentos anuais do ano
+//      anterior e do ano da data-base que faltarem (o realizado do ano anterior com acréscimo);
+//   comunicacao: modelos (aprovados, um arquivado, um rascunho) e envios JÁ TERMINADOS (concluídos e um cancelado), com cada entrega em situação
+//      final calculada como o app calcula (consentimento, e-mail, aparelho). NADA é enviado: nunca envio na FILA nem entrega PENDENTE (a fila do
+//      app não acha nada da massa) e nenhuma linha em Notificacoes;
+//   conquistas: cada presença/falta das chamadas da EBD vira o evento EBD_PRESENCA do app e as conquistas são reavaliadas, domingo a domingo,
+//      pelas funções puras do próprio motor (shared/conquistas.js), com o pré-requisito em cadeia.
 // O lote é por transação: cada bloco de pessoas e cada congregação (ou ano) de cada etapa entra inteiro ou não entra.
 //
-// O QUE FICA PARA SEMPRE (o banco proíbe apagar — gatilhos): itens e eventos do cuidado pastoral (CuidadoItens, CuidadoEventos) e os pedidos de
-// oração (PedidosOracao). O --apagar não falha por causa deles: deixa essas linhas e, pelas chaves estrangeiras, as peças fictícias de que elas
-// dependem — as pessoas citadas (≈700), as congregações, Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões. Também fica o ano do
-// calendário em planejamento que a massa criou (sem marca possível). As notas pastorais saem (com a marca de purga do próprio app). Rodar de novo
-// recria o resto em cima do que ficou, sem duplicar.
+// O QUE FICA PARA SEMPRE (o banco proíbe apagar — gatilhos): itens e eventos do cuidado pastoral (CuidadoItens, CuidadoEventos), os pedidos de
+// oração (PedidosOracao), a segurança das congregações (SegurancaPlanos, SegurancaSimulados, SegurancaVistorias e os itens, SegurancaEquipe),
+// os Setores Técnicos (vínculos e adesões), as adesões ao Termo do Voluntário (VoluntariadoAdesoes) e os modelos de comunicação aprovados ou
+// arquivados (ComunicacaoModelos com a chave "massa-ficticia-..."; o rascunho sai). O --apagar não falha por causa deles:
+// deixa essas linhas e, pelas chaves estrangeiras, as peças fictícias de que elas dependem — as pessoas citadas (≈1.600), as congregações,
+// Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões. Também fica o ano do calendário em planejamento que a massa criou (sem
+// marca possível). As notas pastorais e os consentimentos de comunicação saem (com a marca de purga do próprio app). Rodar de novo recria o
+// resto em cima do que ficou, sem duplicar.
 // Fica de fora (e por quê): ver HOMOLOGACAO.md, "Massa grande" (as etapas da segunda leva entram em partes).
 "use strict";
 const crypto = require("crypto");
@@ -95,7 +115,7 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado", "missoes", "expansao", "entidades", "ministerio"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado", "missoes", "expansao", "entidades", "ministerio", "seguranca", "consentimentos", "enquetes", "campanhas", "comunicacao", "conquistas"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
@@ -972,11 +992,48 @@ const PURGA = "EXEC sp_set_session_context N'cuidado_purga', 1; "; // a marca de
 const PERMANENTES = [
   ["CuidadoItens", `CongregacaoId IN (${Q_CONG})`],
   ["CuidadoEventos", `ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`],
-  ["PedidosOracao", `CongregacaoId IN (${Q_CONG}) OR (Origem = N'SITE' AND Texto LIKE N'%(pedido fictício do mural do site)%')`]
+  ["PedidosOracao", `CongregacaoId IN (${Q_CONG}) OR (Origem = N'SITE' AND Texto LIKE N'%(pedido fictício do mural do site)%')`],
+  ["SegurancaPlanos", `CongregacaoId IN (${Q_CONG})`],
+  ["SegurancaSimulados", `CongregacaoId IN (${Q_CONG})`],
+  ["SegurancaVistorias", `CongregacaoId IN (${Q_CONG})`],
+  ["SegurancaVistoriaItens", `VistoriaId IN (SELECT VistoriaId FROM dbo.SegurancaVistorias WHERE CongregacaoId IN (${Q_CONG}))`],
+  ["SegurancaEquipe", `CongregacaoId IN (${Q_CONG}) OR MembroId ${M_PESSOA}`],
+  ["SetoresTecnicosMembros", `MembroId ${M_PESSOA}`],
+  ["SetoresTecnicosAdesoes", `MembroId ${M_PESSOA}`],
+  ["VoluntariadoAdesoes", `MembroId ${M_PESSOA}`],
+  ["ComunicacaoModelos", `Chave LIKE N'massa-ficticia-%' AND Status <> N'RASCUNHO'`]
 ];
+const Q_ENVCOM = `SELECT EnvioId FROM dbo.ComunicacaoEnvios WHERE ModeloId IN (SELECT ModeloId FROM dbo.ComunicacaoModelos WHERE Chave LIKE N'massa-ficticia-%')`;
 const Q_ENVIO = `SELECT EnvioId FROM dbo.EnviosMissionarios WHERE CampoId IN (SELECT CampoId FROM dbo.CamposMissionarios WHERE Nome LIKE ${LIKE_M}) OR MembroId ${M_PESSOA}`;
 const Q_ENTIDADE = `SELECT EntidadeId FROM dbo.EntidadesVinculadas WHERE RazaoSocial LIKE ${LIKE_F}`;
+const Q_BEM = `SELECT BemId FROM dbo.BensPatrimoniais WHERE CongregacaoId IN (${Q_CONG})`;
+const Q_ENQ = `SELECT EnqueteId FROM dbo.Enquetes WHERE Titulo LIKE ${LIKE_F}`;
+const Q_PERG = `SELECT PerguntaId FROM dbo.PerguntasEnquete WHERE EnqueteId IN (${Q_ENQ})`;
+const Q_CAMP = `SELECT CampanhaId FROM dbo.Campanhas WHERE Nome LIKE ${LIKE_F}`;
+const Q_ORC = `SELECT OrcamentoId FROM dbo.OrcamentosAnuais WHERE CriadoPor ${M_PESSOA}`;
 const ALVOS = [
+  ["RespostasEnquete", `PerguntaId IN (${Q_PERG}) OR MembroId ${M_PESSOA}`],
+  ["OpcoesEnquete", `PerguntaId IN (${Q_PERG})`],
+  ["PerguntasEnquete", `EnqueteId IN (${Q_ENQ})`],
+  ["PublicoEnqueteCustom", `EnqueteId IN (${Q_ENQ})`],
+  ["Enquetes", `Titulo LIKE ${LIKE_F}`],
+  ["ConquistasDesbloqueadas", `MembroId ${M_PESSOA}`],
+  ["ConquistasEventos", `MembroId ${M_PESSOA}`],
+  ["ReceitasAcessorias", `CongregacaoId IN (${Q_CONG}) OR BemId IN (${Q_BEM})`],
+  ["CessoesTemplo", `CongregacaoId IN (${Q_CONG})`],
+  ["ContasAReceber", `CongregacaoId IN (${Q_CONG}) OR CampanhaId IN (${Q_CAMP})`],
+  ["Doacoes", `CongregacaoId IN (${Q_CONG})`],
+  ["CampanhaMetas", `CampanhaId IN (${Q_CAMP}) OR CongregacaoId IN (${Q_CONG})`],
+  ["OrcamentoLinhas", `OrcamentoId IN (${Q_ORC})`],
+  ["OrcamentosAnuais", `CriadoPor ${M_PESSOA}`],
+  ["ApolicesSeguro", `BemId IN (${Q_BEM})`],
+  ["ImoveisSituacaoFiscal", `BemId IN (${Q_BEM})`],
+  ["BensPatrimoniais", `BemId IN (${Q_BEM})`],
+  ["ConsentimentosLGPD", `MembroId ${M_PESSOA}`],
+  ["ComunicacaoConsentimentos", `MembroId ${M_PESSOA}`, false, "EXEC sp_set_session_context N'comunicacao_purga', 1; "],
+  ["ComunicacaoEntregas", `EnvioId IN (${Q_ENVCOM}) OR MembroId ${M_PESSOA}`, false, "EXEC sp_set_session_context N'comunicacao_purga', 1; "],
+  ["ComunicacaoEnvios", `EnvioId IN (${Q_ENVCOM})`],
+  ["ComunicacaoModelos", `Chave LIKE N'massa-ficticia-%'`],
   ["AFMExameResultados", `MembroId ${M_PESSOA} OR ExameId IN (SELECT ExameId FROM dbo.AFMExames WHERE Observacao LIKE ${LIKE_M})`],
   ["AFMExames", `Observacao LIKE ${LIKE_M}`],
   ["AFMTurmaAlunos", `MembroId ${M_PESSOA} OR TurmaId IN (SELECT TurmaId FROM dbo.AFMTurmas WHERE DisciplinaId IN (SELECT DisciplinaId FROM dbo.AFMDisciplinas WHERE Nome LIKE ${LIKE_F}))`],
@@ -1039,6 +1096,7 @@ const ALVOS = [
   ["SaidaCotacoes", `SaidaId IN (${Q_SAIDA})`],
   ["SaidasTesouraria", `CongregacaoId IN (${Q_CONG}) OR FornecedorId IN (${Q_FORN})`],
   ["LancamentosTesouraria", `CongregacaoId IN (${Q_CONG})`],
+  ["Campanhas", `Nome LIKE ${LIKE_F}`],
   ["ConciliacoesTesouraria", `CongregacaoId IN (${Q_CONG})`],
   ["FechamentosTesouraria", `CongregacaoId IN (${Q_CONG})`],
   ["Dizimistas", `CongregacaoId IN (${Q_CONG})`],
@@ -1131,7 +1189,7 @@ async function apagar(pool) {
         }
         if (n) feito.push(`${tabela}: ${n}${Date.now() - t0 > 2000 ? ` (${((Date.now() - t0) / 1000).toFixed(0)} s)` : ""}`);
       }
-      await req().query("EXEC sp_set_session_context N'cuidado_purga', NULL; DROP TABLE #Fixos;");
+      await req().query("EXEC sp_set_session_context N'cuidado_purga', NULL; EXEC sp_set_session_context N'comunicacao_purga', NULL; DROP TABLE #Fixos;");
     });
   } catch (e) {
     const m = /table "([^"]+)", column '([^']+)'/i.exec(e.message || "");
@@ -2549,7 +2607,13 @@ async function etapaMinisterio(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
   const req0 = () => pool.request();
-  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.MarcosMembro WHERE MembroId ${M_PESSOA}`)).length) return [];
+  // A matrícula AUTOMATICA que a rotina do app cria (afmDb.garantirMatriculas) nasce sem o nível de escolaridade: na massa, ele segue o cargo. Roda sempre e só
+  // onde está vazio (na homologação as matrículas dos oficiais fictícios já existiam quando a etapa rodou pela 1ª vez: "0 matrículas").
+  const acerto = await req0().query(`UPDATE ma SET NivelEscolaridade = CASE m.CargoMinisterial WHEN 'AUXILIAR' THEN 'BASICO' WHEN 'MISSIONARIO' THEN 'MEDIO' WHEN 'DIACONO' THEN 'MEDIO' ELSE 'AVANCADO' END
+    FROM dbo.Matriculas_AFM ma JOIN dbo.MembroReferencia m ON m.MembroId = ma.MembroId
+    WHERE ma.MembroId ${M_PESSOA} AND ma.NivelEscolaridade IS NULL AND m.CargoMinisterial IN ('AUXILIAR', 'MISSIONARIO', 'DIACONO', 'PRESBITERO', 'EVANGELISTA', 'PASTOR')`);
+  const acertadas = acerto.rowsAffected.reduce((s, x) => s + x, 0);
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.MarcosMembro WHERE MembroId ${M_PESSOA}`)).length) return acertadas ? [`ministério: nível de escolaridade preenchido em ${acertadas} matrículas da AFM`] : [];
   const cli = await reunioesFicticias(req0, "CLI");
   const cursos = new Map((await ler(req0, "SELECT CursoId, Nivel FROM dbo.AFMCursos")).map((x) => [x.Nivel, x.CursoId]));
   const usados = new Set((await ler(req0, "SELECT Codigo AS c FROM dbo.CredenciaisEclesiasticas UNION SELECT CodigoVerificacao FROM dbo.CertificadosEmitidos WHERE CodigoVerificacao IS NOT NULL")).map((x) => x.c));
@@ -2690,6 +2754,392 @@ async function etapaMinisterio(pool, mod) {
   return [`ministério: ${Object.entries(tot).map(([k, v]) => `${v} ${k}`).join(", ")}`];
 }
 
+// ------------------------------------------------------------------ segurança da congregação, AVCB/seguro e setores técnicos (v7.15, v4.x, v7.6) ------------------------------------------------------------------
+// PERMANENTE (gatilhos): planos, simulados, vistorias e itens, equipe de segurança, vínculos e adesões dos setores técnicos não se apagam.
+const ITENS_VISTORIA = ["EXTINTORES", "SAIDAS", "ILUMINACAO_EMERGENCIA", "QUADRO_ELETRICO", "ACESSIBILIDADE", "SINALIZACAO", "ALARME_INCENDIO", "KIT_PRIMEIROS_SOCORROS", "GAS", "ESTRUTURA"];
+async function etapaSeguranca(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const com = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.SegurancaPlanos WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  const tot = { cong: 0, planos: 0, simulados: 0, vistorias: 0, itens: 0, equipe: 0, imoveis: 0 };
+  // o templo como imóvel (sai no --apagar; os planos e vistorias ficam): refeito à parte quando falta, mesmo onde a segurança já existe
+  const comImovel = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.BensPatrimoniais WHERE CongregacaoId IN (${Q_CONG}) AND Descricao LIKE N'Templo da congregação %'`)).map((x) => x.CongregacaoId));
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    if (comImovel.has(cid)) continue;
+    const r = criarRng(`imovel:${c.i}`);
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "BensPatrimoniais", ["CongregacaoId", "Tipo", "Descricao", "ValorAquisicao", "DataAquisicao", "VidaUtilMeses", "EhTemploSede", "Status", "RegistradoPor", "CriadoEm"],
+        [[cid, "IMOVEL", `Templo da congregação ${c.nome}`, reais(r.int(80, 900) * 100000), `${c.fundacao}-06-01`, 600, !!c.sede, "ATIVO", MATRICULA_MIN + 3, momento(BASE - 700, 12)]]);
+      const bem = (await ler(req, `SELECT TOP 1 BemId FROM dbo.BensPatrimoniais WHERE CongregacaoId = ${cid} AND Descricao = ${lit(`Templo da congregação ${c.nome}`)} ORDER BY BemId DESC`))[0].BemId;
+      const avcb = r.pesos([[BASE + r.int(90, 700), 75], [BASE + r.int(5, 55), 12], [BASE - r.int(5, 200), 13]]);
+      await inserir(req, "ImoveisSituacaoFiscal", ["BemId", "RegistradoPor", "AvcbNumero", "AvcbVigenciaFim", "AvcbDocumentoUrl"], [[bem, MATRICULA_MIN + 3, `AVCB-FICT-${c.k}`, isoDe(avcb), `homolog-ficticio-avcb-${c.k}.pdf`]]);
+      if (c.sede || r.chance(0.4)) await inserir(req, "ApolicesSeguro", ["Tipo", "Seguradora", "NumeroApolice", "DataInicio", "DataFim", "Coberturas", "BemId", "Status", "RegistradoPor"],
+        [[c.sede ? "TEMPLO_SEDE" : "OUTROS", `Seguradora Exemplo${SUF_F}`, `AP-FICT-${c.k}`, isoDe(BASE - r.int(30, 300)), isoDe(BASE + r.int(30, 330)), "Incêndio, danos elétricos e responsabilidade civil (fictício).", bem, "ATIVA", MATRICULA_MIN + 3]]);
+      tot.imoveis++;
+    });
+  }
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    if (com.has(cid)) continue;
+    const r = criarRng(`seguranca:${c.i}`);
+    const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+    const quem = dir ? dir.matricula : MATRICULA_MIN + 2;
+    const adultos = c.pessoas.filter((p) => p.status === "ATIVO" && p.situacao !== "SEM_COMUNHAO" && p.idade >= 21 && p.idade <= 65 && !p.evasao);
+    await emTransacao(pool, async (req) => {
+      const v1 = BASE - r.int(500, 700), v2 = BASE - r.int(30, 330);
+      const plano = (v, em) => [cid, v, "Saída principal pela porta da frente; saída lateral pelo corredor da cantina (dado fictício).", "Estacionamento em frente ao templo.",
+        "Bombeiros 193; SAMU 192 (fictício)", `Dirigente e ${r.pick(["dois diáconos", "a equipe de recepção", "os porteiros"])} (dado fictício)`, quem, momento(em, 14)];
+      tot.planos += await inserir(req, "SegurancaPlanos", ["CongregacaoId", "Versao", "RotasEvacuacao", "PontosEncontro", "ContatosLocais", "Responsaveis", "RegistradoPorMembroId", "RevisadoEm"],
+        r.chance(0.7) ? [plano(1, v1), plano(2, v2)] : [plano(1, v1)]);
+      const sim = [];
+      for (let k = r.int(0, 3); k > 0; k--) { const d = BASE - r.int(20, 900); sim.push([cid, isoDe(d), r.pick(["EVACUACAO", "INCENDIO", "PRIMEIROS_SOCORROS"]), r.int(20, 180), r.int(10, 60), "Saída em ordem e rápida.", "Sinalizar melhor a saída lateral.", quem, momento(d, 20)]); }
+      tot.simulados += await inserir(req, "SegurancaSimulados", ["CongregacaoId", "Data", "Tipo", "Participantes", "DuracaoMinutos", "CorreuBem", "Melhorar", "RegistradoPorMembroId", "RegistradoEm"], sim);
+      // vistorias do último ano (as 10 linhas de itens em cada; alguma pendência, parte resolvida)
+      for (let k = r.int(0, 2); k > 0; k--) {
+        const d = BASE - r.int(15, 360);
+        await inserir(req, "SegurancaVistorias", ["CongregacaoId", "Data", "Observacoes", "RegistradoPorMembroId", "RegistradoEm"], [[cid, isoDe(d), `Vistoria de rotina${SUF_F}`, quem, momento(d, 16, k)]]);
+        const vid = (await ler(req, `SELECT TOP 1 VistoriaId FROM dbo.SegurancaVistorias WHERE CongregacaoId = ${cid} AND RegistradoEm = '${momento(d, 16, k)}'`))[0].VistoriaId;
+        const itens = ITENS_VISTORIA.map((it) => {
+          const res = it === "GAS" && r.chance(0.5) ? "NAO_SE_APLICA" : r.chance(0.15) ? "PENDENTE" : "OK";
+          const resolvida = res === "PENDENTE" && d + 40 < BASE && r.chance(0.6);
+          return [vid, it, res, res === "PENDENTE" ? "Item precisa de reparo (dado fictício)." : null, resolvida ? momento(d + r.int(5, 35), 15) : null, resolvida ? quem : null, resolvida ? "Reparo feito pela equipe (dado fictício)." : null];
+        });
+        tot.itens += await inserir(req, "SegurancaVistoriaItens", ["VistoriaId", "Item", "Resultado", "Pendencia", "ResolvidaEm", "ResolvidaPorMembroId", "ComoResolvida"], itens);
+        tot.vistorias++;
+      }
+      const eq = [];
+      const usados = new Set();
+      for (const f of ["COORDENACAO", "BRIGADA", "PRIMEIROS_SOCORROS", "PORTARIA"]) {
+        const p = adultos.length ? r.pick(adultos) : null;
+        if (!p || usados.has(p)) continue;
+        usados.add(p);
+        eq.push([cid, p.matricula, f, isoDe(BASE - r.int(60, 600)), quem, momento(BASE - 30, 12)]);
+      }
+      tot.equipe += await inserir(req, "SegurancaEquipe", ["CongregacaoId", "MembroId", "Funcao", "Desde", "RegistradoPorMembroId", "RegistradoEm"], eq);
+      tot.cong++;
+    });
+  }
+  // setores técnicos: profissionais da massa em setores, com a adesão ao Termo por ficha física (registrada pela Secretaria) e a cláusula do setor
+  const feito = [];
+  if (!(await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.SetoresTecnicosMembros WHERE MembroId ${M_PESSOA}`)).length) {
+    const setores = await ler(req0, "SELECT SetorId, Codigo, ExigeRegistro, PodeInterditar, PodeSolicitarRemocao FROM dbo.SetoresTecnicos WHERE Ativo = 1");
+    const r = criarRng("setores");
+    const cands = mod.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 25 && p.idade <= 65 && !p.lider && !p.assento && !p.evasao);
+    const vinc = [];
+    for (const s of setores) for (let k = r.int(0, 3); k > 0; k--) { const p = r.pick(cands); if (!vinc.some((v) => v.p === p && v.s === s)) vinc.push({ p, s, ativo: r.chance(0.8), em: BASE - r.int(20, 500) }); }
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "SetoresTecnicosMembros", ["SetorId", "MembroId", "Status", "Origem", "Formacao", "ConselhoSigla", "RegistroNumero", "CriadoPorMembroId", "CriadoEm", "AprovadoPorMembroId", "AprovadoEm", "AtivadoEm"],
+        vinc.map((v) => [v.s.SetorId, v.p.matricula, v.ativo ? "ATIVO" : "AGUARDANDO_TERMO", "INDICACAO", `Formação em ${v.s.Codigo.toLowerCase().replace(/_/g, " ")} (fictícia)`,
+          v.s.ExigeRegistro ? "CONSELHO-PA" : null, v.s.ExigeRegistro ? `FICT${v.p.matricula}` : null, MATRICULA_MIN + 2, momento(v.em, 12), MATRICULA_MIN + 2, momento(v.em, 12, 5), v.ativo ? momento(v.em + 7, 15) : null]));
+      const vid = new Map((await ler(req, `SELECT VinculoId, SetorId, MembroId FROM dbo.SetoresTecnicosMembros WHERE MembroId ${M_PESSOA}`)).map((x) => [`${x.SetorId}:${x.MembroId}`, x.VinculoId]));
+      const espec = (s) => (s.Codigo === "JURIDICO" ? "LIMITES_JURIDICOS" : s.PodeInterditar ? "INTERDICAO" : s.PodeSolicitarRemocao ? "REMOCAO_POSTAGEM" : "");
+      const ades = vinc.filter((v) => v.ativo).map((v) => [vid.get(`${v.s.SetorId}:${v.p.matricula}`), v.p.matricula, v.s.SetorId, "FICHA_FISICA", espec(v.s), isoDe(v.em + 7), `Ficha de adesão nº ${v.p.matricula} (fictícia)`, MATRICULA_MIN + 1, momento(v.em + 7, 15)]);
+      await inserir(req, "SetoresTecnicosAdesoes", ["VinculoId", "MembroId", "SetorId", "Forma", "TermoEspecificos", "DataAceite", "Referencia", "RegistradoPorMembroId", "RegistradoEm"], ades);
+      feito.push(`setores técnicos: ${vinc.length} vínculos, ${ades.length} adesões`);
+    });
+  }
+  return (tot.cong ? [`segurança de ${tot.cong} congregações: ${tot.planos} planos, ${tot.simulados} simulados, ${tot.vistorias} vistorias (${tot.itens} itens), ${tot.equipe} na equipe`] : [])
+    .concat(tot.imoveis ? [`${tot.imoveis} templos como imóvel, com AVCB e parte com seguro`] : []).concat(feito);
+}
+
+// ------------------------------------------------------------------ consentimentos e adesões dos MEMBROS (LGPD, comunicação, voluntariado) ------------------------------------------------------------------
+// Nunca dos logins de liderança de teste (700001..700299): o primeiro acesso deles continua pedindo os termos, como na produção. LGPD (dados de contato) por
+// ficha da Secretaria; comunicação por ficha de papel (o hash do texto aceito vem de shared/comunicacao.js, sem segredo); adesão ao Termo do Voluntário por
+// ficha física de quem serve nas escalas. PERMANENTE (gatilho): a adesão do voluntário. O consentimento de comunicação sai com a marca de purga do app.
+async function etapaConsentimentos(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.ConsentimentosLGPD WHERE MembroId BETWEEN ${MATRICULA_MIN + 300} AND ${MATRICULA_MAX}`)).length) return [];
+  let com = null;
+  try { com = require("../shared/comunicacao"); } catch (e) { console.log(`  (aviso: shared/comunicacao não carregou — consentimentos de comunicação pulados: ${e.message.slice(0, 80)})`); }
+  const r = criarRng("consentimentos");
+  const alvo = mod.pessoas.filter((p) => p.matricula >= MATRICULA_MIN + 300 && p.status === "ATIVO" && p.idade >= 18 && p.situacao !== "CONGREGADO");
+  const secr = (p) => { const d = mod.lideres.find((x) => x.lider.papel === "Dirigente de Congregação" && x.lider.escopo.cong === p.cong); return d && d !== p ? d.matricula : MATRICULA_MIN + 2; };
+  const lgpd = [], comu = [], ades = [];
+  for (const p of alvo) {
+    if (r.chance(0.85)) lgpd.push([p.matricula, "DADOS_CONTATO", true, "CONSENTIMENTO", "Registrado pela Secretaria. Ficha de cadastro (fictícia).", secr(p), momento(BASE - r.int(30, 600), 13)]);
+    if (com && r.chance(0.4)) {
+      const ficha = BASE - r.int(10, 600);
+      for (const cat of com.CATEGORIAS_COM_CONSENTIMENTO || []) if (r.chance(0.7)) comu.push([p.matricula, "EMAIL", cat, true, "FICHA_PAPEL", "2026-10-22", com.hashDoTexto(cat), isoDe(ficha), `Ficha ${p.matricula} (fictícia)`, secr(p), momento(ficha + 1, 14)]);
+    }
+  }
+  // adesão ao Termo do Voluntário de quem serve nas escalas (ficha física)
+  const naEscala = new Set((await ler(req0, `SELECT DISTINCT em.MembroId FROM dbo.EscalasEquipeMembros em WHERE em.MembroId BETWEEN ${MATRICULA_MIN + 300} AND ${MATRICULA_MAX}`)).map((x) => x.MembroId));
+  // a adesão é permanente: depois de um --apagar ela continua lá e não se repete
+  const jaAderiu = new Set((await ler(req0, `SELECT DISTINCT MembroId FROM dbo.VoluntariadoAdesoes WHERE MembroId BETWEEN ${MATRICULA_MIN + 300} AND ${MATRICULA_MAX}`)).map((x) => x.MembroId));
+  for (const p of alvo.filter((x) => naEscala.has(x.matricula) && !jaAderiu.has(x.matricula))) { const d = BASE - r.int(60, 500); ades.push([p.matricula, "FICHA_FISICA", isoDe(d), `Ficha do voluntário nº ${p.matricula} (fictícia)`, secr(p), momento(d, 15)]); }
+  await emTransacao(pool, async (req) => {
+    await inserir(req, "ConsentimentosLGPD", ["MembroId", "Tipo", "Concedido", "BaseLegal", "Observacao", "RegistradoPor", "DataRegistro"], lgpd, 1000);
+    await inserir(req, "ComunicacaoConsentimentos", ["MembroId", "Canal", "Categoria", "Concedido", "Origem", "TextoVersao", "TextoHash", "DataFicha", "FichaReferencia", "RegistradoPorMembroId", "CriadoEm"], comu, 1000);
+    await inserir(req, "VoluntariadoAdesoes", ["MembroId", "Forma", "DataAceite", "Referencia", "RegistradoPorMembroId", "RegistradoEm"], ades, 1000);
+  });
+  return [`consentimentos dos membros: ${lgpd.length} de LGPD, ${comu.length} de comunicação (ficha de papel), ${ades.length} adesões de voluntário`];
+}
+
+// ------------------------------------------------------------------ enquetes e votações (governança) ------------------------------------------------------------------
+// Votações das Assembleias Gerais fictícias (encerradas, ligadas à sessão) e consultas aos membros (encerradas e uma aberta), com as respostas dos adultos
+// em comunhão. Sem gatilho nem CHECK: tudo sai no --apagar (título com a marca).
+async function etapaEnquetes(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.Enquetes WHERE Titulo LIKE ${LIKE_F}`)).length) return [];
+  const ag = await reunioesFicticias(req0, "ASSEMBLEIA_GERAL");
+  const orgAg = (await ler(req0, "SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'ASSEMBLEIA_GERAL'"))[0];
+  const r = criarRng("enquetes");
+  const eleitores = mod.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 18);
+  const lista = [];
+  ag.forEach((s, k) => {
+    lista.push({ titulo: `Aprovação das contas do exercício ${isoDe(s.dia).slice(0, 4) - 1}`, perg: "Aprova as contas apresentadas?", ops: ["Sim", "Não", "Abstenção"], vis: "SECRETA", quorum: "MAIORIA_SIMPLES",
+      orgao: orgAg && orgAg.OrgaoId, sessao: s.id, abre: s.dia, fecha: s.dia, part: 0.35, pesos: [80, 12, 8] });
+    if (k === ag.length - 1) lista.push({ titulo: `Reforma do templo da Sede`, perg: "Aprova a reforma com recursos do fundo de obras?", ops: ["Sim", "Não"], vis: "SECRETA", quorum: "DOIS_TERCOS",
+      orgao: orgAg && orgAg.OrgaoId, sessao: s.id, abre: s.dia, fecha: s.dia, part: 0.3, pesos: [74, 26] });
+  });
+  lista.push({ titulo: "Melhor horário para o culto de doutrina", perg: "Qual horário você prefere?", ops: ["Quarta 19h30", "Quinta 19h30", "Sexta 19h30"], vis: "PUBLICA", quorum: "MAIORIA_SIMPLES",
+    abre: BASE - 120, fecha: BASE - 90, part: 0.25, pesos: [55, 25, 20] });
+  lista.push({ titulo: "Tema do próximo congresso de famílias", perg: "Qual tema você prefere?", ops: ["Família e oração", "Família e trabalho", "Família e missões"], vis: "PUBLICA", quorum: "MAIORIA_SIMPLES",
+    abre: BASE - 6, fecha: null, prevista: BASE + 20, part: 0.12, pesos: [40, 30, 30] });
+  let nr = 0;
+  await emTransacao(pool, async (req) => {
+    for (const e of lista) {
+      const aberta = e.fecha === null;
+      await inserir(req, "Enquetes", ["Titulo", "Descricao", "Visibilidade", "PublicoTipo", "Vinculante", "QuorumTipo", "OrgaoId", "SessaoId", "Status", "ResultadoAprovado", "CriadoPor", "DataAbertura", "DataFechamento", "DataFechamentoPrevista"],
+        [[`${e.titulo}${SUF_F}`, "Votação da massa fictícia da homologação.", e.vis, "TODOS_ATIVOS", !!e.sessao, e.quorum, e.orgao || null, e.sessao || null, aberta ? "ABERTA" : "ENCERRADA",
+          aberta ? null : e.pesos[0] > 50, MATRICULA_MIN + 2, momento(e.abre, 12), aberta ? null : momento(e.fecha, 22), e.prevista ? momento(e.prevista, 23) : null]]);
+      const eid = (await ler(req, `SELECT EnqueteId FROM dbo.Enquetes WHERE Titulo = ${lit(`${e.titulo}${SUF_F}`)}`))[0].EnqueteId;
+      await inserir(req, "PerguntasEnquete", ["EnqueteId", "Ordem", "Titulo", "Tipo"], [[eid, 1, e.perg, "OPCOES"]]);
+      const pid = (await ler(req, `SELECT PerguntaId FROM dbo.PerguntasEnquete WHERE EnqueteId = ${eid}`))[0].PerguntaId;
+      await inserir(req, "OpcoesEnquete", ["PerguntaId", "Texto"], e.ops.map((o) => [pid, o]));
+      const ops = (await ler(req, `SELECT OpcaoId FROM dbo.OpcoesEnquete WHERE PerguntaId = ${pid} ORDER BY OpcaoId`)).map((x) => x.OpcaoId);
+      const resp = eleitores.filter((p) => r.chance(e.part * atividade(p, e.abre))).map((p) => [pid, p.matricula, ops[e.ops.indexOf(r.pesos(e.ops.map((o, i) => [o, e.pesos[i]])))], momento(Math.min(BASE, e.abre + (aberta ? r.int(0, 5) : 0)), 14, r.int(0, 59))]);
+      nr += await inserir(req, "RespostasEnquete", ["PerguntaId", "MembroId", "OpcaoId", "DataResposta"], resp, 1000);
+      if (!aberta) { // o resultado como o app apura (estatuto.avaliarAprovacaoEnquete): a opção mais votada sobre o total; só a vinculante tem resultado
+        const total = resp.length, mais = Math.max(0, ...ops.map((o) => resp.filter((x) => x[2] === o).length));
+        const aprovado = total > 0 && (e.quorum === "DOIS_TERCOS" ? mais >= Math.ceil(total * 2 / 3) : mais > total / 2);
+        await req().query(`UPDATE dbo.Enquetes SET ResultadoAprovado = ${e.sessao ? (aprovado ? 1 : 0) : "NULL"} WHERE EnqueteId = ${eid}`);
+      }
+    }
+  });
+  return [`enquetes: ${lista.length} votações (Assembleias e consultas; uma aberta), ${nr} respostas`];
+}
+
+// ------------------------------------------------------------------ campanhas, doações, contas a receber, orçamento e cessão de templo ------------------------------------------------------------------
+// ------------------------------------------------------------------ comunicação (nada é enviado) ------------------------------------------------------------------
+// Modelos (aprovados, um arquivado e um rascunho) e envios JÁ TERMINADOS (CONCLUIDO ou CANCELADO), com as entregas em situação final por canal, calculada como o
+// app calcula (consentimento, e-mail cadastrado, aparelho). Nunca FILA nem entrega PENDENTE/ENVIANDO: a fila do app (que roda junto de qualquer envio feito na tela)
+// não acha nada da massa para mandar. Sem Notificacoes (o sininho de verdade): só o registro da entrega. PERMANENTE (gatilho): o modelo aprovado ou arquivado.
+async function etapaComunicacao(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const cm = require("../shared/comunicacao");
+  const MODELOS = [
+    { chave: "massa-ficticia-eventos", versao: 1, cat: "EVENTOS", titulo: `Congresso de famílias${SUF_M}`, status: "ARQUIVADO", cria: BASE - 320, aprova: BASE - 318, arquiva: BASE - 200 },
+    { chave: "massa-ficticia-eventos", versao: 2, cat: "EVENTOS", titulo: `Congresso de famílias — inscrições abertas${SUF_M}`, status: "APROVADO", cria: BASE - 202, aprova: BASE - 200 },
+    { chave: "massa-ficticia-devocional", versao: 1, cat: "DEVOCIONAL", titulo: `Palavra da semana${SUF_F}`, status: "APROVADO", cria: BASE - 230, aprova: BASE - 228 },
+    { chave: "massa-ficticia-financeiro", versao: 1, cat: "FINANCEIRO", titulo: `Prestação de contas da campanha${SUF_F}`, status: "APROVADO", cria: BASE - 215, aprova: BASE - 214 },
+    { chave: "massa-ficticia-convocacao", versao: 1, cat: "CONVOCACAO", titulo: `Convocação da Assembleia Geral${SUF_F}`, status: "APROVADO", cria: BASE - 300, aprova: BASE - 299 },
+    { chave: "massa-ficticia-cruzada", versao: 1, cat: "EVENTOS", titulo: `Cruzada evangelística${SUF_F}`, status: "RASCUNHO", cria: BASE - 12 }
+  ];
+  const modelos = await ler(req0, "SELECT ModeloId, Chave, Versao, Categoria, Status FROM dbo.ComunicacaoModelos WHERE Chave LIKE N'massa-ficticia-%'");
+  const doModelo = (x) => modelos.find((y) => y.Chave === x.chave && y.Versao === x.versao);
+  const faltam = MODELOS.filter((x) => !doModelo(x));
+  if (faltam.length) {
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "ComunicacaoModelos", ["Chave", "Versao", "Categoria", "Titulo", "Corpo", "Status", "CriadoPorMembroId", "CriadoEm", "AprovadoPorMembroId", "AprovadoEm", "ArquivadoEm"],
+        faltam.map((x) => [x.chave, x.versao, x.cat, x.titulo, `Paz do Senhor, {{primeiro_nome}}! Este é um comunicado de teste da {{congregacao}} (texto fictício da homologação; nada foi enviado).`,
+          x.status, MATRICULA_MIN + 2, momento(x.cria, 10), x.status === "RASCUNHO" ? null : MATRICULA_MIN + 1, x.status === "RASCUNHO" ? null : momento(x.aprova, 11), x.arquiva ? momento(x.arquiva, 11) : null]));
+    });
+    modelos.push(...(await ler(req0, `SELECT ModeloId, Chave, Versao, Categoria, Status FROM dbo.ComunicacaoModelos WHERE Chave LIKE N'massa-ficticia-%'`)).filter((y) => !modelos.some((z) => z.ModeloId === y.ModeloId)));
+  }
+  const idsModelo = modelos.map((x) => x.ModeloId);
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.ComunicacaoEnvios WHERE ModeloId IN (${idsModelo.join(",")})`)).length) return faltam.length ? [`comunicação: ${faltam.length} modelos`] : [];
+  const r = criarRng("comunicacao");
+  const comEmail = new Set((await ler(req0, `SELECT MembroId FROM dbo.MembroReferencia WHERE MembroId ${M_PESSOA} AND Email IS NOT NULL AND LTRIM(RTRIM(Email)) <> ''`)).map((x) => x.MembroId));
+  const consent = new Set((await ler(req0, `SELECT MembroId, Categoria FROM dbo.ComunicacaoConsentimentos WHERE MembroId ${M_PESSOA} AND Canal = N'EMAIL' AND Concedido = 1`)).map((x) => `${x.MembroId}:${x.Categoria}`));
+  const modeloAtual = (cat) => modelos.find((x) => x.Categoria === cat && x.Status === "APROVADO").ModeloId;
+  const dirDe = (c) => (mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c) || { matricula: MATRICULA_MIN + 2 }).matricula;
+  const envios = [];
+  envios.push({ cat: "CONVOCACAO", congs: null, por: MATRICULA_MIN + 2, dia: BASE - r.int(240, 250), adultos: true });
+  for (const c of mod.congs.filter(() => r.chance(0.18))) envios.push({ cat: "EVENTOS", congs: [c], por: dirDe(c), dia: BASE - r.int(5, 190) });
+  for (const c of mod.congs.filter(() => r.chance(0.1))) envios.push({ cat: "DEVOCIONAL", congs: [c], por: dirDe(c), dia: BASE - r.int(3, 220) });
+  envios.push({ cat: "FINANCEIRO", congs: mod.congs.filter(() => r.chance(0.08)).slice(0, 4), por: MATRICULA_MIN + 3, dia: BASE - r.int(10, 200) });
+  envios[envios.length - 2].cancelado = true; // um envio cancelado no meio: o que ainda esperava a vez ficou CANCELADO
+  const tot = { envios: 0, entregas: 0 };
+  for (const e of envios.filter((x) => !x.congs || x.congs.length)) {
+    const obrig = !!(cm.CATEGORIAS[e.cat] || {}).obrigatoria;
+    const pessoas = mod.pessoas.filter((p) => p.status === "ATIVO" && p.idade >= (e.adultos ? 18 : 12) && (!e.congs || e.congs.includes(p.cong)));
+    if (!pessoas.length) continue;
+    const terr = e.congs ? { tipo: "CONGREGACAO", ids: e.congs.map((c) => m.cong.get(c.nome)) } : { tipo: "TODAS" };
+    const v = cm.validarCriterios({ territorio: terr });
+    const nomes = { territorio: Object.fromEntries((e.congs || []).map((c) => [m.cong.get(c.nome), c.nome])) };
+    const ent = [];
+    for (const p of pessoas) {
+      const at = atividade(p, e.dia);
+      const viu = r.chance(0.65 * at), leu = viu && r.chance(0.6);
+      ent.push([p.matricula, "SININHO", "ACEITO", obrig && viu ? momento(Math.min(BASE, e.dia + r.int(0, 3)), 20) : null, !obrig && leu ? momento(Math.min(BASE, e.dia + r.int(0, 6)), 21) : null]);
+      const email = !obrig && !consent.has(`${p.matricula}:${e.cat}`) ? "SEM_CONSENTIMENTO" : !comEmail.has(p.matricula) ? "SEM_CONTATO" : e.cancelado ? "CANCELADO" : r.chance(0.04) ? "FALHOU" : "ACEITO";
+      ent.push([p.matricula, "EMAIL", email, null, null]);
+      ent.push([p.matricula, "PUSH", obrig ? "SEM_APARELHO" : "SEM_CONSENTIMENTO", null, null]);
+    }
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "ComunicacaoEnvios", ["ModeloId", "Categoria", "CriteriosJson", "GrupoDescricao", "EnviadoPorMembroId", "CriadoEm", "Total", "Status", "ConcluidoEm", "CanceladoPorMembroId"],
+        [[modeloAtual(e.cat), e.cat, JSON.stringify(v.criterios), cm.descreverCriterios(v.criterios, nomes), e.por, momento(e.dia, 9, 30), pessoas.length, e.cancelado ? "CANCELADO" : "CONCLUIDO",
+          momento(e.dia, 9, e.cancelado ? 41 : 30 + r.int(5, 25)), e.cancelado ? e.por : null]]);
+      const id = (await ler(req, `SELECT TOP 1 EnvioId FROM dbo.ComunicacaoEnvios WHERE EnviadoPorMembroId = ${e.por} AND CriadoEm = '${momento(e.dia, 9, 30)}' ORDER BY EnvioId DESC`))[0].EnvioId;
+      tot.entregas += await inserir(req, "ComunicacaoEntregas", ["EnvioId", "MembroId", "Canal", "Situacao", "AtualizadoEm", "CienciaEm", "LidaEm"],
+        ent.map(([mid, canal, sit, ci, li]) => [id, mid, canal, sit, momento(e.dia, 9, 45), ci, li]), 1000);
+      tot.envios++;
+    });
+  }
+  return [`comunicação (nada enviado): ${faltam.length} modelos, ${tot.envios} envios terminados (um cancelado), ${tot.entregas} entregas em situação final`];
+}
+
+// ------------------------------------------------------------------ conquistas (a partir das chamadas da EBD) ------------------------------------------------------------------
+// Cada presença/falta de aluno-membro nas chamadas da massa vira o evento EBD_PRESENCA que o app grava (shared/ebdChamada.js: um por lição, chave "licao:N"), e as
+// conquistas são reavaliadas na ordem do tempo pelas MESMAS funções puras do motor (shared/conquistas.js: avaliarRegra, pré-requisito em cadeia), com a data do
+// domingo. Sem gatilho: sai no --apagar pela matrícula.
+async function etapaConquistas(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.ConquistasEventos WHERE MembroId ${M_PESSOA} AND ChaveOrigem LIKE N'licao:%'`)).length) return [];
+  const motor = require("../shared/conquistas");
+  const regras = (await ler(req0, `SELECT r.RegraId, r.ConquistaId, r.TipoRegra, r.TipoEvento, r.ConfigJson, c.PreRequisitoConquistaId FROM dbo.RegrasConquista r
+    JOIN dbo.CatalogoConquistas c ON c.ConquistaId = r.ConquistaId WHERE r.Ativa = 1 AND c.Ativa = 1 AND r.TipoEvento = N'EBD_PRESENCA'`))
+    .map((x) => ({ regraId: x.RegraId, conquistaId: x.ConquistaId, tipoRegra: x.TipoRegra, config: JSON.parse(x.ConfigJson || "{}"), pre: x.PreRequisitoConquistaId }));
+  const linhas = await ler(req0, `SELECT a.MembroId, c.LicaoId, CONVERT(char(10), l.Data, 23) AS dia, c.Status FROM dbo.EbdChamadas c JOIN dbo.EbdAlunos a ON a.AlunoId = c.AlunoId
+    JOIN dbo.EbdLicoes l ON l.LicaoId = c.LicaoId WHERE a.MembroId ${M_PESSOA} AND l.CongregacaoId IN (${Q_CONG}) AND c.Status IN (N'PRESENTE', N'AUSENTE') ORDER BY a.MembroId, l.Data, c.LicaoId`);
+  const porMembro = new Map();
+  for (const x of linhas) {
+    if (!porMembro.has(x.MembroId)) porMembro.set(x.MembroId, new Map());
+    porMembro.get(x.MembroId).set(x.LicaoId, x); // uma presença por lição (corrigir substitui), como a chave do app
+  }
+  const eventos = [], desbl = [];
+  for (const [mid, mapa] of porMembro) {
+    const hist = [];
+    const tem = new Set();
+    for (const x of mapa.values()) {
+      const payload = { status: x.Status, licaoId: x.LicaoId, contaParaScore: x.Status !== "AUSENTE" };
+      eventos.push([mid, "EBD_PRESENCA", JSON.stringify(payload), x.dia, `licao:${x.LicaoId}`]);
+      hist.push({ tipoEvento: "EBD_PRESENCA", payload, ocorridoEm: new Date(`${x.dia}T12:00:00`) });
+      for (let mudou = true; mudou;) {
+        mudou = false;
+        for (const rg of regras) {
+          if (tem.has(rg.conquistaId) || (rg.pre && !tem.has(rg.pre))) continue;
+          if (motor.avaliarRegra(rg, hist, new Date(`${x.dia}T12:00:00`))) { tem.add(rg.conquistaId); desbl.push([rg.conquistaId, mid, rg.regraId, momento(diaDe(x.dia), 12, 30)]); mudou = true; }
+        }
+      }
+    }
+  }
+  await emTransacao(pool, async (req) => {
+    await inserir(req, "ConquistasEventos", ["MembroId", "TipoEvento", "PayloadJson", "OcorridoEm", "ChaveOrigem"], eventos, 1000);
+    await inserir(req, "ConquistasDesbloqueadas", ["ConquistaId", "MembroId", "RegraId", "DesbloqueadoEm"], desbl, 1000);
+  });
+  const porConquista = {};
+  for (const d of desbl) porConquista[d[0]] = (porConquista[d[0]] || 0) + 1;
+  return [`conquistas: ${eventos.length} presenças/faltas da EBD como evento, ${desbl.length} desbloqueios (${Object.entries(porConquista).map(([k, n]) => `#${k}: ${n}`).join(", ")})`];
+}
+
+async function etapaFinancasExtra(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.Campanhas WHERE Nome LIKE ${LIKE_F}`)).length) return [];
+  const r = criarRng("financasextra");
+  const tes = (c) => mod.lideres.find((p) => p.lider.papel === "Tesoureiro Local" && p.lider.escopo.cong === c);
+  const tot = { metas: 0, lanc: 0, doacoes: 0, contas: 0, linhas: 0, cessoes: 0, orcamentos: 0 };
+  const mesAberto = MESES[MESES.length - 1];
+  await emTransacao(pool, async (req) => {
+    // campanhas (a ativa recebe no mês aberto; a encerrada fica como histórico) e as metas por congregação
+    await inserir(req, "Campanhas", ["Nome", "Descricao", "DataInicio", "DataFim", "Status", "CriadoPor"], [
+      [`Campanha do templo novo${SUF_F}`, "Arrecadação para a construção (dado fictício).", isoDe(mesAberto.inicio), isoDe(BASE + 90), "ATIVA", MATRICULA_MIN + 3],
+      [`Campanha de missões ${ANO_BASE - 1}${SUF_F}`, "Oferta missionária anual (dado fictício).", `${ANO_BASE - 1}-03-01`, `${ANO_BASE - 1}-05-31`, "ENCERRADA", MATRICULA_MIN + 3]]);
+    const camp = new Map((await ler(req, `SELECT CampanhaId, Status FROM dbo.Campanhas WHERE Nome LIKE ${LIKE_F}`)).map((x) => [x.Status, x.CampanhaId]));
+    const metas = mod.congs.filter(() => r.chance(0.6)).map((c) => [camp.get("ATIVA"), m.cong.get(c.nome), reais(r.int(20, 200) * 10000)]);
+    tot.metas = await inserir(req, "CampanhaMetas", ["CampanhaId", "CongregacaoId", "MetaValor"], metas);
+    // lançamentos da campanha ativa no mês aberto (Termo nº continua o da congregação; nenhum mês fechado muda)
+    const maxTermo = new Map((await ler(req, `SELECT CongregacaoId, MAX(TermoNumero) AS t FROM dbo.LancamentosTesouraria WHERE CongregacaoId IN (${Q_CONG}) GROUP BY CongregacaoId`)).map((x) => [x.CongregacaoId, x.t]));
+    const lanc = [];
+    for (const c of mod.congs) {
+      const cid = m.cong.get(c.nome), t = tes(c);
+      if (!t || !maxTermo.has(cid) || !r.chance(0.5)) continue;
+      let termo = maxTermo.get(cid);
+      for (let k = r.int(1, 4); k > 0; k--) {
+        const dia = mesAberto.inicio + r.int(0, Math.max(0, BASE - mesAberto.inicio));
+        lanc.push([cid, null, `${r.pick(NOMES_M.concat(NOMES_F))} ${r.pick(SOBRENOMES)} (oferta fictícia)`, ++termo, "CAMPANHA", "Oferta para a campanha do templo novo", reais(r.int(20, 500) * 100), "PIX", null, mesAberto.chave,
+          null, t.matricula, momento(dia, 23, k), "ATIVO", null, null, null, null, "TESOUREIRO", "CONFIRMADO", camp.get("ATIVA")]);
+      }
+    }
+    tot.lanc = await inserir(req, "LancamentosTesouraria", ["CongregacaoId", "DizimistaId", "NomeAvulso", "TermoNumero", "Tipo", "Descricao", "Valor", "FormaPagamento", "ValorPix", "MesReferencia",
+      "FechamentoId", "RegistradoPor", "CriadoEm", "Status", "MotivoCancelamento", "CanceladoPor", "CanceladoEm", "ConciliacaoId", "Origem", "StatusConfirmacao", "CampanhaId"], lanc);
+    // doações (recibo próprio da massa, fora da numeração DOA-ano do app; acima do limite de identificação, doador pessoa jurídica fictícia), contas a receber
+    // (previstas e canceladas, nas categorias de entrada) e cessões do templo como o app faz: a autorizada com taxa nasce com a conta a receber e a receita acessória
+    const limite = Number(((await ler(req, "SELECT Valor FROM dbo.ValoresMonetarios WHERE Sigla = N'LIMITE_IDENTIFICACAO_DOADOR' AND Ativo = 1"))[0] || { Valor: 2000 }).Valor);
+    const doa = [], contas = [], cess = [];
+    let nRec = 0, nCess = 0;
+    const nome = () => `${r.pick(NOMES_M.concat(NOMES_F))} ${r.pick(SOBRENOMES)}${SUF_M}`;
+    for (const c of mod.congs) {
+      const cid = m.cong.get(c.nome), t = tes(c);
+      if (!t) continue;
+      const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c) || t;
+      for (let k = r.int(0, 5); k > 0; k--) {
+        const d = BASE - r.int(5, 700), v = r.chance(0.15) ? r.int(limite, limite * 4) : r.int(50, Math.max(60, limite - 1)), n = ++nRec;
+        const pj = v >= limite;
+        doa.push([cid, reais(v * 100), r.pick(["ESPECIE", "PIX", "TRANSFERENCIA"]), isoDe(d), pj ? `Comércio ${r.pick(SOBRENOMES)} Ltda${SUF_M}` : r.chance(0.3) ? null : nome(),
+          pj ? `99.999.999/4${String(n).padStart(3, "0")}-00` : null, `REC-FICT-${String(n).padStart(5, "0")}`, t.matricula, momento(d, 15)]);
+      }
+      for (let k = r.int(0, 3); k > 0; k--) {
+        const venc = BASE + r.int(-30, 90), canc = venc < BASE && r.chance(0.5);
+        const tipo = r.pesos([["REVISTA", 40], ["CONGRESSO", 35], ["CAMPANHA", 15], ["SECRETARIA", 10]]);
+        const desc = { REVISTA: "Revistas da EBD entregues a prazo", CONGRESSO: "Inscrição do congresso a pagar", CAMPANHA: "Promessa para a campanha do templo novo", SECRETARIA: "Segunda via de documento" }[tipo];
+        contas.push([cid, null, nome(), tipo, `${desc} (dado fictício)`, reais(r.int(30, 600) * 100), isoDe(venc), tipo === "CAMPANHA" ? camp.get("ATIVA") : null,
+          canc ? "CANCELADO" : "PREVISTO", canc ? "Desistência (dado fictício)." : null, t.matricula, momento(venc - 30, 12), canc ? t.matricula : null, canc ? momento(Math.min(BASE - 1, venc + 2), 12) : null]);
+      }
+      for (let k = r.int(0, 2); k > 0; k--) {
+        const d = BASE + r.int(-200, 60), st = d > BASE ? "SOLICITADA" : r.pesos([["AUTORIZADA", 75], ["REJEITADA", 25]]);
+        const tipo = r.pesos([["CASAMENTO", 45], ["EVENTO_SOCIAL", 30], ["VELORIO", 10], ["OUTROS", 15]]), taxa = r.int(1, 6) * 50;
+        cess.push({ cid, t, dir, d, st, tipo, taxa, isenta: tipo === "VELORIO" || r.chance(0.15), nome: nome(), n: ++nCess });
+      }
+    }
+    tot.doacoes = await inserir(req, "Doacoes", ["CongregacaoId", "Valor", "FormaPagamento", "DataRecebimento", "DoadorNome", "DoadorCpfCnpj", "NumeroRecibo", "RegistradoPor", "CriadoEm"], doa, 1000);
+    const descCessao = (x) => `Taxa de Zeladoria — Cessão de templo (nº ${x.n}, fictícia)`;
+    const cobradas = cess.filter((x) => x.st === "AUTORIZADA" && !x.isenta);
+    for (const x of cobradas) contas.push([x.cid, null, x.nome, "CESSAO_TEMPLO", descCessao(x), reais(x.taxa * 100), isoDe(x.d), null, "PREVISTO", null, x.dir.matricula, momento(x.d - 15, 12), null, null]);
+    tot.contas = await inserir(req, "ContasAReceber", ["CongregacaoId", "DizimistaId", "NomeAvulso", "Tipo", "Descricao", "Valor", "DataVencimento", "CampanhaId", "Status", "MotivoCancelamento",
+      "RegistradoPor", "CriadoEm", "CanceladoPor", "CanceladoEm"], contas);
+    const contaDe = new Map((await ler(req, `SELECT ContaReceberId, Descricao FROM dbo.ContasAReceber WHERE CongregacaoId IN (${Q_CONG}) AND Tipo = N'CESSAO_TEMPLO'`)).map((x) => [x.Descricao, x.ContaReceberId]));
+    tot.cessoes = await inserir(req, "CessoesTemplo", ["CongregacaoId", "SolicitanteNome", "SolicitanteContato", "TipoEvento", "DataEvento", "HoraInicio", "HoraFim", "TaxaZeladoria", "IsencaoTaxa",
+      "ListaMusicalAprovada", "TermoResponsabilidadeUrl", "ContaReceberId", "Status", "AprovadoPor", "MotivoRejeicao", "RegistradoPor", "CriadoEm"],
+    cess.map((x) => [x.cid, x.nome, `(00) 9${String(x.n).padStart(4, "0")}-0000`, x.tipo, isoDe(x.d), x.tipo === "VELORIO" ? "08:00" : "18:00", x.tipo === "VELORIO" ? "16:00" : "22:00", reais(x.taxa * 100), x.isenta,
+      x.st === "AUTORIZADA", x.st === "AUTORIZADA" ? `homolog-ficticio-termo-cessao-${x.n}.pdf` : null, x.st === "AUTORIZADA" && !x.isenta ? contaDe.get(descCessao(x)) || null : null, x.st,
+      x.st === "AUTORIZADA" ? x.dir.matricula : null, x.st === "REJEITADA" ? "A data coincide com o culto da congregação (dado fictício)." : null, x.t.matricula, momento(Math.min(BASE - 1, x.d - 20), 12)]));
+    const cessaoDe = new Map((await ler(req, `SELECT CessaoId, ContaReceberId FROM dbo.CessoesTemplo WHERE CongregacaoId IN (${Q_CONG}) AND ContaReceberId IS NOT NULL`)).map((x) => [x.ContaReceberId, x.CessaoId]));
+    await inserir(req, "ReceitasAcessorias", ["CongregacaoId", "Tipo", "CessaoTemploId", "EventoDescricao", "Valor", "DataRecebimento", "AplicacaoFinalisticaDescricao", "RegistradoPor", "CriadoEm"],
+      cobradas.map((x) => [x.cid, "CESSAO_SALAO", cessaoDe.get(contaDe.get(descCessao(x))), `${x.tipo} — ${x.nome}`, reais(x.taxa * 100), isoDe(x.d),
+        "Taxa de Zeladoria — ressarcimento de custos de manutenção do templo (dado fictício).", x.dir.matricula, momento(x.d - 15, 12)]));
+    // orçamentos anuais (do ano anterior e do ano da data-base) que ainda não existem: o realizado do ano anterior com um acréscimo por categoria
+    const codigos = { ENTRADA: new Set((await ler(req, "SELECT Codigo FROM dbo.CategoriasEntrada")).map((x) => x.Codigo)), SAIDA: new Set((await ler(req, "SELECT Codigo FROM dbo.CategoriasSaida")).map((x) => x.Codigo)) };
+    const real = await ler(req, `SELECT N'ENTRADA' AS mov, CAST(LEFT(MesReferencia, 4) AS int) AS ano, Tipo, SUM(Valor) AS v FROM dbo.LancamentosTesouraria WHERE Status = N'ATIVO' AND StatusConfirmacao = N'CONFIRMADO'
+      GROUP BY LEFT(MesReferencia, 4), Tipo UNION ALL SELECT N'SAIDA', YEAR(SolicitadoEm), Tipo, SUM(Valor) FROM dbo.SaidasTesouraria WHERE Status = N'PAGA' GROUP BY YEAR(SolicitadoEm), Tipo`);
+    for (const ano of [ANO_BASE - 1, ANO_BASE]) {
+      if ((await ler(req, `SELECT TOP 1 1 AS x FROM dbo.OrcamentosAnuais WHERE Ano = ${ano}`)).length) continue;
+      const linhas = real.filter((x) => x.ano === ano - 1 && codigos[x.mov].has(x.Tipo) && Number(x.v) > 0);
+      if (!linhas.length) continue;
+      await inserir(req, "OrcamentosAnuais", ["Ano", "CriadoPor", "CriadoEm"], [[ano, MATRICULA_MIN + 3, momento(diaDe(`${ano - 1}-12-10`), 12)]]);
+      const oid = (await ler(req, `SELECT OrcamentoId FROM dbo.OrcamentosAnuais WHERE Ano = ${ano}`))[0].OrcamentoId;
+      tot.linhas += await inserir(req, "OrcamentoLinhas", ["OrcamentoId", "TipoMovimento", "CategoriaCodigo", "ValorOrcado"],
+        linhas.map((x) => [oid, x.mov, x.Tipo, reais(Math.round(Number(x.v) * (1.03 + r.real() * 0.09) / 100) * 10000)]));
+      tot.orcamentos++;
+    }
+  });
+  return [`finanças: 2 campanhas (${tot.metas} metas, ${tot.lanc} ofertas no mês aberto), ${tot.doacoes} doações, ${tot.contas} contas a receber, ${tot.cessoes} cessões de templo,`
+    + ` ${tot.orcamentos} orçamentos anuais (${tot.linhas} linhas)`];
+}
+
 async function etapaEscalas(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
@@ -2746,7 +3196,8 @@ async function main() {
     console.log(`Modelo (semente ${SEMENTE}, data-base ${DATA_BASE}): ${mod.congs.length} congregações, ${mod.pessoas.length} pessoas, ${mod.vinculos.length} vínculos, ${mod.lideres.length} lideranças — ${((Date.now() - tm) / 1000).toFixed(1)} s`);
     const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, reunioes: etapaReunioes, financeiro: etapaFinanceiro, distritos: etapaDistritos,
       relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas,
-      calendario: etapaCalendario, cuidado: etapaCuidado, missoes: etapaMissoes, expansao: etapaExpansao, entidades: etapaEntidades, ministerio: etapaMinisterio };
+      calendario: etapaCalendario, cuidado: etapaCuidado, missoes: etapaMissoes, expansao: etapaExpansao, entidades: etapaEntidades, ministerio: etapaMinisterio,
+      seguranca: etapaSeguranca, consentimentos: etapaConsentimentos, enquetes: etapaEnquetes, campanhas: etapaFinancasExtra, comunicacao: etapaComunicacao, conquistas: etapaConquistas };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

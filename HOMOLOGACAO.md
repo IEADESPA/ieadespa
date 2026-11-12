@@ -76,6 +76,131 @@ az sql db delete --resource-group ieadespa --server srv-app-sql --name ieadespa-
   treinamento e um sem a política aceita —, para abrir o painel de conformidade. Nunca copiamos dado de membro real; o script se recusa a rodar
   fora de um banco com "homolog" no nome.
 
+## Massa grande (v10.1, 11 e 12/11/2026)
+
+Uma igreja grande inteira, inventada, para o raio-x rodar sobre volume de verdade e
+para "entrar como" cada papel: `api/scripts/semear-homologacao-grande.js`. **Não**
+roda sozinho no fluxo do PR (o semeador pequeno continua lá); roda-se à mão, uma vez.
+
+```bash
+# na homologação (a conexão do ieadespa-homolog; a trava recusa qualquer outro banco)
+cd api && SQL_CONNECTION_STRING="<conexão do ieadespa-homolog>" node scripts/semear-homologacao-grande.js
+# prova no LocalDB do equipamento (tools/e2e-localdb), nunca no Azure
+cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/semear-homologacao-grande.js
+```
+
+- **Uma história, não ruído:** cada congregação cresce, fica estável ou cai no seu
+  ritmo (admissões, saídas, ofertas e dízimos acompanham), dezembro forte (13º),
+  janeiro e julho fracos, e ~5% das pessoas se afastam aos poucos — presença na EBD,
+  dízimo e escala minguando, ainda ativas no cadastro (o padrão do alerta de evasão
+  da v10.12).
+- **O que cria** (semente e data-base padrão; cada item é uma etapa de
+  `--etapas=`): `territorio` — 2 cidades, 3 Regiões, 9 Áreas, 45 Congregações
+  (com a Sede), 2 Quadrantes, 1 Distrito (a região metropolitana na capital), 10
+  Extensões, 48 Bairros e os órgãos automáticos; `membros` — 5.047 pessoas em
+  famílias (4.563 vínculos), com situação, batismo, admissão, endereço e cargo pela
+  escada; `lideranca` — 104 logins e os assentos da Diretoria e do Conselho Fiscal;
+  `reunioes` — 36 reuniões da CLI e 473 da JAI, com 4.428 presenças; `financeiro` —
+  36 meses: 68.709 lançamentos, 1.620 fechamentos (o Distrito do repasse gravado desde
+  o decreto), 1.620 conciliações PIX, 8.118 saídas; `prestacoes` — 1.579 prestações
+  de contas (224 com Ata de Pendência, 41 meses faltando); `distritos` — o decreto
+  da CLI, 19 meses de Dízimo Institucional e o balanço de 2025 (devolvido e aprovado
+  pelo Conselho Fiscal); `relatorios` — 5.146 relatórios de departamento em 18 meses
+  (1.021 atrasados, 380 faltando, rascunhos parados), com valores e trilha de
+  aprovação; `psc` — a avaliação do exercício de cada congregação (nível calculado
+  por `shared/psc.js`); `ebd` — um ano de aulas (325 turmas, 2.449 alunos, 131.609
+  chamadas); `escalas` — 30 domingos (158 equipes, 10.694 convites).
+- **Logins de teste** (a senha do semeador pequeno, ou `SEED_SENHA`; sem e-mail,
+  entram só com a senha): Presidente 700001, Secretário Geral 700002, Tesouraria
+  Geral 700003, Superintendentes Regionais 700011 a 700013, Pastores de Área 700021
+  a 700029, Pastor Distrital 700031, Tesoureiro de Distrito 700032, Vice-Presidentes
+  de Quadrante 700035 e 700036, Dirigente da congregação *k* = 700100 + *k* e
+  Tesoureiro Local = 700200 + *k* (*k* = 1 é a Sede). No primeiro acesso cada um
+  assina os termos, como qualquer liderança.
+- **Refazível:** rodar de novo só completa o que falta (nada duplica);
+  `--apagar` tira só o que o gerador cria — matrículas 700000 a 799999, nomes
+  terminados em " (Fictícia)"/" (Fictício)", CNPJ `99.999.999/…` — e os rastros do
+  login dessas matrículas, numa transação. Se o app foi usado com essas pessoas fora
+  das peças fictícias (um casamento, um aluno noutra congregação...), recusa inteiro e
+  diz a tabela; o `AuditLog` fica.
+- **Opções:** `--contar`, `--etapas=...`, `--semente=N` (a mesma semente gera a
+  mesma massa), `--data-base=AAAA-MM-DD` (padrão 2026-11-08; para atualizar a data,
+  `--apagar` e rodar de novo), `--membros=N`, `--meses=N` (padrão 36),
+  `--ebd-domingos=N` (padrão 52).
+- **Medido no LocalDB:** criar tudo ~3,5 min; rodar por cima ~8 s; `--apagar`
+  ~2,5 min (quase tudo na remoção das pessoas, que confere ~400 chaves
+  estrangeiras). No banco serverless da homologação conte alguns minutos a mais.
+- **Segunda leva (12/11/2026, por ordem do responsável: tudo entra):** `calendario`
+  — 4 anos do calendário oficial (1.297 eventos com o ciclo da CLI e da Ceia,
+  presenças dos dirigentes, organizadores, convidados e 128 caixas de evento; nada
+  vai ao site); `cuidado` — 313 pedidos de oração (com o mural do site), 654 itens
+  da fila, 2.473 eventos, 224 notas pastorais. A massa usa a categoria
+  `OFERTA_CULTO_DEPARTAMENTO` quando a coluna já tem 30 letras (migração 172).
+- **O que fica para sempre (o banco proíbe apagar):** itens e eventos do cuidado
+  pastoral, os pedidos de oração, a segurança das congregações (planos, simulados,
+  vistorias e itens, equipe), os Setores Técnicos (vínculos e adesões) e as adesões
+  ao Termo do Voluntário. O `--apagar` não falha por eles: deixa essas linhas e as
+  peças fictícias de que dependem (cerca de 1.800 pessoas, as congregações, Áreas,
+  Regiões, Quadrantes, o Distrito, os Bairros e as Extensões), e o ano do
+  calendário em planejamento que a massa criou. Rodar de novo recria o resto por
+  cima, sem duplicar.
+- **Parte 2 (mesmo dia):** `missoes` — 6 campos, 8 envios em todas as etapas, sustento
+  com reajuste e o mês gerado no Contas a Pagar; `expansao` — 6 pedidos (uma
+  Extensão e uma congregação criadas pela CLI); `entidades` — as Assembleias Gerais
+  de março e 5 entidades vinculadas com dirigentes, prestações e uma intervenção;
+  `ministerio` — 8.817 marcos, 2.015 credenciais, 856 matrículas da AFM, seminário
+  (12 disciplinas, 24 turmas, 2.068 notas), o exame bienal e 25 consagrações. A
+  reciclagem anual não entra: uma edição do ano passado deixaria pendentes também os
+  oficiais reais da homologação.
+  A AFM conta só a matrícula com nível de escolaridade: a matrícula AUTOMÁTICA que o
+  app cria sozinho nasce sem ele, e a massa a completa pelo cargo (era o "0
+  matrículas" do log da parte 2: elas já existiam, sem nível).
+- **Parte 3:** `seguranca` — plano de segurança das 45 congregações (73 versões),
+  49 simulados, 39 vistorias com os 10 itens, 173 na equipe, o templo como imóvel
+  com AVCB (vigente, a vencer ou vencido) e parte com seguro; 34 profissionais nos
+  Setores Técnicos (25 com a adesão por ficha); `consentimentos` — só dos membros
+  (700300 em diante; os logins de liderança de teste continuam pedindo os termos no
+  primeiro acesso): 2.886 de LGPD, 2.910 de comunicação por e-mail (ficha de papel)
+  e 936 adesões ao Termo do Voluntário de quem serve nas escalas.
+- **Parte 4:** `enquetes` — 6 votações (contas de cada exercício e a reforma da
+  Sede nas Assembleias Gerais, com o resultado apurado como o app apura; duas
+  consultas aos membros, uma aberta) e ~5.900 respostas; `campanhas` — a campanha
+  ativa com metas e ofertas no mês aberto e uma encerrada, ~110 doações (recibo
+  `REC-FICT-…`, fora da numeração `DOA-ano` do app), contas a receber previstas e
+  canceladas, ~47 cessões de templo (a autorizada com taxa nasce com a conta a
+  receber e a receita acessória) e os orçamentos de 2025 e 2026 (o realizado do
+  ano anterior com acréscimo).
+- **Parte 5:** `comunicacao` — 6 modelos (aprovados, um arquivado, um rascunho) e 13
+  envios **já terminados** (um cancelado) com ~16.600 entregas em situação final
+  por canal, calculada como o app calcula. Nada é enviado: nenhum envio na fila,
+  nenhuma entrega pendente (a fila que roda junto de um envio feito na tela não acha
+  nada da massa) e nada no sininho de verdade (`Notificacoes`). `conquistas` — cada
+  presença ou falta da EBD vira o evento do app (~127 mil) e as conquistas são
+  reavaliadas domingo a domingo pelas funções do próprio motor (~5.650
+  desbloqueios: Primeira Presença, Sequência de Ouro, Trimestre Perfeito). Com as
+  partes 3 a 5, criar tudo no LocalDB passou a ~5 min (as conquistas levam ~2 min).
+- **Parte 6 (o responsável decidiu que tudo entra, inclusive o que fica para
+  sempre):** `menores` — nas 6 maiores congregações, salas Maternal e Infantil
+  com voluntários habilitados (um com a habilitação pendente, fora da escala) e
+  13 domingos de check-in; `protecao` — ~30 incidentes em vários estados (as
+  alegações comunicadas ao Conselho Tutelar, com afastamento cautelar); `crise` —
+  dois regimes de crise já encerrados (nunca uma crise ativa, que mudaria a
+  homologação inteira); `identidade` — os temas dos anos anteriores (o ciclo de
+  2028 só pode abrir em 2027: as etapas do app são pela data); `prebenda` — o
+  Rateio Geral de cada mês (o "malote", que faltava) e os prebendados com CPF de
+  dígito verificador impossível, pagos só com o caixa da Prebenda; `conciliacao` —
+  6 meses de extrato bancário conciliados pela função do próprio app.
+- **Fica para sempre também (parte 6):** os incidentes de proteção inteiros, as
+  crises, o check-in infantil, os responsáveis legais, as vistorias e certidões,
+  a política de menores aceita e o consentimento do crachá — e com eles as salas
+  com menores e os cultos em que houve check-in.
+- **Banco próprio no LocalDB:** a prova da massa usa o banco `ieadespa_massa`
+  (`E2E_CS`), não o `ieadespa_local`, que os testes e2e restauram a toda hora.
+  Turmas da EBD e equipes das escalas nascem sem a marca "com menores", como na
+  tela. E-mails só em `@example.org` (domínio reservado) e telefones com DDD (00).
+- **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos
+  papéis das migrações; na homologação o semeador pequeno as acrescenta.
+
 ## O que a homologação prova — e o que não prova (vD.3, 07/10/2026)
 
 **Prova, a cada push no `homolog`:**

@@ -1,0 +1,8 @@
+Este arquivo só existe no ramo homolog (homologação do sistema).
+
+O PR permanente homolog -> main é o que mantém o ambiente de homologação do Static Web App
+(o fluxo migra e semeia o banco ieadespa-homolog nele). O GitHub fecha um PR sozinho quando a
+ponta do ramo entra na main — foi o que aconteceu com o PR #1 em 07/10/2026, quando a main
+recebeu um merge do homolog, e o ambiente foi apagado. Por isso: mude de ramo de trabalho para
+a main (merge do ramo da mudança, nunca do homolog), traga a main para o homolog com merge, e
+deixe este arquivo aqui: ele garante que o homolog sempre tem um commit que a main não tem.

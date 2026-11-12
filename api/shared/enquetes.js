@@ -77,17 +77,33 @@ async function encerrarEnquete(pool, enqueteId, { agendada = false, sql = sqlPad
   return { encerrada: true, resultadoAprovado };
 }
 // O resultado da vinculante, contado com a enquete JÁ encerrada (os votos de antes do instante marcado, quando há um), gravado uma vez só.
+// FASE 10 (migração 173, decisão do responsável e do Presidente): pelo TIPO da votação (estatuto.apurarVotacao). Na PROPOSTA conta o papel de cada opção (aprova,
+// rejeita; o branco não conta) — antes, a opção mais votada "aprovava" fosse ela o Sim ou o Não. Na ESCOLHA ganha a mais votada: ResultadoAprovado = 1 quer dizer
+// "houve uma escolhida" (OpcaoVencedoraId) e 0, empate (ResultadoEmpate = 1). Sem tipo gravado (não deveria acontecer depois da 173), deduz pelos textos.
 async function gravarResultado(pool, enqueteId, { sql = sqlPadrao, quorumTipo } = {}) {
-  const contagem = (await pool.request().input("id", sql.Int, enqueteId).query(`
-    SELECT o.OpcaoId, (SELECT COUNT(*) FROM RespostasEnquete r JOIN Enquetes e ON e.EnqueteId = @id
-      WHERE r.OpcaoId = o.OpcaoId AND (e.DataFechamentoPrevista IS NULL OR r.DataResposta < e.DataFechamentoPrevista)) AS votos
-    FROM OpcoesEnquete o WHERE o.PerguntaId = (SELECT TOP 1 PerguntaId FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem)`)).recordset;
-  const total = contagem.reduce((s, o) => s + Number(o.votos), 0);
-  const maisVotada = contagem.reduce((m, o) => Math.max(m, Number(o.votos)), 0);
-  const aprovado = estatuto.avaliarAprovacaoEnquete(total, maisVotada, quorumTipo).aprovado;
-  await pool.request().input("id", sql.Int, enqueteId).input("resultado", sql.Bit, aprovado)
-    .query(`UPDATE Enquetes SET ResultadoAprovado = @resultado WHERE EnqueteId = @id AND Status = 'ENCERRADA' AND ResultadoAprovado IS NULL`);
-  return aprovado;
+  const linhas = (await pool.request().input("id", sql.Int, enqueteId).query(`
+    SELECT o.OpcaoId AS opcaoId, o.Texto AS texto, o.Papel AS papel,
+      (SELECT TipoApuracao FROM Enquetes WHERE EnqueteId = @id) AS tipo, (SELECT QuorumTipo FROM Enquetes WHERE EnqueteId = @id) AS quorumTipo,
+      (SELECT COUNT(*) FROM RespostasEnquete r JOIN Enquetes e ON e.EnqueteId = @id
+        WHERE r.OpcaoId = o.OpcaoId AND (e.DataFechamentoPrevista IS NULL OR r.DataResposta < e.DataFechamentoPrevista)) AS votos
+    FROM OpcoesEnquete o WHERE o.PerguntaId = (SELECT TOP 1 PerguntaId FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem)
+    ORDER BY o.OpcaoId`)).recordset;
+  let tipo = linhas.length ? linhas[0].tipo : null;
+  let opcoes = linhas;
+  if (!tipo) {
+    const inferido = estatuto.inferirApuracao(linhas.map((l) => l.texto));
+    tipo = inferido.tipo;
+    opcoes = linhas.map((l, i) => Object.assign({}, l, { papel: inferido.papeis[i] }));
+  }
+  const r = estatuto.apurarVotacao({ tipo, quorumTipo: quorumTipo || (linhas[0] && linhas[0].quorumTipo), opcoes });
+  await pool.request().input("id", sql.Int, enqueteId).input("resultado", sql.Bit, !!r.aprovado)
+    .input("vencedora", sql.Int, tipo === "ESCOLHA" ? (r.opcaoVencedoraId || null) : null)
+    .input("empate", sql.Bit, tipo === "ESCOLHA" ? !!r.empate : null)
+    .input("tipo", sql.NVarChar(20), tipo)
+    .query(`UPDATE Enquetes SET ResultadoAprovado = @resultado, OpcaoVencedoraId = @vencedora, ResultadoEmpate = @empate,
+              TipoApuracao = ISNULL(TipoApuracao, @tipo), ApuradaEm = SYSUTCDATETIME()
+            WHERE EnqueteId = @id AND Status = 'ENCERRADA' AND ResultadoAprovado IS NULL`);
+  return !!r.aprovado;
 }
 // A vinculante encerrada sem resultado gravado (caiu entre os dois passos): refaz na leitura.
 async function recuperarResultado(pool, enquete, { sql = sqlPadrao } = {}) {

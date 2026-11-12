@@ -427,7 +427,76 @@ function avaliarAprovacaoEnquete(totalVotos, votosOpcaoMaisVotada, quorumTipo) {
   };
 }
 
+// FASE 10 (12/11/2026, decisão do responsável e do Presidente) — a votação vinculante sabe o que aprova. Antes, avaliarAprovacaoEnquete (acima) recebia só
+// os votos da opção MAIS VOTADA, qualquer que fosse: um "Não" vencendo com folga saía "Aprovado". Agora há dois tipos (migração 173):
+//  - PROPOSTA: cada opção tem um papel — APROVA, REJEITA ou BRANCO; o voto em branco NÃO conta. Aprovada quando os votos que aprovam atingem o quórum sobre os
+//    votos válidos (aprova + rejeita): maioria simples = mais da metade; dois terços e 90% = ao menos a fração (arredondada para cima);
+//  - ESCOLHA (nomes ou opções: o 2º tesoureiro, o tema do ano): ganha a mais votada, sem precisar de maioria (pode ganhar com 30%); empate fica para a mesa.
+const PAPEIS_VOTACAO = ["APROVA", "REJEITA", "BRANCO"];
+const TIPOS_APURACAO = ["PROPOSTA", "ESCOLHA"];
+const semAcento = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+const TEXTOS_PAPEL = {
+  APROVA: ["sim", "aprovo", "aprova", "aprovado", "aprovada", "a favor", "favoravel"],
+  REJEITA: ["nao", "rejeito", "rejeita", "rejeitado", "rejeitada", "contra", "contrario"],
+  BRANCO: ["em branco", "branco", "abstencao", "me abstenho", "nulo", "voto em branco"]
+};
+// O papel de uma opção pelo texto dela (a mesma lista da migração 173); null quando o texto não diz.
+function papelPeloTexto(texto) {
+  const t = semAcento(texto);
+  for (const papel of PAPEIS_VOTACAO) if (TEXTOS_PAPEL[papel].includes(t)) return papel;
+  return null;
+}
+// Sem tipo informado: PROPOSTA quando as opções são exatamente uma que aprova, ao menos uma que rejeita e o resto em branco; senão, ESCOLHA.
+function inferirApuracao(textos) {
+  const papeis = (textos || []).map(papelPeloTexto);
+  const conta = (p) => papeis.filter((x) => x === p).length;
+  const proposta = conta("APROVA") === 1 && conta("REJEITA") >= 1 && papeis.every((x) => x !== null);
+  return { tipo: proposta ? "PROPOSTA" : "ESCOLHA", papeis: proposta ? papeis : papeis.map(() => null) };
+}
+// Os papéis de uma PROPOSTA estão certos? Exatamente uma opção que aprova, ao menos uma que rejeita, as demais em branco.
+function validarPapeisProposta(papeis) {
+  if (!Array.isArray(papeis) || !papeis.every((p) => PAPEIS_VOTACAO.includes(p))) return "Cada opção da proposta precisa dizer se aprova, rejeita ou é voto em branco.";
+  if (papeis.filter((p) => p === "APROVA").length !== 1) return "A proposta precisa de exatamente uma opção que aprova (ex.: Sim).";
+  if (!papeis.includes("REJEITA")) return "A proposta precisa de ao menos uma opção que rejeita (ex.: Não).";
+  return null;
+}
+// opcoes: [{ opcaoId, texto, papel, votos }]. Devolve, para PROPOSTA: { aprovado, aprova, rejeita, branco, validos, mensagem };
+// para ESCOLHA: { aprovado (houve uma escolhida), empate, opcaoVencedoraId, vencedora, votosVencedora, totalVotos, empatadas, mensagem }.
+function apurarVotacao({ tipo, quorumTipo, opcoes }) {
+  const lista = (opcoes || []).map((o) => ({ ...o, votos: Number(o.votos) || 0 }));
+  if (tipo === "PROPOSTA") {
+    const fracao = QUORUM_APROVACAO_ENQUETE[quorumTipo];
+    if (fracao === undefined) return { aprovado: false, mensagem: `QuorumTipo desconhecido: ${quorumTipo}.` };
+    const soma = (papel) => lista.filter((o) => o.papel === papel).reduce((s, o) => s + o.votos, 0);
+    const aprova = soma("APROVA"), rejeita = soma("REJEITA"), branco = soma("BRANCO"), validos = aprova + rejeita;
+    if (validos === 0) return { aprovado: false, aprova, rejeita, branco, validos, mensagem: "Nenhum voto válido (só em branco ou nenhum) — não aprovada." };
+    const aprovado = quorumTipo === "MAIORIA_SIMPLES" ? aprova > validos / 2 : aprova >= Math.ceil(validos * fracao);
+    const brancoTxt = branco ? `; ${branco} em branco, que não conta${branco > 1 ? "m" : ""}` : "";
+    return {
+      aprovado, aprova, rejeita, branco, validos,
+      mensagem: `${aprovado ? "Aprovada" : "Não aprovada"}: ${aprova} a favor e ${rejeita} contra${brancoTxt} (${quorumTipo}).`
+    };
+  }
+  const totalVotos = lista.reduce((s, o) => s + o.votos, 0);
+  if (totalVotos === 0) return { aprovado: false, empate: false, opcaoVencedoraId: null, totalVotos, empatadas: [], mensagem: "Nenhum voto registrado — não há escolhida." };
+  const maior = Math.max(...lista.map((o) => o.votos));
+  const empatadas = lista.filter((o) => o.votos === maior);
+  if (empatadas.length > 1) {
+    return { aprovado: false, empate: true, opcaoVencedoraId: null, totalVotos, empatadas: empatadas.map((o) => o.texto),
+      mensagem: `Empate com ${maior} voto(s) entre: ${empatadas.map((o) => o.texto).join(", ")} — a mesa decide.` };
+  }
+  const v = empatadas[0];
+  return { aprovado: true, empate: false, opcaoVencedoraId: v.opcaoId, vencedora: v.texto, votosVencedora: maior, totalVotos, empatadas: [],
+    mensagem: `Escolhida: ${v.texto}, com ${maior} de ${totalVotos} voto(s).` };
+}
+
 module.exports = {
+  PAPEIS_VOTACAO,
+  TIPOS_APURACAO,
+  papelPeloTexto,
+  inferirApuracao,
+  validarPapeisProposta,
+  apurarVotacao,
   idadeEm,
   diasDesde,
   estaSobDisciplina,

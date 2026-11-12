@@ -62,6 +62,9 @@ jobs:
           node scripts/executar-migracoes.js
           # vD.3: a homologação sempre tem massa fictícia (idempotente; o script se recusa a rodar fora de um banco "homolog").
           if [ "$ALVO_MIGRACAO" = "homologacao" ]; then node scripts/semear-homologacao.js; fi
+          # v10.1 (12/11/2026, só no ramo homolog): e a massa GRANDE (Igreja de ~5.000 pessoas, 3 anos de história, Distrito e Quadrantes).
+          # Rodar de novo só completa o que falta; a mesma trava de banco "homolog". Nunca roda na produção (ALVO_MIGRACAO = producao).
+          if [ "$ALVO_MIGRACAO" = "homologacao" ] && [ -f scripts/semear-homologacao-grande.js ]; then node scripts/semear-homologacao-grande.js; fi
 
       - name: Build And Deploy
         id: builddeploy

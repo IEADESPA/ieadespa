@@ -35,6 +35,7 @@ algo excelente".
 | Assembleia com 1.000 membros votando | teste com 1.000 votantes de teste na homologação (o "modo assembleia") |
 | Zero erro no console e zero violação de segurança (CSP) | o teste de tela de sempre, completo |
 | Leitura confortável (contraste, tamanho de letra, teclado) | régua WCAG AA, conferida tela por tela |
+| Telas que aguentam a Igreja crescer (muitas áreas, regiões, quadrantes e distritos; centenas de pendências) | conferido na homologação com a massa grande e nas propostas com uma Igreja maior de mentira |
 | **Aprovado pelo responsável** | ele viu e aprovou cada tela (3 a 5 opções por tela, claro e escuro) antes de ir ao ar — regras abaixo |
 
 **Como se trabalha nesta fase:** cada versão passa pela homologação; a mudança de tela é de propósito, então o teste de tela ganha uma base
@@ -111,6 +112,10 @@ sem gravar nada):
 **Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da
 Igreja** e uma **foto** (a foto, ele manda). A Opção C saiu (simples demais). O desenho final ainda passa pelas regras de aprovação.
 
+**Rodada 2 (12/11/2026, na página clicável):** no notebook, aprovada a **"Foto na tela inteira"** (a foto cobre a tela, escurecida; boas-vindas
+à esquerda e o formulário num cartão à direita). No celular, aprovada a **"Campos já abertos"** (botão da digital e, logo abaixo, matrícula e
+senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **deitada no notebook e em pé (retrato) no celular**.
+
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
       mesma). O "Preciso de ajuda" (proteção de crianças) **continua na entrada, sem login** — é canal de proteção.
@@ -161,6 +166,25 @@ tem informação demais; não há submenus.
 - A Opção C (três colunas) saiu.
 - Cores por módulo à vontade, em modo claro e escuro. As telas do módulo e do submódulo ainda vêm em **3 a 5 opções** cada (regras de
   aprovação).
+
+**Rodada 2 (12/11/2026, na página clicável) — o que ele aprovou e o que mandou refazer:**
+
+- **Início de quem vê tudo:** aprovados os **"Cartões coloridos"** (pendências do dia e os módulos em cartões com a cor de cada um). Ficam
+  muito bons para o líder local, que vê poucos módulos.
+- **Avisos e pendências não podem crescer sem controle.** Um Líder Geral de departamento tem 40 pendências (uma por congregação); o
+  Secretário Geral, 40 × 8 = 320. Uma lista assim polui e não ajuda. É preciso uma central de avisos inteligente (o sino do alto), com o
+  número agrupado por assunto e o que é de fato dele separado do que só se acompanha. Vem na próxima rodada, com opções.
+- **Início do membro:** aprovado a contragosto ("ficou feio"). Falta mostrar o **encaixe**: a mesma pessoa é membro e, no mês seguinte,
+  pode virar líder local de um departamento, e aí ganha módulos. O Presidente e o Secretário também têm carteirinha, escalas e contribuições.
+  Não pode parecer que a pessoa tem duas abas com a mesma coisa. Refazer mostrando a mesma pessoa em várias situações (membro, líder local,
+  Secretário Geral).
+- **Primeira tela do módulo:** aprovados os **"Cartões com barra de progresso"** (quantas das congregações já enviaram, por departamento).
+- **Dentro do submódulo:** o conteúdo em cartões foi aprovado ("perfeito para relatório"); o **menu da esquerda foi reprovado**. Ele só
+  mostra as funções **daquele** departamento (visão geral, relatórios, equipe, escalas, check-in, proteção, as **finanças do
+  departamento**...), nunca os outros departamentos, nem para quem tem acesso a vários: cada departamento tem a sua aba.
+- **Princípio para todas as telas: escalabilidade dos níveis.** Os relatórios e as listas têm de continuar claros quando a Igreja crescer:
+  Local → Área → Região → Quadrante → Distrito → Geral, com muitas áreas e regiões. Seis botões de área não servem quando forem trinta.
+  As propostas mostram uma Igreja maior de mentira para provar isso.
 
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.

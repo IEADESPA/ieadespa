@@ -12,7 +12,8 @@
 //   --contar                só conta as linhas fictícias por tabela
 //   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, reunioes, financeiro, prestacoes, distritos,
 //                           relatorios, psc, ebd, escalas, calendario, cuidado, missoes, expansao, entidades, ministerio,
-//                           seguranca, consentimentos, enquetes, campanhas, comunicacao, conquistas
+//                           seguranca, consentimentos, enquetes, campanhas, comunicacao, conquistas, menores, protecao, crise,
+//                           identidade, prebenda, conciliacao
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
@@ -91,14 +92,27 @@
 //      final calculada como o app calcula (consentimento, e-mail, aparelho). NADA é enviado: nunca envio na FILA nem entrega PENDENTE (a fila do
 //      app não acha nada da massa) e nenhuma linha em Notificacoes;
 //   conquistas: cada presença/falta das chamadas da EBD vira o evento EBD_PRESENCA do app e as conquistas são reavaliadas, domingo a domingo,
-//      pelas funções puras do próprio motor (shared/conquistas.js), com o pré-requisito em cadeia.
+//      pelas funções puras do próprio motor (shared/conquistas.js), com o pré-requisito em cadeia;
+//   menores: nas 6 maiores congregações, duas salas com menores (Maternal e Infantil) com voluntários habilitados (esteira, vistoria com as certidões,
+//      política aceita por ficha; um com a habilitação pendente, fora da escala), a proporção de cada culto e 13 domingos de check-in (voluntários,
+//      crianças entregues e retiradas pelos pais ou por autorizados, visitantes, código errado, retirada divergente aprovada), responsáveis legais,
+//      autorizados, ficha de saúde e o consentimento do crachá;
+//   protecao: ~30 incidentes de proteção (quase acidentes, quebras de política, alegações comunicadas ao Conselho Tutelar com afastamento cautelar);
+//   crise: dois regimes de crise JÁ ENCERRADOS (um com porta-voz designado), manifestações, demandas da imprensa e respostas (nunca uma crise ativa);
+//   identidade: os temas já usados nos anos anteriores (o ciclo de 2028 só abre em 2027: as etapas do app são pela data);
+//   prebenda: o Rateio Geral (malote) de cada mês, prebendados com Ato de Designação e CPF de dígito IMPOSSÍVEL, cada mês gerado como o app gera e
+//      pago só com o caixa da Prebenda, riscos de vínculo;
+//   conciliacao: 6 meses de extrato bancário fictício da conta única, conciliados pela função do próprio app (shared/conciliação.js).
 // O lote é por transação: cada bloco de pessoas e cada congregação (ou ano) de cada etapa entra inteiro ou não entra.
 //
 // O QUE FICA PARA SEMPRE (o banco proíbe apagar — gatilhos): itens e eventos do cuidado pastoral (CuidadoItens, CuidadoEventos), os pedidos de
 // oração (PedidosOracao), a segurança das congregações (SegurancaPlanos, SegurancaSimulados, SegurancaVistorias e os itens, SegurancaEquipe),
-// os Setores Técnicos (vínculos e adesões), as adesões ao Termo do Voluntário (VoluntariadoAdesoes) e os modelos de comunicação aprovados ou
-// arquivados (ComunicacaoModelos com a chave "massa-ficticia-..."; o rascunho sai). O --apagar não falha por causa deles:
-// deixa essas linhas e, pelas chaves estrangeiras, as peças fictícias de que elas dependem — as pessoas citadas (≈1.600), as congregações,
+// os Setores Técnicos (vínculos e adesões), as adesões ao Termo do Voluntário (VoluntariadoAdesoes), os modelos de comunicação aprovados ou
+// arquivados (ComunicacaoModelos com a chave "massa-ficticia-..."; o rascunho sai) e, da parte 6: os incidentes de proteção inteiros (relatos,
+// envolvidos, decisões, leituras, comunicações, reclassificações), as crises e tudo delas, o check-in infantil (registros, eventos, autorizados),
+// os responsáveis legais, as vistorias de antecedentes e certidões, a política de menores aceita e o consentimento do crachá. Com eles ficam as
+// salas com menores e os cultos em que houve check-in (o --apagar refaz o resto da escala em cima deles). O --apagar não falha por causa deles:
+// deixa essas linhas e, pelas chaves estrangeiras, as peças fictícias de que elas dependem — as pessoas citadas (≈1.800), as congregações,
 // Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões. Também fica o ano do calendário em planejamento que a massa criou (sem
 // marca possível). As notas pastorais e os consentimentos de comunicação saem (com a marca de purga do próprio app). Rodar de novo recria o
 // resto em cima do que ficou, sem duplicar.
@@ -115,7 +129,7 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado", "missoes", "expansao", "entidades", "ministerio", "seguranca", "consentimentos", "enquetes", "campanhas", "comunicacao", "conquistas"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado", "missoes", "expansao", "entidades", "ministerio", "seguranca", "consentimentos", "enquetes", "campanhas", "comunicacao", "conquistas", "menores", "protecao", "crise", "identidade", "prebenda", "conciliacao"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
@@ -966,7 +980,8 @@ const Q_CONG = `SELECT CongregacaoId FROM dbo.Congregacoes WHERE Nome LIKE ${LIK
 const Q_AREA = `SELECT AreaId FROM dbo.Areas WHERE Nome LIKE ${LIKE_F}`;
 const Q_REG = `SELECT RegiaoId FROM dbo.Regioes WHERE Nome LIKE ${LIKE_F}`;
 const Q_EXT = `SELECT ExtensaoId FROM dbo.ExtensoesTenda WHERE Nome LIKE ${LIKE_F}`;
-const Q_FORN = `SELECT FornecedorId FROM dbo.Fornecedores WHERE CpfCnpj LIKE '${CNPJ_PREFIXO}%' AND Nome LIKE ${LIKE_M}`;
+// o fornecedor fictício: CNPJ "99.999.999/..." ou (prebenda) CPF de dígito impossível "999.99x.xxx-xx", sempre com o nome em " (Fictício)"
+const Q_FORN = `SELECT FornecedorId FROM dbo.Fornecedores WHERE (CpfCnpj LIKE '${CNPJ_PREFIXO}%' OR CpfCnpj LIKE '999.99_.___-__') AND Nome LIKE ${LIKE_M}`;
 const Q_SAIDA = `SELECT SaidaId FROM dbo.SaidasTesouraria WHERE CongregacaoId IN (${Q_CONG}) OR FornecedorId IN (${Q_FORN})`;
 const Q_TURMA = `SELECT TurmaId FROM dbo.EbdTurmas WHERE CongregacaoId IN (${Q_CONG})`;
 const Q_LICAO = `SELECT LicaoId FROM dbo.EbdLicoes WHERE CongregacaoId IN (${Q_CONG})`;
@@ -989,7 +1004,33 @@ const Q_EVENTO = `SELECT EventoId FROM dbo.CalendarioEventos WHERE Titulo LIKE $
 const Q_NOTA = `SELECT NotaId FROM dbo.NotasPastorais WHERE MembroId ${M_PESSOA} OR AutorMembroId ${M_PESSOA} OR ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`;
 const PURGA = "EXEC sp_set_session_context N'cuidado_purga', 1; "; // a marca de sessão com que o próprio app apaga notas pastorais (gatilho TR_NotasPastorais_Imutavel)
 // O que o banco proíbe apagar (gatilhos): FICA, e prende as peças fictícias de que depende (ver apagar()).
+const Q_INC = `SELECT IncidenteId FROM dbo.IncidentesProtecao WHERE Protocolo LIKE N'PRO-FICT-%' OR CongregacaoId IN (${Q_CONG})`;
+const Q_CRISE = `SELECT CriseId FROM dbo.CriseRegimes WHERE Motivo LIKE N'%(situação fictícia)%'`;
+const Q_DEMANDA = `SELECT DemandaId FROM dbo.CriseDemandasImprensa WHERE CriseId IN (${Q_CRISE}) OR Pedido LIKE N'%(pedido fictício)%'`;
+const Q_CHECKIN = `SELECT RegistroId FROM dbo.CheckinInfantilRegistros WHERE CongregacaoId IN (${Q_CONG}) OR MenorMembroId ${M_PESSOA}`;
 const PERMANENTES = [
+  ["IncidentesProtecao", `IncidenteId IN (${Q_INC})`],
+  ["IncidenteRelatos", `IncidenteId IN (${Q_INC})`],
+  ["IncidenteEnvolvidos", `IncidenteId IN (${Q_INC}) OR MembroId ${M_PESSOA}`],
+  ["IncidenteDecisoesCautelares", `EnvolvidoId IN (SELECT EnvolvidoId FROM dbo.IncidenteEnvolvidos WHERE IncidenteId IN (${Q_INC}) OR MembroId ${M_PESSOA})`],
+  ["IncidenteLeituras", `IncidenteId IN (${Q_INC}) OR MembroId ${M_PESSOA}`],
+  ["IncidenteComunicacoes", `IncidenteId IN (${Q_INC})`],
+  ["IncidenteReclassificacoes", `IncidenteId IN (${Q_INC})`],
+  ["CriseRegimes", `CriseId IN (${Q_CRISE})`],
+  ["CriseHistorico", `CriseId IN (${Q_CRISE})`],
+  ["CriseManifestacoes", `CriseId IN (${Q_CRISE})`],
+  ["CriseDemandasImprensa", `DemandaId IN (${Q_DEMANDA})`],
+  ["CriseDemandaRespostas", `DemandaId IN (${Q_DEMANDA})`],
+  ["CheckinInfantilRegistros", `RegistroId IN (${Q_CHECKIN})`],
+  ["CheckinInfantilEventos", `RegistroId IN (${Q_CHECKIN}) OR EquipeId IN (SELECT EquipeId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG}))`],
+  ["CheckinInfantilAutorizados", `MenorMembroId ${M_PESSOA}`],
+  ["CheckinInfantilAutorizadosVisita", `RegistroId IN (${Q_CHECKIN})`],
+  ["CheckinInfantilSegundasVias", `RegistroId IN (${Q_CHECKIN})`],
+  ["VoluntariadoResponsaveis", `MenorMembroId ${M_PESSOA} OR ResponsavelMembroId ${M_PESSOA}`],
+  ["VistoriasAntecedentes", `MembroId ${M_PESSOA}`],
+  ["VistoriasDocumentos", `VistoriaId IN (SELECT VistoriaId FROM dbo.VistoriasAntecedentes WHERE MembroId ${M_PESSOA})`],
+  ["MinisterioMenoresPoliticaAceites", `MembroId ${M_PESSOA}`],
+  ["MinisterioMenoresConsentimentos", `MenorMembroId ${M_PESSOA} OR ResponsavelMembroId ${M_PESSOA}`],
   ["CuidadoItens", `CongregacaoId IN (${Q_CONG})`],
   ["CuidadoEventos", `ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`],
   ["PedidosOracao", `CongregacaoId IN (${Q_CONG}) OR (Origem = N'SITE' AND Texto LIKE N'%(pedido fictício do mural do site)%')`],
@@ -1011,7 +1052,27 @@ const Q_ENQ = `SELECT EnqueteId FROM dbo.Enquetes WHERE Titulo LIKE ${LIKE_F}`;
 const Q_PERG = `SELECT PerguntaId FROM dbo.PerguntasEnquete WHERE EnqueteId IN (${Q_ENQ})`;
 const Q_CAMP = `SELECT CampanhaId FROM dbo.Campanhas WHERE Nome LIKE ${LIKE_F}`;
 const Q_ORC = `SELECT OrcamentoId FROM dbo.OrcamentosAnuais WHERE CriadoPor ${M_PESSOA}`;
+const Q_EXTR = `SELECT ExtratoId FROM dbo.ExtratosBancarios WHERE ArquivoUrl LIKE N'homolog-ficticio-extrato-%'`;
+const Q_CONCB = `SELECT c.ConciliacaoId FROM dbo.ConciliacoesBancarias c JOIN dbo.ExtratosBancarios e ON e.FonteId = c.FonteId AND e.MesReferencia = c.MesReferencia
+  WHERE e.ArquivoUrl LIKE N'homolog-ficticio-extrato-%'`;
+const Q_PREB = `SELECT PrebendadoId FROM dbo.Prebendados WHERE MembroId ${M_PESSOA}`;
 const ALVOS = [
+  ["ConciliacaoDivergencias", `ConciliacaoId IN (${Q_CONCB}) OR LancamentoId IN (SELECT LancamentoId FROM dbo.LancamentosTesouraria WHERE CongregacaoId IN (${Q_CONG})) OR SaidaId IN (${Q_SAIDA})`],
+  ["ConciliacoesBancarias", `ConciliacaoId IN (${Q_CONCB})`],
+  ["ExtratoLinhas", `ExtratoId IN (${Q_EXTR})`],
+  ["ExtratosBancarios", `ExtratoId IN (${Q_EXTR})`],
+  ["PrebendaRiscosVinculo", `PrebendadoId IN (${Q_PREB})`],
+  ["PrebendaGeracoes", `PrebendadoId IN (${Q_PREB})`],
+  ["Prebendados", `PrebendadoId IN (${Q_PREB})`],
+  ["AtosDesignacao", `NumeroAto LIKE N'ATO-FICT-%' OR MembroId ${M_PESSOA}`],
+  ["RateioGeralValores", `RateioGeralId IN (SELECT RateioGeralId FROM dbo.RateiosGerais WHERE FechadoPor ${M_PESSOA})`],
+  ["RateioGeralItens", `RateioGeralId IN (SELECT RateioGeralId FROM dbo.RateiosGerais WHERE FechadoPor ${M_PESSOA}) OR FechamentoId IN (SELECT FechamentoId FROM dbo.FechamentosTesouraria WHERE CongregacaoId IN (${Q_CONG}))`],
+  ["RateiosGerais", `FechadoPor ${M_PESSOA}`],
+  ["IdentidadeTemasUsados", `Origem = N'MANUAL' AND Tema LIKE N'%(tema fictício)%'`],
+  ["CheckinInfantilSaude", `MenorMembroId ${M_PESSOA}`],
+  ["CheckinInfantilVoluntarios", `EquipeId IN (${Q_EQUIPE}) OR MembroId ${M_PESSOA}`],
+  ["MinisterioMenoresSalas", `EquipeId IN (${Q_EQUIPE}) OR ServicoId IN (${Q_SERVICO})`],
+  ["VoluntariosHabilitacao", `MembroId ${M_PESSOA}`],
   ["RespostasEnquete", `PerguntaId IN (${Q_PERG}) OR MembroId ${M_PESSOA}`],
   ["OpcoesEnquete", `PerguntaId IN (${Q_PERG})`],
   ["PerguntasEnquete", `EnqueteId IN (${Q_ENQ})`],
@@ -1151,8 +1212,8 @@ async function apagar(pool) {
       // próprio banco, a partir das linhas permanentes, subindo até não achar mais nada. Tudo o mais sai.
       const pks = new Map((await ler(req, `SELECT t.name AS t, c.name AS c FROM sys.tables t JOIN sys.indexes i ON i.object_id = t.object_id AND i.is_primary_key = 1
         JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id JOIN sys.columns c ON c.object_id = t.object_id AND c.column_id = ic.column_id
-        WHERE (SELECT COUNT(*) FROM sys.index_columns x WHERE x.object_id = i.object_id AND x.index_id = i.index_id) = 1 AND TYPE_NAME(c.user_type_id) IN ('int', 'smallint')`)).map((x) => [x.t, x.c]));
-      await req().query("IF OBJECT_ID('tempdb..#Fixos') IS NOT NULL DROP TABLE #Fixos; CREATE TABLE #Fixos (Tabela SYSNAME NOT NULL, Id INT NOT NULL, PRIMARY KEY (Tabela, Id));");
+        WHERE (SELECT COUNT(*) FROM sys.index_columns x WHERE x.object_id = i.object_id AND x.index_id = i.index_id) = 1 AND TYPE_NAME(c.user_type_id) IN ('int', 'smallint', 'bigint')`)).map((x) => [x.t, x.c]));
+      await req().query("IF OBJECT_ID('tempdb..#Fixos') IS NOT NULL DROP TABLE #Fixos; CREATE TABLE #Fixos (Tabela SYSNAME NOT NULL, Id BIGINT NOT NULL, PRIMARY KEY (Tabela, Id));");
       for (const [tabela, cond] of PERMANENTES) {
         if (!existem.has(tabela) || !pks.has(tabela)) continue;
         await req().query(`INSERT INTO #Fixos (Tabela, Id) SELECT N'${tabela}', [${pks.get(tabela)}] FROM dbo.${tabela} WHERE ${cond}`);
@@ -3044,6 +3105,532 @@ async function etapaConquistas(pool, mod) {
   return [`conquistas: ${eventos.length} presenças/faltas da EBD como evento, ${desbl.length} desbloqueios (${Object.entries(porConquista).map(([k, n]) => `#${k}: ${n}`).join(", ")})`];
 }
 
+// ------------------------------------------------------------------ parte 6: menores e check-in, proteção, crise, identidade visual, prebenda, conciliação bancária ------------------------------------------------------------------
+const SALAS_INFANTIS = [
+  { faixa: "MATERNAL", nome: "Ministério infantil — Sala Maternal (3 a 5 anos)", min: 3, max: 5 },
+  { faixa: "INFANTIL", nome: "Ministério infantil — Sala Infantil (6 a 9 anos)", min: 6, max: 9 }
+];
+const sha = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");
+const hm = (dia, minutosNoDia) => momento(dia, Math.floor(minutosNoDia / 60), minutosNoDia % 60);
+const dirigenteDe = (mod, c) => mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+
+// Ministério com menores e check-in infantil, nas 6 maiores congregações: duas salas (Maternal e Infantil) como equipes "com menores", voluntários com a habilitação
+// completa (esteira, Termo de Vistoria com as certidões federal e estadual, política aceita por ficha), um com a habilitação ainda pendente (fora da escala), a
+// proporção da sala em cada culto, e 13 domingos de check-in: entrada e saída dos voluntários, cada criança entregue pelo pai ou pela mãe e retirada pelo
+// responsável ou por um autorizado da ficha, visitantes, um código errado de vez em quando e uma retirada divergente aprovada. Os responsáveis legais, autorizados,
+// a ficha de saúde e o consentimento do crachá entram por ficha física (nunca dos logins de liderança de teste). PERMANENTE (gatilhos): os registros e eventos do
+// check-in, os responsáveis, os autorizados, as vistorias e certidões, a política aceita e o consentimento. Cada pedaço é completado só se faltar.
+async function etapaMenores(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const mm = require("../shared/ministerioMenores");
+  const mc = require("../shared/menoresConsentimento");
+  const congs = mod.congs.slice().sort((a, b) => b.pessoas.length - a.pessoas.length || a.k - b.k).slice(0, 6);
+  const pais = new Map();
+  for (const v of mod.vinculos) if (v.tipo === "PAI_FILHO" && v.a.status === "ATIVO" && v.a.idade >= 18) { if (!pais.has(v.b)) pais.set(v.b, []); pais.get(v.b).push(v.a); }
+  const tot = { equipes: 0, voluntarios: 0, habil: 0, alocacoes: 0, salas: 0, registros: 0, eventos: 0, resp: 0, autorizados: 0, saude: 0 };
+  for (const c of congs) {
+    const cid = m.cong.get(c.nome);
+    const dir = dirigenteDe(mod, c);
+    const quem = dir ? dir.matricula : MATRICULA_MIN + 2;
+    const servs = (await ler(req0, `SELECT MIN(ServicoId) AS ServicoId, CONVERT(char(10), DataHora, 23) AS Dia FROM dbo.EscalasServicos WHERE CongregacaoId = ${cid}
+      GROUP BY CONVERT(char(10), DataHora, 23) ORDER BY 2`)).map((x) => ({ id: x.ServicoId, dia: diaDe(x.Dia) }));
+    if (!servs.length) continue;
+    const passados = servs.filter((s) => s.dia <= BASE).slice(-13), futuros = servs.filter((s) => s.dia > BASE).slice(0, 4);
+    const ocupados = new Set((await ler(req0, `SELECT DISTINCT em.MembroId FROM dbo.EscalasEquipeMembros em JOIN dbo.EscalasEquipes e ON e.EquipeId = em.EquipeId
+      WHERE e.CongregacaoId = ${cid} AND e.ContatoComMenores = 0`)).map((x) => x.MembroId));
+    const rV = criarRng(`menores:vol:${c.i}`);
+    const cand = c.pessoas.filter((p) => p.matricula >= MATRICULA_MIN + 300 && p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 21 && p.idade <= 65 && !p.evasao
+      && !p.lider && !p.assento && p.admissao && p.admissao <= BASE - 400 && !ocupados.has(p.matricula));
+    const usados = new Set();
+    const salas = [];
+    for (const s of SALAS_INFANTIS) {
+      const vols = [];
+      for (let t = 0; t < 60 && vols.length < 4 && cand.length; t++) { const p = rV.pick(cand); if (!usados.has(p)) { usados.add(p); vols.push(p); } }
+      if (vols.length < 3) continue;
+      salas.push({ ...s, vols, pendente: rV.chance(0.35) ? vols[vols.length - 1] : null, ini: new Map(vols.map((p) => [p, BASE - rV.int(150, 170)])) });
+    }
+    const jaHab = new Set((await ler(req0, `SELECT MembroId FROM dbo.VoluntariosHabilitacao WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
+    const jaVist = new Set((await ler(req0, `SELECT DISTINCT MembroId FROM dbo.VistoriasAntecedentes WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
+    const jaPol = new Set((await ler(req0, `SELECT MembroId FROM dbo.MinisterioMenoresPoliticaAceites WHERE MembroId ${M_PESSOA} AND Versao = ${mm.POLITICA_VERSAO}`)).map((x) => x.MembroId));
+    for (const s of salas) {
+      const aptos = s.vols.filter((p) => p !== s.pendente);
+      const r = criarRng(`menores:sala:${c.i}:${s.faixa}`);
+      // o plano da sala (puro: o mesmo a cada rodada)
+      const elegiveis = (dia) => c.pessoas.filter((p) => p.status === "ATIVO" && (pais.get(p) || []).length && idadeEm(p.nasc, dia) >= s.min && idadeEm(p.nasc, dia) <= s.max);
+      const alocs = [], salasLin = [], presencas = [], regs = [];
+      let nVis = 0;
+      for (const sv of passados.concat(futuros)) {
+        const futuro = sv.dia > BASE;
+        const escala = [];
+        for (let t = 0; t < 20 && escala.length < (r.chance(0.5) ? 3 : 2); t++) { const p = r.pick(aptos); if (!escala.includes(p)) escala.push(p); }
+        for (const p of escala) alocs.push([sv.id, null, p.matricula, futuro ? (r.chance(0.5) ? "ACEITO" : "CONVIDADO") : "CONFIRMADO", 1, momento(Math.min(sv.dia - 10, BASE - 1), 20, 5),
+          futuro ? null : momento(sv.dia - 9, 18), futuro ? null : momento(sv.dia - 2, 18, 30)]);
+        const criancas = elegiveis(sv.dia);
+        salasLin.push([sv.id, null, Math.max(1, Math.round(criancas.length * 0.6)), quem, momento(sv.dia - 3, 19)]);
+        if (futuro) continue;
+        const op = escala[0];
+        for (const p of escala) presencas.push({ sv, p, entrou: 20 * 60 + 30 + r.int(0, 10), saiu: 22 * 60 + 50 + r.int(10, 40) });
+        for (const k of criancas) {
+          if (!r.chance(0.55)) continue;
+          const rk = criarRng(`menores:crianca:${k.matricula}`);
+          const autorizado = rk.chance(0.25) ? `${rk.pick(rk.chance(0.5) ? NOMES_F : NOMES_M)} ${k.sobrenomes[0]}${SUF_M}` : null;
+          const trouxe = r.pick(pais.get(k));
+          const porAutorizado = autorizado && r.chance(0.2);
+          const quemRetira = porAutorizado ? null : r.pick(pais.get(k));
+          regs.push({ sv, k, idade: idadeEm(k.nasc, sv.dia), trouxe, autorizado, porAutorizado, quemRetira, op, entregue: 20 * 60 + 35 + r.int(0, 25), retirado: 22 * 60 + 50 + r.int(0, 25),
+            errou: r.chance(0.04), divergente: !porAutorizado && r.chance(0.01) });
+        }
+        if (r.chance(0.25)) {
+          nVis++;
+          regs.push({ sv, visitante: `Visitante ${nVis} (criança fictícia)`, idade: r.int(s.min, s.max), op, entregue: 20 * 60 + 40 + r.int(0, 20), retirado: 22 * 60 + 55 + r.int(0, 20),
+            trouxeNome: `${r.pick(NOMES_F)} ${r.pick(SOBRENOMES)}${SUF_F}` });
+        }
+      }
+      await emTransacao(pool, async (req) => {
+        let eid = ((await ler(req, `SELECT EquipeId FROM dbo.EscalasEquipes WHERE CongregacaoId = ${cid} AND Nome = ${lit(s.nome)}`))[0] || {}).EquipeId;
+        if (!eid) {
+          await inserir(req, "EscalasEquipes", ["Nome", "CongregacaoId", "LiderMembroId", "Ativa", "CriadaEm", "ContatoComMenores", "Natureza", "FaixaEtariaMenores"],
+            [[s.nome, cid, aptos[0].matricula, true, momento(BASE - 180, 12), true, "OUTRA", s.faixa]]);
+          eid = (await ler(req, `SELECT EquipeId FROM dbo.EscalasEquipes WHERE CongregacaoId = ${cid} AND Nome = ${lit(s.nome)}`))[0].EquipeId;
+          tot.equipes++;
+        }
+        const tem = async (t, cond) => (await ler(req, `SELECT TOP 1 1 AS x FROM dbo.${t} WHERE ${cond}`)).length > 0;
+        if (!(await tem("EscalasEquipeMembros", `EquipeId = ${eid}`))) tot.voluntarios += await inserir(req, "EscalasEquipeMembros", ["EquipeId", "MembroId", "FrequenciaPreferidaDias", "Ativo", "CriadoEm"],
+          s.vols.map((p) => [eid, p.matricula, 14, true, momento(BASE - 150, 12)]));
+        // a habilitação de cada voluntário (o pendente parou no treinamento)
+        const hab = [], vist = [], docs = [], pol = [];
+        for (const p of s.vols) {
+          const ini = s.ini.get(p), pend = p === s.pendente;
+          if (!jaHab.has(p.matricula)) {
+            hab.push([p.matricula, cid, momento(ini, 10), momento(ini + 3, 10), "Duas referências da congregação, ambas favoráveis (dado fictício).", momento(ini + 6, 19), quem,
+              "Entrevista sem ressalvas (dado fictício).", momento(ini + 8, 15), pend ? null : momento(ini + 12, 15), pend ? null : momento(ini + 14, 15), pend ? "PENDENTE" : "APTO",
+              pend ? null : momento(ini + 15, 9), pend ? null : isoDe(ini + 15 + 730), quem, momento(ini, 10), momento(pend ? ini + 8 : ini + 15, 15), momento(ini + 10, 11)]);
+            jaHab.add(p.matricula);
+          }
+          if (!jaVist.has(p.matricula)) { vist.push({ p, ini }); jaVist.add(p.matricula); }
+          if (!pend && !jaPol.has(p.matricula)) {
+            pol.push([p.matricula, mm.POLITICA_VERSAO, mm.POLITICA_HASH, "FICHA_FISICA", momento(ini + 14, 15), `Ficha da política nº ${p.matricula} (fictícia)`, quem]);
+            jaPol.add(p.matricula);
+          }
+        }
+        tot.habil += await inserir(req, "VoluntariosHabilitacao", ["MembroId", "CongregacaoId", "EtapaFichaInscricaoEm", "EtapaReferenciasEm", "EtapaReferenciasObservacao", "EtapaEntrevistaEm",
+          "EtapaEntrevistaEntrevistadorId", "EtapaEntrevistaObservacao", "EtapaAntecedentesEm", "EtapaTreinamentoEm", "EtapaTermoAssinadoEm", "Status", "AptoDesde", "AptoValidoAte",
+          "CriadoPorMembroId", "CriadoEm", "AtualizadoEm", "FichaAtualizadaEm"], hab);
+        for (const { p, ini } of vist) {
+          await inserir(req, "VistoriasAntecedentes", ["MembroId", "Motivo", "Funcao", "ComVulneraveis", "DataVerificacao", "Resultado", "Parecer", "DestinoOriginal", "AssinadaPorMembroId", "AssinadaEm"],
+            [[p.matricula, "MUDANCA_FUNCAO", "Voluntário(a) do ministério infantil", true, isoDe(ini + 8), "SEM_RESTRICAO", "Certidões federal e estadual conferidas, sem restrição (dado fictício).",
+              "DEVOLVIDO", MATRICULA_MIN + 1, momento(ini + 8, 15)]]);
+          const vid = (await ler(req, `SELECT TOP 1 VistoriaId FROM dbo.VistoriasAntecedentes WHERE MembroId = ${p.matricula} ORDER BY VistoriaId DESC`))[0].VistoriaId;
+          for (const t of ["ANTECEDENTES_FEDERAL", "ANTECEDENTES_ESTADUAL"]) docs.push([vid, t, sha(`certidao-ficticia:${p.matricula}:${t}`), isoDe(ini + 2)]);
+        }
+        await inserir(req, "VistoriasDocumentos", ["VistoriaId", "Tipo", "HashSha256", "DataEmissao"], docs);
+        await inserir(req, "MinisterioMenoresPoliticaAceites", ["MembroId", "Versao", "TextoHash", "Forma", "AceitoEm", "Referencia", "RegistradoPorMembroId"], pol);
+        if (!(await tem("EscalasAlocacoes", `EquipeId = ${eid}`))) tot.alocacoes += await inserir(req, "EscalasAlocacoes", ["ServicoId", "EquipeId", "MembroId", "Status", "OrdemConvite", "ConvidadoEm",
+          "RespondidoEm", "ConfirmadoEm"], alocs.map((a) => [a[0], eid, ...a.slice(2)]));
+        if (!(await tem("MinisterioMenoresSalas", `EquipeId = ${eid}`))) tot.salas += await inserir(req, "MinisterioMenoresSalas", ["ServicoId", "EquipeId", "CriancasPrevistas", "DefinidoPorMembroId", "DefinidoEm"],
+          salasLin.map((x) => [x[0], eid, ...x.slice(2)]));
+        if (!(await tem("CheckinInfantilVoluntarios", `EquipeId = ${eid}`))) await inserir(req, "CheckinInfantilVoluntarios", ["ServicoId", "EquipeId", "MembroId", "EntrouEm", "SaiuEm"],
+          presencas.map((x) => [x.sv.id, eid, x.p.matricula, hm(x.sv.dia, x.entrou), hm(x.sv.dia, x.saiu)]));
+        // os responsáveis legais, autorizados, saúde e consentimento das crianças que aparecem (só o que falta)
+        const criancas = [...new Set(regs.filter((x) => x.k).map((x) => x.k))];
+        if (criancas.length) {
+          const ids = criancas.map((k) => k.matricula).join(",");
+          const jaResp = new Set((await ler(req, `SELECT MenorMembroId, ResponsavelMembroId FROM dbo.VoluntariadoResponsaveis WHERE MenorMembroId IN (${ids})`)).map((x) => `${x.MenorMembroId}:${x.ResponsavelMembroId}`));
+          const jaAut = new Set((await ler(req, `SELECT DISTINCT MenorMembroId FROM dbo.CheckinInfantilAutorizados WHERE MenorMembroId IN (${ids})`)).map((x) => x.MenorMembroId));
+          const jaSau = new Set((await ler(req, `SELECT MenorMembroId FROM dbo.CheckinInfantilSaude WHERE MenorMembroId IN (${ids})`)).map((x) => x.MenorMembroId));
+          const jaCon = new Set((await ler(req, `SELECT DISTINCT MenorMembroId FROM dbo.MinisterioMenoresConsentimentos WHERE MenorMembroId IN (${ids}) AND Finalidade = N'SAUDE_CRACHA'`)).map((x) => x.MenorMembroId));
+          const resp = [], aut = [], sau = [], con = [];
+          const texto = mc.TEXTOS.SAUDE_CRACHA;
+          for (const k of criancas) {
+            const rk = criarRng(`menores:crianca:${k.matricula}`);
+            const autorizado = rk.chance(0.25) ? `${rk.pick(rk.chance(0.5) ? NOMES_F : NOMES_M)} ${k.sobrenomes[0]}${SUF_M}` : null;
+            const saude = rk.chance(0.12) ? rk.pick(["Alergia a amendoim (dado fictício).", "Asma leve: tem bombinha na mochila (dado fictício).", "Intolerância à lactose (dado fictício).", "Alergia a picada de inseto (dado fictício)."]) : null;
+            const ficha = BASE - 120 - rk.int(0, 60);
+            for (const pa of pais.get(k)) if (!jaResp.has(`${k.matricula}:${pa.matricula}`)) resp.push([k.matricula, pa.matricula, pa.sexo === "M" ? "PAI" : "MAE", "Certidão de nascimento conferida pela Secretaria (dado fictício).", quem, momento(ficha, 10)]);
+            if (autorizado && !jaAut.has(k.matricula)) aut.push([k.matricula, null, autorizado, "AVO", null, "FICHA_FISICA", `Ficha de autorização nº ${k.matricula} (fictícia)`, quem, momento(ficha, 10, 30)]);
+            const responsavel = pais.get(k).find((pa) => pa.matricula >= MATRICULA_MIN + 300);
+            if (saude && !jaSau.has(k.matricula)) sau.push([k.matricula, saude, "FICHA_FISICA", `Ficha de saúde nº ${k.matricula} (fictícia)`, quem, momento(ficha, 11)]);
+            if (saude && responsavel && responsavel.matricula !== quem && !jaCon.has(k.matricula)) con.push([k.matricula, responsavel.matricula, "SAUDE_CRACHA", true, texto.versao, texto.hash, "FICHA_FISICA",
+              momento(ficha, 11, 5), `Ficha de saúde nº ${k.matricula} (fictícia)`, quem]);
+            k.saudeFicha = saude;
+          }
+          tot.resp += await inserir(req, "VoluntariadoResponsaveis", ["MenorMembroId", "ResponsavelMembroId", "Vinculo", "Documento", "RegistradoPorMembroId", "RegistradoEm"], resp);
+          tot.autorizados += await inserir(req, "CheckinInfantilAutorizados", ["MenorMembroId", "AutorizadoMembroId", "Nome", "Parentesco", "ValidoAte", "Forma", "Referencia", "RegistradoPorMembroId", "RegistradoEm"], aut);
+          tot.saude += await inserir(req, "CheckinInfantilSaude", ["MenorMembroId", "Texto", "Forma", "Referencia", "RegistradoPorMembroId", "AtualizadoEm"], sau);
+          await inserir(req, "MinisterioMenoresConsentimentos", ["MenorMembroId", "ResponsavelMembroId", "Finalidade", "Concedido", "TextoVersao", "TextoHash", "Forma", "RegistradoEm", "Referencia", "RegistradoPorMembroId"], con);
+        }
+        // o check-in em si (permanente): só se a sala ainda não tem nenhum
+        if (await tem("CheckinInfantilRegistros", `EquipeId = ${eid}`)) return;
+        const parentesco = (p) => (p.sexo === "M" ? "PAI" : "MAE");
+        tot.registros += await inserir(req, "CheckinInfantilRegistros", ["ServicoId", "EquipeId", "CongregacaoId", "MenorMembroId", "VisitanteNome", "VisitanteNascimento", "IdadeAnos", "FaixaSala",
+          "IdadeForaDaFaixa", "TrouxeMembroId", "TrouxeNome", "TrouxeParentesco", "TrouxeContato", "TrouxeDocumento", "SaudeTexto", "SaudeOrigem", "CodigoHash", "CodigoGeracao", "Tentativas", "Travado",
+          "Situacao", "EntregueEm", "EntreguePorMembroId", "RetiradoEm", "RetiradoTipo", "RetiradoMembroId", "RetiradoNome", "RetiradoParentesco", "RetiradoDocumento", "RetiradoPorOperadorId",
+          "Divergente", "DivergenciaPedidaEm", "DivergenciaDecididaPorId", "DivergenciaDecididaEm", "DivergenciaMotivo", "DivergenciaPedidoMotivo"],
+        regs.map((x) => {
+          const vis = !x.k;
+          const tipo = vis ? "TROUXE" : x.divergente ? "OUTRO" : x.porAutorizado ? "AUTORIZADO" : "RESPONSAVEL";
+          const retNome = vis ? x.trouxeNome : x.divergente ? `${x.k.sobrenomes[0] === "Silva" ? "Ana" : "Maria"} ${x.k.sobrenomes[0]} (tia, fictícia)` : x.porAutorizado ? x.autorizado : null;
+          return [x.sv.id, eid, cid, vis ? null : x.k.matricula, vis ? x.visitante : null, vis ? isoDe(x.sv.dia - x.idade * 365 - 100) : null, x.idade, s.faixa, false,
+            vis ? null : x.trouxe.matricula, vis ? x.trouxeNome : null, vis ? "MAE" : parentesco(x.trouxe), vis ? "(00) 90000-0000" : null, vis ? "RG" : null,
+            !vis && x.k.saudeFicha ? x.k.saudeFicha : null, !vis && x.k.saudeFicha ? "CADASTRO" : null, sha(`codigo-ficticio:${x.sv.id}:${vis ? x.visitante : x.k.matricula}`), 1, x.errou ? 1 : 0, false,
+            "RETIRADA", hm(x.sv.dia, x.entregue), x.op.matricula, hm(x.sv.dia, x.retirado), tipo, tipo === "RESPONSAVEL" ? x.quemRetira.matricula : null, retNome,
+            tipo === "RESPONSAVEL" ? parentesco(x.quemRetira) : tipo === "AUTORIZADO" ? "AVO" : tipo === "OUTRO" ? "TIO" : "MAE", tipo === "RESPONSAVEL" ? null : "RG", x.op.matricula,
+            !!x.divergente, x.divergente ? hm(x.sv.dia, x.retirado - 5) : null, x.divergente ? quem : null, x.divergente ? hm(x.sv.dia, x.retirado - 1) : null,
+            x.divergente ? "A mãe avisou por telefone; documento conferido (dado fictício)." : null, x.divergente ? "A tia veio buscar no lugar da mãe (dado fictício)." : null];
+        }), 500);
+        const regId = new Map((await ler(req, `SELECT RegistroId, ServicoId, MenorMembroId, VisitanteNome FROM dbo.CheckinInfantilRegistros WHERE EquipeId = ${eid}`))
+          .map((x) => [`${x.ServicoId}:${x.MenorMembroId || x.VisitanteNome}`, x.RegistroId]));
+        const ev = [];
+        for (const x of regs) {
+          const id = regId.get(`${x.sv.id}:${x.k ? x.k.matricula : x.visitante}`);
+          ev.push([id, x.sv.id, eid, "CHECKIN", x.op.matricula, hm(x.sv.dia, x.entregue), null]);
+          if (x.errou) ev.push([id, x.sv.id, eid, "CODIGO_ERRADO", x.op.matricula, hm(x.sv.dia, x.retirado - 2), "tentativa=1"]);
+          if (x.divergente) {
+            ev.push([id, x.sv.id, eid, "RETIRADA_DIVERGENTE_PEDIDA", x.op.matricula, hm(x.sv.dia, x.retirado - 5), null]);
+            ev.push([id, x.sv.id, eid, "RETIRADA_DIVERGENTE_APROVADA", quem, hm(x.sv.dia, x.retirado - 1), null]);
+          }
+          ev.push([id, x.sv.id, eid, "RETIRADA", x.op.matricula, hm(x.sv.dia, x.retirado), null]);
+        }
+        for (const x of presencas) {
+          ev.push([null, x.sv.id, eid, "VOLUNTARIO_ENTROU", x.p.matricula, hm(x.sv.dia, x.entrou), null]);
+          ev.push([null, x.sv.id, eid, "VOLUNTARIO_SAIU", x.p.matricula, hm(x.sv.dia, x.saiu), null]);
+        }
+        for (const sv of passados) {
+          const daSala = presencas.filter((x) => x.sv === sv);
+          if (daSala.length) ev.push([null, sv.id, eid, "SALA_ENCERRADA", daSala[0].p.matricula, hm(sv.dia, Math.max(...daSala.map((x) => x.saiu)) + 1), `baixadas=0;voluntarios=${daSala.length}`]);
+        }
+        tot.eventos += await inserir(req, "CheckinInfantilEventos", ["RegistroId", "ServicoId", "EquipeId", "Tipo", "AtorMembroId", "Em", "Detalhe"], ev, 1000);
+      });
+    }
+  }
+  return tot.equipes || tot.voluntarios || tot.habil || tot.registros || tot.resp
+    ? [`menores e check-in: ${tot.equipes} salas com menores, ${tot.voluntarios} voluntários (${tot.habil} habilitações), ${tot.alocacoes} escalas, ${tot.salas} salas por culto, ` +
+      `${tot.registros} check-ins (${tot.eventos} eventos), ${tot.resp} responsáveis, ${tot.autorizados} autorizados, ${tot.saude} fichas de saúde`] : [];
+}
+
+// Incidentes de proteção (~30, em vários estados): quase acidentes, quebras de política e alegações (estas sempre comunicadas ao Conselho Tutelar no prazo, com o
+// afastamento cautelar de quem foi citado e, quando encerrada sem conteúdo de proteção, a liberação), relatos, adendos, leituras e reclassificações. Ninguém da
+// sala infantil é citado em alegação aberta. PERMANENTE (gatilhos): tudo. Protocolo "PRO-FICT-...".
+async function etapaProtecao(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.IncidentesProtecao WHERE Protocolo LIKE N'PRO-FICT-%'`)).length) return [];
+  const r = criarRng("protecao");
+  const salas = await ler(req0, `SELECT EquipeId, CongregacaoId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG}) AND ContatoComMenores = 1`);
+  const naSala = new Set((await ler(req0, `SELECT em.MembroId FROM dbo.EscalasEquipeMembros em JOIN dbo.EscalasEquipes e ON e.EquipeId = em.EquipeId WHERE e.ContatoComMenores = 1`)).map((x) => x.MembroId));
+  const congsComSala = mod.congs.filter((c) => salas.some((s) => s.CongregacaoId === m.cong.get(c.nome)));
+  const ONDE = ["Sala infantil", "Corredor do templo", "Pátio da congregação", "Entrada do templo", "Banheiro do templo", "Estacionamento"];
+  const DESC = {
+    QUASE_ACIDENTE: ["Criança saiu da sala sozinha e foi encontrada no corredor (dado fictício).", "Porta da sala ficou destrancada durante o culto (dado fictício).", "Criança quase caiu da escada do pátio (dado fictício)."],
+    QUEBRA_POLITICA: ["Voluntário ficou sozinho com as crianças por alguns minutos (dado fictício).", "Adulto sem habilitação entrou na sala para ajudar (dado fictício).", "Foto das crianças publicada sem autorização (dado fictício)."],
+    ALEGACAO: ["Relato de conduta inadequada de um adulto com uma criança (alegação fictícia).", "Responsável relatou comportamento estranho de um adulto (alegação fictícia)."]
+  };
+  const lista = [];
+  for (let k = 1; k <= 30; k++) {
+    const c = congsComSala.length && r.chance(0.6) ? r.pick(congsComSala) : r.pick(mod.congs);
+    const nivel = r.pesos([["QUASE_ACIDENTE", 50], ["QUEBRA_POLITICA", 35], ["ALEGACAO", 15]]);
+    const ocorr = BASE - r.int(3, 500), conhecido = Math.min(BASE - 1, ocorr + r.int(0, 2));
+    const aberto = conhecido > BASE - 25 || r.chance(0.2);
+    const sala = salas.find((s) => s.CongregacaoId === m.cong.get(c.nome));
+    const dir = dirigenteDe(mod, c);
+    const canal = nivel === "ALEGACAO" && r.chance(0.3);
+    const adultos = c.pessoas.filter((p) => p.status === "ATIVO" && p.idade >= 18 && p.matricula >= MATRICULA_MIN + 300 && !naSala.has(p.matricula) && !p.lider);
+    const envolvido = nivel !== "QUASE_ACIDENTE" && adultos.length ? r.pick(adultos) : null;
+    const resultado = nivel === "ALEGACAO" ? r.pesos([["ENCAMINHADO_AUTORIDADE", 65], ["SEM_CONTEUDO_DE_PROTECAO", 35]]) : nivel === "QUEBRA_POLITICA" ? "MEDIDA_INTERNA" : r.pesos([["MEDIDA_INTERNA", 60], ["SEM_CONTINUIDADE", 40]]);
+    lista.push({ k, c, nivel, ocorr, conhecido, aberto, sala, dir, canal, envolvido, resultado, encerra: aberto ? null : Math.min(BASE - 1, conhecido + r.int(5, 60)),
+      reclass: nivel === "QUEBRA_POLITICA" && k % 2 === 0, foraDoPrazo: nivel === "ALEGACAO" && r.chance(0.1), desc: r.pick(DESC[nivel]), onde: r.pick(ONDE),
+      relatadoPor: nivel === "ALEGACAO" ? r.pick(["RESPONSAVEL", "VOLUNTARIO", "OUTRA_PESSOA", "PROPRIA_CRIANCA"]) : r.chance(0.7) ? "VOLUNTARIO" : null, adendo: nivel === "ALEGACAO" && r.chance(0.5) });
+  }
+  // ninguém fica com alegação ABERTA e a pessoa citada servindo: o citado já não está em sala nenhuma (filtro acima)
+  const tot = { inc: 0, rel: 0, env: 0, dec: 0, com: 0, lei: 0, rec: 0 };
+  await emTransacao(pool, async (req) => {
+    const proto = (x) => `PRO-FICT-${isoDe(x.conhecido).slice(0, 4)}-${String(x.k).padStart(4, "0")}`;
+    const quemEncerra = (x) => (x.nivel === "ALEGACAO" || !x.dir ? MATRICULA_MIN + 1 : x.dir.matricula);
+    tot.inc = await inserir(req, "IncidentesProtecao", ["Protocolo", "Nivel", "Origem", "CongregacaoId", "EquipeId", "DataOcorrencia", "Onde", "Descricao", "RelatadoPor", "ContatoCanal", "ConhecidoEm",
+      "ExigeComunicacao", "PrazoNotificacaoEm", "RegistradoPorMembroId", "RegistradoEm", "Status", "EncerradoEm", "EncerradoPorMembroId", "EncerramentoResultado", "EncerramentoProvidencia", "EnvolvidoDaLideranca"],
+    lista.map((x) => [proto(x), x.nivel, x.canal ? "CANAL_AJUDA" : "MEMBRO", m.cong.get(x.c.nome), x.sala && x.onde === "Sala infantil" ? x.sala.EquipeId : null, isoDe(x.ocorr), x.onde, x.desc,
+      x.relatadoPor, x.canal ? "(00) 90000-0000 (contato fictício)" : null, momento(x.conhecido, 13), x.nivel === "ALEGACAO", x.nivel === "ALEGACAO" ? momento(x.conhecido + 1, 13) : null,
+      x.canal ? null : x.dir ? x.dir.matricula : MATRICULA_MIN + 2, momento(x.conhecido, 13, 20), x.aberto ? "ABERTO" : "ENCERRADO", x.aberto ? null : momento(x.encerra, 16),
+      x.aberto ? null : quemEncerra(x), x.aberto ? null : x.resultado, x.aberto ? null : "Conversa com a família, reforço das regras da sala e registro no Comitê (dado fictício).", false]));
+    const idDe = new Map((await ler(req, `SELECT IncidenteId, Protocolo FROM dbo.IncidentesProtecao WHERE Protocolo LIKE N'PRO-FICT-%'`)).map((y) => [y.Protocolo, y.IncidenteId]));
+    const rel = [], env = [], com = [], lei = [], rec = [];
+    for (const x of lista) {
+      const id = idDe.get(proto(x));
+      rel.push([id, "RELATO", `${x.desc} Relato registrado como foi contado (texto fictício).`, x.canal ? null : x.dir ? x.dir.matricula : MATRICULA_MIN + 2, momento(x.conhecido, 13, 25)]);
+      if (x.adendo) rel.push([id, "ADENDO", "Informação nova trazida pela família na conversa com a Diretoria (texto fictício).", MATRICULA_MIN + 1, momento(Math.min(BASE - 1, x.conhecido + 2), 15)]);
+      if (x.envolvido) env.push({ id, x });
+      if (x.nivel === "ALEGACAO") com.push([id, "CONSELHO_TUTELAR", r.pick(["TELEFONE", "PRESENCIAL", "OFICIO"]), x.foraDoPrazo ? momento(Math.min(BASE - 1, x.conhecido + 2), 10) : momento(x.conhecido, 17),
+        `CT-FICT-${x.k}`, null, "Comunicação feita pela Diretoria (dado fictício).", x.foraDoPrazo, MATRICULA_MIN + 1, momento(x.foraDoPrazo ? Math.min(BASE - 1, x.conhecido + 2) : x.conhecido, 17, 30)]);
+      if (x.nivel !== "QUASE_ACIDENTE") for (const leitor of [MATRICULA_MIN + 1, MATRICULA_MIN + 2].slice(0, r.int(1, 2))) lei.push([id, leitor, momento(Math.min(BASE - 1, x.conhecido + r.int(0, 3)), 18, r.int(0, 59))]);
+      if (x.reclass) rec.push([id, "QUASE_ACIDENTE", "QUEBRA_POLITICA", "A apuração mostrou que a regra dos dois adultos não foi cumprida (dado fictício).", MATRICULA_MIN + 1, momento(Math.min(BASE - 1, x.conhecido + 2), 11)]);
+    }
+    tot.rel = await inserir(req, "IncidenteRelatos", ["IncidenteId", "Tipo", "Texto", "RegistradoPorMembroId", "RegistradoEm"], rel);
+    tot.env = await inserir(req, "IncidenteEnvolvidos", ["IncidenteId", "MembroId", "Nome", "RegistradoEm"], env.map(({ id, x }) => [id, x.envolvido.matricula, null, momento(x.conhecido, 13, 25)]));
+    const envId = new Map((await ler(req, `SELECT e.EnvolvidoId, e.IncidenteId FROM dbo.IncidenteEnvolvidos e JOIN dbo.IncidentesProtecao i ON i.IncidenteId = e.IncidenteId WHERE i.Protocolo LIKE N'PRO-FICT-%'`))
+      .map((y) => [y.IncidenteId, y.EnvolvidoId]));
+    const dec = [];
+    for (const { id, x } of env.filter((e) => e.x.nivel === "ALEGACAO")) {
+      dec.push([envId.get(id), "MANTIDO_AFASTADO", "Afastado do contato com crianças por cautela, enquanto se apura (dado fictício).", MATRICULA_MIN + 1, momento(x.conhecido, 14)]);
+      if (!x.aberto && x.resultado === "SEM_CONTEUDO_DE_PROTECAO") dec.push([envId.get(id), "LIBERADO", "Apuração encerrada sem conteúdo de proteção (dado fictício).", MATRICULA_MIN + 1, momento(x.encerra, 16, 30)]);
+    }
+    tot.dec = await inserir(req, "IncidenteDecisoesCautelares", ["EnvolvidoId", "Decisao", "Observacao", "DecididaPorMembroId", "DecididaEm"], dec);
+    tot.com = await inserir(req, "IncidenteComunicacoes", ["IncidenteId", "Orgao", "Forma", "ComunicadoEm", "ProtocoloExterno", "ReferenciaArquivo", "Observacao", "ForaDoPrazo", "RegistradoPorMembroId", "RegistradoEm"], com);
+    tot.lei = await inserir(req, "IncidenteLeituras", ["IncidenteId", "MembroId", "LidoEm"], lei);
+    tot.rec = await inserir(req, "IncidenteReclassificacoes", ["IncidenteId", "NivelAnterior", "NivelNovo", "Motivo", "ReclassificadoPorMembroId", "ReclassificadoEm"], rec);
+  });
+  const abertos = lista.filter((x) => x.aberto).length;
+  return [`proteção: ${tot.inc} incidentes (${abertos} abertos; ${lista.filter((x) => x.nivel === "ALEGACAO").length} alegações comunicadas ao Conselho Tutelar), ${tot.rel} relatos, ${tot.env} envolvidos, ` +
+    `${tot.dec} decisões cautelares, ${tot.lei} leituras, ${tot.rec} reclassificações`];
+}
+
+// Crise e porta-voz: dois regimes de crise JÁ ENCERRADOS (nunca um ativo: só pode haver um, e ele mudaria o sistema inteiro da homologação), um com o Presidente como
+// porta-voz e outro com porta-voz designado, a história de cada um, notas e entrevistas (com uma correção), demandas da imprensa (dentro e fora da crise) com
+// respostas. Sem o envio do aviso de crise (nada é enviado). PERMANENTE (gatilhos): tudo. Motivo e pedidos com "(fictícia)".
+async function etapaCrise(pool, mod) {
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.CriseRegimes WHERE Motivo LIKE N'%(situação fictícia)%'`)).length) return [];
+  const pres = mod.lideres.find((p) => p.lider.papel === "Presidente");
+  const pa = mod.lideres.find((p) => p.lider.papel === "Pastor de Área");
+  const contatoPres = "imprensa.presidencia@example.org";
+  const CRISES = [
+    { motivo: "Boato nas redes sociais sobre as contas da igreja (situação fictícia).", abre: BASE - 400, fecha: BASE - 386, designado: null,
+      resumo: "Prestação de contas publicada e boato desmentido; nenhuma nova menção em 7 dias (dado fictício)." },
+    { motivo: "Acidente com ônibus da caravana da juventude, sem feridos graves (situação fictícia).", abre: BASE - 150, fecha: BASE - 139, designado: pa,
+      resumo: "Todos os jovens em casa; seguradora acionada; comunicação encerrada com nota final (dado fictício)." }
+  ];
+  const tot = { crises: 0, manif: 0, demandas: 0, respostas: 0 };
+  await emTransacao(pool, async (req) => {
+    for (const cr of CRISES) {
+      const pv = cr.designado || pres;
+      await inserir(req, "CriseRegimes", ["Status", "Motivo", "Alcance", "OrdenadoPorMembroId", "RegistradoPorMembroId", "PortaVozTipo", "PortaVozMembroId", "PortaVozNome", "PortaVozContato",
+        "DesignacaoAto", "AbertaEm", "EncerradaEm", "EncerradaPorMembroId", "ResumoEncerramento"],
+      [["ENCERRADA", cr.motivo, "CAMPO", pres.matricula, MATRICULA_MIN + 2, cr.designado ? "DESIGNADO" : "PRESIDENTE", pv.matricula, pv.nome, cr.designado ? `${semAcento(pv.primeiro)}.${pv.matricula}@example.org` : contatoPres,
+        cr.designado ? "Ato da Diretoria nº 7/2026 designa o porta-voz da crise (dado fictício)." : null, momento(cr.abre, 9), momento(cr.fecha, 18), pres.matricula, cr.resumo]]);
+      const id = (await ler(req, `SELECT CriseId FROM dbo.CriseRegimes WHERE Motivo = ${lit(cr.motivo)}`))[0].CriseId;
+      tot.crises++;
+      const hist = [[id, "ABERTA", "PRESIDENTE", pres.matricula, pres.nome, contatoPres, null, "Regime de crise aberto pela Presidência (dado fictício).", pres.matricula, momento(cr.abre, 9, 5)]];
+      if (cr.designado) hist.push([id, "PORTA_VOZ", "DESIGNADO", pv.matricula, pv.nome, `${semAcento(pv.primeiro)}.${pv.matricula}@example.org`, "Ato da Diretoria nº 7/2026 designa o porta-voz da crise (dado fictício).",
+        "Porta-voz designado por ato da Diretoria (dado fictício).", pres.matricula, momento(cr.abre, 15)]);
+      hist.push([id, "ENCERRADA", cr.designado ? "DESIGNADO" : "PRESIDENTE", pv.matricula, pv.nome, cr.designado ? `${semAcento(pv.primeiro)}.${pv.matricula}@example.org` : contatoPres,
+        cr.designado ? "Ato da Diretoria nº 7/2026 designa o porta-voz da crise (dado fictício)." : null, cr.resumo, pres.matricula, momento(cr.fecha, 18, 5)]);
+      await inserir(req, "CriseHistorico", ["CriseId", "Evento", "PortaVozTipo", "PortaVozMembroId", "PortaVozNome", "PortaVozContato", "DesignacaoAto", "Texto", "MembroId", "Em"], hist);
+      // manifestações: nota, depois rede social ou entrevista; a primeira nota ganha uma correção (linha nova)
+      const manif = [[id, momento(cr.abre, 12), "NOTA", pv.nome, "Nota oficial: a Igreja acompanha o caso e presta todas as informações (texto fictício).", null, `homolog-ficticio-nota-crise-${id}.pdf`, pres.nome, null, MATRICULA_MIN + 2, momento(cr.abre, 12, 10)],
+        [id, momento(cr.abre + 1, 10), cr.designado ? "ENTREVISTA" : "REDE_SOCIAL", pv.nome, "Esclarecimento aos membros e à imprensa (texto fictício).", "https://example.org/nota-ficticia", null, pres.nome, null, MATRICULA_MIN + 2, momento(cr.abre + 1, 10, 30)]];
+      await inserir(req, "CriseManifestacoes", ["CriseId", "DataHora", "Canal", "QuemFalou", "Resumo", "Link", "Documento", "AutorizadoPor", "CorrigeManifestacaoId", "RegistradoPorMembroId", "RegistradoEm"], manif);
+      const primeira = (await ler(req, `SELECT MIN(ManifestacaoId) AS id FROM dbo.CriseManifestacoes WHERE CriseId = ${id}`))[0].id;
+      await inserir(req, "CriseManifestacoes", ["CriseId", "DataHora", "Canal", "QuemFalou", "Resumo", "Link", "Documento", "AutorizadoPor", "CorrigeManifestacaoId", "RegistradoPorMembroId", "RegistradoEm"],
+        [[id, momento(cr.abre, 12), "NOTA", pv.nome, "Nota oficial corrigida: data do ocorrido ajustada (texto fictício).", null, `homolog-ficticio-nota-crise-${id}-v2.pdf`, pres.nome, primeira, MATRICULA_MIN + 2, momento(cr.abre, 16)]]);
+      tot.manif += 3;
+      // demandas da imprensa dentro da crise, uma respondida e outra recusada
+      for (const [j, veic] of ["Jornal Exemplo (fictício)", "Rádio Exemplo FM (fictícia)"].entries()) {
+        await inserir(req, "CriseDemandasImprensa", ["CriseId", "Veiculo", "Contato", "Pedido", "PrazoEm", "RegistradoPorMembroId", "RecebidaEm"],
+          [[id, veic, `(00) 3000-000${j + 1}`, "Pede posicionamento oficial sobre o caso (pedido fictício).", momento(cr.abre + 1, 18), MATRICULA_MIN + 2, momento(cr.abre, 14 + j)]]);
+        const did = (await ler(req, `SELECT MAX(DemandaId) AS id FROM dbo.CriseDemandasImprensa WHERE CriseId = ${id}`))[0].id;
+        await inserir(req, "CriseDemandaRespostas", ["DemandaId", "Situacao", "Resposta", "RespondidoPorMembroId", "Em"],
+          [[did, j === 0 ? "RESPONDIDA" : "RECUSADA", j === 0 ? "Enviada a nota oficial e o contato do porta-voz (texto fictício)." : "Entrevista recusada: o porta-voz fala só por nota nesta fase (texto fictício).", pv.matricula, momento(cr.abre + 1, 11 + j)]]);
+        tot.demandas++; tot.respostas++;
+      }
+    }
+    // uma demanda fora de crise (pauta comum), respondida
+    await inserir(req, "CriseDemandasImprensa", ["CriseId", "Veiculo", "Contato", "Pedido", "PrazoEm", "RegistradoPorMembroId", "RecebidaEm"],
+      [[null, "TV Exemplo (fictícia)", "pauta.tv@example.org", "Pede entrevista sobre o congresso de famílias (pedido fictício).", momento(BASE - 30, 18), MATRICULA_MIN + 2, momento(BASE - 33, 10)]]);
+    const did = (await ler(req, `SELECT MAX(DemandaId) AS id FROM dbo.CriseDemandasImprensa WHERE CriseId IS NULL AND Pedido LIKE N'%(pedido fictício)%'`))[0].id;
+    await inserir(req, "CriseDemandaRespostas", ["DemandaId", "Situacao", "Resposta", "RespondidoPorMembroId", "Em"], [[did, "RESPONDIDA", "Entrevista marcada com o Presidente (texto fictício).", pres.matricula, momento(BASE - 31, 15)]]);
+    tot.demandas++; tot.respostas++;
+  });
+  return [`crise: ${tot.crises} regimes de crise já encerrados (um com porta-voz designado), ${tot.manif} manifestações (uma correção), ${tot.demandas} demandas da imprensa, ${tot.respostas} respostas`];
+}
+
+// Identidade visual: os temas já usados nos anos anteriores, cadastrados à mão pela Secretaria (com a marca "(tema fictício)"). O ciclo NÃO entra: o app só abre o
+// ciclo da identidade do ano seguinte e o primeiro no sistema é o de 2028 (aberto a partir de 2027), e as etapas são pela data (sugestões de 01 a 15/11/2027) —
+// um ciclo em novembro de 2026 contradiria a tela. Saem no --apagar.
+async function etapaIdentidade(pool, mod) {
+  const req0 = () => pool.request();
+  const iv = require("../shared/identidadeVisual");
+  const ja = new Set((await ler(req0, "SELECT Ano FROM dbo.IdentidadeTemasUsados")).map((x) => x.Ano));
+  const FRASES = ["Unidos em Cristo", "Avivamento que transforma", "Família, projeto de Deus", "Firmes na Palavra", "Igreja que ora", "Semeando esperança", "Missão sem fronteiras",
+    "Servir com alegria", "Raízes e frutos", "Geração que adora", "Fé que move", "Luz para as nações", "Renovo e santidade", "Caminhando em obediência", "Celebrando a fidelidade de Deus"];
+  const linhas = [];
+  for (let ano = Math.max(iv.PRIMEIRO_ANO_TEMAS, ANO_BASE - 12); ano <= ANO_BASE + 1 && ano < iv.PRIMEIRO_CICLO; ano++) {
+    if (ja.has(ano)) continue;
+    const tema = `${FRASES[(ano - 2006) % FRASES.length]} (tema fictício)`;
+    linhas.push([ano, tema, iv.normalizar(tema), "MANUAL", null, MATRICULA_MIN + 2, momento(BASE - 300 + (ano % 30), 10)]);
+  }
+  if (!linhas.length) return [];
+  await emTransacao(pool, async (req) => {
+    await inserir(req, "IdentidadeTemasUsados", ["Ano", "Tema", "TemaNormalizado", "Origem", "CicloId", "RegistradoPorMembroId", "RegistradoEm"], linhas);
+  });
+  return [`identidade visual: ${linhas.length} temas de anos anteriores cadastrados pela Secretaria (o ciclo de 2028 só abre em 2027)`];
+}
+
+// CPF de propósito IMPOSSÍVEL: base 99999NNNN e o 1º dígito verificador trocado (nunca confere), marcado como fictício no fornecedor. Não é CPF de ninguém.
+function cpfImpossivel(k) {
+  const base = `99999${String(k).padStart(4, "0")}`;
+  const dv = (b) => { let s = 0; for (let i = 0; i < b.length; i++) s += Number(b[i]) * (b.length + 1 - i); const x = (s * 10) % 11; return x === 10 ? 0 : x; };
+  const d1 = dv(base), d2 = dv(base + d1);
+  return `${base.slice(0, 3)}.${base.slice(3, 6)}.${base.slice(6, 9)}-${(d1 + 5) % 10}${d2}`;
+}
+
+// Prebenda pastoral: os pastores da liderança fictícia com o Ato de Designação (ata da Diretoria), o fornecedor PF com o CPF impossível e dados bancários
+// confirmados, o valor de referência dentro do ato, e cada mês gerado como o app gera (IRRF pela tabela FaixasIrrf, a Saída PREBENDA_PASTORAL já aprovada pela
+// ata, paga no fim do mês); um prebendado suspenso; riscos de vínculo (um ativo, que vira alerta nas gerações seguintes, e um resolvido). Tudo sai no --apagar.
+async function etapaPrebenda(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.AtosDesignacao WHERE NumeroAto LIKE N'ATO-FICT-%'`)).length) return [];
+  const prebenda = require("../shared/prebenda");
+  const r = criarRng("prebenda");
+  const pastores = mod.lideres.filter((p) => ["Pastor de Área", "Pastor Distrital", "Superintendente Regional"].includes(p.lider.papel));
+  const comForn = new Set((await ler(req0, `SELECT MembroId FROM dbo.Fornecedores WHERE MembroId IS NOT NULL`)).map((x) => x.MembroId));
+  const fechados = MESES.filter((x) => !x.aberto);
+  const lista = pastores.filter((p) => !comForn.has(p.matricula)).map((p, i) => {
+    const k = i + 1, valor = r.int(30, 60) * 100;
+    const ini = fechados[fechados.length - r.int(6, 20)];
+    const suspenso = r.chance(0.12) ? fechados[fechados.length - r.int(1, 3)] : null;
+    return { p, k, valor, ato: Math.min(valor + r.int(0, 5) * 100, valor + 500), ini, suspenso, cpf: cpfImpossivel(k), risco: null };
+  });
+  if (!lista.length) return [];
+  if (lista[0]) lista[0].risco = { tipo: "JORNADA", ativo: true, desc: "Cumpre horário fixo na secretaria da Área, como empregado (dado fictício)." };
+  if (lista[1]) lista[1].risco = { tipo: "CONTROLE_HORARIO", ativo: false, desc: "Assinava folha de ponto; prática encerrada (dado fictício)." };
+  const irrf = new Map();
+  for (const x of lista) irrf.set(x.valor, await prebenda.calcularIrrf(pool, sql, x.valor));
+  const tot = { prebendados: 0, geracoes: 0, pagas: 0, rateios: 0 };
+  // O Rateio Geral (o "malote" da Tesouraria Geral, GestaoRateioGeral): no dia 6 de cada mês fecha tudo o que foi repassado e ainda não rateado (fora o repasse que
+  // é do Distrito), em Convenção, Prebenda Pastoral, PDQ e Tesouro Geral pelos percentuais de RateioGeralDestinos. É dele que sai o saldo da prebenda.
+  if (!(await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.RateiosGerais WHERE FechadoPor ${M_PESSOA}`)).length) {
+    const destinos = await ler(req0, "SELECT Codigo, Nome, Percentual FROM dbo.RateioGeralDestinos WHERE Ativo = 1 ORDER BY DestinoId");
+    const fech = await ler(req0, `SELECT f.FechamentoId, f.CongregacaoId, f.MesReferencia, f.ValorRepasseGeral AS v, CONVERT(char(10), f.DataRepasse, 23) AS d FROM dbo.FechamentosTesouraria f
+      WHERE f.Status = 'REPASSADO' AND f.CongregacaoId IN (${Q_CONG}) AND f.RepasseDistritoId IS NULL AND f.DataRepasse IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM dbo.RateioGeralItens ri WHERE ri.FechamentoId = f.FechamentoId) ORDER BY f.DataRepasse, f.FechamentoId`);
+    const usados = new Set();
+    for (const mes of fechados) {
+      const fechadoEm = mes.fim + 6;
+      if (fechadoEm > BASE - 1) break;
+      const itens = fech.filter((f) => !usados.has(f.FechamentoId) && diaDe(f.d) < fechadoEm);
+      if (!itens.length) continue;
+      itens.forEach((f) => usados.add(f.FechamentoId));
+      const base = Math.round(itens.reduce((a, f) => a + Number(f.v) * 100, 0));
+      const valores = destinos.map((d) => ({ d, v: Math.round(base * Number(d.Percentual) / 100) }));
+      await emTransacao(pool, async (req) => {
+        await inserir(req, "RateiosGerais", ["MesReferencia", "TotalBase", "ValorTesouroGeral", "TotalItens", "FechadoPor", "FechadoEm"],
+          [[mes.chave, reais(base), reais(base - valores.reduce((a, x) => a + x.v, 0)), itens.length, MATRICULA_MIN + 3, momento(fechadoEm, 11)]]);
+        const rid = (await ler(req, `SELECT TOP 1 RateioGeralId FROM dbo.RateiosGerais WHERE MesReferencia = '${mes.chave}' AND FechadoPor = ${MATRICULA_MIN + 3} ORDER BY RateioGeralId DESC`))[0].RateioGeralId;
+        await inserir(req, "RateioGeralValores", ["RateioGeralId", "DestinoCodigo", "DestinoNome", "Percentual", "Valor"], valores.map((x) => [rid, x.d.Codigo, x.d.Nome, x.d.Percentual, reais(x.v)]));
+        await inserir(req, "RateioGeralItens", ["RateioGeralId", "FechamentoId", "CongregacaoId", "MesReferenciaCongregacao", "Valor"], itens.map((f) => [rid, f.FechamentoId, f.CongregacaoId, f.MesReferencia, f.v]), 1000);
+      });
+      tot.rateios++;
+    }
+  }
+  const caixaPrebenda = (await ler(req0, `SELECT CONVERT(char(10), r.FechadoEm, 23) AS d, v.Valor FROM dbo.RateioGeralValores v JOIN dbo.RateiosGerais r ON r.RateioGeralId = v.RateioGeralId
+    WHERE v.DestinoCodigo = N'PREBENDA_PASTORAL'`)).map((x) => ({ dia: diaDe(x.d), v: Math.round(Number(x.Valor) * 100) }));
+  const jaPago = Math.round(Number((await ler(req0, "SELECT ISNULL(SUM(Valor), 0) AS v FROM dbo.SaidasTesouraria WHERE Tipo = N'PREBENDA_PASTORAL' AND Status = N'PAGA'"))[0].v) * 100);
+  let pagoAcum = jaPago;
+  const podePagar = (dia, valor) => caixaPrebenda.filter((x) => x.dia < dia).reduce((a, x) => a + x.v, 0) - pagoAcum >= valor;
+  const geracoes = [];
+  await emTransacao(pool, async (req) => {
+    for (const x of lista) {
+      const cong = m.cong.get(x.p.cong.nome);
+      const desde = x.ini.inicio;
+      await inserir(req, "Fornecedores", ["Nome", "CpfCnpj", "Tipo", "Telefone", "Email", "Banco", "Agencia", "Conta", "TipoConta", "DadosBancariosConfirmados", "ConfirmadoPor", "ConfirmadoEm",
+        "Ativo", "CriadoPor", "CriadoEm", "Estrangeiro", "MembroId"],
+      [[`${x.p.nome}${SUF_M}`, x.cpf, "PF", `(00) 98000-${String(x.k).padStart(4, "0")}`, `prebenda.${x.p.matricula}@example.org`, "Banco Exemplo (fictício)", "0001", `${String(x.k).padStart(5, "0")}-0`,
+        "CORRENTE", true, MATRICULA_MIN + 3, momento(desde - 20, 11), true, MATRICULA_MIN + 3, momento(desde - 20, 10), false, x.p.matricula]]);
+      const forn = (await ler(req, `SELECT FornecedorId FROM dbo.Fornecedores WHERE CpfCnpj = '${x.cpf}'`))[0].FornecedorId;
+      const numero = `ATO-FICT-${String(x.k).padStart(3, "0")}/${isoDe(desde - 15).slice(0, 4)}`, ata = `homolog-ficticio-ata-prebenda-${x.k}.pdf`;
+      await inserir(req, "AtosDesignacao", ["NumeroAto", "OrgaoColegiado", "DataDeliberacao", "ValorMensal", "MembroId", "AtaUrl", "CriadoPor", "CriadoEm"],
+        [[numero, "Diretoria Executiva (dado fictício)", isoDe(desde - 15), reais(x.ato * 100), x.p.matricula, ata, MATRICULA_MIN + 2, momento(desde - 15, 17)]]);
+      const ato = (await ler(req, `SELECT AtoDesignacaoId FROM dbo.AtosDesignacao WHERE NumeroAto = '${numero}'`))[0].AtoDesignacaoId;
+      await inserir(req, "Prebendados", ["MembroId", "FornecedorId", "Cpf", "ValorMensalReferencia", "DataInicio", "DataFim", "Status", "AtoDesignacaoId", "Observacao", "CriadoPor", "CriadoEm"],
+        [[x.p.matricula, forn, x.cpf, reais(x.valor * 100), isoDe(desde), null, x.suspenso ? "SUSPENSO" : "ATIVO", ato, x.suspenso ? "Suspenso a pedido da Diretoria (dado fictício)." : null, MATRICULA_MIN + 3, momento(desde - 10, 12)]]);
+      const pid = (await ler(req, `SELECT PrebendadoId FROM dbo.Prebendados WHERE Cpf = '${x.cpf}'`))[0].PrebendadoId;
+      tot.prebendados++;
+      let riscoDesde = null;
+      if (x.risco) {
+        riscoDesde = desde + 70;
+        await inserir(req, "PrebendaRiscosVinculo", ["PrebendadoId", "TipoRisco", "Descricao", "Status", "RegistradoPor", "CriadoEm", "ResolvidoEm"],
+          [[pid, x.risco.tipo, x.risco.desc, x.risco.ativo ? "ATIVO" : "RESOLVIDO", MATRICULA_MIN + 3, momento(riscoDesde, 12), x.risco.ativo ? null : momento(riscoDesde + 60, 12)]]);
+      }
+      const ir = irrf.get(x.valor), liq = Math.round((x.valor - ir) * 100);
+      for (const mes of fechados.filter((y) => y.inicio >= desde && (!x.suspenso || y.inicio < x.suspenso.inicio))) geracoes.push({ x, mes, cong, forn, pid, numero, ata, ir, liq, riscoDesde });
+    }
+    // cada mês na ordem do tempo: a Saída nasce aprovada pela ata (dia 25) e é paga no dia 28 só se o caixa da Prebenda (o rateio já fechado) cobre
+    geracoes.sort((a, b) => a.mes.inicio - b.mes.inicio || a.pid - b.pid);
+    for (const g of geracoes) {
+      const gerada = g.mes.inicio + 24, pago = g.mes.inicio + 27;
+      const paga = pago < BASE && podePagar(pago, g.liq);
+      if (paga) { pagoAcum += g.liq; tot.pagas++; }
+      await inserir(req, "SaidasTesouraria", ["CongregacaoId", "FornecedorId", "Tipo", "Descricao", "Valor", "DocumentoFiscalUrl", "ComprovantePagamentoUrl", "Status", "SolicitadoPor", "SolicitadoEm", "PagoPor", "PagoEm"],
+        [[g.cong, g.forn, "PREBENDA_PASTORAL", `Prebenda Pastoral — ${g.mes.chave} (Ato ${g.numero})`, reais(g.liq), g.ata, paga ? `homolog-ficticio-prebenda-${g.pid}-${g.mes.chave}.pdf` : null, paga ? "PAGA" : "APROVADA",
+          MATRICULA_MIN + 3, momento(gerada, 10), paga ? MATRICULA_MIN + 3 : null, paga ? momento(pago, 15) : null]]);
+      const sid = (await ler(req, `SELECT TOP 1 SaidaId FROM dbo.SaidasTesouraria WHERE FornecedorId = ${g.forn} AND SolicitadoEm = '${momento(gerada, 10)}' ORDER BY SaidaId DESC`))[0].SaidaId;
+      const alerta = g.x.risco && g.x.risco.ativo && gerada >= g.riscoDesde ? `⚠️ ATENÇÃO — risco de descaracterização de vínculo: ${g.x.risco.tipo} (${g.x.risco.desc})` : null;
+      tot.geracoes += await inserir(req, "PrebendaGeracoes", ["MesReferencia", "PrebendadoId", "ValorBruto", "IrrfRetido", "ValorLiquido", "SaidaId", "AlertaRisco", "GeradaPor", "GeradaEm"],
+        [[g.mes.chave, g.pid, reais(g.x.valor * 100), reais(Math.round(g.ir * 100)), reais(g.liq), sid, alerta, MATRICULA_MIN + 3, momento(gerada, 10)]]);
+    }
+  });
+  return [`prebenda: ${tot.rateios} rateios gerais do malote, ${tot.prebendados} prebendados (CPF de dígito impossível), ${tot.geracoes} meses gerados (${tot.pagas} pagos com o caixa da Prebenda), 2 riscos de vínculo`];
+}
+
+// Conciliação bancária por extrato: para os 6 últimos meses fechados, um extrato da conta única (OFX fictício) que o banco "mandou" a partir do que passou pela
+// conta (PIX e parte PIX do misto, saídas pagas), com 0 a 2 lançamentos que o banco não mostrou e 1 ou 2 tarifas que o sistema não tem; a conciliação é a do
+// PRÓPRIO app (shared/conciliação.js::conciliarExtrato) e as divergências dos meses mais antigos estão resolvidas. Sai no --apagar (extrato "homolog-ficticio-extrato-...").
+async function etapaConciliacao(pool, mod) {
+  const req0 = () => pool.request();
+  const conc = require("../shared/conciliação");
+  const fonte = (await ler(req0, "SELECT TOP 1 FonteId FROM dbo.FontesCaixa WHERE Tipo = N'CONTA_BANCARIA' AND Ativa = 1 ORDER BY Centralizadora DESC, FonteId"))[0];
+  if (!fonte) return [];
+  const meses = MESES.filter((x) => !x.aberto).slice(-6);
+  const tot = { meses: 0, linhas: 0, div: 0, batidas: 0 };
+  for (const [i, mes] of meses.entries()) {
+    if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.ConciliacoesBancarias WHERE FonteId = ${fonte.FonteId} AND MesReferencia = '${mes.chave}'`)).length) continue;
+    const r = criarRng(`conciliacao:${mes.chave}`);
+    const url = `homolog-ficticio-extrato-${mes.chave}.ofx`;
+    let ext = (await ler(req0, `SELECT ExtratoId FROM dbo.ExtratosBancarios WHERE ArquivoUrl = '${url}'`))[0];
+    if (!ext) {
+      const fim = isoDe(mes.fim);
+      const sistema = (await ler(req0, `SELECT N'E' AS t, LancamentoId AS id, CASE WHEN FormaPagamento = 'MISTO' THEN ISNULL(ValorPix, 0) ELSE Valor END AS v, CONVERT(char(10), CriadoEm, 23) AS d
+        FROM dbo.LancamentosTesouraria WHERE Status = 'ATIVO' AND StatusConfirmacao = 'CONFIRMADO' AND CAST(CriadoEm AS date) BETWEEN '${isoDe(mes.inicio)}' AND '${fim}' AND FormaPagamento IN ('PIX', 'MISTO')
+        UNION ALL SELECT N'S', SaidaId, -Valor, CONVERT(char(10), PagoEm, 23) FROM dbo.SaidasTesouraria WHERE Status = 'PAGA' AND CAST(PagoEm AS date) BETWEEN '${isoDe(mes.inicio)}' AND '${fim}'
+        ORDER BY 1, 2`)).filter((x) => Number(x.v) !== 0);
+      const linhas = [];
+      const omitir = new Set();
+      for (let k = r.int(0, 2); k > 0; k--) omitir.add(r.int(0, sistema.length - 1));
+      sistema.forEach((x, j) => {
+        if (omitir.has(j)) return;
+        const d = Math.min(mes.fim, diaDe(x.d) + (x.t === "E" && r.chance(0.3) ? 1 : 0));
+        linhas.push([isoDe(d), x.v, x.t === "E" ? "PIX RECEBIDO (extrato fictício)" : "TED/PIX ENVIADO (extrato fictício)", `FICT-${mes.chave}-${j + 1}`]);
+      });
+      for (let k = r.int(1, 2); k > 0; k--) linhas.push([isoDe(mes.fim - r.int(0, 3)), -r.int(1290, 4990) / 100, "TARIFA PACOTE DE SERVIÇOS (extrato fictício)", `FICT-${mes.chave}-T${k}`]);
+      await emTransacao(pool, async (req) => {
+        await inserir(req, "ExtratosBancarios", ["FonteId", "MesReferencia", "TipoArquivo", "ArquivoUrl", "SaldoFinal", "TotalLinhas", "ImportadoPor", "CriadoEm"],
+          [[fonte.FonteId, mes.chave, "OFX", url, Math.round(linhas.reduce((a, l) => a + Number(l[1]), 0) * 100) / 100, linhas.length, MATRICULA_MIN + 3, momento(mes.fim + 5, 10)]]);
+        const id = (await ler(req, `SELECT ExtratoId FROM dbo.ExtratosBancarios WHERE ArquivoUrl = '${url}'`))[0].ExtratoId;
+        tot.linhas += await inserir(req, "ExtratoLinhas", ["ExtratoId", "DataLancamento", "Valor", "Historico", "Identificador"], linhas.map((l) => [id, ...l]), 1000);
+      });
+      ext = (await ler(req0, `SELECT ExtratoId FROM dbo.ExtratosBancarios WHERE ArquivoUrl = '${url}'`))[0];
+    }
+    const res = await conc.conciliarExtrato(pool, sql, ext.ExtratoId, fonte.FonteId, mes.chave);
+    const resolvida = i < meses.length - 1;
+    const batidas = conc.round2(res.batidas.reduce((a, b) => a + Math.abs(Number(b.valor)), 0));
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "ConciliacoesBancarias", ["FonteId", "MesReferencia", "Status", "TotalExtrato", "TotalSistema", "TotalBatidas", "CriadoEm"],
+        [[fonte.FonteId, mes.chave, res.soBanco.length || res.soSistema.length ? "DIVERGENTE" : "BATIDO", res.totalExtrato, res.totalSistema, batidas, momento(mes.fim + 5, 10, 30)]]);
+      const cid = (await ler(req, `SELECT ConciliacaoId FROM dbo.ConciliacoesBancarias WHERE FonteId = ${fonte.FonteId} AND MesReferencia = '${mes.chave}'`))[0].ConciliacaoId;
+      const quando = resolvida ? momento(mes.fim + 12, 16) : null, por = resolvida ? MATRICULA_MIN + 3 : null;
+      const div = res.soBanco.map((d) => [cid, "SO_BANCO", d.valor, d.referencia || null, d.linhaId, null, null, resolvida ? "RESOLVIDA" : "PENDENTE", por, quando])
+        .concat(res.soSistema.map((d) => [cid, "SO_SISTEMA", d.valor, d.referencia || null, null, d.tipo === "ENTRADA" ? d.id : null, d.tipo === "SAIDA" ? d.id : null, resolvida ? "RESOLVIDA" : "PENDENTE", por, quando]));
+      tot.div += await inserir(req, "ConciliacaoDivergencias", ["ConciliacaoId", "Tipo", "Valor", "Referencia", "LinhaExtratoId", "LancamentoId", "SaidaId", "Status", "ResolvidoPor", "ResolvidoEm"], div);
+    });
+    tot.meses++; tot.batidas += res.batidas.length;
+  }
+  return tot.meses ? [`conciliação bancária: ${tot.meses} meses (${tot.linhas} linhas de extrato, ${tot.batidas} batidas, ${tot.div} divergências; as dos meses antigos resolvidas)`] : [];
+}
+
 async function etapaFinancasExtra(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
@@ -3146,7 +3733,8 @@ async function etapaEscalas(pool, mod) {
   const req0 = () => pool.request();
   const existentes = new Set((await ler(req0, `SELECT MembroId FROM dbo.MembroReferencia WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
   if (mod.pessoas.some((p) => !existentes.has(p.matricula))) throw new Error('faltam pessoas fictícias: rode a etapa "membros" antes');
-  const comEscala = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  // as salas com menores (etapa "menores") e os cultos do check-in ficam depois de um --apagar: não contam como "a escala já existe" e o culto que ficou é reaproveitado
+  const comEscala = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.EscalasEquipes WHERE CongregacaoId IN (${Q_CONG}) AND ContatoComMenores = 0`)).map((x) => x.CongregacaoId));
   const tot = { cong: 0, equipes: 0, membros: 0, servicos: 0, alocacoes: 0 };
   for (const c of mod.congs) {
     const cid = m.cong.get(c.nome);
@@ -3162,8 +3750,9 @@ async function etapaEscalas(pool, mod) {
       const eqId = new Map((await ler(req, `SELECT EquipeId, Nome FROM dbo.EscalasEquipes WHERE CongregacaoId = ${cid}`)).map((x) => [x.Nome, x.EquipeId]));
       const membros = esc.equipes.flatMap((e) => e.membros.map((x) => [eqId.get(e.nome), x.pessoa.matricula, x.frequencia, true, criada]));
       await inserir(req, "EscalasEquipeMembros", ["EquipeId", "MembroId", "FrequenciaPreferidaDias", "Ativo", "CriadoEm"], membros);
+      const jaCulto = new Set((await ler(req, `SELECT CONVERT(char(10), DataHora, 23) AS Dia FROM dbo.EscalasServicos WHERE CongregacaoId = ${cid}`)).map((x) => x.Dia));
       await inserir(req, "EscalasServicos", ["CongregacaoId", "DataHora", "Descricao", "Status", "PublicadaEm", "PrazoConfirmacaoDias", "CriadoPorMembroId", "CriadoEm"],
-        esc.servicos.map((s) => [cid, momento(s.dia, 21), "Culto de domingo", "PUBLICADA", momento(s.publicada, 20), 3, quem, momento(s.publicada - 2, 20)]));
+        esc.servicos.filter((s) => !jaCulto.has(isoDe(s.dia))).map((s) => [cid, momento(s.dia, 21), "Culto de domingo", "PUBLICADA", momento(s.publicada, 20), 3, quem, momento(s.publicada - 2, 20)]));
       const svId = new Map((await ler(req, `SELECT ServicoId, CONVERT(char(10), DataHora, 23) AS Dia FROM dbo.EscalasServicos WHERE CongregacaoId = ${cid}`)).map((x) => [x.Dia, x.ServicoId]));
       const alocs = esc.servicos.flatMap((s) => s.alocs.map((a) => [svId.get(isoDe(s.dia)), eqId.get(a.equipe.nome), a.pessoa.matricula, a.status, a.ordem,
         momento(a.convidado || s.publicada, 20, 5), a.respondido ? momento(a.respondido, 18) : null, a.confirmado ? momento(a.confirmado, 18, 30) : null]));
@@ -3197,7 +3786,8 @@ async function main() {
     const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, reunioes: etapaReunioes, financeiro: etapaFinanceiro, distritos: etapaDistritos,
       relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas,
       calendario: etapaCalendario, cuidado: etapaCuidado, missoes: etapaMissoes, expansao: etapaExpansao, entidades: etapaEntidades, ministerio: etapaMinisterio,
-      seguranca: etapaSeguranca, consentimentos: etapaConsentimentos, enquetes: etapaEnquetes, campanhas: etapaFinancasExtra, comunicacao: etapaComunicacao, conquistas: etapaConquistas };
+      seguranca: etapaSeguranca, consentimentos: etapaConsentimentos, enquetes: etapaEnquetes, campanhas: etapaFinancasExtra, comunicacao: etapaComunicacao, conquistas: etapaConquistas,
+      menores: etapaMenores, protecao: etapaProtecao, crise: etapaCrise, identidade: etapaIdentidade, prebenda: etapaPrebenda, conciliacao: etapaConciliacao };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

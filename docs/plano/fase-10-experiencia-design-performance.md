@@ -64,15 +64,30 @@ e os mesmos deploys do código), mas a massa fictícia de hoje é pequena demais
 20 dizimistas — nenhum lançamento, EBD, evento, escala ou histórico. O responsável quer um sistema de teste **permanente, cheio de dados de
 mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clicando como um usuário.
 
-- [ ] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
+- [x] **Massa grande de dados fictícios** gerada por um script (nunca dado real; o script se recusa a rodar fora de um banco com "homolog" no
       nome), do tamanho de uma Igreja grande: várias regiões e áreas, ~40 congregações e Extensões, ~5.000 membros com famílias, idades,
       situações e cargos (a escada ministerial inteira), anos de lançamentos de dízimo e oferta, saídas, fechamentos e repasses, turmas e
       chamadas da EBD, escalas, eventos e inscrições, cuidado pastoral, missões, distritos, enquetes — respeitando as regras e os vínculos do
-      banco.
-- [ ] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
-      a massa (não refaz a cada vez).
-- [ ] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
-      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação.
+      banco. **Feito em 12/11/2026** (`api/scripts/semear-homologacao-grande.js`, por enquanto só no ramo `homolog`): 45 congregações, 3
+      Regiões, 9 Áreas, 2 Quadrantes, 1 Distrito, 10 Extensões, 5.047 pessoas, 36 meses de tesouraria (68.709 lançamentos, 1.620
+      fechamentos, 8.126 saídas), prestações de contas, 18 meses de relatórios dos departamentos (5.146), reuniões da CLI e da JAI, PSC de
+      2026, um ano de EBD (131.609 chamadas) e escalas. A história tem tendência: 27 congregações crescem, 11 ficam estáveis e 7 caem;
+      dezembro forte, janeiro e julho fracos; ~5% das pessoas se afastam aos poucos (o padrão do alerta de evasão da v10.12). Gerada na
+      homologação em 13 minutos.
+- [ ] **Segunda leva da massa:** missões, expansão, entidades vinculadas, consagração e credencial (esteiras com decisões da CME, da CLI e
+      do Presidente). **Não entram, de propósito:** calendário e eventos (o ano é uma linha única, sem marca de fictício, e o gatilho do ciclo
+      da CLI impede desfazer), vistorias de segurança (o banco proíbe apagar vistoria), cuidado pastoral (a rotina diária já detecta o
+      afastamento a partir da massa; itens e notas não se apagam) e termos e consentimentos (a massa não forja assinatura).
+- [x] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
+      a massa (não refaz a cada vez). Rodar de novo só completa o que falta; `--apagar` tira só o que tem a marca de fictício (matrículas
+      700000 a 799999, nomes "(Fictícia)"). O deploy do ramo `homolog` roda o gerador depois do semeador pequeno.
+- [x] **Entrar como cada papel** (Secretaria, Tesouraria Geral, Dirigente, Tesoureiro local, Pastor de Área, Presidente, membro), com
+      logins de teste — para o responsável testar como um usuário de verdade; isso existe **só** na homologação. Presidente 700001,
+      Secretário Geral 700002, Tesouraria Geral 700003, Superintendentes 700011–700013, Pastores de Área 700021–700029, Pastor Distrital
+      700031, Dirigente da congregação k = 700100 + k e Tesoureiro Local = 700200 + k (k = 1 é a Sede).
+- [ ] **Defeito achado pela massa (12/11/2026):** a categoria de entrada "Oferta de Culto do Departamento" não pode ser lançada — o código
+      dela (`OFERTA_CULTO_DEPARTAMENTO`, 25 letras) não cabe no campo `LancamentosTesouraria.Tipo` (20). Correção: uma migração alargando o
+      campo. Mexe na produção: espera o "pode corrigir" do responsável.
 - [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.
 
 **O raio-x e as referências:**

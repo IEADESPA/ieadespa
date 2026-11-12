@@ -130,17 +130,23 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
 - **Medido no LocalDB:** criar tudo ~3,5 min; rodar por cima ~8 s; `--apagar`
   ~2,5 min (quase tudo na remoção das pessoas, que confere ~400 chaves
   estrangeiras). No banco serverless da homologação conte alguns minutos a mais.
-- **O que ficou de fora, e por quê:** calendário (o ano é uma linha compartilhada,
-  sem marca, e os eventos seguem o ciclo anual da CLI com gatilho de imutabilidade:
-  o `--apagar` não devolveria o banco ao que era); vistorias de segurança/AVCB (o
-  banco proíbe apagar vistoria); cuidado pastoral (a rotina diária detecta o
-  afastamento a partir desta massa; forjar itens e notas, que não se apagam,
-  quebraria o refazer); consentimentos de comunicação, adesões de voluntário e termos
-  (aceites com a impressão digital do texto: a massa não forja assinatura); missões,
-  expansão, entidades, consagração e credencial (esteiras com decisões da CME, da CLI
-  e do Presidente — próxima rodada). Turmas da EBD e equipes das escalas nascem sem a
-  marca "com menores", como na tela. E-mails só em `@example.org` (domínio
-  reservado) e telefones com DDD (00).
+- **Segunda leva (12/11/2026, por ordem do responsável: tudo entra):** `calendario`
+  — 4 anos do calendário oficial (1.297 eventos com o ciclo da CLI e da Ceia,
+  presenças dos dirigentes, organizadores, convidados e 128 caixas de evento; nada
+  vai ao site); `cuidado` — 313 pedidos de oração (com o mural do site), 654 itens
+  da fila, 2.473 eventos, 224 notas pastorais. A massa usa a categoria
+  `OFERTA_CULTO_DEPARTAMENTO` quando a coluna já tem 30 letras (migração 172).
+- **O que fica para sempre (o banco proíbe apagar):** itens e eventos do cuidado
+  pastoral e os pedidos de oração. O `--apagar` não falha por eles: deixa essas
+  linhas e as peças fictícias de que dependem (cerca de 700 pessoas, as
+  congregações, Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões),
+  e o ano do calendário em planejamento que a massa criou. Rodar de novo recria o
+  resto por cima, sem duplicar.
+- **Ainda entrando, em partes:** missões, expansão, entidades, consagração,
+  credencial, AFM e seminário, discipulado, vistorias de segurança e setores
+  técnicos, termos e consentimentos dos membros, governança e o resto que tem tela.
+  Turmas da EBD e equipes das escalas nascem sem a marca "com menores", como na
+  tela. E-mails só em `@example.org` (domínio reservado) e telefones com DDD (00).
 - **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos
   papéis das migrações; na homologação o semeador pequeno as acrescenta.
 

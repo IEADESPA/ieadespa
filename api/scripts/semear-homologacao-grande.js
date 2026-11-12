@@ -11,7 +11,7 @@
 //   --apagar                remove SÓ o que este gerador cria (pelas marcas abaixo), numa transação; nada mais
 //   --contar                só conta as linhas fictícias por tabela
 //   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, reunioes, financeiro, prestacoes, distritos,
-//                           relatorios, psc, ebd, escalas
+//                           relatorios, psc, ebd, escalas, calendario, cuidado
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
@@ -63,12 +63,19 @@
 //   ebd: revistas, turmas por faixa etária, alunos, professores, um ano de lições, chamadas, ofertas e cadernetas (turmas sem a marca "com menores");
 //   escalas: equipes só de adultos, os domingos de 26 semanas antes a 4 depois da data-base (confirmados, recusas com o convite ao próximo, abertos).
 // O lote é por transação: cada bloco de pessoas e cada congregação de cada etapa entra inteiro ou não entra.
-// Fica de fora (e por quê): calendário (o ano é uma linha compartilhada, sem marca, e os eventos seguem o ciclo anual da CLI com gatilho de
-// imutabilidade: o --apagar não devolveria o banco ao que era); vistorias de segurança/AVCB (o banco proíbe apagar vistoria — gatilho); cuidado
-// pastoral (a rotina diária já detecta o afastamento a partir desta massa: forjar os itens e as notas, que não se apagam, quebraria o refazer);
-// consentimentos de comunicação, adesões de voluntário e termos (registros de aceite com a impressão digital do texto: a massa não forja
-// assinatura); missões, expansão, entidades, consagração e credencial (esteiras com decisões da CME, da CLI e do Presidente, ficam para uma
-// próxima rodada).
+//   calendario: 4 anos do calendário oficial (o ciclo da CLI e da Santa Ceia, batismos, assembleia, congressos, vigílias, cruzadas, eventos de
+//      Área e de congregação, com deferidos, indeferidos, cancelados, absorvidos e propostas tardias; o ano seguinte em planejamento), presença dos
+//      dirigentes na Ceia Geral, organizadores, convidados (ética e nada-consta), caixas de evento com lançamentos e destino do saldo; nada vai ao site;
+//   cuidado: pedidos de oração (boletim, risco, o mural do site), a fila do cuidado (afastamento das pessoas que se afastam, visitantes, novos
+//      convertidos, visitas, pós-internação), a história de cada item, notas pastorais e leituras.
+// O lote é por transação: cada bloco de pessoas e cada congregação (ou ano) de cada etapa entra inteiro ou não entra.
+//
+// O QUE FICA PARA SEMPRE (o banco proíbe apagar — gatilhos): itens e eventos do cuidado pastoral (CuidadoItens, CuidadoEventos) e os pedidos de
+// oração (PedidosOracao). O --apagar não falha por causa deles: deixa essas linhas e, pelas chaves estrangeiras, as peças fictícias de que elas
+// dependem — as pessoas citadas (≈700), as congregações, Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões. Também fica o ano do
+// calendário em planejamento que a massa criou (sem marca possível). As notas pastorais saem (com a marca de purga do próprio app). Rodar de novo
+// recria o resto em cima do que ficou, sem duplicar.
+// Fica de fora (e por quê): ver HOMOLOGACAO.md, "Massa grande" (as etapas da segunda leva entram em partes).
 "use strict";
 const crypto = require("crypto");
 const sql = require("mssql");
@@ -81,7 +88,7 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
@@ -951,7 +958,27 @@ const Q_SESSAO = `SELECT SessaoId FROM dbo.Sessoes WHERE (Descricao LIKE ${LIKE_
 // Regra: sai o que pertence às peças fictícias (congregações, turmas, equipes, lições...) e o que é da PRÓPRIA ficha da pessoa fictícia (liderança, histórico do
 // cargo, vínculos, rastros do login); uma linha que o app criou com a pessoa fictícia FORA das peças fictícias (um dízimo, um aluno, uma escala em outra
 // congregação, uma reunião...) faz o --apagar recusar inteiro e dizer a tabela.
+const Q_EVENTO = `SELECT EventoId FROM dbo.CalendarioEventos WHERE Titulo LIKE ${LIKE_M}`;
+const Q_NOTA = `SELECT NotaId FROM dbo.NotasPastorais WHERE MembroId ${M_PESSOA} OR AutorMembroId ${M_PESSOA} OR ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`;
+const PURGA = "EXEC sp_set_session_context N'cuidado_purga', 1; "; // a marca de sessão com que o próprio app apaga notas pastorais (gatilho TR_NotasPastorais_Imutavel)
+// O que o banco proíbe apagar (gatilhos): FICA, e prende as peças fictícias de que depende (ver apagar()).
+const PERMANENTES = [
+  ["CuidadoItens", `CongregacaoId IN (${Q_CONG})`],
+  ["CuidadoEventos", `ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`],
+  ["PedidosOracao", `CongregacaoId IN (${Q_CONG}) OR (Origem = N'SITE' AND Texto LIKE N'%(pedido fictício do mural do site)%')`]
+];
 const ALVOS = [
+  ["NotasPastoraisLeituras", `NotaId IN (${Q_NOTA}) OR MembroId ${M_PESSOA}`, false, PURGA],
+  ["NotasPastorais", `NotaId IN (${Q_NOTA})`, false, PURGA],
+  ["EventoCaixaDestinos", `EventoId IN (${Q_EVENTO})`],
+  ["EventoCaixaLancamentos", `EventoId IN (${Q_EVENTO})`],
+  ["EventoCaixas", `EventoId IN (${Q_EVENTO})`],
+  ["EventoConvidados", `EventoId IN (${Q_EVENTO})`],
+  ["EventoOrganizadores", `EventoId IN (${Q_EVENTO})`],
+  ["CalendarioPresencasDirigente", `EventoId IN (${Q_EVENTO})`],
+  ["CalendarioEventoAreas", `EventoId IN (${Q_EVENTO})`],
+  ["CalendarioEventos", `EventoId IN (${Q_EVENTO})`],
+  ["CalendarioAnos", `AtaReferencia LIKE ${LIKE_F} AND NOT EXISTS (SELECT 1 FROM dbo.CalendarioEventos ce WHERE ce.Ano = dbo.CalendarioAnos.Ano)`],
   ["PscRespostas", `AvaliacaoId IN (SELECT AvaliacaoId FROM dbo.PscAvaliacoes WHERE CongregacaoId IN (${Q_CONG}))`],
   ["PscReclassificacoes", `CongregacaoId IN (${Q_CONG})`],
   ["PscAvaliacoes", `CongregacaoId IN (${Q_CONG})`],
@@ -1018,7 +1045,7 @@ async function tabelasExistentes(pool) {
 async function contar(pool) {
   const existem = await tabelasExistentes(pool);
   const linhas = [];
-  for (const [tabela, cond] of ALVOS.slice().reverse()) {
+  for (const [tabela, cond] of PERMANENTES.concat(ALVOS.slice().reverse())) {
     if (!existem.has(tabela)) continue;
     const n = (await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${tabela} WHERE ${cond}`)).recordset[0].n;
     linhas.push([tabela, n]);
@@ -1030,21 +1057,50 @@ async function apagar(pool) {
   const feito = [];
   try {
     await emTransacao(pool, async (req) => {
-      for (const [tabela, cond] of ALVOS) {
+      // O que o banco proíbe apagar (gatilhos: itens e eventos do cuidado pastoral, pedidos de oração, vistorias...) FICA — e prende, para sempre, as
+      // peças fictícias de que essas linhas dependem (a pessoa, a congregação, a área, o bairro...): o fecho é calculado pelas chaves estrangeiras do
+      // próprio banco, a partir das linhas permanentes, subindo até não achar mais nada. Tudo o mais sai.
+      const pks = new Map((await ler(req, `SELECT t.name AS t, c.name AS c FROM sys.tables t JOIN sys.indexes i ON i.object_id = t.object_id AND i.is_primary_key = 1
+        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id JOIN sys.columns c ON c.object_id = t.object_id AND c.column_id = ic.column_id
+        WHERE (SELECT COUNT(*) FROM sys.index_columns x WHERE x.object_id = i.object_id AND x.index_id = i.index_id) = 1 AND TYPE_NAME(c.user_type_id) IN ('int', 'smallint')`)).map((x) => [x.t, x.c]));
+      await req().query("IF OBJECT_ID('tempdb..#Fixos') IS NOT NULL DROP TABLE #Fixos; CREATE TABLE #Fixos (Tabela SYSNAME NOT NULL, Id INT NOT NULL, PRIMARY KEY (Tabela, Id));");
+      for (const [tabela, cond] of PERMANENTES) {
+        if (!existem.has(tabela) || !pks.has(tabela)) continue;
+        await req().query(`INSERT INTO #Fixos (Tabela, Id) SELECT N'${tabela}', [${pks.get(tabela)}] FROM dbo.${tabela} WHERE ${cond}`);
+      }
+      const fks = await ler(req, `SELECT OBJECT_NAME(fc.parent_object_id) AS filho, COL_NAME(fc.parent_object_id, fc.parent_column_id) AS col, OBJECT_NAME(fc.referenced_object_id) AS pai
+        FROM sys.foreign_key_columns fc WHERE (SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fc.constraint_object_id) = 1`);
+      const alvosNomes = new Set(ALVOS.map((a) => a[0]));
+      for (let volta = 0; volta < 12; volta++) {
+        let novos = 0;
+        for (const fk of fks) {
+          if (!alvosNomes.has(fk.pai) || !pks.has(fk.filho) || !pks.has(fk.pai)) continue;
+          const r = await req().query(`INSERT INTO #Fixos (Tabela, Id) SELECT DISTINCT N'${fk.pai}', c.[${fk.col}] FROM dbo.[${fk.filho}] c
+            JOIN #Fixos f ON f.Tabela = N'${fk.filho}' AND f.Id = c.[${pks.get(fk.filho)}]
+            WHERE c.[${fk.col}] IS NOT NULL AND NOT EXISTS (SELECT 1 FROM #Fixos g WHERE g.Tabela = N'${fk.pai}' AND g.Id = c.[${fk.col}])`);
+          novos += r.rowsAffected.reduce((s, x) => s + x, 0);
+        }
+        if (!novos) break;
+      }
+      const fixos = (await ler(req, "SELECT Tabela, COUNT(*) AS n FROM #Fixos GROUP BY Tabela ORDER BY Tabela")).map((x) => `${x.Tabela}: ${x.n}`);
+      if (fixos.length) feito.push(`FICAM (o banco proíbe apagar, ou são peças de que isso depende) — ${fixos.join(", ")}`);
+      for (const [tabela, condBase, , prefixo] of ALVOS) {
         if (!existem.has(tabela)) continue;
+        const cond = pks.has(tabela) ? `(${condBase}) AND NOT EXISTS (SELECT 1 FROM #Fixos fx WHERE fx.Tabela = N'${tabela}' AND fx.Id = dbo.${tabela}.[${pks.get(tabela)}])` : condBase;
         // Em fatias (cada comando curto, longe do prazo do driver), todas na MESMA transação: ou sai tudo, ou nada. A pessoa é a mais cara (o banco confere
         // as ~400 chaves estrangeiras que apontam para MembroReferencia a cada linha).
         const fatia = tabela === "MembroReferencia" ? 1000 : 20000;
         const t0 = Date.now();
         let n = 0;
         for (;;) {
-          const r = await req().query(`DELETE TOP (${fatia}) FROM dbo.${tabela} WHERE ${cond}`);
+          const r = await req().query(`${prefixo || ""}DELETE TOP (${fatia}) FROM dbo.${tabela} WHERE ${cond}`);
           const k = r.rowsAffected.reduce((s, x) => s + x, 0);
           n += k;
           if (k < fatia) break;
         }
         if (n) feito.push(`${tabela}: ${n}${Date.now() - t0 > 2000 ? ` (${((Date.now() - t0) / 1000).toFixed(0)} s)` : ""}`);
       }
+      await req().query("EXEC sp_set_session_context N'cuidado_purga', NULL; DROP TABLE #Fixos;");
     });
   } catch (e) {
     const m = /table "([^"]+)", column '([^']+)'/i.exec(e.message || "");
@@ -1653,6 +1709,8 @@ async function etapaFinanceiro(pool, mod) {
   }
   const fornId = new Map((await ler(req0, `SELECT FornecedorId, CpfCnpj FROM dbo.Fornecedores WHERE CpfCnpj LIKE '${CNPJ_PREFIXO}%'`)).map((x) => [x.CpfCnpj, x.FornecedorId]));
   // Por congregação, numa transação: conciliações, fechamentos, lançamentos, saídas e aprovações. Congregação que já tem lançamento é pulada inteira.
+  // migração 172: com Tipo NVARCHAR(30) a oferta do culto de departamento vai na categoria própria (antes, 25 letras não cabiam em 20)
+  const tipoLargo = Number((await ler(req0, "SELECT COL_LENGTH('dbo.LancamentosTesouraria', 'Tipo') AS n"))[0].n) >= 60;
   const comLanc = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.LancamentosTesouraria WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
   const tot = { lanc: 0, fech: 0, conc: 0, saidas: 0, cong: 0 };
   const tesGeral = MATRICULA_MIN + 3;
@@ -1675,7 +1733,7 @@ async function etapaFinanceiro(pool, mod) {
       const dizId = new Map((await ler(req, `SELECT DizimistaId, MembroId FROM dbo.Dizimistas WHERE CongregacaoId = ${cid} AND MembroId IS NOT NULL`)).map((x) => [x.MembroId, x.DizimistaId]));
       await inserir(req, "LancamentosTesouraria", ["CongregacaoId", "DizimistaId", "NomeAvulso", "TermoNumero", "Tipo", "Descricao", "Valor", "FormaPagamento", "ValorPix",
         "MesReferencia", "FechamentoId", "RegistradoPor", "CriadoEm", "Status", "MotivoCancelamento", "CanceladoPor", "CanceladoEm", "ConciliacaoId", "Origem", "StatusConfirmacao"],
-      fin.lancs.map((l) => [cid, l.dizimista ? dizId.get(l.dizimista.matricula) || null : null, l.dizimista ? null : l.nomeAvulso || null, l.termo, l.tipo, l.descricao || null,
+      fin.lancs.map((l) => [cid, l.dizimista ? dizId.get(l.dizimista.matricula) || null : null, l.dizimista ? null : l.nomeAvulso || null, l.termo, l.tipo === "DEPARTAMENTO" && tipoLargo ? "OFERTA_CULTO_DEPARTAMENTO" : l.tipo, l.descricao || null,
         reais(l.valor), l.forma, l.valorPix ? reais(l.valorPix) : null, l.mes, l.fechado ? fechId.get(l.mes) || null : null, tes.matricula, l.criadoEm,
         l.cancelado ? "CANCELADO" : "ATIVO", l.cancelado ? "Lançado em duplicidade (dado fictício)." : null, l.cancelado ? tes.matricula : null,
         l.cancelado ? `${l.criadoEm.slice(0, 11)}23:59:00` : null, l.conciliado && !l.cancelado ? concId.get(l.mes) || null : null, "TESOUREIRO", "CONFIRMADO"]), 400);
@@ -1749,6 +1807,404 @@ async function etapaEbd(pool, mod) {
   return feito;
 }
 
+// ------------------------------------------------------------------ calendário oficial e eventos (v7.2/v7.4, migrações 114 e 116) ------------------------------------------------------------------
+// Do ano da data-base −2 ao +1. O ano que já existe no banco é respeitado (o status dos eventos segue o dele); o que a massa cria nasce com a ata marcada.
+// Ciclo do Art. 79 (REGRA, chave canônica: o "Gerar ciclo" do app as reconhece): a Santa Ceia (Geral em maio e outubro) e a CLI no último domingo. Propostas:
+// batismos, assembleia e congressos (Nível 1), vigílias, cruzadas e capacitação no campo (2), cruzadas e intercâmbios por Área (3), aniversários, campanhas e
+// cultos de ensino (4) e casamentos, 15 anos e formaturas (5) por congregação — sem choque entre eventos ativos (as regras de território e de Festividade).
+// Nos homologados: deferidos, indeferidos, cancelados, absorvidos e propostas tardias; no ano seguinte (planejamento): propostas abertas. Nada vai ao site
+// (PublicoNoSite = 0, sem SlugSite). Eventos de campo e de Área ganham organizadores, convidados (com ética e nada-consta quando exigem) e o caixa
+// (aberto, encerrado ou conferido, com lançamentos e o destino do saldo).
+const pad2 = (n) => String(n).padStart(2, "0");
+const diasDoMes = (ano, mes, dow) => { const out = []; for (let d = primeiroDiaMes(ano, mes); mesDe(d) === `${ano}-${pad2(mes)}`; d++) if (diaSemana(d) === dow) out.push(d); return out; };
+function gerarCalendario(mod, ano, statusAno) {
+  const r = criarRng(`calendario:${ano}`);
+  const cicloEm = statusAno === "PLANEJAMENTO" ? BASE - 10 : diaDe(`${ano - 1}-12-01`);
+  const consolidadoEm = diaDe(`${ano}-01-20`);
+  const homologadoEm = diasDoMes(ano, 1, 0).pop();
+  const evs = [], campo = new Set(), areaDias = new Map(), congDias = new Map();
+  const dias = (e) => { const out = []; for (let d = e.ini; d <= e.fim; d++) out.push(d); return out; };
+  const congsDaArea = (a) => mod.areas[a].congs;
+  const choca = (e) => dias(e).some((d) => {
+    if (campo.has(d)) return true;
+    if (e.abr === "CAMPO") return [...areaDias.values()].some((s) => s.has(d)) || [...congDias.values()].some((s) => s.has(d));
+    if (e.abr === "AREAS") return e.areas.some((a) => (areaDias.get(a) || new Set()).has(d) || congsDaArea(a).some((c) => (congDias.get(c.i) || new Set()).has(d)));
+    return (congDias.get(e.cong.i) || new Set()).has(d) || (areaDias.get(e.cong.area) || new Set()).has(d);
+  });
+  const marcar = (e) => dias(e).forEach((d) => {
+    if (e.abr === "CAMPO") campo.add(d);
+    else if (e.abr === "AREAS") e.areas.forEach((a) => { if (!areaDias.has(a)) areaDias.set(a, new Set()); areaDias.get(a).add(d); });
+    else { if (!congDias.has(e.cong.i)) congDias.set(e.cong.i, new Set()); congDias.get(e.cong.i).add(d); }
+  });
+  const lider = (papel, f) => mod.lideres.find((p) => p.lider.papel === papel && f(p.lider.escopo));
+  const add = (e) => {
+    e.areas = e.areas || [];
+    e.fim = e.fim || e.ini;
+    if (e.ini > diaDe(`${ano}-12-31`) || e.ini < diaDe(`${ano}-01-01`)) return;
+    if (e.origem === "REGRA") {
+      e.status = statusAno === "HOMOLOGADO" ? "HOMOLOGADO" : "DEFERIDO";
+      e.proposto = MATRICULA_MIN + 2; e.propostaEm = cicloEm; e.decididoEm = cicloEm; e.homologadoEm = e.status === "HOMOLOGADO" ? homologadoEm : null;
+      marcar(e); evs.push(e); return;
+    }
+    // a decisão (a do ano manda)
+    let st;
+    if (statusAno === "PLANEJAMENTO") st = "PROPOSTO";
+    else if (statusAno === "CONSOLIDADO") st = r.pesos([["DEFERIDO", 92], ["INDEFERIDO", 8]]);
+    else st = e.nivel === 1 ? r.pesos([["HOMOLOGADO", 96], ["CANCELADO", 4]]) : r.pesos([["HOMOLOGADO", 84], ["INDEFERIDO", 7], ["CANCELADO", 5], ["ABSORVIDO", 4]]);
+    const ativo = ["PROPOSTO", "DEFERIDO", "HOMOLOGADO"].includes(st);
+    if (ativo) {
+      for (let k = 0; k < 5 && choca(e); k++) { e.ini += 7; e.fim += 7; }
+      if (choca(e) || e.ini > diaDe(`${ano}-12-31`)) return;
+      marcar(e);
+    }
+    e.status = st;
+    const tardia = statusAno === "HOMOLOGADO" && st === "HOMOLOGADO" && e.nivel > 1 && e.ini - 40 > homologadoEm && r.chance(0.1);
+    if (statusAno === "PLANEJAMENTO") e.propostaEm = Math.min(BASE - 1, diaDe(`${ano - 1}-10-01`) + r.int(0, 45));
+    else if (tardia) e.propostaEm = Math.min(BASE - 1, e.ini - r.int(15, 40));
+    else e.propostaEm = diaDe(`${ano - 1}-11-01`) + r.int(0, 70);
+    if (e.propostaEm >= e.ini) e.propostaEm = e.ini - 20;
+    e.tardia = tardia;
+    if (st !== "PROPOSTO") {
+      e.decididoPor = tardia ? null : MATRICULA_MIN + 2;
+      e.decididoEm = tardia ? e.propostaEm : consolidadoEm;
+      if (st === "HOMOLOGADO" || st === "CANCELADO" || st === "ABSORVIDO") e.homologadoEm = tardia ? e.propostaEm : (statusAno === "HOMOLOGADO" ? homologadoEm : null);
+      if (st === "INDEFERIDO") { e.motivo = "DECISAO_SECRETARIA"; e.detalhe = "A data foi reservada para outra atividade da igreja (dado fictício)."; }
+      if (st === "ABSORVIDO") { e.motivo = "DECISAO_CLI"; e.detalhe = `Unificado com a programação geral (Resolução CLI nº ${r.int(1, 9)}/${ano}, fictícia)`; e.decididoEm = Math.min(BASE - 1, homologadoEm + r.int(20, 120)); }
+      if (st === "CANCELADO") { e.canceladoEm = Math.max(homologadoEm + 1, Math.min(BASE - 1, e.ini - r.int(3, 20))); e.canceladoPor = e.proposto; e.motivoCanc = "Cancelado pela organização: mudança de agenda (dado fictício)."; }
+    }
+    evs.push(e);
+  };
+  // 1) o ciclo (REGRA): Ceia e CLI no último domingo de cada mês
+  for (let mes = 1; mes <= 12; mes++) {
+    const dom = diasDoMes(ano, mes, 0).pop();
+    const geral = mes === 5 || mes === 10;
+    add({ codigo: geral ? "SANTA_CEIA_GERAL" : "SANTA_CEIA_LOCAL", nivel: 1, origem: "REGRA", chave: `CEIA:${ano}-${pad2(mes)}`, ini: dom, abr: "CAMPO", titulo: `Santa Ceia${geral ? " Geral" : ""} do Senhor` });
+    add({ codigo: "REUNIAO_CLI", nivel: 1, origem: "REGRA", chave: `CLI:${ano}-${pad2(mes)}`, ini: dom, abr: "CAMPO", hi: "14:00", hf: "17:00", orgao: "CLI", local: "Templo da Sede", titulo: "Reunião ordinária da CLI" });
+  }
+  // 2) campo (Nível 1 e 2), propostos pela Secretaria Geral
+  const sg = MATRICULA_MIN + 2;
+  const segundo = (mes, dow) => diasDoMes(ano, mes, dow)[1], primeiro = (mes, dow) => diasDoMes(ano, mes, dow)[0];
+  for (const mes of [3, 6, 11]) add({ codigo: "BATISMO", nivel: 1, origem: "PROPOSTA", ini: segundo(mes, 0), abr: "CAMPO", hi: "09:00", hf: "12:00", proposto: sg, titulo: `Batismo nas águas — ${pad2(mes)}/${ano}` });
+  add({ codigo: "ASSEMBLEIA_GERAL", nivel: 1, origem: "PROPOSTA", ini: segundo(3, 6), abr: "CAMPO", hi: "09:00", hf: "13:00", proposto: sg, local: "Templo da Sede", titulo: `Assembleia Geral Ordinária ${ano}` });
+  add({ codigo: "CONGRESSO_UNIFICADO_DEPARTAMENTOS", nivel: 1, origem: "PROPOSTA", ini: segundo(7, 5), fim: segundo(7, 5) + 2, abr: "CAMPO", proposto: sg, titulo: `Congresso Unificado dos Departamentos ${ano}` });
+  add({ codigo: "CONGRESSO_UNIFICADO_SECRETARIAS", nivel: 1, origem: "PROPOSTA", ini: segundo(9, 5), fim: segundo(9, 5) + 1, abr: "CAMPO", proposto: sg, titulo: `Congresso das Secretarias ${ano}` });
+  for (const mes of [2, 8]) add({ codigo: "VIGILIA_GERAL", nivel: 2, origem: "PROPOSTA", ini: primeiro(mes, 5), abr: "CAMPO", hi: "22:00", proposto: sg, titulo: `Vigília Geral — ${pad2(mes)}/${ano}` });
+  for (const mes of [4, 10]) add({ codigo: "CRUZADA_GERAL", nivel: 2, origem: "PROPOSTA", ini: primeiro(mes, 6), abr: "CAMPO", hi: "19:00", hf: "21:30", proposto: sg, titulo: `Cruzada Evangelística Geral — ${pad2(mes)}/${ano}` });
+  for (const mes of [2, 6, 9]) add({ codigo: "CAPACITACAO_LIDERANCA", nivel: 2, origem: "PROPOSTA", ini: primeiro(mes, 6), abr: "CAMPO", hi: "08:00", hf: "12:00", proposto: sg, titulo: `Capacitação de Lideranças — ${pad2(mes)}/${ano}` });
+  // 3) Áreas: um evento a cada 3 meses por Área (3º sábado) e o pré-congresso de cada Região
+  mod.areas.forEach((a, ai) => {
+    const pa = lider("Pastor de Área", (e) => e.area === a);
+    for (let mes = 1 + (ai % 3); mes <= 12; mes += 3) {
+      const codigo = r.pick(["CRUZADA_AREA", "INTERCAMBIO_PULPITO", "REUNIAO_ADMINISTRATIVA_AREA"]);
+      const nome = { CRUZADA_AREA: "Cruzada Evangelística", INTERCAMBIO_PULPITO: "Intercâmbio de Púlpito", REUNIAO_ADMINISTRATIVA_AREA: "Reunião Administrativa" }[codigo];
+      add({ codigo, nivel: 3, origem: "PROPOSTA", ini: diasDoMes(ano, mes, 6)[2], abr: "AREAS", areas: [ai], hi: "19:00", hf: "21:30", proposto: pa ? pa.matricula : sg, titulo: `${nome} — ${a.nome.replace(SUF_F, "")}` });
+    }
+  });
+  mod.regioes.forEach((g, gi) => {
+    const doReg = mod.areas.filter((a) => a.regiao === g.i).map((a) => a.i);
+    add({ codigo: "PRE_CONGRESSO_REGIONAL", nivel: 3, origem: "PROPOSTA", ini: diasDoMes(ano, 6, 6)[2] - 7 + gi * 0, abr: "AREAS", areas: doReg, hi: "18:30", hf: "21:30", proposto: sg, titulo: `Pré-congresso — ${g.nome.replace(SUF_F, "")}` });
+  });
+  // 4) e 5) congregações: aniversário (Festividade: semanas diferentes na mesma Área), campanhas de oração, culto de ensino, casamentos, 15 anos, formaturas
+  for (const c of mod.congs) {
+    const dir = lider("Dirigente de Congregação", (e) => e.cong === c);
+    const prop = dir ? dir.matricula : sg;
+    const j = mod.areas[c.area].congs.indexOf(c);
+    const nomeC = c.nome.replace(SUF_F, "");
+    add({ codigo: "ANIVERSARIO_CONGREGACAO", nivel: 4, origem: "PROPOSTA", ini: diaDe(`${ano}-01-01`) + 7 * (3 + j * 6) + ((5 - diaSemana(diaDe(`${ano}-01-01`)) + 7) % 7), abr: "CONGREGACAO", cong: c, hi: "19:00", hf: "21:30", proposto: prop, titulo: `Aniversário da Congregação ${nomeC}` });
+    for (const mes of [r.int(1, 6), r.int(7, 12)]) add({ codigo: "CAMPANHA_ORACAO", nivel: 4, origem: "PROPOSTA", ini: diasDoMes(ano, mes, 3)[1], fim: diasDoMes(ano, mes, 3)[1] + 4, abr: "CONGREGACAO", cong: c, hi: "19:30", hf: "21:00", proposto: prop, titulo: `Campanha de oração — ${nomeC} — ${pad2(mes)}/${ano}` });
+    const mesE = r.int(2, 11);
+    add({ codigo: "CULTO_ENSINO_FAMILIA", nivel: 4, origem: "PROPOSTA", ini: diasDoMes(ano, mesE, 4)[2], abr: "CONGREGACAO", cong: c, hi: "19:30", hf: "21:00", proposto: prop, titulo: `Culto de ensino para a família — ${nomeC} — ${pad2(mesE)}/${ano}` });
+    for (let k = r.int(0, 3); k > 0; k--) {
+      const mes = r.int(1, 12);
+      const codigo = r.pick(["CASAMENTO_BODAS", "CASAMENTO_BODAS", "ANIVERSARIO_15_ANOS", "FORMATURA"]);
+      const nome = { CASAMENTO_BODAS: "Casamento", ANIVERSARIO_15_ANOS: "Culto de 15 anos", FORMATURA: "Culto de formatura" }[codigo];
+      add({ codigo, nivel: 5, origem: "PROPOSTA", ini: diasDoMes(ano, mes, 6)[r.pick([1, 3])] || diasDoMes(ano, mes, 6)[1], abr: "CONGREGACAO", cong: c, hi: "18:00", hf: "20:00", proposto: prop, titulo: `${nome} — ${nomeC} — ${pad2(mes)}/${ano} (${k})` });
+    }
+  }
+  return { evs, cicloEm, consolidadoEm, homologadoEm };
+}
+async function etapaCalendario(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const tipos = new Map((await ler(req0, "SELECT TipoId, Codigo, Nivel FROM dbo.CalendarioTiposEvento")).map((x) => [x.Codigo, x]));
+  if (!tipos.size) return ["(sem catálogo de tipos de evento: calendário pulado)"];
+  const orgao = new Map((await ler(req0, "SELECT OrgaoId, Sigla FROM dbo.Orgaos")).map((x) => [x.Sigla, x.OrgaoId]));
+  const anos = [ANO_BASE - 2, ANO_BASE - 1, ANO_BASE, ANO_BASE + 1];
+  const statusAno = new Map((await ler(req0, `SELECT Ano, Status FROM dbo.CalendarioAnos WHERE Ano IN (${anos.join(",")})`)).map((x) => [x.Ano, x.Status]));
+  const jaTem = new Set((await ler(req0, `SELECT DISTINCT Ano FROM dbo.CalendarioEventos WHERE Titulo LIKE ${LIKE_M}`)).map((x) => x.Ano));
+  const chaves = new Set((await ler(req0, "SELECT RegraChave FROM dbo.CalendarioEventos WHERE RegraChave IS NOT NULL")).map((x) => x.RegraChave));
+  const tot = { anos: 0, novosAnos: 0, ev: 0, pres: 0, org: 0, conv: 0, caixas: 0, lanc: 0 };
+  for (const ano of anos) {
+    if (jaTem.has(ano)) continue;
+    const st = statusAno.get(ano) || (ano <= ANO_BASE ? "HOMOLOGADO" : "PLANEJAMENTO");
+    const cal = gerarCalendario(mod, ano, st);
+    const r = criarRng(`eventos:${ano}`);
+    const evs = cal.evs.filter((e) => tipos.has(e.codigo) && !(e.chave && chaves.has(e.chave)));
+    await emTransacao(pool, async (req) => {
+      if (!statusAno.has(ano)) {
+        const homolog = st === "HOMOLOGADO";
+        await inserir(req, "CalendarioAnos", ["Ano", "Status", "PrazoPropostas", "CicloGeradoEm", "ConsolidadoPorMembroId", "ConsolidadoEm", "HomologadoPorMembroId", "HomologadoEm", "AtaReferencia", "CriadoEm"],
+          [[ano, st, `${ano}-01-15`, momento(cal.cicloEm, 13), homolog ? MATRICULA_MIN + 2 : null, homolog ? momento(cal.consolidadoEm, 14) : null, homolog ? MATRICULA_MIN + 1 : null,
+            homolog ? momento(cal.homologadoEm, 20) : null, homolog ? `Ata da CLI de ${isoDe(cal.homologadoEm).split("-").reverse().join("/")}${SUF_F}` : null, momento(cal.cicloEm - 1, 12)]]);
+        tot.novosAnos++;
+      }
+      const hm = (h) => (h ? `${h}:00` : null);
+      await inserir(req, "CalendarioEventos", ["Ano", "TipoId", "Nivel", "Titulo", "Descricao", "DataInicio", "DataFim", "HoraInicio", "HoraFim", "Abrangencia", "CongregacaoId", "Local", "OrgaoId",
+        "Origem", "RegraChave", "Status", "Tardia", "MotivoIndeferimento", "DetalheDecisao", "PropostoPorMembroId", "PropostaEm", "DecididoPorMembroId", "DecididoEm", "HomologadoEm",
+        "CanceladoPorMembroId", "CanceladoEm", "MotivoCancelamento", "PublicoNoSite", "AtualizadoEm"],
+      evs.map((e, k) => [ano, tipos.get(e.codigo).TipoId, tipos.get(e.codigo).Nivel, `${e.titulo}${SUF_M}`, "Evento da massa fictícia da homologação.", isoDe(e.ini), isoDe(e.fim), hm(e.hi), hm(e.hf), e.abr,
+        e.abr === "CONGREGACAO" ? m.cong.get(e.cong.nome) : null, e.local || null, e.orgao ? orgao.get(e.orgao) || null : null, e.origem, e.chave || null, e.status, !!e.tardia,
+        e.motivo || null, e.detalhe || null, e.proposto, momento(e.propostaEm, 13, Math.floor(k / 60) % 60, k % 60), e.decididoPor || null, e.decididoEm ? momento(e.decididoEm, 14) : null,
+        e.homologadoEm ? momento(e.homologadoEm, 20, 30) : null, e.canceladoPor || null, e.canceladoEm ? momento(e.canceladoEm, 15) : null, e.motivoCanc || null, false,
+        momento(e.canceladoEm || e.homologadoEm || e.decididoEm || e.propostaEm, 21)]), 300);
+      const ids = new Map((await ler(req, `SELECT EventoId, Titulo, CONVERT(char(10), DataInicio, 23) AS d, ISNULL(CongregacaoId, 0) AS c FROM dbo.CalendarioEventos WHERE Ano = ${ano} AND Titulo LIKE ${LIKE_M}`))
+        .map((x) => [`${x.Titulo}|${x.d}|${x.c}`, x.EventoId]));
+      const idDe = (e) => ids.get(`${e.titulo}${SUF_M}|${isoDe(e.ini)}|${e.abr === "CONGREGACAO" ? m.cong.get(e.cong.nome) : 0}`);
+      await inserir(req, "CalendarioEventoAreas", ["EventoId", "AreaId"], evs.filter((e) => e.abr === "AREAS").flatMap((e) => e.areas.map((a) => [idDe(e), m.area.get(mod.areas[a].nome)])));
+      // presença do dirigente na Santa Ceia Geral já acontecida
+      const pres = [];
+      for (const e of evs.filter((x) => x.codigo === "SANTA_CEIA_GERAL" && ["DEFERIDO", "HOMOLOGADO"].includes(x.status) && x.ini <= BASE)) {
+        for (const c of mod.congs) {
+          const s = r.pesos([["PRESENTE", 85], ["AUSENTE_JUSTIFICADA", 10], ["AUSENTE_INJUSTIFICADA", 5]]);
+          pres.push([idDe(e), m.cong.get(c.nome), s, s === "AUSENTE_JUSTIFICADA" ? "Viagem de trabalho comunicada à Secretaria (dado fictício)." : null, MATRICULA_MIN + 2, momento(e.ini + 1, 15)]);
+        }
+      }
+      await inserir(req, "CalendarioPresencasDirigente", ["EventoId", "CongregacaoId", "Situacao", "Justificativa", "RegistradoPorMembroId", "RegistradoEm"], pres, 1000);
+      // o painel de eventos: organizadores, convidados e caixa dos ativos de campo e de Área (fora o ciclo)
+      const orgs = [], convs = [], caixas = [], lancs = [], destinos = [], fechar = [];
+      const ativos = evs.filter((e) => e.origem === "PROPOSTA" && ["PROPOSTO", "DEFERIDO", "HOMOLOGADO"].includes(e.status) && (e.nivel <= 3 || e.abr !== "CONGREGACAO"));
+      for (const e of ativos) {
+        const eid = idDe(e);
+        const base = e.abr === "AREAS" ? mod.areas[e.areas[0]].congs[0] : mod.congs[0];
+        const cands = base.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 21 && !p.lider && !p.assento);
+        if (cands.length < 2) continue;
+        const o = r.pick(cands); let t = r.pick(cands); if (t === o) t = cands[(cands.indexOf(o) + 1) % cands.length];
+        const designado = Math.min(BASE - 1, (e.decididoEm || e.propostaEm) + r.int(1, 10));
+        orgs.push([eid, o.matricula, "ORGANIZADOR", e.proposto, momento(designado, 15)], [eid, t.matricula, "TESOUREIRO", e.proposto, momento(designado, 15, 5)]);
+        for (let k = r.int(1, 3); k > 0; k--) {
+          const tipo = r.pick(["PRELETOR", "PRELETOR", "CANTOR", "BANDA"]);
+          const nome = tipo === "BANDA" ? `Banda ${r.pick(["Louvor Eterno", "Vozes do Céu", "Novo Cântico", "Ágape"])}${SUF_F}` : `${tipo === "PRELETOR" ? "Pr." : "Cantor(a)"} ${r.pick(NOMES_M.concat(NOMES_F))} ${r.pick(SOBRENOMES)}${SUF_M}`;
+          const rep = r.chance(0.8), etica = !rep, nada = e.nivel <= 2;
+          const submetido = Math.min(BASE - 1, designado + r.int(1, 5));
+          const sit = e.status === "PROPOSTO" ? r.pick(["RASCUNHO", "EM_ANALISE"]) : (submetido + 4 < BASE && (!etica || e.ini - submetido >= 10)) ? r.pesos([["AUTORIZADO", 92], ["CANCELADO", 5], ["VETADO", etica || nada ? 3 : 0]]) : "EM_ANALISE";
+          const sub = sit !== "RASCUNHO", parecer = sit === "AUTORIZADO" || sit === "VETADO" || sit === "CANCELADO";
+          const veta = sit === "VETADO";
+          convs.push([eid, nome, tipo, rep ? null : "Ministério Exemplo (fictício)", null, rep, false, sit, sub ? etica : false, sub ? nada : false, sub ? momento(submetido, 16) : null, sub ? o.matricula : null,
+            parecer && etica ? (veta ? "DESFAVORAVEL" : "FAVORAVEL") : null, parecer && etica && veta ? "Testemunho público incompatível com a doutrina (dado fictício)." : null,
+            parecer && etica ? MATRICULA_MIN + 1 : null, parecer && etica ? momento(submetido + 2, 10) : null,
+            parecer && nada ? (veta && !etica ? "NEGADO" : "CONCEDIDO") : null, parecer && nada && veta && !etica ? "Pendência registrada na convenção de origem (dado fictício)." : null,
+            parecer && nada ? MATRICULA_MIN + 1 : null, parecer && nada ? momento(submetido + 3, 10) : null,
+            sit === "AUTORIZADO" || sit === "CANCELADO" ? momento(submetido + 4, 11) : null, sit === "AUTORIZADO" || sit === "CANCELADO" ? MATRICULA_MIN + 1 : null,
+            sit === "CANCELADO" ? momento(Math.min(BASE - 1, submetido + 6), 12) : null, sit === "CANCELADO" ? o.matricula : null, sit === "CANCELADO" ? "A agenda do convidado mudou (dado fictício)." : null,
+            o.matricula, momento(designado, 16)]);
+        }
+        // caixa: só evento de campo ou de Área, deferido ou homologado, já com data
+        if (e.abr === "CONGREGACAO" || e.status === "PROPOSTO" || e.ini > BASE) continue;
+        const abertoEm = Math.max(e.ini - 30, (e.decididoEm || e.propostaEm) + 1);
+        caixas.push([eid, "ABERTO", momento(abertoEm, 14), t.matricula, momento(abertoEm, 14), t.matricula, isoDe(e.fim + 15), 1]);
+        let ent = 0, sai = 0;
+        const ultimo = Math.min(BASE, e.fim + 10);
+        for (let k = r.int(2, 6); k > 0; k--) {
+          const v = r.int(80, 2500) * 100 + r.int(0, 99); ent += v;
+          lancs.push([eid, "ENTRADA", r.pick(["OFERTA_VOLUNTARIA", "OFERTA_VOLUNTARIA", "VENDAS_CANTINA", "CAMPANHA"]), reais(v), isoDe(Math.min(ultimo, e.ini + r.int(0, e.fim - e.ini))), "Entrada do evento (dado fictício).", null, t.matricula, momento(Math.min(ultimo, e.fim), 22)]);
+        }
+        for (let k = r.int(1, 5); k > 0; k--) {
+          const v = r.int(50, 1800) * 100; sai += v;
+          lancs.push([eid, "SAIDA", r.pick(["ESTRUTURA", "ALIMENTACAO", "SOM_E_MIDIA", "OFERTA_A_CONVIDADO", "MATERIAL", "TRANSPORTE"]), reais(v), isoDe(Math.max(abertoEm, e.ini - r.int(0, 20))),
+            "Despesa do evento (dado fictício).", `NF-FICT-${eid}-${k}`, t.matricula, momento(Math.max(abertoEm, e.ini - 1), 12)]);
+        }
+        if (e.fim + 20 < BASE) fechar.push({ eid, ent, sai, encerrado: Math.min(BASE - 2, e.fim + r.int(3, 14)), por: t.matricula, conferir: r.chance(0.8) });
+      }
+      await inserir(req, "EventoOrganizadores", ["EventoId", "MembroId", "Papel", "DesignadoPorMembroId", "DesignadoEm"], orgs, 1000);
+      await inserir(req, "EventoConvidados", ["EventoId", "Nome", "Tipo", "MinisterioOrigem", "Contato", "ReputacaoConhecida", "DivulgacaoAutorizada", "Status", "ExigeEtica", "ExigeNadaConsta",
+        "SubmetidoEm", "SubmetidoPorMembroId", "EticaParecer", "EticaMotivo", "EticaPorMembroId", "EticaEm", "NadaConsta", "NadaConstaMotivo", "NadaConstaPorMembroId", "NadaConstaEm",
+        "OficializadoEm", "OficializadoPorMembroId", "CanceladoEm", "CanceladoPorMembroId", "MotivoCancelamento", "CriadoPorMembroId", "CriadoEm"], convs, 300);
+      await inserir(req, "EventoCaixas", ["EventoId", "Status", "AbertoEm", "AbertoPorMembroId", "DeclaracaoSemContaEm", "DeclaracaoSemContaPorMembroId", "PrazoEncerramentoEm", "Ciclo"], caixas);
+      // os lançamentos entram com o caixa aberto (gatilho TR_EventoCaixaLancamentos_SoAberto); só depois o caixa é encerrado e conferido
+      await inserir(req, "EventoCaixaLancamentos", ["EventoId", "Tipo", "Categoria", "Valor", "DataLancamento", "Descricao", "Comprovante", "RegistradoPorMembroId", "RegistradoEm"], lancs, 1000);
+      for (const f of fechar) {
+        const saldo = f.ent - f.sai;
+        await req().query(`UPDATE dbo.EventoCaixas SET Status = N'${f.conferir ? "CONFERIDO" : "ENCERRADO"}', EncerradoEm = '${momento(f.encerrado, 18)}', EncerradoPorMembroId = ${f.por},
+          TotalEntradas = ${(f.ent / 100).toFixed(2)}, TotalSaidas = ${(f.sai / 100).toFixed(2)}, Saldo = ${(saldo / 100).toFixed(2)},
+          JustificativaDeficit = ${saldo < 0 ? lit("As despesas passaram das entradas; a diferença foi coberta pela Sede (dado fictício).") : "NULL"},
+          ConferidoEm = ${f.conferir ? `'${momento(f.encerrado + 1, 15)}'` : "NULL"}, ConferidoPorMembroId = ${f.conferir ? MATRICULA_MIN + 3 : "NULL"} WHERE EventoId = ${f.eid}`);
+        if (saldo > 0) destinos.push([f.eid, "RECOLHIDO_SEDE", reais(saldo), isoDe(f.encerrado), `DEP-FICT-${f.eid}`, null, momento(f.encerrado, 19)]);
+      }
+      await inserir(req, "EventoCaixaDestinos", ["EventoId", "Tipo", "Valor", "DataDestino", "Comprovante", "Descricao", "RegistradoEm"], destinos);
+      tot.anos++; tot.ev += evs.length; tot.pres += pres.length; tot.org += orgs.length; tot.conv += convs.length; tot.caixas += caixas.length; tot.lanc += lancs.length;
+    });
+  }
+  return tot.anos ? [`calendário de ${tot.anos} anos (${tot.novosAnos} anos criados): ${tot.ev} eventos, ${tot.pres} presenças de dirigente na Ceia Geral, ${tot.org} organizadores, ${tot.conv} convidados, ${tot.caixas} caixas com ${tot.lanc} lançamentos`] : [];
+}
+
+// ------------------------------------------------------------------ cuidado pastoral (v7.11, migração 148; mural do site, 149) ------------------------------------------------------------------
+// Por congregação: pedidos de oração (moderados para o boletim, não publicados, aguardando; alguns com sinal de risco e o item urgente), e a fila do
+// cuidado: afastamento detectado das pessoas que estão se afastando (o mesmo padrão da massa), visitantes, novos convertidos, pedidos de visita e
+// pós-internação, pedidos de oração com contato — abertos (no prazo ou já subidos à Área), concluídos e cancelados, com a história (criado, atribuído,
+// contatos e visitas com acompanhante, escalonado, encerrado), notas pastorais nos três níveis de sigilo e quem as leu. Mais alguns pedidos do mural do site.
+// PERMANENTE (gatilhos): itens, eventos e pedidos não se apagam — prendem a pessoa e a congregação. As notas e as leituras saem pela marca de purga do app.
+const TEXTOS_PEDIDO = { SAUDE: "Peço oração pela minha saúde; vou fazer exames nesta semana.", FAMILIA: "Peço oração pela paz na minha família.", TRABALHO: "Peço oração por uma porta de emprego.",
+  LUTO: "Peço oração pela família que perdeu um ente querido.", ESPIRITUAL: "Peço oração para crescer na fé e na oração.", GRATIDAO: "Quero agradecer a Deus pela cura recebida.", OUTRO: "Peço oração por um pedido especial." };
+function gerarCuidado(mod, c) {
+  const r = criarRng(`cuidado:${c.i}`);
+  const dir = mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+  const pa = mod.lideres.find((p) => p.lider.papel === "Pastor de Área" && p.lider.escopo.area === mod.areas[c.area]);
+  const ativos = c.pessoas.filter((p) => p.status === "ATIVO" && p.idade >= 14 && p !== dir);
+  const pedidos = [], itens = [];
+  let seq = 0;
+  const nomeCong = c.nome.replace(SUF_F, "");
+  // pedidos de oração do último ano
+  for (let k = r.int(4, 10); k > 0 && ativos.length; k--) {
+    const sol = r.pick(ativos);
+    const cat = r.pick(Object.keys(TEXTOS_PEDIDO));
+    const para = cat === "LUTO" || r.chance(0.3) ? "OUTRA_PESSOA" : "PROPRIO";
+    const criado = BASE - r.int(1, 360);
+    const viaLider = r.chance(0.25) && dir;
+    const risco = c.tendencia === "CAI" && r.chance(0.06);
+    const quer = risco || r.chance(0.3);
+    const pode = !risco && r.chance(0.7);
+    let mod_ = risco ? r.pick(["AGUARDANDO", "NAO_PUBLICAR"]) : criado > BASE - 10 ? "AGUARDANDO" : pode ? r.pesos([["APROVADO", 75], ["NAO_PUBLICAR", 25]]) : "NAO_PUBLICAR";
+    const moderado = mod_ === "AGUARDANDO" ? null : criado + r.int(0, 3);
+    const tb = mod_ === "APROVADO" ? (cat === "GRATIDAO" ? `Alguém da Congregação ${nomeCong} agradece a Deus e pede que a igreja agradeça junto.` : `Alguém da Congregação ${nomeCong} pede oração ${para === "OUTRA_PESSOA" ? "por uma pessoa querida" : cat === "SAUDE" ? "pela saúde" : "por um pedido especial"}.`).slice(0, 200) : null;
+    const p = { seq: seq++, sol, para, cat, criado, viaLider, risco, quer, pode, moderacao: mod_, moderado, tb, texto: risco ? "Estou num momento muito difícil e às vezes penso em desistir de tudo (texto fictício de teste)." : `${TEXTOS_PEDIDO[cat]} (pedido fictício)` };
+    pedidos.push(p);
+    if (quer) itens.push({ tipo: "PEDIDO_ORACAO", membro: sol, origem: "PEDIDO_ORACAO", pedido: p, criado, urgente: risco, motivo: risco ? "Pedido de oração com SINAL DE RISCO (o texto está em Pedidos de oração → Sinal de risco)." : `Pedido de oração: ${cat === "SAUDE" ? "Saúde" : "Família e outros"} (pediu contato).`, prazoDias: risco ? 1 : 3 });
+  }
+  // afastamento detectado (as pessoas da massa que estão se afastando)
+  for (const p of c.pessoas.filter((x) => x.evasao && x.status === "ATIVO" && x.situacao !== "SEM_COMUNHAO")) {
+    const criado = p.evasao.inicio + r.int(42, 70);
+    if (criado > BASE - 2) continue;
+    itens.push({ tipo: "AFASTAMENTO", membro: p, origem: "DETECCAO", criado, motivo: "A frequência caiu em relação ao costume da própria pessoa.", resumo: `EBD e reuniões: antes ${r.int(16, 22)} de 24 (${r.int(70, 92)}%); nas últimas 6 semanas ${r.int(0, 1)} de 6 (${r.int(0, 17)}%).`, prazoDias: 14 });
+  }
+  // visitantes, novos convertidos, visitas e pós-internação
+  for (let k = r.int(2, 6); k > 0; k--) itens.push({ tipo: "VISITANTE", nome: `${r.pick(NOMES_M.concat(NOMES_F))} ${r.pick(SOBRENOMES)} (visitante fictício)`, origem: "LIDERANCA", criado: BASE - r.int(2, 330), motivo: "Visitou o culto de domingo e deixou o contato.", prazoDias: 2 });
+  for (const p of c.pessoas.filter((x) => x.status === "ATIVO" && x.forma === "BATISMO" && x.batismo > BASE - 200)) itens.push({ tipo: "NOVO_CONVERTIDO", membro: p, origem: "LIDERANCA", criado: p.batismo + 1, motivo: "Batizado recentemente: acompanhar os primeiros passos.", prazoDias: 7 });
+  const idosos = c.pessoas.filter((x) => x.status === "ATIVO" && x.idade >= 60 && x !== dir);
+  for (let k = Math.min(idosos.length, r.int(0, 3)); k > 0; k--) {
+    const p = r.pick(idosos);
+    const tipo = r.chance(0.5) ? "PEDIDO_VISITA" : "POS_INTERNACAO";
+    itens.push({ tipo, membro: p, origem: r.chance(0.5) ? "PEDIDO_MEMBRO" : "LIDERANCA", criado: BASE - r.int(3, 300), motivo: tipo === "PEDIDO_VISITA" ? "Pediu uma visita em casa — Melhor contato/horário: à tarde." : "Teve alta do hospital e pediu visita.", prazoDias: tipo === "PEDIDO_VISITA" ? 7 : 3 });
+  }
+  // desfecho de cada item (um aberto por pessoa e tipo); a história de cada um
+  const abertos = new Set();
+  for (const it of itens) {
+    it.seq = seq++;
+    const chave = it.membro ? `${it.tipo}:${it.membro.matricula}` : null;
+    const recente = it.criado > BASE - 25;
+    let status = recente ? "ABERTO" : r.pesos([["CONCLUIDO", 80], ["ABERTO", 12], ["CANCELADO", 8]]);
+    if (it.urgente && status === "CANCELADO") status = "CONCLUIDO";
+    if (status === "ABERTO" && chave) { if (abertos.has(chave)) status = "CONCLUIDO"; else abertos.add(chave); }
+    it.status = status;
+    it.responsavel = dir && it.membro !== dir ? dir : null;
+    it.nivel = it.responsavel ? "CONGREGACAO" : "AREA";
+    it.prazo = it.criado + it.prazoDias;
+    it.eventos = [{ tipo: "CRIADO", membro: it.origem === "DETECCAO" ? null : it.origem === "PEDIDO_MEMBRO" ? it.membro : dir, em: it.criado, prazo: it.prazo }];
+    if (it.responsavel) it.eventos.push({ tipo: "ATRIBUIDO", membro: null, em: it.criado, resp: it.responsavel });
+    if (status === "ABERTO" && it.prazo < BASE) {
+      // venceu sem contato: subiu um degrau (a rotina das 7h faz isto todo dia)
+      it.eventos.push({ tipo: "ESCALONADO", membro: null, em: it.prazo + 1, de: it.nivel, para: "AREA", prazo: it.prazo + 4 });
+      it.nivel = "AREA"; it.escal = 1; it.prazo = it.prazo + 4;
+    }
+    if (status !== "ABERTO" || r.chance(0.5)) {
+      const visita = it.tipo === "PEDIDO_VISITA" || it.tipo === "POS_INTERNACAO";
+      const forma = visita ? (it.tipo === "POS_INTERNACAO" ? "VISITA_HOSPITAL" : "VISITA_LAR") : r.pick(["LIGACAO", "MENSAGEM", "NO_CULTO"]);
+      const em = Math.min(BASE - 1, it.criado + r.int(1, Math.max(1, it.prazoDias)));
+      const conseguiu = r.chance(0.8);
+      const acomp = visita ? `${r.pick(NOMES_M.concat(NOMES_F))} ${r.pick(SOBRENOMES)}` : null;
+      it.eventos.push({ tipo: "CONTATO", membro: it.responsavel || pa || null, em, forma, conseguiu, acomp, obs: "Conversa de acompanhamento (dado fictício)." });
+      if (conseguiu) it.primeiroContato = em;
+    }
+    if (status !== "ABERTO") {
+      it.encerrado = Math.min(BASE - 1, it.criado + r.int(2, 30));
+      it.desfecho = status === "CANCELADO" ? r.pick(["DUPLICADO", "ENGANO"]) : it.tipo === "AFASTAMENTO" ? r.pick(["ACOMPANHADO", "INTEGRADO", "NAO_LOCALIZADO", "RECUSOU_CONTATO"]) : r.pick(["ACOMPANHADO", "INTEGRADO", "ENCAMINHADO"]);
+      it.encerradoPor = it.responsavel || (pa || null);
+      it.eventos.push({ tipo: status === "CANCELADO" ? "CANCELADO" : "CONCLUIDO", membro: it.encerradoPor, em: it.encerrado, obs: status === "CANCELADO" ? "Registrado em duplicidade (dado fictício)." : null });
+    }
+    it.eventos.sort((a, b) => a.em - b.em);
+  }
+  // notas pastorais (o autor é o Dirigente ou o Pastor de Área; nunca sobre si mesmo) e as leituras
+  const notas = [];
+  for (const it of itens) {
+    if (!r.chance(0.35)) continue;
+    const autor = r.chance(0.6) && dir && it.membro !== dir ? dir : pa;
+    if (!autor || it.membro === autor) continue;
+    const nivel = r.pesos([["EQUIPE", 50], ["LIDERANCA", 35], ["PASTORAL", 15]]);
+    const nota = { seq: seq++, item: it, autor, nivel, em: Math.min(BASE - 1, it.criado + r.int(1, 20)), texto: `${nivel === "PASTORAL" ? "Conversa reservada" : "Acompanhamento"}: a pessoa está sendo cuidada; retomar o contato em breve (nota fictícia).` };
+    nota.leitores = [pa, mod.lideres.find((p) => p.lider.papel === "Secretário Geral")].filter((x) => x && x !== autor && x !== it.membro && (nivel !== "PASTORAL" || x.cargo === "PASTOR")).filter(() => r.chance(0.6));
+    notas.push(nota);
+  }
+  return { pedidos, itens, notas, dir, pa };
+}
+async function etapaCuidado(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const comItens = new Set((await ler(req0, `SELECT DISTINCT CongregacaoId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG})`)).map((x) => x.CongregacaoId));
+  const tot = { cong: 0, ped: 0, itens: 0, ev: 0, notas: 0, leit: 0 };
+  for (const c of mod.congs) {
+    const cid = m.cong.get(c.nome);
+    const g = gerarCuidado(mod, c);
+    if (comItens.has(cid)) {
+      // os itens, os eventos e os pedidos ficaram (o banco não os apaga); as notas e as leituras saíram com o --apagar: refaz só elas, se faltam
+      const temNota = (await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.NotasPastorais WHERE ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId = ${cid})
+        OR MembroId IN (SELECT MembroId FROM dbo.MembroReferencia WHERE CongregacaoId = ${cid})`)).length;
+      if (temNota || !g.notas.length) continue;
+      await emTransacao(pool, async (req) => {
+        const itemId = new Map((await ler(req, `SELECT ItemId, CONVERT(varchar(19), CriadoEm, 126) AS em FROM dbo.CuidadoItens WHERE CongregacaoId = ${cid}`)).map((x) => [x.em, x.ItemId]));
+        const idDoItem = (it) => itemId.get(momento(it.criado, 13, Math.floor(it.seq / 60) % 60, it.seq % 60));
+        await inserir(req, "NotasPastorais", ["MembroId", "ItemId", "Nivel", "Texto", "AutorMembroId", "CriadaEm"],
+          g.notas.map((n) => [n.item.membro ? n.item.membro.matricula : null, n.item.membro ? null : idDoItem(n.item), n.nivel, n.texto, n.autor.matricula, momento(n.em, 16, Math.floor(n.seq / 60) % 60, n.seq % 60)]));
+        const notaId = new Map((await ler(req, `SELECT NotaId, CONVERT(varchar(19), CriadaEm, 126) AS em FROM dbo.NotasPastorais WHERE MembroId IN (SELECT MembroId FROM dbo.MembroReferencia WHERE CongregacaoId = ${cid}) OR ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId = ${cid})`)).map((x) => [x.em, x.NotaId]));
+        const leit = g.notas.flatMap((n) => n.leitores.map((l, k) => [notaId.get(momento(n.em, 16, Math.floor(n.seq / 60) % 60, n.seq % 60)), l.matricula, momento(Math.min(BASE, n.em + 1 + k), 18)]));
+        await inserir(req, "NotasPastoraisLeituras", ["NotaId", "MembroId", "LidaEm"], leit);
+        tot.notas += g.notas.length; tot.leit += leit.length; tot.cong++;
+      });
+      continue;
+    }
+    if (!g.itens.length && !g.pedidos.length) continue;
+    await emTransacao(pool, async (req) => {
+      await inserir(req, "PedidosOracao", ["CongregacaoId", "SolicitanteMembroId", "RegistradoPorMembroId", "ParaQuem", "Categoria", "Texto", "PodeBoletim", "QuerContato", "Moderacao", "ModeradoPorMembroId",
+        "ModeradoEm", "TextoBoletim", "BoletimAte", "Risco", "RiscoOrigem", "RiscoJaTeve", "RiscoMarcadoEm", "Origem", "CriadoEm"],
+      g.pedidos.map((p) => [cid, p.sol.matricula, p.viaLider ? g.dir.matricula : p.sol.matricula, p.para, p.cat, p.texto, p.pode, p.quer, p.moderacao,
+        p.moderado !== null ? (g.dir && g.dir !== p.sol ? g.dir.matricula : (g.pa ? g.pa.matricula : MATRICULA_MIN + 2)) : null, p.moderado !== null ? momento(p.moderado, 17) : null,
+        p.tb, p.moderacao === "APROVADO" ? isoDe(p.moderado + 14) : null, p.risco, p.risco ? "AUTOMATICO" : null, p.risco, p.risco ? momento(p.criado, 12, 0, p.seq % 60) : null, "SISTEMA",
+        momento(p.criado, 12, Math.floor(p.seq / 60) % 60, p.seq % 60)]));
+      const pedId = new Map((await ler(req, `SELECT PedidoId, CONVERT(varchar(19), CriadoEm, 126) AS em FROM dbo.PedidosOracao WHERE CongregacaoId = ${cid}`)).map((x) => [x.em, x.PedidoId]));
+      await inserir(req, "CuidadoItens", ["Tipo", "CongregacaoId", "MembroId", "PessoaNome", "PessoaContato", "Motivo", "Origem", "PedidoOracaoId", "Urgente", "DeteccaoResumo", "ResponsavelMembroId",
+        "PrazoEm", "Nivel", "Escalonamentos", "Status", "Desfecho", "EncerradoEm", "EncerradoPorMembroId", "PrimeiroContatoEm", "CriadoEm", "CriadoPorMembroId"],
+      g.itens.map((it) => [it.tipo, cid, it.membro ? it.membro.matricula : null, it.nome || null, it.nome ? "(00) 90000-0000" : null, it.motivo, it.origem,
+        it.pedido ? pedId.get(momento(it.pedido.criado, 12, Math.floor(it.pedido.seq / 60) % 60, it.pedido.seq % 60)) : null, !!it.urgente, it.resumo || null,
+        it.responsavel ? it.responsavel.matricula : null, momento(it.prazo, 20), it.nivel, it.escal || 0, it.status, it.desfecho || null, it.encerrado ? momento(it.encerrado, 19) : null,
+        it.encerradoPor ? it.encerradoPor.matricula : null, it.primeiroContato ? momento(it.primeiroContato, 15) : null, momento(it.criado, 13, Math.floor(it.seq / 60) % 60, it.seq % 60),
+        it.origem === "DETECCAO" ? null : it.origem === "PEDIDO_MEMBRO" ? it.membro.matricula : (g.dir ? g.dir.matricula : MATRICULA_MIN + 2)]));
+      const itemId = new Map((await ler(req, `SELECT ItemId, CONVERT(varchar(19), CriadoEm, 126) AS em FROM dbo.CuidadoItens WHERE CongregacaoId = ${cid}`)).map((x) => [x.em, x.ItemId]));
+      const idDoItem = (it) => itemId.get(momento(it.criado, 13, Math.floor(it.seq / 60) % 60, it.seq % 60));
+      const evs = g.itens.flatMap((it) => it.eventos.map((e, k) => [idDoItem(it), e.tipo, e.membro ? e.membro.matricula : null, momento(e.em, e.tipo === "CRIADO" ? 13 : 15, k), e.forma || null,
+        e.forma ? e.conseguiu : null, e.acomp || null, e.obs || null, e.de || null, e.para || null, e.prazo ? momento(e.prazo, 20) : null, e.resp ? e.resp.matricula : null]));
+      await inserir(req, "CuidadoEventos", ["ItemId", "Tipo", "MembroId", "Em", "Forma", "Conseguiu", "Acompanhante", "Observacao", "NivelDe", "NivelPara", "PrazoNovo", "ResponsavelMembroId"], evs, 500);
+      await inserir(req, "NotasPastorais", ["MembroId", "ItemId", "Nivel", "Texto", "AutorMembroId", "CriadaEm"],
+        g.notas.map((n) => [n.item.membro ? n.item.membro.matricula : null, n.item.membro ? null : idDoItem(n.item), n.nivel, n.texto, n.autor.matricula, momento(n.em, 16, Math.floor(n.seq / 60) % 60, n.seq % 60)]));
+      const notaId = new Map((await ler(req, `SELECT NotaId, CONVERT(varchar(19), CriadaEm, 126) AS em FROM dbo.NotasPastorais WHERE MembroId IN (SELECT MembroId FROM dbo.MembroReferencia WHERE CongregacaoId = ${cid}) OR ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId = ${cid})`)).map((x) => [x.em, x.NotaId]));
+      const leit = g.notas.flatMap((n) => n.leitores.map((l, k) => [notaId.get(momento(n.em, 16, Math.floor(n.seq / 60) % 60, n.seq % 60)), l.matricula, momento(Math.min(BASE, n.em + 1 + k), 18)]));
+      await inserir(req, "NotasPastoraisLeituras", ["NotaId", "MembroId", "LidaEm"], leit);
+      tot.cong++; tot.ped += g.pedidos.length; tot.itens += g.itens.length; tot.ev += evs.length; tot.notas += g.notas.length; tot.leit += leit.length;
+    });
+  }
+  // o mural de oração do site (só o confidencial ou com risco chega; sem congregação; só o nível geral vê)
+  const marcaSite = "(pedido fictício do mural do site)";
+  if (!(await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.PedidosOracao WHERE Origem = N'SITE' AND Texto LIKE N'%${marcaSite}%'`)).length) {
+    const r = criarRng("mural-site");
+    const linhas = [];
+    for (let k = 0; k < 6; k++) linhas.push([null, null, null, "PROPRIO", "OUTRO", `Peço oração em sigilo por uma situação na família ${marcaSite}`, false, false, k < 3 ? "AGUARDANDO" : "NAO_PUBLICAR",
+      k < 3 ? null : MATRICULA_MIN + 2, k < 3 ? null : momento(BASE - 20 + k, 17), null, null, false, null, false, null, "SITE", momento(BASE - r.int(5, 90), 11, k), true, r.chance(0.5) ? "Visitante do site (fictício)" : null]);
+    await emTransacao(pool, (req) => inserir(req, "PedidosOracao", ["CongregacaoId", "SolicitanteMembroId", "RegistradoPorMembroId", "ParaQuem", "Categoria", "Texto", "PodeBoletim", "QuerContato", "Moderacao",
+      "ModeradoPorMembroId", "ModeradoEm", "TextoBoletim", "BoletimAte", "Risco", "RiscoOrigem", "RiscoJaTeve", "RiscoMarcadoEm", "Origem", "CriadoEm", "SoNivelGeral", "SolicitanteNome"], linhas));
+    tot.ped += linhas.length;
+  }
+  return tot.cong ? [`cuidado pastoral de ${tot.cong} congregações: ${tot.ped} pedidos de oração (com o mural do site), ${tot.itens} itens, ${tot.ev} eventos, ${tot.notas} notas, ${tot.leit} leituras`] : [];
+}
+
 async function etapaEscalas(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
@@ -1804,7 +2260,8 @@ async function main() {
     const mod = gerarModelo();
     console.log(`Modelo (semente ${SEMENTE}, data-base ${DATA_BASE}): ${mod.congs.length} congregações, ${mod.pessoas.length} pessoas, ${mod.vinculos.length} vínculos, ${mod.lideres.length} lideranças — ${((Date.now() - tm) / 1000).toFixed(1)} s`);
     const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, reunioes: etapaReunioes, financeiro: etapaFinanceiro, distritos: etapaDistritos,
-      relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas };
+      relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas,
+      calendario: etapaCalendario, cuidado: etapaCuidado };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

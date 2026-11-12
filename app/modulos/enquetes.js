@@ -144,7 +144,8 @@ function resultadoVinculanteEnquete(e) {
     return v ? `<p><strong>🏆 Escolhida: ${escaparHtmlEbd(v.texto)}</strong> (${Number(v.votos)} voto(s); ganha a mais votada, sem precisar de maioria)</p>` : "<p><strong>Sem escolhida</strong></p>";
   }
   const soma = (papel) => opcoes.filter(o => o.papel === papel).reduce((s, o) => s + Number(o.votos || 0), 0);
-  const placar = opcoes.some(o => o.papel) ? ` — ${soma("APROVA")} a favor, ${soma("REJEITA")} contra${soma("BRANCO") ? `, ${soma("BRANCO")} em branco (não contam)` : ""}` : "";
+  const aFavor = Number(soma("APROVA")), contra = Number(soma("REJEITA")), emBranco = Number(soma("BRANCO"));
+  const placar = opcoes.some(o => o.papel) ? ` — ${escaparHtmlEbd(String(aFavor))} a favor, ${escaparHtmlEbd(String(contra))} contra${emBranco ? `, ${escaparHtmlEbd(String(emBranco))} em branco (não contam)` : ""}` : "";
   return `<p><strong>${e.resultadoAprovado ? "✅ Aprovada" : "❌ Não aprovada"}</strong>${placar} (${escaparHtmlEbd(ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo || "")})</p>`;
 }
 

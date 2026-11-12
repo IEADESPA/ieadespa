@@ -140,7 +140,7 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   pastoral, os pedidos de oração, a segurança das congregações (planos, simulados,
   vistorias e itens, equipe), os Setores Técnicos (vínculos e adesões) e as adesões
   ao Termo do Voluntário. O `--apagar` não falha por eles: deixa essas linhas e as
-  peças fictícias de que dependem (cerca de 1.600 pessoas, as congregações, Áreas,
+  peças fictícias de que dependem (cerca de 1.800 pessoas, as congregações, Áreas,
   Regiões, Quadrantes, o Distrito, os Bairros e as Extensões), e o ano do
   calendário em planejamento que a massa criou. Rodar de novo recria o resto por
   cima, sem duplicar.
@@ -179,13 +179,23 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   reavaliadas domingo a domingo pelas funções do próprio motor (~5.650
   desbloqueios: Primeira Presença, Sequência de Ouro, Trimestre Perfeito). Com as
   partes 3 a 5, criar tudo no LocalDB passou a ~5 min (as conquistas levam ~2 min).
-- **Ainda fora (próxima leva):** proteção e incidentes, crise e porta-voz, ministério
-  com menores e check-in infantil, identidade visual — em todos eles o banco tem
-  gatilho que impede apagar quase toda tabela, então cada linha fictícia ficaria
-  para sempre (decidir antes quanto entra); e prebenda (o cadastro exige CPF único:
-  só entra com CPF de dígito verificador impossível, nunca inventado ao acaso). A
-  conciliação do PIX já vem com o financeiro; a conciliação bancária (extrato)
-  ainda não.
+- **Parte 6 (o responsável decidiu que tudo entra, inclusive o que fica para
+  sempre):** `menores` — nas 6 maiores congregações, salas Maternal e Infantil
+  com voluntários habilitados (um com a habilitação pendente, fora da escala) e
+  13 domingos de check-in; `protecao` — ~30 incidentes em vários estados (as
+  alegações comunicadas ao Conselho Tutelar, com afastamento cautelar); `crise` —
+  dois regimes de crise já encerrados (nunca uma crise ativa, que mudaria a
+  homologação inteira); `identidade` — os temas dos anos anteriores (o ciclo de
+  2028 só pode abrir em 2027: as etapas do app são pela data); `prebenda` — o
+  Rateio Geral de cada mês (o "malote", que faltava) e os prebendados com CPF de
+  dígito verificador impossível, pagos só com o caixa da Prebenda; `conciliacao` —
+  6 meses de extrato bancário conciliados pela função do próprio app.
+- **Fica para sempre também (parte 6):** os incidentes de proteção inteiros, as
+  crises, o check-in infantil, os responsáveis legais, as vistorias e certidões,
+  a política de menores aceita e o consentimento do crachá — e com eles as salas
+  com menores e os cultos em que houve check-in.
+- **Banco próprio no LocalDB:** a prova da massa usa o banco `ieadespa_massa`
+  (`E2E_CS`), não o `ieadespa_local`, que os testes e2e restauram a toda hora.
   Turmas da EBD e equipes das escalas nascem sem a marca "com menores", como na
   tela. E-mails só em `@example.org` (domínio reservado) e telefones com DDD (00).
 - **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos

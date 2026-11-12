@@ -164,6 +164,8 @@ senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **d
 **Rodada 4 (12/11/2026, ele e o Presidente):** aprovada a de **desfoque leve, com a foto mais visível**, com um ajuste: a linha onde o
 degradê termina desce até a altura do botão "Entrar". Com isso, a entrada do celular está aprovada.
 
+**Rodada 5 (12/11/2026):** confirmado — o degradê termina **na altura do "Entrar"**. Entrada do celular **aprovada**.
+
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
       mesma). O "Preciso de ajuda" (proteção de crianças) **continua na entrada, sem login** — é canal de proteção.
@@ -273,6 +275,16 @@ tem informação demais; não há submenus.
 - **Níveis:** aprovados a **lupa e os filtros como botões** (bom e enxuto no celular); a lupa deixa **digitar** o nome da congregação,
   área ou região, e os **filtros aumentam** (são poucos).
 
+**Rodada 5 (12/11/2026, ele e o Presidente):**
+
+- **Avisos:** aprovado o **quadro de filtros aberto** (situação, assunto, onde), com o botão **"só o que eu preciso resolver"**. Os filtros
+  **crescem com o nível**: o líder local e o de área veem poucos (só a congregação ou a área deles); da região ao geral, mais.
+- **Busca:** **não haverá uma segunda lupa** dentro das telas. A busca é a do alto (a de "Ctrl K", que já existe), melhorada: procura
+  tudo (pessoa, congregação, área, região, módulo) e ganha **filtros conforme a tela** em que a pessoa está.
+- **Cores:** aprovada **uma família por linha**, com **umas 30 famílias**; cada cor tem a sua **versão para o modo escuro** (o roxo não
+  pode virar outra cor no escuro); e a **regra de escolha**: usar uma família ainda livre antes de repetir uma família já usada (o segundo
+  tom de uma família só quando todas as famílias estiverem em uso).
+
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.
 - [ ] **Menu por contexto (limpo):**
@@ -305,6 +317,15 @@ tem informação demais; não há submenus.
       digitando direto na linha, Enter ou Tab passa para a próxima, o nome do dizimista se completa sozinho (e "novo dizimista" sem sair da
       grade), o total aparece embaixo na hora, e a gravação acontece por linha (com o aviso se uma linha tiver problema) — no lugar do
       formulário de um em um.
+- [ ] **Rodada 5 (12/11/2026, ele e o Presidente):** aprovada a **planilha** para quando há muitos lançamentos e a **linha de lançar**
+      (o valor em letra grande, as opções em botões) para os lançamentos pontuais, principalmente no celular — **a pessoa escolhe o
+      jeito**. O jeito "por culto, em dois blocos" (dízimos de um lado, ofertas do outro) saiu: é tudo junto.
+- [ ] **O número do Termo (o talão de dízimo) ajustável** (rodada 5): o talão da Igreja já passa de 50.000; a numeração do sistema
+      tem de poder **começar do número que a congregação já usa** (o próximo Termo nº, ajustável por quem cuida da tesouraria, com a trilha)
+      — hoje começa em 1 e não há onde mexer. O número aparece também no celular.
+- [ ] **Saldo de abertura** (pedido do responsável, 12/11/2026): para começar a usar o financeiro, lançar o saldo anterior de cada caixa,
+      que pode ser **negativo** (hoje há saldo negativo). A conciliação já casa entrada negativa com débito (correção de 12/11/2026); falta
+      o lançamento do saldo anterior em si.
 - [ ] **Data fácil:** digitar `dd/mm/aaaa` com a máscara pronta, ou escolher num calendário que abre ao lado; "hoje" já vem preenchido
       quando faz sentido.
 - [ ] **Tabela padrão:** busca, filtro, ordenar por coluna, paginação, cabeçalho fixo ao rolar, número alinhado à direita; no celular, cada

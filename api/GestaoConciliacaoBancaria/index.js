@@ -209,17 +209,19 @@ module.exports = async function (context, req) {
 
     await registrarAuditoria({
       tabela: "ExtratosBancarios", registroId: extratoId, acao: "Importou extrato bancário e conciliou", usuarioId: usuario.membroId,
-      dadosDepois: { fonteId, mesReferencia, tipo, totalLinhas: linhas.length, batidas: resultado.batidas.length, soBanco: resultado.soBanco.length, soSistema: resultado.soSistema.length }
+      dadosDepois: { fonteId, mesReferencia, tipo, totalLinhas: linhas.length, batidas: resultado.batidas.length, estornos: resultado.estornos.length, soBanco: resultado.soBanco.length, soSistema: resultado.soSistema.length }
     });
 
+    // O débito que o próprio banco desfez (um débito e um crédito do mesmo valor, sem nada no sistema) não é divergência: só aparece na contagem.
+    const estornosTxt = resultado.estornos.length ? `, ${resultado.estornos.length} débito(s) desfeito(s) pelo banco (estorno)` : "";
     context.res = {
       status: 201, headers: { "Content-Type": "application/json" },
       body: {
         sucesso: true, extratoId, conciliacaoId,
         mensagem: divergente
-          ? `⚠️ Extrato importado (${linhas.length} linha(s)) — ${resultado.batidas.length} batida(s), ${resultado.soBanco.length} só no banco, ${resultado.soSistema.length} só no sistema.`
-          : `✅ Extrato importado e tudo bateu — ${resultado.batidas.length} movimentação(ões) conciliada(s).`,
-        resumo: { totalBatidas: resultado.batidas.length, soBanco: resultado.soBanco.length, soSistema: resultado.soSistema.length, totalExtrato: resultado.totalExtrato, totalSistema: resultado.totalSistema }
+          ? `⚠️ Extrato importado (${linhas.length} linha(s)) — ${resultado.batidas.length} batida(s)${estornosTxt}, ${resultado.soBanco.length} só no banco, ${resultado.soSistema.length} só no sistema.`
+          : `✅ Extrato importado e tudo bateu — ${resultado.batidas.length} movimentação(ões) conciliada(s)${estornosTxt}.`,
+        resumo: { totalBatidas: resultado.batidas.length, estornos: resultado.estornos.length, soBanco: resultado.soBanco.length, soSistema: resultado.soSistema.length, totalExtrato: resultado.totalExtrato, totalSistema: resultado.totalSistema }
       }
     };
     return;

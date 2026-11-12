@@ -57,8 +57,24 @@ function onChangePublicoEnquete() {
   document.getElementById("grupoPublicoCustomEnquete").style.display = ehCustom ? "block" : "none";
 }
 
+// FASE 10 (migração 173): a votação vinculante tem TIPO. Proposta = aprovar ou rejeitar (precisa do quórum; as opções, nesta ordem: a que aprova, a que rejeita
+// e, se quiser, o voto em branco, que não conta). Escolha = nomes ou opções (ganha o mais votado, sem quórum; empate fica para a mesa).
+const AJUDA_TIPO_ENQUETE = {
+  PROPOSTA: "Proposta: escreva as opções da pergunta nesta ordem — 1ª linha a que APROVA (ex.: Sim), 2ª a que REJEITA (ex.: Não) e, se quiser, 3ª o voto EM BRANCO (não conta na apuração).",
+  ESCOLHA: "Escolha: escreva um nome ou uma opção por linha. Ganha o mais votado, mesmo sem maioria; empate fica para a mesa decidir."
+};
 function onChangeVinculanteEnquete() {
-  document.getElementById("enqueteQuorumTipo").style.display = document.getElementById("enqueteVinculante").checked ? "inline-block" : "none";
+  const vinc = document.getElementById("enqueteVinculante").checked;
+  const tipoEl = document.getElementById("enqueteTipoApuracao");
+  const tipo = tipoEl ? tipoEl.value : "PROPOSTA";
+  if (tipoEl) tipoEl.style.display = vinc ? "inline-block" : "none";
+  document.getElementById("enqueteQuorumTipo").style.display = vinc && tipo === "PROPOSTA" ? "inline-block" : "none";
+  const ajuda = document.getElementById("enqueteAjudaTipo");
+  if (ajuda) { ajuda.style.display = vinc ? "block" : "none"; ajuda.textContent = vinc ? AJUDA_TIPO_ENQUETE[tipo] || "" : ""; }
+}
+// Os papéis da proposta pela posição das opções: a 1ª aprova, a 2ª rejeita, as demais são voto em branco.
+function papeisDaPropostaEnquete(opcoes) {
+  return (opcoes || []).map((_, i) => (i === 0 ? "APROVA" : i === 1 ? "REJEITA" : "BRANCO"));
 }
 
 function lerBlocosPerguntaEnquete() {
@@ -81,6 +97,8 @@ async function salvarEnquete() {
   const publicoTipo = document.getElementById("enquetePublicoTipo").value;
   const vinculante = document.getElementById("enqueteVinculante").checked;
   const quorumTipo = document.getElementById("enqueteQuorumTipo").value;
+  const tipoEl = document.getElementById("enqueteTipoApuracao");
+  const tipoApuracao = vinculante ? (tipoEl ? tipoEl.value : "PROPOSTA") : undefined;
   const perguntas = lerBlocosPerguntaEnquete();
   const publicoMembroIds = (document.getElementById("enquetePublicoMatriculas").value.match(/\d+/g) || []).map(Number);
   // v7.14 — fecha sozinha (dia e hora de Brasília, opcional): o servidor guarda em UTC e, passado o instante, ninguém mais responde
@@ -96,7 +114,8 @@ async function salvarEnquete() {
     body: JSON.stringify({
       titulo, descricao: descricao || undefined, visibilidade, publicoTipo, perguntas,
       publicoMembroIds: publicoTipo === "LISTA_CUSTOM" ? publicoMembroIds : undefined,
-      vinculante, quorumTipo: vinculante ? quorumTipo : undefined, dataFechamentoPrevista
+      vinculante, quorumTipo: vinculante && tipoApuracao === "PROPOSTA" ? quorumTipo : undefined, dataFechamentoPrevista,
+      tipoApuracao, papeis: tipoApuracao === "PROPOSTA" && perguntas[0] ? papeisDaPropostaEnquete(perguntas[0].opcoes) : undefined
     })
   });
   const data = await res.json();
@@ -115,6 +134,19 @@ async function salvarEnquete() {
 
 const ROTULO_VISIBILIDADE_ENQUETE = { PUBLICA: "Pública", SECRETA: "Secreta" };
 const ROTULO_QUORUM_ENQUETE = { MAIORIA_SIMPLES: "Maioria simples", DOIS_TERCOS: "Dois terços", NOVENTA_POR_CENTO: "90%" };
+const ROTULO_PAPEL_ENQUETE = { APROVA: "aprova", REJEITA: "rejeita", BRANCO: "em branco, não conta" };
+// O resultado da vinculante encerrada (migração 173): a proposta, aprovada ou não, com o placar dos válidos; a escolha, com a escolhida ou o empate.
+function resultadoVinculanteEnquete(e) {
+  const opcoes = (e.perguntas && e.perguntas[0] && e.perguntas[0].opcoes) || [];
+  if (e.tipoApuracao === "ESCOLHA") {
+    if (e.resultadoEmpate) return "<p><strong>⚖️ Empate no primeiro lugar — a mesa decide</strong></p>";
+    const v = opcoes.find(o => Number(o.opcaoId) === Number(e.opcaoVencedoraId));
+    return v ? `<p><strong>🏆 Escolhida: ${escaparHtmlEbd(v.texto)}</strong> (${Number(v.votos)} voto(s); ganha a mais votada, sem precisar de maioria)</p>` : "<p><strong>Sem escolhida</strong></p>";
+  }
+  const soma = (papel) => opcoes.filter(o => o.papel === papel).reduce((s, o) => s + Number(o.votos || 0), 0);
+  const placar = opcoes.some(o => o.papel) ? ` — ${soma("APROVA")} a favor, ${soma("REJEITA")} contra${soma("BRANCO") ? `, ${soma("BRANCO")} em branco (não contam)` : ""}` : "";
+  return `<p><strong>${e.resultadoAprovado ? "✅ Aprovada" : "❌ Não aprovada"}</strong>${placar} (${escaparHtmlEbd(ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo || "")})</p>`;
+}
 
 function campoRespostaPergunta(enqueteId, pergunta) {
   return pergunta.tipo === "OPCOES"
@@ -134,11 +166,9 @@ async function carregarEnquetes() {
   let html = "";
   enquetes.forEach(e => {
     const participantesHtml = (e.participantes || []).map(p => escaparHtmlEbd(p.nome)).join(", ") || "ninguém ainda";
-    const resultadoHtml = e.status === "ENCERRADA" && e.vinculante
-      ? `<p><strong>${e.resultadoAprovado ? "✅ Aprovado" : "❌ Não aprovado"}</strong> (${escaparHtmlEbd(ROTULO_QUORUM_ENQUETE[e.quorumTipo] || e.quorumTipo)})</p>`
-      : "";
+    const resultadoHtml = e.status === "ENCERRADA" && e.vinculante ? resultadoVinculanteEnquete(e) : "";
     const perguntasHtml = (e.perguntas || []).map(p => {
-      const opcoesHtml = (p.opcoes || []).map(o => `<li>${escaparHtmlEbd(o.texto)}: <strong>${Number(o.votos)}</strong> resposta(s)</li>`).join("");
+      const opcoesHtml = (p.opcoes || []).map(o => `<li>${escaparHtmlEbd(o.texto)}${o.papel && ROTULO_PAPEL_ENQUETE[o.papel] ? ` <span class="subtitle">(${ROTULO_PAPEL_ENQUETE[o.papel]})</span>` : ""}: <strong>${Number(o.votos)}</strong> resposta(s)</li>`).join("");
       const detalhePublico = e.visibilidade === "PUBLICA" && Array.isArray(p.respostas)
         ? `<p class="subtitle">Quem respondeu: ${p.respostas.map(r => `${escaparHtmlEbd(r.nome)} → ${escaparHtmlEbd(r.textoResposta || (p.opcoes.find(o => o.opcaoId === r.opcaoId) || {}).texto || "-")}`).join("; ") || "ninguém ainda"}</p>`
         : "";

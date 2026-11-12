@@ -327,7 +327,7 @@ if (typeof describe === "function") {
 
     test("service-worker: cache novo (v57), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v57";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v58";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });

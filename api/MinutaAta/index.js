@@ -16,6 +16,19 @@ const { universoDoOrgao } = require("../shared/universo");
 const estatuto = require("../shared/estatuto");
 const { encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
 
+// O resultado de uma enquete na minuta (FASE 10, migração 173). A consulta (não vinculante) não tem resultado oficial — antes, encerrada, saía "REPROVADA". A
+// proposta sai APROVADA ou REPROVADA; a escolha sai com a opção escolhida, ou empate (a mesa decide).
+function resultadoNaAta(e) {
+  if (e.Status !== "ENCERRADA") return "em andamento";
+  if (!e.Vinculante) return "encerrada (consulta, sem resultado oficial)";
+  if (e.TipoApuracao === "ESCOLHA") {
+    if (e.ResultadoEmpate) return "EMPATE — a mesa decide";
+    return e.Vencedora ? `ESCOLHIDA: ${e.Vencedora}` : (e.ResultadoAprovado ? "apurada" : "sem escolhida");
+  }
+  if (e.ResultadoAprovado === null || e.ResultadoAprovado === undefined) return "apuração pendente";
+  return e.ResultadoAprovado ? "APROVADA" : "REPROVADA";
+}
+
 function celula(texto, { cabecalho = false } = {}) {
   return new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: texto, bold: cabecalho })] })] });
 }
@@ -80,7 +93,9 @@ module.exports = async function (context, req) {
     else await recuperarResultado(pool, { enqueteId: e.EnqueteId, vinculante: true, status: "ENCERRADA", resultadoAprovado: e.ResultadoAprovado, quorumTipo: e.QuorumTipo });
   }
   const enquetes = (await pool.request().input("id", sql.Int, sessaoId).query(`
-    SELECT EnqueteId, Titulo, Vinculante, QuorumTipo, Status, ResultadoAprovado FROM Enquetes WHERE SessaoId = @id
+    SELECT EnqueteId, Titulo, Vinculante, QuorumTipo, Status, ResultadoAprovado, TipoApuracao, ResultadoEmpate,
+           (SELECT ov.Texto FROM OpcoesEnquete ov WHERE ov.OpcaoId = Enquetes.OpcaoVencedoraId) AS Vencedora
+    FROM Enquetes WHERE SessaoId = @id
   `)).recordset;
   for (const enquete of enquetes) {
     // Contagem por opção a partir do modelo atual (PerguntasEnquete/OpcoesEnquete/RespostasEnquete). A consulta antiga lia VotosEnquete e OpcoesEnquete.EnqueteId, que a
@@ -148,7 +163,7 @@ module.exports = async function (context, req) {
 
         new Paragraph({ text: "3. Enquetes e Resultado de Votação", heading: HeadingLevel.HEADING_3 }),
         ...(enquetes.length === 0 ? [new Paragraph({ text: "(nenhuma enquete vinculada a esta sessão)" })] : enquetes.flatMap((e) => [
-          new Paragraph({ children: [new TextRun({ text: `${e.Titulo}${e.Vinculante ? " (vinculante)" : ""} — ${e.Status === "ENCERRADA" ? (e.ResultadoAprovado ? "APROVADA" : "REPROVADA") : "em andamento"}`, bold: true })] }),
+          new Paragraph({ children: [new TextRun({ text: `${e.Titulo}${e.Vinculante ? " (vinculante)" : ""} — ${resultadoNaAta(e)}`, bold: true })] }),
           ...e.votos.map((v) => new Paragraph({ text: `   ${v.opcao}: ${v.total} voto(s)` })),
           new Paragraph({ text: "" })
         ])),

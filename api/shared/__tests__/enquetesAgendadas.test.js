@@ -112,7 +112,7 @@ describe("a lista e o encerramento", () => {
     quando(/SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY/, [{ enqueteId: 1 }]);
     monta({ dataFechamentoPrevista: PASSADO, vinculante: true, quorumTipo: "MAIORIA_SIMPLES" });
     quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1);
-    mockRegras.unshift([/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 100, votos: 3 }, { OpcaoId: 101, votos: 1 }], 0]);   // antes da regra das perguntas (o texto da contagem também as cita)
+    mockRegras.unshift([/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ opcaoId: 100, texto: "Sim", papel: "APROVA", tipo: "PROPOSTA", votos: 3 }, { opcaoId: 101, texto: "Não", papel: "REJEITA", tipo: "PROPOSTA", votos: 1 }], 0]);   // antes da regra das perguntas (o texto da contagem também as cita)
     quando(/FROM RespostasEnquete r JOIN MembroReferencia m/, []);
     const r = await chamar({ token: GERAL() });
     expect(r.body[0]).toMatchObject({ status: "ENCERRADA", resultadoAprovado: true });
@@ -227,7 +227,7 @@ describe("encerrarEnquete e a rotina", () => {
   test("(revisão) FECHA PRIMEIRO e só então conta: o UPDATE de ENCERRADA vem antes da contagem; a vinculante conta só os votos de antes do instante", async () => {
     const pool = await require("../db").getPool();
     quando(/SELECT Vinculante AS vinculante, QuorumTipo AS quorumTipo FROM Enquetes/, [{ vinculante: true, quorumTipo: "MAIORIA_SIMPLES" }]);
-    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 1, votos: 6 }, { OpcaoId: 2, votos: 2 }]);
+    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ opcaoId: 1, texto: "Sim", papel: "APROVA", tipo: "PROPOSTA", votos: 6 }, { opcaoId: 2, texto: "Não", papel: "REJEITA", tipo: "PROPOSTA", votos: 2 }]);
     quando(/UPDATE Enquetes SET Status = 'ENCERRADA'/, [], 1);
     const r = await enquetes.encerrarEnquete(pool, 7, { agendada: true });
     expect(r).toEqual({ encerrada: true, resultadoAprovado: true });
@@ -261,12 +261,55 @@ describe("encerrarEnquete e a rotina", () => {
   });
   test("a vinculante encerrada sem resultado gravado (caiu entre os passos) tem o resultado refeito na leitura", async () => {
     const pool = await require("../db").getPool();
-    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ OpcaoId: 1, votos: 1 }, { OpcaoId: 2, votos: 3 }]);
+    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, [{ opcaoId: 1, texto: "Não", papel: "REJEITA", tipo: "PROPOSTA", votos: 1 }, { opcaoId: 2, texto: "Sim", papel: "APROVA", tipo: "PROPOSTA", votos: 3 }]);
     const e = await enquetes.recuperarResultado(pool, { enqueteId: 9, vinculante: true, status: "ENCERRADA", resultadoAprovado: null, quorumTipo: "MAIORIA_SIMPLES" });
     expect(e.resultadoAprovado).toBe(true);
     expect(rodou(/UPDATE Enquetes SET ResultadoAprovado/)).toHaveLength(1);
     mockConsultas = [];
     await enquetes.recuperarResultado(pool, { enqueteId: 9, vinculante: true, status: "ENCERRADA", resultadoAprovado: false, quorumTipo: "MAIORIA_SIMPLES" });
     expect(mockConsultas).toHaveLength(0);
+  });
+});
+
+// FASE 10 (migração 173, 12/11/2026): a apuração pelo TIPO da votação. Antes, a opção mais votada — qualquer que fosse — "aprovava".
+describe("a apuração sabe o que aprova (migração 173)", () => {
+  const apura = async (linhas, quorumTipo = "MAIORIA_SIMPLES") => {
+    const pool = await require("../db").getPool();
+    quando(/FROM OpcoesEnquete o WHERE o\.PerguntaId/, linhas);
+    const e = await enquetes.recuperarResultado(pool, { enqueteId: 11, vinculante: true, status: "ENCERRADA", resultadoAprovado: null, quorumTipo });
+    return { resultado: e.resultadoAprovado, update: rodou(/UPDATE Enquetes SET ResultadoAprovado/)[0] };
+  };
+  const P = (texto, papel, votos) => ({ opcaoId: { Sim: 1, Não: 2, "Em branco": 3 }[texto], texto, papel, tipo: "PROPOSTA", votos });
+  test("o Não vencendo com folga NÃO aprova (o defeito: antes saía 'Aprovado')", async () => {
+    const { resultado, update } = await apura([P("Sim", "APROVA", 2), P("Não", "REJEITA", 9), P("Em branco", "BRANCO", 4)]);
+    expect(resultado).toBe(false);
+    expect(update.inputs).toMatchObject({ resultado: false, vencedora: null, empate: null, tipo: "PROPOSTA" });
+    expect(update.sql).toMatch(/ApuradaEm = SYSUTCDATETIME\(\)/);
+  });
+  test("o voto em branco não conta: 5 Sim, 4 Não e 10 em branco aprova por maioria simples", async () => {
+    expect((await apura([P("Sim", "APROVA", 5), P("Não", "REJEITA", 4), P("Em branco", "BRANCO", 10)])).resultado).toBe(true);
+  });
+  test("dois terços sobre os votos válidos: 8 Sim e 4 Não aprova", async () => {
+    expect((await apura([P("Sim", "APROVA", 8), P("Não", "REJEITA", 4)], "DOIS_TERCOS")).resultado).toBe(true);
+  });
+  test("dois terços sobre os votos válidos: 7 Sim e 4 Não não aprova", async () => {
+    expect((await apura([P("Sim", "APROVA", 7), P("Não", "REJEITA", 4)], "DOIS_TERCOS")).resultado).toBe(false);
+  });
+  test("escolha: ganha a mais votada, mesmo com 30% (sem quórum)", async () => {
+    const E = (opcaoId, texto, votos) => ({ opcaoId, texto, papel: null, tipo: "ESCOLHA", votos });
+    const { resultado, update } = await apura([E(1, "Irmão João", 3), E(2, "Irmão Pedro", 2), E(3, "Irmã Ana", 2), E(4, "Irmão Davi", 2), E(5, "Irmão Elias", 1)]);
+    expect(resultado).toBe(true);
+    expect(update.inputs).toMatchObject({ resultado: true, vencedora: 1, empate: false, tipo: "ESCOLHA" });
+  });
+  test("escolha empatada: sem escolhida, a mesa decide", async () => {
+    const E = (opcaoId, texto, votos) => ({ opcaoId, texto, papel: null, tipo: "ESCOLHA", votos });
+    const { resultado, update } = await apura([E(1, "Tema A", 4), E(2, "Tema B", 4), E(3, "Tema C", 1)]);
+    expect(resultado).toBe(false);
+    expect(update.inputs).toMatchObject({ resultado: false, vencedora: null, empate: true });
+  });
+  test("votação sem tipo gravado: deduz pelos textos (Sim/Não → proposta), e o Não vencendo não aprova", async () => {
+    const { resultado, update } = await apura([{ opcaoId: 1, texto: "Sim", papel: null, tipo: null, votos: 1 }, { opcaoId: 2, texto: "Não", papel: null, tipo: null, votos: 5 }]);
+    expect(resultado).toBe(false);
+    expect(update.inputs).toMatchObject({ tipo: "PROPOSTA" });
   });
 });

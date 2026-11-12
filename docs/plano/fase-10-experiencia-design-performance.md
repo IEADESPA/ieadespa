@@ -56,6 +56,8 @@ nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **v�
 5. **Toda tela vem também no celular** (12/11/2026): a maioria da liderança local e de área só usa o telefone; só da Região para cima e a
    Secretaria costumam ter notebook. Cada opção é mostrada no notebook e no celular, e o que fica feio no celular (tabela larga, escadinha de
    níveis, abas no alto) não passa.
+6. **Da rodada 4 em diante, quem aprova é o responsável junto com o Presidente** (12/11/2026): os dois veem as propostas juntos e respondem
+   juntos, para que a decisão já saia de quem está acima e não precise ser refeita depois.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -77,10 +79,11 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       2026, um ano de EBD (131.609 chamadas) e escalas. A história tem tendência: 27 congregações crescem, 11 ficam estáveis e 7 caem;
       dezembro forte, janeiro e julho fracos; ~5% das pessoas se afastam aos poucos (o padrão do alerta de evasão da v10.12). Gerada na
       homologação em 13 minutos.
-- [ ] **Segunda leva da massa:** missões, expansão, entidades vinculadas, consagração e credencial (esteiras com decisões da CME, da CLI e
-      do Presidente). **Não entram, de propósito:** calendário e eventos (o ano é uma linha única, sem marca de fictício, e o gatilho do ciclo
-      da CLI impede desfazer), vistorias de segurança (o banco proíbe apagar vistoria), cuidado pastoral (a rotina diária já detecta o
-      afastamento a partir da massa; itens e notas não se apagam) e termos e consentimentos (a massa não forja assinatura).
+- [ ] **Segunda leva da massa — tudo entra** (decisão do responsável, 12/11/2026: "é um banco de homologação, é tudo fictício; enche o
+      sistema, muita coisa mesmo, o mais aleatório possível"): calendário e eventos com inscrições, vistorias de segurança, cuidado pastoral,
+      termos e consentimentos dos membros fictícios, missões, expansão, entidades vinculadas, consagração, credencial, AFM e seminário,
+      discipulado, comunicação, proteção, governança e o que mais houver tela. O que o banco proíbe apagar (vistoria, o ciclo do calendário)
+      fica na homologação para sempre, documentado; o `--apagar` continua tirando todo o resto sem falhar no meio.
 - [x] **Sempre igual e refazível:** a mesma semente gera a mesma massa; um comando apaga tudo e gera de novo; o deploy da homologação mantém
       a massa (não refaz a cada vez). Rodar de novo só completa o que falta; `--apagar` tira só o que tem a marca de fictício (matrículas
       700000 a 799999, nomes "(Fictícia)"). O deploy do ramo `homolog` roda o gerador depois do semeador pequeno.

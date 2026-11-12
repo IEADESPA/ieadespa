@@ -137,11 +137,13 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   da fila, 2.473 eventos, 224 notas pastorais. A massa usa a categoria
   `OFERTA_CULTO_DEPARTAMENTO` quando a coluna já tem 30 letras (migração 172).
 - **O que fica para sempre (o banco proíbe apagar):** itens e eventos do cuidado
-  pastoral e os pedidos de oração. O `--apagar` não falha por eles: deixa essas
-  linhas e as peças fictícias de que dependem (cerca de 700 pessoas, as
-  congregações, Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões),
-  e o ano do calendário em planejamento que a massa criou. Rodar de novo recria o
-  resto por cima, sem duplicar.
+  pastoral, os pedidos de oração, a segurança das congregações (planos, simulados,
+  vistorias e itens, equipe), os Setores Técnicos (vínculos e adesões) e as adesões
+  ao Termo do Voluntário. O `--apagar` não falha por eles: deixa essas linhas e as
+  peças fictícias de que dependem (cerca de 1.600 pessoas, as congregações, Áreas,
+  Regiões, Quadrantes, o Distrito, os Bairros e as Extensões), e o ano do
+  calendário em planejamento que a massa criou. Rodar de novo recria o resto por
+  cima, sem duplicar.
 - **Parte 2 (mesmo dia):** `missoes` — 6 campos, 8 envios em todas as etapas, sustento
   com reajuste e o mês gerado no Contas a Pagar; `expansao` — 6 pedidos (uma
   Extensão e uma congregação criadas pela CLI); `entidades` — as Assembleias Gerais
@@ -150,8 +152,40 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   (12 disciplinas, 24 turmas, 2.068 notas), o exame bienal e 25 consagrações. A
   reciclagem anual não entra: uma edição do ano passado deixaria pendentes também os
   oficiais reais da homologação.
-- **Ainda entrando:** vistorias de segurança e setores técnicos, termos e
-  consentimentos dos membros, governança e o resto que tem tela.
+  A AFM conta só a matrícula com nível de escolaridade: a matrícula AUTOMÁTICA que o
+  app cria sozinho nasce sem ele, e a massa a completa pelo cargo (era o "0
+  matrículas" do log da parte 2: elas já existiam, sem nível).
+- **Parte 3:** `seguranca` — plano de segurança das 45 congregações (73 versões),
+  49 simulados, 39 vistorias com os 10 itens, 173 na equipe, o templo como imóvel
+  com AVCB (vigente, a vencer ou vencido) e parte com seguro; 34 profissionais nos
+  Setores Técnicos (25 com a adesão por ficha); `consentimentos` — só dos membros
+  (700300 em diante; os logins de liderança de teste continuam pedindo os termos no
+  primeiro acesso): 2.886 de LGPD, 2.910 de comunicação por e-mail (ficha de papel)
+  e 936 adesões ao Termo do Voluntário de quem serve nas escalas.
+- **Parte 4:** `enquetes` — 6 votações (contas de cada exercício e a reforma da
+  Sede nas Assembleias Gerais, com o resultado apurado como o app apura; duas
+  consultas aos membros, uma aberta) e ~5.900 respostas; `campanhas` — a campanha
+  ativa com metas e ofertas no mês aberto e uma encerrada, ~110 doações (recibo
+  `REC-FICT-…`, fora da numeração `DOA-ano` do app), contas a receber previstas e
+  canceladas, ~47 cessões de templo (a autorizada com taxa nasce com a conta a
+  receber e a receita acessória) e os orçamentos de 2025 e 2026 (o realizado do
+  ano anterior com acréscimo).
+- **Parte 5:** `comunicacao` — 6 modelos (aprovados, um arquivado, um rascunho) e 13
+  envios **já terminados** (um cancelado) com ~16.600 entregas em situação final
+  por canal, calculada como o app calcula. Nada é enviado: nenhum envio na fila,
+  nenhuma entrega pendente (a fila que roda junto de um envio feito na tela não acha
+  nada da massa) e nada no sininho de verdade (`Notificacoes`). `conquistas` — cada
+  presença ou falta da EBD vira o evento do app (~127 mil) e as conquistas são
+  reavaliadas domingo a domingo pelas funções do próprio motor (~5.650
+  desbloqueios: Primeira Presença, Sequência de Ouro, Trimestre Perfeito). Com as
+  partes 3 a 5, criar tudo no LocalDB passou a ~5 min (as conquistas levam ~2 min).
+- **Ainda fora (próxima leva):** proteção e incidentes, crise e porta-voz, ministério
+  com menores e check-in infantil, identidade visual — em todos eles o banco tem
+  gatilho que impede apagar quase toda tabela, então cada linha fictícia ficaria
+  para sempre (decidir antes quanto entra); e prebenda (o cadastro exige CPF único:
+  só entra com CPF de dígito verificador impossível, nunca inventado ao acaso). A
+  conciliação do PIX já vem com o financeiro; a conciliação bancária (extrato)
+  ainda não.
   Turmas da EBD e equipes das escalas nascem sem a marca "com menores", como na
   tela. E-mails só em `@example.org` (domínio reservado) e telefones com DDD (00).
 - **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos

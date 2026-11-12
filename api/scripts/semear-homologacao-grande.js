@@ -2947,7 +2947,17 @@ async function etapaEnquetes(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
   const req0 = () => pool.request();
-  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.Enquetes WHERE Titulo LIKE ${LIKE_F}`)).length) return [];
+  // Migração 173 (quando o banco já a tem): a vinculante sabe o tipo — PROPOSTA, com o papel de cada opção (Sim aprova, Não rejeita, Abstenção é branco e não
+  // conta) — e guarda quando foi apurada. As votações da massa que já existiam ganham o instante da apuração (o resultado delas é o mesmo pelas duas regras).
+  const temTipo = Number((await ler(req0, "SELECT ISNULL(COL_LENGTH('dbo.Enquetes', 'TipoApuracao'), 0) AS n"))[0].n) > 0;
+  let acerto = "";
+  if (temTipo) {
+    const n = (await req0().query(`UPDATE dbo.Enquetes SET ApuradaEm = DataFechamento WHERE Titulo LIKE ${LIKE_F} AND Vinculante = 1 AND Status = N'ENCERRADA'
+      AND ApuradaEm IS NULL AND TipoApuracao IS NOT NULL AND DataFechamento IS NOT NULL`)).rowsAffected.reduce((s, x) => s + x, 0);
+    if (n) acerto = `enquetes: instante da apuração gravado em ${n} votações vinculantes da massa (migração 173)`;
+  }
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.Enquetes WHERE Titulo LIKE ${LIKE_F}`)).length) return acerto ? [acerto] : [];
+  const PAPEL = { "Sim": "APROVA", "Não": "REJEITA", "Abstenção": "BRANCO" };
   const ag = await reunioesFicticias(req0, "ASSEMBLEIA_GERAL");
   const orgAg = (await ler(req0, "SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'ASSEMBLEIA_GERAL'"))[0];
   const r = criarRng("enquetes");
@@ -2973,11 +2983,19 @@ async function etapaEnquetes(pool, mod) {
       const eid = (await ler(req, `SELECT EnqueteId FROM dbo.Enquetes WHERE Titulo = ${lit(`${e.titulo}${SUF_F}`)}`))[0].EnqueteId;
       await inserir(req, "PerguntasEnquete", ["EnqueteId", "Ordem", "Titulo", "Tipo"], [[eid, 1, e.perg, "OPCOES"]]);
       const pid = (await ler(req, `SELECT PerguntaId FROM dbo.PerguntasEnquete WHERE EnqueteId = ${eid}`))[0].PerguntaId;
-      await inserir(req, "OpcoesEnquete", ["PerguntaId", "Texto"], e.ops.map((o) => [pid, o]));
+      if (temTipo && e.sessao) {
+        await inserir(req, "OpcoesEnquete", ["PerguntaId", "Texto", "Papel"], e.ops.map((o) => [pid, o, PAPEL[o]]));
+        await req().query(`UPDATE dbo.Enquetes SET TipoApuracao = N'PROPOSTA' WHERE EnqueteId = ${eid}`);
+      } else await inserir(req, "OpcoesEnquete", ["PerguntaId", "Texto"], e.ops.map((o) => [pid, o]));
       const ops = (await ler(req, `SELECT OpcaoId FROM dbo.OpcoesEnquete WHERE PerguntaId = ${pid} ORDER BY OpcaoId`)).map((x) => x.OpcaoId);
       const resp = eleitores.filter((p) => r.chance(e.part * atividade(p, e.abre))).map((p) => [pid, p.matricula, ops[e.ops.indexOf(r.pesos(e.ops.map((o, i) => [o, e.pesos[i]])))], momento(Math.min(BASE, e.abre + (aberta ? r.int(0, 5) : 0)), 14, r.int(0, 59))]);
       nr += await inserir(req, "RespostasEnquete", ["PerguntaId", "MembroId", "OpcaoId", "DataResposta"], resp, 1000);
-      if (!aberta) { // o resultado como o app apura (estatuto.avaliarAprovacaoEnquete): a opção mais votada sobre o total; só a vinculante tem resultado
+      if (!aberta && temTipo && e.sessao) { // a PROPOSTA (migração 173, estatuto.apurarVotacao): o Sim sobre os votos válidos; a abstenção não conta
+        const votos = (txt) => resp.filter((x) => x[2] === ops[e.ops.indexOf(txt)]).length;
+        const aprova = votos("Sim"), validos = aprova + votos("Não");
+        const aprovado = validos > 0 && (e.quorum === "DOIS_TERCOS" ? aprova >= Math.ceil(validos * 2 / 3) : aprova > validos / 2);
+        await req().query(`UPDATE dbo.Enquetes SET ResultadoAprovado = ${aprovado ? 1 : 0}, ApuradaEm = '${momento(e.fecha, 22)}' WHERE EnqueteId = ${eid}`);
+      } else if (!aberta) { // o resultado como o app apura sem a 173 (estatuto.avaliarAprovacaoEnquete): a opção mais votada sobre o total; só a vinculante tem resultado
         const total = resp.length, mais = Math.max(0, ...ops.map((o) => resp.filter((x) => x[2] === o).length));
         const aprovado = total > 0 && (e.quorum === "DOIS_TERCOS" ? mais >= Math.ceil(total * 2 / 3) : mais > total / 2);
         await req().query(`UPDATE dbo.Enquetes SET ResultadoAprovado = ${e.sessao ? (aprovado ? 1 : 0) : "NULL"} WHERE EnqueteId = ${eid}`);

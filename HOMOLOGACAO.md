@@ -142,9 +142,16 @@ cd tools/e2e-localdb && E2E_LOCALDB=1 node -r ./shim-mssql.js ../../api/scripts/
   congregações, Áreas, Regiões, Quadrantes, o Distrito, os Bairros e as Extensões),
   e o ano do calendário em planejamento que a massa criou. Rodar de novo recria o
   resto por cima, sem duplicar.
-- **Ainda entrando, em partes:** missões, expansão, entidades, consagração,
-  credencial, AFM e seminário, discipulado, vistorias de segurança e setores
-  técnicos, termos e consentimentos dos membros, governança e o resto que tem tela.
+- **Parte 2 (mesmo dia):** `missoes` — 6 campos, 8 envios em todas as etapas, sustento
+  com reajuste e o mês gerado no Contas a Pagar; `expansao` — 6 pedidos (uma
+  Extensão e uma congregação criadas pela CLI); `entidades` — as Assembleias Gerais
+  de março e 5 entidades vinculadas com dirigentes, prestações e uma intervenção;
+  `ministerio` — 8.817 marcos, 2.015 credenciais, 856 matrículas da AFM, seminário
+  (12 disciplinas, 24 turmas, 2.068 notas), o exame bienal e 25 consagrações. A
+  reciclagem anual não entra: uma edição do ano passado deixaria pendentes também os
+  oficiais reais da homologação.
+- **Ainda entrando:** vistorias de segurança e setores técnicos, termos e
+  consentimentos dos membros, governança e o resto que tem tela.
   Turmas da EBD e equipes das escalas nascem sem a marca "com menores", como na
   tela. E-mails só em `@example.org` (domínio reservado) e telefones com DDD (00).
 - **Permissões:** a massa não mexe em papel. `ebd_gestao` e `escalas` não vêm nos

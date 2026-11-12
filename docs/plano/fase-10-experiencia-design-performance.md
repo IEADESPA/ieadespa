@@ -79,7 +79,11 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       2026, um ano de EBD (131.609 chamadas) e escalas. A história tem tendência: 27 congregações crescem, 11 ficam estáveis e 7 caem;
       dezembro forte, janeiro e julho fracos; ~5% das pessoas se afastam aos poucos (o padrão do alerta de evasão da v10.12). Gerada na
       homologação em 13 minutos.
-- [ ] **Segunda leva da massa — tudo entra** (decisão do responsável, 12/11/2026: "é um banco de homologação, é tudo fictício; enche o
+- [x] **Segunda leva da massa — tudo entra** (feita em 12/11/2026, partes 1 a 6, todas na homologação: calendário de 4 anos com 1.297
+      eventos, cuidado pastoral, missões, expansão, entidades, ministério, segurança e vistorias, consentimentos dos membros, enquetes,
+      campanhas, doações e cessões, comunicação sem nenhum envio, conquistas, menores e check-in infantil, proteção, crises encerradas,
+      temas antigos da identidade visual, prebenda com CPF impossível de propósito e 6 meses de extrato bancário; o ciclo da identidade de
+      2028 não entra porque o app só o abre no ano anterior). Decisão do responsável, 12/11/2026: "é um banco de homologação, é tudo fictício; enche o
       sistema, muita coisa mesmo, o mais aleatório possível"): calendário e eventos com inscrições, vistorias de segurança, cuidado pastoral,
       termos e consentimentos dos membros fictícios, missões, expansão, entidades vinculadas, consagração, credencial, AFM e seminário,
       discipulado, comunicação, proteção, governança e o que mais houver tela. O que o banco proíbe apagar (vistoria, o ciclo do calendário)
@@ -104,6 +108,11 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
       branco, que não conta; aprovada quando quem aprova atinge o quórum sobre os válidos) ou **escolha** (nomes ou opções: ganha a mais
       votada, mesmo com 30%; empate fica para a mesa). Migração 173 no ramo `v10-votacao` (prova: e2e-83 e os testes de regras); **na
       homologação para os dois testarem**; vai para a produção depois do "aprovado" deles.
+- [ ] **Conciliação bancária: nenhum pagamento bate com o extrato** (achado na parte 6 da massa, 12/11/2026). O lado do sistema guarda a
+      saída com valor negativo, mas a comparação (`casarLancamentos`, `api/shared/conciliação.js`) usa o valor do banco sem sinal: a
+      diferença nunca dá zero e cada pagamento vira duas divergências ("só no sistema" e "só no banco"). Correção: comparar com o sinal (o
+      extrato já traz entrada positiva e pagamento negativo), o que também impede uma entrada de "bater" com um pagamento do mesmo valor.
+      Mexe na produção: espera o "pode corrigir" do responsável.
 - A "matrícula da AFM sem nível" **não é defeito**: a tela da AFM já mostra essas pessoas com o nível "a informar", conta quantas são e tem o
   filtro "Sem nível" para a Secretaria completar (conferido no código em 12/11/2026).
 - [ ] O custo conferido: o banco da homologação pausa sozinho quando ninguém usa; a massa grande ocupa pouco espaço.

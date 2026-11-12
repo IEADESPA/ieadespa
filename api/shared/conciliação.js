@@ -134,16 +134,41 @@ async function buscarLadoSistema(pool, sql, mesInicio, mesFim, ehCaixaFisico) {
 // extrato bancário OU movimentos do Fundo Fixo, a depender da trilha) — cada
 // item precisa de { chave, data, valor, historico }. Retorna
 // { batidas, soExterno, soSistema }.
-function casarLancamentos(linhasExternas, sistema) {
+// FASE 10 (12/11/2026, defeito achado pela massa da homologação; correção aprovada pelo responsável): casa pelo valor COM SINAL. O extrato traz a entrada
+// positiva e o débito negativo (o TRNAMT do OFX, o "-" do CSV) e o lado do sistema também: a entrada com o sinal dela (pode ser negativa — ex.: um saldo
+// anterior negativo) e a saída paga negativa. Antes comparava o valor do sistema com o do banco SEM sinal: nenhuma saída batia (cada pagamento virava duas
+// divergências, "só no sistema" e "só no banco") e uma entrada podia "bater" com um débito do mesmo valor.
+// `parearEstornos` (só a trilha do extrato bancário; no cofre, uma despesa e uma reposição do mesmo valor são movimentos de verdade): o débito que o banco
+// desfaz — um débito e um crédito do mesmo valor, a até DIAS_ESTORNO dias um do outro, sem nada no sistema — não é divergência: os dois saem juntos como estorno.
+const DIAS_ESTORNO = 15;
+function parearEstornosDoBanco(sobras) {
+  const usados = new Set();
+  const estornos = [];
+  for (let a = 0; a < sobras.length; a++) {
+    if (usados.has(a) || !(sobras[a].valor < 0)) continue;
+    let melhor = -1, melhorDias = Infinity;
+    for (let b = 0; b < sobras.length; b++) {
+      if (b === a || usados.has(b) || !(sobras[b].valor > 0) || Math.abs(sobras[b].valor + sobras[a].valor) >= 0.005) continue;
+      const dias = diffDias(sobras[a].data, sobras[b].data);
+      if (dias <= DIAS_ESTORNO && dias < melhorDias) { melhor = b; melhorDias = dias; }
+    }
+    if (melhor >= 0) {
+      usados.add(a); usados.add(melhor);
+      estornos.push({ debito: sobras[a], credito: sobras[melhor], valor: round2(Math.abs(sobras[a].valor)) });
+    }
+  }
+  return { estornos, restantes: sobras.filter((_, i) => !usados.has(i)) };
+}
+function casarLancamentos(linhasExternas, sistema, { parearEstornos = false } = {}) {
   const batidas = [];
-  const soExterno = [];
+  let soExterno = [];
   const usadosSistema = new Set();
 
   for (const linha of linhasExternas) {
     const alvo = round2(Number(linha.valor));
     const candidatos = sistema
       .map((s, i) => ({ s, i }))
-      .filter(({ s, i }) => !usadosSistema.has(i) && Math.abs(round2(s.valor) - Math.abs(alvo)) < 0.005);
+      .filter(({ s, i }) => !usadosSistema.has(i) && Math.abs(round2(s.valor) - alvo) < 0.005);
     if (candidatos.length === 0) {
       soExterno.push({ chave: linha.chave, valor: alvo, data: linha.data, referencia: linha.historico || `Registro ${linha.chave}` });
       continue;
@@ -157,7 +182,9 @@ function casarLancamentos(linhasExternas, sistema) {
   const soSistema = sistema.map((s, i) => ({ s, i })).filter(({ i }) => !usadosSistema.has(i))
     .map(({ s }) => ({ tipo: s.tipo, id: s.id, valor: round2(s.valor), data: s.data, referencia: s.referencia }));
 
-  return { batidas, soExterno, soSistema };
+  let estornos = [];
+  if (parearEstornos) ({ estornos, restantes: soExterno } = parearEstornosDoBanco(soExterno));
+  return { batidas, soExterno, soSistema, estornos };
 }
 
 // Trilha CONTA_BANCARIA: extrato importado (OFX/CSV) x Entradas/Saídas do banco.
@@ -170,10 +197,11 @@ async function conciliarExtrato(pool, sql, extratoId, fonteId, mesReferencia) {
   const extratoLinhas = linhasRes.recordset;
 
   const sistema = await buscarLadoSistema(pool, sql, mesInicio, mesFim, false);
-  const { batidas, soExterno, soSistema } = casarLancamentos(extratoLinhas, sistema);
+  const { batidas, soExterno, soSistema, estornos } = casarLancamentos(extratoLinhas, sistema, { parearEstornos: true });
 
   return {
     batidas,
+    estornos: estornos.map(x => ({ linhaDebito: x.debito.chave, linhaCredito: x.credito.chave, valor: x.valor, data: x.debito.data })),
     soBanco: soExterno.map(x => ({ linhaId: x.chave, valor: x.valor, data: x.data, referencia: x.referencia })),
     soSistema,
     totalExtrato: round2(extratoLinhas.reduce((a, l) => a + Number(l.valor), 0)),
@@ -216,5 +244,5 @@ async function conciliarFundoFixo(pool, sql, fonteId, mesReferencia) {
   };
 }
 
-module.exports = { detectarTipo, parsearOfx, parsearCsv, parsearExtrato, conciliarExtrato, conciliarFundoFixo, round2 };
+module.exports = { detectarTipo, parsearOfx, parsearCsv, parsearExtrato, conciliarExtrato, conciliarFundoFixo, round2, casarLancamentos, DIAS_ESTORNO };
 

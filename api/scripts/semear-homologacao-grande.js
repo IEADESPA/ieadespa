@@ -11,7 +11,7 @@
 //   --apagar                remove SÓ o que este gerador cria (pelas marcas abaixo), numa transação; nada mais
 //   --contar                só conta as linhas fictícias por tabela
 //   --etapas=a,b            só estas etapas, na ordem fixa: territorio, membros, lideranca, reunioes, financeiro, prestacoes, distritos,
-//                           relatorios, psc, ebd, escalas, calendario, cuidado
+//                           relatorios, psc, ebd, escalas, calendario, cuidado, missoes, expansao, entidades, ministerio
 //   --semente=N             semente do gerador pseudoaleatório (padrão 20261111): a MESMA semente gera a MESMA massa
 //   --data-base=AAAA-MM-DD  o "hoje" da massa (padrão 2026-11-08, um domingo): idades, datas, o mês aberto da tesouraria e a EBD
 //   --membros=N             tamanho aproximado da igreja (padrão 5000; mínimo 1500)
@@ -67,7 +67,14 @@
 //      Área e de congregação, com deferidos, indeferidos, cancelados, absorvidos e propostas tardias; o ano seguinte em planejamento), presença dos
 //      dirigentes na Ceia Geral, organizadores, convidados (ética e nada-consta), caixas de evento com lançamentos e destino do saldo; nada vai ao site;
 //   cuidado: pedidos de oração (boletim, risco, o mural do site), a fila do cuidado (afastamento das pessoas que se afastam, visitantes, novos
-//      convertidos, visitas, pós-internação), a história de cada item, notas pastorais e leituras.
+//      convertidos, visitas, pós-internação), a história de cada item, notas pastorais e leituras;
+//   missoes: campos (local a transcultural), envios em cada etapa (parecer da CME, CLI, Presidente; ativos, encerrado, rejeitado), sustento com
+//      reajuste aprovado pela CLI, relatórios de campo e o sustento de cada mês no Contas a Pagar (pago só com saldo local);
+//   expansao: pedidos de Extensão e de congregação (a Extensão e a congregação criadas pela CLI, pendentes, rejeitado, desistência);
+//   entidades: Assembleias Gerais de março, entidades vinculadas (ativa ratificada, aguardando a AG, proposta, não aprovada), dirigentes,
+//      prestações de contas apreciadas e verificadas pelo Conselho Fiscal, uma intervenção ratificada e encerrada;
+//   ministerio: marcos da caminhada, credencial digital (algumas na 2ª via), matrícula da AFM, corpo docente, seminário (disciplinas, turmas e
+//      notas), exame bienal e consagrações em andamento e reprovadas pelo CEI (a reciclagem anual não entra: pegaria os oficiais reais).
 // O lote é por transação: cada bloco de pessoas e cada congregação (ou ano) de cada etapa entra inteiro ou não entra.
 //
 // O QUE FICA PARA SEMPRE (o banco proíbe apagar — gatilhos): itens e eventos do cuidado pastoral (CuidadoItens, CuidadoEventos) e os pedidos de
@@ -88,7 +95,7 @@ function opcao(nome, padrao) {
   const i = a.indexOf("=");
   return i < 0 ? true : a.slice(i + 1);
 }
-const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado"];
+const ETAPAS_TODAS = ["territorio", "membros", "lideranca", "reunioes", "financeiro", "prestacoes", "distritos", "relatorios", "psc", "ebd", "escalas", "calendario", "cuidado", "missoes", "expansao", "entidades", "ministerio"];
 const SEMENTE = String(opcao("semente", "20261111"));
 const DATA_BASE = String(opcao("data-base", "2026-11-08"));
 const TOTAL_MEMBROS = Math.max(1500, Number(opcao("membros", 5000)) || 5000);
@@ -950,7 +957,7 @@ const Q_DIST = `SELECT DistritoId FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M}`;
 const Q_QUAD = `SELECT QuadranteId FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}`;
 const Q_REL = `SELECT RelatorioDepartamentalId FROM dbo.RelatoriosDepartamentais WHERE CongregacaoId IN (${Q_CONG})`;
 // as reuniões: as da CLI com a marca no nome e TODAS as dos órgãos locais fictícios (JAI, JEA...: são peças fictícias)
-const Q_SESSAO = `SELECT SessaoId FROM dbo.Sessoes WHERE (Descricao LIKE ${LIKE_F} AND OrgaoId IN (SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'CLI'))
+const Q_SESSAO = `SELECT SessaoId FROM dbo.Sessoes WHERE (Descricao LIKE ${LIKE_F} AND OrgaoId IN (SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla IN (N'CLI', N'ASSEMBLEIA_GERAL')))
   OR OrgaoLocalId IN (SELECT OrgaoLocalId FROM dbo.OrgaosLocais WHERE (Nivel = 1 AND ReferenciaId IN (${Q_CONG})) OR (Nivel = 2 AND ReferenciaId IN (${Q_AREA}))
     OR (Nivel = 3 AND ReferenciaId IN (${Q_REG})) OR (Nivel = 4 AND ReferenciaId IN (SELECT QuadranteId FROM dbo.Quadrantes WHERE Nome LIKE ${LIKE_M}))
     OR (Nivel = 5 AND ReferenciaId IN (SELECT DistritoId FROM dbo.Distritos WHERE Nome LIKE ${LIKE_M})))`;
@@ -967,7 +974,31 @@ const PERMANENTES = [
   ["CuidadoEventos", `ItemId IN (SELECT ItemId FROM dbo.CuidadoItens WHERE CongregacaoId IN (${Q_CONG}))`],
   ["PedidosOracao", `CongregacaoId IN (${Q_CONG}) OR (Origem = N'SITE' AND Texto LIKE N'%(pedido fictício do mural do site)%')`]
 ];
+const Q_ENVIO = `SELECT EnvioId FROM dbo.EnviosMissionarios WHERE CampoId IN (SELECT CampoId FROM dbo.CamposMissionarios WHERE Nome LIKE ${LIKE_M}) OR MembroId ${M_PESSOA}`;
+const Q_ENTIDADE = `SELECT EntidadeId FROM dbo.EntidadesVinculadas WHERE RazaoSocial LIKE ${LIKE_F}`;
 const ALVOS = [
+  ["AFMExameResultados", `MembroId ${M_PESSOA} OR ExameId IN (SELECT ExameId FROM dbo.AFMExames WHERE Observacao LIKE ${LIKE_M})`],
+  ["AFMExames", `Observacao LIKE ${LIKE_M}`],
+  ["AFMTurmaAlunos", `MembroId ${M_PESSOA} OR TurmaId IN (SELECT TurmaId FROM dbo.AFMTurmas WHERE DisciplinaId IN (SELECT DisciplinaId FROM dbo.AFMDisciplinas WHERE Nome LIKE ${LIKE_F}))`],
+  ["AFMTurmas", `DisciplinaId IN (SELECT DisciplinaId FROM dbo.AFMDisciplinas WHERE Nome LIKE ${LIKE_F}) OR DocenteMembroId ${M_PESSOA}`],
+  ["AFMCursoMatriculas", `MembroId ${M_PESSOA}`],
+  ["AFMDisciplinas", `Nome LIKE ${LIKE_F}`],
+  ["AFMCorpoDocente", `MembroId ${M_PESSOA}`],
+  ["PareceresCEIConsagracao", `ConsagracaoId IN (SELECT ConsagracaoId FROM dbo.Consagracoes WHERE MembroId ${M_PESSOA})`],
+  ["Consagracoes", `MembroId ${M_PESSOA}`],
+  ["CredenciaisEclesiasticas", `MembroId ${M_PESSOA}`],
+  ["Matriculas_AFM", `MembroId ${M_PESSOA}`],
+  ["MarcosMembro", `MembroId ${M_PESSOA}`],
+  ["SustentoGeracoes", `EnvioId IN (${Q_ENVIO})`],
+  ["RelatoriosCampo", `EnvioId IN (${Q_ENVIO})`],
+  ["EnvioSustentoValores", `EnvioId IN (${Q_ENVIO})`],
+  ["EnviosMissionarios", `EnvioId IN (${Q_ENVIO})`],
+  ["CamposMissionarios", `Nome LIKE ${LIKE_M}`],
+  ["PedidosExpansao", `Nome LIKE ${LIKE_F} OR CongregacaoMaeId IN (${Q_CONG}) OR ExtensaoId IN (${Q_EXT})`],
+  ["EntidadeDirigentes", `EntidadeId IN (${Q_ENTIDADE})`],
+  ["EntidadePrestacoes", `EntidadeId IN (${Q_ENTIDADE})`],
+  ["EntidadeIntervencoes", `EntidadeId IN (${Q_ENTIDADE})`],
+  ["EntidadesVinculadas", `EntidadeId IN (${Q_ENTIDADE})`],
   ["NotasPastoraisLeituras", `NotaId IN (${Q_NOTA}) OR MembroId ${M_PESSOA}`, false, PURGA],
   ["NotasPastorais", `NotaId IN (${Q_NOTA})`, false, PURGA],
   ["EventoCaixaDestinos", `EventoId IN (${Q_EVENTO})`],
@@ -2205,6 +2236,460 @@ async function etapaCuidado(pool, mod) {
   return tot.cong ? [`cuidado pastoral de ${tot.cong} congregações: ${tot.ped} pedidos de oração (com o mural do site), ${tot.itens} itens, ${tot.ev} eventos, ${tot.notas} notas, ${tot.leit} leituras`] : [];
 }
 
+// ------------------------------------------------------------------ missões, expansão e entidades vinculadas (v9.4, v9.2, v9.1) ------------------------------------------------------------------
+// As deliberações citam as reuniões fictícias (a CLI de cada mês, da etapa "reunioes"; a Assembleia Geral de março de cada ano, criada aqui).
+async function reunioesFicticias(req, sigla) {
+  return (await ler(req, `SELECT s.SessaoId, s.DataSessao FROM dbo.Sessoes s JOIN dbo.Orgaos o ON o.OrgaoId = s.OrgaoId WHERE o.Sigla = N'${sigla}' AND s.Status = N'ENCERRADA'
+    AND s.Descricao LIKE ${LIKE_F} ORDER BY s.DataSessao`)).map((x) => ({ id: x.SessaoId, dia: Math.round(new Date(x.DataSessao).getTime() / DIA_MS) }));
+}
+const primeiraDepois = (lista, dia) => lista.find((s) => s.dia >= dia) || null;
+async function garantirAssembleias(req) {
+  const org = (await ler(req, "SELECT OrgaoId FROM dbo.Orgaos WHERE Sigla = N'ASSEMBLEIA_GERAL'"))[0];
+  if (!org) return 0;
+  const tem = new Set((await reunioesFicticias(req, "ASSEMBLEIA_GERAL")).map((s) => s.dia));
+  const linhas = [];
+  for (let ano = ANO_BASE - 2; ano <= ANO_BASE; ano++) {
+    const dia = diasDoMes(ano, 3, 6)[1];
+    if (dia > BASE || tem.has(dia)) continue;
+    linhas.push([org.OrgaoId, `Assembleia Geral Ordinária ${ano}${SUF_F}`, isoDe(dia), "ORDINARIA", "ENCERRADA", true, isoDe(dia - 30), isoDe(dia),
+      "Prestação de contas; ratificação dos atos da CLI (entidades vinculadas); eleições internas; avisos.", false]);
+  }
+  return inserir(req, "Sessoes", ["OrgaoId", "Descricao", "DataSessao", "TipoSessao", "Status", "QuorumAtingido", "DataConvocacao", "DataPrevista", "Pauta", "ContaFaltasCLI"], linhas);
+}
+const JUSTIFICATIVA_LONGA = "Envio para um campo de fronteira, com igrejas parceiras locais, escola bíblica e atendimento social às famílias; o missionário tem formação teológica, " +
+  "experiência de campo e o apoio da família; o sustento cobre moradia, transporte e o seguro de saúde, e a congregação acompanhará o campo com relatórios regulares e visitas " +
+  "periódicas da Secretaria de Missões (dado fictício de homologação).";
+async function etapaMissoes(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.CamposMissionarios WHERE Nome LIKE ${LIKE_M}`)).length) return [];
+  const cli = await reunioesFicticias(req0, "CLI");
+  if (!cli.length) throw new Error('faltam as reuniões da CLI fictícias: rode a etapa "reunioes" antes');
+  const r = criarRng("missoes");
+  const sede = mod.congs[0], segunda = mod.congs.slice(1).sort((a, b) => b.alvo - a.alvo)[0];
+  const campos = [
+    { nome: "Ribeirinhos do Rio Verde", pais: "Brasil", uf: "PA", cidade: "Parauapebas", zona: true, abr: "LOCAL", mant: sede, aberto: "2023-02-10" },
+    { nome: "Aldeias do Xingu", pais: "Brasil", uf: "PA", cidade: "Altamira", abr: "ESTADUAL", mant: sede, aberto: "2023-06-05" },
+    { nome: "Missão Manaus Norte", pais: "Brasil", uf: "AM", cidade: "Manaus", abr: "NACIONAL", mant: segunda, aberto: "2024-01-20" },
+    { nome: "Missão Nampula", pais: "Moçambique", uf: null, cidade: "Nampula", abr: "TRANSCULTURAL", mant: null, aberto: "2024-08-01" },
+    { nome: "Missão Cochabamba", pais: "Bolívia", uf: null, cidade: "Cochabamba", abr: "TRANSCULTURAL", mant: null, aberto: "2025-05-12" },
+    { nome: "Missão Sertão do Piauí", pais: "Brasil", uf: "PI", cidade: "Picos", abr: "NACIONAL", mant: sede, aberto: "2023-03-01", encerrado: "2025-07-15" }
+  ];
+  const missionarios = mod.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.cargo === "MISSIONARIO" && !p.lider && !p.assento && !p.evasao && p.idade >= 25);
+  const escolhidos = [];
+  while (escolhidos.length < 8 && escolhidos.length < missionarios.length) { const p = r.pick(missionarios); if (!escolhidos.includes(p)) escolhidos.push(p); }
+  // [campo, situação, sustento, fonte, solicitado, periodicidade]
+  const planos = [[0, "ATIVO", 0, null, "2025-02-03", "MENSAL"], [1, "ATIVO", 1200, "CONGREGACAO", "2025-01-13", "MENSAL"], [2, "ATIVO", 1800, "CONGREGACAO", "2025-06-02", "TRIMESTRAL"],
+    [3, "ATIVO", 2500, "GERAL", "2026-06-01", "MENSAL"], [4, "EM_PARECER", 2200, "GERAL", isoDe(BASE - 6), "MENSAL"], [2, "AGUARDANDO_CLI", 1500, "CONGREGACAO", isoDe(BASE - 25), "MENSAL"],
+    [1, "REJEITADO", 1000, "CONGREGACAO", "2025-09-01", "MENSAL"], [5, "ENCERRADO", 900, "CONGREGACAO", "2023-09-04", "MENSAL"]];
+  const tot = { campos: 0, envios: 0, valores: 0, relatorios: 0, geracoes: 0 };
+  await emTransacao(pool, async (req) => {
+    await inserir(req, "CamposMissionarios", ["Nome", "Pais", "UF", "Cidade", "ZonaRuralAdjacente", "Abrangencia", "CongregacaoMantenedoraId", "Divulgacao", "Descricao", "Status", "AbertoEm", "AbertoPor",
+      "EncerradoEm", "EncerradoPor", "MotivoEncerramento"],
+    campos.map((c) => [`${c.nome}${SUF_M}`, c.pais, c.uf, c.cidade, !!c.zona, c.abr, c.mant ? m.cong.get(c.mant.nome) : null, r.chance(0.7) ? "PUBLICA" : "RESTRITA",
+      "Campo da massa fictícia da homologação.", c.encerrado ? "ENCERRADO" : "ATIVO", c.aberto, MATRICULA_MIN + 2, c.encerrado || null, c.encerrado ? MATRICULA_MIN + 2 : null,
+      c.encerrado ? "A igreja local do campo foi emancipada (dado fictício)." : null]));
+    tot.campos = campos.length;
+    const campoId = new Map((await ler(req, `SELECT CampoId, Nome FROM dbo.CamposMissionarios WHERE Nome LIKE ${LIKE_M}`)).map((x) => [x.Nome, x.CampoId]));
+    // o recebedor do sustento: o próprio missionário como fornecedor PF (Fornecedores.MembroId), dados bancários confirmados
+    const comSustento = planos.map((p, i) => ({ p, pes: escolhidos[i] })).filter((x) => x.pes && x.p[2] > 0);
+    await inserir(req, "Fornecedores", ["Nome", "CpfCnpj", "Tipo", "Telefone", "Email", "Banco", "Agencia", "Conta", "TipoConta", "DadosBancariosConfirmados", "ConfirmadoPor", "ConfirmadoEm", "Ativo", "CriadoPor", "CriadoEm", "MembroId"],
+      comSustento.map((x, k) => [`${x.pes.nome}${SUF_M}`, `${CNPJ_PREFIXO}${2001 + k}-00`, "PF", telefoneDe(x.pes.matricula), null, "Banco Exemplo (fictício)", "0001", `${30000 + k * 71}-${k % 10}`,
+        "CORRENTE", true, MATRICULA_MIN + 1, momento(diaDe(x.p[4]) - 3, 14), true, MATRICULA_MIN + 2, momento(diaDe(x.p[4]) - 5, 13), x.pes.matricula]));
+    const fornDe = new Map((await ler(req, `SELECT FornecedorId, MembroId FROM dbo.Fornecedores WHERE MembroId ${M_PESSOA} AND CpfCnpj LIKE '${CNPJ_PREFIXO}%'`)).map((x) => [x.MembroId, x.FornecedorId]));
+    const envios = [];
+    planos.forEach(([ci, sit, sust, fonte, solic, period], i) => {
+      const pes = escolhidos[i];
+      if (!pes) return;
+      const c = campos[ci];
+      const pj = false, local = c.abr === "LOCAL";
+      const precisaCME = !local || pj, precisaCLI = precisaCME || sust > 0, precisaPres = ["NACIONAL", "TRANSCULTURAL"].includes(c.abr) || pj || sust > 0;
+      const e = { pes, c, sit, sust, fonte, period, solic: diaDe(solic), precisaCME, precisaCLI, precisaPres };
+      if (precisaCME && sit !== "EM_PARECER") { e.parecerEm = e.solic + r.int(3, 12); e.parecer = sit === "REJEITADO" ? "CONTRARIO" : "FAVORAVEL"; }
+      const depois = e.parecerEm || e.solic;
+      if (precisaCLI && ["ATIVO", "REJEITADO", "ENCERRADO"].includes(sit)) { const s = primeiraDepois(cli, depois); e.cli = s; }
+      if (precisaPres && ["ATIVO", "ENCERRADO"].includes(sit)) e.presEm = (e.cli ? e.cli.dia : depois) + r.int(2, 6);
+      if (["ATIVO", "ENCERRADO"].includes(sit)) { e.ativado = e.presEm || (e.cli ? e.cli.dia : e.solic); e.inicio = mesDe(e.ativado); }
+      if (sit === "ENCERRADO") { e.encerrado = diaDe(c.encerrado); e.fim = mesDe(e.encerrado); }
+      envios.push(e);
+    });
+    await inserir(req, "EnviosMissionarios", ["CampoId", "MembroId", "Status", "PrecisaCME", "PrecisaCLI", "PrecisaPresidente", "SustentoMensal", "Fonte", "CongregacaoFonteId", "FornecedorId", "DocumentoUrl",
+      "Periodicidade", "DivulgarNome", "Justificativa", "SolicitadoPor", "SolicitadoEm", "ParecerCME", "ParecerFundamentacao", "ParecerPor", "ParecerEm", "DecisaoSessaoId", "DecisaoEm",
+      "DecisaoResultado", "DecisaoUrgencia", "DecisaoMotivo", "DecisaoRegistradaPor", "DecisaoRegistradaEm", "PresidenteResultado", "PresidentePor", "PresidenteEm", "AtivadoEm", "InicioMes",
+      "EncerradoEm", "FimMes", "EncerradoPor", "MotivoEncerramento"],
+    envios.map((e, k) => [campoId.get(`${e.c.nome}${SUF_M}`), e.pes.matricula, e.sit, e.precisaCME, e.precisaCLI, e.precisaPres, reais(e.sust * 100), e.sust ? e.fonte : null,
+      e.sust && e.fonte === "CONGREGACAO" ? m.cong.get(e.c.mant.nome) : null, e.sust ? fornDe.get(e.pes.matricula) : null, e.sust ? `homolog-ficticio-termo-envio-${k + 1}.pdf` : null,
+      e.period, true, e.c.abr === "TRANSCULTURAL" && e.sust ? JUSTIFICATIVA_LONGA : "Envio para o campo, com o acompanhamento da Secretaria de Missões (dado fictício).",
+      MATRICULA_MIN + 2, isoDe(e.solic), e.parecer || null, e.parecer ? "Campo com base local e plano de trabalho claro (dado fictício)." : null, e.parecer ? MATRICULA_MIN + 21 : null,
+      e.parecerEm ? isoDe(e.parecerEm) : null, e.cli ? e.cli.id : null, e.cli ? isoDe(e.cli.dia) : null, e.cli ? (e.sit === "REJEITADO" ? "REJEITADO" : "APROVADO") : null,
+      false, e.sit === "REJEITADO" ? "A CLI pediu um plano de sustento conjunto com outra congregação (dado fictício)." : null, e.cli ? MATRICULA_MIN + 2 : null,
+      e.cli ? momento(e.cli.dia + 1, 14) : null, e.presEm ? "CONCORDA" : null, e.presEm ? MATRICULA_MIN + 1 : null, e.presEm ? momento(e.presEm, 15) : null,
+      e.ativado ? isoDe(e.ativado) : null, e.inicio || null, e.encerrado ? isoDe(e.encerrado) : null, e.fim || null, e.encerrado ? MATRICULA_MIN + 2 : null,
+      e.encerrado ? "Campo emancipado: a igreja local assumiu o trabalho (dado fictício)." : null]));
+    tot.envios = envios.length;
+    const envioId = new Map((await ler(req, `SELECT EnvioId, MembroId FROM dbo.EnviosMissionarios WHERE CampoId IN (SELECT CampoId FROM dbo.CamposMissionarios WHERE Nome LIKE ${LIKE_M})`)).map((x) => [x.MembroId, x.EnvioId]));
+    for (const e of envios.filter((x) => x.inicio)) {
+      const eid = envioId.get(e.pes.matricula);
+      const fonteCong = e.sust && e.fonte === "CONGREGACAO" ? m.cong.get(e.c.mant.nome) : null;
+      const forn = e.sust ? fornDe.get(e.pes.matricula) : null;
+      const valores = [[eid, e.inicio, reais(e.sust * 100), e.sust ? e.fonte : null, fonteCong, forn, "Ativação do envio", MATRICULA_MIN + 1, momento(e.ativado, 15, 5), null, null]];
+      // um reajuste (aumento, com a reunião da CLI que o aprovou) depois de um ano de envio
+      const reaj = primeiraDepois(cli, e.ativado + 300);
+      let vigente = [{ desde: e.inicio, v: e.sust }];
+      if (e.sust && e.sit === "ATIVO" && reaj && reaj.dia + 3 < BASE) {
+        const desde = mesDe(reaj.dia + 20), novo = Math.round(e.sust * 1.12);
+        valores.push([eid, desde, reais(novo * 100), e.fonte, fonteCong, forn, "Reajuste anual aprovado pela CLI (dado fictício).", MATRICULA_MIN + 1, momento(reaj.dia + 3, 16), reaj.id, isoDe(reaj.dia)]);
+        vigente.push({ desde, v: novo });
+      }
+      await inserir(req, "EnvioSustentoValores", ["EnvioId", "DesdeMes", "Valor", "Fonte", "CongregacaoFonteId", "FornecedorId", "Motivo", "RegistradoPor", "RegistradoEm", "CliSessaoId", "CliEm"], valores);
+      tot.valores += valores.length;
+      // relatórios de campo: todo período com prazo (dia 10 do mês seguinte ao fim) antes da data-base; recebidos entre os dias 1 e 8
+      const n = e.period === "TRIMESTRAL" ? 3 : 1;
+      const rels = [];
+      const ultimoMes = e.fim || mesDe(BASE);
+      for (let t = MESES.findIndex((x) => x.chave === e.inicio) >= 0 ? 0 : 0, mm = e.inicio; mm <= ultimoMes; t++) {
+        const [a, mes] = mm.split("-").map(Number);
+        const fimTotal = a * 12 + (mes - 1) + n; // o 1º mês depois do período
+        const prazo = primeiroDiaMes(Math.floor(fimTotal / 12), (fimTotal % 12) + 1) + 9;
+        const recebido = prazo - 9 + r.int(0, 7);
+        if (recebido > BASE - 1) break;
+        rels.push([eid, mm, r.int(0, 6), r.int(0, 15), r.int(0, 12), "Cultos nas casas, escola bíblica e visitas às famílias do campo (dado fictício).", r.chance(0.5) ? "Oração pela saúde da equipe." : null,
+          null, isoDe(recebido), MATRICULA_MIN + 2, momento(recebido, 17)]);
+        const prox = a * 12 + (mes - 1) + n;
+        mm = `${Math.floor(prox / 12)}-${pad2((prox % 12) + 1)}`;
+      }
+      await inserir(req, "RelatoriosCampo", ["EnvioId", "PeriodoInicio", "Batismos", "Conversoes", "Discipulado", "Atividades", "Pedidos", "AnexoUrl", "RecebidoEm", "RegistradoPor", "RegistradoEm"], rels);
+      tot.relatorios += rels.length;
+      if (!e.sust) continue;
+      // o sustento de cada mês (dia 15 a 20): a Saída já aprovada no Contas a Pagar; paga quando o caixa local da mantenedora tem saldo
+      for (const mes of MESES.filter((x) => x.chave >= e.inicio && x.chave <= (e.fim || mesDe(BASE)))) {
+        const gerada = mes.inicio + r.int(14, 19);
+        if (gerada > BASE - 1 || gerada < e.ativado) continue;
+        const v = vigente.filter((x) => x.desde <= mes.chave).pop().v * 100;
+        const congSaida = fonteCong || m.cong.get(e.pes.cong.nome);
+        let status = "APROVADA";
+        if (fonteCong) {
+          const disp = (await ler(req, `SELECT (SELECT ISNULL(SUM(ValorRetidoLocal), 0) FROM dbo.FechamentosTesouraria WHERE CongregacaoId = ${congSaida} AND Status = 'REPASSADO' AND DataRepasse < '${momento(gerada + 2, 16)}')
+            - (SELECT ISNULL(SUM(s.Valor), 0) FROM dbo.SaidasTesouraria s JOIN dbo.CategoriasSaida cs ON cs.Codigo = s.Tipo WHERE s.CongregacaoId = ${congSaida} AND s.Status = 'PAGA' AND cs.CentroCusto = 'LOCAL') AS d`))[0].d;
+          if (Number(disp) * 100 >= v) status = "PAGA";
+        }
+        const tipo = fonteCong ? "SUSTENTO_MISSIONARIO_LOCAL" : "SUSTENTO_MISSIONARIO";
+        await inserir(req, "SaidasTesouraria", ["CongregacaoId", "FornecedorId", "Tipo", "Descricao", "Valor", "DocumentoFiscalUrl", "ComprovantePagamentoUrl", "Status", "SolicitadoPor", "SolicitadoEm", "PagoPor", "PagoEm"],
+          [[congSaida, forn, tipo, `Sustento missionário — ${mes.chave.slice(5)}/${mes.chave.slice(0, 4)} — ${e.pes.nome} (campo ${e.c.nome})`.slice(0, 300), reais(v),
+            `homolog-ficticio-termo-envio-${envios.indexOf(e) + 1}.pdf`, status === "PAGA" ? `homolog-ficticio-sustento-${eid}-${mes.chave}.pdf` : null, status, MATRICULA_MIN + 3,
+            momento(gerada, 10), status === "PAGA" ? MATRICULA_MIN + 3 : null, status === "PAGA" ? momento(gerada + 2, 16) : null]]);
+        const sid = (await ler(req, `SELECT TOP 1 SaidaId FROM dbo.SaidasTesouraria WHERE CongregacaoId = ${congSaida} AND Tipo = N'${tipo}' AND SolicitadoEm = '${momento(gerada, 10)}' AND FornecedorId = ${forn} ORDER BY SaidaId DESC`))[0].SaidaId;
+        await inserir(req, "SustentoGeracoes", ["EnvioId", "MesReferencia", "Valor", "SaidaId", "GeradaPor", "GeradaEm"], [[eid, mes.chave, reais(v), sid, MATRICULA_MIN + 3, momento(gerada, 10)]]);
+        tot.geracoes++;
+      }
+    }
+  });
+  return [`missões: ${tot.campos} campos, ${tot.envios} envios, ${tot.valores} valores de sustento, ${tot.relatorios} relatórios de campo, ${tot.geracoes} meses de sustento gerados`];
+}
+
+async function etapaExpansao(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.PedidosExpansao WHERE Nome LIKE ${LIKE_F}`)).length) return [];
+  const cli = await reunioesFicticias(req0, "CLI");
+  const r = criarRng("expansao");
+  const dirDe = (c) => mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+  const semExt = mod.congs.filter((c) => !c.sede && !c.extensoes.length && c.pessoas.length >= 80);
+  const maeA = semExt[0], maeB = semExt[1] || semExt[0], maeC = semExt[2] || semExt[0];
+  const enc = (c) => c.pessoas.find((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 25 && !p.lider && !p.assento);
+  const extExistente = mod.extensoes[0];
+  let n = 0;
+  await emTransacao(pool, async (req) => {
+    // 1) Abertura de Extensão aprovada pela CLI: a Extensão nasce e o Encarregado abre no mesmo dia
+    const solA = diaDe("2025-08-04"), cliA = primeiraDepois(cli, solA + 10);
+    const bairroA = mod.bairros[maeA.bairro];
+    await inserir(req, "ExtensoesTenda", ["Nome", "CongregacaoMaeId", "Ativa", "Endereco", "Bairro", "Cidade", "UF", "AbertaEm", "Lat", "Lng"],
+      [[`Extensão Ponto de Luz${SUF_F}`, m.cong.get(maeA.nome), true, "Rua da Esperança, 77", bairroA.nome, bairroA.nomeCidade, UF, isoDe(cliA.dia), cru(bairroA.lat.toFixed(6)), cru(bairroA.lng.toFixed(6))]]);
+    const extId = (await ler(req, `SELECT ExtensaoId FROM dbo.ExtensoesTenda WHERE Nome = N'Extensão Ponto de Luz${SUF_F}'`))[0].ExtensaoId;
+    await inserir(req, "ExtensaoEncarregados", ["ExtensaoId", "MembroId", "Desde", "RegistradoPor", "RegistradoEm"], [[extId, enc(maeA).matricula, isoDe(cliA.dia), MATRICULA_MIN + 2, momento(cliA.dia + 1, 15)]]);
+    // 2) Nova congregação aprovada: a congregação nasce com a JAI
+    const solN = diaDe("2025-10-06"), parN = solN + 9, cliN = primeiraDepois(cli, parN);
+    const area = mod.areas[maeC.area];
+    await inserir(req, "Congregacoes", ["Nome", "Ativa", "AreaId", "Endereco", "Bairro", "Cidade", "Estado", "FundacaoAno", "Categoria"],
+      [[`Nova Esperança${SUF_F}`, true, m.area.get(area.nome), "Avenida Principal, 1500", mod.bairros[maeC.bairro].nome, maeC.nomeCidade, UF, Number(isoDe(cliN.dia).slice(0, 4)), "CONGREGACAO"]]);
+    const novaId = (await ler(req, `SELECT CongregacaoId FROM dbo.Congregacoes WHERE Nome = N'Nova Esperança${SUF_F}'`))[0].CongregacaoId;
+    await inserir(req, "OrgaosLocais", ["Sigla", "Nome", "Nivel", "ReferenciaId", "Ativo"], [["JAI", `Junta de Articulação Institucional — Nova Esperança${SUF_F}`, 1, novaId, true]]);
+    const L = [];
+    const linha = (o) => L.push([o.tipo, o.status, o.nome, o.end || null, o.bairro || null, o.cidade || null, o.uf || null, o.just, o.mae || null, o.ext || null, o.area || null, o.enc || null,
+      o.solPor, isoDe(o.sol), o.parecer || null, o.parecer ? "Há público e liderança local; parecer da CME favorável (dado fictício)." : null, o.parecer ? MATRICULA_MIN + 22 : null,
+      o.parecerEm ? isoDe(o.parecerEm) : null, o.cli ? o.cli.id : null, o.cli ? isoDe(o.cli.dia) : null, o.res || null, false, o.motivo || null,
+      o.cli ? MATRICULA_MIN + 2 : null, o.cli ? momento(o.cli.dia + 1, 14) : null, o.extCriada || null, o.congCriada || null, o.desistido ? isoDe(o.desistido) : null,
+      o.desistido ? o.solPor : null, o.desistido ? "A família que cedia a casa mudou de cidade (dado fictício)." : null]);
+    const dA = dirDe(maeA), dB = dirDe(maeB), dX = dirDe(extExistente.mae);
+    linha({ tipo: "ABERTURA_EXTENSAO", status: "APROVADO", nome: `Extensão Ponto de Luz${SUF_F}`, end: "Rua da Esperança, 77", bairro: bairroA.nome, cidade: bairroA.nomeCidade, uf: UF,
+      just: "Grupo de famílias reunido nas casas há dois anos (dado fictício).", mae: m.cong.get(maeA.nome), enc: enc(maeA).matricula, solPor: dA ? dA.matricula : MATRICULA_MIN + 2, sol: solA,
+      cli: cliA, res: "APROVADO", extCriada: extId });
+    linha({ tipo: "ABERTURA_EXTENSAO", status: "AGUARDANDO_CLI", nome: `Extensão Bom Pastor${SUF_F}`, just: "Ponto de pregação no bairro novo (dado fictício).", mae: m.cong.get(maeB.nome),
+      enc: enc(maeB).matricula, solPor: dB ? dB.matricula : MATRICULA_MIN + 2, sol: BASE - 12 });
+    linha({ tipo: "EMANCIPACAO", status: "EM_PARECER", nome: `${extExistente.nome.replace("Extensão ", "Congregação ")}`, just: "A Extensão se sustenta e tem liderança própria (dado fictício).",
+      mae: m.cong.get(extExistente.mae.nome), ext: m.ext.get(extExistente.nome), solPor: dX ? dX.matricula : MATRICULA_MIN + 2, sol: BASE - 5 });
+    linha({ tipo: "NOVA_CONGREGACAO", status: "APROVADO", nome: `Nova Esperança${SUF_F}`, end: "Avenida Principal, 1500", just: "Plantação de igreja em bairro sem congregação (dado fictício).",
+      area: m.area.get(area.nome), solPor: MATRICULA_MIN + 2, sol: solN, parecer: "FAVORAVEL", parecerEm: parN, cli: cliN, res: "APROVADO", congCriada: novaId });
+    const solR = diaDe("2026-03-02"), cliR = primeiraDepois(cli, solR + 10);
+    linha({ tipo: "NOVA_CONGREGACAO", status: "REJEITADO", nome: `Monte das Oliveiras${SUF_F}`, just: "Pedido de nova congregação no distrito industrial (dado fictício).", area: m.area.get(area.nome),
+      solPor: MATRICULA_MIN + 2, sol: solR, parecer: "FAVORAVEL", parecerEm: solR + 7, cli: cliR, res: "REJEITADO", motivo: "A Área já tem congregação a 2 km; atender como Extensão (dado fictício)." });
+    linha({ tipo: "ABERTURA_EXTENSAO", status: "DESISTIDO", nome: `Extensão Água da Vida${SUF_F}`, just: "Ponto de pregação na casa de uma família (dado fictício).", mae: m.cong.get(maeC.nome),
+      enc: enc(maeC).matricula, solPor: dirDe(maeC) ? dirDe(maeC).matricula : MATRICULA_MIN + 2, sol: diaDe("2025-04-07"), desistido: diaDe("2025-04-20") });
+    n = await inserir(req, "PedidosExpansao", ["Tipo", "Status", "Nome", "Endereco", "Bairro", "Cidade", "UF", "Justificativa", "CongregacaoMaeId", "ExtensaoId", "AreaId", "EncarregadoMembroId",
+      "SolicitadoPor", "SolicitadoEm", "ParecerCME", "ParecerFundamentacao", "ParecerPor", "ParecerEm", "DecisaoSessaoId", "DecisaoEm", "DecisaoResultado", "DecisaoUrgencia", "DecisaoMotivo",
+      "DecisaoRegistradaPor", "DecisaoRegistradaEm", "ExtensaoCriadaId", "CongregacaoCriadaId", "DesistidoEm", "DesistidoPor", "DesistenciaMotivo"], L);
+  });
+  return [`expansão: ${n} pedidos (uma Extensão e uma congregação criadas pela decisão da CLI, pendentes, rejeitado e desistência)`];
+}
+
+async function etapaEntidades(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  const feito = [];
+  await emTransacao(pool, async (req) => { const n = await garantirAssembleias(req); if (n) feito.push(`${n} Assembleias Gerais`); });
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.EntidadesVinculadas WHERE RazaoSocial LIKE ${LIKE_F}`)).length) return feito;
+  const cli = await reunioesFicticias(req0, "CLI"), ag = await reunioesFicticias(req0, "ASSEMBLEIA_GERAL");
+  const tipos = await ler(req0, "SELECT TipoId, Natureza FROM dbo.EntidadeTipos WHERE Ativo = 1 ORDER BY TipoId");
+  const tipoDe = (nat) => (tipos.find((t) => t.Natureza === nat) || {}).TipoId;
+  const formacao = async (tid) => ((await ler(req0, `SELECT TOP 1 Formacao FROM dbo.EntidadeTipoFormacoes WHERE TipoId = ${tid || 0}`))[0] || {}).Formacao || null;
+  const r = criarRng("entidades");
+  const membros = mod.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.idade >= 30 && !p.lider && !p.assento && !p.evasao);
+  const quem = () => r.pick(membros).matricula;
+  const ents = [
+    { razao: "Hospital Bom Samaritano", nat: "SAUDE", st: "ATIVA", vinc: "2024-04-01", ratif: true, period: "ANUAL" },
+    { razao: "Escola Cristã Caminho", nat: "EDUCACAO", st: "ATIVA", vinc: "2026-05-04", ratif: false, period: "SEMESTRAL" },
+    { razao: "Associação Mãos Estendidas", nat: "ASSISTENCIA_SOCIAL", st: "ATIVA", vinc: "2024-02-05", ratif: true, period: "ANUAL", intervencao: true },
+    { razao: "Instituto Luz do Saber", nat: "OUTRA", st: "PROPOSTA", vinc: null, period: "ANUAL" },
+    { razao: "Casa de Apoio Esperança", nat: "ASSISTENCIA_SOCIAL", st: "NAO_APROVADA", vinc: "2025-07-07", period: "ANUAL" }
+  ].filter((e) => tipoDe(e.nat));
+  let nd = 0, np = 0, ni = 0;
+  await emTransacao(pool, async (req) => {
+    const linhas = ents.map((e, k) => {
+      const s = e.vinc ? primeiraDepois(cli, diaDe(e.vinc) + 7) : null;
+      e.cli = s;
+      e.ag = e.ratif && s ? primeiraDepois(ag, s.dia + 1) : null;
+      const ativa = e.st === "ATIVA";
+      return [`${e.razao}${SUF_F}`, e.razao, `99999${String(101 + k).padStart(3, "0")}000100`, tipoDe(e.nat), "Atendimento à comunidade em parceria com a igreja (dado fictício).", "Parauapebas", UF, e.st,
+        MATRICULA_MIN + 2, momento(e.vinc ? diaDe(e.vinc) : BASE - 20, 12), ativa ? s.id : null, ativa ? isoDe(s.dia) : null, ativa ? MATRICULA_MIN + 2 : null,
+        e.st === "NAO_APROVADA" ? isoDe(s.dia) : null, e.st === "NAO_APROVADA" ? s.id : null, e.st === "NAO_APROVADA" ? "A CLI pediu o plano de sustentabilidade antes do vínculo (dado fictício)." : null,
+        e.ag ? e.ag.id : null, e.ag ? "RATIFICADA" : null, e.ag ? isoDe(e.ag.dia) : null, e.period];
+    });
+    await inserir(req, "EntidadesVinculadas", ["RazaoSocial", "NomeFantasia", "Cnpj", "TipoId", "Finalidade", "Municipio", "UF", "Status", "CadastradaPor", "CadastradaEm", "VinculoSessaoId", "VinculoEm",
+      "VinculoRegistradoPor", "NaoAprovadaEm", "NaoAprovadaSessaoId", "NaoAprovadaMotivo", "VinculoAGSessaoId", "VinculoAGResultado", "VinculoAGEm", "Periodicidade"], linhas);
+    const entId = new Map((await ler(req, `SELECT EntidadeId, RazaoSocial FROM dbo.EntidadesVinculadas WHERE RazaoSocial LIKE ${LIKE_F}`)).map((x) => [x.RazaoSocial, x.EntidadeId]));
+    for (const e of ents.filter((x) => x.st === "ATIVA")) {
+      const id = entId.get(`${e.razao}${SUF_F}`);
+      const vinc = e.cli.dia;
+      // intervenção (só a Associação): apuração, notificação, decreto, ratificação pela CLI dentro de 15 dias e encerramento
+      if (e.intervencao) {
+        const rat = primeiraDepois(cli, diaDe("2025-05-10"));
+        const decretada = rat.dia - 7, notificado = decretada - 8, aberta = notificado - 3;
+        await inserir(req, "EntidadeIntervencoes", ["EntidadeId", "Status", "Motivo", "Fatos", "AbertaEm", "AbertaPor", "NotificadoEm", "NotificacaoForma", "NotificacaoRegistradaPor", "Urgencia",
+          "DecretadaEm", "DecretadaPor", "Fundamentacao", "InterventorMembroId", "AfastaDiretoria", "PrazoRatificacao", "RatificacaoSessaoId", "RatificacaoEm", "RatificacaoRegistradaPor",
+          "EncerradaEm", "EncerradaPor", "EncerramentoMotivo"],
+        [[id, "ENCERRADA", "INADIMPLENCIA_FISCAL", "Certidões fiscais vencidas há mais de seis meses (dado fictício).", isoDe(aberta), MATRICULA_MIN + 1, isoDe(notificado), "Carta registrada",
+          MATRICULA_MIN + 2, false, isoDe(decretada), MATRICULA_MIN + 1, "Risco à imagem e ao patrimônio pela situação fiscal, sem resposta à notificação (dado fictício).", quem(), false,
+          isoDe(decretada + 15), rat.id, isoDe(rat.dia), MATRICULA_MIN + 2, isoDe(rat.dia + 90), MATRICULA_MIN + 1, "Situação fiscal regularizada; a diretoria retomou a gestão (dado fictício)."]]);
+        ni++;
+      }
+      // dirigentes: presidente (membro) e gestor técnico (de fora, com a formação do tipo) homologados pela CLI; um conselheiro fiscal indicado
+      const hom = primeiraDepois(cli, vinc + 20);
+      const form = await formacao(tipoDe(e.nat));
+      const d = [[id, "DIRETOR_PRESIDENTE", null, quem(), null, false, null, null, false, hom ? "HOMOLOGADO" : "INDICADO", isoDe(vinc + 5), "Indicação da Presidência (ata fictícia)", MATRICULA_MIN + 1,
+        hom ? hom.id : null, hom ? isoDe(hom.dia) : null, hom ? MATRICULA_MIN + 2 : null, `${Number(isoDe(vinc).slice(0, 4)) + 3}-12-31`]];
+      d.push([id, "GESTOR_TECNICO", null, null, `${r.pick(NOMES_F)} ${r.pick(SOBRENOMES)}${SUF_M}`, true, form, "REG-FICT-0001", true, hom ? "HOMOLOGADO" : "INDICADO", isoDe(vinc + 6),
+        "Indicação da Presidência (ata fictícia)", MATRICULA_MIN + 1, hom ? hom.id : null, hom ? isoDe(hom.dia) : null, hom ? MATRICULA_MIN + 2 : null, `${Number(isoDe(vinc).slice(0, 4)) + 3}-12-31`]);
+      d.push([id, "CONSELHEIRO_FISCAL", null, quem(), null, false, null, null, false, "INDICADO", isoDe(BASE - 15), "Indicação da Presidência (ata fictícia)", MATRICULA_MIN + 1, null, null, null,
+        `${ANO_BASE + 2}-12-31`]);
+      if (!form) d.splice(1, 1);
+      await inserir(req, "EntidadeDirigentes", ["EntidadeId", "Funcao", "FuncaoDescricao", "MembroId", "NomeExterno", "Remunerado", "Formacao", "RegistroProfissional", "DeclaracaoParentesco", "Status",
+        "IndicadoEm", "IndicacaoAto", "IndicacaoRegistradaPor", "HomologacaoSessaoId", "HomologadoEm", "HomologacaoRegistradaPor", "MandatoAte"], d);
+      nd += d.length;
+      // prestações de contas dos períodos já vencidos (entregues, apreciadas pela CLI e, no fim do ano, verificadas pelo Conselho Fiscal)
+      const pres = [];
+      for (let ano = Number(isoDe(vinc).slice(0, 4)); ano <= ANO_BASE; ano++) {
+        const per = e.period === "ANUAL" ? [[`${ano}`, `${ano}-01-01`, `${ano}-12-31`]] : [[`${ano}-S1`, `${ano}-01-01`, `${ano}-06-30`], [`${ano}-S2`, `${ano}-07-01`, `${ano}-12-31`]];
+        for (const [p, ini, fim] of per) {
+          const f = diaDe(fim);
+          if (f < vinc || f + 30 > BASE) continue;
+          const entregue = f + r.int(20, 100);
+          if (entregue > BASE - 1) continue;
+          const apr = primeiraDepois(cli, entregue + 3);
+          const anual = fim.endsWith("12-31");
+          const cfm = mod.conselhoFiscal[0];
+          pres.push([id, p, ini, fim, isoDe(entregue), true, true, "Auditoria Exemplo (fictícia)", null, MATRICULA_MIN + 2, momento(entregue, 15), apr && apr.dia < BASE ? apr.id : null,
+            apr && apr.dia < BASE ? isoDe(apr.dia) : null, apr && apr.dia < BASE ? r.pesos([["APROVADA", 80], ["APROVADA_COM_RESSALVAS", 20]]) : null, null, apr && apr.dia < BASE ? MATRICULA_MIN + 2 : null,
+            anual && cfm && entregue + 10 < BASE ? isoDe(entregue + 10) : null, anual && cfm && entregue + 10 < BASE ? "SEM_CONFUSAO" : null, null, anual && cfm && entregue + 10 < BASE ? cfm.matricula : null]);
+        }
+      }
+      pres.forEach((x) => { if (x[13] === "APROVADA_COM_RESSALVAS") x[14] = "Ressalva: conciliação bancária de dezembro entregue depois (dado fictício)."; });
+      await inserir(req, "EntidadePrestacoes", ["EntidadeId", "Periodo", "Inicio", "Fim", "EntregueEm", "RelatorioAtividades", "BalancoAuditado", "AuditoriaOrgao", "Observacao", "RegistradaPor", "RegistradaEm",
+        "ApreciacaoSessaoId", "ApreciadaEm", "Resultado", "ApreciacaoObs", "ApreciacaoRegistradaPor", "CFVerificadaEm", "CFResultado", "CFObs", "CFRegistradaPor"], pres);
+      np += pres.length;
+    }
+  });
+  feito.push(`entidades vinculadas: ${ents.length} entidades, ${nd} dirigentes, ${np} prestações de contas, ${ni} intervenção`);
+  return feito;
+}
+
+// ------------------------------------------------------------------ ministério: discipulado, credencial, AFM, seminário, consagração (v8.1 a v8.7) ------------------------------------------------------------------
+// Os marcos da caminhada (conversão, curso de discipulado, batismo no Espírito Santo — todo oficial a partir de Diácono tem —, departamento), a credencial
+// digital de oficiais e de parte dos membros (algumas na 2ª via), a matrícula da AFM de cada oficial no nível do cargo, o corpo docente (Reitor homologado
+// pela CLI e docentes), as disciplinas e turmas do seminário (encerradas, com notas, e abertas), o exame bienal com resultados e as consagrações em
+// andamento (protocoladas, no Conselho, com parecer do CEI, homologadas) e algumas reprovadas pelo CEI. A reciclagem anual NÃO entra: uma edição do ano
+// passado deixaria pendentes também os oficiais reais da homologação.
+const ALFABETO_CODIGO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROTULO = { MEMBRO: "Membro", AUXILIAR: "Auxiliar", MISSIONARIO: "Missionário(a)", DIACONO: "Diácono", PRESBITERO: "Presbítero", EVANGELISTA: "Evangelista", PASTOR: "Pastor" };
+const ASSUNTO = { AUXILIAR: "Consagração a Auxiliar", MISSIONARIO: "Consagração a Missionário(a)", DIACONO: "Separação ao Diaconato", PRESBITERO: "Consagração a Presbítero" };
+const NIVEL_AFM = { AUXILIAR: "BASICO", MISSIONARIO: "MEDIO", DIACONO: "MEDIO", PRESBITERO: "AVANCADO", EVANGELISTA: "AVANCADO", PASTOR: "AVANCADO" };
+async function etapaMinisterio(pool, mod) {
+  const m = await mapas(pool);
+  exigirTerritorio(mod, m);
+  const req0 = () => pool.request();
+  if ((await ler(req0, `SELECT TOP 1 1 AS x FROM dbo.MarcosMembro WHERE MembroId ${M_PESSOA}`)).length) return [];
+  const cli = await reunioesFicticias(req0, "CLI");
+  const cursos = new Map((await ler(req0, "SELECT CursoId, Nivel FROM dbo.AFMCursos")).map((x) => [x.Nivel, x.CursoId]));
+  const usados = new Set((await ler(req0, "SELECT Codigo AS c FROM dbo.CredenciaisEclesiasticas UNION SELECT CodigoVerificacao FROM dbo.CertificadosEmitidos WHERE CodigoVerificacao IS NOT NULL")).map((x) => x.c));
+  const r = criarRng("ministerio");
+  const codigo = () => { for (;;) { let s = ""; for (let i = 0; i < 16; i++) s += ALFABETO_CODIGO[r.int(0, ALFABETO_CODIGO.length - 1)]; if (!usados.has(s)) { usados.add(s); return s; } } };
+  const dirDe = (c) => mod.lideres.find((p) => p.lider.papel === "Dirigente de Congregação" && p.lider.escopo.cong === c);
+  const vivos = mod.pessoas.filter((p) => p.status === "ATIVO" && p.situacao === "EM_COMUNHAO" && p.batismo);
+  const oficiais = vivos.filter((p) => p.cargo && p.cargo !== "MEMBRO" && p.carreira);
+  const desdeCargo = (p, cargo) => { const h = (p.carreira || []).find((x) => x.cargo === cargo); return h ? h.desde : null; };
+  const tot = {};
+  await emTransacao(pool, async (req) => {
+    // 1) marcos da caminhada
+    const marcos = [];
+    for (const p of vivos) {
+      const quem = dirDe(p.cong) ? dirDe(p.cong).matricula : MATRICULA_MIN + 2;
+      const conv = p.batismo - r.int(60, 400);
+      marcos.push([p.matricula, "CONVERSAO", "Aceitou a Cristo num culto de domingo (dado fictício).", isoDe(Math.max(p.nasc + 3650, conv)), r.chance(0.4), quem, momento(Math.min(BASE - 1, p.batismo + 1), 12)]);
+      if (r.chance(0.8)) marcos.push([p.matricula, "CURSO_DISCIPULADO", "Concluiu o curso de discipulado da congregação (dado fictício).", isoDe(p.batismo - r.int(10, 50)), false, quem, momento(Math.min(BASE - 1, p.batismo + 1), 13)]);
+      const diac = desdeCargo(p, "DIACONO");
+      const temEspirito = diac || (r.chance(0.35) && p.batismo + 400 < BASE);
+      if (temEspirito) {
+        const ate = diac ? diac - 30 : BASE - 200;
+        const dia = Math.min(ate, p.batismo + r.int(30, 900));
+        if (dia > p.batismo) marcos.push([p.matricula, "BATISMO_ESPIRITO_SANTO", "Batizado no Espírito Santo (dado fictício).", isoDe(dia), false, MATRICULA_MIN + 2, momento(Math.min(BASE - 1, dia + 5), 14)]);
+      }
+      if (r.chance(0.3)) marcos.push([p.matricula, "PARTICIPACAO_DEPARTAMENTO", "Participa do departamento da sua faixa (dado fictício).", isoDe(Math.min(BASE - 200, p.batismo + r.int(60, 700))), true, quem, momento(BASE - 190, 15)]);
+    }
+    tot.marcos = await inserir(req, "MarcosMembro", ["MembroId", "Tipo", "Descricao", "DataMarco", "DataAproximada", "CriadoPor", "CriadoEm"], marcos, 1000);
+    // 2) credencial digital: oficiais e 40% dos membros adultos; algumas na 2ª via
+    const cred = [];
+    for (const p of vivos.filter((x) => x.idade >= 18 && (x.cargo !== "MEMBRO" || r.chance(0.4)))) {
+      const emitida = BASE - r.int(20, 700);
+      if (r.chance(0.06)) {
+        const v2 = Math.min(BASE - 2, emitida + r.int(30, 300));
+        cred.push([p.matricula, 1, codigo(), "SUBSTITUIDA", momento(emitida, 14), MATRICULA_MIN + 2, momento(v2, 14), MATRICULA_MIN + 2, "Perda do celular; nova via emitida (dado fictício).", null, null, null]);
+        cred.push([p.matricula, 2, codigo(), "VALIDA", momento(v2, 14, 1), MATRICULA_MIN + 2, null, null, null, null, null, null]);
+      } else {
+        const pede = r.chance(0.2), imprime = pede && r.chance(0.5);
+        cred.push([p.matricula, 1, codigo(), "VALIDA", momento(emitida, 14), MATRICULA_MIN + 2, null, null, null, pede ? momento(emitida + 5, 10) : null, imprime ? momento(emitida + 12, 11) : null, imprime ? MATRICULA_MIN + 2 : null]);
+      }
+    }
+    tot.credenciais = await inserir(req, "CredenciaisEclesiasticas", ["MembroId", "Via", "Codigo", "Situacao", "EmitidaEm", "EmitidaPor", "EncerradaEm", "EncerradaPor", "MotivoEncerramento",
+      "ImpressaoSolicitadaEm", "ImpressaEm", "ImpressaPor"], cred, 1000);
+    // 3) matrícula da AFM de cada oficial (só quem ainda não tem: a rotina do app também cria a AUTOMATICA)
+    const temMat = new Set((await ler(req, `SELECT DISTINCT MembroId FROM dbo.Matriculas_AFM WHERE MembroId ${M_PESSOA}`)).map((x) => x.MembroId));
+    const mats = oficiais.filter((p) => !temMat.has(p.matricula)).map((p) => [p.matricula, ROTULO[p.cargo], "ATIVA", false, NIVEL_AFM[p.cargo], "AUTOMATICA", isoDe(p.carreira[0].desde),
+      ["EVANGELISTA", "PASTOR"].includes(p.cargo), MATRICULA_MIN + 2, momento(p.carreira[0].desde, 12)]);
+    tot.matriculas = await inserir(req, "Matriculas_AFM", ["MembroId", "NivelAtual", "StatusMatricula", "CertificadoHabilitacao", "NivelEscolaridade", "Origem", "DataMatricula", "NivelConcluido", "CriadoPor", "CriadoEm"], mats, 1000);
+    // 4) corpo docente: o Reitor do ano (mandato até 31/12, homologado pela CLI de janeiro) e quatro docentes
+    const pastores = oficiais.filter((p) => ["PASTOR", "EVANGELISTA", "PRESBITERO"].includes(p.cargo) && p.idade >= 35 && !p.lider);
+    const reitor = pastores.find((p) => p.cargo === "PASTOR") || pastores[0];
+    const docentes = pastores.filter((p) => p !== reitor).slice(0, 4);
+    const cliJan = primeiraDepois(cli, diaDe(`${ANO_BASE}-01-01`));
+    const corpo = [];
+    if (reitor && cliJan) corpo.push([reitor.matricula, "REITOR", "Mestre em Teologia (fictício)", `${ANO_BASE}-01-05`, `${ANO_BASE}-12-31`, isoDe(cliJan.dia), `Ata da CLI de ${isoDe(cliJan.dia).split("-").reverse().join("/")} (fictícia)`, MATRICULA_MIN + 1]);
+    for (const d of docentes) corpo.push([d.matricula, "DOCENTE", "Bacharel em Teologia (fictício)", `${ANO_BASE - 2}-02-01`, null, null, null, MATRICULA_MIN + 1]);
+    tot.docentes = await inserir(req, "AFMCorpoDocente", ["MembroId", "Papel", "Titulacao", "DataInicio", "MandatoAte", "HomologadoCLIEm", "HomologacaoAto", "CriadoPor"], corpo);
+    // 5) seminário: disciplinas de cada nível, turmas encerradas (com notas) e abertas, alunos com a matrícula do curso do seu nível
+    const DISC = { BASICO: [["Introdução à Bíblia", "TEOLOGIA", 20], ["Vida de oração", "LITURGIA", 12], ["Ética cristã", "TEOLOGIA", 16], ["Mordomia e finanças", "ADMINISTRACAO", 12]],
+      MEDIO: [["Doutrinas bíblicas", "TEOLOGIA", 24], ["Liderança servidora", "LIDERANCA", 16], ["Integridade e conformidade", "COMPLIANCE", 12], ["Homilética", "LITURGIA", 20]],
+      AVANCADO: [["Teologia sistemática", "TEOLOGIA", 32], ["Gestão eclesiástica", "ADMINISTRACAO", 20], ["Aconselhamento pastoral", "LIDERANCA", 24], ["História da Igreja", "TEOLOGIA", 24]] };
+    const discs = [];
+    for (const [nivel, lista] of Object.entries(DISC)) if (cursos.has(nivel)) for (const [nome, area, ch] of lista) discs.push([cursos.get(nivel), `${nome}${SUF_F}`, area, ch, true, true, "Disciplina da massa fictícia.", MATRICULA_MIN + 2]);
+    tot.disciplinas = await inserir(req, "AFMDisciplinas", ["CursoId", "Nome", "Area", "CargaHoraria", "Obrigatoria", "Ativa", "Ementa", "CriadaPor"], discs);
+    const discId = (await ler(req, `SELECT d.DisciplinaId, d.CargaHoraria, c.Nivel FROM dbo.AFMDisciplinas d JOIN dbo.AFMCursos c ON c.CursoId = d.CursoId WHERE d.Nome LIKE ${LIKE_F} ORDER BY d.DisciplinaId`));
+    const alunosPorNivel = { BASICO: [], MEDIO: [], AVANCADO: [] };
+    for (const p of oficiais.filter((x) => x !== reitor && !docentes.includes(x))) if (r.chance(0.6) && alunosPorNivel[NIVEL_AFM[p.cargo]]) alunosPorNivel[NIVEL_AFM[p.cargo]].push(p);
+    const cmat = Object.entries(alunosPorNivel).flatMap(([nivel, ps]) => ps.map((p) => [cursos.get(nivel), p.matricula, "CURSANDO", `${ANO_BASE - 1}-02-01`, MATRICULA_MIN + 2]));
+    tot.cursoMatriculas = await inserir(req, "AFMCursoMatriculas", ["CursoId", "MembroId", "Situacao", "DataInicio", "CriadaPor"], cmat, 1000);
+    const turmas = [];
+    discId.forEach((d, k) => {
+      const doc = docentes.length ? docentes[k % docentes.length] : reitor;
+      if (!doc) return;
+      const ini1 = diaDe(`${ANO_BASE - 1}-03-01`) + (k % 4) * 60, ini2 = diaDe(`${ANO_BASE}-08-01`) + (k % 3) * 14;
+      turmas.push({ d, doc, ini: ini1, fim: ini1 + 40, enc: true }, { d, doc, ini: ini2, fim: Math.max(ini2 + 40, BASE + 20), enc: false });
+    });
+    await inserir(req, "AFMTurmas", ["DisciplinaId", "DocenteMembroId", "DataInicio", "DataFim", "Local", "CargaHoraria", "NotaMinima", "FrequenciaMinimaPct", "Situacao", "EncerradaEm", "EncerradaPor", "PrimeiroEncerramentoEm", "CriadaPor", "CriadaEm"],
+      turmas.map((t) => [t.d.DisciplinaId, t.doc.matricula, isoDe(t.ini), isoDe(t.fim), `Templo da Sede${SUF_M}`, t.d.CargaHoraria, cru("7.0"), 75, t.enc ? "ENCERRADA" : "ABERTA",
+        t.enc ? momento(t.fim + 5, 18) : null, t.enc ? t.doc.matricula : null, t.enc ? momento(t.fim + 5, 18) : null, MATRICULA_MIN + 2, momento(t.ini - 20, 12)]));
+    const turmaId = new Map((await ler(req, `SELECT TurmaId, DisciplinaId, CONVERT(char(10), DataInicio, 23) AS d FROM dbo.AFMTurmas WHERE DisciplinaId IN (SELECT DisciplinaId FROM dbo.AFMDisciplinas WHERE Nome LIKE ${LIKE_F})`)).map((x) => [`${x.DisciplinaId}:${x.d}`, x.TurmaId]));
+    const alunos = [];
+    for (const t of turmas) {
+      for (const p of alunosPorNivel[t.d.Nivel] || []) {
+        if (!r.chance(0.5)) continue;
+        if (!t.enc) { alunos.push([turmaId.get(`${t.d.DisciplinaId}:${isoDe(t.ini)}`), p.matricula, "INSCRITO", null, null, null, null, null, MATRICULA_MIN + 2, momento(t.ini - 5, 12)]); continue; }
+        const horas = Math.round(t.d.CargaHoraria * (0.6 + r.real() * 0.4) * 10) / 10, nota = Math.round((5 + r.real() * 5) * 10) / 10;
+        const res = horas < t.d.CargaHoraria * 0.75 ? "REPROVADO_FREQ" : nota < 7 ? "REPROVADO_NOTA" : "APROVADO";
+        alunos.push([turmaId.get(`${t.d.DisciplinaId}:${isoDe(t.ini)}`), p.matricula, "INSCRITO", cru(nota.toFixed(1)), cru(horas.toFixed(1)), res, t.doc.matricula, momento(t.fim + 3, 17), MATRICULA_MIN + 2, momento(t.ini - 5, 12)]);
+      }
+    }
+    tot.alunosSeminario = await inserir(req, "AFMTurmaAlunos", ["TurmaId", "MembroId", "Situacao", "Nota", "HorasPresentes", "Resultado", "LancadoPor", "LancadoEm", "InscritoPor", "InscritoEm"], alunos, 1000);
+    // 6) exame bienal (a maioria aprovada; alguns em observação, ausentes justificados)
+    await inserir(req, "AFMExames", ["Tipo", "DataExame", "Observacao", "CriadoPor"], [["BIENAL", `${ANO_BASE - 1}-09-13`, `Exame bienal ${ANO_BASE - 1}${SUF_M}`, MATRICULA_MIN + 2]]);
+    const exameId = (await ler(req, `SELECT ExameId FROM dbo.AFMExames WHERE Observacao = N'Exame bienal ${ANO_BASE - 1}${SUF_M}'`))[0].ExameId;
+    const exr = oficiais.filter((p) => p.carreira[0].desde < diaDe(`${ANO_BASE - 1}-09-13`)).map((p) => {
+      const res = r.pesos([["APROVADO", 90], ["REPROVADO", 4], ["AUSENTE_JUSTIFICADO", 6]]);
+      return [exameId, p.matricula, res, res === "AUSENTE_JUSTIFICADO" ? "Internação comprovada (dado fictício)." : null, MATRICULA_MIN + 2, momento(diaDe(`${ANO_BASE - 1}-09-20`), 12)];
+    });
+    tot.examesResultados = await inserir(req, "AFMExameResultados", ["ExameId", "MembroId", "Resultado", "Justificativa", "RegistradoPor", "RegistradoEm"], exr, 1000);
+    // 7) consagrações: o próximo degrau de quem já cumpre o interstício; uma por pessoa em andamento
+    const prox = { MEMBRO: "AUXILIAR", AUXILIAR: "MISSIONARIO", MISSIONARIO: "DIACONO", DIACONO: "PRESBITERO" };
+    const anos = { AUXILIAR: 1, MISSIONARIO: 1, DIACONO: 2, PRESBITERO: 2 };
+    const cands = vivos.filter((p) => !p.lider && !p.assento && !p.evasao && prox[p.cargo || "MEMBRO"] && (p.sexo === "M" || ["AUXILIAR", "MISSIONARIO"].includes(prox[p.cargo || "MEMBRO"])) && p.idade >= 18
+      && ((p.cargo || "MEMBRO") === "MEMBRO" ? p.admissao + 400 < BASE - 200 : desdeCargo(p, p.cargo) + anos[prox[p.cargo]] * 366 < BASE - 200));
+    const cons = [], escolhidos = new Set();
+    const plano = [["PROTOCOLADO", 6], ["EM_ANALISE_CONSELHO", 6], ["AGUARDANDO_PLENARIO", 5], ["HOMOLOGADO", 5], ["REPROVADO", 3]];
+    for (const [st, q] of plano) {
+      for (let k = 0; k < q && cands.length; k++) {
+        const p = r.pick(cands);
+        if (escolhidos.has(p)) continue;
+        escolhidos.add(p);
+        const alvo = prox[p.cargo || "MEMBRO"];
+        const dir = dirDe(p.cong);
+        const prot = BASE - r.int(30, 180);
+        const sab = prot + r.int(10, 20), hom = sab + r.int(5, 15);
+        const cliHom = alvo === "PRESBITERO" ? primeiraDepois(cli, sab + 1) : null;
+        const homologado = st === "HOMOLOGADO" && (alvo !== "PRESBITERO" || (cliHom && cliHom.dia < BASE));
+        cons.push({ p, alvo, st: st === "HOMOLOGADO" && !homologado ? "AGUARDANDO_PLENARIO" : st, prot, sab, hom: cliHom ? cliHom.dia : hom, cliHom, dir });
+      }
+    }
+    for (const c of cons) {
+      c.retrato = JSON.stringify({ em: isoDe(c.prot), alvo: c.alvo, modalidade: "INDICACAO", itens: [["degrau", "ATENDE"], ["comunhao", "ATENDE"], ["disciplina", "ATENDE"], ["dizimo", "ATENDE"], ["intersticio", "ATENDE"], ["sexo", "ATENDE"], ["matricula", "ATENDE"], ["escolaridade", "ATENDE"]] });
+    }
+    await inserir(req, "Consagracoes", ["MembroId", "CargoAtual", "Assunto", "ProponenteMembroId", "Status", "DataProtocolo", "DataConclusao", "CargoAlvo", "Modalidade", "RequisitosRetrato", "MotivoEncerramento",
+      "HomologadoEm", "HomologadoPor", "HomologacaoSessaoId", "HomologacaoAto"],
+    cons.map((c) => [c.p.matricula, ROTULO[c.p.cargo || "MEMBRO"], ASSUNTO[c.alvo], c.dir && c.dir !== c.p ? c.dir.matricula : MATRICULA_MIN + 2, c.st, isoDe(c.prot), c.st === "REPROVADO" ? isoDe(c.sab) : null,
+      c.alvo, "INDICACAO", c.retrato, c.st === "REPROVADO" ? "INAPTO_CEI" : null, c.st === "HOMOLOGADO" ? isoDe(c.hom) : null, c.st === "HOMOLOGADO" ? (c.cliHom ? MATRICULA_MIN + 2 : MATRICULA_MIN + 1) : null,
+      c.st === "HOMOLOGADO" && c.cliHom ? c.cliHom.id : null, c.st === "HOMOLOGADO" && !c.cliHom ? `Ato da Presidência nº ${r.int(10, 99)}/${isoDe(c.hom).slice(0, 4)} (fictício)` : null]));
+    tot.consagracoes = cons.length;
+    const consId = new Map((await ler(req, `SELECT ConsagracaoId, MembroId FROM dbo.Consagracoes WHERE MembroId ${M_PESSOA}`)).map((x) => [x.MembroId, x.ConsagracaoId]));
+    const pareceres = cons.filter((c) => ["AGUARDANDO_PLENARIO", "HOMOLOGADO", "REPROVADO"].includes(c.st)).map((c) => {
+      const apto = c.st !== "REPROVADO", alto = c.alvo === "PRESBITERO";
+      return [consId.get(c.p.matricula), apto ? "APTO" : "INAPTO", isoDe(c.sab), apto ? "Sabatina sem ressalvas (fundamentação fictícia)." : "Pendências na vida pregressa a esclarecer (fundamentação fictícia).",
+        apto && alto ? true : null, apto && alto ? true : null, apto && alto ? true : null, false, MATRICULA_MIN + 3, momento(c.sab, 16)];
+    });
+    tot.pareceresCEI = await inserir(req, "PareceresCEIConsagracao", ["ConsagracaoId", "Resultado", "SabatinaEm", "Fundamentacao", "SabatinaVidaPregressa", "SabatinaFinanceira", "SabatinaDoutrina", "EscrutinioConjugal", "EmitidoPor", "EmitidoEm"], pareceres);
+  });
+  return [`ministério: ${Object.entries(tot).map(([k, v]) => `${v} ${k}`).join(", ")}`];
+}
+
 async function etapaEscalas(pool, mod) {
   const m = await mapas(pool);
   exigirTerritorio(mod, m);
@@ -2261,7 +2746,7 @@ async function main() {
     console.log(`Modelo (semente ${SEMENTE}, data-base ${DATA_BASE}): ${mod.congs.length} congregações, ${mod.pessoas.length} pessoas, ${mod.vinculos.length} vínculos, ${mod.lideres.length} lideranças — ${((Date.now() - tm) / 1000).toFixed(1)} s`);
     const FUNCOES = { territorio: etapaTerritorio, membros: etapaMembros, lideranca: etapaLideranca, reunioes: etapaReunioes, financeiro: etapaFinanceiro, distritos: etapaDistritos,
       relatorios: etapaRelatorios, prestacoes: etapaPrestacoes, psc: etapaPsc, ebd: etapaEbd, escalas: etapaEscalas,
-      calendario: etapaCalendario, cuidado: etapaCuidado };
+      calendario: etapaCalendario, cuidado: etapaCuidado, missoes: etapaMissoes, expansao: etapaExpansao, entidades: etapaEntidades, ministerio: etapaMinisterio };
     for (const etapa of ETAPAS_TODAS.filter((e) => pedidas.includes(e))) {
       const te = Date.now();
       const feito = await FUNCOES[etapa](pool, mod);

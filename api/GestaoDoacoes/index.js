@@ -79,20 +79,33 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // O número do recibo nasce dentro de uma transação que trava a faixa do ano (UPDLOCK + HOLDLOCK no índice único de NumeroRecibo): dois registros ao
+    // mesmo tempo esperam um pelo outro e nunca pegam o mesmo número. O próximo é o MAIOR número do ano + 1 — antes era a CONTAGEM + 1, sem trava: dois
+    // registros simultâneos (ou um buraco na sequência) davam o mesmo número e o índice único derrubava a gravação com erro 500 (achado pela massa da
+    // homologação; correção aprovada pelo responsável em 12/11/2026).
     const ano = new Date(dataRecebimento).getFullYear();
-    const seqResult = await pool.request().input("prefixo", sql.NVarChar(20), `DOA-${ano}-`)
-      .query(`SELECT COUNT(*) AS total FROM Doacoes WHERE NumeroRecibo LIKE @prefixo + '%'`);
-    const proximoNumero = (seqResult.recordset[0].total || 0) + 1;
-    const numeroRecibo = `DOA-${ano}-${String(proximoNumero).padStart(5, "0")}`;
-
-    const criada = await pool.request()
-      .input("cong", sql.Int, congregacaoId || null).input("valor", sql.Decimal(12, 2), valor).input("forma", sql.NVarChar(20), formaPagamento)
-      .input("data", sql.Date, dataRecebimento).input("nome", sql.NVarChar(200), doadorNome ? doadorNome.trim() : null)
-      .input("cpfCnpj", sql.NVarChar(20), doadorCpfCnpj ? doadorCpfCnpj.trim() : null).input("recibo", sql.NVarChar(50), numeroRecibo)
-      .input("por", sql.Int, usuario.membroId)
-      .query(`INSERT INTO Doacoes (CongregacaoId, Valor, FormaPagamento, DataRecebimento, DoadorNome, DoadorCpfCnpj, NumeroRecibo, RegistradoPor)
-              OUTPUT INSERTED.DoacaoId VALUES (@cong, @valor, @forma, @data, @nome, @cpfCnpj, @recibo, @por)`);
-    const doacaoId = criada.recordset[0].DoacaoId;
+    const prefixo = `DOA-${ano}-`;
+    let doacaoId, numeroRecibo;
+    const transacao = new sql.Transaction(pool);
+    await transacao.begin();
+    try {
+      const seq = await new sql.Request(transacao).input("prefixo", sql.NVarChar(20), prefixo).query(`
+        SELECT ISNULL(MAX(TRY_CAST(SUBSTRING(NumeroRecibo, LEN(@prefixo) + 1, 20) AS INT)), 0) AS maior
+        FROM Doacoes WITH (UPDLOCK, HOLDLOCK) WHERE NumeroRecibo LIKE @prefixo + '%'`);
+      numeroRecibo = `${prefixo}${String((Number(seq.recordset[0].maior) || 0) + 1).padStart(5, "0")}`;
+      const criada = await new sql.Request(transacao)
+        .input("cong", sql.Int, congregacaoId || null).input("valor", sql.Decimal(12, 2), valor).input("forma", sql.NVarChar(20), formaPagamento)
+        .input("data", sql.Date, dataRecebimento).input("nome", sql.NVarChar(200), doadorNome ? doadorNome.trim() : null)
+        .input("cpfCnpj", sql.NVarChar(20), doadorCpfCnpj ? doadorCpfCnpj.trim() : null).input("recibo", sql.NVarChar(50), numeroRecibo)
+        .input("por", sql.Int, usuario.membroId)
+        .query(`INSERT INTO Doacoes (CongregacaoId, Valor, FormaPagamento, DataRecebimento, DoadorNome, DoadorCpfCnpj, NumeroRecibo, RegistradoPor)
+                OUTPUT INSERTED.DoacaoId VALUES (@cong, @valor, @forma, @data, @nome, @cpfCnpj, @recibo, @por)`);
+      doacaoId = criada.recordset[0].DoacaoId;
+      await transacao.commit();
+    } catch (erro) {
+      try { await transacao.rollback(); } catch (e) { /* a transação já pode ter sido desfeita */ }
+      throw erro;
+    }
 
     // Doação em espécie acima do limite: sinalização automática (VALOR_ATIPICO).
     if (formaPagamento === "ESPECIE" && acimaDoLimite) {

@@ -184,7 +184,10 @@ o pago por causa do financeiro, que também está vindo para cá.
 - [ ] **v10.1d — As telas do módulo**, com 3 opções cada, no notebook e no celular: a lista (tabela no notebook, cartões no celular), a ficha
       da pessoa, o cadastro em etapas, a edição em duas colunas, **Meu Perfil** (os quatro cartões, ajustados com ele), **Minha vida na
       igreja**, a **carteirinha digital do membro** (com o QR para conferir, como a credencial dos ministros da v8.4) e as movimentações
-      (transferência, desligamento, falecimento).
+      (transferência, desligamento, falecimento). **Rodada 8 publicada em 13/11/2026** na página de propostas: 8 telas com 3 opções cada
+      (primeira tela do módulo, lista com filtros e nível, ficha, cadastro em 5 etapas, edição, mudança de congregação com as regras da
+      decisão 3, juntar fichas e carteirinha com a filiação), notebook e celular, claro e escuro — esperando a escolha dele e do
+      Presidente. Meu Perfil espera as observações que ele vai mandar; Minha vida na igreja ficou com a opção 2 da rodada 7.
 - [ ] **v10.1e — A migração única do sistema pago** (no lugar da importação periódica da v10.10): a exportação completa, a conferência campo
       a campo, um tempo com os dois rodando juntos e o desligamento da parte de membros do pago, com o responsável conferindo. **LGPD:** a
       planilha vai direto ao sistema, nunca por conversa ou e-mail; para montar a tela basta o cabeçalho com os nomes das colunas.

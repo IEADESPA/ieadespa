@@ -123,4 +123,7 @@ BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
 BASE=cenario-172 bash rodar.sh roteiro e2e-82-doacoes-recibo.js
 # FASE 10 (v10.1c): a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
 BASE=cenario-172 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
+# FASE 10 (migração 173): a votação vinculante com o tipo — proposta (aprova, rejeita, em branco não conta) ou escolha (a mais votada, empate para a mesa)
+bash rodar.sh preparar-173
+BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
 echo TUDO-PRONTO

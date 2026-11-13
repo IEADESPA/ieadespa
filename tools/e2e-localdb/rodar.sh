@@ -72,6 +72,8 @@ case "$1" in
     migrar 155
     # v8.5: e da 156 à 161 — a rotina diária do cuidado roda a da trilha de discipulado (161) e o Meus Dados lê as colunas da fase 8: o esquema inteiro, como no deploy
     for m in 156 157 158 159 160 161 162 163 164; do migrar $m; done
+    # FASE 10: e a 173 (a votação vinculante com o tipo) — as votações da identidade visual (e2e-31, e2e-32, e2e-39) passam pelo GestaoEnquetes, que lê as colunas dela
+    migrar 173
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"
@@ -191,6 +193,14 @@ case "$1" in
     base restaurar cenario-trava9b
     migrar 172 2
     base salvar cenario-172
+    ;;
+  preparar-173)
+    # FASE 10 (12/11/2026): a partir da base "cenario-172", aplica a 173 duas vezes (a votação vinculante com o tipo: proposta ou escolha); salva "cenario-173"
+    # (e2e-83 monta o próprio cenário e roda a 173 de novo sobre votações antigas).
+    cd "$AQUI"
+    base restaurar cenario-172
+    migrar 173 2
+    base salvar cenario-173
     ;;
   roteiro)
     shift

@@ -218,13 +218,15 @@ o pago por causa do financeiro, que também está vindo para cá.
     (local, área ou geral) aplica.
   - **Mudança de congregação:** opção 1, e as 3 telas são as **etapas de um fluxo só** (pedir, aceitar, acompanhar). O nome é
     **transferência**: o membro pede a transferência, não uma "carta de mudança".
-  - **Juntar fichas:** opção 3 (só o que é diferente); fica **sempre a matrícula mais antiga**; a que sobra fica registrada
-    (ele levantou se o número pode ser reaproveitado — a decidir); e **alerta antes da assembleia geral**: não abrir com
-    cadastro repetido ou errado pendente.
+  - **Juntar fichas:** opção 3 (só o que é diferente); fica **sempre a matrícula mais antiga**; o número que sobra **vai para o
+    próximo cadastro novo** (decisão dele, 13/11: juntando a 15 e a 500, com a 600 já existindo, fica a 15 e a 500 é dada ao
+    próximo cadastro, sem buraco na numeração); e **alerta antes da assembleia geral**: não abrir com cadastro repetido ou errado
+    pendente.
   - **Carteirinha: reprovada** (marcou a 1 só para seguir). São duas: a **física** (papel e PVC), com um **editor do modelo**
     no módulo e só o que não muda (nome, nascimento, foto, matrícula, pai e mãe) e o QR **sem validade** apontando para uma
     página que confere; e a **digital**, com o que muda (congregação, cargo e função — obreiro, pastor, missionário —, situação).
-    O cargo tem de aparecer.
+    O cargo tem de aparecer. **A impressão da física fica bloqueada** enquanto a ficha tiver pendência de cadastro (ficha
+    repetida, número a acertar): nunca sai carteirinha física com o número de duas pessoas (decisão dele, 13/11).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

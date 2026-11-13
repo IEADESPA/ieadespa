@@ -290,6 +290,13 @@ tem informação demais; não há submenus.
   apresentada no notebook (duas colunas de 15, nomes cortados): o certo é **uma coluna só, de cima a baixo, com rolagem**, o botão que
   troca claro/escuro, a **sugestão dentro da própria lista** (a família sugerida no lugar dela, marcada) e um filtro **"só as famílias
   disponíveis"**.
+- **Rodada 7 (13/11/2026) — as telas principais fechadas:** aprovadas na versão final a **entrada** (notebook e celular), o **início**,
+  os **avisos** e a **busca do alto**. A **primeira tela de módulo** e a **tela do submódulo** ficam aprovadas **só para Departamentos e
+  Secretarias** (o menu da esquerda na cor vale para todos; o conteúdo da direita de cada módulo é visto módulo a módulo, porque cada um tem
+  as suas particularidades — Finanças e Membros podem ser bem diferentes). **Cores:** "só as disponíveis, a sugerida no topo" (a busca
+  pelo nome saiu: a lista é curta e a pessoa erraria o nome). **Formulário:** **em etapas** para cadastrar; **em duas colunas** para
+  editar. **Lista:** **tabela no notebook**, **cartões no celular**. **Meu Perfil:** os **quatro cartões** (a ajustar com ele: o perfil é
+  parte da gestão de membros). **Minha vida na igreja:** **os próximos compromissos** ao lado do que é da pessoa.
 - **Cores:** aprovada **uma família por linha**, com **umas 30 famílias**; cada cor tem a sua **versão para o modo escuro** (o roxo não
   pode virar outra cor no escuro); e a **regra de escolha**: usar uma família ainda livre antes de repetir uma família já usada (o segundo
   tom de uma família só quando todas as famílias estiverem em uso).

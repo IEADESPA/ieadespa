@@ -261,7 +261,8 @@ function mostrarAbaSecretaria(aba) {
     if (moduloAtual === "orgaosRegionais") montarSubmenuOrgaosRegionais(); else montarSubmenuOrgaosCentrais();
     carregarElegiveisAssembleia();
   }
-  if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
+  // v10.1 — o formulário aparece NA HORA; as listas dele chegam depois, cada uma por conta própria (antes a aba ficava em branco esperando as seis)
+  if (aba === "pessoas") { carregarOpcoesFormPessoa(); mostrarSubAbaPessoas(subAbaPessoasAtual); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();

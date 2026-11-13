@@ -17,7 +17,11 @@ const territorioDb = require("../shared/territorioDb");
 // fecho da v7.5 — o POST e o DELETE não conferiam o escopo: quem tinha "pessoas" numa congregação alterava, trocava o e-mail ou desligava QUALQUER membro de QUALQUER
 // congregação (só o GET filtrava). E o e-mail virou a raiz da entrada por código ("primeiro acesso / esqueci o PIN"). Agora o alvo E o destino precisam estar no escopo.
 // (a regra mora em shared/escopoRotas.js, usada por todas as rotas de ficha)
-const { noEscopoDaPessoa, FORA_DO_ESCOPO, ehGeral } = require("../shared/escopoRotas");
+const { noEscopoDaPessoa, FORA_DO_ESCOPO, ehGeral, condicaoSqlEscopoPessoa } = require("../shared/escopoRotas");
+const { escaparLike } = require("../shared/ebdLgpd");
+// v10.1c — a lista em páginas (?pagina=N): 20 por página, no máximo 100
+const POR_PAGINA_PADRAO = 20;
+const POR_PAGINA_MAX = 100;
 // v8.2 — Escada ministerial: o cargo ministerial muda pela esteira de consagração (shared/escada.js). No cadastro, só o nível GERAL (a Secretaria: importação e correção)
 // troca o cargo ou informa "no cargo desde" — antes, quem tinha "pessoas" numa congregação punha alguém como Pastor e ele entrava na CLI por Ordenação. Toda troca entra no
 // histórico de cargos (shared/escadaDb.sincronizarCadastro). Sexo (M/F): Missionária é o teto das obreiras (Regimento Art. 71, III).
@@ -95,10 +99,55 @@ module.exports = async function (context, req) {
     const idsSobDisciplina = vDisciplina
       ? await disciplina.membrosSobDisciplina(pool)
       : new Set();
-    const result = await pool.request().query(`${SELECT_MEMBRO} ORDER BY m.Nome`);
-    const membros = result.recordset
+    // v10.1c — o escopo filtra NO BANCO (antes lia o campo inteiro e escondia na memória): o dirigente recebe só a sua congregação, o pastor de área só a área.
+    const pedido = pool.request();
+    const condEscopo = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "e.Nome");
+    const condicoes = condEscopo ? [condEscopo] : [];
+    // ?pagina=N — a lista em páginas, com a busca e os filtros no banco (para a tela nova da lista; sem ?pagina a resposta continua sendo a lista inteira do escopo).
+    const paginada = req.query && req.query.pagina !== undefined && req.query.pagina !== "";
+    let pagina = 1, porPagina = POR_PAGINA_PADRAO, total = 0;
+    if (paginada) {
+      pagina = Math.max(1, Math.min(100000, parseInt(req.query.pagina, 10) || 1));
+      porPagina = Math.max(1, Math.min(POR_PAGINA_MAX, parseInt(req.query.porPagina, 10) || POR_PAGINA_PADRAO));
+      const busca = String(req.query.busca || "").trim().slice(0, 100);
+      if (busca) {
+        pedido.input("busca", sql.NVarChar(210), `%${escaparLike(busca)}%`);
+        condicoes.push(/^\d+$/.test(busca)
+          ? "(m.Nome LIKE @busca ESCAPE '\\' OR CAST(m.MembroId AS NVARCHAR(12)) LIKE @busca ESCAPE '\\')"
+          : "m.Nome LIKE @busca ESCAPE '\\'");
+      }
+      const congId = auth.idDeRota(req.query.congregacaoId);
+      if (req.query.congregacaoId !== undefined && req.query.congregacaoId !== "") {
+        if (!congId) { context.res = { status: 400, body: { sucesso: false, mensagem: "Congregação inválida." } }; return; }
+        pedido.input("filtroCong", sql.Int, congId);
+        condicoes.push("m.CongregacaoId = @filtroCong");
+      }
+      const situacao = String(req.query.situacao || "").trim();
+      if (situacao) {
+        pedido.input("filtroSituacao", sql.NVarChar(30), situacao.slice(0, 30));
+        condicoes.push("m.SituacaoMembro = @filtroSituacao");
+      }
+    }
+    if (condEscopo === "") {
+      // a visão não alcança congregação nenhuma: lista vazia, sem ler o cadastro
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: [], total: 0, pagina, porPagina } : [] };
+      return;
+    }
+    const onde = condicoes.length ? ` WHERE ${condicoes.join(" AND ")}` : "";
+    let linhas;
+    if (paginada) {
+      pedido.input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina);
+      const r = await pedido.query(`
+        SELECT COUNT(*) AS total FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId${onde};
+        ${SELECT_MEMBRO}${onde} ORDER BY m.Nome, m.MembroId OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
+      total = r.recordsets && r.recordsets[0] && r.recordsets[0][0] ? Number(r.recordsets[0][0].total) || 0 : 0;
+      linhas = (r.recordsets && r.recordsets[1]) || [];
+    } else {
+      linhas = (await pedido.query(`${SELECT_MEMBRO}${onde} ORDER BY m.Nome`)).recordset;
+    }
+    const membros = linhas
       // Escopo EXTENSAO é mais estreito que a Congregação-Mãe: só quem tem exatamente essa Extensão vinculada entra na lista (noEscopoDaPessoa confere os
-      // dois, concessão por concessão).
+      // dois, concessão por concessão). O banco já filtrou; esta é a segunda conferência (nunca deixa passar quem está fora).
       .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
       .map(m => Object.assign({}, m, { processoDisciplinarAtivo: !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao) && idsSobDisciplina.has(m.membroId) }))
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }))
@@ -110,7 +159,7 @@ module.exports = async function (context, req) {
       // URL crua salva no banco não abre sozinha, precisa de um link assinado
       // (SAS) gerado na hora, com validade curta.
       .map(m => Object.assign({}, m, { fotoUrl: storage.urlComSas(m.fotoUrl) }));
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: membros };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: membros, total, pagina, porPagina } : membros };
     return;
   }
 

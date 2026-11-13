@@ -121,4 +121,6 @@ bash rodar.sh preparar-172
 BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
 # FASE 10: o número do recibo de doação numa transação travada (o maior do ano + 1), com corrida de 6 processos
 BASE=cenario-172 bash rodar.sh roteiro e2e-82-doacoes-recibo.js
+# FASE 10 (v10.1c): a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
+BASE=cenario-172 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 echo TUDO-PRONTO

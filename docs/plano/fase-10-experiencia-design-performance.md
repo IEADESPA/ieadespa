@@ -58,6 +58,9 @@ nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **v�
    níveis, abas no alto) não passa.
 6. **Da rodada 4 em diante, quem aprova é o responsável junto com o Presidente** (12/11/2026): os dois veem as propostas juntos e respondem
    juntos, para que a decisão já saia de quem está acima e não precise ser refeita depois.
+7. **A ordem do trabalho** (13/11/2026): primeiro **as telas principais** (as que valem para o sistema inteiro: entrada, início, menu,
+   avisos, busca, cores, perfil, peças padrão); fechadas elas, **um módulo por vez**, cada tela do módulo. Misturar dois ou três módulos na
+   mesma rodada fica ruim de avaliar.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -281,6 +284,12 @@ tem informação demais; não há submenus.
   **crescem com o nível**: o líder local e o de área veem poucos (só a congregação ou a área deles); da região ao geral, mais.
 - **Busca:** **não haverá uma segunda lupa** dentro das telas. A busca é a do alto (a de "Ctrl K", que já existe), melhorada: procura
   tudo (pessoa, congregação, área, região, módulo) e ganha **filtros conforme a tela** em que a pessoa está.
+- **Rodada 6 (12/11/2026):** **avisos** com o **quadro de filtros recolhido** ("Filtros ▾" mostrando só os ligados); a **busca do alto**
+  abre num **painel do lado**, com **os mesmos filtros dos avisos**; dentro de um módulo, a busca já vem **presa àquele módulo** (ex.: no
+  Ministério Infantil, procura os relatórios das congregações A, B ou C) e o **Enter** escolhe o resultado. A **paleta** ficou mal
+  apresentada no notebook (duas colunas de 15, nomes cortados): o certo é **uma coluna só, de cima a baixo, com rolagem**, o botão que
+  troca claro/escuro, a **sugestão dentro da própria lista** (a família sugerida no lugar dela, marcada) e um filtro **"só as famílias
+  disponíveis"**.
 - **Cores:** aprovada **uma família por linha**, com **umas 30 famílias**; cada cor tem a sua **versão para o modo escuro** (o roxo não
   pode virar outra cor no escuro); e a **regra de escolha**: usar uma família ainda livre antes de repetir uma família já usada (o segundo
   tom de uma família só quando todas as famílias estiverem em uso).
@@ -323,6 +332,16 @@ tem informação demais; não há submenus.
 - [ ] **O número do Termo (o talão de dízimo) ajustável** (rodada 5): o talão da Igreja já passa de 50.000; a numeração do sistema
       tem de poder **começar do número que a congregação já usa** (o próximo Termo nº, ajustável por quem cuida da tesouraria, com a trilha)
       — hoje começa em 1 e não há onde mexer. O número aparece também no celular.
+- [ ] **O bloco de dízimo de papel no sistema** (rodada 6, 12/11/2026 — explicado pelo responsável; desenhar com ele e o Presidente, em
+      conversa, quando chegar o módulo Finanças). Aprovado o **quadro de configuração da tesouraria**. Como o bloco funciona hoje:
+  - o bloco tem 50 folhas, cada uma em **duas vias com o mesmo número**: uma é arrancada e entregue como recibo a quem deu, a outra fica no
+    bloco. A congregação recebe o bloco e **registra a numeração inteira dele no sistema**;
+  - casos que o sistema precisa tratar: **folha arrancada** (as duas vias somem: marca vermelha, de desconfiança), **folha cancelada** (erro
+    de preenchimento: o número é anotado como cancelado), **datas fora de ordem** (a folha 10 é de outubro e a 11 de setembro), e escolher
+    **quais folhas** vão para um culto ou dia (ex.: 1 a 10);
+  - **o dízimo que entra pelo sistema** (pelo banco ou pelo próprio dizimista) fica como **lançamento pendente de folha**, com alerta: não
+    se apaga; o tesoureiro acha depois a folha e anota nela o número desse lançamento;
+  - o bloco **sempre existe** (não há "acabou o papel"); e quem dá pode **não ser da Igreja**: o nome se escreve à mão (o nome avulso).
 - [ ] **Saldo de abertura** (pedido do responsável, 12/11/2026): para começar a usar o financeiro, lançar o saldo anterior de cada caixa,
       que pode ser **negativo** (hoje há saldo negativo). A conciliação já casa entrada negativa com débito (correção de 12/11/2026); falta
       o lançamento do saldo anterior em si.

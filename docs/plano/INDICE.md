@@ -235,18 +235,19 @@ Arquivo: [`fase-9-entidades-vinculadas.md`](fase-9-entidades-vinculadas.md) — 
 
 ## FASE 10 — Experiência, Design, Desempenho e Indicadores
 
-Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 21 bloco(s) · itens 1/83 concluídos.
+Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) — 22 bloco(s) · itens 7/99 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | · | [O que é "excelente" — as metas desta fase (medidas, não adjetivos)](fase-10-experiencia-design-performance.md#o-que-é-excelente--as-metas-desta-fase-medidas-não-adjetivos) | — |
-| v10.1 | [A homologação de verdade, o raio-x e as referências (a linha de base)](fase-10-experiencia-design-performance.md#v101--a-homologação-de-verdade-o-raio-x-e-as-referências-a-linha-de-base) | 🟡 1/9 |
+| v10.1 | [A homologação de verdade, o raio-x e as referências (a linha de base)](fase-10-experiencia-design-performance.md#v101--a-homologação-de-verdade-o-raio-x-e-as-referências-a-linha-de-base) | 🟡 7/14 |
+| · | [v10.1a a v10.1e — Gestão de membros: o primeiro módulo *(trazida da FASE 11 em 13/11/2026)*](fase-10-experiencia-design-performance.md#v101a-a-v101e--gestão-de-membros-o-primeiro-módulo-trazida-da-fase-11-em-13112026) | ⬜ 0/5 |
 | v10.2 | [A porta de entrada (a página inicial e o login)](fase-10-experiencia-design-performance.md#v102--a-porta-de-entrada-a-página-inicial-e-o-login) | ⬜ 0/5 |
-| v10.3 | [Sistema de design (a "identidade" da tela)](fase-10-experiencia-design-performance.md#v103--sistema-de-design-a-identidade-da-tela) | ⬜ 0/6 |
+| v10.3 | [Sistema de design (a "identidade" da tela)](fase-10-experiencia-design-performance.md#v103--sistema-de-design-a-identidade-da-tela) | ⬜ 0/8 |
 | v10.4 | [Linguagem limpa](fase-10-experiencia-design-performance.md#v104--linguagem-limpa) | ⬜ 0/5 |
 | v10.5 | [Estrutura da tela e navegação (o menu da esquerda e o conteúdo da direita)](fase-10-experiencia-design-performance.md#v105--estrutura-da-tela-e-navegação-o-menu-da-esquerda-e-o-conteúdo-da-direita) | ⬜ 0/6 |
 | v10.6 | [Organização das informações (módulos, submódulos e páginas)](fase-10-experiencia-design-performance.md#v106--organização-das-informações-módulos-submódulos-e-páginas) | ⬜ 0/6 |
-| v10.7 | [Peças padrão, lançamento rápido e celular](fase-10-experiencia-design-performance.md#v107--peças-padrão-lançamento-rápido-e-celular) | ⬜ 0/7 |
+| v10.7 | [Peças padrão, lançamento rápido e celular](fase-10-experiencia-design-performance.md#v107--peças-padrão-lançamento-rápido-e-celular) | ⬜ 0/11 |
 | v10.8 | [Aplicação tela por tela (a varredura)](fase-10-experiencia-design-performance.md#v108--aplicação-tela-por-tela-a-varredura) | ⬜ 0/3 |
 | 🔒 10-A | [antes de avançar para a v10.9](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-a--antes-de-avançar-para-a-v109) | — |
 | v10.9 | [Desempenho e capacidade (100 pessoas sem travar; assembleia de 1.000)](fase-10-experiencia-design-performance.md#v109--desempenho-e-capacidade-100-pessoas-sem-travar-assembleia-de-1000) | ⬜ 0/7 |
@@ -261,14 +262,15 @@ Arquivo: [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-desig
 | 🔒 10-C | [antes de encerrar a FASE 10](fase-10-experiencia-design-performance.md#-trava-de-revisão-10-c--antes-de-encerrar-a-fase-10) | — |
 | · | [Números antigos desta fase (para quem achar uma citação antiga)](fase-10-experiencia-design-performance.md#números-antigos-desta-fase-para-quem-achar-uma-citação-antiga) | — |
 
-## FASE 11 — Cadastro de membros próprio e escuta
+## FASE 11 — Escuta e gestor de ofícios
 
-Arquivo: [`fase-11-escuta-e-gestao-de-membros.md`](fase-11-escuta-e-gestao-de-membros.md) — 3 bloco(s) · itens 0/8 concluídos.
+Arquivo: [`fase-11-escuta-e-gestao-de-membros.md`](fase-11-escuta-e-gestao-de-membros.md) — 4 bloco(s) · itens 0/8 concluídos.
 
 | Versão | Título | Itens |
 | --- | --- | --- |
 | · | [O cadastro de membros próprio (para sair do sistema pago)](fase-11-escuta-e-gestao-de-membros.md#o-cadastro-de-membros-próprio-para-sair-do-sistema-pago) | ⬜ 0/4 |
 | · | [A escuta (comentários de quem usa)](fase-11-escuta-e-gestao-de-membros.md#a-escuta-comentários-de-quem-usa) | ⬜ 0/4 |
+| · | [Gestor de ofícios (módulo novo, pedido em 13/11/2026)](fase-11-escuta-e-gestao-de-membros.md#gestor-de-ofícios-módulo-novo-pedido-em-13112026) | — |
 | · | [Registro](fase-11-escuta-e-gestao-de-membros.md#registro) | — |
 
 ## FASE 12 — Criador de sites próprio (no lugar do Directus)

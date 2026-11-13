@@ -1,4 +1,7 @@
-# FASE 11 — Cadastro de membros próprio e escuta
+# FASE 11 — Escuta e gestor de ofícios
+
+**13/11/2026:** o cadastro de membros próprio foi para a FASE 10 (v10.1a a v10.1e, o primeiro módulo); esta fase ficou com a **escuta**
+e ganhou o **gestor de ofícios**.
 
 > Histórico e checklist desta parte do plano de versões. As referências a “seção 2.x” e “seção 4” apontam para o
 > [README](../../README.md); cada versão tem seu lugar no [índice do plano](INDICE.md).
@@ -10,6 +13,9 @@ ver a tabela de números antigos lá). O objetivo: trazer o cadastro de membros 
 que a Igreja usa hoje, e ouvir quem usa para ajustar o que não ficou bom.
 
 ## O cadastro de membros próprio (para sair do sistema pago)
+
+**Trazido para a FASE 10 em 13/11/2026** (v10.1a a v10.1e, o primeiro módulo depois das telas principais), por decisão do responsável: a
+gestão de membros mexe nas mesmas telas que a FASE 10 está desenhando. O que estava escrito abaixo fica de registro; o que vale está lá.
 
 Até aqui os dados chegam por planilha (a importação periódica da v10.10). Esta parte é a que termina essa dependência.
 
@@ -30,6 +36,13 @@ Até aqui os dados chegam por planilha (a importação periódica da v10.10). Es
 - [ ] "O que mudou": um aviso curto, em português comum, a cada versão que vai ao ar, para quem usa saber o que melhorou.
 - [ ] Ritmo de versões pequenas de ajuste (correção de defeito, tela que não funcionou, troca do que não ficou bom), cada uma com os mesmos
       cuidados de sempre (homologação, testes, desfazer).
+
+## Gestor de ofícios (módulo novo, pedido em 13/11/2026)
+
+O responsável quer um **gerador de ofícios**, que hoje não existe: o ofício certo para cada situação — ao departamento de trânsito para
+fechar uma rua, pedido de patrocínio, uma cruzada, o pedido de um espaço, e assim por diante. Com a **escada de aprovação**: o ofício da
+congregação é aprovado pelo dirigente; o que sai em nome do geral, pelo geral. Fica para quando chegar a vez dele, desenhado com o
+responsável como os outros módulos (3 a 5 opções por tela, notebook e celular).
 
 ## Registro
 

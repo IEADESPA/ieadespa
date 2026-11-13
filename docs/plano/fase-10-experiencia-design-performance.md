@@ -152,6 +152,40 @@ sem gravar nada):
   ("Cargo Ministerial (escada — Art. 71; muda pela consagração, só o Geral corrige aqui)"); a data é o campo cru "dd/mm/aaaa"; o menu do
   módulo muda de itens entre uma aba e outra.
 
+## v10.1a a v10.1e — Gestão de membros: o primeiro módulo *(trazida da FASE 11 em 13/11/2026)*
+
+**Decisão do responsável (13/11/2026):** fechadas as telas principais, o trabalho segue **um módulo por vez**, e o primeiro é a **gestão de
+membros**. Ela estava na FASE 11, mas mexe nas mesmas telas que a FASE 10 está desenhando (Meu Perfil, cadastrar pessoa, Minha vida na
+igreja, a carteirinha): desenhar agora e refazer depois seria trabalho em dobro. E o sistema já guarda quase tudo da pessoa — faltava
+praticamente o **CPF** (para a credencial e as formalidades).
+
+**A meta, nas palavras dele:** fazer **o melhor sistema de gestão de membros que existe**, feito para a Assembleia de Deus, com a
+**escalabilidade** que o sistema pago não tem — do geral, que vê os membros do campo inteiro e filtra, até a área, que vê só os dela —, e
+em que o membro tenha **na mão tudo o que a Igreja precisa, sem papel**.
+
+**O sistema pago (o que ele contou, 13/11/2026):** é uma gestão de igrejas genérica. A Igreja usa de verdade a **membresia** (o cadastro,
+a carteirinha e o histórico do membro). Ele tem também patrimônio, visita e ajuda pastoral, pequenos grupos (não serve: a Igreja trabalha
+com departamentos, não com células), escalas de voluntários (nunca usado; vão começar já no sistema novo) e um financeiro que é bom para a
+congregação sozinha mas se perde no nível do campo. É pago por mês: quanto antes sair, menos mensalidades; ele estima ainda uns 6 meses com
+o pago por causa do financeiro, que também está vindo para cá.
+
+- [ ] **v10.1a — Pesquisa e levantamento:** as referências (os melhores sistemas de membros, no Brasil e fora, e o que uma Assembleia de
+      Deus precisa: cartas de mudança e de recomendação, batismo, consagração, disciplina, desligamento) e o inventário do que o nosso sistema
+      já guarda e já faz com a pessoa. Só entra o que a Igreja usa (ex.: **RG não entra**); o que é reaproveitado por vários módulos fica num
+      lugar só.
+- [ ] **v10.1b — A ficha do membro completa:** o **CPF**, com os cuidados da LGPD (mascarado na tela, inteiro só para quem precisa,
+      conferido pelo dígito, um por pessoa, com a trilha de quem viu e de quem mudou), os campos que faltarem e o **histórico do membro na
+      Igreja** numa linha do tempo (admissão, batismo, transferências, cargos, disciplina, desligamento, falecimento).
+- [ ] **v10.1c — A escala dos níveis:** o geral vê o campo inteiro e filtra; o distrito, o quadrante, a região, a área e a congregação veem
+      só os seus — a mesma regra de escopo do resto do sistema, com a busca do alto e os filtros aprovados na rodada 6.
+- [ ] **v10.1d — As telas do módulo**, com 3 opções cada, no notebook e no celular: a lista (tabela no notebook, cartões no celular), a ficha
+      da pessoa, o cadastro em etapas, a edição em duas colunas, **Meu Perfil** (os quatro cartões, ajustados com ele), **Minha vida na
+      igreja**, a **carteirinha digital do membro** (com o QR para conferir, como a credencial dos ministros da v8.4) e as movimentações
+      (transferência, desligamento, falecimento).
+- [ ] **v10.1e — A migração única do sistema pago** (no lugar da importação periódica da v10.10): a exportação completa, a conferência campo
+      a campo, um tempo com os dois rodando juntos e o desligamento da parte de membros do pago, com o responsável conferindo. **LGPD:** a
+      planilha vai direto ao sistema, nunca por conversa ou e-mail; para montar a tela basta o cabeçalho com os nomes das colunas.
+
 ## v10.2 — A porta de entrada (a página inicial e o login)
 
 **Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da
@@ -389,6 +423,9 @@ de tela completo com a base nova, a varredura de texto e de celular sem nenhum a
 - [ ] O nível do banco decidido com o custo na mão (o teto de R$ 650/mês continua).
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
+
+**Substituída em 13/11/2026 pela migração única da v10.1e:** com a gestão de membros vindo para a FASE 10, não vale construir uma
+importação que se repete a cada tantos dias só para jogá-la fora depois. O que estava escrito abaixo fica de registro.
 
 Até o cadastro próprio substituir o sistema pago (FASE 11), os dados dos membros chegam por planilha.
 

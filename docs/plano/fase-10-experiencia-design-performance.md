@@ -106,11 +106,12 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
 - [x] **Número do recibo de doação** repetido: era a contagem do ano + 1, sem trava; dois registros ao mesmo tempo (ou um buraco na
       sequência) davam o mesmo número e erro 500. Agora nasce numa transação com a faixa do ano travada e é o maior do ano + 1. Aprovado pelo
       responsável e pelo Presidente; **em produção desde 12/11/2026** (prova: e2e-82, com corrida de 6 processos).
-- [ ] **Apuração das votações vinculantes** (o mais grave): a opção mais votada — fosse o Sim ou o Não — "aprovava". Regra decidida pelo
+- [x] **Apuração das votações vinculantes** (o mais grave): a opção mais votada — fosse o Sim ou o Não — "aprovava". Regra decidida pelo
       responsável e pelo Presidente: a votação tem **tipo** — **proposta** (a Secretaria marca qual opção aprova, qual rejeita e qual é voto em
       branco, que não conta; aprovada quando quem aprova atinge o quórum sobre os válidos) ou **escolha** (nomes ou opções: ganha a mais
-      votada, mesmo com 30%; empate fica para a mesa). Migração 173 no ramo `v10-votacao` (prova: e2e-83 e os testes de regras); **na
-      homologação para os dois testarem**; vai para a produção depois do "aprovado" deles.
+      votada, mesmo com 30%; empate fica para a mesa). Migração 173 (prova: e2e-83 e os testes de regras; na homologação, a massa de 5.047
+      pessoas). Aprovada pelo responsável em 13/11/2026 pela explicação, sem abrir a homologação; **em produção desde 13/11/2026** (merge
+      4fdb47e, casca v59; reverter = `git revert -m 1 4fdb47e`).
 - [ ] **Conciliação bancária: nenhum pagamento bate com o extrato** (achado na parte 6 da massa, 12/11/2026). O lado do sistema guarda a
       saída com valor negativo, mas a comparação (`casarLancamentos`, `api/shared/conciliação.js`) usa o valor do banco sem sinal: a
       diferença nunca dá zero e cada pagamento vira duas divergências ("só no sistema" e "só no banco"). Correção: comparar com o sinal (o

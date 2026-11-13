@@ -193,6 +193,38 @@ o pago por causa do financeiro, que também está vindo para cá.
       passaram a ficar em ordem crescente (a nova embaixo); e toda prévia de celular mostra a barra do próprio telefone (voltar,
       início, janelas), com a tela "A parte de baixo do celular" (3 opções) para ele escolher a regra que vale para o sistema todo.
       Esperando a escolha dele e do Presidente.
+- **Rodada 8 respondida (ele, 13/11/2026) — "muita coisa tem que melhorar; achei fraco em várias etapas".** O que ficou e o que
+  muda na rodada 9:
+  - **Celular (regra do sistema todo):** opção 2 — o menu vira abas no alto, logo abaixo do título; **nada preso embaixo**. As
+    telas finais de celular já aprovadas (início, módulo) que usam a barra de baixo terão de ser refeitas assim.
+  - **Primeira tela do módulo:** opção 3 (a busca no centro), virando um **Painel executivo**: mais 2 ou 3 gráficos
+    quantitativos e qualitativos à direita, que mudam com o nível — ou um submódulo "Painel executivo" como o principal. Gostou
+    do "Precisa de você" compacto, com "só o que eu preciso resolver", sem ocupar meia tela.
+  - **Lista:** opção 1 (filtros numa linha), com poucos filtros (a busca do alto, Ctrl K, já procura tudo) e a escolha de quantos
+    nomes por página (20, 40…), pensando na tela do celular. Pediu explicação da diferença entre a busca da lista e o Ctrl K.
+  - **Ficha da pessoa:** opção 3 (a vida na Igreja em destaque), mas **nenhuma convenceu** — quer a **ficha 360**: a foto
+    grande; as datas que faltam (conversão — mesmo em outra igreja —, batismo nas águas, batismo no Espírito Santo, consagrações);
+    situação, direito a voto na assembleia, disciplinas, cargos e funções; um **submenu da própria ficha** (no alto ou à
+    direita) com o menu principal recolhido como no celular; a **linha do tempo obrigatória**, vista por todos — inclusive pelo
+    próprio membro, por inteiro.
+  - **O membro vê tudo o que é dele:** sem "pedir acesso" aos próprios dados; em "Minha vida na igreja", um submenu com a vida
+    inteira dele na Igreja.
+  - **Cadastro:** opção 3 (com a prévia da ficha), e mais: o **pré-cadastro** feito por quem está com a pessoa (o professor da
+    EBD, o líder do departamento, um link no site "quero me cadastrar") ou pela própria pessoa, que cai numa **fila de
+    cadastros**; a secretaria local confere, completa e aceita, e a **matrícula nasce automática** no aceite — com a escala
+    (local, área, geral).
+  - **Edição:** opção 3 (campo a campo, com quem mudou — auditoria). Há campos que a secretaria não muda (ex.: o nome) e campos
+    que o **próprio membro** muda (contato, endereço, o que estiver vazio); no resto, ele **sugere a alteração** e a secretaria
+    (local, área ou geral) aplica.
+  - **Mudança de congregação:** opção 1, e as 3 telas são as **etapas de um fluxo só** (pedir, aceitar, acompanhar). O nome é
+    **transferência**: o membro pede a transferência, não uma "carta de mudança".
+  - **Juntar fichas:** opção 3 (só o que é diferente); fica **sempre a matrícula mais antiga**; a que sobra fica registrada
+    (ele levantou se o número pode ser reaproveitado — a decidir); e **alerta antes da assembleia geral**: não abrir com
+    cadastro repetido ou errado pendente.
+  - **Carteirinha: reprovada** (marcou a 1 só para seguir). São duas: a **física** (papel e PVC), com um **editor do modelo**
+    no módulo e só o que não muda (nome, nascimento, foto, matrícula, pai e mãe) e o QR **sem validade** apontando para uma
+    página que confere; e a **digital**, com o que muda (congregação, cargo e função — obreiro, pastor, missionário —, situação).
+    O cargo tem de aparecer.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

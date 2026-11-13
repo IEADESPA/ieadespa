@@ -169,15 +169,17 @@ com departamentos, não com células), escalas de voluntários (nunca usado; vã
 congregação sozinha mas se perde no nível do campo. É pago por mês: quanto antes sair, menos mensalidades; ele estima ainda uns 6 meses com
 o pago por causa do financeiro, que também está vindo para cá.
 
-- [ ] **v10.1a — Pesquisa e levantamento:** as referências (os melhores sistemas de membros, no Brasil e fora, e o que uma Assembleia de
+- [x] **v10.1a — Pesquisa e levantamento:** as referências (os melhores sistemas de membros, no Brasil e fora, e o que uma Assembleia de
       Deus precisa: cartas de mudança e de recomendação, batismo, consagração, disciplina, desligamento) e o inventário do que o nosso sistema
       já guarda e já faz com a pessoa. Só entra o que a Igreja usa (ex.: **RG não entra**); o que é reaproveitado por vários módulos fica num
-      lugar só.
+      lugar só. **Feita em 13/11/2026:** [docs/pesquisa/gestao-de-membros-2026.md](../pesquisa/gestao-de-membros-2026.md) (as referências, o
+      rol de membros da AD, a LGPD do CPF, o inventário e a lista por prioridade para a v10.1b a v10.1e), com as 7 decisões abaixo.
 - [ ] **v10.1b — A ficha do membro completa:** o **CPF**, com os cuidados da LGPD (mascarado na tela, inteiro só para quem precisa,
       conferido pelo dígito, um por pessoa, com a trilha de quem viu e de quem mudou), os campos que faltarem e o **histórico do membro na
       Igreja** numa linha do tempo (admissão, batismo, transferências, cargos, disciplina, desligamento, falecimento).
 - [ ] **v10.1c — A escala dos níveis:** o geral vê o campo inteiro e filtra; o distrito, o quadrante, a região, a área e a congregação veem
-      só os seus — a mesma regra de escopo do resto do sistema, com a busca do alto e os filtros aprovados na rodada 6.
+      só os seus — a mesma regra de escopo do resto do sistema, com a busca do alto e os filtros aprovados na rodada 6. *(O filtro no banco
+      e a lista em páginas no servidor já estão em produção desde 13/11; falta a tela usar as páginas, que vem com o desenho da v10.1d.)*
 - [ ] **v10.1d — As telas do módulo**, com 3 opções cada, no notebook e no celular: a lista (tabela no notebook, cartões no celular), a ficha
       da pessoa, o cadastro em etapas, a edição em duas colunas, **Meu Perfil** (os quatro cartões, ajustados com ele), **Minha vida na
       igreja**, a **carteirinha digital do membro** (com o QR para conferir, como a credencial dos ministros da v8.4) e as movimentações
@@ -185,6 +187,32 @@ o pago por causa do financeiro, que também está vindo para cá.
 - [ ] **v10.1e — A migração única do sistema pago** (no lugar da importação periódica da v10.10): a exportação completa, a conferência campo
       a campo, um tempo com os dois rodando juntos e o desligamento da parte de membros do pago, com o responsável conferindo. **LGPD:** a
       planilha vai direto ao sistema, nunca por conversa ou e-mail; para montar a tela basta o cabeçalho com os nomes das colunas.
+
+**As 7 decisões da pesquisa (o responsável, 13/11/2026):**
+
+1. **Quem vê o CPF inteiro:** ninguém em lista, busca, exportação ou PDF — ali ele sai sempre **mascarado** (e nenhum dado sensível sai
+   inteiro). Pode-se **procurar** uma pessoa pelo CPF, mas o resultado mostra o CPF mascarado. Inteiro, só em dois lugares: a **Secretaria
+   Geral**, ao abrir os dados pessoais da pessoa, e a **própria pessoa**, em Meus Dados. A secretaria local e os demais veem mascarado.
+2. **Campos novos:** entram a **filiação** (nome da mãe **e** do pai, que vai também para a credencial física e a digital) e a
+   **escolaridade**. **Naturalidade não entra.** A **profissão** só existe para quem está inscrito num dos 20 **Setores Técnicos** e aparece
+   só nesse módulo, não nos dados pessoais.
+3. **Mudança de congregação:** quem pede é a **origem** (a secretaria da congregação de onde a pessoa sai) ou o próprio membro; o membro não
+   precisa aceitar. Pedido pelo **geral**: aceito na hora. **Mesma área**: aceito na hora. **Áreas diferentes**, pedido pela origem local
+   ou pelo membro: a **secretaria de destino** (ou o geral) aceita ou recusa.
+4. **Livro do rol em PDF: não.** O sistema não gera PDF com dados de membros (papel com dado pessoal vira problema em processo). Só o geral,
+   se for estritamente necessário, e com tudo bem mascarado.
+5. **Juntar fichas repetidas: sim.** A secretaria escolhe, campo a campo, o que fica. Pode começar já. Na migração, os 2 cadastros que
+   existem hoje (as duas pessoas da fase de teste) saem e os membros entram da matrícula 3 em diante — a princípio, não é preocupação.
+6. **Carteirinha na carteira do celular (Google/Apple): não** — custo e risco que não compensam.
+7. **Mais de um departamento por pessoa: não.** O **departamento** é por **faixa etária** e é ele que conta as pessoas nos relatórios: uma
+   pessoa, um departamento. **Secretarias e ministérios ficam separados** dos departamentos: uma mulher de 30 anos é do departamento de
+   Senhoras e pode servir no Ministério Infantil (um ministério), sem deixar de contar só uma vez.
+
+**Adiantado em 13/11/2026 (aprovado por ele, em produção — commit 0118594):** a lista de pessoas passou a ser filtrada **no banco** pelo
+escopo de quem está logado (o dirigente recebe só a sua congregação; antes o servidor lia o campo inteiro e escondia na memória), com a
+lista em páginas pronta no servidor para a tela nova (v10.1d); e o **"Cadastrar Pessoa" que ficava em branco** — o formulário agora aparece
+na hora, cada lista carrega por conta própria, e salvar/editar esperam a lista de congregações (antes, editar com as listas chegando podia
+gravar a pessoa na congregação errada).
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
 

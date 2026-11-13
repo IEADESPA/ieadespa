@@ -186,8 +186,16 @@ o pago por causa do financeiro, que também está vindo para cá.
       igreja**, a **carteirinha digital do membro** (com o QR para conferir, como a credencial dos ministros da v8.4) e as movimentações
       (transferência, desligamento, falecimento). **Rodada 8 publicada em 13/11/2026** na página de propostas: 8 telas com 3 opções cada
       (primeira tela do módulo, lista com filtros e nível, ficha, cadastro em 5 etapas, edição, mudança de congregação com as regras da
-      decisão 3, juntar fichas e carteirinha com a filiação), notebook e celular, claro e escuro — esperando a escolha dele e do
-      Presidente. Meu Perfil espera as observações que ele vai mandar; Minha vida na igreja ficou com a opção 2 da rodada 7.
+      decisão 3, juntar fichas e carteirinha com a filiação), notebook e celular, claro e escuro. Meu Perfil espera as observações que
+      ele vai mandar; Minha vida na igreja ficou com a opção 2 da rodada 7. **Reprovada por ele no mesmo dia** ("não vi a
+      escalabilidade") e **refeita**: cada tela com "Quem está vendo" — secretaria local, da área, a Geral e o membro comum —, com os
+      números, a lista (colunas, filtros e grupos por nível) e o "Precisa de você" com "só o que eu preciso resolver"; as rodadas
+      passaram a ficar em ordem crescente (a nova embaixo); e toda prévia de celular mostra a barra do próprio telefone (voltar,
+      início, janelas), com a tela "A parte de baixo do celular" (3 opções) para ele escolher a regra que vale para o sistema todo.
+      Esperando a escolha dele e do Presidente.
+- **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
+  níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
+  e, no celular, nada colado nos botões do telefone.
 - [ ] **v10.1e — A migração única do sistema pago** (no lugar da importação periódica da v10.10): a exportação completa, a conferência campo
       a campo, um tempo com os dois rodando juntos e o desligamento da parte de membros do pago, com o responsável conferindo. **LGPD:** a
       planilha vai direto ao sistema, nunca por conversa ou e-mail; para montar a tela basta o cabeçalho com os nomes das colunas.

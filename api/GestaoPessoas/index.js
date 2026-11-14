@@ -19,6 +19,22 @@ const territorioDb = require("../shared/territorioDb");
 // (a regra mora em shared/escopoRotas.js, usada por todas as rotas de ficha)
 const { noEscopoDaPessoa, FORA_DO_ESCOPO, ehGeral, condicaoSqlEscopoPessoa } = require("../shared/escopoRotas");
 const { escaparLike } = require("../shared/ebdLgpd");
+// FASE 10, v10.1b (migração 174) — o CPF (conferido, mascarado; inteiro só para a Secretaria Geral, com a leitura registrada), a filiação, a escolaridade e a matrícula
+// gerada pelo sistema para a pessoa nova (primeiro um número liberado ao juntar fichas, senão a maior + 1)
+const ficha = require("../shared/fichaMembro");
+// A matrícula da pessoa nova: o menor número liberado ao juntar fichas que ninguém usa, senão a maior + 1 (decisão do responsável, 13/11/2026). Sem trava: a corrida
+// entre dois cadastros ao mesmo tempo é resolvida na gravação (a chave primária recusa o segundo, que pede outro número).
+async function proximaMatricula(pool) {
+  const r = await pool.request().query(`
+    SELECT COALESCE(
+      (SELECT MIN(l.MembroId) FROM MatriculasLivres l WHERE NOT EXISTS (SELECT 1 FROM MembroReferencia x WHERE x.MembroId = l.MembroId)),
+      (SELECT ISNULL(MAX(MembroId), 0) + 1 FROM MembroReferencia)) AS id`);
+  return Number(r.recordset[0].id);
+}
+// O erro do banco é a chave primária repetida (outra matrícula igual), e não o CPF repetido (índice único UX_MembroReferencia_Cpf)?
+const ehMatriculaRepetida = (e) => !!e && (e.number === 2627 || e.number === 2601) && !/UX_MembroReferencia_Cpf/i.test(String(e.message || "")) && /PRIMARY KEY|PK_/i.test(String(e.message || ""));
+const ehCpfRepetido = (e) => !!e && (e.number === 2627 || e.number === 2601) && /UX_MembroReferencia_Cpf/i.test(String(e.message || ""));
+const MSG_CPF_REPETIDO = "Esse CPF já está na ficha de outra pessoa. Se for a mesma pessoa, as duas fichas precisam ser juntadas.";
 // v10.1c — a lista em páginas (?pagina=N): 20 por página, no máximo 100
 const POR_PAGINA_PADRAO = 20;
 const POR_PAGINA_MAX = 100;
@@ -67,7 +83,8 @@ const SELECT_MEMBRO = `
          m.ExtensaoId AS extensaoId, e.Nome AS extensao, m.EstadoCivil AS estadoCivil,
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
          CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
-         m.FotoUrl AS fotoUrl, m.Sexo AS sexo, CONVERT(varchar(10), hc.Desde, 120) AS cargoDesde
+         m.FotoUrl AS fotoUrl, m.Sexo AS sexo, CONVERT(varchar(10), hc.Desde, 120) AS cargoDesde,
+         ${ficha.sqlCpfMascarado("m.Cpf")} AS cpfMascarado, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
@@ -86,6 +103,35 @@ module.exports = async function (context, req) {
   // ---- GET ?lista=bairros: o catálogo dos bairros para o endereço em linhas (v9.5) — nome, cidade e UF, sem dado de ninguém ----
   if (method === "GET" && req.query && req.query.lista === "bairros") {
     context.res = { status: 200, body: { sucesso: true, bairros: await territorioDb.bairrosParaEscolher(pool) } };
+    return;
+  }
+
+  // ---- GET /api/pessoas/{membroId}?ver=cpf: o CPF inteiro — só a Secretaria Geral, e cada leitura fica registrada (CpfLeituras e a trilha) ----
+  if (method === "GET" && req.query && req.query.ver === "cpf") {
+    const alvoId = auth.idDeRota(membroIdRota);
+    if (!ehGeral(usuario)) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "Só a Secretaria Geral vê o CPF inteiro." } };
+      return;
+    }
+    if (!alvoId) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula." } };
+      return;
+    }
+    const alvo = (await pool.request().input("id", sql.Int, alvoId).query(`
+      SELECT m.Cpf, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+      LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`)).recordset[0];
+    if (!alvo || !noEscopoDaPessoa(usuario, alvo.CongregacaoNome, alvo.ExtensaoNome)) {
+      context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    const cpf = alvo.Cpf ? String(alvo.Cpf).trim() : null;
+    if (cpf) {
+      await pool.request().input("id", sql.Int, alvoId).input("por", sql.Int, usuario.membroId)
+        .query(`INSERT INTO CpfLeituras (MembroId, LidoPor, Onde) VALUES (@id, @por, N'FICHA_SECRETARIA_GERAL')`);
+      await registrarAuditoria({ tabela: "MembroReferencia", registroId: alvoId, acao: "Viu o CPF inteiro", usuarioId: usuario.membroId, dadosDepois: { cpf: ficha.mascararCpf(cpf) } });
+    }
+    context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: { sucesso: true, cpf: cpf ? `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}` : null } };
     return;
   }
 
@@ -112,9 +158,17 @@ module.exports = async function (context, req) {
       const busca = String(req.query.busca || "").trim().slice(0, 100);
       if (busca) {
         pedido.input("busca", sql.NVarChar(210), `%${escaparLike(busca)}%`);
-        condicoes.push(/^\d+$/.test(busca)
-          ? "(m.Nome LIKE @busca ESCAPE '\\' OR CAST(m.MembroId AS NVARCHAR(12)) LIKE @busca ESCAPE '\\')"
-          : "m.Nome LIKE @busca ESCAPE '\\'");
+        const porNome = /^\d+$/.test(busca)
+          ? "m.Nome LIKE @busca ESCAPE '\\' OR CAST(m.MembroId AS NVARCHAR(12)) LIKE @busca ESCAPE '\\'"
+          : "m.Nome LIKE @busca ESCAPE '\\'";
+        // v10.1b — procurar pelo CPF (com ou sem pontos): só o número inteiro e certo acha (nunca um pedaço); a pessoa achada vem com o CPF mascarado
+        const cpfBusca = ficha.soDigitos(busca);
+        if (cpfBusca.length === 11 && ficha.cpfValido(cpfBusca)) {
+          pedido.input("buscaCpf", sql.Char(11), cpfBusca);
+          condicoes.push(`(${porNome} OR m.Cpf = @buscaCpf)`);
+        } else {
+          condicoes.push(`(${porNome})`);
+        }
       }
       const congId = auth.idDeRota(req.query.congregacaoId);
       if (req.query.congregacaoId !== undefined && req.query.congregacaoId !== "") {
@@ -165,17 +219,48 @@ module.exports = async function (context, req) {
 
   // ---- POST: criar ou atualizar ----
   if (method === "POST") {
+    const corpo = req.body || {};
     const {
-      membroId, nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
+      nome, congregacaoId, status, dataNascimento, dataAdmissao, dizimistaFiel,
       situacaoMembro, departamentoId, cargoMinisterial, telefone, email, endereco, extensaoId,
       dataBatismo, formaAdmissao, origem, igrejaAnterior,
       dataRitoRecebimento, nomeLidoRito, ministranteRito, estadoCivil,
       dataAfastamento, motivoSaida, dataSaida, sexo, cargoDesde, enderecoPartes
-    } = req.body || {};
-    if (!membroId || !nome) {
-      context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, nome." } };
+    } = corpo;
+    let membroId = corpo.membroId;
+    if (!nome) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Campo obrigatório: nome." } };
       return;
     }
+    // v10.1b — sem matrícula, o sistema gera (pessoa nova); com matrícula, ela precisa ser um número inteiro positivo
+    const matriculaGerada = membroId === undefined || membroId === null || membroId === "";
+    if (!matriculaGerada) {
+      const n = (typeof membroId === "number" || typeof membroId === "string") && /^\s*\d{1,10}\s*$/.test(String(membroId)) ? Number(String(membroId).trim()) : NaN;
+      if (!Number.isInteger(n) || n <= 0 || n > 2147483647) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } };
+        return;
+      }
+      membroId = n;
+    }
+    // v10.1b — CPF, filiação e escolaridade: o campo que não veio no pedido fica como está (a tela antiga não apaga o que não mostra)
+    const veio = (campo) => Object.prototype.hasOwnProperty.call(corpo, campo);
+    const cpfLido = veio("cpf") ? ficha.lerCpf(corpo.cpf) : { ok: true, cpf: undefined };
+    if (!cpfLido.ok) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: cpfLido.mensagem } };
+      return;
+    }
+    const maeLida = veio("nomeMae") ? ficha.lerNomeFiliacao(corpo.nomeMae, "da mãe") : { ok: true, nome: undefined };
+    const paiLido = veio("nomePai") ? ficha.lerNomeFiliacao(corpo.nomePai, "do pai") : { ok: true, nome: undefined };
+    if (!maeLida.ok || !paiLido.ok) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: (!maeLida.ok ? maeLida : paiLido).mensagem } };
+      return;
+    }
+    const escolaridade = veio("escolaridade") ? (corpo.escolaridade || null) : undefined;
+    if (escolaridade && !ficha.escolaridadeValida(escolaridade)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Escolaridade inválida." } };
+      return;
+    }
+    if (matriculaGerada) membroId = await proximaMatricula(pool);
     let destinoCongregacaoNome = null, destinoExtensaoNome = null;
     if (congregacaoId) {
       const c = await pool.request().input("id", sql.Int, congregacaoId).query(`SELECT TOP 1 Nome FROM Congregacoes WHERE CongregacaoId = @id`);
@@ -268,8 +353,8 @@ module.exports = async function (context, req) {
       }
     }
 
-    const existente = await pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
+    const lerExistente = () => pool.request().input("id", sql.Int, membroId).query(`
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
              CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
              CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
                                WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
@@ -278,6 +363,16 @@ module.exports = async function (context, req) {
                                AND pdx.Status IN (N'JULGADO', N'EM_RECURSO')) THEN 1 ELSE 0 END AS TemExclusao,
              c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
+    let existente = await lerExistente();
+    // a matrícula gerada nunca atualiza a ficha de outra pessoa: se o número foi tomado no meio do caminho, pede outro
+    for (let tentativa = 0; matriculaGerada && existente.recordset.length > 0 && tentativa < 5; tentativa++) {
+      membroId = await proximaMatricula(pool);
+      existente = await lerExistente();
+    }
+    if (matriculaGerada && existente.recordset.length > 0) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Não foi possível gerar a matrícula agora. Tente de novo." } };
+      return;
+    }
     const existia = existente.recordset.length > 0;
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
     if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
@@ -288,6 +383,21 @@ module.exports = async function (context, req) {
     const cargoAnterior = existia ? (existente.recordset[0].CargoAnterior || null) : null;
     const cargoNovo = cargoMinisterial || null;
     const geral = ehGeral(usuario);
+    // v10.1b — o CPF: informar quando a ficha não tem, qualquer um no escopo; trocar ou apagar um CPF já gravado, só a Secretaria Geral.
+    const cpfAnterior = existia && existente.recordset[0].CpfAnterior ? String(existente.recordset[0].CpfAnterior).trim() : null;
+    const cpfMuda = cpfLido.cpf !== undefined && cpfLido.cpf !== cpfAnterior;
+    if (cpfMuda && cpfAnterior && !geral) {
+      context.res = { status: 403, body: { sucesso: false, mensagem: "O CPF já está na ficha: só a Secretaria Geral troca ou apaga o CPF." } };
+      return;
+    }
+    if (cpfMuda && cpfLido.cpf) {
+      const dono = (await pool.request().input("cpf", sql.Char(11), cpfLido.cpf).input("id", sql.Int, membroId)
+        .query(`SELECT TOP 1 MembroId FROM MembroReferencia WHERE Cpf = @cpf AND MembroId <> @id`)).recordset[0];
+      if (dono) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: geral ? `${MSG_CPF_REPETIDO} (matrícula ${dono.MembroId})` : MSG_CPF_REPETIDO } };
+        return;
+      }
+    }
     const semCargo = (c) => c === null || c === "MEMBRO";
     if (!geral && ((cargoAnterior !== cargoNovo && !(semCargo(cargoAnterior) && semCargo(cargoNovo))) || cargoDesdeFinal)) {
       context.res = { status: 403, body: { sucesso: false, mensagem: "O cargo ministerial muda pela esteira de consagração. Só a Secretaria (nível geral) corrige o cargo no cadastro." } };
@@ -389,7 +499,14 @@ module.exports = async function (context, req) {
       .input("dataSaida", sql.Date, dataSaidaFinal)
       .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
       .input("sexo", sql.NChar(1), sexoFinal)
-      .input("cargoLido", sql.NVarChar(30), cargoAnterior);
+      .input("cargoLido", sql.NVarChar(30), cargoAnterior)
+      .input("cpf", sql.Char(11), cpfLido.cpf === undefined ? null : cpfLido.cpf)
+      .input("nomeMae", sql.NVarChar(150), maeLida.nome === undefined ? null : maeLida.nome)
+      .input("nomePai", sql.NVarChar(150), paiLido.nome === undefined ? null : paiLido.nome)
+      .input("escolaridade", sql.NVarChar(30), escolaridade === undefined ? null : escolaridade);
+    // v10.1b — no UPDATE, só entram os campos novos que vieram no pedido (os outros ficam como estão)
+    const setFichaNova = [cpfLido.cpf !== undefined ? "Cpf = @cpf" : null, maeLida.nome !== undefined ? "NomeMae = @nomeMae" : null,
+      paiLido.nome !== undefined ? "NomePai = @nomePai" : null, escolaridade !== undefined ? "Escolaridade = @escolaridade" : null].filter(Boolean).map((x) => `, ${x}`).join("");
     const gravarPessoa = async (request, prepEnd) => {
       request.input("endereco", sql.NVarChar(300), prepEnd.endereco);
       territorioDb.entradasEndereco(request, prepEnd.partes);
@@ -405,20 +522,40 @@ module.exports = async function (context, req) {
                DataBatismo = @dataBatismo, FormaAdmissao = @formaAdmissao, Origem = @origem,
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
-               DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
+               DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo${setFichaNova}
         WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
         const passou = !!(gravou && gravou.rowsAffected && gravou.rowsAffected[0]);
         return { gravou: passou, desfazer: !passou };
       }
       await request.query(`
-        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo, ${territorioDb.COLUNAS_ENDERECO})
-        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo, ${territorioDb.VALORES_ENDERECO})`);
+        INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo, Cpf, NomeMae, NomePai, Escolaridade, ${territorioDb.COLUNAS_ENDERECO})
+        VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo, @cpf, @nomeMae, @nomePai, @escolaridade, ${territorioDb.VALORES_ENDERECO});
+        DELETE FROM MatriculasLivres WHERE MembroId = @id;`);
       return { gravou: true };
     };
     const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
-    const resultadoGravacao = partesFinais && partesFinais.bairroId
-      ? await territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
-      : await gravarPessoa(preencher(pool.request()), prepEnd);
+    const executarGravacao = () => (partesFinais && partesFinais.bairroId
+      ? territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
+      : gravarPessoa(preencher(pool.request()), prepEnd));
+    let resultadoGravacao;
+    for (let tentativa = 0; ; tentativa++) {
+      try {
+        resultadoGravacao = await executarGravacao();
+        break;
+      } catch (e) {
+        // v10.1b — o CPF gravado por outro cadastro no mesmo instante (o índice único recusou): a mesma mensagem da conferência acima, sem o número
+        if (ehCpfRepetido(e)) {
+          context.res = { status: 200, body: { sucesso: false, mensagem: MSG_CPF_REPETIDO } };
+          return;
+        }
+        // a matrícula gerada foi tomada por outro cadastro no mesmo instante: pede o próximo número
+        if (matriculaGerada && ehMatriculaRepetida(e) && tentativa < 5) {
+          membroId = await proximaMatricula(pool);
+          continue;
+        }
+        throw e;
+      }
+    }
     if (!resultadoGravacao.gravou) {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
       return;
@@ -460,7 +597,11 @@ module.exports = async function (context, req) {
       acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
       usuarioId: usuario.membroId,
       dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
-        ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
+        ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}),
+        // v10.1b — o CPF na trilha só mascarado (a trilha é imutável e não pode guardar o número inteiro)
+        ...(cpfMuda ? { cpfAlterado: true, cpfAnterior: ficha.mascararCpf(cpfAnterior), cpfNovo: ficha.mascararCpf(cpfLido.cpf) } : {}),
+        ...(maeLida.nome !== undefined ? { nomeMae: maeLida.nome } : {}), ...(paiLido.nome !== undefined ? { nomePai: paiLido.nome } : {}),
+        ...(escolaridade !== undefined ? { escolaridade } : {}), ...(matriculaGerada ? { matriculaGerada: true } : {}) }
     });
     // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
     if (emailMudou && emailAnterior) {
@@ -473,7 +614,7 @@ module.exports = async function (context, req) {
       } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
     }
 
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.", membro } };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : matriculaGerada ? `✅ Pessoa cadastrada com a matrícula ${membroId}.` : "✅ Pessoa cadastrada.", membro } };
     return;
   }
 

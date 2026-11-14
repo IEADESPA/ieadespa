@@ -32,7 +32,8 @@ module.exports = async function (context, req) {
              CONVERT(varchar(10), DataBatismo, 120) AS dataBatismo,
              FormaAdmissao AS formaAdmissao, Origem AS origem, IgrejaAnterior AS igrejaAnterior,
              CONVERT(varchar(10), DataRitoRecebimento, 120) AS dataRitoRecebimento,
-             NomeLidoRito AS nomeLidoRito, MinistranteRito AS ministranteRito
+             NomeLidoRito AS nomeLidoRito, MinistranteRito AS ministranteRito,
+             m.Cpf AS cpf, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade
       FROM MembroReferencia m LEFT JOIN Bairros bm ON bm.BairroId = m.EnderecoBairroId WHERE m.MembroId = @id`);
     if (result.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
@@ -42,6 +43,9 @@ module.exports = async function (context, req) {
     const dados = {};
     for (const [k, v] of Object.entries(linha)) if (!/^(Endereco|BairroNome)/.test(k)) dados[k] = v;
     dados.enderecoPartes = territorioDb.partesDaLinha(linha);
+    // v10.1b (decisão do responsável, 13/11/2026) — a própria pessoa vê o próprio CPF inteiro em Meus Dados (a rota só abre para a matrícula da sessão: exigirTitular)
+    const cpfProprio = linha.cpf ? String(linha.cpf).trim() : null;
+    dados.cpf = cpfProprio && cpfProprio.length === 11 ? `${cpfProprio.slice(0, 3)}.${cpfProprio.slice(3, 6)}.${cpfProprio.slice(6, 9)}-${cpfProprio.slice(9)}` : null;
     const bairros = await territorioDb.bairrosParaEscolher(pool);
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, dados, bairros } };
     return;

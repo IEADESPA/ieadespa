@@ -121,9 +121,13 @@ bash rodar.sh preparar-172
 BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
 # FASE 10: o número do recibo de doação numa transação travada (o maior do ano + 1), com corrida de 6 processos
 BASE=cenario-172 bash rodar.sh roteiro e2e-82-doacoes-recibo.js
-# FASE 10 (v10.1c): a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
-BASE=cenario-172 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 # FASE 10 (migração 173): a votação vinculante com o tipo — proposta (aprova, rejeita, em branco não conta) ou escolha (a mais votada, empate para a mesa)
 bash rodar.sh preparar-173
 BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
+# FASE 10 (v10.1b, migração 174): a ficha por dentro — o GestaoPessoas lê as colunas da 174, por isso a lista de pessoas (e2e-84) também roda sobre a cenario-174
+bash rodar.sh preparar-174
+# (v10.1c) a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
+BASE=cenario-174 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
+# (v10.1b) o CPF (único, mascarado, inteiro só para a Geral com a leitura registrada), a filiação, a escolaridade e a matrícula gerada, com corridas de vários processos
+BASE=cenario-174 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 echo TUDO-PRONTO

@@ -202,6 +202,14 @@ case "$1" in
     migrar 173 2
     base salvar cenario-173
     ;;
+  preparar-174)
+    # FASE 10, v10.1b (14/11/2026): a partir da base "cenario-173", aplica a 174 duas vezes (a ficha por dentro: CPF, filiação, escolaridade, CpfLeituras e
+    # MatriculasLivres; prova a idempotência); salva "cenario-174" (e2e-84 e e2e-85 montam o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-173
+    migrar 174 2
+    base salvar cenario-174
+    ;;
   roteiro)
     shift
     cd "$AQUI"

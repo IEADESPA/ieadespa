@@ -251,6 +251,22 @@ o pago por causa do financeiro, que também está vindo para cá.
     letras, paleta de cores e **arte de fundo em alta resolução** enviada pela secretaria. Editar só no notebook; o celular só vê.
   - **Carteirinha digital:** opção 3 (tela cheia), caprichando no celular — quais informações vão nela e a **página que o QR
     abre**.
+- **Rodada 10 respondida (ele, 14/11/2026):**
+  - **Aprovadas as versões finais** da ficha 360 (submenu à direita no notebook, abas no celular), de Minha vida (linha do tempo
+    primeiro, "Minha ficha" à direita) e do fluxo das sugestões.
+  - **Painel executivo:** no notebook, os avisos do módulo numa coluna à direita (opção 2); no celular, numa faixa no alto
+    (opção 1); os gráficos com filtros livres e muitas possibilidades de gráfico.
+  - **Fila de cadastros:** notebook = quadro por quem completa (opção 1); celular = a esteira com os números (opção 2).
+  - **"Quero me cadastrar" no site:** opção 1 (formulário ao lado do convite), no notebook e no celular. **Não pede o
+    departamento:** ele sai do nascimento, do sexo e do estado civil (os campos podem mudar depois).
+  - **Editor da carteirinha física:** juntar — a tela inicial é a opção 2 (os modelos em cima e as carteirinhas embaixo, sem
+    editar ali; o botão "Editar" abre o editor); o editor é a opção 1 (ferramentas dos dois lados) com as camadas da opção 3: à
+    esquerda os menus da carteirinha, à direita o submenu de personalização. Tudo em **alta resolução** do começo ao fim (o
+    logo e os fundos já entram em alta; nada de reabrir PNG e salvar de novo, que perde qualidade).
+  - **Carteirinha digital:** o "selo vivo" (opção 3) é bom para quem confere; a carteirinha em si pode ser a clássica, com um
+    desenho melhor. **Regra do QR (ele):** cada pessoa tem **um QR só, que nunca vence nem muda** — o mesmo na física e na digital,
+    funcionando 10 anos depois; o que muda é **o que a página mostra** ao ler (membro, em disciplina, não é mais da Igreja). A
+    digital mostra mais (função, situação) do que a física (só o que não muda). Ele quer conversar mais sobre a conferência.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

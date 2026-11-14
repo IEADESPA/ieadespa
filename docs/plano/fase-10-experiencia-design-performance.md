@@ -275,7 +275,19 @@ o pago por causa do financeiro, que também está vindo para cá.
   pessoas); ele vê, aprova, e só então entra na produção:
   1. **A ficha por dentro (sem tela nova ainda):** CPF (único, conferido pelo dígito, mascarado, leitura registrada), filiação
      (mãe e pai), escolaridade e a **matrícula gerada pelo sistema** (reaproveitando primeiro os números liberados ao juntar
-     fichas) — migração 174.
+     fichas) — migração 174. **Feito em 14/11/2026 no ramo `v10-membros`** (commits 4b76f0f e 8d95a49; ainda fora da
+     homologação e da produção): `MembroReferencia` ganhou `Cpf` (11 dígitos, índice único que aceita vazio), `NomeMae`,
+     `NomePai` e `Escolaridade` (lista fixa); `CpfLeituras` registra quem viu o CPF inteiro de quem; `MatriculasLivres` guarda os
+     números que sobram ao juntar fichas. Regras em `api/shared/fichaMembro.js`. Na lista, na busca e na resposta do cadastro o
+     CPF sai **só mascarado** (feito no próprio SQL); procurar pelo CPF inteiro acha a pessoa (no escopo); o inteiro só pela
+     Secretaria Geral (`GET /api/pessoas/{matrícula}?ver=cpf`, com a leitura registrada) e pela própria pessoa (Meus Dados e o
+     dossiê LGPD); trocar ou apagar um CPF já gravado, só a Geral; CPF de outra pessoa é recusado (a matrícula da outra só para a
+     Geral); a trilha guarda o CPF mascarado; a saída por carta e a exclusão LGPD apagam CPF, filiação e escolaridade. A
+     matrícula é gerada **só com o pedido explícito** (`gerarMatricula: true`): o menor número livre que ninguém usa, senão a
+     maior + 1, à prova de corrida. Sem tela nova (vem no passo 7). Prova: jest 6.437/6.437 (20 testes novos); roteiro novo
+     e2e-85 51/51 no LocalDB (migração duas vezes, índice único, máscara procurada em toda resposta, busca, quem troca,
+     leitura registrada, corrida de 6 cadastros sem repetir matrícula e de 4 com o mesmo CPF, reaproveitamento dos números
+     livres, lixo); e 28 roteiros que usam o cadastro de pessoas, Meus Dados, a minimização e a exclusão LGPD, todos verdes.
   2. **A linha do tempo completa:** somar cargos, casamento, apresentação, batismo, transferência, credencial, licença,
      readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda

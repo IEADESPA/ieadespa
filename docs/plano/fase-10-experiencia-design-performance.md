@@ -267,6 +267,10 @@ o pago por causa do financeiro, que também está vindo para cá.
     desenho melhor. **Regra do QR (ele):** cada pessoa tem **um QR só, que nunca vence nem muda** — o mesmo na física e na digital,
     funcionando 10 anos depois; o que muda é **o que a página mostra** ao ler (membro, em disciplina, não é mais da Igreja). A
     digital mostra mais (função, situação) do que a física (só o que não muda). Ele quer conversar mais sobre a conferência.
+- **Rodada 11 respondida (ele, 14/11/2026) — tudo aprovado, sem observação:** tela inicial das carteirinhas = modelos em
+  cartões grandes (opção 1); editor = ícones à esquerda, como nos editores de imagem (opção 2); carteirinha digital = o cartão em
+  cima e os dados embaixo (opção 2); página do QR = topo colorido e anel vivo na foto (opção 2). **O desenho do módulo de
+  membros está fechado** (falta só o Meu Perfil, que espera as observações dele) e ele liberou a construção do que aprovou.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

@@ -232,8 +232,14 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campo obrigatório: nome." } };
       return;
     }
-    // v10.1b — sem matrícula, o sistema gera (pessoa nova); com matrícula, ela precisa ser um número inteiro positivo
-    const matriculaGerada = membroId === undefined || membroId === null || membroId === "";
+    // v10.1b — sem matrícula e com o pedido explícito (gerarMatricula: true), o sistema gera (pessoa nova); com matrícula, ela precisa ser um número inteiro
+    // positivo. Sem as duas coisas, recusa como antes: uma tela que mandasse a matrícula vazia por engano criaria uma pessoa nova em vez de corrigir a ficha.
+    const semMatricula = membroId === undefined || membroId === null || membroId === "";
+    const matriculaGerada = semMatricula && corpo.gerarMatricula === true;
+    if (semMatricula && !matriculaGerada) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a matrícula (ou peça para o sistema gerar uma)." } };
+      return;
+    }
     if (!matriculaGerada) {
       const n = (typeof membroId === "number" || typeof membroId === "string") && /^\s*\d{1,10}\s*$/.test(String(membroId)) ? Number(String(membroId).trim()) : NaN;
       if (!Number.isInteger(n) || n <= 0 || n > 2147483647) {
@@ -530,7 +536,8 @@ module.exports = async function (context, req) {
       await request.query(`
         INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, DataNascimento, DataAdmissao, DizimistaFiel, SituacaoMembro, DepartamentoId, CargoMinisterial, Telefone, Email, Endereco, ExtensaoId, DataBatismo, FormaAdmissao, Origem, IgrejaAnterior, DataRitoRecebimento, NomeLidoRito, MinistranteRito, EstadoCivil, DataAfastamento, DataSaida, MotivoSaida, Sexo, Cpf, NomeMae, NomePai, Escolaridade, ${territorioDb.COLUNAS_ENDERECO})
         VALUES (@id, @nome, @congregacaoId, @status, @dataNascimento, @dataAdmissao, @dizimistaFiel, @situacaoMembro, @departamentoId, @cargoMinisterial, @telefone, @email, @endereco, @extensaoId, @dataBatismo, @formaAdmissao, @origem, @igrejaAnterior, @dataRitoRecebimento, @nomeLidoRito, @ministranteRito, @estadoCivil, @dataAfastamento, @dataSaida, @motivoSaida, @sexo, @cpf, @nomeMae, @nomePai, @escolaridade, ${territorioDb.VALORES_ENDERECO});
-        DELETE FROM MatriculasLivres WHERE MembroId = @id;`);
+        -- o número sai da lista de livres só se a ficha com ele existe (se o INSERT foi recusado pelo CPF repetido, o número continua livre)
+        IF EXISTS (SELECT 1 FROM MembroReferencia WHERE MembroId = @id) DELETE FROM MatriculasLivres WHERE MembroId = @id;`);
       return { gravou: true };
     };
     const prepEnd = { partes: partesFinais, endereco: enderecoFinal };

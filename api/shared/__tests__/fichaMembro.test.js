@@ -195,7 +195,13 @@ describe("GestaoPessoas: gravar o CPF, a filiação e a escolaridade", () => {
 });
 
 describe("GestaoPessoas: a matrícula gerada pelo sistema", () => {
-  const novo = (extra = {}) => ({ nome: "Pessoa Nova", congregacaoId: 2, status: "ATIVO", dataNascimento: "2000-01-01", ...extra });
+  const novo = (extra = {}) => ({ nome: "Pessoa Nova", congregacaoId: 2, status: "ATIVO", dataNascimento: "2000-01-01", gerarMatricula: true, ...extra });
+  test("sem matrícula e sem pedir para gerar: recusado como antes (uma tela que mandasse vazio por engano não cria ninguém)", async () => {
+    const r = await chamar("POST", tokenLocal(), { body: novo({ gerarMatricula: undefined }) });
+    expect(r.status).toBe(400);
+    expect(rodou(/FROM MatriculasLivres l|INSERT INTO MembroReferencia/)).toHaveLength(0);
+    expect((await chamar("POST", tokenLocal(), { body: novo({ gerarMatricula: "true" }) })).status).toBe(400);   // só o verdadeiro de verdade
+  });
   test("sem matrícula: o sistema gera (o número liberado ou a maior + 1), grava e tira o número da lista de livres", async () => {
     quando(/FROM MatriculasLivres l/, { recordset: [{ id: 700981 }] });
     const r = await chamar("POST", tokenLocal(), { body: novo() });
@@ -203,7 +209,7 @@ describe("GestaoPessoas: a matrícula gerada pelo sistema", () => {
     expect(r.body.mensagem).toContain("700981");
     const ins = rodou(/INSERT INTO MembroReferencia/)[0];
     expect(ins.inputs.id).toBe(700981);
-    expect(ins.sql).toMatch(/DELETE FROM MatriculasLivres WHERE MembroId = @id/);
+    expect(ins.sql).toMatch(/IF EXISTS \(SELECT 1 FROM MembroReferencia WHERE MembroId = @id\) DELETE FROM MatriculasLivres WHERE MembroId = @id/);
     expect(mockAuditoria).toHaveBeenCalledWith(expect.objectContaining({ registroId: 700981, dadosDepois: expect.objectContaining({ matriculaGerada: true }) }));
   });
   test("o número foi tomado no mesmo instante (chave primária): pede o próximo e grava", async () => {

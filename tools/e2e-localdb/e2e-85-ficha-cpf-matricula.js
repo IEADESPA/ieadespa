@@ -139,21 +139,23 @@ async function principal() {
 
   console.log("== a matrícula gerada: o número liberado primeiro, senão a maior + 1 ==");
   await q("INSERT INTO MatriculasLivres (MembroId) VALUES (850001), (850050), (850051)");   // 850001 está em uso: precisa ser pulado
-  const g1 = await pessoas(tokenLocalA(), { nome: "Gerada 1 E2E85", congregacaoId: congA, status: "ATIVO" });
+  const g1 = await pessoas(tokenLocalA(), { nome: "Gerada 1 E2E85", congregacaoId: congA, status: "ATIVO", gerarMatricula: true });
   ok(g1.body.sucesso === true && g1.body.membro.membroId === 850050 && /850050/.test(g1.body.mensagem), "sem matrícula: recebe a menor livre que ninguém usa (850050, pulando a 850001)", JSON.stringify(g1.body).slice(0, 200));
   ok((await escalar("SELECT COUNT(*) FROM MatriculasLivres WHERE MembroId = 850050")) === 0, "e o número sai da lista de livres");
   await q("DELETE FROM MatriculasLivres WHERE MembroId IN (850001, 850051)");
   const maior = await escalar("SELECT MAX(MembroId) FROM MembroReferencia");
-  const g2 = await pessoas(tokenLocalA(), { nome: "Gerada 2 E2E85", congregacaoId: congA, status: "ATIVO" });
+  const g2 = await pessoas(tokenLocalA(), { nome: "Gerada 2 E2E85", congregacaoId: congA, status: "ATIVO", gerarMatricula: true });
   ok(g2.body.sucesso === true && g2.body.membro.membroId === maior + 1, `sem número livre: a maior + 1 (${maior + 1})`, JSON.stringify(g2.body).slice(0, 200));
   const digitada = await pessoas(tokenLocalA(), { membroId: "850070", nome: "Digitada E2E85", congregacaoId: congA, status: "ATIVO" });
   ok(digitada.body.sucesso === true && digitada.body.membro.membroId === 850070, "a matrícula digitada continua valendo");
+  const semPedir = await pessoas(tokenLocalA(), { nome: "Sem Pedir E2E85", congregacaoId: congA, status: "ATIVO" });
+  ok(semPedir.status === 400 && (await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Nome = N'Sem Pedir E2E85'")) === 0, "sem matrícula e sem pedir para gerar: recusado (uma tela que mandasse vazio por engano não cria ninguém)");
   ok((await pessoas(tokenLocalA(), { membroId: "85x", nome: "Ruim E2E85", congregacaoId: congA })).status === 400, "matrícula que não é número: 400");
 
   console.log("== corrida: 6 cadastros sem matrícula ao mesmo tempo, com 2 números livres ==");
   await q("INSERT INTO MatriculasLivres (MembroId) VALUES (850060), (850061)");
   const maiorAntes = await escalar("SELECT MAX(MembroId) FROM MembroReferencia");
-  const res = await disparar(Array.from({ length: 6 }, (_, i) => ({ nome: `Corrida ${i} E2E85`, congregacaoId: congA, status: "ATIVO" })));
+  const res = await disparar(Array.from({ length: 6 }, (_, i) => ({ nome: `Corrida ${i} E2E85`, congregacaoId: congA, status: "ATIVO", gerarMatricula: true })));
   const bons = res.filter((r) => r.ok && r.status === 200 && r.sucesso);
   ok(bons.length === 6, "os 6 cadastros simultâneos gravam (nenhum erro por matrícula repetida)", JSON.stringify(res.map((r) => ({ s: r.status, ok: r.sucesso, id: r.id, m: r.mensagem || r.erro }))));
   const ids = bons.map((r) => r.id).sort((a, b) => a - b);
@@ -163,7 +165,7 @@ async function principal() {
   ok((await escalar("SELECT COUNT(*) FROM MatriculasLivres WHERE MembroId IN (850060, 850061)")) === 0, "os números livres saíram da lista");
 
   console.log("== corrida: 4 cadastros com o MESMO CPF ao mesmo tempo ==");
-  const resCpf = await disparar(Array.from({ length: 4 }, (_, i) => ({ nome: `Cpf Corrida ${i} E2E85`, congregacaoId: congA, status: "ATIVO", cpf: CPF_CORRIDA })));
+  const resCpf = await disparar(Array.from({ length: 4 }, (_, i) => ({ nome: `Cpf Corrida ${i} E2E85`, congregacaoId: congA, status: "ATIVO", cpf: CPF_CORRIDA, gerarMatricula: true })));
   const gravaram = resCpf.filter((r) => r.ok && r.sucesso === true);
   const recusados = resCpf.filter((r) => r.ok && r.sucesso === false && /outra pessoa/.test(r.mensagem || ""));
   ok(gravaram.length === 1 && recusados.length === 3, "exatamente 1 grava; os outros 3 recebem a mensagem do CPF repetido (nenhum erro 500)", JSON.stringify(resCpf.map((r) => ({ s: r.status, ok: r.sucesso, m: r.mensagem || r.erro }))));

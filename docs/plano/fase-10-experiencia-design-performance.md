@@ -227,6 +227,30 @@ o pago por causa do financeiro, que também está vindo para cá.
     página que confere; e a **digital**, com o que muda (congregação, cargo e função — obreiro, pastor, missionário —, situação).
     O cargo tem de aparecer. **A impressão da física fica bloqueada** enquanto a ficha tiver pendência de cadastro (ficha
     repetida, número a acertar): nunca sai carteirinha física com o número de duas pessoas (decisão dele, 13/11).
+- **Rodada 9 respondida (ele, 13–14/11/2026)** — o que ficou e o que vai para a rodada 10:
+  - **Menu principal recolhível em todas as telas** (como no celular, abre pelo ☰), para o conteúdo ficar grande.
+  - **Painel executivo:** opção 2 (números no alto e 3 gráficos), sem submódulo próprio. Falta: **gráficos personalizáveis** por
+    quem vê (ex.: só os batizados no Espírito Santo, para campanha), um gráfico grande e outros menores, e uma **barra de avisos
+    só do módulo**, separada do sino geral.
+  - **Lista:** opção 1 (confortável, 20 por página) — aprovada.
+  - **Ficha 360:** gostou das abas no alto, mas, como a ficha tem muitas partes e vai crescer, **no notebook o submenu fica à
+    direita** (cresce para baixo, nunca arrastar para o lado); no celular, as abas no alto.
+  - **Minha vida (o membro):** opção 1, com o submenu "Minha ficha" **à direita**, o menu principal recolhido e a **linha do
+    tempo primeiro**.
+  - **Fila de cadastros:** opção 2 (quadro por etapa), com o pré-cadastro só com o **essencial para não duplicar** (nome, CPF,
+    e-mail para criar a senha; telefone talvez); pelo site, a pessoa escolhe também a congregação e o departamento; a secretaria
+    local completa, a área e a Geral acompanham; e **aceite automático** quando o mínimo obrigatório estiver completo — só fica
+    na fila o que tiver pendência.
+  - **Pré-cadastro:** opção 1 (uma tela só), também no notebook, e numa **página do site** cujos cadastros caem na mesma esteira
+    do sistema.
+  - **Sugestões de alteração:** as três juntas, como um fluxo — o membro vê **o que pode mudar** (opção 3); o que ele pode
+    mudar sozinho, muda direto na ficha (opção 2); o resto vira sugestão, e a secretaria confere na **caixa de sugestões**
+    (opção 1).
+  - **Carteirinha física:** opção 3 (arrastar os campos), com muito mais personalização: **vários modelos** (ex.: congregado,
+    membro), frente e verso, tamanho do cartão, logo, cabeçalho, textos, área de assinatura, posição e tamanho do QR e das
+    letras, paleta de cores e **arte de fundo em alta resolução** enviada pela secretaria. Editar só no notebook; o celular só vê.
+  - **Carteirinha digital:** opção 3 (tela cheia), caprichando no celular — quais informações vão nela e a **página que o QR
+    abre**.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

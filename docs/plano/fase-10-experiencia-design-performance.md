@@ -271,6 +271,23 @@ o pago por causa do financeiro, que também está vindo para cá.
   cartões grandes (opção 1); editor = ícones à esquerda, como nos editores de imagem (opção 2); carteirinha digital = o cartão em
   cima e os dados embaixo (opção 2); página do QR = topo colorido e anel vivo na foto (opção 2). **O desenho do módulo de
   membros está fechado** (falta só o Meu Perfil, que espera as observações dele) e ele liberou a construção do que aprovou.
+- **A ordem da construção (14/11/2026)** — cada passo vai primeiro para a **homologação** (ramo `homolog`, com a massa de 5.047
+  pessoas); ele vê, aprova, e só então entra na produção:
+  1. **A ficha por dentro (sem tela nova ainda):** CPF (único, conferido pelo dígito, mascarado, leitura registrada), filiação
+     (mãe e pai), escolaridade e a **matrícula gerada pelo sistema** (reaproveitando primeiro os números liberados ao juntar
+     fichas) — migração 174.
+  2. **A linha do tempo completa:** somar cargos, casamento, apresentação, batismo, transferência, credencial, licença,
+     readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
+  3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
+     por ela.
+  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático.
+  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
+  6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
+     alerta antes da assembleia.
+  7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no
+     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo.
+  8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
+  9. **A migração única do sistema pago** (v10.1e).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

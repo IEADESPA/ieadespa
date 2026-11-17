@@ -292,15 +292,22 @@ o pago por causa do financeiro, que também está vindo para cá.
      readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
      por ela.
-  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **CPF repetido
-     (decisão dele, 17/11/2026):** o cadastro com um CPF que já está em outra ficha **não conclui** (não cria ficha nova) e
-     vai para a **confirmação de que é a mesma pessoa** que já tinha cadastro — a mecânica dessa confirmação entra aqui, na
-     fila de cadastros (hoje, passo 1, a rota só recusa com a mensagem).
+  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido
+     que chega pelo site (decisão dele, 17/11/2026, corrigida no mesmo dia):** o formulário público do site **deixa enviar** (o
+     site não confere nada, para não revelar quem já é da Igreja); quando o pedido chega na fila, o sistema identifica a
+     repetição (mesmo CPF, ou nome e nascimento parecidos), **não aprova** e manda para **correção junto com o cadastro mais
+     antigo** — a Secretaria Geral ou a local ajustam.
   5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.
   7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no
-     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo.
+     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo. **Na tela de
+     cadastro do sistema (decisão dele, 17/11/2026):** enquanto a secretaria digita o nome, o nascimento e o CPF, uma **barra de
+     avisos** confere se a pessoa já existe. CPF que já está em outra ficha **não deixa concluir**: "este CPF já está em outra
+     matrícula — clique aqui para ir para lá", que leva à ficha **se ela for da mesma congregação ou da mesma área** de quem
+     cadastra (no escopo); fora disso, quem cadastra não mexe nem cadastra, e o caso vai para a **Secretaria Geral** conferir e
+     corrigir. Nome e nascimento parecidos também avisam, como possível repetição. Precisa de uma **rota de conferência** que
+     respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três

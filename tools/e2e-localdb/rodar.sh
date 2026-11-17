@@ -210,6 +210,15 @@ case "$1" in
     migrar 174 2
     base salvar cenario-174
     ;;
+  preparar-176)
+    # FASE 10, v10.1b passo 3 (17/11/2026): a partir da base "cenario-174", aplica a 175 (os índices do raio-x) e a 176 duas vezes (a transferência de congregação
+    # como fluxo; prova a idempotência); salva "cenario-176" (e2e-89 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-174
+    migrar 175
+    migrar 176 2
+    base salvar cenario-176
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

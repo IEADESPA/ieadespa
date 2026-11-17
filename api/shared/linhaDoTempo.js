@@ -26,7 +26,7 @@ const ROTULO_MARCO = { CONVERSAO: "Conversão", BATISMO_ESPIRITO_SANTO: "Batismo
 // A ordem entre eventos do MESMO dia (do mais antigo para o mais novo na vida da pessoa): a conversão vem antes do batismo, o batismo antes da entrada…
 const ORDEM = { CONVERSAO: 10, MARCO: 20, BATISMO_INSCRICAO: 25, BATISMO_AGUAS: 30, ADMISSAO: 40, READMISSAO: 40, RITO_RECEBIMENTO: 45, BATISMO_ESPIRITO_SANTO: 50,
   CASAMENTO: 55, APRESENTACAO: 56, CONSAGRACAO_PROTOCOLO: 60, CONSAGRACAO_CONCLUIDA: 61, CARGO_INICIO: 62, CARGO_FIM: 63, CREDENCIAL_EMITIDA: 70, CREDENCIAL_ENCERRADA: 71,
-  LICENCA_INICIO: 75, LICENCA_FIM: 76, CARTA_TRANSITO: 80, DISCIPLINA_ABERTURA: 85, DISCIPLINA_CONCLUSAO: 86, ABANDONO_NOTIFICACAO: 87, ABANDONO_HOMOLOGACAO: 88,
+  LICENCA_INICIO: 75, LICENCA_FIM: 76, TRANSFERENCIA: 78, CARTA_TRANSITO: 80, DISCIPLINA_ABERTURA: 85, DISCIPLINA_CONCLUSAO: 86, ABANDONO_NOTIFICACAO: 87, ABANDONO_HOMOLOGACAO: 88,
   SAIDA: 95, FALECIMENTO: 99 };
 
 const dataOuNulo = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
@@ -169,6 +169,14 @@ function montarLinhaDoTempo(fontes, opcoes = {}) {
     if (l.Status === "NAO_RETORNOU" && dataOuNulo(l.DataRetornoDecidida)) eventos.push(evento({ data: l.DataRetornoDecidida, tipo: "LICENCA_FIM", categoria: "LICENCA", titulo: "Não voltou da licença", origem: "licenca" }));
   }
 
+  // ---- a transferência de congregação (v10.1b passo 3): só as concluídas; quem decidiu fica na trilha (auditoria), aqui só como foi ----
+  for (const t of f.transferencias || []) {
+    const como = t.Regra === "GERAL" ? "pela Secretaria Geral" : t.Regra === "MESMA_AREA" ? "na mesma área: entrou na hora"
+      : t.DecididoComo === "GERAL" ? "decidida pela Secretaria Geral" : "aceita pela congregação de destino";
+    eventos.push(evento({ data: t.Data, tipo: "TRANSFERENCIA", categoria: "CONGREGACAO", titulo: `Transferência: ${textoOuNulo(t.Origem) || "?"} → ${textoOuNulo(t.Destino) || "?"}`,
+      detalhe: como, origem: "transferencia" }));
+  }
+
   // ---- disciplina e abandono: só com a permissão "disciplina" no escopo (as fontes nem são lidas sem ela; aqui é a segunda trava) ----
   if (disciplina) {
     for (const p of f.processos || []) {
@@ -245,12 +253,20 @@ async function lerFontes(pool, sql, membroId, { disciplina = false } = {}) {
     lotes.push(`SELECT Tipo, CONVERT(varchar(10), DataNotificacao, 120) AS DataNotificacao, CONVERT(varchar(10), DataHomologacao, 120) AS DataHomologacao
                 FROM ProcedimentosAbandono WHERE MembroId = @id`);
   }
+  // a transferência (migração 176): por último, com a guarda da tabela (as bases antigas de teste ainda não a têm — então o lote devolve vazio)
+  lotes.push(`IF OBJECT_ID(N'dbo.TransferenciasCongregacao', N'U') IS NOT NULL
+      SELECT ${DIA_BR("t.DecididoEm")} AS Data, co.Nome AS Origem, cd.Nome AS Destino, t.Regra, t.DecididoComo
+      FROM TransferenciasCongregacao t JOIN Congregacoes co ON co.CongregacaoId = t.CongregacaoOrigemId JOIN Congregacoes cd ON cd.CongregacaoId = t.CongregacaoDestinoId
+      WHERE t.MembroId = @id AND t.Situacao = N'CONCLUIDA'
+    ELSE SELECT CAST(NULL AS varchar(10)) AS Data, CAST(NULL AS NVARCHAR(200)) AS Origem, CAST(NULL AS NVARCHAR(200)) AS Destino, CAST(NULL AS NVARCHAR(20)) AS Regra,
+      CAST(NULL AS NVARCHAR(20)) AS DecididoComo WHERE 1 = 0`);
   const r = await pool.request().input("id", sql.Int, membroId).query(lotes.join(";\n"));
   const rs = r.recordsets || [];
   const lido = (i) => rs[i] || [];
   return {
     membro: lido(0)[0] || null, consagracoes: lido(1), cartas: lido(2), marcos: lido(3), cargos: lido(4), casamentos: lido(5), apresentacoes: lido(6),
-    batismo: lido(7), oficiantes: lido(8), credenciais: lido(9), licencas: lido(10), processos: disciplina ? lido(11) : [], abandonos: disciplina ? lido(12) : []
+    batismo: lido(7), oficiantes: lido(8), credenciais: lido(9), licencas: lido(10), processos: disciplina ? lido(11) : [], abandonos: disciplina ? lido(12) : [],
+    transferencias: lido(lotes.length - 1)
   };
 }
 

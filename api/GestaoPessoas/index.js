@@ -5,6 +5,7 @@
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
+const { MSG: { NA_CONGREGACAO: MSG_TRANSFERENCIA } } = require("../shared/transferencias");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -367,7 +368,7 @@ module.exports = async function (context, req) {
                                AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
              CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pdx WHERE pdx.MembroId = m.MembroId AND pdx.Resultado = N'EXCLUSAO' AND pdx.CEIRecusouEm IS NULL
                                AND pdx.Status IN (N'JULGADO', N'EM_RECURSO')) THEN 1 ELSE 0 END AS TemExclusao,
-             c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
+             c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome, m.CongregacaoId AS CongregacaoIdAnterior
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     let existente = await lerExistente();
     // a matrícula gerada nunca atualiza a ficha de outra pessoa: se o número foi tomado no meio do caminho, pede outro
@@ -383,6 +384,15 @@ module.exports = async function (context, req) {
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
     if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    // FASE 10, v10.1b passo 3 (17/11/2026) — a congregação de quem JÁ TEM congregação na ficha só muda pela TRANSFERÊNCIA (GestaoTransferencias /
+    // MinhaTransferencia: quem pede é a origem, a própria pessoa ou a Geral; na mesma área ou pela Geral entra na hora). Nem a Geral troca por aqui: para ela a
+    // transferência já é na hora, e assim toda mudança fica com quem pediu, quem aceitou e quando (e entra na linha do tempo). Quem ainda não tem congregação
+    // (cadastro incompleto) recebe a primeira por aqui. Trocar a Extensão dentro da mesma congregação continua por aqui.
+    const congregacaoAnteriorId = existia ? existente.recordset[0].CongregacaoIdAnterior : null;
+    if (existia && congregacaoAnteriorId != null && Number(congregacaoId || 0) !== Number(congregacaoAnteriorId)) {
+      context.res = { status: 409, body: { sucesso: false, transferencia: true, mensagem: MSG_TRANSFERENCIA } };
       return;
     }
     // v8.2 — trocar o cargo (ou criar alguém já com cargo de oficial) e informar "no cargo desde": só o nível geral.

@@ -337,6 +337,17 @@ o pago por causa do financeiro, que também está vindo para cá.
      respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
+- **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
+  - **Incremento 1** (commit `eb9b600`, mesclado no `homolog` em `262b59d`): a **entrada como primeira tela** (com sessão aberta
+    vai direto ao Início; a Portaria fica no link "Registrar presença numa reunião"; sair volta à entrada; a foto da Igreja entra
+    quando eles mandarem), as **cores da Igreja** (marinho e o ouro com texto marinho no botão principal), o **claro/escuro** no
+    topo (lembrado no aparelho; sem escolha, segue o aparelho), o **Início** ("Graça e paz", "Para você hoje", "Meu trabalho"
+    com os cartões na cor de cada parte), o menu do Início em grupos (Minha vida na igreja, Meu trabalho, Meu Perfil) e, no
+    **celular, as abas em pílulas no alto** (o membro sem "Trabalho") e nada preso embaixo. A primeira tela de cada módulo e o
+    submódulo não mudaram. Prova: jest 6.426/6.426 e a prova no navegador (entrada, Início, celular, claro e escuro, todos os
+    módulos abrindo). Casca do aplicativo v60.
+  - Próximos: **2** — os avisos (o painel do lado, "só o que eu preciso resolver") e a busca do alto (Ctrl K); **3** — o Meu
+    Perfil (os quatro cartões) e Minha vida na igreja (os próximos compromissos).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

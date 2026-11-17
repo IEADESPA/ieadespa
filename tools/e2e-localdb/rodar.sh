@@ -219,6 +219,14 @@ case "$1" in
     migrar 176 2
     base salvar cenario-176
     ;;
+  preparar-177)
+    # FASE 10, v10.1b passo 4 (17/11/2026): a partir da base "cenario-176", aplica a 177 duas vezes (o pré-cadastro e a fila de cadastros, os casos da Secretaria
+    # Geral; prova a idempotência); salva "cenario-177" (e2e-90 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-176
+    migrar 177 2
+    base salvar cenario-177
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

@@ -170,15 +170,26 @@ describe("GestaoPessoas: gravar o CPF, a filiação e a escolaridade", () => {
     const geral = await chamar("POST", tokenGeral(), { body: corpo({ cpf: CPF_B }) });
     expect(geral.body.sucesso).toBe(true);
   });
-  test("CPF de outra pessoa: recusado; a matrícula da outra só aparece para a Geral", async () => {
+  // v10.1b passo 4 (decisão dele, 17/11/2026): no escopo de quem cadastra, a mensagem leva à ficha (matrícula); fora do escopo, só "já tem cadastro" e o caso vai à Geral
+  test("CPF de outra pessoa NO escopo de quem cadastra: recusado, com a ficha para ir até ela", async () => {
     quando(/SELECT m\.MembroId, m\.Status, m\.Email AS EmailAnterior/, existenteDe());
-    quando(/WHERE Cpf = @cpf AND MembroId <> @id/, { recordset: [{ MembroId: 700981 }] });
+    quando(/WHERE m\.Cpf = @cpf AND \(@ex IS NULL OR m\.MembroId <> @ex\)/, { recordset: [{ MembroId: 700981, Nome: "Ana Antiga", CongregacaoNome: "Vila Nova", ExtensaoNome: null }] });
     const local = await chamar("POST", tokenLocal(), { body: corpo({ cpf: CPF_A }) });
-    expect(local.body.sucesso).toBe(false);
-    expect(local.body.mensagem).toMatch(/juntadas/);
-    expect(local.body.mensagem).not.toContain("700981");
+    expect(local.body).toMatchObject({ sucesso: false, cpfRepetido: "NO_ESCOPO", matricula: 700981 });
+    expect(local.body.mensagem).toContain("700981");
     const geral = await chamar("POST", tokenGeral(), { body: corpo({ cpf: CPF_A }) });
     expect(geral.body.mensagem).toContain("700981");
+    expect(rodou(/UPDATE MembroReferencia SET Nome|INSERT INTO MembroReferencia/)).toHaveLength(0);
+    expect(rodou(/INSERT INTO CasosCadastroGeral/)).toHaveLength(0);
+  });
+  test("CPF de outra pessoa FORA do escopo de quem cadastra: recusado sem nada da outra ficha, e o caso vai à Secretaria Geral", async () => {
+    quando(/SELECT m\.MembroId, m\.Status, m\.Email AS EmailAnterior/, existenteDe());
+    quando(/WHERE m\.Cpf = @cpf AND \(@ex IS NULL OR m\.MembroId <> @ex\)/, { recordset: [{ MembroId: 700981, Nome: "Ana Antiga", CongregacaoNome: "Bairro da Paz", ExtensaoNome: null }] });
+    const local = await chamar("POST", tokenLocal(), { body: corpo({ cpf: CPF_A }) });
+    expect(local.body).toMatchObject({ sucesso: false, cpfRepetido: "FORA_DO_ESCOPO" });
+    expect(local.body.mensagem).toMatch(/Secretaria Geral/);
+    expect(JSON.stringify(local.body)).not.toMatch(/700981|Ana Antiga|Bairro da Paz/);
+    expect(rodou(/INSERT INTO CasosCadastroGeral/)).toHaveLength(1);
     expect(rodou(/UPDATE MembroReferencia SET Nome|INSERT INTO MembroReferencia/)).toHaveLength(0);
   });
   test("o índice único recusou na gravação (dois cadastros ao mesmo tempo): a mesma mensagem, sem quebrar", async () => {

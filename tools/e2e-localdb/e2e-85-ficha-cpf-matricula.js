@@ -125,7 +125,9 @@ async function principal() {
 
   console.log("== CPF de outra pessoa ==");
   const repetidoLocal = await pessoas(tokenLocalA(), { membroId: 850002, nome: "Outra Ficha E2E85", congregacaoId: congA, cpf: CPF_B });
-  ok(repetidoLocal.body.sucesso === false && /juntadas/.test(repetidoLocal.body.mensagem) && !/850001/.test(repetidoLocal.body.mensagem), "a local: recusado, sem dizer de quem é", repetidoLocal.body.mensagem);
+  // desde o passo 4 (17/11/2026, decisão dele): a ficha DENTRO do escopo de quem cadastra aparece (para ir até ela); fora do escopo, só "já tem cadastro" (e2e-90)
+  ok(repetidoLocal.body.sucesso === false && repetidoLocal.body.cpfRepetido === "NO_ESCOPO" && repetidoLocal.body.matricula === 850001 && /850001/.test(repetidoLocal.body.mensagem),
+    "a local (a outra ficha é da mesma congregação): recusado, com a matrícula da ficha para abrir", repetidoLocal.body.mensagem);
   const repetidoGeral = await pessoas(tokenGeral(), { membroId: 850002, nome: "Outra Ficha E2E85", congregacaoId: congA, cpf: CPF_B });
   ok(repetidoGeral.body.sucesso === false && /850001/.test(repetidoGeral.body.mensagem), "a Geral: recusado, com a matrícula da outra ficha", repetidoGeral.body.mensagem);
   ok((await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId = 850002")) === 0, "nenhuma ficha gravada");
@@ -167,7 +169,7 @@ async function principal() {
   console.log("== corrida: 4 cadastros com o MESMO CPF ao mesmo tempo ==");
   const resCpf = await disparar(Array.from({ length: 4 }, (_, i) => ({ nome: `Cpf Corrida ${i} E2E85`, congregacaoId: congA, status: "ATIVO", cpf: CPF_CORRIDA, gerarMatricula: true })));
   const gravaram = resCpf.filter((r) => r.ok && r.sucesso === true);
-  const recusados = resCpf.filter((r) => r.ok && r.sucesso === false && /outra pessoa/.test(r.mensagem || ""));
+  const recusados = resCpf.filter((r) => r.ok && r.sucesso === false && /outra pessoa|já está na ficha/.test(r.mensagem || ""));
   ok(gravaram.length === 1 && recusados.length === 3, "exatamente 1 grava; os outros 3 recebem a mensagem do CPF repetido (nenhum erro 500)", JSON.stringify(resCpf.map((r) => ({ s: r.status, ok: r.sucesso, m: r.mensagem || r.erro }))));
   ok((await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Cpf = @c", { c: CPF_CORRIDA })) === 1, "no banco, uma ficha só com esse CPF");
   ok(resCpf.every((r) => !String(r.bruto || "").includes(CPF_CORRIDA)), "nenhuma das 4 respostas trouxe o CPF inteiro");

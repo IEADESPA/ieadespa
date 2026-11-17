@@ -23,18 +23,12 @@ const { escaparLike } = require("../shared/ebdLgpd");
 // FASE 10, v10.1b (migração 174) — o CPF (conferido, mascarado; inteiro só para a Secretaria Geral, com a leitura registrada), a filiação, a escolaridade e a matrícula
 // gerada pelo sistema para a pessoa nova (primeiro um número liberado ao juntar fichas, senão a maior + 1)
 const ficha = require("../shared/fichaMembro");
-// A matrícula da pessoa nova: o menor número liberado ao juntar fichas que ninguém usa, senão a maior + 1 (decisão do responsável, 13/11/2026). Sem trava: a corrida
-// entre dois cadastros ao mesmo tempo é resolvida na gravação (a chave primária recusa o segundo, que pede outro número).
-async function proximaMatricula(pool) {
-  const r = await pool.request().query(`
-    SELECT COALESCE(
-      (SELECT MIN(l.MembroId) FROM MatriculasLivres l WHERE NOT EXISTS (SELECT 1 FROM MembroReferencia x WHERE x.MembroId = l.MembroId)),
-      (SELECT ISNULL(MAX(MembroId), 0) + 1 FROM MembroReferencia)) AS id`);
-  return Number(r.recordset[0].id);
-}
-// O erro do banco é a chave primária repetida (outra matrícula igual), e não o CPF repetido (índice único UX_MembroReferencia_Cpf)?
-const ehMatriculaRepetida = (e) => !!e && (e.number === 2627 || e.number === 2601) && !/UX_MembroReferencia_Cpf/i.test(String(e.message || "")) && /PRIMARY KEY|PK_/i.test(String(e.message || ""));
-const ehCpfRepetido = (e) => !!e && (e.number === 2627 || e.number === 2601) && /UX_MembroReferencia_Cpf/i.test(String(e.message || ""));
+// A matrícula da pessoa nova (uma regra só, com a fila de cadastros do passo 4): o menor número liberado ao juntar fichas que ninguém usa, senão a maior + 1.
+const matriculaNova = require("../shared/matriculaNova");
+const proximaMatricula = (pool) => matriculaNova.proximaMatricula(() => pool.request());
+const { ehMatriculaRepetida, ehCpfRepetido } = matriculaNova;
+// v10.1b passo 4 — a conferência do CPF repetido (no escopo: a ficha; fora: o caso à Secretaria Geral)
+const preCadastroDb = require("../shared/preCadastroDb");
 const MSG_CPF_REPETIDO = "Esse CPF já está na ficha de outra pessoa. Se for a mesma pessoa, as duas fichas precisam ser juntadas.";
 // v10.1c — a lista em páginas (?pagina=N): 20 por página, no máximo 100
 const POR_PAGINA_PADRAO = 20;
@@ -407,10 +401,12 @@ module.exports = async function (context, req) {
       return;
     }
     if (cpfMuda && cpfLido.cpf) {
-      const dono = (await pool.request().input("cpf", sql.Char(11), cpfLido.cpf).input("id", sql.Int, membroId)
-        .query(`SELECT TOP 1 MembroId FROM MembroReferencia WHERE Cpf = @cpf AND MembroId <> @id`)).recordset[0];
-      if (dono) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: geral ? `${MSG_CPF_REPETIDO} (matrícula ${dono.MembroId})` : MSG_CPF_REPETIDO } };
+      // v10.1b passo 4 (decisão dele, 17/11/2026) — o CPF que já está noutra ficha NÃO deixa concluir: no escopo de quem cadastra, a mensagem leva à ficha (matrícula);
+      // FORA do escopo, só "já tem cadastro" e o caso vai à Secretaria Geral (shared/preCadastroDb.js, a mesma conferência da tela ao digitar)
+      const conf = await preCadastroDb.conferir(pool, usuario, { cpf: cpfLido.cpf, nome, dataNascimento, congregacaoId: auth.idDeRota(congregacaoId) || null,
+        excluirMembroId: membroId == null ? null : Number(membroId), soCpf: true });
+      if (conf.bloqueia) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: conf.cpf.mensagem, cpfRepetido: conf.cpf.situacao, ...(conf.cpf.matricula ? { matricula: conf.cpf.matricula } : {}) } };
         return;
       }
     }

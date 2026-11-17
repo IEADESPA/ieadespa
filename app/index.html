@@ -144,6 +144,7 @@
           <div class="submenu-aba" id="submenuMeupainel">
             <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone">🏠</span><span class="rotulo">Início</span></button>
             <span class="grupo-menu-rotulo" id="grupoMenuMinhaVida">Minha vida na igreja</span>
+            <button class="btn-subaba" id="btnSubMeupainelMinhavida" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhavida"]'><span class="icone">⛪</span><span class="rotulo">Minha vida na igreja</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone">🪪</span><span class="rotulo">Minha carteirinha</span></button>
             <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
@@ -165,6 +166,7 @@
             <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSetores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
             <span class="grupo-menu-rotulo" id="grupoMenuMeuPerfil">Meu Perfil</span>
+            <button class="btn-subaba" id="btnSubMeupainelMeuperfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["meuperfil"]'><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
             <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
             <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" data-on-click="mostrarSubAbaMeupainel" data-args-click='["seguranca"]'><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
@@ -602,6 +604,18 @@
                congregação, mostra o histórico do que foi lançado em seu
                nome. Fica em branco/some sozinho pra quem nunca foi
                vinculado como dizimista (silencioso, não é obrigatório). -->
+        </div>
+
+        <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
+        <div id="subMeupainelMinhavida" class="sub-aba-secretaria" style="display:none;">
+          <div class="vida-grade">
+            <section class="vida-cartao"><h3 class="vida-titulo">Meus próximos compromissos</h3><div id="minhaVidaCompromissos" class="vida-lista"></div></section>
+            <section class="vida-atalhos" id="minhaVidaAtalhos"></section>
+          </div>
+        </div>
+        <!-- FASE 10 — MEU PERFIL (rodada 7, opção 1): os quatro cartões — meus dados, segurança, aparelhos de confiança e preferências (modulos/casca.js) -->
+        <div id="subMeupainelMeuperfil" class="sub-aba-secretaria" style="display:none;">
+          <div class="perfil-grade" id="meuPerfilCartoes"></div>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS CADASTRAIS (v4.2.2 — fatiado de "Meu Perfil",

@@ -290,6 +290,33 @@ o pago por causa do financeiro, que também está vindo para cá.
      livres, lixo); e 28 roteiros que usam o cadastro de pessoas, Meus Dados, a minimização e a exclusão LGPD, todos verdes.
   2. **A linha do tempo completa:** somar cargos, casamento, apresentação, batismo, transferência, credencial, licença,
      readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
+     **Feito em 17/11/2026 no ramo `v10-membros`** (commits 45e2ead e f4f7ba6; ainda fora da homologação e da produção):
+     - **O que soma:** a regra e a leitura estão em `api/shared/linhaDoTempo.js`, numa ida só ao banco (todos os SELECTs no
+       mesmo lote). Entram a ficha (entrada, readmissão, rito, saída, falecimento), o batismo da turma (com o local e os
+       oficiantes, sem repetir a data da ficha), os marcos (conversão, batismo no Espírito Santo, ministério anterior, curso de
+       discipulado), a consagração, os cargos que não vieram dela, o casamento (aparece também na linha do cônjuge), a
+       apresentação dos filhos, as cartas, as vias da credencial e a licença para candidatura.
+     - **A vida espiritual fica à vista:** conversão, batismo nas águas (onde, por quem, ou em outra igreja) e batismo no
+       Espírito Santo. A procedência também.
+     - **A ordem:** do mais recente para o mais antigo; o que não tem data fica no fim.
+     - **Duas rotas novas:**
+       - `GET /api/pessoas/{matrícula}/linha-do-tempo`, para a secretaria, no escopo; fora dele, a mesma resposta de "não
+         encontrada";
+       - `GET /api/minha-linha-do-tempo/{matrícula}`, para a própria pessoa, que vê a sua inteira.
+       - As duas têm páginas de 50 (no máximo 200). O `/historico` antigo continua igual para a tela de hoje.
+     - **Disciplina e abandono:** só quem tem a permissão "disciplina" no escopo **dela** vê o processo, o motivo de uma
+       saída ou de um recolhimento de credencial e a "readmissão depois de exclusão" (a exclusão recusada pela CEI não conta).
+       Esses dados nem são lidos para quem não pode. A própria pessoa não os vê por esta rota.
+     - **Nunca aparece:** CPF, contato nem o código do QR.
+     - **Sem tela nova:** as telas vêm no passo 7.
+     - **Prova:**
+       - jest 6.458 de 6.458, com 19 testes novos;
+       - o roteiro novo e2e-86 no LocalDB, 59 de 59: todas as fontes; a escala (geral, área, local dentro e fora); a
+         disciplina em outro escopo; a própria pessoa e a de outra; o segredo procurado em toda resposta; a paginação; e a
+         rota antiga igual.
+     - **Achado para decidir:** a rota antiga `/historico`, a da tela de hoje, mostra o motivo de uma saída disciplinar
+       (exclusão, abandono) a quem não tem a permissão "disciplina". A rota nova não mostra; a antiga sai quando as telas
+       novas chegarem (passo 7).
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
      por ela.
   4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido

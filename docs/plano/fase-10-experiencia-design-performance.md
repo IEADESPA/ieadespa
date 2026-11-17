@@ -346,8 +346,17 @@ o pago por causa do financeiro, que também está vindo para cá.
     **celular, as abas em pílulas no alto** (o membro sem "Trabalho") e nada preso embaixo. A primeira tela de cada módulo e o
     submódulo não mudaram. Prova: jest 6.426/6.426 e a prova no navegador (entrada, Início, celular, claro e escuro, todos os
     módulos abrindo). Casca do aplicativo v60.
-  - Próximos: **2** — os avisos (o painel do lado, "só o que eu preciso resolver") e a busca do alto (Ctrl K); **3** — o Meu
-    Perfil (os quatro cartões) e Minha vida na igreja (os próximos compromissos).
+  - **Incremento 2** (commit `31d8c2b`): os **avisos** (o sino e a pílula "Avisos") num painel do lado, com "Só o que eu
+    preciso resolver" ligado (os fluxos que estão com a pessoa + os não lidos), o quadro de filtros por assunto recolhido; e a
+    **busca do alto** num painel do lado com o campo no alto (Ctrl K abre, Enter abre o primeiro, Esc fecha), presa ao módulo
+    em que a pessoa está, com "Procurar em todo o sistema".
+  - **Incremento 3** (commit `c6a043e`): **Minha vida na igreja** (os próximos compromissos — as escalas e a agenda oficial —
+    e os atalhos do que é da pessoa; no celular, a pílula "Minha vida") e o **Meu Perfil** (os quatro cartões: meus dados,
+    segurança, aparelhos de confiança e preferências — aparência, tamanho da letra, avisos no celular).
+  - Os três na homologação (`a959e3e`), com o equipamento do teste de telas entrando pela entrada nova (`8feba1a`) e a base
+    do teste de telas aprovada **só dentro do ramo** (`84aab1e`): as divergências eram as esperadas da casca nova, sem
+    violação de CSP nem erro de script novo. Provas: jest 6.426/6.426, frontCsp/frontEscape 93/93 e as três provas no Edge
+    sem janela (entrada e Início; avisos e busca; Meu Perfil e Minha vida), no notebook e no celular, claro e escuro.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

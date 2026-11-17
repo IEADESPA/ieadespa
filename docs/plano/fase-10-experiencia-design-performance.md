@@ -275,19 +275,88 @@ o pago por causa do financeiro, que também está vindo para cá.
   pessoas); ele vê, aprova, e só então entra na produção:
   1. **A ficha por dentro (sem tela nova ainda):** CPF (único, conferido pelo dígito, mascarado, leitura registrada), filiação
      (mãe e pai), escolaridade e a **matrícula gerada pelo sistema** (reaproveitando primeiro os números liberados ao juntar
-     fichas) — migração 174.
+     fichas) — migração 174. **Feito em 14/11/2026 no ramo `v10-membros`** (commits 4b76f0f e 8d95a49; ainda fora da
+     homologação e da produção): `MembroReferencia` ganhou `Cpf` (11 dígitos, índice único que aceita vazio), `NomeMae`,
+     `NomePai` e `Escolaridade` (lista fixa); `CpfLeituras` registra quem viu o CPF inteiro de quem; `MatriculasLivres` guarda os
+     números que sobram ao juntar fichas. Regras em `api/shared/fichaMembro.js`. Na lista, na busca e na resposta do cadastro o
+     CPF sai **só mascarado** (feito no próprio SQL); procurar pelo CPF inteiro acha a pessoa (no escopo); o inteiro só pela
+     Secretaria Geral (`GET /api/pessoas/{matrícula}?ver=cpf`, com a leitura registrada) e pela própria pessoa (Meus Dados e o
+     dossiê LGPD); trocar ou apagar um CPF já gravado, só a Geral; CPF de outra pessoa é recusado (a matrícula da outra só para a
+     Geral); a trilha guarda o CPF mascarado; a saída por carta e a exclusão LGPD apagam CPF, filiação e escolaridade. A
+     matrícula é gerada **só com o pedido explícito** (`gerarMatricula: true`): o menor número livre que ninguém usa, senão a
+     maior + 1, à prova de corrida. Sem tela nova (vem no passo 7). Prova: jest 6.437/6.437 (20 testes novos); roteiro novo
+     e2e-85 51/51 no LocalDB (migração duas vezes, índice único, máscara procurada em toda resposta, busca, quem troca,
+     leitura registrada, corrida de 6 cadastros sem repetir matrícula e de 4 com o mesmo CPF, reaproveitamento dos números
+     livres, lixo); e 28 roteiros que usam o cadastro de pessoas, Meus Dados, a minimização e a exclusão LGPD, todos verdes.
   2. **A linha do tempo completa:** somar cargos, casamento, apresentação, batismo, transferência, credencial, licença,
      readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
+     **Feito em 17/11/2026 no ramo `v10-membros`** (commits 45e2ead e f4f7ba6; ainda fora da homologação e da produção):
+     - **O que soma:** a regra e a leitura estão em `api/shared/linhaDoTempo.js`, numa ida só ao banco (todos os SELECTs no
+       mesmo lote). Entram a ficha (entrada, readmissão, rito, saída, falecimento), o batismo da turma (com o local e os
+       oficiantes, sem repetir a data da ficha), os marcos (conversão, batismo no Espírito Santo, ministério anterior, curso de
+       discipulado), a consagração, os cargos que não vieram dela, o casamento (aparece também na linha do cônjuge), a
+       apresentação dos filhos, as cartas, as vias da credencial e a licença para candidatura.
+     - **A vida espiritual fica à vista:** conversão, batismo nas águas (onde, por quem, ou em outra igreja) e batismo no
+       Espírito Santo. A procedência também.
+     - **A ordem:** do mais recente para o mais antigo; o que não tem data fica no fim.
+     - **Duas rotas novas:**
+       - `GET /api/pessoas/{matrícula}/linha-do-tempo`, para a secretaria, no escopo; fora dele, a mesma resposta de "não
+         encontrada";
+       - `GET /api/minha-linha-do-tempo/{matrícula}`, para a própria pessoa, que vê a sua inteira.
+       - As duas têm páginas de 50 (no máximo 200). O `/historico` antigo continua igual para a tela de hoje.
+     - **Disciplina e abandono:** só quem tem a permissão "disciplina" no escopo **dela** vê o processo, o motivo de uma
+       saída ou de um recolhimento de credencial e a "readmissão depois de exclusão" (a exclusão recusada pela CEI não conta).
+       Esses dados nem são lidos para quem não pode. A própria pessoa não os vê por esta rota.
+     - **Nunca aparece:** CPF, contato nem o código do QR.
+     - **Sem tela nova:** as telas vêm no passo 7.
+     - **Prova:**
+       - jest 6.458 de 6.458, com 19 testes novos;
+       - o roteiro novo e2e-86 no LocalDB, 59 de 59: todas as fontes; a escala (geral, área, local dentro e fora); a
+         disciplina em outro escopo; a própria pessoa e a de outra; o segredo procurado em toda resposta; a paginação; e a
+         rota antiga igual.
+     - **Achado para decidir:** a rota antiga `/historico`, a da tela de hoje, mostra o motivo de uma saída disciplinar
+       (exclusão, abandono) a quem não tem a permissão "disciplina". A rota nova não mostra; a antiga sai quando as telas
+       novas chegarem (passo 7).
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
      por ela.
-  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático.
+  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido
+     que chega pelo site (decisão dele, 17/11/2026, corrigida no mesmo dia):** o formulário público do site **deixa enviar** (o
+     site não confere nada, para não revelar quem já é da Igreja); quando o pedido chega na fila, o sistema identifica a
+     repetição (mesmo CPF, ou nome e nascimento parecidos), **não aprova** e manda para **correção junto com o cadastro mais
+     antigo** — a Secretaria Geral ou a local ajustam.
   5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.
   7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no
-     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo.
+     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo. **Na tela de
+     cadastro do sistema (decisão dele, 17/11/2026):** enquanto a secretaria digita o nome, o nascimento e o CPF, uma **barra de
+     avisos** confere se a pessoa já existe. CPF que já está em outra ficha **não deixa concluir**: "este CPF já está em outra
+     matrícula — clique aqui para ir para lá", que leva à ficha **se ela for da mesma congregação ou da mesma área** de quem
+     cadastra (no escopo); fora disso, quem cadastra não mexe nem cadastra, e o caso vai para a **Secretaria Geral** conferir e
+     corrigir. Nome e nascimento parecidos também avisam, como possível repetição. Precisa de uma **rota de conferência** que
+     respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
+- **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
+  - **Incremento 1** (commit `eb9b600`, mesclado no `homolog` em `262b59d`): a **entrada como primeira tela** (com sessão aberta
+    vai direto ao Início; a Portaria fica no link "Registrar presença numa reunião"; sair volta à entrada; a foto da Igreja entra
+    quando eles mandarem), as **cores da Igreja** (marinho e o ouro com texto marinho no botão principal), o **claro/escuro** no
+    topo (lembrado no aparelho; sem escolha, segue o aparelho), o **Início** ("Graça e paz", "Para você hoje", "Meu trabalho"
+    com os cartões na cor de cada parte), o menu do Início em grupos (Minha vida na igreja, Meu trabalho, Meu Perfil) e, no
+    **celular, as abas em pílulas no alto** (o membro sem "Trabalho") e nada preso embaixo. A primeira tela de cada módulo e o
+    submódulo não mudaram. Prova: jest 6.426/6.426 e a prova no navegador (entrada, Início, celular, claro e escuro, todos os
+    módulos abrindo). Casca do aplicativo v60.
+  - **Incremento 2** (commit `31d8c2b`): os **avisos** (o sino e a pílula "Avisos") num painel do lado, com "Só o que eu
+    preciso resolver" ligado (os fluxos que estão com a pessoa + os não lidos), o quadro de filtros por assunto recolhido; e a
+    **busca do alto** num painel do lado com o campo no alto (Ctrl K abre, Enter abre o primeiro, Esc fecha), presa ao módulo
+    em que a pessoa está, com "Procurar em todo o sistema".
+  - **Incremento 3** (commit `c6a043e`): **Minha vida na igreja** (os próximos compromissos — as escalas e a agenda oficial —
+    e os atalhos do que é da pessoa; no celular, a pílula "Minha vida") e o **Meu Perfil** (os quatro cartões: meus dados,
+    segurança, aparelhos de confiança e preferências — aparência, tamanho da letra, avisos no celular).
+  - Os três na homologação (`a959e3e`), com o equipamento do teste de telas entrando pela entrada nova (`8feba1a`) e a base
+    do teste de telas aprovada **só dentro do ramo** (`84aab1e`): as divergências eram as esperadas da casca nova, sem
+    violação de CSP nem erro de script novo. Provas: jest 6.426/6.426, frontCsp/frontEscape 93/93 e as três provas no Edge
+    sem janela (entrada e Início; avisos e busca; Meu Perfil e Minha vida), no notebook e no celular, claro e escuro.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

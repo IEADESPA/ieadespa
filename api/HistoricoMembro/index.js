@@ -9,6 +9,9 @@ const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const { pessoaAlcancavel, noEscopoDaPessoa } = require("../shared/escopoRotas");
 
+// Causas de saída que contam a disciplina (Reg. Art. 11): sem a permissão "disciplina", a saída aparece sem o motivo.
+const SAIDAS_DISCIPLINARES = new Set(["EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"]);
+
 // ESCOPO: a linha do tempo é da PESSOA — só abre quem alcança a congregação dela (shared/escopoRotas.js); fora do escopo (ou matrícula malformada) vale a mesma resposta de
 // "Matrícula não encontrada".
 module.exports = async function (context, req) {
@@ -43,6 +46,9 @@ module.exports = async function (context, req) {
   }
 
   const eventos = [];
+  // v7.6 — o histórico disciplinar só para quem tem "disciplina" com a pessoa no escopo DESSA permissão (não basta o escopo de "pessoas").
+  const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
+  const podeVerDisciplina = !!(vDisciplina && noEscopoDaPessoa(vDisciplina, alcancavel.congregacaoNome, alcancavel.extensaoNome));
 
   if (membro.DataAdmissao) {
     eventos.push({
@@ -59,7 +65,10 @@ module.exports = async function (context, req) {
     eventos.push({ data: membro.DataRitoRecebimento, tipo: "RITO_RECEBIMENTO", titulo: "Rito Público de Recebimento", descricao: null });
   }
   if (membro.DataSaida) {
-    eventos.push({ data: membro.DataSaida, tipo: "SAIDA", titulo: "Saída do rol de membros", descricao: membro.MotivoSaida });
+    // 17/11/2026 (aprovado pelo responsável): a causa de saída que conta a disciplina (exclusão, abandono) é sigilosa como o processo — sem a permissão
+    // "disciplina" no escopo, a saída aparece sem o motivo (a mesma regra da linha do tempo nova, shared/linhaDoTempo.js no ramo v10-membros).
+    const disciplinar = SAIDAS_DISCIPLINARES.has(membro.MotivoSaida);
+    eventos.push({ data: membro.DataSaida, tipo: "SAIDA", titulo: "Saída do rol de membros", descricao: disciplinar && !podeVerDisciplina ? null : membro.MotivoSaida });
   }
 
   const consagracoes = await pool.request().input("id", sql.Int, membroId).query(`
@@ -90,9 +99,7 @@ module.exports = async function (context, req) {
     eventos.push({ data: m.DataMarco, tipo: `MARCO_${m.Tipo}`, titulo: m.Descricao, descricao: m.DataAproximada ? "Data aproximada" : null, marcoId: m.MarcoId });
   }
 
-  // v7.6 — o histórico disciplinar só para quem tem "disciplina" com a pessoa no escopo DESSA permissão (não basta o escopo de "pessoas").
-  const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
-  if (vDisciplina && noEscopoDaPessoa(vDisciplina, alcancavel.congregacaoNome, alcancavel.extensaoNome)) {
+  if (podeVerDisciplina) {
     const processos = await pool.request().input("id", sql.Int, membroId).query(`
       SELECT CONVERT(varchar(10), p.DataAbertura, 120) AS DataAbertura,
              CONVERT(varchar(10), p.DataConclusao, 120) AS DataConclusao, p.Status AS Status, p.Resultado AS Resultado,

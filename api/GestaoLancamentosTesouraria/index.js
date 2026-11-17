@@ -42,7 +42,10 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const storage = require("../shared/storage");
 const tesouraria = require("../shared/tesouraria");
+const { condicaoSqlEscopoCongregacao } = require("../shared/escopoRotas");
 
+const POR_PAGINA_PADRAO = 50;
+const POR_PAGINA_MAX = 200;
 const FORMAS = ["DINHEIRO", "PIX", "MISTO"];
 const MIME_PERMITIDOS = ["application/pdf", "image/jpeg", "image/png"];
 const TAMANHO_MAXIMO_BYTES = 15 * 1024 * 1024;
@@ -75,13 +78,37 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET") {
     const { congregacaoId, mesReferencia, statusConfirmacao } = req.query || {};
+    const paginada = req.query && req.query.pagina !== undefined && req.query.pagina !== "";
     const request = pool.request();
     let where = "1=1";
-    if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND l.CongregacaoId = @congregacaoId"; }
-    if (mesReferencia) { request.input("mesReferencia", sql.Char(7), mesReferencia); where += " AND l.MesReferencia = @mesReferencia"; }
-    if (statusConfirmacao) { request.input("statusConfirmacao", sql.NVarChar(20), statusConfirmacao); where += " AND l.StatusConfirmacao = @statusConfirmacao"; }
+    // FASE 10 (raio-x de velocidade, 17/11/2026): o escopo de quem pede vai para o WHERE (antes a rota lia a Igreja inteira — 68 mil linhas na massa — e
+    // filtrava na memória: minutos, mesmo para a secretaria local). O filtro na memória continua abaixo como segunda trava.
+    const condEscopo = await condicaoSqlEscopoCongregacao(pool, usuario, request, "l.CongregacaoId");
+    if (condEscopo === "") {
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: [], total: 0, pagina: 1, porPagina: POR_PAGINA_PADRAO } : [] };
+      return;
+    }
+    if (condEscopo) where += ` AND ${condEscopo}`;
+    if (congregacaoId) {
+      const idCong = auth.idDeRota(congregacaoId);
+      if (!idCong) { context.res = { status: 400, body: { sucesso: false, mensagem: "congregacaoId inválido." } }; return; }
+      request.input("congregacaoId", sql.Int, idCong); where += " AND l.CongregacaoId = @congregacaoId";
+    }
+    if (mesReferencia) {
+      if (!REGEX_MES.test(String(mesReferencia))) { context.res = { status: 400, body: { sucesso: false, mensagem: "mesReferencia deve estar no formato AAAA-MM." } }; return; }
+      request.input("mesReferencia", sql.Char(7), mesReferencia); where += " AND l.MesReferencia = @mesReferencia";
+    }
+    if (statusConfirmacao) { request.input("statusConfirmacao", sql.NVarChar(20), String(statusConfirmacao).slice(0, 20)); where += " AND l.StatusConfirmacao = @statusConfirmacao"; }
+    // páginas: só quando pedidas (?pagina=N&porPagina=M) — sem elas, a resposta é a lista como sempre (a tela de hoje)
+    let pagina = 1, porPagina = POR_PAGINA_PADRAO, total = null, paginacao = "";
+    if (paginada) {
+      pagina = Math.min(Math.max(parseInt(req.query.pagina, 10) || 1, 1), 100000);
+      porPagina = Math.min(Math.max(parseInt(req.query.porPagina, 10) || POR_PAGINA_PADRAO, 1), POR_PAGINA_MAX);
+      request.input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina);
+      paginacao = " OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY";
+    }
 
-    const result = await request.query(`
+    const result = await request.query(`${paginada ? `SELECT COUNT(*) AS total FROM LancamentosTesouraria l JOIN Congregacoes c ON c.CongregacaoId = l.CongregacaoId WHERE ${where};` : ""}
       SELECT l.LancamentoId AS lancamentoId, l.CongregacaoId AS congregacaoId, c.Nome AS congregacaoNome,
              l.DizimistaId AS dizimistaId, d.Nome AS dizimistaNome, l.NomeAvulso AS nomeAvulso,
              l.TermoNumero AS termoNumero, l.Tipo AS tipo, cat.Nome AS categoriaNome, l.Descricao AS descricao,
@@ -97,9 +124,11 @@ module.exports = async function (context, req) {
       LEFT JOIN CategoriasEntrada cat ON cat.Codigo = l.Tipo
       LEFT JOIN Campanhas camp ON camp.CampanhaId = l.CampanhaId
       WHERE ${where}
-      ORDER BY ISNULL(l.TermoNumero, 999999999) DESC, l.LancamentoId DESC
+      ORDER BY ISNULL(l.TermoNumero, 999999999) DESC, l.LancamentoId DESC${paginacao}
     `);
-    const lancamentos = result.recordset
+    if (paginada) total = Number((result.recordsets[0][0] || {}).total) || 0;
+    const linhas = paginada ? (result.recordsets[1] || []) : result.recordset;
+    const lancamentos = linhas
       .filter(l => auth.estaNoEscopo(usuario, l.congregacaoNome))
       .map(l => Object.assign({}, l, {
         comprovanteUrl: l.comprovanteUrl ? storage.urlDocumentoComSas(l.comprovanteUrl) : null,
@@ -108,7 +137,7 @@ module.exports = async function (context, req) {
         comprovantePendente: l.status === "ATIVO" && ["PIX", "MISTO"].includes(l.formaPagamento) && !l.comprovanteUrl && !l.conciliacaoId,
         contabilizado: !!l.fechamentoId
       }));
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: lancamentos };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: lancamentos, total, pagina, porPagina } : lancamentos };
     return;
   }
 

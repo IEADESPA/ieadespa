@@ -16,7 +16,7 @@
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
 const vinculos = require("../shared/vinculosFamiliares");
-const { noEscopoDaPessoa, pessoaAlcancavel, carregarPessoa } = require("../shared/escopoRotas");
+const { noEscopoDaPessoa, pessoaAlcancavel, carregarPessoa, condicaoSqlEscopoPessoa } = require("../shared/escopoRotas");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -36,7 +36,17 @@ module.exports = async function (context, req) {
       return;
     }
     // Sem filtro: todos os vínculos em que ao menos uma ponta é do escopo (a consulta do shared não traz a congregação, por isso esta é local da rota).
-    const result = await pool.request().query(`
+    // Raio-x de velocidade 3 (17/11/2026): o escopo vira condição DO BANCO nas duas pontas (antes lia os 4.563 vínculos do campo inteiro e filtrava aqui); o filtro
+    // abaixo continua como segunda conferência. null = a visão vê tudo (sem WHERE); "" = a ponta não alcança ninguém.
+    const pedido = pool.request();
+    const pontaA = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m1.CongregacaoId", "e1.Nome", "escopoA");
+    const pontaB = pontaA === null ? null : await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m2.CongregacaoId", "e2.Nome", "escopoB");
+    const partes = pontaA === null || pontaB === null ? null : [pontaA, pontaB].filter(Boolean);
+    if (partes && partes.length === 0) {
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+      return;
+    }
+    const result = await pedido.query(`
       SELECT v.VinculoId AS vinculoId, v.MembroId AS membroId, m1.Nome AS nome,
              v.MembroParenteId AS membroParenteId, m2.Nome AS parenteNome,
              t.Codigo AS tipoCodigo, t.RotuloDireto AS rotulo, v.ResponsavelLegal AS responsavelLegal,
@@ -49,7 +59,8 @@ module.exports = async function (context, req) {
       LEFT JOIN ExtensoesTenda e1 ON e1.ExtensaoId = m1.ExtensaoId
       LEFT JOIN Congregacoes c2 ON c2.CongregacaoId = m2.CongregacaoId
       LEFT JOIN ExtensoesTenda e2 ON e2.ExtensaoId = m2.ExtensaoId
-      ORDER BY m1.Nome`);
+      ${partes ? `WHERE (${partes.join(" OR ")})` : ""}
+      ORDER BY m1.Nome, v.VinculoId`);
     const lista = result.recordset
       .filter(l => noEscopoDaPessoa(usuario, l.congregacaoNome, l.extensaoNome) || noEscopoDaPessoa(usuario, l.parenteCongregacaoNome, l.parenteExtensaoNome))
       .map(({ congregacaoNome, extensaoNome, parenteCongregacaoNome, parenteExtensaoNome, ...resto }) => resto);

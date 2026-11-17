@@ -132,4 +132,9 @@ BASE=cenario-174 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 BASE=cenario-174 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 # (v10.1b passo 2) a linha do tempo única da pessoa: todas as fontes, a ordem, quem vê o quê (escala, disciplina, a própria pessoa) e a paginação
 BASE=cenario-174 bash rodar.sh roteiro e2e-86-linha-do-tempo.js
+# 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
+BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
+# FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco
+bash rodar.sh preparar-175
+BASE=cenario-175 bash rodar.sh roteiro e2e-88-tesouraria-escopo.js
 echo TUDO-PRONTO

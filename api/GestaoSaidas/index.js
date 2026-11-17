@@ -54,6 +54,9 @@ const { obterTrava } = require("../shared/financeiroSeguro");
 const { afetadas } = require("../shared/entradaFinanceira");
 const { violouUnicidade } = require("../shared/violacaoUnica");
 const vp = require("../shared/voluntarioPagamento");
+const { condicaoSqlEscopoCongregacao } = require("../shared/escopoRotas");
+const POR_PAGINA_PADRAO = 50;
+const POR_PAGINA_MAX = 200;
 const vpDb = require("../shared/voluntarioPagamentoDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 
@@ -124,18 +127,42 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET" && !id) {
     const { congregacaoId, status } = req.query || {};
+    const paginada = req.query && req.query.pagina !== undefined && req.query.pagina !== "";
     const request = pool.request();
     let where = "1=1";
-    if (congregacaoId) { request.input("congregacaoId", sql.Int, congregacaoId); where += " AND s.CongregacaoId = @congregacaoId"; }
-    if (status) { request.input("status", sql.NVarChar(20), status); where += " AND s.Status = @status"; }
-    const result = await request.query(`${SELECT_BASE} WHERE ${where} ORDER BY s.SolicitadoEm DESC`);
-    const saidas = result.recordset
+    // FASE 10 (raio-x de velocidade, 17/11/2026): o escopo de quem pede vai para o WHERE (antes lia todas as saídas da Igreja e filtrava na memória).
+    // A regra do centro de custo (tesouraria departamental) continua na memória, linha a linha, junto com a segunda trava do escopo.
+    const condEscopo = await condicaoSqlEscopoCongregacao(pool, usuario, request, "s.CongregacaoId");
+    if (condEscopo === "") {
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: [], total: 0, pagina: 1, porPagina: POR_PAGINA_PADRAO } : [] };
+      return;
+    }
+    if (condEscopo) where += ` AND ${condEscopo}`;
+    if (congregacaoId) {
+      const idCong = auth.idDeRota(congregacaoId);
+      if (!idCong) { context.res = { status: 400, body: { sucesso: false, mensagem: "congregacaoId inválido." } }; return; }
+      request.input("congregacaoId", sql.Int, idCong); where += " AND s.CongregacaoId = @congregacaoId";
+    }
+    if (status) { request.input("status", sql.NVarChar(20), String(status).slice(0, 20)); where += " AND s.Status = @status"; }
+    // páginas só quando pedidas (?pagina=N&porPagina=M); sem elas, a lista inteira do escopo, como a tela de hoje espera.
+    // Com a regra do centro de custo aplicada depois, a página da tesouraria departamental pode vir com menos itens que porPagina (o total é o do escopo).
+    let pagina = 1, porPagina = POR_PAGINA_PADRAO, paginacao = "";
+    if (paginada) {
+      pagina = Math.min(Math.max(parseInt(req.query.pagina, 10) || 1, 1), 100000);
+      porPagina = Math.min(Math.max(parseInt(req.query.porPagina, 10) || POR_PAGINA_PADRAO, 1), POR_PAGINA_MAX);
+      request.input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina);
+      paginacao = " OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY";
+    }
+    const result = await request.query(`${paginada ? `SELECT COUNT(*) AS total FROM SaidasTesouraria s WHERE ${where};` : ""}${SELECT_BASE} WHERE ${where} ORDER BY s.SolicitadoEm DESC, s.SaidaId DESC${paginacao}`);
+    const total = paginada ? Number((result.recordsets[0][0] || {}).total) || 0 : null;
+    const linhas = paginada ? (result.recordsets[1] || []) : result.recordset;
+    const saidas = linhas
       .filter(s => auth.estaNoEscopo(usuario, s.congregacaoNome) && tesouraria.podeOperarCentroCusto(usuario, s.centroCusto, siglaDepartamentoUsuario))
       .map(s => Object.assign({}, s, {
       documentoFiscalUrl: storage.urlDocumentoComSas(s.documentoFiscalUrl),
       comprovantePagamentoUrl: s.comprovantePagamentoUrl ? storage.urlDocumentoComSas(s.comprovantePagamentoUrl) : null
     }));
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: saidas };
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: paginada ? { sucesso: true, itens: saidas, total, pagina, porPagina } : saidas };
     return;
   }
 

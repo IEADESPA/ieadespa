@@ -13,7 +13,7 @@
 // com escopo "TODAS") recebe só o necessário para a tela (matrícula, nome, congregação, situação), sem nascimento, admissão, dizimista nem os cálculos derivados deles.
 // O quórum da Assembleia não depende desta tela: ele é calculado no servidor sobre o universo inteiro (shared/universo.js).
 const auth = require("../shared/auth");
-const { ehGeral, filtrarPorEscopo } = require("../shared/escopoRotas");
+const { ehGeral, filtrarPorEscopo, condicaoSqlEscopoPessoa } = require("../shared/escopoRotas");
 const { getPool } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -24,7 +24,15 @@ module.exports = async function (context, req) {
   if (!usuario) return;
 
   const pool = await getPool();
-  const result = await pool.request().query(`
+  // Raio-x de velocidade 3 (17/11/2026): o escopo vira condição DO BANCO (antes lia o cadastro inteiro e filtrava aqui); filtrarPorEscopo abaixo continua como
+  // segunda conferência. "" = a visão não alcança ninguém (lista vazia, sem ler o cadastro).
+  const pedido = pool.request();
+  const condEscopo = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "ex.Nome");
+  if (condEscopo === "") {
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+    return;
+  }
+  const result = await pedido.query(`
     SELECT m.MembroId AS membroId, m.Nome AS nome, m.Status AS status, c.Nome AS congregacao,
            CONVERT(varchar(10), m.DataNascimento, 120) AS dataNascimento,
            CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
@@ -32,7 +40,9 @@ module.exports = async function (context, req) {
     FROM MembroReferencia m
     LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
     LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
-  `);
+    ${condEscopo ? `WHERE ${condEscopo}` : ""}
+    ORDER BY m.MembroId
+  `);   // a ordem de antes era a da chave (a leitura da tabela inteira); com o filtro o banco pode usar outro caminho, por isso a ordem fica explícita
   const geral = ehGeral(usuario);
   const doEscopo = filtrarPorEscopo(usuario, result.recordset, (m) => m.congregacao, (m) => m.extensao);
   // Sempre real, nunca mascarado por permissão: isso é o cálculo de quem de fato

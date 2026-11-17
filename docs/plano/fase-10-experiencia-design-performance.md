@@ -292,7 +292,10 @@ o pago por causa do financeiro, que também está vindo para cá.
      readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
      por ela.
-  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático.
+  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **CPF repetido
+     (decisão dele, 17/11/2026):** o cadastro com um CPF que já está em outra ficha **não conclui** (não cria ficha nova) e
+     vai para a **confirmação de que é a mesma pessoa** que já tinha cadastro — a mecânica dessa confirmação entra aqui, na
+     fila de cadastros (hoje, passo 1, a rota só recusa com a mensagem).
   5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.

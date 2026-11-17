@@ -243,6 +243,60 @@ O que compõe o peso:
 | 6 | Juntar os pedidos de cada tela (Início e módulos: 1 ou 2 pedidos em vez de 7 a 9) | celular: 2 a 4 s a menos por tela | médio | médio | não |
 | 7 | Plano do banco maior, só se ainda faltar fôlego em dia de pico | depende | baixo (é configuração) | baixo | não (custa por mês) |
 
+### Feito em 17/11/2026: as correções 1 e 2 (aprovadas por ele: "pode começar")
+
+- **1. Índices (migração 175):** 13 índices nas tabelas que o raio-x achou sem índice de busca.
+  - Lançamentos: congregação + mês, campanha, data, fechamento, conciliação e dizimista.
+  - Saídas: congregação + situação, fornecedor + valor (a conferência de duplicidade) e pagos no período.
+  - Pessoas: congregação + situação, e nome.
+  - As aprovações dos relatórios dos departamentos e as linhas do extrato.
+  - Idempotente, sem índice filtrado.
+  - A 175 não depende da 174: o executor roda todas em ordem a cada deploy.
+- **2. Lançamentos e saídas filtrados no banco:** o escopo de quem pede vai para o `WHERE`
+  (`condicaoSqlEscopoCongregacao` em `api/shared/escopoRotas.js`, a mesma regra de `auth.estaNoEscopo`). O filtro na
+  memória continua como segunda trava.
+  - Páginas opcionais (`?pagina=N&porPagina=M`, até 200). Sem elas, a resposta é a lista de sempre e a tela de hoje
+    não muda.
+  - `congregacaoId` e mês malformados dão 400.
+- **O link do comprovante continua vindo pronto em cada linha.** Gerar só ao abrir mudaria a tela de hoje: o link é
+  aberto direto, sem passar a sessão. Com o escopo no banco, ele só é gerado para as linhas do escopo, e assinar é um
+  cálculo local, sem ida à nuvem. Fica para a tela nova do Financeiro.
+
+**Antes × depois, na mesma massa e no mesmo LocalDB** (`tools/raio-x/medir-tesouraria.js`):
+
+| Pedido | Papel | Antes | Depois | Linhas lidas antes → depois |
+| --- | --- | --- | --- | --- |
+| Lançamentos sem filtro | área | 313 s | 51 s | 68.763 → 11.341 |
+| Lançamentos sem filtro | congregação | 280 s | 29 s | 68.763 → 5.952 |
+| Saídas (a lista da tela) | área | 38 s | 5,3 s | 8.351 → 1.040 |
+| Saídas (a lista da tela) | congregação | 41 s | 1,5 s | 8.351 → 217 |
+| Saídas (a lista da tela) | Geral | 44 s | 42 s | 8.351 → 8.351 (a Geral vê tudo) |
+| Lançamentos da tela (congregação + mês) | todos | 0,7 s | 0,7 a 0,8 s | 163 → 163 |
+
+- **No LocalDB, o tempo é quase todo a ponte do equipamento** (PowerShell), que converte cada linha devolvida em texto,
+  cerca de 4,7 ms por linha. Por isso o número que mais importa é o de linhas lidas, que caiu de 7 a 38 vezes para a área
+  e a congregação.
+- **O tempo só do banco** (`tools/raio-x/medir-tesouraria-banco.js`, sem transferir as linhas):
+  - os lançamentos de uma congregação no mês caíram de 7,3 ms para 1,0 ms com o índice;
+  - as consultas grandes ficaram entre 24 e 114 ms com e sem índice, porque o LocalDB do notebook tem tudo na memória.
+- **No Basic de 5 DTU da produção**, ler a tabela inteira ocupa o banco e segura os outros. O ganho de ler só o escopo e
+  de buscar pelo índice é maior lá do que aqui.
+- **A lista da Geral nas saídas** (todas as 8.351) continua grande. Ela fica rápida com as páginas, que entram na tela nova
+  do Financeiro.
+
+**Provas:**
+
+- jest 6.439 de 6.439, com `tesourariaEscopoBanco.test.js` (13 casos).
+- e2e-88 no LocalDB, 25 de 25, sobre a base `cenario-175` (a 175 aplicada duas vezes). Cobre:
+  - lançamentos e saídas contra o gabarito do banco: Geral, área, congregação, congregação de fora, escopo vazio e nome
+    que não existe;
+  - as páginas;
+  - o link do comprovante e da nota no formato de antes;
+  - o 400 das entradas malformadas;
+  - o índice de congregação + mês sendo usado.
+- Os roteiros que já usavam lançamentos e saídas continuam verdes: e2e-43 55/55, e2e-45 42/42, e2e-76 207/207 e e2e-81
+  15/15.
+
 ## 7. Para repetir a medição
 
 ```bash

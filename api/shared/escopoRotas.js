@@ -117,4 +117,19 @@ async function congregacaoNoEscopo(pool, usuario, congregacaoId) {
   return !!r && auth.estaNoEscopo(usuario, r.Nome);
 }
 
-module.exports = { ehGeral, exigirGeral, noEscopoDaPessoa, carregarPessoa, pessoaAlcancavel, filtrarPorEscopo, congregacaoNoEscopo, condicaoSqlEscopoPessoa, FORA_DO_ESCOPO, MSG_GERAL };
+// FASE 10 (raio-x de velocidade, 17/11/2026) — o escopo da VISÃO da permissão (usuario.escopoCongregacoes, exatamente a regra de auth.estaNoEscopo) virado condição
+// do banco sobre uma coluna de CongregacaoId, para as rotas que liam a tabela inteira e filtravam na memória (lançamentos e saídas da tesouraria).
+// Os nomes viram ids aqui, com a mesma comparação do JavaScript (includes, maiúsculas e acentos iguais); o banco filtra pela coluna indexada.
+// Devolve null = sem filtro (TODAS); "" = nada no escopo (a resposta é vazia, sem ler a tabela); senão, a condição com o parâmetro já posto no pedido.
+async function condicaoSqlEscopoCongregacao(pool, usuario, pedido, colCongregacaoId, nomeParametro = "escopoCongIds") {
+  const escopo = usuario && usuario.escopoCongregacoes;
+  if (escopo === "TODAS") return null;
+  if (!Array.isArray(escopo) || escopo.length === 0) return "";
+  const congregacoes = (await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes`)).recordset;
+  const ids = congregacoes.filter((c) => c.Nome && escopo.includes(c.Nome)).map((c) => Number(c.CongregacaoId));
+  if (ids.length === 0) return "";
+  pedido.input(nomeParametro, sql.NVarChar(sql.MAX), JSON.stringify(ids));
+  return `${colCongregacaoId} IN (SELECT CAST(value AS INT) FROM OPENJSON(@${nomeParametro}))`;
+}
+
+module.exports = { ehGeral, exigirGeral, noEscopoDaPessoa, carregarPessoa, pessoaAlcancavel, filtrarPorEscopo, congregacaoNoEscopo, condicaoSqlEscopoPessoa, condicaoSqlEscopoCongregacao, FORA_DO_ESCOPO, MSG_GERAL };

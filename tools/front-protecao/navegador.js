@@ -361,7 +361,7 @@ async function rodarViewport(nav, base, nome, viewport) {
     if (folhas !== 1) relatorio.problemas.push(`na impressão o relatório devia caber em 1 folha (saíram ${folhas})`);
     relatorio.folhas = folhas; relatorio.alturaImpressao = `${impressao.alturaDoDocumento} px de documento para ${impressao.alturaDaFolha} px de janela`;
     // sair da aba: o intervalo para e o relato/a fila saem
-    await clicarTexto("button", "Painel Principal", "#sidebar");
+    await clicarTexto("button", "Menu principal", "#sidebar");
     const saidaDaAba = await page.evaluate(() => ({ fila: document.getElementById("prtListaIncidentes").innerHTML === "", aba: getComputedStyle(document.getElementById("abaProtecao")).display }));
     if (!saidaDaAba.fila || saidaDaAba.aba !== "none") relatorio.problemas.push(`sair da aba devia esvaziar a fila: ${JSON.stringify(saidaDaAba)}`);
   } catch (e) {

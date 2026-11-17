@@ -1544,3 +1544,277 @@ html[data-tema="escuro"] .chip-filtro.ativo { background: var(--cor-ouro); borde
   .perfil-grade, .vida-grade { grid-template-columns: 1fr; }
   .perfil-linha > span:first-child { width: 110px; }
 }
+
+/* ---- incremento 4: o VISUAL NOVO em TODAS as telas que já existem (o conteúdo e o fluxo de cada uma não mudam; só a aparência).
+   O padrão aprovado nas rodadas: botão principal em ouro com texto marinho e os outros em contorno; campos de 44 px com rótulo forte;
+   tabelas num cartão, cabeçalho discreto, zebra leve e números alinhados; selos de situação em tom suave; abas internas em pílulas;
+   cada tela num cartão branco sobre o fundo; o menu da esquerda de cada módulo NA COR DO MÓDULO, com o cabeçalho colorido; e o modo
+   escuro em tudo. Só variáveis do tema daqui para baixo. ---- */
+:root {
+  --borda: var(--cor-borda);
+  --cor-campo-borda: #C9CFD8;
+  --cor-linha: #EEF1F5;
+  --cor-zebra: #FAFBFD;
+  --cor-tabela-cabecalho: #F4F6FA;
+  --cor-foco: #0A2342;
+  --cor-foco-anel: rgba(10, 35, 66, .18);
+  --cor-acento: #0A2342;
+  --cor-secundaria: #FFB800;
+  --cor-secundaria-hover: #E6A600;
+  --cor-secundaria-suave: #FFF4D6;
+  --cor-secundaria-texto: #7A5800;
+  --cor-aviso: #7A4A00;
+  --cor-perigo: #B91C1C;
+  --chip-verde-fundo: #DCFCE7; --chip-verde-texto: #166534;
+  --chip-ambar-fundo: #FEF3C7; --chip-ambar-texto: #7A4A00;
+  --chip-vermelho-fundo: #FEE2E2; --chip-vermelho-texto: #991B1B;
+  --chip-azul-fundo: #E3ECFD; --chip-azul-texto: #1D4ED8;
+  --chip-neutro-fundo: #EEF1F5; --chip-neutro-texto: #4B5563;
+  --cor-modulo: #0A2342;
+}
+html[data-tema="escuro"] {
+  --cor-campo-borda: #3C5A82;
+  --cor-linha: #1A3557;
+  --cor-zebra: #0E2646;
+  --cor-tabela-cabecalho: #0E2748;
+  --cor-foco: #FFB800;
+  --cor-foco-anel: rgba(255, 184, 0, .30);
+  --cor-acento: #FFB800;
+  --cor-secundaria-suave: #2A2410;
+  --cor-secundaria-texto: #FFC933;
+  --cor-aviso: #FCD34D;
+  --cor-perigo: #FCA5A5;
+  --cor-erro: #FCA5A5;
+  --cor-sucesso: #86EFAC;
+  --chip-verde-fundo: #14532D; --chip-verde-texto: #BBF7D0;
+  --chip-ambar-fundo: #3D2A05; --chip-ambar-texto: #FCD34D;
+  --chip-vermelho-fundo: #4C1717; --chip-vermelho-texto: #FCA5A5;
+  --chip-azul-fundo: #1E3A6E; --chip-azul-texto: #BFD0F7;
+  --chip-neutro-fundo: #1A3557; --chip-neutro-texto: #C9D4E3;
+  --cor-modulo: #FFB800;
+}
+
+/* cada tela num cartão sobre o fundo (o Início, Minha vida e Meu Perfil já têm os cartões deles) */
+.conteudo { background: var(--cor-fundo); }
+.aba-secretaria:not(:has(> .sub-aba-secretaria)),
+.aba-secretaria > .sub-aba-secretaria:not(#subMeupainelPerfil):not(#subMeupainelMinhavida):not(#subMeupainelMeuperfil) {
+  background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(10, 35, 66, .05);
+}
+.aba-secretaria > .sub-aba-secretaria + .sub-aba-secretaria { margin-top: 0; }
+
+/* títulos e textos */
+.aba-secretaria h3, .sub-aba-secretaria h3 { font-size: 1.12rem; font-weight: 700; color: var(--cor-titulo); margin: 0 0 6px; line-height: 1.3; }
+.aba-secretaria h3:not(:first-child), .sub-aba-secretaria h3:not(:first-child) { margin-top: 22px; }
+.aba-secretaria h4, .sub-aba-secretaria h4, .aba-secretaria h5 { color: var(--cor-titulo); }
+.subtitle { color: var(--cor-texto-suave); line-height: 1.5; }
+.aba-secretaria hr, .sub-aba-secretaria hr { margin: 22px 0; border: none; border-top: 1px solid var(--cor-linha); }
+.input-group { margin-bottom: 14px; }
+.input-group label, .cal-form .input-group label { font-size: 0.86rem; font-weight: 600; color: var(--cor-titulo); margin-bottom: 6px; }
+
+/* campos e seleções: 44 px, borda fina, canto de 10 px, foco marinho (no escuro, ouro) */
+input[type="text"], input[type="number"], input[type="password"], input[type="email"], input[type="tel"], input[type="search"], input[type="url"],
+input[type="date"], input[type="month"], input[type="week"], input[type="time"], input[type="datetime-local"], input:not([type]), select, textarea,
+.cal-form input[type="date"], .cal-form input[type="time"], .cal-form input[type="number"], .cal-form-inline input[type="datetime-local"], input.afm-data {
+  min-height: 44px; padding: 10px 12px; border: 1px solid var(--cor-campo-borda); border-radius: 10px;
+  background-color: var(--cor-campo); color: var(--cor-texto); font-family: inherit; font-size: 16px; box-sizing: border-box; max-width: 100%;
+}
+textarea { line-height: 1.45; }
+select { cursor: pointer; }
+input::placeholder, textarea::placeholder { color: var(--cor-texto-suave); opacity: 1; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--cor-foco); box-shadow: 0 0 0 3px var(--cor-foco-anel); }
+input:disabled, select:disabled, textarea:disabled { opacity: .65; cursor: not-allowed; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--cor-acento); width: 18px; height: 18px; vertical-align: middle; }
+.psc-campos input[type="text"], .psc-form-inline input[type="text"], .psc-form-inline input[type="number"], .psc-form-inline textarea,
+.cal-form-inline input[type="text"], .cal-form-inline textarea { padding: 9px 12px; font-size: 0.95rem; }
+input[type="file"] { font-family: inherit; font-size: 0.9rem; color: var(--cor-texto-suave); max-width: 100%; }
+input[type="file"]::file-selector-button {
+  min-height: 40px; padding: 8px 14px; margin-right: 10px; border: 1px solid var(--cor-campo-borda); border-radius: 10px;
+  background: var(--cor-superficie); color: var(--cor-titulo); font-weight: 600; font-family: inherit; cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover { border-color: var(--cor-ouro); }
+fieldset { border: 1px solid var(--cor-borda); border-radius: 12px; }
+legend { color: var(--cor-titulo); font-weight: 600; }
+details > summary { cursor: pointer; color: var(--cor-titulo); font-weight: 600; }
+.cal-form, .cal-form-inline, .psc-form-inline { background: var(--cor-fundo); border-color: var(--cor-borda); border-radius: 12px; }
+
+/* botões: o principal em ouro (texto marinho); os outros em contorno; o de apagar em vermelho */
+.btn-confirmar {
+  min-height: 44px; padding: 10px 18px; font-size: 0.95rem; font-weight: 700; border-radius: 10px; border: 1px solid var(--cor-ouro);
+  line-height: 1.25; transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn-confirmar:hover { border-color: var(--cor-ouro-hover); }
+.btn-confirmar:disabled { opacity: .55; cursor: not-allowed; }
+.btn-secundario, .btn-confirmar.btn-secundario { background: transparent; color: var(--cor-titulo); border: 1px solid var(--cor-campo-borda); }
+.btn-secundario:hover, .btn-confirmar.btn-secundario:hover { background: var(--cor-primaria-suave); border-color: var(--cor-titulo); }
+.btn-perigo, .btn-confirmar.btn-perigo { background: #B91C1C; border-color: #B91C1C; color: #FFFFFF; }
+.btn-perigo:hover, .btn-confirmar.btn-perigo:hover { background: #991B1B; border-color: #991B1B; }
+.btn-link { color: var(--cor-link); font-weight: 600; text-decoration: none; }
+.btn-link:hover { text-decoration: underline; }
+.btn-link-perigo { color: var(--cor-perigo); }
+.btn-link-sucesso { color: var(--chip-verde-texto); }
+.btn-justificar, .evt-selo-congresso { background: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.btn-justificar:hover { background: var(--cor-ouro-hover); }
+.paginacao button { min-height: 34px; min-width: 34px; border-radius: 8px; border-color: var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto); }
+.paginacao button.ativo { background: var(--cor-ouro-texto); border-color: var(--cor-ouro-texto); color: #FFFFFF; font-weight: 700; }
+html[data-tema="escuro"] .paginacao button.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); }
+
+/* abas e subabas dentro das telas: as pílulas aprovadas (a marcada em ouro) */
+.cal-pilulas { gap: 8px; }
+.cal-pilula, .btn-tab-perfil {
+  min-height: 38px; border: 1px solid var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto);
+  border-radius: 19px; padding: 7px 16px; font-size: 0.88rem; font-weight: 600; font-family: inherit; cursor: pointer; margin: 0;
+}
+.cal-pilula:hover, .btn-tab-perfil:hover { border-color: var(--cor-ouro); color: var(--cor-titulo); }
+.cal-pilula.ativo, .btn-tab-perfil.ativo,
+html[data-tema="escuro"] .cal-pilula.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); font-weight: 700; }
+.tabs-perfil { gap: 8px; border-bottom: none; margin: 0 0 18px; }
+
+/* tabelas: num cartão, cabeçalho discreto, linhas finas, zebra leve, números alinhados à direita */
+.tabela-frequencia, .tabela-simples {
+  border-collapse: separate; border-spacing: 0; border: 1px solid var(--cor-borda); border-radius: 12px; overflow: hidden;
+  background: var(--cor-superficie); font-size: 0.9rem; font-variant-numeric: tabular-nums;
+}
+.rolagem-tabela, .cpa-rolagem { border-radius: 12px; }
+.tabela-frequencia th, .tabela-simples th {
+  background: var(--cor-tabela-cabecalho); color: var(--cor-texto-suave); font-size: 0.8rem; font-weight: 700; text-transform: none; letter-spacing: .01em;
+  padding: 11px 12px; border-bottom: 1px solid var(--cor-borda); text-align: left; vertical-align: bottom;
+}
+.tabela-frequencia td, .tabela-simples td { padding: 11px 12px; border-bottom: 1px solid var(--cor-linha); color: var(--cor-texto); vertical-align: middle; }
+.tabela-frequencia tbody tr:last-child td, .tabela-simples tbody tr:last-child td { border-bottom: none; }
+.tabela-frequencia tbody tr:nth-child(even) td, .tabela-simples tbody tr:nth-child(even) td { background: var(--cor-zebra); }
+.tabela-frequencia tbody tr:hover td, .tabela-simples tbody tr:hover td { background: var(--cor-primaria-suave); }
+.tabela-frequencia .casca-num, .tabela-simples .casca-num { text-align: right; white-space: nowrap; }
+.cpa-tabela th { color: var(--cor-texto-suave); }
+
+/* cartões, painéis e listas */
+.cartao-perfil, .cal-cartao, .psc-cartao, .crs-cartao, .idv-cartao, .cons-painel, .escada-requisitos, .com-comunicado, .com-cat,
+.cal-verif-cartao, .vol-cartao, .ent-form, .idv-opcoes, .cal-site-cartao { border-radius: 12px; border-color: var(--cor-borda); }
+.cal-cartao h4, .cal-cartao h5, .psc-cartao h4, .psc-cartao h5, .cartao-perfil .nome-perfil, .cpa-boletim-titulo { color: var(--cor-titulo); }
+.stat-tile { border-radius: 12px; }
+.stat-tile .stat-valor { color: var(--cor-titulo); }
+.lista-documentos a { color: var(--cor-titulo); border: 1px solid var(--cor-borda); border-radius: 12px; }
+.resumo-quorum { color: var(--cor-titulo); border-radius: 12px; }
+.banner-primeiro-acesso { border-radius: 12px; border-color: var(--cor-borda); }
+
+/* selos de situação: tom suave com texto forte (o mesmo padrão dos "chips" aprovados) */
+.badge-status {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+  background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto);
+}
+.badge-status.badge-ativo { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.badge-status.badge-licenca, html[data-tema="escuro"] .badge-status.badge-licenca { background: var(--chip-azul-fundo); border-color: transparent; color: var(--chip-azul-texto); }
+.badge-status.badge-inativo { background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto); }
+.badge-status.badge-desligado { background: var(--chip-vermelho-fundo); color: var(--chip-vermelho-texto); }
+.badge-status.badge-pendente { background: var(--chip-ambar-fundo); color: var(--chip-ambar-texto); }
+.psc-chip, .psc-selo, .cal-selo:not(.cal-selo-nivel), .cal-st-deferido, .vol-etiqueta { border-radius: 12px; background: var(--chip-azul-fundo); color: var(--chip-azul-texto); }
+.tag-pendente, .psc-alerta-selo, .cal-st-proposto, .vol-etiqueta-alerta, .cnl-fase-fora,
+.psc-selo.psc-alerta-selo, .psc-chip.psc-alerta-selo, .cal-selo.cal-st-proposto, .vol-etiqueta.vol-etiqueta-alerta { background: var(--chip-ambar-fundo); color: var(--chip-ambar-texto); }
+.psc-ok, .cal-st-homologado, .psc-selo.psc-ok, .psc-chip.psc-ok, .cal-selo.cal-st-homologado,
+.prt-selo.cal-st-homologado, .chk-selo.cal-st-homologado, .cpa-selo.cal-st-homologado { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.psc-erro, .cal-st-indeferido, .cal-st-absorvido, .psc-selo.psc-erro, .psc-chip.psc-erro,
+.cal-selo.cal-st-indeferido, .cal-selo.cal-st-absorvido { background: var(--chip-vermelho-fundo); color: var(--chip-vermelho-texto); }
+.psc-neutro, .cal-st-cancelado, .psc-selo.psc-neutro, .psc-chip.psc-neutro, .cal-selo.cal-st-cancelado { background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto); border-color: transparent; }
+
+/* avisos dentro das telas (o texto escuro fixo de antes some no modo escuro: aqui ele segue o tema) */
+.psc-aviso, .psc-orientacao, .cal-aviso-remarcacao, .cnl-incompleto, .evt-atencao, .vol-aviso, .prt-ajuda-aviso, .chk-aguardando, .cpa-falha {
+  background: var(--cor-secundaria-suave); color: var(--chip-ambar-texto); border-left-color: var(--cor-ouro); border-radius: 10px;
+}
+.cnl-contador-alerta .cnl-contador-valor, .mnr-contador-alerta .mnr-contador-valor, .prt-contador-alerta .prt-contador-valor,
+.chk-aviso-faixa, .idv-alerta, .cnl-fase-urgente { color: var(--chip-ambar-texto); }
+.cnl-fase-urgente { background: var(--chip-ambar-fundo); }
+.cnl-aviso-senha { border-radius: 10px; }
+html[data-tema="escuro"] .prt-selo.cal-st-homologado, html[data-tema="escuro"] .chk-selo.cal-st-homologado, html[data-tema="escuro"] .cpa-selo.cal-st-homologado,
+html[data-tema="escuro"] .chk-tel, html[data-tema="escuro"] .prt-ajuda-ok h4, html[data-tema="escuro"] .chk-lote-impresso { color: var(--chip-verde-texto); }
+html[data-tema="escuro"] #subMeupainelCheckininfantil .psc-legenda, html[data-tema="escuro"] #abaCheckininfantil .psc-legenda,
+html[data-tema="escuro"] #subMeupainelCheckininfantil .subtitle:not(.psc-aviso), html[data-tema="escuro"] #abaCheckininfantil .subtitle:not(.psc-aviso),
+html[data-tema="escuro"] #subMeupainelCuidado .psc-legenda, html[data-tema="escuro"] #abaCuidadopastoral .psc-legenda,
+html[data-tema="escuro"] #subMeupainelCuidado .subtitle:not(.psc-aviso), html[data-tema="escuro"] #abaCuidadopastoral .subtitle:not(.psc-aviso) { color: var(--cor-texto-suave); }
+/* no escuro o vermelho e o verde viram cor de TEXTO (claros); os FUNDOS cheios com letra branca guardam o tom forte */
+html[data-tema="escuro"] .btn-presenca-offline.ativo-ausente, html[data-tema="escuro"] .cnl-fase-vencida, html[data-tema="escuro"] .cnl-aviso-vencida,
+html[data-tema="escuro"] .evt-urgente, html[data-tema="escuro"] .prt-tel-urgente, html[data-tema="escuro"] .prt-relogio-vencido, html[data-tema="escuro"] .chk-alergia,
+html[data-tema="escuro"] .cpa-selo.cpa-vencido, html[data-tema="escuro"] .cpa-risco-topo { background: #B91C1C; border-color: #B91C1C; color: #FFFFFF; }
+html[data-tema="escuro"] .btn-presenca-offline.ativo-presente { background: #15803D; border-color: #15803D; color: #FFFFFF; }
+
+/* avisos que somem sozinhos, a janela de confirmar */
+.toast { border-radius: 12px; border: 1px solid var(--cor-borda); border-left: 5px solid var(--cor-titulo); font-weight: 500; }
+.toast.toast-sucesso { border-left-color: #15803D; }
+.toast.toast-erro { border-left-color: #B91C1C; }
+#modalOverlay { background: rgba(6, 22, 41, .55); }
+.modal-caixa { border-radius: 16px; border: 1px solid var(--cor-borda); padding: 24px; }
+.modal-caixa h3 { color: var(--cor-titulo); }
+.modal-acoes button { min-height: 44px; }
+
+/* ---- o MENU DE CADA MÓDULO na cor do módulo (aprovado nas rodadas 3, 4 e 7: "o menu todo na cor", o cabeçalho colorido com o nome do
+   módulo e de quem está vendo, "← Menu principal" no alto); a faixa da mesma cor no alto da tela diz onde a pessoa está ---- */
+.menu-modulo-cabecalho { display: none; }
+.painel-layout[data-modulo] .menu-modulo-cabecalho {
+  display: flex; flex-direction: column; gap: 3px; margin: 4px 2px 10px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .12);
+}
+.menu-modulo-rotulo { font-size: 0.7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cor-menu-texto-suave); }
+.menu-modulo-titulo { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; color: #FFFFFF; line-height: 1.25; }
+.menu-modulo-escopo { font-size: 0.78rem; color: var(--cor-menu-texto-suave); }
+.menu-modulo-escopo:empty { display: none; }
+.sidebar.recolhido .menu-modulo-cabecalho { display: none !important; }
+.painel-layout[data-modulo] #btnAbaMeupainel, .painel-layout[data-modulo] #submenuMeupainel { display: none !important; }
+.painel-layout[data-modulo] #btnVoltarModulo {
+  border: none; background: transparent; color: var(--cor-menu-texto-suave); font-size: 0.86rem; font-weight: 600; padding: 6px 10px; min-height: 34px; box-shadow: none;
+}
+.painel-layout[data-modulo] #btnVoltarModulo:hover { background: rgba(255, 255, 255, .10); color: #FFFFFF; }
+.painel-layout[data-modulo] .divisor-sidebar { display: none; }
+.painel-layout[data-modulo] .btn-aba { color: #FFFFFF; }
+.painel-layout[data-modulo] .btn-subaba { color: var(--cor-menu-texto-suave); }
+.painel-layout[data-modulo] .btn-subaba:hover, .painel-layout[data-modulo] .btn-aba:hover { background: rgba(255, 255, 255, .10); color: #FFFFFF; }
+.painel-layout[data-modulo] .btn-aba.ativo, .painel-layout[data-modulo] .btn-subaba.ativo { color: #FFFFFF; }
+.painel-layout[data-modulo] .cabecalho-secretaria { box-shadow: inset 0 5px 0 var(--cor-modulo); padding-top: 13px; }
+.painel-layout[data-modulo] .aba-secretaria h3:first-child, .painel-layout[data-modulo] .sub-aba-secretaria h3:first-child { border-left: 4px solid var(--cor-modulo); padding-left: 10px; }
+/* as famílias de cor (as mesmas dos cartões do Início): o menu num tom bem escuro da família, o item marcado um pouco mais claro */
+.painel-layout[data-modulo="membresia"], .painel-layout[data-modulo="habilitacao"] { --cor-menu: #1A3275; --cor-menu-ativo: #26449A; --cor-menu-texto-suave: #C7D5F8; --cor-modulo: #1D4ED8; }
+.painel-layout[data-modulo="financeiro"] { --cor-menu: #0B4A44; --cor-menu-ativo: #126058; --cor-menu-texto-suave: #B6E6DE; --cor-modulo: #0F766E; }
+.painel-layout[data-modulo="eclesiastica"], .painel-layout[data-modulo="trilhas"] { --cor-menu: #3B1478; --cor-menu-ativo: #55249E; --cor-menu-texto-suave: #D5CAF5; --cor-modulo: #6D28D9; }
+.painel-layout[data-modulo="departamentos"], .painel-layout[data-modulo="escalas"] { --cor-menu: #6B0F37; --cor-menu-ativo: #8C1A4B; --cor-menu-texto-suave: #F6C9DD; --cor-modulo: #BE185D; }
+.painel-layout[data-modulo="ebd"] { --cor-menu: #08405F; --cor-menu-ativo: #0D5A82; --cor-menu-texto-suave: #C2E6F7; --cor-modulo: #0369A1; }
+.painel-layout[data-modulo="expansao"], .painel-layout[data-modulo="entidades"] { --cor-menu: #6A2309; --cor-menu-ativo: #8C330F; --cor-menu-texto-suave: #F8D3BA; --cor-modulo: #C2410C; }
+.painel-layout[data-modulo="territorio"] { --cor-menu: #0D4A24; --cor-menu-ativo: #156433; --cor-menu-texto-suave: #C2EDD0; --cor-modulo: #15803D; }
+.painel-layout[data-modulo="calendario"], .painel-layout[data-modulo="eventos"] { --cor-menu: #5C0F63; --cor-menu-ativo: #7A1683; --cor-menu-texto-suave: #F2CCF5; --cor-modulo: #A21CAF; }
+.painel-layout[data-modulo="orgaosCentrais"], .painel-layout[data-modulo="orgaosRegionais"], .painel-layout[data-modulo="conformidade"], .painel-layout[data-modulo="acesso"] { --cor-menu: #5A4100; --cor-menu-ativo: #73550A; --cor-menu-texto-suave: #F0DFA8; --cor-modulo: #7A5800; }
+.painel-layout[data-modulo="disciplina"], .painel-layout[data-modulo="crise"] { --cor-menu: #6E1010; --cor-menu-ativo: #8E1C1C; --cor-menu-texto-suave: #F7CACA; --cor-modulo: #B91C1C; }
+.painel-layout[data-modulo="canais"] { --cor-menu: #26206E; --cor-menu-ativo: #362F96; --cor-menu-texto-suave: #CED1F8; --cor-modulo: #4338CA; }
+.painel-layout[data-modulo="assistenciasocial"], .painel-layout[data-modulo="psc"], .painel-layout[data-modulo="setores"] { --cor-menu: #5E2D05; --cor-menu-ativo: #7A3D08; --cor-menu-texto-suave: #F7DDB0; --cor-modulo: #B45309; }
+.painel-layout[data-modulo="conquistas"] { --cor-menu: #0A3F4D; --cor-menu-ativo: #0F5668; --cor-menu-texto-suave: #BDE9F3; --cor-modulo: #0E7490; }
+html[data-tema="escuro"] .painel-layout[data-modulo="membresia"], html[data-tema="escuro"] .painel-layout[data-modulo="habilitacao"] { --cor-menu: #0C1A3D; --cor-menu-ativo: #1A2C5C; --cor-modulo: #93B4F8; }
+html[data-tema="escuro"] .painel-layout[data-modulo="financeiro"] { --cor-menu: #082B28; --cor-menu-ativo: #0F3D3A; --cor-modulo: #5EEAD4; }
+html[data-tema="escuro"] .painel-layout[data-modulo="eclesiastica"], html[data-tema="escuro"] .painel-layout[data-modulo="trilhas"] { --cor-menu: #1C0E38; --cor-menu-ativo: #33205F; --cor-modulo: #C4B5FD; }
+html[data-tema="escuro"] .painel-layout[data-modulo="departamentos"], html[data-tema="escuro"] .painel-layout[data-modulo="escalas"] { --cor-menu: #33081B; --cor-menu-ativo: #4A1530; --cor-modulo: #F9A8D4; }
+html[data-tema="escuro"] .painel-layout[data-modulo="ebd"] { --cor-menu: #06243A; --cor-menu-ativo: #0C3A52; --cor-modulo: #7DD3FC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="expansao"], html[data-tema="escuro"] .painel-layout[data-modulo="entidades"] { --cor-menu: #2E1608; --cor-menu-ativo: #4A2410; --cor-modulo: #FDBA74; }
+html[data-tema="escuro"] .painel-layout[data-modulo="territorio"] { --cor-menu: #072A15; --cor-menu-ativo: #14532D; --cor-modulo: #86EFAC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="calendario"], html[data-tema="escuro"] .painel-layout[data-modulo="eventos"] { --cor-menu: #2D0A31; --cor-menu-ativo: #4A1650; --cor-modulo: #F0ABFC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="orgaosCentrais"], html[data-tema="escuro"] .painel-layout[data-modulo="orgaosRegionais"], html[data-tema="escuro"] .painel-layout[data-modulo="conformidade"], html[data-tema="escuro"] .painel-layout[data-modulo="acesso"] { --cor-menu: #2E2405; --cor-menu-ativo: #45370A; --cor-modulo: #FFC933; }
+html[data-tema="escuro"] .painel-layout[data-modulo="disciplina"], html[data-tema="escuro"] .painel-layout[data-modulo="crise"] { --cor-menu: #330A0A; --cor-menu-ativo: #4C1717; --cor-modulo: #FCA5A5; }
+html[data-tema="escuro"] .painel-layout[data-modulo="canais"] { --cor-menu: #15133A; --cor-menu-ativo: #26265E; --cor-modulo: #A5B4FC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="assistenciasocial"], html[data-tema="escuro"] .painel-layout[data-modulo="psc"], html[data-tema="escuro"] .painel-layout[data-modulo="setores"] { --cor-menu: #2E1A04; --cor-menu-ativo: #3D2A05; --cor-modulo: #FCD34D; }
+html[data-tema="escuro"] .painel-layout[data-modulo="conquistas"] { --cor-menu: #062530; --cor-menu-ativo: #0B3A47; --cor-modulo: #67E8F9; }
+.sidebar .abas-secretaria { border-bottom: none; margin-bottom: 0; }
+.vol-selo-ok { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); border-radius: 10px; }
+.psc-sinal-mini.psc-concluido { border-color: var(--chip-verde-texto); color: var(--chip-verde-texto); }
+/* os poucos fundos claros escritos direto no código das telas (Situação do Tesouro, PDQ, a foto vazia da lista de pessoas) seguem o modo escuro */
+html[data-tema="escuro"] .conteudo [style*="background:#fff"], html[data-tema="escuro"] .conteudo [style*="background:#f7f7f7"] { background: var(--cor-superficie) !important; color: var(--cor-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#eef7ee"] { background: var(--chip-verde-fundo) !important; color: var(--chip-verde-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#fff7e6"] { background: var(--chip-ambar-fundo) !important; color: var(--chip-ambar-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#e5e5e5"] { background: var(--chip-neutro-fundo) !important; color: var(--chip-neutro-texto) !important; }
+html[data-tema="escuro"] .conteudo [style*="solid #e0e0e0"], html[data-tema="escuro"] .conteudo [style*="solid #e5e5e5"] { border-color: var(--cor-borda) !important; }
+/* botões de filtro que usam a classe da subaba do menu, mas ficam dentro da tela (ex.: Minhas Tarefas): pílulas */
+.conteudo .btn-subaba {
+  display: inline-flex; width: auto; min-height: 38px; border: 1px solid var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto);
+  border-radius: 19px; padding: 7px 16px; font-size: 0.88rem; font-weight: 600; box-shadow: none;
+}
+.conteudo .btn-subaba:hover { border-color: var(--cor-ouro); color: var(--cor-titulo); background: var(--cor-superficie); }
+.conteudo .btn-subaba.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); box-shadow: none; }
+
+@media (max-width: 640px) {
+  .aba-secretaria:not(:has(> .sub-aba-secretaria)),
+  .aba-secretaria > .sub-aba-secretaria:not(#subMeupainelPerfil):not(#subMeupainelMinhavida):not(#subMeupainelMeuperfil) { padding: 16px 14px; border-radius: 12px; }
+  .tabela-frequencia, .tabela-simples { border-radius: 10px; }
+  .cal-pilula, .btn-tab-perfil { padding: 7px 13px; font-size: 0.84rem; }
+}

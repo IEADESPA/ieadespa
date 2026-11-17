@@ -209,6 +209,66 @@ async function carregarMinhaVidaCasca() {
     : "<p class=\"subtitle\">Nenhum compromisso nos próximos dias.</p>";
 }
 
+// ---- incremento 4: o menu de cada módulo NA COR DO MÓDULO, com o cabeçalho colorido (o nome do módulo e de quem está vendo) ----
+// entrarModulo()/sairDoModulo() chamam esta função; a cor vem do CSS (.painel-layout[data-modulo="..."]), aqui só a marca e o texto.
+function marcarModuloNaCasca(chave) {
+  const painel = document.getElementById("cxPainelConteudo");
+  if (!painel) return;
+  const m = chave && typeof MODULOS !== "undefined" ? MODULOS[chave] : null;
+  if (!m) { delete painel.dataset.modulo; return; }
+  painel.dataset.modulo = chave;
+  const icone = document.getElementById("menuModuloIcone");
+  const titulo = document.getElementById("menuModuloTitulo");
+  const escopo = document.getElementById("menuModuloEscopo");
+  if (icone) icone.textContent = m.icone || "";
+  if (titulo) titulo.textContent = m.titulo || "";
+  if (escopo) escopo.textContent = textoNivelDaSessao();
+}
+// quem está vendo (o nível da sessão), para o cabeçalho do módulo
+const ROTULOS_NIVEL_CASCA = { GLOBAL: "Geral", DISTRITO: "Distrito", AREA: "Área", CONGREGACAO: "Congregação", LOCAL: "Local", DEPARTAMENTO: "Departamento" };
+function textoNivelDaSessao() {
+  if (typeof authGeral !== "undefined" && authGeral) return "Nível geral · a Igreja toda";
+  const nivel = typeof authNivel !== "undefined" ? authNivel : null;
+  return nivel ? "Nível: " + (ROTULOS_NIVEL_CASCA[nivel] || String(nivel).toLowerCase()) : "";
+}
+
+// ---- incremento 4: os números das tabelas alinhados à direita (só a apresentação) ----
+// A coluna em que TODO valor preenchido é número ou dinheiro ("12", "1.250,00", "R$ 80,00", "35%") ganha a classe casca-num;
+// datas ("04/10/2026") e textos ficam à esquerda. Tabelas com células mescladas no corpo ficam como estão.
+const RX_NUMERO_TABELA = /^[-+]?(R\$\s?)?[-+]?\d[\d.\s]*(,\d+)?\s?%?$/;
+function alinharNumerosDasTabelas() {
+  const painel = document.getElementById("cxPainelConteudo");
+  if (!painel) return;
+  painel.querySelectorAll("table.tabela-frequencia, table.tabela-simples").forEach((tab) => {
+    const linhas = [];
+    for (const corpo of tab.tBodies) for (const r of corpo.rows) linhas.push(r);
+    if (!linhas.length) return;
+    const ncol = linhas[0].cells.length;
+    if (linhas.some((r) => r.cells.length !== ncol || [...r.cells].some((c) => c.colSpan > 1))) return;
+    const cab = tab.tHead && tab.tHead.rows.length ? tab.tHead.rows[tab.tHead.rows.length - 1] : null;
+    for (let c = 0; c < ncol; c++) {
+      let numeros = 0, outros = 0;
+      for (const r of linhas) {
+        const t = r.cells[c].textContent.trim();
+        if (!t || t === "-" || t === "—") continue;
+        if (RX_NUMERO_TABELA.test(t)) numeros++; else outros++;
+      }
+      const num = numeros > 0 && outros === 0;
+      for (const r of linhas) r.cells[c].classList.toggle("casca-num", num);
+      if (cab && cab.cells.length === ncol && cab.cells[c]) cab.cells[c].classList.toggle("casca-num", num);
+    }
+  });
+}
+let alinharNumerosEspera = null;
+(function vigiarTabelas() {
+  const painel = document.getElementById("cxPainelConteudo");
+  if (!painel || typeof MutationObserver !== "function") return;
+  new MutationObserver(() => {
+    if (alinharNumerosEspera) clearTimeout(alinharNumerosEspera);
+    alinharNumerosEspera = setTimeout(() => { alinharNumerosEspera = null; alinharNumerosDasTabelas(); }, 120);
+  }).observe(painel, { childList: true, subtree: true });
+})();
+
 // qualquer toque pode trocar de tela: a pílula ativa acompanha (os botões do menu chamam as funções direto)
 document.addEventListener("click", () => setTimeout(atualizarPilulasCelular, 0));
 

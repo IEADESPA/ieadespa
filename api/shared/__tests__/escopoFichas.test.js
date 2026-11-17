@@ -791,10 +791,23 @@ describe("GestaoVinculosFamiliares (o escopo fica na rota; o shared do autoatend
       { vinculoId: 3, membroId: 20, nome: "Beto", membroParenteId: 21, parenteNome: "Caio", congregacaoNome: "Vila Nova", extensaoNome: null, parenteCongregacaoNome: "Vila Nova", parenteExtensaoNome: null },
       { vinculoId: 4, membroId: 30, nome: "Sem", membroParenteId: 21, parenteNome: "Caio", congregacaoNome: null, extensaoNome: null, parenteCongregacaoNome: "Vila Nova", parenteExtensaoNome: null }
     ]);
+    quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 1, Nome: "Central" }, { CongregacaoId: 2, Nome: "Vila Nova" }]);
     const local = await chamar(hVinculos, { token: LOCAL() });
     expect(local.body.map((v) => v.vinculoId)).toEqual([1, 2]);
     expect(JSON.stringify(local.body)).not.toMatch(/congregacaoNome|extensaoNome|parenteCongregacaoNome/);
+    // raio-x de velocidade 3: o escopo vai para o BANCO, nas duas pontas do vínculo (o filtro da rota continua como segunda conferência)
+    const lista = rodou(/c1\.Nome AS congregacaoNome/);
+    expect(lista[0].sql).toMatch(/WHERE \(+m1\.CongregacaoId IN \(SELECT CAST\(value AS INT\) FROM OPENJSON\(@escopoAIds0\)\)\)+ OR \(+m2\.CongregacaoId IN \(SELECT CAST\(value AS INT\) FROM OPENJSON\(@escopoBIds0\)\)\)+/);
+    expect(lista[0].inputs).toMatchObject({ escopoAIds0: "[1]", escopoBIds0: "[1]" });
     expect((await chamar(hVinculos, { token: GERAL() })).body).toHaveLength(4);
+    expect(rodou(/c1\.Nome AS congregacaoNome/)[1].sql).not.toMatch(/WHERE/);   // o geral: sem filtro
+  });
+  test("lista sem filtro com escopo que não alcança congregação nenhuma: [] sem ler os vínculos", async () => {
+    quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 2, Nome: "Vila Nova" }]);
+    const r = await chamar(hVinculos, { token: LOCAL() });
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual([]);
+    expect(rodou(/c1\.Nome AS congregacaoNome/)).toHaveLength(0);
   });
   test("lista de uma pessoa: de fora, inexistente e malformada devolvem [] sem consultar vínculos; da congregação devolve os vínculos", async () => {
     quando(/FROM VinculosFamiliares v\s+JOIN TiposVinculoFamiliar t[\s\S]*WHERE v\.MembroId = @membroId OR/, [{ vinculoId: 1, outraPessoaId: 20 }]);

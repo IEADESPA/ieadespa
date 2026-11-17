@@ -297,6 +297,61 @@ O que compõe o peso:
 - Os roteiros que já usavam lançamentos e saídas continuam verdes: e2e-43 55/55, e2e-45 42/42, e2e-76 207/207 e e2e-81
   15/15.
 
+### Feito em 17/11/2026: a correção 3 e as listas lentas (ele: "vai começando… não pode ficar parado")
+
+Nenhuma muda a tela: a resposta de cada rota é a mesma de antes.
+
+- **Uma consulta por item virou um lote:**
+  - **votações (`GestaoEnquetes`, a lista):** as enquetes, as perguntas, as opções e as respostas em quatro consultas
+    fixas (`montarEnquetesCompletas`), em vez de uma por enquete e por pergunta. A enquete que passou do instante é
+    encerrada pelo mesmo caminho de antes;
+  - **reuniões e órgãos locais (`ListarReunioes`, `MeusOrgaosLocais`):** o território de todos os órgãos numa consulta só
+    (`congregacoesPorOrgaoLocal`, em `api/shared/orgaosLocaisEscopo.js`). Órgão de nível desconhecido não alcança
+    ninguém; em `MeusOrgaosLocais` ele derrubava a rota com erro 500;
+  - **ROPA (`montarRopa`):** as contagens das 157 tabelas numa consulta só (`UNION ALL`), com os nomes vindos só do
+    catálogo fixo.
+- **Listas que liam tudo e filtravam na memória** passaram a filtrar o escopo no banco, com a mesma regra de antes. O
+  filtro da rota continua como segunda conferência:
+  - **relatórios dos departamentos:** congregação e departamento da visão;
+  - **elegíveis da assembleia:** a regra de pessoa, `condicaoSqlEscopoPessoa`;
+  - **vínculos de família:** as duas pontas do vínculo, com o prefixo novo de `condicaoSqlEscopoPessoa`.
+- **O dossiê fiscal ficou como estava.** As 42 consultas dele são somas fixas das demonstrações, que não crescem com o
+  número de itens. Não é o caso de uma consulta por item.
+
+**Antes × depois, na mesma massa e no mesmo LocalDB** (`tools/raio-x/medir-velocidade3.js`, base com a 175):
+
+| Pedido | Papel | Consultas antes → depois | Tempo antes → depois |
+| --- | --- | --- | --- |
+| Votações (a lista) | Geral / área / local / membro | 26 a 28 → 6 a 8 | 4,2 a 8,0 s → 5,7 a 9,9 s (*) |
+| Reuniões | área / local | 45 → 2 | 1,3 a 1,4 s → igual (*) |
+| Órgãos locais | área / local | 79 → 2 | 0,29 s → 0,23 s |
+| ROPA | Geral | 167 → 1 | 0,29 s → 0,09 s |
+| Relatórios dos departamentos | local | 1 → 2 (lê 133 em vez de 5.146) | 10,5 s → 0,4 s |
+| Relatórios dos departamentos | área | 1 → 2 (lê 597 em vez de 5.146) | 10,1 s → 1,7 s |
+| Elegíveis da assembleia | local / área | 3 → 4 (lê só o escopo) | 10,0 a 10,9 s → 1,0 a 1,5 s |
+| Vínculos de família | local / área | 1 → 3 (lê só o escopo) | 10,5 a 11,0 s → 1,1 a 1,9 s |
+| Os três acima | Geral | igual (a Geral vê tudo) | igual |
+
+(*) No LocalDB, o tempo dessas rotas é quase todo a ponte do equipamento, que converte cada linha devolvida em texto. As
+votações devolvem as mesmas respostas de antes, agora numa consulta grande só, e a ponte converte mais devagar quando a
+resposta é grande. Na nuvem, cada consulta a menos é uma ida e volta a menos ao banco. Ali o número que importa é o de
+consultas.
+
+**Provas:**
+
+- A **resposta nova é igual à antiga** em todos os 23 casos medidos (`tools/raio-x/comparar-respostas.js`): 9 rotas ×
+  Geral, área, local e membro.
+  - Nos vínculos e nos relatórios mudou só o desempate entre itens empatados: mesmo nome, ou mesmo mês e ano.
+  - Os itens são os mesmos, e a ordem pelo critério da tela também.
+  - Antes, esse desempate ficava a cargo do banco; agora é fixo (`VinculoId`, `RelatorioDepartamentalId`).
+- **jest:** 6.448 de 6.448.
+  - Teste novo: `velocidade3.test.js` (relatórios com escopo e departamento no banco; órgãos locais numa consulta).
+  - Testes adaptados à forma nova das consultas, com casos novos que contam as consultas: `escopoGovernanca`,
+    `escopoFichas`, `escopoLoginA`, `enquetesAgendadas` e `ropa`.
+- **Roteiros do LocalDB que passam pelas rotas mexidas:**
+  - e2e-83 19/19, e2e-31 241/241, e2e-32 23/23 e e2e-39 9/9;
+  - e2e-43 55/55 e e2e-47 212/212.
+
 ## 7. Para repetir a medição
 
 ```bash

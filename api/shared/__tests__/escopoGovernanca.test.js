@@ -726,6 +726,19 @@ describe("GestaoElegiveisAssembleia", () => {
       { membroId: 42, nome: "Caio", congregacao: null, ...base },
       { membroId: 43, nome: "Davi", congregacao: "A", ...base, extensao: "Tenda Norte" }
     ]);
+    quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 1, Nome: "A" }, { CongregacaoId: 2, Nome: "B" }]);
+  });
+  test("raio-x de velocidade 3: o escopo vai para o BANCO (antes lia o cadastro inteiro); o geral lê sem filtro; escopo vazio nem lê", async () => {
+    await chamar(hElegiveis, { token: LOCAL(["assembleia"], ["A"], 5, "AREA") });
+    const area = rodou(/FROM MembroReferencia m\s+LEFT JOIN Congregacoes c/);
+    expect(area[0].sql).toMatch(/WHERE \(\(m\.CongregacaoId IN \(SELECT CAST\(value AS INT\) FROM OPENJSON\(@escopoIds0\)\)\)\)/);
+    expect(area[0].inputs).toMatchObject({ escopoIds0: "[1]" });
+    await chamar(hElegiveis, { token: GERAL(["assembleia"]) });
+    expect(rodou(/FROM MembroReferencia m\s+LEFT JOIN Congregacoes c/)[1].sql).not.toMatch(/WHERE/);
+    const antes = rodou(/FROM MembroReferencia m\s+LEFT JOIN Congregacoes c/).length;
+    const vazio = await chamar(hElegiveis, { token: LOCAL(["assembleia"], ["Inexistente"], 5, "AREA") });
+    expect(vazio.body).toEqual([]);
+    expect(rodou(/FROM MembroReferencia m\s+LEFT JOIN Congregacoes c/)).toHaveLength(antes);
   });
   test("sem sessão 401; PIN 403; sem 'assembleia' 403 — sem tocar o banco", async () => {
     expect((await chamar(hElegiveis, {})).status).toBe(401);
@@ -783,6 +796,13 @@ describe("GestaoEnquetes", () => {
     quando(/FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem/, (i) => [{ perguntaId: i.id * 10, ordem: 1, titulo: "Aprova?", tipo: "OPCOES" }]);
     quando(/FROM OpcoesEnquete WHERE PerguntaId = @id/, (i) => (i.id === 10 ? [{ opcaoId: 100, texto: "Sim" }, { opcaoId: 101, texto: "Não" }] : [{ opcaoId: 200, texto: "Sim" }, { opcaoId: 201, texto: "Não" }]));
     quando(/FROM RespostasEnquete r JOIN MembroReferencia m/, (i) => RESPOSTAS[i.id] || []);
+    // raio-x de velocidade 3: a LISTA lê todas as enquetes de uma vez (quatro consultas fixas, com os ids em @ids)
+    const idsDe = (i) => JSON.parse(i.ids);
+    const OPCOES = { 10: [{ opcaoId: 100, texto: "Sim" }, { opcaoId: 101, texto: "Não" }], 20: [{ opcaoId: 200, texto: "Sim" }, { opcaoId: 201, texto: "Não" }] };
+    quando(/FROM Enquetes WHERE EnqueteId IN \(SELECT CAST\(value AS INT\) FROM OPENJSON\(@ids\)\)/, (i) => idsDe(i).filter((id) => ENQUETES[id]).map((id) => ({ ...ENQUETES[id] })));
+    quando(/FROM PerguntasEnquete WHERE EnqueteId IN/, (i) => idsDe(i).map((id) => ({ enqueteId: id, perguntaId: id * 10, ordem: 1, titulo: "Aprova?", tipo: "OPCOES" })));
+    quando(/FROM OpcoesEnquete op JOIN PerguntasEnquete pq/, (i) => idsDe(i).flatMap((id) => (OPCOES[id * 10] || []).map((o) => ({ perguntaId: id * 10, ...o }))));
+    quando(/FROM RespostasEnquete r JOIN PerguntasEnquete pq/, (i) => idsDe(i).flatMap((id) => (RESPOSTAS[id * 10] || []).map((r) => ({ perguntaId: id * 10, ...r }))));
     membrosElegiveis.mockImplementation(async (_p, _s, enquete) => (enquete.publicoTipo === "LISTA_CUSTOM" ? new Set([30]) : new Set([20, 40, 41, 42, 43])));
   };
 
@@ -829,6 +849,15 @@ describe("GestaoEnquetes", () => {
       const r = await chamar(hEnquetes, { token: GERAL(["reunioes"]) });
       expect(r.body[0].participantes.map(p => p.membroId).sort()).toEqual([20, 40, 41, 42]);
       expect(r.body[1].participantes.map(p => p.membroId)).toEqual([30]);
+    });
+    test("raio-x de velocidade 3: a lista lê as enquetes em quatro consultas fixas, não uma por enquete/pergunta", async () => {
+      await chamar(hEnquetes, { token: GERAL(["reunioes"]) });
+      expect(rodou(/FROM Enquetes WHERE EnqueteId IN \(SELECT CAST/)).toHaveLength(1);
+      expect(rodou(/FROM PerguntasEnquete WHERE EnqueteId IN/)).toHaveLength(1);
+      expect(rodou(/FROM OpcoesEnquete op JOIN PerguntasEnquete pq/)).toHaveLength(1);
+      expect(rodou(/FROM RespostasEnquete r JOIN PerguntasEnquete pq/)).toHaveLength(1);
+      expect(rodou(/FROM Enquetes WHERE EnqueteId = @id|FROM PerguntasEnquete WHERE EnqueteId = @id|FROM OpcoesEnquete WHERE PerguntaId = @id|WHERE r\.PerguntaId = @id/)).toHaveLength(0);
+      expect(rodou(/FROM Enquetes WHERE EnqueteId IN/)[0].inputs.ids).toBe("[1,2]");
     });
     test("o universo 'todos os ativos' é calculado uma vez só por requisição", async () => {
       mockRegras.unshift([/SELECT EnqueteId AS enqueteId FROM Enquetes ORDER BY/, [{ enqueteId: 1 }, { enqueteId: 1 }], 0]);       // duas enquetes "para todos os ativos" na mesma listagem
@@ -1242,11 +1271,10 @@ describe("ListarReunioes", () => {
   beforeEach(() => {
     quando(/FROM Sessoes s\s+LEFT JOIN Orgaos o/, sessoes.map(s => ({ ...s })));
     // 11 = JAI da congregação 3 (A); 12 = JAI da congregação 4 (B); 13 = CRA da região 1 (que cobre A e B)
-    quando(/SELECT OrgaoLocalId, Nivel, ReferenciaId FROM OrgaosLocais WHERE OrgaoLocalId IN/, [
-      { OrgaoLocalId: 11, Nivel: 1, ReferenciaId: 3 }, { OrgaoLocalId: 12, Nivel: 1, ReferenciaId: 4 }, { OrgaoLocalId: 13, Nivel: 3, ReferenciaId: 1 }
-    ]);
-    quando(/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, (i) => [{ Nome: i.id === 3 ? "A" : "B" }]);
-    quando(/SELECT Nome FROM Congregacoes WHERE AreaId IN/, [{ Nome: "A" }, { Nome: "B" }]);
+    // raio-x de velocidade 3: o território de todos os órgãos numa consulta só (antes, uma por órgão)
+    quando(/FROM OrgaosLocais o\s+JOIN Congregacoes c ON/, (i) => [
+      { orgaoLocalId: 11, nome: "A" }, { orgaoLocalId: 12, nome: "B" }, { orgaoLocalId: 13, nome: "A" }, { orgaoLocalId: 13, nome: "B" }
+    ].filter((l) => JSON.parse(i.ids).includes(l.orgaoLocalId)));
   });
   const ids = (r) => r.body.map(s => s.sessaoId);
 
@@ -1273,14 +1301,22 @@ describe("ListarReunioes", () => {
     expect(fora.body).toEqual([]);
   });
   test("órgão territorial de nível desconhecido não é alcançado por papel local (falha fechado); o geral o vê", async () => {
-    mockRegras.unshift([/SELECT OrgaoLocalId, Nivel, ReferenciaId FROM OrgaosLocais WHERE OrgaoLocalId IN/, [{ OrgaoLocalId: 11, Nivel: 9, ReferenciaId: 3 }], 0]);
+    // nível desconhecido (9) não entra em nenhum ramo do JOIN: o banco não devolve congregação nenhuma para o órgão
+    mockRegras.unshift([/FROM OrgaosLocais o\s+JOIN Congregacoes c ON/, [], 0]);
     expect(ids(await chamar(hReunioes, { token: LOCAL(["reunioes"], ["A"]) }))).toEqual([1]);
     expect(ids(await chamar(hReunioes, { token: GERAL(["reunioes"]) }))).toEqual([1, 2, 3, 4]);
   });
   test("geral (e Líder de Departamento com escopo TODAS) veem tudo sem consultar a hierarquia", async () => {
     expect(ids(await chamar(hReunioes, { token: GERAL(["reunioes"]) }))).toEqual([1, 2, 3, 4]);
     expect(ids(await chamar(hReunioes, { token: LIDER_DEPARTAMENTO(["reunioes"]) }))).toEqual([1, 2, 3, 4]);
-    expect(rodou(/FROM OrgaosLocais WHERE OrgaoLocalId IN/)).toHaveLength(0);
+    expect(rodou(/FROM OrgaosLocais o\s+JOIN Congregacoes c ON/)).toHaveLength(0);
+  });
+  test("raio-x de velocidade 3: a área consulta o território dos órgãos UMA vez, com os ids das sessões", async () => {
+    await chamar(hReunioes, { token: LOCAL(["reunioes"], ["A", "B"], 5, "AREA") });
+    const consultas = rodou(/FROM OrgaosLocais o\s+JOIN Congregacoes c ON/);
+    expect(consultas).toHaveLength(1);
+    expect(JSON.parse(consultas[0].inputs.ids).sort()).toEqual([11, 12, 13]);
+    expect(consultas[0].sql).toMatch(/o\.Nivel = 1 AND c\.CongregacaoId = o\.ReferenciaId[\s\S]*o\.Nivel = 5/);
   });
 });
 

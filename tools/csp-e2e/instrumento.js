@@ -540,7 +540,15 @@ function instrumento(cfg) {
   R.htmlJanela = function (i) { return R.janelas[i] ? norm(R.janelas[i].html) : null; };
   // entrada pelo formulário de verdade (sem chamar função do app direto)
   R.passoLogin = function (etapa, matricula, segredo) {
-    if (etapa === 1) { const a = [...document.querySelectorAll("a")].find(x => /Acessar meu Painel/.test(x.textContent) && visivel(x)); if (!a) return false; a.click(); return true; }
+    if (etapa === 1) {
+      // FASE 10 (casca nova): a ENTRADA já é a primeira tela e, com a sessão gravada, ela abre sozinha o Início — não há mais "Acessar meu Painel" a clicar.
+      // A versão antiga (a base comparada) continua entrando pela Portaria.
+      const conteudo = document.getElementById("cxPainelConteudo");
+      if (conteudo && visivel(conteudo)) return true;
+      const campo = document.getElementById("matriculaPainel");
+      if (campo && visivel(campo)) return true;
+      const a = [...document.querySelectorAll("a")].find(x => /Acessar meu Painel/.test(x.textContent) && visivel(x)); if (!a) return false; a.click(); return true;
+    }
     const m = document.getElementById("matriculaPainel"), s = document.getElementById("senhaPainel");
     if (!m || !s || !visivel(m)) return false;
     m.value = matricula; s.value = segredo;

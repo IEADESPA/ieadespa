@@ -472,6 +472,8 @@
            do cabeçalho e fecha ao escolher uma aba ou tocar fora. Até aqui ela ficava fixa com 230 px e o
            conteúdo sobrava com ~130 px numa tela de 360 px. No notebook nada muda. -->
       <div class="fundo-menu-celular" id="fundoMenuCelular" data-on-click="alternarMenuCelular"></div>
+      <!-- FASE 10 — o fundo escurecido dos painéis do lado (avisos e busca): tocar nele fecha -->
+      <div class="fundo-painel-lado" id="fundoPainelLado" data-on-click="fecharPaineisLado"></div>
       <main class="conteudo">
         <div class="cabecalho-secretaria">
           <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false">☰</button>
@@ -479,8 +481,15 @@
           <!-- vB.4 — busca global: mesmo motivo de ficar fora de qualquer
                aba (não é preciso saber de antemão onde o dado mora). -->
           <div class="caixa-busca-global">
-            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar pessoa, projeto, fornecedor..." data-on-input="onDigitarBuscaGlobal" />
-            <div class="painel-busca-global" id="painelBuscaGlobal" style="display:none;"></div>
+            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar (Ctrl K)" data-on-input="onDigitarBuscaGlobal" autocomplete="off" />
+          </div>
+          <!-- FASE 10 — a busca do alto num PAINEL DO LADO (aprovada na rodada 6): o campo no alto do painel; dentro de um módulo, presa a ele -->
+          <div class="painel-lado" id="painelBuscaGlobal" style="display:none;" role="dialog" aria-label="Buscar">
+            <div class="painel-lado-topo"><strong>Buscar</strong><button type="button" class="btn-icon" data-on-click="fecharPaineisLado" aria-label="Fechar">✕</button></div>
+            <input type="search" id="campoBuscaLado" placeholder="Pessoa, projeto, fornecedor..." data-on-input="onDigitarBuscaLado" autocomplete="off" />
+            <div id="filtroBuscaModulo" class="painel-lado-filtros"></div>
+            <div id="resultadosBuscaGlobal" class="painel-lado-lista"></div>
+            <p class="painel-lado-dica">Enter abre o primeiro · Esc fecha</p>
           </div>
           <!-- vB.2 — sino de notificações: fica no cabeçalho persistente
                (fora de qualquer aba), então aparece em todo módulo, não só
@@ -491,11 +500,18 @@
             <button class="btn-sino" id="btnSino" data-on-click="alternarPainelNotificacoes" title="Notificações">
               🔔<span class="badge-sino" id="badgeSino" style="display:none;">0</span>
             </button>
-            <div class="painel-notificacoes" id="painelNotificacoes" style="display:none;">
-              <div class="painel-notificacoes-topo">
-                <strong>Notificações</strong>
-                <button class="btn-link" data-on-click="marcarTodasNotificacoesLidas">Marcar todas como lidas</button>
+            <!-- FASE 10 — os AVISOS num PAINEL DO LADO (aprovados nas rodadas 4 a 6): "só o que eu preciso resolver" ligado, o quadro de filtros recolhido -->
+            <div class="painel-notificacoes painel-lado" id="painelNotificacoes" style="display:none;" role="dialog" aria-label="Avisos">
+              <div class="painel-lado-topo">
+                <strong>Avisos</strong>
+                <button type="button" class="btn-icon" data-on-click="fecharPaineisLado" aria-label="Fechar">✕</button>
               </div>
+              <div class="painel-lado-controles">
+                <button type="button" class="chave-resolver ativa" id="btnAvisosSoResolver" data-on-click="alternarAvisosSoResolver" aria-pressed="true"><span class="chave-bolinha"></span>Só o que eu preciso resolver <span id="avisosContagemResolver"></span></button>
+                <button type="button" class="btn-link" id="btnFiltrosAvisos" data-on-click="alternarFiltrosAvisos" aria-expanded="false">Filtros ▾</button>
+                <button type="button" class="btn-link" data-on-click="marcarTodasNotificacoesLidas">Marcar todas como lidas</button>
+              </div>
+              <div id="avisosFiltros" class="painel-lado-filtros" style="display:none;"></div>
               <div id="listaNotificacoes" class="painel-notificacoes-lista"></div>
             </div>
           </div>

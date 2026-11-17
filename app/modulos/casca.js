@@ -94,6 +94,32 @@ function irPilulaCelular(qual) {
   }
   atualizarPilulasCelular();
 }
+// ---- incremento 2: a busca do alto (Ctrl K) e o Esc dos painéis do lado ----
+document.addEventListener("keydown", (ev) => {
+  const painelBusca = document.getElementById("painelBuscaGlobal");
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key).toLowerCase() === "k") {
+    const conteudo = document.getElementById("cxPainelConteudo");
+    if (!conteudo || conteudo.style.display === "none") return;   // só dentro do sistema (com sessão)
+    ev.preventDefault();
+    abrirPainelBusca();
+    return;
+  }
+  if (ev.key === "Escape") {
+    const algumAberto = ["painelBuscaGlobal", "painelNotificacoes"].some((id) => { const p = document.getElementById(id); return p && p.style.display !== "none"; });
+    if (algumAberto) { ev.preventDefault(); fecharPaineisLado(); }
+    return;
+  }
+  if (ev.key === "Enter" && painelBusca && painelBusca.style.display !== "none" && ev.target && ev.target.id === "campoBuscaLado") {
+    const primeiro = document.querySelector("#resultadosBuscaGlobal .item-notificacao");
+    if (primeiro) { ev.preventDefault(); primeiro.click(); }
+  }
+});
+document.addEventListener("DOMContentLoaded", () => {
+  // tocar no campo de busca do topo abre o painel do lado (com o campo no alto dele)
+  const campoTopo = document.getElementById("campoBuscaGlobal");
+  if (campoTopo) campoTopo.addEventListener("focus", () => abrirPainelBusca());
+});
+
 // qualquer toque pode trocar de tela: a pílula ativa acompanha (os botões do menu chamam as funções direto)
 document.addEventListener("click", () => setTimeout(atualizarPilulasCelular, 0));
 

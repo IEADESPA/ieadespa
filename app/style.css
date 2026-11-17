@@ -1471,3 +1471,47 @@ html[data-tema="escuro"] .prt-btn-ajuda { color: var(--cor-titulo); }
 .link-secretaria, .btn-link { color: var(--cor-link); }
 /* um "Início" só no menu: o botão grande já leva ao Início */
 #btnSubMeupainelPerfil { display: none; }
+
+/* ---- incremento 2: os AVISOS e a BUSCA como PAINÉIS DO LADO (rodadas 4 a 6); no celular ocupam a tela; fecham pelo ✕, pelo fundo ou pelo Esc ---- */
+.painel-lado {
+  position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: min(460px, 100vw); max-height: none; z-index: 71;
+  background: var(--cor-superficie); border-left: 1px solid var(--cor-borda); box-shadow: -20px 0 50px rgba(6, 22, 41, .28);
+  border-radius: 0; padding: 18px 18px 14px; flex-direction: column; gap: 12px; overflow-y: auto; color: var(--cor-texto);
+}
+.fundo-painel-lado { display: none; }
+.fundo-painel-lado.visivel { display: block; position: fixed; inset: 0; z-index: 70; background: rgba(4, 12, 24, .32); }
+.painel-lado-topo { display: flex; align-items: center; gap: 10px; }
+.painel-lado-topo strong { flex: 1; font-size: 1.15rem; color: var(--cor-titulo); }
+.painel-lado-topo .btn-icon { color: var(--cor-titulo); font-size: 1.1rem; }
+.painel-lado-controles { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.painel-lado-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.painel-lado-lista, .painel-lado .painel-notificacoes-lista { display: flex; flex-direction: column; gap: 4px; padding: 0; }
+.painel-lado-rotulo { margin: 8px 0 2px; font-size: 0.74rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cor-texto-suave); }
+.painel-lado-dica { margin: auto 0 0; font-size: 0.78rem; color: var(--cor-texto-suave); }
+.painel-lado input[type="search"] {
+  width: 100%; height: 48px; border: 2px solid var(--cor-titulo); border-radius: 12px; padding: 0 14px; font-size: 1rem; font-family: inherit;
+  background: var(--cor-campo); color: var(--cor-texto);
+}
+html[data-tema="escuro"] .painel-lado input[type="search"] { border-color: var(--cor-ouro); }
+.painel-lado .item-notificacao { border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); }
+.painel-lado .item-notificacao.item-resolver { border-left: 4px solid var(--cor-ouro); }
+.chip-filtro {
+  height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--cor-borda); background: transparent; color: var(--cor-texto);
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.chip-filtro.ativo { background: var(--cor-titulo); border-color: var(--cor-titulo); color: var(--cor-superficie); }
+html[data-tema="escuro"] .chip-filtro.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.chave-resolver {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 6px; border-radius: 17px; border: 1px solid var(--cor-borda);
+  background: transparent; color: var(--cor-texto); font-family: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+}
+.chave-resolver .chave-bolinha { width: 34px; height: 20px; border-radius: 10px; background: var(--cor-borda); position: relative; flex: none; }
+.chave-resolver .chave-bolinha::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF; transition: left .15s; }
+.chave-resolver.ativa .chave-bolinha { background: var(--cor-ouro); }
+.chave-resolver.ativa .chave-bolinha::after { left: 16px; }
+@media (max-width: 640px) {
+  .painel-lado { width: 100vw; padding: 14px 14px 12px; border-left: none; }
+}
+
+/* o painel da busca mora dentro do topo, que centraliza os filhos (.cabecalho-secretaria > div): o painel estica e alinha à esquerda */
+.cabecalho-secretaria > .painel-lado { align-items: stretch; text-align: left; }

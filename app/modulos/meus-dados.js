@@ -261,7 +261,8 @@ function mostrarAbaSecretaria(aba) {
     if (moduloAtual === "orgaosRegionais") montarSubmenuOrgaosRegionais(); else montarSubmenuOrgaosCentrais();
     carregarElegiveisAssembleia();
   }
-  if (aba === "pessoas") { carregarOpcoesFormPessoa().then(() => mostrarSubAbaPessoas(subAbaPessoasAtual)); carregarPessoas(); }
+  // v10.1 — o formulário aparece NA HORA; as listas dele chegam depois, cada uma por conta própria (antes a aba ficava em branco esperando as seis)
+  if (aba === "pessoas") { carregarOpcoesFormPessoa(); mostrarSubAbaPessoas(subAbaPessoasAtual); carregarPessoas(); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();
@@ -339,7 +340,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 const TITULOS_MODULOS = {
-  meupainel: "Meu Painel", financeiro: "Financeiro", reunioes: "Reuniões",
+  meupainel: "Início", financeiro: "Financeiro", reunioes: "Reuniões",
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",

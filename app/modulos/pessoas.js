@@ -13,64 +13,126 @@ const STATUS_DEFAULT = [
   { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true }
 ];
 
-async function carregarOpcoesFormPessoa() {
-  const [resCong, resDepto, resCargo, resExt, resStatus, resSituacoes] = await Promise.all([
-    fetchProtegido(`${API_BASE}/congregacoes`),
-    fetchProtegido(`${API_BASE}/catalogos/departamentos`),
-    fetchProtegido(`${API_BASE}/catalogos/cargosMinisteriais`),
-    fetchProtegido(`${API_BASE}/catalogos/extensoes`),
-    fetchProtegido(`${API_BASE}/catalogos/statuses`),
-    fetchProtegido(`${API_BASE}/catalogos/situacoes`)
-  ]);
-  const congregacoes = await listaDaApi(resCong);
-  const departamentos = await listaDaApi(resDepto);
-  const cargos = await listaDaApi(resCargo);
-  const extensoes = await listaDaApi(resExt);
-  const statusesRaw = await resStatus.json();
-  const statuses = Array.isArray(statusesRaw) ? statusesRaw : STATUS_DEFAULT;
-  const situacoesRaw = await resSituacoes.json();
-  const situacoes = Array.isArray(situacoesRaw) ? situacoesRaw : [];
+// v10.1 — o "Cadastrar Pessoa" em branco: a aba esperava as SEIS listas abaixo chegarem para só então pôr o formulário na tela (e, se uma falhava, ele nunca
+// aparecia). Agora o formulário entra na hora e cada lista carrega por conta própria: a que falha avisa no próprio campo e não derruba as outras. Enquanto a
+// lista de congregações não chegou, o salvar espera (sem ela iria a congregação errada) e o editar aguarda as listas antes de preencher os campos.
+let opcoesFormPessoaVez = 0;
+let opcoesFormPessoaCarregando = null;   // a promessa da carga em andamento (null = nenhuma)
+let opcoesFormPessoaProntas = false;     // congregações e situações do cadastro carregadas
+let opcoesFormPessoaFalha = "";
 
-  // Cacheados pra resolver nome (não só sigla/id) na aba Dados do Perfil.
-  window._departamentosCache = departamentos;
-  window._cargosCache = cargos;
+async function pedirListaFormPessoa(url) {
+  try {
+    const res = await fetchProtegido(url);
+    const d = await res.json().catch(() => null);
+    return res.ok && Array.isArray(d) ? d : null;
+  } catch (_) { return null; }
+}
 
-  const selectCong = document.getElementById("pessoaCongregacao");
-  selectCong.innerHTML = congregacoes.filter(c => c.ativa).map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+// Troca as opções sem perder o que a pessoa já escolheu (quando a escolha ainda existe na lista nova).
+function trocarOpcoesFormPessoa(select, html) {
+  if (!select) return;
+  const antes = select.value;
+  select.innerHTML = html;
+  if (antes && [...select.options].some(o => o.value === antes)) select.value = antes;
+}
 
-  const selectFiltroCong = document.getElementById("pessoasFiltroCongregacao");
-  if (selectFiltroCong) {
-    selectFiltroCong.innerHTML = `<option value="">Todas as congregações</option>` +
-      congregacoes.map(c => `<option value="${c.congregacaoId}">${escaparHtmlEbd(c.nome)}</option>`).join("");
-  }
-  const selectFiltroSituacao = document.getElementById("pessoasFiltroSituacao");
-  if (selectFiltroSituacao) {
-    selectFiltroSituacao.innerHTML = `<option value="">Todas as situações</option>` +
-      situacoes.filter(s => s.ativa !== false).map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join("");
-  }
+const opcaoCarregandoFormPessoa = `<option value="">Carregando…</option>`;
+const opcaoFalhouFormPessoa = (oque) => `<option value="">⚠️ A lista de ${oque} não carregou. Saia da aba e entre de novo.</option>`;
 
-  const selectExt = document.getElementById("pessoaExtensao");
-  const nomeCongPorId = Object.fromEntries(congregacoes.map(c => [String(c.congregacaoId), c.nome]));
-  selectExt.innerHTML = `<option value="">Não se aplica (fica só na Congregação)</option>` +
-    extensoes.filter(e => e.ativa).map(e => `<option value="${e.extensaoId}">${escaparHtmlEbd(e.nome)} (${escaparHtmlEbd(nomeCongPorId[String(e.congregacaoMaeId)]) || "?"})</option>`).join("");
+function carregarOpcoesFormPessoa() {
+  const vez = ++opcoesFormPessoaVez;
+  const dono = authToken;
+  const valendo = () => vez === opcoesFormPessoaVez && authToken === dono;
+  opcoesFormPessoaProntas = false;
+  opcoesFormPessoaFalha = "";
+  ["pessoaCongregacao", "pessoaStatus", "pessoaDepartamento", "pessoaCargoMinisterial", "pessoaExtensao"].forEach(id => {
+    const s = document.getElementById(id);
+    if (s && s.options.length === 0) s.innerHTML = opcaoCarregandoFormPessoa;
+  });
+  const pedidos = {
+    congregacoes: pedirListaFormPessoa(`${API_BASE}/congregacoes`),
+    departamentos: pedirListaFormPessoa(`${API_BASE}/catalogos/departamentos`),
+    cargos: pedirListaFormPessoa(`${API_BASE}/catalogos/cargosMinisteriais`),
+    extensoes: pedirListaFormPessoa(`${API_BASE}/catalogos/extensoes`),
+    statuses: pedirListaFormPessoa(`${API_BASE}/catalogos/statuses`),
+    situacoes: pedirListaFormPessoa(`${API_BASE}/catalogos/situacoes`)
+  };
 
-  const selectDepto = document.getElementById("pessoaDepartamento");
-  const deptosAtivos = departamentos.filter(d => d.ativo);
-  const opcaoDepto = d => `<option value="${d.departamentoId}">${escaparHtmlEbd(d.nome)}</option>`;
-  const grupoDepto = (rotulo, itens) => itens.length ? `<optgroup label="${rotulo}">${itens.map(opcaoDepto).join("")}</optgroup>` : "";
-  selectDepto.innerHTML = `<option value="">Não informado</option>` +
-    grupoDepto("Departamentos", deptosAtivos.filter(d => d.tipo === "DEPARTAMENTO")) +
-    grupoDepto("Secretarias Adjuntas", deptosAtivos.filter(d => d.tipo === "SECRETARIA_ADJUNTA")) +
-    grupoDepto("Outros", deptosAtivos.filter(d => d.tipo !== "DEPARTAMENTO" && d.tipo !== "SECRETARIA_ADJUNTA"));
+  const congregacoesPronto = pedidos.congregacoes.then(congregacoes => {
+    if (!valendo()) return null;
+    const selectCong = document.getElementById("pessoaCongregacao");
+    const selectFiltroCong = document.getElementById("pessoasFiltroCongregacao");
+    if (!congregacoes) {
+      trocarOpcoesFormPessoa(selectCong, opcaoFalhouFormPessoa("congregações"));
+      return null;
+    }
+    trocarOpcoesFormPessoa(selectCong, congregacoes.filter(c => c.ativa).map(c => `<option value="${escaparHtmlEbd(c.congregacaoId)}">${escaparHtmlEbd(c.nome)}</option>`).join(""));
+    if (selectFiltroCong) {
+      trocarOpcoesFormPessoa(selectFiltroCong, `<option value="">Todas as congregações</option>` +
+        congregacoes.map(c => `<option value="${escaparHtmlEbd(c.congregacaoId)}">${escaparHtmlEbd(c.nome)}</option>`).join(""));
+    }
+    return congregacoes;
+  });
 
-  const selectCargo = document.getElementById("pessoaCargoMinisterial");
-  selectCargo.innerHTML = `<option value="">Não informado</option>` +
-    cargos.filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${escaparHtmlEbd(c.sigla)}">${escaparHtmlEbd(c.nome)}</option>`).join("");
+  const situacoesPronto = pedidos.situacoes.then(situacoes => {
+    if (!valendo()) return;
+    const selectFiltroSituacao = document.getElementById("pessoasFiltroSituacao");
+    if (selectFiltroSituacao) {
+      trocarOpcoesFormPessoa(selectFiltroSituacao, `<option value="">Todas as situações</option>` +
+        (situacoes || []).filter(s => s.ativa !== false).map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join(""));
+    }
+  });
 
-  const selectStatus = document.getElementById("pessoaStatus");
-  selectStatus.innerHTML = statuses
-    .filter(s => s.ativa !== false)
-    .map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join("");
+  const extensoesPronto = Promise.all([pedidos.extensoes, congregacoesPronto]).then(([extensoes, congregacoes]) => {
+    if (!valendo()) return;
+    const selectExt = document.getElementById("pessoaExtensao");
+    const nomeCongPorId = Object.fromEntries((congregacoes || []).map(c => [String(c.congregacaoId), c.nome]));
+    trocarOpcoesFormPessoa(selectExt, `<option value="">Não se aplica (fica só na Congregação)</option>` +
+      (extensoes || []).filter(e => e.ativa).map(e => `<option value="${escaparHtmlEbd(e.extensaoId)}">${escaparHtmlEbd(e.nome)} (${escaparHtmlEbd(nomeCongPorId[String(e.congregacaoMaeId)] || "?")})</option>`).join(""));
+  });
+
+  const departamentosPronto = pedidos.departamentos.then(departamentos => {
+    if (!valendo()) return;
+    // Cacheado pra resolver nome (não só sigla/id) na aba Dados do Perfil.
+    window._departamentosCache = departamentos || [];
+    const deptosAtivos = (departamentos || []).filter(d => d.ativo);
+    const opcaoDepto = d => `<option value="${escaparHtmlEbd(d.departamentoId)}">${escaparHtmlEbd(d.nome)}</option>`;
+    const grupoDepto = (rotulo, itens) => itens.length ? `<optgroup label="${rotulo}">${itens.map(opcaoDepto).join("")}</optgroup>` : "";
+    trocarOpcoesFormPessoa(document.getElementById("pessoaDepartamento"), `<option value="">Não informado</option>` +
+      grupoDepto("Departamentos", deptosAtivos.filter(d => d.tipo === "DEPARTAMENTO")) +
+      grupoDepto("Secretarias Adjuntas", deptosAtivos.filter(d => d.tipo === "SECRETARIA_ADJUNTA")) +
+      grupoDepto("Outros", deptosAtivos.filter(d => d.tipo !== "DEPARTAMENTO" && d.tipo !== "SECRETARIA_ADJUNTA")));
+  });
+
+  const cargosPronto = pedidos.cargos.then(cargos => {
+    if (!valendo()) return;
+    window._cargosCache = cargos || [];
+    trocarOpcoesFormPessoa(document.getElementById("pessoaCargoMinisterial"), `<option value="">Não informado</option>` +
+      (cargos || []).filter(c => c.ativo).sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).map(c => `<option value="${escaparHtmlEbd(c.sigla)}">${escaparHtmlEbd(c.nome)}</option>`).join(""));
+  });
+
+  // Fallback defensivo de sempre: catálogo de status que não veio vira os status semeados (o formulário continua usável).
+  const statusesPronto = pedidos.statuses.then(statuses => {
+    if (!valendo()) return;
+    trocarOpcoesFormPessoa(document.getElementById("pessoaStatus"), (statuses || STATUS_DEFAULT)
+      .filter(s => s.ativa !== false)
+      .map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join(""));
+  });
+
+  const tudo = Promise.all([congregacoesPronto, situacoesPronto, extensoesPronto, departamentosPronto, cargosPronto, statusesPronto]).then(([congregacoes]) => {
+    if (!valendo()) return;
+    opcoesFormPessoaProntas = !!congregacoes;
+    opcoesFormPessoaFalha = congregacoes ? "" : "A lista de congregações não carregou. Saia da aba Pessoas e entre de novo antes de salvar.";
+  }).catch(() => {
+    if (!valendo()) return;
+    opcoesFormPessoaProntas = false;
+    opcoesFormPessoaFalha = "As listas do formulário não carregaram. Saia da aba Pessoas e entre de novo antes de salvar.";
+  }).finally(() => {
+    if (vez === opcoesFormPessoaVez) opcoesFormPessoaCarregando = null;
+  });
+  opcoesFormPessoaCarregando = tudo;
+  return tudo;
 }
 
 async function salvarPessoa() {
@@ -108,6 +170,10 @@ async function salvarPessoa() {
 
   if (!membroId || !nome) {
     msg.textContent = "Informe matrícula e nome.";
+    return;
+  }
+  if (!opcoesFormPessoaProntas) {
+    msg.textContent = opcoesFormPessoaCarregando ? "Aguarde um instante: as listas do formulário ainda estão carregando." : (opcoesFormPessoaFalha || "As listas do formulário não carregaram. Saia da aba Pessoas e entre de novo.");
     return;
   }
 
@@ -807,6 +873,13 @@ function mudarPaginaPessoas(delta) {
 }
 
 function editarPessoa(membroId) {
+  // as listas ainda chegando: preencher agora perderia a congregação, o cargo e o departamento da pessoa (o campo sem a opção fica vazio) — espera e preenche depois
+  if (opcoesFormPessoaCarregando) {
+    opcoesFormPessoaCarregando.then(() => {
+      if (window._membroPerfilAtual === membroId && document.getElementById("tabPerfilEditar").style.display === "block") editarPessoa(membroId);
+    });
+    return;
+  }
   const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
   if (!pessoa) return;
   document.getElementById("pessoaMatricula").value = pessoa.membroId;

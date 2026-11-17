@@ -72,6 +72,8 @@ case "$1" in
     migrar 155
     # v8.5: e da 156 à 161 — a rotina diária do cuidado roda a da trilha de discipulado (161) e o Meus Dados lê as colunas da fase 8: o esquema inteiro, como no deploy
     for m in 156 157 158 159 160 161 162 163 164; do migrar $m; done
+    # FASE 10: e a 173 (a votação vinculante com o tipo) — as votações da identidade visual (e2e-31, e2e-32, e2e-39) passam pelo GestaoEnquetes, que lê as colunas dela
+    migrar 173
     SAIDA="$(mktemp)"
     node -r ./shim-mssql.js e2e-23-cuidado-setup.js > "$SAIDA" 2>&1; ESTADO=$?
     tail -${LINHAS:-12} "$SAIDA"; rm -f "$SAIDA"

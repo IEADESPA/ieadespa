@@ -45,3 +45,6 @@ api/data/mockdb.json
 # sessão, às vezes com trechos de comando/credencial) — não versionar.
 .claude/settings.json
 .claude/settings.local.json
+
+# Passagem de bastão entre sessões e ferramentas (Claude, Codex): estado do trabalho de cada computador — fica só na máquina (17/11/2026).
+HANDOFF.md

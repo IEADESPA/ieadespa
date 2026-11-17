@@ -586,6 +586,8 @@ function voltarParaCheckin() {
 function mostrarTelaPainelInicial() {
   esconderTodasAsTelas();
   document.getElementById("telaPainel").style.display = "flex";
+  // FASE 10 — a casca da entrada (a marca e o fundo) só enquanto não há sessão; com sessão, abrirPainelConteudo tira
+  document.getElementById("telaPainel").classList.toggle("tela-entrada", !(authToken && authMatricula));
   document.getElementById("resultadoLogin").textContent = "";
   document.getElementById("cxCriarPin").style.display = "none";
   if (authToken && authMatricula) {
@@ -941,7 +943,11 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxLoginPainel").style.display = "none";
   document.getElementById("cxCriarPin").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
+  document.getElementById("telaPainel").classList.remove("tela-entrada");
   document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
+  // FASE 10 — o Início: "Graça e paz, <primeiro nome>" (textContent: o nome nunca vira HTML)
+  const saudacao = document.getElementById("inicioSaudacao");
+  if (saudacao) saudacao.textContent = authNome ? `Graça e paz, ${String(authNome).trim().split(/\s+/)[0]}` : "Graça e paz!";
   // Trocar senha é só de quem tem acesso administrativo (senha de liderança); o membro comum troca o PIN (cartão "Meu PIN", sempre visível).
   document.getElementById("cxTrocarSenha").style.display = sessaoDeLiderancaNaTela() ? "block" : "none";
   await carregarTurmasProfessorEbd();
@@ -1275,7 +1281,8 @@ function sairDoPainel() {
   limparSessao();
   document.getElementById("matriculaPainel").value = "";
   document.getElementById("senhaPainel").value = "";
-  voltarParaCheckin();
+  // FASE 10 — ao sair, volta para a ENTRADA (a primeira tela), não para a Portaria
+  mostrarTelaPainelInicial();
 }
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
@@ -1510,7 +1517,7 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+    return `<div class="card-modulo" data-modulo="${escaparHtmlEbd(String(chave ?? ""))}" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
@@ -1542,7 +1549,7 @@ function sairDoModulo() {
 // tudo empilhado numa página só cada vez mais comprida.
 const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha Credencial", vinculos: "Vínculos Familiares",
+  perfil: "Início", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1561,7 +1568,7 @@ function mostrarSubAbaMeupainel(sub) {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
   });
-  document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
+  document.getElementById("tituloModulo").textContent = TITULOS_SUB_MEUPAINEL[sub] || "Início";   // FASE 10: o título é a própria parte ("Início", "Minha carteirinha"...)
   if (sub === "cartas") carregarMinhasCartas();
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }

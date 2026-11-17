@@ -58,6 +58,9 @@ nova a cada etapa (como na Trava 9-B); e, além da máquina, o responsável **v�
    níveis, abas no alto) não passa.
 6. **Da rodada 4 em diante, quem aprova é o responsável junto com o Presidente** (12/11/2026): os dois veem as propostas juntos e respondem
    juntos, para que a decisão já saia de quem está acima e não precise ser refeita depois.
+7. **A ordem do trabalho** (13/11/2026): primeiro **as telas principais** (as que valem para o sistema inteiro: entrada, início, menu,
+   avisos, busca, cores, perfil, peças padrão); fechadas elas, **um módulo por vez**, cada tela do módulo. Misturar dois ou três módulos na
+   mesma rodada fica ruim de avaliar.
 
 ## v10.1 — A homologação de verdade, o raio-x e as referências (a linha de base)
 
@@ -103,11 +106,12 @@ mentira**, onde se testa tudo antes da produção — inclusive ele mesmo, clica
 - [x] **Número do recibo de doação** repetido: era a contagem do ano + 1, sem trava; dois registros ao mesmo tempo (ou um buraco na
       sequência) davam o mesmo número e erro 500. Agora nasce numa transação com a faixa do ano travada e é o maior do ano + 1. Aprovado pelo
       responsável e pelo Presidente; **em produção desde 12/11/2026** (prova: e2e-82, com corrida de 6 processos).
-- [ ] **Apuração das votações vinculantes** (o mais grave): a opção mais votada — fosse o Sim ou o Não — "aprovava". Regra decidida pelo
+- [x] **Apuração das votações vinculantes** (o mais grave): a opção mais votada — fosse o Sim ou o Não — "aprovava". Regra decidida pelo
       responsável e pelo Presidente: a votação tem **tipo** — **proposta** (a Secretaria marca qual opção aprova, qual rejeita e qual é voto em
       branco, que não conta; aprovada quando quem aprova atinge o quórum sobre os válidos) ou **escolha** (nomes ou opções: ganha a mais
-      votada, mesmo com 30%; empate fica para a mesa). Migração 173 no ramo `v10-votacao` (prova: e2e-83 e os testes de regras); **na
-      homologação para os dois testarem**; vai para a produção depois do "aprovado" deles.
+      votada, mesmo com 30%; empate fica para a mesa). Migração 173 (prova: e2e-83 e os testes de regras; na homologação, a massa de 5.047
+      pessoas). Aprovada pelo responsável em 13/11/2026 pela explicação, sem abrir a homologação; **em produção desde 13/11/2026** (merge
+      4fdb47e, casca v59; reverter = `git revert -m 1 4fdb47e`).
 - [ ] **Conciliação bancária: nenhum pagamento bate com o extrato** (achado na parte 6 da massa, 12/11/2026). O lado do sistema guarda a
       saída com valor negativo, mas a comparação (`casarLancamentos`, `api/shared/conciliação.js`) usa o valor do banco sem sinal: a
       diferença nunca dá zero e cada pagamento vira duas divergências ("só no sistema" e "só no banco"). Correção: comparar com o sinal (o
@@ -149,6 +153,223 @@ sem gravar nada):
   ("Cargo Ministerial (escada — Art. 71; muda pela consagração, só o Geral corrige aqui)"); a data é o campo cru "dd/mm/aaaa"; o menu do
   módulo muda de itens entre uma aba e outra.
 
+## v10.1a a v10.1e — Gestão de membros: o primeiro módulo *(trazida da FASE 11 em 13/11/2026)*
+
+**Decisão do responsável (13/11/2026):** fechadas as telas principais, o trabalho segue **um módulo por vez**, e o primeiro é a **gestão de
+membros**. Ela estava na FASE 11, mas mexe nas mesmas telas que a FASE 10 está desenhando (Meu Perfil, cadastrar pessoa, Minha vida na
+igreja, a carteirinha): desenhar agora e refazer depois seria trabalho em dobro. E o sistema já guarda quase tudo da pessoa — faltava
+praticamente o **CPF** (para a credencial e as formalidades).
+
+**A meta, nas palavras dele:** fazer **o melhor sistema de gestão de membros que existe**, feito para a Assembleia de Deus, com a
+**escalabilidade** que o sistema pago não tem — do geral, que vê os membros do campo inteiro e filtra, até a área, que vê só os dela —, e
+em que o membro tenha **na mão tudo o que a Igreja precisa, sem papel**.
+
+**O sistema pago (o que ele contou, 13/11/2026):** é uma gestão de igrejas genérica. A Igreja usa de verdade a **membresia** (o cadastro,
+a carteirinha e o histórico do membro). Ele tem também patrimônio, visita e ajuda pastoral, pequenos grupos (não serve: a Igreja trabalha
+com departamentos, não com células), escalas de voluntários (nunca usado; vão começar já no sistema novo) e um financeiro que é bom para a
+congregação sozinha mas se perde no nível do campo. É pago por mês: quanto antes sair, menos mensalidades; ele estima ainda uns 6 meses com
+o pago por causa do financeiro, que também está vindo para cá.
+
+- [x] **v10.1a — Pesquisa e levantamento:** as referências (os melhores sistemas de membros, no Brasil e fora, e o que uma Assembleia de
+      Deus precisa: cartas de mudança e de recomendação, batismo, consagração, disciplina, desligamento) e o inventário do que o nosso sistema
+      já guarda e já faz com a pessoa. Só entra o que a Igreja usa (ex.: **RG não entra**); o que é reaproveitado por vários módulos fica num
+      lugar só. **Feita em 13/11/2026:** [docs/pesquisa/gestao-de-membros-2026.md](../pesquisa/gestao-de-membros-2026.md) (as referências, o
+      rol de membros da AD, a LGPD do CPF, o inventário e a lista por prioridade para a v10.1b a v10.1e), com as 7 decisões abaixo.
+- [ ] **v10.1b — A ficha do membro completa:** o **CPF**, com os cuidados da LGPD (mascarado na tela, inteiro só para quem precisa,
+      conferido pelo dígito, um por pessoa, com a trilha de quem viu e de quem mudou), os campos que faltarem e o **histórico do membro na
+      Igreja** numa linha do tempo (admissão, batismo, transferências, cargos, disciplina, desligamento, falecimento).
+- [ ] **v10.1c — A escala dos níveis:** o geral vê o campo inteiro e filtra; o distrito, o quadrante, a região, a área e a congregação veem
+      só os seus — a mesma regra de escopo do resto do sistema, com a busca do alto e os filtros aprovados na rodada 6. *(O filtro no banco
+      e a lista em páginas no servidor já estão em produção desde 13/11; falta a tela usar as páginas, que vem com o desenho da v10.1d.)*
+- [ ] **v10.1d — As telas do módulo**, com 3 opções cada, no notebook e no celular: a lista (tabela no notebook, cartões no celular), a ficha
+      da pessoa, o cadastro em etapas, a edição em duas colunas, **Meu Perfil** (os quatro cartões, ajustados com ele), **Minha vida na
+      igreja**, a **carteirinha digital do membro** (com o QR para conferir, como a credencial dos ministros da v8.4) e as movimentações
+      (transferência, desligamento, falecimento). **Rodada 8 publicada em 13/11/2026** na página de propostas: 8 telas com 3 opções cada
+      (primeira tela do módulo, lista com filtros e nível, ficha, cadastro em 5 etapas, edição, mudança de congregação com as regras da
+      decisão 3, juntar fichas e carteirinha com a filiação), notebook e celular, claro e escuro. Meu Perfil espera as observações que
+      ele vai mandar; Minha vida na igreja ficou com a opção 2 da rodada 7. **Reprovada por ele no mesmo dia** ("não vi a
+      escalabilidade") e **refeita**: cada tela com "Quem está vendo" — secretaria local, da área, a Geral e o membro comum —, com os
+      números, a lista (colunas, filtros e grupos por nível) e o "Precisa de você" com "só o que eu preciso resolver"; as rodadas
+      passaram a ficar em ordem crescente (a nova embaixo); e toda prévia de celular mostra a barra do próprio telefone (voltar,
+      início, janelas), com a tela "A parte de baixo do celular" (3 opções) para ele escolher a regra que vale para o sistema todo.
+      Esperando a escolha dele e do Presidente.
+- **Rodada 8 respondida (ele, 13/11/2026) — "muita coisa tem que melhorar; achei fraco em várias etapas".** O que ficou e o que
+  muda na rodada 9:
+  - **Celular (regra do sistema todo):** opção 2 — o menu vira abas no alto, logo abaixo do título; **nada preso embaixo**. As
+    telas finais de celular já aprovadas (início, módulo) que usam a barra de baixo terão de ser refeitas assim.
+  - **Primeira tela do módulo:** opção 3 (a busca no centro), virando um **Painel executivo**: mais 2 ou 3 gráficos
+    quantitativos e qualitativos à direita, que mudam com o nível — ou um submódulo "Painel executivo" como o principal. Gostou
+    do "Precisa de você" compacto, com "só o que eu preciso resolver", sem ocupar meia tela.
+  - **Lista:** opção 1 (filtros numa linha), com poucos filtros (a busca do alto, Ctrl K, já procura tudo) e a escolha de quantos
+    nomes por página (20, 40…), pensando na tela do celular. Pediu explicação da diferença entre a busca da lista e o Ctrl K.
+  - **Ficha da pessoa:** opção 3 (a vida na Igreja em destaque), mas **nenhuma convenceu** — quer a **ficha 360**: a foto
+    grande; as datas que faltam (conversão — mesmo em outra igreja —, batismo nas águas, batismo no Espírito Santo, consagrações);
+    situação, direito a voto na assembleia, disciplinas, cargos e funções; um **submenu da própria ficha** (no alto ou à
+    direita) com o menu principal recolhido como no celular; a **linha do tempo obrigatória**, vista por todos — inclusive pelo
+    próprio membro, por inteiro.
+  - **O membro vê tudo o que é dele:** sem "pedir acesso" aos próprios dados; em "Minha vida na igreja", um submenu com a vida
+    inteira dele na Igreja.
+  - **Cadastro:** opção 3 (com a prévia da ficha), e mais: o **pré-cadastro** feito por quem está com a pessoa (o professor da
+    EBD, o líder do departamento, um link no site "quero me cadastrar") ou pela própria pessoa, que cai numa **fila de
+    cadastros**; a secretaria local confere, completa e aceita, e a **matrícula nasce automática** no aceite — com a escala
+    (local, área, geral).
+  - **Edição:** opção 3 (campo a campo, com quem mudou — auditoria). Há campos que a secretaria não muda (ex.: o nome) e campos
+    que o **próprio membro** muda (contato, endereço, o que estiver vazio); no resto, ele **sugere a alteração** e a secretaria
+    (local, área ou geral) aplica.
+  - **Mudança de congregação:** opção 1, e as 3 telas são as **etapas de um fluxo só** (pedir, aceitar, acompanhar). O nome é
+    **transferência**: o membro pede a transferência, não uma "carta de mudança".
+  - **Juntar fichas:** opção 3 (só o que é diferente); fica **sempre a matrícula mais antiga**; o número que sobra **vai para o
+    próximo cadastro novo** (decisão dele, 13/11: juntando a 15 e a 500, com a 600 já existindo, fica a 15 e a 500 é dada ao
+    próximo cadastro, sem buraco na numeração); e **alerta antes da assembleia geral**: não abrir com cadastro repetido ou errado
+    pendente.
+  - **Carteirinha: reprovada** (marcou a 1 só para seguir). São duas: a **física** (papel e PVC), com um **editor do modelo**
+    no módulo e só o que não muda (nome, nascimento, foto, matrícula, pai e mãe) e o QR **sem validade** apontando para uma
+    página que confere; e a **digital**, com o que muda (congregação, cargo e função — obreiro, pastor, missionário —, situação).
+    O cargo tem de aparecer. **A impressão da física fica bloqueada** enquanto a ficha tiver pendência de cadastro (ficha
+    repetida, número a acertar): nunca sai carteirinha física com o número de duas pessoas (decisão dele, 13/11).
+- **Rodada 9 respondida (ele, 13–14/11/2026)** — o que ficou e o que vai para a rodada 10:
+  - **Menu principal recolhível em todas as telas** (como no celular, abre pelo ☰), para o conteúdo ficar grande.
+  - **Painel executivo:** opção 2 (números no alto e 3 gráficos), sem submódulo próprio. Falta: **gráficos personalizáveis** por
+    quem vê (ex.: só os batizados no Espírito Santo, para campanha), um gráfico grande e outros menores, e uma **barra de avisos
+    só do módulo**, separada do sino geral.
+  - **Lista:** opção 1 (confortável, 20 por página) — aprovada.
+  - **Ficha 360:** gostou das abas no alto, mas, como a ficha tem muitas partes e vai crescer, **no notebook o submenu fica à
+    direita** (cresce para baixo, nunca arrastar para o lado); no celular, as abas no alto.
+  - **Minha vida (o membro):** opção 1, com o submenu "Minha ficha" **à direita**, o menu principal recolhido e a **linha do
+    tempo primeiro**.
+  - **Fila de cadastros:** opção 2 (quadro por etapa), com o pré-cadastro só com o **essencial para não duplicar** (nome, CPF,
+    e-mail para criar a senha; telefone talvez); pelo site, a pessoa escolhe também a congregação e o departamento; a secretaria
+    local completa, a área e a Geral acompanham; e **aceite automático** quando o mínimo obrigatório estiver completo — só fica
+    na fila o que tiver pendência.
+  - **Pré-cadastro:** opção 1 (uma tela só), também no notebook, e numa **página do site** cujos cadastros caem na mesma esteira
+    do sistema.
+  - **Sugestões de alteração:** as três juntas, como um fluxo — o membro vê **o que pode mudar** (opção 3); o que ele pode
+    mudar sozinho, muda direto na ficha (opção 2); o resto vira sugestão, e a secretaria confere na **caixa de sugestões**
+    (opção 1).
+  - **Carteirinha física:** opção 3 (arrastar os campos), com muito mais personalização: **vários modelos** (ex.: congregado,
+    membro), frente e verso, tamanho do cartão, logo, cabeçalho, textos, área de assinatura, posição e tamanho do QR e das
+    letras, paleta de cores e **arte de fundo em alta resolução** enviada pela secretaria. Editar só no notebook; o celular só vê.
+  - **Carteirinha digital:** opção 3 (tela cheia), caprichando no celular — quais informações vão nela e a **página que o QR
+    abre**.
+- **Rodada 10 respondida (ele, 14/11/2026):**
+  - **Aprovadas as versões finais** da ficha 360 (submenu à direita no notebook, abas no celular), de Minha vida (linha do tempo
+    primeiro, "Minha ficha" à direita) e do fluxo das sugestões.
+  - **Painel executivo:** no notebook, os avisos do módulo numa coluna à direita (opção 2); no celular, numa faixa no alto
+    (opção 1); os gráficos com filtros livres e muitas possibilidades de gráfico.
+  - **Fila de cadastros:** notebook = quadro por quem completa (opção 1); celular = a esteira com os números (opção 2).
+  - **"Quero me cadastrar" no site:** opção 1 (formulário ao lado do convite), no notebook e no celular. **Não pede o
+    departamento:** ele sai do nascimento, do sexo e do estado civil (os campos podem mudar depois).
+  - **Editor da carteirinha física:** juntar — a tela inicial é a opção 2 (os modelos em cima e as carteirinhas embaixo, sem
+    editar ali; o botão "Editar" abre o editor); o editor é a opção 1 (ferramentas dos dois lados) com as camadas da opção 3: à
+    esquerda os menus da carteirinha, à direita o submenu de personalização. Tudo em **alta resolução** do começo ao fim (o
+    logo e os fundos já entram em alta; nada de reabrir PNG e salvar de novo, que perde qualidade).
+  - **Carteirinha digital:** o "selo vivo" (opção 3) é bom para quem confere; a carteirinha em si pode ser a clássica, com um
+    desenho melhor. **Regra do QR (ele):** cada pessoa tem **um QR só, que nunca vence nem muda** — o mesmo na física e na digital,
+    funcionando 10 anos depois; o que muda é **o que a página mostra** ao ler (membro, em disciplina, não é mais da Igreja). A
+    digital mostra mais (função, situação) do que a física (só o que não muda). Ele quer conversar mais sobre a conferência.
+- **Rodada 11 respondida (ele, 14/11/2026) — tudo aprovado, sem observação:** tela inicial das carteirinhas = modelos em
+  cartões grandes (opção 1); editor = ícones à esquerda, como nos editores de imagem (opção 2); carteirinha digital = o cartão em
+  cima e os dados embaixo (opção 2); página do QR = topo colorido e anel vivo na foto (opção 2). **O desenho do módulo de
+  membros está fechado** (falta só o Meu Perfil, que espera as observações dele) e ele liberou a construção do que aprovou.
+- **A ordem da construção (14/11/2026)** — cada passo vai primeiro para a **homologação** (ramo `homolog`, com a massa de 5.047
+  pessoas); ele vê, aprova, e só então entra na produção:
+  1. **A ficha por dentro (sem tela nova ainda):** CPF (único, conferido pelo dígito, mascarado, leitura registrada), filiação
+     (mãe e pai), escolaridade e a **matrícula gerada pelo sistema** (reaproveitando primeiro os números liberados ao juntar
+     fichas) — migração 174. **Feito em 14/11/2026 no ramo `v10-membros`** (commits 4b76f0f e 8d95a49; ainda fora da
+     homologação e da produção): `MembroReferencia` ganhou `Cpf` (11 dígitos, índice único que aceita vazio), `NomeMae`,
+     `NomePai` e `Escolaridade` (lista fixa); `CpfLeituras` registra quem viu o CPF inteiro de quem; `MatriculasLivres` guarda os
+     números que sobram ao juntar fichas. Regras em `api/shared/fichaMembro.js`. Na lista, na busca e na resposta do cadastro o
+     CPF sai **só mascarado** (feito no próprio SQL); procurar pelo CPF inteiro acha a pessoa (no escopo); o inteiro só pela
+     Secretaria Geral (`GET /api/pessoas/{matrícula}?ver=cpf`, com a leitura registrada) e pela própria pessoa (Meus Dados e o
+     dossiê LGPD); trocar ou apagar um CPF já gravado, só a Geral; CPF de outra pessoa é recusado (a matrícula da outra só para a
+     Geral); a trilha guarda o CPF mascarado; a saída por carta e a exclusão LGPD apagam CPF, filiação e escolaridade. A
+     matrícula é gerada **só com o pedido explícito** (`gerarMatricula: true`): o menor número livre que ninguém usa, senão a
+     maior + 1, à prova de corrida. Sem tela nova (vem no passo 7). Prova: jest 6.437/6.437 (20 testes novos); roteiro novo
+     e2e-85 51/51 no LocalDB (migração duas vezes, índice único, máscara procurada em toda resposta, busca, quem troca,
+     leitura registrada, corrida de 6 cadastros sem repetir matrícula e de 4 com o mesmo CPF, reaproveitamento dos números
+     livres, lixo); e 28 roteiros que usam o cadastro de pessoas, Meus Dados, a minimização e a exclusão LGPD, todos verdes.
+  2. **A linha do tempo completa:** somar cargos, casamento, apresentação, batismo, transferência, credencial, licença,
+     readmissão e falecimento; todos veem (no escopo), o membro vê a sua por inteiro; a disciplina só para quem pode.
+     **Feito em 17/11/2026 no ramo `v10-membros`** (commits 45e2ead e f4f7ba6; ainda fora da homologação e da produção):
+     - **O que soma:** a regra e a leitura estão em `api/shared/linhaDoTempo.js`, numa ida só ao banco (todos os SELECTs no
+       mesmo lote). Entram a ficha (entrada, readmissão, rito, saída, falecimento), o batismo da turma (com o local e os
+       oficiantes, sem repetir a data da ficha), os marcos (conversão, batismo no Espírito Santo, ministério anterior, curso de
+       discipulado), a consagração, os cargos que não vieram dela, o casamento (aparece também na linha do cônjuge), a
+       apresentação dos filhos, as cartas, as vias da credencial e a licença para candidatura.
+     - **A vida espiritual fica à vista:** conversão, batismo nas águas (onde, por quem, ou em outra igreja) e batismo no
+       Espírito Santo. A procedência também.
+     - **A ordem:** do mais recente para o mais antigo; o que não tem data fica no fim.
+     - **Duas rotas novas:**
+       - `GET /api/pessoas/{matrícula}/linha-do-tempo`, para a secretaria, no escopo; fora dele, a mesma resposta de "não
+         encontrada";
+       - `GET /api/minha-linha-do-tempo/{matrícula}`, para a própria pessoa, que vê a sua inteira.
+       - As duas têm páginas de 50 (no máximo 200). O `/historico` antigo continua igual para a tela de hoje.
+     - **Disciplina e abandono:** só quem tem a permissão "disciplina" no escopo **dela** vê o processo, o motivo de uma
+       saída ou de um recolhimento de credencial e a "readmissão depois de exclusão" (a exclusão recusada pela CEI não conta).
+       Esses dados nem são lidos para quem não pode. A própria pessoa não os vê por esta rota.
+     - **Nunca aparece:** CPF, contato nem o código do QR.
+     - **Sem tela nova:** as telas vêm no passo 7.
+     - **Prova:**
+       - jest 6.458 de 6.458, com 19 testes novos;
+       - o roteiro novo e2e-86 no LocalDB, 59 de 59: todas as fontes; a escala (geral, área, local dentro e fora); a
+         disciplina em outro escopo; a própria pessoa e a de outra; o segredo procurado em toda resposta; a paginação; e a
+         rota antiga igual.
+     - **Achado para decidir:** a rota antiga `/historico`, a da tela de hoje, mostra o motivo de uma saída disciplinar
+       (exclusão, abandono) a quem não tem a permissão "disciplina". A rota nova não mostra; a antiga sai quando as telas
+       novas chegarem (passo 7).
+  3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
+     por ela.
+  4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido
+     que chega pelo site (decisão dele, 17/11/2026, corrigida no mesmo dia):** o formulário público do site **deixa enviar** (o
+     site não confere nada, para não revelar quem já é da Igreja); quando o pedido chega na fila, o sistema identifica a
+     repetição (mesmo CPF, ou nome e nascimento parecidos), **não aprova** e manda para **correção junto com o cadastro mais
+     antigo** — a Secretaria Geral ou a local ajustam.
+  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
+  6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
+     alerta antes da assembleia.
+  7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no
+     alto e nada preso embaixo) —, o painel executivo com os gráficos personalizáveis e os avisos do módulo. **Na tela de
+     cadastro do sistema (decisão dele, 17/11/2026):** enquanto a secretaria digita o nome, o nascimento e o CPF, uma **barra de
+     avisos** confere se a pessoa já existe. CPF que já está em outra ficha **não deixa concluir**: "este CPF já está em outra
+     matrícula — clique aqui para ir para lá", que leva à ficha **se ela for da mesma congregação ou da mesma área** de quem
+     cadastra (no escopo); fora disso, quem cadastra não mexe nem cadastra, e o caso vai para a **Secretaria Geral** conferir e
+     corrigir. Nome e nascimento parecidos também avisam, como possível repetição. Precisa de uma **rota de conferência** que
+     respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
+  8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
+  9. **A migração única do sistema pago** (v10.1e).
+- **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
+  níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
+  e, no celular, nada colado nos botões do telefone.
+- [ ] **v10.1e — A migração única do sistema pago** (no lugar da importação periódica da v10.10): a exportação completa, a conferência campo
+      a campo, um tempo com os dois rodando juntos e o desligamento da parte de membros do pago, com o responsável conferindo. **LGPD:** a
+      planilha vai direto ao sistema, nunca por conversa ou e-mail; para montar a tela basta o cabeçalho com os nomes das colunas.
+
+**As 7 decisões da pesquisa (o responsável, 13/11/2026):**
+
+1. **Quem vê o CPF inteiro:** ninguém em lista, busca, exportação ou PDF — ali ele sai sempre **mascarado** (e nenhum dado sensível sai
+   inteiro). Pode-se **procurar** uma pessoa pelo CPF, mas o resultado mostra o CPF mascarado. Inteiro, só em dois lugares: a **Secretaria
+   Geral**, ao abrir os dados pessoais da pessoa, e a **própria pessoa**, em Meus Dados. A secretaria local e os demais veem mascarado.
+2. **Campos novos:** entram a **filiação** (nome da mãe **e** do pai, que vai também para a credencial física e a digital) e a
+   **escolaridade**. **Naturalidade não entra.** A **profissão** só existe para quem está inscrito num dos 20 **Setores Técnicos** e aparece
+   só nesse módulo, não nos dados pessoais.
+3. **Mudança de congregação:** quem pede é a **origem** (a secretaria da congregação de onde a pessoa sai) ou o próprio membro; o membro não
+   precisa aceitar. Pedido pelo **geral**: aceito na hora. **Mesma área**: aceito na hora. **Áreas diferentes**, pedido pela origem local
+   ou pelo membro: a **secretaria de destino** (ou o geral) aceita ou recusa.
+4. **Livro do rol em PDF: não.** O sistema não gera PDF com dados de membros (papel com dado pessoal vira problema em processo). Só o geral,
+   se for estritamente necessário, e com tudo bem mascarado.
+5. **Juntar fichas repetidas: sim.** A secretaria escolhe, campo a campo, o que fica. Pode começar já. Na migração, os 2 cadastros que
+   existem hoje (as duas pessoas da fase de teste) saem e os membros entram da matrícula 3 em diante — a princípio, não é preocupação.
+6. **Carteirinha na carteira do celular (Google/Apple): não** — custo e risco que não compensam.
+7. **Mais de um departamento por pessoa: não.** O **departamento** é por **faixa etária** e é ele que conta as pessoas nos relatórios: uma
+   pessoa, um departamento. **Secretarias e ministérios ficam separados** dos departamentos: uma mulher de 30 anos é do departamento de
+   Senhoras e pode servir no Ministério Infantil (um ministério), sem deixar de contar só uma vez.
+
+**Adiantado em 13/11/2026 (aprovado por ele, em produção — commit 0118594):** a lista de pessoas passou a ser filtrada **no banco** pelo
+escopo de quem está logado (o dirigente recebe só a sua congregação; antes o servidor lia o campo inteiro e escondia na memória), com a
+lista em páginas pronta no servidor para a tela nova (v10.1d); e o **"Cadastrar Pessoa" que ficava em branco** — o formulário agora aparece
+na hora, cada lista carrega por conta própria, e salvar/editar esperam a lista de congregações (antes, editar com as listas chegando podia
+gravar a pessoa na congregação errada).
+
 ## v10.2 — A porta de entrada (a página inicial e o login)
 
 **Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da
@@ -163,6 +384,8 @@ senha num cartão), **com uma foto por trás**. As fotos têm dois formatos: **d
 
 **Rodada 4 (12/11/2026, ele e o Presidente):** aprovada a de **desfoque leve, com a foto mais visível**, com um ajuste: a linha onde o
 degradê termina desce até a altura do botão "Entrar". Com isso, a entrada do celular está aprovada.
+
+**Rodada 5 (12/11/2026):** confirmado — o degradê termina **na altura do "Entrar"**. Entrada do celular **aprovada**.
 
 - [ ] **A página inicial é a entrada no sistema**, não a "Frequência Ministerial". O registro de presença sai da porta: passa a ser feito
       pela reunião ou pelo evento no Calendário (a senha da reunião continua valendo ali, e a contagem de faltas da CLI, Art. 27, continua a
@@ -273,6 +496,29 @@ tem informação demais; não há submenus.
 - **Níveis:** aprovados a **lupa e os filtros como botões** (bom e enxuto no celular); a lupa deixa **digitar** o nome da congregação,
   área ou região, e os **filtros aumentam** (são poucos).
 
+**Rodada 5 (12/11/2026, ele e o Presidente):**
+
+- **Avisos:** aprovado o **quadro de filtros aberto** (situação, assunto, onde), com o botão **"só o que eu preciso resolver"**. Os filtros
+  **crescem com o nível**: o líder local e o de área veem poucos (só a congregação ou a área deles); da região ao geral, mais.
+- **Busca:** **não haverá uma segunda lupa** dentro das telas. A busca é a do alto (a de "Ctrl K", que já existe), melhorada: procura
+  tudo (pessoa, congregação, área, região, módulo) e ganha **filtros conforme a tela** em que a pessoa está.
+- **Rodada 6 (12/11/2026):** **avisos** com o **quadro de filtros recolhido** ("Filtros ▾" mostrando só os ligados); a **busca do alto**
+  abre num **painel do lado**, com **os mesmos filtros dos avisos**; dentro de um módulo, a busca já vem **presa àquele módulo** (ex.: no
+  Ministério Infantil, procura os relatórios das congregações A, B ou C) e o **Enter** escolhe o resultado. A **paleta** ficou mal
+  apresentada no notebook (duas colunas de 15, nomes cortados): o certo é **uma coluna só, de cima a baixo, com rolagem**, o botão que
+  troca claro/escuro, a **sugestão dentro da própria lista** (a família sugerida no lugar dela, marcada) e um filtro **"só as famílias
+  disponíveis"**.
+- **Rodada 7 (13/11/2026) — as telas principais fechadas:** aprovadas na versão final a **entrada** (notebook e celular), o **início**,
+  os **avisos** e a **busca do alto**. A **primeira tela de módulo** e a **tela do submódulo** ficam aprovadas **só para Departamentos e
+  Secretarias** (o menu da esquerda na cor vale para todos; o conteúdo da direita de cada módulo é visto módulo a módulo, porque cada um tem
+  as suas particularidades — Finanças e Membros podem ser bem diferentes). **Cores:** "só as disponíveis, a sugerida no topo" (a busca
+  pelo nome saiu: a lista é curta e a pessoa erraria o nome). **Formulário:** **em etapas** para cadastrar; **em duas colunas** para
+  editar. **Lista:** **tabela no notebook**, **cartões no celular**. **Meu Perfil:** os **quatro cartões** (a ajustar com ele: o perfil é
+  parte da gestão de membros). **Minha vida na igreja:** **os próximos compromissos** ao lado do que é da pessoa.
+- **Cores:** aprovada **uma família por linha**, com **umas 30 famílias**; cada cor tem a sua **versão para o modo escuro** (o roxo não
+  pode virar outra cor no escuro); e a **regra de escolha**: usar uma família ainda livre antes de repetir uma família já usada (o segundo
+  tom de uma família só quando todas as famílias estiverem em uso).
+
 - [ ] **Duas colunas independentes:** o menu da esquerda fica parado, com a própria rolagem; o conteúdo da direita rola sozinho. Rolar um
       não mexe no outro, e nunca sobra espaço branco.
 - [ ] **Menu por contexto (limpo):**
@@ -305,6 +551,25 @@ tem informação demais; não há submenus.
       digitando direto na linha, Enter ou Tab passa para a próxima, o nome do dizimista se completa sozinho (e "novo dizimista" sem sair da
       grade), o total aparece embaixo na hora, e a gravação acontece por linha (com o aviso se uma linha tiver problema) — no lugar do
       formulário de um em um.
+- [ ] **Rodada 5 (12/11/2026, ele e o Presidente):** aprovada a **planilha** para quando há muitos lançamentos e a **linha de lançar**
+      (o valor em letra grande, as opções em botões) para os lançamentos pontuais, principalmente no celular — **a pessoa escolhe o
+      jeito**. O jeito "por culto, em dois blocos" (dízimos de um lado, ofertas do outro) saiu: é tudo junto.
+- [ ] **O número do Termo (o talão de dízimo) ajustável** (rodada 5): o talão da Igreja já passa de 50.000; a numeração do sistema
+      tem de poder **começar do número que a congregação já usa** (o próximo Termo nº, ajustável por quem cuida da tesouraria, com a trilha)
+      — hoje começa em 1 e não há onde mexer. O número aparece também no celular.
+- [ ] **O bloco de dízimo de papel no sistema** (rodada 6, 12/11/2026 — explicado pelo responsável; desenhar com ele e o Presidente, em
+      conversa, quando chegar o módulo Finanças). Aprovado o **quadro de configuração da tesouraria**. Como o bloco funciona hoje:
+  - o bloco tem 50 folhas, cada uma em **duas vias com o mesmo número**: uma é arrancada e entregue como recibo a quem deu, a outra fica no
+    bloco. A congregação recebe o bloco e **registra a numeração inteira dele no sistema**;
+  - casos que o sistema precisa tratar: **folha arrancada** (as duas vias somem: marca vermelha, de desconfiança), **folha cancelada** (erro
+    de preenchimento: o número é anotado como cancelado), **datas fora de ordem** (a folha 10 é de outubro e a 11 de setembro), e escolher
+    **quais folhas** vão para um culto ou dia (ex.: 1 a 10);
+  - **o dízimo que entra pelo sistema** (pelo banco ou pelo próprio dizimista) fica como **lançamento pendente de folha**, com alerta: não
+    se apaga; o tesoureiro acha depois a folha e anota nela o número desse lançamento;
+  - o bloco **sempre existe** (não há "acabou o papel"); e quem dá pode **não ser da Igreja**: o nome se escreve à mão (o nome avulso).
+- [ ] **Saldo de abertura** (pedido do responsável, 12/11/2026): para começar a usar o financeiro, lançar o saldo anterior de cada caixa,
+      que pode ser **negativo** (hoje há saldo negativo). A conciliação já casa entrada negativa com débito (correção de 12/11/2026); falta
+      o lançamento do saldo anterior em si.
 - [ ] **Data fácil:** digitar `dd/mm/aaaa` com a máscara pronta, ou escolher num calendário que abre ao lado; "hoje" já vem preenchido
       quando faz sentido.
 - [ ] **Tabela padrão:** busca, filtro, ordenar por coluna, paginação, cabeçalho fixo ao rolar, número alinhado à direita; no celular, cada
@@ -342,6 +607,9 @@ de tela completo com a base nova, a varredura de texto e de celular sem nenhum a
 - [ ] O nível do banco decidido com o custo na mão (o teto de R$ 650/mês continua).
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
+
+**Substituída em 13/11/2026 pela migração única da v10.1e:** com a gestão de membros vindo para a FASE 10, não vale construir uma
+importação que se repete a cada tantos dias só para jogá-la fora depois. O que estava escrito abaixo fica de registro.
 
 Até o cadastro próprio substituir o sistema pago (FASE 11), os dados dos membros chegam por planilha.
 

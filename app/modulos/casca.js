@@ -54,7 +54,10 @@ document.addEventListener("DOMContentLoaded", () => {
 function pilulaAtivaAgora() {
   if (typeof moduloAtual !== "undefined" && moduloAtual) return "trabalho";
   const sub = typeof subAbaMeupainelAtual !== "undefined" ? subAbaMeupainelAtual : "perfil";
-  return sub === "perfil" ? "inicio" : "vida";
+  if (sub === "perfil") return "inicio";
+  // o Meu Perfil (e as partes dele) abre pelo ☰: nenhuma pílula fica marcada (aprovado na rodada 12)
+  if (["meuperfil", "dados", "vinculos", "seguranca", "lgpd"].includes(sub)) return "";
+  return "vida";
 }
 function atualizarPilulasCelular() {
   const nav = document.getElementById("pilulasCelular");
@@ -79,11 +82,10 @@ function atualizarPilulasCelular() {
 function irPilulaCelular(qual) {
   if (qual === "avisos") { alternarPainelNotificacoes(); atualizarPilulasCelular(); return; }
   if (qual === "vida") {
-    // "Minha vida na igreja": o grupo do menu com o que é da pessoa (a tela própria aprovada vem no incremento 3)
+    // "Minha vida na igreja" (incremento 3): os próximos compromissos e o que é da pessoa
     if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
-    alternarMenuCelular(true);
-    const grupo = document.getElementById("grupoMenuMinhaVida");
-    if (grupo && grupo.scrollIntoView) grupo.scrollIntoView({ block: "start" });
+    mostrarSubAbaMeupainel("minhavida");
+    atualizarPilulasCelular();
     return;
   }
   sairDoModulo();
@@ -120,7 +122,94 @@ document.addEventListener("DOMContentLoaded", () => {
   if (campoTopo) campoTopo.addEventListener("focus", () => abrirPainelBusca());
 });
 
+// ---- incremento 3: MEU PERFIL (os quatro cartões) e MINHA VIDA NA IGREJA (os próximos compromissos) ----
+function botaoIrPara(sub, rotulo) {
+  return `<button type="button" class="btn-link" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr(String(sub))}">${escaparHtmlEbd(rotulo)} ›</button>`;
+}
+function linhaPerfil(rotulo, valor) {
+  return `<div class="perfil-linha"><span>${escaparHtmlEbd(rotulo)}</span><strong>${escaparHtmlEbd(valor)}</strong></div>`;
+}
+function escolherTemaAcao(modo) {
+  try { if (modo === "aparelho") localStorage.removeItem(CHAVE_TEMA); else localStorage.setItem(CHAVE_TEMA, modo); } catch (e) { /* vale só nesta visita */ }
+  aplicarTema(modo === "aparelho" ? temaDoAparelho() : modo);
+  desenharMeuPerfilCasca();
+}
+function escolherLetraAcao(grande) {
+  const agora = document.documentElement.dataset.readable === "true";
+  if (agora !== !!grande) alternarModoLeitura();
+  desenharMeuPerfilCasca();
+}
+function desenharMeuPerfilCasca() {
+  const caixa = document.getElementById("meuPerfilCartoes");
+  if (!caixa) return;
+  const escolhido = temaEscolhido() || "aparelho";
+  const letraGrande = document.documentElement.dataset.readable === "true";
+  const chip = (ativo, acao, arg, rotulo) => `<button type="button" class="chip-filtro ${ativo ? "ativo" : ""}" data-on-click="${acao}" data-args-click="${argsAttr(arg)}">${escaparHtmlEbd(rotulo)}</button>`;
+  const temPush = "serviceWorker" in navigator && "PushManager" in window;
+  caixa.innerHTML = `
+    <section class="perfil-cartao"><h3>👤 Meus dados</h3>
+      ${linhaPerfil("Nome", authNome || "—")}${linhaPerfil("Matrícula", authMatricula || "—")}
+      <div class="perfil-acoes">${botaoIrPara("dados", "Ver e corrigir os meus dados")}${botaoIrPara("vinculos", "Minha família")}${botaoIrPara("lgpd", "Meus dados (LGPD)")}</div>
+    </section>
+    <section class="perfil-cartao"><h3>🔑 Segurança</h3>
+      <p class="subtitle">A chave deste aparelho (a digital ou o rosto), a senha e o PIN de 4 números.</p>
+      <div class="perfil-acoes">${botaoIrPara("seguranca", "Chaves de acesso e senha")}${botaoIrPara("dados", "Trocar o PIN")}</div>
+    </section>
+    <section class="perfil-cartao"><h3>💻 Aparelhos de confiança</h3>
+      <p class="subtitle">Os aparelhos com a sua sessão aberta. Viu um que não é seu? Saia dele.</p>
+      <div class="perfil-acoes">${botaoIrPara("seguranca", "Ver os aparelhos e sair de um")}</div>
+    </section>
+    <section class="perfil-cartao"><h3>⚙️ Preferências</h3>
+      <div class="perfil-linha perfil-linha-chips"><span>Aparência</span><span class="perfil-chips">${chip(escolhido === "claro", "escolherTemaAcao", "claro", "Claro")}${chip(escolhido === "escuro", "escolherTemaAcao", "escuro", "Escuro")}${chip(escolhido === "aparelho", "escolherTemaAcao", "aparelho", "Seguir o aparelho")}</span></div>
+      <div class="perfil-linha perfil-linha-chips"><span>Tamanho da letra</span><span class="perfil-chips">${chip(!letraGrande, "escolherLetraAcao", false, "Normal")}${chip(letraGrande, "escolherLetraAcao", true, "Grande")}</span></div>
+      ${temPush ? `<div class="perfil-linha perfil-linha-chips"><span>Avisos no celular</span><button type="button" class="btn-link" data-on-click="alternarPushAcao">Ligar ou desligar neste aparelho</button></div>` : ""}
+    </section>`;
+}
+
+const ATALHOS_VIDA = [["credencial", "🪪", "Minha carteirinha"], ["minhasescalas", "🗓️", "Minhas escalas"], ["contribuicoes", "💰", "Minhas contribuições"], ["vinculos", "👪", "Minha família"], ["votacoes", "🗳️", "Votações"], ["eventos", "🎪", "Eventos"]];
+let minhaVidaSeq = 0;
+async function carregarMinhaVidaCasca() {
+  const atalhos = document.getElementById("minhaVidaAtalhos");
+  if (atalhos) atalhos.innerHTML = ATALHOS_VIDA.map((a) => `<button type="button" class="vida-atalho" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr(a[0])}"><span class="vida-atalho-icone">${escaparHtmlEbd(a[1])}</span><span>${escaparHtmlEbd(a[2])}</span></button>`).join("");
+  const lista = document.getElementById("minhaVidaCompromissos");
+  if (!lista) return;
+  const seq = ++minhaVidaSeq;
+  lista.innerHTML = "<p class=\"subtitle\">Carregando…</p>";
+  const itens = [];
+  const agora = Date.now();
+  try {
+    const res = await fetchProtegido(`${API_BASE}/escalas/minhas-alocacoes`);
+    const data = await res.json();
+    (data && Array.isArray(data.alocacoes) ? data.alocacoes : []).forEach((a) => {
+      const quando = Date.parse(a.dataHora);
+      if (!Number.isNaN(quando) && quando >= agora - 3600e3 && a.status !== "RECUSADO") itens.push({ quando, titulo: `${a.equipeNome || "Escala"} — escala`, detalhe: [a.descricao, a.status === "CONVIDADO" ? "convite para responder" : ""].filter(Boolean).join(" · ") });
+    });
+  } catch (e) { /* sem escalas: segue com a agenda */ }
+  try {
+    if (typeof calObter === "function" && typeof calHojeBrasilia === "function" && typeof calSomarDias === "function") {
+      const hoje = calHojeBrasilia();
+      const data = await calObter(`agenda?de=${hoje}&ate=${calSomarDias(hoje, 30)}&camadas=OFICIAL`);
+      (data && Array.isArray(data.itens) ? data.itens : []).filter((i) => i.camada === "OFICIAL" && i.status === "HOMOLOGADO").slice(0, 8).forEach((i) => {
+        const quando = Date.parse(String(i.data || "").slice(0, 10) + "T12:00:00");
+        if (!Number.isNaN(quando)) itens.push({ quando, titulo: i.titulo || i.nome || "Evento", detalhe: i.congregacaoNome || i.local || "" });
+      });
+    }
+  } catch (e) { /* sem agenda: segue com as escalas */ }
+  if (seq !== minhaVidaSeq) return;
+  itens.sort((x, y) => x.quando - y.quando);
+  const proximos = itens.slice(0, 6);
+  lista.innerHTML = proximos.length
+    ? proximos.map((i) => {
+      const d = new Date(i.quando);
+      const mes = d.toLocaleDateString("pt-BR", { month: "short" }).replace(/\./g, "");
+      const semana = d.toLocaleDateString("pt-BR", { weekday: "long" });
+      const detalhe = [semana, i.detalhe].filter(Boolean).join(" · ");
+      return `<div class="vida-item"><div class="vida-data"><strong>${String(d.getDate()).padStart(2, "0")}</strong><span>${escaparHtmlEbd(mes)}</span></div><div><div class="vida-item-titulo">${escaparHtmlEbd(i.titulo)}</div><div class="subtitle">${escaparHtmlEbd(detalhe)}</div></div></div>`;
+    }).join("")
+    : "<p class=\"subtitle\">Nenhum compromisso nos próximos dias.</p>";
+}
+
 // qualquer toque pode trocar de tela: a pílula ativa acompanha (os botões do menu chamam as funções direto)
 document.addEventListener("click", () => setTimeout(atualizarPilulasCelular, 0));
 
-registrarAcoes({ alternarTemaAcao, irPilulaCelular });
+registrarAcoes({ alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irPilulaCelular });

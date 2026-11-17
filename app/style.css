@@ -1515,3 +1515,32 @@ html[data-tema="escuro"] .chip-filtro.ativo { background: var(--cor-ouro); borde
 
 /* o painel da busca mora dentro do topo, que centraliza os filhos (.cabecalho-secretaria > div): o painel estica e alinha à esquerda */
 .cabecalho-secretaria > .painel-lado { align-items: stretch; text-align: left; }
+
+/* ---- incremento 3: MEU PERFIL (os quatro cartões) e MINHA VIDA NA IGREJA (os próximos compromissos) ---- */
+.perfil-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.perfil-cartao, .vida-cartao { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.perfil-cartao h3, .vida-titulo { margin: 0 0 4px; font-size: 1.05rem; color: var(--cor-titulo); }
+.perfil-linha { display: flex; align-items: center; gap: 12px; min-height: 42px; border-top: 1px solid var(--cor-borda); font-size: 0.92rem; }
+.perfil-linha > span:first-child { width: 140px; flex: none; color: var(--cor-texto-suave); }
+.perfil-linha strong { color: var(--cor-titulo); overflow-wrap: anywhere; }
+.perfil-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.perfil-acoes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; }
+.vida-grade { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.vida-lista { display: flex; flex-direction: column; }
+.vida-item { display: flex; gap: 14px; align-items: center; min-height: 56px; border-top: 1px solid var(--cor-borda); }
+.vida-item:first-child { border-top: none; }
+.vida-data { width: 52px; flex: none; text-align: center; display: flex; flex-direction: column; line-height: 1.1; }
+.vida-data strong { font-size: 1.3rem; color: var(--cor-titulo); }
+.vida-data span { font-size: 0.7rem; text-transform: uppercase; color: var(--cor-texto-suave); }
+.vida-item-titulo { font-weight: 600; color: var(--cor-titulo); }
+.vida-atalhos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.vida-atalho {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--raio); border: 1px solid var(--cor-borda);
+  background: var(--cor-superficie); color: var(--cor-titulo); font-family: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer; text-align: left;
+}
+.vida-atalho:hover { border-color: var(--cor-ouro); }
+.vida-atalho-icone { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--cor-primaria-suave); font-size: 1.1rem; }
+@media (max-width: 640px) {
+  .perfil-grade, .vida-grade { grid-template-columns: 1fr; }
+  .perfil-linha > span:first-child { width: 110px; }
+}

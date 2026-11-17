@@ -1633,9 +1633,9 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "minhavida", "meuperfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Início", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
+  perfil: "Início", minhavida: "Minha vida na igreja", meuperfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1684,6 +1684,10 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
+  // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
+  if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
+  if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
+  if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código
 }
 
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----

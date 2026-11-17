@@ -318,7 +318,27 @@ o pago por causa do financeiro, que também está vindo para cá.
        (exclusão, abandono) a quem não tem a permissão "disciplina". A rota nova não mostra; a antiga sai quando as telas
        novas chegarem (passo 7).
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
-     por ela.
+     por ela. **Feito em 17/11/2026 no ramo `v10-membros`** (`bd2349c`, depois de trazer a `main` em `9135278`; migração
+     176), ainda fora da homologação e da produção:
+     - **Quem pede:** a secretaria da congregação de origem, a própria pessoa ou a Secretaria Geral. A área **acompanha**
+       (vê os pedidos das suas congregações), mas não pede nem decide.
+     - **Quando entra na hora:** pedido pela Geral, ou dentro da mesma área. Entre áreas, a secretaria do destino (ou a
+       Geral, a qualquer hora) aceita ou recusa, com motivo; a origem recebe o aviso e lê o motivo. Pedido parado há mais de
+       7 dias aparece para a Geral numa caixa própria.
+     - **A ficha:** só muda se a pessoa ainda estiver na origem; o dízimo ativo vai junto para a tesouraria do destino; quem
+       estava numa Extensão da Tenda sai dela. Um pedido em andamento por pessoa. A trilha guarda quem pediu, quem
+       decidiu e quando, e a transferência concluída entra na linha do tempo.
+     - **O cadastro não troca mais a congregação** de quem já tem uma (nem a Geral: para ela a transferência já é na hora);
+       a ficha sem congregação recebe a primeira pelo cadastro.
+     - **Rotas:** `/api/transferencias` (as caixas "chegando", "saindo", "concluídos" e "paradas", filtradas no banco;
+       acompanhar; pedir; aceitar; recusar; cancelar) e `/api/minha-transferencia/{matrícula}` (a pessoa pede a sua, vê os
+       seus pedidos sem os nomes de quem decidiu e cancela o que ela mesma pediu). Sem tela nova (passo 7).
+     - **Prova:** jest 6.511 de 6.511 (18 testes novos); o roteiro e2e-89 no LocalDB, 77 de 77 (os casos de cada regra, o
+       escopo, a Extensão, o cadastro, a linha do tempo, as corridas com vários processos e o lixo nos campos); a regressão
+       dos roteiros que passam pelo cadastro e pela linha do tempo, toda verde.
+     - **Decisões tomadas pelo caminho seguro (ele pode mudar):** a área não pede (a decisão 3 diz "a origem ou o próprio
+       membro"); congregação sem área conta como "outra área" (o destino aceita); a liderança da pessoa na congregação de
+       origem não é encerrada sozinha pela transferência.
   4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido
      que chega pelo site (decisão dele, 17/11/2026, corrigida no mesmo dia):** o formulário público do site **deixa enviar** (o
      site não confere nada, para não revelar quem já é da Igreja); quando o pedido chega na fila, o sistema identifica a

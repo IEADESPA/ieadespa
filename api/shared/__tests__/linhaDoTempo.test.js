@@ -97,6 +97,14 @@ describe("montarLinhaDoTempo: a regra", () => {
     expect(eventos.find((e) => e.tipo === "READMISSAO").titulo).toBe("Readmissão no rol de membros (depois de exclusão)");
     expect(eventos.find((e) => e.tipo === "DISCIPLINA_CONCLUSAO")).toMatchObject({ titulo: "Processo disciplinar concluído: EXCLUSAO", detalhe: "Exclusão" });
   });
+  test("exclusão recusada pela CEI não vira 'readmissão depois de exclusão'", () => {
+    const f = FONTES();
+    f.membro = { ...FICHA, DataAdmissao: "2025-01-10" };
+    f.processos = [{ DataAbertura: "2024-04-01", DataConclusao: "2024-05-05", Status: "JULGADO", Resultado: "EXCLUSAO", CEIRecusouEm: "2024-06-01" }];
+    const { eventos } = linha.montarLinhaDoTempo(f, { disciplina: true });
+    expect(eventos.find((e) => e.tipo === "ADMISSAO")).toBeTruthy();
+    expect(eventos.some((e) => e.tipo === "READMISSAO")).toBe(false);
+  });
   test("falecimento e saída por carta", () => {
     const f = FONTES(); f.membro = { ...FICHA, DataSaida: "2026-01-02", MotivoSaida: "FALECIMENTO", Status: "FALECIDO" };
     expect(linha.montarLinhaDoTempo(f).eventos[0]).toMatchObject({ tipo: "FALECIMENTO", titulo: "Falecimento", data: "2026-01-02" });

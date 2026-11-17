@@ -130,4 +130,6 @@ bash rodar.sh preparar-174
 BASE=cenario-174 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 # (v10.1b) o CPF (único, mascarado, inteiro só para a Geral com a leitura registrada), a filiação, a escolaridade e a matrícula gerada, com corridas de vários processos
 BASE=cenario-174 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
+# (v10.1b passo 2) a linha do tempo única da pessoa: todas as fontes, a ordem, quem vê o quê (escala, disciplina, a própria pessoa) e a paginação
+BASE=cenario-174 bash rodar.sh roteiro e2e-86-linha-do-tempo.js
 echo TUDO-PRONTO

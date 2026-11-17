@@ -59,7 +59,9 @@ function montarLinhaDoTempo(fontes, opcoes = {}) {
   const m = f.membro || {};
   const eventos = [];
   const dataAdm = dataOuNulo(m.DataAdmissao), dataSaida = dataOuNulo(m.DataSaida);
-  const exclusaoAntesDaEntrada = disciplina && (f.processos || []).some((p) => p.Resultado === "EXCLUSAO" && dataOuNulo(p.DataConclusao) && dataAdm && dataOuNulo(p.DataConclusao) < dataAdm);
+  // a exclusão que valeu (a recusada pela CEI não conta — o mesmo critério do "TemExclusao" do cadastro) e terminou antes da entrada de agora
+  const exclusaoAntesDaEntrada = disciplina && (f.processos || []).some((p) => p.Resultado === "EXCLUSAO" && !p.CEIRecusouEm && dataOuNulo(p.DataConclusao) && dataAdm
+    && dataOuNulo(p.DataConclusao) < dataAdm);
   const voltou = !!(dataAdm && dataSaida && dataAdm > dataSaida);
 
   // ---- a esteira do batismo (antes da ficha: o batismo da turma tem o local e os oficiantes) ----
@@ -238,7 +240,7 @@ async function lerFontes(pool, sql, membroId, { disciplina = false } = {}) {
   ];
   if (disciplina) {
     lotes.push(`SELECT CONVERT(varchar(10), p.DataAbertura, 120) AS DataAbertura, CONVERT(varchar(10), p.DataConclusao, 120) AS DataConclusao, p.Status, p.Resultado,
-                       p.DiasSancao, tp.Nome AS PenalidadeNome
+                       p.DiasSancao, p.CEIRecusouEm, tp.Nome AS PenalidadeNome
                 FROM ProcessosDisciplinares p LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = p.PenalidadeId WHERE p.MembroId = @id`);
     lotes.push(`SELECT Tipo, CONVERT(varchar(10), DataNotificacao, 120) AS DataNotificacao, CONVERT(varchar(10), DataHomologacao, 120) AS DataHomologacao
                 FROM ProcedimentosAbandono WHERE MembroId = @id`);

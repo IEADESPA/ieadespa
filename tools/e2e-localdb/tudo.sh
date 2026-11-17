@@ -126,4 +126,6 @@ BASE=cenario-172 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 # FASE 10 (migração 173): a votação vinculante com o tipo — proposta (aprova, rejeita, em branco não conta) ou escolha (a mais votada, empate para a mesa)
 bash rodar.sh preparar-173
 BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
+# 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
+BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 echo TUDO-PRONTO

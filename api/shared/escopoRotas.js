@@ -81,8 +81,9 @@ function filtrarPorEscopo(usuario, linhas, congregacaoDe, extensaoDe) {
 // v10.1c — o escopo de PESSOA como filtro NO BANCO (a lista de pessoas não lê mais o campo inteiro para depois esconder quem está fora): uma regra por concessão
 // da visão — as congregações dela, por id, e a extensão quando a concessão é de extensão —, o mesmo que noEscopoDaPessoa decide linha a linha (e que continua
 // valendo depois, como segunda conferência). Devolve null quando alguma concessão vê tudo (sem filtro), "" quando a visão não alcança ninguém, ou a condição
-// SQL (os parâmetros entram no `pedido`). `colCongregacaoId`/`colExtensaoNome`: as colunas da consulta de quem chama.
-async function condicaoSqlEscopoPessoa(pool, usuario, pedido, colCongregacaoId, colExtensaoNome) {
+// SQL (os parâmetros entram no `pedido`). `colCongregacaoId`/`colExtensaoNome`: as colunas da consulta de quem chama. `prefixo` (raio-x 3, 17/11/2026): o começo do
+// nome dos parâmetros, para usar a regra duas vezes no mesmo pedido (os vínculos de família: as duas pontas do vínculo).
+async function condicaoSqlEscopoPessoa(pool, usuario, pedido, colCongregacaoId, colExtensaoNome, prefixo = "escopo") {
   const concessoes = auth.concessoesDaVisao(usuario).filter(Boolean);
   const precisaNomes = concessoes.some((c) => Array.isArray(c.escopoCongregacoes) && c.escopoCongregacoes.length > 0);
   const congregacoes = precisaNomes ? (await pool.request().query(`SELECT CongregacaoId, Nome FROM Congregacoes`)).recordset : [];
@@ -95,12 +96,12 @@ async function condicaoSqlEscopoPessoa(pool, usuario, pedido, colCongregacaoId, 
     if (ids && ids.length === 0) return;   // esta concessão não alcança congregação nenhuma
     const cond = [];
     if (ids) {
-      pedido.input(`escopoIds${i}`, sql.NVarChar(sql.MAX), JSON.stringify(ids));
-      cond.push(`${colCongregacaoId} IN (SELECT CAST(value AS INT) FROM OPENJSON(@escopoIds${i}))`);
+      pedido.input(`${prefixo}Ids${i}`, sql.NVarChar(sql.MAX), JSON.stringify(ids));
+      cond.push(`${colCongregacaoId} IN (SELECT CAST(value AS INT) FROM OPENJSON(@${prefixo}Ids${i}))`);
     }
     if (c.escopoExtensaoNome) {
-      pedido.input(`escopoExt${i}`, sql.NVarChar(200), c.escopoExtensaoNome);
-      cond.push(`${colExtensaoNome} = @escopoExt${i}`);
+      pedido.input(`${prefixo}Ext${i}`, sql.NVarChar(200), c.escopoExtensaoNome);
+      cond.push(`${colExtensaoNome} = @${prefixo}Ext${i}`);
     }
     if (cond.length === 0) tudo = true;
     else partes.push(`(${cond.join(" AND ")})`);

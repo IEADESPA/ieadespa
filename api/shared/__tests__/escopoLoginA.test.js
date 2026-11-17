@@ -990,6 +990,8 @@ describe("MeusOrgaosLocais", () => {
   beforeEach(() => {
     quando(/FROM OrgaosLocais WHERE Ativo = 1/, [{ orgaoLocalId: 1, sigla: "JAI", nome: "JAI Central", nivel: 1, referenciaId: 1 }, { orgaoLocalId: 2, sigla: "JAI", nome: "JAI Vila", nivel: 1, referenciaId: 2 }]);
     quando(/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, (i) => [{ Nome: i.id === 1 ? CENTRAL : VILA }]);
+    // raio-x de velocidade 3: o território de todos os órgãos numa consulta só
+    quando(/FROM OrgaosLocais o\s+JOIN Congregacoes c ON/, [{ orgaoLocalId: 1, nome: CENTRAL }, { orgaoLocalId: 2, nome: VILA }]);
   });
   test("sem sessão: 401; sessão de PIN, sem permissão ou sem congregações: lista vazia SEM consultar o banco", async () => {
     expect((await chamar(hOrgaos)).status).toBe(401);

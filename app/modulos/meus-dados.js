@@ -358,6 +358,6 @@ const TITULOS_MODULOS = {
 };
 
 registrarAcoes({
-  alternarMenuCelular, alternarSidebar, enviarMinhaFotoAcao, enviarSolicitacaoEdicaoAcao, mostrarAbaSecretaria, removerMeuVinculoAcao,
+  alternarMenuCelular, enviarMinhaFotoAcao, enviarSolicitacaoEdicaoAcao, mostrarAbaSecretaria, removerMeuVinculoAcao,
   salvarMeusDadosAcao, salvarMeuVinculoAcao
 });

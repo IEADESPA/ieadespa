@@ -22,7 +22,7 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
 jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), minimizarCamposExMembro: jest.fn(async () => {}) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, salvarFoto: jest.fn(async (id) => `https://armazem/fotos/membro-${id}`), excluirFoto: jest.fn(async () => {}) }));
@@ -576,13 +576,17 @@ describe("GestaoLicencasCandidatura", () => {
   });
 });
 
-describe("GestaoFilaAprovacoes", () => {
+describe("GestaoFilaAprovacoes (a caixa de sugestões, v10.1b passo 5)", () => {
+  const { registrarAuditoriaNaTransacao } = require("../auditoria");
+  const AREA = () => tokenDe(7, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], permissoes: ["pessoas"] });
+  const congregacoesNoBanco = () => quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 1, Nome: "Central" }, { CongregacaoId: 2, Nome: "Vila Nova" }]);
   const linha = (solicitacaoId, membroId, nome, congregacaoNome, extra = {}) => ({
-    solicitacaoId, membroId, nome, dataSolicitacao: "2026-10-01T10:00:00", status: "PENDENTE",
-    campoId: solicitacaoId * 10, nomeCampo: "dataNascimento", valorAnterior: "1990-01-01", valorProposto: "1991-02-03", statusCampo: "PENDENTE",
-    congregacaoNome, extensaoNome: null, ...extra
+    SolicitacaoId: solicitacaoId, MembroId: membroId, Nome: nome, DataSolicitacao: "2026-10-01T10:00:00", Status: "PENDENTE",
+    CampoId: solicitacaoId * 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", StatusCampo: "PENDENTE",
+    CongregacaoNome: congregacaoNome, ExtensaoNome: null, EmProcessoDeCargo: 0, TemExclusao: 0, ...extra
   });
   test("lista: só os pedidos de gente do escopo, sem o pedido do próprio usuário e sem as colunas internas", async () => {
+    congregacoesNoBanco();
     quando(/FROM SolicitacoesEdicaoPessoa s/, [
       linha(1, 10, "Ana", "Central"),
       linha(2, 20, "Beto", "Vila Nova"),
@@ -591,28 +595,66 @@ describe("GestaoFilaAprovacoes", () => {
     ]);
     const local = await chamar(hFila, { token: LOCAL() });
     expect(local.body.map((s) => s.solicitacaoId)).toEqual([1]);
-    expect(JSON.stringify(local.body)).not.toMatch(/congregacaoNome|extensaoNome/);
+    expect(JSON.stringify(local.body)).not.toMatch(/congregacaoNome|extensaoNome|EmProcessoDeCargo/);
+    expect(local.body[0].campos[0]).toMatchObject({ podeAplicar: true, podeRecusar: true, rotulo: "Data de nascimento" });
+    // o filtro vai NO BANCO (as congregações do escopo, por id), e a segunda trava em memória
+    expect(rodou(/FROM SolicitacoesEdicaoPessoa s/)[0].sql).toMatch(/OPENJSON/);
     const geral = await chamar(hFila, { token: GERAL() });
-    expect(geral.body.map((s) => s.solicitacaoId)).toEqual([1, 2, 4].concat([3]).sort());
+    expect(geral.body.map((s) => s.solicitacaoId).sort()).toEqual([1, 2, 3, 4]);
   });
+  test("a área ACOMPANHA: vê os pedidos das congregações dela, mas não aplica nem recusa", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central"), linha(2, 20, "Beto", "Vila Nova")]);
+    const r = await chamar(hFila, { token: AREA() });
+    expect(r.body.map((s) => s.solicitacaoId)).toEqual([1, 2]);
+    expect(r.body.every((s) => s.podeAplicar === false && s.campos.every((c) => c.podeAplicar === false && c.podeRecusar === false && /área acompanha/.test(c.motivoNaoAplica)))).toBe(true);
+  });
+  test("o CPF sai mascarado para quem não é a Geral; o CPF já gravado só a Geral aplica", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central", { NomeCampo: "cpf", ValorAnterior: "52998224725", ValorProposto: "11144477735" })]);
+    const local = await chamar(hFila, { token: LOCAL() });
+    const c = local.body[0].campos[0];
+    expect(c.valorAnterior).toBe("***.982.247-**");
+    expect(c.valorProposto).toBe("***.444.777-**");
+    expect(JSON.stringify(local.body)).not.toMatch(/52998224725|11144477735/);
+    expect(c.podeAplicar).toBe(false);
+    expect(c.podeRecusar).toBe(true);
+    const geral = await chamar(hFila, { token: GERAL() });
+    expect(geral.body[0].campos[0]).toMatchObject({ valorProposto: "11144477735", podeAplicar: true });
+  });
+  test("?situacao=DECIDIDAS mostra as já decididas, com o motivo da recusa e quem decidiu", async () => {
+    congregacoesNoBanco();
+    quando(/FROM SolicitacoesEdicaoPessoa s/, [linha(1, 10, "Ana", "Central", { StatusCampo: "REJEITADO", MotivoDecisao: "a certidão diz outra data", DecididoPor: 5, DecididoPorNome: "Dirigente Central" })]);
+    const r = await chamar(hFila, { token: LOCAL(), query: { situacao: "decididas" } });
+    expect(rodou(/FROM SolicitacoesEdicaoPessoa s/)[0].sql).toMatch(/c\.Status <> N'PENDENTE'/);
+    expect(r.body[0].campos[0]).toMatchObject({ status: "REJEITADO", motivo: "a certidão diz outra data", podeAplicar: false, decididoPor: { matricula: 5 } });
+  });
+
   describe("decidir", () => {
-    const campo = (extra = {}) => ({ CampoId: 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", Status: "PENDENTE", ...extra });
-    const base = (campos = [campo()], pendentesRestantes = 0) => {
-      quando(/SELECT SolicitacaoId, MembroId, Status FROM SolicitacoesEdicaoPessoa/, (i) => ({ 1: [{ SolicitacaoId: 1, MembroId: 10, Status: "PENDENTE" }], 2: [{ SolicitacaoId: 2, MembroId: 20, Status: "PENDENTE" }], 3: [{ SolicitacaoId: 3, MembroId: 5, Status: "PENDENTE" }] }[i.id] || []));
-      quando(/FROM SolicitacoesEdicaoCampos WHERE CampoId = @id AND SolicitacaoId = @sol/, (i) => campos.filter((c) => c.CampoId === i.id));
-      quando(/COUNT\(\*\) AS total FROM SolicitacoesEdicaoCampos/, [{ total: pendentesRestantes }]);
+    const campo = (extra = {}) => ({ CampoId: 10, NomeCampo: "dataNascimento", ValorAnterior: "1990-01-01", ValorProposto: "1991-02-03", Status: "PENDENTE", MembroId: 10, ...extra });
+    const SOLICITACOES = { 1: 10, 2: 20, 3: 5 };
+    const base = (campos = [campo()], ficha = {}) => {
+      quando(/SELECT SolicitacaoId, MembroId FROM SolicitacoesEdicaoPessoa/, (i) => (SOLICITACOES[i.id] ? [{ SolicitacaoId: i.id, MembroId: SOLICITACOES[i.id] }] : []));
+      quando(/FROM SolicitacoesEdicaoCampos c WITH \(UPDLOCK, ROWLOCK\)/, (i) => campos.filter((c) => c.CampoId === i.c).map((c) => ({ ...c, MembroId: SOLICITACOES[i.s] })));
+      quando(/FROM MembroReferencia m WITH \(UPDLOCK, ROWLOCK\)/, (i) => (PESSOAS[i.id] ? [{ MembroId: i.id, Status: "ATIVO", DataNascimento: new Date("1990-01-01T00:00:00Z"),
+        Cpf: null, CongregacaoNome: PESSOAS[i.id].CongregacaoNome, ExtensaoNome: null, EmProcessoDeCargo: 0, TemExclusao: 0, ...ficha }] : []));
     };
     const decidir = (solicitacaoId, token = LOCAL(), decisoes = [{ campoId: 10, decisao: "APROVADO" }]) =>
       chamar(hFila, { metodo: "POST", token, ligado: { solicitacaoId: String(solicitacaoId), acao: "decidir" }, corpo: { decisoes } });
+    const naFicha = () => rodou(/^\s*UPDATE MembroReferencia SET/);
 
-    test("pedido de pessoa da congregação: aprova, grava na ficha e audita", async () => {
+    test("pedido de pessoa da congregação: aplica na ficha, fecha o pedido e audita na mesma transação", async () => {
       base();
       const r = await decidir(1);
-      expect(r.body.sucesso).toBe(true);
-      const upd = rodou(/UPDATE MembroReferencia SET DataNascimento = @valor WHERE MembroId = @id/);
+      expect(r.body).toMatchObject({ sucesso: true, aplicados: 1, recusados: 0 });
+      const upd = rodou(/UPDATE MembroReferencia SET DataNascimento = @v WHERE MembroId = @id/);
       expect(upd).toHaveLength(1);
-      expect(upd[0].inputs).toMatchObject({ id: 10, valor: "1991-02-03" });
-      expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ registroId: 10, usuarioId: 5 });
+      expect(upd[0].inputs).toMatchObject({ id: 10, v: "1991-02-03" });
+      expect(rodou(/SET Status = N'APROVADO'/)).toHaveLength(1);
+      expect(rodou(/UPDATE SolicitacoesEdicaoPessoa SET Status = N'CONCLUIDA'/)).toHaveLength(1);
+      expect(registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5,
+        dadosAntes: { dataNascimento: "1990-01-01" }, dadosDepois: { dataNascimento: "1991-02-03" } });
+      expect(mockTransacao).toMatchObject({ begin: 1, commit: 1, rollback: 0 });
     });
     test("pedido de pessoa de OUTRA congregação: a mesma resposta de pedido inexistente; a ficha não muda", async () => {
       base();
@@ -635,20 +677,53 @@ describe("GestaoFilaAprovacoes", () => {
       expect((await decidir(2, GERAL(), [{ campoId: 10, decisao: "APROVADO" }])).body.sucesso).toBe(true);
       expect(rodou(/UPDATE MembroReferencia SET DataNascimento/)[0].inputs.id).toBe(20);
     });
-    test("campo fora do mapa ('constructor') ou data inválida: vira REJEITADO, não toca a ficha e não dá 500", async () => {
+    test("a área acompanha: 403 ao aplicar e ao recusar, nada gravado", async () => {
+      base();
+      expect((await decidir(1, AREA())).status).toBe(403);
+      expect((await decidir(1, AREA(), [{ campoId: 10, decisao: "REJEITADO", motivo: "não confere" }])).status).toBe(403);
+      expect(escritas()).toHaveLength(0);
+    });
+    test("recusar exige o motivo; com o motivo, grava REJEITADO e o motivo (a pessoa lê)", async () => {
+      base();
+      const sem = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "REJEITADO", motivo: "   " }]);
+      expect(sem.body.sucesso).toBe(false);
+      expect(sem.body.mensagem).toMatch(/motivo/);
+      expect(escritas()).toHaveLength(0);
+      const com = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "REJEITADO", motivo: "  a certidão  diz outra data " }]);
+      expect(com.body).toMatchObject({ sucesso: true, recusados: 1 });
+      expect(rodou(/SET Status = N'REJEITADO'/)[0].inputs).toMatchObject({ m: "a certidão diz outra data", por: 5 });
+      expect(naFicha()).toHaveLength(0);
+    });
+    test("a ficha mudou depois do pedido: 409, não aplica por cima e desfaz a transação", async () => {
+      base([campo()], { DataNascimento: new Date("1985-05-05T00:00:00Z") });
+      const r = await decidir(1);
+      expect(r.status).toBe(409);
+      expect(r.body.mensagem).toMatch(/mudou depois do pedido/);
+      expect(naFicha()).toHaveLength(0);
+      expect(mockTransacao.rollback).toBe(1);
+    });
+    test("travas da ficha: com processo de cargo, nascimento só a Geral; o nome só a Geral", async () => {
+      base([campo(), campo({ CampoId: 11, NomeCampo: "nome", ValorAnterior: "Ana", ValorProposto: "Ana Maria" })], { EmProcessoDeCargo: 1, Nome: "Ana" });
+      expect((await decidir(1, LOCAL(), [{ campoId: 10, decisao: "APROVADO" }])).status).toBe(403);
+      expect((await decidir(1, LOCAL(), [{ campoId: 11, decisao: "APROVADO" }])).status).toBe(403);
+      expect(naFicha()).toHaveLength(0);
+      expect((await decidir(1, GERAL(), [{ campoId: 11, decisao: "APROVADO" }])).body.sucesso).toBe(true);
+      expect(rodou(/UPDATE MembroReferencia SET Nome = @v/)).toHaveLength(1);
+    });
+    test("campo fora do mapa ('constructor') ou data inválida: não aplica, não toca a ficha e não dá 500", async () => {
       base([campo({ NomeCampo: "constructor" }), campo({ CampoId: 11, ValorProposto: "2026-02-30" })]);
       const r = await decidir(1, LOCAL(), [{ campoId: 10, decisao: "APROVADO" }, { campoId: 11, decisao: "APROVADO" }]);
-      expect(r.body.sucesso).toBe(true);
-      expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
-      const gravados = rodou(/UPDATE SolicitacoesEdicaoCampos SET Status/).map((c) => c.inputs.status);
-      expect(gravados).toEqual(["REJEITADO", "REJEITADO"]);
+      expect(r.status).toBe(200);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.erros).toHaveLength(2);
+      expect(naFicha()).toHaveLength(0);
+      expect(rodou(/UPDATE SolicitacoesEdicaoCampos SET Status/)).toHaveLength(0);
     });
-    test("decisões malformadas (id fora do formato, decisão desconhecida, não-objeto) são puladas; lista gigante é recusada", async () => {
-      // O banco devolveria o campo para QUALQUER id (inclusive nulo): só a conferência da rota impede a decisão com id fora do formato.
-      quando(/FROM SolicitacoesEdicaoCampos WHERE CampoId = @id AND SolicitacaoId = @sol/, [campo()]);
-      base([campo()], 1);                                                        // nada foi decidido: o campo segue pendente
+    test("decisões malformadas (id fora do formato, decisão desconhecida, não-objeto) não gravam nada; lista gigante é recusada", async () => {
+      base([campo()]);
       const r = await decidir(1, LOCAL(), [{ campoId: "0xA", decisao: "APROVADO" }, { campoId: 10, decisao: "TALVEZ" }, null, "x", { campoId: 10 }]);
-      expect(r.body.sucesso).toBe(true);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.erros).toHaveLength(5);
       expect(escritas()).toHaveLength(0);
       const muitas = Array.from({ length: 51 }, () => ({ campoId: 10, decisao: "APROVADO" }));
       expect((await decidir(1, LOCAL(), muitas)).status).toBe(400);

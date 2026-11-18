@@ -227,6 +227,14 @@ case "$1" in
     migrar 177 2
     base salvar cenario-177
     ;;
+  preparar-178)
+    # FASE 10, v10.1b passo 5 (18/11/2026): a partir da base "cenario-177", aplica a 178 duas vezes (a edição campo a campo e a caixa de sugestões: o motivo da
+    # recusa e os índices da caixa e do histórico; prova a idempotência); salva "cenario-178" (e2e-91 monta o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-177
+    migrar 178 2
+    base salvar cenario-178
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

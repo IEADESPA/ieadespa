@@ -140,6 +140,11 @@ bash rodar.sh preparar-177
 BASE=cenario-177 bash rodar.sh roteiro e2e-90-pre-cadastro.js
 # (v10.1b) o CPF (único, mascarado, inteiro só para a Geral com a leitura registrada), a filiação, a escolaridade e a matrícula gerada, com corridas de vários processos
 BASE=cenario-177 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
+# (v10.1b passo 5, migração 178) a edição da ficha campo a campo (a trilha, o CPF mascarado, as travas por papel), o membro muda o contato e o vazio e sugere o
+# resto, a caixa de sugestões por nível (a local aplica, a área acompanha, a Geral aplica tudo), recusar com motivo, o histórico da ficha e as corridas
+bash rodar.sh preparar-178
+BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
+E2E_RCSI=1 BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
 # 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
 BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 # FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco

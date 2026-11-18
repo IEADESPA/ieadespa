@@ -119,7 +119,7 @@ async function gravarComBairroTravado(pool, prep, fazer) {
         prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
       }
     }
-    const r = await fazer(rq);
+    const r = await fazer(rq, t);   // v10.1b passo 5: a transação vai junto (a trilha gravada dentro dela)
     if (r && r.desfazer) await t.rollback(); else await t.commit();
     return r;
   } catch (e) {

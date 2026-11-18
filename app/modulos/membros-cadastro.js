@@ -16,7 +16,7 @@ const MC_CAMPO_DA_PENDENCIA = { FALTA_NOME: "nome", FALTA_CPF: "cpf", FALTA_EMAI
 
 function mcCadVazio() {
   return { etapa: 0, d: { nome: "", dataNascimento: "", sexo: "", estadoCivil: "", cpf: "", escolaridade: "", nomeMae: "", nomePai: "", telefone: "", email: "",
-    congregacaoId: "", situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "", departamentoId: "" }, conf: null, confSeq: 0, salvando: false, feito: null, erro: "" };
+    congregacaoId: "", situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "", departamentoId: "" }, end: {}, conf: null, confSeq: 0, salvando: false, feito: null, erro: "" };
 }
 let mcCad = mcCadVazio();
 let mcCongs = null;   // as congregações que quem está vendo pode escolher: [{ congregacaoId, nome }]
@@ -64,6 +64,7 @@ async function mcAbrirCadastro() {
   await mcGarantirCongregacoes();
   if (!mcCad.d.congregacaoId && (mcCongs || []).length === 1) mcCad.d.congregacaoId = String(mcCongs[0].congregacaoId);
   if (typeof carregarOpcoesFormPessoa === "function" && !(window._departamentosCache || []).length) carregarOpcoesFormPessoa();
+  await mbGarantirBairros();   // o endereço em linhas, na etapa do contato (as sobras do passo 7a)
   mcDesenharCadastro();
 }
 function mcCampoTexto(campo, rotulo, tipo, extra) {
@@ -100,7 +101,7 @@ function mcFormEtapa() {
   if (etapa === "contato") {
     return `<div class="mc-grade">${mcCampoTexto("telefone", "Celular", "tel", "inputmode=\"tel\" maxlength=\"20\" placeholder=\"(91) 90000-0000\"")}
       ${mcCampoTexto("email", "E-mail (é por onde a pessoa cria a senha)", "email", "maxlength=\"150\"")}</div>
-      <p class="mb-dica">O endereço entra depois, na ficha (parte "Cadastro completo"), com o bairro da lista.</p>`;
+      <div class="mc-campo"><span class="mc-rotulo">Endereço</span>${mbEnderecoCamposHtml("mcEnd", mcCad.end)}</div>`;
   }
   if (etapa === "igreja") {
     const deps = (window._departamentosCache || []).filter((x) => x.ativo !== false);

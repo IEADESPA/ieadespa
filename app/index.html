@@ -255,24 +255,30 @@
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaPessoas" data-on-click="mostrarAbaSecretaria" data-args-click='["pessoas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Pessoas</span></button>
             <div class="submenu-aba" id="submenuPessoas">
-              <!-- FASE 10, passo 7a: o painel executivo e a lista nova (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para a planilha -->
+              <!-- FASE 10 (conformidade, 18/11/2026): o menu do módulo Membros do desenho aprovado (rodadas 9 e 10, M9_GRUPOS): Painéis; Membros; Movimentações;
+                   Cuidados com o cadastro. O que ainda não foi construído abre "em construção". As funções antigas que o desenho não tem ficam fora do menu
+                   (a classe mb-fora-do-menu): o código delas continua, mas a tela antiga não aparece no lugar da aprovada. -->
+              <p class="mb-menu-grupo">Painéis</p>
               <button class="btn-subaba ativo" id="btnSubPessoasVisao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'><span class="icone" data-icone="grafico" aria-hidden="true"></span><span class="rotulo">Painel executivo</span></button>
+              <p class="mb-menu-grupo">Membros</p>
               <button class="btn-subaba" id="btnSubPessoasLista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Pessoas</span></button>
-              <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone" data-icone="mais" aria-hidden="true"></span><span class="rotulo">Cadastrar Pessoa</span></button>
-              <!-- passo 7a, incremento 2: a fila de cadastros e o pré-cadastro rápido (modulos/membros-cadastro.js) -->
-              <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone" data-icone="bandeja" aria-hidden="true"></span><span class="rotulo">Fila de cadastros</span></button>
-              <button class="btn-subaba" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Pré-cadastro rápido</span></button>
-              <!-- passo 7a, incremento 3: as mudanças de congregação (modulos/membros-movimento.js) -->
-              <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone" data-icone="transferir" aria-hidden="true"></span><span class="rotulo">Mudanças de congregação</span></button>
-              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Sugestões dos membros</span></button>
-              <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone" data-icone="planilha" aria-hidden="true"></span><span class="rotulo">Importar e exportar</span></button>
-              <!-- passo 6: juntar fichas repetidas (modulos/membros-juntar.js) -->
+              <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone" data-icone="doc" aria-hidden="true"></span><span class="rotulo">Fila de cadastros</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone" data-icone="mais" aria-hidden="true"></span><span class="rotulo">Cadastrar</span></button>
+              <p class="mb-menu-grupo">Movimentações</p>
+              <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone" data-icone="seta" aria-hidden="true"></span><span class="rotulo">Transferências</span></button>
+              <button class="btn-subaba" id="btnSubPessoasDesligamentos" data-on-click="mostrarSubAbaPessoas" data-args-click='["desligamentos"]'><span class="icone" data-icone="balanca" aria-hidden="true"></span><span class="rotulo">Desligamentos</span></button>
+              <p class="mb-menu-grupo">Cuidados com o cadastro</p>
               <button class="btn-subaba" id="btnSubPessoasRepetidas" data-on-click="mostrarSubAbaPessoas" data-args-click='["repetidas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Fichas repetidas</span></button>
-              <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Credenciais</span></button>
-              <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone" data-icone="broto" aria-hidden="true"></span><span class="rotulo">Discipulado</span></button>
+              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Sugestões de alteração</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCarteirinhas" data-on-click="mostrarSubAbaPessoas" data-args-click='["carteirinhas"]'><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Carteirinhas</span></button>
+              <!-- fora do menu aprovado (o código continua; a tela antiga não aparece no lugar da nova) -->
+              <button class="btn-subaba mb-fora-do-menu" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Pré-cadastro rápido</span></button>
+              <button class="btn-subaba mb-fora-do-menu" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone" data-icone="planilha" aria-hidden="true"></span><span class="rotulo">Importar e exportar</span></button>
+              <button class="btn-subaba mb-fora-do-menu" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]'><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Credenciais</span></button>
+              <button class="btn-subaba mb-fora-do-menu" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone" data-icone="broto" aria-hidden="true"></span><span class="rotulo">Discipulado</span></button>
             </div>
-            <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Cartas</span></button>
-            <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone" data-icone="queda" aria-hidden="true"></span><span class="rotulo">Perda de Membresia</span></button>
+            <button class="btn-aba mb-fora-do-menu" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Cartas</span></button>
+            <button class="btn-aba mb-fora-do-menu" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone" data-icone="queda" aria-hidden="true"></span><span class="rotulo">Perda de Membresia</span></button>
             <!-- v7.11 — Cuidado pastoral: fila com responsável, prazo e escada; pedidos de oração com moderação e sinal de risco; boletim e painel. Permissão própria "cuidado_pastoral". -->
             <button class="btn-aba" id="btnAbaCuidadopastoral" data-on-click="mostrarAbaSecretaria" data-args-click='["cuidadopastoral"]'><span class="icone" data-icone="coracao" aria-hidden="true"></span><span class="rotulo">Cuidado Pastoral</span></button>
           </div>
@@ -2215,18 +2221,12 @@
         </div>
 
         <!-- FASE 10, passo 7a — no celular, as partes do módulo em PÍLULAS no alto (nada preso embaixo); no notebook, o menu do módulo à esquerda -->
-        <nav class="mb-pilulas" id="mbPilulasModulo" aria-label="Partes do módulo Pessoas">
+        <!-- as pílulas do celular do desenho aprovado (rodada 9, M9_ABAS_MOD): Painel, Pessoas, Fila e Transferências; o resto abre pelo menu (☰) -->
+        <nav class="mb-pilulas" id="mbPilulasModulo" aria-label="Partes do módulo Membros">
           <button type="button" class="mb-pilula ativa" data-sub="visao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'>Painel</button>
           <button type="button" class="mb-pilula" data-sub="lista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'>Pessoas</button>
-          <button type="button" class="mb-pilula" data-sub="cadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'>Cadastrar</button>
-          <button type="button" class="mb-pilula" data-sub="fila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'>Fila</button>
-          <button type="button" class="mb-pilula" data-sub="precadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'>Pré-cadastro</button>
+          <button type="button" class="mb-pilula" data-sub="fila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'>Fila <span class="mb-pilula-num" id="mbPilulaFilaNum" hidden></span></button>
           <button type="button" class="mb-pilula" data-sub="transferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'>Transferências</button>
-          <button type="button" class="mb-pilula" data-sub="aprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'>Sugestões</button>
-          <button type="button" class="mb-pilula" data-sub="discipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'>Discipulado</button>
-          <button type="button" class="mb-pilula" data-sub="repetidas" data-on-click="mostrarSubAbaPessoas" data-args-click='["repetidas"]'>Repetidas</button>
-          <button type="button" class="mb-pilula" data-sub="credenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;">Credenciais</button>
-          <button type="button" class="mb-pilula" data-sub="buscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'>Planilha</button>
         </nav>
 
         <!-- FASE 10, passo 7a — o PAINEL EXECUTIVO de Membros (rodadas 9 e 10): números, o gráfico que cada um ajusta, entradas e saídas, como está o cadastro
@@ -2256,6 +2256,8 @@
         <div id="subPessoasPreCadastro" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
         <!-- FASE 10, passo 7a, incremento 3 — as MUDANÇAS DE CONGREGAÇÃO (rodada 8: chegando, saindo, concluídos; acompanhar o pedido) — modulos/membros-movimento.js -->
         <div id="subPessoasTransferencias" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+        <!-- o que o desenho aprovado tem e ainda não foi construído (Desligamentos, Carteirinhas, Fichas repetidas por enquanto): "em construção", nunca a tela antiga -->
+        <div id="subPessoasEmConstrucao" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
         <!-- FASE 10, passo 6 — JUNTAR FICHAS REPETIDAS (rodada 8, opção 3: só o que é diferente) — modulos/membros-juntar.js -->
         <div id="subPessoasRepetidas" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
 
@@ -2312,7 +2314,7 @@
         </div>
 
         <!-- SUB-ABA: FILA DE APROVAÇÕES (v1.11 — pedidos de autoedição sujeitos a aprovação) -->
-        <div id="subPessoasAprovacoes" class="sub-aba-secretaria" style="display:none;">
+        <div id="subPessoasAprovacoes" class="sub-aba-secretaria mb-tela" style="display:none;">
           <!-- FASE 10, passo 7a, incremento 3 — a CAIXA DE SUGESTÕES nova (rodada 10, o 4º passo do fluxo): modulos/membros-movimento.js -->
           <div id="mtSugestoes" class="mb-tela"></div>
           <div id="resultadoFilaAprovacoes" style="display:none;"></div>

@@ -1565,7 +1565,7 @@ function aplicarPermissoesNoMenu() {
 // não tem de onde tirar pendências (o Início não inventa número).
 const MODULOS = {
   financeiro: { titulo: "Financeiro", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financeiro", abas: ["financeiro"] },
-  membresia: { titulo: "Pessoas & Membresia", icone: "pessoas", resumo: "Cadastro, cartas, cuidado e frequência", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
+  membresia: { titulo: "Membros", icone: "pessoas", resumo: "Cadastro, fichas, movimentações e cuidado", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
   territorio: { titulo: "Estrutura & Territórios", icone: "mapa", resumo: "Congregações, áreas, regiões e órgãos", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
   orgaosCentrais: { titulo: "Órgãos Centrais", icone: "banco", resumo: "Reuniões e atas dos órgãos gerais", abaEntrada: "reunioes", abas: ["reunioes"] },
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "bussola", resumo: "Reuniões dos órgãos das áreas", abaEntrada: "reunioes", abas: ["reunioes"] },

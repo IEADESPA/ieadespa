@@ -48,12 +48,18 @@ const MB_POR_PAGINA = 20;
 const MB_FALTAS = { cpf: "Sem CPF", nascimento: "Sem nascimento", contato: "Sem e-mail nem celular", departamento: "Sem departamento", sexo: "Sem sexo" };
 const MB_ROL = { 1: "No rol", saidas: "Quem saiu", todos: "Todos" };
 // as partes da ficha (o submenu da direita): as novas e as de antes trazidas para dentro (a aba antiga do perfil que cada uma usa)
+// o menu "Nesta ficha" do desenho final da rodada 10 (M9_SUB), com os ícones de traço; o que o perfil antigo tinha entra DENTRO dessas seções
+// (conformidade, 18/11/2026): casamentos e apresentação em Família; marcos e caminhada em Vida espiritual; a licença em Cargos e funções; a foto em Dados pessoais
 const MB_PARTES_FICHA = [
-  ["resumo", "casa", "Resumo"], ["dados", "pessoa", "Dados pessoais"], ["familia", "pessoas", "Família"], ["casamentos", "coracao", "Casamentos"],
-  ["apresentacoes", "crianca", "Apresentação de filhos"], ["historico", "pomba", "Marcos da vida espiritual"], ["caminhada", "broto", "Caminhada e formação"],
-  ["foto", "cartao", "Foto"], ["licenca", "urna", "Licença para candidatura"], ["cadastro", "prancheta", "Cadastro completo"], ["transferencia", "transferir", "Transferência"], ["alteracoes", "relogio", "Alterações"]
+  ["resumo", "casa", "Resumo"], ["dados", "pessoa", "Dados pessoais"], ["familia", "pessoas", "Família"], ["espiritual", "coracao", "Vida espiritual"],
+  ["cargos", "escudo", "Cargos e funções"], ["ministerios", "livro", "Ministérios e EBD"], ["assembleia", "balanca", "Assembleia e disciplina"],
+  ["documentos", "doc", "Documentos"], ["alteracoes", "relogio", "Alterações"]
 ];
-const MB_PARTE_ANTIGA = { familia: "vinculos", casamentos: "casamentos", apresentacoes: "apresentacoes", historico: "historico", caminhada: "caminhada", foto: "foto", licenca: "licenca", cadastro: "editar" };
+// a parte que abre pelo botão do cabeçalho (não está no menu)
+const MB_PARTES_EXTRAS = { transferencia: ["transferir", "Transferência"] };
+const mbParteValida = (parte) => MB_PARTES_FICHA.some((x) => x[0] === parte) || mbTem(MB_PARTES_EXTRAS, String(parte));
+// as abas do perfil antigo que entram em cada seção (abaixo do conteúdo novo dela)
+const MB_PARTE_ANTIGA = { dados: ["foto"], familia: ["vinculos", "casamentos", "apresentacoes"], espiritual: ["historico", "caminhada"], cargos: ["licenca"] };
 const MB_ABAS_ANTIGAS = ["Editar", "Historico", "Caminhada", "Foto", "Casamentos", "Apresentacoes", "Licenca", "Vinculos"];
 
 const mbTem = (obj, chave) => Object.prototype.hasOwnProperty.call(obj, chave);
@@ -530,7 +536,7 @@ function mbDesenharPaginas() {
 function mbAbrirFicha(membroId, parte) {
   const id = Number(membroId);
   if (!Number.isInteger(id) || id <= 0) return;
-  mbFicha = Object.assign(mbFichaVazia(), { membroId: id, parte: parte && MB_PARTES_FICHA.some((p) => p[0] === parte) ? parte : "resumo" });
+  mbFicha = Object.assign(mbFichaVazia(), { membroId: id, parte: parte && mbParteValida(parte) ? parte : "resumo" });
   // as partes antigas do perfil leem a pessoa destas variáveis (as mesmas que o perfil antigo usava)
   window._membroPerfilAtual = id;
   window._membroFotoAtual = id;
@@ -585,7 +591,7 @@ async function mbRecarregarPessoa() {
   document.getElementById("tituloModulo").textContent = `Pessoas — Ficha de ${pessoa.nome}`;
   mbDesenharCabeca();
   // passo 6: as pendências de cadastro da ficha (repetida, número a conferir, arrolamento) e "marcar como repetida" (modulos/membros-juntar.js)
-  if (typeof mjPendenciasDaFicha === "function") mjPendenciasDaFicha(id);
+  if (typeof mjPendenciasDaFicha === "function" && typeof MJ_TELA_LIBERADA !== "undefined" && MJ_TELA_LIBERADA) mjPendenciasDaFicha(id);
 }
 function mbDesenharCabeca() {
   const p = mbFicha.pessoa;
@@ -615,11 +621,12 @@ function mbDesenharCabeca() {
       <div class="mb-ficha-foto">${foto}</div>
       <div class="mb-ficha-quem">
         <h3 class="mb-ficha-nome">${escaparHtmlEbd(p.nome)}</h3>
-        <p class="mb-sub">Matrícula ${p.membroId} · ${escaparHtmlEbd(p.congregacao ? `Congregação ${p.congregacao}` : "sem congregação")}${p.extensao ? ` · ${escaparHtmlEbd(p.extensao)}` : ""}</p>
+        <p class="mb-sub">Matrícula ${p.membroId} · ${escaparHtmlEbd(p.congregacao ? `Congregação ${p.congregacao}${p.areaNome ? ` (${p.areaNome})` : ""}` : "sem congregação")}${p.extensao ? ` · ${escaparHtmlEbd(p.extensao)}` : ""}</p>
         <div class="mb-chips">${chips}</div>
         <div class="mb-fatos">${fato("Idade", idade !== null ? `${idade} anos` : "")}${fato("Membro desde", mbDataBr(p.dataAdmissao))}${fato("Convertido em", anoConversao ? anoConversao[1] : "")}${fato("Celular", mbTelefoneMascarado(p.telefone))}${saiu ? fato("Saída", [mbDataBr(p.dataSaida), motivoSaida ? mbRotuloSaida(p.motivoSaida) : ""].filter(Boolean).join(" · ")) : ""}</div>
       </div>
       <div class="mb-ficha-botoes">${saiu ? "" : `<button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("transferencia")}">${mbIc("transferir")} Transferência</button>`}
+        <button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("documentos")}">${mbIc("cartao")} Carteirinha</button>
         <button type="button" class="btn-confirmar mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">${mbIc("lapis")} Editar</button></div>
     </div>`;
 }
@@ -628,32 +635,43 @@ function mbRotuloSaida(motivo) { return mbTem(MB_ROTULO_SAIDA, String(motivo)) ?
 function mbDesenharFichaMenu() {
   const menu = document.getElementById("mbFichaMenu");
   if (!menu) return;
-  const p = mbFicha.pessoa;
-  const podeDesligar = p && !mbTem(MB_STATUS_SAIU, String(p.status));
   menu.innerHTML = `<p class="mb-ficha-menu-rotulo">Nesta ficha</p>
     ${MB_PARTES_FICHA.map(([chave, icone, rotulo]) => `<button type="button" class="mb-ficha-menu-item${chave === mbFicha.parte ? " ativo" : ""}" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr(chave)}"${chave === mbFicha.parte ? " aria-current=\"page\"" : ""}><span aria-hidden="true">${mbIc(icone, 18)}</span>${escaparHtmlEbd(rotulo)}</button>`).join("")}
-    ${podeDesligar ? "<button type=\"button\" class=\"mb-ficha-menu-item mb-perigo\" data-on-click=\"mbDesligarAcao\"><span aria-hidden=\"true\">" + mbIc("saida", 18) + "</span>Desligar do rol</button>" : ""}
-    <p class="mb-dica mb-ficha-menu-nota">Parte nova entra aqui embaixo: o menu cresce para baixo, nunca para o lado.</p>`;
+`;
 }
 function mbMostrarParte() {
   mbDesenharFichaMenu();
   const corpo = document.getElementById("mbFichaCorpo");
   const antigas = document.getElementById("mbFichaAntigas");
   const parte = mbFicha.parte;
-  if (mbTem(MB_PARTE_ANTIGA, parte)) {
-    corpo.innerHTML = "";
-    antigas.style.display = "block";
-    const item = MB_PARTES_FICHA.find((p) => p[0] === parte);
-    const titulo = document.getElementById("mbFichaAntigasTitulo");
-    if (titulo && item) titulo.textContent = `${item[1]} ${item[2]}`;
-    mostrarAbaPerfil(MB_PARTE_ANTIGA[parte]);
-    return;
-  }
-  antigas.style.display = "none";
+  mbMostrarAntigas(mbTem(MB_PARTE_ANTIGA, parte) ? MB_PARTE_ANTIGA[parte] : []);
   if (parte === "dados") { mbMostrarDados(); return; }
   if (parte === "alteracoes") { mbMostrarAlteracoes(); return; }
   if (parte === "transferencia" && typeof mtMostrarPedidoNaFicha === "function") { mtMostrarPedidoNaFicha(); return; }
+  if (["familia", "espiritual", "cargos", "ministerios", "assembleia", "documentos"].includes(parte)) { mbMostrarSecao(parte); return; }
   mbMostrarResumo();
+}
+// as abas do perfil antigo que entram na seção (uma embaixo da outra), com o carregamento de cada uma (o mesmo de mostrarAbaPerfil)
+function mbMostrarAntigas(lista) {
+  const antigas = document.getElementById("mbFichaAntigas");
+  if (!antigas) return;
+  antigas.style.display = lista.length ? "block" : "none";
+  const titulo = document.getElementById("mbFichaAntigasTitulo");
+  if (titulo) titulo.textContent = "";
+  const membroId = window._membroPerfilAtual;
+  (typeof ABAS_PERFIL !== "undefined" ? ABAS_PERFIL : []).forEach((a) => {
+    const el = document.getElementById(`tabPerfil${capitalize(a)}`);
+    if (el) el.style.display = lista.includes(a) ? "block" : "none";
+  });
+  for (const a of lista) {
+    if (a === "historico") { carregarHistoricoMembro(membroId); discPreencherTiposMarco(); }
+    if (a === "caminhada") { discCarregarCaminhadaPerfil(membroId); if (typeof edcCarregarPessoa === "function") edcCarregarPessoa(membroId); if (typeof semCarregarPessoa === "function") semCarregarPessoa(membroId); }
+    if (a === "foto") carregarAbaFoto(membroId);
+    if (a === "casamentos") carregarCasamentos(membroId);
+    if (a === "apresentacoes") carregarApresentacoesCrianca(membroId);
+    if (a === "licenca") carregarLicencasCandidatura(membroId);
+    if (a === "vinculos") carregarAbaVinculos(membroId);
+  }
 }
 
 // ---- Resumo: a linha do tempo (todos veem), a vida espiritual e os dados pessoais ----
@@ -718,6 +736,126 @@ function mbResumoHtml() {
     </div>
   </div>`;
 }
+// ---- as seções do menu "Nesta ficha" (desenho final da rodada 10): o conteúdo novo de cada uma, lido da linha do tempo inteira da pessoa (uma ida só, guardada
+// enquanto a ficha está aberta); o que o perfil antigo tinha aparece embaixo, na mesma seção (mbMostrarAntigas). O que o desenho aprovou e ainda não foi
+// construído aparece como "em construção", nunca com uma tela antiga no lugar.
+function mbEmConstrucaoHtml(titulo, texto) {
+  return `<section class="mb-cartao mb-em-construcao"><header class="mb-cartao-cabeca"><h4>${mbIc("obra")} ${escaparHtmlEbd(titulo)}</h4><span class="mb-chip mb-chip-neutro">em construção</span></header>
+    <p class="mb-dica">${escaparHtmlEbd(texto)}</p></section>`;
+}
+function mbEventosHtml(eventos, vazio) {
+  const quando = (d, aproximada) => (aproximada ? `por volta de ${escaparHtmlEbd(String(d || "").slice(0, 4))}` : escaparHtmlEbd(mbDataBr(d)));
+  if (!eventos.length) return `<p class="mb-dica">${escaparHtmlEbd(vazio)}</p>`;
+  return `<ol class="mb-tempo-lista">${eventos.map((e) => `<li class="mb-tempo-item mb-tempo-${escaparHtmlEbd(String(e.categoria || "").toLowerCase())}">
+      <span class="mb-tempo-icone" aria-hidden="true">${MB_ICONE_CATEGORIA[e.categoria] ? mbIc(MB_ICONE_CATEGORIA[e.categoria], 16) : "•"}</span>
+      <span class="mb-tempo-texto"><strong>${escaparHtmlEbd(e.titulo)}</strong> <span class="mb-tempo-data">${quando(e.data, e.aproximada)}</span>${e.detalhe ? `<span class="mb-tempo-detalhe">${escaparHtmlEbd(e.detalhe)}</span>` : ""}</span></li>`).join("")}</ol>`;
+}
+async function mbMostrarSecao(parte) {
+  const corpo = document.getElementById("mbFichaCorpo");
+  const id = mbFicha.membroId;
+  if (!corpo || !id) return;
+  if (parte === "ministerios") {
+    corpo.innerHTML = mbEmConstrucaoHtml("Ministérios e EBD", "Esta parte da ficha está no desenho aprovado e ainda não foi construída: aqui vão aparecer o departamento, os ministérios e as secretarias em que a pessoa serve, as escalas e a turma da EBD.");
+    return;
+  }
+  if (!mbFicha.linhaToda) {
+    corpo.innerHTML = "<div class=\"mb-cartao\"><p class=\"subtitle\">Carregando…</p></div>";
+    try {
+      const res = await fetchProtegido(`${API_BASE}/pessoas/${encodeURIComponent(String(id))}/linha-do-tempo?pagina=1&porPagina=200`);
+      const data = await jsonDaTela(res, corpo);
+      if (mbFicha.membroId !== id) return;
+      if (!data) return;
+      mbFicha.linhaToda = data;
+    } catch (e) {
+      corpo.innerHTML = `<p class="subtitle aviso-recusa">${mbIc("alerta")} Não deu para ler a ficha agora.</p>`;
+      return;
+    }
+  }
+  if (!mbFicha.campos) await mbLerCampos(id);
+  if (mbFicha.membroId !== id || mbFicha.parte !== parte) return;
+  const l = mbFicha.linhaToda || {};
+  const eventos = Array.isArray(l.eventos) ? l.eventos : [];
+  const da = (...cats) => eventos.filter((e) => cats.includes(e.categoria));
+  const p = mbFicha.pessoa || {};
+  const cap = p.capacidade || {};
+  const linha = (rotulo, valor) => `<div class="mb-campo"><span class="mb-campo-rotulo">${escaparHtmlEbd(rotulo)}</span><span class="mb-campo-valor">${valor || "<em class=\"mb-vazio\">não informado</em>"}</span></div>`;
+  const campo = (chave) => ((mbFicha.campos && mbFicha.campos.campos) || []).find((c) => c.chave === chave) || null;
+  let html = "";
+  if (parte === "familia") {
+    html = `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("pessoas")} Família</h4><span class="mb-dica">casamentos, filhos e parentes ligados a esta ficha</span></header>
+      ${mbEventosHtml(da("FAMILIA"), "Nenhum casamento ou apresentação de filho registrado.")}</section>`;
+  } else if (parte === "espiritual") {
+    const ve = l.vidaEspiritual || {};
+    const quando = (d, aproximada) => (aproximada ? `por volta de ${escaparHtmlEbd(String(d || "").slice(0, 4))}` : escaparHtmlEbd(mbDataBr(d)));
+    const juntar = (...x) => x.filter(Boolean).join(" · ");
+    html = `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("coracao")} Vida espiritual</h4></header>
+      ${linha("Conversão", ve.conversao ? juntar(quando(ve.conversao.data, ve.conversao.aproximada), ve.conversao.detalhe ? escaparHtmlEbd(ve.conversao.detalhe) : "") : "")}
+      ${linha("Batismo nas águas", ve.batismoAguas ? juntar(quando(ve.batismoAguas.data, false), ve.batismoAguas.local ? escaparHtmlEbd(ve.batismoAguas.local) : "", ve.batismoAguas.emOutraIgreja ? `em outra igreja: ${escaparHtmlEbd(ve.batismoAguas.emOutraIgreja)}` : "") : "")}
+      ${linha("Batismo no Espírito Santo", ve.batismoEspiritoSanto ? juntar(quando(ve.batismoEspiritoSanto.data, ve.batismoEspiritoSanto.aproximada), ve.batismoEspiritoSanto.detalhe ? escaparHtmlEbd(ve.batismoEspiritoSanto.detalhe) : "") : "")}
+      ${mbEventosHtml(da("ESPIRITUAL"), "")}</section>`;
+  } else if (parte === "cargos") {
+    const desde = campo("cargoDesde");
+    html = `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("escudo")} Cargos e funções</h4></header>
+      ${linha("Cargo", p.funcao ? escaparHtmlEbd(p.funcao) : "")}${linha("No cargo desde", desde && desde.valor ? escaparHtmlEbd(mbDataBr(desde.valor)) : "")}
+      ${mbEventosHtml(da("MINISTERIO", "LICENCA"), "Nenhuma consagração, cargo ou função registrada.")}</section>`;
+  } else if (parte === "assembleia") {
+    const vota = cap.capacidadeAtiva ? "Sim" : "Não";
+    html = `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("urna")} Assembleia</h4></header>
+      ${linha("Vota na assembleia", escaparHtmlEbd(vota))}${linha("Categoria", cap.categoria ? escaparHtmlEbd(cap.categoria) : "")}
+      ${cap.emPeriodoIntegracao ? linha("Período de integração", `faltam ${mbFmt(cap.diasRestantesIntegracao)} dias`) : ""}${cap.motivo ? linha("Por quê", escaparHtmlEbd(cap.motivo)) : ""}</section>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("balanca")} Disciplina</h4><span class="mb-dica">só quem tem a permissão de disciplina vê os registros</span></header>
+      ${mbEventosHtml(da("DISCIPLINA"), "Nada que você possa ver nesta parte.")}</section>`;
+  } else if (parte === "documentos") {
+    html = `${mbEmConstrucaoHtml("Carteirinha", "A carteirinha física (com o editor do modelo) e a digital, com o QR que nunca vence, estão no desenho aprovado e ainda não foram construídas.")}
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("cartao")} Credencial</h4></header>${mbEventosHtml(da("CREDENCIAL"), "Nenhuma credencial emitida.")}</section>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("envelope")} Cartas</h4></header>${mbEventosHtml(da("CARTAS"), "Nenhuma carta registrada.")}</section>`;
+  }
+  corpo.innerHTML = `<div class="mb-secao">${html}</div>`;
+}
+// ---- o endereço em linhas, campo a campo (antes só pelo cadastro completo): rua, número, complemento, o bairro da lista (ou escrito), cidade, UF e CEP. O servidor
+// confere tudo e monta a linha única (shared/territorioDb.js, o mesmo do Meus Dados). A lista dos bairros vem uma vez por visita.
+let mbBairros = null;
+const MB_UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+async function mbGarantirBairros() {
+  if (mbBairros) return mbBairros;
+  try {
+    const res = await fetchProtegido(`${API_BASE}/pessoas?lista=bairros`);
+    const data = await res.json();
+    mbBairros = data && Array.isArray(data.bairros) ? data.bairros : [];
+  } catch (e) { mbBairros = []; }
+  return mbBairros;
+}
+function mbEnderecoCamposHtml(prefixo, partes) {
+  const d = partes || {};
+  const v = (x) => escaparHtmlEbd(x == null ? "" : String(x));
+  const bairroId = d.bairroId != null ? String(d.bairroId) : "";
+  const outro = !bairroId && !!d.bairroTexto;
+  const bairros = (mbBairros || []).map((b) => `<option value="${Number(b.bairroId)}"${String(b.bairroId) === bairroId ? " selected" : ""}>${escaparHtmlEbd(b.nome)} (${escaparHtmlEbd(b.cidade || "")}/${escaparHtmlEbd(b.uf || "")})</option>`).join("");
+  return `<span class="mb-endereco">
+    <label>Rua<input type="text" id="${prefixo}Logradouro" maxlength="200" value="${v(d.logradouro)}" /></label>
+    <label>Número<input type="text" id="${prefixo}Numero" maxlength="20" value="${v(d.numero)}" /></label>
+    <label>Complemento<input type="text" id="${prefixo}Complemento" maxlength="100" value="${v(d.complemento)}" /></label>
+    <label>Bairro<select id="${prefixo}Bairro"><option value="">— escolha o bairro —</option>${bairros}<option value="OUTRO"${outro ? " selected" : ""}>O bairro não está na lista</option></select></label>
+    <label>Bairro (se não está na lista)<input type="text" id="${prefixo}BairroTexto" maxlength="150" value="${v(d.bairroTexto)}" /></label>
+    <label>Cidade<input type="text" id="${prefixo}Cidade" maxlength="150" value="${v(d.cidade)}" /></label>
+    <label>UF<select id="${prefixo}Uf"><option value="">—</option>${MB_UFS.map((u) => `<option value="${u}"${u === d.uf ? " selected" : ""}>${u}</option>`).join("")}</select></label>
+    <label>CEP<input type="text" id="${prefixo}Cep" inputmode="numeric" maxlength="9" placeholder="00000-000" value="${v(d.cep)}" /></label>
+  </span>`;
+}
+function mbLerEnderecoCampos(prefixo) {
+  const v = (c) => { const el = document.getElementById(`${prefixo}${c}`); return el ? String(el.value || "").trim() : ""; };
+  const bairro = v("Bairro");
+  return { logradouro: v("Logradouro") || null, numero: v("Numero") || null, complemento: v("Complemento") || null,
+    bairroId: bairro && bairro !== "OUTRO" ? bairro : null, bairroTexto: !bairro || bairro === "OUTRO" ? (v("BairroTexto") || null) : null,
+    cidade: v("Cidade") || null, uf: v("Uf") || null, cep: v("Cep") || null };
+}
+function mbEnderecoHtml() {
+  const p = mbFicha.pessoa || {};
+  if (!mbBairros) mbGarantirBairros().then(() => { if (mbFicha.editando === "endereco") mbMostrarDados(); });
+  return mbEnderecoCamposHtml("mbEnd", { logradouro: p.enderecoLogradouro, numero: p.enderecoNumero, complemento: p.enderecoComplemento, bairroId: p.enderecoBairroId,
+    bairroTexto: p.enderecoBairroTexto, cidade: p.enderecoCidade, uf: p.enderecoUF, cep: p.enderecoCep });
+}
+function mbLerEndereco() { return mbLerEnderecoCampos("mbEnd"); }
 // o CPF: mascarado para todos; a Secretaria Geral pode "Mostrar" (o servidor registra cada leitura)
 function mbCpfHtml(mascarado) {
   if (mbFicha.cpfInteiro) return `<span class="mb-cpf">${escaparHtmlEbd(mbFicha.cpfInteiro)}</span> <span class="mb-dica">(a leitura ficou registrada)</span>`;
@@ -775,8 +913,14 @@ function mbDadosHtml() {
   const aviso = f.emProcessoDeCargo ? "<p class=\"mb-faixa-aviso\">Esta pessoa tem um processo de cargo em andamento: nascimento, admissão e estado civil só a Secretaria Geral muda até ele terminar.</p>" : "";
   return `${aviso}<div class="mb-dados-grade">${cartoes}</div>${mbQuemMudaHtml(f.quemMudaOQue)}`;
 }
+function mbTextoDoCampo(c, valor) {
+  if (valor === null || valor === undefined || valor === "") return "";
+  if (c.rotulosOpcoes && mbTem(c.rotulosOpcoes, String(valor))) return c.rotulosOpcoes[String(valor)];
+  if (c.tipo === "simnao") return String(valor) === "true" ? "Sim" : String(valor) === "false" ? "Não" : String(valor);
+  return mbTextoDoValor(c.chave, valor);
+}
 function mbLinhaCampoHtml(c) {
-  const texto = mbTextoDoValor(c.chave, c.valor);
+  const texto = mbTextoDoCampo(c, c.valor);
   const erro = mbFicha.erroCampo && mbFicha.erroCampo.chave === c.chave ? mbFicha.erroCampo : null;
   const erroHtml = erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(erro.mensagem)}${erro.matricula ? ` <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(erro.matricula)}">Abrir a ficha ${mbNum(erro.matricula)} ›</button>` : ""}</p>` : "";
   if (mbFicha.editando === c.chave) {
@@ -790,12 +934,19 @@ function mbLinhaCampoHtml(c) {
   // o motivo de não poder mudar fica embaixo do valor (a coluna da ação é estreita: só o "Mudar")
   const trava = c.pode ? "" : `<span class="mb-trava">${mbIc("cadeado", 14)} ${escaparHtmlEbd(c.motivo || "Você não muda este dado.")}</span>`;
   let acao = "";
-  if (c.pode && c.tipo === "endereco") acao = `<button type="button" class="btn-link" title="O endereço muda no cadastro completo" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("cadastro")}">Mudar ›</button>`;
-  else if (c.pode) acao = `<button type="button" class="btn-link" data-on-click="mbEditarCampoAcao" data-args-click="${argsAttr(c.chave)}">Mudar</button>`;
+  if (c.pode) acao = `<button type="button" class="btn-link" data-on-click="mbEditarCampoAcao" data-args-click="${argsAttr(c.chave)}">Mudar</button>`;
   return `<div class="mb-campo"><span class="mb-campo-rotulo">${escaparHtmlEbd(c.rotulo)}</span><span class="mb-campo-valor"><span>${valorHtml}</span>${trava}</span><span class="mb-campo-acao">${acao}</span>${erroHtml}</div>`;
 }
 function mbEntradaDoCampo(c) {
   const v = c.valor === null || c.valor === undefined ? "" : String(c.valor);
+  if (c.tipo === "endereco") return mbEnderecoHtml();
+  if (c.tipo === "simnao") return `<select id="mbCampoValor"><option value="">— não informado —</option><option value="true"${v === "true" ? " selected" : ""}>Sim</option><option value="false"${v === "false" ? " selected" : ""}>Não</option></select>`;
+  if (["situacao", "status", "cargo", "extensao"].includes(c.tipo)) {
+    const lista = (Array.isArray(c.opcoes) ? c.opcoes : []).map(String);
+    if (v && !lista.includes(v)) lista.unshift(v);   // o valor de agora fica na lista mesmo fora dela (ex.: desligado, de licença)
+    const vazio = c.tipo === "cargo" ? "— sem cargo —" : c.tipo === "extensao" ? "— só a congregação —" : "";
+    return `<select id="mbCampoValor">${vazio ? `<option value="">${escaparHtmlEbd(vazio)}</option>` : ""}${lista.map((o) => `<option value="${escaparHtmlEbd(o)}"${o === v ? " selected" : ""}>${escaparHtmlEbd(mbTextoDoCampo(c, o) || o)}</option>`).join("")}</select>`;
+  }
   if (c.tipo === "data") return `<input type="date" id="mbCampoValor" value="${escaparHtmlEbd(v)}" />`;
   if (c.tipo === "lista") {
     const opcoes = (Array.isArray(c.opcoes) ? c.opcoes : []).map((o) => `<option value="${escaparHtmlEbd(o)}"${String(o) === v ? " selected" : ""}>${escaparHtmlEbd(mbTextoDoValor(c.chave, o))}</option>`).join("");
@@ -834,8 +985,8 @@ async function mbSalvarCampoAcao(chave) {
   const c = campos.find((x) => x.chave === chave);
   const el = document.getElementById("mbCampoValor");
   const id = mbFicha.membroId;
-  if (!c || !el || !id) return;
-  const valor = String(el.value || "").trim();
+  if (!c || !id || (!el && c.tipo !== "endereco")) return;
+  const valor = c.tipo === "endereco" ? mbLerEndereco() : String(el.value || "").trim();
   let res = null, data = null;
   try {
     res = await fetchProtegido(`${API_BASE}/pessoas/${encodeURIComponent(String(id))}/ficha/campo`, {
@@ -848,6 +999,7 @@ async function mbSalvarCampoAcao(chave) {
   if (!data) { mostrarToast("Não deu para salvar agora. Confira a internet e tente de novo.", "erro"); return; }
   if (data.sucesso) {
     c.valor = data.valor === undefined ? valor : data.valor;
+    mbFicha.linhaToda = null;
     mbFicha.editando = null;
     mbFicha.erroCampo = null;
     mbFicha.alteracoes = null;
@@ -977,7 +1129,7 @@ function mbPaginaListaAcao(pagina) {
 }
 function mbAbrirFichaAcao(membroId) { mbAbrirFicha(membroId, "resumo"); }
 function mbFichaParteAcao(parte) {
-  if (!MB_PARTES_FICHA.some((p) => p[0] === parte)) return;
+  if (!mbParteValida(parte)) return;
   mbFicha.parte = parte;
   mbFicha.editando = null;
   mbFicha.erroCampo = null;

@@ -8,6 +8,8 @@
 // No celular, tudo em coluna e os botões no fim da tela, dentro do conteúdo (nada preso embaixo — a regra do sistema). Mesmo escopo global dos outros módulos
 // (vD.2); usa as ajudas de modulos/membros.js. Ações pelo registrarAcoes (CSP forte); tudo o que vem do servidor passa por escaparHtmlEbd/argsAttr.
 
+// a tela de juntar fichas espera a conferência do desenho (ordem do coordenador, 18/11/2026): até lá, o menu abre "em construção" e a ficha não mostra a faixa
+const MJ_TELA_LIBERADA = false;
 let mjEstado = { itens: [], juncoes: [], podeDesfazerDias: 30, aberto: null, motivo: "", escolhas: {}, verIguais: false, erro: "", seq: 0, a: "", b: "", enviando: false };
 const MJ_TIPO_PENDENCIA = { REPETIDA: "Pode ser a mesma pessoa de outra ficha", NUMERO: "Número da matrícula a conferir", ARROLAMENTO: "Arrolamento a completar" };
 

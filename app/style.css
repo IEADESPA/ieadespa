@@ -2182,6 +2182,29 @@ button.mt-quem { cursor: pointer; }
   .mb-tela .mt-motivo { width: 100%; font-size: 16px; }
 }
 
+/* FASE 10 — CONFORMIDADE DE MEMBROS COM O DESENHO APROVADO (18/11/2026, depois da reprovação na homologação):
+   - o menu do módulo com os grupos aprovados (Painéis, Membros, Movimentações, Cuidados com o cadastro) e sem as funções antigas que o desenho não tem;
+   - o conteúdo de Membros direto sobre o fundo, com os cartões dele (no desenho não há um cartão branco em volta da tela inteira);
+   - "em construção" no lugar do que o desenho aprovou e ainda não foi construído; o endereço em linhas na edição campo a campo. */
+.mb-fora-do-menu { display: none !important; }
+.sidebar .mb-menu-grupo { margin: 10px 0 2px -14px; padding: 0 8px; min-height: 30px; display: flex; align-items: center; font-size: 12.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--cor-menu-texto-suave, #B9CCF5); }
+.sidebar .mb-menu-grupo:first-child { margin-top: 0; }
+.sidebar:not(.recolhido) #btnAbaPessoas.ativo { display: none; }
+.sidebar:not(.recolhido) #btnAbaPessoas.ativo + .submenu-aba { margin-top: 6px; }
+.aba-secretaria > .sub-aba-secretaria.mb-tela:not(#subMeupainelPerfil):not(#subMeupainelMinhavida):not(#subMeupainelMeuperfil) {
+  background: transparent; border: 0; box-shadow: none; padding: 0; border-radius: 0;
+}
+
+.mb-pilula-num { display: inline-flex; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px; background: var(--cor-ouro); color: var(--cor-ouro-texto); font-size: 12px; font-weight: 800; align-items: center; justify-content: center; }
+.mb-secao { display: flex; flex-direction: column; gap: 12px; }
+.mb-em-construcao { border-style: dashed; }
+.mb-em-construcao p { margin: 0; }
+.mb-endereco { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 10px; width: 100%; }
+.mb-endereco label { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: var(--cor-texto-suave); margin: 0; }
+.mb-tela .mb-endereco input, .mb-tela .mb-endereco select { margin: 0; width: 100%; }
+@media (max-width: 640px) { .mb-tela .mb-endereco input, .mb-tela .mb-endereco select { font-size: 16px; } }
+
 /* FASE 10, v10.1b passo 6 — JUNTAR FICHAS REPETIDAS (rodada 8, tela 7, opção 3 "Só o que é diferente"): um cartão por campo diferente, o rótulo à esquerda e
    as duas opções para tocar (a escolhida com a borda de 2 px: marinho no claro, ouro no escuro, e o fundo azul-claro); os iguais só contados; a prévia do
    que vai junto, o que impede e, no fim, o aviso e os dois botões (no celular, em coluna e dentro da tela — nada preso embaixo). modulos/membros-juntar.js */

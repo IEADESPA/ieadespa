@@ -283,7 +283,14 @@ function moverFormPessoaPara(slotId) {
 // FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
 const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
   precadastro: "Pré-cadastro rápido", transferencias: "Mudanças de congregação", buscar: "Importar e exportar",
-  aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado", repetidas: "Fichas repetidas" };
+  aprovacoes: "Sugestões de alteração", credenciais: "Credenciais", discipulado: "Discipulado", repetidas: "Fichas repetidas",
+  desligamentos: "Desligamentos", carteirinhas: "Carteirinhas" };
+// (conformidade, 18/11/2026) o que o desenho aprovado tem e ainda não foi construído: "em construção", nunca a tela antiga no lugar
+const EM_CONSTRUCAO_PESSOAS = {
+  desligamentos: ["balanca", "Desligamentos", "O desligamento do rol (a pedido, por falecimento, por abandono e por exclusão), com o motivo e o que ele encerra, está no desenho aprovado e ainda não foi construído com a tela nova."],
+  carteirinhas: ["cartao", "Carteirinhas", "Os modelos da carteirinha física (papel e PVC) com o editor, a carteirinha digital e o QR que nunca vence estão no desenho aprovado e ainda não foram construídos."],
+  repetidas: ["pessoas", "Fichas repetidas", "Juntar as fichas repetidas (só o que é diferente; fica a matrícula mais antiga) está sendo construído e passa pela conferência antes de aparecer aqui."]
+};
 
 function mostrarSubAbaPessoas(sub) {
   // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
@@ -304,7 +311,11 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
   document.getElementById("subPessoasTransferencias").style.display = sub === "transferencias" ? "block" : "none";
   document.getElementById("btnSubPessoasTransferencias").classList.toggle("ativo", sub === "transferencias");
-  document.getElementById("subPessoasRepetidas").style.display = sub === "repetidas" ? "block" : "none";   // passo 6: juntar fichas
+  const emConstrucao = mbTem(EM_CONSTRUCAO_PESSOAS, sub) && !(sub === "repetidas" && typeof MJ_TELA_LIBERADA !== "undefined" && MJ_TELA_LIBERADA);
+  document.getElementById("subPessoasRepetidas").style.display = sub === "repetidas" && !emConstrucao ? "block" : "none";   // passo 6: juntar fichas
+  document.getElementById("subPessoasEmConstrucao").style.display = emConstrucao ? "block" : "none";
+  for (const k of ["Desligamentos", "Carteirinhas"]) document.getElementById(`btnSubPessoas${k}`).classList.toggle("ativo", sub === k.toLowerCase());
+  if (emConstrucao) { const [ic, tit, txt] = EM_CONSTRUCAO_PESSOAS[sub]; document.getElementById("subPessoasEmConstrucao").innerHTML = mbTopoHtml(tit, "Membros", "") + mbEmConstrucaoHtml(tit, txt).replace(mbIc("obra"), mbIc(ic)); }
   document.getElementById("btnSubPessoasRepetidas").classList.toggle("ativo", sub === "repetidas");
   document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
   document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
@@ -331,7 +342,7 @@ function mostrarSubAbaPessoas(sub) {
   if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
   if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
   if (sub === "transferencias" && typeof mtAbrirTransferencias === "function") mtAbrirTransferencias();
-  if (sub === "repetidas" && typeof mjAbrir === "function" && !(typeof mjEstado !== "undefined" && mjEstado.aberto)) mjAbrir();
+  if (sub === "repetidas" && !emConstrucao && typeof mjAbrir === "function" && !(typeof mjEstado !== "undefined" && mjEstado.aberto)) mjAbrir();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();

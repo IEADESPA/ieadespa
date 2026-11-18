@@ -138,6 +138,14 @@ const ARQUIVAR = new Set(["Presencas", "RespostasEnquete", "PublicoEnqueteCustom
 const LIGACAO_ARQUIVAR = new Set(["VinculosFamiliares"]);
 // Tabelas tratadas à parte pelo banco (antes do movimento geral): as pendências da dupla, os casos da Geral, a credencial, as sessões e as chaves de acesso.
 const ESPECIAIS = new Set(["FichasPendencias", "CasosCadastroGeral", "CredenciaisEclesiasticas", "SessoesAtivas"]);
+// Os pares de colunas da pessoa que não podem virar a MESMA pessoa (além dos CHECK "[A]<>[B]" que o banco já tem e que são lidos do catálogo): casada com
+// ela mesma, as duas partes de uma mediação, pai e mãe da mesma criança, quem denunciou e quem foi denunciado.
+const PARES_PROIBIDOS = {
+  Casamentos: [["MembroId", "MembroConjugeId"]],
+  MediacoesArbitragens: [["ParteAId", "ParteBId"]],
+  ApresentacoesCrianca: [["MembroIdMae", "MembroIdPai"]],
+  DenunciasOuvidoria: [["DenunciadoMembroId", "DenuncianteMembroId"]]
+};
 // Colunas de membro SEM chave estrangeira que também andam (as chaves de acesso do aparelho e os desafios da chave)
 const COLUNAS_SEM_FK = [{ t: "ChavesAcesso", c: "MembroId" }, { t: "DesafiosWebAuthn", c: "MembroId" }];
 
@@ -201,4 +209,4 @@ function previaParaTela(contagens) {
 const chaveDoNome = (nome) => String(nome || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 module.exports = { CAMPOS, COLUNAS_FICHA, ENDERECO_COLUNAS, ehCampo, textoDaColuna, valorDoCampo, iguais, quemFica, podeEscolher, valorParaTela, lerEscolhas,
-  DESCARTAR, ARQUIVAR, LIGACAO_ARQUIVAR, ESPECIAIS, COLUNAS_SEM_FK, politicaDoConflito, rotuloDaTabela, motivoDoBloqueio, previaParaTela, chaveDoNome, SAIDAS_DISCIPLINARES };
+  DESCARTAR, ARQUIVAR, LIGACAO_ARQUIVAR, ESPECIAIS, COLUNAS_SEM_FK, PARES_PROIBIDOS, politicaDoConflito, rotuloDaTabela, motivoDoBloqueio, previaParaTela, chaveDoNome, SAIDAS_DISCIPLINARES };

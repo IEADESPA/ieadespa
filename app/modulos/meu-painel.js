@@ -29,6 +29,7 @@ async function carregarPainelPessoal(matricula) {
       <p class="linha-perfil">${escaparHtmlEbd(data.membro.congregacao) || "sem congregação cadastrada"} · ${badgeStatusPessoa(data.membro.status)}</p>
     </div>`;
 
+  if (typeof guardarMembroCasca === "function") guardarMembroCasca(data.membro);   // FASE 10: a congregação da pessoa no Início, no Meu Perfil e no pé do menu
   if (typeof afmCarregarMinhaSituacao === "function") afmCarregarMinhaSituacao();   // v8.1 — faltas seguidas na CLI e a matrícula da AFM
 
   const orgaosContainer = document.getElementById("cartaoMeusOrgaos");

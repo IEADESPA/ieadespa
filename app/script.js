@@ -944,7 +944,8 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxCriarPin").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
   document.getElementById("telaPainel").classList.remove("tela-entrada");
-  document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
+  document.getElementById("nomeLogado").textContent = authNome || "";
+  if (typeof atualizarCartaoUsuarioCasca === "function") atualizarCartaoUsuarioCasca();   // FASE 10: o cartão da pessoa no pé do menu
   // FASE 10 — o Início: "Graça e paz, <primeiro nome>" (textContent: o nome nunca vira HTML)
   const saudacao = document.getElementById("inicioSaudacao");
   if (saudacao) saudacao.textContent = authNome ? `Graça e paz, ${String(authNome).trim().split(/\s+/)[0]}` : "Graça e paz!";
@@ -1558,31 +1559,33 @@ function aplicarPermissoesNoMenu() {
 // gente). Os dois abrem o mesmo conteúdo de sempre (#abaReunioes) — só muda
 // por onde se chega e qual lista de órgãos aparece (ver
 // montarSubmenuOrgaosCentrais/Regionais).
+// FASE 10 (conformidade): "icone" é o nome do ícone de traço (modulos/casca.js), não mais um emoji; "resumo" é a linha do cartão quando o módulo
+// não tem de onde tirar pendências (o Início não inventa número).
 const MODULOS = {
-  financeiro: { titulo: "Financeiro", icone: "💰", abaEntrada: "financeiro", abas: ["financeiro"] },
-  membresia: { titulo: "Pessoas & Membresia", icone: "👥", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
-  territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
-  orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
-  orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
-  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "afm", "enquetes", "arquivos", "identidade"] },
-  disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
-  departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
-  escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
-  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao", "checkininfantil"] },
-  assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
-  ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
-  conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
-  trilhas: { titulo: "Formação e Certificação", icone: "🎓", abaEntrada: "trilhas", abas: ["trilhas"] },
-  psc: { titulo: "Saúde Congregacional (PSC)", icone: "🩺", abaEntrada: "psc", abas: ["psc"] },
-  calendario: { titulo: "Calendário Oficial", icone: "📅", abaEntrada: "calendario", abas: ["calendario"] },
-  canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
-  crise: { titulo: "Crise e Segurança", icone: "🚨", abaEntrada: "crise", abas: ["crise"] },
-  eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
-  setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
-  entidades: { titulo: "Entidades Vinculadas", icone: "🏥", abaEntrada: "entidades", abas: ["entidades"] },
-  expansao: { titulo: "Expansão", icone: "⛺", abaEntrada: "expansao", abas: ["expansao"] },
-  conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
-  acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
+  financeiro: { titulo: "Financeiro", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financeiro", abas: ["financeiro"] },
+  membresia: { titulo: "Pessoas & Membresia", icone: "pessoas", resumo: "Cadastro, cartas, cuidado e frequência", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
+  territorio: { titulo: "Estrutura & Territórios", icone: "mapa", resumo: "Congregações, áreas, regiões e órgãos", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
+  orgaosCentrais: { titulo: "Órgãos Centrais", icone: "banco", resumo: "Reuniões e atas dos órgãos gerais", abaEntrada: "reunioes", abas: ["reunioes"] },
+  orgaosRegionais: { titulo: "Órgãos Regionais", icone: "bussola", resumo: "Reuniões dos órgãos das áreas", abaEntrada: "reunioes", abas: ["reunioes"] },
+  eclesiastica: { titulo: "Vida Eclesiástica", icone: "igreja", resumo: "Consagrações, AFM, votações e arquivos", abaEntrada: "consagracoes", abas: ["consagracoes", "afm", "enquetes", "arquivos", "identidade"] },
+  disciplina: { titulo: "Disciplina & Ética", icone: "balanca", resumo: "Processos, ouvidoria e mediação", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
+  departamentos: { titulo: "Departamentos e Relatórios", icone: "pasta", resumo: "Relatórios dos departamentos", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
+  escalas: { titulo: "Escalas de Serviço", icone: "relogio", resumo: "Equipes e escalas de serviço", abaEntrada: "escalas", abas: ["escalas"] },
+  habilitacao: { titulo: "Habilitação de Voluntários", icone: "escudo", resumo: "Voluntários, menores e proteção", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao", "checkininfantil"] },
+  assistenciasocial: { titulo: "Assistência Social", icone: "maos", resumo: "Atendimentos e profissionais", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
+  ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "livro", resumo: "Turmas, chamadas e revistas", abaEntrada: "ebd", abas: ["ebd"] },
+  conquistas: { titulo: "Conquistas e Gamificação", icone: "trofeu", resumo: "Conquistas e reconhecimentos", abaEntrada: "conquistas", abas: ["conquistas"] },
+  trilhas: { titulo: "Formação e Certificação", icone: "formatura", resumo: "Trilhas e certificados", abaEntrada: "trilhas", abas: ["trilhas"] },
+  psc: { titulo: "Saúde Congregacional (PSC)", icone: "estetoscopio", resumo: "Saúde das congregações", abaEntrada: "psc", abas: ["psc"] },
+  calendario: { titulo: "Calendário Oficial", icone: "calendario", resumo: "Agenda oficial e propostas", abaEntrada: "calendario", abas: ["calendario"] },
+  canais: { titulo: "Canais e Comunicação", icone: "megafone", resumo: "Canais oficiais e comunicados", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
+  crise: { titulo: "Crise e Segurança", icone: "alerta", resumo: "Regime de crise e imprensa", abaEntrada: "crise", abas: ["crise"] },
+  eventos: { titulo: "Eventos e Congressos", icone: "tenda", resumo: "Eventos, inscrições e caixa", abaEntrada: "eventos", abas: ["eventos"] },
+  setores: { titulo: "Setores Técnicos", icone: "maleta", resumo: "Setores técnicos e vistorias", abaEntrada: "setores", abas: ["setores", "vistoria"] },
+  entidades: { titulo: "Entidades Vinculadas", icone: "hospital", resumo: "Entidades vinculadas", abaEntrada: "entidades", abas: ["entidades"] },
+  expansao: { titulo: "Expansão", icone: "globo", resumo: "Frentes novas, missões e distritos", abaEntrada: "expansao", abas: ["expansao"] },
+  conformidade: { titulo: "Conformidade & Auditoria", icone: "prancheta", resumo: "Auditoria, proteção de dados e documentos", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
+  acesso: { titulo: "Administração de Acesso", icone: "cadeado", resumo: "Quem pode o quê no sistema", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
 let moduloAtual = null;
 
@@ -1595,6 +1598,8 @@ function podeAcessarModulo(chave) {
 }
 
 function montarGradeModulos() {
+  // FASE 10 (conformidade): os cartões aprovados (o ícone, o nome e as 2 pendências de cada módulo) — modulos/casca.js
+  if (typeof desenharCartoesModulosCasca === "function") { desenharCartoesModulosCasca(); return; }
   const grade = document.getElementById("gradeModulos");
   const chaves = Object.keys(MODULOS).filter(podeAcessarModulo);
   if (chaves.length === 0) {
@@ -1635,9 +1640,9 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "minhavida", "meuperfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "minhavida", "trabalho", "frequencia", "meuperfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Início", minhavida: "Minha vida na igreja", meuperfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
+  perfil: "Início", minhavida: "Minha vida na igreja", trabalho: "Meu trabalho", frequencia: "Minha frequência", meuperfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1689,6 +1694,7 @@ function mostrarSubAbaMeupainel(sub) {
   // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
   if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
   if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
+  if (sub === "trabalho" && typeof desenharMeuTrabalhoCasca === "function") desenharMeuTrabalhoCasca();
   if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código
 }
 
@@ -1709,6 +1715,8 @@ function fecharPrimeiroAcesso() {
 }
 
 async function carregarPainelInicial() {
+  // FASE 10 (conformidade): "Para você hoje" e as pendências de cada módulo, tiradas dos avisos e das tarefas que o sistema já calcula — modulos/casca.js
+  if (typeof carregarInicioCasca === "function") { await carregarInicioCasca(); return; }
   const cx = document.getElementById("cxPainelInicial");
   if (!authToken) { cx.style.display = "none"; return; }
   mostrarPrimeiroAcessoSeNecessario();
@@ -1922,6 +1930,7 @@ function formatarMoedaEbd(valor) {
 // api/shared/__tests__/frontCsp.test.js confere que cada nome usado está aqui e que nada sobra. Ação nova: escreva data-on-click="minhaAcao" no HTML
 // e acrescente minhaAcao abaixo (referência direta à função, nunca texto: o despachante não procura nada em window).
 registrarAcoes({
+  abrirPainelBusca,   // FASE 10 (conformidade): a lupa da barra do topo no celular
   usarChaveAcessoAcao, pedirCodigoFatorAcao, confirmarCodigoFatorAcao, cancelarSegundoFatorAcao, cadastrarChaveAcessoAcao, removerChaveAcessoAcao,
   abrirModalAnexos, abrirNotificacao,
   acaoMinhaTarefa, acessarPainel,

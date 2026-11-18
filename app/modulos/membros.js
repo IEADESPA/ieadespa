@@ -147,6 +147,7 @@ function mbMarcarPilulas(sub) {
 // troca de aba (mostrarAbaSecretaria): saindo de Pessoas, a ficha aberta não fica para trás (nem o menu recolhido por ela)
 function mbAbaMudou(aba) {
   if (aba !== "pessoas" && subAbaPessoasAtual === "ficha") mbSaiuDaFicha();
+  if (aba !== "meupainel" && typeof mvSubAbaMudou === "function") mvSubAbaMudou("");   // saindo do Meu Painel, o menu recolhido pela minha ficha volta
 }
 function mbSaiuDaFicha() {
   if (mbMenuRecolhidoPelaFicha) {

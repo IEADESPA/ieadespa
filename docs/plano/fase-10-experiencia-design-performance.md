@@ -573,6 +573,32 @@ o pago por causa do financeiro, que também está vindo para cá.
       avisos, busca, módulos, Meu Perfil, Minha vida, Meu trabalho, menu recolhido, gaveta) sem erro de script, sem violação de CSP, sem
       rolagem de lado e sem nada preso embaixo; as telas de Membros na casca nova, 92 telas, 0 ilegível. Os pares aprovado × antes × depois
       ficam no rascunho da sessão (`conformidade/pares` e `conformidade/pares-membros`).
+  - **Etapa 2 da casca: as letras e os efeitos** (pedida e aprovada por ele em 18/11/2026; ramo `v10-casca` `d0a6289` e `8c6e647`, casca
+    v64; na homologação, esperando ele escolher a fonte):
+    - **As letras servidas de dentro do sistema:** os arquivos ficam em `app/fontes` (woff2, com a licença SIL OFL 1.1 de cada família ao
+      lado); o Google Fonts saiu do `index.html` e da CSP (`font-src 'self'`), e um teste confere isso. A fonte padrão continua a de hoje
+      (Inter) até ele escolher.
+    - **As 3 opções** (todas com os números do mesmo tamanho, medido, e os acentos do português):
+      - **Atkinson Hyperlegible Next** (do Braille Institute): feita para quem enxerga pouco; o I maiúsculo, o l minúsculo e o 1 têm formas
+        diferentes, e o O e o 0 também. Ajuda os irmãos mais velhos e quem lê no celular ao sol.
+      - **Source Sans 3** (da Adobe): a clássica de sistema e de tabela; mais estreita, cabe mais coluna sem cortar (bom para o Financeiro);
+        sóbria e institucional.
+      - **Plus Jakarta Sans:** moderna e acolhedora, de cantos suaves; deixa o sistema com cara de novo sem perder a leitura.
+    - **Para ele escolher vendo o sistema de verdade:** na homologação, em Meu Perfil › Preferências (onde ficou o tamanho da letra, o antigo
+      Aa+), a linha **"Fonte (teste)"** com as 3 opções e a de hoje; a escolha fica no aparelho. Na produção a linha não aparece.
+    - **Os efeitos** (só CSS, custo de nuvem zero; entre 0,12 e 0,24 s; só deslocamento e transparência; nunca "transition: all"):
+      - o que se aperta **afunda um pouco** (botões, cartões, pílulas e itens do menu);
+      - o **painel do lado** (avisos), a **janela de confirmar** e os **avisos que somem sozinhos** entram suaves; a busca do Ctrl K abre sem
+        animação (é usada o dia todo);
+      - a **troca de tela desliza** (o conteúdo entra da direita); ao entrar num módulo, o menu ganha a cor do módulo num esmaecer próprio — o
+        "momento marcante"; navegador sem suporte troca direto;
+      - o cartão do módulo sobe 2 px ao passar o mouse, **só em aparelho com mouse**;
+      - com **"movimento reduzido"** ligado no aparelho, nada desliza nem cresce: só um esmaecer curto nos painéis.
+    - **Achado e corrigido junto:** com a Inter carregada de verdade, o título "Órgãos Locais (JAI/JEA/JUC/...)" estourava 3 px de lado no
+      celular; os títulos das telas antigas agora quebram a palavra comprida.
+    - **Provas:** jest do front 97/97 (o teste novo das letras); as telas da casca em cada uma das 4 fontes, notebook e celular, claro e escuro
+      (200 telas), sem erro; os efeitos provados no Edge com e sem movimento reduzido (o clique no cartão entra no módulo pela troca de tela,
+      o painel desliza só sem o movimento reduzido); a prova de todos os módulos, abas e subabas na homologação mesclada (294 telas, notebook claro e celular escuro): 0 ilegível, 0 estouro, 0 CSP; os erros de script são só os 5 de antes, da API de mentira (Imunidade, Discipulado, Educação continuada, Seminário, Tipos de entidade).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

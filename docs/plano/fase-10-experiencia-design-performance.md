@@ -867,6 +867,53 @@ de tela completo com a base nova, a varredura de texto e de celular sem nenhum a
       servidor, limite por matrícula e não por rede (o Wi-Fi da igreja não pode barrar gente), o banco subindo sozinho no dia da
       convocação e voltando depois — e o teste com 1.000 votantes de teste antes de qualquer assembleia real.
 - [ ] O nível do banco decidido com o custo na mão (o teto de R$ 650/mês continua).
+- [ ] **Autorizadas por ele em 18/11/2026 ("faça essas correções"), primeiro na homologação:** as correções **4** e **6** do
+      raio-x de velocidade ([`docs/pesquisa/raio-x-velocidade-2026.md`](../pesquisa/raio-x-velocidade-2026.md)).
+  - **4. O aplicativo baixa só o que usa:**
+    - medido em 18/11: na entrada vêm 46 arquivos, 3,6 MB (1 MB comprimido), com a biblioteca do Excel (929 KB) e os 23
+      módulos;
+    - num celular comum simulado: 5,7 s na primeira abertura e 3,2 s nas seguintes;
+    - a correção: a planilha só ao importar ou exportar, e cada módulo só quando a pessoa entra nele.
+  - **6. Juntar os pedidos de cada tela:** de 7 a 9 para 1 ou 2.
+  - Ordem: depois do passo 6 dos membros (juntar fichas) e das sobras do 7a, antes das carteirinhas.
+
+## Varredura de segurança e de defeitos do que já existe (plano de 18/11/2026)
+
+Pedido dele: as revisões novas não valem só para o código que vem; o sistema já feito tem de passar por elas. É um plano para
+quando houver espaço na cota ("hoje não vai dar certo"), alternando com a construção.
+
+O tamanho medido em 18/11: cerca de 127 mil linhas de JavaScript (88 mil no servidor, 40 mil nas telas) e 234 rotas.
+
+**As ferramentas:** foram instaladas em 18/11, com o OK dele, para todos os repositórios do notebook.
+
+- `claude-security`: varredura de segurança com cada achado conferido antes de ser relatado.
+- O agente `silent-failure-hunter` do `pr-review-toolkit`: os erros engolidos, que viram tela em branco ou travamento sem
+  aviso.
+- `/code-review`: a lógica.
+
+**Os lotes, do mais perigoso para o menos** (estimativa de horas de agente):
+
+| Lote | O que cobre | Tamanho | Conferir | Corrigir (hipótese) |
+| --- | --- | --- | --- | --- |
+| 1 | Entrada e acesso: login, PIN, chave do aparelho, sessões, escopo e permissões | ~8 mil | 2 a 3 h | 3 a 6 h |
+| 2 | O que funciona sem login: site, QR, inscrições, mural, webhooks | ~5 mil | 2 h | 2 a 4 h |
+| 3 | Dinheiro: tesouraria, lançamentos, recibos, campanhas | ~10 mil | 2 a 3 h | 3 a 6 h |
+| 4 | Dados pessoais (LGPD): ficha, CPF, menores, saúde, disciplina, cuidado | ~15 mil | 3 a 4 h | 4 a 8 h |
+| 5 | O resto do servidor, em 3 partes | ~60 mil | 6 a 9 h | 6 a 10 h |
+| 6 | As telas, em 2 partes: falhas silenciosas, travamentos e o código que ninguém usa mais | ~40 mil | 4 a 6 h | 6 a 10 h |
+
+**Como cada lote anda:**
+
+- As três ferramentas passam pelo código.
+- Ele recebe só os achados conferidos, em português simples: o que é, o risco e um exemplo.
+- Ele diz "pode corrigir", e a correção vai com teste e prova.
+- **Gravíssima** (alguém sem login lê dados de membros ou mexe em dinheiro): para tudo, ele é avisado na hora e a
+  correção sai no mesmo dia.
+- **Grave:** de 1 a 3 h cada.
+- **Média e leve:** de 30 min a 1 h cada, num pacote por lote.
+
+**Prazo:** de 2 a 3 semanas alternando com a construção (1 a 2 lotes por dia, presos à cota de 5 horas), ou cerca de 1
+semana e meia se fosse a única tarefa. O lote 1 serve de régua: depois dele o prazo é recalculado com o tempo real.
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 

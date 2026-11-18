@@ -377,7 +377,48 @@ o pago por causa do financeiro, que também está vindo para cá.
        inventados (o limite de 200 por hora segura o volume; a secretaria vê os aceitos na caixa própria); e quem tem a
        permissão de pessoas fica sabendo, pela conferência, que um CPF já tem cadastro em algum lugar (é a regra pedida; o
        limite por pessoa e o caso aberto para a Geral deixam rastro).
-  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
+  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões. **Feito em
+     18/11/2026 no ramo `v10-membros`** (`1faf0ad`; migração 178), ainda fora da homologação e da produção:
+     - **A secretaria muda um campo por vez** (`/api/pessoas/{matrícula}/ficha/campo`): cada campo grava sozinho, numa
+       transação com a ficha travada, e fica na trilha quem mudou, o quê e quando. O CPF, o e-mail e o telefone vão para a
+       trilha **mascarados**. Se a ficha mudou desde que a tela abriu, a gravação é recusada ("mudou enquanto você editava") e
+       nada é sobrescrito. Trocar o e-mail avisa o endereço antigo.
+     - **As travas por papel:** o **nome**, só a Geral (decisão dele); o **CPF já gravado**, só a Geral (vazio, qualquer
+       secretaria preenche; o CPF de outra ficha não grava, pela regra do passo 4); ninguém muda o próprio nascimento, sexo,
+       estado civil ou admissão; com **processo de cargo** em andamento, nascimento, admissão e estado civil só a Geral; com
+       exclusão julgada, a admissão nova (readmissão) só a Geral. O cargo segue pela consagração, a congregação pela
+       transferência e a situação pelo desligamento (a rota diz o caminho certo). A tela recebe, campo por campo, se quem vê
+       pode mudar e por quê (`/ficha/campos`), e a tabela "quem muda o quê" de cada papel.
+     - **O histórico da ficha** (`/ficha/alteracoes`, em páginas): lido da trilha, do mais novo para o mais antigo, com quem
+       mudou. Nunca leva o CPF, o e-mail ou o telefone inteiros, nem das linhas antigas da trilha; o motivo de uma saída
+       disciplinar só para quem tem "disciplina".
+     - **O membro** (Meus Dados): vê o que é dele e o modo de cada campo; **muda sozinho** o contato, o endereço e o que
+       estiver **vazio** (nascimento, sexo, estado civil, escolaridade, CPF, nome da mãe e do pai); o resto ele **sugere**
+       (o nome, o que já está preenchido, a admissão, o batismo, o rito e a procedência). Uma sugestão pendente por campo. Ele
+       lê a resposta (o motivo da recusa), sem saber quem decidiu. O CPF dele que já está noutra ficha não grava e o caso vai
+       à Secretaria Geral (pode ser ficha em dobro).
+     - **A caixa de sugestões** (a fila de aprovações de antes, reaproveitada): a **secretaria local** aplica as da sua
+       congregação; a **área acompanha** (vê, não aplica nem recusa); a **Geral aplica tudo**. Recusar exige o **motivo**.
+       As travas da ficha valem também ao aplicar (ex.: o nome e o CPF gravado só a Geral). Se a ficha mudou depois do
+       pedido, a sugestão não é aplicada por cima. O CPF sai mascarado na caixa de quem não é a Geral, e, decidido o pedido,
+       não fica inteiro guardado nele. Ninguém decide o próprio pedido. Também há a caixa das já decididas.
+     - **Sem tela nova** (passo 7). A tela de hoje continua funcionando, com duas diferenças: recusar na fila agora pede o
+       motivo, e o estado civil já preenchido não muda mais direto em Meus Dados (vira sugestão).
+     - **Prova:** jest 6.590 de 6.590 (32 testes novos e os da fila reescritos); o roteiro e2e-91 no LocalDB, 93 de 93 e 94 de 94 com o RCSI (a trilha e o
+       CPF mascarado, as travas por papel, o membro mudando e sugerindo, a caixa por nível, aplicar e recusar com motivo, o
+       histórico, fora do escopo = não existe, a 178 duas vezes, o lixo nos campos e as corridas com vários processos: duas
+       mudanças no mesmo campo, sugestão aplicada × membro salvando, aplicar × recusar, dois pedidos do mesmo campo,
+       secretaria × membro no mesmo campo vazio), também com o READ_COMMITTED_SNAPSHOT do Azure; a regressão (e2e-78, 79,
+       84, 85, 86, 89 e 90), toda verde; revisão adversarial feita (achados corrigidos: a conferência do CPF só depois das
+       travas, a mensagem da readmissão sem revelar a exclusão, o CPF minimizado no pedido decidido, o caso da Geral para o
+       CPF repetido do membro, o índice da trilha filtrado para não mexer na corrente de hashes).
+     - **Decisões tomadas pelo caminho seguro (ele pode mudar):** a **área edita** a ficha como a secretaria local, mas na
+       caixa só acompanha; a concessão presa a uma **Extensão** edita quem está nela, mas não aplica sugestão (a mesma regra da
+       transferência); o **"vazio, o membro muda sozinho"** vale para os dados pessoais, e os atos da igreja (admissão, forma,
+       batismo, rito, procedência) são sempre sugestão; com processo de cargo, até o vazio que conta para a escada vai como
+       sugestão; Meus Dados é **tudo ou nada** (um campo recusado não grava os outros). **Riscos que ficam:** o cadastro
+       completo antigo (`GestaoPessoas`) ainda grava a ficha inteira de uma vez, então aberto ao mesmo tempo que uma edição
+       campo a campo pode desfazê-la — some quando a tela nova (passo 7) trocar o cadastro completo pela edição campo a campo.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.
   7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no

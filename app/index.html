@@ -8,9 +8,8 @@
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0B2545" />
   <link rel="apple-touch-icon" href="icones/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- FASE 10, etapa 2: as letras são servidas DE DENTRO (app/fontes, licença OFL junto); nada vem do Google -->
+  <link rel="preload" href="fontes/inter/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
   <!-- SheetJS: só usado na aba Assembleia Geral, pra ler o Excel de elegíveis no navegador -->
   <script src="vendor/xlsx.full.min.js"></script>

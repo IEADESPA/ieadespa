@@ -137,6 +137,33 @@ try {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (!temaEscolhido()) aplicarTema(temaDoAparelho()); });
 } catch (e) { /* navegador antigo: fica no tema de agora */ }
 
+// ---- ETAPA 2: as LETRAS servidas de dentro (app/fontes) e o seletor TEMPORÁRIO "Fonte (teste)", só fora da produção, para o responsável
+// escolher vendo o sistema de verdade (a escolha fica neste aparelho). Na produção vale sempre a fonte padrão do style.css. ----
+const CHAVE_FONTE_TESTE = "ieadespaFonteTeste";
+const FONTES_TESTE = [["inter", "Inter (a de hoje)"], ["atkinson", "Atkinson Hyperlegible"], ["source", "Source Sans 3"], ["jakarta", "Plus Jakarta Sans"]];
+function ehProducaoCasca() { return location.hostname === "app.ieadespa.org.br"; }
+function aplicarFonteTeste() {
+  let k = null;
+  if (!ehProducaoCasca()) { try { k = localStorage.getItem(CHAVE_FONTE_TESTE); } catch (e) { /* sem armazenamento */ } }
+  if (k && FONTES_TESTE.some((x) => x[0] === k) && k !== "inter") document.documentElement.dataset.fonte = k;
+  else delete document.documentElement.dataset.fonte;
+}
+function escolherFonteTesteAcao(k) {
+  try { localStorage.setItem(CHAVE_FONTE_TESTE, String(k)); } catch (e) { /* vale só nesta visita */ }
+  aplicarFonteTeste();
+  desenharMeuPerfilCasca(true);
+}
+aplicarFonteTeste();
+// a troca de tela DESLIZANDO (view transitions): o conteúdo entra da direita e o menu troca de cor no esmaecer dele; sem suporte ou com
+// "movimento reduzido" ligado no aparelho, a troca é direta
+function comTransicaoCasca(fn) {
+  let reduz = false;
+  try { reduz = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { /* segue */ }
+  if (!reduz && typeof document.startViewTransition === "function") { document.startViewTransition(() => { fn(); }); return; }
+  fn();
+}
+function entrarModuloCasca(chave) { comTransicaoCasca(() => entrarModulo(chave)); }
+
 // ---- o menu RECOLHÍVEL (rodada 9: "em todas as telas, como no celular"): o ☰ do alto do menu, lembrado neste aparelho ----
 const CHAVE_MENU_RECOLHIDO = "ieadespaMenuRecolhido";
 function alternarMenuRecolhidoCasca() {
@@ -197,11 +224,13 @@ function irAbaAbertaCasca(aba) {
 }
 function irMenuPrincipalCasca(qual) {
   if (typeof alternarMenuCelular === "function" && window.innerWidth <= 640) alternarMenuCelular(false);
-  if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
-  const sub = { inicio: "perfil", trabalho: "trabalho", vida: "minhavida", perfil: "meuperfil" }[qual] || "perfil";
-  mostrarSubAbaMeupainel(sub);
-  const conteudo = document.querySelector(".conteudo");
-  if (conteudo) conteudo.scrollTop = 0;
+  comTransicaoCasca(() => {
+    if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
+    const sub = { inicio: "perfil", trabalho: "trabalho", vida: "minhavida", perfil: "meuperfil" }[qual] || "perfil";
+    mostrarSubAbaMeupainel(sub);
+    const conteudo = document.querySelector(".conteudo");
+    if (conteudo) conteudo.scrollTop = 0;
+  });
 }
 function marcarMenuPrincipalCasca() {
   const parte = parteDoMenuAgora();
@@ -284,8 +313,8 @@ function atualizarTrilhaCasca() {
   }).join("");
 }
 function irTrilhaCasca(tipo, alvo) {
-  if (tipo === "modulo" && typeof entrarModulo === "function") { entrarModulo(alvo); return; }
-  if (tipo === "sub") mostrarSubAbaMeupainel(alvo);
+  if (tipo === "modulo" && typeof entrarModulo === "function") { entrarModuloCasca(alvo); return; }
+  if (tipo === "sub") comTransicaoCasca(() => mostrarSubAbaMeupainel(alvo));
 }
 
 // ---- celular: as pílulas no alto ----
@@ -444,7 +473,7 @@ function cartaoModuloCasca(ch, pend) {
     meio = `<p class="cartao-modulo-resumo">${escaparHtmlEbd(m.resumo || "")}</p>`;
     selo = "";
   }
-  return `<div class="card-modulo" data-modulo="${escaparHtmlEbd(ch)}" data-cor="${escaparHtmlEbd(ch)}" data-on-click="entrarModulo" data-args-click="${argsAttr(ch)}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+  return `<div class="card-modulo" data-modulo="${escaparHtmlEbd(ch)}" data-cor="${escaparHtmlEbd(ch)}" data-on-click="entrarModuloCasca" data-args-click="${argsAttr(ch)}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <div class="cartao-modulo-cabeca">${tileCasca(ch, m.icone, 22)}<strong>${escaparHtmlEbd(m.titulo)}</strong></div>${meio}${selo ? `<div>${selo}</div>` : ""}
     </div>`;
 }
@@ -503,8 +532,8 @@ function desenharVidaNoInicioCasca() {
 }
 function abrirItemHojeCasca(tipo, alvo) {
   if (tipo === "tarefas") { abrirMinhasTarefasDosAvisos(); return; }
-  if (tipo === "modulo" && typeof entrarModulo === "function") { entrarModulo(alvo); return; }
-  if (tipo === "sub") { mostrarSubAbaMeupainel(alvo); return; }
+  if (tipo === "modulo" && typeof entrarModulo === "function") { entrarModuloCasca(alvo); return; }
+  if (tipo === "sub") { comTransicaoCasca(() => mostrarSubAbaMeupainel(alvo)); return; }
   alternarPainelNotificacoes();
 }
 let inicioCascaSeq = 0;
@@ -620,6 +649,7 @@ function desenharMeuPerfilCasca(jaCarregado) {
       <div class="perfil-linha perfil-linha-chips"><span>Aparência</span><span class="perfil-chips">${chip(escolhido === "claro", "escolherTemaAcao", "claro", "Claro")}${chip(escolhido === "escuro", "escolherTemaAcao", "escuro", "Escuro")}${chip(escolhido === "aparelho", "escolherTemaAcao", "aparelho", "Seguir o aparelho")}</span></div>
       ${temPush ? `<div class="perfil-linha perfil-linha-chips"><span>Avisos no celular</span><button type="button" class="btn-link" data-on-click="alternarPushAcao">Ligar ou desligar neste aparelho</button></div>` : ""}
       <div class="perfil-linha perfil-linha-chips"><span>Tamanho da letra</span><span class="perfil-chips">${chip(!letraGrande, "escolherLetraAcao", false, "Normal")}${chip(letraGrande, "escolherLetraAcao", true, "Grande")}</span></div>
+      ${ehProducaoCasca() ? "" : `<div class="perfil-linha perfil-linha-chips"><span>Fonte (teste)</span><span class="perfil-chips">${FONTES_TESTE.map((x) => chip((document.documentElement.dataset.fonte || "inter") === x[0], "escolherFonteTesteAcao", x[0], x[1])).join("")}</span></div>`}
     </section>
     <button type="button" class="btn-confirmar btn-secundario btn-sair-cel" data-on-click="sairDoPainel">Sair do sistema</button>`;
   if (!jaCarregado) carregarDadosPerfilCasca();
@@ -751,4 +781,4 @@ let alinharNumerosEspera = null;
 // qualquer toque pode trocar de tela: a pílula ativa, o item do menu e o caminho do topo acompanham (os botões do menu chamam as funções direto)
 document.addEventListener("click", () => setTimeout(atualizarPilulasCelular, 0));
 
-registrarAcoes({ abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });
+registrarAcoes({ abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, entrarModuloCasca, escolherFonteTesteAcao, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });

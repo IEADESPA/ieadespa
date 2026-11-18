@@ -2149,3 +2149,91 @@ html[data-tema="escuro"] [data-cor="conquistas"] { --cor-modulo: #67E8F9; --cor-
 .prt-btn-ajuda:hover { background: #FEE2E2; }
 html[data-tema="escuro"] .prt-btn-ajuda { color: #FCA5A5; background: #2A1215; border-color: #7F1D1D; }
 html[data-tema="escuro"] .prt-btn-ajuda .icone, html[data-tema="escuro"] .prt-btn-ajuda small { color: #FCA5A5; }
+
+/* =====================================================================================================================================
+   FASE 10, ETAPA 2 (18/11/2026, aprovada pelo responsável: "trocar a fonte e pôr efeitos modernos"): as LETRAS servidas de dentro do sistema
+   (app/fontes, licença SIL OFL 1.1 junto de cada família; nada vem mais do Google) e os EFEITOS só em CSS, entre 0,1 e 0,25 s, só transform e
+   opacity, nunca "transition: all", com a versão de movimento reduzido. A fonte padrão continua a de hoje (Inter) até ele escolher;
+   as 3 opções ficam no seletor "Fonte (teste)" do Meu Perfil, só fora da produção (modulos/casca.js).
+   ===================================================================================================================================== */
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url("fontes/inter/inter-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url("fontes/inter/inter-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url("fontes/inter/inter-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 700; font-display: swap; src: url("fontes/inter/inter-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 800; font-display: swap; src: url("fontes/inter/inter-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 400; font-display: swap; src: url("fontes/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 500; font-display: swap; src: url("fontes/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 600; font-display: swap; src: url("fontes/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 700; font-display: swap; src: url("fontes/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 800; font-display: swap; src: url("fontes/atkinson-hyperlegible-next/atkinson-hyperlegible-next-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 400; font-display: swap; src: url("fontes/source-sans-3/source-sans-3-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 500; font-display: swap; src: url("fontes/source-sans-3/source-sans-3-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 600; font-display: swap; src: url("fontes/source-sans-3/source-sans-3-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 700; font-display: swap; src: url("fontes/source-sans-3/source-sans-3-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 800; font-display: swap; src: url("fontes/source-sans-3/source-sans-3-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("fontes/plus-jakarta-sans/plus-jakarta-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url("fontes/plus-jakarta-sans/plus-jakarta-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("fontes/plus-jakarta-sans/plus-jakarta-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url("fontes/plus-jakarta-sans/plus-jakarta-sans-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 800; font-display: swap; src: url("fontes/plus-jakarta-sans/plus-jakarta-sans-latin-800-normal.woff2") format("woff2"); }
+:root { --fonte-sistema: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+html[data-fonte="atkinson"] { --fonte-sistema: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+html[data-fonte="source"] { --fonte-sistema: "Source Sans 3", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+html[data-fonte="jakarta"] { --fonte-sistema: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+body { font-family: var(--fonte-sistema); }
+/* os números de contagem e de dinheiro alinhados (cada algarismo com a mesma largura) */
+.cartao-modulo-tarefas, .chip-casca, .badge-sino, .pilula-numero, .vida-data, .stat-valor, .perfil-linha strong, .mb-tela, .trilha-casca { font-variant-numeric: tabular-nums; }
+
+/* ---- os EFEITOS (Emil Kowalski: ease-out forte; nada de ease-in; o que se repete o dia todo é rápido) ---- */
+:root { --ease-out-forte: cubic-bezier(0.23, 1, 0.32, 1); --ease-gaveta: cubic-bezier(0.32, 0.72, 0, 1); }
+@media (prefers-reduced-motion: no-preference) {
+  /* 1) a resposta ao toque e ao clique: o que se aperta "afunda" um pouco (0,97) */
+  .btn-confirmar { transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform 160ms var(--ease-out-forte); }
+  .sidebar .btn-aba, .sidebar .btn-subaba, .pilula-celular, .chip-filtro, .cartao-hoje, .grade-modulos .card-modulo, .atalho-vida-grande, .atalho-vida-mini,
+  .linha-vida, .cartao-usuario, .cabecalho-secretaria .btn-tema, .cabecalho-secretaria .btn-sino, .btn-icon, .trilha-link, .mb-pilula { transition: transform 160ms var(--ease-out-forte); }
+  .btn-confirmar:active, .sidebar .btn-aba:active, .sidebar .btn-subaba:active, .pilula-celular:active, .chip-filtro:active, .cartao-hoje:active,
+  .grade-modulos .card-modulo:active, .atalho-vida-grande:active, .atalho-vida-mini:active, .linha-vida:active, .cartao-usuario:active,
+  .cabecalho-secretaria .btn-tema:active, .cabecalho-secretaria .btn-sino:active, .btn-icon:active, .mb-pilula:active { transform: scale(0.97); }
+  /* 2) os painéis e as janelas entram suaves: o painel do lado vem da direita; a janela de confirmar cresce do centro; o aviso sobe */
+  .painel-lado { transition: transform 220ms var(--ease-gaveta), opacity 220ms var(--ease-out-forte); }
+  @starting-style { .painel-lado { transform: translateX(24px); opacity: 0; } }
+  .fundo-painel-lado.visivel, .fundo-menu-celular.visivel { transition: opacity 200ms var(--ease-out-forte); }
+  @starting-style { .fundo-painel-lado.visivel, .fundo-menu-celular.visivel { opacity: 0; } }
+  #modalOverlay:not(.escondido) { transition: opacity 180ms var(--ease-out-forte); }
+  @starting-style { #modalOverlay:not(.escondido) { opacity: 0; } }
+  #modalOverlay:not(.escondido) .modal-caixa { transition: transform 200ms var(--ease-out-forte), opacity 200ms var(--ease-out-forte); }
+  @starting-style { #modalOverlay:not(.escondido) .modal-caixa { transform: scale(0.96); opacity: 0; } }
+  .toast { transition: transform 220ms var(--ease-out-forte), opacity 220ms var(--ease-out-forte); }
+  @starting-style { .toast { transform: translateY(8px); opacity: 0; } }
+  .painel-ajuda { transition: transform 180ms var(--ease-out-forte), opacity 180ms var(--ease-out-forte); transform-origin: top right; }
+  @starting-style { .painel-ajuda { transform: scale(0.97); opacity: 0; } }
+  /* 3) a troca de tela DESLIZANDO (view transitions; o navegador sem suporte só troca, ou faz o esmaecer de baixo) — o MOMENTO MARCANTE:
+     ao entrar num módulo, o menu ganha a cor do módulo num esmaecer próprio enquanto o conteúdo desliza da direita */
+  ::view-transition-old(root) { animation: 140ms var(--ease-out-forte) both casca-sair; }
+  ::view-transition-new(root) { animation: 240ms var(--ease-out-forte) both casca-entrar; }
+  .sidebar { view-transition-name: casca-menu; }
+  .cabecalho-secretaria { view-transition-name: casca-topo; }
+  ::view-transition-old(casca-menu), ::view-transition-new(casca-menu) { animation-duration: 240ms; animation-timing-function: var(--ease-out-forte); }
+  ::view-transition-group(casca-topo) { animation-duration: 0s; }
+  @keyframes casca-sair { to { opacity: 0; } }
+  @keyframes casca-entrar { from { opacity: 0; transform: translateX(18px); } }
+  /* 4) passar o mouse: só em aparelho com mouse (no toque o "hover" fica preso); só os cartões dos módulos, que são as portas de entrada */
+  @media (hover: hover) and (pointer: fine) {
+    .grade-modulos .card-modulo { transition: transform 200ms var(--ease-out-forte); }
+    .grade-modulos .card-modulo:hover { transform: translateY(-2px); }
+    .grade-modulos .card-modulo:active { transform: translateY(-2px) scale(0.98); }
+  }
+}
+@supports not (view-transition-name: casca) {
+  @media (prefers-reduced-motion: no-preference) {
+    .aba-secretaria, .sub-aba-secretaria { transition: opacity 180ms var(--ease-out-forte); }
+    @starting-style { .aba-secretaria, .sub-aba-secretaria { opacity: 0; } }
+  }
+}
+/* movimento reduzido: nada desliza nem cresce; só os painéis e as janelas aparecem com um esmaecer curto */
+@media (prefers-reduced-motion: reduce) {
+  .painel-lado, #modalOverlay:not(.escondido) .modal-caixa, .toast { transition: opacity 120ms linear; }
+  @starting-style { .painel-lado, #modalOverlay:not(.escondido) .modal-caixa, .toast { opacity: 0; } }
+  .sidebar { transition: none; }
+}
+#painelBuscaGlobal { transition: none !important; } /* a busca abre pelo Ctrl K o dia todo: sem animação (Emil: atalho de teclado não anima) */

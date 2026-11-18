@@ -72,7 +72,9 @@
 // v63 (18/11/2026): FASE 10, conformidade da casca com o desenho aprovado — os ícones de traço, o menu principal limpo, o Início com as pendências
 // de cada módulo, as duas colunas, o caminho no topo, o menu recolhível, Meu trabalho, Minha vida e Meu Perfil (index.html, style.css, modulos/casca.js).
 // Pula a v62 porque o ramo v10-membros (na homologação) já a usou. Só no ramo v10-casca e na homologação.
-const CACHE_NOME = "ieadespa-app-shell-v63";
+// v64 (18/11/2026): FASE 10, etapa 2 da casca — as letras servidas de dentro (app/fontes, licença OFL), o seletor "Fonte (teste)" fora da produção e os
+// efeitos (afundar ao tocar, painéis que entram suaves, a troca de tela deslizando), com movimento reduzido. Só no ramo v10-casca e na homologação.
+const CACHE_NOME = "ieadespa-app-shell-v64";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/casca.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

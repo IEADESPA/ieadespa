@@ -429,6 +429,73 @@ o pago por causa do financeiro, que também está vindo para cá.
      cadastra (no escopo); fora disso, quem cadastra não mexe nem cadastra, e o caso vai para a **Secretaria Geral** conferir e
      corrigir. Nome e nascimento parecidos também avisam, como possível repetição. Precisa de uma **rota de conferência** que
      respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
+     - **Passo 7a, as telas do que já estava pronto (18/11/2026), em três incrementos, no ramo `v10-membros` e na homologação
+       (merges `a145d8d` e `8069028`) — NÃO vai à produção sem ele ver e aprovar:**
+       - **Incremento 1** (`07a08da` o servidor, `45fe24d` as telas, `aa68ece` um achado da revisão):
+         - **o painel executivo** é a entrada do módulo:
+           - os números no alto (em comunhão, congregados, sem comunhão, os novos do mês pela forma de entrada); cada um
+             abre a lista já filtrada;
+           - o **gráfico grande que cada um ajusta**: o que mostrar, agrupar por quê, em quantidade ou porcentagem (a
+             escolha fica guardada no aparelho);
+           - as entradas e saídas dos últimos 6 meses e "como está o cadastro" (cada barra abre quem falta);
+           - os **avisos só de Membros** ("só o que eu preciso resolver" ou tudo): no notebook numa coluna à direita, no
+             celular numa faixa no alto;
+           - a área e a Geral escolhem uma congregação;
+           - tudo é contado no banco, dentro do escopo, numa ida só e sem o nome de ninguém (`GET /api/pessoas?resumo=1`,
+             `api/shared/painelMembros.js`);
+         - **a lista**: 20 por página pedidas ao servidor e os filtros numa linha (nome, matrícula ou CPF; congregação;
+           situação; departamento; o que falta; no rol ou quem saiu). A lista **inteira** do escopo não é mais baixada ao
+           entrar em Pessoas;
+         - **a ficha 360**:
+           - no notebook o menu principal recolhe e o submenu da ficha fica à direita; no celular, as partes em pílulas;
+           - o resumo traz a linha do tempo, a vida espiritual e os dados pessoais;
+           - o CPF aparece mascarado; o "Mostrar" é só da Secretaria Geral, com a leitura registrada;
+           - os dados pessoais mudam **campo a campo**, e cada trava diz o porquê; "quem pode mudar cada dado";
+           - as alterações (quem mudou o quê), com nomes no lugar dos códigos;
+           - as partes antigas (família, casamentos, foto...) foram trazidas para dentro da ficha;
+           - o Ctrl K abre a pessoa direto na ficha.
+       - **Incremento 2** (`f94edc0`):
+         - **o cadastro em etapas**, com a prévia "como a ficha vai ficar" e a **barra de avisos** que confere nome,
+           nascimento e CPF:
+           - CPF que já está noutra ficha não deixa concluir;
+           - se a outra ficha está no escopo, o aviso leva até ela; fora do escopo, "já tem cadastro; o caso foi para a
+             Secretaria Geral";
+           - o formulário completo de antes fica embaixo, aberto só quando pedido;
+         - **a fila de cadastros**: no notebook, o quadro por quem completa; no celular, os números e as pendências. O
+           pedido aberto mostra o que falta e quem completa, completar e aceitar, as confirmações e descartar com o motivo.
+           A Geral vê e resolve os casos de CPF repetido fora do escopo;
+         - **o pré-cadastro rápido** numa tela só, com "os que eu lancei".
+       - **Incremento 3** (`4e5161c`):
+         - **as mudanças de congregação**:
+           - o pedido sai do botão "Transferência" da ficha;
+           - as caixas: chegando, saindo, concluídos e as paradas da Geral;
+           - aceitar, ou recusar com o motivo; cancelar;
+           - acompanhar passo a passo;
+         - **a caixa de sugestões nova**: antes → depois, aplicar ou recusar com o motivo; o que é só da Geral aparece
+           travado;
+         - **a minha ficha em "Minha vida na igreja"**:
+           - a linha do tempo primeiro e "Minha ficha" à direita;
+           - o membro muda o que é dele e sugere o resto;
+           - "o que eu posso mudar";
+           - as minhas transferências e as minhas sugestões, com a resposta.
+       - **Prova:**
+         - jest: 6.606 de 6.606 antes dos incrementos 2 e 3; depois, os testes da tela (frontCsp e frontEscape) 93 de 93 e
+           os do painel 17 de 17;
+         - o roteiro novo e2e-92 no LocalDB, 73 de 73 (cada número do painel contra o banco, o escopo, a congregação
+           escolhida, os filtros novos, a matrícula exata, o lixo);
+         - a regressão dos passos 1 a 5 toda verde: e2e-84 47, e2e-85 51, e2e-86 59, e2e-87 14, e2e-89 77, e2e-90 79 e
+           e2e-91 93;
+         - 184 telas no Edge sem janela (Secretaria Geral, secretaria local e membro; notebook e celular; claro e escuro):
+           nenhum texto ilegível ou fraco, nada estourando de lado, nenhum erro de script nem violação de CSP;
+         - as fotos "desenho aprovado × construído" no rascunho da sessão;
+         - o teste de telas da homologação acusou, no incremento 1, só as diferenças esperadas (os botões novos, o Pessoas
+           abrindo no painel, a ficha 360 no lugar do perfil antigo). A base foi aprovada só no ramo (`a0a9bc4`);
+         - revisão adversarial feita, com dois achados corrigidos:
+           - o motivo da saída disciplinar saía no cabeçalho para quem tinha "disciplina" em outra congregação;
+           - a ficha procurava a pessoa pela busca de texto, que para matrícula curta podia não achá-la; agora é
+             `?matricula=N`, exato.
+       - **Fica para depois:** o endereço no cadastro em etapas (hoje vai pelo cadastro completo, na ficha); o formulário
+         público do site; e trocar de vez o cadastro completo antigo pela edição campo a campo, que tira o risco do passo 5.
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
 - **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**

@@ -2237,3 +2237,5 @@ body { font-family: var(--fonte-sistema); }
   .sidebar { transition: none; }
 }
 #painelBuscaGlobal { transition: none !important; } /* a busca abre pelo Ctrl K o dia todo: sem animação (Emil: atalho de teclado não anima) */
+/* os títulos das telas antigas quebram palavra comprida (ex.: "(JAI/JEA/JUC/CRA/TER/CRAF/CEQ/CAQ/CDE)") em vez de estourar de lado no celular */
+.aba-secretaria h3, .aba-secretaria h4, .sub-aba-secretaria h3, .sub-aba-secretaria h4 { overflow-wrap: anywhere; }

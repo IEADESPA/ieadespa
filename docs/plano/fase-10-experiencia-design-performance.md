@@ -410,6 +410,20 @@ o pago por causa do financeiro, que também está vindo para cá.
     do teste de telas aprovada **só dentro do ramo** (`84aab1e`): as divergências eram as esperadas da casca nova, sem
     violação de CSP nem erro de script novo. Provas: jest 6.426/6.426, frontCsp/frontEscape 93/93 e as três provas no Edge
     sem janela (entrada e Início; avisos e busca; Meu Perfil e Minha vida), no notebook e no celular, claro e escuro.
+  - **Ele não aprovou os três (17/11/2026):** só a moldura e o Início estavam novos; dentro dos módulos, a cara antiga.
+  - **Incremento 4** (commit `e1bf760`; a main trazida em `a55535c`; a base do teste de telas só no ramo em `b37088e`;
+    na homologação em `bb43c8a` e `6408347`, 18/11/2026): o **visual novo em todas as telas que já existem**, sem mudar o
+    conteúdo nem o fluxo — cada tela num cartão, campos e botões no padrão novo (o principal em ouro com texto marinho),
+    tabelas com o cabeçalho discreto e os números à direita, abas internas em pílulas, avisos e janelas no padrão novo e o
+    **modo escuro em tudo**; dentro de cada módulo, o **menu na cor do módulo** com o cabeçalho (o nome do módulo e o nível
+    de quem está vendo) e o "Menu principal" no alto. Casca do aplicativo v61.
+    - **Legibilidade medida** no Edge sem janela, como Secretaria Geral, em 560 telas (todos os módulos, abas, subabas e
+      pílulas; notebook e celular; claro e escuro): textos ilegíveis **322 → 0**, textos fracos **302 → 0**, nada estourando
+      de lado, 0 violação de CSP.
+    - **Teste de telas:** as divergências foram só as esperadas da aparência (o "Menu principal" e o cabeçalho do módulo no
+      lugar do "Início"/"Painel Principal" dentro dos módulos, os títulos das colunas sem maiúsculas); nenhum erro de script
+      nem pedido novo. Revisão independente feita (só `textContent`, nenhuma lógica mudada, nada preso embaixo no celular).
+    - Jest 6.448/6.448 com a main trazida. **Esperando ele ver a homologação e aprovar** a casca inteira.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

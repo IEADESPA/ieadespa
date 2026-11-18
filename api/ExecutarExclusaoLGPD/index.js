@@ -114,7 +114,10 @@ module.exports = async function (context, req) {
     }
 
     await r().input("mat", sql.Int, solicitacao.MembroId)
-      .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL, ${LIMPAR_ENDERECO_LINHAS} WHERE MembroId = @mat`);
+      .query(`UPDATE MembroReferencia SET Telefone = NULL, Email = NULL, Endereco = NULL, FotoUrl = NULL, ${LIMPAR_ENDERECO_LINHAS} WHERE MembroId = @mat;
+              IF COL_LENGTH('dbo.MembroReferencia', 'Cpf') IS NOT NULL
+                EXEC sp_executesql N'UPDATE dbo.MembroReferencia SET Cpf = NULL, NomeMae = NULL, NomePai = NULL, Escolaridade = NULL WHERE MembroId = @m', N'@m INT', @m = @mat;`);
+    // v10.1b (migração 174) — o CPF, a filiação e a escolaridade saem junto com o contato (não são registro que o Regimento mande guardar)
     // v8.6 — a justificativa de ausência no exame bienal da AFM (pode citar saúde) sai junto, na mesma transação
     await require("../shared/educacaoContinuadaDb").aplicarRetencao({ request: r }, { membroId: solicitacao.MembroId });
 

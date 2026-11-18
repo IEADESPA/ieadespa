@@ -1040,18 +1040,20 @@ function desenharResultadosBusca() {
     return;
   }
   caixa.innerHTML = `<p class="painel-lado-rotulo">${lista.length} resultado(s)</p>` + lista.map((r) => `
-      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""), r.membroId ? Number(r.membroId) : null)}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
         <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
         <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
     `).join("");
 }
 
-function irParaResultadoBusca(aba) {
+function irParaResultadoBusca(aba, membroId) {
   fecharPaineisLado();
   document.getElementById("campoBuscaGlobal").value = "";
   document.getElementById("campoBuscaLado").value = "";
   if (aba) mostrarAbaSecretaria(aba);
+  // FASE 10, passo 7a — a pessoa achada abre direto na ficha 360 (modulos/membros.js)
+  if (aba === "pessoas" && membroId && typeof mbAbrirFicha === "function") mbAbrirFicha(membroId, "resumo");
 }
 
 // FASE 10 — fecha os painéis do lado (avisos e busca): pelo ✕, pelo fundo escurecido ou pelo Esc

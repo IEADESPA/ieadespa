@@ -281,7 +281,8 @@ function moverFormPessoaPara(slotId) {
 }
 
 // FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
-const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", buscar: "Importar e exportar",
+const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
+  precadastro: "Pré-cadastro rápido", buscar: "Importar e exportar",
   aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado" };
 
 function mostrarSubAbaPessoas(sub) {
@@ -297,6 +298,10 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("subPessoasVisao").style.display = sub === "visao" ? "block" : "none";
   document.getElementById("subPessoasLista").style.display = sub === "lista" ? "block" : "none";
   document.getElementById("subPessoasFicha").style.display = sub === "ficha" ? "block" : "none";
+  document.getElementById("subPessoasFila").style.display = sub === "fila" ? "block" : "none";
+  document.getElementById("subPessoasPreCadastro").style.display = sub === "precadastro" ? "block" : "none";
+  document.getElementById("btnSubPessoasFila").classList.toggle("ativo", sub === "fila");
+  document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
   document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
   document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
@@ -318,6 +323,9 @@ function mostrarSubAbaPessoas(sub) {
   if (sub === "lista" && typeof mbAbrirLista === "function") mbAbrirLista();
   if (sub === "ficha" && typeof mbEntrarNaFicha === "function") mbEntrarNaFicha();
   if (sub === "buscar") carregarPessoas();   // a tela antiga (importar e exportar) usa a lista INTEIRA do escopo: só ela pede
+  if (sub === "cadastrar" && typeof mcAbrirCadastro === "function") mcAbrirCadastro();
+  if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
+  if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();

@@ -363,7 +363,7 @@ function mbItensAvisos() {
   const r = mbPainel.dados || {};
   const itens = [];
   if (mbNum(a.transferencias) > 0) itens.push({ meu: true, nivel: "primeiro", icone: "↪", texto: `${mbFmt(a.transferencias)} ${mbPlural(a.transferencias, "pedido de transferência chegando", "pedidos de transferência chegando")}`, detalhe: "aceitar ou recusar a chegada" });
-  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "📝", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha" });
+  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "📝", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha", acao: "sub", arg: "fila" });
   if (mbNum(a.sugestoes) > 0) itens.push({ meu: true, nivel: "afazer", icone: "✏️", texto: `${mbFmt(a.sugestoes)} ${mbPlural(a.sugestoes, "sugestão de membro para conferir", "sugestões de membros para conferir")}`, detalhe: "aplicar ou recusar com o motivo", acao: "sub", arg: "aprovacoes" });
   if (mbNum(r.semCpf) > 0) itens.push({ meu: false, nivel: "afazer", icone: "🪪", texto: `${mbFmt(r.semCpf)} sem CPF no rol`, detalhe: "o CPF evita ficha repetida", acao: "lista", arg: "cpf" });
   if (mbNum(r.semContato) > 0) itens.push({ meu: false, nivel: "afazer", icone: "📞", texto: `${mbFmt(r.semContato)} sem e-mail nem celular`, detalhe: "sem contato, a pessoa não recebe o código de acesso", acao: "lista", arg: "contato" });

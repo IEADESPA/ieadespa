@@ -246,6 +246,9 @@
               <button class="btn-subaba ativo" id="btnSubPessoasVisao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'><span class="icone">📊</span><span class="rotulo">Painel executivo</span></button>
               <button class="btn-subaba" id="btnSubPessoasLista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
               <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
+              <!-- passo 7a, incremento 2: a fila de cadastros e o pré-cadastro rápido (modulos/membros-cadastro.js) -->
+              <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone">📥</span><span class="rotulo">Fila de cadastros</span></button>
+              <button class="btn-subaba" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone">📝</span><span class="rotulo">Pré-cadastro rápido</span></button>
               <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">✏️</span><span class="rotulo">Sugestões dos membros</span></button>
               <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">📤</span><span class="rotulo">Importar e exportar</span></button>
               <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
@@ -2174,6 +2177,8 @@
           <button type="button" class="mb-pilula ativa" data-sub="visao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'>Painel</button>
           <button type="button" class="mb-pilula" data-sub="lista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'>Pessoas</button>
           <button type="button" class="mb-pilula" data-sub="cadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'>Cadastrar</button>
+          <button type="button" class="mb-pilula" data-sub="fila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'>Fila</button>
+          <button type="button" class="mb-pilula" data-sub="precadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'>Pré-cadastro</button>
           <button type="button" class="mb-pilula" data-sub="aprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'>Sugestões</button>
           <button type="button" class="mb-pilula" data-sub="discipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'>Discipulado</button>
           <button type="button" class="mb-pilula" data-sub="credenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;">Credenciais</button>
@@ -2200,10 +2205,19 @@
           </div>
         </div>
 
-        <!-- SUB-ABA: CADASTRAR PESSOA -->
-        <div id="subPessoasCadastrar" class="sub-aba-secretaria" style="display:none;">
-          <h3>Cadastrar Pessoa</h3>
-          <div id="slotFormPessoaCadastrar"></div>
+        <!-- FASE 10, passo 7a, incremento 2 — a FILA DE CADASTROS (rodada 10: quadro por quem completa no notebook; esteira com os números no celular) e o
+             PRÉ-CADASTRO RÁPIDO (rodada 9: uma tela só). Desenhados por modulos/membros-cadastro.js -->
+        <div id="subPessoasFila" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+        <div id="subPessoasPreCadastro" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+
+        <!-- SUB-ABA: CADASTRAR PESSOA — desde o passo 7a, o cadastro EM ETAPAS com a prévia da ficha e a barra que confere nome, nascimento e CPF
+             (modulos/membros-cadastro.js); o formulário completo de antes fica embaixo, aberto só quando pedido -->
+        <div id="subPessoasCadastrar" class="sub-aba-secretaria mb-tela" style="display:none;">
+          <div id="mbCadastro"></div>
+          <div id="mcFormAntigo" class="mb-cartao" style="display:none;">
+            <h3>Formulário completo</h3>
+            <div id="slotFormPessoaCadastrar"></div>
+          </div>
         </div>
 
         <!-- SUB-ABA: BUSCAR PESSOAS -->
@@ -7781,6 +7795,7 @@
   <script src="modulos/expansao.js"></script>
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
+  <script src="modulos/membros-cadastro.js"></script>
   <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>

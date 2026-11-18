@@ -586,6 +586,8 @@ function voltarParaCheckin() {
 function mostrarTelaPainelInicial() {
   esconderTodasAsTelas();
   document.getElementById("telaPainel").style.display = "flex";
+  // FASE 10 — a casca da entrada (a marca e o fundo) só enquanto não há sessão; com sessão, abrirPainelConteudo tira
+  document.getElementById("telaPainel").classList.toggle("tela-entrada", !(authToken && authMatricula));
   document.getElementById("resultadoLogin").textContent = "";
   document.getElementById("cxCriarPin").style.display = "none";
   if (authToken && authMatricula) {
@@ -941,7 +943,11 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxLoginPainel").style.display = "none";
   document.getElementById("cxCriarPin").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
+  document.getElementById("telaPainel").classList.remove("tela-entrada");
   document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
+  // FASE 10 — o Início: "Graça e paz, <primeiro nome>" (textContent: o nome nunca vira HTML)
+  const saudacao = document.getElementById("inicioSaudacao");
+  if (saudacao) saudacao.textContent = authNome ? `Graça e paz, ${String(authNome).trim().split(/\s+/)[0]}` : "Graça e paz!";
   // Trocar senha é só de quem tem acesso administrativo (senha de liderança); o membro comum troca o PIN (cartão "Meu PIN", sempre visível).
   document.getElementById("cxTrocarSenha").style.display = sessaoDeLiderancaNaTela() ? "block" : "none";
   await carregarTurmasProfessorEbd();
@@ -969,50 +975,91 @@ async function abrirPainelConteudo(matricula) {
   agendarSincronizacaoOfflineEbd();
 }
 
-// ---- BUSCA GLOBAL (vB.4) ----
-let timeoutBuscaGlobal = null;
-function onDigitarBuscaGlobal() {
-  clearTimeout(timeoutBuscaGlobal);
-  const termo = document.getElementById("campoBuscaGlobal").value.trim();
+// ---- BUSCA GLOBAL (vB.4) — FASE 10: num PAINEL DO LADO (rodada 6): o campo no alto do painel (Ctrl K abre); dentro de um módulo, ela fica presa a ele
+// ("Só neste módulo"), com "Procurar em todo o sistema" ----
+let timeoutBuscaGlobal = null, buscaSoModulo = true, ultimoTermoBusca = "", ultimosResultadosBusca = [];
+function abrirPainelBusca() {
   const painel = document.getElementById("painelBuscaGlobal");
-  if (termo.length < 2) { painel.style.display = "none"; return; }
+  const campoTopo = document.getElementById("campoBuscaGlobal");
+  const campo = document.getElementById("campoBuscaLado");
+  if (!painel || !campo) return;
+  fecharPaineisLado();
+  painel.style.display = "flex";
+  document.getElementById("fundoPainelLado").classList.add("visivel");
+  if (campoTopo && campoTopo.value && !campo.value) campo.value = campoTopo.value;
+  if (campoTopo) campoTopo.value = "";
+  buscaSoModulo = true;
+  campo.focus();
+  campo.select();   // reabrir com a busca anterior selecionada: o que se digitar substitui
+  desenharFiltroBuscaModulo();
+  if (campo.value.trim().length >= 2) executarBuscaGlobal(campo.value.trim());
+  else document.getElementById("resultadosBuscaGlobal").innerHTML = "<div class=\"painel-notificacoes-vazio\">Digite pelo menos 2 letras.</div>";
+}
+function onDigitarBuscaGlobal() { abrirPainelBusca(); }
+function onDigitarBuscaLado() {
+  clearTimeout(timeoutBuscaGlobal);
+  const termo = document.getElementById("campoBuscaLado").value.trim();
+  if (termo.length < 2) { document.getElementById("resultadosBuscaGlobal").innerHTML = "<div class=\"painel-notificacoes-vazio\">Digite pelo menos 2 letras.</div>"; return; }
   timeoutBuscaGlobal = setTimeout(() => executarBuscaGlobal(termo), 300);
 }
-
+function moduloDaBusca() { return (typeof moduloAtual !== "undefined" && moduloAtual && MODULOS[moduloAtual]) ? MODULOS[moduloAtual] : null; }
+function desenharFiltroBuscaModulo(totalFora) {
+  const caixa = document.getElementById("filtroBuscaModulo");
+  if (!caixa) return;
+  const mod = moduloDaBusca();
+  if (!mod) { caixa.innerHTML = ""; return; }
+  caixa.innerHTML = `<button type="button" class="chip-filtro ${buscaSoModulo ? "ativo" : ""}" data-on-click="alternarBuscaSoModulo">Só neste módulo: ${escaparHtmlEbd(mod.titulo)}${buscaSoModulo ? " ✕" : ""}</button>`
+    + (buscaSoModulo && totalFora ? ` <button type="button" class="btn-link" data-on-click="alternarBuscaSoModulo">Procurar em todo o sistema (${Number(totalFora)})</button>` : "");
+}
+function alternarBuscaSoModulo() {
+  buscaSoModulo = !buscaSoModulo;
+  desenharResultadosBusca();
+}
 async function executarBuscaGlobal(termo) {
-  const painel = document.getElementById("painelBuscaGlobal");
-  painel.style.display = "block";
-  painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Buscando...</div>";
+  const caixa = document.getElementById("resultadosBuscaGlobal");
+  ultimoTermoBusca = termo;
+  caixa.innerHTML = "<div class=\"painel-notificacoes-vazio\">Buscando...</div>";
   try {
     const res = await fetchProtegido(`${API_BASE}/busca-global?q=${encodeURIComponent(termo)}`);
     const lista = await res.json();
-    if (!Array.isArray(lista) || lista.length === 0) {
-      painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nada encontrado.</div>";
-      return;
-    }
-    painel.innerHTML = lista.map(r => `
-      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""))}">
+    if (termo !== ultimoTermoBusca) return;   // chegou a resposta de uma busca antiga: a tela já mostra a nova
+    ultimosResultadosBusca = Array.isArray(lista) ? lista : [];
+    desenharResultadosBusca();
+  } catch (e) {
+    caixa.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível buscar.</div>";
+  }
+}
+function desenharResultadosBusca() {
+  const caixa = document.getElementById("resultadosBuscaGlobal");
+  const mod = moduloDaBusca();
+  const todos = ultimosResultadosBusca;
+  const lista = mod && buscaSoModulo ? todos.filter((r) => mod.abas.includes(r.aba)) : todos;
+  desenharFiltroBuscaModulo(todos.length - lista.length);
+  if (lista.length === 0) {
+    caixa.innerHTML = `<div class="painel-notificacoes-vazio">${todos.length && mod && buscaSoModulo ? "Nada neste módulo." : "Nada encontrado."}</div>`;
+    return;
+  }
+  caixa.innerHTML = `<p class="painel-lado-rotulo">${lista.length} resultado(s)</p>` + lista.map((r) => `
+      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
         <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
         <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
     `).join("");
-  } catch (e) {
-    painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível buscar.</div>";
-  }
 }
 
 function irParaResultadoBusca(aba) {
-  document.getElementById("painelBuscaGlobal").style.display = "none";
+  fecharPaineisLado();
   document.getElementById("campoBuscaGlobal").value = "";
+  document.getElementById("campoBuscaLado").value = "";
   if (aba) mostrarAbaSecretaria(aba);
 }
 
-document.addEventListener("click", (ev) => {
-  const caixa = document.querySelector(".caixa-busca-global");
-  const painel = document.getElementById("painelBuscaGlobal");
-  if (!painel || painel.style.display === "none" || !caixa) return;
-  if (!caixa.contains(ev.target)) painel.style.display = "none";
-});
+// FASE 10 — fecha os painéis do lado (avisos e busca): pelo ✕, pelo fundo escurecido ou pelo Esc
+function fecharPaineisLado() {
+  ["painelBuscaGlobal", "painelNotificacoes"].forEach((id) => { const p = document.getElementById(id); if (p) p.style.display = "none"; });
+  const fundo = document.getElementById("fundoPainelLado");
+  if (fundo) fundo.classList.remove("visivel");
+}
 
 // ---- SINO DE NOTIFICAÇÕES (vB.2 — Motor de notificações) ----
 async function atualizarBadgeNotificacoes() {
@@ -1029,11 +1076,17 @@ async function atualizarBadgeNotificacoes() {
   } catch (e) { /* sessão expirada já é tratada em fetchProtegido */ }
 }
 
+// FASE 10 — os AVISOS num PAINEL DO LADO (rodadas 4 a 6): "Só o que eu preciso resolver" ligado (os fluxos que estão com a pessoa + os avisos
+// não lidos); desligado, todos os avisos abertos. O quadro de filtros (por assunto) começa recolhido.
+let avisosSoResolver = true, avisosCategoria = null, avisosFiltrosAbertos = false, avisosDados = { lista: [], tarefas: [] };
 async function alternarPainelNotificacoes() {
   const painel = document.getElementById("painelNotificacoes");
   const abrindo = painel.style.display === "none";
-  painel.style.display = abrindo ? "block" : "none";
-  if (abrindo) await carregarPainelNotificacoes();
+  fecharPaineisLado();
+  if (!abrindo) return;
+  painel.style.display = "flex";
+  document.getElementById("fundoPainelLado").classList.add("visivel");
+  await carregarPainelNotificacoes();
 }
 
 async function carregarPainelNotificacoes() {
@@ -1042,23 +1095,68 @@ async function carregarPainelNotificacoes() {
   try {
     const res = await fetchProtegido(`${API_BASE}/notificacoes?status=abertas`);
     const lista = await res.json();
-    if (!Array.isArray(lista) || lista.length === 0) {
-      container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nenhuma notificação por aqui.</div>";
-      return;
+    let tarefas = [];
+    if (sessaoDeLiderancaNaTela()) {
+      try { const rf = await fetchProtegido(`${API_BASE}/fluxos?filtro=comigo`); const t = await rf.json(); tarefas = Array.isArray(t) ? t : []; } catch (e) { tarefas = []; }
     }
-    container.innerHTML = lista.map(n => `
+    avisosDados = { lista: Array.isArray(lista) ? lista : [], tarefas };
+    desenharAvisos();
+  } catch (e) {
+    container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível carregar.</div>";
+  }
+}
+
+const ROTULO_CATEGORIA_AVISO = (c) => String(c || "Outros").replace(/_/g, " ").toLowerCase().replace(/^./, (x) => x.toUpperCase());
+function desenharAvisos() {
+  const container = document.getElementById("listaNotificacoes");
+  const { lista, tarefas } = avisosDados;
+  const naoLidas = lista.filter((n) => !n.lida);
+  const contagem = document.getElementById("avisosContagemResolver");
+  if (contagem) contagem.textContent = `(${naoLidas.length + tarefas.length})`;
+  const btn = document.getElementById("btnAvisosSoResolver");
+  if (btn) { btn.classList.toggle("ativa", avisosSoResolver); btn.setAttribute("aria-pressed", avisosSoResolver ? "true" : "false"); }
+  // o quadro de filtros: os assuntos que existem nos avisos de agora
+  const categorias = [...new Set(lista.map((n) => n.categoria).filter(Boolean))];
+  const filtros = document.getElementById("avisosFiltros");
+  if (filtros) {
+    filtros.style.display = avisosFiltrosAbertos ? "flex" : "none";
+    filtros.innerHTML = categorias.length
+      ? [`<button type="button" class="chip-filtro ${avisosCategoria ? "" : "ativo"}" data-on-click="filtrarAvisosCategoria" data-args-click="${argsAttr("")}">Todos</button>`]
+        .concat(categorias.map((c) => `<button type="button" class="chip-filtro ${avisosCategoria === c ? "ativo" : ""}" data-on-click="filtrarAvisosCategoria" data-args-click="${argsAttr(String(c))}">${escaparHtmlEbd(ROTULO_CATEGORIA_AVISO(c))}</button>`)).join("")
+      : "<span class=\"subtitle\">Sem assuntos para filtrar.</span>";
+  }
+  const btnF = document.getElementById("btnFiltrosAvisos");
+  if (btnF) btnF.setAttribute("aria-expanded", avisosFiltrosAbertos ? "true" : "false");
+  const itens = lista.filter((n) => (!avisosSoResolver || !n.lida) && (!avisosCategoria || n.categoria === avisosCategoria));
+  let html = "";
+  if (tarefas.length && !avisosCategoria) {
+    html += `<p class="painel-lado-rotulo">Precisa de você (${tarefas.length})</p>` + tarefas.slice(0, 5).map((f) => `
+      <div class="item-notificacao item-resolver" data-on-click="abrirMinhasTarefasDosAvisos" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+        <span class="titulo-notificacao">${escaparHtmlEbd(f.tipoFluxoNome)}${f.atrasado ? " · atrasado" : ""}</span>
+        <span>${escaparHtmlEbd(f.etapaNome)} — prazo ${escaparHtmlEbd(new Date(f.prazoEtapaEm).toLocaleDateString("pt-BR"))}</span>
+      </div>`).join("") + (tarefas.length > 5 ? `<button type="button" class="btn-link" data-on-click="abrirMinhasTarefasDosAvisos">Ver as ${tarefas.length} tarefas</button>` : "");
+  }
+  if (itens.length) {
+    html += `<p class="painel-lado-rotulo">${avisosSoResolver ? "Não lidos" : "Avisos"} (${itens.length})</p>` + itens.map((n) => `
       <div class="item-notificacao ${n.lida ? "lida" : ""}" data-on-click="abrirNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}">
         <span class="titulo-notificacao">${escaparHtmlEbd(n.titulo)}</span>
         <span>${escaparHtmlEbd(n.mensagem)}</span>
         <div class="rodape-notificacao">
-          <span>${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
+          <span>${escaparHtmlEbd(ROTULO_CATEGORIA_AVISO(n.categoria))} · ${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
           <button class="btn-link" data-on-click="arquivarNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}" data-stop="click">Arquivar</button>
         </div>
       </div>
     `).join("");
-  } catch (e) {
-    container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível carregar.</div>";
   }
+  container.innerHTML = html || `<div class="painel-notificacoes-vazio">${avisosSoResolver ? "Nada para você resolver agora." : "Nenhum aviso por aqui."}</div>`;
+}
+function alternarAvisosSoResolver() { avisosSoResolver = !avisosSoResolver; desenharAvisos(); }
+function alternarFiltrosAvisos() { avisosFiltrosAbertos = !avisosFiltrosAbertos; desenharAvisos(); }
+function filtrarAvisosCategoria(categoria) { avisosCategoria = categoria || null; desenharAvisos(); }
+function abrirMinhasTarefasDosAvisos() {
+  fecharPaineisLado();
+  if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
+  mostrarSubAbaMeupainel("tarefas");
 }
 
 // ---- MINHAS TAREFAS (vB.3 — Motor de workflow genérico) ----
@@ -1240,13 +1338,7 @@ async function marcarTodasNotificacoesLidas() {
   await atualizarBadgeNotificacoes();
 }
 
-// Fecha o painel ao clicar fora dele (mesmo padrão de qualquer dropdown).
-document.addEventListener("click", (ev) => {
-  const caixa = document.getElementById("caixaSino") || document.querySelector(".caixa-sino");
-  const painel = document.getElementById("painelNotificacoes");
-  if (!painel || painel.style.display === "none" || !caixa) return;
-  if (!caixa.contains(ev.target)) painel.style.display = "none";
-});
+// FASE 10: os avisos e a busca são painéis do lado — fecham pelo ✕, pelo fundo escurecido (fecharPaineisLado) ou pelo Esc (modulos/casca.js).
 
 // Self-service: só aparece pra quem logou com a senha da liderança (não vale a entrada por PIN
 // ou código). Pede a senha ATUAL: o token sozinho não basta para trocar a senha — um token
@@ -1275,7 +1367,8 @@ function sairDoPainel() {
   limparSessao();
   document.getElementById("matriculaPainel").value = "";
   document.getElementById("senhaPainel").value = "";
-  voltarParaCheckin();
+  // FASE 10 — ao sair, volta para a ENTRADA (a primeira tela), não para a Portaria
+  mostrarTelaPainelInicial();
 }
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
@@ -1510,7 +1603,7 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+    return `<div class="card-modulo" data-modulo="${escaparHtmlEbd(String(chave ?? ""))}" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
@@ -1518,6 +1611,7 @@ function montarGradeModulos() {
 
 function entrarModulo(chave) {
   moduloAtual = chave;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(chave);   // FASE 10: o menu na cor do módulo
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById(`grupoModulo${capitalize(chave)}`).style.display = "block";
   document.getElementById("btnVoltarModulo").style.display = "flex";
@@ -1529,6 +1623,7 @@ function entrarModulo(chave) {
 
 function sairDoModulo() {
   moduloAtual = null;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(null);
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById("btnVoltarModulo").style.display = "none";
   mostrarAbaSecretaria("meupainel");
@@ -1540,9 +1635,9 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "minhavida", "meuperfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha Credencial", vinculos: "Vínculos Familiares",
+  perfil: "Início", minhavida: "Minha vida na igreja", meuperfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1561,7 +1656,7 @@ function mostrarSubAbaMeupainel(sub) {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
   });
-  document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
+  document.getElementById("tituloModulo").textContent = TITULOS_SUB_MEUPAINEL[sub] || "Início";   // FASE 10: o título é a própria parte ("Início", "Minha carteirinha"...)
   if (sub === "cartas") carregarMinhasCartas();
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
@@ -1591,6 +1686,10 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
+  // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
+  if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
+  if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
+  if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código
 }
 
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----
@@ -1828,7 +1927,7 @@ registrarAcoes({
   acaoMinhaTarefa, acessarPainel,
   alterarMeuPinAcao, alternarAjudaContextual,
   alternarLoginPorCodigo, alternarModoLeitura, alternarPainelNotificacoes, alternarPushAcao,
-  arquivarNotificacao,
+  arquivarNotificacao, abrirMinhasTarefasDosAvisos, alternarAvisosSoResolver, alternarBuscaSoModulo, alternarFiltrosAvisos, fecharPaineisLado, filtrarAvisosCategoria, onDigitarBuscaLado,
   ativarComTeclado,
   cancelarDelegacaoAcao,
   confirmarCodigoAcessoAcao,

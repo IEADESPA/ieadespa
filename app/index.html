@@ -26,7 +26,7 @@
   </div>
 
   <!-- TELA INICIAL: PORTARIA / CHECK-IN -->
-  <div id="telaCheckin">
+  <div id="telaCheckin" style="display:none;">
     <div class="caixa-login">
       <h2>Frequência Ministerial</h2>
       <p class="subtitle">IEADESPA — Ministério</p>
@@ -43,7 +43,7 @@
         <button id="btnBaterPonto" class="btn-confirmar" type="submit">Registrar Presença</button>
       </form>
 
-      <a href="#" class="link-secretaria" data-on-click="mostrarTelaPainelInicial">📋 Acessar meu Painel</a>
+      <a href="#" class="link-secretaria" data-on-click="mostrarTelaPainelInicial">← Voltar para a entrada</a>
       <!-- v7.8 — Preciso de ajuda: o canal de ajuda da criança e do adolescente, sem login e sem prova (módulo protecao.js) -->
       <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
       <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
@@ -51,11 +51,13 @@
   </div>
 
   <!-- PAINEL ÚNICO: um só acesso, os módulos visíveis dependem das permissões da pessoa -->
-  <div id="telaPainel" style="display:none;">
+  <!-- FASE 10 — a ENTRADA é a primeira tela (aprovada nas rodadas 2 a 5): a marca no alto e o cartão de entrar; a presença numa reunião fica no link de baixo -->
+  <div id="telaPainel" class="tela-entrada" style="display:flex;">
+    <div class="entrada-marca"><img src="icones/icone-192.png" alt="" /><div><strong>IEADESPA</strong><span>Graça e paz!</span></div></div>
 
     <!-- Portão de entrada (fecho da v7.5): matrícula + PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN. -->
     <div class="caixa-login" id="cxLoginPainel">
-      <h2>📋 Meu Painel</h2>
+      <h2>Entrar</h2>
       <p class="subtitle">Entre com a sua matrícula e o seu PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN.</p>
 
       <form data-on-submit="acessarPainel" data-prevent="submit">
@@ -104,7 +106,7 @@
 
       <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
       <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
-      <a href="#" class="link-secretaria" data-on-click="voltarParaCheckin">← Voltar para a Portaria</a>
+      <a href="#" class="link-secretaria" data-on-click="voltarParaCheckin">📝 Registrar presença numa reunião</a>
     </div>
 
     <!-- Criar o PIN (fecho da v7.5): aparece depois do código por e-mail, ou depois de entrar com o PIN provisório que a Secretaria gerou -->
@@ -138,37 +140,48 @@
                "Painel Principal"/home). Escolher um módulo (cards dentro de
                Meu Painel, ver montarGradeModulos()) troca a barra lateral
                inteira pela navegação daquele módulo só — o resto some. -->
-          <button class="btn-aba ativo" id="btnAbaMeupainel" data-on-click="sairDoModulo"><span class="icone">👤</span><span class="rotulo">Meu Painel</span></button>
+          <button class="btn-aba ativo" id="btnAbaMeupainel" data-on-click="irPilulaCelular" data-args-click='["inicio"]'><span class="icone">🏠</span><span class="rotulo">Início</span></button>
           <div class="submenu-aba" id="submenuMeupainel">
-            <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone">🪪</span><span class="rotulo">Minha Credencial</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelContribuicoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["contribuicoes"]'><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelLgpd" data-on-click="mostrarSubAbaMeupainel" data-args-click='["lgpd"]'><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCartas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
+            <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone">🏠</span><span class="rotulo">Início</span></button>
+            <span class="grupo-menu-rotulo" id="grupoMenuMinhaVida">Minha vida na igreja</span>
+            <button class="btn-subaba" id="btnSubMeupainelMinhavida" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhavida"]'><span class="icone">⛪</span><span class="rotulo">Minha vida na igreja</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone">🪪</span><span class="rotulo">Minha carteirinha</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVotacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["votacoes"]'><span class="icone">🗳️</span><span class="rotulo">Votações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelEventos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelContribuicoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["contribuicoes"]'><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone">✉️</span><span class="rotulo">Comunicações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCartas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelIdentidade" data-on-click="mostrarSubAbaMeupainel" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCanais" data-on-click="mostrarSubAbaMeupainel" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais</span></button>
+            <span class="grupo-menu-rotulo" id="grupoMenuMeuTrabalho">Meu trabalho</span>
+            <button class="btn-subaba" id="btnSubMeupainelTarefas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["tarefas"]'><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
             <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
             <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
             <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone">✉️</span><span class="rotulo">Comunicações</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelVotacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["votacoes"]'><span class="icone">🗳️</span><span class="rotulo">Votações</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelIdentidade" data-on-click="mostrarSubAbaMeupainel" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCanais" data-on-click="mostrarSubAbaMeupainel" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelEventos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSetores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelTarefas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["tarefas"]'><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
+            <span class="grupo-menu-rotulo" id="grupoMenuMeuPerfil">Meu Perfil</span>
+            <button class="btn-subaba" id="btnSubMeupainelMeuperfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["meuperfil"]'><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
             <button class="btn-subaba" id="btnSubMeupainelSeguranca" data-on-click="mostrarSubAbaMeupainel" data-args-click='["seguranca"]'><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelLgpd" data-on-click="mostrarSubAbaMeupainel" data-args-click='["lgpd"]'><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
           </div>
 
           <button class="btn-aba btn-aba-destaque" id="btnVoltarModulo" data-on-click="sairDoModulo" style="display:none;">
-            <span class="icone">←</span><span class="rotulo">Painel Principal</span>
+            <span class="icone">←</span><span class="rotulo">Menu principal</span>
           </button>
+          <!-- FASE 10, incremento 4: o cabeçalho colorido do módulo (preenchido por marcarModuloNaCasca, em modulos/casca.js) -->
+          <div class="menu-modulo-cabecalho" id="menuModuloCabecalho">
+            <span class="menu-modulo-rotulo">Módulo</span>
+            <span class="menu-modulo-titulo"><span id="menuModuloIcone" aria-hidden="true"></span><span id="menuModuloTitulo"></span></span>
+            <span class="menu-modulo-escopo" id="menuModuloEscopo"></span>
+          </div>
 
           <!-- MÓDULO: FINANCEIRO (v4.1) -->
           <div class="grupo-modulo" id="grupoModuloFinanceiro" style="display:none;">
@@ -467,6 +480,8 @@
            do cabeçalho e fecha ao escolher uma aba ou tocar fora. Até aqui ela ficava fixa com 230 px e o
            conteúdo sobrava com ~130 px numa tela de 360 px. No notebook nada muda. -->
       <div class="fundo-menu-celular" id="fundoMenuCelular" data-on-click="alternarMenuCelular"></div>
+      <!-- FASE 10 — o fundo escurecido dos painéis do lado (avisos e busca): tocar nele fecha -->
+      <div class="fundo-painel-lado" id="fundoPainelLado" data-on-click="fecharPaineisLado"></div>
       <main class="conteudo">
         <div class="cabecalho-secretaria">
           <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false">☰</button>
@@ -474,21 +489,37 @@
           <!-- vB.4 — busca global: mesmo motivo de ficar fora de qualquer
                aba (não é preciso saber de antemão onde o dado mora). -->
           <div class="caixa-busca-global">
-            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar pessoa, projeto, fornecedor..." data-on-input="onDigitarBuscaGlobal" />
-            <div class="painel-busca-global" id="painelBuscaGlobal" style="display:none;"></div>
+            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar (Ctrl K)" data-on-input="onDigitarBuscaGlobal" autocomplete="off" />
+          </div>
+          <!-- FASE 10 — a busca do alto num PAINEL DO LADO (aprovada na rodada 6): o campo no alto do painel; dentro de um módulo, presa a ele -->
+          <div class="painel-lado" id="painelBuscaGlobal" style="display:none;" role="dialog" aria-label="Buscar">
+            <div class="painel-lado-topo"><strong>Buscar</strong><button type="button" class="btn-icon" data-on-click="fecharPaineisLado" aria-label="Fechar">✕</button></div>
+            <input type="search" id="campoBuscaLado" placeholder="Pessoa, projeto, fornecedor..." data-on-input="onDigitarBuscaLado" autocomplete="off" />
+            <div id="filtroBuscaModulo" class="painel-lado-filtros"></div>
+            <div id="resultadosBuscaGlobal" class="painel-lado-lista"></div>
+            <p class="painel-lado-dica">Enter abre o primeiro · Esc fecha</p>
           </div>
           <!-- vB.2 — sino de notificações: fica no cabeçalho persistente
                (fora de qualquer aba), então aparece em todo módulo, não só
                numa tela específica. -->
+          <!-- FASE 10 — claro/escuro: escolhido aqui e lembrado neste aparelho; sem escolha, segue o aparelho (modulos/casca.js) -->
+          <button class="btn-tema" id="btnTema" type="button" data-on-click="alternarTemaAcao" title="Modo escuro" aria-label="Trocar para o modo escuro">🌙</button>
           <div class="caixa-sino">
             <button class="btn-sino" id="btnSino" data-on-click="alternarPainelNotificacoes" title="Notificações">
               🔔<span class="badge-sino" id="badgeSino" style="display:none;">0</span>
             </button>
-            <div class="painel-notificacoes" id="painelNotificacoes" style="display:none;">
-              <div class="painel-notificacoes-topo">
-                <strong>Notificações</strong>
-                <button class="btn-link" data-on-click="marcarTodasNotificacoesLidas">Marcar todas como lidas</button>
+            <!-- FASE 10 — os AVISOS num PAINEL DO LADO (aprovados nas rodadas 4 a 6): "só o que eu preciso resolver" ligado, o quadro de filtros recolhido -->
+            <div class="painel-notificacoes painel-lado" id="painelNotificacoes" style="display:none;" role="dialog" aria-label="Avisos">
+              <div class="painel-lado-topo">
+                <strong>Avisos</strong>
+                <button type="button" class="btn-icon" data-on-click="fecharPaineisLado" aria-label="Fechar">✕</button>
               </div>
+              <div class="painel-lado-controles">
+                <button type="button" class="chave-resolver ativa" id="btnAvisosSoResolver" data-on-click="alternarAvisosSoResolver" aria-pressed="true"><span class="chave-bolinha"></span>Só o que eu preciso resolver <span id="avisosContagemResolver"></span></button>
+                <button type="button" class="btn-link" id="btnFiltrosAvisos" data-on-click="alternarFiltrosAvisos" aria-expanded="false">Filtros ▾</button>
+                <button type="button" class="btn-link" data-on-click="marcarTodasNotificacoesLidas">Marcar todas como lidas</button>
+              </div>
+              <div id="avisosFiltros" class="painel-lado-filtros" style="display:none;"></div>
               <div id="listaNotificacoes" class="painel-notificacoes-lista"></div>
             </div>
           </div>
@@ -508,6 +539,13 @@
           </div>
         </div>
         <!-- v7.15 — a FAIXA da crise: enquanto houver regime de crise, toda tela da liderança mostra quem é o porta-voz único (montada por crise-seguranca.js). -->
+        <!-- FASE 10 — no CELULAR, o menu em abas em pílulas no alto (aprovado nas rodadas 8 e 12); no notebook não aparece -->
+        <nav class="pilulas-celular" id="pilulasCelular" aria-label="Menu principal">
+          <button type="button" class="pilula-celular ativa" data-pilula="inicio" data-on-click="irPilulaCelular" data-args-click='["inicio"]'>Início</button>
+          <button type="button" class="pilula-celular" data-pilula="trabalho" data-on-click="irPilulaCelular" data-args-click='["trabalho"]'>Trabalho</button>
+          <button type="button" class="pilula-celular" data-pilula="vida" data-on-click="irPilulaCelular" data-args-click='["vida"]'>Minha vida</button>
+          <button type="button" class="pilula-celular" data-pilula="avisos" data-on-click="irPilulaCelular" data-args-click='["avisos"]'>Avisos <span class="pilula-numero" id="pilulaAvisosNumero" style="display:none;"></span></button>
+        </nav>
         <div id="crsFaixa" class="crs-faixa" role="status" aria-live="polite" style="display:none;"></div>
 
       <!-- ABA: MEU PAINEL (sempre visível, todo mundo tem) — dividida em 3 sub-abas
@@ -517,6 +555,9 @@
 
         <!-- SUB-ABA: MEU PERFIL -->
         <div id="subMeupainelPerfil" class="sub-aba-secretaria">
+          <!-- FASE 10 — o Início (aprovado nas rodadas 3 e 4): a saudação, "Para você hoje" e "Meu trabalho" -->
+          <p class="inicio-saudacao" id="inicioSaudacao">Graça e paz!</p>
+          <p class="inicio-escopo" id="inicioEscopo">O que precisa de você hoje e o seu trabalho.</p>
 
           <!-- vB.5 — PWA instalável + notificação push. Só aparece quando o
                navegador realmente suporta (iOS Safari mais antigo, por
@@ -546,14 +587,14 @@
                quem logou de verdade (authToken); some sozinho se não tiver
                nenhum bloco com valor (nada de "0 em tudo" poluindo a tela). -->
           <div id="cxPainelInicial" style="display:none; margin-bottom:20px;">
-            <h3 style="margin-top:0;">📊 O que precisa da sua atenção hoje</h3>
+            <h3 class="inicio-rotulo">Para você hoje</h3>
             <div class="grade-modulos" id="gradePainelInicial"></div>
           </div>
 
           <!-- v4.2 — Grade de módulos (padrão "portal de serviços"): primeira
                coisa que a pessoa vê. Cada card só aparece se ela tiver
                permissão em algo daquele módulo (montarGradeModulos()). -->
-          <h3 style="margin-top:0;">🧩 Módulos</h3>
+          <h3 class="inicio-rotulo" id="rotuloMeuTrabalho">Meu trabalho</h3>
           <div class="grade-modulos" id="gradeModulos"></div>
           <hr />
 
@@ -569,6 +610,18 @@
                congregação, mostra o histórico do que foi lançado em seu
                nome. Fica em branco/some sozinho pra quem nunca foi
                vinculado como dizimista (silencioso, não é obrigatório). -->
+        </div>
+
+        <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
+        <div id="subMeupainelMinhavida" class="sub-aba-secretaria" style="display:none;">
+          <div class="vida-grade">
+            <section class="vida-cartao"><h3 class="vida-titulo">Meus próximos compromissos</h3><div id="minhaVidaCompromissos" class="vida-lista"></div></section>
+            <section class="vida-atalhos" id="minhaVidaAtalhos"></section>
+          </div>
+        </div>
+        <!-- FASE 10 — MEU PERFIL (rodada 7, opção 1): os quatro cartões — meus dados, segurança, aparelhos de confiança e preferências (modulos/casca.js) -->
+        <div id="subMeupainelMeuperfil" class="sub-aba-secretaria" style="display:none;">
+          <div class="perfil-grade" id="meuPerfilCartoes"></div>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS CADASTRAIS (v4.2.2 — fatiado de "Meu Perfil",
@@ -7673,6 +7726,7 @@
   <script src="modulos/assistencia.js"></script>
   <script src="modulos/calendario.js"></script>
   <script src="modulos/canais.js"></script>
+  <script src="modulos/casca.js"></script>
   <script src="modulos/catalogos-estrutura.js"></script>
   <script src="modulos/checkin-infantil.js"></script>
   <script src="modulos/comunicacao.js"></script>

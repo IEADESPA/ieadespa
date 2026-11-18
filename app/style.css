@@ -1279,3 +1279,542 @@ input.afm-data { width: 100%; padding: 12px; border: 2px solid var(--cor-borda);
 .ter-simulacao-item { margin: 10px 0; }
 fieldset.end-linhas { border: 1px solid var(--cor-borda); border-radius: 8px; padding: 8px 12px; margin: 10px 0; }
 fieldset.end-linhas legend { padding: 0 6px; font-weight: 600; }
+
+/* =====================================================================================================================================
+   FASE 10 — a CASCA NOVA (aprovada pelo responsável nas rodadas 2 a 7 e 12; ver docs/plano/fase-10-experiencia-design-performance.md):
+   as cores da Igreja (marinho #0A2342, ouro #FFB800 sempre com texto marinho), o modo escuro (html[data-tema="escuro"], escolhido no
+   topo e lembrado no aparelho), a entrada como primeira tela (foto em tela inteira no notebook; no celular a foto no alto, desfocada,
+   com o degradê até o "Entrar"), o menu principal recolhível, o Início com "Para você hoje" e "Meu trabalho" (os cartões na cor de
+   cada parte do sistema) e, no celular, o menu em ABAS EM PÍLULAS no alto, com NADA preso embaixo. Só variáveis do tema daqui para baixo.
+   ===================================================================================================================================== */
+:root {
+  --cor-primaria: #0A2342;
+  --cor-primaria-hover: #16365E;
+  --cor-primaria-suave: #E3ECFD;
+  --cor-ouro: #FFB800;
+  --cor-ouro-hover: #E6A600;
+  --cor-ouro-texto: #0A2342;
+  --cor-fundo: #F4F6FA;
+  --cor-superficie: #FFFFFF;
+  --cor-texto: #1B2430;
+  --cor-texto-suave: #5F6673;
+  --cor-borda: #DDE2EA;
+  --cor-titulo: #0A2342;
+  --cor-link: #1D4ED8;
+  --cor-campo: #F7F8FA;
+  --cor-menu: #0A2342;
+  --cor-menu-ativo: #16365E;
+  --cor-menu-texto-suave: #C9D4E3;
+  --raio: 14px;
+  color-scheme: light;
+}
+html[data-tema="escuro"] {
+  --cor-primaria: #C7D7FB;
+  --cor-primaria-hover: #FFFFFF;
+  --cor-primaria-suave: #13294A;
+  --cor-fundo: #0B1F3A;
+  --cor-superficie: #102A4C;
+  --cor-texto: #E8EEF7;
+  --cor-texto-suave: #B8C4D6;
+  --cor-borda: #23406A;
+  --cor-titulo: #FFFFFF;
+  --cor-link: #93B4F8;
+  --cor-campo: #0A1F3D;
+  --cor-menu: #061629;
+  --cor-menu-ativo: #13294A;
+  --cor-sucesso-suave: #14532D;
+  --cor-erro-suave: #4C1717;
+  --cor-secundaria-suave: #2A2410;
+  --cor-secundaria-texto: #FFC933;
+  --sombra: 0 10px 28px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+body { background-color: var(--cor-fundo); color: var(--cor-texto); }
+a { color: var(--cor-link); }
+input, textarea, select { background-color: var(--cor-campo); color: var(--cor-texto); border-color: var(--cor-borda); }
+h1, h2, h3, h4 { color: var(--cor-titulo); }
+.caixa-login h2, .cabecalho-secretaria h2 { color: var(--cor-titulo); }
+
+/* o botão principal é ouro com texto marinho em todo o sistema (o padrão aprovado nas rodadas) */
+.btn-confirmar { background-color: var(--cor-ouro); color: var(--cor-ouro-texto); border-radius: 10px; }
+.btn-confirmar:hover { background-color: var(--cor-ouro-hover); }
+.btn-confirmar.btn-perigo { background-color: var(--cor-erro); color: #fff; }
+.btn-confirmar.btn-secundario { background: transparent; color: var(--cor-titulo); border: 1px solid var(--cor-borda); }
+
+/* ---- o menu principal (barra da esquerda), recolhível pelo ☰ ---- */
+.sidebar { background: var(--cor-menu); }
+.btn-aba { color: #FFFFFF; border-radius: 9px; }
+.btn-aba.ativo { background: var(--cor-menu-ativo); color: #FFFFFF; box-shadow: inset 4px 0 0 var(--cor-ouro); font-weight: 700; }
+.btn-subaba { color: var(--cor-menu-texto-suave); border-radius: 8px; }
+.btn-subaba.ativo { background: var(--cor-menu-ativo); color: #FFFFFF; box-shadow: inset 3px 0 0 var(--cor-ouro); }
+.btn-aba-destaque { border-color: var(--cor-ouro); color: var(--cor-ouro); background: rgba(255, 184, 0, .10); }
+.btn-aba-destaque.ativo { background: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.sidebar .link-secretaria { color: var(--cor-ouro); }
+.grupo-menu-rotulo {
+  display: block; margin: 10px 8px 2px; font-size: 0.7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--cor-menu-texto-suave); opacity: .85;
+}
+.sidebar.recolhido .grupo-menu-rotulo { display: none; }
+
+/* ---- o topo: o título, a busca, o claro/escuro, o sino ---- */
+.cabecalho-secretaria {
+  background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 8px 12px; gap: 10px;
+}
+.cabecalho-secretaria h2 { flex: 1 1 auto; }
+.cabecalho-secretaria .btn-icon, .btn-tema { color: var(--cor-titulo); }
+.btn-tema {
+  border: 1px solid var(--cor-borda); background: var(--cor-superficie); border-radius: 10px; min-width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.05rem; padding: 0 10px; font-family: inherit;
+}
+.btn-tema:hover { border-color: var(--cor-ouro); }
+.btn-sino { color: var(--cor-titulo); }
+.badge-sino { background: var(--cor-ouro); color: var(--cor-ouro-texto); }
+
+/* ---- o Início: a saudação, "Para você hoje" e "Meu trabalho" ---- */
+.inicio-saudacao { margin: 0 0 4px; font-size: 1.45rem; font-weight: 800; color: var(--cor-titulo); }
+.inicio-escopo { margin: 0 0 18px; color: var(--cor-texto-suave); font-size: 0.92rem; }
+.inicio-rotulo { margin: 18px 0 10px; font-size: 0.78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cor-texto-suave); }
+.grade-modulos { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.card-modulo {
+  align-items: flex-start; text-align: left; gap: 10px; padding: 16px; border-radius: var(--raio);
+  border-left: 5px solid var(--cor-modulo, var(--cor-borda)); background: var(--cor-superficie);
+}
+.card-modulo .icone-modulo {
+  font-size: 1.5rem; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  background: var(--cor-modulo-fundo, var(--cor-primaria-suave));
+}
+.card-modulo:hover { border-left-color: var(--cor-modulo, var(--cor-ouro)); }
+/* a cor de cada parte do sistema (a paleta aprovada; no escuro, a versão clara da mesma família) */
+.card-modulo[data-modulo="membresia"], .card-modulo[data-modulo="habilitacao"] { --cor-modulo: #1D4ED8; --cor-modulo-fundo: #E3ECFD; }
+.card-modulo[data-modulo="financeiro"] { --cor-modulo: #0F766E; --cor-modulo-fundo: #DDF3EF; }
+.card-modulo[data-modulo="eclesiastica"], .card-modulo[data-modulo="trilhas"] { --cor-modulo: #6D28D9; --cor-modulo-fundo: #EDE7FB; }
+.card-modulo[data-modulo="departamentos"], .card-modulo[data-modulo="escalas"] { --cor-modulo: #BE185D; --cor-modulo-fundo: #FCE7F3; }
+.card-modulo[data-modulo="ebd"] { --cor-modulo: #0369A1; --cor-modulo-fundo: #DFF1FA; }
+.card-modulo[data-modulo="expansao"], .card-modulo[data-modulo="entidades"] { --cor-modulo: #C2410C; --cor-modulo-fundo: #FDEBDD; }
+.card-modulo[data-modulo="territorio"] { --cor-modulo: #15803D; --cor-modulo-fundo: #DCFCE7; }
+.card-modulo[data-modulo="calendario"], .card-modulo[data-modulo="eventos"] { --cor-modulo: #A21CAF; --cor-modulo-fundo: #FBE7FB; }
+.card-modulo[data-modulo="orgaosCentrais"], .card-modulo[data-modulo="orgaosRegionais"], .card-modulo[data-modulo="conformidade"], .card-modulo[data-modulo="acesso"] { --cor-modulo: #7A5800; --cor-modulo-fundo: #FFF4D6; }
+.card-modulo[data-modulo="disciplina"], .card-modulo[data-modulo="crise"] { --cor-modulo: #B91C1C; --cor-modulo-fundo: #FEE2E2; }
+.card-modulo[data-modulo="canais"] { --cor-modulo: #4338CA; --cor-modulo-fundo: #E8EAFD; }
+.card-modulo[data-modulo="assistenciasocial"], .card-modulo[data-modulo="psc"], .card-modulo[data-modulo="setores"] { --cor-modulo: #B45309; --cor-modulo-fundo: #FEF3C7; }
+.card-modulo[data-modulo="conquistas"] { --cor-modulo: #0E7490; --cor-modulo-fundo: #CFFAFE; }
+html[data-tema="escuro"] .card-modulo { --cor-modulo-fundo: #13294A; }
+html[data-tema="escuro"] .card-modulo[data-modulo="membresia"], html[data-tema="escuro"] .card-modulo[data-modulo="habilitacao"] { --cor-modulo: #93B4F8; }
+html[data-tema="escuro"] .card-modulo[data-modulo="financeiro"] { --cor-modulo: #5EEAD4; }
+html[data-tema="escuro"] .card-modulo[data-modulo="eclesiastica"], html[data-tema="escuro"] .card-modulo[data-modulo="trilhas"] { --cor-modulo: #C4B5FD; }
+html[data-tema="escuro"] .card-modulo[data-modulo="departamentos"], html[data-tema="escuro"] .card-modulo[data-modulo="escalas"] { --cor-modulo: #F9A8D4; }
+html[data-tema="escuro"] .card-modulo[data-modulo="ebd"] { --cor-modulo: #7DD3FC; }
+html[data-tema="escuro"] .card-modulo[data-modulo="expansao"], html[data-tema="escuro"] .card-modulo[data-modulo="entidades"] { --cor-modulo: #FDBA74; }
+html[data-tema="escuro"] .card-modulo[data-modulo="territorio"] { --cor-modulo: #86EFAC; }
+html[data-tema="escuro"] .card-modulo[data-modulo="calendario"], html[data-tema="escuro"] .card-modulo[data-modulo="eventos"] { --cor-modulo: #F0ABFC; }
+html[data-tema="escuro"] .card-modulo[data-modulo="orgaosCentrais"], html[data-tema="escuro"] .card-modulo[data-modulo="orgaosRegionais"], html[data-tema="escuro"] .card-modulo[data-modulo="conformidade"], html[data-tema="escuro"] .card-modulo[data-modulo="acesso"] { --cor-modulo: #FFC933; }
+html[data-tema="escuro"] .card-modulo[data-modulo="disciplina"], html[data-tema="escuro"] .card-modulo[data-modulo="crise"] { --cor-modulo: #FCA5A5; }
+html[data-tema="escuro"] .card-modulo[data-modulo="canais"] { --cor-modulo: #A5B4FC; }
+html[data-tema="escuro"] .card-modulo[data-modulo="assistenciasocial"], html[data-tema="escuro"] .card-modulo[data-modulo="psc"], html[data-tema="escuro"] .card-modulo[data-modulo="setores"] { --cor-modulo: #FCD34D; }
+html[data-tema="escuro"] .card-modulo[data-modulo="conquistas"] { --cor-modulo: #67E8F9; }
+
+/* ---- a ENTRADA (primeira tela): notebook = foto em tela inteira com o cartão do lado; celular = foto no alto, desfocada, degradê até o "Entrar".
+   A foto da Igreja entra quando eles mandarem (deitada 1920 × 1080 e em pé); até lá, o fundo marinho com a luz no lugar da foto. ---- */
+#telaPainel { position: relative; }
+#telaPainel.tela-entrada {
+  justify-content: center; align-items: center; padding: 24px;
+  background: linear-gradient(120deg, rgba(6, 22, 41, .92) 0%, rgba(10, 35, 66, .78) 45%, rgba(10, 35, 66, .35) 100%),
+              radial-gradient(circle at 78% 30%, #2B4A7A 0%, #0A2342 55%, #061629 100%);
+}
+.entrada-marca { display: none; }
+#telaPainel.tela-entrada .entrada-marca { display: flex; align-items: center; gap: 14px; color: #FFFFFF; position: absolute; top: 28px; left: 32px; }
+.entrada-marca img { width: 60px; height: 60px; border-radius: 14px; background: #FFFFFF; padding: 4px; }
+.entrada-marca strong { display: block; font-size: 1.5rem; letter-spacing: .04em; color: #FFFFFF; }
+.entrada-marca span { color: #E1E8F2; font-size: 0.95rem; }
+#telaPainel.tela-entrada .caixa-login { max-width: 420px; text-align: left; border-radius: 18px; padding: 28px 28px 22px; }
+#telaPainel.tela-entrada .caixa-login h2 { font-size: 1.5rem; }
+@media (min-width: 900px) {
+  #telaPainel.tela-entrada { justify-content: center; align-items: flex-end; padding-right: 8vw; }
+}
+@media (max-width: 640px) {
+  #telaPainel.tela-entrada {
+    justify-content: flex-end; padding: 0 0 18px;
+    background: linear-gradient(to bottom, rgba(6, 22, 41, .35) 0%, rgba(6, 22, 41, .05) 30%, var(--cor-fundo) 78%, var(--cor-fundo) 100%),
+                radial-gradient(circle at 50% 18%, #2B4A7A 0%, #0A2342 60%, #061629 100%);
+  }
+  #telaPainel.tela-entrada .entrada-marca { top: 22px; left: 22px; }
+  #telaPainel.tela-entrada .caixa-login { width: calc(100% - 24px); margin-top: 30vh; padding: 20px 18px 16px; }
+}
+
+/* ---- CELULAR: o menu em ABAS EM PÍLULAS no alto, logo abaixo do título; nada preso embaixo ---- */
+.pilulas-celular { display: none; }
+@media (max-width: 640px) {
+  .pilulas-celular { display: flex; gap: 6px; padding: 8px 0 10px; margin: 0 0 6px; background: var(--cor-fundo); }
+  .pilula-celular {
+    flex: 1 1 0; min-width: 0; height: 38px; border-radius: 19px; border: none; background: var(--cor-borda); color: var(--cor-texto);
+    font-family: inherit; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  }
+  .pilula-celular.ativa { background: var(--cor-ouro); color: var(--cor-ouro-texto); font-weight: 700; }
+  .pilula-numero {
+    min-width: 17px; height: 17px; border-radius: 9px; background: var(--cor-ouro); color: var(--cor-ouro-texto); font-size: 0.68rem; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0 4px;
+  }
+  .pilula-celular.ativa .pilula-numero { background: var(--cor-ouro-texto); color: var(--cor-ouro); }
+  .cabecalho-secretaria { border-radius: 12px; padding: 6px 8px; }
+  .inicio-saudacao { font-size: 1.2rem; }
+}
+
+/* no escuro a --cor-primaria é a cor clara de texto; os poucos FUNDOS que a usavam ganham o ouro de "selecionado" */
+html[data-tema="escuro"] .badge-status.badge-licenca,
+html[data-tema="escuro"] #btnModoLeitura[aria-pressed="true"],
+html[data-tema="escuro"] .paginacao button.ativo,
+html[data-tema="escuro"] .cal-pilula.ativo,
+html[data-tema="escuro"] .cal-dia.cal-selecionado { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); }
+html[data-tema="escuro"] .prt-btn-ajuda { color: var(--cor-titulo); }
+#btnModoLeitura { color: var(--cor-titulo); }
+.link-secretaria, .btn-link { color: var(--cor-link); }
+/* um "Início" só no menu: o botão grande já leva ao Início */
+#btnSubMeupainelPerfil { display: none; }
+
+/* ---- incremento 2: os AVISOS e a BUSCA como PAINÉIS DO LADO (rodadas 4 a 6); no celular ocupam a tela; fecham pelo ✕, pelo fundo ou pelo Esc ---- */
+.painel-lado {
+  position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: min(460px, 100vw); max-height: none; z-index: 71;
+  background: var(--cor-superficie); border-left: 1px solid var(--cor-borda); box-shadow: -20px 0 50px rgba(6, 22, 41, .28);
+  border-radius: 0; padding: 18px 18px 14px; flex-direction: column; gap: 12px; overflow-y: auto; color: var(--cor-texto);
+}
+.fundo-painel-lado { display: none; }
+.fundo-painel-lado.visivel { display: block; position: fixed; inset: 0; z-index: 70; background: rgba(4, 12, 24, .32); }
+.painel-lado-topo { display: flex; align-items: center; gap: 10px; }
+.painel-lado-topo strong { flex: 1; font-size: 1.15rem; color: var(--cor-titulo); }
+.painel-lado-topo .btn-icon { color: var(--cor-titulo); font-size: 1.1rem; }
+.painel-lado-controles { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.painel-lado-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.painel-lado-lista, .painel-lado .painel-notificacoes-lista { display: flex; flex-direction: column; gap: 4px; padding: 0; }
+.painel-lado-rotulo { margin: 8px 0 2px; font-size: 0.74rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cor-texto-suave); }
+.painel-lado-dica { margin: auto 0 0; font-size: 0.78rem; color: var(--cor-texto-suave); }
+.painel-lado input[type="search"] {
+  width: 100%; height: 48px; border: 2px solid var(--cor-titulo); border-radius: 12px; padding: 0 14px; font-size: 1rem; font-family: inherit;
+  background: var(--cor-campo); color: var(--cor-texto);
+}
+html[data-tema="escuro"] .painel-lado input[type="search"] { border-color: var(--cor-ouro); }
+.painel-lado .item-notificacao { border: 1px solid var(--cor-borda); border-radius: 10px; background: var(--cor-superficie); }
+.painel-lado .item-notificacao.item-resolver { border-left: 4px solid var(--cor-ouro); }
+.chip-filtro {
+  height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--cor-borda); background: transparent; color: var(--cor-texto);
+  font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.chip-filtro.ativo { background: var(--cor-titulo); border-color: var(--cor-titulo); color: var(--cor-superficie); }
+html[data-tema="escuro"] .chip-filtro.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.chave-resolver {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 6px; border-radius: 17px; border: 1px solid var(--cor-borda);
+  background: transparent; color: var(--cor-texto); font-family: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+}
+.chave-resolver .chave-bolinha { width: 34px; height: 20px; border-radius: 10px; background: var(--cor-borda); position: relative; flex: none; }
+.chave-resolver .chave-bolinha::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #FFFFFF; transition: left .15s; }
+.chave-resolver.ativa .chave-bolinha { background: var(--cor-ouro); }
+.chave-resolver.ativa .chave-bolinha::after { left: 16px; }
+@media (max-width: 640px) {
+  .painel-lado { width: 100vw; padding: 14px 14px 12px; border-left: none; }
+}
+
+/* o painel da busca mora dentro do topo, que centraliza os filhos (.cabecalho-secretaria > div): o painel estica e alinha à esquerda */
+.cabecalho-secretaria > .painel-lado { align-items: stretch; text-align: left; }
+
+/* ---- incremento 3: MEU PERFIL (os quatro cartões) e MINHA VIDA NA IGREJA (os próximos compromissos) ---- */
+.perfil-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.perfil-cartao, .vida-cartao { background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.perfil-cartao h3, .vida-titulo { margin: 0 0 4px; font-size: 1.05rem; color: var(--cor-titulo); }
+.perfil-linha { display: flex; align-items: center; gap: 12px; min-height: 42px; border-top: 1px solid var(--cor-borda); font-size: 0.92rem; }
+.perfil-linha > span:first-child { width: 140px; flex: none; color: var(--cor-texto-suave); }
+.perfil-linha strong { color: var(--cor-titulo); overflow-wrap: anywhere; }
+.perfil-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.perfil-acoes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; }
+.vida-grade { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.vida-lista { display: flex; flex-direction: column; }
+.vida-item { display: flex; gap: 14px; align-items: center; min-height: 56px; border-top: 1px solid var(--cor-borda); }
+.vida-item:first-child { border-top: none; }
+.vida-data { width: 52px; flex: none; text-align: center; display: flex; flex-direction: column; line-height: 1.1; }
+.vida-data strong { font-size: 1.3rem; color: var(--cor-titulo); }
+.vida-data span { font-size: 0.7rem; text-transform: uppercase; color: var(--cor-texto-suave); }
+.vida-item-titulo { font-weight: 600; color: var(--cor-titulo); }
+.vida-atalhos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.vida-atalho {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: var(--raio); border: 1px solid var(--cor-borda);
+  background: var(--cor-superficie); color: var(--cor-titulo); font-family: inherit; font-size: 0.92rem; font-weight: 600; cursor: pointer; text-align: left;
+}
+.vida-atalho:hover { border-color: var(--cor-ouro); }
+.vida-atalho-icone { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--cor-primaria-suave); font-size: 1.1rem; }
+@media (max-width: 640px) {
+  .perfil-grade, .vida-grade { grid-template-columns: 1fr; }
+  .perfil-linha > span:first-child { width: 110px; }
+}
+
+/* ---- incremento 4: o VISUAL NOVO em TODAS as telas que já existem (o conteúdo e o fluxo de cada uma não mudam; só a aparência).
+   O padrão aprovado nas rodadas: botão principal em ouro com texto marinho e os outros em contorno; campos de 44 px com rótulo forte;
+   tabelas num cartão, cabeçalho discreto, zebra leve e números alinhados; selos de situação em tom suave; abas internas em pílulas;
+   cada tela num cartão branco sobre o fundo; o menu da esquerda de cada módulo NA COR DO MÓDULO, com o cabeçalho colorido; e o modo
+   escuro em tudo. Só variáveis do tema daqui para baixo. ---- */
+:root {
+  --borda: var(--cor-borda);
+  --cor-campo-borda: #C9CFD8;
+  --cor-linha: #EEF1F5;
+  --cor-zebra: #FAFBFD;
+  --cor-tabela-cabecalho: #F4F6FA;
+  --cor-foco: #0A2342;
+  --cor-foco-anel: rgba(10, 35, 66, .18);
+  --cor-acento: #0A2342;
+  --cor-secundaria: #FFB800;
+  --cor-secundaria-hover: #E6A600;
+  --cor-secundaria-suave: #FFF4D6;
+  --cor-secundaria-texto: #7A5800;
+  --cor-aviso: #7A4A00;
+  --cor-perigo: #B91C1C;
+  --chip-verde-fundo: #DCFCE7; --chip-verde-texto: #166534;
+  --chip-ambar-fundo: #FEF3C7; --chip-ambar-texto: #7A4A00;
+  --chip-vermelho-fundo: #FEE2E2; --chip-vermelho-texto: #991B1B;
+  --chip-azul-fundo: #E3ECFD; --chip-azul-texto: #1D4ED8;
+  --chip-neutro-fundo: #EEF1F5; --chip-neutro-texto: #4B5563;
+  --cor-modulo: #0A2342;
+}
+html[data-tema="escuro"] {
+  --cor-campo-borda: #3C5A82;
+  --cor-linha: #1A3557;
+  --cor-zebra: #0E2646;
+  --cor-tabela-cabecalho: #0E2748;
+  --cor-foco: #FFB800;
+  --cor-foco-anel: rgba(255, 184, 0, .30);
+  --cor-acento: #FFB800;
+  --cor-secundaria-suave: #2A2410;
+  --cor-secundaria-texto: #FFC933;
+  --cor-aviso: #FCD34D;
+  --cor-perigo: #FCA5A5;
+  --cor-erro: #FCA5A5;
+  --cor-sucesso: #86EFAC;
+  --chip-verde-fundo: #14532D; --chip-verde-texto: #BBF7D0;
+  --chip-ambar-fundo: #3D2A05; --chip-ambar-texto: #FCD34D;
+  --chip-vermelho-fundo: #4C1717; --chip-vermelho-texto: #FCA5A5;
+  --chip-azul-fundo: #1E3A6E; --chip-azul-texto: #BFD0F7;
+  --chip-neutro-fundo: #1A3557; --chip-neutro-texto: #C9D4E3;
+  --cor-modulo: #FFB800;
+}
+
+/* cada tela num cartão sobre o fundo (o Início, Minha vida e Meu Perfil já têm os cartões deles) */
+.conteudo { background: var(--cor-fundo); }
+.aba-secretaria:not(:has(> .sub-aba-secretaria)),
+.aba-secretaria > .sub-aba-secretaria:not(#subMeupainelPerfil):not(#subMeupainelMinhavida):not(#subMeupainelMeuperfil) {
+  background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 22px 24px;
+  box-shadow: 0 1px 2px rgba(10, 35, 66, .05);
+}
+.aba-secretaria > .sub-aba-secretaria + .sub-aba-secretaria { margin-top: 0; }
+
+/* títulos e textos */
+.aba-secretaria h3, .sub-aba-secretaria h3 { font-size: 1.12rem; font-weight: 700; color: var(--cor-titulo); margin: 0 0 6px; line-height: 1.3; }
+.aba-secretaria h3:not(:first-child), .sub-aba-secretaria h3:not(:first-child) { margin-top: 22px; }
+.aba-secretaria h4, .sub-aba-secretaria h4, .aba-secretaria h5 { color: var(--cor-titulo); }
+.subtitle { color: var(--cor-texto-suave); line-height: 1.5; }
+.aba-secretaria hr, .sub-aba-secretaria hr { margin: 22px 0; border: none; border-top: 1px solid var(--cor-linha); }
+.input-group { margin-bottom: 14px; }
+.input-group label, .cal-form .input-group label { font-size: 0.86rem; font-weight: 600; color: var(--cor-titulo); margin-bottom: 6px; }
+
+/* campos e seleções: 44 px, borda fina, canto de 10 px, foco marinho (no escuro, ouro) */
+input[type="text"], input[type="number"], input[type="password"], input[type="email"], input[type="tel"], input[type="search"], input[type="url"],
+input[type="date"], input[type="month"], input[type="week"], input[type="time"], input[type="datetime-local"], input:not([type]), select, textarea,
+.cal-form input[type="date"], .cal-form input[type="time"], .cal-form input[type="number"], .cal-form-inline input[type="datetime-local"], input.afm-data {
+  min-height: 44px; padding: 10px 12px; border: 1px solid var(--cor-campo-borda); border-radius: 10px;
+  background-color: var(--cor-campo); color: var(--cor-texto); font-family: inherit; font-size: 16px; box-sizing: border-box; max-width: 100%;
+}
+textarea { line-height: 1.45; }
+select { cursor: pointer; }
+input::placeholder, textarea::placeholder { color: var(--cor-texto-suave); opacity: 1; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--cor-foco); box-shadow: 0 0 0 3px var(--cor-foco-anel); }
+input:disabled, select:disabled, textarea:disabled { opacity: .65; cursor: not-allowed; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--cor-acento); width: 18px; height: 18px; vertical-align: middle; }
+.psc-campos input[type="text"], .psc-form-inline input[type="text"], .psc-form-inline input[type="number"], .psc-form-inline textarea,
+.cal-form-inline input[type="text"], .cal-form-inline textarea { padding: 9px 12px; font-size: 0.95rem; }
+input[type="file"] { font-family: inherit; font-size: 0.9rem; color: var(--cor-texto-suave); max-width: 100%; }
+input[type="file"]::file-selector-button {
+  min-height: 40px; padding: 8px 14px; margin-right: 10px; border: 1px solid var(--cor-campo-borda); border-radius: 10px;
+  background: var(--cor-superficie); color: var(--cor-titulo); font-weight: 600; font-family: inherit; cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover { border-color: var(--cor-ouro); }
+fieldset { border: 1px solid var(--cor-borda); border-radius: 12px; }
+legend { color: var(--cor-titulo); font-weight: 600; }
+details > summary { cursor: pointer; color: var(--cor-titulo); font-weight: 600; }
+.cal-form, .cal-form-inline, .psc-form-inline { background: var(--cor-fundo); border-color: var(--cor-borda); border-radius: 12px; }
+
+/* botões: o principal em ouro (texto marinho); os outros em contorno; o de apagar em vermelho */
+.btn-confirmar {
+  min-height: 44px; padding: 10px 18px; font-size: 0.95rem; font-weight: 700; border-radius: 10px; border: 1px solid var(--cor-ouro);
+  line-height: 1.25; transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.btn-confirmar:hover { border-color: var(--cor-ouro-hover); }
+.btn-confirmar:disabled { opacity: .55; cursor: not-allowed; }
+.btn-secundario, .btn-confirmar.btn-secundario { background: transparent; color: var(--cor-titulo); border: 1px solid var(--cor-campo-borda); }
+.btn-secundario:hover, .btn-confirmar.btn-secundario:hover { background: var(--cor-primaria-suave); border-color: var(--cor-titulo); }
+.btn-perigo, .btn-confirmar.btn-perigo { background: #B91C1C; border-color: #B91C1C; color: #FFFFFF; }
+.btn-perigo:hover, .btn-confirmar.btn-perigo:hover { background: #991B1B; border-color: #991B1B; }
+.btn-link { color: var(--cor-link); font-weight: 600; text-decoration: none; }
+.btn-link:hover { text-decoration: underline; }
+.btn-link-perigo { color: var(--cor-perigo); }
+.btn-link-sucesso { color: var(--chip-verde-texto); }
+.btn-justificar, .evt-selo-congresso { background: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.btn-justificar:hover { background: var(--cor-ouro-hover); }
+.paginacao button { min-height: 34px; min-width: 34px; border-radius: 8px; border-color: var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto); }
+.paginacao button.ativo { background: var(--cor-ouro-texto); border-color: var(--cor-ouro-texto); color: #FFFFFF; font-weight: 700; }
+html[data-tema="escuro"] .paginacao button.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); }
+
+/* abas e subabas dentro das telas: as pílulas aprovadas (a marcada em ouro) */
+.cal-pilulas { gap: 8px; }
+.cal-pilula, .btn-tab-perfil {
+  min-height: 38px; border: 1px solid var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto);
+  border-radius: 19px; padding: 7px 16px; font-size: 0.88rem; font-weight: 600; font-family: inherit; cursor: pointer; margin: 0;
+}
+.cal-pilula:hover, .btn-tab-perfil:hover { border-color: var(--cor-ouro); color: var(--cor-titulo); }
+.cal-pilula.ativo, .btn-tab-perfil.ativo,
+html[data-tema="escuro"] .cal-pilula.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); font-weight: 700; }
+.tabs-perfil { gap: 8px; border-bottom: none; margin: 0 0 18px; }
+
+/* tabelas: num cartão, cabeçalho discreto, linhas finas, zebra leve, números alinhados à direita */
+.tabela-frequencia, .tabela-simples {
+  border-collapse: separate; border-spacing: 0; border: 1px solid var(--cor-borda); border-radius: 12px; overflow: hidden;
+  background: var(--cor-superficie); font-size: 0.9rem; font-variant-numeric: tabular-nums;
+}
+.rolagem-tabela, .cpa-rolagem { border-radius: 12px; }
+.tabela-frequencia th, .tabela-simples th {
+  background: var(--cor-tabela-cabecalho); color: var(--cor-texto-suave); font-size: 0.8rem; font-weight: 700; text-transform: none; letter-spacing: .01em;
+  padding: 11px 12px; border-bottom: 1px solid var(--cor-borda); text-align: left; vertical-align: bottom;
+}
+.tabela-frequencia td, .tabela-simples td { padding: 11px 12px; border-bottom: 1px solid var(--cor-linha); color: var(--cor-texto); vertical-align: middle; }
+.tabela-frequencia tbody tr:last-child td, .tabela-simples tbody tr:last-child td { border-bottom: none; }
+.tabela-frequencia tbody tr:nth-child(even) td, .tabela-simples tbody tr:nth-child(even) td { background: var(--cor-zebra); }
+.tabela-frequencia tbody tr:hover td, .tabela-simples tbody tr:hover td { background: var(--cor-primaria-suave); }
+.tabela-frequencia .casca-num, .tabela-simples .casca-num { text-align: right; white-space: nowrap; }
+.cpa-tabela th { color: var(--cor-texto-suave); }
+
+/* cartões, painéis e listas */
+.cartao-perfil, .cal-cartao, .psc-cartao, .crs-cartao, .idv-cartao, .cons-painel, .escada-requisitos, .com-comunicado, .com-cat,
+.cal-verif-cartao, .vol-cartao, .ent-form, .idv-opcoes, .cal-site-cartao { border-radius: 12px; border-color: var(--cor-borda); }
+.cal-cartao h4, .cal-cartao h5, .psc-cartao h4, .psc-cartao h5, .cartao-perfil .nome-perfil, .cpa-boletim-titulo { color: var(--cor-titulo); }
+.stat-tile { border-radius: 12px; }
+.stat-tile .stat-valor { color: var(--cor-titulo); }
+.lista-documentos a { color: var(--cor-titulo); border: 1px solid var(--cor-borda); border-radius: 12px; }
+.resumo-quorum { color: var(--cor-titulo); border-radius: 12px; }
+.banner-primeiro-acesso { border-radius: 12px; border-color: var(--cor-borda); }
+
+/* selos de situação: tom suave com texto forte (o mesmo padrão dos "chips" aprovados) */
+.badge-status {
+  display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+  background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto);
+}
+.badge-status.badge-ativo { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.badge-status.badge-licenca, html[data-tema="escuro"] .badge-status.badge-licenca { background: var(--chip-azul-fundo); border-color: transparent; color: var(--chip-azul-texto); }
+.badge-status.badge-inativo { background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto); }
+.badge-status.badge-desligado { background: var(--chip-vermelho-fundo); color: var(--chip-vermelho-texto); }
+.badge-status.badge-pendente { background: var(--chip-ambar-fundo); color: var(--chip-ambar-texto); }
+.psc-chip, .psc-selo, .cal-selo:not(.cal-selo-nivel), .cal-st-deferido, .vol-etiqueta { border-radius: 12px; background: var(--chip-azul-fundo); color: var(--chip-azul-texto); }
+.tag-pendente, .psc-alerta-selo, .cal-st-proposto, .vol-etiqueta-alerta, .cnl-fase-fora,
+.psc-selo.psc-alerta-selo, .psc-chip.psc-alerta-selo, .cal-selo.cal-st-proposto, .vol-etiqueta.vol-etiqueta-alerta { background: var(--chip-ambar-fundo); color: var(--chip-ambar-texto); }
+.psc-ok, .cal-st-homologado, .psc-selo.psc-ok, .psc-chip.psc-ok, .cal-selo.cal-st-homologado,
+.prt-selo.cal-st-homologado, .chk-selo.cal-st-homologado, .cpa-selo.cal-st-homologado { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.psc-erro, .cal-st-indeferido, .cal-st-absorvido, .psc-selo.psc-erro, .psc-chip.psc-erro,
+.cal-selo.cal-st-indeferido, .cal-selo.cal-st-absorvido { background: var(--chip-vermelho-fundo); color: var(--chip-vermelho-texto); }
+.psc-neutro, .cal-st-cancelado, .psc-selo.psc-neutro, .psc-chip.psc-neutro, .cal-selo.cal-st-cancelado { background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto); border-color: transparent; }
+
+/* avisos dentro das telas (o texto escuro fixo de antes some no modo escuro: aqui ele segue o tema) */
+.psc-aviso, .psc-orientacao, .cal-aviso-remarcacao, .cnl-incompleto, .evt-atencao, .vol-aviso, .prt-ajuda-aviso, .chk-aguardando, .cpa-falha {
+  background: var(--cor-secundaria-suave); color: var(--chip-ambar-texto); border-left-color: var(--cor-ouro); border-radius: 10px;
+}
+.cnl-contador-alerta .cnl-contador-valor, .mnr-contador-alerta .mnr-contador-valor, .prt-contador-alerta .prt-contador-valor,
+.chk-aviso-faixa, .idv-alerta, .cnl-fase-urgente { color: var(--chip-ambar-texto); }
+.cnl-fase-urgente { background: var(--chip-ambar-fundo); }
+.cnl-aviso-senha { border-radius: 10px; }
+html[data-tema="escuro"] .prt-selo.cal-st-homologado, html[data-tema="escuro"] .chk-selo.cal-st-homologado, html[data-tema="escuro"] .cpa-selo.cal-st-homologado,
+html[data-tema="escuro"] .chk-tel, html[data-tema="escuro"] .prt-ajuda-ok h4, html[data-tema="escuro"] .chk-lote-impresso { color: var(--chip-verde-texto); }
+html[data-tema="escuro"] #subMeupainelCheckininfantil .psc-legenda, html[data-tema="escuro"] #abaCheckininfantil .psc-legenda,
+html[data-tema="escuro"] #subMeupainelCheckininfantil .subtitle:not(.psc-aviso), html[data-tema="escuro"] #abaCheckininfantil .subtitle:not(.psc-aviso),
+html[data-tema="escuro"] #subMeupainelCuidado .psc-legenda, html[data-tema="escuro"] #abaCuidadopastoral .psc-legenda,
+html[data-tema="escuro"] #subMeupainelCuidado .subtitle:not(.psc-aviso), html[data-tema="escuro"] #abaCuidadopastoral .subtitle:not(.psc-aviso) { color: var(--cor-texto-suave); }
+/* no escuro o vermelho e o verde viram cor de TEXTO (claros); os FUNDOS cheios com letra branca guardam o tom forte */
+html[data-tema="escuro"] .btn-presenca-offline.ativo-ausente, html[data-tema="escuro"] .cnl-fase-vencida, html[data-tema="escuro"] .cnl-aviso-vencida,
+html[data-tema="escuro"] .evt-urgente, html[data-tema="escuro"] .prt-tel-urgente, html[data-tema="escuro"] .prt-relogio-vencido, html[data-tema="escuro"] .chk-alergia,
+html[data-tema="escuro"] .cpa-selo.cpa-vencido, html[data-tema="escuro"] .cpa-risco-topo { background: #B91C1C; border-color: #B91C1C; color: #FFFFFF; }
+html[data-tema="escuro"] .btn-presenca-offline.ativo-presente { background: #15803D; border-color: #15803D; color: #FFFFFF; }
+
+/* avisos que somem sozinhos, a janela de confirmar */
+.toast { border-radius: 12px; border: 1px solid var(--cor-borda); border-left: 5px solid var(--cor-titulo); font-weight: 500; }
+.toast.toast-sucesso { border-left-color: #15803D; }
+.toast.toast-erro { border-left-color: #B91C1C; }
+#modalOverlay { background: rgba(6, 22, 41, .55); }
+.modal-caixa { border-radius: 16px; border: 1px solid var(--cor-borda); padding: 24px; }
+.modal-caixa h3 { color: var(--cor-titulo); }
+.modal-acoes button { min-height: 44px; }
+
+/* ---- o MENU DE CADA MÓDULO na cor do módulo (aprovado nas rodadas 3, 4 e 7: "o menu todo na cor", o cabeçalho colorido com o nome do
+   módulo e de quem está vendo, "← Menu principal" no alto); a faixa da mesma cor no alto da tela diz onde a pessoa está ---- */
+.menu-modulo-cabecalho { display: none; }
+.painel-layout[data-modulo] .menu-modulo-cabecalho {
+  display: flex; flex-direction: column; gap: 3px; margin: 4px 2px 10px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .12);
+}
+.menu-modulo-rotulo { font-size: 0.7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cor-menu-texto-suave); }
+.menu-modulo-titulo { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; color: #FFFFFF; line-height: 1.25; }
+.menu-modulo-escopo { font-size: 0.78rem; color: var(--cor-menu-texto-suave); }
+.menu-modulo-escopo:empty { display: none; }
+.sidebar.recolhido .menu-modulo-cabecalho { display: none !important; }
+.painel-layout[data-modulo] #btnAbaMeupainel, .painel-layout[data-modulo] #submenuMeupainel { display: none !important; }
+.painel-layout[data-modulo] #btnVoltarModulo {
+  border: none; background: transparent; color: var(--cor-menu-texto-suave); font-size: 0.86rem; font-weight: 600; padding: 6px 10px; min-height: 34px; box-shadow: none;
+}
+.painel-layout[data-modulo] #btnVoltarModulo:hover { background: rgba(255, 255, 255, .10); color: #FFFFFF; }
+.painel-layout[data-modulo] .divisor-sidebar { display: none; }
+.painel-layout[data-modulo] .btn-aba { color: #FFFFFF; }
+.painel-layout[data-modulo] .btn-subaba { color: var(--cor-menu-texto-suave); }
+.painel-layout[data-modulo] .btn-subaba:hover, .painel-layout[data-modulo] .btn-aba:hover { background: rgba(255, 255, 255, .10); color: #FFFFFF; }
+.painel-layout[data-modulo] .btn-aba.ativo, .painel-layout[data-modulo] .btn-subaba.ativo { color: #FFFFFF; }
+.painel-layout[data-modulo] .cabecalho-secretaria { box-shadow: inset 0 5px 0 var(--cor-modulo); padding-top: 13px; }
+.painel-layout[data-modulo] .aba-secretaria h3:first-child, .painel-layout[data-modulo] .sub-aba-secretaria h3:first-child { border-left: 4px solid var(--cor-modulo); padding-left: 10px; }
+/* as famílias de cor (as mesmas dos cartões do Início): o menu num tom bem escuro da família, o item marcado um pouco mais claro */
+.painel-layout[data-modulo="membresia"], .painel-layout[data-modulo="habilitacao"] { --cor-menu: #1A3275; --cor-menu-ativo: #26449A; --cor-menu-texto-suave: #C7D5F8; --cor-modulo: #1D4ED8; }
+.painel-layout[data-modulo="financeiro"] { --cor-menu: #0B4A44; --cor-menu-ativo: #126058; --cor-menu-texto-suave: #B6E6DE; --cor-modulo: #0F766E; }
+.painel-layout[data-modulo="eclesiastica"], .painel-layout[data-modulo="trilhas"] { --cor-menu: #3B1478; --cor-menu-ativo: #55249E; --cor-menu-texto-suave: #D5CAF5; --cor-modulo: #6D28D9; }
+.painel-layout[data-modulo="departamentos"], .painel-layout[data-modulo="escalas"] { --cor-menu: #6B0F37; --cor-menu-ativo: #8C1A4B; --cor-menu-texto-suave: #F6C9DD; --cor-modulo: #BE185D; }
+.painel-layout[data-modulo="ebd"] { --cor-menu: #08405F; --cor-menu-ativo: #0D5A82; --cor-menu-texto-suave: #C2E6F7; --cor-modulo: #0369A1; }
+.painel-layout[data-modulo="expansao"], .painel-layout[data-modulo="entidades"] { --cor-menu: #6A2309; --cor-menu-ativo: #8C330F; --cor-menu-texto-suave: #F8D3BA; --cor-modulo: #C2410C; }
+.painel-layout[data-modulo="territorio"] { --cor-menu: #0D4A24; --cor-menu-ativo: #156433; --cor-menu-texto-suave: #C2EDD0; --cor-modulo: #15803D; }
+.painel-layout[data-modulo="calendario"], .painel-layout[data-modulo="eventos"] { --cor-menu: #5C0F63; --cor-menu-ativo: #7A1683; --cor-menu-texto-suave: #F2CCF5; --cor-modulo: #A21CAF; }
+.painel-layout[data-modulo="orgaosCentrais"], .painel-layout[data-modulo="orgaosRegionais"], .painel-layout[data-modulo="conformidade"], .painel-layout[data-modulo="acesso"] { --cor-menu: #5A4100; --cor-menu-ativo: #73550A; --cor-menu-texto-suave: #F0DFA8; --cor-modulo: #7A5800; }
+.painel-layout[data-modulo="disciplina"], .painel-layout[data-modulo="crise"] { --cor-menu: #6E1010; --cor-menu-ativo: #8E1C1C; --cor-menu-texto-suave: #F7CACA; --cor-modulo: #B91C1C; }
+.painel-layout[data-modulo="canais"] { --cor-menu: #26206E; --cor-menu-ativo: #362F96; --cor-menu-texto-suave: #CED1F8; --cor-modulo: #4338CA; }
+.painel-layout[data-modulo="assistenciasocial"], .painel-layout[data-modulo="psc"], .painel-layout[data-modulo="setores"] { --cor-menu: #5E2D05; --cor-menu-ativo: #7A3D08; --cor-menu-texto-suave: #F7DDB0; --cor-modulo: #B45309; }
+.painel-layout[data-modulo="conquistas"] { --cor-menu: #0A3F4D; --cor-menu-ativo: #0F5668; --cor-menu-texto-suave: #BDE9F3; --cor-modulo: #0E7490; }
+html[data-tema="escuro"] .painel-layout[data-modulo="membresia"], html[data-tema="escuro"] .painel-layout[data-modulo="habilitacao"] { --cor-menu: #0C1A3D; --cor-menu-ativo: #1A2C5C; --cor-modulo: #93B4F8; }
+html[data-tema="escuro"] .painel-layout[data-modulo="financeiro"] { --cor-menu: #082B28; --cor-menu-ativo: #0F3D3A; --cor-modulo: #5EEAD4; }
+html[data-tema="escuro"] .painel-layout[data-modulo="eclesiastica"], html[data-tema="escuro"] .painel-layout[data-modulo="trilhas"] { --cor-menu: #1C0E38; --cor-menu-ativo: #33205F; --cor-modulo: #C4B5FD; }
+html[data-tema="escuro"] .painel-layout[data-modulo="departamentos"], html[data-tema="escuro"] .painel-layout[data-modulo="escalas"] { --cor-menu: #33081B; --cor-menu-ativo: #4A1530; --cor-modulo: #F9A8D4; }
+html[data-tema="escuro"] .painel-layout[data-modulo="ebd"] { --cor-menu: #06243A; --cor-menu-ativo: #0C3A52; --cor-modulo: #7DD3FC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="expansao"], html[data-tema="escuro"] .painel-layout[data-modulo="entidades"] { --cor-menu: #2E1608; --cor-menu-ativo: #4A2410; --cor-modulo: #FDBA74; }
+html[data-tema="escuro"] .painel-layout[data-modulo="territorio"] { --cor-menu: #072A15; --cor-menu-ativo: #14532D; --cor-modulo: #86EFAC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="calendario"], html[data-tema="escuro"] .painel-layout[data-modulo="eventos"] { --cor-menu: #2D0A31; --cor-menu-ativo: #4A1650; --cor-modulo: #F0ABFC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="orgaosCentrais"], html[data-tema="escuro"] .painel-layout[data-modulo="orgaosRegionais"], html[data-tema="escuro"] .painel-layout[data-modulo="conformidade"], html[data-tema="escuro"] .painel-layout[data-modulo="acesso"] { --cor-menu: #2E2405; --cor-menu-ativo: #45370A; --cor-modulo: #FFC933; }
+html[data-tema="escuro"] .painel-layout[data-modulo="disciplina"], html[data-tema="escuro"] .painel-layout[data-modulo="crise"] { --cor-menu: #330A0A; --cor-menu-ativo: #4C1717; --cor-modulo: #FCA5A5; }
+html[data-tema="escuro"] .painel-layout[data-modulo="canais"] { --cor-menu: #15133A; --cor-menu-ativo: #26265E; --cor-modulo: #A5B4FC; }
+html[data-tema="escuro"] .painel-layout[data-modulo="assistenciasocial"], html[data-tema="escuro"] .painel-layout[data-modulo="psc"], html[data-tema="escuro"] .painel-layout[data-modulo="setores"] { --cor-menu: #2E1A04; --cor-menu-ativo: #3D2A05; --cor-modulo: #FCD34D; }
+html[data-tema="escuro"] .painel-layout[data-modulo="conquistas"] { --cor-menu: #062530; --cor-menu-ativo: #0B3A47; --cor-modulo: #67E8F9; }
+.sidebar .abas-secretaria { border-bottom: none; margin-bottom: 0; }
+.vol-selo-ok { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); border-radius: 10px; }
+.psc-sinal-mini.psc-concluido { border-color: var(--chip-verde-texto); color: var(--chip-verde-texto); }
+/* os poucos fundos claros escritos direto no código das telas (Situação do Tesouro, PDQ, a foto vazia da lista de pessoas) seguem o modo escuro */
+html[data-tema="escuro"] .conteudo [style*="background:#fff"], html[data-tema="escuro"] .conteudo [style*="background:#f7f7f7"] { background: var(--cor-superficie) !important; color: var(--cor-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#eef7ee"] { background: var(--chip-verde-fundo) !important; color: var(--chip-verde-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#fff7e6"] { background: var(--chip-ambar-fundo) !important; color: var(--chip-ambar-texto); }
+html[data-tema="escuro"] .conteudo [style*="background:#e5e5e5"] { background: var(--chip-neutro-fundo) !important; color: var(--chip-neutro-texto) !important; }
+html[data-tema="escuro"] .conteudo [style*="solid #e0e0e0"], html[data-tema="escuro"] .conteudo [style*="solid #e5e5e5"] { border-color: var(--cor-borda) !important; }
+/* botões de filtro que usam a classe da subaba do menu, mas ficam dentro da tela (ex.: Minhas Tarefas): pílulas */
+.conteudo .btn-subaba {
+  display: inline-flex; width: auto; min-height: 38px; border: 1px solid var(--cor-campo-borda); background: var(--cor-superficie); color: var(--cor-texto);
+  border-radius: 19px; padding: 7px 16px; font-size: 0.88rem; font-weight: 600; box-shadow: none;
+}
+.conteudo .btn-subaba:hover { border-color: var(--cor-ouro); color: var(--cor-titulo); background: var(--cor-superficie); }
+.conteudo .btn-subaba.ativo { background: var(--cor-ouro); border-color: var(--cor-ouro); color: var(--cor-ouro-texto); box-shadow: none; }
+
+@media (max-width: 640px) {
+  .aba-secretaria:not(:has(> .sub-aba-secretaria)),
+  .aba-secretaria > .sub-aba-secretaria:not(#subMeupainelPerfil):not(#subMeupainelMinhavida):not(#subMeupainelMeuperfil) { padding: 16px 14px; border-radius: 12px; }
+  .tabela-frequencia, .tabela-simples { border-radius: 10px; }
+  .cal-pilula, .btn-tab-perfil { padding: 7px 13px; font-size: 0.84rem; }
+}

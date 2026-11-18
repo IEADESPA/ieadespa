@@ -325,15 +325,29 @@ if (typeof describe === "function") {
       expect(ler("credencial.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
     });
 
-    test("service-worker: cache novo (v63), eventos.js e todos os módulos na casca offline", () => {
+    test("service-worker: cache novo (v64), eventos.js e todos os módulos na casca offline", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v63";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v64";/);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));
     });
 
     // Com a CSP estrita o `connect-src 'self'` vale também para o service worker: o fetch() dele para as fontes do Google era recusado e a página perdia a fonte
     // (a recusa só aparece no console do service worker, não na página). Por isso ele só trata pedidos do PRÓPRIO endereço e deixa os de fora para o navegador.
+    // FASE 10, etapa 2: as letras moram no próprio sistema (app/fontes, licença OFL junto); a CSP não aceita mais o Google Fonts
+    test("as letras são servidas de dentro: nada do Google Fonts no index.html nem na CSP, e cada família com a licença OFL", () => {
+      expect(ler("index.html")).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      const cfg = JSON.parse(ler("staticwebapp.config.json"));
+      const csp = cfg.globalHeaders["Content-Security-Policy"];
+      expect(csp).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      expect(csp).toMatch(/font-src 'self';/);
+      const css = ler("style.css");
+      const arquivos = [...css.matchAll(/url\("(fontes\/[^"]+\.woff2)"\)/g)].map((m) => m[1]);
+      expect(arquivos.length).toBeGreaterThanOrEqual(20);
+      for (const a of arquivos) expect(fs.existsSync(path.join(APP, a))).toBe(true);
+      for (const pasta of fs.readdirSync(path.join(APP, "fontes"))) expect(fs.readFileSync(path.join(APP, "fontes", pasta, "OFL.txt"), "utf8")).toMatch(/SIL Open Font License/);
+    });
+
     test("service-worker: ignora pedido de outra origem (antes do respondWith), para não cair no connect-src 'self'", () => {
       const sw = ler("service-worker.js");
       const ouvinte = sw.slice(sw.indexOf('addEventListener("fetch"'));

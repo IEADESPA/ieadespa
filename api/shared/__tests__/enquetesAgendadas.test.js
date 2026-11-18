@@ -39,6 +39,11 @@ function monta(extra = {}) {
     status: "ABERTA", resultadoAprovado: null, criadoPor: null, dataFechamentoPrevista: FUTURO, ...extra }]);
   quando(/FROM PerguntasEnquete WHERE EnqueteId = @id ORDER BY Ordem/, [{ perguntaId: 10, ordem: 1, titulo: "Qual?", tipo: "OPCOES" }]);
   quando(/FROM OpcoesEnquete WHERE PerguntaId = @id/, [{ opcaoId: 100, texto: "A" }, { opcaoId: 101, texto: "B" }]);
+  // raio-x de velocidade 3: a LISTA lê as enquetes de uma vez (quatro consultas fixas)
+  quando(/FROM Enquetes WHERE EnqueteId IN \(SELECT CAST\(value AS INT\) FROM OPENJSON\(@ids\)\)/, [{ enqueteId: 1, titulo: "Tema", descricao: null, visibilidade: "SECRETA", publicoTipo: "TODOS_ATIVOS",
+    vinculante: false, quorumTipo: null, status: "ABERTA", resultadoAprovado: null, criadoPor: null, dataFechamentoPrevista: FUTURO, ...extra }]);
+  quando(/FROM PerguntasEnquete WHERE EnqueteId IN/, [{ enqueteId: 1, perguntaId: 10, ordem: 1, titulo: "Qual?", tipo: "OPCOES" }]);
+  quando(/FROM OpcoesEnquete op JOIN PerguntasEnquete pq/, [{ perguntaId: 10, opcaoId: 100, texto: "A" }, { perguntaId: 10, opcaoId: 101, texto: "B" }]);
   quando(/AS apto/, [{ apto: 1 }]);
 }
 const votar = (token = tokenDe(20)) => chamar({ metodo: "POST", id: "1", acao: "votar", corpo: { respostas: [{ perguntaId: 10, opcaoId: 100 }] }, token });
@@ -136,6 +141,7 @@ describe("a lista e o encerramento", () => {
       quando(/SELECT EnqueteId FROM IdentidadeCiclos WHERE EnqueteId IS NOT NULL/, [{ EnqueteId: 1 }]);
       monta({ dataFechamentoPrevista: prevista });
       quando(/FROM RespostasEnquete r JOIN MembroReferencia m/, [{ membroId: 20, nome: "Luz", opcaoId: 100 }, { membroId: 21, nome: "Dora", opcaoId: 101 }]);
+      quando(/FROM RespostasEnquete r JOIN PerguntasEnquete pq/, [{ perguntaId: 10, membroId: 20, nome: "Luz", opcaoId: 100 }, { perguntaId: 10, membroId: 21, nome: "Dora", opcaoId: 101 }]);
       const r = await chamar({ token: GERAL() });
       const opcoes = r.body[0].perguntas[0].opcoes;
       expect(opcoes.every((o) => o.votos !== undefined)).toBe(deveMostrar);

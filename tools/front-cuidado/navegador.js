@@ -317,7 +317,7 @@ async function rodarViewport(nav, nome, viewport) {
     await clicarId("btnCpaSecaoFila");
     await esperar(() => document.querySelectorAll("#cpaFilaLista .cpa-cartao").length >= 4, "a fila de novo");
     await abrirMenuCelular();
-    await clicarTexto("button", "Painel Principal", "#sidebar");
+    await clicarTexto("button", "Menu principal", "#sidebar");
     const saida = await page.evaluate(() => ({ fila: document.getElementById("cpaFilaLista").innerHTML === "", pedidos: document.getElementById("cpaPedLista").innerHTML === "", aba: getComputedStyle(document.getElementById("abaCuidadopastoral")).display }));
     if (!saida.fila || !saida.pedidos || saida.aba !== "none") problema(`sair da aba devia esvaziar a fila e os pedidos: ${JSON.stringify(saida)}`);
     await semTexto("Maria Afastada", "depois de sair da aba");

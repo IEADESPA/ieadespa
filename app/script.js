@@ -1611,6 +1611,7 @@ function montarGradeModulos() {
 
 function entrarModulo(chave) {
   moduloAtual = chave;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(chave);   // FASE 10: o menu na cor do módulo
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById(`grupoModulo${capitalize(chave)}`).style.display = "block";
   document.getElementById("btnVoltarModulo").style.display = "flex";
@@ -1622,6 +1623,7 @@ function entrarModulo(chave) {
 
 function sairDoModulo() {
   moduloAtual = null;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(null);
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById("btnVoltarModulo").style.display = "none";
   mostrarAbaSecretaria("meupainel");

@@ -139,6 +139,15 @@ describe("GET /api/pessoas?pagina=N — os filtros do que falta e do rol", () =>
     const q = rodou(/SELECT COUNT\(\*\) AS total/)[0];
     expect(q.sql).toMatch(/\(m\.Cpf IS NULL\) AND ISNULL\(m\.Status, N'ATIVO'\) NOT IN \(N'DESLIGADO', N'FALECIDO'\)/);
   });
+  test("o departamento vai para o banco; inválido é recusado", async () => {
+    quando(/SELECT COUNT\(\*\) AS total/, respostaPaginada);
+    await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", departamentoId: "4" });
+    const q = rodou(/SELECT COUNT\(\*\) AS total/)[0];
+    expect(q.inputs.filtroDep).toBe(4);
+    expect(q.sql).toMatch(/m\.DepartamentoId = @filtroDep/);
+    const r = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", departamentoId: "x" });
+    expect(r.status).toBe(400);
+  });
   test("só quem saiu", async () => {
     quando(/SELECT COUNT\(\*\) AS total/, respostaPaginada);
     await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", rol: "saidas" });

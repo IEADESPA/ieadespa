@@ -239,7 +239,8 @@ function mostrarAbaSecretaria(aba) {
   if (typeof comAbaMudou === "function") comAbaMudou(aba);   // v7.12: o grupo, o relatório (nomes e telefones) e as escolhas de comunicação não ficam para trás
   if (typeof crsAbaMudou === "function") crsAbaMudou(aba);   // v7.15: a aba da crise fecha o que estava aberto e a faixa da crise é relida de tempos em tempos
   if (typeof cpaAbaMudou === "function") cpaAbaMudou(aba);   // v7.11: a fila, o acompanhamento e a nota pastoral aberta (e, fora de Meu Painel, os pedidos que a pessoa escrevia) não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) e as fichas não ficam para trás quando a pessoa vai para outra tela
-  if (aba !== "protecao" && typeof prtAbaFechada === "function") prtAbaFechada();   // v7.8: o relato, a ficha do incidente e o relógio das 24 horas não ficam para trás (módulo ausente ou velho no cache: a navegação segue)
+  if (aba !== "protecao" && typeof prtAbaFechada === "function") prtAbaFechada();
+  if (typeof mbAbaMudou === "function") mbAbaMudou(aba);   // FASE 10, passo 7a: saindo de Pessoas, a ficha aberta (e o menu recolhido por ela) não fica para trás   // v7.8: o relato, a ficha do incidente e o relógio das 24 horas não ficam para trás (módulo ausente ou velho no cache: a navegação segue)
   NOMES_ABAS.forEach(nome => {
     const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || temPermissaoDaAba(nome);
     const divAba = document.getElementById(`aba${capitalize(nome)}`);
@@ -262,7 +263,9 @@ function mostrarAbaSecretaria(aba) {
     carregarElegiveisAssembleia();
   }
   // v10.1 — o formulário aparece NA HORA; as listas dele chegam depois, cada uma por conta própria (antes a aba ficava em branco esperando as seis)
-  if (aba === "pessoas") { carregarOpcoesFormPessoa(); mostrarSubAbaPessoas(subAbaPessoasAtual); carregarPessoas(); }
+  // FASE 10, passo 7a — a lista inteira não é mais baixada na entrada: o painel, a lista (em páginas) e a ficha pedem só o que mostram; a tela antiga
+  // "Importar e exportar" pede a lista inteira quando abre (mostrarSubAbaPessoas)
+  if (aba === "pessoas") { carregarOpcoesFormPessoa(); mostrarSubAbaPessoas(subAbaPessoasAtual); }
   if (aba === "cartas") { carregarCartas(); processarSaidasCartas(); }
   if (aba === "orgaos") { carregarOrgaos(); carregarAssentos(); montarOrgaosLocais(); }
   if (aba === "estrutura") montarEstrutura();

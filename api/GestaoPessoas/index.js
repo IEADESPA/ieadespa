@@ -194,6 +194,13 @@ module.exports = async function (context, req) {
         pedido.input("filtroSituacao", sql.NVarChar(30), situacao.slice(0, 30));
         condicoes.push("m.SituacaoMembro = @filtroSituacao");
       }
+      // passo 7a — o departamento (o filtro da lista nova)
+      if (req.query.departamentoId !== undefined && req.query.departamentoId !== "") {
+        const depId = auth.idDeRota(req.query.departamentoId);
+        if (!depId) { context.res = { status: 400, body: { sucesso: false, mensagem: "Departamento inválido." } }; return; }
+        pedido.input("filtroDep", sql.Int, depId);
+        condicoes.push("m.DepartamentoId = @filtroDep");
+      }
       // passo 7a — o que falta no cadastro (os avisos do painel abrem a lista já filtrada): só valores conhecidos, o resto é recusado
       const falta = String(req.query.falta || "").trim();
       if (falta) {

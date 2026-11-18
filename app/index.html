@@ -242,9 +242,12 @@
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaPessoas" data-on-click="mostrarAbaSecretaria" data-args-click='["pessoas"]'><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
             <div class="submenu-aba" id="submenuPessoas">
-              <button class="btn-subaba ativo" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
-              <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">🔍</span><span class="rotulo">Buscar Pessoas</span></button>
-              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">📋</span><span class="rotulo">Fila de Aprovações</span></button>
+              <!-- FASE 10, passo 7a: o painel executivo e a lista nova (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para a planilha -->
+              <button class="btn-subaba ativo" id="btnSubPessoasVisao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'><span class="icone">📊</span><span class="rotulo">Painel executivo</span></button>
+              <button class="btn-subaba" id="btnSubPessoasLista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
+              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">✏️</span><span class="rotulo">Sugestões dos membros</span></button>
+              <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">📤</span><span class="rotulo">Importar e exportar</span></button>
               <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
               <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone">🌱</span><span class="rotulo">Discipulado</span></button>
             </div>
@@ -2166,8 +2169,39 @@
           <p id="linkPerfilAposCadastro"></p>
         </div>
 
+        <!-- FASE 10, passo 7a — no celular, as partes do módulo em PÍLULAS no alto (nada preso embaixo); no notebook, o menu do módulo à esquerda -->
+        <nav class="mb-pilulas" id="mbPilulasModulo" aria-label="Partes do módulo Pessoas">
+          <button type="button" class="mb-pilula ativa" data-sub="visao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'>Painel</button>
+          <button type="button" class="mb-pilula" data-sub="lista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'>Pessoas</button>
+          <button type="button" class="mb-pilula" data-sub="cadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'>Cadastrar</button>
+          <button type="button" class="mb-pilula" data-sub="aprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'>Sugestões</button>
+          <button type="button" class="mb-pilula" data-sub="discipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'>Discipulado</button>
+          <button type="button" class="mb-pilula" data-sub="credenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;">Credenciais</button>
+          <button type="button" class="mb-pilula" data-sub="buscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'>Planilha</button>
+        </nav>
+
+        <!-- FASE 10, passo 7a — o PAINEL EXECUTIVO de Membros (rodadas 9 e 10): números, o gráfico que cada um ajusta, entradas e saídas, como está o cadastro
+             e os avisos do módulo (notebook: coluna à direita; celular: faixa no alto). Desenhado por modulos/membros.js -->
+        <div id="subPessoasVisao" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+
+        <!-- FASE 10, passo 7a — a LISTA confortável: 20 por página pedidas ao servidor, filtros numa linha (modulos/membros.js) -->
+        <div id="subPessoasLista" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+
+        <!-- FASE 10, passo 7a — a FICHA 360 (rodada 10, versão final): no notebook o submenu da ficha à DIREITA (o menu principal recolhido); no celular as partes
+             em pílulas no alto. As abas antigas do perfil (família, foto, casamentos...) entram em mbFichaAntigas na primeira vez (modulos/membros.js) -->
+        <div id="subPessoasFicha" class="sub-aba-secretaria mb-tela" style="display:none;">
+          <div class="mb-ficha">
+            <div class="mb-ficha-principal">
+              <div id="mbFichaCabeca"></div>
+              <div id="mbFichaCorpo"></div>
+              <div id="mbFichaAntigas" class="mb-ficha-antigas" style="display:none;"><h4 id="mbFichaAntigasTitulo" class="mb-parte-titulo"></h4></div>
+            </div>
+            <nav id="mbFichaMenu" class="mb-ficha-menu" aria-label="Partes da ficha"></nav>
+          </div>
+        </div>
+
         <!-- SUB-ABA: CADASTRAR PESSOA -->
-        <div id="subPessoasCadastrar" class="sub-aba-secretaria">
+        <div id="subPessoasCadastrar" class="sub-aba-secretaria" style="display:none;">
           <h3>Cadastrar Pessoa</h3>
           <div id="slotFormPessoaCadastrar"></div>
         </div>
@@ -7747,6 +7781,7 @@
   <script src="modulos/expansao.js"></script>
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
+  <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
   <script src="modulos/ministerio-menores.js"></script>

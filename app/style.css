@@ -2143,3 +2143,41 @@ button.mb-aviso:hover { border-color: var(--cor-modulo, var(--cor-link)); }
   .mc-so-notebook { display: none; }
   .mb-tela .mc-campo input, .mb-tela .mc-campo select { font-size: 16px; }
 }
+
+/* ---- FASE 10, passo 7a, incremento 3 (modulos/membros-movimento.js): as mudanças de congregação (as caixas e o acompanhar), a caixa de sugestões e a
+   minha ficha em "Minha vida na igreja" (a linha do tempo primeiro; "Minha ficha" à direita, no celular em pílulas no alto) ---- */
+.mt-abas { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.mt-lista { display: flex; flex-direction: column; gap: 0; padding: 4px 16px; }
+.mt-linha, .mt-sugestao { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(0, 1.3fr) minmax(0, .9fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--cor-borda); font-size: 0.86rem; }
+.mt-sugestao { grid-template-columns: minmax(180px, 1.1fr) minmax(0, 1fr) auto; }
+.mt-linha:last-child, .mt-sugestao:last-child { border-bottom: none; }
+.mt-quem { display: flex; gap: 8px; align-items: center; background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: left; min-width: 0; }
+button.mt-quem { cursor: pointer; }
+.mt-quem > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.mt-quem strong { color: var(--cor-titulo); }
+.mt-quem .btn-link { text-align: left; padding: 0; min-height: 0; justify-content: flex-start; }
+.mt-rota, .mt-mudanca { overflow-wrap: break-word; min-width: 0; }
+.mt-quando { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.mt-acoes { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.mb-tela .mt-motivo { width: 180px; min-height: 34px; padding: 4px 8px; font-size: 0.82rem; margin: 0; }
+.mt-nota { margin-top: 10px; }
+.mt-acompanhar { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; align-items: start; }
+.mt-passos { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.mt-passo { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.86rem; }
+.mt-passo > span:last-child { display: flex; flex-direction: column; }
+.mt-passo-num { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; background: var(--chip-neutro-fundo); color: var(--chip-neutro-texto); }
+.mt-passo-feito .mt-passo-num { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.mt-passo-atual .mt-passo-num { background: var(--cor-ouro); color: var(--cor-ouro-texto); }
+.mt-passo-parou .mt-passo-num { background: var(--chip-vermelho-fundo); color: var(--chip-vermelho-texto); }
+.mt-quem-aceita p { margin: 0; font-size: 0.84rem; }
+.mt-origem { font-weight: 700; color: var(--cor-titulo); padding: 10px 0; }
+.mv-ficha { margin-bottom: 16px; }
+.mv-cabeca { grid-template-columns: auto minmax(0, 1fr); }
+.mv-cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.mv-sugerir { margin-bottom: 12px; border-color: var(--cor-ouro); }
+@media (max-width: 1100px) { .mt-acompanhar { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .mt-linha, .mt-sugestao { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .mt-acoes { justify-content: flex-start; }
+  .mb-tela .mt-motivo { width: 100%; font-size: 16px; }
+}

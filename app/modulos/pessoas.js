@@ -282,7 +282,7 @@ function moverFormPessoaPara(slotId) {
 
 // FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
 const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
-  precadastro: "Pré-cadastro rápido", buscar: "Importar e exportar",
+  precadastro: "Pré-cadastro rápido", transferencias: "Mudanças de congregação", buscar: "Importar e exportar",
   aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado" };
 
 function mostrarSubAbaPessoas(sub) {
@@ -302,6 +302,8 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("subPessoasPreCadastro").style.display = sub === "precadastro" ? "block" : "none";
   document.getElementById("btnSubPessoasFila").classList.toggle("ativo", sub === "fila");
   document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
+  document.getElementById("subPessoasTransferencias").style.display = sub === "transferencias" ? "block" : "none";
+  document.getElementById("btnSubPessoasTransferencias").classList.toggle("ativo", sub === "transferencias");
   document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
   document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
@@ -326,11 +328,13 @@ function mostrarSubAbaPessoas(sub) {
   if (sub === "cadastrar" && typeof mcAbrirCadastro === "function") mcAbrirCadastro();
   if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
   if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
+  if (sub === "transferencias" && typeof mtAbrirTransferencias === "function") mtAbrirTransferencias();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();
   }
-  if (sub === "aprovacoes") carregarFilaAprovacoes();
+  // passo 7a, incremento 3: a caixa de sugestões nova (modulos/membros-movimento.js); sem ela, a tela de antes
+  if (sub === "aprovacoes") { if (typeof mtAbrirSugestoes === "function") mtAbrirSugestoes(); else { document.getElementById("resultadoFilaAprovacoes").style.display = ""; carregarFilaAprovacoes(); } }
   if (sub === "credenciais") credCarregarListaAcao();
   if (sub === "discipulado") discAbrirSubAba();
 }

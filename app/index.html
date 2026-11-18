@@ -249,6 +249,8 @@
               <!-- passo 7a, incremento 2: a fila de cadastros e o pré-cadastro rápido (modulos/membros-cadastro.js) -->
               <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone">📥</span><span class="rotulo">Fila de cadastros</span></button>
               <button class="btn-subaba" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone">📝</span><span class="rotulo">Pré-cadastro rápido</span></button>
+              <!-- passo 7a, incremento 3: as mudanças de congregação (modulos/membros-movimento.js) -->
+              <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone">↪️</span><span class="rotulo">Mudanças de congregação</span></button>
               <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">✏️</span><span class="rotulo">Sugestões dos membros</span></button>
               <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">📤</span><span class="rotulo">Importar e exportar</span></button>
               <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
@@ -620,6 +622,8 @@
 
         <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
         <div id="subMeupainelMinhavida" class="sub-aba-secretaria" style="display:none;">
+          <!-- FASE 10, passo 7a, incremento 3 — a minha ficha (rodada 10, versão final): a linha do tempo primeiro e "Minha ficha" à direita (modulos/membros-movimento.js) -->
+          <div id="mvFicha" class="mb-tela mv-ficha"></div>
           <div class="vida-grade">
             <section class="vida-cartao"><h3 class="vida-titulo">Meus próximos compromissos</h3><div id="minhaVidaCompromissos" class="vida-lista"></div></section>
             <section class="vida-atalhos" id="minhaVidaAtalhos"></section>
@@ -2179,6 +2183,7 @@
           <button type="button" class="mb-pilula" data-sub="cadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'>Cadastrar</button>
           <button type="button" class="mb-pilula" data-sub="fila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'>Fila</button>
           <button type="button" class="mb-pilula" data-sub="precadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'>Pré-cadastro</button>
+          <button type="button" class="mb-pilula" data-sub="transferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'>Transferências</button>
           <button type="button" class="mb-pilula" data-sub="aprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'>Sugestões</button>
           <button type="button" class="mb-pilula" data-sub="discipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'>Discipulado</button>
           <button type="button" class="mb-pilula" data-sub="credenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;">Credenciais</button>
@@ -2209,6 +2214,8 @@
              PRÉ-CADASTRO RÁPIDO (rodada 9: uma tela só). Desenhados por modulos/membros-cadastro.js -->
         <div id="subPessoasFila" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
         <div id="subPessoasPreCadastro" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+        <!-- FASE 10, passo 7a, incremento 3 — as MUDANÇAS DE CONGREGAÇÃO (rodada 8: chegando, saindo, concluídos; acompanhar o pedido) — modulos/membros-movimento.js -->
+        <div id="subPessoasTransferencias" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
 
         <!-- SUB-ABA: CADASTRAR PESSOA — desde o passo 7a, o cadastro EM ETAPAS com a prévia da ficha e a barra que confere nome, nascimento e CPF
              (modulos/membros-cadastro.js); o formulário completo de antes fica embaixo, aberto só quando pedido -->
@@ -2264,10 +2271,9 @@
 
         <!-- SUB-ABA: FILA DE APROVAÇÕES (v1.11 — pedidos de autoedição sujeitos a aprovação) -->
         <div id="subPessoasAprovacoes" class="sub-aba-secretaria" style="display:none;">
-          <h3>📋 Fila de Aprovações</h3>
-          <p class="subtitle">Pedidos de correção que o próprio membro enviou pelo Meu Painel — cada campo pode
-            ser aprovado ou rejeitado separadamente, ou tudo de uma vez.</p>
-          <div id="resultadoFilaAprovacoes"></div>
+          <!-- FASE 10, passo 7a, incremento 3 — a CAIXA DE SUGESTÕES nova (rodada 10, o 4º passo do fluxo): modulos/membros-movimento.js -->
+          <div id="mtSugestoes" class="mb-tela"></div>
+          <div id="resultadoFilaAprovacoes" style="display:none;"></div>
         </div>
 
         <!-- SUB-ABA: CREDENCIAIS (v8.4 — Regimento Art. 76 §2º: emissão e impressão só na Secretaria Geral) -->
@@ -7796,6 +7802,7 @@
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
   <script src="modulos/membros-cadastro.js"></script>
+  <script src="modulos/membros-movimento.js"></script>
   <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>

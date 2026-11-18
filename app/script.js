@@ -1690,6 +1690,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
   // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
   if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
+  if (sub === "minhavida" && typeof mvAbrir === "function") mvAbrir();   // FASE 10, passo 7a: a minha ficha (modulos/membros-movimento.js)
   if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
   if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código
 }

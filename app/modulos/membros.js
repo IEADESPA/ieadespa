@@ -51,7 +51,7 @@ const MB_ROL = { 1: "No rol", saidas: "Quem saiu", todos: "Todos" };
 const MB_PARTES_FICHA = [
   ["resumo", "🏠", "Resumo"], ["dados", "👤", "Dados pessoais"], ["familia", "👪", "Família"], ["casamentos", "💍", "Casamentos"],
   ["apresentacoes", "👶", "Apresentação de filhos"], ["historico", "🕊️", "Marcos da vida espiritual"], ["caminhada", "🌱", "Caminhada e formação"],
-  ["foto", "📷", "Foto"], ["licenca", "🗳️", "Licença para candidatura"], ["cadastro", "📋", "Cadastro completo"], ["alteracoes", "🕒", "Alterações"]
+  ["foto", "📷", "Foto"], ["licenca", "🗳️", "Licença para candidatura"], ["cadastro", "📋", "Cadastro completo"], ["transferencia", "↪", "Transferência"], ["alteracoes", "🕒", "Alterações"]
 ];
 const MB_PARTE_ANTIGA = { familia: "vinculos", casamentos: "casamentos", apresentacoes: "apresentacoes", historico: "historico", caminhada: "caminhada", foto: "foto", licenca: "licenca", cadastro: "editar" };
 const MB_ABAS_ANTIGAS = ["Editar", "Historico", "Caminhada", "Foto", "Casamentos", "Apresentacoes", "Licenca", "Vinculos"];
@@ -362,8 +362,8 @@ function mbItensAvisos() {
   const a = mbPainel.avisos || {};
   const r = mbPainel.dados || {};
   const itens = [];
-  if (mbNum(a.transferencias) > 0) itens.push({ meu: true, nivel: "primeiro", icone: "↪", texto: `${mbFmt(a.transferencias)} ${mbPlural(a.transferencias, "pedido de transferência chegando", "pedidos de transferência chegando")}`, detalhe: "aceitar ou recusar a chegada" });
-  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "📝", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha" });
+  if (mbNum(a.transferencias) > 0) itens.push({ meu: true, nivel: "primeiro", icone: "↪", texto: `${mbFmt(a.transferencias)} ${mbPlural(a.transferencias, "pedido de transferência chegando", "pedidos de transferência chegando")}`, detalhe: "aceitar ou recusar a chegada", acao: "sub", arg: "transferencias" });
+  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "📝", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha", acao: "sub", arg: "fila" });
   if (mbNum(a.sugestoes) > 0) itens.push({ meu: true, nivel: "afazer", icone: "✏️", texto: `${mbFmt(a.sugestoes)} ${mbPlural(a.sugestoes, "sugestão de membro para conferir", "sugestões de membros para conferir")}`, detalhe: "aplicar ou recusar com o motivo", acao: "sub", arg: "aprovacoes" });
   if (mbNum(r.semCpf) > 0) itens.push({ meu: false, nivel: "afazer", icone: "🪪", texto: `${mbFmt(r.semCpf)} sem CPF no rol`, detalhe: "o CPF evita ficha repetida", acao: "lista", arg: "cpf" });
   if (mbNum(r.semContato) > 0) itens.push({ meu: false, nivel: "afazer", icone: "📞", texto: `${mbFmt(r.semContato)} sem e-mail nem celular`, detalhe: "sem contato, a pessoa não recebe o código de acesso", acao: "lista", arg: "contato" });
@@ -612,7 +612,8 @@ function mbDesenharCabeca() {
         <div class="mb-chips">${chips}</div>
         <div class="mb-fatos">${fato("Idade", idade !== null ? `${idade} anos` : "")}${fato("Membro desde", mbDataBr(p.dataAdmissao))}${fato("Convertido em", anoConversao ? anoConversao[1] : "")}${fato("Celular", mbTelefoneMascarado(p.telefone))}${saiu ? fato("Saída", [mbDataBr(p.dataSaida), motivoSaida ? mbRotuloSaida(p.motivoSaida) : ""].filter(Boolean).join(" · ")) : ""}</div>
       </div>
-      <div class="mb-ficha-botoes"><button type="button" class="btn-confirmar mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">✏️ Editar</button></div>
+      <div class="mb-ficha-botoes">${saiu ? "" : `<button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("transferencia")}">↪ Transferência</button>`}
+        <button type="button" class="btn-confirmar mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">✏️ Editar</button></div>
     </div>`;
 }
 const MB_ROTULO_SAIDA = { FALECIMENTO: "falecimento", DESLIGAMENTO: "desligamento", CARTA_MUDANCA: "carta de mudança", EXCLUSAO: "exclusão", ABANDONO_MATERIAL: "abandono", ABANDONO_DIGITAL: "abandono digital" };
@@ -644,6 +645,7 @@ function mbMostrarParte() {
   antigas.style.display = "none";
   if (parte === "dados") { mbMostrarDados(); return; }
   if (parte === "alteracoes") { mbMostrarAlteracoes(); return; }
+  if (parte === "transferencia" && typeof mtMostrarPedidoNaFicha === "function") { mtMostrarPedidoNaFicha(); return; }
   mbMostrarResumo();
 }
 

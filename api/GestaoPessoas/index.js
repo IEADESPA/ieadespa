@@ -52,6 +52,14 @@ function mascararEmail(e) {
 // Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
 // não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
 const CAUSAS_SAIDA = ["FALECIMENTO", "DESLIGAMENTO", "CARTA_MUDANCA", "EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"];
+// As causas DISCIPLINARES (a mesma lista do histórico, HistoricoMembro): o motivo delas é sigiloso — só quem tem "disciplina" com a pessoa no escopo vê.
+const SAIDAS_DISCIPLINARES = new Set(["EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"]);
+// A pessoa da resposta com o motivo da saída que quem vê pode ver: o disciplinar vira null sem "disciplina" no escopo dela (a data da saída continua).
+function motivoSaidaVisivel(m, vDisciplina) {
+  if (!m || !SAIDAS_DISCIPLINARES.has(m.motivoSaida)) return m;
+  const pode = !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao);
+  return pode ? m : Object.assign({}, m, { motivoSaida: null });
+}
 
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
@@ -242,6 +250,9 @@ module.exports = async function (context, req) {
       // dois, concessão por concessão). O banco já filtrou; esta é a segunda conferência (nunca deixa passar quem está fora).
       .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
       .map(m => Object.assign({}, m, { processoDisciplinarAtivo: !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao) && idsSobDisciplina.has(m.membroId) }))
+      // FASE 10 (18/11/2026, autorizado pelo responsável): o motivo de uma saída DISCIPLINAR (exclusão, abandono) só vai a quem tem "disciplina" com a pessoa no
+      // escopo dessa permissão — antes ia no JSON da lista a todo mundo que tinha "pessoas" (a tela nova não mostrava, mas a resposta levava)
+      .map(m => motivoSaidaVisivel(m, vDisciplina))
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }))
       .map(m => {
         const idade = estatuto.idadeEm(m.dataNascimento);
@@ -398,7 +409,7 @@ module.exports = async function (context, req) {
     }
 
     const lerExistente = () => pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.MotivoSaida AS MotivoAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
              CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
              CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
                                WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
@@ -502,6 +513,13 @@ module.exports = async function (context, req) {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto a ficha estava aberta (uma consagração foi concluída?). Abra a ficha de novo antes de salvar." } };
       return;
     }
+    // o motivo de uma saída disciplinar que quem salva NÃO vê (a lista e a ficha o mandam como vazio): fica o que estava — a ficha aberta sem "disciplina" nunca apaga
+    // nem troca a causa disciplinar ao salvar
+    const motivoAnterior = existia ? (existente.recordset[0].MotivoAnterior || null) : null;
+    const vDiscSalvar = auth.visaoDaPermissao(usuario, "disciplina");
+    const motivoOculto = existia && SAIDAS_DISCIPLINARES.has(motivoAnterior)
+      && !(vDiscSalvar && noEscopoDaPessoa(vDiscSalvar, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome));
+    const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
     const statusFinal = status || "ATIVO";
@@ -552,7 +570,7 @@ module.exports = async function (context, req) {
       .input("estadoCivil", sql.NVarChar(20), estadoCivil || null)
       .input("dataAfastamento", sql.Date, dataAfastamento || null)
       .input("dataSaida", sql.Date, dataSaidaFinal)
-      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
+      .input("motivoSaida", sql.NVarChar(200), motivoSaidaFinal)
       .input("sexo", sql.NChar(1), sexoFinal)
       .input("cargoLido", sql.NVarChar(30), cargoAnterior)
       .input("cpf", sql.Char(11), cpfLido.cpf === undefined ? null : cpfLido.cpf)
@@ -627,8 +645,8 @@ module.exports = async function (context, req) {
     }
 
     if (entrandoEmStatusTerminal) {
-      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);   // também derruba as sessões abertas da pessoa
-      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaida || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
+      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaidaFinal || statusFinal);   // também derruba as sessões abertas da pessoa
+      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaidaFinal || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
     } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
       // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
@@ -642,6 +660,7 @@ module.exports = async function (context, req) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
       membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
     }
+    Object.assign(membro, motivoSaidaVisivel(membro, vDisciplinaMembro));
     membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
     const idadeMembro = estatuto.idadeEm(membro.dataNascimento);
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;

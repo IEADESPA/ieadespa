@@ -377,7 +377,48 @@ o pago por causa do financeiro, que também está vindo para cá.
        inventados (o limite de 200 por hora segura o volume; a secretaria vê os aceitos na caixa própria); e quem tem a
        permissão de pessoas fica sabendo, pela conferência, que um CPF já tem cadastro em algum lugar (é a regra pedida; o
        limite por pessoa e o caso aberto para a Geral deixam rastro).
-  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
+  5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões. **Feito em
+     18/11/2026 no ramo `v10-membros`** (`1faf0ad`; migração 178), ainda fora da homologação e da produção:
+     - **A secretaria muda um campo por vez** (`/api/pessoas/{matrícula}/ficha/campo`): cada campo grava sozinho, numa
+       transação com a ficha travada, e fica na trilha quem mudou, o quê e quando. O CPF, o e-mail e o telefone vão para a
+       trilha **mascarados**. Se a ficha mudou desde que a tela abriu, a gravação é recusada ("mudou enquanto você editava") e
+       nada é sobrescrito. Trocar o e-mail avisa o endereço antigo.
+     - **As travas por papel:** o **nome**, só a Geral (decisão dele); o **CPF já gravado**, só a Geral (vazio, qualquer
+       secretaria preenche; o CPF de outra ficha não grava, pela regra do passo 4); ninguém muda o próprio nascimento, sexo,
+       estado civil ou admissão; com **processo de cargo** em andamento, nascimento, admissão e estado civil só a Geral; com
+       exclusão julgada, a admissão nova (readmissão) só a Geral. O cargo segue pela consagração, a congregação pela
+       transferência e a situação pelo desligamento (a rota diz o caminho certo). A tela recebe, campo por campo, se quem vê
+       pode mudar e por quê (`/ficha/campos`), e a tabela "quem muda o quê" de cada papel.
+     - **O histórico da ficha** (`/ficha/alteracoes`, em páginas): lido da trilha, do mais novo para o mais antigo, com quem
+       mudou. Nunca leva o CPF, o e-mail ou o telefone inteiros, nem das linhas antigas da trilha; o motivo de uma saída
+       disciplinar só para quem tem "disciplina".
+     - **O membro** (Meus Dados): vê o que é dele e o modo de cada campo; **muda sozinho** o contato, o endereço e o que
+       estiver **vazio** (nascimento, sexo, estado civil, escolaridade, CPF, nome da mãe e do pai); o resto ele **sugere**
+       (o nome, o que já está preenchido, a admissão, o batismo, o rito e a procedência). Uma sugestão pendente por campo. Ele
+       lê a resposta (o motivo da recusa), sem saber quem decidiu. O CPF dele que já está noutra ficha não grava e o caso vai
+       à Secretaria Geral (pode ser ficha em dobro).
+     - **A caixa de sugestões** (a fila de aprovações de antes, reaproveitada): a **secretaria local** aplica as da sua
+       congregação; a **área acompanha** (vê, não aplica nem recusa); a **Geral aplica tudo**. Recusar exige o **motivo**.
+       As travas da ficha valem também ao aplicar (ex.: o nome e o CPF gravado só a Geral). Se a ficha mudou depois do
+       pedido, a sugestão não é aplicada por cima. O CPF sai mascarado na caixa de quem não é a Geral, e, decidido o pedido,
+       não fica inteiro guardado nele. Ninguém decide o próprio pedido. Também há a caixa das já decididas.
+     - **Sem tela nova** (passo 7). A tela de hoje continua funcionando, com duas diferenças: recusar na fila agora pede o
+       motivo, e o estado civil já preenchido não muda mais direto em Meus Dados (vira sugestão).
+     - **Prova:** jest 6.590 de 6.590 (32 testes novos e os da fila reescritos); o roteiro e2e-91 no LocalDB, 93 de 93 e 94 de 94 com o RCSI (a trilha e o
+       CPF mascarado, as travas por papel, o membro mudando e sugerindo, a caixa por nível, aplicar e recusar com motivo, o
+       histórico, fora do escopo = não existe, a 178 duas vezes, o lixo nos campos e as corridas com vários processos: duas
+       mudanças no mesmo campo, sugestão aplicada × membro salvando, aplicar × recusar, dois pedidos do mesmo campo,
+       secretaria × membro no mesmo campo vazio), também com o READ_COMMITTED_SNAPSHOT do Azure; a regressão (e2e-78, 79,
+       84, 85, 86, 89 e 90), toda verde; revisão adversarial feita (achados corrigidos: a conferência do CPF só depois das
+       travas, a mensagem da readmissão sem revelar a exclusão, o CPF minimizado no pedido decidido, o caso da Geral para o
+       CPF repetido do membro, o índice da trilha filtrado para não mexer na corrente de hashes).
+     - **Decisões tomadas pelo caminho seguro (ele pode mudar):** a **área edita** a ficha como a secretaria local, mas na
+       caixa só acompanha; a concessão presa a uma **Extensão** edita quem está nela, mas não aplica sugestão (a mesma regra da
+       transferência); o **"vazio, o membro muda sozinho"** vale para os dados pessoais, e os atos da igreja (admissão, forma,
+       batismo, rito, procedência) são sempre sugestão; com processo de cargo, até o vazio que conta para a escada vai como
+       sugestão; Meus Dados é **tudo ou nada** (um campo recusado não grava os outros). **Riscos que ficam:** o cadastro
+       completo antigo (`GestaoPessoas`) ainda grava a ficha inteira de uma vez, então aberto ao mesmo tempo que uma edição
+       campo a campo pode desfazê-la — some quando a tela nova (passo 7) trocar o cadastro completo pela edição campo a campo.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.
   7. **As telas novas** do módulo — dentro da casca nova aprovada (menu principal recolhível; no celular, o menu em abas no
@@ -388,6 +429,73 @@ o pago por causa do financeiro, que também está vindo para cá.
      cadastra (no escopo); fora disso, quem cadastra não mexe nem cadastra, e o caso vai para a **Secretaria Geral** conferir e
      corrigir. Nome e nascimento parecidos também avisam, como possível repetição. Precisa de uma **rota de conferência** que
      respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
+     - **Passo 7a, as telas do que já estava pronto (18/11/2026), em três incrementos, no ramo `v10-membros` e na homologação
+       (merges `a145d8d` e `8069028`) — NÃO vai à produção sem ele ver e aprovar:**
+       - **Incremento 1** (`07a08da` o servidor, `45fe24d` as telas, `aa68ece` um achado da revisão):
+         - **o painel executivo** é a entrada do módulo:
+           - os números no alto (em comunhão, congregados, sem comunhão, os novos do mês pela forma de entrada); cada um
+             abre a lista já filtrada;
+           - o **gráfico grande que cada um ajusta**: o que mostrar, agrupar por quê, em quantidade ou porcentagem (a
+             escolha fica guardada no aparelho);
+           - as entradas e saídas dos últimos 6 meses e "como está o cadastro" (cada barra abre quem falta);
+           - os **avisos só de Membros** ("só o que eu preciso resolver" ou tudo): no notebook numa coluna à direita, no
+             celular numa faixa no alto;
+           - a área e a Geral escolhem uma congregação;
+           - tudo é contado no banco, dentro do escopo, numa ida só e sem o nome de ninguém (`GET /api/pessoas?resumo=1`,
+             `api/shared/painelMembros.js`);
+         - **a lista**: 20 por página pedidas ao servidor e os filtros numa linha (nome, matrícula ou CPF; congregação;
+           situação; departamento; o que falta; no rol ou quem saiu). A lista **inteira** do escopo não é mais baixada ao
+           entrar em Pessoas;
+         - **a ficha 360**:
+           - no notebook o menu principal recolhe e o submenu da ficha fica à direita; no celular, as partes em pílulas;
+           - o resumo traz a linha do tempo, a vida espiritual e os dados pessoais;
+           - o CPF aparece mascarado; o "Mostrar" é só da Secretaria Geral, com a leitura registrada;
+           - os dados pessoais mudam **campo a campo**, e cada trava diz o porquê; "quem pode mudar cada dado";
+           - as alterações (quem mudou o quê), com nomes no lugar dos códigos;
+           - as partes antigas (família, casamentos, foto...) foram trazidas para dentro da ficha;
+           - o Ctrl K abre a pessoa direto na ficha.
+       - **Incremento 2** (`f94edc0`):
+         - **o cadastro em etapas**, com a prévia "como a ficha vai ficar" e a **barra de avisos** que confere nome,
+           nascimento e CPF:
+           - CPF que já está noutra ficha não deixa concluir;
+           - se a outra ficha está no escopo, o aviso leva até ela; fora do escopo, "já tem cadastro; o caso foi para a
+             Secretaria Geral";
+           - o formulário completo de antes fica embaixo, aberto só quando pedido;
+         - **a fila de cadastros**: no notebook, o quadro por quem completa; no celular, os números e as pendências. O
+           pedido aberto mostra o que falta e quem completa, completar e aceitar, as confirmações e descartar com o motivo.
+           A Geral vê e resolve os casos de CPF repetido fora do escopo;
+         - **o pré-cadastro rápido** numa tela só, com "os que eu lancei".
+       - **Incremento 3** (`4e5161c`):
+         - **as mudanças de congregação**:
+           - o pedido sai do botão "Transferência" da ficha;
+           - as caixas: chegando, saindo, concluídos e as paradas da Geral;
+           - aceitar, ou recusar com o motivo; cancelar;
+           - acompanhar passo a passo;
+         - **a caixa de sugestões nova**: antes → depois, aplicar ou recusar com o motivo; o que é só da Geral aparece
+           travado;
+         - **a minha ficha em "Minha vida na igreja"**:
+           - a linha do tempo primeiro e "Minha ficha" à direita;
+           - o membro muda o que é dele e sugere o resto;
+           - "o que eu posso mudar";
+           - as minhas transferências e as minhas sugestões, com a resposta.
+       - **Prova:**
+         - jest: 6.606 de 6.606 antes dos incrementos 2 e 3; depois, os testes da tela (frontCsp e frontEscape) 93 de 93 e
+           os do painel 17 de 17;
+         - o roteiro novo e2e-92 no LocalDB, 73 de 73 (cada número do painel contra o banco, o escopo, a congregação
+           escolhida, os filtros novos, a matrícula exata, o lixo);
+         - a regressão dos passos 1 a 5 toda verde: e2e-84 47, e2e-85 51, e2e-86 59, e2e-87 14, e2e-89 77, e2e-90 79 e
+           e2e-91 93;
+         - 184 telas no Edge sem janela (Secretaria Geral, secretaria local e membro; notebook e celular; claro e escuro):
+           nenhum texto ilegível ou fraco, nada estourando de lado, nenhum erro de script nem violação de CSP;
+         - as fotos "desenho aprovado × construído" no rascunho da sessão;
+         - o teste de telas da homologação acusou, no incremento 1, só as diferenças esperadas (os botões novos, o Pessoas
+           abrindo no painel, a ficha 360 no lugar do perfil antigo). A base foi aprovada só no ramo (`a0a9bc4`);
+         - revisão adversarial feita, com dois achados corrigidos:
+           - o motivo da saída disciplinar saía no cabeçalho para quem tinha "disciplina" em outra congregação;
+           - a ficha procurava a pessoa pela busca de texto, que para matrícula curta podia não achá-la; agora é
+             `?matricula=N`, exato.
+       - **Fica para depois:** o endereço no cadastro em etapas (hoje vai pelo cadastro completo, na ficha); o formulário
+         público do site; e trocar de vez o cadastro completo antigo pela edição campo a campo, que tira o risco do passo 5.
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
 - **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
@@ -424,6 +532,73 @@ o pago por causa do financeiro, que também está vindo para cá.
       lugar do "Início"/"Painel Principal" dentro dos módulos, os títulos das colunas sem maiúsculas); nenhum erro de script
       nem pedido novo. Revisão independente feita (só `textContent`, nenhuma lógica mudada, nada preso embaixo no celular).
     - Jest 6.448/6.448 com a main trazida. **Esperando ele ver a homologação e aprovar** a casca inteira.
+  - **Reprovada por ele em 18/11/2026** ("você não fez nada"): a casca dos incrementos 1 a 4 era a tela antiga repintada, não o desenho
+    aprovado — emojis no lugar dos ícones, o menu da esquerda longo, o Início sem as pendências de cada módulo, a página rolando inteira e
+    a barra do topo sem o caminho. Os testes mediam erro de script, contraste e CSP, não se a tela era igual à aprovada.
+  - **Conformidade com o desenho aprovado** (18/11/2026; ramo `v10-casca` `4c1666c`, casca v63; na homologação em `570ef2e`, junto com
+    as telas de Membros). Primeiro a auditoria: cada tela da casca fotografada no Edge sem janela, com dados de mentira, ao lado do
+    desenho aprovado (notebook e celular, claro e escuro; a Geral, o líder local e o membro). Depois a correção:
+    - **Feito igual ao desenho:**
+      - os **ícones de traço** do desenho no lugar dos emojis no menu, nos cartões, na barra do topo e no cabeçalho do módulo (desenhados
+        dentro do sistema, sem biblioteca de fora);
+      - o **menu principal limpo** (Início, Meu trabalho só para quem tem cargo, Minha vida na igreja, Meu Perfil e a pessoa no pé);
+        as telas que ficavam no menu longo abrem pelos cartões de Minha vida, Meu trabalho e Meu Perfil;
+      - dentro do módulo, o "‹ Menu principal", o cabeçalho colorido, o menu na cor do módulo e os **grupos que abrem e fecham com a
+        setinha** (o sistema lembra o que estava fechado);
+      - as **duas colunas independentes**: o menu e o conteúdo rolam cada um sozinho, sem espaço branco;
+      - a **barra do topo** de 64 px com o **caminho** (ex.: Financeiro › Lançamentos), a busca, o claro/escuro e o sino, e a faixa na cor
+        do módulo logo abaixo;
+      - o **menu recolhível** (só os ícones) pelo ☰, lembrado no aparelho;
+      - o **Início**: "Para você hoje" (as 3 primeiras tarefas e avisos) e, em "Meu trabalho", cada módulo com **as 2 principais
+        pendências** e o número ("4 pendências") ou "Em dia"; quadrados para quem cuida de muitos módulos, retângulos para quem cuida de
+        poucos; o membro vê "Minha vida na igreja" no lugar;
+      - **Meu Perfil** (os quatro cartões com os dados mascarados, a segurança, os aparelhos com "Sair deste aparelho", as preferências e
+        "Sair do sistema"; no celular, os quadrados de 2 em 2) e **Minha vida** (os próximos compromissos e "O que é meu");
+      - no **celular**: a barra de 56 px (☰, título, lupa e sino), as pílulas no alto, **nada preso embaixo** (medido em todas as telas) e o
+        menu numa gaveta.
+    - **De onde vêm as pendências do Início:** dos avisos que o sistema já calcula (a categoria diz o módulo) e das tarefas dos fluxos (a
+      permissão da etapa diz o módulo). **Módulos sem nenhuma regra de aviso** mostram só a linha do que há neles, sem número inventado:
+      Órgãos Centrais, Órgãos Regionais, Departamentos e Relatórios (não há aviso de relatório atrasado), Assistência Social, Conquistas,
+      Saúde Congregacional, Setores Técnicos, Conformidade e Acesso.
+    - **Ficou diferente de propósito (dizer a ele):** o número de avisos no sino (o desenho tem um ponto); o "?" da ajuda dentro dos módulos
+      (as telas antigas dependem dela); o link "Registrar presença numa reunião" na entrada (a presença ainda não foi para o Calendário); o
+      Início da Geral com os 24 módulos de hoje (o desenho tem 12: a reorganização é da v10.6).
+    - **Aprovado e ainda não construído:** a entrada pela chave do aparelho e o "confiar neste aparelho" (precisam do servidor, v10.2); a foto
+      da Igreja na entrada (eles mandam); os filtros dos avisos por situação e lugar, que crescem com o nível; os filtros da tela na busca; a
+      primeira tela de Departamentos (cartões com a barra de quantas congregações enviaram) e o submódulo de cada departamento com as funções
+      dele; o formulário e a lista padrão fora de Membros; a escolha da cor de cada parte (as ~30 famílias com reserva); o Financeiro das
+      rodadas 13 a 17.
+    - **Só a moldura nova, com o conteúdo antigo** (o módulo ainda não teve rodada de desenho): todos os módulos menos Membros.
+    - **Provas:** jest do front 96/96; 104 telas da casca no Edge (entrada, Início dos três papéis,
+      avisos, busca, módulos, Meu Perfil, Minha vida, Meu trabalho, menu recolhido, gaveta) sem erro de script, sem violação de CSP, sem
+      rolagem de lado e sem nada preso embaixo; as telas de Membros na casca nova, 92 telas, 0 ilegível. Os pares aprovado × antes × depois
+      ficam no rascunho da sessão (`conformidade/pares` e `conformidade/pares-membros`).
+  - **Etapa 2 da casca: as letras e os efeitos** (pedida e aprovada por ele em 18/11/2026; ramo `v10-casca` `d0a6289` e `8c6e647`, casca
+    v64; na homologação, esperando ele escolher a fonte):
+    - **As letras servidas de dentro do sistema:** os arquivos ficam em `app/fontes` (woff2, com a licença SIL OFL 1.1 de cada família ao
+      lado); o Google Fonts saiu do `index.html` e da CSP (`font-src 'self'`), e um teste confere isso. A fonte padrão continua a de hoje
+      (Inter) até ele escolher.
+    - **As 3 opções** (todas com os números do mesmo tamanho, medido, e os acentos do português):
+      - **Atkinson Hyperlegible Next** (do Braille Institute): feita para quem enxerga pouco; o I maiúsculo, o l minúsculo e o 1 têm formas
+        diferentes, e o O e o 0 também. Ajuda os irmãos mais velhos e quem lê no celular ao sol.
+      - **Source Sans 3** (da Adobe): a clássica de sistema e de tabela; mais estreita, cabe mais coluna sem cortar (bom para o Financeiro);
+        sóbria e institucional.
+      - **Plus Jakarta Sans:** moderna e acolhedora, de cantos suaves; deixa o sistema com cara de novo sem perder a leitura.
+    - **Para ele escolher vendo o sistema de verdade:** na homologação, em Meu Perfil › Preferências (onde ficou o tamanho da letra, o antigo
+      Aa+), a linha **"Fonte (teste)"** com as 3 opções e a de hoje; a escolha fica no aparelho. Na produção a linha não aparece.
+    - **Os efeitos** (só CSS, custo de nuvem zero; entre 0,12 e 0,24 s; só deslocamento e transparência; nunca "transition: all"):
+      - o que se aperta **afunda um pouco** (botões, cartões, pílulas e itens do menu);
+      - o **painel do lado** (avisos), a **janela de confirmar** e os **avisos que somem sozinhos** entram suaves; a busca do Ctrl K abre sem
+        animação (é usada o dia todo);
+      - a **troca de tela desliza** (o conteúdo entra da direita); ao entrar num módulo, o menu ganha a cor do módulo num esmaecer próprio — o
+        "momento marcante"; navegador sem suporte troca direto;
+      - o cartão do módulo sobe 2 px ao passar o mouse, **só em aparelho com mouse**;
+      - com **"movimento reduzido"** ligado no aparelho, nada desliza nem cresce: só um esmaecer curto nos painéis.
+    - **Achado e corrigido junto:** com a Inter carregada de verdade, o título "Órgãos Locais (JAI/JEA/JUC/...)" estourava 3 px de lado no
+      celular; os títulos das telas antigas agora quebram a palavra comprida.
+    - **Provas:** jest do front 97/97 (o teste novo das letras); as telas da casca em cada uma das 4 fontes, notebook e celular, claro e escuro
+      (200 telas), sem erro; os efeitos provados no Edge com e sem movimento reduzido (o clique no cartão entra no módulo pela troca de tela,
+      o painel desliza só sem o movimento reduzido); a prova de todos os módulos, abas e subabas na homologação mesclada (294 telas, notebook claro e celular escuro): 0 ilegível, 0 estouro, 0 CSP; os erros de script são só os 5 de antes, da API de mentira (Imunidade, Discipulado, Educação continuada, Seminário, Tipos de entidade).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.
@@ -692,6 +867,53 @@ de tela completo com a base nova, a varredura de texto e de celular sem nenhum a
       servidor, limite por matrícula e não por rede (o Wi-Fi da igreja não pode barrar gente), o banco subindo sozinho no dia da
       convocação e voltando depois — e o teste com 1.000 votantes de teste antes de qualquer assembleia real.
 - [ ] O nível do banco decidido com o custo na mão (o teto de R$ 650/mês continua).
+- [ ] **Autorizadas por ele em 18/11/2026 ("faça essas correções"), primeiro na homologação:** as correções **4** e **6** do
+      raio-x de velocidade ([`docs/pesquisa/raio-x-velocidade-2026.md`](../pesquisa/raio-x-velocidade-2026.md)).
+  - **4. O aplicativo baixa só o que usa:**
+    - medido em 18/11: na entrada vêm 46 arquivos, 3,6 MB (1 MB comprimido), com a biblioteca do Excel (929 KB) e os 23
+      módulos;
+    - num celular comum simulado: 5,7 s na primeira abertura e 3,2 s nas seguintes;
+    - a correção: a planilha só ao importar ou exportar, e cada módulo só quando a pessoa entra nele.
+  - **6. Juntar os pedidos de cada tela:** de 7 a 9 para 1 ou 2.
+  - Ordem: depois do passo 6 dos membros (juntar fichas) e das sobras do 7a, antes das carteirinhas.
+
+## Varredura de segurança e de defeitos do que já existe (plano de 18/11/2026)
+
+Pedido dele: as revisões novas não valem só para o código que vem; o sistema já feito tem de passar por elas. É um plano para
+quando houver espaço na cota ("hoje não vai dar certo"), alternando com a construção.
+
+O tamanho medido em 18/11: cerca de 127 mil linhas de JavaScript (88 mil no servidor, 40 mil nas telas) e 234 rotas.
+
+**As ferramentas:** foram instaladas em 18/11, com o OK dele, para todos os repositórios do notebook.
+
+- `claude-security`: varredura de segurança com cada achado conferido antes de ser relatado.
+- O agente `silent-failure-hunter` do `pr-review-toolkit`: os erros engolidos, que viram tela em branco ou travamento sem
+  aviso.
+- `/code-review`: a lógica.
+
+**Os lotes, do mais perigoso para o menos** (estimativa de horas de agente):
+
+| Lote | O que cobre | Tamanho | Conferir | Corrigir (hipótese) |
+| --- | --- | --- | --- | --- |
+| 1 | Entrada e acesso: login, PIN, chave do aparelho, sessões, escopo e permissões | ~8 mil | 2 a 3 h | 3 a 6 h |
+| 2 | O que funciona sem login: site, QR, inscrições, mural, webhooks | ~5 mil | 2 h | 2 a 4 h |
+| 3 | Dinheiro: tesouraria, lançamentos, recibos, campanhas | ~10 mil | 2 a 3 h | 3 a 6 h |
+| 4 | Dados pessoais (LGPD): ficha, CPF, menores, saúde, disciplina, cuidado | ~15 mil | 3 a 4 h | 4 a 8 h |
+| 5 | O resto do servidor, em 3 partes | ~60 mil | 6 a 9 h | 6 a 10 h |
+| 6 | As telas, em 2 partes: falhas silenciosas, travamentos e o código que ninguém usa mais | ~40 mil | 4 a 6 h | 6 a 10 h |
+
+**Como cada lote anda:**
+
+- As três ferramentas passam pelo código.
+- Ele recebe só os achados conferidos, em português simples: o que é, o risco e um exemplo.
+- Ele diz "pode corrigir", e a correção vai com teste e prova.
+- **Gravíssima** (alguém sem login lê dados de membros ou mexe em dinheiro): para tudo, ele é avisado na hora e a
+  correção sai no mesmo dia.
+- **Grave:** de 1 a 3 h cada.
+- **Média e leve:** de 30 min a 1 h cada, num pacote por lote.
+
+**Prazo:** de 2 a 3 semanas alternando com a construção (1 a 2 lotes por dia, presos à cota de 5 horas), ou cerca de 1
+semana e meia se fosse a única tarefa. O lote 1 serve de régua: depois dele o prazo é recalculado com o tempo real.
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 

@@ -532,6 +532,47 @@ o pago por causa do financeiro, que também está vindo para cá.
       lugar do "Início"/"Painel Principal" dentro dos módulos, os títulos das colunas sem maiúsculas); nenhum erro de script
       nem pedido novo. Revisão independente feita (só `textContent`, nenhuma lógica mudada, nada preso embaixo no celular).
     - Jest 6.448/6.448 com a main trazida. **Esperando ele ver a homologação e aprovar** a casca inteira.
+  - **Reprovada por ele em 18/11/2026** ("você não fez nada"): a casca dos incrementos 1 a 4 era a tela antiga repintada, não o desenho
+    aprovado — emojis no lugar dos ícones, o menu da esquerda longo, o Início sem as pendências de cada módulo, a página rolando inteira e
+    a barra do topo sem o caminho. Os testes mediam erro de script, contraste e CSP, não se a tela era igual à aprovada.
+  - **Conformidade com o desenho aprovado** (18/11/2026; ramo `v10-casca` `4c1666c`, casca v63; na homologação em `570ef2e`, junto com
+    as telas de Membros). Primeiro a auditoria: cada tela da casca fotografada no Edge sem janela, com dados de mentira, ao lado do
+    desenho aprovado (notebook e celular, claro e escuro; a Geral, o líder local e o membro). Depois a correção:
+    - **Feito igual ao desenho:**
+      - os **ícones de traço** do desenho no lugar dos emojis no menu, nos cartões, na barra do topo e no cabeçalho do módulo (desenhados
+        dentro do sistema, sem biblioteca de fora);
+      - o **menu principal limpo** (Início, Meu trabalho só para quem tem cargo, Minha vida na igreja, Meu Perfil e a pessoa no pé);
+        as telas que ficavam no menu longo abrem pelos cartões de Minha vida, Meu trabalho e Meu Perfil;
+      - dentro do módulo, o "‹ Menu principal", o cabeçalho colorido, o menu na cor do módulo e os **grupos que abrem e fecham com a
+        setinha** (o sistema lembra o que estava fechado);
+      - as **duas colunas independentes**: o menu e o conteúdo rolam cada um sozinho, sem espaço branco;
+      - a **barra do topo** de 64 px com o **caminho** (ex.: Financeiro › Lançamentos), a busca, o claro/escuro e o sino, e a faixa na cor
+        do módulo logo abaixo;
+      - o **menu recolhível** (só os ícones) pelo ☰, lembrado no aparelho;
+      - o **Início**: "Para você hoje" (as 3 primeiras tarefas e avisos) e, em "Meu trabalho", cada módulo com **as 2 principais
+        pendências** e o número ("4 pendências") ou "Em dia"; quadrados para quem cuida de muitos módulos, retângulos para quem cuida de
+        poucos; o membro vê "Minha vida na igreja" no lugar;
+      - **Meu Perfil** (os quatro cartões com os dados mascarados, a segurança, os aparelhos com "Sair deste aparelho", as preferências e
+        "Sair do sistema"; no celular, os quadrados de 2 em 2) e **Minha vida** (os próximos compromissos e "O que é meu");
+      - no **celular**: a barra de 56 px (☰, título, lupa e sino), as pílulas no alto, **nada preso embaixo** (medido em todas as telas) e o
+        menu numa gaveta.
+    - **De onde vêm as pendências do Início:** dos avisos que o sistema já calcula (a categoria diz o módulo) e das tarefas dos fluxos (a
+      permissão da etapa diz o módulo). **Módulos sem nenhuma regra de aviso** mostram só a linha do que há neles, sem número inventado:
+      Órgãos Centrais, Órgãos Regionais, Departamentos e Relatórios (não há aviso de relatório atrasado), Assistência Social, Conquistas,
+      Saúde Congregacional, Setores Técnicos, Conformidade e Acesso.
+    - **Ficou diferente de propósito (dizer a ele):** o número de avisos no sino (o desenho tem um ponto); o "?" da ajuda dentro dos módulos
+      (as telas antigas dependem dela); o link "Registrar presença numa reunião" na entrada (a presença ainda não foi para o Calendário); o
+      Início da Geral com os 24 módulos de hoje (o desenho tem 12: a reorganização é da v10.6).
+    - **Aprovado e ainda não construído:** a entrada pela chave do aparelho e o "confiar neste aparelho" (precisam do servidor, v10.2); a foto
+      da Igreja na entrada (eles mandam); os filtros dos avisos por situação e lugar, que crescem com o nível; os filtros da tela na busca; a
+      primeira tela de Departamentos (cartões com a barra de quantas congregações enviaram) e o submódulo de cada departamento com as funções
+      dele; o formulário e a lista padrão fora de Membros; a escolha da cor de cada parte (as ~30 famílias com reserva); o Financeiro das
+      rodadas 13 a 17.
+    - **Só a moldura nova, com o conteúdo antigo** (o módulo ainda não teve rodada de desenho): todos os módulos menos Membros.
+    - **Provas:** jest do front 96/96; 104 telas da casca no Edge (entrada, Início dos três papéis,
+      avisos, busca, módulos, Meu Perfil, Minha vida, Meu trabalho, menu recolhido, gaveta) sem erro de script, sem violação de CSP, sem
+      rolagem de lado e sem nada preso embaixo; as telas de Membros na casca nova, 92 telas, 0 ilegível. Os pares aprovado × antes × depois
+      ficam no rascunho da sessão (`conformidade/pares` e `conformidade/pares-membros`).
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

@@ -318,12 +318,65 @@ o pago por causa do financeiro, que também está vindo para cá.
        (exclusão, abandono) a quem não tem a permissão "disciplina". A rota nova não mostra; a antiga sai quando as telas
        novas chegarem (passo 7).
   3. **A transferência como fluxo** (pedir, aceitar, acompanhar), com as regras da decisão 3; a congregação da ficha só muda
-     por ela.
+     por ela. **Feito em 17/11/2026 no ramo `v10-membros`** (`bd2349c`, depois de trazer a `main` em `9135278`; migração
+     176), ainda fora da homologação e da produção:
+     - **Quem pede:** a secretaria da congregação de origem, a própria pessoa ou a Secretaria Geral. A área **acompanha**
+       (vê os pedidos das suas congregações), mas não pede nem decide.
+     - **Quando entra na hora:** pedido pela Geral, ou dentro da mesma área. Entre áreas, a secretaria do destino (ou a
+       Geral, a qualquer hora) aceita ou recusa, com motivo; a origem recebe o aviso e lê o motivo. Pedido parado há mais de
+       7 dias aparece para a Geral numa caixa própria.
+     - **A ficha:** só muda se a pessoa ainda estiver na origem; o dízimo ativo vai junto para a tesouraria do destino; quem
+       estava numa Extensão da Tenda sai dela. Um pedido em andamento por pessoa. A trilha guarda quem pediu, quem
+       decidiu e quando, e a transferência concluída entra na linha do tempo.
+     - **O cadastro não troca mais a congregação** de quem já tem uma (nem a Geral: para ela a transferência já é na hora);
+       a ficha sem congregação recebe a primeira pelo cadastro.
+     - **Rotas:** `/api/transferencias` (as caixas "chegando", "saindo", "concluídos" e "paradas", filtradas no banco;
+       acompanhar; pedir; aceitar; recusar; cancelar) e `/api/minha-transferencia/{matrícula}` (a pessoa pede a sua, vê os
+       seus pedidos sem os nomes de quem decidiu e cancela o que ela mesma pediu). Sem tela nova (passo 7).
+     - **Prova:** jest 6.511 de 6.511 (18 testes novos); o roteiro e2e-89 no LocalDB, 77 de 77 (os casos de cada regra, o
+       escopo, a Extensão, o cadastro, a linha do tempo, as corridas com vários processos e o lixo nos campos); a regressão
+       dos roteiros que passam pelo cadastro e pela linha do tempo, toda verde.
+     - **Decisões tomadas pelo caminho seguro (ele pode mudar):** a área não pede (a decisão 3 diz "a origem ou o próprio
+       membro"); congregação sem área conta como "outra área" (o destino aceita); a liderança da pessoa na congregação de
+       origem não é encerrada sozinha pela transferência.
   4. **A fila de cadastros e o pré-cadastro** (no sistema e na página do site), com o aceite automático. **Cadastro repetido
      que chega pelo site (decisão dele, 17/11/2026, corrigida no mesmo dia):** o formulário público do site **deixa enviar** (o
      site não confere nada, para não revelar quem já é da Igreja); quando o pedido chega na fila, o sistema identifica a
      repetição (mesmo CPF, ou nome e nascimento parecidos), **não aprova** e manda para **correção junto com o cadastro mais
-     antigo** — a Secretaria Geral ou a local ajustam.
+     antigo** — a Secretaria Geral ou a local ajustam. **Feito em 17/11/2026 no ramo `v10-membros`** (`73a4e9b`; migração
+     177), ainda fora da homologação e da produção:
+     - **Quem lança:** a secretaria (permissão de pessoas na congregação), o professor ativo da EBD da congregação, a
+       liderança da congregação e a própria pessoa pelo site ("Quero me cadastrar"). Só o essencial: nome, CPF, e-mail,
+       telefone (opcional), nascimento, sexo e estado civil; pelo site, também a congregação. O departamento não é pedido.
+       O consentimento fica registrado (a base legal e a versão do texto); quem lança pelo sistema confirma que a pessoa
+       concordou.
+     - **A fila:** completo e sem pendência **entra sozinho** — a ficha nova como congregado, com a matrícula gerada (o número
+       liberado primeiro, senão a maior + 1). Fica na fila só o que tem pendência: campo faltando, menor de 18 anos (a
+       secretaria confirma o consentimento do responsável), nome e nascimento parecidos com outra ficha (a secretaria confere
+       que não é a mesma pessoa) ou CPF repetido (vai para **correção** junto com o cadastro mais antigo). A secretaria local
+       completa, aceita ou descarta (com motivo); a área acompanha; a Geral acompanha e também resolve. Fora do escopo,
+       "não existe".
+     - **CPF repetido no cadastro pelo sistema:** a rota de conferência (`/api/cadastro/conferir`, 40 por minuto por pessoa)
+       devolve a ficha quando ela é do escopo de quem cadastra; fora dele, só "este CPF já tem cadastro; o caso foi enviado à
+       Secretaria Geral", e o caso fica numa lista só da Geral (`/api/cadastro/casos`), que dá por resolvido com uma nota. O
+       cadastro de hoje (`GestaoPessoas`) já segue essa regra.
+     - **O site nunca revela quem já é da Igreja:** a resposta de um envio válido é sempre a mesma, e também o **tempo** da
+       resposta (um mínimo de 1,5 s). Falha fechada sem a chave combinada com o site; limites de 60 por minuto por origem, 3
+       por hora por visitante e 200 por hora no total. O professor ou líder que lançou vê só "na fila da secretaria" e os
+       campos que faltam, nunca o motivo da repetição.
+     - **Rotas:** `/api/pre-cadastros` (lançar; a fila em caixas; os meus; completar, aceitar, descartar),
+       `/api/pre-cadastro-site` e `/api/cadastro/{conferir|casos|resolver-caso}`. Sem tela nova (passo 7).
+     - **Prova:** jest 6.548 de 6.548 (33 testes novos); o roteiro e2e-90 no LocalDB, 79 de 79 (o líder e o site, o aceite
+       automático com a matrícula reaproveitada, a pendência e o completar/aceitar, o CPF repetido dentro e fora do escopo,
+       o caso da Geral, a resposta igual do site, os limites, o escopo por nível, as corridas com vários processos, o lixo nos
+       campos e a 177 duas vezes); a regressão (e2e-84, 85, 86 e 89), toda verde.
+     - **Decisões tomadas pelo caminho seguro (ele pode mudar):** a pessoa nova entra como **congregado**; o **departamento
+       não é posto sozinho** (o sistema ainda não tem a regra de faixa de idade; definir com ele); menor de 18 anos sempre
+       passa pela secretaria; só a Geral troca a congregação de um pré-cadastro; o e-mail vai para a ficha (a pessoa entra
+       depois pelo "Primeiro acesso"). **Riscos que ficam:** como o site aceita sozinho, alguém pode criar ficha com dados
+       inventados (o limite de 200 por hora segura o volume; a secretaria vê os aceitos na caixa própria); e quem tem a
+       permissão de pessoas fica sabendo, pela conferência, que um CPF já tem cadastro em algum lugar (é a regra pedida; o
+       limite por pessoa e o caso aberto para a Geral deixam rastro).
   5. **A edição campo a campo** (com quem mudou, lendo o `AuditLog`), o que o membro muda sozinho e as sugestões.
   6. **Juntar fichas** (mexe em 241 tabelas), o número liberado indo para o próximo cadastro, o bloqueio da impressão e o
      alerta antes da assembleia.
@@ -337,6 +390,26 @@ o pago por causa do financeiro, que também está vindo para cá.
      respeite o escopo e não revele dado de fora (para fora do escopo, só "já existe; enviado para a Secretaria Geral").
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
+- **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
+  - **Incremento 1** (commit `eb9b600`, mesclado no `homolog` em `262b59d`): a **entrada como primeira tela** (com sessão aberta
+    vai direto ao Início; a Portaria fica no link "Registrar presença numa reunião"; sair volta à entrada; a foto da Igreja entra
+    quando eles mandarem), as **cores da Igreja** (marinho e o ouro com texto marinho no botão principal), o **claro/escuro** no
+    topo (lembrado no aparelho; sem escolha, segue o aparelho), o **Início** ("Graça e paz", "Para você hoje", "Meu trabalho"
+    com os cartões na cor de cada parte), o menu do Início em grupos (Minha vida na igreja, Meu trabalho, Meu Perfil) e, no
+    **celular, as abas em pílulas no alto** (o membro sem "Trabalho") e nada preso embaixo. A primeira tela de cada módulo e o
+    submódulo não mudaram. Prova: jest 6.426/6.426 e a prova no navegador (entrada, Início, celular, claro e escuro, todos os
+    módulos abrindo). Casca do aplicativo v60.
+  - **Incremento 2** (commit `31d8c2b`): os **avisos** (o sino e a pílula "Avisos") num painel do lado, com "Só o que eu
+    preciso resolver" ligado (os fluxos que estão com a pessoa + os não lidos), o quadro de filtros por assunto recolhido; e a
+    **busca do alto** num painel do lado com o campo no alto (Ctrl K abre, Enter abre o primeiro, Esc fecha), presa ao módulo
+    em que a pessoa está, com "Procurar em todo o sistema".
+  - **Incremento 3** (commit `c6a043e`): **Minha vida na igreja** (os próximos compromissos — as escalas e a agenda oficial —
+    e os atalhos do que é da pessoa; no celular, a pílula "Minha vida") e o **Meu Perfil** (os quatro cartões: meus dados,
+    segurança, aparelhos de confiança e preferências — aparência, tamanho da letra, avisos no celular).
+  - Os três na homologação (`a959e3e`), com o equipamento do teste de telas entrando pela entrada nova (`8feba1a`) e a base
+    do teste de telas aprovada **só dentro do ramo** (`84aab1e`): as divergências eram as esperadas da casca nova, sem
+    violação de CSP nem erro de script novo. Provas: jest 6.426/6.426, frontCsp/frontEscape 93/93 e as três provas no Edge
+    sem janela (entrada e Início; avisos e busca; Meu Perfil e Minha vida), no notebook e no celular, claro e escuro.
 - **Regra para toda tela de módulo daqui em diante (ele, 13/11/2026):** nada é aprovado sem mostrar a escala em pelo menos três
   níveis — local, área e geral (região, quadrante e distrito ainda não existem na prática) — e o membro comum quando fizer sentido;
   e, no celular, nada colado nos botões do telefone.

@@ -100,10 +100,7 @@ async function montarEnqueteCompleta(pool, enqueteId) {
   const enquete = await lerEnquete(pool, enqueteId);
   if (!enquete) return null;
   const perguntas = [];
-  const participantesPorId = {};
-
   for (const pergunta of await lerPerguntas(pool, enqueteId)) {
-    const opcoesResult = { recordset: pergunta.opcoes };
     // congregacaoNome/extensaoNome só servem para filtrar a visão por escopo (visaoDaEnquete) e saem antes da resposta.
     const respostasResult = await pool.request().input("id", sql.Int, pergunta.perguntaId).query(`
       SELECT r.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome, r.OpcaoId AS opcaoId, r.TextoResposta AS textoResposta
@@ -112,6 +109,20 @@ async function montarEnqueteCompleta(pool, enqueteId) {
       LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
       WHERE r.PerguntaId = @id
     `);
+    perguntas.push(Object.assign({}, pergunta, { respostasLidas: respostasResult.recordset }));
+  }
+  return comporEnquete(enquete, perguntas);
+}
+
+// Junta a enquete às perguntas (cada uma com as opções e as respostas lidas): a contagem por opção, o detalhe das respostas (só na pública), os participantes.
+// A mesma composição para a leitura de UMA enquete e para a de várias de uma vez (montarEnquetesCompletas).
+function comporEnquete(enquete, perguntasLidas) {
+  const perguntas = [];
+  const participantesPorId = {};
+
+  for (const { respostasLidas, ...pergunta } of perguntasLidas) {
+    const opcoesResult = { recordset: pergunta.opcoes };
+    const respostasResult = { recordset: respostasLidas || [] };
 
     const contagemPorOpcao = {};
     opcoesResult.recordset.forEach(o => { contagemPorOpcao[o.opcaoId] = 0; });
@@ -133,6 +144,69 @@ async function montarEnqueteCompleta(pool, enqueteId) {
   const participantes = Object.values(participantesPorId);
 
   return Object.assign({}, enquete, { perguntas, totalVotos: participantes.length, participantes });
+}
+
+// Raio-x de velocidade 3 (17/11/2026): VÁRIAS enquetes de uma vez para a lista — quatro consultas fixas (as enquetes, as perguntas, as opções, as respostas), em vez de
+// uma enquete, uma pergunta e uma lista de respostas por vez (26 a 28 consultas por pedido). O resultado é o mesmo de montarEnqueteCompleta para cada uma: a enquete que
+// passou do instante marcado é encerrada de verdade aqui também (pelo mesmo lerEnquete) e a vinculante encerrada sem resultado gravado recebe o resultado.
+// Devolve Map(enqueteId -> enquete completa); a que não existe fica de fora.
+async function montarEnquetesCompletas(pool, ids) {
+  const unicos = Array.from(new Set((ids || []).map(Number).filter(Number.isInteger)));
+  const completas = new Map();
+  if (unicos.length === 0) return completas;
+  const lista = JSON.stringify(unicos);
+  const pedido = () => pool.request().input("ids", sql.NVarChar(sql.MAX), lista);
+  const linhas = (await pedido().query(`
+    SELECT EnqueteId AS enqueteId, Titulo AS titulo, Descricao AS descricao,
+           Visibilidade AS visibilidade, PublicoTipo AS publicoTipo, Vinculante AS vinculante,
+           QuorumTipo AS quorumTipo, Status AS status, ResultadoAprovado AS resultadoAprovado, CriadoPor AS criadoPor,
+           TipoApuracao AS tipoApuracao, OpcaoVencedoraId AS opcaoVencedoraId, ResultadoEmpate AS resultadoEmpate,
+           CONVERT(varchar(33), DataAbertura, 126) AS dataAbertura,
+           CONVERT(varchar(33), DataFechamento, 126) AS dataFechamento,
+           CONVERT(varchar(33), DataFechamentoPrevista, 126) AS dataFechamentoPrevista
+    FROM Enquetes WHERE EnqueteId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids))`)).recordset;
+  const enquetes = new Map();
+  for (const linha of linhas) {
+    let enquete = linha;
+    if (enquete.dataFechamentoPrevista === undefined) enquete.dataFechamentoPrevista = null;
+    if (enquete.status === "ABERTA" && passouDoFechamento(enquete)) {
+      enquete = await lerEnquete(pool, enquete.enqueteId);      // o caminho do encerramento (raro): o mesmo de sempre
+      if (!enquete) continue;
+    } else {
+      await recuperarResultado(pool, enquete, { sql });
+    }
+    enquetes.set(Number(enquete.enqueteId), enquete);
+  }
+  if (enquetes.size === 0) return completas;
+  const perguntas = (await pedido().query(`
+    SELECT EnqueteId AS enqueteId, PerguntaId AS perguntaId, Ordem AS ordem, Titulo AS titulo, Tipo AS tipo
+    FROM PerguntasEnquete WHERE EnqueteId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)) ORDER BY EnqueteId, Ordem`)).recordset;
+  const opcoes = (await pedido().query(`
+    SELECT op.PerguntaId AS perguntaId, op.OpcaoId AS opcaoId, op.Texto AS texto, op.Papel AS papel
+    FROM OpcoesEnquete op JOIN PerguntasEnquete pq ON pq.PerguntaId = op.PerguntaId
+    WHERE pq.EnqueteId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)) ORDER BY op.PerguntaId, op.OpcaoId`)).recordset;
+  const respostas = (await pedido().query(`
+    SELECT r.PerguntaId AS perguntaId, r.MembroId AS membroId, m.Nome AS nome, cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome, r.OpcaoId AS opcaoId, r.TextoResposta AS textoResposta
+    FROM RespostasEnquete r JOIN PerguntasEnquete pq ON pq.PerguntaId = r.PerguntaId
+    JOIN MembroReferencia m ON m.MembroId = r.MembroId
+    LEFT JOIN Congregacoes cg ON cg.CongregacaoId = m.CongregacaoId
+    LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
+    WHERE pq.EnqueteId IN (SELECT CAST(value AS INT) FROM OPENJSON(@ids)) ORDER BY r.PerguntaId, r.RespostaId`)).recordset;
+  const porChave = (linhasLidas, chave) => {
+    const mapa = new Map();
+    for (const { [chave]: k, ...resto } of linhasLidas) { const n = Number(k); if (!mapa.has(n)) mapa.set(n, []); mapa.get(n).push(resto); }
+    return mapa;
+  };
+  const opcoesPorPergunta = porChave(opcoes, "perguntaId");
+  const respostasPorPergunta = porChave(respostas, "perguntaId");
+  const perguntasPorEnquete = porChave(perguntas, "enqueteId");
+  for (const [id, enquete] of enquetes) {
+    const lidas = (perguntasPorEnquete.get(id) || []).map((p) => Object.assign({}, p, {
+      opcoes: opcoesPorPergunta.get(Number(p.perguntaId)) || [], respostasLidas: respostasPorPergunta.get(Number(p.perguntaId)) || []
+    }));
+    completas.set(id, comporEnquete(enquete, lidas));
+  }
+  return completas;
 }
 
 // O que quem pede pode ver da enquete: o geral vê tudo; os demais, só participantes/respostas de pessoas do próprio escopo (a mesa local) ou só as próprias (`soPropria`, para
@@ -373,8 +447,9 @@ module.exports = async function (context, req) {
     const daIdentidade = new Set(((await pool.request().query(`SELECT EnqueteId FROM IdentidadeCiclos WHERE EnqueteId IS NOT NULL`)).recordset || []).map(x => Number(x.EnqueteId)));
     const enquetes = [];
     let publicoTodosAtivos = null; // o universo "todos os ativos" é igual para todas as enquetes: calcula uma vez
+    const completas = await montarEnquetesCompletas(pool, idsResult.recordset.map((row) => row.enqueteId));
     for (const row of idsResult.recordset) {
-      const enquete = await montarEnqueteCompleta(pool, row.enqueteId);
+      const enquete = completas.get(Number(row.enqueteId));
       if (!enquete) continue;
       if (!ehMesa && Number(enquete.criadoPor) !== meuId) {
         let elegiveis;

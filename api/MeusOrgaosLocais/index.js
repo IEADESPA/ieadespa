@@ -12,7 +12,7 @@
 // GET /api/meus-orgaos-locais
 const auth = require("../shared/auth");
 const { getPool, sql } = require("../shared/db");
-const escopo = require("../shared/escopo");
+const { congregacoesPorOrgaoLocal } = require("../shared/orgaosLocaisEscopo");
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirLogin(req, context);
@@ -39,12 +39,10 @@ module.exports = async function (context, req) {
     return;
   }
 
-  const permitidos = [];
-  for (const orgao of result.recordset) {
-    const tipo = escopo.NIVEL_PARA_ESCOPO_TIPO[orgao.nivel];
-    const nomesDoOrgao = await escopo.resolverEscopoCongregacoes(pool, tipo, orgao.referenciaId);
-    if (nomesDoOrgao.some(nome => lista.includes(nome))) permitidos.push(orgao);
-  }
+  // Raio-x de velocidade 3 (17/11/2026): o território de todos os órgãos numa consulta só (antes, uma por órgão: 79 consultas por pedido). A mesma resolução de
+  // escopo.resolverEscopoCongregacoes; órgão de nível desconhecido não alcança ninguém (antes, quebrava a rota com erro 500).
+  const territorio = await congregacoesPorOrgaoLocal(pool, result.recordset.map((o) => o.orgaoLocalId));
+  const permitidos = result.recordset.filter((orgao) => (territorio.get(Number(orgao.orgaoLocalId)) || []).some((nome) => lista.includes(nome)));
 
   context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: permitidos };
 };

@@ -337,17 +337,22 @@ const REGISTROS_TRATAMENTO = [
 // Só a contagem é derivada de verdade (SELECT COUNT(*) por tabela) — o
 // resto (finalidade/base legal/retenção) é o julgamento humano que um ROPA
 // exige, não algo que o próprio schema "sabe" sozinho.
+// Raio-x de velocidade 3 (17/11/2026): as contagens de todas as tabelas numa consulta só (antes, uma por tabela: 167 consultas por pedido). Os nomes vêm do catálogo
+// fixo acima (nunca de quem pede) e ainda assim só entram se forem nome simples de tabela.
 async function montarRopa(pool, sql) {
-  const registros = [];
-  for (const registro of REGISTROS_TRATAMENTO) {
-    const contagens = {};
-    for (const tabela of registro.tabelasEnvolvidas) {
-      const resultado = await pool.request().query(`SELECT COUNT(*) AS total FROM ${tabela}`);
-      contagens[tabela] = resultado.recordset[0].total;
-    }
-    registros.push(Object.assign({}, registro, { contagens }));
+  const tabelas = Array.from(new Set(REGISTROS_TRATAMENTO.flatMap((r) => r.tabelasEnvolvidas)));
+  const invalida = tabelas.find((t) => !/^[A-Za-z][A-Za-z0-9_]*$/.test(t));
+  if (invalida) throw new Error(`ROPA: nome de tabela inválido no catálogo: ${invalida}`);
+  const totais = {};
+  if (tabelas.length) {
+    const linhas = (await pool.request().query(tabelas.map((t) => `SELECT N'${t}' AS tabela, COUNT(*) AS total FROM ${t}`).join("\nUNION ALL\n"))).recordset;
+    for (const l of linhas) totais[l.tabela] = l.total;
   }
-  return registros;
+  return REGISTROS_TRATAMENTO.map((registro) => {
+    const contagens = {};
+    for (const tabela of registro.tabelasEnvolvidas) contagens[tabela] = totais[tabela];
+    return Object.assign({}, registro, { contagens });
+  });
 }
 
 module.exports = { REGISTROS_TRATAMENTO, montarRopa };

@@ -128,4 +128,7 @@ bash rodar.sh preparar-173
 BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
 # 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
 BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
+# FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco
+bash rodar.sh preparar-175
+BASE=cenario-175 bash rodar.sh roteiro e2e-88-tesouraria-escopo.js
 echo TUDO-PRONTO

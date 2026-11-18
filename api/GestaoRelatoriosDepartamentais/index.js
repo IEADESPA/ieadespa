@@ -17,6 +17,15 @@ const { getPool, sql } = require("../shared/db");
 const rd = require("../shared/relatoriosDepartamentais");
 const td = require("../shared/tesourariaDepartamental");
 const ebdFinanceiro = require("../shared/ebdFinanceiro");
+const { condicaoSqlEscopoCongregacao } = require("../shared/escopoRotas");
+
+// Os departamentos que a visão alcança, para o filtro do banco (a mesma regra de auth.podeDepartamento): null = todos; senão, a lista (vazia = nenhum).
+function departamentosDaVisao(usuario) {
+  if (!usuario.departamentoId) return null;
+  const daVisao = Array.isArray(usuario._daVisao) && usuario._daVisao.length > 1 ? usuario._daVisao : null;
+  const lista = daVisao ? daVisao.map((c) => c.departamentoId) : [usuario.departamentoId];
+  return Array.from(new Set(lista.map(Number).filter((n) => Number.isInteger(n) && n > 0)));
+}
 
 const SELECT_RELATORIO_BASE = `
   SELECT r.RelatorioDepartamentalId AS relatorioDepartamentalId, r.CongregacaoId AS congregacaoId,
@@ -288,7 +297,21 @@ module.exports = async function (context, req) {
     if (departamentoId) { request.input("departamentoId", sql.Int, departamentoId); where += " AND r.DepartamentoId = @departamentoId"; }
     if (mes) { request.input("mes", sql.Int, mes); where += " AND r.MesReferencia = @mes"; }
     if (ano) { request.input("ano", sql.Int, ano); where += " AND r.AnoReferencia = @ano"; }
-    const result = await request.query(`${SELECT_RELATORIO_BASE} WHERE ${where} ORDER BY r.AnoReferencia DESC, r.MesReferencia DESC`);
+    // Raio-x de velocidade 3 (17/11/2026): o escopo territorial e o do departamento viram condição DO BANCO (antes lia os relatórios do campo inteiro e filtrava
+    // aqui); o filtro abaixo continua como segunda conferência. A regra é a de auth.estaNoEscopo/podeDepartamento.
+    const condEscopo = await condicaoSqlEscopoCongregacao(pool, usuario, request, "r.CongregacaoId");
+    if (condEscopo === "") {
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] };
+      return;
+    }
+    if (condEscopo) where += ` AND ${condEscopo}`;
+    const deptos = departamentosDaVisao(usuario);
+    if (deptos) {
+      if (deptos.length === 0) { context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: [] }; return; }
+      request.input("deptosVisao", sql.NVarChar(sql.MAX), JSON.stringify(deptos));
+      where += " AND r.DepartamentoId IN (SELECT CAST(value AS INT) FROM OPENJSON(@deptosVisao))";
+    }
+    const result = await request.query(`${SELECT_RELATORIO_BASE} WHERE ${where} ORDER BY r.AnoReferencia DESC, r.MesReferencia DESC, r.RelatorioDepartamentalId`);
     const lista = result.recordset
       .filter(r => auth.estaNoEscopo(usuario, r.congregacaoNome) && auth.podeDepartamento(usuario, r.departamentoId));
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: lista };

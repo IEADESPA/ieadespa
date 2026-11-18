@@ -39,6 +39,8 @@ const POR_PAGINA_MAX = 100;
 const escadaDb = require("../shared/escadaDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+// FASE 10, passo 7a — os números do painel executivo do módulo Membros (?resumo=1)
+const painelMembros = require("../shared/painelMembros");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
@@ -137,13 +139,29 @@ module.exports = async function (context, req) {
     // aparece com a categoria normal na lista, mesmo estando sob disciplina de verdade.
     // v7.6 — o dado de disciplina só para a pessoa que está no escopo da permissão "disciplina" (a visão dela), não no de "pessoas".
     const vDisciplina = auth.visaoDaPermissao(usuario, "disciplina");
-    const idsSobDisciplina = vDisciplina
+    const idsSobDisciplina = vDisciplina && !(req.query && req.query.resumo === "1")   // o painel (?resumo=1) não usa a lista de quem está sob disciplina
       ? await disciplina.membrosSobDisciplina(pool)
       : new Set();
     // v10.1c — o escopo filtra NO BANCO (antes lia o campo inteiro e escondia na memória): o dirigente recebe só a sua congregação, o pastor de área só a área.
     const pedido = pool.request();
     const condEscopo = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "e.Nome");
     const condicoes = condEscopo ? [condEscopo] : [];
+    // ?resumo=1 (FASE 10, passo 7a) — os números do PAINEL do módulo Membros, contados no banco dentro do escopo de quem vê (uma ida só, sem nome de ninguém):
+    // o rol por situação, o que falta no cadastro, o gráfico que cada um ajusta (recorte x agrupamento) e as entradas e saídas dos últimos 6 meses (shared/painelMembros.js).
+    if (req.query && req.query.resumo === "1") {
+      const hoje = hojeBrasilia();
+      // ?congregacaoId=N: o painel de UMA congregação (a área e a Geral escolhem); o escopo continua valendo junto (E)
+      let condPainel = condEscopo;
+      if (req.query.congregacaoId !== undefined && req.query.congregacaoId !== "") {
+        const congPainel = auth.idDeRota(req.query.congregacaoId);
+        if (!congPainel) { context.res = { status: 400, body: { sucesso: false, mensagem: "Congregação inválida." } }; return; }
+        pedido.input("painelCong", sql.Int, congPainel);
+        condPainel = condEscopo ? `${condEscopo} AND m.CongregacaoId = @painelCong` : "m.CongregacaoId = @painelCong";
+      }
+      const resumo = condEscopo === "" ? painelMembros.vazio(hoje) : await painelMembros.lerPainel(pedido, sql, condPainel, hoje);
+      context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { sucesso: true, resumo } };
+      return;
+    }
     // ?pagina=N — a lista em páginas, com a busca e os filtros no banco (para a tela nova da lista; sem ?pagina a resposta continua sendo a lista inteira do escopo).
     const paginada = req.query && req.query.pagina !== undefined && req.query.pagina !== "";
     let pagina = 1, porPagina = POR_PAGINA_PADRAO, total = 0;
@@ -176,6 +194,17 @@ module.exports = async function (context, req) {
         pedido.input("filtroSituacao", sql.NVarChar(30), situacao.slice(0, 30));
         condicoes.push("m.SituacaoMembro = @filtroSituacao");
       }
+      // passo 7a — o que falta no cadastro (os avisos do painel abrem a lista já filtrada): só valores conhecidos, o resto é recusado
+      const falta = String(req.query.falta || "").trim();
+      if (falta) {
+        const FALTAS = { cpf: "m.Cpf IS NULL", nascimento: "m.DataNascimento IS NULL", departamento: "m.DepartamentoId IS NULL", sexo: "(m.Sexo IS NULL OR m.Sexo NOT IN (N'M', N'F'))",
+          contato: "NULLIF(LTRIM(RTRIM(ISNULL(m.Email, N''))), N'') IS NULL AND NULLIF(LTRIM(RTRIM(ISNULL(m.Telefone, N''))), N'') IS NULL" };
+        if (!Object.prototype.hasOwnProperty.call(FALTAS, falta)) { context.res = { status: 400, body: { sucesso: false, mensagem: "Filtro inválido." } }; return; }
+        condicoes.push(`(${FALTAS[falta]})`);
+      }
+      // passo 7a — ?rol=1: só o ROL (quem está na Igreja hoje); ?rol=saidas: só quem saiu (desligado ou falecido); sem ?rol: todos, como antes
+      if (req.query.rol === "1") condicoes.push("ISNULL(m.Status, N'ATIVO') NOT IN (N'DESLIGADO', N'FALECIDO')");
+      else if (req.query.rol === "saidas") condicoes.push("ISNULL(m.Status, N'ATIVO') IN (N'DESLIGADO', N'FALECIDO')");
     }
     if (condEscopo === "") {
       // a visão não alcança congregação nenhuma: lista vazia, sem ler o cadastro

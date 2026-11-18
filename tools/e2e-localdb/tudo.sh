@@ -145,6 +145,9 @@ BASE=cenario-177 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 bash rodar.sh preparar-178
 BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
 E2E_RCSI=1 BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
+# (v10.1b passo 7a) o painel executivo do módulo Membros (?resumo=1: GROUPING SETS, idade e batismo no Espírito Santo no banco, escopo, a escolha da congregação)
+# e os filtros novos da lista em páginas (?falta=, ?rol=), contra o gabarito do banco
+BASE=cenario-178 bash rodar.sh roteiro e2e-92-painel-membros.js
 # 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
 BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 # FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco

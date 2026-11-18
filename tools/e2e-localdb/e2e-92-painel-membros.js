@@ -135,6 +135,15 @@ async function principal() {
   ok(saidas.body.total === 2 && saidas.body.itens.map((x) => x.membroId).sort().join() === "920011,920012", "só quem saiu: o desligado e o falecido");
   const todos = await lista({});
   ok(todos.body.total === 14, "sem ?rol: todos, como antes (14)", String(todos.body.total));
+  // a matrícula exata (a ficha 360 lê a pessoa assim): só ela, nunca quem tem o número dentro do seu; fora do escopo, nada
+  const umaSo = await lista({ matricula: "920005" });
+  ok(umaSo.status === 200 && umaSo.body.total === 1 && umaSo.body.itens.length === 1 && umaSo.body.itens[0].membroId === 920005, "matrícula exata: só a 920005");
+  const curta = await pedir(tokenGeral(), { pagina: 1, porPagina: 5, matricula: "9200" });
+  ok(curta.status === 200 && curta.body.total === 0, "matrícula exata 9200 não acha as 9200xx (não é LIKE)", JSON.stringify(curta.body).slice(0, 120));
+  const foraDoEscopo = await pedir(tokenLider(["Congregação que não existe E2E92"]), { pagina: 1, matricula: "920005" });
+  ok(foraDoEscopo.status === 200 && foraDoEscopo.body.total === 0, "matrícula exata fora do escopo: nada");
+  const ruimMat = await lista({ matricula: "920005 OR 1=1" });
+  ok(ruimMat.status === 400, "matrícula inválida: 400");
   const ruim = await lista({ falta: "cpf) OR (1=1" });
   ok(ruim.status === 400, "filtro do que falta desconhecido: 400");
   for (const lixo of L.LIXO.slice(0, 15)) {

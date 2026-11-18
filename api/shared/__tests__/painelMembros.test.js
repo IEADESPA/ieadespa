@@ -148,6 +148,18 @@ describe("GET /api/pessoas?pagina=N — os filtros do que falta e do rol", () =>
     const r = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", departamentoId: "x" });
     expect(r.status).toBe(400);
   });
+  test("a matrícula exata (a ficha 360): igualdade no banco, nunca o LIKE da busca; inválida é recusada", async () => {
+    quando(/SELECT COUNT\(\*\) AS total/, respostaPaginada);
+    await pedir(tokenDe({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"] }), { pagina: "1", porPagina: "1", matricula: "5" });
+    const q = rodou(/SELECT COUNT\(\*\) AS total/)[0];
+    expect(q.inputs.filtroMatricula).toBe(5);
+    expect(q.sql).toMatch(/m\.MembroId = @filtroMatricula/);
+    expect(q.sql).not.toMatch(/LIKE @busca/);
+    // o escopo continua valendo junto
+    expect(q.sql).toMatch(/OPENJSON\(@escopoIds0\)/);
+    const r = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", matricula: "5 OR 1=1" });
+    expect(r.status).toBe(400);
+  });
   test("só quem saiu", async () => {
     quando(/SELECT COUNT\(\*\) AS total/, respostaPaginada);
     await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { pagina: "1", rol: "saidas" });

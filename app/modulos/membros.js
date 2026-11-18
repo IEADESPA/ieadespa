@@ -555,14 +555,14 @@ function mbTrazerPartesAntigas() {
   MB_ABAS_ANTIGAS.forEach((n) => { const el = document.getElementById(`tabPerfil${n}`); if (el) destino.appendChild(el); });
   destino.dataset.pronto = "1";
 }
-// a pessoa da ficha: a mesma linha da lista (o servidor confere o escopo), procurada pela matrícula
+// a pessoa da ficha: a mesma linha da lista (o servidor confere o escopo), pela matrícula exata
 async function mbRecarregarPessoa() {
   const id = mbFicha.membroId;
   if (!id) return;
   const seq = ++mbFicha.seq;
   let pessoa = null;
   try {
-    const res = await fetchProtegido(`${API_BASE}/pessoas?pagina=1&porPagina=100&busca=${encodeURIComponent(String(id))}`);
+    const res = await fetchProtegido(`${API_BASE}/pessoas?pagina=1&porPagina=1&matricula=${encodeURIComponent(String(id))}`);
     const data = await res.json();
     if (data && data.sucesso && Array.isArray(data.itens)) pessoa = data.itens.find((x) => x.membroId === id) || null;
   } catch (e) { pessoa = null; }

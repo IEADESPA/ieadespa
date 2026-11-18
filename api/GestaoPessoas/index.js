@@ -194,6 +194,13 @@ module.exports = async function (context, req) {
         pedido.input("filtroSituacao", sql.NVarChar(30), situacao.slice(0, 30));
         condicoes.push("m.SituacaoMembro = @filtroSituacao");
       }
+      // passo 7a — UMA pessoa pela matrícula exata (a ficha 360 lê a pessoa assim; a busca por texto acharia também quem tem o número dentro do seu)
+      if (req.query.matricula !== undefined && req.query.matricula !== "") {
+        const mat = auth.idDeRota(req.query.matricula);
+        if (!mat) { context.res = { status: 400, body: { sucesso: false, mensagem: "Matrícula inválida." } }; return; }
+        pedido.input("filtroMatricula", sql.Int, mat);
+        condicoes.push("m.MembroId = @filtroMatricula");
+      }
       // passo 7a — o departamento (o filtro da lista nova)
       if (req.query.departamentoId !== undefined && req.query.departamentoId !== "") {
         const depId = auth.idDeRota(req.query.departamentoId);

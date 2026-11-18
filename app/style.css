@@ -2181,3 +2181,332 @@ button.mt-quem { cursor: pointer; }
   .mt-acoes { justify-content: flex-start; }
   .mb-tela .mt-motivo { width: 100%; font-size: 16px; }
 }
+   FASE 10 — CONFORMIDADE COM O DESENHO APROVADO (18/11/2026, depois da reprovação da homologação). O que estava diferente do aprovado:
+   o menu da esquerda longo, os emojis, o Início sem as pendências de cada módulo, a página rolando inteira (o menu junto com o conteúdo),
+   a barra do topo sem o caminho. Aqui: o MENU PRINCIPAL LIMPO (Início, Meu trabalho, Minha vida na igreja, Meu Perfil e a pessoa no pé),
+   os ÍCONES DE TRAÇO, as DUAS COLUNAS que rolam cada uma sozinha, a BARRA DO TOPO de 64 px com o caminho, a busca, o claro/escuro e o sino,
+   a FAIXA na cor do módulo, o menu RECOLHÍVEL (só os ícones) e, no celular, a barra de 56 px, as pílulas no alto e a gaveta do ☰.
+   Medidas e cores tiradas da página de propostas (rodadas 3, 4, 7 e 12). Só variáveis do tema.
+   ===================================================================================================================================== */
+:root { --cor-icone-topo: #0A2342; --cor-menu-cartao: #13294A; --cor-menu-texto: #D5DEEA; }
+html[data-tema="escuro"] { --cor-icone-topo: #FFC933; --cor-menu-cartao: #0E2748; }
+
+/* os ícones de traço: o tamanho vem do próprio desenho (20 px) e a cor, do texto em volta */
+.icone[data-icone], [data-icone] { display: inline-flex; align-items: center; justify-content: center; flex: none; line-height: 0; }
+.icone[data-icone] svg { width: 20px; height: 20px; }
+
+/* as cores de cada parte do sistema (as famílias aprovadas na rodada 4; no escuro, o tom claro da mesma família) */
+[data-cor] { --cor-modulo: #0A2342; --cor-modulo-fundo: #E3ECFD; }
+[data-cor="membresia"], [data-cor="habilitacao"] { --cor-modulo: #1D4ED8; --cor-modulo-fundo: #E3ECFD; }
+[data-cor="financeiro"] { --cor-modulo: #0F766E; --cor-modulo-fundo: #DDF3EF; }
+[data-cor="eclesiastica"], [data-cor="trilhas"] { --cor-modulo: #6D28D9; --cor-modulo-fundo: #EDE7FB; }
+[data-cor="departamentos"], [data-cor="escalas"] { --cor-modulo: #BE185D; --cor-modulo-fundo: #FCE7F3; }
+[data-cor="ebd"] { --cor-modulo: #0369A1; --cor-modulo-fundo: #DFF1FA; }
+[data-cor="expansao"], [data-cor="entidades"] { --cor-modulo: #C2410C; --cor-modulo-fundo: #FDEBDD; }
+[data-cor="territorio"] { --cor-modulo: #15803D; --cor-modulo-fundo: #DCFCE7; }
+[data-cor="calendario"], [data-cor="eventos"] { --cor-modulo: #A21CAF; --cor-modulo-fundo: #FBE7FB; }
+[data-cor="orgaosCentrais"], [data-cor="orgaosRegionais"], [data-cor="conformidade"], [data-cor="acesso"] { --cor-modulo: #7A5800; --cor-modulo-fundo: #FFF4D6; }
+[data-cor="disciplina"], [data-cor="crise"] { --cor-modulo: #B91C1C; --cor-modulo-fundo: #FEE2E2; }
+[data-cor="canais"] { --cor-modulo: #4338CA; --cor-modulo-fundo: #E8EAFD; }
+[data-cor="assistenciasocial"], [data-cor="psc"], [data-cor="setores"] { --cor-modulo: #B45309; --cor-modulo-fundo: #FEF3C7; }
+[data-cor="conquistas"] { --cor-modulo: #0E7490; --cor-modulo-fundo: #CFFAFE; }
+html[data-tema="escuro"] [data-cor] { --cor-modulo: #93B4F8; --cor-modulo-fundo: #13294A; }
+html[data-tema="escuro"] [data-cor="membresia"], html[data-tema="escuro"] [data-cor="habilitacao"] { --cor-modulo: #93B4F8; --cor-modulo-fundo: #1E3A6E; }
+html[data-tema="escuro"] [data-cor="financeiro"] { --cor-modulo: #5EEAD4; --cor-modulo-fundo: #0F3D3A; }
+html[data-tema="escuro"] [data-cor="eclesiastica"], html[data-tema="escuro"] [data-cor="trilhas"] { --cor-modulo: #C4B5FD; --cor-modulo-fundo: #34205E; }
+html[data-tema="escuro"] [data-cor="departamentos"], html[data-tema="escuro"] [data-cor="escalas"] { --cor-modulo: #F9A8D4; --cor-modulo-fundo: #4A1530; }
+html[data-tema="escuro"] [data-cor="ebd"] { --cor-modulo: #7DD3FC; --cor-modulo-fundo: #0C3A52; }
+html[data-tema="escuro"] [data-cor="expansao"], html[data-tema="escuro"] [data-cor="entidades"] { --cor-modulo: #FDBA74; --cor-modulo-fundo: #4A2410; }
+html[data-tema="escuro"] [data-cor="territorio"] { --cor-modulo: #86EFAC; --cor-modulo-fundo: #14532D; }
+html[data-tema="escuro"] [data-cor="calendario"], html[data-tema="escuro"] [data-cor="eventos"] { --cor-modulo: #F0ABFC; --cor-modulo-fundo: #4A1650; }
+html[data-tema="escuro"] [data-cor="orgaosCentrais"], html[data-tema="escuro"] [data-cor="orgaosRegionais"], html[data-tema="escuro"] [data-cor="conformidade"], html[data-tema="escuro"] [data-cor="acesso"] { --cor-modulo: #FFC933; --cor-modulo-fundo: #3D2E05; }
+html[data-tema="escuro"] [data-cor="disciplina"], html[data-tema="escuro"] [data-cor="crise"] { --cor-modulo: #FCA5A5; --cor-modulo-fundo: #4C1717; }
+html[data-tema="escuro"] [data-cor="canais"] { --cor-modulo: #A5B4FC; --cor-modulo-fundo: #26265E; }
+html[data-tema="escuro"] [data-cor="assistenciasocial"], html[data-tema="escuro"] [data-cor="psc"], html[data-tema="escuro"] [data-cor="setores"] { --cor-modulo: #FCD34D; --cor-modulo-fundo: #3D2A05; }
+html[data-tema="escuro"] [data-cor="conquistas"] { --cor-modulo: #67E8F9; --cor-modulo-fundo: #0B3A47; }
+.tile-casca {
+  width: 36px; height: 36px; border-radius: 11px; background: var(--cor-modulo-fundo); color: var(--cor-modulo);
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+}
+
+/* ---- as DUAS COLUNAS: a página não rola; o menu tem a rolagem dele e o conteúdo a dele (sem espaço branco sobrando) ---- */
+#telaPainel:not(.tela-entrada) { padding: 0; min-height: 0; height: 100vh; height: 100dvh; overflow: hidden; justify-content: flex-start; align-items: stretch; }
+.painel-layout { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.conteudo { height: 100vh; height: 100dvh; max-height: none; overflow-y: auto; overflow-x: hidden; padding: 0 0 32px; }
+.conteudo > .aba-secretaria { margin: 24px 32px 0; }
+.conteudo > .crs-faixa { margin: 16px 32px 0; }
+
+/* ---- o MENU DA ESQUERDA (rodadas 3 e 7): o logo, os 4 itens do menu principal e a pessoa no pé ---- */
+.sidebar { overflow-x: hidden; }
+.sidebar-topo { display: flex; align-items: center; gap: 10px; padding: 0 6px 18px; }
+.sidebar-logo { width: 42px; height: 42px; border-radius: 50%; background: #FFFFFF; border: 2px solid var(--cor-ouro); padding: 3px; object-fit: contain; flex: none; }
+.sidebar-titulo { flex: 1; min-width: 0; font-size: 16px; font-weight: 800; letter-spacing: .04em; color: #FFFFFF; }
+.btn-recolher-menu { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--cor-menu-texto-suave); border-radius: 9px; }
+.btn-recolher-menu:hover { color: #FFFFFF; }
+.sidebar .btn-aba:not([style*="none"]) { display: flex !important; }
+.sidebar .btn-aba {
+  align-items: center; gap: 12px; min-height: 44px; padding: 0 16px; border-radius: 10px; color: var(--cor-menu-texto); font-size: 15px; font-weight: 500;
+  background: transparent; box-shadow: none; border: none;
+}
+.sidebar .btn-aba .icone { color: var(--cor-menu-texto); font-size: inherit; }
+.sidebar .btn-aba:hover { background: rgba(255, 255, 255, .08); color: #FFFFFF; }
+.sidebar .btn-aba.ativo { background: var(--cor-menu-ativo); color: #FFFFFF; font-weight: 600; box-shadow: inset 4px 0 0 var(--cor-ouro); }
+.sidebar .btn-aba.ativo .icone { color: var(--cor-ouro); }
+.menu-principal-casca { display: flex; flex-direction: column; gap: 6px; }
+#btnAbaMeupainel, #submenuMeupainel { display: none !important; }
+.painel-layout[data-modulo] #menuPrincipalCasca { display: none; }
+.divisor-sidebar { display: none; }
+.sidebar-rodape { margin-top: auto; padding: 14px 0 0; border-top: none; }
+.cartao-usuario {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border: none; border-radius: 12px; background: var(--cor-menu-cartao);
+  cursor: pointer; text-align: left; font-family: inherit;
+}
+.painel-layout[data-modulo] .cartao-usuario { background: rgba(255, 255, 255, .08); }
+.cartao-usuario:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
+.cartao-usuario-iniciais {
+  width: 34px; height: 34px; border-radius: 17px; background: var(--cor-ouro); color: var(--cor-ouro-texto); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; flex: none;
+}
+.cartao-usuario-textos { display: flex; flex-direction: column; min-width: 0; }
+.sidebar .nome-logado { margin: 0; font-size: 14px; font-weight: 600; color: #FFFFFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cartao-usuario-papel { font-size: 12px; color: var(--cor-menu-texto-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* dentro de um módulo (rodadas 3, 4 e 7): "‹ Menu principal", o cabeçalho colorido e os grupos que abrem e fecham com a setinha */
+.painel-layout[data-modulo] #btnVoltarModulo { min-height: 30px; padding: 0 8px; gap: 6px; font-size: 13px; font-weight: 500; }
+.painel-layout[data-modulo] #btnVoltarModulo .icone svg { width: 16px; height: 16px; }
+.painel-layout[data-modulo] .menu-modulo-cabecalho { margin: 6px 0 8px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, .10); }
+.menu-modulo-rotulo { font-size: 11.5px; letter-spacing: .06em; }
+.menu-modulo-titulo { font-size: 18px; }
+.menu-modulo-escopo { font-size: 12.5px; }
+.sidebar .btn-aba-grupo {
+  min-height: 38px; padding: 0 8px; gap: 8px; font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #FFFFFF;
+}
+.sidebar .btn-aba-grupo .icone { display: none; }
+.sidebar .btn-aba-grupo.ativo { background: transparent; box-shadow: none; }
+.seta-grupo { order: -1; display: inline-flex; color: var(--cor-menu-texto-suave); }
+.seta-grupo svg { transform: rotate(-90deg); transition: transform .15s; }
+.btn-aba-grupo.ativo:has(+ .submenu-aba:not(.fechado)) .seta-grupo svg { transform: none; }
+.btn-aba.ativo + .submenu-aba.fechado { display: none; }
+.sidebar .submenu-aba { margin: 2px 0 6px 14px; gap: 2px; }
+.sidebar .btn-subaba { min-height: 40px; padding: 0 14px; gap: 12px; border-radius: 9px; font-size: 14.5px; font-weight: 500; color: var(--cor-menu-texto); }
+.sidebar .btn-subaba .icone { color: var(--cor-menu-texto-suave); }
+.sidebar .btn-subaba .icone svg { width: 19px; height: 19px; }
+.sidebar .btn-subaba.ativo { background: var(--cor-menu-ativo); color: #FFFFFF; font-weight: 600; box-shadow: inset 4px 0 0 var(--cor-ouro); }
+.sidebar .btn-subaba.ativo .icone { color: var(--cor-ouro); }
+
+/* ---- a BARRA DO TOPO (v10.5): fixa, 64 px; o caminho à esquerda; a busca, o claro/escuro e o sino à direita ---- */
+.cabecalho-secretaria {
+  position: sticky; top: 0; z-index: 30; height: 64px; margin: 0; padding: 0 28px; gap: 10px; flex-wrap: nowrap;
+  background: var(--cor-superficie); border: none; border-bottom: 1px solid var(--cor-borda); border-radius: 0; box-shadow: none;
+}
+.painel-layout[data-modulo] .cabecalho-secretaria { box-shadow: none; padding-top: 0; }
+.cabecalho-secretaria > #tituloModulo { display: none; }
+.trilha-casca { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+.trilha-link, .trilha-parte { font-size: 15px; color: var(--cor-texto-suave); background: none; border: none; padding: 0; font-family: inherit; font-weight: 500; }
+.trilha-link { cursor: pointer; }
+.trilha-link:hover { color: var(--cor-titulo); text-decoration: underline; }
+.trilha-atual { font-size: 15px; font-weight: 600; color: var(--cor-titulo); overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { display: inline-flex; color: var(--cor-texto-suave); }
+.caixa-busca-global { position: relative; flex: 0 0 300px; max-width: 300px; margin: 0; }
+.caixa-busca-global > .icone { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--cor-texto-suave); pointer-events: none; }
+.caixa-busca-global > .icone svg { width: 18px; height: 18px; }
+#campoBuscaGlobal { width: 100%; height: 40px; min-height: 40px; padding: 0 64px 0 38px; border: 1px solid var(--cor-campo-borda); border-radius: 10px; background: var(--cor-campo); font-size: 14px; }
+.atalho-busca {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-family: inherit; font-size: 12px; color: var(--cor-texto-suave);
+  border: 1px solid var(--cor-campo-borda); border-radius: 6px; padding: 1px 6px; background: transparent; pointer-events: none;
+}
+.btn-busca-celular { display: none; }
+.cabecalho-secretaria .btn-tema, .cabecalho-secretaria .btn-sino, .cabecalho-secretaria #btnAjuda {
+  width: 40px; min-width: 40px; height: 40px; padding: 0; border: 1px solid var(--cor-campo-borda); border-radius: 10px; background: var(--cor-campo);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--cor-icone-topo); font-size: inherit;
+}
+.cabecalho-secretaria .btn-sino { position: relative; }
+.cabecalho-secretaria .badge-sino { position: absolute; top: -6px; right: -7px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; font-size: 11px; font-weight: 800; line-height: 18px; }
+#btnModoLeitura { display: none !important; }
+.painel-layout:not([data-modulo]) .caixa-ajuda { display: none; }
+.faixa-modulo-casca { display: none; }
+.painel-layout[data-modulo] .faixa-modulo-casca { display: block; position: sticky; top: 64px; z-index: 29; height: 6px; background: var(--cor-modulo); }
+
+/* ---- o INÍCIO (rodadas 3 e 4) ---- */
+.inicio-saudacao { margin: 0 0 3px; font-size: 25px; font-weight: 700; line-height: 1.25; color: var(--cor-titulo); }
+.inicio-escopo { margin: 0 0 16px; font-size: 14.5px; color: var(--cor-texto-suave); }
+.inicio-escopo:empty { display: none; }
+.inicio-secao { display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; }
+.inicio-rotulo { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--cor-titulo); }
+.inicio-vazio { margin: 0; color: var(--cor-texto-suave); }
+.grade-hoje { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.cartao-hoje {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; background: var(--cor-superficie); border: 1px solid var(--cor-borda);
+  border-radius: 14px; cursor: pointer;
+}
+.cartao-hoje:hover { border-color: var(--cor-ouro); }
+.cartao-hoje-textos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cartao-hoje-textos strong { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--cor-titulo); }
+.cartao-hoje-textos span { font-size: 12.5px; color: var(--cor-texto-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cartao-hoje-seta { display: none; color: var(--cor-texto-suave); }
+.grade-modulos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.grade-modulos.poucos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grade-modulos .card-modulo {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; padding: 12px 14px; text-align: left; font-weight: 400;
+  background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-left-width: 1px; border-radius: 14px; color: var(--cor-texto); cursor: pointer;
+}
+.grade-modulos .card-modulo:hover { border-color: var(--cor-modulo); box-shadow: var(--sombra); transform: none; }
+.cartao-modulo-cabeca { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cartao-modulo-cabeca .tile-casca { width: 40px; height: 40px; border-radius: 12px; }
+.cartao-modulo-cabeca strong { font-size: 15px; font-weight: 700; line-height: 1.25; color: var(--cor-titulo); }
+.cartao-modulo-tarefas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cartao-modulo-tarefas li { font-size: 13px; color: var(--cor-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cartao-modulo-tarefas li::before { content: "•"; color: var(--cor-modulo); margin-right: 6px; }
+.cartao-modulo-resumo { margin: 0; font-size: 13px; color: var(--cor-texto-suave); }
+.chip-casca { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 12px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.chip-pendente { background: var(--chip-ambar-fundo); color: var(--chip-ambar-texto); }
+.chip-emdia { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); }
+.grade-vida-inicio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.atalho-vida-grande {
+  display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: 14px;
+  font-family: inherit; text-align: left; cursor: pointer; color: var(--cor-texto);
+}
+.atalho-vida-grande:hover { border-color: var(--cor-ouro); }
+.atalho-vida-grande .tile-casca { width: 44px; height: 44px; border-radius: 12px; }
+.atalho-vida-textos { display: flex; flex-direction: column; min-width: 0; }
+.atalho-vida-textos strong { font-size: 15.5px; font-weight: 600; color: var(--cor-titulo); }
+.atalho-vida-textos span { font-size: 13.5px; color: var(--cor-texto-suave); }
+
+/* as páginas de Meu trabalho, Minha vida e Meu Perfil não são um cartão só: os cartões estão dentro delas */
+#abaMeupainel > #subMeupainelTrabalho { background: transparent !important; border: none !important; padding: 0 !important; box-shadow: none !important; }
+.pagina-casca-cabeca { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; }
+.pagina-casca-cabeca .inicio-escopo { margin: 0; }
+.pagina-casca-titulos { flex: 1; min-width: 0; }
+#trabalhoAtalhos { display: block; margin-top: 16px; padding: 4px 18px; background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: 14px; }
+
+/* MEU PERFIL (rodada 7, opção 1): o título com "Sair do sistema" e os quatro cartões */
+.perfil-avatar { display: none; }
+.btn-sair-casca { width: auto; margin: 0; flex: none; }
+.perfil-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.perfil-cartao { padding: 16px 18px 12px; border-radius: 16px; gap: 0; }
+.perfil-cartao h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 17px; font-weight: 600; color: var(--cor-titulo); }
+.perfil-linha { min-height: 52px; gap: 12px; border-top: 1px solid var(--cor-linha); font-size: 14.5px; }
+.perfil-linha > span:first-child { width: 150px; }
+.perfil-linha strong { flex: 1; min-width: 0; font-weight: 600; }
+.perfil-linha > .btn-link { margin-left: auto; flex: none; }
+.perfil-aparelho { display: flex; align-items: center; gap: 12px; min-height: 56px; border-top: 1px solid var(--cor-linha); color: var(--cor-texto-suave); }
+.perfil-aparelho-textos { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.perfil-aparelho-textos strong { font-size: 15px; font-weight: 600; color: var(--cor-titulo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perfil-aparelho-textos span { font-size: 12.5px; }
+.perfil-acoes { margin-top: 0; padding-top: 10px; border-top: 1px solid var(--cor-linha); }
+.perfil-extra { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.perfil-extra .btn-confirmar { width: auto; margin: 0; }
+
+/* MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos à esquerda, "O que é meu" à direita, o resto embaixo */
+.vida-grade { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.vida-atalhos { display: block; background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 16px 18px; }
+.vida-titulo { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: var(--cor-titulo); }
+.vida-linhas { display: flex; flex-direction: column; }
+.linha-vida {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 0; border: none; border-top: 1px solid var(--cor-linha);
+  background: transparent; text-align: left; font-family: inherit; cursor: pointer; color: var(--cor-texto);
+}
+.linha-vida:first-child { border-top: none; }
+.linha-vida:hover .linha-vida-textos strong { text-decoration: underline; }
+.linha-vida-textos { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.linha-vida-textos strong { font-size: 15px; font-weight: 600; color: var(--cor-titulo); }
+.linha-vida-textos span { font-size: 13px; color: var(--cor-texto-suave); }
+.linha-vida-seta { display: inline-flex; color: var(--cor-texto-suave); }
+.vida-mais-secao { margin-top: 18px; }
+.vida-mais { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.atalho-vida-mini {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 12px; background: var(--cor-superficie); border: 1px solid var(--cor-borda);
+  border-radius: 12px; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--cor-titulo); text-align: left; cursor: pointer;
+}
+.atalho-vida-mini:hover { border-color: var(--cor-ouro); }
+.atalho-vida-mini .tile-casca { width: 30px; height: 30px; border-radius: 9px; }
+.vida-data span { text-transform: none; }
+
+/* ---- NOTEBOOK: o menu com 248 px, a rolagem própria e o modo RECOLHIDO (só os ícones) ---- */
+@media (min-width: 641px) {
+  .sidebar { width: 248px; min-width: 248px; height: 100vh; height: 100dvh; overflow-y: auto; padding: 20px 14px 14px; gap: 6px; }
+  .sidebar.recolhido { width: 76px; min-width: 76px; padding: 16px 10px 12px; }
+  .sidebar.recolhido .sidebar-topo { flex-direction: column; gap: 10px; padding: 0 0 12px; }
+  .sidebar.recolhido .sidebar-titulo, .sidebar.recolhido .rotulo, .sidebar.recolhido .cartao-usuario-textos, .sidebar.recolhido .seta-grupo,
+  .sidebar.recolhido .menu-modulo-cabecalho, .sidebar.recolhido #btnVoltarModulo .rotulo { display: none !important; }
+  .sidebar.recolhido .btn-aba { justify-content: center; padding: 0; }
+  .sidebar.recolhido .btn-aba-grupo .icone { display: inline-flex; }
+  .sidebar.recolhido .btn-recolher-menu { background: rgba(255, 255, 255, .12); color: #FFFFFF; }
+  .sidebar.recolhido .cartao-usuario { justify-content: center; padding: 8px 0; background: transparent; }
+}
+
+/* ---- CELULAR (rodada 12): a barra de 56 px (☰, o título, a busca e o sino), as pílulas no alto, nada preso embaixo, o menu numa gaveta ---- */
+@media (max-width: 640px) {
+  .sidebar { padding: 18px 12px 12px; gap: 6px; }
+  .cabecalho-secretaria { height: 56px; padding: 0 10px 0 6px; gap: 6px; flex-wrap: nowrap; }
+  .trilha-casca { display: none; }
+  .cabecalho-secretaria > #tituloModulo { display: block; flex: 1 1 auto; min-width: 0; margin: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .caixa-busca-global { display: none !important; }
+  .btn-busca-celular { display: inline-flex; }
+  .cabecalho-secretaria .btn-tema, .cabecalho-secretaria .caixa-ajuda { display: none; }
+  .cabecalho-secretaria .btn-menu-celular, .cabecalho-secretaria .btn-busca-celular, .cabecalho-secretaria .btn-sino {
+    width: 40px; min-width: 40px; height: 40px; padding: 0; border: none; background: transparent; color: var(--cor-icone-topo); display: inline-flex; align-items: center; justify-content: center;
+  }
+  .cabecalho-secretaria .btn-menu-celular .icone svg, .cabecalho-secretaria .btn-busca-celular .icone svg, .cabecalho-secretaria .btn-sino .icone svg { width: 23px; height: 23px; }
+  .cabecalho-secretaria .badge-sino { top: 0; right: -2px; }
+  .painel-layout[data-modulo] .faixa-modulo-casca { position: static; height: 5px; }
+  .pilulas-celular { position: sticky; top: 56px; z-index: 29; margin: 0; padding: 10px 12px; gap: 6px; background: var(--cor-superficie); border-bottom: 1px solid var(--cor-borda); }
+  .pilula-celular { height: 36px; border-radius: 18px; background: var(--cor-linha); color: var(--cor-texto); font-size: 12.5px; }
+  .conteudo { padding: 0 0 24px; }
+  .conteudo > .aba-secretaria { margin: 16px 16px 0; }
+  .conteudo > .crs-faixa { margin: 12px 16px 0; }
+  .inicio-saudacao { font-size: 21px; font-weight: 800; }
+  .inicio-escopo { font-size: 13.5px; margin-bottom: 14px; }
+  .inicio-rotulo { font-size: 17px; }
+  .grade-hoje { grid-template-columns: 1fr; gap: 0; padding: 2px 16px; background: var(--cor-superficie); border: 1px solid var(--cor-borda); border-radius: 16px; }
+  .cartao-hoje { min-height: 58px; padding: 10px 0; border: none; border-top: 1px solid var(--cor-linha); border-radius: 0; background: transparent; }
+  .cartao-hoje:first-child { border-top: none; }
+  .cartao-hoje-seta { display: inline-flex; }
+  .cartao-hoje-textos span { white-space: normal; }
+  .grade-modulos, .grade-modulos.poucos { grid-template-columns: 1fr; gap: 10px; }
+  .grade-vida-inicio { grid-template-columns: 1fr; gap: 10px; }
+  .vida-grade { grid-template-columns: 1fr; }
+  .vida-mais { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Meu Perfil no celular (rodada 12): a foto e o nome no alto e o "Sair do sistema" largo, em vermelho */
+  .pagina-casca-cabeca#meuPerfilCabeca { flex-wrap: wrap; gap: 12px; }
+  .perfil-avatar { display: flex; width: 48px; height: 48px; border-radius: 24px; background: var(--cor-ouro); color: var(--cor-ouro-texto); align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex: none; }
+  #meuPerfilCabeca .inicio-saudacao { font-size: 18px; }
+  #meuPerfilCabeca .btn-sair-casca { order: 10; width: 100%; color: #B91C1C; border-color: #FCA5A5; }
+  html[data-tema="escuro"] #meuPerfilCabeca .btn-sair-casca { color: #FCA5A5; border-color: #7F1D1D; }
+  /* os três primeiros cartões viram quadrados de 2 em 2 (tocar abre a parte); as preferências ficam abertas, na largura toda; o "Sair" fica embaixo */
+  #meuPerfilCabeca .btn-sair-casca { display: none; }
+  .perfil-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .perfil-cartao[data-qual] { padding: 14px; cursor: pointer; min-height: 104px; }
+  .perfil-cartao[data-qual] h2 { flex-direction: column; align-items: flex-start; gap: 8px; font-size: 14.5px; margin: 0 0 4px; }
+  .perfil-cartao[data-qual] .perfil-linha, .perfil-cartao[data-qual] .perfil-aparelho, .perfil-cartao[data-qual] .perfil-acoes, .perfil-cartao[data-qual] .subtitle { display: none; }
+  .perfil-cartao[data-qual] .perfil-resumo-cel { display: block; }
+  .perfil-preferencias { grid-column: 1 / -1; }
+  .perfil-grade .btn-sair-cel { display: block; grid-column: 1 / -1; width: 100%; margin: 4px 0 0; color: #B91C1C; border-color: #FCA5A5; }
+  html[data-tema="escuro"] .btn-sair-cel { color: #FCA5A5; border-color: #7F1D1D; }
+  .perfil-linha > span:first-child { width: 110px; }
+  .perfil-linha { font-size: 14px; min-height: 46px; }
+}
+.perfil-resumo-cel { display: none; margin: 0; font-size: 12.5px; color: var(--cor-texto-suave); }
+.btn-sair-cel { display: none; }
+
+/* ---- a ENTRADA (rodadas 2 a 5): "Entrar no sistema", os dois links lado a lado, o "Preciso de ajuda" em vermelho claro e, no notebook,
+   as boas-vindas sobre a foto (embaixo, à esquerda). A chave do aparelho como primeiro botão espera o servidor (v10.2). ---- */
+.entrada-boasvindas { display: none; }
+@media (min-width: 900px) {
+  #telaPainel.tela-entrada .entrada-boasvindas { display: flex; flex-direction: column; gap: 14px; position: absolute; left: 72px; bottom: 90px; max-width: 540px; color: #FFFFFF; }
+  .entrada-boasvindas strong { font-size: 46px; font-weight: 800; line-height: 1.08; }
+  .entrada-boasvindas span { font-size: 18px; color: #D5DEEA; }
+}
+#telaPainel.tela-entrada .caixa-login h2 { font-size: 26px; font-weight: 700; }
+.entrada-links { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.entrada-links .link-secretaria { margin: 0; font-weight: 600; text-decoration: none; color: var(--cor-link); }
+.link-presenca { text-align: center; font-size: 0.85rem; }
+.prt-btn-ajuda {
+  flex-direction: row; justify-content: flex-start; gap: 10px; text-align: left; min-height: 0; padding: 12px 14px; font-size: 14px; font-weight: 600;
+  color: #991B1B; background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 12px;
+}
+.prt-btn-ajuda .icone { color: #B91C1C; }
+.prt-btn-ajuda small { display: block; font-weight: 500; color: #7F1D1D; }
+.prt-btn-ajuda:hover { background: #FEE2E2; }
+html[data-tema="escuro"] .prt-btn-ajuda { color: #FCA5A5; background: #2A1215; border-color: #7F1D1D; }
+html[data-tema="escuro"] .prt-btn-ajuda .icone, html[data-tema="escuro"] .prt-btn-ajuda small { color: #FCA5A5; }

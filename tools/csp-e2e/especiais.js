@@ -18,6 +18,13 @@ async function clicar(s, seletor, texto) {
   await s.calmo();
   return ok;
 }
+// FASE 10 (conformidade da casca): o Meu Painel antigo saiu do menu da esquerda; as telas dele abrem pelos cartões de "Minha vida na igreja".
+// Na versão antiga (a base comparada) o botão do menu ainda está lá; na nova, o caminho é Minha vida → o cartão.
+async function abrirDoMeuPainel(s, seletorAntigo, textoCartao) {
+  if (await clicar(s, seletorAntigo)) return true;
+  if (!(await clicar(s, "#btnMenuVida"))) return false;
+  return clicar(s, "#subMeupainelMinhavida button", textoCartao);
+}
 async function coletar(s, srv, marca) {
   const tr = await s.avaliar(() => window.__reg.coletar());
   tr.retrato = await s.avaliar(() => window.__reg.retrato());
@@ -92,7 +99,7 @@ const CENARIOS = [
   {
     nome: "imprimir carta (Meu Painel → Cartas)", perfil: "geral",
     async rodar(s, srv) {
-      const passos = [await clicar(s, "#btnSubMeupainelCartas")];
+      const passos = [await abrirDoMeuPainel(s, "#btnSubMeupainelCartas", "Cartas de trânsito")];
       await s.avaliar(() => window.__reg.zerar());
       const marca = srv.marca();
       passos.push(await clicar(s, "#subMeupainelCartas button", "Imprimir"));
@@ -110,7 +117,7 @@ const CENARIOS = [
   {
     nome: "imprimir certificado (Meu Painel → Minha Formação)", perfil: "geral",
     async rodar(s, srv) {
-      const passos = [await clicar(s, "#btnSubMeupainelMinhaformacao")];
+      const passos = [await abrirDoMeuPainel(s, "#btnSubMeupainelMinhaformacao", "Minha formação")];
       await s.avaliar(() => window.__reg.zerar());
       const marca = srv.marca();
       passos.push(await clicar(s, "#subMeupainelMinhaformacao button", "Imprimir"));

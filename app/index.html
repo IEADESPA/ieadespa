@@ -45,8 +45,8 @@
 
       <a href="#" class="link-secretaria" data-on-click="mostrarTelaPainelInicial">← Voltar para a entrada</a>
       <!-- v7.8 — Preciso de ajuda: o canal de ajuda da criança e do adolescente, sem login e sem prova (módulo protecao.js) -->
-      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
-      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
+      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao"><span class="icone" data-icone="escudo" aria-hidden="true"></span><span>Preciso de ajuda: proteção de crianças (sem entrar)<small>Criança, adolescente ou alguém que quer ajudar</small></span></button>
+      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">Chamada da EBD sem internet</a>
     </div>
   </div>
 
@@ -54,19 +54,21 @@
   <!-- FASE 10 — a ENTRADA é a primeira tela (aprovada nas rodadas 2 a 5): a marca no alto e o cartão de entrar; a presença numa reunião fica no link de baixo -->
   <div id="telaPainel" class="tela-entrada" style="display:flex;">
     <div class="entrada-marca"><img src="icones/icone-192.png" alt="" /><div><strong>IEADESPA</strong><span>Graça e paz!</span></div></div>
+    <!-- FASE 10 (conformidade): as boas-vindas sobre a foto, no notebook (rodada 2, "foto na tela inteira") -->
+    <div class="entrada-boasvindas"><strong>Que bom ter você de volta.</strong><span>Entre para cuidar da sua congregação, do seu departamento ou dos seus dados.</span></div>
 
     <!-- Portão de entrada (fecho da v7.5): matrícula + PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN. -->
     <div class="caixa-login" id="cxLoginPainel">
-      <h2>Entrar</h2>
-      <p class="subtitle">Entre com a sua matrícula e o seu PIN de 4 números. Quem tem acesso administrativo digita a senha no lugar do PIN.</p>
+      <h2>Entrar no sistema</h2>
+      <p class="subtitle">Use a sua matrícula e o seu PIN de 4 números. Quem tem acesso administrativo usa a senha no lugar do PIN.</p>
 
       <form data-on-submit="acessarPainel" data-prevent="submit">
         <div class="input-group">
-          <label>Número de Matrícula:</label>
+          <label for="matriculaPainel">Matrícula</label>
           <input type="number" id="matriculaPainel" placeholder="Ex: 3" autocomplete="username" />
         </div>
         <div class="input-group">
-          <label>PIN (4 números) ou senha de acesso administrativo:</label>
+          <label for="senhaPainel">PIN ou senha</label>
           <input type="password" id="senhaPainel" placeholder="Seu PIN" autocomplete="current-password" />
         </div>
         <button class="btn-confirmar" type="submit">Entrar</button>
@@ -93,7 +95,7 @@
 
       <!-- vB.5 — código de 6 dígitos verificado por e-mail. Desde o fecho da v7.5 é o caminho do PRIMEIRO ACESSO e do "esqueci meu PIN": depois de confirmar o
            código, a pessoa cria o PIN. Quem não tem e-mail cadastrado pede à Secretaria um PIN provisório. -->
-      <a href="#" class="link-secretaria" data-on-click="alternarLoginPorCodigo">📧 Primeiro acesso ou esqueci meu PIN</a>
+      <div class="entrada-links"><a href="#" class="link-secretaria" data-on-click="alternarLoginPorCodigo">Esqueci o PIN ou a senha</a><a href="#" class="link-secretaria" data-on-click="alternarLoginPorCodigo">Primeiro acesso</a></div>
       <div id="cxLoginCodigo" style="display:none; margin-top:12px;">
         <p class="subtitle">Enviamos um código de 6 dígitos pro e-mail já cadastrado da sua matrícula (acima). Sem e-mail cadastrado? Peça à Secretaria da sua congregação um PIN provisório.</p>
         <button class="btn-confirmar btn-secundario" type="button" data-on-click="solicitarCodigoAcessoAcao">Enviar código</button>
@@ -104,9 +106,9 @@
         </div>
       </div>
 
-      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">📴 Chamada da EBD sem internet</a>
-      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao">🧒 Preciso de ajuda<small>Criança, adolescente ou alguém que quer ajudar</small></button>
-      <a href="#" class="link-secretaria" data-on-click="voltarParaCheckin">📝 Registrar presença numa reunião</a>
+      <a href="#" class="link-secretaria link-chamada-offline" style="display:none;" data-on-click="abrirTelaChamadaOffline" data-prevent="click">Chamada da EBD sem internet</a>
+      <button type="button" class="prt-btn-ajuda" data-on-click="prtAbrirAjudaPublicaAcao"><span class="icone" data-icone="escudo" aria-hidden="true"></span><span>Preciso de ajuda: proteção de crianças (sem entrar)<small>Criança, adolescente ou alguém que quer ajudar</small></span></button>
+      <a href="#" class="link-secretaria link-presenca" data-on-click="voltarParaCheckin">Registrar presença numa reunião</a>
     </div>
 
     <!-- Criar o PIN (fecho da v7.5): aparece depois do código por e-mail, ou depois de entrar com o PIN provisório que a Secretaria gerou -->
@@ -131,8 +133,9 @@
     <div class="painel-layout" id="cxPainelConteudo" style="display:none;">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-topo">
+          <img class="sidebar-logo" src="icones/icone-192.png" alt="" />
           <span class="sidebar-titulo">IEADESPA</span>
-          <button class="btn-icon" data-on-click="alternarSidebar" title="Recolher/Expandir menu">☰</button>
+          <button class="btn-icon btn-recolher-menu" id="btnRecolherMenu" type="button" data-on-click="alternarMenuRecolhidoCasca" title="Recolher ou abrir o menu" aria-label="Recolher ou abrir o menu"><span class="icone" data-icone="menu" aria-hidden="true"></span></button>
         </div>
         <nav class="abas-secretaria" id="navAbasSecretaria">
           <!-- v4.2 — Navegação por módulos (padrão "portal de serviços", tipo
@@ -140,41 +143,52 @@
                "Painel Principal"/home). Escolher um módulo (cards dentro de
                Meu Painel, ver montarGradeModulos()) troca a barra lateral
                inteira pela navegação daquele módulo só — o resto some. -->
-          <button class="btn-aba ativo" id="btnAbaMeupainel" data-on-click="irPilulaCelular" data-args-click='["inicio"]'><span class="icone">🏠</span><span class="rotulo">Início</span></button>
+          <!-- FASE 10 (conformidade, 18/11/2026) — o MENU PRINCIPAL LIMPO aprovado nas rodadas 3, 4 e 7: Início, Meu trabalho (só para quem tem
+               cargo), Minha vida na igreja e Meu Perfil. A escolha do que fazer fica à direita, nos cartões. O "Meu Painel" antigo (botão e submenu
+               abaixo) continua no código, escondido: as telas dele abrem pelos cartões de Minha vida, Meu trabalho e Meu Perfil (modulos/casca.js). -->
+          <div class="menu-principal-casca" id="menuPrincipalCasca">
+            <button class="btn-aba btn-menu-principal" id="btnMenuInicio" type="button" data-on-click="irMenuPrincipalCasca" data-args-click='["inicio"]'><span class="icone" data-icone="casa" aria-hidden="true"></span><span class="rotulo">Início</span></button>
+            <button class="btn-aba btn-menu-principal" id="btnMenuTrabalho" type="button" data-on-click="irMenuPrincipalCasca" data-args-click='["trabalho"]'><span class="icone" data-icone="maleta" aria-hidden="true"></span><span class="rotulo">Meu trabalho</span></button>
+            <button class="btn-aba btn-menu-principal" id="btnMenuVida" type="button" data-on-click="irMenuPrincipalCasca" data-args-click='["vida"]'><span class="icone" data-icone="igreja" aria-hidden="true"></span><span class="rotulo">Minha vida na igreja</span></button>
+            <button class="btn-aba btn-menu-principal" id="btnMenuPerfil" type="button" data-on-click="irMenuPrincipalCasca" data-args-click='["perfil"]'><span class="icone" data-icone="pessoa" aria-hidden="true"></span><span class="rotulo">Meu Perfil</span></button>
+          </div>
+          <button class="btn-aba ativo" id="btnAbaMeupainel" data-on-click="irPilulaCelular" data-args-click='["inicio"]'><span class="icone" data-icone="casa" aria-hidden="true"></span><span class="rotulo">Início</span></button>
           <div class="submenu-aba" id="submenuMeupainel">
-            <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone">🏠</span><span class="rotulo">Início</span></button>
+            <button class="btn-subaba ativo" id="btnSubMeupainelPerfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["perfil"]'><span class="icone" data-icone="casa" aria-hidden="true"></span><span class="rotulo">Início</span></button>
             <span class="grupo-menu-rotulo" id="grupoMenuMinhaVida">Minha vida na igreja</span>
-            <button class="btn-subaba" id="btnSubMeupainelMinhavida" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhavida"]'><span class="icone">⛪</span><span class="rotulo">Minha vida na igreja</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone">🪪</span><span class="rotulo">Minha carteirinha</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone">📅</span><span class="rotulo">Agenda</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone">🗓️</span><span class="rotulo">Minhas Escalas</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelVotacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["votacoes"]'><span class="icone">🗳️</span><span class="rotulo">Votações</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelEventos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelContribuicoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["contribuicoes"]'><span class="icone">💰</span><span class="rotulo">Minhas Contribuições</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone">💛</span><span class="rotulo">Cuidado (oração e visita)</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone">✉️</span><span class="rotulo">Comunicações</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCartas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas de Trânsito</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone">🎓</span><span class="rotulo">Minha Formação</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone">🏆</span><span class="rotulo">Minhas Conquistas</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelIdentidade" data-on-click="mostrarSubAbaMeupainel" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCanais" data-on-click="mostrarSubAbaMeupainel" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhavida" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhavida"]'><span class="icone" data-icone="igreja" aria-hidden="true"></span><span class="rotulo">Minha vida na igreja</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCredencial" data-on-click="mostrarSubAbaMeupainel" data-args-click='["credencial"]'><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Minha carteirinha</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelAgenda" data-on-click="mostrarSubAbaMeupainel" data-args-click='["agenda"]'><span class="icone" data-icone="calendario" aria-hidden="true"></span><span class="rotulo">Agenda</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhasescalas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasescalas"]'><span class="icone" data-icone="relogio" aria-hidden="true"></span><span class="rotulo">Minhas Escalas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVotacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["votacoes"]'><span class="icone" data-icone="urna" aria-hidden="true"></span><span class="rotulo">Votações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelEventos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["eventos"]'><span class="icone" data-icone="tenda" aria-hidden="true"></span><span class="rotulo">Eventos</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelContribuicoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["contribuicoes"]'><span class="icone" data-icone="dinheiro" aria-hidden="true"></span><span class="rotulo">Minhas Contribuições</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCuidado" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cuidado"]'><span class="icone" data-icone="coracao" aria-hidden="true"></span><span class="rotulo">Cuidado (oração e visita)</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelComunicacoes" data-on-click="mostrarSubAbaMeupainel" data-args-click='["comunicacoes"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Comunicações</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCartas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["cartas"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Cartas de Trânsito</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhaformacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhaformacao"]'><span class="icone" data-icone="formatura" aria-hidden="true"></span><span class="rotulo">Minha Formação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhasconquistas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhasconquistas"]'><span class="icone" data-icone="trofeu" aria-hidden="true"></span><span class="rotulo">Minhas Conquistas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelIdentidade" data-on-click="mostrarSubAbaMeupainel" data-args-click='["identidade"]'><span class="icone" data-icone="paleta" aria-hidden="true"></span><span class="rotulo">Identidade Visual</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCanais" data-on-click="mostrarSubAbaMeupainel" data-args-click='["canais"]'><span class="icone" data-icone="megafone" aria-hidden="true"></span><span class="rotulo">Canais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelFrequencia" data-on-click="mostrarSubAbaMeupainel" data-args-click='["frequencia"]'><span class="icone" data-icone="grafico" aria-hidden="true"></span><span class="rotulo">Minha frequência</span></button>
             <span class="grupo-menu-rotulo" id="grupoMenuMeuTrabalho">Meu trabalho</span>
-            <button class="btn-subaba" id="btnSubMeupainelTarefas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["tarefas"]'><span class="icone">✅</span><span class="rotulo">Minhas Tarefas</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Minha Habilitação</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com menores</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de crianças</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in infantil</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelSetores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelTrabalho" data-on-click="mostrarSubAbaMeupainel" data-args-click='["trabalho"]'><span class="icone" data-icone="maleta" aria-hidden="true"></span><span class="rotulo">Meu trabalho</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelTarefas" data-on-click="mostrarSubAbaMeupainel" data-args-click='["tarefas"]'><span class="icone" data-icone="tarefa" aria-hidden="true"></span><span class="rotulo">Minhas Tarefas</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMinhahabilitacao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["minhahabilitacao"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Minha Habilitação</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMenores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["menores"]'><span class="icone" data-icone="crianca" aria-hidden="true"></span><span class="rotulo">Ministério com menores</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelProtecao" data-on-click="mostrarSubAbaMeupainel" data-args-click='["protecao"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Proteção de crianças</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelCheckininfantil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["checkininfantil"]'><span class="icone" data-icone="crianca" aria-hidden="true"></span><span class="rotulo">Check-in infantil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelSetores" data-on-click="mostrarSubAbaMeupainel" data-args-click='["setores"]'><span class="icone" data-icone="maleta" aria-hidden="true"></span><span class="rotulo">Setores Técnicos</span></button>
             <span class="grupo-menu-rotulo" id="grupoMenuMeuPerfil">Meu Perfil</span>
-            <button class="btn-subaba" id="btnSubMeupainelMeuperfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["meuperfil"]'><span class="icone">👤</span><span class="rotulo">Meu Perfil</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone">✏️</span><span class="rotulo">Meus Dados Cadastrais</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone">👪</span><span class="rotulo">Vínculos Familiares</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelSeguranca" data-on-click="mostrarSubAbaMeupainel" data-args-click='["seguranca"]'><span class="icone">🔐</span><span class="rotulo">Segurança</span></button>
-            <button class="btn-subaba" id="btnSubMeupainelLgpd" data-on-click="mostrarSubAbaMeupainel" data-args-click='["lgpd"]'><span class="icone">🔒</span><span class="rotulo">Meus Dados (LGPD)</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelMeuperfil" data-on-click="mostrarSubAbaMeupainel" data-args-click='["meuperfil"]'><span class="icone" data-icone="pessoa" aria-hidden="true"></span><span class="rotulo">Meu Perfil</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelDados" data-on-click="mostrarSubAbaMeupainel" data-args-click='["dados"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Meus Dados Cadastrais</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelVinculos" data-on-click="mostrarSubAbaMeupainel" data-args-click='["vinculos"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Vínculos Familiares</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelSeguranca" data-on-click="mostrarSubAbaMeupainel" data-args-click='["seguranca"]'><span class="icone" data-icone="cadeado" aria-hidden="true"></span><span class="rotulo">Segurança</span></button>
+            <button class="btn-subaba" id="btnSubMeupainelLgpd" data-on-click="mostrarSubAbaMeupainel" data-args-click='["lgpd"]'><span class="icone" data-icone="cadeado" aria-hidden="true"></span><span class="rotulo">Meus Dados (LGPD)</span></button>
           </div>
 
           <button class="btn-aba btn-aba-destaque" id="btnVoltarModulo" data-on-click="sairDoModulo" style="display:none;">
-            <span class="icone">←</span><span class="rotulo">Menu principal</span>
+            <span class="icone" data-icone="voltar" aria-hidden="true"></span><span class="rotulo">Menu principal</span>
           </button>
           <!-- FASE 10, incremento 4: o cabeçalho colorido do módulo (preenchido por marcarModuloNaCasca, em modulos/casca.js) -->
           <div class="menu-modulo-cabecalho" id="menuModuloCabecalho">
@@ -186,38 +200,38 @@
           <!-- MÓDULO: FINANCEIRO (v4.1) -->
           <div class="grupo-modulo" id="grupoModuloFinanceiro" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaFinanceiro" data-on-click="mostrarAbaSecretaria" data-args-click='["financeiro"]'><span class="icone">💰</span><span class="rotulo">Financeiro</span></button>
+            <button class="btn-aba" id="btnAbaFinanceiro" data-on-click="mostrarAbaSecretaria" data-args-click='["financeiro"]'><span class="icone" data-icone="dinheiro" aria-hidden="true"></span><span class="rotulo">Financeiro</span></button>
             <div class="submenu-aba" id="submenuFinanceiro">
-              <button class="btn-subaba ativo" id="btnSubFinanceiroVisaogeral" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["visaogeral"]'><span class="icone">🧭</span><span class="rotulo">Visão Geral</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroSituacaotesouro" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["situacaotesouro"]'><span class="icone">💎</span><span class="rotulo">Situação do Tesouro</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroLancamentos" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["lancamentos"]'><span class="icone">📝</span><span class="rotulo">Lançamentos</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["planocontas"]'><span class="icone">📚</span><span class="rotulo">Plano de Contas</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroCampanhas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["campanhas"]'><span class="icone">🎯</span><span class="rotulo">Campanhas</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroSaidas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["saidas"]'><span class="icone">💸</span><span class="rotulo">Saídas</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroReceber" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["receber"]'><span class="icone">📆</span><span class="rotulo">Contas a Receber</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroOrcamento" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["orcamento"]'><span class="icone">📐</span><span class="rotulo">Orçamento</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroPdq" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["pdq"]'><span class="icone">🧭</span><span class="rotulo">PDQ</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["demonstracoes"]'><span class="icone">📑</span><span class="rotulo">Demonstrações</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["rateiogeral"]'><span class="icone">📬</span><span class="rotulo">Rateio Geral</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroPrebenda" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["prebenda"]'><span class="icone">⛪</span><span class="rotulo">Prebenda</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["patrimonio"]'><span class="icone">🏛️</span><span class="rotulo">Patrimônio</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroFrota" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["frota"]'><span class="icone">🚗</span><span class="rotulo">Frota</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroConciliacao" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["conciliacao"]'><span class="icone">🏦</span><span class="rotulo">Conciliação Bancária</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["investimentos"]'><span class="icone">📈</span><span class="rotulo">Investimentos</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroRepasses" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["repasses"]'><span class="icone">🏛️</span><span class="rotulo">Repasses Institucionais</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroSeguros" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["seguros"]'><span class="icone">🛡️</span><span class="rotulo">Seguros Institucionais</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["parametrosmonetarios"]'><span class="icone">💰</span><span class="rotulo">Parâmetros Monetários</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroCessoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["cessoes"]'><span class="icone">⛪</span><span class="rotulo">Cessão de Templo</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroObrigacoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["obrigacoes"]'><span class="icone">🧾</span><span class="rotulo">Obrigações Fiscais</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroImunidade" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["imunidade"]'><span class="icone">🛡️</span><span class="rotulo">Imunidade Tributária</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroReceitasacessorias" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["receitasacessorias"]'><span class="icone">🎪</span><span class="rotulo">Receitas Acessórias</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroImoveis" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["imoveis"]'><span class="icone">🏘️</span><span class="rotulo">Imóveis</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroObras" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["obras"]'><span class="icone">🏗️</span><span class="rotulo">Obras</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroDizimistas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["dizimistas"]'><span class="icone">👥</span><span class="rotulo">Dizimistas do Mês</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroFechamento" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["fechamento"]'><span class="icone">🔒</span><span class="rotulo">Fechamento do Mês</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroRelatorio" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["relatorio"]'><span class="icone">🖨️</span><span class="rotulo">Relatório</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroParametros" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["parametros"]'><span class="icone">⚙️</span><span class="rotulo">Parâmetros</span></button>
-              <button class="btn-subaba" id="btnSubFinanceiroConsolidado" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["consolidado"]'><span class="icone">📊</span><span class="rotulo">Consolidado</span></button>
+              <button class="btn-subaba ativo" id="btnSubFinanceiroVisaogeral" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["visaogeral"]'><span class="icone" data-icone="bussola" aria-hidden="true"></span><span class="rotulo">Visão Geral</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSituacaotesouro" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["situacaotesouro"]'><span class="icone" data-icone="diamante" aria-hidden="true"></span><span class="rotulo">Situação do Tesouro</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroLancamentos" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["lancamentos"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Lançamentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPlanocontas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["planocontas"]'><span class="icone" data-icone="livro" aria-hidden="true"></span><span class="rotulo">Plano de Contas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroCampanhas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["campanhas"]'><span class="icone" data-icone="alvo" aria-hidden="true"></span><span class="rotulo">Campanhas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSaidas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["saidas"]'><span class="icone" data-icone="saida" aria-hidden="true"></span><span class="rotulo">Saídas</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroReceber" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["receber"]'><span class="icone" data-icone="calendario" aria-hidden="true"></span><span class="rotulo">Contas a Receber</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroOrcamento" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["orcamento"]'><span class="icone" data-icone="planilha" aria-hidden="true"></span><span class="rotulo">Orçamento</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPdq" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["pdq"]'><span class="icone" data-icone="bussola" aria-hidden="true"></span><span class="rotulo">PDQ</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroDemonstracoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["demonstracoes"]'><span class="icone" data-icone="doc" aria-hidden="true"></span><span class="rotulo">Demonstrações</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRateiogeral" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["rateiogeral"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Rateio Geral</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPrebenda" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["prebenda"]'><span class="icone" data-icone="igreja" aria-hidden="true"></span><span class="rotulo">Prebenda</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroPatrimonio" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["patrimonio"]'><span class="icone" data-icone="banco" aria-hidden="true"></span><span class="rotulo">Patrimônio</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroFrota" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["frota"]'><span class="icone" data-icone="carro" aria-hidden="true"></span><span class="rotulo">Frota</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroConciliacao" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["conciliacao"]'><span class="icone" data-icone="banco" aria-hidden="true"></span><span class="rotulo">Conciliação Bancária</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroInvestimentos" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["investimentos"]'><span class="icone" data-icone="tendencia" aria-hidden="true"></span><span class="rotulo">Investimentos</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRepasses" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["repasses"]'><span class="icone" data-icone="banco" aria-hidden="true"></span><span class="rotulo">Repasses Institucionais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroSeguros" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["seguros"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Seguros Institucionais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroParametrosmonetarios" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["parametrosmonetarios"]'><span class="icone" data-icone="dinheiro" aria-hidden="true"></span><span class="rotulo">Parâmetros Monetários</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroCessoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["cessoes"]'><span class="icone" data-icone="igreja" aria-hidden="true"></span><span class="rotulo">Cessão de Templo</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroObrigacoes" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["obrigacoes"]'><span class="icone" data-icone="recibo" aria-hidden="true"></span><span class="rotulo">Obrigações Fiscais</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroImunidade" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["imunidade"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Imunidade Tributária</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroReceitasacessorias" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["receitasacessorias"]'><span class="icone" data-icone="tenda" aria-hidden="true"></span><span class="rotulo">Receitas Acessórias</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroImoveis" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["imoveis"]'><span class="icone" data-icone="casas" aria-hidden="true"></span><span class="rotulo">Imóveis</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroObras" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["obras"]'><span class="icone" data-icone="obra" aria-hidden="true"></span><span class="rotulo">Obras</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroDizimistas" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["dizimistas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Dizimistas do Mês</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroFechamento" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["fechamento"]'><span class="icone" data-icone="cadeado" aria-hidden="true"></span><span class="rotulo">Fechamento do Mês</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroRelatorio" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["relatorio"]'><span class="icone" data-icone="impressora" aria-hidden="true"></span><span class="rotulo">Relatório</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroParametros" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["parametros"]'><span class="icone" data-icone="engrenagem" aria-hidden="true"></span><span class="rotulo">Parâmetros</span></button>
+              <button class="btn-subaba" id="btnSubFinanceiroConsolidado" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["consolidado"]'><span class="icone" data-icone="grafico" aria-hidden="true"></span><span class="rotulo">Consolidado</span></button>
             </div>
           </div>
 
@@ -240,35 +254,35 @@
           <!-- MÓDULO: PESSOAS & MEMBRESIA -->
           <div class="grupo-modulo" id="grupoModuloMembresia" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaPessoas" data-on-click="mostrarAbaSecretaria" data-args-click='["pessoas"]'><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
+            <button class="btn-aba" id="btnAbaPessoas" data-on-click="mostrarAbaSecretaria" data-args-click='["pessoas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Pessoas</span></button>
             <div class="submenu-aba" id="submenuPessoas">
               <!-- FASE 10, passo 7a: o painel executivo e a lista nova (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para a planilha -->
-              <button class="btn-subaba ativo" id="btnSubPessoasVisao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'><span class="icone">📊</span><span class="rotulo">Painel executivo</span></button>
-              <button class="btn-subaba" id="btnSubPessoasLista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'><span class="icone">👥</span><span class="rotulo">Pessoas</span></button>
-              <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone">➕</span><span class="rotulo">Cadastrar Pessoa</span></button>
+              <button class="btn-subaba ativo" id="btnSubPessoasVisao" data-on-click="mostrarSubAbaPessoas" data-args-click='["visao"]'><span class="icone" data-icone="grafico" aria-hidden="true"></span><span class="rotulo">Painel executivo</span></button>
+              <button class="btn-subaba" id="btnSubPessoasLista" data-on-click="mostrarSubAbaPessoas" data-args-click='["lista"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Pessoas</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCadastrar" data-on-click="mostrarSubAbaPessoas" data-args-click='["cadastrar"]'><span class="icone" data-icone="mais" aria-hidden="true"></span><span class="rotulo">Cadastrar Pessoa</span></button>
               <!-- passo 7a, incremento 2: a fila de cadastros e o pré-cadastro rápido (modulos/membros-cadastro.js) -->
-              <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone">📥</span><span class="rotulo">Fila de cadastros</span></button>
-              <button class="btn-subaba" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone">📝</span><span class="rotulo">Pré-cadastro rápido</span></button>
+              <button class="btn-subaba" id="btnSubPessoasFila" data-on-click="mostrarSubAbaPessoas" data-args-click='["fila"]'><span class="icone" data-icone="bandeja" aria-hidden="true"></span><span class="rotulo">Fila de cadastros</span></button>
+              <button class="btn-subaba" id="btnSubPessoasPrecadastro" data-on-click="mostrarSubAbaPessoas" data-args-click='["precadastro"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Pré-cadastro rápido</span></button>
               <!-- passo 7a, incremento 3: as mudanças de congregação (modulos/membros-movimento.js) -->
-              <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone">↪️</span><span class="rotulo">Mudanças de congregação</span></button>
-              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone">✏️</span><span class="rotulo">Sugestões dos membros</span></button>
-              <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone">📤</span><span class="rotulo">Importar e exportar</span></button>
-              <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone">🪪</span><span class="rotulo">Credenciais</span></button>
-              <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone">🌱</span><span class="rotulo">Discipulado</span></button>
+              <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone" data-icone="transferir" aria-hidden="true"></span><span class="rotulo">Mudanças de congregação</span></button>
+              <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Sugestões dos membros</span></button>
+              <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone" data-icone="planilha" aria-hidden="true"></span><span class="rotulo">Importar e exportar</span></button>
+              <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Credenciais</span></button>
+              <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone" data-icone="broto" aria-hidden="true"></span><span class="rotulo">Discipulado</span></button>
             </div>
-            <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone">📨</span><span class="rotulo">Cartas</span></button>
-            <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone">📉</span><span class="rotulo">Perda de Membresia</span></button>
+            <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Cartas</span></button>
+            <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone" data-icone="queda" aria-hidden="true"></span><span class="rotulo">Perda de Membresia</span></button>
             <!-- v7.11 — Cuidado pastoral: fila com responsável, prazo e escada; pedidos de oração com moderação e sinal de risco; boletim e painel. Permissão própria "cuidado_pastoral". -->
-            <button class="btn-aba" id="btnAbaCuidadopastoral" data-on-click="mostrarAbaSecretaria" data-args-click='["cuidadopastoral"]'><span class="icone">💛</span><span class="rotulo">Cuidado Pastoral</span></button>
+            <button class="btn-aba" id="btnAbaCuidadopastoral" data-on-click="mostrarAbaSecretaria" data-args-click='["cuidadopastoral"]'><span class="icone" data-icone="coracao" aria-hidden="true"></span><span class="rotulo">Cuidado Pastoral</span></button>
           </div>
 
           <!-- MÓDULO: ESTRUTURA & TERRITÓRIOS (candidato natural a fatiar
                ainda mais no futuro — ver nota acima sobre Catálogos). -->
           <div class="grupo-modulo" id="grupoModuloTerritorio" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaOrgaos" data-on-click="mostrarAbaSecretaria" data-args-click='["orgaos"]'><span class="icone">🏛️</span><span class="rotulo">Órgãos</span></button>
-            <button class="btn-aba" id="btnAbaEstrutura" data-on-click="mostrarAbaSecretaria" data-args-click='["estrutura"]'><span class="icone">🗺️</span><span class="rotulo">Estrutura</span></button>
-            <button class="btn-aba" id="btnAbaCatalogos" data-on-click="mostrarAbaSecretaria" data-args-click='["catalogos"]'><span class="icone">📚</span><span class="rotulo">Catálogos</span></button>
+            <button class="btn-aba" id="btnAbaOrgaos" data-on-click="mostrarAbaSecretaria" data-args-click='["orgaos"]'><span class="icone" data-icone="banco" aria-hidden="true"></span><span class="rotulo">Órgãos</span></button>
+            <button class="btn-aba" id="btnAbaEstrutura" data-on-click="mostrarAbaSecretaria" data-args-click='["estrutura"]'><span class="icone" data-icone="mapa" aria-hidden="true"></span><span class="rotulo">Estrutura</span></button>
+            <button class="btn-aba" id="btnAbaCatalogos" data-on-click="mostrarAbaSecretaria" data-args-click='["catalogos"]'><span class="icone" data-icone="livro" aria-hidden="true"></span><span class="rotulo">Catálogos</span></button>
           </div>
 
           <!-- v4.2.3 — Reuniões deixou de ter botão/submenu próprio aqui: a
@@ -299,46 +313,46 @@
           <!-- MÓDULO: VIDA ECLESIÁSTICA -->
           <div class="grupo-modulo" id="grupoModuloEclesiastica" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaConsagracoes" data-on-click="mostrarAbaSecretaria" data-args-click='["consagracoes"]'><span class="icone">🕊️</span><span class="rotulo">Consagrações</span></button>
-            <button class="btn-aba" id="btnAbaAfm" data-on-click="mostrarAbaSecretaria" data-args-click='["afm"]'><span class="icone">🎓</span><span class="rotulo">Academia (AFM)</span></button>
-            <button class="btn-aba" id="btnAbaEnquetes" data-on-click="mostrarAbaSecretaria" data-args-click='["enquetes"]'><span class="icone">🗳️</span><span class="rotulo">Enquetes</span></button>
-            <button class="btn-aba" id="btnAbaArquivos" data-on-click="mostrarAbaSecretaria" data-args-click='["arquivos"]'><span class="icone">📁</span><span class="rotulo">Arquivos</span></button>
-            <button class="btn-aba" id="btnAbaIdentidade" data-on-click="mostrarAbaSecretaria" data-args-click='["identidade"]'><span class="icone">🎨</span><span class="rotulo">Identidade Visual</span></button>
+            <button class="btn-aba" id="btnAbaConsagracoes" data-on-click="mostrarAbaSecretaria" data-args-click='["consagracoes"]'><span class="icone" data-icone="pomba" aria-hidden="true"></span><span class="rotulo">Consagrações</span></button>
+            <button class="btn-aba" id="btnAbaAfm" data-on-click="mostrarAbaSecretaria" data-args-click='["afm"]'><span class="icone" data-icone="formatura" aria-hidden="true"></span><span class="rotulo">Academia (AFM)</span></button>
+            <button class="btn-aba" id="btnAbaEnquetes" data-on-click="mostrarAbaSecretaria" data-args-click='["enquetes"]'><span class="icone" data-icone="urna" aria-hidden="true"></span><span class="rotulo">Enquetes</span></button>
+            <button class="btn-aba" id="btnAbaArquivos" data-on-click="mostrarAbaSecretaria" data-args-click='["arquivos"]'><span class="icone" data-icone="pasta" aria-hidden="true"></span><span class="rotulo">Arquivos</span></button>
+            <button class="btn-aba" id="btnAbaIdentidade" data-on-click="mostrarAbaSecretaria" data-args-click='["identidade"]'><span class="icone" data-icone="paleta" aria-hidden="true"></span><span class="rotulo">Identidade Visual</span></button>
           </div>
 
           <!-- MÓDULO: DISCIPLINA & ÉTICA -->
           <div class="grupo-modulo" id="grupoModuloDisciplina" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaDisciplina" data-on-click="mostrarAbaSecretaria" data-args-click='["disciplina"]'><span class="icone">⚖️</span><span class="rotulo">Processo Disciplinar</span></button>
-            <button class="btn-aba" id="btnAbaOuvidoria" data-on-click="mostrarAbaSecretaria" data-args-click='["ouvidoria"]'><span class="icone">📢</span><span class="rotulo">Ouvidoria</span></button>
-            <button class="btn-aba" id="btnAbaMediacao" data-on-click="mostrarAbaSecretaria" data-args-click='["mediacao"]'><span class="icone">🤝</span><span class="rotulo">Mediação e Arbitragem</span></button>
+            <button class="btn-aba" id="btnAbaDisciplina" data-on-click="mostrarAbaSecretaria" data-args-click='["disciplina"]'><span class="icone" data-icone="balanca" aria-hidden="true"></span><span class="rotulo">Processo Disciplinar</span></button>
+            <button class="btn-aba" id="btnAbaOuvidoria" data-on-click="mostrarAbaSecretaria" data-args-click='["ouvidoria"]'><span class="icone" data-icone="megafone" aria-hidden="true"></span><span class="rotulo">Ouvidoria</span></button>
+            <button class="btn-aba" id="btnAbaMediacao" data-on-click="mostrarAbaSecretaria" data-args-click='["mediacao"]'><span class="icone" data-icone="maos" aria-hidden="true"></span><span class="rotulo">Mediação e Arbitragem</span></button>
           </div>
 
           <!-- MÓDULO: DEPARTAMENTOS E RELATÓRIOS (v5.2) -->
           <div class="grupo-modulo" id="grupoModuloDepartamentos" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaRelatoriosdepto" data-on-click="mostrarAbaSecretaria" data-args-click='["relatoriosdepto"]'><span class="icone">🗂️</span><span class="rotulo">Relatórios de Departamentos</span></button>
+            <button class="btn-aba" id="btnAbaRelatoriosdepto" data-on-click="mostrarAbaSecretaria" data-args-click='["relatoriosdepto"]'><span class="icone" data-icone="pasta" aria-hidden="true"></span><span class="rotulo">Relatórios de Departamentos</span></button>
           </div>
 
           <!-- MÓDULO: ESCALAS DE SERVIÇO (v5.6) -->
           <div class="grupo-modulo" id="grupoModuloEscalas" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaEscalas" data-on-click="mostrarAbaSecretaria" data-args-click='["escalas"]'><span class="icone">🗓️</span><span class="rotulo">Escalas de Serviço</span></button>
+            <button class="btn-aba" id="btnAbaEscalas" data-on-click="mostrarAbaSecretaria" data-args-click='["escalas"]'><span class="icone" data-icone="relogio" aria-hidden="true"></span><span class="rotulo">Escalas de Serviço</span></button>
           </div>
 
           <!-- MÓDULO: HABILITAÇÃO DE VOLUNTÁRIOS (v5.7) -->
           <div class="grupo-modulo" id="grupoModuloHabilitacao" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaHabilitacao" data-on-click="mostrarAbaSecretaria" data-args-click='["habilitacao"]'><span class="icone">🛡️</span><span class="rotulo">Habilitação de Voluntários</span></button>
+            <button class="btn-aba" id="btnAbaHabilitacao" data-on-click="mostrarAbaSecretaria" data-args-click='["habilitacao"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Habilitação de Voluntários</span></button>
             <!-- v7.7 — Ministério com Menores (Lei 14.811/2024): painel de conformidade, ferramentas da Secretaria e, só para a Diretoria, as comunicações dos voluntários.
                  Mesma permissão da Habilitação ("habilitacao_voluntarios"). -->
-            <button class="btn-aba" id="btnAbaMenores" data-on-click="mostrarAbaSecretaria" data-args-click='["menores"]'><span class="icone">🧒</span><span class="rotulo">Ministério com Menores</span></button>
+            <button class="btn-aba" id="btnAbaMenores" data-on-click="mostrarAbaSecretaria" data-args-click='["menores"]'><span class="icone" data-icone="crianca" aria-hidden="true"></span><span class="rotulo">Ministério com Menores</span></button>
             <!-- v7.8 — Proteção de Crianças: fila de incidentes com o relógio das 24 horas, leitura protegida do relato, comunicação ao Conselho Tutelar e, no nível geral,
                  afastamento cautelar, encerramento, padrões, Comitê e relatório anual. Permissão própria "protecao_menores". -->
-            <button class="btn-aba" id="btnAbaProtecao" data-on-click="mostrarAbaSecretaria" data-args-click='["protecao"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de Crianças</span></button>
+            <button class="btn-aba" id="btnAbaProtecao" data-on-click="mostrarAbaSecretaria" data-args-click='["protecao"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Proteção de Crianças</span></button>
             <!-- v7.10 — Check-in infantil: as salas de hoje do escopo (tela da sala com a visão da liderança), as aprovações de retirada divergente e as fichas assinadas.
                  Mesma permissão da Habilitação ("habilitacao_voluntarios"). -->
-            <button class="btn-aba" id="btnAbaCheckininfantil" data-on-click="mostrarAbaSecretaria" data-args-click='["checkininfantil"]'><span class="icone">👶</span><span class="rotulo">Check-in Infantil</span></button>
+            <button class="btn-aba" id="btnAbaCheckininfantil" data-on-click="mostrarAbaSecretaria" data-args-click='["checkininfantil"]'><span class="icone" data-icone="crianca" aria-hidden="true"></span><span class="rotulo">Check-in Infantil</span></button>
           </div>
 
           <!-- MÓDULO: ASSISTÊNCIA SOCIAL / AÇÃO DA FÉ (v5.9) — permissão
@@ -346,7 +360,7 @@
                nenhum papel (dado mais sensível do sistema). -->
           <div class="grupo-modulo" id="grupoModuloAssistenciasocial" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaAssistenciasocial" data-on-click="mostrarAbaSecretaria" data-args-click='["assistenciasocial"]'><span class="icone">🤝</span><span class="rotulo">Assistência Social</span></button>
+            <button class="btn-aba" id="btnAbaAssistenciasocial" data-on-click="mostrarAbaSecretaria" data-args-click='["assistenciasocial"]'><span class="icone" data-icone="maos" aria-hidden="true"></span><span class="rotulo">Assistência Social</span></button>
           </div>
 
           <!-- MÓDULO: EBD — ESCOLA BÍBLICA DOMINICAL (v6.1, abre a FASE 6) —
@@ -355,7 +369,7 @@
                pelos Relatórios Departamentais (v5.2/v5.5/v5.8). -->
           <div class="grupo-modulo" id="grupoModuloEbd" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaEbd" data-on-click="mostrarAbaSecretaria" data-args-click='["ebd"]'><span class="icone">📖</span><span class="rotulo">EBD</span></button>
+            <button class="btn-aba" id="btnAbaEbd" data-on-click="mostrarAbaSecretaria" data-args-click='["ebd"]'><span class="icone" data-icone="livro" aria-hidden="true"></span><span class="rotulo">EBD</span></button>
           </div>
 
           <!-- MÓDULO: CONQUISTAS E GAMIFICAÇÃO (v6.4) — motor genérico
@@ -365,7 +379,7 @@
                ficam em Meu Painel → Minhas Conquistas, abertos a qualquer matrícula. -->
           <div class="grupo-modulo" id="grupoModuloConquistas" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaConquistas" data-on-click="mostrarAbaSecretaria" data-args-click='["conquistas"]'><span class="icone">🏆</span><span class="rotulo">Conquistas</span></button>
+            <button class="btn-aba" id="btnAbaConquistas" data-on-click="mostrarAbaSecretaria" data-args-click='["conquistas"]'><span class="icone" data-icone="trofeu" aria-hidden="true"></span><span class="rotulo">Conquistas</span></button>
           </div>
 
           <!-- MÓDULO: FORMAÇÃO E CERTIFICAÇÃO (v6.9) — trilhas por papel,
@@ -375,7 +389,7 @@
                Formação, aberta a qualquer matrícula. -->
           <div class="grupo-modulo" id="grupoModuloTrilhas" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaTrilhas" data-on-click="mostrarAbaSecretaria" data-args-click='["trilhas"]'><span class="icone">🎓</span><span class="rotulo">Formação</span></button>
+            <button class="btn-aba" id="btnAbaTrilhas" data-on-click="mostrarAbaSecretaria" data-args-click='["trilhas"]'><span class="icone" data-icone="formatura" aria-hidden="true"></span><span class="rotulo">Formação</span></button>
           </div>
 
           <!-- MÓDULO: SAÚDE CONGREGACIONAL — PSC (v7.1) — avaliação anual
@@ -385,7 +399,7 @@
                concedidas por padrão. -->
           <div class="grupo-modulo" id="grupoModuloPsc" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaPsc" data-on-click="mostrarAbaSecretaria" data-args-click='["psc"]'><span class="icone">🩺</span><span class="rotulo">Saúde Congregacional</span></button>
+            <button class="btn-aba" id="btnAbaPsc" data-on-click="mostrarAbaSecretaria" data-args-click='["psc"]'><span class="icone" data-icone="estetoscopio" aria-hidden="true"></span><span class="rotulo">Saúde Congregacional</span></button>
           </div>
 
           <!-- MÓDULO: CALENDÁRIO OFICIAL (v7.2) — agenda única do Campo
@@ -398,7 +412,7 @@
                login em Meu Painel → Agenda. -->
           <div class="grupo-modulo" id="grupoModuloCalendario" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaCalendario" data-on-click="mostrarAbaSecretaria" data-args-click='["calendario"]'><span class="icone">📅</span><span class="rotulo">Calendário</span></button>
+            <button class="btn-aba" id="btnAbaCalendario" data-on-click="mostrarAbaSecretaria" data-args-click='["calendario"]'><span class="icone" data-icone="calendario" aria-hidden="true"></span><span class="rotulo">Calendário</span></button>
           </div>
 
           <!-- MÓDULO: CANAIS E COMUNICAÇÃO (v7.3) — Canais Oficiais da IEADESPA
@@ -410,8 +424,8 @@
                Meu Painel → Canais, abertos a qualquer login. -->
           <div class="grupo-modulo" id="grupoModuloCanais" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaCanais" data-on-click="mostrarAbaSecretaria" data-args-click='["canais"]'><span class="icone">📣</span><span class="rotulo">Canais e Comunicação</span></button>
-            <button class="btn-aba" id="btnAbaComunicacao" data-on-click="mostrarAbaSecretaria" data-args-click='["comunicacao"]'><span class="icone">✉️</span><span class="rotulo">Comunicados</span></button>
+            <button class="btn-aba" id="btnAbaCanais" data-on-click="mostrarAbaSecretaria" data-args-click='["canais"]'><span class="icone" data-icone="megafone" aria-hidden="true"></span><span class="rotulo">Canais e Comunicação</span></button>
+            <button class="btn-aba" id="btnAbaComunicacao" data-on-click="mostrarAbaSecretaria" data-args-click='["comunicacao"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Comunicados</span></button>
           </div>
 
           <!-- MÓDULO: CRISE E SEGURANÇA (v7.15) — regime de crise com Porta-Voz Único (Regimento Art. 161-B), manifestações autorizadas, pedidos da imprensa e a segurança
@@ -419,7 +433,7 @@
                registra o pedido da imprensa que chegou a ele); as pílulas Crise e Segurança aparecem só para quem tem crise_gestao e seguranca_congregacao. -->
           <div class="grupo-modulo" id="grupoModuloCrise" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaCrise" data-on-click="mostrarAbaSecretaria" data-args-click='["crise"]'><span class="icone">🚨</span><span class="rotulo">Crise e segurança</span></button>
+            <button class="btn-aba" id="btnAbaCrise" data-on-click="mostrarAbaSecretaria" data-args-click='["crise"]'><span class="icone" data-icone="alerta" aria-hidden="true"></span><span class="rotulo">Crise e segurança</span></button>
           </div>
 
           <!-- MÓDULO: EVENTOS E CONGRESSOS (v7.4) — dossiê de governança do evento do
@@ -431,7 +445,7 @@
                um evento sem permissão nenhuma age em Meu Painel → Eventos. -->
           <div class="grupo-modulo" id="grupoModuloEventos" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaEventos" data-on-click="mostrarAbaSecretaria" data-args-click='["eventos"]'><span class="icone">🎪</span><span class="rotulo">Eventos e Congressos</span></button>
+            <button class="btn-aba" id="btnAbaEventos" data-on-click="mostrarAbaSecretaria" data-args-click='["eventos"]'><span class="icone" data-icone="tenda" aria-hidden="true"></span><span class="rotulo">Eventos e Congressos</span></button>
           </div>
 
           <!-- MÓDULO: SETORES TÉCNICOS (v7.6) — os 20 Setores do Regimento (Art. 48 a 52): voluntários
@@ -444,8 +458,8 @@
                Meu Painel → Setores Técnicos, abertos a qualquer login. -->
           <div class="grupo-modulo" id="grupoModuloSetores" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaSetores" data-on-click="mostrarAbaSecretaria" data-args-click='["setores"]'><span class="icone">🧑‍⚕️</span><span class="rotulo">Setores Técnicos</span></button>
-            <button class="btn-aba" id="btnAbaVistoria" data-on-click="mostrarAbaSecretaria" data-args-click='["vistoria"]'><span class="icone">🔎</span><span class="rotulo">Vistoria de Antecedentes</span></button>
+            <button class="btn-aba" id="btnAbaSetores" data-on-click="mostrarAbaSecretaria" data-args-click='["setores"]'><span class="icone" data-icone="maleta" aria-hidden="true"></span><span class="rotulo">Setores Técnicos</span></button>
+            <button class="btn-aba" id="btnAbaVistoria" data-on-click="mostrarAbaSecretaria" data-args-click='["vistoria"]'><span class="icone" data-icone="busca" aria-hidden="true"></span><span class="rotulo">Vistoria de Antecedentes</span></button>
           </div>
 
           <!-- MÓDULO: ENTIDADES VINCULADAS (v9.1) — Estatuto Art. 64 a 68; Regimento Art. 47-A e 153: hospitais, escolas, ONGs e associações com
@@ -453,22 +467,22 @@
                Permissão própria "entidades_vinculadas", só do nível geral. -->
           <div class="grupo-modulo" id="grupoModuloEntidades" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaEntidades" data-on-click="mostrarAbaSecretaria" data-args-click='["entidades"]'><span class="icone">🏥</span><span class="rotulo">Entidades Vinculadas</span></button>
+            <button class="btn-aba" id="btnAbaEntidades" data-on-click="mostrarAbaSecretaria" data-args-click='["entidades"]'><span class="icone" data-icone="hospital" aria-hidden="true"></span><span class="rotulo">Entidades Vinculadas</span></button>
           </div>
 
           <!-- MÓDULO: EXPANSÃO (v9.2) — Estatuto Art. 5º §§3º e 5º; Regimento Art. 23, 24 §2º e 109-A: abertura de Extensão da Tenda, emancipação e nova
                congregação, com o parecer da CME e a decisão da CLI. Permissão própria "expansao" (o Dirigente vê só a congregação dele); a CME entra também. -->
           <div class="grupo-modulo" id="grupoModuloExpansao" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaExpansao" data-on-click="mostrarAbaSecretaria" data-args-click='["expansao"]'><span class="icone">⛺</span><span class="rotulo">Expansão</span></button>
+            <button class="btn-aba" id="btnAbaExpansao" data-on-click="mostrarAbaSecretaria" data-args-click='["expansao"]'><span class="icone" data-icone="tenda" aria-hidden="true"></span><span class="rotulo">Expansão</span></button>
           </div>
 
           <!-- MÓDULO: CONFORMIDADE & AUDITORIA -->
           <div class="grupo-modulo" id="grupoModuloConformidade" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaAuditoria" data-on-click="mostrarAbaSecretaria" data-args-click='["auditoria"]'><span class="icone">🧾</span><span class="rotulo">Auditoria</span></button>
-            <button class="btn-aba" id="btnAbaProtecaodedados" data-on-click="mostrarAbaSecretaria" data-args-click='["protecaodedados"]'><span class="icone">🛡️</span><span class="rotulo">Proteção de Dados</span></button>
-            <button class="btn-aba" id="btnAbaDocumentos" data-on-click="mostrarAbaSecretaria" data-args-click='["documentos"]'><span class="icone">📜</span><span class="rotulo">Documentos</span></button>
+            <button class="btn-aba" id="btnAbaAuditoria" data-on-click="mostrarAbaSecretaria" data-args-click='["auditoria"]'><span class="icone" data-icone="recibo" aria-hidden="true"></span><span class="rotulo">Auditoria</span></button>
+            <button class="btn-aba" id="btnAbaProtecaodedados" data-on-click="mostrarAbaSecretaria" data-args-click='["protecaodedados"]'><span class="icone" data-icone="escudo" aria-hidden="true"></span><span class="rotulo">Proteção de Dados</span></button>
+            <button class="btn-aba" id="btnAbaDocumentos" data-on-click="mostrarAbaSecretaria" data-args-click='["documentos"]'><span class="icone" data-icone="doc" aria-hidden="true"></span><span class="rotulo">Documentos</span></button>
           </div>
 
           <!-- MÓDULO: ADMINISTRAÇÃO DE ACESSO (fica separado de propósito —
@@ -476,12 +490,14 @@
                demais temas). -->
           <div class="grupo-modulo" id="grupoModuloAcesso" style="display:none;">
             <hr class="divisor-sidebar" />
-            <button class="btn-aba" id="btnAbaPermissoes" data-on-click="mostrarAbaSecretaria" data-args-click='["permissoes"]'><span class="icone">🔐</span><span class="rotulo">Permissões</span></button>
+            <button class="btn-aba" id="btnAbaPermissoes" data-on-click="mostrarAbaSecretaria" data-args-click='["permissoes"]'><span class="icone" data-icone="cadeado" aria-hidden="true"></span><span class="rotulo">Permissões</span></button>
           </div>
         </nav>
         <div class="sidebar-rodape">
-          <span id="nomeLogado" class="nome-logado"></span>
-          <a href="#" class="link-secretaria" data-on-click="sairDoPainel">Sair</a>
+          <button type="button" class="cartao-usuario" id="cartaoUsuarioCasca" data-on-click="irMenuPrincipalCasca" data-args-click='["perfil"]' title="Meu Perfil">
+            <span class="cartao-usuario-iniciais" id="usuarioIniciais" aria-hidden="true"></span>
+            <span class="cartao-usuario-textos"><span id="nomeLogado" class="nome-logado"></span><span class="cartao-usuario-papel" id="usuarioPapel"></span></span>
+          </button>
         </div>
       </aside>
       <!-- vD.6 (07/10/2026) — no celular a barra lateral vira uma gaveta: fechada por padrão, abre pelo ☰
@@ -492,13 +508,16 @@
       <div class="fundo-painel-lado" id="fundoPainelLado" data-on-click="fecharPaineisLado"></div>
       <main class="conteudo">
         <div class="cabecalho-secretaria">
-          <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false">☰</button>
+          <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false"><span class="icone" data-icone="menu" aria-hidden="true"></span></button>
+          <!-- FASE 10 (conformidade) — o CAMINHO até a página (ex.: Pessoas & Membresia › Pessoas › Buscar Pessoas), montado por modulos/casca.js -->
+          <nav class="trilha-casca" id="trilhaCasca" aria-label="Onde você está"></nav>
           <h2 id="tituloModulo">Meu Painel</h2>
           <!-- vB.4 — busca global: mesmo motivo de ficar fora de qualquer
                aba (não é preciso saber de antemão onde o dado mora). -->
           <div class="caixa-busca-global">
-            <input type="search" id="campoBuscaGlobal" placeholder="🔎 Buscar (Ctrl K)" data-on-input="onDigitarBuscaGlobal" autocomplete="off" />
+            <span class="icone" data-icone="busca" aria-hidden="true"></span><input type="search" id="campoBuscaGlobal" placeholder="Buscar pessoa ou módulo" aria-label="Buscar pessoa ou módulo (Ctrl K)" data-on-input="onDigitarBuscaGlobal" autocomplete="off" /><kbd class="atalho-busca">Ctrl K</kbd>
           </div>
+          <button type="button" class="btn-icon btn-busca-celular" id="btnBuscaCelular" data-on-click="abrirPainelBusca" title="Buscar" aria-label="Buscar"><span class="icone" data-icone="busca" aria-hidden="true"></span></button>
           <!-- FASE 10 — a busca do alto num PAINEL DO LADO (aprovada na rodada 6): o campo no alto do painel; dentro de um módulo, presa a ele -->
           <div class="painel-lado" id="painelBuscaGlobal" style="display:none;" role="dialog" aria-label="Buscar">
             <div class="painel-lado-topo"><strong>Buscar</strong><button type="button" class="btn-icon" data-on-click="fecharPaineisLado" aria-label="Fechar">✕</button></div>
@@ -511,10 +530,10 @@
                (fora de qualquer aba), então aparece em todo módulo, não só
                numa tela específica. -->
           <!-- FASE 10 — claro/escuro: escolhido aqui e lembrado neste aparelho; sem escolha, segue o aparelho (modulos/casca.js) -->
-          <button class="btn-tema" id="btnTema" type="button" data-on-click="alternarTemaAcao" title="Modo escuro" aria-label="Trocar para o modo escuro">🌙</button>
+          <button class="btn-tema" id="btnTema" type="button" data-on-click="alternarTemaAcao" title="Modo escuro" aria-label="Trocar para o modo escuro"><span class="icone" data-icone="lua" aria-hidden="true"></span></button>
           <div class="caixa-sino">
-            <button class="btn-sino" id="btnSino" data-on-click="alternarPainelNotificacoes" title="Notificações">
-              🔔<span class="badge-sino" id="badgeSino" style="display:none;">0</span>
+            <button class="btn-sino" id="btnSino" data-on-click="alternarPainelNotificacoes" title="Avisos" aria-label="Avisos">
+              <span class="icone" data-icone="sino" aria-hidden="true"></span><span class="badge-sino" id="badgeSino" style="display:none;">0</span>
             </button>
             <!-- FASE 10 — os AVISOS num PAINEL DO LADO (aprovados nas rodadas 4 a 6): "só o que eu preciso resolver" ligado, o quadro de filtros recolhido -->
             <div class="painel-notificacoes painel-lado" id="painelNotificacoes" style="display:none;" role="dialog" aria-label="Avisos">
@@ -539,13 +558,14 @@
                fixo (o sistema tem 17 abas e dezenas de sub-abas; quem
                chega hoje não tem nenhum caminho explicado). -->
           <div class="caixa-ajuda">
-            <button class="btn-icon" id="btnAjuda" data-on-click="alternarAjudaContextual" title="Ajuda desta tela">❓</button>
+            <button class="btn-icon" id="btnAjuda" data-on-click="alternarAjudaContextual" title="Ajuda desta tela" aria-label="Ajuda desta tela"><span class="icone" data-icone="ajudaQ" aria-hidden="true"></span></button>
             <div class="painel-ajuda" id="painelAjuda" style="display:none;">
               <div class="painel-notificacoes-topo"><strong>Ajuda</strong></div>
               <div id="conteudoAjudaContextual" class="painel-notificacoes-lista"></div>
             </div>
           </div>
         </div>
+        <div class="faixa-modulo-casca" aria-hidden="true"></div>
         <!-- v7.15 — a FAIXA da crise: enquanto houver regime de crise, toda tela da liderança mostra quem é o porta-voz único (montada por crise-seguranca.js). -->
         <!-- FASE 10 — no CELULAR, o menu em abas em pílulas no alto (aprovado nas rodadas 8 e 12); no notebook não aparece -->
         <nav class="pilulas-celular" id="pilulasCelular" aria-label="Menu principal">
@@ -564,27 +584,21 @@
         <!-- SUB-ABA: MEU PERFIL -->
         <div id="subMeupainelPerfil" class="sub-aba-secretaria">
           <!-- FASE 10 — o Início (aprovado nas rodadas 3 e 4): a saudação, "Para você hoje" e "Meu trabalho" -->
-          <p class="inicio-saudacao" id="inicioSaudacao">Graça e paz!</p>
-          <p class="inicio-escopo" id="inicioEscopo">O que precisa de você hoje e o seu trabalho.</p>
+          <h1 class="inicio-saudacao" id="inicioSaudacao">Graça e paz!</h1>
+          <p class="inicio-escopo" id="inicioEscopo"></p>
 
           <!-- vB.5 — PWA instalável + notificação push. Só aparece quando o
                navegador realmente suporta (iOS Safari mais antigo, por
                exemplo, não tem PushManager) — sem isso, o botão ficaria
                morto pra quem clicasse. -->
-          <div id="cxInstalarApp" style="display:none; margin-bottom:16px;">
-            <button class="btn-confirmar btn-secundario" style="width:auto;" data-on-click="instalarAppAcao">📲 Instalar app no celular</button>
-          </div>
-          <div id="cxAtivarPush" style="display:none; margin-bottom:16px;">
-            <button class="btn-confirmar btn-secundario" style="width:auto;" id="btnAtivarPush" data-on-click="alternarPushAcao">🔔 Ativar notificação neste dispositivo</button>
-          </div>
+          <!-- (FASE 10, conformidade: "Instalar o app" e "avisos no celular" foram para o Meu Perfil, nas preferências) -->
 
           <!-- vB.10 — banner de primeiro acesso: some sozinho depois de
                fechado (localStorage), nunca mais aparece no mesmo navegador. -->
           <div id="cxPrimeiroAcesso" class="banner-primeiro-acesso" style="display:none;">
             <p>
-              👋 Primeira vez aqui? O menu à esquerda mostra só os módulos que você tem permissão de usar.
-              O sino 🔔 no topo avisa pendências, a busca 🔎 acha pessoa/projeto/fornecedor rápido, e o
-              <strong>❓</strong> no canto explica a tela em que você está.
+              Primeira vez aqui? À esquerda ficam o Início, o seu trabalho, a sua vida na igreja e o seu perfil; o que fazer
+              aparece aqui, nos cartões. O sino no alto traz os avisos e a busca (Ctrl K) acha pessoa, congregação ou módulo.
             </p>
             <button class="btn-link" data-on-click="fecharPrimeiroAcesso">Entendi, não mostrar de novo</button>
           </div>
@@ -594,30 +608,44 @@
                detector) — nenhum cálculo novo, só reunião. Só aparece pra
                quem logou de verdade (authToken); some sozinho se não tiver
                nenhum bloco com valor (nada de "0 em tudo" poluindo a tela). -->
-          <div id="cxPainelInicial" style="display:none; margin-bottom:20px;">
-            <h3 class="inicio-rotulo">Para você hoje</h3>
-            <div class="grade-modulos" id="gradePainelInicial"></div>
-          </div>
+          <section id="cxPainelInicial" class="inicio-secao">
+            <h2 class="inicio-rotulo">Para você hoje</h2>
+            <div class="grade-hoje" id="gradePainelInicial"></div>
+          </section>
 
           <!-- v4.2 — Grade de módulos (padrão "portal de serviços"): primeira
                coisa que a pessoa vê. Cada card só aparece se ela tiver
                permissão em algo daquele módulo (montarGradeModulos()). -->
-          <h3 class="inicio-rotulo" id="rotuloMeuTrabalho">Meu trabalho</h3>
-          <div class="grade-modulos" id="gradeModulos"></div>
-          <hr />
-
-          <div id="cartaoPerfilPessoal"></div>
-          <div id="cartaoMeusOrgaos"></div>
-          <!-- v8.1 — a situação da pessoa na CLI (faltas seguidas) e na AFM (matrícula, nível, licença para oficiar). Montado por afm.js. -->
-          <div id="cartaoAfmCli"></div>
-          <div id="resumoStatsPessoal"></div>
-          <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
+          <section class="inicio-secao" id="secaoMeuTrabalho">
+            <h2 class="inicio-rotulo" id="rotuloMeuTrabalho">Meu trabalho</h2>
+            <div class="grade-modulos" id="gradeModulos"></div>
+          </section>
+          <section class="inicio-secao" id="secaoVidaInicio" style="display:none;">
+            <h2 class="inicio-rotulo">Minha vida na igreja</h2>
+            <div class="grade-vida-inicio" id="inicioVidaAtalhos"></div>
+          </section>
 
           <!-- MINHAS CONTRIBUIÇÕES (v4.1.1) — transparência: se a matrícula
                estiver vinculada a um cadastro de Dizimista em alguma
                congregação, mostra o histórico do que foi lançado em seu
                nome. Fica em branco/some sozinho pra quem nunca foi
                vinculado como dizimista (silencioso, não é obrigatório). -->
+        </div>
+
+        <!-- FASE 10 (conformidade) — MEU TRABALHO: os módulos da pessoa em cartões, com as 2 pendências de cada um, e as tarefas dela (modulos/casca.js) -->
+        <div id="subMeupainelTrabalho" class="sub-aba-secretaria" style="display:none;">
+          <div class="pagina-casca-cabeca"><div><h1 class="inicio-saudacao">Meu trabalho</h1><p class="inicio-escopo" id="trabalhoEscopo"></p></div></div>
+          <div class="grade-modulos" id="trabalhoCartoes"></div>
+          <div class="vida-mais" id="trabalhoAtalhos"></div>
+        </div>
+        <!-- FASE 10 (conformidade) — MINHA FREQUÊNCIA: o painel pessoal que ficava no Início (presença nas reuniões, órgãos, CLI e AFM); abre por Minha vida -->
+        <div id="subMeupainelFrequencia" class="sub-aba-secretaria" style="display:none;">
+          <div id="cartaoPerfilPessoal"></div>
+          <div id="cartaoMeusOrgaos"></div>
+          <!-- v8.1 — a situação da pessoa na CLI (faltas seguidas) e na AFM (matrícula, nível, licença para oficiar). Montado por afm.js. -->
+          <div id="cartaoAfmCli"></div>
+          <div id="resumoStatsPessoal"></div>
+          <div class="rolagem-tabela"><div id="resultadoPainelPessoal"></div></div>
         </div>
 
         <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
@@ -631,7 +659,16 @@
         </div>
         <!-- FASE 10 — MEU PERFIL (rodada 7, opção 1): os quatro cartões — meus dados, segurança, aparelhos de confiança e preferências (modulos/casca.js) -->
         <div id="subMeupainelMeuperfil" class="sub-aba-secretaria" style="display:none;">
+          <div class="pagina-casca-cabeca" id="meuPerfilCabeca"></div>
           <div class="perfil-grade" id="meuPerfilCartoes"></div>
+          <div class="perfil-extra">
+            <div id="cxInstalarApp" style="display:none;">
+              <button class="btn-confirmar btn-secundario" data-on-click="instalarAppAcao">Instalar o app neste celular</button>
+            </div>
+            <div id="cxAtivarPush" style="display:none;">
+              <button class="btn-confirmar btn-secundario" id="btnAtivarPush" data-on-click="alternarPushAcao">Ligar os avisos neste aparelho</button>
+            </div>
+          </div>
         </div>
 
         <!-- SUB-ABA: MEUS DADOS CADASTRAIS (v4.2.2 — fatiado de "Meu Perfil",

@@ -310,7 +310,7 @@ let sessaoFrequenciaAberta = null; // { sessaoId, descricao } — pra atualizar 
 function renderizarListaOrgaosModulo(containerId, lista) {
   document.getElementById(containerId).innerHTML = lista.map(o => `
     <button class="btn-aba" id="btnSubReunioes${escaparHtmlEbd(o.chave.replace(":", "_"))}" data-on-click="selecionarOrgaoReunioes" data-args-click="${argsAttr(String(o.chave ?? ""))}">
-      <span class="icone">🏛️</span><span class="rotulo">${escaparHtmlEbd(o.nome)}</span>
+      <span class="icone" data-icone="banco" aria-hidden="true"></span><span class="rotulo">${escaparHtmlEbd(o.nome)}</span>
     </button>`).join("");
 }
 

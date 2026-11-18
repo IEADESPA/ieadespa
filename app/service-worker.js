@@ -73,7 +73,10 @@
 // a campo (modulos/membros.js, index.html, style.css, pessoas.js); o incremento 2 (modulos/membros-cadastro.js: o cadastro em etapas, a fila de cadastros e o
 // pré-cadastro rápido) e o 3 (modulos/membros-movimento.js: as mudanças de congregação, a caixa de sugestões e a minha ficha em Minha vida) entram na mesma
 // v62, que ainda não foi para a produção. Só no ramo v10-membros e na homologação.
-const CACHE_NOME = "ieadespa-app-shell-v62";
+// v63 (18/11/2026): FASE 10, conformidade da casca com o desenho aprovado — os ícones de traço, o menu principal limpo, o Início com as pendências
+// de cada módulo, as duas colunas, o caminho no topo, o menu recolhível, Meu trabalho, Minha vida e Meu Perfil (index.html, style.css, modulos/casca.js).
+// Pula a v62 porque o ramo v10-membros (na homologação) já a usou. Só no ramo v10-casca e na homologação.
+const CACHE_NOME = "ieadespa-app-shell-v63";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/casca.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/membros-cadastro.js", "/modulos/membros-movimento.js", "/modulos/membros.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

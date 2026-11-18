@@ -77,9 +77,9 @@ describe("o que a tela mostra", () => {
     expect(R.valorParaTela("telefone", linha)).not.toContain("98888");
   });
   test("o motivo disciplinar da saída só com \"disciplina\"", () => {
-    expect(R.valorParaTela("saida", linha)).toBe("2026-03-01 · motivo reservado");
-    expect(R.valorParaTela("saida", linha, { podeDisciplina: true })).toBe("2026-03-01 · EXCLUSAO");
-    expect(R.valorParaTela("saida", { ...linha, MotivoSaida: "CARTA_MUDANCA" })).toBe("2026-03-01 · CARTA_MUDANCA");
+    expect(R.valorParaTela("saida", linha)).toBe("01/03/2026 · motivo reservado");
+    expect(R.valorParaTela("saida", linha, { podeDisciplina: true })).toBe("01/03/2026 · EXCLUSAO");
+    expect(R.valorParaTela("saida", { ...linha, MotivoSaida: "CARTA_MUDANCA" })).toBe("01/03/2026 · CARTA_MUDANCA");
   });
   test("nomes no lugar dos números; a foto não vira link", () => {
     const nomes = { congregacoes: new Map([[2, "Vila Nova"]]), cargos: new Map([["PRESBITERO", "Presbítero"]]) };

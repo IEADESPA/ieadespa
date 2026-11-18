@@ -24,15 +24,17 @@ function emTransacao(pool, prepEnd, fazer) {
   });
 }
 
-const tipoSql = (c) => (c.tipo === "data" ? sql.Date : c.tipo === "departamento" ? sql.Int : c.tipo === "cpf" ? sql.Char(11) : c.coluna === "Sexo" ? sql.NChar(1) : sql.NVarChar(300));
+const tipoSql = (c) => (c.tipo === "data" ? sql.Date : c.tipo === "departamento" || c.tipo === "extensao" ? sql.Int : c.tipo === "cpf" ? sql.Char(11) : c.coluna === "Sexo" ? sql.NChar(1)
+  : c.tipo === "simnao" ? sql.Bit : c.tipo === "situacao" || c.tipo === "cargo" ? sql.NVarChar(30) : c.tipo === "status" ? sql.NVarChar(20) : sql.NVarChar(300));
 const mesmo = (a, b) => (a === null || a === undefined ? null : String(a)) === (b === null || b === undefined ? null : String(b));
-const COLUNAS = Object.values(regras.CAMPOS).map((c) => `m.${c.coluna}`).join(", ");
+const COLUNAS = Object.values(regras.CAMPOS).filter((c) => c.coluna).map((c) => `m.${c.coluna}`).join(", ");
 
 // A ficha com tudo o que as regras precisam: os campos, a congregação/Extensão (escopo), o processo de cargo em andamento e a exclusão julgada (as mesmas
 // consultas do cadastro, GestaoPessoas). `travar` = UPDLOCK na ficha (dentro da transação).
 async function lerFicha(rq, membroId, { travar = false } = {}) {
   const r = await rq().input("id", sql.Int, membroId).query(`
-    SELECT m.MembroId, m.Status, ${COLUNAS}, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome,
+    SELECT m.MembroId, m.Status AS StatusAtual, m.CongregacaoId, ${COLUNAS}, c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome,
+           (SELECT CONVERT(varchar(10), MAX(hc.Desde), 120) FROM CargosMinisteriaisHistorico hc WHERE hc.MembroId = m.MembroId AND hc.Ate IS NULL AND hc.Cargo = m.CargoMinisterial) AS CargoDesde,
            CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
                              WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
                              AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
@@ -45,8 +47,8 @@ async function lerFicha(rq, membroId, { travar = false } = {}) {
   const l = r.recordset[0];
   if (!l) return null;
   const valores = {};
-  for (const [chave, c] of Object.entries(regras.CAMPOS)) valores[chave] = regras.valorParaTexto(l[c.coluna]);
-  return { membroId: l.MembroId, status: l.Status, congregacaoNome: l.CongregacaoNome || null, extensaoNome: l.ExtensaoNome || null,
+  for (const [chave, c] of Object.entries(regras.CAMPOS)) valores[chave] = regras.valorParaTexto(c.coluna ? l[c.coluna] : chave === "cargoDesde" ? l.CargoDesde : null);
+  return { membroId: l.MembroId, status: l.StatusAtual, congregacaoId: l.CongregacaoId == null ? null : Number(l.CongregacaoId), congregacaoNome: l.CongregacaoNome || null, extensaoNome: l.ExtensaoNome || null,
     emProcessoDeCargo: !!l.EmProcessoDeCargo, temExclusao: !!l.TemExclusao, valores };
 }
 
@@ -54,11 +56,25 @@ async function lerFicha(rq, membroId, { travar = false } = {}) {
 const valorParaTela = (chave, v) => (chave === "cpf" ? regras.mascarar("cpf", v) : v);
 
 // O que a secretaria vê da ficha para editar: cada campo com o valor, se pode mudar e, se não pode, por quê.
-function camposParaSecretaria(ficha, papel, ehProprio) {
+// `opcoes` (opcoesDaFicha): as listas que vêm do banco — a situação, o cargo, as Extensões da congregação da pessoa e a situação no rol — com o nome de cada uma.
+function camposParaSecretaria(ficha, papel, ehProprio, opcoes = {}) {
   return Object.entries(regras.CAMPOS).map(([chave, c]) => {
     const p = regras.podeSecretariaMudar(chave, { papel, ehProprio, valorAtual: ficha.valores[chave], emProcessoDeCargo: ficha.emProcessoDeCargo, temExclusao: ficha.temExclusao });
-    return { chave, rotulo: c.rotulo, grupo: c.grupo, tipo: c.tipo, opcoes: c.lista || null, valor: valorParaTela(chave, ficha.valores[chave]), pode: p.pode, motivo: p.motivo };
+    const doBanco = Object.prototype.hasOwnProperty.call(opcoes, chave) ? opcoes[chave] : null;
+    return { chave, rotulo: c.rotulo, grupo: c.grupo, tipo: c.tipo, opcoes: doBanco ? doBanco.map((o) => o.codigo) : c.lista || null,
+      ...(doBanco ? { rotulosOpcoes: Object.fromEntries(doBanco.map((o) => [o.codigo, o.rotulo])) } : {}),
+      valor: valorParaTela(chave, ficha.valores[chave]), pode: p.pode, motivo: p.motivo };
   });
+}
+const ROTULO_STATUS = { ATIVO: "Ativo", INATIVO: "Inativo", FALECIDO: "Falecido" };
+async function opcoesDaFicha(rq, ficha) {
+  const r = await rq().input("c", sql.Int, ficha.congregacaoId).input("e", sql.Int, ficha.valores.extensaoId ? Number(ficha.valores.extensaoId) : null).query(`
+    SELECT Sigla AS codigo, Nome AS rotulo FROM SituacoesMembro WHERE Ativa = 1 ORDER BY SituacaoId;
+    SELECT Sigla AS codigo, Nome AS rotulo FROM CargosMinisteriais WHERE Ativo = 1 ORDER BY ISNULL(Ordem, 999), Nome;
+    SELECT CAST(ExtensaoId AS NVARCHAR(12)) AS codigo, Nome AS rotulo FROM ExtensoesTenda WHERE CongregacaoMaeId = @c AND (Ativa = 1 OR ExtensaoId = @e) ORDER BY Nome;`);
+  const rs = r.recordsets || [];
+  return { situacaoMembro: rs[0] || [], cargoMinisterial: rs[1] || [], extensaoId: rs[2] || [],
+    status: regras.STATUS_DA_FICHA.map((codigo) => ({ codigo, rotulo: ROTULO_STATUS[codigo] })) };
 }
 
 // ---------------------------------------------------------------- a secretaria, um campo por vez
@@ -90,8 +106,10 @@ async function gravarCampoSecretaria(pool, { visao, membroId, chave, valor, valo
     const conf = await require("./preCadastroDb").conferir(pool, visao, { cpf: novo, excluirMembroId: Number(membroId), soCpf: true });
     if (conf.bloqueia) return { sucesso: false, status: 200, mensagem: conf.cpf.mensagem, cpfRepetido: conf.cpf.situacao, ...(conf.cpf.matricula ? { matricula: conf.cpf.matricula } : {}) };
   }
+  // o que roda DEPOIS da transação (como no cadastro completo): o histórico de cargos, a vacância e a credencial do falecimento, as sessões de quem saiu do ativo
+  let depois = null;
   try {
-    return await emTransacao(pool, prepEnd, async (rq, t) => {
+    const r = await emTransacao(pool, prepEnd, async (rq, t) => {
       const ficha = await lerFicha(rq, membroId, { travar: true });
       if (!ficha || !noEscopoDaPessoa(visao, ficha.congregacaoNome, ficha.extensaoNome)) return { sucesso: false, status: 200, mensagem: "Matrícula não encontrada." };
       const atual = ficha.valores[chave];
@@ -112,7 +130,45 @@ async function gravarCampoSecretaria(pool, { visao, membroId, chave, valor, valo
           const d = await rq().input("d", sql.Int, novo).query(`SELECT TOP 1 1 AS x FROM Departamentos WHERE DepartamentoId = @d`);
           if (!d.recordset.length) return { sucesso: false, status: 200, mensagem: "Departamento inválido." };
         }
-        await rq().input("id", sql.Int, membroId).input("v", tipoSql(c), novo).query(`UPDATE MembroReferencia SET ${c.coluna} = @v WHERE MembroId = @id`);
+        // os campos que vieram do cadastro completo (as sobras do passo 7a): o catálogo, a Extensão da congregação da pessoa, a saída e a readmissão
+        if (c.tipo === "situacao") {
+          const x = await rq().input("v", sql.NVarChar(30), novo).query(`SELECT TOP 1 1 AS x FROM SituacoesMembro WHERE Sigla = @v`);
+          if (!x.recordset.length) return { sucesso: false, status: 200, mensagem: "Situação: escolha uma opção da lista." };
+        }
+        if (c.tipo === "cargo" && novo != null) {
+          const x = await rq().input("v", sql.NVarChar(30), novo).query(`SELECT TOP 1 1 AS x FROM CargosMinisteriais WHERE Sigla = @v`);
+          if (!x.recordset.length) return { sucesso: false, status: 200, mensagem: "Cargo: escolha uma opção da lista." };
+        }
+        if (c.tipo === "extensao" && novo != null) {
+          const x = await rq().input("v", sql.Int, novo).input("c", sql.Int, ficha.congregacaoId).input("e", sql.Int, atual ? Number(atual) : null)
+            .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @v AND CongregacaoMaeId = @c AND (Ativa = 1 OR ExtensaoId = @e)`);
+          if (!x.recordset.length) return { sucesso: false, status: 200, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." };
+          if (!noEscopoDaPessoa(visao, ficha.congregacaoNome, x.recordset[0].Nome)) return { sucesso: false, status: 403, mensagem: "Essa Extensão está fora do seu alcance." };
+        }
+        if (c.tipo === "extensao" && novo == null && !noEscopoDaPessoa(visao, ficha.congregacaoNome, null)) {
+          return { sucesso: false, status: 403, mensagem: "Tirar a pessoa da Extensão a leva para fora do seu alcance: peça à secretaria da congregação." };
+        }
+        if (chave === "cargoDesde") {
+          // "no cargo desde" mora no histórico de cargos (escadaDb.sincronizarCadastro, depois da transação): precisa de um cargo de oficial na ficha
+          if (!ficha.valores.cargoMinisterial || ficha.valores.cargoMinisterial === "MEMBRO") return { sucesso: false, status: 200, mensagem: "\"No cargo desde\" só vale para quem tem cargo de oficial." };
+          if (novo < "1950-01-01") return { sucesso: false, status: 200, mensagem: "A data de entrada no cargo está antiga demais." };
+          depois = { cargo: { anterior: ficha.valores.cargoMinisterial, novo: ficha.valores.cargoMinisterial, desde: novo } };
+        } else if (c.tipo === "status") {
+          const saiu = regras.STATUS_DE_SAIDA.includes(atual);
+          if (saiu && papel !== "GERAL") return { sucesso: false, status: 403, mensagem: "Voltar de uma saída do rol é a readmissão: só a Secretaria Geral registra." };
+          if (novo === "FALECIDO" && !saiu) {
+            // o falecimento é a saída do rol: sem comunhão, a data e a causa (como no cadastro completo); os vínculos e a credencial caem depois da transação
+            await rq().input("id", sql.Int, membroId).input("hoje", sql.Date, hoje).query(`
+              UPDATE MembroReferencia SET Status = N'FALECIDO', SituacaoMembro = N'SEM_COMUNHAO', DataSaida = ISNULL(DataSaida, @hoje), MotivoSaida = N'FALECIMENTO' WHERE MembroId = @id`);
+            depois = { terminal: "FALECIMENTO" };
+          } else {
+            await rq().input("id", sql.Int, membroId).input("v", tipoSql(c), novo).query(`UPDATE MembroReferencia SET ${c.coluna} = @v WHERE MembroId = @id`);
+            if (novo !== "ATIVO") depois = { derrubarSessoes: true };
+          }
+        } else {
+          await rq().input("id", sql.Int, membroId).input("v", tipoSql(c), novo).query(`UPDATE MembroReferencia SET ${c.coluna} = @v WHERE MembroId = @id`);
+          if (c.tipo === "cargo") depois = { cargo: { anterior: atual || null, novo: novo || null, desde: null } };
+        }
       }
       if (chave !== "endereco" || !mesmo(atual, novo)) {
         await registrarAuditoriaNaTransacao(t, { tabela: "MembroReferencia", registroId: Number(membroId), acao: `Mudou ${c.rotulo.toLowerCase()} (campo a campo)`.slice(0, 100),
@@ -120,10 +176,27 @@ async function gravarCampoSecretaria(pool, { visao, membroId, chave, valor, valo
       }
       return { sucesso: true, status: 200, mensagem: `✅ ${c.rotulo} salvo.`, valor: valorParaTela(chave, novo), emailAnterior: chave === "email" && atual ? atual : undefined };
     });
+    if (r && r.sucesso && depois) await efeitosDepois(pool, { membroId: Number(membroId), por: visao.membroId, depois });
+    return r;
   } catch (e) {
     if (violouCpfUnico(e)) return { sucesso: false, status: 200, mensagem: MSG_CPF_REPETIDO };
     throw e;
   }
+}
+
+// Os efeitos que o cadastro completo fazia depois de gravar (GestaoPessoas): falhou um deles? A ficha já está gravada; o erro fica no log (a mesma regra de lá).
+async function efeitosDepois(pool, { membroId, por, depois }) {
+  try {
+    if (depois.cargo) {
+      const h = await require("./escadaDb").sincronizarCadastro(pool, { membroId, cargoAnterior: depois.cargo.anterior, cargoNovo: depois.cargo.novo, desde: depois.cargo.desde, por });
+      if (h && h.sucesso === false) console.warn(`[edicaoFicha] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
+    }
+    if (depois.terminal) {
+      await require("./vacancia").encerrarVinculos(pool, sql, membroId, depois.terminal);   // também derruba as sessões abertas da pessoa
+      await require("./credencialDb").recolherSemFalhar(pool, membroId, depois.terminal, por);
+    }
+    if (depois.derrubarSessoes) await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);
+  } catch (e) { console.error(`[edicaoFicha] efeito depois da gravação de ${membroId} falhou: ${e.message}`); }
 }
 
 // ---------------------------------------------------------------- o membro (Meus Dados)
@@ -473,5 +546,5 @@ async function fecharSeDecidida(rq, solicitacaoId) {
     WHERE SolicitacaoId = @s AND Status = N'PENDENTE' AND NOT EXISTS (SELECT 1 FROM SolicitacoesEdicaoCampos WHERE SolicitacaoId = @s AND Status = N'PENDENTE')`);
 }
 
-module.exports = { lerFicha, camposParaSecretaria, gravarCampoSecretaria, gravarDoMembro, regrasDoMembro, sugerir, minhasSugestoes, lerAlteracoes, mudancasDaLinha,
+module.exports = { lerFicha, camposParaSecretaria, opcoesDaFicha, gravarCampoSecretaria, gravarDoMembro, regrasDoMembro, sugerir, minhasSugestoes, lerAlteracoes, mudancasDaLinha,
   listarSugestoes, decidirCampo, valorParaTela, violouCpfUnico, MSG_CPF_REPETIDO };

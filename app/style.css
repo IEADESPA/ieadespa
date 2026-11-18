@@ -2181,6 +2181,63 @@ button.mt-quem { cursor: pointer; }
   .mt-acoes { justify-content: flex-start; }
   .mb-tela .mt-motivo { width: 100%; font-size: 16px; }
 }
+
+/* FASE 10, v10.1b passo 6 — JUNTAR FICHAS REPETIDAS (rodada 8, tela 7, opção 3 "Só o que é diferente"): um cartão por campo diferente, o rótulo à esquerda e
+   as duas opções para tocar (a escolhida com a borda de 2 px: marinho no claro, ouro no escuro, e o fundo azul-claro); os iguais só contados; a prévia do
+   que vai junto, o que impede e, no fim, o aviso e os dois botões (no celular, em coluna e dentro da tela — nada preso embaixo). modulos/membros-juntar.js */
+.mj-linha { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--cor-borda); font-size: 0.86rem; }
+.mj-linha:last-child { border-bottom: none; }
+.mj-juncao { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) auto auto; }
+.mj-dupla { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.mj-pessoa { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.mj-pessoa strong { color: var(--cor-titulo); }
+.mj-e { color: var(--cor-texto-suave); }
+.mj-manual-campos { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.mj-manual-campos label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--cor-texto-suave); margin: 0; }
+.mb-tela .mj-manual-campos input { width: 140px; margin: 0; }
+.mb-tela > section.mb-cartao, .mb-tela > .mj-manual { margin-bottom: 12px; }
+.mj-resumo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.86rem; color: var(--cor-texto-suave); margin: 4px 0 10px; }
+.mj-resumo strong { color: var(--cor-titulo); }
+.mj-iguais { margin: -4px 0 10px; }
+.mj-campo { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 16px; margin-bottom: 10px; }
+.mj-campo .mj-trava { grid-column: 2; margin: 0; display: flex; align-items: center; gap: 6px; }
+.mj-rotulo { font-size: 0.86rem; font-weight: 700; color: var(--cor-titulo); }
+.mj-opcoes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.mj-opcao { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--cor-borda); background: var(--cor-superficie);
+  color: var(--cor-titulo); font: inherit; text-align: left; min-height: 44px; min-width: 0; cursor: pointer; }
+.mj-opcao:disabled { cursor: default; opacity: 0.7; }
+.mj-opcao.mj-escolhida { border: 2px solid var(--cor-primaria); background: var(--chip-azul-fundo); padding: 9px 11px; }
+html[data-tema="escuro"] .mj-opcao.mj-escolhida { border-color: var(--cor-ouro); background: #13294A; }
+.mj-opcao .mj-valor { flex: 1; font-size: 0.92rem; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.mj-opcao .mj-valor em { font-weight: 400; color: var(--cor-texto-suave); }
+.mj-radio { width: 18px; height: 18px; border-radius: 9px; border: 2px solid var(--cor-borda); flex: none; box-sizing: border-box; }
+.mj-escolhida .mj-radio { border: 6px solid var(--cor-primaria); }
+html[data-tema="escuro"] .mj-escolhida .mj-radio { border-color: var(--cor-ouro); }
+.mj-fixa { cursor: default; flex-wrap: wrap; }
+.mj-fixa .mj-valor { flex: 0 0 auto; }
+.mj-fixa .mb-dica { flex: 1 1 160px; text-align: right; }
+.mj-campo-fixo .mj-opcao:not(.mj-escolhida) { opacity: 0.75; }
+.mj-baixo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 4px; }
+.mj-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 0.86rem; }
+.mj-bloqueios { border-color: var(--cor-aviso); }
+.mj-rodape { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.mj-info { flex: 1; min-width: 260px; margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 0.84rem; color: var(--cor-texto-suave); }
+.mj-info strong { color: var(--cor-titulo); }
+.mj-pendencias { margin: 10px 0; border-color: var(--cor-ouro); display: flex; flex-direction: column; gap: 6px; }
+.mj-pendencias .mj-lista { list-style: none; padding: 0; }
+.mj-pendencias p { margin: 0; display: flex; gap: 6px; align-items: center; }
+@media (max-width: 760px) {
+  .mj-linha, .mj-juncao { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .mj-campo { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px 14px; }
+  .mj-campo .mj-trava { grid-column: 1; }
+  .mj-rotulo { font-size: 0.75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--cor-texto-suave); }
+  .mj-opcoes { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .mj-baixo { grid-template-columns: minmax(0, 1fr); }
+  .mj-rodape .mc-botoes { width: 100%; flex-direction: column; align-items: stretch; }
+  .mj-rodape .mc-botoes .mb-btn { width: 100%; min-height: 48px; }
+  .mb-tela .mj-manual-campos input { width: 100%; font-size: 16px; }
+  .mj-manual-campos label, .mj-manual-campos .mb-btn { width: 100%; }
+}
    FASE 10 — CONFORMIDADE COM O DESENHO APROVADO (18/11/2026, depois da reprovação da homologação). O que estava diferente do aprovado:
    o menu da esquerda longo, os emojis, o Início sem as pendências de cada módulo, a página rolando inteira (o menu junto com o conteúdo),
    a barra do topo sem o caminho. Aqui: o MENU PRINCIPAL LIMPO (Início, Meu trabalho, Minha vida na igreja, Meu Perfil e a pessoa no pé),

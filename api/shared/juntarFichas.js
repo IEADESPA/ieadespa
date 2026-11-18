@@ -80,7 +80,8 @@ function podeEscolher(chave, ctx) {
 // só para quem tem "disciplina" no escopo das duas fichas. `nomes` = { congregacoes: Map(id->nome), extensoes: Map, departamentos: Map, cargos: Map }.
 function valorParaTela(chave, linha, { podeDisciplina = false, nomes = {} } = {}) {
   const v = (col) => linha[col];
-  const txt = (col) => textoDaColuna(v(col));
+  // as datas no padrão brasileiro (dd/mm/aaaa); o resto como está
+  const txt = (col) => { const t = textoDaColuna(v(col)); return t && /^Data/.test(col) && /^\d{4}-\d{2}-\d{2}$/.test(t) ? `${t.slice(8, 10)}/${t.slice(5, 7)}/${t.slice(0, 4)}` : t; };
   const pegar = (mapa, id) => (id == null ? null : (mapa && mapa.get(Number(id))) || `nº ${id}`);
   switch (chave) {
     case "cpf": return txt("Cpf") ? mascararCpf(txt("Cpf")) : null;

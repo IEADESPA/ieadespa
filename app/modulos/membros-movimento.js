@@ -60,9 +60,9 @@ function mtDesenharCaixas() {
   caixa.innerHTML = `
     ${mbTopoHtml("Mudanças de congregação", `${mbTextoEscopo(mbPainel.dados || {}, "")} · o que chega para você aceitar e o que sai daqui`, "")}
     <nav class="mt-abas" aria-label="Caixas">${abas}</nav>
-    ${mtCaixa.erro ? `<p class="subtitle aviso-recusa">⚠️ ${escaparHtmlEbd(mtCaixa.erro)}</p>` : ""}
+    ${mtCaixa.erro ? `<p class="subtitle aviso-recusa">${mbIc("alerta")} ${escaparHtmlEbd(mtCaixa.erro)}</p>` : ""}
     <div class="mb-cartao mt-lista">${linhas || `<p class="mb-vazio-lista">${mtCaixa.caixa === "chegando" ? "Nenhum pedido chegando agora." : "Nada aqui."}</p>`}</div>
-    <p class="mb-dica mt-nota">ℹ️ Para pedir uma mudança, abra a ficha da pessoa e toque em "Transferência". Na mesma área a mudança entra na hora; entre áreas, a secretaria
+    <p class="mb-dica mt-nota">${mbIc("ajudaQ", 14)} Para pedir uma mudança, abra a ficha da pessoa e toque em "Transferência". Na mesma área a mudança entra na hora; entre áreas, a secretaria
       do destino (ou a Secretaria Geral) aceita ou recusa, e até lá a pessoa continua onde está. Ao recusar, quem pediu recebe o motivo.</p>`;
 }
 function mtCaixaAcao(caixa) {
@@ -162,7 +162,7 @@ async function mtMostrarPedidoNaFicha() {
   const opcoes = (mtPedido.destinos || []).filter((c) => String(c.congregacaoId) !== String(p.congregacaoId))
     .map((c) => `<option value="${c.congregacaoId}"${String(c.congregacaoId) === String(mtPedido.destinoId) ? " selected" : ""}>${escaparHtmlEbd(c.nome)}${c.areaNome ? ` · ${escaparHtmlEbd(c.areaNome)}` : ""}</option>`).join("");
   corpo.innerHTML = `<section class="mb-cartao mt-pedir">
-    <header class="mb-cartao-cabeca"><h4>↪ Pedir mudança de congregação</h4><span class="mb-dica">quem pede: a congregação de onde a pessoa sai, a Secretaria Geral ou a própria pessoa</span></header>
+    <header class="mb-cartao-cabeca"><h4>${mbIc("transferir")} Pedir mudança de congregação</h4><span class="mb-dica">quem pede: a congregação de onde a pessoa sai, a Secretaria Geral ou a própria pessoa</span></header>
     <form class="mc-form" data-on-submit="mtPedirAcao" data-prevent="submit">
       <div class="mc-grade">
         <div class="mc-campo"><span class="mc-rotulo">Sai de</span><span class="mt-origem">${escaparHtmlEbd(p.congregacao || "—")}</span></div>
@@ -171,9 +171,9 @@ async function mtMostrarPedidoNaFicha() {
       </div>
       <div class="mc-campo"><label for="mtMotivoPedido">Motivo (opcional)</label>
         <input type="text" id="mtMotivoPedido" maxlength="300" value="${escaparHtmlEbd(mtPedido.motivo)}" placeholder="Ex.: mudou de bairro" data-on-input="mtPedidoCampoAcao" data-args-input="${argsAttr("motivo", ARG.valor)}" /></div>
-      <p class="mc-aviso mc-aviso-atencao">⚠️ Na mesma área a mudança entra na hora. Em áreas diferentes, o pedido vai para a secretaria do destino, que aceita ou recusa;
+      <p class="mc-aviso mc-aviso-atencao">${mbIc("alerta")} Na mesma área a mudança entra na hora. Em áreas diferentes, o pedido vai para a secretaria do destino, que aceita ou recusa;
         até lá, ${escaparHtmlEbd(p.nome || "a pessoa")} continua em ${escaparHtmlEbd(p.congregacao || "sua congregação")}.</p>
-      ${mtPedido.erro ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(mtPedido.erro)}</p>` : ""}
+      ${mtPedido.erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(mtPedido.erro)}</p>` : ""}
       <div class="mc-botoes"><button type="submit" class="btn-confirmar mb-btn"${mtPedido.enviando ? " disabled" : ""}>${mtPedido.enviando ? "Enviando…" : "Enviar o pedido"}</button>
         <button type="button" class="btn-link" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("resumo")}">Cancelar</button></div>
     </form></section>`;
@@ -245,8 +245,8 @@ function mtDesenharSugestoes() {
             data-on-input="mtSugMotivoAcao" data-args-input="${argsAttr(chave, ARG.valor)}" />
           <button type="button" class="btn-confirmar btn-secundario mb-btn-pequeno" data-on-click="mtSugDecidirAcao" data-args-click="${argsAttr(s.solicitacaoId, c.campoId, "REJEITADO")}">Recusar</button>` : ""}
           ${c.podeAplicar ? `<button type="button" class="btn-confirmar mb-btn-pequeno" data-on-click="mtSugDecidirAcao" data-args-click="${argsAttr(s.solicitacaoId, c.campoId, "APROVADO")}">✓ Aplicar</button>` : ""}
-          ${!c.podeAplicar && c.motivoNaoAplica ? `<span class="mb-trava">🔒 ${escaparHtmlEbd(c.motivoNaoAplica)}</span>` : ""}`
-        : `<span class="mb-trava">🔒 ${escaparHtmlEbd(c.motivoNaoAplica || "Você acompanha.")}</span>`)
+          ${!c.podeAplicar && c.motivoNaoAplica ? `<span class="mb-trava">${mbIc("cadeado", 14)} ${escaparHtmlEbd(c.motivoNaoAplica)}</span>` : ""}`
+        : `<span class="mb-trava">${mbIc("cadeado", 14)} ${escaparHtmlEbd(c.motivoNaoAplica || "Você acompanha.")}</span>`)
         : `<span class="${c.status === "APROVADO" ? "mb-chip mb-chip-verde" : "mb-chip mb-chip-neutro"}">${c.status === "APROVADO" ? "aplicada" : "recusada"}</span>${c.motivo ? ` <span class="mb-dica">${escaparHtmlEbd(c.motivo)}</span>` : ""}`}</span>
       </div>`);
     }
@@ -257,9 +257,9 @@ function mtDesenharSugestoes() {
       <button type="button" class="mb-pilula${mtSug.situacao === "PENDENTE" ? " ativa" : ""}" data-on-click="mtSugSituacaoAcao" data-args-click="${argsAttr("PENDENTE")}">Esperando</button>
       <button type="button" class="mb-pilula${mtSug.situacao === "DECIDIDAS" ? " ativa" : ""}" data-on-click="mtSugSituacaoAcao" data-args-click="${argsAttr("DECIDIDAS")}">Já decididas</button>
     </nav>
-    ${mtSug.erro ? `<p class="subtitle aviso-recusa">⚠️ ${escaparHtmlEbd(mtSug.erro)}</p>` : ""}
+    ${mtSug.erro ? `<p class="subtitle aviso-recusa">${mbIc("alerta")} ${escaparHtmlEbd(mtSug.erro)}</p>` : ""}
     <div class="mb-cartao mt-lista">${linhas.join("") || `<p class="mb-vazio-lista">${mtSug.situacao === "PENDENTE" ? "Nenhuma sugestão esperando." : "Nenhuma decidida ainda."}</p>`}</div>
-    <p class="mb-dica mt-nota">ℹ️ Recusar avisa o membro com o motivo. O que só a Secretaria Geral muda (o nome, o CPF já gravado) aparece aqui travado e segue para ela.</p>`;
+    <p class="mb-dica mt-nota">${mbIc("ajudaQ", 14)} Recusar avisa o membro com o motivo. O que só a Secretaria Geral muda (o nome, o CPF já gravado) aparece aqui travado e segue para ela.</p>`;
 }
 function mtSugSituacaoAcao(s) { mtSug.situacao = s === "DECIDIDAS" ? "DECIDIDAS" : "PENDENTE"; mtSug.itens = []; mtAbrirSugestoes(); }
 function mtSugMotivoAcao(chave, valor) { mtSug.motivos[String(chave)] = String(valor || "").slice(0, 300); }
@@ -279,8 +279,8 @@ async function mtSugDecidirAcao(solicitacaoId, campoId, decisao) {
 }
 
 // ================================================================= MINHA VIDA NA IGREJA (o membro)
-const MV_PARTES = [["linha", "🕒", "Minha linha do tempo"], ["dados", "👤", "Meus dados"], ["vinculos", "👪", "Família"], ["mudar", "✏️", "O que eu posso mudar"],
-  ["credencial", "🪪", "Minha carteirinha"], ["transferencias", "↪", "Minhas transferências"], ["sugestoes", "💬", "Minhas sugestões"]];
+const MV_PARTES = [["linha", "relogio", "Minha linha do tempo"], ["dados", "pessoa", "Meus dados"], ["vinculos", "pessoas", "Família"], ["mudar", "lapis", "O que eu posso mudar"],
+  ["credencial", "cartao", "Minha carteirinha"], ["transferencias", "transferir", "Minhas transferências"], ["sugestoes", "envelope", "Minhas sugestões"]];
 // as partes que já têm tela no Meu Painel abrem lá; as outras são desenhadas aqui
 const MV_ABRE_NO_PAINEL = { dados: "dados", vinculos: "vinculos", credencial: "credencial" };
 let mv = { parte: "linha", linha: null, dados: null, campos: null, transf: null, sugestoes: null, pagina: 1, sugerir: null, valor: "", erro: "", seq: 0 };
@@ -340,7 +340,7 @@ function mvCorpoHtml() {
   const total = mbNum(l.total);
   const paginas = Math.max(1, Math.ceil(total / 8));
   const itens = eventos.map((e) => `<li class="mb-tempo-item mb-tempo-${escaparHtmlEbd(String(e.categoria || "").toLowerCase())}">
-    <span class="mb-tempo-icone" aria-hidden="true">${escaparHtmlEbd(MB_ICONE_CATEGORIA[e.categoria] || "•")}</span>
+    <span class="mb-tempo-icone" aria-hidden="true">${MB_ICONE_CATEGORIA[e.categoria] ? mbIc(MB_ICONE_CATEGORIA[e.categoria], 16) : "•"}</span>
     <span class="mb-tempo-texto"><strong>${escaparHtmlEbd(e.titulo)}</strong> <span class="mb-tempo-data">${e.aproximada ? `por volta de ${escaparHtmlEbd(String(e.data || "").slice(0, 4))}` : escaparHtmlEbd(mbDataBr(e.data))}</span>${e.detalhe ? `<span class="mb-tempo-detalhe">${escaparHtmlEbd(e.detalhe)}</span>` : ""}</span></li>`).join("");
   const ve = l.vidaEspiritual || {};
   const modo = (chave) => ((mv.campos || []).find((c) => c.chave === chave) || {}).modo || "NAO";
@@ -356,12 +356,12 @@ function mvCorpoHtml() {
         <button type="button" class="mb-pagina"${mv.pagina >= paginas ? " disabled" : ""} data-on-click="mvPaginaAcao" data-args-click="${argsAttr(mv.pagina + 1)}">Mais antigos ›</button></span></div>` : ""}
     </section>
     <div class="mv-cartoes">
-      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>🕊️ Vida espiritual</h4></header>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("pomba")} Vida espiritual</h4></header>
         ${linha("Conversão", ve.conversao ? mbDataBr(ve.conversao.data) || String(ve.conversao.data || "").slice(0, 4) : "", "")}
         ${linha("Batismo nas águas", d.dataBatismo ? mbDataBr(d.dataBatismo) : "", "dataBatismo")}
         ${linha("Batismo no Espírito Santo", ve.batismoEspiritoSanto ? mbDataBr(ve.batismoEspiritoSanto.data) : "", "")}
       </section>
-      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>📱 Contato</h4><button type="button" class="btn-link" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr("dados")}">Endereço ›</button></header>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("celular")} Contato</h4><button type="button" class="btn-link" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr("dados")}">Endereço ›</button></header>
         ${linha("Celular", d.telefone || "", "telefone")}
         ${linha("E-mail", d.email || "", "email")}
       </section>
@@ -377,7 +377,7 @@ function mvMudarHtml() {
       ${c.sugestaoPendente ? "<span class=\"mb-trava\">sugestão esperando a secretaria</span>" : ""}</span>
       <span class="mb-campo-acao"><span class="${escaparHtmlEbd(m[0])}">${escaparHtmlEbd(m[1])}</span>${c.modo !== "NAO" && !c.sugestaoPendente ? `<button type="button" class="btn-link" data-on-click="mvSugerirAcao" data-args-click="${argsAttr(c.chave)}">${c.modo === "MUDA" ? "Mudar" : "Sugerir"}</button>` : ""}</span></div>`;
   }).join("");
-  return `${mv.sugerir ? mvSugerirHtml() : ""}<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>✏️ O que eu posso mudar</h4><span class="mb-dica">igual para todos</span></header>
+  return `${mv.sugerir ? mvSugerirHtml() : ""}<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("lapis")} O que eu posso mudar</h4><span class="mb-dica">igual para todos</span></header>
     ${linhas || "<p class=\"subtitle\">Carregando…</p>"}
     <div class="mb-campo"><span class="mb-campo-rotulo">Congregação</span><span class="mb-campo-valor">${escaparHtmlEbd((mv.transf && mv.transf.congregacaoAtual) || "")}</span>
       <span class="mb-campo-acao"><span class="mb-chip mb-chip-azul">pela transferência</span><button type="button" class="btn-link" data-on-click="mvParteAcao" data-args-click="${argsAttr("transferencias")}">Pedir</button></span></div>
@@ -396,7 +396,7 @@ function mvSugerirHtml() {
     <form class="mc-form" data-on-submit="mvEnviarAcao" data-prevent="submit">
       <div class="mb-campo"><span class="mb-campo-rotulo">Hoje está</span><span class="mb-campo-valor">${atual ? escaparHtmlEbd(atual) : "<em class=\"mb-vazio\">vazio</em>"}</span><span></span></div>
       <div class="mc-campo"><label for="mvValor">${muda ? "O novo" : "O certo é"} *</label>${entrada}</div>
-      ${mv.erro ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(mv.erro)}</p>` : ""}
+      ${mv.erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(mv.erro)}</p>` : ""}
       <div class="mc-botoes"><button type="submit" class="btn-confirmar mb-btn">${muda ? "Salvar" : "Enviar para a secretaria"}</button>
         <button type="button" class="btn-link" data-on-click="mvSugerirAcao" data-args-click="${argsAttr("")}">Cancelar</button></div>
       ${muda ? "" : "<p class=\"mb-dica\">Você acompanha em \"Minhas sugestões\" e recebe o aviso quando for aplicada ou recusada (com o motivo).</p>"}
@@ -415,7 +415,7 @@ function mvTransferenciasHtml() {
     ${aberto ? "<p class=\"mc-aviso mc-aviso-atencao\">Você já tem um pedido esperando resposta.</p>" : `<form class="mc-form" data-on-submit="mvPedirTransferenciaAcao" data-prevent="submit">
       <div class="mc-grade"><div class="mc-campo"><label for="mvDestino">Quero ir para</label><select id="mvDestino" data-on-change="mvValorAcao" data-args-change="${argsAttr(ARG.valor)}"><option value="">— escolha —</option>${opcoes}</select></div></div>
       <p class="mb-dica">Na mesma área a mudança entra na hora; em áreas diferentes, a secretaria do destino aceita ou recusa, e até lá você continua onde está.</p>
-      ${mv.erro ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(mv.erro)}</p>` : ""}
+      ${mv.erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(mv.erro)}</p>` : ""}
       <div class="mc-botoes"><button type="submit" class="btn-confirmar mb-btn">Pedir a mudança</button></div></form>`}
     ${lista ? `<ul class="mc-meus">${lista}</ul>` : "<p class=\"mb-dica\">Nenhum pedido ainda.</p>"}</section>`;
 }
@@ -426,7 +426,7 @@ function mvSugestoesHtml() {
     itens.push(`<li><span><strong>${escaparHtmlEbd(c.rotulo || mbRotuloDaChave(c.nomeCampo, ""))}</strong>: ${escaparHtmlEbd(mbTextoDoValor(c.nomeCampo, c.valorProposto) || "—")}
       ${c.motivo ? `<span class="mb-dica"> · ${escaparHtmlEbd(c.motivo)}</span>` : ""}</span><span class="${escaparHtmlEbd(st[0])}">${escaparHtmlEbd(st[1])}</span></li>`);
   }
-  return `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>💬 Minhas sugestões</h4><button type="button" class="btn-link" data-on-click="mvParteAcao" data-args-click="${argsAttr("mudar")}">Sugerir outra ›</button></header>
+  return `<section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("envelope")} Minhas sugestões</h4><button type="button" class="btn-link" data-on-click="mvParteAcao" data-args-click="${argsAttr("mudar")}">Sugerir outra ›</button></header>
     ${itens.length ? `<ul class="mc-meus">${itens.join("")}</ul>` : "<p class=\"mb-dica\">Nenhuma sugestão ainda.</p>"}</section>`;
 }
 function mvParteAcao(parte) {

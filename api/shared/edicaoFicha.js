@@ -37,16 +37,26 @@ const CAMPOS = {
   igrejaAnterior: { coluna: "IgrejaAnterior", rotulo: "Igreja anterior", tipo: "texto", max: 150, grupo: "Vida espiritual", membro: "SUGERIR" },
   dataRitoRecebimento: { coluna: "DataRitoRecebimento", rotulo: "Rito de recebimento", tipo: "data", grupo: "Na igreja", membro: "SUGERIR" },
   nomeLidoRito: { coluna: "NomeLidoRito", rotulo: "Nome lido no rito", tipo: "texto", max: 200, grupo: "Na igreja", membro: "SUGERIR" },
-  ministranteRito: { coluna: "MinistranteRito", rotulo: "Ministrante do rito", tipo: "texto", max: 150, grupo: "Na igreja", membro: "SUGERIR" }
+  ministranteRito: { coluna: "MinistranteRito", rotulo: "Ministrante do rito", tipo: "texto", max: 150, grupo: "Na igreja", membro: "SUGERIR" },
+  // FASE 10, v10.1b (18/11/2026, as sobras do passo 7a): o resto do cadastro completo antigo também muda CAMPO A CAMPO — assim a ficha não tem mais o formulário
+  // que gravava tudo de uma vez (e que podia desfazer uma edição feita ao mesmo tempo). As mesmas travas do cadastro (GestaoPessoas): o cargo, "no cargo desde" e
+  // "dizimista fiel" só a Geral, e ninguém no próprio; a situação conta para a escada (com processo de cargo, só a Geral); a Extensão é da congregação da pessoa;
+  // a situação no rol muda entre ativo e inativo, e o falecimento registra a saída (os vínculos e a credencial caem, como no cadastro); voltar de uma saída é a
+  // readmissão (só a Geral). O desligamento continua no botão "Desligar do rol"; a licença, pela licença para candidatura.
+  situacaoMembro: { coluna: "SituacaoMembro", rotulo: "Situação", tipo: "situacao", grupo: "Na igreja", membro: "NAO", escada: true, proprioNao: true },
+  status: { coluna: "Status", rotulo: "Situação no rol", tipo: "status", grupo: "Na igreja", membro: "NAO", proprioNao: true },
+  extensaoId: { coluna: "ExtensaoId", rotulo: "Extensão da Tenda", tipo: "extensao", grupo: "Na igreja", membro: "NAO" },
+  dataAfastamento: { coluna: "DataAfastamento", rotulo: "Data do afastamento", tipo: "data", grupo: "Na igreja", membro: "NAO" },
+  cargoMinisterial: { coluna: "CargoMinisterial", rotulo: "Cargo", tipo: "cargo", grupo: "Na igreja", membro: "NAO", soGeral: true, proprioNao: true },
+  cargoDesde: { coluna: null, rotulo: "No cargo desde", tipo: "data", grupo: "Na igreja", membro: "NAO", soGeral: true, proprioNao: true },
+  dizimistaFiel: { coluna: "DizimistaFiel", rotulo: "Dizimista fiel", tipo: "simnao", grupo: "Na igreja", membro: "NAO", soGeral: true, proprioNao: true }
 };
+// A situação no rol que a ficha muda por aqui (o desligamento tem botão próprio; a licença vem da licença para candidatura)
+const STATUS_DA_FICHA = ["ATIVO", "INATIVO", "FALECIDO"];
+const STATUS_DE_SAIDA = ["DESLIGADO", "FALECIDO"];
 // O que NÃO muda por aqui e por onde muda (a tela mostra o caminho certo). Sem protótipo: "constructor" ou "__proto__" vindos de fora não viram mensagem.
 const OUTRO_CAMINHO = Object.assign(Object.create(null), {
   congregacaoId: "A congregação muda pela transferência.",
-  cargoMinisterial: "O cargo muda pela esteira de consagração (a Secretaria Geral corrige no cadastro completo).",
-  status: "A situação no rol muda pelo desligamento, pela carta ou pelo processo.",
-  situacaoMembro: "A situação no rol muda pelo desligamento, pela carta ou pelo processo.",
-  dizimistaFiel: "\"Dizimista fiel\" só a Secretaria Geral afirma, no cadastro completo.",
-  extensaoId: "A Extensão da Tenda muda pelo cadastro completo ou pela transferência.",
   motivoSaida: "A saída é registrada pelo desligamento.",
   dataSaida: "A saída é registrada pelo desligamento."
 });
@@ -125,6 +135,24 @@ function validar(chave, valor, hoje) {
     return id ? { ok: true, valor: id } : { ok: false, mensagem: "Departamento inválido." };
   }
   if (c.tipo === "cpf") { const r = lerCpf(valor); return r.ok ? { ok: true, valor: r.cpf } : { ok: false, mensagem: r.mensagem }; }
+  // os campos que vieram do cadastro completo (as sobras do passo 7a): o banco confere o catálogo (situação, cargo, Extensão) na gravação
+  if (c.tipo === "simnao") {
+    if (vazio(valor)) return { ok: true, valor: null };
+    if (valor === true || valor === "true" || valor === "sim" || valor === 1 || valor === "1") return { ok: true, valor: true };
+    if (valor === false || valor === "false" || valor === "nao" || valor === "não" || valor === 0 || valor === "0") return { ok: true, valor: false };
+    return { ok: false, mensagem: `${c.rotulo}: escolha sim, não ou não informado.` };
+  }
+  if (c.tipo === "extensao") {
+    if (vazio(valor)) return { ok: true, valor: null };
+    const id = auth.idDeRota(valor);
+    return id ? { ok: true, valor: id } : { ok: false, mensagem: "Extensão da Tenda inválida." };
+  }
+  if (c.tipo === "situacao" || c.tipo === "cargo" || c.tipo === "status") {
+    if (vazio(valor)) return c.tipo === "cargo" ? { ok: true, valor: null } : { ok: false, mensagem: `${c.rotulo}: escolha uma opção.` };
+    if (typeof valor !== "string" || !/^[A-Z][A-Z_ÇÃ]{1,29}$/.test(valor.trim())) return { ok: false, mensagem: `${c.rotulo}: escolha uma opção da lista.` };
+    if (c.tipo === "status" && !STATUS_DA_FICHA.includes(valor.trim())) return { ok: false, mensagem: "Situação no rol: ativo, inativo ou falecido (o desligamento tem botão próprio; a licença vem da licença para candidatura)." };
+    return { ok: true, valor: valor.trim() };
+  }
   if (c.tipo === "filiacao") { const r = lerNomeFiliacao(valor, c.quem); return r.ok ? { ok: true, valor: r.nome } : { ok: false, mensagem: r.mensagem }; }
   if (valor !== null && valor !== undefined && typeof valor !== "string" && typeof valor !== "number") return { ok: false, mensagem: `${c.rotulo}: valor inválido.` };
   const txt = vazio(valor) ? null : String(valor).replace(/\s+/g, " ").trim();
@@ -175,5 +203,5 @@ function mascarar(chave, v) {
   return v;
 }
 
-module.exports = { CAMPOS, OUTRO_CAMINHO, ESTADOS_CIVIS, FORMAS_ADMISSAO, ehCampo, papelNaFicha, podeAplicarSugestao, podeSecretariaMudar, modoDoMembro, tabelaDePapeis,
+module.exports = { CAMPOS, OUTRO_CAMINHO, ESTADOS_CIVIS, FORMAS_ADMISSAO, STATUS_DA_FICHA, STATUS_DE_SAIDA, ehCampo, papelNaFicha, podeAplicarSugestao, podeSecretariaMudar, modoDoMembro, tabelaDePapeis,
   validar, valorParaTexto, mascarar, vazio, dataISOValida };

@@ -283,7 +283,7 @@ function moverFormPessoaPara(slotId) {
 // FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
 const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
   precadastro: "Pré-cadastro rápido", transferencias: "Mudanças de congregação", buscar: "Importar e exportar",
-  aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado" };
+  aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado", repetidas: "Fichas repetidas" };
 
 function mostrarSubAbaPessoas(sub) {
   // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
@@ -304,6 +304,8 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
   document.getElementById("subPessoasTransferencias").style.display = sub === "transferencias" ? "block" : "none";
   document.getElementById("btnSubPessoasTransferencias").classList.toggle("ativo", sub === "transferencias");
+  document.getElementById("subPessoasRepetidas").style.display = sub === "repetidas" ? "block" : "none";   // passo 6: juntar fichas
+  document.getElementById("btnSubPessoasRepetidas").classList.toggle("ativo", sub === "repetidas");
   document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
   document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
@@ -329,6 +331,7 @@ function mostrarSubAbaPessoas(sub) {
   if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
   if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
   if (sub === "transferencias" && typeof mtAbrirTransferencias === "function") mtAbrirTransferencias();
+  if (sub === "repetidas" && typeof mjAbrir === "function" && !(typeof mjEstado !== "undefined" && mjEstado.aberto)) mjAbrir();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();

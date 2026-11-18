@@ -63,7 +63,7 @@ beforeEach(() => {
   FICHAS = { 5: fichaBase({ Nome: "Dirigente Central" }), 10: fichaBase(), 20: fichaBase({ Nome: "Beto", CongregacaoNome: "Vila Nova" }) };
   // carregarPessoa (o escopo) e a ficha inteira (lerFicha, com ou sem trava)
   quando(/SELECT m\.MembroId, m\.Nome, m\.Status, c\.Nome AS CongregacaoNome/, (i) => (FICHAS[i.id] ? [{ MembroId: i.id, ...FICHAS[i.id] }] : []));
-  quando(/SELECT m\.MembroId, m\.Status, m\.Nome, m\.DataNascimento/, (i) => (FICHAS[i.id] ? [{ MembroId: i.id, ...FICHAS[i.id] }] : []));
+  quando(/SELECT m\.MembroId, m\.Status AS StatusAtual, m\.CongregacaoId, m\.Nome, m\.DataNascimento/, (i) => (FICHAS[i.id] ? [{ MembroId: i.id, StatusAtual: FICHAS[i.id].Status, CongregacaoId: 1, ...FICHAS[i.id] }] : []));
 });
 
 describe("regras puras (shared/edicaoFicha.js)", () => {
@@ -99,7 +99,10 @@ describe("regras puras (shared/edicaoFicha.js)", () => {
   });
   test("o que não muda por aqui diz o caminho certo (congregação, cargo, situação)", () => {
     expect(regras.podeSecretariaMudar("congregacaoId", ctx({ papel: "GERAL" }))).toEqual({ pode: false, motivo: "A congregação muda pela transferência." });
-    expect(regras.podeSecretariaMudar("cargoMinisterial", ctx({ papel: "GERAL" })).motivo).toMatch(/consagração/);
+    // (18/11/2026, as sobras do passo 7a) o cargo agora muda campo a campo — só a Secretaria Geral, e ninguém no próprio
+    expect(regras.podeSecretariaMudar("cargoMinisterial", ctx({ papel: "GERAL" })).pode).toBe(true);
+    expect(regras.podeSecretariaMudar("cargoMinisterial", ctx()).motivo).toMatch(/Geral/);
+    expect(regras.podeSecretariaMudar("motivoSaida", ctx({ papel: "GERAL" })).motivo).toMatch(/desligamento/);
     expect(regras.podeSecretariaMudar("constructor", ctx({ papel: "GERAL" })).pode).toBe(false);
     for (const k of ["constructor", "__proto__", "toString"]) expect(typeof regras.podeSecretariaMudar(k, ctx({ papel: "GERAL" })).motivo).toBe("string");
   });
@@ -225,7 +228,7 @@ describe("EdicaoFicha — a secretaria, campo a campo", () => {
     expect((await campo(LOCAL(), 10, { campo: "cpf", valor: "111.444.777-35" })).status).toBe(403);
     expect((await campo(LOCAL(), 5, { campo: "dataNascimento", valor: "1980-01-01" })).status).toBe(403);
     expect((await campo(LOCAL(), 10, { campo: "congregacaoId", valor: 2 })).status).toBe(422);
-    expect((await campo(LOCAL(), 10, { campo: "cargoMinisterial", valor: "PASTOR" })).status).toBe(422);
+    expect((await campo(LOCAL(), 10, { campo: "cargoMinisterial", valor: "PASTOR" })).status).toBe(403);   // (18/11) o cargo muda campo a campo, só a Geral
     expect(rodou(/UPDATE MembroReferencia/)).toHaveLength(0);
     const g = await campo(GERAL(), 10, { campo: "nome", valor: "Ana Maria" });
     expect(g.body.sucesso).toBe(true);
@@ -254,7 +257,7 @@ describe("EdicaoFicha — a secretaria, campo a campo", () => {
     expect(r.body.quemMudaOQue.length).toBe(Object.keys(regras.CAMPOS).length);
   });
   test("GET alteracoes: paginado, sem CPF inteiro", async () => {
-    quando(/FROM AuditLog WHERE RegistroId = @id/, () => [[{ total: 1 }], [{ AuditId: 7, DataHora: "2026-11-18T10:00:00", Acao: "Atualizou pessoa", UsuarioId: 5, UsuarioNome: "Dirigente Central",
+    quando(/WITH trilha AS/, () => [[{ total: 1 }], [{ AuditId: 7, DataHora: "2026-11-18T10:00:00", Acao: "Atualizou pessoa", UsuarioId: 5, UsuarioNome: "Dirigente Central",
       DadosAntes: null, DadosDepois: JSON.stringify({ cpf: "52998224725", nome: "Ana" }) }]]);
     const r = await chamar(hFicha, { token: LOCAL(), ligado: { membroId: "10", acao: "alteracoes" }, query: { pagina: "1", porPagina: "500" } });
     expect(r.body).toMatchObject({ sucesso: true, total: 1, porPagina: 100 });
@@ -328,7 +331,7 @@ describe("SolicitarEdicaoPessoa — a sugestão do membro", () => {
     expect((await sugerir({ escolaridade: "MEDIO_COMPLETO" })).body.mensagem).toMatch(/está vazio/);
     expect((await sugerir({ departamentoId: 3 })).body.mensagem).toMatch(/secretaria/);
     expect((await sugerir({ dataBatismo: "2099-01-01" })).body.sucesso).toBe(false);
-    expect((await sugerir({ cargoMinisterial: "PASTOR" })).body.mensagem).toMatch(/consagração/);
+    expect((await sugerir({ cargoMinisterial: "PASTOR" })).body.mensagem).toMatch(/secretaria/);
     expect(escritas()).toHaveLength(0);
   });
   test("a resposta da secretaria (o motivo da recusa) chega ao membro; quem decidiu não", async () => {

@@ -36,7 +36,7 @@ module.exports = async function (context, req) {
     if (!ficha) { context.res = { status: 200, body: NAO_ENCONTRADA }; return; }
     const papel = regras.papelNaFicha(usuario);
     context.res = { status: 200, headers: semCache, body: { sucesso: true, membroId, papel, emProcessoDeCargo: ficha.emProcessoDeCargo,
-      campos: db.camposParaSecretaria(ficha, papel, Number(membroId) === Number(usuario.membroId)), quemMudaOQue: regras.tabelaDePapeis(), outrosCaminhos: regras.OUTRO_CAMINHO } };
+      campos: db.camposParaSecretaria(ficha, papel, Number(membroId) === Number(usuario.membroId), await db.opcoesDaFicha(() => pool.request(), ficha)), quemMudaOQue: regras.tabelaDePapeis(), outrosCaminhos: regras.OUTRO_CAMINHO } };
     return;
   }
 

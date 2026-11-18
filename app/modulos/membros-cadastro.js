@@ -149,18 +149,18 @@ function mcBarraHtml() {
   if (!c) return "";
   const itens = [];
   const cpf = c.cpf || {};
-  if (c.erro) itens.push(`<div class="mc-aviso mc-aviso-info">ℹ️ ${escaparHtmlEbd(c.erro)}</div>`);
-  if (cpf.situacao === "INVALIDO") itens.push(`<div class="mc-aviso mc-aviso-erro">⚠️ ${escaparHtmlEbd(cpf.mensagem || "CPF inválido.")}</div>`);
+  if (c.erro) itens.push(`<div class="mc-aviso mc-aviso-info">${mbIc("ajudaQ")} ${escaparHtmlEbd(c.erro)}</div>`);
+  if (cpf.situacao === "INVALIDO") itens.push(`<div class="mc-aviso mc-aviso-erro">${mbIc("alerta")} ${escaparHtmlEbd(cpf.mensagem || "CPF inválido.")}</div>`);
   if (cpf.situacao === "NO_ESCOPO") {
-    itens.push(`<div class="mc-aviso mc-aviso-erro">⛔ ${escaparHtmlEbd(cpf.mensagem || "Este CPF já está noutra ficha.")}
+    itens.push(`<div class="mc-aviso mc-aviso-erro">${mbIc("cadeado")} ${escaparHtmlEbd(cpf.mensagem || "Este CPF já está noutra ficha.")}
       <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(cpf.matricula))}">Ir para a ficha ${mbNum(cpf.matricula)} ›</button>
       <span class="mc-aviso-nota">Este cadastro não pode ser concluído com esse CPF.</span></div>`);
   }
-  if (cpf.situacao === "FORA_DO_ESCOPO") itens.push(`<div class="mc-aviso mc-aviso-erro">⛔ ${escaparHtmlEbd(cpf.mensagem || "Este CPF já tem cadastro.")} <span class="mc-aviso-nota">Este cadastro não pode ser concluído com esse CPF.</span></div>`);
-  if (cpf.situacao === "LIVRE") itens.push("<div class=\"mc-aviso mc-aviso-ok\">✓ CPF conferido: não está em nenhuma outra ficha.</div>");
+  if (cpf.situacao === "FORA_DO_ESCOPO") itens.push(`<div class="mc-aviso mc-aviso-erro">${mbIc("cadeado")} ${escaparHtmlEbd(cpf.mensagem || "Este CPF já tem cadastro.")} <span class="mc-aviso-nota">Este cadastro não pode ser concluído com esse CPF.</span></div>`);
+  if (cpf.situacao === "LIVRE") itens.push("<div class=\"mc-aviso mc-aviso-ok\">" + mbIc("check") + " CPF conferido: não está em nenhuma outra ficha.</div>");
   const parecidos = Array.isArray(c.parecidos) ? c.parecidos : [];
   if (parecidos.length) {
-    itens.push(`<div class="mc-aviso mc-aviso-atencao">⚠️ Nome e nascimento parecidos com quem já está no cadastro — confira se não é a mesma pessoa:
+    itens.push(`<div class="mc-aviso mc-aviso-atencao">${mbIc("alerta")} Nome e nascimento parecidos com quem já está no cadastro — confira se não é a mesma pessoa:
       ${parecidos.map((p) => `<button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(p.matricula))}">${escaparHtmlEbd(p.nome)} (${mbNum(p.matricula)}${p.congregacao ? ` · ${escaparHtmlEbd(p.congregacao)}` : ""}) ›</button>`).join(" ")}</div>`);
   }
   return itens.join("");
@@ -170,7 +170,7 @@ function mcDesenharCadastro() {
   if (!caixa) return;
   if (mcCad.feito) {
     caixa.innerHTML = `${mbTopoHtml("Cadastrar pessoa", "Cadastro concluído", "")}
-      <div class="mb-cartao mc-feito"><p class="mc-feito-titulo">✅ ${escaparHtmlEbd(mcCad.feito.mensagem)}</p>
+      <div class="mb-cartao mc-feito"><p class="mc-feito-titulo">${mbIc("check")} ${escaparHtmlEbd(mcCad.feito.mensagem)}</p>
         <div class="mc-botoes">${mcCad.feito.matricula ? `<button type="button" class="btn-confirmar mb-btn" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mcCad.feito.matricula)}">Abrir a ficha</button>` : ""}
         <button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mcNovoCadastroAcao">Cadastrar outra pessoa</button></div></div>`;
     return;
@@ -187,7 +187,7 @@ function mcDesenharCadastro() {
     <div class="mc-cadastro">
       <form class="mb-cartao mc-form" data-on-submit="mcProximoAcao" data-prevent="submit">
         ${mcFormEtapa()}
-        ${mcCad.erro ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(mcCad.erro)}</p>` : ""}
+        ${mcCad.erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(mcCad.erro)}</p>` : ""}
         <div class="mc-botoes">
           ${i > 0 ? "<button type=\"button\" class=\"btn-confirmar btn-secundario mb-btn\" data-on-click=\"mcVoltarAcao\">Voltar</button>" : ""}
           <button type="submit" class="btn-confirmar mb-btn"${(ultima && bloqueia) || mcCad.salvando ? " disabled" : ""}>${ultima ? (mcCad.salvando ? "Salvando…" : "Salvar o cadastro") : `Próximo: ${escaparHtmlEbd(MC_ETAPAS[i + 1][1])}`}</button>
@@ -371,14 +371,14 @@ function mcDesenharFila() {
   const hoje = mcFila.aceitos.filter((p) => mcQuandoFoi(p.decididoEm || p.criadoEm) === "hoje");
   const aceitosCartoes = mcFila.aceitos.slice(0, 6).map((p) => `<button type="button" class="mc-cartao mc-cartao-aceito" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(p.matricula))}"${p.matricula ? "" : " disabled"}>
       <span class="mc-cartao-nome">✓ ${escaparHtmlEbd(p.nome || "")}</span><span class="mb-dica">${escaparHtmlEbd(MC_ORIGEM[p.origem] || "")} · matrícula ${mbNum(p.matricula)}</span></button>`);
-  const casos = mcFila.casos.length ? `<section class="mb-cartao mc-casos"><header class="mb-cartao-cabeca"><h4>⚖️ CPF repetido fora do escopo de quem cadastrou</h4><span class="mb-dica">só a Secretaria Geral</span></header>
+  const casos = mcFila.casos.length ? `<section class="mb-cartao mc-casos"><header class="mb-cartao-cabeca"><h4>${mbIc("balanca")} CPF repetido fora do escopo de quem cadastrou</h4><span class="mb-dica">só a Secretaria Geral</span></header>
     ${mcFila.casos.map((k) => `<div class="mc-caso"><span><strong>${escaparHtmlEbd(k.nomeInformado || "")}</strong> <span class="mb-dica">tentou entrar com o CPF da ficha</span>
       <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(k.fichaExistente && k.fichaExistente.matricula))}">${escaparHtmlEbd((k.fichaExistente && k.fichaExistente.nome) || "")} (${mbNum(k.fichaExistente && k.fichaExistente.matricula)}) ›</button></span>
       <button type="button" class="btn-confirmar btn-secundario mb-btn-pequeno" data-on-click="mcResolverCasoAcao" data-args-click="${argsAttr(k.casoId)}">Dar por resolvido</button></div>`).join("")}</section>` : "";
   caixa.innerHTML = `
     ${mbTopoHtml("Fila de cadastros", `${mbTextoEscopo(mbPainel.dados || {}, "")} · hoje: ${mbFmt(hoje.length)} ${mbPlural(hoje.length, "entrou sozinho", "entraram sozinhos")} · ${mbFmt(mcFila.total)} com pendência`,
-      `<button type="button" class="btn-confirmar mb-btn" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("precadastro")}">＋ Pré-cadastro rápido</button>`)}
-    ${mcFila.erro ? `<p class="subtitle aviso-recusa">⚠️ ${escaparHtmlEbd(mcFila.erro)}</p>` : ""}
+      `<button type="button" class="btn-confirmar mb-btn" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("precadastro")}">${mbIc("mais")} Pré-cadastro rápido</button>`)}
+    ${mcFila.erro ? `<p class="subtitle aviso-recusa">${mbIc("alerta")} ${escaparHtmlEbd(mcFila.erro)}</p>` : ""}
     <div class="mc-numeros">
       <div class="mb-cartao mb-numero"><span class="mb-numero-rotulo">Entraram sozinhos</span><strong class="mb-numero-valor mb-cor-verde">${mbFmt(hoje.length)}</strong><span class="mb-numero-detalhe">hoje</span></div>
       <div class="mb-cartao mb-numero"><span class="mb-numero-rotulo">Com pendência</span><strong class="mb-numero-valor mc-cor-ambar">${mbFmt(mcFila.total)}</strong><span class="mb-numero-detalhe">${mbFmt(meus.length)} esperando você</span></div>
@@ -410,10 +410,10 @@ function mcDesenharPedido() {
   };
   const r = p.repetido;
   const repetidoHtml = r ? (r.matricula
-    ? `<div class="mc-aviso mc-aviso-erro">⛔ Este CPF já está na ficha de ${escaparHtmlEbd(r.nome || "")} (matrícula ${mbNum(r.matricula)}${r.congregacao ? ` · ${escaparHtmlEbd(r.congregacao)}` : ""}).
+    ? `<div class="mc-aviso mc-aviso-erro">${mbIc("cadeado")} Este CPF já está na ficha de ${escaparHtmlEbd(r.nome || "")} (matrícula ${mbNum(r.matricula)}${r.congregacao ? ` · ${escaparHtmlEbd(r.congregacao)}` : ""}).
         <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(r.matricula))}">Ir para a ficha ›</button>
         <span class="mc-aviso-nota">Corrija junto com o cadastro mais antigo: se for a mesma pessoa, descarte este pedido.</span></div>`
-    : r.foraDoEscopo ? `<div class="mc-aviso mc-aviso-erro">⛔ ${escaparHtmlEbd(r.mensagem || "")}</div>` : "<div class=\"mc-aviso mc-aviso-atencao\">⚠️ Este CPF está noutro pré-cadastro aberto: resolva primeiro o mais antigo.</div>") : "";
+    : r.foraDoEscopo ? `<div class="mc-aviso mc-aviso-erro">${mbIc("cadeado")} ${escaparHtmlEbd(r.mensagem || "")}</div>` : "<div class=\"mc-aviso mc-aviso-atencao\">" + mbIc("alerta") + " Este CPF está noutro pré-cadastro aberto: resolva primeiro o mais antigo.</div>") : "";
   caixa.innerHTML = `
     <nav class="mb-trilha"><button type="button" class="btn-link" data-on-click="mcFecharPedidoAcao">← Fila de cadastros</button><span>›</span><span>${escaparHtmlEbd(p.nome || "Pedido")}</span></nav>
     <div class="mc-pedido">
@@ -435,7 +435,7 @@ function mcDesenharPedido() {
           <textarea id="mcMotivoDescarte" maxlength="300" rows="2" data-on-input="mcPedidoMotivoAcao" data-args-input="${argsAttr(ARG.valor)}">${escaparHtmlEbd(mcFila.motivo)}</textarea>
           <button type="button" class="btn-confirmar btn-perigo mb-btn-pequeno" data-on-click="mcDescartarAcao">Descartar</button></details>`
     : "<p class=\"mb-dica\">Quem completa, aceita ou descarta é a secretaria da congregação (ou a Secretaria Geral). Você acompanha.</p>"}
-        ${mcFila.erroPedido ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(mcFila.erroPedido)}</p>` : ""}
+        ${mcFila.erroPedido ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(mcFila.erroPedido)}</p>` : ""}
       </section>
     </div>`;
 }
@@ -519,10 +519,10 @@ function mcDesenharPreCadastro() {
     <select id="mcPre_${c}" data-on-change="mcPreCampoAcao" data-args-change="${argsAttr(c, ARG.valor)}">${mcOpcoes(mapa, d[c], "— se souber —")}</select></div>`;
   const r = mcPre.resultado;
   const resultado = r ? (r.situacao === "ACEITO"
-    ? `<div class="mc-aviso mc-aviso-ok">✅ Entrou sozinho: matrícula ${mbNum(r.matricula)}. <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(r.matricula))}">Abrir a ficha ›</button></div>`
-    : r.situacao ? `<div class="mc-aviso mc-aviso-atencao">📝 Foi para a fila de cadastros: ${escaparHtmlEbd(((r.preCadastro && r.preCadastro.pendencias) || []).map((x) => x.rotulo).join("; ") || "a secretaria confere")}.
+    ? `<div class="mc-aviso mc-aviso-ok">${mbIc("check")} Entrou sozinho: matrícula ${mbNum(r.matricula)}. <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(mbNum(r.matricula))}">Abrir a ficha ›</button></div>`
+    : r.situacao ? `<div class="mc-aviso mc-aviso-atencao">${mbIc("doc")} Foi para a fila de cadastros: ${escaparHtmlEbd(((r.preCadastro && r.preCadastro.pendencias) || []).map((x) => x.rotulo).join("; ") || "a secretaria confere")}.
       <button type="button" class="btn-link" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("fila")}">Ver a fila ›</button></div>`
-      : `<div class="mc-aviso mc-aviso-erro">⚠️ ${escaparHtmlEbd(r.mensagem || "Não deu para enviar.")}</div>`) : "";
+      : `<div class="mc-aviso mc-aviso-erro">${mbIc("alerta")} ${escaparHtmlEbd(r.mensagem || "Não deu para enviar.")}</div>`) : "";
   caixa.innerHTML = `
     ${mbTopoHtml("Pré-cadastro rápido", "Uma tela só: o mínimo para a pessoa não se perder. Completo, entra sozinho; faltando algo, vai para a fila.", "")}
     <div class="mc-pre">

@@ -189,9 +189,14 @@ async function avaliar(rq, usuario, idA, idB) {
   // os campos: só os diferentes vão para a tela (os iguais só contados)
   const nomes = await nomesDosCampos(rq, [fica, sai]);
   const campos = [];
+  const iguaisLista = [];
   let iguais = 0;
   for (const chave of Object.keys(R.CAMPOS)) {
-    if (R.iguais(chave, fica, sai)) { iguais++; continue; }
+    if (R.iguais(chave, fica, sai)) {
+      iguais++;
+      iguaisLista.push({ campo: chave, rotulo: R.CAMPOS[chave].rotulo, valor: R.valorParaTela(chave, fica, { podeDisciplina, nomes }) });
+      continue;
+    }
     const p = R.podeEscolher(chave, { papel, ehProprio, valorFica: R.valorDoCampo(chave, fica), emProcessoDeCargo, temExclusao });
     // o CPF: os dois preenchidos e diferentes = um deles está errado; quem escolhe é a Geral (o vazio, qualquer secretaria preenche — a regra do passo 5)
     campos.push({ campo: chave, rotulo: R.CAMPOS[chave].rotulo, grupo: R.CAMPOS[chave].grupo,
@@ -232,7 +237,7 @@ async function avaliar(rq, usuario, idA, idB) {
   const arquivadas = conflitos.filter((c) => c.politica === "ARQUIVAR").reduce((s, c) => s + c.linhas.length, 0);
   const descartadas = conflitos.filter((c) => c.politica === "DESCARTAR").reduce((s, c) => s + c.linhas.length, 0);
   return {
-    fica, sai, papel, geral, podeDisciplina, emProcessoDeCargo, temExclusao, campos, iguais, bloqueios, mapa, contagens, conflitos,
+    fica, sai, papel, geral, podeDisciplina, emProcessoDeCargo, temExclusao, campos, iguais, iguaisLista, bloqueios, mapa, contagens, conflitos,
     previa: R.previaParaTela([...porTabela.entries()].map(([t, n]) => ({ t, n }))), arquivadas, descartadas,
     versao: versaoDaDupla(fica, sai)
   };
@@ -260,7 +265,7 @@ async function comparar(pool, usuario, a, b) {
 function paraTela(av) {
   const resumo = (l) => ({ matricula: l.MembroId, nome: l.NomeAtual, congregacao: l.CongregacaoNome || null, criadaEm: l.CriadoEm ? new Date(l.CriadoEm).toISOString().slice(0, 10) : null });
   return {
-    fica: resumo(av.fica), sai: resumo(av.sai), campos: av.campos, iguais: av.iguais, bloqueios: av.bloqueios, podeJuntar: av.bloqueios.length === 0,
+    fica: resumo(av.fica), sai: resumo(av.sai), campos: av.campos, iguais: av.iguais, iguaisLista: av.iguaisLista, bloqueios: av.bloqueios, podeJuntar: av.bloqueios.length === 0,
     previa: av.previa, arquivadas: av.arquivadas, descartadas: av.descartadas, versao: av.versao, papel: av.papel
   };
 }
@@ -581,6 +586,9 @@ async function listarCandidatos(pool, usuario, { limite = 200 } = {}) {
       ${filtro}
     ), pares AS (
       SELECT a.MembroId AS A, b.MembroId AS B, N'NOME_NASCIMENTO' AS Motivo FROM base a JOIN base b ON a.MembroId < b.MembroId AND a.DataNascimento = b.DataNascimento AND a.Chave = b.Chave
+        -- (a dupla que alguém já disse que NÃO é a mesma pessoa sai da conta automática; se alguém MARCAR de novo, ela volta pela marcação abaixo)
+        AND NOT EXISTS (SELECT 1 FROM FichasPendencias n WHERE n.Tipo = N'REPETIDA' AND n.Situacao = N'RESOLVIDA' AND n.Resolucao = N'NAO_E_A_MESMA'
+                        AND ((n.MembroId = a.MembroId AND n.OutroMembroId = b.MembroId) OR (n.MembroId = b.MembroId AND n.OutroMembroId = a.MembroId)))
       UNION
       SELECT CASE WHEN p.MembroId < p.OutroMembroId THEN p.MembroId ELSE p.OutroMembroId END, CASE WHEN p.MembroId < p.OutroMembroId THEN p.OutroMembroId ELSE p.MembroId END, N'MARCADA'
       FROM FichasPendencias p WHERE p.Situacao = N'ABERTA' AND p.Tipo = N'REPETIDA'
@@ -589,8 +597,6 @@ async function listarCandidatos(pool, usuario, { limite = 200 } = {}) {
     SELECT TOP (@lim) x.A, x.B, MAX(x.Motivo) AS Motivo, a.Nome AS NomeA, b.Nome AS NomeB, a.CongregacaoNome AS CongA, b.CongregacaoNome AS CongB,
            a.ExtensaoNome AS ExtA, b.ExtensaoNome AS ExtB, CONVERT(varchar(10), a.DataNascimento, 120) AS NascA, CONVERT(varchar(10), b.DataNascimento, 120) AS NascB
     FROM pares x JOIN base a ON a.MembroId = x.A JOIN base b ON b.MembroId = x.B
-    WHERE NOT EXISTS (SELECT 1 FROM FichasPendencias n WHERE n.Tipo = N'REPETIDA' AND n.Situacao = N'RESOLVIDA' AND n.Resolucao = N'NAO_E_A_MESMA'
-                      AND ((n.MembroId = x.A AND n.OutroMembroId = x.B) OR (n.MembroId = x.B AND n.OutroMembroId = x.A)))
     GROUP BY x.A, x.B, a.Nome, b.Nome, a.CongregacaoNome, b.CongregacaoNome, a.ExtensaoNome, b.ExtensaoNome, a.DataNascimento, b.DataNascimento
     ORDER BY a.Nome, x.A`);
   return r.recordset
@@ -711,7 +717,7 @@ function textoDoAlerta(c) {
   if (c.possiveis) partes.push(`${c.possiveis} ${c.possiveis === 1 ? "dupla de fichas com o mesmo nome e nascimento" : "duplas de fichas com o mesmo nome e nascimento"} sem conferir`);
   if (c.numero) partes.push(`${c.numero} ${c.numero === 1 ? "ficha com o número a acertar" : "fichas com o número a acertar"}`);
   const precisa = partes.length > 0;
-  const arrol = c.arrolamento ? ` Além disso, ${c.arrolamento} ${c.arrolamento === 1 ? "pessoa ainda espera" : "pessoas ainda esperam"} o arrolamento e não ${c.arrolamento === 1 ? "vota" : "votam"}.` : "";
+  const arrol = c.arrolamento ? ` Além disso, ${c.arrolamento} ${c.arrolamento === 1 ? "pessoa ainda espera" : "pessoas ainda esperam"} o arrolamento (a situação e a entrada a completar).` : "";
   return { precisaConfirmar: precisa, mensagem: precisa ? `Há cadastros a acertar antes da assembleia: ${partes.join(", ")}. A mesma pessoa pode estar com duas fichas (e votar duas vezes).${arrol} Confirme para continuar mesmo assim.` : arrol.trim() || null };
 }
 

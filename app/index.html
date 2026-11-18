@@ -266,6 +266,8 @@
               <button class="btn-subaba" id="btnSubPessoasTransferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'><span class="icone" data-icone="transferir" aria-hidden="true"></span><span class="rotulo">Mudanças de congregação</span></button>
               <button class="btn-subaba" id="btnSubPessoasAprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'><span class="icone" data-icone="lapis" aria-hidden="true"></span><span class="rotulo">Sugestões dos membros</span></button>
               <button class="btn-subaba" id="btnSubPessoasBuscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'><span class="icone" data-icone="planilha" aria-hidden="true"></span><span class="rotulo">Importar e exportar</span></button>
+              <!-- passo 6: juntar fichas repetidas (modulos/membros-juntar.js) -->
+              <button class="btn-subaba" id="btnSubPessoasRepetidas" data-on-click="mostrarSubAbaPessoas" data-args-click='["repetidas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Fichas repetidas</span></button>
               <button class="btn-subaba" id="btnSubPessoasCredenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;"><span class="icone" data-icone="cartao" aria-hidden="true"></span><span class="rotulo">Credenciais</span></button>
               <button class="btn-subaba" id="btnSubPessoasDiscipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'><span class="icone" data-icone="broto" aria-hidden="true"></span><span class="rotulo">Discipulado</span></button>
             </div>
@@ -2222,6 +2224,7 @@
           <button type="button" class="mb-pilula" data-sub="transferencias" data-on-click="mostrarSubAbaPessoas" data-args-click='["transferencias"]'>Transferências</button>
           <button type="button" class="mb-pilula" data-sub="aprovacoes" data-on-click="mostrarSubAbaPessoas" data-args-click='["aprovacoes"]'>Sugestões</button>
           <button type="button" class="mb-pilula" data-sub="discipulado" data-on-click="mostrarSubAbaPessoas" data-args-click='["discipulado"]'>Discipulado</button>
+          <button type="button" class="mb-pilula" data-sub="repetidas" data-on-click="mostrarSubAbaPessoas" data-args-click='["repetidas"]'>Repetidas</button>
           <button type="button" class="mb-pilula" data-sub="credenciais" data-on-click="mostrarSubAbaPessoas" data-args-click='["credenciais"]' style="display:none;">Credenciais</button>
           <button type="button" class="mb-pilula" data-sub="buscar" data-on-click="mostrarSubAbaPessoas" data-args-click='["buscar"]'>Planilha</button>
         </nav>
@@ -2239,6 +2242,7 @@
           <div class="mb-ficha">
             <div class="mb-ficha-principal">
               <div id="mbFichaCabeca"></div>
+              <div id="mbFichaPendencias"></div>
               <div id="mbFichaCorpo"></div>
               <div id="mbFichaAntigas" class="mb-ficha-antigas" style="display:none;"><h4 id="mbFichaAntigasTitulo" class="mb-parte-titulo"></h4></div>
             </div>
@@ -2252,6 +2256,8 @@
         <div id="subPessoasPreCadastro" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
         <!-- FASE 10, passo 7a, incremento 3 — as MUDANÇAS DE CONGREGAÇÃO (rodada 8: chegando, saindo, concluídos; acompanhar o pedido) — modulos/membros-movimento.js -->
         <div id="subPessoasTransferencias" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
+        <!-- FASE 10, passo 6 — JUNTAR FICHAS REPETIDAS (rodada 8, opção 3: só o que é diferente) — modulos/membros-juntar.js -->
+        <div id="subPessoasRepetidas" class="sub-aba-secretaria mb-tela" style="display:none;"></div>
 
         <!-- SUB-ABA: CADASTRAR PESSOA — desde o passo 7a, o cadastro EM ETAPAS com a prévia da ficha e a barra que confere nome, nascimento e CPF
              (modulos/membros-cadastro.js); o formulário completo de antes fica embaixo, aberto só quando pedido -->
@@ -7838,6 +7844,7 @@
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
   <script src="modulos/membros-cadastro.js"></script>
+  <script src="modulos/membros-juntar.js"></script>
   <script src="modulos/membros-movimento.js"></script>
   <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>

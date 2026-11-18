@@ -30,7 +30,7 @@ const MB_ROTULO_CHAVE = {
 const MB_GRUPOS_FICHA = ["Dados pessoais", "Filiação", "Contato", "Na igreja", "Vida espiritual"];
 const MB_QUEM_MUDA = { MUDA: "muda", SO_GERAL: "só a Geral", SE_VAZIO: "só se estiver vazio", SUGERE: "sugere", NAO: "não muda" };
 const MB_ICONE_CATEGORIA = {
-  ENTRADA: "⭐", ESPIRITUAL: "🕊️", MINISTERIO: "🛡️", CREDENCIAL: "🪪", CONGREGACAO: "↪", FAMILIA: "💍", CARTAS: "✉️", LICENCA: "🗳️", DISCIPLINA: "⚖️", SAIDA: "🚪"
+  ENTRADA: "check", ESPIRITUAL: "pomba", MINISTERIO: "escudo", CREDENCIAL: "cartao", CONGREGACAO: "transferir", FAMILIA: "coracao", CARTAS: "envelope", LICENCA: "urna", DISCIPLINA: "balanca", SAIDA: "saida"
 };
 // o gráfico grande: o que mostrar (o recorte) e como agrupar (aprovado na rodada 10: "podendo personalizar a vontade dos gráficos")
 const MB_RECORTES = {
@@ -49,14 +49,16 @@ const MB_FALTAS = { cpf: "Sem CPF", nascimento: "Sem nascimento", contato: "Sem 
 const MB_ROL = { 1: "No rol", saidas: "Quem saiu", todos: "Todos" };
 // as partes da ficha (o submenu da direita): as novas e as de antes trazidas para dentro (a aba antiga do perfil que cada uma usa)
 const MB_PARTES_FICHA = [
-  ["resumo", "🏠", "Resumo"], ["dados", "👤", "Dados pessoais"], ["familia", "👪", "Família"], ["casamentos", "💍", "Casamentos"],
-  ["apresentacoes", "👶", "Apresentação de filhos"], ["historico", "🕊️", "Marcos da vida espiritual"], ["caminhada", "🌱", "Caminhada e formação"],
-  ["foto", "📷", "Foto"], ["licenca", "🗳️", "Licença para candidatura"], ["cadastro", "📋", "Cadastro completo"], ["transferencia", "↪", "Transferência"], ["alteracoes", "🕒", "Alterações"]
+  ["resumo", "casa", "Resumo"], ["dados", "pessoa", "Dados pessoais"], ["familia", "pessoas", "Família"], ["casamentos", "coracao", "Casamentos"],
+  ["apresentacoes", "crianca", "Apresentação de filhos"], ["historico", "pomba", "Marcos da vida espiritual"], ["caminhada", "broto", "Caminhada e formação"],
+  ["foto", "cartao", "Foto"], ["licenca", "urna", "Licença para candidatura"], ["cadastro", "prancheta", "Cadastro completo"], ["transferencia", "transferir", "Transferência"], ["alteracoes", "relogio", "Alterações"]
 ];
 const MB_PARTE_ANTIGA = { familia: "vinculos", casamentos: "casamentos", apresentacoes: "apresentacoes", historico: "historico", caminhada: "caminhada", foto: "foto", licenca: "licenca", cadastro: "editar" };
 const MB_ABAS_ANTIGAS = ["Editar", "Historico", "Caminhada", "Foto", "Casamentos", "Apresentacoes", "Licenca", "Vinculos"];
 
 const mbTem = (obj, chave) => Object.prototype.hasOwnProperty.call(obj, chave);
+// os ícones de traço da casca (modulos/casca.js, iconeSvg) — os mesmos do desenho aprovado; nada de emoji nas telas de Membros
+const mbIc = (nome, tam) => (typeof iconeSvg === "function" ? iconeSvg(nome, tam || 16) : "");
 const mbNum = (v) => Number(v) || 0;
 const mbFmt = (v) => (Number(v) || 0).toLocaleString("pt-BR");
 const mbPlural = (n, um, varios) => (Number(n) === 1 ? um : varios);
@@ -183,7 +185,7 @@ async function mbCarregarPainel() {
     if (seq !== mbPainel.seq) return;
     data = await jsonDaTela(res, caixa);
   } catch (e) {
-    if (seq === mbPainel.seq) caixa.innerHTML = "<p class=\"subtitle aviso-recusa\">⚠️ Não deu para ler os números agora. Confira a internet e abra de novo.</p>";
+    if (seq === mbPainel.seq) caixa.innerHTML = "<p class=\"subtitle aviso-recusa\">" + mbIc("alerta") + " Não deu para ler os números agora. Confira a internet e abra de novo.</p>";
     return;
   }
   if (seq !== mbPainel.seq || !data || !data.resumo) return;
@@ -207,7 +209,7 @@ function mbTopoHtml(titulo, subtitulo, acoes) {
 }
 function mbSeletorCongregacao(onde, valor) {
   const congs = mbPainel.congregacoes || [];
-  if (congs.length <= 1) return congs.length ? `<span class="mb-chip mb-chip-neutro">🏠 ${escaparHtmlEbd(congs[0].nome)}</span>` : "";
+  if (congs.length <= 1) return congs.length ? `<span class="mb-chip mb-chip-neutro">${mbIc("igreja", 14)} ${escaparHtmlEbd(congs[0].nome)}</span>` : "";
   const todas = mbEhGeral() ? "Igreja toda" : "Todas as minhas";
   const opcoes = congs.map((c) => `<option value="${c.congregacaoId}"${String(c.congregacaoId) === String(valor) ? " selected" : ""}>${escaparHtmlEbd(c.nome)}</option>`).join("");
   return `<label class="mb-rotulo-escondido" for="mbCong${onde === "painel" ? "Painel" : "Lista"}">Congregação</label>
@@ -215,7 +217,7 @@ function mbSeletorCongregacao(onde, valor) {
       <option value="">${escaparHtmlEbd(todas)}</option>${opcoes}</select>`;
 }
 function mbBotaoCadastrar() {
-  return `<button type="button" class="btn-confirmar mb-btn" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("cadastrar")}">＋ Cadastrar pessoa</button>`;
+  return `<button type="button" class="btn-confirmar mb-btn" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("cadastrar")}">${mbIc("mais")} Cadastrar pessoa</button>`;
 }
 function mbNumeroHtml(rotulo, valor, detalhe, classe, situacao) {
   const conteudo = `<span class="mb-numero-rotulo">${escaparHtmlEbd(rotulo)}</span><strong class="mb-numero-valor ${classe}">${mbFmt(valor)}</strong><span class="mb-numero-detalhe">${detalhe}</span>`;
@@ -291,7 +293,7 @@ function mbGraficoGrandeHtml() {
       <select id="mbRecorte" class="mb-select mb-select-chip" data-on-change="mbAjustarGraficoAcao" data-args-change="${argsAttr("recorte", ARG.valor)}">${opcoesRecorte}</select>
       <label class="mb-rotulo-escondido" for="mbAgrupar">Agrupar</label>
       <select id="mbAgrupar" class="mb-select mb-select-chip" data-on-change="mbAjustarGraficoAcao" data-args-change="${argsAttr("agrupar", ARG.valor)}">${opcoesAgrupar}</select>
-      <button type="button" class="mb-btn-ajuste" data-on-click="mbAlternarAjusteAcao" aria-expanded="${mbPainel.ajusteAberto ? "true" : "false"}">⚙️ Ajustar os gráficos</button>
+      <button type="button" class="mb-btn-ajuste" data-on-click="mbAlternarAjusteAcao" aria-expanded="${mbPainel.ajusteAberto ? "true" : "false"}">${mbIc("engrenagem")} Ajustar os gráficos</button>
     </div>
     ${mbPainel.ajusteAberto ? `<div class="mb-ajuste">
       <span class="mb-ajuste-rotulo">Mostrar em</span>
@@ -363,13 +365,13 @@ function mbItensAvisos() {
   const a = mbPainel.avisos || {};
   const r = mbPainel.dados || {};
   const itens = [];
-  if (mbNum(a.transferencias) > 0) itens.push({ meu: true, nivel: "primeiro", icone: "↪", texto: `${mbFmt(a.transferencias)} ${mbPlural(a.transferencias, "pedido de transferência chegando", "pedidos de transferência chegando")}`, detalhe: "aceitar ou recusar a chegada", acao: "sub", arg: "transferencias" });
-  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "📝", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha", acao: "sub", arg: "fila" });
-  if (mbNum(a.sugestoes) > 0) itens.push({ meu: true, nivel: "afazer", icone: "✏️", texto: `${mbFmt(a.sugestoes)} ${mbPlural(a.sugestoes, "sugestão de membro para conferir", "sugestões de membros para conferir")}`, detalhe: "aplicar ou recusar com o motivo", acao: "sub", arg: "aprovacoes" });
-  if (mbNum(r.semCpf) > 0) itens.push({ meu: false, nivel: "afazer", icone: "🪪", texto: `${mbFmt(r.semCpf)} sem CPF no rol`, detalhe: "o CPF evita ficha repetida", acao: "lista", arg: "cpf" });
-  if (mbNum(r.semContato) > 0) itens.push({ meu: false, nivel: "afazer", icone: "📞", texto: `${mbFmt(r.semContato)} sem e-mail nem celular`, detalhe: "sem contato, a pessoa não recebe o código de acesso", acao: "lista", arg: "contato" });
-  if (mbNum(r.semNascimento) > 0) itens.push({ meu: false, nivel: "afazer", icone: "🎂", texto: `${mbFmt(r.semNascimento)} sem data de nascimento`, detalhe: "sem ela, a pessoa não vota na assembleia", acao: "lista", arg: "nascimento" });
-  if (mbNum(r.semDepartamento) > 0) itens.push({ meu: false, nivel: "info", icone: "👥", texto: `${mbFmt(r.semDepartamento)} sem departamento`, detalhe: "para os gráficos e as campanhas", acao: "lista", arg: "departamento" });
+  if (mbNum(a.transferencias) > 0) itens.push({ meu: true, nivel: "primeiro", icone: "transferir", texto: `${mbFmt(a.transferencias)} ${mbPlural(a.transferencias, "pedido de transferência chegando", "pedidos de transferência chegando")}`, detalhe: "aceitar ou recusar a chegada", acao: "sub", arg: "transferencias" });
+  if (mbNum(a.preCadastros) > 0) itens.push({ meu: true, nivel: "afazer", icone: "doc", texto: `${mbFmt(a.preCadastros)} ${mbPlural(a.preCadastros, "pré-cadastro na fila", "pré-cadastros na fila")}`, detalhe: "falta dado ou parece com outra ficha", acao: "sub", arg: "fila" });
+  if (mbNum(a.sugestoes) > 0) itens.push({ meu: true, nivel: "afazer", icone: "lapis", texto: `${mbFmt(a.sugestoes)} ${mbPlural(a.sugestoes, "sugestão de membro para conferir", "sugestões de membros para conferir")}`, detalhe: "aplicar ou recusar com o motivo", acao: "sub", arg: "aprovacoes" });
+  if (mbNum(r.semCpf) > 0) itens.push({ meu: false, nivel: "afazer", icone: "cartao", texto: `${mbFmt(r.semCpf)} sem CPF no rol`, detalhe: "o CPF evita ficha repetida", acao: "lista", arg: "cpf" });
+  if (mbNum(r.semContato) > 0) itens.push({ meu: false, nivel: "afazer", icone: "celular", texto: `${mbFmt(r.semContato)} sem e-mail nem celular`, detalhe: "sem contato, a pessoa não recebe o código de acesso", acao: "lista", arg: "contato" });
+  if (mbNum(r.semNascimento) > 0) itens.push({ meu: false, nivel: "afazer", icone: "calendario", texto: `${mbFmt(r.semNascimento)} sem data de nascimento`, detalhe: "sem ela, a pessoa não vota na assembleia", acao: "lista", arg: "nascimento" });
+  if (mbNum(r.semDepartamento) > 0) itens.push({ meu: false, nivel: "info", icone: "pessoas", texto: `${mbFmt(r.semDepartamento)} sem departamento`, detalhe: "para os gráficos e as campanhas", acao: "lista", arg: "departamento" });
   return itens;
 }
 const MB_ETIQUETA_AVISO = { primeiro: ["mb-chip mb-chip-vermelho", "Primeiro"], afazer: ["mb-chip mb-chip-ambar", "A fazer"], info: ["mb-chip mb-chip-neutro", "Para saber"] };
@@ -380,14 +382,14 @@ function mbAvisosHtml() {
   const carregando = !mbPainel.avisos;
   const itens = lista.map((i) => {
     const etiqueta = MB_ETIQUETA_AVISO[i.nivel] || MB_ETIQUETA_AVISO.info;
-    const corpo = `<span class="mb-aviso-icone" aria-hidden="true">${escaparHtmlEbd(i.icone)}</span>
+    const corpo = `<span class="mb-aviso-icone" aria-hidden="true">${mbIc(i.icone, 18)}</span>
       <span class="mb-aviso-texto"><strong>${escaparHtmlEbd(i.texto)}</strong><span>${escaparHtmlEbd(i.detalhe)}</span></span>
       <span class="${escaparHtmlEbd(etiqueta[0])}">${escaparHtmlEbd(etiqueta[1])}</span>`;
     if (i.acao === "lista") return `<button type="button" class="mb-aviso" data-on-click="mbAbrirListaFiltradaAcao" data-args-click="${argsAttr(i.arg)}">${corpo}</button>`;
     if (i.acao === "sub") return `<button type="button" class="mb-aviso" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr(i.arg)}">${corpo}</button>`;
     return `<div class="mb-aviso">${corpo}</div>`;
   }).join("");
-  return `<header class="mb-cartao-cabeca"><h4>🔔 Avisos de Membros <span class="mb-contador">${mbFmt(meus.length)}</span></h4><span class="mb-dica">só deste módulo</span></header>
+  return `<header class="mb-cartao-cabeca"><h4>${mbIc("sino")} Avisos de Membros <span class="mb-contador">${mbFmt(meus.length)}</span></h4><span class="mb-dica">só deste módulo</span></header>
     <div class="mb-avisos-filtro" role="group" aria-label="Quais avisos">
       <button type="button" class="chip-filtro ${mbPainel.soResolver ? "ativo" : ""}" data-on-click="mbAvisosFiltroAcao" data-args-click="${argsAttr(true)}">Só o que eu preciso resolver (${mbFmt(meus.length)})</button>
       <button type="button" class="chip-filtro ${mbPainel.soResolver ? "" : "ativo"}" data-on-click="mbAvisosFiltroAcao" data-args-click="${argsAttr(false)}">Tudo (${mbFmt(todos.length)})</button>
@@ -431,7 +433,7 @@ function mbDesenharListaMoldura() {
       <div class="mb-filtros">
         <span class="mb-busca">
           <label class="mb-rotulo-escondido" for="mbBuscaLista">Procurar nesta lista</label>
-          <input type="search" id="mbBuscaLista" placeholder="🔍 Nome, matrícula ou CPF" value="${escaparHtmlEbd(mbLista.busca)}" autocomplete="off"
+          <input type="search" id="mbBuscaLista" placeholder="Nome, matrícula ou CPF" value="${escaparHtmlEbd(mbLista.busca)}" autocomplete="off"
             data-on-input="mbBuscaListaAcao" data-args-input="${argsAttr(ARG.valor)}" />
           <span class="mb-busca-conta" id="mbListaConta"></span>
         </span>
@@ -468,7 +470,7 @@ async function mbCarregarLista() {
     if (seq !== mbLista.seq) return;
     data = await jsonDaTela(res, corpo);
   } catch (e) {
-    if (seq === mbLista.seq) corpo.innerHTML = "<p class=\"subtitle aviso-recusa\">⚠️ Não deu para ler a lista agora. Confira a internet e tente de novo.</p>";
+    if (seq === mbLista.seq) corpo.innerHTML = "<p class=\"subtitle aviso-recusa\">" + mbIc("alerta") + " Não deu para ler a lista agora. Confira a internet e tente de novo.</p>";
     return;
   }
   if (seq !== mbLista.seq || !data) return;
@@ -574,12 +576,16 @@ async function mbRecarregarPessoa() {
     if (cabeca) cabeca.innerHTML = `<div class="mb-cartao mb-ficha-cabeca"><p class="subtitle aviso-recusa">Matrícula não encontrada (ou fora do seu escopo).</p>
       <button type="button" class="btn-link" data-on-click="mostrarSubAbaPessoas" data-args-click="${argsAttr("lista")}">← Voltar à lista</button></div>`;
     document.getElementById("mbFichaCorpo").innerHTML = "";
+    const pend = document.getElementById("mbFichaPendencias");
+    if (pend) pend.innerHTML = "";
     return;
   }
   mbFicha.pessoa = pessoa;
   window._pessoasCache = mbJuntarNoCache(window._pessoasCache, [pessoa]);
   document.getElementById("tituloModulo").textContent = `Pessoas — Ficha de ${pessoa.nome}`;
   mbDesenharCabeca();
+  // passo 6: as pendências de cadastro da ficha (repetida, número a conferir, arrolamento) e "marcar como repetida" (modulos/membros-juntar.js)
+  if (typeof mjPendenciasDaFicha === "function") mjPendenciasDaFicha(id);
 }
 function mbDesenharCabeca() {
   const p = mbFicha.pessoa;
@@ -613,8 +619,8 @@ function mbDesenharCabeca() {
         <div class="mb-chips">${chips}</div>
         <div class="mb-fatos">${fato("Idade", idade !== null ? `${idade} anos` : "")}${fato("Membro desde", mbDataBr(p.dataAdmissao))}${fato("Convertido em", anoConversao ? anoConversao[1] : "")}${fato("Celular", mbTelefoneMascarado(p.telefone))}${saiu ? fato("Saída", [mbDataBr(p.dataSaida), motivoSaida ? mbRotuloSaida(p.motivoSaida) : ""].filter(Boolean).join(" · ")) : ""}</div>
       </div>
-      <div class="mb-ficha-botoes">${saiu ? "" : `<button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("transferencia")}">↪ Transferência</button>`}
-        <button type="button" class="btn-confirmar mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">✏️ Editar</button></div>
+      <div class="mb-ficha-botoes">${saiu ? "" : `<button type="button" class="btn-confirmar btn-secundario mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("transferencia")}">${mbIc("transferir")} Transferência</button>`}
+        <button type="button" class="btn-confirmar mb-btn" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">${mbIc("lapis")} Editar</button></div>
     </div>`;
 }
 const MB_ROTULO_SAIDA = { FALECIMENTO: "falecimento", DESLIGAMENTO: "desligamento", CARTA_MUDANCA: "carta de mudança", EXCLUSAO: "exclusão", ABANDONO_MATERIAL: "abandono", ABANDONO_DIGITAL: "abandono digital" };
@@ -625,8 +631,8 @@ function mbDesenharFichaMenu() {
   const p = mbFicha.pessoa;
   const podeDesligar = p && !mbTem(MB_STATUS_SAIU, String(p.status));
   menu.innerHTML = `<p class="mb-ficha-menu-rotulo">Nesta ficha</p>
-    ${MB_PARTES_FICHA.map(([chave, icone, rotulo]) => `<button type="button" class="mb-ficha-menu-item${chave === mbFicha.parte ? " ativo" : ""}" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr(chave)}"${chave === mbFicha.parte ? " aria-current=\"page\"" : ""}><span aria-hidden="true">${escaparHtmlEbd(icone)}</span>${escaparHtmlEbd(rotulo)}</button>`).join("")}
-    ${podeDesligar ? "<button type=\"button\" class=\"mb-ficha-menu-item mb-perigo\" data-on-click=\"mbDesligarAcao\"><span aria-hidden=\"true\">🚫</span>Desligar do rol</button>" : ""}
+    ${MB_PARTES_FICHA.map(([chave, icone, rotulo]) => `<button type="button" class="mb-ficha-menu-item${chave === mbFicha.parte ? " ativo" : ""}" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr(chave)}"${chave === mbFicha.parte ? " aria-current=\"page\"" : ""}><span aria-hidden="true">${mbIc(icone, 18)}</span>${escaparHtmlEbd(rotulo)}</button>`).join("")}
+    ${podeDesligar ? "<button type=\"button\" class=\"mb-ficha-menu-item mb-perigo\" data-on-click=\"mbDesligarAcao\"><span aria-hidden=\"true\">" + mbIc("saida", 18) + "</span>Desligar do rol</button>" : ""}
     <p class="mb-dica mb-ficha-menu-nota">Parte nova entra aqui embaixo: o menu cresce para baixo, nunca para o lado.</p>`;
 }
 function mbMostrarParte() {
@@ -664,7 +670,7 @@ async function mbMostrarResumo() {
       mbFicha.linha = data;
       mbDesenharCabeca();
     } catch (e) {
-      corpo.innerHTML = "<p class=\"subtitle aviso-recusa\">⚠️ Não deu para ler a linha do tempo agora.</p>";
+      corpo.innerHTML = `<p class="subtitle aviso-recusa">${mbIc("alerta")} Não deu para ler a linha do tempo agora.</p>`;
       return;
     }
   }
@@ -680,7 +686,7 @@ function mbResumoHtml() {
   const ve = l.vidaEspiritual || {};
   const quando = (d, aproximada) => (aproximada ? `por volta de ${escaparHtmlEbd(String(d || "").slice(0, 4))}` : escaparHtmlEbd(mbDataBr(d)));
   const itens = eventos.map((e) => `<li class="mb-tempo-item mb-tempo-${escaparHtmlEbd(String(e.categoria || "").toLowerCase())}">
-      <span class="mb-tempo-icone" aria-hidden="true">${escaparHtmlEbd(MB_ICONE_CATEGORIA[e.categoria] || "•")}</span>
+      <span class="mb-tempo-icone" aria-hidden="true">${MB_ICONE_CATEGORIA[e.categoria] ? mbIc(MB_ICONE_CATEGORIA[e.categoria], 16) : "•"}</span>
       <span class="mb-tempo-texto"><strong>${escaparHtmlEbd(e.titulo)}</strong> <span class="mb-tempo-data">${quando(e.data, e.aproximada)}</span>${e.detalhe ? `<span class="mb-tempo-detalhe">${escaparHtmlEbd(e.detalhe)}</span>` : ""}</span></li>`).join("");
   const linhaVE = (rotulo, valor) => `<div class="mb-campo"><span class="mb-campo-rotulo">${escaparHtmlEbd(rotulo)}</span><span class="mb-campo-valor">${valor || "<em class=\"mb-vazio\">não informado</em>"}</span></div>`;
   const conv = ve.conversao ? [quando(ve.conversao.data, ve.conversao.aproximada), ve.conversao.detalhe ? escaparHtmlEbd(ve.conversao.detalhe) : ""].filter(Boolean).join(" · ") : "";
@@ -700,10 +706,10 @@ function mbResumoHtml() {
         <button type="button" class="mb-pagina"${mbFicha.linhaPagina >= paginas ? " disabled" : ""} data-on-click="mbLinhaPaginaAcao" data-args-click="${argsAttr(mbFicha.linhaPagina + 1)}">Mais antigos ›</button></span></div>` : ""}
     </section>
     <div class="mb-resumo-lado">
-      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>🕊️ Vida espiritual</h4></header>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("pomba")} Vida espiritual</h4></header>
         ${linhaVE("Conversão", conv)}${linhaVE("Batismo nas águas", aguas)}${linhaVE("Batismo no Espírito Santo", espirito)}${linhaVE("Procedência", proc)}
       </section>
-      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>👤 Dados pessoais</h4><button type="button" class="btn-link" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">Ver e mudar ›</button></header>
+      <section class="mb-cartao"><header class="mb-cartao-cabeca"><h4>${mbIc("pessoa")} Dados pessoais</h4><button type="button" class="btn-link" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("dados")}">Ver e mudar ›</button></header>
         ${linhaVE("Nascimento", p.dataNascimento ? `${escaparHtmlEbd(mbDataBr(p.dataNascimento))}${idade !== null ? ` · ${idade} anos` : ""}` : "")}
         ${linhaVE("CPF", cpf && cpf.valor ? mbCpfHtml(cpf.valor) : "")}
         ${linhaVE("Estado civil", escaparHtmlEbd(mbTextoDoValor("estadoCivil", p.estadoCivil)))}
@@ -759,7 +765,7 @@ async function mbMostrarDados() {
 }
 function mbDadosHtml() {
   const f = mbFicha.campos || {};
-  if (f.erro) return `<div class="mb-cartao"><p class="subtitle aviso-recusa">⚠️ ${escaparHtmlEbd(f.erro)}</p></div>`;
+  if (f.erro) return `<div class="mb-cartao"><p class="subtitle aviso-recusa">${mbIc("alerta")} ${escaparHtmlEbd(f.erro)}</p></div>`;
   const campos = Array.isArray(f.campos) ? f.campos : [];
   const cartoes = MB_GRUPOS_FICHA.map((g) => {
     const doGrupo = campos.filter((c) => c.grupo === g);
@@ -772,7 +778,7 @@ function mbDadosHtml() {
 function mbLinhaCampoHtml(c) {
   const texto = mbTextoDoValor(c.chave, c.valor);
   const erro = mbFicha.erroCampo && mbFicha.erroCampo.chave === c.chave ? mbFicha.erroCampo : null;
-  const erroHtml = erro ? `<p class="mb-campo-erro" role="alert">⚠️ ${escaparHtmlEbd(erro.mensagem)}${erro.matricula ? ` <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(erro.matricula)}">Abrir a ficha ${mbNum(erro.matricula)} ›</button>` : ""}</p>` : "";
+  const erroHtml = erro ? `<p class="mb-campo-erro" role="alert">${mbIc("alerta")} ${escaparHtmlEbd(erro.mensagem)}${erro.matricula ? ` <button type="button" class="btn-link" data-on-click="mbAbrirFichaAcao" data-args-click="${argsAttr(erro.matricula)}">Abrir a ficha ${mbNum(erro.matricula)} ›</button>` : ""}</p>` : "";
   if (mbFicha.editando === c.chave) {
     return `<form class="mb-campo-editando" data-on-submit="mbSalvarCampoAcao" data-prevent="submit" data-args-submit="${argsAttr(c.chave)}">
       <label class="mb-campo-rotulo" for="mbCampoValor">${escaparHtmlEbd(c.rotulo)}</label>
@@ -782,7 +788,7 @@ function mbLinhaCampoHtml(c) {
   let valorHtml = texto ? escaparHtmlEbd(texto) : "<em class=\"mb-vazio\">não informado</em>";
   if (c.chave === "cpf" && c.valor) valorHtml = mbCpfHtml(c.valor);
   // o motivo de não poder mudar fica embaixo do valor (a coluna da ação é estreita: só o "Mudar")
-  const trava = c.pode ? "" : `<span class="mb-trava">🔒 ${escaparHtmlEbd(c.motivo || "Você não muda este dado.")}</span>`;
+  const trava = c.pode ? "" : `<span class="mb-trava">${mbIc("cadeado", 14)} ${escaparHtmlEbd(c.motivo || "Você não muda este dado.")}</span>`;
   let acao = "";
   if (c.pode && c.tipo === "endereco") acao = `<button type="button" class="btn-link" title="O endereço muda no cadastro completo" data-on-click="mbFichaParteAcao" data-args-click="${argsAttr("cadastro")}">Mudar ›</button>`;
   else if (c.pode) acao = `<button type="button" class="btn-link" data-on-click="mbEditarCampoAcao" data-args-click="${argsAttr(c.chave)}">Mudar</button>`;
@@ -876,7 +882,7 @@ async function mbMostrarAlteracoes() {
       if (mbFicha.membroId !== id || mbFicha.parte !== "alteracoes" || !data) return;
       mbFicha.alteracoes = data;
     } catch (e) {
-      corpo.innerHTML = "<p class=\"subtitle aviso-recusa\">⚠️ Não deu para ler as alterações agora.</p>";
+      corpo.innerHTML = `<p class="subtitle aviso-recusa">${mbIc("alerta")} Não deu para ler as alterações agora.</p>`;
       return;
     }
   }
@@ -898,7 +904,7 @@ async function mbMostrarAlteracoes() {
       <ul class="mb-mudancas">${(Array.isArray(i.mudancas) ? i.mudancas : []).map((m) => `<li><span class="mb-mudanca-campo">${escaparHtmlEbd(mbRotuloDaChave(m.campo, m.rotulo))}:</span>
         ${mbTem(m, "antes") ? `${valor(m, "antes")} <span aria-hidden="true">→</span> ` : ""}${valor(m, "depois")}</li>`).join("") || "<li class=\"mb-dica\">sem detalhe do que mudou</li>"}</ul></li>`).join("");
   corpo.innerHTML = `<section class="mb-cartao">
-    <header class="mb-cartao-cabeca"><h4>🕒 Alterações nesta ficha</h4><span class="mb-dica">quem mudou o quê, mais recente primeiro</span></header>
+    <header class="mb-cartao-cabeca"><h4>${mbIc("relogio")} Alterações nesta ficha</h4><span class="mb-dica">quem mudou o quê, mais recente primeiro</span></header>
     ${linhas ? `<ol class="mb-alteracoes">${linhas}</ol>` : "<p class=\"subtitle\">Nenhuma alteração registrada ainda.</p>"}
     ${paginas > 1 ? `<div class="mb-paginacao"><span class="mb-dica">${mbFmt(total)} ${mbPlural(total, "alteração", "alterações")}</span><span class="mb-paginas">
       <button type="button" class="mb-pagina"${mbFicha.altPagina <= 1 ? " disabled" : ""} data-on-click="mbAlteracoesPaginaAcao" data-args-click="${argsAttr(mbFicha.altPagina - 1)}">‹ Mais recentes</button>

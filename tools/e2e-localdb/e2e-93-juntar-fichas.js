@@ -135,6 +135,7 @@ async function principal() {
   ok(campos1.includes("nome") && campos1.includes("telefone") && campos1.includes("email") && campos1.includes("cpf") && campos1.includes("dataAdmissao"), "os campos diferentes aparecem", campos1);
   ok(!campos1.includes("nomeMae") && !campos1.includes("dataNascimento") && !campos1.includes("congregacao"), "os iguais NÃO aparecem (só contados)", campos1);
   ok(b1.iguais > 10, "os iguais contados", b1.iguais);
+  ok(Array.isArray(b1.iguaisLista) && b1.iguaisLista.length === b1.iguais && b1.iguaisLista.some((x) => x.campo === "nomeMae" && x.valor === "Lúcia Moreira"), "e listados (o \"ver\" da tela), com o valor", b1.iguaisLista && b1.iguaisLista.length);
   const txt1 = JSON.stringify(b1);
   ok(!txt1.includes(CPF_ANA) && !txt1.includes(CPF_ANA.slice(0, 9)), "o CPF inteiro não aparece em lugar nenhum da resposta");
   ok(!txt1.includes("ana.nova@exemplo.org") && !txt1.includes("97777-1212") && !txt1.includes("977771212"), "o e-mail e o celular saem mascarados");
@@ -325,6 +326,8 @@ async function principal() {
   ok(nsm.body && nsm.body.sucesso, "não são a mesma pessoa", nsm.body && nsm.body.mensagem);
   ok(!pares(await lista("vn")).includes("930100-930400"), "a dupla sai da lista");
   ok((await F("vn", "pendencias", { query: { membroId: 930100 } })).body.impressaoFisicaBloqueada === false, "e a credencial física volta a poder");
+  await F("vn", "marcar", { metodo: "POST", corpo: { a: 930100, b: 930400 } });
+  ok(pares(await lista("vn")).includes("930100-930400"), "marcada de novo depois do \"não são a mesma\": volta para a lista (a marcação vale)");
   await F("vn", "nao-sao-a-mesma", { metodo: "POST", corpo: { a: 930100, b: 930400 } });
   ok(Number(await escalar("SELECT COUNT(*) FROM FichasPendencias WHERE Resolucao = N'NAO_E_A_MESMA' AND ((MembroId = 930400 AND OutroMembroId = 930100) OR (MembroId = 930100 AND OutroMembroId = 930400))")) === 1, "dizer de novo não duplica");
   // o número a acertar

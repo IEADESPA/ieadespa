@@ -301,6 +301,15 @@ async function mvAbrir() {
   mv.sugestoes = Array.isArray(sug) ? sug : sug && Array.isArray(sug.solicitacoes) ? sug.solicitacoes : sug && Array.isArray(sug.itens) ? sug.itens : [];
   mvDesenhar();
 }
+// a minha ficha, como a ficha 360: no notebook o menu principal recolhe (o "Minha ficha" fica à direita) e volta quando a pessoa sai de "Minha vida"
+let mvMenuRecolhido = false;
+function mvSubAbaMudou(sub) {
+  const sb = document.getElementById("sidebar");
+  if (!sb) return;
+  const celular = window.matchMedia && window.matchMedia("(max-width: 640px)").matches;
+  if (sub === "minhavida" && !celular && !sb.classList.contains("recolhido")) { sb.classList.add("recolhido"); mvMenuRecolhido = true; return; }
+  if (sub !== "minhavida" && mvMenuRecolhido) { sb.classList.remove("recolhido"); mvMenuRecolhido = false; }
+}
 function mvPendentes() { return (mv.sugestoes || []).reduce((n, s) => n + (s.campos || []).filter((c) => c.status === "PENDENTE").length, 0); }
 function mvDesenhar() {
   const caixa = document.getElementById("mvFicha");

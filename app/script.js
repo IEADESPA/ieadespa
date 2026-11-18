@@ -1653,6 +1653,7 @@ function mostrarSubAbaMeupainel(sub) {
   if (typeof idvSubAbaMudou === "function") idvSubAbaMudou(sub);   // v7.14: as sugestões, o voto e as artes da pessoa não ficam para trás
   if (typeof enqSubAbaMudou === "function") enqSubAbaMudou(sub);
   if (typeof comSubAbaMudou === "function") comSubAbaMudou(sub);   // v7.12: as escolhas e os comunicados da pessoa não ficam para trás
+  if (typeof mvSubAbaMudou === "function") mvSubAbaMudou(sub);   // FASE 10, passo 7a: a minha ficha recolhe o menu principal (notebook) e o devolve ao sair
   if (typeof cpaSubAbaMudou === "function") cpaSubAbaMudou(sub);   // v7.11: o acompanhamento aberto (e a nota pastoral aberta) e o que a pessoa escrevia nos pedidos não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";

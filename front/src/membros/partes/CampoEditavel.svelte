@@ -19,8 +19,10 @@
     onfechar: () => void;
     onsalvar: (valor: string | Endereco) => void;
     extra?: import("svelte").Snippet;
+    /** as linhas do endereço de agora (a edição começa delas: salvar só a rua não apaga o resto) */
+    enderecoAtual?: Endereco | null;
   }
-  let { campo, sexo, deps, mudou, aberto, salvando, erro, onabrir, onfechar, onsalvar, extra }: Props = $props();
+  let { campo, sexo, deps, mudou, aberto, salvando, erro, onabrir, onfechar, onsalvar, extra, enderecoAtual = null }: Props = $props();
 
   let texto = $state("");
   let escolha = $state<string | null>(null);
@@ -32,6 +34,7 @@
     // a edição começa do valor de agora (o CPF começa vazio: o que está na tela é o mascarado)
     texto = campo.tipo === "cpf" ? "" : campo.tipo === "data" ? (campo.valor ?? "") : (campo.valor ?? "");
     escolha = campo.valor;
+    if (campo.tipo === "endereco" && enderecoAtual) end = { ...enderecoAtual };
     queueMicrotask(() => campoEl?.focus());
   });
   const valorTela = $derived(textoDoValor(campo.chave, campo.valor, sexo, deps));
@@ -40,6 +43,7 @@
     : (campo.opcoes ?? []).map((o) => ({ valor: o, rotulo: textoDoValor(campo.chave, o, sexo, deps) || o })));
   const tipoInput = $derived(campo.tipo === "data" ? "date" : campo.tipo === "email" ? "email" : campo.tipo === "telefone" ? "tel" : "text");
   function salvar() {
+    if (salvando) return;   // o Enter repetido não manda duas vezes
     if (campo.tipo === "endereco") { onsalvar({ ...end }); return; }
     if (campo.tipo === "lista" || campo.tipo === "departamento") { onsalvar(escolha ?? ""); return; }
     onsalvar(texto.trim());

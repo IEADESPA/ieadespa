@@ -2,8 +2,8 @@
      o que ele muda sozinho e o que sugere; à direita o menu "Minha ficha" completo (cresce para baixo). No celular, pílulas no alto e o ← do topo.
      As sugestões seguem o fluxo de 4 etapas (rodada 10): o que posso mudar → mudo sozinho → sugiro o resto → a secretaria confere. -->
 <script lang="ts">
-  import { untrack } from "svelte";
-  import { pedir, qs } from "../../comum/api";
+  import { onMount, untrack } from "svelte";
+  import { pedir, qs, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import { tela } from "../../comum/tela.svelte";
   import { anoDe, dataBr, iniciais, mesAnoBr, haQuanto } from "../../comum/formato";
@@ -54,6 +54,8 @@
   let transf = $state<{ congregacaoAtual: string | null; pedidos: MeuPedido[]; congregacoes: { congregacaoId: number; nome: string }[] } | null>(null);
   let vinculos = $state<{ vinculoId: number; outraPessoaNome: string; rotulo: string }[] | null>(null);
   let erro = $state("");
+  // cada leitura com o seu erro; numa releitura que falha, o que já estava na tela fica (nunca some logo depois do "salvo")
+  const falhas = $state({ dados: "", linha: "", sugestoes: "", transf: "", vinculos: "" });
 
   async function carregar() {
     erro = "";
@@ -62,22 +64,27 @@
       pedir<MeusDados>(`/meus-dados/${m}`), pedir<MinhaLinha>(`/minha-linha-do-tempo/${m}` + qs({ porPagina: 200 })),
       pedir<MinhaSug[]>(`/solicitacoes-edicao/${m}`), pedir<NonNullable<typeof transf>>(`/minha-transferencia/${m}`)
     ]);
-    if (!d.ok && !l.ok) { erro = d.mensagem; return; }
-    md = d.ok ? d.dados : null;
-    linha = l.ok ? l.dados : null;
-    sugs = s.ok && Array.isArray(s.dados) ? s.dados : [];
-    transf = t.ok ? t.dados : null;
+    if (!d.ok && !l.ok && !md && !linha) { erro = d.mensagem; return; }
+    if (d.ok) { md = d.dados; falhas.dados = ""; } else falhas.dados = d.mensagem;
+    if (l.ok) { linha = l.dados; falhas.linha = ""; } else falhas.linha = l.mensagem;
+    if (s.ok && Array.isArray(s.dados)) { sugs = s.dados; falhas.sugestoes = ""; } else if (!s.ok) falhas.sugestoes = s.mensagem;
+    if (t.ok) { transf = t.dados; falhas.transf = ""; } else falhas.transf = t.mensagem;
   }
   void carregar();
+  // como no desenho: o menu principal recolhido (o trilho) enquanto a ficha está aberta; ao sair, volta a escolha da pessoa
+  onMount(() => { ponte().menuRecolhido(true); return () => ponte().menuRecolhido(null); });
   $effect(() => {
     if (parte === "familia" && vinculos === null) {
-      void pedir<unknown>(`/meus-vinculos/${encodeURIComponent(mat)}`).then((r) => {
-        const lista = r.ok ? (Array.isArray(r.dados) ? r.dados : ((r.dados as { vinculos?: unknown[] }).vinculos ?? [])) : [];
-        vinculos = lista as typeof vinculos;
-      });
+      void lerVinculos();
     }
   });
 
+  async function lerVinculos() {
+    const r = await pedir<unknown>(`/meus-vinculos/${encodeURIComponent(mat)}`);
+    if (!r.ok) { falhas.vinculos = r.mensagem; return; }
+    falhas.vinculos = "";
+    vinculos = (Array.isArray(r.dados) ? r.dados : ((r.dados as { vinculos?: unknown[] }).vinculos ?? [])) as typeof vinculos;
+  }
   // o caminho do topo ("Minha vida na igreja › Minha linha do tempo") e o ← no celular (volta ao Início)
   $effect(() => {
     const p = ponte();
@@ -113,6 +120,7 @@
       complemento: dados.enderecoComplemento ?? "", bairroTexto: dados.enderecoBairroTexto ?? dados.enderecoBairroNome ?? "", cidade: dados.enderecoCidade ?? "", uf: dados.enderecoUF ?? "PA", cep: dados.enderecoCep ?? "" });
   }
   async function salvarContato() {
+    if (salvando) return;
     salvando = true; erroEd = "";
     const corpo: Record<string, unknown> = { telefone: ed.telefone.trim() || null, email: ed.email.trim() || null };
     if (ed.logradouro.trim() || ed.bairroTexto.trim() || ed.cidade.trim()) corpo.enderecoPartes = { logradouro: ed.logradouro.trim(), numero: ed.numero.trim(), complemento: ed.complemento.trim(), bairroTexto: ed.bairroTexto.trim(), cidade: ed.cidade.trim(), uf: ed.uf.trim(), cep: ed.cep.trim() };
@@ -124,6 +132,7 @@
     void carregar();
   }
   async function salvarVazio(chave: string) {
+    if (salvando) return;
     salvando = true; erroEd = "";
     const r = await pedir<{ mensagem?: string }>(`/meus-dados/${encodeURIComponent(mat)}`, { metodo: "POST", corpo: { [chave]: ed.valor.trim() || null } });
     salvando = false;
@@ -138,6 +147,7 @@
   let erroSug = $state("");
   $effect(() => { void campoSugerir; valorSug = ""; erroSug = ""; });
   async function enviarSugestao() {
+    if (enviando) return;
     if (!campoSugerir || !valorSug.trim()) { erroSug = "Escreva o valor certo."; return; }
     enviando = true; erroSug = "";
     const r = await pedir<{ mensagem?: string }>(`/solicitacoes-edicao/${encodeURIComponent(mat)}`, { metodo: "POST", corpo: { campos: { [campoSugerir]: valorSug.trim() } } });
@@ -151,18 +161,22 @@
   let destinoId = $state<number | null>(null);
   let motivoTr = $state("");
   async function pedirTransferencia() {
-    if (!destinoId) return;
+    if (!destinoId || enviando) return;
     enviando = true;
     const r = await pedir<{ mensagem?: string }>(`/minha-transferencia/${encodeURIComponent(mat)}`, { metodo: "POST", corpo: { congregacaoDestinoId: destinoId, motivo: motivoTr.trim() || null } });
     enviando = false;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); return; }
+    if (!r.ok) { avisarFalha(r); return; }
     ponte().avisar(r.dados.mensagem ?? "Pedido enviado.", "sucesso");
     destinoId = null; motivoTr = "";
     void carregar();
   }
+  let cancelando = $state(false);
   async function cancelarTransferencia(id: number) {
+    if (cancelando) return;
+    cancelando = true;
     const r = await pedir<{ mensagem?: string }>(`/minha-transferencia/${encodeURIComponent(mat)}/cancelar`, { metodo: "POST", corpo: { transferenciaId: id } });
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); return; }
+    cancelando = false;
+    if (!r.ok) { avisarFalha(r); return; }
     ponte().avisar("Pedido cancelado.", "sucesso");
     void carregar();
   }
@@ -205,14 +219,14 @@
 {#snippet conteudo()}
   {#if parte === "linha"}
     <Cartao titulo="A minha vida na Igreja" nota={tela.celular ? "tudo, por inteiro" : "tudo, por inteiro · você vê o mesmo que a secretaria"}>
-      {#if !linha}<Estado tipo="carregando" linhas={5} />{:else if eventos.length}<LinhaTempo {eventos} max={6} />{:else}<Estado tipo="vazio" texto="Nada registrado ainda." />{/if}
+      {#if falhas.linha && !linha}<Estado tipo="erro" texto={falhas.linha} ontentar={carregar} />{:else if !linha}<Estado tipo="carregando" linhas={5} />{:else if eventos.length}<LinhaTempo {eventos} max={6} />{:else}<Estado tipo="vazio" texto="Nada registrado ainda." />{/if}
       {#if eventos.length > 6}<Botao tipo="texto" onclick={() => irParte("vida")}>Ver tudo ({eventos.length})</Botao>{/if}
     </Cartao>
     {#if !tela.celular}<div class="duas">{@render blocoEspiritual()}{@render blocoContato()}</div>{/if}
   {:else if parte === "dados"}
     <Etapas rotulo="O que você pode fazer" passos={["O que posso mudar", "Mudo sozinho", "Sugiro o resto", "A secretaria confere"]} atual={0} />
     <p class="expl">O que <strong>você</strong> pode fazer com os seus dados. O que é seu de mudar, você muda aqui mesmo; o resto você sugere, e a secretaria confere.</p>
-    {#if !md}<Estado tipo="carregando" linhas={6} />{:else}
+    {#if falhas.dados && !md}<Estado tipo="erro" texto={falhas.dados} ontentar={carregar} />{:else if !md}<Estado tipo="carregando" linhas={6} />{:else}
       {#each grupos as g (g)}
         <Cartao titulo={g} pad="justo">
           <div class="lista">
@@ -280,7 +294,7 @@
     <Etapas rotulo="O caminho da sugestão" passos={["O que posso mudar", "Mudo sozinho", "Sugiro o resto", "A secretaria confere"]} atual={3} />
     <Cartao titulo="Minhas sugestões">
       {#snippet direita()}<Botao tipo="texto" onclick={() => irParte("dados")}>Sugerir outra</Botao>{/snippet}
-      {#if !sugs.length}<Estado tipo="vazio" texto="Você ainda não sugeriu nenhuma mudança." />{:else}
+      {#if falhas.sugestoes}<Estado tipo="erro" texto={falhas.sugestoes} ontentar={carregar} />{:else if !sugs.length}<Estado tipo="vazio" texto="Você ainda não sugeriu nenhuma mudança." />{:else}
         <ul class="sugs">
           {#each sugs.flatMap((s) => s.campos.map((c) => ({ s, c }))) as x, i (i)}
             <li><span><strong>{x.c.rotulo}:</strong> {textoDoValor(x.c.nomeCampo, x.c.valorProposto) || "—"}{#if x.c.motivo}<small>{x.c.motivo}</small>{/if}</span>
@@ -309,18 +323,18 @@
       </div>
     </Cartao>
     <Cartao titulo="Parentes ligados à minha ficha">
-      {#if vinculos === null}<Estado tipo="carregando" linhas={2} />{:else if !vinculos.length}<Estado tipo="vazio" texto="Nenhum parente ligado." />{:else}
+      {#if falhas.vinculos}<Estado tipo="erro" texto={falhas.vinculos} ontentar={lerVinculos} />{:else if vinculos === null}<Estado tipo="carregando" linhas={2} />{:else if !vinculos.length}<Estado tipo="vazio" texto="Nenhum parente ligado." />{:else}
         <ul class="sugs">{#each vinculos as v (v.vinculoId)}<li><span><strong>{v.outraPessoaNome}</strong> · {v.rotulo}</span></li>{/each}</ul>{/if}
     </Cartao>
     {#if eventos.filter((e) => e.categoria === "FAMILIA").length}<Cartao titulo="Casamento e filhos"><LinhaTempo eventos={eventos.filter((e) => e.categoria === "FAMILIA")} /></Cartao>{/if}
   {:else if parte === "transferencias"}
     <Cartao titulo="Minhas transferências" nota={transf?.congregacaoAtual ? `hoje: ${transf.congregacaoAtual}` : undefined}>
-      {#if !transf}<Estado tipo="carregando" linhas={2} />{:else}
+      {#if falhas.transf && !transf}<Estado tipo="erro" texto={falhas.transf} ontentar={carregar} />{:else if !transf}<Estado tipo="carregando" linhas={2} />{:else}
         {#if transf.pedidos.length}
           <ul class="sugs">{#each transf.pedidos as p (p.transferenciaId)}
             <li><span><strong>{p.origemNome} → {p.destinoNome}</strong><small>{haQuanto(p.pedidoEm)}{p.motivoRecusa ? ` · ${p.motivoRecusa}` : ""}</small></span>
               <Chip tom={p.situacao === "PENDENTE" ? "pendente" : p.situacao === "CONCLUIDA" ? "ok" : "atrasado"}>{p.situacao === "PENDENTE" ? "esperando" : p.situacao === "CONCLUIDA" ? "concluída" : p.situacao === "RECUSADA" ? "recusada" : "cancelada"}</Chip>
-              {#if p.situacao === "PENDENTE"}<Botao tipo="texto" onclick={() => void cancelarTransferencia(p.transferenciaId)}>Cancelar</Botao>{/if}</li>
+              {#if p.situacao === "PENDENTE"}<Botao tipo="texto" ocupado={cancelando} onclick={() => void cancelarTransferencia(p.transferenciaId)}>Cancelar</Botao>{/if}</li>
           {/each}</ul>
         {:else}<Estado tipo="vazio" texto="Nenhum pedido de transferência." />{/if}
         {#if !pedidoPendente}

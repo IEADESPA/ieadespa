@@ -433,6 +433,8 @@ function limparSessao() {
   // v7.8: o relato e a fila de incidentes (dado de criança) saem da página junto com a sessão. O módulo é outro arquivo (modulos/protecao.js): se ele faltar ou estiver velho no cache do service worker,
   // a saída da sessão NÃO pode parar aqui (sem isto o authToken ficava preenchido).
   if (typeof prtLimparTela === "function") prtLimparTela();
+  // FASE 10 (19/11/2026): as telas Svelte de Membros (a ficha aberta, a lista, o rascunho do cadastro com CPF) saem da página junto com a sessão
+  if (typeof svLimparTela === "function") svLimparTela();
   // v7.10: a sala do check-in infantil, a busca, os formulários e o CÓDIGO de retirada (que só existe em memória e no painel de impressão) saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
   if (typeof chkLimparTela === "function") chkLimparTela();
   // v7.11: a fila, o acompanhamento aberto, a NOTA PASTORAL aberta e os pedidos de oração saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
@@ -495,6 +497,8 @@ async function fetchProtegido(url, opts = {}) {
   try {
     res = await fetch(url, Object.assign({}, opts, { headers }));
   } catch (falhaDeRede) {
+    // FASE 10: o pedido CANCELADO de propósito (a busca que mudou antes da resposta) não é falta de internet: volta calado para quem cancelou
+    if (falhaDeRede && falhaDeRede.name === "AbortError") throw falhaDeRede;
     mostrarToast("Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.", "erro");
     if (falhaDeRede && typeof falhaDeRede === "object") falhaDeRede.jaAvisado = true;
     throw falhaDeRede;

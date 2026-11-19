@@ -51,8 +51,7 @@ export function textoDoValor(chave: string, valor: string | null, sexo: string |
 
 /** de onde veio o pré-cadastro (o ícone e o texto do desenho da esteira) */
 export const ORIGEM: Readonly<Record<string, { icone: string; texto: string }>> = {
-  SITE: { icone: "globo", texto: "link do site" }, LIDER: { icone: "pessoas", texto: "líder ou professor da EBD" }, EBD: { icone: "livro", texto: "professor da EBD" },
-  PROPRIA: { icone: "pessoa", texto: "a própria pessoa" }, MEMBRO: { icone: "pessoa", texto: "a própria pessoa" }, SECRETARIA: { icone: "igreja", texto: "a secretaria" }
+  SITE: { icone: "globo", texto: "link do site" }, LIDER: { icone: "pessoas", texto: "líder ou professor da EBD" }, SECRETARIA: { icone: "igreja", texto: "a secretaria" }
 };
 export function origemDe(o: string | null | undefined): { icone: string; texto: string } {
   return (o && ORIGEM[o]) || { icone: "doc", texto: "cadastro" };

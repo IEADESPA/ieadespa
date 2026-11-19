@@ -7,6 +7,7 @@
   import Campo from "../../comum/Campo.svelte";
   import Escolha from "../../comum/Escolha.svelte";
   import Aviso from "../../comum/Aviso.svelte";
+  import Estado from "../../comum/Estado.svelte";
   import { ir, escopo, lerContadores } from "../estado.svelte";
   import type { ResumoPainel } from "../tipos";
 
@@ -23,7 +24,12 @@
     if (congs.length === 1 && congs[0]) f.congregacaoId = congs[0].congregacaoId;
   };
   if (escopo.resumo) lerCongs(escopo.resumo);
-  else void pedir<{ resumo: ResumoPainel }>("/pessoas?resumo=1").then((x) => { if (x.ok) { escopo.resumo = x.dados.resumo; lerCongs(x.dados.resumo); } });
+  let erroCongs = $state("");
+  function lerResumo() {
+    erroCongs = "";
+    void pedir<{ resumo: ResumoPainel }>("/pessoas?resumo=1").then((x) => { if (x.ok) { escopo.resumo = x.dados.resumo; lerCongs(x.dados.resumo); } else erroCongs = x.mensagem; });
+  }
+  if (!escopo.resumo) lerResumo();
   const nomeCong = $derived(congs.find((c) => c.congregacaoId === f.congregacaoId)?.nome ?? "");
 
   async function enviar() {
@@ -63,6 +69,7 @@
       <Campo rotulo="E-mail" opcional tipo="email" valor={f.email} oninput={(v) => (f.email = v)} dica="É por onde ela cria a senha." />
       <Campo rotulo="Celular" opcional tipo="tel" valor={f.telefone} oninput={(v) => (f.telefone = v)} inputmode="tel" />
       <div class="grupo"><span class="rot">Congregação <span class="obr">*</span></span>
+        {#if erroCongs}<Estado tipo="erro" texto="Não deu para ler as congregações: {erroCongs}" ontentar={lerResumo} />{/if}
         {#if congs.length === 1}<Escolha rotulo={nomeCong} estilo="trava" larga valor={null} opcoes={[]} onescolher={() => {}} />
         {:else}<Escolha rotulo="Escolha a congregação" estilo="campo" larga valor={f.congregacaoId} opcoes={congs.map((c) => ({ valor: c.congregacaoId, rotulo: c.nome }))} onescolher={(v) => (f.congregacaoId = v)} />{/if}
       </div>

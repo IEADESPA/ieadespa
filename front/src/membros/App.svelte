@@ -1,23 +1,28 @@
 <!-- O módulo Membros: a tela de agora, o caminho no topo e, no celular, a fileira de pílulas (Painel, Pessoas, Fila, Transferências). -->
 <script lang="ts">
+  import { onMount } from "svelte";
   import { ponte, type ParteTrilha } from "../comum/ponte";
   import { tela } from "../comum/tela.svelte";
   import Pilulas from "../comum/Pilulas.svelte";
   import EmConstrucao from "../comum/EmConstrucao.svelte";
   import Cabecalho from "../comum/Cabecalho.svelte";
+  import Estado from "../comum/Estado.svelte";
   import { nav, ir, voltar, contadores, escopo, textoEscopo, lerContadores, type Rota } from "./estado.svelte";
   import Painel from "./telas/Painel.svelte";
-  import Pessoas from "./telas/Pessoas.svelte";
-  import Ficha from "./telas/Ficha.svelte";
-  import Cadastrar from "./telas/Cadastrar.svelte";
-  import Fila from "./telas/Fila.svelte";
-  import CadastroRapido from "./telas/CadastroRapido.svelte";
-  import Transferencias from "./telas/Transferencias.svelte";
-  import Transferir from "./telas/Transferir.svelte";
-  import Transferencia from "./telas/Transferencia.svelte";
-  import Sugestoes from "./telas/Sugestoes.svelte";
-  import Repetidas from "./telas/Repetidas.svelte";
-  import Juntar from "./telas/Juntar.svelte";
+  // as outras telas vêm em pedaços próprios, baixados na primeira vez que a pessoa abre cada uma (a lista e a ficha já vêm logo depois do painel, com o
+  // aparelho parado): entrar em Membros baixa só o painel
+  const telas = {
+    pessoas: () => import("./telas/Pessoas.svelte"), ficha: () => import("./telas/Ficha.svelte"), cadastrar: () => import("./telas/Cadastrar.svelte"),
+    fila: () => import("./telas/Fila.svelte"), rapido: () => import("./telas/CadastroRapido.svelte"), transferencias: () => import("./telas/Transferencias.svelte"),
+    transferir: () => import("./telas/Transferir.svelte"), transferencia: () => import("./telas/Transferencia.svelte"), sugestoes: () => import("./telas/Sugestoes.svelte"),
+    repetidas: () => import("./telas/Repetidas.svelte"), juntar: () => import("./telas/Juntar.svelte")
+  };
+  onMount(() => {
+    // logo depois do painel: a lista e a ficha (as próximas telas de quase todo mundo) já ficam no aparelho
+    // (se a pré-carga falhar, nada a fazer agora: a tela é pedida de novo quando a pessoa abrir)
+    const t = setTimeout(() => { telas.pessoas().catch(() => undefined); telas.ficha().catch(() => undefined); }, 400);
+    return () => clearTimeout(t);
+  });
 
   let nomeDaTela = $state("");
   void lerContadores();
@@ -57,10 +62,16 @@
   });
   $effect(() => { const t = textoEscopo(escopo.resumo); if (t) ponte().escopoDoModulo(t); });
   // a mesma tela com outra parte (a ficha trocando de seção, a caixa trocando de aba) não é montada de novo
-  const chaveTela = $derived(nav.rota.tela === "ficha" ? `ficha-${nav.rota.id}` : nav.rota.tela === "transferencias" ? "transferencias" : JSON.stringify(nav.rota));
+  // "Tentar de novo" de uma tela que não baixou: a tentativa entra na chave e a tela é montada (e pedida) outra vez
+  let tentativa = $state(0);
+  function registrar(e: unknown): string { console.error("tela de Membros não baixou", e); return ""; }
+  const chaveTela = $derived(`${tentativa}:` + (nav.rota.tela === "ficha" ? `ficha-${nav.rota.id}` : nav.rota.tela === "transferencias" ? "transferencias" : JSON.stringify(nav.rota)));
   // a tela de dentro avisa o nome da pessoa (para o caminho do topo)
   $effect(() => { void chaveTela; nomeDaTela = ""; });
 </script>
+
+{#snippet esperando()}<Estado tipo="carregando" linhas={4} />{/snippet}
+{#snippet falhou()}<Estado tipo="erro" texto={tentativa > 0 ? "Esta tela não abriu de novo. O sistema pode ter sido atualizado: recarregue a página." : "Não deu para abrir esta tela agora. Confira a internet e tente de novo."} ontentar={() => (tentativa += 1)} />{/snippet}
 
 <div class="sv membros" class:celular={tela.celular}>
   {#if tela.celular && pilula}
@@ -72,17 +83,17 @@
   <div class="tela">
     {#key chaveTela}
       {#if nav.rota.tela === "painel"}<Painel celular={tela.celular} />
-      {:else if nav.rota.tela === "pessoas"}<Pessoas celular={tela.celular} />
-      {:else if nav.rota.tela === "ficha"}<Ficha id={nav.rota.id} secao={nav.rota.secao} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />
-      {:else if nav.rota.tela === "cadastrar"}<Cadastrar celular={tela.celular} />
-      {:else if nav.rota.tela === "fila"}<Fila celular={tela.celular} />
-      {:else if nav.rota.tela === "rapido"}<CadastroRapido celular={tela.celular} />
-      {:else if nav.rota.tela === "transferencias"}<Transferencias aba={nav.rota.aba} celular={tela.celular} />
-      {:else if nav.rota.tela === "transferir"}<Transferir membroId={nav.rota.membroId} celular={tela.celular} />
-      {:else if nav.rota.tela === "transferencia"}<Transferencia id={nav.rota.id} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />
-      {:else if nav.rota.tela === "sugestoes"}<Sugestoes celular={tela.celular} />
-      {:else if nav.rota.tela === "repetidas"}<Repetidas celular={tela.celular} />
-      {:else if nav.rota.tela === "juntar"}<Juntar a={nav.rota.a} b={nav.rota.b} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />
+      {:else if nav.rota.tela === "pessoas"}{#await telas.pessoas()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "ficha"}{@const r = nav.rota}{#await telas.ficha()}{@render esperando()}{:then m}<m.default id={r.id} secao={r.secao} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "cadastrar"}{#await telas.cadastrar()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "fila"}{#await telas.fila()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "rapido"}{#await telas.rapido()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "transferencias"}{@const r = nav.rota}{#await telas.transferencias()}{@render esperando()}{:then m}<m.default aba={r.aba} celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "transferir"}{@const r = nav.rota}{#await telas.transferir()}{@render esperando()}{:then m}<m.default membroId={r.membroId} celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "transferencia"}{@const r = nav.rota}{#await telas.transferencia()}{@render esperando()}{:then m}<m.default id={r.id} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "sugestoes"}{#await telas.sugestoes()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "repetidas"}{#await telas.repetidas()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "juntar"}{@const r = nav.rota}{#await telas.juntar()}{@render esperando()}{:then m}<m.default a={r.a} b={r.b} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "desligamentos"}
         <div class="pilha">
           {#if !tela.celular}<Cabecalho titulo="Desligamentos" sub="Quem sai do rol: a pedido, por falecimento ou pelo processo da Igreja" />{/if}

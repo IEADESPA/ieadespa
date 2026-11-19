@@ -12,7 +12,7 @@
   import Aviso from "../../comum/Aviso.svelte";
   import Icone from "../../comum/Icone.svelte";
   import Estado from "../../comum/Estado.svelte";
-  import { ir, voltar, departamentos, congregacoesDestino, lerContadores } from "../estado.svelte";
+  import { ir, voltar, departamentos, congregacoesDestino, lerContadores, falhasCatalogo } from "../estado.svelte";
   import { situacaoDe } from "../rotulos";
   import type { Congregacao, Departamento, PaginaPessoas, PessoaLista } from "../tipos";
 
@@ -39,13 +39,16 @@
     if (!r.ok) erro = r.mensagem;
   }
   $effect(() => { if (membroId) void lerPessoa(membroId); });
+  let buscaSeq = 0;
   function procurar(v: string) {
     busca = v;
     if (espera) clearTimeout(espera);
     espera = setTimeout(async () => {
       if (v.trim().length < 2) { achados = []; return; }
+      const meu = ++buscaSeq;
       const r = await pedir<PaginaPessoas>("/pessoas" + qs({ pagina: 1, porPagina: 8, busca: v.trim(), rol: 1 }));
-      achados = r.ok ? [...r.dados.itens] : [];
+      if (meu !== buscaSeq) return;   // chegou a resposta de uma busca velha
+      if (r.ok) { achados = [...r.dados.itens]; erro = ""; } else { achados = []; erro = r.mensagem; }
     }, 250);
   }
   const origem = $derived(pessoa ? destinos.find((c) => c.congregacaoId === pessoa!.congregacaoId) ?? null : null);
@@ -60,6 +63,7 @@
   });
   const nomeDep = $derived(pessoa?.departamentoId != null ? deps.find((d) => d.departamentoId === pessoa!.departamentoId)?.nome ?? "" : "");
   async function enviar() {
+    if (enviando) return;   // o Enter no campo do motivo também envia: nunca duas vezes
     if (!pessoa || !destinoId) { erro = "Escolha para onde a pessoa vai."; return; }
     enviando = true; erro = "";
     const r = await pedir<{ mensagem?: string; transferenciaId?: number; situacao?: string }>("/transferencias", { metodo: "POST", corpo: { membroId: pessoa.membroId, congregacaoDestinoId: destinoId, motivo: motivo.trim() || null } });
@@ -91,6 +95,7 @@
               opcoes={destinos.filter((c) => c.congregacaoId !== pessoa!.congregacaoId).map((c) => ({ valor: c.congregacaoId, rotulo: c.areaNome ? `${c.nome} · ${c.areaNome}` : c.nome }))} onescolher={(v) => (destinoId = v)} />
           </div>
         </div>
+        {#if falhasCatalogo.destinos}<Estado tipo="erro" texto="Não deu para ler as congregações de destino: {falhasCatalogo.destinos}" ontentar={() => void congregacoesDestino().then((c) => (destinos = c))} />{/if}
         {#if regra === "entre" && destino}
           <Aviso tom="alerta"><strong>Áreas diferentes:</strong> o pedido vai para a secretaria de <strong>{destino.nome}</strong>, que aceita ou recusa. Até lá, {pessoa.sexo === "F" ? "a" : "o"} {primeiroNome(pessoa.nome)} continua em {pessoa.congregacao}.</Aviso>
         {:else if regra === "mesma" && destino}

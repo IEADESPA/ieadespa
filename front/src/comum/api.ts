@@ -4,7 +4,7 @@ import { ponte } from "./ponte";
 
 export type Resultado<T> =
   | { readonly ok: true; readonly dados: T; readonly status: number }
-  | { readonly ok: false; readonly mensagem: string; readonly status: number; readonly corpo: unknown; readonly cancelado: boolean };
+  | { readonly ok: false; readonly mensagem: string; readonly status: number; readonly corpo: unknown; readonly cancelado: boolean; readonly jaAvisado: boolean };
 
 const SEM_REDE = "Não deu para falar com o servidor agora. Confira a internet e tente de novo.";
 
@@ -41,14 +41,24 @@ export async function pedir<T>(caminho: string, opcoes: OpcoesPedido = {}): Prom
     res = await p.pedir(p.apiBase + caminho, init);
   } catch (e) {
     const cancelado = e instanceof DOMException && e.name === "AbortError";
-    // a sessão vencida (a casca já voltou para a entrada) também cai aqui: a tela só mostra a mensagem
-    return { ok: false, mensagem: cancelado ? "" : SEM_REDE, status: 0, corpo: null, cancelado };
+    // a casca já avisou a pessoa (sem rede: jaAvisado; sessão vencida: ela voltou para a entrada) — a tela não repete o aviso
+    const jaAvisado = !!(e && typeof e === "object" && ((e as { jaAvisado?: unknown }).jaAvisado === true || (e as Error).message === "Sessão expirada"));
+    if (!cancelado && !jaAvisado) console.error("pedido", caminho, e);
+    return { ok: false, mensagem: cancelado ? "" : SEM_REDE, status: 0, corpo: null, cancelado, jaAvisado: jaAvisado || cancelado };
   }
   let corpo: unknown = null;
   try { corpo = await res.json(); } catch { corpo = null; }
   const recusou = !res.ok || (corpo !== null && typeof corpo === "object" && !Array.isArray(corpo) && (corpo as { sucesso?: unknown }).sucesso === false);
-  if (recusou) return { ok: false, mensagem: mensagemDe(corpo, res.status), status: res.status, corpo, cancelado: false };
+  // 403 e 5xx a casca já avisou (fetchProtegido)
+  if (recusou) return { ok: false, mensagem: mensagemDe(corpo, res.status), status: res.status, corpo, cancelado: false, jaAvisado: res.status === 403 || res.status >= 500 };
+  // resposta certa mas sem JSON: não é "dado vazio", é falha
+  if (corpo === null) return { ok: false, mensagem: "O servidor respondeu sem os dados. Tente de novo.", status: res.status, corpo: null, cancelado: false, jaAvisado: false };
   return { ok: true, dados: corpo as T, status: res.status };
+}
+
+/** avisa a falha de um pedido, se a casca ainda não avisou (nada de dois avisos vermelhos para a mesma coisa) */
+export function avisarFalha(r: { readonly mensagem: string; readonly jaAvisado: boolean; readonly cancelado: boolean }): void {
+  if (!r.jaAvisado && !r.cancelado && r.mensagem) ponte().avisar(r.mensagem, "erro");
 }
 
 /** monta a query string só com o que tem valor */

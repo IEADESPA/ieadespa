@@ -798,6 +798,11 @@ function carregarModuloSvelte(nome) {
       css.href = `/svelte/${nome}.css`;
       css.dataset.svelte = nome;
       document.head.appendChild(css);
+      // o pedaço comum (o Svelte e as peças de todas as telas) vem junto, sem esperar a entrada chegar
+      const comum = document.createElement("link");
+      comum.rel = "modulepreload";
+      comum.href = "/svelte/comum.js";
+      document.head.appendChild(comum);
     }
     svelteCarregados[nome] = import(`/svelte/${nome}.js`).catch((e) => { delete svelteCarregados[nome]; throw e; });
   }
@@ -892,10 +897,17 @@ function abrirMembrosSvelte(rota) {
   carregarModuloSvelte("membros").then((m) => {
     if (typeof moduloAtual === "undefined" || moduloAtual !== "membresia") return;   // a pessoa saiu antes de baixar
     if (!membrosSvelteMontado) conteudo.innerHTML = "";
-    m.montar({ menu, conteudo }, ponteSvelteCasca("membresia"), rota || undefined);
-    membrosSvelteMontado = true;
-  }).catch(() => {
-    conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir Membros agora. Confira a internet e tente de novo.</p>";
+    try {
+      m.montar({ menu, conteudo }, ponteSvelteCasca("membresia"), rota || undefined);
+      membrosSvelteMontado = true;
+    } catch (e) {
+      // defeito de código, não de rede: fica registrado e a pessoa não é mandada "conferir a internet"
+      console.error("Membros (Svelte) não montou:", e);
+      conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Membros não abriu por um problema do sistema. Recarregue a página; se continuar, avise a equipe técnica.</p>";
+    }
+  }, (e) => {
+    console.error("Membros (Svelte) não baixou:", e);
+    conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir Membros agora. Confira a internet (ou recarregue a página, se o sistema acabou de ser atualizado) e tente de novo.</p>";
   });
 }
 function fecharMembrosSvelte() {
@@ -925,12 +937,26 @@ function abrirMinhaVidaSvelte(parte) {
   const alvo = document.getElementById("mvFicha");
   if (!alvo || !authMatricula) return;
   carregarModuloSvelte("membros").then((m) => {
-    if (typeof subAbaMeupainelAtual === "undefined" || subAbaMeupainelAtual !== "minhavida") return;
-    m.montarMinhaVida(alvo, ponteSvelteCasca("minhavida"), parte || undefined);
-    minhaVidaSvelteMontada = true;
-  }).catch(() => {
-    alvo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir a sua ficha agora. Confira a internet e tente de novo.</p>";
+    if (typeof subAbaMeupainelAtual === "undefined" || subAbaMeupainelAtual !== "minhavida") return undefined;
+    minhaVidaSvelteMontada = true;   // já conta como montada: sair da página antes de o pedaço chegar cancela a montagem (desmontarMinhaVida)
+    return m.montarMinhaVida(alvo, ponteSvelteCasca("minhavida"), parte || undefined);
+  }).catch((e) => {
+    console.error("Minha vida (Svelte) não abriu:", e);
+    minhaVidaSvelteMontada = false;
+    alvo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir a sua ficha agora. Confira a internet (ou recarregue a página, se o sistema acabou de ser atualizado) e tente de novo.</p>";
   });
+}
+// a SAÍDA DA SESSÃO (limparSessao, em script.js): nada das telas Svelte fica na página (nem o rascunho do cadastro, que tem CPF)
+function svLimparTela() {
+  trilhaExternaCasca = null;
+  const estavam = membrosSvelteMontado || minhaVidaSvelteMontada;
+  membrosSvelteMontado = false;
+  minhaVidaSvelteMontada = false;
+  if (estavam || svelteCarregados.membros) {
+    carregarModuloSvelte("membros").then((m) => { m.desmontar(); m.desmontarMinhaVida(); m.limparRascunho(); }).catch(() => { /* o módulo nem chegou a baixar: nada a limpar */ });
+  }
+  for (const id of ["membrosRaiz", "membrosMenuRaiz", "mvFicha"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
+  atualizarVoltarCelularCasca();
 }
 function svSubMudou(sub) {
   if (sub === "minhavida") { abrirMinhaVidaSvelte(); return; }

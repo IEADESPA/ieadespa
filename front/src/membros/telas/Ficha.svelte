@@ -2,7 +2,7 @@
      Carteirinha e Editar); no notebook o menu "Nesta ficha" à DIREITA (cresce para baixo); no celular as partes em pílulas no alto.
      Cada parte mostra o que o sistema já sabe da pessoa — o que estava nas abas antigas do perfil foi redistribuído aqui dentro. -->
 <script lang="ts">
-  import { pedir, qs } from "../../comum/api";
+  import { pedir, qs, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import { dataBr, mesAnoBr, anoDe, idade, telefoneMascarado, iniciais, numero, haQuanto } from "../../comum/formato";
   import Botao from "../../comum/Botao.svelte";
@@ -40,6 +40,8 @@
   let pendencias = $state<{ pendencias: { tipo?: string; descricao?: string; rotulo?: string }[]; impressaoFisicaBloqueada: boolean } | null>(null);
   let deps = $state<readonly Departamento[]>([]);
   let erro = $state("");
+  // cada parte com o seu erro: nunca um "nada registrado" no lugar de uma leitura que falhou
+  const falhas = $state({ linha: "", campos: "", alteracoes: "", vinculos: "", pendencias: "" });
   let cpfInteiro = $state<string | null>(null);
   let editando = $state<string | null>(null);
   let salvando = $state(false);
@@ -59,31 +61,41 @@
     if (!achada) { erro = "Matrícula não encontrada."; return; }
     pessoa = achada;
     onnome(achada.nome);
-    linha = l.ok ? l.dados : null;
+    if (l.ok) { linha = l.dados; falhas.linha = ""; } else if (!l.cancelado) falhas.linha = l.mensagem;
   }
   async function carregarCampos() {
     const [c, a] = await Promise.all([
       pedir<CamposFicha>(`/pessoas/${id}/ficha/campos`),
       pedir<PaginaAlteracoes>(`/pessoas/${id}/ficha/alteracoes` + qs({ porPagina: 50 }))
     ]);
-    if (c.ok) campos = c.dados;
-    if (a.ok) { alteracoes = [...a.dados.itens]; altTotal = a.dados.total; }
+    if (c.ok) { campos = c.dados; falhas.campos = ""; } else falhas.campos = c.mensagem;
+    if (a.ok) { alteracoes = [...a.dados.itens]; altTotal = a.dados.total; falhas.alteracoes = ""; } else falhas.alteracoes = a.mensagem;
   }
   $effect(() => { void id; pessoa = null; linha = null; campos = null; vinculos = null; pendencias = null; cpfInteiro = null; editando = null; void carregarPessoa(); });
   $effect(() => {
     if (!pessoa) return;
     if (["dados", "vida", "ministerios", "alteracoes", "familia"].includes(secao) && !campos) void carregarCampos();
     if (secao === "familia" && vinculos === null) {
-      void pedir<unknown>("/vinculos-familiares" + qs({ membroId: id })).then((r) => {
-        const lista = r.ok ? (Array.isArray(r.dados) ? r.dados : ((r.dados as { vinculos?: unknown[] }).vinculos ?? [])) : [];
-        vinculos = lista as typeof vinculos;
-      });
+      void lerVinculos();
     }
     if (secao === "documentos" && pendencias === null) {
-      void pedir<{ pendencias: []; impressaoFisicaBloqueada: boolean }>("/fichas-repetidas/pendencias" + qs({ membroId: id })).then((r) => { pendencias = r.ok ? r.dados : { pendencias: [], impressaoFisicaBloqueada: false }; });
+      void lerPendencias();
     }
   });
 
+  async function lerVinculos() {
+    const r = await pedir<unknown>("/vinculos-familiares" + qs({ membroId: id }));
+    if (!r.ok) { falhas.vinculos = r.mensagem; return; }
+    falhas.vinculos = "";
+    const lista = Array.isArray(r.dados) ? r.dados : ((r.dados as { vinculos?: unknown[] }).vinculos ?? []);
+    vinculos = lista as typeof vinculos;
+  }
+  async function lerPendencias() {
+    const r = await pedir<{ pendencias: []; impressaoFisicaBloqueada: boolean }>("/fichas-repetidas/pendencias" + qs({ membroId: id }));
+    if (!r.ok) { falhas.pendencias = r.mensagem; return; }
+    falhas.pendencias = "";
+    pendencias = r.dados;
+  }
   const ir2 = (s: SecaoFicha) => ir({ tela: "ficha", id, secao: s });
   const eventos = $derived(linha?.eventos ?? []);
   const de = (...cats: string[]) => eventos.filter((e) => cats.includes(e.categoria));
@@ -109,6 +121,7 @@
   const campoDep = $derived((campos?.campos ?? []).find((c) => c.chave === "departamentoId") ?? null);
 
   async function salvarCampo(c: CampoFicha, valor: string | Endereco) {
+    if (salvando) return;
     salvando = true; erroCampo = ""; outraFicha = null;
     const r = await pedir<{ valor?: string | null; mensagem?: string }>(`/pessoas/${id}/ficha/campo`, { metodo: "POST", corpo: { campo: c.chave, valor, valorLido: c.valor } });
     salvando = false;
@@ -127,13 +140,17 @@
   async function mostrarCpf() {
     const r = await pedir<{ cpf: string | null }>(`/pessoas/${id}` + qs({ ver: "cpf" }));
     if (r.ok) cpfInteiro = r.dados.cpf ?? "";
-    else ponte().avisar(r.mensagem, "erro");
+    else avisarFalha(r);
   }
   async function maisAlteracoes() {
     const pag = Math.floor(alteracoes.length / 50) + 1;
     const a = await pedir<PaginaAlteracoes>(`/pessoas/${id}/ficha/alteracoes` + qs({ porPagina: 50, pagina: pag }));
-    if (a.ok) alteracoes = [...alteracoes, ...a.dados.itens];
+    if (a.ok) alteracoes = [...alteracoes, ...a.dados.itens]; else avisarFalha(a);
   }
+  const enderecoAtual = $derived<Endereco | null>(pessoa ? {
+    logradouro: pessoa.enderecoLogradouro ?? "", numero: pessoa.enderecoNumero ?? "", complemento: pessoa.enderecoComplemento ?? "",
+    bairroTexto: pessoa.enderecoBairroTexto ?? pessoa.enderecoBairroNome ?? "", cidade: pessoa.enderecoCidade ?? "", uf: pessoa.enderecoUF ?? "PA", cep: pessoa.enderecoCep ?? ""
+  } : null);
   const resumoMudanca = (a: Alteracao) => a.mudancas.map((x) => x.campo === "congregacaoId" ? "Congregação" : x.rotulo).filter(Boolean).join(", ") || a.acao;
 </script>
 
@@ -216,7 +233,7 @@
 
 {#snippet editaveis(lista: readonly CampoFicha[])}
   {#each lista as c (c.chave)}
-    <CampoEditavel campo={c} sexo={pessoa?.sexo ?? null} {deps} mudou={ultimaMudanca.get(c.chave) ?? ""} aberto={editando === c.chave} {salvando}
+    <CampoEditavel campo={c} sexo={pessoa?.sexo ?? null} {deps} {enderecoAtual} mudou={ultimaMudanca.get(c.chave) ?? ""} aberto={editando === c.chave} {salvando}
       erro={editando === c.chave ? erroCampo : ""} onabrir={() => { editando = c.chave; erroCampo = ""; outraFicha = null; }} onfechar={() => { editando = null; erroCampo = ""; }}
       onsalvar={(v) => salvarCampo(c, v)}>
       {#snippet extra()}{#if outraFicha}<button type="button" class="link" onclick={() => ir({ tela: "ficha", id: outraFicha!, secao: "resumo" })}>Abrir a ficha {outraFicha}</button>{/if}{/snippet}
@@ -233,7 +250,8 @@
 
 {#snippet quemMudou()}
   <Cartao titulo="Quem mudou o quê">
-    {#if !campos}<Estado tipo="carregando" linhas={4} />
+    {#if falhas.alteracoes}<Estado tipo="erro" texto={falhas.alteracoes} ontentar={carregarCampos} />
+    {:else if !campos}<Estado tipo="carregando" linhas={4} />
     {:else if !alteracoes.length}<Estado tipo="vazio" texto="Nenhuma mudança registrada ainda." />
     {:else}
       <ol class="quem-mudou">
@@ -250,7 +268,7 @@
   {#if secao === "resumo"}
     <div class="resumo">
       <Cartao titulo="Vida na Igreja" nota={celular ? "todos veem" : "todos veem · mais recente primeiro"}>
-        {#if !linha}<Estado tipo="carregando" linhas={5} />{:else if eventos.length}<LinhaTempo eventos={eventos} max={celular ? 4 : 7} />{:else}<Estado tipo="vazio" texto="Nada registrado ainda na vida desta pessoa na Igreja." />{/if}
+        {#if falhas.linha}<Estado tipo="erro" texto={falhas.linha} ontentar={carregarPessoa} />{:else if !linha}<Estado tipo="carregando" linhas={5} />{:else if eventos.length}<LinhaTempo eventos={eventos} max={celular ? 4 : 7} />{:else}<Estado tipo="vazio" texto="Nada registrado ainda na vida desta pessoa na Igreja." />{/if}
         {#if eventos.length > (celular ? 4 : 7)}<Botao tipo="texto" onclick={() => ir2("vida")}>Ver a linha do tempo inteira ({eventos.length})</Botao>{/if}
       </Cartao>
       {#if !celular}<div class="col">{@render blocoEspiritual()}{@render blocoPessoais()}</div>{/if}
@@ -258,7 +276,7 @@
   {:else if secao === "dados"}
     <div class="duas">
       <section class="cartao-base editar" aria-label="Dados pessoais">
-        {#if !campos}<div class="pad"><Estado tipo="carregando" linhas={7} /></div>
+        {#if falhas.campos}<div class="pad"><Estado tipo="erro" texto={falhas.campos} ontentar={carregarCampos} /></div>{:else if !campos}<div class="pad"><Estado tipo="carregando" linhas={7} /></div>
         {:else}
           {@render grupoEditavel("Dados pessoais", camposDo("Dados pessoais"))}
           {@render grupoEditavel("Filiação", camposDo("Filiação"))}
@@ -272,7 +290,7 @@
       <div class="col">
         {@render blocoEspiritual()}
         <section class="cartao-base editar" aria-label="Datas e entrada na igreja">
-          {#if !campos}<div class="pad"><Estado tipo="carregando" linhas={5} /></div>
+          {#if falhas.campos}<div class="pad"><Estado tipo="erro" texto={falhas.campos} ontentar={carregarCampos} /></div>{:else if !campos}<div class="pad"><Estado tipo="carregando" linhas={5} /></div>
           {:else}{@render grupoEditavel("Vida espiritual", camposDo("Vida espiritual"))}{@render grupoEditavel("Na igreja", camposDo("Na igreja"))}{/if}
         </section>
       </div>
@@ -289,7 +307,8 @@
           <div class="dados"><Dado rotulo="Mãe" valor={pessoa?.nomeMae} vazio="não informada" /><Dado rotulo="Pai" valor={pessoa?.nomePai} vazio="não informado" /></div>
         </Cartao>
         <Cartao titulo="Parentes no cadastro" icone="pessoas">
-          {#if vinculos === null}<Estado tipo="carregando" linhas={3} />
+          {#if falhas.vinculos}<Estado tipo="erro" texto={falhas.vinculos} ontentar={lerVinculos} />
+          {:else if vinculos === null}<Estado tipo="carregando" linhas={3} />
           {:else if !vinculos.length}<Estado tipo="vazio" texto="Nenhum parente ligado a esta ficha." />
           {:else}
             <ul class="parentes">
@@ -328,7 +347,7 @@
       <div class="col">
         <section class="cartao-base editar" aria-label="Departamento">
           <h3 class="grupo">Departamento</h3>
-          {#if !campos}<div class="pad"><Estado tipo="carregando" linhas={1} /></div>{:else if campoDep}{@render editaveis([campoDep])}{/if}
+          {#if falhas.campos}<div class="pad"><Estado tipo="erro" texto={falhas.campos} ontentar={carregarCampos} /></div>{:else if !campos}<div class="pad"><Estado tipo="carregando" linhas={1} /></div>{:else if campoDep}{@render editaveis([campoDep])}{/if}
           <p class="nota-dep">Um departamento por pessoa, pela idade, separado dos ministérios onde ela serve.</p>
         </section>
       </div>
@@ -360,6 +379,7 @@
       <div class="col">
         <Cartao titulo="Carteirinha" icone="cartao">
           {#if de("CREDENCIAL").length}<LinhaTempo eventos={de("CREDENCIAL")} />{:else}<Estado tipo="vazio" texto="Nenhuma carteirinha emitida." />{/if}
+          {#if falhas.pendencias}<Estado tipo="erro" texto="Não deu para conferir as pendências do cadastro (e se a impressão está bloqueada)." ontentar={lerPendencias} />{/if}
           {#if pendencias?.impressaoFisicaBloqueada}<Aviso tom="alerta"><strong>A impressão da carteirinha física está bloqueada</strong> enquanto a ficha tiver pendência de cadastro.</Aviso>{/if}
         </Cartao>
         {#if pendencias && pendencias.pendencias.length}
@@ -376,7 +396,8 @@
     </div>
   {:else if secao === "alteracoes"}
     <Cartao titulo="Alterações" nota="quem mudou o quê e quando">
-      {#if !campos}<Estado tipo="carregando" linhas={6} />
+      {#if falhas.alteracoes}<Estado tipo="erro" texto={falhas.alteracoes} ontentar={carregarCampos} />
+      {:else if !campos}<Estado tipo="carregando" linhas={6} />
       {:else if !alteracoes.length}<Estado tipo="vazio" texto="Nenhuma alteração registrada." />
       {:else}
         <ol class="alteracoes">

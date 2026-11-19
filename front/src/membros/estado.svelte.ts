@@ -24,6 +24,23 @@ export type Rota =
   | { readonly tela: "carteirinhas" }
   | { readonly tela: "ficha"; readonly id: number; readonly secao: SecaoFicha };
 
+const inteiro = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null);
+const TELAS_SIMPLES = ["painel", "pessoas", "fila", "cadastrar", "rapido", "desligamentos", "repetidas", "sugestoes", "carteirinhas"] as const;
+const SECOES: readonly SecaoFicha[] = ["resumo", "dados", "familia", "vida", "cargos", "ministerios", "assembleia", "documentos", "alteracoes"];
+/** a rota que chega de FORA (a casca, a busca do alto): só telas conhecidas, com ids inteiros; o resto é ignorado (fica a tela de agora) */
+export function lerRota(x: unknown): Rota | null {
+  if (!x || typeof x !== "object") return null;
+  const o = x as Record<string, unknown>;
+  const tela = o.tela;
+  if ((TELAS_SIMPLES as readonly unknown[]).includes(tela)) return { tela: tela as (typeof TELAS_SIMPLES)[number] };
+  if (tela === "ficha") { const id = inteiro(o.id); return id ? { tela, id, secao: SECOES.includes(o.secao as SecaoFicha) ? (o.secao as SecaoFicha) : "resumo" } : null; }
+  if (tela === "transferencias") return { tela, aba: o.aba === "saindo" || o.aba === "concluidos" ? o.aba : "chegando" };
+  if (tela === "transferir") return { tela, membroId: inteiro(o.membroId) };
+  if (tela === "transferencia") { const id = inteiro(o.id); return id ? { tela, id } : null; }
+  if (tela === "juntar") { const a = inteiro(o.a), b = inteiro(o.b); return a && b && a !== b ? { tela, a, b } : null; }
+  return null;
+}
+
 export type ChaveMenu = "painel" | "pessoas" | "fila" | "cadastrar" | "transferencias" | "desligamentos" | "repetidas" | "sugestoes" | "carteirinhas";
 
 /** a qual item do menu cada tela pertence (o item marcado e o caminho do topo) */
@@ -70,11 +87,13 @@ export async function lerContadores(): Promise<void> {
   contadores.lidos = true;
 }
 
-// ---- os catálogos (lidos uma vez por entrada no módulo) ----
+// ---- os catálogos (lidos uma vez por entrada no módulo); a falha fica guardada para a tela dizer por que a lista está vazia ----
+export const falhasCatalogo = $state({ departamentos: "", destinos: "" });
 let depsPromessa: Promise<readonly Departamento[]> | null = null;
 export function departamentos(): Promise<readonly Departamento[]> {
   depsPromessa ??= pedir<Departamento[] | { itens: Departamento[] }>("/catalogos/departamentos").then((r) => {
-    if (!r.ok) { depsPromessa = null; return []; }
+    if (!r.ok) { depsPromessa = null; falhasCatalogo.departamentos = r.mensagem; return []; }
+    falhasCatalogo.departamentos = "";
     const lista = Array.isArray(r.dados) ? r.dados : r.dados.itens ?? [];
     return lista.filter((d) => d.ativo !== false);
   });
@@ -84,8 +103,9 @@ let congsPromessa: Promise<readonly Congregacao[]> | null = null;
 /** as congregações para onde se pode transferir (com a área) */
 export function congregacoesDestino(): Promise<readonly Congregacao[]> {
   congsPromessa ??= pedir<{ congregacoes: Congregacao[] }>("/transferencias" + qs({ destinos: 1 })).then((r) => {
-    if (!r.ok) { congsPromessa = null; return []; }
-    return (r.dados.congregacoes ?? []).filter((c) => c.ativa !== false);
+    if (!r.ok) { congsPromessa = null; falhasCatalogo.destinos = r.mensagem; return []; }
+    falhasCatalogo.destinos = "";
+    return r.dados.congregacoes ?? [];   // o servidor já manda só as ativas
   });
   return congsPromessa;
 }

@@ -1,6 +1,6 @@
 <!-- 8b. A CAIXA DE TRANSFERÊNCIAS (rodada 8, "caixa de pedidos"): chegando, saindo e concluídos; quem aceita vê "Recusar" e "Aceitar" na linha. -->
 <script lang="ts">
-  import { pedir, qs } from "../../comum/api";
+  import { pedir, qs, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import { haQuanto, dataBr } from "../../comum/formato";
   import Cabecalho from "../../comum/Cabecalho.svelte";
@@ -15,34 +15,34 @@
   interface Props { aba: AbaTransferencias; celular: boolean }
   let { aba, celular }: Props = $props();
 
-  const caixas = $state<Record<AbaTransferencias, { itens: Transferencia[]; total: number; lido: boolean }>>({
-    chegando: { itens: [], total: 0, lido: false }, saindo: { itens: [], total: 0, lido: false }, concluidos: { itens: [], total: 0, lido: false }
+  const caixas = $state<Record<AbaTransferencias, { itens: Transferencia[]; total: number; lido: boolean; erro: string }>>({
+    chegando: { itens: [], total: 0, lido: false, erro: "" }, saindo: { itens: [], total: 0, lido: false, erro: "" }, concluidos: { itens: [], total: 0, lido: false, erro: "" }
   });
-  let erro = $state("");
   let recusando = $state<number | null>(null);
   let motivo = $state("");
   let ocupado = $state<number | null>(null);
 
   async function ler(c: AbaTransferencias) {
     const r = await pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: c, porPagina: 50 }));
-    if (!r.ok) { if (c === aba) erro = r.mensagem; return; }
-    caixas[c] = { itens: [...r.dados.itens], total: r.dados.total, lido: true };
+    if (!r.ok) { caixas[c].erro = r.mensagem; return; }
+    caixas[c] = { itens: [...r.dados.itens], total: r.dados.total, lido: true, erro: "" };
   }
-  function lerTudo() { erro = ""; void ler("chegando"); void ler("saindo"); void ler("concluidos"); }
+  function lerTudo() { void ler("chegando"); void ler("saindo"); void ler("concluidos"); }
   lerTudo();
 
   async function decidir(t: Transferencia, acao: "aceitar" | "recusar") {
     if (acao === "recusar" && !motivo.trim()) { ponte().avisar("Escreva o motivo da recusa: a pessoa e a origem recebem.", "erro"); return; }
+    if (ocupado !== null) return;   // uma decisão por vez
     ocupado = t.transferenciaId;
     const r = await pedir<{ mensagem?: string }>(`/transferencias/${t.transferenciaId}/${acao}`, { metodo: "POST", corpo: acao === "recusar" ? { motivo: motivo.trim() } : {} });
-    ocupado = null;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); return; }
+    if (!r.ok) { ocupado = null; avisarFalha(r); return; }
     ponte().avisar(acao === "aceitar" ? `${t.pessoaNome} agora é de ${t.destinoNome}.` : "Pedido recusado; a origem foi avisada.", "sucesso");
     recusando = null; motivo = "";
-    lerTudo();
+    await Promise.all([ler("chegando"), ler("saindo"), ler("concluidos")]);
+    ocupado = null;   // os botões só voltam depois de a lista ser lida de novo
     void lerContadores();
   }
-  const pedidoPor = (t: Transferencia) => t.pedidoComo === "MEMBRO" ? "pedido pelo próprio membro" : t.pedidoComo === "GERAL" ? "pedido pela Secretaria Geral" : `pedido pela secretaria de ${t.origemNome}`;
+  const pedidoPor = (t: Transferencia) => t.pedidoComo === "PROPRIO" ? "pedido pelo próprio membro" : t.pedidoComo === "GERAL" ? "pedido pela Secretaria Geral" : `pedido pela secretaria de ${t.origemNome}`;
   const lado = (nome: string, area: string | null) => (area ? `${nome} (${area})` : nome);
   const lista = $derived(caixas[aba].itens);
   const entreAreas = $derived(lista.filter((t) => t.regra === "ENTRE_AREAS").length);
@@ -64,7 +64,7 @@
       </button>
     {/each}
   </div>
-  {#if erro}<Estado tipo="erro" texto={erro} ontentar={lerTudo} />
+  {#if caixas[aba].erro}<Estado tipo="erro" texto={caixas[aba].erro} ontentar={() => { caixas[aba].erro = ""; void ler(aba); }} />
   {:else if !caixas[aba].lido}<div class="caixa pad"><Estado tipo="carregando" linhas={3} /></div>
   {:else if !lista.length}<div class="caixa pad"><Estado tipo="vazio" texto={aba === "chegando" ? "Nenhum pedido chegando." : aba === "saindo" ? "Nenhum pedido saindo." : "Nenhum pedido concluído ainda."} /></div>
   {:else}
@@ -76,7 +76,7 @@
             <span><strong>{t.pessoaNome}</strong><small class="sv-num">{t.membroId} · {pedidoPor(t)}</small></span>
           </button>
           <span class="rota">{lado(t.origemNome, t.origemAreaNome)} → {t.destinoNome}</span>
-          <span class="quando">{aba === "concluidos" ? dataBr(t.decididoEm) : haQuanto(t.pedidoEm)}</span>
+          <span class="quando">{aba === "concluidos" ? dataBr(t.decididoEm ?? t.canceladoEm ?? null) : haQuanto(t.pedidoEm)}</span>
           <div class="acoes">
             {#if t.podeDecidir}
               {#if recusando === t.transferenciaId}
@@ -84,7 +84,7 @@
                 <Botao tipo="linha" ocupado={ocupado === t.transferenciaId} onclick={() => void decidir(t, "recusar")}>Recusar</Botao>
                 <Botao tipo="texto" onclick={() => { recusando = null; motivo = ""; }}>Desistir</Botao>
               {:else}
-                <Botao tipo="linha" onclick={() => { recusando = t.transferenciaId; motivo = ""; }}>Recusar</Botao>
+                <Botao tipo="linha" desligado={ocupado !== null} onclick={() => { recusando = t.transferenciaId; motivo = ""; }}>Recusar</Botao>
                 <Botao tipo="ouro" icone="check" ocupado={ocupado === t.transferenciaId} onclick={() => void decidir(t, "aceitar")}>Aceitar</Botao>
               {/if}
             {:else if t.situacao === "CONCLUIDA"}<Chip tom="ok">Concluída</Chip>

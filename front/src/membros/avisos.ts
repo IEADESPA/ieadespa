@@ -1,8 +1,9 @@
 // Os AVISOS SÓ DE MEMBROS do painel (rodada 10): montados com o que o servidor já conta (as caixas e o resumo do rol), sem número inventado.
 // "meu" = espera por quem está vendo (a caixa dele); o resto é para acompanhar (aparece em "Tudo da...").
+// A montagem é SÍNCRONA (montarAvisos): o painel a refaz sozinho quando os contadores do menu chegam ou mudam.
 import { pedir } from "../comum/api";
 import { numero, plural, primeiroNome } from "../comum/formato";
-import { contadores, ir } from "./estado.svelte";
+import { ir } from "./estado.svelte";
 import type { ResumoPainel, Transferencia } from "./tipos";
 
 export interface AvisoMembros {
@@ -14,8 +15,18 @@ export interface AvisoMembros {
   readonly meu: boolean;
   readonly abrir: () => void;
 }
+/** o alerta da assembleia geral (shared/juntarFichasDb.textoDoAlerta) */
+export interface AlertaAssembleia { precisaConfirmar?: boolean; mensagem?: string | null; contagem?: { repetidas?: number; possiveis?: number; numero?: number; arrolamento?: number } }
+export interface Contadores { readonly fila: number; readonly repetidas: number; readonly sugestoes: number }
 
-export async function avisosDoModulo(resumo: ResumoPainel, chegando: readonly Transferencia[], geral: boolean): Promise<AvisoMembros[]> {
+/** só a Geral recebe o alerta do servidor; para os outros (ou se a leitura falhar) não há alerta, e o "sem CPF" do resumo aparece no lugar */
+export async function lerAlerta(geral: boolean): Promise<AlertaAssembleia | null> {
+  if (!geral) return null;
+  const a = await pedir<AlertaAssembleia>("/fichas-repetidas/alerta");
+  return a.ok && a.dados.precisaConfirmar ? a.dados : null;
+}
+
+export function montarAvisos(resumo: ResumoPainel, chegando: readonly Transferencia[], alerta: AlertaAssembleia | null, c: Contadores, geral: boolean): AvisoMembros[] {
   const lista: AvisoMembros[] = [];
   const pendentes = chegando.filter((t) => t.situacao === "PENDENTE" && t.podeDecidir);
   if (pendentes.length === 1 && pendentes[0]) {
@@ -27,32 +38,23 @@ export async function avisosDoModulo(resumo: ResumoPainel, chegando: readonly Tr
     lista.push({ chave: "tr", icone: "seta", titulo: `${pendentes.length} transferências chegando: aceitar ou recusar`, sub: parado ? `a mais antiga parada há ${parado} dias` : "chegaram hoje",
       tom: parado >= 3 ? "primeiro" : "afazer", meu: true, abrir: () => ir({ tela: "transferencias", aba: "chegando" }, true) });
   }
-  if (contadores.repetidas > 0) {
-    const n = contadores.repetidas;
-    lista.push({ chave: "rep", icone: "pessoas", titulo: `${n} ${plural(n, "par", "pares")} de fichas repetidas`, sub: geral ? "entre áreas, só a Geral junta" : "a mesma pessoa em duas fichas",
+  if (c.repetidas > 0) {
+    lista.push({ chave: "rep", icone: "pessoas", titulo: `${c.repetidas} ${plural(c.repetidas, "par", "pares")} de fichas repetidas`, sub: geral ? "entre áreas, só a Geral junta" : "a mesma pessoa em duas fichas",
       tom: "afazer", meu: true, abrir: () => ir({ tela: "repetidas" }, true) });
   }
-  if (contadores.fila > 0) {
-    const n = contadores.fila;
-    lista.push({ chave: "fila", icone: "doc", titulo: `${n} ${plural(n, "cadastro", "cadastros")} na fila com pendência`, sub: "falta dado ou parece outra ficha",
+  if (c.fila > 0) {
+    lista.push({ chave: "fila", icone: "doc", titulo: `${c.fila} ${plural(c.fila, "cadastro", "cadastros")} na fila com pendência`, sub: "falta dado ou parece outra ficha",
       tom: "afazer", meu: true, abrir: () => ir({ tela: "fila" }, true) });
   }
-  if (contadores.sugestoes > 0) {
-    const n = contadores.sugestoes;
-    lista.push({ chave: "sug", icone: "lapis", titulo: `${n} ${plural(n, "sugestão", "sugestões")} de membros para conferir`, sub: "aplicar ou recusar com o motivo",
+  if (c.sugestoes > 0) {
+    lista.push({ chave: "sug", icone: "lapis", titulo: `${c.sugestoes} ${plural(c.sugestoes, "sugestão", "sugestões")} de membros para conferir`, sub: "aplicar ou recusar com o motivo",
       tom: "afazer", meu: true, abrir: () => ir({ tela: "sugestoes" }, true) });
   }
-  // o alerta da assembleia geral (só a Geral recebe do servidor: shared/juntarFichasDb.textoDoAlerta); para os outros, o "sem CPF" do resumo
-  interface Alerta { precisaConfirmar?: boolean; mensagem?: string | null; contagem?: { repetidas?: number; possiveis?: number; numero?: number; arrolamento?: number } }
-  let alerta: Alerta | null = null;
-  if (geral) {
-    const a = await pedir<Alerta>("/fichas-repetidas/alerta");
-    if (a.ok && a.dados.precisaConfirmar) alerta = a.dados;
-  }
   if (alerta) {
-    const c = alerta.contagem ?? {};
-    const fichas = (c.repetidas ?? 0) + (c.possiveis ?? 0);
-    const partes = [fichas ? `${fichas} ${plural(fichas, "ficha repetida", "fichas repetidas")}` : "", c.numero ? `${c.numero} ${plural(c.numero, "número", "números")} a acertar` : ""].filter(Boolean);
+    const k = alerta.contagem ?? {};
+    const partes = [k.repetidas ? `${k.repetidas} ${plural(k.repetidas, "ficha marcada como repetida", "fichas marcadas como repetidas")}` : "",
+      k.possiveis ? `${k.possiveis} ${plural(k.possiveis, "dupla", "duplas")} com o mesmo nome e nascimento` : "",
+      k.numero ? `${k.numero} ${plural(k.numero, "número", "números")} a acertar` : ""].filter(Boolean);
     lista.push({ chave: "assembleia", icone: "alerta", titulo: "Cadastros a acertar antes da assembleia geral", sub: partes.join(" · "), tom: "primeiro", meu: true, abrir: () => ir({ tela: "repetidas" }, true) });
   }
   if (resumo.semCpf > 0) {

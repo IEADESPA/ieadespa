@@ -14,7 +14,8 @@
   import Estado from "../../comum/Estado.svelte";
   import { ir, escopo, contadores, cuidaDoCadastro } from "../estado.svelte";
   import type { Agrupamento, PaginaTransferencias, Recorte, ResumoPainel } from "../tipos";
-  import { avisosDoModulo, type AvisoMembros } from "../avisos";
+  import { lerAlerta, montarAvisos, type AlertaAssembleia } from "../avisos";
+  import type { Transferencia } from "../tipos";
 
   interface Props { celular: boolean }
   let { celular }: Props = $props();
@@ -23,7 +24,10 @@
   let congregacaoId = $state<number | null>(null);
   let resumo = $state<ResumoPainel | null>(null);
   let erro = $state("");
-  let avisos = $state<AvisoMembros[]>([]);
+  let chegando = $state<Transferencia[]>([]);
+  let alerta = $state<AlertaAssembleia | null>(null);
+  // os avisos se refazem sozinhos quando os contadores do menu chegam ou mudam
+  const avisos = $derived(resumo ? montarAvisos(resumo, chegando, alerta, contadores, sessao.geral) : []);
   let soMeu = $state(true);
 
   // ---- o gráfico grande: o que mostrar e como agrupar ficam guardados neste aparelho ----
@@ -69,14 +73,22 @@
   const totEnt = $derived((resumo?.movimento ?? []).reduce((a, m) => a + m.entradas, 0));
   const totSai = $derived((resumo?.movimento ?? []).reduce((a, m) => a + m.saidas, 0));
 
+  let seq = 0;
   async function carregar() {
     erro = "";
-    const r = await pedir<{ resumo: ResumoPainel }>("/pessoas" + qs({ resumo: 1, congregacaoId }));
+    const meu = ++seq;
+    const pedida = congregacaoId;   // o escopo do módulo só vem do painel SEM filtro (nunca da congregação escolhida)
+    const [r, tr, al] = await Promise.all([
+      pedir<{ resumo: ResumoPainel }>("/pessoas" + qs({ resumo: 1, congregacaoId: pedida })),
+      cuidaDoCadastro() ? pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: "chegando", porPagina: 20 })) : Promise.resolve(null),
+      lerAlerta(sessao.geral)
+    ]);
+    if (meu !== seq) return;   // a pessoa trocou o filtro antes da resposta: vale só a última
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
     resumo = r.dados.resumo;
-    if (congregacaoId === null) escopo.resumo = r.dados.resumo;
-    const tr = cuidaDoCadastro() ? await pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: "chegando", porPagina: 20 })) : null;
-    avisos = await avisosDoModulo(r.dados.resumo, tr && tr.ok ? tr.dados.itens : [], sessao.geral);
+    if (pedida === null) escopo.resumo = r.dados.resumo;
+    chegando = tr && tr.ok ? [...tr.dados.itens] : [];
+    alerta = al;
   }
   $effect(() => { void congregacaoId; void carregar(); });
 

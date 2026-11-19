@@ -11,6 +11,7 @@
   import Etapas from "../../comum/Etapas.svelte";
   import Icone from "../../comum/Icone.svelte";
   import Aviso from "../../comum/Aviso.svelte";
+  import Estado from "../../comum/Estado.svelte";
   import { ir, escopo, departamentos, lerContadores } from "../estado.svelte";
   import { cadastro, limparRascunho } from "../rascunho.svelte";
   import { sugerirDepartamento } from "../departamento";
@@ -36,7 +37,12 @@
   void pedir<{ sigla: string; nome: string; ativo?: boolean }[]>("/catalogos/cargosMinisteriais").then((x) => { if (x.ok && Array.isArray(x.dados)) cargos = x.dados.filter((c) => c.ativo !== false); });
   const lerCongs = (res: ResumoPainel | null) => (congs = (res?.congregacoes ?? []).map((c) => ({ congregacaoId: c.congregacaoId, nome: c.nome })));
   if (escopo.resumo) lerCongs(escopo.resumo);
-  else void pedir<{ resumo: ResumoPainel }>("/pessoas?resumo=1").then((x) => { if (x.ok) { escopo.resumo = x.dados.resumo; lerCongs(x.dados.resumo); } });
+  let erroCongs = $state("");
+  function lerResumo() {
+    erroCongs = "";
+    void pedir<{ resumo: ResumoPainel }>("/pessoas?resumo=1").then((x) => { if (x.ok) { escopo.resumo = x.dados.resumo; lerCongs(x.dados.resumo); } else erroCongs = x.mensagem; });
+  }
+  if (!escopo.resumo) lerResumo();
   $effect(() => { if (congs.length === 1 && congs[0] && cadastro.r.congregacaoId === null) cadastro.r.congregacaoId = congs[0].congregacaoId; });
 
   // o departamento pela idade (a secretaria pode trocar)
@@ -51,12 +57,15 @@
     if (confEspera) clearTimeout(confEspera);
     confEspera = setTimeout(conferir, 500);
   }
+  let confSeq = 0;
   async function conferir() {
     const cpf = r.cpf.replace(/\D/g, "");
+    const meu = ++confSeq;
     if (!cpf && !(r.nome.trim().length >= 2 && r.dataNascimento)) { conf = null; return; }
     const x = await pedir<Conferencia>("/cadastro/conferir", { metodo: "POST", corpo: { cpf: cpf || null, nome: r.nome.trim() || null, dataNascimento: r.dataNascimento || null, congregacaoId: r.congregacaoId } });
-    if (x.ok) conf = x.dados;
-    else if (x.status === 429) conf = { ...(conf ?? {}), bloqueia: conf?.bloqueia ?? false };
+    if (meu !== confSeq) return;   // a resposta de um CPF antigo não vale para o de agora
+    // sem conferir agora, não bloqueia: o servidor confere de novo ao salvar
+    conf = x.ok ? x.dados : null;
   }
   const bloqueia = $derived(!!conf?.bloqueia);
 
@@ -80,6 +89,7 @@
     cadastro.r.etapa = Math.min(ETAPAS.length - 1, r.etapa + 1);
   }
   async function salvar() {
+    if (salvando) return;
     for (const i of [0, 3]) { const f = faltaNaEtapa(i); if (f) { erro = f; cadastro.r.etapa = i; return; } }
     salvando = true; erro = "";
     const corpo: Record<string, unknown> = {
@@ -161,6 +171,7 @@
   {:else if r.etapa === 3}
     <div class="duas">
       <div class="grupo"><span class="rot">Congregação <span class="obr">*</span></span>
+        {#if erroCongs}<Estado tipo="erro" texto="Não deu para ler as congregações: {erroCongs}" ontentar={lerResumo} />{/if}
         {#if congs.length === 1}<Escolha rotulo={`${nomeCong} (a sua congregação)`} estilo="trava" larga valor={null} opcoes={[]} onescolher={() => {}} />
         {:else}<Escolha rotulo="Escolha a congregação" estilo="campo" larga valor={r.congregacaoId} opcoes={congs.map((c) => ({ valor: c.congregacaoId, rotulo: c.nome }))} onescolher={(v) => (cadastro.r.congregacaoId = v)} />{/if}
       </div>

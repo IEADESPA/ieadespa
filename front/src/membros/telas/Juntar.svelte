@@ -1,7 +1,7 @@
 <!-- 11b. JUNTAR FICHAS REPETIDAS (rodada 8, opção 3 "só o que é diferente"): um campo por linha, com as duas opções para tocar; os iguais ficam
      escondidos (contados); fica a matrícula mais antiga e o histórico das duas. "Não são a mesma pessoa" tira a dupla da lista. -->
 <script lang="ts">
-  import { pedir, qs } from "../../comum/api";
+  import { pedir, qs, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import Cabecalho from "../../comum/Cabecalho.svelte";
   import Botao from "../../comum/Botao.svelte";
@@ -36,7 +36,7 @@
     ocupado = true;
     const r = await pedir<{ mensagem?: string }>("/fichas-repetidas/juntar", { metodo: "POST", corpo: { a: c.fica.matricula, b: c.sai.matricula, escolhas, versao: c.versao } });
     ocupado = false;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); if (r.status === 409) void carregar(); return; }
+    if (!r.ok) { avisarFalha(r); if (r.status === 409) void carregar(); return; }
     feito = r.dados.mensagem ?? `As duas fichas viraram uma só: ${c.fica.matricula}.`;
     void lerContadores();
   }
@@ -45,7 +45,7 @@
     ocupado = true;
     const r = await pedir<{ mensagem?: string }>("/fichas-repetidas/nao-sao-a-mesma", { metodo: "POST", corpo: { a: c.fica.matricula, b: c.sai.matricula } });
     ocupado = false;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); return; }
+    if (!r.ok) { avisarFalha(r); return; }
     ponte().avisar("Combinado: a dupla saiu da lista de repetidas.", "sucesso");
     void lerContadores();
     ir({ tela: "repetidas" }, true);

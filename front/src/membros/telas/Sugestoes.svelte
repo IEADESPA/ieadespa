@@ -1,7 +1,7 @@
 <!-- 9. A CAIXA DE SUGESTÕES (rodada 10, versão final, 4º passo): a trilha das 4 etapas no alto; cada sugestão com o antes riscado › o depois; "Aplicar"
      muda a ficha na hora; "Recusar" pede o motivo (o membro recebe); o que só a Geral muda aparece com o cadeado "encaminhada". -->
 <script lang="ts">
-  import { pedir } from "../../comum/api";
+  import { pedir, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import Cabecalho from "../../comum/Cabecalho.svelte";
   import Botao from "../../comum/Botao.svelte";
@@ -38,7 +38,7 @@
     ocupado = l.c.campoId;
     const r = await pedir<{ mensagem?: string }>(`/fila-aprovacoes/${l.s.solicitacaoId}/decidir`, { metodo: "POST", corpo: { decisoes: [{ campoId: l.c.campoId, decisao, ...(decisao === "REJEITADO" ? { motivo: motivo.trim() } : {}) }] } });
     ocupado = null;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); if (r.status === 409) void carregar(); return; }
+    if (!r.ok) { avisarFalha(r); if (r.status === 409) void carregar(); return; }
     ponte().avisar(decisao === "APROVADO" ? `${l.c.rotulo} de ${l.s.nome}: aplicado na ficha.` : "Recusada; o membro recebe o motivo.", "sucesso");
     recusando = null; motivo = "";
     void carregar();

@@ -659,8 +659,9 @@
 
         <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
         <div id="subMeupainelMinhavida" class="sub-aba-secretaria" style="display:none;">
-          <!-- FASE 10, passo 7a, incremento 3 — a minha ficha (rodada 10, versão final): a linha do tempo primeiro e "Minha ficha" à direita (modulos/membros-movimento.js) -->
-          <div id="mvFicha" class="mb-tela mv-ficha"></div>
+          <!-- FASE 10 (19/11/2026) — a minha ficha (rodada 10, versão final): a linha do tempo primeiro e "Minha ficha" à direita; as telas Svelte montam aqui
+               (app/svelte, por modulos/casca.js abrirMinhaVidaSvelte) -->
+          <div id="mvFicha" class="mv-ficha"></div>
           <div class="vida-grade">
             <section class="vida-cartao"><h3 class="vida-titulo">Meus próximos compromissos</h3><div id="minhaVidaCompromissos" class="vida-lista"></div></section>
             <section class="vida-atalhos" id="minhaVidaAtalhos"></section>
@@ -7850,9 +7851,6 @@
   <script src="modulos/expansao.js"></script>
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
-  <script src="modulos/membros-cadastro.js"></script>
-  <script src="modulos/membros-movimento.js"></script>
-  <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
   <script src="modulos/ministerio-menores.js"></script>

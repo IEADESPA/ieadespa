@@ -1,7 +1,7 @@
 <!-- 8c. ACOMPANHAR UM PEDIDO (rodada 8, "acompanhar como entrega"): os passos (feito, esperando, concluído) e o que já aconteceu; quem pode decidir,
      decide aqui; quem pediu pode cancelar enquanto espera. -->
 <script lang="ts">
-  import { pedir } from "../../comum/api";
+  import { pedir, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
   import { dataBr, haQuanto } from "../../comum/formato";
   import Cabecalho from "../../comum/Cabecalho.svelte";
@@ -22,6 +22,7 @@
   let motivo = $state("");
   let ocupado = $state(false);
   async function carregar() {
+    erro = "";
     const r = await pedir<{ transferencia: T }>(`/transferencias/${id}`);
     if (!r.ok) { erro = r.mensagem; return; }
     t = r.dados.transferencia;
@@ -29,24 +30,24 @@
   }
   void carregar();
   async function agir(acao: "aceitar" | "recusar" | "cancelar") {
-    if (!t) return;
+    if (!t || ocupado) return;
     if (acao === "recusar" && !motivo.trim()) { ponte().avisar("Escreva o motivo da recusa.", "erro"); return; }
     ocupado = true;
     const r = await pedir<{ mensagem?: string }>(`/transferencias/${t.transferenciaId}/${acao}`, { metodo: "POST", corpo: acao === "recusar" ? { motivo: motivo.trim() } : {} });
-    ocupado = false;
-    if (!r.ok) { ponte().avisar(r.mensagem, "erro"); return; }
+    if (!r.ok) { ocupado = false; avisarFalha(r); return; }
     ponte().avisar(r.dados.mensagem ?? "Feito.", "sucesso");
     void lerContadores();
-    void carregar();
+    await carregar();
+    ocupado = false;
   }
   const passos = $derived.by(() => {
     if (!t) return [];
     const esperando = t.situacao === "PENDENTE";
     const fim = t.situacao === "CONCLUIDA" ? "Concluída" : t.situacao === "RECUSADA" ? "Recusada" : t.situacao === "CANCELADA" ? "Cancelada" : "Concluída";
     return [
-      { titulo: "Pedido feito", sub: `${dataBr(t.pedidoEm)} · ${t.pedidoComo === "MEMBRO" ? "pela própria pessoa" : t.pedidoPorNome ?? "pela secretaria"}`, estado: "feito" as const },
+      { titulo: "Pedido feito", sub: `${dataBr(t.pedidoEm)} · ${t.pedidoComo === "PROPRIO" ? "pela própria pessoa" : t.pedidoPorNome ?? "pela secretaria"}`, estado: "feito" as const },
       { titulo: `Esperando ${t.destinoNome}`, sub: esperando ? (t.diasParado ? `parado há ${t.diasParado} dias` : haQuanto(t.pedidoEm)) : "decidido", estado: esperando ? "agora" as const : "feito" as const },
-      { titulo: fim, sub: t.decididoEm ? `${dataBr(t.decididoEm)}${t.motivoRecusa ? ` · ${t.motivoRecusa}` : ""}` : "a ficha muda de congregação", estado: esperando ? "depois" as const : t.situacao === "CONCLUIDA" ? "feito" as const : "parou" as const }
+      { titulo: fim, sub: t.situacao === "CANCELADA" ? `${dataBr(t.canceladoEm ?? null)} · o pedido foi cancelado` : t.decididoEm ? `${dataBr(t.decididoEm)}${t.motivoRecusa ? ` · ${t.motivoRecusa}` : ""}` : "a ficha muda de congregação", estado: esperando ? "depois" as const : t.situacao === "CONCLUIDA" ? "feito" as const : "parou" as const }
     ];
   });
 </script>

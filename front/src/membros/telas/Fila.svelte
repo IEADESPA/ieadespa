@@ -56,7 +56,10 @@
   const sub = $derived(`${lugar ? lugar + " · " : ""}hoje: ${numero(entraramHoje.length)} ${plural(entraramHoje.length, "entrou sozinho", "entraram sozinhos")} · ${numero(fila.length)} com pendência`);
   const oQueFalta = (p: PreCadastro) => {
     const r = (p.pendencias ?? []).map((x) => x.rotulo.split(":")[0]!.replace(/^Falta /, "falta ").replace(/ \(.*\)$/, ""));
-    if (p.repetido) return `parecida com ${p.repetido.nome} (${p.repetido.matricula})`;
+    const rep = p.repetido;
+    if (rep && "matricula" in rep) return `parecida com ${rep.nome} (${rep.matricula})`;
+    if (rep && "foraDoEscopo" in rep) return "o CPF já está numa ficha de fora do seu escopo: a Secretaria Geral confere";
+    if (rep && "preCadastroId" in rep) return "repete outro pré-cadastro aberto";
     return r.join(" · ") || "conferir";
   };
   const nomeComIdade = (p: PreCadastro) => { const a = idade(p.dataNascimento); return a !== null && a < 18 ? `${p.nome} (${a} anos)` : p.nome; };
@@ -67,7 +70,8 @@
   }
   const tem = (c: string) => (aberto?.pendencias ?? []).some((x) => x.codigo === c);
   async function resolver(acao: "completar" | "descartar") {
-    if (!aberto) return;
+    if (!aberto || resolvendo) return;
+    const alvo = aberto;
     resolvendo = true; erroResolver = "";
     const campos: Record<string, string> = {};
     if (tem("FALTA_CPF") && comp.cpf.trim()) campos.cpf = comp.cpf.trim();
@@ -78,11 +82,11 @@
     if (tem("FALTA_NOME") && comp.nome.trim()) campos.nome = comp.nome.trim();
     const corpo = acao === "descartar" ? { motivo: comp.motivo.trim(), versao: aberto.versao }
       : { campos, versao: aberto.versao, ...(comp.naoRepete ? { naoERepeticao: true } : {}), ...(comp.responsavel ? { responsavelConfirmado: true } : {}) };
-    const x = await pedir<{ situacao?: string; matricula?: number; mensagem?: string }>(`/pre-cadastros/${aberto.preCadastroId}/${acao}`, { metodo: "POST", corpo });
+    const x = await pedir<{ situacao?: string; matricula?: number; mensagem?: string }>(`/pre-cadastros/${alvo.preCadastroId}/${acao}`, { metodo: "POST", corpo });
     resolvendo = false;
-    if (!x.ok) { erroResolver = x.mensagem; if (x.status === 409) void carregar(); return; }
+    if (!x.ok) { if (aberto === alvo) erroResolver = x.mensagem; if (x.status === 409) void carregar(); return; }
     ponte().avisar(acao === "descartar" ? "Pré-cadastro descartado." : x.dados.matricula ? `Entrou no rol com a matrícula ${x.dados.matricula}.` : (x.dados.mensagem ?? "Salvo. Ainda falta resolver o resto."), "sucesso");
-    aberto = null;
+    if (aberto === alvo) aberto = null;
     void carregar();
     void lerContadores();
   }
@@ -103,10 +107,15 @@
     <section class="resolver" aria-label="Resolver o cadastro de {aberto.nome}">
       <div class="r-topo"><strong>{aberto.nome}</strong><button type="button" class="fechar" aria-label="Fechar" onclick={() => (aberto = null)}><Icone nome="fechar" tam={18} traco={2.4} /></button></div>
       <ul class="pend">{#each aberto.pendencias ?? [] as x (x.codigo)}<li>{x.rotulo} <small>· {x.quem}</small></li>{/each}</ul>
-      {#if aberto.repetido}
-        <Aviso tom="alerta">Parece com <strong>{aberto.repetido.nome}</strong> (matrícula {aberto.repetido.matricula}{aberto.repetido.congregacao ? `, ${aberto.repetido.congregacao}` : ""}).
-          {#snippet acao()}<Botao tipo="linha" tam="pequeno" onclick={() => ir({ tela: "ficha", id: aberto!.repetido!.matricula, secao: "resumo" })}>Ver a ficha</Botao>{/snippet}
+      {#if aberto.repetido && "matricula" in aberto.repetido}
+        {@const rep = aberto.repetido}
+        <Aviso tom="alerta">Parece com <strong>{rep.nome}</strong> (matrícula {rep.matricula}{rep.congregacao ? `, ${rep.congregacao}` : ""}).
+          {#snippet acao()}<Botao tipo="linha" tam="pequeno" onclick={() => ir({ tela: "ficha", id: rep.matricula, secao: "resumo" })}>Ver a ficha</Botao>{/snippet}
         </Aviso>
+      {:else if aberto.repetido && "foraDoEscopo" in aberto.repetido}
+        <Aviso tom="alerta">{aberto.repetido.mensagem}</Aviso>
+      {:else if aberto.repetido}
+        <Aviso tom="alerta">Este cadastro repete outro pré-cadastro que ainda está aberto: corrija junto com o mais antigo.</Aviso>
       {/if}
       {#if aberto.podeResolver !== false}
         <div class="r-campos">

@@ -31,6 +31,14 @@ export interface PessoaLista {
   readonly nomeMae?: string | null;
   readonly nomePai?: string | null;
   readonly cargoDesde?: string | null;
+  readonly enderecoLogradouro?: string | null;
+  readonly enderecoNumero?: string | null;
+  readonly enderecoComplemento?: string | null;
+  readonly enderecoBairroNome?: string | null;
+  readonly enderecoBairroTexto?: string | null;
+  readonly enderecoCidade?: string | null;
+  readonly enderecoUF?: string | null;
+  readonly enderecoCep?: string | null;
   readonly capacidade?: { readonly capacidadeAtiva?: boolean; readonly emPeriodoIntegracao?: boolean; readonly categoria?: string } | null;
   readonly menorDeIdade?: boolean;
 }
@@ -125,10 +133,14 @@ export interface Alteracao {
 }
 export interface PaginaAlteracoes { readonly itens: readonly Alteracao[]; readonly total: number }
 
-export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean; readonly idadeMinima?: number | null; readonly idadeMaxima?: number | null }
-export interface Congregacao { readonly congregacaoId: number; readonly nome: string; readonly ativa?: boolean; readonly areaNome?: string | null; readonly areaId?: number | null }
+export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean }
+/** as congregações de destino (GET /transferencias?destinos=1) */
+export interface Congregacao { readonly congregacaoId: number; readonly nome: string; readonly areaNome: string | null }
 
-export type SituacaoTransferencia = "PENDENTE" | "CONCLUIDA" | "RECUSADA" | "CANCELADA" | (string & {});
+// os valores fechados do banco (CK_Transferencias_*, migração 176)
+export type SituacaoTransferencia = "PENDENTE" | "CONCLUIDA" | "RECUSADA" | "CANCELADA";
+export type RegraTransferencia = "GERAL" | "MESMA_AREA" | "ENTRE_AREAS";
+export type PedidoComo = "GERAL" | "ORIGEM" | "PROPRIO";
 export interface Transferencia {
   readonly transferenciaId: number;
   readonly membroId: number;
@@ -139,13 +151,14 @@ export interface Transferencia {
   readonly destinoId: number;
   readonly destinoNome: string;
   readonly destinoAreaNome: string | null;
-  readonly regra: string;
-  readonly pedidoComo: string;
+  readonly regra: RegraTransferencia;
+  readonly pedidoComo: PedidoComo;
   readonly pedidoPorNome: string | null;
   readonly pedidoEm: string;
   readonly motivo: string | null;
   readonly situacao: SituacaoTransferencia;
   readonly decididoEm: string | null;
+  readonly canceladoEm?: string | null;
   readonly motivoRecusa: string | null;
   readonly diasParado: number | null;
   readonly podeDecidir: boolean;
@@ -154,7 +167,8 @@ export interface Transferencia {
 export interface PaginaTransferencias { readonly itens: readonly Transferencia[]; readonly total: number }
 
 export interface Pendencia { readonly codigo: string; readonly rotulo: string; readonly quem: string }
-export type OrigemPreCadastro = "SITE" | "LIDER" | "EBD" | "SECRETARIA" | "PROPRIA" | (string & {});
+// CK_PreCadastros_Origem (migração 177): o líder e o professor da EBD entram os dois como LIDER
+export type OrigemPreCadastro = "SITE" | "LIDER" | "SECRETARIA";
 export interface PreCadastro {
   readonly preCadastroId: number;
   readonly origem: OrigemPreCadastro;
@@ -169,7 +183,8 @@ export interface PreCadastro {
   readonly situacao: string;
   readonly pendencias?: readonly Pendencia[];
   readonly matricula?: number | null;
-  readonly repetido?: { readonly matricula: number; readonly nome: string; readonly congregacao: string | null } | null;
+  /** a ficha (ou o pré-cadastro) que parece a mesma pessoa: 3 formas (shared/preCadastroDb.js) — a ficha no escopo, fora do escopo (sem nome) ou outro pré-cadastro */
+  readonly repetido?: Repetido | null;
   readonly criadoEm: string;
   readonly decididoEm?: string | null;
   readonly versao?: string;
@@ -199,6 +214,11 @@ export interface Sugestao {
   readonly podeAplicar: boolean;
   readonly campos: readonly CampoSugestao[];
 }
+
+export type Repetido =
+  | { readonly matricula: number; readonly nome: string; readonly congregacao: string | null }
+  | { readonly foraDoEscopo: true; readonly mensagem: string }
+  | { readonly preCadastroId: number };
 
 /** o endereço em linhas (a gravação do campo "endereco" pede as partes) */
 export interface Endereco { logradouro: string; numero: string; complemento: string; bairroTexto: string; cidade: string; uf: string; cep: string }

@@ -44,7 +44,7 @@ const urlConferencia = (codigo) => `${certificados.urlPublicaBase()}/conferir.ht
 // ---------------------------------------------------------------- os modelos
 async function garantirPadroes(pool) {
   const ha = (await pool.request().query(`SELECT COUNT(*) AS n FROM CarteirinhaModelos`)).recordset[0].n;
-  if (Number(ha) > 0) return;
+  if (Number(ha) > 0) { await acertarPadroesIntactos(pool); return; }
   const t = new sql.Transaction(pool);
   await t.begin();
   try {
@@ -61,6 +61,19 @@ async function garantirPadroes(pool) {
   } catch (e) {
     try { await t.rollback(); } catch (x) { /* já encerrada */ }
     throw e;
+  }
+}
+
+// Os modelos padrão que NINGUÉM mexeu (criados pelo sistema e nunca salvos) acompanham o desenho do código: quando o desenho aprovado muda (ex.: as cores da
+// rodada 11), o padrão intacto muda junto. O que a Secretaria Geral editou nunca é tocado (AtualizadoEm preenchido).
+async function acertarPadroesIntactos(pool) {
+  const r = await pool.request().query(`SELECT ModeloId, Publico, Nome, Desenho FROM CarteirinhaModelos WHERE CriadoPor IS NULL AND AtualizadoEm IS NULL`);
+  for (const l of r.recordset) {
+    if (regra.NOMES_PADRAO[l.Publico] !== l.Nome) continue;
+    const novo = JSON.stringify(regra.desenhoPadrao(l.Publico));
+    if (novo === l.Desenho) continue;
+    await pool.request().input("id", sql.Int, l.ModeloId).input("d", sql.NVarChar(sql.MAX), novo)
+      .query(`UPDATE CarteirinhaModelos SET Desenho = @d WHERE ModeloId = @id AND CriadoPor IS NULL AND AtualizadoEm IS NULL`);
   }
 }
 

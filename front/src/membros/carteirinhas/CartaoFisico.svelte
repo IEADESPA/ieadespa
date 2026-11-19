@@ -13,8 +13,11 @@
   // só endereço https ou do próprio sistema vira imagem (a arte e a foto vêm assinadas do armazenamento)
   const segura = (x: string | null | undefined): string | null => (x && /^(https:\/\/|\/)/.test(x) ? x : null);
   const arteSegura = $derived(L.fundo.arte ? segura(arte) : null);
+  // a arte (se houver) por cima; depois o brilho dourado do desenho aprovado; embaixo a cor ou o degradê
+  const BRILHO = "radial-gradient(circle at 88% 12%, rgba(255,184,0,.35), transparent 42%), radial-gradient(circle at 10% 110%, rgba(255,255,255,.12), transparent 45%), ";
   const fundoCss = $derived(
     (arteSegura ? `url("${arteSegura.replace(/"/g, "%22")}") center / cover no-repeat, ` : "") +
+    (L.fundo.brilho ? BRILHO : "") +
     (L.fundo.degrade && L.fundo.cor2 ? `linear-gradient(${L.fundo.angulo}deg, ${L.fundo.cor1}, ${L.fundo.cor2})` : L.fundo.cor1)
   );
   const qr = $derived(dados.qrSvg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(dados.qrSvg)}` : null);

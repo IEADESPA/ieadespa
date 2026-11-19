@@ -81,6 +81,11 @@ async function principal() {
   ok(usadoMembro === gabMembro, `"usado por" do modelo de membro bate com o banco (${gabMembro})`, String(usadoMembro));
   const m1 = await K(tok.vn(), "modelos");
   ok(m1.body.modelos.length === modelos0.length, "ler de novo não cria padrões de novo");
+  // o padrão intacto (ninguém editou) acompanha o desenho do código: as cores aprovadas voltam sozinhas
+  await q("UPDATE CarteirinhaModelos SET Desenho = REPLACE(Desenho, N'#0a2342', N'#0f2a5c') WHERE Publico = N'MEMBRO' AND CriadoPor IS NULL AND AtualizadoEm IS NULL");
+  await K(tok.vn(), "modelos");
+  const corMembro = await escalar("SELECT Desenho FROM CarteirinhaModelos WHERE Publico = N'MEMBRO' AND CriadoPor IS NULL");
+  ok(/"cor1":"#0a2342"/.test(corMembro) && !/#0f2a5c/.test(corMembro) && /"brilho":true/.test(corMembro), "o modelo padrão intacto volta às cores aprovadas (marinho escuro com o brilho dourado)", corMembro.slice(0, 160));
   const recusaLocal = await K(tok.vn(), "modelos", { metodo: "POST", corpo: { nome: "Visitante", publico: "OUTRO" } });
   ok(recusaLocal.status === 403, "a local não cria modelo (só a Secretaria Geral)", String(recusaLocal.status));
   const novoOutro = await K(tok.geral(), "modelos", { metodo: "POST", corpo: { nome: "Visitante", publico: "OUTRO" } });

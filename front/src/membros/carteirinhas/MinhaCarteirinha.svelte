@@ -60,14 +60,19 @@
 
 <style>
   .dig { display: flex; flex-direction: column; gap: 14px; max-width: 420px; }
-  .dig.celular { max-width: none; }
+  /* no celular, um respiro embaixo: a legenda do QR não encosta na borda */
+  .dig.celular { max-width: none; padding-bottom: 28px; gap: 10px; }
+  .celular .qr { width: 150px; height: 150px; padding: 10px; }
+  .celular .dados div { padding: 8px 0; }
   .topo { display: flex; align-items: center; gap: 10px; }
   .topo strong { color: var(--sv-titulo); font-size: 18px; flex: 1; }
   .topo small { color: var(--sv-suave); font-size: 13px; }
   .fechar { background: none; border: 0; padding: 4px; color: var(--sv-titulo); display: flex; cursor: pointer; }
-  .cartao { border-radius: 18px; padding: 14px 16px 18px; color: #fff; background: linear-gradient(135deg, #0f2a5c, #1e3a8a 60%, #3b4f8a); box-shadow: 0 12px 26px rgba(15, 23, 42, .3); }
-  .cartao.congregado { background: linear-gradient(135deg, #14532d, #0f766e); }
-  .cartao.obreiro { background: linear-gradient(135deg, #3b0764, #6b21a8); }
+  /* as cores do desenho aprovado (rodada 11): o marinho escuro com o brilho dourado; o congregado no verde-petróleo; o obreiro no roxo */
+  .cartao { --brilho: radial-gradient(circle at 90% 10%, rgba(255, 184, 0, .3), transparent 45%), radial-gradient(circle at 10% 110%, rgba(255, 255, 255, .12), transparent 45%);
+    border-radius: 18px; padding: 14px 16px 18px; color: #fff; background: var(--brilho), linear-gradient(135deg, #0a2342, #16365e); box-shadow: 0 12px 26px rgba(6, 22, 41, .3); }
+  .cartao.congregado { background: var(--brilho), linear-gradient(135deg, #0f4c45, #126058); }
+  .cartao.obreiro { background: var(--brilho), linear-gradient(135deg, #3b1f5e, #55307f); }
   .cab { display: flex; align-items: center; gap: 10px; }
   .cab img { width: 34px; height: 34px; border-radius: 50%; background: #fff; }
   .cab span { display: flex; flex-direction: column; line-height: 1.15; }
@@ -80,7 +85,7 @@
   .foto small { font-size: 11px; opacity: .8; }
   .quem { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-items: flex-start; }
   .nome { font-size: 19px; font-weight: 800; line-height: 1.15; }
-  .cargo { background: #fbbf24; color: #1f2937; font-weight: 800; letter-spacing: .06em; font-size: 14px; padding: 3px 12px; border-radius: 8px; }
+  .cargo { background: #ffb800; color: #0a2342; font-weight: 800; letter-spacing: .06em; font-size: 14px; padding: 3px 12px; border-radius: 8px; }
   .mat { font-size: 13.5px; opacity: .9; }
   .dados { margin: 0; background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: 14px; padding: 4px 16px; }
   .dados div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--sv-linha); }

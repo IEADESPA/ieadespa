@@ -342,7 +342,8 @@
     <Cabecalho titulo="Carteirinhas" sub={nomeCong ? `${nomeCong} · os modelos são da Secretaria Geral; aqui você imprime as suas` : "Os modelos são da Secretaria Geral; aqui você imprime as suas"}>
       {#snippet acoes()}
         {#if congregacaoId !== null && (geral || (resumo?.congregacoes.length ?? 0) > 1)}<Botao tipo="linha" icone="voltar" onclick={() => ir({ tela: "carteirinhas", congregacaoId: null }, true)}>Todas as congregações</Botao>{/if}
-        {#if nomeCong}<span class="trancada"><Icone nome="cadeado" tam={16} traco={2} />{nomeCong}</span>{/if}
+        <!-- o cadeado só para quem está preso à congregação (a local); a Geral e a área só estão vendo uma delas -->
+        {#if nomeCong}<span class="trancada">{#if !geral && (resumo?.congregacoes.length ?? 0) <= 1}<Icone nome="cadeado" tam={16} traco={2} />{:else}<Icone nome="igreja" tam={16} />{/if}{nomeCong}</span>{/if}
       {/snippet}
     </Cabecalho>
     {@render formNovo()}

@@ -93,7 +93,8 @@ function validarFundo(f, onde) {
   const cor2 = degrade ? (COR.test(fundo.cor2) ? fundo.cor2.toLowerCase() : null) : null;
   if (degrade && !cor2) return { erro: `${onde}: escolha a segunda cor do degradê.` };
   const angulo = numeroEntre(fundo.angulo, 0, 360) ? Math.round(fundo.angulo) : 135;
-  return { fundo: { cor1, degrade, cor2, angulo, arte: fundo.arte === true } };
+  // brilho: o dourado no canto de cima e a luz clara embaixo, do desenho aprovado (rodada 11)
+  return { fundo: { cor1, degrade, cor2, angulo, arte: fundo.arte === true, brilho: fundo.brilho === true } };
 }
 
 function validarCamada(c, i, onde, larg, alt) {
@@ -174,17 +175,18 @@ function validarNome(nome) {
 }
 
 // O modelo novo já nasce como o do desenho aprovado (rodada 10/11): faixa de cima com o logo e o nome da Igreja, o selo do tipo, a foto à esquerda e o
-// nome, o nascimento e a matrícula à direita; no verso, a filiação, a assinatura e o QR fixo.
+// nome, o nascimento e a matrícula à direita; no verso, a filiação, a assinatura e o QR fixo. As cores são as do desenho (M10_MODELOS da página de propostas):
+// o membro no marinho escuro com o brilho dourado; o congregado no verde-petróleo; o obreiro no roxo.
 const CORES_PADRAO = {
-  MEMBRO: { cor1: "#0f2a5c", cor2: "#1e3a8a", selo: "#fbbf24", seloTexto: "#1f2937" },
-  CONGREGADO: { cor1: "#14532d", cor2: "#0f766e", selo: "#5eead4", seloTexto: "#134e4a" },
-  OBREIRO: { cor1: "#3b0764", cor2: "#6b21a8", selo: "#fbbf24", seloTexto: "#1f2937" },
+  MEMBRO: { cor1: "#0a2342", cor2: "#16365e", selo: "#ffb800", seloTexto: "#0a2342" },
+  CONGREGADO: { cor1: "#0f4c45", cor2: "#126058", selo: "#5eead4", seloTexto: "#0f3d3a" },
+  OBREIRO: { cor1: "#3b1f5e", cor2: "#55307f", selo: "#ffb800", seloTexto: "#0a2342" },
   OUTRO: { cor1: "#1f2937", cor2: "#334155", selo: "#e5e7eb", seloTexto: "#111827" }
 };
 function desenhoPadrao(publico) {
   const c = CORES_PADRAO[publico] || CORES_PADRAO.MEMBRO;
   const branco = "#ffffff";
-  const fundo = { cor1: c.cor1, degrade: true, cor2: c.cor2, angulo: 135, arte: false };
+  const fundo = { cor1: c.cor1, degrade: true, cor2: c.cor2, angulo: 135, arte: false, brilho: true };
   return {
     tamanho: "CARTAO", largura: 85.6, altura: 54,
     lados: {
@@ -202,7 +204,7 @@ function desenhoPadrao(publico) {
         ]
       },
       verso: {
-        fundo: { cor1: "#ffffff", degrade: false, cor2: null, angulo: 135, arte: false },
+        fundo: { cor1: "#ffffff", degrade: false, cor2: null, angulo: 135, arte: false, brilho: false },
         camadas: [
           { id: "mae", tipo: "CAMPO", campo: "MAE", rotulo: "Mãe", x: 5, y: 8, larg: 50, alt: 4, fonte: "Inter", tamanho: 6, cor: "#1f2937", negrito: false, italico: false, alinhamento: "esq", fundo: null, visivel: true, travada: false },
           { id: "pai", tipo: "CAMPO", campo: "PAI", rotulo: "Pai", x: 5, y: 14, larg: 50, alt: 4, fonte: "Inter", tamanho: 6, cor: "#1f2937", negrito: false, italico: false, alinhamento: "esq", fundo: null, visivel: true, travada: false },

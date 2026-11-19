@@ -24,7 +24,7 @@
   async function carregar() {
     erro = "";
     const r = await pedir<{ transferencia: T }>(`/transferencias/${id}`);
-    if (!r.ok) { erro = r.mensagem; return; }
+    if (!r.ok) { if (t) avisarFalha(r); else erro = r.mensagem; return; }
     t = r.dados.transferencia;
     onnome(t.pessoaNome);
   }

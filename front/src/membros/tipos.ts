@@ -34,6 +34,7 @@ export interface PessoaLista {
   readonly enderecoLogradouro?: string | null;
   readonly enderecoNumero?: string | null;
   readonly enderecoComplemento?: string | null;
+  readonly enderecoBairroId?: number | null;
   readonly enderecoBairroNome?: string | null;
   readonly enderecoBairroTexto?: string | null;
   readonly enderecoCidade?: string | null;
@@ -221,4 +222,4 @@ export type Repetido =
   | { readonly preCadastroId: number };
 
 /** o endereço em linhas (a gravação do campo "endereco" pede as partes) */
-export interface Endereco { logradouro: string; numero: string; complemento: string; bairroTexto: string; cidade: string; uf: string; cep: string }
+export interface Endereco { logradouro: string; numero: string; complemento: string; bairroTexto: string; cidade: string; uf: string; cep: string; bairroId?: number | null }

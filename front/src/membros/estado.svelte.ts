@@ -70,20 +70,25 @@ export function voltar(padrao: Rota = { tela: "painel" }): void {
   nav.rota = ant ?? padrao;
 }
 
-export const contadores = $state({ fila: 0, transferencias: 0, repetidas: 0, sugestoes: 0, lidos: false });
+export const contadores = $state({ fila: 0, transferencias: 0, repetidas: 0, sugestoes: 0, lidos: false, falhou: false });
 
 /** os números do menu e das pílulas: cada um com o seu pedido curto (porPagina=1), em paralelo; o que falhar fica 0 */
+let contSeq = 0;
 export async function lerContadores(): Promise<void> {
+  const meu = ++contSeq;
   const [fila, tr, rep, sug] = await Promise.all([
     pedir<PaginaPreCadastros>("/pre-cadastros" + qs({ caixa: "fila", porPagina: 1 })),
     pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: "chegando", porPagina: 1 })),
     pedir<{ total: number }>("/fichas-repetidas"),
     pedir<Sugestao[]>("/fila-aprovacoes")
   ]);
-  contadores.fila = fila.ok ? Number(fila.dados.total) || 0 : 0;
-  contadores.transferencias = tr.ok ? Number(tr.dados.total) || 0 : 0;
-  contadores.repetidas = rep.ok ? Number(rep.dados.total) || 0 : 0;
-  contadores.sugestoes = sug.ok && Array.isArray(sug.dados) ? sug.dados.length : 0;
+  if (meu !== contSeq) return;
+  // o que falhou fica com o número de antes (e conta como falha): um aviso não some só porque a leitura caiu
+  if (fila.ok) contadores.fila = Number(fila.dados.total) || 0;
+  if (tr.ok) contadores.transferencias = Number(tr.dados.total) || 0;
+  if (rep.ok) contadores.repetidas = Number(rep.dados.total) || 0;
+  if (sug.ok && Array.isArray(sug.dados)) contadores.sugestoes = sug.dados.length;
+  contadores.falhou = !(fila.ok && tr.ok && rep.ok && sug.ok);
   contadores.lidos = true;
 }
 
@@ -134,4 +139,6 @@ export function zerarModulo(): void {
   congsPromessa = null;
   escopo.resumo = null;
   contadores.lidos = false;
+  falhasCatalogo.departamentos = "";
+  falhasCatalogo.destinos = "";
 }

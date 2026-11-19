@@ -58,14 +58,16 @@
     confEspera = setTimeout(conferir, 500);
   }
   let confSeq = 0;
+  let confCpf = "";
   async function conferir() {
     const cpf = r.cpf.replace(/\D/g, "");
     const meu = ++confSeq;
     if (!cpf && !(r.nome.trim().length >= 2 && r.dataNascimento)) { conf = null; return; }
     const x = await pedir<Conferencia>("/cadastro/conferir", { metodo: "POST", corpo: { cpf: cpf || null, nome: r.nome.trim() || null, dataNascimento: r.dataNascimento || null, congregacaoId: r.congregacaoId } });
     if (meu !== confSeq) return;   // a resposta de um CPF antigo não vale para o de agora
-    // sem conferir agora, não bloqueia: o servidor confere de novo ao salvar
-    conf = x.ok ? x.dados : null;
+    if (x.ok) { conf = x.dados; confCpf = cpf; return; }
+    // sem conferir agora: vale o que já se sabia do MESMO CPF; CPF mudou, sem bloqueio (o servidor confere de novo ao salvar)
+    if (confCpf !== cpf) conf = null;
   }
   const bloqueia = $derived(!!conf?.bloqueia);
 

@@ -294,7 +294,7 @@
     <Etapas rotulo="O caminho da sugestão" passos={["O que posso mudar", "Mudo sozinho", "Sugiro o resto", "A secretaria confere"]} atual={3} />
     <Cartao titulo="Minhas sugestões">
       {#snippet direita()}<Botao tipo="texto" onclick={() => irParte("dados")}>Sugerir outra</Botao>{/snippet}
-      {#if falhas.sugestoes}<Estado tipo="erro" texto={falhas.sugestoes} ontentar={carregar} />{:else if !sugs.length}<Estado tipo="vazio" texto="Você ainda não sugeriu nenhuma mudança." />{:else}
+      {#if falhas.sugestoes && !sugs.length}<Estado tipo="erro" texto={falhas.sugestoes} ontentar={carregar} />{:else if !sugs.length}<Estado tipo="vazio" texto="Você ainda não sugeriu nenhuma mudança." />{:else}
         <ul class="sugs">
           {#each sugs.flatMap((s) => s.campos.map((c) => ({ s, c }))) as x, i (i)}
             <li><span><strong>{x.c.rotulo}:</strong> {textoDoValor(x.c.nomeCampo, x.c.valorProposto) || "—"}{#if x.c.motivo}<small>{x.c.motivo}</small>{/if}</span>
@@ -334,7 +334,7 @@
           <ul class="sugs">{#each transf.pedidos as p (p.transferenciaId)}
             <li><span><strong>{p.origemNome} → {p.destinoNome}</strong><small>{haQuanto(p.pedidoEm)}{p.motivoRecusa ? ` · ${p.motivoRecusa}` : ""}</small></span>
               <Chip tom={p.situacao === "PENDENTE" ? "pendente" : p.situacao === "CONCLUIDA" ? "ok" : "atrasado"}>{p.situacao === "PENDENTE" ? "esperando" : p.situacao === "CONCLUIDA" ? "concluída" : p.situacao === "RECUSADA" ? "recusada" : "cancelada"}</Chip>
-              {#if p.situacao === "PENDENTE"}<Botao tipo="texto" ocupado={cancelando} onclick={() => void cancelarTransferencia(p.transferenciaId)}>Cancelar</Botao>{/if}</li>
+              {#if p.situacao === "PENDENTE" && p.podeCancelar}<Botao tipo="texto" ocupado={cancelando} onclick={() => void cancelarTransferencia(p.transferenciaId)}>Cancelar</Botao>{/if}</li>
           {/each}</ul>
         {:else}<Estado tipo="vazio" texto="Nenhum pedido de transferência." />{/if}
         {#if !pedidoPendente}

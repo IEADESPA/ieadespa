@@ -227,6 +227,7 @@
             <button type="button" class:on={!soMeu} aria-pressed={!soMeu} onclick={() => (soMeu = false)}>{rotuloTudo} ({avisos.length})</button>
           </div>
           <div class="lista-av">{@render listaAvisos(false)}</div>
+          {#if contadores.falhou}<p class="pe falha">Parte dos avisos não pôde ser conferida agora (a fila, as repetidas ou as sugestões).</p>{/if}
           <p class="pe">O sino lá de cima continua com os avisos do sistema todo; aqui, só os de Membros.</p>
         </Cartao>
       </aside>
@@ -303,6 +304,7 @@
   .at small { font-size: 12.5px; color: var(--sv-suave); }
   .nada { font-size: 13.5px; color: var(--sv-suave); padding: 6px 0; }
   .pe { font-size: 12.5px; color: var(--sv-suave); line-height: 1.4; }
+  .pe.falha { color: var(--sv-atr); font-weight: 600; }
   .faixa { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--sv-info-fundo); border: 1px solid var(--sv-info-borda); }
   .faixa-tit { display: flex; align-items: center; gap: 8px; color: var(--sv-icone); }
   .faixa-tit strong { font-size: 14px; font-weight: 800; color: var(--sv-titulo); }

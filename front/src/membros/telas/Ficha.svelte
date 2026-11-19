@@ -149,7 +149,7 @@
   }
   const enderecoAtual = $derived<Endereco | null>(pessoa ? {
     logradouro: pessoa.enderecoLogradouro ?? "", numero: pessoa.enderecoNumero ?? "", complemento: pessoa.enderecoComplemento ?? "",
-    bairroTexto: pessoa.enderecoBairroTexto ?? pessoa.enderecoBairroNome ?? "", cidade: pessoa.enderecoCidade ?? "", uf: pessoa.enderecoUF ?? "PA", cep: pessoa.enderecoCep ?? ""
+    bairroId: pessoa.enderecoBairroId ?? null, bairroTexto: pessoa.enderecoBairroTexto ?? pessoa.enderecoBairroNome ?? "", cidade: pessoa.enderecoCidade ?? "", uf: pessoa.enderecoUF ?? "PA", cep: pessoa.enderecoCep ?? ""
   } : null);
   const resumoMudanca = (a: Alteracao) => a.mudancas.map((x) => x.campo === "congregacaoId" ? "Congregação" : x.rotulo).filter(Boolean).join(", ") || a.acao;
 </script>

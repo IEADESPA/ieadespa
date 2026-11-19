@@ -64,6 +64,7 @@
   // a mesma tela com outra parte (a ficha trocando de seção, a caixa trocando de aba) não é montada de novo
   // "Tentar de novo" de uma tela que não baixou: a tentativa entra na chave e a tela é montada (e pedida) outra vez
   let tentativa = $state(0);
+  $effect(() => { void nav.rota; tentativa = 0; });
   function registrar(e: unknown): string { console.error("tela de Membros não baixou", e); return ""; }
   const chaveTela = $derived(`${tentativa}:` + (nav.rota.tela === "ficha" ? `ficha-${nav.rota.id}` : nav.rota.tela === "transferencias" ? "transferencias" : JSON.stringify(nav.rota)));
   // a tela de dentro avisa o nome da pessoa (para o caminho do topo)

@@ -84,7 +84,7 @@
       : { campos, versao: aberto.versao, ...(comp.naoRepete ? { naoERepeticao: true } : {}), ...(comp.responsavel ? { responsavelConfirmado: true } : {}) };
     const x = await pedir<{ situacao?: string; matricula?: number; mensagem?: string }>(`/pre-cadastros/${alvo.preCadastroId}/${acao}`, { metodo: "POST", corpo });
     resolvendo = false;
-    if (!x.ok) { if (aberto === alvo) erroResolver = x.mensagem; if (x.status === 409) void carregar(); return; }
+    if (!x.ok) { if (aberto === alvo) erroResolver = x.mensagem; else if (!x.jaAvisado) ponte().avisar(`${alvo.nome}: ${x.mensagem}`, "erro"); if (x.status === 409) void carregar(); return; }
     ponte().avisar(acao === "descartar" ? "Pré-cadastro descartado." : x.dados.matricula ? `Entrou no rol com a matrícula ${x.dados.matricula}.` : (x.dados.mensagem ?? "Salvo. Ainda falta resolver o resto."), "sucesso");
     if (aberto === alvo) aberto = null;
     void carregar();

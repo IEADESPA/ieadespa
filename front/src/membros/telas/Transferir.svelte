@@ -40,15 +40,16 @@
   }
   $effect(() => { if (membroId) void lerPessoa(membroId); });
   let buscaSeq = 0;
+  let erroBusca = $state("");
   function procurar(v: string) {
     busca = v;
+    const meu = ++buscaSeq;   // qualquer digitação invalida a busca que ainda está no ar
     if (espera) clearTimeout(espera);
     espera = setTimeout(async () => {
-      if (v.trim().length < 2) { achados = []; return; }
-      const meu = ++buscaSeq;
+      if (v.trim().length < 2) { achados = []; erroBusca = ""; return; }
       const r = await pedir<PaginaPessoas>("/pessoas" + qs({ pagina: 1, porPagina: 8, busca: v.trim(), rol: 1 }));
       if (meu !== buscaSeq) return;   // chegou a resposta de uma busca velha
-      if (r.ok) { achados = [...r.dados.itens]; erro = ""; } else { achados = []; erro = r.mensagem; }
+      if (r.ok) { achados = [...r.dados.itens]; erroBusca = ""; } else { achados = []; erroBusca = r.mensagem; }
     }, 250);
   }
   const origem = $derived(pessoa ? destinos.find((c) => c.congregacaoId === pessoa!.congregacaoId) ?? null : null);
@@ -120,6 +121,7 @@
             {/each}
           </ul>
         {/if}
+        {#if erroBusca}<p class="erro" role="alert">{erroBusca}</p>{/if}
         {#if erro}<p class="erro" role="alert">{erro}</p>{/if}
       {/if}
     </form>

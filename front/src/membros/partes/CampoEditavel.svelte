@@ -44,7 +44,12 @@
   const tipoInput = $derived(campo.tipo === "data" ? "date" : campo.tipo === "email" ? "email" : campo.tipo === "telefone" ? "tel" : "text");
   function salvar() {
     if (salvando) return;   // o Enter repetido não manda duas vezes
-    if (campo.tipo === "endereco") { onsalvar({ ...end }); return; }
+    if (campo.tipo === "endereco") {
+      // o bairro escolhido na lista vai pelo número dele enquanto o nome não for mexido; mexeu, vai o nome escrito
+      const daLista = enderecoAtual?.bairroId && end.bairroTexto.trim() === (enderecoAtual.bairroTexto ?? "").trim();
+      onsalvar(daLista ? { ...end, bairroId: enderecoAtual!.bairroId ?? null, bairroTexto: "" } : { ...end, bairroId: null });
+      return;
+    }
     if (campo.tipo === "lista" || campo.tipo === "departamento") { onsalvar(escolha ?? ""); return; }
     onsalvar(texto.trim());
   }

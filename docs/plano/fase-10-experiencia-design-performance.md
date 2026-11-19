@@ -732,6 +732,11 @@ O que falta, nesta ordem:
    - o formulário "Quero me cadastrar" do site;
    - as ações das abas antigas do perfil (casamento, vínculo, foto, licença), refeitas dentro da ficha.
 5. **O importador do sistema pago** (passo 9).
+6. **A ida à produção:**
+   - as migrações 174 a 179;
+   - a permissão ALTER para juntar fichas;
+   - a importação real;
+   - a troca do sistema pago.
 
 **Rodada de desenho de Membros, aprovada por ele em 19/11/2026,** para logo depois que ele fechar a rodada 19 do Financeiro
 (um módulo por vez no desenho). O objetivo é Membros ter a mesma robustez do Financeiro.
@@ -750,11 +755,6 @@ O que falta, nesta ordem:
   - o que o sistema faz sozinho: deixar os cargos vagos, recolher a carteirinha, tirar das escalas, parar os
     comunicados e registrar na linha do tempo.
   - É o item "Desligamentos" do menu, que hoje está "em construção".
-6. **A ida à produção:**
-   - as migrações 174 a 179;
-   - a permissão ALTER para juntar fichas;
-   - a importação real;
-   - a troca do sistema pago.
 
 ## Financeiro (módulo 2): o desenho aprovado e o que a Igreja vive hoje
 

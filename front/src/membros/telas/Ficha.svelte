@@ -381,7 +381,7 @@
     <div class="duas">
       <div class="col">
         <Cartao titulo="Carteirinha" icone="cartao">
-          <NaFicha membroId={id} />
+          {#if cuidaDoCadastro()}<NaFicha membroId={id} />{:else if !de("CREDENCIAL").length}<Estado tipo="vazio" texto="Nenhuma carteirinha emitida." />{/if}
           {#if de("CREDENCIAL").length}<h4 class="sub-cart">Credencial (vias)</h4><LinhaTempo eventos={de("CREDENCIAL")} />{/if}
           {#if falhas.pendencias}<Estado tipo="erro" texto="Não deu para conferir as pendências do cadastro (e se a impressão está bloqueada)." ontentar={lerPendencias} />{/if}
           {#if pendencias?.impressaoFisicaBloqueada}<Aviso tom="alerta"><strong>A impressão da carteirinha física está bloqueada</strong> enquanto a ficha tiver pendência de cadastro.</Aviso>{/if}

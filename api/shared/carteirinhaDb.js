@@ -29,8 +29,9 @@ const PENDENCIAS_SQL = `(SELECT STRING_AGG(pp.T, N',') FROM (SELECT CONCAT(p.Tip
   FROM FichasPendencias p WHERE p.Situacao = N'ABERTA' AND p.Tipo IN (N'REPETIDA', N'NUMERO') AND (p.MembroId = m.MembroId OR p.OutroMembroId = m.MembroId)) pp)`;
 // a versão (rowversion) vai e volta como texto hexadecimal, lido do próprio banco (o driver pode entregar o binário de jeitos diferentes)
 const VERSAO_SQL = "LOWER(CONVERT(VARCHAR(16), CAST(Versao AS BINARY(8)), 2)) AS VersaoHex";
-// o nome do arquivo da arte no armazenamento (storage.salvarDocumento): é o que vai e volta entre a tela e o servidor (nunca um endereço inteiro)
-const RX_ARTE = /^doc-\d{10,16}-[a-z0-9]{1,16}$/;
+// o nome do arquivo da arte no armazenamento (storage.salvarArteCarteirinha): é o que vai e volta entre a tela e o servidor (nunca um endereço inteiro). Só os
+// nomes "cart-...": o salvar nunca aponta para um documento de outro módulo (uma ata, um anexo sigiloso), nem o apaga depois como "sobra".
+const RX_ARTE = /^cart-\d{10,16}-[a-z0-9]{1,16}$/;
 const MAX_LOTE = 20;
 
 const NAO_EXISTE = { sucesso: false, naoExiste: true };
@@ -122,6 +123,12 @@ async function salvarModelo(pool, { modeloId, nome, desenho, versao, arteFrente,
   if (!d.ok) return { sucesso: false, mensagem: d.mensagem };
   if (typeof versao !== "string" || !/^[0-9a-f]{16}$/.test(versao)) return MUDOU("Abra o modelo de novo: a versão que a tela tem não confere.");
   for (const a of [arteFrente, arteVerso]) if (a != null && (typeof a !== "string" || !RX_ARTE.test(a))) return { sucesso: false, mensagem: "A arte enviada não confere: envie de novo." };
+  // o lado marcado com arte precisa ter o arquivo (o novo ou o que já estava): senão a carteirinha sairia só com a cor
+  const atual = await lerModelo(pool, modeloId);
+  if (!atual) return NAO_EXISTE;
+  for (const [lado, nova, ja] of [["frente", arteFrente, atual.ArteFrente], ["verso", arteVerso, atual.ArteVerso]]) {
+    if (d.desenho.lados[lado].fundo.arte && !nova && !ja) return { sucesso: false, mensagem: `O ${lado} está marcado com arte de fundo, mas nenhuma arte foi enviada: envie a arte ou tire a marca.` };
+  }
   const req = pool.request().input("id", sql.Int, Number(modeloId)).input("n", sql.NVarChar(60), n.nome).input("d", sql.NVarChar(sql.MAX), JSON.stringify(d.desenho))
     .input("v", sql.VarChar(16), versao).input("por", sql.Int, por).input("af", sql.NVarChar(400), arteFrente || null).input("av", sql.NVarChar(400), arteVerso || null);
   const r = await req.query(`
@@ -136,6 +143,12 @@ async function salvarModelo(pool, { modeloId, nome, desenho, versao, arteFrente,
     dadosDepois: { nome: n.nome, arteFrenteNova: !!arteFrente, arteVersoNova: !!arteVerso } });
   const sobras = [l.AntesFrente !== l.AgoraFrente ? l.AntesFrente : null, l.AntesVerso !== l.AgoraVerso ? l.AntesVerso : null].filter(Boolean);
   return { sucesso: true, versao: l.VersaoHex, sobras, mensagem: "Modelo salvo. As próximas carteirinhas já saem assim." };
+}
+
+// Algum modelo usa esta arte? (antes de apagar a que foi enviada e trocada antes de salvar)
+async function arteEmUso(pool, nome) {
+  const r = await pool.request().input("n", sql.NVarChar(400), nome).query(`SELECT COUNT(*) AS n FROM CarteirinhaModelos WHERE ArteFrente = @n OR ArteVerso = @n`);
+  return Number(r.recordset[0].n) > 0;
 }
 
 // "Usar este modelo": vira o atual do público dele (o anterior fica guardado).
@@ -260,14 +273,16 @@ async function filaParaImprimir(pool, { congregacaoId, condEscopo, pedido, podeO
 }
 
 // O resumo por congregação (a tabela da Geral e da área): as prontas e as bloqueadas, contadas da mesma lista (o número da tabela é o que a lista mostra).
-async function resumoPorCongregacao(pool, { condEscopo, pedido }) {
+// `podeObreiro`: o mesmo da lista — para quem não é da Geral, a de obreiro não conta como "pronta" (ela não pode imprimir). Toda congregação do escopo com gente
+// no rol aparece, mesmo com zero (a secretaria local cuja congregação está em dia vê a dela, não "nenhuma congregação").
+async function resumoPorCongregacao(pool, { condEscopo, pedido, podeObreiro }) {
   const porCong = new Map();
   for (const x of await pessoasDaFila(pool, { condEscopo, pedido })) {
-    const it = itemDaFila(x, true);
+    let l = porCong.get(x.p.congregacaoId);
+    if (!l) { l = { congregacaoId: x.p.congregacaoId, congregacao: x.p.congregacao, area: x.p.area, prontas: 0, bloqueadas: 0, repetidas: 0, numeros: 0 }; porCong.set(x.p.congregacaoId, l); }
+    const it = itemDaFila(x, podeObreiro);
     if (!it) continue;
-    let l = porCong.get(it.congregacaoId);
-    if (!l) { l = { congregacaoId: it.congregacaoId, congregacao: it.congregacao, area: it.area, prontas: 0, bloqueadas: 0, repetidas: 0, numeros: 0 }; porCong.set(it.congregacaoId, l); }
-    if (!it.bloqueada) l.prontas++;
+    if (!it.bloqueada) { if (!it.soGeral) l.prontas++; }
     else { l.bloqueadas++; if (it.repetida) l.repetidas++; else l.numeros++; }
   }
   const linhas = [...porCong.values()].sort((a, b) => b.bloqueadas - a.bloqueadas || String(a.congregacao).localeCompare(String(b.congregacao), "pt-BR"));
@@ -306,6 +321,11 @@ async function preparar(pool, { membroIds, material, podeObreiro, alcanca, urlFo
     const modelo = p ? modelos.get(p.tipo) : null;
     const porQue = recusa(p, { alcanca, podeObreiro, modelo });
     if (porQue) { recusadas.push({ membroId: id, nome: p && alcanca(p) ? p.nome : undefined, mensagem: porQue }); continue; }
+    // o modelo pede arte de fundo e o endereço dela não saiu agora: não imprime (o PVC sairia só com a cor)
+    if ((modelo.desenho.lados.frente.fundo.arte && !modelo.arteFrente) || (modelo.desenho.lados.verso.fundo.arte && !modelo.arteVerso)) {
+      recusadas.push({ membroId: id, nome: p.nome, mensagem: "A arte de fundo do modelo não abriu agora: tente de novo em instantes." });
+      continue;
+    }
     let foto = null;
     if (p.fotoUrl) {
       try { foto = urlFoto ? urlFoto(p.fotoUrl) : null; } catch (e) { foto = null; }
@@ -425,7 +445,8 @@ async function minha(pool, membroId, { urlFoto, svgDoQr }) {
   let foto = null;
   try { foto = p.fotoUrl && urlFoto ? urlFoto(p.fotoUrl) : null; } catch (e) { foto = null; }
   return {
-    nome: p.nome, matricula: p.membroId, tipo: p.tipo, tipoRotulo: regra.ROTULO_PUBLICO[p.tipo], cargo: ROTULO_CARGO[p.cargo || "MEMBRO"] || null,
+    // o cargo só de quem está em comunhão (a mesma regra da conferência): o congregado, quem está em disciplina e quem saiu não mostram cargo
+    nome: p.nome, matricula: p.membroId, tipo: p.tipo, tipoRotulo: regra.ROTULO_PUBLICO[p.tipo], cargo: sit.cargo || null,
     funcao: p.funcao, congregacao: p.congregacao, area: p.area, membroDesde: regra.mesAno(p.dataAdmissao), situacao: sit.situacao, exerceCargo: sit.exerceCargo ?? null,
     foto, qrSvg: svgDoQr(urlConferencia(codigo)), url: urlConferencia(codigo)
   };
@@ -450,6 +471,6 @@ function iniciais(nome) {
 }
 
 module.exports = {
-  garantirPadroes, listarModelos, lerModelo, criarModelo, salvarModelo, ativarModelo, codigoQr, pessoa, filaParaImprimir, resumoPorCongregacao,
+  garantirPadroes, listarModelos, lerModelo, criarModelo, salvarModelo, ativarModelo, arteEmUso, codigoQr, pessoa, filaParaImprimir, resumoPorCongregacao,
   preparar, confirmar, pedirSegundaVia, situacaoDaFicha, minha, conferir, urlConferencia, TIPO_SQL, RX_ARTE, MAX_LOTE
 };

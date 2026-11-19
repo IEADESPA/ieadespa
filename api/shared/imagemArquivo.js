@@ -21,6 +21,7 @@ function dimensoes(buffer, mimeType) {
       let i = 2;
       while (i + 9 < buffer.length) {
         if (buffer[i] !== 0xff) { i++; continue; }
+        if (buffer[i + 1] === 0xff) { i++; continue; }   // preenchimento entre segmentos (a norma permite vários 0xFF seguidos)
         const marca = buffer[i + 1];
         if (marca === 0xd8 || marca === 0x01 || (marca >= 0xd0 && marca <= 0xd7)) { i += 2; continue; }
         const tam = buffer.readUInt16BE(i + 2);

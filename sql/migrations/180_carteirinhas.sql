@@ -61,6 +61,18 @@ BEGIN
 END
 GO
 
+-- a primeira forma desta tabela (19/11/2026, só num banco de teste) tinha a chave em MembroId: converte para a chave no código
+IF EXISTS (SELECT 1 FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+           JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+           WHERE i.object_id = OBJECT_ID(N'dbo.CarteirinhasQr') AND i.is_primary_key = 1 AND c.name = N'MembroId')
+BEGIN
+    ALTER TABLE dbo.CarteirinhasQr DROP CONSTRAINT PK_CarteirinhasQr;
+    IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CarteirinhasQr_Codigo' AND object_id = OBJECT_ID(N'dbo.CarteirinhasQr'))
+        DROP INDEX UX_CarteirinhasQr_Codigo ON dbo.CarteirinhasQr;
+    ALTER TABLE dbo.CarteirinhasQr ADD CONSTRAINT PK_CarteirinhasQr PRIMARY KEY (Codigo);
+END
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CarteirinhasQr_Membro' AND object_id = OBJECT_ID(N'dbo.CarteirinhasQr'))
     CREATE INDEX IX_CarteirinhasQr_Membro ON dbo.CarteirinhasQr (MembroId, CriadoEm);
 GO

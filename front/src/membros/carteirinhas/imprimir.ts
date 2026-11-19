@@ -27,6 +27,10 @@ export async function imprimirCartoes(p: { cartoes: readonly CartaoImpresso[]; m
   const porId = new Map(p.modelos.map((m) => [m.modeloId, m]));
   const semModelo = p.cartoes.filter((c) => !porId.get(c.modeloId)?.desenho);
   if (semModelo.length) return { ok: false, motivo: `Sem o modelo de ${semModelo.map((c) => c.nome).join(", ")}: nada foi impresso. Tente de novo.` };
+  // o modelo pede arte de fundo e o endereço dela não veio: não imprime (o PVC sairia só com a cor)
+  const lados = p.frenteVerso ? (["frente", "verso"] as const) : (["frente"] as const);
+  const semArte = p.modelos.filter((m) => lados.some((l) => m.desenho?.lados[l].fundo.arte && !(l === "frente" ? m.arteFrente : m.arteVerso)));
+  if (semArte.length) return { ok: false, motivo: `A arte de fundo do modelo ${semArte.map((m) => m.nome).join(", ")} não abriu. Nada foi impresso: tente de novo.` };
   imprimindo = true;
   const alvo = document.createElement("div");
   document.body.appendChild(alvo);

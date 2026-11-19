@@ -79,7 +79,7 @@
     arte = { frente: m.arteFrente, verso: m.arteVerso };
     arteNova = { frente: null, verso: null };
     salvo = JSON.stringify({ nome, desenho });
-    historico = [JSON.stringify(desenho)];
+    historico = [foto()];
     pos = 0;
     conflito = "";
     onnome(m.nome);
@@ -88,15 +88,25 @@
   }
   void carregar();
 
+  // cada passo guarda o desenho E a arte (a enviada e ainda não salva): desfazer o envio de uma arte volta a anterior também
+  const foto = () => JSON.stringify({ desenho, arte, arteNova });
   function registrar() {
     if (!desenho) return;
-    const atual = JSON.stringify(desenho);
+    const atual = foto();
     if (historico[pos] === atual) return;
     historico = [...historico.slice(0, pos + 1), atual].slice(-60);
     pos = historico.length - 1;
   }
-  function desfazer() { if (pos > 0) { pos -= 1; desenho = JSON.parse(historico[pos] ?? "null") as Desenho; } }
-  function refazer() { if (pos < historico.length - 1) { pos += 1; desenho = JSON.parse(historico[pos] ?? "null") as Desenho; } }
+  function voltarPara(i: number) {
+    const e = JSON.parse(historico[i] ?? "null") as { desenho: Desenho; arte: typeof arte; arteNova: typeof arteNova } | null;
+    if (!e) return;
+    pos = i;
+    desenho = e.desenho;
+    arte = e.arte;
+    arteNova = e.arteNova;
+  }
+  function desfazer() { if (pos > 0) voltarPara(pos - 1); }
+  function refazer() { if (pos < historico.length - 1) voltarPara(pos + 1); }
 
   const camadas = $derived(desenho ? desenho.lados[lado].camadas : []);
   const atual = $derived(camadas.find((c) => c.id === selecionada) ?? null);
@@ -213,7 +223,9 @@
       fr.readAsDataURL(f);
     }).catch(() => "");
     if (!base64) { enviandoArte = false; ponte().avisar("Não deu para ler o arquivo.", "erro"); return; }
-    const r = await pedir<{ arte: string; arteId: string; mensagem: string }>(`/carteirinhas/arte/${modeloId}`, { metodo: "POST", corpo: { lado, tipo: f.type, imagemBase64: base64 } });
+    // a arte enviada antes e ainda não salva (trocou de ideia): o servidor apaga, se nenhum modelo usar
+    const r = await pedir<{ arte: string; arteId: string; mensagem: string }>(`/carteirinhas/arte/${modeloId}`,
+      { metodo: "POST", corpo: { lado, tipo: f.type, imagemBase64: base64, substitui: arteNova[lado] ?? undefined } });
     enviandoArte = false;
     if (!r.ok) { avisarFalha(r); return; }
     arte = { ...arte, [lado]: r.dados.arte };
@@ -230,7 +242,8 @@
     erroSalvar = "";
     conflito = "";
     const r = await pedir<{ versao: string; mensagem: string }>(`/carteirinhas/modelos/${modeloId}`,
-      { metodo: "PUT", corpo: { nome, desenho, versao, arteFrente: arteNova.frente ?? undefined, arteVerso: arteNova.verso ?? undefined } });
+      { metodo: "PUT", corpo: { nome, desenho, versao,
+        arteFrente: desenho.lados.frente.fundo.arte ? arteNova.frente ?? undefined : undefined, arteVerso: desenho.lados.verso.fundo.arte ? arteNova.verso ?? undefined : undefined } });
     salvando = false;
     if (!r.ok) {
       if (r.status === 409) conflito = r.mensagem;

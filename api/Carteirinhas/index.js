@@ -93,16 +93,17 @@ module.exports = async function (context, req) {
         return erro(context, 400, `A arte precisa ter pelo menos 1.011 × 638 pixels (300 dpi no tamanho do cartão); esta tem ${dim.largura} × ${dim.altura}.`);
       }
       if (!(await db.lerModelo(pool, modeloId))) return erro(context, 404, "Modelo não encontrado.");
-      let url;
+      let arteId;
       try {
-        url = await storage.salvarDocumento(buffer, corpo.tipo);
+        arteId = await storage.salvarArteCarteirinha(buffer, corpo.tipo);
       } catch (e) {
         context.log.error("[Carteirinhas] a arte não foi guardada no armazenamento:", e && e.message);
         return erro(context, 503, "Não foi possível guardar a arte agora. Tente de novo em instantes.");
       }
       // só o arquivo: a arte passa a valer quando o modelo for salvo (o desenho e a arte juntos, conferindo a versão — "desfazer" e "sair sem salvar" não perdem a anterior)
-      const arteId = String(url).split("?")[0].split("/").pop();
-      if (!db.RX_ARTE.test(arteId)) { await storage.excluirDocumento(url); return erro(context, 503, "Não foi possível guardar a arte agora. Tente de novo em instantes."); }
+      if (!db.RX_ARTE.test(String(arteId))) return erro(context, 503, "Não foi possível guardar a arte agora. Tente de novo em instantes.");
+      // a arte enviada antes, que nenhum modelo usa (a pessoa trocou de ideia antes de salvar), sai do armazenamento
+      if (typeof corpo.substitui === "string" && db.RX_ARTE.test(corpo.substitui) && !(await db.arteEmUso(pool, corpo.substitui))) await storage.excluirDocumento(corpo.substitui);
       return ok(context, { mensagem: `Arte do ${lado} pronta (${dim.largura} × ${dim.altura} px, como veio). Salve o modelo para valer.`, arteId, arte: storage.urlDocumentoComSas(arteId), largura: dim.largura, altura: dim.altura });
     }
     return erro(context, 404, "Ação inválida.");
@@ -119,7 +120,7 @@ module.exports = async function (context, req) {
     const pedido = pool.request();
     const cond = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "ex.Nome");
     if (cond === "") return ok(context, { congregacoes: [], prontas: 0, bloqueadas: 0, repetidas: 0, numeros: 0, geral });
-    return ok(context, { ...(await db.resumoPorCongregacao(pool, { condEscopo: cond, pedido })), geral });
+    return ok(context, { ...(await db.resumoPorCongregacao(pool, { condEscopo: cond, pedido, podeObreiro: geral })), geral });
   }
   if (metodo === "GET" && acao === "fila") {
     const congregacaoId = auth.idDeRota((req.query || {}).congregacaoId);

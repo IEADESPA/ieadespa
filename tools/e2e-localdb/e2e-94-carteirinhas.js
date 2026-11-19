@@ -130,12 +130,16 @@ async function principal() {
   ok(aLocal.status === 403, "a local não troca a arte", String(aLocal.status));
   const vAntesArte = (await K(tok.geral(), "modelos")).body.modelos.find((m) => m.modeloId === mId).versao;
   const aBoa = await arte({ lado: "frente", tipo: "image/png", imagemBase64: pngCabecalho(2400, 1514) });
-  ok((aBoa.status === 200 && /^doc-\d+-[a-z0-9]+$/.test(aBoa.body.arteId)) || aBoa.status === 503, "arte boa (2.400 × 1.514): o arquivo guardado como veio (ou, sem o armazenamento aqui, 503)", JSON.stringify(aBoa.body));
+  ok((aBoa.status === 200 && /^cart-\d+-[a-z0-9]+$/.test(aBoa.body.arteId)) || aBoa.status === 503, "arte boa (2.400 × 1.514): o arquivo guardado como veio (ou, sem o armazenamento aqui, 503)", JSON.stringify(aBoa.body));
   ok((await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) == null, "enviar a arte NÃO muda o modelo: ela só vale no salvar (desfazer e sair sem salvar não perdem a anterior)");
   const vArte = (await K(tok.geral(), "modelos")).body.modelos.find((m) => m.modeloId === mId).versao;
   ok(vArte === vAntesArte, "a versão do modelo não mudou com o envio da arte (o próximo salvar não dá 409)");
-  const arteId = aBoa.status === 200 ? aBoa.body.arteId : "doc-1763500000000-abc123";
+  const arteId = aBoa.status === 200 ? aBoa.body.arteId : "cart-1763500000000-abc123";
   const comArte = JSON.parse(JSON.stringify(desenho)); comArte.lados.frente.fundo.arte = true;
+  const semArquivo = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: vArte } });
+  ok(semArquivo.status === 422 && /nenhuma arte foi enviada/.test(semArquivo.body.mensagem), "frente marcada com arte sem arte nenhuma: recusado (a carteirinha sairia só com a cor)", JSON.stringify(semArquivo.body));
+  const deOutro = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: vArte, arteFrente: "doc-1763500000000-abc123" } });
+  ok(deOutro.status === 422 && (await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) == null, "um documento de outro módulo (doc-...) nunca vira arte da carteirinha", JSON.stringify(deOutro.body));
   const sArte = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: vArte, arteFrente: arteId } });
   ok(sArte.status === 200 && (await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) === arteId, "salvar com a arte: o desenho e a arte juntos", JSON.stringify(sArte.body));
   const sFora = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: sArte.body.versao, arteFrente: "https://outro.exemplo.org/x.png" } });
@@ -251,6 +255,8 @@ async function principal() {
   ok(!JSON.stringify(minha.body).includes(CPF1), "a digital não mostra o CPF");
   const minha3 = await K(tok.membro(940003), "minha");
   ok(minha3.body.carteirinha.cargo === "Diácono" && minha3.body.carteirinha.tipo === "OBREIRO", "a do obreiro mostra o cargo", JSON.stringify(minha3.body.carteirinha.cargo));
+  const minha4 = await K(tok.membro(940004), "minha");
+  ok(minha4.status === 200 && minha4.body.carteirinha.cargo === null && minha4.body.carteirinha.situacao === "DISCIPLINA", "quem está em disciplina não mostra cargo na digital", JSON.stringify(minha4.body.carteirinha && [minha4.body.carteirinha.cargo, minha4.body.carteirinha.situacao]));
   const semLogin = await K(null, "minha");
   ok(semLogin.status === 401, "sem sessão: 401", String(semLogin.status));
 
@@ -286,6 +292,9 @@ async function principal() {
     "Geral: Vila Nova com 3 bloqueadas (2 repetidas, 1 número) e a área", JSON.stringify(linhaVn));
   ok(linhaVn.prontas === filaAgora.filter((x) => !x.bloqueada).length, "as prontas do resumo batem com a lista da congregação", JSON.stringify([linhaVn.prontas, filaAgora.filter((x) => !x.bloqueada).map((x) => x.membroId)]));
   const resVn = await K(tok.vn(), "resumo");
+  const filaVnAgora = (await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } })).body.itens;
+  ok(resVn.body.congregacoes[0] && resVn.body.congregacoes[0].prontas === filaVnAgora.filter((x) => !x.bloqueada && !x.soGeral).length,
+    "para a local, as prontas do resumo são as que ela pode imprimir (a de obreiro não conta)", JSON.stringify([resVn.body.congregacoes[0], filaVnAgora.map((x) => [x.membroId, x.bloqueada, x.soGeral])]));
   ok(resVn.status === 200 && resVn.body.congregacoes.length === 1 && resVn.body.congregacoes[0].congregacaoId === cong.VN && resVn.body.geral === false, "a local vê só a dela", JSON.stringify(resVn.body.congregacoes.map((l) => l.congregacao)));
 
   console.log("== juntar fichas com QR ==");

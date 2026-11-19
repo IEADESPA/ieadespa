@@ -245,7 +245,7 @@
 
 {#snippet grupoEditavel(titulo: string, lista: readonly CampoFicha[])}
   {#if lista.length}
-    <h3 class="grupo">{titulo}</h3>
+    <h4 class="grupo">{titulo}</h4>
     {@render editaveis(lista)}
   {/if}
 {/snippet}
@@ -348,7 +348,7 @@
     <div class="duas">
       <div class="col">
         <section class="cartao-base editar" aria-label="Departamento">
-          <h3 class="grupo">Departamento</h3>
+          <h4 class="grupo">Departamento</h4>
           {#if falhas.campos}<div class="pad"><Estado tipo="erro" texto={falhas.campos} ontentar={carregarCampos} /></div>{:else if !campos}<div class="pad"><Estado tipo="carregando" linhas={1} /></div>{:else if campoDep}{@render editaveis([campoDep])}{/if}
           <p class="nota-dep">Um departamento por pessoa, pela idade, separado dos ministérios onde ela serve.</p>
         </section>

@@ -321,7 +321,10 @@
   .aviso.curto .tile { width: auto; height: auto; background: transparent; color: var(--sv-icone); }
   .celular .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
   .celular .kpi strong { font-size: 26px; }
-  .celular .rot { width: 84px; font-size: 13px; }
+  /* no celular o nome vai inteiro numa linha e a barra embaixo ("União de Mocidade", "Sem departamento" e o nome da congregação não cabem ao lado) */
+  .celular .barras { gap: 9px; }
+  .celular .barra { flex-wrap: wrap; row-gap: 3px; }
+  .celular .rot { width: 100%; font-size: 13px; }
   .celular .val { width: 44px; }
   .fundo { position: fixed; inset: 0; background: rgba(4, 12, 24, .28); z-index: 900; }
   .gaveta {

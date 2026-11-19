@@ -632,6 +632,120 @@ lista em páginas pronta no servidor para a tela nova (v10.1d); e o **"Cadastrar
 na hora, cada lista carrega por conta própria, e salvar/editar esperam a lista de congregações (antes, editar com as listas chegando podia
 gravar a pessoa na congregação errada).
 
+## Financeiro (módulo 2): o desenho aprovado e o que a Igreja vive hoje
+
+O desenho do Financeiro foi aprovado nas rodadas 13 a 17: a última respondida por ele em 18/11/2026, com a opção final em
+todas as telas. A construção vem logo depois de Membros, já em TypeScript + Svelte (decisão dele de 19/11/2026: as telas
+são refeitas do zero; o servidor e o banco ficam). Nenhuma tela vai à produção sem ele ver e aprovar na homologação.
+
+### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
+
+"Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do
+Financeiro (orçamento, PDQ, patrimônio, imunidade...) vem do Regimento Interno e ainda não existe na prática; está aprovado
+como desenhado e nasce na implantação. Por isso a construção começa por este núcleo, nesta ordem:
+
+1. **Entradas: o lançamento de dízimos e ofertas em planilha, como já desenhado.**
+   - **Os blocos e as folhas vêm numerados sozinhos e seguem de um mês para o outro.** Exemplo: em novembro a
+     congregação usou 10 folhas; em dezembro continua da folha 11 em diante, até acabar o bloco e começar o novo.
+   - **O dizimista é procurado no cadastro de membros;** se não for achado, digita-se o nome.
+2. **Repasses: como a Igreja recebe o dinheiro das congregações.**
+   - **O sistema guarda até onde já recebeu.** Exemplo: recebeu até o dia 10. No dia 11, ao voltar àquela congregação,
+     continua dali: o repasse do dia 11 ao dia 20, depois o do dia 21 ao dia 30, que encerra o mês. Também há o repasse
+     mensal de uma vez.
+   - **Os valores semanais, quinzenais e mensais são calculados sozinhos** e ficam salvos.
+3. **Fechamento e a folha impressa.**
+   - No fim do mês (dia 30), quem trouxe o dinheiro leva a folha impressa.
+   - **A folha tem o lugar da assinatura,** pelo menos a do Tesoureiro Geral, e um **QR que confere a validade** numa
+     página do sistema. Assim não ficam relatórios falsos nos murais das igrejas. É a mesma ideia do QR da credencial:
+     a página mostra se o documento existe e é aquele.
+4. **Rateio para os centros de custo.** Aprovado na rodada 17: "agora sim, do jeito que eu queria".
+   - Depois dos repasses vem o rateio. Ele pode ser feito a qualquer dia e juntar repasses de várias congregações (ex.:
+     no dia 12, o rateio dos repasses 1, 3 e 4).
+   - Ele vai direto para os centros de custo: Presidente (a prebenda em %), Tesouro Geral, Convenção e os fundos.
+   - Os 40% da congregação vão para a aba de repasses ao local.
+5. **Saídas a partir de cada centro de custo.** Exemplo: no dia 15 o Presidente recebe R$ 5.000; lança-se a saída daquele
+   centro de custo. Em todo momento se sabe o que cada centro de custo tem.
+6. **A página do Tesouro é atualizada pelos rateios gerais.**
+7. **A folha do mural** (o comentário dele na rodada 17 vale mais que o acerto anterior):
+   - **Cada linha:** o número do bloco, o número da folha (o recibo) e o nome do dizimista, sem valor.
+   - **Página em retrato,** cerca de 47 nomes por folha; passou disso, segue numa segunda folha.
+   - **O "total arrecadado" é só dos dízimos e ofertas** da aba de lançamentos. As outras entradas ficam no relatório do
+     sistema, não no mural.
+   - **Do total saem os compromissos da congregação** (ex.: o aluguel, a parcela de um lote). O que sobra é dividido: 60%
+     para a Geral, 40% para o local. Exemplo dele: arrecadou 1.000, o aluguel foi 900, sobraram 100, que viram 60 e 40.
+   - **O relatório nunca fica negativo.** Se o aluguel (2.000) passa do arrecadado (1.000), desconta-se só até zerar.
+   - **Nada fica "retido" na congregação.** O dinheiro vai para a Geral, e é a Geral que paga o local, nunca o contrário.
+     "Retidos" fica zerado.
+   - **Entendimento a confirmar com ele:** se os compromissos que saem antes da divisão são só os fixos da congregação
+     (aluguel, parcela de lote) ou qualquer saída do mês. Até ele responder, vale só o que ele citou: aluguel e lote,
+     como "compromissos fixos" cadastrados.
+
+**Regras que valem para todo o núcleo:**
+
+- **Três níveis que crescem:** congregação, área e Geral. A Geral vê o todo e escolhe a congregação; a congregação vê só o
+  que é dela; a área, as suas. A troca de congregação tem de ser amigável, num painel, nunca um select perdido.
+- **A Igreja é uma só, não um conjunto de congregações isoladas.** Era o defeito que ele mais apontou no sistema antigo.
+  - **Fornecedores, contas bancárias e centros de custo são da Igreja inteira.** Um fornecedor cadastrado numa congregação
+    aparece para as outras.
+  - **A conta geral da Igreja pode ser escolhida** como destino de um recurso de qualquer congregação.
+  - O escopo limita quem VÊ e quem LANÇA, não o cadastro comum.
+- **A Sede Administrativa é diferente da Congregação Sede** (rodada 16), em todos os módulos.
+  - A Sede Administrativa é a Secretaria e as contas gerais.
+  - A Congregação Sede é uma congregação como as outras, com membros e custos.
+
+### As decisões de desenho das rodadas 13 a 17 (resumo)
+
+- **Regras gerais:**
+  - um painel executivo para cada grupo de submódulos;
+  - nada de rolagem; listas grandes em páginas;
+  - pílulas no celular;
+  - o menu "por tipo de trabalho", com um "Resumo" no alto de cada grupo.
+- **Lançamento:** planilha + linha. A folha arrancada ou cancelada vai junto, obrigatória, na planilha.
+- **Blocos:**
+  - a lista com filtros e páginas de 40 (são ~200 blocos por ano);
+  - as folhas: o formulário primeiro e os quadradinhos maiores; ninguém digita número de bloco nem de folha;
+  - o livro de entrada e saída do bloco: a área é só intermediária, e o lote da gráfica soma as 50 folhas sozinho.
+- **Saídas (pagamentos):**
+  - os bloquinhos em colunas e o "novo pagamento": única vez, parcelado ou recorrente; boleto, Pix ou dinheiro;
+  - o local requer, e a Geral (Presidente + Tesoureiro Geral) aprova e paga;
+  - a nota fiscal o local anexa depois.
+- **Fornecedores:** o cadastro completo: como se paga, a saída padrão e os genéricos.
+- **Tipos de entrada e saída:** o catálogo pronto (~200).
+- **Contas a receber:** em colunas; o termo é gerado pelo sistema.
+- **Conciliação:** feita pela Geral, em duas telas: o extrato e o resultado; as diferenças em cartões. O que não bate vira
+  lançamento ali mesmo.
+- **Fechamento:**
+  - só o Conselho Fiscal fecha o mês; a Geral pode travar os lançamentos durante a auditoria; a congregação MANDA para
+    conferência;
+  - os dízimos e ofertas fecham separados;
+  - há prazo para as despesas: o que chega atrasado cai no mês seguinte, com advertência.
+- **Relatórios:**
+  - o relatório do mural, separado do relatório do sistema, que é completo, com gráfico e sem nome de dizimista;
+  - gráficos ajustáveis numa tela própria;
+  - o consolidado com o mês a mês das áreas;
+  - as demonstrações com gráficos pequenos.
+- **Tesouro:** "para onde vai cada real", como submódulo de Relatórios.
+- **Investimentos:** vale o valor líquido para resgate informado pelo banco; o rendimento só como projeção.
+- **Dizimistas:**
+  - o valor do dízimo fica mascarado para todos, com "mostrar" registrado;
+  - a visão é anual;
+  - o dizimista fiel é calculado: pelo menos 10 meses no ano.
+- **Repasses:**
+  - tabela no notebook e cartões no celular;
+  - repasse semanal, quinzenal e mensal; o tesoureiro lança e a Geral confere;
+  - os percentuais ficam nos parâmetros;
+  - o distrito fica bloqueado.
+- **Rateio:** é a contabilidade interna pelos fundos; não fecha o mês.
+- **Prebenda:** só o Presidente, em percentual do rateio (35%, nos parâmetros).
+- **Campanhas:** em três etapas, mais a "nova campanha".
+- **Orçamento e PDQ:** em cartões, com o PDQ numa aba própria.
+- **Plano de contas:** a lista e o item aberto.
+- **Parâmetros:** em abas, com tudo do Regimento.
+- **Prazos:** o aviso à Geral pelo menos 15 dias antes.
+- **Imunidade, patrimônio, frota, imóveis, obras, seguros e parâmetros monetários:** em cartões, sem mudança.
+- **Receitas acessórias e cessões:** como aprovado.
+- **Em aberto com ele:** "60% + 10%: cobrar logo 70%?" nos repasses (até lá, os percentuais são parâmetros editáveis).
+
 ## v10.2 — A porta de entrada (a página inicial e o login)
 
 **Escolha dele na primeira rodada de propostas (11/11/2026):** no **celular, a Opção A**; no **notebook, a Opção B**, com o **logo da

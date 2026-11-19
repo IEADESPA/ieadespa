@@ -496,6 +496,77 @@ o pago por causa do financeiro, que também está vindo para cá.
              `?matricula=N`, exato.
        - **Fica para depois:** o endereço no cadastro em etapas (hoje vai pelo cadastro completo, na ficha); o formulário
          público do site; e trocar de vez o cadastro completo antigo pela edição campo a campo, que tira o risco do passo 5.
+     - **Passo 6, o servidor (18/11/2026, ramo `v10-membros`, `6e833fd`):** juntar fichas (`/api/fichas-repetidas`; migração
+       179), o alerta da assembleia e da votação geral, a carteirinha física bloqueada com pendência e o número que sobra indo
+       para o próximo cadastro. Provas: e2e-93 117/117 (também com o READ_COMMITTED_SNAPSHOT) e a prova de mutação 10/10. Risco
+       que só a homologação prova: a junção desliga os gatilhos imutáveis dentro da transação (`DISABLE TRIGGER`), o que pede a
+       permissão ALTER do login do sistema no Azure.
+     - **Passo 7b — Membros refeito do zero em Svelte + TypeScript (19/11/2026, ramo `v10-membros-svelte`, na homologação em
+       `84fe461`) — NÃO vai à produção sem ele ver e aprovar:**
+       - **Por quê:** em 18/11 ele reprovou as telas do passo 7a ("quase igual ao que estava antes"): o perfil antigo reembalado,
+         emojis, funções antigas no menu, anotação do desenho virando texto. Decisão dele (19/11): as telas de Membros **refeitas
+         do zero em TypeScript + Svelte**, como um teste de verdade na homologação; o servidor e o banco ficam como estão; se der
+         certo, o resto do sistema segue em Svelte. Ele exige ver que fica **mais leve e mais rápido** que o JavaScript de hoje.
+       - **A base (pronta para os próximos módulos):**
+         - `front/`: Vite 8.3.5, Svelte 5.57.3, TypeScript 6.0.3, svelte-check 4.7.8 e @sveltejs/vite-plugin-svelte 7.3.1,
+           versões fixadas; `npm run check` (svelte-check e tsc) sem erro nem aviso;
+         - **a saída do build é versionada** em `app/svelte` (o deploy do Azure não roda o build: um build quebrado nunca derruba
+           o deploy da main nem o da homologação). O carimbo `app/svelte/carimbo.json` guarda o resumo do código-fonte e de cada
+           arquivo gerado, e o teste `frontSvelteCarimbo.test.js` (que roda no deploy, antes da migração) para tudo se o fonte
+           mudou sem build novo, se um arquivo foi mexido à mão ou se aparecer `eval`, `new Function` ou endereço de fora;
+         - **sob demanda:** a casca (`modulos/casca.js`, `abrirMembrosSvelte` e `abrirMinhaVidaSvelte`) só baixa
+           `app/svelte/membros.js` quando a pessoa entra em Membros ou abre a Minha vida; cada tela é um pedaço baixado na
+           primeira vez (a lista e a ficha logo depois do painel); o membro na Minha vida não baixa as telas da secretaria;
+         - **a ponte** (`front/src/comum/ponte.ts`): tudo o que as telas usam da casca passa por um objeto só (o fetch
+           autenticado, a sessão, os ícones de traço — as MESMAS formas do `iconeSvg()` —, os avisos, o caminho do topo, o menu
+           recolhido), conferido quando chega;
+         - **as peças comuns** (`front/src/comum`): cabeçalho, cartão, chip, escolha em chips (no lugar do select nativo),
+           opções, etapas, pílulas, menu do módulo com o trilho, linha do tempo, campo, aviso, estados (carregando, vazio, erro)
+           e "em construção";
+         - a CSP continua `'self'` (sem script em linha); o service worker subiu para v65 (as telas Svelte ficam fora da
+           instalação e são guardadas quando baixadas).
+       - **As telas, igual ao desenho aprovado** (fotos "aprovado × construído" de cada uma, por nível, aparelho e tema):
+         o módulo se chama **Membros**, com o menu em 4 grupos (Painéis; Membros; Movimentações; Cuidados com o cadastro) e o
+         trilho de ícones; o conteúdo direto no fundo; nenhum emoji; títulos sem a barra azul; o painel executivo; a lista; a
+         ficha 360 (o menu "Nesta ficha" com as 9 partes, o conteúdo antigo redistribuído nelas, a edição campo a campo com o
+         lápis, o ✓ e o ✕ e "quem mudou o quê"); o cadastro em etapas; a esteira de cadastros; o cadastro rápido; as
+         transferências (pedir, a caixa e acompanhar); a caixa de sugestões com a trilha das 4 etapas; as fichas repetidas e
+         juntar (só o que é diferente); e a Minha vida (a linha do tempo primeiro, "Minha ficha" à direita com o menu completo).
+         No celular, uma fileira só de pílulas (Painel, Pessoas, Fila com o número, Transferências), as telas de dentro com o ←
+         e nada preso embaixo.
+       - **Servidor (com teste):** a lista ordenada pelo cabeçalho e a Área de cada pessoa (`?ordem=&direcao=`, lista fechada;
+         e2e-92 79/79 com a tentativa de injeção); a situação e a congregação na minha linha do tempo.
+       - **Saíram da casca:** as telas do passo 7a em JavaScript (`modulos/membros.js`, `membros-cadastro.js`,
+         `membros-movimento.js` e o estilo delas). Do menu de Membros saíram as funções antigas (Importar e exportar,
+         Credenciais, Discipulado, Cartas, Perda de Membresia); o **Cuidado Pastoral** ganhou o cartão dele.
+       - **Em construção (aparece assim na tela, nunca a tela velha):** Desligamentos; Carteirinhas (passo 8); "Serve em algum
+         ministério?" no cadastro; o anexo do documento na sugestão do membro; a coluna "a pessoa completa por e-mail" da esteira.
+       - **Peso e velocidade, medidos no Edge sem janela** (rede de celular 4G lento: 150 ms e 1,6 Mbit/s; processador 4×
+         mais lento; cache vazio; arquivos comprimidos como o Azure manda; mediana de 5 rodadas, a secretaria local):
+
+         | | JavaScript de hoje (homologação) | Svelte |
+         | --- | --- | --- |
+         | Abrir o sistema | 1.158 KB | 1.119 KB |
+         | Entrar em Membros (painel) | 0 KB (já veio ao abrir) | 54 KB |
+         | Painel pronto | 1,11 s | 1,11 s |
+         | Lista pronta | 0,67 s | 0,39 s |
+         | Ficha 360 pronta | 1,27 s | 0,24 s |
+
+         O JavaScript de Membros de hoje (61 KB) é baixado por todo mundo ao abrir o sistema, mesmo por quem nunca entra em
+         Membros; em Svelte, só quem entra baixa (54 KB, já com o painel, a lista e a ficha; cada outra tela, de 1 a 6 KB, na primeira vez que abre).
+       - **Provas:** jest 6.645/6.645; e2e no LocalDB (base `cenario-179`): 84 47/47, 85 51/51, 86 59/59, 89 77/77, 90 79/79,
+         91 93/93, 92 79/79, 93 117/117; as telas no Edge sem janela em todos os níveis, aparelhos e temas sem erro de script,
+         sem violação de CSP, sem estouro de lado e sem emoji; revisão com o caçador de falhas silenciosas, a análise dos tipos e
+         o `/code-review`, com os achados corrigidos (cada parte com o seu erro e o "Tentar de novo"; nada enviado duas vezes;
+         respostas velhas descartadas; a saída da sessão limpa o rascunho com CPF; o pedido da própria pessoa aparece como dela).
+       - **Escolhas pelo caminho seguro (ele pode mudar):** no celular as pílulas da rodada 12 no lugar das abas sublinhadas; o
+         cadastro rápido com o desenho da rodada 9 e os campos que a regra escrita pede (CPF e e-mail opcionais, que fazem a
+         pessoa entrar sozinha; o celular opcional); o departamento sugerido pela idade (até 11 Crianças, 12–17 Adolescentes,
+         solteiro até 35 Jovens, o resto Senhoras ou Varões), que a secretaria pode trocar; o menu recolhido (trilho) nas telas
+         em que o desenho o mostra (painel, ficha, esteira, sugestões e Minha vida); a página "Transferências" com o nome do menu
+         novo; a Minha vida com o desenho no alto e, embaixo, os compromissos e "o que é meu" da casca.
+       - **Achado consertado de passagem:** o `style.css` da homologação tinha perdido o começo de um comentário (no merge de
+         `59dcdac`), e o navegador jogava fora as variáveis do `:root` da casca.
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
 - **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
@@ -661,11 +732,23 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
 4. **Rateio para os centros de custo.** Aprovado na rodada 17: "agora sim, do jeito que eu queria".
    - Depois dos repasses vem o rateio. Ele pode ser feito a qualquer dia e juntar repasses de várias congregações (ex.:
      no dia 12, o rateio dos repasses 1, 3 e 4).
-   - Ele vai direto para os centros de custo: Presidente (a prebenda em %), Tesouro Geral, Convenção e os fundos.
+   - **Os percentuais certos dos 60% da Geral** (ele, 19/11/2026: os da rodada 17 e da 18 estavam "erradíssimos"):
+     - **Presidente: 30%**;
+     - **Tesouro Geral: 60%**;
+     - **Convenção (o fundo convencional): 10%**;
+     - **o dízimo do pastor:** dos 30% do Presidente, 10% vão também para a Convenção. A Convenção recebe os seus 10%
+       mais 10% dos 30% do Presidente.
+     - **Não existem hoje** reserva, PDQ (plano diretor) nem Missões no rateio. Missões tem caixa próprio, na Secretaria de
+       Missões. Se um dia o Regimento criar reserva ou PDQ, eles saem dos 60% do Tesouro Geral.
+     - A pergunta antiga "60% + 10% = 70%?" deixou de existir.
+     - Os percentuais ficam nos parâmetros, editáveis pela Geral, com estes valores de partida.
    - Os 40% da congregação vão para a aba de repasses ao local.
    - **Pedido dele de 19/11: o rateio mais automático, "um rateio mesmo top".** Quando o repasse é conferido, a divisão
-     pelos centros de custo sai sozinha, pelos percentuais dos parâmetros; o tesoureiro só confere e pode desfazer no
-     mesmo dia. A contabilidade interna e o fechamento do mês ficam como aprovados.
+     pelos centros de custo sai sozinha, pelos percentuais dos parâmetros. A contabilidade interna e o fechamento do mês
+     ficam como aprovados.
+   - **Não existe "desfazer" nem "reabrir" o rateio.** Ele: "nunca reabrimos um rateio em todos esses anos". Um erro de
+     cálculo ou de digitação se corrige com um ESTORNO, um lançamento de correção com o motivo, que fica na trilha e é
+     feito pela Tesouraria Geral. O botão "Desfazer (só hoje)" da rodada 18 sai na construção.
    - **As entradas mais amigáveis:** é o ponto que ele mais quer melhorar.
 5. **Saídas a partir de cada centro de custo.** Exemplo: no dia 15 o Presidente recebe R$ 5.000; lança-se a saída daquele
    centro de custo. Em todo momento se sabe o que cada centro de custo tem.
@@ -675,6 +758,14 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
    - **Página em retrato,** cerca de 47 nomes por folha; passou disso, segue numa segunda folha.
    - **O "total arrecadado" é só dos dízimos e ofertas** da aba de lançamentos. As outras entradas ficam no relatório do
      sistema, não no mural.
+   - **As ofertas dos cultos de departamentos e secretarias NÃO entram no 60/40** (ele, 19/11). A maioria dos cultos é
+     desses. Cada departamento e secretaria tem o seu centro de custo, e Missões tem caixa próprio. No 60/40 entram só
+     os dízimos e a oferta do culto da congregação.
+   - **As assinaturas da folha do mural** (ele, 19/11), três e obrigatórias:
+     - o **Tesoureiro Geral**, que recebe e fecha o relatório;
+     - o **tesoureiro local**;
+     - o **dirigente da congregação**.
+     - O **Presidente não assina**, nem como opção.
    - **Do total saem os compromissos da congregação** (ex.: o aluguel, a parcela de um lote). O que sobra é dividido: 60%
      para a Geral, 40% para o local. Exemplo dele: arrecadou 1.000, o aluguel foi 900, sobraram 100, que viram 60 e 40.
    - **O relatório nunca fica negativo.** Se o aluguel (2.000) passa do arrecadado (1.000), desconta-se só até zerar.
@@ -687,9 +778,20 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
      - a **obra liberada pelo Presidente**. Na congregação em construção, quando a Geral não tem como ajudar, o
        Presidente libera que ela fique com o que arrecada (às vezes 100%) até um valor autorizado. Exemplo dele: rende
        1.000, mas pode ficar com até 2.000 para ajudar a construir.
-     - Cada despesa congregacional é cadastrada uma vez na congregação, com o valor, o período e quem autorizou (a
-       obra, só o Presidente). Ela entra sozinha no relatório do mês.
-     - A soma desconta até zerar, nunca deixando o relatório negativo.
+     - **Quem cadastra (ele, 19/11): a própria congregação,** com autonomia. A Tesouraria Geral aceita ou não e paga quando
+       a congregação comunica. O Presidente não precisa saber, a não ser acima de um valor (um parâmetro; "nunca foi
+       alcançado"). Exemplo dele: um produto de limpeza de R$ 50 é cadastrado pelo local, aceito pela Tesouraria Geral
+       e lançado como despesa. A obra continua sendo liberada só pelo Presidente.
+     - Ela entra sozinha no relatório do mês. A soma desconta até zerar, nunca deixando o relatório negativo.
+     - **Com repasses por período** (ele, 19/11): a despesa vai consumindo os repasses na ordem até ser coberta. Exemplo:
+       uma despesa de R$ 1.000. O 1º repasse, de R$ 500, vai todo para ela: nada para a Geral nem para o local, e não há
+       rateio. O 2º, de R$ 600, completa os R$ 500 que faltavam, e os R$ 100 que sobram vão para o rateio normal. Do 3º
+       em diante, rateio normal.
+     - **De onde vem o dinheiro da obra** (ele, 19/11; entendimento a confirmar na construção):
+       - se vem dos dízimos e ofertas da congregação (a obra liberada), fica travado lá: não entra no rateio e não volta;
+       - se é uma despesa comum da congregação, sai dos 40% dela;
+       - se a Geral paga, é uma despesa da Geral e também não volta.
+       - Em nenhum caso a Geral "devolve" a obra à congregação.
 
 **Regras que valem para todo o núcleo:**
 
@@ -747,7 +849,7 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
   - os percentuais ficam nos parâmetros;
   - o distrito fica bloqueado.
 - **Rateio:** é a contabilidade interna pelos fundos; não fecha o mês.
-- **Prebenda:** só o Presidente, em percentual do rateio (35%, nos parâmetros).
+- **Prebenda:** só o Presidente, em percentual do rateio: **30%**, corrigido por ele em 19/11 (antes estava 35%).
 - **Campanhas:** em três etapas, mais a "nova campanha".
 - **Orçamento e PDQ:** em cartões, com o PDQ numa aba própria.
 - **Plano de contas:** a lista e o item aberto.
@@ -755,7 +857,11 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
 - **Prazos:** o aviso à Geral pelo menos 15 dias antes.
 - **Imunidade, patrimônio, frota, imóveis, obras, seguros e parâmetros monetários:** em cartões, sem mudança.
 - **Receitas acessórias e cessões:** como aprovado.
-- **Em aberto com ele:** "60% + 10%: cobrar logo 70%?" nos repasses (até lá, os percentuais são parâmetros editáveis).
+- **A pergunta "60% + 10%: cobrar logo 70%?"** deixou de existir (ele, 19/11).
+- **Tela nova a desenhar na próxima rodada do Financeiro (ele, 19/11): "O que o contador precisa".** É a entrega do mês ao
+  contador, com os lançamentos prontos e no formato da norma das entidades sem fins lucrativos (ITG 2002), sem redigitar.
+  - **Sobre o dinheiro em espécie:** ele decidiu que não há regra para diminuir. O dinheiro em papel continua existindo, e
+    o sistema só facilita o Pix quando houver.
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
 

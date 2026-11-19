@@ -778,8 +778,33 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
    - **Do total saem os compromissos da congregação** (ex.: o aluguel, a parcela de um lote). O que sobra é dividido: 60%
      para a Geral, 40% para o local. Exemplo dele: arrecadou 1.000, o aluguel foi 900, sobraram 100, que viram 60 e 40.
    - **O relatório nunca fica negativo.** Se o aluguel (2.000) passa do arrecadado (1.000), desconta-se só até zerar.
-   - **Nada fica "retido" na congregação.** O dinheiro vai para a Geral, e é a Geral que paga o local, nunca o contrário.
-     "Retidos" fica zerado.
+   - **O "retido na congregação"** (corrigido por ele na rodada 18, 19/11/2026). A regra é o dinheiro ir para a Geral e a
+     Geral pagar o local. Na prática, o que a pessoa NÃO traz em espécie fica retido na congregação e sai dos 40% do
+     local.
+     - Exemplo dele: eram R$ 5.000; ela trouxe só os R$ 3.000 da Geral (60%); os R$ 2.000 ficaram lá, e a Geral "nem viu
+       a cor".
+     - O sistema registra só o que de fato chegou: "tem que ser sincero".
+     - A linha "Retido na congregação" mostra esse valor; não é sempre zero.
+   - **O repasse, como ele trabalha** (rodada 18):
+     - hoje é o envelope (congregação, data e valor), e o dinheiro fica nele até o rateio;
+     - no sistema, a congregação faz um **pré-repasse**, sem validade até a Tesouraria Geral conferir com o dinheiro na
+       mão; a Geral também pode fazer o pré-repasse;
+     - a tela de Repasses abre na **lista das congregações com pré-repasse**;
+     - no detalhe:
+       - escolhe-se até que **dia e hora** se fecha;
+       - escolhe-se **quem trouxe**;
+       - confere-se o **banco (Pix)** e a **espécie**;
+       - o que não veio fica retido.
+   - **O caixa único da Tesouraria Geral** (ideia dele e do Presidente):
+     - funciona como o caixa de supermercado: abre e fecha; recebe a espécie e o Pix de todas as congregações; dá o
+       **recibo** a quem trouxe;
+     - o envelope acaba, e quem separa é o rateio automático.
+     - O recibo é a "folha do recebimento", aprovada na opção 3 da rodada 18, somada ao detalhamento da opção 1, numa via só.
+   - **A folha do mural, versão final** (rodada 18):
+     - a folha 1 cabe 50 nomes, e mais 3 se precisar;
+     - cada bloco novo começa numa folha nova;
+     - as contas do mês, as 3 assinaturas e o QR ficam juntos e inteiros na última folha (normalmente são 2 folhas; com
+       muitos nomes, 3).
    - **Confirmado por ele (19/11/2026): só o que é fixo da congregação sai antes da divisão,** numa linha só chamada
      **"Despesas congregacionais"**, no lugar de várias linhas soltas. Dentro dela vai o que for:
      - o **aluguel**;

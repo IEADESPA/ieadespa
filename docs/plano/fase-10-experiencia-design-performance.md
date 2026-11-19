@@ -712,6 +712,32 @@ lista em páginas pronta no servidor para a tela nova (v10.1d); e o **"Cadastrar
 na hora, cada lista carrega por conta própria, e salvar/editar esperam a lista de congregações (antes, editar com as listas chegando podia
 gravar a pessoa na congregação errada).
 
+### Membros em Svelte: aprovado no visual por ele (19/11/2026), e o que falta para a produção
+
+**Ele, depois de entrar como Presidente:** "ficou bom, gostei, bem rápido mesmo". A prioridade dele, depois da rodada 19
+do Financeiro, é **terminar Membros de fato e levar à produção**. Com Membros e Financeiro no sistema, a Igreja sai do
+sistema pago e o dinheiro economizado vai para outros projetos.
+
+O que falta, nesta ordem:
+
+1. **O seletor de congregação aprovado no Financeiro** (rodada 18, opção 3: a área primeiro e depois a congregação, com a
+   procura). Hoje Membros ainda mostra a lista inteira de congregações. Ele vira peça comum e entra também em Membros,
+   na versão final da rodada 19.
+2. **Carteirinhas** (passo 8, desenho aprovado nas rodadas 9 a 11).
+3. **Desligamentos.**
+4. **As sobras:**
+   - "Serve em algum ministério?";
+   - o anexo da sugestão;
+   - "a pessoa completa por e-mail";
+   - o formulário "Quero me cadastrar" do site;
+   - as ações das abas antigas do perfil (casamento, vínculo, foto, licença), refeitas dentro da ficha.
+5. **O importador do sistema pago** (passo 9).
+6. **A ida à produção:**
+   - as migrações 174 a 179;
+   - a permissão ALTER para juntar fichas;
+   - a importação real;
+   - a troca do sistema pago.
+
 ## Financeiro (módulo 2): o desenho aprovado e o que a Igreja vive hoje
 
 O desenho do Financeiro foi aprovado nas rodadas 13 a 17: a última respondida por ele em 18/11/2026, com a opção final em
@@ -1179,6 +1205,38 @@ O tamanho medido em 18/11: cerca de 127 mil linhas de JavaScript (88 mil no serv
 
 **Prazo:** de 2 a 3 semanas alternando com a construção (1 a 2 lotes por dia, presos à cota de 5 horas), ou cerca de 1
 semana e meia se fosse a única tarefa. O lote 1 serve de régua: depois dele o prazo é recalculado com o tempo real.
+
+### Como a varredura vai rodar: pedaços de 30 minutos (pedido dele, 19/11/2026)
+
+A ideia dele: em vez de poucos agentes trabalhando horas, vários agentes, cada um com no máximo 30 minutos de trabalho. Se
+a cota acabar no meio, perdem-se no máximo 30 minutos, nunca um lote inteiro.
+
+- **Os 6 lotes viram cerca de 26 pedaços de 30 minutos,** cada um com 4 a 6 mil linhas de código:
+  - **Lote 1, entrada e acesso:** 2 pedaços. O login e o PIN; a chave do aparelho, as sessões, o escopo e as permissões.
+  - **Lote 2, sem login:** 2 pedaços. As rotas públicas do sistema; o site, o QR e as inscrições.
+  - **Lote 3, dinheiro:** 3 pedaços. Os lançamentos e as saídas; os repasses, o rateio e a prebenda; os recibos e as
+    campanhas.
+  - **Lote 4, dados pessoais:** 4 pedaços. A ficha e o CPF; menores e saúde; disciplina e cuidado; as rotinas da LGPD.
+  - **Lote 5, o resto do servidor:** cerca de 11 pedaços, um por grupo de módulos.
+  - **Lote 6, as telas:** só as que NÃO serão refeitas em Svelte, cerca de 4 pedaços. As telas que vão ser refeitas não se
+    revisam: a tela nova já passa pelas três revisões ao ser construída.
+- **Cada pedaço, sempre do mesmo jeito:**
+  1. Um agente pega UM pedaço, olha a hora no início e para aos 25 minutos.
+  2. Ele passa as três lentes:
+     - segurança: o `claude-security` no esforço adequado ao tamanho;
+     - erros escondidos: o `silent-failure-hunter`;
+     - lógica: o `/code-review`.
+  3. Antes de terminar, ele grava os achados num arquivo do pedaço e no `memoria-projeto`.
+- **A conferência dos achados é outro pedaço de 30 minutos,** feito por outro agente que tenta derrubar cada achado. Só o
+  que resiste vai para ele.
+- **As correções também são em pedaços,** um achado grave ou um pacote de leves por pedaço, sempre com teste e prova.
+- **A agenda:** de 2 a 4 pedaços por dia, um de cada vez ou dois ao mesmo tempo, encaixados entre os trabalhos de
+  construção. São cerca de 13 a 18 horas de agente no total, ao longo de 2 a 3 semanas.
+- **O que ele recebe:**
+  - um resumo por semana, em português simples: o que é, o risco, um exemplo e o "pode corrigir?";
+  - uma gravíssima, na hora.
+- **Quando começa:** quando ele disser que está viável. Até lá, a prioridade é a rodada 19 do Financeiro e terminar
+  Membros para a produção.
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 

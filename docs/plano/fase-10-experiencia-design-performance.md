@@ -762,6 +762,43 @@ O desenho do Financeiro foi aprovado nas rodadas 13 a 17: a última respondida p
 todas as telas. A construção vem logo depois de Membros, já em TypeScript + Svelte (decisão dele de 19/11/2026: as telas
 são refeitas do zero; o servidor e o banco ficam). Nenhuma tela vai à produção sem ele ver e aprovar na homologação.
 
+### A realidade do dinheiro, que vale mais que o Regimento (ele, 19/11/2026)
+
+A rodada 19 foi REPROVADA inteira porque trouxe do Regimento Interno coisas que não existem. O Regimento não foi aprovado
+e não é a realidade. Esta lista vale para todo desenho e toda construção do Financeiro:
+
+- **Não existe:**
+  - lançar ou cadastrar CULTO no Financeiro. O dízimo é lançado a qualquer hora (ex.: terça de manhã), e no máximo se
+    registra o dia. A oferta entra quando há, como a da ceia;
+  - malote;
+  - a contagem no domingo à noite;
+  - o pré-repasse "todo domingo";
+  - cofre, duas pessoas contando, depósito no banco toda segunda.
+- **O dinheiro em espécie vira Pix logo.** O caixa único tem as contas do dinheiro em espécie e do Pix, separadas; o Pix
+  é o que mais se movimenta.
+- **O repasse:** metade das congregações entrega o mês inteiro no último dia; a outra metade faz repasses semanais ou
+  parciais. Todo mês tem de vir. Não existe "repasse atrasado" no meio do mês.
+- **Departamentos e secretarias ficam FORA do 60/40,** e Missões é uma secretaria.
+  - Cada um tem caixa e receitas próprios (ofertas, mensalidades de quem apoia).
+  - Os centros de custo são centenas: um geral e um por departamento ou secretaria, em cada congregação, mais os da área.
+    Foi o que o sistema pago não aguentou.
+  - O Financeiro tem de suportar essa árvore; o módulo dos departamentos vem depois.
+- **O contador é anual, não mensal.** A Igreja manda o resultado contábil do ano, e ele envia à Receita. A tela "O que o
+  contador precisa" segue o formato que a Receita recebe.
+- **Trabalho voluntário:** todos são voluntários e não há registro. Não entra no sistema.
+
+**As respostas dele às dúvidas da rodada 19:**
+
+- **A folha do mural:** 50 nomes por folha, no máximo.
+- **O retido:** sai dos 40% DEPOIS das despesas congregacionais. Os 60% e os 40% são sempre do que sobrou.
+- **O dízimo digital:** quem liga primeiro é a tesouraria da congregação. Ela escreve o recibo de papel e o liga ao Pix.
+  - A Geral só liga quando a congregação não fez e trouxe o bloco.
+  - Ao lançar, a Geral vê PRIMEIRO o aviso "há dízimos digitais para ligar"; sem ligar, eles ficam de fora.
+- **O dízimo do pastor:** sai dos 30% do Presidente, que fica com o que sobra.
+  - O centro de custo da Convenção tem dois tipos de entrada: o fundo convencional, que vem do rateio, e o dízimo do
+    pastor.
+- **As tendências:** opções de tela com o gráfico personalizável.
+
 ### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
 
 "Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do

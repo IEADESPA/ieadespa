@@ -153,6 +153,23 @@ async function principal() {
     ok([200, 400].includes(y.status), `resumo com lixo não derruba a rota (${String(JSON.stringify(lixo)).slice(0, 30)})`, String(y.status));
   }
 
+  // FASE 10 (19/11/2026, telas Svelte): a lista ordenada pelo cabeçalho (?ordem=&direcao=) e a área de cada pessoa; ordem desconhecida cai no nome
+  console.log("== a lista ordenada pelo cabeçalho e a coluna Área ==");
+  const porMat = await lista({ rol: "1", ordem: "matricula", direcao: "desc" });
+  const mats = (porMat.body.itens || []).map((x) => x.membroId);
+  ok(porMat.status === 200 && mats.length === 12 && mats.every((m, i) => i === 0 || mats[i - 1] > m), "ordem=matricula&direcao=desc: as 12 do rol da maior para a menor", JSON.stringify(mats));
+  const porNome = await lista({ rol: "1", ordem: "nome" });
+  const nomes = (porNome.body.itens || []).map((x) => x.nome);
+  ok(nomes.length === 12 && nomes.every((n, i) => i === 0 || nomes[i - 1].localeCompare(n, "pt-BR") <= 0), "ordem=nome: em ordem alfabética", JSON.stringify(nomes.slice(0, 4)));
+  const injecao = await lista({ rol: "1", ordem: "nome; DROP TABLE MembroReferencia--", direcao: "desc; --" });
+  ok(injecao.status === 200 && (injecao.body.itens || []).length === 12, "ordem com injeção: ignorada (cai no nome), a lista vem igual", String(injecao.status));
+  ok((await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 920001 AND 920014")) === 14, "a tabela continua inteira depois da tentativa");
+  const comArea = (porNome.body.itens || [])[0] || {};
+  const areaBanco = await escalar(`SELECT ar.Nome FROM Congregacoes c LEFT JOIN Areas ar ON ar.AreaId = c.AreaId WHERE c.CongregacaoId = ${Number(cong)}`);
+  ok(Object.prototype.hasOwnProperty.call(comArea, "areaNome") && (comArea.areaNome || null) === (areaBanco || null), "cada pessoa vem com a área da congregação dela (areaNome)", JSON.stringify([comArea.areaNome, areaBanco]));
+  const porArea = await pedir(tokenGeral(), { pagina: 1, porPagina: 20, rol: "1", ordem: "area", direcao: "asc" });
+  ok(porArea.status === 200 && Array.isArray(porArea.body.itens), "Geral: ordem=area responde", String(porArea.status));
+
   fim("e2e-92 (painel de membros no banco)");
   L.shimEncerrar();
 }

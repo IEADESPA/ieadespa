@@ -25,7 +25,7 @@
     font-size: 12.5px; font-weight: 600; white-space: nowrap; background: var(--sv-linha); color: var(--sv-texto); cursor: pointer;
     -webkit-tap-highlight-color: transparent; transition: background-color .15s ease, transform .12s ease;
   }
-  .cheias button { flex: 1 0 auto; }
+  .cheias button { flex: 1 1 auto; padding: 0 9px; min-width: 0; }
   button:active { transform: scale(.97); }
   .ativa { background: var(--sv-ouro); color: #0A2342; font-weight: 700; }
   .n { min-width: 17px; height: 17px; border-radius: 9px; background: var(--sv-ouro); color: #0A2342; font-size: 10.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }

@@ -12,7 +12,9 @@ const SAIDA = path.resolve(RAIZ_FRONT, "..", "app", "svelte");
 const ARQUIVO_CARIMBO = "carimbo.json";
 const FONTES_SOLTAS = ["package.json", "package-lock.json", "vite.config.ts", "svelte.config.js", "tsconfig.json"];
 
+/** @param {string} dir @returns {string[]} */
 function listar(dir) {
+  /** @type {string[]} */
   const saida = [];
   for (const nome of fs.readdirSync(dir).sort()) {
     const p = path.join(dir, nome);
@@ -21,7 +23,9 @@ function listar(dir) {
   }
   return saida;
 }
+/** @param {string} p */
 function texto(p) { return fs.readFileSync(p, "utf8").replace(/\r\n/g, "\n"); }
+/** @param {string} s */
 function resumo(s) { return crypto.createHash("sha256").update(s, "utf8").digest("hex"); }
 
 function resumoDoFonte() {
@@ -34,6 +38,7 @@ function resumoDoFonte() {
   return h.digest("hex");
 }
 function resumosDaSaida() {
+  /** @type {Record<string, string>} */
   const r = {};
   if (!fs.existsSync(SAIDA)) return r;
   for (const p of listar(SAIDA)) {
@@ -52,6 +57,7 @@ function carimbar() {
 function conferir() {
   const p = path.join(SAIDA, ARQUIVO_CARIMBO);
   if (!fs.existsSync(p)) return ["falta app/svelte/carimbo.json (rode npm run build em front/)"];
+  /** @type {{ fonte: string, arquivos: Record<string, string> }} */
   const salvo = JSON.parse(fs.readFileSync(p, "utf8"));
   const erros = [];
   if (salvo.fonte !== resumoDoFonte()) erros.push("o código-fonte de front/ mudou depois do último build (rode npm run build em front/ e versione app/svelte)");

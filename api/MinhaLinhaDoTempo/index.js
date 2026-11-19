@@ -24,6 +24,9 @@ module.exports = async function (context, req) {
   context.res = {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    body: { sucesso: true, nome: fontes.membro.Nome, vidaEspiritual, eventos: pagina.itens, total: pagina.total, pagina: pagina.pagina, porPagina: pagina.porPagina }
+    // FASE 10 (19/11/2026): o cabeçalho da Minha vida (a congregação, a situação e o "membro desde" da própria pessoa)
+    body: { sucesso: true, nome: fontes.membro.Nome, situacao: fontes.membro.SituacaoMembro || null, status: fontes.membro.Status || null,
+      congregacao: fontes.membro.CongregacaoNome || null, dataAdmissao: fontes.membro.DataAdmissao || null,
+      vidaEspiritual, eventos: pagina.itens, total: pagina.total, pagina: pagina.pagina, porPagina: pagina.porPagina }
   };
 };

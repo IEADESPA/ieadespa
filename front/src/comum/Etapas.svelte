@@ -39,6 +39,8 @@
   .feita .fio { background: var(--sv-ok); }
   @media (max-width: 640px) {
     .nome { display: none; }
-    .agora .nome { display: inline; }
+    .agora .nome { display: inline; font-size: 13px; }
+    .fio { min-width: 6px; margin: 0 4px; }
+    .circ { width: 26px; height: 26px; }
   }
 </style>

@@ -42,15 +42,20 @@ export async function avisosDoModulo(resumo: ResumoPainel, chegando: readonly Tr
     lista.push({ chave: "sug", icone: "lapis", titulo: `${n} ${plural(n, "sugestão", "sugestões")} de membros para conferir`, sub: "aplicar ou recusar com o motivo",
       tom: "afazer", meu: true, abrir: () => ir({ tela: "sugestoes" }, true) });
   }
-  // o alerta da assembleia geral (só a Geral recebe do servidor); para os outros, o "sem CPF" do resumo
-  let alerta: { titulo?: string; mensagem?: string; contagem?: { total?: number } } | null = null;
+  // o alerta da assembleia geral (só a Geral recebe do servidor: shared/juntarFichasDb.textoDoAlerta); para os outros, o "sem CPF" do resumo
+  interface Alerta { precisaConfirmar?: boolean; mensagem?: string | null; contagem?: { repetidas?: number; possiveis?: number; numero?: number; arrolamento?: number } }
+  let alerta: Alerta | null = null;
   if (geral) {
-    const a = await pedir<{ titulo?: string; mensagem?: string; contagem?: { total?: number } }>("/fichas-repetidas/alerta");
-    if (a.ok && a.dados.contagem && Number(a.dados.contagem.total) > 0) alerta = a.dados;
+    const a = await pedir<Alerta>("/fichas-repetidas/alerta");
+    if (a.ok && a.dados.precisaConfirmar) alerta = a.dados;
   }
-  if (alerta && alerta.titulo) {
-    lista.push({ chave: "assembleia", icone: "alerta", titulo: alerta.titulo, sub: alerta.mensagem ?? "", tom: "afazer", meu: true, abrir: () => ir({ tela: "repetidas" }, true) });
-  } else if (resumo.semCpf > 0) {
+  if (alerta) {
+    const c = alerta.contagem ?? {};
+    const fichas = (c.repetidas ?? 0) + (c.possiveis ?? 0);
+    const partes = [fichas ? `${fichas} ${plural(fichas, "ficha repetida", "fichas repetidas")}` : "", c.numero ? `${c.numero} ${plural(c.numero, "número", "números")} a acertar` : ""].filter(Boolean);
+    lista.push({ chave: "assembleia", icone: "alerta", titulo: "Cadastros a acertar antes da assembleia geral", sub: partes.join(" · "), tom: "primeiro", meu: true, abrir: () => ir({ tela: "repetidas" }, true) });
+  }
+  if (resumo.semCpf > 0) {
     lista.push({ chave: "cpf", icone: "alerta", titulo: `${numero(resumo.semCpf)} sem CPF no rol`, sub: "quem não tem CPF não entra na lista de votantes",
       tom: "afazer", meu: false, abrir: () => ir({ tela: "pessoas" }, true) });
   }

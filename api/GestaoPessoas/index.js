@@ -108,9 +108,10 @@ const ORDENS_LISTA = {
 };
 function ordemDaLista(query) {
   const q = query || {};
-  const chave = Object.prototype.hasOwnProperty.call(ORDENS_LISTA, q.ordem) ? q.ordem : "nome";
+  const chave = typeof q.ordem === "string" && Object.prototype.hasOwnProperty.call(ORDENS_LISTA, q.ordem) ? q.ordem : "nome";
   const dir = String(q.direcao || "").toLowerCase() === "desc" ? "DESC" : "ASC";
   if (chave === "matricula") return `m.MembroId ${dir}`;
+  if (chave === "nome") return `m.Nome ${dir}, m.MembroId ${dir}`;
   return `${ORDENS_LISTA[chave]} ${dir}, m.Nome ASC, m.MembroId ASC`;
 }
 

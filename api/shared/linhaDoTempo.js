@@ -220,7 +220,8 @@ const DIA_BR = (col) => `CONVERT(varchar(10), DATEADD(HOUR, -3, ${col}), 120)`;
 // UMA ida ao banco: todos os SELECTs no mesmo lote (recordsets na ordem abaixo). Disciplina e abandono só entram no lote quando quem vê pode vê-los.
 async function lerFontes(pool, sql, membroId, { disciplina = false } = {}) {
   const lotes = [
-    `SELECT Nome, Status, FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao, CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo,
+    `SELECT Nome, Status, SituacaoMembro, (SELECT c.Nome FROM Congregacoes c WHERE c.CongregacaoId = MembroReferencia.CongregacaoId) AS CongregacaoNome,
+            FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao, CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo,
             CONVERT(varchar(10), DataRitoRecebimento, 120) AS DataRitoRecebimento, MinistranteRito, Origem, IgrejaAnterior,
             CONVERT(varchar(10), DataSaida, 120) AS DataSaida, MotivoSaida
      FROM MembroReferencia WHERE MembroId = @id`,

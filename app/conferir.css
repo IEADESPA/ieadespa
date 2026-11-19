@@ -1,0 +1,51 @@
+/* conferir.css — a página PÚBLICA que o QR da carteirinha abre (conferir.html; FASE 10, passo 8). Desenho aprovado na rodada 11 (opção 2): o topo colorido com a
+   situação de agora e o anel vivo em volta da foto (gira devagar: uma foto ou uma captura de tela parada não engana quem confere). */
+:root { --azul: #1d4ed8; --marinho: #0a2342; --suave: #5f6673; --fundo: #f4f6fa; --borda: #dde2ea; --ok: #15803d; --pend: #b45309; --erro: #b91c1c; --info: #1d4ed8; --nada: #475569; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fundo); color: #1b2430; }
+.barra { background: var(--azul); color: #fff; display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.barra img { border-radius: 50%; background: #fff; }
+.barra div { display: flex; flex-direction: column; }
+.barra strong { font-size: 1.05rem; }
+.barra small { font-size: .85rem; color: #dbe6ff; }
+.selo { color: #fff; text-align: center; padding: 18px 16px 20px; }
+.selo h1 { margin: 6px 0 4px; font-size: 1.35rem; }
+.selo p { margin: 0; font-size: .92rem; }
+.selo .ic svg { width: 34px; height: 34px; }
+.selo.ok { background: var(--ok); }
+.selo.pend { background: var(--pend); }
+.selo.erro { background: var(--erro); }
+.selo.info { background: var(--info); }
+.selo.nada, .selo.espera { background: var(--nada); }
+main { max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
+.pessoa { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.pessoa[hidden], .dados[hidden], .form[hidden] { display: none; }
+.anel { width: 136px; height: 136px; border-radius: 50%; padding: 8px; background: conic-gradient(#fbbf24, #a3e635, #5eead4, #93c5fd, #c4b5fd, #fbbf24); animation: gira 6s linear infinite; }
+.foto { width: 100%; height: 100%; border-radius: 50%; border: 6px solid #fff; background: linear-gradient(160deg, #c7d7fe, #93b4f5); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #1e3a8a; overflow: hidden; animation: gira 6s linear infinite reverse; }
+.foto.cinza { background: linear-gradient(160deg, #d4d4d8, #a1a1aa); color: #27272a; }
+.foto img { width: 100%; height: 100%; object-fit: cover; }
+.foto strong { font-size: 2rem; font-weight: 800; line-height: 1; }
+.foto small { font-size: .75rem; opacity: .8; }
+.pessoa h2 { margin: 8px 0 0; font-size: 1.3rem; color: var(--marinho); text-align: center; }
+.vivo { margin: 0; color: var(--suave); font-weight: 700; font-size: .9rem; }
+.vivo strong { color: #334155; font-variant-numeric: tabular-nums; }
+.dados { margin: 16px 0 0; background: #fff; border: 1px solid var(--borda); border-radius: 14px; padding: 4px 16px; }
+.dados div { display: grid; grid-template-columns: 116px 1fr; gap: 10px; padding: 11px 0; border-bottom: 1px solid #eef1f5; }
+.dados div:last-child { border-bottom: 0; }
+.dados dt { color: var(--suave); }
+.dados dd { margin: 0; font-weight: 700; color: var(--marinho); }
+.form { margin-top: 16px; background: #fff; border: 1px solid var(--borda); border-radius: 14px; padding: 16px; }
+.form label { display: block; font-weight: 600; margin-bottom: 6px; }
+.form input { width: 100%; padding: 12px; font-size: 1.05rem; letter-spacing: .08em; text-transform: uppercase; border: 1px solid #b8bec9; border-radius: 8px; font-family: ui-monospace, Consolas, monospace; }
+.form button { margin-top: 12px; width: 100%; padding: 12px; font-size: 1rem; font-weight: 700; background: var(--marinho); color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+.nota { margin: 18px 0 0; color: var(--suave); font-size: .85rem; line-height: 1.45; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .anel, .foto { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  body { background: #0b1f3a; color: #e8eef7; }
+  .pessoa h2, .dados dd { color: #fff; }
+  .dados, .form { background: #102a4c; border-color: #23406a; }
+  .dados div { border-color: #23406a; }
+  .vivo strong { color: #e8eef7; }
+  .nota, .vivo, .dados dt { color: #b8c4d6; }
+}

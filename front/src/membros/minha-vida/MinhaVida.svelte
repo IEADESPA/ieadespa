@@ -25,8 +25,8 @@
   interface Props { parteInicial: string }
   let { parteInicial }: Props = $props();
 
-  type Parte = "linha" | "dados" | "familia" | "vida" | "igreja" | "contato" | "transferencias" | "sugestoes" | "sugerir";
-  const MENU: readonly { chave: Parte | "carteirinha" | "ebd"; rotulo: string; icone: string }[] = [
+  type Parte = "linha" | "dados" | "familia" | "vida" | "igreja" | "contato" | "transferencias" | "sugestoes" | "sugerir" | "carteirinha";
+  const MENU: readonly { chave: Parte | "ebd"; rotulo: string; icone: string }[] = [
     { chave: "linha", rotulo: "Minha linha do tempo", icone: "relogio" }, { chave: "dados", rotulo: "Meus dados", icone: "pessoa" },
     { chave: "familia", rotulo: "Família", icone: "pessoas" }, { chave: "vida", rotulo: "Vida espiritual", icone: "coracao" },
     { chave: "igreja", rotulo: "Na igreja", icone: "igreja" }, { chave: "contato", rotulo: "Contato e endereço", icone: "celular" },
@@ -34,12 +34,13 @@
     { chave: "sugestoes", rotulo: "Minhas sugestões", icone: "lapis" }, { chave: "ebd", rotulo: "Escola Bíblica", icone: "livro" }
   ];
   const TITULOS: Record<Parte, string> = { linha: "Minha linha do tempo", dados: "Meus dados", familia: "Família", vida: "Vida espiritual", igreja: "Na igreja",
-    contato: "Contato e endereço", transferencias: "Minhas transferências", sugestoes: "Minhas sugestões", sugerir: "Sugerir alteração" };
+    contato: "Contato e endereço", transferencias: "Minhas transferências", sugestoes: "Minhas sugestões", sugerir: "Sugerir alteração", carteirinha: "Minha carteirinha" };
 
   const mat = ponte().sessao().matricula;
-  const PARTES: readonly Parte[] = ["linha", "dados", "familia", "vida", "igreja", "contato", "transferencias", "sugestoes", "sugerir"];
+  const PARTES: readonly Parte[] = ["linha", "dados", "familia", "vida", "igreja", "contato", "transferencias", "sugestoes", "sugerir", "carteirinha"];
   const inicial = untrack(() => String(parteInicial ?? "linha"));
   let parte = $state<Parte>((PARTES as readonly string[]).includes(inicial.split(":")[0] ?? "") ? (inicial.split(":")[0] as Parte) : "linha");
+  let tentativaCart = $state(0);
   let campoSugerir = $state<string | null>(inicial.startsWith("sugerir:") ? inicial.slice(8) : null);
 
   interface CampoMembro { chave: string; rotulo: string; grupo: string; tipo: string; opcoes: string[] | null; modo: "MUDA" | "SUGERE" | "NAO"; sugestaoPendente: boolean }
@@ -93,7 +94,6 @@
       parte === "linha" ? () => p.irMeuPainel("perfil") : () => irParte("linha"));
   });
   function irParte(k: string) {
-    if (k === "carteirinha") { ponte().irMeuPainel("credencial"); return; }
     if (k === "ebd") { ponte().irMeuPainel("minhaformacao"); return; }
     parte = k as Parte;
     if (k !== "sugerir") campoSugerir = null;
@@ -327,6 +327,9 @@
         <ul class="sugs">{#each vinculos as v (v.vinculoId)}<li><span><strong>{v.outraPessoaNome}</strong> · {v.rotulo}</span></li>{/each}</ul>{/if}
     </Cartao>
     {#if eventos.filter((e) => e.categoria === "FAMILIA").length}<Cartao titulo="Casamento e filhos"><LinhaTempo eventos={eventos.filter((e) => e.categoria === "FAMILIA")} /></Cartao>{/if}
+  {:else if parte === "carteirinha"}
+    <!-- a carteirinha digital (passo 8): baixada só quando a pessoa abre -->
+    {#key tentativaCart}{#await import("../carteirinhas/MinhaCarteirinha.svelte")}<Estado tipo="carregando" linhas={5} />{:then m}<m.default celular={tela.celular} onfechar={() => irParte("linha")} />{:catch}<Estado tipo="erro" texto="Não deu para abrir a carteirinha agora. Confira a internet e tente de novo." ontentar={() => (tentativaCart += 1)} />{/await}{/key}
   {:else if parte === "transferencias"}
     <Cartao titulo="Minhas transferências" nota={transf?.congregacaoAtual ? `hoje: ${transf.congregacaoAtual}` : undefined}>
       {#if falhas.transf && !transf}<Estado tipo="erro" texto={falhas.transf} ontentar={carregar} />{:else if !transf}<Estado tipo="carregando" linhas={2} />{:else}
@@ -351,12 +354,14 @@
 
 <div class="sv minha" class:celular={tela.celular}>
   {#if tela.celular}
-    <Pilulas rotulo="Minha ficha" ativa={parte === "linha" || parte === "dados" || parte === "sugestoes" ? parte : null} onescolher={(k) => irParte(k)}
+    <Pilulas rotulo="Minha ficha" ativa={parte === "linha" || parte === "dados" || parte === "sugestoes" || parte === "carteirinha" ? parte : null} onescolher={(k) => irParte(k)}
       itens={[{ chave: "linha", rotulo: "Linha do tempo" }, { chave: "dados", rotulo: "Dados" }, { chave: "carteirinha", rotulo: "Carteirinha" }, { chave: "sugestoes", rotulo: "Sugestões", n: pendentes }]} />
   {/if}
   <div class="corpo">
     {#if erro}<Estado tipo="erro" texto={erro} ontentar={carregar} />{:else}
       <div class="centro">
+        <!-- no celular, a carteirinha digital ocupa a tela inteira (o desenho aprovado): sem o cabeçalho da pessoa em cima -->
+        {#if !(tela.celular && parte === "carteirinha")}
         <div class="cab">
           <div class="foto"><strong>{iniciais(linha?.nome ?? ponte().sessao().nome)}</strong><span>foto</span></div>
           <div class="quem">
@@ -365,6 +370,7 @@
             {#if sit && linha?.situacao}<div><Chip tom={sit.tom}>{sit.rotulo}</Chip></div>{/if}
           </div>
         </div>
+        {/if}
         {@render conteudo()}
       </div>
       {#if !tela.celular}

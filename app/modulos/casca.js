@@ -526,13 +526,15 @@ function desenharParaHojeCasca() {
     : `<p class="inicio-vazio">Nada esperando por você hoje.</p>`;
 }
 // o membro (sem cargo) vê, no lugar de "Meu trabalho", os atalhos de "Minha vida na igreja" (rodada 3: grandes, 3 por linha)
+// o atalho "credencial" (Minha carteirinha) abre a carteirinha digital nova (passo 8); os outros, a subaba deles
+const acaoVidaCasca = (sub) => (sub === "credencial" ? `data-on-click="abrirMinhaCarteirinhaCasca"` : `data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr(sub)}"`);
 const ATALHOS_INICIO_MEMBRO = [["dados", "pessoas", "pessoa", "Meus dados", "Endereço, telefone e família"], ["credencial", "eclesiastica", "cartao", "Minha carteirinha", "Mostrar no celular"],
   ["minhasescalas", "departamentos", "relogio", "Minhas escalas", "Onde e quando você serve"], ["contribuicoes", "financeiro", "dinheiro", "Minhas contribuições", "O que você entregou, mês a mês"],
   ["agenda", "calendario", "calendario", "Agenda da igreja", "Cultos e eventos do mês"], ["cuidado", "assistenciasocial", "coracao", "Pedido de oração", "A liderança ora por você"]];
 function desenharVidaNoInicioCasca() {
   const alvo = document.getElementById("inicioVidaAtalhos");
   if (!alvo) return;
-  alvo.innerHTML = ATALHOS_INICIO_MEMBRO.map((a) => `<button type="button" class="atalho-vida-grande" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr(a[0])}">${tileCasca(a[1], a[2], 22)}<span class="atalho-vida-textos"><strong>${escaparHtmlEbd(a[3])}</strong><span>${escaparHtmlEbd(a[4])}</span></span></button>`).join("");
+  alvo.innerHTML = ATALHOS_INICIO_MEMBRO.map((a) => `<button type="button" class="atalho-vida-grande" ${acaoVidaCasca(a[0])}>${tileCasca(a[1], a[2], 22)}<span class="atalho-vida-textos"><strong>${escaparHtmlEbd(a[3])}</strong><span>${escaparHtmlEbd(a[4])}</span></span></button>`).join("");
 }
 function abrirItemHojeCasca(tipo, alvo) {
   if (tipo === "tarefas") { abrirMinhasTarefasDosAvisos(); return; }
@@ -674,7 +676,7 @@ const VIDA_MAIS = [["agenda", "calendario", "calendario", "Agenda da igreja"], [
   ["minhahabilitacao", "habilitacao", "escudo", "Minha habilitação"], ["checkininfantil", "habilitacao", "crianca", "Check-in infantil"], ["menores", "habilitacao", "crianca", "Ministério com menores"],
   ["protecao", "habilitacao", "escudo", "Proteção de crianças"], ["setores", "setores", "maleta", "Setores Técnicos"],
   ["aba:ouvidoria", "disciplina", "megafone", "Ouvidoria"], ["aba:documentos", "conformidade", "doc", "Documentos da Igreja"]];
-const linhaVidaCasca = (a) => `<button type="button" class="linha-vida" data-on-click="mostrarSubAbaMeupainel" data-args-click="${argsAttr(a[0])}">${tileCasca(a[1], a[2], 20)}<span class="linha-vida-textos"><strong>${escaparHtmlEbd(a[3])}</strong>${a[4] ? `<span>${escaparHtmlEbd(a[4])}</span>` : ""}</span><span class="linha-vida-seta" aria-hidden="true">${iconeSvg("seta", 18)}</span></button>`;
+const linhaVidaCasca = (a) => `<button type="button" class="linha-vida" ${acaoVidaCasca(a[0])}>${tileCasca(a[1], a[2], 20)}<span class="linha-vida-textos"><strong>${escaparHtmlEbd(a[3])}</strong>${a[4] ? `<span>${escaparHtmlEbd(a[4])}</span>` : ""}</span><span class="linha-vida-seta" aria-hidden="true">${iconeSvg("seta", 18)}</span></button>`;
 let minhaVidaSeq = 0;
 async function carregarMinhaVidaCasca() {
   const atalhos = document.getElementById("minhaVidaAtalhos");
@@ -962,8 +964,16 @@ function svLimparTela() {
   for (const id of ["membrosRaiz", "membrosMenuRaiz", "mvFicha"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
   atualizarVoltarCelularCasca();
 }
+// FASE 10, passo 8: "Minha carteirinha" (os atalhos do Início e de "O que é meu") abre a carteirinha DIGITAL nova, dentro da Minha vida (o mesmo QR fixo
+// da física); a página antiga da credencial da v8.4 fica só para quem chegar a ela por outro caminho
+let parteMinhaVidaPedida = null;
+function abrirMinhaCarteirinhaCasca() {
+  parteMinhaVidaPedida = "carteirinha";
+  if (typeof subAbaMeupainelAtual !== "undefined" && subAbaMeupainelAtual === "minhavida") { svSubMudou("minhavida"); return; }
+  mostrarSubAbaMeupainel("minhavida");
+}
 function svSubMudou(sub) {
-  if (sub === "minhavida") { abrirMinhaVidaSvelte(); return; }
+  if (sub === "minhavida") { const parte = parteMinhaVidaPedida; parteMinhaVidaPedida = null; abrirMinhaVidaSvelte(parte); return; }
   if (!minhaVidaSvelteMontada) return;
   minhaVidaSvelteMontada = false;
   if (trilhaExternaCasca && trilhaExternaCasca.contexto === "minhavida") trilhaExternaCasca = null;
@@ -971,4 +981,4 @@ function svSubMudou(sub) {
   atualizarVoltarCelularCasca();
 }
 
-registrarAcoes({ irTrilhaExternaCasca, voltarCelularCasca, abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, entrarModuloCasca, escolherFonteTesteAcao, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });
+registrarAcoes({ abrirMinhaCarteirinhaCasca, irTrilhaExternaCasca, voltarCelularCasca, abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, entrarModuloCasca, escolherFonteTesteAcao, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });

@@ -124,6 +124,7 @@ export interface CarteirinhaDaFicha {
   readonly porQueNao: string | null;
   readonly precisaDeNova: boolean;
   readonly congregacaoId: number | null;
+  readonly podePedirSegundaVia: boolean;
 }
 
 export const ROTULO_PUBLICO: Readonly<Record<Publico, string>> = { MEMBRO: "Membro", CONGREGADO: "Congregado", OBREIRO: "Obreiro", OUTRO: "Outro" };

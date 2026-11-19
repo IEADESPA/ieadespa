@@ -1,14 +1,15 @@
 {
-  "fonte": "bf2ee5191167e615c98b90da97bb5e7db0c24d3f79b4b424d450247f177179a8",
+  "fonte": "acef1178eea717efd6d07300a7267cb2e072f41b60bc72ca39d7cf6dc1dada0c",
   "arquivos": {
     "Cadastrar-D49ywGLB.js": "68f97827186689a7cea056e44483e84d0eb54082665e9118aa901ff2da90b06a",
     "CadastroRapido-DMX8mxSZ.js": "8529f179e5d41d33fa47f119cdda4d0008c08a6844d596887f3306652f391696",
-    "Carteirinhas-R-8eIi1V.js": "df85a483e3f2aa7b76cdafc3081688259485e1af0f364e7530946257b0fbe75a",
-    "Editor-BBPi_g5x.js": "75101d834bca651907c5c3952cf9f920e57f9470bec9f2e3a915a16e8a409a84",
-    "Ficha-DjItRJtY.js": "b596881adf1eba0082b17bf4331f413b6a26eb0cf21f5a3e816373cbd62aaa6c",
+    "Carteirinhas-D_RCFuer.js": "1e365011fd7e63805b3afdb48cae9cb9b39547523617a868af9d76ffcd728ad1",
+    "Editor-r7KRKVML.js": "6482313a9ca03e8f5b710b22a0751d0956d5aba97c434a5660f5848803efc070",
+    "Ficha-PjfPEABx.js": "a3413f4cafa2115bc038fe85830060888a3e59af9e54a5293526a836d25f3a2c",
     "Fila-D71bpyfF.js": "6cb66457439fb5156ca55731a70d148233bc4cd2485a73b89c129d50aa78ac9e",
     "Juntar-DLOuJfeX.js": "1e5b15cb5976c4b811b7a6046fad41c7c57b76c71168bd9a82e3e9714c385e70",
-    "MinhaVida-BqJ9Wvm8.js": "ef2e7fb29b05e3e53d4161a0786e2ceb0c73cd0cb8cd707e48353bf0cede3783",
+    "MinhaCarteirinha-DqPgFNrD.js": "d1602f67c1e773076114d25f2d1978e3b6f0d1536e56a67db97091d199ab2417",
+    "MinhaVida-Cwy0JdP8.js": "50b68464583378febc6f6e1002e9ad324f4b5ac4d42fe080d1246ef07d3ab4ce",
     "Pessoas-D0wX5q4_.js": "25ec7d7ddfae4b25fc11b0d484dace0403cf1f05ff660742fd47c6a97f87979f",
     "Repetidas-BrDScPvf.js": "811b7ee5b2a3d6726f4116b3e29d71b39656ae76ee1776d15e9076141df26a0d",
     "Sugestoes-CPNM8C3H.js": "d780bf33de4031eb7c9be8e7a34d33c2d297f736dcc00582f95e7d68bd8af35b",
@@ -16,8 +17,10 @@
     "Transferencias-BSmh3G7j.js": "fa394161ee883a80d17e5ecc95eda586a12fae60f102b57e8f5e11d17fddba4a",
     "Transferir-B6RXLwE-.js": "aa19c12b53c8f9374bbe3ae4d25fd65a2c02f3dc434f22002b74f097fd846ee8",
     "comum.js": "60eb7807b380589d4da4504c49586be2d0dbe5a3c735e7bfd5d50d8e7dda7555",
-    "membros.css": "14f20d35e171f5fd3003131e915283f0a3ffaea42755aefc93b67ca229c8d25f",
-    "membros.js": "158b2b704917fc9f8d0844879316fe636adbafbb74a17af5c518d93c98eb7ac4",
-    "tipos-BzKJJ-Ju.js": "321e94da298f8d2081bb5cbc452d34445927be7f156894fdf269da0577e0d27a"
+    "imprimir-DW44zpbe.js": "ab6df92400d931969c3f54d5f45bbb55e61310402ff3b05fc6e5ad1efefd0610",
+    "membros.css": "b6431de98e6f8bcc148f8f39129649e917574ec28b2c5439055c416ea8a559e9",
+    "membros.js": "22307b8875a7b3ac57da4167bafdae120b4fa4becfa4db5ca2d8bc8dcc06482d",
+    "preload-helper-ARvDcSUK.js": "e0ef356954b6894e9b3940a8e868e0ca0fa2a8540243bcee48a3b05ae3c61ea1",
+    "tipos-Bzmr7GoI.js": "8df21ecd75a6cebd243a18eda7b35cebec34e9e686fee0fddd260798a8b6e47a"
   }
 }

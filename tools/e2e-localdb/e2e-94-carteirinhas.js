@@ -212,6 +212,9 @@ async function principal() {
   ok(f6.status === 200 && f6.body.carteirinha.podeImprimir === false && /Pendência/.test(f6.body.carteirinha.porQueNao), "a repetida: não pode, e diz por quê");
   const f3 = await K(tok.vn(), "ficha", { id: 940003 });
   ok(f3.body.carteirinha.podeImprimir === false && /Art\. 76/.test(f3.body.carteirinha.porQueNao), "o obreiro, para a local: não pode (só a Geral)");
+  const f4 = await K(tok.vn(), "ficha", { id: 940004 });
+  ok(f1.body.carteirinha.podePedirSegundaVia === true && f6.body.carteirinha.podePedirSegundaVia === true && f4.status === 200 && f4.body.carteirinha.podePedirSegundaVia === false,
+    "a segunda via se pede de quem está no rol (a repetida também); quem está em disciplina, não", JSON.stringify([f1.body.carteirinha.podePedirSegundaVia, f6.body.carteirinha.podePedirSegundaVia, f4.body.carteirinha && f4.body.carteirinha.podePedirSegundaVia]));
   const fFora = await K(tok.cj(), "ficha", { id: 940001 });
   const fNada = await K(tok.vn(), "ficha", { id: 99999999 });
   ok(fFora.status === 404 && fNada.status === 404, "fora do escopo e matrícula que não existe: 404 igual", JSON.stringify([fFora.status, fNada.status]));

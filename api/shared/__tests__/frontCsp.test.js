@@ -325,9 +325,23 @@ if (typeof describe === "function") {
       expect(ler("credencial.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function/);
     });
 
-    test("service-worker: cache novo (v65), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
+    // FASE 10, passo 8 — a página pública que o QR FIXO da carteirinha abre: as mesmas regras (só o próprio script e o próprio estilo, nada em linha, nada perigoso)
+    test("conferir.html e conferir.js (o QR da carteirinha): só conferir.js e conferir.css, zero evento ou script em linha, a resposta só por textContent", () => {
+      const html = ler("conferir.html");
+      const tags = tagsDoHtml(html);
+      expect(tags.filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor)).toEqual(["conferir.js"]);
+      expect(tags.filter(t => t.nome === "style")).toEqual([]);
+      expect(tags.filter(t => t.attrs.some(a => a.nome === "style" || /^on/.test(a.nome) || /^data-on-/.test(a.nome)))).toEqual([]);
+      expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "conferir.css"))).toBe(true);
+      const analise = analisarScript("conferir.js", ler("conferir.js"));
+      expect(analise.problemas || []).toEqual([]);
+      expect(ler("conferir.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function|localStorage|sessionStorage|document\.cookie/);
+      expect(ler("conferir.js")).toMatch(/fetch\("\/api\/conferencia\/"/);
+    });
+
+    test("service-worker: cache novo (v66), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
       const sw = ler("service-worker.js");
-      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v65";/);
+      expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v66";/);
       expect(sw).not.toMatch(/"\/svelte\//);
       const casca = JSON.parse(/const ARQUIVOS_SHELL = (\[[^\]]*\]);/.exec(sw)[1]);
       expect(casca).toEqual(expect.arrayContaining(["/index.html", "/eventos.js", "/script.js", "/style.css", ...MODULOS.map(m => "/" + m)]));

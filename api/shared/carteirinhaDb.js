@@ -373,7 +373,9 @@ async function situacaoDaFicha(pool, membroId, { podeObreiro }) {
     podeImprimir: pode.pode && !p.pendencias.length && !(p.tipo === "OBREIRO" && !podeObreiro),
     porQueNao: !pode.pode ? pode.mensagem : p.pendencias.length ? "Pendência de cadastro (ficha repetida ou número a acertar): resolva antes de imprimir."
       : p.tipo === "OBREIRO" && !podeObreiro ? "A carteirinha de obreiro é impressa pela Secretaria Geral (Regimento, Art. 76 §2º)." : null,
-    precisaDeNova: !!motivo, congregacaoId: p.congregacaoId
+    precisaDeNova: !!motivo, congregacaoId: p.congregacaoId,
+    // a segunda via se pede de quem está no rol e fora da disciplina (a pendência e o obreiro só travam a impressão, não o pedido)
+    podePedirSegundaVia: pode.pode && !pedido
   };
 }
 

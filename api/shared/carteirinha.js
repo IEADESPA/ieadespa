@@ -58,7 +58,7 @@ function situacaoConferencia(p) {
   if (!membroEmComunhao(p) || p.sobDisciplina) return { situacao: "DISCIPLINA", nome: p.nome, foto: true };
   const r = {
     situacao: "EM_COMUNHAO", nome: p.nome, foto: true,
-    cargo: ROTULO_CARGO[p.cargo] || null, funcao: p.funcao || null,
+    cargo: ROTULO_CARGO[p.cargo || "MEMBRO"] || null, funcao: p.funcao || null,
     congregacao: p.congregacao || null, area: p.area || null, membroDesde: mesAno(p.dataAdmissao)
   };
   if (ehObreiro(p.cargo)) {

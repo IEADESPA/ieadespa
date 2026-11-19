@@ -20,12 +20,14 @@ const LISTA_CARGOS = CARGOS_OFICIAIS.map((c) => `N'${c}'`).join(", ");   // cons
 const TIPO_SQL = `CASE WHEN m.SituacaoMembro = N'CONGREGADO' THEN N'CONGREGADO'
   WHEN m.CargoMinisterial IN (${LISTA_CARGOS}) AND m.SituacaoMembro = N'EM_COMUNHAO' THEN N'OBREIRO' ELSE N'MEMBRO' END`;
 // a pendência que trava a física (a ficha é a da pendência ou a outra ficha dela) — a mesma conta de juntarFichasDb.bloqueiaImpressaoFisica
-const PENDENCIAS_SQL = `(SELECT STRING_AGG(CONCAT(p.Tipo, N':', CASE WHEN p.MembroId = m.MembroId THEN p.OutroMembroId ELSE p.MembroId END), N',')
-  FROM FichasPendencias p WHERE p.Situacao = N'ABERTA' AND p.Tipo IN (N'REPETIDA', N'NUMERO') AND (p.MembroId = m.MembroId OR p.OutroMembroId = m.MembroId))`;
+// (o CONCAT com a coluna de fora fica numa subconsulta: o SQL Server não deixa agregar uma expressão que mistura a coluna de fora com as de dentro)
+const PENDENCIAS_SQL = `(SELECT STRING_AGG(pp.T, N',') FROM (SELECT CONCAT(p.Tipo, N':', CASE WHEN p.MembroId = m.MembroId THEN p.OutroMembroId ELSE p.MembroId END) AS T
+  FROM FichasPendencias p WHERE p.Situacao = N'ABERTA' AND p.Tipo IN (N'REPETIDA', N'NUMERO') AND (p.MembroId = m.MembroId OR p.OutroMembroId = m.MembroId)) pp)`;
 
 const NAO_EXISTE = { sucesso: false, naoExiste: true };
 const MUDOU = (mensagem) => ({ sucesso: false, mudou: true, mensagem });
-const versaoHex = (v) => (Buffer.isBuffer(v) ? v.toString("hex") : null);
+// a versão (rowversion) vai e volta como texto hexadecimal, lido do próprio banco (o driver pode entregar o binário de jeitos diferentes)
+const VERSAO_SQL = "LOWER(CONVERT(VARCHAR(16), CAST(Versao AS BINARY(8)), 2)) AS VersaoHex";
 const dia = (v) => (v == null ? null : new Date(v).toISOString().slice(0, 10));
 
 const urlConferencia = (codigo) => certificados.urlVerificacao(codigo).replace("/verificar.html?c=", "/conferir.html?c=");
@@ -59,7 +61,7 @@ function mapearModelo(l, urlArte) {
   const assinar = (u) => { try { return u && urlArte ? urlArte(u) : null; } catch (e) { return null; } };
   return {
     modeloId: Number(l.ModeloId), nome: l.Nome, publico: l.Publico, ativo: !!l.Ativo, desenho,
-    arteFrente: assinar(l.ArteFrente), arteVerso: assinar(l.ArteVerso), versao: versaoHex(l.Versao), atualizadoEm: l.AtualizadoEm || l.CriadoEm
+    arteFrente: assinar(l.ArteFrente), arteVerso: assinar(l.ArteVerso), versao: l.VersaoHex || null, atualizadoEm: l.AtualizadoEm || l.CriadoEm
   };
 }
 
@@ -67,7 +69,7 @@ function mapearModelo(l, urlArte) {
 async function listarModelos(pool, urlArte) {
   await garantirPadroes(pool);
   const r = await pool.request().query(`
-    SELECT ModeloId, Nome, Publico, Desenho, ArteFrente, ArteVerso, Ativo, CriadoEm, AtualizadoEm, Versao FROM CarteirinhaModelos
+    SELECT ModeloId, Nome, Publico, Desenho, ArteFrente, ArteVerso, Ativo, CriadoEm, AtualizadoEm, ${VERSAO_SQL} FROM CarteirinhaModelos
     ORDER BY Ativo DESC, CASE Publico WHEN N'MEMBRO' THEN 1 WHEN N'CONGREGADO' THEN 2 WHEN N'OBREIRO' THEN 3 ELSE 4 END, Nome;
     SELECT t.Tipo, COUNT(*) AS n FROM (SELECT ${TIPO_SQL} AS Tipo FROM MembroReferencia m WHERE ${NO_ROL} AND ISNULL(m.SituacaoMembro, N'') <> N'SEM_COMUNHAO') t GROUP BY t.Tipo;`);
   const porTipo = new Map(r.recordsets[1].map((l) => [l.Tipo, Number(l.n)]));
@@ -80,7 +82,7 @@ async function listarModelos(pool, urlArte) {
 
 async function lerModelo(conexao, modeloId) {
   const r = await new sql.Request(conexao).input("id", sql.Int, Number(modeloId))
-    .query(`SELECT ModeloId, Nome, Publico, Desenho, ArteFrente, ArteVerso, Ativo, CriadoEm, AtualizadoEm, Versao FROM CarteirinhaModelos WHERE ModeloId = @id`);
+    .query(`SELECT ModeloId, Nome, Publico, Desenho, ArteFrente, ArteVerso, Ativo, CriadoEm, AtualizadoEm, ${VERSAO_SQL} FROM CarteirinhaModelos WHERE ModeloId = @id`);
   return r.recordset[0] || null;
 }
 
@@ -110,14 +112,14 @@ async function salvarModelo(pool, { modeloId, nome, desenho, versao, por }) {
   if (!d.ok) return { sucesso: false, mensagem: d.mensagem };
   if (typeof versao !== "string" || !/^[0-9a-f]{16}$/.test(versao)) return MUDOU("Abra o modelo de novo: a versão que a tela tem não confere.");
   const r = await pool.request().input("id", sql.Int, Number(modeloId)).input("n", sql.NVarChar(60), n.nome).input("d", sql.NVarChar(sql.MAX), JSON.stringify(d.desenho))
-    .input("v", sql.Binary(8), Buffer.from(versao, "hex")).input("por", sql.Int, por)
+    .input("v", sql.VarChar(16), versao).input("por", sql.Int, por)
     .query(`UPDATE CarteirinhaModelos SET Nome = @n, Desenho = @d, AtualizadoEm = SYSUTCDATETIME(), AtualizadoPor = @por
-            OUTPUT INSERTED.Versao WHERE ModeloId = @id AND Versao = @v`);
+            OUTPUT LOWER(CONVERT(VARCHAR(16), CAST(INSERTED.Versao AS BINARY(8)), 2)) AS VersaoHex WHERE ModeloId = @id AND LOWER(CONVERT(VARCHAR(16), CAST(Versao AS BINARY(8)), 2)) = @v`);
   if (!r.recordset[0]) {
     return (await lerModelo(pool, modeloId)) ? MUDOU("Outra pessoa salvou este modelo enquanto você editava. Abra de novo para ver o que mudou.") : NAO_EXISTE;
   }
   await registrarAuditoria({ tabela: "CarteirinhaModelos", registroId: Number(modeloId), acao: "CARTEIRINHA_MODELO_SALVO", usuarioId: por, dadosDepois: { nome: n.nome } });
-  return { sucesso: true, versao: versaoHex(r.recordset[0].Versao), mensagem: "Modelo salvo. As próximas carteirinhas já saem assim." };
+  return { sucesso: true, versao: r.recordset[0].VersaoHex, mensagem: "Modelo salvo. As próximas carteirinhas já saem assim." };
 }
 
 // "Usar este modelo": vira o atual do público dele (o anterior fica guardado).
@@ -384,7 +386,7 @@ async function minha(pool, membroId, { urlFoto, svgDoQr }) {
   let foto = null;
   try { foto = p.fotoUrl && urlFoto ? urlFoto(p.fotoUrl) : null; } catch (e) { foto = null; }
   return {
-    nome: p.nome, matricula: p.membroId, tipo: p.tipo, tipoRotulo: regra.ROTULO_PUBLICO[p.tipo], cargo: require("./escada").ROTULO_CARGO[p.cargo] || null,
+    nome: p.nome, matricula: p.membroId, tipo: p.tipo, tipoRotulo: regra.ROTULO_PUBLICO[p.tipo], cargo: require("./escada").ROTULO_CARGO[p.cargo || "MEMBRO"] || null,
     funcao: p.funcao, congregacao: p.congregacao, area: p.area, membroDesde: regra.mesAno(p.dataAdmissao), situacao: sit.situacao, exerceCargo: sit.exerceCargo ?? null,
     foto, qrSvg: svgDoQr(urlConferencia(codigo)), url: urlConferencia(codigo)
   };

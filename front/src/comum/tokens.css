@@ -1,0 +1,42 @@
+/* As cores e medidas do DESENHO APROVADO (a página de propostas, função P(modo) e MODS): claro e escuro. Valem dentro de .sv (as telas Svelte)
+   e seguem o tema que a casca põe em html[data-tema]. A letra é a da casca (herdada). */
+.sv {
+  --sv-fundo: #F4F6FA; --sv-sup: #FFFFFF; --sv-borda: #DDE2EA; --sv-texto: #1B2430; --sv-titulo: #0A2342; --sv-suave: #5F6673;
+  --sv-campo: #F7F8FA; --sv-campo-borda: #C9CFD8; --sv-icone: #0A2342; --sv-link: #1D4ED8; --sv-linha: #EEF1F5;
+  --sv-ouro: #FFB800; --sv-ouro-texto: #0A2342; --sv-ouro-tinta: #FFF4D6; --sv-ouro-borda: #F2D27A; --sv-marinho: #0A2342;
+  --sv-mod: #1D4ED8; --sv-mod-fundo: #E3ECFD;
+  --sv-ok-fundo: #DCFCE7; --sv-ok: #166534; --sv-pend-fundo: #FEF3C7; --sv-pend: #7A4A00; --sv-atr-fundo: #FEE2E2; --sv-atr: #991B1B;
+  --sv-info-fundo: #EEF4FF; --sv-info-borda: #C7D7FB; --sv-alerta-fundo: #FFF8E1; --sv-alerta-borda: #F2D27A; --sv-alerta-icone: #7A5800;
+  --sv-ok-caixa: #DCFCE7; --sv-ok-borda: #86EFAC;
+  --sv-graf-1: #2a78d6; --sv-graf-2: #eb6834;
+  --sv-escolha: #0A2342; --sv-escolha-texto: #FFFFFF;
+  --sv-sombra: 0 1px 2px rgba(10, 35, 66, .05);
+  --sv-raio: 14px;
+  color: var(--sv-texto);
+  font-size: 15px;
+  line-height: 1.35;
+}
+html[data-tema="escuro"] .sv {
+  --sv-fundo: #0B1F3A; --sv-sup: #102A4C; --sv-borda: #23406A; --sv-texto: #E8EEF7; --sv-titulo: #FFFFFF; --sv-suave: #B8C4D6;
+  --sv-campo: #0A1F3D; --sv-campo-borda: #3C5A82; --sv-icone: #FFC933; --sv-link: #93B4F8; --sv-linha: #1A3557;
+  --sv-ouro-tinta: #2A2410; --sv-ouro-borda: #5C4A12;
+  --sv-mod: #93B4F8; --sv-mod-fundo: #1E3A6E;
+  --sv-ok-fundo: #14532D; --sv-ok: #BBF7D0; --sv-pend-fundo: #3D2A05; --sv-pend: #FCD34D; --sv-atr-fundo: #4C1717; --sv-atr: #FCA5A5;
+  --sv-info-fundo: #13294A; --sv-info-borda: #23406A; --sv-alerta-fundo: #2A2410; --sv-alerta-borda: #5C4A12; --sv-alerta-icone: #FFC933;
+  --sv-ok-caixa: #14532D; --sv-ok-borda: #166534;
+  --sv-graf-1: #3987e5; --sv-graf-2: #d95926;
+  --sv-escolha: #FFB800; --sv-escolha-texto: #0A2342;
+}
+.sv *, .sv *::before, .sv *::after { box-sizing: border-box; }
+.sv h1, .sv h2, .sv h3, .sv p { margin: 0; }
+.sv button { font: inherit; color: inherit; }
+.sv :focus-visible { outline: 3px solid var(--sv-ouro); outline-offset: 2px; border-radius: 6px; }
+.sv .sv-escondido { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.sv .sv-num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .sv *, .sv *::before, .sv *::after { transition: none !important; animation: none !important; }
+}
+/* os campos das telas Svelte desenham a própria borda: a regra global de campo da casca (borda, enchimento, anel do foco) não entra aqui */
+.sv input, .sv select, .sv textarea { min-height: 0; max-width: none; box-shadow: none; }
+.sv input:focus, .sv select:focus, .sv textarea:focus { box-shadow: none; }
+.sv input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }

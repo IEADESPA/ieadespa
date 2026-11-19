@@ -250,9 +250,12 @@
                departamental e o de "Territórios" pro pastor de área, cada um
                só com o que é dele. -->
 
-          <!-- MÓDULO: PESSOAS & MEMBRESIA -->
+          <!-- MÓDULO: MEMBROS — FASE 10 (19/11/2026): refeito do zero em Svelte, igual ao desenho aprovado. O menu do módulo (4 grupos) é montado aqui por
+               app/svelte/membros.js (código em front/), baixado só quando a pessoa entra em Membros (modulos/casca.js, abrirMembrosSvelte). Os botões antigos
+               ficam escondidos (o código antigo ainda procura por eles), fora do menu. -->
           <div class="grupo-modulo" id="grupoModuloMembresia" style="display:none;">
-            <hr class="divisor-sidebar" />
+            <div id="membrosMenuRaiz" class="menu-svelte"></div>
+            <div hidden>
             <button class="btn-aba" id="btnAbaPessoas" data-on-click="mostrarAbaSecretaria" data-args-click='["pessoas"]'><span class="icone" data-icone="pessoas" aria-hidden="true"></span><span class="rotulo">Pessoas</span></button>
             <div class="submenu-aba" id="submenuPessoas">
               <!-- FASE 10, passo 7a: o painel executivo e a lista nova (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para a planilha -->
@@ -271,7 +274,12 @@
             </div>
             <button class="btn-aba" id="btnAbaCartas" data-on-click="mostrarAbaSecretaria" data-args-click='["cartas"]'><span class="icone" data-icone="envelope" aria-hidden="true"></span><span class="rotulo">Cartas</span></button>
             <button class="btn-aba" id="btnAbaAbandono" data-on-click="mostrarAbaSecretaria" data-args-click='["abandono"]'><span class="icone" data-icone="queda" aria-hidden="true"></span><span class="rotulo">Perda de Membresia</span></button>
-            <!-- v7.11 — Cuidado pastoral: fila com responsável, prazo e escada; pedidos de oração com moderação e sinal de risco; boletim e painel. Permissão própria "cuidado_pastoral". -->
+            </div>
+          </div>
+          <!-- MÓDULO: CUIDADO PASTORAL (v7.11; cartão próprio desde 19/11/2026, fora do desenho de Membros) — fila com responsável, prazo e escada; pedidos de
+               oração com moderação e sinal de risco; boletim e painel. Permissão própria "cuidado_pastoral". -->
+          <div class="grupo-modulo" id="grupoModuloCuidadopastoral" style="display:none;">
+            <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaCuidadopastoral" data-on-click="mostrarAbaSecretaria" data-args-click='["cuidadopastoral"]'><span class="icone" data-icone="coracao" aria-hidden="true"></span><span class="rotulo">Cuidado Pastoral</span></button>
           </div>
 
@@ -508,6 +516,8 @@
       <main class="conteudo">
         <div class="cabecalho-secretaria">
           <button class="btn-icon btn-menu-celular" id="btnMenuCelular" data-on-click="alternarMenuCelular" title="Menu" aria-label="Abrir o menu" aria-expanded="false"><span class="icone" data-icone="menu" aria-hidden="true"></span></button>
+          <!-- FASE 10 (19/11/2026) — o ← das telas de dentro das telas Svelte, no celular (no lugar do ☰) -->
+          <button type="button" class="btn-icon btn-voltar-celular" id="btnVoltarCelular" data-on-click="voltarCelularCasca" title="Voltar" aria-label="Voltar" hidden><span class="icone" data-icone="voltar" aria-hidden="true"></span></button>
           <!-- FASE 10 (conformidade) — o CAMINHO até a página (ex.: Pessoas & Membresia › Pessoas › Buscar Pessoas), montado por modulos/casca.js -->
           <nav class="trilha-casca" id="trilhaCasca" aria-label="Onde você está"></nav>
           <h2 id="tituloModulo">Meu Painel</h2>
@@ -649,8 +659,9 @@
 
         <!-- FASE 10 — MINHA VIDA NA IGREJA (rodada 7, opção 2): os próximos compromissos da pessoa e, ao lado, o que é dela (modulos/casca.js) -->
         <div id="subMeupainelMinhavida" class="sub-aba-secretaria" style="display:none;">
-          <!-- FASE 10, passo 7a, incremento 3 — a minha ficha (rodada 10, versão final): a linha do tempo primeiro e "Minha ficha" à direita (modulos/membros-movimento.js) -->
-          <div id="mvFicha" class="mb-tela mv-ficha"></div>
+          <!-- FASE 10 (19/11/2026) — a minha ficha (rodada 10, versão final): a linha do tempo primeiro e "Minha ficha" à direita; as telas Svelte montam aqui
+               (app/svelte, por modulos/casca.js abrirMinhaVidaSvelte) -->
+          <div id="mvFicha" class="mv-ficha"></div>
           <div class="vida-grade">
             <section class="vida-cartao"><h3 class="vida-titulo">Meus próximos compromissos</h3><div id="minhaVidaCompromissos" class="vida-lista"></div></section>
             <section class="vida-atalhos" id="minhaVidaAtalhos"></section>
@@ -2046,6 +2057,9 @@
       </div>
 
       <!-- ABA: PESSOAS -->
+      <!-- FASE 10 (19/11/2026) — MEMBROS refeito do zero em Svelte (front/ -> app/svelte/membros.js): as telas aprovadas montam aqui, direto no fundo -->
+      <div id="abaMembros" class="aba-secretaria aba-svelte" style="display:none;"><div id="membrosRaiz"></div></div>
+
       <div id="abaPessoas" class="aba-secretaria" style="display:none;">
 
         <!-- Formulário de cadastro/edição — um único elemento no DOM, movido entre
@@ -7837,9 +7851,6 @@
   <script src="modulos/expansao.js"></script>
   <script src="modulos/financeiro.js"></script>
   <script src="modulos/identidade-visual.js"></script>
-  <script src="modulos/membros-cadastro.js"></script>
-  <script src="modulos/membros-movimento.js"></script>
-  <script src="modulos/membros.js"></script>
   <script src="modulos/meu-painel.js"></script>
   <script src="modulos/meus-dados.js"></script>
   <script src="modulos/ministerio-menores.js"></script>

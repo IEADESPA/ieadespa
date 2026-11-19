@@ -132,7 +132,7 @@ describe("GET /api/pessoas?pagina=N — a lista em páginas", () => {
     const q = rodou(/SELECT COUNT\(\*\) AS total/)[0];
     expect(q.inputs).toMatchObject({ pular: 10, trazer: 10 });
     expect(q.sql).toMatch(/OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY/);
-    expect(q.sql).toMatch(/ORDER BY m\.Nome, m\.MembroId/);
+    expect(q.sql).toMatch(/ORDER BY m\.Nome ASC, m\.MembroId ASC/);
     // o escopo vale para a contagem E para a página
     expect(q.sql.match(/OPENJSON\(@escopoIds0\)/g)).toHaveLength(2);
   });

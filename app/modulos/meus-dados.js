@@ -240,6 +240,7 @@ function mostrarAbaSecretaria(aba) {
   if (typeof crsAbaMudou === "function") crsAbaMudou(aba);   // v7.15: a aba da crise fecha o que estava aberto e a faixa da crise é relida de tempos em tempos
   if (typeof cpaAbaMudou === "function") cpaAbaMudou(aba);   // v7.11: a fila, o acompanhamento e a nota pastoral aberta (e, fora de Meu Painel, os pedidos que a pessoa escrevia) não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) e as fichas não ficam para trás quando a pessoa vai para outra tela
   if (aba !== "protecao" && typeof prtAbaFechada === "function") prtAbaFechada();
+  if (typeof svAbaMudou === "function") svAbaMudou(aba);   // FASE 10 (19/11/2026): entrar em Membros abre as telas Svelte; sair desmonta
   if (typeof mbAbaMudou === "function") mbAbaMudou(aba);   // FASE 10, passo 7a: saindo de Pessoas, a ficha aberta (e o menu recolhido por ela) não fica para trás   // v7.8: o relato, a ficha do incidente e o relógio das 24 horas não ficam para trás (módulo ausente ou velho no cache: a navegação segue)
   NOMES_ABAS.forEach(nome => {
     const podeVer = nome === "meupainel" || nome === "documentos" || nome === "ouvidoria" || temPermissaoDaAba(nome);
@@ -343,7 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 const TITULOS_MODULOS = {
-  meupainel: "Início", financeiro: "Financeiro", reunioes: "Reuniões",
+  meupainel: "Início", financeiro: "Financeiro", reunioes: "Reuniões", membros: "Membros",
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",

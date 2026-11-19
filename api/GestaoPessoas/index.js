@@ -52,6 +52,14 @@ function mascararEmail(e) {
 // Causas de saída fixas (Reg. Art. 11 — Perda de Membresia, v1.5) — regra jurídica,
 // não catálogo editável por tela (mesmo espírito de FORMAS_ADMISSAO/ESTADOS_CIVIS).
 const CAUSAS_SAIDA = ["FALECIMENTO", "DESLIGAMENTO", "CARTA_MUDANCA", "EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"];
+// As causas DISCIPLINARES (a mesma lista do histórico, HistoricoMembro): o motivo delas é sigiloso — só quem tem "disciplina" com a pessoa no escopo vê.
+const SAIDAS_DISCIPLINARES = new Set(["EXCLUSAO", "ABANDONO_MATERIAL", "ABANDONO_DIGITAL"]);
+// A pessoa da resposta com o motivo da saída que quem vê pode ver: o disciplinar vira null sem "disciplina" no escopo dela (a data da saída continua).
+function motivoSaidaVisivel(m, vDisciplina) {
+  if (!m || !SAIDAS_DISCIPLINARES.has(m.motivoSaida)) return m;
+  const pode = !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao);
+  return pode ? m : Object.assign({}, m, { motivoSaida: null });
+}
 
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
@@ -81,13 +89,31 @@ const SELECT_MEMBRO = `
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
          CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
          m.FotoUrl AS fotoUrl, m.Sexo AS sexo, CONVERT(varchar(10), hc.Desde, 120) AS cargoDesde,
-         ${ficha.sqlCpfMascarado("m.Cpf")} AS cpfMascarado, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade
+         ${ficha.sqlCpfMascarado("m.Cpf")} AS cpfMascarado, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade,
+         ar.Nome AS areaNome
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+  LEFT JOIN Areas ar ON ar.AreaId = c.AreaId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
   LEFT JOIN Bairros bm ON bm.BairroId = m.EnderecoBairroId
   LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
   LEFT JOIN CargosMinisteriaisHistorico hc ON hc.MembroId = m.MembroId AND hc.Ate IS NULL AND hc.Cargo = m.CargoMinisterial`;
+
+// FASE 10 (telas novas de Membros, 19/11/2026) — a lista em páginas ordenada pelo CABEÇALHO que a pessoa clicou: ?ordem=nome|matricula|congregacao|area|
+// situacao|cargo|departamento e ?direcao=asc|desc. Só valores desta lista fechada viram SQL (o resto cai no nome); a matrícula desempata sempre (a página
+// seguinte nunca repete nem pula ninguém).
+const ORDENS_LISTA = {
+  nome: "m.Nome", matricula: "m.MembroId", congregacao: "c.Nome", area: "ar.Nome", situacao: "m.SituacaoMembro",
+  cargo: "COALESCE(cm.Nome, m.Funcao)", departamento: "m.DepartamentoId"
+};
+function ordemDaLista(query) {
+  const q = query || {};
+  const chave = typeof q.ordem === "string" && Object.prototype.hasOwnProperty.call(ORDENS_LISTA, q.ordem) ? q.ordem : "nome";
+  const dir = String(q.direcao || "").toLowerCase() === "desc" ? "DESC" : "ASC";
+  if (chave === "matricula") return `m.MembroId ${dir}`;
+  if (chave === "nome") return `m.Nome ${dir}, m.MembroId ${dir}`;
+  return `${ORDENS_LISTA[chave]} ${dir}, m.Nome ASC, m.MembroId ASC`;
+}
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -231,7 +257,7 @@ module.exports = async function (context, req) {
       pedido.input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina);
       const r = await pedido.query(`
         SELECT COUNT(*) AS total FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId${onde};
-        ${SELECT_MEMBRO}${onde} ORDER BY m.Nome, m.MembroId OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
+        ${SELECT_MEMBRO}${onde} ORDER BY ${ordemDaLista(req.query)} OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
       total = r.recordsets && r.recordsets[0] && r.recordsets[0][0] ? Number(r.recordsets[0][0].total) || 0 : 0;
       linhas = (r.recordsets && r.recordsets[1]) || [];
     } else {
@@ -242,6 +268,9 @@ module.exports = async function (context, req) {
       // dois, concessão por concessão). O banco já filtrou; esta é a segunda conferência (nunca deixa passar quem está fora).
       .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
       .map(m => Object.assign({}, m, { processoDisciplinarAtivo: !!vDisciplina && noEscopoDaPessoa(vDisciplina, m.congregacao, m.extensao) && idsSobDisciplina.has(m.membroId) }))
+      // FASE 10 (18/11/2026, autorizado pelo responsável): o motivo de uma saída DISCIPLINAR (exclusão, abandono) só vai a quem tem "disciplina" com a pessoa no
+      // escopo dessa permissão — antes ia no JSON da lista a todo mundo que tinha "pessoas" (a tela nova não mostrava, mas a resposta levava)
+      .map(m => motivoSaidaVisivel(m, vDisciplina))
       .map(m => Object.assign({}, m, { capacidade: estatuto.calcularCapacidadeEleitoral(m) }))
       .map(m => {
         const idade = estatuto.idadeEm(m.dataNascimento);
@@ -398,7 +427,7 @@ module.exports = async function (context, req) {
     }
 
     const lerExistente = () => pool.request().input("id", sql.Int, membroId).query(`
-      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
+      SELECT m.MembroId, m.Status, m.Email AS EmailAnterior, m.MotivoSaida AS MotivoAnterior, m.Cpf AS CpfAnterior, m.CargoMinisterial AS CargoAnterior, m.DizimistaFiel AS DizimistaAnterior, m.Sexo AS SexoAnterior,
              CONVERT(varchar(10), m.DataNascimento, 120) AS NascimentoAnterior, CONVERT(varchar(10), m.DataAdmissao, 120) AS AdmissaoAnterior, m.EstadoCivil AS EstadoCivilAnterior,
              CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
                                WHERE cs.MembroId = m.MembroId AND ISNULL(cs.CargoAlvo, tc.CargoMinisterialResultante) IS NOT NULL
@@ -502,6 +531,13 @@ module.exports = async function (context, req) {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto a ficha estava aberta (uma consagração foi concluída?). Abra a ficha de novo antes de salvar." } };
       return;
     }
+    // o motivo de uma saída disciplinar que quem salva NÃO vê (a lista e a ficha o mandam como vazio): fica o que estava — a ficha aberta sem "disciplina" nunca apaga
+    // nem troca a causa disciplinar ao salvar
+    const motivoAnterior = existia ? (existente.recordset[0].MotivoAnterior || null) : null;
+    const vDiscSalvar = auth.visaoDaPermissao(usuario, "disciplina");
+    const motivoOculto = existia && SAIDAS_DISCIPLINARES.has(motivoAnterior)
+      && !(vDiscSalvar && noEscopoDaPessoa(vDiscSalvar, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome));
+    const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
     const statusFinal = status || "ATIVO";
@@ -552,7 +588,7 @@ module.exports = async function (context, req) {
       .input("estadoCivil", sql.NVarChar(20), estadoCivil || null)
       .input("dataAfastamento", sql.Date, dataAfastamento || null)
       .input("dataSaida", sql.Date, dataSaidaFinal)
-      .input("motivoSaida", sql.NVarChar(200), motivoSaida || null)
+      .input("motivoSaida", sql.NVarChar(200), motivoSaidaFinal)
       .input("sexo", sql.NChar(1), sexoFinal)
       .input("cargoLido", sql.NVarChar(30), cargoAnterior)
       .input("cpf", sql.Char(11), cpfLido.cpf === undefined ? null : cpfLido.cpf)
@@ -627,8 +663,8 @@ module.exports = async function (context, req) {
     }
 
     if (entrandoEmStatusTerminal) {
-      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaida || statusFinal);   // também derruba as sessões abertas da pessoa
-      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaida || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
+      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaidaFinal || statusFinal);   // também derruba as sessões abertas da pessoa
+      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaidaFinal || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
     } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
       // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
@@ -642,6 +678,7 @@ module.exports = async function (context, req) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
       membro.processoDisciplinarAtivo = idsSobDisciplina.has(membro.membroId);
     }
+    Object.assign(membro, motivoSaidaVisivel(membro, vDisciplinaMembro));
     membro.capacidade = estatuto.calcularCapacidadeEleitoral(membro);
     const idadeMembro = estatuto.idadeEm(membro.dataNascimento);
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
@@ -707,3 +744,6 @@ module.exports = async function (context, req) {
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };
+
+// para os testes (a ordem da lista vem de uma lista fechada)
+module.exports.ordemDaLista = ordemDaLista;

@@ -254,7 +254,8 @@ describe("EdicaoFicha — a secretaria, campo a campo", () => {
     expect(r.body.quemMudaOQue.length).toBe(Object.keys(regras.CAMPOS).length);
   });
   test("GET alteracoes: paginado, sem CPF inteiro", async () => {
-    quando(/FROM AuditLog WHERE RegistroId = @id/, () => [[{ total: 1 }], [{ AuditId: 7, DataHora: "2026-11-18T10:00:00", Acao: "Atualizou pessoa", UsuarioId: 5, UsuarioNome: "Dirigente Central",
+    // passo 6: a trilha junta a da ficha que saiu numa junção (WITH trilha AS ... FROM AuditLog a)
+    quando(/WITH trilha AS[\s\S]*FROM AuditLog a/, () => [[{ total: 1 }], [{ AuditId: 7, DataHora: "2026-11-18T10:00:00", Acao: "Atualizou pessoa", UsuarioId: 5, UsuarioNome: "Dirigente Central",
       DadosAntes: null, DadosDepois: JSON.stringify({ cpf: "52998224725", nome: "Ana" }) }]]);
     const r = await chamar(hFicha, { token: LOCAL(), ligado: { membroId: "10", acao: "alteracoes" }, query: { pagina: "1", porPagina: "500" } });
     expect(r.body).toMatchObject({ sucesso: true, total: 1, porPagina: 100 });

@@ -569,12 +569,17 @@ async function iniciarSessaoConvocadaAcao(sessaoId) {
   const senhaAcesso = await pedirTexto("Senha para a Portaria", "Ex: 1234");
   if (senhaAcesso === null) return;
 
-  const res = await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
+  const abrir = async (confirmar) => (await fetchProtegido(`${API_BASE}/reunioes/abrir`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessaoId, senhaAcesso })
-  });
-  const data = await res.json();
+    body: JSON.stringify({ sessaoId, senhaAcesso, ...(confirmar ? { confirmarCadastrosPendentes: true } : {}) })
+  })).json();
+  let data = await abrir(false);
+  // FASE 10, passo 6: há cadastro repetido ou com o número a acertar — o servidor avisa e só abre com a confirmação (a escolha fica na trilha)
+  if (data && data.precisaConfirmar) {
+    if (!(await confirmarAcao(data.mensagem, "Abrir mesmo assim"))) return;
+    data = await abrir(true);
+  }
   avisarResultado(data);
   if (data.sucesso) {
     carregarConvocacoesPendentes();

@@ -312,14 +312,36 @@ function mudancasDaLinha(antesTxt, depoisTxt, podeDisciplina) {
   return lista;
 }
 async function lerAlteracoes(pool, membroId, { pagina = 1, porPagina = 30, podeDisciplina = false } = {}) {
+  // v10.1b passo 6 (juntar fichas, migração 179): a trilha de um número que SAIU numa junção e foi dado a outra pessoa (MatriculasLivres) é da ficha antiga —
+  // a pessoa nova não vê o que era da outra (só o que veio depois da junção). E a ficha que FICOU mostra também a trilha da que saiu (de antes da junção),
+  // marcada com o número dela. Quem mudou: o nome só se a ficha de quem mudou já existia naquela hora (um número reaproveitado não "assina" o que não fez).
   const r = await pool.request().input("id", sql.Int, membroId).input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina).query(`
-    SELECT COUNT(*) AS total FROM AuditLog WHERE RegistroId = @id AND Tabela = N'MembroReferencia';
-    SELECT a.AuditId, CONVERT(varchar(33), a.DataHora, 126) AS DataHora, a.Acao, a.UsuarioId, u.Nome AS UsuarioNome, a.DadosAntes, a.DadosDepois
-    FROM AuditLog a LEFT JOIN MembroReferencia u ON u.MembroId = a.UsuarioId
-    WHERE a.RegistroId = @id AND a.Tabela = N'MembroReferencia'
-    ORDER BY a.AuditId DESC OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
+    WITH trilha AS (
+      SELECT a.AuditId, a.DataHora, a.Acao, a.UsuarioId, a.DadosAntes, a.DadosDepois, CAST(NULL AS INT) AS DaFicha
+      FROM AuditLog a
+      WHERE a.RegistroId = @id AND a.Tabela = N'MembroReferencia'
+        AND NOT EXISTS (SELECT 1 FROM JuncoesFichas j WHERE j.MatriculaSai = @id AND j.Situacao = N'FEITA' AND a.DataHora < j.JuntadaEm)
+      UNION ALL
+      SELECT a.AuditId, a.DataHora, a.Acao, a.UsuarioId, a.DadosAntes, a.DadosDepois, j.MatriculaSai
+      FROM JuncoesFichas j JOIN AuditLog a ON a.RegistroId = j.MatriculaSai AND a.Tabela = N'MembroReferencia' AND a.DataHora < j.JuntadaEm
+      WHERE j.MatriculaFica = @id AND j.Situacao = N'FEITA'
+    )
+    SELECT COUNT(*) AS total FROM trilha;
+    WITH trilha AS (
+      SELECT a.AuditId, a.DataHora, a.Acao, a.UsuarioId, a.DadosAntes, a.DadosDepois, CAST(NULL AS INT) AS DaFicha
+      FROM AuditLog a
+      WHERE a.RegistroId = @id AND a.Tabela = N'MembroReferencia'
+        AND NOT EXISTS (SELECT 1 FROM JuncoesFichas j WHERE j.MatriculaSai = @id AND j.Situacao = N'FEITA' AND a.DataHora < j.JuntadaEm)
+      UNION ALL
+      SELECT a.AuditId, a.DataHora, a.Acao, a.UsuarioId, a.DadosAntes, a.DadosDepois, j.MatriculaSai
+      FROM JuncoesFichas j JOIN AuditLog a ON a.RegistroId = j.MatriculaSai AND a.Tabela = N'MembroReferencia' AND a.DataHora < j.JuntadaEm
+      WHERE j.MatriculaFica = @id AND j.Situacao = N'FEITA'
+    )
+    SELECT t.AuditId, CONVERT(varchar(33), t.DataHora, 126) AS DataHora, t.Acao, t.UsuarioId, u.Nome AS UsuarioNome, t.DadosAntes, t.DadosDepois, t.DaFicha
+    FROM trilha t LEFT JOIN MembroReferencia u ON u.MembroId = t.UsuarioId AND (u.CriadoEm IS NULL OR u.CriadoEm <= t.DataHora)
+    ORDER BY t.DataHora DESC, t.AuditId DESC OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
   const total = r.recordsets[0][0].total;
-  const itens = r.recordsets[1].map((l) => ({ id: Number(l.AuditId), quando: l.DataHora, acao: l.Acao,
+  const itens = r.recordsets[1].map((l) => ({ id: Number(l.AuditId), quando: l.DataHora, acao: l.Acao, ...(l.DaFicha ? { daFichaJuntada: l.DaFicha } : {}),
     quem: l.UsuarioId ? { matricula: l.UsuarioId, nome: l.UsuarioNome || null } : null, mudancas: mudancasDaLinha(l.DadosAntes, l.DadosDepois, podeDisciplina) }));
   return { total, pagina, porPagina, itens };
 }

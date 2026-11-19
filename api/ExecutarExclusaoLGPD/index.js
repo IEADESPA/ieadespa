@@ -120,6 +120,8 @@ module.exports = async function (context, req) {
     // v10.1b (migração 174) — o CPF, a filiação e a escolaridade saem junto com o contato (não são registro que o Regimento mande guardar)
     // v8.6 — a justificativa de ausência no exame bienal da AFM (pode citar saúde) sai junto, na mesma transação
     await require("../shared/educacaoContinuadaDb").aplicarRetencao({ request: r }, { membroId: solicitacao.MembroId });
+    // v10.1b passo 6 (migração 179) — o que uma junção de fichas guardou da ficha que entrou nesta (a ficha que saiu, com o contato e o CPF, e as linhas arquivadas)
+    await require("../shared/juntarFichasDb").apagarArquivosDaPessoa(r, solicitacao.MembroId);
 
     await r()
       .input("mat", sql.Int, solicitacao.MembroId)

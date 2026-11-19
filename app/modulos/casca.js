@@ -282,6 +282,10 @@ document.addEventListener("click", (ev) => {
 function atualizarTrilhaCasca() {
   const trilha = document.getElementById("trilhaCasca");
   if (!trilha) return;
+  // as telas Svelte dizem o caminho delas (ponteSvelteCasca().trilha)
+  const externa = trilhaExternaValendo();
+  atualizarVoltarCelularCasca();
+  if (externa) { desenharTrilhaExternaCasca(trilha, externa); return; }
   const partes = [];   // [rótulo, ação ou null]
   const titulo = (document.getElementById("tituloModulo") || {}).textContent || "";
   const mod = typeof moduloAtual !== "undefined" && moduloAtual && typeof MODULOS !== "undefined" ? MODULOS[moduloAtual] : null;
@@ -418,7 +422,7 @@ function atualizarEscopoInicioCasca() {
 // De onde vem cada pendência: os AVISOS que o sistema já calcula (a categoria diz de que módulo é) e as TAREFAS dos fluxos (a permissão da etapa
 // diz o módulo). Módulo sem nenhuma regra de aviso no sistema mostra só o que ele tem (o "resumo"), sem número inventado.
 const MODULO_DA_CATEGORIA = {
-  FINANCEIRO: "financeiro", PATRIMONIO: "financeiro", CALENDARIO: "calendario", CANAIS: "canais", COMUNICACAO: "canais", CRISE: "crise", CUIDADO: "membresia",
+  FINANCEIRO: "financeiro", PATRIMONIO: "financeiro", CALENDARIO: "calendario", CANAIS: "canais", COMUNICACAO: "canais", CRISE: "crise", CUIDADO: "cuidadopastoral",
   DISTRITOS: "expansao", EBD: "ebd", ENTIDADES: "entidades", ESCALAS: "escalas", EVENTOS: "eventos", EXPANSAO: "expansao", MISSOES: "expansao", EXTENSAO_TENDA: "expansao",
   FORMACAO: "trilhas", IDENTIDADE: "eclesiastica", MEDIACAO: "disciplina", MENORES: "habilitacao", PROTECAO: "habilitacao", CONGREGACAO: "territorio"
 };
@@ -781,4 +785,186 @@ let alinharNumerosEspera = null;
 // qualquer toque pode trocar de tela: a pílula ativa, o item do menu e o caminho do topo acompanham (os botões do menu chamam as funções direto)
 document.addEventListener("click", () => setTimeout(atualizarPilulasCelular, 0));
 
-registrarAcoes({ abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, entrarModuloCasca, escolherFonteTesteAcao, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });
+// ---- FASE 10 (19/11/2026): as TELAS NOVAS EM SVELTE (o código em front/, o build versionado em app/svelte). O arquivo do módulo só é baixado quando a pessoa
+// entra nele (ou abre a Minha vida); a casca entrega a PONTE (front/src/comum/ponte.ts): o fetch autenticado, a sessão, os ícones de traço, os avisos,
+// o caminho do topo e o menu. Sem script em linha (a CSP continua 'self'): o módulo vem por import() do próprio endereço. ----
+const svelteCarregados = {};
+function carregarModuloSvelte(nome) {
+  if (!/^[a-z-]+$/.test(nome)) return Promise.reject(new Error("módulo inválido"));
+  if (!svelteCarregados[nome]) {
+    if (!document.querySelector(`link[data-svelte="${nome}"]`)) {
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = `/svelte/${nome}.css`;
+      css.dataset.svelte = nome;
+      document.head.appendChild(css);
+      // o pedaço comum (o Svelte e as peças de todas as telas) vem junto, sem esperar a entrada chegar
+      const comum = document.createElement("link");
+      comum.rel = "modulepreload";
+      comum.href = "/svelte/comum.js";
+      document.head.appendChild(comum);
+    }
+    svelteCarregados[nome] = import(`/svelte/${nome}.js`).catch((e) => { delete svelteCarregados[nome]; throw e; });
+  }
+  return svelteCarregados[nome];
+}
+// o caminho do topo, o título do celular e o ← de uma tela Svelte (contexto: o módulo ou a parte do Meu Painel em que ela está)
+let trilhaExternaCasca = null;
+function trilhaExternaValendo() {
+  const t = trilhaExternaCasca;
+  if (!t) return null;
+  if (t.contexto === "membresia") return typeof moduloAtual !== "undefined" && moduloAtual === "membresia" ? t : null;
+  return (typeof moduloAtual === "undefined" || !moduloAtual) && typeof subAbaMeupainelAtual !== "undefined" && subAbaMeupainelAtual === t.contexto ? t : null;
+}
+function desenharTrilhaExternaCasca(trilha, t) {
+  trilha.innerHTML = t.partes.map((p, i) => {
+    const ultimo = i === t.partes.length - 1;
+    if (ultimo) return `<span class="trilha-atual" aria-current="page">${escaparHtmlEbd(p.rotulo)}</span>`;
+    const parte = typeof p.ir === "function"
+      ? `<button type="button" class="trilha-link" data-on-click="irTrilhaExternaCasca" data-args-click="${argsAttr(i)}">${escaparHtmlEbd(p.rotulo)}</button>`
+      : `<span class="trilha-parte">${escaparHtmlEbd(p.rotulo)}</span>`;
+    return parte + `<span class="trilha-sep" aria-hidden="true">${iconeSvg("seta", 14)}</span>`;
+  }).join("");
+  const titulo = document.getElementById("tituloModulo");
+  if (titulo && titulo.textContent !== t.tituloCelular) titulo.textContent = t.tituloCelular;
+}
+function irTrilhaExternaCasca(i) {
+  const t = trilhaExternaValendo();
+  const p = t && t.partes[Number(i)];
+  if (p && typeof p.ir === "function") p.ir();
+}
+// o ← do topo no celular (as telas de dentro de um módulo Svelte)
+function atualizarVoltarCelularCasca() {
+  const t = trilhaExternaValendo();
+  const btn = document.getElementById("btnVoltarCelular");
+  const painel = document.getElementById("cxPainelConteudo");
+  const com = !!(t && typeof t.voltar === "function");
+  if (btn) btn.hidden = !com;
+  if (painel) painel.classList.toggle("com-voltar", com);
+}
+function voltarCelularCasca() {
+  const t = trilhaExternaValendo();
+  if (t && typeof t.voltar === "function") t.voltar();
+}
+let menuRecolhidoPeloSvelte = false;
+function ponteSvelteCasca(contexto) {
+  return {
+    apiBase: API_BASE,
+    pedir: (url, opcoes) => fetchProtegido(url, opcoes || {}),
+    sessao: () => ({
+      matricula: String(authMatricula || ""), nome: String(authNome || ""), permissoes: Array.isArray(authPermissoes) ? authPermissoes.slice() : [],
+      geral: !!authGeral, nivel: authNivel || null, congregacao: (membroCasca && membroCasca.congregacao) || null
+    }),
+    icones: ICONES_CASCA,
+    avisar: (texto, tipo) => mostrarToast(String(texto || ""), tipo === "erro" ? "erro" : "sucesso"),
+    trilha: (partes, tituloCelular, voltar) => {
+      trilhaExternaCasca = { contexto, partes: Array.isArray(partes) ? partes : [], tituloCelular: String(tituloCelular || ""), voltar: typeof voltar === "function" ? voltar : null };
+      atualizarTrilhaCasca();
+    },
+    menuRecolhido: (recolher) => {
+      const sb = document.getElementById("sidebar");
+      if (!sb || window.innerWidth <= 640) return;
+      if (recolher === true) {
+        if (!sb.classList.contains("recolhido")) { sb.classList.add("recolhido"); menuRecolhidoPeloSvelte = true; }
+      } else if (menuRecolhidoPeloSvelte) {
+        // devolve a escolha que a pessoa deixou guardada
+        let guardado = false;
+        try { guardado = localStorage.getItem(CHAVE_MENU_RECOLHIDO) === "1"; } catch (e) { /* sem armazenamento */ }
+        sb.classList.toggle("recolhido", guardado);
+        menuRecolhidoPeloSvelte = false;
+      }
+    },
+    sairDoModulo: () => { if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo(); },
+    irMeuPainel: (sub) => irMinhaParteCasca(String(sub || "minhavida")),
+    abrirMembros: (rota) => abrirMembrosCasca(rota),
+    fecharGavetaCelular: () => { if (window.innerWidth <= 640 && typeof alternarMenuCelular === "function") alternarMenuCelular(false); },
+    escopoDoModulo: (texto) => { const el = document.getElementById("menuModuloEscopo"); if (el) el.textContent = String(texto || ""); }
+  };
+}
+function irMinhaParteCasca(sub) {
+  comTransicaoCasca(() => {
+    if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
+    mostrarSubAbaMeupainel(sub);
+  });
+}
+// o módulo Membros: o menu vai para a barra da esquerda e as telas para #membrosRaiz
+let membrosSvelteMontado = false;
+function abrirMembrosSvelte(rota) {
+  const menu = document.getElementById("membrosMenuRaiz");
+  const conteudo = document.getElementById("membrosRaiz");
+  if (!menu || !conteudo) return;
+  if (!membrosSvelteMontado) conteudo.innerHTML = "<p class=\"subtitle\" style=\"padding:8px 0\">Abrindo Membros…</p>";
+  carregarModuloSvelte("membros").then((m) => {
+    if (typeof moduloAtual === "undefined" || moduloAtual !== "membresia") return;   // a pessoa saiu antes de baixar
+    if (!membrosSvelteMontado) conteudo.innerHTML = "";
+    try {
+      m.montar({ menu, conteudo }, ponteSvelteCasca("membresia"), rota || undefined);
+      membrosSvelteMontado = true;
+    } catch (e) {
+      // defeito de código, não de rede: fica registrado e a pessoa não é mandada "conferir a internet"
+      console.error("Membros (Svelte) não montou:", e);
+      conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Membros não abriu por um problema do sistema. Recarregue a página; se continuar, avise a equipe técnica.</p>";
+    }
+  }, (e) => {
+    console.error("Membros (Svelte) não baixou:", e);
+    conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir Membros agora. Confira a internet (ou recarregue a página, se o sistema acabou de ser atualizado) e tente de novo.</p>";
+  });
+}
+function fecharMembrosSvelte() {
+  if (!membrosSvelteMontado) return;
+  membrosSvelteMontado = false;
+  if (trilhaExternaCasca && trilhaExternaCasca.contexto === "membresia") trilhaExternaCasca = null;
+  carregarModuloSvelte("membros").then((m) => m.desmontar()).catch(() => { /* nada montado */ });
+  ponteSvelteCasca("membresia").menuRecolhido(null);
+  atualizarVoltarCelularCasca();
+}
+// chamada pela troca de aba (mostrarAbaSecretaria): entrar em "membros" abre as telas novas; sair desmonta
+function svAbaMudou(aba) {
+  if (aba === "membros") abrirMembrosSvelte(null);
+  else fecharMembrosSvelte();
+}
+// abrir Membros já numa tela (a busca do alto acha uma pessoa; a Minha vida pede a ficha de alguém)
+function abrirMembrosCasca(rota) {
+  if (typeof moduloAtual === "undefined" || moduloAtual !== "membresia") {
+    comTransicaoCasca(() => { entrarModulo("membresia"); abrirMembrosSvelte(rota || null); });
+    return;
+  }
+  abrirMembrosSvelte(rota || null);
+}
+// a MINHA VIDA (rodada 10, versão final): a minha ficha no alto da página da casca; o resto da página (compromissos, o que é meu) continua embaixo
+let minhaVidaSvelteMontada = false;
+function abrirMinhaVidaSvelte(parte) {
+  const alvo = document.getElementById("mvFicha");
+  if (!alvo || !authMatricula) return;
+  carregarModuloSvelte("membros").then((m) => {
+    if (typeof subAbaMeupainelAtual === "undefined" || subAbaMeupainelAtual !== "minhavida") return undefined;
+    minhaVidaSvelteMontada = true;   // já conta como montada: sair da página antes de o pedaço chegar cancela a montagem (desmontarMinhaVida)
+    return m.montarMinhaVida(alvo, ponteSvelteCasca("minhavida"), parte || undefined);
+  }).catch((e) => {
+    console.error("Minha vida (Svelte) não abriu:", e);
+    minhaVidaSvelteMontada = false;
+    alvo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir a sua ficha agora. Confira a internet (ou recarregue a página, se o sistema acabou de ser atualizado) e tente de novo.</p>";
+  });
+}
+// a SAÍDA DA SESSÃO (limparSessao, em script.js): nada das telas Svelte fica na página (nem o rascunho do cadastro, que tem CPF)
+function svLimparTela() {
+  trilhaExternaCasca = null;
+  const estavam = membrosSvelteMontado || minhaVidaSvelteMontada;
+  membrosSvelteMontado = false;
+  minhaVidaSvelteMontada = false;
+  if (estavam || svelteCarregados.membros) {
+    carregarModuloSvelte("membros").then((m) => { m.desmontar(); m.desmontarMinhaVida(); m.limparRascunho(); }).catch(() => { /* o módulo nem chegou a baixar: nada a limpar */ });
+  }
+  for (const id of ["membrosRaiz", "membrosMenuRaiz", "mvFicha"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
+  atualizarVoltarCelularCasca();
+}
+function svSubMudou(sub) {
+  if (sub === "minhavida") { abrirMinhaVidaSvelte(); return; }
+  if (!minhaVidaSvelteMontada) return;
+  minhaVidaSvelteMontada = false;
+  if (trilhaExternaCasca && trilhaExternaCasca.contexto === "minhavida") trilhaExternaCasca = null;
+  carregarModuloSvelte("membros").then((m) => m.desmontarMinhaVida()).catch(() => { /* nada montado */ });
+  atualizarVoltarCelularCasca();
+}
+
+registrarAcoes({ irTrilhaExternaCasca, voltarCelularCasca, abrirCartaoPerfilCasca, abrirItemHojeCasca, alternarMenuRecolhidoCasca, entrarModuloCasca, escolherFonteTesteAcao, irAbaAbertaCasca, alternarTemaAcao, escolherLetraAcao, escolherTemaAcao, irMenuPrincipalCasca, irPilulaCelular, irTrilhaCasca });

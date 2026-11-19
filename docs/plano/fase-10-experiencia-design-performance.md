@@ -501,8 +501,8 @@ o pago por causa do financeiro, que também está vindo para cá.
        para o próximo cadastro. Provas: e2e-93 117/117 (também com o READ_COMMITTED_SNAPSHOT) e a prova de mutação 10/10. Risco
        que só a homologação prova: a junção desliga os gatilhos imutáveis dentro da transação (`DISABLE TRIGGER`), o que pede a
        permissão ALTER do login do sistema no Azure.
-     - **Passo 7b — Membros refeito do zero em Svelte + TypeScript (19/11/2026, ramo `v10-membros-svelte`, na homologação em
-       `84fe461`) — NÃO vai à produção sem ele ver e aprovar:**
+     - **Passo 7b — Membros refeito do zero em Svelte + TypeScript (19/11/2026, ramo `v10-membros-svelte` até `a178d9a`; na
+       homologação nos merges `84fe461`, `4222547`, `8930ee7` e `acef2cb`) — NÃO vai à produção sem ele ver e aprovar:**
        - **Por quê:** em 18/11 ele reprovou as telas do passo 7a ("quase igual ao que estava antes"): o perfil antigo reembalado,
          emojis, funções antigas no menu, anotação do desenho virando texto. Decisão dele (19/11): as telas de Membros **refeitas
          do zero em TypeScript + Svelte**, como um teste de verdade na homologação; o servidor e o banco ficam como estão; se der
@@ -565,6 +565,15 @@ o pago por causa do financeiro, que também está vindo para cá.
          solteiro até 35 Jovens, o resto Senhoras ou Varões), que a secretaria pode trocar; o menu recolhido (trilho) nas telas
          em que o desenho o mostra (painel, ficha, esteira, sugestões e Minha vida); a página "Transferências" com o nome do menu
          novo; a Minha vida com o desenho no alto e, embaixo, os compromissos e "o que é meu" da casca.
+       - **Na homologação de verdade** (a API e o banco `ieadespa-homolog`, a massa fictícia): os deploys com "DEPLOY OK"; a
+         Secretaria Geral de teste (900013) e o pastor de área de teste (900007, no celular) entraram em Membros e passaram
+         pelo painel, a lista, a ficha, a esteira, as transferências, as sugestões, as repetidas e o cadastro sem erro de script
+         nem recusa de CSP (o único 404 é o `favicon.ico` da casca, que já existia). O que se viu lá e foi corrigido: os números
+         do painel mostravam 0 enquanto o servidor respondia (agora o esqueleto), a barra azul que a casca põe no primeiro
+         título das telas antigas aparecia num subtítulo da ficha, e o nome comprido dos departamentos ("União de Senhoras").
+         O teste de telas acusou o esperado (o cartão do módulo virou "Membros", as telas antigas de Pessoas e do 7a saíram,
+         1 botão a mais em toda tela, o ← do celular; 0 violação de CSP) e a base foi aprovada **só no `homolog`** (`8eca237`).
+         Ainda não provado lá: juntar fichas de verdade (o `DISABLE TRIGGER` pede a permissão ALTER no Azure).
        - **Achado consertado de passagem:** o `style.css` da homologação tinha perdido o começo de um comentário (no merge de
          `59dcdac`), e o navegador jogava fora as variáveis do `:root` da casca.
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).

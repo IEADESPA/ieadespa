@@ -28,7 +28,7 @@ html[data-tema="escuro"] .sv {
   --sv-escolha: #FFB800; --sv-escolha-texto: #0A2342;
 }
 .sv *, .sv *::before, .sv *::after { box-sizing: border-box; }
-.sv h1, .sv h2, .sv h3, .sv p { margin: 0; }
+.sv h1, .sv h2, .sv h3, .sv h4, .sv p { margin: 0; }
 .sv button { font: inherit; color: inherit; }
 .sv :focus-visible { outline: 3px solid var(--sv-ouro); outline-offset: 2px; border-radius: 6px; }
 .sv .sv-escondido { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -40,3 +40,4 @@ html[data-tema="escuro"] .sv {
 .sv input, .sv select, .sv textarea { min-height: 0; max-width: none; box-shadow: none; }
 .sv input:focus, .sv select:focus, .sv textarea:focus { box-shadow: none; }
 .sv input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+/* a barra colorida que a casca põe no 1º h3 das telas antigas (.aba-secretaria h3:first-child) não entra nas telas Svelte: os subtítulos delas são h4 */

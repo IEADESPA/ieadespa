@@ -1,9 +1,9 @@
 {
-  "fonte": "878e6c583cf543d9350a04092f480d9984d12b8b201ee07159e69f7597acdecc",
+  "fonte": "af974981f210c4dcba8b7ccbe502a59e5e6b57575390830ff03ca6028b1b8721",
   "arquivos": {
     "Cadastrar-DPZQfWtv.js": "ff18f21621bc5444ce0ce8dd0dacf797fa7f5316bd20ee6b838274ddde5866d6",
     "CadastroRapido-EFHbUXU3.js": "eaba34345b77f0b061c303ca4f029072c7a6a80a7f154e8f48626b72bc1624e4",
-    "Ficha-BHdF71Ek.js": "39e0c3f445b9dfd39c3aebdad92295591affb5a2d9d942b9d2e4ad27b4be2084",
+    "Ficha--W7Xba5S.js": "ceb76d00c884eb093b14d2d05524bd2d70ea0282b992d1e8c2e088225884f046",
     "Fila-pJLnrU1Y.js": "c991b394bc5d8b8d1d1931993e5804fff83c6be405a79e3d3f46890b76ac1500",
     "Juntar-Bps6Dhhz.js": "b5d128f644c6c8b45778c8dca089b512b7417c2484bc6c2e7d3e21d182e7c16d",
     "MinhaVida-TFiytNXa.js": "2661db0cc7af663b97c9c3d53c374b98dd943373ee225e6bca3f553f8cab6f25",
@@ -14,7 +14,7 @@
     "Transferencias-DzzI74zF.js": "62dc1091bcb793da9596be75b8f69f5bf1e1bc7cc34477b56a969e5101fcab64",
     "Transferir-0a3X07wW.js": "085ef56b4047d863725f5ec6c316d68783ec018e240f40ba0fd0df5a8b4bcc45",
     "comum.js": "e49b5eecb26e849792fc8e08cfc86fcaa92dfb0bd45d7dfb8fb852b7807c8b2c",
-    "membros.css": "18000e994b46a8df4fe4c6ee0c6fd87723fd6c833f1a982e0faa914616d9172b",
-    "membros.js": "9957457f2d3a2dbdaa020722e287168156924668f7c863430b45537d0832cf5b"
+    "membros.css": "2fb94aaac889db450fe115e91fc892125f352582c370eb9148d08d50d9ea9d27",
+    "membros.js": "e08ac6fc4647baafd4749292b7715e9a112a1e849ce29e8804148b40e3e96245"
   }
 }

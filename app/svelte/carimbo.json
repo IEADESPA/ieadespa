@@ -1,20 +1,20 @@
 {
-  "fonte": "2717ae70587310f669b3bcfed65fd64bbc61a2dc67e25f619fe8694eb5384ca4",
+  "fonte": "bd8d7971e97d1a3ce48fc8835b8b037913fe3c58061d99edaaecd60a487d67b5",
   "arquivos": {
-    "Cadastrar-DPZQfWtv.js": "ff18f21621bc5444ce0ce8dd0dacf797fa7f5316bd20ee6b838274ddde5866d6",
-    "CadastroRapido-EFHbUXU3.js": "eaba34345b77f0b061c303ca4f029072c7a6a80a7f154e8f48626b72bc1624e4",
-    "Ficha--W7Xba5S.js": "ceb76d00c884eb093b14d2d05524bd2d70ea0282b992d1e8c2e088225884f046",
-    "Fila-pJLnrU1Y.js": "c991b394bc5d8b8d1d1931993e5804fff83c6be405a79e3d3f46890b76ac1500",
-    "Juntar-Bps6Dhhz.js": "b5d128f644c6c8b45778c8dca089b512b7417c2484bc6c2e7d3e21d182e7c16d",
-    "MinhaVida-TFiytNXa.js": "2661db0cc7af663b97c9c3d53c374b98dd943373ee225e6bca3f553f8cab6f25",
-    "Pessoas-Dn6w6Kwt.js": "f6519d49d2aff7500937c163d0b47cee2e7f84d5b3393c812eaec9c86962cb85",
-    "Repetidas-Cs27mRiW.js": "d30f6849f360ffc95f3eb2bc713b80c87b486a7be3ff88b488c90381794a40d4",
-    "Sugestoes-Dk4uMu-n.js": "d14b4b8802851d239a21590cb7f28055fce8f7f492ab88fe803c6987f3f4105c",
-    "Transferencia-Dc8TrXvx.js": "a626c90b611c16de30bbf2835cfd6fa5b4e2995f00ea1798b95e4d8441466238",
-    "Transferencias-DzzI74zF.js": "62dc1091bcb793da9596be75b8f69f5bf1e1bc7cc34477b56a969e5101fcab64",
-    "Transferir-0a3X07wW.js": "085ef56b4047d863725f5ec6c316d68783ec018e240f40ba0fd0df5a8b4bcc45",
-    "comum.js": "e49b5eecb26e849792fc8e08cfc86fcaa92dfb0bd45d7dfb8fb852b7807c8b2c",
-    "membros.css": "a36b8293ab53be723e53b50a7ea6d24f85284109d249bde9c8c8c93523ce7261",
-    "membros.js": "669b0a2e1f1f3d63536dfa8ac3f8827a97c2efdc7d02bf1021fefaf5802737fd"
+    "Cadastrar-BRFOWda5.js": "8d98acc55522f98d81a75409e113a5338e4d28fd08a55ff1e2c1a66e16013d82",
+    "CadastroRapido-i_sbAfs4.js": "6cae1b9310c124344e2784bf10dd541f150178edf7a02d195ee9479e3aa7b931",
+    "Ficha-B4X3QuWs.js": "160fe31a720903d027cf47a00254b971c2593962392bad20262f81c2c95efec3",
+    "Fila-B7gMVRel.js": "947cdbae46789a216d22cf858702fc868642587f7ae996c78b4364451ef5486c",
+    "Juntar-BXHqxXBg.js": "267992bf1dfde489edce4a049ab51d9c1f19542a6cf6a5dd23ba4f697f031010",
+    "MinhaVida-BeB6-9ql.js": "dbce49a16efc5c49b8cf583fbcb690d6f826ed01b3fda100e0b52949849db0ec",
+    "Pessoas-9oW09OjL.js": "634226a420c8bcef7fa41554e7a9b3712a9282ec62dc2af04f35d6486475de66",
+    "Repetidas-DdCxciVE.js": "1fcce1a792d71813e40f77da1afcd9346a29edea8f09df1c0fa030d7aa2d5e51",
+    "Sugestoes-BU92OOtU.js": "f2bfeffd95a8eb3f0b8eefa80af7113cceef3b04bb70b21b584d7630a7310ab2",
+    "Transferencia-DNMgljXR.js": "1f97955adda134b63a047dc9d296617bd1f45a3eb4f5ff11fb11fdab1f16bf0b",
+    "Transferencias-h-XJ67BR.js": "492f8beba48b0f0c65db6cdb4ce1797e9c3c58a1dc29b8a1038fc04ef0106ad7",
+    "Transferir-BAlp8iqA.js": "8d7da66be78b681382a7200079cec860454f141725be7157cb554c38f6fbcb86",
+    "comum.js": "df80ffef8b509d15100f93c0e6bb6622e280db60638479d5f684d8c5cd4c9d02",
+    "membros.css": "8bdf7ad9138a2347606f1493f5c7cc96c4bccc3a58c1156839c52d7250fb2493",
+    "membros.js": "e8dd72fad1059590830450e5e60c7040253f1394a01ddf4b1284837f58eff22b"
   }
 }

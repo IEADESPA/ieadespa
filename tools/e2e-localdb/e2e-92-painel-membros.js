@@ -170,6 +170,34 @@ async function principal() {
   const porArea = await pedir(tokenGeral(), { pagina: 1, porPagina: 20, rol: "1", ordem: "area", direcao: "asc" });
   ok(porArea.status === 200 && Array.isArray(porArea.body.itens), "Geral: ordem=area responde", String(porArea.status));
 
+  // 19/11/2026 — defeito visto na homologação: o pastor de ÁREA com 60 pessoas, todas sem departamento e sem batismo no Espírito Santo, via o gráfico
+  // "0 e 0". O servidor tem de mandar a linha "Sem departamento" e os grupos de cada agrupamento têm de somar o rol dos números do alto (a tela soma
+  // os grupos na legenda: front/src/membros/grafico.ts, teste painelGrafico.test.js).
+  console.log("== o painel da área: a linha 'Sem departamento' e os grupos somando o rol do alto ==");
+  const cong2 = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Painel E2E92 B', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: area }))[0].id;
+  for (const [id, sit] of [[920021, "EM_COMUNHAO"], [920022, "EM_COMUNHAO"], [920023, "CONGREGADO"]]) {
+    await q(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, Sexo) VALUES (@id, @n, @c, N'ATIVO', @sit, N'F')`,
+      { id, n: `Pessoa ${id} E2E92`, c: cong2, sit });
+  }
+  const tokenArea = tokenLider(["Painel E2E92", "Painel E2E92 B"], { nivel: "AREA" });
+  const pa = ((await pedir(tokenArea, { resumo: "1" })).body || {}).resumo || {};
+  ok(pa.total === 15 && pa.emComunhao + pa.congregados + pa.semComunhao === 15, "área: o rol das duas congregações (12 + 3)", JSON.stringify([pa.total, pa.emComunhao, pa.congregados, pa.semComunhao]));
+  const depsArea = (pa.grupos && pa.grupos.departamento) || [];
+  const semDepArea = depsArea.find((g) => g.nome === "Sem departamento");
+  ok(!!semDepArea && semDepArea.total === pa.semDepartamento && pa.semDepartamento === 12 - depsGab + 3,
+    `área: a linha 'Sem departamento' vem no gráfico (${12 - depsGab + 3}) e bate com o número de cima`, JSON.stringify(depsArea));
+  const somaGrupos = (eixo, campo) => ((pa.grupos && pa.grupos[eixo]) || []).reduce((s, g) => s + g[campo], 0);
+  ok(["departamento", "congregacao", "sexo", "faixa"].every((e) => somaGrupos(e, "total") === pa.total), "área: cada agrupamento soma o rol do alto", JSON.stringify(["departamento", "congregacao", "sexo", "faixa"].map((e) => somaGrupos(e, "total"))));
+  const recortesArea = { es: pa.batizadosEspirito, aguas: pa.batizadosAguas, cpf: pa.total - pa.semCpf, comunhao: pa.emComunhao, completo: pa.completos };
+  ok(Object.entries(recortesArea).every(([r, n]) => somaGrupos("departamento", r) === n), "área: cada recorte somado nos departamentos bate com o número dele", JSON.stringify(recortesArea));
+  ok(pa.batizadosEspirito === 2 && semDepArea && semDepArea.es === 0, "área: o batismo no Espírito Santo vazio conta como 'ainda não' (2 batizados, 0 sem departamento)", JSON.stringify(semDepArea));
+  const soB = ((await pedir(tokenArea, { resumo: "1", congregacaoId: String(cong2) })).body || {}).resumo || {};
+  const depsB = (soB.grupos && soB.grupos.departamento) || [];
+  ok(soB.total === 3 && soB.emComunhao === 2 && soB.congregados === 1 && depsB.length === 1 && depsB[0].nome === "Sem departamento" && depsB[0].total === 3 && depsB[0].es === 0,
+    "área escolhendo a congregação sem departamentos: só a linha 'Sem departamento' com as 3", JSON.stringify(depsB));
+  const geralDeps = ((await pedir(tokenGeral(), { resumo: "1" })).body || {}).resumo || {};
+  ok(((geralDeps.grupos && geralDeps.grupos.departamento) || []).reduce((s, g) => s + g.total, 0) === geralDeps.total, "Geral: os departamentos (com 'Sem departamento') somam o rol", String(geralDeps.total));
+
   fim("e2e-92 (painel de membros no banco)");
   L.shimEncerrar();
 }

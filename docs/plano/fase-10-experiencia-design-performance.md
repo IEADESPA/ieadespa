@@ -732,6 +732,24 @@ O que falta, nesta ordem:
    - o formulário "Quero me cadastrar" do site;
    - as ações das abas antigas do perfil (casamento, vínculo, foto, licença), refeitas dentro da ficha.
 5. **O importador do sistema pago** (passo 9).
+
+**Rodada de desenho de Membros, aprovada por ele em 19/11/2026,** para logo depois que ele fechar a rodada 19 do Financeiro
+(um módulo por vez no desenho). O objetivo é Membros ter a mesma robustez do Financeiro.
+
+- **A família como unidade.** Hoje os vínculos são de dois em dois.
+  - Como ele quer, a partir do que vê no sistema pago: cadastra-se a pessoa e, na família dela, a esposa e os filhos.
+  - O endereço vale para a família toda: preenchido num, vai para os outros.
+  - Toda a família numa tela só.
+- **Listas inteligentes:** um filtro forte e personalizável.
+  - Exemplo: "jovens de 18 a 29 anos da área 3, sem batismo no Espírito Santo".
+  - Salvar a lista e, com ela, fazer ações em lote: mandar um comunicado, pôr uma etiqueta, exportar só o permitido.
+- **A movimentação em assistente: desligamento, falecimento e readmissão.** Hoje se edita a ficha; o assistente pergunta
+  passo a passo:
+  - o que aconteceu (pediu para sair, faleceu, voltou);
+  - a data e o documento ou a ata;
+  - o que o sistema faz sozinho: deixar os cargos vagos, recolher a carteirinha, tirar das escalas, parar os
+    comunicados e registrar na linha do tempo.
+  - É o item "Desligamentos" do menu, que hoje está "em construção".
 6. **A ida à produção:**
    - as migrações 174 a 179;
    - a permissão ALTER para juntar fichas;

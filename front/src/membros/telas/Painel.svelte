@@ -15,6 +15,7 @@
   import { ir, escopo, contadores, cuidaDoCadastro } from "../estado.svelte";
   import type { Agrupamento, PaginaTransferencias, Recorte, ResumoPainel } from "../tipos";
   import { lerAlerta, montarAvisos, type AlertaAssembleia } from "../avisos";
+  import { montarGrafico } from "../grafico";
   import type { Transferencia } from "../tipos";
 
   interface Props { celular: boolean }
@@ -61,14 +62,11 @@
   }
   const rec = $derived(RECORTES.find((r) => r.valor === ajuste.recorte) ?? RECORTES[0]!);
   const agr = $derived(AGRUPAR.find((g) => g.valor === ajuste.agrupar) ?? AGRUPAR[0]!);
-  const linhasGraf = $derived.by(() => {
-    const g = resumo?.grupos[ajuste.agrupar] ?? [];
-    const lista = g.filter((x) => x.total > 0 && x.nome !== "Sem departamento").slice(0, celular ? 5 : 6);
-    const max = Math.max(1, ...lista.map((x) => x.total));
-    return lista.map((x) => ({ nome: x.nome, total: x.total, sim: x[ajuste.recorte], nao: x.total - x[ajuste.recorte], largura: Math.round((x.total / max) * 100) }));
-  });
-  const totSim = $derived(linhasGraf.reduce((a, x) => a + x.sim, 0));
-  const totNao = $derived(linhasGraf.reduce((a, x) => a + x.nao, 0));
+  // todo grupo com gente entra (a legenda soma o rol do alto); "Sem departamento" sempre visível, por último; o excesso vira "Outros (n)"
+  const grafico = $derived(montarGrafico(resumo?.grupos[ajuste.agrupar] ?? [], ajuste.recorte, 6));
+  const linhasGraf = $derived(grafico.linhas);
+  const totSim = $derived(grafico.sim);
+  const totNao = $derived(grafico.nao);
   const maxMov = $derived(Math.max(1, ...(resumo?.movimento ?? []).flatMap((m) => [m.entradas, m.saidas])));
   const totEnt = $derived((resumo?.movimento ?? []).reduce((a, m) => a + m.entradas, 0));
   const totSai = $derived((resumo?.movimento ?? []).reduce((a, m) => a + m.saidas, 0));
@@ -139,7 +137,7 @@
     {#if linhasGraf.length}
       <div class="barras">
         {#each linhasGraf as l (l.nome)}
-          <div class="barra">
+          <div class="barra" class:sem={l.sem}>
             <span class="rot" title={l.nome}>{l.nome}</span>
             <div class="trilho"><div class="cheio" style:width="{l.largura}%">
               <span class="s1" style:width="{l.total ? (l.sim / l.total) * 100 : 0}%" title="{l.nome}: {numero(l.sim)}"></span>
@@ -150,7 +148,7 @@
         {/each}
       </div>
     {:else if resumo}
-      <Estado tipo="vazio" texto={resumo.total ? `Ninguém no rol com ${agr.rotulo} preenchido para mostrar aqui.` : "Ninguém no rol ainda."} />
+      <Estado tipo="vazio" texto="Ninguém no rol ainda." />
     {:else}
       <Estado tipo="carregando" linhas={4} />
     {/if}
@@ -282,6 +280,7 @@
   .barras { display: flex; flex-direction: column; gap: 11px; padding-top: 2px; }
   .barra { display: flex; align-items: center; gap: 10px; }
   .rot { width: 140px; flex: none; font-size: 13.5px; color: var(--sv-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sem .rot { font-style: italic; }
   .trilho { flex: 1; display: flex; align-items: center; min-width: 0; }
   .cheio { display: flex; height: 16px; }
   .s1 { background: var(--sv-graf-1); height: 100%; }

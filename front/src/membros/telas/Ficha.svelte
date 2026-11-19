@@ -14,6 +14,7 @@
   import Aviso from "../../comum/Aviso.svelte";
   import Pilulas from "../../comum/Pilulas.svelte";
   import NaFicha from "../carteirinhas/NaFicha.svelte";
+  import OndeServe from "../partes/OndeServe.svelte";
   import LinhaTempo from "../../comum/LinhaTempo.svelte";
   import CampoEditavel from "../partes/CampoEditavel.svelte";
   import { ir, departamentos, cuidaDoCadastro, type SecaoFicha } from "../estado.svelte";
@@ -355,9 +356,9 @@
         </section>
       </div>
       <div class="lado">
-        <Cartao titulo="Onde serve" nota="ministérios e funções">
-          {#if de("MINISTERIO").filter((e: EventoVida) => e.tipo.startsWith("CARGO")).length}<LinhaTempo eventos={de("MINISTERIO").filter((e: EventoVida) => e.tipo.startsWith("CARGO"))} />
-          {:else}<Estado tipo="vazio" texto="Nenhum ministério registrado." />{/if}
+        <Cartao titulo="Onde serve" nota="ministérios e secretarias">
+          <OndeServe membroId={id} podeEditar={cuidaDoCadastro()} />
+          {#if de("MINISTERIO").filter((e: EventoVida) => e.tipo.startsWith("CARGO")).length}<h4 class="sub-cart">Cargos</h4><LinhaTempo eventos={de("MINISTERIO").filter((e: EventoVida) => e.tipo.startsWith("CARGO"))} />{/if}
         </Cartao>
       </div>
     </div>

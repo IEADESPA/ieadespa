@@ -109,6 +109,8 @@ export function departamentos(): Promise<readonly Departamento[]> {
   });
   return depsPromessa;
 }
+/** é departamento (a faixa de idade) ou ministério/secretaria? (o catálogo antigo sem tipo conta como departamento) */
+export const ehDepartamento = (d: Departamento): boolean => !d.tipo || d.tipo === "DEPARTAMENTO";
 let congsPromessa: Promise<readonly Congregacao[]> | null = null;
 /** as congregações para onde se pode transferir (com a área) */
 export function congregacoesDestino(): Promise<readonly Congregacao[]> {

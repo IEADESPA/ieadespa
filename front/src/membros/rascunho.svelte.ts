@@ -6,12 +6,13 @@ export interface Rascunho {
   nomeMae: string; nomePai: string;
   telefone: string; email: string; logradouro: string; numero: string; complemento: string; bairroTexto: string; cidade: string; uf: string; cep: string;
   congregacaoId: number | null; dataAdmissao: string; formaAdmissao: string; departamentoId: number | null; departamentoTrocado: boolean; cargoMinisterial: string;
+  ministerioId: number | null;
 }
 export function rascunhoVazio(): Rascunho {
   return {
     etapa: 0, nome: "", dataNascimento: "", sexo: "", estadoCivil: "", escolaridade: "", cpf: "", nomeMae: "", nomePai: "",
     telefone: "", email: "", logradouro: "", numero: "", complemento: "", bairroTexto: "", cidade: "", uf: "PA", cep: "",
-    congregacaoId: null, dataAdmissao: "", formaAdmissao: "BATISMO", departamentoId: null, departamentoTrocado: false, cargoMinisterial: ""
+    congregacaoId: null, dataAdmissao: "", formaAdmissao: "BATISMO", departamentoId: null, departamentoTrocado: false, cargoMinisterial: "", ministerioId: null
   };
 }
 export const cadastro = $state<{ r: Rascunho }>({ r: rascunhoVazio() });

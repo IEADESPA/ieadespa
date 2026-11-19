@@ -134,7 +134,8 @@ export interface Alteracao {
 }
 export interface PaginaAlteracoes { readonly itens: readonly Alteracao[]; readonly total: number }
 
-export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean }
+// tipo: DEPARTAMENTO (a faixa de idade) ou o de um ministério/secretaria (SECRETARIA_ADJUNTA...) — o mesmo catálogo, separados pela regra do responsável
+export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean; readonly tipo?: string | null }
 /** as congregações de destino (GET /transferencias?destinos=1) */
 export interface Congregacao { readonly congregacaoId: number; readonly nome: string; readonly areaNome: string | null }
 

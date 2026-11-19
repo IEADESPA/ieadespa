@@ -136,7 +136,9 @@ const ARQUIVAR = new Set(["Presencas", "RespostasEnquete", "PublicoEnqueteCustom
   "CredenciamentosAssembleia", "ComunicacaoEntregas", "DeclaracoesConflitoInteresse", "EscalasRodizioGrupoMembros", "CpfLeituras",
   // passo 8 (19/11/2026): as duas fichas com a segunda via da carteirinha pedida: fica o pedido da que fica; o da que sai vai para o arquivo (desfazer devolve).
   // (O QR não entra aqui: os códigos da ficha que sai passam para a que fica e continuam valendo — o cartão já impresso das duas confere a mesma pessoa.)
-  "CarteirinhasPedidos"]);
+  "CarteirinhasPedidos",
+  // sobras (19/11/2026): as duas fichas servindo no mesmo ministério: fica o registro da que fica; o da que sai vai para o arquivo
+  "MembrosMinisterios"]);
 // As linhas que ligam uma ficha à OUTRA (um vínculo de família entre as duas, que viraria "a pessoa é parente de si mesma"): arquivadas, como acima.
 const LIGACAO_ARQUIVAR = new Set(["VinculosFamiliares"]);
 // Tabelas tratadas à parte pelo banco (antes do movimento geral): as pendências da dupla, os casos da Geral, a credencial, as sessões e as chaves de acesso.
@@ -169,7 +171,8 @@ const ROTULOS = {
   FichasPendencias: "pendências de cadastro", PreCadastros: "pré-cadastros", Assentos: "assentos em órgãos", ComissaoMembros: "comissões",
   ConquistasDesbloqueadas: "conquistas", ConquistasEventos: "conquistas", AcessoTentativas: "tentativas de acesso", CodigosAcessoMembro: "códigos de acesso",
   LicencasCandidatura: "licença para candidatura", EnviosMissionarios: "envio missionário", ExtensaoEncarregados: "encarregado de Extensão",
-  CarteirinhasQr: "QR da carteirinha", CarteirinhasImpressas: "carteirinhas impressas", CarteirinhasPedidos: "pedidos de segunda via da carteirinha"
+  CarteirinhasQr: "QR da carteirinha", CarteirinhasImpressas: "carteirinhas impressas", CarteirinhasPedidos: "pedidos de segunda via da carteirinha",
+  MembrosMinisterios: "ministérios onde serve"
 };
 // Os nomes nas mensagens de bloqueio (o que precisa ser encerrado antes)
 const BLOQUEIO = {

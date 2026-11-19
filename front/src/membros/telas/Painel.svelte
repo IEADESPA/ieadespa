@@ -110,12 +110,17 @@
 </script>
 
 {#snippet kpis()}
+  {#if !resumo}
+    <!-- antes de o servidor responder: nada de "0" que parece número de verdade -->
+    <div class="kpis" aria-busy="true">{#each [1, 2, 3, 4] as k (k)}<div class="kpi"><Estado tipo="carregando" linhas={2} /></div>{/each}</div>
+  {:else}
   <div class="kpis">
     <div class="kpi"><span>Em comunhão</span><strong class="verde sv-num">{numero(resumo?.emComunhao)}</strong><small>{pct(resumo?.emComunhao ?? 0, resumo?.total ?? 0)}% do rol</small></div>
     <div class="kpi"><span>Congregados</span><strong class="sv-num">{numero(resumo?.congregados)}</strong><small>ainda não membros</small></div>
     <div class="kpi"><span>Sem comunhão</span><strong class="vermelho sv-num">{numero(resumo?.semComunhao)}</strong><small>em disciplina ou afastados</small></div>
     <div class="kpi"><span>Novos em {mesLongo(resumo?.mesAtual ?? "")}</span><strong class="sv-num">{numero(resumo?.novosNoMes)}</strong><small>{novosSub}</small></div>
   </div>
+  {/if}
 {/snippet}
 
 {#snippet grafGrande()}
@@ -154,6 +159,7 @@
 
 {#snippet grafMov()}
   <Cartao titulo="Entradas e saídas" nota="últimos 6 meses">
+    {#if !resumo}<Estado tipo="carregando" linhas={3} />{:else}
     <div class="legenda"><span><i class="c1"></i>Entradas <strong class="sv-num">{numero(totEnt)}</strong></span><span><i class="c2"></i>Saídas <strong class="sv-num">{numero(totSai)}</strong></span></div>
     <div class="colunas" role="img" aria-label="Entradas e saídas por mês">
       {#each resumo?.movimento ?? [] as m (m.mes)}
@@ -166,15 +172,18 @@
         </div>
       {/each}
     </div>
+    {/if}
   </Cartao>
 {/snippet}
 
 {#snippet grafQual()}
   <Cartao titulo="Como está o cadastro" nota="do rol">
+    {#if !resumo}<Estado tipo="carregando" linhas={4} />{:else}
     {#each [["Cadastro completo", resumo?.completos ?? 0], ["Com CPF", (resumo?.total ?? 0) - (resumo?.semCpf ?? 0)], ["Batizados no Espírito Santo", resumo?.batizadosEspirito ?? 0], ["Em comunhão", resumo?.emComunhao ?? 0]] as [rot, v] (rot)}
       {@const p = pct(Number(v), resumo?.total ?? 0)}
       <div class="qual"><div class="qt"><span>{rot}</span><strong class="sv-num">{p}%</strong></div><div class="qb"><span style:width="{p}%"></span></div></div>
     {/each}
+    {/if}
   </Cartao>
 {/snippet}
 
@@ -194,7 +203,7 @@
   {#if celular}
     <section class="faixa" aria-label="Avisos de Membros">
       <div class="faixa-tit"><Icone nome="sino" tam={17} traco={2} /><strong>Avisos de Membros</strong>{#if qtdMeu}<span class="bola sv-num">{qtdMeu}</span>{/if}</div>
-      {@render listaAvisos(true)}
+      {#if resumo}{@render listaAvisos(true)}{:else}<Estado tipo="carregando" linhas={2} />{/if}
     </section>
     {#if erro}<Estado tipo="erro" texto={erro} ontentar={carregar} />{/if}
     {@render kpis()}
@@ -226,7 +235,7 @@
             <button type="button" class:on={soMeu} aria-pressed={soMeu} onclick={() => (soMeu = true)}>Só o que eu preciso resolver ({qtdMeu})</button>
             <button type="button" class:on={!soMeu} aria-pressed={!soMeu} onclick={() => (soMeu = false)}>{rotuloTudo} ({avisos.length})</button>
           </div>
-          <div class="lista-av">{@render listaAvisos(false)}</div>
+          <div class="lista-av">{#if resumo}{@render listaAvisos(false)}{:else}<Estado tipo="carregando" linhas={3} />{/if}</div>
           {#if contadores.falhou}<p class="pe falha">Parte dos avisos não pôde ser conferida agora (a fila, as repetidas ou as sugestões).</p>{/if}
           <p class="pe">O sino lá de cima continua com os avisos do sistema todo; aqui, só os de Membros.</p>
         </Cartao>

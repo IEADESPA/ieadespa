@@ -15,6 +15,8 @@
   import Pilulas from "../../comum/Pilulas.svelte";
   import NaFicha from "../carteirinhas/NaFicha.svelte";
   import OndeServe from "../partes/OndeServe.svelte";
+  import AcoesFamilia from "../partes/AcoesFamilia.svelte";
+  import LicencaCandidatura from "../partes/LicencaCandidatura.svelte";
   import LinhaTempo from "../../comum/LinhaTempo.svelte";
   import CampoEditavel from "../partes/CampoEditavel.svelte";
   import { ir, departamentos, cuidaDoCadastro, type SecaoFicha } from "../estado.svelte";
@@ -64,6 +66,35 @@
     pessoa = achada;
     onnome(achada.nome);
     if (l.ok) { linha = l.dados; falhas.linha = ""; } else if (!l.cancelado) falhas.linha = l.mensagem;
+  }
+  // trocar a foto (era uma aba do perfil antigo): imagem até 5 MB; o servidor confere o tipo pelo conteúdo e o consentimento (LGPD; do menor, o do responsável)
+  let enviandoFoto = $state(false);
+  async function trocarFoto(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = "";
+    if (!f || enviandoFoto) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { ponte().avisar("A foto precisa ser JPEG, PNG ou WebP.", "erro"); return; }
+    if (f.size > 5 * 1024 * 1024) { ponte().avisar("A foto passa de 5 MB.", "erro"); return; }
+    enviandoFoto = true;
+    const base64 = await new Promise<string>((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).replace(/^data:[^,]*,/, "")); fr.onerror = () => ok(""); fr.readAsDataURL(f); });
+    if (!base64) { enviandoFoto = false; ponte().avisar("Não deu para ler o arquivo.", "erro"); return; }
+    const r = await pedir<{ mensagem?: string }>(`/pessoas/${id}/foto`, { metodo: "POST", corpo: { fotoBase64: base64, mimeType: f.type } });
+    enviandoFoto = false;
+    if (!r.ok) { avisarFalha(r); return; }
+    ponte().avisar("Foto trocada.", "sucesso");
+    void carregarPessoa();
+  }
+  // desligar um parente (só se foi ligado errado)
+  let desligando = $state<number | null>(null);
+  async function desligarVinculo(v: { vinculoId: number; outraPessoaNome: string }) {
+    if (desligando !== null || !window.confirm(`Desligar ${v.outraPessoaNome} desta ficha? (Só se foi ligado errado.)`)) return;
+    desligando = v.vinculoId;
+    const r = await pedir<{ mensagem?: string }>(`/vinculos-familiares/${v.vinculoId}`, { metodo: "DELETE" });
+    desligando = null;
+    if (!r.ok) { avisarFalha(r); return; }
+    ponte().avisar("Desligado.", "sucesso");
+    void lerVinculos();
   }
   async function carregarCampos() {
     const [c, a] = await Promise.all([
@@ -157,9 +188,14 @@
 </script>
 
 {#snippet foto(tam: number)}
-  <div class="foto" style:width="{tam}px" style:height="{Math.round(tam * 1.2)}px">
-    {#if pessoa?.fotoUrl && /^(https:\/\/|\/)/.test(pessoa.fotoUrl)}<img src={pessoa.fotoUrl} alt="Foto de {pessoa.nome}" />
-    {:else}<strong>{iniciais(pessoa?.nome)}</strong><span>foto</span>{/if}
+  <div class="foto-caixa">
+    <div class="foto" style:width="{tam}px" style:height="{Math.round(tam * 1.2)}px">
+      {#if pessoa?.fotoUrl && /^(https:\/\/|\/)/.test(pessoa.fotoUrl)}<img src={pessoa.fotoUrl} alt="Foto de {pessoa.nome}" />
+      {:else}<strong>{iniciais(pessoa?.nome)}</strong><span>foto</span>{/if}
+    </div>
+    {#if cuidaDoCadastro() && !saiu}
+      <label class="trocar-foto" aria-busy={enviandoFoto}>{enviandoFoto ? "Enviando…" : "Trocar a foto"}<input type="file" accept="image/jpeg,image/png,image/webp" onchange={trocarFoto} /></label>
+    {/if}
   </div>
 {/snippet}
 
@@ -317,15 +353,18 @@
           {:else}
             <ul class="parentes">
               {#each vinculos as v (v.vinculoId)}
-                <li><button type="button" onclick={() => ir({ tela: "ficha", id: v.outraPessoaId, secao: "resumo" })}><span class="av">{iniciais(v.outraPessoaNome)}</span><span><strong>{v.outraPessoaNome}</strong><small>{v.rotulo}</small></span><Icone nome="seta" tam={16} traco={2} /></button></li>
+                <li><button type="button" onclick={() => ir({ tela: "ficha", id: v.outraPessoaId, secao: "resumo" })}><span class="av">{iniciais(v.outraPessoaNome)}</span><span><strong>{v.outraPessoaNome}</strong><small>{v.rotulo}</small></span><Icone nome="seta" tam={16} traco={2} /></button>
+                  {#if cuidaDoCadastro()}<button type="button" class="desligar" disabled={desligando === v.vinculoId} onclick={() => desligarVinculo(v)}>Desligar</button>{/if}</li>
               {/each}
             </ul>
           {/if}
+          <AcoesFamilia membroId={id} podeEditar={cuidaDoCadastro() && !saiu} parte="vinculo" onmudou={lerVinculos} />
         </Cartao>
       </div>
       <div class="lado">
         <Cartao titulo="Casamento e filhos" nota="na linha do tempo">
           {#if de("FAMILIA").length}<LinhaTempo eventos={de("FAMILIA")} />{:else}<Estado tipo="vazio" texto="Nenhum casamento ou apresentação registrado." />{/if}
+          <AcoesFamilia membroId={id} podeEditar={cuidaDoCadastro() && !saiu} parte="casamento" onmudou={carregarPessoa} />
         </Cartao>
       </div>
     </div>
@@ -339,6 +378,9 @@
           </div>
         </Cartao>
         {#if de("LICENCA").length}<Cartao titulo="Licenças"><LinhaTempo eventos={de("LICENCA")} /></Cartao>{/if}
+        <Cartao titulo="Licença por candidatura" nota="Regimento, Art. 157 §2º">
+          <LicencaCandidatura membroId={id} podeEditar={cuidaDoCadastro() && !saiu} geral={sessao.geral} onmudou={carregarPessoa} />
+        </Cartao>
       </div>
       <div class="lado">
         <Cartao titulo="Consagrações e cargos" nota="mais recente primeiro">
@@ -527,4 +569,12 @@
   .ficha-cel .resumo, .ficha-cel .duas { grid-template-columns: 1fr; }
   @media (max-width: 1180px) { .resumo, .duas { grid-template-columns: 1fr; } }
   .sub-cart { margin: 6px 0 0; font-size: 13px; color: var(--sv-suave); }
+  .foto-caixa { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+  .trocar-foto { position: relative; font-size: 12.5px; font-weight: 700; color: var(--sv-link); cursor: pointer; }
+  .trocar-foto input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+  .desligar { background: none; border: 0; padding: 0 6px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--sv-suave); cursor: pointer; }
+  .desligar:hover { color: var(--sv-atr); }
+  .parentes li { display: flex; align-items: center; gap: 4px; }
+  .parentes li > button:first-child { flex: 1; min-width: 0; }
+  .parentes .desligar { width: auto; min-height: 0; flex: none; color: var(--sv-suave); font-size: 12.5px; font-weight: 700; }
 </style>

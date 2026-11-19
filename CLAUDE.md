@@ -10,7 +10,9 @@ O responsável **não vê nada localmente, só o que está no GitHub**. Terminou
 pedido.
 
 - Commit estreito: só os arquivos da tarefa, `git add` explícito (nunca `git add -A`).
-- Depois do push, conferir o deploy com `gh run watch` e informar o resultado.
+- Depois do push, conferir o deploy com `bash tools/conferir-deploy.sh` e informar o resultado. Vale a última linha,
+  "DEPLOY OK" ou "DEPLOY FALHOU", nunca só o fim do comando. A recusa do firewall do banco é repetida sozinha até a 3ª
+  tentativa; se ainda falhar, avisar o responsável.
 - Se o push for bloqueado, **parar e avisar** — nunca deixar a alteração só na máquina.
 
 ## 2. Senha e segredo nunca em texto puro

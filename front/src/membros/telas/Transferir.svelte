@@ -35,8 +35,9 @@
   void departamentos().then((d) => (deps = d));
   async function lerPessoa(id: number) {
     const r = await pedir<PaginaPessoas>("/pessoas" + qs({ pagina: 1, porPagina: 1, matricula: id }));
-    pessoa = r.ok ? r.dados.itens[0] ?? null : null;
-    if (!r.ok) erro = r.mensagem;
+    if (!r.ok) { erro = r.mensagem; return; }
+    pessoa = r.dados.itens[0] ?? null;
+    if (!pessoa) erro = "Matrícula não encontrada no seu escopo. Procure a pessoa pelo nome.";
   }
   $effect(() => { if (membroId) void lerPessoa(membroId); });
   let buscaSeq = 0;

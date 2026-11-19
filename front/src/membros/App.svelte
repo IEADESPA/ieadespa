@@ -15,7 +15,8 @@
     pessoas: () => import("./telas/Pessoas.svelte"), ficha: () => import("./telas/Ficha.svelte"), cadastrar: () => import("./telas/Cadastrar.svelte"),
     fila: () => import("./telas/Fila.svelte"), rapido: () => import("./telas/CadastroRapido.svelte"), transferencias: () => import("./telas/Transferencias.svelte"),
     transferir: () => import("./telas/Transferir.svelte"), transferencia: () => import("./telas/Transferencia.svelte"), sugestoes: () => import("./telas/Sugestoes.svelte"),
-    repetidas: () => import("./telas/Repetidas.svelte"), juntar: () => import("./telas/Juntar.svelte")
+    repetidas: () => import("./telas/Repetidas.svelte"), juntar: () => import("./telas/Juntar.svelte"),
+    carteirinhas: () => import("./carteirinhas/Carteirinhas.svelte"), editor: () => import("./carteirinhas/Editor.svelte")
   };
   onMount(() => {
     // logo depois do painel: a lista e a ficha (as próximas telas de quase todo mundo) já ficam no aparelho
@@ -53,12 +54,13 @@
       case "repetidas": partes.push({ rotulo: "Fichas repetidas" }); titulo = "Fichas repetidas"; break;
       case "juntar": partes.push(m("Fichas repetidas", { tela: "repetidas" }), { rotulo: nomeDaTela || "Juntar" }); titulo = "Juntar fichas"; break;
       case "sugestoes": partes.push({ rotulo: "Sugestões de alteração" }); titulo = "Sugestões"; break;
-      case "carteirinhas": partes.push({ rotulo: "Carteirinhas" }); titulo = "Carteirinhas"; break;
+      case "carteirinhas": partes.push(m("Carteirinhas", { tela: "carteirinhas", congregacaoId: null }), { rotulo: nomeDaTela || (r.congregacaoId === null ? "Modelos" : "Imprimir") }); titulo = "Carteirinhas"; break;
+      case "editor": partes.push(m("Carteirinhas", { tela: "carteirinhas", congregacaoId: null }), { rotulo: "Modelos" }, { rotulo: nomeDaTela || "Editor" }); titulo = "Editor do modelo"; break;
     }
     const interna = pilulaDe(r) === null;
     p.trilha(partes, titulo, interna ? () => voltar({ tela: "painel" }) : null);
     // o desenho aprovado mostra o menu recolhido (o trilho de ícones) no painel, na ficha, na esteira e na caixa de sugestões
-    p.menuRecolhido(["painel", "ficha", "fila", "sugestoes"].includes(r.tela) ? true : null);
+    p.menuRecolhido(["painel", "ficha", "fila", "sugestoes", "carteirinhas", "editor"].includes(r.tela) ? true : null);
   });
   $effect(() => { const t = textoEscopo(escopo.resumo); if (t) ponte().escopoDoModulo(t); });
   // a mesma tela com outra parte (a ficha trocando de seção, a caixa trocando de aba) não é montada de novo
@@ -100,11 +102,8 @@
           {#if !tela.celular}<Cabecalho titulo="Desligamentos" sub="Quem sai do rol: a pedido, por falecimento ou pelo processo da Igreja" />{/if}
           <EmConstrucao titulo="Desligamentos" texto="Esta tela ainda vai ser desenhada e aprovada. Até lá, a saída do rol continua pelo caminho de hoje, com a secretaria." />
         </div>
-      {:else if nav.rota.tela === "carteirinhas"}
-        <div class="pilha">
-          {#if !tela.celular}<Cabecalho titulo="Carteirinhas" sub="A física (papel ou PVC) e a digital, com o QR que nunca muda" />{/if}
-          <EmConstrucao titulo="Carteirinhas" texto="O desenho já foi aprovado (rodada 11): o início das carteirinhas, o editor do modelo, a digital e a página que o QR abre. A construção vem no passo 8." />
-        </div>
+      {:else if nav.rota.tela === "carteirinhas"}{@const r = nav.rota}{#await telas.carteirinhas()}{@render esperando()}{:then m}<m.default congregacaoId={r.congregacaoId} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "editor"}{@const r = nav.rota}{#await telas.editor()}{@render esperando()}{:then m}<m.default modeloId={r.modeloId} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {/if}
     {/key}
   </div>

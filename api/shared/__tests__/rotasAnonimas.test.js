@@ -23,6 +23,7 @@ const PUBLICAS = {
   ConsultarProtocoloOuvidoria: "consulta do próprio protocolo (o código é o segredo)",
   VerificarCertificado: "verificação pública de certificado (o código é o segredo; com limitador)",
   VerificarCredencial: "v8.4: leitura pública do QR da credencial (Regimento Art. 76 §1º; o código é o segredo; só o mínimo — nome, membro/obreiro, congregação, ativa/inativa; com limitador)",
+  ConferirCarteirinha: "FASE 10, passo 8: leitura pública do QR fixo da carteirinha (o código é o segredo; só o mínimo — nome, situação calculada agora e, de quem está no rol, a foto; do membro em comunhão, cargo, função, congregação; com limitador)",
   VerificarContaMembro: "chamada servidor a servidor do site; só devolve um booleano; limitador por origem + chave combinada com o site (CHAVE_SITE_SISTEMA, ver chaveSiteSistema.test.js)",
   LoginSecretaria: "porta de entrada da liderança (senha + bloqueio)",
   SegundoFator: "segunda etapa do login da liderança (vD.4): só com o bilhete assinado que a senha certa abriu; limitador + bloqueio por pessoa",

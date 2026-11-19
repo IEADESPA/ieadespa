@@ -172,9 +172,11 @@
 {/snippet}
 
 {#snippet botoes()}
+  <!-- no celular, como no desenho: Editar primeiro; no notebook, Transferência, Carteirinha e Editar -->
+  {#if celular && cuidaDoCadastro()}<Botao tipo="ouro" icone="lapis" onclick={() => ir2("dados")}>Editar</Botao>{/if}
   {#if !saiu && cuidaDoCadastro()}<Botao tipo="linha" icone="seta" onclick={() => ir({ tela: "transferir", membroId: id })}>Transferência</Botao>{/if}
   {#if !celular}<Botao tipo="linha" icone="cartao" onclick={() => ir2("documentos")}>Carteirinha</Botao>{/if}
-  {#if cuidaDoCadastro()}<Botao tipo="ouro" icone="lapis" onclick={() => ir2("dados")}>Editar</Botao>{/if}
+  {#if !celular && cuidaDoCadastro()}<Botao tipo="ouro" icone="lapis" onclick={() => ir2("dados")}>Editar</Botao>{/if}
 {/snippet}
 
 {#snippet cabecalho()}

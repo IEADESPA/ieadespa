@@ -5,7 +5,8 @@ import { ponte } from "../comum/ponte";
 import type { Congregacao, Departamento, PaginaPreCadastros, PaginaTransferencias, ResumoPainel, Sugestao } from "./tipos";
 
 export type SecaoFicha = "resumo" | "dados" | "familia" | "vida" | "cargos" | "ministerios" | "assembleia" | "documentos" | "alteracoes";
-export type AbaTransferencias = "chegando" | "saindo" | "concluidos";
+// as caixas do servidor (GestaoTransferencias): "andamento" = todas as pendentes do escopo; "paradas" só a Geral
+export type AbaTransferencias = "chegando" | "saindo" | "concluidos" | "paradas" | "andamento";
 
 /** as telas do módulo (as do menu e as de dentro) */
 export type Rota =
@@ -34,7 +35,7 @@ export function lerRota(x: unknown): Rota | null {
   const tela = o.tela;
   if ((TELAS_SIMPLES as readonly unknown[]).includes(tela)) return { tela: tela as (typeof TELAS_SIMPLES)[number] };
   if (tela === "ficha") { const id = inteiro(o.id); return id ? { tela, id, secao: SECOES.includes(o.secao as SecaoFicha) ? (o.secao as SecaoFicha) : "resumo" } : null; }
-  if (tela === "transferencias") return { tela, aba: o.aba === "saindo" || o.aba === "concluidos" ? o.aba : "chegando" };
+  if (tela === "transferencias") return { tela, aba: o.aba === "saindo" || o.aba === "concluidos" || o.aba === "paradas" || o.aba === "andamento" ? o.aba : "chegando" };
   if (tela === "transferir") return { tela, membroId: inteiro(o.membroId) };
   if (tela === "transferencia") { const id = inteiro(o.id); return id ? { tela, id } : null; }
   if (tela === "juntar") { const a = inteiro(o.a), b = inteiro(o.b); return a && b && a !== b ? { tela, a, b } : null; }

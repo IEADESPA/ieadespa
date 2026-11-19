@@ -26,7 +26,7 @@
   let largMesa = $state(0);
   const ESC = $derived(largMesa > 0 ? Math.max(3, Math.min(6.5, (largMesa - 70) / 85.6)) : 5);
   const FONTES = ["Inter", "Atkinson Hyperlegible Next", "Source Sans 3", "Plus Jakarta Sans"] as const;
-  const CORES = ["#0a2342", "#1e3a8a", "#ffb800", "#ffffff", "#14532d", "#5eead4", "#b91c1c", "#1f2937"] as const;
+  const CORES = ["#0a2342", "#16365e", "#ffb800", "#ffffff", "#0f4c45", "#5eead4", "#3b1f5e", "#b91c1c", "#1f2937"] as const;
   const FUNDO = "__fundo";
 
   let modelos = $state<Modelo[] | null>(null);
@@ -381,6 +381,7 @@
             <div class="cores">{#each CORES as cor (cor)}<button type="button" class="cor" class:on={f.cor2 === cor} style:background={cor} aria-label="Segunda cor {cor}" onclick={() => { f.cor2 = cor; registrar(); }}></button>{/each}</div>
             <label class="linha-campo"><span>Ângulo</span><input type="range" min="0" max="360" step="15" value={f.angulo} oninput={(e) => (f.angulo = Number(e.currentTarget.value))} onchange={registrar} /><span class="sv-num">{f.angulo}°</span></label>
           {/if}
+          <label class="interruptor"><input type="checkbox" checked={!!f.brilho} onchange={(e) => { f.brilho = e.currentTarget.checked; registrar(); }} /><span>Brilho dourado</span></label>
           <p class="nota">A arte de fundo (a imagem) fica em "Imagens", à esquerda.</p>
         {:else}
           {#if ehTexto(atual)}

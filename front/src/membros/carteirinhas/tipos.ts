@@ -31,7 +31,7 @@ export interface Camada {
   raio?: number;
   borda?: string | null;
 }
-export interface Fundo { cor1: string; degrade: boolean; cor2: string | null; angulo: number; arte: boolean }
+export interface Fundo { cor1: string; degrade: boolean; cor2: string | null; angulo: number; arte: boolean; brilho?: boolean }
 export interface LadoDesenho { fundo: Fundo; camadas: Camada[] }
 export interface Desenho { tamanho: "CARTAO"; largura: number; altura: number; lados: Record<Lado, LadoDesenho> }
 

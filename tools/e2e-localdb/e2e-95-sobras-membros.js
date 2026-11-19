@@ -4,6 +4,7 @@
 // Parte 2: O ANEXO DA SUGESTÃO (migração 182). Parte 3: A PESSOA COMPLETA O PRÓPRIO CADASTRO PELO E-MAIL (migração 183). Roda sobre a base cenario-183
 // (`bash rodar.sh preparar-183` e depois `BASE=cenario-183 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
+process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-sobras";
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
 
@@ -225,6 +226,21 @@ async function principal() {
     "CPF que já tem ficha: a pessoa recebe a MESMA resposta e o pré-cadastro vai para a correção", JSON.stringify(p3.body));
   const pedNada = await pessoaPre.pedir(pool, { id: pre1, por: 9502 });
   ok(!pedNada.sucesso, "pedir para um pré-cadastro já aceito: recusado");
+
+
+  console.log("== parte 4: o que o \"Quero me cadastrar\" do site lê (as congregações e a versão do consentimento) ==");
+  const Sg = (headers) => chamarRota("PreCadastroSite/index.js", { metodo: "GET", headers });
+  const semChave = await Sg({});
+  const chaveErrada = await Sg({ "x-site-key": "errada" });
+  ok(semChave.status === 401 && chaveErrada.status === 401, "sem a chave do site ou com a errada: 401", JSON.stringify([semChave.status, chaveErrada.status]));
+  const lida = await Sg({ "x-site-key": process.env.CHAVE_SITE_SISTEMA });
+  const congsSite = (lida.body && lida.body.congregacoes) || [];
+  ok(lida.status === 200 && congsSite.some((c) => c.congregacaoId === cong.VN && c.nome === C.VN && c.area === "Área E2E95") && lida.body.consentimento.versao === require("../../api/shared/preCadastro").CONSENTIMENTO.versao,
+    "com a chave: as congregações ativas (com a área) e a versão do consentimento", JSON.stringify(congsSite.slice(0, 2)));
+  ok(!JSON.stringify(lida.body).match(/Fernanda|950001|exemplo\.org/), "a lista não traz gente nenhuma");
+  await q("UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = @c", { c: cong.CJ });
+  const semInativa = ((await Sg({ "x-site-key": process.env.CHAVE_SITE_SISTEMA })).body.congregacoes || []);
+  ok(!semInativa.some((c) => c.congregacaoId === cong.CJ), "a congregação desativada some da lista");
 
   fim("e2e-95 (as sobras de Membros no banco)");
   L.shimEncerrar();

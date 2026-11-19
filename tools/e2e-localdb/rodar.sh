@@ -267,6 +267,14 @@ case "$1" in
     migrar 182 2
     base salvar cenario-182
     ;;
+  preparar-183)
+    # FASE 10, as sobras de Membros (19/11/2026): a partir da base "cenario-182", aplica a 183 duas vezes (a pessoa completa o pré-cadastro pelo e-mail:
+    # PedidoPessoa* em PreCadastros e o índice do código; prova a idempotência); salva "cenario-183".
+    cd "$AQUI"
+    base restaurar cenario-182
+    migrar 183 2
+    base salvar cenario-183
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

@@ -339,6 +339,19 @@ if (typeof describe === "function") {
       expect(ler("conferir.js")).toMatch(/fetch\("\/api\/conferencia\/"/);
     });
 
+    // FASE 10, as sobras — a página pública em que a própria pessoa completa o pré-cadastro pelo link do e-mail: as mesmas regras
+    test("completar-cadastro.html e .js (o link do e-mail): só o próprio script e conferir.css, nada em linha, a resposta só por textContent", () => {
+      const html = ler("completar-cadastro.html");
+      const tags = tagsDoHtml(html);
+      expect(tags.filter(t => t.nome === "script").map(t => t.attrs.find(a => a.nome === "src").valor)).toEqual(["completar-cadastro.js"]);
+      expect(tags.filter(t => t.nome === "style")).toEqual([]);
+      expect(tags.filter(t => t.attrs.some(a => a.nome === "style" || /^on/.test(a.nome) || /^data-on-/.test(a.nome)))).toEqual([]);
+      expect(tags.some(t => t.nome === "link" && t.attrs.some(a => a.nome === "href" && a.valor === "conferir.css"))).toBe(true);
+      const analise = analisarScript("completar-cadastro.js", ler("completar-cadastro.js"));
+      expect(analise.problemas || []).toEqual([]);
+      expect(ler("completar-cadastro.js")).not.toMatch(/innerHTML|insertAdjacentHTML|document\.write|eval\(|new Function|localStorage|sessionStorage|document\.cookie/);
+    });
+
     test("service-worker: cache novo (v66), eventos.js e todos os módulos na casca offline (as telas Svelte ficam fora: baixadas sob demanda)", () => {
       const sw = ler("service-worker.js");
       expect(sw).toMatch(/const CACHE_NOME = "ieadespa-app-shell-v66";/);

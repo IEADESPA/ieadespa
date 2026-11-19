@@ -191,6 +191,8 @@ export interface PreCadastro {
   readonly decididoEm?: string | null;
   readonly versao?: string;
   readonly podeResolver?: boolean;
+  /** a própria pessoa foi chamada a completar pelo e-mail e ainda não respondeu (migração 183) */
+  readonly pedidoPessoa?: { readonly em: string; readonly expiraEm: string; readonly vencido: boolean } | null;
 }
 export interface PaginaPreCadastros { readonly itens: readonly PreCadastro[]; readonly total: number }
 

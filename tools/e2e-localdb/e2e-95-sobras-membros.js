@@ -1,8 +1,8 @@
 // e2e-95-sobras-membros.js — AS SOBRAS DE MEMBROS (FASE 10, 19/11/2026), contra o SQL Server de verdade. Parte 1: ONDE A PESSOA SERVE (migração 181): registrar
 // um ministério (só os do catálogo que não são departamento, ativos), não duplicar, a data que não pode ser no futuro, encerrar (nada se apaga), listar, o escopo
 // (fora = não existe), sem sessão e sem permissão, e juntar fichas com as duas servindo no mesmo ministério.
-// Parte 2: O ANEXO DA SUGESTÃO (migração 182). Roda sobre a base cenario-182 (`bash rodar.sh preparar-182` e depois
-// `BASE=cenario-182 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
+// Parte 2: O ANEXO DA SUGESTÃO (migração 182). Parte 3: A PESSOA COMPLETA O PRÓPRIO CADASTRO PELO E-MAIL (migração 183). Roda sobre a base cenario-183
+// (`bash rodar.sh preparar-183` e depois `BASE=cenario-183 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -150,6 +150,81 @@ async function principal() {
   "decidida a sugestão, o documento sai (as colunas voltam a vazio)", JSON.stringify(dec.body));
   const depoisDec = await Fa(tok.vn(), sid, "anexo");
   ok(depoisDec.status === 404, "depois de decidida, o anexo não abre mais", String(depoisDec.status));
+
+
+  console.log("== parte 3: a pessoa completa o próprio cadastro pelo e-mail (migração 183) ==");
+  ok(await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.PreCadastros') AND name LIKE 'PedidoPessoa%'") === 5, "as cinco colunas novas");
+  const pessoaPre = require("../../api/shared/preCadastroPessoa");
+  const pdbPre = require("../../api/shared/preCadastroDb");
+  const pool = await obterPool();
+  const novoPre = async (nome, extra = {}) => {
+    const id = (await q(`INSERT INTO PreCadastros (Origem, CongregacaoId, Nome, Cpf, Email, DataNascimento, Sexo, EstadoCivil, Situacao)
+      VALUES (N'SITE', @c, @n, @cpf, @e, @nasc, @sexo, @ec, N'PENDENTE'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id`,
+      { c: cong.VN, n: nome, cpf: extra.cpf || null, e: extra.email === undefined ? "pessoa@exemplo.org" : extra.email, nasc: extra.nasc || null, sexo: extra.sexo || "F", ec: extra.ec || "SOLTEIRO" }))[0].id;
+    await pdbPre.processar(pool, id);
+    return id;
+  };
+  const cpfDe = (base9) => { const d = String(base9).padStart(9, "0").split("").map(Number); const dv = (a) => { const n = a.length + 1; const s2 = a.reduce((x, y, i) => x + y * (n - i), 0); const r = (s2 * 10) % 11; return r === 10 ? 0 : r; }; const d1 = dv(d); const d2 = dv([...d, d1]); return [...d, d1, d2].join(""); };
+  const pre1 = await novoPre("Fernanda Completa Sozinha");
+  ok((await escalar("SELECT Pendencias FROM PreCadastros WHERE PreCadastroId = @id", { id: pre1 })).includes("FALTA_CPF"), "o pré-cadastro chegou sem CPF e sem nascimento (fica na fila)");
+  const P = (token, id, acao, corpo) => chamarRota("PreCadastros/index.js", { metodo: "POST", token, binding: { id: String(id), acao }, corpo: corpo || {} });
+  const viaRota = await P(tok.vn(), pre1, "pedir-pessoa");
+  const colunas = async (id) => (await q("SELECT PedidoPessoaEm, PedidoPessoaTokenHash, PedidoPessoaExpiraEm FROM PreCadastros WHERE PreCadastroId = @id", { id }))[0];
+  const c1 = await colunas(pre1);
+  ok((viaRota.status === 200 && c1.PedidoPessoaTokenHash) || (viaRota.status === 503 && !c1.PedidoPessoaEm && !c1.PedidoPessoaTokenHash),
+    "pedir pela rota: o e-mail sai — ou, sem o serviço de e-mail aqui, 503 e o pedido NÃO vale (nada fica pela metade)", JSON.stringify([viaRota.status, viaRota.body && viaRota.body.mensagem]));
+  const preSemEmail = await novoPre("Sem E-mail Nenhum", { email: null });
+  const semEmail = await P(tok.vn(), preSemEmail, "pedir-pessoa");
+  ok(semEmail.status === 200 && semEmail.body.sucesso === false && /não tem e-mail/.test(semEmail.body.mensagem), "sem e-mail: não dá para pedir à pessoa", JSON.stringify(semEmail.body));
+  const foraCj = await P(tok.cj(), pre1, "pedir-pessoa");
+  ok(foraCj.body && foraCj.body.sucesso === false, "outra congregação não pede (não existe para ela)", JSON.stringify(foraCj.body));
+  const ped = await pessoaPre.pedir(pool, { id: pre1, por: 9502 });
+  const c2 = await colunas(pre1);
+  ok(ped.sucesso && /^[A-Za-z0-9_-]{32}$/.test(ped.token) && c2.PedidoPessoaTokenHash && c2.PedidoPessoaTokenHash !== ped.token && !String(c2.PedidoPessoaTokenHash).includes(ped.token),
+    "o pedido guarda só o resumo do código (nunca o código)", JSON.stringify({ falta: ped.falta }));
+  const dias = (new Date(c2.PedidoPessoaExpiraEm) - Date.now()) / 86400000;
+  ok(dias > 6.9 && dias < 7.1, "o link vale 7 dias", String(dias));
+  ok(/vale 7 dias e uma vez só/.test(pessoaPre.textoDoEmail({ nome: "Fernanda X", falta: ped.falta, url: "https://exemplo/x" })) && /Graça e paz, Fernanda!/.test(pessoaPre.textoDoEmail({ nome: "Fernanda X", falta: ped.falta, url: "x" })), "o texto do e-mail");
+  const listaPre = await chamarRota("PreCadastros/index.js", { metodo: "GET", token: tok.vn(), binding: {}, query: {} });
+  const naFila = ((listaPre.body && listaPre.body.itens) || []).find((x) => x.preCadastroId === pre1);
+  ok(naFila && naFila.pedidoPessoa && naFila.pedidoPessoa.vencido === false, "na esteira: esperando a pessoa (a coluna \"a pessoa completa\")", JSON.stringify(naFila && naFila.pedidoPessoa));
+  const Cc = (codigo, metodo = "GET", corpo) => chamarRota("CompletarCadastro/index.js", { metodo, binding: { codigo }, corpo, headers: { "x-forwarded-for": "203.0.113.95, 10.0.0.1" } });
+  const g1 = await Cc(ped.token);
+  ok(g1.status === 200 && g1.body.nome === "Fernanda" && JSON.stringify(g1.body.falta) === JSON.stringify(["cpf", "dataNascimento"]) && !JSON.stringify(g1.body).includes("@"),
+    "a página pública vê só o primeiro nome e o que falta (nunca o e-mail)", JSON.stringify(g1.body));
+  const gErrado = await Cc("A".repeat(32));
+  const gLixo = await Cc("'; DROP TABLE PreCadastros; --");
+  ok(gErrado.status === 404 && gLixo.status === 404 && gErrado.body.mensagem === gLixo.body.mensagem, "código errado e lixo: 404 com a mesma frase", JSON.stringify([gErrado.status, gLixo.status]));
+  const pFalta = await Cc(ped.token, "POST", { cpf: cpfDe(950000099) });
+  const pCpf = await Cc(ped.token, "POST", { cpf: "11111111111", dataNascimento: "1995-05-05" });
+  const pFuturo = await Cc(ped.token, "POST", { cpf: cpfDe(950000099), dataNascimento: "2999-01-01" });
+  ok(pFalta.status === 422 && /data de nascimento/.test(pFalta.body.mensagem) && pCpf.status === 422 && pFuturo.status === 422, "faltou um campo, CPF inválido, data no futuro: 422 (o link continua valendo)",
+    JSON.stringify([pFalta.status, pCpf.status, pFuturo.status]));
+  ok((await Cc(ped.token)).status === 200, "depois dos erros, o link ainda abre");
+  const pBom = await Cc(ped.token, "POST", { cpf: cpfDe(950000099), dataNascimento: "1995-05-05", sexo: "M", nome: "Outro Nome", congregacaoId: cong.CJ, email: "outro@x.org" });
+  const preDepois = (await q("SELECT Situacao, Nome, Sexo, CongregacaoId, Email, MembroIdResultado, PedidoPessoaTokenHash, PedidoPessoaRespondidoEm FROM PreCadastros WHERE PreCadastroId = @id", { id: pre1 }))[0];
+  ok(pBom.status === 200 && /Recebemos/.test(pBom.body.mensagem) && preDepois.PedidoPessoaTokenHash === null && preDepois.PedidoPessoaRespondidoEm,
+    "a pessoa completa: resposta de sucesso e o link deixa de valer", JSON.stringify(pBom.body));
+  ok(preDepois.Nome === "Fernanda Completa Sozinha" && preDepois.Sexo === "F" && preDepois.CongregacaoId === cong.VN && preDepois.Email === "pessoa@exemplo.org",
+    "ela só muda o que faltava: o nome, o sexo, a congregação e o e-mail que mandou a mais foram ignorados", JSON.stringify(preDepois));
+  ok(preDepois.Situacao === "ACEITO" && preDepois.MembroIdResultado, "completo e sem repetição: entrou sozinho na hora (a matrícula nasceu)", JSON.stringify([depois.Situacao, preDepois.MembroIdResultado]));
+  ok((await Cc(ped.token, "POST", { cpf: cpfDe(950000098), dataNascimento: "1995-05-05" })).status === 404 && (await Cc(ped.token)).status === 404, "o link usado não vale de novo (404)");
+  // o vencido
+  const pre2 = await novoPre("Gustavo Vencido");
+  const ped2 = await pessoaPre.pedir(pool, { id: pre2, por: 9502 });
+  await q("UPDATE PreCadastros SET PedidoPessoaExpiraEm = DATEADD(minute, -1, SYSUTCDATETIME()) WHERE PreCadastroId = @id", { id: pre2 });
+  ok((await Cc(ped2.token)).status === 404 && (await Cc(ped2.token, "POST", { cpf: cpfDe(950000097), dataNascimento: "1990-01-01" })).status === 404, "o link vencido não abre nem grava");
+  const lista2 = await chamarRota("PreCadastros/index.js", { metodo: "GET", token: tok.vn(), binding: {}, query: {} });
+  ok((((lista2.body && lista2.body.itens) || []).find((x) => x.preCadastroId === pre2) || {}).pedidoPessoa?.vencido === true, "na esteira, o pedido vencido volta para a secretaria");
+  // o CPF que já é de uma ficha: a resposta é a mesma (não revela), e o pré-cadastro vai para a correção
+  await q("UPDATE MembroReferencia SET Cpf = @c WHERE MembroId = 950001", { c: cpfDe(950000096) });
+  const pre3 = await novoPre("Helena Repetida");
+  const ped3 = await pessoaPre.pedir(pool, { id: pre3, por: 9502 });
+  const p3 = await Cc(ped3.token, "POST", { cpf: cpfDe(950000096), dataNascimento: "1990-01-01" });
+  ok(p3.status === 200 && p3.body.mensagem === pBom.body.mensagem && (await escalar("SELECT Situacao FROM PreCadastros WHERE PreCadastroId = @id", { id: pre3 })) === "CORRECAO",
+    "CPF que já tem ficha: a pessoa recebe a MESMA resposta e o pré-cadastro vai para a correção", JSON.stringify(p3.body));
+  const pedNada = await pessoaPre.pedir(pool, { id: pre1, por: 9502 });
+  ok(!pedNada.sucesso, "pedir para um pré-cadastro já aceito: recusado");
 
   fim("e2e-95 (as sobras de Membros no banco)");
   L.shimEncerrar();

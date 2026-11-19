@@ -33,7 +33,7 @@
   button.circ { cursor: pointer; }
   .feita .circ { background: var(--sv-ok); border-color: var(--sv-ok); color: var(--sv-sup); }
   .agora .circ { background: var(--sv-ouro); border-color: var(--sv-ouro); color: #0A2342; }
-  .nome { font-size: 14px; color: var(--sv-texto); white-space: nowrap; }
+  .nome { font-size: 14px; color: var(--sv-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
   .agora .nome { font-weight: 700; color: var(--sv-titulo); }
   .fio { flex: 1; height: 2px; min-width: 16px; margin: 0 6px; background: var(--sv-borda); }
   .feita .fio { background: var(--sv-ok); }

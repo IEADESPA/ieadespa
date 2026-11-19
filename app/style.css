@@ -2257,6 +2257,13 @@ body { font-family: var(--fonte-sistema); }
   .painel-layout[data-modulo="membresia"] .cabecalho-secretaria .btn-sino,
   .painel-layout[data-modulo="membresia"] .cabecalho-secretaria .btn-tema { color: #FFFFFF; background: transparent; border-color: transparent; }
   .painel-layout[data-modulo="membresia"] .faixa-modulo-casca { display: none; }
+  .painel-layout.sv-minhavida #pilulasCelular { display: none; }
+  .painel-layout.sv-minhavida .cabecalho-secretaria { background: #1D4ED8; border-bottom-color: #1D4ED8; }
+  html[data-tema="escuro"] .painel-layout.sv-minhavida .cabecalho-secretaria { background: #14306B; border-bottom-color: #14306B; }
+  .painel-layout.sv-minhavida .cabecalho-secretaria #tituloModulo,
+  .painel-layout.sv-minhavida .cabecalho-secretaria .btn-icon,
+  .painel-layout.sv-minhavida .cabecalho-secretaria .btn-sino,
+  .painel-layout.sv-minhavida .cabecalho-secretaria .btn-tema { color: #FFFFFF; background: transparent; border-color: transparent; }
   .painel-layout.com-voltar .btn-voltar-celular:not([hidden]) { display: inline-flex; }
   .painel-layout.com-voltar #btnMenuCelular { display: none; }
 }

@@ -64,7 +64,6 @@ export interface RespostaImpressao {
   readonly recusadas: readonly { readonly membroId: number; readonly nome?: string; readonly mensagem: string }[];
   readonly modelos: readonly Modelo[];
   readonly material: Material;
-  readonly frenteVerso: boolean;
   readonly mensagem: string;
 }
 

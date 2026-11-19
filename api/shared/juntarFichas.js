@@ -134,9 +134,9 @@ const DESCARTAR = new Set(["MembroPins", "AcessoTentativas", "NotificacaoPrefere
 const ARQUIVAR = new Set(["Presencas", "RespostasEnquete", "PublicoEnqueteCustom", "MinisterioMenoresPoliticaAceites", "CodigoCondutaAceites", "EscalasAlocacoes",
   "EscalasEquipeMembros", "EbdTurmaProfessores", "OficiantesBatismo", "AFMTurmaAlunos", "CerimoniasComissaoUncao", "SaidaAprovacoes", "VinculosFamiliares",
   "CredenciamentosAssembleia", "ComunicacaoEntregas", "DeclaracoesConflitoInteresse", "EscalasRodizioGrupoMembros", "CpfLeituras",
-  // passo 8 (19/11/2026): as duas fichas com QR (um por pessoa) ou com segunda via pedida: fica o da ficha que fica; o da que sai vai para o arquivo
-  // (desfazer devolve). O QR que estava impresso no cartão da ficha que sai deixa de abrir a pessoa até desfazer.
-  "CarteirinhasQr", "CarteirinhasPedidos"]);
+  // passo 8 (19/11/2026): as duas fichas com a segunda via da carteirinha pedida: fica o pedido da que fica; o da que sai vai para o arquivo (desfazer devolve).
+  // (O QR não entra aqui: os códigos da ficha que sai passam para a que fica e continuam valendo — o cartão já impresso das duas confere a mesma pessoa.)
+  "CarteirinhasPedidos"]);
 // As linhas que ligam uma ficha à OUTRA (um vínculo de família entre as duas, que viraria "a pessoa é parente de si mesma"): arquivadas, como acima.
 const LIGACAO_ARQUIVAR = new Set(["VinculosFamiliares"]);
 // Tabelas tratadas à parte pelo banco (antes do movimento geral): as pendências da dupla, os casos da Geral, a credencial, as sessões e as chaves de acesso.

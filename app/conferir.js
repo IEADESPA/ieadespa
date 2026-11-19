@@ -66,8 +66,10 @@
     selo("espera", "Conferindo…", "");
     try {
       var res = await fetch("/api/conferencia/" + encodeURIComponent(codigo), { headers: { Accept: "application/json" }, cache: "no-store" });
-      var r = await res.json();
       if (res.status === 429) { selo("nada", "Muitas leituras seguidas", "Aguarde um minuto e tente de novo."); return; }
+      // erro do servidor (a página de erro do Azure vem em HTML): não é falta de internet de quem confere
+      if (!/json/i.test(res.headers.get("content-type") || "") || (res.status >= 500)) { selo("nada", "O sistema não respondeu agora", "Tente de novo em instantes. Se continuar, avise a secretaria da Igreja."); return; }
+      var r = await res.json();
       if (r.situacao === "EM_COMUNHAO") {
         selo("ok", "Membro em comunhão", r.exerceCargo === false ? (r.cargo || "Obreiro") + " · no momento não exerce o cargo" : (r.cargo || "Membro") + " · pode exercer o cargo e a função");
         pessoa(r, false);

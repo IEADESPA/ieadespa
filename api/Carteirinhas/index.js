@@ -5,10 +5,12 @@
 //  POST carteirinhas/modelos {nome, publico, desenho?}            (geral pessoas)  modelo novo
 //  PUT  carteirinhas/modelos/{id} {nome, desenho, versao}         (geral pessoas)  salvar o editor (409 se outra pessoa salvou no meio)
 //  POST carteirinhas/ativar/{id}                                  (geral pessoas)  "usar este modelo"
-//  POST carteirinhas/arte/{id} {lado, imagemBase64, tipo}         (geral pessoas)  a arte de fundo em alta resolução (guardada como veio)
+//  POST carteirinhas/arte/{id} {lado, imagemBase64, tipo}         (geral pessoas)  guarda a arte de fundo como veio e devolve o nome do arquivo; ela só passa
+//                                                                                    a valer no "salvar" do modelo (junto com o desenho, conferindo a versão)
 //  GET  carteirinhas/resumo                       (pessoas)            por congregação do escopo: prontas para imprimir e bloqueadas
 //  GET  carteirinhas/fila?congregacaoId=          (pessoas, no escopo) quem imprimir na congregação (nova, mudou, segunda via) e quem está bloqueado
-//  POST carteirinhas/imprimir {membroIds, material, frenteVerso}  (pessoas, no escopo) registra e devolve os cartões para a impressora
+//  POST carteirinhas/preparar {membroIds, material}               (pessoas, no escopo) confere e devolve os cartões para a impressora (NADA registrado)
+//  POST carteirinhas/confirmar {membroIds, material, frenteVerso} (pessoas, no escopo) depois da impressora: registra só as que saíram certas
 //  POST carteirinhas/segunda-via {membroId, motivo}               (pessoas, no escopo) pede a segunda via
 //  GET  carteirinhas/ficha/{membroId}             (pessoas, no escopo) a carteirinha de uma pessoa (o botão da ficha)
 //  GET  carteirinhas/minha                        (login)              a carteirinha digital da própria pessoa, com o QR fixo
@@ -71,7 +73,11 @@ module.exports = async function (context, req) {
     const modeloId = auth.idDeRota(idRota);
     if (!modeloId) return erro(context, 404, "Modelo não encontrado.");
     if (acao === "modelos" && metodo === "PUT") {
-      return resposta(context, await db.salvarModelo(pool, { modeloId, nome: corpo.nome, desenho: corpo.desenho, versao: corpo.versao, por }));
+      const r = await db.salvarModelo(pool, { modeloId, nome: corpo.nome, desenho: corpo.desenho, versao: corpo.versao, arteFrente: corpo.arteFrente, arteVerso: corpo.arteVerso, por });
+      // as artes que deixaram de ser usadas saem do armazenamento (melhor esforço: o modelo já está salvo)
+      if (r && r.sucesso) for (const nome of r.sobras || []) await storage.excluirDocumento(nome);
+      if (r && r.sucesso) delete r.sobras;
+      return resposta(context, r);
     }
     if (acao === "ativar" && metodo === "POST") return resposta(context, await db.ativarModelo(pool, { modeloId, por }));
     if (acao === "arte" && metodo === "POST") {
@@ -94,10 +100,10 @@ module.exports = async function (context, req) {
         context.log.error("[Carteirinhas] a arte não foi guardada no armazenamento:", e && e.message);
         return erro(context, 503, "Não foi possível guardar a arte agora. Tente de novo em instantes.");
       }
-      const r = await db.guardarArte(pool, { modeloId, lado, url, por });
-      if (!r.sucesso) { await storage.excluirDocumento(url); return resposta(context, r); }
-      if (r.antes) await storage.excluirDocumento(r.antes);   // a arte anterior não fica esquecida no armazenamento (melhor esforço)
-      return ok(context, { mensagem: `Arte do ${lado} guardada como veio (${dim.largura} × ${dim.altura} px).`, arte: storage.urlDocumentoComSas(url), largura: dim.largura, altura: dim.altura });
+      // só o arquivo: a arte passa a valer quando o modelo for salvo (o desenho e a arte juntos, conferindo a versão — "desfazer" e "sair sem salvar" não perdem a anterior)
+      const arteId = String(url).split("?")[0].split("/").pop();
+      if (!db.RX_ARTE.test(arteId)) { await storage.excluirDocumento(url); return erro(context, 503, "Não foi possível guardar a arte agora. Tente de novo em instantes."); }
+      return ok(context, { mensagem: `Arte do ${lado} pronta (${dim.largura} × ${dim.altura} px, como veio). Salve o modelo para valer.`, arteId, arte: storage.urlDocumentoComSas(arteId), largura: dim.largura, altura: dim.altura });
     }
     return erro(context, 404, "Ação inválida.");
   }
@@ -111,7 +117,7 @@ module.exports = async function (context, req) {
 
   if (metodo === "GET" && acao === "resumo") {
     const pedido = pool.request();
-    const cond = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "e.Nome");
+    const cond = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "ex.Nome");
     if (cond === "") return ok(context, { congregacoes: [], prontas: 0, bloqueadas: 0, repetidas: 0, numeros: 0, geral });
     return ok(context, { ...(await db.resumoPorCongregacao(pool, { condEscopo: cond, pedido })), geral });
   }
@@ -123,11 +129,13 @@ module.exports = async function (context, req) {
     if (cond === "") return ok(context, { itens: [], geral });
     return ok(context, { itens: await db.filaParaImprimir(pool, { congregacaoId, condEscopo: cond, pedido, podeObreiro: geral }), geral });
   }
-  if (metodo === "POST" && acao === "imprimir") {
-    const fv = corpo.frenteVerso === true;
-    const r = await db.imprimir(pool, { membroIds: corpo.membroIds, material: corpo.material, frenteVerso: fv, por: usuario.membroId, podeObreiro: geral, alcanca,
-      urlFoto: storage.urlComSas, urlArte: storage.urlDocumentoComSas, svgDoQr });
-    return resposta(context, r);
+  if (metodo === "POST" && acao === "preparar") {
+    return resposta(context, await db.preparar(pool, { membroIds: corpo.membroIds, material: corpo.material, podeObreiro: geral, alcanca,
+      urlFoto: storage.urlComSas, urlArte: storage.urlDocumentoComSas, svgDoQr }));
+  }
+  if (metodo === "POST" && acao === "confirmar") {
+    return resposta(context, await db.confirmar(pool, { membroIds: corpo.membroIds, material: corpo.material, frenteVerso: corpo.frenteVerso === true, por: usuario.membroId,
+      podeObreiro: geral, alcanca }));
   }
   if (metodo === "POST" && acao === "segunda-via") {
     const membroId = auth.idDeRota(corpo.membroId);

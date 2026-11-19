@@ -1,11 +1,11 @@
 {
-  "fonte": "acef1178eea717efd6d07300a7267cb2e072f41b60bc72ca39d7cf6dc1dada0c",
+  "fonte": "5a2d5603fee52343bef83fe143b6812e2c0aee4b5796cd930c0a6fa40894f0d8",
   "arquivos": {
     "Cadastrar-D49ywGLB.js": "68f97827186689a7cea056e44483e84d0eb54082665e9118aa901ff2da90b06a",
     "CadastroRapido-DMX8mxSZ.js": "8529f179e5d41d33fa47f119cdda4d0008c08a6844d596887f3306652f391696",
-    "Carteirinhas-D_RCFuer.js": "1e365011fd7e63805b3afdb48cae9cb9b39547523617a868af9d76ffcd728ad1",
-    "Editor-r7KRKVML.js": "6482313a9ca03e8f5b710b22a0751d0956d5aba97c434a5660f5848803efc070",
-    "Ficha-PjfPEABx.js": "a3413f4cafa2115bc038fe85830060888a3e59af9e54a5293526a836d25f3a2c",
+    "Carteirinhas-qwuudFx4.js": "fe9c27daf65ac64f33fc1d122fce373b256be818852fbdc8e50bcc1ca1c488c1",
+    "Editor-CpmcDnIp.js": "21ab05363ebd25dcf8f60c0ec9dfa3f5e982732e1018b317e7c5331ab2a90251",
+    "Ficha-cf4azIt-.js": "15969a032afadfc72e7beddf87d28d000918890371bb6dd15fe16fbbdbfc182a",
     "Fila-D71bpyfF.js": "6cb66457439fb5156ca55731a70d148233bc4cd2485a73b89c129d50aa78ac9e",
     "Juntar-DLOuJfeX.js": "1e5b15cb5976c4b811b7a6046fad41c7c57b76c71168bd9a82e3e9714c385e70",
     "MinhaCarteirinha-DqPgFNrD.js": "d1602f67c1e773076114d25f2d1978e3b6f0d1536e56a67db97091d199ab2417",
@@ -17,9 +17,9 @@
     "Transferencias-BSmh3G7j.js": "fa394161ee883a80d17e5ecc95eda586a12fae60f102b57e8f5e11d17fddba4a",
     "Transferir-B6RXLwE-.js": "aa19c12b53c8f9374bbe3ae4d25fd65a2c02f3dc434f22002b74f097fd846ee8",
     "comum.js": "60eb7807b380589d4da4504c49586be2d0dbe5a3c735e7bfd5d50d8e7dda7555",
-    "imprimir-DW44zpbe.js": "ab6df92400d931969c3f54d5f45bbb55e61310402ff3b05fc6e5ad1efefd0610",
-    "membros.css": "b6431de98e6f8bcc148f8f39129649e917574ec28b2c5439055c416ea8a559e9",
-    "membros.js": "22307b8875a7b3ac57da4167bafdae120b4fa4becfa4db5ca2d8bc8dcc06482d",
+    "imprimir-BC0uuOIi.js": "8e02103f2611cecb931c91ea9d56ff753cba3f790bc5bc23db88d08ed9326c08",
+    "membros.css": "9ca2843a2ccbc7488b64c2a8f7e46e4234232e716e8009a7c989ef88aa70de3b",
+    "membros.js": "4ff71ffe16ed5655a2764a244ba5e254cab2b5c17896c86c39c612d213d1582a",
     "preload-helper-ARvDcSUK.js": "e0ef356954b6894e9b3940a8e868e0ca0fa2a8540243bcee48a3b05ae3c61ea1",
     "tipos-Bzmr7GoI.js": "8df21ecd75a6cebd243a18eda7b35cebec34e9e686fee0fddd260798a8b6e47a"
   }

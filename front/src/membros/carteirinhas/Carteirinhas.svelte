@@ -35,6 +35,9 @@
   let enviando = $state(false);
   let recusas = $state<RespostaImpressao["recusadas"]>([]);
   let aba = $state<"modelos" | "imprimir" | "bloqueadas">("modelos");
+  const LOTE = 20;
+  // depois da impressora: quais saíram certas (só essas são registradas)
+  let conferindo = $state<{ cartoes: { membroId: number; nome: string }[]; saiu: Set<number>; material: Material; frenteVerso: boolean } | null>(null);
 
   // qual congregação imprimir: a escolhida na tabela (Geral e área) ou a única do escopo (a local)
   const unica = $derived(resumo && !resumo.geral && resumo.congregacoes.length === 1 ? resumo.congregacoes[0] ?? null : null);
@@ -66,7 +69,8 @@
     if (r.ok) {
       fila = r.dados.itens;
       // já vêm marcadas as que podem sair
-      marcados = new Set(r.dados.itens.filter((x) => !x.bloqueada && !x.soGeral).map((x) => x.membroId));
+      // já vêm marcadas as primeiras que podem sair (até o tamanho do lote: a impressora recebe no máximo 20 por vez)
+      marcados = new Set(r.dados.itens.filter((x) => !x.bloqueada && !x.soGeral).slice(0, LOTE).map((x) => x.membroId));
     } else if (!r.cancelado) erroFila = r.mensagem;
   }
   void lerModelos();
@@ -84,24 +88,54 @@
     if (s.has(id)) s.delete(id); else s.add(id);
     marcados = s;
   }
+  // 1) o servidor confere e devolve os cartões (nada registrado); 2) a impressora; 3) a pessoa diz quais saíram certas e só essas são registradas
   async function imprimir() {
-    if (enviando || !quantos) return;
+    if (enviando || !quantos || conferindo) return;
     enviando = true;
     recusas = [];
-    const ids = [...marcados].filter((id) => prontas.some((x) => x.membroId === id && !x.soGeral));
-    const r = await pedir<RespostaImpressao>("/carteirinhas/imprimir", { metodo: "POST", corpo: { membroIds: ids, material, frenteVerso } });
-    enviando = false;
-    if (!r.ok) {
-      const corpo = r.corpo as { recusadas?: RespostaImpressao["recusadas"] } | null;
-      recusas = corpo?.recusadas ?? [];
-      avisarFalha(r);
-      return;
+    try {
+      const ids = [...marcados].filter((id) => prontas.some((x) => x.membroId === id && !x.soGeral)).slice(0, LOTE);
+      const fv = frenteVerso, mat = material;
+      const r = await pedir<RespostaImpressao>("/carteirinhas/preparar", { metodo: "POST", corpo: { membroIds: ids, material: mat } });
+      if (!r.ok) {
+        const corpo = r.corpo as { recusadas?: RespostaImpressao["recusadas"] } | null;
+        recusas = corpo?.recusadas ?? [];
+        avisarFalha(r);
+        return;
+      }
+      recusas = r.dados.recusadas;
+      const res = await imprimirCartoes({ cartoes: r.dados.cartoes, modelos: r.dados.modelos, material: mat, frenteVerso: fv });
+      if (!res.ok) { ponte().avisar(res.motivo, "erro"); return; }
+      conferindo = { cartoes: r.dados.cartoes.map((c) => ({ membroId: c.membroId, nome: c.nome })), saiu: new Set(r.dados.cartoes.map((c) => c.membroId)), material: mat, frenteVerso: fv };
+    } finally {
+      enviando = false;
     }
+  }
+  let confirmando = $state(false);
+  async function confirmar(nenhuma: boolean) {
+    if (!conferindo || confirmando) return;
+    const ids = nenhuma ? [] : [...conferindo.saiu];
+    if (!ids.length) { conferindo = null; ponte().avisar("Nada registrado: as carteirinhas continuam na lista para imprimir.", "sucesso"); return; }
+    confirmando = true;
+    const r = await pedir<{ registradas: number[]; recusadas: RespostaImpressao["recusadas"]; mensagem: string }>("/carteirinhas/confirmar",
+      { metodo: "POST", corpo: { membroIds: ids, material: conferindo.material, frenteVerso: conferindo.frenteVerso } });
+    confirmando = false;
+    if (!r.ok) { avisarFalha(r); return; }   // a lista de conferência continua aberta: dá para tentar de novo
+    conferindo = null;
     recusas = r.dados.recusadas;
-    await imprimirCartoes({ cartoes: r.dados.cartoes, modelos: r.dados.modelos, material: r.dados.material, frenteVerso: r.dados.frenteVerso });
-    ponte().avisar(`${r.dados.cartoes.length} ${plural(r.dados.cartoes.length, "carteirinha registrada", "carteirinhas registradas")} como impressa${r.dados.cartoes.length === 1 ? "" : "s"}.`, "sucesso");
+    ponte().avisar(r.dados.mensagem, "sucesso");
     if (congAtual !== null) void lerFila(congAtual);
     void lerResumo();
+  }
+  function alternarSaiu(id: number) {
+    if (!conferindo) return;
+    const s = new Set(conferindo.saiu);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    conferindo = { ...conferindo, saiu: s };
+  }
+  function marcarProximas() {
+    const livres = prontas.filter((x) => !x.soGeral && !marcados.has(x.membroId)).slice(0, LOTE).map((x) => x.membroId);
+    marcados = new Set(livres);
   }
 
   // ---- modelo novo (só a Geral) ----
@@ -248,8 +282,19 @@
     <Opcoes rotulo="Material" valor={material} onescolher={(v) => (material = v)} opcoes={[{ valor: "PAPEL", rotulo: "Papel" }, { valor: "PVC", rotulo: "PVC" }]} />
     <span class="rot">Impressão</span>
     <Opcoes rotulo="Impressão" valor={frenteVerso ? "fv" : "f"} onescolher={(v) => (frenteVerso = v === "fv")} opcoes={[{ valor: "f", rotulo: "Só frente" }, { valor: "fv", rotulo: "Frente e verso" }]} />
-    <Botao tipo="ouro" icone="check" largo desligado={!quantos} ocupado={enviando} onclick={imprimir}>Imprimir {quantos || ""}</Botao>
-    <small>Vai direto para a impressora; nenhum arquivo fica guardado. O modelo sai sozinho pelo tipo da pessoa.</small>
+    {#if conferindo}
+      <div class="conf" role="group" aria-label="Quais saíram certas">
+        <strong>Saíram todas certas?</strong>
+        <small>Desmarque as que não saíram (papel enroscado, cartão estragado): elas continuam na lista.</small>
+        <ul>{#each conferindo.cartoes as c (c.membroId)}<li><label><input type="checkbox" checked={conferindo.saiu.has(c.membroId)} onchange={() => alternarSaiu(c.membroId)} />{c.nome}</label></li>{/each}</ul>
+        <Botao tipo="ouro" icone="check" largo ocupado={confirmando} desligado={!conferindo.saiu.size} onclick={() => confirmar(false)}>Registrar as {conferindo.saiu.size} que saíram</Botao>
+        <Botao tipo="texto" largo onclick={() => confirmar(true)}>Nenhuma saiu: não registrar</Botao>
+      </div>
+    {:else}
+      <Botao tipo="ouro" icone="check" largo desligado={!quantos} ocupado={enviando} onclick={imprimir}>Imprimir {Math.min(quantos, LOTE) || ""}</Botao>
+      {#if prontas.filter((x) => !x.soGeral).length > LOTE}<Botao tipo="texto" largo onclick={marcarProximas}>Marcar as próximas {LOTE}</Botao>{/if}
+      <small>Vai direto para a impressora; nenhum arquivo fica guardado. O modelo sai sozinho pelo tipo da pessoa. De {LOTE} em {LOTE}; depois você diz quais saíram certas.</small>
+    {/if}
     {#if recusas.length}
       <Aviso tom="alerta">{#each recusas as r (r.membroId)}<span class="recusa">{r.nome ?? `Matrícula ${r.membroId}`}: {r.mensagem}</span>{/each}</Aviso>
     {/if}
@@ -367,6 +412,12 @@
   .painel-imp .rot, .para .rot { font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--sv-suave); font-weight: 700; }
   .painel-imp small { color: var(--sv-suave); font-size: 12.5px; line-height: 1.4; }
   .recusa { display: block; }
+  .conf { display: flex; flex-direction: column; gap: 8px; }
+  .conf strong { color: var(--sv-titulo); }
+  .conf small { color: var(--sv-suave); font-size: 12.5px; }
+  .conf ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+  .conf label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  .conf input { width: 18px; height: 18px; accent-color: var(--sv-marinho); }
   .trancada { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--sv-borda); background: var(--sv-sup); border-radius: 10px; padding: 8px 14px; font-weight: 700; color: var(--sv-titulo); }
   .novo-form { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: var(--sv-raio); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
   .novo-form h4 { margin: 0; color: var(--sv-titulo); }

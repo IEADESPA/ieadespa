@@ -8,6 +8,7 @@
 process.env.AUTH_SECRET = "segredo-das-carteirinhas-no-banco-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
+const certificados = require("../../api/shared/certificados");
 
 const PERM = ["pessoas"];
 const fator = () => ({ via: "CHAVE", em: Date.now() });
@@ -42,7 +43,7 @@ async function principal() {
 
   console.log("== a migração 180 ==");
   ok(await escalar("SELECT COUNT(*) FROM sys.tables WHERE name IN ('CarteirinhaModelos', 'CarteirinhasQr', 'CarteirinhasImpressas', 'CarteirinhasPedidos')") === 4, "as quatro tabelas novas");
-  ok(await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name IN ('UX_CarteirinhaModelos_PublicoAtivo', 'UX_CarteirinhasQr_Codigo', 'IX_CarteirinhasImpressas_Membro', 'UX_CarteirinhasPedidos_Aberto')") === 4, "os índices");
+  ok(await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name IN ('UX_CarteirinhaModelos_PublicoAtivo', 'IX_CarteirinhasQr_Membro', 'IX_CarteirinhasImpressas_Membro', 'UX_CarteirinhasPedidos_Aberto')") === 4, "os índices");
 
   console.log("== o cenário: duas congregações e as pessoas de cada situação ==");
   const area = (await q("INSERT INTO Areas (Nome) VALUES (N'Área E2E94'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
@@ -65,8 +66,9 @@ async function principal() {
   await ficha(940008, "Número Torto", cong.VN);
   await ficha(940009, "Pedro de Outra", cong.CJ);
   await ficha(940010, "Joana Sem Nada", cong.VN, { adm: null });
-  await q(`INSERT INTO FichasPendencias (MembroId, Tipo, OutroMembroId, Origem) VALUES (940007, N'REPETIDA', 940006, N'MARCADA'), (940008, N'NUMERO', NULL, N'MARCADA')`);
-  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 940001 AND 940010") === 10, "10 pessoas do roteiro");
+  await ficha(940011, "Tomé Em Disciplina", cong.VN, { sit: "SEM_COMUNHAO" });
+  await q(`INSERT INTO FichasPendencias (MembroId, Tipo, OutroMembroId, Origem) VALUES (940007, N'REPETIDA', 940006, N'MARCADA'), (940008, N'NUMERO', NULL, N'MARCADA'), (940011, N'NUMERO', NULL, N'MARCADA')`);
+  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 940001 AND 940011") === 11, "11 pessoas do roteiro");
 
   console.log("== os modelos ==");
   const m0 = await K(tok.vn(), "modelos");
@@ -126,9 +128,18 @@ async function principal() {
   ok([aFalsa, aTipo, aLado, aGrande].every((r) => r.status === 400), "conteúdo que não é PNG, SVG, lado estranho e arquivo grande demais: 400", JSON.stringify([aFalsa.status, aTipo.status, aLado.status, aGrande.status]));
   const aLocal = await arte({ lado: "frente", tipo: "image/png", imagemBase64: pngCabecalho(2400, 1514) }, tok.vn());
   ok(aLocal.status === 403, "a local não troca a arte", String(aLocal.status));
+  const vAntesArte = (await K(tok.geral(), "modelos")).body.modelos.find((m) => m.modeloId === mId).versao;
   const aBoa = await arte({ lado: "frente", tipo: "image/png", imagemBase64: pngCabecalho(2400, 1514) });
-  const arteGravada = await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId });
-  ok((aBoa.status === 200 && !!arteGravada) || (aBoa.status === 503 && arteGravada == null), "arte boa (2.400 × 1.514): guardada como veio — ou, sem o armazenamento aqui, 503 sem gravar nada pela metade", JSON.stringify([aBoa.status, arteGravada]));
+  ok((aBoa.status === 200 && /^doc-\d+-[a-z0-9]+$/.test(aBoa.body.arteId)) || aBoa.status === 503, "arte boa (2.400 × 1.514): o arquivo guardado como veio (ou, sem o armazenamento aqui, 503)", JSON.stringify(aBoa.body));
+  ok((await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) == null, "enviar a arte NÃO muda o modelo: ela só vale no salvar (desfazer e sair sem salvar não perdem a anterior)");
+  const vArte = (await K(tok.geral(), "modelos")).body.modelos.find((m) => m.modeloId === mId).versao;
+  ok(vArte === vAntesArte, "a versão do modelo não mudou com o envio da arte (o próximo salvar não dá 409)");
+  const arteId = aBoa.status === 200 ? aBoa.body.arteId : "doc-1763500000000-abc123";
+  const comArte = JSON.parse(JSON.stringify(desenho)); comArte.lados.frente.fundo.arte = true;
+  const sArte = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: vArte, arteFrente: arteId } });
+  ok(sArte.status === 200 && (await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) === arteId, "salvar com a arte: o desenho e a arte juntos", JSON.stringify(sArte.body));
+  const sFora = await K(tok.geral(), "modelos", { metodo: "PUT", id: mId, corpo: { nome: "Membro 2027", desenho: comArte, versao: sArte.body.versao, arteFrente: "https://outro.exemplo.org/x.png" } });
+  ok(sFora.status === 422 && (await escalar("SELECT ArteFrente FROM CarteirinhaModelos WHERE ModeloId = @id", { id: mId })) === arteId, "arte que não é um arquivo nosso (endereço de fora): recusada", JSON.stringify(sFora.body));
 
   console.log("== a lista para imprimir de Vila Nova ==");
   const filaVn = await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } });
@@ -151,35 +162,46 @@ async function principal() {
   const filaNada = await K(tok.vn(), "fila", { query: { congregacaoId: 99999999 } });
   ok(filaFora.status === 404 && filaLixo.status === 404 && filaNada.status === 404, "outra congregação, lixo e congregação que não existe: a mesma resposta (404)", JSON.stringify([filaFora.status, filaLixo.status, filaNada.status]));
 
-  console.log("== imprimir ==");
-  const imp1 = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: [940001, 940002, 940003, 940006, 940009, 99999999, "940001"], material: "PVC", frenteVerso: true } });
+  console.log("== imprimir: preparar (nada gravado) e confirmar (só as que saíram) ==");
+  const P = (token, ids, material, extra = {}) => K(token, "preparar", { metodo: "POST", corpo: { membroIds: ids, material, ...extra } });
+  const Cf = (token, ids, material, frenteVerso) => K(token, "confirmar", { metodo: "POST", corpo: { membroIds: ids, material, frenteVerso } });
+  const imp1 = await P(tok.vn(), [940001, 940002, 940003, 940006, 940009, 99999999, "940001"], "PVC");
   const cart = (imp1.body && imp1.body.cartoes) || [];
   const rec = (imp1.body && imp1.body.recusadas) || [];
-  ok(imp1.status === 200 && cart.map((x) => x.membroId).sort().join() === "940001,940002", "imprime só as duas que podem (a repetida da lista conta uma vez)", JSON.stringify(cart.map((x) => x.membroId)));
+  ok(imp1.status === 200 && cart.map((x) => x.membroId).sort().join() === "940001,940002", "prepara só as duas que podem (a repetida da lista conta uma vez)", JSON.stringify(cart.map((x) => x.membroId)));
   const recPor = (id) => (rec.find((x) => x.membroId === id) || {}).mensagem || "";
   ok(/Art\. 76/.test(recPor(940003)) && /Pendência/.test(recPor(940006)) && recPor(940009) === "Matrícula não encontrada." && recPor(99999999) === "Matrícula não encontrada.",
     "recusadas: o obreiro (só a Geral), a repetida (pendência), a de outra congregação e a que não existe (a mesma frase)", JSON.stringify(rec));
+  ok(!(rec.find((x) => x.membroId === 940009) || {}).nome && !(rec.find((x) => x.membroId === 99999999) || {}).nome, "a recusa de fora do escopo não diz o nome de ninguém");
   const c1 = cart.find((x) => x.membroId === 940001) || {};
   ok(c1.nome === "Ana Beatriz Moreira" && c1.nascimento === "1990-03-14" && c1.mae === "Lúcia Moreira" && c1.pai === "Paulo Moreira" && c1.matricula === 940001 && /^<svg/.test(c1.qrSvg || "") && c1.tipo === "MEMBRO",
     "o cartão traz só o que não muda (nome, nascimento, matrícula, pai e mãe), o tipo e o QR", JSON.stringify({ ...c1, qrSvg: (c1.qrSvg || "").slice(0, 20) }));
   ok(!JSON.stringify(imp1.body).includes(CPF1) && !JSON.stringify(imp1.body).includes("98888") && !JSON.stringify(imp1.body).includes("Professora"), "o que vai para a impressora não tem CPF, contato nem a função (o que muda fica na digital)");
   ok(Array.isArray(imp1.body.modelos) && imp1.body.modelos.length === 2 && imp1.body.modelos.every((m) => m.desenho && m.ativo), "vêm os modelos usados (membro e congregado)");
-  const reg = await q("SELECT MembroId, Publico, Material, FrenteVerso, Motivo, ImpressaPor, CongregacaoId FROM CarteirinhasImpressas WHERE MembroId BETWEEN 940001 AND 940010 ORDER BY MembroId");
+  ok((await escalar("SELECT COUNT(*) FROM CarteirinhasImpressas WHERE MembroId BETWEEN 940001 AND 940011")) === 0, "preparar NÃO registra nada (a impressora ainda não soltou)");
+  ok((await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } })).body.itens.some((x) => x.membroId === 940001), "preparada e não confirmada: continua na lista");
+  const conf1 = await Cf(tok.vn(), [940002, 940001, 940003, 99999999], "PVC", true);
+  ok(conf1.status === 200 && (conf1.body.registradas || []).join() === "940001,940002" && /Art\. 76/.test(((conf1.body.recusadas || []).find((x) => x.membroId === 940003) || {}).mensagem || ""),
+    "confirmar registra só as que podem (o obreiro e a que não existe ficam de fora)", JSON.stringify(conf1.body));
+  const reg = await q("SELECT MembroId, Publico, Material, FrenteVerso, Motivo, ImpressaPor, CongregacaoId FROM CarteirinhasImpressas WHERE MembroId BETWEEN 940001 AND 940011 ORDER BY MembroId");
   ok(reg.length === 2 && reg[0].Publico === "MEMBRO" && reg[1].Publico === "CONGREGADO" && reg.every((l) => l.Material === "PVC" && l.FrenteVerso === true && l.Motivo === "NOVA" && l.ImpressaPor === 9402 && l.CongregacaoId === cong.VN),
     "o registro das duas impressões (tipo, material, frente e verso, nova, quem, onde)", JSON.stringify(reg));
   const qr1 = await escalar("SELECT Codigo FROM CarteirinhasQr WHERE MembroId = 940001");
-  ok(typeof qr1 === "string" && qr1.length >= 12 && (await escalar("SELECT COUNT(*) FROM CarteirinhasQr WHERE MembroId IN (940001, 940002)")) === 2, "o QR fixo nasceu para as duas");
+  ok(typeof qr1 === "string" && qr1.length >= 12 && (await escalar("SELECT COUNT(*) FROM CarteirinhasQr WHERE MembroId IN (940001, 940002)")) === 2, "o QR fixo nasceu para as duas (um para cada)");
   const depois = (await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } })).body.itens;
-  ok(!depois.some((x) => x.membroId === 940001 || x.membroId === 940002), "depois de impressas, saem da lista");
-  const rMat = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: [940010], material: "OURO" } });
-  const rVazio = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: [], material: "PAPEL" } });
-  const rMuitos = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: Array.from({ length: 61 }, (_, i) => 950000 + i), material: "PAPEL" } });
-  const rLixo = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: "940010", material: "PAPEL" } });
-  ok([rMat, rVazio, rMuitos, rLixo].every((r) => r.status === 422), "material estranho, lista vazia, mais de 60 e lista que não é lista: recusados", JSON.stringify([rMat.status, rVazio.status, rMuitos.status, rLixo.status]));
-  const soRecusa = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: [940003], material: "PAPEL" } });
-  ok(soRecusa.status === 422 && /Art\. 76/.test(soRecusa.body.mensagem) && (await escalar("SELECT COUNT(*) FROM CarteirinhasImpressas WHERE MembroId = 940003")) === 0, "só o obreiro, pela local: recusado e nada registrado", JSON.stringify(soRecusa.body));
-  const impGeral = await K(tok.geral(), "imprimir", { metodo: "POST", corpo: { membroIds: [940003], material: "PAPEL", frenteVerso: false } });
-  ok(impGeral.status === 200 && impGeral.body.cartoes.length === 1 && (await escalar("SELECT Publico FROM CarteirinhasImpressas WHERE MembroId = 940003")) === "OBREIRO", "a Geral imprime a do obreiro (modelo de obreiro)", JSON.stringify(impGeral.body.recusadas));
+  ok(!depois.some((x) => x.membroId === 940001 || x.membroId === 940002), "depois de confirmadas, saem da lista");
+  const rMat = await P(tok.vn(), [940010], "OURO");
+  const rVazio = await P(tok.vn(), [], "PAPEL");
+  const rMuitos = await P(tok.vn(), Array.from({ length: 21 }, (_, i) => 950000 + i), "PAPEL");
+  const rLixo = await P(tok.vn(), "940010", "PAPEL");
+  const cMuitos = await Cf(tok.vn(), Array.from({ length: 21 }, (_, i) => 950000 + i), "PAPEL", false);
+  ok([rMat, rVazio, rMuitos, rLixo, cMuitos].every((r) => r.status === 422) && /No máximo 20/.test(rMuitos.body.mensagem), "material estranho, lista vazia, mais de 20 e lista que não é lista: recusados", JSON.stringify([rMat.status, rVazio.status, rMuitos.status, rLixo.status, cMuitos.status]));
+  const soRecusa = await P(tok.vn(), [940003], "PAPEL");
+  const soRecusaC = await Cf(tok.vn(), [940003], "PAPEL", false);
+  ok(soRecusa.status === 422 && /Art\. 76/.test(soRecusa.body.mensagem) && soRecusaC.status === 422 && (await escalar("SELECT COUNT(*) FROM CarteirinhasImpressas WHERE MembroId = 940003")) === 0, "só o obreiro, pela local: recusado nas duas fases e nada registrado", JSON.stringify(soRecusa.body));
+  const impGeral = await P(tok.geral(), [940003], "PAPEL");
+  const confGeral = await Cf(tok.geral(), [940003], "PAPEL", false);
+  ok(impGeral.status === 200 && impGeral.body.cartoes.length === 1 && confGeral.status === 200 && (await escalar("SELECT Publico FROM CarteirinhasImpressas WHERE MembroId = 940003")) === "OBREIRO", "a Geral imprime a do obreiro (modelo de obreiro)", JSON.stringify(impGeral.body.recusadas));
 
   console.log("== mudou de tipo e a segunda via ==");
   await q("UPDATE MembroReferencia SET SituacaoMembro = N'EM_COMUNHAO', DataAdmissao = '2026-11-01' WHERE MembroId = 940002");
@@ -196,8 +218,9 @@ async function principal() {
   ok(svCurto.status === 422 && svDisc.status === 422 && svFora.status === 404 && svLixo.status === 404, "motivo curto e pessoa em disciplina: 422; fora do escopo e lixo: 404", JSON.stringify([svCurto.status, svDisc.status, svFora.status, svLixo.status]));
   const naFila = (await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } })).body.itens.find((x) => x.membroId === 940001);
   ok(naFila && naFila.motivo === "SEGUNDA_VIA" && naFila.detalhe === "segunda via (perdeu a de papel)", "a segunda via entra na lista com o motivo", JSON.stringify(naFila));
-  const imp2 = await K(tok.vn(), "imprimir", { metodo: "POST", corpo: { membroIds: [940001, 940002], material: "PAPEL", frenteVerso: false } });
-  ok(imp2.status === 200 && imp2.body.cartoes.length === 2, "imprime a segunda via e a de quem mudou");
+  const imp2 = await P(tok.vn(), [940001, 940002], "PAPEL");
+  const conf2 = await Cf(tok.vn(), [940001, 940002], "PAPEL", false);
+  ok(imp2.status === 200 && imp2.body.cartoes.length === 2 && conf2.status === 200 && conf2.body.registradas.length === 2, "imprime a segunda via e a de quem mudou");
   ok((await escalar("SELECT TOP 1 Motivo FROM CarteirinhasImpressas WHERE MembroId = 940001 ORDER BY ImpressaoId DESC")) === "SEGUNDA_VIA"
     && (await escalar("SELECT TOP 1 Motivo FROM CarteirinhasImpressas WHERE MembroId = 940002 ORDER BY ImpressaoId DESC")) === "MUDOU"
     && (await escalar("SELECT COUNT(*) FROM CarteirinhasPedidos WHERE MembroId = 940001 AND AtendidoEm IS NOT NULL AND ImpressaoId IS NOT NULL")) === 1,
@@ -266,14 +289,18 @@ async function principal() {
   ok(resVn.status === 200 && resVn.body.congregacoes.length === 1 && resVn.body.congregacoes[0].congregacaoId === cong.VN && resVn.body.geral === false, "a local vê só a dela", JSON.stringify(resVn.body.congregacoes.map((l) => l.congregacao)));
 
   console.log("== juntar fichas com QR ==");
-  await q("INSERT INTO CarteirinhasQr (MembroId, Codigo) VALUES (940006, N'QRVELHO94000006'), (940007, N'QRNOVO940000007')");
+  const C6 = certificados.gerarCodigoVerificacao(), C7 = certificados.gerarCodigoVerificacao();
+  await q("INSERT INTO CarteirinhasQr (MembroId, Codigo, CriadoEm) VALUES (940006, @c6, '2020-01-01'), (940007, @c7, '2026-01-01')", { c6: C6, c7: C7 });
   await q("INSERT INTO CarteirinhasPedidos (MembroId, Motivo, PedidoPor) VALUES (940007, N'perdeu', 9402)");
   const comp = await chamarRota("FichasRepetidas/index.js", { metodo: "GET", token: tok.vn(), binding: { acao: "comparar" }, query: { a: 940006, b: 940007 } });
   const junta = await chamarRota("FichasRepetidas/index.js", { metodo: "POST", token: tok.vn(), binding: { acao: "juntar" }, corpo: { a: 940006, b: 940007, escolhas: {}, versao: comp.body && comp.body.versao } });
   ok(junta.status === 200, "a junção das duas fichas com QR passa (nada bloqueia)", JSON.stringify(junta.body).slice(0, 300));
-  ok((await escalar("SELECT Codigo FROM CarteirinhasQr WHERE MembroId = 940006")) === "QRVELHO94000006" && (await escalar("SELECT COUNT(*) FROM CarteirinhasQr WHERE Codigo = N'QRNOVO940000007'")) === 0,
-    "fica o QR da ficha que fica; o da que saiu sai da tabela");
-  ok((await escalar("SELECT COUNT(*) FROM JuncoesFichasArquivo a JOIN JuncoesFichas j ON j.JuncaoId = a.JuncaoId WHERE j.MatriculaSai = 940007 AND a.Tabela = N'CarteirinhasQr'")) === 1, "o QR da que saiu foi para o arquivo (desfazer devolve)");
+  ok((await escalar("SELECT COUNT(*) FROM CarteirinhasQr WHERE MembroId = 940006 AND Codigo IN (@c6, @c7)", { c6: C6, c7: C7 })) === 2,
+    "os dois códigos agora são da ficha que fica (o cartão já impresso das duas continua valendo)");
+  const vSai = await conferir(certificados.formatarCodigo(C7));
+  ok(vSai.status === 200 && vSai.body.nome === "Marcos Vieira", "o QR da ficha que saiu confere a pessoa da ficha que ficou (não aparece como falso)", JSON.stringify(vSai.body));
+  const urlNova = (await K(tok.membro(940006), "minha")).body.carteirinha.url;
+  ok(urlNova.endsWith(encodeURIComponent(certificados.formatarCodigo(C6))), "o cartão novo sai com o código mais antigo", urlNova);
   ok((await escalar("SELECT COUNT(*) FROM CarteirinhasPedidos WHERE MembroId = 940006 AND AtendidoEm IS NULL")) === 1, "o pedido de segunda via da que saiu veio para a que fica");
   const posJunta = (await K(tok.vn(), "fila", { query: { congregacaoId: cong.VN } })).body.itens.find((x) => x.membroId === 940006);
   ok(posJunta && !posJunta.bloqueada && posJunta.motivo === "SEGUNDA_VIA", "depois de juntar: desbloqueada, com a segunda via pedida", JSON.stringify(posJunta));

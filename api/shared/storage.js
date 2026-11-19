@@ -114,7 +114,9 @@ function urlDocumentoComSas(urlBlob) {
 // problema que deva bloquear a exclusão do anexo.
 async function excluirDocumento(urlBlob) {
   try {
-    const nomeBlob = new URL(urlBlob).pathname.split("/").pop();
+    // o endereço inteiro do blob ou só o nome dele (a arte da carteirinha guarda só o nome)
+    let nomeBlob;
+    try { nomeBlob = new URL(urlBlob).pathname.split("/").pop(); } catch (e) { nomeBlob = String(urlBlob || ""); }
     if (nomeBlob) await getContainerClient(CONTAINER_DOCUMENTOS).getBlockBlobClient(nomeBlob).deleteIfExists();
   } catch (e) {
     console.error("Falha ao excluir documento do Blob Storage (ignorado):", e.message);

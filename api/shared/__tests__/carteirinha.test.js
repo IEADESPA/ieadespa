@@ -1,5 +1,6 @@
 // shared/carteirinha.js (FASE 10, passo 8) — a regra das carteirinhas: o tipo da pessoa (o modelo sai sozinho), quem pode ter a física impressa, por que
 // entra na lista, o que a página de conferência mostra e o desenho do modelo (a física só leva o que não muda; um QR só).
+jest.mock("../db", () => ({ sql: new Proxy({}, { get: () => () => undefined }), getPool: async () => ({}) }));
 const c = require("../carteirinha");
 
 const pessoa = (extra = {}) => ({ nome: "Ana Beatriz Moreira", status: "ATIVO", situacaoMembro: "EM_COMUNHAO", cargo: null, funcao: null, congregacao: "Vila Nova",
@@ -106,5 +107,17 @@ describe("o desenho do modelo", () => {
     expect(c.validarNome("  Visitante  ")).toEqual({ ok: true, nome: "Visitante" });
     expect(c.validarNome("ab").ok).toBe(false);
     expect(c.validarNome(null).ok).toBe(false);
+  });
+});
+
+describe("o endereço que o QR guarda", () => {
+  test("a página de conferência, com o código formatado (é o que fica impresso no PVC para sempre)", () => {
+    const { urlConferencia } = require("../carteirinhaDb");
+    const antes = process.env.APP_URL_PUBLICA;
+    delete process.env.APP_URL_PUBLICA;
+    expect(urlConferencia("abcdefghjklmnpqr")).toBe("https://app.ieadespa.org.br/conferir.html?c=ABCD-EFGH-JKLM-NPQR");
+    process.env.APP_URL_PUBLICA = "https://homolog.exemplo.org/";
+    expect(urlConferencia("ABCD-EFGH-JKLM-NPQR")).toBe("https://homolog.exemplo.org/conferir.html?c=ABCD-EFGH-JKLM-NPQR");
+    if (antes === undefined) delete process.env.APP_URL_PUBLICA; else process.env.APP_URL_PUBLICA = antes;
   });
 });

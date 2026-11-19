@@ -13,7 +13,9 @@
 --  - CarteirinhaModelos: os modelos da física. Desenho = o JSON do editor (as camadas da frente e do verso, as cores, o tamanho), conferido por
 --    api/shared/carteirinha.js antes de gravar. ArteFrente/ArteVerso = o endereço da arte de fundo no armazenamento (container privado de documentos).
 --    Um modelo ATIVO por público (MEMBRO, CONGREGADO, OBREIRO); os de público OUTRO não saem sozinhos. Versao (rowversion) para não gravar por cima.
---  - CarteirinhasQr: o código do QR de cada pessoa (um por pessoa, para sempre). Nasce na primeira vez que a carteirinha é vista ou impressa.
+--  - CarteirinhasQr: o código do QR de cada pessoa (um por pessoa, para sempre). Nasce na primeira vez que a carteirinha é vista ou impressa. A chave é o
+--    CÓDIGO: juntando fichas, os códigos da ficha que sai passam para a que fica (o cartão já impresso das duas continua valendo, da mesma pessoa); o cartão
+--    novo sai sempre com o código mais antigo.
 --  - CarteirinhasImpressas: o registro de cada impressão (quem, qual modelo, o tipo da pessoa naquela hora, o material), para saber quem já tem a sua e
 --    quem precisa de uma nova (entrou, mudou de tipo, pediu segunda via). Nenhum dado pessoal além da matrícula.
 --  - CarteirinhasPedidos: os pedidos de segunda via (perdeu, estragou), atendidos na próxima impressão.
@@ -51,17 +53,16 @@ GO
 IF OBJECT_ID(N'dbo.CarteirinhasQr', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.CarteirinhasQr (
-        MembroId        INT NOT NULL CONSTRAINT PK_CarteirinhasQr PRIMARY KEY
-                            CONSTRAINT FK_CarteirinhasQr_Membro REFERENCES dbo.MembroReferencia(MembroId),
-        Codigo          NVARCHAR(20) NOT NULL,
+        Codigo          NVARCHAR(20) NOT NULL CONSTRAINT PK_CarteirinhasQr PRIMARY KEY,
+        MembroId        INT NOT NULL CONSTRAINT FK_CarteirinhasQr_Membro REFERENCES dbo.MembroReferencia(MembroId),
         CriadoEm        DATETIME2(0) NOT NULL CONSTRAINT DF_CarteirinhasQr_CriadoEm DEFAULT SYSUTCDATETIME(),
         CONSTRAINT CK_CarteirinhasQr_Codigo CHECK (LEN(Codigo) >= 12)
     );
 END
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_CarteirinhasQr_Codigo' AND object_id = OBJECT_ID(N'dbo.CarteirinhasQr'))
-    CREATE UNIQUE INDEX UX_CarteirinhasQr_Codigo ON dbo.CarteirinhasQr (Codigo);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CarteirinhasQr_Membro' AND object_id = OBJECT_ID(N'dbo.CarteirinhasQr'))
+    CREATE INDEX IX_CarteirinhasQr_Membro ON dbo.CarteirinhasQr (MembroId, CriadoEm);
 GO
 
 IF OBJECT_ID(N'dbo.CarteirinhasImpressas', N'U') IS NULL

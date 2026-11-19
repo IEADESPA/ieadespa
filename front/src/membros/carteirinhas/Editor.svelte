@@ -36,6 +36,8 @@
   let nome = $state("");
   let versao = $state<string | null>(null);
   let arte = $state<{ frente: string | null; verso: string | null }>({ frente: null, verso: null });
+  // a arte enviada e ainda não salva (o nome do arquivo que o servidor devolveu): só passa a valer no "Salvar o modelo"
+  let arteNova = $state<{ frente: string | null; verso: string | null }>({ frente: null, verso: null });
   let lado = $state<Lado>("frente");
   let selecionada = $state<string>("nome");
   let material = $state<Material>("PVC");
@@ -49,7 +51,19 @@
   let historico = $state<string[]>([]);
   let pos = $state(-1);
   let salvo = $state("");
-  const sujo = $derived(!!desenho && JSON.stringify({ nome, desenho }) !== salvo);
+  const sujo = $derived(!!desenho && (JSON.stringify({ nome, desenho }) !== salvo || !!arteNova.frente || !!arteNova.verso));
+  // sair da página com mudanças não salvas: o navegador pergunta antes
+  $effect(() => {
+    if (!sujo) return;
+    const f = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", f);
+    return () => window.removeEventListener("beforeunload", f);
+  });
+  function abrirModelo(id: number) {
+    if (id === modeloId) return;
+    if (sujo && !window.confirm("Há mudanças não salvas neste modelo. Abrir o outro e perder o que não foi salvo?")) return;
+    ir({ tela: "editor", modeloId: id });
+  }
 
   async function carregar() {
     erro = "";
@@ -63,6 +77,7 @@
     nome = m.nome;
     versao = m.versao;
     arte = { frente: m.arteFrente, verso: m.arteVerso };
+    arteNova = { frente: null, verso: null };
     salvo = JSON.stringify({ nome, desenho });
     historico = [JSON.stringify(desenho)];
     pos = 0;
@@ -198,13 +213,14 @@
       fr.readAsDataURL(f);
     }).catch(() => "");
     if (!base64) { enviandoArte = false; ponte().avisar("Não deu para ler o arquivo.", "erro"); return; }
-    const r = await pedir<{ arte: string; mensagem: string }>(`/carteirinhas/arte/${modeloId}`, { metodo: "POST", corpo: { lado, tipo: f.type, imagemBase64: base64 } });
+    const r = await pedir<{ arte: string; arteId: string; mensagem: string }>(`/carteirinhas/arte/${modeloId}`, { metodo: "POST", corpo: { lado, tipo: f.type, imagemBase64: base64 } });
     enviandoArte = false;
     if (!r.ok) { avisarFalha(r); return; }
     arte = { ...arte, [lado]: r.dados.arte };
+    arteNova = { ...arteNova, [lado]: r.dados.arteId };
     desenho.lados[lado].fundo.arte = true;
     registrar();
-    ponte().avisar(r.dados.mensagem + " Salve o modelo para valer.", "sucesso");
+    ponte().avisar(r.dados.mensagem, "sucesso");
   }
 
   // ---- salvar ----
@@ -213,7 +229,8 @@
     salvando = true;
     erroSalvar = "";
     conflito = "";
-    const r = await pedir<{ versao: string; mensagem: string }>(`/carteirinhas/modelos/${modeloId}`, { metodo: "PUT", corpo: { nome, desenho, versao } });
+    const r = await pedir<{ versao: string; mensagem: string }>(`/carteirinhas/modelos/${modeloId}`,
+      { metodo: "PUT", corpo: { nome, desenho, versao, arteFrente: arteNova.frente ?? undefined, arteVerso: arteNova.verso ?? undefined } });
     salvando = false;
     if (!r.ok) {
       if (r.status === 409) conflito = r.mensagem;
@@ -221,13 +238,15 @@
       return;
     }
     versao = r.dados.versao;
+    arteNova = { frente: null, verso: null };
     salvo = JSON.stringify({ nome, desenho });
     ponte().avisar(r.dados.mensagem, "sucesso");
   }
   async function teste() {
     if (!desenho || !modelo) return;
     const m: Modelo = { ...modelo, desenho: JSON.parse(JSON.stringify(desenho)) as Desenho, arteFrente: arte.frente, arteVerso: arte.verso };
-    await imprimirCartoes({ cartoes: [{ ...exemplo, membroId: 0, modeloId: m.modeloId, tipo: m.publico }], modelos: [m], material, frenteVerso: true });
+    const res = await imprimirCartoes({ cartoes: [{ ...exemplo, membroId: 0, modeloId: m.modeloId, tipo: m.publico }], modelos: [m], material, frenteVerso: true });
+    if (!res.ok) ponte().avisar(res.motivo, "erro");
   }
 
   const regua = (n: number) => Array.from({ length: Math.floor(n / 10) + 1 }, (_, i) => i * 10);
@@ -251,7 +270,7 @@
       {#snippet acoes()}
         <Opcoes rotulo="Lado do cartão" valor={lado} onescolher={(v) => { lado = v; selecionada = FUNDO; }} opcoes={[{ valor: "frente", rotulo: "Frente" }, { valor: "verso", rotulo: "Verso" }]} />
         <Escolha rotulo="Modelo" prefixo="Modelo: " valor={modeloId} opcoes={(modelos ?? []).map((m) => ({ valor: m.modeloId, rotulo: m.nome, sub: m.ativo ? undefined : "guardado" }))}
-          onescolher={(v) => { if (v && v !== modeloId) ir({ tela: "editor", modeloId: v }); }} />
+          onescolher={(v) => { if (v) abrirModelo(v); }} />
         <button type="button" class="redondo" aria-label="Desfazer" title="Desfazer" disabled={pos <= 0} onclick={desfazer}><Icone nome="voltar" tam={18} traco={2.2} /></button>
         <button type="button" class="redondo" aria-label="Refazer" title="Refazer" disabled={pos >= historico.length - 1} onclick={refazer}><span class="espelho"><Icone nome="voltar" tam={18} traco={2.2} /></span></button>
       {/snippet}
@@ -301,7 +320,7 @@
         {#if abertos.modelos}
           <ul class="dobra-corpo outros">
             {#each modelos ?? [] as m (m.modeloId)}
-              <li><button type="button" class="link" class:atual={m.modeloId === modeloId} onclick={() => ir({ tela: "editor", modeloId: m.modeloId })}>{m.nome}</button><small>{m.ativo ? `usado por ${numero(m.usadoPor)}` : "guardado"}</small></li>
+              <li><button type="button" class="link" class:atual={m.modeloId === modeloId} onclick={() => abrirModelo(m.modeloId)}>{m.nome}</button><small>{m.ativo ? `usado por ${numero(m.usadoPor)}` : "guardado"}</small></li>
             {/each}
           </ul>
         {/if}

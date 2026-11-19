@@ -10,6 +10,7 @@
   import Opcoes from "../../comum/Opcoes.svelte";
   import Campo from "../../comum/Campo.svelte";
   import Chip from "../../comum/Chip.svelte";
+  import { imprimirCartoes } from "./imprimir";
   import type { CarteirinhaDaFicha, Material, RespostaImpressao } from "./tipos";
 
   interface Props { membroId: number }
@@ -29,21 +30,33 @@
   $effect(() => { void membroId; void ler(); });
 
   const MOTIVO: Record<string, string> = { NOVA: "nova", MUDOU: "mudou de tipo", SEGUNDA_VIA: "segunda via", REIMPRESSAO: "impressa de novo" };
-  let modo = $state<"" | "imprimir" | "segunda">("");
+  let modo = $state<"" | "imprimir" | "segunda" | "saiu">("");
   let material = $state<Material>("PVC");
   let frenteVerso = $state(true);
   let motivo = $state("");
   let enviando = $state(false);
+  // preparar (nada gravado) → a impressora → "saiu certa?" → só então registrar
   async function imprimir() {
     if (enviando) return;
     enviando = true;
-    const r = await pedir<RespostaImpressao>("/carteirinhas/imprimir", { metodo: "POST", corpo: { membroIds: [membroId], material, frenteVerso } });
+    try {
+      const r = await pedir<RespostaImpressao>("/carteirinhas/preparar", { metodo: "POST", corpo: { membroIds: [membroId], material } });
+      if (!r.ok) { avisarFalha(r); return; }
+      const res = await imprimirCartoes({ cartoes: r.dados.cartoes, modelos: r.dados.modelos, material, frenteVerso });
+      if (!res.ok) { ponte().avisar(res.motivo, "erro"); return; }
+      modo = "saiu";
+    } finally {
+      enviando = false;
+    }
+  }
+  async function registrar() {
+    if (enviando) return;
+    enviando = true;
+    const r = await pedir<{ mensagem: string }>("/carteirinhas/confirmar", { metodo: "POST", corpo: { membroIds: [membroId], material, frenteVerso } });
     enviando = false;
     if (!r.ok) { avisarFalha(r); return; }
     modo = "";
-    const { imprimirCartoes } = await import("./imprimir");
-    await imprimirCartoes({ cartoes: r.dados.cartoes, modelos: r.dados.modelos, material: r.dados.material, frenteVerso: r.dados.frenteVerso });
-    ponte().avisar("Carteirinha registrada como impressa.", "sucesso");
+    ponte().avisar(r.dados.mensagem, "sucesso");
     void ler();
   }
   async function segundaVia() {
@@ -73,7 +86,12 @@
     {#if c.porQueNao}<Aviso tom="alerta">{c.porQueNao}</Aviso>{:else if c.precisaDeNova && !c.pedido}<Aviso tom="info">Precisa de uma carteirinha nova: já está na lista para imprimir.</Aviso>{/if}
     <p class="dig">A digital, com o mesmo QR, a pessoa vê em Minha vida › Minha carteirinha.</p>
 
-    {#if modo === "imprimir"}
+    {#if modo === "saiu"}
+      <div class="form">
+        <strong class="pergunta">A carteirinha saiu certa?</strong>
+        <div class="botoes"><Botao tipo="texto" onclick={() => (modo = "")}>Não saiu: não registrar</Botao><Botao tipo="ouro" icone="check" ocupado={enviando} onclick={registrar}>Saiu certa: registrar</Botao></div>
+      </div>
+    {:else if modo === "imprimir"}
       <div class="form">
         <Opcoes rotulo="Material" valor={material} onescolher={(v) => (material = v)} opcoes={[{ valor: "PAPEL", rotulo: "Papel" }, { valor: "PVC", rotulo: "PVC" }]} />
         <Opcoes rotulo="Impressão" valor={frenteVerso ? "fv" : "f"} onescolher={(v) => (frenteVerso = v === "fv")} opcoes={[{ valor: "f", rotulo: "Só frente" }, { valor: "fv", rotulo: "Frente e verso" }]} />
@@ -104,4 +122,5 @@
   .form { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--sv-linha); padding-top: 10px; }
   .botoes { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
   .botoes.esq { justify-content: flex-start; }
+  .pergunta { color: var(--sv-titulo); }
 </style>

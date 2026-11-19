@@ -140,7 +140,7 @@
       <div class="barras">
         {#each linhasGraf as l (l.nome)}
           <div class="barra">
-            <span class="rot">{l.nome}</span>
+            <span class="rot" title={l.nome}>{l.nome}</span>
             <div class="trilho"><div class="cheio" style:width="{l.largura}%">
               <span class="s1" style:width="{l.total ? (l.sim / l.total) * 100 : 0}%" title="{l.nome}: {numero(l.sim)}"></span>
               <span class="s2" title="{l.nome}: {numero(l.nao)} {rec.nao.toLowerCase()}"></span>
@@ -150,7 +150,7 @@
         {/each}
       </div>
     {:else if resumo}
-      <Estado tipo="vazio" texto="Ninguém no rol para mostrar aqui." />
+      <Estado tipo="vazio" texto={resumo.total ? `Ninguém no rol com ${agr.rotulo} preenchido para mostrar aqui.` : "Ninguém no rol ainda."} />
     {:else}
       <Estado tipo="carregando" linhas={4} />
     {/if}
@@ -281,7 +281,7 @@
   .c2 { background: var(--sv-graf-2); }
   .barras { display: flex; flex-direction: column; gap: 11px; padding-top: 2px; }
   .barra { display: flex; align-items: center; gap: 10px; }
-  .rot { width: 100px; flex: none; font-size: 13.5px; color: var(--sv-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rot { width: 140px; flex: none; font-size: 13.5px; color: var(--sv-texto); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .trilho { flex: 1; display: flex; align-items: center; min-width: 0; }
   .cheio { display: flex; height: 16px; }
   .s1 { background: var(--sv-graf-1); height: 100%; }

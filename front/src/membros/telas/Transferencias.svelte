@@ -10,24 +10,37 @@
   import Chip from "../../comum/Chip.svelte";
   import Estado from "../../comum/Estado.svelte";
   import { ir, lerContadores, cuidaDoCadastro, escopo, textoEscopo, type AbaTransferencias } from "../estado.svelte";
-  import type { PaginaTransferencias, Transferencia } from "../tipos";
+  import type { PaginaTransferencias, ResumoPainel, Transferencia } from "../tipos";
 
   interface Props { aba: AbaTransferencias; celular: boolean }
   let { aba, celular }: Props = $props();
 
+  const vazia = () => ({ itens: [] as Transferencia[], total: 0, lido: false, erro: "" });
   const caixas = $state<Record<AbaTransferencias, { itens: Transferencia[]; total: number; lido: boolean; erro: string }>>({
-    chegando: { itens: [], total: 0, lido: false, erro: "" }, saindo: { itens: [], total: 0, lido: false, erro: "" }, concluidos: { itens: [], total: 0, lido: false, erro: "" }
+    chegando: vazia(), saindo: vazia(), concluidos: vazia(), paradas: vazia(), andamento: vazia()
   });
+  // as caixas mudam com o nível (rodada 8, refeita com os níveis): a Geral vê primeiro as paradas; a área acompanha o que espera na área; a local, o que chega e sai
+  const sessao = ponte().sessao();
+  const area = $derived(!sessao.geral && (escopo.resumo?.congregacoes.length ?? 0) > 1);
+  const ABAS = $derived<readonly { chave: AbaTransferencias; rotulo: string; conta: boolean }[]>(sessao.geral
+    ? [{ chave: "paradas", rotulo: "Paradas há mais de 7 dias", conta: true }, { chave: "andamento", rotulo: "Todas em andamento", conta: true }, { chave: "concluidos", rotulo: "Concluídas", conta: false }]
+    : area
+      ? [{ chave: "andamento", rotulo: "Esperando na área", conta: true }, { chave: "chegando", rotulo: "Entrando na área", conta: true }, { chave: "concluidos", rotulo: "Concluídas", conta: false }]
+      : [{ chave: "chegando", rotulo: "Chegando", conta: true }, { chave: "saindo", rotulo: "Saindo", conta: true }, { chave: "concluidos", rotulo: "Concluídos", conta: false }]);
+  // a aba pedida que não existe neste nível (ex.: o menu abre "chegando" para a Geral) vira a primeira do nível
+  const abaVista = $derived<AbaTransferencias>(ABAS.some((x) => x.chave === aba) ? aba : (ABAS[0]?.chave ?? "chegando"));
   let recusando = $state<number | null>(null);
   let motivo = $state("");
   let ocupado = $state<number | null>(null);
 
   async function ler(c: AbaTransferencias) {
-    const r = await pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: c, porPagina: 50 }));
+    const r = await pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: c === "andamento" ? null : c, porPagina: 50 }));
     if (!r.ok) { caixas[c].erro = r.mensagem; return; }
     caixas[c] = { itens: [...r.dados.itens], total: r.dados.total, lido: true, erro: "" };
   }
-  function lerTudo() { void ler("chegando"); void ler("saindo"); void ler("concluidos"); }
+  function lerTudo() { for (const x of ABAS) void ler(x.chave); }
+  // as caixas dependem do nível; sem o resumo ainda (entrou direto aqui), ele é lido e as caixas do nível certo seguem
+  if (!escopo.resumo) void pedir<{ resumo: ResumoPainel }>("/pessoas?resumo=1").then((x) => { if (x.ok) { escopo.resumo = x.dados.resumo; lerTudo(); } });
   lerTudo();
 
   async function decidir(t: Transferencia, acao: "aceitar" | "recusar") {
@@ -38,15 +51,14 @@
     if (!r.ok) { ocupado = null; avisarFalha(r); return; }
     ponte().avisar(acao === "aceitar" ? `${t.pessoaNome} agora é de ${t.destinoNome}.` : "Pedido recusado; a origem foi avisada.", "sucesso");
     recusando = null; motivo = "";
-    await Promise.all([ler("chegando"), ler("saindo"), ler("concluidos")]);
+    await Promise.all(ABAS.map((x) => ler(x.chave)));
     ocupado = null;   // os botões só voltam depois de a lista ser lida de novo
     void lerContadores();
   }
   const pedidoPor = (t: Transferencia) => t.pedidoComo === "PROPRIO" ? "pedido pelo próprio membro" : t.pedidoComo === "GERAL" ? "pedido pela Secretaria Geral" : `pedido pela secretaria de ${t.origemNome}`;
   const lado = (nome: string, area: string | null) => (area ? `${nome} (${area})` : nome);
-  const lista = $derived(caixas[aba].itens);
+  const lista = $derived(caixas[abaVista].itens);
   const entreAreas = $derived(lista.filter((t) => t.regra === "ENTRE_AREAS").length);
-  const ABAS: readonly { chave: AbaTransferencias; rotulo: string }[] = [{ chave: "chegando", rotulo: "Chegando" }, { chave: "saindo", rotulo: "Saindo" }, { chave: "concluidos", rotulo: "Concluídos" }];
 </script>
 
 <div class="tr" class:celular>
@@ -59,14 +71,14 @@
   {/if}
   <div class="abas" role="tablist" aria-label="Caixas de transferência">
     {#each ABAS as a (a.chave)}
-      <button type="button" role="tab" aria-selected={aba === a.chave} onclick={() => ir({ tela: "transferencias", aba: a.chave }, true)}>
-        {a.rotulo}{#if a.chave !== "concluidos" && caixas[a.chave].lido} ({caixas[a.chave].total}){/if}
+      <button type="button" role="tab" aria-selected={abaVista === a.chave} onclick={() => ir({ tela: "transferencias", aba: a.chave }, true)}>
+        {a.rotulo}{#if a.conta && caixas[a.chave].lido}{` (${caixas[a.chave].total})`}{/if}
       </button>
     {/each}
   </div>
-  {#if caixas[aba].erro}<Estado tipo="erro" texto={caixas[aba].erro} ontentar={() => { caixas[aba].erro = ""; void ler(aba); }} />
-  {:else if !caixas[aba].lido}<div class="caixa pad"><Estado tipo="carregando" linhas={3} /></div>
-  {:else if !lista.length}<div class="caixa pad"><Estado tipo="vazio" texto={aba === "chegando" ? "Nenhum pedido chegando." : aba === "saindo" ? "Nenhum pedido saindo." : "Nenhum pedido concluído ainda."} /></div>
+  {#if caixas[abaVista].erro && !caixas[abaVista].lido}<Estado tipo="erro" texto={caixas[abaVista].erro} ontentar={() => { caixas[abaVista].erro = ""; void ler(abaVista); }} />
+  {:else if !caixas[abaVista].lido}<div class="caixa pad"><Estado tipo="carregando" linhas={3} /></div>
+  {:else if !lista.length}<div class="caixa pad"><Estado tipo="vazio" texto={abaVista === "paradas" ? "Nenhum pedido parado há mais de 7 dias." : abaVista === "concluidos" ? "Nenhum pedido concluído nos últimos 90 dias." : "Nenhum pedido aqui agora."} /></div>
   {:else}
     <ul class="caixa">
       {#each lista as t (t.transferenciaId)}
@@ -76,7 +88,7 @@
             <span><strong>{t.pessoaNome}</strong><small class="sv-num">{t.membroId} · {pedidoPor(t)}</small></span>
           </button>
           <span class="rota">{lado(t.origemNome, t.origemAreaNome)} → {t.destinoNome}</span>
-          <span class="quando">{aba === "concluidos" ? dataBr(t.decididoEm ?? t.canceladoEm ?? null) : haQuanto(t.pedidoEm)}</span>
+          <span class="quando">{abaVista === "concluidos" ? dataBr(t.decididoEm ?? t.canceladoEm ?? null) : haQuanto(t.pedidoEm)}</span>
           <div class="acoes">
             {#if t.podeDecidir}
               {#if recusando === t.transferenciaId}
@@ -95,7 +107,8 @@
         </li>
       {/each}
     </ul>
-    {#if aba === "chegando" && entreAreas}
+    {#if caixas[abaVista].erro}<Estado tipo="erro" texto={caixas[abaVista].erro} ontentar={() => void ler(abaVista)} />{/if}
+    {#if abaVista === "chegando" && entreAreas && !area}
       <Aviso tom="info">{entreAreas === 1 ? "Este vem" : `Os ${entreAreas} vêm`} de <strong>outra área</strong>: {entreAreas === 1 ? "espera" : "esperam"} você aceitar ou recusar. Os da mesma área e os da Secretaria Geral entram sozinhos.</Aviso>
     {/if}
   {/if}

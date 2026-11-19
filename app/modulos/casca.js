@@ -840,7 +840,11 @@ function atualizarVoltarCelularCasca() {
   const painel = document.getElementById("cxPainelConteudo");
   const com = !!(t && typeof t.voltar === "function");
   if (btn) btn.hidden = !com;
-  if (painel) painel.classList.toggle("com-voltar", com);
+  if (painel) {
+    painel.classList.toggle("com-voltar", com);
+    // a Minha vida em Svelte tem as pílulas dela (Linha do tempo, Dados...): no celular, uma fileira só, como em Membros
+    painel.classList.toggle("sv-minhavida", !!(t && t.contexto === "minhavida"));
+  }
 }
 function voltarCelularCasca() {
   const t = trilhaExternaValendo();

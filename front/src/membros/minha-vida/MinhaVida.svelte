@@ -438,7 +438,9 @@
   .sub button.ativo { font-weight: 700; background: var(--sv-info-fundo); box-shadow: inset 3px 0 0 var(--sv-ouro); }
   .n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--sv-ouro); color: #0A2342; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
   .sub-nota { font-size: 11.5px; color: var(--sv-suave); padding: 8px 10px 2px; line-height: 1.35; border-top: 1px solid var(--sv-linha); margin-top: 6px; }
-  .celular .corpo { padding: 16px; }
+  /* no celular a fileira de pílulas encosta nas bordas, logo abaixo do topo (a página da casca tem 16 px de margem) */
+  .celular > :global(.pilulas) { margin: -16px -16px 0; }
+  .celular .corpo { padding: 16px 0; }
   .celular .duas, .celular .duas-c { grid-template-columns: 1fr; }
   .celular h1 { font-size: 19px; }
   .celular .foto { width: 70px; height: 78px; }

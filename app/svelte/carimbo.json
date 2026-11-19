@@ -1,9 +1,9 @@
 {
-  "fonte": "1c5456022e4daaa2653bc580b228af993b1977dd9b4247ae6bdef11048b1f4eb",
+  "fonte": "878e6c583cf543d9350a04092f480d9984d12b8b201ee07159e69f7597acdecc",
   "arquivos": {
     "Cadastrar-DPZQfWtv.js": "ff18f21621bc5444ce0ce8dd0dacf797fa7f5316bd20ee6b838274ddde5866d6",
     "CadastroRapido-EFHbUXU3.js": "eaba34345b77f0b061c303ca4f029072c7a6a80a7f154e8f48626b72bc1624e4",
-    "Ficha-ynTl-Vi6.js": "998b8c7554e9ad552459c5def191bb25ed796c90ee728a4bbbe580e27971ed37",
+    "Ficha-BHdF71Ek.js": "39e0c3f445b9dfd39c3aebdad92295591affb5a2d9d942b9d2e4ad27b4be2084",
     "Fila-pJLnrU1Y.js": "c991b394bc5d8b8d1d1931993e5804fff83c6be405a79e3d3f46890b76ac1500",
     "Juntar-Bps6Dhhz.js": "b5d128f644c6c8b45778c8dca089b512b7417c2484bc6c2e7d3e21d182e7c16d",
     "MinhaVida-TFiytNXa.js": "2661db0cc7af663b97c9c3d53c374b98dd943373ee225e6bca3f553f8cab6f25",
@@ -11,10 +11,10 @@
     "Repetidas-Cs27mRiW.js": "d30f6849f360ffc95f3eb2bc713b80c87b486a7be3ff88b488c90381794a40d4",
     "Sugestoes-Dk4uMu-n.js": "d14b4b8802851d239a21590cb7f28055fce8f7f492ab88fe803c6987f3f4105c",
     "Transferencia-Dc8TrXvx.js": "a626c90b611c16de30bbf2835cfd6fa5b4e2995f00ea1798b95e4d8441466238",
-    "Transferencias-34KuFJOf.js": "03223fb46aa6606e84f422b00ad70a69339b1603238094cd6cdab497cdf0b963",
-    "Transferir-CX5y8DT1.js": "81dcb57fb0665e80f4268e632c1449f41877fdf504a6dcca520d54857d4c300e",
-    "comum.js": "4179d036c216a83f631bd3efcd6ac06b9d5422981354bafe49f07ff30005ec74",
-    "membros.css": "d821c049d3ea55ba6786e36ea00ce3acf9921a5fc4d4d574dc6d719c78ef9db4",
-    "membros.js": "54df46cc686098513df047445904d80a4188ea4e1cc33c1db47c553bd0a13d81"
+    "Transferencias-DzzI74zF.js": "62dc1091bcb793da9596be75b8f69f5bf1e1bc7cc34477b56a969e5101fcab64",
+    "Transferir-0a3X07wW.js": "085ef56b4047d863725f5ec6c316d68783ec018e240f40ba0fd0df5a8b4bcc45",
+    "comum.js": "e49b5eecb26e849792fc8e08cfc86fcaa92dfb0bd45d7dfb8fb852b7807c8b2c",
+    "membros.css": "18000e994b46a8df4fe4c6ee0c6fd87723fd6c833f1a982e0faa914616d9172b",
+    "membros.js": "9957457f2d3a2dbdaa020722e287168156924668f7c863430b45537d0832cf5b"
   }
 }

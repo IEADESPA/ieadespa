@@ -9,3 +9,7 @@ secrets.env text eol=lf
 # sem conversão de quebra de linha em nenhuma máquina.
 app/vendor/* -text
 site/public/vendor/* -text
+
+# FASE 10 (19/11/2026): o código das telas Svelte com LF em toda máquina (o carimbo do build conta o texto com LF) e a saída do build byte a byte
+front/** text eol=lf
+app/svelte/** -text

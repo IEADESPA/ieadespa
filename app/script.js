@@ -1034,7 +1034,7 @@ function desenharResultadosBusca() {
   const caixa = document.getElementById("resultadosBuscaGlobal");
   const mod = moduloDaBusca();
   const todos = ultimosResultadosBusca;
-  const lista = mod && buscaSoModulo ? todos.filter((r) => mod.abas.includes(r.aba)) : todos;
+  const lista = mod && buscaSoModulo ? todos.filter((r) => mod.abas.includes(r.aba) || (r.aba === "pessoas" && mod.abas.includes("membros"))) : todos;
   desenharFiltroBuscaModulo(todos.length - lista.length);
   if (lista.length === 0) {
     caixa.innerHTML = `<div class="painel-notificacoes-vazio">${todos.length && mod && buscaSoModulo ? "Nada neste módulo." : "Nada encontrado."}</div>`;
@@ -1052,9 +1052,9 @@ function irParaResultadoBusca(aba, membroId) {
   fecharPaineisLado();
   document.getElementById("campoBuscaGlobal").value = "";
   document.getElementById("campoBuscaLado").value = "";
+  // FASE 10 (19/11/2026) — a pessoa achada abre direto na ficha 360 das telas novas de Membros (app/svelte, por modulos/casca.js)
+  if (aba === "pessoas" && typeof abrirMembrosCasca === "function") { abrirMembrosCasca(membroId ? { tela: "ficha", id: Number(membroId), secao: "resumo" } : { tela: "pessoas" }); return; }
   if (aba) mostrarAbaSecretaria(aba);
-  // FASE 10, passo 7a — a pessoa achada abre direto na ficha 360 (modulos/membros.js)
-  if (aba === "pessoas" && membroId && typeof mbAbrirFicha === "function") mbAbrirFicha(membroId, "resumo");
 }
 
 // FASE 10 — fecha os painéis do lado (avisos e busca): pelo ✕, pelo fundo escurecido ou pelo Esc
@@ -1376,7 +1376,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "membros", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1384,6 +1384,7 @@ const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", 
 // reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
+  membros: ["pessoas"],   // FASE 10 (19/11/2026): as telas novas de Membros (Svelte)
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
   consagracoes: ["consagracoes", "cei", "financeiro"],   // v8.3: o CEI chega à aba para dar o parecer (Regimento Art. 74, III); Trava 8-A: a tesouraria, para a taxa
@@ -1565,7 +1566,11 @@ function aplicarPermissoesNoMenu() {
 // não tem de onde tirar pendências (o Início não inventa número).
 const MODULOS = {
   financeiro: { titulo: "Financeiro", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financeiro", abas: ["financeiro"] },
-  membresia: { titulo: "Pessoas & Membresia", icone: "pessoas", resumo: "Cadastro, cartas, cuidado e frequência", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
+  // FASE 10 (19/11/2026): Membros refeito do zero em Svelte, igual ao desenho aprovado (rodadas 8 a 11): uma aba só ("membros"), o menu e as telas vêm de
+  // app/svelte/membros.js. As telas antigas (Cartas, Perda de Membresia, Importar e exportar, Credenciais, Discipulado) saíram do menu do módulo.
+  membresia: { titulo: "Membros", icone: "pessoas", resumo: "Cadastro, fila, transferências e fichas", abaEntrada: "membros", abas: ["membros"] },
+  // o Cuidado Pastoral (v7.11) não faz parte do desenho de Membros: ganhou o cartão dele (a mesma tela e a mesma permissão)
+  cuidadopastoral: { titulo: "Cuidado Pastoral", icone: "coracao", resumo: "Acompanhamentos, visitas e pedidos de oração", abaEntrada: "cuidadopastoral", abas: ["cuidadopastoral"] },
   territorio: { titulo: "Estrutura & Territórios", icone: "mapa", resumo: "Congregações, áreas, regiões e órgãos", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
   orgaosCentrais: { titulo: "Órgãos Centrais", icone: "banco", resumo: "Reuniões e atas dos órgãos gerais", abaEntrada: "reunioes", abas: ["reunioes"] },
   orgaosRegionais: { titulo: "Órgãos Regionais", icone: "bussola", resumo: "Reuniões dos órgãos das áreas", abaEntrada: "reunioes", abas: ["reunioes"] },
@@ -1658,7 +1663,8 @@ function mostrarSubAbaMeupainel(sub) {
   if (typeof idvSubAbaMudou === "function") idvSubAbaMudou(sub);   // v7.14: as sugestões, o voto e as artes da pessoa não ficam para trás
   if (typeof enqSubAbaMudou === "function") enqSubAbaMudou(sub);
   if (typeof comSubAbaMudou === "function") comSubAbaMudou(sub);   // v7.12: as escolhas e os comunicados da pessoa não ficam para trás
-  if (typeof mvSubAbaMudou === "function") mvSubAbaMudou(sub);   // FASE 10, passo 7a: a minha ficha recolhe o menu principal (notebook) e o devolve ao sair
+  if (typeof mvSubAbaMudou === "function") mvSubAbaMudou(sub);
+  if (sub !== "minhavida" && typeof svSubMudou === "function") svSubMudou(sub);   // FASE 10, passo 7a: a minha ficha recolhe o menu principal (notebook) e o devolve ao sair
   if (typeof cpaSubAbaMudou === "function") cpaSubAbaMudou(sub);   // v7.11: o acompanhamento aberto (e a nota pastoral aberta) e o que a pessoa escrevia nos pedidos não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
@@ -1696,7 +1702,8 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
   // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
   if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
-  if (sub === "minhavida" && typeof mvAbrir === "function") mvAbrir();   // FASE 10, passo 7a: a minha ficha (modulos/membros-movimento.js)
+  // FASE 10 (19/11/2026): a minha ficha das telas novas (app/svelte, por modulos/casca.js); ao sair da Minha vida ela é desmontada
+  if (sub === "minhavida" && typeof svSubMudou === "function") svSubMudou(sub);
   if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
   if (sub === "trabalho" && typeof desenharMeuTrabalhoCasca === "function") desenharMeuTrabalhoCasca();
   if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código

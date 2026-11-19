@@ -89,13 +89,30 @@ const SELECT_MEMBRO = `
          CONVERT(varchar(10), m.DataAfastamento, 120) AS dataAfastamento,
          CONVERT(varchar(10), m.DataSaida, 120) AS dataSaida, m.MotivoSaida AS motivoSaida,
          m.FotoUrl AS fotoUrl, m.Sexo AS sexo, CONVERT(varchar(10), hc.Desde, 120) AS cargoDesde,
-         ${ficha.sqlCpfMascarado("m.Cpf")} AS cpfMascarado, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade
+         ${ficha.sqlCpfMascarado("m.Cpf")} AS cpfMascarado, m.NomeMae AS nomeMae, m.NomePai AS nomePai, m.Escolaridade AS escolaridade,
+         ar.Nome AS areaNome
   FROM MembroReferencia m
   LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId
+  LEFT JOIN Areas ar ON ar.AreaId = c.AreaId
   LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId
   LEFT JOIN Bairros bm ON bm.BairroId = m.EnderecoBairroId
   LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial
   LEFT JOIN CargosMinisteriaisHistorico hc ON hc.MembroId = m.MembroId AND hc.Ate IS NULL AND hc.Cargo = m.CargoMinisterial`;
+
+// FASE 10 (telas novas de Membros, 19/11/2026) — a lista em páginas ordenada pelo CABEÇALHO que a pessoa clicou: ?ordem=nome|matricula|congregacao|area|
+// situacao|cargo|departamento e ?direcao=asc|desc. Só valores desta lista fechada viram SQL (o resto cai no nome); a matrícula desempata sempre (a página
+// seguinte nunca repete nem pula ninguém).
+const ORDENS_LISTA = {
+  nome: "m.Nome", matricula: "m.MembroId", congregacao: "c.Nome", area: "ar.Nome", situacao: "m.SituacaoMembro",
+  cargo: "COALESCE(cm.Nome, m.Funcao)", departamento: "m.DepartamentoId"
+};
+function ordemDaLista(query) {
+  const q = query || {};
+  const chave = Object.prototype.hasOwnProperty.call(ORDENS_LISTA, q.ordem) ? q.ordem : "nome";
+  const dir = String(q.direcao || "").toLowerCase() === "desc" ? "DESC" : "ASC";
+  if (chave === "matricula") return `m.MembroId ${dir}`;
+  return `${ORDENS_LISTA[chave]} ${dir}, m.Nome ASC, m.MembroId ASC`;
+}
 
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
@@ -239,7 +256,7 @@ module.exports = async function (context, req) {
       pedido.input("pular", sql.Int, (pagina - 1) * porPagina).input("trazer", sql.Int, porPagina);
       const r = await pedido.query(`
         SELECT COUNT(*) AS total FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId${onde};
-        ${SELECT_MEMBRO}${onde} ORDER BY m.Nome, m.MembroId OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
+        ${SELECT_MEMBRO}${onde} ORDER BY ${ordemDaLista(req.query)} OFFSET @pular ROWS FETCH NEXT @trazer ROWS ONLY`);
       total = r.recordsets && r.recordsets[0] && r.recordsets[0][0] ? Number(r.recordsets[0][0].total) || 0 : 0;
       linhas = (r.recordsets && r.recordsets[1]) || [];
     } else {
@@ -726,3 +743,6 @@ module.exports = async function (context, req) {
 
   context.res = { status: 405, body: { sucesso: false, mensagem: "Método não suportado." } };
 };
+
+// para os testes (a ordem da lista vem de uma lista fechada)
+module.exports.ordemDaLista = ordemDaLista;

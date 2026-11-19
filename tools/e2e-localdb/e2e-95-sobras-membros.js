@@ -1,7 +1,8 @@
 // e2e-95-sobras-membros.js — AS SOBRAS DE MEMBROS (FASE 10, 19/11/2026), contra o SQL Server de verdade. Parte 1: ONDE A PESSOA SERVE (migração 181): registrar
 // um ministério (só os do catálogo que não são departamento, ativos), não duplicar, a data que não pode ser no futuro, encerrar (nada se apaga), listar, o escopo
 // (fora = não existe), sem sessão e sem permissão, e juntar fichas com as duas servindo no mesmo ministério.
-// Roda sobre a base cenario-181 (`bash rodar.sh preparar-181` e depois `BASE=cenario-181 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
+// Parte 2: O ANEXO DA SUGESTÃO (migração 182). Roda sobre a base cenario-182 (`bash rodar.sh preparar-182` e depois
+// `BASE=cenario-182 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool } = L;
@@ -99,6 +100,56 @@ async function principal() {
   ok(junta.status === 200, "a junção passa (o mesmo ministério nas duas não bloqueia)", JSON.stringify(junta.body).slice(0, 200));
   const depois = (await M(tok.vn(), 950003)).body.ministerios || [];
   ok(depois.filter((x) => x.ativo).map((x) => x.departamentoId).sort().join() === [infantil, louvor].sort().join(), "a que fica serve nos dois (o repetido foi para o arquivo, o outro veio junto)", JSON.stringify(depois));
+
+
+  console.log("== parte 2: o anexo da sugestão (migração 182) ==");
+  ok(await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.SolicitacoesEdicaoPessoa') AND name IN ('AnexoNome', 'AnexoTipo')") === 2, "as duas colunas novas");
+  await ficha(950005, "Eva Sugere", cong.VN);
+  await q("UPDATE MembroReferencia SET DataBatismo = '2010-05-05' WHERE MembroId = 950005");
+  const tokEva = () => L.sessao(950005, { via: "SENHA", fator: fator(), nivel: "MEMBRO", escopoCongregacoes: [], permissoes: [] });
+  const S = (corpo) => chamarRota("SolicitarEdicaoPessoa/index.js", { metodo: "POST", token: tokEva(), binding: { matricula: "950005" }, corpo });
+  const pngCab = (() => { const b = Buffer.alloc(33); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0); b.writeUInt32BE(13, 8); b.write("IHDR", 12, "ascii"); b.writeUInt32BE(800, 16); b.writeUInt32BE(600, 20); return b.toString("base64"); })();
+  const campos = { dataBatismo: "2011-06-12" };
+  const conta = async () => Number(await escalar("SELECT COUNT(*) FROM SolicitacoesEdicaoPessoa WHERE MembroId = 950005"));
+  const aTxt = await S({ campos, anexo: { tipo: "text/plain", base64: Buffer.from("oi").toString("base64") } });
+  const aFalso = await S({ campos, anexo: { tipo: "image/png", base64: Buffer.from("<script>x</script>").toString("base64") } });
+  const aPdfFalso = await S({ campos, anexo: { tipo: "application/pdf", base64: Buffer.from("não é pdf").toString("base64") } });
+  const aGrande = await S({ campos, anexo: { tipo: "image/png", base64: "A".repeat(7100000) } });
+  const aLixo = await S({ campos, anexo: "x" });
+  ok([aTxt, aFalso, aPdfFalso, aGrande, aLixo].every((r) => r.status === 400) && (await conta()) === 0, "anexo de outro tipo, conteúdo que não confere, PDF falso, grande demais e lixo: 400 e nenhuma sugestão criada",
+    JSON.stringify([aTxt.status, aFalso.status, aPdfFalso.status, aGrande.status, aLixo.status]));
+  const aBom = await S({ campos, anexo: { tipo: "image/png", base64: pngCab } });
+  ok((aBom.status === 201 && (await conta()) === 1) || (aBom.status === 503 && (await conta()) === 0), "anexo bom: a sugestão sai com ele — ou, sem o armazenamento aqui, 503 e NADA enviado", JSON.stringify([aBom.status, aBom.body && aBom.body.mensagem]));
+  if (aBom.status === 503) {
+    const semAnexo = await S({ campos });
+    ok(semAnexo.status === 201 && (await conta()) === 1, "a sugestão sem anexo continua funcionando", JSON.stringify(semAnexo.body));
+  }
+  const sid = await escalar("SELECT TOP 1 SolicitacaoId FROM SolicitacoesEdicaoPessoa WHERE MembroId = 950005 ORDER BY SolicitacaoId DESC");
+  await q("UPDATE SolicitacoesEdicaoPessoa SET AnexoNome = N'sug-1763500000000-abc123', AnexoTipo = N'image/png' WHERE SolicitacaoId = @s", { s: sid });
+  const Fa = (token, id, acao, extra = {}) => chamarRota("GestaoFilaAprovacoes/index.js", { metodo: extra.metodo || "GET", token, binding: { solicitacaoId: String(id), acao }, corpo: extra.corpo, query: extra.query || {} });
+  const verVn = await Fa(tok.vn(), sid, "anexo");
+  ok(verVn.status === 200 && /sug-1763500000000-abc123/.test(verVn.body.url) && verVn.body.tipo === "image/png", "a secretaria da congregação vê o documento (endereço assinado)", JSON.stringify(verVn.body).slice(0, 160));
+  const verCj = await Fa(tok.cj(), sid, "anexo");
+  const verNada = await Fa(tok.vn(), 99999999, "anexo");
+  const verLixo = await Fa(tok.vn(), "abc", "anexo");
+  ok(verCj.status === 404 && verNada.status === 404 && verLixo.status === 404, "outra congregação, sugestão que não existe e lixo: 404 igual", JSON.stringify([verCj.status, verNada.status, verLixo.status]));
+  const verEva = await chamarRota("GestaoFilaAprovacoes/index.js", { metodo: "GET", token: tokEva(), binding: { solicitacaoId: String(sid), acao: "anexo" } });
+  ok(verEva.status === 403, "o membro (sem a permissão de secretaria) não abre a caixa", String(verEva.status));
+  const minhas = await chamarRota("SolicitarEdicaoPessoa/index.js", { metodo: "GET", token: tokEva(), binding: { matricula: "950005" } });
+  ok(Array.isArray(minhas.body) && minhas.body.some((x) => x.solicitacaoId === sid && x.temAnexo === true), "o membro vê que a sugestão foi com anexo", JSON.stringify(minhas.body).slice(0, 200));
+  const caixa = await chamarRota("GestaoFilaAprovacoes/index.js", { metodo: "GET", token: tok.vn(), binding: {} });
+  ok(Array.isArray(caixa.body) && caixa.body.some((x) => x.solicitacaoId === sid && x.temAnexo === true), "a caixa mostra que tem anexo", JSON.stringify(caixa.body).slice(0, 200));
+  await q("UPDATE SolicitacoesEdicaoPessoa SET AnexoNome = N'doc-1763500000000-abc123' WHERE SolicitacaoId = @s", { s: sid });
+  const verOutro = await Fa(tok.vn(), sid, "anexo");
+  ok(verOutro.status === 404, "um nome que não é de anexo de sugestão (doc-...) nunca vira endereço", String(verOutro.status));
+  await q("UPDATE SolicitacoesEdicaoPessoa SET AnexoNome = N'sug-1763500000000-abc123' WHERE SolicitacaoId = @s", { s: sid });
+  const campoId = await escalar("SELECT TOP 1 CampoId FROM SolicitacoesEdicaoCampos WHERE SolicitacaoId = @s", { s: sid });
+  const dec = await Fa(tok.vn(), sid, "decidir", { metodo: "POST", corpo: { decisoes: [{ campoId, decisao: "REJEITADO", motivo: "A certidão não confere com a data." }] } });
+  ok(dec.status === 200 && (await escalar("SELECT Status FROM SolicitacoesEdicaoPessoa WHERE SolicitacaoId = @s", { s: sid })) === "CONCLUIDA"
+    && (await escalar("SELECT COUNT(*) FROM SolicitacoesEdicaoPessoa WHERE SolicitacaoId = @s AND AnexoNome IS NULL AND AnexoTipo IS NULL", { s: sid })) === 1,
+  "decidida a sugestão, o documento sai (as colunas voltam a vazio)", JSON.stringify(dec.body));
+  const depoisDec = await Fa(tok.vn(), sid, "anexo");
+  ok(depoisDec.status === 404, "depois de decidida, o anexo não abre mais", String(depoisDec.status));
 
   fim("e2e-95 (as sobras de Membros no banco)");
   L.shimEncerrar();

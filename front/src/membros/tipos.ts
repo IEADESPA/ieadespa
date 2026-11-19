@@ -214,6 +214,8 @@ export interface Sugestao {
   readonly dataSolicitacao: string;
   readonly status: string;
   readonly podeAplicar: boolean;
+  /** o membro mandou a foto do documento (migração 182) */
+  readonly temAnexo?: boolean;
   readonly campos: readonly CampoSugestao[];
 }
 

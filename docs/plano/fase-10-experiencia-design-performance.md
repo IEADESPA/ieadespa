@@ -663,6 +663,10 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
      no dia 12, o rateio dos repasses 1, 3 e 4).
    - Ele vai direto para os centros de custo: Presidente (a prebenda em %), Tesouro Geral, Convenção e os fundos.
    - Os 40% da congregação vão para a aba de repasses ao local.
+   - **Pedido dele de 19/11: o rateio mais automático, "um rateio mesmo top".** Quando o repasse é conferido, a divisão
+     pelos centros de custo sai sozinha, pelos percentuais dos parâmetros; o tesoureiro só confere e pode desfazer no
+     mesmo dia. A contabilidade interna e o fechamento do mês ficam como aprovados.
+   - **As entradas mais amigáveis:** é o ponto que ele mais quer melhorar.
 5. **Saídas a partir de cada centro de custo.** Exemplo: no dia 15 o Presidente recebe R$ 5.000; lança-se a saída daquele
    centro de custo. Em todo momento se sabe o que cada centro de custo tem.
 6. **A página do Tesouro é atualizada pelos rateios gerais.**
@@ -676,9 +680,16 @@ como desenhado e nasce na implantação. Por isso a construção começa por est
    - **O relatório nunca fica negativo.** Se o aluguel (2.000) passa do arrecadado (1.000), desconta-se só até zerar.
    - **Nada fica "retido" na congregação.** O dinheiro vai para a Geral, e é a Geral que paga o local, nunca o contrário.
      "Retidos" fica zerado.
-   - **Entendimento a confirmar com ele:** se os compromissos que saem antes da divisão são só os fixos da congregação
-     (aluguel, parcela de lote) ou qualquer saída do mês. Até ele responder, vale só o que ele citou: aluguel e lote,
-     como "compromissos fixos" cadastrados.
+   - **Confirmado por ele (19/11/2026): só o que é fixo da congregação sai antes da divisão,** numa linha só chamada
+     **"Despesas congregacionais"**, no lugar de várias linhas soltas. Dentro dela vai o que for:
+     - o **aluguel**;
+     - a **parcela de lote**;
+     - a **obra liberada pelo Presidente**. Na congregação em construção, quando a Geral não tem como ajudar, o
+       Presidente libera que ela fique com o que arrecada (às vezes 100%) até um valor autorizado. Exemplo dele: rende
+       1.000, mas pode ficar com até 2.000 para ajudar a construir.
+     - Cada despesa congregacional é cadastrada uma vez na congregação, com o valor, o período e quem autorizou (a
+       obra, só o Presidente). Ela entra sozinha no relatório do mês.
+     - A soma desconta até zerar, nunca deixando o relatório negativo.
 
 **Regras que valem para todo o núcleo:**
 

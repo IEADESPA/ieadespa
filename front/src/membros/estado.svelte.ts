@@ -22,11 +22,12 @@ export type Rota =
   | { readonly tela: "repetidas" }
   | { readonly tela: "juntar"; readonly a: number; readonly b: number }
   | { readonly tela: "sugestoes" }
-  | { readonly tela: "carteirinhas" }
+  | { readonly tela: "carteirinhas"; readonly congregacaoId: number | null }
+  | { readonly tela: "editor"; readonly modeloId: number }
   | { readonly tela: "ficha"; readonly id: number; readonly secao: SecaoFicha };
 
 const inteiro = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null);
-const TELAS_SIMPLES = ["painel", "pessoas", "fila", "cadastrar", "rapido", "desligamentos", "repetidas", "sugestoes", "carteirinhas"] as const;
+const TELAS_SIMPLES = ["painel", "pessoas", "fila", "cadastrar", "rapido", "desligamentos", "repetidas", "sugestoes"] as const;
 const SECOES: readonly SecaoFicha[] = ["resumo", "dados", "familia", "vida", "cargos", "ministerios", "assembleia", "documentos", "alteracoes"];
 /** a rota que chega de FORA (a casca, a busca do alto): só telas conhecidas, com ids inteiros; o resto é ignorado (fica a tela de agora) */
 export function lerRota(x: unknown): Rota | null {
@@ -38,6 +39,8 @@ export function lerRota(x: unknown): Rota | null {
   if (tela === "transferencias") return { tela, aba: o.aba === "saindo" || o.aba === "concluidos" || o.aba === "paradas" || o.aba === "andamento" ? o.aba : "chegando" };
   if (tela === "transferir") return { tela, membroId: inteiro(o.membroId) };
   if (tela === "transferencia") { const id = inteiro(o.id); return id ? { tela, id } : null; }
+  if (tela === "carteirinhas") return { tela, congregacaoId: inteiro(o.congregacaoId) };
+  if (tela === "editor") { const id = inteiro(o.modeloId); return id ? { tela, modeloId: id } : null; }
   if (tela === "juntar") { const a = inteiro(o.a), b = inteiro(o.b); return a && b && a !== b ? { tela, a, b } : null; }
   return null;
 }
@@ -51,6 +54,7 @@ export function itemDoMenu(r: Rota): ChaveMenu {
     case "rapido": return "fila";
     case "transferir": case "transferencia": return "transferencias";
     case "juntar": return "repetidas";
+    case "editor": return "carteirinhas";
     default: return r.tela;
   }
 }

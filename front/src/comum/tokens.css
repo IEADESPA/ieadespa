@@ -41,3 +41,17 @@ html[data-tema="escuro"] .sv {
 .sv input:focus, .sv select:focus, .sv textarea:focus { box-shadow: none; }
 .sv input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 /* a barra colorida que a casca põe no 1º h3 das telas antigas (.aba-secretaria h3:first-child) não entra nas telas Svelte: os subtítulos delas são h4 */
+
+/* As carteirinhas na impressora (FASE 10, passo 8): a folha é montada direto no body só enquanto imprime (membros/carteirinhas/imprimir.ts). Na tela
+   ela nunca aparece; na impressão, só ela aparece. Papel: A4 com margem de 7 mm e 10 cartões (2 × 5); PVC: uma página do tamanho do cartão. */
+.sv-impressao { display: none; }
+@page svfolha { size: A4; margin: 7mm; }
+@page svcartao { size: 85.6mm 54mm; margin: 0; }
+@media print {
+  body.sv-imprimindo > *:not(:has(.sv-impressao)) { display: none !important; }
+  body.sv-imprimindo .sv-impressao { display: block !important; background: #fff; }
+  .sv-impressao.papel .folha { page: svfolha; display: grid; grid-template-columns: 85.6mm 85.6mm; grid-auto-rows: 54mm; gap: 2mm; justify-content: center; break-after: page; }
+  .sv-impressao.papel .vaga { width: 85.6mm; height: 54mm; outline: 0.1mm dashed #c0c4cc; }
+  .sv-impressao.pvc .folha { page: svcartao; width: 85.6mm; height: 54mm; overflow: hidden; break-after: page; }
+  .sv-impressao .folha:last-child { break-after: auto; }
+}

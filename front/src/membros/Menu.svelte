@@ -24,7 +24,7 @@
   ]);
 
   function escolher(k: ChaveMenu) {
-    const r = k === "transferencias" ? { tela: k, aba: "chegando" as const } : { tela: k };
+    const r = k === "transferencias" ? { tela: k, aba: "chegando" as const } : k === "carteirinhas" ? { tela: k, congregacaoId: null } : { tela: k };
     ir(r as Parameters<typeof ir>[0], true);
     ponte().fecharGavetaCelular();
   }

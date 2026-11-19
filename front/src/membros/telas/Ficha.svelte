@@ -13,6 +13,7 @@
   import Estado from "../../comum/Estado.svelte";
   import Aviso from "../../comum/Aviso.svelte";
   import Pilulas from "../../comum/Pilulas.svelte";
+  import NaFicha from "../carteirinhas/NaFicha.svelte";
   import LinhaTempo from "../../comum/LinhaTempo.svelte";
   import CampoEditavel from "../partes/CampoEditavel.svelte";
   import { ir, departamentos, cuidaDoCadastro, type SecaoFicha } from "../estado.svelte";
@@ -380,7 +381,8 @@
     <div class="duas">
       <div class="col">
         <Cartao titulo="Carteirinha" icone="cartao">
-          {#if de("CREDENCIAL").length}<LinhaTempo eventos={de("CREDENCIAL")} />{:else}<Estado tipo="vazio" texto="Nenhuma carteirinha emitida." />{/if}
+          {#if cuidaDoCadastro()}<NaFicha membroId={id} />{:else if !de("CREDENCIAL").length}<Estado tipo="vazio" texto="Nenhuma carteirinha emitida." />{/if}
+          {#if de("CREDENCIAL").length}<h4 class="sub-cart">Credencial (vias)</h4><LinhaTempo eventos={de("CREDENCIAL")} />{/if}
           {#if falhas.pendencias}<Estado tipo="erro" texto="Não deu para conferir as pendências do cadastro (e se a impressão está bloqueada)." ontentar={lerPendencias} />{/if}
           {#if pendencias?.impressaoFisicaBloqueada}<Aviso tom="alerta"><strong>A impressão da carteirinha física está bloqueada</strong> enquanto a ficha tiver pendência de cadastro.</Aviso>{/if}
         </Cartao>
@@ -523,4 +525,5 @@
   .tit-sec { font-size: 19px; font-weight: 800; color: var(--sv-titulo); }
   .ficha-cel .resumo, .ficha-cel .duas { grid-template-columns: 1fr; }
   @media (max-width: 1180px) { .resumo, .duas { grid-template-columns: 1fr; } }
+  .sub-cart { margin: 6px 0 0; font-size: 13px; color: var(--sv-suave); }
 </style>

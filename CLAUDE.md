@@ -30,8 +30,8 @@ adicionar `.env`, `*.db`, `node_modules` nem `.rar` lá. A cópia pesada aninhad
 
 ## 4. Uma pessoa por vez: a linha "Em uso por" do `HANDOFF.md`
 
-O `HANDOFF.md` (estado do trabalho) vai para o Git, na `main`, para o colega continuar do mesmo ponto. É público: nada
-de senha, chave, token, CPF, endereço nem dado pessoal real.
+O `HANDOFF.md` (estado do trabalho) e a memória do projeto (`.claude/continuidade/memoria/`) vão para o Git, na `main`,
+para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, token, CPF, endereço nem dado pessoal real.
 
 - **Antes de começar:** `git pull` e leia a linha "Em uso por" no alto do `HANDOFF.md`. Em uso por outra pessoa? Não
   comece. Livre? Ponha o seu nome e a data/hora, commit e push.

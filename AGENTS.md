@@ -9,7 +9,8 @@ Antes de qualquer tarefa neste repositório:
    alto, tiver o nome de outra pessoa, não comece. Se estiver "Livre", ponha o seu nome e a data/hora, commit e push.
    Ao parar, faça a passagem completa, volte a linha para "Livre", commit e push (regra 4 do `CLAUDE.md`).
 3. Consulte o servidor MCP `memoria-projeto` (`search_nodes`), se estiver configurado neste computador: os fatos duráveis
-   do projeto (arquitetura, regras de negócio, decisões do responsável, pendências). Para instalar, siga o
+   do projeto (arquitetura, regras de negócio, decisões do responsável, pendências). Com o kit, o servidor usa a memória
+   versionada em [`.claude/continuidade/memoria/`](.claude/continuidade/memoria/). Para instalar, siga o
    [`.claude/continuidade/LEIA-ME.md`](.claude/continuidade/LEIA-ME.md).
 4. Confira `git status` e o ramo atual.
 

@@ -67,9 +67,20 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 ## 3b. 20/11/2026, tarde (sessão principal)
 
-- **Rodada 21 PUBLICADA** na página leve KMeb… (387 KB, versão 3). Tem os acertos da 20, o caixa único (só a Geral, em 4
-  passos), o rateio em 2 páginas só dos 60%, o mural com 50 nomes e QR em cada folha, e o contador anual. Os fontes estão
-  copiados em `C:/tmp/ieadespa-desenho-fontes/`.
+- **Rodada 23 PUBLICADA** (20/11, noite) na página leve KMeb… (versão 5, 350 KB), com a 22 e a 21 recolhidas
+  ("respondida"). A 21 foi aprovada. A 23 refaz 3 telas com a regra das folhas de outro mês corrigida por ele (plano,
+  `1af8293`, DEPLOY OK):
+  - **Lançar**, em 02/12: a 70.090 de novembro espera o nome; a 70.165 (mês anterior) e a 70.169 (mês posterior)
+    ficam só com a linha;
+  - **Folha do mural**, novembro e dezembro, e o relatório atrasado "referente aos meses de outubro e novembro";
+  - **Conferir o repasse**, sem as folhas de outro mês.
+  - Conferida foto a foto na sessão principal.
+  - Fontes em `C:/tmp/ieadespa-desenho-fontes/` (r23-*.js, montar-r23.js, propostas-r23/).
+  - **2 perguntas a ele, só detalhe:**
+    1. na hora de lançar, pode-se marcar "Mês anterior" (enquanto o mês anterior não fechou), ou essa folha sempre
+       já vem marcada?
+    2. o dinheiro do adiantado entregue em novembro vai no repasse de novembro, ou espera dezembro?
+  - Respostas na página: ArtifactData, coleção "escolhas", ids `r23-*` e `geral-r23`.
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
@@ -94,8 +105,8 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 1. **Membros:** retomar os acabamentos no `v10-membros-svelte`, a partir do WIP `fd7862c` (o "Quero me cadastrar"), com
    os ajustes das carteirinhas, em incrementos de 30 minutos. Depois: o seletor de congregação final, o importador
    (passo 9) e a ida à produção.
-2. **Financeiro:** ler as escolhas dele na rodada 20. Se aprovada, começar a CONSTRUÇÃO do núcleo em Svelte: entradas,
-   repasse, caixa, recibo, rateio, tesouro e mural.
+2. **Financeiro:** ler as escolhas dele na rodada 23 (e as 2 respostas acima). Aprovada, começar a CONSTRUÇÃO do núcleo
+   em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro e mural. Dúvida de regra se pergunta ANTES.
 3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
    desligamento).
 4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.

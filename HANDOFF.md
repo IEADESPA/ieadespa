@@ -1,0 +1,101 @@
+# Passagem de bastão — ieadespa
+
+Em uso por: **Mateus** desde 20/11/2026 17:19
+
+> Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
+> comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
+> "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
+
+Atualizado em 20/11/2026 (Claude, agente de construção de Membros). Agente em andamento no `v10-membros-svelte`
+(worktree `C:/tmp/ieadespa-svelte`): sobras 1 a 5 FEITAS (ramo até `b5f12f8`) e NA HOMOLOGAÇÃO: homolog `ae7f2e3` DEPLOY OK,
+`feb7dc6` (site), base do teste de telas `e5fe087` só no homolog (DEPLOY OK; a execução 44806909775 que a
+confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
+`https://salmon-bay-0efd06d0f-21.eastus2.3.azurestaticapps.net/quero-me-cadastrar/`. Pares em
+`scratchpad/svelte-membros/pares-site/`. Próximo: o importador (passo 9), NÃO começado (cota).
+
+## 1. Concluído
+
+- **Produção (main):**
+  - `motivoSaida` fora da lista de pessoas (`d0831d7`);
+  - a rede de segurança do deploy: `tools/conferir-deploy.sh` e `.github/workflows/sistema-repetir-deploy.yml`. A regra
+    1 do `CLAUDE.md` usa o script, e já repetiu sozinha um deploy recusado pelo firewall;
+  - plano: a seção "Financeiro (módulo 2)" com "A realidade do dinheiro, que vale mais que o Regimento", o que falta em
+    Membros e a varredura em pedaços de 30 minutos (main até `610cbc2`, todos com DEPLOY OK).
+- **Homologação** (preview do PR #21):
+  - a casca refeita igual ao desenho, com as fontes e os efeitos;
+  - **Membros REFEITO DO ZERO em Svelte + TypeScript.** Ele aprovou o visual: "ficou bom, bem rápido". O gráfico do
+    painel foi corrigido;
+  - **as Carteirinhas** (homolog `0533b88`).
+  - Ramo `v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`.
+- **Desenho:**
+  - **A página antiga** (G1gj9hzSbdcqAZYcFjmJ1j) é o ARQUIVO das rodadas 2 a 18. Nunca mais republicar.
+  - **A página leve** (KMebnrdoWfAhcz9yeRgjFz) tem a **rodada 20 publicada** (Financeiro, 12 telas). A rodada 19 foi
+    reprovada por causa do "culto": ver a memória `realidade-financeira-nao-o-regimento`.
+
+## 2. Arquivos alterados (ainda não registrados no Git)
+
+- **Cópia de segurança dos fontes do desenho** (20/11): `C:/tmp/ieadespa-desenho-fontes/`, com 3.235 arquivos, sem
+  fotos. São os geradores das rodadas, as páginas, as escolhas, as auditorias e os scripts de Membros. O scratchpad da
+  sessão é temporário e pode ser apagado pelo Windows. Onde guardar de vez (repositório ou outro lugar) depende da
+  pesquisa de colaboração em andamento.
+
+- Nenhum. O incremento 5 ("Quero me cadastrar" do site) está no `v10-membros-svelte` `37c25a4`, testado (e2e-95 56/56, jest
+  6.683). O worktree `C:/tmp/ieadespa-svelte` ganhou também a junção `site/node_modules` (apagar com `rmdir` sem `/s`).
+
+## 3. Pendências e erros conhecidos
+
+- **Respostas dele pendentes:**
+  - **Rodada 20, as 5 dúvidas:**
+    1. a espécie da congregação vai para a conta dela ou direto para a geral;
+    2. o retido fica em dinheiro ou é depositado;
+    3. o Pix dos membros cai direto na geral;
+    4. as receitas passam de R$ 4,8 milhões (a ECD);
+    5. mostrar "atrasada".
+    - E as escolhas dele na página leve: ler com ArtifactData (url KMeb…, coleção "escolhas", ids `r20-*`, `geral-r20`).
+  - **Carteirinhas:**
+    1. a do obreiro, só a Secretaria Geral imprime;
+    2. o QR de quem saiu mostra só o nome;
+    3. testar a impressora de PVC.
+  - **Membros na homologação:** o OK final dele.
+  - **Antigas:** a fonte (Fonte teste), o alerta do Azure para R$ 450, as fotos da Igreja e as 3 decisões do passo 3.
+- **Ajustes das carteirinhas** (cor marinho com brilho, respiro do QR, cadeado só da local): já feitos no `24d782c` e no
+  homolog `319b547`; falta só a foto de conferência na homologação.
+- **Pendências das revisões do "Quero me cadastrar"** (do passo 4): 4 itens, 2 de segurança e 2 de consistência, a
+  corrigir ANTES da produção. O detalhe técnico fica fora do repositório público (é público): pergunte ao responsável.
+- **Decisão dele:** e-mail com a matrícula depois do cadastro pelo site (o desenho prometia; revelaria quem não tem ficha).
+- **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
+- **O worktree `C:/tmp/ieadespa-svelte`** tem uma junção `api/node_modules`: apagar com `rmdir` sem `/s` antes de
+  remover o worktree.
+
+## 3b. 20/11/2026, tarde (sessão principal)
+
+- **Rodada 21 PUBLICADA** na página leve KMeb… (387 KB, versão 3). Tem os acertos da 20, o caixa único (só a Geral, em 4
+  passos), o rateio em 2 páginas só dos 60%, o mural com 50 nomes e QR em cada folha, e o contador anual. Os fontes estão
+  copiados em `C:/tmp/ieadespa-desenho-fontes/`.
+- **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
+  - o esforço SEMPRE no máximo;
+  - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
+  - o plugin Nonprofits fica;
+  - a colaboração no repositório PÚBLICO, só com o que é seguro;
+  - a senha do ASAF apagada do settings.
+- **Em andamento:** o agente de Membros (acabamentos e carteirinhas) e a pesquisa 2 dos economizadores (graphify,
+  claude-mem, RTK...).
+- **Próximo:** quando o agente de Membros terminar, montar a colaboração no repositório público:
+  - as habilidades em `.claude/skills` e `.agents/skills`;
+  - `.claude/settings.json` com `enabledPlugins`;
+  - o `HANDOFF.md` e a memória versionados, sem dado pessoal;
+  - os fontes do desenho;
+  - o kit atualizado;
+  - a linha "em uso por".
+  - Enxugar o MEMORY.md só depois do OK dele.
+
+## 4. Próximo passo exato (quando ele mandar continuar)
+
+1. **Membros:** retomar os acabamentos no `v10-membros-svelte`, a partir do WIP `fd7862c` (o "Quero me cadastrar"), com
+   os ajustes das carteirinhas, em incrementos de 30 minutos. Depois: o seletor de congregação final, o importador
+   (passo 9) e a ida à produção.
+2. **Financeiro:** ler as escolhas dele na rodada 20. Se aprovada, começar a CONSTRUÇÃO do núcleo em Svelte: entradas,
+   repasse, caixa, recibo, rateio, tesouro e mural.
+3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
+   desligamento).
+4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.

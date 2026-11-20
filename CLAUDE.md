@@ -27,3 +27,12 @@ arquivo de segredo (`local.settings.json`, `.env*`), **mascare todos os valores*
 consulta de ideias (ver `REFERENCIAS.md`): não copiar código (Next.js é banido aqui) e não
 adicionar `.env`, `*.db`, `node_modules` nem `.rar` lá. A cópia pesada aninhada
 (`chamada-ebd/chamada-ebd/`) é só local e ignorada — nunca versionar.
+
+## 4. Uma pessoa por vez: a linha "Em uso por" do `HANDOFF.md`
+
+O `HANDOFF.md` (estado do trabalho) vai para o Git, na `main`, para o colega continuar do mesmo ponto. É público: nada
+de senha, chave, token, CPF, endereço nem dado pessoal real.
+
+- **Antes de começar:** `git pull` e leia a linha "Em uso por" no alto do `HANDOFF.md`. Em uso por outra pessoa? Não
+  comece. Livre? Ponha o seu nome e a data/hora, commit e push.
+- **Ao parar:** a passagem completa (memória e `HANDOFF.md`), a linha volta a "Livre", commit e push.

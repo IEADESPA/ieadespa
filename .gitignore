@@ -45,6 +45,3 @@ api/data/mockdb.json
 # comuns, sem permissões nem segredo. As permissões de cada pessoa (acumuladas a cada sessão, às vezes com trechos de
 # comando/credencial) e o autoMemoryDirectory dela ficam no settings.local.json, que nunca vai para o Git.
 .claude/settings.local.json
-
-# Passagem de bastão entre sessões e ferramentas (Claude, Codex): estado do trabalho de cada computador — fica só na máquina (17/11/2026).
-HANDOFF.md

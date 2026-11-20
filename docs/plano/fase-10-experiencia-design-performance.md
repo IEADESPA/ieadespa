@@ -886,6 +886,46 @@ lançar as saídas na hora).
   que se fecha é AUTOMÁTICO ("para não ter aglomeramento de comprovantes"). Só o destino da sobra é escolha de quem
   confere: dezembro, o centro de custo, estorno ou despesa.
 
+### A varredura antes da construção: as respostas dele (20/11/2026, noite)
+
+- **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o
+  código com a conta dele.
+  - O ano de 2026 NÃO vem para o sistema. Entram só os saldos de abertura, que podem ser positivos ou negativos:
+    primeiro os do Tesouro Geral e da Convenção, que são gerais;
+  - os outros centros de custo ganham o saldo à medida que começarem a trabalhar no sistema.
+- **O mês anterior recebe enquanto a congregação não mandou aquele relatório.** Mandado e fechado, não recebe mais, e o
+  dízimo cai no mês atual.
+- **Departamentos e Missões ficam FORA da 1ª entrega.** Continuam como hoje até nascer o módulo de cada um, e aí entram
+  por ele.
+- **Só duas formas de receber: espécie e digital (Pix).** Maquininha, TED e cheque não existem por enquanto.
+- **O extrato:** a conta geral é no **banco Cora**.
+  - Até existir a ligação automática (a v10.16 prevê o Pix pela Cora), alguém da Tesouraria Geral baixa o arquivo do
+    extrato e o põe no sistema antes de começar a receber os repasses do dia.
+  - Sem o extrato do dia, o Pix não se confere na hora.
+  - Se a ligação automática ficar pronta até lá, ela substitui o arquivo.
+- **O dizimista vê os próprios dízimos** em "Minha vida", quando o dízimo está ligado ao nome dele e ele tem acesso.
+  "Quero ver se alguém vai ficar com desculpa."
+- **O contador:**
+  - recebe por planilha, no formato das normas técnicas (ITG 2002);
+  - a Igreja NÃO entrega a ECD, porque a receita do ano não passa de R$ 4,8 milhões;
+  - as doações em bens não entram.
+- **As suposições, confirmadas:**
+  - **O fechamento:** a congregação manda, a Tesouraria Geral confere e fecha o repasse, e o Conselho Fiscal audita e
+    fecha o mês. O mês fechado não reabre, com UMA exceção: o Conselho Fiscal vota a reabertura, com a autorização do
+    Ministério (o órgão colegiado dos obreiros). O sistema registra o voto e a autorização, com data, e a trilha mostra
+    tudo.
+  - **A área não carrega dinheiro:** cada congregação entrega direto no caixa da Geral.
+  - **Salário e encargos ficam com o contador.** Hoje não há ninguém contratado.
+  - **As inscrições e as camisetas do site entram sozinhas no centro de custo de quem organizou.** Isso já fica como base
+    da integração do site vivo (v10.14): o site manda para o sistema, e não o contrário.
+- **Comigo, aprovado:**
+  - a planilha com sinal fraco;
+  - o percentual que vale dali para a frente;
+  - a trilha e o estorno;
+  - os comprovantes guardados por pelo menos 5 anos;
+  - a passagem do Financeiro de hoje para as telas novas;
+  - os centros de custo nascendo sozinhos das congregações e dos departamentos.
+
 ### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
 
 "Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do

@@ -77,19 +77,17 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   - Conferida foto a foto na sessão principal.
   - Fontes em `C:/tmp/ieadespa-desenho-fontes/` (r24-*.js, montar-r24.js, propostas-r24/).
   - Respostas na página: ArtifactData, coleção "escolhas", ids `r24-*` e `geral-r24`.
-- **Varredura do Financeiro: 6 perguntas a ele ANTES da construção** (feitas no chat em 20/11):
-  1. a data de início (janeiro de 2027?), os saldos de abertura, se traz o ano de 2026, e um mês em paralelo;
-  2. até que dia o mês anterior ainda recebe: dia 3, dia 5, ou enquanto a congregação não mandou o relatório;
-  3. o dinheiro dos departamentos e de Missões já na 1ª entrega, ou depois;
-  4. maquininha de cartão, TED ou cheque;
-  5. o banco da conta geral, e o extrato diário: arquivo baixado à mão ou ligação automática;
-  6. o dizimista vê os próprios dízimos em "Minha vida".
-  - Ação externa: perguntar ao contador o formato do arquivo, a ECD (acima de R$ 4,8 milhões) e as doações em bens.
-  - Suposições, que ele pode corrigir:
-    - a congregação manda, a Geral fecha o repasse e o Conselho Fiscal fecha o mês;
-    - a área não carrega dinheiro;
-    - salário e encargos ficam com o contador;
-    - as inscrições do site vão para o centro de custo de quem organizou.
+- **Varredura do Financeiro antes da construção: RESPONDIDA por ele** (20/11, noite). Está no plano, na seção "A
+  varredura antes da construção". Em resumo:
+  - começa em janeiro de 2027, só com os saldos de abertura;
+  - o mês anterior recebe até a congregação mandar o relatório;
+  - departamentos e Missões ficam fora da 1ª entrega;
+  - só espécie e Pix;
+  - extrato da Cora em arquivo;
+  - o dizimista vê os próprios dízimos;
+  - o contador recebe por planilha (ITG 2002), sem ECD;
+  - a reabertura do mês só com o voto do Conselho Fiscal e a autorização do Ministério.
+- **Falta dele:** aprovar a rodada 24. Em 20/11 ainda não havia nenhum `r24-*` na coleção "escolhas".
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;

@@ -1,0 +1,27 @@
+{
+  "_leia": "A bancada da IEADESPA: tudo o que as duas pessoas usam. O INSTALAR.cmd le esta lista. Para acrescentar um plugin, uma linha em 'plugins' e a mesma no enabledPlugins do .claude/settings.json; para uma habilidade, a pasta em .claude/skills e .agents/skills e uma linha em 'habilidades'. Depois: bash tools/conferir-bancada.sh.",
+  "plugins": [
+    { "id": "claude-security@anthropic-plugin-directory", "para": "varredura de seguranca e correcoes revisadas" },
+    { "id": "pr-review-toolkit@anthropic-plugin-directory", "para": "revisao de codigo e caca a defeitos (agentes revisores)" },
+    { "id": "typescript-lsp@anthropic-plugin-directory", "para": "TypeScript do front/ (Svelte); usa o programa typescript-language-server" },
+    { "id": "microsoft-docs@anthropic-plugin-directory", "para": "documentacao oficial do Azure e da Microsoft" },
+    { "id": "claude-md-management@anthropic-plugin-directory", "para": "manter os CLAUDE.md enxutos e atualizados" }
+  ],
+  "pluginsDaConta": [
+    { "id": "claude-for-nonprofits@synced", "para": "habilidades para organizacoes sem fins lucrativos; fica ligado", "vem": "da conta da organizacao no claude.ai: chega sozinho a quem faz o login com essa conta" }
+  ],
+  "habilidades": [
+    { "nome": "frontend-design", "origem": "anthropics/skills", "licenca": "Apache-2.0" },
+    { "nome": "emil-design-eng", "origem": "emilkowalski/skills", "licenca": "MIT" },
+    { "nome": "mobile-native", "origem": "emilkowalski/skills", "licenca": "MIT" },
+    { "nome": "review-animations", "origem": "emilkowalski/skills", "licenca": "MIT" },
+    { "nome": "diretrizes-interface-web", "origem": "vercel-labs/web-interface-guidelines", "licenca": "MIT" },
+    { "nome": "guias-web-modernas", "origem": "GoogleChrome/modern-web-guidance", "licenca": "Apache-2.0" }
+  ],
+  "configuracoesPessoais": [
+    { "chave": "autoCompactWindow", "valor": 400000, "onde": "~/.claude/settings.json", "para": "resumir a conversa mais cedo (economia de creditos, decisao de 20/11/2026)" }
+  ],
+  "programas": [
+    { "comando": "typescript-language-server", "npm": ["typescript-language-server", "typescript"], "para": "o plugin typescript-lsp" }
+  ]
+}

@@ -7,7 +7,8 @@ Nada aqui vai para o ar: são equipamentos para provar o sistema antes de public
 
 - `conferir-deploy.sh`: espera o deploy do sistema de um commit e diz o resultado final (repete sozinho a recusa do
   firewall do banco). **Vale a última linha:** "DEPLOY OK" ou "DEPLOY FALHOU".
-- `conferir-habilidades.sh`: confere que `.claude/skills` e `.agents/skills` são iguais.
+- `conferir-bancada.sh`: confere a bancada: as habilidades iguais em `.claude/skills` e `.agents/skills`, e a lista
+  `.claude/continuidade/bancada.json` igual às pastas e aos plugins do `.claude/settings.json`.
 - `e2e-localdb/`: os handlers REAIS de `api/` contra um SQL Server local (LocalDB `psc7`): gatilhos, `CHECK`,
   transações, corridas com vários processos e a bateria de segurança. Um roteiro `e2e-NN-*.js` por versão; as bases
   salvas (`bases.ps1`) deixam rodar só o da versão.
@@ -32,7 +33,7 @@ Nada aqui vai para o ar: são equipamentos para provar o sistema antes de public
 
 ```bash
 bash tools/conferir-deploy.sh HEAD          # depois de cada push na main
-bash tools/conferir-habilidades.sh
+bash tools/conferir-bancada.sh
 cd tools/e2e-localdb && bash rodar.sh roteiro e2e-NN-*.js
 cd tools/front-<tema> && node mutacoes.js
 ```

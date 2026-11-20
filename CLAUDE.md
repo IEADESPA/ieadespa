@@ -37,3 +37,21 @@ para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, to
 - **Antes de começar:** `git pull` e leia a linha "Em uso por" no alto do `HANDOFF.md`. Em uso por outra pessoa? Não
   comece. Livre? Ponha o seu nome e a data/hora, commit e push.
 - **Ao parar:** a passagem completa (memória e `HANDOFF.md`), a linha volta a "Livre", commit e push.
+- **Computador novo** (sem o `memoria-projeto` no `/mcp` ou sem os plugins da bancada): ofereça rodar o instalador
+  (`.claude\continuidade\INSTALAR.cmd`, dois cliques). Só com a licença da pessoa: primeiro `-SoTestar`, mostre o que
+  mudaria e, com o sim, `-Sim`. A lista da bancada é `.claude/continuidade/bancada.json`.
+
+## 5. Economia de créditos (vale para qualquer pessoa ou agente)
+
+O esforço e o modelo ficam no **MÁXIMO**, por decisão do responsável: não se economiza baixando a qualidade. Economiza-se
+no jeito de trabalhar (medido com `tools/medir-creditos/`, 20/11/2026):
+
+- Tarefa longa vai para um agente **novo**, com um resumo escrito; nunca um "fork", que herda a conversa inteira
+  (~22% do gasto medido).
+- Missões curtas, de uns 30 minutos, com commit a cada uma.
+- O relatório do agente tem no máximo 25 a 30 linhas; o detalhe vai num arquivo.
+- A página de propostas fica leve (menos de ~400 KB); as rodadas antigas ficam na página de arquivo.
+- Poucas fotos de tela, só as necessárias para conferir.
+- Antes de abrir arquivo grande, consulte o mapa do sistema (o `CLAUDE.md` de cada pasta e `docs/plano/RESUMO-fase-10.md`).
+- O saldo se vê com `/usage`. A compactação da conversa começa mais cedo (`autoCompactWindow` 400000, oferecida pelo
+  instalador).

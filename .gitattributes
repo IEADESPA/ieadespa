@@ -11,7 +11,7 @@ app/vendor/* -text
 site/public/vendor/* -text
 
 # Habilidades de terceiros (Claude Code em .claude/skills, Codex em .agents/skills): byte a byte como o autor publicou e
-# iguais nas duas pastas em qualquer máquina (tools/conferir-habilidades.sh compara).
+# iguais nas duas pastas em qualquer máquina (tools/conferir-bancada.sh compara).
 .claude/skills/** -text
 .agents/skills/** -text
 
@@ -22,3 +22,6 @@ site/public/vendor/* -text
 
 # Fontes das páginas de desenho: o montador procura trechos com "\n"; com CRLF no checkout, ele não acharia nada.
 design/propostas/** -text
+
+# O instalador de dois cliques (.cmd) precisa de CRLF para o cmd.exe ler direito em qualquer máquina.
+.claude/continuidade/*.cmd text eol=crlf

@@ -81,10 +81,12 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 - **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades
   em `.claude/skills` e `.agents/skills`, o `.claude/settings.json` com os 5 plugins, este `HANDOFF.md` com a linha
   "Em uso por", a memória do projeto e a do Claude versionadas (revisadas, sem dado pessoal), os fontes do desenho, o
-  mapa do sistema (`CLAUDE.md` por pasta e `docs/plano/RESUMO-fase-10.md`) e o kit novo (`.claude/continuidade`).
+  mapa do sistema (`CLAUDE.md` por pasta e `docs/plano/RESUMO-fase-10.md`) e o kit novo (`.claude/continuidade`, com
+  o `INSTALAR.cmd` de dois cliques e a lista `bancada.json`).
   - **Falta só neste computador:** pôr o checkout principal na `main` (o `HANDOFF.md` sem registro de lá sai, porque
-    o da `main` é o mesmo) e, se ele quiser, rodar o instalador para apontar o `autoMemoryDirectory`. Até lá, a sessão
-    principal continua gravando em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
+    o da `main` é o mesmo) e, se ele quiser, dois cliques em `.claude\continuidade\INSTALAR.cmd` para apontar o
+    `autoMemoryDirectory`. Até lá, a sessão principal continua gravando em `C:\MCP\memorias\ieadespa.jsonl`: exportar
+    de novo para o repositório na troca.
   - Enxugar o MEMORY.md só depois do OK dele.
 
 ## 4. Próximo passo exato (quando ele mandar continuar)

@@ -855,6 +855,28 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
   - O caixa da congregação vem no futuro (daqui a uns 5 ou 6 anos), quando as congregações tiverem CNPJ de filial e conta
     própria. Aí a Geral aprova pelo comprovante: "não dá para confiar".
 
+### Rodadas 21 e 22: aprovado e as últimas regras (20/11/2026)
+
+**Aprovados na 21:** o caixa único (4 passos, só a Geral), o contador (o ano numa linha e o resumo), a folha do mural, o
+lançamento, o rateio (vai sozinho para cada centro de custo) e o tesouro (atualiza a cada saída e repasse; estimula
+lançar as saídas na hora).
+
+**Rodada 22 publicada,** com as respostas dele:
+
+- **O dízimo digital:** a folha não trava. Quem liga escolhe a folha física livre e digita o número. Só o lançar e o
+  fechar ficam impedidos até ligar.
+- **"Referente ao mês anterior / posterior"** (no lugar do "mês de referência", que ele não quis): o dízimo SOMA NO MÊS A
+  QUE SE REFERE.
+  - Na sequência das folhas do bloco, a folha "pulada" aparece no mês da sequência só com a marca, sem nome e sem valor.
+    Por exemplo, em novembro: "folha 70.090 · mês posterior".
+  - No mês a que ela se refere, o número da folha já aparece listado, esperando o nome e o valor, para ninguém esquecer.
+    É ali que ela soma.
+  - Vale igual para o "mês anterior".
+  - O mural é contínuo e mostra as marcas.
+- **A conferência entre espécie e digital** (o 3º relatório, contínuo): usar o Pix do mês seguinte para completar o mês
+  que se fecha é AUTOMÁTICO ("para não ter aglomeramento de comprovantes"). Só o destino da sobra é escolha de quem
+  confere: dezembro, o centro de custo, estorno ou despesa.
+
 ### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
 
 "Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do

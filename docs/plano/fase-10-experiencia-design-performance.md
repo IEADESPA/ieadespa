@@ -866,14 +866,19 @@ lançar as saídas na hora).
 - **O dízimo digital:** a folha não trava. Quem liga escolhe a folha física livre e digita o número. Só o lançar e o
   fechar ficam impedidos até ligar.
 - **"Referente ao mês anterior / posterior"** (no lugar do "mês de referência", que ele não quis): o dízimo SOMA NO MÊS A
-  QUE SE REFERE.
-  - Na sequência das folhas do bloco, a folha "pulada" aparece no mês da sequência só com a marca, sem nome e sem valor.
-    Por exemplo, em novembro: "folha 70.090 · mês posterior".
-  - No mês a que ela se refere, o número da folha já aparece listado, esperando o nome e o valor, para ninguém esquecer.
-    É ali que ela soma.
-  - **"Mês anterior" (corrigido por ele, 20/11):** o dízimo JÁ ESTAVA no relatório do mês anterior, lançado e auditado
-    lá. No mês atual, a folha aparece na sequência só com a linha "referente ao mês anterior", sem nome e sem valor, para
-    não ficar em branco. Nada se lança nem muda no mês atual.
+  QUE SE REFERE. **A regra definitiva, explicada por ele em 20/11 à noite:**
+  - **Quem decide é sempre o mês que vem antes.** Exemplo, um bloco de 20 folhas no fim de setembro:
+    - em setembro, as folhas 18 e 19 são de outubro (dízimo adiantado), e a 20 é de setembro;
+    - na planilha de setembro, a 18 e a 19 ficam só com a linha "referente ao mês posterior", sem nome e sem valor. A 20
+      vai com o nome e o valor e soma em setembro.
+  - **O mês seguinte começa na primeira folha marcada "mês posterior".** A planilha de outubro abre na folha 18:
+    - a 18 e a 19 já vêm listadas e o nome e o valor são obrigatórios. Se o dízimo foi digital, os dois vêm sozinhos;
+    - a 20 já vem com a tarja "referente ao mês anterior", sozinha, e ninguém digita nada (somou em setembro);
+    - depois segue a sequência de outubro, e no fim de outubro o processo se repete.
+  - **Ninguém marca "mês anterior".** Na hora de lançar, só existem "Este mês" e "Mês posterior". O dízimo de novembro
+    entregue no dia 2 de dezembro não é caso de "mês anterior": a tesoureira o lança em novembro como recebido no dia 30.
+  - **O dinheiro do adiantado é do mês a que se refere, para todos os fins.** O dízimo de dezembro entregue em novembro
+    entra em dezembro: não vai no repasse nem na conta de novembro, fica esperando e soma na contabilidade de dezembro.
   - **O Conselho Fiscal não tem nada a ver com essas linhas.** À parte, o relatório atrasado (o tesoureiro que não fechou
     outubro) sai como "referente aos meses de outubro e novembro".
   - O mural é contínuo e mostra as marcas.

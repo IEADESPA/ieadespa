@@ -63,9 +63,13 @@ uso, cópia, modificação, distribuição ou exploração comercial.
      exclusivamente o código-fonte do site institucional.
 
 5.2. As pastas de terceiros em .claude/skills/ e .agents/skills/ não
-     são da IEADESPA e seguem as próprias licenças (o LICENSE e o
-     ORIGEM.md de cada pasta, Apache 2.0 ou MIT): esta reserva de
-     direitos não as cobre.
+     são da IEADESPA e seguem as próprias licenças (o LICENSE, o
+     NOTICE, quando houver, e o ORIGEM.md de cada pasta, que marca os
+     arquivos alterados): Apache 2.0 em frontend-design,
+     guias-web-modernas e impeccable; MIT em emil-design-eng,
+     mobile-native, review-animations, diretrizes-interface-web,
+     systematic-debugging, verification-before-completion e
+     humanizer-pt. Esta reserva de direitos não as cobre.
 
 6. FORO
 

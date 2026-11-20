@@ -16,7 +16,11 @@
     { "nome": "mobile-native", "origem": "emilkowalski/skills", "licenca": "MIT" },
     { "nome": "review-animations", "origem": "emilkowalski/skills", "licenca": "MIT" },
     { "nome": "diretrizes-interface-web", "origem": "vercel-labs/web-interface-guidelines", "licenca": "MIT" },
-    { "nome": "guias-web-modernas", "origem": "GoogleChrome/modern-web-guidance", "licenca": "Apache-2.0" }
+    { "nome": "guias-web-modernas", "origem": "GoogleChrome/modern-web-guidance", "licenca": "Apache-2.0" },
+    { "nome": "systematic-debugging", "origem": "obra/superpowers", "commit": "22f0b463e7a5e579904dd6211a520321035526f7", "licenca": "MIT", "para": "achar a causa antes de corrigir (4 fases); so texto" },
+    { "nome": "verification-before-completion", "origem": "obra/superpowers", "commit": "22f0b463e7a5e579904dd6211a520321035526f7", "licenca": "MIT", "para": "so dizer 'pronto' com a prova rodada; so texto" },
+    { "nome": "humanizer-pt", "origem": "matematicsolutions/matematic-humanizer", "commit": "2557bcb5d7096d8a09a790497702b737b9151cb5", "licenca": "MIT", "para": "tirar a cara de IA dos textos em portugues; chamar com /humanizer-pt" },
+    { "nome": "impeccable", "origem": "pbakaus/impeccable", "commit": "b49177d32788f2dc585c42831d845dacf1ebed2c", "licenca": "Apache-2.0", "para": "critica e acabamento de tela contra a cara de IA; so o texto, sem o programa; chamar com /impeccable" }
   ],
   "configuracoesPessoais": [
     { "chave": "autoCompactWindow", "valor": 400000, "onde": "~/.claude/settings.json", "para": "resumir a conversa mais cedo (economia de creditos, decisao de 20/11/2026)" }

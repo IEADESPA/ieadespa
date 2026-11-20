@@ -1,0 +1,12 @@
+HUMANIZER (humanizer-pt) - NOTICE
+
+Este skill é uma adaptação para o português do projeto open source "blader/humanizer"
+(licença MIT, Copyright (c) 2025 Siqi Chen; texto completo da licença em LICENSE), que por
+sua vez se apoia no guia da Wikipédia "Signs of AI writing" (WikiProject AI Cleanup).
+A licença MIT original e a atribuição aos autores do original continuam valendo para a
+lógica adaptada. Adaptação e conteúdo em português: Wiesław Mazur / MateMatic Solutions.
+
+Seção "Assinaturas estatísticas" baseada em: W. Wołoszyk, M. Domaszk, "Detecting
+AI-Generated Content: A hybrid linguistic approach", MultiLingual, setembro de 2025.
+
+Fontes: https://github.com/blader/humanizer | https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing

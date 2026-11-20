@@ -16,7 +16,7 @@ pessoal real.
 | Memória do projeto | `.claude/continuidade/memoria/ieadespa.jsonl` | Os fatos duráveis (servidor `memoria-projeto`) |
 | Memória do Claude | `.claude/continuidade/memoria-claude/` | Como trabalhar com o responsável (preferências, correções) |
 | Bancada | `.claude/continuidade/bancada.json` | A lista de TUDO o que a bancada usa: plugins, habilidades e programas |
-| Habilidades | `.claude/skills/` (Claude Code) e `.agents/skills/` (Codex), iguais | As 6 de desenho, com a licença de cada uma |
+| Habilidades | `.claude/skills/` (Claude Code) e `.agents/skills/` (Codex), iguais | As 10 da bancada, com a licença de cada uma |
 | Plugins | `.claude/settings.json` | Liga os 5 plugins oficiais do projeto (instalar é com o kit) |
 | Desenho | `design/propostas/` | Os fontes da página de propostas da rodada atual |
 
@@ -24,8 +24,13 @@ pessoal real.
 
 - **5 plugins oficiais:** `claude-security`, `pr-review-toolkit`, `typescript-lsp`, `microsoft-docs` e
   `claude-md-management` (catálogo `anthropic-plugin-directory`).
-- **6 habilidades:** `frontend-design`, `emil-design-eng`, `mobile-native`, `review-animations`,
-  `diretrizes-interface-web` e `guias-web-modernas`.
+- **10 habilidades:**
+  - de desenho: `frontend-design`, `emil-design-eng`, `mobile-native`, `review-animations`,
+    `diretrizes-interface-web` e `guias-web-modernas`;
+  - de método: `systematic-debugging` (a causa antes da correção) e `verification-before-completion` ("pronto" só
+    com a prova rodada);
+  - chamadas só à mão: `humanizer-pt` (`/humanizer-pt`, texto em português sem cara de IA) e `impeccable`
+    (`/impeccable`, crítica de tela; só o texto, sem o programa: nunca `npx` nem login).
 - **Da conta da organização no claude.ai:** o plugin **Claude for Nonprofits** (`claude-for-nonprofits@synced`) fica
   ligado. Ele não vem do repositório: chega sozinho a quem faz o login com a conta da organização.
 - **Programa:** o `typescript-language-server`, que o plugin `typescript-lsp` usa.

@@ -23,6 +23,7 @@ projeto valem por cima destas. Gravadas em 17/11/2026.
 
 Fazer sozinho, no começo da primeira conversa, antes do pedido do usuário (ele não
 precisa pedir nada de especial; depois, seguir com o que ele pediu):
+
 1. Ler `CLAUDE.md`, `README`/`LEIA-ME`, plano de trabalho e a memória automática do
    Claude desse projeto, se houver.
 2. Migrar para o servidor os fatos duráveis: arquitetura, regras de negócio, decisões do
@@ -31,8 +32,10 @@ precisa pedir nada de especial; depois, seguir com o que ele pediu):
 3. Criar o `HANDOFF.md` (modelo abaixo) e o `AGENTS.md`, que aponta para o `CLAUDE.md`,
    o `HANDOFF.md` e o servidor "se estiver configurado neste computador" (é o arquivo
    que o Codex lê).
-4. Pôr `/HANDOFF.md` no `.gitignore` do repositório: o estado do trabalho é de cada
-   pessoa e nunca vai para o Git (decisão de 17/11/2026).
+4. O `HANDOFF.md` e a memória do projeto vão para o Git, sem dado pessoal (decisão de
+   20/11/2026, que substitui a de 17/11): no alto do `HANDOFF.md`, a linha
+   `Em uso por: <nome> desde <dd/mm/aaaa hh:mm>` (ou "Livre"), uma pessoa por vez; a
+   memória do servidor em `.claude/continuidade/memoria/<repositório>.jsonl`.
 5. Copiar o kit `C:\MCP\continuidade\` para `.claude/continuidade/` do repositório e
    citá-lo numa linha no guia de colaboração (`COMO-COLABORAR`, `CONTRIBUTING` ou
    `README`): quem quiser a memória no próprio computador segue o `LEIA-ME.md` do kit.
@@ -57,9 +60,9 @@ completa. Ao concluir uma tarefa ou antes de mudar de assunto, lembrar o usuári
 
 - **O repositório** é a memória comum entre pessoas: decisão que outro colaborador
   precisa saber vai para os documentos dele, não só para o servidor.
-- **Servidor `memoria-projeto`** (`C:\MCP\memorias\<repositório>.jsonl`, compartilhado
-  com o Codex, pessoal de cada computador): fatos duráveis do projeto. O arquivo de
-  memória nunca é compartilhado entre pessoas.
+- **Servidor `memoria-projeto`** (`.claude/continuidade/memoria/<repositório>.jsonl`, que
+  vai para o Git com a passagem de bastão; sem ele, `C:\MCP\memorias\<repositório>.jsonl`;
+  compartilhado com o Codex): fatos duráveis do projeto, sem senha nem dado pessoal.
 - **`HANDOFF.md`**: só o estado atual do trabalho. É substituído a cada marco, não acumula
   histórico.
 - **Memória automática do Claude**: como trabalhar com o usuário (preferências, correções).
@@ -68,6 +71,8 @@ Modelo do `HANDOFF.md`:
 
 ```markdown
 # Passagem de bastão — <repositório>
+
+Em uso por: <nome> desde dd/mm/aaaa hh:mm (ou "Livre")
 
 Atualizado em dd/mm/aaaa hh:mm (Claude ou Codex).
 

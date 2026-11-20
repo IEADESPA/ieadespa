@@ -34,10 +34,8 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 ## 2. Arquivos alterados (ainda não registrados no Git)
 
-- **Cópia de segurança dos fontes do desenho** (20/11): `C:/tmp/ieadespa-desenho-fontes/`, com 3.235 arquivos, sem
-  fotos. São os geradores das rodadas, as páginas, as escolhas, as auditorias e os scripts de Membros. O scratchpad da
-  sessão é temporário e pode ser apagado pelo Windows. Onde guardar de vez (repositório ou outro lugar) depende da
-  pesquisa de colaboração em andamento.
+- **Fontes do desenho:** os da rodada atual (21) estão no Git, em `design/propostas/` (20/11). O resto (rodadas antigas,
+  escolhas, auditorias e scripts de Membros) continua só na cópia `C:/tmp/ieadespa-desenho-fontes/` deste computador.
 
 - Nenhum. O incremento 5 ("Quero me cadastrar" do site) está no `v10-membros-svelte` `37c25a4`, testado (e2e-95 56/56, jest
   6.683). O worktree `C:/tmp/ieadespa-svelte` ganhou também a junção `site/node_modules` (apagar com `rmdir` sem `/s`).
@@ -80,13 +78,13 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   - a senha do ASAF apagada do settings.
 - **Em andamento:** o agente de Membros (acabamentos e carteirinhas) e a pesquisa 2 dos economizadores (graphify,
   claude-mem, RTK...).
-- **Próximo:** quando o agente de Membros terminar, montar a colaboração no repositório público:
-  - as habilidades em `.claude/skills` e `.agents/skills`;
-  - `.claude/settings.json` com `enabledPlugins`;
-  - o `HANDOFF.md` e a memória versionados, sem dado pessoal;
-  - os fontes do desenho;
-  - o kit atualizado;
-  - a linha "em uso por".
+- **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades
+  em `.claude/skills` e `.agents/skills`, o `.claude/settings.json` com os 5 plugins, este `HANDOFF.md` com a linha
+  "Em uso por", a memória do projeto e a do Claude versionadas (revisadas, sem dado pessoal), os fontes do desenho, o
+  mapa do sistema (`CLAUDE.md` por pasta e `docs/plano/RESUMO-fase-10.md`) e o kit novo (`.claude/continuidade`).
+  - **Falta só neste computador:** pôr o checkout principal na `main` (o `HANDOFF.md` sem registro de lá sai, porque
+    o da `main` é o mesmo) e, se ele quiser, rodar o instalador para apontar o `autoMemoryDirectory`. Até lá, a sessão
+    principal continua gravando em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
   - Enxugar o MEMORY.md só depois do OK dele.
 
 ## 4. Próximo passo exato (quando ele mandar continuar)

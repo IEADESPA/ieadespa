@@ -1,0 +1,24 @@
+{
+  "name": "ieadespa-front",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Telas novas do sistema (FASE 10) em Svelte + TypeScript; o build vai para app/svelte e é versionado (o carimbo em app/svelte/carimbo.json prova que bate com o fonte)",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "vite build && node scripts/carimbo.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p tsconfig.node.json --noEmit",
+    "conferir": "node scripts/carimbo.mjs --conferir"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "22.20.4",
+    "svelte": "5.57.3",
+    "svelte-check": "4.7.8",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  }
+}

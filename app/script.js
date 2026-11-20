@@ -433,6 +433,8 @@ function limparSessao() {
   // v7.8: o relato e a fila de incidentes (dado de criança) saem da página junto com a sessão. O módulo é outro arquivo (modulos/protecao.js): se ele faltar ou estiver velho no cache do service worker,
   // a saída da sessão NÃO pode parar aqui (sem isto o authToken ficava preenchido).
   if (typeof prtLimparTela === "function") prtLimparTela();
+  // FASE 10 (19/11/2026): as telas Svelte de Membros (a ficha aberta, a lista, o rascunho do cadastro com CPF) saem da página junto com a sessão
+  if (typeof svLimparTela === "function") svLimparTela();
   // v7.10: a sala do check-in infantil, a busca, os formulários e o CÓDIGO de retirada (que só existe em memória e no painel de impressão) saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
   if (typeof chkLimparTela === "function") chkLimparTela();
   // v7.11: a fila, o acompanhamento aberto, a NOTA PASTORAL aberta e os pedidos de oração saem da página junto com a sessão — mesma guarda (módulo ausente ou velho no cache)
@@ -495,6 +497,8 @@ async function fetchProtegido(url, opts = {}) {
   try {
     res = await fetch(url, Object.assign({}, opts, { headers }));
   } catch (falhaDeRede) {
+    // FASE 10: o pedido CANCELADO de propósito (a busca que mudou antes da resposta) não é falta de internet: volta calado para quem cancelou
+    if (falhaDeRede && falhaDeRede.name === "AbortError") throw falhaDeRede;
     mostrarToast("Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.", "erro");
     if (falhaDeRede && typeof falhaDeRede === "object") falhaDeRede.jaAvisado = true;
     throw falhaDeRede;
@@ -586,6 +590,8 @@ function voltarParaCheckin() {
 function mostrarTelaPainelInicial() {
   esconderTodasAsTelas();
   document.getElementById("telaPainel").style.display = "flex";
+  // FASE 10 — a casca da entrada (a marca e o fundo) só enquanto não há sessão; com sessão, abrirPainelConteudo tira
+  document.getElementById("telaPainel").classList.toggle("tela-entrada", !(authToken && authMatricula));
   document.getElementById("resultadoLogin").textContent = "";
   document.getElementById("cxCriarPin").style.display = "none";
   if (authToken && authMatricula) {
@@ -941,7 +947,12 @@ async function abrirPainelConteudo(matricula) {
   document.getElementById("cxLoginPainel").style.display = "none";
   document.getElementById("cxCriarPin").style.display = "none";
   document.getElementById("cxPainelConteudo").style.display = "flex";
-  document.getElementById("nomeLogado").textContent = authNome ? `Olá, ${authNome}` : "";
+  document.getElementById("telaPainel").classList.remove("tela-entrada");
+  document.getElementById("nomeLogado").textContent = authNome || "";
+  if (typeof atualizarCartaoUsuarioCasca === "function") atualizarCartaoUsuarioCasca();   // FASE 10: o cartão da pessoa no pé do menu
+  // FASE 10 — o Início: "Graça e paz, <primeiro nome>" (textContent: o nome nunca vira HTML)
+  const saudacao = document.getElementById("inicioSaudacao");
+  if (saudacao) saudacao.textContent = authNome ? `Graça e paz, ${String(authNome).trim().split(/\s+/)[0]}` : "Graça e paz!";
   // Trocar senha é só de quem tem acesso administrativo (senha de liderança); o membro comum troca o PIN (cartão "Meu PIN", sempre visível).
   document.getElementById("cxTrocarSenha").style.display = sessaoDeLiderancaNaTela() ? "block" : "none";
   await carregarTurmasProfessorEbd();
@@ -969,50 +980,93 @@ async function abrirPainelConteudo(matricula) {
   agendarSincronizacaoOfflineEbd();
 }
 
-// ---- BUSCA GLOBAL (vB.4) ----
-let timeoutBuscaGlobal = null;
-function onDigitarBuscaGlobal() {
-  clearTimeout(timeoutBuscaGlobal);
-  const termo = document.getElementById("campoBuscaGlobal").value.trim();
+// ---- BUSCA GLOBAL (vB.4) — FASE 10: num PAINEL DO LADO (rodada 6): o campo no alto do painel (Ctrl K abre); dentro de um módulo, ela fica presa a ele
+// ("Só neste módulo"), com "Procurar em todo o sistema" ----
+let timeoutBuscaGlobal = null, buscaSoModulo = true, ultimoTermoBusca = "", ultimosResultadosBusca = [];
+function abrirPainelBusca() {
   const painel = document.getElementById("painelBuscaGlobal");
-  if (termo.length < 2) { painel.style.display = "none"; return; }
+  const campoTopo = document.getElementById("campoBuscaGlobal");
+  const campo = document.getElementById("campoBuscaLado");
+  if (!painel || !campo) return;
+  fecharPaineisLado();
+  painel.style.display = "flex";
+  document.getElementById("fundoPainelLado").classList.add("visivel");
+  if (campoTopo && campoTopo.value && !campo.value) campo.value = campoTopo.value;
+  if (campoTopo) campoTopo.value = "";
+  buscaSoModulo = true;
+  campo.focus();
+  campo.select();   // reabrir com a busca anterior selecionada: o que se digitar substitui
+  desenharFiltroBuscaModulo();
+  if (campo.value.trim().length >= 2) executarBuscaGlobal(campo.value.trim());
+  else document.getElementById("resultadosBuscaGlobal").innerHTML = "<div class=\"painel-notificacoes-vazio\">Digite pelo menos 2 letras.</div>";
+}
+function onDigitarBuscaGlobal() { abrirPainelBusca(); }
+function onDigitarBuscaLado() {
+  clearTimeout(timeoutBuscaGlobal);
+  const termo = document.getElementById("campoBuscaLado").value.trim();
+  if (termo.length < 2) { document.getElementById("resultadosBuscaGlobal").innerHTML = "<div class=\"painel-notificacoes-vazio\">Digite pelo menos 2 letras.</div>"; return; }
   timeoutBuscaGlobal = setTimeout(() => executarBuscaGlobal(termo), 300);
 }
-
+function moduloDaBusca() { return (typeof moduloAtual !== "undefined" && moduloAtual && MODULOS[moduloAtual]) ? MODULOS[moduloAtual] : null; }
+function desenharFiltroBuscaModulo(totalFora) {
+  const caixa = document.getElementById("filtroBuscaModulo");
+  if (!caixa) return;
+  const mod = moduloDaBusca();
+  if (!mod) { caixa.innerHTML = ""; return; }
+  caixa.innerHTML = `<button type="button" class="chip-filtro ${buscaSoModulo ? "ativo" : ""}" data-on-click="alternarBuscaSoModulo">Só neste módulo: ${escaparHtmlEbd(mod.titulo)}${buscaSoModulo ? " ✕" : ""}</button>`
+    + (buscaSoModulo && totalFora ? ` <button type="button" class="btn-link" data-on-click="alternarBuscaSoModulo">Procurar em todo o sistema (${Number(totalFora)})</button>` : "");
+}
+function alternarBuscaSoModulo() {
+  buscaSoModulo = !buscaSoModulo;
+  desenharResultadosBusca();
+}
 async function executarBuscaGlobal(termo) {
-  const painel = document.getElementById("painelBuscaGlobal");
-  painel.style.display = "block";
-  painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Buscando...</div>";
+  const caixa = document.getElementById("resultadosBuscaGlobal");
+  ultimoTermoBusca = termo;
+  caixa.innerHTML = "<div class=\"painel-notificacoes-vazio\">Buscando...</div>";
   try {
     const res = await fetchProtegido(`${API_BASE}/busca-global?q=${encodeURIComponent(termo)}`);
     const lista = await res.json();
-    if (!Array.isArray(lista) || lista.length === 0) {
-      painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nada encontrado.</div>";
-      return;
-    }
-    painel.innerHTML = lista.map(r => `
-      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""))}">
+    if (termo !== ultimoTermoBusca) return;   // chegou a resposta de uma busca antiga: a tela já mostra a nova
+    ultimosResultadosBusca = Array.isArray(lista) ? lista : [];
+    desenharResultadosBusca();
+  } catch (e) {
+    caixa.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível buscar.</div>";
+  }
+}
+function desenharResultadosBusca() {
+  const caixa = document.getElementById("resultadosBuscaGlobal");
+  const mod = moduloDaBusca();
+  const todos = ultimosResultadosBusca;
+  const lista = mod && buscaSoModulo ? todos.filter((r) => mod.abas.includes(r.aba) || (r.aba === "pessoas" && mod.abas.includes("membros"))) : todos;
+  desenharFiltroBuscaModulo(todos.length - lista.length);
+  if (lista.length === 0) {
+    caixa.innerHTML = `<div class="painel-notificacoes-vazio">${todos.length && mod && buscaSoModulo ? "Nada neste módulo." : "Nada encontrado."}</div>`;
+    return;
+  }
+  caixa.innerHTML = `<p class="painel-lado-rotulo">${lista.length} resultado(s)</p>` + lista.map((r) => `
+      <div class="item-notificacao" data-on-click="irParaResultadoBusca" data-args-click="${argsAttr(String(r.aba || ""), r.membroId ? Number(r.membroId) : null)}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
         <span class="titulo-notificacao">${escaparHtmlEbd(r.titulo)}</span>
         <span>${escaparHtmlEbd(r.tipo)} — ${escaparHtmlEbd(r.subtitulo || "")}</span>
       </div>
     `).join("");
-  } catch (e) {
-    painel.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível buscar.</div>";
-  }
 }
 
-function irParaResultadoBusca(aba) {
-  document.getElementById("painelBuscaGlobal").style.display = "none";
+function irParaResultadoBusca(aba, membroId) {
+  fecharPaineisLado();
   document.getElementById("campoBuscaGlobal").value = "";
+  document.getElementById("campoBuscaLado").value = "";
+  // FASE 10 (19/11/2026) — a pessoa achada abre direto na ficha 360 das telas novas de Membros (app/svelte, por modulos/casca.js)
+  if (aba === "pessoas" && typeof abrirMembrosCasca === "function") { abrirMembrosCasca(membroId ? { tela: "ficha", id: Number(membroId), secao: "resumo" } : { tela: "pessoas" }); return; }
   if (aba) mostrarAbaSecretaria(aba);
 }
 
-document.addEventListener("click", (ev) => {
-  const caixa = document.querySelector(".caixa-busca-global");
-  const painel = document.getElementById("painelBuscaGlobal");
-  if (!painel || painel.style.display === "none" || !caixa) return;
-  if (!caixa.contains(ev.target)) painel.style.display = "none";
-});
+// FASE 10 — fecha os painéis do lado (avisos e busca): pelo ✕, pelo fundo escurecido ou pelo Esc
+function fecharPaineisLado() {
+  ["painelBuscaGlobal", "painelNotificacoes"].forEach((id) => { const p = document.getElementById(id); if (p) p.style.display = "none"; });
+  const fundo = document.getElementById("fundoPainelLado");
+  if (fundo) fundo.classList.remove("visivel");
+}
 
 // ---- SINO DE NOTIFICAÇÕES (vB.2 — Motor de notificações) ----
 async function atualizarBadgeNotificacoes() {
@@ -1029,11 +1083,17 @@ async function atualizarBadgeNotificacoes() {
   } catch (e) { /* sessão expirada já é tratada em fetchProtegido */ }
 }
 
+// FASE 10 — os AVISOS num PAINEL DO LADO (rodadas 4 a 6): "Só o que eu preciso resolver" ligado (os fluxos que estão com a pessoa + os avisos
+// não lidos); desligado, todos os avisos abertos. O quadro de filtros (por assunto) começa recolhido.
+let avisosSoResolver = true, avisosCategoria = null, avisosFiltrosAbertos = false, avisosDados = { lista: [], tarefas: [] };
 async function alternarPainelNotificacoes() {
   const painel = document.getElementById("painelNotificacoes");
   const abrindo = painel.style.display === "none";
-  painel.style.display = abrindo ? "block" : "none";
-  if (abrindo) await carregarPainelNotificacoes();
+  fecharPaineisLado();
+  if (!abrindo) return;
+  painel.style.display = "flex";
+  document.getElementById("fundoPainelLado").classList.add("visivel");
+  await carregarPainelNotificacoes();
 }
 
 async function carregarPainelNotificacoes() {
@@ -1042,23 +1102,68 @@ async function carregarPainelNotificacoes() {
   try {
     const res = await fetchProtegido(`${API_BASE}/notificacoes?status=abertas`);
     const lista = await res.json();
-    if (!Array.isArray(lista) || lista.length === 0) {
-      container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Nenhuma notificação por aqui.</div>";
-      return;
+    let tarefas = [];
+    if (sessaoDeLiderancaNaTela()) {
+      try { const rf = await fetchProtegido(`${API_BASE}/fluxos?filtro=comigo`); const t = await rf.json(); tarefas = Array.isArray(t) ? t : []; } catch (e) { tarefas = []; }
     }
-    container.innerHTML = lista.map(n => `
+    avisosDados = { lista: Array.isArray(lista) ? lista : [], tarefas };
+    desenharAvisos();
+  } catch (e) {
+    container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível carregar.</div>";
+  }
+}
+
+const ROTULO_CATEGORIA_AVISO = (c) => String(c || "Outros").replace(/_/g, " ").toLowerCase().replace(/^./, (x) => x.toUpperCase());
+function desenharAvisos() {
+  const container = document.getElementById("listaNotificacoes");
+  const { lista, tarefas } = avisosDados;
+  const naoLidas = lista.filter((n) => !n.lida);
+  const contagem = document.getElementById("avisosContagemResolver");
+  if (contagem) contagem.textContent = `(${naoLidas.length + tarefas.length})`;
+  const btn = document.getElementById("btnAvisosSoResolver");
+  if (btn) { btn.classList.toggle("ativa", avisosSoResolver); btn.setAttribute("aria-pressed", avisosSoResolver ? "true" : "false"); }
+  // o quadro de filtros: os assuntos que existem nos avisos de agora
+  const categorias = [...new Set(lista.map((n) => n.categoria).filter(Boolean))];
+  const filtros = document.getElementById("avisosFiltros");
+  if (filtros) {
+    filtros.style.display = avisosFiltrosAbertos ? "flex" : "none";
+    filtros.innerHTML = categorias.length
+      ? [`<button type="button" class="chip-filtro ${avisosCategoria ? "" : "ativo"}" data-on-click="filtrarAvisosCategoria" data-args-click="${argsAttr("")}">Todos</button>`]
+        .concat(categorias.map((c) => `<button type="button" class="chip-filtro ${avisosCategoria === c ? "ativo" : ""}" data-on-click="filtrarAvisosCategoria" data-args-click="${argsAttr(String(c))}">${escaparHtmlEbd(ROTULO_CATEGORIA_AVISO(c))}</button>`)).join("")
+      : "<span class=\"subtitle\">Sem assuntos para filtrar.</span>";
+  }
+  const btnF = document.getElementById("btnFiltrosAvisos");
+  if (btnF) btnF.setAttribute("aria-expanded", avisosFiltrosAbertos ? "true" : "false");
+  const itens = lista.filter((n) => (!avisosSoResolver || !n.lida) && (!avisosCategoria || n.categoria === avisosCategoria));
+  let html = "";
+  if (tarefas.length && !avisosCategoria) {
+    html += `<p class="painel-lado-rotulo">Precisa de você (${tarefas.length})</p>` + tarefas.slice(0, 5).map((f) => `
+      <div class="item-notificacao item-resolver" data-on-click="abrirMinhasTarefasDosAvisos" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+        <span class="titulo-notificacao">${escaparHtmlEbd(f.tipoFluxoNome)}${f.atrasado ? " · atrasado" : ""}</span>
+        <span>${escaparHtmlEbd(f.etapaNome)} — prazo ${escaparHtmlEbd(new Date(f.prazoEtapaEm).toLocaleDateString("pt-BR"))}</span>
+      </div>`).join("") + (tarefas.length > 5 ? `<button type="button" class="btn-link" data-on-click="abrirMinhasTarefasDosAvisos">Ver as ${tarefas.length} tarefas</button>` : "");
+  }
+  if (itens.length) {
+    html += `<p class="painel-lado-rotulo">${avisosSoResolver ? "Não lidos" : "Avisos"} (${itens.length})</p>` + itens.map((n) => `
       <div class="item-notificacao ${n.lida ? "lida" : ""}" data-on-click="abrirNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}">
         <span class="titulo-notificacao">${escaparHtmlEbd(n.titulo)}</span>
         <span>${escaparHtmlEbd(n.mensagem)}</span>
         <div class="rodape-notificacao">
-          <span>${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
+          <span>${escaparHtmlEbd(ROTULO_CATEGORIA_AVISO(n.categoria))} · ${new Date(n.criadaEm).toLocaleString("pt-BR")}</span>
           <button class="btn-link" data-on-click="arquivarNotificacao" data-args-click="${argsAttr(Number(n.notificacaoId))}" data-stop="click">Arquivar</button>
         </div>
       </div>
     `).join("");
-  } catch (e) {
-    container.innerHTML = "<div class=\"painel-notificacoes-vazio\">Não foi possível carregar.</div>";
   }
+  container.innerHTML = html || `<div class="painel-notificacoes-vazio">${avisosSoResolver ? "Nada para você resolver agora." : "Nenhum aviso por aqui."}</div>`;
+}
+function alternarAvisosSoResolver() { avisosSoResolver = !avisosSoResolver; desenharAvisos(); }
+function alternarFiltrosAvisos() { avisosFiltrosAbertos = !avisosFiltrosAbertos; desenharAvisos(); }
+function filtrarAvisosCategoria(categoria) { avisosCategoria = categoria || null; desenharAvisos(); }
+function abrirMinhasTarefasDosAvisos() {
+  fecharPaineisLado();
+  if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo();
+  mostrarSubAbaMeupainel("tarefas");
 }
 
 // ---- MINHAS TAREFAS (vB.3 — Motor de workflow genérico) ----
@@ -1240,13 +1345,7 @@ async function marcarTodasNotificacoesLidas() {
   await atualizarBadgeNotificacoes();
 }
 
-// Fecha o painel ao clicar fora dele (mesmo padrão de qualquer dropdown).
-document.addEventListener("click", (ev) => {
-  const caixa = document.getElementById("caixaSino") || document.querySelector(".caixa-sino");
-  const painel = document.getElementById("painelNotificacoes");
-  if (!painel || painel.style.display === "none" || !caixa) return;
-  if (!caixa.contains(ev.target)) painel.style.display = "none";
-});
+// FASE 10: os avisos e a busca são painéis do lado — fecham pelo ✕, pelo fundo escurecido (fecharPaineisLado) ou pelo Esc (modulos/casca.js).
 
 // Self-service: só aparece pra quem logou com a senha da liderança (não vale a entrada por PIN
 // ou código). Pede a senha ATUAL: o token sozinho não basta para trocar a senha — um token
@@ -1275,12 +1374,13 @@ function sairDoPainel() {
   limparSessao();
   document.getElementById("matriculaPainel").value = "";
   document.getElementById("senhaPainel").value = "";
-  voltarParaCheckin();
+  // FASE 10 — ao sair, volta para a ENTRADA (a primeira tela), não para a Portaria
+  mostrarTelaPainelInicial();
 }
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "membros", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1288,6 +1388,7 @@ const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", 
 // reunioes/assembleia/cli — a aba única de Reuniões reflete isso).
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
+  membros: ["pessoas"],   // FASE 10 (19/11/2026): as telas novas de Membros (Svelte)
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
   consagracoes: ["consagracoes", "cei", "financeiro"],   // v8.3: o CEI chega à aba para dar o parecer (Regimento Art. 74, III); Trava 8-A: a tesouraria, para a taxa
@@ -1465,31 +1566,37 @@ function aplicarPermissoesNoMenu() {
 // gente). Os dois abrem o mesmo conteúdo de sempre (#abaReunioes) — só muda
 // por onde se chega e qual lista de órgãos aparece (ver
 // montarSubmenuOrgaosCentrais/Regionais).
+// FASE 10 (conformidade): "icone" é o nome do ícone de traço (modulos/casca.js), não mais um emoji; "resumo" é a linha do cartão quando o módulo
+// não tem de onde tirar pendências (o Início não inventa número).
 const MODULOS = {
-  financeiro: { titulo: "Financeiro", icone: "💰", abaEntrada: "financeiro", abas: ["financeiro"] },
-  membresia: { titulo: "Pessoas & Membresia", icone: "👥", abaEntrada: "pessoas", abas: ["pessoas", "cartas", "abandono", "cuidadopastoral"] },
-  territorio: { titulo: "Estrutura & Territórios", icone: "🗺️", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
-  orgaosCentrais: { titulo: "Órgãos Centrais", icone: "🏛️", abaEntrada: "reunioes", abas: ["reunioes"] },
-  orgaosRegionais: { titulo: "Órgãos Regionais", icone: "🧭", abaEntrada: "reunioes", abas: ["reunioes"] },
-  eclesiastica: { titulo: "Vida Eclesiástica", icone: "📅", abaEntrada: "consagracoes", abas: ["consagracoes", "afm", "enquetes", "arquivos", "identidade"] },
-  disciplina: { titulo: "Disciplina & Ética", icone: "⚖️", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
-  departamentos: { titulo: "Departamentos e Relatórios", icone: "🗂️", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
-  escalas: { titulo: "Escalas de Serviço", icone: "🗓️", abaEntrada: "escalas", abas: ["escalas"] },
-  habilitacao: { titulo: "Habilitação de Voluntários", icone: "🛡️", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao", "checkininfantil"] },
-  assistenciasocial: { titulo: "Assistência Social", icone: "🤝", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
-  ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "📖", abaEntrada: "ebd", abas: ["ebd"] },
-  conquistas: { titulo: "Conquistas e Gamificação", icone: "🏆", abaEntrada: "conquistas", abas: ["conquistas"] },
-  trilhas: { titulo: "Formação e Certificação", icone: "🎓", abaEntrada: "trilhas", abas: ["trilhas"] },
-  psc: { titulo: "Saúde Congregacional (PSC)", icone: "🩺", abaEntrada: "psc", abas: ["psc"] },
-  calendario: { titulo: "Calendário Oficial", icone: "📅", abaEntrada: "calendario", abas: ["calendario"] },
-  canais: { titulo: "Canais e Comunicação", icone: "📣", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
-  crise: { titulo: "Crise e Segurança", icone: "🚨", abaEntrada: "crise", abas: ["crise"] },
-  eventos: { titulo: "Eventos e Congressos", icone: "🎪", abaEntrada: "eventos", abas: ["eventos"] },
-  setores: { titulo: "Setores Técnicos", icone: "🧑‍⚕️", abaEntrada: "setores", abas: ["setores", "vistoria"] },
-  entidades: { titulo: "Entidades Vinculadas", icone: "🏥", abaEntrada: "entidades", abas: ["entidades"] },
-  expansao: { titulo: "Expansão", icone: "⛺", abaEntrada: "expansao", abas: ["expansao"] },
-  conformidade: { titulo: "Conformidade & Auditoria", icone: "🧾", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
-  acesso: { titulo: "Administração de Acesso", icone: "🔐", abaEntrada: "permissoes", abas: ["permissoes"] }
+  financeiro: { titulo: "Financeiro", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financeiro", abas: ["financeiro"] },
+  // FASE 10 (19/11/2026): Membros refeito do zero em Svelte, igual ao desenho aprovado (rodadas 8 a 11): uma aba só ("membros"), o menu e as telas vêm de
+  // app/svelte/membros.js. As telas antigas (Cartas, Perda de Membresia, Importar e exportar, Credenciais, Discipulado) saíram do menu do módulo.
+  membresia: { titulo: "Membros", icone: "pessoas", resumo: "Cadastro, fila, transferências e fichas", abaEntrada: "membros", abas: ["membros"] },
+  // o Cuidado Pastoral (v7.11) não faz parte do desenho de Membros: ganhou o cartão dele (a mesma tela e a mesma permissão)
+  cuidadopastoral: { titulo: "Cuidado Pastoral", icone: "coracao", resumo: "Acompanhamentos, visitas e pedidos de oração", abaEntrada: "cuidadopastoral", abas: ["cuidadopastoral"] },
+  territorio: { titulo: "Estrutura & Territórios", icone: "mapa", resumo: "Congregações, áreas, regiões e órgãos", abaEntrada: "estrutura", abas: ["orgaos", "estrutura", "catalogos"] },
+  orgaosCentrais: { titulo: "Órgãos Centrais", icone: "banco", resumo: "Reuniões e atas dos órgãos gerais", abaEntrada: "reunioes", abas: ["reunioes"] },
+  orgaosRegionais: { titulo: "Órgãos Regionais", icone: "bussola", resumo: "Reuniões dos órgãos das áreas", abaEntrada: "reunioes", abas: ["reunioes"] },
+  eclesiastica: { titulo: "Vida Eclesiástica", icone: "igreja", resumo: "Consagrações, AFM, votações e arquivos", abaEntrada: "consagracoes", abas: ["consagracoes", "afm", "enquetes", "arquivos", "identidade"] },
+  disciplina: { titulo: "Disciplina & Ética", icone: "balanca", resumo: "Processos, ouvidoria e mediação", abaEntrada: "disciplina", abas: ["disciplina", "ouvidoria", "mediacao"] },
+  departamentos: { titulo: "Departamentos e Relatórios", icone: "pasta", resumo: "Relatórios dos departamentos", abaEntrada: "relatoriosdepto", abas: ["relatoriosdepto"] },
+  escalas: { titulo: "Escalas de Serviço", icone: "relogio", resumo: "Equipes e escalas de serviço", abaEntrada: "escalas", abas: ["escalas"] },
+  habilitacao: { titulo: "Habilitação de Voluntários", icone: "escudo", resumo: "Voluntários, menores e proteção", abaEntrada: "habilitacao", abas: ["habilitacao", "menores", "protecao", "checkininfantil"] },
+  assistenciasocial: { titulo: "Assistência Social", icone: "maos", resumo: "Atendimentos e profissionais", abaEntrada: "assistenciasocial", abas: ["assistenciasocial"] },
+  ebd: { titulo: "EBD (Escola Bíblica Dominical)", icone: "livro", resumo: "Turmas, chamadas e revistas", abaEntrada: "ebd", abas: ["ebd"] },
+  conquistas: { titulo: "Conquistas e Gamificação", icone: "trofeu", resumo: "Conquistas e reconhecimentos", abaEntrada: "conquistas", abas: ["conquistas"] },
+  trilhas: { titulo: "Formação e Certificação", icone: "formatura", resumo: "Trilhas e certificados", abaEntrada: "trilhas", abas: ["trilhas"] },
+  psc: { titulo: "Saúde Congregacional (PSC)", icone: "estetoscopio", resumo: "Saúde das congregações", abaEntrada: "psc", abas: ["psc"] },
+  calendario: { titulo: "Calendário Oficial", icone: "calendario", resumo: "Agenda oficial e propostas", abaEntrada: "calendario", abas: ["calendario"] },
+  canais: { titulo: "Canais e Comunicação", icone: "megafone", resumo: "Canais oficiais e comunicados", abaEntrada: "canais", abas: ["canais", "comunicacao"] },
+  crise: { titulo: "Crise e Segurança", icone: "alerta", resumo: "Regime de crise e imprensa", abaEntrada: "crise", abas: ["crise"] },
+  eventos: { titulo: "Eventos e Congressos", icone: "tenda", resumo: "Eventos, inscrições e caixa", abaEntrada: "eventos", abas: ["eventos"] },
+  setores: { titulo: "Setores Técnicos", icone: "maleta", resumo: "Setores técnicos e vistorias", abaEntrada: "setores", abas: ["setores", "vistoria"] },
+  entidades: { titulo: "Entidades Vinculadas", icone: "hospital", resumo: "Entidades vinculadas", abaEntrada: "entidades", abas: ["entidades"] },
+  expansao: { titulo: "Expansão", icone: "globo", resumo: "Frentes novas, missões e distritos", abaEntrada: "expansao", abas: ["expansao"] },
+  conformidade: { titulo: "Conformidade & Auditoria", icone: "prancheta", resumo: "Auditoria, proteção de dados e documentos", abaEntrada: "auditoria", abas: ["auditoria", "protecaodedados", "documentos"] },
+  acesso: { titulo: "Administração de Acesso", icone: "cadeado", resumo: "Quem pode o quê no sistema", abaEntrada: "permissoes", abas: ["permissoes"] }
 };
 let moduloAtual = null;
 
@@ -1502,6 +1609,8 @@ function podeAcessarModulo(chave) {
 }
 
 function montarGradeModulos() {
+  // FASE 10 (conformidade): os cartões aprovados (o ícone, o nome e as 2 pendências de cada módulo) — modulos/casca.js
+  if (typeof desenharCartoesModulosCasca === "function") { desenharCartoesModulosCasca(); return; }
   const grade = document.getElementById("gradeModulos");
   const chaves = Object.keys(MODULOS).filter(podeAcessarModulo);
   if (chaves.length === 0) {
@@ -1510,7 +1619,7 @@ function montarGradeModulos() {
   }
   grade.innerHTML = chaves.map(chave => {
     const m = MODULOS[chave];
-    return `<div class="card-modulo" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
+    return `<div class="card-modulo" data-modulo="${escaparHtmlEbd(String(chave ?? ""))}" data-on-click="entrarModulo" data-args-click="${argsAttr(String(chave ?? ""))}" tabindex="0" role="button" data-on-keydown="ativarComTeclado" data-args-keydown="${argsAttr(ARG.evento, ARG.elemento)}">
       <span class="icone-modulo">${escaparHtmlEbd(m.icone)}</span><span>${escaparHtmlEbd(m.titulo)}</span>
     </div>`;
   }).join("");
@@ -1518,6 +1627,7 @@ function montarGradeModulos() {
 
 function entrarModulo(chave) {
   moduloAtual = chave;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(chave);   // FASE 10: o menu na cor do módulo
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById(`grupoModulo${capitalize(chave)}`).style.display = "block";
   document.getElementById("btnVoltarModulo").style.display = "flex";
@@ -1529,6 +1639,7 @@ function entrarModulo(chave) {
 
 function sairDoModulo() {
   moduloAtual = null;
+  if (typeof marcarModuloNaCasca === "function") marcarModuloNaCasca(null);
   document.querySelectorAll(".grupo-modulo").forEach(g => g.style.display = "none");
   document.getElementById("btnVoltarModulo").style.display = "none";
   mostrarAbaSecretaria("meupainel");
@@ -1540,9 +1651,9 @@ function sairDoModulo() {
 // explícito): Perfil agora é só o resumo/dashboard; Dados Cadastrais, Vínculos
 // Familiares e Contribuições ganharam cada um seu próprio espaço, em vez de
 // tudo empilhado numa página só cada vez mais comprida.
-const SUB_ABAS_MEUPAINEL = ["perfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
+const SUB_ABAS_MEUPAINEL = ["perfil", "minhavida", "trabalho", "frequencia", "meuperfil", "dados", "credencial", "vinculos", "contribuicoes", "lgpd", "cartas", "minhasescalas", "minhahabilitacao", "menores", "protecao", "checkininfantil", "cuidado", "comunicacoes", "votacoes", "identidade", "minhasconquistas", "minhaformacao", "agenda", "canais", "eventos", "setores", "tarefas", "seguranca"];
 const TITULOS_SUB_MEUPAINEL = {
-  perfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha Credencial", vinculos: "Vínculos Familiares",
+  perfil: "Início", minhavida: "Minha vida na igreja", trabalho: "Meu trabalho", frequencia: "Minha frequência", meuperfil: "Meu Perfil", dados: "Meus Dados Cadastrais", credencial: "Minha carteirinha", vinculos: "Vínculos Familiares",
   contribuicoes: "Minhas Contribuições", lgpd: "Meus Dados (LGPD)", cartas: "Cartas de Trânsito",
   minhasescalas: "Minhas Escalas", minhahabilitacao: "Minha Habilitação", menores: "Ministério com menores", protecao: "Proteção de crianças", checkininfantil: "Check-in infantil", cuidado: "Cuidado (oração e visita)", comunicacoes: "Comunicações", votacoes: "Votações", identidade: "Identidade Visual", minhasconquistas: "Minhas Conquistas", minhaformacao: "Minha Formação", agenda: "Agenda", canais: "Canais", eventos: "Eventos", setores: "Setores Técnicos",
   tarefas: "Minhas Tarefas", seguranca: "Segurança (sessões e delegação)"
@@ -1556,12 +1667,14 @@ function mostrarSubAbaMeupainel(sub) {
   if (typeof idvSubAbaMudou === "function") idvSubAbaMudou(sub);   // v7.14: as sugestões, o voto e as artes da pessoa não ficam para trás
   if (typeof enqSubAbaMudou === "function") enqSubAbaMudou(sub);
   if (typeof comSubAbaMudou === "function") comSubAbaMudou(sub);   // v7.12: as escolhas e os comunicados da pessoa não ficam para trás
+  if (typeof mvSubAbaMudou === "function") mvSubAbaMudou(sub);
+  if (sub !== "minhavida" && typeof svSubMudou === "function") svSubMudou(sub);   // FASE 10, passo 7a: a minha ficha recolhe o menu principal (notebook) e o devolve ao sair
   if (typeof cpaSubAbaMudou === "function") cpaSubAbaMudou(sub);   // v7.11: o acompanhamento aberto (e a nota pastoral aberta) e o que a pessoa escrevia nos pedidos não ficam para trás   // v7.10: a sala do check-in infantil (e o código de retirada) não fica para trás ao trocar de sub-aba (módulo ausente ou velho no cache: a navegação segue)
   SUB_ABAS_MEUPAINEL.forEach(nome => {
     document.getElementById(`subMeupainel${capitalize(nome)}`).style.display = nome === sub ? "block" : "none";
     document.getElementById(`btnSubMeupainel${capitalize(nome)}`).classList.toggle("ativo", nome === sub);
   });
-  document.getElementById("tituloModulo").textContent = `Meu Painel — ${TITULOS_SUB_MEUPAINEL[sub]}`;
+  document.getElementById("tituloModulo").textContent = TITULOS_SUB_MEUPAINEL[sub] || "Início";   // FASE 10: o título é a própria parte ("Início", "Minha carteirinha"...)
   if (sub === "cartas") carregarMinhasCartas();
   if (sub === "lgpd") { carregarConsentimentoLGPD(); carregarMinhasSolicitacoesLGPD(); carregarMinhaFoto(); }
   if (sub === "dados") { carregarMeusDadosForm(); carregarMinhasSolicitacoesEdicao(); }
@@ -1591,6 +1704,13 @@ function mostrarSubAbaMeupainel(sub) {
   if (sub === "tarefas") { filtrarMinhasTarefas(filtroMinhasTarefasAtual); carregarMinhasMediacoesAcao(); }
   if (sub === "perfil") carregarPainelInicial();
   if (sub === "seguranca") { carregarMinhasSessoes(); carregarChavesAcesso(); carregarDelegacoes(); }
+  // FASE 10 — as páginas novas do Meu Painel (modulos/casca.js; módulo ausente ou velho no cache: a navegação segue)
+  if (sub === "minhavida" && typeof carregarMinhaVidaCasca === "function") carregarMinhaVidaCasca();
+  // FASE 10 (19/11/2026): a minha ficha das telas novas (app/svelte, por modulos/casca.js); ao sair da Minha vida ela é desmontada
+  if (sub === "minhavida" && typeof svSubMudou === "function") svSubMudou(sub);
+  if (sub === "meuperfil" && typeof desenharMeuPerfilCasca === "function") desenharMeuPerfilCasca();
+  if (sub === "trabalho" && typeof desenharMeuTrabalhoCasca === "function") desenharMeuTrabalhoCasca();
+  if (typeof atualizarPilulasCelular === "function") atualizarPilulasCelular();   // a pílula do celular acompanha também a troca feita por código
 }
 
 // ---- PAINEL INICIAL POR PERFIL (vB.7) ----
@@ -1610,6 +1730,8 @@ function fecharPrimeiroAcesso() {
 }
 
 async function carregarPainelInicial() {
+  // FASE 10 (conformidade): "Para você hoje" e as pendências de cada módulo, tiradas dos avisos e das tarefas que o sistema já calcula — modulos/casca.js
+  if (typeof carregarInicioCasca === "function") { await carregarInicioCasca(); return; }
   const cx = document.getElementById("cxPainelInicial");
   if (!authToken) { cx.style.display = "none"; return; }
   mostrarPrimeiroAcessoSeNecessario();
@@ -1823,12 +1945,13 @@ function formatarMoedaEbd(valor) {
 // api/shared/__tests__/frontCsp.test.js confere que cada nome usado está aqui e que nada sobra. Ação nova: escreva data-on-click="minhaAcao" no HTML
 // e acrescente minhaAcao abaixo (referência direta à função, nunca texto: o despachante não procura nada em window).
 registrarAcoes({
+  abrirPainelBusca,   // FASE 10 (conformidade): a lupa da barra do topo no celular
   usarChaveAcessoAcao, pedirCodigoFatorAcao, confirmarCodigoFatorAcao, cancelarSegundoFatorAcao, cadastrarChaveAcessoAcao, removerChaveAcessoAcao,
   abrirModalAnexos, abrirNotificacao,
   acaoMinhaTarefa, acessarPainel,
   alterarMeuPinAcao, alternarAjudaContextual,
   alternarLoginPorCodigo, alternarModoLeitura, alternarPainelNotificacoes, alternarPushAcao,
-  arquivarNotificacao,
+  arquivarNotificacao, abrirMinhasTarefasDosAvisos, alternarAvisosSoResolver, alternarBuscaSoModulo, alternarFiltrosAvisos, fecharPaineisLado, filtrarAvisosCategoria, onDigitarBuscaLado,
   ativarComTeclado,
   cancelarDelegacaoAcao,
   confirmarCodigoAcessoAcao,

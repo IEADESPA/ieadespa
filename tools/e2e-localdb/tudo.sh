@@ -121,11 +121,33 @@ bash rodar.sh preparar-172
 BASE=cenario-172 bash rodar.sh roteiro e2e-81-oferta-departamento.js
 # FASE 10: o número do recibo de doação numa transação travada (o maior do ano + 1), com corrida de 6 processos
 BASE=cenario-172 bash rodar.sh roteiro e2e-82-doacoes-recibo.js
-# FASE 10 (v10.1c): a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
-BASE=cenario-172 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
 # FASE 10 (migração 173): a votação vinculante com o tipo — proposta (aprova, rejeita, em branco não conta) ou escolha (a mais votada, empate para a mesa)
 bash rodar.sh preparar-173
 BASE=cenario-173 bash rodar.sh roteiro e2e-83-votacao.js
+# FASE 10 (v10.1b, migração 174): a ficha por dentro — o GestaoPessoas lê as colunas da 174, por isso a lista de pessoas (e2e-84) também roda sobre a cenario-174
+bash rodar.sh preparar-174
+# (v10.1c) a lista de pessoas filtrada no banco pelo escopo e em páginas, contra o gabarito tirado do banco
+BASE=cenario-174 bash rodar.sh roteiro e2e-84-pessoas-escopo.js
+# (v10.1b passo 2) a linha do tempo única da pessoa: todas as fontes, a ordem, quem vê o quê (escala, disciplina, a própria pessoa) e a paginação
+BASE=cenario-174 bash rodar.sh roteiro e2e-86-linha-do-tempo.js
+# (v10.1b passo 3, migração 176) a transferência de congregação como fluxo: na hora pela Geral e na mesma área, entre áreas o destino aceita ou recusa, a própria
+# pessoa pede, o cadastro não troca mais a congregação, as corridas, o escopo e a linha do tempo
+bash rodar.sh preparar-176
+BASE=cenario-176 bash rodar.sh roteiro e2e-89-transferencia.js
+# (v10.1b passo 4, migração 177) o pré-cadastro (site e líder), a fila de cadastros com o aceite automático, o CPF repetido (dentro e fora do escopo, o caso
+# da Secretaria Geral), os limites do site e as corridas; o e2e-85 roda aqui porque o cadastro pelo sistema agora confere o CPF pela regra nova (e pode abrir caso)
+bash rodar.sh preparar-177
+BASE=cenario-177 bash rodar.sh roteiro e2e-90-pre-cadastro.js
+# (v10.1b) o CPF (único, mascarado, inteiro só para a Geral com a leitura registrada), a filiação, a escolaridade e a matrícula gerada, com corridas de vários processos
+BASE=cenario-177 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
+# (v10.1b passo 5, migração 178) a edição da ficha campo a campo (a trilha, o CPF mascarado, as travas por papel), o membro muda o contato e o vazio e sugere o
+# resto, a caixa de sugestões por nível (a local aplica, a área acompanha, a Geral aplica tudo), recusar com motivo, o histórico da ficha e as corridas
+bash rodar.sh preparar-178
+BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
+E2E_RCSI=1 BASE=cenario-178 bash rodar.sh roteiro e2e-91-edicao-campo-a-campo.js
+# (v10.1b passo 7a) o painel executivo do módulo Membros (?resumo=1: GROUPING SETS, idade e batismo no Espírito Santo no banco, escopo, a escolha da congregação)
+# e os filtros novos da lista em páginas (?falta=, ?rol=), contra o gabarito do banco
+BASE=cenario-178 bash rodar.sh roteiro e2e-92-painel-membros.js
 # 17/11/2026: o histórico antigo não mostra o motivo de uma saída disciplinar (exclusão, abandono) a quem não tem "disciplina"
 BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 # FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco

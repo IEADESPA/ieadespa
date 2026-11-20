@@ -1,0 +1,262 @@
+---
+/*
+ * FASE 10 (20/11/2026) — "Quero me cadastrar": o pré-cadastro de membros pelo site.
+ * Desenho aprovado: rodada 10, tela r10-site, opção "Formulário ao lado do convite" (à esquerda o convite e "como funciona" em 3 passos,
+ * à direita o formulário; no celular, só o título e o formulário). Por decisão dele, o DEPARTAMENTO não é pedido: sai do nascimento,
+ * do sexo e do estado civil, que por isso entram no lugar dele.
+ * O navegador fala só com o site (/api/quero-me-cadastrar); o site repassa ao sistema, que confere tudo e põe na esteira da secretaria.
+ */
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { getAllMensagens, visiblePosts } from "@/lib/posts";
+
+const allPosts = visiblePosts(await getAllMensagens());
+const passos = [
+  ["Você manda os dados", "leva 2 minutos"],
+  // o desenho dizia "recebe a matrícula por e-mail": esse e-mail não existe e, se existisse, contaria a quem digitou um CPF alheio que ele não tem ficha
+  ["O sistema confere", "se está tudo certo, a sua ficha é criada na hora"],
+  ["Se faltar algo", "a secretaria da sua congregação fala com você"],
+];
+---
+
+<BaseLayout
+  title="Quero me cadastrar"
+  description="Faça o seu cadastro de membro da IEADESPA. Os dados vão direto para a secretaria da sua congregação."
+>
+  <SiteHeader posts={allPosts} />
+  <main id="content" class="qc">
+    <div class="qc-grade">
+      <section class="qc-convite" aria-labelledby="qc-titulo">
+        <p class="qc-sobre">Cadastro de membros</p>
+        <h1 id="qc-titulo" class="qc-titulo">Quero fazer parte <span class="qc-tit-resto">da IEADESPA</span></h1>
+        <ol class="qc-passos">
+          {
+            passos.map(([t, d], i) => (
+              <li>
+                <span class="qc-num" aria-hidden="true">{i + 1}</span>
+                <span>
+                  <strong>{t}</strong>
+                  <small>{d}</small>
+                </span>
+              </li>
+            ))
+          }
+        </ol>
+      </section>
+
+      <div class="qc-cartao">
+        <p class="qc-previa" data-qc-previa hidden>
+          Prévia de testes: os cadastros desta página vão para a homologação, não para o sistema da Igreja.
+        </p>
+        <form class="qc-form" data-qc-form novalidate>
+          <div class="qc-campo">
+            <label for="qc-nome">Nome completo <span class="qc-obr" aria-hidden="true">*</span></label>
+            <input id="qc-nome" name="nome" type="text" autocomplete="name" maxlength="150" required />
+          </div>
+          <div class="qc-dupla">
+            <div class="qc-campo">
+              <label for="qc-cpf">CPF <span class="qc-obr" aria-hidden="true">*</span></label>
+              <input id="qc-cpf" name="cpf" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" required />
+            </div>
+            <div class="qc-campo">
+              <label for="qc-nasc">Nascimento <span class="qc-obr" aria-hidden="true">*</span></label>
+              <input id="qc-nasc" name="dataNascimento" type="date" autocomplete="bday" min="1900-01-01" required />
+            </div>
+          </div>
+          <div class="qc-campo">
+            <label for="qc-email">E-mail <small>(para criar a sua senha)</small> <span class="qc-obr" aria-hidden="true">*</span></label>
+            <input id="qc-email" name="email" type="email" autocomplete="email" maxlength="150" spellcheck="false" required />
+          </div>
+          <div class="qc-campo">
+            <label for="qc-cel">Celular <small>(opcional)</small></label>
+            <input id="qc-cel" name="telefone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="16" placeholder="(00) 00000-0000" />
+          </div>
+          <div class="qc-dupla">
+            <div class="qc-campo">
+              <label for="qc-sexo">Sexo <span class="qc-obr" aria-hidden="true">*</span></label>
+              <select id="qc-sexo" name="sexo" required>
+                <option value="">Escolha</option>
+                <option value="F">Feminino</option>
+                <option value="M">Masculino</option>
+              </select>
+            </div>
+            <div class="qc-campo">
+              <label for="qc-civil">Estado civil <span class="qc-obr" aria-hidden="true">*</span></label>
+              <select id="qc-civil" name="estadoCivil" required>
+                <option value="">Escolha</option>
+                <option value="SOLTEIRO">Solteiro(a)</option>
+                <option value="CASADO">Casado(a)</option>
+                <option value="UNIAO_ESTAVEL">União estável</option>
+                <option value="DIVORCIADO">Divorciado(a)</option>
+                <option value="VIUVO">Viúvo(a)</option>
+              </select>
+            </div>
+          </div>
+          <div class="qc-campo">
+            <label for="qc-cong">Congregação que você frequenta <span class="qc-obr" aria-hidden="true">*</span></label>
+            <select id="qc-cong" name="congregacaoId" required disabled data-qc-cong>
+              <option value="">Carregando as congregações…</option>
+            </select>
+          </div>
+          <label class="qc-aceite">
+            <input type="checkbox" name="aceito" required />
+            <span>Autorizo a Igreja a guardar estes dados para o cadastro de membros. Veja a <a href="/privacidade/" target="_blank">política de privacidade</a>.</span>
+          </label>
+          <div class="qc-isca" aria-hidden="true">
+            <label for="qc-site">Deixe este campo em branco</label>
+            <input type="text" id="qc-site" name="site" tabindex="-1" autocomplete="off" />
+          </div>
+          <button type="submit" class="qc-enviar" data-qc-enviar>Enviar o meu cadastro</button>
+          <p class="qc-status" data-qc-status role="status" aria-live="polite"></p>
+        </form>
+        <div class="qc-pronto" data-qc-pronto tabindex="-1" hidden>
+          <strong>Cadastro enviado</strong>
+          <p data-qc-pronto-msg></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <SiteFooter />
+
+  <script is:inline>
+    (() => {
+      const form = document.querySelector("[data-qc-form]");
+      if (!form) return;
+      const sel = form.querySelector("[data-qc-cong]");
+      const status = form.querySelector("[data-qc-status]");
+      const botao = form.querySelector("[data-qc-enviar]");
+      let versao = "";
+      const so = (v) => v.replace(/\D+/g, "");
+      const avisar = (t, erro) => { status.textContent = t; status.classList.toggle("qc-erro", !!erro); };
+
+      // CPF e celular com a máscara enquanto se digita (o sistema confere de novo)
+      form.cpf.addEventListener("input", () => {
+        const d = so(form.cpf.value).slice(0, 11);
+        form.cpf.value = d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d{1,2})$/, ".$1-$2");
+      });
+      form.telefone.addEventListener("input", () => {
+        const d = so(form.telefone.value).slice(0, 11);
+        form.telefone.value = d.length <= 2 ? d : d.length <= 6 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}`;
+      });
+      const hoje = new Date();
+      form.dataNascimento.max = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+      let visitante = "";
+      const novoId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+      try { visitante = localStorage.getItem("ieadespaVisitanteCadastro") || ""; if (!visitante) { visitante = novoId(); localStorage.setItem("ieadespaVisitanteCadastro", visitante); } } catch { visitante = visitante || novoId(); }
+      let tentativas = 0;
+
+      async function carregar() {
+        let msgServidor = "";
+        try {
+          const r = await fetch("/api/quero-me-cadastrar", { headers: { Accept: "application/json" } });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !Array.isArray(j.congregacoes)) { msgServidor = j.mensagem || ""; throw 0; }
+          versao = (j.consentimento && j.consentimento.versao) || "";
+          sel.replaceChildren(new Option("Escolha a sua congregação", ""));
+          for (const c of j.congregacoes) sel.add(new Option(c.area ? `${c.nome} (${c.area})` : c.nome, String(c.congregacaoId)));
+          sel.disabled = false;
+          avisar("");
+          document.querySelector("[data-qc-previa]").hidden = j.ambiente !== "homologacao";
+        } catch {
+          // nunca a mensagem técnica do navegador ("Failed to fetch"); tenta de novo sozinho, sem apagar o que a pessoa digitou
+          tentativas += 1;
+          sel.replaceChildren(new Option(tentativas < 4 ? "Carregando as congregações…" : "Não carregou: recarregue a página", ""));
+          avisar(msgServidor || "Não conseguimos carregar as congregações. Tentando de novo…", true);
+          if (tentativas < 4) setTimeout(carregar, 20000);
+        }
+      }
+      carregar();
+
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        if (botao.disabled) return;
+        if (sel.disabled) { avisar("A lista de congregações ainda não carregou. Aguarde uns segundos e envie de novo.", true); return; }
+        if (!form.checkValidity()) {
+          const primeiro = form.querySelector(":invalid");
+          avisar(primeiro && primeiro.type === "checkbox" ? "Para enviar, marque que você autoriza a Igreja a guardar os dados." : "Preencha os campos marcados com * (o CPF com os 11 números).", true);
+          if (primeiro) primeiro.focus();
+          return;
+        }
+        if (so(form.cpf.value).length !== 11) { avisar("O CPF tem 11 números.", true); form.cpf.focus(); return; }
+        botao.disabled = true;
+        avisar("Enviando…");
+        const corpo = {
+          nome: form.nome.value, cpf: so(form.cpf.value), email: form.email.value, telefone: so(form.telefone.value),
+          dataNascimento: form.dataNascimento.value, sexo: form.sexo.value, estadoCivil: form.estadoCivil.value,
+          congregacaoId: form.congregacaoId.value, consentimento: { aceito: form.aceito.checked, versao }, site: form.site.value, visitante,
+        };
+        try {
+          const r = await fetch("/api/quero-me-cadastrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok && j.sucesso) {
+            form.hidden = true;
+            const pronto = document.querySelector("[data-qc-pronto]");
+            pronto.querySelector("[data-qc-pronto-msg]").textContent = j.mensagem || "Recebemos o seu cadastro.";
+            pronto.hidden = false;
+            pronto.focus();
+            return;
+          }
+          avisar(j.mensagem || "Não conseguimos enviar agora. Tente de novo em alguns minutos.", true);
+        } catch {
+          avisar("Sem conexão. Confira a internet e envie de novo.", true);
+        }
+        botao.disabled = false;
+      });
+    })();
+  </script>
+</BaseLayout>
+
+<style>
+  .qc { --qc-marinho: #0a2342; --qc-ouro: #ffb800; background: var(--background); }
+  .qc-grade { max-width: var(--layout-wide); margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-direction: column; gap: 16px; }
+  .qc-convite { display: flex; flex-direction: column; gap: 6px; }
+  .qc-sobre, .qc-passos { display: none; }
+  .qc-titulo { font-family: var(--font-sans); font-size: 1.4rem; font-weight: 800; line-height: 1.15; color: var(--foreground); margin: 0; }
+  .qc-tit-resto { display: none; }
+  .qc [hidden] { display: none !important; }
+  .qc-convite::after { content: "Os dados vão direto para a secretaria da sua congregação."; font-size: 0.85rem; color: var(--muted-foreground); }
+  .qc-form { display: flex; flex-direction: column; gap: 12px; }
+  .qc-campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .qc-campo label { font-size: 0.85rem; font-weight: 600; color: var(--foreground); }
+  .qc-campo label small { font-weight: 400; font-size: 0.75rem; color: var(--muted-foreground); }
+  .qc-obr { color: var(--danger); }
+  .qc-campo input, .qc-campo select { height: 44px; width: 100%; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 10px;
+    background: var(--muted); color: var(--foreground); font: inherit; font-size: 16px; }
+  .qc-campo input:focus-visible, .qc-campo select:focus-visible, .qc-aceite input:focus-visible { outline: 2px solid var(--qc-ouro); outline-offset: 1px; }
+  .qc-dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .qc-aceite { display: flex; gap: 10px; align-items: flex-start; font-size: 0.85rem; line-height: 1.4; color: var(--foreground); }
+  .qc-aceite input { width: 20px; height: 20px; flex: none; margin: 0; accent-color: var(--qc-marinho); }
+  .qc-aceite a { text-decoration: underline; text-underline-offset: 2px; }
+  .qc-isca { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .qc-enviar { height: 50px; border: 0; border-radius: 12px; background: var(--qc-ouro); color: var(--qc-marinho); font-size: 1rem; font-weight: 800;
+    cursor: pointer; transition: transform 0.12s ease-out; touch-action: manipulation; }
+  .qc-enviar:active { transform: scale(0.97); }
+  .qc-enviar:disabled { opacity: 0.6; cursor: progress; }
+  .qc-enviar:focus-visible { outline: 3px solid var(--qc-marinho); outline-offset: 2px; }
+  .qc-status { margin: 0; font-size: 0.85rem; min-height: 1.2em; color: var(--muted-foreground); }
+  .qc-status.qc-erro { color: var(--danger); font-weight: 600; }
+  .qc-previa { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--muted); border: 1px dashed var(--border-strong); font-size: 0.8rem; color: var(--warning); }
+  .qc-pronto { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 14px; border: 1px solid var(--border); background: var(--muted); }
+  .qc-pronto strong { font-size: 1.1rem; color: var(--foreground); }
+  .qc-pronto p { margin: 0; color: var(--foreground); }
+  :global([data-theme="dark"]) .qc-aceite input { accent-color: var(--qc-ouro); }
+
+  @media (min-width: 1024px) {
+    .qc { background: linear-gradient(90deg, var(--qc-marinho) 0 46%, var(--background) 46%); }
+    .qc-grade { flex-direction: row; gap: 56px; padding: 36px 64px 56px; align-items: flex-start; }
+    .qc-convite { flex: 1; gap: 22px; padding-top: 24px; }
+    .qc-convite::after { content: none; }
+    .qc-sobre { display: block; margin: 0; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--qc-ouro); }
+    .qc-titulo { font-size: 2.4rem; color: #fff; }
+    .qc-tit-resto { display: block; }
+    .qc-passos { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .qc-passos li { display: flex; gap: 12px; align-items: flex-start; }
+    .qc-passos strong { display: block; font-size: 0.97rem; color: #fff; }
+    .qc-passos small { display: block; font-size: 0.8rem; color: #c9d4e3; line-height: 1.4; }
+    .qc-num { width: 30px; height: 30px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+      background: var(--qc-ouro); color: var(--qc-marinho); font-weight: 800; font-size: 0.875rem; }
+    .qc-cartao { width: min(520px, 46vw); flex: none; background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 24px;
+      box-shadow: 0 16px 40px rgba(6, 22, 41, 0.12); }
+  }
+</style>

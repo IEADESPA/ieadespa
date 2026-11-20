@@ -199,7 +199,7 @@ async function salvarPessoa() {
 
   // Editando dentro do Perfil (aba Editar) — mantém onde está, só atualiza o
   // cabeçalho. Cadastrando pessoa nova — limpa o formulário e oferece o Perfil.
-  const emPerfil = document.getElementById("subPessoasPerfil").style.display !== "none";
+  const emPerfil = document.getElementById("subPessoasPerfil").style.display !== "none" || subAbaPessoasAtual === "ficha";
   if (emPerfil) {
     const pessoa = (window._pessoasCache || []).find(p => p.membroId === Number(membroId));
     if (pessoa) {
@@ -240,7 +240,8 @@ function mudouCargoPessoaAcao() {
 
 // ---- NAVEGAÇÃO DA ABA PESSOAS (v1.10 — submenu Cadastrar/Buscar + Perfil) ----
 
-let subAbaPessoasAtual = "cadastrar";
+// FASE 10, passo 7a — a entrada do módulo é o PAINEL executivo (modulos/membros.js)
+let subAbaPessoasAtual = "visao";
 
 function limparFormPessoa() {
   ["pessoaMatricula", "pessoaNome", "pessoaOrigem", "pessoaIgrejaAnterior", "pessoaNomeLidoRito",
@@ -279,14 +280,32 @@ function moverFormPessoaPara(slotId) {
   document.getElementById(slotId).appendChild(bloco);
 }
 
-const TITULOS_SUB_PESSOAS = { cadastrar: "Cadastrar Pessoa", buscar: "Buscar Pessoas", aprovacoes: "Fila de Aprovações", credenciais: "Credenciais", discipulado: "Discipulado" };
+// FASE 10, passo 7a — o painel, a lista e a ficha 360 novos (modulos/membros.js); o "Buscar Pessoas" antigo ficou só para importar e exportar a planilha
+const TITULOS_SUB_PESSOAS = { visao: "Painel executivo", lista: "Pessoas", ficha: "Ficha da pessoa", cadastrar: "Cadastrar Pessoa", fila: "Fila de cadastros",
+  precadastro: "Pré-cadastro rápido", transferencias: "Mudanças de congregação", buscar: "Importar e exportar",
+  aprovacoes: "Sugestões dos membros", credenciais: "Credenciais", discipulado: "Discipulado" };
 
 function mostrarSubAbaPessoas(sub) {
   // v8.4 — as credenciais são só da Secretaria Geral (o botão nem aparece fora do nível geral; o servidor confere). O desvio vem ANTES de qualquer painel: quem não é
   // do nível geral e herdou "credenciais" de outra sessão cai na busca, nunca numa tela em branco.
   const credGeral = geralPara("pessoas");
-  if (sub === "credenciais" && !credGeral) sub = "buscar";
+  if (sub === "credenciais" && !credGeral) sub = "lista";
+  if (!Object.prototype.hasOwnProperty.call(TITULOS_SUB_PESSOAS, sub)) sub = "visao";
+  // a ficha só abre com uma pessoa escolhida (mbAbrirFicha); sem ela, a lista
+  if (sub === "ficha" && !(typeof mbFichaPodeAbrir === "function" && mbFichaPodeAbrir())) sub = "lista";
+  const saiuDaFicha = subAbaPessoasAtual === "ficha" && sub !== "ficha";
   subAbaPessoasAtual = sub;
+  document.getElementById("subPessoasVisao").style.display = sub === "visao" ? "block" : "none";
+  document.getElementById("subPessoasLista").style.display = sub === "lista" ? "block" : "none";
+  document.getElementById("subPessoasFicha").style.display = sub === "ficha" ? "block" : "none";
+  document.getElementById("subPessoasFila").style.display = sub === "fila" ? "block" : "none";
+  document.getElementById("subPessoasPreCadastro").style.display = sub === "precadastro" ? "block" : "none";
+  document.getElementById("btnSubPessoasFila").classList.toggle("ativo", sub === "fila");
+  document.getElementById("btnSubPessoasPrecadastro").classList.toggle("ativo", sub === "precadastro");
+  document.getElementById("subPessoasTransferencias").style.display = sub === "transferencias" ? "block" : "none";
+  document.getElementById("btnSubPessoasTransferencias").classList.toggle("ativo", sub === "transferencias");
+  document.getElementById("btnSubPessoasVisao").classList.toggle("ativo", sub === "visao");
+  document.getElementById("btnSubPessoasLista").classList.toggle("ativo", sub === "lista" || sub === "ficha");
   document.getElementById("subPessoasCadastrar").style.display = sub === "cadastrar" ? "block" : "none";
   document.getElementById("subPessoasBuscar").style.display = sub === "buscar" ? "block" : "none";
   document.getElementById("subPessoasAprovacoes").style.display = sub === "aprovacoes" ? "block" : "none";
@@ -300,20 +319,36 @@ function mostrarSubAbaPessoas(sub) {
   document.getElementById("btnSubPessoasBuscar").classList.toggle("ativo", sub === "buscar");
   document.getElementById("btnSubPessoasAprovacoes").classList.toggle("ativo", sub === "aprovacoes");
   document.getElementById("tituloModulo").textContent = `Pessoas — ${TITULOS_SUB_PESSOAS[sub]}`;
+  if (saiuDaFicha && typeof mbSaiuDaFicha === "function") mbSaiuDaFicha();
+  if (typeof mbMarcarPilulas === "function") mbMarcarPilulas(sub);
+  if (sub === "visao" && typeof mbCarregarPainel === "function") mbCarregarPainel();
+  if (sub === "lista" && typeof mbAbrirLista === "function") mbAbrirLista();
+  if (sub === "ficha" && typeof mbEntrarNaFicha === "function") mbEntrarNaFicha();
+  if (sub === "buscar") carregarPessoas();   // a tela antiga (importar e exportar) usa a lista INTEIRA do escopo: só ela pede
+  if (sub === "cadastrar" && typeof mcAbrirCadastro === "function") mcAbrirCadastro();
+  if (sub === "fila" && typeof mcAbrirFila === "function") mcAbrirFila();
+  if (sub === "precadastro" && typeof mcAbrirPreCadastro === "function") mcAbrirPreCadastro();
+  if (sub === "transferencias" && typeof mtAbrirTransferencias === "function") mtAbrirTransferencias();
   if (sub === "cadastrar") {
     moverFormPessoaPara("slotFormPessoaCadastrar");
     limparFormPessoa();
   }
-  if (sub === "aprovacoes") carregarFilaAprovacoes();
+  // passo 7a, incremento 3: a caixa de sugestões nova (modulos/membros-movimento.js); sem ela, a tela de antes
+  if (sub === "aprovacoes") { if (typeof mtAbrirSugestoes === "function") mtAbrirSugestoes(); else { document.getElementById("resultadoFilaAprovacoes").style.display = ""; carregarFilaAprovacoes(); } }
   if (sub === "credenciais") credCarregarListaAcao();
   if (sub === "discipulado") discAbrirSubAba();
 }
 
 function voltarBuscaPessoas() {
-  mostrarSubAbaPessoas("buscar");
+  mostrarSubAbaPessoas("lista");
 }
 
+// FASE 10, passo 7a — o perfil abre na FICHA 360 nova (modulos/membros.js): as abas antigas do perfil vão para dentro dela
 function abrirPerfilPessoa(membroId) {
+  if (typeof mbAbrirFicha === "function") { mbAbrirFicha(membroId, "resumo"); return; }
+  abrirPerfilPessoaAntigo(membroId);
+}
+function abrirPerfilPessoaAntigo(membroId) {
   const pessoa = (window._pessoasCache || []).find(p => p.membroId === membroId);
   if (!pessoa) return;
 
@@ -523,6 +558,12 @@ async function endCarregarBairrosPessoas() {
 }
 
 async function carregarPessoas() {
+  // FASE 10, passo 7a — a lista INTEIRA do escopo só serve à tela antiga "Importar e exportar" (sub "buscar"). Nas telas novas, depois de salvar algo, quem está
+  // aberto se relê sozinho (a ficha relê a pessoa; a lista, a página; o painel, os números), sem baixar o cadastro inteiro.
+  if (subAbaPessoasAtual !== "buscar") {
+    if (typeof mbDadosMudaram === "function") await mbDadosMudaram();
+    return;
+  }
   endCarregarBairrosPessoas();
   const res = await fetchProtegido(`${API_BASE}/pessoas`);
   const lista = await jsonDaTela(res, document.getElementById("resultadoListaPessoas"), "lista");

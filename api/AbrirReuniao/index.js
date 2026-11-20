@@ -21,6 +21,7 @@ const { universoDoOrgao } = require("../shared/universo");
 const { resolverOrgao, membroAutorizadoNoOrgaoLocal } = require("../shared/escopo");
 const afm = require("../shared/afm");
 const { ehGeral } = require("../shared/escopoRotas");
+const juntarFichasDb = require("../shared/juntarFichasDb");
 // v8.1 (revisão independente): o que tem efeito nas 3 faltas da CLI (abrir e encerrar a reunião, justificar, corrigir presença) é do nível GERAL nas permissões de reuniões
 // — antes um Dirigente (que tem "reunioes" na congregação) podia abrir e encerrar 3 reuniões da CLI em minutos e excluir todo mundo.
 const geralEmReunioes = (usuario) => ehGeral(auth.visaoDaPermissao(usuario, ["reunioes", "assembleia", "cli"]));
@@ -69,10 +70,20 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // FASE 10, v10.1b passo 6 (decisão do responsável, 13/11/2026): não abrir a assembleia geral com cadastro repetido ou com o número a acertar pendente — a mesma
+    // pessoa com duas fichas votaria duas vezes. O sistema AVISA e pede a confirmação de quem abre; a escolha fica na trilha (shared/juntarFichasDb.js).
+    const pendCadastro = await juntarFichasDb.contarPendenciasGerais(() => pool.request());
+    const alertaCadastro = juntarFichasDb.textoDoAlerta(pendCadastro);
+    if (alertaCadastro.precisaConfirmar && !(req.body && req.body.confirmarCadastrosPendentes === true)) {
+      context.res = { status: 200, body: { sucesso: false, precisaConfirmar: true, mensagem: alertaCadastro.mensagem, contagem: pendCadastro } };
+      return;
+    }
+
     await pool.request().input("id", sql.Int, sessaoConvocadaId).input("senha", sql.NVarChar(50), senhaAcesso)
       .query(`UPDATE Sessoes SET Status = 'ABERTA', SenhaAcesso = @senha, DataSessao = CAST(SYSUTCDATETIME() AS DATE) WHERE SessaoId = @id`);
 
-    await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoConvocadaId), acao: "Iniciou Assembleia convocada", usuarioId });
+    await registrarAuditoria({ tabela: "Sessoes", registroId: Number(sessaoConvocadaId), acao: "Iniciou Assembleia convocada", usuarioId,
+      ...(alertaCadastro.precisaConfirmar ? { dadosDepois: { abriuComCadastrosPendentes: pendCadastro } } : {}) });
 
     context.res = {
       status: 200,

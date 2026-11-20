@@ -36,6 +36,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { membrosElegiveis, membroElegivel, passouDoFechamento, encerrarEnquete, recuperarResultado } = require("../shared/enquetes");
 const estatuto = require("../shared/estatuto");
+const juntarFichasDb = require("../shared/juntarFichasDb");
 // O INSERT do voto: a enquete lida COM TRAVA (UPDLOCK, REPEATABLEREAD — uma leitura com trava mesmo com o banco em READ_COMMITTED_SNAPSHOT), aberta e antes do instante
 // marcado pela hora do banco. Exportado para o roteiro ponta a ponta provar a corrida com o encerramento (tools/e2e-localdb/e2e-39).
 const SQL_INSERIR_RESPOSTA = `INSERT INTO RespostasEnquete (PerguntaId, MembroId, OpcaoId, TextoResposta)
@@ -628,6 +629,18 @@ module.exports = async function (context, req) {
       }
     }
 
+    // FASE 10, v10.1b passo 6 (decisão do responsável, 13/11/2026): a votação que vale para a igreja inteira (vinculante ou de todos os ativos) avisa antes de
+    // abrir se há cadastro repetido ou com o número a acertar (a mesma pessoa votaria duas vezes) e pede a confirmação; a escolha fica na trilha.
+    let alertaCadastro = null, pendCadastro = null;
+    if (vinculante || publicoTipoFinal === "TODOS_ATIVOS") {
+      pendCadastro = await juntarFichasDb.contarPendenciasGerais(() => pool.request());
+      alertaCadastro = juntarFichasDb.textoDoAlerta(pendCadastro);
+      if (alertaCadastro.precisaConfirmar && corpo.confirmarCadastrosPendentes !== true) {
+        context.res = { status: 200, body: { sucesso: false, precisaConfirmar: true, mensagem: alertaCadastro.mensagem, contagem: pendCadastro } };
+        return;
+      }
+    }
+
     const criada = await pool.request()
       .input("titulo", sql.NVarChar(200), titulo.trim())
       .input("descricao", sql.NVarChar(1000), descricao || null)
@@ -683,7 +696,8 @@ module.exports = async function (context, req) {
 
     await registrarAuditoria({
       tabela: "Enquetes", registroId: enqueteId, acao: "Criou enquete", usuarioId: usuario.membroId,
-      dadosDepois: { titulo, totalPerguntas: perguntas.length, visibilidade: visibilidadeFinal, vinculante: !!vinculante, tipoApuracao, publicoTipo: publicoTipoFinal }
+      dadosDepois: { titulo, totalPerguntas: perguntas.length, visibilidade: visibilidadeFinal, vinculante: !!vinculante, tipoApuracao, publicoTipo: publicoTipoFinal,
+        ...(alertaCadastro && alertaCadastro.precisaConfirmar ? { abriuComCadastrosPendentes: pendCadastro } : {}) }
     });
 
     const enqueteCompleta = await montarEnqueteCompleta(pool, enqueteId);

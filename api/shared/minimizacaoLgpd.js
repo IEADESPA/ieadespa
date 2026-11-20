@@ -35,7 +35,11 @@ async function minimizarCamposExMembro(pool, membroId, { dataSaida, motivo }) {
             NomeLidoRito = NULL, MinistranteRito = NULL, DizimistaFiel = NULL,
             CongregacaoId = NULL, ExtensaoId = NULL,
             DataSaida = @dataSaida, MotivoSaida = @motivo, Sexo = NULL
-            WHERE MembroId = @id`);
+            WHERE MembroId = @id;
+            -- v10.1b (migração 174) — o CPF, a filiação e a escolaridade não são registro que o Regimento mande guardar: saem com a minimização (só se a coluna
+            -- existe: a rotina não quebra num banco que ainda não recebeu a 174)
+            IF COL_LENGTH('dbo.MembroReferencia', 'Cpf') IS NOT NULL
+              EXEC sp_executesql N'UPDATE dbo.MembroReferencia SET Cpf = NULL, NomeMae = NULL, NomePai = NULL, Escolaridade = NULL WHERE MembroId = @m', N'@m INT', @m = @id;`);
   // v8.2 — o histórico de cargos é registro eclesiástico de consagração: sai com a minimização (Regimento Art. 132 §2º, II).
   await pool.request().input("id", sql.Int, membroId).query(`DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id`);
   // v8.4 — o recolhimento da credencial (Regimento Art. 131 §3º, III; Art. 132 §2º, II): a via válida é cancelada (o QR passa a dizer "cancelada").

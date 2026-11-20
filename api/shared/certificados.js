@@ -336,7 +336,7 @@ module.exports = {
   TIPO_PROTOCOLO_CERTIFICADO, ALFABETO_CODIGO, TAMANHO_CODIGO,
   // Lógica pura
   validarEmissaoCertificado, podeAcessarCertificado, gestorAlcancaMembro, mapearCertificado, PERMISSOES_DA_NATUREZA,
-  gerarCodigoVerificacao, normalizarCodigo, codigoValido, formatarCodigo, urlVerificacao,
+  gerarCodigoVerificacao, normalizarCodigo, codigoValido, formatarCodigo, urlVerificacao, urlPublicaBase,
   isoDia, calcularHashIntegridade, avaliarVerificacaoPublica, podeRevogarCertificado,
   // Banco
   emitirCertificado, listarCertificadosMembro, buscarCertificadoPorId, buscarCertificadoPorCodigo, revogarCertificado

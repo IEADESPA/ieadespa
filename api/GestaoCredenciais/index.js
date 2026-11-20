@@ -9,6 +9,8 @@
 //  POST pedir-impressao         (login)         a própria
 // Matrícula malformada, inexistente ou sem credencial: 404 igual.
 const auth = require("../shared/auth");
+const juntarFichasDb = require("../shared/juntarFichasDb");
+const MSG_PENDENCIA = "Esta ficha tem uma pendência de cadastro (ficha repetida ou número a acertar): a credencial física só é impressa depois de resolver. A via digital continua valendo.";
 const { getPool } = require("../shared/db");
 const { exigirGeral, ehGeral } = require("../shared/escopoRotas");
 const regra = require("../shared/credencial");
@@ -59,6 +61,9 @@ module.exports = async function (context, req) {
     }
     // só a foto que está no cadastro: a que foi tirada (consentimento revogado) não volta pelo arquivo que sobrou no armazenamento
     // Trava 8-A: o PDF que a própria pessoa baixa sai marcado "via digital" (Art. 76 §2º: a impressão é da Secretaria Geral)
+    // FASE 10, passo 6 (decisão do responsável): o cartão para IMPRIMIR (o PDF que a Secretaria Geral baixa de outra pessoa) não sai enquanto a ficha tiver pendência
+    // de cadastro (ficha repetida, número a acertar) — nunca sai credencial física com o número de duas pessoas. A via digital da própria pessoa continua.
+    if (Number(membroId) !== Number(usuario.membroId) && await juntarFichasDb.bloqueiaImpressaoFisica(() => pool.request(), membroId)) return erro(context, 409, MSG_PENDENCIA);
     const buffer = await pdfDaCredencial(c, c.fotoUrlCrua ? await storage.lerFoto(membroId) : null, { viaDigital: Number(membroId) === Number(usuario.membroId) });
     context.res = { status: 200, headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="credencial-${membroId}-via${c.via}.pdf"`, "Cache-Control": "no-store" }, body: buffer, isRaw: true };
     return;
@@ -83,6 +88,8 @@ module.exports = async function (context, req) {
   if (acao === "impressa") {
     const credencialId = auth.idDeRota(corpo.credencialId);
     if (!credencialId) return erro(context, 404, "Credencial não encontrada.");
+    const dona = (await pool.request().input("id", require("../shared/db").sql.Int, credencialId).query(`SELECT MembroId FROM CredenciaisEclesiasticas WHERE CredencialId = @id`)).recordset[0];
+    if (dona && await juntarFichasDb.bloqueiaImpressaoFisica(() => pool.request(), dona.MembroId)) return erro(context, 409, MSG_PENDENCIA);
     return resposta(context, await db.registrarImpressao(pool, { credencialId, por }));
   }
   if (!["emitir", "nova-via", "cancelar"].includes(acao)) return erro(context, 404, "Ação inválida.");

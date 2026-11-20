@@ -108,17 +108,23 @@ async function salvarEnquete() {
   if (!titulo) { msg.textContent = "Informe o título."; return; }
   if (perguntas.length === 0) { msg.textContent = "Adicione ao menos 1 pergunta."; return; }
 
-  const res = await fetchProtegido(`${API_BASE}/enquetes`, {
+  const criar = async (confirmar) => (await fetchProtegido(`${API_BASE}/enquetes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       titulo, descricao: descricao || undefined, visibilidade, publicoTipo, perguntas,
       publicoMembroIds: publicoTipo === "LISTA_CUSTOM" ? publicoMembroIds : undefined,
       vinculante, quorumTipo: vinculante && tipoApuracao === "PROPOSTA" ? quorumTipo : undefined, dataFechamentoPrevista,
-      tipoApuracao, papeis: tipoApuracao === "PROPOSTA" && perguntas[0] ? papeisDaPropostaEnquete(perguntas[0].opcoes) : undefined
+      tipoApuracao, papeis: tipoApuracao === "PROPOSTA" && perguntas[0] ? papeisDaPropostaEnquete(perguntas[0].opcoes) : undefined,
+      ...(confirmar ? { confirmarCadastrosPendentes: true } : {})
     })
-  });
-  const data = await res.json();
+  })).json();
+  let data = await criar(false);
+  // FASE 10, passo 6: a votação da igreja inteira avisa se há cadastro repetido ou com o número a acertar e só abre com a confirmação
+  if (data && data.precisaConfirmar) {
+    if (!(await confirmarAcao(data.mensagem, "Abrir a votação mesmo assim"))) { msg.textContent = "Votação não aberta."; return; }
+    data = await criar(true);
+  }
   msg.textContent = data.mensagem;
   if (data.sucesso) {
     document.getElementById("enqueteTitulo").value = "";

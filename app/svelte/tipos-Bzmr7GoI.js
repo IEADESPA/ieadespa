@@ -1,0 +1,1 @@
+var e={MEMBRO:`Membro`,CONGREGADO:`Congregado`,OBREIRO:`Obreiro`,OUTRO:`Outro`},t={nome:`Ana Beatriz Moreira`,nascimento:`1990-03-14`,matricula:700412,mae:`Lúcia Moreira`,pai:`Paulo Moreira`,tipoRotulo:`Membro`,foto:null,qrSvg:null};export{e as n,t};

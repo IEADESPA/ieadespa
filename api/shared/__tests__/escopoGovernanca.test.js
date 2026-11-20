@@ -8,6 +8,8 @@ jest.mock("../db", () => {
   const requisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor, afetadas] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs, texto) : valor, rowsAffected: [afetadas === undefined ? 0 : afetadas] };
+    // passo 6 (juntar fichas): criar uma votação geral confere antes o alerta da assembleia (cadastros a acertar) — aqui, nenhum
+    if (/AS possiveis/.test(texto)) return { recordset: [{ repetidas: 0, numero: 0, arrolamento: 0, possiveis: 0 }], rowsAffected: [0] };
     return { recordset: [], rowsAffected: [0] };
   } }; return r; };
   // (v8.1) a inclusão em comissão grava numa transação com a trava da comissão: Transaction e Request simulados sobre o mesmo banco de texto

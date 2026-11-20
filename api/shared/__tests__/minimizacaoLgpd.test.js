@@ -50,7 +50,8 @@ describe("minimizarCamposExMembro", () => {
     expect(chamadas[12].inputs.membroId).toBe(42);
     expect(chamadas[13].sql).toMatch(/Telefone = NULL, Email = NULL, Endereco = NULL/);
     expect(chamadas[13].sql).toMatch(/Sexo = NULL/);
-    expect(chamadas[13].sql).not.toMatch(/Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo
+    expect(chamadas[13].sql).not.toMatch(/[^e]Nome\s*=\s*NULL/); // nunca apaga o Registro Histórico Mínimo (o nome da pessoa; o da mãe e o do pai saem — v10.1b)
+    expect(chamadas[13].sql).toMatch(/Cpf = NULL, NomeMae = NULL, NomePai = NULL, Escolaridade = NULL/);   // v10.1b — o CPF, a filiação e a escolaridade saem juntos
     expect(chamadas[13].inputs.id).toBe(42);
     expect(chamadas[14].sql).toMatch(/DELETE FROM CargosMinisteriaisHistorico WHERE MembroId = @id/);
     expect(chamadas[15].sql).toMatch(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);

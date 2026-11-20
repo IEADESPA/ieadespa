@@ -14,7 +14,8 @@ import { getAllMensagens, visiblePosts } from "@/lib/posts";
 const allPosts = visiblePosts(await getAllMensagens());
 const passos = [
   ["Você manda os dados", "leva 2 minutos"],
-  ["O sistema confere", "se está tudo certo, você entra na hora e recebe a matrícula por e-mail"],
+  // o desenho dizia "recebe a matrícula por e-mail": esse e-mail não existe e, se existisse, contaria a quem digitou um CPF alheio que ele não tem ficha
+  ["O sistema confere", "se está tudo certo, a sua ficha é criada na hora"],
   ["Se faltar algo", "a secretaria da sua congregação fala com você"],
 ];
 ---
@@ -138,21 +139,31 @@ const passos = [
         const d = so(form.telefone.value).slice(0, 11);
         form.telefone.value = d.length <= 2 ? d : d.length <= 6 ? `(${d.slice(0, 2)}) ${d.slice(2)}` : `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}`;
       });
-      form.dataNascimento.max = new Date().toISOString().slice(0, 10);
+      const hoje = new Date();
+      form.dataNascimento.max = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+      let visitante = "";
+      const novoId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+      try { visitante = localStorage.getItem("ieadespaVisitanteCadastro") || ""; if (!visitante) { visitante = novoId(); localStorage.setItem("ieadespaVisitanteCadastro", visitante); } } catch { visitante = visitante || novoId(); }
+      let tentativas = 0;
 
       async function carregar() {
+        let msgServidor = "";
         try {
           const r = await fetch("/api/quero-me-cadastrar", { headers: { Accept: "application/json" } });
           const j = await r.json().catch(() => ({}));
-          if (!r.ok || !Array.isArray(j.congregacoes)) throw new Error(j.mensagem || "");
+          if (!r.ok || !Array.isArray(j.congregacoes)) { msgServidor = j.mensagem || ""; throw 0; }
           versao = (j.consentimento && j.consentimento.versao) || "";
           sel.replaceChildren(new Option("Escolha a sua congregação", ""));
           for (const c of j.congregacoes) sel.add(new Option(c.area ? `${c.nome} (${c.area})` : c.nome, String(c.congregacaoId)));
           sel.disabled = false;
+          avisar("");
           document.querySelector("[data-qc-previa]").hidden = j.ambiente !== "homologacao";
-        } catch (e) {
-          sel.replaceChildren(new Option("Não carregou: recarregue a página", ""));
-          avisar((e && e.message) || "Não conseguimos carregar as congregações. Recarregue a página em 1 minuto.", true);
+        } catch {
+          // nunca a mensagem técnica do navegador ("Failed to fetch"); tenta de novo sozinho, sem apagar o que a pessoa digitou
+          tentativas += 1;
+          sel.replaceChildren(new Option(tentativas < 4 ? "Carregando as congregações…" : "Não carregou: recarregue a página", ""));
+          avisar(msgServidor || "Não conseguimos carregar as congregações. Tentando de novo…", true);
+          if (tentativas < 4) setTimeout(carregar, 20000);
         }
       }
       carregar();
@@ -160,6 +171,7 @@ const passos = [
       form.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         if (botao.disabled) return;
+        if (sel.disabled) { avisar("A lista de congregações ainda não carregou. Aguarde uns segundos e envie de novo.", true); return; }
         if (!form.checkValidity()) {
           const primeiro = form.querySelector(":invalid");
           avisar(primeiro && primeiro.type === "checkbox" ? "Para enviar, marque que você autoriza a Igreja a guardar os dados." : "Preencha os campos marcados com * (o CPF com os 11 números).", true);
@@ -172,7 +184,7 @@ const passos = [
         const corpo = {
           nome: form.nome.value, cpf: so(form.cpf.value), email: form.email.value, telefone: so(form.telefone.value),
           dataNascimento: form.dataNascimento.value, sexo: form.sexo.value, estadoCivil: form.estadoCivil.value,
-          congregacaoId: form.congregacaoId.value, consentimento: { aceito: form.aceito.checked, versao }, site: form.site.value,
+          congregacaoId: form.congregacaoId.value, consentimento: { aceito: form.aceito.checked, versao }, site: form.site.value, visitante,
         };
         try {
           const r = await fetch("/api/quero-me-cadastrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });

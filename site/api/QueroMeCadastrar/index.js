@@ -31,7 +31,8 @@ function cabecalho(req, nome) {
 
 /** "producao", "homologacao" ou null (desconhecido: não repassa). */
 function ambienteDoPedido(req) {
-  const hosts = [cabecalho(req, "x-ms-original-url"), cabecalho(req, "x-forwarded-host"), cabecalho(req, "host")]
+  // só o que a plataforma põe (o x-forwarded-host o visitante inventa)
+  const hosts = [cabecalho(req, "x-ms-original-url"), cabecalho(req, "host")]
     .map((v) => v.replace(/^https?:\/\//i, "").split(/[/:,\s]/)[0].toLowerCase())
     .filter(Boolean);
   // qualquer sinal de prévia vence: mandar à homologação por engano não faz mal; mandar à produção, sim
@@ -43,7 +44,7 @@ function ambienteDoPedido(req) {
 async function chamarSistema(alvo, metodo, corpo, prazoMs) {
   const r = await fetch(`${SISTEMA[alvo]}/pre-cadastro-site`, {
     method: metodo,
-    headers: { "Content-Type": "application/json", "x-site-key": process.env.CHAVE_SITE_SISTEMA },
+    headers: { "Content-Type": "application/json", "x-site-key": String(process.env.CHAVE_SITE_SISTEMA).trim() },
     body: corpo ? JSON.stringify(corpo) : undefined,
     signal: AbortSignal.timeout(prazoMs),
   });
@@ -56,14 +57,18 @@ module.exports = async function (context, req) {
   const responder = (status, body) => { context.res = { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body }; };
   const foraDoAr = (msg) => responder(503, { sucesso: false, mensagem: msg || "Não conseguimos falar com a secretaria agora. Tente de novo em alguns minutos." });
 
-  if (!process.env.CHAVE_SITE_SISTEMA) { context.log.warn("[QueroMeCadastrar] CHAVE_SITE_SISTEMA ausente: o cadastro do site está desligado."); return foraDoAr(); }
+  if (!String(process.env.CHAVE_SITE_SISTEMA || "").trim()) { context.log.error("[QueroMeCadastrar] CHAVE_SITE_SISTEMA ausente: o cadastro do site está desligado."); return foraDoAr(); }
   const alvo = ambienteDoPedido(req);
-  if (!alvo) { context.log.warn("[QueroMeCadastrar] endereço desconhecido: não repassa (falha fechada)."); return foraDoAr(); }
+  if (!alvo) {
+    context.log.error(`[QueroMeCadastrar] endereço desconhecido, não repassa (falha fechada): x-ms-original-url=${cabecalho(req, "x-ms-original-url").slice(0, 120)} host=${cabecalho(req, "host").slice(0, 80)}`);
+    return foraDoAr();
+  }
   const ip = ipDoPedido(req);
 
   if (req.method === "GET") {
-    if (!permitir(`cadastro-lista:${ip}`, 30)) return responder(429, { sucesso: false, mensagem: "Muitas tentativas. Aguarde um pouco." });
+    // a cópia guardada não custa nada ao sistema: o limite só vale para quem faria o site perguntar de novo
     if (guardado.dados && guardado.alvo === alvo && Date.now() - guardado.em < GUARDA_MS) return responder(200, { ...guardado.dados, ambiente: alvo });
+    if (!permitir(`cadastro-lista:${ip}`, 30)) return responder(429, { sucesso: false, mensagem: "Muita gente abrindo por esta mesma internet agora. Espere 5 minutos." });
     try {
       const s = await chamarSistema(alvo, "GET", null, 30000);
       if (s.status !== 200 || !s.dados || !Array.isArray(s.dados.congregacoes)) {
@@ -84,12 +89,15 @@ module.exports = async function (context, req) {
   }
 
   if (req.method !== "POST") return responder(405, { sucesso: false, mensagem: "Método não suportado." });
-  if (!permitir(`cadastro:${ip}`, 5)) return responder(429, { sucesso: false, mensagem: "Muitas tentativas. Aguarde um pouco." });
+  // 20 por 5 minutos por IP: num culto, muita gente manda pelo mesmo Wi-Fi da igreja
+  if (!permitir(`cadastro:${ip}`, 20)) return responder(429, { sucesso: false, mensagem: "Muita gente enviando por esta mesma internet agora. Espere 5 minutos e envie de novo." });
   const b = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
   // armadilha para robô: campo escondido preenchido = finge que deu certo e não manda nada
-  if (typeof b.site === "string" && b.site.trim() !== "") return responder(200, { sucesso: true, mensagem: "Recebemos o seu cadastro. A secretaria da congregação vai conferir e falar com você." });
+  if (typeof b.site === "string" && b.site.trim() !== "") { context.log.warn("[QueroMeCadastrar] a isca de robô veio preenchida: não repassado."); return responder(200, { sucesso: true, mensagem: "Recebemos o seu cadastro. A secretaria da congregação vai conferir e falar com você." }); }
 
-  const corpo = { origemVisitante: ip.slice(0, 128) };
+  // o visitante = o IP + o identificador do navegador (o sistema limita 3 por hora por visitante; pelo IP só, o Wi-Fi da igreja travaria no 4º)
+  const navegador = typeof b.visitante === "string" && /^[A-Za-z0-9-]{8,64}$/.test(b.visitante) ? b.visitante : "";
+  const corpo = { origemVisitante: `${ip}|${navegador}`.slice(0, 128) };
   for (const k of CAMPOS) {
     const v = b[k];
     if (v != null && typeof v !== "string") return responder(400, { sucesso: false, mensagem: "Envio inválido." });
@@ -107,13 +115,19 @@ module.exports = async function (context, req) {
     const s = await chamarSistema(alvo, "POST", corpo, 40000);
     const mensagem = s.dados && typeof s.dados.mensagem === "string" ? s.dados.mensagem : null;
     // 200 (recebido), 400 (só formato: o que falta ou está errado) e 429 (muitos agora) vão como o sistema disse; o resto é "fora do ar"
-    if ((s.status === 200 || s.status === 400 || s.status === 429) && mensagem) return responder(s.status, { sucesso: s.status === 200, mensagem });
-    if (s.status === 401) context.log.warn("[QueroMeCadastrar] o sistema recusou a chave do site (CHAVE_SITE_SISTEMA diferente nos dois aplicativos?).");
+    if ((s.status === 200 || s.status === 400 || s.status === 429) && mensagem) {
+      // versão do consentimento trocada no sistema: a próxima leitura da página busca a nova (sem esperar os 10 minutos)
+      if (s.status === 400 && /consentimento/i.test(mensagem)) guardado = { em: 0, alvo: null, dados: null };
+      return responder(s.status, { sucesso: s.status === 200, mensagem });
+    }
+    if (s.status === 401) context.log.error("[QueroMeCadastrar] o sistema recusou a chave do site (CHAVE_SITE_SISTEMA diferente nos dois aplicativos, ou ausente no sistema).");
     else context.log.warn(`[QueroMeCadastrar] o sistema respondeu ${s.status} ao cadastro.`);
     return foraDoAr();
   } catch (e) {
-    context.log.warn("[QueroMeCadastrar] envio:", e.message);
-    return foraDoAr("O cadastro está acordando. Espere 1 minuto e envie de novo.");
+    // o prazo esgotado não quer dizer que não chegou: o sistema pode ter gravado e só demorado a responder
+    if (e && e.name === "TimeoutError") { context.log.warn("[QueroMeCadastrar] envio: o sistema demorou mais de 40 s."); return foraDoAr("Pode ser que tenha chegado. Espere 1 minuto antes de enviar de novo."); }
+    context.log.error("[QueroMeCadastrar] envio:", e && e.stack ? e.stack : e);
+    return foraDoAr();
   }
 };
 

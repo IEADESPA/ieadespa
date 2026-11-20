@@ -40,7 +40,8 @@ async function travar(rq, recurso) {
 }
 
 // O hash truncado de quem enviou pelo site (o site manda um identificador do visitante; aqui guardamos só 16 letras do hash, nunca o valor em claro).
-const hashOrigem = (v) => (typeof v === "string" && v.trim() ? crypto.createHash("sha256").update(`precad:${v.trim().slice(0, 128)}`).digest("hex").slice(0, 16) : null);
+// HMAC com o segredo do servidor (revisão de 20/11/2026): o hash simples de um IP se desfaz testando os 2^32 endereços
+const hashOrigem = (v) => (typeof v === "string" && v.trim() ? crypto.createHmac("sha256", String(process.env.AUTH_SECRET || "")).update(`precad:${v.trim().slice(0, 128)}`).digest("hex").slice(0, 16) : null);
 
 async function lerCongregacao(rq, congregacaoId) {
   if (!congregacaoId) return null;

@@ -28,7 +28,10 @@ describe("para onde vai", () => {
   test("o domínio do site e o endereço padrão de produção -> produção", () => {
     expect(ambienteDoPedido({ headers: { host: PROD } })).toBe("producao");
     expect(ambienteDoPedido({ headers: { host: "www.ieadespa.org.br" } })).toBe("producao");
-    expect(ambienteDoPedido({ headers: { "X-Forwarded-Host": "salmon-bay-0efd06d0f.6.azurestaticapps.net" } })).toBe("producao");
+    expect(ambienteDoPedido({ headers: { "X-MS-Original-URL": "https://salmon-bay-0efd06d0f.6.azurestaticapps.net/api/quero-me-cadastrar" } })).toBe("producao");
+  });
+  test("o x-forwarded-host (que o visitante inventa) não muda o destino", () => {
+    expect(ambienteDoPedido({ headers: { host: PROD, "x-forwarded-host": PREVIA } })).toBe("producao");
   });
   test("a prévia do pull request -> homologação, mesmo que outro cabeçalho diga produção", () => {
     expect(ambienteDoPedido({ headers: { host: PREVIA } })).toBe("homologacao");
@@ -55,6 +58,9 @@ describe("o repasse", () => {
     const enviado = JSON.parse(chamadas[0].op.body);
     expect(Object.keys(enviado).sort()).toEqual(["congregacaoId", "consentimento", "cpf", "dataNascimento", "email", "estadoCivil", "nome", "origemVisitante", "sexo"].sort());
     expect(enviado.congregacaoId).toBe(7);
+    expect(enviado.origemVisitante).toMatch(/^177\.1\.1\.\d+:1000\|$/);
+    await chamar(pedido("POST", PREVIA, { ...corpoValido(), visitante: "a1b2c3d4-e5f6" }));
+    expect(JSON.parse(chamadas[1].op.body).origemVisitante).toMatch(/\|a1b2c3d4-e5f6$/);
   });
   test("endereço desconhecido ou sem a chave: 503 e nada vai ao sistema", async () => {
     expect((await chamar(pedido("POST", "localhost", corpoValido()))).status).toBe(503);

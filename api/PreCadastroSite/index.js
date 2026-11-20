@@ -36,7 +36,7 @@ module.exports = async function (context, req) {
     try {
       const pool = await getPool();
       const r = await pool.request().query(`SELECT c.CongregacaoId, c.Nome, a.Nome AS Area FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId
-        WHERE ISNULL(c.Ativa, 1) = 1 ORDER BY c.Nome`);
+        WHERE c.Ativa = 1 ORDER BY c.Nome`);
       return res(200, { sucesso: true, consentimento: { versao: regras.CONSENTIMENTO.versao },
         congregacoes: r.recordset.map((l) => ({ congregacaoId: Number(l.CongregacaoId), nome: l.Nome, area: l.Area || null })) }, { "Cache-Control": "public, max-age=600" });
     } catch (e) {
@@ -65,7 +65,7 @@ module.exports = async function (context, req) {
     }
     const id = await pdb.inserir(pool, lido.dados, { origem: "SITE", consentimento: regras.CONSENTIMENTO, origemHash: hash });
     // o processamento (o aceite automático ou a fila) não muda a resposta; se falhar, o pré-cadastro já está gravado e a fila o mostra como pendente
-    try { await pdb.processar(pool, id); } catch (e) { context.log.error("[PreCadastroSite] processar:", e.message); }
+    try { await pdb.processar(pool, id); } catch (e) { context.log.error(`[PreCadastroSite] processar o pré-cadastro ${id}:`, e && e.stack ? e.stack : e); }
     const falta = inicio + tempoMinimo() - Date.now();
     if (falta > 0) await new Promise((r) => setTimeout(r, falta));
     return res(200, { sucesso: true, mensagem: regras.MSG.RECEBIDO });

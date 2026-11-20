@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>Completar o cadastro — IEADESPA</title>
+  <!-- FASE 10, as sobras de Membros — a página PÚBLICA em que a própria pessoa completa o pré-cadastro pelo link do e-mail (api/CompletarCadastro). Autônoma:
+       não carrega o app, não usa cookie nem armazenamento local; a resposta da API entra sempre por textContent. O link vale 7 dias e uma vez só. -->
+  <link rel="icon" href="icones/icone-192.png" />
+  <link rel="stylesheet" href="conferir.css" />
+</head>
+<body>
+  <header class="barra">
+    <img src="icones/icone-192.png" alt="" width="40" height="40" />
+    <div><strong>IEADESPA · Cadastro</strong><small>sem precisar entrar</small></div>
+  </header>
+  <main>
+    <h1 id="titulo" class="titulo">Abrindo…</h1>
+    <p id="texto" class="nota-topo"></p>
+    <form id="form" class="form" autocomplete="off" hidden>
+      <div id="cpfCaixa" class="campo" hidden><label for="cpf">CPF</label><input id="cpf" name="cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" /></div>
+      <div id="nascCaixa" class="campo" hidden><label for="nasc">Data de nascimento</label><input id="nasc" name="nasc" type="date" /></div>
+      <fieldset id="sexoCaixa" class="campo" hidden><legend>Sexo</legend>
+        <label class="opcao"><input type="radio" name="sexo" value="F" /> Feminino</label>
+        <label class="opcao"><input type="radio" name="sexo" value="M" /> Masculino</label>
+      </fieldset>
+      <div id="ecCaixa" class="campo" hidden><label for="ec">Estado civil</label>
+        <select id="ec" name="ec">
+          <option value="">Escolha</option>
+          <option value="SOLTEIRO">Solteiro(a)</option>
+          <option value="CASADO">Casado(a)</option>
+          <option value="UNIAO_ESTAVEL">União estável</option>
+          <option value="DIVORCIADO">Divorciado(a)</option>
+          <option value="VIUVO">Viúvo(a)</option>
+        </select>
+      </div>
+      <p id="erro" class="erro" role="alert"></p>
+      <button id="botao" type="submit">Enviar</button>
+    </form>
+    <p class="nota">Os seus dados ficam só no cadastro da Igreja (LGPD). Se você não pediu cadastro, feche esta página: nada será feito.</p>
+  </main>
+  <script src="completar-cadastro.js"></script>
+</body>
+</html>

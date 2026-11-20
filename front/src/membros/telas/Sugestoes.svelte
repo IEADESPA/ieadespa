@@ -32,6 +32,16 @@
   }
   void carregar();
   interface Linha { s: Sugestao; c: CampoSugestao }
+  // a foto do documento que o membro anexou: o endereço assinado e curto, aberto numa aba nova (nunca guardado no aparelho)
+  let abrindo = $state<number | null>(null);
+  async function verAnexo(id: number) {
+    if (abrindo !== null) return;
+    abrindo = id;
+    const r = await pedir<{ url: string }>(`/fila-aprovacoes/${id}/anexo`);
+    abrindo = null;
+    if (!r.ok) { avisarFalha(r); return; }
+    if (/^https:\/\//.test(r.dados.url)) window.open(r.dados.url, "_blank", "noopener,noreferrer");
+  }
   const linhas = $derived<Linha[]>((lista ?? []).flatMap((s) => s.campos.filter((c) => c.status === "PENDENTE").map((c) => ({ s, c }))));
   async function decidir(l: Linha, decisao: "APROVADO" | "REJEITADO") {
     if (decisao === "REJEITADO" && !motivo.trim()) { ponte().avisar("Escreva o motivo: o membro recebe a resposta.", "erro"); return; }
@@ -70,6 +80,7 @@
           </button>
           <div class="mud">
             <div class="ad"><s>{val(l, l.c.valorAnterior) || "—"}</s><Icone nome="seta" tam={14} traco={2} /><strong>{val(l, l.c.valorProposto) || "—"}</strong></div>
+            {#if l.s.temAnexo}<button type="button" class="doc" disabled={abrindo === l.s.solicitacaoId} onclick={() => void verAnexo(l.s.solicitacaoId)}><Icone nome="doc" tam={15} traco={2} />{abrindo === l.s.solicitacaoId ? "Abrindo…" : "Ver o documento"}</button>{/if}
           </div>
           <div class="acoes">
             {#if !l.c.podeAplicar}
@@ -96,6 +107,7 @@
 
 <style>
   .sug { display: flex; flex-direction: column; gap: 14px; }
+  .doc { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; background: none; border: 0; padding: 0; font: inherit; font-size: 13px; font-weight: 700; color: var(--sv-link); cursor: pointer; }
   .tit-cel { font-size: 18px; font-weight: 800; color: var(--sv-titulo); }
   .caixa { list-style: none; margin: 0; padding: 0; background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: var(--sv-raio); overflow: hidden; }
   .pad { padding: 14px 18px; }

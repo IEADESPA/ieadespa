@@ -1,5 +1,7 @@
 // PreCadastroSite (FASE 10, v10.1b passo 4, 17/11/2026) — o "Quero me cadastrar" do SITE: a própria pessoa manda o pré-cadastro, que cai na mesma fila da secretaria.
 // POST /api/pre-cadastro-site   body:{ nome, cpf, email, telefone?, dataNascimento, sexo, estadoCivil, congregacaoId, consentimento:{ aceito:true, versao }, origemVisitante? }
+// GET  /api/pre-cadastro-site   -> { congregacoes: [{ congregacaoId, nome, area }], consentimento: { versao } } — o que a página "Quero me cadastrar" do site precisa
+//                                  para montar o formulário (FASE 10, as sobras): só as congregações ativas, sem gente nenhuma; a mesma chave do site
 //       cabeçalho x-site-key = CHAVE_SITE_SISTEMA (a mesma nos dois aplicativos do Azure)
 //
 // Chamada pelo site, SERVIDOR A SERVIDOR (o navegador do visitante fala só com o site). Como o mural de oração (CuidadoPastoralSite), FALHA FECHADA: sem a chave
@@ -30,6 +32,18 @@ module.exports = async function (context, req) {
   if (!chave.exigida || !chave.ok) return res(401, { sucesso: false, mensagem: "Não autorizado." });
   const limite = limitador.registrar(chaveDeOrigem(req));
   if (!limite.permitido) return res(429, { sucesso: false, mensagem: "Muitas chamadas seguidas." }, { "Retry-After": String(limite.retryAposSegundos) });
+  if (req.method === "GET") {
+    try {
+      const pool = await getPool();
+      const r = await pool.request().query(`SELECT c.CongregacaoId, c.Nome, a.Nome AS Area FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId
+        WHERE c.Ativa = 1 ORDER BY c.Nome`);
+      return res(200, { sucesso: true, consentimento: { versao: regras.CONSENTIMENTO.versao },
+        congregacoes: r.recordset.map((l) => ({ congregacaoId: Number(l.CongregacaoId), nome: l.Nome, area: l.Area || null })) }, { "Cache-Control": "public, max-age=600" });
+    } catch (e) {
+      context.log.error("[PreCadastroSite] lista:", e.message);
+      return res(500, { sucesso: false, mensagem: "Erro interno." });
+    }
+  }
   if (req.method !== "POST") return res(405, { sucesso: false, mensagem: "Método não suportado." });
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
 
@@ -51,7 +65,7 @@ module.exports = async function (context, req) {
     }
     const id = await pdb.inserir(pool, lido.dados, { origem: "SITE", consentimento: regras.CONSENTIMENTO, origemHash: hash });
     // o processamento (o aceite automático ou a fila) não muda a resposta; se falhar, o pré-cadastro já está gravado e a fila o mostra como pendente
-    try { await pdb.processar(pool, id); } catch (e) { context.log.error("[PreCadastroSite] processar:", e.message); }
+    try { await pdb.processar(pool, id); } catch (e) { context.log.error(`[PreCadastroSite] processar o pré-cadastro ${id}:`, e && e.stack ? e.stack : e); }
     const falta = inicio + tempoMinimo() - Date.now();
     if (falta > 0) await new Promise((r) => setTimeout(r, falta));
     return res(200, { sucesso: true, mensagem: regras.MSG.RECEBIDO });

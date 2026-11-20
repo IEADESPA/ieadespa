@@ -6,6 +6,8 @@
 // mudança feita depois do pedido (409). O CPF na caixa sai mascarado para quem não é a Geral.
 // GET  /api/fila-aprovacoes                         -> ?situacao=PENDENTE (padrão) | DECIDIDAS — os pedidos no escopo (lista com os campos aninhados)
 // POST /api/fila-aprovacoes/{solicitacaoId}/decidir -> body: { decisoes: [{ campoId, decisao: 'APROVADO'|'REJEITADO', motivo? }] } (motivo obrigatório ao recusar)
+// GET  /api/fila-aprovacoes/{solicitacaoId}/anexo   -> o endereço assinado (curto) da foto do documento que o membro anexou (migração 182); quando a sugestão
+//                                                      termina de ser decidida, o arquivo sai do armazenamento
 //
 // ESCOPO: o pedido é sobre a ficha de uma PESSOA — só entra na caixa (e só se decide) o pedido de quem está na congregação que o decisor alcança
 // (shared/escopoRotas.js, filtrado no banco); fora do escopo vale a resposta de "não existe". Ninguém decide o PRÓPRIO pedido: o pedido do próprio usuário nem aparece.
@@ -14,6 +16,7 @@ const { getPool, sql } = require("../shared/db");
 const { pessoaAlcancavel } = require("../shared/escopoRotas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const edicaoFichaDb = require("../shared/edicaoFichaDb");
+const anexoSugestao = require("../shared/anexoSugestao");
 
 const MAX_DECISOES = 50;
 
@@ -31,6 +34,16 @@ module.exports = async function (context, req) {
     const situacao = req.query && String(req.query.situacao || "").toUpperCase() === "DECIDIDAS" ? "DECIDIDAS" : "PENDENTE";
     const lista = await edicaoFichaDb.listarSugestoes(pool, usuario, { situacao });
     context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: lista };
+    return;
+  }
+
+  // ---- GET /{solicitacaoId}/anexo: a foto do documento (no escopo; nunca a do próprio pedido) ----
+  if (req.method === "GET" && solicitacaoIdBruto && acao === "anexo") {
+    const s = solicitacaoId ? (await pool.request().input("id", sql.Int, solicitacaoId).query(`SELECT MembroId FROM SolicitacoesEdicaoPessoa WHERE SolicitacaoId = @id`)).recordset[0] : null;
+    const dono = s ? await pessoaAlcancavel(pool, usuario, s.MembroId) : null;
+    const a = dono && Number(dono.membroId) !== Number(usuario.membroId) ? await anexoSugestao.endereco(pool, solicitacaoId) : null;
+    if (!a) { context.res = { status: 404, headers: { "Cache-Control": "no-store" }, body: { sucesso: false, mensagem: "Anexo não encontrado." } }; return; }
+    context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { sucesso: true, ...a } };
     return;
   }
 
@@ -65,6 +78,8 @@ module.exports = async function (context, req) {
       if (r.sucesso) { if (r.aplicado) aplicados++; else recusados++; } else erros.push({ campoId, status: r.status || 200, mensagem: r.mensagem });
     }
     const feitos = aplicados + recusados;
+    // a sugestão terminou de ser decidida: a foto do documento sai do armazenamento (a decisão já está gravada; melhor esforço)
+    if (feitos) { try { await anexoSugestao.limparSeDecidida(pool, solicitacaoId); } catch (e) { context.log.error("[GestaoFilaAprovacoes] o anexo não foi apagado:", e && e.message); } }
     const mensagem = erros.length === 0 ? `✅ ${aplicados} campo(s) aplicado(s), ${recusados} recusado(s).`
       : decisoes.length === 1 ? erros[0].mensagem
         : `${feitos ? `${aplicados} aplicado(s), ${recusados} recusado(s); ` : ""}${erros.length} não decidido(s): ${erros.map((e) => e.mensagem).join(" · ")}`;

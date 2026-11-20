@@ -49,3 +49,16 @@ main { max-width: 520px; margin: 0 auto; padding: 18px 16px 40px; }
   .vivo strong { color: #e8eef7; }
   .nota, .vivo, .dados dt { color: #b8c4d6; }
 }
+
+/* a página em que a própria pessoa completa o cadastro (completar-cadastro.html) usa este mesmo estilo */
+.titulo { margin: 4px 0 6px; font-size: 1.35rem; color: var(--marinho); }
+.nota-topo { margin: 0 0 6px; color: var(--suave); }
+.campo { margin: 0 0 14px; border: 0; padding: 0; }
+.campo[hidden] { display: none; }
+.campo legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.campo select, .campo input[type="date"] { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #b8bec9; border-radius: 8px; font-family: inherit; background: #fff; }
+.form .campo input[type="date"] { letter-spacing: normal; text-transform: none; font-family: inherit; }
+.opcao { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; font-weight: 500; }
+.opcao input { width: auto; }
+.erro { color: var(--erro); font-weight: 600; min-height: 1em; margin: 0 0 4px; }
+@media (prefers-color-scheme: dark) { .titulo { color: #fff; } .nota-topo { color: #b8c4d6; } }

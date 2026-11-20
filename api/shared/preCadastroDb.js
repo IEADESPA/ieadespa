@@ -40,7 +40,8 @@ async function travar(rq, recurso) {
 }
 
 // O hash truncado de quem enviou pelo site (o site manda um identificador do visitante; aqui guardamos só 16 letras do hash, nunca o valor em claro).
-const hashOrigem = (v) => (typeof v === "string" && v.trim() ? crypto.createHash("sha256").update(`precad:${v.trim().slice(0, 128)}`).digest("hex").slice(0, 16) : null);
+// HMAC com o segredo do servidor (revisão de 20/11/2026): o hash simples de um IP se desfaz testando os 2^32 endereços
+const hashOrigem = (v) => (typeof v === "string" && v.trim() ? crypto.createHmac("sha256", String(process.env.AUTH_SECRET || "")).update(`precad:${v.trim().slice(0, 128)}`).digest("hex").slice(0, 16) : null);
 
 async function lerCongregacao(rq, congregacaoId) {
   if (!congregacaoId) return null;
@@ -66,7 +67,8 @@ async function origemDeQuemLanca(pool, usuario, congregacao) {
 const COLUNAS = `p.PreCadastroId, p.Origem, p.CriadoPor, p.CongregacaoId, c.Nome AS CongregacaoNome, p.Nome, ${ficha.sqlCpfMascarado("p.Cpf")} AS CpfMascarado,
   p.Email, p.Telefone, CONVERT(varchar(10), p.DataNascimento, 120) AS DataNascimento, p.Sexo, p.EstadoCivil, p.Situacao, p.Pendencias, p.MembroIdResultado,
   p.MembroIdRepetido, mr.Nome AS RepetidoNome, cr.Nome AS RepetidoCongregacao, er.Nome AS RepetidoExtensao, p.PreCadastroRepetidoId, p.ResponsavelConfirmado,
-  p.RepeticaoConferida, p.CriadoEm, p.AtualizadoEm, p.DecididoEm, p.DecididoComo, p.MotivoDescarte, CONVERT(varchar(20), CONVERT(bigint, p.Versao)) AS Versao`;
+  p.RepeticaoConferida, p.CriadoEm, p.AtualizadoEm, p.DecididoEm, p.DecididoComo, p.MotivoDescarte, CONVERT(varchar(20), CONVERT(bigint, p.Versao)) AS Versao,
+  p.PedidoPessoaEm, p.PedidoPessoaExpiraEm, p.PedidoPessoaRespondidoEm, CASE WHEN p.PedidoPessoaExpiraEm < SYSUTCDATETIME() THEN 1 ELSE 0 END AS PedidoPessoaVencido`;
 const DE = `FROM PreCadastros p LEFT JOIN Congregacoes c ON c.CongregacaoId = p.CongregacaoId
   LEFT JOIN MembroReferencia mr ON mr.MembroId = p.MembroIdRepetido LEFT JOIN Congregacoes cr ON cr.CongregacaoId = mr.CongregacaoId
   LEFT JOIN ExtensoesTenda er ON er.ExtensaoId = mr.ExtensaoId`;
@@ -87,6 +89,8 @@ function mapear(l, visao) {
     situacao: l.Situacao, pendencias: regras.pendenciasComRotulo(pend), matricula: l.MembroIdResultado == null ? null : Number(l.MembroIdResultado), repetido,
     responsavelConfirmado: !!l.ResponsavelConfirmado, repeticaoConferida: !!l.RepeticaoConferida, criadoEm: l.CriadoEm, decididoEm: l.DecididoEm,
     decididoComo: l.DecididoComo, motivoDescarte: l.MotivoDescarte, versao: l.Versao,
+    // a pessoa foi chamada a completar pelo e-mail (migração 183) e ainda não respondeu: a coluna "a pessoa completa" da esteira
+    pedidoPessoa: l.PedidoPessoaEm && !l.PedidoPessoaRespondidoEm ? { em: l.PedidoPessoaEm, expiraEm: l.PedidoPessoaExpiraEm, vencido: !!l.PedidoPessoaVencido } : null,
     podeResolver: !!visao && ["PENDENTE", "CORRECAO"].includes(l.Situacao) && (ehGeral(visao) || secretariaLocalDe(visao, l.CongregacaoNome)) };
 }
 

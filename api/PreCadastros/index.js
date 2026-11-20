@@ -16,6 +16,9 @@ const { getPool } = require("../shared/db");
 const regras = require("../shared/preCadastro");
 const pdb = require("../shared/preCadastroDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const pessoaCompleta = require("../shared/preCadastroPessoa");
+const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
+const { urlPublicaBase } = require("../shared/certificados");
 
 const NAO_EXISTE = { sucesso: false, mensagem: regras.MSG.NAO_EXISTE };
 const CAMPOS = ["nome", "cpf", "email", "telefone", "dataNascimento", "sexo", "estadoCivil", "congregacaoId"];
@@ -72,7 +75,7 @@ module.exports = async function (context, req) {
 
   // ---- completar, aceitar, descartar (a secretaria local da congregação do pré-cadastro, ou a Geral) ----
   const id = auth.idDeRota(idBruto);
-  if (!id || !["completar", "aceitar", "descartar"].includes(acao) || !visao) return responder(context, 200, NAO_EXISTE);
+  if (!id || !["completar", "aceitar", "descartar", "pedir-pessoa"].includes(acao) || !visao) return responder(context, 200, NAO_EXISTE);
   const l = await pdb.lerPreCadastro(() => pool.request(), id);
   if (!l || !pdb.visivelPara(visao, l)) return responder(context, 200, NAO_EXISTE);
   const papel = pdb.papelParaResolver(visao, l);
@@ -80,6 +83,19 @@ module.exports = async function (context, req) {
   const versaoLida = typeof corpo.versao === "string" && /^\d{1,20}$/.test(corpo.versao) ? corpo.versao : null;
   const confirmacoes = { naoERepeticao: corpo.naoERepeticao === true, responsavelConfirmado: corpo.responsavelConfirmado === true };
 
+  // a própria pessoa completa pelo e-mail (migração 183): o link vale 7 dias e uma vez só; se o e-mail não sair, o pedido não vale
+  if (acao === "pedir-pessoa") {
+    const p = await pessoaCompleta.pedir(pool, { id, por: eu });
+    if (!p.sucesso) return responder(context, p.conflito ? 409 : 200, { sucesso: false, mensagem: p.mensagem });
+    const url = `${urlPublicaBase()}/completar-cadastro.html?c=${encodeURIComponent(p.token)}`;
+    const enviado = await enviarEmailNotificacao({ email: p.email, titulo: "Complete o seu cadastro na IEADESPA", mensagem: pessoaCompleta.textoDoEmail({ nome: p.nome, falta: p.falta, url }), aguardarEntrega: false });
+    if (!enviado) {
+      await pessoaCompleta.desfazerPedido(pool, { id, token: p.token });
+      return responder(context, 503, { sucesso: false, mensagem: "O e-mail não saiu agora: tente de novo em instantes (ou complete você mesma)." });
+    }
+    const atual = await pdb.lerPreCadastro(() => pool.request(), id);
+    return responder(context, 200, { sucesso: true, mensagem: `E-mail enviado: a pessoa tem ${pessoaCompleta.DIAS} dias para completar.`, preCadastro: pdb.mapear(atual, visao) });
+  }
   let r;
   if (acao === "descartar") r = await pdb.descartar(pool, { id, papel, por: eu, motivo: corpo.motivo, versaoLida });
   else if (acao === "completar") {

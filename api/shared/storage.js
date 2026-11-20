@@ -115,6 +115,15 @@ async function salvarArteCarteirinha(bufferArquivo, mimeType) {
   return nomeBlob;
 }
 
+// FASE 10, as sobras — o anexo da sugestão do membro (a foto do documento): no container privado dos documentos, com o nome começando por "sug-". Devolve o NOME.
+async function salvarAnexoSugestao(bufferArquivo, mimeType) {
+  const container = getContainerClient(CONTAINER_DOCUMENTOS);
+  await container.createIfNotExists();
+  const nomeBlob = `sug-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  await container.getBlockBlobClient(nomeBlob).uploadData(bufferArquivo, { blobHTTPHeaders: { blobContentType: mimeType } });
+  return nomeBlob;
+}
+
 function urlDocumentoComSas(urlBlob) {
   return gerarUrlComSas(CONTAINER_DOCUMENTOS, urlBlob);
 }
@@ -174,4 +183,4 @@ async function salvarJsonPrivadoSe(nomeBlob, objeto, etag) {
   }
 }
 
-module.exports = { salvarFoto, excluirFoto, lerFoto, urlComSas, salvarDocumento, salvarArteCarteirinha, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };
+module.exports = { salvarFoto, excluirFoto, lerFoto, urlComSas, salvarDocumento, salvarArteCarteirinha, salvarAnexoSugestao, urlDocumentoComSas, excluirDocumento, salvarJsonPrivado, lerJsonPrivado, lerJsonPrivadoComVersao, salvarJsonPrivadoSe };

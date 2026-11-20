@@ -1,9 +1,9 @@
 <!-- 6. A ESTEIRA DE CADASTROS (rodada 10; notebook opção 1 "quadro por quem completa", celular opção 2 "esteira com os números"): quem chega com o
      mínimo entra sozinho; na fila fica só quem tem pendência, em colunas por quem completa, com o ícone de onde veio. Tocar no cartão abre o que falta. -->
 <script lang="ts">
-  import { pedir, qs } from "../../comum/api";
+  import { pedir, qs, avisarFalha } from "../../comum/api";
   import { ponte } from "../../comum/ponte";
-  import { haQuanto, idade, numero, plural } from "../../comum/formato";
+  import { haQuanto, idade, numero, plural, dataBr } from "../../comum/formato";
   import Cabecalho from "../../comum/Cabecalho.svelte";
   import Botao from "../../comum/Botao.svelte";
   import Escolha from "../../comum/Escolha.svelte";
@@ -47,7 +47,25 @@
 
   const PARECIDA = ["POSSIVEL_REPETICAO", "CPF_REPETIDO", "CPF_EM_OUTRO_PRECADASTRO"];
   const ehParecida = (p: PreCadastro) => (p.pendencias ?? []).some((x) => PARECIDA.includes(x.codigo));
-  const voceCompleta = $derived(fila.filter((p) => !ehParecida(p)));
+  // a coluna "a pessoa completa": chamada pelo e-mail e o link ainda vale (vencido volta para a secretaria)
+  const comAPessoa = (p: PreCadastro) => !!p.pedidoPessoa && !p.pedidoPessoa.vencido && !ehParecida(p);
+  const pessoaCompleta = $derived(fila.filter(comAPessoa));
+  const voceCompleta = $derived(fila.filter((p) => !ehParecida(p) && !comAPessoa(p)));
+  // o que a própria pessoa pode completar (o resto é com a secretaria)
+  const DA_PESSOA = ["FALTA_CPF", "FALTA_NASCIMENTO", "FALTA_SEXO", "FALTA_ESTADO_CIVIL"];
+  const podePedirAPessoa = (p: PreCadastro) => !!p.email && p.situacao === "PENDENTE" && (p.pendencias ?? []).some((x) => DA_PESSOA.includes(x.codigo)) && !comAPessoa(p);
+  let pedindo = $state(false);
+  async function pedirAPessoa() {
+    if (!aberto || pedindo) return;
+    const alvo = aberto;
+    pedindo = true;
+    const x = await pedir<{ mensagem: string; preCadastro?: PreCadastro }>(`/pre-cadastros/${alvo.preCadastroId}/pedir-pessoa`, { metodo: "POST", corpo: {} });
+    pedindo = false;
+    if (!x.ok) { if (aberto === alvo) erroResolver = x.mensagem; else avisarFalha(x); return; }
+    ponte().avisar(x.dados.mensagem, "sucesso");
+    if (aberto === alvo) aberto = null;
+    void carregar();
+  }
   const parecidas = $derived(fila.filter(ehParecida));
   const hoje = new Date().toISOString().slice(0, 10);
   const entraramHoje = $derived(aceitos.filter((p) => (p.decididoEm ?? p.criadoEm ?? "").slice(0, 10) === hoje));
@@ -98,7 +116,7 @@
     <strong>{nomeComIdade(p)}</strong>
     <span class="origem"><Icone nome={o.icone} tam={15} traco={2} />{o.texto}</span>
     <span class="falta">{oQueFalta(p)}</span>
-    <small>{haQuanto(p.criadoEm)} · {p.podeResolver === false ? "a Geral resolve" : ehParecida(p) ? "você: é a mesma pessoa?" : "você"}{sessao.geral || congs.length > 1 ? ` · ${p.congregacao ?? ""}` : ""}</small>
+    <small>{haQuanto(p.criadoEm)} · {comAPessoa(p) ? `e-mail enviado ${haQuanto(p.pedidoPessoa?.em ?? p.criadoEm)}` : p.podeResolver === false ? "a Geral resolve" : ehParecida(p) ? "você: é a mesma pessoa?" : "você"}{sessao.geral || congs.length > 1 ? ` · ${p.congregacao ?? ""}` : ""}</small>
   </button>
 {/snippet}
 
@@ -129,6 +147,8 @@
           {#if tem("POSSIVEL_REPETICAO")}<label class="conf"><input type="checkbox" bind:checked={comp.naoRepete} /> Conferi: não é a mesma pessoa da ficha parecida.</label>{/if}
         </div>
         {#if erroResolver}<p class="erro" role="alert">{erroResolver}</p>{/if}
+        {#if comAPessoa(aberto)}<Aviso tom="info">A pessoa recebeu o e-mail para completar (o link vale até {dataBr(aberto.pedidoPessoa?.expiraEm ?? "")}). Você pode completar aqui mesmo assim.</Aviso>
+        {:else if podePedirAPessoa(aberto)}<div class="r-pessoa"><Botao tipo="linha" icone="envelope" ocupado={pedindo} onclick={() => void pedirAPessoa()}>Pedir à pessoa pelo e-mail</Botao><small>Ela completa o que é dela num link que vale 7 dias.</small></div>{/if}
         <div class="r-acoes">
           <Campo rotulo="Motivo para descartar" opcional valor={comp.motivo} oninput={(v) => (comp.motivo = v)} />
           <div class="r-botoes">
@@ -170,8 +190,8 @@
     <div class="quadro">
       <section class="col"><h2><i class="d marrom"></i>Falta dado: você completa<span class="sv-num">{voceCompleta.length}</span></h2>
         {#each voceCompleta as p (p.preCadastroId)}{@render cartao(p)}{:else}<p class="vazio">Nada aqui.</p>{/each}</section>
-      <section class="col"><h2><i class="d azul"></i>Falta dado: a pessoa completa<span class="sv-num">0</span></h2>
-        <p class="vazio">Pedir à própria pessoa que complete pelo e-mail: em construção.</p></section>
+      <section class="col"><h2><i class="d azul"></i>Falta dado: a pessoa completa<span class="sv-num">{pessoaCompleta.length}</span></h2>
+        {#each pessoaCompleta as p (p.preCadastroId)}{@render cartao(p)}{:else}<p class="vazio">Ninguém esperando. Abra um cadastro que tem e-mail e use "Pedir à pessoa".</p>{/each}</section>
       <section class="col"><h2><i class="d vermelho"></i>Parecida com outra ficha<span class="sv-num">{parecidas.length}</span></h2>
         {#each parecidas as p (p.preCadastroId)}{@render cartao(p)}{:else}<p class="vazio">Nada aqui.</p>{/each}</section>
       <section class="col"><h2><i class="d verde"></i>Entraram sozinhos hoje<span class="sv-num">{entraramHoje.length}</span></h2>
@@ -238,4 +258,6 @@
   .lista-cel { display: flex; flex-direction: column; gap: 8px; }
   .celular .r-campos { grid-template-columns: 1fr; }
   @media (max-width: 1100px) { .quadro { grid-template-columns: 1fr 1fr; } }
+  .r-pessoa { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .r-pessoa small { color: var(--sv-suave); font-size: 12.5px; }
 </style>

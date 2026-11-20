@@ -145,12 +145,36 @@
   let valorSug = $state("");
   let enviando = $state(false);
   let erroSug = $state("");
-  $effect(() => { void campoSugerir; valorSug = ""; erroSug = ""; });
+  // a foto do documento (opcional): imagem ou PDF até 5 MB, vai junto com a sugestão (o servidor confere o conteúdo); some quando a secretaria decide
+  let anexo = $state<{ nome: string; tipo: string; base64: string } | null>(null);
+  let lendoAnexo = $state(false);
+  $effect(() => { void campoSugerir; valorSug = ""; erroSug = ""; anexo = null; });
+  async function escolherAnexo(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = "";
+    if (!f) return;
+    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(f.type)) { erroSug = "O anexo precisa ser uma foto (JPEG, PNG ou WebP) ou um PDF."; return; }
+    if (f.size > 5 * 1024 * 1024) { erroSug = "O anexo passa de 5 MB: tire uma foto menor."; return; }
+    lendoAnexo = true;
+    const base64 = await new Promise<string>((ok) => {
+      const fr = new FileReader();
+      fr.onload = () => ok(String(fr.result).replace(/^data:[^,]*,/, ""));
+      fr.onerror = () => ok("");
+      fr.readAsDataURL(f);
+    });
+    lendoAnexo = false;
+    if (!base64) { erroSug = "Não deu para ler o arquivo: escolha de novo."; return; }
+    erroSug = "";
+    anexo = { nome: f.name, tipo: f.type, base64 };
+  }
   async function enviarSugestao() {
-    if (enviando) return;
+    if (enviando || lendoAnexo) return;
     if (!campoSugerir || !valorSug.trim()) { erroSug = "Escreva o valor certo."; return; }
     enviando = true; erroSug = "";
-    const r = await pedir<{ mensagem?: string }>(`/solicitacoes-edicao/${encodeURIComponent(mat)}`, { metodo: "POST", corpo: { campos: { [campoSugerir]: valorSug.trim() } } });
+    const corpo: Record<string, unknown> = { campos: { [campoSugerir]: valorSug.trim() } };
+    if (anexo) corpo.anexo = { tipo: anexo.tipo, base64: anexo.base64 };
+    const r = await pedir<{ mensagem?: string }>(`/solicitacoes-edicao/${encodeURIComponent(mat)}`, { metodo: "POST", corpo });
     enviando = false;
     if (!r.ok) { erroSug = r.mensagem; return; }
     ponte().avisar("Enviada para a secretaria. Você recebe o aviso quando ela responder.", "sucesso");
@@ -285,7 +309,13 @@
       <Dado rotulo="Hoje está" valor={textoDoValor(campoSugerir, dados[campoSugerir] ?? null)} vazio="vazio" />
       {#if c?.opcoes}<div class="grupo"><span class="rot-f">O certo é <span class="obr">*</span></span><Escolha rotulo="Escolha" estilo="campo" larga valor={valorSug || null} opcoes={c.opcoes.map((o) => ({ valor: o, rotulo: textoDoValor(c.chave, o) }))} onescolher={(v) => (valorSug = v ?? "")} /></div>
       {:else}<Campo rotulo="O certo é" obrigatorio tipo={c?.tipo === "data" ? "date" : "text"} valor={valorSug} oninput={(v) => (valorSug = v)} />{/if}
-      <div class="anexo"><Icone nome="doc" tam={18} traco={2} /><span>Anexar a foto do documento</span><small>em construção</small></div>
+      <label class="anexo" class:tem={!!anexo}>
+        <Icone nome="doc" tam={18} traco={2} />
+        <span>{anexo ? anexo.nome : "Anexar a foto do documento"}</span>
+        <small>{lendoAnexo ? "lendo…" : anexo ? "trocar" : "opcional"}</small>
+        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="escondido" onchange={escolherAnexo} />
+      </label>
+      <p class="dica-anexo">Foto ou PDF, até 5 MB. Só a secretaria vê, e o arquivo sai quando ela decidir.{#if anexo} <button type="button" class="tirar" onclick={() => (anexo = null)}>Tirar o anexo</button>{/if}</p>
       {#if erroSug}<p class="erro" role="alert">{erroSug}</p>{/if}
       <div class="bo-botoes"><Botao tipo="ouro" icone="check" ocupado={enviando} onclick={() => void enviarSugestao()}>Enviar para a secretaria</Botao></div>
     </section>
@@ -427,7 +457,13 @@
   .rot-f { font-size: 14px; font-weight: 700; color: var(--sv-titulo); }
   .obr { color: var(--sv-atr); }
   .anexo { display: flex; align-items: center; gap: 8px; height: 44px; border: 1px dashed var(--sv-campo-borda); border-radius: 10px; padding: 0 12px; font-size: 14px; color: var(--sv-suave); }
-  .anexo small { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--sv-pend); }
+  .anexo { cursor: pointer; }
+  .anexo.tem { border-style: solid; color: var(--sv-titulo); }
+  .anexo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .anexo small { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--sv-suave); white-space: nowrap; }
+  .escondido { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .dica-anexo { margin: -4px 0 0; font-size: 12.5px; color: var(--sv-suave); }
+  .tirar { align-self: flex-start; background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--sv-link); font-weight: 700; cursor: pointer; }
   .sugs { list-style: none; margin: 0; padding: 0; }
   .sugs li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--sv-linha); font-size: 14px; color: var(--sv-texto); }
   .sugs li:first-child { border-top: 0; }

@@ -260,13 +260,13 @@ async function sugerir(pool, { membroId, campos, hoje }) {
 // Os pedidos do próprio membro, com a resposta (o motivo da recusa); quem decidiu não aparece.
 async function minhasSugestoes(pool, membroId) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
-    SELECT TOP 200 s.SolicitacaoId, CONVERT(varchar(33), s.DataSolicitacao, 126) AS DataSolicitacao, s.Status, c.CampoId, c.NomeCampo, c.ValorAnterior, c.ValorProposto,
+    SELECT TOP 200 s.SolicitacaoId, CONVERT(varchar(33), s.DataSolicitacao, 126) AS DataSolicitacao, s.Status, s.AnexoNome, c.CampoId, c.NomeCampo, c.ValorAnterior, c.ValorProposto,
            c.Status AS StatusCampo, c.MotivoDecisao, CONVERT(varchar(33), c.DataDecisao, 126) AS DataDecisao
     FROM SolicitacoesEdicaoPessoa s JOIN SolicitacoesEdicaoCampos c ON c.SolicitacaoId = s.SolicitacaoId
     WHERE s.MembroId = @m ORDER BY s.DataSolicitacao DESC, c.CampoId`);
   const porSolicitacao = new Map();
   for (const l of r.recordset) {
-    if (!porSolicitacao.has(l.SolicitacaoId)) porSolicitacao.set(l.SolicitacaoId, { solicitacaoId: l.SolicitacaoId, dataSolicitacao: l.DataSolicitacao, status: l.Status, campos: [] });
+    if (!porSolicitacao.has(l.SolicitacaoId)) porSolicitacao.set(l.SolicitacaoId, { solicitacaoId: l.SolicitacaoId, dataSolicitacao: l.DataSolicitacao, status: l.Status, temAnexo: !!l.AnexoNome, campos: [] });
     porSolicitacao.get(l.SolicitacaoId).campos.push({ campoId: l.CampoId, nomeCampo: l.NomeCampo, rotulo: regras.ehCampo(l.NomeCampo) ? regras.CAMPOS[l.NomeCampo].rotulo : l.NomeCampo,
       valorAnterior: l.ValorAnterior, valorProposto: l.ValorProposto, status: l.StatusCampo, motivo: l.MotivoDecisao || null, dataDecisao: l.DataDecisao || null });
   }
@@ -356,7 +356,7 @@ async function listarSugestoes(pool, visao, { situacao = "PENDENTE", limite = 30
   pedido.input("eu", sql.Int, visao.membroId).input("limite", sql.Int, limite);
   const decididas = situacao === "DECIDIDAS";
   const r = await pedido.query(`
-    SELECT TOP (@limite) s.SolicitacaoId, s.MembroId, m.Nome, CONVERT(varchar(33), s.DataSolicitacao, 126) AS DataSolicitacao, s.Status,
+    SELECT TOP (@limite) s.SolicitacaoId, s.MembroId, m.Nome, CONVERT(varchar(33), s.DataSolicitacao, 126) AS DataSolicitacao, s.Status, s.AnexoNome,
            c.CampoId, c.NomeCampo, c.ValorAnterior, c.ValorProposto, c.Status AS StatusCampo, c.MotivoDecisao, c.DecididoPor, dp.Nome AS DecididoPorNome,
            CONVERT(varchar(33), c.DataDecisao, 126) AS DataDecisao, cg.Nome AS CongregacaoNome, ex.Nome AS ExtensaoNome,
            CASE WHEN EXISTS (SELECT 1 FROM Consagracoes cs LEFT JOIN TiposConsagracao tc ON tc.Nome = cs.Assunto
@@ -380,7 +380,7 @@ async function listarSugestoes(pool, visao, { situacao = "PENDENTE", limite = 30
     const aplica = regras.podeAplicarSugestao(visao, l.CongregacaoNome);
     if (!porSolicitacao.has(l.SolicitacaoId)) {
       porSolicitacao.set(l.SolicitacaoId, { solicitacaoId: l.SolicitacaoId, membroId: l.MembroId, nome: l.Nome, congregacao: l.CongregacaoNome, dataSolicitacao: l.DataSolicitacao,
-        status: l.Status, podeAplicar: aplica, campos: [] });
+        status: l.Status, podeAplicar: aplica, temAnexo: !!l.AnexoNome, campos: [] });
     }
     const chave = l.NomeCampo;
     const masc = (v) => (chave === "cpf" && !geral && !/\*/.test(String(v || "")) ? regras.mascarar("cpf", v) : v);   // (o decidido já está mascarado no banco)

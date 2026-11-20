@@ -134,7 +134,8 @@ export interface Alteracao {
 }
 export interface PaginaAlteracoes { readonly itens: readonly Alteracao[]; readonly total: number }
 
-export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean }
+// tipo: DEPARTAMENTO (a faixa de idade) ou o de um ministério/secretaria (SECRETARIA_ADJUNTA...) — o mesmo catálogo, separados pela regra do responsável
+export interface Departamento { readonly departamentoId: number; readonly nome: string; readonly ativo?: boolean; readonly tipo?: string | null }
 /** as congregações de destino (GET /transferencias?destinos=1) */
 export interface Congregacao { readonly congregacaoId: number; readonly nome: string; readonly areaNome: string | null }
 
@@ -190,6 +191,8 @@ export interface PreCadastro {
   readonly decididoEm?: string | null;
   readonly versao?: string;
   readonly podeResolver?: boolean;
+  /** a própria pessoa foi chamada a completar pelo e-mail e ainda não respondeu (migração 183) */
+  readonly pedidoPessoa?: { readonly em: string; readonly expiraEm: string; readonly vencido: boolean } | null;
 }
 export interface PaginaPreCadastros { readonly itens: readonly PreCadastro[]; readonly total: number }
 
@@ -213,6 +216,8 @@ export interface Sugestao {
   readonly dataSolicitacao: string;
   readonly status: string;
   readonly podeAplicar: boolean;
+  /** o membro mandou a foto do documento (migração 182) */
+  readonly temAnexo?: boolean;
   readonly campos: readonly CampoSugestao[];
 }
 

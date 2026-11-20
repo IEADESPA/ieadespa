@@ -12,7 +12,7 @@
   import Icone from "../../comum/Icone.svelte";
   import Aviso from "../../comum/Aviso.svelte";
   import Estado from "../../comum/Estado.svelte";
-  import { ir, escopo, departamentos, lerContadores } from "../estado.svelte";
+  import { ir, escopo, departamentos, lerContadores, ehDepartamento } from "../estado.svelte";
   import { cadastro, limparRascunho } from "../rascunho.svelte";
   import { sugerirDepartamento } from "../departamento";
   import { ESCOLARIDADE, ESTADO_CIVIL } from "../rotulos";
@@ -46,7 +46,11 @@
   $effect(() => { if (congs.length === 1 && congs[0] && cadastro.r.congregacaoId === null) cadastro.r.congregacaoId = congs[0].congregacaoId; });
 
   // o departamento pela idade (a secretaria pode trocar)
-  const sugestao = $derived(sugerirDepartamento(deps, r.dataNascimento, r.sexo, r.estadoCivil));
+  // o mesmo catálogo: os departamentos (pela idade) de um lado, os ministérios e secretarias do outro
+  const depsIdade = $derived(deps.filter(ehDepartamento));
+  const ministerios = $derived(deps.filter((d) => !ehDepartamento(d)));
+  const nomeMinisterio = $derived(ministerios.find((d) => d.departamentoId === r.ministerioId)?.nome ?? "");
+  const sugestao = $derived(sugerirDepartamento(depsIdade, r.dataNascimento, r.sexo, r.estadoCivil));
   $effect(() => { if (!cadastro.r.departamentoTrocado) cadastro.r.departamentoId = sugestao ? sugestao.departamento.departamentoId : null; });
   const nomeDep = $derived(deps.find((d) => d.departamentoId === r.departamentoId)?.nome ?? "");
   const nomeCong = $derived(congs.find((c) => c.congregacaoId === r.congregacaoId)?.nome ?? "");
@@ -106,16 +110,25 @@
     if (r.logradouro.trim() || r.bairroTexto.trim() || r.cidade.trim()) {
       corpo.enderecoPartes = { logradouro: r.logradouro.trim(), numero: r.numero.trim(), complemento: r.complemento.trim(), bairroTexto: r.bairroTexto.trim(), cidade: r.cidade.trim(), uf: r.uf.trim(), cep: r.cep.trim() };
     }
+    const ministerioId = r.ministerioId;
     const x = await pedir<{ mensagem?: string; membro?: { membroId: number } }>("/pessoas", { metodo: "POST", corpo });
-    salvando = false;
     if (x.ok) {
       const m = /matr[íi]cula (\d+)/i.exec(x.dados.mensagem ?? "");
-      feito = { matricula: x.dados.membro?.membroId ?? (m ? Number(m[1]) : null), mensagem: x.dados.mensagem ?? "Pessoa cadastrada." };
+      const matricula = x.dados.membro?.membroId ?? (m ? Number(m[1]) : null);
+      let mensagem = x.dados.mensagem ?? "Pessoa cadastrada.";
+      // onde serve: registrado logo depois (se não der, a pessoa já está cadastrada e o ministério se acrescenta na ficha)
+      if (ministerioId !== null && matricula !== null) {
+        const mi = await pedir<{ mensagem: string }>(`/pessoas/${matricula}/ministerios`, { metodo: "POST", corpo: { departamentoId: ministerioId } });
+        if (!mi.ok) mensagem += ` O ministério não foi registrado (${mi.mensagem}): acrescente na ficha, em Ministérios e EBD.`;
+      }
+      salvando = false;
+      feito = { matricula, mensagem };
       limparRascunho();
       escopo.resumo = null;
       void lerContadores();
       return;
     }
+    salvando = false;
     const c = x.corpo as { cpfRepetido?: string; matricula?: number } | null;
     if (c?.cpfRepetido) { conf = { cpf: { situacao: c.cpfRepetido, mensagem: x.mensagem, ...(c.matricula ? { matricula: c.matricula } : {}) }, bloqueia: true }; cadastro.r.etapa = 0; }
     erro = x.mensagem;
@@ -185,12 +198,14 @@
         <Icone nome="pessoas" tam={18} traco={2} />
         {#if r.departamentoId !== null}<strong>{nomeDep}</strong>{:else}<strong class="nada">sem departamento</strong>{/if}
         <span class="porque">{r.departamentoTrocado ? "escolhido pela secretaria" : sugestao ? `sugerido ${sugestao.porque}` : "informe o nascimento e o sexo para sugerir"}</span>
-        <Escolha rotulo="Trocar" valor={null} opcoes={deps.map((d) => ({ valor: d.departamentoId, rotulo: d.nome }))} onescolher={(v) => { cadastro.r.departamentoId = v; cadastro.r.departamentoTrocado = v !== null; }} />
+        <Escolha rotulo="Trocar" valor={null} opcoes={depsIdade.map((d) => ({ valor: d.departamentoId, rotulo: d.nome }))} onescolher={(v) => { cadastro.r.departamentoId = v; cadastro.r.departamentoTrocado = v !== null; }} />
       </div>
     </div>
     <div class="duas">
       <div class="grupo"><span class="rot">Cargo</span><Escolha rotulo="Membro" estilo="campo" larga valor={r.cargoMinisterial || null} opcoes={cargos.map((c) => ({ valor: c.sigla, rotulo: c.nome }))} onescolher={(v) => (cadastro.r.cargoMinisterial = v ?? "")} /></div>
-      <div class="grupo"><span class="rot">Serve em algum ministério? <span class="opc">(opcional)</span></span><Escolha rotulo="Em construção" estilo="trava" larga valor={null} opcoes={[]} onescolher={() => {}} /></div>
+      <div class="grupo"><span class="rot">Serve em algum ministério? <span class="opc">(opcional)</span></span>
+        {#if ministerios.length}<Escolha rotulo="Não serve em nenhum" estilo="campo" larga limpavel valor={r.ministerioId} opcoes={ministerios.map((d) => ({ valor: d.departamentoId, rotulo: d.nome }))} onescolher={(v) => (cadastro.r.ministerioId = v)} />
+        {:else}<span class="opc">Nenhum ministério no catálogo (a Secretaria Geral cadastra em Estrutura).</span>{/if}</div>
     </div>
   {:else}
     <div class="conferir">
@@ -202,6 +217,7 @@
       <div class="linha-c"><span>Congregação</span><strong>{nomeCong || "—"}</strong></div>
       <div class="linha-c"><span>Entrada</span><strong>{membro ? `${FORMAS.find((f) => f.valor === r.formaAdmissao)?.rotulo ?? ""} · ${dataBr(r.dataAdmissao)}` : "Congregado (ainda não membro)"}</strong></div>
       <div class="linha-c"><span>Departamento</span><strong>{nomeDep || "—"}</strong></div>
+      <div class="linha-c"><span>Serve em</span><strong>{nomeMinisterio || "—"}</strong></div>
     </div>
     {@render barraConfere()}
   {/if}

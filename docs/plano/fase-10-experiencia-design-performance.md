@@ -816,6 +816,16 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
   - A "oferta alçada" existe, mas não é usada e fica fora do rateio.
 - **O dízimo digital:** opção 2 (a lista própria em 3 passos). O aviso fica no alto, e só se lança o bloco depois de
   ligar os dízimos digitais: o sistema já sabe a folha de quem ligou.
+  - **A regra, nas palavras dele (rodada 21, 20/11/2026).** A planilha não fica travada para ver. Mas a Geral só pode
+    FECHAR o repasse e o mês depois de resolver cada dízimo digital, de um destes dois jeitos:
+    - LIGAR o dízimo a um número de recibo do bloco;
+    - ou EXCLUÍ-LO com o motivo, e o membro é avisado do porquê.
+  - O caso típico: o membro fez o dízimo digital e, no mesmo dia, entregou também o físico, e ficaram dois dízimos do
+    mesmo valor. Também acontece de ninguém ter anotado o digital no bloco.
+  - Quem liga primeiro é a tesouraria da congregação; o que ela não ligou sobra para a Geral.
+- **A congregação e a área veem para onde foram os 60% DELAS** (aprovado em 20/11): só por centro de custo, no nível
+  macro (Presidente, Tesouro Geral, Convenção). "Até é bom: acaba a discussão de para onde foi o dinheiro." O detalhe
+  de cada compra fica nas saídas de cada centro de custo, na Geral.
 - **O contador:** opção 2 ("o ano numa linha"). O pacote do ano se atualiza todo mês, e ao mandar abre-se o resumo (a 3ª
   tela) para conferir. Se um dia houver contador mensal, a tela já serve.
 - **A folha do mural:**

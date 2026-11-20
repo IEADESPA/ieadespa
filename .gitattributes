@@ -9,3 +9,8 @@ secrets.env text eol=lf
 # sem conversão de quebra de linha em nenhuma máquina.
 app/vendor/* -text
 site/public/vendor/* -text
+
+# Habilidades de terceiros (Claude Code em .claude/skills, Codex em .agents/skills): byte a byte como o autor publicou e
+# iguais nas duas pastas em qualquer máquina (tools/conferir-habilidades.sh compara).
+.claude/skills/** -text
+.agents/skills/** -text

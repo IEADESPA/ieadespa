@@ -802,6 +802,7 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
 ### Rodada 20: o que ele aprovou e o que muda (20/11/2026)
 
 **Aprovados** (ele vai lembrando de mais coisas na prática e pode completar):
+
 - o caminho do repasse ("agora vi bem melhor");
 - o seletor de congregação;
 - a folha do recebimento ("papel muito bom, bem detalhado");
@@ -809,6 +810,7 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
 - o lançamento de dízimos (versão final).
 
 **Aprovados com acertos:**
+
 - **Os tipos de oferta:** NÃO existe "oferta da ceia".
   - Só a **oferta de culto**, genérica, e a **oferta voluntária**, que pode vir junto do dízimo.
   - A "oferta alçada" existe, mas não é usada e fica fora do rateio.
@@ -833,8 +835,15 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
     rateio.
 - **O tesouro:** SAI "congregações" e "guardado para pagar". O tesouro mostra os centros de custo da Geral. Os 40% são o
   repasse à congregação, não um centro de custo do tesouro.
-- **O caixa único:** ele escolheu a opção 2 ("o livro do caixa"), mas ficou "muito nebuloso". Só entendeu que a espécie
-  vira Pix e que o local manda por Pix. Precisa ser explicado de forma simples e redesenhado.
+- **O caixa único:** ele escolheu a opção 2 ("o livro do caixa"), mas ficou "muito nebuloso". Explicado em 4 passos, ele
+  aprovou: "agora sim é o caixa único que a gente espera".
+  1. Quem traz o repasse entrega a espécie, e o Pix já está na conta.
+  2. O caixa anota espécie e Pix separados e dá o recibo. O recibo aprovado basta.
+  3. A espécie vai para o banco ou vira Pix, e o caixa anota "espécie virou Pix", com o comprovante.
+  4. No fim do dia, a espécie deve estar em zero e o resto no banco. É daí que sai o rateio.
+  - **Só a Tesouraria Geral tem caixa hoje,** porque há uma única conta geral.
+  - O caixa da congregação vem no futuro (daqui a uns 5 ou 6 anos), quando as congregações tiverem CNPJ de filial e conta
+    própria. Aí a Geral aprova pelo comprovante: "não dá para confiar".
 
 ### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
 

@@ -1,7 +1,8 @@
 # IEADESPA — regras obrigatórias (leia antes de qualquer tarefa)
 
 Repositório **público**. Contexto completo no [`README.md`](README.md); segredos em
-[`SECRETS.md`](SECRETS.md).
+[`SECRETS.md`](SECRETS.md). **Mapa do sistema** (leia antes de abrir arquivos): o `CLAUDE.md` curto de cada pasta
+(`api/`, `app/`, `front/`, `site/`, `tools/`) e o estado da fase em [`docs/plano/RESUMO-fase-10.md`](docs/plano/RESUMO-fase-10.md).
 
 ## 1. Toda alteração vai para a nuvem — OBRIGATÓRIO
 

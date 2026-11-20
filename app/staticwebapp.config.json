@@ -10,6 +10,10 @@
         "X-Frame-Options": "SAMEORIGIN",
         "Cache-Control": "no-store"
       }
+    },
+    {
+      "route": "/CLAUDE.md",
+      "statusCode": 404
     }
   ],
   "globalHeaders": {

@@ -871,7 +871,11 @@ lançar as saídas na hora).
     Por exemplo, em novembro: "folha 70.090 · mês posterior".
   - No mês a que ela se refere, o número da folha já aparece listado, esperando o nome e o valor, para ninguém esquecer.
     É ali que ela soma.
-  - Vale igual para o "mês anterior".
+  - **"Mês anterior" (corrigido por ele, 20/11):** o dízimo JÁ ESTAVA no relatório do mês anterior, lançado e auditado
+    lá. No mês atual, a folha aparece na sequência só com a linha "referente ao mês anterior", sem nome e sem valor, para
+    não ficar em branco. Nada se lança nem muda no mês atual.
+  - **O Conselho Fiscal não tem nada a ver com essas linhas.** À parte, o relatório atrasado (o tesoureiro que não fechou
+    outubro) sai como "referente aos meses de outubro e novembro".
   - O mural é contínuo e mostra as marcas.
 - **A conferência entre espécie e digital** (o 3º relatório, contínuo): usar o Pix do mês seguinte para completar o mês
   que se fecha é AUTOMÁTICO ("para não ter aglomeramento de comprovantes"). Só o destino da sobra é escolha de quem

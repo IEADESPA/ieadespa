@@ -67,20 +67,29 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 ## 3b. 20/11/2026, tarde (sessão principal)
 
-- **Rodada 23 PUBLICADA** (20/11, noite) na página leve KMeb… (versão 5, 350 KB), com a 22 e a 21 recolhidas
-  ("respondida"). A 21 foi aprovada. A 23 refaz 3 telas com a regra das folhas de outro mês corrigida por ele (plano,
-  `1af8293`, DEPLOY OK):
-  - **Lançar**, em 02/12: a 70.090 de novembro espera o nome; a 70.165 (mês anterior) e a 70.169 (mês posterior)
-    ficam só com a linha;
-  - **Folha do mural**, novembro e dezembro, e o relatório atrasado "referente aos meses de outubro e novembro";
-  - **Conferir o repasse**, sem as folhas de outro mês.
+- **Rodada 24 PUBLICADA** (20/11, noite) na página leve KMeb… (versão 6, 378 KB). Ela substitui a 23, que saiu sem
+  resposta dele; a 22 e a 21 seguem recolhidas, e a 21 foi aprovada. A 24 refaz 3 telas com a regra DEFINITIVA das
+  folhas de outro mês (plano, `7688b5c`, DEPLOY OK):
+  - **Lançar**, em 02/12: dezembro começa na 70.161, a 1ª "mês posterior". A 70.163 e a 70.164 vêm sozinhas com a
+    tarja, e só existem "Este mês" e "Mês posterior";
+  - **Folha do mural** contínua: novembro da 70.063 à 70.164, dezembro a partir da 70.161;
+  - **Conferir o repasse:** o adiantado de dezembro (R$ 530) "espera dezembro".
   - Conferida foto a foto na sessão principal.
-  - Fontes em `C:/tmp/ieadespa-desenho-fontes/` (r23-*.js, montar-r23.js, propostas-r23/).
-  - **2 perguntas a ele, só detalhe:**
-    1. na hora de lançar, pode-se marcar "Mês anterior" (enquanto o mês anterior não fechou), ou essa folha sempre
-       já vem marcada?
-    2. o dinheiro do adiantado entregue em novembro vai no repasse de novembro, ou espera dezembro?
-  - Respostas na página: ArtifactData, coleção "escolhas", ids `r23-*` e `geral-r23`.
+  - Fontes em `C:/tmp/ieadespa-desenho-fontes/` (r24-*.js, montar-r24.js, propostas-r24/).
+  - Respostas na página: ArtifactData, coleção "escolhas", ids `r24-*` e `geral-r24`.
+- **Varredura do Financeiro: 6 perguntas a ele ANTES da construção** (feitas no chat em 20/11):
+  1. a data de início (janeiro de 2027?), os saldos de abertura, se traz o ano de 2026, e um mês em paralelo;
+  2. até que dia o mês anterior ainda recebe: dia 3, dia 5, ou enquanto a congregação não mandou o relatório;
+  3. o dinheiro dos departamentos e de Missões já na 1ª entrega, ou depois;
+  4. maquininha de cartão, TED ou cheque;
+  5. o banco da conta geral, e o extrato diário: arquivo baixado à mão ou ligação automática;
+  6. o dizimista vê os próprios dízimos em "Minha vida".
+  - Ação externa: perguntar ao contador o formato do arquivo, a ECD (acima de R$ 4,8 milhões) e as doações em bens.
+  - Suposições, que ele pode corrigir:
+    - a congregação manda, a Geral fecha o repasse e o Conselho Fiscal fecha o mês;
+    - a área não carrega dinheiro;
+    - salário e encargos ficam com o contador;
+    - as inscrições do site vão para o centro de custo de quem organizou.
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;

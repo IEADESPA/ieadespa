@@ -799,6 +799,43 @@ e não é a realidade. Esta lista vale para todo desenho e toda construção do 
     pastor.
 - **As tendências:** opções de tela com o gráfico personalizável.
 
+### Rodada 20: o que ele aprovou e o que muda (20/11/2026)
+
+**Aprovados** (ele vai lembrando de mais coisas na prática e pode completar):
+- o caminho do repasse ("agora vi bem melhor");
+- o seletor de congregação;
+- a folha do recebimento ("papel muito bom, bem detalhado");
+- os relatórios (opção 3, "Monte o seu gráfico");
+- o lançamento de dízimos (versão final).
+
+**Aprovados com acertos:**
+- **Os tipos de oferta:** NÃO existe "oferta da ceia".
+  - Só a **oferta de culto**, genérica, e a **oferta voluntária**, que pode vir junto do dízimo.
+  - A "oferta alçada" existe, mas não é usada e fica fora do rateio.
+- **O dízimo digital:** opção 2 (a lista própria em 3 passos). O aviso fica no alto, e só se lança o bloco depois de
+  ligar os dízimos digitais: o sistema já sabe a folha de quem ligou.
+- **O contador:** opção 2 ("o ano numa linha"). O pacote do ano se atualiza todo mês, e ao mandar abre-se o resumo (a 3ª
+  tela) para conferir. Se um dia houver contador mensal, a tela já serve.
+- **A folha do mural:**
+  - 50 nomes por folha, **sem importar o bloco**: a regra "bloco novo, folha nova" SAI porque deixava folha quase vazia;
+  - **cada folha precisa de validação própria,** com o QR ou a conferência e o "folha 2 de 3". Hoje só a última tem QR,
+    e uma folha solta poderia ser falsificada.
+- **O conferir do repasse:** a opção 3 ("a lista dos lançamentos com o corte"); ele gostou também da 1 e da 4. Faltam:
+  - **os comprovantes de Pix pelo sistema.** Hoje a tesouraria local manda cada comprovante pelo telefone, e ele quer
+    ACABAR com isso. A congregação anexa a foto ou o PDF de cada Pix ao pré-repasse, e a Geral confere no sistema,
+    contra o extrato;
+  - **a virada do mês:** do dia 1 ao dia 5 entram Pix e dízimos que são do mês anterior (o dizimista que dizima sempre
+    no dia 5). É preciso marcar o mês de referência, e o pré-repasse do mês anterior tem de recebê-los, sem esperar o
+    dia 30 para conferir.
+- **O rateio:**
+  - são **duas páginas**: antes, escolher o que vai ratear (os repasses, o período); depois, o rateio feito;
+  - o rateio só divide os **60% da Geral**. Os 40% da congregação já foram separados no repasse e não aparecem como
+    rateio.
+- **O tesouro:** SAI "congregações" e "guardado para pagar". O tesouro mostra os centros de custo da Geral. Os 40% são o
+  repasse à congregação, não um centro de custo do tesouro.
+- **O caixa único:** ele escolheu a opção 2 ("o livro do caixa"), mas ficou "muito nebuloso". Só entendeu que a espécie
+  vira Pix e que o local manda por Pix. Precisa ser explicado de forma simples e redesenhado.
+
 ### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
 
 "Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do

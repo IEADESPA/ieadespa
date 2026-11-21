@@ -18,6 +18,7 @@ pessoal real.
 | Bancada | `.claude/continuidade/bancada.json` | A lista de TUDO o que a bancada usa: plugins, habilidades e programas |
 | Habilidades | `.claude/skills/` (Claude Code) e `.agents/skills/` (Codex), iguais | As 10 da bancada, com a licença de cada uma |
 | Plugins | `.claude/settings.json` | Liga os 5 plugins oficiais do projeto (instalar é com o kit) |
+| Aviso de início | `.claude/continuidade/aviso-inicio.mjs` (gancho no `.claude/settings.json`) | No começo de toda conversa: "Em uso por", git pull e se o computador está atrás do kit |
 | Desenho | `design/propostas/` | Os fontes da página de propostas da rodada atual |
 
 **A bancada inteira** (`bancada.json`):
@@ -39,6 +40,16 @@ pessoal real.
 Para **acrescentar** depois: o plugin numa linha da lista `plugins` e no `enabledPlugins` do `.claude/settings.json`;
 a habilidade na pasta `.claude/skills/<nome>` e na `.agents/skills/<nome>` (com `LICENSE` e `ORIGEM.md`) e numa linha
 da lista `habilidades`. Confira com `bash tools/conferir-bancada.sh`. Quem rodar o instalador de novo recebe o novo.
+
+**O aviso de início** roda sozinho no começo de toda conversa (e depois do `/clear`). Ele só lê, nunca muda nada, e
+mostra:
+- a linha "Em uso por";
+- se falta o `git pull`;
+- o que este computador tem de diferente do kit: o servidor de memória, os plugins, as habilidades, os programas, as
+  configurações, as regras globais e a memória automática.
+
+Se o kit mudar (num `git pull`), o aviso pede: dois cliques no `INSTALAR.cmd`. Para testar à mão:
+`node .claude/continuidade/aviso-inicio.mjs`.
 
 ## Uma vez por computador
 

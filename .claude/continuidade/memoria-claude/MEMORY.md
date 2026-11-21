@@ -26,6 +26,8 @@
 - [README sem avisos](readme-sem-avisos-markdownlint.md) — markdownlint-cli2 (MD013 off) antes do commit
 - [README enxuto](readme-enxuto-historico-em-docs.md) — README <600 linhas; histórico em docs/plano
 - [Telas azuis do notebook](notebook-telas-azuis-19-10.md) — navegador sempre com --disable-gpu
+- [Cópias pesadas locais](copias-pesadas-locais-nao-apagar.md) — pastas aninhadas e .rar no notebook; só apagar com pedido
+- [Senha SQL de produção é real](senha-sql-producao-e-real.md) — fica no cofre SOPS; não trocar sem pedido
 
 ## FASE 10: desenho e construção
 

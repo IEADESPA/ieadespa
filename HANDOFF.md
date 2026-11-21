@@ -114,9 +114,9 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   - **Matriz única da bancada: FEITA em 21/11** (repositório privado `IEADESPA/bancada` em `C:\MCP\bancada`; aqui ficou
     só a porta, `185f566`, DEPLOY OK; diário em `C:\tmp\ieadespa-bancada\DIARIO.md`). O `-Sim` rodou neste notebook com
     o sim dele (vale depois de "Recarregar Janela"). Correção do instalador na bancada: `12f0ee7`.
-  - **asaf:** a porta está no ramo `bancada-porta` (`0da8086`, enviado; só `.claude/`, `.gitattributes`, `.gitignore`,
-    `AGENTS.md`, nenhum deploy). **Falta o sim dele para mesclar na `main` do asaf.** **Construtor:** aplicar na próxima
-    vez que for aberto (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`).
+  - **asaf: FEITO** (21/11): a porta entrou na `main` dele (`0da8086`, com o sim dele); aviso de início e servidor de
+    memória conferidos lá. **Construtor:** aplicar na próxima vez que for aberto
+    (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`).
   - **Decisões dele pendentes da bancada:** conferir o servidor de memória 2.2.1 (a aprovada é a 2.1.1) antes de subir a
     versão; a cláusula 5.2 do `LICENSE` cita as pastas de habilidades que saíram; o Codex lendo habilidades por junção
     não foi provado.

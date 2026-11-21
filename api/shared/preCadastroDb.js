@@ -33,9 +33,11 @@ async function emTransacao(pool, fazer) {
     throw e;
   }
 }
-async function travar(rq, recurso) {
-  const r = await rq().input("r", sql.NVarChar(255), recurso)
-    .query("DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000; SELECT @rc AS rc");
+// esperaMs: quanto esperar pela trava (o padrão, 20 s; o formulário do site passa o que sobra do tempo fixo da resposta)
+async function travar(rq, recurso, esperaMs = 20000) {
+  const espera = Math.max(0, Math.min(Math.floor(Number(esperaMs) || 0), 20000));
+  const r = await rq().input("r", sql.NVarChar(255), recurso).input("ms", sql.Int, espera)
+    .query("DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @ms; SELECT @rc AS rc");
   if (Number(r.recordset[0].rc) < 0) throw new Error("trava do pré-cadastro não obtida a tempo");
 }
 
@@ -124,13 +126,17 @@ async function registrarCaso(rq, { tipo, membroIdExistente, congregacaoQuePediuI
 // ---------------------------------------------------------------- a fila: processar um pré-cadastro (o aceite automático)
 // porQuem/como: quem resolveu (null/AUTOMATICO no aceite sozinho; o membroId e LOCAL/GERAL quando a secretaria completou ou aceitou).
 // naoERepeticao: a secretaria conferiu que nome e nascimento parecidos NÃO são a mesma pessoa. responsavelConfirmado: o menor tem o consentimento do responsável.
-async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERepeticao = false, responsavelConfirmado = false, versaoLida = null } = {}) {
+// esperaMaxMs: o teto de espera pela trava do CPF (o formulário do site passa o que sobra do tempo fixo da resposta; sem a trava a tempo, nada muda e o
+// pré-cadastro fica na fila sem avaliar — PENDENTE sem pendência —, para a secretaria ou para o reenvio do mesmo envio).
+async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERepeticao = false, responsavelConfirmado = false, versaoLida = null, esperaMaxMs = 20000 } = {}) {
   return emTransacao(pool, async (t, rq) => {
+    const inicio = Date.now();
+    const espera = () => Math.max(0, esperaMaxMs - (Date.now() - inicio));
     const base = (await rq().input("id", sql.Int, id).query("SELECT Cpf FROM PreCadastros WHERE PreCadastroId = @id")).recordset[0];
     if (!base) return { sucesso: false, naoExiste: true, mensagem: regras.MSG.NAO_EXISTE };
-    await travar(rq, base.Cpf ? `precad-cpf:${base.Cpf}` : `precad:${id}`);
+    await travar(rq, base.Cpf ? `precad-cpf:${base.Cpf}` : `precad:${id}`, espera());
     let l = (await rq().input("id", sql.Int, id).query(`SELECT p.*, CONVERT(varchar(20), CONVERT(bigint, p.Versao)) AS VersaoTexto FROM PreCadastros p WITH (UPDLOCK, HOLDLOCK) WHERE p.PreCadastroId = @id`)).recordset[0];
-    if (l.Cpf && l.Cpf !== base.Cpf) await travar(rq, `precad-cpf:${l.Cpf}`);   // o CPF mudou entre a leitura e a trava (completar): trava o novo também
+    if (l.Cpf && l.Cpf !== base.Cpf) await travar(rq, `precad-cpf:${l.Cpf}`, espera());   // o CPF mudou entre a leitura e a trava (completar): trava o novo também
     if (versaoLida && String(l.VersaoTexto) !== String(versaoLida)) return { sucesso: false, conflito: true, mensagem: regras.MSG.MUDOU };
     if (!["PENDENTE", "CORRECAO"].includes(l.Situacao)) return { sucesso: true, situacao: l.Situacao, matricula: l.MembroIdResultado == null ? null : Number(l.MembroIdResultado), jaResolvido: true };
 
@@ -230,12 +236,52 @@ async function inserir(pool, dados, { origem, criadoPor = null, consentimento = 
   return Number(r.recordset[0].PreCadastroId);
 }
 
-// O site: quantos pré-cadastros chegaram na última hora (de quem enviou, e no total). O limite do formulário público mora no banco (vale para todas as instâncias).
-async function contagemDoSite(pool, origemHash) {
-  const r = await pool.request().input("h", sql.Char(16), origemHash).query(`
-    SELECT COUNT(*) AS total, SUM(CASE WHEN @h IS NOT NULL AND OrigemHash = @h THEN 1 ELSE 0 END) AS daOrigem
-    FROM PreCadastros WHERE Origem = N'SITE' AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`);
-  return { total: Number(r.recordset[0].total || 0), daOrigem: Number(r.recordset[0].daOrigem || 0) };
+// ---------------------------------------------------------------- o formulário do site ("Quero me cadastrar")
+// O identificador de UM envio do formulário (a página gera 32 letras hexadecimais ao acaso; o mesmo envio repetido traz o mesmo).
+const ENVIO_ID = /^[0-9a-f]{32}$/;
+const TRAVA_DO_SITE = "precad-site:limites";
+
+// Grava o pré-cadastro do site NUMA transação, debaixo de uma trava só do formulário público (sp_getapplock, dona a transação), na ordem:
+//  1. o mesmo envio já gravado (EnvioId)? devolve ele, sem contar nem gravar de novo (o reenvio depois de um prazo esgotado não duplica);
+//  2. a contagem da última hora (de quem enviou, e no total) — o limite mora no banco e vale para todas as instâncias;
+//  3. a gravação.
+// Revisão de 20/11/2026: a contagem e a gravação andavam separadas e uma rajada passava dos limites. A trava serializa só os envios do site (alguns
+// milissegundos cada; o limite é de 200 por hora): a fila, a secretaria e o líder não esperam por ela, e a tabela não fica travada. O índice único
+// UX_PreCadastros_Envio (migração 184) é a última trava do envio repetido.
+// Devolve { id, repetido, avaliado } (avaliado: o processamento já passou por ele — não está PENDENTE sem pendência) ou { limite: true }.
+async function inserirDoSite(pool, dados, { envioId, consentimento, origemHash = null, porVisitanteHora, totalHora, esperaMs = 10000 }) {
+  if (typeof envioId !== "string" || !ENVIO_ID.test(envioId)) throw new Error("inserirDoSite: envioId inválido");
+  const lerRepetido = async (rq) => {
+    const l = (await rq().input("e", sql.Char(32), envioId).query("SELECT PreCadastroId, Situacao, Pendencias FROM PreCadastros WHERE EnvioId = @e")).recordset[0];
+    return l ? { id: Number(l.PreCadastroId), repetido: true, avaliado: !(l.Situacao === "PENDENTE" && l.Pendencias == null) } : null;
+  };
+  try {
+    return await emTransacao(pool, async (t, rq) => {
+      await travar(rq, TRAVA_DO_SITE, esperaMs);
+      const repetido = await lerRepetido(rq);
+      if (repetido) return repetido;
+      const c = (await rq().input("h", sql.Char(16), origemHash).query(`
+        SELECT COUNT(*) AS total, SUM(CASE WHEN @h IS NOT NULL AND OrigemHash = @h THEN 1 ELSE 0 END) AS daOrigem
+        FROM PreCadastros WHERE Origem = N'SITE' AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())`)).recordset[0];
+      if (Number(c.total || 0) >= totalHora || (origemHash && Number(c.daOrigem || 0) >= porVisitanteHora)) return { limite: true };
+      const r = await rq().input("c", sql.Int, dados.congregacaoId)
+        .input("nome", sql.NVarChar(200), dados.nome).input("cpf", sql.Char(11), dados.cpf).input("email", sql.NVarChar(150), dados.email)
+        .input("tel", sql.NVarChar(20), dados.telefone).input("nasc", sql.Date, dados.dataNascimento).input("sexo", sql.NChar(1), dados.sexo)
+        .input("ec", sql.NVarChar(20), dados.estadoCivil).input("cv", sql.NVarChar(20), consentimento.versao).input("cb", sql.NVarChar(30), consentimento.base)
+        .input("h", sql.Char(16), origemHash).input("e", sql.Char(32), envioId)
+        .query(`INSERT INTO PreCadastros (Origem, CongregacaoId, Nome, Cpf, Email, Telefone, DataNascimento, Sexo, EstadoCivil, ConsentimentoVersao, ConsentimentoBase,
+                  ConsentimentoEm, OrigemHash, EnvioId)
+                OUTPUT INSERTED.PreCadastroId
+                VALUES (N'SITE', @c, @nome, @cpf, @email, @tel, @nasc, @sexo, @ec, @cv, @cb, SYSUTCDATETIME(), @h, @e)`);
+      return { id: Number(r.recordset[0].PreCadastroId), repetido: false, avaliado: false };
+    });
+  } catch (e) {
+    // o mesmo envio gravado no mesmo instante por outro caminho (a trava deveria impedir; o índice único garante): é o mesmo envio
+    if (!violouUnico(e, "UX_PreCadastros_Envio")) throw e;
+    const repetido = await lerRepetido(() => pool.request());
+    if (!repetido) throw e;
+    return repetido;
+  }
 }
 
 // ---------------------------------------------------------------- a secretaria: completar, aceitar, descartar
@@ -375,5 +421,5 @@ async function resolverCaso(pool, { casoId, por, nota }) {
   return r.rowsAffected && r.rowsAffected[0] ? { sucesso: true } : { sucesso: false, mensagem: "Caso não encontrado ou já resolvido." };
 }
 
-module.exports = { hashOrigem, lerCongregacao, origemDeQuemLanca, mapear, lerPreCadastro, visivelPara, papelParaResolver, registrarCaso, processar, inserir, contagemDoSite,
-  completar, descartar, listar, meus, conferir, listarCasos, resolverCaso };
+module.exports = { ENVIO_ID, hashOrigem, lerCongregacao, origemDeQuemLanca, mapear, lerPreCadastro, visivelPara, papelParaResolver, registrarCaso, processar, inserir,
+  inserirDoSite, completar, descartar, listar, meus, conferir, listarCasos, resolverCaso };

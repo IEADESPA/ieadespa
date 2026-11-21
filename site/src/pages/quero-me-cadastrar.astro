@@ -99,9 +99,10 @@ const passos = [
               <option value="">Carregando as congregações…</option>
             </select>
           </div>
+          <!-- o texto do consentimento vem do sistema, junto com a versão que a página devolve (os dois do mesmo lugar); até chegar, não se marca -->
           <label class="qc-aceite">
-            <input type="checkbox" name="aceito" required />
-            <span>Autorizo a Igreja a guardar estes dados para o cadastro de membros. Veja a <a href="/privacidade/" target="_blank">política de privacidade</a>.</span>
+            <input type="checkbox" name="aceito" required disabled />
+            <span data-qc-termo>Carregando o texto da autorização…</span>
           </label>
           <div class="qc-isca" aria-hidden="true">
             <label for="qc-site">Deixe este campo em branco</label>
@@ -142,20 +143,44 @@ const passos = [
       const hoje = new Date();
       form.dataNascimento.max = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
       let visitante = "";
-      const novoId = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+      const novoId = (bytes = 12) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, "0")).join("");
       try { visitante = localStorage.getItem("ieadespaVisitanteCadastro") || ""; if (!visitante) { visitante = novoId(); localStorage.setItem("ieadespaVisitanteCadastro", visitante); } } catch { visitante = visitante || novoId(); }
       let tentativas = 0;
+
+      // o texto do consentimento, como o sistema mandou (só texto, nunca HTML); "política de privacidade" vira o link da página de privacidade
+      function mostrarTermo(alvo, texto) {
+        const trecho = "política de privacidade";
+        const i = texto.indexOf(trecho);
+        if (i < 0) { alvo.replaceChildren(texto); return; }
+        const link = document.createElement("a");
+        link.href = "/privacidade/";
+        link.target = "_blank";
+        link.textContent = trecho;
+        alvo.replaceChildren(texto.slice(0, i), link, texto.slice(i + trecho.length));
+      }
+
+      // o identificador do envio: o mesmo enquanto os dados não mudam (enviar de novo depois de um "pode ser que tenha chegado" não grava dois
+      // cadastros); mudou algum dado, é outro envio
+      let envio = { assinatura: "", id: "" };
+      function idDoEnvio(dados) {
+        const assinatura = JSON.stringify(dados);
+        if (assinatura !== envio.assinatura) envio = { assinatura, id: novoId(16) };
+        return envio.id;
+      }
 
       async function carregar() {
         let msgServidor = "";
         try {
           const r = await fetch("/api/quero-me-cadastrar", { headers: { Accept: "application/json" } });
           const j = await r.json().catch(() => ({}));
-          if (!r.ok || !Array.isArray(j.congregacoes)) { msgServidor = j.mensagem || ""; throw 0; }
-          versao = (j.consentimento && j.consentimento.versao) || "";
+          const termo = j.consentimento && typeof j.consentimento.texto === "string" ? j.consentimento.texto : "";
+          if (!r.ok || !Array.isArray(j.congregacoes) || !termo || !j.consentimento.versao) { msgServidor = j.mensagem || ""; throw 0; }
+          versao = j.consentimento.versao;
+          mostrarTermo(form.querySelector("[data-qc-termo]"), termo);
           sel.replaceChildren(new Option("Escolha a sua congregação", ""));
           for (const c of j.congregacoes) sel.add(new Option(c.area ? `${c.nome} (${c.area})` : c.nome, String(c.congregacaoId)));
           sel.disabled = false;
+          form.aceito.disabled = false;
           avisar("");
           document.querySelector("[data-qc-previa]").hidden = j.ambiente !== "homologacao";
         } catch {
@@ -186,6 +211,7 @@ const passos = [
           dataNascimento: form.dataNascimento.value, sexo: form.sexo.value, estadoCivil: form.estadoCivil.value,
           congregacaoId: form.congregacaoId.value, consentimento: { aceito: form.aceito.checked, versao }, site: form.site.value, visitante,
         };
+        corpo.envio = idDoEnvio(corpo);
         try {
           const r = await fetch("/api/quero-me-cadastrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
           const j = await r.json().catch(() => ({}));

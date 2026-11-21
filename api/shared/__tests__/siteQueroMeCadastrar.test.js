@@ -9,8 +9,10 @@ const PREVIA = "salmon-bay-0efd06d0f-21.eastus2.6.azurestaticapps.net";
 let ipSeq = 0;
 const pedido = (metodo, host, body, extra = {}) => ({ method: metodo, body, headers: { host, "x-forwarded-for": `177.1.1.${++ipSeq}:1000, 40.0.0.1:2`, ...extra } });
 async function chamar(req) { const context = { log: Object.assign(() => {}, { warn: () => {}, error: () => {} }) }; await funcao(context, req); return context.res; }
+const ENVIO = "a1b2c3d4e5f60718293a4b5c6d7e8f90";
 const corpoValido = () => ({ nome: "Lucas Ferreira", cpf: "123.456.789-09", email: "lucas@exemplo.org", telefone: "", dataNascimento: "1996-07-22", sexo: "M",
-  estadoCivil: "SOLTEIRO", congregacaoId: "7", consentimento: { aceito: true, versao: "2026-11" } });
+  estadoCivil: "SOLTEIRO", congregacaoId: "7", consentimento: { aceito: true, versao: "2026-11" }, envio: ENVIO });
+const TERMO = { versao: "2026-11", texto: "Autorizo a Igreja a guardar estes dados para o cadastro de membros. Veja a política de privacidade." };
 
 let chamadas;
 beforeEach(() => {
@@ -18,7 +20,7 @@ beforeEach(() => {
   process.env.CHAVE_SITE_SISTEMA = "chave-de-teste";
   global.fetch = jest.fn(async (url, op) => {
     chamadas.push({ url, op });
-    if (op.method === "GET") return { status: 200, json: async () => ({ sucesso: true, consentimento: { versao: "2026-11" }, congregacoes: [{ congregacaoId: 7, nome: "Vila Nova", area: "Área 2", extra: "x" }] }) };
+    if (op.method === "GET") return { status: 200, json: async () => ({ sucesso: true, consentimento: TERMO, congregacoes: [{ congregacaoId: 7, nome: "Vila Nova", area: "Área 2", extra: "x" }] }) };
     return { status: 200, json: async () => ({ sucesso: true, mensagem: "Recebemos o seu cadastro." }) };
   });
 });
@@ -56,8 +58,9 @@ describe("o repasse", () => {
     const corpo = { ...corpoValido(), situacao: "ATIVO", matricula: "1" };
     await chamar(pedido("POST", PREVIA, corpo));
     const enviado = JSON.parse(chamadas[0].op.body);
-    expect(Object.keys(enviado).sort()).toEqual(["congregacaoId", "consentimento", "cpf", "dataNascimento", "email", "estadoCivil", "nome", "origemVisitante", "sexo"].sort());
+    expect(Object.keys(enviado).sort()).toEqual(["congregacaoId", "consentimento", "cpf", "dataNascimento", "email", "envioId", "estadoCivil", "nome", "origemVisitante", "sexo"].sort());
     expect(enviado.congregacaoId).toBe(7);
+    expect(enviado.envioId).toBe(ENVIO);
     expect(enviado.origemVisitante).toMatch(/^177\.1\.1\.\d+:1000\|$/);
     await chamar(pedido("POST", PREVIA, { ...corpoValido(), visitante: "a1b2c3d4-e5f6" }));
     expect(JSON.parse(chamadas[1].op.body).origemVisitante).toMatch(/\|a1b2c3d4-e5f6$/);
@@ -104,5 +107,59 @@ describe("o repasse", () => {
     const r3 = await chamar(pedido("GET", PROD));
     expect(r3.body.ambiente).toBe("producao");
     expect(chamadas.length).toBe(2);
+  });
+});
+
+describe("as pendências da revisão de 20/11/2026", () => {
+  // uma cópia nova da função (a lista guardada por 10 minutos começa vazia)
+  const novaFuncao = () => { let f; jest.isolateModules(() => { f = require("../../../site/api/QueroMeCadastrar/index.js"); }); return f; };
+  async function chamarCom(f, req) { const context = { log: Object.assign(() => {}, { warn: () => {}, error: () => {} }) }; await f(context, req); return context.res; }
+  test("(c) o identificador do envio vai ao sistema como envioId; sem ele (a página antiga) ou fora do formato: 400 'recarregue', nada vai ao sistema", async () => {
+    await chamar(pedido("POST", PROD, corpoValido()));
+    expect(JSON.parse(chamadas[0].op.body).envioId).toBe(ENVIO);
+    for (const envio of [undefined, "", "abc", ENVIO.toUpperCase(), `${ENVIO}0`, 12345, { x: 1 }, "'; DROP TABLE x; --"]) {
+      const r = await chamar(pedido("POST", PROD, { ...corpoValido(), envio }));
+      expect(r.status).toBe(400);
+      expect(r.body.mensagem).toMatch(/recarregue/);
+    }
+    expect(chamadas.length).toBe(1);
+  });
+  test("(c) o mesmo envio repetido vai com o MESMO envioId (o sistema devolve o mesmo resultado sem gravar de novo)", async () => {
+    await chamar(pedido("POST", PROD, corpoValido()));
+    await chamar(pedido("POST", PROD, corpoValido()));
+    expect(JSON.parse(chamadas[0].op.body).envioId).toBe(JSON.parse(chamadas[1].op.body).envioId);
+  });
+  test("(d) o texto do consentimento vem do sistema, junto com a versão, e é guardado com a lista", async () => {
+    const f = novaFuncao();
+    const r = await chamarCom(f, pedido("GET", PROD));
+    expect(r.status).toBe(200);
+    expect(r.body.consentimento).toEqual(TERMO);
+    const r2 = await chamarCom(f, pedido("GET", PROD));
+    expect(r2.body.consentimento).toEqual(TERMO);
+    expect(chamadas.length).toBe(1);
+  });
+  test("(d) o sistema sem o texto (ou sem a versão, ou com texto grande demais): falha fechada, 503, e nada guardado", async () => {
+    for (const consentimento of [{ versao: "2026-11" }, { texto: TERMO.texto }, { versao: "2026-11", texto: "" }, { versao: "2026-11", texto: "x".repeat(601) }, { versao: 1, texto: 2 }, null]) {
+      const f = novaFuncao();
+      chamadas = [];
+      global.fetch = jest.fn(async (url, op) => { chamadas.push({ url, op }); return { status: 200, json: async () => ({ sucesso: true, consentimento, congregacoes: [] }) }; });
+      expect((await chamarCom(f, pedido("GET", PROD))).status).toBe(503);
+      expect((await chamarCom(f, pedido("GET", PROD))).status).toBe(503);
+      expect(chamadas.length).toBe(2);   // nada foi guardado: perguntou de novo
+    }
+  });
+  test("(d) a versão do consentimento trocada no sistema: o 400 dele chega à pessoa e a lista guardada é jogada fora (a próxima leitura traz o texto novo)", async () => {
+    const f = novaFuncao();
+    await chamarCom(f, pedido("GET", PROD));
+    global.fetch = jest.fn(async (url, op) => {
+      chamadas.push({ url, op });
+      if (op.method === "GET") return { status: 200, json: async () => ({ sucesso: true, consentimento: { versao: "2027-01", texto: "Texto novo." }, congregacoes: [] }) };
+      return { status: 400, json: async () => ({ sucesso: false, mensagem: "O texto do consentimento foi atualizado: recarregue a página e envie de novo." }) };
+    });
+    const r = await chamarCom(f, pedido("POST", PROD, corpoValido()));
+    expect(r.status).toBe(400);
+    expect(r.body.mensagem).toMatch(/recarregue/);
+    const lista = await chamarCom(f, pedido("GET", PROD));
+    expect(lista.body.consentimento).toEqual({ versao: "2027-01", texto: "Texto novo." });
   });
 });

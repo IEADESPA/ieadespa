@@ -275,6 +275,14 @@ case "$1" in
     migrar 183 2
     base salvar cenario-183
     ;;
+  preparar-184)
+    # FASE 10, as pendências do "Quero me cadastrar" (21/11/2026): a partir da base "cenario-183", aplica a 184 duas vezes (a chave do envio do site:
+    # EnvioId em PreCadastros, o CHECK do formato e o índice único filtrado; prova a idempotência); salva "cenario-184" (e2e-95 e e2e-90 montam o próprio cenário).
+    cd "$AQUI"
+    base restaurar cenario-183
+    migrar 184 2
+    base salvar cenario-184
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

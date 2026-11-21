@@ -3,6 +3,7 @@
 // pendência na fila e o completar/aceitar/descartar pela secretaria local, a área e a Geral acompanhando, o CPF repetido no cadastro pelo sistema (no escopo: a
 // ficha; fora: só "já tem cadastro" e o caso à Geral, sem vazar nada), a repetição do site indo para correção, e as corridas com vários processos node.
 // Roda sobre a base cenario-177 (`bash rodar.sh preparar-177` e depois `BASE=cenario-177 bash rodar.sh roteiro e2e-90-pre-cadastro.js`); monta o próprio cenário.
+// Desde 21/11/2026 o envio do site grava o identificador do envio (migração 184): rode sobre a cenario-184 (`bash rodar.sh preparar-184`).
 process.env.AUTH_SECRET = "segredo-do-pre-cadastro-e-da-fila-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-precadastro";
 const { spawn } = require("child_process");
@@ -69,8 +70,9 @@ async function principal() {
   const pre = async (id) => (await q("SELECT * FROM PreCadastros WHERE PreCadastroId = @id", { id }))[0];
   const ultimoPreDoCpf = async (cpf) => (await q("SELECT TOP 1 * FROM PreCadastros WHERE Cpf = @c ORDER BY PreCadastroId DESC", { c: cpf }))[0];
   const fichaDoCpf = async (cpf) => (await q("SELECT * FROM MembroReferencia WHERE Cpf = @c", { c: cpf }));
+  // desde 21/11/2026 (migração 184) cada envio do site leva o seu identificador (o mesmo envio repetido não grava de novo — e2e-95, parte 5)
   const corpoSite = (extra = {}) => ({ nome: "Pessoa Site E2E90", cpf: cpfDe(900000001), email: "site@example.org", telefone: "00988887777", dataNascimento: "1991-04-20",
-    sexo: "F", estadoCivil: "SOLTEIRO", congregacaoId: VN, consentimento, origemVisitante: "visitante-" + Math.random(), ...extra });
+    sexo: "F", estadoCivil: "SOLTEIRO", congregacaoId: VN, consentimento, origemVisitante: "visitante-" + Math.random(), envioId: require("crypto").randomBytes(16).toString("hex"), ...extra });
 
   console.log("== a migração 177 (aplicada duas vezes no preparo) ==");
   ok(await escalar("SELECT COUNT(*) FROM sys.tables WHERE name IN ('PreCadastros','CasosCadastroGeral')") === 2, "as tabelas PreCadastros e CasosCadastroGeral");

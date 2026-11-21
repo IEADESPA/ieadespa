@@ -193,6 +193,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   raio e o escopo do Dirigente; a densidade; os critérios; a simulação com cada indicador medido de verdade; a emancipação levando o ponto; a LGPD; os CHECK;
   lixo em cada campo; `E2E_CONTRATO=1` grava `tools/front-territorio/contrato-real.json`) e `e2e-79` (corridas: o bairro homônimo, a edição com a mesma versão,
   as junções cruzadas, a desativação junto com a gravação de um morador, o raio, o critério editado e apagado, o ponto da Extensão; `E2E_RCSI=1`).
+- **FASE 10, Membros** (migrações 177 a 184; um `preparar-NNN` por migração, cada um a partir da base anterior). O "Quero me cadastrar" do site (migração 184,
+  a chave do envio), base `cenario-184` (`bash rodar.sh preparar-184`: a `cenario-183` com a 184 aplicada duas vezes): `e2e-95` parte 5 (o tempo da
+  resposta medido com e sem ficha, com e sem o tempo fixo; rajadas em vários processos contra os limites; o mesmo envio repetido, em sequência e em
+  quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento) e `e2e-90` (o pré-cadastro e a fila).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

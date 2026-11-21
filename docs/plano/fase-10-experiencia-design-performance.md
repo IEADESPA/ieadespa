@@ -931,6 +931,20 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
   com dinheiro em contas diferentes (o que está na Geral e o que está na conta da congregação). Na prestação de contas,
   a parte da Geral sai **primeiro** do que está na Geral; o que está na conta da congregação vem **em segundo**.
 
+### Rodada 26: o Financeiro aprovado (21/11/2026)
+
+- **A folha do mural:** aprovada ("ficou ótimo... agora está excelente"), sem o quadro do fim e sem a aba "Espécie e
+  digital" no relatório do mês.
+- **Quanto cada congregação tem na Geral:** aprovada como está ("do jeito que está, passa, está muito bom"). Na
+  construção:
+  - **o que é da Geral pode ficar negativo**, quando a Geral gasta além do que é dela. A tela continua mostrando quanto
+    é de cada congregação, e o número da Geral negativo aparece em vermelho, como alerta;
+  - **alerta para o futuro** (CNPJ das filiais, conta bancária própria): o sistema terá de saber de onde é cada recurso
+    (o que está na conta geral, o que está na conta local e o que está em espécie). Até lá, fica como está.
+- Com a 26, **o desenho do núcleo do Financeiro está aprovado** (rodadas 20 a 26). Próximo: a construção em Svelte, na
+  homologação, tela por tela igual ao aprovado. A produção começa em janeiro de 2027, depois de mais uma verificação de
+  defeitos (seção "A varredura antes da construção").
+
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
 - **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o

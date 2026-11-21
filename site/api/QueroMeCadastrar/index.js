@@ -5,9 +5,12 @@ const { permitir, ipDoPedido } = require("../src/lib/rateLimit");
  *
  * O navegador do visitante fala só com o site; esta função repassa ao sistema, SERVIDOR A SERVIDOR, com a chave combinada
  * CHAVE_SITE_SISTEMA no cabeçalho x-site-key (o mesmo padrão do mural de oração):
- *   GET  /api/quero-me-cadastrar  -> as congregações ativas e a versão do consentimento (guardadas 10 minutos aqui, para não gastar o
- *                                   limite do sistema, que conta por servidor do site);
- *   POST /api/quero-me-cadastrar  -> o pré-cadastro, que cai na mesma esteira da secretaria (o sistema confere tudo; aqui só o formato).
+ *   GET  /api/quero-me-cadastrar  -> as congregações ativas e o consentimento — o TEXTO que a página mostra e a VERSÃO que ela devolve, os dois vindos do
+ *                                   sistema (21/11/2026: antes o texto morava na página) — guardados 10 minutos aqui, para não gastar o limite do sistema,
+ *                                   que conta por servidor do site;
+ *   POST /api/quero-me-cadastrar  -> o pré-cadastro, que cai na mesma esteira da secretaria (o sistema confere tudo; aqui só o formato). A página manda o
+ *                                   identificador do envio (`envio`, 32 letras hexadecimais ao acaso, o mesmo enquanto os dados não mudam): o envio repetido
+ *                                   depois de um prazo esgotado não grava dois pré-cadastros (o sistema devolve o mesmo resultado).
  *
  * PARA ONDE VAI: o site de produção fala com o sistema de produção; a PRÉVIA do site (o preview de um pull request) fala com a
  * homologação do sistema. Se o endereço não for nenhum dos dois conhecidos, FALHA FECHADA (503): uma prévia nunca grava gente na
@@ -19,6 +22,8 @@ const SISTEMA = {
   homologacao: "https://white-grass-048208e0f-21.eastus2.6.azurestaticapps.net/api",
 };
 const CAMPOS = ["nome", "cpf", "email", "telefone", "dataNascimento", "sexo", "estadoCivil"];
+const ENVIO = /^[0-9a-f]{32}$/;
+const TEXTO_MAX = 600;   // o texto do consentimento (hoje, ~100 letras)
 const GUARDA_MS = 10 * 60 * 1000;
 let guardado = { em: 0, alvo: null, dados: null };
 
@@ -71,13 +76,16 @@ module.exports = async function (context, req) {
     if (!permitir(`cadastro-lista:${ip}`, 30)) return responder(429, { sucesso: false, mensagem: "Muita gente abrindo por esta mesma internet agora. Espere 5 minutos." });
     try {
       const s = await chamarSistema(alvo, "GET", null, 30000);
-      if (s.status !== 200 || !s.dados || !Array.isArray(s.dados.congregacoes)) {
-        context.log.warn(`[QueroMeCadastrar] o sistema respondeu ${s.status} à lista de congregações.`);
+      const c = s.dados && s.dados.consentimento;
+      // sem o texto e a versão do consentimento, a página não tem o que a pessoa autoriza: não monta o formulário (falha fechada)
+      const consentimentoOk = c && typeof c.versao === "string" && c.versao.trim() && typeof c.texto === "string" && c.texto.trim() && c.texto.length <= TEXTO_MAX;
+      if (s.status !== 200 || !s.dados || !Array.isArray(s.dados.congregacoes) || !consentimentoOk) {
+        context.log.warn(`[QueroMeCadastrar] o sistema respondeu ${s.status} à lista de congregações${s.status === 200 ? " sem o consentimento completo" : ""}.`);
         return foraDoAr();
       }
       const dados = {
         sucesso: true,
-        consentimento: { versao: String((s.dados.consentimento && s.dados.consentimento.versao) || "") },
+        consentimento: { versao: c.versao.trim().slice(0, 20), texto: c.texto.trim() },
         congregacoes: s.dados.congregacoes.map((c) => ({ congregacaoId: Number(c.congregacaoId), nome: String(c.nome || ""), area: c.area ? String(c.area) : null })),
       };
       guardado = { em: Date.now(), alvo, dados };
@@ -110,6 +118,9 @@ module.exports = async function (context, req) {
   const cons = b.consentimento;
   if (!cons || cons.aceito !== true || typeof cons.versao !== "string") return responder(400, { sucesso: false, mensagem: "Para enviar, marque que você concorda com o uso dos seus dados pela Igreja." });
   corpo.consentimento = { aceito: true, versao: cons.versao.slice(0, 20) };
+  // o identificador do envio (a página antiga, sem ele, precisa ser recarregada)
+  if (typeof b.envio !== "string" || !ENVIO.test(b.envio)) return responder(400, { sucesso: false, mensagem: "A página está desatualizada: recarregue-a e envie de novo." });
+  corpo.envioId = b.envio;
 
   try {
     const s = await chamarSistema(alvo, "POST", corpo, 40000);

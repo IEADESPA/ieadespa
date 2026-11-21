@@ -13,8 +13,15 @@ const SEXOS = ["M", "F"];
 const NOME_MAX = 200;
 const EMAIL_MAX = 150;
 const MOTIVO_MAX = 300;
-// O texto do consentimento mostrado no formulário do site (a versão guardada com o pré-cadastro; mudou o texto, muda a versão).
-const CONSENTIMENTO = { versao: "2026-11", base: "CONSENTIMENTO" };   // LGPD art. 11, I (dado sensível: filiação religiosa) — consentimento específico e destacado
+// O consentimento do formulário do site: o TEXTO que a pessoa lê e a VERSÃO guardada com o pré-cadastro saem daqui, juntos (21/11/2026: antes o texto morava
+// na página do site e só a versão vinha do sistema; os dois podiam divergir). A página mostra o texto que o sistema serve (GET /api/pre-cadastro-site) e devolve
+// a versão; o sistema só aceita a versão atual. Mudou o texto, muda a versão — o teste fixa o resumo (SHA-256) do texto de cada versão.
+// LGPD art. 11, I (dado sensível: filiação religiosa) — consentimento específico e destacado.
+const CONSENTIMENTO = Object.freeze({
+  versao: "2026-11",
+  base: "CONSENTIMENTO",
+  texto: "Autorizo a Igreja a guardar estes dados para o cadastro de membros. Veja a política de privacidade."
+});
 
 // As pendências: o código fica no banco; o rótulo e quem resolve vão para a tela.
 const PENDENCIAS = {

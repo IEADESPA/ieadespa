@@ -108,7 +108,10 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
     criado de `v10-membros-svelte`; migrações a partir da 200): o inventário, o plano `docs/plano/financeiro-construcao.md`
     (no ramo) e o incremento 1. Diário `C:\tmp\ieadespa-financeiro\DIARIO.md`; as escolhas dele copiadas em
     `C:\tmp\ieadespa-financeiro\escolhas\`.
-  - **Membros:** corrige as 4 pendências de segurança e consistência do "Quero me
+  - **Membros:** as 4 pendências do "Quero me cadastrar" FEITAS e na homologação (`2e4200c`, `a70f5c2`; homolog
+    `810540f`, DEPLOY OK; diário `C:\tmp\ieadespa-membros\DIARIO.md`). Agora o IMPORTADOR do sistema pago (passo 9), no
+    mesmo ramo, migrações 185 em diante; diário `C:\tmp\ieadespa-membros\DIARIO-importador.md`.
+  - Antes, no Membros: corrigidas as 4 pendências de segurança e consistência do "Quero me
   cadastrar" no `v10-membros-svelte` (worktree `C:/tmp/ieadespa-svelte`, a partir de `b5f12f8`), com prova e homologação;
   diário em `C:\tmp\ieadespa-membros\DIARIO.md`.
 - **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades

@@ -37,9 +37,12 @@ para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, to
 - **Antes de começar:** `git pull` e leia a linha "Em uso por" no alto do `HANDOFF.md`. Em uso por outra pessoa? Não
   comece. Livre? Ponha o seu nome e a data/hora, commit e push.
 - **Ao parar:** a passagem completa (memória e `HANDOFF.md`), a linha volta a "Livre", commit e push.
-- **Computador novo** (sem o `memoria-projeto` no `/mcp` ou sem os plugins da bancada): ofereça rodar o instalador
-  (`.claude\continuidade\INSTALAR.cmd`, dois cliques). Só com a licença da pessoa: primeiro `-SoTestar`, mostre o que
-  mudaria e, com o sim, `-Sim`. A lista da bancada é `.claude/continuidade/bancada.json`.
+- **A bancada** (instalador, aviso de início, servidor de memória, habilidades, regras globais e a lista `bancada.json`)
+  mora no repositório privado `IEADESPA/bancada`, baixado em `C:\MCP\bancada`; aqui fica só a **porta**
+  (`.claude/continuidade/`: `INSTALAR.cmd`, `porta.sh`, `LEIA-ME.md`) e a memória. Melhoria da bancada, só lá, com push.
+- **Computador novo** (a porta avisa no começo da conversa): ofereça rodar `.claude\continuidade\INSTALAR.cmd` (dois
+  cliques), que baixa a bancada e chama o instalador. Só com a licença da pessoa: primeiro `-SoTestar`, mostre o que
+  mudaria e, com o sim, `-Sim`.
 
 ## 5. Economia de créditos (vale para qualquer pessoa ou agente)
 

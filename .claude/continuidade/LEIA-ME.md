@@ -43,6 +43,7 @@ da lista `habilidades`. Confira com `bash tools/conferir-bancada.sh`. Quem rodar
 
 **O aviso de início** roda sozinho no começo de toda conversa (e depois do `/clear`). Ele só lê, nunca muda nada, e
 mostra:
+
 - a linha "Em uso por";
 - se falta o `git pull`;
 - o que este computador tem de diferente do kit: o servidor de memória, os plugins, as habilidades, os programas, as
@@ -136,4 +137,4 @@ args = ['C:\MCP\iniciar-memoria.mjs']
   duas versões das linhas (cada linha é uma entidade) e reforce a regra da linha "Em uso por".
 - `bash tools/conferir-bancada.sh` confere que as duas pastas de habilidades estão iguais e batem com a `bancada.json`.
 
-Versão do kit: 20/11/2026.
+Versão do kit: 21/11/2026.

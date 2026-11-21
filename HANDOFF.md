@@ -101,10 +101,15 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   "Em uso por", a memória do projeto e a do Claude versionadas (revisadas, sem dado pessoal), os fontes do desenho, o
   mapa do sistema (`CLAUDE.md` por pasta e `docs/plano/RESUMO-fase-10.md`) e o kit novo (`.claude/continuidade`, com
   o `INSTALAR.cmd` de dois cliques e a lista `bancada.json`).
-  - **Falta só neste computador:** pôr o checkout principal na `main` (o `HANDOFF.md` sem registro de lá sai, porque
-    o da `main` é o mesmo) e, se ele quiser, dois cliques em `.claude\continuidade\INSTALAR.cmd` para apontar o
-    `autoMemoryDirectory`. Até lá, a sessão principal continua gravando em `C:\MCP\memorias\ieadespa.jsonl`: exportar
-    de novo para o repositório na troca.
+  - **Neste computador (20–21/11):** checkout principal na `main`; o instalador rodou com o sim dele (servidor 2.1.1,
+    cópia do kit e `autoMemoryDirectory`), valendo a partir da próxima conversa. Até recarregar a janela, a sessão
+    principal grava em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
+  - **Aviso de início de toda conversa: NO AR** (`10d7ac9`, aprovado por ele): gancho SessionStart que só lê e mostra
+    a linha "Em uso por", o `git pull` que falta e o que o computador tem de diferente do kit.
+  - **Matriz única da bancada: NÃO aprovada** ("muito nebuloso"). Em 21/11 ele pediu a explicação detalhada (repositório
+    pequeno privado, garantia de puxar sempre o mais novo, versões do servidor, conflito de repositório dentro de
+    repositório). Explicação dada na conversa; NÃO construir antes do sim dele. Fato medido: as cópias do kit no `asaf`
+    e no `construtor de igreja` já estão velhas (17–18/11, sem `bancada.json` nem aviso).
   - Enxugar o MEMORY.md só depois do OK dele.
 
 ## 4. Próximo passo exato (quando ele mandar continuar)

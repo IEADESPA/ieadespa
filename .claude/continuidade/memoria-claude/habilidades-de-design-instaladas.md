@@ -36,3 +36,5 @@ Em 18/11/2026, depois de ler a pesquisa `docs/pesquisa/habilidades-de-design-202
   adversarial de sempre.
 
 Ver [[construir-exatamente-o-aprovado]], [[fase10-nada-sem-aprovacao]].
+
+**20/11/2026: mais 4 habilidades instaladas (só texto, versão fixa), em ~/.claude/skills, ~/.agents/skills e ~/.cline/skills, e no repositório pelo pacote do colega:** systematic-debugging e verification-before-completion (obra/superpowers MIT 22f0b46), humanizer-pt (MIT 2557bcb, só chamada à mão: /humanizer-pt) e impeccable (Apache 2.0 b49177d, SÓ o texto, chamada à mão /impeccable, com nota proibindo npx/login/telemetria). Recusados, com motivo em C:/tmp/ieadespa-desenho-fontes/pesquisa-habilidades-lista.md: Superpowers inteiro (gancho obrigatório), Ponytail (3 ganchos), UI UX Pro Max, Matt Pocock, algorithmic-art/theme-factory/web-artifacts-builder, canvas-design (para cartaz, usar o conector do Canva que já está ligado no claude.ai), file-search.

@@ -48,3 +48,5 @@ Ver [[varredura-em-pedacos-de-30-min]], [[habilidades-de-design-instaladas]], [[
 - O teste do graphify ficou como "talvez", isolado e só se ele quiser.
 - Descartados: GrapeRoot (fechado, com telemetria), claude-mem (telemetria, 9 ganchos), claude-context (manda o código
   para fora) e Token Optimizer (licença).
+
+**Nonprofits, confirmado em 20/11:** fica LIGADO também no Claude Code, mesmo custando ~3.900 tokens por conversa. Ele tem mais dois repositórios de sistemas sendo criados, para entidades sem fins lucrativos: o **COMEP** (um conselho) e a **ASAF** (uma associação). Lá as habilidades de texto, campanha e doadores podem servir; as bases de editais americanas, não. Não propor desligar de novo.

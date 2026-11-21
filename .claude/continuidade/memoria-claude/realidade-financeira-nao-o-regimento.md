@@ -35,3 +35,16 @@ Regimento Interno, que NÃO foi aprovado ("as ideias são minhas, mas quem escre
 - Antes de publicar, conferir que nenhuma tela traz culto, malote, cofre ou depósito semanal.
 
 Ver [[construir-exatamente-o-aprovado]], [[propostas-de-tela-em-artefato]].
+
+**20/11/2026 (noite): a regra das folhas de outro mês, definitiva (ele: "você tem que entender as entrelinhas").** Quem
+decide é sempre o mês que vem antes:
+- o mês seguinte começa na primeira folha marcada "mês posterior". Essas folhas vêm listadas, com o nome e o valor
+  obrigatórios, e sozinhos se o dízimo foi digital;
+- as folhas seguintes que somaram no mês anterior vêm sozinhas com a tarja "referente ao mês anterior";
+- NINGUÉM marca "mês anterior": ao lançar, só "Este mês" e "Mês posterior";
+- o dízimo de novembro entregue em 02/12 é lançado em novembro como recebido no dia 30;
+- o dinheiro do adiantado soma no mês a que se refere, para todos os fins: fica esperando e não vai no repasse do mês da
+  entrega.
+
+Não perguntar a ele cenário que a prática da tesouraria já resolve. Antes de perguntar, montar o exemplo com as folhas,
+no papel.

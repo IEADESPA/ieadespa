@@ -1,6 +1,6 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mariano Fernandes (Claude), 21/11/2026 — juntar memória e instalar a bancada neste computador
+Em uso por: Livre
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a

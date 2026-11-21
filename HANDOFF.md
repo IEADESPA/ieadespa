@@ -93,10 +93,9 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 - **Rodada 25 RESPONDIDA (21/11)** e a regra do saldo CONFIRMADA com ele antes de desenhar (plano, seção "Rodada 25: a
   regra certa de quanto cada congregação tem"): um extrato por congregação dentro da Geral; relatório fechado tira só a
   parte da Geral; o resto já é da congregação.
-- **Rodada 26 PUBLICADA (21/11)** na página leve KMeb… (versão 8; fontes em `design/propostas/`, `04d9cf4`; 213 KB,
-  112 desenhos sem problema, nada transborda): o mural sem o quadro do fim e sem a aba "Espécie e digital"; "Quanto cada
-  congregação tem na Geral" em "Contas e bancos". **Esperando as escolhas dele:** ids `r26-*` e `geral-r26` (28
-  documentos no banco, os da 25 guardados).
+- **Rodada 26 APROVADA (21/11)** (página leve KMeb…, versão 8; fontes em `design/propostas/`, `04d9cf4`): o mural
+  ("agora está excelente") e "Quanto cada congregação tem na Geral" ("do jeito que está, passa"). **O desenho do núcleo
+  do Financeiro está aprovado** (rodadas 20 a 26; plano, seção "Rodada 26: o Financeiro aprovado").
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
@@ -131,9 +130,11 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 1. **Membros:** conferir o resultado do agente das 4 pendências do "Quero me cadastrar" (diário acima). Depois, em
    missões de 30 minutos: o seletor de congregação final, o importador (passo 9) e a ida à produção (só com o OK dele).
-2. **Financeiro:** ler as escolhas dele na rodada 26 (ids `r26-*`, `geral-r26`). Aprovada, começar a CONSTRUÇÃO do núcleo
-   em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro, mural e o saldo de cada congregação na Geral. Dúvida
-   de regra se pergunta ANTES.
+2. **Financeiro: começar a CONSTRUÇÃO** (desenho aprovado), quando o agente de Membros terminar (um agente por vez).
+   Missão 0, num agente novo: o inventário do que o servidor e o banco já têm de Financeiro e o plano da construção em
+   incrementos de 30 minutos (cada um com a tela aprovada que reproduz: rodada, tela e opção), gravado em
+   `docs/plano/`. Depois, os incrementos em Svelte na homologação: entradas, repasse, caixa, recibo, rateio, tesouro,
+   mural e o saldo de cada congregação na Geral. Dúvida de regra se pergunta ANTES.
 3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
    desligamento).
 4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.

@@ -1,12 +1,17 @@
 // e2e-95-sobras-membros.js — AS SOBRAS DE MEMBROS (FASE 10, 19/11/2026), contra o SQL Server de verdade. Parte 1: ONDE A PESSOA SERVE (migração 181): registrar
 // um ministério (só os do catálogo que não são departamento, ativos), não duplicar, a data que não pode ser no futuro, encerrar (nada se apaga), listar, o escopo
 // (fora = não existe), sem sessão e sem permissão, e juntar fichas com as duas servindo no mesmo ministério.
-// Parte 2: O ANEXO DA SUGESTÃO (migração 182). Parte 3: A PESSOA COMPLETA O PRÓPRIO CADASTRO PELO E-MAIL (migração 183). Roda sobre a base cenario-183
-// (`bash rodar.sh preparar-183` e depois `BASE=cenario-183 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
+// Parte 2: O ANEXO DA SUGESTÃO (migração 182). Parte 3: A PESSOA COMPLETA O PRÓPRIO CADASTRO PELO E-MAIL (migração 183). Parte 4: o que o "Quero me cadastrar"
+// do site lê. Parte 5 (21/11/2026, migração 184): AS PENDÊNCIAS DA REVISÃO DE 20/11 no envio do site — (a) o tempo da resposta igual com e sem ficha (medido),
+// (b) as rajadas em vários processos não passam dos limites, (c) o mesmo envio repetido não grava dois e o que ficou sem avaliar é avaliado no reenvio,
+// (d) o texto e a versão do consentimento do mesmo lugar. Roda sobre a base cenario-184 (`bash rodar.sh preparar-184` e depois
+// `BASE=cenario-184 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-sobras";
+const { spawn } = require("child_process");
+const crypto = require("crypto");
 const L = require("./lib");
-const { ok, fim, q, escalar, obterPool } = L;
+const { ok, fim, q, escalar, obterPool, path } = L;
 
 const PERM = ["pessoas"];
 const fator = () => ({ via: "CHAVE", em: Date.now() });
@@ -242,8 +247,150 @@ async function principal() {
   const semInativa = ((await Sg({ "x-site-key": process.env.CHAVE_SITE_SISTEMA })).body.congregacoes || []);
   ok(!semInativa.some((c) => c.congregacaoId === cong.CJ), "a congregação desativada some da lista");
 
+
+  console.log("== parte 5: as pendências da revisão de 20/11 no envio do site (migração 184) ==");
+  ok(await escalar("SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.PreCadastros') AND name = 'EnvioId'") === 1
+    && await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name = 'UX_PreCadastros_Envio' AND is_unique = 1 AND has_filter = 1") === 1
+    && await escalar("SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_PreCadastros_Envio'") === 1, "a coluna EnvioId, o índice único filtrado e o CHECK do formato");
+  const regrasPre = require("../../api/shared/preCadastro");
+  const SITE = { "x-site-key": process.env.CHAVE_SITE_SISTEMA };
+  let nVisitante = 0;
+  const corpoSite = (extra = {}) => ({ nome: "Pessoa do Site E2E95", cpf: cpfDe(950000300), email: "site95@example.org", dataNascimento: "1991-04-20", sexo: "F",
+    estadoCivil: "SOLTEIRO", congregacaoId: cong.VN, consentimento: { aceito: true, versao: regrasPre.CONSENTIMENTO.versao },
+    origemVisitante: `e2e95-${Date.now()}-${++nVisitante}`, envioId: crypto.randomBytes(16).toString("hex"), ...extra });
+  const site = (corpo) => chamarRota("PreCadastroSite/index.js", { metodo: "POST", corpo, headers: SITE });
+  const doEnvio = (e) => q("SELECT PreCadastroId, Situacao, Pendencias, MembroIdResultado, ConsentimentoVersao FROM PreCadastros WHERE EnvioId = @e", { e });
+  const fichasDoCpf = (c) => escalar("SELECT COUNT(*) FROM MembroReferencia WHERE Cpf = @c", { c });
+  const RECEBIDO = regrasPre.MSG.RECEBIDO;
+
+  console.log("-- (d) o consentimento: o texto e a versão do mesmo lugar");
+  const termo = (await chamarRota("PreCadastroSite/index.js", { metodo: "GET", headers: SITE })).body.consentimento;
+  ok(termo && termo.versao === regrasPre.CONSENTIMENTO.versao && termo.texto === "Autorizo a Igreja a guardar estes dados para o cadastro de membros. Veja a política de privacidade.",
+    "o GET serve o texto (o mesmo que a página mostrava, letra por letra) e a versão", JSON.stringify(termo));
+  const velha = await site(corpoSite({ cpf: cpfDe(950000301), consentimento: { aceito: true, versao: "2025-01" } }));
+  ok(velha.status === 400 && /recarregue/.test(velha.body.mensagem) && (await escalar("SELECT COUNT(*) FROM PreCadastros WHERE Cpf = @c", { c: cpfDe(950000301) })) === 0,
+    "a versão que não é a atual: 400 'recarregue', nada gravado", JSON.stringify(velha.body));
+  const semEnvio = await site({ ...corpoSite({ cpf: cpfDe(950000301) }), envioId: undefined });
+  ok(semEnvio.status === 400 && /recarregue/.test(semEnvio.body.mensagem), "sem o identificador do envio: 400 'recarregue'", JSON.stringify(semEnvio.body));
+
+  console.log("-- (a) o tempo da resposta: sem ficha (entra sozinho), com ficha (correção) e nome parecido (fila)");
+  await q("UPDATE MembroReferencia SET Cpf = @c WHERE MembroId = 950002", { c: cpfDe(950000302) });   // a ficha (noutra congregação) que o CPF vai achar
+  await ficha(950010, "Paula Parecida E2E95", cong.VN);                                                // nascida em 14/03/1990
+  const medir = async (corpo) => { const t = Date.now(); const r = await site(corpo); return { ms: Date.now() - t, status: r.status, mensagem: r.body && r.body.mensagem, envio: corpo.envioId }; };
+  let iSem = 0, iPar = 0;
+  const DATAS = ["1971-01-11", "1972-02-12", "1973-03-13", "1974-04-14", "1975-05-15", "1976-06-16", "1977-07-17", "1978-08-18", "1979-09-19", "1980-10-20"];
+  const NOMES = ["Abel", "Bento", "Caio", "Davi", "Elias", "Fabio", "Gael", "Hugo", "Igor", "Joel"];
+  // 10 pessoas novas (5 em cada rodada), cada uma com um nascimento diferente: nenhuma parece com outra
+  const semFicha = () => { const i = iSem++; return medir(corpoSite({ nome: `Sem Ficha ${NOMES[i]}`, cpf: cpfDe(950000400 + i), dataNascimento: DATAS[i] })); };
+  const comFicha = () => medir(corpoSite({ nome: "Bia Tentativa E2E95", cpf: cpfDe(950000302) }));
+  const parecido = () => medir(corpoSite({ nome: "Paula Parecida E2E95", cpf: cpfDe(950000450 + iPar++), dataNascimento: "1990-03-14" }));
+  const rodada = async () => { const r = { semFicha: [], comFicha: [], parecido: [] }; for (let i = 0; i < 5; i++) { r.semFicha.push(await semFicha()); r.comFicha.push(await comFicha()); r.parecido.push(await parecido()); } return r; };
+  const resumo = (xs) => { const v = xs.map((x) => x.ms).sort((a, b) => a - b); return { min: v[0], mediana: v[Math.floor(v.length / 2)], max: v[v.length - 1] }; };
+  process.env.PRE_CADASTRO_SITE_MIN_MS = "0";   // SEM o tempo fixo: o que vazaria
+  const sem = await rodada();
+  delete process.env.PRE_CADASTRO_SITE_MIN_MS;  // COM o tempo fixo (o padrão, 3.000 ms)
+  const com = await rodada();
+  console.log("   tempos em ms SEM o tempo fixo (o processamento puro):", JSON.stringify({ semFicha: resumo(sem.semFicha), comFicha: resumo(sem.comFicha), parecido: resumo(sem.parecido) }));
+  console.log("   tempos em ms COM o tempo fixo:                       ", JSON.stringify({ semFicha: resumo(com.semFicha), comFicha: resumo(com.comFicha), parecido: resumo(com.parecido) }));
+  const situacaoDe = async (lista) => [...new Set(await Promise.all(lista.map(async (x) => ((await doEnvio(x.envio))[0] || {}).Situacao)))].join();
+  ok(await situacaoDe([...sem.semFicha, ...com.semFicha]) === "ACEITO" && await situacaoDe([...sem.comFicha, ...com.comFicha]) === "CORRECAO"
+    && await situacaoDe([...sem.parecido, ...com.parecido]) === "PENDENTE", "os três caminhos de verdade: sem ficha entrou sozinho, com ficha foi à correção, o parecido ficou na fila");
+  const todosCom = [...com.semFicha, ...com.comFicha, ...com.parecido];
+  ok([...todosCom, ...sem.semFicha, ...sem.comFicha, ...sem.parecido].every((x) => x.status === 200 && x.mensagem === RECEBIDO), "as 30 respostas: o mesmo 200 'recebemos'");
+  ok(todosCom.every((x) => x.ms >= 2990 && x.ms < 3400), "com o tempo fixo, as 15 respostas saem nos 3.000 ms (entre 2.990 e 3.400)", JSON.stringify(todosCom.map((x) => x.ms)));
+  const medianas = [resumo(com.semFicha).mediana, resumo(com.comFicha).mediana, resumo(com.parecido).mediana];
+  ok(Math.max(...medianas) - Math.min(...medianas) < 60, "…e as medianas das três situações a menos de 60 ms uma da outra", JSON.stringify(medianas));
+  const pior = Math.max(...[...sem.semFicha, ...sem.comFicha, ...sem.parecido].map((x) => x.ms));
+  ok(pior < 2700, "o pior processamento medido (sem o tempo fixo) cabe com folga nos 3.000 ms", `${pior} ms`);
+
+  console.log("-- (b) rajadas em vários processos: a contagem e a gravação na mesma trava");
+  const visitanteRajada = `rajada-${Date.now()}`;
+  const rb1 = await disparar(Array.from({ length: 8 }, (_, i) => ({ corpo: corpoSite({ nome: `Rajada Visitante ${NOMES[i]} E2E95`, cpf: cpfDe(950000500 + i), dataNascimento: DATAS[i],
+    origemVisitante: visitanteRajada }) }))).promessa;
+  const doVisitante = await escalar("SELECT COUNT(*) FROM PreCadastros WHERE OrigemHash = @h", { h: pdbPre.hashOrigem(visitanteRajada) });
+  ok(rb1.every((r) => r.ok) && rb1.filter((r) => r.status === 200).length === 3 && rb1.filter((r) => r.status === 429).length === 5 && doVisitante === 3,
+    "8 envios do MESMO visitante ao mesmo tempo: exatamente 3 gravados e 5 recusados (429)", `${rb1.map((r) => r.status).join(",")} / gravados ${doVisitante}`);
+  const naHora = await escalar("SELECT COUNT(*) FROM PreCadastros WHERE Origem = N'SITE' AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())");
+  await q("INSERT INTO PreCadastros (Origem, Nome, Situacao) SELECT TOP (@n) N'SITE', N'Volume E2E95', N'DESCARTADO' FROM sys.all_objects", { n: 196 - naHora });
+  const rb2 = await disparar(Array.from({ length: 8 }, (_, i) => ({ corpo: corpoSite({ nome: `Rajada Total ${NOMES[i]} E2E95`, cpf: cpfDe(950000600 + i), dataNascimento: DATAS[i] }) }))).promessa;
+  const doTotal = await escalar("SELECT COUNT(*) FROM PreCadastros WHERE Nome LIKE N'Rajada Total % E2E95'");
+  const totalHora = await escalar("SELECT COUNT(*) FROM PreCadastros WHERE Origem = N'SITE' AND CriadoEm >= DATEADD(HOUR, -1, SYSUTCDATETIME())");
+  ok(rb2.every((r) => r.ok) && rb2.filter((r) => r.status === 200).length === 4 && rb2.filter((r) => r.status === 429).length === 4 && doTotal === 4 && totalHora === 200,
+    "196 na hora e 8 envios de visitantes diferentes ao mesmo tempo: exatamente 4 gravados (o total para em 200) e 4 recusados", `${rb2.map((r) => r.status).join(",")} / gravados ${doTotal} / total ${totalHora}`);
+  await q("DELETE FROM PreCadastros WHERE Nome = N'Volume E2E95'");
+
+  console.log("-- (c) o mesmo envio repetido não grava dois");
+  process.env.PRE_CADASTRO_SITE_MIN_MS = "0";
+  const envA = corpoSite({ nome: "Reenvio Um E2E95", cpf: cpfDe(950000700), dataNascimento: "1981-11-21" });
+  const resA1 = await site(envA); const resA2 = await site({ ...envA }); const resA3 = await site({ ...envA, nome: "Outro Nome Mesmo Envio" });
+  const linA = await doEnvio(envA.envioId);
+  ok(resA1.status === 200 && JSON.stringify(resA2) === JSON.stringify(resA1) && JSON.stringify(resA3) === JSON.stringify(resA1) && linA.length === 1 && linA[0].Situacao === "ACEITO"
+    && (await fichasDoCpf(cpfDe(950000700))) === 1, "o mesmo envio 3 vezes (a 3ª com outro nome): a mesma resposta, UM pré-cadastro e UMA ficha", JSON.stringify(linA));
+  const envB = corpoSite({ nome: "Reenvio Corrida E2E95", cpf: cpfDe(950000701), dataNascimento: "1982-12-22" });
+  const resB = await disparar([0, 1, 2, 3].map(() => ({ corpo: envB }))).promessa;
+  const linB = await doEnvio(envB.envioId);
+  ok(resB.every((r) => r.ok && r.status === 200 && r.body.mensagem === RECEBIDO) && linB.length === 1 && linB[0].Situacao === "ACEITO" && (await fichasDoCpf(cpfDe(950000701))) === 1,
+    "o mesmo envio em 4 processos ao mesmo tempo: os 4 recebem 200, UM pré-cadastro e UMA ficha", `${resB.map((r) => r.status).join(",")} / ${JSON.stringify(linB)}`);
+  // a trava do CPF ocupada por outro processamento demorado: a espera tem teto (o tempo fixo continua), o pré-cadastro fica sem avaliar; o reenvio avalia
+  delete process.env.PRE_CADASTRO_SITE_MIN_MS;
+  const envC = corpoSite({ nome: "Trava Ocupada E2E95", cpf: cpfDe(950000702), dataNascimento: "1983-01-23" });
+  const segura = disparar([{ segurar: { recurso: `precad-cpf:${envC.cpf}`, segundos: 7 } }]);
+  let travada = false;
+  for (let i = 0; i < 80 && !travada; i++) {
+    travada = Date.now() > segura.t0 && (await escalar("SELECT APPLOCK_TEST('public', @r, 'Exclusive', 'Session')", { r: `precad-cpf:${envC.cpf}` })) === 0;
+    if (!travada) await new Promise((r) => setTimeout(r, 250));
+  }
+  ok(travada, "outro processo segura a trava do CPF (7 s)");
+  const tOcupada = Date.now(); const rOcupada = await site(envC); const msOcupada = Date.now() - tOcupada;
+  const linC = (await doEnvio(envC.envioId))[0];
+  ok(rOcupada.status === 200 && rOcupada.body.mensagem === RECEBIDO && msOcupada >= 2990 && msOcupada < 3400 && linC && linC.Situacao === "PENDENTE" && linC.Pendencias === null,
+    "com a trava ocupada: a MESMA resposta no MESMO tempo fixo, e o pré-cadastro gravado, sem avaliar (a fila o mostra)", `${msOcupada} ms / ${JSON.stringify(linC)}`);
+  await segura.promessa;
+  const rDepois = await site({ ...envC });
+  const linC2 = await doEnvio(envC.envioId);
+  ok(rDepois.status === 200 && linC2.length === 1 && linC2[0].Situacao === "ACEITO" && linC2[0].MembroIdResultado && (await fichasDoCpf(cpfDe(950000702))) === 1,
+    "o reenvio do MESMO envio avalia o que tinha ficado (entrou sozinho) e continua UM pré-cadastro", JSON.stringify(linC2));
+  ok((await escalar("SELECT COUNT(*) FROM PreCadastros WHERE EnvioId IS NOT NULL AND ConsentimentoVersao <> @v", { v: regrasPre.CONSENTIMENTO.versao })) === 0
+    && (await escalar("SELECT COUNT(*) FROM PreCadastros WHERE EnvioId IS NOT NULL")) > 30, "todo pré-cadastro do site guardou a versão atual do consentimento");
+
   fim("e2e-95 (as sobras de Membros no banco)");
   L.shimEncerrar();
 }
 
-principal().catch((e) => { console.error(e); process.exitCode = 1; L.shimEncerrar(); });
+// ---- os processos filhos das corridas da parte 5 (cada um com a sua conexão; a ponte do shim é uma conexão só, então Promise.all não prova corrida)
+async function filho() {
+  const spec = JSON.parse(process.argv[3]);
+  await obterPool();
+  const espera = spec.t0 - Date.now();
+  if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+  let saida;
+  try {
+    if (spec.segurar) {
+      // segura a trava do CPF como um processamento demorado (o tempo vai escrito no texto: só um número de 1 a 9)
+      const s = Math.max(1, Math.min(9, Math.floor(Number(spec.segurar.segundos) || 1)));
+      await q(`BEGIN TRAN; DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 5000;
+               WAITFOR DELAY '00:00:0${s}'; COMMIT`, { r: spec.segurar.recurso });
+      saida = { ok: true };
+    } else {
+      const { chamarRota } = require("./lib-afm");
+      const t = Date.now();
+      const res = await chamarRota("PreCadastroSite/index.js", { metodo: "POST", corpo: spec.corpo, headers: { "x-site-key": process.env.CHAVE_SITE_SISTEMA } });
+      saida = { ok: true, status: res.status, body: res.body, ms: Date.now() - t };
+    }
+  } catch (e) { saida = { ok: false, erro: e && e.message }; }
+  process.stdout.write("@@RESULTADO@@" + JSON.stringify(saida) + "\n");
+  L.shimEncerrar();
+}
+// dispara os filhos para o mesmo instante (t0); os envios do site sem o tempo fixo (a corrida é da gravação, não do relógio)
+function disparar(specs) {
+  const t0 = Date.now() + 7000 + specs.length * 800;
+  const promessa = Promise.all(specs.map((s, i) => new Promise((resolve) => {
+    const p = spawn(process.execPath, ["-r", path.join(__dirname, "shim-mssql.js"), __filename, "filho", JSON.stringify({ n: i, t0, ...s })],
+      { env: { ...process.env, PRE_CADASTRO_SITE_MIN_MS: "0" } });
+    let saida = ""; p.stdout.on("data", (d) => { saida += d; });
+    p.on("exit", () => { const m = saida.split("\n").find((l) => l.startsWith("@@RESULTADO@@")); resolve(m ? JSON.parse(m.slice(13)) : { ok: false, erro: "sem resultado" }); });
+  })));
+  return { t0, promessa };
+}
+
+if (process.argv[2] === "filho") filho(); else principal().catch((e) => { console.error(e); process.exitCode = 1; L.shimEncerrar(); });

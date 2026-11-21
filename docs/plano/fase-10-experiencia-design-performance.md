@@ -496,6 +496,86 @@ o pago por causa do financeiro, que também está vindo para cá.
              `?matricula=N`, exato.
        - **Fica para depois:** o endereço no cadastro em etapas (hoje vai pelo cadastro completo, na ficha); o formulário
          público do site; e trocar de vez o cadastro completo antigo pela edição campo a campo, que tira o risco do passo 5.
+     - **Passo 6, o servidor (18/11/2026, ramo `v10-membros`, `6e833fd`):** juntar fichas (`/api/fichas-repetidas`; migração
+       179), o alerta da assembleia e da votação geral, a carteirinha física bloqueada com pendência e o número que sobra indo
+       para o próximo cadastro. Provas: e2e-93 117/117 (também com o READ_COMMITTED_SNAPSHOT) e a prova de mutação 10/10. Risco
+       que só a homologação prova: a junção desliga os gatilhos imutáveis dentro da transação (`DISABLE TRIGGER`), o que pede a
+       permissão ALTER do login do sistema no Azure.
+     - **Passo 7b — Membros refeito do zero em Svelte + TypeScript (19/11/2026, ramo `v10-membros-svelte` até `a178d9a`; na
+       homologação nos merges `84fe461`, `4222547`, `8930ee7` e `acef2cb`) — NÃO vai à produção sem ele ver e aprovar:**
+       - **Por quê:** em 18/11 ele reprovou as telas do passo 7a ("quase igual ao que estava antes"): o perfil antigo reembalado,
+         emojis, funções antigas no menu, anotação do desenho virando texto. Decisão dele (19/11): as telas de Membros **refeitas
+         do zero em TypeScript + Svelte**, como um teste de verdade na homologação; o servidor e o banco ficam como estão; se der
+         certo, o resto do sistema segue em Svelte. Ele exige ver que fica **mais leve e mais rápido** que o JavaScript de hoje.
+       - **A base (pronta para os próximos módulos):**
+         - `front/`: Vite 8.3.5, Svelte 5.57.3, TypeScript 6.0.3, svelte-check 4.7.8 e @sveltejs/vite-plugin-svelte 7.3.1,
+           versões fixadas; `npm run check` (svelte-check e tsc) sem erro nem aviso;
+         - **a saída do build é versionada** em `app/svelte` (o deploy do Azure não roda o build: um build quebrado nunca derruba
+           o deploy da main nem o da homologação). O carimbo `app/svelte/carimbo.json` guarda o resumo do código-fonte e de cada
+           arquivo gerado, e o teste `frontSvelteCarimbo.test.js` (que roda no deploy, antes da migração) para tudo se o fonte
+           mudou sem build novo, se um arquivo foi mexido à mão ou se aparecer `eval`, `new Function` ou endereço de fora;
+         - **sob demanda:** a casca (`modulos/casca.js`, `abrirMembrosSvelte` e `abrirMinhaVidaSvelte`) só baixa
+           `app/svelte/membros.js` quando a pessoa entra em Membros ou abre a Minha vida; cada tela é um pedaço baixado na
+           primeira vez (a lista e a ficha logo depois do painel); o membro na Minha vida não baixa as telas da secretaria;
+         - **a ponte** (`front/src/comum/ponte.ts`): tudo o que as telas usam da casca passa por um objeto só (o fetch
+           autenticado, a sessão, os ícones de traço — as MESMAS formas do `iconeSvg()` —, os avisos, o caminho do topo, o menu
+           recolhido), conferido quando chega;
+         - **as peças comuns** (`front/src/comum`): cabeçalho, cartão, chip, escolha em chips (no lugar do select nativo),
+           opções, etapas, pílulas, menu do módulo com o trilho, linha do tempo, campo, aviso, estados (carregando, vazio, erro)
+           e "em construção";
+         - a CSP continua `'self'` (sem script em linha); o service worker subiu para v65 (as telas Svelte ficam fora da
+           instalação e são guardadas quando baixadas).
+       - **As telas, igual ao desenho aprovado** (fotos "aprovado × construído" de cada uma, por nível, aparelho e tema):
+         o módulo se chama **Membros**, com o menu em 4 grupos (Painéis; Membros; Movimentações; Cuidados com o cadastro) e o
+         trilho de ícones; o conteúdo direto no fundo; nenhum emoji; títulos sem a barra azul; o painel executivo; a lista; a
+         ficha 360 (o menu "Nesta ficha" com as 9 partes, o conteúdo antigo redistribuído nelas, a edição campo a campo com o
+         lápis, o ✓ e o ✕ e "quem mudou o quê"); o cadastro em etapas; a esteira de cadastros; o cadastro rápido; as
+         transferências (pedir, a caixa e acompanhar); a caixa de sugestões com a trilha das 4 etapas; as fichas repetidas e
+         juntar (só o que é diferente); e a Minha vida (a linha do tempo primeiro, "Minha ficha" à direita com o menu completo).
+         No celular, uma fileira só de pílulas (Painel, Pessoas, Fila com o número, Transferências), as telas de dentro com o ←
+         e nada preso embaixo.
+       - **Servidor (com teste):** a lista ordenada pelo cabeçalho e a Área de cada pessoa (`?ordem=&direcao=`, lista fechada;
+         e2e-92 79/79 com a tentativa de injeção); a situação e a congregação na minha linha do tempo.
+       - **Saíram da casca:** as telas do passo 7a em JavaScript (`modulos/membros.js`, `membros-cadastro.js`,
+         `membros-movimento.js` e o estilo delas). Do menu de Membros saíram as funções antigas (Importar e exportar,
+         Credenciais, Discipulado, Cartas, Perda de Membresia); o **Cuidado Pastoral** ganhou o cartão dele.
+       - **Em construção (aparece assim na tela, nunca a tela velha):** Desligamentos; Carteirinhas (passo 8); "Serve em algum
+         ministério?" no cadastro; o anexo do documento na sugestão do membro; a coluna "a pessoa completa por e-mail" da esteira.
+       - **Peso e velocidade, medidos no Edge sem janela** (rede de celular 4G lento: 150 ms e 1,6 Mbit/s; processador 4×
+         mais lento; cache vazio; arquivos comprimidos como o Azure manda; mediana de 5 rodadas, a secretaria local):
+
+         | | JavaScript de hoje (homologação) | Svelte |
+         | --- | --- | --- |
+         | Abrir o sistema | 1.158 KB | 1.119 KB |
+         | Entrar em Membros (painel) | 0 KB (já veio ao abrir) | 54 KB |
+         | Painel pronto | 1,11 s | 1,11 s |
+         | Lista pronta | 0,67 s | 0,39 s |
+         | Ficha 360 pronta | 1,27 s | 0,24 s |
+
+         O JavaScript de Membros de hoje (61 KB) é baixado por todo mundo ao abrir o sistema, mesmo por quem nunca entra em
+         Membros; em Svelte, só quem entra baixa (54 KB, já com o painel, a lista e a ficha; cada outra tela, de 1 a 6 KB, na primeira vez que abre).
+       - **Provas:** jest 6.645/6.645; e2e no LocalDB (base `cenario-179`): 84 47/47, 85 51/51, 86 59/59, 89 77/77, 90 79/79,
+         91 93/93, 92 79/79, 93 117/117; as telas no Edge sem janela em todos os níveis, aparelhos e temas sem erro de script,
+         sem violação de CSP, sem estouro de lado e sem emoji; revisão com o caçador de falhas silenciosas, a análise dos tipos e
+         o `/code-review`, com os achados corrigidos (cada parte com o seu erro e o "Tentar de novo"; nada enviado duas vezes;
+         respostas velhas descartadas; a saída da sessão limpa o rascunho com CPF; o pedido da própria pessoa aparece como dela).
+       - **Escolhas pelo caminho seguro (ele pode mudar):** no celular as pílulas da rodada 12 no lugar das abas sublinhadas; o
+         cadastro rápido com o desenho da rodada 9 e os campos que a regra escrita pede (CPF e e-mail opcionais, que fazem a
+         pessoa entrar sozinha; o celular opcional); o departamento sugerido pela idade (até 11 Crianças, 12–17 Adolescentes,
+         solteiro até 35 Jovens, o resto Senhoras ou Varões), que a secretaria pode trocar; o menu recolhido (trilho) nas telas
+         em que o desenho o mostra (painel, ficha, esteira, sugestões e Minha vida); a página "Transferências" com o nome do menu
+         novo; a Minha vida com o desenho no alto e, embaixo, os compromissos e "o que é meu" da casca.
+       - **Na homologação de verdade** (a API e o banco `ieadespa-homolog`, a massa fictícia): os deploys com "DEPLOY OK"; a
+         Secretaria Geral de teste (900013) e o pastor de área de teste (900007, no celular) entraram em Membros e passaram
+         pelo painel, a lista, a ficha, a esteira, as transferências, as sugestões, as repetidas e o cadastro sem erro de script
+         nem recusa de CSP (o único 404 é o `favicon.ico` da casca, que já existia). O que se viu lá e foi corrigido: os números
+         do painel mostravam 0 enquanto o servidor respondia (agora o esqueleto), a barra azul que a casca põe no primeiro
+         título das telas antigas aparecia num subtítulo da ficha, e o nome comprido dos departamentos ("União de Senhoras").
+         O teste de telas acusou o esperado (o cartão do módulo virou "Membros", as telas antigas de Pessoas e do 7a saíram,
+         1 botão a mais em toda tela, o ← do celular; 0 violação de CSP) e a base foi aprovada **só no `homolog`** (`8eca237`).
+         Ainda não provado lá: juntar fichas de verdade (o `DISABLE TRIGGER` pede a permissão ALTER no Azure).
+       - **Achado consertado de passagem:** o `style.css` da homologação tinha perdido o começo de um comentário (no merge de
+         `59dcdac`), e o navegador jogava fora as variáveis do `:root` da casca.
   8. **As carteirinhas:** o editor da física, a digital e a página do QR (o QR fixo da pessoa, que nunca vence).
   9. **A migração única do sistema pago** (v10.1e).
 - **A casca nova na homologação (17/11/2026), em incrementos — ramo `v10-casca`, NÃO vai à produção sem ele ver e aprovar:**
@@ -631,6 +711,444 @@ escopo de quem está logado (o dirigente recebe só a sua congregação; antes o
 lista em páginas pronta no servidor para a tela nova (v10.1d); e o **"Cadastrar Pessoa" que ficava em branco** — o formulário agora aparece
 na hora, cada lista carrega por conta própria, e salvar/editar esperam a lista de congregações (antes, editar com as listas chegando podia
 gravar a pessoa na congregação errada).
+
+### Membros em Svelte: aprovado no visual por ele (19/11/2026), e o que falta para a produção
+
+**Ele, depois de entrar como Presidente:** "ficou bom, gostei, bem rápido mesmo". A prioridade dele, depois da rodada 19
+do Financeiro, é **terminar Membros de fato e levar à produção**. Com Membros e Financeiro no sistema, a Igreja sai do
+sistema pago e o dinheiro economizado vai para outros projetos.
+
+O que falta, nesta ordem:
+
+1. **O seletor de congregação aprovado no Financeiro** (rodada 18, opção 3: a área primeiro e depois a congregação, com a
+   procura). Hoje Membros ainda mostra a lista inteira de congregações. Ele vira peça comum e entra também em Membros,
+   na versão final da rodada 19.
+2. **Carteirinhas** (passo 8, desenho aprovado nas rodadas 9 a 11).
+3. **Desligamentos.**
+4. **As sobras:**
+   - "Serve em algum ministério?";
+   - o anexo da sugestão;
+   - "a pessoa completa por e-mail";
+   - o formulário "Quero me cadastrar" do site;
+   - as ações das abas antigas do perfil (casamento, vínculo, foto, licença), refeitas dentro da ficha.
+5. **O importador do sistema pago** (passo 9).
+6. **A ida à produção:**
+   - as migrações 174 a 179;
+   - a permissão ALTER para juntar fichas;
+   - a importação real;
+   - a troca do sistema pago.
+
+**Rodada de desenho de Membros, aprovada por ele em 19/11/2026,** para logo depois que ele fechar a rodada 19 do Financeiro
+(um módulo por vez no desenho). O objetivo é Membros ter a mesma robustez do Financeiro.
+
+- **A família como unidade.** Hoje os vínculos são de dois em dois.
+  - Como ele quer, a partir do que vê no sistema pago: cadastra-se a pessoa e, na família dela, a esposa e os filhos.
+  - O endereço vale para a família toda: preenchido num, vai para os outros.
+  - Toda a família numa tela só.
+- **Listas inteligentes:** um filtro forte e personalizável.
+  - Exemplo: "jovens de 18 a 29 anos da área 3, sem batismo no Espírito Santo".
+  - Salvar a lista e, com ela, fazer ações em lote: mandar um comunicado, pôr uma etiqueta, exportar só o permitido.
+- **A movimentação em assistente: desligamento, falecimento e readmissão.** Hoje se edita a ficha; o assistente pergunta
+  passo a passo:
+  - o que aconteceu (pediu para sair, faleceu, voltou);
+  - a data e o documento ou a ata;
+  - o que o sistema faz sozinho: deixar os cargos vagos, recolher a carteirinha, tirar das escalas, parar os
+    comunicados e registrar na linha do tempo.
+  - É o item "Desligamentos" do menu, que hoje está "em construção".
+
+## Financeiro (módulo 2): o desenho aprovado e o que a Igreja vive hoje
+
+O desenho do Financeiro foi aprovado nas rodadas 13 a 17: a última respondida por ele em 18/11/2026, com a opção final em
+todas as telas. A construção vem logo depois de Membros, já em TypeScript + Svelte (decisão dele de 19/11/2026: as telas
+são refeitas do zero; o servidor e o banco ficam). Nenhuma tela vai à produção sem ele ver e aprovar na homologação.
+
+### A realidade do dinheiro, que vale mais que o Regimento (ele, 19/11/2026)
+
+A rodada 19 foi REPROVADA inteira porque trouxe do Regimento Interno coisas que não existem. O Regimento não foi aprovado
+e não é a realidade. Esta lista vale para todo desenho e toda construção do Financeiro:
+
+- **Não existe:**
+  - lançar ou cadastrar CULTO no Financeiro. O dízimo é lançado a qualquer hora (ex.: terça de manhã), e no máximo se
+    registra o dia. A oferta entra quando há, como a da ceia;
+  - malote;
+  - a contagem no domingo à noite;
+  - o pré-repasse "todo domingo";
+  - cofre, duas pessoas contando, depósito no banco toda segunda.
+- **O dinheiro em espécie vira Pix logo.** O caixa único tem as contas do dinheiro em espécie e do Pix, separadas; o Pix
+  é o que mais se movimenta.
+- **O repasse:** metade das congregações entrega o mês inteiro no último dia; a outra metade faz repasses semanais ou
+  parciais. Todo mês tem de vir. Não existe "repasse atrasado" no meio do mês.
+- **Departamentos e secretarias ficam FORA do 60/40,** e Missões é uma secretaria.
+  - Cada um tem caixa e receitas próprios (ofertas, mensalidades de quem apoia).
+  - Os centros de custo são centenas: um geral e um por departamento ou secretaria, em cada congregação, mais os da área.
+    Foi o que o sistema pago não aguentou.
+  - O Financeiro tem de suportar essa árvore; o módulo dos departamentos vem depois.
+- **O contador é anual, não mensal.** A Igreja manda o resultado contábil do ano, e ele envia à Receita. A tela "O que o
+  contador precisa" segue o formato que a Receita recebe.
+- **Trabalho voluntário:** todos são voluntários e não há registro. Não entra no sistema.
+
+**As respostas dele às dúvidas da rodada 19:**
+
+- **A folha do mural:** 50 nomes por folha, no máximo.
+- **O retido:** sai dos 40% DEPOIS das despesas congregacionais. Os 60% e os 40% são sempre do que sobrou.
+- **O dízimo digital:** quem liga primeiro é a tesouraria da congregação. Ela escreve o recibo de papel e o liga ao Pix.
+  - A Geral só liga quando a congregação não fez e trouxe o bloco.
+  - Ao lançar, a Geral vê PRIMEIRO o aviso "há dízimos digitais para ligar"; sem ligar, eles ficam de fora.
+- **O dízimo do pastor:** sai dos 30% do Presidente, que fica com o que sobra.
+  - O centro de custo da Convenção tem dois tipos de entrada: o fundo convencional, que vem do rateio, e o dízimo do
+    pastor.
+- **As tendências:** opções de tela com o gráfico personalizável.
+
+### Rodada 20: o que ele aprovou e o que muda (20/11/2026)
+
+**Aprovados** (ele vai lembrando de mais coisas na prática e pode completar):
+
+- o caminho do repasse ("agora vi bem melhor");
+- o seletor de congregação;
+- a folha do recebimento ("papel muito bom, bem detalhado");
+- os relatórios (opção 3, "Monte o seu gráfico");
+- o lançamento de dízimos (versão final).
+
+**Aprovados com acertos:**
+
+- **Os tipos de oferta:** NÃO existe "oferta da ceia".
+  - Só a **oferta de culto**, genérica, e a **oferta voluntária**, que pode vir junto do dízimo.
+  - A "oferta alçada" existe, mas não é usada e fica fora do rateio.
+- **O dízimo digital:** opção 2 (a lista própria em 3 passos). O aviso fica no alto, e só se lança o bloco depois de
+  ligar os dízimos digitais: o sistema já sabe a folha de quem ligou.
+  - **A regra, nas palavras dele (rodada 21, 20/11/2026).** A planilha não fica travada para ver. Mas a Geral só pode
+    FECHAR o repasse e o mês depois de resolver cada dízimo digital, de um destes dois jeitos:
+    - LIGAR o dízimo a um número de recibo do bloco;
+    - ou EXCLUÍ-LO com o motivo, e o membro é avisado do porquê.
+  - O caso típico: o membro fez o dízimo digital e, no mesmo dia, entregou também o físico, e ficaram dois dízimos do
+    mesmo valor. Também acontece de ninguém ter anotado o digital no bloco.
+  - Quem liga primeiro é a tesouraria da congregação; o que ela não ligou sobra para a Geral.
+- **A congregação e a área veem para onde foram os 60% DELAS** (aprovado em 20/11): só por centro de custo, no nível
+  macro (Presidente, Tesouro Geral, Convenção). "Até é bom: acaba a discussão de para onde foi o dinheiro." O detalhe
+  de cada compra fica nas saídas de cada centro de custo, na Geral.
+- **O contador:** opção 2 ("o ano numa linha"). O pacote do ano se atualiza todo mês, e ao mandar abre-se o resumo (a 3ª
+  tela) para conferir. Se um dia houver contador mensal, a tela já serve.
+- **A folha do mural:**
+  - 50 nomes por folha, **sem importar o bloco**: a regra "bloco novo, folha nova" SAI porque deixava folha quase vazia;
+  - **cada folha precisa de validação própria,** com o QR ou a conferência e o "folha 2 de 3". Hoje só a última tem QR,
+    e uma folha solta poderia ser falsificada.
+- **O conferir do repasse:** a opção 3 ("a lista dos lançamentos com o corte"); ele gostou também da 1 e da 4. Faltam:
+  - **os comprovantes de Pix pelo sistema.** Hoje a tesouraria local manda cada comprovante pelo telefone, e ele quer
+    ACABAR com isso. A congregação anexa a foto ou o PDF de cada Pix ao pré-repasse, e a Geral confere no sistema,
+    contra o extrato;
+  - **a virada do mês:** do dia 1 ao dia 5 entram Pix e dízimos que são do mês anterior (o dizimista que dizima sempre
+    no dia 5). É preciso marcar o mês de referência, e o pré-repasse do mês anterior tem de recebê-los, sem esperar o
+    dia 30 para conferir.
+- **O rateio:**
+  - são **duas páginas**: antes, escolher o que vai ratear (os repasses, o período); depois, o rateio feito;
+  - o rateio só divide os **60% da Geral**. Os 40% da congregação já foram separados no repasse e não aparecem como
+    rateio.
+- **O tesouro:** SAI "congregações" e "guardado para pagar". O tesouro mostra os centros de custo da Geral. Os 40% são o
+  repasse à congregação, não um centro de custo do tesouro.
+- **O caixa único:** ele escolheu a opção 2 ("o livro do caixa"), mas ficou "muito nebuloso". Explicado em 4 passos, ele
+  aprovou: "agora sim é o caixa único que a gente espera".
+  1. Quem traz o repasse entrega a espécie, e o Pix já está na conta.
+  2. O caixa anota espécie e Pix separados e dá o recibo. O recibo aprovado basta.
+  3. A espécie vai para o banco ou vira Pix, e o caixa anota "espécie virou Pix", com o comprovante.
+  4. No fim do dia, a espécie deve estar em zero e o resto no banco. É daí que sai o rateio.
+  - **Só a Tesouraria Geral tem caixa hoje,** porque há uma única conta geral.
+  - O caixa da congregação vem no futuro (daqui a uns 5 ou 6 anos), quando as congregações tiverem CNPJ de filial e conta
+    própria. Aí a Geral aprova pelo comprovante: "não dá para confiar".
+
+### Rodadas 21 e 22: aprovado e as últimas regras (20/11/2026)
+
+**Aprovados na 21:** o caixa único (4 passos, só a Geral), o contador (o ano numa linha e o resumo), a folha do mural, o
+lançamento, o rateio (vai sozinho para cada centro de custo) e o tesouro (atualiza a cada saída e repasse; estimula
+lançar as saídas na hora).
+
+**Rodada 22 publicada,** com as respostas dele:
+
+- **O dízimo digital:** a folha não trava. Quem liga escolhe a folha física livre e digita o número. Só o lançar e o
+  fechar ficam impedidos até ligar.
+- **"Referente ao mês anterior / posterior"** (no lugar do "mês de referência", que ele não quis): o dízimo SOMA NO MÊS A
+  QUE SE REFERE. **A regra definitiva, explicada por ele em 20/11 à noite:**
+  - **Quem decide é sempre o mês que vem antes.** Exemplo, um bloco de 20 folhas no fim de setembro:
+    - em setembro, as folhas 18 e 19 são de outubro (dízimo adiantado), e a 20 é de setembro;
+    - na planilha de setembro, a 18 e a 19 ficam só com a linha "referente ao mês posterior", sem nome e sem valor. A 20
+      vai com o nome e o valor e soma em setembro.
+  - **O mês seguinte começa na primeira folha marcada "mês posterior".** A planilha de outubro abre na folha 18:
+    - a 18 e a 19 já vêm listadas e o nome e o valor são obrigatórios. Se o dízimo foi digital, os dois vêm sozinhos;
+    - a 20 já vem com a tarja "referente ao mês anterior", sozinha, e ninguém digita nada (somou em setembro);
+    - depois segue a sequência de outubro, e no fim de outubro o processo se repete.
+  - **Ninguém marca "mês anterior".** Na hora de lançar, só existem "Este mês" e "Mês posterior". O dízimo de novembro
+    entregue no dia 2 de dezembro não é caso de "mês anterior": a tesoureira o lança em novembro como recebido no dia 30.
+  - **O dinheiro do adiantado é do mês a que se refere, para todos os fins.** O dízimo de dezembro entregue em novembro
+    entra em dezembro: não vai no repasse nem na conta de novembro, fica esperando e soma na contabilidade de dezembro.
+  - **O Conselho Fiscal não tem nada a ver com essas linhas.** À parte, o relatório atrasado (o tesoureiro que não fechou
+    outubro) sai como "referente aos meses de outubro e novembro".
+  - O mural é contínuo e mostra as marcas.
+- **A conferência entre espécie e digital** (o 3º relatório, contínuo): usar o Pix do mês seguinte para completar o mês
+  que se fecha é AUTOMÁTICO ("para não ter aglomeramento de comprovantes"). Só o destino da sobra é escolha de quem
+  confere: dezembro, o centro de custo, estorno ou despesa.
+
+### Rodada 24: o que ele aprovou e a regra nova do 3º relatório (21/11/2026)
+
+- **Lançar:** aprovado como está.
+- **A folha do mural:** aprovada, com um acerto. As linhas COM NOME que vieram do mês anterior ficam iguais às outras,
+  sem "(marcada em outubro)", "(marcada em novembro)" nem fundo roxo ("não poderia existir"). As tarjas "referente ao
+  mês posterior" e "referente ao mês anterior" continuam.
+- **O 3º relatório NÃO é conferência de mês** ("não entendi nada dessas 3 telas"). Saem o "fechar novembro", o
+  "faltavam" e o "destino da sobra". É só saber, todo dia, quanto cada congregação tem, sem separar por mês, por dízimo,
+  oferta ou departamento:
+  - **duas linhas, separadas:** o que já está NA SEDE (o Pix na conta geral e a espécie entregue no caixa da Geral) e a
+    espécie que ainda está COM A CONGREGAÇÃO;
+  - funciona mesmo se a congregação só mandou os comprovantes e não lançou as folhas: o dinheiro conta do mesmo jeito;
+  - acaba com o comprovante pelo telefone e com o "só saber no fim do mês";
+  - **quando um relatório fecha, de qualquer mês, o líquido sai do saldo** e se divide sozinho: os 60% vão para a Geral
+    e os 40% vão AUTOMATICAMENTE para o centro de custo da congregação (na conta geral). O que sobra no saldo fica
+    esperando o próximo relatório; o que falta é coberto pelo dinheiro que chegar depois.
+- **O retido e as despesas da congregação saem do relatório** (muda o que estava no desenho): são movimentos no centro
+  de custo da congregação, onde ela decide (despesa, liberar para o dirigente, outra coisa). Só as despesas descontadas
+  ANTES do líquido, como o aluguel, continuam no relatório, antes do 60/40.
+  - Exemplo dele: Vila Nova tem R$ 1.000 na sede e fecha um relatório de R$ 1.000. Saem R$ 600 (60%) para a Geral e
+    R$ 400 (40%) para o centro de custo de Vila Nova, e o saldo na sede fica em zero.
+  - **Corrigido na rodada 25** (abaixo): não existe saldo "esperando o próximo relatório".
+
+### Rodada 25: a regra certa de quanto cada congregação tem (21/11/2026)
+
+Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 24 acima.**
+
+- **A folha do mural:** aprovada. Sai só o quadro do fim que explica as folhas de outro mês. As linhas "folha
+  arrancada" e "folha cancelada" continuam na lista.
+- **Quanto cada congregação tem na Geral** é uma conta só por congregação, dentro da Geral, como um extrato de banco.
+  Ela não tem mês e não tem nada a ver com repasse nem com o mural:
+  - **entra** o Pix da congregação na conta geral e a espécie que ela entrega no caixa da Geral;
+  - **quando um relatório fecha** (de qualquer mês), **sai só a parte da Geral**. Todo o resto já é da congregação (o
+    centro de custo dela), seja qual for o valor: nesta tela não existe "40%" nem dinheiro "esperando outro repasse";
+  - **despesa da congregação paga pela Geral** sai desse saldo;
+  - **no relatório seguinte**, a parte da Geral sai primeiro desse saldo; se faltar, a congregação cobre com a espécie;
+  - **a Geral vê quanto da conta geral é de cada congregação**, para não gastar o que é dos outros: a conta geral, quanto
+    disso é das congregações e quanto é da Geral de verdade;
+  - a espécie que ainda está com a congregação continua aparecendo à parte (a escolha "as duas, separadas").
+  - Exemplo dele: a congregação tem R$ 10.000 na Geral; o relatório tira R$ 7.000 (a parte da Geral) e os R$ 3.000
+    restantes já são dela. De novo R$ 10.000; o relatório tira R$ 4.000 e os R$ 6.000 já são dela.
+- **Para o futuro** (quando a congregação tiver conta bancária própria, CNPJ filial): o centro de custo fica **misto**,
+  com dinheiro em contas diferentes (o que está na Geral e o que está na conta da congregação). Na prestação de contas,
+  a parte da Geral sai **primeiro** do que está na Geral; o que está na conta da congregação vem **em segundo**.
+
+### A varredura antes da construção: as respostas dele (20/11/2026, noite)
+
+- **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o
+  código com a conta dele.
+  - O ano de 2026 NÃO vem para o sistema. Entram só os saldos de abertura, que podem ser positivos ou negativos:
+    primeiro os do Tesouro Geral e da Convenção, que são gerais;
+  - os outros centros de custo ganham o saldo à medida que começarem a trabalhar no sistema.
+- **O mês anterior recebe enquanto a congregação não mandou aquele relatório.** Mandado e fechado, não recebe mais, e o
+  dízimo cai no mês atual.
+- **Departamentos e Missões ficam FORA da 1ª entrega.** Continuam como hoje até nascer o módulo de cada um, e aí entram
+  por ele.
+- **Só duas formas de receber: espécie e digital (Pix).** Maquininha, TED e cheque não existem por enquanto.
+- **O extrato:** a conta geral é no **banco Cora**.
+  - Até existir a ligação automática (a v10.16 prevê o Pix pela Cora), alguém da Tesouraria Geral baixa o arquivo do
+    extrato e o põe no sistema antes de começar a receber os repasses do dia.
+  - Sem o extrato do dia, o Pix não se confere na hora.
+  - Se a ligação automática ficar pronta até lá, ela substitui o arquivo.
+- **O dizimista vê os próprios dízimos** em "Minha vida", quando o dízimo está ligado ao nome dele e ele tem acesso.
+  "Quero ver se alguém vai ficar com desculpa."
+- **O contador:**
+  - recebe por planilha, no formato das normas técnicas (ITG 2002);
+  - a Igreja NÃO entrega a ECD, porque a receita do ano não passa de R$ 4,8 milhões;
+  - as doações em bens não entram.
+- **As suposições, confirmadas:**
+  - **O fechamento:** a congregação manda, a Tesouraria Geral confere e fecha o repasse, e o Conselho Fiscal audita e
+    fecha o mês. O mês fechado não reabre, com UMA exceção: o Conselho Fiscal vota a reabertura, com a autorização do
+    Ministério (o órgão colegiado dos obreiros). O sistema registra o voto e a autorização, com data, e a trilha mostra
+    tudo.
+  - **A área não carrega dinheiro:** cada congregação entrega direto no caixa da Geral.
+  - **Salário e encargos ficam com o contador.** Hoje não há ninguém contratado.
+  - **As inscrições e as camisetas do site entram sozinhas no centro de custo de quem organizou.** Isso já fica como base
+    da integração do site vivo (v10.14): o site manda para o sistema, e não o contrário.
+- **Comigo, aprovado:**
+  - a planilha com sinal fraco;
+  - o percentual que vale dali para a frente;
+  - a trilha e o estorno;
+  - os comprovantes guardados por pelo menos 5 anos;
+  - a passagem do Financeiro de hoje para as telas novas;
+  - os centros de custo nascendo sozinhos das congregações e dos departamentos.
+
+### O núcleo: o que a Igreja vive hoje (ele, 19/11/2026)
+
+"Hoje a maior deficiência nossa é a gestão disso": as entradas, os repasses, o rateio, as saídas e o tesouro. O resto do
+Financeiro (orçamento, PDQ, patrimônio, imunidade...) vem do Regimento Interno e ainda não existe na prática; está aprovado
+como desenhado e nasce na implantação. Por isso a construção começa por este núcleo, nesta ordem:
+
+1. **Entradas: o lançamento de dízimos e ofertas em planilha, como já desenhado.**
+   - **Os blocos e as folhas vêm numerados sozinhos e seguem de um mês para o outro.** Exemplo: em novembro a
+     congregação usou 10 folhas; em dezembro continua da folha 11 em diante, até acabar o bloco e começar o novo.
+   - **O dizimista é procurado no cadastro de membros;** se não for achado, digita-se o nome.
+2. **Repasses: como a Igreja recebe o dinheiro das congregações.**
+   - **O sistema guarda até onde já recebeu.** Exemplo: recebeu até o dia 10. No dia 11, ao voltar àquela congregação,
+     continua dali: o repasse do dia 11 ao dia 20, depois o do dia 21 ao dia 30, que encerra o mês. Também há o repasse
+     mensal de uma vez.
+   - **Os valores semanais, quinzenais e mensais são calculados sozinhos** e ficam salvos.
+3. **Fechamento e a folha impressa.**
+   - No fim do mês (dia 30), quem trouxe o dinheiro leva a folha impressa.
+   - **A folha tem o lugar da assinatura,** pelo menos a do Tesoureiro Geral, e um **QR que confere a validade** numa
+     página do sistema. Assim não ficam relatórios falsos nos murais das igrejas. É a mesma ideia do QR da credencial:
+     a página mostra se o documento existe e é aquele.
+4. **Rateio para os centros de custo.** Aprovado na rodada 17: "agora sim, do jeito que eu queria".
+   - Depois dos repasses vem o rateio. Ele pode ser feito a qualquer dia e juntar repasses de várias congregações (ex.:
+     no dia 12, o rateio dos repasses 1, 3 e 4).
+   - **Os percentuais certos dos 60% da Geral** (ele, 19/11/2026: os da rodada 17 e da 18 estavam "erradíssimos"):
+     - **Presidente: 30%**;
+     - **Tesouro Geral: 60%**;
+     - **Convenção (o fundo convencional): 10%**;
+     - **o dízimo do pastor:** dos 30% do Presidente, 10% vão também para a Convenção. A Convenção recebe os seus 10%
+       mais 10% dos 30% do Presidente.
+     - **Não existem hoje** reserva, PDQ (plano diretor) nem Missões no rateio. Missões tem caixa próprio, na Secretaria de
+       Missões. Se um dia o Regimento criar reserva ou PDQ, eles saem dos 60% do Tesouro Geral.
+     - A pergunta antiga "60% + 10% = 70%?" deixou de existir.
+     - Os percentuais ficam nos parâmetros, editáveis pela Geral, com estes valores de partida.
+   - Os 40% da congregação vão para a aba de repasses ao local.
+   - **Pedido dele de 19/11: o rateio mais automático, "um rateio mesmo top".** Quando o repasse é conferido, a divisão
+     pelos centros de custo sai sozinha, pelos percentuais dos parâmetros. A contabilidade interna e o fechamento do mês
+     ficam como aprovados.
+   - **Não existe "desfazer" nem "reabrir" o rateio.** Ele: "nunca reabrimos um rateio em todos esses anos". Um erro de
+     cálculo ou de digitação se corrige com um ESTORNO, um lançamento de correção com o motivo, que fica na trilha e é
+     feito pela Tesouraria Geral. O botão "Desfazer (só hoje)" da rodada 18 sai na construção.
+   - **As entradas mais amigáveis:** é o ponto que ele mais quer melhorar.
+5. **Saídas a partir de cada centro de custo.** Exemplo: no dia 15 o Presidente recebe R$ 5.000; lança-se a saída daquele
+   centro de custo. Em todo momento se sabe o que cada centro de custo tem.
+6. **A página do Tesouro é atualizada pelos rateios gerais.**
+7. **A folha do mural** (o comentário dele na rodada 17 vale mais que o acerto anterior):
+   - **Cada linha:** o número do bloco, o número da folha (o recibo) e o nome do dizimista, sem valor.
+   - **Página em retrato,** cerca de 47 nomes por folha; passou disso, segue numa segunda folha.
+   - **O "total arrecadado" é só dos dízimos e ofertas** da aba de lançamentos. As outras entradas ficam no relatório do
+     sistema, não no mural.
+   - **As ofertas dos cultos de departamentos e secretarias NÃO entram no 60/40** (ele, 19/11). A maioria dos cultos é
+     desses. Cada departamento e secretaria tem o seu centro de custo, e Missões tem caixa próprio. No 60/40 entram só
+     os dízimos e a oferta do culto da congregação.
+   - **As assinaturas da folha do mural** (ele, 19/11), três e obrigatórias:
+     - o **Tesoureiro Geral**, que recebe e fecha o relatório;
+     - o **tesoureiro local**;
+     - o **dirigente da congregação**.
+     - O **Presidente não assina**, nem como opção.
+   - **Do total saem os compromissos da congregação** (ex.: o aluguel, a parcela de um lote). O que sobra é dividido: 60%
+     para a Geral, 40% para o local. Exemplo dele: arrecadou 1.000, o aluguel foi 900, sobraram 100, que viram 60 e 40.
+   - **O relatório nunca fica negativo.** Se o aluguel (2.000) passa do arrecadado (1.000), desconta-se só até zerar.
+   - **O "retido na congregação"** (corrigido por ele na rodada 18, 19/11/2026). A regra é o dinheiro ir para a Geral e a
+     Geral pagar o local. Na prática, o que a pessoa NÃO traz em espécie fica retido na congregação e sai dos 40% do
+     local.
+     - Exemplo dele: eram R$ 5.000; ela trouxe só os R$ 3.000 da Geral (60%); os R$ 2.000 ficaram lá, e a Geral "nem viu
+       a cor".
+     - O sistema registra só o que de fato chegou: "tem que ser sincero".
+     - A linha "Retido na congregação" mostra esse valor; não é sempre zero.
+   - **O repasse, como ele trabalha** (rodada 18):
+     - hoje é o envelope (congregação, data e valor), e o dinheiro fica nele até o rateio;
+     - no sistema, a congregação faz um **pré-repasse**, sem validade até a Tesouraria Geral conferir com o dinheiro na
+       mão; a Geral também pode fazer o pré-repasse;
+     - a tela de Repasses abre na **lista das congregações com pré-repasse**;
+     - no detalhe:
+       - escolhe-se até que **dia e hora** se fecha;
+       - escolhe-se **quem trouxe**;
+       - confere-se o **banco (Pix)** e a **espécie**;
+       - o que não veio fica retido.
+   - **O caixa único da Tesouraria Geral** (ideia dele e do Presidente):
+     - funciona como o caixa de supermercado: abre e fecha; recebe a espécie e o Pix de todas as congregações; dá o
+       **recibo** a quem trouxe;
+     - o envelope acaba, e quem separa é o rateio automático.
+     - O recibo é a "folha do recebimento", aprovada na opção 3 da rodada 18, somada ao detalhamento da opção 1, numa via só.
+   - **A folha do mural, versão final** (rodada 18):
+     - a folha 1 cabe 50 nomes, e mais 3 se precisar;
+     - cada bloco novo começa numa folha nova;
+     - as contas do mês, as 3 assinaturas e o QR ficam juntos e inteiros na última folha (normalmente são 2 folhas; com
+       muitos nomes, 3).
+   - **Confirmado por ele (19/11/2026): só o que é fixo da congregação sai antes da divisão,** numa linha só chamada
+     **"Despesas congregacionais"**, no lugar de várias linhas soltas. Dentro dela vai o que for:
+     - o **aluguel**;
+     - a **parcela de lote**;
+     - a **obra liberada pelo Presidente**. Na congregação em construção, quando a Geral não tem como ajudar, o
+       Presidente libera que ela fique com o que arrecada (às vezes 100%) até um valor autorizado. Exemplo dele: rende
+       1.000, mas pode ficar com até 2.000 para ajudar a construir.
+     - **Quem cadastra (ele, 19/11): a própria congregação,** com autonomia. A Tesouraria Geral aceita ou não e paga quando
+       a congregação comunica. O Presidente não precisa saber, a não ser acima de um valor (um parâmetro; "nunca foi
+       alcançado"). Exemplo dele: um produto de limpeza de R$ 50 é cadastrado pelo local, aceito pela Tesouraria Geral
+       e lançado como despesa. A obra continua sendo liberada só pelo Presidente.
+     - Ela entra sozinha no relatório do mês. A soma desconta até zerar, nunca deixando o relatório negativo.
+     - **Com repasses por período** (ele, 19/11): a despesa vai consumindo os repasses na ordem até ser coberta. Exemplo:
+       uma despesa de R$ 1.000. O 1º repasse, de R$ 500, vai todo para ela: nada para a Geral nem para o local, e não há
+       rateio. O 2º, de R$ 600, completa os R$ 500 que faltavam, e os R$ 100 que sobram vão para o rateio normal. Do 3º
+       em diante, rateio normal.
+     - **De onde vem o dinheiro da obra** (ele, 19/11; entendimento a confirmar na construção):
+       - se vem dos dízimos e ofertas da congregação (a obra liberada), fica travado lá: não entra no rateio e não volta;
+       - se é uma despesa comum da congregação, sai dos 40% dela;
+       - se a Geral paga, é uma despesa da Geral e também não volta.
+       - Em nenhum caso a Geral "devolve" a obra à congregação.
+
+**Regras que valem para todo o núcleo:**
+
+- **Três níveis que crescem:** congregação, área e Geral. A Geral vê o todo e escolhe a congregação; a congregação vê só o
+  que é dela; a área, as suas. A troca de congregação tem de ser amigável, num painel, nunca um select perdido.
+- **A Igreja é uma só, não um conjunto de congregações isoladas.** Era o defeito que ele mais apontou no sistema antigo.
+  - **Fornecedores, contas bancárias e centros de custo são da Igreja inteira.** Um fornecedor cadastrado numa congregação
+    aparece para as outras.
+  - **A conta geral da Igreja pode ser escolhida** como destino de um recurso de qualquer congregação.
+  - O escopo limita quem VÊ e quem LANÇA, não o cadastro comum.
+- **A Sede Administrativa é diferente da Congregação Sede** (rodada 16), em todos os módulos.
+  - A Sede Administrativa é a Secretaria e as contas gerais.
+  - A Congregação Sede é uma congregação como as outras, com membros e custos.
+
+### As decisões de desenho das rodadas 13 a 17 (resumo)
+
+- **Regras gerais:**
+  - um painel executivo para cada grupo de submódulos;
+  - nada de rolagem; listas grandes em páginas;
+  - pílulas no celular;
+  - o menu "por tipo de trabalho", com um "Resumo" no alto de cada grupo.
+- **Lançamento:** planilha + linha. A folha arrancada ou cancelada vai junto, obrigatória, na planilha.
+- **Blocos:**
+  - a lista com filtros e páginas de 40 (são ~200 blocos por ano);
+  - as folhas: o formulário primeiro e os quadradinhos maiores; ninguém digita número de bloco nem de folha;
+  - o livro de entrada e saída do bloco: a área é só intermediária, e o lote da gráfica soma as 50 folhas sozinho.
+- **Saídas (pagamentos):**
+  - os bloquinhos em colunas e o "novo pagamento": única vez, parcelado ou recorrente; boleto, Pix ou dinheiro;
+  - o local requer, e a Geral (Presidente + Tesoureiro Geral) aprova e paga;
+  - a nota fiscal o local anexa depois.
+- **Fornecedores:** o cadastro completo: como se paga, a saída padrão e os genéricos.
+- **Tipos de entrada e saída:** o catálogo pronto (~200).
+- **Contas a receber:** em colunas; o termo é gerado pelo sistema.
+- **Conciliação:** feita pela Geral, em duas telas: o extrato e o resultado; as diferenças em cartões. O que não bate vira
+  lançamento ali mesmo.
+- **Fechamento:**
+  - só o Conselho Fiscal fecha o mês; a Geral pode travar os lançamentos durante a auditoria; a congregação MANDA para
+    conferência;
+  - os dízimos e ofertas fecham separados;
+  - há prazo para as despesas: o que chega atrasado cai no mês seguinte, com advertência.
+- **Relatórios:**
+  - o relatório do mural, separado do relatório do sistema, que é completo, com gráfico e sem nome de dizimista;
+  - gráficos ajustáveis numa tela própria;
+  - o consolidado com o mês a mês das áreas;
+  - as demonstrações com gráficos pequenos.
+- **Tesouro:** "para onde vai cada real", como submódulo de Relatórios.
+- **Investimentos:** vale o valor líquido para resgate informado pelo banco; o rendimento só como projeção.
+- **Dizimistas:**
+  - o valor do dízimo fica mascarado para todos, com "mostrar" registrado;
+  - a visão é anual;
+  - o dizimista fiel é calculado: pelo menos 10 meses no ano.
+- **Repasses:**
+  - tabela no notebook e cartões no celular;
+  - repasse semanal, quinzenal e mensal; o tesoureiro lança e a Geral confere;
+  - os percentuais ficam nos parâmetros;
+  - o distrito fica bloqueado.
+- **Rateio:** é a contabilidade interna pelos fundos; não fecha o mês.
+- **Prebenda:** só o Presidente, em percentual do rateio: **30%**, corrigido por ele em 19/11 (antes estava 35%).
+- **Campanhas:** em três etapas, mais a "nova campanha".
+- **Orçamento e PDQ:** em cartões, com o PDQ numa aba própria.
+- **Plano de contas:** a lista e o item aberto.
+- **Parâmetros:** em abas, com tudo do Regimento.
+- **Prazos:** o aviso à Geral pelo menos 15 dias antes.
+- **Imunidade, patrimônio, frota, imóveis, obras, seguros e parâmetros monetários:** em cartões, sem mudança.
+- **Receitas acessórias e cessões:** como aprovado.
+- **A pergunta "60% + 10%: cobrar logo 70%?"** deixou de existir (ele, 19/11).
+- **Tela nova a desenhar na próxima rodada do Financeiro (ele, 19/11): "O que o contador precisa".** É a entrega do mês ao
+  contador, com os lançamentos prontos e no formato da norma das entidades sem fins lucrativos (ITG 2002), sem redigitar.
+  - **Sobre o dinheiro em espécie:** ele decidiu que não há regra para diminuir. O dinheiro em papel continua existindo, e
+    o sistema só facilita o Pix quando houver.
 
 ## v10.2 — A porta de entrada (a página inicial e o login)
 
@@ -914,6 +1432,38 @@ O tamanho medido em 18/11: cerca de 127 mil linhas de JavaScript (88 mil no serv
 
 **Prazo:** de 2 a 3 semanas alternando com a construção (1 a 2 lotes por dia, presos à cota de 5 horas), ou cerca de 1
 semana e meia se fosse a única tarefa. O lote 1 serve de régua: depois dele o prazo é recalculado com o tempo real.
+
+### Como a varredura vai rodar: pedaços de 30 minutos (pedido dele, 19/11/2026)
+
+A ideia dele: em vez de poucos agentes trabalhando horas, vários agentes, cada um com no máximo 30 minutos de trabalho. Se
+a cota acabar no meio, perdem-se no máximo 30 minutos, nunca um lote inteiro.
+
+- **Os 6 lotes viram cerca de 26 pedaços de 30 minutos,** cada um com 4 a 6 mil linhas de código:
+  - **Lote 1, entrada e acesso:** 2 pedaços. O login e o PIN; a chave do aparelho, as sessões, o escopo e as permissões.
+  - **Lote 2, sem login:** 2 pedaços. As rotas públicas do sistema; o site, o QR e as inscrições.
+  - **Lote 3, dinheiro:** 3 pedaços. Os lançamentos e as saídas; os repasses, o rateio e a prebenda; os recibos e as
+    campanhas.
+  - **Lote 4, dados pessoais:** 4 pedaços. A ficha e o CPF; menores e saúde; disciplina e cuidado; as rotinas da LGPD.
+  - **Lote 5, o resto do servidor:** cerca de 11 pedaços, um por grupo de módulos.
+  - **Lote 6, as telas:** só as que NÃO serão refeitas em Svelte, cerca de 4 pedaços. As telas que vão ser refeitas não se
+    revisam: a tela nova já passa pelas três revisões ao ser construída.
+- **Cada pedaço, sempre do mesmo jeito:**
+  1. Um agente pega UM pedaço, olha a hora no início e para aos 25 minutos.
+  2. Ele passa as três lentes:
+     - segurança: o `claude-security` no esforço adequado ao tamanho;
+     - erros escondidos: o `silent-failure-hunter`;
+     - lógica: o `/code-review`.
+  3. Antes de terminar, ele grava os achados num arquivo do pedaço e no `memoria-projeto`.
+- **A conferência dos achados é outro pedaço de 30 minutos,** feito por outro agente que tenta derrubar cada achado. Só o
+  que resiste vai para ele.
+- **As correções também são em pedaços,** um achado grave ou um pacote de leves por pedaço, sempre com teste e prova.
+- **A agenda:** de 2 a 4 pedaços por dia, um de cada vez ou dois ao mesmo tempo, encaixados entre os trabalhos de
+  construção. São cerca de 13 a 18 horas de agente no total, ao longo de 2 a 3 semanas.
+- **O que ele recebe:**
+  - um resumo por semana, em português simples: o que é, o risco, um exemplo e o "pode corrigir?";
+  - uma gravíssima, na hora.
+- **Quando começa:** quando ele disser que está viável. Até lá, a prioridade é a rodada 19 do Financeiro e terminar
+  Membros para a produção.
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 

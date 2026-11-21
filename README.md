@@ -37,7 +37,7 @@ configurável e orientado a processo. Os 3 repositórios viram um sistema único
 `relatorios-departamentos` (Fase 5 — Relatórios). Os dois protótipos de referência
 (só o fonte, versão enxuta) estão na raiz: [`chamada-ebd/`](chamada-ebd/) e
 [`relatorios-departamentos/`](relatorios-departamentos/) — ver [`REFERENCIAS.md`](REFERENCIAS.md).
-Versões de Node, Astro e bibliotecas, e o motivo de cada uma que ficou para trás: [`docs/PLATAFORMAS.md`](docs/PLATAFORMAS.md). Para quem trabalha com agentes (Claude Code, Codex): [`AGENTS.md`](AGENTS.md); quem quiser a memória de continuidade no próprio computador segue o [`.claude/continuidade/LEIA-ME.md`](.claude/continuidade/LEIA-ME.md).
+Versões de Node, Astro e bibliotecas, e o motivo de cada uma que ficou para trás: [`docs/PLATAFORMAS.md`](docs/PLATAFORMAS.md). Para quem trabalha com agentes (Claude Code, Codex): [`AGENTS.md`](AGENTS.md); num computador novo, dois cliques em `.claude\continuidade\INSTALAR.cmd`, a porta que baixa a bancada privada `IEADESPA/bancada` em `C:\MCP\bancada` ([`LEIA-ME`](.claude/continuidade/LEIA-ME.md)). O acesso de outra pessoa (escrita no repositório e na bancada, editor nas páginas de propostas, chave `age` do [`SECRETS.md`](SECRETS.md)) é dado pelo responsável; o checkout principal fica na `main` e o trabalho em ramo vai num worktree.
 
 ## 1. Decisões de arquitetura (fechadas)
 

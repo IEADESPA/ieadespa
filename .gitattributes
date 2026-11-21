@@ -13,3 +13,16 @@ site/public/vendor/* -text
 # FASE 10 (19/11/2026): o código das telas Svelte com LF em toda máquina (o carimbo do build conta o texto com LF) e a saída do build byte a byte
 front/** text eol=lf
 app/svelte/** -text
+
+# Memória do projeto (servidor MCP) e memória automática do Claude, versionadas desde 20/11/2026: as ferramentas gravam
+# com LF; sem conversão, o arquivo não aparece inteiro como alterado a cada gravação.
+.claude/continuidade/memoria/*.jsonl text eol=lf
+.claude/continuidade/memoria-claude/*.md text eol=lf
+
+# Fontes das páginas de desenho: o montador procura trechos com "\n"; com CRLF no checkout, ele não acharia nada.
+design/propostas/** -text
+
+# A porta da bancada: o instalador de dois cliques (.cmd) precisa de CRLF para o cmd.exe ler direito em qualquer
+# máquina; o gancho (.sh) precisa de LF para o bash.
+.claude/continuidade/*.cmd text eol=crlf
+.claude/continuidade/*.sh text eol=lf

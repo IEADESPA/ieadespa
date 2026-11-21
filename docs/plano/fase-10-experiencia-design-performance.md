@@ -907,6 +907,29 @@ lançar as saídas na hora).
   ANTES do líquido, como o aluguel, continuam no relatório, antes do 60/40.
   - Exemplo dele: Vila Nova tem R$ 1.000 na sede e fecha um relatório de R$ 1.000. Saem R$ 600 (60%) para a Geral e
     R$ 400 (40%) para o centro de custo de Vila Nova, e o saldo na sede fica em zero.
+  - **Corrigido na rodada 25** (abaixo): não existe saldo "esperando o próximo relatório".
+
+### Rodada 25: a regra certa de quanto cada congregação tem (21/11/2026)
+
+Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 24 acima.**
+
+- **A folha do mural:** aprovada. Sai só o quadro do fim que explica as folhas de outro mês. As linhas "folha
+  arrancada" e "folha cancelada" continuam na lista.
+- **Quanto cada congregação tem na Geral** é uma conta só por congregação, dentro da Geral, como um extrato de banco.
+  Ela não tem mês e não tem nada a ver com repasse nem com o mural:
+  - **entra** o Pix da congregação na conta geral e a espécie que ela entrega no caixa da Geral;
+  - **quando um relatório fecha** (de qualquer mês), **sai só a parte da Geral**. Todo o resto já é da congregação (o
+    centro de custo dela), seja qual for o valor: nesta tela não existe "40%" nem dinheiro "esperando outro repasse";
+  - **despesa da congregação paga pela Geral** sai desse saldo;
+  - **no relatório seguinte**, a parte da Geral sai primeiro desse saldo; se faltar, a congregação cobre com a espécie;
+  - **a Geral vê quanto da conta geral é de cada congregação**, para não gastar o que é dos outros: a conta geral, quanto
+    disso é das congregações e quanto é da Geral de verdade;
+  - a espécie que ainda está com a congregação continua aparecendo à parte (a escolha "as duas, separadas").
+  - Exemplo dele: a congregação tem R$ 10.000 na Geral; o relatório tira R$ 7.000 (a parte da Geral) e os R$ 3.000
+    restantes já são dela. De novo R$ 10.000; o relatório tira R$ 4.000 e os R$ 6.000 já são dela.
+- **Para o futuro** (quando a congregação tiver conta bancária própria, CNPJ filial): o centro de custo fica **misto**,
+  com dinheiro em contas diferentes (o que está na Geral e o que está na conta da congregação). Na prestação de contas,
+  a parte da Geral sai **primeiro** do que está na Geral; o que está na conta da congregação vem **em segundo**.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

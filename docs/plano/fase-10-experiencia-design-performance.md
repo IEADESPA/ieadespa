@@ -886,6 +886,28 @@ lançar as saídas na hora).
   que se fecha é AUTOMÁTICO ("para não ter aglomeramento de comprovantes"). Só o destino da sobra é escolha de quem
   confere: dezembro, o centro de custo, estorno ou despesa.
 
+### Rodada 24: o que ele aprovou e a regra nova do 3º relatório (21/11/2026)
+
+- **Lançar:** aprovado como está.
+- **A folha do mural:** aprovada, com um acerto. As linhas COM NOME que vieram do mês anterior ficam iguais às outras,
+  sem "(marcada em outubro)", "(marcada em novembro)" nem fundo roxo ("não poderia existir"). As tarjas "referente ao
+  mês posterior" e "referente ao mês anterior" continuam.
+- **O 3º relatório NÃO é conferência de mês** ("não entendi nada dessas 3 telas"). Saem o "fechar novembro", o
+  "faltavam" e o "destino da sobra". É só saber, todo dia, quanto cada congregação tem, sem separar por mês, por dízimo,
+  oferta ou departamento:
+  - **duas linhas, separadas:** o que já está NA SEDE (o Pix na conta geral e a espécie entregue no caixa da Geral) e a
+    espécie que ainda está COM A CONGREGAÇÃO;
+  - funciona mesmo se a congregação só mandou os comprovantes e não lançou as folhas: o dinheiro conta do mesmo jeito;
+  - acaba com o comprovante pelo telefone e com o "só saber no fim do mês";
+  - **quando um relatório fecha, de qualquer mês, o líquido sai do saldo** e se divide sozinho: os 60% vão para a Geral
+    e os 40% vão AUTOMATICAMENTE para o centro de custo da congregação (na conta geral). O que sobra no saldo fica
+    esperando o próximo relatório; o que falta é coberto pelo dinheiro que chegar depois.
+- **O retido e as despesas da congregação saem do relatório** (muda o que estava no desenho): são movimentos no centro
+  de custo da congregação, onde ela decide (despesa, liberar para o dirigente, outra coisa). Só as despesas descontadas
+  ANTES do líquido, como o aluguel, continuam no relatório, antes do 60/40.
+  - Exemplo dele: Vila Nova tem R$ 1.000 na sede e fecha um relatório de R$ 1.000. Saem R$ 600 (60%) para a Geral e
+    R$ 400 (40%) para o centro de custo de Vila Nova, e o saldo na sede fica em zero.
+
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
 - **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o

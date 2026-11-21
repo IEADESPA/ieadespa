@@ -87,7 +87,12 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   - o dizimista vê os próprios dízimos;
   - o contador recebe por planilha (ITG 2002), sem ECD;
   - a reabertura do mês só com o voto do Conselho Fiscal e a autorização do Ministério.
-- **Falta dele:** aprovar a rodada 24. Em 20/11 ainda não havia nenhum `r24-*` na coleção "escolhas".
+- **Rodada 24 RESPONDIDA (21/11):** lançar aprovado; mural aprovado com acerto; o 3º relatório refeito com a regra
+  nova (plano, seção "Rodada 24: o que ele aprovou e a regra nova do 3º relatório"): contínuo, sem mês; na sede × com a
+  congregação; o relatório fechado tira o líquido e divide 60% Geral, 40% centro de custo; o retido saiu do relatório.
+- **Rodada 25 MONTADA e conferida, NÃO publicada ainda** (fontes em `design/propostas/`, 282 KB, 168 desenhos sem
+  problema): o mural acertado e "Quanto cada congregação tem". A ferramenta só publica na KMeb… depois de ler a versão
+  no ar inteira (~380 KB): um agente novo faz isso quando o da bancada terminar (um agente por vez).
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
@@ -106,10 +111,8 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
     principal grava em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
   - **Aviso de início de toda conversa: NO AR** (`10d7ac9`, aprovado por ele): gancho SessionStart que só lê e mostra
     a linha "Em uso por", o `git pull` que falta e o que o computador tem de diferente do kit.
-  - **Matriz única da bancada: NÃO aprovada** ("muito nebuloso"). Em 21/11 ele pediu a explicação detalhada (repositório
-    pequeno privado, garantia de puxar sempre o mais novo, versões do servidor, conflito de repositório dentro de
-    repositório). Explicação dada na conversa; NÃO construir antes do sim dele. Fato medido: as cópias do kit no `asaf`
-    e no `construtor de igreja` já estão velhas (17–18/11, sem `bancada.json` nem aviso).
+  - **Matriz única da bancada: APROVADA em 21/11**, depois da explicação. Um agente a constrói (60 min; diário em
+    `C:\tmp\ieadespa-bancada\DIARIO.md`; 1º commit `185f566`). O `-Sim` neste computador é só com o sim dele.
   - Enxugar o MEMORY.md só depois do OK dele.
 
 ## 4. Próximo passo exato (quando ele mandar continuar)

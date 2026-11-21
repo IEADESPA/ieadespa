@@ -1,15 +1,28 @@
 ---
 name: desenho-em-paralelo-a-construcao
-description: "O desenho das telas (rodadas para aprovação) corre em paralelo à construção, com um agente próprio; a regra global \"um agente por vez\" não trava o desenho"
+description: "Sempre mais de um agente trabalhando em paralelo (construção de módulos para a homologação e desenho), cada um no seu ramo e worktree; a regra global \"um agente por vez\" NÃO vale aqui"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: 8e446f57-0011-4863-8efe-ff9484623ad6
-  modified: 2026-11-17T14:46:48.371Z
+  modified: 2026-11-21T19:40:00.000Z
 ---
 
-Na FASE 10, manter SEMPRE um agente desenhando as próximas rodadas de telas (módulo a módulo, na ordem fixa) enquanto outro constrói/mede — e publicar cada rodada assim que ficar pronta (a publicação precisa de um agente de contexto limpo, porque a ferramenta exige ler a versão viva inteira, ~510 KB). Ele aprova tela por tela e quer o máximo de telas prontas para olhar.
+Na FASE 10, o serviço NÃO para: manter agentes trabalhando em paralelo, cada um no seu ramo e no seu worktree. Em
+21/11/2026: um agente no Membros (`v10-membros-svelte`, `C:/tmp/ieadespa-svelte`) e outro construindo o Financeiro
+aprovado (`v10-financeiro-svelte`, `C:/tmp/ieadespa-financeiro/obra`), os dois levando à homologação. Quando houver
+rodada de desenho, mais um agente desenha enquanto os outros constroem.
 
-**Why:** 17/11/2026, ele: "as telas, a aprovação das telas, precisam ser feitas logo... elas independem [da construção]... isso já vai sendo paralelo, senão a gente fica perdendo muito tempo". Ele tinha dito antes "um agente por vez"; para desenho × construção isso não vale.
+**Why:** 17/11/2026, ele: "as telas, a aprovação das telas, precisam ser feitas logo... isso já vai sendo paralelo". Em
+21/11/2026, ao ver só um agente trabalhando: "Tem que ter outro agente trabalhando para já ir colocando tudo lá na
+homologação até chegar na produção. Nós não podemos parar isso não."
 
-**How to apply:** o agente de construção é o único que mexe no Git (código e docs); o de desenho trabalha no scratchpad (rN-telas.js, rN-lista.js, emendar-rN.js sobre propostas-r2-antes-rN.html) e entrega a rodada pronta; eu lanço a publicação e escrevo as decisões dele no plano. Ver [[ordem-fixa-de-modulos]] e [[propostas-de-tela-em-artefato]].
+**How to apply:**
+
+- Quando um agente termina, o próximo daquela frente já começa; nunca deixar só um trabalhando se há outra frente
+  aprovada esperando (construção de módulo aprovado, pendências, desenho do próximo módulo).
+- Para não colidirem: worktree e ramo próprios; faixa própria de migrações (Membros até 18x, Financeiro a partir da 200);
+  antes de mesclar no `homolog`, `git fetch` e esperar o deploy que estiver rodando (`gh run list`).
+- A produção continua só com o OK dele ([[fase10-nada-sem-aprovacao]]).
+- Desenho: a publicação na página de propostas precisa de um agente de contexto limpo (a ferramenta exige ler a versão
+  viva inteira). Ver [[ordem-fixa-de-modulos]] e [[propostas-de-tela-em-artefato]].

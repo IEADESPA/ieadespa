@@ -102,7 +102,13 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
   - o plugin Nonprofits fica;
   - a colaboração no repositório PÚBLICO, só com o que é seguro;
   - a senha do ASAF apagada do settings.
-- **Em andamento (21/11, tarde):** um agente novo corrige as 4 pendências de segurança e consistência do "Quero me
+- **Em andamento (21/11, fim da tarde): DOIS agentes em paralelo** (pedido dele: "não podemos parar"; memória
+  `desenho-em-paralelo-a-construcao`):
+  - **Financeiro:** constrói o aprovado no ramo `v10-financeiro-svelte` (worktree `C:/tmp/ieadespa-financeiro/obra`,
+    criado de `v10-membros-svelte`; migrações a partir da 200): o inventário, o plano `docs/plano/financeiro-construcao.md`
+    (no ramo) e o incremento 1. Diário `C:\tmp\ieadespa-financeiro\DIARIO.md`; as escolhas dele copiadas em
+    `C:\tmp\ieadespa-financeiro\escolhas\`.
+  - **Membros:** corrige as 4 pendências de segurança e consistência do "Quero me
   cadastrar" no `v10-membros-svelte` (worktree `C:/tmp/ieadespa-svelte`, a partir de `b5f12f8`), com prova e homologação;
   diário em `C:\tmp\ieadespa-membros\DIARIO.md`.
 - **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades
@@ -130,11 +136,10 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 1. **Membros:** conferir o resultado do agente das 4 pendências do "Quero me cadastrar" (diário acima). Depois, em
    missões de 30 minutos: o seletor de congregação final, o importador (passo 9) e a ida à produção (só com o OK dele).
-2. **Financeiro: começar a CONSTRUÇÃO** (desenho aprovado), quando o agente de Membros terminar (um agente por vez).
-   Missão 0, num agente novo: o inventário do que o servidor e o banco já têm de Financeiro e o plano da construção em
-   incrementos de 30 minutos (cada um com a tela aprovada que reproduz: rodada, tela e opção), gravado em
-   `docs/plano/`. Depois, os incrementos em Svelte na homologação: entradas, repasse, caixa, recibo, rateio, tesouro,
-   mural e o saldo de cada congregação na Geral. Dúvida de regra se pergunta ANTES.
+2. **Financeiro: a CONSTRUÇÃO começou** (agente acima). Conferir o relatório dele e o plano; depois, um agente novo por
+   incremento de ~30 minutos, na ordem do plano, sempre em paralelo ao Membros: entradas, caixa e recibo, relatório do
+   mês, saldo de cada congregação na Geral, rateio, tesouro, mural, relatórios e contador. Dúvida de regra se pergunta
+   ANTES.
 3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
    desligamento).
 4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.

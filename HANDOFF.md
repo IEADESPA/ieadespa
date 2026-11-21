@@ -6,7 +6,7 @@ Em uso por: **Mateus** desde 20/11/2026 17:19
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 20/11/2026 (Claude, agente de construção de Membros). Agente em andamento no `v10-membros-svelte`
+Atualizado em 21/11/2026 (Claude, sessão principal: bancada e rodada 25). Antes, em 20/11 (agente de construção de Membros): Agente em andamento no `v10-membros-svelte`
 (worktree `C:/tmp/ieadespa-svelte`): sobras 1 a 5 FEITAS (ramo até `b5f12f8`) e NA HOMOLOGAÇÃO: homolog `ae7f2e3` DEPLOY OK,
 `feb7dc6` (site), base do teste de telas `e5fe087` só no homolog (DEPLOY OK; a execução 44806909775 que a
 confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
@@ -90,9 +90,9 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 - **Rodada 24 RESPONDIDA (21/11):** lançar aprovado; mural aprovado com acerto; o 3º relatório refeito com a regra
   nova (plano, seção "Rodada 24: o que ele aprovou e a regra nova do 3º relatório"): contínuo, sem mês; na sede × com a
   congregação; o relatório fechado tira o líquido e divide 60% Geral, 40% centro de custo; o retido saiu do relatório.
-- **Rodada 25 MONTADA e conferida, NÃO publicada ainda** (fontes em `design/propostas/`, 282 KB, 168 desenhos sem
-  problema): o mural acertado e "Quanto cada congregação tem". A ferramenta só publica na KMeb… depois de ler a versão
-  no ar inteira (~380 KB): um agente novo faz isso quando o da bancada terminar (um agente por vez).
+- **Rodada 25 PUBLICADA (21/11)** na página leve KMeb… (versão 7; fontes em `design/propostas/`, `dca1411`): o mural
+  acertado e "Quanto cada congregação tem". **Esperando as escolhas dele:** ArtifactData, coleção "escolhas", ids
+  `r25-*` e `geral-r25` (26 documentos no banco, os da 24 guardados).
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
@@ -111,8 +111,15 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
     principal grava em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
   - **Aviso de início de toda conversa: NO AR** (`10d7ac9`, aprovado por ele): gancho SessionStart que só lê e mostra
     a linha "Em uso por", o `git pull` que falta e o que o computador tem de diferente do kit.
-  - **Matriz única da bancada: APROVADA em 21/11**, depois da explicação. Um agente a constrói (60 min; diário em
-    `C:\tmp\ieadespa-bancada\DIARIO.md`; 1º commit `185f566`). O `-Sim` neste computador é só com o sim dele.
+  - **Matriz única da bancada: FEITA em 21/11** (repositório privado `IEADESPA/bancada` em `C:\MCP\bancada`; aqui ficou
+    só a porta, `185f566`, DEPLOY OK; diário em `C:\tmp\ieadespa-bancada\DIARIO.md`). O `-Sim` rodou neste notebook com
+    o sim dele (vale depois de "Recarregar Janela"). Correção do instalador na bancada: `12f0ee7`.
+  - **asaf:** a porta está no ramo `bancada-porta` (`0da8086`, enviado; só `.claude/`, `.gitattributes`, `.gitignore`,
+    `AGENTS.md`, nenhum deploy). **Falta o sim dele para mesclar na `main` do asaf.** **Construtor:** aplicar na próxima
+    vez que for aberto (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`).
+  - **Decisões dele pendentes da bancada:** conferir o servidor de memória 2.2.1 (a aprovada é a 2.1.1) antes de subir a
+    versão; a cláusula 5.2 do `LICENSE` cita as pastas de habilidades que saíram; o Codex lendo habilidades por junção
+    não foi provado.
   - Enxugar o MEMORY.md só depois do OK dele.
 
 ## 4. Próximo passo exato (quando ele mandar continuar)
@@ -120,7 +127,7 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 1. **Membros:** retomar os acabamentos no `v10-membros-svelte`, a partir do WIP `fd7862c` (o "Quero me cadastrar"), com
    os ajustes das carteirinhas, em incrementos de 30 minutos. Depois: o seletor de congregação final, o importador
    (passo 9) e a ida à produção.
-2. **Financeiro:** ler as escolhas dele na rodada 23 (e as 2 respostas acima). Aprovada, começar a CONSTRUÇÃO do núcleo
+2. **Financeiro:** ler as escolhas dele na rodada 25 (ids `r25-*`, `geral-r25`). Aprovada, começar a CONSTRUÇÃO do núcleo
    em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro e mural. Dúvida de regra se pergunta ANTES.
 3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
    desligamento).

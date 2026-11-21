@@ -6,7 +6,7 @@ Em uso por: Mateus desde 21/11/2026 15:09
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 21/11/2026 (Claude, sessão principal: bancada e rodada 25). Antes, em 20/11 (agente de construção de Membros): Agente em andamento no `v10-membros-svelte`
+Atualizado em 21/11/2026 (Claude, sessão principal: bancada e rodadas 25 e 26). Antes, em 20/11 (agente de construção de Membros): Agente em andamento no `v10-membros-svelte`
 (worktree `C:/tmp/ieadespa-svelte`): sobras 1 a 5 FEITAS (ramo até `b5f12f8`) e NA HOMOLOGAÇÃO: homolog `ae7f2e3` DEPLOY OK,
 `feb7dc6` (site), base do teste de telas `e5fe087` só no homolog (DEPLOY OK; a execução 44806909775 que a
 confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
@@ -90,17 +90,22 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 - **Rodada 24 RESPONDIDA (21/11):** lançar aprovado; mural aprovado com acerto; o 3º relatório refeito com a regra
   nova (plano, seção "Rodada 24: o que ele aprovou e a regra nova do 3º relatório"): contínuo, sem mês; na sede × com a
   congregação; o relatório fechado tira o líquido e divide 60% Geral, 40% centro de custo; o retido saiu do relatório.
-- **Rodada 25 PUBLICADA (21/11)** na página leve KMeb… (versão 7; fontes em `design/propostas/`, `dca1411`): o mural
-  acertado e "Quanto cada congregação tem". **Esperando as escolhas dele:** ArtifactData, coleção "escolhas", ids
-  `r25-*` e `geral-r25` (26 documentos no banco, os da 24 guardados).
+- **Rodada 25 RESPONDIDA (21/11)** e a regra do saldo CONFIRMADA com ele antes de desenhar (plano, seção "Rodada 25: a
+  regra certa de quanto cada congregação tem"): um extrato por congregação dentro da Geral; relatório fechado tira só a
+  parte da Geral; o resto já é da congregação.
+- **Rodada 26 PUBLICADA (21/11)** na página leve KMeb… (versão 8; fontes em `design/propostas/`, `04d9cf4`; 213 KB,
+  112 desenhos sem problema, nada transborda): o mural sem o quadro do fim e sem a aba "Espécie e digital"; "Quanto cada
+  congregação tem na Geral" em "Contas e bancos". **Esperando as escolhas dele:** ids `r26-*` e `geral-r26` (28
+  documentos no banco, os da 25 guardados).
 - **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
   - o esforço SEMPRE no máximo;
   - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
   - o plugin Nonprofits fica;
   - a colaboração no repositório PÚBLICO, só com o que é seguro;
   - a senha do ASAF apagada do settings.
-- **Em andamento:** o agente de Membros (acabamentos e carteirinhas) e a pesquisa 2 dos economizadores (graphify,
-  claude-mem, RTK...).
+- **Em andamento (21/11, tarde):** um agente novo corrige as 4 pendências de segurança e consistência do "Quero me
+  cadastrar" no `v10-membros-svelte` (worktree `C:/tmp/ieadespa-svelte`, a partir de `b5f12f8`), com prova e homologação;
+  diário em `C:\tmp\ieadespa-membros\DIARIO.md`.
 - **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades
   em `.claude/skills` e `.agents/skills`, o `.claude/settings.json` com os 5 plugins, este `HANDOFF.md` com a linha
   "Em uso por", a memória do projeto e a do Claude versionadas (revisadas, sem dado pessoal), os fontes do desenho, o
@@ -124,11 +129,11 @@ confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
 
 ## 4. Próximo passo exato (quando ele mandar continuar)
 
-1. **Membros:** retomar os acabamentos no `v10-membros-svelte`, a partir do WIP `fd7862c` (o "Quero me cadastrar"), com
-   os ajustes das carteirinhas, em incrementos de 30 minutos. Depois: o seletor de congregação final, o importador
-   (passo 9) e a ida à produção.
-2. **Financeiro:** ler as escolhas dele na rodada 25 (ids `r25-*`, `geral-r25`). Aprovada, começar a CONSTRUÇÃO do núcleo
-   em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro e mural. Dúvida de regra se pergunta ANTES.
+1. **Membros:** conferir o resultado do agente das 4 pendências do "Quero me cadastrar" (diário acima). Depois, em
+   missões de 30 minutos: o seletor de congregação final, o importador (passo 9) e a ida à produção (só com o OK dele).
+2. **Financeiro:** ler as escolhas dele na rodada 26 (ids `r26-*`, `geral-r26`). Aprovada, começar a CONSTRUÇÃO do núcleo
+   em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro, mural e o saldo de cada congregação na Geral. Dúvida
+   de regra se pergunta ANTES.
 3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
    desligamento).
 4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.

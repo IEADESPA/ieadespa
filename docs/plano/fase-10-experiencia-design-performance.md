@@ -974,6 +974,28 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
   importação); a 28, a rodada de Membros aprovada em 19/11 (a família como unidade, as listas inteligentes e o
   assistente de movimentação); depois, o módulo 3 (Estrutura e Territórios).
 
+### Rodada 27: o que ele aprovou e o fechamento refeito (22/11/2026)
+
+- **Aprovadas como estão:** receber o repasse e dar o recibo ("muito bom, ficou ótimo"), os saldos de abertura,
+  importar os membros e cadastrar lote da gráfica. Os pontos marcados "Para conferir" nessas telas ficam como foram
+  desenhados (o saldo de abertura vale com a maioria do Conselho Fiscal; a matrícula 0, vazia ou repetida ganha a
+  próxima do sistema e quem veio primeiro na planilha fica com o número).
+- **Na construção do repasse:** o mês pode ter QUALQUER número de repasses (o desenho mostra o 1º, o 2º e o 3º, de 10
+  em 10 dias, mas não é limite).
+- **O lote da gráfica, os números pulados:** este ano a gráfica recebeu o pedido da 60.001 à 70.000 e fez da 60.001 à
+  65.000 e depois da 70.000 à 75.000. Na chegada, a tesouraria confirma as folhas que vieram de verdade; o sistema
+  mostra em vermelho os números pulados e só cria os blocos que existem (a desenhar na rodada 28).
+- **O fechamento do mês volta na rodada 28, separado em duas coisas:**
+  - **a auditoria ao vivo, durante o mês:** o Conselho Fiscal confere cada nota (entrada ou despesa) logo que ela
+    entra, sem esperar o mês acabar; a nota conferida por 2 dos 3 conselheiros fica travada e ninguém mais a muda; o
+    mês continua recebendo lançamentos enquanto isso;
+  - **a correção de uma nota travada (antes do fechamento):** a tesouraria faz um pedido de correção na própria nota,
+    com a justificativa; o Conselho confere de novo aquela nota (2 dos 3) e, se aceitar a justificativa, a nota fica
+    corrigida. Nada de estorno com nota nova; a trilha guarda o valor antigo, o novo, o motivo e quem aceitou;
+  - **o fechamento final:** perto da data da prestação de contas, com tudo conferido, o Conselho vota e fecha o mês de
+    vez; aí nada mais entra. A reabertura continua com o voto da maioria do Conselho Fiscal e a autorização do
+    Ministério.
+
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
 - **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o

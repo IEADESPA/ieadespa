@@ -54,10 +54,12 @@ Atualizado em 22/11/2026, tarde (Claude, sessão principal): as perguntas respon
 
 **Em andamento (22/11, tarde): TRÊS agentes em paralelo**, cada um no seu ramo e worktree:
 
-1. **Desenho, rodada 27** (ramo `desenho-r27`, worktree `C:/tmp/ieadespa-desenho-r27`; diário
-   `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md`): receber o repasse e dar o recibo (simples), o fechamento do mês com o
-   voto de cada conselheiro, os saldos de abertura e importar os membros. Publica na página leve KMeb…; a sessão
-   principal mescla o ramo na `main` depois de conferir.
+1. **Desenho, rodada 27: PUBLICADA** (página leve KMeb…, versão 9, 246 KB; fontes na `main`, `1f7d51c`; diário
+   `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md`). 5 telas: receber o repasse e dar o recibo, o fechamento do mês, os
+   saldos de abertura, importar os membros e cadastrar lote da gráfica. **Esperando ele conferir**; as escolhas ficam
+   na coleção "escolhas" (ids `r27-*` e `geral-r27`). 4 pontos desenhados por suposição, marcados "Para conferir": o
+   saldo de abertura vale com a maioria do Conselho Fiscal; quem registra a autorização do Ministério (o próprio CF);
+   o voto "ainda não" com motivo; a matrícula 0, vazia ou repetida ganha a próxima do sistema.
 2. **Financeiro** (`v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`; diário
    `C:\tmp\ieadespa-financeiro\DIARIO.md`): o **incremento 1b está na homologação** (a tela dos blocos de recibo, bloco
    pela 1ª folha; ramo `3b53669`, homolog `f774121`, DEPLOY OK). Agora: o teste de telas do CI, as diferenças da casca

@@ -107,7 +107,7 @@ describe("o formulário do site (PreCadastroSite)", () => {
     expect(JSON.stringify(novo.body)).not.toMatch(/700999|matr/i);
   });
   // (a) revisão de 20/11/2026: o tempo da resposta revelava a ficha quando o aceite automático passava do mínimo. Agora o tempo é FIXO, o processamento
-  // fica dentro da chamada (nada para depois da resposta) e, se passar do tempo fixo, a resposta sai no próximo múltiplo dele.
+  // fica dentro da chamada (nada para depois da resposta) e, com o banco lento, o que não couber é desfeito (os testes "BANCO LENTO" abaixo).
   test("o TEMPO também não revela: a correção (rápida), o aceite com a ficha nova (demorado) e o reenvio saem no MESMO tempo fixo", async () => {
     const h = comChave();
     process.env.PRE_CADASTRO_SITE_MIN_MS = "400";
@@ -124,35 +124,122 @@ describe("o formulário do site (PreCadastroSite)", () => {
       expect(Math.max(rapido, demorado, reenvio) - Math.min(rapido, demorado, reenvio)).toBeLessThan(120);
     } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
   });
-  test("o processamento que passa do tempo fixo: a resposta sai no próximo MÚLTIPLO dele (nunca no tempo exato do processamento) e fica o aviso", async () => {
+  // BANCO LENTO (decisão do responsável de 22/11/2026: "a secretaria aceita depois"): a resposta NUNCA passa do tempo fixo. Acabou o "próximo múltiplo".
+  const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+  const chamarMedindo = async (h, avisos = []) => {
+    const ctx = { bindingData: {}, log: Object.assign(() => {}, { error() {}, info() {}, verbose() {}, warn: (m) => avisos.push(m) }) };
+    const t = Date.now();
+    await hSite(ctx, { method: "POST", body: valido(), query: {}, headers: cabecalhos(h) });
+    return { ms: Date.now() - t, res: ctx.res, avisos };
+  };
+  test("BANCO LENTO: o processamento que não termina no tempo fixo — a resposta sai NO tempo fixo, a mesma 'recebemos', e fica o aviso de que ficou na fila", async () => {
     const h = comChave();
-    process.env.PRE_CADASTRO_SITE_MIN_MS = "200";
-    const avisos = [];
+    process.env.PRE_CADASTRO_SITE_MIN_MS = "300";
     try {
       preparar(null);
-      mockPdb.processar = async () => { await new Promise((r) => setTimeout(r, 260)); return { sucesso: true, situacao: "ACEITO", matricula: 1 }; };
-      const ctx = { bindingData: {}, log: Object.assign(() => {}, { error() {}, info() {}, verbose() {}, warn: (m) => avisos.push(m) }) };
-      const t = Date.now();
-      await hSite(ctx, { method: "POST", body: valido(), query: {}, headers: cabecalhos(h) });
-      const ms = Date.now() - t;
-      expect(ctx.res.body).toEqual({ sucesso: true, mensagem: regras.MSG.RECEBIDO });
-      expect(ms).toBeGreaterThanOrEqual(395);
-      expect(ms).toBeLessThan(520);
-      expect(avisos.join(" ")).toMatch(/mais que o tempo fixo de 200 ms: a resposta saiu em 400 ms/);
+      let terminou = false;
+      mockPdb.processar = async () => { await dormir(700); terminou = true; return { sucesso: true, situacao: "ACEITO", matricula: 1 }; };
+      const { ms, res, avisos } = await chamarMedindo(h);
+      expect(terminou).toBe(false);   // a resposta não esperou o processamento lento
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ sucesso: true, mensagem: regras.MSG.RECEBIDO });
+      expect(ms).toBeGreaterThanOrEqual(295);
+      expect(ms).toBeLessThan(400);   // nunca 600 (o "próximo múltiplo" de antes), nem os 700 do processamento
+      expect(avisos.join(" ")).toMatch(/não terminou no tempo fixo de 300 ms: o que não confirmou é desfeito e ele fica na fila, sem avaliar/);
+      await dormir(450);
     } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
   });
-  test("o processamento espera a trava do CPF só até o que sobra do tempo fixo (menos a folga), e nada fica para depois da resposta", async () => {
+  test("BANCO LENTO: o processamento que desistiu no prazo (PrazoEsgotado, já desfeito) — a resposta ESPERA o tempo fixo e é a mesma 'recebemos'", async () => {
+    const h = comChave();
+    process.env.PRE_CADASTRO_SITE_MIN_MS = "300";
+    try {
+      preparar(null);
+      mockPdb.processar = async () => { await dormir(40); throw new (jest.requireActual("../preCadastroDb").PrazoEsgotado)(); };
+      const { ms, res, avisos } = await chamarMedindo(h);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ sucesso: true, mensagem: regras.MSG.RECEBIDO });
+      expect(ms).toBeGreaterThanOrEqual(295);
+      expect(ms).toBeLessThan(400);
+      expect(avisos.join(" ")).toMatch(/não coube no tempo fixo: desfeito; fica na fila, sem avaliar, para a secretaria aceitar/);
+    } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
+  });
+  test("BANCO LENTO: o pedido cortado pelo driver (ETIMEOUT) no processamento conta como 'não coube' (aviso, não erro)", async () => {
+    const h = comChave();
+    process.env.PRE_CADASTRO_SITE_MIN_MS = "200";
+    try {
+      preparar(null);
+      mockPdb.processar = async () => { throw Object.assign(new Error("Timeout: Request failed to complete in 150ms"), { code: "ETIMEOUT" }); };
+      const { res, avisos } = await chamarMedindo(h);
+      expect(res.body).toEqual({ sucesso: true, mensagem: regras.MSG.RECEBIDO });
+      expect(avisos.join(" ")).toMatch(/não coube no tempo fixo/);
+    } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
+  });
+  test("BANCO LENTO: a GRAVAÇÃO que não termina no tempo fixo — 503 'envie de novo' NO tempo fixo, nunca 'recebemos' sem gravar, e sem processar", async () => {
+    const h = comChave();
+    process.env.PRE_CADASTRO_SITE_MIN_MS = "300";
+    try {
+      const ch = preparar({ sucesso: true, situacao: "ACEITO" });
+      mockPdb.inserirDoSite = async () => { await dormir(700); return { id: 501, repetido: false, avaliado: false }; };
+      const { ms, res, avisos } = await chamarMedindo(h);
+      expect(res.status).toBe(503);
+      expect(res.body.sucesso).toBe(false);
+      expect(res.body.mensagem).toMatch(/Envie de novo/);
+      expect(res.body.mensagem).not.toBe(regras.MSG.RECEBIDO);
+      expect(res.headers["Retry-After"]).toBe("60");
+      expect(ms).toBeGreaterThanOrEqual(295);
+      expect(ms).toBeLessThan(400);
+      expect(avisos.join(" ")).toMatch(/a gravação do pré-cadastro não coube no tempo fixo de 300 ms/);
+      expect(ch.processar).toBe(0);
+      await dormir(450);
+    } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
+  });
+  test("BANCO LENTO: a gravação que desistiu no prazo (PrazoEsgotado, desfeita) — 503 no MESMO tempo fixo; a congregação lida devagar também", async () => {
+    const h = comChave();
+    process.env.PRE_CADASTRO_SITE_MIN_MS = "300";
+    try {
+      const ch = preparar({ sucesso: true, situacao: "ACEITO" });
+      mockPdb.inserirDoSite = async () => { await dormir(30); throw new (jest.requireActual("../preCadastroDb").PrazoEsgotado)(); };
+      const a = await chamarMedindo(h);
+      expect(a.res.status).toBe(503);
+      expect(a.ms).toBeGreaterThanOrEqual(295);
+      expect(a.ms).toBeLessThan(400);
+      expect(ch.processar).toBe(0);
+      preparar({ sucesso: true, situacao: "ACEITO" });
+      mockPdb.lerCongregacao = async () => { throw Object.assign(new Error("Timeout: Request failed"), { code: "ETIMEOUT" }); };
+      const b = await chamarMedindo(h);
+      expect(b.res.status).toBe(503);
+      expect(b.ms).toBeGreaterThanOrEqual(295);
+    } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
+  });
+  test("o PRAZO do trabalho (chegada + tempo fixo − 300 ms de folga) vai à congregação, à gravação e ao processamento; o que cabe termina ANTES da resposta", async () => {
     const h = comChave();
     process.env.PRE_CADASTRO_SITE_MIN_MS = "1000";
     try {
-      let terminou = false;
+      let terminou = false, limiteDaCongregacao = null;
       const ch = preparar(null);
-      mockPdb.processar = async (_p, _id, opcoes) => { ch.opcoesProcessar = opcoes; await new Promise((r) => setTimeout(r, 50)); terminou = true; return { sucesso: true, situacao: "ACEITO" }; };
+      mockPdb.lerCongregacao = async (rq) => { limiteDaCongregacao = rq; return { congregacaoId: 2, nome: "Vila Nova", areaId: 1, ativa: true }; };
+      mockPdb.processar = async (_p, _id, opcoes) => { ch.opcoesProcessar = opcoes; await dormir(50); terminou = true; return { sucesso: true, situacao: "ACEITO" }; };
+      const t0 = Date.now();
       await chamar(hSite, { corpo: valido(), headers: h });
       expect(terminou).toBe(true);   // a resposta só saiu depois do processamento
-      expect(ch.opcoesProcessar.esperaMaxMs).toBeGreaterThan(500);
-      expect(ch.opcoesProcessar.esperaMaxMs).toBeLessThanOrEqual(700);
+      for (const ate of [ch.opcoesGravar.ate, ch.opcoesProcessar.ate]) {
+        expect(ate - t0).toBeGreaterThan(650);
+        expect(ate - t0).toBeLessThanOrEqual(700);
+      }
+      expect(ch.opcoesProcessar.esperaMaxMs).toBeUndefined();
+      expect(typeof limiteDaCongregacao).toBe("function");
     } finally { process.env.PRE_CADASTRO_SITE_MIN_MS = "0"; }
+  });
+  test("sem o tempo fixo (0, os testes): sem prazo — o trabalho inteiro, a resposta logo depois", async () => {
+    const h = comChave();
+    const ch = preparar(null);
+    mockPdb.processar = async (_p, _id, opcoes) => { ch.opcoesProcessar = opcoes; await dormir(120); return { sucesso: true, situacao: "ACEITO" }; };
+    const t = Date.now();
+    const r = await chamar(hSite, { corpo: valido(), headers: h });
+    expect(Date.now() - t).toBeGreaterThanOrEqual(115);
+    expect(r.body).toEqual({ sucesso: true, mensagem: regras.MSG.RECEBIDO });
+    expect(ch.opcoesGravar.ate).toBeNull();
+    expect(ch.opcoesProcessar.ate).toBeNull();
   });
   test("o processamento que falha não muda a resposta (o pré-cadastro já está gravado e a fila o mostra)", async () => {
     const h = comChave();

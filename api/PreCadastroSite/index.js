@@ -16,11 +16,13 @@
 //    (revisão de 20/11/2026: separadas, uma rajada passava do limite). O erro de formato (campo que falta ou inválido) é só de forma, nunca do banco;
 //  - o MESMO envio (envioId, gerado pela página) repetido devolve o mesmo resultado sem gravar de novo (revisão de 20/11/2026: o reenvio depois de um prazo
 //    esgotado gravava dois pré-cadastros). Se o primeiro ficou sem avaliar, o reenvio avalia;
-//  - o TEMPO da resposta também não pode revelar (revisão de 20/11/2026): o aceite automático (a ficha nova) demora mais que a correção. Toda resposta "recebemos"
-//    sai num TEMPO FIXO contado da chegada (PRE_CADASTRO_SITE_MIN_MS, padrão 3.000 ms — bem acima do pior caso medido; os testes usam 0), com o processamento
-//    DENTRO da chamada (no Azure Functions, trabalho deixado para depois da resposta não tem garantia de terminar). A espera pela trava do CPF tem teto no que
-//    sobra desse tempo; se ainda assim o processamento passar do tempo fixo, a resposta sai no próximo múltiplo dele (nunca no tempo exato do processamento)
-//    e fica um aviso no registro.
+//  - o TEMPO da resposta também não pode revelar (revisão de 20/11/2026): o aceite automático (a ficha nova) demora mais que a correção. A resposta sai SEMPRE
+//    no TEMPO FIXO contado da chegada (PRE_CADASTRO_SITE_MIN_MS, padrão 3.000 ms; os testes usam 0 = sem tempo fixo), com o trabalho DENTRO da chamada (no
+//    Azure Functions, trabalho deixado para depois da resposta não tem garantia de terminar);
+//  - BANCO LENTO (decisão do responsável de 22/11/2026: "a secretaria aceita depois"): a resposta NUNCA passa do tempo fixo. O trabalho tem PRAZO (o tempo fixo
+//    menos a folga): o processamento que não couber nele é desfeito (é uma transação só) e o pré-cadastro fica gravado e PENDENTE sem avaliar, na fila da
+//    secretaria — a mesma resposta "recebemos", no mesmo tempo. Se nem a GRAVAÇÃO do pré-cadastro couber, ela também é desfeita e a resposta, no mesmo tempo
+//    fixo, é "envie de novo" (503; não depende do CPF: a gravação não olha a ficha) — o reenvio leva o mesmo envioId e não duplica. Acabou o "próximo múltiplo".
 const { getPool } = require("../shared/db");
 const { criarLimitador, chaveDeOrigem } = require("../shared/limiteTaxa");
 const { conferirChaveDoSite } = require("../shared/chaveSiteSistema");
@@ -31,15 +33,39 @@ const { hojeBrasilia } = require("../shared/dataBrasilia");
 const limitador = criarLimitador({ janelaMs: 60000, maximo: 60 });
 const POR_VISITANTE_HORA = 3;
 const TOTAL_HORA = 200;
-const FOLGA_MS = 300;   // o que se reserva, dentro do tempo fixo, para gravar o fim do processamento e responder
+const FOLGA_MS = 300;   // entre o fim do prazo do trabalho e a resposta: o banco confirma (ou desfaz) o último passo e a resposta sai no tempo fixo
 const tempoFixo = () => { const v = Number(process.env.PRE_CADASTRO_SITE_MIN_MS); return Number.isFinite(v) && v >= 0 ? Math.min(v, 20000) : 3000; };
+const dormirAte = (instante) => new Promise((r) => setTimeout(r, Math.max(0, instante - Date.now())));
+const NAO_COUBE = "Não conseguimos confirmar o envio agora. Envie de novo daqui a pouco.";
+const foraDoPrazo = (e) => pdb.ehPrazoEsgotado(e) || !!(e && e.code === "ETIMEOUT");
 
-// Espera até o tempo fixo (ou, se já passou, até o próximo múltiplo dele). Devolve quanto o trabalho levou e quando a resposta sai.
-async function esperarOTempoFixo(inicio, fixo) {
-  const passou = Date.now() - inicio;
-  const alvo = fixo > 0 ? Math.max(1, Math.ceil(passou / fixo)) * fixo : 0;
-  if (alvo > passou) await new Promise((r) => setTimeout(r, alvo - passou));
-  return { passou, alvo };
+// O trabalho de um envio: a congregação, a gravação e o processamento (o aceite automático ou a fila), com o prazo `ate` (null = sem prazo). Nunca rejeita:
+// devolve { recebido } (gravado: a resposta é "recebemos"), { naoCoube } (nada gravado no prazo) ou { status, body, extra } (a resposta que não espera:
+// 400 de forma, 429 do limite, 500). estado.gravado guarda o id assim que a gravação confirma (a rota sabe, no tempo fixo, se pode dizer "recebemos").
+async function receber(context, dados, corpo, ate, estado) {
+  // o registro só enquanto a chamada não respondeu (depois dela, o Azure avisa "log depois do fim")
+  const registrar = (nivel, ...m) => { if (!estado.respondido) context.log[nivel](...m); };
+  try {
+    const pool = await getPool();
+    const cong = await pdb.lerCongregacao(() => pdb.pedidoNoPrazo(pool, ate), dados.congregacaoId);
+    if (!cong || !cong.ativa) return { status: 400, body: { sucesso: false, mensagem: "Escolha uma congregação da lista." } };
+    const gravado = await pdb.inserirDoSite(pool, dados, { envioId: corpo.envioId, consentimento: regras.CONSENTIMENTO, origemHash: pdb.hashOrigem(corpo.origemVisitante),
+      porVisitanteHora: POR_VISITANTE_HORA, totalHora: TOTAL_HORA, ate });
+    if (gravado.limite) return { status: 429, body: { sucesso: false, mensagem: "Recebemos muitos cadastros agora. Tente de novo daqui a pouco." }, extra: { "Retry-After": "600" } };
+    estado.gravado = gravado.id;
+    if (!gravado.avaliado) {
+      // o processamento não muda a resposta; se não couber no prazo (ou falhar), foi desfeito e o pré-cadastro gravado fica na fila, PENDENTE sem avaliar
+      try { await pdb.processar(pool, gravado.id, { ate }); } catch (e) {
+        if (foraDoPrazo(e)) registrar("warn", `[PreCadastroSite] o processamento do pré-cadastro ${gravado.id} não coube no tempo fixo: desfeito; fica na fila, sem avaliar, para a secretaria aceitar.`);
+        else registrar("error", `[PreCadastroSite] processar o pré-cadastro ${gravado.id}:`, e && e.stack ? e.stack : e);
+      }
+    }
+    return { recebido: true };
+  } catch (e) {
+    if (foraDoPrazo(e)) return { naoCoube: true };
+    registrar("error", "[PreCadastroSite] erro:", e && e.message);
+    return { status: 500, body: { sucesso: false, mensagem: "Erro interno." } };
+  }
 }
 
 module.exports = async function (context, req) {
@@ -72,25 +98,28 @@ module.exports = async function (context, req) {
   if (corpo.origemVisitante != null && (typeof corpo.origemVisitante !== "string" || corpo.origemVisitante.length > 128)) return res(400, { sucesso: false, mensagem: "Envio inválido." });
   if (typeof corpo.envioId !== "string" || !pdb.ENVIO_ID.test(corpo.envioId)) return res(400, { sucesso: false, mensagem: "Envio inválido: recarregue a página e envie de novo." });
 
-  try {
-    const pool = await getPool();
-    const cong = await pdb.lerCongregacao(() => pool.request(), lido.dados.congregacaoId);
-    if (!cong || !cong.ativa) return res(400, { sucesso: false, mensagem: "Escolha uma congregação da lista." });
-    const hash = pdb.hashOrigem(corpo.origemVisitante);
-    const gravado = await pdb.inserirDoSite(pool, lido.dados, { envioId: corpo.envioId, consentimento: regras.CONSENTIMENTO, origemHash: hash,
-      porVisitanteHora: POR_VISITANTE_HORA, totalHora: TOTAL_HORA });
-    if (gravado.limite) return res(429, { sucesso: false, mensagem: "Recebemos muitos cadastros agora. Tente de novo daqui a pouco." }, { "Retry-After": "600" });
-    const fixo = tempoFixo();
-    if (!gravado.avaliado) {
-      // o processamento (o aceite automático ou a fila) não muda a resposta; se falhar, o pré-cadastro já está gravado e a fila o mostra como pendente
-      const esperaMaxMs = fixo > 0 ? Math.max(0, inicio + fixo - FOLGA_MS - Date.now()) : 20000;
-      try { await pdb.processar(pool, gravado.id, { esperaMaxMs }); } catch (e) { context.log.error(`[PreCadastroSite] processar o pré-cadastro ${gravado.id}:`, e && e.stack ? e.stack : e); }
-    }
-    const { passou, alvo } = await esperarOTempoFixo(inicio, fixo);
-    if (fixo > 0 && passou > fixo) context.log.warn(`[PreCadastroSite] o envio levou ${passou} ms, mais que o tempo fixo de ${fixo} ms: a resposta saiu em ${alvo} ms.`);
-    return res(200, { sucesso: true, mensagem: regras.MSG.RECEBIDO });
-  } catch (e) {
-    context.log.error("[PreCadastroSite] erro:", e.message);
-    return res(500, { sucesso: false, mensagem: "Erro interno." });
+  const fixo = tempoFixo();
+  const estado = { gravado: null, respondido: false };
+  const responder = (r) => {
+    estado.respondido = true;
+    if (r && r.status) return res(r.status, r.body, r.extra);
+    return estado.gravado ? res(200, { sucesso: true, mensagem: regras.MSG.RECEBIDO }) : res(503, { sucesso: false, mensagem: NAO_COUBE }, { "Retry-After": "60" });
+  };
+  if (fixo === 0) return responder(await receber(context, lido.dados, corpo, null, estado));   // sem tempo fixo (os testes): o trabalho inteiro, sem prazo
+
+  // Com o tempo fixo: o trabalho corre com prazo, e a resposta sai no tempo fixo, nem antes nem depois — termine o trabalho ou não.
+  const respostaEm = inicio + fixo;
+  const trabalho = receber(context, lido.dados, corpo, respostaEm - FOLGA_MS, estado);
+  const pronto = await Promise.race([trabalho, dormirAte(respostaEm).then(() => null)]);
+  if (pronto && pronto.status) return responder(pronto);   // 400, 429 e 500 não esperam (não dependem do CPF)
+  if (!pronto) {
+    // o tempo fixo chegou com o trabalho ainda no banco: o que não confirmou dentro do prazo é desfeito sozinho (o driver corta o pedido e a transação volta)
+    context.log.warn(estado.gravado
+      ? `[PreCadastroSite] o processamento do pré-cadastro ${estado.gravado} não terminou no tempo fixo de ${fixo} ms: o que não confirmou é desfeito e ele fica na fila, sem avaliar.`
+      : `[PreCadastroSite] a gravação do pré-cadastro não coube no tempo fixo de ${fixo} ms: respondido "envie de novo".`);
+  } else {
+    if (pronto.naoCoube) context.log.warn(`[PreCadastroSite] a gravação do pré-cadastro não coube no tempo fixo de ${fixo} ms: desfeita; respondido "envie de novo".`);
+    await dormirAte(respostaEm);
   }
+  return responder(pronto);
 };

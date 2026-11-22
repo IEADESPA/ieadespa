@@ -196,7 +196,9 @@ Cada versão parte da base da anterior (`BASE=...`):
 - **FASE 10, Membros** (migrações 177 a 184; um `preparar-NNN` por migração, cada um a partir da base anterior). O "Quero me cadastrar" do site (migração 184,
   a chave do envio), base `cenario-184` (`bash rodar.sh preparar-184`: a `cenario-183` com a 184 aplicada duas vezes): `e2e-95` parte 5 (o tempo da
   resposta medido com e sem ficha, com e sem o tempo fixo; rajadas em vários processos contra os limites; o mesmo envio repetido, em sequência e em
-  quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento) e `e2e-90` (o pré-cadastro e a fila).
+  quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento), a parte 6 (22/11/2026: o banco lento, simulado
+  por outro processo que segura a tabela inteira; a resposta nunca passa do tempo fixo, o que não cabe é desfeito) e `e2e-90` (o pré-cadastro e a fila).
+  A ponte aceita o limite por pedido do driver (`requestTimeout`): o comando é cancelado no banco e o erro sai com o código `ETIMEOUT`, como no tedious.
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos

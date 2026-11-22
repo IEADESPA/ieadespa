@@ -20,25 +20,55 @@ const erroNumero = (e) => e && (e.number || (e.originalError && e.originalError.
 const violouUnico = (e, indice) => [2601, 2627].includes(erroNumero(e)) && (!indice || new RegExp(indice).test(String(e && e.message)));
 const ABERTAS = "N'PENDENTE', N'CORRECAO'";
 
-async function emTransacao(pool, fazer) {
+// O PRAZO do trabalho (o "Quero me cadastrar" com o banco lento, decisão do responsável de 22/11/2026: "a secretaria aceita depois"): o instante
+// (Date.now()) até o qual o trabalho pode ir. Passado dele, NADA se grava: a transação é desfeita e sai PrazoEsgotado. Cada pedido ao banco leva o que
+// sobra do prazo como limite (o driver cancela o pedido no banco quando passa) e, antes de confirmar, o prazo é conferido de novo: o que não coube não
+// confirma depois. Sem prazo (a secretaria, o líder), tudo como sempre.
+class PrazoEsgotado extends Error {
+  constructor(causa) { super("o trabalho não coube no prazo"); this.name = "PrazoEsgotado"; this.prazoEsgotado = true; if (causa) this.causa = causa; }
+}
+const ehPrazoEsgotado = (e) => !!(e && e.prazoEsgotado === true);
+// A espera da trava termina um pouco antes do prazo do pedido: a recusa vem da própria trava (limpa), não do corte do pedido.
+const MARGEM_TRAVA_MS = 50;
+const esperaDaTrava = (ate, semPrazoMs) => (ate == null ? semPrazoMs : Math.max(0, Math.min(semPrazoMs, ate - Date.now() - MARGEM_TRAVA_MS)));
+// Um pedido ao banco dentro do prazo (fora de transação): o que sobra vira o limite do pedido; já passou, nem sai.
+function pedidoNoPrazo(origem, ate) {
+  if (ate == null) return origem.request();
+  const ms = Math.floor(ate - Date.now());
+  if (ms <= 0) throw new PrazoEsgotado();
+  return origem.request({ requestTimeout: ms });
+}
+
+async function emTransacao(pool, fazer, { ate = null } = {}) {
+  const comPrazo = ate != null;
+  const resta = () => ate - Date.now();
+  if (comPrazo && resta() <= 0) throw new PrazoEsgotado();
   const t = new sql.Transaction(pool);
   await t.begin();
+  const rq = !comPrazo ? () => new sql.Request(t) : () => {
+    const ms = Math.floor(resta());
+    if (ms <= 0) throw new PrazoEsgotado();
+    return new sql.Request(t, { requestTimeout: ms });
+  };
   try {
-    const r = await fazer(t, () => new sql.Request(t));
+    if (comPrazo && resta() <= 0) throw new PrazoEsgotado();   // a abertura da transação (pegar a conexão) já comeu o prazo
+    const r = await fazer(t, rq);
     if (r && r.sucesso === false) { await t.rollback(); return r; }
+    if (comPrazo && resta() <= 0) throw new PrazoEsgotado();   // terminou, mas fora do prazo: não confirma (a resposta já está saindo sem ele)
     await t.commit();
     return r;
   } catch (e) {
-    try { await t.rollback(); } catch (_) { /* já desfeita */ }
+    try { await t.rollback(); } catch (_) { /* já desfeita (o banco desfaz a transação do pedido cortado quando a conexão cai) */ }
+    if (comPrazo && !ehPrazoEsgotado(e) && e && e.code === "ETIMEOUT") throw new PrazoEsgotado(e);   // o driver cortou o pedido no fim do prazo
     throw e;
   }
 }
-// esperaMs: quanto esperar pela trava (o padrão, 20 s; o formulário do site passa o que sobra do tempo fixo da resposta)
-async function travar(rq, recurso, esperaMs = 20000) {
+// esperaMs: quanto esperar pela trava (o padrão, 20 s). comPrazo: a espera veio do prazo do trabalho (a trava que não vem é PrazoEsgotado).
+async function travar(rq, recurso, esperaMs = 20000, { comPrazo = false } = {}) {
   const espera = Math.max(0, Math.min(Math.floor(Number(esperaMs) || 0), 20000));
   const r = await rq().input("r", sql.NVarChar(255), recurso).input("ms", sql.Int, espera)
     .query("DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @ms; SELECT @rc AS rc");
-  if (Number(r.recordset[0].rc) < 0) throw new Error("trava do pré-cadastro não obtida a tempo");
+  if (Number(r.recordset[0].rc) < 0) throw comPrazo ? new PrazoEsgotado() : new Error("trava do pré-cadastro não obtida a tempo");
 }
 
 // O hash truncado de quem enviou pelo site (o site manda um identificador do visitante; aqui guardamos só 16 letras do hash, nunca o valor em claro).
@@ -126,17 +156,17 @@ async function registrarCaso(rq, { tipo, membroIdExistente, congregacaoQuePediuI
 // ---------------------------------------------------------------- a fila: processar um pré-cadastro (o aceite automático)
 // porQuem/como: quem resolveu (null/AUTOMATICO no aceite sozinho; o membroId e LOCAL/GERAL quando a secretaria completou ou aceitou).
 // naoERepeticao: a secretaria conferiu que nome e nascimento parecidos NÃO são a mesma pessoa. responsavelConfirmado: o menor tem o consentimento do responsável.
-// esperaMaxMs: o teto de espera pela trava do CPF (o formulário do site passa o que sobra do tempo fixo da resposta; sem a trava a tempo, nada muda e o
-// pré-cadastro fica na fila sem avaliar — PENDENTE sem pendência —, para a secretaria ou para o reenvio do mesmo envio).
-async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERepeticao = false, responsavelConfirmado = false, versaoLida = null, esperaMaxMs = 20000 } = {}) {
+// ate: o PRAZO do trabalho (o formulário do site passa o fim do tempo fixo da resposta menos a folga). O que não couber nele — a espera da trava do CPF, ou
+// qualquer passo depois dela — é desfeito (é uma transação só) e sai PrazoEsgotado: o pré-cadastro fica na fila sem avaliar (PENDENTE sem pendência), para
+// a secretaria aceitar ou para o reenvio do mesmo envio. Sem prazo, a trava espera até 20 s.
+async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERepeticao = false, responsavelConfirmado = false, versaoLida = null, ate = null } = {}) {
   return emTransacao(pool, async (t, rq) => {
-    const inicio = Date.now();
-    const espera = () => Math.max(0, esperaMaxMs - (Date.now() - inicio));
+    const travarCpf = (recurso) => travar(rq, recurso, esperaDaTrava(ate, 20000), { comPrazo: ate != null });
     const base = (await rq().input("id", sql.Int, id).query("SELECT Cpf FROM PreCadastros WHERE PreCadastroId = @id")).recordset[0];
     if (!base) return { sucesso: false, naoExiste: true, mensagem: regras.MSG.NAO_EXISTE };
-    await travar(rq, base.Cpf ? `precad-cpf:${base.Cpf}` : `precad:${id}`, espera());
+    await travarCpf(base.Cpf ? `precad-cpf:${base.Cpf}` : `precad:${id}`);
     let l = (await rq().input("id", sql.Int, id).query(`SELECT p.*, CONVERT(varchar(20), CONVERT(bigint, p.Versao)) AS VersaoTexto FROM PreCadastros p WITH (UPDLOCK, HOLDLOCK) WHERE p.PreCadastroId = @id`)).recordset[0];
-    if (l.Cpf && l.Cpf !== base.Cpf) await travar(rq, `precad-cpf:${l.Cpf}`, espera());   // o CPF mudou entre a leitura e a trava (completar): trava o novo também
+    if (l.Cpf && l.Cpf !== base.Cpf) await travarCpf(`precad-cpf:${l.Cpf}`);   // o CPF mudou entre a leitura e a trava (completar): trava o novo também
     if (versaoLida && String(l.VersaoTexto) !== String(versaoLida)) return { sucesso: false, conflito: true, mensagem: regras.MSG.MUDOU };
     if (!["PENDENTE", "CORRECAO"].includes(l.Situacao)) return { sucesso: true, situacao: l.Situacao, matricula: l.MembroIdResultado == null ? null : Number(l.MembroIdResultado), jaResolvido: true };
 
@@ -219,7 +249,7 @@ async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERe
     await registrarAuditoriaNaTransacao(t, { tabela: "MembroReferencia", registroId: matricula, acao: "Cadastrou pessoa pelo pré-cadastro", usuarioId: porQuem,
       dadosDepois: { preCadastroId: id, origem: l.Origem, congregacaoId: dados.congregacaoId, aceite: como, cpf: ficha.mascararCpf(dados.cpf) } });
     return { sucesso: true, situacao: "ACEITO", matricula };
-  });
+  }, { ate });
 }
 
 // ---------------------------------------------------------------- lançar (líder, secretaria ou o site)
@@ -248,8 +278,10 @@ const TRAVA_DO_SITE = "precad-site:limites";
 // Revisão de 20/11/2026: a contagem e a gravação andavam separadas e uma rajada passava dos limites. A trava serializa só os envios do site (alguns
 // milissegundos cada; o limite é de 200 por hora): a fila, a secretaria e o líder não esperam por ela, e a tabela não fica travada. O índice único
 // UX_PreCadastros_Envio (migração 184) é a última trava do envio repetido.
+// ate: o PRAZO (o fim do tempo fixo da resposta menos a folga). A gravação que não couber nele é desfeita e sai PrazoEsgotado: nada gravado, e a rota
+// responde "envie de novo" no mesmo tempo fixo (o reenvio do mesmo envio não duplica, se a confirmação tiver chegado ao banco no último instante).
 // Devolve { id, repetido, avaliado } (avaliado: o processamento já passou por ele — não está PENDENTE sem pendência) ou { limite: true }.
-async function inserirDoSite(pool, dados, { envioId, consentimento, origemHash = null, porVisitanteHora, totalHora, esperaMs = 10000 }) {
+async function inserirDoSite(pool, dados, { envioId, consentimento, origemHash = null, porVisitanteHora, totalHora, esperaMs = 10000, ate = null }) {
   if (typeof envioId !== "string" || !ENVIO_ID.test(envioId)) throw new Error("inserirDoSite: envioId inválido");
   const lerRepetido = async (rq) => {
     const l = (await rq().input("e", sql.Char(32), envioId).query("SELECT PreCadastroId, Situacao, Pendencias FROM PreCadastros WHERE EnvioId = @e")).recordset[0];
@@ -257,7 +289,7 @@ async function inserirDoSite(pool, dados, { envioId, consentimento, origemHash =
   };
   try {
     return await emTransacao(pool, async (t, rq) => {
-      await travar(rq, TRAVA_DO_SITE, esperaMs);
+      await travar(rq, TRAVA_DO_SITE, esperaDaTrava(ate, esperaMs), { comPrazo: ate != null });
       const repetido = await lerRepetido(rq);
       if (repetido) return repetido;
       const c = (await rq().input("h", sql.Char(16), origemHash).query(`
@@ -274,11 +306,12 @@ async function inserirDoSite(pool, dados, { envioId, consentimento, origemHash =
                 OUTPUT INSERTED.PreCadastroId
                 VALUES (N'SITE', @c, @nome, @cpf, @email, @tel, @nasc, @sexo, @ec, @cv, @cb, SYSUTCDATETIME(), @h, @e)`);
       return { id: Number(r.recordset[0].PreCadastroId), repetido: false, avaliado: false };
-    });
+    }, { ate });
   } catch (e) {
     // o mesmo envio gravado no mesmo instante por outro caminho (a trava deveria impedir; o índice único garante): é o mesmo envio
     if (!violouUnico(e, "UX_PreCadastros_Envio")) throw e;
-    const repetido = await lerRepetido(() => pool.request());
+    let repetido;
+    try { repetido = await lerRepetido(() => pedidoNoPrazo(pool, ate)); } catch (e2) { throw ate != null && e2 && e2.code === "ETIMEOUT" ? new PrazoEsgotado(e2) : e2; }
     if (!repetido) throw e;
     return repetido;
   }
@@ -422,4 +455,4 @@ async function resolverCaso(pool, { casoId, por, nota }) {
 }
 
 module.exports = { ENVIO_ID, hashOrigem, lerCongregacao, origemDeQuemLanca, mapear, lerPreCadastro, visivelPara, papelParaResolver, registrarCaso, processar, inserir,
-  inserirDoSite, completar, descartar, listar, meus, conferir, listarCasos, resolverCaso };
+  inserirDoSite, completar, descartar, listar, meus, conferir, listarCasos, resolverCaso, PrazoEsgotado, ehPrazoEsgotado, pedidoNoPrazo };

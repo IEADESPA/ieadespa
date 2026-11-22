@@ -186,6 +186,35 @@ async function main() {
     if (r1.rowsAffected[0]) feito.push(`${r1.rowsAffected[0]} chave(s) de acesso dos fictícios zerada(s)`);
   } catch (e) { console.log("(chaves de acesso: " + e.message.slice(0, 80) + ")"); }
 
+  // FASE 10, Financeiro novo (incremento 1b, 22/11/2026): os BLOCOS DE RECIBO fictícios, pelas mesmas funções da rota (shared/finBlocosDb.js) —
+  // o lote da gráfica série 2026 (70.001 a 80.000 = 200 blocos de 50; o número de cada bloco sai da 1ª folha), a chegada das primeiras 5.000
+  // folhas, 2 blocos entregues a cada congregação fictícia e algumas folhas com destino no 1º bloco da Alfa (para "Em uso" e "Esperando").
+  try {
+    const temFin = await escalar("SELECT COUNT(*) FROM sys.tables WHERE name = 'FinLotesGrafica'");
+    const jaTem = temFin ? await escalar("SELECT COUNT(*) FROM dbo.FinLotesGrafica WHERE Serie = 2026 AND PrimeiraFolha = 70001") : 1;
+    const por = quartoAlfa && quartoAlfa.matricula;
+    if (!jaTem && por) {
+      const finDb = require("../shared/finBlocosDb");
+      const lote = await finDb.cadastrarLote(pool, { dados: { serie: 2026, primeiraFolha: 70001, totalFolhas: 10000 }, por });
+      if (!lote.sucesso) throw new Error(lote.mensagem);
+      const loteId = await escalar("SELECT LoteId FROM dbo.FinLotesGrafica WHERE Serie = 2026 AND PrimeiraFolha = 70001");
+      const chegada = await finDb.registrarChegada(pool, { loteId, ateFolha: 75000, data: "2026-10-28", por });
+      if (!chegada.sucesso) throw new Error(chegada.mensagem);
+      let primeira = 70051;
+      for (const c of congs) for (let k = 0; k < 2; k++, primeira += 50) {
+        const r = await finDb.entregar(pool, { primeiraFolha: primeira, congregacaoId: c.id, pessoa: { nome: `Tesouraria ${c.nome}` }, data: "2026-11-02", por });
+        if (!r.sucesso) throw new Error(r.mensagem);
+      }
+      const blocoAlfa = await escalar("SELECT BlocoId FROM dbo.FinBlocos WHERE PrimeiraFolha = 70051");
+      for (let f = 70051; f <= 70088; f++) {
+        const destino = f === 70067 ? "CANCELADA" : f === 70079 ? "ARRANCADA" : "LANCADA";
+        await q("INSERT INTO dbo.FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (@b, @f, @d, @o, @p)",
+          { b: blocoAlfa, f, d: destino, o: destino === "LANCADA" ? null : "Dado fictício de homologação", p: por });
+      }
+      feito.push("blocos de recibo fictícios (lote 2026 de 200 blocos, 100 chegaram, 6 entregues, 38 folhas com destino)");
+    }
+  } catch (e) { console.log("(blocos de recibo: " + e.message.slice(0, 160) + ")"); }
+
   await pool.close();
   console.log(feito.length ? `Semeado em "${banco}": ${feito.join("; ")}.` : `Nada a criar em "${banco}": a massa fictícia já existia.`);
   console.log(`Acessos fictícios (senha ${process.env.SEED_SENHA ? "de SEED_SENHA" : "padrão do script"}): dirigentes/tesoureiros = 1º e 2º adulto de cada congregação; pastor de área = 3º adulto da Alfa (900007); secretário geral (nível geral) = 4º adulto da Alfa (900013). Matrículas de ${BASE_MATRICULA + 1} a ${BASE_MATRICULA + 60}.`);

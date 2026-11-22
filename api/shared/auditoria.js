@@ -56,4 +56,30 @@ async function registrarAuditoriaNaTransacao(transacao, { tabela, registroId, ac
             VALUES (@tabela, @registroId, @acao, @usuarioId, @dadosAntes, @dadosDepois, @hashRegistro)`);
 }
 
-module.exports = { registrarAuditoria, registrarAuditoriaNaTransacao, sha256 };
+// FASE 10 (21/11/2026, a importação dos membros): MUITOS registros da MESMA tabela numa transação, com a mesma cadeia de hashes de registrarAuditoriaNaTransacao
+// (o mesmo payload, o mesmo SHA-256 sobre o anterior), em dois comandos: o topo lido uma vez sob UPDLOCK, HOLDLOCK e a gravação de todos de uma vez, na ordem
+// da lista (o INSERT ... SELECT com ORDER BY dá os AuditId nessa ordem: a verificação da cadeia, que segue o AuditId, confere). Um lote de 500 fichas
+// importadas grava em milissegundos e segura a fila da trilha só esse tempo (registro a registro seriam 1.000 idas ao banco com a fila presa).
+// registros: [{ registroId, acao, usuarioId, dadosAntes, dadosDepois }].
+async function registrarAuditoriaEmLoteNaTransacao(transacao, tabela, registros) {
+  if (!Array.isArray(registros) || !registros.length) return;
+  const rq = () => new sql.Request(transacao);
+  const anterior = await rq().input("tabela", sql.NVarChar(50), tabela)
+    .query(`SELECT TOP 1 HashRegistro FROM AuditLog WITH (UPDLOCK, HOLDLOCK) WHERE Tabela = @tabela ORDER BY AuditId DESC`);
+  let hash = anterior.recordset[0] ? (anterior.recordset[0].HashRegistro || "") : "";
+  const linhas = registros.map(({ registroId, acao, usuarioId, dadosAntes, dadosDepois }, i) => {
+    const registroIdNorm = registroId != null ? registroId : null;
+    const dadosAntesStr = dadosAntes ? JSON.stringify(dadosAntes) : null;
+    const dadosDepoisStr = dadosDepois ? JSON.stringify(dadosDepois) : null;
+    const payload = JSON.stringify({ tabela, registroId: registroIdNorm, acao, usuarioId: usuarioId || null, dadosAntes: dadosAntesStr, dadosDepois: dadosDepoisStr });
+    hash = sha256(payload + hash);
+    return { o: i, r: registroIdNorm, a: acao, u: usuarioId || null, da: dadosAntesStr, dd: dadosDepoisStr, h: hash };
+  });
+  await rq().input("tabela", sql.NVarChar(50), tabela).input("j", sql.NVarChar(sql.MAX), JSON.stringify(linhas))
+    .query(`INSERT INTO AuditLog (Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro)
+            SELECT @tabela, j.r, j.a, j.u, j.da, j.dd, j.h
+            FROM OPENJSON(@j) WITH (o INT '$.o', r INT '$.r', a NVARCHAR(100) '$.a', u INT '$.u', da NVARCHAR(MAX) '$.da', dd NVARCHAR(MAX) '$.dd', h NVARCHAR(64) '$.h') j
+            ORDER BY j.o`);
+}
+
+module.exports = { registrarAuditoria, registrarAuditoriaNaTransacao, registrarAuditoriaEmLoteNaTransacao, sha256 };

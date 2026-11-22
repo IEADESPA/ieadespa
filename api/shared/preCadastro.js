@@ -172,4 +172,4 @@ function motivoLimpo(v) {
 }
 
 module.exports = { ORIGENS, ESTADOS_CIVIS, SEXOS, CONSENTIMENTO, PENDENCIAS, MSG, lerEntrada, dataNoCalendario, pendenciasDeCampo, pendenciasSemBanco, idadeEm, normalizarNome,
-  nomesParecidos, lerPendencias, pendenciasComRotulo, motivoLimpo };
+  nomesParecidos, lerPendencias, pendenciasComRotulo, motivoLimpo, lerNome, lerEmail, lerTelefone };

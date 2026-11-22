@@ -1,73 +1,73 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 22/11/2026 15:45
+Em uso por: Livre
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 22/11/2026, tarde (Claude, sessão principal): as perguntas respondidas e três agentes em paralelo.
+Atualizado em 22/11/2026, noite (Claude, sessão principal). Ele mandou parar: os três agentes foram parados, e tudo o
+que estava feito já estava enviado ao GitHub (nada ficou só na máquina).
 
 ## 1. Concluído
 
-- **Produção (main):** só documentação e a porta da bancada nesta semana (último `fbe9373`, DEPLOY OK). Nada de
-  Membros nem de Financeiro foi à produção.
-- **Desenho do Financeiro: APROVADO** (rodadas 20 a 26; página leve KMeb…, versão 8; fontes em `design/propostas/`).
-  A regra do saldo de cada congregação na Geral está no plano (`docs/plano/fase-10-experiencia-design-performance.md`,
-  seções "Rodada 25" e "Rodada 26"). A página antiga G1gj… é só arquivo: nunca republicar.
-- **Membros (ramo `v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`):** refeito em Svelte, com as Carteirinhas e
-  o "Quero me cadastrar". As 4 pendências de segurança e consistência do cadastro estão FEITAS e na homologação
-  (`2e4200c`, `a70f5c2`; homolog `810540f`, DEPLOY OK).
-- **Financeiro (ramo `v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`, criado do Membros):**
-  - o plano da construção, `docs/plano/financeiro-construcao.md` (no ramo, `f0f2188`): inventário, tabelas `Fin*`
-    (migrações 200 a 208), rotas `/api/financeiro`, 13 incrementos e as perguntas de regra;
-  - o **incremento 1a** (`ae96eae`): migração 200 e a rota dos blocos de recibo, com teste (jest 15/15) e o e2e-200 no
-    LocalDB (76/76). Ainda SEM tela e fora da homologação.
-- **Bancada:** matriz única no repositório privado `IEADESPA/bancada` (`C:\MCP\bancada`); aqui só a porta. O asaf já
-  tem a porta. O compartilhamento entre os dois computadores foi testado e deu certo (21/11).
+- **Produção (main):** só documentação e desenho. Nada de Membros nem de Financeiro foi à produção.
+- **Desenho:**
+  - Financeiro: núcleo aprovado nas rodadas 20 a 26.
+  - **Rodada 27 conferida (22/11):** aprovadas receber o repasse e dar o recibo, os saldos de abertura, importar os
+    membros e cadastrar lote da gráfica. O fechamento do mês volta na 28.
+  - Página leve KMeb… na versão 9 (a 27); fontes em `design/propostas/`. A página antiga G1gj… é só arquivo.
+  - **As regras da rodada 28 foram todas respondidas por ele** antes de desenhar: plano
+    `docs/plano/fase-10-experiencia-design-performance.md`, seções "Rodada 27: o que ele aprovou e o fechamento refeito"
+    e "As regras da rodada 28 (Membros), respondidas antes de desenhar".
+- **Membros** (ramo `v10-membros-svelte`, `3e65794`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
+  - as 4 pendências do "Quero me cadastrar" (homolog `810540f`);
+  - o banco lento: a resposta nunca passa de 3 s, a secretaria aceita depois, e "envie de novo" quando nem a gravação
+    cabe (homolog `7d5ebbf`, DEPLOY OK; aprovado por ele);
+  - o **servidor** do importador do sistema pago, migração 185 e a rota `api/importacao-membros` (homolog `708f50f`,
+    DEPLOY OK). O ramo `v10-membros-importador-wip` já foi trazido e pode ser apagado.
+- **Financeiro** (ramo `v10-financeiro-svelte`; worktree `C:/tmp/ieadespa-financeiro/obra`):
+  - o plano da construção `docs/plano/financeiro-construcao.md` (no ramo);
+  - o **incremento 1b na homologação** (a tela dos blocos de recibo, o número do bloco pela 1ª folha; homolog
+    `f774121`, DEPLOY OK);
+  - **só no ramo, fora da homologação:** `bd694cf`, a casca igual ao desenho (barra de 280 px, o cabeçalho numa linha e o
+    último grupo do menu à vista no notebook); e `4c06d58`, o **servidor** do incremento 2 (as folhas do bloco, a
+    exceção da folha, o livro, o rastreio e a devolução). A tela do incremento 2 não foi feita.
 
 ## 2. Arquivos alterados (ainda não registrados no Git)
 
-- Nenhum. O importador dos membros, que estava pela metade, foi guardado no ramo próprio
-  **`v10-membros-importador-wip`** (`fc24cd6`, enviado): `api/shared/importacaoMembros.js`,
-  `sql/migrations/185_importacao_membros.sql` e pequenos acréscimos em `auditoria.js` e `preCadastro.js`. **Sem teste,
-  sem tela: não mesclar** no `v10-membros-svelte` nem no `homolog` antes de terminar e provar.
+- Nenhum. Os três worktrees estavam limpos e enviados quando os agentes pararam. A rodada 28 não chegou a ser começada
+  (nenhum arquivo).
 
 ## 3. Pendências e erros conhecidos
 
-- **As perguntas do cadastro pelo site e as do Financeiro foram RESPONDIDAS em 22/11** (plano, seção "As respostas de
-  22/11/2026 (antes da rodada 27)"). A tela de importação, o fechamento do mês, os saldos de abertura e o "receber o
-  repasse" simplificado estão sendo desenhados na rodada 27.
+- **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:
+  atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
-- **Membros na homologação:** falta o OK final dele para ir à produção.
+- **Membros na homologação:** falta o OK final dele para ir à produção. A importação só vai à produção com "completar o
+  arrolamento" pronto (sem ele a pendência não se resolve).
 - **Bancada, decisões dele:** conferir o servidor de memória 2.2.1 antes de subir (a aprovada é a 2.1.1); a cláusula
-  5.2 do `LICENSE`; a porta do construtor na próxima vez que ele for aberto
-  (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste computador vence até 24/11.
+  5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
+  computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
 - **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
-  sem `/s` antes de remover o worktree.
-- **Diários dos agentes** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`,
-  `C:\tmp\ieadespa-membros\DIARIO.md` e `C:\tmp\ieadespa-membros\DIARIO-importador.md`.
+  sem `/s` antes de remover o worktree. O da rodada 27 (`C:/tmp/ieadespa-desenho-r27`) já pode sair.
+- **Diários** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`, `C:\tmp\ieadespa-membros\` (DIARIO,
+  DIARIO-importador, DIARIO-banco-lento), `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md` e o levantamento da 28 em
+  `C:/tmp/ieadespa-r28-duvidas.md`.
 
-## 4. Próximo passo exato
+## 4. Próximo passo exato (quando ele mandar continuar)
 
-**Em andamento (22/11, tarde): TRÊS agentes em paralelo**, cada um no seu ramo e worktree:
+Três agentes em paralelo, cada um no seu ramo e worktree (memória `desenho-em-paralelo-a-construcao`):
 
-1. **Desenho, rodada 27: PUBLICADA** (página leve KMeb…, versão 9, 246 KB; fontes na `main`, `1f7d51c`; diário
-   `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md`). 5 telas: receber o repasse e dar o recibo, o fechamento do mês, os
-   saldos de abertura, importar os membros e cadastrar lote da gráfica. **Esperando ele conferir**; as escolhas ficam
-   na coleção "escolhas" (ids `r27-*` e `geral-r27`). 4 pontos desenhados por suposição, marcados "Para conferir": o
-   saldo de abertura vale com a maioria do Conselho Fiscal; quem registra a autorização do Ministério (o próprio CF);
-   o voto "ainda não" com motivo; a matrícula 0, vazia ou repetida ganha a próxima do sistema.
-2. **Financeiro** (`v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`; diário
-   `C:\tmp\ieadespa-financeiro\DIARIO.md`): o **incremento 1b está na homologação** (a tela dos blocos de recibo, bloco
-   pela 1ª folha; ramo `3b53669`, homolog `f774121`, DEPLOY OK). Agora: o teste de telas do CI, as diferenças da casca
-   (barra lateral, cabeçalho da Geral, último grupo do menu cortado no notebook) e o incremento 2 (abas Folhas e
-   Livro). O formulário "Cadastrar lote da gráfica" não tinha desenho: foi pedido na rodada 27.
-3. **Membros** (`v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`; diários em `C:\tmp\ieadespa-membros\`): o
-   "Quero me cadastrar" com o banco lento indo para a secretaria; depois o servidor do importador (do ramo
-   `v10-membros-importador-wip`), sem a tela.
+1. **Desenho, rodada 28** (worktree novo `C:/tmp/ieadespa-desenho-r28`, ramo `desenho-r28`, a partir da `main`), pelas
+   regras já respondidas no plano: a auditoria ao vivo e o fechamento do mês; a chegada do lote com os números pulados;
+   a família com "mora junto"; as listas inteligentes; o assistente de movimentação (saída e volta); completar o
+   arrolamento e o grupo novo do painel. Publicar na página leve KMeb… (ele já conferiu a 27).
+2. **Membros:** a importação pula a matrícula que já existe (a 1 e a 2); a **tela** "Importar os membros", igual à
+   r27 aprovada; homologação.
+3. **Financeiro:** o teste de telas do CI; a casca (`bd694cf`) e o servidor do incremento 2 (`4c06d58`) para a
+   homologação; a tela das abas Folhas e Livro; depois o formulário do lote da gráfica (aprovado na 27).
 
-Depois: ele confere a rodada 27; em seguida a rodada 28 (Membros: a família como unidade, as listas inteligentes e o
-assistente de movimentação) e o módulo 3 (Estrutura e Territórios).
+Depois da 28: o módulo 3 (Estrutura e Territórios).

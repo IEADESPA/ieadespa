@@ -1,7 +1,7 @@
-// O conferir.js de sempre para a página leve da rodada 26 (21/11/2026): a sintaxe, cada desenho (modos, níveis e aparelhos),
+// O conferir.js de sempre para a página leve da rodada 27 (22/11/2026): a sintaxe, cada desenho (modos, níveis e aparelhos),
 // undefined/NaN/[object Object]/${ esquecido, caixas <div> desiguais, emojis e as palavras que não existem na Igreja.
 const fs = require('fs'), path = require('path');
-const arq = process.argv[2] || 'propostas-r26/index.html';
+const arq = process.argv[2] || 'propostas-r27/index.html';
 const h = fs.readFileSync(path.join(__dirname, arq), 'utf8');
 const ini = h.indexOf('<script>') + 8, js = h.slice(ini, h.indexOf('</script>', ini));
 new Function(js);

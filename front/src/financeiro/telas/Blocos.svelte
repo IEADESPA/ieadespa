@@ -167,7 +167,7 @@
       {#each dados.blocos as b (b.id)}
         <div class="linha" role="row">
           <span role="cell" class="num">{numero(b.numero)}</span>
-          <span role="cell" class="sv-num">{folhas(b)}</span>
+          <span role="cell" class="folhas">{folhas(b)}</span>
           <span role="cell">{ondeEsta(b)}</span>
           <span role="cell"><Chip tom={TOM[b.situacao]}>{ROTULO[b.situacao]}</Chip></span>
           <span role="cell" title={uso(b)}>{uso(b)}</span>
@@ -332,6 +332,9 @@
   .linha > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .linha.cab { height: 38px; min-height: 38px; border-top: 0; font-size: 12.5px; font-weight: 700; color: var(--sv-suave); background: var(--sv-fundo); }
   .num { font-weight: 600; color: var(--sv-titulo); font-variant-numeric: tabular-nums; }
+  /* "70.051 a 70.100" tem formato fixo e enche a coluna no notebook de 1280 px (no desenho cabe no limite; a Inter local mede 1 px a mais):
+     sem corte, usa o vão de 10 px até a congregação */
+  .linha > span.folhas { overflow: visible; text-overflow: clip; }
   .vazio { padding: 6px 16px; border-top: 1px solid var(--sv-linha); }
   .rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12.5px; color: var(--sv-suave); }
   .rodape > span { white-space: nowrap; }

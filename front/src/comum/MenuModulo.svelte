@@ -58,11 +58,13 @@
 </nav>
 
 <style>
-  .menu-mod { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
-  .grupo { display: flex; flex-direction: column; }
+  /* como o menuCor do desenho: 2 px entre todas as linhas (grupo, itens); o grupo tem 36 px e o item 40, e os dois encolhem até 33 e 37 quando
+     o menu não cabe na altura da barra (a casca faz da barra inteira uma coluna flex, app/style.css) */
+  .menu-mod { display: flex; flex-direction: column; gap: 2px; }
+  .grupo { display: flex; flex-direction: column; gap: 2px; }
   button { font: inherit; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   .cab {
-    display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px; width: 100%; text-align: left; color: #FFFFFF;
+    display: flex; align-items: center; gap: 8px; flex: 0 1 36px; min-height: 33px; padding: 0 8px; width: 100%; text-align: left; color: #FFFFFF;
     font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 8px;
   }
   .cab:hover { background: rgba(255, 255, 255, .06); }
@@ -70,8 +72,9 @@
   .nome { flex: 1; min-width: 0; }
   .qtd { font-size: 11.5px; font-weight: 600; color: var(--cor-menu-texto-suave, #C7D5F8); letter-spacing: 0; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  li { display: flex; flex-direction: column; }
   .item {
-    display: flex; align-items: center; gap: 12px; height: 40px; width: calc(100% - 14px); margin-left: 14px; padding: 0 14px; border-radius: 9px;
+    display: flex; align-items: center; gap: 12px; flex: 0 1 40px; min-height: 37px; width: calc(100% - 14px); margin-left: 14px; padding: 0 14px; border-radius: 9px;
     color: #E6EEFB; font-size: 14.5px; text-align: left; border-left: 4px solid transparent; transition: background-color .15s ease;
   }
   .item:hover { background: rgba(255, 255, 255, .07); }
@@ -82,8 +85,13 @@
   .n { min-width: 20px; height: 20px; border-radius: 10px; padding: 0 6px; background: #FFB800; color: #0A2342; font-size: 11.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
   .trilho { display: none; }
   .menu-mod :focus-visible { outline: 3px solid #FFB800; outline-offset: 1px; }
-  /* o trilho: a casca recolheu o menu (notebook) */
   @media (min-width: 641px) {
+    /* no notebook, com o menu aberto, cada linha vira filha direta da barra (como no desenho), para encolher só quando falta altura */
+    :global(.painel-layout[data-modulo] .sidebar:not(.recolhido)) .menu-mod,
+    :global(.painel-layout[data-modulo] .sidebar:not(.recolhido)) .grupo,
+    :global(.painel-layout[data-modulo] .sidebar:not(.recolhido)) ul,
+    :global(.painel-layout[data-modulo] .sidebar:not(.recolhido)) li { display: contents; }
+    /* o trilho: a casca recolheu o menu */
     :global(.sidebar.recolhido) .menu-mod { align-items: center; gap: 6px; }
     :global(.sidebar.recolhido) .cab, :global(.sidebar.recolhido) ul { display: none; }
     :global(.sidebar.recolhido) .trilho {

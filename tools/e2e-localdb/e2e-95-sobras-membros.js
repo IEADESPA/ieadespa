@@ -4,7 +4,8 @@
 // Parte 2: O ANEXO DA SUGESTÃO (migração 182). Parte 3: A PESSOA COMPLETA O PRÓPRIO CADASTRO PELO E-MAIL (migração 183). Parte 4: o que o "Quero me cadastrar"
 // do site lê. Parte 5 (21/11/2026, migração 184): AS PENDÊNCIAS DA REVISÃO DE 20/11 no envio do site — (a) o tempo da resposta igual com e sem ficha (medido),
 // (b) as rajadas em vários processos não passam dos limites, (c) o mesmo envio repetido não grava dois e o que ficou sem avaliar é avaliado no reenvio,
-// (d) o texto e a versão do consentimento do mesmo lugar. Roda sobre a base cenario-184 (`bash rodar.sh preparar-184` e depois
+// (d) o texto e a versão do consentimento do mesmo lugar. Parte 6 (22/11/2026): O BANCO LENTO — a resposta nunca passa do tempo fixo; o processamento que não
+// cabe é desfeito (o pré-cadastro fica na fila sem avaliar), a gravação que não cabe é desfeita ("envie de novo"). Roda sobre a base cenario-184 (`bash rodar.sh preparar-184` e depois
 // `BASE=cenario-184 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-sobras";
@@ -353,6 +354,70 @@ async function principal() {
   ok((await escalar("SELECT COUNT(*) FROM PreCadastros WHERE EnvioId IS NOT NULL AND ConsentimentoVersao <> @v", { v: regrasPre.CONSENTIMENTO.versao })) === 0
     && (await escalar("SELECT COUNT(*) FROM PreCadastros WHERE EnvioId IS NOT NULL")) > 30, "todo pré-cadastro do site guardou a versão atual do consentimento");
 
+  // ---- parte 6 (22/11/2026): o BANCO LENTO — decisão do responsável: "a secretaria aceita depois". A resposta NUNCA passa do tempo fixo (3.000 ms): o
+  // processamento que não cabe é desfeito e o pré-cadastro fica PENDENTE sem avaliar; a gravação que não cabe é desfeita e a resposta é "envie de novo".
+  // O banco lento é simulado por outro processo que segura a TABELA inteira (TABLOCKX) por alguns segundos: o pedido do envio fica parado nela, como num
+  // banco que não responde, e o limite do pedido (requestTimeout) o corta no prazo.
+  console.log("== parte 6: o banco lento (a resposta nunca passa do tempo fixo) ==");
+  delete process.env.PRE_CADASTRO_SITE_MIN_MS;   // o tempo fixo padrão (3.000 ms)
+  // a trava X da tabela aparece uma vez por partição de travas (16 linhas nesta máquina): basta existir
+  const tabelaSegura = (tabela) => escalar(`SELECT CASE WHEN EXISTS (SELECT 1 FROM sys.dm_tran_locks WHERE resource_database_id = DB_ID() AND resource_type = N'OBJECT'
+    AND resource_associated_entity_id = OBJECT_ID(@t) AND request_mode = N'X' AND request_status = N'GRANT') THEN 1 ELSE 0 END`, { t: `dbo.${tabela}` });
+  const segurarTabela = async (tabela, segundos) => {
+    const s = disparar([{ segurar: { tabela, segundos } }]);
+    let pega = false;
+    for (let i = 0; i < 80 && !pega; i++) {
+      pega = Date.now() > s.t0 && (await tabelaSegura(tabela)) === 1;
+      if (!pega) await new Promise((r) => setTimeout(r, 200));
+    }
+    ok(pega, `outro processo segura a tabela ${tabela} inteira (${segundos} s)`);
+    return s;
+  };
+  const medirSite = async (corpo) => { const t = Date.now(); const r = await site(corpo); return { ms: Date.now() - t, r }; };
+
+  console.log("-- o processamento que não cabe: desfeito, o pré-cadastro na fila sem avaliar; a MESMA resposta no MESMO tempo");
+  const envD = corpoSite({ nome: "Banco Lento Processa E2E95", cpf: cpfDe(950000800), dataNascimento: "1984-02-24" });
+  const segD = await segurarTabela("MembroReferencia", 7);
+  const d1 = await medirSite(envD);
+  const linD = (await doEnvio(envD.envioId))[0];
+  ok(d1.r.status === 200 && d1.r.body.mensagem === RECEBIDO && d1.ms >= 2990 && d1.ms < 3400, "com a tabela das fichas parada: 200 'recebemos' nos 3.000 ms (nunca 6 s, nem os 7 s do banco)",
+    `${d1.ms} ms / ${d1.r.status} ${JSON.stringify(d1.r.body)}`);
+  ok(linD && linD.Situacao === "PENDENTE" && linD.Pendencias === null && linD.MembroIdResultado === null, "…o pré-cadastro gravado, PENDENTE sem avaliar (a fila da secretaria o mostra)",
+    JSON.stringify(linD));
+  await segD.promessa;
+  await new Promise((r) => setTimeout(r, 1500));   // se algo do processamento cortado fosse confirmar depois, já teria confirmado
+  const linD2 = (await doEnvio(envD.envioId))[0];
+  ok(linD2.Situacao === "PENDENTE" && linD2.Pendencias === null && (await fichasDoCpf(envD.cpf)) === 0,
+    "depois que o banco volta: NENHUMA ficha nasceu e o pré-cadastro continua sem avaliar (o trabalho cortado foi desfeito, não confirmou depois)", JSON.stringify(linD2));
+  const d2 = await medirSite({ ...envD });
+  const linD3 = await doEnvio(envD.envioId);
+  ok(d2.r.status === 200 && d2.r.body.mensagem === RECEBIDO && linD3.length === 1 && linD3[0].Situacao === "ACEITO" && (await fichasDoCpf(envD.cpf)) === 1,
+    "o reenvio do mesmo envio, com o banco normal, avalia (entrou sozinho): UM pré-cadastro e UMA ficha", JSON.stringify(linD3));
+
+  console.log("-- a GRAVAÇÃO que não cabe: desfeita, nada gravado; 'envie de novo' (503) no MESMO tempo, nunca 'recebemos' sem gravar");
+  const envE = corpoSite({ nome: "Banco Lento Grava E2E95", cpf: cpfDe(950000801), dataNascimento: "1985-03-25" });
+  const segE = await segurarTabela("PreCadastros", 7);
+  const e1 = await medirSite(envE);
+  ok(e1.r.status === 503 && e1.r.body.sucesso === false && e1.r.body.mensagem !== RECEBIDO && e1.ms >= 2990 && e1.ms < 3400,
+    "com a tabela dos pré-cadastros parada: 503 'envie de novo' nos 3.000 ms", `${e1.ms} ms / ${e1.r.status} ${JSON.stringify(e1.r.body)}`);
+  await segE.promessa;
+  await new Promise((r) => setTimeout(r, 1500));
+  ok((await doEnvio(envE.envioId)).length === 0 && (await fichasDoCpf(envE.cpf)) === 0, "depois que o banco volta: nada gravado (nem pré-cadastro, nem ficha)");
+  const e2 = await medirSite({ ...envE });
+  const linE = await doEnvio(envE.envioId);
+  ok(e2.r.status === 200 && e2.r.body.mensagem === RECEBIDO && e2.ms >= 2990 && e2.ms < 3400 && linE.length === 1 && linE[0].Situacao === "ACEITO" && (await fichasDoCpf(envE.cpf)) === 1,
+    "o reenvio do mesmo envio grava e avalia: 200 'recebemos' nos 3.000 ms, UM pré-cadastro e UMA ficha", `${e2.ms} ms / ${JSON.stringify(linE)}`);
+
+  console.log("-- o banco lento que ainda cabe: o trabalho termina dentro do prazo e a resposta continua nos 3.000 ms");
+  const envF = corpoSite({ nome: "Banco Lento Cabe E2E95", cpf: cpfDe(950000802), dataNascimento: "1986-04-26" });
+  const segF = await segurarTabela("MembroReferencia", 1);
+  const f1 = await medirSite(envF);
+  await segF.promessa;
+  const linF = await doEnvio(envF.envioId);
+  ok(f1.r.status === 200 && f1.r.body.mensagem === RECEBIDO && f1.ms >= 2990 && f1.ms < 3400 && linF.length === 1 && linF[0].Situacao === "ACEITO" && (await fichasDoCpf(envF.cpf)) === 1,
+    "com a tabela parada só 1 s: a ficha nasce (coube no prazo) e a resposta sai nos mesmos 3.000 ms", `${f1.ms} ms / ${JSON.stringify(linF)}`);
+  console.log("   tempos em ms com o banco lento:", JSON.stringify({ processamentoNaoCabe: d1.ms, reenvio: d2.ms, gravacaoNaoCabe: e1.ms, reenvioDaGravacao: e2.ms, lentoQueCabe: f1.ms }));
+
   fim("e2e-95 (as sobras de Membros no banco)");
   L.shimEncerrar();
 }
@@ -365,7 +430,14 @@ async function filho() {
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
   let saida;
   try {
-    if (spec.segurar) {
+    if (spec.segurar && spec.segurar.tabela) {
+      // o BANCO LENTO (parte 6): segura a tabela inteira (TABLOCKX) — o nome só de uma lista fechada, e o tempo escrito no texto (um número de 1 a 9)
+      const tabela = { MembroReferencia: "dbo.MembroReferencia", PreCadastros: "dbo.PreCadastros" }[spec.segurar.tabela];
+      if (!tabela) throw new Error("tabela fora da lista");
+      const s = Math.max(1, Math.min(9, Math.floor(Number(spec.segurar.segundos) || 1)));
+      await q(`BEGIN TRAN; SELECT COUNT(*) AS n FROM ${tabela} WITH (TABLOCKX, HOLDLOCK); WAITFOR DELAY '00:00:0${s}'; COMMIT`);
+      saida = { ok: true };
+    } else if (spec.segurar) {
       // segura a trava do CPF como um processamento demorado (o tempo vai escrito no texto: só um número de 1 a 9)
       const s = Math.max(1, Math.min(9, Math.floor(Number(spec.segurar.segundos) || 1)));
       await q(`BEGIN TRAN; DECLARE @rc INT; EXEC @rc = sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 5000;

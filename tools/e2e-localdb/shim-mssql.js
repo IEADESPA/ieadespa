@@ -55,10 +55,15 @@ function paraValor(valor, nomeTipo) {
   return String(valor);
 }
 
-class ErroSql extends Error { constructor(m, numero) { super(m); this.number = numero; this.code = "EREQUEST"; this.name = "RequestError"; } }
+class ErroSql extends Error { constructor(m, numero, codigo) { super(m); this.number = numero; this.code = codigo || "EREQUEST"; this.name = "RequestError"; } }
 
+// overrides.requestTimeout: o limite do pedido em ms, como o do driver de verdade (mssql 12: pool.request({ requestTimeout }) e new sql.Request(t, {...})).
+// A ponte cancela o comando no banco quando passa e o erro sai com o código ETIMEOUT, como o do tedious (22/11/2026, o "Quero me cadastrar" com o banco lento).
 class Request {
-  constructor(origem) { this._params = []; this._ouvintes = {}; this._ponte = obterPonte(); this._transacao = origem && origem.__transacao ? origem : null; }
+  constructor(origem, overrides) {
+    this._params = []; this._ouvintes = {}; this._ponte = obterPonte(); this._transacao = origem && origem.__transacao ? origem : null;
+    this._limiteMs = overrides && Number.isFinite(overrides.requestTimeout) && overrides.requestTimeout > 0 ? Math.floor(overrides.requestTimeout) : null;
+  }
   input(nome, a, b) {
     let t, valor;
     if (b === undefined && typeof a !== "function" && !(a && a.__tipo)) { valor = a; t = { nome: typeof a === "number" ? (Number.isInteger(a) ? "Int" : "Float") : typeof a === "boolean" ? "Bit" : a instanceof Date ? "DateTime2" : "NVarChar", args: [] }; }
@@ -71,7 +76,8 @@ class Request {
   }
   on(evento, fn) { (this._ouvintes[evento] = this._ouvintes[evento] || []).push(fn); return this; }
   async query(texto) {
-    const r = await this._ponte.enviar({ op: "query", sql: texto, params: this._params });
+    const r = await this._ponte.enviar({ op: "query", sql: texto, params: this._params, limiteMs: this._limiteMs });
+    if (!r.ok && r.erro.tempo) throw new ErroSql(`Timeout: Request failed to complete in ${this._limiteMs}ms`, 0, "ETIMEOUT");
     if (!r.ok) throw new ErroSql(r.erro.mensagem, r.erro.numero);
     for (const m of r.mensagens || []) for (const fn of this._ouvintes.info || []) fn({ message: m });
     const recordsets = r.conjuntos.map((c) => {
@@ -94,7 +100,7 @@ class Transaction {
   async rollback() { const r = await this._ponte.enviar({ op: "rollback" }); if (!r.ok) throw new ErroSql(r.erro.mensagem, r.erro.numero); }
 }
 
-const pool = { connected: true, request: () => new Request(null), close: async () => { if (ponte) ponte.encerrar(); ponte = null; }, transaction: () => new Transaction(pool) };
+const pool = { connected: true, request: (overrides) => new Request(null, overrides), close: async () => { if (ponte) ponte.encerrar(); ponte = null; }, transaction: () => new Transaction(pool) };
 const shim = new Proxy({
   connect: async () => { await obterPonte().pronto; return pool; },
   close: async () => { if (ponte) ponte.encerrar(); ponte = null; },

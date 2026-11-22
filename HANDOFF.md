@@ -1,6 +1,6 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Livre
+Em uso por: Mateus desde 22/11/2026 15:45
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a

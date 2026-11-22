@@ -243,38 +243,38 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
       let numero = numeroNovo ? null : Number(l.Matricula);
       let cpf = l.Cpf ? String(l.Cpf).trim() : null;
       let repetidaMembro = l.RepetidaMembro == null ? null : Number(l.RepetidaMembro);
+      // A matrícula e o CPF são conferidos e a ficha gravada no MESMO comando, com a faixa da chave travada (UPDLOCK, HOLDLOCK) da conferência até a gravação:
+      // outro cadastro no mesmo instante espera, e a gravação não falha no meio da transação (o lote inteiro não se perde por uma linha).
       let feito = false;
       for (let tentativa = 0; tentativa < 8 && !feito; tentativa++) {
         if (numero == null) numero = await matriculaNova.proximaMatricula(rq);
-        await rq().query("SAVE TRANSACTION antesDaFicha");
-        try {
-          await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
-            .input("nasc", sql.Date, l.DataNascimento || null).input("sexo", sql.NChar(1), l.Sexo ? String(l.Sexo).trim() : null).input("ec", sql.NVarChar(20), l.EstadoCivil)
-            .input("email", sql.NVarChar(150), l.Email).input("tel", sql.NVarChar(20), l.Telefone).input("cpf", sql.Char(11), cpf)
-            .input("mae", sql.NVarChar(150), l.NomeMae).input("pai", sql.NVarChar(150), l.NomePai).input("esc", sql.NVarChar(30), l.Escolaridade)
-            .input("adm", sql.Date, l.DataAdmissao || null).input("fa", sql.NVarChar(30), l.FormaAdmissao).input("bat", sql.Date, l.DataBatismo || null)
-            .query(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, Sexo, EstadoCivil, Email, Telefone, Cpf, NomeMae, NomePai,
+        const r = (await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
+          .input("nasc", sql.Date, l.DataNascimento || null).input("sexo", sql.NChar(1), l.Sexo ? String(l.Sexo).trim() : null).input("ec", sql.NVarChar(20), l.EstadoCivil)
+          .input("email", sql.NVarChar(150), l.Email).input("tel", sql.NVarChar(20), l.Telefone).input("cpf", sql.Char(11), cpf)
+          .input("mae", sql.NVarChar(150), l.NomeMae).input("pai", sql.NVarChar(150), l.NomePai).input("esc", sql.NVarChar(30), l.Escolaridade)
+          .input("adm", sql.Date, l.DataAdmissao || null).input("fa", sql.NVarChar(30), l.FormaAdmissao).input("bat", sql.Date, l.DataBatismo || null)
+          .query(`DECLARE @ocupada BIT = CASE WHEN EXISTS (SELECT 1 FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @id) THEN 1 ELSE 0 END;
+                  DECLARE @donoCpf INT = NULL;
+                  IF @cpf IS NOT NULL SELECT TOP 1 @donoCpf = MembroId FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE Cpf = @cpf;
+                  IF @ocupada = 0 AND @donoCpf IS NULL
+                  BEGIN
+                    INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, Sexo, EstadoCivil, Email, Telefone, Cpf, NomeMae, NomePai,
                       Escolaridade, DataAdmissao, FormaAdmissao, DataBatismo)
                     VALUES (@id, @nome, @c, N'ATIVO', N'ARROLAMENTO', @nasc, @sexo, @ec, @email, @tel, @cpf, @mae, @pai, @esc, @adm, @fa, @bat);
-                    DELETE FROM MatriculasLivres WHERE MembroId = @id;`);
-          feito = true;
-        } catch (e) {
-          await rq().query("IF XACT_STATE() = 1 ROLLBACK TRANSACTION antesDaFicha");
-          if (cpf && matriculaNova.ehCpfRepetido(e)) {
-            // alguém gravou o mesmo CPF depois da prévia: entra sem ele, como possível repetida da ficha que tem o CPF
-            const dono = (await rq().input("cpf", sql.Char(11), cpf).query("SELECT TOP 1 MembroId FROM MembroReferencia WHERE Cpf = @cpf")).recordset[0];
-            if (repetidaMembro == null && dono) repetidaMembro = Number(dono.MembroId);
-            cpf = null;
-            continue;
-          }
-          if (matriculaNova.ehMatriculaRepetida(e)) {
-            // a matrícula foi usada depois da prévia (ou, no número novo, por outro cadastro no mesmo instante): a próxima do sistema
-            if (!numeroNovo) { numeroNovo = true; motivo = "DE_OUTRA_FICHA"; }
-            numero = null;
-            continue;
-          }
-          throw e;
+                    DELETE FROM MatriculasLivres WHERE MembroId = @id;
+                  END
+                  SELECT @ocupada AS ocupada, @donoCpf AS donoCpf`)).recordset[0];
+        if (r.donoCpf != null) {
+          // alguém gravou o mesmo CPF depois da prévia: entra sem ele, como possível repetida da ficha que tem o CPF
+          if (repetidaMembro == null) repetidaMembro = Number(r.donoCpf);
+          cpf = null;
         }
+        if (r.ocupada === true || r.ocupada === 1) {
+          // a matrícula foi usada depois da prévia (ou, no número novo, por outro cadastro no mesmo instante): a próxima do sistema
+          if (!numeroNovo) { numeroNovo = true; motivo = "DE_OUTRA_FICHA"; }
+          numero = null;
+        }
+        feito = !(r.donoCpf != null) && !(r.ocupada === true || r.ocupada === 1);
       }
       if (!feito) throw new Error(`importação: não foi possível gravar a linha ${l.Linha}`);
       await abrirPendencia(rq, { membroId: numero, tipo: "ARROLAMENTO", detalhe: DETALHE_ARROLAMENTO, por });

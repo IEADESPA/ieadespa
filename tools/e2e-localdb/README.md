@@ -197,6 +197,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   a chave do envio), base `cenario-184` (`bash rodar.sh preparar-184`: a `cenario-183` com a 184 aplicada duas vezes): `e2e-95` parte 5 (o tempo da
   resposta medido com e sem ficha, com e sem o tempo fixo; rajadas em vários processos contra os limites; o mesmo envio repetido, em sequência e em
   quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento) e `e2e-90` (o pré-cadastro e a fila).
+- **FASE 10, a importação dos membros do sistema pago** (migração 185), base `cenario-185` (`bash rodar.sh preparar-185`: a `cenario-184` com a 185 aplicada
+  duas vezes): `e2e-96` (só a Secretaria Geral; a prévia e a que substitui a anterior; a lista e o CSV sem dado pessoal; a confirmação com o 428; a
+  matrícula e o CPF usados depois da prévia; um lote de 4 e o resto disputado por dois processos; as pendências ARROLAMENTO, NUMERO e REPETIDA; os dados
+  pessoais das linhas apagados no fim; a cadeia da trilha; "uma vez só").
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

@@ -92,11 +92,69 @@ function excecaoDaFolha(dados) {
   if (!obs) return { erro: "Escreva a observação: o que aconteceu com a folha." };
   if (obs.length > 300) return { erro: "A observação passou de 300 letras." };
   const folha = inteiro(d.folha);
-  if (folha === null || folha < 1) return { erro: "Escolha a folha." };
+  if (folha === null || folha < 1 || folha > MAX_FOLHA) return { erro: "Escolha a folha." };   // 2^40 não cabe no INT (o lixo do e2e-201 pegou)
   return { folha, destino, observacao: obs };
+}
+
+// ---- incremento 2 (22/11/2026): as folhas de um bloco e o livro de entrada e saída (r17-blocos-folhas e r17-blocos-livro, opção 1) ----
+
+const DESTINO_TELA = { LANCADA: "lancada", CANCELADA: "cancelada", ARRANCADA: "arrancada", EXTRAVIADA: "extraviada" };
+/** o livro mostra 5 registros por página no notebook e 3 no celular (o desenho) */
+const POR_PAGINA_LIVRO = [5, 3];
+
+/** o destino guardado como a tela o chama (lancada, cancelada, arrancada, extraviada); outro valor = null */
+const destinoDaTela = (d) => DESTINO_TELA[d] || null;
+
+/** quantas folhas do bloco têm cada destino e quantas estão livres (a lista vem de FinFolhas: [{Destino}] ou [{Destino, N}]) */
+function contagemDasFolhas(linhas, totalFolhas) {
+  const c = { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 0 };
+  const chave = { LANCADA: "lancadas", CANCELADA: "canceladas", ARRANCADA: "arrancadas", EXTRAVIADA: "extraviadas" };
+  let usadas = 0;
+  for (const l of linhas || []) {
+    const k = chave[l.Destino];
+    if (!k) continue;
+    const n = l.N === undefined ? 1 : Number(l.N) || 0;
+    c[k] += n;
+    usadas += n;
+  }
+  c.livres = Math.max(0, Number(totalFolhas) - usadas);
+  return c;
+}
+
+/** a pessoa do livro (quem levou o bloco ou quem o devolveu): alguém do cadastro (membroId) ou o nome escrito */
+function pessoaDoLivro(pessoa, rotulo) {
+  const p = pessoa && typeof pessoa === "object" && !Array.isArray(pessoa) ? pessoa : {};
+  const semMembro = p.membroId == null || p.membroId === "";
+  // só número ou texto de dígitos: [1], true e objeto não viram pessoa
+  const membroId = semMembro ? null : typeof p.membroId === "number" || typeof p.membroId === "string" ? inteiro(p.membroId) : null;
+  const nome = typeof p.nome === "string" ? p.nome.trim() : "";
+  if (!semMembro && (!membroId || membroId < 1 || membroId > 2147483647)) return { erro: "A pessoa escolhida não confere." };
+  if (membroId === null && !nome) return { erro: rotulo };
+  if (nome.length > 200) return { erro: "O nome passou de 200 letras." };
+  return { membroId, nome: membroId === null ? nome : null };
+}
+
+/** quantos registros por página o livro devolve (5 ou 3); outro valor = 5 */
+function porPaginaDoLivro(v) {
+  const n = inteiro(typeof v === "number" ? v : String(v ?? ""));
+  return POR_PAGINA_LIVRO.includes(n) ? n : POR_PAGINA_LIVRO[0];
+}
+
+/** os blocos "agora" de quem não é a Geral (o livro da área e da congregação): esperando (nenhuma folha usada), em uso (alguma, mas não todas)
+ *  e a devolver (todas as folhas com destino; o bloco volta para a Tesouraria Geral) */
+function blocosAgora(linhas) {
+  const r = { emUso: 0, esperando: 0, aDevolver: 0 };
+  for (const l of linhas || []) {
+    const usadas = Number(l.Usadas) || 0, total = Number(l.Total) || 0;
+    if (usadas === 0) r.esperando++;
+    else if (usadas >= total) r.aDevolver++;
+    else r.emUso++;
+  }
+  return r;
 }
 
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
-  numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha
+  numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
+  destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora
 };

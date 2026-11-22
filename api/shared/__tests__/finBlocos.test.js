@@ -91,6 +91,7 @@ describe("a folha e a situação", () => {
       .toEqual({ folha: 70090, destino: "ARRANCADA", observacao: "Rasgou na hora de preencher" });
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "lancada", observacao: "x" }).erro).toMatch(/cancelada, arrancada ou extraviada/);
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "  " }).erro).toMatch(/observação/);
+    expect(regra.excecaoDaFolha({ folha: 2 ** 40, oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "x".repeat(301) }).erro).toMatch(/300/);
     expect(regra.excecaoDaFolha({ folha: "abc", oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
   });
@@ -159,5 +160,73 @@ describe("a porta da rota FinBlocos", () => {
     expect(r.status).toBe(422);
     expect(r.body.mensagem).toMatch(/blocos inteiros/);
     expect(mockConsultas.filter((c) => /INSERT/.test(c.sql))).toHaveLength(0);
+  });
+});
+
+// ---- incremento 2 (22/11/2026): as folhas de um bloco, a exceção, o livro, o rastreio e a devolução ----
+describe("as folhas e o livro (regra pura)", () => {
+  test("a contagem das folhas: cada destino e as livres, de linhas soltas ou agrupadas", () => {
+    expect(regra.contagemDasFolhas([{ Destino: "LANCADA" }, { Destino: "LANCADA" }, { Destino: "CANCELADA" }], 50))
+      .toEqual({ lancadas: 2, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 47 });
+    expect(regra.contagemDasFolhas([{ Destino: "LANCADA", N: 49 }, { Destino: "CANCELADA", N: 1 }, { Destino: "OUTRO", N: 9 }], 50))
+      .toEqual({ lancadas: 49, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 0 });
+    expect(regra.contagemDasFolhas(null, 50).livres).toBe(50);
+    expect(regra.destinoDaTela("EXTRAVIADA")).toBe("extraviada");
+    expect(regra.destinoDaTela("X")).toBeNull();
+  });
+  test("a pessoa do livro: do cadastro ou escrita; lixo não passa", () => {
+    expect(regra.pessoaDoLivro({ membroId: 1003 }, "x")).toEqual({ membroId: 1003, nome: null });
+    expect(regra.pessoaDoLivro({ membroId: "1003", nome: "ignorado" }, "x")).toEqual({ membroId: 1003, nome: null });
+    expect(regra.pessoaDoLivro({ nome: "  Lia Fontes " }, "x")).toEqual({ membroId: null, nome: "Lia Fontes" });
+    expect(regra.pessoaDoLivro({}, "Informe quem devolveu o bloco.").erro).toBe("Informe quem devolveu o bloco.");
+    expect(regra.pessoaDoLivro(null, "r").erro).toBe("r");
+    expect(regra.pessoaDoLivro({ nome: "a".repeat(201) }, "r").erro).toMatch(/200/);
+    for (const lixo of [0, -1, 1.5, "1e3", "1 OR 1=1", 2147483648, true, [1], { a: 1 }]) expect(regra.pessoaDoLivro({ membroId: lixo }, "r").erro).toBeTruthy();
+  });
+  test("o livro em páginas de 5 (notebook) ou 3 (celular); outro valor = 5", () => {
+    expect(regra.porPaginaDoLivro("3")).toBe(3);
+    expect(regra.porPaginaDoLivro(5)).toBe(5);
+    for (const lixo of ["40", 0, "-3", "abc", undefined, null, 3.5]) expect(regra.porPaginaDoLivro(lixo)).toBe(5);
+  });
+  test("os blocos agora: esperando (nenhuma usada), em uso e a devolver (todas com destino)", () => {
+    expect(regra.blocosAgora([{ Usadas: 0, Total: 50 }, { Usadas: 12, Total: 50 }, { Usadas: 50, Total: 50 }, { Usadas: 3, Total: 50 }]))
+      .toEqual({ emUso: 2, esperando: 1, aDevolver: 1 });
+    expect(regra.blocosAgora([])).toEqual({ emUso: 0, esperando: 0, aDevolver: 0 });
+  });
+});
+
+describe("a porta das ações do incremento 2", () => {
+  beforeAll(() => { process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-" + "x".repeat(24); });
+  beforeEach(() => { mockConsultas = []; mockRegras = []; });
+  const sessao = (extra) => auth.reassinarSessao({ membroId: 700002, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+  const LOCAL = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["financeiro"] });
+  const SEM = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["pessoas"] });
+  async function chamar({ acao, metodo = "GET", query = {}, corpo, token }) {
+    const context = { bindingData: { acao }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    const qs = {}; for (const [k, v] of Object.entries(query)) qs[k] = String(v);
+    await rota(context, { method: metodo, query: qs, body: corpo, headers: token ? { "x-auth-token": token } : {} });
+    return context.res;
+  }
+  test("folhas, livro e exceção: 401 sem sessão e 403 sem a permissão financeiro", async () => {
+    for (const [acao, metodo] of [["folhas", "GET"], ["livro", "GET"], ["folha", "POST"]]) {
+      expect((await chamar({ acao, metodo })).status).toBe(401);
+      expect((await chamar({ acao, metodo, token: SEM() })).status).toBe(403);
+    }
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("o rastreio e a devolução são só da Tesouraria Geral (403 para a congregação, sem tocar no banco)", async () => {
+    expect((await chamar({ acao: "rastreio", query: { folha: 68001 }, token: LOCAL() })).status).toBe(403);
+    expect((await chamar({ acao: "devolver", metodo: "POST", corpo: { primeiraFolha: 68001, pessoa: { nome: "x" } }, token: LOCAL() })).status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("o bloco pedido com lixo na query: 404 antes do banco", async () => {
+    for (const lixo of ["1 OR 1=1", "-1", "1.5", "abc"]) expect((await chamar({ acao: "folhas", query: { bloco: lixo }, token: LOCAL() })).status).toBe(404);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("a exceção sem observação volta 422 com a mensagem, sem gravar", async () => {
+    const r = await chamar({ acao: "folha", metodo: "POST", corpo: { folha: 70090, oQueAconteceu: "cancelada", observacao: "  " }, token: LOCAL() });
+    expect(r.status).toBe(422);
+    expect(r.body.mensagem).toMatch(/observação/);
+    expect(mockConsultas.filter((c) => /INSERT|UPDATE/.test(c.sql))).toHaveLength(0);
   });
 });

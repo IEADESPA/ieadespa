@@ -4,6 +4,12 @@
 //  POST financeiro/blocos/lote     {serie, primeiraFolha, totalFolhas, folhasPorBloco?}           (Tesouraria Geral) o lote da gráfica
 //  POST financeiro/blocos/chegada  {loteId, ateFolha, data?}                                       (Tesouraria Geral) a chegada da gráfica
 //  POST financeiro/blocos/entregar {primeiraFolha, congregacaoId, pessoa:{membroId|nome}, levadoPelaArea?, data?} (Tesouraria Geral) a saída do livro
+// Incremento 2 (22/11/2026; telas r17-blocos-folhas e r17-blocos-livro, opção 1):
+//  GET  financeiro/blocos/folhas?bloco=                 (financeiro, no escopo) as folhas de um bloco (vazio = o em uso mais recente) e o seletor
+//  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada ou extraviada
+//  GET  financeiro/blocos/livro?pagina=&porPagina=5|3   (financeiro, no escopo) o livro de entrada e saída e, fora da Geral, os blocos agora
+//  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco pela primeira folha, no "Registrar entrada"
+//  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, data?}    (Tesouraria Geral) a entrada do livro (o bloco volta)
 // A congregação e a área veem só os blocos das congregações do seu escopo; o que está na Geral só a Geral vê. Congregação fora do escopo e
 // congregação que não existe têm a mesma resposta.
 const auth = require("../shared/auth");
@@ -43,13 +49,35 @@ module.exports = comConflito(async function (context, req) {
     return;
   }
 
+  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
+
+  // as folhas, a exceção da folha e o livro: quem tem a permissão financeiro, nas congregações do seu escopo
+  if ((metodo === "GET" && (acao === "folhas" || acao === "livro")) || (metodo === "POST" && acao === "folha")) {
+    const usuario = auth.exigirPermissao(req, context, "financeiro");
+    if (!usuario) return;
+    const q = req.query || {};
+    const pool = await getPool();
+    const geral = ehGeral(usuario);
+    if (acao === "folha") return responder(context, await db.registrarFolha(pool, usuario, { geral, dados: corpo, por: Number(usuario.membroId) }));
+    if (acao === "livro") {
+      return responder(context, await db.livroDosBlocos(pool, usuario, { geral, pagina: regra.paginaDaLista(q.pagina), porPagina: regra.porPaginaDoLivro(q.porPagina) }));
+    }
+    let blocoId = null;
+    if (q.bloco !== undefined && q.bloco !== "") {
+      blocoId = auth.idDeRota(q.bloco);
+      if (!blocoId) return erro(context, 404, "Registro não encontrado.");
+    }
+    return responder(context, await db.folhasDoBloco(pool, usuario, { geral, blocoId }));
+  }
+
   // a porta vem antes de tudo: sem sessão é 401 e fora da Tesouraria Geral é 403, mesmo numa ação que não existe (a rota não serve de sonda)
   const geral = exigirGeral(req, context, "financeiro");
   if (!geral) return;
-  if (metodo !== "POST" || !["lote", "chegada", "entregar"].includes(acao)) return erro(context, 404, "Ação inválida.");
-  const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
   const pool = await getPool();
+  if (metodo === "GET" && acao === "rastreio") return responder(context, await db.rastreio(pool, { folha: (req.query || {}).folha }));
+  if (metodo !== "POST" || !["lote", "chegada", "entregar", "devolver"].includes(acao)) return erro(context, 404, "Ação inválida.");
   const por = Number(geral.membroId);
+  if (acao === "devolver") return responder(context, await db.devolver(pool, { primeiraFolha: corpo.primeiraFolha, pessoa: corpo.pessoa, data: corpo.data, por }));
   if (acao === "lote") return responder(context, await db.cadastrarLote(pool, { dados: corpo, por }), 201);
   if (acao === "chegada") {
     const loteId = auth.idDeRota(corpo.loteId);

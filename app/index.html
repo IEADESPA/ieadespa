@@ -196,8 +196,13 @@
             <span class="menu-modulo-escopo" id="menuModuloEscopo"></span>
           </div>
 
-          <!-- MÓDULO: FINANCEIRO (v4.1) -->
+          <!-- MÓDULO: FINANCEIRO (v4.1). FASE 10 (22/11/2026): o Financeiro novo ("Finanças", em Svelte, o desenho aprovado das rodadas 13 a 26). O menu
+               aprovado é montado em #financeiroMenuRaiz por app/svelte/financeiro.js (código em front/), baixado só quando a pessoa entra em Finanças
+               (modulos/casca.js, abrirFinanceiroSvelte); o menu antigo fica escondido enquanto as telas novas estão abertas (quem só tem a tesouraria
+               de departamento continua nele: os departamentos ficam fora da 1ª entrega). -->
           <div class="grupo-modulo" id="grupoModuloFinanceiro" style="display:none;">
+            <div id="financeiroMenuRaiz" class="menu-svelte"></div>
+            <div id="financeiroMenuAntigo">
             <hr class="divisor-sidebar" />
             <button class="btn-aba" id="btnAbaFinanceiro" data-on-click="mostrarAbaSecretaria" data-args-click='["financeiro"]'><span class="icone" data-icone="dinheiro" aria-hidden="true"></span><span class="rotulo">Financeiro</span></button>
             <div class="submenu-aba" id="submenuFinanceiro">
@@ -231,6 +236,7 @@
               <button class="btn-subaba" id="btnSubFinanceiroRelatorio" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["relatorio"]'><span class="icone" data-icone="impressora" aria-hidden="true"></span><span class="rotulo">Relatório</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroParametros" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["parametros"]'><span class="icone" data-icone="engrenagem" aria-hidden="true"></span><span class="rotulo">Parâmetros</span></button>
               <button class="btn-subaba" id="btnSubFinanceiroConsolidado" data-on-click="mostrarSubAbaFinanceiro" data-args-click='["consolidado"]'><span class="icone" data-icone="grafico" aria-hidden="true"></span><span class="rotulo">Consolidado</span></button>
+            </div>
             </div>
           </div>
 
@@ -2059,6 +2065,8 @@
       <!-- ABA: PESSOAS -->
       <!-- FASE 10 (19/11/2026) — MEMBROS refeito do zero em Svelte (front/ -> app/svelte/membros.js): as telas aprovadas montam aqui, direto no fundo -->
       <div id="abaMembros" class="aba-secretaria aba-svelte" style="display:none;"><div id="membrosRaiz"></div></div>
+      <!-- FASE 10 (22/11/2026) — o FINANCEIRO novo ("Finanças", front/ -> app/svelte/financeiro.js): as telas aprovadas montam aqui, direto no fundo -->
+      <div id="abaFinancas" class="aba-secretaria aba-svelte" style="display:none;"><div id="financeiroRaiz"></div></div>
 
       <div id="abaPessoas" class="aba-secretaria" style="display:none;">
 

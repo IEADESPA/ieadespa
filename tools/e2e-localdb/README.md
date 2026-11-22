@@ -197,6 +197,14 @@ Cada versão parte da base da anterior (`BASE=...`):
   a chave do envio), base `cenario-184` (`bash rodar.sh preparar-184`: a `cenario-183` com a 184 aplicada duas vezes): `e2e-95` parte 5 (o tempo da
   resposta medido com e sem ficha, com e sem o tempo fixo; rajadas em vários processos contra os limites; o mesmo envio repetido, em sequência e em
   quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento) e `e2e-90` (o pré-cadastro e a fila).
+- **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
+  quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
+  `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos
+  (o `bases.ps1` restaura com os arquivos do banco novo). Base `cenario-200` (`bash rodar.sh preparar-200`: a `cenario-184` com a 200 aplicada duas
+  vezes): `e2e-200` (o esquema da 200 com os CHECK e os índices únicos; os centros de custo da Geral e de cada congregação que nascem uma vez só;
+  a abertura negativa e o estorno único; o lote da gráfica numerado pela primeira folha, o lote que cruza, a chegada e a entrega com as recusas;
+  a lista em páginas de 40 com os filtros, a procura e o quadro da direita; o escopo da Geral, da área e da congregação; lixo em cada campo; e
+  corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

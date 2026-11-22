@@ -5,12 +5,17 @@
 
   interface Item { readonly chave: K; readonly rotulo: string; readonly icone: string; readonly n?: number }
   interface Grupo { readonly nome: string; readonly icone: string; readonly itens: readonly Item[] }
-  interface Props { grupos: readonly Grupo[]; ativo: K; onescolher: (k: K) => void; chaveGuardada: string; rotulo: string }
-  let { grupos, ativo, onescolher, chaveGuardada, rotulo }: Props = $props();
+  // soAtivoAberto: na primeira visita só o grupo da função escolhida vem aberto (o desenho do Financeiro); sem ele, todos vêm abertos (Membros)
+  interface Props { grupos: readonly Grupo[]; ativo: K; onescolher: (k: K) => void; chaveGuardada: string; rotulo: string; soAtivoAberto?: boolean }
+  let { grupos, ativo, onescolher, chaveGuardada, rotulo, soAtivoAberto = false }: Props = $props();
 
   // os grupos fechados ficam guardados neste aparelho; o grupo da função escolhida sempre abre
   function lerFechados(): string[] {
-    try { const l: unknown = JSON.parse(localStorage.getItem(chaveGuardada) ?? "null"); return Array.isArray(l) ? l.filter((x): x is string => typeof x === "string") : []; } catch { return []; }
+    try {
+      const l: unknown = JSON.parse(localStorage.getItem(chaveGuardada) ?? "null");
+      if (Array.isArray(l)) return l.filter((x): x is string => typeof x === "string");
+    } catch { /* sem armazenamento: vale o começo padrão */ }
+    return soAtivoAberto ? grupos.map((g) => g.nome) : [];
   }
   let fechados = $state<string[]>(lerFechados());
   const grupoAtivo = $derived(grupos.find((g) => g.itens.some((i) => i.chave === ativo))?.nome ?? "");

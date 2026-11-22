@@ -12,9 +12,13 @@ describe("telas Svelte: a saída versionada corresponde ao código-fonte", () =>
     expect(conferir()).toEqual([]);
   });
 
-  test("o módulo de Membros e o CSS dele existem", () => {
+  // 22/11/2026: o estilo de todas as telas Svelte num arquivo só (telas.css), pedido pela casca na primeira entrada num módulo
+  test("os módulos de Membros e do Financeiro e o CSS único das telas existem", () => {
     expect(fs.existsSync(path.join(SAIDA, "membros.js"))).toBe(true);
-    expect(fs.existsSync(path.join(SAIDA, "membros.css"))).toBe(true);
+    expect(fs.existsSync(path.join(SAIDA, "financeiro.js"))).toBe(true);
+    expect(fs.existsSync(path.join(SAIDA, "telas.css"))).toBe(true);
+    const casca = fs.readFileSync(path.join(__dirname, "..", "..", "..", "app", "modulos", "casca.js"), "utf8");
+    expect(casca).toContain("/svelte/telas.css");
   });
 
   test("nada na saída que a CSP forte recusaria ou que fale com outro endereço", () => {

@@ -283,6 +283,15 @@ case "$1" in
     migrar 184 2
     base salvar cenario-184
     ;;
+  preparar-200)
+    # FASE 10, Financeiro (módulo 2), incremento 1a (21/11/2026): a partir da base "cenario-184", aplica a 200 duas vezes (a base do Financeiro novo:
+    # centros de custo, blocos de recibo e o livro; prova a idempotência e que os centros de custo nascem uma vez só); salva "cenario-200" (e2e-200).
+    # O Financeiro roda no LocalDB próprio (E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS=...), para não atropelar quem trabalha no psc7.
+    cd "$AQUI"
+    base restaurar cenario-184
+    migrar 200 2
+    base salvar cenario-200
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

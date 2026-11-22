@@ -794,11 +794,12 @@ const svelteCarregados = {};
 function carregarModuloSvelte(nome) {
   if (!/^[a-z-]+$/.test(nome)) return Promise.reject(new Error("módulo inválido"));
   if (!svelteCarregados[nome]) {
-    if (!document.querySelector(`link[data-svelte="${nome}"]`)) {
+    // o estilo de TODAS as telas Svelte vem num arquivo só (telas.css, um CSS para os módulos todos): o <link> entra na primeira vez
+    if (!document.querySelector("link[data-svelte]")) {
       const css = document.createElement("link");
       css.rel = "stylesheet";
-      css.href = `/svelte/${nome}.css`;
-      css.dataset.svelte = nome;
+      css.href = "/svelte/telas.css";
+      css.dataset.svelte = "telas";
       document.head.appendChild(css);
       // o pedaço comum (o Svelte e as peças de todas as telas) vem junto, sem esperar a entrada chegar
       const comum = document.createElement("link");
@@ -815,7 +816,7 @@ let trilhaExternaCasca = null;
 function trilhaExternaValendo() {
   const t = trilhaExternaCasca;
   if (!t) return null;
-  if (t.contexto === "membresia") return typeof moduloAtual !== "undefined" && moduloAtual === "membresia" ? t : null;
+  if (t.contexto === "membresia" || t.contexto === "financeiro") return typeof moduloAtual !== "undefined" && moduloAtual === t.contexto ? t : null;
   return (typeof moduloAtual === "undefined" || !moduloAtual) && typeof subAbaMeupainelAtual !== "undefined" && subAbaMeupainelAtual === t.contexto ? t : null;
 }
 function desenharTrilhaExternaCasca(trilha, t) {
@@ -924,10 +925,48 @@ function fecharMembrosSvelte() {
   ponteSvelteCasca("membresia").menuRecolhido(null);
   atualizarVoltarCelularCasca();
 }
-// chamada pela troca de aba (mostrarAbaSecretaria): entrar em "membros" abre as telas novas; sair desmonta
+// o módulo Financeiro ("Finanças", FASE 10, módulo 2): o menu aprovado vai para a barra da esquerda (#financeiroMenuRaiz, no lugar do menu antigo,
+// que fica escondido enquanto as telas novas estão abertas) e as telas para #financeiroRaiz. Quem só tem "tesouraria_departamental" continua na aba
+// antiga (Saídas do departamento): os departamentos ficam fora da 1ª entrega do Financeiro novo.
+let financeiroSvelteMontado = false;
+function abrirFinanceiroSvelte(rota) {
+  const menu = document.getElementById("financeiroMenuRaiz");
+  const conteudo = document.getElementById("financeiroRaiz");
+  if (!menu || !conteudo) return;
+  const antigo = document.getElementById("financeiroMenuAntigo");
+  if (antigo) antigo.hidden = true;
+  if (!financeiroSvelteMontado) conteudo.innerHTML = "<p class=\"subtitle\" style=\"padding:8px 0\">Abrindo Finanças…</p>";
+  carregarModuloSvelte("financeiro").then((m) => {
+    if (typeof moduloAtual === "undefined" || moduloAtual !== "financeiro") return;   // a pessoa saiu antes de baixar
+    if (!financeiroSvelteMontado) conteudo.innerHTML = "";
+    try {
+      m.montar({ menu, conteudo }, ponteSvelteCasca("financeiro"), rota || undefined);
+      financeiroSvelteMontado = true;
+    } catch (e) {
+      console.error("Finanças (Svelte) não montou:", e);
+      conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Finanças não abriu por um problema do sistema. Recarregue a página; se continuar, avise a equipe técnica.</p>";
+    }
+  }, (e) => {
+    console.error("Finanças (Svelte) não baixou:", e);
+    conteudo.innerHTML = "<p class=\"subtitle aviso-recusa\">Não deu para abrir Finanças agora. Confira a internet (ou recarregue a página, se o sistema acabou de ser atualizado) e tente de novo.</p>";
+  });
+}
+function fecharFinanceiroSvelte() {
+  const antigo = document.getElementById("financeiroMenuAntigo");
+  if (antigo) antigo.hidden = false;
+  if (!financeiroSvelteMontado) return;
+  financeiroSvelteMontado = false;
+  if (trilhaExternaCasca && trilhaExternaCasca.contexto === "financeiro") trilhaExternaCasca = null;
+  carregarModuloSvelte("financeiro").then((m) => m.desmontar()).catch(() => { /* nada montado */ });
+  ponteSvelteCasca("financeiro").menuRecolhido(null);
+  atualizarVoltarCelularCasca();
+}
+// chamada pela troca de aba (mostrarAbaSecretaria): entrar em "membros" ou "financas" abre as telas novas; sair desmonta
 function svAbaMudou(aba) {
   if (aba === "membros") abrirMembrosSvelte(null);
   else fecharMembrosSvelte();
+  if (aba === "financas") abrirFinanceiroSvelte(null);
+  else fecharFinanceiroSvelte();
 }
 // abrir Membros já numa tela (a busca do alto acha uma pessoa; a Minha vida pede a ficha de alguém)
 function abrirMembrosCasca(rota) {
@@ -961,7 +1000,13 @@ function svLimparTela() {
   if (estavam || svelteCarregados.membros) {
     carregarModuloSvelte("membros").then((m) => { m.desmontar(); m.desmontarMinhaVida(); m.limparRascunho(); }).catch(() => { /* o módulo nem chegou a baixar: nada a limpar */ });
   }
-  for (const id of ["membrosRaiz", "membrosMenuRaiz", "mvFicha"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
+  if (financeiroSvelteMontado || svelteCarregados.financeiro) {
+    financeiroSvelteMontado = false;
+    carregarModuloSvelte("financeiro").then((m) => m.desmontar()).catch(() => { /* o módulo nem chegou a baixar: nada a limpar */ });
+  }
+  const antigo = document.getElementById("financeiroMenuAntigo");
+  if (antigo) antigo.hidden = false;
+  for (const id of ["membrosRaiz", "membrosMenuRaiz", "mvFicha", "financeiroRaiz", "financeiroMenuRaiz"]) { const el = document.getElementById(id); if (el) el.innerHTML = ""; }
   atualizarVoltarCelularCasca();
 }
 // FASE 10, passo 8: "Minha carteirinha" (os atalhos do Início e de "O que é meu") abre a carteirinha DIGITAL nova, dentro da Minha vida (o mesmo QR fixo

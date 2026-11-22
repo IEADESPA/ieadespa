@@ -6,12 +6,14 @@ Svelte + TypeScript; o servidor (`api/`) e o banco ficam. O código está no ram
 
 ## Peças principais
 
-- `src/membros.ts`: a entrada do módulo; `src/membros/` (o `App.svelte`, o `Menu.svelte`, o estado em
+- `src/membros.ts`: a entrada do módulo Membros; `src/membros/` (o `App.svelte`, o `Menu.svelte`, o estado em
   `estado.svelte.ts`, `telas/`, `partes/`, `carteirinhas/`, `minha-vida/`).
 - `src/comum/`: as **peças comuns** a todos os módulos (`Botao`, `Campo`, `Cartao`, `Chip`, `Pilulas`, `Etapas`,
   `Icone`, `MenuModulo`...), `api.ts` (chamadas à API), `ponte.ts` (a conversa com a casca do `app/`) e
   `tokens.css` (cores, letras e espaços). Peça usada por dois módulos vai para `comum/`.
-- `vite.config.ts`: cada módulo é uma entrada e sai em `app/svelte/<módulo>.js` + `.css`; a casca
+- `src/financeiro.ts` e `src/financeiro/` (22/11/2026): o Financeiro novo ("Finanças"), no ramo `v10-financeiro-svelte`; o plano em
+  `docs/plano/financeiro-construcao.md`.
+- `vite.config.ts`: cada módulo é uma entrada e sai em `app/svelte/<módulo>.js`; o estilo de todos sai num arquivo só, `telas.css`; a casca
   (`app/modulos/casca.js`, `abrirModuloSvelte`) carrega o módulo só quando a pessoa entra nele.
 - `scripts/carimbo.mjs`: grava `app/svelte/carimbo.json` com o hash do fonte; `--conferir` diz se a saída bate.
 

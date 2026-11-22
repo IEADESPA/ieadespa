@@ -945,6 +945,35 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
   homologação, tela por tela igual ao aprovado. A produção começa em janeiro de 2027, depois de mais uma verificação de
   defeitos (seção "A varredura antes da construção").
 
+### As respostas de 22/11/2026 (antes da rodada 27)
+
+- **Financeiro, na construção:**
+  - **o número do bloco de recibos sai da primeira folha** (blocos de 50 folhas: a folha 70.051 é do bloco 1.401);
+    ninguém digita o número do bloco;
+  - **a tela de lançar não mostra mais "marcada em novembro"** na coluna "Referente a", igual ao mural. A folha de outro
+    mês continua com a tarja "Mês posterior".
+- **"Conferir o repasse" volta redesenhada e simples na rodada 27.** É a tela em que a Tesouraria Geral recebe o que a
+  congregação mandou (os dízimos e as ofertas lançados, a espécie entregue e o Pix), confere, aceita e dá o recibo do
+  repasse (semanal ou mensal). A versão da rodada 24 ainda tinha o "adiantado esperando dezembro", que a regra da
+  rodada 25 acabou.
+- **O fechamento do mês (desenhar na 27):** só o Conselho Fiscal fecha o mês, e **cada conselheiro vota no sistema,
+  com o próprio acesso**: o mês fecha (ou reabre) quando a maioria votou. A reabertura ainda precisa da autorização do
+  Ministério, registrada com a data. A Geral pode travar os lançamentos durante a auditoria.
+- **Os saldos de abertura (desenhar na 27):** a Tesouraria Geral lança o saldo (pode ser negativo) e anexa o
+  comprovante; **o Conselho Fiscal confere e confirma** antes de valer. Primeiro o Tesouro Geral e a Convenção; as
+  congregações à medida que cada uma começar no sistema.
+- **Importar os membros do sistema pago (desenhar na 27): uma vez só**, só a Secretaria Geral. O que mudar depois é
+  corrigido à mão no sistema novo. Valem as decisões de 18/11 (o arrolamento não vem: cada importado entra com a
+  pendência e sem voto até completar; colunas extras aceitas; o cadastro "IEADESPA - GERAL" entra sem congregação).
+- **"Quero me cadastrar" do site:**
+  - **com o banco lento, a secretaria aceita depois.** A resposta sai sempre no tempo fixo; se o trabalho não couber
+    nele, o cadastro fica na fila para a secretaria aceitar, em vez de a resposta demorar mais;
+  - a espera de 3 segundos fica; o "Carregando o texto da autorização…" fica; o envio repetido com dados trocados
+    continua ignorado, sem aviso.
+- **A ordem do desenho:** a rodada 27 traz as telas que faltam (o repasse, o fechamento, os saldos de abertura e a
+  importação); a 28, a rodada de Membros aprovada em 19/11 (a família como unidade, as listas inteligentes e o
+  assistente de movimentação); depois, o módulo 3 (Estrutura e Territórios).
+
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
 - **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o

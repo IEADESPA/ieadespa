@@ -1,4 +1,4 @@
-// O build das telas novas (FASE 10): cada módulo é uma entrada e sai em app/svelte/<módulo>.js (+ .css), carregado pela casca SÓ
+// O build das telas novas (FASE 10): cada módulo é uma entrada e sai em app/svelte/<módulo>.js (o estilo de todos num arquivo só, telas.css), carregado pela casca SÓ
 // quando a pessoa entra no módulo (app/modulos/casca.js, abrirModuloSvelte). Peças comuns a dois módulos ou mais saem num pedaço
 // próprio com o hash no nome (o cache do navegador nunca serve um pedaço velho).
 import { defineConfig } from "vite";
@@ -16,11 +16,12 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
     modulePreload: false,
-    // um CSS só por módulo (a casca põe o <link> ao entrar): nada de dezenas de arquivinhos de estilo pela rede lenta
+    // um CSS só para todas as telas Svelte (a casca põe o <link> na primeira entrada num módulo): nada de dezenas de arquivinhos de estilo pela
+    // rede lenta. Com cssCodeSplit desligado o Vite junta o estilo de TODAS as entradas num arquivo; o estilo de cada peça é isolado pelo Svelte.
     cssCodeSplit: false,
     reportCompressedSize: true,
     rollupOptions: {
-      input: { membros: aqui("src/membros.ts") },
+      input: { membros: aqui("src/membros.ts"), financeiro: aqui("src/financeiro.ts") },
       preserveEntrySignatures: "exports-only",
       output: {
         format: "es",
@@ -34,8 +35,8 @@ export default defineConfig({
           if (/[\/]src[\/]membros[\/][^\/]+\.ts$/.test(id)) return "comum";
           return undefined;
         },
-        // o CSS único sai com o nome do módulo (membros.css), que é o que a casca procura
-        assetFileNames: (a) => ((a.names ?? []).some((n) => n.endsWith(".css")) ? "membros.css" : "[name][extname]")
+        // o CSS único (de todos os módulos) sai com um nome neutro, telas.css, que é o que a casca procura
+        assetFileNames: (a) => ((a.names ?? []).some((n) => n.endsWith(".css")) ? "telas.css" : "[name][extname]")
       }
     }
   }

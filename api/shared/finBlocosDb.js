@@ -28,15 +28,32 @@ async function fecharTransacao(t, ok) {
   try { if (ok) await t.commit(); else await t.rollback(); } catch (e) { if (ok) throw e; }
 }
 
-// A lista dos blocos (páginas de 40), com o uso das folhas e o resumo do alto à direita.
+// Quem está vendo (o título da página e o cabeçalho do módulo): a Geral, ou quantas congregações ativas a pessoa alcança, a área delas (quando é
+// uma só) e a congregação (quando é uma só). Desenho: "Sede administrativa · as 45 congregações", "Área 2 · 12 congregações", "Congregação Vila Nova".
+async function escopoDaTela(pool, usuario, geral) {
+  const todas = (await pool.request().query(`
+    SELECT c.Nome, a.Nome AS Area FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId WHERE c.Ativa = 1`)).recordset;
+  const alcance = usuario && usuario.escopoCongregacoes;
+  const minhas = geral || alcance === "TODAS" ? todas : todas.filter((c) => Array.isArray(alcance) && c.Nome && alcance.includes(c.Nome));
+  const areas = [...new Set(minhas.map((c) => c.Area).filter(Boolean))];
+  return {
+    geral: !!geral, congregacoes: minhas.length,
+    area: !geral && areas.length === 1 ? areas[0] : null,
+    congregacao: !geral && minhas.length === 1 ? minhas[0].Nome : null
+  };
+}
+
+// A lista dos blocos (páginas de 40), com o uso das folhas, o quadro do alto à direita e quem está vendo.
 // `geral`: a sessão é do nível geral; `congregacaoId`: a congregação escolhida no seletor (já conferida no escopo pela rota), ou null = todas.
 async function listar(pool, usuario, { geral, congregacaoId, filtro, procura, pagina }) {
+  const escopo = await escopoDaTela(pool, usuario, geral);
+  const quadro = () => resumo(pool, usuario, { geral, congregacaoId, variasCongregacoes: escopo.congregacoes > 1 });
   const pedido = pool.request();
   const onde = [];
   if (!geral) {
     onde.push("b.CongregacaoId IS NOT NULL");
     const cond = await condicaoSqlEscopoCongregacao(pool, usuario, pedido, "b.CongregacaoId");
-    if (cond === "") return { blocos: [], total: 0, pagina: 1, porPagina: regra.POR_PAGINA, resumo: await resumo(pool, usuario, { geral, congregacaoId }) };
+    if (cond === "") return { blocos: [], total: 0, pagina: 1, porPagina: regra.POR_PAGINA, resumo: await quadro(), escopo };
     if (cond) onde.push(cond);
   }
   if (congregacaoId) { pedido.input("cong", sql.Int, congregacaoId); onde.push("b.CongregacaoId = @cong"); }
@@ -69,14 +86,15 @@ async function listar(pool, usuario, { geral, congregacaoId, filtro, procura, pa
       };
     }),
     total: linhas.length ? Number(linhas[0].Total) : 0, pagina, porPagina: regra.POR_PAGINA,
-    resumo: await resumo(pool, usuario, { geral, congregacaoId })
+    resumo: await quadro(), escopo
   };
 }
 
-// O quadro da direita: na Geral, o lote da gráfica mais novo (quantos blocos e folhas, quantas chegaram e quantas faltam); na congregação,
-// "Seus blocos" (em uso ou esperando, e as folhas livres deles).
-async function resumo(pool, usuario, { geral, congregacaoId }) {
-  if (geral && !congregacaoId) {
+// O quadro da direita: na Geral e na área (o desenho mostra o mesmo quadro às duas), o lote da gráfica mais novo (quantos blocos e folhas, quantas
+// chegaram e quantas faltam); na congregação (o alcance é uma congregação, ou a Geral escolheu uma), "Seus blocos" (em uso ou esperando, e as
+// folhas livres deles).
+async function resumo(pool, usuario, { geral, congregacaoId, variasCongregacoes = false }) {
+  if (!congregacaoId && (geral || variasCongregacoes)) {
     const l = (await pool.request().query(`
       SELECT TOP 1 l.LoteId, l.Serie, l.PrimeiraFolha, l.UltimaFolha, l.FolhasPorBloco,
              (SELECT COUNT(*) FROM FinBlocos b WHERE b.LoteId = l.LoteId) AS Blocos,
@@ -217,4 +235,4 @@ async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPela
   }
 }
 
-module.exports = { listar, resumo, cadastrarLote, registrarChegada, entregar };
+module.exports = { listar, resumo, escopoDaTela, cadastrarLote, registrarChegada, entregar };

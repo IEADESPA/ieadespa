@@ -1380,7 +1380,7 @@ function sairDoPainel() {
 
 // "meupainel" é sempre visível pra qualquer matrícula — as demais abas dependem
 // de authPermissoes (fica vazio pra quem entrou só com matrícula, sem senha).
-const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "membros", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
+const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", "orgaos", "estrutura", "catalogos", "permissoes", "consagracoes", "enquetes", "arquivos", "disciplina", "abandono", "auditoria", "protecaodedados", "ouvidoria", "documentos", "mediacao", "relatoriosdepto", "escalas", "habilitacao", "menores", "protecao", "checkininfantil", "cuidadopastoral", "assistenciasocial", "ebd", "membros", "financas", "conquistas", "trilhas", "psc", "calendario", "canais", "comunicacao", "eventos", "setores", "vistoria", "identidade", "crise", "afm", "entidades", "expansao"];
 
 // Quais chaves de permissão liberam cada aba (qualquer uma delas basta). Abas fora
 // deste mapa usam a própria chave — ex: "disciplina" exige só "disciplina". Espelha
@@ -1389,6 +1389,7 @@ const NOMES_ABAS = ["meupainel", "financeiro", "reunioes", "pessoas", "cartas", 
 const ABA_PERMISSOES_ALT = {
   reunioes: ["reunioes", "assembleia", "cli"],
   membros: ["pessoas"],   // FASE 10 (19/11/2026): as telas novas de Membros (Svelte)
+  financas: ["financeiro"],   // FASE 10 (22/11/2026): o Financeiro novo (Svelte); a tesouraria de departamento fica na aba antiga "financeiro" (Saídas)
   congregacoes: ["pessoas"], orgaos: ["pessoas"], estrutura: ["pessoas"], catalogos: ["pessoas"], cartas: ["pessoas"],
   abandono: ["disciplina"],
   consagracoes: ["consagracoes", "cei", "financeiro"],   // v8.3: o CEI chega à aba para dar o parecer (Regimento Art. 74, III); Trava 8-A: a tesouraria, para a taxa
@@ -1569,7 +1570,10 @@ function aplicarPermissoesNoMenu() {
 // FASE 10 (conformidade): "icone" é o nome do ícone de traço (modulos/casca.js), não mais um emoji; "resumo" é a linha do cartão quando o módulo
 // não tem de onde tirar pendências (o Início não inventa número).
 const MODULOS = {
-  financeiro: { titulo: "Financeiro", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financeiro", abas: ["financeiro"] },
+  // FASE 10 (22/11/2026): o Financeiro novo ("Finanças" no desenho aprovado, rodadas 13 a 26), em Svelte: a aba "financas" (o menu e as telas vêm de
+  // app/svelte/financeiro.js). Quem só tem "tesouraria_departamental" entra na aba antiga "financeiro" (as Saídas do departamento): os departamentos
+  // ficam fora da 1ª entrega e continuam como hoje.
+  financeiro: { titulo: "Finanças", icone: "dinheiro", resumo: "Dízimos, ofertas, saídas e fechamentos", abaEntrada: "financas", abas: ["financas", "financeiro"] },
   // FASE 10 (19/11/2026): Membros refeito do zero em Svelte, igual ao desenho aprovado (rodadas 8 a 11): uma aba só ("membros"), o menu e as telas vêm de
   // app/svelte/membros.js. As telas antigas (Cartas, Perda de Membresia, Importar e exportar, Credenciais, Discipulado) saíram do menu do módulo.
   membresia: { titulo: "Membros", icone: "pessoas", resumo: "Cadastro, fila, transferências e fichas", abaEntrada: "membros", abas: ["membros"] },

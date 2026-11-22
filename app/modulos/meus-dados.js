@@ -344,7 +344,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 const TITULOS_MODULOS = {
-  meupainel: "Início", financeiro: "Financeiro", reunioes: "Reuniões", membros: "Membros",
+  meupainel: "Início", financeiro: "Financeiro", financas: "Finanças", reunioes: "Reuniões", membros: "Membros",
   pessoas: "Pessoas", cartas: "Cartas de Trânsito", congregacoes: "Congregações",
   orgaos: "Órgãos", estrutura: "Estrutura", catalogos: "Catálogos",
   permissoes: "Permissões", consagracoes: "Consagrações", disciplina: "Processo Disciplinar",

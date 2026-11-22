@@ -144,6 +144,14 @@ async function disparar(chamadas) {
   ok(fora.status === 404 && naoExiste.status === 404 && JSON.stringify(fora.body) === JSON.stringify(naoExiste.body), "congregação fora do escopo e congregação que não existe: a mesma resposta");
   r = await GET(H, "", area, {});
   ok(r.body.blocos.map((x) => x.numero).sort().join() === "1401,1402", "a área (Central e Vila Nova) vê os blocos das suas congregações, não os da Beta");
+  // incremento 1b (22/11/2026): a área vê o quadro do lote, como no desenho aprovado; e a lista diz quem está vendo (o título e o cabeçalho do módulo)
+  ok(r.body.resumo.tipo === "lote" && r.body.resumo.lote && r.body.resumo.lote.blocos === 200, "a área vê o quadro do lote da gráfica (como no desenho)", r.body.resumo);
+  ok(JSON.stringify(r.body.escopo) === JSON.stringify({ geral: false, congregacoes: 2, area: "Área Alfa E2E", congregacao: null }), "o escopo da área: 2 congregações da Área Alfa", r.body.escopo);
+  r = await GET(H, "", local, {});
+  ok(JSON.stringify(r.body.escopo) === JSON.stringify({ geral: false, congregacoes: 1, area: "Área Alfa E2E", congregacao: "Vila Nova E2E" }), "o escopo da congregação: Vila Nova", r.body.escopo);
+  r = await GET(H, "", geral, {});
+  const ativas = await escalar(`SELECT COUNT(*) FROM Congregacoes WHERE Ativa = 1`);
+  ok(r.body.escopo.geral === true && r.body.escopo.congregacoes === ativas && r.body.escopo.area === null && r.body.escopo.congregacao === null, "o escopo da Geral: todas as congregações ativas", r.body.escopo);
 
   console.log("== lixo em cada campo ==");
   const quebras = [], mudancas = [];

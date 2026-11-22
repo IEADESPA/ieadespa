@@ -140,3 +140,40 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
 5. **As 5 dúvidas da rodada 20 ainda abertas** (a espécie da congregação vai para a conta dela ou para a geral; o retido fica
    em dinheiro ou é depositado; o Pix dos membros cai direto na geral; receitas acima de R$ 4,8 milhões e a ECD; mostrar
    "atrasada"): a maioria foi respondida nas rodadas 21 a 26 (ver o plano); as que sobrarem entram no incremento 5.
+
+### As respostas dele (22/11/2026, antes da rodada 27)
+
+1. **O número do bloco sai da primeira folha** (blocos de 50: a folha 70.051 é do bloco 1.401). Ninguém digita o número; as duas
+   linhas do desenho que fugiam da conta ficam calculadas pela regra (68.801 → bloco 1.376; 68.951 → 1.379). Construído assim no 1a
+   (`shared/finBlocos.js`, `numeroDoBloco`) e mostrado assim no 1b.
+2. **"Conferir o repasse" volta redesenhado e simples na rodada 27** (a Tesouraria Geral recebe o que a congregação mandou, confere,
+   aceita e dá o recibo do repasse, semanal ou mensal). O incremento 5 espera esse desenho; a opção 2 da r24 não se constrói.
+3. **"Marcada em novembro" sai da tela de lançar** (coluna "Referente a"), igual ao mural. A folha de outro mês continua com a tarja
+   "Mês posterior". Vale para o incremento 3 (o lançamento).
+4. **O fechamento do mês e os saldos de abertura serão desenhados na rodada 27.** Nada dessas partes se constrói antes do desenho
+   aprovado. Já se sabe: só o Conselho Fiscal fecha o mês, cada conselheiro vota com o próprio acesso e o mês fecha (ou reabre)
+   pela maioria; a reabertura ainda precisa da autorização do Ministério, com a data; a Geral pode travar os lançamentos durante a
+   auditoria. O saldo de abertura a Tesouraria Geral lança (pode ser negativo) com o comprovante e o Conselho Fiscal confere e
+   confirma antes de valer (primeiro o Tesouro Geral e a Convenção).
+
+### O que o incremento 1b decidiu na construção (sem mudar regra)
+
+- **O menu** é o aprovado da rodada 17 (r17-blocos op. 1): os 7 grupos "por tipo de trabalho" com o resumo no alto de cada um, os
+  blocos de recibo e os tipos de entrada e saída, filtrado por nível como no desenho (a Geral vê tudo). Só o grupo da tela aberta
+  vem aberto. Os itens que as rodadas 18 a 26 acrescentaram (despesas congregacionais, caixa único, para o contador, saldo das
+  congregações) entram no incremento da tela de cada um. Item ainda não construído abre o aviso "em construção".
+- **A entrada:** o cartão do módulo passa a se chamar "Finanças" (o nome do desenho) e abre a aba nova `financas` (as telas Svelte).
+  Quem só tem `tesouraria_departamental` continua na aba antiga `financeiro` (as Saídas do departamento): os departamentos ficam
+  fora da 1ª entrega e continuam como hoje. O menu antigo fica escondido enquanto as telas novas estão abertas.
+- **O CSS das telas Svelte** virou um arquivo só para todos os módulos (`app/svelte/telas.css`; antes `membros.css`): com
+  `cssCodeSplit: false` o Vite junta o estilo de todas as entradas, e o estilo de cada peça é isolado pelo Svelte.
+- **O nível no alto à direita** ("Sede administrativa", "Área 2", o cadeado "Vila Nova") aparece como no desenho, mas sem a seta de
+  escolher: a escolha da congregação vem com a peça comum do seletor (r20-seletor), a partir do incremento 3.
+- **A área vê o quadro do lote da gráfica**, como no desenho (o servidor do 1a dava "Seus blocos" a ela). A lista diz quem está
+  vendo (`escopo`: a Geral, quantas congregações, a área e a congregação) para o título da página e o cabeçalho do módulo.
+- **O bloco que ainda está na Tesouraria Geral** (só a Geral vê) aparece com a etiqueta "Na Geral" e o uso "chegou da gráfica dd/mm"
+  ou "ainda na gráfica": o desenho só mostra blocos já entregues.
+- **"Cadastrar lote da gráfica"** (Geral) mostra que o cadastro vem no incremento 2 (o desenho do formulário do lote não existe;
+  perguntar antes de construí-lo, junto com as folhas e o livro).
+- **As páginas** mostram só as que existem (o desenho repete "1 2 3 4 5" mesmo com 2 blocos); no celular, "Próxima página" só quando
+  há próxima.

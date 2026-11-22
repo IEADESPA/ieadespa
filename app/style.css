@@ -2267,3 +2267,14 @@ body { font-family: var(--fonte-sistema); }
   .painel-layout.com-voltar .btn-voltar-celular:not([hidden]) { display: inline-flex; }
   .painel-layout.com-voltar #btnMenuCelular { display: none; }
 }
+/* FASE 10 (22/11/2026): o Financeiro novo ("Finanças") no celular — a barra do alto na cor do módulo (rodadas 13 a 26); as pílulas da casca
+   (Início, Trabalho, Minha vida, Avisos) ficam, como no desenho aprovado. */
+@media (max-width: 640px) {
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria { background: #0F766E; border-bottom-color: #0F766E; }
+  html[data-tema="escuro"] .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria { background: #0F3D3A; border-bottom-color: #0F3D3A; }
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria #tituloModulo,
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-icon,
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-sino,
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .cabecalho-secretaria .btn-tema { color: #FFFFFF; background: transparent; border-color: transparent; }
+  .painel-layout[data-modulo="financeiro"]:has(#abaFinancas[style*="block"]) .faixa-modulo-casca { display: none; }
+}

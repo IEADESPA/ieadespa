@@ -996,6 +996,37 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
     vez; aí nada mais entra. A reabertura continua com o voto da maioria do Conselho Fiscal e a autorização do
     Ministério.
 
+### As regras da rodada 28 (Membros), respondidas antes de desenhar (22/11/2026)
+
+- **A família:** a pessoa liga qualquer parente (filho, mãe, pai, o filho casado, a avó...) e marca se **mora junto**.
+  Quem mora junto forma a mesma casa, com o mesmo endereço; quem não mora fica só na árvore da família. Uma pessoa pode
+  estar ligada a mais de uma família.
+- **Quem ganha ficha:** quem frequenta a igreja ganha ficha com matrícula; quem não frequenta fica só com o nome na
+  família, fora das contagens.
+- **O membro, em "Minha vida":** muda o endereço da casa toda (os outros adultos recebem aviso) e acrescenta o bebê que
+  nasceu, que cai na fila da secretaria.
+- **As etiquetas:** cada nível (congregação, área, Geral) tem as suas; a Geral cria as oficiais; pela LGPD o membro
+  pode ver as dele, e o sistema avisa isso ao criar.
+- **A lista salva:** quem salva escolhe "só eu" ou "o meu nível"; a Geral pode publicar para todos, e cada um vê só as
+  pessoas do seu alcance; a lista se atualiza sozinha.
+- **A saída (desligamento, falecimento):** a congregação registra; para o membro comum vale na hora; obreiro, quem tem
+  credencial ou liderança precisa da confirmação da Geral antes.
+- **Os documentos:** o desligamento por carta de mudança é automático (a própria carta, pedida pelo membro ou emitida
+  pela secretaria, é o documento); no falecimento, a data e quem informou, com a certidão opcional; a volta não pede
+  documento.
+- **A volta (readmissão):** a matrícula é para sempre. A pessoa volta com a mesma matrícula, em comunhão, com **data de
+  entrada nova** e **sem o cargo** (renunciou a tudo ao sair; os cargos já são de outros). É como um membro novo: passa
+  de novo pela integração. O que ainda estiver guardado volta; o que a harmonização dos dados (a LGPD) já apagou com o
+  tempo é preenchido de novo (depois de muitos anos pode sobrar só a matrícula e o nome). Pelo cadastro do site, o
+  sistema reconhece que é alguém que saiu e está voltando.
+- **A importação do sistema pago:** só 2 fichas já existem aqui com matrícula (a 1 e a 2): elas ficam de fora da
+  planilha, e, se aparecerem, a importação as deixa de fora; as duas são completadas à mão no sistema novo.
+- **Completar o arrolamento:** a secretaria da congregação preenche a situação, a data e a forma de entrada (batismo,
+  carta...); o cargo só se tiver; ao completar, a pessoa ganha o voto. No painel de Membros, um grupo próprio
+  "arrolamento a completar" mostra quantos faltam.
+- **"Quero me cadastrar":** quando nem a gravação cabe no tempo fixo, a resposta é "Não conseguimos receber agora, envie
+  de novo", no mesmo tempo e igual para todos; o reenvio não duplica.
+
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
 - **Começa em janeiro de 2027,** se houver garantia. Antes falta mais uma verificação de defeitos, e o colega revisa o

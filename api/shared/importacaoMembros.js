@@ -5,9 +5,11 @@
 //  - o arquivo: CSV com ';' e o cabeçalho MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF. A IGREJA vem "IEADESPA - <nome>";
 //    o SEXO, FEMININO ou MASCULINO; o ESTADO CIVIL usa ".: NAO INFORMADO :." para vazio; há linhas incompletas; existe a matrícula 0;
 //  - "IEADESPA - GERAL" é um cadastro errado (o da matrícula 0): entra SEM congregação;
-//  - o arrolamento NÃO vem: quem entra fica com "Arrolamento a completar" (sem voto) — isso é do banco (importacaoMembrosDb.js);
+//  - o arrolamento NÃO vem: quem entra fica com "Arrolamento a completar" (sem voto) e a pendência ARROLAMENTO — isso é do banco (importacaoMembrosDb.js);
 //  - COLUNAS EXTRAS: reconhecidas pelo nome (sem acento, maiúscula ou pontuação), as desconhecidas ignoradas e mostradas;
-//  - a matrícula do sistema pago é mantida; CPF repetido e ficha que já existe não duplicam (pendências REPETIDA e NUMERO + "juntar fichas").
+//  - (22/11/2026) UMA VEZ SÓ, sem tela de diferenças: toda linha que pode entrar ENTRA. A matrícula do sistema pago é mantida; a repetida (no arquivo ou já de
+//    outra ficha) ou zerada (vazia, que não é número) entra com a próxima do sistema e a pendência NUMERO; a possível repetida (o mesmo CPF de outra linha
+//    ou ficha, ou a mesma matrícula e a mesma pessoa) entra com a pendência REPETIDA, para a secretaria juntar as fichas (ou dizer que não são a mesma).
 //
 // O caminho: lerCsv (o texto vira linhas de células) → mapearColunas (cada coluna vira um campo, ou é ignorada) → lerLinha (cada linha vira os dados da ficha,
 // com os PROBLEMAS — a linha não entra — e os AVISOS — a linha entra, sem o que estava errado) → classificar (com o que o banco já tem: a ficha da mesma
@@ -209,9 +211,10 @@ const AVISOS = Object.freeze({
   MATRICULA_ZERO: "Matrícula 0: entra com a próxima matrícula do sistema",
   SEM_MATRICULA: "Sem matrícula: entra com a próxima matrícula do sistema",
   MATRICULA_INVALIDA: "A matrícula não é um número: entra com a próxima do sistema",
-  MATRICULA_REPETIDA_NO_ARQUIVO: "A mesma matrícula de outra pessoa do arquivo: entra com a próxima do sistema",
-  MATRICULA_DE_OUTRA_FICHA: "A matrícula já é de outra pessoa no sistema: entra com a próxima do sistema",
-  LINHA_REPETIDA: "A mesma pessoa e a mesma matrícula de outra linha do arquivo: não entra de novo",
+  MATRICULA_REPETIDA_NO_ARQUIVO: "A mesma matrícula de outra linha do arquivo: entra com a próxima do sistema",
+  MATRICULA_DE_OUTRA_FICHA: "A matrícula já é de uma ficha do sistema: entra com a próxima do sistema",
+  MESMA_PESSOA_NO_ARQUIVO: "Parece a mesma pessoa de outra linha do arquivo (a mesma matrícula): marcada como possível ficha repetida",
+  MESMA_PESSOA_NO_SISTEMA: "Parece a mesma pessoa de uma ficha do sistema (a mesma matrícula): marcada como possível ficha repetida",
   CPF_REPETIDO_NO_ARQUIVO: "O mesmo CPF de outra linha do arquivo: entra sem o CPF, marcada como possível ficha repetida",
   CPF_EM_OUTRA_FICHA: "O CPF já está em outra ficha do sistema: entra sem o CPF, marcada como possível ficha repetida",
   CPF_INVALIDO: "CPF inválido: entra sem o CPF",
@@ -311,26 +314,35 @@ function mesmaPessoa(a, b) {
 
 // Decide o que acontece com cada linha. `fichasPorMatricula`: Map(matrícula -> { nome, cpf }) das fichas que já existem com as matrículas do arquivo;
 // `fichasPorCpf`: Map(cpf -> matrícula) das fichas que já existem com os CPFs do arquivo. Muda as linhas no lugar e devolve a mesma lista; cada linha ganha:
-//   acao: NOVA | EXISTE | PROBLEMA; matriculaNumero (a do arquivo, quando serve); numeroNovo; membroExistente; cpfIgualLinha; cpfIgualMembro.
+//   acao: NOVA | PROBLEMA; matriculaNumero (a do arquivo, quando serve); numeroNovo + motivoNumero (pendência NUMERO); repetidaLinha / repetidaMembro (a
+//   linha anterior ou a ficha de que ela pode ser repetida: pendência REPETIDA).
+// Uma vez só (22/11/2026): nada fica de fora por já existir — a ficha nova e a antiga ficam, marcadas, e a secretaria junta (fica a matrícula mais antiga).
 function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map() } = {}) {
   const primeiraDaMatricula = new Map();   // matrícula do arquivo -> a primeira linha (não PROBLEMA) que a usa
+  const numeroNovo = (l, motivo, aviso) => { l.numeroNovo = true; l.motivoNumero = motivo; l.avisos.push(aviso); };
+  const repetida = (l, { linha = null, membro = null }, aviso) => {
+    if (l.repetidaLinha == null && l.repetidaMembro == null) { l.repetidaLinha = linha; l.repetidaMembro = membro; }
+    l.avisos.push(aviso);
+  };
   for (const l of linhas) {
-    l.numeroNovo = false; l.matriculaNumero = null; l.membroExistente = null; l.cpfIgualLinha = null; l.cpfIgualMembro = null;
+    l.numeroNovo = false; l.motivoNumero = null; l.matriculaNumero = null; l.repetidaLinha = null; l.repetidaMembro = null;
     if (l.problemas.length) { l.acao = "PROBLEMA"; continue; }
     l.acao = "NOVA";
     const m = l.matricula;
-    if (m.zero) { l.numeroNovo = true; l.avisos.push("MATRICULA_ZERO"); continue; }
-    if (m.vazia) { l.numeroNovo = true; l.avisos.push("SEM_MATRICULA"); continue; }
-    if (m.invalida) { l.numeroNovo = true; l.avisos.push("MATRICULA_INVALIDA"); continue; }
+    if (m.zero) { numeroNovo(l, "ZERO", "MATRICULA_ZERO"); continue; }
+    if (m.vazia) { numeroNovo(l, "VAZIA", "SEM_MATRICULA"); continue; }
+    if (m.invalida) { numeroNovo(l, "INVALIDA", "MATRICULA_INVALIDA"); continue; }
     const existente = fichasPorMatricula.get(m.numero);
     if (existente) {
-      if (mesmaPessoa(l.dados, existente)) { l.acao = "EXISTE"; l.membroExistente = m.numero; continue; }
-      l.numeroNovo = true; l.avisos.push("MATRICULA_DE_OUTRA_FICHA"); continue;
+      numeroNovo(l, "DE_OUTRA_FICHA", "MATRICULA_DE_OUTRA_FICHA");
+      if (mesmaPessoa(l.dados, existente)) repetida(l, { membro: m.numero }, "MESMA_PESSOA_NO_SISTEMA");
+      continue;
     }
     const anterior = primeiraDaMatricula.get(m.numero);
     if (anterior) {
-      if (mesmaPessoa(l.dados, anterior.dados)) { l.acao = "EXISTE"; l.avisos.push("LINHA_REPETIDA"); l.linhaIgual = anterior.linha; continue; }
-      l.numeroNovo = true; l.avisos.push("MATRICULA_REPETIDA_NO_ARQUIVO"); l.linhaIgual = anterior.linha; continue;
+      numeroNovo(l, "REPETIDA_NO_ARQUIVO", "MATRICULA_REPETIDA_NO_ARQUIVO");
+      if (mesmaPessoa(l.dados, anterior.dados)) repetida(l, { linha: anterior.linha }, "MESMA_PESSOA_NO_ARQUIVO");
+      continue;
     }
     primeiraDaMatricula.set(m.numero, l);
     l.matriculaNumero = m.numero;
@@ -342,7 +354,7 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
   for (const l of linhas) {
     if (l.acao !== "NOVA" || !l.dados.cpf) continue;
     const dono = fichasPorCpf.get(l.dados.cpf);
-    if (dono) { l.cpfIgualMembro = dono; l.dados.cpf = null; l.avisos.push("CPF_EM_OUTRA_FICHA"); continue; }
+    if (dono) { repetida(l, { membro: dono }, "CPF_EM_OUTRA_FICHA"); l.dados.cpf = null; continue; }
     if (!porCpf.has(l.dados.cpf)) porCpf.set(l.dados.cpf, []);
     porCpf.get(l.dados.cpf).push(l);
   }
@@ -350,7 +362,7 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
     if (grupo.length < 2) continue;
     const ordem = [...grupo].sort((a, b) => (a.matriculaNumero == null) - (b.matriculaNumero == null) || (a.matriculaNumero || 0) - (b.matriculaNumero || 0) || a.linha - b.linha);
     const dono = ordem[0];
-    for (const l of ordem.slice(1)) { l.cpfIgualLinha = dono.linha; l.dados.cpf = null; l.avisos.push("CPF_REPETIDO_NO_ARQUIVO"); }
+    for (const l of ordem.slice(1)) { repetida(l, { linha: dono.linha }, "CPF_REPETIDO_NO_ARQUIVO"); l.dados.cpf = null; }
   }
   return linhas;
 }
@@ -386,11 +398,10 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
   return {
     total: ls.length,
     novas: novas.length,
-    existem: conta((l) => l.acao === "EXISTE"),
     problemas: conta((l) => l.acao === "PROBLEMA"),
     comAviso: conta((l) => l.acao === "NOVA" && l.avisos.length > 0),
     numeroNovo: conta((l) => l.acao === "NOVA" && l.numeroNovo),
-    cpfRepetido: conta((l) => l.acao === "NOVA" && (l.cpfIgualLinha != null || l.cpfIgualMembro != null)),
+    possivelRepetida: conta((l) => l.acao === "NOVA" && (l.repetidaLinha != null || l.repetidaMembro != null)),
     semCongregacao: conta((l) => l.acao === "NOVA" && l.dados.congregacaoId == null),
     separador: prep.separador === "\t" ? "tabulação" : prep.separador,
     colunas: prep.colunas,
@@ -419,7 +430,7 @@ function csvDaLista(itens) {
     return /[;"\r\n]/.test(t) ? `"${t.replace(/"/g, "\"\"")}"` : t;
   };
   const cab = ["Linha", "Matrícula no arquivo", "Nome", "O que acontece", "Matrícula no sistema", "Motivos"];
-  const oQue = { NOVA: "Entra", EXISTE: "Já existe (não entra de novo)", PROBLEMA: "Não entra" };
+  const oQue = { NOVA: "Entra", PROBLEMA: "Não entra" };
   const linhas = itens.map((i) => [i.linha, i.matricula, i.nome, oQue[i.acao] || i.acao, i.matriculaFinal == null ? "" : i.matriculaFinal, i.motivos.join(" | ")].map(celula).join(";"));
   return "﻿" + [cab.join(";"), ...linhas].join("\r\n") + "\r\n";
 }

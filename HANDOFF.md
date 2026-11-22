@@ -6,8 +6,7 @@ Em uso por: Mateus desde 22/11/2026 15:45
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 21/11/2026, fim do expediente (Claude, sessão principal). Ele mandou parar tudo: os dois agentes foram
-parados e o que estava pela metade foi guardado no GitHub.
+Atualizado em 22/11/2026, tarde (Claude, sessão principal): as perguntas respondidas e três agentes em paralelo.
 
 ## 1. Concluído
 
@@ -36,15 +35,9 @@ parados e o que estava pela metade foi guardado no GitHub.
 
 ## 3. Pendências e erros conhecidos
 
-- **Perguntas para ele, do cadastro pelo site (agente de Membros):**
-  1. com o banco lento (mais de 2,7 s), a resposta demora 6 s: aumentar o tempo ou deixar a secretaria fazer o aceite;
-  2. a espera fixa de 3 s está boa (recomendação: manter);
-  3. o novo aviso "Carregando o texto da autorização…";
-  4. o mesmo envio repetido com dados diferentes devolve o resultado do primeiro.
-- **Perguntas de regra do Financeiro** (plano do ramo, seção 6): o número do bloco pela primeira folha; o conferir do
-  repasse (opção 2 da r24 sem a aba "Espécie e digital"); "marcada em novembro" na tela de lançar; o fechamento do mês
-  pelo Conselho Fiscal e o saldo de abertura, que não têm tela desenhada.
-- **O importador:** não existe tela aprovada de importação. Precisa de desenho e do OK dele antes de construir a tela.
+- **As perguntas do cadastro pelo site e as do Financeiro foram RESPONDIDAS em 22/11** (plano, seção "As respostas de
+  22/11/2026 (antes da rodada 27)"). A tela de importação, o fechamento do mês, os saldos de abertura e o "receber o
+  repasse" simplificado estão sendo desenhados na rodada 27.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
 - **Membros na homologação:** falta o OK final dele para ir à produção.
@@ -57,15 +50,19 @@ parados e o que estava pela metade foi guardado no GitHub.
 - **Diários dos agentes** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`,
   `C:\tmp\ieadespa-membros\DIARIO.md` e `C:\tmp\ieadespa-membros\DIARIO-importador.md`.
 
-## 4. Próximo passo exato (quando ele mandar continuar)
+## 4. Próximo passo exato
 
-Dois agentes em paralelo, cada um no seu ramo (memória `desenho-em-paralelo-a-construcao`):
+**Em andamento (22/11, tarde): TRÊS agentes em paralelo**, cada um no seu ramo e worktree:
 
-1. **Financeiro, incremento 1b:** a tela dos blocos de recibo (r17-blocos, opção 1) no `v10-financeiro-svelte`, seguindo
-   o fim do diário do Financeiro: a 2ª entrada no `front/vite.config.ts` (cuidado com o CSS único `membros.css`),
-   `front/src/financeiro.ts` e `front/src/financeiro/`, a ligação na casca, os pares aprovado × construído (as fotos do
-   aprovado já estão em `C:\tmp\ieadespa-financeiro\pares\`) e, aí sim, a homologação (`git fetch`, esperar deploy em
-   curso, mesclar no `homolog`, `bash tools/conferir-deploy.sh`).
-2. **Membros, o importador:** retomar do ramo `v10-membros-importador-wip` (diário do importador), terminar o servidor
-   com teste e e2e no LocalDB; a tela só depois de desenhada e aprovada.
-3. Levar a ele as perguntas da seção 3 (cadastro e regras do Financeiro) antes dos incrementos que dependem delas.
+1. **Desenho, rodada 27** (ramo `desenho-r27`, worktree `C:/tmp/ieadespa-desenho-r27`; diário
+   `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md`): receber o repasse e dar o recibo (simples), o fechamento do mês com o
+   voto de cada conselheiro, os saldos de abertura e importar os membros. Publica na página leve KMeb…; a sessão
+   principal mescla o ramo na `main` depois de conferir.
+2. **Financeiro, incremento 1b** (`v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`; diário
+   `C:\tmp\ieadespa-financeiro\DIARIO.md`): a tela dos blocos de recibo (bloco pela 1ª folha) e a homologação.
+3. **Membros** (`v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`; diários em `C:\tmp\ieadespa-membros\`): o
+   "Quero me cadastrar" com o banco lento indo para a secretaria; depois o servidor do importador (do ramo
+   `v10-membros-importador-wip`), sem a tela.
+
+Depois: ele confere a rodada 27; em seguida a rodada 28 (Membros: a família como unidade, as listas inteligentes e o
+assistente de movimentação) e o módulo 3 (Estrutura e Territórios).

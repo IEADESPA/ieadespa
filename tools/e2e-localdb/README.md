@@ -199,6 +199,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   quatro processos; a trava do CPF ocupada e o reenvio que avalia; o texto e a versão do consentimento), a parte 6 (22/11/2026: o banco lento, simulado
   por outro processo que segura a tabela inteira; a resposta nunca passa do tempo fixo, o que não cabe é desfeito) e `e2e-90` (o pré-cadastro e a fila).
   A ponte aceita o limite por pedido do driver (`requestTimeout`): o comando é cancelado no banco e o erro sai com o código `ETIMEOUT`, como no tedious.
+- **FASE 10, a importação dos membros do sistema pago** (migração 185), base `cenario-185` (`bash rodar.sh preparar-185`: a `cenario-184` com a 185 aplicada
+  duas vezes): `e2e-96` (só a Secretaria Geral; a prévia e a que substitui a anterior; a lista e o CSV sem dado pessoal; a confirmação com o 428; a
+  matrícula e o CPF usados depois da prévia; um lote de 4 e o resto disputado por dois processos; as pendências ARROLAMENTO, NUMERO e REPETIDA; os dados
+  pessoais das linhas apagados no fim; a cadeia da trilha; "uma vez só").
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

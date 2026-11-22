@@ -58,8 +58,11 @@ Atualizado em 22/11/2026, tarde (Claude, sessão principal): as perguntas respon
    `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md`): receber o repasse e dar o recibo (simples), o fechamento do mês com o
    voto de cada conselheiro, os saldos de abertura e importar os membros. Publica na página leve KMeb…; a sessão
    principal mescla o ramo na `main` depois de conferir.
-2. **Financeiro, incremento 1b** (`v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`; diário
-   `C:\tmp\ieadespa-financeiro\DIARIO.md`): a tela dos blocos de recibo (bloco pela 1ª folha) e a homologação.
+2. **Financeiro** (`v10-financeiro-svelte`, worktree `C:/tmp/ieadespa-financeiro/obra`; diário
+   `C:\tmp\ieadespa-financeiro\DIARIO.md`): o **incremento 1b está na homologação** (a tela dos blocos de recibo, bloco
+   pela 1ª folha; ramo `3b53669`, homolog `f774121`, DEPLOY OK). Agora: o teste de telas do CI, as diferenças da casca
+   (barra lateral, cabeçalho da Geral, último grupo do menu cortado no notebook) e o incremento 2 (abas Folhas e
+   Livro). O formulário "Cadastrar lote da gráfica" não tinha desenho: foi pedido na rodada 27.
 3. **Membros** (`v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`; diários em `C:\tmp\ieadespa-membros\`): o
    "Quero me cadastrar" com o banco lento indo para a secretaria; depois o servidor do importador (do ramo
    `v10-membros-importador-wip`), sem a tela.

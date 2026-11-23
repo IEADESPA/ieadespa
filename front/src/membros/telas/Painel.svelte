@@ -17,7 +17,7 @@
   import type { Agrupamento, LugarArrolamento, PainelArrolamento, PaginaTransferencias, Recorte, ResumoPainel } from "../tipos";
   import { lerAlerta, montarAvisos, type AlertaAssembleia } from "../avisos";
   import { montarGrafico } from "../grafico";
-  import { corDoDepartamento, diaMes, diaPorExtenso, fraseResto, fraseSemCongregacao, hojeIso, pctAndamento } from "../arrolamento";
+  import { corDoDepartamento, diaMes, diaPorExtenso, fraseResto, fraseSemCongregacao, hojeIso, lerPainelArrol, pctAndamento } from "../arrolamento";
   import type { Transferencia } from "../tipos";
 
   interface Props { celular: boolean }
@@ -86,7 +86,7 @@
       pedir<{ resumo: ResumoPainel }>("/pessoas" + qs({ resumo: 1, congregacaoId: pedida })),
       cuidaDoCadastro() ? pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: "chegando", porPagina: 20 })) : Promise.resolve(null),
       lerAlerta(sessao.geral),
-      cuidaDoCadastro() ? pedir<PainelArrolamento>("/arrolamento" + qs({ congregacaoId: pedida })) : Promise.resolve(null)
+      cuidaDoCadastro() ? pedir<unknown>("/arrolamento" + qs({ congregacaoId: pedida })) : Promise.resolve(null)
     ]);
     if (meu !== seq) return;   // a pessoa trocou o filtro antes da resposta: vale só a última
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
@@ -94,13 +94,16 @@
     if (pedida === null) escopo.resumo = r.dados.resumo;
     chegando = tr && tr.ok ? [...tr.dados.itens] : [];
     alerta = al;
-    arrol = ar && ar.ok ? ar.dados : null;
-    arrolErro = ar && !ar.ok && !ar.cancelado ? ar.mensagem : "";
+    // a resposta conferida: sem o andamento (servidor antigo ou resposta estranha), nada; o painel fica como era
+    arrol = ar && ar.ok ? lerPainelArrol(ar.dados) : null;
+    arrolErro = ar && !ar.ok ? (ar.cancelado ? "" : ar.mensagem) : ar && !arrol && Number(r.dados.resumo.arrolamento) > 0 ? "Não deu para ler o andamento do arrolamento agora." : "";
     todas = false;
   }
 
   // o 4º grupo aparece quando veio alguém do sistema pago para este recorte; antes da importação (vieram = 0), o painel fica como era
-  const temArrol = $derived(!!resumo && (resumo.arrolamento > 0 || (arrol?.andamento.vieram ?? 0) > 0));
+  const temArrol = $derived(!!resumo && (Number(resumo.arrolamento) > 0 || (arrol?.andamento.vieram ?? 0) > 0));
+  // o cartão e a tabela, só para quem cuida do cadastro (a rota pede a permissão "pessoas"); o número dourado aparece para todos
+  const grupoVisivel = $derived(temArrol && cuidaDoCadastro());
   // a congregação (ou a área e a Geral com uma congregação escolhida) vê as próximas fichas; a área e a Geral sem filtro, a tabela
   const vistaLocal = $derived(congregacaoId !== null || ((escopo.resumo ?? resumo)?.congregacoes.length ?? 0) <= 1);
   const idDaCongregacao = $derived(congregacaoId ?? ((escopo.resumo ?? resumo)?.congregacoes.length === 1 ? (escopo.resumo ?? resumo)?.congregacoes[0]?.congregacaoId ?? null : null));
@@ -343,7 +346,7 @@
     </section>
     {#if erro}<Estado tipo="erro" texto={erro} ontentar={carregar} />{/if}
     {@render kpis()}
-    {#if temArrol}{#if vistaLocal}{@render cartaoArrol()}{:else}{@render listaCima()}{/if}{/if}
+    {#if grupoVisivel}{#if vistaLocal}{@render cartaoArrol()}{:else}{@render listaCima()}{/if}{/if}
     {@render grafGrande()}
     {@render grafMov()}
     {@render grafQual()}
@@ -363,11 +366,11 @@
     <!-- rodada 28: com o 4º grupo, os 5 números vão na largura toda; a área e a Geral veem a tabela por lugar logo abaixo -->
     {#if temArrol}
       {@render kpis()}
-      {#if !vistaLocal}{@render grupoCima()}{/if}
+      {#if grupoVisivel && !vistaLocal}{@render grupoCima()}{/if}
     {/if}
     <div class="duas">
       <div class="esq">
-        {#if !temArrol}{@render kpis()}{:else if vistaLocal}{@render cartaoArrol()}{/if}
+        {#if !temArrol}{@render kpis()}{:else if grupoVisivel && vistaLocal}{@render cartaoArrol()}{/if}
         {@render grafGrande()}
         <div class="par-graf">{@render grafMov()}{@render grafQual()}</div>
       </div>

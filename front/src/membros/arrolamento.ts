@@ -30,6 +30,70 @@ export interface CorpoCompletar {
   congregacaoId?: number;
 }
 export type CampoComErro = "situacao" | "forma" | "data" | "congregacao";
+
+/** vieram do sistema pago, já completadas e as que faltam */
+export interface Andamento { readonly vieram: number; readonly completadas: number; readonly faltam: number }
+export interface LugarArrolamento extends Andamento { readonly id: number | null; readonly nome: string; readonly area?: string | null }
+export interface ProximaFicha { readonly matricula: number; readonly nome: string; readonly sexo: string | null; readonly departamento: string | null }
+/** GET /api/arrolamento: o andamento, o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e as que vieram sem congregação */
+export interface PainelArrolamento {
+  readonly andamento: Andamento;
+  readonly veioEm: string | null;
+  readonly porCongregacao: readonly LugarArrolamento[];
+  readonly proximas: readonly ProximaFicha[];
+  readonly porArea: readonly LugarArrolamento[] | null;
+  readonly semCongregacao: number;
+}
+/** GET /api/arrolamento/ficha: a ficha para completar (null quando não falta nenhuma), a próxima e o andamento da congregação dela */
+export interface FichaArrolamento {
+  readonly matricula: number;
+  readonly nome: string;
+  readonly nascimento: string | null;
+  readonly idade: number | null;
+  readonly sexo: string | null;
+  readonly congregacaoId: number | null;
+  readonly congregacao: string | null;
+  readonly departamento: string | null;
+  readonly formaAdmissao: string | null;
+  readonly dataAdmissao: string | null;
+}
+export interface RespostaFichaArrolamento {
+  readonly ficha: FichaArrolamento | null;
+  readonly proxima: { readonly matricula: number; readonly nome: string } | null;
+  readonly andamento: Andamento | null;
+}
+
+const obj = (x: unknown): Record<string, unknown> | null => (x && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : null);
+const ehNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+function lerAndamento(x: unknown): Andamento | null {
+  const a = obj(x);
+  return a && ehNum(a.vieram) && ehNum(a.completadas) && ehNum(a.faltam) ? { vieram: a.vieram, completadas: a.completadas, faltam: a.faltam } : null;
+}
+/** a resposta do painel do arrolamento, conferida: sem o andamento (servidor antigo, resposta simulada ou estranha) é null, e o painel fica como era */
+export function lerPainelArrol(x: unknown): PainelArrolamento | null {
+  const o = obj(x);
+  const andamento = o ? lerAndamento(o.andamento) : null;
+  if (!o || !andamento) return null;
+  const lista = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+  return {
+    andamento,
+    veioEm: typeof o.veioEm === "string" ? o.veioEm : null,
+    porCongregacao: lista<LugarArrolamento>(o.porCongregacao),
+    proximas: lista<ProximaFicha>(o.proximas),
+    porArea: Array.isArray(o.porArea) ? (o.porArea as LugarArrolamento[]) : null,
+    semCongregacao: ehNum(o.semCongregacao) ? o.semCongregacao : 0
+  };
+}
+/** a resposta da ficha, conferida: a ficha e a próxima só com matrícula e nome */
+export function lerRespostaFicha(x: unknown): RespostaFichaArrolamento {
+  const o = obj(x);
+  const f = obj(o?.ficha), p = obj(o?.proxima);
+  return {
+    ficha: f && ehNum(f.matricula) && typeof f.nome === "string" ? (f as unknown as FichaArrolamento) : null,
+    proxima: p && ehNum(p.matricula) && typeof p.nome === "string" ? { matricula: p.matricula, nome: p.nome } : null,
+    andamento: lerAndamento(o?.andamento)
+  };
+}
 export type Envio = { readonly ok: true; readonly corpo: CorpoCompletar } | { readonly ok: false; readonly campo: CampoComErro; readonly mensagem: string };
 
 export const SITUACOES: readonly { readonly valor: Situacao; readonly rotulo: string; readonly sub: string }[] = [

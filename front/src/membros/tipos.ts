@@ -83,36 +83,8 @@ export interface ResumoPainel {
   readonly movimento: readonly { readonly mes: string; readonly entradas: number; readonly saidas: number }[];
 }
 
-/** COMPLETAR O ARROLAMENTO (rodada 28): vieram do sistema pago, já completadas e as que faltam */
-export interface Andamento { readonly vieram: number; readonly completadas: number; readonly faltam: number }
-export interface LugarArrolamento extends Andamento { readonly id: number | null; readonly nome: string; readonly area?: string | null }
-/** GET /api/arrolamento: o andamento, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e as que vieram sem congregação */
-export interface PainelArrolamento {
-  readonly andamento: Andamento;
-  readonly veioEm: string | null;
-  readonly porCongregacao: readonly LugarArrolamento[];
-  readonly proximas: readonly { readonly matricula: number; readonly nome: string; readonly sexo: string | null; readonly departamento: string | null }[];
-  readonly porArea?: readonly LugarArrolamento[];
-  readonly semCongregacao?: number;
-}
-/** GET /api/arrolamento/ficha: a ficha para completar (null quando não falta nenhuma), a próxima e o andamento da congregação dela */
-export interface FichaArrolamento {
-  readonly matricula: number;
-  readonly nome: string;
-  readonly nascimento: string | null;
-  readonly idade: number | null;
-  readonly sexo: string | null;
-  readonly congregacaoId: number | null;
-  readonly congregacao: string | null;
-  readonly departamento: string | null;
-  readonly formaAdmissao: string | null;
-  readonly dataAdmissao: string | null;
-}
-export interface RespostaFichaArrolamento {
-  readonly ficha: FichaArrolamento | null;
-  readonly proxima: { readonly matricula: number; readonly nome: string } | null;
-  readonly andamento?: Andamento;
-}
+/** COMPLETAR O ARROLAMENTO (rodada 28): os tipos moram em ./arrolamento.ts, junto com a conferência das respostas */
+export type { Andamento, LugarArrolamento, PainelArrolamento, FichaArrolamento, RespostaFichaArrolamento } from "./arrolamento";
 
 /** um acontecimento da linha do tempo (GET /api/pessoas/{id}/linha-do-tempo) */
 export interface EventoVida {

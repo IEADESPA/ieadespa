@@ -7,7 +7,7 @@ const vm = require("vm");
 const { stripTypeScriptTypes } = require("node:module");
 
 const ARQ = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "arrolamento.ts");
-const NOMES = ["SITUACOES", "FORMAS", "formInicial", "montarEnvio", "pctAndamento", "fraseSemCongregacao", "fraseResto", "corDoDepartamento", "diaPorExtenso", "diaMes", "depoisDe", "notaDaData"];
+const NOMES = ["SITUACOES", "FORMAS", "formInicial", "montarEnvio", "pctAndamento", "fraseSemCongregacao", "fraseResto", "corDoDepartamento", "diaPorExtenso", "diaMes", "depoisDe", "notaDaData", "lerPainelArrol", "lerRespostaFicha"];
 
 function carregar() {
   if (typeof stripTypeScriptTypes !== "function") throw new Error("este Node não tira tipos do TypeScript (precisa do 22.13 ou mais novo)");
@@ -123,5 +123,25 @@ describe("o andamento e as frases do painel", () => {
     expect(T.corDoDepartamento("Adolescentes")).toBe("#0369A1");
     expect(T.corDoDepartamento("Departamento Infantil")).toBe("#15803D");
     expect(T.corDoDepartamento(null)).toBe("#1D4ED8");
+  });
+});
+
+describe("a resposta do servidor que a tela aceita (o painel não quebra com resposta estranha nem antes da importação)", () => {
+  const and = { vieram: 312, completadas: 48, faltam: 264 };
+  test("a resposta certa passa inteira", () => {
+    const p = T.lerPainelArrol({ sucesso: true, andamento: and, veioEm: "2026-12-10", porCongregacao: [{ id: 1, nome: "Vila Nova", area: "Área 2", ...and }], proximas: [{ matricula: 4102, nome: "Ana", sexo: "F", departamento: "Senhoras" }], porArea: [], semCongregacao: 1 });
+    igual(p, { andamento: and, veioEm: "2026-12-10", porCongregacao: [{ id: 1, nome: "Vila Nova", area: "Área 2", ...and }], proximas: [{ matricula: 4102, nome: "Ana", sexo: "F", departamento: "Senhoras" }], porArea: [], semCongregacao: 1 });
+  });
+  test("sem o andamento (servidor antigo, simulado ou resposta estranha): nada, e o painel fica como era", () => {
+    for (const x of [null, undefined, "texto", [], { sucesso: true }, { andamento: "x" }, { andamento: { vieram: "3", completadas: 0, faltam: 3 } }, { andamento: { vieram: 3 } }]) expect(T.lerPainelArrol(x)).toBeNull();
+  });
+  test("listas e números que não vieram certos ficam vazios", () => {
+    igual(T.lerPainelArrol({ andamento: and, veioEm: 5, porCongregacao: "x", proximas: null }), { andamento: and, veioEm: null, porCongregacao: [], proximas: [], porArea: null, semCongregacao: 0 });
+  });
+  test("a ficha: só com matrícula e nome; sem isso, conta como 'não falta nenhuma'", () => {
+    const f = { matricula: 4102, nome: "Ana", nascimento: null, idade: 38, sexo: "F", congregacaoId: 7, congregacao: "Vila Nova", departamento: null, formaAdmissao: null, dataAdmissao: null };
+    igual(T.lerRespostaFicha({ ficha: f, proxima: { matricula: 4118, nome: "Carlos" }, andamento: and }), { ficha: f, proxima: { matricula: 4118, nome: "Carlos" }, andamento: and });
+    igual(T.lerRespostaFicha({ sucesso: true }), { ficha: null, proxima: null, andamento: null });
+    igual(T.lerRespostaFicha({ ficha: { nome: "sem matrícula" }, proxima: { nome: "x" } }), { ficha: null, proxima: null, andamento: null });
   });
 });

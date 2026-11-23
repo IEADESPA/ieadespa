@@ -16,7 +16,7 @@
   import Avatar from "../../comum/Avatar.svelte";
   import { ir, voltar, congregacoesDestino } from "../estado.svelte";
   import type { Congregacao, RespostaFichaArrolamento } from "../tipos";
-  import { FORMAS, SITUACOES, corDoDepartamento, depoisDe, diaPorExtenso, formInicial, hojeIso, montarEnvio, notaDaData, type CampoComErro, type FormCompletar, type Situacao } from "../arrolamento";
+  import { FORMAS, SITUACOES, corDoDepartamento, depoisDe, diaPorExtenso, formInicial, hojeIso, lerRespostaFicha, montarEnvio, notaDaData, type CampoComErro, type FormCompletar, type Situacao } from "../arrolamento";
 
   interface Props { matricula: number | null; congregacaoId: number | null; semCongregacao: boolean; celular: boolean; onnome: (n: string) => void }
   let { matricula, congregacaoId, semCongregacao, celular, onnome }: Props = $props();
@@ -46,14 +46,15 @@
     const meu = ++seq;
     erro = "";
     erroCampo = null;
-    const r = await pedir<RespostaFichaArrolamento>("/arrolamento/ficha" + qs(q));
+    const r = await pedir<unknown>("/arrolamento/ficha" + qs(q));
     if (meu !== seq) return;
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; resp = null; return; }
-    resp = r.dados;
-    if (r.dados.ficha) {
-      form = formInicial(r.dados.ficha);
-      onnome(r.dados.ficha.nome);
-      if (r.dados.ficha.congregacaoId === null && !congs.length) congs = await congregacoesDestino();
+    const lida = lerRespostaFicha(r.dados);
+    resp = lida;
+    if (lida.ficha) {
+      form = formInicial(lida.ficha);
+      onnome(lida.ficha.nome);
+      if (lida.ficha.congregacaoId === null && !congs.length) congs = await congregacoesDestino();
     }
     document.querySelector(".conteudo")?.scrollTo?.({ top: 0 });
   }
@@ -80,7 +81,7 @@
     if (!r.ok) { avisarFalha(r); return; }
     ponte().avisar(r.dados.mensagem ?? "Arrolamento completado.", "sucesso");
     if (r.dados.proxima) void abrir({ matricula: r.dados.proxima.matricula });
-    else resp = { ficha: null, proxima: null, andamento: resp?.andamento ? { ...resp.andamento, completadas: resp.andamento.completadas + 1, faltam: Math.max(0, resp.andamento.faltam - 1) } : undefined };
+    else resp = { ficha: null, proxima: null, andamento: resp?.andamento ? { ...resp.andamento, completadas: resp.andamento.completadas + 1, faltam: Math.max(0, resp.andamento.faltam - 1) } : null };
   }
 
   const sub = $derived.by(() => {

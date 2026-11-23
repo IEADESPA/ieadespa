@@ -1,7 +1,7 @@
 // painelMembros (FASE 10, v10.1b passo 7a, 18/11/2026) — os números do PAINEL EXECUTIVO do módulo Membros (rodadas 9 e 10 da gestão de membros:
 // "números no alto e 3 gráficos", o gráfico grande que cada um AJUSTA, os avisos do módulo). Tudo contado no banco, dentro do escopo de quem vê (a mesma
 // condição da lista: shared/escopoRotas.condicaoSqlEscopoPessoa), numa ida só e sem o nome de ninguém:
-//   - o rol de hoje por situação (em comunhão, congregados, sem comunhão) e os novos do mês (com a forma de entrada);
+//   - o rol de hoje por situação (em comunhão, congregados, sem comunhão e, desde a rodada 28, o arrolamento a completar) e os novos do mês (com a forma de entrada);
 //   - o que falta no cadastro (CPF, nascimento, contato, departamento, sexo) — "cadastro completo" é ter os cinco;
 //   - o recorte do gráfico grande (batizados no Espírito Santo, nas águas, com CPF, em comunhão, cadastro completo) agrupado por departamento,
 //     congregação, sexo ou faixa de idade (GROUPING SETS: uma leitura só para os quatro agrupamentos);
@@ -40,6 +40,7 @@ function montarConsulta(condEscopo) {
       CASE WHEN m.SituacaoMembro = N'EM_COMUNHAO' THEN 1 ELSE 0 END AS comunhao,
       CASE WHEN m.SituacaoMembro = N'CONGREGADO' THEN 1 ELSE 0 END AS congregado,
       CASE WHEN m.SituacaoMembro = N'SEM_COMUNHAO' THEN 1 ELSE 0 END AS semComunhao,
+      CASE WHEN m.SituacaoMembro = N'ARROLAMENTO' THEN 1 ELSE 0 END AS arrolamento,
       CASE WHEN ${COMPLETO} THEN 1 ELSE 0 END AS completo,
       CASE WHEN ${TEM_CONTATO} THEN 1 ELSE 0 END AS contato,
       CASE WHEN m.DataNascimento IS NOT NULL THEN 1 ELSE 0 END AS nasc,
@@ -47,7 +48,7 @@ function montarConsulta(condEscopo) {
       CASE WHEN m.Sexo IN (N'M', N'F') THEN 1 ELSE 0 END AS sexoOk
     ${deRol}`;
   const somas = "COUNT(*) AS total, SUM(b.es) AS es, SUM(b.aguas) AS aguas, SUM(b.cpf) AS cpf, SUM(b.comunhao) AS comunhao, SUM(b.congregado) AS congregado, "
-    + "SUM(b.semComunhao) AS semComunhao, SUM(b.completo) AS completo, SUM(b.contato) AS contato, SUM(b.nasc) AS nasc, SUM(b.depOk) AS depOk, SUM(b.sexoOk) AS sexoOk";
+    + "SUM(b.semComunhao) AS semComunhao, SUM(b.arrolamento) AS arrolamento, SUM(b.completo) AS completo, SUM(b.contato) AS contato, SUM(b.nasc) AS nasc, SUM(b.depOk) AS depOk, SUM(b.sexoOk) AS sexoOk";
   // entradas e saídas: a mesma condição de escopo, sem o filtro do rol (quem saiu também conta)
   const deTodos = `FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE 1 = 1${escopo}`;
   return `
@@ -89,7 +90,7 @@ function limitar(lista, max = 12) {
 
 function vazio(hoje) {
   const { meses } = janelaSeisMeses(hoje);
-  return { total: 0, emComunhao: 0, congregados: 0, semComunhao: 0, semCpf: 0, semNascimento: 0, semContato: 0, semDepartamento: 0, semSexo: 0, completos: 0,
+  return { total: 0, emComunhao: 0, congregados: 0, semComunhao: 0, arrolamento: 0, semCpf: 0, semNascimento: 0, semContato: 0, semDepartamento: 0, semSexo: 0, completos: 0,
     batizadosEspirito: 0, batizadosAguas: 0, novosNoMes: 0, novosPorForma: [], mesAtual: meses[5],
     grupos: { departamento: [], congregacao: [], sexo: [], faixa: [] }, congregacoes: [], movimento: meses.map((mes) => ({ mes, entradas: 0, saidas: 0 })) };
 }
@@ -103,6 +104,7 @@ function mapear(recordsets, hoje) {
   r.emComunhao = num(geral.comunhao);
   r.congregados = num(geral.congregado);
   r.semComunhao = num(geral.semComunhao);
+  r.arrolamento = num(geral.arrolamento);   // r28: o 4º grupo, quem veio do sistema pago e ainda espera a secretaria (sem voto)
   r.semCpf = r.total - num(geral.cpf);
   r.semNascimento = r.total - num(geral.nasc);
   r.semContato = r.total - num(geral.contato);

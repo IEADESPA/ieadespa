@@ -439,7 +439,7 @@ module.exports = async function (context, req) {
                                AND cs.Status IN (N'PROTOCOLADO', N'EM_ANALISE_CONSELHO', N'AGUARDANDO_PLENARIO', N'HOMOLOGADO')) THEN 1 ELSE 0 END AS EmProcessoDeCargo,
              CASE WHEN EXISTS (SELECT 1 FROM ProcessosDisciplinares pdx WHERE pdx.MembroId = m.MembroId AND pdx.Resultado = N'EXCLUSAO' AND pdx.CEIRecusouEm IS NULL
                                AND pdx.Status IN (N'JULGADO', N'EM_RECURSO')) THEN 1 ELSE 0 END AS TemExclusao,
-             c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome, m.CongregacaoId AS CongregacaoIdAnterior
+             c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome, m.CongregacaoId AS CongregacaoIdAnterior, m.SituacaoMembro AS SituacaoAnterior
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     let existente = await lerExistente();
     // a matrícula gerada nunca atualiza a ficha de outra pessoa: se o número foi tomado no meio do caminho, pede outro
@@ -469,6 +469,13 @@ module.exports = async function (context, req) {
     const congregacaoAnteriorId = existia ? existente.recordset[0].CongregacaoIdAnterior : null;
     if (existia && congregacaoAnteriorId != null && Number(congregacaoId || 0) !== Number(congregacaoAnteriorId)) {
       context.res = { status: 409, body: { sucesso: false, transferencia: true, mensagem: MSG_TRANSFERENCIA } };
+      return;
+    }
+    // FASE 10, rodada 28 (23/11/2026) — o "Arrolamento a completar" (ARROLAMENTO) só se ganha pela importação do sistema pago e só se perde completando o
+    // arrolamento (api/Arrolamento) ou saindo do rol: o cadastro completo não põe ninguém no grupo e não tira ninguém dele (sem voto até a secretaria completar).
+    const situacaoAnterior = existia ? (existente.recordset[0].SituacaoAnterior || null) : null;
+    if (situacaoMembro === "ARROLAMENTO" && situacaoAnterior !== "ARROLAMENTO") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "O \"Arrolamento a completar\" é só de quem veio do sistema pago." } };
       return;
     }
     // v8.2 — trocar o cargo (ou criar alguém já com cargo de oficial) e informar "no cargo desde": só o nível geral.
@@ -559,6 +566,7 @@ module.exports = async function (context, req) {
     const hojeISO = new Date().toISOString().slice(0, 10);
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
+      : situacaoAnterior === "ARROLAMENTO" ? "ARROLAMENTO"   // só completando sai do grupo (rodada 28)
       : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
     const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaida || hojeISO) : (dataSaida || null);
 

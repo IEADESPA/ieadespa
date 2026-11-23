@@ -161,4 +161,6 @@ BASE=cenario-185 bash rodar.sh roteiro e2e-95-sobras-membros.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-51-escada-fluxos.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
+# FASE 10, Membros, rodada 28: completar o arrolamento de quem veio do sistema pago (sem migração; a situação ARROLAMENTO e a pendência são da 185)
+BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js
 echo TUDO-PRONTO

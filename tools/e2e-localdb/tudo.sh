@@ -134,12 +134,9 @@ BASE=cenario-174 bash rodar.sh roteiro e2e-86-linha-do-tempo.js
 # pessoa pede, o cadastro não troca mais a congregação, as corridas, o escopo e a linha do tempo
 bash rodar.sh preparar-176
 BASE=cenario-176 bash rodar.sh roteiro e2e-89-transferencia.js
-# (v10.1b passo 4, migração 177) o pré-cadastro (site e líder), a fila de cadastros com o aceite automático, o CPF repetido (dentro e fora do escopo, o caso
-# da Secretaria Geral), os limites do site e as corridas; o e2e-85 roda aqui porque o cadastro pelo sistema agora confere o CPF pela regra nova (e pode abrir caso)
+# (v10.1b passo 4, migração 177) a base da fila de cadastros. O e2e-90 (o pré-cadastro) e o e2e-85 (a ficha e a matrícula gerada) cadastram gente: desde a
+# trava das matrículas (23/11/2026) rodam no fim, sobre a cenario-185, com uma importação do sistema pago CONCLUÍDA semeada
 bash rodar.sh preparar-177
-BASE=cenario-177 bash rodar.sh roteiro e2e-90-pre-cadastro.js
-# (v10.1b) o CPF (único, mascarado, inteiro só para a Geral com a leitura registrada), a filiação, a escolaridade e a matrícula gerada, com corridas de vários processos
-BASE=cenario-177 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 # (v10.1b passo 5, migração 178) a edição da ficha campo a campo (a trilha, o CPF mascarado, as travas por papel), o membro muda o contato e o vazio e sugere o
 # resto, a caixa de sugestões por nível (a local aplica, a área acompanha, a Geral aplica tudo), recusar com motivo, o histórico da ficha e as corridas
 bash rodar.sh preparar-178
@@ -153,4 +150,14 @@ BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 # FASE 10 (migração 175, raio-x de velocidade): os índices das tabelas grandes e os lançamentos e saídas filtrados no banco pelo escopo, contra o gabarito do banco
 bash rodar.sh preparar-175
 BASE=cenario-175 bash rodar.sh roteiro e2e-88-tesouraria-escopo.js
+# FASE 10, Membros (migrações 179 a 185, cada base a partir da anterior). A TRAVA DAS MATRÍCULAS (23/11/2026): sem uma importação do sistema pago CONCLUÍDA,
+# nenhum caminho cria ficha nova; os roteiros que cadastram gente (85, 90, 93 e 95) semeiam uma no começo (lib.js importacaoConcluida) e o e2e-97 prova a
+# trava ligada, a importação parada no meio (continua travada), a de zero pessoas (não se confirma) e a concluída (solta sozinha)
+for n in 179 180 181 182 183 184 185; do bash rodar.sh preparar-$n; done
+BASE=cenario-185 bash rodar.sh roteiro e2e-90-pre-cadastro.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-93-juntar-fichas.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-95-sobras-membros.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
 echo TUDO-PRONTO

@@ -8,6 +8,7 @@
 // dupla quatro vezes, A→B × B→A, duas duplas com a mesma ficha, junção × edição campo a campo, junção × presença nova).
 // Roda sobre a base cenario-179 (`bash rodar.sh preparar-179` e depois `BASE=cenario-179 bash rodar.sh roteiro e2e-93-juntar-fichas.js`); monta o próprio
 // cenário. E2E_RCSI=1 liga o READ_COMMITTED_SNAPSHOT (como no Azure SQL).
+// Desde 23/11/2026 (a trava das matrículas) semeia uma importação do sistema pago CONCLUÍDA: rode sobre a cenario-185 (`bash rodar.sh preparar-185`).
 process.env.AUTH_SECRET = "segredo-do-juntar-fichas-" + "x".repeat(24);
 const { spawn } = require("child_process");
 const L = require("./lib");
@@ -65,6 +66,7 @@ async function disparar(specs) {
 async function principal() {
   const { chamarRota } = require("./lib-afm");
   await obterPool();
+  await L.importacaoConcluida();   // a trava das matrículas (23/11/2026): este roteiro cadastra gente, então roda depois da importação do sistema pago
   const F = (quem, acao, { metodo = "GET", corpo, query } = {}) => chamarRota("FichasRepetidas/index.js", { metodo, token: tok[quem](), binding: { acao }, corpo: corpo || {}, query: query || {} });
   const lista = (quem) => F(quem, "");
   const comparar = (quem, a, b) => F(quem, "comparar", { query: { a, b } });

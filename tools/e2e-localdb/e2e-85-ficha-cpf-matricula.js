@@ -2,6 +2,7 @@
 // toda resposta; inteiro só para a Secretaria Geral, com a leitura registrada, e para a própria pessoa em Meus Dados), a filiação, a escolaridade e a MATRÍCULA
 // GERADA pelo sistema (primeiro o menor número liberado ao juntar fichas, senão a maior + 1), com corridas de vários processos node, cada um com a sua conexão.
 // Roda sobre a base cenario-174 (`bash rodar.sh preparar-174` e depois `BASE=cenario-174 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js`); monta o próprio cenário.
+// Desde 23/11/2026 (a trava das matrículas) semeia uma importação do sistema pago CONCLUÍDA: rode sobre a cenario-185 (`bash rodar.sh preparar-185`).
 process.env.AUTH_SECRET = "segredo-da-ficha-cpf-e-matricula-" + "x".repeat(24);
 const { spawn } = require("child_process");
 const L = require("./lib");
@@ -45,6 +46,7 @@ async function disparar(corpos) {
 async function principal() {
   const { chamarRota } = require("./lib-afm");
   await obterPool();
+  await L.importacaoConcluida();   // a trava das matrículas (23/11/2026): este roteiro cadastra gente, então roda depois da importação do sistema pago
   const pessoas = (token, corpo) => chamarRota("GestaoPessoas/index.js", { metodo: "POST", token, corpo });
   const listar = (token, query) => chamarRota("GestaoPessoas/index.js", { metodo: "GET", token, query: query || {} });
   const verCpf = (token, id) => chamarRota("GestaoPessoas/index.js", { metodo: "GET", token, binding: { membroId: String(id) }, query: { ver: "cpf" } });

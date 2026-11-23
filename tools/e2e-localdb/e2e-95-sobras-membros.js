@@ -7,6 +7,7 @@
 // (d) o texto e a versão do consentimento do mesmo lugar. Parte 6 (22/11/2026): O BANCO LENTO — a resposta nunca passa do tempo fixo; o processamento que não
 // cabe é desfeito (o pré-cadastro fica na fila sem avaliar), a gravação que não cabe é desfeita ("envie de novo"). Roda sobre a base cenario-184 (`bash rodar.sh preparar-184` e depois
 // `BASE=cenario-184 bash rodar.sh roteiro e2e-95-sobras-membros.js`); monta o próprio cenário.
+// Desde 23/11/2026 (a trava das matrículas) semeia uma importação do sistema pago CONCLUÍDA: rode sobre a cenario-185 (`bash rodar.sh preparar-185`).
 process.env.AUTH_SECRET = "segredo-das-sobras-de-membros-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-sobras";
 const { spawn } = require("child_process");
@@ -27,6 +28,7 @@ const tok = {
 async function principal() {
   const { chamarRota } = require("./lib-afm");
   await obterPool();
+  await L.importacaoConcluida();   // a trava das matrículas (23/11/2026): este roteiro cadastra gente, então roda depois da importação do sistema pago
   const M = (token, membroId, { metodo = "GET", acao, corpo } = {}) =>
     chamarRota("MinisteriosPessoa/index.js", { metodo, token, binding: { membroId: String(membroId), acao }, corpo: corpo || {} });
 

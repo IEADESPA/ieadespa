@@ -6,10 +6,13 @@
 //    o SEXO, FEMININO ou MASCULINO; o ESTADO CIVIL usa ".: NAO INFORMADO :." para vazio; há linhas incompletas; existe a matrícula 0;
 //  - "IEADESPA - GERAL" é um cadastro errado (o da matrícula 0): entra SEM congregação;
 //  - o arrolamento NÃO vem: quem entra fica com "Arrolamento a completar" (sem voto) e a pendência ARROLAMENTO — isso é do banco (importacaoMembrosDb.js);
-//  - COLUNAS EXTRAS: reconhecidas pelo nome (sem acento, maiúscula ou pontuação), as desconhecidas ignoradas e mostradas;
-//  - (22/11/2026) UMA VEZ SÓ, sem tela de diferenças: toda linha que pode entrar ENTRA. A matrícula do sistema pago é mantida; a repetida (no arquivo ou já de
-//    outra ficha) ou zerada (vazia, que não é número) entra com a próxima do sistema e a pendência NUMERO; a possível repetida (o mesmo CPF de outra linha
-//    ou ficha, ou a mesma matrícula e a mesma pessoa) entra com a pendência REPETIDA, para a secretaria juntar as fichas (ou dizer que não são a mesma).
+//  - COLUNAS EXTRAS: reconhecidas pelo nome (sem acento, maiúscula ou pontuação), as desconhecidas ignoradas e mostradas; (23/11, a tela r27) a Secretaria
+//    Geral pode trocar o campo de cada coluna, ou "não usar" (a escolha vem na prévia e é conferida aqui: mapearColunas);
+//  - (22/11/2026) UMA VEZ SÓ, sem tela de diferenças. A matrícula do sistema pago é mantida; a repetida no arquivo ou zerada (vazia, que não é número)
+//    entra com a próxima do sistema e a pendência NUMERO; a possível repetida (o mesmo CPF ou o mesmo nome e nascimento de outra linha ou ficha — a tela r27 —,
+//    ou a mesma matrícula e a mesma pessoa no arquivo) entra com a pendência REPETIDA, para a secretaria juntar as fichas (ou dizer que não são a mesma);
+//  - (22/11/2026, as regras da rodada 28) a matrícula que JÁ É de uma ficha do sistema (hoje só a 1 e a 2, completadas à mão) FICA DE FORA: a linha não entra
+//    (o problema MATRICULA_JA_EXISTE) e a prévia mostra quantas são.
 //
 // O caminho: lerCsv (o texto vira linhas de células) → mapearColunas (cada coluna vira um campo, ou é ignorada) → lerLinha (cada linha vira os dados da ficha,
 // com os PROBLEMAS — a linha não entra — e os AVISOS — a linha entra, sem o que estava errado) → classificar (com o que o banco já tem: a ficha da mesma
@@ -74,39 +77,65 @@ function lerCsv(texto) {
 // Cada campo da ficha e os nomes de coluna que o representam (já passados por chave()). As 11 do sistema pago primeiro; depois as da planilha mais completa
 // que ele pode trazer (decisão 3: a data e a forma de entrada, o batismo, a escolaridade).
 const COLUNAS = Object.freeze([
-  { campo: "matricula", rotulo: "Matrícula", nomes: ["MATRICULA", "N MATRICULA", "NO MATRICULA", "NUMERO DA MATRICULA", "MATRICULA DO MEMBRO"], obrigatoria: true },
-  { campo: "nome", rotulo: "Nome", nomes: ["NOME", "NOME COMPLETO", "NOME DO MEMBRO"], obrigatoria: true },
-  { campo: "igreja", rotulo: "Congregação", nomes: ["IGREJA", "CONGREGACAO", "CONGREGACAO ATUAL"] },
-  { campo: "sexo", rotulo: "Sexo", nomes: ["SEXO"] },
-  { campo: "nascimento", rotulo: "Nascimento", nomes: ["NASCIMENTO", "DATA DE NASCIMENTO", "DATA NASCIMENTO", "DT NASCIMENTO", "DATA NASC"] },
-  { campo: "estadoCivil", rotulo: "Estado civil", nomes: ["ESTADO CIVIL", "EST CIVIL"] },
-  { campo: "email", rotulo: "E-mail", nomes: ["E MAIL", "EMAIL"] },
-  { campo: "celular", rotulo: "Celular", nomes: ["CELULAR", "TELEFONE", "FONE", "TELEFONE CELULAR", "WHATSAPP"] },
-  { campo: "mae", rotulo: "Mãe", nomes: ["MAE", "NOME DA MAE", "FILIACAO MAE"] },
-  { campo: "pai", rotulo: "Pai", nomes: ["PAI", "NOME DO PAI", "FILIACAO PAI"] },
-  { campo: "cpf", rotulo: "CPF", nomes: ["CPF", "N CPF", "NUMERO DO CPF"] },
+  { campo: "matricula", rotulo: "Matrícula", nomes: ["MATRICULA", "N MATRICULA", "NO MATRICULA", "NUMERO DA MATRICULA", "MATRICULA DO MEMBRO"], padrao: true, obrigatoria: true },
+  { campo: "nome", rotulo: "Nome", nomes: ["NOME", "NOME COMPLETO", "NOME DO MEMBRO"], padrao: true, obrigatoria: true },
+  { campo: "igreja", rotulo: "Congregação", nomes: ["IGREJA", "CONGREGACAO", "CONGREGACAO ATUAL"], padrao: true },
+  { campo: "sexo", rotulo: "Sexo", nomes: ["SEXO"], padrao: true },
+  { campo: "nascimento", rotulo: "Nascimento", nomes: ["NASCIMENTO", "DATA DE NASCIMENTO", "DATA NASCIMENTO", "DT NASCIMENTO", "DATA NASC"], padrao: true },
+  { campo: "estadoCivil", rotulo: "Estado civil", nomes: ["ESTADO CIVIL", "EST CIVIL"], padrao: true },
+  { campo: "email", rotulo: "E-mail", nomes: ["E MAIL", "EMAIL"], padrao: true },
+  { campo: "celular", rotulo: "Celular", nomes: ["CELULAR", "TELEFONE", "FONE", "TELEFONE CELULAR", "WHATSAPP"], padrao: true },
+  { campo: "mae", rotulo: "Mãe", nomes: ["MAE", "NOME DA MAE", "FILIACAO MAE"], padrao: true },
+  { campo: "pai", rotulo: "Pai", nomes: ["PAI", "NOME DO PAI", "FILIACAO PAI"], padrao: true },
+  { campo: "cpf", rotulo: "CPF", nomes: ["CPF", "N CPF", "NUMERO DO CPF"], padrao: true },
   { campo: "admissao", rotulo: "Data de entrada", nomes: ["ADMISSAO", "DATA DE ADMISSAO", "DATA ADMISSAO", "MEMBRO DESDE", "DATA DE ENTRADA", "DATA DO ARROLAMENTO", "DATA DE ARROLAMENTO"] },
   { campo: "formaAdmissao", rotulo: "Forma de entrada", nomes: ["FORMA DE ADMISSAO", "TIPO DE ADMISSAO", "FORMA DE ENTRADA", "TIPO DE ARROLAMENTO", "FORMA DE ARROLAMENTO", "ARROLAMENTO"] },
   { campo: "batismo", rotulo: "Batismo nas águas", nomes: ["BATISMO", "DATA DE BATISMO", "DATA DO BATISMO", "DATA BATISMO", "BATISMO NAS AGUAS"] },
   { campo: "escolaridade", rotulo: "Escolaridade", nomes: ["ESCOLARIDADE", "GRAU DE INSTRUCAO", "INSTRUCAO"] }
 ]);
 const CAMPO_POR_NOME = new Map(COLUNAS.flatMap((c) => c.nomes.map((n) => [n, c])));
+const CAMPO_POR_CODIGO = new Map(COLUNAS.map((c) => [c.campo, c]));
+// o catálogo para a tela (o select de cada coluna): o campo, o rótulo e se é uma das 11 colunas de sempre do sistema pago (a outra é "a mais")
+const CAMPOS = Object.freeze(COLUNAS.map((c) => Object.freeze({ campo: c.campo, rotulo: c.rotulo, padrao: c.padrao === true })));
 
 // O cabeçalho vira o mapa { campo: índice da coluna }. A coluna desconhecida é ignorada (e mostrada); a segunda coluna do mesmo campo também.
-// Sem matrícula ou sem nome no cabeçalho, o arquivo não serve (erro).
-function mapearColunas(cabecalho) {
+// `escolha` (a tela, 23/11): um campo (ou null = "não usar") para CADA coluna do cabeçalho, na ordem; substitui o reconhecimento pelo nome. Escolha que não bate com
+// o arquivo (outro número de colunas, campo que não existe, o mesmo campo em duas colunas) devolve { erro }. Sem matrícula ou sem nome, o arquivo não serve.
+// `lista`: todas as colunas do cabeçalho, na ordem, com o campo ligado (ou null) — é o mapa que a tela mostra.
+function mapearColunas(cabecalho, escolha) {
   const mapa = Object.create(null);
-  const reconhecidas = [], ignoradas = [];
-  (cabecalho || []).forEach((bruto, indice) => {
-    const nome = String(bruto == null ? "" : bruto).trim();
-    const c = CAMPO_POR_NOME.get(chave(nome));
-    if (!c) { if (nome) ignoradas.push({ coluna: nome.slice(0, 80), motivo: "desconhecida" }); return; }
-    if (mapa[c.campo] !== undefined) { ignoradas.push({ coluna: nome.slice(0, 80), motivo: `repetida (já há a coluna de ${c.rotulo.toLowerCase()})` }); return; }
+  const reconhecidas = [], ignoradas = [], lista = [];
+  const cab = cabecalho || [];
+  if (escolha != null) {
+    if (!Array.isArray(escolha) || escolha.length !== cab.length) return { erro: "O mapa das colunas não bate com este arquivo. Escolha o arquivo de novo." };
+    for (const campo of escolha) {
+      if (campo === null) continue;
+      if (typeof campo !== "string" || !CAMPO_POR_CODIGO.has(campo)) return { erro: "O mapa das colunas tem um campo que não existe. Escolha o arquivo de novo." };
+    }
+  }
+  cab.forEach((bruto, indice) => {
+    const nome = String(bruto == null ? "" : bruto).trim().slice(0, 80);
+    const c = escolha != null ? (escolha[indice] === null ? null : CAMPO_POR_CODIGO.get(escolha[indice])) : CAMPO_POR_NOME.get(chave(nome));
+    let motivo = null;
+    if (!c) motivo = escolha != null ? "não usar" : "desconhecida";
+    else if (mapa[c.campo] !== undefined) motivo = `repetida (já há a coluna de ${c.rotulo.toLowerCase()})`;
+    if (motivo) {
+      if (escolha != null && c) return;   // o mesmo campo em duas colunas: tratado abaixo (erro)
+      if (nome || escolha != null) ignoradas.push({ indice, coluna: nome, motivo });
+      lista.push({ indice, coluna: nome, campo: null });
+      return;
+    }
     mapa[c.campo] = indice;
-    reconhecidas.push({ coluna: nome.slice(0, 80), campo: c.campo, rotulo: c.rotulo });
+    reconhecidas.push({ indice, coluna: nome, campo: c.campo, rotulo: c.rotulo });
+    lista.push({ indice, coluna: nome, campo: c.campo });
   });
+  if (escolha != null) {
+    const usados = escolha.filter((x) => x !== null);
+    const dobrado = usados.find((x, i) => usados.indexOf(x) !== i);
+    if (dobrado) return { erro: `Duas colunas estão ligadas ao mesmo campo (${CAMPO_POR_CODIGO.get(dobrado).rotulo.toLowerCase()}). Escolha “não usar” em uma delas.` };
+  }
   const faltando = COLUNAS.filter((c) => c.obrigatoria && mapa[c.campo] === undefined).map((c) => c.rotulo);
-  return { mapa, reconhecidas, ignoradas, faltando };
+  return { mapa, reconhecidas, ignoradas, faltando, lista };
 }
 
 // ------------------------------------------------------------------ os valores de cada célula
@@ -204,7 +233,8 @@ const PROBLEMAS = Object.freeze({
   CONGREGACAO_NAO_ENCONTRADA: "A congregação não existe no sistema (confira o nome)",
   CONGREGACAO_INATIVA: "A congregação está desativada no sistema",
   CONGREGACAO_AMBIGUA: "Duas congregações do sistema têm esse nome",
-  COLUNAS_A_MAIS: "A linha tem mais colunas que o cabeçalho (um ';' no meio de um nome?)"
+  COLUNAS_A_MAIS: "A linha tem mais colunas que o cabeçalho (um ';' no meio de um nome?)",
+  MATRICULA_JA_EXISTE: "A matrícula já é de uma ficha do sistema: fica de fora (essa ficha se completa à mão)"
 });
 const AVISOS = Object.freeze({
   SEM_CONGREGACAO: "Entra sem congregação (no arquivo: GERAL ou vazio)",
@@ -212,11 +242,11 @@ const AVISOS = Object.freeze({
   SEM_MATRICULA: "Sem matrícula: entra com a próxima matrícula do sistema",
   MATRICULA_INVALIDA: "A matrícula não é um número: entra com a próxima do sistema",
   MATRICULA_REPETIDA_NO_ARQUIVO: "A mesma matrícula de outra linha do arquivo: entra com a próxima do sistema",
-  MATRICULA_DE_OUTRA_FICHA: "A matrícula já é de uma ficha do sistema: entra com a próxima do sistema",
   MESMA_PESSOA_NO_ARQUIVO: "Parece a mesma pessoa de outra linha do arquivo (a mesma matrícula): marcada como possível ficha repetida",
-  MESMA_PESSOA_NO_SISTEMA: "Parece a mesma pessoa de uma ficha do sistema (a mesma matrícula): marcada como possível ficha repetida",
   CPF_REPETIDO_NO_ARQUIVO: "O mesmo CPF de outra linha do arquivo: entra sem o CPF, marcada como possível ficha repetida",
   CPF_EM_OUTRA_FICHA: "O CPF já está em outra ficha do sistema: entra sem o CPF, marcada como possível ficha repetida",
+  NOME_NASCIMENTO_NO_ARQUIVO: "O mesmo nome e nascimento de outra linha do arquivo: marcada como possível ficha repetida",
+  NOME_NASCIMENTO_EM_OUTRA_FICHA: "O mesmo nome e nascimento de uma ficha do sistema: marcada como possível ficha repetida",
   CPF_INVALIDO: "CPF inválido: entra sem o CPF",
   NASCIMENTO_INVALIDO: "Data de nascimento inválida: entra sem ela",
   SEXO_DESCONHECIDO: "Sexo não reconhecido: entra sem ele",
@@ -282,17 +312,21 @@ function lerLinha(celulas, mapa, { congregacoes, hojeISO, colunasCabecalho }) {
 }
 
 // ------------------------------------------------------------------ o arquivo inteiro (sem o banco)
-// Devolve { erro } (o arquivo não serve) ou { separador, colunas, linhas: [{ linha, dados, matricula, problemas, avisos }] } — as linhas vazias ficam de fora.
-function prepararArquivo(texto, { congregacoes, hojeISO }) {
+// Devolve { erro } (o arquivo não serve) ou { separador, colunas, linhas: [{ linha, dados, matricula, problemas, avisos }], vazias, totalColunas } — as linhas
+// vazias ficam de fora (e são contadas). `escolha`: o mapa das colunas escolhido na tela (mapearColunas); sem ela, cada coluna é reconhecida pelo nome.
+function prepararArquivo(texto, { congregacoes, hojeISO, escolha }) {
   if (typeof texto !== "string" || !texto.trim()) return { erro: "O arquivo está vazio." };
   if (texto.length > LIMITE_TEXTO) return { erro: "O arquivo é grande demais (mais de 8 milhões de letras). Divida em partes." };
   if (texto.includes("�")) return { erro: "O arquivo tem letras que não puderam ser lidas (acentos trocados por “�”). Salve o arquivo de novo como CSV (UTF-8 ou Windows) e tente outra vez." };
   const { separador, linhas } = lerCsv(texto);
   if (!linhas.length) return { erro: "O arquivo está vazio." };
   const [cab, ...resto] = linhas;
-  const colunas = mapearColunas(cab.celulas);
+  const colunas = mapearColunas(cab.celulas, escolha);
+  if (colunas.erro) return { erro: colunas.erro };
   if (colunas.faltando.length) {
-    return { erro: `O arquivo não tem a coluna de ${colunas.faltando.map((f) => f.toLowerCase()).join(" nem a de ")}. A primeira linha precisa ser o cabeçalho (MATRÍCULA;NOME;IGREJA;...).` };
+    // o mapa vai junto (só os nomes das colunas): a tela mostra e a Geral liga a coluna que falta
+    return { erro: `O arquivo não tem a coluna de ${colunas.faltando.map((f) => f.toLowerCase()).join(" nem a de ")}. A primeira linha precisa ser o cabeçalho (MATRÍCULA;NOME;IGREJA;...).`,
+      colunas: { lista: colunas.lista, escolhidas: escolha != null }, totalColunas: cab.celulas.length };
   }
   const corpo = resto.filter((l) => l.celulas.some((c) => String(c).trim() !== ""));
   if (!corpo.length) return { erro: "O arquivo só tem o cabeçalho: nenhuma pessoa para importar." };
@@ -300,8 +334,10 @@ function prepararArquivo(texto, { congregacoes, hojeISO }) {
   const opcoes = { congregacoes, hojeISO, colunasCabecalho: cab.celulas.length };
   return {
     separador,
-    colunas: { reconhecidas: colunas.reconhecidas, ignoradas: colunas.ignoradas },
-    linhas: corpo.map((l) => ({ linha: l.numero, ...lerLinha(l.celulas, colunas.mapa, opcoes) }))
+    colunas: { reconhecidas: colunas.reconhecidas, ignoradas: colunas.ignoradas, lista: colunas.lista, escolhidas: escolha != null },
+    linhas: corpo.map((l) => ({ linha: l.numero, ...lerLinha(l.celulas, colunas.mapa, opcoes) })),
+    vazias: resto.length - corpo.length,
+    totalColunas: cab.celulas.length
   };
 }
 
@@ -316,8 +352,10 @@ function mesmaPessoa(a, b) {
 // `fichasPorCpf`: Map(cpf -> matrícula) das fichas que já existem com os CPFs do arquivo. Muda as linhas no lugar e devolve a mesma lista; cada linha ganha:
 //   acao: NOVA | PROBLEMA; matriculaNumero (a do arquivo, quando serve); numeroNovo + motivoNumero (pendência NUMERO); repetidaLinha / repetidaMembro (a
 //   linha anterior ou a ficha de que ela pode ser repetida: pendência REPETIDA).
-// Uma vez só (22/11/2026): nada fica de fora por já existir — a ficha nova e a antiga ficam, marcadas, e a secretaria junta (fica a matrícula mais antiga).
-function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map() } = {}) {
+// A matrícula que JÁ É de uma ficha do sistema (as regras da rodada 28, 22/11/2026): a linha fica de fora (o problema MATRICULA_JA_EXISTE), seja quem for —
+// a ficha de lá continua como está e se completa à mão. O resto entra uma vez só, marcado (NUMERO, REPETIDA) para a secretaria acertar.
+// `fichasPorNomeNascimento`: Map(chaveNomeNascimento -> matrícula) das fichas do sistema com o mesmo nome e nascimento de alguma linha.
+function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map(), fichasPorNomeNascimento = new Map() } = {}) {
   const primeiraDaMatricula = new Map();   // matrícula do arquivo -> a primeira linha (não PROBLEMA) que a usa
   const numeroNovo = (l, motivo, aviso) => { l.numeroNovo = true; l.motivoNumero = motivo; l.avisos.push(aviso); };
   const repetida = (l, { linha = null, membro = null }, aviso) => {
@@ -326,18 +364,13 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
   };
   for (const l of linhas) {
     l.numeroNovo = false; l.motivoNumero = null; l.matriculaNumero = null; l.repetidaLinha = null; l.repetidaMembro = null;
+    const m = l.matricula;
+    if (m.numero && fichasPorMatricula.has(m.numero) && !l.problemas.includes("MATRICULA_JA_EXISTE")) l.problemas.push("MATRICULA_JA_EXISTE");
     if (l.problemas.length) { l.acao = "PROBLEMA"; continue; }
     l.acao = "NOVA";
-    const m = l.matricula;
     if (m.zero) { numeroNovo(l, "ZERO", "MATRICULA_ZERO"); continue; }
     if (m.vazia) { numeroNovo(l, "VAZIA", "SEM_MATRICULA"); continue; }
     if (m.invalida) { numeroNovo(l, "INVALIDA", "MATRICULA_INVALIDA"); continue; }
-    const existente = fichasPorMatricula.get(m.numero);
-    if (existente) {
-      numeroNovo(l, "DE_OUTRA_FICHA", "MATRICULA_DE_OUTRA_FICHA");
-      if (mesmaPessoa(l.dados, existente)) repetida(l, { membro: m.numero }, "MESMA_PESSOA_NO_SISTEMA");
-      continue;
-    }
     const anterior = primeiraDaMatricula.get(m.numero);
     if (anterior) {
       numeroNovo(l, "REPETIDA_NO_ARQUIVO", "MATRICULA_REPETIDA_NO_ARQUIVO");
@@ -364,7 +397,28 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
     const dono = ordem[0];
     for (const l of ordem.slice(1)) { repetida(l, { linha: dono.linha }, "CPF_REPETIDO_NO_ARQUIVO"); l.dados.cpf = null; }
   }
+
+  // O mesmo NOME e o mesmo NASCIMENTO (a tela r27 aprovada: "o mesmo CPF, ou o mesmo nome e nascimento, de uma ficha que já está no sistema ou de outra linha do
+  // arquivo"; a chave é a mesma da tela Fichas repetidas: sem acento nem maiúscula, os espaços juntos). A ficha do sistema vem primeiro; no arquivo, a primeira
+  // linha fica e as outras são marcadas como possíveis repetidas dela. Quem já é possível repetida (o CPF, a matrícula) não ganha outra marca.
+  const primeiraDoNome = new Map();
+  for (const l of linhas) {
+    if (l.acao !== "NOVA" || !l.dados.nome || !l.dados.dataNascimento) continue;
+    const k = chaveNomeNascimento(l.dados.nome, l.dados.dataNascimento);
+    const ficha = fichasPorNomeNascimento.get(k);
+    const primeira = primeiraDoNome.get(k);
+    if (!primeira) primeiraDoNome.set(k, l);
+    if (l.repetidaLinha != null || l.repetidaMembro != null) continue;
+    if (ficha != null) repetida(l, { membro: ficha }, "NOME_NASCIMENTO_EM_OUTRA_FICHA");
+    else if (primeira) repetida(l, { linha: primeira.linha }, "NOME_NASCIMENTO_NO_ARQUIVO");
+  }
   return linhas;
+}
+// A chave do "mesmo nome e nascimento": o nome sem acento nem maiúscula, com os espaços juntos (como o COLLATE Latin1_General_CI_AI da tela Fichas repetidas),
+// e a data AAAA-MM-DD.
+function chaveNomeNascimento(nome, dataISO) {
+  const n = String(nome == null ? "" : nome).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  return `${n}|${String(dataISO == null ? "" : dataISO).slice(0, 10)}`;
 }
 
 // ------------------------------------------------------------------ os números da prévia (sem dado pessoal)
@@ -395,13 +449,25 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
     avisosGerais.push({ codigo: "CONGREGACOES_NAO_ENCONTRADAS", texto: `${naoAchadas.size === 1 ? "Uma congregação do arquivo não foi achada" : `${naoAchadas.size} congregações do arquivo não foram achadas`} no sistema: essas pessoas ficam de fora até o nome bater (confira o nome no sistema ou no arquivo e faça a prévia de novo).` });
   }
   const maiorArquivo = comNumero.length ? comNumero[comNumero.length - 1].m : 0;
+  const ehRepetida = (l) => l.repetidaLinha != null || l.repetidaMembro != null;
   return {
     total: ls.length,
+    vazias: Number(prep.vazias) || 0,
+    totalColunas: Number(prep.totalColunas) || 0,
     novas: novas.length,
+    // os quadros da tela (r27): cada linha que entra conta numa caixa só — a matrícula a acertar primeiro, depois a possível repetida, e o resto entra como está
+    quadros: {
+      comMatricula: conta((l) => l.acao === "NOVA" && !l.numeroNovo && !ehRepetida(l)),
+      acertar: conta((l) => l.acao === "NOVA" && l.numeroNovo),
+      repetidas: conta((l) => l.acao === "NOVA" && !l.numeroNovo && ehRepetida(l))
+    },
+    congregacoesReconhecidas: new Set(novas.map((l) => l.dados.congregacaoId).filter((c) => c != null)).size,
+    jaExistem: conta((l) => l.problemas.includes("MATRICULA_JA_EXISTE")),
+    primeiraMatriculaNova: Math.max(maiorArquivo, maiorMatriculaSistema) + 1,
     problemas: conta((l) => l.acao === "PROBLEMA"),
     comAviso: conta((l) => l.acao === "NOVA" && l.avisos.length > 0),
     numeroNovo: conta((l) => l.acao === "NOVA" && l.numeroNovo),
-    possivelRepetida: conta((l) => l.acao === "NOVA" && (l.repetidaLinha != null || l.repetidaMembro != null)),
+    possivelRepetida: conta((l) => l.acao === "NOVA" && ehRepetida(l)),
     semCongregacao: conta((l) => l.acao === "NOVA" && l.dados.congregacaoId == null),
     separador: prep.separador === "\t" ? "tabulação" : prep.separador,
     colunas: prep.colunas,
@@ -447,6 +513,6 @@ function mapaDeCongregacoes(lista) {
   return m;
 }
 
-module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, PROBLEMAS, AVISOS, chave, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
+module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, chaveNomeNascimento, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
   lerFormaAdmissao, lerEscolaridade, lerCpf, lerCelular, lerMatricula, chaveDaIgreja, lerLinha, prepararArquivo, mesmaPessoa, classificar, resumir, linhaParaLista,
   csvDaLista, mapaDeCongregacoes, textoDe };

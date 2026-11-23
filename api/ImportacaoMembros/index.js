@@ -1,15 +1,17 @@
 // ImportacaoMembros (FASE 10, v10.1e, passo 9 de Membros; migração 185; 22/11/2026) — a IMPORTAÇÃO dos membros do sistema pago, UMA VEZ SÓ.
-// Só a Secretaria Geral (exigirGeral + "pessoas"). A TELA ainda está no desenho (rodada 27): aqui só o servidor.
-// GET  /api/importacao-membros                          -> { feita, emAndamento, importacao: { importacaoId, situacao, resumo... } | null, restantes }
-// POST /api/importacao-membros/previa                   -> { nomeArquivo?, texto } — lê e confere o arquivo (CSV do sistema pago); nada entra ainda. A nova prévia
-//                                                          substitui a anterior. Devolve { importacaoId, resumo } (os números, as colunas, os avisos gerais)
-// GET  /api/importacao-membros/lista?importacaoId=&filtro=problemas|avisos|todas&pagina= -> as linhas com os motivos (nunca o CPF nem o contato)
+// Só a Secretaria Geral (exigirGeral + "pessoas"). A TELA (r27 aprovada, 22/11) é a "Importar do sistema pago" do módulo Membros (front/src/membros).
+// GET  /api/importacao-membros                          -> { feita, emAndamento, importacao: { importacaoId, situacao, resumo... } | null, restantes, retrato, campos }
+// POST /api/importacao-membros/previa                   -> { nomeArquivo?, texto, colunas? } — lê e confere o arquivo (CSV do sistema pago); nada entra ainda. A nova
+//                                                          prévia substitui a anterior. `colunas`: o mapa escolhido na tela (um campo ou null por coluna).
+//                                                          Devolve { importacaoId, resumo } (os números, as colunas, os avisos gerais)
+// GET  /api/importacao-membros/lista?importacaoId=&filtro=problemas|avisos|acertar|repetidas|todas&pagina= -> as linhas com os motivos e o detalhe (nunca o CPF
+//                                                          nem o contato)
 // GET  /api/importacao-membros/lista.csv?importacaoId=  -> a lista dos que não entram ou entram com aviso, para abrir no Excel
 // POST /api/importacao-membros/descartar                -> { importacaoId } — a prévia sai (os dados pessoais das linhas também)
 // POST /api/importacao-membros/confirmar                -> { importacaoId } — confirmação reforçada (428): a prévia vira a importação; daqui não volta
 // POST /api/importacao-membros/lote                     -> { importacaoId } — importa o próximo lote (até 200); a tela chama até "concluida"
-// Regras (decisões do responsável, 18/11 e 22/11/2026): uma vez só; colunas extras aceitas; matrícula repetida ou zerada entra com a próxima do sistema e a
-// pendência NUMERO; possível repetida, a pendência REPETIDA; "IEADESPA - GERAL" sem congregação; todo importado em "Arrolamento a completar" (sem voto) com a
+// Regras (decisões do responsável, 18/11 e 22/11/2026): uma vez só; colunas extras aceitas; a matrícula que já é de uma ficha do sistema fica de fora (a rodada
+// 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; "IEADESPA - GERAL" sem congregação; todo importado em "Arrolamento a completar" (sem voto) com a
 // pendência ARROLAMENTO (shared/importacaoMembros.js e shared/importacaoMembrosDb.js).
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
@@ -48,7 +50,14 @@ module.exports = async function (context, req) {
       }
       const corpo = corpoDe(req);
       if (typeof corpo.texto !== "string") { responder({ sucesso: false, status: 400, mensagem: "Envie o texto do arquivo (CSV do sistema pago)." }); return; }
-      responder(await db.criarPrevia(pool, usuario, { nomeArquivo: corpo.nomeArquivo, texto: corpo.texto }));
+      // o mapa das colunas escolhido na tela: uma lista (um campo ou null por coluna); a camada confere cada item contra o arquivo
+      if (corpo.colunas !== undefined && corpo.colunas !== null && !(Array.isArray(corpo.colunas) && corpo.colunas.length <= 200)) {
+        responder({ sucesso: false, status: 400, mensagem: "O mapa das colunas veio num formato que não serve. Escolha o arquivo de novo." });
+        return;
+      }
+      const opcoes = { nomeArquivo: corpo.nomeArquivo, texto: corpo.texto };
+      if (Array.isArray(corpo.colunas)) opcoes.colunas = corpo.colunas;
+      responder(await db.criarPrevia(pool, usuario, opcoes));
       return;
     }
     if (metodo === "POST" && acao === "descartar") { responder(await db.descartar(pool, usuario, corpoDe(req).importacaoId)); return; }

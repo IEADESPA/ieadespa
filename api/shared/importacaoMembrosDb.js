@@ -60,13 +60,43 @@ const lerJson = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { re
 const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.Situacao, nomeArquivo: l.NomeArquivo, criadaEm: l.CriadaEm, confirmadaEm: l.ConfirmadaEm,
   concluidaEm: l.ConcluidaEm, resumo: lerJson(l.Resumo) } : null);
 
-// O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta?
+// O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta? `campos`: o catálogo do mapa das colunas (o select da tela).
+// Feita, vem também o RETRATO do resultado (a tela r27, passo 4): quem importou, as matrículas novas e onde as fichas estão hoje, por área.
 async function estado(pool) {
   const sit = await lerSituacao(() => pool.request());
   const atual = sit.concluida || sit.andamento || sit.previa;
   let restantes = null;
   if (sit.andamento) restantes = await contarRestantes(() => pool.request(), Number(sit.andamento.ImportacaoId));
-  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes };
+  const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
+  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, retrato, campos: regras.CAMPOS };
+}
+// Onde as fichas importadas estão HOJE (por área; o arrolamento completo = a situação já não é "Arrolamento a completar"), as matrículas novas e quem confirmou.
+// Sem dado pessoal além do nome de quem importou (a Secretaria Geral, que é quem vê a tela).
+async function retratoDoResultado(rq, imp) {
+  const id = Number(imp.ImportacaoId);
+  const areas = (await rq().input("id", sql.Int, id).query(`
+    SELECT a.AreaId, a.Nome AS Area, CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END AS SemCongregacao, COUNT(DISTINCT m.CongregacaoId) AS Congregacoes,
+      COUNT(*) AS Fichas, SUM(CASE WHEN m.SituacaoMembro <> N'ARROLAMENTO' THEN 1 ELSE 0 END) AS Completas
+    FROM ImportacoesMembrosLinhas l JOIN MembroReferencia m ON m.MembroId = l.MatriculaFinal
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN Areas a ON a.AreaId = c.AreaId
+    WHERE l.ImportacaoId = @id AND l.Estado = N'IMPORTADA'
+    GROUP BY a.AreaId, a.Nome, CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END
+    ORDER BY CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END, CASE WHEN a.AreaId IS NULL THEN 1 ELSE 0 END, a.Nome`)).recordset;
+  // os quadros do resultado, cada ficha numa caixa só (como os da prévia): a matrícula nova, depois a possível repetida, depois a que ficou como estava
+  const novas = (await rq().input("id", sql.Int, id).query(`SELECT MIN(CASE WHEN NumeroNovo = 1 THEN MatriculaFinal END) AS de,
+      MAX(CASE WHEN NumeroNovo = 1 THEN MatriculaFinal END) AS ate, SUM(CASE WHEN NumeroNovo = 1 THEN 1 ELSE 0 END) AS n,
+      SUM(CASE WHEN NumeroNovo = 0 AND (RepetidaLinha IS NOT NULL OR RepetidaMembro IS NOT NULL) THEN 1 ELSE 0 END) AS repetidas,
+      SUM(CASE WHEN NumeroNovo = 0 AND RepetidaLinha IS NULL AND RepetidaMembro IS NULL THEN 1 ELSE 0 END) AS comMatricula
+    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'IMPORTADA'`)).recordset[0] || {};
+  const quem = imp.ConfirmadaPor == null ? null
+    : (await rq().input("m", sql.Int, Number(imp.ConfirmadaPor)).query("SELECT Nome FROM MembroReferencia WHERE MembroId = @m")).recordset[0];
+  return {
+    confirmadaPor: quem ? quem.Nome : null,
+    matriculasNovas: { total: Number(novas.n || 0), de: novas.de == null ? null : Number(novas.de), ate: novas.ate == null ? null : Number(novas.ate) },
+    quadros: { comMatricula: Number(novas.comMatricula || 0), acertar: Number(novas.n || 0), repetidas: Number(novas.repetidas || 0) },
+    porArea: areas.map((a) => ({ area: a.SemCongregacao ? null : a.Area || null, semCongregacao: !!a.SemCongregacao, congregacoes: Number(a.Congregacoes || 0),
+      fichas: Number(a.Fichas || 0), completas: Number(a.Completas || 0) }))
+  };
 }
 async function contarRestantes(rq, id) {
   const r = await rq().input("id", sql.Int, id).query("SELECT COUNT(*) AS n FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE'");
@@ -75,14 +105,16 @@ async function contarRestantes(rq, id) {
 
 // ------------------------------------------------------------------ a prévia
 // Lê e confere o arquivo (o trabalho pesado fica fora da transação: nada é gravado até o fim) e grava a prévia com as linhas. A prévia anterior é descartada.
-async function criarPrevia(pool, usuario, { nomeArquivo, texto }) {
+// `colunas`: o mapa das colunas escolhido na tela (um campo ou null para cada coluna do cabeçalho); sem ele, cada coluna é reconhecida pelo nome.
+async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
   const sit = await lerSituacao(() => pool.request());
   if (sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
   if (sit.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
   const congs = (await pool.request().query("SELECT CongregacaoId, Nome, Ativa FROM Congregacoes")).recordset
     .map((c) => ({ congregacaoId: Number(c.CongregacaoId), nome: c.Nome, ativa: c.Ativa }));
-  const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia() });
-  if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro };
+  const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia(), escolha: colunas });
+  // a coluna que falta: o mapa volta junto (só os nomes do cabeçalho, nenhum dado pessoal) para a tela ligar a coluna certa
+  if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro, ...(prep.colunas ? { colunas: prep.colunas, totalColunas: prep.totalColunas } : {}) };
 
   // as fichas que já existem com as matrículas e com os CPFs do arquivo (uma ida ao banco para cada)
   const mats = [...new Set(prep.linhas.map((l) => l.matricula.numero).filter(Boolean))];
@@ -98,7 +130,21 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto }) {
       .query("SELECT m.MembroId, m.Cpf FROM OPENJSON(@j) WITH (v CHAR(11) '$') j JOIN MembroReferencia m ON m.Cpf = j.v");
     for (const l of r.recordset) fichasPorCpf.set(String(l.Cpf).trim(), Number(l.MembroId));
   }
-  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf });
+  // as fichas com o mesmo nome e nascimento de alguma linha (a mesma chave da tela Fichas repetidas: sem acento nem maiúscula, os espaços juntos); a chave é a
+  // do nome do ARQUIVO (j.n), para o Map bater com a linha
+  const fichasPorNomeNascimento = new Map();
+  const pares = [...new Map(prep.linhas.filter((l) => !l.problemas.length && l.dados.nome && l.dados.dataNascimento)
+    .map((l) => [regras.chaveNomeNascimento(l.dados.nome, l.dados.dataNascimento), { n: l.dados.nome, d: l.dados.dataNascimento }])).values()];
+  if (pares.length) {
+    const r = await pool.request().input("j", sql.NVarChar(sql.MAX), JSON.stringify(pares)).query(`
+      SELECT j.n AS N, CONVERT(varchar(10), j.d, 120) AS D, MIN(m.MembroId) AS MembroId
+      FROM OPENJSON(@j) WITH (n NVARCHAR(200), d DATE) j
+      JOIN MembroReferencia m ON m.DataNascimento = j.d
+        AND LTRIM(RTRIM(REPLACE(REPLACE(m.Nome, N'  ', N' '), N'  ', N' '))) COLLATE Latin1_General_CI_AI = j.n COLLATE Latin1_General_CI_AI
+      GROUP BY j.n, j.d`);
+    for (const l of r.recordset) fichasPorNomeNascimento.set(regras.chaveNomeNascimento(l.N, l.D), Number(l.MembroId));
+  }
+  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf, fichasPorNomeNascimento });
   const maior = Number((await pool.request().query("SELECT ISNULL(MAX(MembroId), 0) AS m FROM MembroReferencia")).recordset[0].m);
   const resumo = regras.resumir(prep, { maiorMatriculaSistema: maior });
   const nome = typeof nomeArquivo === "string" ? nomeArquivo.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 200) || null : null;
@@ -127,7 +173,8 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto }) {
           fa NVARCHAR(30), db DATE, esc NVARCHAR(30)) j`);
     }
     await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Fez a prévia da importação do sistema pago", usuarioId: Number(usuario.membroId),
-      dadosDepois: { nomeArquivo: nome, total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, numeroNovo: resumo.numeroNovo, possivelRepetida: resumo.possivelRepetida } });
+      dadosDepois: { nomeArquivo: nome, total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, jaExistem: resumo.jaExistem, numeroNovo: resumo.numeroNovo,
+        possivelRepetida: resumo.possivelRepetida, colunasEscolhidas: !!(resumo.colunas && resumo.colunas.escolhidas) } });
     return { sucesso: true, importacaoId: id, resumo };
   });
 }
@@ -150,25 +197,61 @@ async function descartar(pool, usuario, importacaoId) {
 }
 
 // ------------------------------------------------------------------ a lista para conferir (a tela e o arquivo para baixar)
-// filtro: "problemas" (não entram), "avisos" (entram com aviso: número novo, possível repetida, o que entrou sem...) ou "todas". Nunca o CPF nem o contato.
-function condicaoDoFiltro(filtro) {
-  if (filtro === "problemas") return "AND Acao = N'PROBLEMA'";
-  if (filtro === "avisos") return "AND Acao = N'NOVA' AND Avisos IS NOT NULL";
-  return "";
-}
+// filtro: "problemas" (não entram: com problema ou a matrícula que já existe), "avisos" (entram com aviso: número novo, possível repetida, o que entrou sem...),
+// "acertar" (a matrícula a acertar: recebem a próxima do sistema), "repetidas" (as possíveis repetidas que ficam com a matrícula de antes: as do quadro da tela)
+// ou "todas". Nunca o CPF nem o contato.
+const FILTROS = Object.freeze({
+  problemas: "AND a.Acao = N'PROBLEMA'",
+  avisos: "AND a.Acao = N'NOVA' AND a.Avisos IS NOT NULL",
+  acertar: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 1",
+  repetidas: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 0 AND (a.RepetidaLinha IS NOT NULL OR a.RepetidaMembro IS NOT NULL)",
+  todas: ""
+});
 const paraLista = (l) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
   matriculaFinal: l.MatriculaFinal == null ? null : Number(l.MatriculaFinal), problemas: l.Problemas ? l.Problemas.split(",") : [], avisos: l.Avisos ? l.Avisos.split(",") : [] });
+// O detalhe de cada linha para a tela (r27, "Matrícula a acertar" e "Possíveis repetidas"): por que a matrícula muda (e quem ficou com ela: a linha que veio
+// antes), de quem pode ser repetida e o número que ela RECEBE — o de verdade depois de importada; antes, o PREVISTO pela regra do lote (as matrículas do arquivo
+// entram primeiro e as novas seguem a ordem das linhas a partir da maior + 1; um cadastro feito no meio do caminho, ou uma matrícula liberada ao juntar fichas,
+// pode mudar o número: por isso "prevista").
+const detalheDe = (l, base) => {
+  const importada = l.Estado === "IMPORTADA";
+  const nova = l.NumeroNovo === true || l.NumeroNovo === 1;
+  const ordem = l.OrdemNova == null ? null : Number(l.OrdemNova);
+  return {
+    motivoNumero: nova ? l.MotivoNumero || null : null,
+    semCongregacao: importada ? null : l.CongregacaoId == null && l.Acao === "NOVA",
+    dono: l.DonoLinha == null ? null : { linha: Number(l.DonoLinha), nome: l.DonoNome || "", sexo: l.DonoSexo ? String(l.DonoSexo).trim() || null : null },
+    repetidaDe: l.RepetidaLinha != null ? { linha: Number(l.RepetidaLinha), matricula: null, nome: l.RepLinhaNome || "" }
+      : l.RepetidaMembro != null ? { linha: null, matricula: Number(l.RepetidaMembro), nome: l.RepMembroNome || "" } : null,
+    recebe: importada ? Number(l.MatriculaFinal) : nova && base && ordem ? base + ordem - 1 : null,
+    prevista: !importada && nova && !!base && !!ordem
+  };
+};
 async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
   const p = Math.max(1, Math.min(100000, Math.floor(Number(pagina) || 1)));
-  const f = ["problemas", "avisos", "todas"].includes(filtro) ? filtro : "todas";
+  const f = Object.prototype.hasOwnProperty.call(FILTROS, filtro) ? filtro : "todas";
+  const cab = (await pool.request().input("id", sql.Int, id).query("SELECT Resumo FROM ImportacoesMembros WHERE ImportacaoId = @id")).recordset[0];
+  const resumo = cab ? lerJson(cab.Resumo) || {} : {};
+  // o primeiro número novo previsto (a prévia de antes de 23/11 não o tinha: a próxima matrícula menos as que recebem número novo)
+  const base = Number(resumo.primeiraMatriculaNova) || (Number(resumo.proximaMatricula) && Number(resumo.proximaMatricula) - Number(resumo.numeroNovo || 0)) || null;
+  // a ordem do número novo conta sobre TODAS as linhas de número novo da importação (não só as da página nem só as do filtro)
   const r = await pool.request().input("id", sql.Int, id).input("pula", sql.Int, (p - 1) * POR_PAGINA).input("n", sql.Int, POR_PAGINA).query(`
-    SELECT COUNT(*) OVER () AS Total, Linha, MatriculaArquivo, Nome, Acao, MatriculaFinal, Problemas, Avisos
-    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id ${condicaoDoFiltro(f)}
-    ORDER BY Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
+    WITH ordem AS (SELECT Linha, ROW_NUMBER() OVER (ORDER BY Linha) AS OrdemNova FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND NumeroNovo = 1)
+    SELECT COUNT(*) OVER () AS Total, a.Linha, a.MatriculaArquivo, a.Nome, a.Acao, a.Estado, a.MatriculaFinal, a.Problemas, a.Avisos, a.NumeroNovo, a.MotivoNumero,
+      a.CongregacaoId, a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, dono.Sexo AS DonoSexo, o.OrdemNova
+    FROM ImportacoesMembrosLinhas a
+    LEFT JOIN ordem o ON o.Linha = a.Linha
+    LEFT JOIN ImportacoesMembrosLinhas rl ON rl.ImportacaoId = a.ImportacaoId AND rl.Linha = a.RepetidaLinha
+    LEFT JOIN MembroReferencia rm ON rm.MembroId = a.RepetidaMembro
+    OUTER APPLY (SELECT TOP 1 b.Linha, b.Nome, b.Sexo FROM ImportacoesMembrosLinhas b
+      WHERE a.MotivoNumero = N'REPETIDA_NO_ARQUIVO' AND b.ImportacaoId = a.ImportacaoId AND b.Acao = N'NOVA' AND b.NumeroNovo = 0
+        AND b.Matricula = TRY_CONVERT(INT, a.MatriculaArquivo) ORDER BY b.Linha) dono
+    WHERE a.ImportacaoId = @id ${FILTROS[f]}
+    ORDER BY a.Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
   const total = r.recordset.length ? Number(r.recordset[0].Total) : 0;
-  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map(paraLista) };
+  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l), detalhe: detalheDe(l, base) })) };
 }
 async function csv(pool, importacaoId) {
   const id = idValido(importacaoId);
@@ -208,7 +291,7 @@ const DETALHE_NUMERO = {
   DE_OUTRA_FICHA: (t) => `A matrícula ${String(t || "").slice(0, 20)} do sistema pago já era de outra ficha: confira o número.`
 };
 const DETALHE_ARROLAMENTO = "Importada do sistema pago: complete a situação, o cargo, a data e a forma de entrada (até lá, sem voto).";
-const DETALHE_REPETIDA = "Importação do sistema pago: pode ser a mesma pessoa (o mesmo CPF, ou a mesma matrícula e o mesmo nome).";
+const DETALHE_REPETIDA = "Importação do sistema pago: pode ser a mesma pessoa (o mesmo CPF, o mesmo nome e nascimento, ou a mesma matrícula e o mesmo nome).";
 
 async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }) {
   await rq().input("m", sql.Int, membroId).input("t", sql.NVarChar(12), tipo).input("o", sql.Int, outro).input("d", sql.NVarChar(300), String(detalhe).slice(0, 300))
@@ -220,7 +303,7 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
 
 // Importa até `tamanho` linhas pendentes, numa transação. Primeiro as que têm a matrícula do arquivo (na ordem do arquivo), depois as de número novo (que
 // recebem a próxima do sistema DEPOIS de todas as do arquivo estarem no lugar). Cada linha é conferida de novo contra o banco de agora: a matrícula que
-// alguém usou depois da prévia vira número novo (NUMERO); o CPF que alguém gravou depois entra sem o CPF, como possível repetida (REPETIDA).
+// alguém usou depois da prévia vira número novo (NUMERO) e vai para o fim da fila; o CPF que alguém gravou depois entra sem o CPF, como possível repetida.
 async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
@@ -238,14 +321,14 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
       FROM ImportacoesMembrosLinhas WITH (UPDLOCK) WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' ORDER BY NumeroNovo, Linha`)).recordset;
     const trilha = [];
     for (const l of linhas) {
-      let numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
-      let motivo = l.MotivoNumero || null;
+      const numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
+      const motivo = l.MotivoNumero || null;
       let numero = numeroNovo ? null : Number(l.Matricula);
       let cpf = l.Cpf ? String(l.Cpf).trim() : null;
       let repetidaMembro = l.RepetidaMembro == null ? null : Number(l.RepetidaMembro);
       // A matrícula e o CPF são conferidos e a ficha gravada no MESMO comando, com a faixa da chave travada (UPDLOCK, HOLDLOCK) da conferência até a gravação:
       // outro cadastro no mesmo instante espera, e a gravação não falha no meio da transação (o lote inteiro não se perde por uma linha).
-      let feito = false;
+      let feito = false, adiada = false;
       for (let tentativa = 0; tentativa < 8 && !feito; tentativa++) {
         if (numero == null) numero = await matriculaNova.proximaMatricula(rq);
         const r = (await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
@@ -269,13 +352,21 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
           if (repetidaMembro == null) repetidaMembro = Number(r.donoCpf);
           cpf = null;
         }
-        if (r.ocupada === true || r.ocupada === 1) {
-          // a matrícula foi usada depois da prévia (ou, no número novo, por outro cadastro no mesmo instante): a próxima do sistema
-          if (!numeroNovo) { numeroNovo = true; motivo = "DE_OUTRA_FICHA"; }
-          numero = null;
+        if ((r.ocupada === true || r.ocupada === 1) && !numeroNovo) {
+          // a matrícula do arquivo foi usada depois da prévia: a linha vira de número novo e vai para o FIM DA FILA (a ordem é NumeroNovo, Linha). Tomar a
+          // próxima do sistema agora (a maior + 1) poderia ocupar a matrícula de uma linha do arquivo que ainda vai entrar e empurrar essa também (23/11,
+          // achado do e2e-96); depois que todas as matrículas do arquivo estão no lugar, a maior + 1 é livre.
+          await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("cpf", sql.Char(11), cpf).input("rm", sql.Int, repetidaMembro).query(`
+            UPDATE ImportacoesMembrosLinhas SET NumeroNovo = 1, MotivoNumero = N'DE_OUTRA_FICHA', Cpf = @cpf, RepetidaMembro = @rm
+            WHERE ImportacaoId = @id AND Linha = @l AND Estado = N'PENDENTE'`);
+          adiada = true;
+          break;
         }
+        // no número novo, outro cadastro pegou o mesmo número no mesmo instante: a próxima do sistema
+        if (r.ocupada === true || r.ocupada === 1) numero = null;
         feito = !(r.donoCpf != null) && !(r.ocupada === true || r.ocupada === 1);
       }
+      if (adiada) continue;
       if (!feito) throw new Error(`importação: não foi possível gravar a linha ${l.Linha}`);
       await abrirPendencia(rq, { membroId: numero, tipo: "ARROLAMENTO", detalhe: DETALHE_ARROLAMENTO, por });
       if (numeroNovo) await abrirPendencia(rq, { membroId: numero, tipo: "NUMERO", detalhe: (DETALHE_NUMERO[motivo] || DETALHE_NUMERO.VAZIA)(l.MatriculaArquivo), por });
@@ -289,9 +380,10 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
     }
     await registrarAuditoriaEmLoteNaTransacao(t, "MembroReferencia", trilha);
     const restantes = await contarRestantes(rq, id);
-    if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: linhas.length, restantes, concluida: false };
+    // importadas: as que entraram neste lote (a adiada para o fim da fila fica nas restantes)
+    if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes, concluida: false };
     const final = await concluirNaTransacao(t, rq, id, por, lerJson(imp.Resumo));
-    return { sucesso: true, importacaoId: id, importadas: linhas.length, restantes: 0, concluida: true, resultado: final };
+    return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes: 0, concluida: true, resultado: final };
   });
 }
 

@@ -60,11 +60,22 @@ describe("o lote", () => {
     expect(mockTx).toEqual(["begin", "commit"]);
     expect(registrarAuditoriaEmLoteNaTransacao.mock.calls[0][2]).toEqual([expect.objectContaining({ registroId: 500, acao: "Importou pessoa do sistema pago" })]);
   });
-  test("a matrícula usada DEPOIS da prévia: a próxima do sistema e a pendência NUMERO (DE_OUTRA_FICHA)", async () => {
-    cenario({ linhas: [linha()], gravar: (i) => ({ ocupada: i.id === 500, donoCpf: null }) });
+  test("a matrícula usada DEPOIS da prévia: a linha vira de número novo e vai para o FIM DA FILA (sem tomar a maior + 1 antes das outras do arquivo)", async () => {
+    cenario({ linhas: [linha({ Cpf: "52998224725" }), linha({ Linha: 3, MatriculaArquivo: "501", Matricula: 501 })],
+      gravar: (i) => ({ ocupada: i.id === 500, donoCpf: i.cpf ? 321 : null }) });
+    const r = await db.importarLote(POOL, QUEM, 7);
+    // a linha 2 não entrou neste lote: ficou pendente, de número novo, sem o CPF (gravado em outra ficha) e possível repetida dela; a 3 entrou com a dela
+    const adiada = mockConsultas.find((c) => /SET NumeroNovo = 1, MotivoNumero = N'DE_OUTRA_FICHA'/.test(c.sql));
+    expect(adiada.inputs).toMatchObject({ l: 2, cpf: null, rm: 321 });
+    expect(mockConsultas.filter((c) => /FROM MatriculasLivres l/.test(c.sql))).toHaveLength(0);
+    expect(marcacao()).toEqual([expect.objectContaining({ l: 3, m: 501, nn: false })]);
+    expect(r).toMatchObject({ importadas: 1, concluida: false });
+    // no lote seguinte ela vem como número novo: a próxima do sistema e a pendência NUMERO (DE_OUTRA_FICHA)
+    mockConsultas = [];
+    cenario({ linhas: [linha({ NumeroNovo: true, MotivoNumero: "DE_OUTRA_FICHA", RepetidaMembro: 321 })], gravar: () => ({ ocupada: false, donoCpf: null }) });
     await db.importarLote(POOL, QUEM, 7);
-    expect(marcacao()).toEqual([expect.objectContaining({ m: 900, nn: true, mn: "DE_OUTRA_FICHA" })]);
-    expect(pendencias().map((p) => p.tipo)).toEqual(["ARROLAMENTO", "NUMERO"]);
+    expect(marcacao()).toEqual([expect.objectContaining({ m: 900, nn: true, mn: "DE_OUTRA_FICHA", rm: 321 })]);
+    expect(pendencias().map((p) => p.tipo)).toEqual(["ARROLAMENTO", "NUMERO", "REPETIDA"]);
     expect(pendencias()[1]).toMatchObject({ membro: 900, detalhe: expect.stringMatching(/500 do sistema pago já era de outra ficha/) });
   });
   test("o CPF gravado DEPOIS da prévia: entra sem ele, com a REPETIDA da ficha que tem o CPF (e a trilha sem o CPF)", async () => {
@@ -82,8 +93,8 @@ describe("o lote", () => {
     expect(pendencias().map((p) => [p.tipo, p.membro, p.outro])).toEqual([["ARROLAMENTO", 900, null], ["NUMERO", 900, null], ["REPETIDA", 900, 44]]);
     expect(pendencias()[1].detalhe).toMatch(/matrícula 0/);
   });
-  test("sem lugar em 8 tentativas: o lote inteiro é desfeito (nada pela metade)", async () => {
-    cenario({ linhas: [linha()], gravar: () => ({ ocupada: true, donoCpf: null }) });
+  test("o número novo sem lugar em 8 tentativas: o lote inteiro é desfeito (nada pela metade)", async () => {
+    cenario({ linhas: [linha({ Matricula: null, MatriculaArquivo: "", NumeroNovo: true, MotivoNumero: "VAZIA" })], gravar: () => ({ ocupada: true, donoCpf: null }) });
     await expect(db.importarLote(POOL, QUEM, 7)).rejects.toThrow(/linha 2/);
     expect(mockTx).toEqual(["begin", "rollback"]);
     expect(mockConsultas.filter((c) => /DECLARE @ocupada/.test(c.sql))).toHaveLength(8);
@@ -104,5 +115,48 @@ describe("o lote", () => {
     expect((await db.importarLote(POOL, QUEM, 7)).status).toBe(404);
     expect((await db.importarLote(POOL, QUEM, "abc")).status).toBe(400);
     expect(mockConsultas.some((c) => /DECLARE @ocupada/.test(c.sql))).toBe(false);
+  });
+});
+
+describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
+  const { sql } = require("../db");
+  const POOL_REQ = { request: () => new sql.Request() };
+  const linhaLista = (extra = {}) => ({ Total: 2, Linha: 5, MatriculaArquivo: "4318", Nome: "Pessoa B", Acao: "NOVA", Estado: "PENDENTE", MatriculaFinal: null,
+    Problemas: null, Avisos: "MATRICULA_REPETIDA_NO_ARQUIVO", NumeroNovo: true, MotivoNumero: "REPETIDA_NO_ARQUIVO", CongregacaoId: 3, RepetidaLinha: null,
+    RepLinhaNome: null, RepetidaMembro: null, RepMembroNome: null, DonoLinha: 2, DonoNome: "Pessoa A", DonoSexo: "F", OrdemNova: 2, ...extra });
+  test("a matrícula a acertar: quem ficou com o número (a linha de antes) e o número PREVISTO pela ordem (a primeira nova da prévia + a ordem - 1)", async () => {
+    mockRegras = [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: JSON.stringify({ primeiraMatriculaNova: 30512 }) }]], [/WITH ordem AS/, [linhaLista()]]];
+    const r = await db.listar(POOL_REQ, "7", { filtro: "acertar" });
+    expect(r).toMatchObject({ sucesso: true, filtro: "acertar", total: 2 });
+    expect(r.itens[0].detalhe).toEqual({ motivoNumero: "REPETIDA_NO_ARQUIVO", semCongregacao: false, dono: { linha: 2, nome: "Pessoa A", sexo: "F" }, repetidaDe: null,
+      recebe: 30513, prevista: true });
+    expect(mockConsultas.find((c) => /WITH ordem AS/.test(c.sql)).sql).toMatch(/AND a\.NumeroNovo = 1/);
+  });
+  test("depois de importada: o número de verdade; a possível repetida diz de quem (a linha ou a ficha); o filtro desconhecido vira 'todas'", async () => {
+    mockRegras = [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: JSON.stringify({ proximaMatricula: 30524, numeroNovo: 12 }) }]],
+      [/WITH ordem AS/, [linhaLista({ Estado: "IMPORTADA", MatriculaFinal: 30600, CongregacaoId: null }),
+        linhaLista({ NumeroNovo: false, MotivoNumero: null, DonoLinha: null, OrdemNova: null, RepetidaMembro: 2, RepMembroNome: "Ficha Antiga" })]]];
+    const r = await db.listar(POOL_REQ, 7, { filtro: "'; DROP TABLE x --" });
+    expect(r.filtro).toBe("todas");
+    expect(r.itens[0].detalhe).toMatchObject({ recebe: 30600, prevista: false, semCongregacao: null });
+    expect(r.itens[1].detalhe).toMatchObject({ motivoNumero: null, recebe: null, prevista: false, repetidaDe: { linha: null, matricula: 2, nome: "Ficha Antiga" } });
+    expect(mockConsultas.find((c) => /WITH ordem AS/.test(c.sql)).sql).not.toMatch(/DROP/);
+  });
+  test("o estado: o catálogo das colunas sempre; feita, o retrato (quem importou, as matrículas novas e as fichas por área, com a sem congregação)", async () => {
+    mockRegras = [
+      [/FROM ImportacoesMembros WHERE Situacao IN/, [{ ImportacaoId: 7, Situacao: "CONCLUIDA", ConfirmadaPor: 4242, Resumo: "{}" }]],
+      [/GROUP BY a\.AreaId/, [{ AreaId: 1, Area: "Área 1", SemCongregacao: 0, Congregacoes: 10, Fichas: 1096, Completas: 0 },
+        { AreaId: null, Area: null, SemCongregacao: 1, Congregacoes: 0, Fichas: 1, Completas: 0 }]],
+      [/MIN\(CASE WHEN NumeroNovo = 1/, [{ de: 30512, ate: 30523, n: 12, repetidas: 173, comMatricula: 4862 }]],
+      [/SELECT Nome FROM MembroReferencia/, [{ Nome: "Secretária de Teste" }]]
+    ];
+    const r = await db.estado(POOL_REQ);
+    expect(r).toMatchObject({ feita: true, emAndamento: false, restantes: null });
+    expect(r.campos.find((c) => c.campo === "cpf")).toEqual({ campo: "cpf", rotulo: "CPF", padrao: true });
+    expect(r.retrato).toEqual({ confirmadaPor: "Secretária de Teste", matriculasNovas: { total: 12, de: 30512, ate: 30523 },
+      quadros: { comMatricula: 4862, acertar: 12, repetidas: 173 }, porArea: [
+      { area: "Área 1", semCongregacao: false, congregacoes: 10, fichas: 1096, completas: 0 }, { area: null, semCongregacao: true, congregacoes: 0, fichas: 1, completas: 0 }] });
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, []]];
+    expect((await db.estado(POOL_REQ)).retrato).toBeNull();
   });
 });

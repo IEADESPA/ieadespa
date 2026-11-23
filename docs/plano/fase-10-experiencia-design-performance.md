@@ -1110,8 +1110,63 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
     apagamento aos poucos e sozinho.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
-  termina (ela é uma vez só). Até lá, quem chega pelo site ou pela secretaria fica na fila, sem número. O sistema que
-  está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
+  termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
+  importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
+
+### Módulo 3 (Estrutura e Territórios): as respostas dele antes do desenho (23/11/2026)
+
+Ele mandou perguntar logo, sem esperar Membros fechar. O desenho continua um módulo por vez; estas respostas ficam
+guardadas para quando o módulo 3 começar. O levantamento completo do desenhista está em
+`C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md` (só no computador dele).
+
+- **A dor de hoje:** os dados desatualizados.
+  - Gente sai do cargo e ninguém põe o próximo. Não se sabe quem é o dirigente, o vice, o tesoureiro ou o secretário,
+    nem na congregação nem na Geral.
+  - O endereço e os horários de culto ficam velhos no site.
+  - O termo de posse dos dirigentes é em papel e "poderia ser tudo digital".
+- **Congregação nova:** a Geral cadastra direto, quando o Presidente decide, num formulário simples. Não há parecer
+  nem fluxo de pedido; o caminho da v9.2 vem do Regimento.
+- **Ponto de culto:** o nome real da "Extensão da Tenda" é **ponto de culto**. É um culto no lar, ligado a uma
+  congregação, que tem 1, 2 ou 3 deles, com a esperança de virar igreja um dia. O que importa primeiro é saber os pontos
+  e os horários.
+  - No site vivo (fase 12), cada igreja terá **a sua aba, como um subsite**, com os cultos, o histórico, o dirigente e
+    a diretoria.
+  - Decidido pela sessão, "para conferir": no público aparecem só o bairro e o horário do ponto, sem o endereço da casa.
+- **A diretoria e os cargos ficam na Estrutura (o executivo):** dirigente, vice, tesoureiro, secretário, presidente etc.
+  O módulo 10 é o legislativo: obreiros, juntas, Ministério, conselhos e reuniões.
+- **Quem põe o dirigente:** o pastor de área e a Geral, os dois direto, sem confirmação. A diretoria da congregação, o
+  dirigente cadastra; a da área, o pastor de área; a geral, a Geral.
+- **O termo de posse digital:** quem dá a posse confirma no sistema (o Presidente, para o dirigente; o dirigente, para a
+  diretoria da congregação), e quem toma posse aceita no próprio celular. O termo sai em PDF com o QR de validade e a
+  data e a hora dos dois.
+- **O mandato dos cargos:**
+  - todo cargo vence na virada do ano (31/12) ou na data marcada nele;
+  - vencido, o cargo fica vago sozinho e a pessoa **perde o perfil de acesso** que o cargo dava;
+  - trocado no meio do ano, quem saiu perde o cargo e o acesso na hora em que o novo é cadastrado.
+  - Decidido pela sessão, "para conferir": os cargos do ano seguinte podem ser cadastrados antes, com início em 01/01,
+    e o aviso de "cargo vencendo" aparece em dezembro, para ninguém ficar sem acesso na virada.
+- **Mudança de área:** só a Geral muda. O passado fica com a área antiga; dali em diante, conta para a nova.
+- **Congregação que fecha ou se junta a outra:** a Geral escolhe a que recebe e todos os membros passam de uma vez. O
+  histórico e o dinheiro antigos ficam com o nome antigo.
+- **Região, quadrante e distrito:** ficam dormindo. Só a Geral vê que existem e pode ligar um dia.
+- **O mapa:** é muito importante, para a congregação, a área e a Geral (hoje só o nível local localiza os membros).
+  - O problema é a localização: a cidade costuma usar um CEP geral. No futuro, o endereço buscado pelo CEP e pelo
+    número já basta, mesmo com erro de uns 50 m.
+  - A localização das igrejas que vai para o site alimenta o mapa sozinha.
+- **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
+  posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
+- **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação
+  só, com a mesma administração das outras.
+- **O número da congregação:** é o número de abertura, o "número de filial", e vai nos relatórios onde o nome não cabe.
+  A Sede é a 1; a Águas Vivas, a 3. A ordem é pelo número, não pelo nome.
+  - Quando congregações fecham, a numeração desce (a 20 pode virar a 17 se 3 fecharam), e o histórico guarda o número
+    de cada época.
+- **"Área com pelo menos 3 congregações" (Regimento):** não vale. A Área 1 tem uma congregação só.
+- **Decididas pela sessão, pelas regras dele ("para conferir" no desenho):**
+  - o endereço, os horários, o telefone e a foto são atualizados pela congregação, pela área e pela Geral, e o site
+    muda sozinho;
+  - na página da congregação, o membro vê o endereço, os horários e o dirigente, a secretaria vê os números de pessoas,
+    e o dinheiro e o patrimônio só a tesouraria e a Geral veem.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

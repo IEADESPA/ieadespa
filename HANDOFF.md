@@ -39,9 +39,11 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
   importação de mentira para mostrar o liberado. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
   `C:/tmp/ieadespa-membros/DIARIO-trava.md`.
 - **desenhista**, desenhando e publicando a rodada 29, a movimentação refeita. Worktree `C:/tmp/ieadespa-desenho-r29`,
-  ramo `desenho-r29`. As 10 perguntas do módulo 3 estão prontas em
-  `C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md`, para levar a ele quando Membros fechar, poucas de cada vez.
-  Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+  ramo `desenho-r29`. Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+
+**O módulo 3 já tem as respostas dele** (23/11, plano da fase, seção "Módulo 3 (Estrutura e Territórios): as respostas
+dele antes do desenho"). O desenho espera Membros fechar. A regra nova de acesso vale também para Membros: o cargo
+vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de mandar de novo.
 

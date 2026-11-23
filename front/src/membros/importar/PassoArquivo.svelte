@@ -54,10 +54,14 @@
     } finally { lendo = false; }
   }
 
+  // voltou ao passo 1 com a prévia guardada (a tela foi aberta de novo): o mapa dela aparece; para mudar as colunas, a planilha de novo
+  if (!mapa && previa) mapa = mapaDe(previa.resumo.colunas.lista);
+
   const mudou = $derived(!!mapa && (!previa || mapa.escolha.some((c, i) => (previa?.resumo.colunas.lista[i]?.campo ?? null) !== c)));
   async function conferir() {
-    if (!arquivo || lendo) return;
+    if (lendo) return;
     if (previa && !mudou) { onconferir(); return; }
+    if (!arquivo) { erro = "Para mudar as colunas, escolha a planilha de novo."; return; }
     if (!mapa) return;
     lendo = true;
     erro = "";
@@ -100,7 +104,7 @@
 {/snippet}
 
 {#snippet botao()}
-  <Botao tipo="ouro" icone="seta" largo ocupado={lendo} desligado={!arquivo || !mapa} onclick={conferir}>Conferir os números</Botao>
+  <Botao tipo="ouro" icone="seta" largo ocupado={lendo} desligado={!(previa && !mudou) && (!arquivo || !mapa)} onclick={conferir}>Conferir os números</Botao>
 {/snippet}
 
 {#if celular}

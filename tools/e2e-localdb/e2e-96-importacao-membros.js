@@ -51,8 +51,13 @@ const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").dige
 async function principal() {
   const { chamarRota } = require("./lib-afm");
   await obterPool();
-  const R = (token, { metodo = "GET", acao = "", corpo, query } = {}) =>
-    chamarRota("ImportacaoMembros/index.js", { metodo, token, binding: { acao }, corpo: corpo || {}, query: query || {} });
+  // E2E96_GRAVAR=<arquivo>: grava as respostas da rota (para as fotos da tela com o contrato de verdade; só dados de mentira)
+  const gravadas = [];
+  const R = async (token, { metodo = "GET", acao = "", corpo, query } = {}) => {
+    const res = await chamarRota("ImportacaoMembros/index.js", { metodo, token, binding: { acao }, corpo: corpo || {}, query: query || {} });
+    if (process.env.E2E96_GRAVAR) gravadas.push({ metodo, acao, query: query || {}, colunas: corpo && corpo.colunas ? true : false, status: res.status, body: res.body });
+    return res;
+  };
 
   console.log("== a migração 185 ==");
   ok(await escalar("SELECT COUNT(*) FROM sys.tables WHERE name IN ('ImportacoesMembros', 'ImportacoesMembrosLinhas')") === 2, "as duas tabelas");
@@ -92,6 +97,8 @@ async function principal() {
   ok(soCab.status === 400 && /só tem o cabeçalho/.test(soCab.body.mensagem), "só o cabeçalho: 400 com o motivo", soCab.body);
   const semMat = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { texto: "NOME;IGREJA\r\nAna;IEADESPA - GERAL" } });
   ok(semMat.status === 400 && /matrícula/.test(semMat.body.mensagem), "sem a coluna de matrícula: 400", semMat.body);
+  ok(semMat.body.colunas && JSON.stringify(semMat.body.colunas.lista) === JSON.stringify([{ indice: 0, coluna: "NOME", campo: "nome" }, { indice: 1, coluna: "IGREJA", campo: "igreja" }]) && !semMat.body.linhas,
+    "o mapa volta junto (só os nomes do cabeçalho): a tela mostra e a Geral liga a coluna que falta", semMat.body);
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "o arquivo que não serve não grava nada");
 
   const p1 = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "membros<script>.csv", texto: ARQUIVO } });
@@ -284,6 +291,7 @@ async function principal() {
   ok(b9.status === 200 && b9.body.concluida === true && b9.body.importadas === 0, "mais um lote (a tela que chamou de novo): nada entra", b9.body);
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros WHERE Situacao IN (N'PREVIA', N'IMPORTANDO')") === 0, "nada aberto");
 
+  if (process.env.E2E96_GRAVAR) require("fs").writeFileSync(process.env.E2E96_GRAVAR, JSON.stringify(gravadas, null, 1));
   fim("e2e-96 (a importação dos membros)");
 }
 

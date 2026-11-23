@@ -52,7 +52,8 @@
     if (c.aberta && !c.pagina) void carregar(f);
   }
   // a tabela da matrícula a acertar já abre com as 4 primeiras (como no desenho)
-  $effect(() => { if (!celular && r.quadros.acertar > 0 && !listas.acertar.pagina && !listas.acertar.carregando) void carregar("acertar"); });
+  // (uma vez: a falha mostra "Tentar de novo" e não pede outra vez sozinha)
+  $effect(() => { if (!celular && r.quadros.acertar > 0 && !listas.acertar.pagina && !listas.acertar.carregando && !listas.acertar.erro) void carregar("acertar"); });
   const acertarVisiveis = $derived(listas.acertar.aberta ? listas.acertar.itens : listas.acertar.itens.slice(0, 4));
 
   let baixando = $state(false);

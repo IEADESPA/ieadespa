@@ -46,8 +46,17 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**Nenhum agente trabalhando.** Os dois foram parados à tarde, a pedido dele (cota acabando), sem nada pela metade no
-Git:
+**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Se a conversa cair, confira os
+diários antes de mandar de novo:
+
+1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
+   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+2. **pesquisa dos 8 economizadores de tokens** (o PDF dele), só leitura. Resultado em
+   `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
+3. **desenhista:** só publica a rodada 29 na página KMeb….
+4. **construtor:** o e2e-51 e completar o arrolamento. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+
+O estado de quando os agentes da tarde foram parados (cota acabando), sem nada pela metade no Git:
 
 - **construtor:** só trouxe a `main` para o ramo (`3f8a1a5`, enviado). "Completar o arrolamento" e o ajuste do e2e-51
   NÃO começaram. Pode haver um rascunho em `C:/tmp/ieadespa-membros/aprovado-arrolamento.js` (fora do Git).

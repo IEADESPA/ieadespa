@@ -5,8 +5,12 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 8e446f57-0011-4863-8efe-ff9484623ad6
-  modified: 2026-11-23T12:30:00.000Z
+  modified: 2026-11-23T22:15:03.519Z
 ---
+
+**23/11/2026, à noite: 4 agentes** (ordem nova dele: "não pode ficar parado… já pode jogar os outros dois… fica aí os
+4"): o desenhista, o construtor e mais dois de missões curtas (naquele dia, o revisor de fora na bancada e a pesquisa
+dos economizadores). Vale até ele dar outro número.
 
 **23/11/2026, à tarde: 2 agentes** (ordem nova dele: "primeiramente só eu trabalho com esses dois agentes"): o
 **desenhista** e o **construtor** (Membros, depois Financeiro, até a homologação e, com o sim dele, a produção). A

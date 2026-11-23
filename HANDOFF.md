@@ -8,14 +8,20 @@ Em uso por: Mateus desde 23/11/2026 08:48
 
 Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
 
-**Em andamento (pedido dele de 23/11, antes de recarregar a janela):** um agente na **bancada** (`C:\MCP\bancada`)
-traz o que ele aprovou: as habilidades do Svelte, do Postgres e do "teste primeiro" (com uma linha no `construtor`), o
-plugin do Python (`pyright-lsp`); o conserto do caminho do Codex no instalador; e o aviso da 2.2.1 calado (decisão
-dele: ficar na 2.1.1 até a 2.2.2). Faz dois commits **sem push**: eu leio as mudanças, envio, mostro a ele o
-`-SoTestar` e, com o sim, rodo o `-Sim`. Só então ele recarrega a janela. As pesquisas que embasam (só neste
-computador): `C:\tmp\ieadespa-bancada\pesquisa-habilidades-23-11.md` e `conferencia-servidor-memoria-2.2.1.md`.
-**A LGPD ficou para a decisão dele**, depois da explicação: a habilidade de um autor só grava documentos de regras
-(não dados de pessoas), e ele não quer isso no repositório público.
+**Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
+- as habilidades `svelte-core-bestpractices`, `supabase-postgres-best-practices` (só Postgres) e
+  `test-driven-development` (o `construtor` escreve o teste antes);
+- 3 de LGPD adaptadas, com os documentos em `C:\MCP\bancada\lgpd\<repositório>\` (privada, nunca no repositório);
+- o plugin `pyright-lsp` com o `pyright@1.1.414`;
+- o caminho do Codex consertado (cópia em `C:\MCP\copias-antigas\2026-11-23-1154\`);
+- a 2.2.1 do servidor de memória conferida e calada: fica a 2.1.1 até conferir a 2.2.2.
+
+O banco do ieadespa **fica no SQL Server** (memória `banco-sql-server-fica`).
+
+**Em andamento:** um agente estuda, só lendo o nosso código, se regras de SQL Server ajudariam (detalhe em
+`C:\tmp\ieadespa-bancada\estudo-regras-sql.md`). Com ganho médio ou alto, as regras vão para o próprio projeto
+(`api/CLAUDE.md`); com pouco ganho, fica só o plugin `microsoft-docs`. Defeitos que ele achar vão para a varredura.
+Depois disso ele recarrega a janela.
 
 ## 1. Concluído
 

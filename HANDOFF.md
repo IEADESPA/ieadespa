@@ -30,17 +30,18 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo:**
+**Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo.** As perguntas dos dois foram respondidas por ele
+às 16h (plano da fase: "A tela de importar os membros", item da trava, e "Rodada 28", respostas antes da r29):
 
-- **construtor**, na trava das matrículas (item 1.1 abaixo). Worktree `C:/tmp/ieadespa-svelte`, ramo
-  `v10-membros-svelte`; primeiro traz a `main` para o ramo. Antes de codar, responde 3 perguntas: o que marca que a
-  importação terminou, sem confundir com a que parou no meio; o que fazem os 3 pontos de `GestaoPessoas`; como ele vê
-  os dois estados na homologação. Se alguma não fechar, para e devolve a pergunta. Diário:
+- **construtor**, construindo a trava das matrículas (item 1.1 abaixo), já com a `main` no ramo (`fb2c8a5`). É a trava
+  simples: sem importação `CONCLUIDA`, nenhuma ficha nova por caminho nenhum, e a importação com zero pessoas é
+  recusada. Ele mescla no homolog e **para**. Ele (o responsável) vê o estado travado; só depois o agente faz a
+  importação de mentira para mostrar o liberado. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
   `C:/tmp/ieadespa-membros/DIARIO-trava.md`.
-- **desenhista**, na rodada 29 (item 2 abaixo). Worktree `C:/tmp/ieadespa-desenho-r29`, ramo `desenho-r29`. Primeiro
-  levanta as dúvidas que mudam a tela da movimentação e, se houver, para e devolve sem desenhar; o módulo 3 é só
-  pergunta, gravada em `C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md`. Diário:
-  `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+- **desenhista**, desenhando e publicando a rodada 29, a movimentação refeita. Worktree `C:/tmp/ieadespa-desenho-r29`,
+  ramo `desenho-r29`. As 10 perguntas do módulo 3 estão prontas em
+  `C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md`, para levar a ele quando Membros fechar, poucas de cada vez.
+  Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
 
 Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de mandar de novo.
 

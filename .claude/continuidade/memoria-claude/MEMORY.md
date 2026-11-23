@@ -33,6 +33,7 @@
 
 - [Nada sem aprovação dele](fase10-nada-sem-aprovacao.md) — ele VÊ e aprova antes da produção
 - [Perguntar antes de desenhar](perguntar-antes-de-desenhar.md) — 20/11: dúvida de regra se pergunta ANTES de desenhar
+- [Não perguntar o que ele controla](nao-perguntar-o-que-ele-controla.md) — 23/11: caso que ele impede na operação = trava simples
 - [Construir exatamente o aprovado](construir-exatamente-o-aprovado.md) — par aprovado × construído de toda tela
 - [Realidade financeira](realidade-financeira-nao-o-regimento.md) — sem culto/malote/cofre; Regimento não é a realidade
 - [Propostas em artefato](propostas-de-tela-em-artefato.md) — página leve KMeb…; a antiga G1gj… é só arquivo

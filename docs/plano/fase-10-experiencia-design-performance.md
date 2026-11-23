@@ -1044,6 +1044,15 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     fila da secretaria, sem número.
   - O cuidado que já existe na importação (o número tomado depois da prévia vai para o fim da fila, com aviso) fica
     como rede de proteção.
+  - **A trava, resposta dele (23/11, à tarde), que substitui a "fila sem número":** "Ninguém vai ser cadastrado antes
+    da importação… Eu só vou liberar depois de importar." Ele controla a ordem na operação; por isso não há fila de
+    espera, nem aceite depois, nem tela nova.
+    - Enquanto não existir importação concluída, o servidor recusa criar ficha nova por qualquer caminho, com uma
+      mensagem curta: o "Cadastrar" (número gerado ou digitado), o importador antigo de planilha, o aceite da fila e o
+      "Quero me cadastrar" do site. Editar ficha que já existe continua livre.
+    - A importação que terminaria com zero pessoas é recusada: não solta a trava nem gasta a importação única.
+    - Na homologação, ele vê primeiro o estado travado. Depois que ele disser que viu, o agente faz uma importação de
+      mentira até o fim, para ele ver o liberado.
 - **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
   O código já faz assim.
 - **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
@@ -1078,6 +1087,28 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
       (endereço, telefone, família, cargos, histórico) é apagado aos poucos, a partir de 30 dias da carta. Sem revisão
       de advogado.
     - **Quem só quer sair, sem ir para outra igreja:** o mesmo caminho; sai na hora, e a carta fica disponível.
+  - **Respostas dele antes de desenhar a rodada 29 (23/11, à tarde):**
+    - **A família:** cada adulto pede a sua carta. Os filhos menores de idade saem junto com o pai ou a mãe que pediu.
+    - **Em disciplina ou congregado:** sai com carta, com a situação verdadeira (Comunhão, Paz, Observação), sem o
+      motivo.
+    - **O arrependimento:** a saída não se desfaz. Ele volta como qualquer um que volta, sem os cargos; quem cuida daquele
+      nível decide se os devolve.
+    - **A assinatura:** só o QR de validade, o protocolo e os nomes do pastor e do secretário impressos; sem linhas para
+      assinar.
+  - **Decididas pela sessão a partir das regras dele (marcadas "Para conferir" na r29):**
+    - o destino é um campo opcional;
+    - em 30 dias saem os cargos, as escalas, os contatos e a família, e em 1 ano o resto do histórico, com o batismo e
+      o casamento (não estão na lista do que fica para sempre);
+    - por 30 dias a pessoa ainda entra no aplicativo só para baixar a carta, e recebe uma cópia por e-mail, se tiver;
+    - a secretaria pede por quem não sabe usar sem prova (fica registrado quem pediu e quando, e a pessoa recebe um
+      aviso), e podem pedir a congregação, a área e a Geral;
+    - o abandono fica como está (90 dias, aviso com 15 dias, a Geral confirma, quem abriu não confirma, recurso à
+      Assembleia); quem pede é a secretaria; não há carta;
+    - o falecimento continua como na r28, e a ficha de quem faleceu não se apaga.
+  - **Para a construção:** hoje o `SolicitarCarta` não desliga a pessoa no confirmar. Só o "processar" da secretaria,
+    depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
+    batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
+    apagamento aos poucos e sozinho.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
   termina (ela é uma vez só). Até lá, quem chega pelo site ou pela secretaria fica na fila, sem número. O sistema que
   está hoje na produção não gera matrícula sozinho (a secretaria digita o número).

@@ -30,7 +30,8 @@ As rotas do sistema de gestão (`/api/...`), publicadas junto com o `app/` no St
 ## Banco (SQL Server): as regras de qualidade
 
 Valem para todo código novo e toda correção. O banco de produção é o nível Basic (5 DTU, 30 workers, 300 sessões),
-pequeno: o que escapa aqui só aparece no dia de muito uso. Estudo de 23/11/2026, aprovado por ele.
+pequeno: o que escapa aqui só aparece no dia de muito uso. Vêm do estudo de 23/11/2026 (ganho médio), na condição
+que ele deu: entram se o ganho não for pequeno.
 
 1. Nada de consulta dentro de laço sobre lista que cresce (N+1): uma consulta só, com junção ou lista de ids.
    [Chatty I/O](https://learn.microsoft.com/azure/architecture/antipatterns/chatty-io/)
@@ -53,8 +54,9 @@ pequeno: o que escapa aqui só aparece no dia de muito uso. Estudo de 23/11/2026
 9. Valor do usuário só por parâmetro, nunca concatenado no SQL.
    [Injeção de SQL](https://learn.microsoft.com/sql/relational-databases/security/sql-injection)
 
-As regras 5 e 6 ainda não existem no `shared/db.js`; elas e os casos achados pelo estudo entram na varredura de
-defeitos.
+As regras 5 e 6 ainda não existem no `shared/db.js`. Elas se constroem uma vez só, no `db.js`, numa missão própria,
+nunca rota por rota: a nova tentativa em volta de uma gravação solta pode gravar duas vezes. Elas e os casos achados
+pelo estudo entram na varredura de defeitos.
 
 ## Testes
 

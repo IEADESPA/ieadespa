@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
+Atualizado em 23/11/2026 13:10 (Claude, sessão principal).
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -76,8 +76,8 @@ Nenhum agente trabalhando agora. **Pronto para ele recarregar a janela e rodar `
   atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
-- **Bancada, decisões dele:** o servidor de memória 2.2.1 (a aprovada é a 2.1.1; nunca instalar sozinho); a cláusula
-  5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
+- **Bancada, decisões dele:** a 2.2.2 do servidor de memória, quando sair (prevista para 25/11), conferir antes de
+  qualquer troca (a 2.2.1 já foi conferida e recusada); a cláusula 5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
   computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
 - **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
@@ -91,7 +91,8 @@ Nenhum agente trabalhando agora. **Pronto para ele recarregar a janela e rodar `
 Antes: ele recarrega a janela do VS Code ("Recarregar Janela") e roda `/clear`. A conversa nova já tem o conselheiro
 Fable e os agentes `construtor`, `desenhista` e `revisor`.
 
-Três agentes, cada um no seu ramo e worktree:
+Três agentes, cada um no seu ramo e worktree. **Toda missão começa trazendo a `main` para o ramo:** as regras de SQL do
+`api/CLAUDE.md` (seção "Banco (SQL Server)", de 23/11) ainda não estão nos ramos de Membros nem do Financeiro.
 
 1. **Revisor:** confere a importação de Membros (homolog `b34284c`; commits `703c76b` a `68bce84`): `importarLote` em
    `api/shared/importacaoMembrosDb.js`, `classificar`/`criarPrevia`, o laço dos lotes e o 428 em `Importar.svelte`, e

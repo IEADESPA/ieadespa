@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 20:15 (Claude, sessão principal).
+Atualizado em 23/11/2026 20:40 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -50,16 +50,29 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 Windows reiniciou o notebook; os agentes foram retomados às 20h05, sem perda. Se a conversa cair, confira os diários
 antes de mandar de novo:
 
-1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
-   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`. Decidido pelas regras (não perguntar): o
-   modelo é o **Fable 5.2** (não se rebaixa quem revisa) e **sem cartão** (crédito acabou, para e continua no mês
-   seguinte); `settingSources: []`, `maxBudgetUsd` por consulta e o gasto de cada passada medido nas 3 primeiras rodadas.
+1. **revisor de fora: PRONTO** na bancada (`C:\MCP\bancada\revisor-sdk\`, commits até `904edfa`, 90/90 testes),
+   genérico para todos os repositórios. **Esperando a chave dele:** no Console, conferir sem cartão e sem recarga
+   automática; criar uma chave de API comum (`sk-ant-api…`); dois cliques em `GUARDAR-CHAVE.cmd`, colar e Enter (fica
+   cifrada em `C:\MCP\segredos\revisor-api.age`). Depois, o Claude roda `node C:/MCP/bancada/revisor-sdk/revisar.mjs
+   --prova` (só vale "PROVA PASSOU"), e a 1ª rodada real é com `--proximo`, lendo o `gastos.csv`. Fable 5.2 em tudo,
+   sem cartão, teto de US$ 16 por pedaço, as regras do projeto no pedido (o `settingSources: []` não lê CLAUDE.md).
+   Os relatórios vão para o repositório privado da bancada (decisão dele). Diário:
+   `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 2. **construtor:** o e2e-51 FEITO (`58dcd0d`) e o servidor do arrolamento FEITO (`20681e8`, jest 6842 verdes,
    e2e-98 92/92); agora a tela (o Painel com o 4º grupo e a tela Completar), os pares e a homologação. Diário:
    `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
-3. **revisor** (desde as 19h45): confere a importação (`703c76b` a `68bce84`) e a trava (`54ae870` a `58dcd0d`) antes
-   da produção. Worktree só dele: `C:/tmp/ieadespa-revisao` (destacado em `58dcd0d`). Relatório local
-   `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md` (fora do Git).
+3. **revisor: TERMINOU** a importação e a trava (até `58dcd0d`): **ainda não vai à produção.** A trava está completa e
+   nenhum defeito de segurança foi provado (jest 6.783 verdes; e2e 96, 97, 51, 85, 90, 93 e 95 verdes). O que falta,
+   na fila do construtor depois do arrolamento:
+   - **bloqueia:** a importação nunca rodou inteira num banco Azure de verdade. Falta o ensaio na homologação com ~5
+     mil linhas de mentira, medindo o tempo de cada lote, depois do "vi" dele sobre a trava;
+   - **importante:** uma aspa sem fechar no arquivo faz pessoas sumirem da prévia sem aviso
+     (`api/shared/importacaoMembros.js`, `lerCsv`);
+   - a importação presa em IMPORTANDO se um lote falhar sempre (precisa poder retomar); o texto do site com "sistema
+     pago" (o visitante passa a ler "O cadastro pelo site abre em breve…"); o item do menu cortado a 1280 px;
+   - **esperando ele:** o prazo de guarda da prévia abandonada e da lista dos que ficaram de fora (LGPD).
+   Relatório local `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md` (fora do Git). O worktree
+   `C:/tmp/ieadespa-revisao` fica para a revisão do arrolamento (só a diferença desde `58dcd0d`).
 4. **construtor do Financeiro** (desde as 20h15): a tela do incremento 2 (as abas Folhas e Livro, r17 op. 1) só no
    ramo `v10-financeiro-svelte` (worktree `C:/tmp/ieadespa-financeiro/obra`), **sem mesclar no homolog** (o Membros vai
    primeiro). Diário: `C:/tmp/ieadespa-financeiro/DIARIO.md`.

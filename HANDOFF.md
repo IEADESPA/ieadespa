@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 16:50 (Claude, sessão principal).
+Atualizado em 23/11/2026 19:45 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -50,11 +50,21 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 diários antes de mandar de novo:
 
 1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
-   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-2. **pesquisa dos 8 economizadores de tokens** (o PDF dele), só leitura. Resultado em
-   `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
-3. **desenhista:** publicou a rodada 29 (versão 11) e terminou.
-4. **construtor:** o e2e-51 e completar o arrolamento. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`. Decidido pelas regras (não perguntar): o
+   modelo é o **Fable 5.2** (não se rebaixa quem revisa) e **sem cartão** (crédito acabou, para e continua no mês
+   seguinte); `settingSources: []`, `maxBudgetUsd` por consulta e o gasto de cada passada medido nas 3 primeiras rodadas.
+2. **construtor:** o e2e-51 FEITO (`58dcd0d`, enviado); agora completar o arrolamento. Diário:
+   `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+3. **revisor** (desde as 19h45): confere a importação (`703c76b` a `68bce84`) e a trava (`54ae870` a `58dcd0d`) antes
+   da produção. Worktree só dele: `C:/tmp/ieadespa-revisao` (destacado em `58dcd0d`). Relatório local
+   `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md` (fora do Git).
+4. **diagnóstico do teste de telas do CI** (desde as 19h45), sem commit: a causa provada, a correção e o ramo certo, em
+   `C:/tmp/ieadespa-ci-telas-DIAGNOSTICO.md`.
+
+Terminados: o **desenhista** publicou a rodada 29 (versão 11; DEPLOY OK em `15067a6`). A **pesquisa dos 8
+economizadores** (o PDF dele) concluiu que nenhum vale instalar agora: rendem no máximo uns 2% sem perder qualidade, e os
+que rendem mais trocam a leitura do código por resumos. Talvez mais tarde, só com teste de 5 defeitos plantados: o Code
+Review Graph no revisor de fora e o RTK. Detalhe em `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
 
 O estado de quando os agentes da tarde foram parados (cota acabando), sem nada pela metade no Git:
 
@@ -117,8 +127,8 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
   qualquer troca (a 2.2.1 já foi conferida e recusada); a cláusula 5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
   computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
-- **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
-  sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
+- **Worktrees:** `C:/tmp/ieadespa-svelte` e `C:/tmp/ieadespa-revisao` têm junções `api/node_modules` e
+  `site/node_modules`: apagar com `rmdir` sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
   `v10-membros-importador-wip` também.
 - **Diários** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`, `C:\tmp\ieadespa-membros\` (DIARIO,
   DIARIO-importador, DIARIO-banco-lento) e os das rodadas em `C:/tmp/ieadespa-desenho-r27-fotos/` e `-r28-fotos/`.
@@ -135,9 +145,9 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
    e2e-97 tem a planilha de mentira) para ele ver o liberado.
 3. **Construtor:** o e2e-51 e completar o arrolamento (item 1.2), com o resumo da missão parada (o passo 0 já está feito).
 
-**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
-**2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
-nunca como terceiro agente. A varredura de defeitos de segurança espera ("questões secundárias").
+**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem dele em
+vigor (23/11 à noite): **4 agentes ao mesmo tempo** (veja o bloco do alto). A varredura de defeitos de segurança fica
+com o revisor de fora, pelos créditos de API, não pela assinatura.
 
 **Toda missão do construtor começa trazendo a `main` para o ramo:** as regras de SQL do `api/CLAUDE.md` (seção "Banco
 (SQL Server)") ainda não estão nos ramos de Membros nem do Financeiro.

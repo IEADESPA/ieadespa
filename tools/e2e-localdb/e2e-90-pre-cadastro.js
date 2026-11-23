@@ -4,6 +4,7 @@
 // ficha; fora: só "já tem cadastro" e o caso à Geral, sem vazar nada), a repetição do site indo para correção, e as corridas com vários processos node.
 // Roda sobre a base cenario-177 (`bash rodar.sh preparar-177` e depois `BASE=cenario-177 bash rodar.sh roteiro e2e-90-pre-cadastro.js`); monta o próprio cenário.
 // Desde 21/11/2026 o envio do site grava o identificador do envio (migração 184): rode sobre a cenario-184 (`bash rodar.sh preparar-184`).
+// Desde 23/11/2026 (a trava das matrículas) semeia uma importação do sistema pago CONCLUÍDA: rode sobre a cenario-185 (`bash rodar.sh preparar-185`).
 process.env.AUTH_SECRET = "segredo-do-pre-cadastro-e-da-fila-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-precadastro";
 const { spawn } = require("child_process");
@@ -60,6 +61,7 @@ async function disparar(specs) {
 async function principal() {
   const { chamarRota } = require("./lib-afm");
   await obterPool();
+  await L.importacaoConcluida();   // a trava das matrículas (23/11/2026): este roteiro cadastra gente, então roda depois da importação do sistema pago
   const site = (corpo, headers = SITE) => chamarRota("PreCadastroSite/index.js", { metodo: "POST", corpo, headers });
   const fila = (quem, { id, acao, metodo = "POST", corpo, query } = {}) => chamarRota("PreCadastros/index.js", { metodo, token: tok[quem](),
     binding: { ...(id != null ? { id: String(id) } : {}), ...(acao ? { acao } : {}) }, corpo: corpo || {}, query: query || {} });

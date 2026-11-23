@@ -333,6 +333,11 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Escolaridade inválida." } };
       return;
     }
+    // A trava das matrículas (23/11/2026, shared/matriculaNova.js): antes da importação do sistema pago concluída, nenhuma ficha nova — nem o número se gera
+    if (matriculaGerada && !(await matriculaNova.matriculasLiberadas(() => pool.request()))) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: matriculaNova.MSG_TRAVADA } };
+      return;
+    }
     if (matriculaGerada) membroId = await proximaMatricula(pool);
     let destinoCongregacaoNome = null, destinoExtensaoNome = null;
     if (congregacaoId) {
@@ -450,6 +455,11 @@ module.exports = async function (context, req) {
     // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
     if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    // A trava das matrículas também vale para a matrícula DIGITADA de ficha que não existe (a tela antiga): editar a ficha que já existe continua livre
+    if (!existia && !matriculaGerada && !(await matriculaNova.matriculasLiberadas(() => pool.request()))) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: matriculaNova.MSG_TRAVADA } };
       return;
     }
     // FASE 10, v10.1b passo 3 (17/11/2026) — a congregação de quem JÁ TEM congregação na ficha só muda pela TRANSFERÊNCIA (GestaoTransferencias /

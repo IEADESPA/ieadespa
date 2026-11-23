@@ -1,139 +1,119 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 21/11/2026 15:09
+Em uso por: Mateus desde 23/11/2026 08:48
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 21/11/2026 (Claude, sessão principal: bancada e rodadas 25 e 26). Antes, em 20/11 (agente de construção de Membros): Agente em andamento no `v10-membros-svelte`
-(worktree `C:/tmp/ieadespa-svelte`): sobras 1 a 5 FEITAS (ramo até `b5f12f8`) e NA HOMOLOGAÇÃO: homolog `ae7f2e3` DEPLOY OK,
-`feb7dc6` (site), base do teste de telas `e5fe087` só no homolog (DEPLOY OK; a execução 44806909775 que a
-confirma ainda rodava às 17h30 de 20/11: conferir). Prévia do site:
-`https://salmon-bay-0efd06d0f-21.eastus2.3.azurestaticapps.net/quero-me-cadastrar/`. Pares em
-`scratchpad/svelte-membros/pares-site/`. Próximo: o importador (passo 9), NÃO começado (cota).
+Atualizado em 23/11/2026 14:00 (Claude, sessão principal).
+
+**Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
+
+- as habilidades `svelte-core-bestpractices`, `supabase-postgres-best-practices` (só Postgres) e
+  `test-driven-development` (o `construtor` escreve o teste antes);
+- 3 de LGPD adaptadas, com os documentos em `C:\MCP\bancada\lgpd\<repositório>\` (privada, nunca no repositório);
+- o plugin `pyright-lsp` com o `pyright@1.1.414`;
+- o caminho do Codex consertado (cópia em `C:\MCP\copias-antigas\2026-11-23-1154\`);
+- a 2.2.1 do servidor de memória conferida e calada: fica a 2.1.1 até conferir a 2.2.2.
+
+O banco do ieadespa **fica no SQL Server** (memória `banco-sql-server-fica`).
+
+**O estudo das regras de SQL (23/11), só leitura:** deu **ganho médio**. As 9 regras estão no `api/CLAUDE.md`, na seção
+"Banco (SQL Server)", e não viraram habilidade. O detalhe está em `C:\tmp\ieadespa-bancada\estudo-regras-sql.md`. Os
+achados vão para o **lote 1 da varredura**, e estão também na memória do projeto, "FASE 10":
+
+- o `db.js` sem nova tentativa e sem pool configurado;
+- a tela de votar da assembleia, com consultas por pessoa;
+- o sininho;
+- a prévia do juntar fichas;
+- o painel de distritos;
+- 342 chaves estrangeiras sem índice.
+
+Nenhum agente trabalhando agora.
 
 ## 1. Concluído
 
-- **Produção (main):**
-  - `motivoSaida` fora da lista de pessoas (`d0831d7`);
-  - a rede de segurança do deploy: `tools/conferir-deploy.sh` e `.github/workflows/sistema-repetir-deploy.yml`. A regra
-    1 do `CLAUDE.md` usa o script, e já repetiu sozinha um deploy recusado pelo firewall;
-  - plano: a seção "Financeiro (módulo 2)" com "A realidade do dinheiro, que vale mais que o Regimento", o que falta em
-    Membros e a varredura em pedaços de 30 minutos (main até `610cbc2`, todos com DEPLOY OK).
-- **Homologação** (preview do PR #21):
-  - a casca refeita igual ao desenho, com as fontes e os efeitos;
-  - **Membros REFEITO DO ZERO em Svelte + TypeScript.** Ele aprovou o visual: "ficou bom, bem rápido". O gráfico do
-    painel foi corrigido;
-  - **as Carteirinhas** (homolog `0533b88`).
-  - Ramo `v10-membros-svelte`, worktree `C:/tmp/ieadespa-svelte`.
+- **Produção (main):** só documentação e desenho. Nada de Membros nem de Financeiro foi à produção.
+- **O padrão alto (23/11; memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`):**
+  - o conselheiro (`/advisor fable`) funciona no VS Code, sem créditos à parte no plano dele;
+  - a bancada `ef666e8` instalada neste computador: os agentes `construtor` e `desenhista` (Opus) e `revisor` (Fable,
+    só lê), e o gancho de proteção. Segredo mascarado: `node C:/MCP/bancada/mascarar.mjs <arquivo>`;
+  - 3 agentes ao mesmo tempo (desenha, constrói, revisa) e, como exceção autorizada, fluxos com muitos agentes nas
+    Travas e quando ajudar;
+  - o plano novo da varredura de defeitos, aprovado por ele (plano da fase, seção "O jeito novo").
 - **Desenho:**
-  - **A página antiga** (G1gj9hzSbdcqAZYcFjmJ1j) é o ARQUIVO das rodadas 2 a 18. Nunca mais republicar.
-  - **A página leve** (KMebnrdoWfAhcz9yeRgjFz) tem a **rodada 20 publicada** (Financeiro, 12 telas). A rodada 19 foi
-    reprovada por causa do "culto": ver a memória `realidade-financeira-nao-o-regimento`.
+  - Financeiro: núcleo aprovado nas rodadas 20 a 27.
+  - **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
+    `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento do mês, o lote com os números
+    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta
+    aberta, marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+- **Membros** (ramo `v10-membros-svelte`, `68bce84`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
+  - o "Quero me cadastrar" (as 4 pendências) e o banco lento (aprovado por ele);
+  - o servidor do importador (migração 185, rota `api/importacao-membros`);
+  - **a tela "Importar os membros do sistema pago"** (r27), só para a Secretaria Geral, e a importação deixando de fora
+    a matrícula que já existe (a 1 e a 2): commits `703c76b` a `68bce84`, homolog `b34284c`, DEPLOY OK, 96/96 no teste
+    completo. As respostas dele de 23/11 estão no plano, seção "A tela de importar os membros: as respostas dele".
+- **Financeiro** (ramo `v10-financeiro-svelte`; worktree `C:/tmp/ieadespa-financeiro/obra`):
+  - o incremento 1b na homologação (homolog `f774121`);
+  - **só no ramo, fora da homologação:** `bd694cf` (a casca igual ao desenho) e `4c06d58` (o servidor do incremento
+    2: as folhas, a exceção da folha, o livro, o rastreio e a devolução). A tela do incremento 2 não foi feita.
 
 ## 2. Arquivos alterados (ainda não registrados no Git)
 
-- **Fontes do desenho:** os da rodada atual (21) estão no Git, em `design/propostas/` (20/11). O resto (rodadas antigas,
-  escolhas, auditorias e scripts de Membros) continua só na cópia `C:/tmp/ieadespa-desenho-fontes/` deste computador.
-
-- Nenhum. O incremento 5 ("Quero me cadastrar" do site) está no `v10-membros-svelte` `37c25a4`, testado (e2e-95 56/56, jest
-  6.683). O worktree `C:/tmp/ieadespa-svelte` ganhou também a junção `site/node_modules` (apagar com `rmdir` sem `/s`).
+- Nenhum. A `main` e os worktrees estão limpos e enviados.
 
 ## 3. Pendências e erros conhecidos
 
-- **Respostas dele pendentes:**
-  - **Rodada 20, as 5 dúvidas:**
-    1. a espécie da congregação vai para a conta dela ou direto para a geral;
-    2. o retido fica em dinheiro ou é depositado;
-    3. o Pix dos membros cai direto na geral;
-    4. as receitas passam de R$ 4,8 milhões (a ECD);
-    5. mostrar "atrasada".
-    - E as escolhas dele na página leve: ler com ArtifactData (url KMeb…, coleção "escolhas", ids `r20-*`, `geral-r20`).
-  - **Carteirinhas:**
-    1. a do obreiro, só a Secretaria Geral imprime;
-    2. o QR de quem saiu mostra só o nome;
-    3. testar a impressora de PVC.
-  - **Membros na homologação:** o OK final dele.
-  - **Antigas:** a fonte (Fonte teste), o alerta do Azure para R$ 450, as fotos da Igreja e as 3 decisões do passo 3.
-- **Ajustes das carteirinhas** (cor marinho com brilho, respiro do QR, cadeado só da local): já feitos no `24d782c` e no
-  homolog `319b547`; falta só a foto de conferência na homologação.
-- **Pendências das revisões do "Quero me cadastrar"** (do passo 4): 4 itens, 2 de segurança e 2 de consistência, a
-  corrigir ANTES da produção. O detalhe técnico fica fora do repositório público (é público): pergunte ao responsável.
-- **Decisão dele:** e-mail com a matrícula depois do cadastro pelo site (o desenho prometia; revelaria quem não tem ficha).
+- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** Falta a trava
+  no código: nada gera matrícula antes da importação concluída, em todos os pontos que chamam `proximaMatricula`
+  (`api/shared/preCadastroDb.js` e os 3 de `api/GestaoPessoas/index.js`). Sem ela, Membros não vai à produção.
+- **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
+  Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
+- **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
+  arrolamento" pronto.
+- **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:
+  atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
+- **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
+  de PVC; a foto de conferência dos ajustes na homologação.
+- **Bancada, decisões dele:** a 2.2.2 do servidor de memória, quando sair (prevista para 25/11), conferir antes de
+  qualquer troca (a 2.2.1 já foi conferida e recusada); a cláusula 5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
+  computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
-- **O worktree `C:/tmp/ieadespa-svelte`** tem uma junção `api/node_modules`: apagar com `rmdir` sem `/s` antes de
-  remover o worktree.
+- **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
+  sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
+  `v10-membros-importador-wip` também.
+- **Diários** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`, `C:\tmp\ieadespa-membros\` (DIARIO,
+  DIARIO-importador, DIARIO-banco-lento) e os das rodadas em `C:/tmp/ieadespa-desenho-r27-fotos/` e `-r28-fotos/`.
 
-## 3b. 20/11/2026, tarde (sessão principal)
+## 4. Próximo passo exato
 
-- **Rodada 24 PUBLICADA** (20/11, noite) na página leve KMeb… (versão 6, 378 KB). Ela substitui a 23, que saiu sem
-  resposta dele; a 22 e a 21 seguem recolhidas, e a 21 foi aprovada. A 24 refaz 3 telas com a regra DEFINITIVA das
-  folhas de outro mês (plano, `7688b5c`, DEPLOY OK):
-  - **Lançar**, em 02/12: dezembro começa na 70.161, a 1ª "mês posterior". A 70.163 e a 70.164 vêm sozinhas com a
-    tarja, e só existem "Este mês" e "Mês posterior";
-  - **Folha do mural** contínua: novembro da 70.063 à 70.164, dezembro a partir da 70.161;
-  - **Conferir o repasse:** o adiantado de dezembro (R$ 530) "espera dezembro".
-  - Conferida foto a foto na sessão principal.
-  - Fontes em `C:/tmp/ieadespa-desenho-fontes/` (r24-*.js, montar-r24.js, propostas-r24/).
-  - Respostas na página: ArtifactData, coleção "escolhas", ids `r24-*` e `geral-r24`.
-- **Varredura do Financeiro antes da construção: RESPONDIDA por ele** (20/11, noite). Está no plano, na seção "A
-  varredura antes da construção". Em resumo:
-  - começa em janeiro de 2027, só com os saldos de abertura;
-  - o mês anterior recebe até a congregação mandar o relatório;
-  - departamentos e Missões ficam fora da 1ª entrega;
-  - só espécie e Pix;
-  - extrato da Cora em arquivo;
-  - o dizimista vê os próprios dízimos;
-  - o contador recebe por planilha (ITG 2002), sem ECD;
-  - a reabertura do mês só com o voto do Conselho Fiscal e a autorização do Ministério.
-- **Rodada 24 RESPONDIDA (21/11):** lançar aprovado; mural aprovado com acerto; o 3º relatório refeito com a regra
-  nova (plano, seção "Rodada 24: o que ele aprovou e a regra nova do 3º relatório"): contínuo, sem mês; na sede × com a
-  congregação; o relatório fechado tira o líquido e divide 60% Geral, 40% centro de custo; o retido saiu do relatório.
-- **Rodada 25 RESPONDIDA (21/11)** e a regra do saldo CONFIRMADA com ele antes de desenhar (plano, seção "Rodada 25: a
-  regra certa de quanto cada congregação tem"): um extrato por congregação dentro da Geral; relatório fechado tira só a
-  parte da Geral; o resto já é da congregação.
-- **Rodada 26 PUBLICADA (21/11)** na página leve KMeb… (versão 8; fontes em `design/propostas/`, `04d9cf4`; 213 KB,
-  112 desenhos sem problema, nada transborda): o mural sem o quadro do fim e sem a aba "Espécie e digital"; "Quanto cada
-  congregação tem na Geral" em "Contas e bancos". **Esperando as escolhas dele:** ids `r26-*` e `geral-r26` (28
-  documentos no banco, os da 25 guardados).
-- **Decisões dele de 20/11** (memória `colaboracao-publica-e-creditos`):
-  - o esforço SEMPRE no máximo;
-  - `autoCompactWindow` = 400000, já aplicado em `~/.claude/settings.json`;
-  - o plugin Nonprofits fica;
-  - a colaboração no repositório PÚBLICO, só com o que é seguro;
-  - a senha do ASAF apagada do settings.
-- **Em andamento (21/11, tarde):** um agente novo corrige as 4 pendências de segurança e consistência do "Quero me
-  cadastrar" no `v10-membros-svelte` (worktree `C:/tmp/ieadespa-svelte`, a partir de `b5f12f8`), com prova e homologação;
-  diário em `C:\tmp\ieadespa-membros\DIARIO.md`.
-- **A colaboração no repositório público: MONTADA em 20/11** (commits `87caeb9` a `94c3771` e o do kit): as habilidades
-  em `.claude/skills` e `.agents/skills`, o `.claude/settings.json` com os 5 plugins, este `HANDOFF.md` com a linha
-  "Em uso por", a memória do projeto e a do Claude versionadas (revisadas, sem dado pessoal), os fontes do desenho, o
-  mapa do sistema (`CLAUDE.md` por pasta e `docs/plano/RESUMO-fase-10.md`) e o kit novo (`.claude/continuidade`, com
-  o `INSTALAR.cmd` de dois cliques e a lista `bancada.json`).
-  - **Neste computador (20–21/11):** checkout principal na `main`; o instalador rodou com o sim dele (servidor 2.1.1,
-    cópia do kit e `autoMemoryDirectory`), valendo a partir da próxima conversa. Até recarregar a janela, a sessão
-    principal grava em `C:\MCP\memorias\ieadespa.jsonl`: exportar de novo para o repositório na troca.
-  - **Aviso de início de toda conversa: NO AR** (`10d7ac9`, aprovado por ele): gancho SessionStart que só lê e mostra
-    a linha "Em uso por", o `git pull` que falta e o que o computador tem de diferente do kit.
-  - **Matriz única da bancada: FEITA em 21/11** (repositório privado `IEADESPA/bancada` em `C:\MCP\bancada`; aqui ficou
-    só a porta, `185f566`, DEPLOY OK; diário em `C:\tmp\ieadespa-bancada\DIARIO.md`). O `-Sim` rodou neste notebook com
-    o sim dele (vale depois de "Recarregar Janela"). Correção do instalador na bancada: `12f0ee7`.
-  - **asaf: FEITO** (21/11): a porta entrou na `main` dele (`0da8086`, com o sim dele); aviso de início e servidor de
-    memória conferidos lá. **Construtor:** aplicar na próxima vez que for aberto
-    (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`).
-  - **Decisões dele pendentes da bancada:** conferir o servidor de memória 2.2.1 (a aprovada é a 2.1.1) antes de subir a
-    versão; a cláusula 5.2 do `LICENSE` cita as pastas de habilidades que saíram; o Codex lendo habilidades por junção
-    não foi provado.
-  - Enxugar o MEMORY.md só depois do OK dele.
+**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
+**2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
+nunca como terceiro agente. A varredura de defeitos de segurança espera ("questões secundárias").
 
-## 4. Próximo passo exato (quando ele mandar continuar)
+**Toda missão do construtor começa trazendo a `main` para o ramo:** as regras de SQL do `api/CLAUDE.md` (seção "Banco
+(SQL Server)") ainda não estão nos ramos de Membros nem do Financeiro.
 
-1. **Membros:** conferir o resultado do agente das 4 pendências do "Quero me cadastrar" (diário acima). Depois, em
-   missões de 30 minutos: o seletor de congregação final, o importador (passo 9) e a ida à produção (só com o OK dele).
-2. **Financeiro:** ler as escolhas dele na rodada 26 (ids `r26-*`, `geral-r26`). Aprovada, começar a CONSTRUÇÃO do núcleo
-   em Svelte: entradas, repasse, caixa, recibo, rateio, tesouro, mural e o saldo de cada congregação na Geral. Dúvida
-   de regra se pergunta ANTES.
-3. **Desenho:** depois do Financeiro, a rodada de Membros (família como unidade, listas inteligentes, assistente de
-   desligamento).
-4. **A varredura de defeitos em pedaços de 30 minutos:** só quando ele disser que é viável.
+1. **Construtor, Membros** (worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`), em missões curtas, com commit,
+   homologação e DEPLOY OK a cada uma:
+   1. **A trava das matrículas:** nada gera matrícula nova antes de a importação do sistema pago terminar, e ela libera
+      sozinha no fim da importação. Os pontos: o aceite em `api/shared/preCadastroDb.js` e os 3 de
+      `api/GestaoPessoas/index.js` que chamam `proximaMatricula`. **Cuidado:** `api/shared/importacaoMembrosDb.js`
+      (~linha 333) também chama `proximaMatricula`, para as linhas sem número. A trava vai nos chamadores, nunca dentro
+      de `proximaMatricula`, senão barra a própria importação. A ficha que chega no meio fica na fila sem número, e a
+      tela explica.
+   2. **Completar o arrolamento** (r28): a congregação, **a área e a Geral** completam e editam (conferir o
+      `escopoRotas`).
+   3. **A família** (r28) e **as listas inteligentes** (r28; **exportar PDF ou planilha, só a Geral**).
+   4. **O revisor** confere a importação (homolog `b34284c`; `703c76b` a `68bce84`), a trava e o arrolamento.
+   5. **A ida de Membros à produção:** o construtor escreve o plano (as migrações, a permissão ALTER para juntar
+      fichas, a importação real e depois a liberação das matrículas, como desfazer) e **para**. Só com o sim dele, depois
+      de ver na homologação.
+   6. **Depois, o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58` para a homologação; as abas Folhas e
+      Livro; o lote da gráfica (r27); a chegada do lote e o fechamento do mês (r28).
+2. **Desenhista, rodada 29:** (1) a **movimentação refeita** pelas regras novas dele: o membro sai sozinho pelo
+   aplicativo, com a carta em PDF; ninguém confirma; os cargos ficam vagos; a secretaria só no "não sabe usar" e no
+   abandono; o apagamento a partir de 30 dias; o que fica para sempre. (2) O **levantamento das dúvidas do módulo 3**
+   (Estrutura e Territórios), para perguntar a ele **antes** de desenhar. Publicar na página leve KMeb…: ele já
+   terminou de comentar a 28.

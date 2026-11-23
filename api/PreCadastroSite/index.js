@@ -29,6 +29,9 @@ const { conferirChaveDoSite } = require("../shared/chaveSiteSistema");
 const regras = require("../shared/preCadastro");
 const pdb = require("../shared/preCadastroDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+// A trava das matrículas (23/11/2026, shared/matriculaNova.js): antes da importação do sistema pago concluída, ninguém se cadastra pelo site — a recusa (409)
+// não espera o tempo fixo, como o 400 e o 429: não depende do CPF nem de quem já é da Igreja
+const matriculaNova = require("../shared/matriculaNova");
 
 const limitador = criarLimitador({ janelaMs: 60000, maximo: 60 });
 const POR_VISITANTE_HORA = 3;
@@ -47,6 +50,7 @@ async function receber(context, dados, corpo, ate, estado) {
   const registrar = (nivel, ...m) => { if (!estado.respondido) context.log[nivel](...m); };
   try {
     const pool = await getPool();
+    if (!(await matriculaNova.matriculasLiberadas(() => pdb.pedidoNoPrazo(pool, ate)))) return { status: 409, body: { sucesso: false, mensagem: matriculaNova.MSG_TRAVADA } };
     const cong = await pdb.lerCongregacao(() => pdb.pedidoNoPrazo(pool, ate), dados.congregacaoId);
     if (!cong || !cong.ativa) return { status: 400, body: { sucesso: false, mensagem: "Escolha uma congregação da lista." } };
     const gravado = await pdb.inserirDoSite(pool, dados, { envioId: corpo.envioId, consentimento: regras.CONSENTIMENTO, origemHash: pdb.hashOrigem(corpo.origemVisitante),

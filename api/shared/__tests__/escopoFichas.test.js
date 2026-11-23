@@ -210,6 +210,8 @@ describe("GestaoMedidasCautelares: Art. 45 é da igreja inteira, só o GERAL", (
 
 describe("ImportarPessoas: importação do rol é do GERAL, com teto e transação", () => {
   const corpo = { linhas: [{ membroId: 100, nome: "Nova" }] };
+  // o mundo depois da importação do sistema pago (a trava das matrículas solta; a trava ligada tem os testes dela em travaMatriculas.test.js)
+  beforeEach(() => quando(/FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA'/, [{ liberadas: 1 }]));
   test("dirigente local com pessoas: 403 antes de tocar o banco", async () => {
     const r = await chamar(hImportar, { metodo: "POST", token: LOCAL(), corpo });
     expect(r.status).toBe(403);

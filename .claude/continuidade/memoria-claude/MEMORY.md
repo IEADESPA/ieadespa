@@ -11,7 +11,7 @@
 - [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — 20/11: esforço máximo; sem fork longo; repo público
 - [Varredura em pedaços de 30 min](varredura-em-pedacos-de-30-min.md) — caça de defeitos em pedaços; ele diz quando
 - [Sem Bedrock](sem-bedrock-ficar-na-assinatura.md) — ficar na assinatura; não reabrir
-- [Habilidades instaladas](habilidades-de-design-instaladas.md) — frontend-design, Emil, Vercel, Google e 5 plugins
+- [Habilidades instaladas](habilidades-de-design-instaladas.md) — design, Svelte, Postgres, TDD, LGPD (docs na bancada privada), plugins
 - [Não cobrar cadastros de pessoas](nao-cobrar-cadastros-de-pessoas.md) — até a importação do cadastro
 
 ## Regras de entrega e teste

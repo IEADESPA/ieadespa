@@ -11,7 +11,7 @@
 - [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — 20/11: esforço máximo; sem fork longo; repo público
 - [Varredura em pedaços de 30 min](varredura-em-pedacos-de-30-min.md) — caça de defeitos em pedaços; ele diz quando
 - [Sem Bedrock](sem-bedrock-ficar-na-assinatura.md) — ficar na assinatura; não reabrir
-- [Habilidades instaladas](habilidades-de-design-instaladas.md) — frontend-design, Emil, Vercel, Google e 5 plugins
+- [Habilidades instaladas](habilidades-de-design-instaladas.md) — design, Svelte, Postgres, TDD, LGPD (docs na bancada privada), plugins
 - [Não cobrar cadastros de pessoas](nao-cobrar-cadastros-de-pessoas.md) — até a importação do cadastro
 
 ## Regras de entrega e teste
@@ -33,11 +33,14 @@
 
 - [Nada sem aprovação dele](fase10-nada-sem-aprovacao.md) — ele VÊ e aprova antes da produção
 - [Perguntar antes de desenhar](perguntar-antes-de-desenhar.md) — 20/11: dúvida de regra se pergunta ANTES de desenhar
+- [Não perguntar o que ele controla](nao-perguntar-o-que-ele-controla.md) — 23/11: caso que ele impede na operação = trava simples
+- [Perguntas na hora](perguntas-na-hora.md) — 23/11: pergunta pronta vai já, em blocos de 4, enquanto os agentes trabalham
 - [Construir exatamente o aprovado](construir-exatamente-o-aprovado.md) — par aprovado × construído de toda tela
 - [Realidade financeira](realidade-financeira-nao-o-regimento.md) — sem culto/malote/cofre; Regimento não é a realidade
 - [Propostas em artefato](propostas-de-tela-em-artefato.md) — página leve KMeb…; a antiga G1gj… é só arquivo
 - [Um módulo por vez](um-modulo-por-vez-sem-republicar.md) — não republicar enquanto ele comenta
-- [Desenho em paralelo](desenho-em-paralelo-a-construcao.md) — um desenha, outro constrói
+- [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 23/11 noite: 4 agentes ao mesmo tempo, até outra ordem dele
+- [Conselheiro e alto padrão](conselheiro-e-padrao-alto.md) — 23/11: Fable aconselha o Opus (funciona no VS Code); agentes padrão, ganchos e fluxos com muitos agentes quando ajudar
 - [Ordem fixa de módulos](ordem-fixa-de-modulos.md) — 1 Membros, 2 Financeiro, 3 Estrutura...
 - [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra
 - [Roteiro das fases 10–12](roteiro-fases-10-11-12.md) — 10 experiência + Membros; 11 escuta; 12 sites
@@ -52,6 +55,7 @@
 - [Azure SWA: fatos medidos](azure-swa-fatos-medidos.md) — IP do cliente; config vale em app/
 - [Azure: duas contas](azure-duas-contas-config-dir.md) — AZURE_CONFIG_DIR=~/.azure-ieadespa
 - [Custo Azure](custo-azure-e-pico-do-servidor.md) — banco pausa; teto do orçamento
+- [O banco fica SQL Server](banco-sql-server-fica.md) — 23/11: não trocar para Postgres; não reabrir sem motivo novo
 - [Capacidade para 1.000](capacidade-mil-pessoas.md) — assembleia online ainda não pronta
 - [Visão futura](visao-futura-integracao-total.md) — integração total sem Directus; não é prioridade
 - [Chave de acesso (vD.4)](vd4-chave-de-acesso.md) — passkey da liderança

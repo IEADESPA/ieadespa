@@ -735,7 +735,8 @@ O que falta, nesta ordem:
 6. **A ida à produção:**
    - as migrações 174 a 179;
    - a permissão ALTER para juntar fichas;
-   - a importação real;
+   - a importação real, **antes de qualquer matrícula nova** (regra dele de 23/11; a trava no código está na seção "A
+     tela de importar os membros: as respostas dele");
    - a troca do sistema pago.
 
 **Rodada de desenho de Membros, aprovada por ele em 19/11/2026,** para logo depois que ele fechar a rodada 19 do Financeiro
@@ -930,6 +931,242 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
 - **Para o futuro** (quando a congregação tiver conta bancária própria, CNPJ filial): o centro de custo fica **misto**,
   com dinheiro em contas diferentes (o que está na Geral e o que está na conta da congregação). Na prestação de contas,
   a parte da Geral sai **primeiro** do que está na Geral; o que está na conta da congregação vem **em segundo**.
+
+### Rodada 26: o Financeiro aprovado (21/11/2026)
+
+- **A folha do mural:** aprovada ("ficou ótimo... agora está excelente"), sem o quadro do fim e sem a aba "Espécie e
+  digital" no relatório do mês.
+- **Quanto cada congregação tem na Geral:** aprovada como está ("do jeito que está, passa, está muito bom"). Na
+  construção:
+  - **o que é da Geral pode ficar negativo**, quando a Geral gasta além do que é dela. A tela continua mostrando quanto
+    é de cada congregação, e o número da Geral negativo aparece em vermelho, como alerta;
+  - **alerta para o futuro** (CNPJ das filiais, conta bancária própria): o sistema terá de saber de onde é cada recurso
+    (o que está na conta geral, o que está na conta local e o que está em espécie). Até lá, fica como está.
+- Com a 26, **o desenho do núcleo do Financeiro está aprovado** (rodadas 20 a 26). Próximo: a construção em Svelte, na
+  homologação, tela por tela igual ao aprovado. A produção começa em janeiro de 2027, depois de mais uma verificação de
+  defeitos (seção "A varredura antes da construção").
+
+### As respostas de 22/11/2026 (antes da rodada 27)
+
+- **Financeiro, na construção:**
+  - **o número do bloco de recibos sai da primeira folha** (blocos de 50 folhas: a folha 70.051 é do bloco 1.401);
+    ninguém digita o número do bloco;
+  - **a tela de lançar não mostra mais "marcada em novembro"** na coluna "Referente a", igual ao mural. A folha de outro
+    mês continua com a tarja "Mês posterior".
+- **"Conferir o repasse" volta redesenhada e simples na rodada 27.** É a tela em que a Tesouraria Geral recebe o que a
+  congregação mandou (os dízimos e as ofertas lançados, a espécie entregue e o Pix), confere, aceita e dá o recibo do
+  repasse (semanal ou mensal). A versão da rodada 24 ainda tinha o "adiantado esperando dezembro", que a regra da
+  rodada 25 acabou.
+- **O fechamento do mês (desenhar na 27):** só o Conselho Fiscal fecha o mês, e **cada conselheiro vota no sistema,
+  com o próprio acesso**: o mês fecha (ou reabre) quando a maioria votou. A reabertura ainda precisa da autorização do
+  Ministério, registrada com a data. A Geral pode travar os lançamentos durante a auditoria.
+- **Os saldos de abertura (desenhar na 27):** a Tesouraria Geral lança o saldo (pode ser negativo) e anexa o
+  comprovante; **o Conselho Fiscal confere e confirma** antes de valer. Primeiro o Tesouro Geral e a Convenção; as
+  congregações à medida que cada uma começar no sistema.
+- **Importar os membros do sistema pago (desenhar na 27): uma vez só**, só a Secretaria Geral. O que mudar depois é
+  corrigido à mão no sistema novo. Valem as decisões de 18/11 (o arrolamento não vem: cada importado entra com a
+  pendência e sem voto até completar; colunas extras aceitas; o cadastro "IEADESPA - GERAL" entra sem congregação).
+- **"Quero me cadastrar" do site:**
+  - **com o banco lento, a secretaria aceita depois.** A resposta sai sempre no tempo fixo; se o trabalho não couber
+    nele, o cadastro fica na fila para a secretaria aceitar, em vez de a resposta demorar mais;
+  - a espera de 3 segundos fica; o "Carregando o texto da autorização…" fica; o envio repetido com dados trocados
+    continua ignorado, sem aviso.
+- **A ordem do desenho:** a rodada 27 traz as telas que faltam (o repasse, o fechamento, os saldos de abertura e a
+  importação); a 28, a rodada de Membros aprovada em 19/11 (a família como unidade, as listas inteligentes e o
+  assistente de movimentação); depois, o módulo 3 (Estrutura e Territórios).
+
+### Rodada 27: o que ele aprovou e o fechamento refeito (22/11/2026)
+
+- **Aprovadas como estão:** receber o repasse e dar o recibo ("muito bom, ficou ótimo"), os saldos de abertura,
+  importar os membros e cadastrar lote da gráfica. Os pontos marcados "Para conferir" nessas telas ficam como foram
+  desenhados (o saldo de abertura vale com a maioria do Conselho Fiscal; a matrícula 0, vazia ou repetida ganha a
+  próxima do sistema e quem veio primeiro na planilha fica com o número).
+- **Na construção do repasse:** o mês pode ter QUALQUER número de repasses (o desenho mostra o 1º, o 2º e o 3º, de 10
+  em 10 dias, mas não é limite).
+- **O lote da gráfica, os números pulados:** este ano a gráfica recebeu o pedido da 60.001 à 70.000 e fez da 60.001 à
+  65.000 e depois da 70.000 à 75.000. Na chegada, a tesouraria confirma as folhas que vieram de verdade; o sistema
+  mostra em vermelho os números pulados e só cria os blocos que existem (a desenhar na rodada 28).
+- **O fechamento do mês volta na rodada 28, separado em duas coisas:**
+  - **a auditoria ao vivo, durante o mês:** o Conselho Fiscal confere cada nota (entrada ou despesa) logo que ela
+    entra, sem esperar o mês acabar; a nota conferida por 2 dos 3 conselheiros fica travada e ninguém mais a muda; o
+    mês continua recebendo lançamentos enquanto isso;
+  - **a correção de uma nota travada (antes do fechamento):** a tesouraria faz um pedido de correção na própria nota,
+    com a justificativa; o Conselho confere de novo aquela nota (2 dos 3) e, se aceitar a justificativa, a nota fica
+    corrigida. Nada de estorno com nota nova; a trilha guarda o valor antigo, o novo, o motivo e quem aceitou;
+  - **o fechamento final:** perto da data da prestação de contas, com tudo conferido, o Conselho vota e fecha o mês de
+    vez; aí nada mais entra. A reabertura continua com o voto da maioria do Conselho Fiscal e a autorização do
+    Ministério.
+
+### As regras da rodada 28 (Membros), respondidas antes de desenhar (22/11/2026)
+
+- **A família:** a pessoa liga qualquer parente (filho, mãe, pai, o filho casado, a avó...) e marca se **mora junto**.
+  Quem mora junto forma a mesma casa, com o mesmo endereço; quem não mora fica só na árvore da família. Uma pessoa pode
+  estar ligada a mais de uma família.
+- **Quem ganha ficha:** quem frequenta a igreja ganha ficha com matrícula; quem não frequenta fica só com o nome na
+  família, fora das contagens.
+- **O membro, em "Minha vida":** muda o endereço da casa toda (os outros adultos recebem aviso) e acrescenta o bebê que
+  nasceu, que cai na fila da secretaria.
+- **As etiquetas:** cada nível (congregação, área, Geral) tem as suas; a Geral cria as oficiais; pela LGPD o membro
+  pode ver as dele, e o sistema avisa isso ao criar.
+- **A lista salva:** quem salva escolhe "só eu" ou "o meu nível"; a Geral pode publicar para todos, e cada um vê só as
+  pessoas do seu alcance; a lista se atualiza sozinha.
+- **A saída (desligamento, falecimento):** ~~a congregação registra; para o membro comum vale na hora; obreiro, quem tem
+  credencial ou liderança precisa da confirmação da Geral antes.~~ **Substituída em 23/11/2026** (seção "Rodada 28: o
+  que ele aprovou"): o próprio membro sai pelo aplicativo, na hora, sem confirmação de ninguém.
+- **Os documentos:** o desligamento por carta de mudança é automático (a própria carta é o documento); no falecimento, a
+  data e quem informou, com a certidão opcional; a volta não pede documento. O "pediu para sair" por áudio ou recado não
+  existe mais (23/11).
+- **A volta (readmissão):** a matrícula é para sempre. A pessoa volta com a mesma matrícula, em comunhão, com **data de
+  entrada nova** e **sem o cargo** (renunciou a tudo ao sair; os cargos já são de outros). É como um membro novo: passa
+  de novo pela integração. O que ainda estiver guardado volta; o que a harmonização dos dados (a LGPD) já apagou com o
+  tempo é preenchido de novo (depois de muitos anos pode sobrar só a matrícula e o nome). Pelo cadastro do site, o
+  sistema reconhece que é alguém que saiu e está voltando.
+- **A importação do sistema pago:** só 2 fichas já existem aqui com matrícula (a 1 e a 2): elas ficam de fora da
+  planilha, e, se aparecerem, a importação as deixa de fora; as duas são completadas à mão no sistema novo.
+- **Completar o arrolamento:** a secretaria da congregação preenche a situação, a data e a forma de entrada (batismo,
+  carta...); o cargo só se tiver; ao completar, a pessoa ganha o voto. No painel de Membros, um grupo próprio
+  "arrolamento a completar" mostra quantos faltam.
+- **"Quero me cadastrar":** quando nem a gravação cabe no tempo fixo, a resposta é "Não conseguimos receber agora, envie
+  de novo", no mesmo tempo e igual para todos; o reenvio não duplica.
+
+### A tela de importar os membros: as respostas dele (23/11/2026)
+
+A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce84`; homolog `b34284c`, DEPLOY OK).
+
+- **A ordem na produção, regra dele:** "só vamos liberar a matrícula depois dessa importação". Hoje a produção tem só as
+  matrículas 1 e 2; a importação traz as do sistema pago (da 3 até as 200 e tantas). **Só depois dela** alguém ganha
+  matrícula nova (pelo site ou pela secretaria). Se a ficha nova viesse antes, pegaria o número 3, e o membro 3 do
+  sistema pago ficaria de fora da importação (a matrícula é para sempre).
+  - **Falta a trava no código** (missão do construtor, com o revisor, antes de alternar para o Financeiro): enquanto a
+    importação real não estiver concluída, nada gera matrícula nova. Vale para **todos** os lugares que geram o número:
+    o aceite do "Quero me cadastrar" (`api/shared/preCadastroDb.js`) e o cadastro da secretaria
+    (`api/GestaoPessoas/index.js`, os três pontos que chamam `proximaMatricula`). A ideia da fila sem número caiu: veja
+    abaixo a resposta dele, a trava simples.
+  - O cuidado que já existe na importação (o número tomado depois da prévia vai para o fim da fila, com aviso) fica
+    como rede de proteção.
+  - **A trava, resposta dele (23/11, à tarde), que substitui a "fila sem número":** "Ninguém vai ser cadastrado antes
+    da importação… Eu só vou liberar depois de importar." Ele controla a ordem na operação; por isso não há fila de
+    espera, nem aceite depois, nem tela nova.
+    - Enquanto não existir importação concluída, o servidor recusa criar ficha nova por qualquer caminho, com uma
+      mensagem curta: o "Cadastrar" (número gerado ou digitado), o importador antigo de planilha, o aceite da fila e o
+      "Quero me cadastrar" do site. Editar ficha que já existe continua livre.
+    - A importação que terminaria com zero pessoas é recusada: não solta a trava nem gasta a importação única.
+    - Na homologação, ele vê primeiro o estado travado. Depois que ele disser que viu, o agente faz uma importação de
+      mentira até o fim, para ele ver o liberado.
+- **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
+  O código já faz assim.
+- **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
+- **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
+  linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
+
+### Rodada 28: o que ele aprovou (23/11/2026)
+
+- **Aprovadas sem mudança:** a auditoria ao vivo e o fechamento do mês, a chegada do lote com os números pulados e a
+  família ("mora junto").
+- **As listas inteligentes:** aprovadas, com uma restrição dele contra vazamento de dados: **exportar a lista em PDF ou
+  planilha, só o pessoal da Geral.** A congregação e a área veem e usam a lista no sistema, mas não baixam.
+- **Completar o arrolamento:** aprovado. **A área e a Geral também podem completar e editar** os dados do membro, e
+  aprovar quando for o caso: se a congregação não faz o que tem de fazer, a área faz, e o serviço não para.
+- **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
+  boa. As regras novas dele:
+  - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,
+    seja qual for o cargo (até o vice-presidente). Ninguém confirma: nem a secretaria local, nem a Geral. Não se prende
+    membro.
+  - **Sai com a carta em PDF**, com os dados mais recentes dele (congregação, em comunhão etc.), para entregar na igreja
+    que vai recebê-lo.
+  - **Os cargos que ele tinha ficam vagos sozinhos.** Quem cuida daquele nível preenche com outra pessoa; os cargos da
+    diretoria, da área e da Geral são cadastrados no módulo de governança.
+  - **A secretaria só entra** quando a pessoa não sabe usar o aplicativo (ela pede a carta por ele) e no **abandono**: 90
+    dias sem comunhão, pelo Regimento (o procedimento já existe desde a fase 1); a congregação pede e a Geral confirma.
+  - **30 dias depois da carta, os dados começam a ser apagados** (LGPD): a função dele primeiro, depois o histórico, aos
+    poucos. Se voltar um dia, encontra só o nome e a matrícula.
+  - A mudança para outra congregação da própria IEADESPA continua sendo a **transferência** (já aprovada), não a carta.
+  - **Respostas dele antes da rodada 29 (23/11):**
+    - **O que fica guardado para sempre:** o nome, a matrícula, a data de nascimento (para reconhecer quem volta), a
+      data da saída e o que a contabilidade e a lei mandam guardar (os dízimos e ofertas em nome da pessoa). O resto
+      (endereço, telefone, família, cargos, histórico) é apagado aos poucos, a partir de 30 dias da carta. Sem revisão
+      de advogado.
+    - **Quem só quer sair, sem ir para outra igreja:** o mesmo caminho; sai na hora, e a carta fica disponível.
+  - **Respostas dele antes de desenhar a rodada 29 (23/11, à tarde):**
+    - **A família:** cada adulto pede a sua carta. Os filhos menores de idade saem junto com o pai ou a mãe que pediu.
+    - **Em disciplina ou congregado:** sai com carta, com a situação verdadeira (Comunhão, Paz, Observação), sem o
+      motivo.
+    - **O arrependimento:** a saída não se desfaz. Ele volta como qualquer um que volta, sem os cargos; quem cuida daquele
+      nível decide se os devolve.
+    - **A assinatura:** só o QR de validade, o protocolo e os nomes do pastor e do secretário impressos; sem linhas para
+      assinar.
+  - **Decididas pela sessão a partir das regras dele (marcadas "Para conferir" na r29):**
+    - o destino é um campo opcional;
+    - em 30 dias saem os cargos, as escalas, os contatos e a família, e em 1 ano o resto do histórico, com o batismo e
+      o casamento (não estão na lista do que fica para sempre);
+    - por 30 dias a pessoa ainda entra no aplicativo só para baixar a carta, e recebe uma cópia por e-mail, se tiver;
+    - a secretaria pede por quem não sabe usar sem prova (fica registrado quem pediu e quando, e a pessoa recebe um
+      aviso), e podem pedir a congregação, a área e a Geral;
+    - o abandono fica como está (90 dias, aviso com 15 dias, a Geral confirma, quem abriu não confirma, recurso à
+      Assembleia); quem pede é a secretaria; não há carta;
+    - o falecimento continua como na r28, e a ficha de quem faleceu não se apaga.
+  - **Para a construção:** hoje o `SolicitarCarta` não desliga a pessoa no confirmar. Só o "processar" da secretaria,
+    depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
+    batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
+    apagamento aos poucos e sozinho.
+- **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
+  termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
+  importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
+
+### Módulo 3 (Estrutura e Territórios): as respostas dele antes do desenho (23/11/2026)
+
+Ele mandou perguntar logo, sem esperar Membros fechar. O desenho continua um módulo por vez; estas respostas ficam
+guardadas para quando o módulo 3 começar. O levantamento completo do desenhista está em
+`C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md` (só no computador dele).
+
+- **A dor de hoje:** os dados desatualizados.
+  - Gente sai do cargo e ninguém põe o próximo. Não se sabe quem é o dirigente, o vice, o tesoureiro ou o secretário,
+    nem na congregação nem na Geral.
+  - O endereço e os horários de culto ficam velhos no site.
+  - O termo de posse dos dirigentes é em papel e "poderia ser tudo digital".
+- **Congregação nova:** a Geral cadastra direto, quando o Presidente decide, num formulário simples. Não há parecer
+  nem fluxo de pedido; o caminho da v9.2 vem do Regimento.
+- **Ponto de culto:** o nome real da "Extensão da Tenda" é **ponto de culto**. É um culto no lar, ligado a uma
+  congregação, que tem 1, 2 ou 3 deles, com a esperança de virar igreja um dia. O que importa primeiro é saber os pontos
+  e os horários.
+  - No site vivo (fase 12), cada igreja terá **a sua aba, como um subsite**, com os cultos, o histórico, o dirigente e
+    a diretoria.
+  - Decidido pela sessão, "para conferir": no público aparecem só o bairro e o horário do ponto, sem o endereço da casa.
+- **A diretoria e os cargos ficam na Estrutura (o executivo):** dirigente, vice, tesoureiro, secretário, presidente etc.
+  O módulo 10 é o legislativo: obreiros, juntas, Ministério, conselhos e reuniões.
+- **Quem põe o dirigente:** o pastor de área e a Geral, os dois direto, sem confirmação. A diretoria da congregação, o
+  dirigente cadastra; a da área, o pastor de área; a geral, a Geral.
+- **O termo de posse digital:** quem dá a posse confirma no sistema (o Presidente, para o dirigente; o dirigente, para a
+  diretoria da congregação), e quem toma posse aceita no próprio celular. O termo sai em PDF com o QR de validade e a
+  data e a hora dos dois.
+- **O mandato dos cargos:**
+  - todo cargo vence na virada do ano (31/12) ou na data marcada nele;
+  - vencido, o cargo fica vago sozinho e a pessoa **perde o perfil de acesso** que o cargo dava;
+  - trocado no meio do ano, quem saiu perde o cargo e o acesso na hora em que o novo é cadastrado.
+  - Decidido pela sessão, "para conferir": os cargos do ano seguinte podem ser cadastrados antes, com início em 01/01,
+    e o aviso de "cargo vencendo" aparece em dezembro, para ninguém ficar sem acesso na virada.
+- **Mudança de área:** só a Geral muda. O passado fica com a área antiga; dali em diante, conta para a nova.
+- **Congregação que fecha ou se junta a outra:** a Geral escolhe a que recebe e todos os membros passam de uma vez. O
+  histórico e o dinheiro antigos ficam com o nome antigo.
+- **Região, quadrante e distrito:** ficam dormindo. Só a Geral vê que existem e pode ligar um dia.
+- **O mapa:** é muito importante, para a congregação, a área e a Geral (hoje só o nível local localiza os membros).
+  - O problema é a localização: a cidade costuma usar um CEP geral. No futuro, o endereço buscado pelo CEP e pelo
+    número já basta, mesmo com erro de uns 50 m.
+  - A localização das igrejas que vai para o site alimenta o mapa sozinha.
+- **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
+  posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
+- **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação
+  só, com a mesma administração das outras.
+- **O número da congregação:** é o número de abertura, o "número de filial", e vai nos relatórios onde o nome não cabe.
+  A Sede é a 1; a Águas Vivas, a 3. A ordem é pelo número, não pelo nome.
+  - Quando congregações fecham, a numeração desce (a 20 pode virar a 17 se 3 fecharam), e o histórico guarda o número
+    de cada época.
+- **"Área com pelo menos 3 congregações" (Regimento):** não vale. A Área 1 tem uma congregação só.
+- **Decididas pela sessão, pelas regras dele ("para conferir" no desenho):**
+  - o endereço, os horários, o telefone e a foto são atualizados pela congregação, pela área e pela Geral, e o site
+    muda sozinho;
+  - na página da congregação, o membro vê o endereço, os horários e o dirigente, a secretaria vê os números de pessoas,
+    e o dinheiro e o patrimônio só a tesouraria e a Geral veem.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 
@@ -1464,6 +1701,31 @@ a cota acabar no meio, perdem-se no máximo 30 minutos, nunca um lote inteiro.
   - uma gravíssima, na hora.
 - **Quando começa:** quando ele disser que está viável. Até lá, a prioridade é a rodada 19 do Financeiro e terminar
   Membros para a produção.
+
+### O jeito novo: um fluxo com muitos agentes e o revisor no Fable (23/11/2026)
+
+Em 23/11 ele autorizou os fluxos com muitos agentes (o "nível 8") nas Travas de Revisão e sempre que ajudarem, e pediu
+para planejar a varredura já (memória `conselheiro-e-padrao-alto`). Os pedaços de 30 minutos continuam; o que muda é que
+**cada lote vira um fluxo só**, que reparte o trabalho, caça, confere e resume sozinho:
+
+1. **Inventário** (1 agente): mede de novo o lote na `main`, que é o que está em produção (o código mudou desde
+   18/11), e o divide em pedaços de 4 a 6 mil linhas. As telas que vão ser refeitas em Svelte ficam de fora.
+2. **Caça** (3 agentes por pedaço, cada um com uma lente e no máximo 25 minutos): segurança, erros escondidos (o
+   `silent-failure-hunter`) e lógica. Eles só leem: ninguém mexe no código nem no banco.
+3. **Conferência** (o `revisor` da bancada, no Fable): cada achado é atacado por quem tenta derrubá-lo. O leve e o
+   médio têm 1 revisor; o grave e o gravíssimo têm 3, e só sobra o que a maioria não derrubar. Achado repetido entre
+   pedaços é juntado antes.
+4. **Resumo** (1 agente): um arquivo do lote fora do Git (`C:\tmp\varredura\lote-N.md`), as observações no
+   `memoria-projeto` e, para ele, o resumo em português simples: o que é, o risco, um exemplo e o "pode corrigir?".
+
+- **O tamanho:** o lote 1 (entrada e acesso, 2 pedaços) tem cerca de 6 caçadores e de 10 a 20 conferências; até 14
+  agentes trabalham ao mesmo tempo neste computador. É a régua: depois dele, o prazo dos outros lotes é recalculado.
+- **Gravíssima** (alguém sem login lê dados de membros ou mexe em dinheiro): ele é avisado na hora, sem esperar o fim
+  do lote.
+- **As correções** continuam fora do fluxo: com o "pode corrigir" dele, o `construtor` corrige com teste e prova, e o
+  `revisor` confere antes da homologação e da produção.
+- **Quando roda:** depois que os agentes padrão da bancada estiverem instalados neste computador (o `revisor` é um
+  deles), com o OK dele a este plano. Pode rodar junto com os 3 agentes do dia a dia, porque só lê.
 
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 

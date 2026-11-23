@@ -1561,6 +1561,31 @@ a cota acabar no meio, perdem-se no máximo 30 minutos, nunca um lote inteiro.
 - **Quando começa:** quando ele disser que está viável. Até lá, a prioridade é a rodada 19 do Financeiro e terminar
   Membros para a produção.
 
+### O jeito novo: um fluxo com muitos agentes e o revisor no Fable (23/11/2026)
+
+Em 23/11 ele autorizou os fluxos com muitos agentes (o "nível 8") nas Travas de Revisão e sempre que ajudarem, e pediu
+para planejar a varredura já (memória `conselheiro-e-padrao-alto`). Os pedaços de 30 minutos continuam; o que muda é que
+**cada lote vira um fluxo só**, que reparte o trabalho, caça, confere e resume sozinho:
+
+1. **Inventário** (1 agente): mede de novo o lote na `main`, que é o que está em produção (o código mudou desde
+   18/11), e o divide em pedaços de 4 a 6 mil linhas. As telas que vão ser refeitas em Svelte ficam de fora.
+2. **Caça** (3 agentes por pedaço, cada um com uma lente e no máximo 25 minutos): segurança, erros escondidos (o
+   `silent-failure-hunter`) e lógica. Eles só leem: ninguém mexe no código nem no banco.
+3. **Conferência** (o `revisor` da bancada, no Fable): cada achado é atacado por quem tenta derrubá-lo. O leve e o
+   médio têm 1 revisor; o grave e o gravíssimo têm 3, e só sobra o que a maioria não derrubar. Achado repetido entre
+   pedaços é juntado antes.
+4. **Resumo** (1 agente): um arquivo do lote fora do Git (`C:\tmp\varredura\lote-N.md`), as observações no
+   `memoria-projeto` e, para ele, o resumo em português simples: o que é, o risco, um exemplo e o "pode corrigir?".
+
+- **O tamanho:** o lote 1 (entrada e acesso, 2 pedaços) tem cerca de 6 caçadores e de 10 a 20 conferências; até 14
+  agentes trabalham ao mesmo tempo neste computador. É a régua: depois dele, o prazo dos outros lotes é recalculado.
+- **Gravíssima** (alguém sem login lê dados de membros ou mexe em dinheiro): ele é avisado na hora, sem esperar o fim
+  do lote.
+- **As correções** continuam fora do fluxo: com o "pode corrigir" dele, o `construtor` corrige com teste e prova, e o
+  `revisor` confere antes da homologação e da produção.
+- **Quando roda:** depois que os agentes padrão da bancada estiverem instalados neste computador (o `revisor` é um
+  deles), com o OK dele a este plano. Pode rodar junto com os 3 agentes do dia a dia, porque só lê.
+
 ## v10.10 — Importação periódica do cadastro de membros (o sistema que a Igreja paga)
 
 **Substituída em 13/11/2026 pela migração única da v10.1e:** com a gestão de membros vindo para a FASE 10, não vale construir uma

@@ -20,7 +20,27 @@ describe("o arquivo e as colunas", () => {
     const c = r.mapearColunas(["Nº Matrícula", "Nome Completo", "Igreja", "Data de Batismo", "Tipo de Arrolamento", "Cor Favorita", "nome"]);
     expect(c.faltando).toEqual([]);
     expect(Object.keys(c.mapa)).toEqual(["matricula", "nome", "igreja", "batismo", "formaAdmissao"]);
-    expect(c.ignoradas).toEqual([{ coluna: "Cor Favorita", motivo: "desconhecida" }, { coluna: "nome", motivo: "repetida (já há a coluna de nome)" }]);
+    expect(c.ignoradas).toEqual([{ indice: 5, coluna: "Cor Favorita", motivo: "desconhecida" }, { indice: 6, coluna: "nome", motivo: "repetida (já há a coluna de nome)" }]);
+    expect(c.lista.map((x) => x.campo)).toEqual(["matricula", "nome", "igreja", "batismo", "formaAdmissao", null, null]);
+  });
+  test("a ESCOLHA da tela (23/11): um campo ou 'não usar' para cada coluna substitui o reconhecimento pelo nome; escolha que não bate é recusada", () => {
+    const cab = ["MATRÍCULA", "NOME", "IGREJA", "ESCOLARIDADE", "PROFISSÃO"];
+    const c = r.mapearColunas(cab, ["matricula", "nome", "igreja", null, "escolaridade"]);
+    expect(c.erro).toBeUndefined();
+    expect(c.mapa).toEqual(Object.assign(Object.create(null), { matricula: 0, nome: 1, igreja: 2, escolaridade: 4 }));
+    expect(c.ignoradas).toEqual([{ indice: 3, coluna: "ESCOLARIDADE", motivo: "não usar" }]);
+    expect(r.mapearColunas(cab, ["matricula", "nome"]).erro).toMatch(/não bate com este arquivo/);
+    expect(r.mapearColunas(cab, ["matricula", "nome", "igreja", "senha", null]).erro).toMatch(/campo que não existe/);
+    expect(r.mapearColunas(cab, ["matricula", "nome", "igreja", "nome", null]).erro).toMatch(/mesmo campo \(nome\)/);
+    expect(r.mapearColunas(cab, [null, "nome", "igreja", null, null]).faltando).toEqual(["Matrícula"]);
+    // na prévia: a escolha vale para as linhas (a coluna 'não usar' não entra) e o erro dela volta como erro do arquivo
+    const p = r.prepararArquivo([cab.join(";"), "70001;Ana;IEADESPA - Vila Nova;Médio completo;Professora"].join("\r\n"),
+      { congregacoes: CONGS, hojeISO: HOJE, escolha: ["matricula", "nome", "igreja", null, null] });
+    expect(p.linhas[0].dados.escolaridade).toBeNull();
+    expect(p.colunas.escolhidas).toBe(true);
+    expect(r.prepararArquivo([cab.join(";"), "1;Ana"].join("\r\n"), { congregacoes: CONGS, escolha: ["matricula"] }).erro).toMatch(/não bate/);
+    // o catálogo da tela: as 11 de sempre do sistema pago marcadas
+    expect(r.CAMPOS.filter((x) => x.padrao).map((x) => x.campo)).toEqual(["matricula", "nome", "igreja", "sexo", "nascimento", "estadoCivil", "email", "celular", "mae", "pai", "cpf"]);
   });
   test("sem a coluna de matrícula ou de nome, o arquivo não serve; vazio, só cabeçalho e o acento estragado também não", () => {
     expect(preparar(["1;Ana"], "NOME;IGREJA").erro).toMatch(/coluna de matrícula/);
@@ -73,11 +93,19 @@ describe("classificar (uma vez só, 22/11/2026: toda linha que pode entrar ENTRA
       ["NOVA", 70020, false, null, null], ["NOVA", null, true, "REPETIDA_NO_ARQUIVO", 2], ["NOVA", null, true, "REPETIDA_NO_ARQUIVO", null]]);
     expect(ls[1].avisos).toEqual(["MATRICULA_REPETIDA_NO_ARQUIVO", "MESMA_PESSOA_NO_ARQUIVO"]);
   });
-  test("a matrícula que JÁ É de uma ficha do sistema: nada fica de fora — entra com a próxima (NUMERO), e REPETIDA da ficha se parece a mesma pessoa", () => {
-    const banco = { fichasPorMatricula: new Map([[70030, { nome: "Rui Barbosa Lima", cpf: null }], [70031, { nome: "Outra Pessoa", cpf: null }]]) };
-    const ls = classificar(["70030;Rui Lima;IEADESPA - Vila Nova", "70031;Sara Nova;IEADESPA - Vila Nova"], banco);
-    expect(ls.map((l) => [l.acao, l.numeroNovo, l.motivoNumero, l.repetidaMembro])).toEqual([["NOVA", true, "DE_OUTRA_FICHA", 70030], ["NOVA", true, "DE_OUTRA_FICHA", null]]);
-    expect(ls.some((l) => l.acao === "EXISTE")).toBe(false);
+  test("a matrícula que JÁ É de uma ficha do sistema (as regras da rodada 28): a linha FICA DE FORA, seja a mesma pessoa ou não, e não ocupa a matrícula nem o CPF", () => {
+    const banco = { fichasPorMatricula: new Map([[1, { nome: "Rui Barbosa Lima", cpf: null }], [2, { nome: "Outra Pessoa", cpf: null }]]) };
+    const ls = classificar(["1;Rui Lima;IEADESPA - Vila Nova", `2;Sara Nova;IEADESPA - Vila Nova;;;;;;;;${CPF1}`, "1;;IEADESPA - Vila Nova",
+      `70032;Sara Dois;IEADESPA - Vila Nova;;;;;;;;${CPF1}`], banco);
+    expect(ls.map((l) => [l.acao, l.problemas, l.numeroNovo, l.repetidaMembro])).toEqual([
+      ["PROBLEMA", ["MATRICULA_JA_EXISTE"], false, null], ["PROBLEMA", ["MATRICULA_JA_EXISTE"], false, null],
+      ["PROBLEMA", ["SEM_NOME", "MATRICULA_JA_EXISTE"], false, null], ["NOVA", [], false, null]]);
+    // o CPF da linha que ficou de fora não é de ninguém: a linha que entra fica com ele
+    expect(ls[3].dados.cpf).toBe(CPF1);
+    expect(r.linhaParaLista({ ...ls[0], acao: "PROBLEMA" }).motivos).toEqual([r.PROBLEMAS.MATRICULA_JA_EXISTE]);
+    // classificar de novo (a mesma linha) não repete o motivo
+    r.classificar([ls[0]], banco);
+    expect(ls[0].problemas).toEqual(["MATRICULA_JA_EXISTE"]);
   });
   test("o CPF que já está numa ficha: entra SEM o CPF, como possível repetida dela; repetido no arquivo, fica com a MENOR matrícula", () => {
     const banco = { fichasPorCpf: new Map([[CPF1, 600]]) };
@@ -102,10 +130,21 @@ describe("o resumo e a lista (sem dado pessoal)", () => {
     const prep = preparar(["100;Ana;IEADESPA - Vila Nova", "101;Bia;IEADESPA - Vila Nova", "0;Caio;IEADESPA - GERAL", "999999;Davi;IEADESPA - Vila Nova", "102;;IEADESPA - Vila Nova"]);
     r.classificar(prep.linhas);
     const s = r.resumir(prep, { maiorMatriculaSistema: 50 });
-    expect(s).toMatchObject({ total: 5, novas: 4, problemas: 1, numeroNovo: 1, possivelRepetida: 0, semCongregacao: 1, separador: ";", proximaMatricula: 1000001 });
+    expect(s).toMatchObject({ total: 5, novas: 4, problemas: 1, numeroNovo: 1, possivelRepetida: 0, semCongregacao: 1, separador: ";", proximaMatricula: 1000001,
+      primeiraMatriculaNova: 1000000, vazias: 0, totalColunas: 11, jaExistem: 0, congregacoesReconhecidas: 1 });
     expect(s.existem).toBeUndefined();
     expect(s.avisosGerais.map((a) => a.codigo)).toEqual(["MATRICULA_FORA_DA_SEQUENCIA"]);
     expect(JSON.stringify(s)).not.toMatch(/Ana|Bia|Caio|Davi/);
+  });
+  test("os quadros da tela: cada linha que entra numa caixa só (a acertar, depois a repetida, depois a que entra como está); as vazias e as que já existem contadas", () => {
+    const prep = preparar(["100;Ana Souza;IEADESPA - Vila Nova", "", "100;Ana Maria Souza;IEADESPA - Monte Sião", `101;Bia;IEADESPA - Vila Nova;;;;;;;;${CPF1}`,
+      `102;Caio;IEADESPA - Vila Nova;;;;;;;;${CPF1}`, "1;Davi;IEADESPA - Vila Nova", " ; ", "0;Eva;IEADESPA - GERAL"]);
+    r.classificar(prep.linhas, { fichasPorMatricula: new Map([[1, { nome: "Davi", cpf: null }]]) });
+    const s = r.resumir(prep, { maiorMatriculaSistema: 2 });
+    // a linha 4 (100 de novo, a mesma pessoa) é a acertar E repetida: conta só em "a acertar"; a 6 (CPF da 5) é repetida; a 7 (matrícula 1) fica de fora
+    expect(s.quadros).toEqual({ comMatricula: 2, acertar: 2, repetidas: 1 });
+    expect(s).toMatchObject({ total: 6, vazias: 2, novas: 5, jaExistem: 1, problemas: 1, possivelRepetida: 2, numeroNovo: 2, primeiraMatriculaNova: 103,
+      congregacoesReconhecidas: 2 });
   });
   test("a lista para conferir e o CSV: nunca o CPF nem o contato; a célula que começa com = + - @ é protegida (fórmula)", () => {
     const item = r.linhaParaLista({ linha: 7, matriculaArquivo: "0", nome: "=HYPERLINK(\"x\")", acao: "NOVA", matriculaFinal: 70100, problemas: [], avisos: ["MATRICULA_ZERO"] });

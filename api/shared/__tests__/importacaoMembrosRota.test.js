@@ -72,6 +72,15 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     expect(c2.res.status).toBe(409);
     expect(c2.res.body).toEqual({ sucesso: false, mensagem: "A importação do sistema pago já foi feita (é uma vez só)." });
   });
+  test("a prévia com o mapa das colunas escolhido na tela: a lista vai à camada; o que não é lista (ou é enorme) é 400 sem tocar no banco", async () => {
+    await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", colunas: ["matricula", null] } });
+    expect(db.criarPrevia).toHaveBeenCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x", colunas: ["matricula", null] });
+    db.criarPrevia.mockClear();
+    for (const colunas of ["matricula", { 0: "nome" }, 7, new Array(201).fill(null)]) {
+      expect((await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", colunas } })).res.status).toBe(400);
+    }
+    expect(db.criarPrevia).not.toHaveBeenCalled();
+  });
   test("a prévia: no máximo 10 por minuto por pessoa (429 com Retry-After)", async () => {
     const t = tok.geral(5555);
     for (let i = 0; i < 10; i++) expect((await chamar({ metodo: "POST", acao: "previa", token: t, corpo: { texto: "x" } })).res.status).toBe(200);

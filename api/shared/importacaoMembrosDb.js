@@ -60,13 +60,38 @@ const lerJson = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { re
 const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.Situacao, nomeArquivo: l.NomeArquivo, criadaEm: l.CriadaEm, confirmadaEm: l.ConfirmadaEm,
   concluidaEm: l.ConcluidaEm, resumo: lerJson(l.Resumo) } : null);
 
-// O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta?
+// O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta? `campos`: o catálogo do mapa das colunas (o select da tela).
+// Feita, vem também o RETRATO do resultado (a tela r27, passo 4): quem importou, as matrículas novas e onde as fichas estão hoje, por área.
 async function estado(pool) {
   const sit = await lerSituacao(() => pool.request());
   const atual = sit.concluida || sit.andamento || sit.previa;
   let restantes = null;
   if (sit.andamento) restantes = await contarRestantes(() => pool.request(), Number(sit.andamento.ImportacaoId));
-  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes };
+  const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
+  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, retrato, campos: regras.CAMPOS };
+}
+// Onde as fichas importadas estão HOJE (por área; o arrolamento completo = a situação já não é "Arrolamento a completar"), as matrículas novas e quem confirmou.
+// Sem dado pessoal além do nome de quem importou (a Secretaria Geral, que é quem vê a tela).
+async function retratoDoResultado(rq, imp) {
+  const id = Number(imp.ImportacaoId);
+  const areas = (await rq().input("id", sql.Int, id).query(`
+    SELECT a.AreaId, a.Nome AS Area, CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END AS SemCongregacao, COUNT(DISTINCT m.CongregacaoId) AS Congregacoes,
+      COUNT(*) AS Fichas, SUM(CASE WHEN m.SituacaoMembro <> N'ARROLAMENTO' THEN 1 ELSE 0 END) AS Completas
+    FROM ImportacoesMembrosLinhas l JOIN MembroReferencia m ON m.MembroId = l.MatriculaFinal
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN Areas a ON a.AreaId = c.AreaId
+    WHERE l.ImportacaoId = @id AND l.Estado = N'IMPORTADA'
+    GROUP BY a.AreaId, a.Nome, CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END
+    ORDER BY CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END, CASE WHEN a.AreaId IS NULL THEN 1 ELSE 0 END, a.Nome`)).recordset;
+  const novas = (await rq().input("id", sql.Int, id).query(`SELECT MIN(MatriculaFinal) AS de, MAX(MatriculaFinal) AS ate, COUNT(*) AS n
+    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'IMPORTADA' AND NumeroNovo = 1`)).recordset[0] || {};
+  const quem = imp.ConfirmadaPor == null ? null
+    : (await rq().input("m", sql.Int, Number(imp.ConfirmadaPor)).query("SELECT Nome FROM MembroReferencia WHERE MembroId = @m")).recordset[0];
+  return {
+    confirmadaPor: quem ? quem.Nome : null,
+    matriculasNovas: { total: Number(novas.n || 0), de: novas.de == null ? null : Number(novas.de), ate: novas.ate == null ? null : Number(novas.ate) },
+    porArea: areas.map((a) => ({ area: a.SemCongregacao ? null : a.Area || null, semCongregacao: !!a.SemCongregacao, congregacoes: Number(a.Congregacoes || 0),
+      fichas: Number(a.Fichas || 0), completas: Number(a.Completas || 0) }))
+  };
 }
 async function contarRestantes(rq, id) {
   const r = await rq().input("id", sql.Int, id).query("SELECT COUNT(*) AS n FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE'");
@@ -75,13 +100,14 @@ async function contarRestantes(rq, id) {
 
 // ------------------------------------------------------------------ a prévia
 // Lê e confere o arquivo (o trabalho pesado fica fora da transação: nada é gravado até o fim) e grava a prévia com as linhas. A prévia anterior é descartada.
-async function criarPrevia(pool, usuario, { nomeArquivo, texto }) {
+// `colunas`: o mapa das colunas escolhido na tela (um campo ou null para cada coluna do cabeçalho); sem ele, cada coluna é reconhecida pelo nome.
+async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
   const sit = await lerSituacao(() => pool.request());
   if (sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
   if (sit.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
   const congs = (await pool.request().query("SELECT CongregacaoId, Nome, Ativa FROM Congregacoes")).recordset
     .map((c) => ({ congregacaoId: Number(c.CongregacaoId), nome: c.Nome, ativa: c.Ativa }));
-  const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia() });
+  const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia(), escolha: colunas });
   if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro };
 
   // as fichas que já existem com as matrículas e com os CPFs do arquivo (uma ida ao banco para cada)
@@ -127,7 +153,8 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto }) {
           fa NVARCHAR(30), db DATE, esc NVARCHAR(30)) j`);
     }
     await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Fez a prévia da importação do sistema pago", usuarioId: Number(usuario.membroId),
-      dadosDepois: { nomeArquivo: nome, total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, numeroNovo: resumo.numeroNovo, possivelRepetida: resumo.possivelRepetida } });
+      dadosDepois: { nomeArquivo: nome, total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, jaExistem: resumo.jaExistem, numeroNovo: resumo.numeroNovo,
+        possivelRepetida: resumo.possivelRepetida, colunasEscolhidas: !!(resumo.colunas && resumo.colunas.escolhidas) } });
     return { sucesso: true, importacaoId: id, resumo };
   });
 }
@@ -150,25 +177,61 @@ async function descartar(pool, usuario, importacaoId) {
 }
 
 // ------------------------------------------------------------------ a lista para conferir (a tela e o arquivo para baixar)
-// filtro: "problemas" (não entram), "avisos" (entram com aviso: número novo, possível repetida, o que entrou sem...) ou "todas". Nunca o CPF nem o contato.
-function condicaoDoFiltro(filtro) {
-  if (filtro === "problemas") return "AND Acao = N'PROBLEMA'";
-  if (filtro === "avisos") return "AND Acao = N'NOVA' AND Avisos IS NOT NULL";
-  return "";
-}
+// filtro: "problemas" (não entram: com problema ou a matrícula que já existe), "avisos" (entram com aviso: número novo, possível repetida, o que entrou sem...),
+// "acertar" (a matrícula a acertar: recebem a próxima do sistema), "repetidas" (as possíveis repetidas que ficam com a matrícula de antes: as do quadro da tela)
+// ou "todas". Nunca o CPF nem o contato.
+const FILTROS = Object.freeze({
+  problemas: "AND a.Acao = N'PROBLEMA'",
+  avisos: "AND a.Acao = N'NOVA' AND a.Avisos IS NOT NULL",
+  acertar: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 1",
+  repetidas: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 0 AND (a.RepetidaLinha IS NOT NULL OR a.RepetidaMembro IS NOT NULL)",
+  todas: ""
+});
 const paraLista = (l) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
   matriculaFinal: l.MatriculaFinal == null ? null : Number(l.MatriculaFinal), problemas: l.Problemas ? l.Problemas.split(",") : [], avisos: l.Avisos ? l.Avisos.split(",") : [] });
+// O detalhe de cada linha para a tela (r27, "Matrícula a acertar" e "Possíveis repetidas"): por que a matrícula muda (e quem ficou com ela: a linha que veio
+// antes), de quem pode ser repetida e o número que ela RECEBE — o de verdade depois de importada; antes, o PREVISTO pela regra do lote (as matrículas do arquivo
+// entram primeiro e as novas seguem a ordem das linhas a partir da maior + 1; um cadastro feito no meio do caminho, ou uma matrícula liberada ao juntar fichas,
+// pode mudar o número: por isso "prevista").
+const detalheDe = (l, base) => {
+  const importada = l.Estado === "IMPORTADA";
+  const nova = l.NumeroNovo === true || l.NumeroNovo === 1;
+  const ordem = l.OrdemNova == null ? null : Number(l.OrdemNova);
+  return {
+    motivoNumero: nova ? l.MotivoNumero || null : null,
+    semCongregacao: importada ? null : l.CongregacaoId == null && l.Acao === "NOVA",
+    dono: l.DonoLinha == null ? null : { linha: Number(l.DonoLinha), nome: l.DonoNome || "" },
+    repetidaDe: l.RepetidaLinha != null ? { linha: Number(l.RepetidaLinha), matricula: null, nome: l.RepLinhaNome || "" }
+      : l.RepetidaMembro != null ? { linha: null, matricula: Number(l.RepetidaMembro), nome: l.RepMembroNome || "" } : null,
+    recebe: importada ? Number(l.MatriculaFinal) : nova && base && ordem ? base + ordem - 1 : null,
+    prevista: !importada && nova && !!base && !!ordem
+  };
+};
 async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
   const p = Math.max(1, Math.min(100000, Math.floor(Number(pagina) || 1)));
-  const f = ["problemas", "avisos", "todas"].includes(filtro) ? filtro : "todas";
+  const f = Object.prototype.hasOwnProperty.call(FILTROS, filtro) ? filtro : "todas";
+  const cab = (await pool.request().input("id", sql.Int, id).query("SELECT Resumo FROM ImportacoesMembros WHERE ImportacaoId = @id")).recordset[0];
+  const resumo = cab ? lerJson(cab.Resumo) || {} : {};
+  // o primeiro número novo previsto (a prévia de antes de 23/11 não o tinha: a próxima matrícula menos as que recebem número novo)
+  const base = Number(resumo.primeiraMatriculaNova) || (Number(resumo.proximaMatricula) && Number(resumo.proximaMatricula) - Number(resumo.numeroNovo || 0)) || null;
+  // a ordem do número novo conta sobre TODAS as linhas de número novo da importação (não só as da página nem só as do filtro)
   const r = await pool.request().input("id", sql.Int, id).input("pula", sql.Int, (p - 1) * POR_PAGINA).input("n", sql.Int, POR_PAGINA).query(`
-    SELECT COUNT(*) OVER () AS Total, Linha, MatriculaArquivo, Nome, Acao, MatriculaFinal, Problemas, Avisos
-    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id ${condicaoDoFiltro(f)}
-    ORDER BY Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
+    WITH ordem AS (SELECT Linha, ROW_NUMBER() OVER (ORDER BY Linha) AS OrdemNova FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND NumeroNovo = 1)
+    SELECT COUNT(*) OVER () AS Total, a.Linha, a.MatriculaArquivo, a.Nome, a.Acao, a.Estado, a.MatriculaFinal, a.Problemas, a.Avisos, a.NumeroNovo, a.MotivoNumero,
+      a.CongregacaoId, a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, o.OrdemNova
+    FROM ImportacoesMembrosLinhas a
+    LEFT JOIN ordem o ON o.Linha = a.Linha
+    LEFT JOIN ImportacoesMembrosLinhas rl ON rl.ImportacaoId = a.ImportacaoId AND rl.Linha = a.RepetidaLinha
+    LEFT JOIN MembroReferencia rm ON rm.MembroId = a.RepetidaMembro
+    OUTER APPLY (SELECT TOP 1 b.Linha, b.Nome FROM ImportacoesMembrosLinhas b
+      WHERE a.MotivoNumero = N'REPETIDA_NO_ARQUIVO' AND b.ImportacaoId = a.ImportacaoId AND b.Acao = N'NOVA' AND b.NumeroNovo = 0
+        AND b.Matricula = TRY_CONVERT(INT, a.MatriculaArquivo) ORDER BY b.Linha) dono
+    WHERE a.ImportacaoId = @id ${FILTROS[f]}
+    ORDER BY a.Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
   const total = r.recordset.length ? Number(r.recordset[0].Total) : 0;
-  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map(paraLista) };
+  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l), detalhe: detalheDe(l, base) })) };
 }
 async function csv(pool, importacaoId) {
   const id = idValido(importacaoId);

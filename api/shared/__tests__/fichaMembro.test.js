@@ -41,6 +41,8 @@ const existenteDe = (extra = {}) => ({ recordset: [{ MembroId: 700412, Status: "
 
 beforeEach(() => {
   mockRegras = []; mockConsultas = []; mockAuditoria.mockClear();
+  // o mundo depois da importação do sistema pago (a trava das matrículas solta; a trava ligada tem os testes dela em travaMatriculas.test.js)
+  quando(/FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA'/, { recordset: [{ liberadas: 1 }] });
   quando(/SELECT CongregacaoId, Nome FROM Congregacoes/, { recordset: [{ CongregacaoId: 1, Nome: "Central" }, { CongregacaoId: 2, Nome: "Vila Nova" }] });
   quando(/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Vila Nova" }] });
   quando(/UPDATE MembroReferencia SET Nome/, { recordset: [], rowsAffected: [1] });

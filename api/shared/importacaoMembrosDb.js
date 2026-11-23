@@ -26,6 +26,7 @@ const MSG = Object.freeze({
   EM_ANDAMENTO: "A importação já foi confirmada e está em andamento: continue a importação.",
   PREVIA_MUDOU: "Esta prévia não é mais a atual (outra foi feita depois, ou foi descartada). Confira a prévia de novo antes de confirmar.",
   NAO_EXISTE: "Importação não encontrada.",
+  NINGUEM_ENTRA: "Nenhuma pessoa desta planilha entra no sistema: confira o arquivo antes de confirmar.",
   OCUPADO: "Outra pessoa está mexendo na importação agora. Tente de novo daqui a pouco."
 });
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
@@ -272,6 +273,9 @@ async function confirmar(pool, usuario, importacaoId) {
       ? { sucesso: true, importacaoId: id, jaConfirmada: true, restantes: await contarRestantes(rq, id) }
       : { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
     if (!sit.previa || Number(sit.previa.ImportacaoId) !== id) return { sucesso: false, status: 409, mensagem: MSG.PREVIA_MUDOU };
+    // a importação em que ninguém entra não se confirma (23/11/2026): terminaria CONCLUIDA com zero pessoas, soltaria a trava das matrículas e gastaria a
+    // importação única com uma planilha errada
+    if ((await contarRestantes(rq, id)) === 0) return { sucesso: false, status: 409, mensagem: MSG.NINGUEM_ENTRA };
     await rq().input("id", sql.Int, id).input("por", sql.Int, Number(usuario.membroId)).query(`
       UPDATE ImportacoesMembros SET Situacao = N'IMPORTANDO', ConfirmadaEm = SYSUTCDATETIME(), ConfirmadaPor = @por WHERE ImportacaoId = @id AND Situacao = N'PREVIA';
       UPDATE ImportacoesMembrosLinhas SET Estado = N'FORA' WHERE ImportacaoId = @id AND Acao = N'PROBLEMA';`);

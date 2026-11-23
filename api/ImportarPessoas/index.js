@@ -12,6 +12,9 @@ const auth = require("../shared/auth");
 const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const { exigirGeral } = require("../shared/escopoRotas");
+// A trava das matrículas (23/11/2026): antes da importação do sistema pago concluída, a planilha que traz uma matrícula NOVA não grava nada (atualizar
+// quem já existe continua livre)
+const matriculaNova = require("../shared/matriculaNova");
 
 const MAX_LINHAS = 2000;
 
@@ -48,6 +51,7 @@ module.exports = async function (context, req) {
   const transaction = new sql.Transaction(pool);
   const r = () => new sql.Request(transaction);
   await transaction.begin();
+  let liberadas = null;   // lida uma vez, só se aparecer uma linha nova
   try {
     const vistos = new Set();
     for (const linha of linhasValidas) {
@@ -78,6 +82,12 @@ module.exports = async function (context, req) {
         }
         atualizados++;
       } else {
+        if (liberadas === null) liberadas = await matriculaNova.matriculasLiberadas(r);
+        if (!liberadas) {
+          await transaction.rollback();
+          context.res = { status: 409, body: { sucesso: false, mensagem: `${matriculaNova.MSG_TRAVADA} Nenhuma linha foi gravada: a planilha traz a matrícula ${membroId}, que ainda não existe.` } };
+          return;
+        }
         await r()
           .input("id", sql.Int, membroId)
           .input("nome", sql.NVarChar(200), nome)

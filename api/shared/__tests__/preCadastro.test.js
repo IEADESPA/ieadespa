@@ -11,6 +11,8 @@ jest.mock("../db", () => ({
   sql: new Proxy({}, { get: () => () => undefined })
 }));
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
+// o mundo depois da importação do sistema pago (a trava das matrículas solta; a trava ligada tem os testes dela em travaMatriculas.test.js)
+jest.mock("../matriculaNova", () => ({ ...jest.requireActual("../matriculaNova"), matriculasLiberadas: async () => true }));
 
 const auth = require("../auth");
 const regras = require("../preCadastro");

@@ -213,6 +213,8 @@ async function processar(pool, id, { porQuem = null, como = "AUTOMATICO", naoERe
     }
 
     // ---- sem pendência: entra sozinho (a ficha nova, como CONGREGADO, com a matrícula gerada) ----
+    // A trava das matrículas (23/11/2026, shared/matriculaNova.js): antes da importação do sistema pago concluída, nada de ficha nova (nada foi gravado: desfaz)
+    if (!(await matriculaNova.matriculasLiberadas(rq))) return { sucesso: false, travada: true, mensagem: matriculaNova.MSG_TRAVADA };
     let matricula = null;
     for (let tentativa = 0; tentativa < 6; tentativa++) {
       const numero = await matriculaNova.proximaMatricula(rq);

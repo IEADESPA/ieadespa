@@ -15,6 +15,7 @@ const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const regras = require("../shared/preCadastro");
 const pdb = require("../shared/preCadastroDb");
+const matriculaNova = require("../shared/matriculaNova");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const pessoaCompleta = require("../shared/preCadastroPessoa");
 const { enviarEmailNotificacao } = require("../shared/notificacaoEmail");
@@ -64,6 +65,8 @@ module.exports = async function (context, req) {
     if (!cong || !cong.ativa) return responder(context, 200, { sucesso: false, mensagem: "Congregação inválida." });
     const origem = await pdb.origemDeQuemLanca(pool, usuario, cong);
     if (!origem) return responder(context, 403, { sucesso: false, mensagem: regras.MSG.QUEM_LANCA });
+    // A trava das matrículas (23/11/2026): antes da importação do sistema pago concluída, ninguém se cadastra — nem fica numa fila
+    if (!(await matriculaNova.matriculasLiberadas(() => pool.request()))) return responder(context, 409, { sucesso: false, mensagem: matriculaNova.MSG_TRAVADA });
     if (corpo.consentimentoDaPessoa !== true) return responder(context, 200, { sucesso: false, mensagem: "Confirme que a pessoa concordou em ter os dados no cadastro da Igreja." });
     const id = await pdb.inserir(pool, lido.dados, { origem, criadoPor: eu, consentimento: regras.CONSENTIMENTO });
     let r;
@@ -111,7 +114,7 @@ module.exports = async function (context, req) {
     }
     if (r.jaResolvido && r.situacao !== "ACEITO") return responder(context, 409, { sucesso: false, mensagem: regras.MSG.JA_RESOLVIDO });
   }
-  if (!r.sucesso) return responder(context, r.conflito ? 409 : r.proibido ? 403 : 200, { sucesso: false, mensagem: r.mensagem });
+  if (!r.sucesso) return responder(context, r.conflito || r.travada ? 409 : r.proibido ? 403 : 200, { sucesso: false, mensagem: r.mensagem });
   const atual = await pdb.lerPreCadastro(() => pool.request(), id);
   return responder(context, 200, { sucesso: true, situacao: r.situacao, matricula: r.matricula || null, preCadastro: pdb.mapear(atual, visao) });
 };

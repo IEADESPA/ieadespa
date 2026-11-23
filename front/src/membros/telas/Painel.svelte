@@ -12,10 +12,12 @@
   import Icone from "../../comum/Icone.svelte";
   import Chip from "../../comum/Chip.svelte";
   import Estado from "../../comum/Estado.svelte";
+  import Avatar from "../../comum/Avatar.svelte";
   import { ir, escopo, contadores, cuidaDoCadastro } from "../estado.svelte";
-  import type { Agrupamento, PaginaTransferencias, Recorte, ResumoPainel } from "../tipos";
+  import type { Agrupamento, LugarArrolamento, PainelArrolamento, PaginaTransferencias, Recorte, ResumoPainel } from "../tipos";
   import { lerAlerta, montarAvisos, type AlertaAssembleia } from "../avisos";
   import { montarGrafico } from "../grafico";
+  import { corDoDepartamento, diaMes, diaPorExtenso, fraseResto, fraseSemCongregacao, hojeIso, pctAndamento } from "../arrolamento";
   import type { Transferencia } from "../tipos";
 
   interface Props { celular: boolean }
@@ -27,8 +29,12 @@
   let erro = $state("");
   let chegando = $state<Transferencia[]>([]);
   let alerta = $state<AlertaAssembleia | null>(null);
+  // ---- o 4º grupo (rodada 28): quem veio do sistema pago e ainda espera a secretaria completar (GET /api/arrolamento) ----
+  let arrol = $state<PainelArrolamento | null>(null);
+  let arrolErro = $state("");
+  let todas = $state(false);
   // os avisos se refazem sozinhos quando os contadores do menu chegam ou mudam
-  const avisos = $derived(resumo ? montarAvisos(resumo, chegando, alerta, contadores, sessao.geral) : []);
+  const avisos = $derived(resumo ? montarAvisos(resumo, chegando, alerta, contadores, sessao.geral, cuidaDoCadastro() ? abrirArrolamento : null) : []);
   let soMeu = $state(true);
 
   // ---- o gráfico grande: o que mostrar e como agrupar ficam guardados neste aparelho ----
@@ -76,10 +82,11 @@
     erro = "";
     const meu = ++seq;
     const pedida = congregacaoId;   // o escopo do módulo só vem do painel SEM filtro (nunca da congregação escolhida)
-    const [r, tr, al] = await Promise.all([
+    const [r, tr, al, ar] = await Promise.all([
       pedir<{ resumo: ResumoPainel }>("/pessoas" + qs({ resumo: 1, congregacaoId: pedida })),
       cuidaDoCadastro() ? pedir<PaginaTransferencias>("/transferencias" + qs({ caixa: "chegando", porPagina: 20 })) : Promise.resolve(null),
-      lerAlerta(sessao.geral)
+      lerAlerta(sessao.geral),
+      cuidaDoCadastro() ? pedir<PainelArrolamento>("/arrolamento" + qs({ congregacaoId: pedida })) : Promise.resolve(null)
     ]);
     if (meu !== seq) return;   // a pessoa trocou o filtro antes da resposta: vale só a última
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
@@ -87,6 +94,30 @@
     if (pedida === null) escopo.resumo = r.dados.resumo;
     chegando = tr && tr.ok ? [...tr.dados.itens] : [];
     alerta = al;
+    arrol = ar && ar.ok ? ar.dados : null;
+    arrolErro = ar && !ar.ok && !ar.cancelado ? ar.mensagem : "";
+    todas = false;
+  }
+
+  // o 4º grupo aparece quando veio alguém do sistema pago para este recorte; antes da importação (vieram = 0), o painel fica como era
+  const temArrol = $derived(!!resumo && (resumo.arrolamento > 0 || (arrol?.andamento.vieram ?? 0) > 0));
+  // a congregação (ou a área e a Geral com uma congregação escolhida) vê as próximas fichas; a área e a Geral sem filtro, a tabela
+  const vistaLocal = $derived(congregacaoId !== null || ((escopo.resumo ?? resumo)?.congregacoes.length ?? 0) <= 1);
+  const idDaCongregacao = $derived(congregacaoId ?? ((escopo.resumo ?? resumo)?.congregacoes.length === 1 ? (escopo.resumo ?? resumo)?.congregacoes[0]?.congregacaoId ?? null : null));
+  const hoje = hojeIso();
+  const lugaresArrol = $derived.by((): readonly LugarArrolamento[] => {
+    if (!arrol) return [];
+    if (sessao.geral) return arrol.porArea ?? [];
+    return [...arrol.porCongregacao].sort((a, b) => b.faltam - a.faltam || a.nome.localeCompare(b.nome, "pt-BR"));
+  });
+  const LIMITE = 6;
+  const lugaresVisiveis = $derived(todas ? lugaresArrol : lugaresArrol.slice(0, celular ? 4 : LIMITE));
+  const escondidos = $derived(lugaresArrol.length - lugaresVisiveis.length);
+  const areaUnica = $derived.by(() => { const nomes = new Set(lugaresArrol.map((l) => l.area ?? "")); return nomes.size === 1 ? [...nomes][0] || null : null; });
+  const fraseEscondidos = $derived(sessao.geral ? `+ ${numero(escondidos)} ${escondidos === 1 ? "área" : "áreas"}` : fraseResto(escondidos, areaUnica));
+  function abrirArrolamento() {
+    if (vistaLocal && idDaCongregacao !== null) { ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao, semCongregacao: false }); return; }
+    document.getElementById("arrolamento-por-lugar")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   $effect(() => { void congregacaoId; void carregar(); });
 
@@ -95,6 +126,14 @@
   const nomeLugar = $derived(congregacaoId !== null ? congregacoes.find((c) => c.congregacaoId === congregacaoId)?.nome ?? "" : "");
   const sub = $derived.by(() => {
     if (!resumo) return "";
+    if (temArrol) {
+      // rodada 28: o rol soma os 4 grupos, e a data de hoje fica no alto
+      const rol = `${numero(resumo.total)} no rol (os 4 grupos) · ${diaPorExtenso(hoje)}`;
+      if (congregacaoId !== null) return `Congregação ${nomeLugar} · ${rol}`;
+      if (sessao.geral) return `Igreja toda · ${rol}`;
+      if (congregacoes.length === 1 && congregacoes[0]) return `Congregação ${congregacoes[0].nome} · ${rol}`;
+      return `${areaUnica ? areaUnica + " · " : ""}${congregacoes.length} congregações · ${rol}`;
+    }
     const total = `${numero(resumo.total)} pessoas no rol`;
     if (congregacaoId !== null) return `Congregação ${nomeLugar} · ${total}`;
     if (sessao.geral) return `Igreja toda · ${congregacoes.length} congregações · ${total}`;
@@ -112,12 +151,111 @@
     <!-- antes de o servidor responder: nada de "0" que parece número de verdade -->
     <div class="kpis" aria-busy="true">{#each [1, 2, 3, 4] as k (k)}<div class="kpi"><Estado tipo="carregando" linhas={2} /></div>{/each}</div>
   {:else}
-  <div class="kpis">
+  <!-- rodada 28: com o 4º grupo, 5 números (o dourado em 4º; no celular, o primeiro, na largura toda) -->
+  <div class="kpis" class:cinco={temArrol}>
+    {#if temArrol && celular}{@render kpiArrol()}{/if}
     <div class="kpi"><span>Em comunhão</span><strong class="verde sv-num">{numero(resumo?.emComunhao)}</strong><small>{pct(resumo?.emComunhao ?? 0, resumo?.total ?? 0)}% do rol</small></div>
     <div class="kpi"><span>Congregados</span><strong class="sv-num">{numero(resumo?.congregados)}</strong><small>ainda não membros</small></div>
     <div class="kpi"><span>Sem comunhão</span><strong class="vermelho sv-num">{numero(resumo?.semComunhao)}</strong><small>em disciplina ou afastados</small></div>
+    {#if temArrol && !celular}{@render kpiArrol()}{/if}
     <div class="kpi"><span>Novos em {mesLongo(resumo?.mesAtual ?? "")}</span><strong class="sv-num">{numero(resumo?.novosNoMes)}</strong><small>{novosSub}</small></div>
   </div>
+  {/if}
+{/snippet}
+
+{#snippet kpiArrol()}
+  <div class="kpi ouro"><span>Arrolamento a completar</span><strong class="sv-num">{numero(resumo?.arrolamento)}</strong><small>sem voto até completar</small></div>
+{/snippet}
+
+{#snippet barraArrol(feito: number, total: number)}
+  <div class="trilho-arr" role="img" aria-label="{pctAndamento(feito, total)}% completadas"><span style:width="{pctAndamento(feito, total)}%"></span></div>
+{/snippet}
+
+<!-- a congregação: o andamento, as próximas fichas e "Completar, uma por uma" -->
+{#snippet cartaoArrol()}
+  <Cartao titulo="Arrolamento a completar">
+    {#snippet direita()}<span class="dir-etiq"><Chip tom="pendente">sem voto</Chip></span>{/snippet}
+    {#if arrol}
+      {@const a = arrol.andamento}
+      <div class="andamento">
+        {@render barraArrol(a.completadas, a.vieram)}
+        <p class="and-txt"><strong class="sv-num">{numero(a.completadas)} de {numero(a.vieram)}</strong> já completadas · faltam <span class="sv-num">{numero(a.faltam)}</span></p>
+      </div>
+      {#if !celular}<p class="explica">Vieram do sistema pago{arrol.veioEm ? ` em ${diaMes(arrol.veioEm)}` : ""} sem a situação, a data e a forma de entrada. Ao completar, a pessoa sai deste grupo e ganha o voto.</p>{/if}
+      {#if a.faltam > 0}
+        <div class="proximas">
+          {#each arrol.proximas.slice(0, celular ? 3 : 4) as p (p.matricula)}
+            <button type="button" class="prox" onclick={() => ir({ tela: "completar", matricula: p.matricula, congregacaoId: null, semCongregacao: false })}>
+              <Avatar nome={p.nome} tam={30} cor={corDoDepartamento(p.departamento)} />
+              <span class="prox-t"><strong>{p.nome}</strong><small>nº {numero(p.matricula)} · veio do sistema pago · sem voto</small></span>
+              <span class="mais">Completar ›</span>
+            </button>
+          {/each}
+        </div>
+        {#if idDaCongregacao !== null}
+          <Botao tipo="ouro" icone="seta" largo tam={celular ? "grande" : "normal"} onclick={() => ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao, semCongregacao: false })}>Completar, uma por uma</Botao>
+        {/if}
+      {/if}
+    {:else if arrolErro}
+      <Estado tipo="erro" texto={arrolErro} ontentar={carregar} />
+    {:else}
+      <Estado tipo="carregando" linhas={3} />
+    {/if}
+  </Cartao>
+{/snippet}
+
+<!-- a área (por congregação) e a Geral (por área): o mesmo grupo, com o andamento de cada lugar -->
+{#snippet grupoCima()}
+  <section class="grupo-cima" id="arrolamento-por-lugar" aria-label="Arrolamento a completar">
+    <div class="gc-topo">
+      <h2>Arrolamento a completar, {sessao.geral ? "por área" : "por congregação"}</h2>
+      <Chip tom="pendente">sem voto</Chip>
+      <span class="gc-tot sv-num">{#if arrol}{numero(arrol.andamento.vieram)} vieram · {numero(arrol.andamento.completadas)} completadas · faltam {numero(arrol.andamento.faltam)}{/if}</span>
+    </div>
+    {#if arrol}
+      <div class="tabela-arr">
+        <table>
+          <thead><tr><th scope="col">{sessao.geral ? "Área" : "Congregação"}</th><th scope="col">Vieram</th><th scope="col">Completadas</th><th scope="col">Faltam</th><th scope="col">Andamento</th></tr></thead>
+          <tbody>
+            {#each lugaresVisiveis as l (l.id ?? l.nome)}
+              <tr>
+                <th scope="row">{l.nome}</th>
+                <td class="sv-num">{numero(l.vieram)}</td>
+                <td class="sv-num">{numero(l.completadas)}</td>
+                <td class="sv-num"><strong class="falta">{numero(l.faltam)}</strong></td>
+                <td><span class="and-cel">{@render barraArrol(l.completadas, l.vieram)}<small class="sv-num">{pctAndamento(l.completadas, l.vieram)}%</small></span></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      {@render fimCima()}
+    {:else if arrolErro}
+      <Estado tipo="erro" texto={arrolErro} ontentar={carregar} />
+    {:else}
+      <Estado tipo="carregando" linhas={4} />
+    {/if}
+  </section>
+{/snippet}
+
+{#snippet fimCima()}
+  {#if escondidos > 0}<button type="button" class="gc-fim botao-txt" onclick={() => (todas = true)}>{fraseEscondidos}</button>{/if}
+  {#if sessao.geral && (arrol?.semCongregacao ?? 0) > 0}
+    <p class="gc-fim">{fraseSemCongregacao(arrol?.semCongregacao ?? 0)} <button type="button" class="mais botao-txt" onclick={() => ir({ tela: "completar", matricula: null, congregacaoId: null, semCongregacao: true })}>Completar ›</button></p>
+  {/if}
+{/snippet}
+
+<!-- no celular, a área e a Geral: cada lugar numa linha -->
+{#snippet listaCima()}
+  {#if arrol}
+    <div class="lista-cel" aria-label="Arrolamento a completar, {sessao.geral ? 'por área' : 'por congregação'}" role="list">
+      {#each lugaresVisiveis as l (l.id ?? l.nome)}
+        <div class="lc" role="listitem"><span class="lc-t"><strong>{l.nome}</strong><small class="sv-num">{numero(l.completadas)} de {numero(l.vieram)} completadas</small></span><strong class="lc-f sv-num">faltam {numero(l.faltam)}</strong></div>
+      {/each}
+    </div>
+    {@render fimCima()}
+  {:else if arrolErro}
+    <Estado tipo="erro" texto={arrolErro} ontentar={carregar} />
   {/if}
 {/snippet}
 
@@ -205,6 +343,7 @@
     </section>
     {#if erro}<Estado tipo="erro" texto={erro} ontentar={carregar} />{/if}
     {@render kpis()}
+    {#if temArrol}{#if vistaLocal}{@render cartaoArrol()}{:else}{@render listaCima()}{/if}{/if}
     {@render grafGrande()}
     {@render grafMov()}
     {@render grafQual()}
@@ -221,9 +360,14 @@
       {/snippet}
     </Cabecalho>
     {#if erro}<Estado tipo="erro" texto={erro} ontentar={carregar} />{/if}
+    <!-- rodada 28: com o 4º grupo, os 5 números vão na largura toda; a área e a Geral veem a tabela por lugar logo abaixo -->
+    {#if temArrol}
+      {@render kpis()}
+      {#if !vistaLocal}{@render grupoCima()}{/if}
+    {/if}
     <div class="duas">
       <div class="esq">
-        {@render kpis()}
+        {#if !temArrol}{@render kpis()}{:else if vistaLocal}{@render cartaoArrol()}{/if}
         {@render grafGrande()}
         <div class="par-graf">{@render grafMov()}{@render grafQual()}</div>
       </div>
@@ -340,5 +484,63 @@
   .g-grupo { display: flex; flex-direction: column; gap: 8px; }
   .g-grupo > span { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--sv-suave); }
   .g-fim { margin-top: auto; display: flex; justify-content: flex-end; }
-  @media (max-width: 1100px) { .kpis { grid-template-columns: 1fr 1fr; } .avisos-col { width: 280px; } }
+  /* ---- o 4º grupo (rodada 28): as cores do desenho (o dourado do KPI, a barra verde, "faltam" em ouro) ---- */
+  .kpis.cinco { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .kpis.cinco .kpi { padding: 10px 12px; border-radius: 12px; gap: 1px; }
+  .kpis.cinco .kpi span { font-size: 12.5px; color: var(--sv-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpis.cinco .kpi strong { font-size: 26px; }
+  .kpis.cinco .kpi small { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi.ouro { background: #FFF4D1; border-color: #FFB800; }
+  .kpis .kpi.ouro span { color: #8A5A00; font-weight: 700; }
+  :global(html[data-tema="escuro"]) .kpi.ouro { background: #3A2E0B; }
+  :global(html[data-tema="escuro"]) .kpis .kpi.ouro span { color: #FCD34D; }
+  .celular .kpis.cinco { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .celular .kpis.cinco .kpi { padding: 7px 10px; }
+  .celular .kpis.cinco .kpi strong { font-size: 20px; }
+  .celular .kpi.ouro { grid-column: span 2; }
+  .dir-etiq { margin-left: auto; display: flex; }
+  .andamento { display: flex; flex-direction: column; gap: 5px; }
+  .trilho-arr { height: 10px; border-radius: 5px; background: var(--sv-linha); overflow: hidden; display: flex; min-width: 0; }
+  .trilho-arr span { display: block; height: 100%; background: #166534; }
+  :global(html[data-tema="escuro"]) .trilho-arr span { background: #86EFAC; }
+  .and-txt { font-size: 13px; color: var(--sv-texto); }
+  .and-txt strong { color: var(--sv-titulo); }
+  .explica { font-size: 13px; color: var(--sv-texto); line-height: 1.4; }
+  .proximas { display: flex; flex-direction: column; }
+  .prox { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 0; border: 0; border-top: 1px solid var(--sv-linha); background: transparent; text-align: left; cursor: pointer; width: 100%; }
+  .proximas .prox:first-child { border-top: 0; }
+  .prox-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+  .prox-t strong { font-size: 14px; font-weight: 600; color: var(--sv-titulo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prox-t small { font-size: 12px; color: var(--sv-suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mais { font-size: 13px; font-weight: 700; color: var(--sv-link); white-space: nowrap; }
+  .botao-txt { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; text-align: left; }
+  .prox:hover .mais, .botao-txt:hover { text-decoration: underline; }
+  .grupo-cima { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+  .gc-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .gc-topo h2 { font-size: 15.5px; font-weight: 700; color: var(--sv-titulo); }
+  .gc-tot { margin-left: auto; font-size: 13px; color: var(--sv-suave); }
+  .tabela-arr { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: var(--sv-raio); overflow: hidden; }
+  .tabela-arr table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .tabela-arr th, .tabela-arr td { padding: 0 16px; height: 44px; text-align: left; font-size: 13.5px; color: var(--sv-titulo); border-top: 1px solid var(--sv-linha); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabela-arr thead th { height: 38px; border-top: 0; font-size: 12.5px; font-weight: 700; color: var(--sv-texto); border-bottom: 1px solid var(--sv-borda); }
+  .tabela-arr tbody tr:first-child th, .tabela-arr tbody tr:first-child td { border-top: 0; }
+  .tabela-arr tbody th { font-weight: 700; }
+  .tabela-arr thead th:nth-child(1) { width: 30%; }
+  .tabela-arr thead th:nth-child(2) { width: 100px; }
+  .tabela-arr thead th:nth-child(3) { width: 120px; }
+  .tabela-arr thead th:nth-child(4) { width: 100px; }
+  .falta { color: #8A5A00; font-weight: 700; }
+  :global(html[data-tema="escuro"]) .falta { color: #FCD34D; }
+  .and-cel { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .and-cel .trilho-arr { flex: 1; height: 8px; border-radius: 4px; }
+  .and-cel small { font-size: 12px; color: var(--sv-suave); width: 34px; text-align: right; flex: none; }
+  .gc-fim { font-size: 13px; color: var(--sv-suave); padding: 0 4px; }
+  .lista-cel { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: var(--sv-raio); padding: 2px 12px; display: flex; flex-direction: column; }
+  .lc { display: flex; align-items: center; gap: 10px; min-height: 52px; border-top: 1px solid var(--sv-linha); }
+  .lc:first-child { border-top: 0; }
+  .lc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+  .lc-t strong { font-size: 14.5px; font-weight: 700; color: var(--sv-titulo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lc-t small { font-size: 12.5px; color: var(--sv-suave); }
+  .lc-f { font-size: 13.5px; font-weight: 700; color: var(--sv-titulo); white-space: nowrap; }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: 1fr 1fr; } .kpis.cinco { grid-template-columns: repeat(3, minmax(0, 1fr)); } .avisos-col { width: 280px; } }
 </style>

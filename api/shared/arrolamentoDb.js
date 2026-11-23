@@ -12,6 +12,7 @@ const { ehGeral, condicaoSqlEscopoPessoa, carregarPessoa, noEscopoDaPessoa, MSG_
 const { registrarAuditoriaNaTransacao } = require("./auditoria");
 const escadaDb = require("./escadaDb");
 const regras = require("./arrolamento");
+const { hojeBrasilia } = require("./dataBrasilia");
 
 const NAO_ENCONTRADA = { sucesso: false, mensagem: "Matrícula não encontrada." };
 const NO_ROL = "ISNULL(m.Status, N'ATIVO') NOT IN (N'DESLIGADO', N'FALECIDO')";
@@ -21,6 +22,14 @@ const DE_PESSOA = "FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.Exten
 const num = (x) => Number(x) || 0;
 const andamentoDe = (vieram, faltam) => ({ vieram, completadas: vieram - faltam, faltam });
 
+// o dia (AAAA-MM-DD, Brasília) em que a importação do sistema pago foi concluída; o banco guarda em UTC
+function diaDaImportacao(linha) {
+  const veio = linha && linha.veio;
+  if (!veio) return null;
+  const d = veio instanceof Date ? veio : new Date(String(veio).replace(" ", "T") + (/[Zz]|[+-]\d{2}:?\d{2}$/.test(String(veio)) ? "" : "Z"));
+  return Number.isNaN(d.getTime()) ? null : hojeBrasilia(d);
+}
+
 function idade(nascimento, hoje) {
   if (!nascimento || !hoje) return null;
   const [a, m, d] = nascimento.split("-").map(Number);
@@ -28,13 +37,14 @@ function idade(nascimento, hoje) {
   return ha - a - (hm < m || (hm === m && hd < d) ? 1 : 0);
 }
 
-// O ANDAMENTO para o painel: o total, cada congregação do escopo (a área), cada área e as que vieram sem congregação (a Geral) e as 4 próximas fichas.
+// O ANDAMENTO para o painel: o total, o dia em que as fichas vieram (veioEm, a importação concluída), cada congregação do escopo (a área, com a área de cada uma),
+// cada área e as que vieram sem congregação (a Geral) e as 4 próximas fichas.
 // `congregacaoId`: o painel de uma congregação (a área e a Geral escolhem); o escopo continua valendo junto.
 async function painel(pool, usuario, { congregacaoId = null } = {}) {
   const geral = ehGeral(usuario);
   const pedido = pool.request();
   const condEscopo = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "e.Nome");
-  const vazioResp = { andamento: andamentoDe(0, 0), porCongregacao: [], proximas: [], ...(geral ? { porArea: [], semCongregacao: 0 } : {}) };
+  const vazioResp = { andamento: andamentoDe(0, 0), veioEm: null, porCongregacao: [], proximas: [], ...(geral ? { porArea: [], semCongregacao: 0 } : {}) };
   if (condEscopo === "") return vazioResp;
   let cond = condEscopo ? ` AND ${condEscopo}` : "";
   if (congregacaoId) { pedido.input("cong", sql.Int, congregacaoId); cond += " AND m.CongregacaoId = @cong"; }
@@ -46,7 +56,8 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
     SELECT TOP (4) m.MembroId, m.Nome, m.Sexo, d.Nome AS Departamento
     ${DE_PESSOA} LEFT JOIN Departamentos d ON d.DepartamentoId = m.DepartamentoId
     WHERE ${NO_ROL} AND m.SituacaoMembro = N'ARROLAMENTO'${cond}
-    ORDER BY m.MembroId;`);
+    ORDER BY m.MembroId;
+    SELECT MAX(ConcluidaEm) AS veio FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA';`);
   const linhas = r.recordsets[0] || [];
   let vieram = 0, faltam = 0, semCongregacao = 0;
   const porArea = new Map();
@@ -54,7 +65,7 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
   for (const l of linhas) {
     vieram += num(l.vieram); faltam += num(l.faltam);
     if (l.congId == null) { semCongregacao += num(l.faltam); continue; }
-    porCongregacao.push({ id: num(l.congId), nome: l.cong, ...andamentoDe(num(l.vieram), num(l.faltam)) });
+    porCongregacao.push({ id: num(l.congId), nome: l.cong, area: l.area || null, ...andamentoDe(num(l.vieram), num(l.faltam)) });
     const chave = l.areaId == null ? "sem" : String(l.areaId);
     const a = porArea.get(chave) || { id: l.areaId == null ? null : num(l.areaId), nome: l.area || "Sem área", vieram: 0, faltam: 0 };
     a.vieram += num(l.vieram); a.faltam += num(l.faltam);
@@ -64,6 +75,7 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
   porCongregacao.sort(porNome);
   const resp = {
     andamento: andamentoDe(vieram, faltam),
+    veioEm: vieram ? diaDaImportacao((r.recordsets[2] || [])[0]) : null,   // "Vieram do sistema pago em 10/12" (o dia de Brasília)
     porCongregacao,
     proximas: (r.recordsets[1] || []).map((l) => ({ matricula: num(l.MembroId), nome: l.Nome, sexo: l.Sexo || null, departamento: l.Departamento || null }))
   };

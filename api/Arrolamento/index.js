@@ -1,5 +1,5 @@
 // Arrolamento (FASE 10, Membros, rodada 28 aprovada em 23/11/2026) — COMPLETAR O ARROLAMENTO de quem veio do sistema pago.
-// GET  /api/arrolamento                 -> ?congregacaoId=N — o andamento (vieram, completadas, faltam), cada congregação do escopo, as 4 próximas fichas e, para a
+// GET  /api/arrolamento                 -> ?congregacaoId=N — o andamento (vieram, completadas, faltam), o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a
 //                                          Geral, cada área e as que vieram sem congregação
 // GET  /api/arrolamento/ficha           -> ?matricula=N | ?congregacaoId=N&depois=M | ?semCongregacao=1&depois=M (só a Geral) — a ficha para completar, a próxima e o
 //                                          andamento da congregação dela

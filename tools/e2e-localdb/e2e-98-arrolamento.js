@@ -94,11 +94,14 @@ async function principal() {
   console.log("== 1. o andamento ==");
   let r = await arrol(tok.local());
   ok(r.status === 200 && r.body.sucesso === true, "a local lê o andamento", r.body);
+  ok(r.body.veioEm === L.hojeBr(), "o dia em que as fichas vieram do sistema pago (a importação concluída, no dia de Brasília)", r.body.veioEm);
   ok(r.body.andamento && r.body.andamento.vieram === 8 && r.body.andamento.completadas === 1 && r.body.andamento.faltam === 7, "Vila Nova: 8 vieram, 1 completada, faltam 7", r.body.andamento);
   ok(Array.isArray(r.body.proximas) && r.body.proximas.length === 4 && r.body.proximas[0].matricula === 9809 && r.body.proximas[1].matricula === 980101 && r.body.proximas[0].nome,
     "as 4 próximas, pela matrícula, com o nome", r.body.proximas);
   ok(r.body.porCongregacao.length === 1 && r.body.porCongregacao[0].nome === C.VN, "um lugar só: Vila Nova", r.body.porCongregacao);
   ok(r.body.porArea === undefined && r.body.semCongregacao === undefined, "a local não recebe as áreas nem as sem congregação", r.body);
+  const nada = await arrol(tok.outra(), { congregacaoId: cong.VN });
+  ok(nada.status === 200 && nada.body.andamento.vieram === 0 && nada.body.veioEm === null, "quem não tem nada a ver com o arrolamento não recebe a data", nada.body);
   r = await arrol(tok.area());
   const lugar = (lista, nome) => (lista || []).find((x) => x.nome === nome) || {};
   ok(lugar(r.body.porCongregacao, C.VN).faltam === 7 && lugar(r.body.porCongregacao, C.CJ).vieram === 3 && r.body.porCongregacao.length === 2, "a área: cada congregação com o seu andamento", r.body.porCongregacao);

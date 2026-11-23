@@ -17,7 +17,7 @@
     transferir: () => import("./telas/Transferir.svelte"), transferencia: () => import("./telas/Transferencia.svelte"), sugestoes: () => import("./telas/Sugestoes.svelte"),
     repetidas: () => import("./telas/Repetidas.svelte"), juntar: () => import("./telas/Juntar.svelte"),
     carteirinhas: () => import("./carteirinhas/Carteirinhas.svelte"), editor: () => import("./carteirinhas/Editor.svelte"),
-    importar: () => import("./telas/Importar.svelte")
+    importar: () => import("./telas/Importar.svelte"), completar: () => import("./telas/Completar.svelte")
   };
   onMount(() => {
     // logo depois do painel: a lista e a ficha (as próximas telas de quase todo mundo) já ficam no aparelho
@@ -56,6 +56,7 @@
       case "juntar": partes.push(m("Fichas repetidas", { tela: "repetidas" }), { rotulo: nomeDaTela || "Juntar" }); titulo = "Juntar fichas"; break;
       case "sugestoes": partes.push({ rotulo: "Sugestões de alteração" }); titulo = "Sugestões"; break;
       case "importar": partes.push({ rotulo: "Importar do sistema pago" }); titulo = "Importar"; break;
+      case "completar": partes.push(m("Pessoas", { tela: "pessoas" }), { rotulo: nomeDaTela || "Completar o arrolamento" }); titulo = "Completar"; break;
       case "carteirinhas": partes.push(m("Carteirinhas", { tela: "carteirinhas", congregacaoId: null }), { rotulo: nomeDaTela || (r.congregacaoId === null ? "Modelos" : "Imprimir") }); titulo = "Carteirinhas"; break;
       case "editor": partes.push(m("Carteirinhas", { tela: "carteirinhas", congregacaoId: null }), { rotulo: "Modelos" }, { rotulo: nomeDaTela || "Editor" }); titulo = "Editor do modelo"; break;
     }
@@ -98,6 +99,7 @@
       {:else if nav.rota.tela === "transferencia"}{@const r = nav.rota}{#await telas.transferencia()}{@render esperando()}{:then m}<m.default id={r.id} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "sugestoes"}{#await telas.sugestoes()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "importar"}{#await telas.importar()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
+      {:else if nav.rota.tela === "completar"}{@const r = nav.rota}{#await telas.completar()}{@render esperando()}{:then m}<m.default matricula={r.matricula} congregacaoId={r.congregacaoId} semCongregacao={r.semCongregacao} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "repetidas"}{#await telas.repetidas()}{@render esperando()}{:then m}<m.default celular={tela.celular} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "juntar"}{@const r = nav.rota}{#await telas.juntar()}{@render esperando()}{:then m}<m.default a={r.a} b={r.b} celular={tela.celular} onnome={(n: string) => (nomeDaTela = n)} />{:catch e}{registrar(e)}{@render falhou()}{/await}
       {:else if nav.rota.tela === "desligamentos"}

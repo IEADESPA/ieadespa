@@ -6,8 +6,22 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 22/11/2026, noite (Claude, sessão principal). Ele mandou parar: os três agentes foram parados, e tudo o
-que estava feito já estava enviado ao GitHub (nada ficou só na máquina).
+Atualizado em 23/11/2026, manhã (Claude, sessão principal).
+
+**Em andamento (23/11):** ele decidiu adotar o conselheiro (o Fable aconselhando o Opus; em TESTE só neste
+computador), os agentes padrão e os ganchos de proteção na bancada, e **3 agentes ao mesmo tempo** neste projeto (um
+desenha, um constrói, um revisa; memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`). Agentes
+rodando agora:
+
+- **Bancada:** os agentes padrão (construtor, desenhista, revisor no Fable) e os ganchos de proteção, em
+  `C:\MCP\bancada`; só o `-SoTestar` (o `-Sim` espera o sim dele). Diário
+  `C:\tmp\ieadespa-bancada\DIARIO-agentes-e-ganchos.md`.
+- **Desenho, rodada 28** (ramo `desenho-r28`, worktree `C:/tmp/ieadespa-desenho-r28`; diário em
+  `C:/tmp/ieadespa-desenho-r28-fotos/`).
+- **Construção, Membros:** a tela de importar os membros e o pulo das matrículas que já existem (`v10-membros-svelte`).
+- Quando os agentes padrão estiverem instalados, o **revisor** substitui o agente da bancada como 3º.
+
+O resto deste arquivo é o estado da parada de 22/11, ainda válido.
 
 ## 1. Concluído
 

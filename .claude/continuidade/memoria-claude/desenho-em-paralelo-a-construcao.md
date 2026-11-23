@@ -1,28 +1,29 @@
 ---
 name: desenho-em-paralelo-a-construcao
-description: "Sempre mais de um agente trabalhando em paralelo (construção de módulos para a homologação e desenho), cada um no seu ramo e worktree; a regra global \"um agente por vez\" NÃO vale aqui"
+description: "Neste projeto, 3 agentes ao mesmo tempo (decisão de 23/11): um desenha, um constrói (Membros primeiro, depois alterna para o Financeiro) e um revisa; cada um no seu ramo e worktree"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: 8e446f57-0011-4863-8efe-ff9484623ad6
-  modified: 2026-11-21T19:40:00.000Z
+  modified: 2026-11-23T12:30:00.000Z
 ---
 
-Na FASE 10, o serviço NÃO para: manter agentes trabalhando em paralelo, cada um no seu ramo e no seu worktree. Em
-21/11/2026: um agente no Membros (`v10-membros-svelte`, `C:/tmp/ieadespa-svelte`) e outro construindo o Financeiro
-aprovado (`v10-financeiro-svelte`, `C:/tmp/ieadespa-financeiro/obra`), os dois levando à homologação. Quando houver
-rodada de desenho, mais um agente desenha enquanto os outros constroem.
+Na FASE 10, o serviço NÃO para. A regra global (22/11) diz que o número de agentes ao mesmo tempo é ele quem decide,
+de 1 a 4, conforme os créditos; sem ordem nova, vale o último número dado no projeto. **No ieadespa, em 23/11/2026: 3
+agentes** — um **desenha** (as rodadas), um **constrói** (primeiro o Membros, depois alterna para o Financeiro; não
+mais os dois em paralelo) e um **revisa** (o revisor, no modelo mais forte).
 
-**Why:** 17/11/2026, ele: "as telas, a aprovação das telas, precisam ser feitas logo... isso já vai sendo paralelo". Em
-21/11/2026, ao ver só um agente trabalhando: "Tem que ter outro agente trabalhando para já ir colocando tudo lá na
-homologação até chegar na produção. Nós não podemos parar isso não."
+**Why:** 21/11, ao ver só um agente: "Tem que ter outro agente trabalhando para já ir colocando tudo lá na homologação
+até chegar na produção. Nós não podemos parar isso não." 23/11, a contagem: "Vai ser 3: um vai desenhar, o outro vai
+construir primeiramente o Membros e depois ele alterna para o Financeiro, e o terceiro vai revisar."
 
 **How to apply:**
 
-- Quando um agente termina, o próximo daquela frente já começa; nunca deixar só um trabalhando se há outra frente
-  aprovada esperando (construção de módulo aprovado, pendências, desenho do próximo módulo).
-- Para não colidirem: worktree e ramo próprios; faixa própria de migrações (Membros até 18x, Financeiro a partir da 200);
-  antes de mesclar no `homolog`, `git fetch` e esperar o deploy que estiver rodando (`gh run list`).
+- Quando um agente termina, o próximo daquela frente já começa; mas nunca mais que 3 ao mesmo tempo, sem ordem nova.
+- Agentes em paralelo nunca mexem no mesmo código; worktree e ramo próprios; só um por vez usa o banco de teste (trava
+  `C:/tmp/localdb-trava`); faixa de migrações (Membros até a 199, Financeiro a partir da 200); antes de mesclar no
+  `homolog`, `git fetch` e esperar o deploy em curso (`gh run list`).
+- O revisor confere o que o construtor entregou antes da homologação e antes da produção.
 - A produção continua só com o OK dele ([[fase10-nada-sem-aprovacao]]).
 - Desenho: a publicação na página de propostas precisa de um agente de contexto limpo (a ferramenta exige ler a versão
-  viva inteira). Ver [[ordem-fixa-de-modulos]] e [[propostas-de-tela-em-artefato]].
+  viva inteira). Ver [[ordem-fixa-de-modulos]], [[propostas-de-tela-em-artefato]] e [[conselheiro-e-padrao-alto]].

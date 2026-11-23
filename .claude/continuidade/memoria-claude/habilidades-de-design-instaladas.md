@@ -37,4 +37,15 @@ Em 18/11/2026, depois de ler a pesquisa `docs/pesquisa/habilidades-de-design-202
 
 Ver [[construir-exatamente-o-aprovado]], [[fase10-nada-sem-aprovacao]].
 
+**23/11/2026, ele pediu "aumentar o nível" em todos os sistemas** (pesquisa em
+`C:\tmp\ieadespa-bancada\pesquisa-habilidades-23-11.md`; as pilhas dos outros sistemas ficam fora deste repositório
+público). Aprovou trazer para a bancada: `svelte-core-bestpractices` (sveltejs/ai-tools), `supabase-postgres-best-practices`
+(só Postgres, para os outros sistemas), o plugin `pyright-lsp` (Python) e a `test-driven-development` (obra/superpowers; o construtor
+escreve o teste antes, sem "apagar o código"). A LGPD (goul4rt/lgpd-skills, 3 partes: menores, prazo de guarda, pedido do
+titular) entra **adaptada**: os documentos de regras vão para `C:\MCP\bancada\lgpd\<repositório>\`, privada, **nunca no
+repositório público**; o texto não tem revisão de advogado. O servidor de memória fica na 2.1.1 até conferir a 2.2.2. O
+caminho do Codex é consertado pelo instalador. Ele também quer saber, a cada pesquisa, se há outras que valem a pena:
+responder com opinião própria, poucas e lidas antes. Na pergunta, não chamar de "oficial e conferida" o que é só de fonte
+conhecida e ainda não foi lido inteiro.
+
 **20/11/2026: mais 4 habilidades instaladas (só texto, versão fixa), em ~/.claude/skills, ~/.agents/skills e ~/.cline/skills, e no repositório pelo pacote do colega:** systematic-debugging e verification-before-completion (obra/superpowers MIT 22f0b46), humanizer-pt (MIT 2557bcb, só chamada à mão: /humanizer-pt) e impeccable (Apache 2.0 b49177d, SÓ o texto, chamada à mão /impeccable, com nota proibindo npx/login/telemetria). Recusados, com motivo em C:/tmp/ieadespa-desenho-fontes/pesquisa-habilidades-lista.md: Superpowers inteiro (gancho obrigatório), Ponytail (3 ganchos), UI UX Pro Max, Matt Pocock, algorithmic-art/theme-factory/web-artifacts-builder, canvas-design (para cartaz, usar o conector do Canva que já está ligado no claude.ai), file-search.

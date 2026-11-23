@@ -207,7 +207,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   nova. `e2e-97` (travada: o "Cadastrar" com a matrícula gerada e a digitada, o importador antigo, o lançar e o aceite da fila e o site recusados com a
   mesma mensagem, nada gravado, editar continua livre, o 401/403 de sempre antes da trava; a importação de zero pessoas não se confirma; a parada no meio
   continua travada; a concluída solta sozinha e a matrícula nova vem depois das importadas). Os roteiros que cadastram gente (`e2e-85`, `e2e-90`, `e2e-93` e
-  `e2e-95`) semeiam uma importação concluída no começo (`lib.js` `importacaoConcluida()`) e rodam sobre a `cenario-185`.
+  `e2e-95`) semeiam uma importação concluída no começo (`lib.js` `importacaoConcluida()`) e rodam sobre a `cenario-185`. O `e2e-51` (escada) também
+  roda sobre a `cenario-185`: a ficha nova recusada pela trava (409) e, depois da importação semeada, a regra do cargo (403).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

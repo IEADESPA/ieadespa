@@ -60,7 +60,7 @@ BASE=cenario-escada bash rodar.sh roteiro e2e-48-afm-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-49-afm-corridas.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-50-afm-revisao.js
 # v8.2 (Escada ministerial, migração 157): cada roteiro sobre a base sozinho
-BASE=cenario-escada bash rodar.sh roteiro e2e-51-escada-fluxos.js
+# (o e2e-51 roda no fim, sobre a cenario-185: desde a trava das matrículas ele cadastra gente depois da importação semeada)
 BASE=cenario-escada bash rodar.sh roteiro e2e-52-escada-seguranca.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-53-escada-corridas.js
 BASE=cenario-escada bash rodar.sh roteiro e2e-54-escada-revisao.js
@@ -151,13 +151,14 @@ BASE=cenario-173 bash rodar.sh roteiro e2e-87-historico-motivo-saida.js
 bash rodar.sh preparar-175
 BASE=cenario-175 bash rodar.sh roteiro e2e-88-tesouraria-escopo.js
 # FASE 10, Membros (migrações 179 a 185, cada base a partir da anterior). A TRAVA DAS MATRÍCULAS (23/11/2026): sem uma importação do sistema pago CONCLUÍDA,
-# nenhum caminho cria ficha nova; os roteiros que cadastram gente (85, 90, 93 e 95) semeiam uma no começo (lib.js importacaoConcluida) e o e2e-97 prova a
+# nenhum caminho cria ficha nova; os roteiros que cadastram gente (85, 90, 93, 95 e o 51 da escada) semeiam uma no começo (lib.js importacaoConcluida) e o e2e-97 prova a
 # trava ligada, a importação parada no meio (continua travada), a de zero pessoas (não se confirma) e a concluída (solta sozinha)
 for n in 179 180 181 182 183 184 185; do bash rodar.sh preparar-$n; done
 BASE=cenario-185 bash rodar.sh roteiro e2e-90-pre-cadastro.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-93-juntar-fichas.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-95-sobras-membros.js
+BASE=cenario-185 bash rodar.sh roteiro e2e-51-escada-fluxos.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
 echo TUDO-PRONTO

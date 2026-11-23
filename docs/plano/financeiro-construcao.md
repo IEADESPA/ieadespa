@@ -177,3 +177,28 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
   perguntar antes de construí-lo, junto com as folhas e o livro).
 - **As páginas** mostram só as que existem (o desenho repete "1 2 3 4 5" mesmo com 2 blocos); no celular, "Próxima página" só quando
   há próxima.
+
+### O que o incremento 2 decidiu na construção (23/11/2026, sem mudar regra)
+
+- **As abas "Folhas do bloco" e "Livro de entrada e saída"** são as aprovadas da rodada 17 (r17-blocos-folhas e r17-blocos-livro,
+  opção 1), nos 3 níveis, claro e escuro, notebook e celular. A prova é `tools/front-financeiro/navegador.js`.
+- **Folhas:** só a folha livre de um bloco que está com a congregação aceita a exceção; o bloco devolvido aparece só para consulta.
+  A Geral e a área escolhem o bloco no alto (os entregues e os 50 devolvidos mais novos); a congregação vê o bloco em uso dela, sem
+  seletor, como no desenho. No celular as primeiras folhas com destino viram uma linha, em dezenas (38 com destino → "1ª a 30ª").
+- **Livro:** a devolução vai pela primeira folha do bloco que o rastreio achou (a pessoa pode digitar qualquer folha dele, com ou sem
+  ponto); quem devolveu é alguém da lista do rastreio (quem levou o bloco e a liderança da congregação) ou "outra pessoa", com o nome
+  escrito. O bloco que ainda está na Geral e o já devolvido mostram o rastreio, mas não se registram. A linha do livro segue o texto
+  do desenho ("devolvido por Bela Vista", "pela congregação Sede"; todas as folhas lançadas = "50 conferidas").
+- **Sem desenho, o menor desvio:** a folha **extraviada** usa o azul das notas (já aprovado) e entra na legenda só quando o bloco tem
+  uma; o registro **"chegada" do lote** no livro escreve "Chegada: lote da gráfica, série 2026 · 100 blocos chegaram"; na congregação,
+  "Seus blocos agora" conta o bloco cheio ainda não devolvido como "em uso" (como a aba Blocos).
+- **"Registrar saída" (a entrega) não tem formulário aprovado:** o botão mostra o aviso de que vem num próximo incremento. O servidor
+  da entrega já existe (`POST financeiro/blocos/entregar`).
+
+### Perguntas abertas do incremento 2 (para ele)
+
+1. O formulário de "Registrar saída" (entregar o bloco a uma congregação): desenhar numa rodada curta? Pela regra já falada, quem leva
+   é o tesoureiro, o dirigente ou outra pessoa da congregação; a área só leva e o bloco nunca fica com ela.
+2. A folha extraviada ficou no azul das notas: serve, ou ele quer outra cor?
+3. No celular (todos os níveis) e na congregação (também no notebook) o desenho não tem o seletor do bloco: aparece o bloco em uso
+   mais recente. Quando a congregação tem dois blocos abertos, ela precisa escolher?

@@ -66,11 +66,11 @@
   .textos p { font-size: 14.5px; color: var(--sv-suave); }
   .acoes { display: flex; gap: 10px; align-items: center; flex: none; }
   .nivel {
-    height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); background: var(--sv-campo); display: inline-flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); background: var(--sv-campo); display: inline-flex; align-items: center; gap: 8px;
     font-size: 14px; font-weight: 600; color: var(--sv-titulo); white-space: nowrap; flex: none;
   }
   .nivel :global(svg) { color: var(--sv-icone); }
-  .nivel.local { height: 36px; gap: 7px; font-size: 13.5px; border-color: var(--sv-borda); background: transparent; }
+  .nivel.local { height: 38px; gap: 7px; font-size: 13.5px; border-color: var(--sv-borda); background: transparent; }
   .nivel.local :global(svg) { color: var(--sv-suave); }
 
   /* as abas (o traço dourado embaixo da escolhida) */

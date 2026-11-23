@@ -245,7 +245,7 @@
 
   /* o seletor do bloco, no alto (como o botão de linha do desenho: "Bloco 1.401 · Vila Nova ▾") */
   .seletor {
-    position: relative; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); color: var(--sv-titulo); display: inline-flex;
+    position: relative; height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); color: var(--sv-titulo); display: inline-flex;
     align-items: center; gap: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; flex: none; cursor: pointer;
   }
   .seletor :global(svg) { color: var(--sv-icone); }

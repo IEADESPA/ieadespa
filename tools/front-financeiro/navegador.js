@@ -195,7 +195,7 @@ const campo = (page, rotulo) => page.evaluateHandle((rotulo) => {
   const l = [...document.querySelectorAll("#financeiroRaiz label")].find((x) => x.textContent.replace(/\s+/g, " ").trim().startsWith(rotulo) && x.offsetParent !== null);
   return (l && (l.control || l.querySelector("input, select"))) || null;
 }, rotulo);
-async function digitar(page, rotulo, texto) { const el = (await campo(page, rotulo)).asElement(); if (!el) return false; await el.click({ clickCount: 3 }); await el.type(texto); return true; }
+async function digitar(page, rotulo, texto) { const el = (await campo(page, rotulo)).asElement(); if (!el) return false; await el.click(); await el.evaluate((e) => e.select()); await el.type(texto); return true; }
 async function escolher(page, rotulo, valorOuTexto) {
   const el = (await campo(page, rotulo)).asElement();
   if (!el) return false;

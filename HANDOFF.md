@@ -8,12 +8,14 @@ Em uso por: Mateus desde 23/11/2026 08:48
 
 Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
 
-**Em andamento, só leitura (pedido dele de 23/11, antes de recarregar a janela):** dois agentes de pesquisa. Um confere
-se a versão 2.2.1 do servidor de memória pode trocar a 2.1.1 (detalhe em
-`C:\tmp\ieadespa-bancada\conferencia-servidor-memoria-2.2.1.md`). O outro procura habilidades oficiais e confiáveis
-para a bancada (detalhe em `C:\tmp\ieadespa-bancada\pesquisa-habilidades-23-11.md`). Nada se instala sem o sim dele.
-Recarregar a janela só depois que os dois terminarem (a recarga mata os agentes). Se pararem no meio, relançar com os
-mesmos arquivos.
+**Em andamento (pedido dele de 23/11, antes de recarregar a janela):** um agente na **bancada** (`C:\MCP\bancada`)
+traz o que ele aprovou: as habilidades do Svelte, do Postgres e do "teste primeiro" (com uma linha no `construtor`), o
+plugin do Python (`pyright-lsp`); o conserto do caminho do Codex no instalador; e o aviso da 2.2.1 calado (decisão
+dele: ficar na 2.1.1 até a 2.2.2). Faz dois commits **sem push**: eu leio as mudanças, envio, mostro a ele o
+`-SoTestar` e, com o sim, rodo o `-Sim`. Só então ele recarrega a janela. As pesquisas que embasam (só neste
+computador): `C:\tmp\ieadespa-bancada\pesquisa-habilidades-23-11.md` e `conferencia-servidor-memoria-2.2.1.md`.
+**A LGPD ficou para a decisão dele**, depois da explicação: a habilidade de um autor só grava documentos de regras
+(não dados de pessoas), e ele não quer isso no repositório público.
 
 ## 1. Concluído
 

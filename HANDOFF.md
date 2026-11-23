@@ -1,12 +1,12 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 23/11/2026 08:48
+Em uso por: Livre
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 15:10 (Claude, sessão principal).
+Atualizado em 23/11/2026 17:45 (Claude, sessão principal). Parada pedida por ele: a cota de uso acabando.
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,20 +30,17 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo.** As perguntas dos dois foram respondidas por ele
-às 16h (plano da fase: "A tela de importar os membros", item da trava, e "Rodada 28", respostas antes da r29):
+**Nenhum agente trabalhando.** Os dois foram parados às 17h40, a pedido dele, sem nada pela metade no Git:
 
-- **construtor**, desde as 17h, no ajuste do e2e-51 e em **completar o arrolamento** (item 1.2 abaixo). A trava (item
-  1.1) ficou pronta na homologação. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
-  `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
-- **desenhista**, desenhando e publicando a rodada 29, a movimentação refeita. Worktree `C:/tmp/ieadespa-desenho-r29`,
-  ramo `desenho-r29`. Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+- **construtor:** só trouxe a `main` para o ramo (`3f8a1a5`, enviado). "Completar o arrolamento" e o ajuste do e2e-51
+  NÃO começaram. Pode haver um rascunho em `C:/tmp/ieadespa-membros/aprovado-arrolamento.js` (fora do Git).
+- **desenhista:** a rodada 29 ficou **PRONTA, mas NÃO publicada**. As fontes estão na `main` (`e1dc866` e `cb9ac39`):
+  18 telas, 387 KB, conferência com 0 problema. A página KMeb… continua na versão 10. Diário:
+  `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
 
 **O módulo 3 já tem as respostas dele** (23/11, plano da fase, seção "Módulo 3 (Estrutura e Territórios): as respostas
 dele antes do desenho"). O desenho espera Membros fechar. A regra nova de acesso vale também para Membros: o cargo
 vence em 31/12 e, vencido, a pessoa perde o acesso.
-
-Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de mandar de novo.
 
 ## 1. Concluído
 
@@ -79,9 +76,9 @@ Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de ma
 
 ## 3. Pendências e erros conhecidos
 
-- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** Falta a trava
-  no código: nada gera matrícula antes da importação concluída, em todos os pontos que chamam `proximaMatricula`
-  (`api/shared/preCadastroDb.js` e os 3 de `api/GestaoPessoas/index.js`). Sem ela, Membros não vai à produção.
+- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** A trava está
+  feita e na homologação (item 4, 1.1). Ele ainda precisa vê-la.
+- **O teste de telas do CI** já falhava no homolog `b34284c`, antes da trava. A causa não foi apurada.
 - **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
   Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
 - **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
@@ -101,6 +98,18 @@ Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de ma
   DIARIO-importador, DIARIO-banco-lento) e os das rodadas em `C:/tmp/ieadespa-desenho-r27-fotos/` e `-r28-fotos/`.
 
 ## 4. Próximo passo exato
+
+**Ao voltar, nesta ordem:**
+
+1. **Publicar a rodada 29** com um agente NOVO, que só publica. A ferramenta exige ler antes a versão no ar inteira
+   (343 KB), e o desenhista que montou não tinha contexto para isso.
+   - A fonte é `design/propostas/` (`montar-r29.js`, `r29-*.js`).
+   - A página é <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>.
+   - Depois, avisar que ele pode conferir.
+2. **Ele vê a trava travada na homologação:** matrícula de teste 900007 › Membros › Fila de cadastros › Cadastro rápido
+   › "Enviar para a secretaria" mostra a recusa. Depois do "vi", um agente faz a importação de mentira até o fim (o
+   e2e-97 tem a planilha de mentira) para ele ver o liberado.
+3. **Construtor:** o e2e-51 e completar o arrolamento (item 1.2), com o resumo da missão parada (o passo 0 já está feito).
 
 **A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
 **2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
@@ -128,8 +137,9 @@ nunca como terceiro agente. A varredura de defeitos de segurança espera ("quest
       de ver na homologação.
    6. **Depois, o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58` para a homologação; as abas Folhas e
       Livro; o lote da gráfica (r27); a chegada do lote e o fechamento do mês (r28).
-2. **Desenhista, rodada 29:** (1) a **movimentação refeita** pelas regras novas dele: o membro sai sozinho pelo
-   aplicativo, com a carta em PDF; ninguém confirma; os cargos ficam vagos; a secretaria só no "não sabe usar" e no
-   abandono; o apagamento a partir de 30 dias; o que fica para sempre. (2) O **levantamento das dúvidas do módulo 3**
-   (Estrutura e Territórios), para perguntar a ele **antes** de desenhar. Publicar na página leve KMeb…: ele já
-   terminou de comentar a 28.
+2. **Desenhista:**
+   - a rodada 29 está pronta (publicar: veja o passo 1 acima);
+   - as dúvidas do módulo 3 já foram respondidas por ele;
+   - quando ele conferir a 29, os acertos vão para a 30. O desenho do módulo 3 só começa quando Membros fechar.
+   - **Para a construção da movimentação**, o código muda, não só a tela: sair na hora, cargos vagos na hora e o
+     apagamento aos poucos e sozinho. Plano, "Rodada 28", item "Para a construção".

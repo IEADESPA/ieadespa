@@ -8,6 +8,11 @@ metadata:
   modified: 2026-11-23T12:30:00.000Z
 ---
 
+**23/11/2026, à tarde: 2 agentes** (ordem nova dele: "primeiramente só eu trabalho com esses dois agentes"): o
+**desenhista** e o **construtor** (Membros, depois Financeiro, até a homologação e, com o sim dele, a produção). A
+conferência do revisor antes da produção continua, no lugar do construtor, nunca como terceiro agente. A caça de
+defeitos de segurança ficou "em questões secundárias": o lote 1 da varredura espera.
+
 Na FASE 10, o serviço NÃO para. A regra global (22/11) diz que o número de agentes ao mesmo tempo é ele quem decide,
 de 1 a 4, conforme os créditos; sem ordem nova, vale o último número dado no projeto. **No ieadespa, em 23/11/2026: 3
 agentes** — um **desenha** (as rodadas), um **constrói** (primeiro o Membros, depois alterna para o Financeiro; não

@@ -37,7 +37,7 @@
 - [Realidade financeira](realidade-financeira-nao-o-regimento.md) — sem culto/malote/cofre; Regimento não é a realidade
 - [Propostas em artefato](propostas-de-tela-em-artefato.md) — página leve KMeb…; a antiga G1gj… é só arquivo
 - [Um módulo por vez](um-modulo-por-vez-sem-republicar.md) — não republicar enquanto ele comenta
-- [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 23/11: 3 agentes: desenha, constrói (Membros, depois Financeiro), revisa
+- [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 23/11 tarde: 2 agentes (desenha e constrói); revisor no lugar do construtor
 - [Conselheiro e alto padrão](conselheiro-e-padrao-alto.md) — 23/11: Fable aconselha o Opus (funciona no VS Code); agentes padrão, ganchos e fluxos com muitos agentes quando ajudar
 - [Ordem fixa de módulos](ordem-fixa-de-modulos.md) — 1 Membros, 2 Financeiro, 3 Estrutura...
 - [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra

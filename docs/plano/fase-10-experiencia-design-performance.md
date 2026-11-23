@@ -1010,11 +1010,12 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
   pode ver as dele, e o sistema avisa isso ao criar.
 - **A lista salva:** quem salva escolhe "só eu" ou "o meu nível"; a Geral pode publicar para todos, e cada um vê só as
   pessoas do seu alcance; a lista se atualiza sozinha.
-- **A saída (desligamento, falecimento):** a congregação registra; para o membro comum vale na hora; obreiro, quem tem
-  credencial ou liderança precisa da confirmação da Geral antes.
-- **Os documentos:** o desligamento por carta de mudança é automático (a própria carta, pedida pelo membro ou emitida
-  pela secretaria, é o documento); no falecimento, a data e quem informou, com a certidão opcional; a volta não pede
-  documento.
+- **A saída (desligamento, falecimento):** ~~a congregação registra; para o membro comum vale na hora; obreiro, quem tem
+  credencial ou liderança precisa da confirmação da Geral antes.~~ **Substituída em 23/11/2026** (seção "Rodada 28: o
+  que ele aprovou"): o próprio membro sai pelo aplicativo, na hora, sem confirmação de ninguém.
+- **Os documentos:** o desligamento por carta de mudança é automático (a própria carta é o documento); no falecimento, a
+  data e quem informou, com a certidão opcional; a volta não pede documento. O "pediu para sair" por áudio ou recado não
+  existe mais (23/11).
 - **A volta (readmissão):** a matrícula é para sempre. A pessoa volta com a mesma matrícula, em comunhão, com **data de
   entrada nova** e **sem o cargo** (renunciou a tudo ao sair; os cargos já são de outros). É como um membro novo: passa
   de novo pela integração. O que ainda estiver guardado volta; o que a harmonização dos dados (a LGPD) já apagou com o
@@ -1048,6 +1049,38 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
 - **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
+
+### Rodada 28: o que ele aprovou (23/11/2026)
+
+- **Aprovadas sem mudança:** a auditoria ao vivo e o fechamento do mês, a chegada do lote com os números pulados e a
+  família ("mora junto").
+- **As listas inteligentes:** aprovadas, com uma restrição dele contra vazamento de dados: **exportar a lista em PDF ou
+  planilha, só o pessoal da Geral.** A congregação e a área veem e usam a lista no sistema, mas não baixam.
+- **Completar o arrolamento:** aprovado. **A área e a Geral também podem completar e editar** os dados do membro, e
+  aprovar quando for o caso: se a congregação não faz o que tem de fazer, a área faz, e o serviço não para.
+- **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
+  boa. As regras novas dele:
+  - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,
+    seja qual for o cargo (até o vice-presidente). Ninguém confirma: nem a secretaria local, nem a Geral. Não se prende
+    membro.
+  - **Sai com a carta em PDF**, com os dados mais recentes dele (congregação, em comunhão etc.), para entregar na igreja
+    que vai recebê-lo.
+  - **Os cargos que ele tinha ficam vagos sozinhos.** Quem cuida daquele nível preenche com outra pessoa; os cargos da
+    diretoria, da área e da Geral são cadastrados no módulo de governança.
+  - **A secretaria só entra** quando a pessoa não sabe usar o aplicativo (ela pede a carta por ele) e no **abandono**: 90
+    dias sem comunhão, pelo Regimento (o procedimento já existe desde a fase 1); a congregação pede e a Geral confirma.
+  - **30 dias depois da carta, os dados começam a ser apagados** (LGPD): a função dele primeiro, depois o histórico, aos
+    poucos. Se voltar um dia, encontra só o nome e a matrícula.
+  - A mudança para outra congregação da própria IEADESPA continua sendo a **transferência** (já aprovada), não a carta.
+  - **Respostas dele antes da rodada 29 (23/11):**
+    - **O que fica guardado para sempre:** o nome, a matrícula, a data de nascimento (para reconhecer quem volta), a
+      data da saída e o que a contabilidade e a lei mandam guardar (os dízimos e ofertas em nome da pessoa). O resto
+      (endereço, telefone, família, cargos, histórico) é apagado aos poucos, a partir de 30 dias da carta. Sem revisão
+      de advogado.
+    - **Quem só quer sair, sem ir para outra igreja:** o mesmo caminho; sai na hora, e a carta fica disponível.
+- **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
+  termina (ela é uma vez só). Até lá, quem chega pelo site ou pela secretaria fica na fila, sem número. O sistema que
+  está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

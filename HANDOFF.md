@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 13:10 (Claude, sessão principal).
+Atualizado em 23/11/2026 14:00 (Claude, sessão principal).
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,7 +30,7 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-Nenhum agente trabalhando agora. **Pronto para ele recarregar a janela e rodar `/clear`.**
+Nenhum agente trabalhando agora.
 
 ## 1. Concluído
 
@@ -88,19 +88,32 @@ Nenhum agente trabalhando agora. **Pronto para ele recarregar a janela e rodar `
 
 ## 4. Próximo passo exato
 
-Antes: ele recarrega a janela do VS Code ("Recarregar Janela") e roda `/clear`. A conversa nova já tem o conselheiro
-Fable e os agentes `construtor`, `desenhista` e `revisor`.
+**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
+**2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
+nunca como terceiro agente. A varredura de defeitos de segurança espera ("questões secundárias").
 
-Três agentes, cada um no seu ramo e worktree. **Toda missão começa trazendo a `main` para o ramo:** as regras de SQL do
-`api/CLAUDE.md` (seção "Banco (SQL Server)", de 23/11) ainda não estão nos ramos de Membros nem do Financeiro.
+**Toda missão do construtor começa trazendo a `main` para o ramo:** as regras de SQL do `api/CLAUDE.md` (seção "Banco
+(SQL Server)") ainda não estão nos ramos de Membros nem do Financeiro.
 
-1. **Revisor:** confere a importação de Membros (homolog `b34284c`; commits `703c76b` a `68bce84`): `importarLote` em
-   `api/shared/importacaoMembrosDb.js`, `classificar`/`criarPrevia`, o laço dos lotes e o 428 em `Importar.svelte`, e
-   `PassoArquivo`.
-2. **Construtor, Membros primeiro:** a trava "nada gera matrícula antes da importação" (seção 3), conferida pelo
-   revisor, para a homologação. **Depois alterna para o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58`
-   para a homologação; a tela das abas Folhas e Livro; o formulário do lote da gráfica (aprovado na 27).
-3. **Desenhista:** espera a conferência dele da rodada 28 (ler as escolhas `r28-*` na página KMeb…); depois, o módulo
-   3 (Estrutura e Territórios).
-
-E a varredura de defeitos, lote 1, como fluxo com o `revisor` (avisar a ele em uma linha antes).
+1. **Construtor, Membros** (worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`), em missões curtas, com commit,
+   homologação e DEPLOY OK a cada uma:
+   1. **A trava das matrículas:** nada gera matrícula nova antes de a importação do sistema pago terminar, e ela libera
+      sozinha no fim da importação. Os pontos: o aceite em `api/shared/preCadastroDb.js` e os 3 de
+      `api/GestaoPessoas/index.js` que chamam `proximaMatricula`. **Cuidado:** `api/shared/importacaoMembrosDb.js`
+      (~linha 333) também chama `proximaMatricula`, para as linhas sem número. A trava vai nos chamadores, nunca dentro
+      de `proximaMatricula`, senão barra a própria importação. A ficha que chega no meio fica na fila sem número, e a
+      tela explica.
+   2. **Completar o arrolamento** (r28): a congregação, **a área e a Geral** completam e editam (conferir o
+      `escopoRotas`).
+   3. **A família** (r28) e **as listas inteligentes** (r28; **exportar PDF ou planilha, só a Geral**).
+   4. **O revisor** confere a importação (homolog `b34284c`; `703c76b` a `68bce84`), a trava e o arrolamento.
+   5. **A ida de Membros à produção:** o construtor escreve o plano (as migrações, a permissão ALTER para juntar
+      fichas, a importação real e depois a liberação das matrículas, como desfazer) e **para**. Só com o sim dele, depois
+      de ver na homologação.
+   6. **Depois, o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58` para a homologação; as abas Folhas e
+      Livro; o lote da gráfica (r27); a chegada do lote e o fechamento do mês (r28).
+2. **Desenhista, rodada 29:** (1) a **movimentação refeita** pelas regras novas dele: o membro sai sozinho pelo
+   aplicativo, com a carta em PDF; ninguém confirma; os cargos ficam vagos; a secretaria só no "não sabe usar" e no
+   abandono; o apagamento a partir de 30 dias; o que fica para sempre. (2) O **levantamento das dúvidas do módulo 3**
+   (Estrutura e Territórios), para perguntar a ele **antes** de desenhar. Publicar na página leve KMeb…: ele já
+   terminou de comentar a 28.

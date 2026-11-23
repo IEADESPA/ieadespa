@@ -1044,6 +1044,15 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     fila da secretaria, sem número.
   - O cuidado que já existe na importação (o número tomado depois da prévia vai para o fim da fila, com aviso) fica
     como rede de proteção.
+  - **A trava, resposta dele (23/11, à tarde), que substitui a "fila sem número":** "Ninguém vai ser cadastrado antes
+    da importação… Eu só vou liberar depois de importar." Ele controla a ordem na operação; por isso não há fila de
+    espera, nem aceite depois, nem tela nova.
+    - Enquanto não existir importação concluída, o servidor recusa criar ficha nova por qualquer caminho, com uma
+      mensagem curta: o "Cadastrar" (número gerado ou digitado), o importador antigo de planilha, o aceite da fila e o
+      "Quero me cadastrar" do site. Editar ficha que já existe continua livre.
+    - A importação que terminaria com zero pessoas é recusada: não solta a trava nem gasta a importação única.
+    - Na homologação, ele vê primeiro o estado travado. Depois que ele disser que viu, o agente faz uma importação de
+      mentira até o fim, para ele ver o liberado.
 - **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
   O código já faz assim.
 - **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
@@ -1078,9 +1087,86 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
       (endereço, telefone, família, cargos, histórico) é apagado aos poucos, a partir de 30 dias da carta. Sem revisão
       de advogado.
     - **Quem só quer sair, sem ir para outra igreja:** o mesmo caminho; sai na hora, e a carta fica disponível.
+  - **Respostas dele antes de desenhar a rodada 29 (23/11, à tarde):**
+    - **A família:** cada adulto pede a sua carta. Os filhos menores de idade saem junto com o pai ou a mãe que pediu.
+    - **Em disciplina ou congregado:** sai com carta, com a situação verdadeira (Comunhão, Paz, Observação), sem o
+      motivo.
+    - **O arrependimento:** a saída não se desfaz. Ele volta como qualquer um que volta, sem os cargos; quem cuida daquele
+      nível decide se os devolve.
+    - **A assinatura:** só o QR de validade, o protocolo e os nomes do pastor e do secretário impressos; sem linhas para
+      assinar.
+  - **Decididas pela sessão a partir das regras dele (marcadas "Para conferir" na r29):**
+    - o destino é um campo opcional;
+    - em 30 dias saem os cargos, as escalas, os contatos e a família, e em 1 ano o resto do histórico, com o batismo e
+      o casamento (não estão na lista do que fica para sempre);
+    - por 30 dias a pessoa ainda entra no aplicativo só para baixar a carta, e recebe uma cópia por e-mail, se tiver;
+    - a secretaria pede por quem não sabe usar sem prova (fica registrado quem pediu e quando, e a pessoa recebe um
+      aviso), e podem pedir a congregação, a área e a Geral;
+    - o abandono fica como está (90 dias, aviso com 15 dias, a Geral confirma, quem abriu não confirma, recurso à
+      Assembleia); quem pede é a secretaria; não há carta;
+    - o falecimento continua como na r28, e a ficha de quem faleceu não se apaga.
+  - **Para a construção:** hoje o `SolicitarCarta` não desliga a pessoa no confirmar. Só o "processar" da secretaria,
+    depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
+    batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
+    apagamento aos poucos e sozinho.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
-  termina (ela é uma vez só). Até lá, quem chega pelo site ou pela secretaria fica na fila, sem número. O sistema que
-  está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
+  termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
+  importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).
+
+### Módulo 3 (Estrutura e Territórios): as respostas dele antes do desenho (23/11/2026)
+
+Ele mandou perguntar logo, sem esperar Membros fechar. O desenho continua um módulo por vez; estas respostas ficam
+guardadas para quando o módulo 3 começar. O levantamento completo do desenhista está em
+`C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md` (só no computador dele).
+
+- **A dor de hoje:** os dados desatualizados.
+  - Gente sai do cargo e ninguém põe o próximo. Não se sabe quem é o dirigente, o vice, o tesoureiro ou o secretário,
+    nem na congregação nem na Geral.
+  - O endereço e os horários de culto ficam velhos no site.
+  - O termo de posse dos dirigentes é em papel e "poderia ser tudo digital".
+- **Congregação nova:** a Geral cadastra direto, quando o Presidente decide, num formulário simples. Não há parecer
+  nem fluxo de pedido; o caminho da v9.2 vem do Regimento.
+- **Ponto de culto:** o nome real da "Extensão da Tenda" é **ponto de culto**. É um culto no lar, ligado a uma
+  congregação, que tem 1, 2 ou 3 deles, com a esperança de virar igreja um dia. O que importa primeiro é saber os pontos
+  e os horários.
+  - No site vivo (fase 12), cada igreja terá **a sua aba, como um subsite**, com os cultos, o histórico, o dirigente e
+    a diretoria.
+  - Decidido pela sessão, "para conferir": no público aparecem só o bairro e o horário do ponto, sem o endereço da casa.
+- **A diretoria e os cargos ficam na Estrutura (o executivo):** dirigente, vice, tesoureiro, secretário, presidente etc.
+  O módulo 10 é o legislativo: obreiros, juntas, Ministério, conselhos e reuniões.
+- **Quem põe o dirigente:** o pastor de área e a Geral, os dois direto, sem confirmação. A diretoria da congregação, o
+  dirigente cadastra; a da área, o pastor de área; a geral, a Geral.
+- **O termo de posse digital:** quem dá a posse confirma no sistema (o Presidente, para o dirigente; o dirigente, para a
+  diretoria da congregação), e quem toma posse aceita no próprio celular. O termo sai em PDF com o QR de validade e a
+  data e a hora dos dois.
+- **O mandato dos cargos:**
+  - todo cargo vence na virada do ano (31/12) ou na data marcada nele;
+  - vencido, o cargo fica vago sozinho e a pessoa **perde o perfil de acesso** que o cargo dava;
+  - trocado no meio do ano, quem saiu perde o cargo e o acesso na hora em que o novo é cadastrado.
+  - Decidido pela sessão, "para conferir": os cargos do ano seguinte podem ser cadastrados antes, com início em 01/01,
+    e o aviso de "cargo vencendo" aparece em dezembro, para ninguém ficar sem acesso na virada.
+- **Mudança de área:** só a Geral muda. O passado fica com a área antiga; dali em diante, conta para a nova.
+- **Congregação que fecha ou se junta a outra:** a Geral escolhe a que recebe e todos os membros passam de uma vez. O
+  histórico e o dinheiro antigos ficam com o nome antigo.
+- **Região, quadrante e distrito:** ficam dormindo. Só a Geral vê que existem e pode ligar um dia.
+- **O mapa:** é muito importante, para a congregação, a área e a Geral (hoje só o nível local localiza os membros).
+  - O problema é a localização: a cidade costuma usar um CEP geral. No futuro, o endereço buscado pelo CEP e pelo
+    número já basta, mesmo com erro de uns 50 m.
+  - A localização das igrejas que vai para o site alimenta o mapa sozinha.
+- **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
+  posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
+- **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação
+  só, com a mesma administração das outras.
+- **O número da congregação:** é o número de abertura, o "número de filial", e vai nos relatórios onde o nome não cabe.
+  A Sede é a 1; a Águas Vivas, a 3. A ordem é pelo número, não pelo nome.
+  - Quando congregações fecham, a numeração desce (a 20 pode virar a 17 se 3 fecharam), e o histórico guarda o número
+    de cada época.
+- **"Área com pelo menos 3 congregações" (Regimento):** não vale. A Área 1 tem uma congregação só.
+- **Decididas pela sessão, pelas regras dele ("para conferir" no desenho):**
+  - o endereço, os horários, o telefone e a foto são atualizados pela congregação, pela área e pela Geral, e o site
+    muda sozinho;
+  - na página da congregação, o membro vê o endereço, os horários e o dirigente, a secretaria vê os números de pessoas,
+    e o dinheiro e o patrimônio só a tesouraria e a Geral veem.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

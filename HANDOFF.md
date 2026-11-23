@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 14:00 (Claude, sessão principal).
+Atualizado em 23/11/2026 15:10 (Claude, sessão principal).
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,7 +30,22 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-Nenhum agente trabalhando agora.
+**Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo.** As perguntas dos dois foram respondidas por ele
+às 16h (plano da fase: "A tela de importar os membros", item da trava, e "Rodada 28", respostas antes da r29):
+
+- **construtor**, construindo a trava das matrículas (item 1.1 abaixo), já com a `main` no ramo (`fb2c8a5`). É a trava
+  simples: sem importação `CONCLUIDA`, nenhuma ficha nova por caminho nenhum, e a importação com zero pessoas é
+  recusada. Ele mescla no homolog e **para**. Ele (o responsável) vê o estado travado; só depois o agente faz a
+  importação de mentira para mostrar o liberado. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
+  `C:/tmp/ieadespa-membros/DIARIO-trava.md`.
+- **desenhista**, desenhando e publicando a rodada 29, a movimentação refeita. Worktree `C:/tmp/ieadespa-desenho-r29`,
+  ramo `desenho-r29`. Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+
+**O módulo 3 já tem as respostas dele** (23/11, plano da fase, seção "Módulo 3 (Estrutura e Territórios): as respostas
+dele antes do desenho"). O desenho espera Membros fechar. A regra nova de acesso vale também para Membros: o cargo
+vence em 31/12 e, vencido, a pessoa perde o acesso.
+
+Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de mandar de novo.
 
 ## 1. Concluído
 
@@ -46,8 +61,9 @@ Nenhum agente trabalhando agora.
   - Financeiro: núcleo aprovado nas rodadas 20 a 27.
   - **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
     `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento do mês, o lote com os números
-    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta
-    aberta, marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Conferida por ele em 23/11** (ver o
+    item 4). A pergunta do "pediu para sair" ficou respondida pelas regras novas (plano, "Rodada 28: o que ele
+    aprovou").
 - **Membros** (ramo `v10-membros-svelte`, `68bce84`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
   - o "Quero me cadastrar" (as 4 pendências) e o banco lento (aprovado por ele);
   - o servidor do importador (migração 185, rota `api/importacao-membros`);

@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 14:00 (Claude, sessão principal).
+Atualizado em 23/11/2026 15:10 (Claude, sessão principal).
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,7 +30,19 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-Nenhum agente trabalhando agora.
+**Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo:**
+
+- **construtor**, na trava das matrículas (item 1.1 abaixo). Worktree `C:/tmp/ieadespa-svelte`, ramo
+  `v10-membros-svelte`; primeiro traz a `main` para o ramo. Antes de codar, responde 3 perguntas: o que marca que a
+  importação terminou, sem confundir com a que parou no meio; o que fazem os 3 pontos de `GestaoPessoas`; como ele vê
+  os dois estados na homologação. Se alguma não fechar, para e devolve a pergunta. Diário:
+  `C:/tmp/ieadespa-membros/DIARIO-trava.md`.
+- **desenhista**, na rodada 29 (item 2 abaixo). Worktree `C:/tmp/ieadespa-desenho-r29`, ramo `desenho-r29`. Primeiro
+  levanta as dúvidas que mudam a tela da movimentação e, se houver, para e devolve sem desenhar; o módulo 3 é só
+  pergunta, gravada em `C:/tmp/ieadespa-desenho-r29-fotos/duvidas-modulo3.md`. Diário:
+  `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+
+Se a conversa cair, confira os diários e o `git log` dos dois ramos antes de mandar de novo.
 
 ## 1. Concluído
 
@@ -46,8 +58,9 @@ Nenhum agente trabalhando agora.
   - Financeiro: núcleo aprovado nas rodadas 20 a 27.
   - **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
     `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento do mês, o lote com os números
-    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta
-    aberta, marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Conferida por ele em 23/11** (ver o
+    item 4). A pergunta do "pediu para sair" ficou respondida pelas regras novas (plano, "Rodada 28: o que ele
+    aprovou").
 - **Membros** (ramo `v10-membros-svelte`, `68bce84`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
   - o "Quero me cadastrar" (as 4 pendências) e o banco lento (aprovado por ele);
   - o servidor do importador (migração 185, rota `api/importacao-membros`);

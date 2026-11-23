@@ -82,13 +82,18 @@ async function retratoDoResultado(rq, imp) {
     WHERE l.ImportacaoId = @id AND l.Estado = N'IMPORTADA'
     GROUP BY a.AreaId, a.Nome, CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END
     ORDER BY CASE WHEN m.CongregacaoId IS NULL THEN 1 ELSE 0 END, CASE WHEN a.AreaId IS NULL THEN 1 ELSE 0 END, a.Nome`)).recordset;
-  const novas = (await rq().input("id", sql.Int, id).query(`SELECT MIN(MatriculaFinal) AS de, MAX(MatriculaFinal) AS ate, COUNT(*) AS n
-    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'IMPORTADA' AND NumeroNovo = 1`)).recordset[0] || {};
+  // os quadros do resultado, cada ficha numa caixa só (como os da prévia): a matrícula nova, depois a possível repetida, depois a que ficou como estava
+  const novas = (await rq().input("id", sql.Int, id).query(`SELECT MIN(CASE WHEN NumeroNovo = 1 THEN MatriculaFinal END) AS de,
+      MAX(CASE WHEN NumeroNovo = 1 THEN MatriculaFinal END) AS ate, SUM(CASE WHEN NumeroNovo = 1 THEN 1 ELSE 0 END) AS n,
+      SUM(CASE WHEN NumeroNovo = 0 AND (RepetidaLinha IS NOT NULL OR RepetidaMembro IS NOT NULL) THEN 1 ELSE 0 END) AS repetidas,
+      SUM(CASE WHEN NumeroNovo = 0 AND RepetidaLinha IS NULL AND RepetidaMembro IS NULL THEN 1 ELSE 0 END) AS comMatricula
+    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'IMPORTADA'`)).recordset[0] || {};
   const quem = imp.ConfirmadaPor == null ? null
     : (await rq().input("m", sql.Int, Number(imp.ConfirmadaPor)).query("SELECT Nome FROM MembroReferencia WHERE MembroId = @m")).recordset[0];
   return {
     confirmadaPor: quem ? quem.Nome : null,
     matriculasNovas: { total: Number(novas.n || 0), de: novas.de == null ? null : Number(novas.de), ate: novas.ate == null ? null : Number(novas.ate) },
+    quadros: { comMatricula: Number(novas.comMatricula || 0), acertar: Number(novas.n || 0), repetidas: Number(novas.repetidas || 0) },
     porArea: areas.map((a) => ({ area: a.SemCongregacao ? null : a.Area || null, semCongregacao: !!a.SemCongregacao, congregacoes: Number(a.Congregacoes || 0),
       fichas: Number(a.Fichas || 0), completas: Number(a.Completas || 0) }))
   };
@@ -124,7 +129,21 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
       .query("SELECT m.MembroId, m.Cpf FROM OPENJSON(@j) WITH (v CHAR(11) '$') j JOIN MembroReferencia m ON m.Cpf = j.v");
     for (const l of r.recordset) fichasPorCpf.set(String(l.Cpf).trim(), Number(l.MembroId));
   }
-  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf });
+  // as fichas com o mesmo nome e nascimento de alguma linha (a mesma chave da tela Fichas repetidas: sem acento nem maiúscula, os espaços juntos); a chave é a
+  // do nome do ARQUIVO (j.n), para o Map bater com a linha
+  const fichasPorNomeNascimento = new Map();
+  const pares = [...new Map(prep.linhas.filter((l) => !l.problemas.length && l.dados.nome && l.dados.dataNascimento)
+    .map((l) => [regras.chaveNomeNascimento(l.dados.nome, l.dados.dataNascimento), { n: l.dados.nome, d: l.dados.dataNascimento }])).values()];
+  if (pares.length) {
+    const r = await pool.request().input("j", sql.NVarChar(sql.MAX), JSON.stringify(pares)).query(`
+      SELECT j.n AS N, CONVERT(varchar(10), j.d, 120) AS D, MIN(m.MembroId) AS MembroId
+      FROM OPENJSON(@j) WITH (n NVARCHAR(200), d DATE) j
+      JOIN MembroReferencia m ON m.DataNascimento = j.d
+        AND LTRIM(RTRIM(REPLACE(REPLACE(m.Nome, N'  ', N' '), N'  ', N' '))) COLLATE Latin1_General_CI_AI = j.n COLLATE Latin1_General_CI_AI
+      GROUP BY j.n, j.d`);
+    for (const l of r.recordset) fichasPorNomeNascimento.set(regras.chaveNomeNascimento(l.N, l.D), Number(l.MembroId));
+  }
+  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf, fichasPorNomeNascimento });
   const maior = Number((await pool.request().query("SELECT ISNULL(MAX(MembroId), 0) AS m FROM MembroReferencia")).recordset[0].m);
   const resumo = regras.resumir(prep, { maiorMatriculaSistema: maior });
   const nome = typeof nomeArquivo === "string" ? nomeArquivo.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 200) || null : null;
@@ -271,7 +290,7 @@ const DETALHE_NUMERO = {
   DE_OUTRA_FICHA: (t) => `A matrícula ${String(t || "").slice(0, 20)} do sistema pago já era de outra ficha: confira o número.`
 };
 const DETALHE_ARROLAMENTO = "Importada do sistema pago: complete a situação, o cargo, a data e a forma de entrada (até lá, sem voto).";
-const DETALHE_REPETIDA = "Importação do sistema pago: pode ser a mesma pessoa (o mesmo CPF, ou a mesma matrícula e o mesmo nome).";
+const DETALHE_REPETIDA = "Importação do sistema pago: pode ser a mesma pessoa (o mesmo CPF, o mesmo nome e nascimento, ou a mesma matrícula e o mesmo nome).";
 
 async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }) {
   await rq().input("m", sql.Int, membroId).input("t", sql.NVarChar(12), tipo).input("o", sql.Int, outro).input("d", sql.NVarChar(300), String(detalhe).slice(0, 300))
@@ -283,7 +302,7 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
 
 // Importa até `tamanho` linhas pendentes, numa transação. Primeiro as que têm a matrícula do arquivo (na ordem do arquivo), depois as de número novo (que
 // recebem a próxima do sistema DEPOIS de todas as do arquivo estarem no lugar). Cada linha é conferida de novo contra o banco de agora: a matrícula que
-// alguém usou depois da prévia vira número novo (NUMERO); o CPF que alguém gravou depois entra sem o CPF, como possível repetida (REPETIDA).
+// alguém usou depois da prévia vira número novo (NUMERO) e vai para o fim da fila; o CPF que alguém gravou depois entra sem o CPF, como possível repetida.
 async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
@@ -301,14 +320,14 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
       FROM ImportacoesMembrosLinhas WITH (UPDLOCK) WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' ORDER BY NumeroNovo, Linha`)).recordset;
     const trilha = [];
     for (const l of linhas) {
-      let numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
-      let motivo = l.MotivoNumero || null;
+      const numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
+      const motivo = l.MotivoNumero || null;
       let numero = numeroNovo ? null : Number(l.Matricula);
       let cpf = l.Cpf ? String(l.Cpf).trim() : null;
       let repetidaMembro = l.RepetidaMembro == null ? null : Number(l.RepetidaMembro);
       // A matrícula e o CPF são conferidos e a ficha gravada no MESMO comando, com a faixa da chave travada (UPDLOCK, HOLDLOCK) da conferência até a gravação:
       // outro cadastro no mesmo instante espera, e a gravação não falha no meio da transação (o lote inteiro não se perde por uma linha).
-      let feito = false;
+      let feito = false, adiada = false;
       for (let tentativa = 0; tentativa < 8 && !feito; tentativa++) {
         if (numero == null) numero = await matriculaNova.proximaMatricula(rq);
         const r = (await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
@@ -332,13 +351,21 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
           if (repetidaMembro == null) repetidaMembro = Number(r.donoCpf);
           cpf = null;
         }
-        if (r.ocupada === true || r.ocupada === 1) {
-          // a matrícula foi usada depois da prévia (ou, no número novo, por outro cadastro no mesmo instante): a próxima do sistema
-          if (!numeroNovo) { numeroNovo = true; motivo = "DE_OUTRA_FICHA"; }
-          numero = null;
+        if ((r.ocupada === true || r.ocupada === 1) && !numeroNovo) {
+          // a matrícula do arquivo foi usada depois da prévia: a linha vira de número novo e vai para o FIM DA FILA (a ordem é NumeroNovo, Linha). Tomar a
+          // próxima do sistema agora (a maior + 1) poderia ocupar a matrícula de uma linha do arquivo que ainda vai entrar e empurrar essa também (23/11,
+          // achado do e2e-96); depois que todas as matrículas do arquivo estão no lugar, a maior + 1 é livre.
+          await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("cpf", sql.Char(11), cpf).input("rm", sql.Int, repetidaMembro).query(`
+            UPDATE ImportacoesMembrosLinhas SET NumeroNovo = 1, MotivoNumero = N'DE_OUTRA_FICHA', Cpf = @cpf, RepetidaMembro = @rm
+            WHERE ImportacaoId = @id AND Linha = @l AND Estado = N'PENDENTE'`);
+          adiada = true;
+          break;
         }
+        // no número novo, outro cadastro pegou o mesmo número no mesmo instante: a próxima do sistema
+        if (r.ocupada === true || r.ocupada === 1) numero = null;
         feito = !(r.donoCpf != null) && !(r.ocupada === true || r.ocupada === 1);
       }
+      if (adiada) continue;
       if (!feito) throw new Error(`importação: não foi possível gravar a linha ${l.Linha}`);
       await abrirPendencia(rq, { membroId: numero, tipo: "ARROLAMENTO", detalhe: DETALHE_ARROLAMENTO, por });
       if (numeroNovo) await abrirPendencia(rq, { membroId: numero, tipo: "NUMERO", detalhe: (DETALHE_NUMERO[motivo] || DETALHE_NUMERO.VAZIA)(l.MatriculaArquivo), por });
@@ -352,9 +379,10 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
     }
     await registrarAuditoriaEmLoteNaTransacao(t, "MembroReferencia", trilha);
     const restantes = await contarRestantes(rq, id);
-    if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: linhas.length, restantes, concluida: false };
+    // importadas: as que entraram neste lote (a adiada para o fim da fila fica nas restantes)
+    if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes, concluida: false };
     const final = await concluirNaTransacao(t, rq, id, por, lerJson(imp.Resumo));
-    return { sucesso: true, importacaoId: id, importadas: linhas.length, restantes: 0, concluida: true, resultado: final };
+    return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes: 0, concluida: true, resultado: final };
   });
 }
 

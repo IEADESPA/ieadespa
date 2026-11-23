@@ -9,8 +9,8 @@
 //  - COLUNAS EXTRAS: reconhecidas pelo nome (sem acento, maiúscula ou pontuação), as desconhecidas ignoradas e mostradas; (23/11, a tela r27) a Secretaria
 //    Geral pode trocar o campo de cada coluna, ou "não usar" (a escolha vem na prévia e é conferida aqui: mapearColunas);
 //  - (22/11/2026) UMA VEZ SÓ, sem tela de diferenças. A matrícula do sistema pago é mantida; a repetida no arquivo ou zerada (vazia, que não é número)
-//    entra com a próxima do sistema e a pendência NUMERO; a possível repetida (o mesmo CPF de outra linha ou ficha, ou a mesma matrícula e a mesma pessoa no
-//    arquivo) entra com a pendência REPETIDA, para a secretaria juntar as fichas (ou dizer que não são a mesma);
+//    entra com a próxima do sistema e a pendência NUMERO; a possível repetida (o mesmo CPF ou o mesmo nome e nascimento de outra linha ou ficha — a tela r27 —,
+//    ou a mesma matrícula e a mesma pessoa no arquivo) entra com a pendência REPETIDA, para a secretaria juntar as fichas (ou dizer que não são a mesma);
 //  - (22/11/2026, as regras da rodada 28) a matrícula que JÁ É de uma ficha do sistema (hoje só a 1 e a 2, completadas à mão) FICA DE FORA: a linha não entra
 //    (o problema MATRICULA_JA_EXISTE) e a prévia mostra quantas são.
 //
@@ -245,6 +245,8 @@ const AVISOS = Object.freeze({
   MESMA_PESSOA_NO_ARQUIVO: "Parece a mesma pessoa de outra linha do arquivo (a mesma matrícula): marcada como possível ficha repetida",
   CPF_REPETIDO_NO_ARQUIVO: "O mesmo CPF de outra linha do arquivo: entra sem o CPF, marcada como possível ficha repetida",
   CPF_EM_OUTRA_FICHA: "O CPF já está em outra ficha do sistema: entra sem o CPF, marcada como possível ficha repetida",
+  NOME_NASCIMENTO_NO_ARQUIVO: "O mesmo nome e nascimento de outra linha do arquivo: marcada como possível ficha repetida",
+  NOME_NASCIMENTO_EM_OUTRA_FICHA: "O mesmo nome e nascimento de uma ficha do sistema: marcada como possível ficha repetida",
   CPF_INVALIDO: "CPF inválido: entra sem o CPF",
   NASCIMENTO_INVALIDO: "Data de nascimento inválida: entra sem ela",
   SEXO_DESCONHECIDO: "Sexo não reconhecido: entra sem ele",
@@ -350,7 +352,8 @@ function mesmaPessoa(a, b) {
 //   linha anterior ou a ficha de que ela pode ser repetida: pendência REPETIDA).
 // A matrícula que JÁ É de uma ficha do sistema (as regras da rodada 28, 22/11/2026): a linha fica de fora (o problema MATRICULA_JA_EXISTE), seja quem for —
 // a ficha de lá continua como está e se completa à mão. O resto entra uma vez só, marcado (NUMERO, REPETIDA) para a secretaria acertar.
-function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map() } = {}) {
+// `fichasPorNomeNascimento`: Map(chaveNomeNascimento -> matrícula) das fichas do sistema com o mesmo nome e nascimento de alguma linha.
+function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map(), fichasPorNomeNascimento = new Map() } = {}) {
   const primeiraDaMatricula = new Map();   // matrícula do arquivo -> a primeira linha (não PROBLEMA) que a usa
   const numeroNovo = (l, motivo, aviso) => { l.numeroNovo = true; l.motivoNumero = motivo; l.avisos.push(aviso); };
   const repetida = (l, { linha = null, membro = null }, aviso) => {
@@ -392,7 +395,28 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
     const dono = ordem[0];
     for (const l of ordem.slice(1)) { repetida(l, { linha: dono.linha }, "CPF_REPETIDO_NO_ARQUIVO"); l.dados.cpf = null; }
   }
+
+  // O mesmo NOME e o mesmo NASCIMENTO (a tela r27 aprovada: "o mesmo CPF, ou o mesmo nome e nascimento, de uma ficha que já está no sistema ou de outra linha do
+  // arquivo"; a chave é a mesma da tela Fichas repetidas: sem acento nem maiúscula, os espaços juntos). A ficha do sistema vem primeiro; no arquivo, a primeira
+  // linha fica e as outras são marcadas como possíveis repetidas dela. Quem já é possível repetida (o CPF, a matrícula) não ganha outra marca.
+  const primeiraDoNome = new Map();
+  for (const l of linhas) {
+    if (l.acao !== "NOVA" || !l.dados.nome || !l.dados.dataNascimento) continue;
+    const k = chaveNomeNascimento(l.dados.nome, l.dados.dataNascimento);
+    const ficha = fichasPorNomeNascimento.get(k);
+    const primeira = primeiraDoNome.get(k);
+    if (!primeira) primeiraDoNome.set(k, l);
+    if (l.repetidaLinha != null || l.repetidaMembro != null) continue;
+    if (ficha != null) repetida(l, { membro: ficha }, "NOME_NASCIMENTO_EM_OUTRA_FICHA");
+    else if (primeira) repetida(l, { linha: primeira.linha }, "NOME_NASCIMENTO_NO_ARQUIVO");
+  }
   return linhas;
+}
+// A chave do "mesmo nome e nascimento": o nome sem acento nem maiúscula, com os espaços juntos (como o COLLATE Latin1_General_CI_AI da tela Fichas repetidas),
+// e a data AAAA-MM-DD.
+function chaveNomeNascimento(nome, dataISO) {
+  const n = String(nome == null ? "" : nome).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+  return `${n}|${String(dataISO == null ? "" : dataISO).slice(0, 10)}`;
 }
 
 // ------------------------------------------------------------------ os números da prévia (sem dado pessoal)
@@ -487,6 +511,6 @@ function mapaDeCongregacoes(lista) {
   return m;
 }
 
-module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
+module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, chaveNomeNascimento, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
   lerFormaAdmissao, lerEscolaridade, lerCpf, lerCelular, lerMatricula, chaveDaIgreja, lerLinha, prepararArquivo, mesmaPessoa, classificar, resumir, linhaParaLista,
   csvDaLista, mapaDeCongregacoes, textoDe };

@@ -117,6 +117,17 @@ describe("classificar (uma vez só, 22/11/2026: toda linha que pode entrar ENTRA
     // 70045 é a menor: fica com o CPF; as outras duas entram sem ele, possíveis repetidas da linha dela (a 4)
     expect(ls.slice(1).map((l) => [l.dados.cpf, l.repetidaLinha])).toEqual([[null, 4], [CPF2, null], [null, 4]]);
   });
+  test("o mesmo NOME e NASCIMENTO (a tela r27): de uma ficha do sistema ou de outra linha do arquivo (sem acento, maiúscula nem espaço a mais); a primeira fica", () => {
+    const banco = { fichasPorNomeNascimento: new Map([[r.chaveNomeNascimento("Jose  Antonio", "1970-02-03"), 77]]) };
+    const ls = classificar(["70070;Lia Gomes;IEADESPA - Vila Nova;;10/01/1980", "70071;LÍA  gomes;IEADESPA - Vila Nova;;10/01/1980",
+      "70072;José Antônio;IEADESPA - Vila Nova;;03/02/1970", "70073;Lia Gomes;IEADESPA - Vila Nova;;11/01/1980", "70074;Lia Gomes;IEADESPA - Vila Nova"], banco);
+    expect(ls.map((l) => [l.repetidaLinha, l.repetidaMembro])).toEqual([[null, null], [2, null], [null, 77], [null, null], [null, null]]);
+    expect(ls[1].avisos).toEqual(["NOME_NASCIMENTO_NO_ARQUIVO"]);
+    expect(ls[2].avisos).toEqual(["NOME_NASCIMENTO_EM_OUTRA_FICHA"]);
+    // quem já é possível repetida pelo CPF não ganha a segunda marca
+    const cpf = classificar([`70080;Rita;IEADESPA - Vila Nova;;10/01/1980;;;;;;${CPF1}`, `70081;Rita;IEADESPA - Vila Nova;;10/01/1980;;;;;;${CPF1}`]);
+    expect(cpf[1].avisos).toEqual(["CPF_REPETIDO_NO_ARQUIVO"]);
+  });
   test("a linha com PROBLEMA não entra e não ocupa matrícula nem CPF", () => {
     const ls = classificar([`70060;;IEADESPA - Vila Nova;;;;;;;;${CPF1}`, `70060;Lia Certa;IEADESPA - Vila Nova;;;;;;;;${CPF1}`]);
     expect(ls.map((l) => l.acao)).toEqual(["PROBLEMA", "NOVA"]);

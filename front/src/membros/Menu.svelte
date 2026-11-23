@@ -19,7 +19,9 @@
     { nome: "Cuidados com o cadastro", icone: "cartao", itens: [
       { chave: "repetidas" as ChaveMenu, rotulo: "Fichas repetidas", icone: "pessoas", n: contadores.repetidas },
       { chave: "sugestoes" as ChaveMenu, rotulo: "Sugestões de alteração", icone: "lapis", n: contadores.sugestoes },
-      { chave: "carteirinhas" as ChaveMenu, rotulo: "Carteirinhas", icone: "cartao" }
+      { chave: "carteirinhas" as ChaveMenu, rotulo: "Carteirinhas", icone: "cartao" },
+      // a importação do sistema pago (r27): só a Secretaria Geral
+      ...(ponte().sessao().geral ? [{ chave: "importar" as ChaveMenu, rotulo: "Importar do sistema pago", icone: "bandeja" }] : [])
     ] }
   ]);
 

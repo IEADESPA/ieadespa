@@ -113,7 +113,8 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
   const congs = (await pool.request().query("SELECT CongregacaoId, Nome, Ativa FROM Congregacoes")).recordset
     .map((c) => ({ congregacaoId: Number(c.CongregacaoId), nome: c.Nome, ativa: c.Ativa }));
   const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia(), escolha: colunas });
-  if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro };
+  // a coluna que falta: o mapa volta junto (só os nomes do cabeçalho, nenhum dado pessoal) para a tela ligar a coluna certa
+  if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro, ...(prep.colunas ? { colunas: prep.colunas, totalColunas: prep.totalColunas } : {}) };
 
   // as fichas que já existem com as matrículas e com os CPFs do arquivo (uma ida ao banco para cada)
   const mats = [...new Set(prep.linhas.map((l) => l.matricula.numero).filter(Boolean))];
@@ -219,7 +220,7 @@ const detalheDe = (l, base) => {
   return {
     motivoNumero: nova ? l.MotivoNumero || null : null,
     semCongregacao: importada ? null : l.CongregacaoId == null && l.Acao === "NOVA",
-    dono: l.DonoLinha == null ? null : { linha: Number(l.DonoLinha), nome: l.DonoNome || "" },
+    dono: l.DonoLinha == null ? null : { linha: Number(l.DonoLinha), nome: l.DonoNome || "", sexo: l.DonoSexo ? String(l.DonoSexo).trim() || null : null },
     repetidaDe: l.RepetidaLinha != null ? { linha: Number(l.RepetidaLinha), matricula: null, nome: l.RepLinhaNome || "" }
       : l.RepetidaMembro != null ? { linha: null, matricula: Number(l.RepetidaMembro), nome: l.RepMembroNome || "" } : null,
     recebe: importada ? Number(l.MatriculaFinal) : nova && base && ordem ? base + ordem - 1 : null,
@@ -239,12 +240,12 @@ async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {})
   const r = await pool.request().input("id", sql.Int, id).input("pula", sql.Int, (p - 1) * POR_PAGINA).input("n", sql.Int, POR_PAGINA).query(`
     WITH ordem AS (SELECT Linha, ROW_NUMBER() OVER (ORDER BY Linha) AS OrdemNova FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND NumeroNovo = 1)
     SELECT COUNT(*) OVER () AS Total, a.Linha, a.MatriculaArquivo, a.Nome, a.Acao, a.Estado, a.MatriculaFinal, a.Problemas, a.Avisos, a.NumeroNovo, a.MotivoNumero,
-      a.CongregacaoId, a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, o.OrdemNova
+      a.CongregacaoId, a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, dono.Sexo AS DonoSexo, o.OrdemNova
     FROM ImportacoesMembrosLinhas a
     LEFT JOIN ordem o ON o.Linha = a.Linha
     LEFT JOIN ImportacoesMembrosLinhas rl ON rl.ImportacaoId = a.ImportacaoId AND rl.Linha = a.RepetidaLinha
     LEFT JOIN MembroReferencia rm ON rm.MembroId = a.RepetidaMembro
-    OUTER APPLY (SELECT TOP 1 b.Linha, b.Nome FROM ImportacoesMembrosLinhas b
+    OUTER APPLY (SELECT TOP 1 b.Linha, b.Nome, b.Sexo FROM ImportacoesMembrosLinhas b
       WHERE a.MotivoNumero = N'REPETIDA_NO_ARQUIVO' AND b.ImportacaoId = a.ImportacaoId AND b.Acao = N'NOVA' AND b.NumeroNovo = 0
         AND b.Matricula = TRY_CONVERT(INT, a.MatriculaArquivo) ORDER BY b.Linha) dono
     WHERE a.ImportacaoId = @id ${FILTROS[f]}

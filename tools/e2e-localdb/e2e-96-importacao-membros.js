@@ -128,8 +128,8 @@ async function principal() {
   ok(lac.status === 200 && lac.body.total === 3 && lac.body.itens.map((i) => i.linha).join(",") === "3,5,12", "a matrícula a acertar: as linhas 3, 5 e 12", lac.body);
   ok(JSON.stringify(porLinha(lac, 3).detalhe) === JSON.stringify({ motivoNumero: "ZERO", semCongregacao: true, dono: null, repetidaDe: null, recebe: 960116, prevista: true }),
     "a linha 3: matrícula 0, sem congregação, recebe a 960.116 (prevista)", porLinha(lac, 3));
-  ok(porLinha(lac, 5).detalhe.dono && porLinha(lac, 5).detalhe.dono.linha === 4 && porLinha(lac, 5).detalhe.dono.nome === "Caio Souza" && porLinha(lac, 5).detalhe.recebe === 960117
-    && porLinha(lac, 5).detalhe.repetidaDe.linha === 4, "a linha 5: a 960103 ficou com o Caio Souza (linha 4), que veio antes; recebe a 960.117", porLinha(lac, 5));
+  ok(porLinha(lac, 5).detalhe.dono && porLinha(lac, 5).detalhe.dono.linha === 4 && porLinha(lac, 5).detalhe.dono.nome === "Caio Souza" && porLinha(lac, 5).detalhe.dono.sexo === "M" && porLinha(lac, 5).detalhe.recebe === 960117
+    && porLinha(lac, 5).detalhe.repetidaDe.linha === 4, "a linha 5: a 960103 ficou com o Caio Souza (linha 4, masculino: a tela diz do Caio), que veio antes; recebe a 960.117", porLinha(lac, 5));
   ok(porLinha(lac, 12).detalhe.motivoNumero === "VAZIA" && porLinha(lac, 12).detalhe.recebe === 960118, "a linha 12: sem matrícula, recebe a 960.118", porLinha(lac, 12));
   const lrp = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(id1), filtro: "repetidas" } });
   ok(lrp.status === 200 && lrp.body.total === 3 && lrp.body.itens.map((i) => i.linha).join(",") === "8,14,15" && porLinha(lrp, 8).detalhe.repetidaDe.matricula === 960003 && porLinha(lrp, 8).detalhe.repetidaDe.nome === "Tito Antigo",

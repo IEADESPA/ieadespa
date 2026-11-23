@@ -324,7 +324,9 @@ function prepararArquivo(texto, { congregacoes, hojeISO, escolha }) {
   const colunas = mapearColunas(cab.celulas, escolha);
   if (colunas.erro) return { erro: colunas.erro };
   if (colunas.faltando.length) {
-    return { erro: `O arquivo não tem a coluna de ${colunas.faltando.map((f) => f.toLowerCase()).join(" nem a de ")}. A primeira linha precisa ser o cabeçalho (MATRÍCULA;NOME;IGREJA;...).` };
+    // o mapa vai junto (só os nomes das colunas): a tela mostra e a Geral liga a coluna que falta
+    return { erro: `O arquivo não tem a coluna de ${colunas.faltando.map((f) => f.toLowerCase()).join(" nem a de ")}. A primeira linha precisa ser o cabeçalho (MATRÍCULA;NOME;IGREJA;...).`,
+      colunas: { lista: colunas.lista, escolhidas: escolha != null }, totalColunas: cab.celulas.length };
   }
   const corpo = resto.filter((l) => l.celulas.some((c) => String(c).trim() !== ""));
   if (!corpo.length) return { erro: "O arquivo só tem o cabeçalho: nenhuma pessoa para importar." };

@@ -43,7 +43,12 @@ describe("o arquivo e as colunas", () => {
     expect(r.CAMPOS.filter((x) => x.padrao).map((x) => x.campo)).toEqual(["matricula", "nome", "igreja", "sexo", "nascimento", "estadoCivil", "email", "celular", "mae", "pai", "cpf"]);
   });
   test("sem a coluna de matrícula ou de nome, o arquivo não serve; vazio, só cabeçalho e o acento estragado também não", () => {
-    expect(preparar(["1;Ana"], "NOME;IGREJA").erro).toMatch(/coluna de matrícula/);
+    const semMat = preparar(["1;Ana"], "NOME;IGREJA");
+    expect(semMat.erro).toMatch(/coluna de matrícula/);
+    // o mapa volta junto com o erro (só os nomes do cabeçalho): a tela mostra e a Geral liga a coluna que falta
+    expect(semMat.colunas.lista).toEqual([{ indice: 0, coluna: "NOME", campo: "nome" }, { indice: 1, coluna: "IGREJA", campo: "igreja" }]);
+    expect(semMat.totalColunas).toBe(2);
+    expect(semMat.linhas).toBeUndefined();
     expect(r.prepararArquivo("", { congregacoes: CONGS }).erro).toMatch(/vazio/);
     expect(preparar([]).erro).toMatch(/só tem o cabeçalho/);
     expect(preparar(["1;Jo�o;IEADESPA - Vila Nova"]).erro).toMatch(/letras que não puderam ser lidas/);

@@ -1040,8 +1040,8 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   - **Falta a trava no código** (missão do construtor, com o revisor, antes de alternar para o Financeiro): enquanto a
     importação real não estiver concluída, nada gera matrícula nova. Vale para **todos** os lugares que geram o número:
     o aceite do "Quero me cadastrar" (`api/shared/preCadastroDb.js`) e o cadastro da secretaria
-    (`api/GestaoPessoas/index.js`, os três pontos que chamam `proximaMatricula`). A ficha que chegar nesse meio fica na
-    fila da secretaria, sem número.
+    (`api/GestaoPessoas/index.js`, os três pontos que chamam `proximaMatricula`). A ideia da fila sem número caiu: veja
+    abaixo a resposta dele, a trava simples.
   - O cuidado que já existe na importação (o número tomado depois da prévia vai para o fim da fila, com aviso) fica
     como rede de proteção.
   - **A trava, resposta dele (23/11, à tarde), que substitui a "fila sem número":** "Ninguém vai ser cadastrado antes

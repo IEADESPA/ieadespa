@@ -1,38 +1,38 @@
-// Monta a página da rodada 27 (22/11/2026) a partir da página leve da rodada 26 (propostas-r26/index.html, a versão publicada),
-// que não muda. A 27 fica no alto; a 26 e a 25, já respondidas, ficam recolhidas; a 24 (respondida antes) sai, para a página
-// ficar leve. O "Já aprovados (rodadas 2 a 18)" continua um link para a página antiga. A observação geral passa a 'geral-r27'.
+// Monta a página da rodada 28 (23/11/2026) a partir da página leve da rodada 27 (propostas-r27/index.html, a versão publicada),
+// que não muda. A 28 fica no alto; a 27 e a 26, já respondidas, ficam recolhidas; a 25 (respondida antes) sai, para a página
+// ficar leve. O "Já aprovados (rodadas 2 a 18)" continua um link para a página antiga. A observação geral passa a 'geral-r28'.
 // Para caber: o código que nenhuma tela usa mais sai (a "poda", pelo analisador do TypeScript).
 // No fim, a procura das palavras proibidas no HTML inteiro.
 const fs = require('fs'), path = require('path');
 const ts = (() => { try { return require('typescript'); } catch { return require(path.join(require('child_process').execSync('npm root -g', { encoding: 'utf8' }).trim(), 'typescript')); } })();
 const pasta = __dirname;
-let html = fs.readFileSync(path.join(pasta, 'propostas-r26', 'index.html'), 'utf8');
+let html = fs.readFileSync(path.join(pasta, 'propostas-r27', 'index.html'), 'utf8');
 const t = (a, b, todos) => { if (!html.includes(a)) throw new Error('não achei: ' + a.slice(0, 90)); html = todos ? html.split(a).join(b) : html.replace(a, () => b); };
 const antes = Buffer.byteLength(html);
 const corta = (a, b, nome) => { const i = html.indexOf(a), j = html.indexOf(b); if (i < 0 || j < i) throw new Error('não achei a lista da ' + nome); html = html.slice(0, i) + html.slice(j + b.length); };
 
-// 1. as telas da 27 logo depois da lista da 26 (unshift: a 27 fica na frente)
-const ancora = 'TELAS.unshift(...TELAS_R26.map(t => Object.assign({}, t, { rodada: 26 })));';
-t(ancora, ancora + '\n' + ['r27-telas.js', 'r27-lista.js'].map(f => fs.readFileSync(path.join(pasta, f), 'utf8')).join('\n'));
-// 2. a 24 sai (respondida; fica no Git, nas páginas antigas): a lista das telas e o unshift; o código que outras usam fica
-corta('const TELAS_R24 = [', 'TELAS.unshift(...TELAS_R24.map(t => Object.assign({}, t, { rodada: 24 })));', '24');
-// 3. a rodada atual e os grupos: a 27 aberta, a 26 e a 25 respondidas e recolhidas
-{ const i = html.indexOf('const RODADA_ATUAL = 26;'), j = html.indexOf('\n', html.indexOf('const GRUPOS_TELAS = ', i)); if (i < 0) throw new Error('não achei a rodada atual');
-  html = html.slice(0, i) + 'const RODADA_ATUAL = 27;\nconst GRUPOS_TELAS = [[27, "Rodada 27: receber o repasse, o fechamento pelo Conselho Fiscal, os saldos de abertura, importar os membros e o lote da gráfica (para escolher agora)"], [26, "Rodada 26 (respondida)"], [25, "Rodada 25 (respondida)"]];' + html.slice(j); }
-t('${EXPLICA_R26}', '${EXPLICA_R27}');
-t("'propostas-explica-r26'", "'propostas-explica-r27'", true);
-t("'propostas-r26-antigas'", "'propostas-r27-antigas'", true);
-t('// as rodadas 25 e 24, já respondidas, ficam recolhidas embaixo da 26', '// as rodadas 26 e 25, já respondidas, ficam recolhidas embaixo da 27');
+// 1. as telas da 28 logo depois da lista da 27 (unshift: a 28 fica na frente)
+const ancora = 'TELAS.unshift(...TELAS_R27.map(t => Object.assign({}, t, { rodada: 27 })));';
+t(ancora, ancora + '\n' + ['r28-telas.js', 'r28-membros.js', 'r28-lista.js'].map(f => fs.readFileSync(path.join(pasta, f), 'utf8')).join('\n'));
+// 2. a 25 sai (respondida; fica no Git, nas páginas antigas): a lista das telas e o unshift; o código que outras usam fica
+corta('const TELAS_R25 = [', 'TELAS.unshift(...TELAS_R25.map(t => Object.assign({}, t, { rodada: 25 })));', '25');
+// 3. a rodada atual e os grupos: a 28 aberta, a 27 e a 26 respondidas e recolhidas
+{ const i = html.indexOf('const RODADA_ATUAL = 27;'), j = html.indexOf('\n', html.indexOf('const GRUPOS_TELAS = ', i)); if (i < 0) throw new Error('não achei a rodada atual');
+  html = html.slice(0, i) + 'const RODADA_ATUAL = 28;\nconst GRUPOS_TELAS = [[28, "Rodada 28: a auditoria e o fechamento do mês, a chegada do lote com os números pulados, e Membros: a família, as listas, a saída e a volta, o arrolamento (para escolher agora)"], [27, "Rodada 27 (respondida)"], [26, "Rodada 26 (respondida)"]];' + html.slice(j); }
+t('${EXPLICA_R27}', '${EXPLICA_R28}');
+t("'propostas-explica-r27'", "'propostas-explica-r28'", true);
+t("'propostas-r27-antigas'", "'propostas-r28-antigas'", true);
+t('// as rodadas 26 e 25, já respondidas, ficam recolhidas embaixo da 27', '// as rodadas 27 e 26, já respondidas, ficam recolhidas embaixo da 28');
 // 4. ao abrir, a tela lembrada só vale se for da rodada atual
-t('if (i >= 0 && TELAS[i].rodada === 26)', 'if (i >= 0 && TELAS[i].rodada === 27)');
-t("'geral-r26'", "'geral-r27'", true);
-t("escolhas/geral-r26'", "escolhas/geral-r27'", true);
+t('if (i >= 0 && TELAS[i].rodada === 27)', 'if (i >= 0 && TELAS[i].rodada === 28)');
+t("'geral-r27'", "'geral-r28'", true);
+t("escolhas/geral-r27'", "escolhas/geral-r28'", true);
 // 5. o HTML em volta
-t('<title>Propostas rodada 26</title>', '<title>Propostas rodada 27</title>');
-t('IEADESPA · FASE 10 · rodada 26', 'IEADESPA · FASE 10 · rodada 27');
-t('Observação geral sobre a rodada 26', 'Observação geral sobre a rodada 27');
-t('Esta página é da rodada 26. As rodadas 25 e 24, já respondidas, ficam logo abaixo da 26, recolhidas, com as escolhas e as observações guardadas.', 'Esta página é da rodada 27. As rodadas 26 e 25, já respondidas, ficam logo abaixo da 27, recolhidas, com as escolhas e as observações guardadas.');
-t('/* Rodada 26: as rodadas 25 e 24, já respondidas, recolhidas embaixo da 26 */', '/* Rodada 27: as rodadas 26 e 25, já respondidas, recolhidas embaixo da 27 */');
+t('<title>Propostas rodada 27</title>', '<title>Propostas rodada 28</title>');
+t('IEADESPA · FASE 10 · rodada 27', 'IEADESPA · FASE 10 · rodada 28');
+t('Observação geral sobre a rodada 27', 'Observação geral sobre a rodada 28');
+t('Esta página é da rodada 27. As rodadas 26 e 25, já respondidas, ficam logo abaixo da 27, recolhidas, com as escolhas e as observações guardadas.', 'Esta página é da rodada 28. As rodadas 27 e 26, já respondidas, ficam logo abaixo da 28, recolhidas, com as escolhas e as observações guardadas.');
+t('/* Rodada 27: as rodadas 26 e 25, já respondidas, recolhidas embaixo da 27 */', '/* Rodada 28: as rodadas 27 e 26, já respondidas, recolhidas embaixo da 28 */');
 
 // 6. a poda: sai a declaração de topo que ninguém mais usa (nem as telas, nem a página, nem as ferramentas de conferir e de foto)
 {
@@ -68,6 +68,6 @@ const nOferta = (html.match(/oferta de culto/gi) || []).length;
 console.log('Oferta de culto:', nOferta, '· palavras proibidas fora disso:', achou.length);
 achou.slice(0, 30).forEach(x => console.log('   SOBROU:', x));
 if (achou.length) process.exitCode = 1;
-fs.mkdirSync(path.join(pasta, 'propostas-r27'), { recursive: true });
-fs.writeFileSync(path.join(pasta, 'propostas-r27', 'index.html'), html);
+fs.mkdirSync(path.join(pasta, 'propostas-r28'), { recursive: true });
+fs.writeFileSync(path.join(pasta, 'propostas-r28', 'index.html'), html);
 console.log('página:', (antes / 1024).toFixed(0), 'KB antes →', (Buffer.byteLength(html) / 1024).toFixed(0), 'KB');

@@ -1,12 +1,28 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Livre
+Em uso por: Mateus desde 23/11/2026 16:50
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 17:45 (Claude, sessão principal). Parada pedida por ele: a cota de uso acabando.
+Atualizado em 23/11/2026 16:50 (Claude, sessão principal).
+
+**O revisor de fora (decisão dele, 23/11, à tarde):**
+
+- Os créditos mensais de API dos assinantes já foram resgatados por ele. São cerca de US$ 120 por mês, do plano Team de
+  organização sem fins lucrativos. A página oficial diz que **não valem no Claude Code** ("Claude Code: No"), mas valem
+  no **Agent SDK**. O crédito vence todo mês e não acumula. Sem cartão na organização do Console, nada é cobrado:
+  acabou, para.
+- **A decisão dele:**
+  - um programa na **bancada** (`C:\MCP\bancada\revisor-sdk\`) roda o revisor com esses créditos, ao mesmo tempo em que
+    a assinatura trabalha;
+  - o primeiro serviço é **a varredura do sistema inteiro**;
+  - **os relatórios ficam só na bancada**, que é privada. No repositório público vai só "lote N, K achados".
+  - Se der certo, a assinatura fica só com o desenhista e o construtor.
+- **A ordem:** (1) ele cria a chave no Console, sem cartão e sem recarga automática; (2) o programa mínimo e uma prova
+  minúscula, para ver se o saldo de "Promotional credits" desce, se o Fable está liberado e se não há recusa; (3) só
+  então o lote 1 da varredura, que serve de régua.
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,7 +46,8 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**Nenhum agente trabalhando.** Os dois foram parados às 17h40, a pedido dele, sem nada pela metade no Git:
+**Nenhum agente trabalhando.** Os dois foram parados à tarde, a pedido dele (cota acabando), sem nada pela metade no
+Git:
 
 - **construtor:** só trouxe a `main` para o ramo (`3f8a1a5`, enviado). "Completar o arrolamento" e o ajuste do e2e-51
   NÃO começaram. Pode haver um rascunho em `C:/tmp/ieadespa-membros/aprovado-arrolamento.js` (fora do Git).

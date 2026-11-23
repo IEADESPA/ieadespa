@@ -6,87 +6,74 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026, fim da manhã (Claude, sessão principal).
-
-**23/11, o que mudou** (memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`):
-
-- **O conselheiro funciona no VS Code** (`/advisor fable`; sem créditos à parte no plano dele). Vale da próxima
-  conversa em diante.
-- **Bancada `ef666e8`, INSTALADA neste computador com o sim dele:** os agentes padrão `construtor` e `desenhista`
-  (Opus) e `revisor` (Fable, só lê), e o gancho de proteção (barra `git add -A`/`.`/`--all`/`-u`, `git commit -a`,
-  segredo sem máscara, homolog para a main, navegador sem `--disable-gpu`; o `.env.example` passa). Mostrar segredo
-  mascarado: `node C:/MCP/bancada/mascarar.mjs <arquivo>`. **Falta recarregar a janela do VS Code** (depois que o
-  agente de Membros terminar) para os agentes aparecerem.
-- **3 agentes ao mesmo tempo** (desenha, constrói, revisa) e, como exceção autorizada, **fluxos com muitos agentes**
-  nas Travas e quando ajudar. O plano novo da varredura de defeitos foi aprovado (plano da fase, "O jeito novo"): o
-  lote 1 roda quando o `revisor` aparecer.
-- **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
-  `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento, o lote com os números pulados,
-  a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta aberta,
-  marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
-- **Em andamento:** o agente de Membros (a tela de importar e o pulo das matrículas 1 e 2, `v10-membros-svelte`).
-
-O resto deste arquivo é o estado da parada de 22/11, ainda válido.
+Atualizado em 23/11/2026 10:24 (Claude, sessão principal). Nenhum agente trabalhando agora.
 
 ## 1. Concluído
 
 - **Produção (main):** só documentação e desenho. Nada de Membros nem de Financeiro foi à produção.
+- **O padrão alto (23/11; memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`):**
+  - o conselheiro (`/advisor fable`) funciona no VS Code, sem créditos à parte no plano dele;
+  - a bancada `ef666e8` instalada neste computador: os agentes `construtor` e `desenhista` (Opus) e `revisor` (Fable,
+    só lê), e o gancho de proteção. Segredo mascarado: `node C:/MCP/bancada/mascarar.mjs <arquivo>`;
+  - 3 agentes ao mesmo tempo (desenha, constrói, revisa) e, como exceção autorizada, fluxos com muitos agentes nas
+    Travas e quando ajudar;
+  - o plano novo da varredura de defeitos, aprovado por ele (plano da fase, seção "O jeito novo").
 - **Desenho:**
-  - Financeiro: núcleo aprovado nas rodadas 20 a 26.
-  - **Rodada 27 conferida (22/11):** aprovadas receber o repasse e dar o recibo, os saldos de abertura, importar os
-    membros e cadastrar lote da gráfica. O fechamento do mês volta na 28.
-  - Página leve KMeb… na versão 9 (a 27); fontes em `design/propostas/`. A página antiga G1gj… é só arquivo.
-  - **As regras da rodada 28 foram todas respondidas por ele** antes de desenhar: plano
-    `docs/plano/fase-10-experiencia-design-performance.md`, seções "Rodada 27: o que ele aprovou e o fechamento refeito"
-    e "As regras da rodada 28 (Membros), respondidas antes de desenhar".
-- **Membros** (ramo `v10-membros-svelte`, `3e65794`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
-  - as 4 pendências do "Quero me cadastrar" (homolog `810540f`);
-  - o banco lento: a resposta nunca passa de 3 s, a secretaria aceita depois, e "envie de novo" quando nem a gravação
-    cabe (homolog `7d5ebbf`, DEPLOY OK; aprovado por ele);
-  - o **servidor** do importador do sistema pago, migração 185 e a rota `api/importacao-membros` (homolog `708f50f`,
-    DEPLOY OK). O ramo `v10-membros-importador-wip` já foi trazido e pode ser apagado.
+  - Financeiro: núcleo aprovado nas rodadas 20 a 27.
+  - **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
+    `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento do mês, o lote com os números
+    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta
+    aberta, marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+- **Membros** (ramo `v10-membros-svelte`, `68bce84`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
+  - o "Quero me cadastrar" (as 4 pendências) e o banco lento (aprovado por ele);
+  - o servidor do importador (migração 185, rota `api/importacao-membros`);
+  - **a tela "Importar os membros do sistema pago"** (r27), só para a Secretaria Geral, e a importação deixando de fora
+    a matrícula que já existe (a 1 e a 2): commits `703c76b` a `68bce84`, homolog `b34284c`, DEPLOY OK, 96/96 no teste
+    completo. As respostas dele de 23/11 estão no plano, seção "A tela de importar os membros: as respostas dele".
 - **Financeiro** (ramo `v10-financeiro-svelte`; worktree `C:/tmp/ieadespa-financeiro/obra`):
-  - o plano da construção `docs/plano/financeiro-construcao.md` (no ramo);
-  - o **incremento 1b na homologação** (a tela dos blocos de recibo, o número do bloco pela 1ª folha; homolog
-    `f774121`, DEPLOY OK);
-  - **só no ramo, fora da homologação:** `bd694cf`, a casca igual ao desenho (barra de 280 px, o cabeçalho numa linha e o
-    último grupo do menu à vista no notebook); e `4c06d58`, o **servidor** do incremento 2 (as folhas do bloco, a
-    exceção da folha, o livro, o rastreio e a devolução). A tela do incremento 2 não foi feita.
+  - o incremento 1b na homologação (homolog `f774121`);
+  - **só no ramo, fora da homologação:** `bd694cf` (a casca igual ao desenho) e `4c06d58` (o servidor do incremento
+    2: as folhas, a exceção da folha, o livro, o rastreio e a devolução). A tela do incremento 2 não foi feita.
 
 ## 2. Arquivos alterados (ainda não registrados no Git)
 
-- Nenhum. Os três worktrees estavam limpos e enviados quando os agentes pararam. A rodada 28 não chegou a ser começada
-  (nenhum arquivo).
+- Nenhum. A `main` e os worktrees estão limpos e enviados.
 
 ## 3. Pendências e erros conhecidos
 
+- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** Falta a trava
+  no código: nada gera matrícula antes da importação concluída, em todos os pontos que chamam `proximaMatricula`
+  (`api/shared/preCadastroDb.js` e os 3 de `api/GestaoPessoas/index.js`). Sem ela, Membros não vai à produção.
+- **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
+  arrolamento" pronto.
 - **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:
   atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
-- **Membros na homologação:** falta o OK final dele para ir à produção. A importação só vai à produção com "completar o
-  arrolamento" pronto (sem ele a pendência não se resolve).
-- **Bancada, decisões dele:** conferir o servidor de memória 2.2.1 antes de subir (a aprovada é a 2.1.1); a cláusula
+- **Bancada, decisões dele:** o servidor de memória 2.2.1 (a aprovada é a 2.1.1; nunca instalar sozinho); a cláusula
   5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
   computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
 - **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
-  sem `/s` antes de remover o worktree. O da rodada 27 (`C:/tmp/ieadespa-desenho-r27`) já pode sair.
+  sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
+  `v10-membros-importador-wip` também.
 - **Diários** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`, `C:\tmp\ieadespa-membros\` (DIARIO,
-  DIARIO-importador, DIARIO-banco-lento), `C:/tmp/ieadespa-desenho-r27-fotos/DIARIO.md` e o levantamento da 28 em
-  `C:/tmp/ieadespa-r28-duvidas.md`.
+  DIARIO-importador, DIARIO-banco-lento) e os das rodadas em `C:/tmp/ieadespa-desenho-r27-fotos/` e `-r28-fotos/`.
 
-## 4. Próximo passo exato (quando ele mandar continuar)
+## 4. Próximo passo exato
 
-Três agentes em paralelo, cada um no seu ramo e worktree (memória `desenho-em-paralelo-a-construcao`):
+Antes: ele recarrega a janela do VS Code ("Recarregar Janela") e roda `/clear`. A conversa nova já tem o conselheiro
+Fable e os agentes `construtor`, `desenhista` e `revisor`.
 
-1. **Desenho, rodada 28** (worktree novo `C:/tmp/ieadespa-desenho-r28`, ramo `desenho-r28`, a partir da `main`), pelas
-   regras já respondidas no plano: a auditoria ao vivo e o fechamento do mês; a chegada do lote com os números pulados;
-   a família com "mora junto"; as listas inteligentes; o assistente de movimentação (saída e volta); completar o
-   arrolamento e o grupo novo do painel. Publicar na página leve KMeb… (ele já conferiu a 27).
-2. **Membros:** a importação pula a matrícula que já existe (a 1 e a 2); a **tela** "Importar os membros", igual à
-   r27 aprovada; homologação.
-3. **Financeiro:** o teste de telas do CI; a casca (`bd694cf`) e o servidor do incremento 2 (`4c06d58`) para a
-   homologação; a tela das abas Folhas e Livro; depois o formulário do lote da gráfica (aprovado na 27).
+Três agentes, cada um no seu ramo e worktree:
 
-Depois da 28: o módulo 3 (Estrutura e Territórios).
+1. **Revisor:** confere a importação de Membros (homolog `b34284c`; commits `703c76b` a `68bce84`): `importarLote` em
+   `api/shared/importacaoMembrosDb.js`, `classificar`/`criarPrevia`, o laço dos lotes e o 428 em `Importar.svelte`, e
+   `PassoArquivo`.
+2. **Construtor, Membros primeiro:** a trava "nada gera matrícula antes da importação" (seção 3), conferida pelo
+   revisor, para a homologação. **Depois alterna para o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58`
+   para a homologação; a tela das abas Folhas e Livro; o formulário do lote da gráfica (aprovado na 27).
+3. **Desenhista:** espera a conferência dele da rodada 28 (ler as escolhas `r28-*` na página KMeb…); depois, o módulo
+   3 (Estrutura e Territórios).
+
+E a varredura de defeitos, lote 1, como fluxo com o `revisor` (avisar a ele em uma linha antes).

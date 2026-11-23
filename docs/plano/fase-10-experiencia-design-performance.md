@@ -735,7 +735,8 @@ O que falta, nesta ordem:
 6. **A ida à produção:**
    - as migrações 174 a 179;
    - a permissão ALTER para juntar fichas;
-   - a importação real;
+   - a importação real, **antes de qualquer matrícula nova** (regra dele de 23/11; a trava no código está na seção "A
+     tela de importar os membros: as respostas dele");
    - a troca do sistema pago.
 
 **Rodada de desenho de Membros, aprovada por ele em 19/11/2026,** para logo depois que ele fechar a rodada 19 do Financeiro
@@ -1026,6 +1027,27 @@ Ele confirmou ("até que enfim, acertamos"). **Vale mais que a regra da rodada 2
   "arrolamento a completar" mostra quantos faltam.
 - **"Quero me cadastrar":** quando nem a gravação cabe no tempo fixo, a resposta é "Não conseguimos receber agora, envie
   de novo", no mesmo tempo e igual para todos; o reenvio não duplica.
+
+### A tela de importar os membros: as respostas dele (23/11/2026)
+
+A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce84`; homolog `b34284c`, DEPLOY OK).
+
+- **A ordem na produção, regra dele:** "só vamos liberar a matrícula depois dessa importação". Hoje a produção tem só as
+  matrículas 1 e 2; a importação traz as do sistema pago (da 3 até as 200 e tantas). **Só depois dela** alguém ganha
+  matrícula nova (pelo site ou pela secretaria). Se a ficha nova viesse antes, pegaria o número 3, e o membro 3 do
+  sistema pago ficaria de fora da importação (a matrícula é para sempre).
+  - **Falta a trava no código** (missão do construtor, com o revisor, antes de alternar para o Financeiro): enquanto a
+    importação real não estiver concluída, nada gera matrícula nova. Vale para **todos** os lugares que geram o número:
+    o aceite do "Quero me cadastrar" (`api/shared/preCadastroDb.js`) e o cadastro da secretaria
+    (`api/GestaoPessoas/index.js`, os três pontos que chamam `proximaMatricula`). A ficha que chegar nesse meio fica na
+    fila da secretaria, sem número.
+  - O cuidado que já existe na importação (o número tomado depois da prévia vai para o fim da fila, com aviso) fica
+    como rede de proteção.
+- **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
+  O código já faz assim.
+- **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
+- **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
+  linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
 
 ### A varredura antes da construção: as respostas dele (20/11/2026, noite)
 

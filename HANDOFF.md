@@ -6,20 +6,25 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026, manhã (Claude, sessão principal).
+Atualizado em 23/11/2026, fim da manhã (Claude, sessão principal).
 
-**Em andamento (23/11):** ele decidiu adotar o conselheiro (o Fable aconselhando o Opus; em TESTE só neste
-computador), os agentes padrão e os ganchos de proteção na bancada, e **3 agentes ao mesmo tempo** neste projeto (um
-desenha, um constrói, um revisa; memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`). Agentes
-rodando agora:
+**23/11, o que mudou** (memórias `conselheiro-e-padrao-alto` e `desenho-em-paralelo-a-construcao`):
 
-- **Bancada:** os agentes padrão (construtor, desenhista, revisor no Fable) e os ganchos de proteção, em
-  `C:\MCP\bancada`; só o `-SoTestar` (o `-Sim` espera o sim dele). Diário
-  `C:\tmp\ieadespa-bancada\DIARIO-agentes-e-ganchos.md`.
-- **Desenho, rodada 28** (ramo `desenho-r28`, worktree `C:/tmp/ieadespa-desenho-r28`; diário em
-  `C:/tmp/ieadespa-desenho-r28-fotos/`).
-- **Construção, Membros:** a tela de importar os membros e o pulo das matrículas que já existem (`v10-membros-svelte`).
-- Quando os agentes padrão estiverem instalados, o **revisor** substitui o agente da bancada como 3º.
+- **O conselheiro funciona no VS Code** (`/advisor fable`; sem créditos à parte no plano dele). Vale da próxima
+  conversa em diante.
+- **Bancada `ef666e8`, INSTALADA neste computador com o sim dele:** os agentes padrão `construtor` e `desenhista`
+  (Opus) e `revisor` (Fable, só lê), e o gancho de proteção (barra `git add -A`/`.`/`--all`/`-u`, `git commit -a`,
+  segredo sem máscara, homolog para a main, navegador sem `--disable-gpu`; o `.env.example` passa). Mostrar segredo
+  mascarado: `node C:/MCP/bancada/mascarar.mjs <arquivo>`. **Falta recarregar a janela do VS Code** (depois que o
+  agente de Membros terminar) para os agentes aparecerem.
+- **3 agentes ao mesmo tempo** (desenha, constrói, revisa) e, como exceção autorizada, **fluxos com muitos agentes**
+  nas Travas e quando ajudar. O plano novo da varredura de defeitos foi aprovado (plano da fase, "O jeito novo"): o
+  lote 1 roda quando o `revisor` aparecer.
+- **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
+  `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento, o lote com os números pulados,
+  a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta aberta,
+  marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+- **Em andamento:** o agente de Membros (a tela de importar e o pulo das matrículas 1 e 2, `v10-membros-svelte`).
 
 O resto deste arquivo é o estado da parada de 22/11, ainda válido.
 

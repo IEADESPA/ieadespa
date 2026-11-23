@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 19:45 (Claude, sessão principal).
+Atualizado em 23/11/2026 20:15 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,20 +46,29 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Se a conversa cair, confira os
-diários antes de mandar de novo:
+**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Às 19h54 a atualização do
+Windows reiniciou o notebook; os agentes foram retomados às 20h05, sem perda. Se a conversa cair, confira os diários
+antes de mandar de novo:
 
 1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
    com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`. Decidido pelas regras (não perguntar): o
    modelo é o **Fable 5.2** (não se rebaixa quem revisa) e **sem cartão** (crédito acabou, para e continua no mês
    seguinte); `settingSources: []`, `maxBudgetUsd` por consulta e o gasto de cada passada medido nas 3 primeiras rodadas.
-2. **construtor:** o e2e-51 FEITO (`58dcd0d`, enviado); agora completar o arrolamento. Diário:
+2. **construtor:** o e2e-51 FEITO (`58dcd0d`) e o servidor do arrolamento FEITO (`20681e8`, jest 6842 verdes,
+   e2e-98 92/92); agora a tela (o Painel com o 4º grupo e a tela Completar), os pares e a homologação. Diário:
    `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
 3. **revisor** (desde as 19h45): confere a importação (`703c76b` a `68bce84`) e a trava (`54ae870` a `58dcd0d`) antes
    da produção. Worktree só dele: `C:/tmp/ieadespa-revisao` (destacado em `58dcd0d`). Relatório local
    `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md` (fora do Git).
-4. **diagnóstico do teste de telas do CI** (desde as 19h45), sem commit: a causa provada, a correção e o ramo certo, em
-   `C:/tmp/ieadespa-ci-telas-DIAGNOSTICO.md`.
+4. **construtor do Financeiro** (desde as 20h15): a tela do incremento 2 (as abas Folhas e Livro, r17 op. 1) só no
+   ramo `v10-financeiro-svelte` (worktree `C:/tmp/ieadespa-financeiro/obra`), **sem mesclar no homolog** (o Membros vai
+   primeiro). Diário: `C:/tmp/ieadespa-financeiro/DIARIO.md`.
+
+**O teste de telas do CI: causa achada e corrigida** (diagnóstico em `C:/tmp/ieadespa-ci-telas-DIAGNOSTICO.md`). A base
+do homolog estava velha (`ae7f2e3`), depois de duas mudanças de tela de propósito (o 1b do Financeiro e a entrada da
+importação). Correção `f36ccf4`, direto no homolog (base = `b34284c`), no padrão do `e5fe087`. A rodada `45285926023`
+refaz a base (1h20 a 1h40); até ela acabar, nenhum push no homolog que mexa em `app/`. **Regra:** depois de toda
+mesclagem que muda tela no homolog, conferir as divergências e atualizar a base, direto no homolog.
 
 Terminados: o **desenhista** publicou a rodada 29 (versão 11; DEPLOY OK em `15067a6`). A **pesquisa dos 8
 economizadores** (o PDF dele) concluiu que nenhum vale instalar agora: rendem no máximo uns 2% sem perder qualidade, e os
@@ -114,13 +123,13 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 - **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** A trava está
   feita e na homologação (item 4, 1.1). Ele ainda precisa vê-la.
-- **O teste de telas do CI** já falhava no homolog `b34284c`, antes da trava. A causa não foi apurada.
+- **O teste de telas do CI:** a causa foi achada e corrigida em `f36ccf4` (veja o alto). Falta só a rodada
+  `45285926023` terminar verde. Quando o Membros for para a main, a base da main (os ramos carregam `0707967`) precisa
+  ser ajustada.
 - **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
   Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
 - **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
   arrolamento" pronto.
-- **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:
-  atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
 - **Bancada, decisões dele:** a 2.2.2 do servidor de memória, quando sair (prevista para 25/11), conferir antes de

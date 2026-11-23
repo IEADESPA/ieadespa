@@ -43,7 +43,9 @@ module.exports = async function (context, req) {
 
   const pool = await getPool();
   const situacoesResult = await pool.request().query(`SELECT Sigla FROM SituacoesMembro`);
-  const situacoesValidas = new Set(situacoesResult.recordset.map(s => s.Sigla));
+  // FASE 10, rodada 28: o "Arrolamento a completar" só vem da importação do sistema pago e só sai completando (api/Arrolamento): a planilha antiga não põe
+  // ninguém no grupo (a sigla não vale aqui) nem tira (a ficha que está nele continua nele).
+  const situacoesValidas = new Set(situacoesResult.recordset.map(s => s.Sigla).filter(s => s !== "ARROLAMENTO"));
 
   let criados = 0;
   let atualizados = 0;
@@ -76,7 +78,7 @@ module.exports = async function (context, req) {
         const request = r().input("id", sql.Int, membroId).input("nome", sql.NVarChar(200), nome);
         if (situacaoMembro) {
           await request.input("situacaoMembro", sql.NVarChar(30), situacaoMembro)
-            .query(`UPDATE MembroReferencia SET Nome = @nome, SituacaoMembro = @situacaoMembro WHERE MembroId = @id`);
+            .query(`UPDATE MembroReferencia SET Nome = @nome, SituacaoMembro = CASE WHEN SituacaoMembro = N'ARROLAMENTO' THEN SituacaoMembro ELSE @situacaoMembro END WHERE MembroId = @id`);
         } else {
           await request.query(`UPDATE MembroReferencia SET Nome = @nome WHERE MembroId = @id`);
         }

@@ -69,6 +69,17 @@ describe("painelMembros (as contas)", () => {
       { mes: "2026-06", entradas: 0, saidas: 0 }, { mes: "2026-07", entradas: 0, saidas: 0 }, { mes: "2026-08", entradas: 4, saidas: 0 },
       { mes: "2026-09", entradas: 0, saidas: 0 }, { mes: "2026-10", entradas: 0, saidas: 1 }, { mes: "2026-11", entradas: 3, saidas: 0 }]);
   });
+  test("rodada 28: o 4º grupo, o arrolamento a completar, contado no banco junto com os outros (o rol soma os 4)", async () => {
+    const r = painel.mapear([[{ ...linhaTotal, total: 14, arrolamento: 4 }], [], []], "2026-11-18");
+    expect(r).toMatchObject({ total: 14, emComunhao: 6, congregados: 3, semComunhao: 1, arrolamento: 4 });
+    expect(painel.mapear([[linhaTotal], [], []], "2026-11-18").arrolamento).toBe(0);
+    expect(painel.vazio("2026-11-18").arrolamento).toBe(0);
+    quando(/FROM Congregacoes/, { recordset: CONGREGACOES });
+    quando(/GROUPING SETS/, RESPOSTA);
+    await pedir(tokenDe({ escopoCongregacoes: ["Vila Nova"] }), { resumo: "1" });
+    expect(rodou(/GROUPING SETS/)[0].sql).toContain("CASE WHEN m.SituacaoMembro = N'ARROLAMENTO' THEN 1 ELSE 0 END AS arrolamento");
+    expect(rodou(/GROUPING SETS/)[0].sql).toContain("SUM(b.arrolamento) AS arrolamento");
+  });
   test("muitos grupos: os 11 maiores e o resto somado em \"Outros\"", () => {
     const lista = Array.from({ length: 15 }, (_, i) => ({ nome: `C${i}`, total: 100 - i, es: 1, aguas: 0, cpf: 0, comunhao: 0, completo: 0 }));
     const r = painel.limitar(lista);

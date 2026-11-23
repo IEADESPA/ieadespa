@@ -207,7 +207,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   nova. `e2e-97` (travada: o "Cadastrar" com a matrícula gerada e a digitada, o importador antigo, o lançar e o aceite da fila e o site recusados com a
   mesma mensagem, nada gravado, editar continua livre, o 401/403 de sempre antes da trava; a importação de zero pessoas não se confirma; a parada no meio
   continua travada; a concluída solta sozinha e a matrícula nova vem depois das importadas). Os roteiros que cadastram gente (`e2e-85`, `e2e-90`, `e2e-93` e
-  `e2e-95`) semeiam uma importação concluída no começo (`lib.js` `importacaoConcluida()`) e rodam sobre a `cenario-185`.
+  `e2e-95`) semeiam uma importação concluída no começo (`lib.js` `importacaoConcluida()`) e rodam sobre a `cenario-185`. O `e2e-51` (escada) também
+  roda sobre a `cenario-185`: a ficha nova recusada pela trava (409) e, depois da importação semeada, a regra do cargo (403).
+- **FASE 10, completar o arrolamento** (rodada 28, sem migração), base `cenario-185`: `e2e-98` (o 4º grupo do painel e o andamento de cada nível; a
+  congregação, a área e a Geral completam, cada uma só no seu escopo, e fora dele a mesma resposta de "não encontrada"; ninguém completa a própria ficha; a
+  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; o cargo que a pessoa já tinha entra no histórico
+  como LEGADO; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
+  importador antigos não põem nem tiram ninguém do arrolamento).
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos

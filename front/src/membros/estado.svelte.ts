@@ -25,6 +25,8 @@ export type Rota =
   | { readonly tela: "importar" }
   | { readonly tela: "carteirinhas"; readonly congregacaoId: number | null }
   | { readonly tela: "editor"; readonly modeloId: number }
+  // completar o arrolamento (rodada 28): uma ficha da lista, a primeira de uma congregação ("uma por uma") ou a primeira das que vieram sem congregação (a Geral)
+  | { readonly tela: "completar"; readonly matricula: number | null; readonly congregacaoId: number | null; readonly semCongregacao: boolean }
   | { readonly tela: "ficha"; readonly id: number; readonly secao: SecaoFicha };
 
 const inteiro = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null);
@@ -42,6 +44,10 @@ export function lerRota(x: unknown): Rota | null {
   if (tela === "transferencia") { const id = inteiro(o.id); return id ? { tela, id } : null; }
   if (tela === "carteirinhas") return { tela, congregacaoId: inteiro(o.congregacaoId) };
   if (tela === "editor") { const id = inteiro(o.modeloId); return id ? { tela, modeloId: id } : null; }
+  if (tela === "completar") {
+    const matricula = inteiro(o.matricula), congregacaoId = inteiro(o.congregacaoId), semCongregacao = o.semCongregacao === true;
+    return matricula || congregacaoId || semCongregacao ? { tela, matricula, congregacaoId, semCongregacao } : null;
+  }
   if (tela === "juntar") { const a = inteiro(o.a), b = inteiro(o.b); return a && b && a !== b ? { tela, a, b } : null; }
   return null;
 }
@@ -51,7 +57,7 @@ export type ChaveMenu = "painel" | "pessoas" | "fila" | "cadastrar" | "transfere
 /** a qual item do menu cada tela pertence (o item marcado e o caminho do topo) */
 export function itemDoMenu(r: Rota): ChaveMenu {
   switch (r.tela) {
-    case "ficha": return "pessoas";
+    case "ficha": case "completar": return "pessoas";
     case "rapido": return "fila";
     case "transferir": case "transferencia": return "transferencias";
     case "juntar": return "repetidas";

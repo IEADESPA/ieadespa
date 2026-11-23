@@ -7,7 +7,9 @@ export const SITUACOES: readonly { valor: string; rotulo: string }[] = [
   { valor: "SAIDAS", rotulo: "Saíram do rol" }
 ];
 const SIT: Readonly<Record<string, { rotulo: string; tom: TomChip }>> = {
-  EM_COMUNHAO: { rotulo: "Em comunhão", tom: "ok" }, CONGREGADO: { rotulo: "Congregado", tom: "pendente" }, SEM_COMUNHAO: { rotulo: "Sem comunhão", tom: "atrasado" }
+  EM_COMUNHAO: { rotulo: "Em comunhão", tom: "ok" }, CONGREGADO: { rotulo: "Congregado", tom: "pendente" }, SEM_COMUNHAO: { rotulo: "Sem comunhão", tom: "atrasado" },
+  // rodada 28: quem veio do sistema pago e ainda espera a secretaria completar (sem voto)
+  ARROLAMENTO: { rotulo: "Arrolamento a completar", tom: "pendente" }
 };
 const SAIU: Readonly<Record<string, string>> = { DESLIGADO: "Desligado", FALECIDO: "Falecido" };
 

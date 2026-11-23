@@ -1,12 +1,28 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 23/11/2026 08:48
+Em uso por: Mateus desde 23/11/2026 16:50
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 14:00 (Claude, sessão principal).
+Atualizado em 23/11/2026 16:50 (Claude, sessão principal).
+
+**O revisor de fora (decisão dele, 23/11, à tarde):**
+
+- Os créditos mensais de API dos assinantes já foram resgatados por ele. São cerca de US$ 120 por mês, do plano Team de
+  organização sem fins lucrativos. A página oficial diz que **não valem no Claude Code** ("Claude Code: No"), mas valem
+  no **Agent SDK**. O crédito vence todo mês e não acumula. Sem cartão na organização do Console, nada é cobrado:
+  acabou, para.
+- **A decisão dele:**
+  - um programa na **bancada** (`C:\MCP\bancada\revisor-sdk\`) roda o revisor com esses créditos, ao mesmo tempo em que
+    a assinatura trabalha;
+  - o primeiro serviço é **a varredura do sistema inteiro**;
+  - **os relatórios ficam só na bancada**, que é privada. No repositório público vai só "lote N, K achados".
+  - Se der certo, a assinatura fica só com o desenhista e o construtor.
+- **A ordem:** (1) ele cria a chave no Console, sem cartão e sem recarga automática; (2) o programa mínimo e uma prova
+  minúscula, para ver se o saldo de "Promotional credits" desce, se o Fable está liberado e se não há recusa; (3) só
+  então o lote 1 da varredura, que serve de régua.
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
 
@@ -30,7 +46,27 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-Nenhum agente trabalhando agora.
+**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Se a conversa cair, confira os
+diários antes de mandar de novo:
+
+1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
+   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+2. **pesquisa dos 8 economizadores de tokens** (o PDF dele), só leitura. Resultado em
+   `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
+3. **desenhista:** só publica a rodada 29 na página KMeb….
+4. **construtor:** o e2e-51 e completar o arrolamento. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+
+O estado de quando os agentes da tarde foram parados (cota acabando), sem nada pela metade no Git:
+
+- **construtor:** só trouxe a `main` para o ramo (`3f8a1a5`, enviado). "Completar o arrolamento" e o ajuste do e2e-51
+  NÃO começaram. Pode haver um rascunho em `C:/tmp/ieadespa-membros/aprovado-arrolamento.js` (fora do Git).
+- **desenhista:** a rodada 29 ficou **PRONTA, mas NÃO publicada**. As fontes estão na `main` (`e1dc866` e `cb9ac39`):
+  18 telas, 387 KB, conferência com 0 problema. A página KMeb… continua na versão 10. Diário:
+  `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
+
+**O módulo 3 já tem as respostas dele** (23/11, plano da fase, seção "Módulo 3 (Estrutura e Territórios): as respostas
+dele antes do desenho"). O desenho espera Membros fechar. A regra nova de acesso vale também para Membros: o cargo
+vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 ## 1. Concluído
 
@@ -46,8 +82,9 @@ Nenhum agente trabalhando agora.
   - Financeiro: núcleo aprovado nas rodadas 20 a 27.
   - **Rodada 28 PUBLICADA** (página leve KMeb…, versão 10; fontes na `main`, `06c308b` e `dc73367`; diário
     `C:/tmp/ieadespa-desenho-r28-fotos/DIARIO.md`): a auditoria ao vivo e o fechamento do mês, o lote com os números
-    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Esperando ele conferir.** Pergunta
-    aberta, marcada "Para conferir": no "pediu para sair" (sem carta), o documento é obrigatório?
+    pulados, a família, as listas, a saída e a volta, completar o arrolamento. **Conferida por ele em 23/11** (ver o
+    item 4). A pergunta do "pediu para sair" ficou respondida pelas regras novas (plano, "Rodada 28: o que ele
+    aprovou").
 - **Membros** (ramo `v10-membros-svelte`, `68bce84`; worktree `C:/tmp/ieadespa-svelte`), na homologação:
   - o "Quero me cadastrar" (as 4 pendências) e o banco lento (aprovado por ele);
   - o servidor do importador (migração 185, rota `api/importacao-membros`);
@@ -65,9 +102,9 @@ Nenhum agente trabalhando agora.
 
 ## 3. Pendências e erros conhecidos
 
-- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** Falta a trava
-  no código: nada gera matrícula antes da importação concluída, em todos os pontos que chamam `proximaMatricula`
-  (`api/shared/preCadastroDb.js` e os 3 de `api/GestaoPessoas/index.js`). Sem ela, Membros não vai à produção.
+- **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** A trava está
+  feita e na homologação (item 4, 1.1). Ele ainda precisa vê-la.
+- **O teste de telas do CI** já falhava no homolog `b34284c`, antes da trava. A causa não foi apurada.
 - **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
   Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
 - **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
@@ -88,6 +125,18 @@ Nenhum agente trabalhando agora.
 
 ## 4. Próximo passo exato
 
+**Ao voltar, nesta ordem:**
+
+1. **Publicar a rodada 29** com um agente NOVO, que só publica. A ferramenta exige ler antes a versão no ar inteira
+   (343 KB), e o desenhista que montou não tinha contexto para isso.
+   - A fonte é `design/propostas/` (`montar-r29.js`, `r29-*.js`).
+   - A página é <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>.
+   - Depois, avisar que ele pode conferir.
+2. **Ele vê a trava travada na homologação:** matrícula de teste 900007 › Membros › Fila de cadastros › Cadastro rápido
+   › "Enviar para a secretaria" mostra a recusa. Depois do "vi", um agente faz a importação de mentira até o fim (o
+   e2e-97 tem a planilha de mentira) para ele ver o liberado.
+3. **Construtor:** o e2e-51 e completar o arrolamento (item 1.2), com o resumo da missão parada (o passo 0 já está feito).
+
 **A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
 **2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
 nunca como terceiro agente. A varredura de defeitos de segurança espera ("questões secundárias").
@@ -97,12 +146,14 @@ nunca como terceiro agente. A varredura de defeitos de segurança espera ("quest
 
 1. **Construtor, Membros** (worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`), em missões curtas, com commit,
    homologação e DEPLOY OK a cada uma:
-   1. **A trava das matrículas:** nada gera matrícula nova antes de a importação do sistema pago terminar, e ela libera
-      sozinha no fim da importação. Os pontos: o aceite em `api/shared/preCadastroDb.js` e os 3 de
-      `api/GestaoPessoas/index.js` que chamam `proximaMatricula`. **Cuidado:** `api/shared/importacaoMembrosDb.js`
-      (~linha 333) também chama `proximaMatricula`, para as linhas sem número. A trava vai nos chamadores, nunca dentro
-      de `proximaMatricula`, senão barra a própria importação. A ficha que chega no meio fica na fila sem número, e a
-      tela explica.
+   1. **A trava das matrículas: FEITA** (23/11; `54ae870`, `c0e6638`, `0eac89b`; homolog `937c942`, DEPLOY OK; diário
+      `C:/tmp/ieadespa-membros/DIARIO-trava.md`).
+      - Sem importação `CONCLUIDA`, toda ficha nova é recusada com a mensagem "As matrículas novas só começam depois da
+        importação do sistema pago.", e a importação de zero pessoas também.
+      - A trava fica em `matriculasLiberadas(rq)`, em `api/shared/matriculaNova.js`, nos chamadores.
+      - **Falta:** ele ver o estado travado na homologação. Depois do "vi", um agente faz a importação de mentira até o
+        fim, para ele ver o liberado.
+      - O e2e-51 (linha 192) espera 403 e agora recebe 409. Ajustar na próxima missão.
    2. **Completar o arrolamento** (r28): a congregação, **a área e a Geral** completam e editam (conferir o
       `escopoRotas`).
    3. **A família** (r28) e **as listas inteligentes** (r28; **exportar PDF ou planilha, só a Geral**).
@@ -112,8 +163,9 @@ nunca como terceiro agente. A varredura de defeitos de segurança espera ("quest
       de ver na homologação.
    6. **Depois, o Financeiro:** o teste de telas do CI; `bd694cf` e `4c06d58` para a homologação; as abas Folhas e
       Livro; o lote da gráfica (r27); a chegada do lote e o fechamento do mês (r28).
-2. **Desenhista, rodada 29:** (1) a **movimentação refeita** pelas regras novas dele: o membro sai sozinho pelo
-   aplicativo, com a carta em PDF; ninguém confirma; os cargos ficam vagos; a secretaria só no "não sabe usar" e no
-   abandono; o apagamento a partir de 30 dias; o que fica para sempre. (2) O **levantamento das dúvidas do módulo 3**
-   (Estrutura e Territórios), para perguntar a ele **antes** de desenhar. Publicar na página leve KMeb…: ele já
-   terminou de comentar a 28.
+2. **Desenhista:**
+   - a rodada 29 está pronta (publicar: veja o passo 1 acima);
+   - as dúvidas do módulo 3 já foram respondidas por ele;
+   - quando ele conferir a 29, os acertos vão para a 30. O desenho do módulo 3 só começa quando Membros fechar.
+   - **Para a construção da movimentação**, o código muda, não só a tela: sair na hora, cargos vagos na hora e o
+     apagamento aos poucos e sozinho. Plano, "Rodada 28", item "Para a construção".

@@ -26,8 +26,13 @@ export async function lerAlerta(geral: boolean): Promise<AlertaAssembleia | null
   return a.ok && a.dados.precisaConfirmar ? a.dados : null;
 }
 
-export function montarAvisos(resumo: ResumoPainel, chegando: readonly Transferencia[], alerta: AlertaAssembleia | null, c: Contadores, geral: boolean): AvisoMembros[] {
+// abrirArrolamento: o que o aviso do 4º grupo abre (rodada 28: a congregação vai direto para "completar, uma por uma"; a área e a Geral, para a tabela)
+export function montarAvisos(resumo: ResumoPainel, chegando: readonly Transferencia[], alerta: AlertaAssembleia | null, c: Contadores, geral: boolean, abrirArrolamento: (() => void) | null = null): AvisoMembros[] {
   const lista: AvisoMembros[] = [];
+  if (resumo.arrolamento > 0 && abrirArrolamento) {
+    lista.push({ chave: "arrol", icone: "alerta", titulo: `${numero(resumo.arrolamento)} ${plural(resumo.arrolamento, "ficha", "fichas")} com o arrolamento a completar`, sub: "sem voto até completar",
+      tom: "afazer", meu: true, abrir: abrirArrolamento });
+  }
   const pendentes = chegando.filter((t) => t.situacao === "PENDENTE" && t.podeDecidir);
   if (pendentes.length === 1 && pendentes[0]) {
     const t = pendentes[0];

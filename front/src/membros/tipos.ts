@@ -66,6 +66,8 @@ export interface ResumoPainel {
   readonly emComunhao: number;
   readonly congregados: number;
   readonly semComunhao: number;
+  /** o 4º grupo (rodada 28): quem veio do sistema pago e ainda espera a secretaria completar (sem voto) */
+  readonly arrolamento: number;
   readonly semCpf: number;
   readonly semNascimento: number;
   readonly semContato: number;
@@ -80,6 +82,9 @@ export interface ResumoPainel {
   readonly congregacoes: readonly { readonly congregacaoId: number; readonly nome: string; readonly total: number }[];
   readonly movimento: readonly { readonly mes: string; readonly entradas: number; readonly saidas: number }[];
 }
+
+/** COMPLETAR O ARROLAMENTO (rodada 28): os tipos moram em ./arrolamento.ts, junto com a conferência das respostas */
+export type { Andamento, LugarArrolamento, PainelArrolamento, FichaArrolamento, RespostaFichaArrolamento } from "./arrolamento";
 
 /** um acontecimento da linha do tempo (GET /api/pessoas/{id}/linha-do-tempo) */
 export interface EventoVida {

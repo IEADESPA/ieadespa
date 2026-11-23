@@ -1,5 +1,6 @@
-// e2e-51-escada-fluxos.js — v8.2 (Escada ministerial), com os handlers e o banco REAIS, sobre a base "cenario-escada" (cenario-afm + a migração 157 aplicada duas vezes:
-// `bash rodar.sh preparar-escada`).
+// e2e-51-escada-fluxos.js — v8.2 (Escada ministerial), com os handlers e o banco REAIS. Nasceu sobre a base "cenario-escada" (cenario-afm + a migração 157 aplicada duas
+// vezes: `bash rodar.sh preparar-escada`); desde a trava das matrículas (23/11/2026) roda sobre a "cenario-185", que a contém, porque prova a ficha nova recusada antes da
+// importação do sistema pago e a regra do cargo depois dela (lib.js importacaoConcluida).
 // O esquema da 157; a conferência dos requisitos (prévia, protocolo e a cada avanço); a conclusão que troca cargo, Função e histórico juntos; o interstício pelo histórico;
 // a queima de etapas; o teto das obreiras; as modalidades (nomeação do Presidente com o nivelamento; outra convenção); Evangelista e Pastor só por indicação do Presidente;
 // a disciplina (motivo só ao nível geral); a data de entrada no cargo informada pela Secretaria; a matrícula de candidato; o CHM (concedido, revogado no meio do processo);
@@ -189,7 +190,12 @@ const aberta = (m) => um("SELECT Cargo, CONVERT(varchar(10), Desde, 120) AS Desd
   ok(r.status === 200 && r.body.sucesso !== false, "o Dirigente edita o telefone (cargo igual): passa", r.body);
   r = await salvarPessoa(P.candidato, { dizimistaFiel: false }, LID);
   ok(r.status === 403 && (await escalar("SELECT DizimistaFiel FROM MembroReferencia WHERE MembroId = @m", { m: P.candidato })) === true, "o Dirigente não mexe em 'dizimista fiel'", r.body);
-  r = await chamarRota("GestaoPessoas/index.js", { metodo: "POST", token: LID, corpo: { membroId: 9230, nome: "Novo Pastor Forjado E2E", congregacaoId: await escalar("SELECT CongregacaoId FROM Congregacoes WHERE Nome = N'Central E2E'"), status: "ATIVO", cargoMinisterial: "PASTOR" } });
+  // A trava das matrículas (23/11/2026): antes da importação do sistema pago, nenhuma ficha nova nasce (409); depois dela, a regra do cargo continua valendo (403).
+  const forjado = async () => chamarRota("GestaoPessoas/index.js", { metodo: "POST", token: LID, corpo: { membroId: 9230, nome: "Novo Pastor Forjado E2E", congregacaoId: await escalar("SELECT CongregacaoId FROM Congregacoes WHERE Nome = N'Central E2E'"), status: "ATIVO", cargoMinisterial: "PASTOR" } });
+  r = await forjado();
+  ok(r.status === 409 && /importação do sistema pago/.test(r.body.mensagem || "") && (await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId = 9230")) === 0, "antes da importação do sistema pago, nem a ficha nova nasce (a trava das matrículas)", r.body);
+  await L.importacaoConcluida();
+  r = await forjado();
   ok(r.status === 403 && (await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId = 9230")) === 0, "nem cria alguém já como Pastor", r.body);
   r = await salvarPessoa(P.semSexo, { sexo: "X" });
   ok(r.body.sucesso === false && /Sexo/.test(r.body.mensagem), "sexo fora de M/F: recusado", r.body);

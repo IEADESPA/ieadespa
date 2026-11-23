@@ -33,11 +33,9 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 **Agentes trabalhando agora (desde 23/11 15:05), 2 ao mesmo tempo.** As perguntas dos dois foram respondidas por ele
 às 16h (plano da fase: "A tela de importar os membros", item da trava, e "Rodada 28", respostas antes da r29):
 
-- **construtor**, construindo a trava das matrículas (item 1.1 abaixo), já com a `main` no ramo (`fb2c8a5`). É a trava
-  simples: sem importação `CONCLUIDA`, nenhuma ficha nova por caminho nenhum, e a importação com zero pessoas é
-  recusada. Ele mescla no homolog e **para**. Ele (o responsável) vê o estado travado; só depois o agente faz a
-  importação de mentira para mostrar o liberado. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
-  `C:/tmp/ieadespa-membros/DIARIO-trava.md`.
+- **construtor**, desde as 17h, no ajuste do e2e-51 e em **completar o arrolamento** (item 1.2 abaixo). A trava (item
+  1.1) ficou pronta na homologação. Worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`. Diário:
+  `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
 - **desenhista**, desenhando e publicando a rodada 29, a movimentação refeita. Worktree `C:/tmp/ieadespa-desenho-r29`,
   ramo `desenho-r29`. Diário: `C:/tmp/ieadespa-desenho-r29-fotos/DIARIO.md`.
 
@@ -113,12 +111,14 @@ nunca como terceiro agente. A varredura de defeitos de segurança espera ("quest
 
 1. **Construtor, Membros** (worktree `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`), em missões curtas, com commit,
    homologação e DEPLOY OK a cada uma:
-   1. **A trava das matrículas:** nada gera matrícula nova antes de a importação do sistema pago terminar, e ela libera
-      sozinha no fim da importação. Os pontos: o aceite em `api/shared/preCadastroDb.js` e os 3 de
-      `api/GestaoPessoas/index.js` que chamam `proximaMatricula`. **Cuidado:** `api/shared/importacaoMembrosDb.js`
-      (~linha 333) também chama `proximaMatricula`, para as linhas sem número. A trava vai nos chamadores, nunca dentro
-      de `proximaMatricula`, senão barra a própria importação. A ficha que chega no meio fica na fila sem número, e a
-      tela explica.
+   1. **A trava das matrículas: FEITA** (23/11; `54ae870`, `c0e6638`, `0eac89b`; homolog `937c942`, DEPLOY OK; diário
+      `C:/tmp/ieadespa-membros/DIARIO-trava.md`).
+      - Sem importação `CONCLUIDA`, toda ficha nova é recusada com a mensagem "As matrículas novas só começam depois da
+        importação do sistema pago.", e a importação de zero pessoas também.
+      - A trava fica em `matriculasLiberadas(rq)`, em `api/shared/matriculaNova.js`, nos chamadores.
+      - **Falta:** ele ver o estado travado na homologação. Depois do "vi", um agente faz a importação de mentira até o
+        fim, para ele ver o liberado.
+      - O e2e-51 (linha 192) espera 403 e agora recebe 409. Ajustar na próxima missão.
    2. **Completar o arrolamento** (r28): a congregação, **a área e a Geral** completam e editam (conferir o
       `escopoRotas`).
    3. **A família** (r28) e **as listas inteligentes** (r28; **exportar PDF ou planilha, só a Geral**).

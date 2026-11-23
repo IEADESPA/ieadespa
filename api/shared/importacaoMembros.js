@@ -43,14 +43,16 @@ function separadorDe(primeiraLinha) {
 }
 
 // Lê o CSV (RFC 4180): campos entre aspas podem ter o separador, quebra de linha e aspas dobradas (""). Aceita CRLF, LF e a marca BOM do começo.
-// Devolve { separador, linhas: [{ numero, celulas }] } — numero é a linha do arquivo onde o registro COMEÇA (o cabeçalho é a 1).
+// Devolve { separador, linhas: [{ numero, celulas }], aspas } — numero é a linha do arquivo onde o registro COMEÇA (o cabeçalho é a 1). aspas (revisão de
+// 23/11, I1): o primeiro campo entre aspas que passou para a linha de baixo ({ linha onde a aspa abriu, fechou }), ou null. Uma aspa sem fechar engolia as
+// linhas seguintes num campo só, e as pessoas sumiam da prévia sem aviso; quem recusa o arquivo é prepararArquivo.
 function lerCsv(texto) {
   let t = String(texto == null ? "" : texto);
   if (t.charCodeAt(0) === 0xfeff) t = t.slice(1);
   const fimPrimeira = t.search(/\r?\n/);
   const separador = separadorDe(fimPrimeira < 0 ? t : t.slice(0, fimPrimeira));
   const linhas = [];
-  let celulas = [], campo = "", aspas = false, numero = 1, inicio = 1, i = 0;
+  let celulas = [], campo = "", aspas = false, numero = 1, inicio = 1, i = 0, abriu = 0, quebra = null;
   const fecharCampo = () => { celulas.push(campo); campo = ""; };
   const fecharLinha = () => { fecharCampo(); linhas.push({ numero: inicio, celulas }); celulas = []; };
   while (i < t.length) {
@@ -60,17 +62,19 @@ function lerCsv(texto) {
         if (t[i + 1] === "\"") { campo += "\""; i += 2; continue; }
         aspas = false; i++; continue;
       }
-      if (ch === "\n") numero++;
+      if (ch === "\n" || (ch === "\r" && t[i + 1] !== "\n")) { numero++; if (!quebra) quebra = { linha: abriu, fechou: false }; }
       campo += ch; i++; continue;
     }
-    if (ch === "\"" && campo.trim() === "") { campo = ""; aspas = true; i++; continue; }
+    if (ch === "\"" && campo.trim() === "") { campo = ""; aspas = true; abriu = numero; i++; continue; }
     if (ch === separador) { fecharCampo(); i++; continue; }
     if (ch === "\r" && t[i + 1] === "\n") { i++; continue; }
     if (ch === "\n" || ch === "\r") { fecharLinha(); numero++; inicio = numero; i++; continue; }
     campo += ch; i++;
   }
   if (campo !== "" || celulas.length) fecharLinha();
-  return { separador, linhas };
+  // fechou = a aspa que atravessou a linha fechou depois (não é a que ficou aberta até o fim do arquivo)
+  if (quebra && !(aspas && abriu === quebra.linha)) quebra.fechou = true;
+  return { separador, linhas, aspas: quebra };
 }
 
 // ------------------------------------------------------------------ as colunas
@@ -318,8 +322,11 @@ function prepararArquivo(texto, { congregacoes, hojeISO, escolha }) {
   if (typeof texto !== "string" || !texto.trim()) return { erro: "O arquivo está vazio." };
   if (texto.length > LIMITE_TEXTO) return { erro: "O arquivo é grande demais (mais de 8 milhões de letras). Divida em partes." };
   if (texto.includes("�")) return { erro: "O arquivo tem letras que não puderam ser lidas (acentos trocados por “�”). Salve o arquivo de novo como CSV (UTF-8 ou Windows) e tente outra vez." };
-  const { separador, linhas } = lerCsv(texto);
+  const { separador, linhas, aspas } = lerCsv(texto);
   if (!linhas.length) return { erro: "O arquivo está vazio." };
+  // ninguém some calado (revisão de 23/11, I1): o campo entre aspas que atravessa a linha engoliria as pessoas de baixo; o arquivo inteiro volta, com a linha
+  if (aspas && !aspas.fechou) return { erro: `A linha ${aspas.linha} do arquivo abre aspas (") e não fecha: as pessoas das linhas de baixo sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.` };
+  if (aspas) return { erro: `A linha ${aspas.linha} do arquivo tem um campo entre aspas que passa para a linha de baixo: as pessoas dessas linhas sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.` };
   const [cab, ...resto] = linhas;
   const colunas = mapearColunas(cab.celulas, escolha);
   if (colunas.erro) return { erro: colunas.erro };

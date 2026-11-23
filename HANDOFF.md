@@ -6,7 +6,14 @@ Em uso por: Mateus desde 23/11/2026 08:48
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 10:24 (Claude, sessão principal). Nenhum agente trabalhando agora.
+Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
+
+**Em andamento, só leitura (pedido dele de 23/11, antes de recarregar a janela):** dois agentes de pesquisa. Um confere
+se a versão 2.2.1 do servidor de memória pode trocar a 2.1.1 (detalhe em
+`C:\tmp\ieadespa-bancada\conferencia-servidor-memoria-2.2.1.md`). O outro procura habilidades oficiais e confiáveis
+para a bancada (detalhe em `C:\tmp\ieadespa-bancada\pesquisa-habilidades-23-11.md`). Nada se instala sem o sim dele.
+Recarregar a janela só depois que os dois terminarem (a recarga mata os agentes). Se pararem no meio, relançar com os
+mesmos arquivos.
 
 ## 1. Concluído
 

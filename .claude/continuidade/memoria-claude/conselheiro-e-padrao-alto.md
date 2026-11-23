@@ -22,8 +22,9 @@ Decisões dele (23/11):
   o homolog para a main, navegador sem `--disable-gpu`): sim.
 - **Nível 8, os fluxos com muitos agentes (Workflow):** autorizados nas Travas de Revisão e **"sempre que for ajudar,
   é interessante ter mais de 3 agentes"**. É a exceção ao limite de 3 de [[desenho-em-paralelo-a-construcao]].
-- **A varredura de defeitos:** planejar agora, para rodar com o revisor no Fable depois que os agentes padrão estiverem
-  instalados; mostrar o plano a ele antes de rodar.
+- **A varredura de defeitos:** o plano novo (um fluxo por lote; plano da fase 10, seção "O jeito novo") foi
+  **aprovado por ele em 23/11** ("eu gostei bastante"): roda o lote 1 assim que o `revisor` da bancada estiver
+  instalado neste computador.
 
 **Why:** qualidade que não depende de alguém lembrar a regra; o modelo mais forte nas decisões e na revisão.
 

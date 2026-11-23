@@ -19,8 +19,8 @@ R$ 322,76 (o teto dele é R$ 450). A decisão 1 do `README` ("tudo no Azure") j�
 escolha original não ficou registrado.
 
 Também em 23/11: o sistema da associação (Postgres) fica como está; ele disse que não precisa estudar a troca. As regras
-de SQL para o nosso: ele pediu primeiro um estudo da eficiência (`C:\tmp\ieadespa-bancada\estudo-regras-sql.md`); com
-pouco ganho, fica só o plugin `microsoft-docs`.
+de SQL para o nosso: ele pediu primeiro um estudo da eficiência (`C:\tmp\ieadespa-bancada\estudo-regras-sql.md`): deu ganho
+médio, e as 9 regras foram para o `api/CLAUDE.md` (seção "Banco (SQL Server)"), sem habilidade nova.
 
 **How to apply:** não propor a troca. Só reabrir se o sistema sair do Azure ou precisar de algo que só o Postgres faz.
 A habilidade de Postgres da bancada é para os sistemas que usam Postgres, não para este. Ver [[custo-azure-e-pico-do-servidor]].

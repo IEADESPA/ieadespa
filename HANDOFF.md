@@ -9,6 +9,7 @@ Em uso por: Mateus desde 23/11/2026 08:48
 Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
 
 **Bancada, 23/11 (com o sim dele, FEITO):** `a17890c` e `76f02a8` enviados e instalados neste computador (`-Sim`):
+
 - as habilidades `svelte-core-bestpractices`, `supabase-postgres-best-practices` (só Postgres) e
   `test-driven-development` (o `construtor` escreve o teste antes);
 - 3 de LGPD adaptadas, com os documentos em `C:\MCP\bancada\lgpd\<repositório>\` (privada, nunca no repositório);
@@ -18,10 +19,18 @@ Atualizado em 23/11/2026 10:45 (Claude, sessão principal).
 
 O banco do ieadespa **fica no SQL Server** (memória `banco-sql-server-fica`).
 
-**Em andamento:** um agente estuda, só lendo o nosso código, se regras de SQL Server ajudariam (detalhe em
-`C:\tmp\ieadespa-bancada\estudo-regras-sql.md`). Com ganho médio ou alto, as regras vão para o próprio projeto
-(`api/CLAUDE.md`); com pouco ganho, fica só o plugin `microsoft-docs`. Defeitos que ele achar vão para a varredura.
-Depois disso ele recarrega a janela.
+**O estudo das regras de SQL (23/11), só leitura:** deu **ganho médio**. As 9 regras estão no `api/CLAUDE.md`, na seção
+"Banco (SQL Server)", e não viraram habilidade. O detalhe está em `C:\tmp\ieadespa-bancada\estudo-regras-sql.md`. Os
+achados vão para o **lote 1 da varredura**, e estão também na memória do projeto, "FASE 10":
+
+- o `db.js` sem nova tentativa e sem pool configurado;
+- a tela de votar da assembleia, com consultas por pessoa;
+- o sininho;
+- a prévia do juntar fichas;
+- o painel de distritos;
+- 342 chaves estrangeiras sem índice.
+
+Nenhum agente trabalhando agora. **Pronto para ele recarregar a janela e rodar `/clear`.**
 
 ## 1. Concluído
 
@@ -59,6 +68,8 @@ Depois disso ele recarrega a janela.
 - **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** Falta a trava
   no código: nada gera matrícula antes da importação concluída, em todos os pontos que chamam `proximaMatricula`
   (`api/shared/preCadastroDb.js` e os 3 de `api/GestaoPessoas/index.js`). Sem ela, Membros não vai à produção.
+- **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
+  Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
 - **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
   arrolamento" pronto.
 - **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:

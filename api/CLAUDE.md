@@ -27,6 +27,35 @@ As rotas do sistema de gestão (`/api/...`), publicadas junto com o `app/` no St
   aponta para a **produção**: SQL de teste vai na homologação (`ieadespa-homolog`), nunca na produção.
 - Nada de credencial no código.
 
+## Banco (SQL Server): as regras de qualidade
+
+Valem para todo código novo e toda correção. O banco de produção é o nível Basic (5 DTU, 30 workers, 300 sessões),
+pequeno: o que escapa aqui só aparece no dia de muito uso. Estudo de 23/11/2026, aprovado por ele.
+
+1. Nada de consulta dentro de laço sobre lista que cresce (N+1): uma consulta só, com junção ou lista de ids.
+   [Chatty I/O](https://learn.microsoft.com/azure/architecture/antipatterns/chatty-io/)
+2. Filtrar, contar e paginar no banco, nunca trazer tudo para o Node.
+   [Extraneous fetching](https://learn.microsoft.com/azure/architecture/antipatterns/extraneous-fetching/)
+3. Índice, na mesma migração, em toda coluna filtrada, juntada ou apagada por chave estrangeira (a de "quem
+   registrou" não precisa). [Índices em chaves estrangeiras](https://learn.microsoft.com/sql/relational-databases/tables/primary-and-foreign-key-constraints#indexes-on-foreign-key-constraints)
+4. Nada de função sobre a coluna no filtro (`CONVERT`, `LOWER`, `ISNULL(col…)`, `LIKE '%…'`), e o parâmetro com o
+   tipo da coluna (`NVarChar` × `VARCHAR` desliga o índice).
+   [Predicados que não usam índice](https://learn.microsoft.com/sql/relational-databases/post-migration-validation-and-optimization-guide#inability-to-use-predicates-to-filter-data)
+5. Nova tentativa, com espera crescente, nos erros passageiros do Azure SQL (40197, 40501, 40613, 49918, 10928,
+   10929); no impasse (1205), repetir a transação inteira.
+   [Erros passageiros](https://learn.microsoft.com/azure/azure-sql/database/troubleshoot-common-errors-issues#transient-fault-error-messages-40197-40613-and-others)
+6. O pool de conexões configurado de propósito para o Basic, não o padrão do driver.
+   [Limites do Basic](https://learn.microsoft.com/azure/azure-sql/database/resource-limits-dtu-single-databases)
+7. Transação curta, com `SET XACT_ABORT ON`; nada de e-mail, `fetch` ou espera dentro dela.
+   [Bloqueios](https://learn.microsoft.com/azure/azure-sql/database/understand-resolve-blocking)
+8. `OFFSET … FETCH` só com desempate único no `ORDER BY` e com teto por página.
+   [OFFSET e FETCH](https://learn.microsoft.com/sql/t-sql/queries/select-order-by-clause-transact-sql#use-offset-and-fetch-to-limit-the-rows-returned)
+9. Valor do usuário só por parâmetro, nunca concatenado no SQL.
+   [Injeção de SQL](https://learn.microsoft.com/sql/relational-databases/security/sql-injection)
+
+As regras 5 e 6 ainda não existem no `shared/db.js`; elas e os casos achados pelo estudo entram na varredura de
+defeitos.
+
 ## Testes
 
 ```bash

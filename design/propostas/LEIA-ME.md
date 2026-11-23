@@ -49,7 +49,8 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 - **Nunca republicar enquanto o responsável está comentando:** as observações dele ficam no navegador e se perdem.
   A chave do `localStorage` (`propostas-r15`) não muda entre as rodadas.
 - Ler as escolhas dele: `ArtifactData`, coleção `escolhas` da página leve (ids `r29-*` e `geral-r29`).
-- **Antes de publicar, a ferramenta exige ler a versão no ar inteira** (a 28 tem cerca de 343 KB). Faça isso num agente novo,
+- **Antes de publicar, a ferramenta exige ler a versão no ar inteira** (a 29 tem cerca de 388 KB; leia em blocos de ~100
+  linhas, porque a ferramenta corta acima de 25 mil tokens). Faça isso num agente novo,
   para não pesar a conversa principal. A única diferença esperada é a casca que a plataforma põe em volta da página
   (o `<!doctype>` na 1ª linha e o fechamento no fim).
 

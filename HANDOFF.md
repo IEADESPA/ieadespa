@@ -53,7 +53,7 @@ diários antes de mandar de novo:
    com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 2. **pesquisa dos 8 economizadores de tokens** (o PDF dele), só leitura. Resultado em
    `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
-3. **desenhista:** só publica a rodada 29 na página KMeb….
+3. **desenhista:** publicou a rodada 29 (versão 11) e terminou.
 4. **construtor:** o e2e-51 e completar o arrolamento. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
 
 O estado de quando os agentes da tarde foram parados (cota acabando), sem nada pela metade no Git:
@@ -127,11 +127,9 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 **Ao voltar, nesta ordem:**
 
-1. **Publicar a rodada 29** com um agente NOVO, que só publica. A ferramenta exige ler antes a versão no ar inteira
-   (343 KB), e o desenhista que montou não tinha contexto para isso.
-   - A fonte é `design/propostas/` (`montar-r29.js`, `r29-*.js`).
-   - A página é <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>.
-   - Depois, avisar que ele pode conferir.
+1. **A rodada 29 está PUBLICADA** (23/11 à noite; versão 11 da página <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>,
+   387 KB). O banco da página ficou intacto: as 6 escolhas da r28 continuam lá. **Esperando ele conferir.** As escolhas
+   dele vão para a coleção `escolhas`, com os ids `r29-*` e `geral-r29`.
 2. **Ele vê a trava travada na homologação:** matrícula de teste 900007 › Membros › Fila de cadastros › Cadastro rápido
    › "Enviar para a secretaria" mostra a recusa. Depois do "vi", um agente faz a importação de mentira até o fim (o
    e2e-97 tem a planilha de mentira) para ele ver o liberado.

@@ -97,6 +97,13 @@ describe("o repasse", () => {
     expect(r.status).toBe(400);
     expect(r.body.mensagem).toBe("CPF inválido.");
   });
+  test("a trava das matrículas (409, antes da importação do sistema pago) chega à pessoa como o sistema disse, não como 'fora do ar'", async () => {
+    const msg = "As matrículas novas só começam depois da importação do sistema pago.";
+    global.fetch = jest.fn(async () => ({ status: 409, json: async () => ({ sucesso: false, mensagem: msg }) }));
+    const r = await chamar(pedido("POST", PROD, corpoValido()));
+    expect(r.status).toBe(409);
+    expect(r.body).toEqual({ sucesso: false, mensagem: msg });
+  });
   test("a lista das congregações: só id, nome e área; guardada 10 minutos por ambiente", async () => {
     const r1 = await chamar(pedido("GET", PREVIA));
     expect(r1.status).toBe(200);

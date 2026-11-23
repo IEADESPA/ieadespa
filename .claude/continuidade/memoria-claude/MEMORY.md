@@ -53,6 +53,7 @@
 - [Azure SWA: fatos medidos](azure-swa-fatos-medidos.md) — IP do cliente; config vale em app/
 - [Azure: duas contas](azure-duas-contas-config-dir.md) — AZURE_CONFIG_DIR=~/.azure-ieadespa
 - [Custo Azure](custo-azure-e-pico-do-servidor.md) — banco pausa; teto do orçamento
+- [O banco fica SQL Server](banco-sql-server-fica.md) — 23/11: não trocar para Postgres; não reabrir sem motivo novo
 - [Capacidade para 1.000](capacidade-mil-pessoas.md) — assembleia online ainda não pronta
 - [Visão futura](visao-futura-integracao-total.md) — integração total sem Directus; não é prioridade
 - [Chave de acesso (vD.4)](vd4-chave-de-acesso.md) — passkey da liderança

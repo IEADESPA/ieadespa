@@ -139,6 +139,31 @@ describe("efetivarTurma (Art. 7º, II — efetivação automática)", () => {
     expect(chamadas[2].inputs.dataBatismo).toBe("2026-05-16");
   });
 
+  test("A2 (revisão de 24/11): a ficha em arrolamento batizada sai do grupo COMPLETADA, junto com a pendência, numa transação só, e com a trilha", async () => {
+    const auditoria = require("../auditoria");
+    const espia = jest.spyOn(auditoria, "registrarAuditoria").mockResolvedValue(undefined);
+    const { pool, chamadas } = criarPoolFalso([
+      [{ DataBatismo: "2026-05-16" }],
+      [{ CandidatoId: 1, MembroId: 10 }, { CandidatoId: 2, MembroId: 11 }],
+      [{ resolvidas: 1 }], // a 10 estava em arrolamento: a pendência fechou
+      [],
+      [{ resolvidas: 0 }], // a 11 não estava
+      []
+    ]);
+    expect(await batismo.efetivarTurma(pool, 1, 77)).toBe(2);
+    const efetiva = chamadas[2];
+    expect(efetiva.sql).toMatch(/SET XACT_ABORT ON;\s*BEGIN TRAN;/);
+    expect(efetiva.sql).toMatch(/SituacaoMembro = 'EM_COMUNHAO'/);
+    expect(efetiva.sql).toMatch(/UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME\(\), ResolvidaPor = @por/);
+    expect(efetiva.sql).toMatch(/WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA'/);
+    expect(efetiva.sql).toMatch(/COMMIT;/);
+    expect(efetiva.inputs.por).toBe(77);
+    // a trilha só para quem estava em arrolamento, sem dado pessoal
+    expect(espia).toHaveBeenCalledTimes(1);
+    expect(espia).toHaveBeenCalledWith(expect.objectContaining({ tabela: "MembroReferencia", registroId: 10, usuarioId: 77, acao: "O batismo completou o arrolamento" }));
+    espia.mockRestore();
+  });
+
   test("turma inexistente não efetiva nada", async () => {
     const { pool, chamadas } = criarPoolFalso([[]]);
     const total = await batismo.efetivarTurma(pool, 999);

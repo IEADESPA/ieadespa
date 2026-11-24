@@ -178,7 +178,7 @@ module.exports = async function (context, req) {
         context.res = { status: 200, body: { sucesso: false, mensagem: "Esta turma já foi concluída/cancelada." } };
         return;
       }
-      const efetivados = await efetivarTurma(pool, id);
+      const efetivados = await efetivarTurma(pool, id, usuario.membroId);
       await registrarAuditoria({ tabela: "TurmasBatismo", registroId: id, acao: `Realizou o batismo (${efetivados} candidato(s) efetivado(s))`, usuarioId: usuario.membroId });
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: `✅ Batismo realizado — ${efetivados} candidato(s) agora em comunhão.`, efetivados } };
       return;

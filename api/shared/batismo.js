@@ -8,7 +8,10 @@
 // tal no próprio retorno, não escondida atrás de um "ok" genérico.
 const { sql } = require("./db");
 const estatuto = require("./estatuto");
-const { sha256 } = require("./auditoria");
+const auditoria = require("./auditoria");
+const { sha256 } = auditoria;
+// pela referência ao módulo (a trilha do batismo que completa o arrolamento): o teste espia registrarAuditoria
+const registrarAuditoria = (registro) => auditoria.registrarAuditoria(registro);
 const trilhas = require("./trilhas");
 const auth = require("./auth");
 const { ehGeral } = require("./escopoRotas");
@@ -111,7 +114,12 @@ async function registrarAceiteEstatuto(pool, membroId) {
 // texto da versão). Quem não foi aprovado a tempo NÃO é efetivado — fica
 // pra reatribuir numa turma seguinte (Status volta a AGUARDANDO_TURMA
 // fora daqui, ação separada).
-async function efetivarTurma(pool, turmaId) {
+//
+// A ficha em ARROLAMENTO (veio do sistema pago e ainda não foi completada) que é batizada: o batismo responde o que o completar pergunta (a situação, em
+// comunhão; a forma, batismo; a data, a do batismo), então a pendência ARROLAMENTO fecha como COMPLETADA junto com a situação, na mesma transação, e a
+// trilha diz que foi o batismo (A2 da revisão de 24/11/2026: antes a ficha saía do grupo e a pendência ficava aberta). A DataAdmissao não muda aqui (como
+// no batismo de quem não veio da importação). `por`: quem realizou a turma.
+async function efetivarTurma(pool, turmaId, por = null) {
   const turma = (await pool.request().input("id", sql.Int, turmaId).query(`SELECT DataBatismo FROM TurmasBatismo WHERE TurmaId = @id`)).recordset[0];
   if (!turma) return 0;
   const aprovados = (await pool.request().input("turmaId", sql.Int, turmaId).query(`
@@ -119,9 +127,20 @@ async function efetivarTurma(pool, turmaId) {
   `)).recordset;
 
   for (const candidato of aprovados) {
-    await pool.request()
-      .input("id", sql.Int, candidato.MembroId).input("dataBatismo", sql.Date, turma.DataBatismo)
-      .query(`UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = 'BATISMO' WHERE MembroId = @id`);
+    const r = await pool.request()
+      .input("id", sql.Int, candidato.MembroId).input("dataBatismo", sql.Date, turma.DataBatismo).input("por", sql.Int, por)
+      .query(`SET XACT_ABORT ON; BEGIN TRAN;
+              UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = 'BATISMO' WHERE MembroId = @id;
+              UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por,
+                Nota = N'Completada pelo batismo: em comunhão, a forma e a data de entrada vêm do batismo.'
+              WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA';
+              DECLARE @resolvidas INT = @@ROWCOUNT;
+              COMMIT;
+              SELECT @resolvidas AS resolvidas;`);
+    if (Number(r.recordset && r.recordset[0] && r.recordset[0].resolvidas) > 0) {
+      await registrarAuditoria({ tabela: "MembroReferencia", registroId: candidato.MembroId, acao: "O batismo completou o arrolamento", usuarioId: por,
+        dadosDepois: { situacaoMembro: "EM_COMUNHAO", formaAdmissao: "BATISMO", turmaId } });
+    }
     await pool.request().input("id", sql.Int, candidato.CandidatoId).query(`UPDATE CandidatosBatismo SET Status = 'BATIZADO' WHERE CandidatoId = @id`);
   }
   return aprovados.length;

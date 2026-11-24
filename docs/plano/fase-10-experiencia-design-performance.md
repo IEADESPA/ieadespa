@@ -1093,6 +1093,9 @@ Depois da revisão do Financeiro até `4c06d58`:
   - arrancada: tirada do bloco;
   - extraviada: sumiu, e a congregação não sabe dela;
   - inexistente: a gráfica não imprimiu.
+- **Onde se marca a inexistente (ele, 24/11):** ninguém confere o lote folha por folha quando ele chega da gráfica.
+  A inexistente aparece no lançamento, na planilha, e se marca ali, do mesmo jeito que a cancelada ou a arrancada. Na
+  devolução parcial, a inexistente no fim do bloco não impede: as folhas em branco antes dela voltam livres.
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 
@@ -1249,6 +1252,18 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   - O problema é a localização: a cidade costuma usar um CEP geral. No futuro, o endereço buscado pelo CEP e pelo
     número já basta, mesmo com erro de uns 50 m.
   - A localização das igrejas que vai para o site alimenta o mapa sozinha.
+- **As respostas dele às 8 perguntas da rodada 32 (24/11/2026):**
+  1. O novo dirigente (ou cargo) **vale no cadastro**; o painel cobra o termo de posse até as duas confirmações.
+  2. Quem não tem celular **aceita a posse no balcão, com o PIN**, e fica registrado quem atendeu.
+  3. **A virada do ano é em lote, com termo novo**: "continuam em 2027", e cada um aceita o termo de novo.
+  4. **A diretoria cobrada como vaga é uma lista fixa da Geral.** Na congregação: dirigente, vice, 1º e 2º secretário
+     e 1º e 2º tesoureiro. Na área: pastor, secretário e tesoureiro.
+  5. **Os outros cargos (EBD, jovens, porteiro, recepção) ficam no módulo de cada um**, não na Estrutura.
+  6. A congregação confirma os dados (endereço, cultos, diretoria) **a cada 6 meses**, num toque; vencido, vai para o
+     painel.
+  7. **O ponto de culto guarda** o bairro, o dia e a hora, o responsável e o endereço da casa; o endereço só a
+     liderança vê.
+  8. **O mapa:** a congregação vê o ponto de cada membro dela; a área e a Geral veem só a contagem por bairro.
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

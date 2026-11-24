@@ -119,6 +119,21 @@ describe("A2 e o menor 6: a efetivação da turma", () => {
     expect(p.inputs.nota).not.toMatch(/não muda/);
   });
 
+  // a nota diz o que aconteceu de verdade com aquela ficha: quem entrou por outro caminho (carta, aclamação, reconciliação) fica com a forma e a data dele, e a
+  // nota não pode dizer "a forma batismo e a data igual à do batismo" (o conselheiro, na volta 5)
+  test("a nota de cada pendência diz a forma e a data que ficaram (a do batismo ou a de antes)", async () => {
+    await batismo.efetivarTurma(pool, 5, 77);
+    const notas = mockConsultas.filter((c) => /UPDATE FichasPendencias/.test(c.sql)).map((c) => [c.inputs.id, c.inputs.nota]);
+    expect(notas[0]).toEqual([10, "Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo."]);
+    expect(notas[2]).toEqual([12, "Completada pelo batismo: em comunhão; a forma de entrada (carta de mudança) e a data de entrada de antes ficam."]);
+  });
+  test("a nota pura: cada forma de outro caminho com o nome dela; sem data de entrada, a nota avisa que a data está em branco", () => {
+    expect(batismo.notaDoBatismo({ formaAdmissao: "BATISMO", dataAdmissao: "2026-10-03" })).toBe("Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo.");
+    expect(batismo.notaDoBatismo({ formaAdmissao: "ACLAMACAO", dataAdmissao: "2019-05-04" })).toBe("Completada pelo batismo: em comunhão; a forma de entrada (aclamação) e a data de entrada de antes ficam.");
+    expect(batismo.notaDoBatismo({ formaAdmissao: "RECONCILIACAO", dataAdmissao: "2021-01-10" })).toBe("Completada pelo batismo: em comunhão; a forma de entrada (reconciliação) e a data de entrada de antes ficam.");
+    expect(batismo.notaDoBatismo({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: null })).toBe("Completada pelo batismo: em comunhão; a forma de entrada (carta de mudança) fica, e a data de entrada está em branco: registre na ficha a data de entrada.");
+  });
+
   test("um erro no meio desfaz a transação daquele candidato (nada pela metade) e sobe", async () => {
     const antes = mockResponder;
     mockResponder = (texto, inputs) => { if (/UPDATE FichasPendencias/.test(texto) && inputs.id === 11) throw new Error("caiu"); return antes(texto, inputs); };

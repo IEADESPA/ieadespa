@@ -127,6 +127,15 @@ function entradaPeloBatismo(antes, dataBatismo) {
 // (com a forma e a data de antes: a data anterior de congregado só sobrevive nela, porque o banco não tem coluna de conversão) e o BATIZADO do candidato.
 // Um erro desfaz só o candidato da vez (os anteriores já ficaram) e sobe. `por`: quem realizou a turma.
 const NOTA_BATISMO = "Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo.";
+const NOME_DA_FORMA = { CARTA_MUDANCA: "carta de mudança", ACLAMACAO: "aclamação", RECONCILIACAO: "reconciliação" };
+// A nota da pendência fechada diz o que ficou de verdade naquela ficha (a forma e a data do batismo, ou as de antes de quem entrou por outro caminho). Sem a
+// data de entrada (ficha antiga com a forma e sem a data), a nota avisa: a data não se inventa (pergunta aberta da volta 5).
+function notaDoBatismo(e) {
+  const nome = NOME_DA_FORMA[e && e.formaAdmissao];
+  if (!nome) return NOTA_BATISMO;
+  if (!e.dataAdmissao) return `Completada pelo batismo: em comunhão; a forma de entrada (${nome}) fica, e a data de entrada está em branco: registre na ficha a data de entrada.`;
+  return `Completada pelo batismo: em comunhão; a forma de entrada (${nome}) e a data de entrada de antes ficam.`;
+}
 async function efetivarTurma(pool, turmaId, por = null) {
   const turma = (await pool.request().input("id", sql.Int, turmaId)
     .query(`SELECT CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo FROM TurmasBatismo WHERE TurmaId = @id`)).recordset[0];
@@ -150,7 +159,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
         .input("dataAdmissao", sql.Date, e.dataAdmissao)
         .query(`SET XACT_ABORT ON;
                 UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = @forma, DataAdmissao = @dataAdmissao WHERE MembroId = @id;`);
-      const p = (await rq().input("id", sql.Int, candidato.MembroId).input("por", sql.Int, por).input("nota", sql.NVarChar(300), NOTA_BATISMO)
+      const p = (await rq().input("id", sql.Int, candidato.MembroId).input("por", sql.Int, por).input("nota", sql.NVarChar(300), notaDoBatismo(e))
         .query(`SET XACT_ABORT ON;
                 UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por, Nota = @nota
                 WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA';
@@ -170,7 +179,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
 }
 
 module.exports = {
-  efetivarTurma, entradaPeloBatismo, FORMAS_DE_OUTRO_CAMINHO, turmaNoEscopo,
+  efetivarTurma, entradaPeloBatismo, notaDoBatismo, FORMAS_DE_OUTRO_CAMINHO, turmaNoEscopo,
   IDADE_MINIMA_BATISMO, MESES_VALIDOS_TURMA, TIPOS_LOCAL_VEDADOS,
   mesValidoParaTurma, localPermitido, possuiCasamentoCivilRegistrado,
   calcularAptidaoBatismo, registrarAceiteEstatuto,

@@ -1083,6 +1083,16 @@ Depois da revisão do Financeiro até `4c06d58`:
   no celular vão para o desenho da rodada 30.
 - O 1b continua fora da produção até a troca de janeiro de 2027 (plano da construção do Financeiro, §5): na produção
   ele esconderia as telas antigas, e o módulo novo ainda está quase todo "em construção".
+- **A rodada 30 (24/11/2026): as 5 telas aprovadas na versão única** (r30-blocos-saida, -devolver, -folhas, -desfazer
+  e -vazios). Foram para a construção.
+- **A folha inexistente (ele, 24/11):** um tipo novo de exceção. É a folha que a gráfica não imprimiu (o bloco devia
+  ter 50 e veio com uma a menos). Ela tem de ser catalogada, porque a numeração não pode pular. Não precisa de tela
+  nova: é a opção a mais onde as outras exceções aparecem, e sai nos relatórios como as outras.
+- **Os 4 tipos de exceção, cada um com uma frase curta na tela (ele, 24/11):**
+  - cancelada: preenchida errado e anulada;
+  - arrancada: tirada do bloco;
+  - extraviada: sumiu, e a congregação não sabe dela;
+  - inexistente: a gráfica não imprimiu.
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 
@@ -1105,6 +1115,22 @@ Depois da revisão do Financeiro até `4c06d58`:
      o cargo são cortados sozinhos. Quem sai da Câmara perde a função, mas fica com o cargo e a situação.
   - No arrolamento, a congregação e a área completam a situação e os cargos do seu nível, e **não gravam função
     eclesiástica** (a revisão de 24/11 achou que hoje gravam qualquer cargo, até Pastor).
+- **As respostas dele à revisão do arrolamento (24/11, à tarde):**
+  - **Sem congregação, não há importação.** A importação é feita uma única vez e é só da Secretaria Geral. A linha
+    da planilha sem congregação é recusada na prévia: a Geral corrige a planilha ou deixa a linha de fora. Por isso não
+    existe ficha em arrolamento sem congregação, e o "Completar" não volta.
+  - **A importação que para no meio:** o prazo é de 7 dias, contados do último lote, e a tela avisa "faltam N dias".
+    Vencido o prazo, os dados pessoais da prévia se apagam (LGPD) e o sistema mostra quais linhas faltaram (o número
+    e o nome). A Secretaria Geral pode fazer uma importação nova só com elas. A parada sem ninguém importado segue o
+    mesmo prazo e pode ser descartada.
+  - **A data de entrada (admissão) é quando a pessoa se torna membro.** Quem se converteu na nossa igreja (era
+    congregado) é admitido no batismo nas águas. Exemplo: veio em 2006, ficou congregado e foi batizado em 2010; a
+    admissão é 2010, e os 90 dias da Assembleia contam do batismo. Quem veio de outra igreja tem como data de entrada a
+    da chegada.
+  - **Quem está em arrolamento não vota e não conta em nada:** fica fora das enquetes, das votações, da presença e do
+    quórum das reuniões de órgão.
+  - No arrolamento, cada nível completa só os **cargos administrativos** do seu âmbito. A função eclesiástica aparece
+    só para ler.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

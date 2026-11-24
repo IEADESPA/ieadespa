@@ -1,12 +1,21 @@
 ---
 name: desenho-em-paralelo-a-construcao
-description: "Neste projeto, 3 agentes ao mesmo tempo (decisão de 23/11): um desenha, um constrói (Membros primeiro, depois alterna para o Financeiro) e um revisa; cada um no seu ramo e worktree"
+description: "24/11: 3 papéis ao mesmo tempo — construtor, desenhista e corretor (o construtor corrigindo o que o revisor de fora acha); o revisor de dentro só no portão (antes do homolog e da produção); cada um no seu ramo e worktree"
 metadata:
   node_type: memory
   type: feedback
   originSessionId: 8e446f57-0011-4863-8efe-ff9484623ad6
-  modified: 2026-11-23T22:15:03.519Z
+  modified: 2026-11-24T17:45:00.000Z
 ---
+
+**24/11/2026, à tarde: 3 papéis** (ordem nova dele): um **construtor** constrói o que foi decidido; um **desenhista** desenha as
+rodadas para ele aprovar; um **corretor** (o agente construtor com essa missão) corrige os defeitos que o **revisor de
+fora** acha. O revisor de dentro fica parado, **só no portão**: uma passada por ramo antes da homologação e outra antes
+da produção (ele escolheu isso ao saber que o revisor de fora revisar os ramos novos custaria US$ 400–500 dos
+créditos). O revisor de fora fica com a main e confere de novo cada correção do corretor. Quando o corretor não tem
+defeito para corrigir, o lugar dele pode ir a um segundo construtor de outro módulo (nunca o mesmo código). Por quê, nas
+palavras dele: "o revisor de fora já está no Fable, no mais alto… ter só um corretor"; olhar mais largo sem gastar com
+um revisor a mais.
 
 **23/11/2026, à noite: 4 agentes** (ordem nova dele: "não pode ficar parado… já pode jogar os outros dois… fica aí os
 4"): o desenhista, o construtor e mais dois de missões curtas (naquele dia, o revisor de fora na bancada e a pesquisa
@@ -28,11 +37,11 @@ construir primeiramente o Membros e depois ele alterna para o Financeiro, e o te
 
 **How to apply:**
 
-- Quando um agente termina, o próximo daquela frente já começa; mas nunca mais que 3 ao mesmo tempo, sem ordem nova.
+- Quando um agente termina, o próximo daquela frente já começa; 3 papéis ao mesmo tempo (24/11), sem ordem nova.
 - Agentes em paralelo nunca mexem no mesmo código; worktree e ramo próprios; só um por vez usa o banco de teste (trava
   `C:/tmp/localdb-trava`); faixa de migrações (Membros até a 199, Financeiro a partir da 200); antes de mesclar no
   `homolog`, `git fetch` e esperar o deploy em curso (`gh run list`).
-- O revisor confere o que o construtor entregou antes da homologação e antes da produção.
+- O revisor de dentro só no portão: uma passada antes do homolog e outra antes da produção (24/11).
 - A produção continua só com o OK dele ([[fase10-nada-sem-aprovacao]]).
 - Desenho: a publicação na página de propostas precisa de um agente de contexto limpo (a ferramenta exige ler a versão
   viva inteira). Ver [[ordem-fixa-de-modulos]], [[propostas-de-tela-em-artefato]] e [[conselheiro-e-padrao-alto]].

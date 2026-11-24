@@ -46,12 +46,14 @@ para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, to
 
 ## 5. Economia de créditos (vale para qualquer pessoa ou agente)
 
-O modelo fica no melhor, e o esforço vai por agente, por decisão do responsável (24/11/2026):
+O modelo fica no melhor, e o esforço vai por agente, por decisão do responsável (24/11/2026). A equipe tem 3 papéis
+ao mesmo tempo:
 
-- construtor no "x alto";
+- construtor no "x alto": constrói o aprovado e, como corretor, corrige o que o revisor de fora acha;
 - desenhista no "alto";
-- revisor (Fable) até o teste comparativo dele;
-- a conversa principal no nível que ele escolher.
+- revisor (Fable) só no portão: uma passada por ramo antes da homologação e outra antes da produção. O revisor de
+  fora revisa a `main` e confere de novo cada correção do corretor; o esforço dele sai do teste num pedaço real;
+- a conversa principal no "alto".
 
 Não se baixa a qualidade de quem constrói, revisa ou caça defeitos. Economiza-se no jeito de trabalhar (medido com
 `tools/medir-creditos/`, 20/11/2026):

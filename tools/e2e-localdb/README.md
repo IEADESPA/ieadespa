@@ -218,6 +218,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
   5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; corrigido, continua de onde parou; a lista,
   o CSV e o resultado mostram as de fora; a trilha com o número do erro e sem a mensagem do banco; a cadeia de hashes).
+- **FASE 10, a guarda dos dados da importação** (respostas dele de 23/11/2026, sem migração), base `cenario-185`: `e2e-100` (a prévia não confirmada,
+  com o celular, a mãe e o pai, fica com 6 dias e sai pela rotina com 8: DESCARTADA, sem as linhas, a trilha sem usuário; o "Descartar" apaga na hora, a
+  liderança local não pode, de novo é 409 e o lixo é 400; a lista dos de fora fica com 89 dias e sai com 91, só as linhas de fora: as importadas, o retrato e
+  o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; os prazos no estado; a NotificacoesAgendador de verdade roda a guarda; a
+  trilha sem dado das linhas e a cadeia de hashes).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

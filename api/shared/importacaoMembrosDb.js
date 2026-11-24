@@ -78,7 +78,10 @@ async function estado(pool) {
   let restantes = null;
   if (sit.andamento) restantes = await contarRestantes(() => pool.request(), Number(sit.andamento.ImportacaoId));
   const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
-  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, retrato, campos: regras.CAMPOS };
+  // os prazos da guarda dos dados (a nota do "Descartar" e a do resultado dizem o prazo de verdade, também o ajustado nas Políticas de retenção)
+  const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
+  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, retrato, campos: regras.CAMPOS,
+    guarda: { diasPrevia, diasFora } };
 }
 // Onde as fichas importadas estão HOJE (por área; o arrolamento completo = a situação já não é "Arrolamento a completar"), as matrículas novas e quem confirmou.
 // Sem dado pessoal além do nome de quem importou (a Secretaria Geral, que é quem vê a tela).
@@ -472,10 +475,16 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
 // faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.
 const POLITICA_PREVIA = Object.freeze({ categoria: "Membros — prévia da importação que não foi confirmada", padrao: 7 });
 const POLITICA_FORA = Object.freeze({ categoria: "Membros — lista dos que ficaram de fora da importação", padrao: 90 });
-async function aplicarRetencao(pool) {
+async function prazosDaGuarda(pool) {
   const { diasDaPolitica } = require("./politicasRetencao");
-  const diasPrevia = await diasDaPolitica(pool, POLITICA_PREVIA.categoria, POLITICA_PREVIA.padrao);
-  const diasFora = await diasDaPolitica(pool, POLITICA_FORA.categoria, POLITICA_FORA.padrao);
+  return { diasPrevia: await diasDaPolitica(pool, POLITICA_PREVIA.categoria, POLITICA_PREVIA.padrao),
+    diasFora: await diasDaPolitica(pool, POLITICA_FORA.categoria, POLITICA_FORA.padrao) };
+}
+async function aplicarRetencao(pool) {
+  const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
+  // a base de antes da migração 185 (as bases antigas dos roteiros e2e): não há importação para guardar (o mesmo cuidado do afmDb e da minimizacaoLgpd)
+  const tabela = (await pool.request().query("SELECT OBJECT_ID(N'dbo.ImportacoesMembros', N'U') AS id")).recordset[0];
+  if (!tabela || tabela.id == null) return { previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia, diasFora };
   const r = await emTransacao(pool, async (t, rq) => {
     const velhas = (await rq().input("d", sql.Int, diasPrevia)
       .query("SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA' AND CriadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())")).recordset;
@@ -496,7 +505,7 @@ async function aplicarRetencao(pool) {
       const id = Number(a.ImportacaoId), n = Number(a.n) || 0;
       linhasForaApagadas += n;
       // o dia em que a lista saiu fica no resumo: a tela do resultado diz que ela foi apagada, em vez de mostrar uma lista menor sem explicar
-      await rq().input("id", sql.Int, id).query(`UPDATE ImportacoesMembros SET Resumo = JSON_MODIFY(Resumo, '$.foraApagadaEm', CONVERT(varchar(19), SYSUTCDATETIME(), 126))
+      await rq().input("id", sql.Int, id).query(`UPDATE ImportacoesMembros SET Resumo = JSON_MODIFY(Resumo, '$.foraApagadaEm', CONVERT(varchar(19), SYSUTCDATETIME(), 126) + 'Z')
         WHERE ImportacaoId = @id AND ISJSON(Resumo) = 1`);
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina apagou a lista dos que ficaram de fora da importação (${diasFora} dias depois do fim)`,
         usuarioId: null, dadosDepois: { linhasApagadas: n, retencaoDias: diasFora } });

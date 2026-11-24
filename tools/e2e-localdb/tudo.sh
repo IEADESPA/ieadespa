@@ -165,4 +165,6 @@ BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js
 # a saida do IMPORTANDO (revisao de 23/11/2026): a linha que o banco recusa sempre fica de fora como problema; 5 seguidas param sem ninguem de fora
 BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js
+# a guarda dos dados da importacao (respostas dele de 23/11/2026): a previa sem confirmar sai em 7 dias (e o "Descartar" na hora); a lista dos de fora, 90 dias depois do fim
+BASE=cenario-185 bash rodar.sh roteiro e2e-100-importacao-guarda.js
 echo TUDO-PRONTO

@@ -29,7 +29,11 @@ export interface ResumoImportacao {
   readonly colunas: { readonly lista: readonly ColunaArquivo[]; readonly escolhidas: boolean };
   readonly avisosGerais: readonly { readonly codigo: string; readonly texto: string }[];
   readonly resultado?: { readonly importadas: number; readonly fora: number; readonly numeroNovo: number; readonly possivelRepetida: number; readonly semCongregacao: number };
+  /** o dia em que a rotina apagou a lista dos que ficaram de fora (a guarda dos dados) */
+  readonly foraApagadaEm?: string | null;
 }
+/** os prazos da guarda dos dados (respostas dele de 23/11/2026): a prévia não confirmada e a lista dos de fora, em dias */
+export interface Guarda { readonly diasPrevia: number; readonly diasFora: number }
 /** a planilha lida no aparelho (o texto só fica na memória da tela) */
 export interface ArquivoLido { readonly nome: string; readonly texto: string }
 /** o mapa das colunas na tela: a lista do servidor, as colunas a mais (amarelas, fixas desde a leitura) e o campo escolhido para cada uma */
@@ -59,6 +63,7 @@ export interface EstadoImportacao {
   readonly restantes: number | null;
   readonly retrato: Retrato | null;
   readonly campos: readonly CampoColuna[];
+  readonly guarda?: Guarda | null;
 }
 export interface DetalheLinha {
   readonly motivoNumero: string | null;
@@ -95,6 +100,9 @@ export const confirmar = (importacaoId: number): Promise<Resultado<{ importacaoI
   pedir(BASE + "/confirmar", { metodo: "POST", corpo: { importacaoId } });
 export const importarLote = (importacaoId: number): Promise<Resultado<{ importadas: number; restantes: number; concluida: boolean }>> =>
   pedir(BASE + "/lote", { metodo: "POST", corpo: { importacaoId } });
+/** o "Descartar": a prévia sai na hora, com os dados pessoais das linhas (antes dos dias da guarda) */
+export const descartar = (importacaoId: number): Promise<Resultado<{ sucesso: boolean }>> =>
+  pedir(BASE + "/descartar", { metodo: "POST", corpo: { importacaoId } });
 
 /** baixa a lista do que acontece com cada linha (sem CPF nem contato) pelo fetch autenticado da casca: um link solto iria sem a sessão */
 export async function baixarLista(importacaoId: number): Promise<string> {
@@ -160,6 +168,29 @@ export function diaMesHora(v: string | Date | null | undefined): string {
   const p = partes(d);
   return `${p.day}/${p.month}, ${p.hour}h${p.minute}`;
 }
+
+// ---- a guarda dos dados (respostas dele de 23/11/2026, LGPD): a prévia não confirmada se apaga sozinha; a lista dos de fora fica um tempo depois do fim
+/** sem os prazos do servidor (ou inválidos), os das respostas dele */
+export const GUARDA_PADRAO: Guarda = { diasPrevia: 7, diasFora: 90 };
+const diasValidos = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1;
+export function guardaDe(g: Partial<Guarda> | null | undefined): Guarda {
+  return { diasPrevia: diasValidos(g?.diasPrevia) ? g.diasPrevia : GUARDA_PADRAO.diasPrevia, diasFora: diasValidos(g?.diasFora) ? g.diasFora : GUARDA_PADRAO.diasFora };
+}
+const emDias = (n: number): string => `${numero(n)} ${n === 1 ? "dia" : "dias"}`;
+export const notaDaPrevia = (g: Guarda): string => `Sem confirmar, esta prévia se apaga sozinha em ${emDias(g.diasPrevia)}.`;
+export const PERGUNTA_DESCARTAR = "Descartar esta prévia? A planilha sai do sistema agora, com o CPF, o celular, a mãe e o pai. Para importar, escolha o arquivo de novo.";
+/** no resultado, com gente de fora: até quando a lista fica (o dia de Brasília do fim + os dias da guarda; a rotina diária apaga a partir desse dia) */
+export function notaForaAte(imp: Importacao, g: Guarda): string {
+  const fim = data(imp.concluidaEm);
+  if (!fim || !imp.resumo || imp.resumo.foraApagadaEm || !((imp.resumo.resultado?.fora ?? 0) > 0)) return "";
+  const p = partes(fim);
+  const dia = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day) + g.diasFora));
+  const dd = String(dia.getUTCDate()).padStart(2, "0"), mm = String(dia.getUTCMonth() + 1).padStart(2, "0");
+  return `A lista dos que ficaram de fora se apaga sozinha a partir de ${dd}/${mm}/${dia.getUTCFullYear()} (${emDias(g.diasFora)} depois do fim): baixe antes, se precisar.`;
+}
+/** a lista já apagada pela rotina: a linha da trilha (a lista para baixar fica sem os de fora, e a tela diz por quê) */
+export const fraseForaApagada = (imp: Importacao, g: Guarda): string =>
+  imp.resumo?.foraApagadaEm ? `A lista dos que ficaram de fora foi apagada, ${emDias(g.diasFora)} depois do fim (a guarda dos dados)` : "";
 
 /** a matrícula do arquivo com o ponto do milhar ("4318" -> "4.318"); o que não é número fica como veio */
 export const matriculaBr = (m: string): string => (/^\d{1,9}$/.test(m.trim()) ? numero(Number(m.trim())) : m.trim());

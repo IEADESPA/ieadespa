@@ -249,8 +249,9 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   const { sql } = require("../db");
   const POOL_G = { request: () => new sql.Request() };
   const { registrarAuditoriaNaTransacao } = require("../auditoria");
-  function cenarioGuarda({ previas = [], foraApagadas = [], politicas = {}, rc = 0 }) {
+  function cenarioGuarda({ previas = [], foraApagadas = [], politicas = {}, rc = 0, semTabela = false }) {
     mockRegras = [
+      [/OBJECT_ID\(N'dbo\.ImportacoesMembros', N'U'\)/, [{ id: semTabela ? null : 1234 }]],
       [/FROM PoliticasRetencao/, (i) => (politicas[i.c] ? [{ DiasRetencao: politicas[i.c] }] : [])],
       [/sp_getapplock/, [{ rc }]],
       [/SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/, previas.map((id) => ({ ImportacaoId: id }))],
@@ -284,7 +285,8 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     expect(del.sql).not.toMatch(/IMPORTADA/);
     expect(del.inputs.d).toBe(90);
     const marca = mockConsultas.find((c) => /JSON_MODIFY/.test(c.sql));
-    expect(marca.sql).toMatch(/\$\.foraApagadaEm/);
+    // em UTC, com o Z: a tela mostra no horário de Brasília
+    expect(marca.sql).toMatch(/\$\.foraApagadaEm', CONVERT\(varchar\(19\), SYSUTCDATETIME\(\), 126\) \+ 'Z'\)/);
     expect(marca.inputs.id).toBe(7);
     expect(trilhas()).toEqual([expect.objectContaining({ registroId: 7, usuarioId: null, acao: "A rotina apagou a lista dos que ficaram de fora da importação (90 dias depois do fim)",
       dadosDepois: { linhasApagadas: 4, retencaoDias: 90 } })]);
@@ -307,5 +309,17 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     cenarioGuarda({ previas: [12], rc: -1 });
     await expect(db.aplicarRetencao(POOL_G)).rejects.toThrow(/ocupada/);
     expect(mockConsultas.some((c) => /DELETE/.test(c.sql))).toBe(false);
+  });
+  test("a base sem a migração 185 (as bases antigas dos roteiros e2e): a rotina não faz nada e não falha", async () => {
+    cenarioGuarda({ previas: [12], semTabela: true });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(mockConsultas.some((c) => /sp_getapplock|DELETE/.test(c.sql))).toBe(false);
+    expect(mockTx).toEqual([]);
+  });
+  test("o estado leva os prazos da guarda para a tela (a nota do \"Descartar\" e a do resultado dizem o prazo de verdade, também o ajustado)", async () => {
+    cenarioGuarda({});
+    expect((await db.estado(POOL_G)).guarda).toEqual({ diasPrevia: 7, diasFora: 90 });
+    cenarioGuarda({ politicas: { [db.POLITICA_PREVIA.categoria]: 3, [db.POLITICA_FORA.categoria]: 30 } });
+    expect((await db.estado(POOL_G)).guarda).toEqual({ diasPrevia: 3, diasFora: 30 });
   });
 });

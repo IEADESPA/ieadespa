@@ -1055,7 +1055,17 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
       mentira até o fim, para ele ver o liberado.
 - **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
   O código já faz assim.
-- **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
+- **"Descartar a prévia" e a guarda dos dados da importação, respostas dele (23/11/2026, à noite), que substituem o "não
+  precisa de botão":**
+  - A prévia que não foi confirmada (com CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**. A tela ganha o botão
+    **"Descartar a prévia"**, que apaga na hora (com a pergunta antes), e a nota "Sem confirmar, esta prévia se apaga
+    sozinha em 7 dias." Subir outra planilha continua substituindo a prévia.
+  - A lista dos que ficaram de fora (nome e motivo) **fica 90 dias depois de a importação terminar** e depois se apaga
+    sozinha. As importadas ficam (a ficha é o registro delas) e o resultado continua com os números. No resultado, a
+    tela diz até que dia a lista fica ("baixe antes, se precisar") e, depois, na trilha, que ela foi apagada.
+  - Pela rotina diária, no padrão das retenções que já existem (a `NotificacoesAgendador`), com a trilha de cada
+    apagamento; o prazo segue a política de retenção ("Membros — prévia da importação que não foi confirmada" e
+    "Membros — lista dos que ficaram de fora da importação"), com 7 e 90 dias quando ela não existe.
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
 

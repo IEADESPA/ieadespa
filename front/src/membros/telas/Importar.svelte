@@ -13,8 +13,9 @@
   import PassoArquivo from "../importar/PassoArquivo.svelte";
   import PassoNumeros from "../importar/PassoNumeros.svelte";
   import PassoResultado from "../importar/PassoResultado.svelte";
+  import { avisarFalha } from "../../comum/api";
   import {
-    confirmar, diaEHora, importarLote, lerEstado, quandoLongo, resumoDaTela,
+    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, PERGUNTA_DESCARTAR, quandoLongo, resumoDaTela,
     type ArquivoLido, type EstadoImportacao, type MapaDaTela, type Previa
   } from "../importar/importar";
 
@@ -31,7 +32,10 @@
   let importando = $state(false);
   let andamento = $state("");
   let erroImp = $state("");
+  let descartando = $state(false);
   const agora = quandoLongo(new Date());
+  // os prazos da guarda dos dados (do servidor; sem eles, 7 e 90 dias)
+  const guarda = $derived(guardaDe(est?.guarda));
 
   async function carregar() {
     erro = "";
@@ -86,6 +90,25 @@
     passo = 3;
     await rodarLotes(previa.importacaoId, c.dados.restantes);
   }
+  // o "Descartar" (respostas dele de 23/11/2026): a prévia sai na hora, com os dados pessoais da planilha; a tela volta ao arquivo
+  async function descartarPrevia() {
+    if (!previa || importando || descartando || !window.confirm(PERGUNTA_DESCARTAR)) return;
+    descartando = true;
+    erroImp = "";
+    const r = await descartar(previa.importacaoId);
+    descartando = false;
+    if (!r.ok) {
+      // a prévia mudou (outra aba, ou a rotina já apagou): a tela relê o estado e mostra onde está
+      avisarFalha(r);
+      await carregar();
+      return;
+    }
+    previa = null;
+    arquivo = null;
+    mapa = null;
+    ponte().avisar("Prévia descartada: a planilha saiu do sistema.", "sucesso");
+    await carregar();
+  }
   function continuar() {
     const imp = est?.importacao;
     if (!imp || importando) return;
@@ -114,7 +137,7 @@
     {#if passo === 1}
       <PassoArquivo {celular} campos={est.campos} bind:arquivo bind:previa bind:mapa onconferir={() => (passo = 2)} />
     {:else if previa && (passo === 2 || (passo === 3 && importando && !est.emAndamento))}
-      <PassoNumeros {celular} {previa} {andamento} ocupado={importando} erro={erroImp} onconfirmar={confirmarEImportar} />
+      <PassoNumeros {celular} {previa} {andamento} ocupado={importando} erro={erroImp} onconfirmar={confirmarEImportar} {guarda} {descartando} ondescartar={descartarPrevia} />
     {:else if passo === 3}
       <section class="continuar">
         <h2>A importação começou e não terminou</h2>
@@ -124,7 +147,7 @@
         {#if erroImp}<Aviso tom="erro">{erroImp}</Aviso>{/if}
       </section>
     {:else if passo === 4 && est.importacao && est.retrato}
-      <PassoResultado {celular} importacao={est.importacao} retrato={est.retrato} />
+      <PassoResultado {celular} importacao={est.importacao} retrato={est.retrato} {guarda} />
     {/if}
   {/if}
 </div>

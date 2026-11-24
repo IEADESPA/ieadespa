@@ -470,8 +470,8 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
 // ------------------------------------------------------------------ a guarda dos dados (a rotina diária)
 // Respostas dele de 23/11/2026 (LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7 dias (antes disso, o "Descartar" da
 // tela apaga na hora); a lista dos que ficaram de fora (nome e motivo) fica 90 dias depois de a importação terminar e se apaga sozinha. As importadas não saem
-// (a ficha é o registro dela; o retrato do resultado continua). O prazo é ajustável em Proteção de Dados → Políticas de retenção, como as outras retenções;
-// sem a política, valem os de 7 e 90 dias. Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada naquela hora
+// (a ficha é o registro dela; o retrato do resultado continua). O prazo segue a política de retenção com estes nomes, se o Encarregado a criar em
+// Proteção de Dados → Políticas de retenção; sem ela, valem os de 7 e 90 dias (as duas ainda não vêm semeadas na lista: falta uma migração com a base legal). Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada naquela hora
 // faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.
 const POLITICA_PREVIA = Object.freeze({ categoria: "Membros — prévia da importação que não foi confirmada", padrao: 7 });
 const POLITICA_FORA = Object.freeze({ categoria: "Membros — lista dos que ficaram de fora da importação", padrao: 90 });

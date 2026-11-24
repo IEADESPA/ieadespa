@@ -1057,15 +1057,19 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   O código já faz assim.
 - **"Descartar a prévia" e a guarda dos dados da importação, respostas dele (23/11/2026, à noite), que substituem o "não
   precisa de botão":**
-  - A prévia que não foi confirmada (com CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**. A tela ganha o botão
-    **"Descartar a prévia"**, que apaga na hora (com a pergunta antes), e a nota "Sem confirmar, esta prévia se apaga
-    sozinha em 7 dias." Subir outra planilha continua substituindo a prévia.
+  - A prévia que não foi confirmada (com CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**. A tela ganha um botão
+    **"Descartar"** para apagar na hora.
   - A lista dos que ficaram de fora (nome e motivo) **fica 90 dias depois de a importação terminar** e depois se apaga
-    sozinha. As importadas ficam (a ficha é o registro delas) e o resultado continua com os números. No resultado, a
-    tela diz até que dia a lista fica ("baixe antes, se precisar") e, depois, na trilha, que ela foi apagada.
-  - Pela rotina diária, no padrão das retenções que já existem (a `NotificacoesAgendador`), com a trilha de cada
-    apagamento; o prazo segue a política de retenção ("Membros — prévia da importação que não foi confirmada" e
-    "Membros — lista dos que ficaram de fora da importação"), com 7 e 90 dias quando ela não existe.
+    sozinha.
+- **O que a construção acrescentou à guarda (24/11/2026, ainda não visto por ele; ele vê na homologação):**
+  - O botão se chama "Descartar a prévia" e pergunta antes de apagar; ao lado, a nota "Sem confirmar, esta prévia se
+    apaga sozinha em 7 dias." Depois de descartar, a tela volta ao arquivo.
+  - No resultado, com gente de fora, a nota de até que dia a lista fica ("baixe antes, se precisar"); depois que ela sai,
+    uma linha na trilha. As importadas não saem da importação e os números do resultado ficam.
+  - Roda pela rotina diária, como as retenções que já existem (a `NotificacoesAgendador`), com a trilha de cada
+    apagamento. Os prazos de 7 e 90 dias valem enquanto não houver, em Proteção de Dados → Políticas de retenção, uma
+    política com o nome "Membros — prévia da importação que não foi confirmada" ou "Membros — lista dos que ficaram de
+    fora da importação". Hoje elas não aparecem na lista da tela: mostrá-las pede uma migração com a base legal (falta).
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
 

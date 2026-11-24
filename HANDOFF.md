@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 21:30 (Claude, sessão principal).
+Atualizado em 23/11/2026 22:45 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -51,18 +51,25 @@ pendências dele, uma de cada vez. Nada ficou pela metade: os worktrees estão l
 em `f722716`), a trava do LocalDB está livre e o desenhista ainda não tinha criado o worktree da r30. Ao retomar, cada
 frente continua do item abaixo:
 
-**As pendências dele, na ordem:** (1) a chave do revisor de fora; (2) ver a trava na homologação e dizer "vi"; (3)
-conferir a rodada 29.
+**As pendências dele:** (1) a chave do revisor de fora: **FEITA**; (2) ver a trava: **FEITA** (ele viu a foto do
+travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **falta**.
+
+**Decisões dele (23/11, 22h40):**
+
+- **A importação de mentira na homologação fica para o ÚLTIMO PASSO**, antes da produção de Membros. O sistema de
+  proteção do Claude barrou mandá-la sem o sim explícito dele. Quando chegar a hora, pedir o "pode" de novo.
+- **O revisor de fora roda só quando mandarem** (nada de horário automático). Além do ieadespa, revisa também o
+  **asaf** e o **comep**.
 
 O que cada frente fazia (para retomar):
 
-1. **revisor de fora: PRONTO** na bancada (`C:\MCP\bancada\revisor-sdk\`, commits até `904edfa`, 90/90 testes),
-   genérico para todos os repositórios. **Esperando a chave dele:** no Console, conferir sem cartão e sem recarga
-   automática; criar uma chave de API comum (`sk-ant-api…`); dois cliques em `GUARDAR-CHAVE.cmd`, colar e Enter (fica
-   cifrada em `C:\MCP\segredos\revisor-api.age`). Depois, o Claude roda `node C:/MCP/bancada/revisor-sdk/revisar.mjs
-   --prova` (só vale "PROVA PASSOU"), e a 1ª rodada real é com `--proximo`, lendo o `gastos.csv`. Fable 5.2 em tudo,
-   sem cartão, teto de US$ 16 por pedaço, as regras do projeto no pedido (o `settingSources: []` não lê CLAUDE.md).
-   Os relatórios vão para o repositório privado da bancada (decisão dele). Diário:
+1. **revisor de fora: FUNCIONANDO** (bancada até `d025795`, 90/90 testes). A chave fica num **workspace próprio**
+   (`revisor-de-fora`), porque a chave pessoal sem workspace dá 400. Os plugins embutidos do Claude Code ficam
+   desligados. A prova passou em 23/11 às 22h26 (US$ 0,08), e o gasto saiu dos créditos promocionais, conferido por
+   ele. A **1ª rodada real** (o próximo pedaço do lote 1 do ieadespa) começou às 22h35; o registro está em
+   `C:/tmp/ieadespa-bancada/revisor-rodada1.log`. Um agente monta as **listas de pedaços** do ieadespa inteiro, do comep
+   e do asaf. Em outro computador, o programa chega pela bancada, mas a chave não (cada um guarda a sua); a recomendação
+   é só este computador rodar, e os outros lerem os relatórios na bancada. Diário:
    `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 2. **construtor do Membros:** o arrolamento está **na homologação** (servidor `20681e8`, tela `2ce12bc` e `90d3122`;
    homolog `a8d03c3`, base do teste de telas `11c51ff`). Já corrigiu da revisão a aspa sem fechar (`923dd5f`), a saída

@@ -53,7 +53,7 @@ describe("o lote", () => {
   test("a linha comum entra com a matrícula do arquivo, em ARROLAMENTO, com a pendência ARROLAMENTO (e mais nada)", async () => {
     cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
     const r = await db.importarLote(POOL, QUEM, 7);
-    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 1, restantes: 5, concluida: false });
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 1, fora: 0, restantes: 5, concluida: false });
     expect(mockConsultas.find((c) => /DECLARE @ocupada/.test(c.sql)).sql).toMatch(/N'ARROLAMENTO'/);
     expect(pendencias()).toEqual([expect.objectContaining({ tipo: "ARROLAMENTO", membro: 500, outro: null })]);
     expect(marcacao()).toEqual([expect.objectContaining({ m: 500, nn: false, mn: null, rm: null })]);
@@ -110,11 +110,92 @@ describe("o lote", () => {
     cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }), situacao: "PREVIA" });
     expect((await db.importarLote(POOL, QUEM, 7)).status).toBe(409);
     cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }), situacao: "CONCLUIDA" });
-    expect(await db.importarLote(POOL, QUEM, 7)).toEqual({ sucesso: true, importacaoId: 7, importadas: 0, restantes: 0, concluida: true });
+    expect(await db.importarLote(POOL, QUEM, 7)).toEqual({ sucesso: true, importacaoId: 7, importadas: 0, fora: 0, restantes: 0, concluida: true });
     cenario({ linhas: [], gravar: () => ({}), situacao: null });
     expect((await db.importarLote(POOL, QUEM, 7)).status).toBe(404);
     expect((await db.importarLote(POOL, QUEM, "abc")).status).toBe(400);
     expect(mockConsultas.some((c) => /DECLARE @ocupada/.test(c.sql))).toBe(false);
+  });
+});
+
+// revisão de 23/11 (a saída do IMPORTANDO): cada lote é uma transação própria e a tela continua de onde parou; mas a linha que o banco recusa SEMPRE (um erro de
+// dado: CHECK, chave, tamanho, conversão) desfazia o lote inteiro a cada chamada, e a importação ficava presa (com as matrículas novas travadas no sistema todo).
+// Regra: a linha recusada fica de fora COMO PROBLEMA (na lista e no CSV, ninguém some calado), provada sozinha (o lote refeito sem ela, com UMA linha depois dela
+// entrando); o que não é erro de dado da própria linha sobe como antes; 5 recusadas seguidas é o banco, não a linha: para sem deixar ninguém de fora; e a
+// importação nunca conclui com zero pessoas.
+describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
+  const recusa = (numero = 547) => Object.assign(new Error("The INSERT statement conflicted with the CHECK constraint \"CK_Teste\". Valor: Pessoa Secreta"), { number: numero, code: "EREQUEST" });
+  const tres = () => [linha({ Nome: "Pessoa 2" }), linha({ Linha: 3, MatriculaArquivo: "501", Matricula: 501, Nome: "Recusada" }), linha({ Linha: 4, MatriculaArquivo: "502", Matricula: 502, Nome: "Pessoa 4" })];
+  // o lote respeita o TOP (@n) e as linhas já marcadas de fora no começo da transação
+  function cenarioRecusa({ linhas, recusar, restantes = 5, importadasNoTotal = 3 }) {
+    let marcadas = [];
+    cenario({ linhas: [], gravar: (i) => { if (recusar(i)) throw recusa(); return { ocupada: false, donoCpf: null }; } });
+    mockRegras.unshift([/ERRO_AO_GRAVAR/, (i) => { marcadas = JSON.parse(i.p); return []; }]);
+    mockRegras = mockRegras.map(([p, v]) => (String(p) === String(/FROM ImportacoesMembrosLinhas WITH \(UPDLOCK\)/)
+      ? [p, (i) => linhas.filter((l) => !marcadas.includes(l.Linha)).slice(0, i.n)]
+      : String(p).includes("COUNT") ? [p, [{ n: restantes }]] : [p, v]));
+    mockRegras.push([/AS importadasNoTotal/, [{ importadasNoTotal }]]);
+    mockRegras.push([/SUM\(CASE WHEN Estado = N'IMPORTADA'/, [{ importadas: importadasNoTotal, fora: 1, numeroNovo: 0, possivelRepetida: 0, semCongregacao: 0 }]]);
+  }
+  const tentadas = () => mockConsultas.filter((c) => /DECLARE @ocupada/.test(c.sql)).map((c) => c.inputs.nome);
+  const marcas = () => mockConsultas.filter((c) => /ERRO_AO_GRAVAR/.test(c.sql));
+
+  test("a recusada no meio fica de fora como problema; o lote é refeito sem ela, na mesma ordem, até UMA linha depois dela (a prova), e entra", async () => {
+    cenarioRecusa({ linhas: tres(), recusar: (i) => i.nome === "Recusada" });
+    const r = await db.importarLote(POOL, QUEM, 7);
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 2, fora: 1, restantes: 5, concluida: false });
+    expect(tentadas()).toEqual(["Pessoa 2", "Recusada", "Pessoa 2", "Pessoa 4"]);
+    expect(mockTx).toEqual(["begin", "rollback", "begin", "commit"]);
+    const m = marcas();
+    expect(m).toHaveLength(1);
+    expect(JSON.parse(m[0].inputs.p)).toEqual([3]);
+    expect(m[0].sql).toMatch(/Acao = N'PROBLEMA', Estado = N'FORA'/);
+    expect(m[0].sql).toMatch(/Estado = N'PENDENTE'/);
+    // a trilha diz a linha e o número do erro; nunca a mensagem do banco (pode trazer o valor da linha)
+    const { registrarAuditoriaNaTransacao } = require("../auditoria");
+    const trilha = registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /não conseguiu gravar/.test(a.acao));
+    expect(trilha).toMatchObject({ tabela: "ImportacoesMembros", registroId: 7, dadosDepois: { linhas: [{ linha: 3, erro: 547 }] } });
+    expect(JSON.stringify(trilha)).not.toMatch(/Secreta|CK_Teste/);
+    expect(require("../importacaoMembros").textoDe("ERRO_AO_GRAVAR")).toMatch(/não conseguiu gravar esta linha/);
+  });
+  test("o que não é erro de dado da própria linha sobe como antes, sem ninguém de fora: a trava do banco (1205), o tempo esgotado, o defeito do código e a trilha", async () => {
+    for (const erro of [recusa(1205), Object.assign(new Error("Timeout"), { code: "ETIMEOUT" }), new TypeError("x is undefined")]) {
+      mockConsultas = []; mockTx = [];
+      cenario({ linhas: tres(), gravar: (i) => { if (i.nome === "Recusada") throw erro; return { ocupada: false, donoCpf: null }; } });
+      await expect(db.importarLote(POOL, QUEM, 7)).rejects.toBe(erro);
+      expect(marcas()).toHaveLength(0);
+      expect(mockTx).not.toContain("commit");
+    }
+    // o erro de dado FORA das linhas (a trilha do lote) não é da linha: sobe
+    mockConsultas = []; mockTx = [];
+    cenario({ linhas: tres(), gravar: () => ({ ocupada: false, donoCpf: null }) });
+    registrarAuditoriaEmLoteNaTransacao.mockImplementationOnce(async () => { throw recusa(8152); });
+    await expect(db.importarLote(POOL, QUEM, 7)).rejects.toMatchObject({ number: 8152 });
+    expect(marcas()).toHaveLength(0);
+    expect(mockTx).toEqual(["begin", "rollback"]);
+  });
+  test("5 recusadas seguidas é o banco, não a linha: 409 com a primeira, nada gravado e ninguém de fora", async () => {
+    const seis = [2, 3, 4, 5, 6, 7].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: `Pessoa ${n}` }));
+    cenarioRecusa({ linhas: seis, recusar: () => true });
+    const r = await db.importarLote(POOL, QUEM, 7);
+    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(2) });
+    expect(r.mensagem).toBe("O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 2 do arquivo): a importação parou sem deixar ninguém de fora. Avise o suporte.");
+    expect(tentadas()).toEqual(["Pessoa 2", "Pessoa 3", "Pessoa 4", "Pessoa 5", "Pessoa 6"]);
+    expect(mockTx.filter((x) => x === "commit")).toHaveLength(0);
+  });
+  test("a última recusada e ninguém importado na importação toda: não conclui com zero (409, fica em andamento, nada perdido)", async () => {
+    cenarioRecusa({ linhas: [linha({ Nome: "Recusada" })], recusar: () => true, restantes: 0, importadasNoTotal: 0 });
+    const r = await db.importarLote(POOL, QUEM, 7);
+    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.NINGUEM_ENTROU });
+    expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(false);
+    expect(mockTx).toEqual(["begin", "rollback", "begin", "rollback"]);
+  });
+  test("a última recusada com outras já importadas: fica de fora e a importação conclui", async () => {
+    cenarioRecusa({ linhas: [linha({ Nome: "Recusada" })], recusar: () => true, restantes: 0, importadasNoTotal: 3 });
+    const r = await db.importarLote(POOL, QUEM, 7);
+    expect(r).toMatchObject({ sucesso: true, importadas: 0, fora: 1, restantes: 0, concluida: true, resultado: expect.objectContaining({ importadas: 3, fora: 1 }) });
+    expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(true);
+    expect(mockTx).toEqual(["begin", "rollback", "begin", "commit"]);
   });
 });
 

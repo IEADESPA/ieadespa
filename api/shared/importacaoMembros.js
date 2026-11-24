@@ -238,7 +238,9 @@ const PROBLEMAS = Object.freeze({
   CONGREGACAO_INATIVA: "A congregação está desativada no sistema",
   CONGREGACAO_AMBIGUA: "Duas congregações do sistema têm esse nome",
   COLUNAS_A_MAIS: "A linha tem mais colunas que o cabeçalho (um ';' no meio de um nome?)",
-  MATRICULA_JA_EXISTE: "A matrícula já é de uma ficha do sistema: fica de fora (essa ficha se completa à mão)"
+  MATRICULA_JA_EXISTE: "A matrícula já é de uma ficha do sistema: fica de fora (essa ficha se completa à mão)",
+  // na hora de gravar (não na prévia): o banco recusou a linha sempre, e o resto da importação seguiu sem ela (shared/importacaoMembrosDb.js, revisão de 23/11)
+  ERRO_AO_GRAVAR: "O sistema não conseguiu gravar esta linha na importação: ficou de fora (confira os dados e cadastre à mão)"
 });
 const AVISOS = Object.freeze({
   SEM_CONGREGACAO: "Entra sem congregação (no arquivo: GERAL ou vazio)",

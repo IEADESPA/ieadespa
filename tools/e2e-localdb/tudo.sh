@@ -169,4 +169,6 @@ BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js
 # 7 dias (e o "Descartar" na hora); no fim, as linhas ficam so com o necessario (a de fora, nome e motivo); a lista dos de fora, 90 dias depois do fim
 bash rodar.sh preparar-186
 BASE=cenario-186 bash rodar.sh roteiro e2e-100-importacao-guarda.js
+# a revisao de 24/11/2026: quem esta em arrolamento nao vota nas enquetes nem no tema (A1); o batismo de quem esta em arrolamento fecha a pendencia (A2)
+BASE=cenario-186 bash rodar.sh roteiro e2e-101-voto-e-batismo-do-arrolamento.js
 echo TUDO-PRONTO

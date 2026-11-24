@@ -211,8 +211,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   roda sobre a `cenario-185`: a ficha nova recusada pela trava (409) e, depois da importação semeada, a regra do cargo (403).
 - **FASE 10, completar o arrolamento** (rodada 28, sem migração), base `cenario-185`: `e2e-98` (o 4º grupo do painel e o andamento de cada nível; a
   congregação, a área e a Geral completam, cada uma só no seu escopo, e fora dele a mesma resposta de "não encontrada"; ninguém completa a própria ficha; a
-  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; o cargo que a pessoa já tinha entra no histórico
-  como LEGADO; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
+  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; a função eclesiástica não se grava em nenhum
+  nível (regra dele de 24/11: só a Câmara de liderança e a academia), e a que a ficha já tem aparece para ler; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
   importador antigos não põem nem tiram ninguém do arrolamento).
 - **FASE 10, a saída do IMPORTANDO** (revisão de 23/11/2026, sem migração), base `cenario-185`: `e2e-99` (o banco recusa de verdade, com regras CHECK
   de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
@@ -226,6 +226,9 @@ Cada versão parte da base da anterior (`BASE=...`):
   motivo, conferido coluna por coluna; a importação que terminou antes desta versão é limpa pela rotina; a lista dos de fora fica com 89 dias e sai com 91,
   só as linhas de fora: as importadas, o retrato e o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; a NotificacoesAgendador
   de verdade roda a guarda; a trilha sem dado das linhas e a cadeia de hashes).
+- **FASE 10, a revisão de 24/11/2026 (Membros)**, base `cenario-186`: `e2e-101` (A1: o "apto e em comunhão" e o universo geral, que são os das enquetes e
+  do tema, dão a mesma resposta: em arrolamento e sem comunhão não votam, em comunhão e congregado votam; A2: o batismo de quem está em arrolamento muda
+  a situação e fecha a pendência juntos, como COMPLETADA e por quem realizou, com a trilha; a congregada batizada fica como antes; de novo, nada muda).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

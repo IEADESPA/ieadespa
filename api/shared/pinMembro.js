@@ -7,6 +7,8 @@
 //   2. PIN fácil de adivinhar não é aceito (repetido, sequência, ano, data de nascimento da própria pessoa, final da matrícula);
 //   3. o PIN nunca é guardado: só o scrypt dele com sal e com o segredo do sistema (um vazamento só do banco não deixa quebrar os 10 mil);
 //   4. a sessão do PIN é de membro: sem permissão nenhuma. Quem tem acesso administrativo continua entrando com a senha da liderança.
+// E, na rota de entrada (MembroEntrar), um freio por CONEXÃO além do por pessoa: as tentativas sem acerto que saem da mesma conexão, em qualquer matrícula,
+// somam; passou de LIMITE_FALHAS_ORIGEM_PIN, a conexão espera (15 min, 1 h, 4 h, 24 h) — a conta de ninguém é travada por isso (shared/limiteTaxa.js).
 // Esquecer o PIN não tranca ninguém: o código de 6 dígitos por e-mail (ou o PIN provisório da Secretaria) cria outro.
 const crypto = require("crypto");
 const { sql } = require("./db");
@@ -15,6 +17,9 @@ const PEPPER = require("./segredoSessao").resolverSegredo();
 const PIN_REGEX = /^\d{4}$/;
 const LIMITE_FALHAS_PIN = 5;
 const LIMITE_FALHAS_SENHA = 10;                 // a senha da liderança é digitada com mais cuidado e é mais valiosa; erra-se menos por engano
+// Falhas da mesma conexão (somando todas as matrículas) antes de ela esperar. Bem acima do engano comum: uma pessoa sozinha chega no máximo a 20 antes do
+// bloqueio de 24 h dela; quem acerta devolve a tentativa, então o Wi-Fi da igreja com muita gente entrando não esgota a conta.
+const LIMITE_FALHAS_ORIGEM_PIN = 30;
 const VALIDADE_PROVISORIO_DIAS = 7;
 const MENSAGEM_GENERICA = "Matrícula ou PIN incorreto, ou acesso bloqueado por muitas tentativas. Se esqueceu o PIN, peça um código por e-mail.";
 
@@ -154,7 +159,7 @@ async function limparTentativas(pool, membroId, canal) {
 }
 
 module.exports = {
-  PIN_REGEX, LIMITE_FALHAS_PIN, LIMITE_FALHAS_SENHA, VALIDADE_PROVISORIO_DIAS, MENSAGEM_GENERICA,
+  PIN_REGEX, LIMITE_FALHAS_PIN, LIMITE_FALHAS_SENHA, LIMITE_FALHAS_ORIGEM_PIN, VALIDADE_PROVISORIO_DIAS, MENSAGEM_GENERICA,
   formatoPinValido, pinFraco, mensagemPinFraco, gerarPinProvisorio, derivadosDeNascimento,
   hashPin, verificarPin, conferenciaFalsa,
   lerPin, gravarPin, reservarTentativa, limparTentativas

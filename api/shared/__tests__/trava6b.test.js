@@ -126,8 +126,8 @@ describe("vacância e a EBD", () => {
       const tudo = chamadas.map(c => c.sql).join("\n");
       expect(tudo).toMatch(/EbdTurmaProfessores/);
       expect(tudo).not.toMatch(/EbdAlunos/);
-      // v7.6 — o mandato acaba "ontem" (o login confere AtivoAte < hoje) e as sessões abertas da pessoa caem na hora
-      expect(tudo).toMatch(/UPDATE Lideranca SET AtivoAte = DATEADD\(day, -1, CAST\(SYSUTCDATETIME\(\) AS DATE\)\)/);
+      // v7.6 — o mandato acaba "ontem" (o login confere AtivoAte < hoje) e as sessões abertas da pessoa caem na hora; "hoje" é o de Brasília (dataDoAcesso.test.js)
+      expect(tudo).toMatch(/UPDATE Lideranca SET AtivoAte = DATEADD\(day, -1, @h\)/);
       expect(chamadas[chamadas.length - 1].sql).toMatch(/UPDATE SessoesAtivas SET Encerrada = 1/);
       expect(chamadas[chamadas.length - 1].inputs.membroId).toBe(42);
     }

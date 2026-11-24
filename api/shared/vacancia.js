@@ -52,11 +52,13 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
             WHERE MembroId = @id AND DataFim IS NULL`);
 
   // v7.6 — "ontem", não hoje: o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares e da dissolução de diretoria em shared/psc.js). Com "hoje",
-  // quem perdeu a membresia entrava de novo com a senha até a meia-noite — e as sessões derrubadas logo abaixo voltavam no login seguinte.
+  // quem perdeu a membresia entrava de novo com a senha até a meia-noite — e as sessões derrubadas logo abaixo voltavam no login seguinte. "Hoje" é o de
+  // Brasília, a régua do login (shared/dataBrasilia.js).
   await pool.request()
     .input("id", sql.Int, membroId)
-    .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE))
-            WHERE MembroId = @id AND (AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))`);
+    .input("h", sql.Date, require("./dataBrasilia").hojeBrasilia())
+    .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h)
+            WHERE MembroId = @id AND (AtivoAte IS NULL OR AtivoAte >= @h)`);
 
   await pool.request()
     .input("id", sql.Int, membroId)

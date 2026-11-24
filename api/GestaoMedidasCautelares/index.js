@@ -12,6 +12,7 @@ const { registrarAuditoria } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const { exigirGeral } = require("../shared/escopoRotas");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 
 const DIAS_RELATORIO = 30; // Art. 45 §2º
 
@@ -91,7 +92,7 @@ module.exports = async function (context, req) {
     // medida. Precisa sobrar pelo menos 1 outra pessoa com essa permissão,
     // ativa (AtivoAte nulo ou no futuro), antes de suspender esta.
     if (suspenderAcessoSistema) {
-      const hoje = new Date().toISOString().slice(0, 10);
+      const hoje = hojeBrasilia();                    // o dia de Brasília, o mesmo do login
       const outrosComPermissao = await pool.request()
         .input("membroId", sql.Int, membroId)
         .input("hoje", sql.Date, hoje)
@@ -126,9 +127,10 @@ module.exports = async function (context, req) {
     if (suspenderAcessoSistema) {
       // Ontem, não hoje: o login checa "AtivoAte < hoje" (mesmo padrão de
       // vencimento de Assentos) — pra suspender JÁ no dia de hoje, precisa
-      // que a data fique estritamente no passado.
-      await pool.request().input("membroId", sql.Int, membroId)
-        .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE)) WHERE MembroId = @membroId`);
+      // que a data fique estritamente no passado. "Hoje" é o de Brasília, a
+      // mesma régua do login (sessaoLideranca.suspensa; shared/dataBrasilia.js).
+      await pool.request().input("membroId", sql.Int, membroId).input("h", sql.Date, hojeBrasilia())
+        .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h) WHERE MembroId = @membroId`);
       // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
       // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (antes a suspensa seguia na lista de quem recebe avisos por delegação, como o pedido da imprensa

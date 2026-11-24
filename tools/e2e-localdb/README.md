@@ -214,6 +214,10 @@ Cada versão parte da base da anterior (`BASE=...`):
   ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; o cargo que a pessoa já tinha entra no histórico
   como LEGADO; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
   importador antigos não põem nem tiram ninguém do arrolamento).
+- **FASE 10, a saída do IMPORTANDO** (revisão de 23/11/2026, sem migração), base `cenario-185`: `e2e-99` (o banco recusa de verdade, com regras CHECK
+  de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
+  5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; corrigido, continua de onde parou; a lista,
+  o CSV e o resultado mostram as de fora; a trilha com o número do erro e sem a mensagem do banco; a cadeia de hashes).
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos

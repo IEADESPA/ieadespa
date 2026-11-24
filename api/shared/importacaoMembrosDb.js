@@ -19,6 +19,7 @@ const { hojeBrasilia } = require("./dataBrasilia");
 
 const TRAVA = "importacao-membros";
 const TAMANHO_LOTE = 200;
+const SEGUIDAS_MAX = 5;   // 5 recusadas seguidas (sem nenhuma entrar entre elas) é o banco, não a linha: a importação para, sem ninguém de fora
 const BLOCO_GRAVACAO = 400;   // linhas por INSERT da prévia (OPENJSON)
 const POR_PAGINA = 100;
 const MSG = Object.freeze({
@@ -27,8 +28,16 @@ const MSG = Object.freeze({
   PREVIA_MUDOU: "Esta prévia não é mais a atual (outra foi feita depois, ou foi descartada). Confira a prévia de novo antes de confirmar.",
   NAO_EXISTE: "Importação não encontrada.",
   NINGUEM_ENTRA: "Nenhuma pessoa desta planilha entra no sistema: confira o arquivo antes de confirmar.",
-  OCUPADO: "Outra pessoa está mexendo na importação agora. Tente de novo daqui a pouco."
+  OCUPADO: "Outra pessoa está mexendo na importação agora. Tente de novo daqui a pouco.",
+  RECUSADAS: (linha) => `O sistema não conseguiu gravar ${SEGUIDAS_MAX} linhas seguidas (a partir da linha ${linha} do arquivo): a importação parou sem deixar ninguém de fora. Avise o suporte.`,
+  NINGUEM_ENTROU: "O sistema não conseguiu gravar nenhuma pessoa desta importação: ela parou sem deixar ninguém de fora. Avise o suporte."
 });
+// A LINHA QUE O BANCO RECUSA (revisão de 23/11/2026, a saída do IMPORTANDO). Só um erro de DADO levantado pelos comandos da PRÓPRIA linha (a ficha, as
+// pendências, a marcação) deixa a linha de fora: a regra (CHECK, chave estrangeira), a chave repetida, o texto longo demais, a conversão, o nulo, o estouro, o
+// gatilho que recusa (50000+, ou que desfaz a transação: 3609). O resto — a trava do banco, o tempo esgotado, a rede, o defeito do código, a trilha, a conclusão,
+// o "8 tentativas" — sobe como sempre (a tela mostra "continue de onde parou" e nada se perde).
+const ERROS_DA_LINHA = new Set([547, 2601, 2627, 2628, 8152, 241, 242, 245, 8114, 8115, 220, 515, 3609]);
+const recusaDaLinha = (e) => !!e && e.linhaImportacao != null && Number.isInteger(e.number) && (ERROS_DA_LINHA.has(e.number) || e.number >= 50000);
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
 const idValido = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null; };
 
@@ -308,87 +317,127 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
 // Importa até `tamanho` linhas pendentes, numa transação. Primeiro as que têm a matrícula do arquivo (na ordem do arquivo), depois as de número novo (que
 // recebem a próxima do sistema DEPOIS de todas as do arquivo estarem no lugar). Cada linha é conferida de novo contra o banco de agora: a matrícula que
 // alguém usou depois da prévia vira número novo (NUMERO) e vai para o fim da fila; o CPF que alguém gravou depois entra sem o CPF, como possível repetida.
+// Cada lote é uma transação própria: o que entrou fica, e a chamada seguinte continua da primeira linha pendente. A linha que o banco RECUSA SEMPRE (um erro de
+// dado dela: veja recusaDaLinha) desfazia o lote inteiro a cada chamada e a importação ficava presa, com as matrículas novas travadas no sistema todo. Agora o
+// lote é refeito na mesma chamada, com a recusada marcada de fora (como PROBLEMA: na lista e no CSV, ninguém some calado) e só até UMA linha depois dela: se
+// essa entra, é a linha, e não o banco, e tudo é gravado junto. A ordem das outras não muda (NumeroNovo, Linha). 5 recusadas seguidas: para, sem marcar ninguém.
 async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
-  const n = Math.max(1, Math.min(TAMANHO_LOTE, Math.floor(Number(tamanho) || TAMANHO_LOTE)));
+  let n = Math.max(1, Math.min(TAMANHO_LOTE, Math.floor(Number(tamanho) || TAMANHO_LOTE)));
   const por = Number(usuario.membroId);
-  return emTransacao(pool, async (t, rq) => {
-    const imp = (await rq().input("id", sql.Int, id).query("SELECT ImportacaoId, Situacao, Resumo FROM ImportacoesMembros WITH (UPDLOCK) WHERE ImportacaoId = @id")).recordset[0];
-    if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
-    if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, restantes: 0, concluida: true };
-    if (imp.Situacao !== "IMPORTANDO") return { sucesso: false, status: 409, mensagem: "Esta importação não foi confirmada." };
-    const linhas = (await rq().input("id", sql.Int, id).input("n", sql.Int, n).query(`
-      SELECT TOP (@n) Linha, MatriculaArquivo, Matricula, NumeroNovo, MotivoNumero, RepetidaMembro, Nome, CongregacaoId, Sexo, CONVERT(varchar(10), DataNascimento, 120) AS DataNascimento,
-        EstadoCivil, Email, Telefone, NomeMae, NomePai, Cpf, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao, FormaAdmissao,
-        CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo, Escolaridade
-      FROM ImportacoesMembrosLinhas WITH (UPDLOCK) WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' ORDER BY NumeroNovo, Linha`)).recordset;
-    const trilha = [];
-    for (const l of linhas) {
-      const numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
-      const motivo = l.MotivoNumero || null;
-      let numero = numeroNovo ? null : Number(l.Matricula);
-      let cpf = l.Cpf ? String(l.Cpf).trim() : null;
-      let repetidaMembro = l.RepetidaMembro == null ? null : Number(l.RepetidaMembro);
-      // A matrícula e o CPF são conferidos e a ficha gravada no MESMO comando, com a faixa da chave travada (UPDLOCK, HOLDLOCK) da conferência até a gravação:
-      // outro cadastro no mesmo instante espera, e a gravação não falha no meio da transação (o lote inteiro não se perde por uma linha).
-      let feito = false, adiada = false;
-      for (let tentativa = 0; tentativa < 8 && !feito; tentativa++) {
-        if (numero == null) numero = await matriculaNova.proximaMatricula(rq);
-        const r = (await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
-          .input("nasc", sql.Date, l.DataNascimento || null).input("sexo", sql.NChar(1), l.Sexo ? String(l.Sexo).trim() : null).input("ec", sql.NVarChar(20), l.EstadoCivil)
-          .input("email", sql.NVarChar(150), l.Email).input("tel", sql.NVarChar(20), l.Telefone).input("cpf", sql.Char(11), cpf)
-          .input("mae", sql.NVarChar(150), l.NomeMae).input("pai", sql.NVarChar(150), l.NomePai).input("esc", sql.NVarChar(30), l.Escolaridade)
-          .input("adm", sql.Date, l.DataAdmissao || null).input("fa", sql.NVarChar(30), l.FormaAdmissao).input("bat", sql.Date, l.DataBatismo || null)
-          .query(`DECLARE @ocupada BIT = CASE WHEN EXISTS (SELECT 1 FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @id) THEN 1 ELSE 0 END;
-                  DECLARE @donoCpf INT = NULL;
-                  IF @cpf IS NOT NULL SELECT TOP 1 @donoCpf = MembroId FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE Cpf = @cpf;
-                  IF @ocupada = 0 AND @donoCpf IS NULL
-                  BEGIN
-                    INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, Sexo, EstadoCivil, Email, Telefone, Cpf, NomeMae, NomePai,
-                      Escolaridade, DataAdmissao, FormaAdmissao, DataBatismo)
-                    VALUES (@id, @nome, @c, N'ATIVO', N'ARROLAMENTO', @nasc, @sexo, @ec, @email, @tel, @cpf, @mae, @pai, @esc, @adm, @fa, @bat);
-                    DELETE FROM MatriculasLivres WHERE MembroId = @id;
-                  END
-                  SELECT @ocupada AS ocupada, @donoCpf AS donoCpf`)).recordset[0];
-        if (r.donoCpf != null) {
-          // alguém gravou o mesmo CPF depois da prévia: entra sem ele, como possível repetida da ficha que tem o CPF
-          if (repetidaMembro == null) repetidaMembro = Number(r.donoCpf);
-          cpf = null;
-        }
-        if ((r.ocupada === true || r.ocupada === 1) && !numeroNovo) {
-          // a matrícula do arquivo foi usada depois da prévia: a linha vira de número novo e vai para o FIM DA FILA (a ordem é NumeroNovo, Linha). Tomar a
-          // próxima do sistema agora (a maior + 1) poderia ocupar a matrícula de uma linha do arquivo que ainda vai entrar e empurrar essa também (23/11,
-          // achado do e2e-96); depois que todas as matrículas do arquivo estão no lugar, a maior + 1 é livre.
-          await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("cpf", sql.Char(11), cpf).input("rm", sql.Int, repetidaMembro).query(`
-            UPDATE ImportacoesMembrosLinhas SET NumeroNovo = 1, MotivoNumero = N'DE_OUTRA_FICHA', Cpf = @cpf, RepetidaMembro = @rm
-            WHERE ImportacaoId = @id AND Linha = @l AND Estado = N'PENDENTE'`);
-          adiada = true;
-          break;
-        }
-        // no número novo, outro cadastro pegou o mesmo número no mesmo instante: a próxima do sistema
-        if (r.ocupada === true || r.ocupada === 1) numero = null;
-        feito = !(r.donoCpf != null) && !(r.ocupada === true || r.ocupada === 1);
-      }
-      if (adiada) continue;
-      if (!feito) throw new Error(`importação: não foi possível gravar a linha ${l.Linha}`);
-      await abrirPendencia(rq, { membroId: numero, tipo: "ARROLAMENTO", detalhe: DETALHE_ARROLAMENTO, por });
-      if (numeroNovo) await abrirPendencia(rq, { membroId: numero, tipo: "NUMERO", detalhe: (DETALHE_NUMERO[motivo] || DETALHE_NUMERO.VAZIA)(l.MatriculaArquivo), por });
-      if (repetidaMembro != null && repetidaMembro !== numero) await abrirPendencia(rq, { membroId: numero, tipo: "REPETIDA", outro: repetidaMembro, detalhe: DETALHE_REPETIDA, por });
-      await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("m", sql.Int, numero).input("nn", sql.Bit, numeroNovo).input("mn", sql.NVarChar(30), numeroNovo ? motivo : null)
-        .input("rm", sql.Int, repetidaMembro).query(`UPDATE ImportacoesMembrosLinhas SET Estado = N'IMPORTADA', MatriculaFinal = @m, NumeroNovo = @nn, MotivoNumero = @mn,
-          RepetidaMembro = @rm WHERE ImportacaoId = @id AND Linha = @l`);
-      trilha.push({ registroId: numero, acao: "Importou pessoa do sistema pago", usuarioId: por,
-        dadosDepois: { importacaoId: id, linha: Number(l.Linha), congregacaoId: l.CongregacaoId == null ? null : Number(l.CongregacaoId), cpf: ficha.mascararCpf(cpf),
-          numeroNovo, possivelRepetida: repetidaMembro != null } });
+  const fora = [];   // as recusadas desta chamada, ainda sem uma linha depois delas que tenha entrado: { linha, erro } (o número do erro, nunca a mensagem)
+  for (;;) {
+    try {
+      return await emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n, por, fora }));
+    } catch (e) {
+      if (!recusaDaLinha(e)) throw e;
+      fora.push({ linha: e.linhaImportacao, erro: e.number });
+      if (fora.length >= SEGUIDAS_MAX) return { sucesso: false, status: 409, mensagem: MSG.RECUSADAS(fora[0].linha) };
+      n = e.antesNoLote + 1;   // as que entraram antes dela neste lote e mais UMA depois (a prova)
     }
-    await registrarAuditoriaEmLoteNaTransacao(t, "MembroReferencia", trilha);
-    const restantes = await contarRestantes(rq, id);
-    // importadas: as que entraram neste lote (a adiada para o fim da fila fica nas restantes)
-    if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes, concluida: false };
-    const final = await concluirNaTransacao(t, rq, id, por, lerJson(imp.Resumo));
-    return { sucesso: true, importacaoId: id, importadas: trilha.length, restantes: 0, concluida: true, resultado: final };
-  });
+  }
+}
+
+async function gravarLote(t, rq, { id, n, por, fora }) {
+  const imp = (await rq().input("id", sql.Int, id).query("SELECT ImportacaoId, Situacao, Resumo FROM ImportacoesMembros WITH (UPDLOCK) WHERE ImportacaoId = @id")).recordset[0];
+  if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
+  if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, fora: 0, restantes: 0, concluida: true };
+  if (imp.Situacao !== "IMPORTANDO") return { sucesso: false, status: 409, mensagem: "Esta importação não foi confirmada." };
+  if (fora.length) {
+    // as recusadas ficam de fora como PROBLEMA (o mesmo par de quem tem problema na prévia: Acao PROBLEMA, Estado FORA), na MESMA transação do lote que prova
+    await rq().input("id", sql.Int, id).input("p", sql.NVarChar(sql.MAX), JSON.stringify(fora.map((f) => f.linha))).query(`
+      UPDATE ImportacoesMembrosLinhas SET Acao = N'PROBLEMA', Estado = N'FORA', Problemas = N'ERRO_AO_GRAVAR'
+      WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' AND Linha IN (SELECT CAST([value] AS INT) FROM OPENJSON(@p))`);
+    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Deixou de fora linhas que o sistema não conseguiu gravar", usuarioId: por,
+      dadosDepois: { linhas: fora.map((f) => ({ linha: f.linha, erro: f.erro })) } });
+  }
+  const linhas = (await rq().input("id", sql.Int, id).input("n", sql.Int, n).query(`
+    SELECT TOP (@n) Linha, MatriculaArquivo, Matricula, NumeroNovo, MotivoNumero, RepetidaMembro, Nome, CongregacaoId, Sexo, CONVERT(varchar(10), DataNascimento, 120) AS DataNascimento,
+      EstadoCivil, Email, Telefone, NomeMae, NomePai, Cpf, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao, FormaAdmissao,
+      CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo, Escolaridade
+    FROM ImportacoesMembrosLinhas WITH (UPDLOCK) WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' ORDER BY NumeroNovo, Linha`)).recordset;
+  const trilha = [];
+  for (const [i, l] of linhas.entries()) {
+    let feita;
+    try {
+      feita = await gravarLinha(rq, id, l, por);
+    } catch (e) {
+      // a marca da linha (e quantas entraram antes dela neste lote): recusaDaLinha só aceita o erro de dado que veio dos comandos desta linha
+      if (e && typeof e === "object" && e.linhaImportacao == null) Object.assign(e, { linhaImportacao: Number(l.Linha), antesNoLote: i });
+      throw e;
+    }
+    if (feita) trilha.push(feita);
+  }
+  await registrarAuditoriaEmLoteNaTransacao(t, "MembroReferencia", trilha);
+  const restantes = await contarRestantes(rq, id);
+  // importadas: as que entraram neste lote (a adiada para o fim da fila fica nas restantes); fora: as recusadas que ficaram de fora neste lote
+  if (restantes > 0) return { sucesso: true, importacaoId: id, importadas: trilha.length, fora: fora.length, restantes, concluida: false };
+  // nunca conclui com zero pessoas (como a confirmação): soltaria a trava das matrículas e gastaria a importação única; a transação desfaz as marcas de fora
+  const entrou = (await rq().input("id", sql.Int, id).query("SELECT COUNT(*) AS importadasNoTotal FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'IMPORTADA'")).recordset[0];
+  if (!entrou || !Number(entrou.importadasNoTotal)) return { sucesso: false, status: 409, mensagem: MSG.NINGUEM_ENTROU };
+  const final = await concluirNaTransacao(t, rq, id, por, lerJson(imp.Resumo));
+  return { sucesso: true, importacaoId: id, importadas: trilha.length, fora: fora.length, restantes: 0, concluida: true, resultado: final };
+}
+
+// Uma linha: grava a ficha (em ARROLAMENTO), as pendências e a marcação da linha; devolve a entrada da trilha, ou null quando a linha foi para o fim da fila.
+async function gravarLinha(rq, id, l, por) {
+  const numeroNovo = l.NumeroNovo === true || l.NumeroNovo === 1;
+  const motivo = l.MotivoNumero || null;
+  let numero = numeroNovo ? null : Number(l.Matricula);
+  let cpf = l.Cpf ? String(l.Cpf).trim() : null;
+  let repetidaMembro = l.RepetidaMembro == null ? null : Number(l.RepetidaMembro);
+  // A matrícula e o CPF são conferidos e a ficha gravada no MESMO comando, com a faixa da chave travada (UPDLOCK, HOLDLOCK) da conferência até a gravação:
+  // outro cadastro no mesmo instante espera, e a gravação não falha no meio da transação (o lote inteiro não se perde por uma linha).
+  let feito = false, adiada = false;
+  for (let tentativa = 0; tentativa < 8 && !feito; tentativa++) {
+    if (numero == null) numero = await matriculaNova.proximaMatricula(rq);
+    const r = (await rq().input("id", sql.Int, numero).input("nome", sql.NVarChar(200), l.Nome).input("c", sql.Int, l.CongregacaoId)
+      .input("nasc", sql.Date, l.DataNascimento || null).input("sexo", sql.NChar(1), l.Sexo ? String(l.Sexo).trim() : null).input("ec", sql.NVarChar(20), l.EstadoCivil)
+      .input("email", sql.NVarChar(150), l.Email).input("tel", sql.NVarChar(20), l.Telefone).input("cpf", sql.Char(11), cpf)
+      .input("mae", sql.NVarChar(150), l.NomeMae).input("pai", sql.NVarChar(150), l.NomePai).input("esc", sql.NVarChar(30), l.Escolaridade)
+      .input("adm", sql.Date, l.DataAdmissao || null).input("fa", sql.NVarChar(30), l.FormaAdmissao).input("bat", sql.Date, l.DataBatismo || null)
+      .query(`DECLARE @ocupada BIT = CASE WHEN EXISTS (SELECT 1 FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @id) THEN 1 ELSE 0 END;
+              DECLARE @donoCpf INT = NULL;
+              IF @cpf IS NOT NULL SELECT TOP 1 @donoCpf = MembroId FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE Cpf = @cpf;
+              IF @ocupada = 0 AND @donoCpf IS NULL
+              BEGIN
+                INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, Sexo, EstadoCivil, Email, Telefone, Cpf, NomeMae, NomePai,
+                  Escolaridade, DataAdmissao, FormaAdmissao, DataBatismo)
+                VALUES (@id, @nome, @c, N'ATIVO', N'ARROLAMENTO', @nasc, @sexo, @ec, @email, @tel, @cpf, @mae, @pai, @esc, @adm, @fa, @bat);
+                DELETE FROM MatriculasLivres WHERE MembroId = @id;
+              END
+              SELECT @ocupada AS ocupada, @donoCpf AS donoCpf`)).recordset[0];
+    if (r.donoCpf != null) {
+      // alguém gravou o mesmo CPF depois da prévia: entra sem ele, como possível repetida da ficha que tem o CPF
+      if (repetidaMembro == null) repetidaMembro = Number(r.donoCpf);
+      cpf = null;
+    }
+    if ((r.ocupada === true || r.ocupada === 1) && !numeroNovo) {
+      // a matrícula do arquivo foi usada depois da prévia: a linha vira de número novo e vai para o FIM DA FILA (a ordem é NumeroNovo, Linha). Tomar a
+      // próxima do sistema agora (a maior + 1) poderia ocupar a matrícula de uma linha do arquivo que ainda vai entrar e empurrar essa também (23/11,
+      // achado do e2e-96); depois que todas as matrículas do arquivo estão no lugar, a maior + 1 é livre.
+      await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("cpf", sql.Char(11), cpf).input("rm", sql.Int, repetidaMembro).query(`
+        UPDATE ImportacoesMembrosLinhas SET NumeroNovo = 1, MotivoNumero = N'DE_OUTRA_FICHA', Cpf = @cpf, RepetidaMembro = @rm
+        WHERE ImportacaoId = @id AND Linha = @l AND Estado = N'PENDENTE'`);
+      adiada = true;
+      break;
+    }
+    // no número novo, outro cadastro pegou o mesmo número no mesmo instante: a próxima do sistema
+    if (r.ocupada === true || r.ocupada === 1) numero = null;
+    feito = !(r.donoCpf != null) && !(r.ocupada === true || r.ocupada === 1);
+  }
+  if (adiada) return null;
+  if (!feito) throw new Error(`importação: não foi possível gravar a linha ${l.Linha}`);
+  await abrirPendencia(rq, { membroId: numero, tipo: "ARROLAMENTO", detalhe: DETALHE_ARROLAMENTO, por });
+  if (numeroNovo) await abrirPendencia(rq, { membroId: numero, tipo: "NUMERO", detalhe: (DETALHE_NUMERO[motivo] || DETALHE_NUMERO.VAZIA)(l.MatriculaArquivo), por });
+  if (repetidaMembro != null && repetidaMembro !== numero) await abrirPendencia(rq, { membroId: numero, tipo: "REPETIDA", outro: repetidaMembro, detalhe: DETALHE_REPETIDA, por });
+  await rq().input("id", sql.Int, id).input("l", sql.Int, Number(l.Linha)).input("m", sql.Int, numero).input("nn", sql.Bit, numeroNovo).input("mn", sql.NVarChar(30), numeroNovo ? motivo : null)
+    .input("rm", sql.Int, repetidaMembro).query(`UPDATE ImportacoesMembrosLinhas SET Estado = N'IMPORTADA', MatriculaFinal = @m, NumeroNovo = @nn, MotivoNumero = @mn,
+      RepetidaMembro = @rm WHERE ImportacaoId = @id AND Linha = @l`);
+  return { registroId: numero, acao: "Importou pessoa do sistema pago", usuarioId: por,
+    dadosDepois: { importacaoId: id, linha: Number(l.Linha), congregacaoId: l.CongregacaoId == null ? null : Number(l.CongregacaoId), cpf: ficha.mascararCpf(cpf),
+      numeroNovo, possivelRepetida: repetidaMembro != null } };
 }
 
 // O fim: as possíveis repetidas entre linhas do arquivo (as duas já têm a matrícula final), o resumo final e os dados pessoais das linhas apagados.

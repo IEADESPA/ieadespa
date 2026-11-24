@@ -163,4 +163,6 @@ BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
 # FASE 10, Membros, rodada 28: completar o arrolamento de quem veio do sistema pago (sem migração; a situação ARROLAMENTO e a pendência são da 185)
 BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js
+# a saida do IMPORTANDO (revisao de 23/11/2026): a linha que o banco recusa sempre fica de fora como problema; 5 seguidas param sem ninguem de fora
+BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js
 echo TUDO-PRONTO

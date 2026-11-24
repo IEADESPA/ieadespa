@@ -97,12 +97,14 @@ describe("o repasse", () => {
     expect(r.status).toBe(400);
     expect(r.body.mensagem).toBe("CPF inválido.");
   });
-  test("a trava das matrículas (409, antes da importação do sistema pago) chega à pessoa como o sistema disse, não como 'fora do ar'", async () => {
+  // revisão de 23/11 (M3): a mensagem do sistema fala de "importação do sistema pago" (palavra de dentro); o visitante recebe a dele, e não "fora do ar"
+  test("a trava das matrículas (409, antes da importação do sistema pago) chega ao visitante com a mensagem do site, sem palavra de dentro", async () => {
     const msg = "As matrículas novas só começam depois da importação do sistema pago.";
     global.fetch = jest.fn(async () => ({ status: 409, json: async () => ({ sucesso: false, mensagem: msg }) }));
     const r = await chamar(pedido("POST", PROD, corpoValido()));
     expect(r.status).toBe(409);
-    expect(r.body).toEqual({ sucesso: false, mensagem: msg });
+    expect(r.body).toEqual({ sucesso: false, mensagem: "O cadastro pelo site abre em breve. Por enquanto, procure a secretaria da sua congregação." });
+    expect(JSON.stringify(r.body)).not.toMatch(/sistema pago|importa/i);
   });
   test("a lista das congregações: só id, nome e área; guardada 10 minutos por ambiente", async () => {
     const r1 = await chamar(pedido("GET", PREVIA));

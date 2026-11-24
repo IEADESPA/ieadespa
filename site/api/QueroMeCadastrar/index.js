@@ -24,6 +24,8 @@ const SISTEMA = {
 const CAMPOS = ["nome", "cpf", "email", "telefone", "dataNascimento", "sexo", "estadoCivil"];
 const ENVIO = /^[0-9a-f]{32}$/;
 const TEXTO_MAX = 600;   // o texto do consentimento (hoje, ~100 letras)
+// a trava das matrículas (409) para o VISITANTE (revisão de 23/11/2026, M3): a mensagem do sistema fala de "importação do sistema pago", palavra de dentro
+const MSG_AINDA_FECHADO = "O cadastro pelo site abre em breve. Por enquanto, procure a secretaria da sua congregação.";
 const GUARDA_MS = 10 * 60 * 1000;
 let guardado = { em: 0, alvo: null, dados: null };
 
@@ -126,11 +128,11 @@ module.exports = async function (context, req) {
     const s = await chamarSistema(alvo, "POST", corpo, 40000);
     const mensagem = s.dados && typeof s.dados.mensagem === "string" ? s.dados.mensagem : null;
     // 200 (recebido), 400 (só formato: o que falta ou está errado), 409 (a trava das matrículas: ninguém se cadastra antes da importação do sistema pago,
-    // decisão do responsável de 23/11/2026) e 429 (muitos agora) vão como o sistema disse; o resto é "fora do ar"
+    // decisão do responsável de 23/11/2026) e 429 (muitos agora) vão como o sistema disse (o 409 com a mensagem do visitante); o resto é "fora do ar"
     if ((s.status === 200 || s.status === 400 || s.status === 409 || s.status === 429) && mensagem) {
       // versão do consentimento trocada no sistema: a próxima leitura da página busca a nova (sem esperar os 10 minutos)
       if (s.status === 400 && /consentimento/i.test(mensagem)) guardado = { em: 0, alvo: null, dados: null };
-      return responder(s.status, { sucesso: s.status === 200, mensagem });
+      return responder(s.status, { sucesso: s.status === 200, mensagem: s.status === 409 ? MSG_AINDA_FECHADO : mensagem });
     }
     if (s.status === 401) context.log.error("[QueroMeCadastrar] o sistema recusou a chave do site (CHAVE_SITE_SISTEMA diferente nos dois aplicativos, ou ausente no sistema).");
     else context.log.warn(`[QueroMeCadastrar] o sistema respondeu ${s.status} ao cadastro.`);

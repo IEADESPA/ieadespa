@@ -53,6 +53,28 @@ describe("o arquivo e as colunas", () => {
     expect(preparar([]).erro).toMatch(/só tem o cabeçalho/);
     expect(preparar(["1;Jo�o;IEADESPA - Vila Nova"]).erro).toMatch(/letras que não puderam ser lidas/);
   });
+  // revisão de 23/11 (I1): uma aspa sem fechar engolia as linhas seguintes sem aviso (10 pessoas, a 5ª com o nome começando por aspas -> total 3).
+  // Regra: ninguém some calado. O arquivo inteiro é recusado, com a linha do problema, para a Geral corrigir na planilha e mandar de novo.
+  const pessoas = (n, troca = {}) => Array.from({ length: n }, (_, i) => troca[i + 1] ?? `${70000 + i + 1};Pessoa ${i + 1} de Mentira;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;;;`);
+  test("I1: a aspa que abre e não fecha recusa o arquivo inteiro, com a linha (ninguém some calado)", () => {
+    const p = preparar(pessoas(10, { 5: "70005;\"Maria Aspas de Mentira;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;;;" }));
+    expect(p.linhas).toBeUndefined();
+    expect(p.erro).toBe("A linha 6 do arquivo abre aspas (\") e não fecha: as pessoas das linhas de baixo sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.");
+    expect(r.lerCsv(["A;B", "1;\"Ana", "2;Bia"].join("\r\n")).aspas).toEqual({ linha: 2, fechou: false });
+  });
+  test("I1: o campo entre aspas que passa para a linha de baixo também recusa, com a linha onde a aspa abriu", () => {
+    const p = preparar(pessoas(10, { 3: "70003;\"Rosa Aspas;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;;;", 7: "70007;Lia\" de Mentira;IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;;;" }));
+    expect(p.linhas).toBeUndefined();
+    expect(p.erro).toBe("A linha 4 do arquivo tem um campo entre aspas que passa para a linha de baixo: as pessoas dessas linhas sumiriam da prévia. Corrija essa linha na planilha e mande o arquivo de novo.");
+    expect(r.lerCsv(["A;B", "1;\"Ana", "2;Bia\";x"].join("\n")).aspas).toEqual({ linha: 2, fechou: true });
+  });
+  test("I1: aspas certas numa linha só continuam valendo; o arquivo de 10 pessoas dá as 10", () => {
+    const p = preparar(pessoas(10, { 5: "70005;\"Silva; Maria \"\"Mãe\"\"\";IEADESPA - Vila Nova;FEMININO;01/01/1990;CASADA;;;;;" }));
+    expect(p.erro).toBeUndefined();
+    expect(p.linhas).toHaveLength(10);
+    expect(p.linhas[4].dados.nome).toBe("Silva; Maria \"Mãe\"");
+    expect(r.lerCsv("A;B\r\n1;\"x\"").aspas).toBeNull();
+  });
 });
 
 describe("cada linha", () => {

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 8e446f57-0011-4863-8efe-ff9484623ad6
-  modified: 2026-11-13T18:31:07.310Z
+  modified: 2026-11-24T13:18:15.705Z
 ---
 
 Regras dele (13/11/2026, ao ver a rodada 8 da gestão de membros — "totalmente reprovada"):
@@ -17,3 +17,5 @@ Regras dele (13/11/2026, ao ver a rodada 8 da gestão de membros — "totalmente
 **Why:** ele diz que não pode mais mexer em módulo sem ver a escala; e que a IA erra — ver antes evita refazer.
 
 **How to apply:** em toda rodada nova, cada tela com `perfis` (local, área, geral, membro) e dados coerentes por nível; ver [[propostas-de-tela-em-artefato]] e [[fase10-nada-sem-aprovacao]].
+
+**Sem modo escuro nas propostas (ele, 24/11/2026):** a r30 deu 352 desenhos para 5 telas e ele reclamou da espera ("um pesadelo que demora horas para 5 telas; nós não vamos terminar isso nunca"). Decisão dele: **tirar o modo escuro** das rodadas (desenhar e conferir só no claro). **Os 3 níveis e o notebook + celular continuam obrigatórios** ("precisa saber o que cada nível vê no celular e no notebook"). Isto substitui o "toda proposta em claro e escuro" de 11/11. Na conferência, fotos só do pior caso.

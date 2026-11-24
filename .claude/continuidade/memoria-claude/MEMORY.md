@@ -43,7 +43,7 @@
 - [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 23/11 noite: 4 agentes ao mesmo tempo, até outra ordem dele
 - [Conselheiro e alto padrão](conselheiro-e-padrao-alto.md) — 23/11: Fable aconselha o Opus (funciona no VS Code); agentes padrão, ganchos e fluxos com muitos agentes quando ajudar
 - [Ordem fixa de módulos](ordem-fixa-de-modulos.md) — 1 Membros, 2 Financeiro, 3 Estrutura...
-- [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra
+- [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra; SEM modo escuro (24/11)
 - [Roteiro das fases 10–12](roteiro-fases-10-11-12.md) — 10 experiência + Membros; 11 escuta; 12 sites
 - [Massa grande da homologação](homolog-massa-grande.md) — gerador no ramo homolog
 

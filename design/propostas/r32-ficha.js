@@ -24,7 +24,7 @@ function r32FichaNote(p, k) {
   const cultos = r32Car(p, 'Cultos', r28Mais(p, 'Editar ›'), r32CultoLinhas(p, R32_CULTOS_VN));
   const pontos = r32Car(p, 'Pontos de culto', r18Etiq(p, '2', 'verde'), r32PontoLinhas(p, 0, 1));
   const end = r32Car(p, 'Endereço e contato', r28Mais(p, 'Editar ›'), r31Fatos(p, R32_END));
-  const gente = r32Car(p, 'As pessoas', r20Nota(p, 'a secretaria vê'), r31Fatos(p, geral ? [['Pessoas', '312 membros · 41 congregados · 58 crianças']] : [['Membros', '312, em comunhão 296'], ['Congregados', '41'], ['Crianças', '58']]));
+  const gente = r32Car(p, 'As pessoas', r20Nota(p, 'o dirigente e a secretaria veem'), r31Fatos(p, geral ? [['Pessoas', '312 membros · 41 congregados · 58 crianças']] : [['Membros', '312, em comunhão 296'], ['Congregados', '41'], ['Crianças', '58']]));
   const din = geral
     ? r32Car(p, 'Dinheiro e patrimônio', '', `${r31Fatos(p, [['Novembro', 'R$ 18.420,00 repassados · fechado'], ['Patrimônio', 'templo próprio e 1 terreno']])}${r20Nota(p, 'Só a tesouraria e a Geral veem.')}`)
     : r16aAviso(p, 'O dinheiro e o patrimônio de Vila Nova ficam no Financeiro, para a tesouraria e a Geral.');
@@ -34,10 +34,10 @@ function r32FichaNote(p, k) {
 }
 // a ficha da área, para o pastor de área: a diretoria da área e as 12 congregações pelo número
 function r32FichaArea(p) {
-  const dirA = r32Car(p, 'Diretoria da Área 2', r18Etiq(p, '1 vago', 'verm'), `${r32DirLinhas(p, [['Pastor de área', 'Pr. Davi Teixeira', 'DT'], ['Secretário da área', 'Elias Prado', 'EP'], ['Tesoureiro da área', '', '']], 0, 'vago desde 16/11 · a Sílvia Matos saiu')}${r20Nota(p, 'A diretoria da área, o pastor de área põe; o dirigente que falta, você ou a Geral.')}`);
-  const info = r32Car(p, 'A área', '', r31Fatos(p, [['Número', 'Área 2 · 12 congregações'], ['Pontos de culto', '19, em 9 congregações'], ['Pessoas', '2.104 membros e 266 congregados']]));
+  const dirA = r32Car(p, 'Diretoria da Área 2', r18Etiq(p, '1 vago', 'verm'), `${r32DirLinhas(p, [['Pastor de área', 'Pr. Davi Teixeira', 'DT'], ['Secretário da área', 'Elias Prado', 'EP'], ['Tesoureiro da área', '', '']], 0, 'vago desde 16/11 · a Sílvia saiu')}${r20Nota(p, 'A diretoria da área, o pastor de área põe; o dirigente que falta, você ou a Geral.')}`);
+  const info = r32Car(p, 'A área', '', r31Fatos(p, [['Número', 'Área 2 · 12 congregações'], ['Pontos de culto', '19, em 11 congregações'], ['Pessoas', '2.104 membros e 266 congregados']]));
   const L = R32_CONG_A2.concat(R32_CONG_A2_MAIS).sort((a, b) => a[0] - b[0]);
-  const tab = r16aTab(p, '44px minmax(0,1fr) minmax(0,1.1fr) 58px minmax(0,1.3fr)', ['Nº', 'Congregação', 'Dirigente', 'Vagos', 'Situação'], L.map(x => [x[0], x[1], x[2] || r18Etiq(p, 'sem dirigente', 'verm'), x[3] ? r18Etiq(p, String(x[3]), x[5] === 'verm' ? 'verm' : 'ouro') : '0', r18Etiq(p, x[4], x[5])]));
+  const tab = r16aTab(p, '40px minmax(0,1fr) minmax(0,1.1fr) 52px minmax(0,1.25fr)', ['Nº', 'Congregação', 'Dirigente', 'Vagos', 'Situação'], L.map(x => [x[0], x[1], x[2] || r18Etiq(p, 'sem dirigente', 'verm'), x[3] ? r18Etiq(p, String(x[3]), x[5] === 'verm' ? 'verm' : 'ouro') : '0', r18Etiq(p, x[4], x[5])]));
   const tit = r18Tit(p, 'Área 2 · ficha da área', `12 congregações, pela ordem do número de abertura · ${R32_HOJE}`, m8Linha(p, 'Ver no mapa', 'mapa'));
   return r32Es(p, 'area', 'Ficha da área', `${tit}${r17Dois(r18Col(dirA, info), tab, '0.85fr 1.6fr')}`, ['Área 2']);
 }
@@ -54,7 +54,7 @@ function r32FichaMembro(p, cel) {
 function r32FichaCel(p, k) {
   if (k === 'area') {
     const dirA = r32Car(p, 'Diretoria da Área 2', r18Etiq(p, '1 vago', 'verm'), r32DirLinhas(p, [['Pastor de área', 'Pr. Davi Teixeira', 'DT'], ['Secretário da área', 'Elias Prado', 'EP'], ['Tesoureiro da área', '', '']], 1, 'vago desde 16/11'), 1);
-    const L = R32_CONG_A2.slice(0, 6).map(x => [`${x[0]} · ${x[1]}`, x[2] || 'sem dirigente', r18Etiq(p, x[4].replace(' desde 02/11', '').replace('termo do secretário pendente', 'termo pendente').replace('endereço sem conferir há 8 meses', 'conferir').replace('conferido há 6 meses', 'conferir'), x[5])]);
+    const L = R32_CONG_A2.slice(0, 6).map(x => [`${x[0]} · ${x[1]}`, x[2] || 'sem dirigente', r18Etiq(p, x[4].replace(' desde 02/11', '').replace('sem conferir há 8 meses', 'conferir').replace('conferido há 6 meses', 'conferir'), x[5])]);
     return r32EsCel(p, 'Ficha da área', `${dirA}<div style="display:flex;align-items:center;flex:none"><strong style="flex:1;font-size:14.5px;color:${p.titulo}">As 12 congregações</strong>${r28Mais(p, 'Ver todas ›')}</div>${r16aListaCel(p, L)}`);
   }
   const geral = k === 'geral';

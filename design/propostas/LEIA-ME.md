@@ -10,7 +10,7 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
-| `propostas-r32/index.html` | A página da **rodada 32** (Módulo 3, Estrutura e Territórios, o começo), 218 KB, com a 31 recolhida embaixo. Gerada; não editar à mão. Pronta em 24/11/2026, ainda **não publicada** (espera as respostas das 8 perguntas) |
+| `propostas-r32/index.html` | A página da **rodada 32** (Módulo 3, Estrutura e Territórios, o começo), 220 KB, com a 31 recolhida embaixo. Gerada; não editar à mão. Pronta em 24/11/2026, ainda **não publicada** (espera as respostas das 8 perguntas) |
 | `r32-base.js` | A casca do módulo (verde), quem está vendo e os dados de mentira comuns da 32 |
 | `r32-painel.js`, `r32-ficha.js`, `r32-cultos.js`, `r32-posse.js`, `r32-mapa.js` | As 5 telas da 32: o painel do que está desatualizado, a ficha da congregação (e a da área), os cultos e os pontos de culto, a diretoria com o termo de posse e o mapa |
 | `r32-lista.js` | A explicação da rodada (`EXPLICA_R32`), a de cada tela (com os "Para conferir") e a lista que junta as telas |

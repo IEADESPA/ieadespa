@@ -286,6 +286,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok((await POST(H, "folha", geral, { folha: 70530, oQueAconteceu: "extraviada", observacao: "Sumiu na Beta" })).status === 200,
     "na Beta: 20 folhas lançadas, a 70.530 extraviada, as 70.521 a 70.529 sem destino (recibos ainda não lançados) e as 70.531 a 70.550 em branco");
   r = await GET(H, "rastreio", geral, { folha: 70501 });
+  ok(r.status === 200 && r.body.volta === null && r.body.bloco.chegouEm === "2026-11-01", "entregue, o rastreio não traz volta parcial; traz a chegada da gráfica", { volta: r.body.volta, chegouEm: r.body.bloco.chegouEm });
   ok(r.status === 200 && r.body.primeiraEmBranco === 70531 && JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 20, canceladas: 0, arrancadas: 0, extraviadas: 1, livres: 29 }),
     "o rastreio sugere a primeira em branco: a 70.531, logo depois da última folha com destino", { sugestao: r.body.primeiraEmBranco, contagem: r.body.contagem });
   const antesP0 = await retratoFin();
@@ -311,6 +312,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await GET(H, "rastreio", geral, { folha: 70501 });
   ok(r.status === 200 && r.body.bloco.situacao === "na-geral" && r.body.bloco.parcial === true && r.body.bloco.livres === 20 && r.body.bloco.congregacao === null && r.body.primeiraEmBranco === null,
     "o rastreio: o 1.410 na Geral, parcial, com 20 livres", r.body.bloco);
+  ok(JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70531, ultimaFolha: 70550 }) && JSON.stringify(r.body.volta) === JSON.stringify({ congregacao: "Beta E2E", data: "2026-11-12", usadas: 21 }),
+    "e, para o \"Registrar saída\" da r30: saem só as livres (70.531 a 70.550), voltou da Beta em 12/11, 21 usadas ficam no histórico", { faixa: r.body.bloco.faixa, volta: r.body.volta });
   const antesP = await retratoFin();
   r = await POST(H, "folha", geral, { folha: 70540, oQueAconteceu: "cancelada", observacao: "x" });
   ok(r.status === 422 && /1\.410 ainda está na Tesouraria Geral/.test(r.body.mensagem), "com o bloco na Geral, a folha livre não ganha destino", r.body);
@@ -362,6 +365,10 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok(r.status === 200 && r.body.bloco.situacao === "em-uso" && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70531, ultimaFolha: 70550 }) && r.body.bloco.usadas === 1 && r.body.bloco.livres === 19
     && r.body.folhas.length === 22 && naGrade(70530).destino === "extraviada" && naGrade(70530).observacao === null && naGrade(70535).observacao === "Rasgou em Vila Nova",
     "Vila Nova vê o 1.410: a faixa dela (70.531 a 70.550) e as folhas de antes só para consulta, sem a observação da Beta", r.body.bloco);
+  r = await GET(H, "folhas", LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Beta E2E", "Vila Nova E2E"], "AREA"), { bloco: b1410 });
+  const naArea = (n) => r.body.folhas.find((x) => x.folha === n) || {};
+  ok(r.status === 200 && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70531, ultimaFolha: 70550 }) && naArea(70530).observacao === "Sumiu na Beta"
+    && naArea(70535).observacao === "Rasgou em Vila Nova", "a área que alcança a Beta e Vila Nova vê a entrega em curso e as observações das duas", r.body.bloco);
   r = await GET(H, "folhas", beta, { bloco: b1410 });
   ok(r.status === 200 && r.body.folhas.length === 21 && !r.body.folhas.some((x) => x.folha >= 70531), "a Beta não vê o que acontece com as folhas que voltaram livres", r.body.folhas.slice(-2));
   ok(fotoBeta(r) === betaDepoisDaParcial, "nem pelo cabeçalho nem pelo seletor: o que a Beta vê não mudou com a nova entrega (nada de \"em uso\" nem de Vila Nova)", r.body.bloco);

@@ -98,7 +98,7 @@ notebook e celular. Divergência volta para a construção; não vai para ele.
 
 | # | O incremento | A tela aprovada que reproduz (rodada, `id`, opção) |
 | --- | --- | --- |
-| 1a | O modelo base (migração 200), a regra dos blocos e dos centros de custo, a rota `FinBlocos` e `FinCentrosCusto` (leitura e saldo de abertura) | — (servidor) |
+| 1a | O modelo base (migração 200), a regra dos blocos e a rota `FinBlocos` (a regra e a rota `FinCentrosCusto`, com o saldo de abertura, ficaram para o desenho da rodada 27: ver a seção 3) | — (servidor) |
 | 1b | O módulo Financeiro na casca: a 2ª entrada do Svelte, o menu "por tipo de trabalho" e a 1ª tela | r13 `r13-fin-menu` op. 1 (o `FIN13`); r17 `r17-blocos` op. 1 |
 | 2 | As folhas do bloco e o livro de entrada e saída (o lote da gráfica, entregar, devolver, o rastreio) | r17 `r17-blocos-folhas` op. 1; r17 `r17-blocos-livro` op. 1 |
 | 3 | Lançar dízimos e ofertas: a planilha e a linha de lançar, "Este mês"/"Mês posterior", as folhas de outro mês, o dizimista do cadastro (migração 202) | r24 `r24-lancamento` op. 1 (na página r26) |

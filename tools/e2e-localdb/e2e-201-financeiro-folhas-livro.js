@@ -131,7 +131,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   console.log("== o rastreio e a devolução ==");
   r = await GET(H, "rastreio", geral, { folha: 70051 });
   ok(r.status === 200 && r.body.bloco.numero === 1401 && r.body.bloco.congregacao.nome === "Vila Nova E2E" && r.body.bloco.entregueEm === "2026-11-10", "o rastreio pela primeira folha: o 1.401, com Vila Nova desde 10/11", r.body.bloco);
-  ok(JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 0, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 49 }), "o rastreio conta as folhas: 1 cancelada, 49 livres", r.body.contagem);
+  ok(JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 0, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 49 }), "o rastreio conta as folhas: 1 cancelada, 49 livres", r.body.contagem);
   ok(r.body.pessoas[0] && r.body.pessoas[0].membroId === TESOUREIRA_LOCAL && r.body.pessoas[0].papel === "quem levou o bloco", "a primeira pessoa que pode devolver é quem levou o bloco", r.body.pessoas);
   ok((await GET(H, "rastreio", geral, { folha: "70075" })).body.bloco.numero === 1401, "qualquer folha do bloco também acha o rastreio");
   ok((await GET(H, "rastreio", geral, { folha: 1 })).status === 422 && (await GET(H, "rastreio", geral, { folha: "abc" })).status === 422, "folha que não existe ou que não é número: 422");
@@ -217,7 +217,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok(r.status === 200 && r.body.total === totalLivro && r.body.registros.length === 5 && r.body.porPagina === 5, "a Geral vê o livro inteiro em páginas de 5", { total: r.body.total, n: r.body.registros.length });
   const e0 = r.body.registros[0];
   ok(e0.tipo === "entrada" && e0.bloco === 1401 && e0.congregacao === "Vila Nova E2E" && e0.pessoa === "Lia Fontes"
-    && JSON.stringify(e0.contagem) === JSON.stringify({ lancadas: 48, canceladas: 1, arrancadas: 1, extraviadas: 0, livres: 0 }) && e0.pendentes === 0 && e0.parcial === false && e0.faixaLivre === null,
+    && JSON.stringify(e0.contagem) === JSON.stringify({ lancadas: 48, canceladas: 1, arrancadas: 1, extraviadas: 0, inexistentes: 0, livres: 0 }) && e0.pendentes === 0 && e0.parcial === false && e0.faixaLivre === null,
     "o mais novo primeiro: a entrada do 1.401, completa, com a contagem das folhas", e0);
   ok(r.body.registros.some((x) => x.tipo === "saida" && x.bloco === 1402 && x.levadoPelaArea === true && x.pessoa === "Rute Santos"), "a saída do 1.402 diz que foi levada pela área");
   ok(r.body.agora === null, "a Geral não tem o quadro \"agora\"");
@@ -296,7 +296,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
     "na Beta: 20 folhas lançadas, a 70.530 extraviada, as 70.521 a 70.529 sem destino (recibos ainda não lançados) e as 70.531 a 70.550 em branco");
   r = await GET(H, "rastreio", geral, { folha: 70501 });
   ok(r.status === 200 && r.body.volta === null && r.body.bloco.chegouEm === "2026-11-01", "entregue, o rastreio não traz volta parcial; traz a chegada da gráfica", { volta: r.body.volta, chegouEm: r.body.bloco.chegouEm });
-  ok(r.status === 200 && r.body.primeiraEmBranco === 70531 && JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 20, canceladas: 0, arrancadas: 0, extraviadas: 1, livres: 29 }),
+  ok(r.status === 200 && r.body.primeiraEmBranco === 70531 && JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 20, canceladas: 0, arrancadas: 0, extraviadas: 1, inexistentes: 0, livres: 29 }),
     "o rastreio sugere a primeira em branco: a 70.531, logo depois da última folha com destino", { sugestao: r.body.primeiraEmBranco, contagem: r.body.contagem });
   const antesP0 = await retratoFin();
   r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "Tesoureiro da Beta" }, parcial: true, primeiraEmBranco: 70525 });
@@ -385,7 +385,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await GET(H, "folhas", geral, { bloco: b1410 });
   ok(r.body.folhas.find((x) => x.folha === 70530).observacao === "Sumiu na Beta" && r.body.folhas.length === 22, "a Tesouraria Geral vê todas as folhas e as observações de todas as entregas");
   r = await GET(H, "rastreio", geral, { folha: 70531 });
-  ok(JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 0, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 19 }) && r.body.primeiraEmBranco === 70536,
+  ok(JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 0, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 19 }) && r.body.primeiraEmBranco === 70536,
     "o rastreio conta as folhas da entrega em curso (1 cancelada, 19 livres) e sugere a 70.536", { contagem: r.body.contagem, sugestao: r.body.primeiraEmBranco });
   await lancarDireto(b1410, 70536, 70545);
   r = await POST(H, "devolver", geral, { primeiraFolha: 70531, pessoa: { nome: "Rute Santos" } });
@@ -397,10 +397,10 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   const livroB = (await livroTodo(geral)).filter((x) => x.bloco === 1410);   // do mais novo ao mais antigo
   ok(livroB.map((x) => x.tipo).join() === "entrada,saida,entrada,saida", "o livro do 1.410: saída, entrada parcial, saída de novo, entrada completa", livroB.map((x) => x.tipo));
   const [eComp, saida2L, eParc, saida1L] = livroB;
-  ok(eParc && JSON.stringify(eParc.contagem) === JSON.stringify({ lancadas: 20, canceladas: 0, arrancadas: 0, extraviadas: 1, livres: 20 }) && eParc.pendentes === 9 && eParc.parcial === true
+  ok(eParc && JSON.stringify(eParc.contagem) === JSON.stringify({ lancadas: 20, canceladas: 0, arrancadas: 0, extraviadas: 1, inexistentes: 0, livres: 20 }) && eParc.pendentes === 9 && eParc.parcial === true
     && JSON.stringify(eParc.faixaLivre) === JSON.stringify({ primeiraFolha: 70531, ultimaFolha: 70550 }),
     "a entrada parcial continua contando só a entrega dela (20 lançadas, 1 extraviada, 9 sem destino com a Beta, 20 livres de novo)", eParc);
-  ok(eComp && JSON.stringify(eComp.contagem) === JSON.stringify({ lancadas: 10, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 0 }) && eComp.pendentes === 9 && eComp.parcial === false && eComp.faixaLivre === null,
+  ok(eComp && JSON.stringify(eComp.contagem) === JSON.stringify({ lancadas: 10, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 0 }) && eComp.pendentes === 9 && eComp.parcial === false && eComp.faixaLivre === null,
     "a entrada completa conta a 2ª entrega (10 lançadas, 1 cancelada, 9 recibos ainda não lançados)", eComp);
   ok(saida1L && saida2L && JSON.stringify(saida1L.folhas) === JSON.stringify({ primeiraFolha: 70501, ultimaFolha: 70550 }) && JSON.stringify(saida2L.folhas) === JSON.stringify({ primeiraFolha: 70531, ultimaFolha: 70550 }),
     "cada saída do livro mostra a faixa das folhas entregues", [saida1L && saida1L.folhas, saida2L && saida2L.folhas]);

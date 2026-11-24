@@ -5,14 +5,15 @@
 //   (70.051 → bloco 1.401; 68.001 → 1.360), a conta do desenho aprovado. A série nunca repete número de folha.
 // - A situação que a tela mostra: "Na Tesouraria Geral" (não foi entregue), "Esperando" (entregue, nenhuma folha usada), "Em uso" (entregue, com
 //   folha usada) e "Fechado" (devolvido). Só "na Geral", "entregue" e "devolvido" se guardam; esperando e em uso saem do uso das folhas.
-// - A folha tem um destino só: lançada na planilha, cancelada, arrancada ou extraviada (as três últimas com a observação).
+// - A folha tem um destino só: lançada na planilha, cancelada, arrancada, extraviada ou inexistente (as quatro últimas com a observação). A
+//   inexistente (decisão dele de 24/11/2026) é a folha que a gráfica não imprimiu: a numeração não pode pular, então ela se cataloga como as outras.
 
 const FOLHAS_POR_BLOCO = 50;
 const MAX_BLOCOS_POR_LOTE = 1000;        // 50.000 folhas num lote: a gráfica manda uns 200 blocos por ano
 const MAX_FOLHA = 999999999;             // cabe no INT da tabela, com folga
 const POR_PAGINA = 40;                   // a lista dos blocos, como no desenho
 const SITUACOES_FILTRO = ["todos", "em-uso", "esperando", "fechado", "na-geral"];
-const DESTINOS_EXCECAO = { cancelada: "CANCELADA", arrancada: "ARRANCADA", extraviada: "EXTRAVIADA" };
+const DESTINOS_EXCECAO = { cancelada: "CANCELADA", arrancada: "ARRANCADA", extraviada: "EXTRAVIADA", inexistente: "INEXISTENTE" };
 
 const inteiro = (v) => {
   if (typeof v === "number") return Number.isInteger(v) ? v : null;
@@ -83,11 +84,11 @@ function paginaDaLista(v) {
   return n !== null && n >= 1 && n <= 100000 ? n : 1;
 }
 
-/** a exceção de uma folha: o que aconteceu (cancelada, arrancada, extraviada) e a observação, obrigatória */
+/** a exceção de uma folha: o que aconteceu (cancelada, arrancada, extraviada, inexistente) e a observação, obrigatória */
 function excecaoDaFolha(dados) {
   const d = dados && typeof dados === "object" ? dados : {};
   const destino = typeof d.oQueAconteceu === "string" ? DESTINOS_EXCECAO[d.oQueAconteceu.trim().toLowerCase()] : undefined;
-  if (!destino) return { erro: "Escolha o que aconteceu com a folha: cancelada, arrancada ou extraviada." };
+  if (!destino) return { erro: "Escolha o que aconteceu com a folha: cancelada, arrancada, extraviada ou inexistente." };
   const obs = typeof d.observacao === "string" ? d.observacao.trim() : "";
   if (!obs) return { erro: "Escreva a observação: o que aconteceu com a folha." };
   if (obs.length > 300) return { erro: "A observação passou de 300 letras." };
@@ -98,17 +99,17 @@ function excecaoDaFolha(dados) {
 
 // ---- incremento 2 (22/11/2026): as folhas de um bloco e o livro de entrada e saída (r17-blocos-folhas e r17-blocos-livro, opção 1) ----
 
-const DESTINO_TELA = { LANCADA: "lancada", CANCELADA: "cancelada", ARRANCADA: "arrancada", EXTRAVIADA: "extraviada" };
+const DESTINO_TELA = { LANCADA: "lancada", CANCELADA: "cancelada", ARRANCADA: "arrancada", EXTRAVIADA: "extraviada", INEXISTENTE: "inexistente" };
 /** o livro mostra 5 registros por página no notebook e 3 no celular (o desenho) */
 const POR_PAGINA_LIVRO = [5, 3];
 
-/** o destino guardado como a tela o chama (lancada, cancelada, arrancada, extraviada); outro valor = null */
+/** o destino guardado como a tela o chama (lancada, cancelada, arrancada, extraviada, inexistente); outro valor = null */
 const destinoDaTela = (d) => DESTINO_TELA[d] || null;
 
 /** quantas folhas do bloco têm cada destino e quantas estão livres (a lista vem de FinFolhas: [{Destino}] ou [{Destino, N}]) */
 function contagemDasFolhas(linhas, totalFolhas) {
-  const c = { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 0 };
-  const chave = { LANCADA: "lancadas", CANCELADA: "canceladas", ARRANCADA: "arrancadas", EXTRAVIADA: "extraviadas" };
+  const c = { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 0 };
+  const chave = { LANCADA: "lancadas", CANCELADA: "canceladas", ARRANCADA: "arrancadas", EXTRAVIADA: "extraviadas", INEXISTENTE: "inexistentes" };
   let usadas = 0;
   for (const l of linhas || []) {
     const k = chave[l.Destino];

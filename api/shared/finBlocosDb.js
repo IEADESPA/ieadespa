@@ -414,8 +414,9 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
   };
 }
 
-// A exceção de uma folha (cancelada, arrancada ou extraviada, com a observação): só numa folha livre de um bloco que está com a congregação. Quem
-// registra: quem tem a permissão financeiro e alcança a congregação do bloco (a Geral, a área, a congregação). A folha lançada vem do lançamento.
+// A exceção de uma folha (cancelada, arrancada, extraviada ou inexistente, com a observação): só numa folha livre de um bloco que está com a
+// congregação. Quem registra: quem tem a permissão financeiro e alcança a congregação do bloco (a Geral, a área, a congregação). A folha lançada vem
+// do lançamento.
 // O bloco fica travado na transação: a devolução e a exceção da mesma folha nunca se cruzam. Regra de 24/11/2026 com o detalhe da r30: só as folhas
 // da entrega em curso (da primeira folha da saída ao fim); quem recebe o bloco que voltou em parte não marca as folhas de quem devolveu.
 async function registrarFolha(pool, usuario, { geral, dados, por }) {
@@ -444,7 +445,7 @@ async function registrarFolha(pool, usuario, { geral, dados, por }) {
     const ja = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha).query(`SELECT Destino FROM FinFolhas WHERE Folha = @f`)).recordset[0];
     if (ja) return MUDOU(`A folha ${milhar(v.folha)} já tem destino (${regra.destinoDaTela(ja.Destino)}).`);
     // a folha guarda a entrega em que foi usada (a última saída do bloco, que está entregue: regra de 24/11/2026)
-    const id = (await pedidoNaTransacao(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(10), v.destino)
+    const id = (await pedidoNaTransacao(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(12), v.destino)
       .input("o", sql.NVarChar(300), v.observacao).input("por", sql.Int, por)
       .query(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) OUTPUT INSERTED.FolhaId
               SELECT @b, @f, @d, @o, @por, (SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC)`)).recordset[0].FolhaId;
@@ -482,7 +483,7 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
     SELECT l.RegistroId, l.Tipo, l.DataRegistro, l.LevadoPelaArea, l.Quantidade, l.PessoaNome, pm.Nome AS PessoaMembro, rp.Nome AS RegistradoPor,
            l.PrimeiraFolha AS FaixaPrimeira, l.UltimaFolha AS FaixaUltima, l.Parcial, sx.PrimeiraFolha AS EntregaDe, b.UltimaFolha AS BlocoUltima,
            b.Numero, c.Nome AS Congregacao, lg.Serie, lg.PrimeiraFolha AS LotePrimeira, lg.UltimaFolha AS LoteUltima,
-           (SELECT COUNT(*) FROM FinBlocos x WHERE x.LoteId = lg.LoteId) AS LoteBlocos, k.Lancadas, k.Canceladas, k.Arrancadas, k.Extraviadas,
+           (SELECT COUNT(*) FROM FinBlocos x WHERE x.LoteId = lg.LoteId) AS LoteBlocos, k.Lancadas, k.Canceladas, k.Arrancadas, k.Extraviadas, k.Inexistentes,
            COUNT(*) OVER () AS Total
     FROM FinLivroBlocos l
     LEFT JOIN FinBlocos b ON b.BlocoId = l.BlocoId
@@ -492,7 +493,8 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
     LEFT JOIN MembroReferencia pm ON pm.MembroId = l.PessoaMembroId
     LEFT JOIN MembroReferencia rp ON rp.MembroId = l.RegistradoPor
     OUTER APPLY (SELECT SUM(CASE WHEN f.Destino = 'LANCADA' THEN 1 ELSE 0 END) AS Lancadas, SUM(CASE WHEN f.Destino = 'CANCELADA' THEN 1 ELSE 0 END) AS Canceladas,
-                        SUM(CASE WHEN f.Destino = 'ARRANCADA' THEN 1 ELSE 0 END) AS Arrancadas, SUM(CASE WHEN f.Destino = 'EXTRAVIADA' THEN 1 ELSE 0 END) AS Extraviadas
+                        SUM(CASE WHEN f.Destino = 'ARRANCADA' THEN 1 ELSE 0 END) AS Arrancadas, SUM(CASE WHEN f.Destino = 'EXTRAVIADA' THEN 1 ELSE 0 END) AS Extraviadas,
+                        SUM(CASE WHEN f.Destino = 'INEXISTENTE' THEN 1 ELSE 0 END) AS Inexistentes
                  FROM FinFolhas f WHERE l.Tipo = 'ENTRADA' AND f.SaidaId = l.SaidaId) k
     ${onde.length ? "WHERE " + onde.join(" AND ") : ""}
     ORDER BY l.DataRegistro DESC, l.RegistroId DESC
@@ -513,11 +515,12 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
       // a entrega que a entrada fecha vai da primeira folha da saída até o fim do bloco (a completa) ou até a folha antes da primeira em branco (a
       // parcial); dela, as folhas sem destino são os pendentes (recibos ainda não lançados, que continuam com a congregação)
       const parcial = l.Parcial === true;
-      const usadas = [l.Lancadas, l.Canceladas, l.Arrancadas, l.Extraviadas].reduce((a, n) => a + (Number(n) || 0), 0);
+      const usadas = [l.Lancadas, l.Canceladas, l.Arrancadas, l.Extraviadas, l.Inexistentes].reduce((a, n) => a + (Number(n) || 0), 0);
       const livres = parcial ? Number(l.FaixaUltima) - Number(l.FaixaPrimeira) + 1 : 0;
       const ate = parcial ? Number(l.FaixaPrimeira) - 1 : Number(l.BlocoUltima);
       const contagem = regra.contagemDasFolhas([
-        { Destino: "LANCADA", N: l.Lancadas }, { Destino: "CANCELADA", N: l.Canceladas }, { Destino: "ARRANCADA", N: l.Arrancadas }, { Destino: "EXTRAVIADA", N: l.Extraviadas }
+        { Destino: "LANCADA", N: l.Lancadas }, { Destino: "CANCELADA", N: l.Canceladas }, { Destino: "ARRANCADA", N: l.Arrancadas }, { Destino: "EXTRAVIADA", N: l.Extraviadas },
+        { Destino: "INEXISTENTE", N: l.Inexistentes }
       ], usadas + livres);
       return { ...base, contagem, parcial, pendentes: Math.max(0, ate - Number(l.EntregaDe) + 1 - usadas),
         faixaLivre: parcial ? { primeiraFolha: Number(l.FaixaPrimeira), ultimaFolha: Number(l.FaixaUltima) } : null };
@@ -672,7 +675,7 @@ async function desfazerFolha(pool, { dados, por }) {
     const f = (await pedidoNaTransacao(t).input("f", sql.Int, v.folha)
       .query(`SELECT FolhaId, Destino, SaidaId FROM FinFolhas WITH (UPDLOCK, ROWLOCK) WHERE Folha = @f`)).recordset[0];
     if (!f) return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} não tem exceção para desfazer: ela está livre.` };
-    if (f.Destino === "LANCADA") return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} foi lançada: aqui só se desfaz a exceção (cancelada, arrancada ou extraviada).` };
+    if (f.Destino === "LANCADA") return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} foi lançada: aqui só se desfaz a exceção (cancelada, arrancada, extraviada ou inexistente).` };
     const emCurso = b.Situacao === "ENTREGUE" ? await ultimaSaida(t, b.BlocoId) : null;
     if (!emCurso || Number(f.SaidaId) !== emCurso.id) {
       return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} voltou com o bloco ${milhar(b.Numero)} numa devolução: as folhas que já voltaram não mudam mais.` };

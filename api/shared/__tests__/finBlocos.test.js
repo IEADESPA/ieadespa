@@ -89,7 +89,7 @@ describe("a folha e a situação", () => {
   test("a exceção da folha pede o que aconteceu e a observação", () => {
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "arrancada", observacao: "Rasgou na hora de preencher" }))
       .toEqual({ folha: 70090, destino: "ARRANCADA", observacao: "Rasgou na hora de preencher" });
-    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "lancada", observacao: "x" }).erro).toMatch(/cancelada, arrancada ou extraviada/);
+    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "lancada", observacao: "x" }).erro).toBe("Escolha o que aconteceu com a folha: cancelada, arrancada, extraviada ou inexistente.");
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "  " }).erro).toMatch(/observação/);
     expect(regra.excecaoDaFolha({ folha: 2 ** 40, oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "x".repeat(301) }).erro).toMatch(/300/);
@@ -167,9 +167,9 @@ describe("a porta da rota FinBlocos", () => {
 describe("as folhas e o livro (regra pura)", () => {
   test("a contagem das folhas: cada destino e as livres, de linhas soltas ou agrupadas", () => {
     expect(regra.contagemDasFolhas([{ Destino: "LANCADA" }, { Destino: "LANCADA" }, { Destino: "CANCELADA" }], 50))
-      .toEqual({ lancadas: 2, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 47 });
+      .toEqual({ lancadas: 2, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 47 });
     expect(regra.contagemDasFolhas([{ Destino: "LANCADA", N: 49 }, { Destino: "CANCELADA", N: 1 }, { Destino: "OUTRO", N: 9 }], 50))
-      .toEqual({ lancadas: 49, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 0 });
+      .toEqual({ lancadas: 49, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 0 });
     expect(regra.contagemDasFolhas(null, 50).livres).toBe(50);
     expect(regra.destinoDaTela("EXTRAVIADA")).toBe("extraviada");
     expect(regra.destinoDaTela("X")).toBeNull();
@@ -378,5 +378,22 @@ describe("a porta de desfazer a exceção da folha (só a Tesouraria Geral)", ()
       expect(r.body.mensagem).toBe("A primeira folha em branco só vale na devolução parcial.");
     }
     expect(mockConsultas).toHaveLength(0);
+  });
+});
+
+// ---- decisão dele de 24/11/2026 (com a aprovação da r30): a FOLHA INEXISTENTE, a que a gráfica não imprimiu ----
+// Um tipo a mais de exceção, onde as outras já aparecem: a numeração não pode pular, então a folha que faltou no bloco se cataloga. A observação
+// segue a regra das outras exceções (obrigatória).
+describe("a folha inexistente (decisão dele de 24/11/2026)", () => {
+  test("a exceção aceita \"inexistente\", com a observação obrigatória como as outras", () => {
+    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "inexistente", observacao: "A gráfica não imprimiu" }))
+      .toEqual({ folha: 70090, destino: "INEXISTENTE", observacao: "A gráfica não imprimiu" });
+    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "Inexistente ", observacao: "x" }).destino).toBe("INEXISTENTE");
+    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "inexistente", observacao: "  " }).erro).toBe("Escreva a observação: o que aconteceu com a folha.");
+  });
+  test("o destino guardado vira \"inexistente\" na tela e entra na contagem, como as outras exceções", () => {
+    expect(regra.destinoDaTela("INEXISTENTE")).toBe("inexistente");
+    expect(regra.contagemDasFolhas([{ Destino: "LANCADA", N: 48 }, { Destino: "INEXISTENTE", N: 1 }, { Destino: "EXTRAVIADA", N: 1 }], 50))
+      .toEqual({ lancadas: 48, canceladas: 0, arrancadas: 0, extraviadas: 1, inexistentes: 1, livres: 0 });
   });
 });

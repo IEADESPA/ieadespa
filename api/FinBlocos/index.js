@@ -6,7 +6,7 @@
 //  POST financeiro/blocos/entregar {primeiraFolha, congregacaoId, pessoa:{membroId|nome}, levadoPelaArea?, data?} (Tesouraria Geral) a saída do livro
 // Incremento 2 (22/11/2026; telas r17-blocos-folhas e r17-blocos-livro, opção 1):
 //  GET  financeiro/blocos/folhas?bloco=                 (financeiro, no escopo) as folhas de um bloco (vazio = o em uso mais recente) e o seletor
-//  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada ou extraviada
+//  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada, extraviada ou inexistente
 //  GET  financeiro/blocos/livro?pagina=&porPagina=5|3   (financeiro, no escopo) o livro de entrada e saída e, fora da Geral, os blocos agora
 //  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco pela primeira folha, no "Registrar entrada"
 //  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, parcial?, primeiraEmBranco?, data?} (Tesouraria Geral) a entrada do livro

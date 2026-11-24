@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 00:15 (Claude, sessão principal).
+Atualizado em 24/11/2026 08:36 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,9 +46,9 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**AGENTES PARADOS às 00h10 de 24/11: ele desligou o computador.** Foram retomados à meia-noite ("você tem que andar")
-e trabalharam uns 10 minutos. Há trabalho começado e **não registrado** no disco: são testes escritos antes do
-código, ainda vermelhos. Não apague. Ao retomar, 4 ao mesmo tempo, cada um continua do seu ponto:
+**AGENTES RETOMADOS às 08h40 de 24/11**, 4 ao mesmo tempo. Às 00h10 tinham sido parados porque ele ia desligar o
+computador. Cada um continua do seu ponto, a partir do trabalho começado e **não registrado** no disco: são testes
+escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o ponto de cada um é este:
 
 - **Membros** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, em `4741cd3`): a guarda dos dados (7 e 90 dias)
   começada. Estão alterados `importacaoMembrosDb.js`, `NotificacoesAgendador/index.js` e os 2 testes deles. Depois

@@ -6,8 +6,10 @@
 //   parte também na Geral, "na Tesouraria Geral") e a volta parcial (de onde, quando e as usadas: a faixa da entrega antes da primeira em branco);
 // - a FOLHA INEXISTENTE (decisão dele de 24/11/2026): a folha que a gráfica não imprimiu é um tipo a mais de exceção, onde as outras já aparecem
 //   (marcar, ver, contar no livro, desfazer), com a observação obrigatória; a migração 203 (o destino com 11 letras nas duas tabelas e os CHECKs),
-//   rodada de novo sobre dados. Duas consequências da regra ao pé da letra ficam fixadas como estão (perguntas abertas): a 50ª inexistente com
-//   folhas em branco antes dela não deixa a devolução ser parcial, e a Geral não marca a inexistente antes de entregar o bloco.
+//   rodada de novo sobre dados. As respostas dele (24/11/2026): a primeira em branco é procurada ignorando as inexistentes (a devolução parcial
+//   passa com a 50ª inexistente: as folhas antes dela voltam livres e ela continua inexistente, sem contar como livre nem como pendente, nem
+//   tirar o "esperando" de quem recebe o bloco de novo; a do meio também); e a inexistente
+//   só se marca onde as outras exceções se marcam, com o bloco já entregue (ninguém confere folha por folha quando o lote chega).
 const L = require("./lib");
 const { q, um, escalar, ok, fim, GET, POST, GERAL, LIDER, API, path } = L;
 const H = require(path.join(API, "FinBlocos/index.js"));
@@ -77,14 +79,11 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   r = await GET(H, "rastreio", geral, { folha: 70051 });
   ok(r.status === 200 && JSON.stringify(r.body.contagem) === JSON.stringify({ lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 1, livres: 49 }),
     "o rastreio conta a inexistente", r.body.contagem);
-  // pergunta aberta (regra ao pé da letra: a inexistente vale onde as outras valem): com a 50ª inexistente, não sobra "primeira em branco" depois da
-  // última folha com destino, e a parcial antes dela é recusada
-  ok(r.body.primeiraEmBranco === null, "pergunta aberta: com a 50ª inexistente, o rastreio não sugere a primeira em branco", r.body.primeiraEmBranco);
-  r = await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70090, data: "2026-11-20" });
-  ok(r.status === 422 && r.body.mensagem === "A folha 70.090 não pode ser a primeira em branco: a 70.100 já tem destino.", "pergunta aberta: a parcial antes da 50ª inexistente é recusada", r.body);
-  // pergunta aberta: a Geral não cataloga a inexistente de um bloco que ainda não saiu
+  // resposta dele: a primeira em branco é procurada ignorando as inexistentes (nada lançado ainda: a primeira folha do bloco)
+  ok(r.body.primeiraEmBranco === 70051, "o rastreio procura a primeira em branco ignorando a 50ª inexistente", r.body.primeiraEmBranco);
+  // resposta dele: a inexistente só se marca com o bloco já entregue, onde as outras exceções se marcam (nada de marcar antes da entrega)
   r = await POST(H, "folha", geral, { folha: 70200, oQueAconteceu: "inexistente", observacao: "A gráfica não imprimiu" });
-  ok(r.status === 422 && r.body.mensagem === "O bloco 1.403 ainda está na Tesouraria Geral: a folha só tem destino depois da entrega.", "pergunta aberta: a Geral não marca a inexistente antes da entrega", r.body);
+  ok(r.status === 422 && r.body.mensagem === "O bloco 1.403 ainda está na Tesouraria Geral: a folha só tem destino depois da entrega.", "a Geral não marca a inexistente antes da entrega", r.body);
 
   // desfazer a inexistente (a linha vai inteira para FinFolhasDesfeitas, com o destino de 11 letras)
   r = await POST(H, "desfazer-folha", geral, { folha: 70100, motivo: "A folha estava no fim do bloco" });
@@ -142,12 +141,76 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 200 && r.body.bloco.faixa.ultimaFolha === 70185 && !r.body.folhas.some((x) => x.folha >= 70186), "Vila Nova continua vendo só as folhas dela do 1.403", r.body.bloco);
   ok(!(await GET(H, "folhas", central, {})).body.opcoes.some((o) => o.congregacao === "Vila Nova E2E"), "a Central não vê no seletor os blocos de Vila Nova");
 
+  console.log("== a devolução parcial com a 50ª inexistente (resposta dele, 24/11/2026) ==");
+  // o 1.402 (70.101 a 70.150, a 50ª inexistente) usa até a 39ª e volta parcial: as folhas 40ª a 49ª voltam livres e a 50ª continua inexistente
+  await lancarDireto(b1402, 70101, 70139);
+  r = await GET(H, "rastreio", geral, { folha: 70101 });
+  ok(r.status === 200 && r.body.primeiraEmBranco === 70140, "o rastreio sugere a 70.140 (a 40ª), ignorando a 50ª inexistente", r.body.primeiraEmBranco);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70101, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70150, data: "2026-11-20" });
+  ok(r.status === 422 && r.body.mensagem === "A folha 70.150 não pode ser a primeira em branco: ela é inexistente.", "a própria inexistente não é a primeira em branco", r.body);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70101, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70140, data: "2026-11-20" });
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.402 de volta, parcial: as folhas 70.140 a 70.149 estão livres para outra entrega.",
+    "o 1.402 volta parcial: da 40ª à 49ª livres; a 50ª continua inexistente", r.body);
+  ok((await um(`SELECT Destino FROM FinFolhas WHERE Folha = 70150`)).Destino === "INEXISTENTE", "a 50ª continua inexistente");
+  r = await GET(H, "livro", geral, {});
+  let ent = r.body.registros.find((x) => x.tipo === "entrada" && x.bloco === 1402);
+  ok(ent && JSON.stringify(ent.contagem) === JSON.stringify({ lancadas: 39, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 1, livres: 10 }) && ent.pendentes === 0
+    && ent.parcial === true && JSON.stringify(ent.faixaLivre) === JSON.stringify({ primeiraFolha: 70140, ultimaFolha: 70150 }),
+    "a entrada do 1.402 no livro: 39 lançadas, 1 inexistente, 10 livres (a faixa 70.140 a 70.150 menos a inexistente), nenhuma pendente", ent);
+  r = await GET(H, "folhas", geral, { bloco: b1402 });
+  ok(r.status === 200 && r.body.bloco.situacao === "na-geral" && r.body.bloco.livres === 10 && r.body.folhas.some((x) => x.folha === 70150 && x.destino === "inexistente"),
+    "a Geral vê o 1.402 com as 10 livres, e a 50ª continua inexistente", r.body.bloco);
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70140, congregacaoId: CENTRAL, pessoa: { nome: "Davi Moura" }, data: "2026-11-21" })).status === 200,
+    "o 1.402 sai de novo para a Central, com as 10 livres");
+  r = await GET(H, "rastreio", geral, { folha: 70140 });
+  ok(r.status === 200 && r.body.bloco.situacao === "esperando" && r.body.bloco.livres === 10 && r.body.primeiraEmBranco === 70140,
+    "com a Central, o 1.402 está esperando: as 10 folhas dela livres (a inexistente de antes não tira o esperando)", r.body.bloco);
+  r = await GET(H, "", central, {});
+  let item = r.body.blocos && r.body.blocos.find((x) => x.numero === 1402);
+  ok(item && item.situacao === "esperando" && item.livres === 10, "a lista da Central: o 1.402 esperando, 10 livres", item);
+  op = (await GET(H, "folhas", central, {})).body.opcoes.find((o) => o.numero === 1402);
+  ok(op && op.situacao === "esperando" && op.faixa.ultimaFolha - op.faixa.primeiraFolha + 1 - op.usadas === 10, "o seletor da Central: o 1.402 esperando, 10 livres", op);
+  await lancarDireto(b1402, 70140, 70149);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70140, pessoa: { nome: "Davi Moura" }, data: "2026-11-23" });
+  ok(r.status === 200, "o 1.402 volta completo da Central", r.body);
+  r = await GET(H, "livro", geral, {});
+  ent = r.body.registros.find((x) => x.tipo === "entrada" && x.bloco === 1402);
+  ok(ent && JSON.stringify(ent.contagem) === JSON.stringify({ lancadas: 10, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 0 }) && ent.pendentes === 0,
+    "a entrada da Central no livro: 10 lançadas, nenhuma pendente (a 50ª inexistente ficou na entrada de Vila Nova)", ent);
+
+  // a inexistente no meio (a 45ª do 1.404): a parcial na 40ª passa, a mensagem diz qual não está livre, e nada vira pendente nem livre por ela
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-14" })).status === 200, "o 1.404 entregue a Vila Nova em 14/11");
+  const b1404 = await idDo(1404);
+  ok((await POST(H, "folha", local, { folha: 70245, oQueAconteceu: "inexistente", observacao: "A gráfica pulou a 45ª" })).status === 200, "a 45ª do 1.404 inexistente");
+  await lancarDireto(b1404, 70201, 70239);
+  r = await GET(H, "rastreio", geral, { folha: 70201 });
+  ok(r.status === 200 && r.body.primeiraEmBranco === 70240, "o rastreio sugere a 70.240, ignorando a 45ª inexistente", r.body.primeiraEmBranco);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70201, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70240, data: "2026-11-20" });
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.404 de volta, parcial: as folhas 70.240 a 70.250 (menos a 70.245, inexistente) estão livres para outra entrega.",
+    "o 1.404 volta parcial: a mensagem diz que a 70.245 não está livre", r.body);
+  r = await GET(H, "livro", geral, {});
+  ent = r.body.registros.find((x) => x.tipo === "entrada" && x.bloco === 1404);
+  ok(ent && JSON.stringify(ent.contagem) === JSON.stringify({ lancadas: 39, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 1, livres: 10 }) && ent.pendentes === 0,
+    "a entrada do 1.404 no livro: 39 lançadas, 1 inexistente, 10 livres, nenhuma pendente", ent);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70201, pessoa: { nome: "Rute Santos" }, data: "2026-11-21" });
+  ok(r.status === 422 && r.body.mensagem === "O bloco 1.404 já voltou, parcial, em 20/11/2026: as folhas 70.240 a 70.250 (menos a 70.245, inexistente) estão livres na Tesouraria Geral para outra entrega.",
+    "a recusa de voltar de novo diz as mesmas livres", r.body);
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70240, congregacaoId: CENTRAL, pessoa: { nome: "Davi Moura" }, data: "2026-11-21" })).status === 200, "o 1.404 sai de novo para a Central");
+  r = await GET(H, "", central, {});
+  item = r.body.blocos && r.body.blocos.find((x) => x.numero === 1404);
+  ok(item && item.situacao === "esperando" && item.livres === 10, "a lista da Central: o 1.404 esperando, 10 livres (a 45ª continua inexistente)", item);
+  await lancarDireto(b1404, 70240, 70250);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70240, pessoa: { nome: "Davi Moura" }, data: "2026-11-23" });
+  ok(r.status === 200, "o 1.404 volta completo da Central", r.body);
+  ent = (await GET(H, "livro", geral, {})).body.registros.find((x) => x.tipo === "entrada" && x.bloco === 1404);
+  ok(ent && ent.contagem.lancadas === 10 && ent.contagem.inexistentes === 0 && ent.pendentes === 0, "a entrada da Central do 1.404: 10 lançadas, nenhuma pendente", ent);
+
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();
   await aplicarMigracao("203");
   await aplicarMigracao("203");
   ok((await retratoFin()) === antes, "a 203 rodada duas vezes sobre o banco com inexistentes não muda nada");
-  ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Destino = 'INEXISTENTE'`)) === 2 && b1402 > 0, "as duas inexistentes continuam lá");
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Destino = 'INEXISTENTE'`)) === 3 && b1402 > 0, "as três inexistentes continuam lá");
 
   fim("e2e-202 (Financeiro: o que a r30 pede ao servidor)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

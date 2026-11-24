@@ -318,6 +318,20 @@ describe("a devolução completa ou parcial (regra de 24/11/2026)", () => {
     expect(regra.mensagemDaParcial(1288, 64436, 64450)).toBe("Bloco 1.288 de volta, parcial: as folhas 64.436 a 64.450 estão livres para outra entrega.");
     expect(regra.mensagemDaParcial(1288, 64450, 64450)).toBe("Bloco 1.288 de volta, parcial: a folha 64.450 está livre para outra entrega.");
   });
+  test("a parcial com inexistentes (resposta dele, 24/11/2026): as do fim ficam fora das livres; as do meio, ditas", () => {
+    expect(regra.faixaLivre(70140, 70150, [70150])).toEqual({ de: 70140, ate: 70149, menos: [] });
+    expect(regra.faixaLivre(70140, 70150, [70149, 70150])).toEqual({ de: 70140, ate: 70148, menos: [] });
+    expect(regra.faixaLivre(70240, 70250, [70247, 70245])).toEqual({ de: 70240, ate: 70250, menos: [70245, 70247] });
+    expect(regra.faixaLivre(70240, 70250, [70245, 70250])).toEqual({ de: 70240, ate: 70249, menos: [70245] });
+    expect(regra.faixaLivre(64436, 64450, [])).toEqual({ de: 64436, ate: 64450, menos: [] });
+    expect(regra.mensagemDaParcial(1402, 70140, 70149)).toBe("Bloco 1.402 de volta, parcial: as folhas 70.140 a 70.149 estão livres para outra entrega.");
+    expect(regra.mensagemDaParcial(1404, 70240, 70250, [70245]))
+      .toBe("Bloco 1.404 de volta, parcial: as folhas 70.240 a 70.250 (menos a 70.245, inexistente) estão livres para outra entrega.");
+    expect(regra.mensagemDaParcial(1404, 70240, 70250, [70243, 70245, 70247]))
+      .toBe("Bloco 1.404 de volta, parcial: as folhas 70.240 a 70.250 (menos as 70.243, 70.245 e 70.247, inexistentes) estão livres para outra entrega.");
+    expect(regra.mensagemJaVoltouParcial(1404, "2026-11-20", 70240, 70250, [70245]))
+      .toBe("O bloco 1.404 já voltou, parcial, em 20/11/2026: as folhas 70.240 a 70.250 (menos a 70.245, inexistente) estão livres na Tesouraria Geral para outra entrega.");
+  });
 
   test("o bloco que já voltou em parte e está na Geral não volta de novo antes de sair (revisão m3: não é \"não saiu\")", () => {
     expect(regra.mensagemJaVoltouParcial(1288, "2026-11-20", 64436, 64450))

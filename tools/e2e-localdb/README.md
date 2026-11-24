@@ -206,7 +206,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   a lista em páginas de 40 com os filtros, a procura e o quadro da direita; o escopo da Geral, da área e da congregação; lixo em cada campo; e
   corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados); `e2e-201` (as folhas do bloco e o livro: a exceção, o
   desfazer, a devolução completa e a parcial, o rastreio e as corridas da mesma folha); `e2e-202` (o que a rodada 30 pede ao servidor: a folha
-  inexistente de ponta a ponta e a 203 rodada de novo sobre dados).
+  inexistente de ponta a ponta, a devolução parcial com ela no fim e no meio, o seletor de bloco e a volta parcial, e a 203 rodada de novo
+  sobre dados).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

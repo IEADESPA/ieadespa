@@ -186,22 +186,39 @@ function devolucaoParcial(v) {
 }
 
 const milhar = (x) => Number(x).toLocaleString("pt-BR");
-const livresPorExtenso = (de, ate) => (Number(de) === Number(ate) ? `a folha ${milhar(de)} está livre` : `as folhas ${milhar(de)} a ${milhar(ate)} estão livres`);
+const menosPorExtenso = (menos) => {
+  if (!menos || !menos.length) return "";
+  if (menos.length === 1) return ` (menos a ${milhar(menos[0])}, inexistente)`;
+  return ` (menos as ${menos.slice(0, -1).map(milhar).join(", ")} e ${milhar(menos[menos.length - 1])}, inexistentes)`;
+};
+const livresPorExtenso = (de, ate, menos) =>
+  (Number(de) === Number(ate) ? `a folha ${milhar(de)} está livre` : `as folhas ${milhar(de)} a ${milhar(ate)}${menosPorExtenso(menos)} estão livres`);
 
-/** a mensagem da devolução parcial: as folhas que voltam livres, da primeira em branco ao fim do bloco */
-function mensagemDaParcial(numero, de, ate) {
-  return `Bloco ${milhar(numero)} de volta, parcial: ${livresPorExtenso(de, ate)} para outra entrega.`;
+/** as folhas que voltam livres na devolução parcial (resposta dele, 24/11/2026: a primeira em branco é procurada ignorando as inexistentes): da
+ *  primeira em branco ao fim do bloco, sem as inexistentes do fim ("as folhas 40 a 49 voltam livres e a 50ª continua inexistente"); as do meio
+ *  vão em `menos`, para a mensagem dizer quais não estão livres. A primeira em branco nunca é inexistente (a devolução recusa antes). */
+function faixaLivre(de, ate, inexistentes) {
+  const fora = new Set((inexistentes || []).map(Number));
+  let fim = Number(ate);
+  while (fim > Number(de) && fora.has(fim)) fim--;
+  const menos = [...fora].filter((f) => f >= Number(de) && f < fim).sort((a, b) => a - b);
+  return { de: Number(de), ate: fim, menos };
+}
+
+/** a mensagem da devolução parcial: as folhas que voltam livres, da primeira em branco ao fim do bloco (menos as inexistentes) */
+function mensagemDaParcial(numero, de, ate, menos) {
+  return `Bloco ${milhar(numero)} de volta, parcial: ${livresPorExtenso(de, ate, menos)} para outra entrega.`;
 }
 
 /** a recusa da devolução do bloco que já voltou em parte e está na Geral (revisão m3): ele só volta de novo depois de sair; data em aaaa-mm-dd */
-function mensagemJaVoltouParcial(numero, data, de, ate) {
+function mensagemJaVoltouParcial(numero, data, de, ate, menos) {
   const dia = String(data).slice(0, 10).split("-").reverse().join("/");
-  return `O bloco ${milhar(numero)} já voltou, parcial, em ${dia}: ${livresPorExtenso(de, ate)} na Tesouraria Geral para outra entrega.`;
+  return `O bloco ${milhar(numero)} já voltou, parcial, em ${dia}: ${livresPorExtenso(de, ate, menos)} na Tesouraria Geral para outra entrega.`;
 }
 
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, mensagemDaParcial, mensagemJaVoltouParcial
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial
 };

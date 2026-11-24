@@ -30,7 +30,7 @@ function r32FichaNote(p, k) {
     : r16aAviso(p, 'O dinheiro e o patrimônio de Vila Nova ficam no Financeiro, para a tesouraria e a Geral.');
   const acoes = geral ? `${m8Linha(p, 'Mudar de área', 'transferir')}${m8Linha(p, 'Fechar ou juntar', 'saida')}` : m8Linha(p, 'Ver no site', 'globo');
   const tit = r18Tit(p, 'Vila Nova · congregação nº 7', `Área 2 · aberta em 14/03/1998 · dados conferidos em 14/05/2026${geral ? ' · você vê tudo, como a Geral' : ''}`, acoes);
-  return r32Es(p, k, 'Ficha da congregação', `${tit}${r32Abas(p, ['Resumo', 'Diretoria', 'Outros cargos', 'Cultos e pontos de culto', 'Endereço e site', 'Histórico'], 'Resumo')}${r32Grade3(r18Col(dir), r18Col(cultos, pontos), r18Col(end, gente, din))}`, geral ? ['Congregações', 'Vila Nova'] : ['Vila Nova']);
+  return r32Es(p, k, 'Ficha da congregação', `${tit}${r32Abas(p, ['Resumo', 'Diretoria', 'Cultos e pontos de culto', 'Endereço e site', 'Histórico'], 'Resumo')}${r32Grade3(r18Col(dir), r18Col(cultos, pontos), r18Col(end, gente, din))}`, geral ? ['Congregações', 'Vila Nova'] : ['Vila Nova']);
 }
 // a ficha da área, para o pastor de área: a diretoria da área e as 12 congregações pelo número
 function r32FichaArea(p) {

@@ -2,19 +2,19 @@
 // A primeira tela do módulo, "quem precisa de atenção primeiro": o cargo vago, o cargo vencendo, o dado velho e o termo de
 // posse pendente. Cada nível vê os seus tipos de aviso, como no Financeiro, e o filtro "só o que eu preciso resolver".
 const R32_PRECISA = {
-  local: [['maleta', 'verm', '1º tesoureiro vago', 'desde 25/11 · o Carlos saiu', 'Preencher ›'], ['calendario', 'ouro', 'A diretoria de 2027', 'os 6 cargos vencem em 31/12 · faltam 29 dias', 'Montar ›'], ['relogio', 'ouro', 'Cultos e pontos de culto', 'conferidos em 14/05 · passou dos 6 meses', 'Conferir ›'], ['livro', 'ouro', 'Professor dos Jovens (EBD)', 'outro cargo · vago desde 25/11', 'Preencher ›']],
+  local: [['maleta', 'verm', '1º tesoureiro vago', 'desde 25/11 · o Carlos saiu', 'Preencher ›'], ['calendario', 'ouro', 'A diretoria de 2027', 'os 6 cargos vencem em 31/12 · faltam 29 dias', 'Montar ›'], ['relogio', 'ouro', 'Cultos e pontos de culto', 'conferidos em 14/05 · passou dos 6 meses', 'Conferir ›']],
   area: [['igreja', 'verm', 'Dirigente de Monte Sião', 'desde 02/11 · você ou a Geral', 'Pôr ›'], ['maleta', 'verm', 'Tesoureiro da Área 2', 'vago desde 16/11', 'Preencher ›'], ['calendario', 'ouro', 'A diretoria da área de 2027', 'os 3 cargos vencem em 31/12', 'Montar ›']],
   geral: [['doc', 'ouro', '2 termos de dirigente', 'esperam o Presidente · Área 4 e Área 6', 'Ver ›'], ['igreja', 'verm', 'Boa Sorte sem dirigente', 'Área 7 · desde 20/10', 'Pôr ›'], ['calendario', 'ouro', 'A diretoria geral de 2027', 'os cargos da Geral vencem em 31/12', 'Montar ›']]
 };
 const R32_NUMS = {
-  local: [r32Num('2', 'cargos vagos', 'verm'), r32Num('5', 'cargos vencem em 31/12'), r32Num('0', 'termos pendentes'), r32Num('1', 'dado para conferir', 'ouro')],
-  area: [r32Num('11', 'cargos vagos', 'verm'), r32Num('1', 'congregação sem dirigente', 'verm'), r32Num('1', 'termo pendente', 'ouro'), r32Num('3', 'para conferir', 'ouro')],
-  geral: [r32Num('25', 'cargos vagos', 'verm'), r32Num('2', 'congregações sem dirigente', 'verm'), r32Num('3', 'termos pendentes', 'ouro'), r32Num('11', 'para conferir', 'ouro'), r32Num('4 de 45', 'com a diretoria de 2027')]
+  local: [r32Num('1', 'cargo vago', 'verm'), r32Num('5', 'cargos vencem em 31/12'), r32Num('0', 'termos pendentes'), r32Num('1', 'dado para conferir', 'ouro')],
+  area: [r32Num('8', 'cargos vagos', 'verm'), r32Num('1', 'congregação sem dirigente', 'verm'), r32Num('1', 'termo pendente', 'ouro'), r32Num('3', 'para conferir', 'ouro')],
+  geral: [r32Num('22', 'cargos vagos', 'verm'), r32Num('2', 'congregações sem dirigente', 'verm'), r32Num('3', 'termos pendentes', 'ouro'), r32Num('11', 'para conferir', 'ouro'), r32Num('4 de 45', 'com a diretoria de 2027')]
 };
 const r32Precisa = (p, k, cel) => r32Car(p, 'Precisa de você', r18Etiq(p, String(R32_PRECISA[k].length), 'ouro'), R32_PRECISA[k].map((x, i) => r28Pes(p, r32Ic(p, x[0], x[1]), x[2], x[3], r28Mais(p, cel ? '›' : x[4]), { i, alt: cel ? 50 : 54 })).join(''), cel);
 // a virada do ano em Vila Nova: quem vence em 31/12 e o acesso que perde se não estiver na diretoria de 2027
 const R32_VENCE = [['AN', 'Pr. Abel Nogueira', 'Dirigente', 'o acesso de dirigente'], ['IC', 'Pb. Ivan Castro', 'Vice-dirigente', 'o cargo de vice-dirigente'], ['DL', 'Débora Lima', '1º secretário', 'a secretaria de Vila Nova'], ['PM', 'Paulo Mendes', '2º secretário', 'a secretaria de Vila Nova'], ['SR', 'Sueli Rocha', '2º tesoureiro', 'a tesouraria de Vila Nova']];
-const R32_ATENCAO_A2 = [['12 · Monte Sião', 'sem dirigente · 2 vagos · cultos há 7 meses', 'verm', 'sem dirigente'], ['27 · Betel', 'os 2 tesoureiros vagos desde 03/11', 'ouro', '2 vagos'], ['21 · Nova Esperança', 'endereço e cultos há 8 meses · 1 vago', 'ouro', 'conferir'], ['7 · Vila Nova', 'tesoureiro e professor vagos · cultos há 6 meses', 'ouro', '2 vagos'], ['9 · Cidade Jardim', 'secretário sem aceitar o termo · recepção vaga', 'ouro', 'termo'], ['36 · Recanto', 'secretário vago desde 19/11', 'ouro', '1 vago']];
+const R32_ATENCAO_A2 = [['12 · Monte Sião', 'sem dirigente · 2 vagos · cultos há 7 meses', 'verm', 'sem dirigente'], ['27 · Betel', 'os 2 tesoureiros vagos desde 03/11', 'ouro', '2 vagos'], ['21 · Nova Esperança', 'endereço e cultos há 8 meses', 'ouro', 'conferir'], ['7 · Vila Nova', '1º tesoureiro vago · cultos há 6 meses', 'ouro', '1 vago'], ['9 · Cidade Jardim', 'o secretário novo ainda não aceitou o termo', 'ouro', 'termo'], ['36 · Recanto', 'secretário vago desde 19/11', 'ouro', '1 vago']];
 function r32Painel(p, k, d) {
   const cel = ehCel(d), N = R32_NUMS[k];
   if (cel) {

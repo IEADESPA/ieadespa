@@ -238,9 +238,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   que não existe), o número errado é 409 e o lixo 400; a parada com gente não se descarta; confirmada há 20 dias e com o lote agora, nada muda; com 8 dias do
   lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo. Depois, a importação SÓ DAS LINHAS QUE
   FALTARAM (o resto, uma vez): o estado diz quais faltaram; a prévia comum continua recusada; a planilha só com algumas entra pelo nome e avisa quem não
-  foi achado; o mesmo arquivo substitui essa prévia e acha todas; a matrícula tomada depois vira número novo (e a mesma pessoa, possível repetida); o lixo,
-  a local, o 428 e o arquivo sem nenhuma delas; importado, a tela volta ao resultado com o que o resto fez, a lista de antes diz que ele foi feito, um
-  segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado pessoal e a cadeia.
+  foi achado; o arquivo de antes sem a última linha substitui essa prévia e acha três das quatro (a que não veio, avisada); nenhum resumo guarda o nome
+  de quem não veio; a matrícula tomada depois vira número novo (e a mesma pessoa, possível repetida); o lixo, a local, o 428 e o arquivo sem nenhuma delas;
+  importado, a tela volta ao resultado com o que o resto fez (e quantas não vieram), a lista e o CSV de antes dizem de cada linha que faltou se veio no
+  resto ou não, um segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado
+  pessoal e a cadeia.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

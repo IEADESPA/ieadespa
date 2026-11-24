@@ -46,7 +46,8 @@ export interface ResumoResto {
   readonly naoAchadas: number;
   readonly ambiguas: number;
   readonly foraDaLista: number;
-  readonly listaNaoAchadas: readonly LinhaENome[];
+  /** os números das linhas que faltaram e não foram achadas (sem o nome) */
+  readonly linhasNaoAchadas: readonly number[];
 }
 /** o resto no estado (G2, decisão dele de 24/11/2026): as linhas que faltaram na importação concluída (quantas e as 10 primeiras), se a importação só delas
  *  pode ser feita (uma vez), se está aberta (prévia ou em andamento) e o que ela fez */
@@ -56,7 +57,14 @@ export interface EstadoResto {
   readonly linhas: readonly LinhaENome[];
   readonly possivel: boolean;
   readonly aberto: boolean;
-  readonly feito: { readonly importacaoId: number; readonly concluidaEm: string | null; readonly importadas: number; readonly fora: number } | null;
+  readonly feito: {
+    readonly importacaoId: number;
+    readonly concluidaEm: string | null;
+    readonly importadas: number;
+    readonly fora: number;
+    /** as que faltaram e não vieram no arquivo do resto (marcadas na lista da importação de antes) */
+    readonly naoAchadas?: number;
+  } | null;
 }
 /** os prazos da guarda dos dados (respostas dele de 23/11/2026): a prévia não confirmada e a lista dos de fora, em dias */
 export interface Guarda { readonly diasPrevia: number; readonly diasFora: number }
@@ -303,8 +311,10 @@ export function fraseDoResto(r: EstadoResto | null | undefined): string {
     const quando = diaBr(r.feito.concluidaEm);
     const entraram = contagem(r.feito.importadas) ? r.feito.importadas : 0;
     const fora = contagem(r.feito.fora) ? r.feito.fora : 0;
+    const naoVieram = contagem(r.feito.naoAchadas) ? r.feito.naoAchadas : 0;
     return `A importação das linhas que faltaram foi feita${quando ? ` em ${quando}` : ""}: ${numero(entraram)} ${entraram === 1 ? "entrou" : "entraram"}`
       + (fora > 0 ? ` e ${numero(fora)} ${fora === 1 ? "ficou" : "ficaram"} de fora (na lista dela para baixar)` : "")
+      + (naoVieram > 0 ? `; ${numero(naoVieram)} ${naoVieram === 1 ? "não veio no arquivo (marcada" : "não vieram no arquivo (marcadas"} na lista do que aconteceu)` : "")
       + ". É uma vez só: quem ainda faltar se cadastra à mão.";
   }
   if (!r.possivel || !contagem(r.faltaram) || r.faltaram < 1) return "";

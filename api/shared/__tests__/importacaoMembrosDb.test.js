@@ -695,7 +695,7 @@ describe("G2: a importação só das linhas que faltaram (o resto)", () => {
     const r = await db.criarPrevia(POOL_R, QUEM, { nomeArquivo: "membros.csv", texto: ARQUIVO, resto: true });
     expect(r).toMatchObject({ sucesso: true, importacaoId: 8 });
     expect(r.resumo).toMatchObject({ total: 2, novas: 2, numeroNovo: 1, problemas: 0,
-      resto: { de: 7, faltaram: 2, achadas: 2, naoAchadas: 0, ambiguas: 0, foraDaLista: 2, listaNaoAchadas: [] } });
+      resto: { de: 7, faltaram: 2, achadas: 2, naoAchadas: 0, ambiguas: 0, foraDaLista: 2, linhasNaoAchadas: [] } });
     expect(r.resumo.avisosGerais.map((a) => a.codigo)).not.toContain("RESTO_NAO_ACHADAS");
     // só as matrículas das linhas achadas vão ao banco (as das que já entraram, não)
     expect(JSON.parse(mockConsultas.find((c) => /JOIN MembroReferencia m ON m\.MembroId = j\.v/.test(c.sql)).inputs.j)).toEqual([70102, 70103]);
@@ -712,7 +712,9 @@ describe("G2: a importação só das linhas que faltaram (o resto)", () => {
   test("a linha que faltou e não está no arquivo: a prévia avisa (não passa calada); nenhuma achada: 409 e nada se grava", async () => {
     mockRegras = basePrevia([concluida()], [...FALTARAM, { Linha: 9, Nome: "Samuel Brito" }]);
     const r = await db.criarPrevia(POOL_R, QUEM, { texto: ARQUIVO, resto: true });
-    expect(r.resumo.resto).toMatchObject({ faltaram: 3, achadas: 2, naoAchadas: 1, listaNaoAchadas: [{ linha: 9, nome: "Samuel Brito" }] });
+    expect(r.resumo.resto).toMatchObject({ faltaram: 3, achadas: 2, naoAchadas: 1, linhasNaoAchadas: [9] });
+    // o resumo gravado (que fica depois dos 90 dias da lista) não leva o nome de quem não foi achado
+    expect(JSON.stringify(mockConsultas.find((c) => /INSERT INTO ImportacoesMembros \(/.test(c.sql)).inputs)).not.toMatch(/Samuel Brito/);
     expect(r.resumo.avisosGerais[0]).toMatchObject({ codigo: "RESTO_NAO_ACHADAS" });
     mockConsultas = [];
     mockRegras = basePrevia([concluida()], [{ Linha: 9, Nome: "Samuel Brito" }]);
@@ -793,10 +795,12 @@ describe("G2: a importação só das linhas que faltaram (o resto)", () => {
     // feito: a tela volta ao resultado da importação de antes, com o que o resto fez; o retrato é o da importação de antes
     mockConsultas = [];
     const fim = new Date("2026-12-22T10:00:00Z");
-    mockRegras = [situacao([concluida(), concluida({ ImportacaoId: 8, RestoDe: 7, ConcluidaEm: fim, Resumo: JSON.stringify({ resultado: { importadas: 1, fora: 1 } }) })]), lista];
+    mockRegras = [situacao([concluida(), concluida({ ImportacaoId: 8, RestoDe: 7, ConcluidaEm: fim,
+      Resumo: JSON.stringify({ resultado: { importadas: 1, fora: 1 }, resto: { naoAchadas: 3, linhasNaoAchadas: [9, 10, 11] } }) })]), lista];
     r = await db.estado(POOL_R);
     expect(r.importacao).toMatchObject({ importacaoId: 7 });
-    expect(r.resto).toMatchObject({ possivel: false, aberto: false, feito: { importacaoId: 8, concluidaEm: fim, importadas: 1, fora: 1 } });
+    // feito: quantas entraram e ficaram de fora nele, e quantas das que faltaram não vieram no arquivo dele (e não estão na lista dele)
+    expect(r.resto).toMatchObject({ possivel: false, aberto: false, feito: { importacaoId: 8, concluidaEm: fim, importadas: 1, fora: 1, naoAchadas: 3 } });
     expect(mockConsultas.filter((c) => /GROUP BY a\.AreaId/.test(c.sql)).map((c) => c.inputs.id)).toEqual([7]);
     // nada faltou (ou a lista já se apagou) e nenhum resto: nada a mostrar
     mockRegras = [situacao([concluida()])];
@@ -815,19 +819,32 @@ describe("G2: a importação só das linhas que faltaram (o resto)", () => {
     expect(r.descartadaPeloPrazo).toMatchObject({ importacaoId: 8, dias: 7 });
     expect(r.resto).toMatchObject({ possivel: true, aberto: false, feito: null });
   });
-  test("a lista e o CSV da importação de antes: depois do resto feito, o motivo de quem faltou diz que o resto já foi feito", async () => {
-    const linhaFora = { Total: 1, Linha: 4, MatriculaArquivo: null, Nome: "Paulo Henrique Dias", Acao: "PROBLEMA", Estado: "FORA", MatriculaFinal: null, Problemas: "NAO_TERMINOU",
-      Avisos: null, NumeroNovo: false, MotivoNumero: null };
-    const cenarioLista = (feito) => [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: "{}" }]], [/WITH ordem AS/, [linhaFora]],
-      [/FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND \(Acao = N'PROBLEMA'/, [linhaFora]],
-      [/WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'/, feito ? [{ ImportacaoId: 8 }] : []]];
-    mockRegras = cenarioLista(false);
-    expect((await db.listar(POOL_R, 7)).itens[0].motivos).toEqual([regras.PROBLEMAS.NAO_TERMINOU]);
-    expect(await db.csv(POOL_R, 7)).toContain(regras.PROBLEMAS.NAO_TERMINOU);
-    mockRegras = cenarioLista(true);
-    expect((await db.listar(POOL_R, 7)).itens[0].motivos).toEqual([regras.PROBLEMAS.NAO_TERMINOU_RESTO_FEITO]);
-    expect(await db.csv(POOL_R, 7)).toContain(regras.PROBLEMAS.NAO_TERMINOU_RESTO_FEITO);
-    expect(mockConsultas.find((c) => /WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'/.test(c.sql)).inputs.id).toBe(7);
+  test("a lista e o CSV de antes: depois do resto feito, cada linha que faltou diz se veio no arquivo dele (confira nele) ou não (cadastre à mão)", async () => {
+    const fora = (Linha, Nome) => ({ Total: 2, Linha, MatriculaArquivo: null, Nome, Acao: "PROBLEMA", Estado: "FORA", MatriculaFinal: null, Problemas: "NAO_TERMINOU",
+      Avisos: null, NumeroNovo: false, MotivoNumero: null });
+    const linhas = [fora(4, "Paulo Henrique Dias"), fora(5, "Raquel Monteiro")];
+    const contexto = /OUTER APPLY \(SELECT TOP 1 r\.Resumo FROM ImportacoesMembros r WHERE r\.RestoDe = i\.ImportacaoId AND r\.Situacao = N'CONCLUIDA'\) f/;
+    const cenarioLista = (ctx) => [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: "{}" }]], [/WITH ordem AS/, linhas],
+      [/FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND \(Acao = N'PROBLEMA'/, linhas], [contexto, ctx ? [ctx] : []]];
+    const motivos = async () => (await db.listar(POOL_R, 7)).itens.map((i) => i.motivos);
+    const P = regras.PROBLEMAS;
+    // sem resto feito: a saída de agora
+    mockRegras = cenarioLista({ RestoDe: null, ResumoDoResto: null });
+    expect(await motivos()).toEqual([[P.NAO_TERMINOU], [P.NAO_TERMINOU]]);
+    expect(await db.csv(POOL_R, 7)).toContain(P.NAO_TERMINOU);
+    // resto feito, a linha 5 não veio no arquivo dele: cada uma com o seu motivo, na lista e no CSV
+    mockConsultas = [];
+    mockRegras = cenarioLista({ RestoDe: null, ResumoDoResto: JSON.stringify({ resto: { naoAchadas: 1, linhasNaoAchadas: [5] } }) });
+    expect(await motivos()).toEqual([[P.NAO_TERMINOU_FOI_NO_RESTO], [P.NAO_TERMINOU_FORA_DO_RESTO]]);
+    const c = await db.csv(POOL_R, 7);
+    expect(c).toContain(P.NAO_TERMINOU_FOI_NO_RESTO);
+    expect(c).toContain(P.NAO_TERMINOU_FORA_DO_RESTO);
+    expect(mockConsultas.filter((q) => contexto.test(q.sql)).map((q) => q.inputs.id)).toEqual([7, 7]);
+    // a lista do PRÓPRIO resto que parou e a rotina concluiu: quem faltou nele não tem outra importação
+    mockRegras = cenarioLista({ RestoDe: 6, ResumoDoResto: null });
+    expect(await motivos()).toEqual([[P.NAO_TERMINOU_NO_RESTO], [P.NAO_TERMINOU_NO_RESTO]]);
+    expect(await db.csv(POOL_R, 7)).toContain(P.NAO_TERMINOU_NO_RESTO);
+    expect(await db.csv(POOL_R, 7)).not.toContain("entra na importação das linhas que faltaram");
   });
   test("o painel do arrolamento diz o dia em que vieram pela importação de antes (o resto, depois, não muda a data)", () => {
     const f = require("fs").readFileSync(require("path").join(__dirname, "..", "arrolamentoDb.js"), "utf8");

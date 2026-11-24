@@ -146,7 +146,10 @@ async function restoDe(rq, sit) {
   const aberto = doResto(sit.previa) || doResto(sit.andamento);
   const f = doResto(sit.restoConcluido) ? sit.restoConcluido : null;
   const res = f ? (lerJson(f.Resumo) || {}).resultado || {} : null;
-  const feito = f ? { importacaoId: Number(f.ImportacaoId), concluidaEm: f.ConcluidaEm, importadas: Number(res.importadas || 0), fora: Number(res.fora || 0) } : null;
+  // feito: o que entrou e o que ficou de fora nele (na lista dele) e quantas das que faltaram não vieram no arquivo dele (marcadas na lista de antes)
+  const doRestoFeito = f ? (lerJson(f.Resumo) || {}).resto || {} : null;
+  const feito = f ? { importacaoId: Number(f.ImportacaoId), concluidaEm: f.ConcluidaEm, importadas: Number(res.importadas || 0), fora: Number(res.fora || 0),
+    naoAchadas: Number(doRestoFeito.naoAchadas || 0) } : null;
   if (!faltaram && !feito && !aberto) return null;
   return { de, faltaram, linhas: ls.map((l) => ({ linha: Number(l.Linha), nome: l.Nome || "" })), possivel: faltaram > 0 && !feito && !aberto, aberto, feito };
 }
@@ -381,14 +384,27 @@ const FILTROS = Object.freeze({
   repetidas: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 0 AND (a.RepetidaLinha IS NOT NULL OR a.RepetidaMembro IS NOT NULL)",
   todas: ""
 });
-// `restoFeito` (G2): a importação das linhas que faltaram já foi feita — o motivo de quem faltou diz isso (e não mais "entra na importação das que faltaram")
-const paraLista = (l, restoFeito = false) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
+// G2: o motivo de quem faltou (NAO_TERMINOU) diz a saída que existe de verdade — no PRÓPRIO resto que parou, nenhuma (cadastrar à mão); na importação de
+// antes, com o resto feito, se a linha veio no arquivo dele (confira na lista dele) ou não (cadastrar à mão); sem resto feito, a importação das que faltaram
+function motivoDeQuemFaltou(ctx, linha) {
+  if (ctx.ehResto) return "NAO_TERMINOU_NO_RESTO";
+  if (!ctx.naoVieram) return "NAO_TERMINOU";
+  return ctx.naoVieram.has(linha) ? "NAO_TERMINOU_FORA_DO_RESTO" : "NAO_TERMINOU_FOI_NO_RESTO";
+}
+const paraLista = (l, ctx = {}) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
   matriculaFinal: l.MatriculaFinal == null ? null : Number(l.MatriculaFinal),
-  problemas: l.Problemas ? l.Problemas.split(",").map((c) => (restoFeito && c === "NAO_TERMINOU" ? "NAO_TERMINOU_RESTO_FEITO" : c)) : [],
+  problemas: l.Problemas ? l.Problemas.split(",").map((c) => (c === "NAO_TERMINOU" ? motivoDeQuemFaltou(ctx, Number(l.Linha)) : c)) : [],
   avisos: l.Avisos ? l.Avisos.split(",") : [] });
-async function restoFeitoDe(pool, id) {
-  return (await pool.request().input("id", sql.Int, id)
-    .query("SELECT TOP 1 ImportacaoId FROM ImportacoesMembros WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'")).recordset.length > 0;
+// a importação listada é um resto? e, se é a de antes, o resto dela foi feito (e quais linhas que faltaram não vieram no arquivo dele)?
+async function contextoDaLista(pool, id) {
+  const c = (await pool.request().input("id", sql.Int, id).query(`SELECT i.RestoDe, f.Resumo AS ResumoDoResto FROM ImportacoesMembros i
+    OUTER APPLY (SELECT TOP 1 r.Resumo FROM ImportacoesMembros r WHERE r.RestoDe = i.ImportacaoId AND r.Situacao = N'CONCLUIDA') f
+    WHERE i.ImportacaoId = @id`)).recordset[0];
+  if (!c) return {};
+  if (c.RestoDe != null) return { ehResto: true };
+  if (c.ResumoDoResto == null) return {};
+  const ls = ((lerJson(c.ResumoDoResto) || {}).resto || {}).linhasNaoAchadas;
+  return { naoVieram: new Set(Array.isArray(ls) ? ls.map(Number) : []) };
 }
 // O detalhe de cada linha para a tela (r27, "Matrícula a acertar" e "Possíveis repetidas"): por que a matrícula muda (e quem ficou com ela: a linha que veio
 // antes), de quem pode ser repetida e o número que ela RECEBE — o de verdade depois de importada; antes, o PREVISTO pela regra do lote (as matrículas do arquivo
@@ -431,16 +447,16 @@ async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {})
     WHERE a.ImportacaoId = @id ${FILTROS[f]}
     ORDER BY a.Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
   const total = r.recordset.length ? Number(r.recordset[0].Total) : 0;
-  const restoFeito = await restoFeitoDe(pool, id);
-  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l, restoFeito), detalhe: detalheDe(l, base) })) };
+  const ctx = await contextoDaLista(pool, id);
+  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l, ctx), detalhe: detalheDe(l, base) })) };
 }
 async function csv(pool, importacaoId) {
   const id = idValido(importacaoId);
   if (!id) return null;
   const r = await pool.request().input("id", sql.Int, id).query(`SELECT Linha, MatriculaArquivo, Nome, Acao, MatriculaFinal, Problemas, Avisos
     FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND (Acao = N'PROBLEMA' OR Avisos IS NOT NULL) ORDER BY Linha`);
-  const restoFeito = await restoFeitoDe(pool, id);
-  return regras.csvDaLista(r.recordset.map((l) => paraLista(l, restoFeito)));
+  const ctx = await contextoDaLista(pool, id);
+  return regras.csvDaLista(r.recordset.map((l) => paraLista(l, ctx)));
 }
 
 // ------------------------------------------------------------------ a confirmação (daqui não volta)

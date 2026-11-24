@@ -249,11 +249,14 @@ describe("G2: a importação só das linhas que faltaram (a tela)", () => {
       + "Você pode fazer uma importação só com elas, uma vez: mande o mesmo arquivo de novo, ou uma planilha só com essas linhas.");
     expect(T.fraseDoResto({ ...base, faltaram: 1 })).toBe("A importação não terminou no prazo: 1 linha faltou, e o sistema guardou só o número da linha e o nome "
       + "dela. Você pode fazer uma importação só com ela, uma vez: mande o mesmo arquivo de novo, ou uma planilha só com essa linha.");
-    const feito = { ...base, possivel: false, feito: { importacaoId: 8, concluidaEm: "2026-12-22T13:00:00Z", importadas: 1150, fora: 57 } };
-    expect(T.fraseDoResto(feito)).toBe("A importação das linhas que faltaram foi feita em 22/12/2026: 1.150 entraram e 57 ficaram de fora (na lista dela para baixar). "
-      + "É uma vez só: quem ainda faltar se cadastra à mão.");
-    expect(T.fraseDoResto({ ...feito, feito: { ...feito.feito, importadas: 1, fora: 0 } })).toBe("A importação das linhas que faltaram foi feita em 22/12/2026: 1 entrou. "
-      + "É uma vez só: quem ainda faltar se cadastra à mão.");
+    // feito: as que entraram e as que ficaram de fora nele (na lista dele) e as que não vieram no arquivo dele (marcadas na lista da importação de antes)
+    const feito = { ...base, possivel: false, feito: { importacaoId: 8, concluidaEm: "2026-12-22T13:00:00Z", importadas: 1140, fora: 10, naoAchadas: 57 } };
+    expect(T.fraseDoResto(feito)).toBe("A importação das linhas que faltaram foi feita em 22/12/2026: 1.140 entraram e 10 ficaram de fora (na lista dela para baixar); "
+      + "57 não vieram no arquivo (marcadas na lista do que aconteceu). É uma vez só: quem ainda faltar se cadastra à mão.");
+    expect(T.fraseDoResto({ ...feito, feito: { ...feito.feito, importadas: 3, fora: 0, naoAchadas: 1 } })).toBe("A importação das linhas que faltaram foi feita em "
+      + "22/12/2026: 3 entraram; 1 não veio no arquivo (marcada na lista do que aconteceu). É uma vez só: quem ainda faltar se cadastra à mão.");
+    expect(T.fraseDoResto({ ...feito, feito: { ...feito.feito, importadas: 1, fora: 0, naoAchadas: 0 } })).toBe("A importação das linhas que faltaram foi feita em "
+      + "22/12/2026: 1 entrou. É uma vez só: quem ainda faltar se cadastra à mão.");
     for (const x of [null, undefined, { ...base, possivel: false }, { ...base, aberto: true, possivel: false }, { ...base, faltaram: 0 }, { ...base, faltaram: "3" }]) {
       expect(T.fraseDoResto(x)).toBe("");
     }

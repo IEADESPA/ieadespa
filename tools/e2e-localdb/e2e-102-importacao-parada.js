@@ -10,11 +10,12 @@
 //      7 dias); com 6 dias do lote, nada; com 8, as que faltavam ficam de fora só com o nome e o motivo, ela CONCLUI (as matrículas destravam), as
 //      importadas ficam como na conclusão de sempre, a lista e o CSV mostram o motivo novo; rodar de novo não faz nada;
 //   3. a importação SÓ DAS LINHAS QUE FALTARAM (o resto: a exceção ao "uma vez só", uma vez): o estado diz quais faltaram; a prévia comum continua recusada;
-//      a planilha só com algumas delas entra pelo nome e avisa quem não foi achado; o mesmo arquivo de novo substitui essa prévia e acha todas (as outras linhas
-//      do arquivo nem entram); a matrícula tomada depois (um cadastro novo; a linha que repetia a matrícula de quem entrou) vira número novo, e a mesma pessoa
-//      vira possível repetida; o lixo, a liderança local, o 428 e o arquivo sem nenhuma delas; confirmada e importada, a tela volta ao resultado com o que o
-//      resto fez, a lista de antes diz que o resto foi feito, um segundo resto é recusado (e o banco o impede), e o painel do arrolamento guarda o dia de
-//      antes. No fim, a trilha sem dado pessoal e a cadeia de hashes.
+//      a planilha só com algumas delas entra pelo nome e avisa quem não foi achado; o arquivo de antes sem a última linha substitui essa prévia e acha três
+//      das quatro (as outras linhas do arquivo nem entram; a que não veio fica avisada); nenhum resumo guarda o nome de quem não veio; a matrícula tomada
+//      depois (um cadastro novo; a linha que repetia a matrícula de quem entrou) vira número novo, e a mesma pessoa vira possível repetida; o lixo, a liderança
+//      local, o 428 e o arquivo sem nenhuma delas; confirmada e importada, a tela volta ao resultado com o que o resto fez, a lista de antes diz de cada linha
+//      que faltou se veio no resto ou não, um segundo resto é recusado (e o banco o impede), e o painel do arrolamento guarda o dia de antes. No fim, a
+//      trilha sem dado pessoal e a cadeia de hashes.
 // Roda sobre a base cenario-187: `BASE=cenario-187 bash rodar.sh roteiro e2e-102-importacao-parada.js`.
 process.env.AUTH_SECRET = "segredo-da-importacao-parada-" + "x".repeat(24);
 const crypto = require("crypto");
@@ -137,16 +138,18 @@ async function principal() {
   ok((await R(tok.geral())).body.descartadaPeloPrazo === null && await travadas(), "a tela não explica a descartada à mão; as matrículas continuam travadas");
 
   console.log("== 2. parada com gente importada ==");
-  // a linha 6 repete a matrícula (e a pessoa) da linha 2: entra com número novo, no fim da fila, e falta junto com as outras
-  const ARQ_B = arquivo([pessoa(992101, "Caio Entrou E2E102"), pessoa(992102, "Dora Entrou E2E102"), pessoa(992103, "Eva Faltou E2E102"), pessoa(992104, "Fábio Faltou E2E102"),
-    pessoa(992101, "Caio Entrou E2E102")]);
+  // a linha 6 repete a matrícula (e a pessoa) da linha 2: entra com número novo, no fim da fila, e falta junto com as outras; a linha 7 falta e não vem no
+  // arquivo do resto (caso 3)
+  const LINHAS_B = [pessoa(992101, "Caio Entrou E2E102"), pessoa(992102, "Dora Entrou E2E102"), pessoa(992103, "Eva Faltou E2E102"), pessoa(992104, "Fábio Faltou E2E102"),
+    pessoa(992101, "Caio Entrou E2E102"), pessoa(992105, "Gil Faltou E2E102")];
+  const ARQ_B = arquivo(LINHAS_B);
   const pB = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "parada-b.csv", texto: ARQ_B } });
   const idB = pB.body.importacaoId;
   await R(tok.geral(), { metodo: "POST", acao: "confirmar", corpo: { importacaoId: idB } });
   const lote = await db.importarLote(pool, { membroId: 9920 }, idB, { tamanho: 2 });
-  ok(lote.sucesso === true && lote.importadas === 2 && lote.restantes === 3 && lote.concluida === false, "um lote de 2 entrou e a importação parou (faltam 3)", lote);
+  ok(lote.sucesso === true && lote.importadas === 2 && lote.restantes === 4 && lote.concluida === false, "um lote de 2 entrou e a importação parou (faltam 4)", lote);
   const ndB = await R(tok.geral(), { metodo: "POST", acao: "descartar-parada", corpo: { importacaoId: idB } });
-  ok(ndB.status === 409 && ndB.body.mensagem === MSG.JA_ENTROU_ALGUEM && await pessoais(idB) === 5, "a parada com gente importada não se descarta (409; nada sai)", ndB.body);
+  ok(ndB.status === 409 && ndB.body.mensagem === MSG.JA_ENTROU_ALGUEM && await pessoais(idB) === 6, "a parada com gente importada não se descarta (409; nada sai)", ndB.body);
   await voltarConfirmacao(idB, 20);
   await db.aplicarRetencao(pool);
   const eB = (await R(tok.geral())).body;
@@ -155,27 +158,27 @@ async function principal() {
   await voltar(idB, 6);
   await db.aplicarRetencao(pool);
   const sB6 = await escalar("SELECT Situacao FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB }), pB6 = await pessoais(idB);
-  // as 5 linhas ainda com os dados: as 3 pendentes e as 2 importadas (as importadas só se limpam na conclusão, como sempre)
-  ok(sB6 === "IMPORTANDO" && pB6 === 5, "com 6 dias do último lote: nada muda (em andamento, as 5 linhas ainda com os dados)", { situacao: sB6, comDados: pB6 });
+  // as 6 linhas ainda com os dados: as 4 pendentes e as 2 importadas (as importadas só se limpam na conclusão, como sempre)
+  ok(sB6 === "IMPORTANDO" && pB6 === 6, "com 6 dias do último lote: nada muda (em andamento, as 6 linhas ainda com os dados)", { situacao: sB6, comDados: pB6 });
   ok((await R(tok.geral())).body.prazo.faltam === 1, "e a tela diz que falta 1 dia");
   await voltar(idB, 2);
   await db.aplicarRetencao(pool);
   const imp = await um("SELECT Situacao, Resumo FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB });
   const res = JSON.parse(imp.Resumo || "{}").resultado || {};
-  ok(imp.Situacao === "CONCLUIDA" && res.importadas === 2 && res.fora === 3, "com 8 dias do último lote: ela conclui com as 2 que entraram e as 3 de fora", { situacao: imp.Situacao, res });
+  ok(imp.Situacao === "CONCLUIDA" && res.importadas === 2 && res.fora === 4, "com 8 dias do último lote: ela conclui com as 2 que entraram e as 4 de fora", { situacao: imp.Situacao, res });
   ok(!(await travadas()), "concluída: as matrículas novas destravam");
   const lB = await q("SELECT Linha, Estado, Problemas FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i ORDER BY Linha", { i: idB });
-  ok(lB.map((l) => `${l.Linha}:${l.Estado}:${l.Problemas || ""}`).join(",") === "2:IMPORTADA:,3:IMPORTADA:,4:FORA:NAO_TERMINOU,5:FORA:NAO_TERMINOU,6:FORA:NAO_TERMINOU",
+  ok(lB.map((l) => `${l.Linha}:${l.Estado}:${l.Problemas || ""}`).join(",") === "2:IMPORTADA:,3:IMPORTADA:,4:FORA:NAO_TERMINOU,5:FORA:NAO_TERMINOU,6:FORA:NAO_TERMINOU,7:FORA:NAO_TERMINOU",
     "as que entraram ficam; as que faltavam, de fora com o motivo", lB);
   ok(await sobraFora(idB) === 0 && await pessoais(idB) === 0, "nenhum dado pessoal sobrou em linha nenhuma (a conclusão de sempre limpa as importadas)");
   ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (992101, 992102) AND SituacaoMembro = N'ARROLAMENTO'") === 2
-    && await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (992103, 992104)") === 0, "as fichas: as 2 que entraram, em arrolamento; as de fora, nenhuma");
+    && await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (992103, 992104, 992105)") === 0, "as fichas: as 2 que entraram, em arrolamento; as de fora, nenhuma");
   const tB = await trilha("A rotina encerrou a importação parada%");
-  ok(tB.length === 1 && tB[0].RegistroId === idB && tB[0].UsuarioId === null && JSON.parse(tB[0].DadosDepois).linhasDeFora === 3, "a trilha do encerramento, sem usuário", tB);
+  ok(tB.length === 1 && tB[0].RegistroId === idB && tB[0].UsuarioId === null && JSON.parse(tB[0].DadosDepois).linhasDeFora === 4, "a trilha do encerramento, sem usuário", tB);
   ok((await trilha("Concluiu a importação do sistema pago")).some((t) => t.RegistroId === idB && t.UsuarioId === null), "e a da conclusão, sem usuário");
   const lp = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(idB), filtro: "problemas" } });
   const texto = textoDe("NAO_TERMINOU");
-  ok(lp.status === 200 && lp.body.total === 3 && lp.body.itens.every((i) => i.motivos.length === 1 && i.motivos[0] === texto), "a lista 'problemas' mostra as 3, com o motivo novo", lp.body.itens);
+  ok(lp.status === 200 && lp.body.total === 4 && lp.body.itens.every((i) => i.motivos.length === 1 && i.motivos[0] === texto), "a lista 'problemas' mostra as 4, com o motivo novo", lp.body.itens);
   const cv = await R(tok.geral(), { acao: "lista.csv", query: { importacaoId: idB } });
   ok(cv.status === 200 && String(cv.body).includes("Eva Faltou E2E102") && String(cv.body).includes(texto) && !/90000-|example\.org|Mãe de/.test(String(cv.body)),
     "o CSV: as de fora com o motivo, sem celular, e-mail nem mãe", cv.status);
@@ -187,9 +190,9 @@ async function principal() {
   const regras = require(path.join(API, "shared/importacaoMembros.js"));
   const { hojeBrasilia } = require(path.join(API, "shared/dataBrasilia.js"));
   const e3 = (await R(tok.geral())).body;
-  ok(e3.feita === true && e3.importacao && e3.importacao.importacaoId === idB && e3.resto && e3.resto.de === idB && e3.resto.faltaram === 3 && e3.resto.possivel === true
+  ok(e3.feita === true && e3.importacao && e3.importacao.importacaoId === idB && e3.resto && e3.resto.de === idB && e3.resto.faltaram === 4 && e3.resto.possivel === true
     && e3.resto.aberto === false && e3.resto.feito === null && e3.resto.linhas.map((l) => `${l.linha}:${l.nome}`).join(",")
-      === "4:Eva Faltou E2E102,5:Fábio Faltou E2E102,6:Caio Entrou E2E102", "o estado diz QUAIS linhas faltaram (só a linha e o nome) e que o resto pode ser feito", e3.resto);
+      === "4:Eva Faltou E2E102,5:Fábio Faltou E2E102,6:Caio Entrou E2E102,7:Gil Faltou E2E102", "o estado diz QUAIS linhas faltaram (só a linha e o nome) e que o resto pode ser feito", e3.resto);
   const comum = await R(tok.geral2(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "parada-b.csv", texto: ARQ_B } });
   ok(comum.status === 409 && comum.body.mensagem === MSG.JA_IMPORTADO, "a prévia comum continua recusada (uma vez só)", comum.body);
   let lixoResto = true;
@@ -213,15 +216,18 @@ async function principal() {
   const parcial = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "so-as-que-faltaram.csv", resto: true,
     texto: arquivo([pessoa(992104, "Fábio Faltou E2E102"), pessoa(992103, "Eva Faltou E2E102")]) } });
   const rp = parcial.body.resumo || {};
-  ok(parcial.status === 200 && rp.total === 2 && rp.resto && rp.resto.achadas === 2 && rp.resto.naoAchadas === 1 && rp.resto.listaNaoAchadas[0].linha === 6
-    && rp.avisosGerais[0].codigo === "RESTO_NAO_ACHADAS", "a planilha só com duas: as duas entram pelo nome; a que não veio fica avisada (antes de confirmar)", rp.resto);
+  ok(parcial.status === 200 && rp.total === 2 && rp.resto && rp.resto.achadas === 2 && rp.resto.naoAchadas === 2 && rp.resto.linhasNaoAchadas.join(",") === "6,7"
+    && rp.avisosGerais[0].codigo === "RESTO_NAO_ACHADAS", "a planilha só com duas: as duas entram pelo nome; as que não vieram ficam avisadas (antes de confirmar)", rp.resto);
   const idP = parcial.body.importacaoId;
-  // o mesmo arquivo de novo: substitui a prévia de antes e acha as três (as que já entraram nem vão para a prévia)
-  const pR = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "parada-b.csv", texto: ARQ_B, resto: true } });
+  // o arquivo de antes sem a última linha (a do Gil): substitui a prévia de antes e acha três das quatro (as que já entraram nem vão para a prévia)
+  const pR = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "parada-b.csv", texto: arquivo(LINHAS_B.slice(0, 5)), resto: true } });
   const idR = pR.body.importacaoId;
   const rr = pR.body.resumo || {};
-  ok(pR.status === 200 && rr.total === 3 && rr.resto.faltaram === 3 && rr.resto.achadas === 3 && rr.resto.naoAchadas === 0 && rr.resto.foraDaLista === 2
-    && !rr.avisosGerais.some((a) => a.codigo === "RESTO_NAO_ACHADAS"), "o mesmo arquivo: as três achadas; as duas que já entraram ficam fora da prévia", rr.resto);
+  ok(pR.status === 200 && rr.total === 3 && rr.resto.faltaram === 4 && rr.resto.achadas === 3 && rr.resto.naoAchadas === 1 && rr.resto.linhasNaoAchadas.join(",") === "7"
+    && rr.resto.foraDaLista === 2 && rr.avisosGerais.some((a) => a.codigo === "RESTO_NAO_ACHADAS"),
+    "o arquivo sem a linha do Gil: três achadas e a dele avisada; as duas que já entraram ficam fora da prévia", rr.resto);
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros WHERE Resumo LIKE N'%Faltou E2E102%' OR Resumo LIKE N'%Entrou E2E102%'") === 0,
+    "nenhum resumo guarda o nome de quem não veio (o resumo fica depois dos 90 dias da lista): só o número da linha");
   ok(await escalar("SELECT Situacao FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idP }) === "DESCARTADA"
     && await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i", { i: idP }) === 0, "a prévia de antes foi descartada, com as linhas");
   ok(await escalar("SELECT RestoDe FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idR }) === idB, "a prévia nova é o resto da importação de antes");
@@ -258,13 +264,14 @@ async function principal() {
   await q("UPDATE ImportacoesMembros SET ConcluidaEm = DATEADD(DAY, -3, ConcluidaEm) WHERE ImportacaoId = @i", { i: idB });
   const e3c = (await R(tok.geral())).body;
   ok(e3c.feita === true && e3c.emAndamento === false && e3c.importacao.importacaoId === idB && e3c.resto.feito && e3c.resto.feito.importacaoId === idR
-    && e3c.resto.feito.importadas === 3 && e3c.resto.feito.fora === 0 && e3c.resto.possivel === false && e3c.resto.aberto === false,
+    && e3c.resto.feito.importadas === 3 && e3c.resto.feito.fora === 0 && e3c.resto.feito.naoAchadas === 1 && e3c.resto.possivel === false && e3c.resto.aberto === false,
     "a tela volta ao resultado da importação de antes, com o que o resto fez", e3c.resto);
   const lp2 = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(idB), filtro: "problemas" } });
-  const feitoTxt = regras.textoDe("NAO_TERMINOU_RESTO_FEITO");
-  ok(lp2.body.total === 3 && lp2.body.itens.every((i) => i.motivos[0] === feitoTxt), "a lista de antes diz que a importação das que faltaram já foi feita", lp2.body.itens);
+  const veio = regras.textoDe("NAO_TERMINOU_FOI_NO_RESTO"), naoVeio = regras.textoDe("NAO_TERMINOU_FORA_DO_RESTO");
+  ok(lp2.body.total === 4 && lp2.body.itens.map((i) => `${i.linha}:${i.motivos[0] === veio ? "veio" : i.motivos[0] === naoVeio ? "nao-veio" : "?"}`).join(",")
+    === "4:veio,5:veio,6:veio,7:nao-veio", "a lista de antes diz de cada linha que faltou se veio no resto (confira nele) ou não (cadastre à mão)", lp2.body.itens);
   const cv2 = await R(tok.geral(), { acao: "lista.csv", query: { importacaoId: idB } });
-  ok(String(cv2.body).includes(feitoTxt), "e o CSV de antes também");
+  ok(String(cv2.body).includes(veio) && String(cv2.body).includes(naoVeio) && String(cv2.body).includes("Gil Faltou E2E102"), "e o CSV de antes também");
   const outro = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { texto: ARQ_B, resto: true } });
   ok(outro.status === 409 && outro.body.mensagem === MSG.RESTO_JA_FEITO, "um segundo resto é recusado (uma vez só)", outro.body);
   let bancoBarra = false;

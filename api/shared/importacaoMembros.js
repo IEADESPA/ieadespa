@@ -248,9 +248,14 @@ const PROBLEMAS = Object.freeze({
   // a importação que parou e passou do prazo da guarda dos dados (G2, revisão de 24/11): a rotina deixa de fora as linhas que faltavam (importacaoMembrosDb)
   NAO_TERMINOU: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (entra na importação das linhas que faltaram, que é "
     + "uma vez só, ou se cadastra à mão)",
-  // o mesmo motivo, na lista e no CSV da importação de antes, depois que a importação das linhas que faltaram foi feita (importacaoMembrosDb.listar e csv)
-  NAO_TERMINOU_RESTO_FEITO: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora, e a importação das linhas que faltaram já "
-    + "foi feita (confira na lista dela se a pessoa entrou; se não, cadastre à mão)"
+  // o mesmo motivo, na lista e no CSV da importação de antes, depois que a importação das linhas que faltaram foi feita: a linha achada no arquivo dela e a
+  // que não veio (resumo.resto.linhasNaoAchadas do resto); e o de quem faltou no PRÓPRIO resto que parou (importacaoMembrosDb.listar e csv)
+  NAO_TERMINOU_FOI_NO_RESTO: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora e foi achada no arquivo da importação das "
+    + "linhas que faltaram (confira na lista dela se a pessoa entrou; se não, cadastre à mão)",
+  NAO_TERMINOU_FORA_DO_RESTO: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora e não veio no arquivo da importação das "
+    + "linhas que faltaram, que já foi feita e é uma vez só (cadastre à mão)",
+  NAO_TERMINOU_NO_RESTO: "A importação das linhas que faltaram parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão; não há "
+    + "outra importação)"
 });
 const AVISOS = Object.freeze({
   MATRICULA_ZERO: "Matrícula 0: entra com a próxima matrícula do sistema",
@@ -496,8 +501,10 @@ function resumoDoResto(casado, { de, faltaram }) {
   const n = casado.naoAchadas.length;
   const amb = casado.ambiguas;
   const br = (v) => Number(v).toLocaleString("pt-BR");
+  // só os NÚMEROS das linhas não achadas (da importação de antes), para marcar cada uma na lista dela depois do resto feito; nunca o nome: o resumo fica
+  // guardado depois dos 90 dias da lista dos de fora
   const resto = { de, faltaram, achadas: casado.achadas.length, naoAchadas: n, ambiguas: amb, foraDaLista: casado.foraDaLista,
-    listaNaoAchadas: casado.naoAchadas.slice(0, 20).map((f) => ({ linha: f.linha, nome: String(f.nome).slice(0, 200) })) };
+    linhasNaoAchadas: casado.naoAchadas.map((f) => Number(f.linha)) };
   if (!n) return { resto, aviso: null };
   const um = n === 1;
   const ambTexto = amb ? `; ${amb === 1 ? "1 linha do arquivo tem um nome que aparece mais vezes no arquivo do que na lista e não entra"

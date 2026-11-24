@@ -231,25 +231,33 @@ describe("G2: a importação só das linhas que faltaram (decisão dele de 24/11
     const normal = r.classificar(preparar(["70102;Paulo Henrique Dias;IEADESPA - Vila Nova"]).linhas, banco);
     expect(normal[0]).toMatchObject({ acao: "PROBLEMA", problemas: ["MATRICULA_JA_EXISTE"] });
   });
-  test("o resumo do resto: quantas faltaram, quantas foram achadas, as não achadas (as 20 primeiras, só linha e nome) e o aviso que não deixa passar", () => {
+  // o resumo fica guardado depois dos 90 dias da lista dos de fora: nele, só os NÚMEROS das linhas não achadas (para marcar cada uma na lista de antes), nunca o nome
+  test("o resumo do resto: quantas faltaram, quantas foram achadas, os números das linhas não achadas (sem o nome) e o aviso que não deixa passar", () => {
     const c = { achadas: [{}, {}], naoAchadas: [{ linha: 7, nome: "Samuel Brito" }], ambiguas: 0, foraDaLista: 3 };
     const x = r.resumoDoResto(c, { de: 12, faltaram: 3 });
-    expect(x.resto).toEqual({ de: 12, faltaram: 3, achadas: 2, naoAchadas: 1, ambiguas: 0, foraDaLista: 3, listaNaoAchadas: [{ linha: 7, nome: "Samuel Brito" }] });
+    expect(x.resto).toEqual({ de: 12, faltaram: 3, achadas: 2, naoAchadas: 1, ambiguas: 0, foraDaLista: 3, linhasNaoAchadas: [7] });
+    expect(JSON.stringify(x)).not.toMatch(/Samuel|Brito/);
     expect(x.aviso).toEqual({ codigo: "RESTO_NAO_ACHADAS", texto: "1 das 3 linhas que faltaram não foi achada neste arquivo (procuramos o mesmo nome): fica de fora "
       + "desta importação, que é uma vez só. Confira o arquivo antes de confirmar; depois, essa pessoa só se cadastra à mão." });
     const muitas = r.resumoDoResto({ achadas: [{}], naoAchadas: Array.from({ length: 25 }, (_, i) => ({ linha: i + 2, nome: `Pessoa ${i}` })), ambiguas: 2, foraDaLista: 0 },
       { de: 12, faltaram: 1250 });
-    expect(muitas.resto.listaNaoAchadas).toHaveLength(20);
+    expect(muitas.resto.linhasNaoAchadas).toEqual(Array.from({ length: 25 }, (_, i) => i + 2));
+    expect(JSON.stringify(muitas)).not.toMatch(/Pessoa/);
     expect(muitas.aviso.texto).toBe("25 das 1.250 linhas que faltaram não foram achadas neste arquivo (procuramos o mesmo nome; 2 linhas do arquivo têm um nome que "
       + "aparece mais vezes no arquivo do que na lista e não entram): ficam de fora desta importação, que é uma vez só. Confira o arquivo antes de confirmar; depois, "
       + "essas pessoas só se cadastram à mão.");
     expect(r.resumoDoResto({ achadas: [{}], naoAchadas: [], ambiguas: 0, foraDaLista: 0 }, { de: 12, faltaram: 1 }).aviso).toBeNull();
   });
-  test("o motivo de quem faltou diz a saída de agora (a importação do resto); depois dela, diz que já foi feita", () => {
+  test("o motivo de quem faltou diz a saída de agora (a importação do resto); depois dela, diz de cada linha se veio nela ou não; no próprio resto, não há outra", () => {
     expect(r.textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (entra na importação das linhas que "
       + "faltaram, que é uma vez só, ou se cadastra à mão)");
-    expect(r.textoDe("NAO_TERMINOU_RESTO_FEITO")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora, e a importação das "
-      + "linhas que faltaram já foi feita (confira na lista dela se a pessoa entrou; se não, cadastre à mão)");
+    expect(r.textoDe("NAO_TERMINOU_FOI_NO_RESTO")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora e foi achada no "
+      + "arquivo da importação das linhas que faltaram (confira na lista dela se a pessoa entrou; se não, cadastre à mão)");
+    expect(r.textoDe("NAO_TERMINOU_FORA_DO_RESTO")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora e não veio no "
+      + "arquivo da importação das linhas que faltaram, que já foi feita e é uma vez só (cadastre à mão)");
+    expect(r.textoDe("NAO_TERMINOU_NO_RESTO")).toBe("A importação das linhas que faltaram parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora "
+      + "(cadastre à mão; não há outra importação)");
+    expect(r.PROBLEMAS.NAO_TERMINOU_RESTO_FEITO).toBeUndefined();
   });
 });
 

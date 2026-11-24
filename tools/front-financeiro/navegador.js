@@ -56,7 +56,7 @@ const LIVRO = [
   { id: 4, tipo: "entrada", data: "2026-11-10", registradoPor: "João da Silva", bloco: 1360, congregacao: "Bela Vista", pessoa: "Lia Fontes", levadoPelaArea: false,
     contagem: { lancadas: 49, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 0 } },
   { id: 3, tipo: "saida", data: "2026-11-03", registradoPor: "João da Silva", bloco: 1395, congregacao: "Monte Sião", pessoa: `Ezequiel Ramos`, levadoPelaArea: true, contagem: null },
-  { id: 2, tipo: "cadastro", data: "2026-10-28", registradoPor: "João da Silva", quantidade: null, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } },
+  { id: 2, tipo: "cadastro", data: "2026-10-28", registradoPor: "João da Silva", quantidade: 200, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } },
   { id: 1, tipo: "entrada", data: "2026-10-21", registradoPor: "João da Silva", bloco: 1352, congregacao: "Sede", pessoa: `Ana Prado ${ATAQUE}`, levadoPelaArea: false,
     contagem: { lancadas: 50, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 0 } },
   { id: 0, tipo: "chegada", data: "2026-10-20", registradoPor: "João da Silva", quantidade: 100, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } }
@@ -122,7 +122,13 @@ function apiFinanceiro(nivel, opcoes) {
       const r = rastreio(Number(q.get("folha")));
       return r.status ? r : { corpo: r };
     }
-    if (p === "/api/financeiro/blocos/devolver" && metodo === "POST") return { corpo: { sucesso: true, mensagem: "Bloco 1.360 devolvido: está de novo com a Tesouraria Geral." } };
+    if (p === "/api/financeiro/blocos/devolver" && metodo === "POST") {
+      // a regra dele (23/11/2026): o bloco só volta cheio; o servidor recusa com a mensagem (a tela só a mostra)
+      if (corpo && corpo.pessoa && corpo.pessoa.nome === "Marta Lima") {
+        return { status: 422, corpo: { sucesso: false, mensagem: "O bloco 1.360 ainda tem 2 folhas livres: toda folha precisa de destino antes de o bloco voltar (lançada, ou cancelada, arrancada ou extraviada com a observação)." } };
+      }
+      return { corpo: { sucesso: true, mensagem: "Bloco 1.360 devolvido: está de novo com a Tesouraria Geral." } };
+    }
     if (p === "/api/financeiro/blocos/entregar" && metodo === "POST") return { corpo: { sucesso: true, mensagem: "Bloco entregue." } };
     return { status: 404, corpo: { sucesso: false, mensagem: "Ação inválida." } };
   };
@@ -399,6 +405,8 @@ async function provarLivro() {
   await clicar(page, "Registrar a entrada");
   dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
   ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Marta Lima" } }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
+  await calmo(page);
+  ok(/^O bloco 1.360 ainda tem 2 folhas livres: /.test(await ultimoAviso(page)), "geral: a recusa do bloco com folha livre aparece para a pessoa (só volta cheio, regra de 23/11)", await ultimoAviso(page));
   // o bloco que ainda está na Geral e o já devolvido: o rastreio não quebra e não oferece o registro
   await digitar(page, "Primeira folha do bloco", "70101");
   await espera(700);
@@ -417,6 +425,7 @@ async function provarLivro() {
   ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\"");
   t = await textoTela(page);
   ok(/saída do bloco/.test(t) && /ainda vai ser construíd/.test(t), "geral: a saída avisa que ainda vai ser construída", t.slice(0, 400));
+  ok(!/incremento/i.test(t), "geral: o aviso da saída não usa a palavra da construção (\"incremento\")", t.slice(t.indexOf("saída do bloco"), t.indexOf("saída do bloco") + 200));
   ok(!t.includes("o bloco volta para a Tesouraria Geral"), "geral: a saída troca o formulário da entrada pelo aviso");
   ok(pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e0, "geral: a saída não grava nada");
   await clicar(page, "Registrar entrada");
@@ -426,6 +435,7 @@ async function provarLivro() {
   await clicar(page, "Cadastrar lote da gráfica");
   t = await textoTela(page);
   ok(/lote da gráfica/.test(t) && !/junto com as folhas do bloco e o livro/.test(t), "geral: o aviso do lote não fala mais das folhas e do livro");
+  ok(/O cadastro do lote da gráfica ainda vai ser construído/.test(t) && !/incremento/i.test(t), "geral: o aviso do lote sem a palavra da construção (\"incremento\")", t.slice(t.indexOf("O cadastro"), t.indexOf("O cadastro") + 120));
   await fechar(s, "livro geral notebook");
 
   // a área: o aviso e os blocos agora, sem formulário

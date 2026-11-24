@@ -175,7 +175,7 @@
 
 {#snippet recadoLote()}
   {#if avisoLote}
-    <Aviso tom="alerta"><strong>O cadastro do lote da gráfica vem no próximo incremento.</strong></Aviso>
+    <Aviso tom="alerta"><strong>O cadastro do lote da gráfica ainda vai ser construído.</strong></Aviso>
   {/if}
 {/snippet}
 

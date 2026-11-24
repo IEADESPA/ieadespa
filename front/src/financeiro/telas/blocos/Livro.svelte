@@ -160,7 +160,7 @@
 {/snippet}
 
 {#snippet saida()}
-  <Aviso tom="alerta"><strong>O registro da saída do bloco ainda vai ser construído.</strong> A entrega de um bloco a uma congregação ganha o formulário num próximo incremento.</Aviso>
+  <Aviso tom="alerta"><strong>O registro da saída do bloco ainda vai ser construído.</strong></Aviso>
 {/snippet}
 
 {#snippet livro()}

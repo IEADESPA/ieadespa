@@ -114,7 +114,7 @@ export interface ContagemFolhas {
 /** um registro do livro do lote da gráfica: o cadastro e a chegada (só a Geral vê) */
 export interface RegistroLote {
   readonly id: number; readonly tipo: "cadastro" | "chegada"; readonly data: string; readonly registradoPor: string;
-  /** na chegada: quantos blocos chegaram */
+  /** quantos blocos: no cadastro, os do lote; na chegada, os que chegaram */
   readonly quantidade: number | null;
   readonly lote: { readonly serie: number; readonly primeiraFolha: number; readonly ultimaFolha: number; readonly blocos: number };
 }

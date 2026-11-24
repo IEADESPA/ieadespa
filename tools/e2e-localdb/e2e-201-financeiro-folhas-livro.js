@@ -177,7 +177,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok((await retratoFin()) === antes2, "os pedidos recusados não mexeram no banco");
   const folhaAntiga = await um(`SELECT FolhaId, CONVERT(varchar(30), RegistradoEm, 126) AS Em FROM FinFolhas WHERE Folha = 70090`);
   r = await POST(H, "desfazer-folha", geral, { folha: 70090, motivo: "Marcada na folha errada" });
-  ok(r.status === 200 && r.body.mensagem === "Folha 70.090 (40ª do bloco 1.401) livre de novo: a exceção (cancelada) foi desfeita.", "a Tesouraria Geral desfaz a exceção da 70.090", r.body);
+  ok(r.status === 200 && r.body.mensagem === "A folha 70.090 voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê.", "a Tesouraria Geral desfaz a exceção da 70.090 (a mensagem da r30)", r.body);
   ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Folha = 70090`)) === 0, "a folha fica livre");
   const hist = await um(`SELECT FolhaId, BlocoId, Destino, Observacao, RegistradoPor, CONVERT(varchar(30), RegistradoEm, 126) AS Em, DesfeitaPor, DesfeitaEm, Motivo FROM FinFolhasDesfeitas WHERE Folha = 70090`);
   ok(hist && hist.FolhaId === folhaAntiga.FolhaId && hist.BlocoId === b1401 && hist.Destino === "CANCELADA" && hist.Observacao === "Rasgou na hora de preencher" && hist.RegistradoPor === TESOUREIRA_LOCAL

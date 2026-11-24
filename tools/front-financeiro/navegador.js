@@ -5,7 +5,7 @@
 //
 // Rodar (pelo PowerShell; pelo Bash o Edge sem tela não abre neste notebook):
 //   node tools/front-financeiro/navegador.js            (PUPPETEER_CORE = a pasta do puppeteer-core; sem ela, tools/csp-e2e/node_modules)
-//   LISTA=1 mostra cada caso aprovado; SO=folhas ou SO=livro roda só uma parte.
+//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer ou SO=livro roda só uma parte.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -38,15 +38,28 @@ const blocoMentira = (id, primeira, cong, situacao, usadas, extra = {}) => ({
   situacao, entregueEm: cong ? "2026-11-01" : null, devolvidoEm: null, usadas, livres: 50 - usadas, parcial: false,
   faixa: { primeiraFolha: primeira, ultimaFolha: primeira + 49 }, volta: null, ...extra
 });
-// bloco 1.401 (70.051 a 70.100): 38 com destino (a 17ª cancelada, a 29ª arrancada), 12 livres
-function folhasDoBloco1401(registradas) {
+// bloco 1.401 (70.051 a 70.100): 38 com destino (a 17ª cancelada, a 29ª arrancada, a 36ª extraviada), 12 livres
+function folhasDoBloco1401(registradas, desfeitas = []) {
   const f = [];
   for (let i = 1; i <= 38; i++) {
-    const destino = i === 17 ? "cancelada" : i === 29 ? "arrancada" : "lancada";
-    f.push({ folha: 70050 + i, destino, observacao: destino === "lancada" ? null : destino === "cancelada" ? `Erro no valor ${ATAQUE}` : "Rasgou" });
+    const destino = i === 17 ? "cancelada" : i === 29 ? "arrancada" : i === 36 ? "extraviada" : "lancada";
+    const obs = { cancelada: `Erro no valor ${ATAQUE}`, arrancada: "Rasgou", extraviada: "Não achei a folha no bloco." };
+    if (!desfeitas.includes(70050 + i)) f.push({ folha: 70050 + i, destino, observacao: obs[destino] || null });
   }
   for (const r of registradas) f.push(r);
   return f.sort((a, b) => a.folha - b.folha);
+}
+// o histórico (r30-blocos-desfazer): a 36ª marcada por Vila Nova (e desfeita, se for o caso); a 10ª, lançada depois de uma exceção desfeita
+const MARCOU_36 = { tipo: "marcou", quando: "2026-11-12T09:40", nome: "Rute Santos", papel: "tesoureira de Vila Nova", destino: "extraviada", texto: "Não achei a folha no bloco." };
+const DESFEZ_36 = { tipo: "desfez", quando: "2026-11-25T11:20", nome: "João da Silva", papel: "Tesouraria Geral", destino: null, texto: "A folha apareceu, estava com os recibos de outubro" };
+function historico(folha, desfeitas) {
+  if (folha === 70086) return { sucesso: true, folha, bloco: 1401, posicao: 36, itens: desfeitas.includes(70086) ? [MARCOU_36, DESFEZ_36] : [MARCOU_36] };
+  if (folha === 70067) return { sucesso: true, folha, bloco: 1401, posicao: 17, itens: [{ ...MARCOU_36, destino: "cancelada", texto: `Erro no valor ${ATAQUE}` }] };
+  if (folha === 70060) {
+    return { sucesso: true, folha, bloco: 1401, posicao: 10, itens: [{ ...MARCOU_36, destino: "cancelada", texto: "Achei que estava errada" }, { ...DESFEZ_36, texto: `Estava certa ${ATAQUE}` }] };
+  }
+  if (folha === 62564) return { sucesso: true, folha, bloco: 1251, posicao: 14, itens: [{ ...MARCOU_36, quando: "2026-06-02T15:05", destino: "arrancada", texto: "Tirada do bloco" }] };
+  return null;
 }
 const opcao = (id, numero, congregacao, situacao, extra = {}) => {
   const primeira = numero * 50 + 1;
@@ -98,7 +111,7 @@ const PERFIS = {
 
 // a API simulada do Financeiro: cada página tem o seu estado (as folhas registradas) e a lista dos pedidos
 function apiFinanceiro(nivel, opcoes) {
-  const estado = { registradas: [], pedidos: [] };
+  const estado = { registradas: [], desfeitas: [], pedidos: [] };
   const responder = (metodo, u, corpo) => {
     const p = u.pathname, q = u.searchParams;
     estado.pedidos.push({ metodo, caminho: p, busca: Object.fromEntries(q.entries()), corpo });
@@ -123,17 +136,26 @@ function apiFinanceiro(nivel, opcoes) {
       if (q.get("bloco") === "9" && nivel === "local") {   // o 1.251 voltou completo em 21/07: 49 lançadas e a 14ª arrancada
         const f = [];
         for (let i = 1; i <= 50; i++) f.push({ folha: 62550 + i, destino: i === 14 ? "arrancada" : "lancada", observacao: i === 14 ? "Tirada do bloco" : null });
-        return { corpo: { sucesso: true, bloco: blocoMentira(9, 62551, "Vila Nova", "fechado", 50, { devolvidoEm: "2026-07-21" }), folhas: f, opcoes: OPCOES_LOCAL, escopo: ESCOPO[nivel] } };
+        return { corpo: { sucesso: true, bloco: blocoMentira(9, 62551, "Vila Nova", "fechado", 50, { devolvidoEm: "2026-07-21" }), folhas: f, comHistorico: [62564], opcoes: OPCOES_LOCAL, escopo: ESCOPO[nivel] } };
       }
       if (q.get("bloco") && !["1", "2"].includes(q.get("bloco"))) return { status: 404, corpo: { sucesso: false, mensagem: "Registro não encontrado." } };
-      const reg = estado.registradas;
-      return { corpo: { sucesso: true, bloco: blocoMentira(1, 70051, "Vila Nova", "em-uso", 38 + reg.length), folhas: folhasDoBloco1401(reg),
-        opcoes: nivel === "local" ? OPCOES_LOCAL : OPCOES, escopo: ESCOPO[nivel] } };
+      const reg = estado.registradas, desf = estado.desfeitas;
+      return { corpo: { sucesso: true, bloco: blocoMentira(1, 70051, "Vila Nova", "em-uso", 38 + reg.length - desf.length), folhas: folhasDoBloco1401(reg, desf),
+        comHistorico: [70060, 70067, 70079, 70086], opcoes: nivel === "local" ? OPCOES_LOCAL : OPCOES, escopo: ESCOPO[nivel] } };
     }
     if (p === "/api/financeiro/blocos/folha" && metodo === "POST") {
       if (corpo && corpo.folha === 70089) return { status: 409, corpo: { sucesso: false, mensagem: "A folha 70.089 já tem destino (cancelada)." } };
       estado.registradas.push({ folha: corpo.folha, destino: corpo.oQueAconteceu, observacao: corpo.observacao });
       return { corpo: { sucesso: true, mensagem: `Folha ${Number(corpo.folha).toLocaleString("pt-BR")} registrada como ${corpo.oQueAconteceu}.` } };
+    }
+    if (p === "/api/financeiro/blocos/historico" && metodo === "GET") {
+      const h = historico(Number(q.get("folha")), estado.desfeitas);
+      return h ? { corpo: h } : { status: 404, corpo: { sucesso: false, mensagem: "Registro não encontrado." } };
+    }
+    if (p === "/api/financeiro/blocos/desfazer-folha" && metodo === "POST") {
+      if (nivel !== "geral") return { status: 403, corpo: { sucesso: false, mensagem: "Esta função é da administração geral da igreja." } };
+      estado.desfeitas.push(corpo.folha);
+      return { corpo: { sucesso: true, mensagem: `A folha ${Number(corpo.folha).toLocaleString("pt-BR")} voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê.` } };
     }
     if (p === "/api/financeiro/blocos/livro" && metodo === "GET") {
       const porPagina = Number(q.get("porPagina")) === 3 ? 3 : 5, pagina = Number(q.get("pagina")) || 1;
@@ -280,9 +302,9 @@ async function provarFolhas() {
   const n = await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz button")].filter((b) => /^Folha \d/.test(b.getAttribute("aria-label") || "")).length);
   ok(n === 50, "geral: 50 quadradinhos", n);
   const f17 = await infoFolha(page, "70.067"), f29 = await infoFolha(page, "70.079"), f1x = await infoFolha(page, "70.051"), f39 = await infoFolha(page, "70.089");
-  ok(f17 && /17ª/.test(f17.rotulo) && /cancelada/.test(f17.rotulo) && f17.desligado, "geral: a 17ª é cancelada e não se clica", f17);
-  ok(f29 && /arrancada/.test(f29.rotulo) && f29.desligado, "geral: a 29ª é arrancada", f29);
-  ok(f1x && /lançada na planilha/.test(f1x.rotulo) && f1x.desligado, "geral: a 1ª é lançada na planilha", f1x);
+  ok(f17 && /17ª/.test(f17.rotulo) && /cancelada/.test(f17.rotulo) && !f17.desligado, "geral: a 17ª é cancelada e se clica (abre o histórico: r30)", f17);
+  ok(f29 && /arrancada/.test(f29.rotulo) && !f29.desligado, "geral: a 29ª é arrancada", f29);
+  ok(f1x && /lançada na planilha/.test(f1x.rotulo) && f1x.desligado, "geral: a 1ª é lançada na planilha, sem histórico: não se clica (resposta dele)", f1x);
   ok(f39 && /livre/.test(f39.rotulo) && !f39.desligado, "geral: a 39ª é livre e se clica", f39);
   const legenda = await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz .legenda > span")].map((x) => x.textContent.trim()));
   ok(JSON.stringify(legenda) === JSON.stringify(["lançada na planilha", "cancelada", "arrancada", "extraviada", "inexistente", "livre", "a que você clicou"]),
@@ -439,6 +461,115 @@ async function provarFolhas() {
   await fechar(s, "folhas geral celular");
 }
 
+// ---- desfazer a exceção da folha e o histórico (r30-blocos-desfazer) ----
+const textoHistorico = (page) => page.evaluate(() => { const h = document.querySelector("#financeiroRaiz .historico"); return h ? h.innerText.replace(/\s+/g, " ").trim() : null; });
+async function provarDesfazer() {
+  // a Tesouraria Geral, notebook: a folha marcada abre o cartão com o motivo e o histórico
+  let s = await abrir("geral", "notebook");
+  let { page, api } = s;
+  await clicar(page, "Folhas do bloco");
+  await espera(300);
+  const f36 = await infoFolha(page, "70.086");
+  ok(f36 && /36ª: extraviada/.test(f36.rotulo) && !f36.desligado, "desfazer geral: a 36ª extraviada se clica", f36);
+  let antes = pedidos(api, "/api/financeiro/blocos/historico").length;
+  ok(await clicarFolha(page, "70.086"), "desfazer geral: clicar na 36ª");
+  const h1 = await esperarPedido(api, "/api/financeiro/blocos/historico", "GET", antes);
+  ok(h1 && h1.busca.folha === "70086", "desfazer geral: pede o histórico da folha clicada", h1 && h1.busca);
+  await calmo(page);
+  let t = await textoTela(page);
+  ok(t.includes("A folha que você clicou") && t.includes("desfazer pede o motivo") && t.includes("Folha (bloco 1.401)") && t.includes("70.086 · 36ª") && t.includes("Está como"),
+    "desfazer geral: o cartão da folha marcada (o texto da r30)", t.slice(0, 500));
+  ok(t.includes("Motivo para desfazer") && t.includes("fica no histórico") && t.includes("Desfazer a marcação"), "desfazer geral: o motivo e o botão");
+  ok((await textoHistorico(page)) === "O histórico da folha 12/11 09h40 Rute Santos (tesoureira de Vila Nova) marcou como extraviada: “Não achei a folha no bloco.”",
+    "desfazer geral: o histórico (quem marcou, quando e o que escreveu)", await textoHistorico(page));
+  ok(!t.includes("Normalmente é automático"), "desfazer geral: sem a nota do automático no cartão da folha marcada");
+  ok((await infoFolha(page, "70.086")).rotulo.endsWith(", a que você clicou"), "desfazer geral: a 36ª fica marcada como a clicada");
+  const anel = await page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => (x.getAttribute("aria-label") || "").startsWith("Folha 70.086,")); const c = getComputedStyle(b); return { fundo: c.backgroundColor, sombra: c.boxShadow }; });
+  ok(anel.fundo === "rgb(237, 233, 254)" && /3px/.test(anel.sombra), "desfazer geral: a clicada marcada guarda a cor dela, com o anel", anel);
+  const postAntes = pedidos(api, "/api/financeiro/blocos/desfazer-folha", "POST").length;
+  await clicar(page, "Desfazer a marcação");
+  ok(pedidos(api, "/api/financeiro/blocos/desfazer-folha", "POST").length === postAntes, "desfazer geral: sem o motivo não desfaz");
+  ok((await textoTela(page)).includes("Escreva o motivo para desfazer."), "desfazer geral: pede o motivo (o texto da r30)");
+  ok(await digitar(page, "Motivo para desfazer", "A folha apareceu, estava com os recibos de outubro"), "desfazer geral: o campo do motivo");
+  const leituras = pedidos(api, "/api/financeiro/blocos/folhas").length;
+  antes = pedidos(api, "/api/financeiro/blocos/historico").length;
+  await clicar(page, "Desfazer a marcação");
+  const post = await esperarPedido(api, "/api/financeiro/blocos/desfazer-folha", "POST", postAntes);
+  ok(post && JSON.stringify(post.corpo) === JSON.stringify({ folha: 70086, motivo: "A folha apareceu, estava com os recibos de outubro" }), "desfazer geral: manda a folha e o motivo", post && post.corpo);
+  const releu = await esperarPedido(api, "/api/financeiro/blocos/folhas", "GET", leituras);
+  ok(releu && releu.busca.bloco === "1", "desfazer geral: lê de novo o mesmo bloco", releu && releu.busca);
+  await esperarPedido(api, "/api/financeiro/blocos/historico", "GET", antes);
+  await calmo(page);
+  ok((await ultimoAviso(page)).includes("A folha 70.086 voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê."), "desfazer geral: o aviso da r30", await ultimoAviso(page));
+  t = await textoTela(page);
+  ok(t.includes("só escolha o que aconteceu") && t.includes("70.086 · 36ª") && t.includes("Cancelada"), "desfazer geral: a folha livre de novo, já no formulário (o \"depois de desfazer\" da r30)", t.slice(0, 500));
+  ok((await textoHistorico(page)) === "O histórico da folha 12/11 09h40 Rute Santos (tesoureira de Vila Nova) marcou como extraviada: “Não achei a folha no bloco.” "
+    + "25/11 11h20 João da Silva (Tesouraria Geral) desfez: “A folha apareceu, estava com os recibos de outubro.” Voltou a ficar livre.",
+    "desfazer geral: o histórico embaixo do formulário, com quem desfez e por quê", await textoHistorico(page));
+  const f36b = await infoFolha(page, "70.086");
+  ok(f36b && /36ª: livre/.test(f36b.rotulo) && f36b.marcado === "true", "desfazer geral: a 36ª livre e escolhida", f36b);
+  ok(t.includes("70.051 a 70.100 · 37 com destino · 13 livres"), "desfazer geral: a conta do quadro (37 com destino · 13 livres)");
+  // a lançada com histórico abre o cartão, sem desfazer; a lançada sem histórico não se clica
+  ok(await clicarFolha(page, "70.060"), "desfazer geral: a 10ª (lançada, com uma exceção desfeita antes) se clica");
+  t = await textoTela(page);
+  ok(t.includes("Está como") && t.includes("lançada") && t.includes("A folha lançada se corrige pelo lançamento.") && !t.includes("Desfazer a marcação"),
+    "desfazer geral: a lançada mostra o histórico, sem desfazer", t.slice(0, 500));
+  ok((await textoHistorico(page) || "").includes("desfez: “Estava certa"), "desfazer geral: o histórico da lançada (o texto do servidor como texto)");
+  ok((await infoFolha(page, "70.052")).desligado, "desfazer geral: a lançada sem histórico não se clica");
+  await fechar(s, "desfazer geral notebook");
+
+  // a área e a congregação: só o histórico, com o cadeado
+  for (const nivel of ["area", "local"]) {
+    s = await abrir(nivel, "notebook");
+    await clicar(s.page, "Folhas do bloco");
+    await espera(300);
+    await clicarFolha(s.page, "70.086");
+    await espera(200);
+    t = await textoTela(s.page);
+    ok(t.includes("só a Tesouraria Geral desfaz") && t.includes("Marcou errado? Só a Tesouraria Geral desfaz, com o motivo. Fale com ela."), `desfazer ${nivel}: o cadeado (o texto da r30)`, t.slice(0, 500));
+    ok(!t.includes("Motivo para desfazer") && !t.includes("Desfazer a marcação"), `desfazer ${nivel}: sem o motivo nem o botão`);
+    ok((await textoHistorico(s.page) || "").startsWith("O histórico da folha 12/11 09h40 Rute Santos"), `desfazer ${nivel}: o histórico`);
+    if (nivel === "local") {
+      await abrirSeletor(s.page);
+      await escolherNoSeletor(s.page, "Bloco 1.251");
+      await clicarFolha(s.page, "62.564");
+      await espera(200);
+      t = await textoTela(s.page);
+      ok(t.includes("Está como") && t.includes("arrancada") && t.includes("Só para consulta: a folha já voltou com o bloco.") && (await textoHistorico(s.page) || "").includes("02/06 15h05"),
+        "desfazer local: no bloco devolvido, a folha com histórico abre só para consulta", t.slice(0, 600));
+      ok((await infoFolha(s.page, "62.551")).desligado, "desfazer local: no devolvido, a lançada sem histórico não se clica");
+    }
+    await fechar(s, `desfazer ${nivel} notebook`);
+  }
+
+  // o celular: a congregação vê o cadeado sem "Fale com ela."; a Geral desfaz e vê o cartão da folha livre com o histórico
+  s = await abrir("local", "celular");
+  await clicar(s.page, "Folhas do bloco");
+  await espera(300);
+  await clicarFolha(s.page, "70.086");
+  await espera(200);
+  t = await textoTela(s.page);
+  ok(t.includes("Folha 70.086 · a 36ª") && t.includes("Marcou errado? Só a Tesouraria Geral desfaz, com o motivo.") && !t.includes("Fale com ela."), "desfazer local celular: o cartão (o texto da r30)", t.slice(0, 500));
+  await fechar(s, "desfazer local celular");
+  s = await abrir("geral", "celular");
+  ({ page, api } = s);
+  await clicar(page, "Folhas do bloco");
+  await espera(300);
+  await clicarFolha(page, "70.086");
+  await espera(200);
+  ok(await digitar(page, "Motivo para desfazer", "A folha apareceu, estava com os recibos de outubro"), "desfazer geral celular: o motivo");
+  await clicar(page, "Desfazer a marcação");
+  await espera(400);
+  await calmo(page);
+  ok((await ultimoAviso(page)).trim() === "A folha 70.086 voltou a ficar livre.", "desfazer geral celular: o aviso curto da r30", await ultimoAviso(page));
+  t = await textoTela(page);
+  ok(t.includes("Folha 70.086 · a 36ª") && t.includes("Marcar o que aconteceu") && !t.includes("Cancelada"), "desfazer geral celular: o cartão da folha livre, com o histórico e o botão (o formulário fecha)", t.slice(0, 600));
+  ok((await textoHistorico(page) || "").includes("João da Silva (Tesouraria Geral) desfez"), "desfazer geral celular: o histórico");
+  ok(await clicar(page, "Marcar o que aconteceu"), "desfazer geral celular: tocar em \"Marcar o que aconteceu\"");
+  ok((await textoTela(page)).includes("Cancelada"), "desfazer geral celular: abre o formulário");
+  await fechar(s, "desfazer geral celular");
+}
+
 // ---- Livro de entrada e saída ----
 async function provarLivro() {
   let s = await abrir("geral", "notebook");
@@ -593,6 +724,7 @@ async function provarLivro() {
   });
   try {
     if (!SO || SO === "folhas") { console.log("Folhas do bloco"); await provarFolhas(); }
+    if (!SO || SO === "desfazer") { console.log("Desfazer e o histórico da folha"); await provarDesfazer(); }
     if (!SO || SO === "livro") { console.log("Livro de entrada e saída"); await provarLivro(); }
   } finally {
     await nav.close();

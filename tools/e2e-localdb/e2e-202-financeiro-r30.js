@@ -2,6 +2,8 @@
 // Server de verdade. Base: cenario-200 (a 200, a 201, a 202 e a 203 aplicadas duas vezes), no LocalDB próprio do Financeiro:
 //   E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true' BASE=cenario-200 bash rodar.sh roteiro e2e-202-financeiro-r30.js
 // Cobre:
+// - o histórico da folha (r30-blocos-desfazer): quem marcou e quem desfez, quando e por quê, só das entregas que a pessoa alcança (a mesma resposta
+//   para o que existe fora do alcance e o que não existe), as folhas com histórico na grade, a mensagem do motivo e a do desfazer;
 // - as folhas da r30: o seletor de bloco em todos os níveis (a situação, as datas, a faixa vista e as usadas de cada bloco; o bloco que voltou em
 //   parte também na Geral, "na Tesouraria Geral") e a volta parcial (de onde, quando e as usadas: a faixa da entrega antes da primeira em branco);
 // - a FOLHA INEXISTENTE (decisão dele de 24/11/2026): a folha que a gráfica não imprimiu é um tipo a mais de exceção, onde as outras já aparecem
@@ -19,6 +21,8 @@ const CENTRAL = 1, VILA_NOVA = 2;
 const geral = GERAL(TESOUREIRO_GERAL, ["financeiro"]);
 const local = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Vila Nova E2E"]);
 const central = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Central E2E"]);
+const area = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Central E2E", "Vila Nova E2E"], "AREA");
+const semFinanceiro = LIDER(TESOUREIRA_LOCAL, ["pessoas"], ["Vila Nova E2E"]);
 
 const TABELAS = ["FinBlocos", "FinFolhas", "FinLivroBlocos", "FinFolhasDesfeitas", "AuditLog"];
 async function retratoFin() {
@@ -204,6 +208,76 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok(r.status === 200, "o 1.404 volta completo da Central", r.body);
   ent = (await GET(H, "livro", geral, {})).body.registros.find((x) => x.tipo === "entrada" && x.bloco === 1404);
   ok(ent && ent.contagem.lancadas === 10 && ent.contagem.inexistentes === 0 && ent.pendentes === 0, "a entrada da Central do 1.404: 10 lançadas, nenhuma pendente", ent);
+
+  console.log("== o histórico da folha e o desfazer (r30-blocos-desfazer) ==");
+  // a tesoureira é da liderança de Vila Nova, como tesoureira (uma liderança por pessoa; o papel do histórico vem dela); o 1.405 (70.251 a 70.300)
+  // vai a Vila Nova
+  await q(`UPDATE Lideranca SET EscopoTipo = 'CONGREGACAO', EscopoId = ${VILA_NOVA}, AtivoAte = NULL,
+             PapelId = COALESCE((SELECT TOP 1 PapelId FROM Papeis WHERE Nome = 'Tesoureiro'), PapelId) WHERE MembroId = ${TESOUREIRA_LOCAL}`);
+  if (!Number(await escalar(`SELECT COUNT(*) FROM Lideranca WHERE MembroId = ${TESOUREIRA_LOCAL}`))) {
+    await q(`INSERT INTO Lideranca (MembroId, PapelId, EscopoTipo, EscopoId) SELECT TOP 1 ${TESOUREIRA_LOCAL}, PapelId, 'CONGREGACAO', ${VILA_NOVA} FROM Papeis WHERE Nome = 'Tesoureiro'`);
+  }
+  const papelVN = await escalar(`SELECT p.Nome FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId WHERE l.MembroId = ${TESOUREIRA_LOCAL}`);
+  const nomeTes = await escalar(`SELECT Nome FROM MembroReferencia WHERE MembroId = ${TESOUREIRA_LOCAL}`);
+  const nomeGeral = await escalar(`SELECT Nome FROM MembroReferencia WHERE MembroId = ${TESOUREIRO_GERAL}`);
+  const HORA = /^\d{4}-\d\d-\d\dT\d\d:\d\d$/;
+  ok(!!papelVN && !!nomeTes && !!nomeGeral, "a tesoureira tem papel em Vila Nova", { papelVN, nomeTes, nomeGeral });
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70251, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-15" })).status === 200, "o 1.405 entregue a Vila Nova em 15/11");
+  const b1405 = await idDo(1405);
+  await lancarDireto(b1405, 70251, 70285);
+  ok((await POST(H, "folha", local, { folha: 70286, oQueAconteceu: "extraviada", observacao: "Não achei a folha no bloco." })).status === 200, "Vila Nova marca a 36ª extraviada");
+  r = await GET(H, "folhas", local, { bloco: b1405 });
+  ok(r.status === 200 && JSON.stringify(r.body.comHistorico) === JSON.stringify([70286]), "as folhas dizem quais têm histórico: a 70.286 (a lançada sem histórico, não)", r.body.comHistorico);
+  r = await GET(H, "historico", local, { folha: 70286 });
+  let it = r.body && r.body.itens;
+  ok(r.status === 200 && r.body.folha === 70286 && r.body.bloco === 1405 && r.body.posicao === 36 && it && it.length === 1
+    && it[0].tipo === "marcou" && it[0].nome === nomeTes && it[0].papel === `${String(papelVN).toLowerCase()} de Vila Nova E2E` && it[0].destino === "extraviada"
+    && it[0].texto === "Não achei a folha no bloco." && HORA.test(it[0].quando), "o histórico da 70.286: a tesoureira de Vila Nova marcou como extraviada, com a observação", r.body);
+
+  console.log("-- desfazer, com o motivo --");
+  r = await POST(H, "desfazer-folha", geral, { folha: 70286, motivo: "   " });
+  ok(r.status === 422 && r.body.mensagem === "Escreva o motivo para desfazer.", "sem o motivo: a mensagem da r30", r.body);
+  r = await POST(H, "desfazer-folha", geral, { folha: 70286, motivo: "A folha apareceu, estava com os recibos de outubro" });
+  ok(r.status === 200 && r.body.mensagem === "A folha 70.286 voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê.", "a Geral desfaz: a mensagem da r30", r.body);
+  r = await GET(H, "historico", geral, { folha: 70286 });
+  it = r.body && r.body.itens;
+  ok(r.status === 200 && it && it.length === 2 && it[0].tipo === "marcou" && it[1].tipo === "desfez" && it[1].nome === nomeGeral && it[1].papel === "Tesouraria Geral"
+    && it[1].destino === null && it[1].texto === "A folha apareceu, estava com os recibos de outubro" && HORA.test(it[1].quando) && it[1].quando >= it[0].quando,
+    "o histórico depois de desfazer: quem marcou e quem desfez (a Tesouraria Geral), com o motivo", r.body);
+  r = await GET(H, "folhas", local, { bloco: b1405 });
+  ok(JSON.stringify(r.body.comHistorico) === JSON.stringify([70286]) && !r.body.folhas.some((x) => x.folha === 70286), "a folha livre de novo continua com histórico", r.body.comHistorico);
+  ok((await GET(H, "historico", area, { folha: 70286 })).status === 200, "a área de Vila Nova vê o histórico");
+
+  console.log("-- quem não alcança: a mesma resposta do que não existe --");
+  const fora = await GET(H, "historico", central, { folha: 70286 });
+  const semHist = await GET(H, "historico", local, { folha: 70287 });
+  const naoExiste = await GET(H, "historico", local, { folha: 990001 });
+  const lixo = await GET(H, "historico", local, { folha: "70286 OR 1=1" });
+  ok(fora.status === 404 && semHist.status === 404 && naoExiste.status === 404 && lixo.status === 404
+    && new Set([fora, semHist, naoExiste, lixo].map((x) => JSON.stringify(x.body))).size === 1,
+    "a Central, a folha sem histórico, a que não existe e o lixo: o mesmo 404", [fora.body, semHist.body, naoExiste.body, lixo.body]);
+  ok((await GET(H, "historico", null, { folha: 70286 })).status === 401, "sem sessão: 401");
+  ok((await GET(H, "historico", semFinanceiro, { folha: 70286 })).status === 403, "sem a permissão financeiro: 403");
+
+  console.log("-- marcar de novo, desfazer e lançar: o histórico acumula --");
+  ok((await POST(H, "folha", local, { folha: 70286, oQueAconteceu: "cancelada", observacao: "Preenchida errado" })).status === 200, "a 70.286 marcada de novo, cancelada");
+  it = (await GET(H, "historico", local, { folha: 70286 })).body.itens;
+  ok(it && it.map((x) => x.tipo).join(",") === "marcou,desfez,marcou" && it[2].destino === "cancelada" && it[2].texto === "Preenchida errado", "três linhas, na ordem", it);
+  ok((await POST(H, "desfazer-folha", geral, { folha: 70286, motivo: "Engano de novo" })).status === 200, "desfeita de novo");
+  await lancarDireto(b1405, 70286, 70286);
+  it = (await GET(H, "historico", local, { folha: 70286 })).body.itens;
+  ok(it && it.map((x) => x.tipo).join(",") === "marcou,desfez,marcou,desfez", "a folha lançada mostra as exceções de antes dela (a lançada não é marcação)", it);
+  r = await GET(H, "folhas", local, { bloco: b1405 });
+  ok(JSON.stringify(r.body.comHistorico) === JSON.stringify([70286]), "a lançada com histórico continua na lista; a lançada sem histórico, não", r.body.comHistorico);
+  ok((await GET(H, "historico", local, { folha: 70251 })).status === 404, "a lançada sem histórico não tem o que mostrar");
+
+  console.log("-- a marcação de outra congregação no bloco que mudou de mãos --");
+  r = await GET(H, "folhas", central, { bloco: b1404 });
+  ok(r.status === 200 && !(r.body.comHistorico || []).includes(70245) && r.body.folhas.some((x) => x.folha === 70245 && x.destino === "inexistente"),
+    "a Central vê a 45ª do 1.404 inexistente, sem o histórico de Vila Nova", r.body.comHistorico);
+  ok((await GET(H, "historico", central, { folha: 70245 })).status === 404, "e não abre o histórico dela");
+  r = await GET(H, "historico", local, { folha: 70245 });
+  ok(r.status === 200 && r.body.itens.length === 1 && r.body.itens[0].destino === "inexistente", "Vila Nova abre o histórico da marcação dela", r.body);
 
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();

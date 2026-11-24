@@ -373,7 +373,7 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
       WHERE b.Situacao IN ('ENTREGUE', 'DEVOLVIDO') OR vp.VoltouParcial = 1`;
   } else {
     const cond = await condicaoSqlEscopoCongregacao(pool, usuario, pedido, "s.CongregacaoId");
-    if (cond === "") return blocoId ? { naoExiste: true } : { sucesso: true, bloco: null, folhas: [], opcoes: [], escopo };
+    if (cond === "") return blocoId ? { naoExiste: true } : { sucesso: true, bloco: null, folhas: [], comHistorico: [], opcoes: [], escopo };
     // a entrega fechada pela parcial vai até a folha antes da primeira em branco (a que voltou sem uso, com a primeira em branco na primeira
     // folha da entrega, fica de fora); a em curso e a fechada pela completa, até o fim do bloco
     vistas = `
@@ -418,7 +418,7 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
     entregueEm: iso(l.EntregueEm), devolvidoEm: iso(l.DevolvidoEm), parcial: Number(l.Parcial) === 1,
     faixa: { primeiraFolha: Number(l.De), ultimaFolha: Number(l.Ate) }, usadas: Number(l.Usadas)
   }));
-  if (!escolhido) return { sucesso: true, bloco: null, folhas: [], opcoes, escopo };
+  if (!escolhido) return { sucesso: true, bloco: null, folhas: [], comHistorico: [], opcoes, escopo };
   const f = await pool.request().input("b", sql.Int, escolhido.BlocoId).input("ate", sql.Int, Number(escolhido.Ate)).query(`
     SELECT f.Folha, f.Destino, f.Observacao, c.Nome AS CongregacaoDaEntrega
     FROM FinFolhas f
@@ -426,7 +426,17 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
     LEFT JOIN Congregacoes c ON c.CongregacaoId = s.CongregacaoId
     WHERE f.BlocoId = @b AND f.Folha <= @ate ORDER BY f.Folha`);
   const de = Number(escolhido.De), ate = Number(escolhido.Ate), usadas = Number(escolhido.Usadas);
-  const verObservacao = (x) => x.Destino !== "LANCADA" && (geral || (!!x.CongregacaoDaEntrega && auth.estaNoEscopo(usuario, x.CongregacaoDaEntrega)));
+  const alcanca = (congregacao) => geral || (!!congregacao && auth.estaNoEscopo(usuario, congregacao));
+  const verObservacao = (x) => x.Destino !== "LANCADA" && alcanca(x.CongregacaoDaEntrega);
+  // as folhas com histórico que a pessoa pode abrir (a r30: clicar na folha marcada, ou na que já foi marcada e desfeita): a exceção de agora e as
+  // desfeitas, das entregas às congregações que ela alcança (a lançada sem exceção antes dela não tem histórico)
+  const h = await pool.request().input("b", sql.Int, escolhido.BlocoId).input("ate", sql.Int, ate).query(`
+    SELECT x.Folha, c.Nome AS Congregacao FROM (
+      SELECT Folha, SaidaId FROM FinFolhas WHERE BlocoId = @b AND Folha <= @ate AND Destino <> 'LANCADA'
+      UNION ALL SELECT Folha, SaidaId FROM FinFolhasDesfeitas WHERE BlocoId = @b AND Folha <= @ate) x
+    LEFT JOIN FinLivroBlocos s ON s.RegistroId = x.SaidaId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = s.CongregacaoId`);
+  const comHistorico = [...new Set(h.recordset.filter((x) => alcanca(x.Congregacao)).map((x) => Number(x.Folha)))].sort((a, b) => a - b);
   // o bloco que voltou em parte e está com a Geral: de onde voltou, quando e quantas a entrega usou (o cartão "O bloco 1.288 voltou parcial em 03/11")
   const volta = geral && escolhido.Situacao === "NA_GERAL" ? await ultimaVolta(pool, escolhido.BlocoId) : null;
   return {
@@ -438,7 +448,7 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
       parcial: Number(escolhido.Parcial) === 1, faixa: { primeiraFolha: de, ultimaFolha: ate }, usadas, livres: ate - de + 1 - usadas, volta
     },
     folhas: f.recordset.map((x) => ({ folha: Number(x.Folha), destino: regra.destinoDaTela(x.Destino), observacao: verObservacao(x) ? x.Observacao : null })),
-    opcoes, escopo
+    comHistorico, opcoes, escopo
   };
 }
 
@@ -704,6 +714,49 @@ async function devolver(pool, { primeiraFolha, pessoa, parcial, primeiraEmBranco
   }
 }
 
+// O histórico de uma folha (r30-blocos-desfazer): quem marcou e quem desfez, quando e por quê, na ordem (nada se apaga: a exceção de agora em
+// FinFolhas e as desfeitas em FinFolhasDesfeitas). A folha lançada não é marcação (vem do lançamento): só as exceções de antes dela aparecem. Cada
+// marcação é de uma entrega (a SaidaId): a Geral vê todas; a área e a congregação, só as das entregas às congregações que alcançam. A folha sem
+// histórico à vista, a que não existe e o número que não é folha têm a mesma resposta ("não existe"). Quem marcou leva o papel da liderança dele
+// (na congregação ou na área; fora delas, a Tesouraria Geral); quem desfez é sempre a Tesouraria Geral (só ela desfaz).
+async function historicoDaFolha(pool, usuario, { geral, folha }) {
+  const n = inteiroPositivo(folha);
+  if (!n) return { naoExiste: true };
+  const linhas = (await pool.request().input("f", sql.Int, n).query(`
+    WITH marcas AS (
+      SELECT 'marcou' AS Tipo, f.RegistradoEm AS Em, f.RegistradoPor AS Quem, f.Destino, f.Observacao AS Texto, f.SaidaId, f.BlocoId
+      FROM FinFolhas f WHERE f.Folha = @f AND f.Destino <> 'LANCADA'
+      UNION ALL
+      SELECT 'marcou', d.RegistradoEm, d.RegistradoPor, d.Destino, d.Observacao, d.SaidaId, d.BlocoId FROM FinFolhasDesfeitas d WHERE d.Folha = @f
+      UNION ALL
+      SELECT 'desfez', d.DesfeitaEm, d.DesfeitaPor, NULL, d.Motivo, d.SaidaId, d.BlocoId FROM FinFolhasDesfeitas d WHERE d.Folha = @f
+    )
+    SELECT m.Tipo, m.Em, m.Destino, m.Texto, b.Numero, b.PrimeiraFolha, c.Nome AS Congregacao, mr.Nome,
+           pl.EscopoTipo, pl.Papel, pl.CongregacaoDoPapel, pl.AreaDoPapel
+    FROM marcas m
+    JOIN FinBlocos b ON b.BlocoId = m.BlocoId
+    LEFT JOIN FinLivroBlocos s ON s.RegistroId = m.SaidaId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = s.CongregacaoId
+    LEFT JOIN MembroReferencia mr ON mr.MembroId = m.Quem
+    OUTER APPLY (SELECT TOP 1 l.EscopoTipo, p.Nome AS Papel, cl.Nome AS CongregacaoDoPapel, al.Nome AS AreaDoPapel
+                 FROM Lideranca l
+                 LEFT JOIN Papeis p ON p.PapelId = l.PapelId
+                 LEFT JOIN Congregacoes cl ON l.EscopoTipo = 'CONGREGACAO' AND cl.CongregacaoId = l.EscopoId
+                 LEFT JOIN Areas al ON l.EscopoTipo = 'AREA' AND al.AreaId = l.EscopoId
+                 WHERE l.MembroId = m.Quem AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))) pl
+    ORDER BY m.Em, CASE m.Tipo WHEN 'marcou' THEN 0 ELSE 1 END`)).recordset
+    .filter((x) => geral || (!!x.Congregacao && auth.estaNoEscopo(usuario, x.Congregacao)));
+  if (!linhas.length) return { naoExiste: true };
+  return {
+    sucesso: true, folha: n, bloco: Number(linhas[0].Numero), posicao: n - Number(linhas[0].PrimeiraFolha) + 1,
+    itens: linhas.map((x) => ({
+      tipo: x.Tipo, quando: regra.horaBrasilia(x.Em), nome: x.Nome || "",
+      papel: x.Tipo === "desfez" ? "Tesouraria Geral" : regra.papelNoHistorico({ escopoTipo: x.EscopoTipo, papel: x.Papel, congregacao: x.CongregacaoDoPapel, area: x.AreaDoPapel }),
+      destino: x.Destino ? regra.destinoDaTela(x.Destino) : null, texto: x.Texto || ""
+    }))
+  };
+}
+
 // Desfazer a exceção de uma folha (regra dele, 23/11/2026): só a Tesouraria Geral, com o motivo; nunca em bloco já devolvido; a folha lançada se
 // corrige pelo lançamento. A linha sai de FinFolhas e vai INTEIRA para FinFolhasDesfeitas (quem marcou e quando, o que era, quem desfez, quando
 // e por quê), na mesma transação: nada se perde, e a folha volta a poder ter destino. Trava a linha do bloco primeiro, como a exceção e a
@@ -737,11 +790,13 @@ async function desfazerFolha(pool, { dados, por }) {
     await registrarAuditoriaNaTransacao(t, { tabela: "FinFolhas", registroId: Number(f.FolhaId), acao: "FIN_FOLHA_DESFEITA", usuarioId: por,
       dadosAntes: { bloco: Number(b.Numero), folha: v.folha, destino: f.Destino }, dadosDepois: { desfeita: Number(desfeita) } });
     ok = true;
-    const posicao = v.folha - Number(b.PrimeiraFolha) + 1;
-    return { sucesso: true, mensagem: `Folha ${milhar(v.folha)} (${posicao}ª do bloco ${milhar(b.Numero)}) livre de novo: a exceção (${regra.destinoDaTela(f.Destino)}) foi desfeita.` };
+    return { sucesso: true, mensagem: `A folha ${milhar(v.folha)} voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê.` };
   } finally {
     await fecharTransacao(t, ok);
   }
 }
 
-module.exports = { listar, resumo, escopoDaTela, cadastrarLote, registrarChegada, entregar, folhasDoBloco, registrarFolha, livroDosBlocos, rastreio, devolver, desfazerFolha };
+module.exports = {
+  listar, resumo, escopoDaTela, cadastrarLote, registrarChegada, entregar, folhasDoBloco, registrarFolha, livroDosBlocos, rastreio, devolver, desfazerFolha,
+  historicoDaFolha
+};

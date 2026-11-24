@@ -13,6 +13,23 @@ export const NOME_DESTINO: Record<DestinoFolha | "livre", string> = {
   lancada: "lançada na planilha", cancelada: "cancelada", arrancada: "arrancada", extraviada: "extraviada", inexistente: "inexistente", livre: "livre"
 };
 
+/** o nome curto de cada situação (a etiqueta "Está como" e o histórico da folha, na r30) */
+export const NOME_CURTO: Record<DestinoFolha | "livre", string> = {
+  lancada: "lançada", cancelada: "cancelada", arrancada: "arrancada", extraviada: "extraviada", inexistente: "inexistente", livre: "livre"
+};
+
+/** a hora do histórico: "2026-11-12T09:40" → "12/11 09h40" */
+export function horaDoHistorico(quando: string | null): string {
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(quando ?? "");
+  return m ? `${m[3]}/${m[2]} ${m[4]}h${m[5]}` : "";
+}
+
+/** o que a pessoa escreveu, com o ponto final (o motivo se escreve sem ele; o histórico mostra com: a r30) */
+export function comPonto(texto: string): string {
+  const t = texto.trim();
+  return !t || /[.!?…]$/.test(t) ? t : `${t}.`;
+}
+
 /** as exceções que a tela marca, na ordem das escolhas, cada uma com a frase de quando usar (decisão dele de 24/11/2026) */
 export const EXCECOES: readonly { readonly chave: ExcecaoFolha; readonly rotulo: string; readonly quando: string }[] = [
   { chave: "cancelada", rotulo: "Cancelada", quando: "preenchida errado e anulada" },

@@ -1,16 +1,18 @@
 <!-- O quadro branco das telas do Financeiro (o "m9Cartao" do desenho da rodada 17): o título de 15 px, a nota à direita e o conteúdo, com 14 × 16 px
-     de folga. No celular a nota some (o desenho tira as notas dos quadros). O comum/Cartao tem outras medidas (o título de 16 px). -->
+     de folga. No celular a nota some (o desenho tira as notas dos quadros). O comum/Cartao tem outras medidas (o título de 16 px). O `extra` fica à
+     direita do título, também no celular (a etiqueta da folha clicada, na r30). -->
 <script lang="ts">
   import type { Snippet } from "svelte";
 
-  interface Props { titulo: string; nota?: string; celular?: boolean; rotulo?: string; children: Snippet }
-  let { titulo, nota, celular = false, rotulo, children }: Props = $props();
+  interface Props { titulo: string; nota?: string; celular?: boolean; rotulo?: string; extra?: Snippet; children: Snippet }
+  let { titulo, nota, celular = false, rotulo, extra, children }: Props = $props();
 </script>
 
 <section class="quadro" aria-label={rotulo}>
   <div class="topo">
     <h2>{titulo}</h2>
     {#if nota && !celular}<span class="nota">{nota}</span>{/if}
+    {#if extra}{@render extra()}{/if}
   </div>
   {@render children()}
 </section>

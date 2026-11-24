@@ -4,7 +4,9 @@
      legenda sempre completa e a nota: normalmente é automático (a folha lançada sai da planilha); esta tela é a exceção. O seletor de bloco em todos
      os níveis ("Bloco 1.401 · Vila Nova ▾"; na congregação, "Bloco 1.401 · em uso"), no celular logo abaixo das abas. O bloco devolvido fica só para
      consulta; o que voltou em parte e está com a Geral mostra as livres prontas para sair. No celular a grade começa na 36ª: as de antes, todas com
-     destino, viram uma linha. -->
+     destino, viram uma linha. A folha com histórico também se clica ("r30-blocos-desfazer"): a marcada abre o cartão dela (a Tesouraria Geral
+     desfaz, com o motivo; a área e a congregação veem o cadeado) e a que já foi marcada e desfeita vai ao formulário com o histórico embaixo (no
+     celular, primeiro o cartão com "Marcar o que aconteceu"). A lançada sem histórico não abre nada (resposta dele de 24/11/2026). -->
 <script lang="ts">
   import { pedir, qs, avisarFalha } from "../../../comum/api";
   import { numero } from "../../../comum/formato";
@@ -14,10 +16,12 @@
   import Estado from "../../../comum/Estado.svelte";
   import { escopo, ir, nivelDaSessao } from "../../estado.svelte";
   import { NOME_DESTINO, EXCECOES, posicao, recolhidasNoCelular, plural, diaMes, partesDaContagem, textoFaixa, tituloDoSeletor } from "../../blocos";
-  import type { DestinoFolha, ExcecaoFolha, Faixa, PaginaFolhas } from "../../tipos";
+  import type { DestinoFolha, ExcecaoFolha, Faixa, HistoricoFolha, PaginaFolhas } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
   import Cabecalho from "./Cabecalho.svelte";
   import SeletorBloco from "./SeletorBloco.svelte";
+  import FolhaMarcada from "./FolhaMarcada.svelte";
+  import Historico from "./Historico.svelte";
 
   interface Props { celular: boolean }
   let { celular }: Props = $props();
@@ -40,6 +44,11 @@
   let observacao = $state("");
   let falta = $state("");
   let gravando = $state(false);
+  /** o histórico da folha clicada (null = sem histórico, ou ainda lendo) */
+  let historico = $state.raw<HistoricoFolha | null>(null);
+  let motivo = $state("");
+  /** no celular, a folha livre com histórico: o formulário só abre ao tocar em "Marcar o que aconteceu" */
+  let marcando = $state(false);
 
   let seq = 0;
   async function ler(blocoId: number | null): Promise<void> {
@@ -56,7 +65,16 @@
   }
   void ler(null);
 
-  function limpar() { escolhida = null; oQueAconteceu = null; observacao = ""; falta = ""; }
+  function limpar() { escolhida = null; oQueAconteceu = null; observacao = ""; falta = ""; historico = null; motivo = ""; marcando = false; }
+
+  let seqHist = 0;
+  async function lerHistorico(n: number): Promise<void> {
+    const meu = ++seqHist;
+    const r = await pedir<HistoricoFolha>("/financeiro/blocos/historico" + qs({ folha: n }));
+    if (meu !== seqHist || escolhida !== n) return;   // outra folha foi clicada antes desta resposta chegar
+    if (!r.ok) { historico = null; if (!r.cancelado) avisarFalha(r); return; }
+    historico = r.dados;
+  }
 
   const bloco = $derived(dados?.bloco ?? null);
   /** o bloco ainda está com a congregação: as folhas livres recebem a exceção */
@@ -74,6 +92,24 @@
   /** a faixa que se marca: a da entrega em curso (as folhas de uma entrega anterior ficam só para consulta) */
   const faixa = $derived<Faixa | null>(bloco ? (bloco.faixa ?? { primeiraFolha: bloco.primeiraFolha, ultimaFolha: bloco.ultimaFolha }) : null);
   const marcavel = (f: { n: number; destino: DestinoFolha | null }) => aberto && f.destino === null && !!faixa && f.n >= faixa.primeiraFolha && f.n <= faixa.ultimaFolha;
+  const comHistorico = $derived(new Set(dados?.comHistorico ?? []));
+  /** a folha se clica: a livre da entrega em curso (o formulário) e a que tem histórico (o cartão dela, ou o formulário com o histórico) */
+  const clicavel = (f: { n: number; destino: DestinoFolha | null }) => marcavel(f) || comHistorico.has(f.n);
+  /** a folha clicada, com o destino de agora */
+  const sel = $derived(escolhida === null ? null : (folhas.find((f) => f.n === escolhida) ?? null));
+  /** o que aparece no lugar do formulário: o formulário, o cartão da folha marcada, ou (no celular) o cartão da livre com histórico */
+  const modo = $derived.by((): "formulario" | "marcada" | "livreComHistorico" => {
+    if (!sel || marcavel(sel)) return sel && celular && comHistorico.has(sel.n) && !marcando ? "livreComHistorico" : "formulario";
+    return "marcada";
+  });
+  /** a exceção (não a lançada) da entrega em curso: a Tesouraria Geral desfaz; a área e a congregação veem o cadeado */
+  const excecaoEmCurso = $derived(!!sel && sel.destino !== null && sel.destino !== "lancada" && aberto && !!faixa && sel.n >= faixa.primeiraFolha && sel.n <= faixa.ultimaFolha);
+  const podeDesfazer = $derived(nivel === "geral" && excecaoEmCurso);
+  const trava = $derived(
+    excecaoEmCurso ? (celular ? "Marcou errado? Só a Tesouraria Geral desfaz, com o motivo." : "Marcou errado? Só a Tesouraria Geral desfaz, com o motivo. Fale com ela.")
+      : sel?.destino === "lancada" ? "A folha lançada se corrige pelo lançamento." : "Só para consulta: a folha já voltou com o bloco."
+  );
+  const notaMarcada = $derived(podeDesfazer ? "desfazer pede o motivo" : excecaoEmCurso ? "só a Tesouraria Geral desfaz" : "só consulta");
   /** a conta do quadro das folhas (a r30): "38 com destino · 12 livres"; no devolvido, "completo: 49 lançadas, 1 arrancada" */
   const notaGrade = $derived.by(() => {
     if (!bloco) return "";
@@ -101,7 +137,27 @@
     return `Folha ${numero(f.n)}, ${f.pos}ª: ${NOME_DESTINO[f.destino ?? "livre"]}${f.n === escolhida ? ", a que você clicou" : ""}`;
   }
 
-  function escolherFolha(n: number) { escolhida = n; falta = ""; }
+  function escolherFolha(n: number) {
+    if (n === escolhida) return;
+    escolhida = n; falta = ""; motivo = ""; marcando = false; historico = null;
+    if (comHistorico.has(n)) void lerHistorico(n);
+  }
+
+  async function desfazer() {
+    if (gravando || !bloco || escolhida === null) return;
+    if (!motivo.trim()) { falta = "Escreva o motivo para desfazer."; return; }
+    falta = "";
+    gravando = true;
+    const n = escolhida;
+    const r = await pedir<{ mensagem: string }>("/financeiro/blocos/desfazer-folha", { metodo: "POST", corpo: { folha: n, motivo: motivo.trim() } });
+    gravando = false;
+    if (!r.ok) { avisarFalha(r); return; }
+    // no celular, o aviso curto (a r30): "A folha 70.086 voltou a ficar livre."
+    ponte().avisar(celular ? r.dados.mensagem.replace(/^(.*?\.)\s.*$/s, "$1") : r.dados.mensagem, "sucesso");
+    motivo = "";
+    await ler(bloco.id);
+    if (escolhida === n) await lerHistorico(n);
+  }
 
   async function registrar() {
     if (gravando || !bloco) return;
@@ -162,8 +218,8 @@
 {#snippet grade()}
   <div class="grade" role="group" aria-label={bloco ? `As folhas do bloco ${numero(bloco.numero)}` : "As folhas do bloco"} aria-busy={carregando}>
     {#each visiveis as f (f.n)}
-      <button type="button" class="folha {f.destino ?? 'livre'}" class:escolhida={f.n === escolhida} disabled={!marcavel(f)}
-        aria-pressed={marcavel(f) ? f.n === escolhida : undefined} aria-label={rotuloFolha(f)}
+      <button type="button" class="folha {f.destino ?? 'livre'}" class:escolhida={f.n === escolhida && f.destino === null} class:anel={f.n === escolhida && f.destino !== null}
+        disabled={!clicavel(f)} aria-pressed={clicavel(f) ? f.n === escolhida : undefined} aria-label={rotuloFolha(f)}
         title={f.observacao ? `${NOME_DESTINO[f.destino ?? "livre"]}: ${f.observacao}` : undefined} onclick={() => escolherFolha(f.n)}>
         <strong>{numero(f.n)}</strong><span>{f.pos}ª</span>
       </button>
@@ -205,6 +261,14 @@
   {/if}
 {/snippet}
 
+{#snippet folhaMarcada()}
+  {#if bloco && sel}
+    <FolhaMarcada {celular} blocoNumero={bloco.numero} folha={sel.n} posicao={sel.pos} destino={sel.destino} {historico} pode={podeDesfazer} {trava}
+      nota={notaMarcada} {gravando} {falta} bind:motivo ondesfazer={() => void desfazer()} oneditar={() => (falta = "")}
+      onmarcar={modo === "livreComHistorico" ? () => (marcando = true) : undefined} />
+  {/if}
+{/snippet}
+
 <div class="pagina folhas-bloco" class:cel={celular}>
   {#if celular}
     <Cabecalho aba="folhas" {celular} />
@@ -227,13 +291,17 @@
       {@render cartaoFechado()}
     {:else if bloco.situacao === "na-geral"}
       {@render cartaoEstoque()}
-    {:else}
+    {/if}
+    {#if modo !== "formulario"}
+      {@render folhaMarcada()}
+    {:else if aberto}
       <Quadro titulo={escolhida !== null ? `Folha ${numero(escolhida)} · a ${posicao(escolhida, bloco.primeiraFolha)}ª` : "Toque numa folha livre"} celular>
         {@render escolhas()}
         {@render quandoUsar()}
         {@render campoObservacao()}
         {@render faltando()}
         <div class="fim">{@render botaoRegistrar()}</div>
+        {#if historico}<Historico {historico} {celular} />{/if}
       </Quadro>
     {/if}
   {:else}
@@ -241,7 +309,10 @@
       {@render cartaoFechado()}
     {:else if bloco.situacao === "na-geral"}
       {@render cartaoEstoque()}
-    {:else}
+    {/if}
+    {#if modo === "marcada"}
+      {@render folhaMarcada()}
+    {:else if aberto}
     <Quadro titulo="A folha que você clicou" nota="só escolha o que aconteceu">
         <div class="formulario">
           <div class="campo">
@@ -254,13 +325,14 @@
         </div>
         {@render quandoUsar()}
         {@render faltando()}
+        {#if historico}<Historico {historico} {celular} />{/if}
     </Quadro>
     {/if}
     <Quadro titulo={`As ${numero(folhas.length)} folhas do bloco ${numero(bloco.numero)}`} nota={notaGrade}>
       {@render grade()}
       {@render legenda()}
     </Quadro>
-    {#if aberto && exemplo !== null}
+    {#if aberto && exemplo !== null && modo === "formulario" && !historico}
       <div class="nota">
         <Aviso><strong>Normalmente é automático:</strong> a folha lançada na planilha sai daqui sozinha. Esta tela é só para a exceção. Ninguém digita número: clique na folha e o sistema sabe a posição ({numero(exemplo)} = {posicao(exemplo, bloco.primeiraFolha)}ª do bloco {numero(bloco.primeiraFolha)} a {numero(bloco.ultimaFolha)}).</Aviso>
       </div>
@@ -369,6 +441,9 @@
   .folha.livre.escolhida { height: 46px; }
   .cel .folha.livre.escolhida { height: 48px; }
   .folha.escolhida { background: #FFB800; color: #0A2342; border: 0; box-shadow: 0 0 0 3px #0A2342 inset; }
+  /* a folha marcada que foi clicada (r30-blocos-desfazer): guarda a cor dela, com o anel por fora */
+  .folha.anel { box-shadow: 0 0 0 3px #0A2342; }
+  :global(html[data-tema="escuro"]) .folha.anel { box-shadow: 0 0 0 3px #FFB800; }
   .folha:focus-visible { outline: 2px solid var(--sv-mod); outline-offset: 2px; }
 
   .legenda { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--sv-texto); }

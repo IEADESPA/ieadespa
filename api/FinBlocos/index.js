@@ -8,6 +8,7 @@
 //  GET  financeiro/blocos/folhas?bloco=                 (financeiro, no escopo) as folhas de um bloco (vazio = o em uso mais recente) e o seletor
 //  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada, extraviada ou inexistente
 //  GET  financeiro/blocos/livro?pagina=&porPagina=5|3   (financeiro, no escopo) o livro de entrada e saída e, fora da Geral, os blocos agora
+//  GET  financeiro/blocos/historico?folha=              (financeiro, no escopo) o histórico da folha: quem marcou, quem desfez, quando e por quê (r30)
 //  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco pela primeira folha, no "Registrar entrada"
 //  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, parcial?, primeiraEmBranco?, data?} (Tesouraria Geral) a entrada do livro
 // Regra dele de 24/11/2026, com o detalhe da r30: a devolução completa (o bloco fecha) ou parcial, com a primeira folha em branco (dela ao fim, as
@@ -55,14 +56,20 @@ module.exports = comConflito(async function (context, req) {
 
   const corpo = req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {};
 
-  // as folhas, a exceção da folha e o livro: quem tem a permissão financeiro, nas congregações do seu escopo
-  if ((metodo === "GET" && (acao === "folhas" || acao === "livro")) || (metodo === "POST" && acao === "folha")) {
+  // as folhas, a exceção da folha, o histórico dela e o livro: quem tem a permissão financeiro, nas congregações do seu escopo
+  if ((metodo === "GET" && (acao === "folhas" || acao === "livro" || acao === "historico")) || (metodo === "POST" && acao === "folha")) {
     const usuario = auth.exigirPermissao(req, context, "financeiro");
     if (!usuario) return;
     const q = req.query || {};
     const pool = await getPool();
     const geral = ehGeral(usuario);
     if (acao === "folha") return responder(context, await db.registrarFolha(pool, usuario, { geral, dados: corpo, por: Number(usuario.membroId) }));
+    // o número que não é folha tem a resposta da folha que não existe, sem tocar no banco
+    if (acao === "historico") {
+      const folha = auth.idDeRota(q.folha);
+      if (!folha) return erro(context, 404, "Registro não encontrado.");
+      return responder(context, await db.historicoDaFolha(pool, usuario, { geral, folha }));
+    }
     if (acao === "livro") {
       return responder(context, await db.livroDosBlocos(pool, usuario, { geral, pagina: regra.paginaDaLista(q.pagina), porPagina: regra.porPaginaDoLivro(q.porPagina) }));
     }

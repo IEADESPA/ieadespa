@@ -411,3 +411,45 @@ describe("a folha inexistente (decisão dele de 24/11/2026)", () => {
       .toEqual({ lancadas: 48, canceladas: 0, arrancadas: 0, extraviadas: 1, inexistentes: 1, livres: 0 });
   });
 });
+
+describe("o histórico da folha e o desfazer (r30-blocos-desfazer)", () => {
+  beforeAll(() => { process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-" + "x".repeat(24); });
+  beforeEach(() => { mockConsultas = []; mockRegras = []; });
+  const sessao = (extra) => auth.reassinarSessao({ membroId: 700002, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+  const LOCAL = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["financeiro"] });
+  const SEM_FINANCEIRO = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["pessoas"] });
+  async function chamar({ acao, metodo = "GET", query = {}, token }) {
+    const context = { bindingData: { acao }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await rota(context, { method: metodo, query, headers: token ? { "x-auth-token": token } : {} });
+    return context.res;
+  }
+  test("o motivo vazio: a mensagem da r30", () => {
+    expect(regra.desfazimentoDaFolha({ folha: 70086, motivo: "  " }).erro).toBe("Escreva o motivo para desfazer.");
+  });
+  test("a hora do histórico em Brasília (o banco guarda UTC), como \"aaaa-mm-ddThh:mm\"", () => {
+    expect(regra.horaBrasilia(new Date("2026-11-12T12:40:31.123Z"))).toBe("2026-11-12T09:40");
+    expect(regra.horaBrasilia(new Date("2026-11-13T01:05:00Z"))).toBe("2026-11-12T22:05");
+    expect(regra.horaBrasilia(null)).toBeNull();
+  });
+  test("quem marcou: o papel da liderança da pessoa (uma por pessoa), na congregação ou na área; fora delas, a Tesouraria Geral", () => {
+    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: "Vila Nova" })).toBe("tesoureiro de Vila Nova");
+    expect(regra.papelNoHistorico({ escopoTipo: "AREA", papel: "Tesoureiro", area: "Área 2" })).toBe("tesoureiro da Área 2");
+    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: null, congregacao: "Vila Nova" })).toBe("liderança de Vila Nova");
+    expect(regra.papelNoHistorico({ escopoTipo: "GLOBAL", papel: "Tesoureiro" })).toBe("Tesouraria Geral");
+    expect(regra.papelNoHistorico({ escopoTipo: "CONGREGACAO", papel: "Tesoureiro", congregacao: null })).toBe("Tesouraria Geral");
+    expect(regra.papelNoHistorico({})).toBe("Tesouraria Geral");
+  });
+  test("a porta do histórico: sem sessão 401, sem a permissão financeiro 403, a folha que não é número 404, sem tocar no banco", async () => {
+    expect((await chamar({ acao: "historico", query: { folha: "70086" } })).status).toBe(401);
+    expect((await chamar({ acao: "historico", query: { folha: "70086" }, token: SEM_FINANCEIRO() })).status).toBe(403);
+    for (const folha of ["", "abc", "70086 OR 1=1", "-5", "1.5", "99999999999", undefined]) {
+      const r = await chamar({ acao: "historico", query: { folha }, token: LOCAL() });
+      expect(r.status).toBe(404);
+      expect(r.body.mensagem).toBe("Registro não encontrado.");
+    }
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("o histórico só pelo GET (o POST é ação inválida da Tesouraria Geral)", async () => {
+    expect((await chamar({ acao: "historico", metodo: "POST", token: LOCAL() })).status).toBe(403);
+  });
+});

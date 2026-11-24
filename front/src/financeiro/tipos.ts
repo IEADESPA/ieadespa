@@ -117,8 +117,31 @@ export interface PaginaFolhas {
   /** null = nenhum bloco saiu para as congregações do alcance */
   readonly bloco: BlocoDasFolhas | null;
   readonly folhas: readonly FolhaComDestino[];
+  /** as folhas com histórico que a pessoa pode abrir (a r30: a exceção de agora e as já desfeitas); a lançada sem exceção antes dela não tem */
+  readonly comHistorico?: readonly number[];
   readonly opcoes: readonly OpcaoBloco[];
   readonly escopo: EscopoTela;
+}
+
+/** uma linha do histórico da folha (r30-blocos-desfazer): quem marcou ou desfez, quando (Brasília, "aaaa-mm-ddThh:mm") e o que escreveu */
+export interface ItemHistorico {
+  readonly tipo: "marcou" | "desfez";
+  readonly quando: string;
+  readonly nome: string;
+  /** "tesoureira de Vila Nova", "Tesouraria Geral" */
+  readonly papel: string;
+  /** o que foi marcado (null no desfez) */
+  readonly destino: DestinoFolha | null;
+  /** a observação de quem marcou, ou o motivo de quem desfez */
+  readonly texto: string;
+}
+
+/** GET /financeiro/blocos/historico?folha= */
+export interface HistoricoFolha {
+  readonly folha: number;
+  readonly bloco: number;
+  readonly posicao: number;
+  readonly itens: readonly ItemHistorico[];
 }
 
 /** quantas folhas do bloco têm cada destino (shared/finBlocos.js, contagemDasFolhas) */

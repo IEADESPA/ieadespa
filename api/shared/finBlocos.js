@@ -169,7 +169,7 @@ function desfazimentoDaFolha(dados) {
   const folha = inteiro(d.folha);
   if (folha === null || folha < 1 || folha > MAX_FOLHA) return { erro: "Escolha a folha." };
   const motivo = typeof d.motivo === "string" ? d.motivo.trim() : "";
-  if (!motivo) return { erro: "Escreva o motivo: por que a exceção da folha está sendo desfeita." };
+  if (!motivo) return { erro: "Escreva o motivo para desfazer." };
   if (motivo.length > 300) return { erro: "O motivo passou de 300 letras." };
   return { folha, motivo };
 }
@@ -216,9 +216,26 @@ function mensagemJaVoltouParcial(numero, data, de, ate, menos) {
   return `O bloco ${milhar(numero)} já voltou, parcial, em ${dia}: ${livresPorExtenso(de, ate, menos)} na Tesouraria Geral para outra entrega.`;
 }
 
+// ---- o histórico da folha (r30-blocos-desfazer): quem marcou, quem desfez, quando e por quê ----
+
+/** a hora do histórico em Brasília (UTC-3, sem horário de verão; o banco guarda UTC): "aaaa-mm-ddThh:mm" (a tela escreve "12/11 09h40") */
+function horaBrasilia(d) {
+  if (!d) return null;
+  return new Date(new Date(d).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}
+
+/** quem marcou, entre parênteses no histórico: o papel da liderança da pessoa (uma por pessoa) na congregação ("tesoureiro de Vila Nova") ou na
+ *  área ("tesoureiro da Área 2"); fora delas, quem marca é a Tesouraria Geral */
+function papelNoHistorico({ escopoTipo, papel, congregacao, area } = {}) {
+  const nome = papel ? String(papel).toLowerCase() : "liderança";
+  if (escopoTipo === "CONGREGACAO" && congregacao) return `${nome} de ${congregacao}`;
+  if (escopoTipo === "AREA" && area) return `${nome} da ${area}`;
+  return "Tesouraria Geral";
+}
+
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial, horaBrasilia, papelNoHistorico
 };

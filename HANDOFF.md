@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 09:38 (Claude, sessão principal).
+Atualizado em 24/11/2026 10:02 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -73,11 +73,10 @@ escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o pon
 - **Revisor de fora** (bancada, até `81fdf25`): prontos o crédito por dia com os 2 computadores, a largada no
   `message_start`, o `--conferir-relatorio` e o teto mínimo por lente. Falta o recorte dos ramos e a agenda. Diário:
   `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-- **A prova do Code Review Graph** (agente novo, 24/11): o script e o relatório ficam em
-  `C:/tmp/ieadespa-bancada/prova-crg/` e não vão para o Git. A cópia do sistema com os defeitos plantados fica em
-  `C:/tmp/ieadespa-prova-crg`, sem remote, e é apagada no fim. O teto é de US$ 40.
 - **A próxima volta do construtor do Membros começou** (a LGPD da importação e a migração 186, acima).
-- Na fila, quando abrir vaga: o revisor do arrolamento, que revisa também os commits novos do Membros.
+- **O desenhista prepara a r31** (Membros: a carta com o histórico, o QR, o pedido no celular com a cidade e o
+  abandono com a Câmara), no ramo `desenho-r31`. **Não publicar** enquanto ele confere a r30.
+- Na fila, quando o Membros terminar: o revisor do arrolamento, que revisa também os commits novos do Membros.
 
 A trava do LocalDB está livre.
 
@@ -91,11 +90,12 @@ saldo que cabe a cada um. Dois computadores nunca rodam o mesmo projeto.
 travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **FEITA** (24/11: as 7 telas aprovadas, com
 ajustes; estão no plano da fase 10, em "As respostas dele à rodada 29", e foram para o desenhista da r30).
 
-**A prova do Code Review Graph (o "talvez" da pesquisa dos economizadores): ele APROVOU o gasto (~US$ 25 do crédito
-de API) em 24/11.** Entra quando abrir uma vaga dos 4 agentes. É feita numa cópia do sistema em `C:\tmp`, com 5
-defeitos plantados, rodando a revisão 2 vezes com o mapa e 2 vezes sem. Adota só se achar os mesmos defeitos e gastar
-pelo menos 15% menos. Fica de fora o Headroom, que é um programa no meio do caminho e tem telemetria ligada; o RTK é só
-uma consulta grátis. Pesquisa: `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`, seção 6.
+**A prova do Code Review Graph (24/11, com o sim dele): NÃO ADOTAR.** Foram 5 defeitos plantados numa cópia,
+rodando 2 vezes com o mapa e 2 vezes sem. A média sem o mapa foi US$ 3,78 e com o mapa US$ 3,87, dentro do ruído; os
+15% a menos não apareceram. Achou 4, 4, 4 e 5 dos 5, sem alarme falso, e o modelo quase não usou o mapa. Gastou US$
+15,31, que o agente do revisor lança na conta do ciclo (~US$ 39,50 de US$ 200). O RTK não deixa ligar só o filtro de
+testes, e o Headroom fica de fora. **Conclusão: nenhum dos 8 economizadores entra.** A cópia foi apagada. Relatório:
+`C:/tmp/ieadespa-bancada/prova-crg/RELATORIO.md`.
 
 **Decisões dele (23/11, 22h40):**
 

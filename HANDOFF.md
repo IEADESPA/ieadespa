@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 20:40 (Claude, sessão principal).
+Atualizado em 23/11/2026 21:30 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,9 +46,15 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Às 19h54 a atualização do
-Windows reiniciou o notebook; os agentes foram retomados às 20h05, sem perda. Se a conversa cair, confira os diários
-antes de mandar de novo:
+**AGENTES PARADOS às 21h30 de 23/11, por ordem dele** ("dá uma parada… uma coisa de cada vez"): primeiro ele faz as
+pendências dele, uma de cada vez. Nada ficou pela metade: os worktrees estão limpos (Membros em `4741cd3`, Financeiro
+em `f722716`), a trava do LocalDB está livre e o desenhista ainda não tinha criado o worktree da r30. Ao retomar, cada
+frente continua do item abaixo:
+
+**As pendências dele, na ordem:** (1) a chave do revisor de fora; (2) ver a trava na homologação e dizer "vi"; (3)
+conferir a rodada 29.
+
+O que cada frente fazia (para retomar):
 
 1. **revisor de fora: PRONTO** na bancada (`C:\MCP\bancada\revisor-sdk\`, commits até `904edfa`, 90/90 testes),
    genérico para todos os repositórios. **Esperando a chave dele:** no Console, conferir sem cartão e sem recarga
@@ -58,30 +64,34 @@ antes de mandar de novo:
    sem cartão, teto de US$ 16 por pedaço, as regras do projeto no pedido (o `settingSources: []` não lê CLAUDE.md).
    Os relatórios vão para o repositório privado da bancada (decisão dele). Diário:
    `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-2. **construtor:** o e2e-51 FEITO (`58dcd0d`) e o servidor do arrolamento FEITO (`20681e8`, jest 6842 verdes,
-   e2e-98 92/92); agora a tela (o Painel com o 4º grupo e a tela Completar), os pares e a homologação. Diário:
-   `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
-3. **revisor: TERMINOU** a importação e a trava (até `58dcd0d`): **ainda não vai à produção.** A trava está completa e
-   nenhum defeito de segurança foi provado (jest 6.783 verdes; e2e 96, 97, 51, 85, 90, 93 e 95 verdes). O que falta,
-   na fila do construtor depois do arrolamento:
-   - **bloqueia:** a importação nunca rodou inteira num banco Azure de verdade. Falta o ensaio na homologação com ~5
-     mil linhas de mentira, medindo o tempo de cada lote, depois do "vi" dele sobre a trava;
-   - **importante:** uma aspa sem fechar no arquivo faz pessoas sumirem da prévia sem aviso
-     (`api/shared/importacaoMembros.js`, `lerCsv`);
-   - a importação presa em IMPORTANDO se um lote falhar sempre (precisa poder retomar); o texto do site com "sistema
-     pago" (o visitante passa a ler "O cadastro pelo site abre em breve…"); o item do menu cortado a 1280 px;
-   - **esperando ele:** o prazo de guarda da prévia abandonada e da lista dos que ficaram de fora (LGPD).
-   Relatório local `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md` (fora do Git). O worktree
-   `C:/tmp/ieadespa-revisao` fica para a revisão do arrolamento (só a diferença desde `58dcd0d`).
-4. **construtor do Financeiro** (desde as 20h15): a tela do incremento 2 (as abas Folhas e Livro, r17 op. 1) só no
-   ramo `v10-financeiro-svelte` (worktree `C:/tmp/ieadespa-financeiro/obra`), **sem mesclar no homolog** (o Membros vai
-   primeiro). Diário: `C:/tmp/ieadespa-financeiro/DIARIO.md`.
+2. **construtor do Membros:** o arrolamento está **na homologação** (servidor `20681e8`, tela `2ce12bc` e `90d3122`;
+   homolog `a8d03c3`, base do teste de telas `11c51ff`). Já corrigiu da revisão a aspa sem fechar (`923dd5f`), a saída
+   do IMPORTANDO (`07d592d`) e o texto do site (`4741cd3`; homolog `259a737`). Agora: o menu cortado a 1280 px e a
+   guarda dos dados (respostas dele: a prévia não confirmada se apaga em 7 dias, com o botão "Descartar"; a lista dos
+   de fora fica 90 dias). Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+3. **revisor do arrolamento** (desde as 21h20): confere `58dcd0d..4741cd3` (o arrolamento e as correções) no worktree
+   `C:/tmp/ieadespa-revisao` (destacado em `4741cd3`). Relatório local `C:/tmp/ieadespa-membros/REVISAO-arrolamento.md`.
+4. **construtor do Financeiro** (desde as 21h20): as correções da revisão (índices, `XACT_ABORT`, os menores) e as
+   regras dele de 23/11 no servidor (a devolução só de bloco cheio; desfazer a exceção da folha com motivo, só a
+   Tesouraria Geral). **Sem mesclar no homolog** até o revisor conferir a tela do incremento 2 (`f722716`) e as
+   correções. Diário: `C:/tmp/ieadespa-financeiro/DIARIO.md`.
+5. **desenhista** (desde as 21h20): prepara a **rodada 30, sem publicar** até ele conferir a 29 (Financeiro: o
+   formulário "Registrar saída", a cor da folha extraviada, o seletor de bloco no celular, os textos sem desenho, a
+   recusa do bloco com folha em branco e o "Desfazer" da exceção). Worktree `C:/tmp/ieadespa-desenho-r30`, ramo
+   `desenho-r30`; diário `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`.
 
-**O teste de telas do CI: causa achada e corrigida** (diagnóstico em `C:/tmp/ieadespa-ci-telas-DIAGNOSTICO.md`). A base
-do homolog estava velha (`ae7f2e3`), depois de duas mudanças de tela de propósito (o 1b do Financeiro e a entrada da
-importação). Correção `f36ccf4`, direto no homolog (base = `b34284c`), no padrão do `e5fe087`. A rodada `45285926023`
-refaz a base (1h20 a 1h40); até ela acabar, nenhum push no homolog que mexa em `app/`. **Regra:** depois de toda
-mesclagem que muda tela no homolog, conferir as divergências e atualizar a base, direto no homolog.
+**As revisões de 23/11 à noite** (relatórios locais, fora do Git):
+
+- **Importação e trava** (até `58dcd0d`; `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md`): **ainda não vai à
+  produção.** A trava está completa e nenhum defeito de segurança foi provado. Bloqueia: o ensaio da importação inteira
+  na homologação (~5 mil linhas de mentira, medindo o lote), depois do "vi" dele. As outras correções estão no item 2.
+- **Financeiro até `4c06d58`** (`C:/tmp/ieadespa-financeiro/REVISAO-1a-a-inc2.md`): `bd694cf` e `4c06d58` **podem ir à
+  homologação**. O 1b **não vai à produção** antes da troca de janeiro de 2027 (ele esconderia as telas antigas). Na
+  mesclagem do `bd694cf`, refazer o build (nunca mesclar `app/svelte` à mão) e atualizar a base do teste de telas.
+
+**O teste de telas do CI está resolvido:** a base do homolog estava velha. `f36ccf4` (base `b34284c`) passou verde, e o
+construtor já atualizou a base depois do arrolamento (`11c51ff`). **Regra:** depois de toda mesclagem que muda tela no
+homolog, conferir as divergências e atualizar a base, direto no homolog.
 
 Terminados: o **desenhista** publicou a rodada 29 (versão 11; DEPLOY OK em `15067a6`). A **pesquisa dos 8
 economizadores** (o PDF dele) concluiu que nenhum vale instalar agora: rendem no máximo uns 2% sem perder qualidade, e os

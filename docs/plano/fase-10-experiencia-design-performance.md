@@ -1055,9 +1055,31 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
       mentira até o fim, para ele ver o liberado.
 - **"Baixar a lista do que aconteceu":** só o que precisa de ação (as linhas que ficaram de fora ou com aviso), sem CPF.
   O código já faz assim.
-- **"Descartar a prévia":** não precisa de botão; subir a planilha certa substitui a prévia.
+- **"Descartar a prévia":** subir a planilha certa substitui a prévia; além disso, a tela ganha o botão "Descartar"
+  (resposta dele de 23/11 à noite, abaixo).
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
+- **A guarda dos dados (LGPD), respostas dele (23/11/2026, à noite)**, depois da revisão:
+  - a prévia que não foi confirmada (tem CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**, e o botão
+    "Descartar" apaga na hora;
+  - a lista dos que ficaram de fora (nome e motivo) fica **90 dias** depois de a importação terminar e depois se apaga
+    sozinha.
+- **A revisão de 23/11 (até `58dcd0d`)**: a trava está completa. Antes da produção, faltam o ensaio da importação
+  inteira na homologação (~5 mil linhas de mentira, medindo o lote), depois do "vi" dele sobre a trava, e as correções
+  da revisão (a aspa sem fechar no arquivo, a saída do IMPORTANDO, o texto do site e o menu cortado).
+
+### Financeiro, blocos de recibo: as respostas dele (23/11/2026, à noite)
+
+Depois da revisão do Financeiro até `4c06d58`:
+
+- **A devolução é só de bloco cheio.** A devolução só passa com as 50 folhas usadas ou marcadas. Se sobrar folha em
+  branco, a tesouraria marca como anulada antes de devolver.
+- **A exceção da folha pode ser desfeita**, só pela Tesouraria Geral e com motivo obrigatório. Fica no histórico quem
+  marcou, quem desfez, quando e por quê; nada se apaga. Não vale para folha de bloco já devolvido.
+- O formulário "Registrar saída" (entregar um bloco a uma congregação), a cor da folha extraviada e o seletor de bloco
+  no celular vão para o desenho da rodada 30.
+- O 1b continua fora da produção até a troca de janeiro de 2027 (plano da construção do Financeiro, §5): na produção
+  ele esconderia as telas antigas, e o módulo novo ainda está quase todo "em construção".
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 

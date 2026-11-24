@@ -56,7 +56,7 @@ const r30Etq = (p, s) => { const c = R30_COR(p)[s]; return `<span style="display
 const R30_NOTA = '<strong>Normalmente é automático:</strong> a folha lançada na planilha sai daqui sozinha. Esta tela é só para a exceção. Ninguém digita número: clique na folha e o sistema sabe a posição (70.090 = 40ª do bloco 70.051 a 70.100).';
 
 /* ---- o seletor de bloco (novo na congregação e no celular) ---- */
-const R30_BLOCOS_VN = [['Bloco 1.401 · em uso', '38 com destino · 12 livres', 1], ['Bloco 1.403 · esperando', 'saiu em 25/11 · 50 livres'], ['Bloco 1.288 · devolvido em 03/11', 'só consulta'], ['Bloco 1.251 · devolvido em 21/07', 'só consulta']];
+const R30_BLOCOS_VN = [['Bloco 1.401 · em uso', '38 com destino · 12 livres', 1], ['Bloco 1.403 · esperando', 'recebido em 25/11 · 50 livres'], ['Bloco 1.288 · devolvido em 03/11', 'só consulta'], ['Bloco 1.251 · devolvido em 21/07', 'só consulta']];
 const r30Lista = (p, cel) => `<div style="position:absolute;top:${cel ? 50 : 46}px;${cel ? 'left:0;right:0;' : 'right:0;width:330px;'}background:${p.sup};border:1px solid ${p.borda};border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,${p.e ? .5 : .18});padding:6px;z-index:5;display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;font-weight:700;color:${p.suave};padding:6px 10px 4px">Os blocos de Vila Nova</span>${R30_BLOCOS_VN.map(o => `<div style="display:flex;align-items:center;gap:10px;min-height:${cel ? 50 : 46}px;padding:0 10px;border-radius:9px;${o[2] ? `background:${p.e ? '#13294A' : '#EEF4FF'};` : ''}"><div style="flex:1;min-width:0;line-height:1.3"><div style="font-size:13.5px;font-weight:700;color:${p.titulo};white-space:nowrap">${o[0]}</div><div style="font-size:12px;color:${p.suave}">${o[1]}</div></div>${o[2] ? ic('check', p.link, 16, 2.4) : ''}</div>`).join('')}</div>`;
 const r30SelBloco = (p, txt, cel, aberto) => cel
   ? `<div style="position:relative;flex:none"><div style="height:44px;border:1px solid ${p.campoBorda};border-radius:10px;background:${p.campo};display:flex;align-items:center;gap:9px;padding:0 12px;font-size:14px;font-weight:600;color:${p.titulo}">${ic('livro', p.icone, 17, 2)}<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${txt}</span>${ic('setaBaixo', p.suave, 16, 2.2)}</div>${aberto ? r30Lista(p, 1) : ''}</div>`
@@ -130,13 +130,13 @@ const R30_SAIDA = {
 function r30FormSaida(p, o, cel) {
   const S = R30_SAIDA[o.caso || 'vn'], vazio = o.vazio;
   const folha = r17Campo(p, 'Primeira folha do bloco', vazio ? 'o número impresso na 1ª folha' : S.folha, { obrig: 1, icone: 'busca', vazio });
-  const caixa = vazio ? '' : r30Caixa(p, cel ? `<span><strong style="color:${p.titulo}">Bloco ${S.bloco}</strong> (veio sozinho): folhas ${S.faixa} · chegou em 05/02/2026 · na Tesouraria Geral</span>` : `<span><strong style="color:${p.titulo}">Bloco ${S.bloco}</strong> (veio sozinho): folhas ${S.faixa} · chegou da gráfica em 05/02/2026 · está na Tesouraria Geral, pronto para sair</span>`);
+  const caixa = vazio ? '' : r30Caixa(p, cel ? `<span><strong style="color:${p.titulo}">Bloco ${S.bloco}</strong> (veio sozinho): folhas ${S.faixa} · chegou em 05/02/2026 · na Tesouraria Geral</span>` : `<span><strong style="color:${p.titulo}">Bloco ${S.bloco}</strong> (veio sozinho): folhas ${S.faixa} · chegou em 05/02/2026 · está na Tesouraria Geral</span>`);
   const cong = r17Campo(p, 'Congregação', vazio ? 'Escolha ▾' : `${S.cong} ▾`, { obrig: 1, vazio, nota: cel ? '' : 'só as ativas' });
-  const data = o.dataErro ? r30CampoErro(p, cel ? 'Data' : 'Data da entrega', '25/01/2026', cel ? 'Antes da chegada (05/02/2026).' : 'Não pode ser antes da chegada do bloco (05/02/2026).', { obrig: 1, icone: 'calendario' }) : r17Campo(p, cel ? 'Data' : 'Data da entrega', '25/11/2026', { obrig: 1, icone: 'calendario' });
+  const data = o.dataErro ? r30CampoErro(p, cel ? 'Data' : 'Data da entrega', '25/01/2026', cel ? 'Antes da chegada (05/02/2026).' : 'Antes da chegada do bloco (05/02/2026).', { obrig: 1, icone: 'calendario' }) : r17Campo(p, cel ? 'Data' : 'Data da entrega', '25/11/2026', { obrig: 1, icone: 'calendario' });
   const pessoa = r17Campo(p, 'Entregue a', vazio ? 'primeiro, a congregação' : S.pessoa, { obrig: 1, vazio, nota: cel ? '' : 'a liderança dela ou outra pessoa' });
   const levado = r30Levado(p, !vazio && S.area, vazio ? 'a congregação' : S.cong, cel);
   if (cel) return r27Cartao(p, 'Registrar saída', r30Fecha(p), `${folha}${caixa}<div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:8px;align-items:start">${cong}${data}</div>${pessoa}${levado}${r21Ouro(p, 'Registrar a saída', 'check', 44)}<span style="font-size:12px;color:${p.suave};line-height:1.35">Entregue por João da Silva (quem está entrando).</span>`, 'padding:11px 12px;gap:8px');
-  return m9Cartao(p, 'Registrar saída', 'o bloco sai da Tesouraria Geral para uma congregação', `${folha}${caixa}<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px;align-items:start">${cong}${data}</div>${pessoa}${levado}${r17Campo(p, 'Entregue por', 'João da Silva · Tesouraria Geral (quem está entrando)', { auto: 1, icone: 'cadeado' })}<div style="display:flex;justify-content:flex-end">${m8Ouro(p, 'Registrar a saída', 'check', 38)}</div>`, 'gap:9px');
+  return m9Cartao(p, 'Registrar saída', 'o bloco vai para uma congregação', `${folha}${caixa}<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:10px;align-items:start">${cong}${data}</div>${pessoa}${levado}${r17Campo(p, 'Entregue por', 'João da Silva · Tesouraria Geral (quem está entrando)', { auto: 1, icone: 'cadeado' })}<div style="display:flex;justify-content:flex-end">${m8Ouro(p, 'Registrar a saída', 'check', 38)}</div>`, 'gap:9px');
 }
 function r30Saida(p, k, d) {
   const cel = ehCel(d);
@@ -170,9 +170,10 @@ function r30FormEntrada(p, o, cel) {
 // anular as que sobraram: as 3 em branco já vêm escolhidas e "Anulada" marcada (a Geral, vinda da recusa; ou a congregação, antes de levar)
 function r30Anular(p, k, cel) {
   const geral = k === 'geral', marcar = `<span style="font-size:12px;font-weight:700;color:${p.link};white-space:nowrap">marcar as 3 em branco</span>`;
-  const form = r30FormFolha(p, { cel, bloco: '1.288', rotFolha: 'Folhas em branco', folha: '64.448 a 64.450 · 48ª a 50ª', chip: 3, obs: 'Sobraram em branco; o bloco vai voltar', botao: 'Anular as 3', tit: 'As folhas em branco que você escolheu', sub: 'anular antes de devolver', titCel: 'Folhas 64.448 a 64.450 · 48ª a 50ª' });
+  const voltar = `<span style="display:inline-flex;align-items:center;gap:4px;font-weight:700;color:${p.link}">${ic('voltar', p.link, 14, 2.4)}Voltar à entrada do bloco 1.288</span>`;
+  const form = r30FormFolha(p, { cel, bloco: '1.288', rotFolha: 'Folhas (bloco 1.288)', folha: '48ª a 50ª', chip: 3, obs: 'Sobraram em branco', botao: 'Anular as 3', tit: 'As folhas em branco que você escolheu', sub: geral ? voltar : 'anular antes de levar', titCel: 'Folhas 64.448 a 64.450 · 48ª a 50ª' });
   const nota = r16aAviso(p, `<strong>Só bloco cheio volta para a Tesouraria Geral.</strong> Escolha “Anulada” e clique nas folhas em branco que sobraram (ou em “marcar as 3 em branco”). ${geral ? 'Depois, volte ao livro e registre a entrada.' : 'Depois, leve o bloco à Tesouraria Geral.'}`);
-  return r30Folhas(p, k, cel, { bloco: '1.288', folhas: r30B1288('escolhida'), resumo: `64.401 a 64.450 · 47 com destino · 3 em branco · ${marcar}`, sel: geral ? 'Bloco 1.288 · Vila Nova' : 'Bloco 1.288 · em uso', dir: geral ? m8Linha(p, 'Voltar à entrada', 'voltar') : '', form, nota, resumoCel: '1ª a 35ª: todas com destino', linkCel: marcar });
+  return r30Folhas(p, k, cel, { bloco: '1.288', folhas: r30B1288('escolhida'), resumo: `64.401 a 64.450 · 47 com destino · 3 em branco · ${marcar}`, sel: geral ? 'Bloco 1.288 · Vila Nova' : 'Bloco 1.288 · em uso', form, nota, resumoCel: '1ª a 35ª: todas com destino', linkCel: marcar });
 }
 function r30Devolver(p, k, d) {
   const cel = ehCel(d);
@@ -192,7 +193,7 @@ function r30FolhasCor(p, k, d) {
   const cel = ehCel(d), local = k === 'local' || k === 'localSel' || k === 'devolvido', nivel = local ? 'local' : k;
   if (k === 'devolvido') {
     const fechado = `<div style="display:flex;align-items:flex-start;gap:10px;padding:${cel ? '10px 12px' : '12px 14px'};border-radius:12px;border:1px solid ${p.borda};background:${p.sup};font-size:13px;line-height:1.45;color:${p.texto}">${ic('cadeado', p.suave, 17, 2)}<span style="min-width:0"><strong style="color:${p.titulo}">O bloco 1.288 voltou à Tesouraria Geral em 03/11.</strong> As folhas dele não mudam mais: ficam só para consulta. ${cel ? '' : 'Clique numa folha para ver o histórico dela.'}</span></div>`;
-    return r30Folhas(p, 'local', cel, { bloco: '1.288', folhas: r30B1288('anulada'), resumo: '64.401 a 64.450 · cheio: 46 lançadas, 1 cancelada, 3 anuladas', sel: 'Bloco 1.288 · devolvido', form: fechado, resumoCel: '1ª a 35ª: todas com destino' });
+    return r30Folhas(p, 'local', cel, { bloco: '1.288', folhas: r30B1288('anulada'), resumo: '64.401 a 64.450 · cheio: 46 lançadas, 1 cancelada, 3 anuladas', sel: 'Bloco 1.288 · devolvido', form: fechado, nota: '', resumoCel: '1ª a 35ª: todas com destino' });
   }
   const sel = local ? 'Bloco 1.401 · em uso' : 'Bloco 1.401 · Vila Nova';
   const form = r30FormFolha(p, { cel, bloco: '1.401', folha: '70.090 · 40ª', chip: 1, obs: 'Rasgou na hora de preencher', titCel: 'Folha 70.090 · a 40ª' });
@@ -205,7 +206,9 @@ function r30Desfazer(p, k, d) {
   const cel = ehCel(d), nivel = k === 'feito' ? 'geral' : k;
   const sel = k === 'local' ? 'Bloco 1.401 · em uso' : 'Bloco 1.401 · Vila Nova';
   if (k === 'feito') {
-    const form = r30FormFolha(p, { cel, bloco: '1.401', folha: '70.086 · 36ª', chip: -1, obs: '', titCel: 'Folha 70.086 · a 36ª', rodape: r30Hist(p, [R30_H_MARCOU, R30_H_DESFEZ], cel) });
+    // no celular, o cartão da folha (agora livre) com o histórico; o formulário abre ao tocar em "Marcar o que aconteceu"
+    const form = cel ? r27Cartao(p, 'Folha 70.086 · a 36ª', r30Etq(p, 'livre'), `${r30Hist(p, [R30_H_MARCOU, R30_H_DESFEZ], 1)}<div style="display:flex;justify-content:flex-end">${m8Linha(p, 'Marcar o que aconteceu', 'lapis')}</div>`, 'padding:11px 12px;gap:8px')
+      : r30FormFolha(p, { bloco: '1.401', folha: '70.086 · 36ª', chip: -1, obs: '', rodape: r30Hist(p, [R30_H_MARCOU, R30_H_DESFEZ]) });
     return r30Folhas(p, 'geral', cel, { bloco: '1.401', folhas: r30B1401({ 36: 'escolhida' }), resumo: '70.051 a 70.100 · 37 com destino · 13 livres', sel, form, nota: '', toast: cel ? 'A folha 70.086 voltou a ficar livre.' : 'A folha 70.086 voltou a ficar livre. O histórico guarda quem marcou, quem desfez e por quê.' });
   }
   const pode = k === 'geral';
@@ -241,8 +244,9 @@ function r30Vazios(p, k, d) {
   // a aba Blocos da Geral antes do primeiro lote
   const busca = `<div style="height:40px;border:1px solid ${p.campoBorda};border-radius:10px;background:${p.campo};display:flex;align-items:center;gap:8px;padding:0 12px;font-size:13.5px;color:${p.suave};${cel ? '' : 'width:250px;'}flex:none">${ic('busca', p.suave, 16, 2)}Nº do bloco ou de uma folha</div>`;
   const chips = `<div style="display:flex;gap:6px;flex-wrap:wrap">${['Todos', 'Em uso', 'Esperando', 'Fechado'].slice(0, cel ? 3 : 4).map((t, i) => chipFiltro(p, t, i === 0).replace(/<svg[\s\S]*?<\/svg>/, '')).join('')}</div>`;
-  const lote = m9Cartao(p, 'Lote da gráfica', '', `<span style="font-size:13px;color:${p.texto};line-height:1.45">Nenhum lote da gráfica cadastrado ainda.</span>${m8Ouro(p, 'Cadastrar lote da gráfica', 'mais', 38)}`);
-  if (cel) return r20Cel(p, 'geral', 'Blocos de recibo', r30Pos(`${r30Abas(p, 0, 1)}${busca}${chips}${r30Vazio(p, V[0], V[1], '', 1)}`, '', 1));
+  const lote = m9Cartao(p, 'Lote da gráfica', '', `<span style="font-size:13px;color:${p.texto};line-height:1.45">Nenhum lote da gráfica cadastrado ainda. Use o botão “Cadastrar lote da gráfica”, no alto.</span>`);
+  // no celular não há o cadastro do lote (como no aprovado): o texto não aponta para o botão
+  if (cel) return r20Cel(p, 'geral', 'Blocos de recibo', r30Pos(`${r30Abas(p, 0, 1)}${busca}${chips}${r30Vazio(p, V[0], 'Os blocos aparecem quando o lote da gráfica chega.', '', 1)}`, '', 1));
   return r20Casca(p, 'geral', 'Blocos de recibo', r30Pos(`${r30Tit(p, 'geral', 'os blocos', m8Ouro(p, 'Cadastrar lote da gráfica', 'mais', 40))}${r30Abas(p, 0)}<div style="display:flex;gap:12px;align-items:center">${busca}${chips}</div>${r17Dois(r30Vazio(p, V[0], V[1]), r18Col(lote, r16aAviso(p, '<strong>Bloco só fica com a Tesouraria Geral ou com a congregação.</strong> A área é só intermediária.')), '1.55fr 1fr')}`));
 }
 const PERFIS30_VAZIO = [['folhasGeral', 'Folhas do bloco · Tesouraria Geral'], ['folhasArea', 'Folhas do bloco · Tesouraria da Área 2'], ['folhasLocal', 'Folhas do bloco · Tesouraria local (Vila Nova)'], ['livroGeral', 'Livro · Tesouraria Geral'], ['livroArea', 'Livro · Tesouraria da Área 2'], ['livroLocal', 'Livro · Tesouraria local (Vila Nova)'], ['blocosGeral', 'Blocos · Tesouraria Geral, antes do 1º lote']];

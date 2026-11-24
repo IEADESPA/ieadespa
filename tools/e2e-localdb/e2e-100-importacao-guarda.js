@@ -205,6 +205,7 @@ async function principal() {
   const resumoC = JSON.parse(sC.Resumo);
   ok(sC.Situacao === "CONCLUIDA" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(resumoC.foraApagadaEm || "") && resumoC.resultado && resumoC.resultado.fora === 1,
     "o resumo guarda o dia em que a lista saiu (UTC, com o Z) e o número de antes continua", resumoC.foraApagadaEm);
+  ok(resumoC.foraDias === 90, "G4: o resumo guarda também o prazo que valeu no dia (90), para a tela não usar o prazo de hoje", resumoC.foraDias);
   const tC = await trilha("A rotina apagou a lista%");
   ok(tC.length === 1 && tC[0].RegistroId === idC && tC[0].UsuarioId === null && JSON.stringify(JSON.parse(tC[0].DadosDepois)) === JSON.stringify({ linhasApagadas: 1, retencaoDias: 90 }),
     "a trilha: quantas saíram e o prazo, sem nome", tC);

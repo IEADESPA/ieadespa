@@ -126,7 +126,7 @@ async function principal() {
   const dados = deFora.map((t) => JSON.parse(t.DadosDepois || "{}"));
   ok(JSON.stringify(dados.map((d) => d.linhas)) === JSON.stringify([[{ linha: 3, erro: 547 }], BLOCO.map((l) => ({ linha: l, erro: 547 })), [{ linha: 5, erro: 547 }]]),
     "a trilha: a linha e o número do erro (547, a regra do banco)", dados);
-  ok(!dados[0].confirmadoNaTela && dados[1].confirmadoNaTela === true && !dados[2].confirmadoNaTela, "a trilha diz qual saída a Secretaria Geral confirmou na tela", dados);
+  ok(dados.length === 3 && !dados[0].confirmadoNaTela && dados[1].confirmadoNaTela === true && !dados[2].confirmadoNaTela, "a trilha diz qual saída a Secretaria Geral confirmou na tela", dados);
   ok(!deFora.some((t) => /CK_E2E99|Recusad|conflicted/i.test(String(t.DadosDepois))), "a trilha sem a mensagem do banco (pode trazer o valor da linha)");
   let cadeiaOk = true;
   for (const t of marcas) {

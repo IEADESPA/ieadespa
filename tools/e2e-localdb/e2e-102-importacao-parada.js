@@ -88,7 +88,9 @@ async function principal() {
   ok(lote.sucesso === true && lote.importadas === 2 && lote.restantes === 2 && lote.concluida === false, "um lote de 2 entrou e a importação parou (faltam 2)", lote);
   await voltar(idB, 6);
   await db.aplicarRetencao(pool);
-  ok(await escalar("SELECT Situacao FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB }) === "IMPORTANDO" && await pessoais(idB) === 2, "com 6 dias: nada muda");
+  const sB6 = await escalar("SELECT Situacao FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB }), pB6 = await pessoais(idB);
+  // as 4 linhas ainda com os dados: as 2 pendentes e as 2 importadas (as importadas só se limpam na conclusão, como sempre)
+  ok(sB6 === "IMPORTANDO" && pB6 === 4, "com 6 dias: nada muda (em andamento, as 4 linhas ainda com os dados)", { situacao: sB6, comDados: pB6 });
   await ate8(idB);
   const imp = await um("SELECT Situacao, Resumo FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB });
   const res = JSON.parse(imp.Resumo || "{}").resultado || {};

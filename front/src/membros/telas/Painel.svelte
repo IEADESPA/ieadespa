@@ -184,7 +184,7 @@
         {@render barraArrol(a.completadas, a.vieram)}
         <p class="and-txt"><strong class="sv-num">{numero(a.completadas)} de {numero(a.vieram)}</strong> já completadas · faltam <span class="sv-num">{numero(a.faltam)}</span></p>
       </div>
-      {#if !celular}<p class="explica">Vieram do sistema pago{arrol.veioEm ? ` em ${diaMes(arrol.veioEm)}` : ""} sem a situação, a data e a forma de entrada. Ao completar, a pessoa sai deste grupo e ganha o voto.</p>{/if}
+      {#if !celular}<p class="explica">Vieram do sistema pago{arrol.veioEm ? ` em ${diaMes(arrol.veioEm)}` : ""} sem a situação, a data e a forma de entrada. Ao completar, a pessoa sai deste grupo; em comunhão, vota com 18 anos e 90 dias de entrada.</p>{/if}
       {#if a.faltam > 0}
         <div class="proximas">
           {#each arrol.proximas.slice(0, celular ? 3 : 4) as p (p.matricula)}

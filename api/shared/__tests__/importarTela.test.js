@@ -10,7 +10,7 @@ const { stripTypeScriptTypes } = require("node:module");
 
 const ARQ = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "importar", "importar.ts");
 const NOMES = ["descartar", "GUARDA_PADRAO", "guardaDe", "notaDaPrevia", "PERGUNTA_DESCARTAR", "fraseForaApagada", "notaForaAte", "importarLote", "podeDeixarDeFora",
-  "PERGUNTA_DEIXAR_DE_FORA"];
+  "perguntaDeixarDeFora", "linhasRecusadas"];
 
 function carregar(pedir) {
   if (typeof stripTypeScriptTypes !== "function") throw new Error("este Node não tira tipos do TypeScript (precisa do 22.13 ou mais novo)");
@@ -40,10 +40,33 @@ describe("a saída quando o sistema não consegue gravar 5 linhas seguidas", () 
     expect(T.podeDeixarDeFora({ sucesso: false, podeDeixarDeFora: true, recusadas: [2, 3, 4, 5, 6] })).toBe(true);
     for (const corpo of [null, undefined, "x", {}, { podeDeixarDeFora: "true" }, { podeDeixarDeFora: 1 }]) expect(T.podeDeixarDeFora(corpo)).toBe(false);
   });
-  test("a pergunta antes de deixar de fora diz para onde as linhas vão e quando parar", () => {
+  // menor 10 da revisão de 24/11/2026: a pessoa confirmava sem ver quais linhas ficariam de fora. A tela lista cada uma (a linha e o nome) e a pergunta
+  // diz quantas
+  test("a pergunta antes de deixar de fora diz quantas, para onde vão e quando parar", () => {
     const T = carregar(jest.fn());
-    expect(T.PERGUNTA_DEIXAR_DE_FORA).toBe("Deixar de fora as linhas que o sistema não conseguiu gravar? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), "
+    expect(T.perguntaDeixarDeFora(5)).toBe("Deixar de fora as 5 linhas da lista? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), "
       + "para a secretaria cadastrar à mão. Se as linhas seguintes também não entrarem, pare e avise o suporte.");
+    expect(T.perguntaDeixarDeFora(1)).toMatch(/^Deixar de fora a linha da lista\? /);
+    expect(T.perguntaDeixarDeFora(0)).toMatch(/^Deixar de fora as linhas que o sistema não conseguiu gravar\? /);
+  });
+  test("as linhas que ficariam de fora vêm do servidor (a linha e o nome); o que não serve é ignorado", () => {
+    const T = carregar(jest.fn());
+    igual(T.linhasRecusadas({ podeDeixarDeFora: true, recusadas: [{ linha: 812, nome: "Ana Exemplo" }, { linha: 813, nome: "" }] }),
+      [{ linha: 812, nome: "Ana Exemplo" }, { linha: 813, nome: "" }]);
+    igual(T.linhasRecusadas({ recusadas: [{ linha: "x", nome: "A" }, { linha: 9 }, null, 7, { linha: 10, nome: 5 }, { linha: -1, nome: "B" }] }), [{ linha: 9, nome: "" }]);
+    for (const corpo of [null, undefined, "x", {}, { recusadas: "1,2" }]) igual(T.linhasRecusadas(corpo), []);
+    // no máximo as 5 (o servidor para em 5 seguidas)
+    expect(T.linhasRecusadas({ recusadas: Array.from({ length: 9 }, (_, i) => ({ linha: i + 2, nome: "P" })) })).toHaveLength(5);
+  });
+  test("a tela mostra a lista das linhas antes do botão e a pergunta com o número delas", () => {
+    const tela = fs.readFileSync(path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Importar.svelte"), "utf8");
+    const bloco = tela.slice(tela.indexOf("{#if podeDeixar && !importando}"), tela.indexOf("{/if}", tela.indexOf("Deixar essas linhas de fora e continuar")) + 5);
+    expect(bloco).toMatch(/\{#each recusadas as r \(r\.linha\)\}/);
+    expect(bloco).toMatch(/Linha \{numero\(r\.linha\)\}/);
+    expect(bloco).toMatch(/As linhas que ficam de fora/);
+    expect(bloco.indexOf("{#each recusadas")).toBeLessThan(bloco.indexOf("Deixar essas linhas de fora e continuar"));
+    expect(tela).toMatch(/window\.confirm\(perguntaDeixarDeFora\(recusadas\.length\)\)/);
+    expect(tela).toMatch(/recusadas = podeDeixar \? linhasRecusadas\(l\.corpo\) : \[\]/);
   });
 });
 

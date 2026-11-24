@@ -107,8 +107,28 @@ export const importarLote = (importacaoId: number, deixarDeFora = false): Promis
 export function podeDeixarDeFora(corpo: unknown): boolean {
   return !!corpo && typeof corpo === "object" && (corpo as { podeDeixarDeFora?: unknown }).podeDeixarDeFora === true;
 }
-export const PERGUNTA_DEIXAR_DE_FORA = "Deixar de fora as linhas que o sistema não conseguiu gravar? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), "
-  + "para a secretaria cadastrar à mão. Se as linhas seguintes também não entrarem, pare e avise o suporte.";
+/** uma linha que o sistema não conseguiu gravar (a linha do arquivo e o nome), só para a tela mostrar quais ficariam de fora */
+export interface LinhaRecusada { readonly linha: number; readonly nome: string }
+/** as linhas que ficariam de fora, como o servidor mandou no 409 (menor 10 da revisão de 24/11/2026: a Geral confirma vendo quais); no máximo 5 */
+export function linhasRecusadas(corpo: unknown): LinhaRecusada[] {
+  const lista = corpo && typeof corpo === "object" ? (corpo as { recusadas?: unknown }).recusadas : null;
+  if (!Array.isArray(lista)) return [];
+  const boas: LinhaRecusada[] = [];
+  for (const x of lista) {
+    if (!x || typeof x !== "object") continue;
+    const { linha, nome } = x as { linha?: unknown; nome?: unknown };
+    if (typeof linha !== "number" || !Number.isInteger(linha) || linha < 1) continue;
+    if (nome !== undefined && typeof nome !== "string") continue;
+    boas.push({ linha, nome: nome ?? "" });
+  }
+  return boas.slice(0, 5);
+}
+/** a pergunta antes de deixar de fora: quantas, para onde vão e quando parar */
+export function perguntaDeixarDeFora(n: number): string {
+  const quais = n === 1 ? "a linha da lista" : n > 1 ? `as ${numero(n)} linhas da lista` : "as linhas que o sistema não conseguiu gravar";
+  return `Deixar de fora ${quais}? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), `
+    + "para a secretaria cadastrar à mão. Se as linhas seguintes também não entrarem, pare e avise o suporte.";
+}
 /** o "Descartar": a prévia sai na hora, com os dados pessoais das linhas (antes dos dias da guarda) */
 export const descartar = (importacaoId: number): Promise<Resultado<{ sucesso: boolean }>> =>
   pedir(BASE + "/descartar", { metodo: "POST", corpo: { importacaoId } });

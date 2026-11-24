@@ -15,8 +15,8 @@
   import PassoResultado from "../importar/PassoResultado.svelte";
   import { avisarFalha } from "../../comum/api";
   import {
-    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, PERGUNTA_DEIXAR_DE_FORA, PERGUNTA_DESCARTAR, podeDeixarDeFora, quandoLongo, resumoDaTela,
-    type ArquivoLido, type EstadoImportacao, type MapaDaTela, type Previa
+    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, linhasRecusadas, perguntaDeixarDeFora, PERGUNTA_DESCARTAR, podeDeixarDeFora, quandoLongo, resumoDaTela,
+    type ArquivoLido, type EstadoImportacao, type LinhaRecusada, type MapaDaTela, type Previa
   } from "../importar/importar";
 
   interface Props { celular: boolean }
@@ -34,6 +34,8 @@
   let erroImp = $state("");
   // A6 (revisão de 24/11/2026): parou com 5 linhas seguidas que o sistema não conseguiu gravar; a Secretaria Geral pode deixá-las de fora e continuar
   let podeDeixar = $state(false);
+  // as linhas que ficariam de fora (a linha e o nome), para a Geral ver antes de confirmar (menor 10 da revisão de 24/11/2026)
+  let recusadas = $state<LinhaRecusada[]>([]);
   let descartando = $state(false);
   const agora = quandoLongo(new Date());
   // os prazos da guarda dos dados (do servidor; sem eles, 7 e 90 dias)
@@ -59,6 +61,7 @@
     importando = true;
     erroImp = "";
     podeDeixar = false;
+    recusadas = [];
     let feitas = 0;
     let parado = 0;
     let deixar = deixarDeFora;   // só a primeira chamada leva a confirmação; as seguintes seguem como sempre
@@ -69,6 +72,7 @@
         deixar = false;
         if (!l.ok) {
           podeDeixar = podeDeixarDeFora(l.corpo);
+          recusadas = podeDeixar ? linhasRecusadas(l.corpo) : [];
           erroImp = podeDeixar ? l.mensagem : `${l.mensagem || "A importação parou no meio."} O que já entrou fica: continue de onde parou.`;
           return;
         }
@@ -125,7 +129,7 @@
   }
   function deixarDeForaEContinuar() {
     const imp = est?.importacao;
-    if (!imp || importando || !window.confirm(PERGUNTA_DEIXAR_DE_FORA)) return;
+    if (!imp || importando || !window.confirm(perguntaDeixarDeFora(recusadas.length))) return;
     void rodarLotes(imp.importacaoId, est?.restantes ?? 0, true);
   }
 
@@ -159,7 +163,15 @@
         <Botao tipo="ouro" icone="seta" largo={celular} ocupado={importando} onclick={continuar}>Continuar a importação</Botao>
         {#if andamento}<p role="status">{andamento}</p>{/if}
         {#if erroImp}<Aviso tom="erro">{erroImp}</Aviso>{/if}
-        {#if podeDeixar && !importando}<Botao tipo="linha" largo={celular} onclick={deixarDeForaEContinuar}>Deixar essas linhas de fora e continuar</Botao>{/if}
+        {#if podeDeixar && !importando}
+          {#if recusadas.length}
+            <div class="recusadas">
+              <strong>As linhas que ficam de fora, se você continuar:</strong>
+              <ul>{#each recusadas as r (r.linha)}<li><span class="sv-num">Linha {numero(r.linha)}</span>{r.nome ? ` · ${r.nome}` : ""}</li>{/each}</ul>
+            </div>
+          {/if}
+          <Botao tipo="linha" largo={celular} onclick={deixarDeForaEContinuar}>Deixar essas linhas de fora e continuar</Botao>
+        {/if}
       </section>
     {:else if passo === 4 && est.importacao && est.retrato}
       <PassoResultado {celular} importacao={est.importacao} retrato={est.retrato} {guarda} />
@@ -182,4 +194,7 @@
   .continuar { background: var(--sv-sup); border: 1px solid var(--sv-ouro); box-shadow: 0 0 0 1px var(--sv-ouro); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
   .continuar h2 { font-size: 15px; font-weight: 700; color: var(--sv-titulo); }
   .continuar p { font-size: 13px; color: var(--sv-texto); line-height: 1.45; }
+  .recusadas { font-size: 13px; color: var(--sv-texto); line-height: 1.45; display: flex; flex-direction: column; gap: 4px; }
+  .recusadas ul { margin: 0; padding-left: 18px; }
+  .recusadas strong { color: var(--sv-titulo); font-weight: 600; }
 </style>

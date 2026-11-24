@@ -1,6 +1,6 @@
 <!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação e como e quando a pessoa entrou (a função eclesiástica só
      aparece para ler: regra dele de 24/11/2026, só a Câmara de liderança e a academia a mudam); ao
-     completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, ganha o voto. Depois, vai direto para a próxima. A congregação, a área e a Geral
+     completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, vota com 18 anos e 90 dias de entrada. Depois, vai direto para a próxima. A congregação, a área e a Geral
      completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento). Toda ficha do arrolamento tem congregação e ela não muda aqui (G3, decisão
      dele de 24/11/2026: sem congregação não há importação; a de antes da regra volta com o porquê, sem o formulário).
      As regras da tela em ../arrolamento.ts; o servidor confere tudo de novo. -->

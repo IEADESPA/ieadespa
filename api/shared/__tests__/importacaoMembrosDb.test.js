@@ -177,9 +177,17 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
   test("5 recusadas seguidas é o banco, não a linha: 409 com a primeira, nada gravado e ninguém de fora", async () => {
     const seis = [2, 3, 4, 5, 6, 7].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: `Pessoa ${n}` }));
     cenarioRecusa({ linhas: seis, recusar: () => true });
-    const r = await db.importarLote(POOL, QUEM, 7);
-    // A6 (revisão de 24/11): a tela ganha a saída (podeDeixarDeFora); os números das linhas vão só para mostrar, o servidor nunca os lê de volta
-    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(2), podeDeixarDeFora: true, recusadas: [2, 3, 4, 5, 6] });
+    // os nomes das 5 (para a tela mostrar quais ficariam de fora: menor 10 da revisão de 24/11), lidos depois da transação desfeita, sem CPF nem contato
+    mockRegras.push([/SELECT Linha, Nome FROM ImportacoesMembrosLinhas/, [2, 3, 4, 5, 6].map((n) => ({ Linha: n, Nome: `Pessoa ${n}` }))]);
+    const { sql } = require("../db");
+    const r = await db.importarLote({ request: () => new sql.Request() }, QUEM, 7);
+    // A6 (revisão de 24/11): a tela ganha a saída (podeDeixarDeFora); as linhas (o número e o nome) vão só para mostrar, o servidor nunca as lê de volta
+    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(2), podeDeixarDeFora: true,
+      recusadas: [2, 3, 4, 5, 6].map((n) => ({ linha: n, nome: `Pessoa ${n}` })) });
+    const leitura = mockConsultas.find((c) => /SELECT Linha, Nome FROM ImportacoesMembrosLinhas/.test(c.sql));
+    expect(leitura.sql).toMatch(/WHERE ImportacaoId = @id AND Linha IN \(SELECT CAST\(\[value\] AS INT\) FROM OPENJSON\(@p\)\)/);
+    expect(leitura.sql).not.toMatch(/Cpf|Telefone|Email|NomeMae|NomePai/);
+    expect(JSON.parse(leitura.inputs.p)).toEqual([2, 3, 4, 5, 6]);
     expect(r.mensagem).toBe("O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 2 do arquivo): a importação parou sem deixar ninguém de fora. "
       + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte.");
     expect(tentadas()).toEqual(["Pessoa 2", "Pessoa 3", "Pessoa 4", "Pessoa 5", "Pessoa 6"]);

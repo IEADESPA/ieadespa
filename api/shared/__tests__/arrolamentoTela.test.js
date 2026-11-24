@@ -30,8 +30,11 @@ describe("o formulário de completar", () => {
     igual(T.formInicial(ficha({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01T00:00:00.000Z" })), { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01" });
     igual(T.formInicial(ficha({ formaAdmissao: "TRANSFERENCIA", dataAdmissao: "2015-13-45" })), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "" });
   });
-  test("as 3 situações e as 4 formas do desenho, com os textos aprovados", () => {
-    igual(T.SITUACOES.map((s) => [s.valor, s.rotulo, s.sub]), [["EM_COMUNHAO", "Em comunhão", "membro: ganha o voto"], ["CONGREGADO", "Congregado", "ainda não membro: não vota"], ["SEM_COMUNHAO", "Sem comunhão", "em disciplina ou afastado"]]);
+  // menor 8 da revisão de 24/11/2026: "membro: ganha o voto" (do aprovado) contradizia a nota da Assembleia na mesma tela (18 anos e 90 dias de entrada,
+  // estatuto.js). O texto diz a regra de verdade, sem prometer o voto na hora
+  test("as 3 situações e as 4 formas do desenho, com os textos aprovados (o de em comunhão com a regra da Assembleia)", () => {
+    igual(T.SITUACOES.map((s) => [s.valor, s.rotulo, s.sub]), [["EM_COMUNHAO", "Em comunhão", "membro: vota com 18 anos e 90 dias de entrada"], ["CONGREGADO", "Congregado", "ainda não membro: não vota"], ["SEM_COMUNHAO", "Sem comunhão", "em disciplina ou afastado"]]);
+    expect(T.SITUACOES.some((s) => /ganha o voto/.test(s.sub))).toBe(false);
     igual(T.FORMAS.map((f) => f.valor), ["BATISMO", "CARTA_MUDANCA", "RECONCILIACAO", "ACLAMACAO"]);
     expect(T.FORMAS[0].rotulo).toBe("Batismo nas águas");
   });
@@ -151,6 +154,15 @@ describe("a resposta do servidor que a tela aceita (o painel não quebra com res
 // escolhe a congregação") prometia uma escolha que não existe: troca pela que diz o que fazer, e só aparece se sobrou ficha de antes da regra. A tela
 // Completar perde a rota "semCongregacao" e o campo da congregação (o servidor recusa a congregação no pedido).
 const MEMBROS = path.join(__dirname, "..", "..", "..", "front", "src", "membros");
+// menor 8 da revisão de 24/11/2026: a frase do painel também prometia o voto na hora ("sai deste grupo e ganha o voto")
+describe("o painel não promete o voto na hora (menor 8)", () => {
+  const painel = fs.readFileSync(path.join(MEMBROS, "telas", "Painel.svelte"), "utf8");
+  test("a explicação do grupo diz a regra da Assembleia", () => {
+    expect(painel).not.toMatch(/ganha o voto/);
+    expect(painel).toMatch(/Ao completar, a pessoa sai deste grupo; em comunhão, vota com 18 anos e 90 dias de entrada\./);
+  });
+});
+
 describe("o painel da Geral e a tela Completar sem a escolha da congregação (G3)", () => {
   const painel = fs.readFileSync(path.join(MEMBROS, "telas", "Painel.svelte"), "utf8");
   const completar = fs.readFileSync(path.join(MEMBROS, "telas", "Completar.svelte"), "utf8");

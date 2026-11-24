@@ -76,7 +76,9 @@ async function principal() {
   const b2 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
   ok(b2.status === 409 && b2.body.mensagem === "O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 6 do arquivo): a importação parou sem deixar ninguém de fora. "
     + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte." && b2.body.podeDeixarDeFora === true
-    && JSON.stringify(b2.body.recusadas) === JSON.stringify(BLOCO), "409 com a primeira do bloco (a linha 6), e a tela pode deixá-las de fora", b2.body);
+    && JSON.stringify(b2.body.recusadas) === JSON.stringify(BLOCO.map((linha, i) => ({ linha, nome: `Recusado Bloco ${i + 1} E2E99` }))),
+    "409 com a primeira do bloco (a linha 6), e a tela pode deixá-las de fora, vendo quais (a linha e o nome: menor 10)", b2.body);
+  ok(!/@|example|90000/.test(JSON.stringify(b2.body.recusadas)), "as linhas do 409 só com o número e o nome (sem contato)", b2.body.recusadas);
   const bloco = await q(`SELECT Linha, Acao, Estado FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha IN (${BLOCO.join(",")}) ORDER BY Linha`, { i: id });
   ok(bloco.length === 5 && bloco.every((l) => l.Acao === "NOVA" && l.Estado === "PENDENTE"), "o bloco continua pendente (ninguém de fora)", bloco);
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'IMPORTADA'", { i: id }) === 2, "nada mais gravado (só as 2 do 1º lote)");

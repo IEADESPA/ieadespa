@@ -97,7 +97,8 @@ export function lerRespostaFicha(x: unknown): RespostaFichaArrolamento {
 export type Envio = { readonly ok: true; readonly corpo: CorpoCompletar } | { readonly ok: false; readonly campo: CampoComErro; readonly mensagem: string };
 
 export const SITUACOES: readonly { readonly valor: Situacao; readonly rotulo: string; readonly sub: string }[] = [
-  { valor: "EM_COMUNHAO", rotulo: "Em comunhão", sub: "membro: ganha o voto" },
+  // a regra de verdade da Assembleia (estatuto.js: 18 anos e 90 dias da entrada), sem prometer o voto na hora (menor 8 da revisão de 24/11/2026)
+  { valor: "EM_COMUNHAO", rotulo: "Em comunhão", sub: "membro: vota com 18 anos e 90 dias de entrada" },
   { valor: "CONGREGADO", rotulo: "Congregado", sub: "ainda não membro: não vota" },
   { valor: "SEM_COMUNHAO", rotulo: "Sem comunhão", sub: "em disciplina ou afastado" }
 ];

@@ -360,11 +360,22 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
       fora.push({ linha: e.linhaImportacao, erro: e.number });
       if (fora.length >= SEGUIDAS_MAX) {
         if (deixarDeFora === true) return emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n: 0, por, fora, confirmadoNaTela: true }));
-        return { sucesso: false, status: 409, mensagem: MSG.RECUSADAS(fora[0].linha), podeDeixarDeFora: true, recusadas: fora.map((f) => f.linha) };
+        // a tela mostra quais linhas ficariam de fora, com o nome (menor 10 da revisão de 24/11/2026: a Geral confirma vendo quais); só o nome, nunca o CPF
+        // nem o contato. Só para mostrar: o "deixar de fora" do servidor nunca lê essa lista de volta (tenta de novo e decide sozinho)
+        const nomes = await nomesDasLinhas(pool, id, fora.map((f) => f.linha));
+        return { sucesso: false, status: 409, mensagem: MSG.RECUSADAS(fora[0].linha), podeDeixarDeFora: true,
+          recusadas: fora.map((f) => ({ linha: f.linha, nome: nomes.get(f.linha) || "" })) };
       }
       n = e.antesNoLote + 1;   // as que entraram antes dela neste lote e mais UMA depois (a prova)
     }
   }
+}
+
+// O nome de cada linha da importação (para a tela dizer quais linhas são), lido fora da transação: Map(linha -> nome).
+async function nomesDasLinhas(pool, id, linhas) {
+  const r = await pool.request().input("id", sql.Int, id).input("p", sql.NVarChar(sql.MAX), JSON.stringify(linhas))
+    .query("SELECT Linha, Nome FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Linha IN (SELECT CAST([value] AS INT) FROM OPENJSON(@p))");
+  return new Map(r.recordset.map((l) => [Number(l.Linha), l.Nome || ""]));
 }
 
 async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false }) {

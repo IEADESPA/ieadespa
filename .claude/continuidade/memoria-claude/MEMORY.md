@@ -35,6 +35,7 @@
 - [Perguntar antes de desenhar](perguntar-antes-de-desenhar.md) — 20/11: dúvida de regra se pergunta ANTES de desenhar
 - [Não perguntar o que ele controla](nao-perguntar-o-que-ele-controla.md) — 23/11: caso que ele impede na operação = trava simples
 - [Perguntas na hora](perguntas-na-hora.md) — 23/11: pergunta pronta vai já, em blocos de 4, enquanto os agentes trabalham
+- [Uma coisa de cada vez](uma-coisa-de-cada-vez.md) — 23/11 noite: pendência dele, um passo por vez; "parar" = parar os agentes
 - [Construir exatamente o aprovado](construir-exatamente-o-aprovado.md) — par aprovado × construído de toda tela
 - [Realidade financeira](realidade-financeira-nao-o-regimento.md) — sem culto/malote/cofre; Regimento não é a realidade
 - [Propostas em artefato](propostas-de-tela-em-artefato.md) — página leve KMeb…; a antiga G1gj… é só arquivo

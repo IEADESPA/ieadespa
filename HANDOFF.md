@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 09:00 (Claude, sessão principal).
+Atualizado em 24/11/2026 09:11 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -50,10 +50,18 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 computador. Cada um continua do seu ponto, a partir do trabalho começado e **não registrado** no disco: são testes
 escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o ponto de cada um é este:
 
-- **Membros** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, em `4741cd3`): a guarda dos dados (7 e 90 dias)
-  começada. Estão alterados `importacaoMembrosDb.js`, `NotificacoesAgendador/index.js` e os 2 testes deles. Depois
-  vem o M5. Fica só no ramo: a mesclagem no homolog é do Claude, porque o sistema de proteção barrou mandar o agente
-  mexer na homologação.
+- **Membros: TERMINOU a guarda dos dados e o M5** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, até `d9c8cb8`,
+  enviado). jest com 6887 testes; e2e-100 36/36, e as regressões verdes. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+  - O M5 só fica igual ao desenho com a barra de 280 px do `bd694cf` (Financeiro). Até lá, 4 rótulos aparecem com
+    reticências.
+  - **Próxima volta, na fila**, decidida pela sessão a partir da regra dele ("de fora: nome e motivo") e da LGPD:
+    - quando a importação termina, apagar das linhas importadas a cópia de CPF, celular, e-mail, mãe, pai e
+      nascimento (o dado vive na ficha, onde a exclusão LGPD passa);
+    - as linhas de fora ficam só com o nome e o motivo por 90 dias;
+    - as 2 políticas entram na tela Políticas de retenção (migração 186).
+  - Ficaram de antes: o limite de 5 linhas seguidas, I1, S1 e as perguntas do arrolamento.
+  - O homolog recebeu `a8d03c3`, `259a737` e `11c51ff` na noite de 23/11, e o teste de telas passou verde.
+  - Os commits novos vão ao homolog pelo Claude, depois do revisor do arrolamento.
 - **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, em `f722716`): o teste novo
   `finMigracoesIndices.test.js` (I3), ainda sem a migração. Depois vêm I4, os menores e as duas regras dele.
 - **Desenhista: a r30 está PRONTA e NÃO publicada** (`C:/tmp/ieadespa-desenho-r30`, ramo `desenho-r30`, em `d0881bf`,
@@ -61,14 +69,15 @@ escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o pon
   **Antes de publicar, um ajuste** pela regra nova dele (24/11): a "anulada" sai (o 4º botão, o cinza, o item da
   legenda, o "marcar as 3 em branco" e o "3 anuladas" do livro). A devolução passa a ser completa ou parcial, com as
   folhas em branco de volta a livres, e o "Registrar saída" passa a entregar um bloco parcial (só as folhas livres). O
-  desenhista volta para isso quando abrir uma vaga e depois publica. As respostas da r29 ficam para a próxima rodada de
+  desenhista **voltou para isso às 09h50 de 24/11** e depois publica. As respostas da r29 ficam para a próxima rodada de
   Membros: a carta com o histórico pede uma tela antes de construir.
 - **Revisor de fora** (bancada, em `a4fd8b3`): o teste `revisor-sdk/testes/orcamento-local.test.mjs` foi escrito e
   ainda não está registrado; o código não começou. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 - **A prova do Code Review Graph** (agente novo, 24/11): o script e o relatório ficam em
   `C:/tmp/ieadespa-bancada/prova-crg/` e não vão para o Git. A cópia do sistema com os defeitos plantados fica em
   `C:/tmp/ieadespa-prova-crg`, sem remote, e é apagada no fim. O teto é de US$ 40.
-- Na fila, quando abrir vaga: o desenhista (o ajuste da r30) e o revisor do arrolamento.
+- Na fila, quando abrir vaga, nesta ordem: a próxima volta do construtor do Membros (acima) e depois o revisor do
+  arrolamento, que revisa também os commits novos do Membros.
 
 A trava do LocalDB está livre.
 

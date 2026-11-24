@@ -65,7 +65,8 @@ function podeCompletar({ geral, propria, temCongregacao, congregacaoPedida }) {
 
 // O recado da tela depois de completar.
 function recadoFeito(situacao, nome) {
-  if (situacao === "EM_COMUNHAO") return `Arrolamento completado: ${nome} está em comunhão e ganhou o voto.`;
+  // a Assembleia pede 18 anos e 90 dias da entrada (estatuto.js): o recado não promete o voto na hora (A4, revisão de 24/11/2026)
+  if (situacao === "EM_COMUNHAO") return `Arrolamento completado: ${nome} está em comunhão (na Assembleia, vota com 18 anos e 90 dias de entrada).`;
   if (situacao === "CONGREGADO") return `Arrolamento completado: ${nome} ficou como congregado (ainda não membro, sem voto).`;
   return `Arrolamento completado: ${nome} ficou sem comunhão (sem voto).`;
 }

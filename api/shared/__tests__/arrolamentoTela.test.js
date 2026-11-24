@@ -110,8 +110,9 @@ describe("o andamento e as frases do painel", () => {
     igual(T.depoisDe("SEM_COMUNHAO"), { rotulo: "sem comunhão", tom: "atrasado", voto: "sem voto" });
   });
   test("a nota da data, só para quem fica em comunhão", () => {
-    expect(T.notaDaData("EM_COMUNHAO", "2009-03-12")).toBe("A data de entrada é a de verdade (2009): com ela, o voto vale na hora.");
-    expect(T.notaDaData("EM_COMUNHAO", "")).toBe("A data de entrada é a de verdade: com ela, o voto vale na hora.");
+    // A4 (revisão de 24/11): a Assembleia pede 18 anos, 90 dias da entrada e as duas datas (estatuto.js, calcularCapacidadeEleitoral): nada de "vale na hora"
+    expect(T.notaDaData("EM_COMUNHAO", "2009-03-12")).toBe("A data de entrada é a de verdade (2009). Na Assembleia, vota quem tem 18 anos e 90 dias de entrada, com a data de nascimento na ficha.");
+    expect(T.notaDaData("EM_COMUNHAO", "")).toBe("A data de entrada é a de verdade. Na Assembleia, vota quem tem 18 anos e 90 dias de entrada, com a data de nascimento na ficha.");
     expect(T.notaDaData("CONGREGADO", "2009-03-12")).toBe("");
     expect(T.notaDaData("SEM_COMUNHAO", "2009-03-12")).toBe("");
   });

@@ -193,7 +193,8 @@ export function depoisDe(s: Situacao): { readonly rotulo: string; readonly tom: 
 export function notaDaData(s: Situacao, dataAdmissao: string): string {
   if (s !== "EM_COMUNHAO") return "";
   const ano = dataValida(dataAdmissao) ? dataAdmissao.slice(0, 4) : "";
-  return `A data de entrada é a de verdade${ano ? ` (${ano})` : ""}: com ela, o voto vale na hora.`;
+  // a regra de verdade da Assembleia (estatuto.js, calcularCapacidadeEleitoral: 18 anos, 90 dias da entrada, as duas datas na ficha), sem prometer o voto na hora
+  return `A data de entrada é a de verdade${ano ? ` (${ano})` : ""}. Na Assembleia, vota quem tem 18 anos e 90 dias de entrada, com a data de nascimento na ficha.`;
 }
 
 // a cor do círculo de iniciais pelo departamento (as do desenho r28); o nome vem do catálogo, então a regra procura pelo sentido (como departamento.ts)

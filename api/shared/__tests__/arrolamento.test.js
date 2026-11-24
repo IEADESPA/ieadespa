@@ -112,7 +112,8 @@ describe("podeCompletar: quem completa", () => {
 
 describe("o recado depois de completar", () => {
   test("em comunhão ganha o voto; o congregado e o sem comunhão não votam", () => {
-    expect(regras.recadoFeito("EM_COMUNHAO", "Ana Exemplo")).toMatch(/Ana Exemplo.*voto/);
+    expect(regras.recadoFeito("EM_COMUNHAO", "Ana Exemplo")).toBe("Arrolamento completado: Ana Exemplo está em comunhão (na Assembleia, vota com 18 anos e 90 dias de entrada).");
+    expect(regras.recadoFeito("EM_COMUNHAO", "Ana Exemplo")).not.toMatch(/ganhou o voto/);
     expect(regras.recadoFeito("CONGREGADO", "Ana Exemplo")).toMatch(/congregado/i);
     expect(regras.recadoFeito("SEM_COMUNHAO", "Ana Exemplo")).toMatch(/sem comunhão/i);
   });

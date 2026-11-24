@@ -43,7 +43,8 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 - **A página leve** (rodadas 19 em diante): `https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz`. Peça ao Claude para
   publicar `design/propostas/propostas-r30/index.html` **nesse endereço** (o mesmo `url`, sem criar outro). A página já
-  declara o banco (`db`) das escolhas; na republicação, não mexa nas capacidades.
+  declara o banco (`db`) das escolhas; na republicação, não mexa nas capacidades. A 30 foi publicada em 24/11/2026
+  (versão 12 da página leve, id 1795523649-c0c5), com o `db` mantido.
 - **A página antiga** (`G1gj9hzSbdcqAZYcFjmJ1j`) é o arquivo das rodadas 2 a 18: nunca mais republicar.
 - Para publicar no mesmo endereço, a pessoa precisa ser **editora** da página (o responsável dá o papel no botão Share).
 - **Nunca republicar enquanto o responsável está comentando:** as observações dele ficam no navegador e se perdem.

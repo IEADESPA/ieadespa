@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 10:02 (Claude, sessão principal).
+Atualizado em 24/11/2026 10:10 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -50,15 +50,14 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 computador. Cada um continua do seu ponto, a partir do trabalho começado e **não registrado** no disco: são testes
 escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o ponto de cada um é este:
 
-- **Membros: TERMINOU a guarda dos dados e o M5** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, até `d9c8cb8`,
-  enviado). jest com 6887 testes; e2e-100 36/36, e as regressões verdes. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+- **Membros: TERMINOU a guarda dos dados, o M5 e a volta 3** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`,
+  até `f7045ab`, enviado). jest 6897/6897; e2e-100 58/58, e as regressões verdes. Diário:
+  `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
   - O M5 só fica igual ao desenho com a barra de 280 px do `bd694cf` (Financeiro). Até lá, 4 rótulos aparecem com
     reticências.
-  - **Próxima volta, na fila**, decidida pela sessão a partir da regra dele ("de fora: nome e motivo") e da LGPD:
-    - quando a importação termina, apagar das linhas importadas a cópia de CPF, celular, e-mail, mãe, pai e
-      nascimento (o dado vive na ficha, onde a exclusão LGPD passa);
-    - as linhas de fora ficam só com o nome e o motivo por 90 dias;
-    - as 2 políticas entram na tela Políticas de retenção (migração 186).
+  - A volta 3: a linha importada já perdia o CPF e os outros dados pessoais desde `ded91fe`. Agora a linha de fora
+    fica só com o nome e o motivo, a rotina limpa as importações antigas e a migração 186 põe as 2 políticas na tela.
+    **O texto da base legal ele confirma antes da produção.**
   - Ficaram de antes: o limite de 5 linhas seguidas, I1, S1 e as perguntas do arrolamento.
   - O homolog recebeu `a8d03c3`, `259a737` e `11c51ff` na noite de 23/11, e o teste de telas passou verde.
   - Os commits novos vão ao homolog pelo Claude, depois do revisor do arrolamento.
@@ -73,10 +72,10 @@ escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o pon
 - **Revisor de fora** (bancada, até `81fdf25`): prontos o crédito por dia com os 2 computadores, a largada no
   `message_start`, o `--conferir-relatorio` e o teto mínimo por lente. Falta o recorte dos ramos e a agenda. Diário:
   `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-- **A próxima volta do construtor do Membros começou** (a LGPD da importação e a migração 186, acima).
 - **O desenhista prepara a r31** (Membros: a carta com o histórico, o QR, o pedido no celular com a cidade e o
   abandono com a Câmara), no ramo `desenho-r31`. **Não publicar** enquanto ele confere a r30.
-- Na fila, quando o Membros terminar: o revisor do arrolamento, que revisa também os commits novos do Membros.
+- **O revisor do arrolamento revisa o ramo do Membros até `f7045ab`** (só leitura). Se der o sim, o Claude mescla no
+  homolog e atualiza a base do teste de telas.
 
 A trava do LocalDB está livre.
 

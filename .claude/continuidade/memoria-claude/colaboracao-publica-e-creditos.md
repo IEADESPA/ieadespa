@@ -50,3 +50,9 @@ Ver [[varredura-em-pedacos-de-30-min]], [[habilidades-de-design-instaladas]], [[
   para fora) e Token Optimizer (licença).
 
 **Nonprofits, confirmado em 20/11:** fica LIGADO também no Claude Code, mesmo custando ~3.900 tokens por conversa. Ele tem mais dois repositórios de sistemas sendo criados, para entidades sem fins lucrativos: o **COMEP** (um conselho) e a **ASAF** (uma associação). Lá as habilidades de texto, campanha e doadores podem servir; as bases de editais americanas, não. Não propor desligar de novo.
+
+**Esforço por agente (ele, 24/11/2026):** o "máximo" de 20/11 mudou. O construtor fica no "x alto" e o desenhista no
+"alto" (campo `effort` no cabeçalho dos agentes da bancada). A conversa principal fica no nível que ele escolhe (hoje
+"x alto"; ele não usa o máximo aqui). O Fable 5.2 (revisor) só muda depois do teste comparativo de esforço que ele
+mandou fazer. Ele quer saber, de cada nível, se o resultado compensa o gasto da cota: responder com medição, não com
+palpite.

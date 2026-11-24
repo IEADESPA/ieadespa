@@ -8,7 +8,7 @@
 - [Nada em aberto](nada-em-aberto.md) — fechar o que o código resolve; só sobra decisão dele ou ação externa
 - [Fase de teste, duas pessoas](fase-de-teste-duas-pessoas.md) — 2 pessoas no sistema; segurança como produção
 - [Ritmo e limites de uso](ritmo-e-limites-de-uso.md) — ser econômico; pausa = Monitor, não sleep
-- [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — 20/11: esforço máximo; sem fork longo; repo público
+- [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — esforço por agente (24/11); sem fork longo; repo público
 - [Varredura em pedaços de 30 min](varredura-em-pedacos-de-30-min.md) — caça de defeitos em pedaços; ele diz quando
 - [Sem Bedrock](sem-bedrock-ficar-na-assinatura.md) — ficar na assinatura; não reabrir
 - [Habilidades instaladas](habilidades-de-design-instaladas.md) — design, Svelte, Postgres, TDD, LGPD (docs na bancada privada), plugins

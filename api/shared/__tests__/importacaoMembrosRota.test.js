@@ -8,6 +8,7 @@ jest.mock("../importacaoMembrosDb", () => ({
   csv: jest.fn(async () => "﻿Linha;Matrícula\r\n"),
   criarPrevia: jest.fn(async () => ({ sucesso: true, importacaoId: 7, resumo: { total: 1 } })),
   descartar: jest.fn(async () => ({ sucesso: true })),
+  descartarParada: jest.fn(async () => ({ sucesso: true })),
   confirmar: jest.fn(async () => ({ sucesso: true, importacaoId: 7, restantes: 3 })),
   importarLote: jest.fn(async () => ({ sucesso: true, importacaoId: 7, importadas: 3, restantes: 0, concluida: true }))
 }));
@@ -102,6 +103,19 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     const c2 = await chamar({ metodo: "POST", acao: "confirmar", token: tok.geral(79), corpo: { importacaoId: 7 } });
     expect(c2.res.status).toBe(200);
     expect(db.confirmar).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 79 }), 7);
+  });
+  // G2 (decisão dele de 24/11/2026): descartar a importação JÁ CONFIRMADA (a parada sem ninguém importado) é ato sensível como confirmar: pede o fator recente
+  test("descartar a importação parada pede a confirmação recente (428) e, sem ela, nada muda", async () => {
+    const semFator = auth.reassinarSessao({ membroId: 82, via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"], termosPendentes: [] });
+    const c = await chamar({ metodo: "POST", acao: "descartar-parada", token: semFator, corpo: { importacaoId: 7 } });
+    expect(c.res.status).toBe(428);
+    expect(db.descartarParada).not.toHaveBeenCalled();
+    expect((await chamar({ metodo: "POST", acao: "descartar-parada", token: tok.local(), corpo: { importacaoId: 7 } })).res.status).toBe(403);
+    expect(db.descartarParada).not.toHaveBeenCalled();
+    const c2 = await chamar({ metodo: "POST", acao: "descartar-parada", token: tok.geral(83), corpo: { importacaoId: 7 } });
+    expect(c2.res.status).toBe(200);
+    expect(db.descartarParada).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 83 }), 7);
+    expect((await chamar({ metodo: "GET", acao: "descartar-parada", token: tok.geral(83) })).res.status).toBe(405);
   });
   test("descartar e o lote", async () => {
     expect((await chamar({ metodo: "POST", acao: "descartar", token: tok.geral(80), corpo: { importacaoId: 7 } })).res.status).toBe(200);

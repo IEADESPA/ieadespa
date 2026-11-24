@@ -50,6 +50,20 @@ const marcacao = () => mockConsultas.filter((c) => /SET Estado = N'IMPORTADA'/.t
 beforeEach(() => { mockRegras = []; mockConsultas = []; mockTx = []; jest.clearAllMocks(); });
 
 describe("o lote", () => {
+  // G2 (decisão dele de 24/11/2026): o prazo da importação parada é de 7 dias contados do ÚLTIMO LOTE, e não da confirmação. Cada lote gravado marca a hora,
+  // na mesma transação (o lote desfeito, como o 409 de ninguém entrou, não marca nada)
+  test("G2: cada lote gravado marca a hora do último lote (UltimoLoteEm), na transação dele; a importação já concluída não marca", async () => {
+    cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
+    await db.importarLote(POOL, QUEM, 7);
+    const marca = mockConsultas.findIndex((c) => /UPDATE ImportacoesMembros SET UltimoLoteEm = SYSUTCDATETIME\(\) WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO'/.test(c.sql));
+    expect(marca).toBeGreaterThan(mockConsultas.findIndex((c) => /FROM ImportacoesMembros WITH \(UPDLOCK\)/.test(c.sql)));
+    expect(mockConsultas[marca].inputs.id).toBe(7);
+    expect(mockTx).toEqual(["begin", "commit"]);
+    mockConsultas = []; mockTx = [];
+    cenario({ linhas: [], gravar: () => ({ ocupada: false, donoCpf: null }), situacao: "CONCLUIDA" });
+    await db.importarLote(POOL, QUEM, 7);
+    expect(mockConsultas.some((c) => /SET UltimoLoteEm/.test(c.sql))).toBe(false);
+  });
   test("a linha comum entra com a matrícula do arquivo, em ARROLAMENTO, com a pendência ARROLAMENTO (e mais nada)", async () => {
     cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
     const r = await db.importarLote(POOL, QUEM, 7);
@@ -362,6 +376,37 @@ describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
     mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, []]];
     expect((await db.estado(POOL_REQ)).retrato).toBeNull();
   });
+  // G2 (decisão dele de 24/11/2026): a tela parada mostra "faltam N dias"; o prazo é de 7 dias (a política da prévia) contados do ÚLTIMO LOTE (sem lote, da
+  // confirmação). A tela também precisa saber se já entrou alguém (a parada sem ninguém tem outra saída)
+  test("G2: a importação parada leva o prazo para a tela: 7 dias do último lote (sem lote, da confirmação), os dias que faltam e quantas já entraram", async () => {
+    const dia = 86400000, agora = Date.now();
+    const imp = (extra) => [{ ImportacaoId: 9, Situacao: "IMPORTANDO", ConfirmadaEm: new Date(agora - 10 * dia), ConfirmadaPor: 1, Resumo: "{}", UltimoLoteEm: null, ...extra }];
+    const contas = [/AS importadas,\s+SUM\(CASE WHEN Acao = N'NOVA' AND Estado = N'PENDENTE' THEN 1 ELSE 0 END\) AS restantes/, [{ importadas: 40, restantes: 12 }]];
+    const ultimo = agora - 2 * dia - 3600000;
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ UltimoLoteEm: new Date(ultimo) })], contas];
+    const r = await db.estado(POOL_REQ);
+    expect(r).toMatchObject({ emAndamento: true, feita: false, restantes: 12, importadas: 40 });
+    expect(r.prazo).toEqual({ dias: 7, venceEm: new Date(ultimo + 7 * dia).toISOString(), faltam: 5 });
+    expect(mockConsultas.find((c) => /FROM ImportacoesMembros WHERE Situacao IN/.test(c.sql)).sql).toMatch(/UltimoLoteEm/);
+    // sem nenhum lote gravado: da confirmação
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ ConfirmadaEm: new Date(agora - 3 * dia - 3600000) })], contas];
+    expect((await db.estado(POOL_REQ)).prazo.faltam).toBe(4);
+    // logo depois da confirmação: faltam 7 (o banco guarda o segundo arredondado, que pode ser meio segundo à frente: o e2e-102 viu "faltam 8")
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ ConfirmadaEm: new Date(agora + 500) })], contas];
+    expect((await db.estado(POOL_REQ)).prazo.faltam).toBe(7);
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ UltimoLoteEm: new Date(agora + 500 - 6 * dia) })], contas];
+    expect((await db.estado(POOL_REQ)).prazo.faltam).toBe(1);
+    // passou do prazo e a rotina do dia ainda não rodou: 0 (nunca negativo)
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ UltimoLoteEm: new Date(agora - 8 * dia) })], contas];
+    expect((await db.estado(POOL_REQ)).prazo.faltam).toBe(0);
+    // o prazo ajustado na política da prévia vale também aqui
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, imp({ UltimoLoteEm: new Date(ultimo) })], contas,
+      [/FROM PoliticasRetencao/, (i) => (i.c === db.POLITICA_PREVIA.categoria ? [{ DiasRetencao: 3 }] : [])]];
+    expect((await db.estado(POOL_REQ)).prazo).toMatchObject({ dias: 3, faltam: 1 });
+    // sem importação parada: sem prazo
+    mockRegras = [[/FROM ImportacoesMembros WHERE Situacao IN/, []]];
+    expect(await db.estado(POOL_REQ)).toMatchObject({ prazo: null, importadas: null });
+  });
 });
 
 // A GUARDA DOS DADOS DA IMPORTAÇÃO (respostas dele de 23/11/2026, LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7
@@ -371,12 +416,15 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   const { sql } = require("../db");
   const POOL_G = { request: () => new sql.Request() };
   const { registrarAuditoriaNaTransacao } = require("../auditoria");
-  function cenarioGuarda({ previas = [], foraApagadas = [], limpas = [], politicas = {}, rc = 0, semTabela = false, paradas = [], paradasDeFora = 0 }) {
+  function cenarioGuarda({ previas = [], foraApagadas = [], limpas = [], politicas = {}, rc = 0, semTabela = false, sem187 = false, paradas = [], paradasDeFora = 0,
+    ninguem = [] }) {
     mockRegras = [
-      [/OBJECT_ID\(N'dbo\.ImportacoesMembros', N'U'\)/, [{ id: semTabela ? null : 1234 }]],
+      [/OBJECT_ID\(N'dbo\.ImportacoesMembros', N'U'\) AS id, COL_LENGTH\(N'dbo\.ImportacoesMembros', N'UltimoLoteEm'\) AS col/,
+        [{ id: semTabela ? null : 1234, col: semTabela || sem187 ? null : 4 }]],
       [/FROM PoliticasRetencao/, (i) => (politicas[i.c] ? [{ DiasRetencao: politicas[i.c] }] : [])],
       [/sp_getapplock/, [{ rc }]],
       [/SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/, previas.map((id) => ({ ImportacaoId: id }))],
+      [/NOT EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l\.ImportacaoId = i\.ImportacaoId AND l\.Estado = N'IMPORTADA'\)/, ninguem],
       [/WHERE i\.Situacao = N'IMPORTANDO'/, paradas],
       [/N'NAO_TERMINOU'/, [{ n: paradasDeFora }]],
       [/SUM\(CASE WHEN Estado = N'IMPORTADA'/, [{ importadas: 3, fora: paradasDeFora, numeroNovo: 0, possivelRepetida: 0, semCongregacao: 0 }]],
@@ -393,7 +441,9 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     const r = await db.aplicarRetencao(POOL_G);
     expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     const sel = mockConsultas.find((c) => /WHERE i\.Situacao = N'IMPORTANDO'/.test(c.sql));
-    expect(sel.sql).toMatch(/i\.ConfirmadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    // G2 (decisão dele de 24/11/2026): do ÚLTIMO LOTE; sem nenhum lote gravado, da confirmação
+    expect(sel.sql).toMatch(/COALESCE\(i\.UltimoLoteEm, i\.ConfirmadaEm\) < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(sel.sql).not.toMatch(/AND i\.ConfirmadaEm </);
     expect(sel.sql).toMatch(/l\.Estado = N'PENDENTE'/);
     expect(sel.inputs.d).toBe(7);
     const marca = mockConsultas.find((c) => /N'NAO_TERMINOU'/.test(c.sql));
@@ -411,17 +461,34 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
       expect.objectContaining({ registroId: 9, usuarioId: null, acao: "Concluiu a importação do sistema pago" })]);
     expect(mockTx).toEqual(["begin", "commit"]);
   });
-  // A que parou sem ninguém importado NÃO entra no prazo (o 7902eca tinha esse defeito): tirar as linhas dela deixava a importação única sem saída — o
-  // "Continuar a importação" recusava para sempre (NINGUEM_ENTROU, "Avise o suporte") e nenhuma outra podia começar. Ela fica como antes do G2: continua
-  // de onde parou, com os dados, quando a Secretaria Geral voltar. O que fazer com ela depois de um prazo, ele decide.
-  test("G2: a importação parada sem ninguém que entrou fica como está (continua de onde parou, com os dados): a rotina só pega a que tem gente importada", async () => {
-    cenarioGuarda({ paradas: [], paradasDeFora: 5 });
+  // G2 (decisão dele de 24/11/2026): o mesmo prazo vale para a parada SEM ninguém importado. Concluir com zero soltaria a trava das matrículas e gastaria a
+  // importação única com uma planilha que não entrou (e tirar só as linhas a deixava sem saída: o defeito do 7902eca). Vencido o prazo, ela é DESCARTADA:
+  // as linhas saem inteiras (com os dados pessoais), a data da confirmação fica, o resumo guarda o prazo (a tela diz por quê) e as matrículas continuam
+  // travadas, à espera da importação de verdade. Leitura da sessão, no relatório: sem lote gravado, o prazo conta da confirmação.
+  test("G2: a parada sem ninguém importado, vencido o prazo, é descartada: as linhas saem, a data da confirmação fica e nada conclui", async () => {
+    cenarioGuarda({ ninguem: [{ ImportacaoId: 11 }], paradas: [] });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
+    const sel = mockConsultas.find((c) => /NOT EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l\.ImportacaoId = i\.ImportacaoId AND l\.Estado = N'IMPORTADA'\)/.test(c.sql));
+    expect(sel.sql).toMatch(/i\.Situacao = N'IMPORTANDO' AND COALESCE\(i\.UltimoLoteEm, i\.ConfirmadaEm\) < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(sel.inputs.d).toBe(7);
+    const apaga = mockConsultas.find((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND NOT EXISTS/.test(c.sql));
+    expect(apaga.inputs).toMatchObject({ id: 11, dias: 7 });
+    // nunca apaga as linhas de quem já entrou (a ficha existe e a linha é o registro dela), também se alguém entrou depois da consulta
+    expect(apaga.sql).toMatch(/NOT EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas x WHERE x\.ImportacaoId = @id AND x\.Estado = N'IMPORTADA'\)/);
+    expect(apaga.sql).toMatch(/SET Situacao = N'DESCARTADA', DescartadaEm = SYSUTCDATETIME\(\)/);
+    expect(apaga.sql).toMatch(/'\$\.descartadaPeloPrazo', @dias/);
+    expect(apaga.sql).toMatch(/WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO'/);
+    expect(apaga.sql).not.toMatch(/ConfirmadaEm = NULL/);
+    expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'|N'NAO_TERMINOU'/.test(c.sql))).toBe(false);
+    expect(trilhas()).toEqual([expect.objectContaining({ tabela: "ImportacoesMembros", registroId: 11, usuarioId: null,
+      acao: "A rotina descartou a importação parada há 7 dias, sem ninguém importado", dadosDepois: { retencaoDias: 7 } })]);
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+  test("G2: a trilha da parada descartada cabe em 100 também com o prazo mais longo", async () => {
+    cenarioGuarda({ ninguem: [{ ImportacaoId: 11 }], politicas: { [db.POLITICA_PREVIA.categoria]: 36500 } });
     await db.aplicarRetencao(POOL_G);
-    const sel = mockConsultas.find((c) => /WHERE i\.Situacao = N'IMPORTANDO'/.test(c.sql));
-    expect(sel.sql).toMatch(/EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l\.ImportacaoId = i\.ImportacaoId AND l\.Estado = N'IMPORTADA'\)/);
-    expect(mockConsultas.some((c) => /N'NAO_TERMINOU'/.test(c.sql))).toBe(false);
-    expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(false);
-    expect(trilhas()).toEqual([]);
+    expect(trilhas()).toHaveLength(1);
+    for (const t of trilhas()) expect(t.acao.length).toBeLessThanOrEqual(100);
   });
   test("G2: o motivo novo tem o texto para a lista e o CSV; os textos da trilha cabem em 100 (com o prazo de 36.500 dias)", async () => {
     expect(require("../importacaoMembros").textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)");
@@ -517,10 +584,86 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     expect(mockConsultas.some((c) => /sp_getapplock|DELETE/.test(c.sql))).toBe(false);
     expect(mockTx).toEqual([]);
   });
+  test("a base com a 185 e sem a 187 (as bases dos roteiros de antes do G2): a rotina não faz nada e não falha", async () => {
+    cenarioGuarda({ previas: [12], paradas: [{ ImportacaoId: 9, Resumo: "{}" }], sem187: true });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(mockConsultas.some((c) => /sp_getapplock|DELETE|UltimoLoteEm </.test(c.sql))).toBe(false);
+    expect(mockTx).toEqual([]);
+  });
   test("o estado leva os prazos da guarda para a tela (a nota do \"Descartar\" e a do resultado dizem o prazo de verdade, também o ajustado)", async () => {
     cenarioGuarda({});
     expect((await db.estado(POOL_G)).guarda).toEqual({ diasPrevia: 7, diasFora: 90 });
     cenarioGuarda({ politicas: { [db.POLITICA_PREVIA.categoria]: 3, [db.POLITICA_FORA.categoria]: 30 } });
     expect((await db.estado(POOL_G)).guarda).toEqual({ diasPrevia: 3, diasFora: 30 });
+  });
+});
+
+// G2 (decisão dele de 24/11/2026): a importação confirmada que parou sem ninguém importado ganha a saída "descartar a importação" (à mão, pela Secretaria
+// Geral; a rota pede a confirmação recente). Só a que não gravou ninguém: a que já gravou alguém continua, ou o prazo a encerra com a lista dos que faltaram.
+describe("G2: descartar a importação parada sem ninguém importado", () => {
+  const { sql } = require("../db");
+  const POOL_D = { request: () => new sql.Request() };
+  const { registrarAuditoriaNaTransacao } = require("../auditoria");
+  const situacao = (linhas) => [/FROM ImportacoesMembros WHERE Situacao IN/, linhas];
+  const andamento = (id = 9) => ({ ImportacaoId: id, Situacao: "IMPORTANDO", ConfirmadaEm: new Date(), UltimoLoteEm: null, Resumo: "{}" });
+  const contas = (importadas) => [/AS importadas,\s+SUM/, [{ importadas, restantes: 4 }]];
+  test("sem ninguém importado: as linhas saem inteiras e ela fica DESCARTADA (a data da confirmação fica), com a trilha de quem descartou", async () => {
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([andamento()]), contas(0)];
+    expect(await db.descartarParada(POOL_D, QUEM, "9")).toEqual({ sucesso: true });
+    const apaga = mockConsultas.find((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND NOT EXISTS/.test(c.sql));
+    expect(apaga.inputs).toMatchObject({ id: 9, dias: null });
+    expect(apaga.sql).toMatch(/WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO'/);
+    expect(registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1])).toEqual([expect.objectContaining({ tabela: "ImportacoesMembros", registroId: 9, usuarioId: 1,
+      acao: "Descartou a importação parada, sem ninguém importado" })]);
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+  test("a que já gravou alguém não se descarta (409, nada sai); a que não é a parada de agora, 409; sem a importação, 400; a trava ocupada, 409", async () => {
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([andamento()]), contas(3)];
+    expect(await db.descartarParada(POOL_D, QUEM, 9)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.JA_ENTROU_ALGUEM });
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([andamento(9)]), contas(0)];
+    expect(await db.descartarParada(POOL_D, QUEM, 10)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.NAO_ESTA_PARADA });
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([{ ImportacaoId: 9, Situacao: "PREVIA", Resumo: "{}" }]), contas(0)];
+    expect(await db.descartarParada(POOL_D, QUEM, 9)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.NAO_ESTA_PARADA });
+    expect(mockConsultas.some((c) => /DELETE/.test(c.sql))).toBe(false);
+    expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+    mockConsultas = [];
+    // (o e2e-102 achou: Number([9]) e Number(true) viravam 9 e 1; só o número, ou o texto só com dígitos, vale)
+    for (const lixo of [null, "x", -1, 0, 1.5, "9; DROP TABLE x", 2147483647, [9], ["9"], true, { id: 9 }, "", " ", "0x9", "9e0", "+9"]) {
+      expect(await db.descartarParada(POOL_D, QUEM, lixo)).toEqual({ sucesso: false, status: 400, mensagem: "Informe a importação." });
+      expect(await db.confirmar(POOL_D, QUEM, lixo)).toEqual({ sucesso: false, status: 400, mensagem: "Informe a importação." });
+    }
+    expect(mockConsultas).toEqual([]);
+    mockRegras = [[/sp_getapplock/, [{ rc: -1 }]]];
+    expect(await db.descartarParada(POOL_D, QUEM, 9)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.OCUPADO });
+  });
+  test("o lote da importação descartada diz que ela foi descartada (e não que não foi confirmada)", async () => {
+    cenario({ linhas: [], gravar: () => ({ ocupada: false, donoCpf: null }), situacao: "DESCARTADA" });
+    expect(await db.importarLote(POOL, QUEM, 7)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.DESCARTADA });
+  });
+  test("a mensagem de quando ninguém entrou aponta a saída nova", () => {
+    expect(db.MSG.NINGUEM_ENTROU).toBe("O sistema não conseguiu gravar nenhuma pessoa desta importação: ela parou sem deixar ninguém de fora. "
+      + "Avise o suporte, ou descarte a importação e faça outra.");
+  });
+  // a parada descartada pelo prazo não pode sumir calada: a tela volta ao arquivo dizendo que a importação de tal dia foi descartada no fim do prazo
+  test("o estado depois da descartada pelo prazo: a tela diz qual foi e quando (só se ela for a última e não houver outra)", async () => {
+    const descartada = { ImportacaoId: 12, Situacao: "DESCARTADA", NomeArquivo: "membros.csv", ConfirmadaEm: new Date("2026-12-01T13:00:00Z"),
+      DescartadaEm: new Date("2026-12-09T06:00:00Z"), Resumo: JSON.stringify({ total: 4, descartadaPeloPrazo: 7 }) };
+    mockRegras = [situacao([descartada]), [/SELECT MAX\(ImportacaoId\) AS ultima FROM ImportacoesMembros/, [{ ultima: 12 }]]];
+    const r = await db.estado(POOL_D);
+    expect(r).toMatchObject({ feita: false, emAndamento: false, importacao: null });
+    expect(r.descartadaPeloPrazo).toEqual({ importacaoId: 12, nomeArquivo: "membros.csv", confirmadaEm: descartada.ConfirmadaEm, descartadaEm: descartada.DescartadaEm, dias: 7 });
+    expect(mockConsultas.find((c) => /FROM ImportacoesMembros WHERE Situacao IN/.test(c.sql)).sql)
+      .toMatch(/OR \(Situacao = N'DESCARTADA' AND ConfirmadaEm IS NOT NULL\)/);
+    // houve outra depois (uma prévia descartada): não mostra mais
+    mockRegras = [situacao([descartada]), [/SELECT MAX\(ImportacaoId\) AS ultima FROM ImportacoesMembros/, [{ ultima: 13 }]]];
+    expect((await db.estado(POOL_D)).descartadaPeloPrazo).toBeNull();
+    // descartada à mão (sem o prazo no resumo): a tela não precisa explicar
+    mockRegras = [situacao([{ ...descartada, Resumo: "{}" }]), [/SELECT MAX\(ImportacaoId\) AS ultima/, [{ ultima: 12 }]]];
+    expect((await db.estado(POOL_D)).descartadaPeloPrazo).toBeNull();
+    // com uma prévia aberta depois: a prévia é a de agora
+    mockRegras = [situacao([descartada, { ImportacaoId: 14, Situacao: "PREVIA", Resumo: "{}" }]), [/SELECT MAX\(ImportacaoId\) AS ultima/, [{ ultima: 14 }]]];
+    const comPrevia = await db.estado(POOL_D);
+    expect(comPrevia.descartadaPeloPrazo).toBeNull();
+    expect(comPrevia.importacao).toMatchObject({ importacaoId: 14, situacao: "PREVIA" });
   });
 });

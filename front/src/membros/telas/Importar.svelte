@@ -15,7 +15,8 @@
   import PassoResultado from "../importar/PassoResultado.svelte";
   import { avisarFalha } from "../../comum/api";
   import {
-    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, linhasRecusadas, perguntaDeixarDeFora, PERGUNTA_DESCARTAR, podeDeixarDeFora, quandoLongo, resumoDaTela,
+    confirmar, descartar, descartarParada, diaEHora, fraseDescartadaPeloPrazo, fraseDoPrazo, guardaDe, importarLote, lerEstado, linhasRecusadas, perguntaDeixarDeFora,
+    PERGUNTA_DESCARTAR, PERGUNTA_DESCARTAR_PARADA, podeDeixarDeFora, quandoLongo, resumoDaTela,
     type ArquivoLido, type EstadoImportacao, type LinhaRecusada, type MapaDaTela, type Previa
   } from "../importar/importar";
 
@@ -40,6 +41,10 @@
   const agora = quandoLongo(new Date());
   // os prazos da guarda dos dados (do servidor; sem eles, 7 e 90 dias)
   const guarda = $derived(guardaDe(est?.guarda));
+  // G2 (decisão dele de 24/11/2026): a importação parada tem 7 dias, contados do último lote; a tela diz quantos faltam e o que acontece depois
+  const prazoTexto = $derived(fraseDoPrazo(est?.prazo, est?.importadas));
+  // a parada sem ninguém importado que a rotina descartou no fim do prazo: o passo do arquivo diz qual foi e quando
+  const descartadaTexto = $derived(fraseDescartadaPeloPrazo(est?.descartadaPeloPrazo));
 
   async function carregar() {
     erro = "";
@@ -122,6 +127,28 @@
     ponte().avisar("Prévia descartada: a planilha saiu do sistema.", "sucesso");
     await carregar();
   }
+  // G2: a parada sem ninguém importado pode ser descartada (a planilha sai na hora, com os dados pessoais); a tela volta ao arquivo
+  async function descartarImportacaoParada() {
+    const imp = est?.importacao;
+    if (!imp || importando || descartando || !window.confirm(PERGUNTA_DESCARTAR_PARADA)) return;
+    descartando = true;
+    erroImp = "";
+    const r = await descartarParada(imp.importacaoId);
+    descartando = false;
+    if (!r.ok) {
+      // a confirmação reforçada cancelada não é erro; o resto (outra aba, o prazo que já a encerrou) vira aviso e a tela relê onde está
+      avisarFalha(r);
+      await carregar();
+      return;
+    }
+    previa = null;
+    arquivo = null;
+    mapa = null;
+    podeDeixar = false;
+    recusadas = [];
+    ponte().avisar("Importação descartada: a planilha saiu do sistema.", "sucesso");
+    await carregar();
+  }
   function continuar() {
     const imp = est?.importacao;
     if (!imp || importando) return;
@@ -153,6 +180,7 @@
     {#if !celular}<Cabecalho titulo="Importar os membros do sistema pago" {sub} />{/if}
     <Caminho agora={passo} {celular} onvoltar={passo === 2 && !importando ? () => (passo = 1) : null} />
     {#if passo === 1}
+      {#if descartadaTexto}<Aviso tom="info">{descartadaTexto}</Aviso>{/if}
       <PassoArquivo {celular} campos={est.campos} bind:arquivo bind:previa bind:mapa onconferir={() => (passo = 2)} />
     {:else if previa && (passo === 2 || (passo === 3 && importando && !est.emAndamento))}
       <PassoNumeros {celular} {previa} {andamento} ocupado={importando} erro={erroImp} onconfirmar={confirmarEImportar} {guarda} {descartando} ondescartar={descartarPrevia} />
@@ -160,6 +188,7 @@
       <section class="continuar">
         <h2>A importação começou e não terminou</h2>
         <p>{#if est.restantes}Faltam {numero(est.restantes)} {plural(est.restantes, "ficha", "fichas")}.{" "}{/if}Continue de onde parou: o que já entrou não se repete.</p>
+        {#if prazoTexto}<p class="prazo">{prazoTexto}</p>{/if}
         <Botao tipo="ouro" icone="seta" largo={celular} ocupado={importando} onclick={continuar}>Continuar a importação</Botao>
         {#if andamento}<p role="status">{andamento}</p>{/if}
         {#if erroImp}<Aviso tom="erro">{erroImp}</Aviso>{/if}
@@ -171,6 +200,9 @@
             </div>
           {/if}
           <Botao tipo="linha" largo={celular} onclick={deixarDeForaEContinuar}>Deixar essas linhas de fora e continuar</Botao>
+        {/if}
+        {#if est.importadas === 0 && !importando}
+          <Botao tipo="linha" largo={celular} ocupado={descartando} onclick={descartarImportacaoParada}>Descartar a importação</Botao>
         {/if}
       </section>
     {:else if passo === 4 && est.importacao && est.retrato}
@@ -194,6 +226,7 @@
   .continuar { background: var(--sv-sup); border: 1px solid var(--sv-ouro); box-shadow: 0 0 0 1px var(--sv-ouro); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
   .continuar h2 { font-size: 15px; font-weight: 700; color: var(--sv-titulo); }
   .continuar p { font-size: 13px; color: var(--sv-texto); line-height: 1.45; }
+  .continuar .prazo { color: var(--imp-ouro-texto); font-weight: 600; }
   .recusadas { font-size: 13px; color: var(--sv-texto); line-height: 1.45; display: flex; flex-direction: column; gap: 4px; }
   .recusadas ul { margin: 0; padding-left: 18px; }
   .recusadas strong { color: var(--sv-titulo); font-weight: 600; }

@@ -45,7 +45,12 @@ const MSG = Object.freeze({
   OCUPADO: "Outra pessoa está mexendo na importação agora. Tente de novo daqui a pouco.",
   RECUSADAS: (linha) => `O sistema não conseguiu gravar ${SEGUIDAS_MAX} linhas seguidas (a partir da linha ${linha} do arquivo): a importação parou sem deixar ninguém de fora. `
     + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte.",
-  NINGUEM_ENTROU: "O sistema não conseguiu gravar nenhuma pessoa desta importação: ela parou sem deixar ninguém de fora. Avise o suporte."
+  // G2 (decisão dele de 24/11/2026): a parada sem ninguém importado ganhou a saída "descartar a importação"
+  NINGUEM_ENTROU: "O sistema não conseguiu gravar nenhuma pessoa desta importação: ela parou sem deixar ninguém de fora. "
+    + "Avise o suporte, ou descarte a importação e faça outra.",
+  JA_ENTROU_ALGUEM: "Esta importação já gravou pessoas: ela não se descarta. Continue de onde parou.",
+  NAO_ESTA_PARADA: "Esta importação não está mais em andamento (outra aba mexeu nela, ou o prazo já a encerrou): confira a tela de novo.",
+  DESCARTADA: "Esta importação foi descartada: para importar, escolha o arquivo de novo."
 });
 // A LINHA QUE O BANCO RECUSA (revisão de 23/11/2026, a saída do IMPORTANDO). Só um erro de DADO levantado pelos comandos da PRÓPRIA linha (a ficha, as
 // pendências, a marcação) deixa a linha de fora: a regra (CHECK, chave estrangeira), a chave repetida, o texto longo demais, a conversão, o nulo, o estouro, o
@@ -58,7 +63,12 @@ const SEM_CONGREGACAO_FORA = `UPDATE ImportacoesMembrosLinhas SET Acao = N'PROBL
       WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' AND CongregacaoId IS NULL`;
 const recusaDaLinha = (e) => !!e && e.linhaImportacao != null && Number.isInteger(e.number) && (ERROS_DA_LINHA.has(e.number) || e.number >= 50000);
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
-const idValido = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null; };
+// só o número, ou o texto só com dígitos (o e2e-102 achou: Number([9]) e Number(true) viravam 9 e 1)
+const idValido = (v) => {
+  if (typeof v !== "number" && !(typeof v === "string" && /^\d{1,10}$/.test(v))) return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null;
+};
 
 async function emTransacao(pool, fazer) {
   const t = new sql.Transaction(pool);
@@ -78,12 +88,14 @@ async function emTransacao(pool, fazer) {
   }
 }
 
-// As importações que contam: a concluída (uma vez só), a em andamento e a prévia aberta.
+// As importações que contam: a concluída (uma vez só), a em andamento e a prévia aberta; e a última confirmada que foi descartada (G2: a parada sem ninguém
+// importado, à mão ou pelo prazo), para a tela dizer o que houve com ela.
 async function lerSituacao(rq) {
-  const r = await rq().query(`SELECT ImportacaoId, Situacao, NomeArquivo, HashArquivo, CriadaEm, CriadaPor, ConfirmadaEm, ConfirmadaPor, ConcluidaEm, Resumo
-    FROM ImportacoesMembros WHERE Situacao IN (N'PREVIA', N'IMPORTANDO', N'CONCLUIDA') ORDER BY ImportacaoId`);
+  const r = await rq().query(`SELECT ImportacaoId, Situacao, NomeArquivo, HashArquivo, CriadaEm, CriadaPor, ConfirmadaEm, ConfirmadaPor, ConcluidaEm, DescartadaEm,
+      UltimoLoteEm, Resumo
+    FROM ImportacoesMembros WHERE Situacao IN (N'PREVIA', N'IMPORTANDO', N'CONCLUIDA') OR (Situacao = N'DESCARTADA' AND ConfirmadaEm IS NOT NULL) ORDER BY ImportacaoId`);
   const de = (s) => r.recordset.filter((l) => l.Situacao === s).pop() || null;
-  return { concluida: de("CONCLUIDA"), andamento: de("IMPORTANDO"), previa: de("PREVIA") };
+  return { concluida: de("CONCLUIDA"), andamento: de("IMPORTANDO"), previa: de("PREVIA"), descartada: de("DESCARTADA") };
 }
 const lerJson = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { return null; } };
 const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.Situacao, nomeArquivo: l.NomeArquivo, criadaEm: l.CriadaEm, confirmadaEm: l.ConfirmadaEm,
@@ -91,16 +103,51 @@ const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.
 
 // O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta? `campos`: o catálogo do mapa das colunas (o select da tela).
 // Feita, vem também o RETRATO do resultado (a tela r27, passo 4): quem importou, as matrículas novas e onde as fichas estão hoje, por área.
+// Em andamento (G2, decisão dele de 24/11/2026), vem o PRAZO (a tela parada mostra "faltam N dias") e quantas já entraram (a parada sem ninguém tem outra saída).
 async function estado(pool) {
   const sit = await lerSituacao(() => pool.request());
   const atual = sit.concluida || sit.andamento || sit.previa;
-  let restantes = null;
-  if (sit.andamento) restantes = await contarRestantes(() => pool.request(), Number(sit.andamento.ImportacaoId));
-  const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
   // os prazos da guarda dos dados (a nota do "Descartar" e a do resultado dizem o prazo de verdade, também o ajustado nas Políticas de retenção)
   const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
-  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, retrato, campos: regras.CAMPOS,
-    guarda: { diasPrevia, diasFora } };
+  let restantes = null, importadas = null, prazo = null;
+  if (sit.andamento) {
+    const c = await contarAndamento(() => pool.request(), Number(sit.andamento.ImportacaoId));
+    restantes = c.restantes;
+    importadas = c.importadas;
+    prazo = prazoDaParada(sit.andamento, diasPrevia);
+  }
+  const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
+  const descartadaPeloPrazo = atual ? null : await descartadaPeloPrazoDe(pool, sit.descartada);
+  return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, importadas, prazo, retrato, descartadaPeloPrazo,
+    campos: regras.CAMPOS, guarda: { diasPrevia, diasFora } };
+}
+// A parada sem ninguém importado que a rotina descartou no fim do prazo (G2) não some calada: a tela volta ao arquivo dizendo qual foi e quando. Só se ela é
+// a última importação (depois dela, nem uma prévia).
+async function descartadaPeloPrazoDe(pool, imp) {
+  if (!imp) return null;
+  const dias = Number((lerJson(imp.Resumo) || {}).descartadaPeloPrazo);
+  if (!Number.isInteger(dias) || dias < 1) return null;
+  const u = (await pool.request().query("SELECT MAX(ImportacaoId) AS ultima FROM ImportacoesMembros")).recordset[0];
+  if (!u || Number(u.ultima) !== Number(imp.ImportacaoId)) return null;
+  return { importacaoId: Number(imp.ImportacaoId), nomeArquivo: imp.NomeArquivo || null, confirmadaEm: imp.ConfirmadaEm, descartadaEm: imp.DescartadaEm, dias };
+}
+// O PRAZO DA IMPORTAÇÃO PARADA (G2, decisão dele de 24/11/2026): `dias` contados do ÚLTIMO LOTE gravado (sem nenhum, da confirmação). Passado o prazo, a
+// rotina diária encerra a importação (aplicarRetencao). `faltam`: os dias até vencer, arredondados para cima (0 depois de vencer, até a rotina passar), com
+// um minuto de folga: o banco guarda o segundo arredondado, que pode ficar meio segundo à frente (o e2e-102 viu "faltam 8" logo depois de confirmar).
+const DIA_MS = 86400000;
+const FOLGA_MS = 60000;
+function prazoDaParada(imp, dias) {
+  const base = imp.UltimoLoteEm || imp.ConfirmadaEm;
+  const desde = base instanceof Date ? base.getTime() : new Date(base).getTime();
+  if (!Number.isFinite(desde)) return null;
+  const vence = desde + dias * DIA_MS;
+  return { dias, venceEm: new Date(vence).toISOString(), faltam: Math.max(0, Math.ceil((vence - Date.now() - FOLGA_MS) / DIA_MS)) };
+}
+async function contarAndamento(rq, id) {
+  const r = (await rq().input("id", sql.Int, id).query(`SELECT SUM(CASE WHEN Estado = N'IMPORTADA' THEN 1 ELSE 0 END) AS importadas,
+      SUM(CASE WHEN Acao = N'NOVA' AND Estado = N'PENDENTE' THEN 1 ELSE 0 END) AS restantes
+    FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id`)).recordset[0] || {};
+  return { importadas: Number(r.importadas || 0), restantes: Number(r.restantes || 0) };
 }
 // Onde as fichas importadas estão HOJE (por área; o arrolamento completo = a situação já não é "Arrolamento a completar"), as matrículas novas e quem confirmou.
 // Sem dado pessoal além do nome de quem importou (a Secretaria Geral, que é quem vê a tela).
@@ -215,6 +262,31 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
 async function descartarNaTransacao(rq, id) {
   await rq().input("id", sql.Int, id).query(`DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id;
     UPDATE ImportacoesMembros SET Situacao = N'DESCARTADA', DescartadaEm = SYSUTCDATETIME() WHERE ImportacaoId = @id AND Situacao = N'PREVIA';`);
+}
+// G2 (decisão dele de 24/11/2026): a importação CONFIRMADA que não gravou ninguém sai inteira (as linhas, com os dados pessoais) e fica DESCARTADA, com a data
+// da confirmação (a migração 187 deixa). Nunca a que já gravou alguém: a ficha existe e a linha é o registro dela (a conferência vem de novo no próprio
+// comando). `dias`: o prazo, quando foi a rotina (o resumo guarda; a tela diz por quê); à mão, null.
+async function descartarParadaNaTransacao(rq, id, dias) {
+  await rq().input("id", sql.Int, id).input("dias", sql.Int, dias).query(`
+    DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND NOT EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas x WHERE x.ImportacaoId = @id AND x.Estado = N'IMPORTADA');
+    UPDATE ImportacoesMembros SET Situacao = N'DESCARTADA', DescartadaEm = SYSUTCDATETIME(),
+      Resumo = CASE WHEN @dias IS NOT NULL AND ISJSON(Resumo) = 1 THEN JSON_MODIFY(Resumo, '$.descartadaPeloPrazo', @dias) ELSE Resumo END
+    WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO'
+      AND NOT EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas x WHERE x.ImportacaoId = @id AND x.Estado = N'IMPORTADA');`);
+}
+// O "descartar a importação" da tela parada sem ninguém importado (a rota pede a confirmação recente, como a de confirmar).
+async function descartarParada(pool, usuario, importacaoId) {
+  const id = idValido(importacaoId);
+  if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
+  return emTransacao(pool, async (t, rq) => {
+    const sit = await lerSituacao(rq);
+    if (!sit.andamento || Number(sit.andamento.ImportacaoId) !== id) return { sucesso: false, status: 409, mensagem: MSG.NAO_ESTA_PARADA };
+    if ((await contarAndamento(rq, id)).importadas > 0) return { sucesso: false, status: 409, mensagem: MSG.JA_ENTROU_ALGUEM };
+    await descartarParadaNaTransacao(rq, id, null);
+    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Descartou a importação parada, sem ninguém importado",
+      usuarioId: Number(usuario.membroId) });
+    return { sucesso: true };
+  });
 }
 async function descartar(pool, usuario, importacaoId) {
   const id = idValido(importacaoId);
@@ -382,7 +454,10 @@ async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false })
   const imp = (await rq().input("id", sql.Int, id).query("SELECT ImportacaoId, Situacao, Resumo FROM ImportacoesMembros WITH (UPDLOCK) WHERE ImportacaoId = @id")).recordset[0];
   if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
   if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, fora: 0, restantes: 0, concluida: true };
+  if (imp.Situacao === "DESCARTADA") return { sucesso: false, status: 409, mensagem: MSG.DESCARTADA };
   if (imp.Situacao !== "IMPORTANDO") return { sucesso: false, status: 409, mensagem: "Esta importação não foi confirmada." };
+  // G2 (decisão dele de 24/11/2026): o prazo da importação parada conta do último lote; a marca anda na transação do lote (o lote desfeito não marca)
+  await rq().input("id", sql.Int, id).query("UPDATE ImportacoesMembros SET UltimoLoteEm = SYSUTCDATETIME() WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO'");
   await rq().input("id", sql.Int, id).query(SEM_CONGREGACAO_FORA);
   if (fora.length) {
     // as recusadas ficam de fora como PROBLEMA (o mesmo par de quem tem problema na prévia: Acao PROBLEMA, Estado FORA), na MESMA transação do lote que prova
@@ -523,9 +598,11 @@ async function prazosDaGuarda(pool) {
 }
 async function aplicarRetencao(pool) {
   const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
-  // a base de antes da migração 185 (as bases antigas dos roteiros e2e): não há importação para guardar (o mesmo cuidado do afmDb e da minimizacaoLgpd)
-  const tabela = (await pool.request().query("SELECT OBJECT_ID(N'dbo.ImportacoesMembros', N'U') AS id")).recordset[0];
-  if (!tabela || tabela.id == null) return { previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia, diasFora };
+  // a base de antes da migração 185 (as bases antigas dos roteiros e2e): não há importação para guardar (o mesmo cuidado do afmDb e da minimizacaoLgpd); a
+  // base com a 185 e sem a 187 (as dos roteiros de antes do G2) também não: a rotina lê o último lote, que nasce na 187
+  const tabela = (await pool.request()
+    .query("SELECT OBJECT_ID(N'dbo.ImportacoesMembros', N'U') AS id, COL_LENGTH(N'dbo.ImportacoesMembros', N'UltimoLoteEm') AS col")).recordset[0];
+  if (!tabela || tabela.id == null || tabela.col == null) return { previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia, diasFora };
   const r = await emTransacao(pool, async (t, rq) => {
     const velhas = (await rq().input("d", sql.Int, diasPrevia)
       .query("SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA' AND CriadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())")).recordset;
@@ -535,17 +612,14 @@ async function aplicarRetencao(pool) {
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina descartou a prévia da importação que não foi confirmada em ${diasPrevia} dias`,
         usuarioId: null });
     }
-    // G2 (revisão de 24/11/2026): a importação que começou a gravar e parou (IMPORTANDO) não tinha prazo, e as linhas que faltavam ficavam com CPF, celular,
-    // mãe e pai. O prazo é o da prévia (a mesma planilha com dado pessoal esperando), contado da confirmação: passado ele, as linhas que faltavam ficam de
-    // fora como problema (NAO_TERMINOU), só com o nome e o motivo, e a importação conclui (como no último lote: as matrículas novas destravam e a lista dos
-    // de fora entra nos 90 dias). Só a que já tem alguém importado: a que parou sem ninguém fica como está, com os dados, e continua de onde parou quando a
-    // Secretaria Geral voltar (o 7902eca também a pegava, e era defeito: sem as linhas, o "Continuar a importação" recusava para sempre, com o NINGUEM_ENTROU
-    // e o "Avise o suporte", e nenhuma outra importação podia começar: a importação única ficava sem saída). O que fazer com ela depois de um prazo, o
-    // responsável decide.
+    // G2 (decisão dele de 24/11/2026): a importação que começou a gravar e parou (IMPORTANDO) tem o prazo da prévia (7 dias; a mesma planilha com dado
+    // pessoal esperando), contado do ÚLTIMO LOTE gravado (sem nenhum, da confirmação). Passado ele, com alguém já importado, as linhas que faltavam ficam de
+    // fora como problema (NAO_TERMINOU), só com o número da linha, o nome e o motivo (a lista de QUAIS faltaram), e a importação conclui (como no último
+    // lote: as matrículas novas destravam e a lista dos de fora entra nos 90 dias). A que parou sem ninguém importado é a de baixo.
     const paradas = (await rq().input("d", sql.Int, diasPrevia).query(`
       SELECT i.ImportacaoId, i.Resumo
       FROM ImportacoesMembros i
-      WHERE i.Situacao = N'IMPORTANDO' AND i.ConfirmadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())
+      WHERE i.Situacao = N'IMPORTANDO' AND COALESCE(i.UltimoLoteEm, i.ConfirmadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME())
         AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'PENDENTE')
         AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA')`)).recordset;
     for (const pa of paradas) {
@@ -558,6 +632,18 @@ async function aplicarRetencao(pool) {
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: null, dadosDepois: { linhasDeFora, retencaoDias: diasPrevia },
         acao: `A rotina encerrou a importação parada há ${diasPrevia} dias (as linhas que faltavam ficaram de fora)` });
       await concluirNaTransacao(t, rq, id, null, lerJson(pa.Resumo));
+    }
+    // G2: a parada SEM ninguém importado, vencido o mesmo prazo, é DESCARTADA: concluir com zero soltaria a trava das matrículas e gastaria a importação
+    // única com uma planilha que não entrou. As linhas saem inteiras, com os dados pessoais; a data da confirmação fica; as matrículas continuam travadas.
+    const semNinguem = (await rq().input("d", sql.Int, diasPrevia).query(`
+      SELECT i.ImportacaoId FROM ImportacoesMembros i
+      WHERE i.Situacao = N'IMPORTANDO' AND COALESCE(i.UltimoLoteEm, i.ConfirmadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME())
+        AND NOT EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA')`)).recordset;
+    for (const s of semNinguem) {
+      const id = Number(s.ImportacaoId);
+      await descartarParadaNaTransacao(rq, id, diasPrevia);
+      await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: null, dadosDepois: { retencaoDias: diasPrevia },
+        acao: `A rotina descartou a importação parada há ${diasPrevia} dias, sem ninguém importado` });
     }
     const apagadas = (await rq().input("d", sql.Int, diasFora).query(`
       DECLARE @apagadas TABLE (ImportacaoId INT NOT NULL);
@@ -600,4 +686,5 @@ async function aplicarRetencao(pool) {
   return { previasDescartadas: r.previasDescartadas, linhasForaApagadas: r.linhasForaApagadas, linhasLimpas: r.linhasLimpas, diasPrevia, diasFora };
 }
 
-module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, listar, csv, confirmar, importarLote, aplicarRetencao };
+module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, descartarParada, listar, csv, confirmar, importarLote,
+  aplicarRetencao };

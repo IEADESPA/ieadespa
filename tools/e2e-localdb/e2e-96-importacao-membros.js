@@ -6,7 +6,7 @@
 // O caminho inteiro pela rota: a prévia (e a que substitui a anterior), a lista e o CSV sem dado pessoal, a confirmação (428 sem fator recente), o que mudou no
 // banco DEPOIS da prévia (a matrícula usada por outro cadastro, o CPF gravado em outra ficha), os lotes (um de 4 e o resto disputado por DOIS processos ao mesmo
 // tempo: a trava faz um esperar o outro e ninguém entra duas vezes), as pendências, os dados pessoais das linhas apagados no fim, a cadeia da trilha e o "uma
-// vez só". Roda sobre a base cenario-185 (`bash rodar.sh preparar-185` e depois `BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js`).
+// vez só". Roda sobre a base cenario-187 (`bash rodar.sh preparar-187` e depois `BASE=cenario-187 bash rodar.sh roteiro e2e-96-importacao-membros.js`).
 process.env.AUTH_SECRET = "segredo-da-importacao-de-membros-" + "x".repeat(24);
 const { spawn } = require("child_process");
 const crypto = require("crypto");

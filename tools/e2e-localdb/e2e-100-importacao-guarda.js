@@ -11,7 +11,7 @@
 //   4. a lista dos que ficaram de fora fica 90 dias depois de a importação terminar: com 89 fica; com 91 só as linhas de fora saem (as importadas e o retrato do
 //      resultado ficam), o resumo guarda o dia em que saiu (em UTC, com o Z) e a trilha diz quantas; rodar de novo não faz nada;
 //   5. a rotina diária de verdade (NotificacoesAgendador) roda a guarda sem falha; a trilha sem dado das linhas e a cadeia de hashes conferem.
-// Roda sobre a base cenario-186: `BASE=cenario-186 bash rodar.sh roteiro e2e-100-importacao-guarda.js`.
+// Roda sobre a base cenario-187: `BASE=cenario-187 bash rodar.sh roteiro e2e-100-importacao-guarda.js`.
 process.env.AUTH_SECRET = "segredo-da-guarda-da-importacao-" + "x".repeat(24);
 process.env.CRON_SECRET = process.env.CRON_SECRET || "segredo-da-rotina-e2e";
 const crypto = require("crypto");
@@ -86,7 +86,7 @@ async function principal() {
     "a política da lista dos de fora aparece na tela: 90 dias, com a base legal", polFora);
 
   console.log("== o cenário ==");
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-186)");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-187)");
   const area = (await q("INSERT INTO Areas (Nome) VALUES (N'Área E2E100'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
   const cong = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (@n, @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: CONG, a: area }))[0].id;
   await q(`IF NOT EXISTS (SELECT 1 FROM MembroReferencia WHERE MembroId = 9910) INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro)

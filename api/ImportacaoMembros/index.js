@@ -61,6 +61,12 @@ module.exports = async function (context, req) {
       return;
     }
     if (metodo === "POST" && acao === "descartar") { responder(await db.descartar(pool, usuario, corpoDe(req).importacaoId)); return; }
+    // G2 (decisão dele de 24/11/2026): descartar a importação JÁ CONFIRMADA que parou sem ninguém importado é ato sensível como confirmar
+    if (metodo === "POST" && acao === "descartar-parada") {
+      if (!auth.exigirFatorRecente(req, context)) return;   // 428
+      responder(await db.descartarParada(pool, usuario, corpoDe(req).importacaoId));
+      return;
+    }
     if (metodo === "POST" && acao === "confirmar") {
       if (!auth.exigirFatorRecente(req, context)) return;   // 428: importar o rol inteiro é ato sensível
       responder(await db.confirmar(pool, usuario, corpoDe(req).importacaoId));

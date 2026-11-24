@@ -10,7 +10,7 @@ const { stripTypeScriptTypes } = require("node:module");
 
 const ARQ = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "importar", "importar.ts");
 const NOMES = ["descartar", "GUARDA_PADRAO", "guardaDe", "notaDaPrevia", "PERGUNTA_DESCARTAR", "fraseForaApagada", "notaForaAte", "importarLote", "podeDeixarDeFora",
-  "perguntaDeixarDeFora", "linhasRecusadas"];
+  "perguntaDeixarDeFora", "linhasRecusadas", "fraseDoPrazo", "descartarParada", "PERGUNTA_DESCARTAR_PARADA", "fraseDescartadaPeloPrazo"];
 
 function carregar(pedir) {
   if (typeof stripTypeScriptTypes !== "function") throw new Error("este Node não tira tipos do TypeScript (precisa do 22.13 ou mais novo)");
@@ -156,5 +156,73 @@ describe("as telas da importação sem a ficha sem congregação (G3)", () => {
   });
   test("a lista da prévia não fala mais da linha que entra sem congregação", () => {
     expect(fs.readFileSync(ARQ, "utf8")).not.toMatch(/semCongregacao: boolean \| null|e sem congregação/);
+  });
+});
+
+// G2 (decisão dele de 24/11/2026): o prazo da importação parada é de 7 dias contados do ÚLTIMO LOTE, e a tela parada mostra "faltam N dias". Vencido, com
+// gente já importada, as linhas que faltam ficam de fora (fica só o número da linha e o nome, para uma importação só com elas); sem ninguém importado, a
+// importação é descartada. Os dois com os dados pessoais apagados.
+describe("G2: a tela parada mostra o prazo (faltam N dias)", () => {
+  const prazo = (faltam, venceEm = "2026-12-03T14:00:00Z") => ({ dias: 7, venceEm, faltam });
+  test("com gente já importada: quantos dias faltam, até quando e o que acontece depois", () => {
+    const T = carregar(jest.fn());
+    expect(T.fraseDoPrazo(prazo(5), 40)).toBe("Faltam 5 dias para continuar (até 03/12/2026). Depois do prazo, as linhas que faltam ficam de fora e os dados pessoais "
+      + "delas se apagam: o sistema guarda só o número da linha e o nome, para uma importação só com elas.");
+    expect(T.fraseDoPrazo(prazo(1), 40)).toMatch(/^Falta 1 dia para continuar \(até 03\/12\/2026\)\. Depois do prazo, as linhas que faltam ficam de fora/);
+    expect(T.fraseDoPrazo(prazo(0), 40)).toBe("O prazo para continuar acabou em 03/12/2026: continue agora; senão, o sistema deixa de fora as linhas que faltam e apaga "
+      + "os dados pessoais delas.");
+    // o dia é o de Brasília (02h de 03/12 em UTC ainda é 02/12 em Brasília)
+    expect(T.fraseDoPrazo(prazo(2, "2026-12-03T02:00:00Z"), 40)).toMatch(/\(até 02\/12\/2026\)/);
+  });
+  test("sem ninguém importado: depois do prazo, a importação é descartada", () => {
+    const T = carregar(jest.fn());
+    expect(T.fraseDoPrazo(prazo(3), 0)).toBe("Faltam 3 dias para continuar (até 03/12/2026). Depois do prazo, a importação é descartada e os dados pessoais da planilha se apagam.");
+    expect(T.fraseDoPrazo(prazo(0), 0)).toBe("O prazo para continuar acabou em 03/12/2026: continue agora; senão, o sistema descarta a importação e apaga os dados pessoais da planilha.");
+  });
+  test("sem prazo, ou com um prazo que não serve: nada", () => {
+    const T = carregar(jest.fn());
+    for (const p of [null, undefined, {}, prazo(-1), prazo(1.5), prazo("2"), prazo(2, "ontem"), prazo(2, null)]) expect(T.fraseDoPrazo(p, 40)).toBe("");
+  });
+  test("a tela parada mostra a frase do prazo, com o prazo e quantas entraram que vêm do servidor", () => {
+    const tela = fs.readFileSync(path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Importar.svelte"), "utf8");
+    expect(tela).toMatch(/const prazoTexto = \$derived\(fraseDoPrazo\(est\?\.prazo, est\?\.importadas\)\)/);
+    const secao = tela.slice(tela.indexOf("<h2>A importação começou e não terminou</h2>"), tela.indexOf("Continuar a importação</Botao>"));
+    expect(secao).toMatch(/\{#if prazoTexto\}<p class="prazo">\{prazoTexto\}<\/p>\{\/if\}/);
+  });
+});
+
+// G2 (decisão dele de 24/11/2026): a parada sem ninguém importado ganha a saída "descartar a importação"; e, se a rotina a descartou no fim do prazo, a tela
+// volta ao arquivo dizendo qual foi e quando (não some calada).
+describe("G2: descartar a importação parada sem ninguém importado", () => {
+  const TELA = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Importar.svelte");
+  test("o botão chama a rota própria (a que pede a confirmação recente), só com a importação", async () => {
+    const pedir = jest.fn(async () => ({ ok: true, dados: { sucesso: true } }));
+    const T = carregar(pedir);
+    await T.descartarParada(9);
+    igual(pedir.mock.calls.map((c) => [c[0], c[1]]), [["/importacao-membros/descartar-parada", { metodo: "POST", corpo: { importacaoId: 9 } }]]);
+  });
+  test("a pergunta antes de descartar diz que ninguém entrou, o que sai e como voltar", () => {
+    const T = carregar(jest.fn());
+    expect(T.PERGUNTA_DESCARTAR_PARADA).toBe("Descartar esta importação? Ninguém entrou ainda: a planilha sai do sistema agora, com o CPF, o celular, a mãe e o pai. "
+      + "Para importar, escolha o arquivo de novo.");
+  });
+  test("a frase da descartada pelo prazo: qual (o arquivo e a confirmação), quando e por quê", () => {
+    const T = carregar(jest.fn());
+    const d = { importacaoId: 12, nomeArquivo: "membros.csv", confirmadaEm: "2026-12-01T13:00:00Z", descartadaEm: "2026-12-09T06:00:00Z", dias: 7 };
+    expect(T.fraseDescartadaPeloPrazo(d)).toBe("A importação do arquivo “membros.csv”, confirmada em 01/12/2026, parou sem ninguém importado e foi descartada em "
+      + "09/12/2026, no fim do prazo de 7 dias: os dados da planilha foram apagados. Para importar, escolha o arquivo de novo.");
+    expect(T.fraseDescartadaPeloPrazo({ ...d, nomeArquivo: null, dias: 1 })).toBe("A importação confirmada em 01/12/2026 parou sem ninguém importado e foi descartada "
+      + "em 09/12/2026, no fim do prazo de 1 dia: os dados da planilha foram apagados. Para importar, escolha o arquivo de novo.");
+    for (const x of [null, undefined, {}, { ...d, dias: 0 }, { ...d, descartadaEm: "x" }]) expect(T.fraseDescartadaPeloPrazo(x)).toBe("");
+  });
+  test("a tela parada mostra o botão só quando ninguém entrou; o passo do arquivo mostra a descartada pelo prazo", () => {
+    const tela = fs.readFileSync(TELA, "utf8");
+    const secao = tela.slice(tela.indexOf("<h2>A importação começou e não terminou</h2>"), tela.indexOf("</section>", tela.indexOf("<h2>A importação começou e não terminou</h2>")));
+    expect(secao).toMatch(/\{#if est\.importadas === 0 && !importando\}[\s\S]*onclick=\{descartarImportacaoParada\}>Descartar a importação<\/Botao>/);
+    expect(tela).toMatch(/window\.confirm\(PERGUNTA_DESCARTAR_PARADA\)/);
+    expect(tela).toMatch(/await descartarParada\(imp\.importacaoId\)/);
+    const passo1 = tela.slice(tela.indexOf("{#if passo === 1}"), tela.indexOf("<PassoArquivo"));
+    expect(passo1).toMatch(/\{#if descartadaTexto\}<Aviso tom="info">\{descartadaTexto\}<\/Aviso>\{\/if\}/);
+    expect(tela).toMatch(/const descartadaTexto = \$derived\(fraseDescartadaPeloPrazo\(est\?\.descartadaPeloPrazo\)\)/);
   });
 });

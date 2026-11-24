@@ -5,8 +5,8 @@
 // O que se prova: a recusada sozinha fica de fora COMO PROBLEMA (na lista, no CSV, no resultado e na trilha, com o número do erro e sem a mensagem do banco) e
 // as outras entram na ordem; 5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, a importação continua em andamento e as matrículas travadas;
 // a saída pela tela (A6 da revisão de 24/11/2026, sem mexer no banco à mão): a Secretaria Geral confirma "deixar essas linhas de fora e continuar", só as 5
-// ficam de fora (a liderança local não pode) e a importação continua de onde parou até concluir. Roda sobre a base cenario-185:
-// `BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js`.
+// ficam de fora (a liderança local não pode) e a importação continua de onde parou até concluir. Roda sobre a base cenario-187:
+// `BASE=cenario-187 bash rodar.sh roteiro e2e-99-importacao-recusada.js`.
 process.env.AUTH_SECRET = "segredo-da-importacao-recusada-" + "x".repeat(24);
 const crypto = require("crypto");
 const L = require("./lib");
@@ -45,7 +45,7 @@ async function principal() {
   const linhaDb = (id, linha) => L.um("SELECT Acao, Estado, Problemas, MatriculaFinal FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha = @l", { i: id, l: linha });
 
   console.log("== o cenário ==");
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-185)");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-187)");
   const area = (await q("INSERT INTO Areas (Nome) VALUES (N'Área E2E99'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
   const cong = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (@n, @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: CONG, a: area }))[0].id;
   await q(`IF NOT EXISTS (SELECT 1 FROM MembroReferencia WHERE MembroId = 9901) INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro)

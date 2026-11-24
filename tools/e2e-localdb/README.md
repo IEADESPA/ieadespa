@@ -228,11 +228,15 @@ Cada versão parte da base da anterior (`BASE=...`):
   só as linhas de fora: as importadas, o retrato e o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; a NotificacoesAgendador
   de verdade roda a guarda; a trilha sem dado das linhas e a cadeia de hashes).
 - **FASE 10, a revisão de 24/11/2026 (Membros)**, base `cenario-186`: `e2e-101` (A1: o "apto e em comunhão" e o universo geral, que são os das enquetes e
-  do tema, dão a mesma resposta: em arrolamento e sem comunhão não votam, em comunhão e congregado votam; A2: o batismo de quem está em arrolamento muda
-  a situação e fecha a pendência juntos, como COMPLETADA e por quem realizou, com a trilha; a congregada batizada fica como antes; de novo, nada muda);
-  `e2e-102` (G2: a importação que começou a gravar e parou passa do prazo da prévia, contado da confirmação: com 6 dias nada muda; sem ninguém importado,
-  as linhas ficam só com o nome e o motivo e ela não conclui com zero; com gente importada, as que faltavam ficam de fora e ela conclui, destravando as
-  matrículas; a lista e o CSV com o motivo novo; rodar de novo não faz nada; a trilha sem dado pessoal e a cadeia de hashes).
+  do tema: em arrolamento, congregado e sem comunhão não votam, só em comunhão; A2: o batismo admite o convertido com a data do batismo, e quem veio de
+  outra igreja fica com a data da chegada; a pendência fecha como COMPLETADA, com a trilha e a data de antes; de novo, nada muda).
+- **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
+  `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
+  importação lê e grava o último lote. `e2e-102`: o prazo de 7 dias conta do ÚLTIMO LOTE (sem lote, da confirmação) e o estado diz quantos dias faltam; a
+  parada sem ninguém importado, com 8 dias, é DESCARTADA pela rotina (as linhas saem inteiras, a data da confirmação fica, as matrículas continuam travadas,
+  o lote dela recusa, a tela diz qual foi) e uma importação nova pode começar; descartar à mão pede o 428, a local não pode (403 igual para a que existe e a
+  que não existe), o número errado é 409 e o lixo 400; a parada com gente não se descarta; confirmada há 20 dias e com o lote agora, nada muda; com 8 dias do
+  lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo; a trilha sem dado pessoal e a cadeia.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

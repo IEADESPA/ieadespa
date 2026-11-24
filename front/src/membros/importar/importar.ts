@@ -37,6 +37,16 @@ export interface ResumoImportacao {
 }
 /** os prazos da guarda dos dados (respostas dele de 23/11/2026): a prévia não confirmada e a lista dos de fora, em dias */
 export interface Guarda { readonly diasPrevia: number; readonly diasFora: number }
+/** o prazo da importação parada (G2, decisão dele de 24/11/2026): os dias contados do último lote, o dia em que vence e quantos dias faltam */
+export interface Prazo { readonly dias: number; readonly venceEm: string; readonly faltam: number }
+/** a parada sem ninguém importado que a rotina descartou no fim do prazo (G2): qual foi, quando e com que prazo */
+export interface DescartadaPeloPrazo {
+  readonly importacaoId: number;
+  readonly nomeArquivo: string | null;
+  readonly confirmadaEm: string | null;
+  readonly descartadaEm: string | null;
+  readonly dias: number;
+}
 /** a planilha lida no aparelho (o texto só fica na memória da tela) */
 export interface ArquivoLido { readonly nome: string; readonly texto: string }
 /** o mapa das colunas na tela: a lista do servidor, as colunas a mais (amarelas, fixas desde a leitura) e o campo escolhido para cada uma */
@@ -64,6 +74,11 @@ export interface EstadoImportacao {
   readonly emAndamento: boolean;
   readonly importacao: Importacao | null;
   readonly restantes: number | null;
+  /** em andamento: quantas já entraram (a parada sem ninguém tem outra saída) e o prazo para continuar */
+  readonly importadas?: number | null;
+  readonly prazo?: Prazo | null;
+  /** a última importação, se a rotina a descartou no fim do prazo (parou sem ninguém importado) */
+  readonly descartadaPeloPrazo?: DescartadaPeloPrazo | null;
   readonly retrato: Retrato | null;
   readonly campos: readonly CampoColuna[];
   readonly guarda?: Guarda | null;
@@ -132,6 +147,9 @@ export function perguntaDeixarDeFora(n: number): string {
 /** o "Descartar": a prévia sai na hora, com os dados pessoais das linhas (antes dos dias da guarda) */
 export const descartar = (importacaoId: number): Promise<Resultado<{ sucesso: boolean }>> =>
   pedir(BASE + "/descartar", { metodo: "POST", corpo: { importacaoId } });
+/** G2: descarta a importação confirmada que parou sem ninguém importado (a rota pede a confirmação recente, como a de confirmar) */
+export const descartarParada = (importacaoId: number): Promise<Resultado<{ sucesso: boolean }>> =>
+  pedir(BASE + "/descartar-parada", { metodo: "POST", corpo: { importacaoId } });
 
 /** baixa a lista do que acontece com cada linha (sem CPF nem contato) pelo fetch autenticado da casca: um link solto iria sem a sessão */
 export async function baixarLista(importacaoId: number): Promise<string> {
@@ -207,6 +225,8 @@ export function guardaDe(g: Partial<Guarda> | null | undefined): Guarda {
 }
 const emDias = (n: number): string => `${numero(n)} ${n === 1 ? "dia" : "dias"}`;
 export const notaDaPrevia = (g: Guarda): string => `Sem confirmar, esta prévia se apaga sozinha em ${emDias(g.diasPrevia)}.`;
+export const PERGUNTA_DESCARTAR_PARADA = "Descartar esta importação? Ninguém entrou ainda: a planilha sai do sistema agora, com o CPF, o celular, a mãe e o pai. "
+  + "Para importar, escolha o arquivo de novo.";
 export const PERGUNTA_DESCARTAR = "Descartar esta prévia? A planilha sai do sistema agora, com o CPF, o celular, a mãe e o pai. Para importar, escolha o arquivo de novo.";
 /** no resultado, com gente de fora: até quando a lista fica (o dia de Brasília do fim + os dias da guarda; a rotina diária apaga a partir desse dia) */
 export function notaForaAte(imp: Importacao, g: Guarda): string {
@@ -216,6 +236,39 @@ export function notaForaAte(imp: Importacao, g: Guarda): string {
   const dia = new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day) + g.diasFora));
   const dd = String(dia.getUTCDate()).padStart(2, "0"), mm = String(dia.getUTCMonth() + 1).padStart(2, "0");
   return `A lista dos que ficaram de fora se apaga sozinha a partir de ${dd}/${mm}/${dia.getUTCFullYear()} (${emDias(g.diasFora)} depois do fim): baixe antes, se precisar.`;
+}
+/** "03/12/2026" (o dia de Brasília) */
+function diaBr(v: string | Date | null | undefined): string {
+  const d = data(v);
+  if (!d) return "";
+  const p = partes(d);
+  return `${p.day}/${p.month}/${p.year}`;
+}
+/** a tela parada (G2, decisão dele de 24/11/2026): quantos dias faltam, até quando e o que acontece depois do prazo. Com gente já importada, as linhas que
+ *  faltam ficam de fora (fica o número da linha e o nome, para uma importação só com elas); sem ninguém, a importação é descartada. */
+export function fraseDoPrazo(prazo: Prazo | null | undefined, importadas: number | null | undefined): string {
+  if (!prazo || typeof prazo.faltam !== "number" || !Number.isInteger(prazo.faltam) || prazo.faltam < 0) return "";
+  const ate = diaBr(prazo.venceEm);
+  if (!ate) return "";
+  const alguem = typeof importadas === "number" && importadas > 0;
+  if (prazo.faltam === 0) {
+    return `O prazo para continuar acabou em ${ate}: continue agora; senão, o sistema `
+      + (alguem ? "deixa de fora as linhas que faltam e apaga os dados pessoais delas." : "descarta a importação e apaga os dados pessoais da planilha.");
+  }
+  const quanto = prazo.faltam === 1 ? "Falta 1 dia" : `Faltam ${numero(prazo.faltam)} dias`;
+  return `${quanto} para continuar (até ${ate}). Depois do prazo, `
+    + (alguem ? "as linhas que faltam ficam de fora e os dados pessoais delas se apagam: o sistema guarda só o número da linha e o nome, para uma importação só com elas."
+      : "a importação é descartada e os dados pessoais da planilha se apagam.");
+}
+/** a parada sem ninguém importado que a rotina descartou no fim do prazo: a tela volta ao arquivo dizendo qual foi, quando e por quê (G2) */
+export function fraseDescartadaPeloPrazo(d: DescartadaPeloPrazo | null | undefined): string {
+  if (!d || !diasValidos(d.dias)) return "";
+  const quando = diaBr(d.descartadaEm);
+  if (!quando) return "";
+  const confirmada = diaBr(d.confirmadaEm);
+  const qual = (d.nomeArquivo ? `A importação do arquivo “${d.nomeArquivo}”` : "A importação") + (confirmada ? (d.nomeArquivo ? `, confirmada em ${confirmada},` : ` confirmada em ${confirmada}`) : "");
+  return `${qual} parou sem ninguém importado e foi descartada em ${quando}, no fim do prazo de ${emDias(d.dias)}: os dados da planilha foram apagados. `
+    + "Para importar, escolha o arquivo de novo.";
 }
 /** o dia de Brasília como número de dias (para contar os dias entre duas datas) */
 function diaNumero(v: string | Date | null | undefined): number | null {

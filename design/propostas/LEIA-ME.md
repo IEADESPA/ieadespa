@@ -10,6 +10,11 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
+| `propostas-r32/index.html` | A página da **rodada 32** (Módulo 3, Estrutura e Territórios, o começo), 220 KB, com a 31 recolhida embaixo. Gerada; não editar à mão. Pronta em 24/11/2026, ajustada às respostas dele às 8 perguntas (24/11/2026), ainda **não publicada** |
+| `r32-base.js` | A casca do módulo (verde), quem está vendo e os dados de mentira comuns da 32 |
+| `r32-painel.js`, `r32-ficha.js`, `r32-cultos.js`, `r32-posse.js`, `r32-mapa.js` | As 5 telas da 32: o painel do que está desatualizado, a ficha da congregação (e a da área), os cultos e os pontos de culto, a diretoria com o termo de posse e o mapa |
+| `r32-lista.js` | A explicação da rodada (`EXPLICA_R32`), a de cada tela (com os "Para conferir") e a lista que junta as telas |
+| `montar-r32.js`, `conferir-r32.js` | Montam a 32 a partir da página da 31 e conferem cada desenho (só no claro, cada nível, notebook e celular). A procura das palavras proibidas tem duas listas: a antiga (do Financeiro) na 31 e o resto da página; a do Módulo 3 nos fontes da 32, que libera "culto" e barra o vocabulário do Regimento (Extensão da Tenda, parecer, região, quadrante e distrito, menos "Distrito Sede") |
 | `propostas-r31/index.html` | A página da **rodada 31** (Membros, a saída e a volta), 155 KB, só com a 31. Gerada; não editar à mão. Publicada na página nova (24/11/2026) |
 | `propostas-r30/index.html` | A página da rodada 30, a publicada (versão 12): a **base** de que a 31 parte. Não muda |
 | `r31-carta.js` | As telas da 31 da carta: a carta em PDF (A4) com o histórico e a página que o QR abre (antes e depois do apagamento) |
@@ -40,8 +45,8 @@ as auditorias. As escolhas do responsável ficam no banco da própria página (c
 Na pasta `design/propostas`, com o Node.js:
 
 ```bash
-node montar-r31.js     # grava propostas-r31/index.html; no fim, "palavras proibidas fora disso: 0"
-node conferir-r31.js   # no fim, "com problema 0"
+node montar-r32.js     # grava propostas-r32/index.html; no fim, as duas contagens de palavras proibidas em 0
+node conferir-r32.js   # no fim, "com problema 0"
 ```
 
 O `montar-r31.js` usa o TypeScript (do projeto ou o global do npm).

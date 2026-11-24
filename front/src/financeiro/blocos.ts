@@ -1,7 +1,7 @@
 // Os textos e as contas das abas dos blocos de recibo (as folhas e o livro), como o desenho aprovado escreve (rodada 17, r17-blocos-folhas e
 // r17-blocos-livro, opção 1). O servidor confere tudo; aqui só se escreve o que ele mandou.
 import { dataBr, numero } from "../comum/formato";
-import type { ContagemFolhas, DestinoFolha, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
+import type { ContagemFolhas, DestinoFolha, ExcecaoFolha, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
 
 /** "1 bloco", "2 blocos" */
 export const plural = (n: number, um: string, varios: string): string => `${numero(n)} ${n === 1 ? um : varios}`;
@@ -10,8 +10,16 @@ export const diaMes = (iso: string | null): string => dataBr(iso).slice(0, 5);
 
 /** o nome de cada destino na tela (a legenda do desenho) */
 export const NOME_DESTINO: Record<DestinoFolha | "livre", string> = {
-  lancada: "lançada na planilha", cancelada: "cancelada", arrancada: "arrancada", extraviada: "extraviada", livre: "livre"
+  lancada: "lançada na planilha", cancelada: "cancelada", arrancada: "arrancada", extraviada: "extraviada", inexistente: "inexistente", livre: "livre"
 };
+
+/** as exceções que a tela marca, na ordem das escolhas, cada uma com a frase de quando usar (decisão dele de 24/11/2026) */
+export const EXCECOES: readonly { readonly chave: ExcecaoFolha; readonly rotulo: string; readonly quando: string }[] = [
+  { chave: "cancelada", rotulo: "Cancelada", quando: "preenchida errado e anulada" },
+  { chave: "arrancada", rotulo: "Arrancada", quando: "tirada do bloco" },
+  { chave: "extraviada", rotulo: "Extraviada", quando: "sumiu, e a congregação não sabe dela" },
+  { chave: "inexistente", rotulo: "Inexistente", quando: "a gráfica não imprimiu" }
+];
 
 /** a posição da folha no bloco: 70.090 no bloco 70.051 a 70.100 é a 40ª */
 export const posicao = (folha: number, primeiraFolha: number): number => folha - primeiraFolha + 1;
@@ -31,12 +39,13 @@ function partesDaContagem(c: ContagemFolhas): string[] {
   if (c.canceladas) p.push(plural(c.canceladas, "cancelada", "canceladas"));
   if (c.arrancadas) p.push(plural(c.arrancadas, "arrancada", "arrancadas"));
   if (c.extraviadas) p.push(plural(c.extraviadas, "extraviada", "extraviadas"));
+  if (c.inexistentes) p.push(plural(c.inexistentes, "inexistente", "inexistentes"));
   return p;
 }
 
 /** como o bloco voltou, no livro: "49 lançadas, 1 cancelada"; todas lançadas = "50 conferidas" (o desenho) */
 export function contagemDaEntrada(c: ContagemFolhas): string {
-  if (c.lancadas && !c.canceladas && !c.arrancadas && !c.extraviadas && !c.livres) return plural(c.lancadas, "conferida", "conferidas");
+  if (c.lancadas && !c.canceladas && !c.arrancadas && !c.extraviadas && !c.inexistentes && !c.livres) return plural(c.lancadas, "conferida", "conferidas");
   const p = partesDaContagem(c);
   if (c.livres) p.push(plural(c.livres, "livre", "livres"));
   return p.join(", ");

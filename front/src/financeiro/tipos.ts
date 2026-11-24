@@ -60,8 +60,9 @@ export interface PaginaBlocos {
 
 // ---- incremento 2 (23/11/2026): as folhas de um bloco e o livro de entrada e saída (r17-blocos-folhas e r17-blocos-livro, opção 1) ----
 
-/** o destino de uma folha (shared/finBlocos.js, destinoDaTela); a folha sem destino é "livre" e não vem na lista */
-export type DestinoFolha = "lancada" | "cancelada" | "arrancada" | "extraviada";
+/** o destino de uma folha (shared/finBlocos.js, destinoDaTela); a folha sem destino é "livre" e não vem na lista. A inexistente (a gráfica não
+ *  imprimiu) é a decisão dele de 24/11/2026 */
+export type DestinoFolha = "lancada" | "cancelada" | "arrancada" | "extraviada" | "inexistente";
 /** o que aconteceu numa exceção (a folha lançada vem do lançamento, nunca daqui) */
 export type ExcecaoFolha = Exclude<DestinoFolha, "lancada">;
 
@@ -108,6 +109,7 @@ export interface ContagemFolhas {
   readonly canceladas: number;
   readonly arrancadas: number;
   readonly extraviadas: number;
+  readonly inexistentes: number;
   readonly livres: number;
 }
 

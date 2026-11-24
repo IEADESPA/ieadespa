@@ -88,7 +88,7 @@ function paginaDaLista(v) {
 function excecaoDaFolha(dados) {
   const d = dados && typeof dados === "object" ? dados : {};
   const destino = typeof d.oQueAconteceu === "string" ? DESTINOS_EXCECAO[d.oQueAconteceu.trim().toLowerCase()] : undefined;
-  if (!destino) return { erro: "Escolha o que aconteceu com a folha: cancelada, arrancada, extraviada ou inexistente." };
+  if (!destino) return { erro: "Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente." };
   const obs = typeof d.observacao === "string" ? d.observacao.trim() : "";
   if (!obs) return { erro: "Escreva a observação: o que aconteceu com a folha." };
   if (obs.length > 300) return { erro: "A observação passou de 300 letras." };

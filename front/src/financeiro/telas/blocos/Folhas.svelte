@@ -11,7 +11,7 @@
   import Aviso from "../../../comum/Aviso.svelte";
   import Estado from "../../../comum/Estado.svelte";
   import { escopo, nivelDaSessao } from "../../estado.svelte";
-  import { NOME_DESTINO, posicao, recolhidasNoCelular, plural } from "../../blocos";
+  import { NOME_DESTINO, EXCECOES, posicao, recolhidasNoCelular, plural } from "../../blocos";
   import type { DestinoFolha, ExcecaoFolha, PaginaFolhas } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
   import Cabecalho from "./Cabecalho.svelte";
@@ -20,8 +20,12 @@
   let { celular }: Props = $props();
 
   const nivel = nivelDaSessao();
-  const EXCECOES: readonly { readonly chave: ExcecaoFolha; readonly rotulo: string }[] = [
-    { chave: "cancelada", rotulo: "Cancelada" }, { chave: "arrancada", rotulo: "Arrancada" }, { chave: "extraviada", rotulo: "Extraviada" }
+  /** a legenda: sempre todas as situações, na mesma ordem (a r30); no celular, os nomes curtos */
+  const LEGENDA: readonly { readonly chave: DestinoFolha | "livre" | "escolhida"; readonly nome: string; readonly curto: string }[] = [
+    { chave: "lancada", nome: "lançada na planilha", curto: "lançada" }, { chave: "cancelada", nome: "cancelada", curto: "cancelada" },
+    { chave: "arrancada", nome: "arrancada", curto: "arrancada" }, { chave: "extraviada", nome: "extraviada", curto: "extraviada" },
+    { chave: "inexistente", nome: "inexistente", curto: "inexistente" }, { chave: "livre", nome: "livre", curto: "livre" },
+    { chave: "escolhida", nome: "a que você clicou", curto: "clicada" }
   ];
 
   let dados = $state.raw<PaginaFolhas | null>(null);
@@ -63,7 +67,6 @@
     });
   });
   const comDestino = $derived(folhas.filter((f) => f.destino !== null).length);
-  const temExtraviada = $derived(folhas.some((f) => f.destino === "extraviada"));
   const recolhidas = $derived(celular ? recolhidasNoCelular(folhas.map((f) => f.destino)) : 0);
   const visiveis = $derived(folhas.slice(recolhidas));
   const exemplo = $derived(escolhida ?? folhas.find((f) => f.destino === null)?.n ?? bloco?.ultimaFolha ?? null);
@@ -78,7 +81,7 @@
   async function registrar() {
     if (gravando || !bloco) return;
     if (escolhida === null) { falta = "Escolha a folha: clique numa folha livre."; return; }
-    if (!oQueAconteceu) { falta = "Escolha o que aconteceu com a folha: cancelada, arrancada ou extraviada."; return; }
+    if (!oQueAconteceu) { falta = "Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente."; return; }
     if (!observacao.trim()) { falta = "Escreva a observação: o que aconteceu com a folha."; return; }
     falta = "";
     gravando = true;
@@ -128,6 +131,12 @@
   </div>
 {/snippet}
 
+{#snippet quandoUsar()}
+  <ul class="quando" aria-label="Quando usar cada uma">
+    {#each EXCECOES as x (x.chave)}<li><strong>{x.rotulo}:</strong> {x.quando}</li>{/each}
+  </ul>
+{/snippet}
+
 {#snippet campoObservacao()}
   <label class="campo">
     <span class="rot">Observação</span>
@@ -157,12 +166,7 @@
 
 {#snippet legenda()}
   <div class="legenda">
-    <span><i class="lancada"></i>lançada na planilha</span>
-    <span><i class="cancelada"></i>cancelada</span>
-    <span><i class="arrancada"></i>arrancada</span>
-    {#if temExtraviada}<span><i class="extraviada"></i>extraviada</span>{/if}
-    <span><i class="livre"></i>livre</span>
-    <span><i class="escolhida"></i>a que você clicou</span>
+    {#each LEGENDA as l (l.chave)}<span><i class={l.chave}></i>{celular ? l.curto : l.nome}</span>{/each}
   </div>
 {/snippet}
 
@@ -191,6 +195,7 @@
     <Quadro titulo={escolhida !== null ? `Folha ${numero(escolhida)} · a ${posicao(escolhida, bloco.primeiraFolha)}ª` : aberto ? "Toque numa folha livre" : `Bloco ${numero(bloco.numero)}`} celular>
       {#if aberto}
         {@render escolhas()}
+        {@render quandoUsar()}
         {@render campoObservacao()}
         {@render faltando()}
         <div class="fim">{@render botaoRegistrar()}</div>
@@ -210,6 +215,7 @@
           {@render campoObservacao()}
           {@render botaoRegistrar()}
         </div>
+        {@render quandoUsar()}
         {@render faltando()}
       {:else}
         {@render fechado()}
@@ -233,14 +239,18 @@
   .pagina.cel { gap: 10px; }
   button { font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 
-  /* as cores das folhas (o desenho): lançada verde, cancelada vermelha, arrancada amarela, livre como campo, a clicada dourada.
-     Extraviada não tem cor no desenho: usa o azul das notas (já aprovado), para nunca parecer livre. */
+  /* as cores das folhas (aprovadas na r17 e na r30): lançada verde, cancelada vermelha, arrancada amarela, extraviada roxa com a borda tracejada,
+     livre como o campo, a clicada dourada. A inexistente (decisão dele de 24/11/2026, sem desenho ainda) é cinza listrada: nunca parece livre
+     (que é lisa, com a borda) nem a extraviada (que é tracejada). */
   .folhas-bloco {
     --f-lancada: #DCFCE7; --f-lancada-texto: #166534; --f-cancelada: #FEE2E2; --f-cancelada-texto: #991B1B;
-    --f-arrancada: #FEF3C7; --f-arrancada-texto: #7A4A00; --f-extraviada: var(--sv-info-fundo); --f-extraviada-texto: var(--sv-link);
+    --f-arrancada: #FEF3C7; --f-arrancada-texto: #7A4A00; --f-extraviada: #EDE9FE; --f-extraviada-texto: #5B21B6; --f-extraviada-borda: #7C3AED;
+    --f-inexistente: #E2E8F0; --f-inexistente-texto: #334155; --f-inexistente-risca: rgba(51, 65, 85, .16);
   }
   :global(html[data-tema="escuro"]) .folhas-bloco {
     --f-lancada: #14532D; --f-lancada-texto: #86EFAC; --f-cancelada: #4C1717; --f-cancelada-texto: #FCA5A5; --f-arrancada: #3D2A05; --f-arrancada-texto: #FCD34D;
+    --f-extraviada: #2E1A5C; --f-extraviada-texto: #D8CCFF; --f-extraviada-borda: #A78BFA;
+    --f-inexistente: #1E293B; --f-inexistente-texto: #CBD5E1; --f-inexistente-risca: rgba(203, 213, 225, .14);
   }
 
   /* o seletor do bloco, no alto (como o botão de linha do desenho: "Bloco 1.401 · Vila Nova ▾") */
@@ -258,7 +268,8 @@
   .seta { font-size: 11px; margin-left: -2px; }
 
   /* o formulário: a folha, o que aconteceu, a observação e o botão numa linha */
-  .formulario { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: end; }
+  /* as medidas da r30 (r30FormFolha): a folha, o que aconteceu (agora com quatro escolhas), a observação e o botão */
+  .formulario { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 2.5fr) minmax(0, 1.3fr) auto; gap: 12px; align-items: end; }
   .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .rot { font-size: 12.5px; font-weight: 600; color: var(--sv-titulo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* o desenho não usa box-sizing: a caixa de 38 px com a borda dá 40 (e a folha livre de 46, com a borda, 48; no celular 50) */
@@ -274,7 +285,7 @@
   .escolhas { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chips button {
-    height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--sv-borda); background: transparent; display: flex; align-items: center;
+    height: 30px; padding: 0 12px; border-radius: 16px; border: 1px solid var(--sv-borda); background: transparent; display: flex; align-items: center;
     font-size: 13px; font-weight: 600; color: var(--sv-texto); white-space: nowrap; transition: background-color .15s ease;
   }
   .chips button.ativa { background: var(--sv-escolha); border-color: var(--sv-escolha); color: var(--sv-escolha-texto); }
@@ -286,6 +297,10 @@
   .ouro:disabled { opacity: .6; cursor: default; }
   @media (hover: hover) { .ouro:hover:not(:disabled) { box-shadow: 0 2px 6px rgba(10, 35, 66, .18); } }
   .falta { font-size: 12.5px; font-weight: 600; color: var(--sv-atr); }
+  /* a frase de cada tipo (decisão dele de 24/11/2026), à vista antes de escolher */
+  .quando { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 16px; font-size: 12px; line-height: 1.35; color: var(--sv-suave); }
+  .quando strong { font-weight: 600; color: var(--sv-texto); }
+  .cel .quando { flex-direction: column; gap: 2px; font-size: 11.5px; }
   .fechado { font-size: 13px; color: var(--sv-texto); line-height: 1.4; }
   .fim { display: flex; justify-content: flex-end; }
 
@@ -305,7 +320,13 @@
   .folha.lancada { background: var(--f-lancada); color: var(--f-lancada-texto); }
   .folha.cancelada { background: var(--f-cancelada); color: var(--f-cancelada-texto); }
   .folha.arrancada { background: var(--f-arrancada); color: var(--f-arrancada-texto); }
-  .folha.extraviada { background: var(--f-extraviada); color: var(--f-extraviada-texto); }
+  /* a borda tracejada de 1,5 px por fora da caixa de 46 (o desenho não usa box-sizing) */
+  .folha.extraviada { background: var(--f-extraviada); color: var(--f-extraviada-texto); border: 1.5px dashed var(--f-extraviada-borda); height: 49px; }
+  .cel .folha.extraviada { height: 51px; }
+  .folha.inexistente {
+    background-color: var(--f-inexistente); color: var(--f-inexistente-texto);
+    background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--f-inexistente-risca) 5px 8px);
+  }
   .folha.livre { background: var(--sv-campo); color: var(--sv-suave); border: 1px solid var(--sv-campo-borda); height: 48px; }
   .cel .folha.livre { height: 50px; }
   .folha.livre.escolhida { height: 46px; }
@@ -313,13 +334,15 @@
   .folha.escolhida { background: #FFB800; color: #0A2342; border: 0; box-shadow: 0 0 0 3px #0A2342 inset; }
   .folha:focus-visible { outline: 2px solid var(--sv-mod); outline-offset: 2px; }
 
-  .legenda { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--sv-texto); }
-  .legenda span { display: flex; align-items: center; gap: 5px; }
-  .legenda i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--sv-borda); }
+  .legenda { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--sv-texto); }
+  .cel .legenda { gap: 5px 11px; font-size: 11.5px; }
+  .legenda span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .legenda i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--sv-borda); flex: none; }
   .legenda i.lancada { background: var(--f-lancada); }
   .legenda i.cancelada { background: var(--f-cancelada); }
   .legenda i.arrancada { background: var(--f-arrancada); }
-  .legenda i.extraviada { background: var(--f-extraviada); }
+  .legenda i.extraviada { background: var(--f-extraviada); border: 1.5px dashed var(--f-extraviada-borda); }
+  .legenda i.inexistente { background-color: var(--f-inexistente); background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--f-inexistente-risca) 3px 5px); }
   .legenda i.livre { background: var(--sv-campo); }
   .legenda i.escolhida { background: #FFB800; }
 

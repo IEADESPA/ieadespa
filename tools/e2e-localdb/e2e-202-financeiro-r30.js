@@ -66,7 +66,7 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   r = await POST(H, "folha", local, { folha: 70099, oQueAconteceu: "inexistente", observacao: "  " });
   ok(r.status === 422 && r.body.mensagem === "Escreva a observação: o que aconteceu com a folha.", "a inexistente sem observação é recusada, como as outras", r.body);
   r = await POST(H, "folha", local, { folha: 70099, oQueAconteceu: "sumida", observacao: "x" });
-  ok(r.status === 422 && r.body.mensagem === "Escolha o que aconteceu com a folha: cancelada, arrancada, extraviada ou inexistente.", "o que não é exceção é recusado, com as quatro na mensagem", r.body);
+  ok(r.status === 422 && r.body.mensagem === "Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente.", "o que não é exceção é recusado, com as quatro na mensagem", r.body);
   r = await GET(H, "folhas", local, { bloco: b1401 });
   const g = r.body.folhas && r.body.folhas.find((x) => x.folha === 70100);
   ok(r.status === 200 && g && g.destino === "inexistente" && g.observacao === "A gráfica não imprimiu a 50ª" && r.body.bloco.usadas === 1 && r.body.bloco.livres === 49,

@@ -98,7 +98,7 @@ function apiFinanceiro(nivel, opcoes) {
     if (p === "/api/financeiro/blocos/folhas" && metodo === "GET") {
       if (q.get("bloco") === "5") {
         const f = [];
-        for (let i = 1; i <= 50; i++) f.push({ folha: 68000 + i, destino: i === 3 ? "cancelada" : i > 48 ? "extraviada" : "lancada", observacao: i === 3 || i > 48 ? "Perdida" : null });
+        for (let i = 1; i <= 50; i++) f.push({ folha: 68000 + i, destino: i === 3 ? "cancelada" : i === 49 ? "extraviada" : i === 50 ? "inexistente" : "lancada", observacao: i === 3 || i > 48 ? "Perdida" : null });
         f.splice(45, 1);   // a 46ª ficou livre e o bloco voltou assim
         return { corpo: { sucesso: true, bloco: blocoMentira(5, 68001, "Bela Vista", "fechado", 49, { devolvidoEm: "2026-11-10" }), folhas: f, opcoes: OPCOES, escopo: ESCOPO[nivel] } };
       }
@@ -244,7 +244,13 @@ async function provarFolhas() {
   ok(f29 && /arrancada/.test(f29.rotulo) && f29.desligado, "geral: a 29ª é arrancada", f29);
   ok(f1x && /lançada na planilha/.test(f1x.rotulo) && f1x.desligado, "geral: a 1ª é lançada na planilha", f1x);
   ok(f39 && /livre/.test(f39.rotulo) && !f39.desligado, "geral: a 39ª é livre e se clica", f39);
-  ok(["lançada na planilha", "cancelada", "arrancada", "livre", "a que você clicou"].every((x) => t.includes(x)), "geral: a legenda");
+  const legenda = await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz .legenda > span")].map((x) => x.textContent.trim()));
+  ok(JSON.stringify(legenda) === JSON.stringify(["lançada na planilha", "cancelada", "arrancada", "extraviada", "inexistente", "livre", "a que você clicou"]),
+    "geral: a legenda sempre completa, na mesma ordem (a extraviada e a inexistente mesmo sem nenhuma no bloco)", legenda);
+  const chips = await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz .chips button")].map((b) => b.textContent.trim()));
+  ok(JSON.stringify(chips) === JSON.stringify(["Cancelada", "Arrancada", "Extraviada", "Inexistente"]), "geral: as quatro escolhas (a inexistente é a nova)", chips);
+  ok(["preenchida errado e anulada", "tirada do bloco", "sumiu, e a congregação não sabe dela", "a gráfica não imprimiu"].every((x) => t.includes(x)),
+    "geral: a frase de cada tipo, à vista antes de escolher (decisão dele de 24/11)");
   ok(t.includes("Normalmente é automático:") && t.includes("Ninguém digita número: clique na folha e o sistema sabe a posição"), "geral: a nota do automático");
   // escolher a folha: o número vai ao formulário
   ok(await clicarFolha(page, "70.090"), "geral: clicar na 40ª");
@@ -256,7 +262,7 @@ async function provarFolhas() {
   const postAntes = pedidos(api, "/api/financeiro/blocos/folha", "POST").length;
   await clicar(page, "Registrar");
   ok(pedidos(api, "/api/financeiro/blocos/folha", "POST").length === postAntes, "geral: sem \"o que aconteceu\" não registra");
-  ok((await textoTela(page)).includes("Escolha o que aconteceu com a folha"), "geral: diz o que falta");
+  ok((await textoTela(page)).includes("Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente."), "geral: diz o que falta (o texto da r30, com a inexistente)");
   ok(await clicar(page, "Arrancada"), "geral: a escolha \"Arrancada\"");
   ok(await page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz button")].some((b) => b.textContent.trim() === "Arrancada" && b.getAttribute("aria-pressed") === "true")), "geral: \"Arrancada\" marcada");
   await clicar(page, "Registrar");
@@ -283,6 +289,17 @@ async function provarFolhas() {
   await espera(300);
   ok(/já tem destino/.test(await ultimoAviso(page)), "geral: a recusa do servidor aparece", await ultimoAviso(page));
   ok((await textoTela(page)).includes("70.089 · 39ª"), "geral: depois da recusa, a folha continua escolhida");
+  // a folha inexistente (a gráfica não imprimiu): registra como as outras exceções
+  await clicarFolha(page, "70.091");
+  ok(await clicar(page, "Inexistente"), "geral: a escolha \"Inexistente\"");
+  await digitar(page, "Observação", "A gráfica não imprimiu");
+  const postInex = pedidos(api, "/api/financeiro/blocos/folha", "POST").length;
+  await clicar(page, "Registrar");
+  const pi = await esperarPedido(api, "/api/financeiro/blocos/folha", "POST", postInex);
+  ok(pi && JSON.stringify(pi.corpo) === JSON.stringify({ folha: 70091, oQueAconteceu: "inexistente", observacao: "A gráfica não imprimiu" }), "geral: registra a inexistente", pi && pi.corpo);
+  await calmo(page);
+  const f41 = await infoFolha(page, "70.091");
+  ok(f41 && /41ª: inexistente/.test(f41.rotulo) && f41.desligado, "geral: a 41ª agora é inexistente", f41);
   // o seletor do bloco
   const ops = await opcoesDe(page, "Bloco");
   ok(ops && ops.length === 3 && ops[0] === "Bloco 1.401 · Vila Nova", "geral: o seletor \"Bloco 1.401 · Vila Nova\" com os blocos", ops);
@@ -296,9 +313,17 @@ async function provarFolhas() {
   const livreDevolvido = await infoFolha(page, "68.046");
   ok(livreDevolvido && livreDevolvido.desligado, "geral: no bloco devolvido nenhuma folha se clica (nem a livre)", livreDevolvido);
   ok(/já foi devolvido/.test(t), "geral: diz que o bloco já foi devolvido e não muda mais");
-  const ext = await infoFolha(page, "68.049");
+  const ext = await infoFolha(page, "68.049"), inex = await infoFolha(page, "68.050");
   ok(ext && /extraviada/.test(ext.rotulo), "geral: a folha extraviada se distingue", ext);
-  ok(t.includes("extraviada"), "geral: a legenda ganha \"extraviada\" quando o bloco tem uma");
+  ok(inex && /: inexistente/.test(inex.rotulo), "geral: a folha inexistente se distingue (o nome dela no rótulo)", inex);
+  const cores = await page.evaluate(() => {
+    const achar = (n) => [...document.querySelectorAll("#financeiroRaiz button")].find((b) => (b.getAttribute("aria-label") || "").startsWith(`Folha ${n},`));
+    const est = (n) => { const c = getComputedStyle(achar(n)); return { fundo: c.backgroundColor, imagem: c.backgroundImage, borda: c.borderTopStyle, cor: c.borderTopColor }; };
+    return { ext: est("68.049"), inex: est("68.050"), livre: est("68.046"), lanc: est("68.001") };
+  });
+  ok(cores.ext.fundo === "rgb(237, 233, 254)" && cores.ext.borda === "dashed" && cores.ext.cor === "rgb(124, 58, 237)", "geral: a extraviada é roxa com a borda tracejada (a cor aprovada na r30)", cores.ext);
+  ok(cores.inex.imagem !== "none" && cores.inex.fundo !== cores.livre.fundo && cores.inex.fundo !== cores.lanc.fundo && cores.inex.borda !== "dashed",
+    "geral: a inexistente tem cor própria (listrada), que não se confunde com a livre nem com a extraviada", cores.inex);
   await fechar(s, "folhas geral notebook");
 
   // a lista falhou: a aba das folhas diz sozinha quem está vendo

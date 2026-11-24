@@ -89,7 +89,7 @@ describe("a folha e a situação", () => {
   test("a exceção da folha pede o que aconteceu e a observação", () => {
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "arrancada", observacao: "Rasgou na hora de preencher" }))
       .toEqual({ folha: 70090, destino: "ARRANCADA", observacao: "Rasgou na hora de preencher" });
-    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "lancada", observacao: "x" }).erro).toBe("Escolha o que aconteceu com a folha: cancelada, arrancada, extraviada ou inexistente.");
+    expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "lancada", observacao: "x" }).erro).toBe("Escolha o que aconteceu: cancelada, arrancada, extraviada ou inexistente.");
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "  " }).erro).toMatch(/observação/);
     expect(regra.excecaoDaFolha({ folha: 2 ** 40, oQueAconteceu: "cancelada", observacao: "x" }).erro).toMatch(/folha/);
     expect(regra.excecaoDaFolha({ folha: 70090, oQueAconteceu: "cancelada", observacao: "x".repeat(301) }).erro).toMatch(/300/);

@@ -1074,6 +1074,9 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   - Quando a importação termina, a linha importada fica só com o necessário para a trilha: o número da linha, a
     matrícula, o nome e a situação. CPF, celular, e-mail, mãe, pai, nascimento e o resto saem (o dado vive na ficha,
     onde a exclusão LGPD passa). O código já tirava os dados pessoais no fim desde 22/11; agora a regra está escrita.
+    Ficam também os códigos que os quadros do resultado e a lista baixada usam, sem dado pessoal: se ganhou número novo
+    e por quê, a linha ou a ficha parecida (o número dela) e os códigos dos problemas e avisos (por exemplo "CPF
+    inválido", sem o CPF).
   - A linha de quem ficou de fora fica **só com o nome e o motivo** pelos 90 dias (a matrícula do arquivo também sai).
   - A importação que terminou antes desta versão é limpa pela rotina diária.
   - A migração 186 põe as duas políticas na tela Políticas de retenção ("Membros — prévia da importação que não foi

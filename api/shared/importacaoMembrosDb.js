@@ -485,7 +485,8 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
 // Respostas dele de 23/11/2026 (LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7 dias (antes disso, o "Descartar" da
 // tela apaga na hora); a lista dos que ficaram de fora (nome e motivo) fica 90 dias depois de a importação terminar e se apaga sozinha. As importadas não saem
 // (a ficha é o registro dela; o retrato do resultado continua). Decisões da sessão de 24/11/2026 (da regra dele e da LGPD): ao terminar, a linha importada
-// fica só com a linha, a matrícula, o nome e a situação, e a de fora só com o nome e o motivo; a importação que terminou antes disso a rotina limpa. O prazo
+// fica só com a linha, a matrícula, o nome e a situação (mais os códigos que o retrato e o CSV leem: número novo e motivo, linha/ficha repetida, problemas
+// e avisos; nenhum é dado pessoal), e a de fora só com o nome e o motivo; a importação que terminou antes disso a rotina limpa. O prazo
 // segue a política de retenção com estes nomes em Proteção de Dados → Políticas de retenção (a migração 186 as semeia com a base legal; o Encarregado ajusta
 // os dias ali); sem ela, valem os de 7 e 90 dias. Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada
 // naquela hora faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.

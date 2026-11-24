@@ -24,6 +24,7 @@ export interface ResumoImportacao {
   readonly problemas: number;
   readonly numeroNovo: number;
   readonly possivelRepetida: number;
+  /** as linhas que ficam de fora por falta de congregação (G3, decisão dele de 24/11/2026: sem congregação não há importação) */
   readonly semCongregacao: number;
   readonly separador: string;
   readonly colunas: { readonly lista: readonly ColunaArquivo[]; readonly escolhidas: boolean };
@@ -69,7 +70,6 @@ export interface EstadoImportacao {
 }
 export interface DetalheLinha {
   readonly motivoNumero: string | null;
-  readonly semCongregacao: boolean | null;
   readonly dono: { readonly linha: number; readonly nome: string; readonly sexo?: string | null } | null;
   readonly repetidaDe: { readonly linha: number | null; readonly matricula: number | null; readonly nome: string } | null;
   readonly recebe: number | null;
@@ -221,15 +221,15 @@ export const matriculaBr = (m: string): string => (/^\d{1,9}$/.test(m.trim()) ? 
 
 /** "da Lúcia", "do Marcos"; sem o sexo na linha, "de" */
 const artigo = (sexo: string | null | undefined): string => (sexo === "F" ? "da" : sexo === "M" ? "do" : "de");
-/** o "Por quê" da matrícula a acertar (r27): o motivo, de quem é o número (quem veio antes na planilha) e a congregação que faltou */
+/** o "Por quê" da matrícula a acertar (r27): o motivo e de quem é o número (quem veio antes na planilha). A linha sem congregação não entra (G3), então o
+ *  motivo não fala mais da congregação que faltou */
 export function porQue(i: ItemLista): string {
   const d = i.detalhe;
-  const sem = d.semCongregacao ? " e sem congregação" : "";
   let t: string;
   switch (d.motivoNumero) {
-    case "ZERO": t = `veio com a matrícula 0${sem}`; break;
-    case "VAZIA": t = `veio sem matrícula${sem}`; break;
-    case "INVALIDA": t = `a matrícula “${i.matricula}” não é um número${sem}`; break;
+    case "ZERO": t = "veio com a matrícula 0"; break;
+    case "VAZIA": t = "veio sem matrícula"; break;
+    case "INVALIDA": t = `a matrícula “${i.matricula}” não é um número`; break;
     case "REPETIDA_NO_ARQUIVO":
       t = d.dono ? `a ${matriculaBr(i.matricula)} já é ${artigo(d.dono.sexo)} ${d.dono.nome}, que veio antes (linha ${numero(d.dono.linha)})` : `a ${matriculaBr(i.matricula)} veio repetida na planilha`;
       break;

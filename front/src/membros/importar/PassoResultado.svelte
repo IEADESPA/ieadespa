@@ -24,7 +24,8 @@
     { n: retrato.quadros.comMatricula, rotulo: "Com a matrícula de antes", sub: "como no sistema pago" },
     { n: retrato.quadros.acertar, rotulo: "Com matrícula nova", sub: faixa },
     { n: retrato.quadros.repetidas, rotulo: "Em “Fichas repetidas”", sub: "para a secretaria juntar" },
-    { n: sem, rotulo: "Sem congregação", sub: "para a Geral distribuir" }
+    // G3 (decisão dele de 24/11/2026): nenhuma ficha entra sem congregação; o quinto quadro passa a ser o das linhas que ficaram de fora
+    { n: res ? res.fora : 0, rotulo: "Ficaram de fora", sub: "na lista para baixar" }
   ]);
   const forte = $derived(pendentes === importadas
     ? `${importadas === 1 ? "A ficha está" : `As ${numero(importadas)} estão`} com a pendência “completar o arrolamento”, sem voto até completar.`
@@ -54,7 +55,7 @@
     {#each areas as a (a.area ?? "")}
       <li><span><strong>{a.area ?? "Sem área"}</strong><small>{numero(a.congregacoes)} {plural(a.congregacoes, "congregação", "congregações")} · {numero(a.completas)} {plural(a.completas, "completa", "completas")}</small></span><b class="sv-num">{numero(a.fichas)}</b></li>
     {/each}
-    {#if sem}<li><span><strong>Sem congregação</strong><small class="ouro">a Geral escolhe</small></span><b class="sv-num">{numero(sem)}</b></li>{/if}
+    {#if sem}<li><span><strong>Sem congregação</strong><small class="ouro">avise o suporte</small></span><b class="sv-num">{numero(sem)}</b></li>{/if}
   </ul>
 {:else}
   <div class="dois">
@@ -71,7 +72,7 @@
       {#if sem}
         <div class="lin" role="row">
           <span class="nome" role="cell">Sem congregação</span><span role="cell">—</span><span role="cell" class="sv-num">{numero(sem)}</span>
-          <span role="cell" class="ouro">a Geral escolhe</span>
+          <span role="cell" class="ouro">avise o suporte</span>
         </div>
       {/if}
     </div>

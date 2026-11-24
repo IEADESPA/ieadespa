@@ -1,14 +1,14 @@
 // Arrolamento (FASE 10, Membros, rodada 28 aprovada em 23/11/2026) — COMPLETAR O ARROLAMENTO de quem veio do sistema pago.
 // GET  /api/arrolamento                 -> ?congregacaoId=N — o andamento (vieram, completadas, faltam), o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a
-//                                          Geral, cada área e as que vieram sem congregação
-// GET  /api/arrolamento/ficha           -> ?matricula=N | ?congregacaoId=N&depois=M | ?semCongregacao=1&depois=M (só a Geral) — a ficha para completar, a próxima e o
-//                                          andamento da congregação dela
-// POST /api/arrolamento/completar       -> { matricula, situacao, formaAdmissao, dataAdmissao, cargoMinisterial, congregacaoId } — completa (409 se já foi completada)
+//                                          Geral, cada área e quantas estão sem congregação (só as de antes da regra G3)
+// GET  /api/arrolamento/ficha           -> ?matricula=N | ?congregacaoId=N&depois=M — a ficha para completar, a próxima e o andamento da congregação dela
+// POST /api/arrolamento/completar       -> { matricula, situacao, formaAdmissao, dataAdmissao } — completa (409 se já foi completada); a função eclesiástica e a
+//                                          congregação no pedido são recusadas
 // Regra dele: a secretaria escolhe a situação, como e quando a pessoa entrou e o cargo, só se tiver; ao completar, a pessoa sai do grupo e, em comunhão, ganha
 // o voto. "A área e a Geral também podem completar e editar ... se a congregação não faz o que tem de fazer, a área faz, e o serviço não para."
 // ESCOPO: a permissão "pessoas" e a pessoa no alcance de quem completa (shared/escopoRotas.js) — a congregação, a área (só as congregações dela) e a Geral; fora
-// do escopo (ou matrícula que não existe) a resposta é a mesma de "Matrícula não encontrada". Ninguém completa a própria ficha; a que veio sem congregação, só
-// a Geral, escolhendo a congregação. As regras em shared/arrolamento.js; as consultas e a gravação em shared/arrolamentoDb.js.
+// do escopo (ou matrícula que não existe) a resposta é a mesma de "Matrícula não encontrada". Ninguém completa a própria ficha. Toda ficha do arrolamento tem
+// congregação (G3, decisão dele de 24/11/2026); a de antes da regra, sem congregação, não se completa por aqui (409). As regras em shared/arrolamento.js; as consultas e a gravação em shared/arrolamentoDb.js.
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
 const { hojeBrasilia } = require("../shared/dataBrasilia");

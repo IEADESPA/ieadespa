@@ -1,14 +1,14 @@
 {
-  "fonte": "f31a14aeb74df24c50ccfdf0bc4e5af6270b3f01471ece60f340910b88c45d1b",
+  "fonte": "1979d976e2a0d95675d52653c12dd0e4ba7e4bb52c7aac3ed9dc883f8b44ceae",
   "arquivos": {
     "Cadastrar-CM0mBJm6.js": "abd9acd7f90624554e3802b0341d419ab4b6010fa8a29e90b3fedcff0f494f23",
     "CadastroRapido-De5G-QnQ.js": "4aa68fb5e7cd36fac2640441de6fb70a211a13b314cb06aa7619e25b7f4686c0",
     "Carteirinhas-HM4iDGe4.js": "5406804234106a146a26741e627dd07a5e017ec22dc9c787efcc2b0b4e0e0949",
-    "Completar-CDFr5Hsk.js": "2a7a0b8860b2534a5afc4abc6ee9b54fa2f2b198285113d31ece174c07a21db6",
+    "Completar-BwV2ULZ8.js": "74beebfd629cbf401631606696dde8fd53cd65dbea9d5f1a2f0f4cb3f5b2c8a2",
     "Editor-B8-Y0l0b.js": "464cb36e0465fb2a454875bff2489cdc7dd5f8f7255f4c19833898a76751ea6a",
     "Ficha-uaTKRifT.js": "baa1c7ff9a2c2c74600ff4ee2f801fc2f2a90151b18ac4be9561e2688c2c22f9",
     "Fila-G_BryowW.js": "1b3c4b838a51deb32a95f17a9595347e724a5baf248bab9d191054d74b0836db",
-    "Importar-CGeM-Wfz.js": "1c4004ec643be1cd42cbbec1ee969981e60f3fefb1878820c96e2a016523ccd8",
+    "Importar-HHs1UO_D.js": "bcbce7350d84e045e2155eb324edef4a5d5bb326a82542d6146e2b32a12ba346",
     "Juntar-BDyO7I34.js": "f1438005bbaef60e7eed4adddbfd97beb4116b01dc1fc0e006a276a322ff7ab5",
     "MinhaCarteirinha-BevyT8CC.js": "25814c106ea17cca54e339d60dce139f24ead1546a38154678ccc71caa3b4a84",
     "MinhaVida-Ci_R2mW1.js": "ce938ebd2722b3594f452b4844a888b4296d94d9729075c951053e3dba8a488f",
@@ -18,10 +18,10 @@
     "Transferencia-DuZ7gAwv.js": "cd867be34397a31d806a73e809b6269e0208655f57ba3814194ed38f4bdd94d5",
     "Transferencias-KyndOT3d.js": "de67225442c1c5db20e647f2586e0f667ad8318510e43781da1af85845aa3d57",
     "Transferir-RCcHBV4Z.js": "b5d9f6db258f91a86bc70479ab46f32a7eec72933280c1934231ea03c8badd8f",
-    "comum.js": "40aa46b6c55df0e73e35c938245999f5fce65898a3f71c100f3ddf8b4afc9d78",
+    "comum.js": "4791b807d105aaa2e1d6e032a3236ce149db8bb17842f9f84e3f30b38d41468c",
     "imprimir-CP9G4PYD.js": "810ceadcd55eebe08827e728037b75c869afa2da20322f18067968ff7caa47b6",
     "membros.css": "3ce86e5c8f045ca704bab63b04d6e35949852946a02f7fc5d80102adee95d7dd",
-    "membros.js": "fcff92d7ceb5a56db6f483245472477665d8e8d85a83a541132f5c9c23926387",
+    "membros.js": "3d7915235dcd73ca4c74287baea33596e63befcecdce9efaf156936a2e91b056",
     "preload-helper-ARvDcSUK.js": "e0ef356954b6894e9b3940a8e868e0ca0fa2a8540243bcee48a3b05ae3c61ea1",
     "tipos-Bzmr7GoI.js": "8df21ecd75a6cebd243a18eda7b35cebec34e9e686fee0fddd260798a8b6e47a"
   }

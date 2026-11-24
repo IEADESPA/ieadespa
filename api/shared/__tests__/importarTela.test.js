@@ -110,3 +110,28 @@ describe("a lista dos que ficaram de fora, no resultado", () => {
       .toBe("A lista dos que ficaram de fora foi apagada (a guarda dos dados)");
   });
 });
+
+// G3 (decisão dele de 24/11/2026): sem congregação não há importação. A linha sem congregação ("IEADESPA - GERAL" ou vazia) fica de fora na prévia, com o
+// motivo; a Geral corrige a planilha ou continua sem ela. As telas não dizem mais que essas pessoas "entram sem congregação" nem que "a Geral escolhe".
+describe("as telas da importação sem a ficha sem congregação (G3)", () => {
+  const PASTA = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "importar");
+  const ler = (arq) => fs.readFileSync(path.join(PASTA, arq), "utf8");
+  test("o passo do arquivo diz que a linha sem congregação fica de fora", () => {
+    const t = ler("PassoArquivo.svelte");
+    expect(t).toMatch(/<small>sem congregação \(“IEADESPA - GERAL” ou vazia\) fica de fora<\/small>/);
+    expect(t).not.toMatch(/fica sem congregação/);
+  });
+  test("a prévia conta as que ficam de fora por falta de congregação", () => {
+    const t = ler("PassoNumeros.svelte");
+    expect(t).toMatch(/\{ n: r\.semCongregacao, rotulo: "Sem congregação", sub: "ficam de fora" \}/);
+    expect(t).not.toMatch(/sub: "“IEADESPA - GERAL”"/);
+  });
+  test("o resultado não promete que a Geral distribui: o quadro passa a ser o das linhas que ficaram de fora", () => {
+    const t = ler("PassoResultado.svelte");
+    expect(t).not.toMatch(/para a Geral distribuir|a Geral escolhe/);
+    expect(t).toMatch(/\{ n: res \? res\.fora : 0, rotulo: "Ficaram de fora", sub: "na lista para baixar" \}/);
+  });
+  test("a lista da prévia não fala mais da linha que entra sem congregação", () => {
+    expect(fs.readFileSync(ARQ, "utf8")).not.toMatch(/semCongregacao: boolean \| null|e sem congregação/);
+  });
+});

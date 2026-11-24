@@ -5,8 +5,8 @@
 // podem completar e editar ... se a congregação não faz o que tem de fazer, a área faz, e o serviço não para." Cada uma só no seu escopo.
 //  1. o 4º grupo do painel (?resumo=1) e o andamento (GET /api/arrolamento): local, área (por congregação), Geral (por área e as sem congregação);
 //  2. a ficha para completar (GET /api/arrolamento/ficha): a próxima, pular, "não encontrada" igual para o que não existe e o que está fora do escopo;
-//  3. completar (POST /api/arrolamento/completar): a local, a área e a Geral; a extensão; a própria ficha; a sem congregação só a Geral, escolhendo a
-//     congregação; a função eclesiástica recusada em todo nível (nada muda); a pendência resolvida e a trilha, numa transação só; a segunda vez 409; lixo sem 500;
+//  3. completar (POST /api/arrolamento/completar): a local, a área e a Geral; a extensão; a própria ficha; a sem congregação (de antes da regra G3, 24/11)
+//     ninguém completa, e a congregação no pedido é recusada; a função eclesiástica recusada em todo nível (nada muda); a pendência resolvida e a trilha, numa transação só; a segunda vez 409; lixo sem 500;
 //  4. a corrida (a local e a área ao mesmo tempo na mesma ficha): uma completa, a outra leva 409;
 //  5. o cadastro antigo (POST /api/pessoas) e o importador antigo não tiram ninguém do grupo nem põem ninguém nele; o cargo continua só da Geral ali.
 // Roda sobre a base cenario-185 (`BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js`).
@@ -149,10 +149,15 @@ async function principal() {
   ok(r.body.ficha && r.body.ficha.matricula === 9809, "sem 'depois': a primeira", r.body.ficha);
   r = await ficha(tok.local(), { congregacaoId: cong.OU });
   ok(r.status === 200 && r.body.ficha === null, "a congregação de fora: nenhuma ficha", r.body);
+  // G3 (decisão dele de 24/11/2026): sem congregação não há importação. A fila "das sem congregação" não existe mais; a ficha de antes da regra, aberta pela
+  // matrícula, diz que não se completa por aqui (só quem a vê: a Geral; para os outros, a mesma resposta de "não encontrada")
   r = await ficha(tok.geral(), { semCongregacao: 1 });
-  ok(r.body.ficha && r.body.ficha.matricula === 980401 && r.body.ficha.congregacao === null, "a Geral abre as que vieram sem congregação", r.body);
-  r = await ficha(tok.area(), { semCongregacao: 1 });
-  ok(r.status === 403, "a área não pede as sem congregação: 403", r.body);
+  ok(r.status === 400 && !r.body.ficha, "a fila das sem congregação não existe mais (nem para a Geral): 400", r.body);
+  r = await ficha(tok.geral(), { matricula: 980401 });
+  ok(r.status === 409 && /sem congregação/.test(r.body.mensagem) && /avise o suporte/.test(r.body.mensagem) && !/escolhe/.test(r.body.mensagem) && !r.body.ficha,
+    "a ficha sem congregação de antes da regra: 409, sem o formulário e sem prometer a escolha", r.body);
+  const prox = await arrol(tok.geral());
+  ok(!prox.body.proximas.some((p) => p.matricula === 980401), "as 4 próximas da Geral não trazem a ficha que não se completa", prox.body.proximas);
   for (const query of [{}, { matricula: "abc" }, { matricula: "0" }, { congregacaoId: "x" }, { congregacaoId: cong.VN, depois: "-3" }]) {
     r = await ficha(tok.local(), query);
     ok(r.status === 400 || igualNao(r), `ficha com ${JSON.stringify(query)}: 400 ou não encontrada, sem 500`, r.status);
@@ -213,14 +218,16 @@ async function principal() {
   r = await completar(tok.geral(), 980102, { ...comunhao, congregacaoId: cong.CJ });
   ok(r.status === 400 && /transferência/.test(r.body.mensagem) && (await sit(980102)) === "ARROLAMENTO", "a ficha que tem congregação não muda de congregação por aqui", r.body);
 
-  r = await completar(tok.depto(), 980401, { ...comunhao, congregacaoId: cong.CJ });
-  ok(r.status === 403 && /Secretaria Geral/.test(r.body.mensagem) && (await sit(980401)) === "ARROLAMENTO", "a sem congregação: quem vê a Igreja toda sem ser a Geral não completa", r.body);
+  // G3: a congregação nunca vem no completar, e a ficha sem congregação (de antes da regra) não se completa por aqui, nem pela Geral
+  r = await completar(tok.depto(), 980401, comunhao);
+  ok(r.status === 409 && /sem congregação/.test(r.body.mensagem) && (await sit(980401)) === "ARROLAMENTO", "a sem congregação: quem vê a Igreja toda não completa (409)", r.body);
   r = await completar(tok.geral(), 980401, comunhao);
-  ok(r.status === 400 && /Escolha a congregação/.test(r.body.mensagem), "a Geral precisa escolher a congregação", r.body);
-  r = await completar(tok.geral(), 980401, { ...comunhao, congregacaoId: 99999999 });
-  ok(r.status === 400 && /congregação/i.test(r.body.mensagem) && (await sit(980401)) === "ARROLAMENTO", "congregação que não existe: recusada", r.body);
-  r = await completar(tok.geral(), 980401, { ...comunhao, congregacaoId: cong.CJ });
-  ok(r.status === 200 && (await escalar("SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = 980401")) === cong.CJ, "a Geral completa e põe na congregação escolhida", r.body);
+  ok(r.status === 409 && /sem congregação/.test(r.body.mensagem) && (await sit(980401)) === "ARROLAMENTO", "a sem congregação: nem a Geral completa (409)", r.body);
+  for (const congregacaoId of [cong.CJ, 99999999]) {
+    r = await completar(tok.geral(), 980401, { ...comunhao, congregacaoId });
+    ok(r.status === 400 && /transferência/.test(r.body.mensagem) && (await sit(980401)) === "ARROLAMENTO"
+      && (await escalar("SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = 980401")) === null, `a congregação ${congregacaoId} no pedido: recusada, nada muda`, r.body);
+  }
 
   ok(igualNao(await completar(tok.extensao(), 980102, comunhao)), "a concessão da extensão não completa a de fora dela");
   r = await completar(tok.extensao(), 980106, comunhao);

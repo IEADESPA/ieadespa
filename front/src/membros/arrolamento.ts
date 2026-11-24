@@ -11,7 +11,6 @@ export interface FormCompletar {
   readonly situacao: Situacao;
   readonly formaAdmissao: string;
   readonly dataAdmissao: string;
-  readonly congregacaoId: number | null;
 }
 /** o mínimo da ficha que a regra precisa (GET /api/arrolamento/ficha) */
 export interface FichaBase {
@@ -26,15 +25,15 @@ export interface CorpoCompletar {
   situacao: Situacao;
   formaAdmissao?: string;
   dataAdmissao?: string;
-  congregacaoId?: number;
 }
-export type CampoComErro = "situacao" | "forma" | "data" | "congregacao";
+export type CampoComErro = "situacao" | "forma" | "data";
 
 /** vieram do sistema pago, já completadas e as que faltam */
 export interface Andamento { readonly vieram: number; readonly completadas: number; readonly faltam: number }
 export interface LugarArrolamento extends Andamento { readonly id: number | null; readonly nome: string; readonly area?: string | null }
 export interface ProximaFicha { readonly matricula: number; readonly nome: string; readonly sexo: string | null; readonly departamento: string | null }
-/** GET /api/arrolamento: o andamento, o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e as que vieram sem congregação */
+/** GET /api/arrolamento: o andamento, o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e quantas estão sem
+ *  congregação (só as de antes da regra G3, de 24/11/2026: não se completam por aqui) */
 export interface PainelArrolamento {
   readonly andamento: Andamento;
   readonly veioEm: string | null;
@@ -125,18 +124,15 @@ const soDia = (v: string | null | undefined): string => (typeof v === "string" ?
 export function formInicial(f: FichaBase): FormCompletar {
   const forma = FORMAS.some((x) => x.valor === f.formaAdmissao) ? String(f.formaAdmissao) : "";
   const data = soDia(f.dataAdmissao);
-  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "", congregacaoId: null };
+  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "" };
 }
 
-/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma e sem data; a congregação só na ficha sem ela. A função
- *  eclesiástica nunca vai: só a Câmara de liderança e a academia a mudam (regra dele de 24/11/2026). */
+/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma e sem data. A função eclesiástica nunca vai: só a
+ *  Câmara de liderança e a academia a mudam (regra dele de 24/11/2026). Nem a congregação: toda ficha do arrolamento tem a sua e ela muda pela
+ *  transferência (G3, decisão dele de 24/11/2026). */
 export function montarEnvio(form: FormCompletar, ficha: FichaBase, hoje: string): Envio {
   if (!SITUACOES.some((s) => s.valor === form.situacao)) return { ok: false, campo: "situacao", mensagem: "Escolha a situação: em comunhão, congregado ou sem comunhão." };
   const corpo: CorpoCompletar = { matricula: ficha.matricula, situacao: form.situacao };
-  if (ficha.congregacaoId === null) {
-    if (!form.congregacaoId) return { ok: false, campo: "congregacao", mensagem: "Escolha a congregação desta pessoa." };
-    corpo.congregacaoId = form.congregacaoId;
-  }
   if (form.situacao !== "CONGREGADO") {
     if (!FORMAS.some((x) => x.valor === form.formaAdmissao)) return { ok: false, campo: "forma", mensagem: "Escolha como a pessoa entrou." };
     const data = form.dataAdmissao;
@@ -158,8 +154,11 @@ export function pctAndamento(completadas: number, vieram: number): number {
 }
 
 const mil = (n: number): string => n.toLocaleString("pt-BR");
+/** a ficha sem congregação que ficou de antes da regra G3 (24/11/2026: sem congregação não há importação). Ninguém escolhe a congregação aqui: ela não
+ *  se completa pelo arrolamento (o servidor recusa) */
 export function fraseSemCongregacao(n: number): string {
-  return n === 1 ? "1 ficha veio sem congregação: a Secretaria Geral escolhe a congregação." : `${mil(n)} fichas vieram sem congregação: a Secretaria Geral escolhe a congregação.`;
+  return n === 1 ? "1 ficha está sem congregação e não se completa pelo arrolamento: avise o suporte."
+    : `${mil(n)} fichas estão sem congregação e não se completam pelo arrolamento: avise o suporte.`;
 }
 /** "+ 6 congregações da Área 2" (as que não cabem na tabela) */
 export function fraseResto(n: number, area: string | null): string {

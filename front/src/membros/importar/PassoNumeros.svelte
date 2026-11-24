@@ -31,7 +31,8 @@
     { n: r.quadros.comMatricula, rotulo: "Fichas novas", sub: "a matrícula de antes" },
     { n: r.quadros.acertar, rotulo: "Matrícula a acertar", sub: "recebem a próxima" },
     { n: r.quadros.repetidas, rotulo: "Possíveis repetidas", sub: "para “Fichas repetidas”" },
-    { n: r.semCongregacao, rotulo: "Sem congregação", sub: "“IEADESPA - GERAL”" }
+    // G3 (decisão dele de 24/11/2026): sem congregação não há importação; aqui, as que ficam de fora por isso
+    { n: r.semCongregacao, rotulo: "Sem congregação", sub: "ficam de fora" }
   ]);
 
   // as listas da prévia (sem CPF nem contato), lidas aos poucos: 100 por página

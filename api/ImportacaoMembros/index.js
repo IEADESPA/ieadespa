@@ -11,7 +11,7 @@
 // POST /api/importacao-membros/confirmar                -> { importacaoId } — confirmação reforçada (428): a prévia vira a importação; daqui não volta
 // POST /api/importacao-membros/lote                     -> { importacaoId } — importa o próximo lote (até 200); a tela chama até "concluida"
 // Regras (decisões do responsável, 18/11 e 22/11/2026): uma vez só; colunas extras aceitas; a matrícula que já é de uma ficha do sistema fica de fora (a rodada
-// 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; "IEADESPA - GERAL" sem congregação; todo importado em "Arrolamento a completar" (sem voto) com a
+// 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; a linha sem congregação ("IEADESPA - GERAL" ou vazia) fica de fora (G3, 24/11); todo importado em "Arrolamento a completar" (sem voto) com a
 // pendência ARROLAMENTO (shared/importacaoMembros.js e shared/importacaoMembrosDb.js).
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");

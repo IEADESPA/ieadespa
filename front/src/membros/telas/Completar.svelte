@@ -1,7 +1,8 @@
 <!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação e como e quando a pessoa entrou (a função eclesiástica só
      aparece para ler: regra dele de 24/11/2026, só a Câmara de liderança e a academia a mudam); ao
      completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, ganha o voto. Depois, vai direto para a próxima. A congregação, a área e a Geral
-     completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento); a ficha que veio sem congregação, só a Geral, escolhendo a congregação.
+     completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento). Toda ficha do arrolamento tem congregação e ela não muda aqui (G3, decisão
+     dele de 24/11/2026: sem congregação não há importação; a de antes da regra volta com o porquê, sem o formulário).
      As regras da tela em ../arrolamento.ts; o servidor confere tudo de novo. -->
 <script lang="ts">
   import { pedir, qs, avisarFalha } from "../../comum/api";
@@ -15,24 +16,22 @@
   import Chip from "../../comum/Chip.svelte";
   import Estado from "../../comum/Estado.svelte";
   import Avatar from "../../comum/Avatar.svelte";
-  import { ir, voltar, congregacoesDestino } from "../estado.svelte";
-  import type { Congregacao, RespostaFichaArrolamento } from "../tipos";
+  import { ir, voltar } from "../estado.svelte";
+  import type { RespostaFichaArrolamento } from "../tipos";
   import { FORMAS, SITUACOES, corDoDepartamento, depoisDe, diaPorExtenso, formInicial, hojeIso, lerRespostaFicha, montarEnvio, notaDaData, type CampoComErro, type FormCompletar, type Situacao } from "../arrolamento";
 
-  interface Props { matricula: number | null; congregacaoId: number | null; semCongregacao: boolean; celular: boolean; onnome: (n: string) => void }
-  let { matricula, congregacaoId, semCongregacao, celular, onnome }: Props = $props();
+  interface Props { matricula: number | null; congregacaoId: number | null; celular: boolean; onnome: (n: string) => void }
+  let { matricula, congregacaoId, celular, onnome }: Props = $props();
 
   const hoje = hojeIso();
   let resp = $state<RespostaFichaArrolamento | null>(null);
   let erro = $state("");
-  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
+  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "" });
   let erroCampo = $state<{ campo: CampoComErro; mensagem: string } | null>(null);
   let enviando = $state(false);
-  let congs = $state<readonly Congregacao[]>([]);
   let entrada: HTMLInputElement | undefined = $state();
 
   const ficha = $derived(resp?.ficha ?? null);
-  const semCong = $derived(!!ficha && ficha.congregacaoId === null);
   const membro = $derived(form.situacao !== "CONGREGADO");
   const depois = $derived(depoisDe(form.situacao));
   const nota = $derived(notaDaData(form.situacao, form.dataAdmissao));
@@ -50,13 +49,11 @@
     if (lida.ficha) {
       form = formInicial(lida.ficha);
       onnome(lida.ficha.nome);
-      if (lida.ficha.congregacaoId === null && !congs.length) congs = await congregacoesDestino();
     }
     document.querySelector(".conteudo")?.scrollTo?.({ top: 0 });
   }
   function primeira() {
     if (matricula) return abrir({ matricula });
-    if (semCongregacao) return abrir({ semCongregacao: 1 });
     return abrir({ congregacaoId });
   }
   void primeira();
@@ -114,16 +111,6 @@
     </div>
     {#if erroDe("situacao")}<small class="erro">{erroDe("situacao")}</small>{/if}
   </div>
-{/snippet}
-
-{#snippet congregacao()}
-  {#if semCong}
-    <div class="grupo">
-      <span class="rot">Congregação<span class="obr" aria-hidden="true">*</span> <span class="dica">veio sem congregação</span></span>
-      <Escolha rotulo="Escolha a congregação" estilo="campo" larga valor={form.congregacaoId} opcoes={congs.map((c) => ({ valor: c.congregacaoId, rotulo: c.nome, sub: c.areaNome ?? undefined }))} onescolher={(v) => trocar("congregacaoId", v)} />
-      {#if erroDe("congregacao")}<small class="erro">{erroDe("congregacao")}</small>{/if}
-    </div>
-  {/if}
 {/snippet}
 
 {#snippet entradaCampos()}
@@ -193,7 +180,6 @@
     </Cartao>
   {:else if celular}
     {@render quem()}
-    {@render congregacao()}
     {@render situacao()}
     {@render entradaCampos()}
     {@render funcao()}
@@ -204,7 +190,6 @@
     <div class="colunas">
       <Cartao titulo="O que falta" nota="o sistema pago não trouxe">
         <div class="form">
-          {@render congregacao()}
           {@render situacao()}
           {@render entradaCampos()}
           {@render funcao()}

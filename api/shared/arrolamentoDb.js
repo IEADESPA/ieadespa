@@ -9,7 +9,7 @@
 // ARROLAMENTO: quem chega depois (a local e a área ao mesmo tempo) leva 409.
 const { sql } = require("./db");
 const auth = require("./auth");
-const { ehGeral, condicaoSqlEscopoPessoa, carregarPessoa, noEscopoDaPessoa, MSG_GERAL } = require("./escopoRotas");
+const { ehGeral, condicaoSqlEscopoPessoa, carregarPessoa, noEscopoDaPessoa } = require("./escopoRotas");
 const { registrarAuditoriaNaTransacao } = require("./auditoria");
 const escadaDb = require("./escadaDb");
 const regras = require("./arrolamento");
@@ -40,7 +40,7 @@ function idade(nascimento, hoje) {
 }
 
 // O ANDAMENTO para o painel: o total, o dia em que as fichas vieram (veioEm, a importação concluída), cada congregação do escopo (a área, com a área de cada uma),
-// cada área e as que vieram sem congregação (a Geral) e as 4 próximas fichas.
+// cada área e quantas estão sem congregação (a Geral: só as de antes da regra G3, que não se completam por aqui) e as 4 próximas fichas (as que se completam).
 // `congregacaoId`: o painel de uma congregação (a área e a Geral escolhem); o escopo continua valendo junto.
 async function painel(pool, usuario, { congregacaoId = null } = {}) {
   const geral = ehGeral(usuario);
@@ -57,7 +57,7 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
     GROUP BY m.CongregacaoId, c.Nome, c.AreaId, ar.Nome;
     SELECT TOP (4) m.MembroId, m.Nome, m.Sexo, d.Nome AS Departamento
     ${DE_PESSOA} LEFT JOIN Departamentos d ON d.DepartamentoId = m.DepartamentoId
-    WHERE ${NO_ROL} AND m.SituacaoMembro = N'ARROLAMENTO'${cond}
+    WHERE ${NO_ROL} AND m.SituacaoMembro = N'ARROLAMENTO' AND m.CongregacaoId IS NOT NULL${cond}
     ORDER BY m.MembroId;
     SELECT MAX(ConcluidaEm) AS veio FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA';`);
   const linhas = r.recordsets[0] || [];
@@ -109,15 +109,15 @@ function estadoDaFicha(l) {
   return { sucesso: false, status: 409, mensagem: num(l.Veio) ? "Esta ficha já foi completada." : "Esta ficha não está no arrolamento a completar." };
 }
 
-// O andamento da congregação da ficha (ou das que vieram sem congregação) e a PRÓXIMA ficha depois desta, no escopo de quem vê (voltando ao começo no fim).
+// O andamento da congregação da ficha e a PRÓXIMA ficha depois desta, no escopo de quem vê (voltando ao começo no fim). Toda ficha que se completa tem
+// congregação (G3): sem ela, não há andamento nem próxima.
 async function andamentoEProxima(pool, usuario, { congregacaoId, depois, excluir }) {
+  if (!congregacaoId) return { andamento: andamentoDe(0, 0), proxima: null };
   const pedido = pool.request();
   const condEscopo = await condicaoSqlEscopoPessoa(pool, usuario, pedido, "m.CongregacaoId", "e.Nome");
   if (condEscopo === "") return { andamento: andamentoDe(0, 0), proxima: null };
-  const lugar = congregacaoId ? "m.CongregacaoId = @cong" : "m.CongregacaoId IS NULL";
-  if (congregacaoId) pedido.input("cong", sql.Int, congregacaoId);
-  pedido.input("depois", sql.Int, depois || 0).input("excluir", sql.Int, excluir || 0);
-  const cond = `${NO_ROL} AND ${lugar}${condEscopo ? ` AND ${condEscopo}` : ""}`;
+  pedido.input("cong", sql.Int, congregacaoId).input("depois", sql.Int, depois || 0).input("excluir", sql.Int, excluir || 0);
+  const cond = `${NO_ROL} AND m.CongregacaoId = @cong${condEscopo ? ` AND ${condEscopo}` : ""}`;
   const r = await pedido.query(`
     SELECT COUNT(*) AS vieram, SUM(CASE WHEN m.SituacaoMembro = N'ARROLAMENTO' THEN 1 ELSE 0 END) AS faltam ${DE_PESSOA} ${VEIO} WHERE ${cond};
     SELECT TOP (1) m.MembroId, m.Nome ${DE_PESSOA} WHERE ${cond} AND m.SituacaoMembro = N'ARROLAMENTO' AND m.MembroId <> @excluir
@@ -127,7 +127,8 @@ async function andamentoEProxima(pool, usuario, { congregacaoId, depois, excluir
   return { andamento: andamentoDe(num(a.vieram), num(a.faltam)), proxima: p ? { matricula: num(p.MembroId), nome: p.Nome } : null };
 }
 
-// A FICHA PARA COMPLETAR. query: { matricula } (a da lista) | { congregacaoId, depois } (a primeira, ou a seguinte ao pular) | { semCongregacao: 1, depois } (só a Geral).
+// A FICHA PARA COMPLETAR. query: { matricula } (a da lista) | { congregacaoId, depois } (a primeira, ou a seguinte ao pular). A fila das que vieram sem
+// congregação não existe mais (G3, decisão dele de 24/11/2026: sem congregação não há importação); a de antes da regra, aberta pela matrícula, volta 409.
 async function fichaParaCompletar(pool, usuario, query, hoje) {
   const q = query || {};
   let membroId = null;
@@ -135,10 +136,8 @@ async function fichaParaCompletar(pool, usuario, query, hoje) {
     membroId = auth.idDeRota(q.matricula);
     if (!membroId) return { sucesso: false, status: 400, mensagem: "Informe a matrícula." };
   } else {
-    const sem = q.semCongregacao === "1" || q.semCongregacao === 1;
-    const congregacaoId = sem ? null : auth.idDeRota(q.congregacaoId);
-    if (!sem && !congregacaoId) return { sucesso: false, status: 400, mensagem: "Informe a matrícula ou a congregação." };
-    if (sem && !ehGeral(usuario)) return { sucesso: false, status: 403, mensagem: MSG_GERAL };
+    const congregacaoId = auth.idDeRota(q.congregacaoId);
+    if (!congregacaoId) return { sucesso: false, status: 400, mensagem: "Informe a matrícula ou a congregação." };
     let depois = 0;
     if (q.depois !== undefined && q.depois !== "") {
       depois = auth.idDeRota(q.depois);
@@ -154,7 +153,8 @@ async function fichaParaCompletar(pool, usuario, query, hoje) {
   if (!l || !noRol(l)) return { ...NAO_ENCONTRADA, status: 200 };
   const estado = estadoDaFicha(l);
   if (estado) return estado;
-  const congId = l.CongregacaoId == null ? null : num(l.CongregacaoId);
+  if (l.CongregacaoId == null) return { sucesso: false, status: 409, mensagem: regras.MSG_SEM_CONGREGACAO };
+  const congId = num(l.CongregacaoId);
   const { andamento, proxima } = await andamentoEProxima(pool, usuario, { congregacaoId: congId, depois: membroId, excluir: membroId });
   return {
     sucesso: true, status: 200,
@@ -165,7 +165,7 @@ async function fichaParaCompletar(pool, usuario, query, hoje) {
   };
 }
 
-// COMPLETAR. corpo: { matricula, situacao, formaAdmissao, dataAdmissao, congregacaoId } (a função eclesiástica não: shared/arrolamento.js recusa).
+// COMPLETAR. corpo: { matricula, situacao, formaAdmissao, dataAdmissao } (a função eclesiástica e a congregação não: shared/arrolamento.js recusa).
 // Devolve { sucesso, status, mensagem, proxima }.
 async function completar(pool, usuario, corpo, hoje) {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, status: 400, mensagem: "Envie a situação, como e quando a pessoa entrou." };
@@ -181,25 +181,20 @@ async function completar(pool, usuario, corpo, hoje) {
   if (!v.ok) return { sucesso: false, status: 400, mensagem: v.mensagem };
   const d = v.dados;
   const congLida = l.CongregacaoId == null ? null : num(l.CongregacaoId);
-  const pode = regras.podeCompletar({ geral: ehGeral(usuario), propria: membroId === Number(usuario.membroId), temCongregacao: congLida !== null, congregacaoPedida: d.congregacaoId });
+  const pode = regras.podeCompletar({ propria: membroId === Number(usuario.membroId), temCongregacao: congLida !== null });
   if (!pode.pode) return { sucesso: false, status: pode.status, mensagem: pode.mensagem };
-  if (d.congregacaoId) {
-    const c = await pool.request().input("c", sql.Int, d.congregacaoId).query(`SELECT TOP 1 Nome FROM Congregacoes WHERE CongregacaoId = @c AND Ativa = 1`);
-    if (!c.recordset[0]) return { sucesso: false, status: 400, mensagem: "Esta congregação não foi encontrada: escolha da lista." };
-  }
   const congregado = d.situacao === "CONGREGADO";
   const por = Number(usuario.membroId);
   const feito = await escadaDb.comTravaDaPessoa(pool, membroId, async (t) => {
     const rq = () => new sql.Request(t);
     await rq().query("SET XACT_ABORT ON");
     const u = await rq().input("id", sql.Int, membroId).input("s", sql.NVarChar(30), d.situacao).input("congregado", sql.Bit, congregado ? 1 : 0)
-      .input("f", sql.NVarChar(30), d.formaAdmissao).input("dt", sql.Date, d.dataAdmissao).input("nova", sql.Int, d.congregacaoId).input("lida", sql.Int, congLida)
+      .input("f", sql.NVarChar(30), d.formaAdmissao).input("dt", sql.Date, d.dataAdmissao).input("lida", sql.Int, congLida)
       .query(`UPDATE MembroReferencia SET SituacaoMembro = @s,
                 FormaAdmissao = CASE WHEN @congregado = 1 THEN FormaAdmissao ELSE @f END,
-                DataAdmissao = CASE WHEN @congregado = 1 THEN DataAdmissao ELSE @dt END,
-                CongregacaoId = CASE WHEN @nova IS NULL THEN CongregacaoId ELSE @nova END
+                DataAdmissao = CASE WHEN @congregado = 1 THEN DataAdmissao ELSE @dt END
               WHERE MembroId = @id AND SituacaoMembro = N'ARROLAMENTO' AND (Status IS NULL OR Status NOT IN (N'DESLIGADO', N'FALECIDO'))
-                AND ${congLida === null ? "CongregacaoId IS NULL" : "CongregacaoId = @lida"}`);
+                AND CongregacaoId = @lida`);
     if (!u.rowsAffected[0]) return { sucesso: false, status: 409, mensagem: "Esta ficha já foi completada (ou mudou agora há pouco): abra de novo." };
     await rq().input("id", sql.Int, membroId).input("por", sql.Int, por).query(`
       UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por
@@ -207,11 +202,11 @@ async function completar(pool, usuario, corpo, hoje) {
     await registrarAuditoriaNaTransacao(t, { tabela: "MembroReferencia", registroId: membroId, acao: "Completou o arrolamento", usuarioId: por,
       dadosAntes: { situacaoMembro: "ARROLAMENTO", formaAdmissao: l.FormaAdmissao || null, dataAdmissao: l.DataAdmissao || null, congregacaoId: congLida },
       dadosDepois: { situacaoMembro: d.situacao, formaAdmissao: congregado ? (l.FormaAdmissao || null) : d.formaAdmissao, dataAdmissao: congregado ? (l.DataAdmissao || null) : d.dataAdmissao,
-        congregacaoId: d.congregacaoId || congLida } });
+        congregacaoId: congLida } });
     return { sucesso: true };
   });
   if (!feito || feito.sucesso === false) return { sucesso: false, status: (feito && feito.status) || 409, mensagem: (feito && feito.mensagem) || "Esta ficha mudou agora há pouco: abra de novo." };
-  const { proxima } = await andamentoEProxima(pool, usuario, { congregacaoId: d.congregacaoId || congLida, depois: membroId, excluir: membroId });
+  const { proxima } = await andamentoEProxima(pool, usuario, { congregacaoId: congLida, depois: membroId, excluir: membroId });
   return { sucesso: true, status: 200, mensagem: regras.recadoFeito(d.situacao, l.Nome), proxima };
 }
 

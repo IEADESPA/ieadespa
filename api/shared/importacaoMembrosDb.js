@@ -3,7 +3,8 @@
 //
 // Decisões do responsável (18/11 e 22/11/2026): só a Secretaria Geral; UMA VEZ SÓ (depois de confirmada, nenhuma outra importação; o que mudar depois se
 // corrige à mão); colunas extras aceitas; matrícula repetida ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência
-// REPETIDA; "IEADESPA - GERAL" entra sem congregação; todo importado entra em "Arrolamento a completar" (sem voto) com a pendência ARROLAMENTO.
+// REPETIDA; todo importado entra em "Arrolamento a completar" (sem voto) com a pendência ARROLAMENTO. E a de 24/11/2026 (G3): sem congregação não há
+// importação — a linha "IEADESPA - GERAL" ou sem congregação fica de fora, com o motivo (a da prévia de antes da regra também: SEM_CONGREGACAO_FORA).
 //
 // O caminho: a PRÉVIA (o arquivo lido e conferido contra o banco; nada entra ainda; a nova prévia substitui a anterior) → a CONFIRMAÇÃO (a prévia vira a
 // importação em andamento; daqui não volta) → os LOTES (cada chamada importa até TAMANHO_LOTE linhas numa transação; a tela chama até acabar) → o FIM
@@ -51,6 +52,10 @@ const MSG = Object.freeze({
 // gatilho que recusa (50000+, ou que desfaz a transação: 3609). O resto — a trava do banco, o tempo esgotado, a rede, o defeito do código, a trilha, a conclusão,
 // o "8 tentativas" — sobe como sempre (a tela mostra "continue de onde parou" e nada se perde).
 const ERROS_DA_LINHA = new Set([547, 2601, 2627, 2628, 8152, 241, 242, 245, 8114, 8115, 220, 515, 3609]);
+// G3: a linha que entraria sem congregação (só a de uma prévia feita antes da regra: a de agora já vem como problema) fica de fora, com o motivo, antes de
+// contar quem entra e antes de cada lote gravar alguém. Toda ficha que a importação cria tem congregação.
+const SEM_CONGREGACAO_FORA = `UPDATE ImportacoesMembrosLinhas SET Acao = N'PROBLEMA', Estado = N'FORA', Problemas = N'SEM_CONGREGACAO'
+      WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' AND CongregacaoId IS NULL`;
 const recusaDaLinha = (e) => !!e && e.linhaImportacao != null && Number.isInteger(e.number) && (ERROS_DA_LINHA.has(e.number) || e.number >= 50000);
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
 const idValido = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 && n < 2147483647 ? n : null; };
@@ -246,7 +251,6 @@ const detalheDe = (l, base) => {
   const ordem = l.OrdemNova == null ? null : Number(l.OrdemNova);
   return {
     motivoNumero: nova ? l.MotivoNumero || null : null,
-    semCongregacao: importada ? null : l.CongregacaoId == null && l.Acao === "NOVA",
     dono: l.DonoLinha == null ? null : { linha: Number(l.DonoLinha), nome: l.DonoNome || "", sexo: l.DonoSexo ? String(l.DonoSexo).trim() || null : null },
     repetidaDe: l.RepetidaLinha != null ? { linha: Number(l.RepetidaLinha), matricula: null, nome: l.RepLinhaNome || "" }
       : l.RepetidaMembro != null ? { linha: null, matricula: Number(l.RepetidaMembro), nome: l.RepMembroNome || "" } : null,
@@ -267,7 +271,7 @@ async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {})
   const r = await pool.request().input("id", sql.Int, id).input("pula", sql.Int, (p - 1) * POR_PAGINA).input("n", sql.Int, POR_PAGINA).query(`
     WITH ordem AS (SELECT Linha, ROW_NUMBER() OVER (ORDER BY Linha) AS OrdemNova FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Acao = N'NOVA' AND NumeroNovo = 1)
     SELECT COUNT(*) OVER () AS Total, a.Linha, a.MatriculaArquivo, a.Nome, a.Acao, a.Estado, a.MatriculaFinal, a.Problemas, a.Avisos, a.NumeroNovo, a.MotivoNumero,
-      a.CongregacaoId, a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, dono.Sexo AS DonoSexo, o.OrdemNova
+      a.RepetidaLinha, rl.Nome AS RepLinhaNome, a.RepetidaMembro, rm.Nome AS RepMembroNome, dono.Linha AS DonoLinha, dono.Nome AS DonoNome, dono.Sexo AS DonoSexo, o.OrdemNova
     FROM ImportacoesMembrosLinhas a
     LEFT JOIN ordem o ON o.Linha = a.Linha
     LEFT JOIN ImportacoesMembrosLinhas rl ON rl.ImportacaoId = a.ImportacaoId AND rl.Linha = a.RepetidaLinha
@@ -299,8 +303,9 @@ async function confirmar(pool, usuario, importacaoId) {
       ? { sucesso: true, importacaoId: id, jaConfirmada: true, restantes: await contarRestantes(rq, id) }
       : { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
     if (!sit.previa || Number(sit.previa.ImportacaoId) !== id) return { sucesso: false, status: 409, mensagem: MSG.PREVIA_MUDOU };
+    await rq().input("id", sql.Int, id).query(SEM_CONGREGACAO_FORA);
     // a importação em que ninguém entra não se confirma (23/11/2026): terminaria CONCLUIDA com zero pessoas, soltaria a trava das matrículas e gastaria a
-    // importação única com uma planilha errada
+    // importação única com uma planilha errada (a transação desfaz a marca acima)
     if ((await contarRestantes(rq, id)) === 0) return { sucesso: false, status: 409, mensagem: MSG.NINGUEM_ENTRA };
     await rq().input("id", sql.Int, id).input("por", sql.Int, Number(usuario.membroId)).query(`
       UPDATE ImportacoesMembros SET Situacao = N'IMPORTANDO', ConfirmadaEm = SYSUTCDATETIME(), ConfirmadaPor = @por WHERE ImportacaoId = @id AND Situacao = N'PREVIA';
@@ -367,6 +372,7 @@ async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false })
   if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
   if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, fora: 0, restantes: 0, concluida: true };
   if (imp.Situacao !== "IMPORTANDO") return { sucesso: false, status: 409, mensagem: "Esta importação não foi confirmada." };
+  await rq().input("id", sql.Int, id).query(SEM_CONGREGACAO_FORA);
   if (fora.length) {
     // as recusadas ficam de fora como PROBLEMA (o mesmo par de quem tem problema na prévia: Acao PROBLEMA, Estado FORA), na MESMA transação do lote que prova
     await rq().input("id", sql.Int, id).input("p", sql.NVarChar(sql.MAX), JSON.stringify(fora.map((f) => f.linha))).query(`

@@ -85,9 +85,22 @@ describe("cada linha", () => {
     expect(p.linhas[0].dados).toMatchObject({ nome: "Maria da Silva", congregacaoId: 1, sexo: "F", dataNascimento: "1990-03-14", estadoCivil: "CASADO",
       email: "maria@example.org", telefone: "91988887777", nomeMae: "Ana da Silva", nomePai: "José da Silva", cpf: CPF1 });
   });
-  test("'IEADESPA - GERAL' e a igreja vazia entram SEM congregação (decisão de 18/11)", () => {
-    const p = preparar(["0;Cadastro Geral;IEADESPA - GERAL", "5;Sem Igreja;"]);
-    for (const l of p.linhas) { expect(l.dados.congregacaoId).toBeNull(); expect(l.avisos).toContain("SEM_CONGREGACAO"); expect(l.problemas).toEqual([]); }
+  // G3 (decisão dele de 24/11/2026, que troca a de 18/11): sem congregação não há importação. A linha sem ela fica de fora na prévia, com o motivo; a Geral
+  // corrige a planilha e faz a prévia de novo, ou continua sem essas linhas.
+  test("'IEADESPA - GERAL' e a igreja vazia ficam DE FORA, com o motivo (G3)", () => {
+    const p = preparar(["0;Cadastro Geral;IEADESPA - GERAL", "5;Sem Igreja;", "6;Só Espaços;   "]);
+    for (const l of p.linhas) { expect(l.dados.congregacaoId).toBeNull(); expect(l.problemas).toEqual(["SEM_CONGREGACAO"]); expect(l.avisos).not.toContain("SEM_CONGREGACAO"); }
+    r.classificar(p.linhas);
+    expect(p.linhas.map((l) => l.acao)).toEqual(["PROBLEMA", "PROBLEMA", "PROBLEMA"]);
+    expect(r.AVISOS.SEM_CONGREGACAO).toBeUndefined();
+    expect(r.PROBLEMAS.SEM_CONGREGACAO).toBe("Sem congregação (no arquivo: GERAL ou vazio): fica de fora. Ponha a congregação na planilha e faça a prévia de novo, ou continue sem esta linha");
+    expect(r.linhaParaLista(p.linhas[0]).motivos).toEqual([r.PROBLEMAS.SEM_CONGREGACAO]);
+  });
+  test("a coluna da congregação é obrigatória, como a matrícula e o nome (G3): o arquivo sem ela volta com o mapa", () => {
+    expect(r.mapearColunas(["MATRÍCULA", "NOME", "SEXO"]).faltando).toEqual(["Congregação"]);
+    const p = preparar(["1;Ana;FEMININO"], "MATRÍCULA;NOME;SEXO");
+    expect(p.erro).toBe("O arquivo não tem a coluna de congregação. A primeira linha precisa ser o cabeçalho (MATRÍCULA;NOME;IGREJA;...).");
+    expect(p.colunas.lista.map((x) => x.campo)).toEqual(["matricula", "nome", "sexo"]);
   });
   test("o que impede de entrar (PROBLEMA): sem nome, congregação que não existe, desativada ou com nome em duas", () => {
     const p = preparar(["1;;IEADESPA - Vila Nova", "2;Ana;IEADESPA - Lugar Nenhum", "3;Bia;IEADESPA - Fechada Antiga", "4;Caio;IEADESPA - Duplicada"]);
@@ -168,10 +181,14 @@ describe("o resumo e a lista (sem dado pessoal)", () => {
     const prep = preparar(["100;Ana;IEADESPA - Vila Nova", "101;Bia;IEADESPA - Vila Nova", "0;Caio;IEADESPA - GERAL", "999999;Davi;IEADESPA - Vila Nova", "102;;IEADESPA - Vila Nova"]);
     r.classificar(prep.linhas);
     const s = r.resumir(prep, { maiorMatriculaSistema: 50 });
-    expect(s).toMatchObject({ total: 5, novas: 4, problemas: 1, numeroNovo: 1, possivelRepetida: 0, semCongregacao: 1, separador: ";", proximaMatricula: 1000001,
+    // a linha da "IEADESPA - GERAL" fica de fora (G3): conta em problemas e em semCongregacao (as que ficam de fora por isso)
+    expect(s).toMatchObject({ total: 5, novas: 3, problemas: 2, numeroNovo: 0, possivelRepetida: 0, semCongregacao: 1, separador: ";", proximaMatricula: 1000000,
       primeiraMatriculaNova: 1000000, vazias: 0, totalColunas: 11, jaExistem: 0, congregacoesReconhecidas: 1 });
     expect(s.existem).toBeUndefined();
-    expect(s.avisosGerais.map((a) => a.codigo)).toEqual(["MATRICULA_FORA_DA_SEQUENCIA"]);
+    expect(s.avisosGerais.map((a) => a.codigo)).toEqual(["MATRICULA_FORA_DA_SEQUENCIA", "SEM_CONGREGACAO"]);
+    expect(s.avisosGerais[1].texto).toBe("1 linha está sem congregação (no arquivo: GERAL ou vazio) e fica de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem ela.");
+    expect(r.resumir({ ...prep, linhas: [...prep.linhas, { ...prep.linhas[2], linha: 9 }] }, { maiorMatriculaSistema: 50 }).avisosGerais[1].texto)
+      .toBe("2 linhas estão sem congregação (no arquivo: GERAL ou vazio) e ficam de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem elas.");
     expect(JSON.stringify(s)).not.toMatch(/Ana|Bia|Caio|Davi/);
   });
   test("os quadros da tela: cada linha que entra numa caixa só (a acertar, depois a repetida, depois a que entra como está); as vazias e as que já existem contadas", () => {
@@ -179,10 +196,11 @@ describe("o resumo e a lista (sem dado pessoal)", () => {
       `102;Caio;IEADESPA - Vila Nova;;;;;;;;${CPF1}`, "1;Davi;IEADESPA - Vila Nova", " ; ", "0;Eva;IEADESPA - GERAL"]);
     r.classificar(prep.linhas, { fichasPorMatricula: new Map([[1, { nome: "Davi", cpf: null }]]) });
     const s = r.resumir(prep, { maiorMatriculaSistema: 2 });
-    // a linha 4 (100 de novo, a mesma pessoa) é a acertar E repetida: conta só em "a acertar"; a 6 (CPF da 5) é repetida; a 7 (matrícula 1) fica de fora
-    expect(s.quadros).toEqual({ comMatricula: 2, acertar: 2, repetidas: 1 });
-    expect(s).toMatchObject({ total: 6, vazias: 2, novas: 5, jaExistem: 1, problemas: 1, possivelRepetida: 2, numeroNovo: 2, primeiraMatriculaNova: 103,
-      congregacoesReconhecidas: 2 });
+    // a linha 4 (100 de novo, a mesma pessoa) é a acertar E repetida: conta só em "a acertar"; a 6 (CPF da 5) é repetida; a 7 (matrícula 1) fica de fora;
+    // a da "IEADESPA - GERAL" também (G3)
+    expect(s.quadros).toEqual({ comMatricula: 2, acertar: 1, repetidas: 1 });
+    expect(s).toMatchObject({ total: 6, vazias: 2, novas: 4, jaExistem: 1, problemas: 2, possivelRepetida: 2, numeroNovo: 1, primeiraMatriculaNova: 103,
+      congregacoesReconhecidas: 2, semCongregacao: 1 });
   });
   test("a lista para conferir e o CSV: nunca o CPF nem o contato; a célula que começa com = + - @ é protegida (fórmula)", () => {
     const item = r.linhaParaLista({ linha: 7, matriculaArquivo: "0", nome: "=HYPERLINK(\"x\")", acao: "NOVA", matriculaFinal: 70100, problemas: [], avisos: ["MATRICULA_ZERO"] });

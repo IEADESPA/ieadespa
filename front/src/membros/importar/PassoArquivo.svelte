@@ -128,7 +128,7 @@
         <section class="cartao">
           <div class="topo"><h2>O que o sistema já entendeu</h2></div>
           <ul class="entendeu">
-            <li><span class="ic azul"><Icone nome="igreja" tam={17} traco={2} /></span><span><strong>{numero(r.congregacoesReconhecidas)} {plural(r.congregacoesReconhecidas, "congregação reconhecida", "congregações reconhecidas")}</strong><small>“IEADESPA - GERAL” fica sem congregação</small></span></li>
+            <li><span class="ic azul"><Icone nome="igreja" tam={17} traco={2} /></span><span><strong>{numero(r.congregacoesReconhecidas)} {plural(r.congregacoesReconhecidas, "congregação reconhecida", "congregações reconhecidas")}</strong><small>sem congregação (“IEADESPA - GERAL” ou vazia) fica de fora</small></span></li>
             <li><span class="ic azul"><Icone nome="pessoas" tam={17} traco={2} /></span><span><strong>As linhas incompletas entram</strong><small>com o que tiverem; o resto se completa depois</small></span></li>
             <li><span class="ic ouro"><Icone nome="alerta" tam={17} traco={2} /></span><span><strong>O arrolamento não vem</strong><small>cada um entra com a pendência de completar</small></span></li>
             <li><span class="ic azul"><Icone nome="bandeja" tam={17} traco={2} /></span><span>

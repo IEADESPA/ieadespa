@@ -25,8 +25,9 @@ export type Rota =
   | { readonly tela: "importar" }
   | { readonly tela: "carteirinhas"; readonly congregacaoId: number | null }
   | { readonly tela: "editor"; readonly modeloId: number }
-  // completar o arrolamento (rodada 28): uma ficha da lista, a primeira de uma congregação ("uma por uma") ou a primeira das que vieram sem congregação (a Geral)
-  | { readonly tela: "completar"; readonly matricula: number | null; readonly congregacaoId: number | null; readonly semCongregacao: boolean }
+  // completar o arrolamento (rodada 28): uma ficha da lista ou a primeira de uma congregação ("uma por uma"). A fila das que vieram sem congregação não existe
+  // mais (G3, decisão dele de 24/11/2026: sem congregação não há importação)
+  | { readonly tela: "completar"; readonly matricula: number | null; readonly congregacaoId: number | null }
   | { readonly tela: "ficha"; readonly id: number; readonly secao: SecaoFicha };
 
 const inteiro = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null);
@@ -45,8 +46,8 @@ export function lerRota(x: unknown): Rota | null {
   if (tela === "carteirinhas") return { tela, congregacaoId: inteiro(o.congregacaoId) };
   if (tela === "editor") { const id = inteiro(o.modeloId); return id ? { tela, modeloId: id } : null; }
   if (tela === "completar") {
-    const matricula = inteiro(o.matricula), congregacaoId = inteiro(o.congregacaoId), semCongregacao = o.semCongregacao === true;
-    return matricula || congregacaoId || semCongregacao ? { tela, matricula, congregacaoId, semCongregacao } : null;
+    const matricula = inteiro(o.matricula), congregacaoId = inteiro(o.congregacaoId);
+    return matricula || congregacaoId ? { tela, matricula, congregacaoId } : null;
   }
   if (tela === "juntar") { const a = inteiro(o.a), b = inteiro(o.b); return a && b && a !== b ? { tela, a, b } : null; }
   return null;

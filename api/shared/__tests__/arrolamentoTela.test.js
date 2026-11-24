@@ -24,11 +24,11 @@ const igual = (a, b) => expect(JSON.parse(JSON.stringify(a))).toEqual(b);
 
 describe("o formulário de completar", () => {
   test("começa em comunhão (como no desenho), sem forma e sem data (a função eclesiástica não é do formulário)", () => {
-    igual(T.formInicial(ficha()), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
+    igual(T.formInicial(ficha()), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "" });
   });
   test("o que o sistema pago já trouxe vem preenchido; forma fora da lista e data inválida, não", () => {
-    igual(T.formInicial(ficha({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01T00:00:00.000Z" })), { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01", congregacaoId: null });
-    igual(T.formInicial(ficha({ formaAdmissao: "TRANSFERENCIA", dataAdmissao: "2015-13-45" })), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
+    igual(T.formInicial(ficha({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01T00:00:00.000Z" })), { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01" });
+    igual(T.formInicial(ficha({ formaAdmissao: "TRANSFERENCIA", dataAdmissao: "2015-13-45" })), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "" });
   });
   test("as 3 situações e as 4 formas do desenho, com os textos aprovados", () => {
     igual(T.SITUACOES.map((s) => [s.valor, s.rotulo, s.sub]), [["EM_COMUNHAO", "Em comunhão", "membro: ganha o voto"], ["CONGREGADO", "Congregado", "ainda não membro: não vota"], ["SEM_COMUNHAO", "Sem comunhão", "em disciplina ou afastado"]]);
@@ -50,14 +50,11 @@ describe("o que vai no pedido", () => {
   test("o congregado vai sem forma, sem data e sem cargo, mesmo que tenham ficado no formulário", () => {
     igual(T.montarEnvio(comForm({ situacao: "CONGREGADO", cargo: "DIACONO" }), ficha(), HOJE), { ok: true, corpo: { matricula: 4102, situacao: "CONGREGADO" } });
   });
-  test("a congregação só vai na ficha que veio sem ela (a Geral escolhe)", () => {
-    const sem = ficha({ congregacaoId: null });
-    const r = T.montarEnvio(comForm(), sem, HOJE);
-    expect(r.ok).toBe(false);
-    expect(r.campo).toBe("congregacao");
-    expect(r.mensagem).toBe("Escolha a congregação desta pessoa.");
-    expect(T.montarEnvio(comForm({ congregacaoId: 9 }), sem, HOJE).corpo.congregacaoId).toBe(9);
-    expect(T.montarEnvio(comForm({ congregacaoId: 9 }), ficha(), HOJE).corpo.congregacaoId).toBeUndefined();
+  // G3 (decisão dele de 24/11/2026): sem congregação não há importação; a congregação nunca vai no pedido (muda pela transferência)
+  test("a congregação nunca vai no pedido (G3), nem o formulário a tem", () => {
+    expect(T.formInicial(ficha())).not.toHaveProperty("congregacaoId");
+    expect(T.montarEnvio(comForm({ congregacaoId: 9 }), ficha(), HOJE).corpo).not.toHaveProperty("congregacaoId");
+    expect(T.montarEnvio(comForm({ congregacaoId: 9 }), ficha({ congregacaoId: null }), HOJE).corpo).not.toHaveProperty("congregacaoId");
   });
 });
 
@@ -89,9 +86,12 @@ describe("o andamento e as frases do painel", () => {
     expect(T.pctAndamento(999, 1000)).toBe(99);
     expect(T.pctAndamento(1000, 1000)).toBe(100);
   });
-  test("as fichas que vieram sem congregação", () => {
-    expect(T.fraseSemCongregacao(1)).toBe("1 ficha veio sem congregação: a Secretaria Geral escolhe a congregação.");
-    expect(T.fraseSemCongregacao(1234)).toBe("1.234 fichas vieram sem congregação: a Secretaria Geral escolhe a congregação.");
+  // G3: a frase não promete mais que a Geral escolhe a congregação (ninguém escolhe: a importação recusa a linha sem ela). Só a ficha de antes da regra
+  // cai aqui, e ela não se completa pelo arrolamento.
+  test("as fichas sem congregação (de antes da regra G3): a frase diz o que fazer, sem prometer a escolha", () => {
+    expect(T.fraseSemCongregacao(1)).toBe("1 ficha está sem congregação e não se completa pelo arrolamento: avise o suporte.");
+    expect(T.fraseSemCongregacao(1234)).toBe("1.234 fichas estão sem congregação e não se completam pelo arrolamento: avise o suporte.");
+    expect(T.fraseSemCongregacao(2)).not.toMatch(/escolhe/);
   });
   test("as congregações que não cabem na tabela", () => {
     expect(T.fraseResto(6, "Área 2")).toBe("+ 6 congregações da Área 2");
@@ -147,21 +147,30 @@ describe("a resposta do servidor que a tela aceita (o painel não quebra com res
   });
 });
 
-// G3 da revisão de 24/11/2026: no painel da Geral, a frase "N fichas vieram sem congregação" fica (é do desenho aprovado, rodada 28), mas o "Completar ›"
-// depois dela sai (não estava no desenho). Pergunta aberta ao responsável: sem ele, hoje não há outro caminho de tela para essas fichas (a transferência
-// recusa ficha sem congregação e o cadastro antigo não abre mais); a tela Completar ainda aceita a rota semCongregacao, então voltar o botão é uma linha.
-describe("o painel da Geral igual ao aprovado (G3)", () => {
-  const painel = fs.readFileSync(path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Painel.svelte"), "utf8");
-  test("a frase das fichas sem congregação continua, só para a Geral", () => {
+// G3 (decisão dele de 24/11/2026): sem congregação não há importação; toda ficha do arrolamento tem congregação. A frase do aprovado ("a Secretaria Geral
+// escolhe a congregação") prometia uma escolha que não existe: troca pela que diz o que fazer, e só aparece se sobrou ficha de antes da regra. A tela
+// Completar perde a rota "semCongregacao" e o campo da congregação (o servidor recusa a congregação no pedido).
+const MEMBROS = path.join(__dirname, "..", "..", "..", "front", "src", "membros");
+describe("o painel da Geral e a tela Completar sem a escolha da congregação (G3)", () => {
+  const painel = fs.readFileSync(path.join(MEMBROS, "telas", "Painel.svelte"), "utf8");
+  const completar = fs.readFileSync(path.join(MEMBROS, "telas", "Completar.svelte"), "utf8");
+  const estado = fs.readFileSync(path.join(MEMBROS, "estado.svelte.ts"), "utf8");
+  const app = fs.readFileSync(path.join(MEMBROS, "App.svelte"), "utf8");
+  test("a frase das fichas sem congregação continua só para a Geral, sem o \"Completar ›\" depois dela", () => {
     expect(painel).toMatch(/sessao\.geral && \(arrol\?\.semCongregacao \?\? 0\) > 0/);
-    expect(painel).toMatch(/fraseSemCongregacao\(arrol\?\.semCongregacao \?\? 0\)/);
-  });
-  test("sem o botão \"Completar ›\" depois dela (nem caminho de tela para a fila das sem congregação)", () => {
     const fim = painel.slice(painel.indexOf("{#snippet fimCima()}"), painel.indexOf("{/snippet}", painel.indexOf("{#snippet fimCima()}")));
-    expect(fim).toMatch(/fraseSemCongregacao/);
+    expect(fim).toMatch(/fraseSemCongregacao\(arrol\?\.semCongregacao \?\? 0\)/);
     expect(fim).not.toMatch(/Completar ›/);
-    expect(painel).not.toMatch(/semCongregacao: true/);
     // o "Completar ›" de cada ficha da lista "a completar" da congregação continua (é do desenho)
     expect(painel).toMatch(/<span class="mais">Completar ›<\/span>/);
+  });
+  test("nenhuma rota nem campo para escolher a congregação no arrolamento", () => {
+    for (const arq of [completar, estado, app]) expect(arq).not.toMatch(/semCongregacao/);
+    // no painel, só a contagem que o servidor manda (para a frase acima)
+    expect(painel.replace(/arrol\?\.semCongregacao \?\? 0/g, "")).not.toMatch(/semCongregacao/);
+    expect(completar).not.toMatch(/\{#snippet congregacao\(\)\}/);
+    expect(completar).not.toMatch(/Escolha a congregação/);
+    expect(completar).not.toMatch(/congregacoesDestino/);
+    expect(estado).toMatch(/tela: "completar"; readonly matricula: number \| null; readonly congregacaoId: number \| null \}/);
   });
 });

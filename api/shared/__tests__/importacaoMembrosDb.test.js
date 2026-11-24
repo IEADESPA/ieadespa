@@ -283,6 +283,34 @@ describe("o que fica nas linhas quando a importação termina", () => {
   });
 });
 
+// G3 (decisão dele de 24/11/2026): sem congregação não há importação. A prévia de agora já põe a linha sem congregação como problema; a que foi feita antes da
+// regra (com a linha "IEADESPA - GERAL" como NOVA, sem congregação) não deixa ninguém entrar sem congregação: a confirmação e o lote a deixam de fora, com o
+// motivo, antes de gravar qualquer pessoa.
+describe("G3: a linha sem congregação de uma prévia de antes da regra", () => {
+  const MARCA = /UPDATE ImportacoesMembrosLinhas SET Acao = N'PROBLEMA', Estado = N'FORA', Problemas = N'SEM_CONGREGACAO'\s+WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' AND CongregacaoId IS NULL/;
+  test("a confirmação a deixa de fora antes de contar quem entra (e, se não sobrar ninguém, não confirma)", async () => {
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], [/FROM ImportacoesMembros WHERE Situacao IN/, [{ ImportacaoId: 7, Situacao: "PREVIA" }]],
+      [/SELECT COUNT\(\*\) AS n FROM ImportacoesMembrosLinhas/, [{ n: 3 }]]];
+    expect(await db.confirmar(POOL, QUEM, 7)).toMatchObject({ sucesso: true, restantes: 3 });
+    const i = mockConsultas.findIndex((c) => MARCA.test(c.sql));
+    expect(i).toBeGreaterThan(-1);
+    expect(i).toBeLessThan(mockConsultas.findIndex((c) => /SELECT COUNT\(\*\) AS n FROM ImportacoesMembrosLinhas/.test(c.sql)));
+    expect(i).toBeLessThan(mockConsultas.findIndex((c) => /SET Situacao = N'IMPORTANDO'/.test(c.sql)));
+    mockConsultas = []; mockTx = [];
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], [/FROM ImportacoesMembros WHERE Situacao IN/, [{ ImportacaoId: 7, Situacao: "PREVIA" }]],
+      [/SELECT COUNT\(\*\) AS n FROM ImportacoesMembrosLinhas/, [{ n: 0 }]]];
+    expect(await db.confirmar(POOL, QUEM, 7)).toMatchObject({ sucesso: false, status: 409 });
+    expect(mockTx).toEqual(["begin", "rollback"]);
+  });
+  test("o lote (a importação confirmada antes da regra) a deixa de fora antes de ler as linhas que vão entrar", async () => {
+    cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
+    await db.importarLote(POOL, QUEM, 7);
+    const i = mockConsultas.findIndex((c) => MARCA.test(c.sql));
+    expect(i).toBeGreaterThan(-1);
+    expect(i).toBeLessThan(mockConsultas.findIndex((c) => /FROM ImportacoesMembrosLinhas WITH \(UPDLOCK\)/.test(c.sql)));
+  });
+});
+
 describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
   const { sql } = require("../db");
   const POOL_REQ = { request: () => new sql.Request() };
@@ -293,7 +321,8 @@ describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
     mockRegras = [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: JSON.stringify({ primeiraMatriculaNova: 30512 }) }]], [/WITH ordem AS/, [linhaLista()]]];
     const r = await db.listar(POOL_REQ, "7", { filtro: "acertar" });
     expect(r).toMatchObject({ sucesso: true, filtro: "acertar", total: 2 });
-    expect(r.itens[0].detalhe).toEqual({ motivoNumero: "REPETIDA_NO_ARQUIVO", semCongregacao: false, dono: { linha: 2, nome: "Pessoa A", sexo: "F" }, repetidaDe: null,
+    // G3: nenhuma linha que entra fica sem congregação, então o detalhe não fala mais disso
+    expect(r.itens[0].detalhe).toEqual({ motivoNumero: "REPETIDA_NO_ARQUIVO", dono: { linha: 2, nome: "Pessoa A", sexo: "F" }, repetidaDe: null,
       recebe: 30513, prevista: true });
     expect(mockConsultas.find((c) => /WITH ordem AS/.test(c.sql)).sql).toMatch(/AND a\.NumeroNovo = 1/);
   });
@@ -303,7 +332,8 @@ describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
         linhaLista({ NumeroNovo: false, MotivoNumero: null, DonoLinha: null, OrdemNova: null, RepetidaMembro: 2, RepMembroNome: "Ficha Antiga" })]]];
     const r = await db.listar(POOL_REQ, 7, { filtro: "'; DROP TABLE x --" });
     expect(r.filtro).toBe("todas");
-    expect(r.itens[0].detalhe).toMatchObject({ recebe: 30600, prevista: false, semCongregacao: null });
+    expect(r.itens[0].detalhe).toMatchObject({ recebe: 30600, prevista: false });
+    expect(r.itens[0].detalhe).not.toHaveProperty("semCongregacao");
     expect(r.itens[1].detalhe).toMatchObject({ motivoNumero: null, recebe: null, prevista: false, repetidaDe: { linha: null, matricula: 2, nome: "Ficha Antiga" } });
     expect(mockConsultas.find((c) => /WITH ordem AS/.test(c.sql)).sql).not.toMatch(/DROP/);
   });

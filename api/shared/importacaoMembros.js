@@ -4,7 +4,8 @@
 // Decisões do responsável (18/11/2026):
 //  - o arquivo: CSV com ';' e o cabeçalho MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF. A IGREJA vem "IEADESPA - <nome>";
 //    o SEXO, FEMININO ou MASCULINO; o ESTADO CIVIL usa ".: NAO INFORMADO :." para vazio; há linhas incompletas; existe a matrícula 0;
-//  - "IEADESPA - GERAL" é um cadastro errado (o da matrícula 0): entra SEM congregação;
+//  - "IEADESPA - GERAL" é um cadastro errado (o da matrícula 0). Entrava SEM congregação; desde 24/11/2026 (G3, decisão dele: sem congregação não há
+//    importação) a linha sem congregação (GERAL ou vazia) fica de fora, com o motivo, e a coluna da congregação é obrigatória;
 //  - o arrolamento NÃO vem: quem entra fica com "Arrolamento a completar" (sem voto) e a pendência ARROLAMENTO — isso é do banco (importacaoMembrosDb.js);
 //  - COLUNAS EXTRAS: reconhecidas pelo nome (sem acento, maiúscula ou pontuação), as desconhecidas ignoradas e mostradas; (23/11, a tela r27) a Secretaria
 //    Geral pode trocar o campo de cada coluna, ou "não usar" (a escolha vem na prévia e é conferida aqui: mapearColunas);
@@ -83,7 +84,8 @@ function lerCsv(texto) {
 const COLUNAS = Object.freeze([
   { campo: "matricula", rotulo: "Matrícula", nomes: ["MATRICULA", "N MATRICULA", "NO MATRICULA", "NUMERO DA MATRICULA", "MATRICULA DO MEMBRO"], padrao: true, obrigatoria: true },
   { campo: "nome", rotulo: "Nome", nomes: ["NOME", "NOME COMPLETO", "NOME DO MEMBRO"], padrao: true, obrigatoria: true },
-  { campo: "igreja", rotulo: "Congregação", nomes: ["IGREJA", "CONGREGACAO", "CONGREGACAO ATUAL"], padrao: true },
+  // a congregação é obrigatória (G3, decisão dele de 24/11/2026: sem congregação não há importação)
+  { campo: "igreja", rotulo: "Congregação", nomes: ["IGREJA", "CONGREGACAO", "CONGREGACAO ATUAL"], padrao: true, obrigatoria: true },
   { campo: "sexo", rotulo: "Sexo", nomes: ["SEXO"], padrao: true },
   { campo: "nascimento", rotulo: "Nascimento", nomes: ["NASCIMENTO", "DATA DE NASCIMENTO", "DATA NASCIMENTO", "DT NASCIMENTO", "DATA NASC"], padrao: true },
   { campo: "estadoCivil", rotulo: "Estado civil", nomes: ["ESTADO CIVIL", "EST CIVIL"], padrao: true },
@@ -223,7 +225,8 @@ function lerMatricula(v) {
   return n === 0 ? { zero: true, texto: t } : { numero: n, texto: t };
 }
 
-// A congregação do arquivo: "IEADESPA - Vila Nova" -> "VILA NOVA" (a chave). "IEADESPA - GERAL" e vazio -> sem congregação (decisão 1).
+// A congregação do arquivo: "IEADESPA - Vila Nova" -> "VILA NOVA" (a chave). "IEADESPA - GERAL" e vazio -> sem congregação: a linha fica de fora (G3, decisão
+// dele de 24/11/2026, que troca a de 18/11: sem congregação não há importação).
 const PREFIXO_IGREJA = /^\s*IEADESPA\s*[-–—:]\s*/i;
 function chaveDaIgreja(v) {
   const t = String(v == null ? "" : v).trim();
@@ -237,6 +240,7 @@ const PROBLEMAS = Object.freeze({
   CONGREGACAO_NAO_ENCONTRADA: "A congregação não existe no sistema (confira o nome)",
   CONGREGACAO_INATIVA: "A congregação está desativada no sistema",
   CONGREGACAO_AMBIGUA: "Duas congregações do sistema têm esse nome",
+  SEM_CONGREGACAO: "Sem congregação (no arquivo: GERAL ou vazio): fica de fora. Ponha a congregação na planilha e faça a prévia de novo, ou continue sem esta linha",
   COLUNAS_A_MAIS: "A linha tem mais colunas que o cabeçalho (um ';' no meio de um nome?)",
   MATRICULA_JA_EXISTE: "A matrícula já é de uma ficha do sistema: fica de fora (essa ficha se completa à mão)",
   // na hora de gravar (não na prévia): o banco recusou a linha sempre, e o resto da importação seguiu sem ela (shared/importacaoMembrosDb.js, revisão de 23/11)
@@ -245,7 +249,6 @@ const PROBLEMAS = Object.freeze({
   NAO_TERMINOU: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)"
 });
 const AVISOS = Object.freeze({
-  SEM_CONGREGACAO: "Entra sem congregação (no arquivo: GERAL ou vazio)",
   MATRICULA_ZERO: "Matrícula 0: entra com a próxima matrícula do sistema",
   SEM_MATRICULA: "Sem matrícula: entra com a próxima matrícula do sistema",
   MATRICULA_INVALIDA: "A matrícula não é um número: entra com a próxima do sistema",
@@ -290,7 +293,7 @@ function lerLinha(celulas, mapa, { congregacoes, hojeISO, colunasCabecalho }) {
   dados.igrejaArquivo = cel("igreja").slice(0, 150) || null;
   dados.congregacaoId = null;
   const k = chaveDaIgreja(cel("igreja"));
-  if (!k || k === "GERAL") avisos.push("SEM_CONGREGACAO");
+  if (!k || k === "GERAL") problemas.push("SEM_CONGREGACAO");
   else {
     const achadas = (congregacoes && congregacoes.get(k)) || [];
     if (!achadas.length) problemas.push("CONGREGACAO_NAO_ENCONTRADA");
@@ -459,6 +462,13 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
   if (naoAchadas.size) {
     avisosGerais.push({ codigo: "CONGREGACOES_NAO_ENCONTRADAS", texto: `${naoAchadas.size === 1 ? "Uma congregação do arquivo não foi achada" : `${naoAchadas.size} congregações do arquivo não foram achadas`} no sistema: essas pessoas ficam de fora até o nome bater (confira o nome no sistema ou no arquivo e faça a prévia de novo).` });
   }
+  // as linhas sem congregação (G3): ficam de fora; a Geral corrige a planilha ou continua sem elas
+  const semCong = conta((l) => l.problemas.includes("SEM_CONGREGACAO"));
+  if (semCong) {
+    avisosGerais.push({ codigo: "SEM_CONGREGACAO", texto: semCong === 1
+      ? "1 linha está sem congregação (no arquivo: GERAL ou vazio) e fica de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem ela."
+      : `${semCong.toLocaleString("pt-BR")} linhas estão sem congregação (no arquivo: GERAL ou vazio) e ficam de fora: ponha a congregação na planilha e faça a prévia de novo, ou continue sem elas.` });
+  }
   const maiorArquivo = comNumero.length ? comNumero[comNumero.length - 1].m : 0;
   const ehRepetida = (l) => l.repetidaLinha != null || l.repetidaMembro != null;
   return {
@@ -479,7 +489,8 @@ function resumir(prep, { maiorMatriculaSistema = 0 } = {}) {
     comAviso: conta((l) => l.acao === "NOVA" && l.avisos.length > 0),
     numeroNovo: conta((l) => l.acao === "NOVA" && l.numeroNovo),
     possivelRepetida: conta((l) => l.acao === "NOVA" && ehRepetida(l)),
-    semCongregacao: conta((l) => l.acao === "NOVA" && l.dados.congregacaoId == null),
+    // as linhas que ficam de fora por falta de congregação (G3)
+    semCongregacao: conta((l) => l.problemas.includes("SEM_CONGREGACAO")),
     separador: prep.separador === "\t" ? "tabulação" : prep.separador,
     colunas: prep.colunas,
     congregacoesNaoEncontradas: [...naoAchadas.entries()].map(([nome, pessoas]) => ({ nome: nome.slice(0, 150), pessoas })).sort((a, b) => b.pessoas - a.pessoas).slice(0, 100),

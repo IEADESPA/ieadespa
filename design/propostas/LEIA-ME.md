@@ -10,7 +10,7 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
-| `propostas-r31/index.html` | A página da **rodada 31** (Membros, a saída e a volta), 279 KB. Gerada; não editar à mão. Ainda não publicada |
+| `propostas-r31/index.html` | A página da **rodada 31** (Membros, a saída e a volta), 280 KB. Gerada; não editar à mão. Ainda não publicada |
 | `propostas-r30/index.html` | A página da rodada 30, a publicada (versão 12): a **base** de que a 31 parte. Não muda |
 | `r31-carta.js` | As telas da 31 da carta: a carta em PDF (A4) com o histórico e a página que o QR abre (antes e depois do apagamento) |
 | `r31-telas.js` | As outras telas da 31: o pedido com a cidade, o abandono com a Câmara de liderança e a volta sem os cargos |
@@ -21,7 +21,7 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 | `propostas-r29/index.html`, `r29-saida.js`, `r29-mais.js`, `r29-lista.js` | A rodada 29, para consulta: podem sair quando a 31 for publicada (o Git guarda) |
 
 Na página da 31, a 28 saiu (a lista das telas; o código que a 29 e a 30 ainda usam ficou), e a poda tirou o resto sem
-uso: a página caiu de 350 KB para 279 KB. A 30 e a 29 ficam recolhidas embaixo da 31.
+uso: a página caiu de 350 KB para 280 KB. A 30 e a 29 ficam recolhidas embaixo da 31.
 
 **Sem modo escuro nas propostas** (decisão dele de 24/11/2026, a partir da 31): a espera estava longa demais (a 30 teve
 352 desenhos para 5 telas). A página não tem mais os botões Claro e Escuro (nem o "Trocar claro/escuro" da tela cheia)
@@ -75,7 +75,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 3. `node montar-r32.js` e um `conferir-r32.js` (cópia do da 31), os dois com zero problema.
 4. Publique no mesmo endereço e registre: commit dos fontes da 32. A pasta da 30 pode sair quando a 32 entrar, porque o
    Git guarda o histórico.
-5. A página leve deve ficar abaixo de ~400 KB: a 31 tem 279 KB.
+5. A página leve deve ficar abaixo de ~400 KB: a 31 tem 280 KB.
 6. O conferidor não mede transbordo: meça no Edge (o `medir.js` da pasta de fotos da rodada, só no claro) e olhe as
    fotos do pior caso (a mensagem de erro, o seletor aberto, o celular com o formulário), sem fotografar tudo.
 

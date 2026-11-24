@@ -34,7 +34,7 @@
   const quando = $derived(quandoCurto(importacao.concluidaEm));
   // a guarda dos dados (respostas dele de 23/11/2026): a lista dos que ficaram de fora fica um tempo depois do fim e se apaga sozinha
   const foraAte = $derived(notaForaAte(importacao, guarda));
-  const foraApagada = $derived(fraseForaApagada(importacao, guarda));
+  const foraApagada = $derived(fraseForaApagada(importacao));
 
   let baixando = $state(false);
   let erroBaixar = $state("");

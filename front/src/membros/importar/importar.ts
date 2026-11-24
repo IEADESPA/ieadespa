@@ -31,6 +31,8 @@ export interface ResumoImportacao {
   readonly resultado?: { readonly importadas: number; readonly fora: number; readonly numeroNovo: number; readonly possivelRepetida: number; readonly semCongregacao: number };
   /** o dia em que a rotina apagou a lista dos que ficaram de fora (a guarda dos dados) */
   readonly foraApagadaEm?: string | null;
+  /** o prazo (em dias) que valeu no dia em que a rotina apagou a lista */
+  readonly foraDias?: number | null;
 }
 /** os prazos da guarda dos dados (respostas dele de 23/11/2026): a prévia não confirmada e a lista dos de fora, em dias */
 export interface Guarda { readonly diasPrevia: number; readonly diasFora: number }
@@ -188,9 +190,24 @@ export function notaForaAte(imp: Importacao, g: Guarda): string {
   const dd = String(dia.getUTCDate()).padStart(2, "0"), mm = String(dia.getUTCMonth() + 1).padStart(2, "0");
   return `A lista dos que ficaram de fora se apaga sozinha a partir de ${dd}/${mm}/${dia.getUTCFullYear()} (${emDias(g.diasFora)} depois do fim): baixe antes, se precisar.`;
 }
-/** a lista já apagada pela rotina: a linha da trilha (a lista para baixar fica sem os de fora, e a tela diz por quê) */
-export const fraseForaApagada = (imp: Importacao, g: Guarda): string =>
-  imp.resumo?.foraApagadaEm ? `A lista dos que ficaram de fora foi apagada, ${emDias(g.diasFora)} depois do fim (a guarda dos dados)` : "";
+/** o dia de Brasília como número de dias (para contar os dias entre duas datas) */
+function diaNumero(v: string | Date | null | undefined): number | null {
+  const d = data(v);
+  if (!d) return null;
+  const p = partes(d);
+  return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)) / 86400000;
+}
+/** a lista já apagada pela rotina: a linha da trilha (a lista para baixar fica sem os de fora, e a tela diz por quê). Os dias são os do dia em que apagou (o
+ *  prazo guardado no resumo; na apagada antes de guardá-lo, os dias entre o fim e o dia em que apagou), nunca o prazo de hoje (G4, revisão de 24/11/2026). */
+export function fraseForaApagada(imp: Importacao): string {
+  const apagada = imp.resumo?.foraApagadaEm;
+  if (!apagada) return "";
+  const guardados = imp.resumo?.foraDias;
+  const fim = diaNumero(imp.concluidaEm), dia = diaNumero(apagada);
+  const dias = diasValidos(guardados) ? guardados : fim !== null && dia !== null && dia - fim >= 1 ? dia - fim : null;
+  return dias === null ? "A lista dos que ficaram de fora foi apagada (a guarda dos dados)"
+    : `A lista dos que ficaram de fora foi apagada, ${emDias(dias)} depois do fim (a guarda dos dados)`;
+}
 
 /** a matrícula do arquivo com o ponto do milhar ("4318" -> "4.318"); o que não é número fica como veio */
 export const matriculaBr = (m: string): string => (/^\d{1,9}$/.test(m.trim()) ? numero(Number(m.trim())) : m.trim());

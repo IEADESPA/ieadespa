@@ -521,8 +521,10 @@ async function aplicarRetencao(pool) {
     for (const a of apagadas) {
       const id = Number(a.ImportacaoId), n = Number(a.n) || 0;
       linhasForaApagadas += n;
-      // o dia em que a lista saiu fica no resumo: a tela do resultado diz que ela foi apagada, em vez de mostrar uma lista menor sem explicar
-      await rq().input("id", sql.Int, id).query(`UPDATE ImportacoesMembros SET Resumo = JSON_MODIFY(Resumo, '$.foraApagadaEm', CONVERT(varchar(19), SYSUTCDATETIME(), 126) + 'Z')
+      // o dia em que a lista saiu e o prazo que valeu nesse dia ficam no resumo: a tela do resultado diz que ela foi apagada (em vez de mostrar uma lista menor
+      // sem explicar), com os dias de então, não os da política de hoje (G4, revisão de 24/11/2026)
+      await rq().input("id", sql.Int, id).input("d", sql.Int, diasFora).query(`UPDATE ImportacoesMembros
+        SET Resumo = JSON_MODIFY(JSON_MODIFY(Resumo, '$.foraApagadaEm', CONVERT(varchar(19), SYSUTCDATETIME(), 126) + 'Z'), '$.foraDias', @d)
         WHERE ImportacaoId = @id AND ISJSON(Resumo) = 1`);
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina apagou a lista dos que ficaram de fora da importação (${diasFora} dias depois do fim)`,
         usuarioId: null, dadosDepois: { linhasApagadas: n, retencaoDias: diasFora } });

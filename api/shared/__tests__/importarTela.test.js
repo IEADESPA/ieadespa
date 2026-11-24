@@ -69,9 +69,21 @@ describe("a lista dos que ficaram de fora, no resultado", () => {
     expect(T.notaForaAte(feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00" }), T.GUARDA_PADRAO)).toBe("");
     expect(T.notaForaAte(feita(null), T.GUARDA_PADRAO)).toBe("");
   });
-  test("a lista já apagada: a linha da trilha diz que saiu e por quê", () => {
+  test("a lista já apagada: a linha da trilha diz que saiu e por quê, com o prazo que valeu no dia (guardado no resumo)", () => {
     const T = carregar(jest.fn());
-    expect(T.fraseForaApagada(feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00" }), T.GUARDA_PADRAO)).toBe("A lista dos que ficaram de fora foi apagada, 90 dias depois do fim (a guarda dos dados)");
-    expect(T.fraseForaApagada(feita(res(7)), T.GUARDA_PADRAO)).toBe("");
+    expect(T.fraseForaApagada(feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00Z", foraDias: 90 }))).toBe("A lista dos que ficaram de fora foi apagada, 90 dias depois do fim (a guarda dos dados)");
+    expect(T.fraseForaApagada(feita(res(7)))).toBe("");
+  });
+  test("G4: o prazo de hoje não entra na frase (a política mudou depois de apagar: vale o do dia)", () => {
+    const T = carregar(jest.fn());
+    // apagou com 90; hoje a política é de 30: a frase continua dizendo 90
+    expect(T.fraseForaApagada(feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00Z", foraDias: 90 }), { diasPrevia: 7, diasFora: 30 }))
+      .toBe("A lista dos que ficaram de fora foi apagada, 90 dias depois do fim (a guarda dos dados)");
+    // a apagada antes desta versão (sem o prazo no resumo): os dias entre o fim (10/12/2026, Brasília) e o dia em que apagou (11/03/2027, Brasília)
+    expect(T.fraseForaApagada(feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00Z" }), { diasPrevia: 7, diasFora: 30 }))
+      .toBe("A lista dos que ficaram de fora foi apagada, 91 dias depois do fim (a guarda dos dados)");
+    // sem como saber os dias: a frase sem o número
+    expect(T.fraseForaApagada({ ...feita({ ...res(7), foraApagadaEm: "2027-03-11T09:00:00Z" }), concluidaEm: null }))
+      .toBe("A lista dos que ficaram de fora foi apagada (a guarda dos dados)");
   });
 });

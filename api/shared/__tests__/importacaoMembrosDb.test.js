@@ -347,6 +347,9 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     const marca = mockConsultas.find((c) => /JSON_MODIFY/.test(c.sql));
     // em UTC, com o Z: a tela mostra no horário de Brasília
     expect(marca.sql).toMatch(/\$\.foraApagadaEm', CONVERT\(varchar\(19\), SYSUTCDATETIME\(\), 126\) \+ 'Z'\)/);
+    // G4 (revisão de 24/11): o resumo guarda também o prazo que valeu no dia em que apagou (a tela não usa o prazo de hoje)
+    expect(marca.sql).toMatch(/'\$\.foraDias', @d\)/);
+    expect(marca.inputs.d).toBe(90);
     expect(marca.inputs.id).toBe(7);
     expect(trilhas()).toEqual([expect.objectContaining({ registroId: 7, usuarioId: null, acao: "A rotina apagou a lista dos que ficaram de fora da importação (90 dias depois do fim)",
       dadosDepois: { linhasApagadas: 4, retencaoDias: 90 } })]);

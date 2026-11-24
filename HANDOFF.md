@@ -1,12 +1,12 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 24/11/2026 08:34
+Em uso por: Livre
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 14:40 (Claude, sessão principal).
+Atualizado em 24/11/2026 17:10 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,33 +46,32 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**AGENTES, 24/11 às 14h** (a equipe nova de 3 papéis: construtor, desenhista e corretor; o revisor de dentro só no
-portão; se a cota acabar, o ponto de cada um é este):
+**ESTADO EM 24/11 À NOITE (o dia encerrou; nenhum agente trabalhando)** — o próximo passo de cada frente:
 
-- **Membros, volta 5** (construtor; `C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, a partir de `1cb32c6`;
-  diário `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`). Entrega as respostas dele de 24/11 (plano da fase 10, "As
-  respostas dele à revisão do arrolamento") e os achados do portão (`C:/tmp/ieadespa-membros/REVISAO-portao-v4.md`).
-  - O portão da volta 4 deu: **pode ir ao homolog, não à produção** (1 grave, o G2, já respondido por ele).
-  - O homolog tem até `f7045ab`. A volta 4 **não foi mesclada**: entra junto com a 5, e o portão da produção cobre as
-    duas.
-  - Se o agente parou pela cota, mande-lhe uma mensagem para continuar; o trabalho dele fica salvo.
-- **Financeiro, telas da r30** (construtor; `C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, a partir
-  de `47e429b`; diário `C:/tmp/ieadespa-financeiro/DIARIO.md`, parte 4). São as 5 telas aprovadas, a folha inexistente
-  e a frase de cada exceção. As correções m1, m2, m9 e N3 já estão em `e72b321` e `47e429b`.
-  - Depois vem o portão, e só então o homolog.
-- **Correção do acesso: NA PRODUÇÃO** (d1625c2, DEPLOY OK em 24/11; a conferência só de leitura antes deu que ninguém perde o login). Um **corretor** trata os graves vizinhos que o revisor de fora achou (ramo próprio; o detalhe só na bancada privada).
-- **Desenhista:** r31 aprovada (58VZ…). **A r32 (Módulo 3, o começo) está PUBLICADA** em <https://claude.ai/artifact/HYtYxyM4ysGnxhxnWiCk5o>, **esperando ele conferir**. Regra nova: **uma página por rodada** (o banco é por página).
-- **Revisor de fora: TRABALHANDO** (bancada `ee4a5e0`, 178/178 testes). Ele revisa os 2 pedaços do acesso e depois
-  faz uma rodada agendada da fila.
-  - A fila: infraestrutura, **os menores (decisão dele, 24/11)**, os módulos na ordem fixa e o site por último.
-  - A agenda do Windows ainda não foi ligada (`LIGAR-AGENDA.cmd`, dois cliques dele).
-  - O esforço: a prova (US$ 12,72) deu achados iguais no alto, no x alto e no máximo, e o máximo custa o dobro do x
-    alto. **A decisão dele:** testar 1 pedaço real no x alto e no máximo e então trocar. O pedaço revisado agora no
-    máximo serve de metade do teste; falta rodar o mesmo pedaço no x alto (`config.json`, `esforco`).
-- **A conversa principal está no "alto"** (`modelSettings` do Opus 5.5). O construtor fica no x alto e o desenhista no
-  alto, pelo frontmatter de cada um.
+- **Membros, volta 5: PRONTA** no ramo `v10-membros-svelte` (até `2a0f3fb`; worktree `C:/tmp/ieadespa-svelte`;
+  diário `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`). Jest 6.991 verdes; e2e 36 e 96 a 102 verdes.
+  - **Amanhã:** (1) levar a ele as perguntas abertas do diário (o cargo administrativo no arrolamento dá acesso? de
+    qual lista? o batismo e a carta sem data; o congregado nas listas escolhidas à mão e nos órgãos; os textos novos
+    sem desenho aprovado: o bloco "As linhas que faltaram", o aviso do prazo e o "Descartar a importação"); (2) com as
+    respostas, o portão; (3) a mescla no homolog (o homolog tem até `f7045ab`).
+- **Financeiro, telas da r30** (ramo `v10-financeiro-svelte`; worktree `C:/tmp/ieadespa-financeiro/obra`; diário
+  `C:/tmp/ieadespa-financeiro/DIARIO.md`, parte 4): parado no meio, a pedido dele; o ponto exato está no diário. A
+  folha inexistente já está no servidor (`06e1fd8`). **Amanhã:** continuar, depois o portão e o homolog.
+- **Acesso, parte 2** (ramo `v10-acesso-ajustes-2`, `c7095fa`): o portão APROVOU para a produção. **Amanhã:** o revisor
+  de fora confere os 2 pedaços (~US$ 30; hoje bateu no limite do dia) e, com o OK dele, sobe num commit só, com
+  mensagem neutra, e o ramo remoto é apagado. O detalhe fica só na bancada privada.
+- **Desenhista:** a **r32 (Módulo 3, o começo)** está PUBLICADA em <https://claude.ai/artifact/HYtYxyM4ysGnxhxnWiCk5o>,
+  **esperando ele conferir**. Uma página nova por rodada; o banco é por página.
+- **A bancada privada guarda agora o estado de cada projeto** (`C:\MCP\bancada\projetos\<repo>\`). O comep já foi
+  migrado pela outra máquina. **O ieadespa migra amanhã, no começo e com os agentes parados:**
+  `node C:/MCP/bancada/migrar-estado.mjs "C:\sistemas vs code\ieadespa"` (só mostra) e, com o sim dele, `--sim`.
+  Depois: os comandos que ele mostra (a bancada primeiro), o `CLAUDE.md` §4 e o `AGENTS.md` no mesmo commit, e
+  "Recarregar Janela".
+- **Revisor de fora:** limite do dia atingido (US$ 85,68 deste computador; o teto de hoje era US$ 96). A fila: a
+  infraestrutura, os menores, os módulos e o site por último. O teste do esforço (1 pedaço real no x alto contra o
+  máximo) continua pendente.
 
-A trava do LocalDB: com quem estiver rodando e2e.
+A trava do LocalDB: livre.
 
 **Decisão dele (24/11): um 2º computador com um assento Team Premium.** Pela página oficial, cada assento Premium
 põe US$ 100 e cada Standard US$ 20 num **saldo único da organização**, com teto de US$ 500 por mês, e toda chave da

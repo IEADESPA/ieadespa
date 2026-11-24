@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 23:55 (Claude, sessão principal).
+Atualizado em 24/11/2026 00:30 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,10 +46,22 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**AGENTES PARADOS às 21h30 de 23/11, por ordem dele** ("dá uma parada… uma coisa de cada vez"): primeiro ele faz as
-pendências dele, uma de cada vez. Nada ficou pela metade: os worktrees estão limpos (Membros em `4741cd3`, Financeiro
-em `f722716`), a trava do LocalDB está livre e o desenhista ainda não tinha criado o worktree da r30. Ao retomar, cada
-frente continua do item abaixo:
+**AGENTES RETOMADOS em 24/11, por ordem dele** ("você tem que andar"). Foram parados às 21h30 de 23/11 sem nada pela
+metade. Trabalham 4 ao mesmo tempo:
+
+- o construtor do Membros, só no ramo: a guarda dos dados e o M5. A mesclagem no homolog fica para depois, porque o
+  sistema de proteção barrou mandar o agente mexer na homologação;
+- o construtor do Financeiro: I3, I4, os menores e as duas regras dele;
+- o desenhista: prepara a r30, sem publicar;
+- o agente do plano novo do revisor de fora.
+
+O revisor do arrolamento entra quando uma vaga abrir. Cada frente continua do item abaixo.
+
+**Decisão dele (24/11): um 2º computador com um assento Team Premium.** Pela página oficial, cada assento Premium
+põe US$ 100 e cada Standard US$ 20 num **saldo único da organização**, com teto de US$ 500 por mês, e toda chave da
+organização gasta desse saldo. Mudar repositórios para outro computador não cria saldo à parte. O revisor de fora
+ganha uma configuração por computador (`config.local.json`, fora do Git), com os projetos de cada um e a parte do
+saldo que cabe a cada um. Dois computadores nunca rodam o mesmo projeto.
 
 **As pendências dele:** (1) a chave do revisor de fora: **FEITA**; (2) ver a trava: **FEITA** (ele viu a foto do
 travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **falta**.

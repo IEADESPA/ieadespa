@@ -34,6 +34,29 @@ export interface ResumoImportacao {
   readonly foraApagadaEm?: string | null;
   /** o prazo (em dias) que valeu no dia em que a rotina apagou a lista */
   readonly foraDias?: number | null;
+  /** a prévia da importação só das linhas que faltaram (G2): quantas faltaram, quantas foram achadas no arquivo e as que não foram (as 20 primeiras) */
+  readonly resto?: ResumoResto | null;
+}
+/** uma linha de uma lista sem dado pessoal: o número da linha do arquivo e o nome */
+export interface LinhaENome { readonly linha: number; readonly nome: string }
+export interface ResumoResto {
+  readonly de: number;
+  readonly faltaram: number;
+  readonly achadas: number;
+  readonly naoAchadas: number;
+  readonly ambiguas: number;
+  readonly foraDaLista: number;
+  readonly listaNaoAchadas: readonly LinhaENome[];
+}
+/** o resto no estado (G2, decisão dele de 24/11/2026): as linhas que faltaram na importação concluída (quantas e as 10 primeiras), se a importação só delas
+ *  pode ser feita (uma vez), se está aberta (prévia ou em andamento) e o que ela fez */
+export interface EstadoResto {
+  readonly de: number;
+  readonly faltaram: number;
+  readonly linhas: readonly LinhaENome[];
+  readonly possivel: boolean;
+  readonly aberto: boolean;
+  readonly feito: { readonly importacaoId: number; readonly concluidaEm: string | null; readonly importadas: number; readonly fora: number } | null;
 }
 /** os prazos da guarda dos dados (respostas dele de 23/11/2026): a prévia não confirmada e a lista dos de fora, em dias */
 export interface Guarda { readonly diasPrevia: number; readonly diasFora: number }
@@ -56,6 +79,8 @@ export type SituacaoImportacao = "PREVIA" | "IMPORTANDO" | "CONCLUIDA";
 export interface Importacao {
   readonly importacaoId: number;
   readonly situacao: SituacaoImportacao;
+  /** G2: a importação só das linhas que faltaram diz de qual importação ela é o resto */
+  readonly restoDe?: number | null;
   readonly nomeArquivo: string | null;
   readonly criadaEm: string | null;
   readonly confirmadaEm: string | null;
@@ -79,6 +104,8 @@ export interface EstadoImportacao {
   readonly prazo?: Prazo | null;
   /** a última importação, se a rotina a descartou no fim do prazo (parou sem ninguém importado) */
   readonly descartadaPeloPrazo?: DescartadaPeloPrazo | null;
+  /** feita: as linhas que faltaram e a importação só delas (G2) */
+  readonly resto?: EstadoResto | null;
   readonly retrato: Retrato | null;
   readonly campos: readonly CampoColuna[];
   readonly guarda?: Guarda | null;
@@ -109,7 +136,8 @@ export function resumoDaTela(r: ResumoImportacao | null | undefined): r is Resum
 
 const BASE = "/importacao-membros";
 export const lerEstado = (): Promise<Resultado<EstadoImportacao>> => pedir<EstadoImportacao>(BASE);
-export const fazerPrevia = (corpo: { nomeArquivo: string; texto: string; colunas?: (string | null)[] }): Promise<Resultado<{ importacaoId: number; resumo: ResumoImportacao }>> =>
+/** a prévia; `resto: true` = a importação só das linhas que faltaram (G2) */
+export const fazerPrevia = (corpo: { nomeArquivo: string; texto: string; colunas?: (string | null)[]; resto?: true }): Promise<Resultado<{ importacaoId: number; resumo: ResumoImportacao }>> =>
   pedir(BASE + "/previa", { metodo: "POST", corpo });
 export const lerLista = (importacaoId: number, filtro: FiltroLista, pagina = 1): Promise<Resultado<PaginaLista>> =>
   pedir<PaginaLista>(BASE + "/lista" + qs({ importacaoId, filtro, pagina }));
@@ -245,8 +273,9 @@ function diaBr(v: string | Date | null | undefined): string {
   return `${p.day}/${p.month}/${p.year}`;
 }
 /** a tela parada (G2, decisão dele de 24/11/2026): quantos dias faltam, até quando e o que acontece depois do prazo. Com gente já importada, as linhas que
- *  faltam ficam de fora (fica o número da linha e o nome, para uma importação só com elas); sem ninguém, a importação é descartada. */
-export function fraseDoPrazo(prazo: Prazo | null | undefined, importadas: number | null | undefined): string {
+ *  faltam ficam de fora (fica o número da linha e o nome, para uma importação só com elas; na do resto, que é uma vez só, para cadastrar à mão); sem
+ *  ninguém, a importação é descartada. */
+export function fraseDoPrazo(prazo: Prazo | null | undefined, importadas: number | null | undefined, resto = false): string {
   if (!prazo || typeof prazo.faltam !== "number" || !Number.isInteger(prazo.faltam) || prazo.faltam < 0) return "";
   const ate = diaBr(prazo.venceEm);
   if (!ate) return "";
@@ -257,8 +286,42 @@ export function fraseDoPrazo(prazo: Prazo | null | undefined, importadas: number
   }
   const quanto = prazo.faltam === 1 ? "Falta 1 dia" : `Faltam ${numero(prazo.faltam)} dias`;
   return `${quanto} para continuar (até ${ate}). Depois do prazo, `
-    + (alguem ? "as linhas que faltam ficam de fora e os dados pessoais delas se apagam: o sistema guarda só o número da linha e o nome, para uma importação só com elas."
-      : "a importação é descartada e os dados pessoais da planilha se apagam.");
+    + (!alguem ? "a importação é descartada e os dados pessoais da planilha se apagam."
+      : resto ? "as linhas que faltam ficam de fora e os dados pessoais delas se apagam: fica só o número da linha e o nome, para cadastrar à mão."
+        : "as linhas que faltam ficam de fora e os dados pessoais delas se apagam: o sistema guarda só o número da linha e o nome, para uma importação só com elas.");
+}
+
+// ---- a importação só das linhas que faltaram (G2, decisão dele de 24/11/2026: UMA importação nova só com elas, a exceção ao "uma vez só")
+const contagem = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0;
+/** o passo do arquivo no modo do resto: o que mandar e o que entra */
+export const AVISO_ARQUIVO_RESTO = "Importação só das linhas que faltaram (uma vez): escolha o mesmo arquivo da importação, ou uma planilha só com essas linhas. "
+  + "Entram só as linhas da lista, achadas pelo nome; as outras ficam fora.";
+/** o bloco do resultado: quantas faltaram e a saída (enquanto pode); depois de feito, o que o resto fez. Aberto (prévia ou andamento), nada: a tela está nele */
+export function fraseDoResto(r: EstadoResto | null | undefined): string {
+  if (!r) return "";
+  if (r.feito) {
+    const quando = diaBr(r.feito.concluidaEm);
+    const entraram = contagem(r.feito.importadas) ? r.feito.importadas : 0;
+    const fora = contagem(r.feito.fora) ? r.feito.fora : 0;
+    return `A importação das linhas que faltaram foi feita${quando ? ` em ${quando}` : ""}: ${numero(entraram)} ${entraram === 1 ? "entrou" : "entraram"}`
+      + (fora > 0 ? ` e ${numero(fora)} ${fora === 1 ? "ficou" : "ficaram"} de fora (na lista dela para baixar)` : "")
+      + ". É uma vez só: quem ainda faltar se cadastra à mão.";
+  }
+  if (!r.possivel || !contagem(r.faltaram) || r.faltaram < 1) return "";
+  const um = r.faltaram === 1;
+  return `A importação não terminou no prazo: ${um ? "1 linha faltou" : `${numero(r.faltaram)} linhas faltaram`}, e o sistema guardou só o número da linha e o nome `
+    + `${um ? "dela" : "de cada uma"}. Você pode fazer uma importação só com ${um ? "ela" : "elas"}, uma vez: mande o mesmo arquivo de novo, ou uma planilha só `
+    + `com ${um ? "essa linha" : "essas linhas"}.`;
+}
+/** a nota da prévia do resto: quantas das que faltaram foram achadas no arquivo e quantas linhas do arquivo ficam fora da lista (quem não foi achado vem no
+ *  aviso amarelo do servidor, com os outros avisos da prévia) */
+export function fraseDaPreviaDoResto(r: ResumoResto | null | undefined): string {
+  if (!r || !contagem(r.achadas) || !contagem(r.faltaram) || r.faltaram < 1) return "";
+  const fora = contagem(r.foraDaLista) ? r.foraDaLista : 0;
+  return `Importação só das linhas que faltaram (uma vez): ${numero(r.achadas)} das ${numero(r.faltaram)} ${r.achadas === 1 ? "linhas foi achada" : "linhas foram achadas"} `
+    + "neste arquivo"
+    + (fora > 0 ? `; ${fora === 1 ? "a outra linha do arquivo não está na lista e fica fora" : `as outras ${numero(fora)} linhas do arquivo não estão na lista e ficam fora`}` : "")
+    + ".";
 }
 /** a parada sem ninguém importado que a rotina descartou no fim do prazo: a tela volta ao arquivo dizendo qual foi, quando e por quê (G2) */
 export function fraseDescartadaPeloPrazo(d: DescartadaPeloPrazo | null | undefined): string {

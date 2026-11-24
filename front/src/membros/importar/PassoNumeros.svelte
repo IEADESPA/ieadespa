@@ -27,7 +27,10 @@
 
   const r = $derived(previa.resumo);
   const quadros = $derived<Quadro[]>([
-    { n: r.total, rotulo: "Pessoas no arquivo", sub: r.vazias ? `${numero(r.vazias)} ${plural(r.vazias, "linha vazia de fora", "linhas vazias de fora")}` : "nenhuma linha vazia" },
+    // na prévia do resto (G2), o total é o das linhas que faltaram e foram achadas no arquivo
+    r.resto
+      ? { n: r.total, rotulo: "Achadas no arquivo", sub: `das ${numero(r.resto.faltaram)} que faltaram` }
+      : { n: r.total, rotulo: "Pessoas no arquivo", sub: r.vazias ? `${numero(r.vazias)} ${plural(r.vazias, "linha vazia de fora", "linhas vazias de fora")}` : "nenhuma linha vazia" },
     { n: r.quadros.comMatricula, rotulo: "Fichas novas", sub: "a matrícula de antes" },
     { n: r.quadros.acertar, rotulo: "Matrícula a acertar", sub: "recebem a próxima" },
     { n: r.quadros.repetidas, rotulo: "Possíveis repetidas", sub: "para “Fichas repetidas”" },

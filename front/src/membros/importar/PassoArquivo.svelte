@@ -1,6 +1,7 @@
 <!-- Passo 1 da importação (r27): o arquivo e as colunas. A Geral escolhe a planilha do jeito que o sistema pago exporta; o sistema lê (a
      prévia: nada é gravado nas fichas) e liga cada coluna a um campo da ficha. As colunas a mais ficam em amarelo para ela escolher o
-     campo, ou "não usar". "Conferir os números" refaz a prévia com o mapa escolhido (só se ele mudou) e abre o passo 2. -->
+     campo, ou "não usar". "Conferir os números" refaz a prévia com o mapa escolhido (só se ele mudou) e abre o passo 2. No modo do resto (G2: a
+     importação só das linhas que faltaram), as duas prévias vão com resto: true. -->
 <script lang="ts">
   import Icone from "../../comum/Icone.svelte";
   import Botao from "../../comum/Botao.svelte";
@@ -17,8 +18,10 @@
     previa: Previa | null;
     mapa: MapaDaTela | null;
     onconferir: () => void;
+    /** a importação só das linhas que faltaram (G2) */
+    resto?: boolean;
   }
-  let { celular, campos, arquivo = $bindable(), previa = $bindable(), mapa = $bindable(), onconferir }: Props = $props();
+  let { celular, campos, arquivo = $bindable(), previa = $bindable(), mapa = $bindable(), onconferir, resto = false }: Props = $props();
 
   let lendo = $state(false);
   let erro = $state("");
@@ -46,7 +49,7 @@
       arquivo = { nome: f.name, texto };
       previa = null;
       mapa = null;
-      const r = await fazerPrevia({ nomeArquivo: f.name, texto });
+      const r = await fazerPrevia({ nomeArquivo: f.name, texto, ...(resto ? { resto: true as const } : {}) });
       if (r.ok) { previa = { importacaoId: r.dados.importacaoId, resumo: r.dados.resumo }; mapa = mapaDe(r.dados.resumo.colunas.lista); return; }
       erro = r.mensagem;
       const lista = colunasDoErro(r.corpo);
@@ -66,7 +69,7 @@
     lendo = true;
     erro = "";
     try {
-      const r = await fazerPrevia({ nomeArquivo: arquivo.nome, texto: arquivo.texto, colunas: [...mapa.escolha] });
+      const r = await fazerPrevia({ nomeArquivo: arquivo.nome, texto: arquivo.texto, colunas: [...mapa.escolha], ...(resto ? { resto: true as const } : {}) });
       if (!r.ok) { erro = r.mensagem; return; }
       previa = { importacaoId: r.dados.importacaoId, resumo: r.dados.resumo };
       onconferir();
@@ -74,6 +77,8 @@
   }
 
   const r = $derived(previa?.resumo ?? null);
+  // as linhas do arquivo: na prévia do resto (G2), o total é o das achadas; as outras linhas do arquivo vêm à parte
+  const linhasNoArquivo = $derived(r ? r.total + r.vazias + (r.resto ? r.resto.foraDaLista + r.resto.ambiguas : 0) : 0);
   const separador = (s: string) => (s === "\t" ? "tabulação" : `“${s}”`);
   const extras = $derived(mapa ? mapa.extras.filter(Boolean).length : 0);
 </script>
@@ -90,7 +95,7 @@
       <span class="arq-txt">
         {#if arquivo}
           <span class="arq-nome">{arquivo.nome}</span>
-          <span class="arq-sub">{#if r}{numero(r.total + r.vazias)} {plural(r.total + r.vazias, "linha", "linhas")} · separado por {separador(r.separador)} · {numero(r.totalColunas)} {plural(r.totalColunas, "coluna", "colunas")}{:else if lendo}lendo a planilha…{:else}a planilha não foi lida{/if}</span>
+          <span class="arq-sub">{#if r}{numero(linhasNoArquivo)} {plural(linhasNoArquivo, "linha", "linhas")} · separado por {separador(r.separador)} · {numero(r.totalColunas)} {plural(r.totalColunas, "coluna", "colunas")}{:else if lendo}lendo a planilha…{:else}a planilha não foi lida{/if}</span>
         {:else}
           <span class="arq-nome">Escolher a planilha</span>
           <span class="arq-sub">o CSV exportado pelo sistema pago</span>

@@ -10,7 +10,8 @@ const { stripTypeScriptTypes } = require("node:module");
 
 const ARQ = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "importar", "importar.ts");
 const NOMES = ["descartar", "GUARDA_PADRAO", "guardaDe", "notaDaPrevia", "PERGUNTA_DESCARTAR", "fraseForaApagada", "notaForaAte", "importarLote", "podeDeixarDeFora",
-  "perguntaDeixarDeFora", "linhasRecusadas", "fraseDoPrazo", "descartarParada", "PERGUNTA_DESCARTAR_PARADA", "fraseDescartadaPeloPrazo"];
+  "perguntaDeixarDeFora", "linhasRecusadas", "fraseDoPrazo", "descartarParada", "PERGUNTA_DESCARTAR_PARADA", "fraseDescartadaPeloPrazo", "fazerPrevia", "fraseDoResto",
+  "fraseDaPreviaDoResto", "AVISO_ARQUIVO_RESTO"];
 
 function carregar(pedir) {
   if (typeof stripTypeScriptTypes !== "function") throw new Error("este Node não tira tipos do TypeScript (precisa do 22.13 ou mais novo)");
@@ -185,7 +186,7 @@ describe("G2: a tela parada mostra o prazo (faltam N dias)", () => {
   });
   test("a tela parada mostra a frase do prazo, com o prazo e quantas entraram que vêm do servidor", () => {
     const tela = fs.readFileSync(path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Importar.svelte"), "utf8");
-    expect(tela).toMatch(/const prazoTexto = \$derived\(fraseDoPrazo\(est\?\.prazo, est\?\.importadas\)\)/);
+    expect(tela).toMatch(/const prazoTexto = \$derived\(fraseDoPrazo\(est\?\.prazo, est\?\.importadas, est\?\.importacao\?\.restoDe != null\)\)/);
     const secao = tela.slice(tela.indexOf("<h2>A importação começou e não terminou</h2>"), tela.indexOf("Continuar a importação</Botao>"));
     expect(secao).toMatch(/\{#if prazoTexto\}<p class="prazo">\{prazoTexto\}<\/p>\{\/if\}/);
   });
@@ -224,5 +225,88 @@ describe("G2: descartar a importação parada sem ninguém importado", () => {
     const passo1 = tela.slice(tela.indexOf("{#if passo === 1}"), tela.indexOf("<PassoArquivo"));
     expect(passo1).toMatch(/\{#if descartadaTexto\}<Aviso tom="info">\{descartadaTexto\}<\/Aviso>\{\/if\}/);
     expect(tela).toMatch(/const descartadaTexto = \$derived\(fraseDescartadaPeloPrazo\(est\?\.descartadaPeloPrazo\)\)/);
+  });
+});
+
+// G2 (decisão dele de 24/11/2026): com a lista de QUAIS linhas faltaram, a Secretaria Geral faz UMA importação nova só com elas (o resto). A tela: o bloco
+// "As linhas que faltaram" no resultado (quantas, as primeiras, o botão; depois, o que o resto fez), o passo do arquivo no modo do resto e a nota da prévia.
+// Nada disso tem desenho aprovado: os textos vão no relatório para ele ver.
+describe("G2: a importação só das linhas que faltaram (a tela)", () => {
+  const PASTA = path.join(__dirname, "..", "..", "..", "front", "src", "membros");
+  const ler = (arq) => fs.readFileSync(path.join(PASTA, arq), "utf8");
+  test("a prévia do resto vai com resto: true; a comum, sem", async () => {
+    const pedir = jest.fn(async () => ({ ok: true, dados: { importacaoId: 8, resumo: {} } }));
+    const T = carregar(pedir);
+    await T.fazerPrevia({ nomeArquivo: "membros.csv", texto: "x", resto: true });
+    await T.fazerPrevia({ nomeArquivo: "membros.csv", texto: "x" });
+    igual(pedir.mock.calls.map((c) => [c[0], c[1]]), [["/importacao-membros/previa", { metodo: "POST", corpo: { nomeArquivo: "membros.csv", texto: "x", resto: true } }],
+      ["/importacao-membros/previa", { metodo: "POST", corpo: { nomeArquivo: "membros.csv", texto: "x" } }]]);
+  });
+  test("o bloco do resultado: quantas faltaram e a saída (uma vez); depois, o que o resto fez; aberto ou sem nada, calado", () => {
+    const T = carregar(jest.fn());
+    const base = { de: 7, faltaram: 1207, linhas: [{ linha: 3912, nome: "Paulo Henrique Dias" }], possivel: true, aberto: false, feito: null };
+    expect(T.fraseDoResto(base)).toBe("A importação não terminou no prazo: 1.207 linhas faltaram, e o sistema guardou só o número da linha e o nome de cada uma. "
+      + "Você pode fazer uma importação só com elas, uma vez: mande o mesmo arquivo de novo, ou uma planilha só com essas linhas.");
+    expect(T.fraseDoResto({ ...base, faltaram: 1 })).toBe("A importação não terminou no prazo: 1 linha faltou, e o sistema guardou só o número da linha e o nome "
+      + "dela. Você pode fazer uma importação só com ela, uma vez: mande o mesmo arquivo de novo, ou uma planilha só com essa linha.");
+    const feito = { ...base, possivel: false, feito: { importacaoId: 8, concluidaEm: "2026-12-22T13:00:00Z", importadas: 1150, fora: 57 } };
+    expect(T.fraseDoResto(feito)).toBe("A importação das linhas que faltaram foi feita em 22/12/2026: 1.150 entraram e 57 ficaram de fora (na lista dela para baixar). "
+      + "É uma vez só: quem ainda faltar se cadastra à mão.");
+    expect(T.fraseDoResto({ ...feito, feito: { ...feito.feito, importadas: 1, fora: 0 } })).toBe("A importação das linhas que faltaram foi feita em 22/12/2026: 1 entrou. "
+      + "É uma vez só: quem ainda faltar se cadastra à mão.");
+    for (const x of [null, undefined, { ...base, possivel: false }, { ...base, aberto: true, possivel: false }, { ...base, faltaram: 0 }, { ...base, faltaram: "3" }]) {
+      expect(T.fraseDoResto(x)).toBe("");
+    }
+  });
+  test("a nota da prévia do resto: quantas foram achadas e quantas linhas do arquivo ficam fora da lista", () => {
+    const T = carregar(jest.fn());
+    const r = { de: 7, faltaram: 1207, achadas: 1150, naoAchadas: 57, ambiguas: 0, foraDaLista: 3840, listaNaoAchadas: [] };
+    expect(T.fraseDaPreviaDoResto(r)).toBe("Importação só das linhas que faltaram (uma vez): 1.150 das 1.207 linhas foram achadas neste arquivo; as outras 3.840 "
+      + "linhas do arquivo não estão na lista e ficam fora.");
+    expect(T.fraseDaPreviaDoResto({ ...r, achadas: 1, faltaram: 3, foraDaLista: 1 })).toBe("Importação só das linhas que faltaram (uma vez): 1 das 3 linhas foi "
+      + "achada neste arquivo; a outra linha do arquivo não está na lista e fica fora.");
+    expect(T.fraseDaPreviaDoResto({ ...r, foraDaLista: 0 })).toBe("Importação só das linhas que faltaram (uma vez): 1.150 das 1.207 linhas foram achadas neste arquivo.");
+    for (const x of [null, undefined, {}, { ...r, faltaram: 0 }, { ...r, achadas: "1" }]) expect(T.fraseDaPreviaDoResto(x)).toBe("");
+  });
+  test("o passo do arquivo no modo do resto diz o que mandar; o prazo do resto parado não promete outra importação", () => {
+    const T = carregar(jest.fn());
+    expect(T.AVISO_ARQUIVO_RESTO).toBe("Importação só das linhas que faltaram (uma vez): escolha o mesmo arquivo da importação, ou uma planilha só com essas linhas. "
+      + "Entram só as linhas da lista, achadas pelo nome; as outras ficam fora.");
+    const prazo = { dias: 7, venceEm: "2026-12-03T14:00:00Z", faltam: 5 };
+    expect(T.fraseDoPrazo(prazo, 40, true)).toBe("Faltam 5 dias para continuar (até 03/12/2026). Depois do prazo, as linhas que faltam ficam de fora e os dados pessoais "
+      + "delas se apagam: fica só o número da linha e o nome, para cadastrar à mão.");
+    expect(T.fraseDoPrazo(prazo, 0, true)).toBe("Faltam 5 dias para continuar (até 03/12/2026). Depois do prazo, a importação é descartada e os dados pessoais da planilha se apagam.");
+  });
+  test("a tela abre na prévia e no andamento do resto antes do resultado; o modo do resto vale no passo do arquivo e na prévia", () => {
+    const tela = ler("telas/Importar.svelte");
+    const c = tela.slice(tela.indexOf("async function carregar()"), tela.indexOf("if (geral) void carregar();"));
+    expect(c.indexOf("if (r.dados.emAndamento) passo = 3;")).toBeGreaterThan(-1);
+    expect(c.indexOf("if (r.dados.emAndamento) passo = 3;")).toBeLessThan(c.indexOf('imp.situacao === "PREVIA"'));
+    expect(c.indexOf('imp.situacao === "PREVIA"')).toBeLessThan(c.indexOf("else if (r.dados.feita) passo = 4;"));
+    expect(c).toMatch(/modoResto = imp\?\.restoDe != null;/);
+    const passo1 = tela.slice(tela.indexOf("{#if passo === 1}"), tela.indexOf("<PassoNumeros"));
+    expect(passo1).toMatch(/\{#if modoResto\}\s*<Aviso tom="info">\{AVISO_ARQUIVO_RESTO\}/);
+    expect(passo1).toMatch(/<PassoArquivo \{celular\} campos=\{est\.campos\} resto=\{modoResto\}/);
+    expect(tela).toMatch(/\{#if previaRestoTexto\}<Aviso tom="info">\{previaRestoTexto\}<\/Aviso>\{\/if\}\s*<PassoNumeros/);
+    expect(tela).toMatch(/<PassoResultado [^>]*resto=\{est\.resto \?\? null\}[^>]*onresto=\{importarResto\}/);
+    const arq = ler("importar/PassoArquivo.svelte");
+    expect(arq.match(/\.\.\.\(resto \? \{ resto: true as const \} : \{\}\)/g) || []).toHaveLength(2);
+  });
+  test("na prévia do resto, os números dizem o que é: o arquivo conta todas as linhas; o primeiro quadro, as achadas das que faltaram (as fotos acharam)", () => {
+    const arq = ler("importar/PassoArquivo.svelte");
+    expect(arq).toMatch(/const linhasNoArquivo = \$derived\(r \? r\.total \+ r\.vazias \+ \(r\.resto \? r\.resto\.foraDaLista \+ r\.resto\.ambiguas : 0\) : 0\);/);
+    expect(arq).toMatch(/\{numero\(linhasNoArquivo\)\} \{plural\(linhasNoArquivo, "linha", "linhas"\)\}/);
+    const num = ler("importar/PassoNumeros.svelte");
+    expect(num).toMatch(/r\.resto\s*\? \{ n: r\.total, rotulo: "Achadas no arquivo", sub: `das \$\{numero\(r\.resto\.faltaram\)\} que faltaram` \}/);
+    expect(num).toMatch(/: \{ n: r\.total, rotulo: "Pessoas no arquivo",/);
+  });
+  test("o resultado: o bloco fica fora da divisão celular/computador; o botão só quando o resto pode; a nota do 'não se importa de novo' some enquanto pode", () => {
+    const t = ler("importar/PassoResultado.svelte");
+    const bloco = t.indexOf('<section class="resto"');
+    expect(bloco).toBeGreaterThan(-1);
+    expect(bloco).toBeLessThan(t.indexOf("{#if celular}"));
+    expect(t).toMatch(/\{#if resto\?\.possivel && resto\.linhas\.length\}[\s\S]*onclick=\{onresto\}>Importar só as linhas que faltaram<\/Botao>/);
+    expect(t).toMatch(/\{#if !resto\?\.possivel\}<p class="nota">Não se importa de novo: esta tela fica só com o resultado\.<\/p>\{\/if\}/);
+    expect(t).toMatch(/baixarLista\(resto\.feito\.importacaoId\)/);
   });
 });

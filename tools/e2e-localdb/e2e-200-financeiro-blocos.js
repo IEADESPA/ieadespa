@@ -141,7 +141,11 @@ async function disparar(chamadas) {
   // revisão M2, M3 e M5: a data antes da chegada, a congregação inativa e o "levado pela área" que não é sim nem não
   const antesM = await retratoFin();
   r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { nome: "Tesoureira da Central" }, data: "2026-01-02" });
-  ok(r.status === 422 && /antes da chegada/.test(r.body.mensagem), "a entrega com data antes da chegada do bloco é recusada", r.body);
+  ok(r.status === 422 && /^Antes da chegada do bloco \(\d\d\/\d\d\/\d{4}\)\.$/.test(r.body.mensagem), "a entrega com data antes da chegada do bloco é recusada (o texto da r30)", r.body);
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { nome: "Tesoureira da Central" }, data: "2099-01-02" });
+  ok(r.status === 422 && r.body.mensagem === "Depois de hoje: confira a data.", "a entrega com data depois de hoje é recusada (o texto da r30)", r.body);
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { nome: "  " } });
+  ok(r.status === 422 && r.body.mensagem === "Escolha quem recebeu o bloco.", "a entrega sem quem recebeu é recusada (o texto da r30)", r.body);
   await q(`UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = ${BETA}`);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } });
   await q(`UPDATE Congregacoes SET Ativa = 1 WHERE CongregacaoId = ${BETA}`);
@@ -153,9 +157,9 @@ async function disparar(chamadas) {
   ok((await retratoFin()) === antesM, "as entregas recusadas não mexeram no banco");
 
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL } });
-  ok(r.status === 200 && r.body.mensagem === "Bloco 1.401 entregue a Vila Nova E2E.", "o bloco 1.401 entregue a Vila Nova", r.body);
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.401 entregue a Vila Nova E2E. Está no livro.", "o bloco 1.401 entregue a Vila Nova (a confirmação da r30)", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: BETA, pessoa: { nome: "Outra pessoa" } });
-  ok(r.status === 422 && /O bloco 1\.401 já foi entregue/.test(r.body.mensagem), "o mesmo bloco não sai duas vezes", r.body);
+  ok(r.status === 409 && r.body.mensagem === "Este bloco acabou de sair por outra pessoa. Confira o livro.", "o mesmo bloco não sai duas vezes (409, o texto da r30)", r.body);
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70101, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute (tesoureira)" }, levadoPelaArea: true })).status === 200, "o bloco 1.402 entregue a Vila Nova, levado pela área");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70151, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } })).status === 200, "o bloco 1.403 entregue à Beta");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: 999, pessoa: { nome: "x" } })).status === 422, "congregação que não existe é recusada");
@@ -320,6 +324,8 @@ async function disparar(chamadas) {
   rs = await disparar([CENTRAL, VILA_NOVA, BETA, CENTRAL].map((c, i) => ({ handler: "finBlocos", acao: "entregar", token: tok, corpo: { primeiraFolha: 70251, congregacaoId: c, pessoa: { nome: `Pessoa ${i}` } } })));
   ok(rs.filter((x) => x.status === 200).length === 1 && Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = (SELECT BlocoId FROM FinBlocos WHERE PrimeiraFolha = 70251)`)) === 1,
     "4 entregas do mesmo bloco ao mesmo tempo: só 1 sai, e o livro tem uma linha só", rs.map((x) => x.status));
+  ok(rs.filter((x) => x.status === 409 && x.mensagem === "Este bloco acabou de sair por outra pessoa. Confira o livro.").length === 3,
+    "as outras 3 recebem o 409: o bloco acabou de sair por outra pessoa", rs.map((x) => `${x.status} ${x.mensagem}`));
   rs = await disparar([0, 1, 2, 3].map((i) => ({ handler: "finBlocos", acao: "lote", token: tok, corpo: { serie: 2027, primeiraFolha: 200001 + i * 25, totalFolhas: 100 } })));
   const sobrepostos = Number(await escalar(`SELECT COUNT(*) FROM FinLotesGrafica a JOIN FinLotesGrafica b ON a.LoteId < b.LoteId AND a.PrimeiraFolha <= b.UltimaFolha AND a.UltimaFolha >= b.PrimeiraFolha`));
   ok(sobrepostos === 0 && rs.filter((x) => x.status === 201).length === 1, "4 lotes que se cruzam ao mesmo tempo: nenhum par de lotes se sobrepõe", rs.map((x) => x.status));

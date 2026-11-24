@@ -9,7 +9,10 @@
 //  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada, extraviada ou inexistente
 //  GET  financeiro/blocos/livro?pagina=&porPagina=5|3   (financeiro, no escopo) o livro de entrada e saída e, fora da Geral, os blocos agora
 //  GET  financeiro/blocos/historico?folha=              (financeiro, no escopo) o histórico da folha: quem marcou, quem desfez, quando e por quê (r30)
-//  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco pela primeira folha, no "Registrar entrada"
+//  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco por qualquer folha dele, no "Registrar entrada" e
+//                                                       no "Registrar saída" (r30)
+//  GET  financeiro/blocos/para-saida?congregacaoId=     (Tesouraria Geral) no "Registrar saída" (r30): sem congregação, as ativas com a área; com
+//                                                       ela, a congregação e a liderança (a inativa e a que não existe têm a mesma resposta)
 //  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, parcial?, primeiraEmBranco?, data?} (Tesouraria Geral) a entrada do livro
 // Regra dele de 24/11/2026, com o detalhe da r30: a devolução completa (o bloco fecha) ou parcial, com a primeira folha em branco (dela ao fim, as
 // folhas voltam livres e o bloco fica na Geral, para sair de novo só com elas). Revisão de 23/11/2026 (regra dele): a exceção da folha se
@@ -86,6 +89,15 @@ module.exports = comConflito(async function (context, req) {
   if (!geral) return;
   const pool = await getPool();
   if (metodo === "GET" && acao === "rastreio") return responder(context, await db.rastreio(pool, { folha: (req.query || {}).folha }));
+  if (metodo === "GET" && acao === "para-saida") {
+    const q = req.query || {};
+    let congregacaoId = null;
+    if (q.congregacaoId !== undefined && q.congregacaoId !== "") {
+      congregacaoId = auth.idDeRota(q.congregacaoId);
+      if (!congregacaoId) return erro(context, 404, "Registro não encontrado.");
+    }
+    return responder(context, await db.paraSaida(pool, { congregacaoId }));
+  }
   if (metodo !== "POST" || !["lote", "chegada", "entregar", "devolver", "desfazer-folha"].includes(acao)) return erro(context, 404, "Ação inválida.");
   const por = Number(geral.membroId);
   if (acao === "desfazer-folha") return responder(context, await db.desfazerFolha(pool, { dados: corpo, por }));

@@ -167,6 +167,9 @@ export interface RegistroBloco {
   readonly bloco: number; readonly congregacao: string; readonly pessoa: string; readonly levadoPelaArea: boolean;
   /** só na entrada: como o bloco voltou */
   readonly contagem: ContagemFolhas | null;
+  /** só na saída: as folhas que saíram e a primeira folha do bloco (a saída do bloco que voltou em parte diz as folhas e as posições) */
+  readonly folhas?: Faixa;
+  readonly blocoPrimeiraFolha?: number;
 }
 export type RegistroLivro = RegistroLote | RegistroBloco;
 
@@ -187,7 +190,15 @@ export interface PaginaLivro {
 export interface PessoaDevolve { readonly membroId: number | null; readonly nome: string; readonly papel: string }
 
 export interface Rastreio {
-  readonly bloco: BlocoDasFolhas;
+  /** com a chegada da gráfica (o "Registrar saída" da r30 confere a data por ela) */
+  readonly bloco: BlocoDasFolhas & { readonly chegouEm?: string | null };
   readonly contagem: ContagemFolhas;
   readonly pessoas: readonly PessoaDevolve[];
+  /** o bloco que voltou em parte e está na Geral: de onde voltou, quando e as usadas (a r30) */
+  readonly volta?: VoltaBloco | null;
 }
+
+/** o "Registrar saída" (r30): as congregações ativas, com a área de cada uma (a frase do "Levado pela área") */
+export interface CongregacaoSaida { readonly id: number; readonly nome: string; readonly area: string | null }
+/** a congregação escolhida e a liderança dela (a lista do "Entregue a") */
+export interface LiderancaSaida { readonly congregacao: CongregacaoSaida; readonly pessoas: readonly PessoaDevolve[] }

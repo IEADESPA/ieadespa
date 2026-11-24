@@ -87,14 +87,29 @@ const LIVRO = [
   { id: 0, tipo: "chegada", data: "2026-10-20", registradoPor: "João da Silva", quantidade: 100, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } }
 ];
 const AGORA = { area: { emUso: 9, esperando: 2, aDevolver: 1 }, local: { emUso: 1, esperando: 1, aDevolver: 0 } };
+// a saída (r30-blocos-saida): as congregações ativas com a área e a liderança de cada uma
+const PARA_SAIDA = [{ id: 2, nome: "Vila Nova", area: "Área 2" }, { id: 4, nome: "Monte Sião", area: "Área 2" }, { id: 6, nome: "Cidade Jardim", area: "Área 3" },
+  { id: 8, nome: `Nova Vida ${ATAQUE}`, area: null }];
+const LIDERES = { 2: [{ membroId: 101, nome: "Rute Santos", papel: "Tesoureira" }, { membroId: 102, nome: "Paulo Reis", papel: "Dirigente" }],
+  4: [{ membroId: 401, nome: "Ezequiel Ramos", papel: "Dirigente" }], 6: [{ membroId: 601, nome: "Davi Moura", papel: "Tesoureiro" }], 8: [] };
+// o instrumento do teste fixa o relógio da página em 04/10/2026 15h (UTC): o "hoje" da tela
+const hojeBrasilia = () => "2026-10-04";
 const PESSOAS_1360 = [{ membroId: null, nome: "Ezequiel Ramos", papel: "quem levou o bloco" }, { membroId: 301, nome: "Lia Fontes", papel: "Tesoureira" }];
 function rastreio(folha) {
   if (folha >= 68001 && folha <= 68050) {
     return { sucesso: true, bloco: blocoMentira(5, 68001, "Bela Vista", "em-uso", 50, { entregueEm: "2026-09-08" }),
       contagem: { lancadas: 49, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 0 }, pessoas: PESSOAS_1360 };
   }
-  if (folha >= 70101 && folha <= 70150) {   // ainda na Tesouraria Geral: sem congregação nem entrega
-    return { sucesso: true, bloco: blocoMentira(9, 70101, null, "na-geral", 0), contagem: { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 50 }, pessoas: [] };
+  if (folha >= 70101 && folha <= 70150) {   // ainda na Tesouraria Geral, sem congregação nem entrega; ainda não chegou da gráfica
+    return { sucesso: true, bloco: blocoMentira(9, 70101, null, "na-geral", 0, { chegouEm: null }), contagem: { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 50 }, pessoas: [] };
+  }
+  if (folha >= 70151 && folha <= 70200) {   // o 1.403: chegou da gráfica em 05/02/2026 e está na Tesouraria Geral, pronto para sair
+    return { sucesso: true, bloco: blocoMentira(10, 70151, null, "na-geral", 0, { chegouEm: "2026-02-05" }), contagem: { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 50 },
+      primeiraEmBranco: null, pessoas: [], volta: null };
+  }
+  if (folha >= 64401 && folha <= 64450) {   // o 1.288: voltou parcial de Vila Nova em 03/11, as 35 usadas; as 15 livres (64.436 a 64.450) na Geral
+    return { sucesso: true, bloco: blocoMentira(8, 64401, null, "na-geral", 35, { chegouEm: "2026-02-05", entregueEm: null, parcial: true, livres: 15, faixa: { primeiraFolha: 64436, ultimaFolha: 64450 } }),
+      contagem: { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 15 }, primeiraEmBranco: null, pessoas: [], volta: { congregacao: "Vila Nova", data: "2026-10-01", usadas: 35 } };
   }
   if (folha >= 67001 && folha <= 67050) {   // já devolvido
     return { sucesso: true, bloco: blocoMentira(7, 67001, "Monte Sião", "fechado", 50, { devolvidoEm: "2026-10-02" }),
@@ -111,7 +126,7 @@ const PERFIS = {
 
 // a API simulada do Financeiro: cada página tem o seu estado (as folhas registradas) e a lista dos pedidos
 function apiFinanceiro(nivel, opcoes) {
-  const estado = { registradas: [], desfeitas: [], pedidos: [] };
+  const estado = { registradas: [], desfeitas: [], pedidos: [], saidas: [], saiu: [] };
   const responder = (metodo, u, corpo) => {
     const p = u.pathname, q = u.searchParams;
     estado.pedidos.push({ metodo, caminho: p, busca: Object.fromEntries(q.entries()), corpo });
@@ -159,7 +174,7 @@ function apiFinanceiro(nivel, opcoes) {
     }
     if (p === "/api/financeiro/blocos/livro" && metodo === "GET") {
       const porPagina = Number(q.get("porPagina")) === 3 ? 3 : 5, pagina = Number(q.get("pagina")) || 1;
-      const lista = nivel === "geral" ? LIVRO : LIVRO.filter((r) => r.tipo === "saida" || r.tipo === "entrada");
+      const lista = nivel === "geral" ? [...estado.saidas, ...LIVRO] : LIVRO.filter((r) => r.tipo === "saida" || r.tipo === "entrada");
       return { corpo: { sucesso: true, registros: lista.slice(0, porPagina), total: nivel === "geral" ? 412 : 37, pagina, porPagina,
         agora: nivel === "geral" ? null : AGORA[nivel], escopo: ESCOPO[nivel] } };
     }
@@ -174,7 +189,25 @@ function apiFinanceiro(nivel, opcoes) {
       }
       return { corpo: { sucesso: true, mensagem: "Bloco 1.360 devolvido: está de novo com a Tesouraria Geral." } };
     }
-    if (p === "/api/financeiro/blocos/entregar" && metodo === "POST") return { corpo: { sucesso: true, mensagem: "Bloco entregue." } };
+    if (p === "/api/financeiro/blocos/para-saida" && metodo === "GET") {
+      if (nivel !== "geral") return { status: 403, corpo: { sucesso: false, mensagem: "Esta função é da administração geral da igreja." } };
+      const c = q.get("congregacaoId");
+      if (!c) return { corpo: { sucesso: true, congregacoes: PARA_SAIDA } };
+      const cong = PARA_SAIDA.find((x) => String(x.id) === c);
+      return cong ? { corpo: { sucesso: true, congregacao: cong, pessoas: LIDERES[cong.id] } } : { status: 404, corpo: { sucesso: false, mensagem: "Registro não encontrado." } };
+    }
+    if (p === "/api/financeiro/blocos/entregar" && metodo === "POST") {
+      // o mesmo bloco duas vezes: a corrida de duas pessoas (409)
+      if (estado.saiu.includes(corpo.primeiraFolha)) return { status: 409, corpo: { sucesso: false, mensagem: "Este bloco acabou de sair por outra pessoa. Confira o livro." } };
+      estado.saiu.push(corpo.primeiraFolha);
+      const cong = PARA_SAIDA.find((x) => x.id === corpo.congregacaoId);
+      const pessoa = corpo.pessoa.nome || (LIDERES[corpo.congregacaoId] || []).find((x) => x.membroId === corpo.pessoa.membroId).nome;
+      const parcial = corpo.primeiraFolha === 64436;
+      estado.saidas.unshift({ id: 100 + estado.saidas.length, tipo: "saida", data: corpo.data, registradoPor: "João da Silva", bloco: parcial ? 1288 : 1403, congregacao: cong.nome, pessoa,
+        levadoPelaArea: corpo.levadoPelaArea, contagem: null, folhas: parcial ? { primeiraFolha: 64436, ultimaFolha: 64450 } : { primeiraFolha: 70151, ultimaFolha: 70200 },
+        blocoPrimeiraFolha: parcial ? 64401 : 70151 });
+      return { corpo: { sucesso: true, mensagem: parcial ? `Bloco 1.288 (64.436 a 64.450) entregue a ${cong.nome}. Está no livro.` : `Bloco 1.403 entregue a ${cong.nome}. Está no livro.` } };
+    }
     return { status: 404, corpo: { sucesso: false, mensagem: "Ação inválida." } };
   };
   return { estado, responder };
@@ -656,14 +689,11 @@ async function provarLivro() {
   await digitar(page, "Primeira folha do bloco", "5");
   await espera(700);
   ok((await textoTela(page)).includes("Nenhum bloco tem a folha 5."), "geral: a folha que nenhum bloco tem");
-  // a saída: sem formulário aprovado ainda
-  const e0 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  // a saída: o formulário da r30 no lugar do aviso
   ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\"");
   t = await textoTela(page);
-  ok(/saída do bloco/.test(t) && /ainda vai ser construíd/.test(t), "geral: a saída avisa que ainda vai ser construída", t.slice(0, 400));
-  ok(!/incremento/i.test(t), "geral: o aviso da saída não usa a palavra da construção (\"incremento\")", t.slice(t.indexOf("saída do bloco"), t.indexOf("saída do bloco") + 200));
-  ok(!t.includes("o bloco volta para a Tesouraria Geral"), "geral: a saída troca o formulário da entrada pelo aviso");
-  ok(pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e0, "geral: a saída não grava nada");
+  ok(!/ainda vai ser construíd/.test(t) && t.includes("o bloco vai para uma congregação"), "geral: a saída abre o formulário (sai o aviso de antes)", t.slice(0, 400));
+  ok(!t.includes("o bloco volta para a Tesouraria Geral"), "geral: a saída troca o formulário da entrada pelo dela");
   await clicar(page, "Registrar entrada");
   ok((await textoTela(page)).includes("o bloco volta para a Tesouraria Geral"), "geral: \"Registrar entrada\" volta ao formulário");
   // o aviso do lote da gráfica não promete mais "junto com as folhas e o livro"
@@ -693,6 +723,8 @@ async function provarLivro() {
   ok(t.includes("Entrada e saída de blocos quem registra é a Tesouraria Geral. Para pedir um bloco novo, fale com a Tesouraria Geral; a entrega fica registrada aqui."), "local: o aviso");
   ok(/Seus blocos agora em uso 1 esperando 1/.test(t) && !/a devolver/.test(t), "local: seus blocos agora (em uso, esperando)", t.slice(t.indexOf("Seus blocos"), t.indexOf("Seus blocos") + 60));
   ok(t.includes("1 a 5 de 37 registros"), "local: as páginas do livro");
+  ok(t.includes("17/11 Saída: bloco 1.402 entregue a Rute Santos registrou João da Silva · Tesouraria Geral") && !t.includes("(Vila Nova)"),
+    "local: a linha da saída sem o nome da própria congregação (r30)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
   await fechar(s, "livro local notebook");
 
   // o celular: a Geral com os dois botões (o formulário só ao tocar); a congregação com o aviso
@@ -712,8 +744,235 @@ async function provarLivro() {
   await clicar(s.page, "Livro de entrada e saída");
   await espera(300);
   t = await textoTela(s.page);
-  ok(t.includes("Entrada e saída de blocos quem registra é a Tesouraria Geral. Aqui você vê o livro da sua congregação."), "celular local: o aviso");
+  ok(t.includes("Entrada e saída de blocos quem registra é a Tesouraria Geral. Para pedir um bloco novo, fale com a Tesouraria Geral; a entrega fica registrada aqui."),
+    "celular local: o aviso aprovado, o mesmo do notebook (r30)", t.slice(0, 400));
+  ok(!t.includes("Aqui você vê o livro da sua congregação"), "celular local: sai o aviso antigo");
   await fechar(s, "livro local celular");
+
+  s = await abrir("area", "celular");
+  await clicar(s.page, "Livro de entrada e saída");
+  await espera(300);
+  t = await textoTela(s.page);
+  ok(t.includes("Entrada e saída de blocos quem registra é a Tesouraria Geral. A área é só intermediária: o bloco nunca fica com a área."), "celular área: o aviso aprovado (r30)", t.slice(0, 400));
+  await fechar(s, "livro área celular");
+}
+
+// ---- a saída (r30-blocos-saida): a Tesouraria Geral entrega um bloco a uma congregação ----
+const dataDe = (page, rotulo) => page.evaluate((rotulo) => {
+  const l = [...document.querySelectorAll("#financeiroRaiz label")].find((x) => x.textContent.replace(/\s+/g, " ").trim().startsWith(rotulo) && x.offsetParent !== null);
+  const i = l && (l.control || l.querySelector("input"));
+  return i ? i.value : null;
+}, rotulo);
+async function definirData(page, rotulo, iso) {
+  const feito = await page.evaluate((rotulo, iso) => {
+    const l = [...document.querySelectorAll("#financeiroRaiz label")].find((x) => x.textContent.replace(/\s+/g, " ").trim().startsWith(rotulo) && x.offsetParent !== null);
+    const i = l && (l.control || l.querySelector("input"));
+    if (!i) return false;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(i, iso);
+    i.dispatchEvent(new Event("input", { bubbles: true }));
+    i.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }, rotulo, iso);
+  await calmo(page);
+  return feito;
+}
+const chave = (page) => page.evaluate(() => { const b = document.querySelector("#financeiroRaiz [role=switch]"); return b ? { ligada: b.getAttribute("aria-checked"), texto: b.textContent.replace(/\s+/g, " ").trim() } : null; });
+async function virarChave(page) { await page.evaluate(() => document.querySelector("#financeiroRaiz [role=switch]").click()); await calmo(page); }
+const classeDoBotao = (page, texto) => page.evaluate((texto) => { const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => x.textContent.replace(/\s+/g, " ").trim() === texto && x.offsetParent !== null); return b ? b.className : null; }, texto);
+const caixaSaida = (page) => page.evaluate(() => { const c = document.querySelector("#financeiroRaiz .caixa-bloco"); return c ? { texto: c.innerText.replace(/\s+/g, " ").trim(), erro: c.classList.contains("erro") } : null; });
+async function folhaDaSaida(page, api, texto) {
+  const antes = pedidos(api, "/api/financeiro/blocos/rastreio").length;
+  await digitar(page, "Primeira folha do bloco", texto);
+  const r = await esperarPedido(api, "/api/financeiro/blocos/rastreio", "GET", antes);
+  await calmo(page);
+  return r;
+}
+async function provarSaida() {
+  let s = await abrir("geral", "notebook");
+  let { page, api } = s;
+  await clicar(page, "Livro de entrada e saída");
+  await calmo(page);
+  ok(/\bouro\b/.test(await classeDoBotao(page, "Registrar entrada")) && /linha-botao/.test(await classeDoBotao(page, "Registrar saída")), "geral: a entrada é a dourada antes de escolher");
+  const ps0 = pedidos(api, "/api/financeiro/blocos/para-saida").length;
+  ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\"");
+  const ps1 = await esperarPedido(api, "/api/financeiro/blocos/para-saida", "GET", ps0);
+  ok(ps1 && !ps1.busca.congregacaoId, "geral: pede as congregações ativas", ps1 && ps1.busca);
+  await calmo(page);
+  let t = await textoTela(page);
+  ok(/\bouro\b/.test(await classeDoBotao(page, "Registrar saída")) && /linha-botao/.test(await classeDoBotao(page, "Registrar entrada")), "geral: com a saída aberta, a saída é a dourada (r30Botoes)");
+  ok(t.includes("Registrar saída o bloco vai para uma congregação"), "geral: o quadro \"Registrar saída\" com a nota", t.slice(0, 600));
+  ok(t.includes("Congregação* · só as ativas") && t.includes("Data da entrega*") && t.includes("Entregue a* · a liderança dela ou outra pessoa"), "geral: os rótulos do notebook", t.slice(0, 900));
+  ok(t.includes("Entregue por João da Silva · Tesouraria Geral (quem está entrando)"), "geral: \"Entregue por\" é quem está entrando");
+  const ops = await opcoesDe(page, "Congregação");
+  ok(ops && JSON.stringify(ops) === JSON.stringify(["Escolha", "Vila Nova", "Monte Sião", "Cidade Jardim", `Nova Vida ${ATAQUE}`]), "geral: a lista só com as ativas (o nome vai como texto)", ops);
+  ok(JSON.stringify(await opcoesDe(page, "Entregue a")) === JSON.stringify(["primeiro, a congregação"]), "geral: \"Entregue a\" espera a congregação", await opcoesDe(page, "Entregue a"));
+  let ch = await chave(page);
+  ok(ch && ch.ligada === "false" && ch.texto === "Levado pela área Marque se a área da congregação vai levar o bloco.", "geral: \"Levado pela área\" desligado, a frase sem congregação", ch);
+  ok((await dataDe(page, "Data da entrega")) === hojeBrasilia(), "geral: a data já vem com hoje", await dataDe(page, "Data da entrega"));
+  ok(await classeDoBotao(page, "Registrar a saída") !== null, "geral: o botão \"Registrar a saída\" (dourado, mesmo vazio)");
+  // o que o sistema confere antes de gravar, cada mensagem embaixo do seu campo
+  const e0 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  await clicar(page, "Registrar a saída");
+  t = await textoTela(page);
+  ok(t.includes("Informe a primeira folha do bloco.") && t.includes("Escolha a congregação.") && t.includes("Escolha quem recebeu o bloco."), "geral: vazio, as três mensagens", t.slice(0, 900));
+  ok(pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e0, "geral: vazio não grava");
+  const r1 = await folhaDaSaida(page, api, "70.160");
+  ok(r1 && r1.busca.folha === "70160", "geral: qualquer folha do bloco puxa o bloco (o rastreio, só com os números)", r1 && r1.busca);
+  let cx = await caixaSaida(page);
+  ok(cx && !cx.erro && cx.texto === "Bloco 1.403 (veio sozinho): folhas 70.151 a 70.200 · chegou em 05/02/2026 · está na Tesouraria Geral", "geral: a caixa do bloco (verde-água)", cx);
+  ok(!(await textoTela(page)).includes("Informe a primeira folha do bloco."), "geral: a mensagem da folha some quando a pessoa digita");
+  const pc0 = pedidos(api, "/api/financeiro/blocos/para-saida").length;
+  ok(await escolher(page, "Congregação", "Vila Nova"), "geral: escolher Vila Nova");
+  const pc1 = await esperarPedido(api, "/api/financeiro/blocos/para-saida", "GET", pc0);
+  ok(pc1 && pc1.busca.congregacaoId === "2", "geral: pede a liderança de Vila Nova", pc1 && pc1.busca);
+  await calmo(page);
+  const opsP = await opcoesDe(page, "Entregue a");
+  ok(opsP && JSON.stringify(opsP) === JSON.stringify(["Escolha quem recebe o bloco", "Rute Santos · tesoureira de Vila Nova", "Paulo Reis · dirigente de Vila Nova", "Outra pessoa (escrever o nome)"]),
+    "geral: \"Entregue a\" com a liderança de Vila Nova e \"Outra pessoa\"", opsP);
+  ch = await chave(page);
+  ok(ch && ch.texto === "Levado pela área Marque se a Área 2 vai levar o bloco até Vila Nova.", "geral: a frase com a área e a congregação", ch);
+  await definirData(page, "Data da entrega", "2026-01-25");
+  await escolher(page, "Entregue a", "Rute Santos · tesoureira de Vila Nova");
+  await clicar(page, "Registrar a saída");
+  t = await textoTela(page);
+  ok(t.includes("Antes da chegada do bloco (05/02/2026).") && pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e0, "geral: a data antes da chegada (o 11 virou 01)", t.slice(0, 900));
+  ok(await page.evaluate(() => { const i = [...document.querySelectorAll("#financeiroRaiz input[type=date]")].find((x) => x.offsetParent !== null); return !!i && i.getAttribute("aria-invalid") === "true"; }), "geral: o campo da data fica marcado");
+  await definirData(page, "Data da entrega", "2099-01-02");
+  await clicar(page, "Registrar a saída");
+  ok((await textoTela(page)).includes("Depois de hoje: confira a data."), "geral: a data depois de hoje");
+  await definirData(page, "Data da entrega", hojeBrasilia());
+  const lv = pedidos(api, "/api/financeiro/blocos/livro").length;
+  await clicar(page, "Registrar a saída");
+  const ent = await esperarPedido(api, "/api/financeiro/blocos/entregar", "POST", e0);
+  ok(ent && JSON.stringify(ent.corpo) === JSON.stringify({ primeiraFolha: 70151, congregacaoId: 2, pessoa: { membroId: 101 }, levadoPelaArea: false, data: hojeBrasilia() }),
+    "geral: a saída vai pela PRIMEIRA folha do bloco, com a pessoa do cadastro, sem a área e a data", ent && ent.corpo);
+  const relido = await esperarPedido(api, "/api/financeiro/blocos/livro", "GET", lv);
+  ok(relido && (!relido.busca.pagina || relido.busca.pagina === "1"), "geral: o livro volta à 1ª página", relido && relido.busca);
+  await calmo(page);
+  ok((await ultimoAviso(page)) === "Bloco 1.403 entregue a Vila Nova. Está no livro.", "geral: a confirmação da r30", await ultimoAviso(page));
+  t = await textoTela(page);
+  ok(t.includes(`${hojeBrasilia().slice(8, 10)}/${hojeBrasilia().slice(5, 7)} Saída: bloco 1.403 entregue a Rute Santos (Vila Nova) registrou João da Silva · Tesouraria Geral`), "geral: a linha nova no alto do livro", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
+  ok(t.includes("o bloco vai para uma congregação") && !(await caixaSaida(page)) && (await dataDe(page, "Data da entrega")) === hojeBrasilia()
+    && (await page.evaluate(() => { const i = [...document.querySelectorAll("#financeiroRaiz input")].find((x) => x.offsetParent !== null && x.inputMode === "numeric"); return i ? i.value : null; })) === "",
+    "geral: o formulário fica aberto e limpo, com a data de hoje (para o próximo bloco)");
+  ok(JSON.stringify(await opcoesDe(page, "Entregue a")) === JSON.stringify(["primeiro, a congregação"]), "geral: \"Entregue a\" volta a esperar a congregação");
+  // levado pela área e a corrida (o mesmo bloco, um instante depois)
+  await folhaDaSaida(page, api, "70151");
+  await escolher(page, "Congregação", "Monte Sião");
+  await espera(300);
+  await escolher(page, "Entregue a", "Ezequiel Ramos · dirigente de Monte Sião");
+  await virarChave(page);
+  ch = await chave(page);
+  ok(ch && ch.ligada === "true" && ch.texto === "Levado pela área A Área 2 leva até Monte Sião; o bloco não fica com ela.", "geral: \"Levado pela área\" ligado: o bloco não fica com a área", ch);
+  const e1 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  await clicar(page, "Registrar a saída");
+  const ent2 = await esperarPedido(api, "/api/financeiro/blocos/entregar", "POST", e1);
+  ok(ent2 && ent2.corpo.levadoPelaArea === true && JSON.stringify(ent2.corpo.pessoa) === JSON.stringify({ membroId: 401 }) && ent2.corpo.congregacaoId === 4, "geral: vai a marca \"levado pela área\" e a pessoa de Monte Sião", ent2 && ent2.corpo);
+  await calmo(page);
+  ok((await ultimoAviso(page)) === "Este bloco acabou de sair por outra pessoa. Confira o livro.", "geral: a corrida: a mensagem do servidor (409)", await ultimoAviso(page));
+  ok(!!(await caixaSaida(page)), "geral: a recusa não limpa o formulário");
+  // outra pessoa
+  await escolher(page, "Entregue a", "outra");
+  ok(await campo(page, "Nome de quem recebeu").then((h) => !!h.asElement()), "geral: \"Outra pessoa\" abre o campo do nome");
+  const e2 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  await clicar(page, "Registrar a saída");
+  ok((await textoTela(page)).includes("Escreva o nome de quem recebeu o bloco.") && pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e2, "geral: sem o nome, a mensagem e nada grava");
+  // a caixa em vermelho: o que não pode sair
+  for (const [folhaT, msg, desc] of [["70101", "O bloco 1.402 ainda não chegou da gráfica.", "o que não chegou"], ["68010", "O bloco 1.360 já saiu: está com Bela Vista desde 08/09/2026.", "o que já saiu"],
+    ["67001", "O bloco 1.340 voltou completo em 02/10/2026: não tem folha livre para sair.", "o que voltou completo"], ["5", "Nenhum bloco tem a folha 5.", "a folha que nenhum bloco tem"]]) {
+    await folhaDaSaida(page, api, folhaT);
+    cx = await caixaSaida(page);
+    ok(cx && cx.erro && cx.texto === msg, `geral: a caixa em vermelho: ${desc}`, cx);
+    const n = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+    await clicar(page, "Registrar a saída");
+    ok(pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === n, `geral: ${desc} não grava`);
+  }
+  // o bloco que voltou parcial: saem só as livres, pela primeira livre
+  await folhaDaSaida(page, api, "64.401");
+  cx = await caixaSaida(page);
+  ok(cx && !cx.erro && cx.texto === "Bloco 1.288, parcial (veio sozinho): saem só as 15 livres, 64.436 a 64.450 (36ª a 50ª) · voltou de Vila Nova em 01/10 · está na Tesouraria Geral. As 35 usadas ficam no histórico, com Vila Nova.",
+    "geral: a caixa do bloco parcial", cx);
+  await escolher(page, "Congregação", "Cidade Jardim");
+  await espera(300);
+  await escolher(page, "Entregue a", "Davi Moura · tesoureiro de Cidade Jardim");
+  if ((await chave(page)).ligada === "true") await virarChave(page);
+  await definirData(page, "Data da entrega", "2026-09-25");
+  const e3 = pedidos(api, "/api/financeiro/blocos/entregar", "POST").length;
+  await clicar(page, "Registrar a saída");
+  ok((await textoTela(page)).includes("Antes da volta do bloco (01/10/2026).") && pedidos(api, "/api/financeiro/blocos/entregar", "POST").length === e3, "geral: no parcial, a data não vem antes da volta");
+  await definirData(page, "Data da entrega", hojeBrasilia());
+  await clicar(page, "Registrar a saída");
+  const ent3 = await esperarPedido(api, "/api/financeiro/blocos/entregar", "POST", e3);
+  ok(ent3 && ent3.corpo.primeiraFolha === 64436 && ent3.corpo.congregacaoId === 6, "geral: o parcial sai pela primeira livre (64.436), não pela digitada", ent3 && ent3.corpo);
+  await calmo(page);
+  ok((await ultimoAviso(page)) === "Bloco 1.288 (64.436 a 64.450) entregue a Cidade Jardim. Está no livro.", "geral: a confirmação do parcial diz as folhas", await ultimoAviso(page));
+  t = await textoTela(page);
+  ok(t.includes("Saída: bloco 1.288, parcial, entregue a Davi Moura (Cidade Jardim) só as folhas 64.436 a 64.450 (36ª a 50ª) · registrou João da Silva"), "geral: a linha do livro da saída parcial", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
+  await fechar(s, "saída geral notebook");
+
+  // da aba Folhas: o bloco parcial na Geral abre a saída já com ele
+  s = await abrir("geral", "notebook");
+  ({ page, api } = s);
+  await clicar(page, "Folhas do bloco");
+  await abrirSeletor(page);
+  await escolherNoSeletor(page, "Bloco 1.288");
+  const rs0 = pedidos(api, "/api/financeiro/blocos/rastreio").length;
+  ok(await clicar(page, "Registrar saída"), "estoque: o botão \"Registrar saída\" do bloco parcial");
+  const rs1 = await esperarPedido(api, "/api/financeiro/blocos/rastreio", "GET", rs0);
+  ok(rs1 && rs1.busca.folha === "64436", "estoque: o livro abre a saída já com a primeira livre", rs1 && rs1.busca);
+  await calmo(page);
+  cx = await caixaSaida(page);
+  ok(cx && /^Bloco 1\.288, parcial/.test(cx.texto), "estoque: a caixa do parcial aparece sozinha", cx);
+  await fechar(s, "saída estoque notebook");
+
+  // a área e a congregação não registram saída
+  for (const nivel of ["area", "local"]) {
+    s = await abrir(nivel, "notebook");
+    await clicar(s.page, "Livro de entrada e saída");
+    await espera(300);
+    t = await textoTela(s.page);
+    ok(!t.includes("Registrar saída") && pedidos(s.api, "/api/financeiro/blocos/para-saida").length === 0, `${nivel}: sem o formulário da saída e sem pedir as congregações`);
+    await fechar(s, `saída ${nivel} notebook`);
+  }
+
+  // o celular: o formulário no lugar dos botões e do livro, com o X; depois de registrar, o livro e a saída dourada
+  s = await abrir("geral", "celular");
+  ({ page, api } = s);
+  await clicar(page, "Livro de entrada e saída");
+  await calmo(page);
+  await clicar(page, "Registrar saída");
+  await calmo(page);
+  t = await textoTela(page);
+  ok(t.includes("Registrar saída") && !t.includes("O livro") && !t.includes("Registrar entrada"), "celular: o formulário fica no lugar dos botões e do livro", t.slice(0, 500));
+  ok(t.includes("Congregação*") && !t.includes("só as ativas") && t.includes("Data*") && !t.includes("Data da entrega") && !t.includes("a liderança dela ou outra pessoa"), "celular: os rótulos curtos", t.slice(0, 700));
+  ok(t.includes("Entregue por João da Silva (quem está entrando).") && !t.includes("Tesouraria Geral (quem está entrando)"), "celular: \"Entregue por\" é a linha embaixo do botão");
+  await folhaDaSaida(page, api, "70151");
+  cx = await caixaSaida(page);
+  ok(cx && cx.texto === "Bloco 1.403 (veio sozinho): folhas 70.151 a 70.200 · chegou em 05/02/2026 · na Tesouraria Geral", "celular: a caixa curta", cx);
+  await escolher(page, "Congregação", "Vila Nova");
+  await espera(300);
+  ch = await chave(page);
+  ok(ch && ch.texto === "Levado pela área Marque se a Área 2 vai levar.", "celular: a frase curta do \"Levado pela área\"", ch);
+  await definirData(page, "Data", "2026-01-25");
+  await escolher(page, "Entregue a", "Rute Santos · tesoureira de Vila Nova");
+  await clicar(page, "Registrar a saída");
+  ok((await textoTela(page)).includes("Antes da chegada (05/02/2026)."), "celular: a mensagem curta da data");
+  await definirData(page, "Data", hojeBrasilia());
+  await clicar(page, "Registrar a saída");
+  await calmo(page);
+  t = await textoTela(page);
+  ok(t.includes("O livro") && t.includes("Registrar entrada") && !t.includes("Primeira folha do bloco"), "celular: depois de registrar, o formulário fecha e o livro volta", t.slice(0, 500));
+  ok(/\bouro\b/.test(await classeDoBotao(page, "Registrar saída")), "celular: a saída fica dourada (r30Botoes)");
+  ok((await ultimoAviso(page)) === "Bloco 1.403 entregue a Vila Nova. Está no livro.", "celular: a confirmação", await ultimoAviso(page));
+  await clicar(page, "Registrar saída");
+  ok(await page.evaluate(() => { const b = document.querySelector("#financeiroRaiz button[aria-label=Fechar]"); if (!b) return false; b.click(); return true; }), "celular: o X do formulário");
+  await calmo(page);
+  t = await textoTela(page);
+  ok(t.includes("O livro") && !t.includes("Primeira folha do bloco"), "celular: o X fecha o formulário");
+  await clicar(page, "Registrar entrada");
+  t = await textoTela(page);
+  ok(t.includes("Primeira folha do bloco") && !t.includes("O livro") && await page.evaluate(() => !!document.querySelector("#financeiroRaiz button[aria-label=Fechar]")), "celular: a entrada também fica no lugar do livro, com o X (r30)");
+  await fechar(s, "saída geral celular");
 }
 
 (async () => {
@@ -726,6 +985,7 @@ async function provarLivro() {
     if (!SO || SO === "folhas") { console.log("Folhas do bloco"); await provarFolhas(); }
     if (!SO || SO === "desfazer") { console.log("Desfazer e o histórico da folha"); await provarDesfazer(); }
     if (!SO || SO === "livro") { console.log("Livro de entrada e saída"); await provarLivro(); }
+    if (!SO || SO === "saida") { console.log("Registrar saída"); await provarSaida(); }
   } finally {
     await nav.close();
     await srv.fechar();

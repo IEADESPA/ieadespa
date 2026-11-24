@@ -8,7 +8,7 @@
   let { titulo, nota, celular = false, rotulo, extra, children }: Props = $props();
 </script>
 
-<section class="quadro" aria-label={rotulo}>
+<section class="quadro" class:cel={celular} aria-label={rotulo}>
   <div class="topo">
     <h2>{titulo}</h2>
     {#if nota && !celular}<span class="nota">{nota}</span>{/if}
@@ -19,6 +19,8 @@
 
 <style>
   .quadro { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: var(--sv-raio); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  /* no celular, a folga dos cartões do desenho (11 × 12 px) */
+  .quadro.cel { padding: 11px 12px; }
   .topo { display: flex; align-items: baseline; gap: 8px; }
   h2 { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: var(--sv-titulo); }
   .nota { font-size: 12px; color: var(--sv-suave); white-space: nowrap; }

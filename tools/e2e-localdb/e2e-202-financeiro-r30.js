@@ -2,6 +2,9 @@
 // Server de verdade. Base: cenario-200 (a 200, a 201, a 202 e a 203 aplicadas duas vezes), no LocalDB próprio do Financeiro:
 //   E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true' BASE=cenario-200 bash rodar.sh roteiro e2e-202-financeiro-r30.js
 // Cobre:
+// - a saída (r30-blocos-saida): as congregações ativas com a área (a inativa nem aparece), a liderança da congregação escolhida (a inativa, a que
+//   não existe e o lixo: o mesmo 404; só a Tesouraria Geral), o rastreio do bloco que nunca saiu (a faixa desde a primeira folha e a chegada) e a
+//   linha do livro com a primeira folha do bloco (a saída parcial diz as folhas e as posições);
 // - o histórico da folha (r30-blocos-desfazer): quem marcou e quem desfez, quando e por quê, só das entregas que a pessoa alcança (a mesma resposta
 //   para o que existe fora do alcance e o que não existe), as folhas com histórico na grade, a mensagem do motivo e a do desfazer;
 // - as folhas da r30: o seletor de bloco em todos os níveis (a situação, as datas, a faixa vista e as usadas de cada bloco; o bloco que voltou em
@@ -278,6 +281,57 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   ok((await GET(H, "historico", central, { folha: 70245 })).status === 404, "e não abre o histórico dela");
   r = await GET(H, "historico", local, { folha: 70245 });
   ok(r.status === 200 && r.body.itens.length === 1 && r.body.itens[0].destino === "inexistente", "Vila Nova abre o histórico da marcação dela", r.body);
+
+  console.log("== a saída da r30: para quem o bloco vai ==");
+  const ativas = await q(`SELECT c.CongregacaoId, c.Nome, a.Nome AS Area FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId WHERE c.Ativa = 1 ORDER BY c.Nome, c.CongregacaoId`);
+  r = await GET(H, "para-saida", geral, {});
+  ok(r.status === 200 && JSON.stringify(r.body.congregacoes) === JSON.stringify(ativas.map((c) => ({ id: c.CongregacaoId, nome: c.Nome, area: c.Area || null }))),
+    "as congregações ativas, em ordem de nome, com a área de cada uma", r.body);
+  ok(ativas.some((c) => c.Area) , "o cenário tem congregação com área (a frase do \"Levado pela área\")", ativas);
+  await q(`UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = 3`);
+  const semInativa = await GET(H, "para-saida", geral, {});
+  const inativa = await GET(H, "para-saida", geral, { congregacaoId: 3 });
+  await q(`UPDATE Congregacoes SET Ativa = 1 WHERE CongregacaoId = 3`);
+  ok(semInativa.status === 200 && !semInativa.body.congregacoes.some((c) => c.id === 3), "a congregação inativa nem aparece na lista", semInativa.body);
+  const lideres = await q(`SELECT m.MembroId, m.Nome, MIN(p.Nome) AS Papel FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId LEFT JOIN Papeis p ON p.PapelId = l.PapelId
+                           WHERE l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = ${VILA_NOVA} AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+                           GROUP BY m.MembroId, m.Nome ORDER BY m.Nome`);
+  r = await GET(H, "para-saida", geral, { congregacaoId: VILA_NOVA });
+  const vn = ativas.find((c) => c.CongregacaoId === VILA_NOVA);
+  ok(r.status === 200 && JSON.stringify(r.body.congregacao) === JSON.stringify({ id: VILA_NOVA, nome: vn.Nome, area: vn.Area || null })
+    && JSON.stringify(r.body.pessoas) === JSON.stringify(lideres.map((l) => ({ membroId: l.MembroId, nome: l.Nome, papel: l.Papel || "" }))),
+    "Vila Nova: a congregação, a área e a liderança dela (a lista de \"Entregue a\")", r.body);
+  ok(lideres.some((l) => l.MembroId === TESOUREIRA_LOCAL), "a tesoureira de Vila Nova está na lista", lideres);
+  const naoHa = await GET(H, "para-saida", geral, { congregacaoId: 999999 });
+  const lixoC = await GET(H, "para-saida", geral, { congregacaoId: "2 OR 1=1" });
+  const injecao = await GET(H, "para-saida", geral, { congregacaoId: "2; DROP TABLE FinBlocos" });
+  ok([inativa, naoHa, lixoC, injecao].every((x) => x.status === 404) && new Set([inativa, naoHa, lixoC, injecao].map((x) => JSON.stringify(x.body))).size === 1,
+    "a inativa, a que não existe, o lixo e a injeção: o mesmo 404", [inativa, naoHa, lixoC, injecao].map((x) => x.status));
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinBlocos`)) > 0, "a injeção não apagou nada");
+  ok((await GET(H, "para-saida", null, {})).status === 401, "sem sessão: 401");
+  const negados = [await GET(H, "para-saida", local, {}), await GET(H, "para-saida", area, { congregacaoId: VILA_NOVA }), await GET(H, "para-saida", semFinanceiro, {})];
+  ok(negados.every((x) => x.status === 403), "a congregação, a área e quem não tem o financeiro: 403 (só a Tesouraria Geral registra a saída)", negados.map((x) => x.status));
+
+  console.log("-- o rastreio do bloco que nunca saiu e a linha do livro --");
+  r = await GET(H, "rastreio", geral, { folha: 70520 });
+  ok(r.status === 200 && r.body.bloco.numero === 1410 && r.body.bloco.situacao === "na-geral" && r.body.bloco.chegouEm === "2026-11-01" && r.body.bloco.parcial === false
+    && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70501, ultimaFolha: 70550 }),
+    "qualquer folha acha o bloco que nunca saiu: a faixa desde a primeira folha e a chegada", r.body.bloco);
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70501, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-20" });
+  ok(r.status === 200 && r.body.mensagem === `Bloco 1.410 entregue a ${vn.Nome}. Está no livro.`, "o 1.410 sai para Vila Nova (a confirmação da r30)", r.body);
+  // o livro inteiro, de 5 em 5 (a saída do 1.410, de 20/11, vem depois das reentregas de 21/11)
+  const todas = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    const x = (await GET(H, "livro", geral, { porPagina: 5, pagina: pg })).body.registros;
+    todas.push(...x);
+    if (x.length < 5) break;
+  }
+  const s1410 = todas.find((x) => x.tipo === "saida" && x.bloco === 1410);
+  ok(s1410 && s1410.blocoPrimeiraFolha === 70501 && s1410.folhas.primeiraFolha === 70501 && s1410.folhas.ultimaFolha === 70550,
+    "a linha da saída inteira: as folhas começam na primeira do bloco", s1410);
+  const parciais = todas.filter((x) => x.tipo === "saida" && x.folhas.primeiraFolha !== x.blocoPrimeiraFolha);
+  ok(parciais.length > 0 && parciais.every((x) => x.folhas.primeiraFolha > x.blocoPrimeiraFolha && x.folhas.ultimaFolha >= x.folhas.primeiraFolha),
+    "a saída do bloco que voltou em parte: a linha tem a faixa e a primeira folha do bloco (as posições)", parciais);
 
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();

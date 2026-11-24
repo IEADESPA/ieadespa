@@ -207,7 +207,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await POST(H, "desfazer-folha", geral, { folha: 70090, motivo: "depois de devolvido" });
   ok(r.status === 422 && /O bloco 1\.401 já foi devolvido/.test(r.body.mensagem), "nem a Tesouraria Geral desfaz exceção de bloco devolvido", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { nome: "x" } });
-  ok(r.status === 422 && /^O bloco 1\.401 já foi devolvido em \d\d\/\d\d\/\d{4}\.$/.test(r.body.mensagem), "o bloco devolvido não sai de novo, e a recusa diz que ele já voltou (revisão M4)", r.body);
+  ok(r.status === 422 && /^O bloco 1\.401 voltou completo em \d\d\/\d\d\/\d{4}: não tem folha livre para sair\.$/.test(r.body.mensagem), "o bloco devolvido não sai de novo, e a recusa diz que ele já voltou (revisão M4; o texto da r30)", r.body);
   r = await GET(H, "folhas", local, {});
   ok(r.body.bloco.numero === 1402 && r.body.opcoes.find((x) => x.numero === 1401).situacao === "fechado", "o devolvido continua no seletor, como fechado", r.body.opcoes);
 
@@ -337,7 +337,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await POST(H, "entregar", geral, { primeiraFolha: 70525, congregacaoId: VILA_NOVA, pessoa: { nome: "x" } });
   ok(r.status === 422 && r.body.mensagem === "O bloco 1.410 volta a sair pela folha 70.531, a primeira livre.", "nem pela folha sem destino da Beta", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70531, congregacaoId: VILA_NOVA, pessoa: { nome: "x" }, data: "2026-11-11" });
-  ok(r.status === 422 && r.body.mensagem === "A data da entrega é antes da volta do bloco (12/11/2026).", "a nova saída com data antes da volta do bloco é recusada", r.body);
+  ok(r.status === 422 && r.body.mensagem === "Antes da volta do bloco (12/11/2026).", "a nova saída com data antes da volta do bloco é recusada (o texto da r30)", r.body);
   r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "x" }, parcial: true, primeiraEmBranco: 70540 });
   ok(r.status === 422 && r.body.mensagem === "O bloco 1.410 já voltou, parcial, em 12/11/2026: as folhas 70.531 a 70.550 estão livres na Tesouraria Geral para outra entrega.",
     "o bloco parcial não volta de novo antes de sair (revisão m3: a recusa diz que já voltou, não que não saiu)", r.body);
@@ -352,7 +352,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
     && JSON.parse(betaDepoisDaParcial).opcao.situacao === "fechado" && JSON.parse(betaDepoisDaParcial).opcao.congregacao === "Beta E2E",
     "o cabeçalho e o seletor da Beta mostram a entrega dela: a Beta, entregue em 05/11, fechado", JSON.parse(betaDepoisDaParcial).opcao);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70531, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL }, data: "2026-11-13" });
-  ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 entregue a Vila Nova E2E (folhas 70.531 a 70.550).", "o 1.410 sai de novo, para Vila Nova, só com as livres (70.531 a 70.550)", r.body);
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 (70.531 a 70.550) entregue a Vila Nova E2E. Está no livro.", "o 1.410 sai de novo, para Vila Nova, só com as livres (70.531 a 70.550)", r.body);
   const saida2 = Number(await escalar(SAIDA_ATUAL(b1410)));
   const s2 = await um(`SELECT CongregacaoId, PrimeiraFolha, UltimaFolha FROM FinLivroBlocos WHERE RegistroId = ${saida2}`);
   ok(saida2 !== saida1 && s2.CongregacaoId === VILA_NOVA && s2.PrimeiraFolha === 70531 && s2.UltimaFolha === 70550, "a 2ª saída guarda a faixa: 70.531 a 70.550", s2);
@@ -418,7 +418,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await GET(H, "", geral, { procura: "1420" });
   ok(r.status === 200 && r.body.blocos[0].parcial === true && r.body.blocos[0].livres === 50, "a aba Blocos: o 1.420 parcial, com 50 livres", r.body.blocos[0]);
   r = await POST(H, "entregar", geral, { primeiraFolha: 71001, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-07" });
-  ok(r.status === 200 && r.body.mensagem === "Bloco 1.420 entregue a Vila Nova E2E.", "e sai de novo inteiro, pela primeira folha", r.body);
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.420 entregue a Vila Nova E2E. Está no livro.", "e sai de novo inteiro, pela primeira folha", r.body);
   const antesC = await retratoFin();
   r = await POST(H, "devolver", geral, { primeiraFolha: 71001, pessoa: { nome: "Rute Santos" }, parcial: false, primeiraEmBranco: 71010 });
   ok(r.status === 422 && r.body.mensagem === "A primeira folha em branco só vale na devolução parcial.", "a completa com a primeira em branco é recusada (o \"parcial\" perdido nunca fecha o bloco calado)", r.body);
@@ -467,8 +467,9 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
     { handler: "finBlocos", acao: "entregar", token: tokGeral, corpo: { primeiraFolha: 70561, congregacaoId: CENTRAL, pessoa: { nome: "Tesoureira da Central" } } }
   ]);
   const saidas1411 = await q(`SELECT PrimeiraFolha FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = ${b1411} ORDER BY RegistroId`);
-  ok(rs.filter((x) => x.status === 200).length === 1 && rs.every((x) => [200, 422].includes(x.status)) && saidas1411.length === 2 && saidas1411[1].PrimeiraFolha === 70561,
-    "duas saídas do mesmo bloco parcial ao mesmo tempo: só uma sai, e a saída começa na primeira folha livre (70.561)", rs);
+  ok(rs.filter((x) => x.status === 200).length === 1 && rs.every((x) => x.status === 200 || (x.status === 409 && x.mensagem === "Este bloco acabou de sair por outra pessoa. Confira o livro."))
+    && saidas1411.length === 2 && saidas1411[1].PrimeiraFolha === 70561,
+    "duas saídas do mesmo bloco parcial ao mesmo tempo: só uma sai (a outra, o 409 da r30), e a saída começa na primeira folha livre (70.561)", rs);
   // a devolução parcial e a exceção na primeira folha em branco ao mesmo tempo: ou a exceção entra e a parcial é recusada (a folha deixou de estar em branco), ou a
   // parcial vale e a exceção é recusada (o bloco voltou para a Geral: para a congregação, a mesma resposta de "não existe", 404)
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70601, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" } })).status === 200, "o 1.412 entregue a Vila Nova para a corrida da parcial");

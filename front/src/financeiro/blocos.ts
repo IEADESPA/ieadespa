@@ -1,7 +1,8 @@
 // Os textos e as contas das abas dos blocos de recibo (as folhas e o livro), como o desenho aprovado escreve (rodada 17, r17-blocos-folhas e
 // r17-blocos-livro, opção 1). O servidor confere tudo; aqui só se escreve o que ele mandou.
 import { dataBr, numero } from "../comum/formato";
-import type { ContagemFolhas, DestinoFolha, EscopoTela, ExcecaoFolha, Faixa, OpcaoBloco, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
+import type { CongregacaoSaida, ContagemFolhas, DestinoFolha, EscopoTela, ExcecaoFolha, Faixa, OpcaoBloco, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
+import type { Nivel } from "./estado.svelte";
 
 /** "1 bloco", "2 blocos" */
 export const plural = (n: number, um: string, varios: string): string => `${numero(n)} ${n === 1 ? um : varios}`;
@@ -111,8 +112,8 @@ const devolvidoPor = (congregacao: string): string => (/^sede$/i.test(congregaca
 
 const ehDoLote = (r: RegistroLivro): r is RegistroLote => r.tipo === "cadastro" || r.tipo === "chegada";
 
-/** a linha do livro: o título e a linha de baixo */
-export function linhaDoLivro(r: RegistroLivro): { readonly titulo: string; readonly detalhe: string } {
+/** a linha do livro: o título e a linha de baixo. A congregação não vê o próprio nome na saída (r30: "entregue a Rute Santos") */
+export function linhaDoLivro(r: RegistroLivro, nivel: Nivel = "geral"): { readonly titulo: string; readonly detalhe: string } {
   if (ehDoLote(r)) {
     if (r.tipo === "chegada") {
       return { titulo: `Chegada: lote da gráfica, série ${r.lote.serie}`, detalhe: `${plural(r.quantidade ?? 0, "bloco chegou", "blocos chegaram")} · registrou ${r.registradoPor}` };
@@ -124,10 +125,14 @@ export function linhaDoLivro(r: RegistroLivro): { readonly titulo: string; reado
     };
   }
   if (r.tipo === "saida") {
-    return {
-      titulo: `Saída: bloco ${numero(r.bloco)} entregue a ${r.pessoa} (${r.congregacao})`,
-      detalhe: r.levadoPelaArea ? "levado pela área, sem ficar com ela" : `registrou ${r.registradoPor} · Tesouraria Geral`
-    };
+    const para = nivel === "local" ? r.pessoa : `${r.pessoa} (${r.congregacao})`;
+    const como = r.levadoPelaArea ? "levado pela área, sem ficar com ela" : `registrou ${r.registradoPor} · Tesouraria Geral`;
+    // a saída do bloco que voltou em parte: só as folhas livres, com as posições (r30: "só as folhas 64.436 a 64.450 (36ª a 50ª)")
+    if (r.folhas && r.blocoPrimeiraFolha && r.folhas.primeiraFolha !== r.blocoPrimeiraFolha) {
+      const so = `só as folhas ${textoFaixa(r.folhas)} (${posicao(r.folhas.primeiraFolha, r.blocoPrimeiraFolha)}ª a ${posicao(r.folhas.ultimaFolha, r.blocoPrimeiraFolha)}ª)`;
+      return { titulo: `Saída: bloco ${numero(r.bloco)}, parcial, entregue a ${para}`, detalhe: `${so} · ${r.levadoPelaArea ? "levado pela área, sem ficar com ela" : `registrou ${r.registradoPor}`}` };
+    }
+    return { titulo: `Saída: bloco ${numero(r.bloco)} entregue a ${para}`, detalhe: como };
   }
   const como = r.contagem ? contagemDaEntrada(r.contagem) : "";
   return { titulo: `Entrada: bloco ${numero(r.bloco)} devolvido ${devolvidoPor(r.congregacao)}`, detalhe: `recebeu ${r.registradoPor}${como ? " · " + como : ""}` };
@@ -153,3 +158,47 @@ export function rotuloDaPessoa(p: PessoaDevolve, congregacao: string | null): st
 
 /** só os algarismos do que a pessoa digitou ("68.001" → "68001"); o servidor confere o número */
 export const soNumeros = (v: string): string => v.replace(/\D/g, "").slice(0, 9);
+
+// ---- o "Registrar saída" (rodada 30, "r30-blocos-saida") ----
+
+/** o dia de hoje em Brasília ("aaaa-mm-dd"), como o servidor confere a data */
+export const hojeBrasilia = (): string => new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+/** a caixa do bloco na saída: verde-água (veio sozinho, pode sair) ou vermelha (o que não pode sair, com o porquê) */
+export interface CaixaSaida { readonly negrito: string; readonly texto: string; readonly erro: boolean }
+export function caixaDaSaida(r: Rastreio, celular: boolean): CaixaSaida {
+  const b = r.bloco, n = numero(b.numero);
+  if (b.situacao === "fechado") return { negrito: "", texto: `O bloco ${n} voltou completo em ${dataBr(b.devolvidoEm)}: não tem folha livre para sair.`, erro: true };
+  if (b.situacao !== "na-geral") {
+    return { negrito: "", texto: `O bloco ${n} já saiu: está com ${b.congregacao?.nome ?? "uma congregação"}${b.entregueEm ? ` desde ${dataBr(b.entregueEm)}` : ""}.`, erro: true };
+  }
+  if (!b.chegouEm) return { negrito: "", texto: `O bloco ${n} ainda não chegou da gráfica.`, erro: true };
+  if (b.parcial && b.faixa) {
+    const f = b.faixa, de = r.volta?.congregacao ?? "";
+    const posicoes = `${posicao(f.primeiraFolha, b.primeiraFolha)}ª a ${posicao(f.ultimaFolha, b.primeiraFolha)}ª`;
+    const livres = `saem só as ${plural(b.livres, "livre", "livres")}, ${textoFaixa(f)} (${posicoes})`;
+    if (celular) return { negrito: `Bloco ${n}, parcial`, texto: ` (veio sozinho): ${livres}. As usadas ficam no histórico${de ? `, com ${de}` : ""}.`, erro: false };
+    const voltou = r.volta ? ` · voltou de ${de} em ${diaMes(r.volta.data)}` : "";
+    const usadas = r.volta ? ` As ${plural(r.volta.usadas, "usada fica", "usadas ficam")} no histórico, com ${de}.` : "";
+    return { negrito: `Bloco ${n}, parcial`, texto: ` (veio sozinho): ${livres}${voltou} · está na Tesouraria Geral.${usadas}`, erro: false };
+  }
+  return { negrito: `Bloco ${n}`, texto: ` (veio sozinho): folhas ${numero(b.primeiraFolha)} a ${numero(b.ultimaFolha)} · chegou em ${dataBr(b.chegouEm)} · ${celular ? "na" : "está na"} Tesouraria Geral`, erro: false };
+}
+
+/** a frase do "Levado pela área" (a congregação sem área cadastrada fica com a frase geral) */
+export function fraseDoLevado(c: CongregacaoSaida | null, ligado: boolean, celular: boolean): string {
+  const area = c?.area ? `a ${c.area}` : "a área";
+  if (c && ligado) return `${c.area ? `A ${c.area}` : "A área"} leva até ${c.nome}; o bloco não fica com ela.`;
+  if (!c || !c.area) return "Marque se a área da congregação vai levar o bloco.";
+  return celular ? `Marque se ${area} vai levar.` : `Marque se ${area} vai levar o bloco até ${c.nome}.`;
+}
+
+/** o que a data da saída confere antes de gravar: nem antes da volta (o parcial), nem antes da chegada, nem depois de hoje */
+export function erroDaDataDaSaida(dia: string, r: Rastreio | null, celular: boolean): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return "Informe a data da entrega.";
+  if (dia > hojeBrasilia()) return "Depois de hoje: confira a data.";
+  if (r?.bloco.parcial && r.volta && dia < r.volta.data) return `Antes da volta do bloco (${dataBr(r.volta.data)}).`;
+  const chegou = r?.bloco.chegouEm;
+  if (chegou && dia < chegou) return celular ? `Antes da chegada (${dataBr(chegou)}).` : `Antes da chegada do bloco (${dataBr(chegou)}).`;
+  return "";
+}

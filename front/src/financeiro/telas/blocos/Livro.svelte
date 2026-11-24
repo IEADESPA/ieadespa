@@ -1,8 +1,9 @@
-<!-- Blocos de recibo: o livro de entrada e saída (rodada 17, "r17-blocos-livro", opção 1). A Tesouraria Geral tem os botões "Registrar entrada" e
-     "Registrar saída". Na entrada (a devolução) quem recebe é sempre a Tesouraria Geral (o nome de quem está entrando vem sozinho); o número de uma
-     folha do bloco puxa o rastreio e quem pode devolver. À direita, o livro em páginas (5 no notebook, 3 no celular). A área e a congregação veem o
-     aviso, os blocos delas agora e o livro das suas congregações. No celular a Geral vê os dois botões; o formulário abre ao tocar.
-     "Registrar saída" ainda não tem formulário aprovado: mostra o aviso. -->
+<!-- Blocos de recibo: o livro de entrada e saída (rodada 17, "r17-blocos-livro", opção 1; a saída e o celular da rodada 30, "r30-blocos-saida").
+     A Tesouraria Geral tem os botões "Registrar entrada" e "Registrar saída" (o do formulário aberto é o dourado). Na entrada (a devolução) quem
+     recebe é sempre a Tesouraria Geral (o nome de quem está entrando vem sozinho); o número de uma folha do bloco puxa o rastreio e quem pode
+     devolver. A saída está em FormSaida.svelte. À direita, o livro em páginas (5 no notebook, 3 no celular). A área e a congregação veem o aviso,
+     os blocos delas agora e o livro das suas congregações. No celular a Geral vê os dois botões e o livro; o formulário abre ao tocar, no lugar
+     deles, com o X; depois de registrar, fecha e o livro volta. -->
 <script lang="ts">
   import { pedir, qs, avisarFalha } from "../../../comum/api";
   import { numero } from "../../../comum/formato";
@@ -10,13 +11,14 @@
   import Icone from "../../../comum/Icone.svelte";
   import Aviso from "../../../comum/Aviso.svelte";
   import Estado from "../../../comum/Estado.svelte";
-  import { escopo, nivelDaSessao } from "../../estado.svelte";
+  import { escopo, nav, nivelDaSessao } from "../../estado.svelte";
   import { diaMes, linhaDoLivro, textoDoRastreio, rotuloDaPessoa, soNumeros } from "../../blocos";
   import type { PaginaLivro, Rastreio } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
   import Numeros from "../../partes/Numeros.svelte";
   import Paginas from "../../partes/Paginas.svelte";
   import Cabecalho from "./Cabecalho.svelte";
+  import FormSaida from "./FormSaida.svelte";
 
   interface Props { celular: boolean }
   let { celular }: Props = $props();
@@ -52,13 +54,23 @@
     return `${numero(de)} a ${numero(ate)} de ${numero(dados.total)} ${dados.total === 1 ? "registro" : "registros"}`;
   });
 
-  // ---- os botões da Geral: no notebook a entrada começa aberta; no celular, nenhum ----
-  let aberto = $state<"entrada" | "saida" | null>(null);
-  let abertoEscolhido = $state(false);
-  const mostrar = $derived(abertoEscolhido ? aberto : celular ? null : "entrada");
-  function abrir(qual: "entrada" | "saida") {
-    aberto = celular && mostrar === qual ? null : qual;
-    abertoEscolhido = true;
+  // ---- os botões da Geral: no notebook um formulário fica sempre aberto (a entrada, de começo); no celular, nenhum até tocar, e o formulário
+  // fica no lugar dos botões e do livro. Da aba Folhas (o bloco que voltou em parte), a saída já abre com a primeira folha livre ----
+  type Form = "entrada" | "saida";
+  const inicialSaida = nivel === "geral" && nav.rota.tela === "blocos" && nav.rota.saida ? nav.rota.saida : undefined;
+  let noNotebook = $state<Form>(inicialSaida ? "saida" : "entrada");
+  let noCelular = $state<Form | null>(inicialSaida ? "saida" : null);
+  /** o botão dourado: o do formulário aberto (no celular, o do último aberto) */
+  let dourado = $state<Form>(inicialSaida ? "saida" : "entrada");
+  const mostrar = $derived(celular ? noCelular : noNotebook);
+  function abrir(qual: Form) {
+    if (celular) noCelular = qual; else noNotebook = qual;
+    dourado = qual;
+  }
+  async function saidaFeita(mensagem: string) {
+    ponte().avisar(mensagem, "sucesso");
+    noCelular = null;
+    if (pagina === 1) await ler(1, porPagina); else pagina = 1;
   }
 
   // ---- a entrada (a devolução) ----
@@ -107,19 +119,28 @@
     if (!r.ok) { avisarFalha(r); return; }
     ponte().avisar(r.dados.mensagem, "sucesso");
     folhaDigitada = ""; rastreio = null; quem = ""; outroNome = "";
+    noCelular = null;
     if (pagina === 1) await ler(1, porPagina); else pagina = 1;
   }
 </script>
 
 {#snippet botoes()}
   <div class="botoes">
-    <button type="button" class="ouro" aria-pressed={mostrar === "entrada"} onclick={() => abrir("entrada")}><Icone nome="voltar" tam={18} traco={2.2} />Registrar entrada</button>
-    <button type="button" class="linha-botao" aria-pressed={mostrar === "saida"} onclick={() => abrir("saida")}><Icone nome="seta" tam={17} traco={2} />Registrar saída</button>
+    <button type="button" class={dourado === "entrada" ? "ouro" : "linha-botao"} aria-pressed={mostrar === "entrada"} onclick={() => abrir("entrada")}><Icone nome="voltar" tam={dourado === "entrada" ? 18 : 17} traco={dourado === "entrada" ? 2.2 : 2} />Registrar entrada</button>
+    <button type="button" class={dourado === "saida" ? "ouro" : "linha-botao"} aria-pressed={mostrar === "saida"} onclick={() => abrir("saida")}><Icone nome="seta" tam={dourado === "saida" ? 18 : 17} traco={dourado === "saida" ? 2.2 : 2} />Registrar saída</button>
   </div>
 {/snippet}
 
+{#snippet fechar()}
+  <button type="button" class="fechar" aria-label="Fechar" onclick={() => (noCelular = null)}><Icone nome="fechar" tam={18} traco={2.2} /></button>
+{/snippet}
+
+{#snippet saida()}
+  <FormSaida {celular} inicial={inicialSaida} onfeito={(m) => void saidaFeita(m)} onfechar={() => (noCelular = null)} />
+{/snippet}
+
 {#snippet entrada()}
-  <Quadro titulo="Registrar entrada" nota="o bloco volta para a Tesouraria Geral" {celular}>
+  <Quadro titulo="Registrar entrada" nota="o bloco volta para a Tesouraria Geral" {celular} extra={celular ? fechar : undefined}>
     <label class="campo">
       <span class="rot">Primeira folha do bloco<span class="obr" aria-hidden="true">*</span></span>
       <span class="caixa"><Icone nome="busca" tam={15} traco={2} /><input type="text" inputmode="numeric" autocomplete="off" maxlength="12" required
@@ -159,10 +180,6 @@
   </Quadro>
 {/snippet}
 
-{#snippet saida()}
-  <Aviso tom="alerta"><strong>O registro da saída do bloco ainda vai ser construído.</strong></Aviso>
-{/snippet}
-
 {#snippet livro()}
   <Quadro titulo="O livro" nota="entradas, saídas e cadastros" {celular}>
     {#if erro && !dados}
@@ -173,7 +190,7 @@
       {#if dados.registros.length}
         <ul class="registros" aria-busy={carregando}>
           {#each dados.registros as r (r.id)}
-            {@const l = linhaDoLivro(r)}
+            {@const l = linhaDoLivro(r, nivel)}
             <li><span class="dia">{diaMes(r.data)}</span><div class="txt"><strong>{l.titulo}</strong><span>{l.detalhe}</span></div></li>
           {/each}
         </ul>
@@ -186,14 +203,21 @@
   </Quadro>
 {/snippet}
 
-{#snippet agora()}
+{#snippet aviso()}
   {#if nivel === "area"}
     <Aviso><strong>Entrada e saída de blocos quem registra é a Tesouraria Geral.</strong> A área é só intermediária: o bloco nunca fica com a área.</Aviso>
+  {:else}
+    <Aviso><strong>Entrada e saída de blocos quem registra é a Tesouraria Geral.</strong> Para pedir um bloco novo, fale com a Tesouraria Geral; a entrega fica registrada aqui.</Aviso>
+  {/if}
+{/snippet}
+
+{#snippet agora()}
+  {@render aviso()}
+  {#if nivel === "area"}
     <Quadro titulo="Blocos da área agora">
       <Numeros itens={[[dados?.agora?.emUso ?? 0, "em uso"], [dados?.agora?.esperando ?? 0, "esperando"], [dados?.agora?.aDevolver ?? 0, "a devolver"]]} />
     </Quadro>
   {:else}
-    <Aviso><strong>Entrada e saída de blocos quem registra é a Tesouraria Geral.</strong> Para pedir um bloco novo, fale com a Tesouraria Geral; a entrega fica registrada aqui.</Aviso>
     <Quadro titulo="Seus blocos agora">
       <!-- o bloco com todas as folhas usadas ainda está com a congregação: conta como em uso, como na aba "Blocos" -->
       <Numeros itens={[[(dados?.agora?.emUso ?? 0) + (dados?.agora?.aDevolver ?? 0), "em uso"], [dados?.agora?.esperando ?? 0, "esperando"]]} />
@@ -204,13 +228,17 @@
 <div class="pagina" class:cel={celular}>
   <Cabecalho aba="livro" {celular} />
   {#if celular}
-    {#if nivel === "geral"}
-      {@render botoes()}
-      {#if mostrar === "entrada"}{@render entrada()}{:else if mostrar === "saida"}{@render saida()}{/if}
+    {#if nivel !== "geral"}
+      {@render aviso()}
+      {@render livro()}
+    {:else if mostrar === "entrada"}
+      {@render entrada()}
+    {:else if mostrar === "saida"}
+      {@render saida()}
     {:else}
-      <Aviso>Entrada e saída de blocos quem registra é a Tesouraria Geral. Aqui você vê o livro da sua congregação.</Aviso>
+      {@render botoes()}
+      {@render livro()}
     {/if}
-    {@render livro()}
   {:else}
     <div class="dois">
       <div class="col">
@@ -252,6 +280,7 @@
   .linha-botao :global(svg) { color: var(--sv-icone); }
   @media (hover: hover) { .linha-botao:hover { background: var(--sv-linha); } }
   .linha-botao[aria-pressed="true"] { border-color: var(--sv-mod); }
+  .fechar { width: 28px; height: 28px; margin: -4px -4px -4px 0; border: 0; background: transparent; color: var(--sv-suave); display: flex; align-items: center; justify-content: center; border-radius: 8px; flex: none; align-self: center; }
 
   /* os campos do formulário (as medidas da rodada 17: a caixa de 38 + a borda) */
   .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

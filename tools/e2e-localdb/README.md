@@ -207,7 +207,8 @@ Cada versão parte da base da anterior (`BASE=...`):
   corridas: o mesmo lote, a mesma entrega e lotes que se cruzam, em processos separados); `e2e-201` (as folhas do bloco e o livro: a exceção, o
   desfazer, a devolução completa e a parcial, o rastreio e as corridas da mesma folha); `e2e-202` (o que a rodada 30 pede ao servidor: a folha
   inexistente de ponta a ponta, a devolução parcial com ela no fim e no meio, o seletor de bloco e a volta parcial, o histórico da folha com
-  quem marcou e quem desfez, no escopo de cada nível, e a 203 rodada de novo sobre dados).
+  quem marcou e quem desfez, no escopo de cada nível, a saída da r30 (as congregações ativas com a área, a liderança da escolhida, o rastreio
+  do bloco que nunca saiu e a linha do livro com a primeira folha do bloco) e a 203 rodada de novo sobre dados).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

@@ -453,3 +453,33 @@ describe("o histórico da folha e o desfazer (r30-blocos-desfazer)", () => {
     expect((await chamar({ acao: "historico", metodo: "POST", token: LOCAL() })).status).toBe(403);
   });
 });
+describe("a saída (r30-blocos-saida)", () => {
+  beforeAll(() => { process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-" + "x".repeat(24); });
+  beforeEach(() => { mockConsultas = []; mockRegras = []; });
+  const sessao = (extra) => auth.reassinarSessao({ membroId: 700002, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+  const GERAL = () => sessao({ nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["financeiro"] });
+  const LOCAL = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["financeiro"] });
+  const AREA = () => sessao({ nivel: "AREA", escopoCongregacoes: ["Vila Nova", "Monte Sião"], permissoes: ["financeiro"] });
+  async function chamar({ acao, metodo = "GET", query = {}, token }) {
+    const context = { bindingData: { acao }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await rota(context, { method: metodo, query, headers: token ? { "x-auth-token": token } : {} });
+    return context.res;
+  }
+  test("a porta de para-saida: sem sessão 401; a congregação e a área 403 (só a Tesouraria Geral), sem tocar no banco", async () => {
+    expect((await chamar({ acao: "para-saida" })).status).toBe(401);
+    expect((await chamar({ acao: "para-saida", token: LOCAL() })).status).toBe(403);
+    expect((await chamar({ acao: "para-saida", query: { congregacaoId: "2" }, token: AREA() })).status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("a congregação que não é número: o mesmo 404 da que não existe, sem tocar no banco", async () => {
+    for (const congregacaoId of ["abc", "2 OR 1=1", "-5", "1.5", "99999999999"]) {
+      const r = await chamar({ acao: "para-saida", query: { congregacaoId }, token: GERAL() });
+      expect(r.status).toBe(404);
+      expect(r.body.mensagem).toBe("Registro não encontrado.");
+    }
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("para-saida só pelo GET", async () => {
+    expect((await chamar({ acao: "para-saida", metodo: "POST", token: GERAL() })).status).toBe(404);
+  });
+});

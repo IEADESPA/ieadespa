@@ -1,12 +1,12 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 23/11/2026 16:50
+Em uso por: Livre
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 00:30 (Claude, sessão principal).
+Atualizado em 24/11/2026 00:15 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,16 +46,24 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**AGENTES RETOMADOS em 24/11, por ordem dele** ("você tem que andar"). Foram parados às 21h30 de 23/11 sem nada pela
-metade. Trabalham 4 ao mesmo tempo:
+**AGENTES PARADOS às 00h10 de 24/11: ele desligou o computador.** Foram retomados à meia-noite ("você tem que andar")
+e trabalharam uns 10 minutos. Há trabalho começado e **não registrado** no disco: são testes escritos antes do
+código, ainda vermelhos. Não apague. Ao retomar, 4 ao mesmo tempo, cada um continua do seu ponto:
 
-- o construtor do Membros, só no ramo: a guarda dos dados e o M5. A mesclagem no homolog fica para depois, porque o
-  sistema de proteção barrou mandar o agente mexer na homologação;
-- o construtor do Financeiro: I3, I4, os menores e as duas regras dele;
-- o desenhista: prepara a r30, sem publicar;
-- o agente do plano novo do revisor de fora.
+- **Membros** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`, em `4741cd3`): a guarda dos dados (7 e 90 dias)
+  começada. Estão alterados `importacaoMembrosDb.js`, `NotificacoesAgendador/index.js` e os 2 testes deles. Depois
+  vem o M5. Fica só no ramo: a mesclagem no homolog é do Claude, porque o sistema de proteção barrou mandar o agente
+  mexer na homologação.
+- **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, em `f722716`): o teste novo
+  `finMigracoesIndices.test.js` (I3), ainda sem a migração. Depois vêm I4, os menores e as duas regras dele.
+- **Desenhista** (`C:/tmp/ieadespa-desenho-r30`, ramo `desenho-r30`, em `f3707d1`, enviado): o esqueleto da r30, sem
+  a 27 na página leve (de 387 para 289 KB). `r30-lista.js`, `r30-telas.js` e `propostas-r30/` ainda não estão
+  registrados. Não publicar.
+- **Revisor de fora** (bancada, em `a4fd8b3`): o teste `revisor-sdk/testes/orcamento-local.test.mjs` foi escrito e
+  ainda não está registrado; o código não começou. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+- O revisor do arrolamento entra quando uma vaga abrir.
 
-O revisor do arrolamento entra quando uma vaga abrir. Cada frente continua do item abaixo.
+A trava do LocalDB está livre.
 
 **Decisão dele (24/11): um 2º computador com um assento Team Premium.** Pela página oficial, cada assento Premium
 põe US$ 100 e cada Standard US$ 20 num **saldo único da organização**, com teto de US$ 500 por mês, e toda chave da

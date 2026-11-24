@@ -46,8 +46,15 @@ para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, to
 
 ## 5. Economia de créditos (vale para qualquer pessoa ou agente)
 
-O esforço e o modelo ficam no **MÁXIMO**, por decisão do responsável: não se economiza baixando a qualidade. Economiza-se
-no jeito de trabalhar (medido com `tools/medir-creditos/`, 20/11/2026):
+O modelo fica no melhor, e o esforço vai por agente, por decisão do responsável (24/11/2026):
+
+- construtor no "x alto";
+- desenhista no "alto";
+- revisor (Fable) até o teste comparativo dele;
+- a conversa principal no nível que ele escolher.
+
+Não se baixa a qualidade de quem constrói, revisa ou caça defeitos. Economiza-se no jeito de trabalhar (medido com
+`tools/medir-creditos/`, 20/11/2026):
 
 - Tarefa longa vai para um agente **novo**, com um resumo escrito; nunca um "fork", que herda a conversa inteira
   (~22% do gasto medido).

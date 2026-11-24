@@ -8,7 +8,7 @@
 - [Nada em aberto](nada-em-aberto.md) — fechar o que o código resolve; só sobra decisão dele ou ação externa
 - [Fase de teste, duas pessoas](fase-de-teste-duas-pessoas.md) — 2 pessoas no sistema; segurança como produção
 - [Ritmo e limites de uso](ritmo-e-limites-de-uso.md) — ser econômico; pausa = Monitor, não sleep
-- [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — 20/11: esforço máximo; sem fork longo; repo público
+- [Colaboração pública e créditos](colaboracao-publica-e-creditos.md) — esforço por agente (24/11); sem fork longo; repo público
 - [Varredura em pedaços de 30 min](varredura-em-pedacos-de-30-min.md) — caça de defeitos em pedaços; ele diz quando
 - [Sem Bedrock](sem-bedrock-ficar-na-assinatura.md) — ficar na assinatura; não reabrir
 - [Habilidades instaladas](habilidades-de-design-instaladas.md) — design, Svelte, Postgres, TDD, LGPD (docs na bancada privada), plugins
@@ -43,7 +43,7 @@
 - [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 23/11 noite: 4 agentes ao mesmo tempo, até outra ordem dele
 - [Conselheiro e alto padrão](conselheiro-e-padrao-alto.md) — 23/11: Fable aconselha o Opus (funciona no VS Code); agentes padrão, ganchos e fluxos com muitos agentes quando ajudar
 - [Ordem fixa de módulos](ordem-fixa-de-modulos.md) — 1 Membros, 2 Financeiro, 3 Estrutura...
-- [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra
+- [Telas com níveis](telas-com-niveis-e-celular-real.md) — local/área/geral; celular com a barra; SEM modo escuro (24/11)
 - [Roteiro das fases 10–12](roteiro-fases-10-11-12.md) — 10 experiência + Membros; 11 escuta; 12 sites
 - [Massa grande da homologação](homolog-massa-grande.md) — gerador no ramo homolog
 

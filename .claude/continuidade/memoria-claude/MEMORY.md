@@ -38,7 +38,7 @@
 - [Uma coisa de cada vez](uma-coisa-de-cada-vez.md) — 23/11 noite: pendência dele, um passo por vez; "parar" = parar os agentes
 - [Construir exatamente o aprovado](construir-exatamente-o-aprovado.md) — par aprovado × construído de toda tela
 - [Realidade financeira](realidade-financeira-nao-o-regimento.md) — sem culto/malote/cofre; Regimento não é a realidade
-- [Propostas em artefato](propostas-de-tela-em-artefato.md) — página nova 58VZ… desde a r31 (teto 250 KB); KMeb… e G1gj… são arquivo
+- [Propostas em artefato](propostas-de-tela-em-artefato.md) — uma página NOVA por rodada desde a r32 (r31 em 58VZ…); KMeb… e G1gj… são arquivo
 - [Um módulo por vez](um-modulo-por-vez-sem-republicar.md) — não republicar enquanto ele comenta
 - [Agentes em paralelo](desenho-em-paralelo-a-construcao.md) — 24/11: 3 papéis (construtor, desenhista, corretor); revisor de dentro só no portão
 - [Conselheiro e alto padrão](conselheiro-e-padrao-alto.md) — 23/11: Fable aconselha o Opus (funciona no VS Code); agentes padrão, ganchos e fluxos com muitos agentes quando ajudar

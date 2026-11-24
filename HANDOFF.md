@@ -60,15 +60,8 @@ portão; se a cota acabar, o ponto de cada um é este):
   de `47e429b`; diário `C:/tmp/ieadespa-financeiro/DIARIO.md`, parte 4). São as 5 telas aprovadas, a folha inexistente
   e a frase de cada exceção. As correções m1, m2, m9 e N3 já estão em `e72b321` e `47e429b`.
   - Depois vem o portão, e só então o homolog.
-- **Correção do acesso** (corretor; `C:/tmp/ieadespa-acesso`, ramo `v10-acesso-ajustes`, até `1d3b816`). O detalhe fica
-  só na bancada privada.
-  - Em revisão dupla: o revisor de dentro no portão e o revisor de fora nos 2 pedaços do ramo.
-  - Vai à produção só com o OK dele.
-- **Desenhista: a r31 está PUBLICADA numa página NOVA**, <https://claude.ai/artifact/58VZXcgVGNdrUxoVZRp2c6> (155 KB,
-  só a r31). **Esperando ele conferir.**
-  - A KMeb… virou o arquivo das rodadas 19 a 30, e o banco dela ficou intacto (53 escolhas). As escolhas da r31 vão
-    para o banco da página nova (`r31-*`, `geral-r31`).
-  - O teto da página é de ~250 KB, para quem publica conseguir ler tudo.
+- **Correção do acesso: NA PRODUÇÃO** (d1625c2, DEPLOY OK em 24/11; a conferência só de leitura antes deu que ninguém perde o login). Um **corretor** trata os graves vizinhos que o revisor de fora achou (ramo próprio; o detalhe só na bancada privada).
+- **Desenhista:** r31 aprovada (58VZ…). **A r32 (Módulo 3, o começo) está PUBLICADA** em <https://claude.ai/artifact/HYtYxyM4ysGnxhxnWiCk5o>, **esperando ele conferir**. Regra nova: **uma página por rodada** (o banco é por página).
 - **Revisor de fora: TRABALHANDO** (bancada `ee4a5e0`, 178/178 testes). Ele revisa os 2 pedaços do acesso e depois
   faz uma rodada agendada da fila.
   - A fila: infraestrutura, **os menores (decisão dele, 24/11)**, os módulos na ordem fixa e o site por último.

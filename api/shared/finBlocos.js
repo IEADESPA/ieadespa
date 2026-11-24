@@ -173,11 +173,10 @@ function desfazimentoDaFolha(dados) {
   return { folha, motivo };
 }
 
-// ---- a regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11): a devolução é COMPLETA ou PARCIAL ----
-// Completa (o normal): toda folha da entrega tem destino e o bloco fecha. Parcial (a exceção): as folhas que ninguém usou continuam livres (nada
-// se anula) e o bloco volta para a Tesouraria Geral, para sair de novo a partir da primeira folha livre.
-
-const folhasLivresPorExtenso = (n) => (Number(n) === 1 ? "1 folha livre" : `${Number(n).toLocaleString("pt-BR")} folhas livres`);
+// ---- a regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11), com o detalhe da r30: a devolução é COMPLETA ou PARCIAL ----
+// Completa: o bloco fecha (o recibo ainda não lançado passa normalmente). Parcial: a tesouraria informa a primeira folha em branco (o sistema
+// sugere); dela até a última folha do bloco, as folhas voltam livres e o bloco fica na Tesouraria Geral, para sair de novo só com elas. A folha sem
+// destino antes da primeira em branco continua com a congregação. Nada se recusa por folha livre.
 
 /** "parcial" na devolução: true = parcial; false ou sem o campo = completa; qualquer outra coisa = null, recusado (nunca vira "completa" calada) */
 function devolucaoParcial(v) {
@@ -185,15 +184,16 @@ function devolucaoParcial(v) {
   return v === true ? true : null;
 }
 
-/** a recusa da devolução COMPLETA do bloco que ainda tem folha livre: com folha livre, a devolução é parcial (nunca se manda anular a folha) */
-function recusaDaDevolucaoCompleta(numero, livres) {
-  return `O bloco ${Number(numero).toLocaleString("pt-BR")} ainda tem ${folhasLivresPorExtenso(livres)}: a devolução completa é só do bloco todo usado; `
-    + "com folhas livres, a devolução é parcial.";
+/** a mensagem da devolução parcial: as folhas que voltam livres, da primeira em branco ao fim do bloco */
+function mensagemDaParcial(numero, de, ate) {
+  const n = (x) => Number(x).toLocaleString("pt-BR");
+  const livres = Number(de) === Number(ate) ? `a folha ${n(de)} está livre` : `as folhas ${n(de)} a ${n(ate)} estão livres`;
+  return `Bloco ${n(numero)} de volta, parcial: ${livres} para outra entrega.`;
 }
 
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, recusaDaDevolucaoCompleta, folhasLivresPorExtenso
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, mensagemDaParcial
 };

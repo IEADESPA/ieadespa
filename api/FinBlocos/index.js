@@ -9,9 +9,10 @@
 //  POST financeiro/blocos/folha    {folha, oQueAconteceu, observacao}  (financeiro, no escopo) a exceção: cancelada, arrancada ou extraviada
 //  GET  financeiro/blocos/livro?pagina=&porPagina=5|3   (financeiro, no escopo) o livro de entrada e saída e, fora da Geral, os blocos agora
 //  GET  financeiro/blocos/rastreio?folha=               (Tesouraria Geral) o rastreio do bloco pela primeira folha, no "Registrar entrada"
-//  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, parcial?, data?} (Tesouraria Geral) a entrada do livro (completa ou parcial)
-// Regra dele de 24/11/2026: a devolução completa (o bloco fecha) ou parcial (as folhas sem uso continuam livres e o bloco volta para a Geral, para
-// sair de novo a partir da primeira folha livre). Revisão de 23/11/2026 (regra dele): a exceção da folha se desfaz com o motivo:
+//  POST financeiro/blocos/devolver {primeiraFolha, pessoa:{membroId|nome}, parcial?, primeiraEmBranco?, data?} (Tesouraria Geral) a entrada do livro
+// Regra dele de 24/11/2026, com o detalhe da r30: a devolução completa (o bloco fecha) ou parcial, com a primeira folha em branco (dela ao fim, as
+// folhas voltam livres e o bloco fica na Geral, para sair de novo só com elas). Revisão de 23/11/2026 (regra dele): a exceção da folha se
+// desfaz com o motivo:
 //  POST financeiro/blocos/desfazer-folha {folha, motivo}   (Tesouraria Geral) a folha volta a ficar livre; o histórico em FinFolhasDesfeitas
 // A congregação e a área veem só os blocos das congregações do seu escopo; o que está na Geral só a Geral vê. Congregação fora do escopo e
 // congregação que não existe têm a mesma resposta.
@@ -81,7 +82,7 @@ module.exports = comConflito(async function (context, req) {
   if (metodo !== "POST" || !["lote", "chegada", "entregar", "devolver", "desfazer-folha"].includes(acao)) return erro(context, 404, "Ação inválida.");
   const por = Number(geral.membroId);
   if (acao === "desfazer-folha") return responder(context, await db.desfazerFolha(pool, { dados: corpo, por }));
-  if (acao === "devolver") return responder(context, await db.devolver(pool, { primeiraFolha: corpo.primeiraFolha, pessoa: corpo.pessoa, parcial: corpo.parcial, data: corpo.data, por }));
+  if (acao === "devolver") return responder(context, await db.devolver(pool, { primeiraFolha: corpo.primeiraFolha, pessoa: corpo.pessoa, parcial: corpo.parcial, primeiraEmBranco: corpo.primeiraEmBranco, data: corpo.data, por }));
   if (acao === "lote") return responder(context, await db.cadastrarLote(pool, { dados: corpo, por }), 201);
   if (acao === "chegada") {
     const loteId = auth.idDeRota(corpo.loteId);

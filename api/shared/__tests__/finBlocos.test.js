@@ -259,13 +259,13 @@ describe("a devolução completa ou parcial (regra de 24/11/2026)", () => {
     expect(regra.devolucaoParcial(null)).toBe(false);
     for (const lixo of ["true", "parcial", 1, 0, "", [], {}, [true]]) expect(regra.devolucaoParcial(lixo)).toBeNull();
   });
-  test("a devolução completa do bloco com folha livre: a mensagem manda marcar parcial, e nunca anular a folha em branco", () => {
-    expect(regra.recusaDaDevolucaoCompleta(1401, 1)).toMatch(/^O bloco 1\.401 ainda tem 1 folha livre: /);
-    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).toMatch(/^O bloco 1\.401 ainda tem 49 folhas livres: /);
-    expect(regra.recusaDaDevolucaoCompleta(1401, 1200)).toMatch(/1\.200 folhas livres/);
-    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).toMatch(/parcial/);
-    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).not.toMatch(/anul|cancel|toda folha precisa/i);
-    expect(regra.recusaDoBlocoComFolhaLivre).toBeUndefined();   // a recusa de 23/11 (marcar cada folha em branco) saiu
+  test("nada se recusa por folha livre (r30): as recusas de 23/11 e da primeira leitura de 24/11 saíram", () => {
+    expect(regra.recusaDoBlocoComFolhaLivre).toBeUndefined();
+    expect(regra.recusaDaDevolucaoCompleta).toBeUndefined();
+  });
+  test("a mensagem da devolução parcial: as folhas que voltam livres (a r30), no plural e no singular", () => {
+    expect(regra.mensagemDaParcial(1288, 64436, 64450)).toBe("Bloco 1.288 de volta, parcial: as folhas 64.436 a 64.450 estão livres para outra entrega.");
+    expect(regra.mensagemDaParcial(1288, 64450, 64450)).toBe("Bloco 1.288 de volta, parcial: a folha 64.450 está livre para outra entrega.");
   });
 });
 
@@ -302,6 +302,22 @@ describe("a porta de desfazer a exceção da folha (só a Tesouraria Geral)", ()
       const r = await chamar({ acao: "devolver", metodo: "POST", corpo: { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, parcial: lixo }, token: GERAL() });
       expect(r.status).toBe(422);
       expect(r.body.mensagem).toBe("Diga se a devolução é completa ou parcial.");
+    }
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("a devolução parcial sem a primeira folha em branco (ou com lixo nela): 422, sem tocar no banco (a r30)", async () => {
+    for (const lixo of [undefined, null, "", "abc", 1.5, -1, 0, [], {}]) {
+      const r = await chamar({ acao: "devolver", metodo: "POST", corpo: { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, parcial: true, primeiraEmBranco: lixo }, token: GERAL() });
+      expect(r.status).toBe(422);
+      expect(r.body.mensagem).toBe("Informe a primeira folha em branco do bloco.");
+    }
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("a devolução completa com a primeira folha em branco: 422, sem tocar no banco (o \"parcial\" perdido nunca fecha o bloco calado)", async () => {
+    for (const parcial of [false, undefined]) {
+      const r = await chamar({ acao: "devolver", metodo: "POST", corpo: { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, parcial, primeiraEmBranco: 70090 }, token: GERAL() });
+      expect(r.status).toBe(422);
+      expect(r.body.mensagem).toBe("A primeira folha em branco só vale na devolução parcial.");
     }
     expect(mockConsultas).toHaveLength(0);
   });

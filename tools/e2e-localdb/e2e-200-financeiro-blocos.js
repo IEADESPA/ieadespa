@@ -161,18 +161,19 @@ async function disparar(chamadas) {
   await recusa(desfeita("CANCELADA", "   "), "exceção desfeita sem o motivo");
   await recusa(desfeita("LANCADA", "lançada"), "folha lançada no histórico das exceções desfeitas (o lançamento se corrige por estorno)");
   await recusa(desfeita("CANCELADA", "sem a entrega", "NULL"), "exceção desfeita sem a entrega que a usou");
-  // o livro da regra de 24/11/2026: a saída com a faixa; a entrada com a saída que fecha, se foi parcial e as folhas livres que voltaram
+  // o livro da regra de 24/11/2026 (com o detalhe da r30): a saída com a faixa entregue; a entrada com a saída que fecha; a parcial com a faixa
+  // que voltou livre (da primeira folha em branco ao fim); a completa sem faixa
   const livroDireto = (tipo, extra) => `INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, ${Object.keys(extra).join(", ")})
     VALUES ('${tipo}', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${Object.values(extra).join(", ")})`;
   await recusa(livroDireto("SAIDA", { Parcial: 0 }), "saída sem a faixa das folhas");
   await recusa(livroDireto("SAIDA", { PrimeiraFolha: 70100, UltimaFolha: 70051 }), "saída com a faixa ao contrário");
-  await recusa(livroDireto("ENTRADA", { FolhasLivres: 0 }), "entrada sem a saída que ela fecha");
-  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, FolhasLivres: 0 }), "entrada parcial sem folha livre");
-  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 0, FolhasLivres: -1 }), "entrada com folhas livres negativas");
-  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, PrimeiraFolha: 70051, UltimaFolha: 70100, FolhasLivres: 0 }), "entrada com a faixa (a faixa é da saída)");
+  await recusa(livroDireto("ENTRADA", { Parcial: 0 }), "entrada sem a saída que ela fecha");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1 }), "entrada parcial sem a primeira folha em branco");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, PrimeiraFolha: 70100, UltimaFolha: 70090 }), "entrada parcial com a faixa ao contrário");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 0, PrimeiraFolha: 70090, UltimaFolha: 70100 }), "entrada completa com faixa livre");
   await recusa(`INSERT INTO FinLivroBlocos (Tipo, LoteId, Quantidade, DataRegistro, RegistradoPor, Parcial) VALUES ('CHEGADA', ${loteId}, 1, '2026-11-20', ${TESOUREIRO_GERAL}, 1)`, "chegada marcada como parcial");
-  await q(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId, FolhasLivres) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403}, 3)`);
-  await recusa(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId, FolhasLivres) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403}, 3)`, "duas entradas fechando a mesma saída");
+  await q(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403})`);
+  await recusa(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403})`, "duas entradas fechando a mesma saída");
   await q(`DELETE FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND SaidaId = ${saida1403}`);
   await recusa(`UPDATE FinBlocos SET Situacao = 'NA_GERAL' WHERE BlocoId = ${b1401}`, "bloco na Geral com congregação");
   await recusa(`UPDATE FinBlocos SET Situacao = 'DEVOLVIDO' WHERE BlocoId = ${b1401}`, "bloco devolvido sem a data da devolução");

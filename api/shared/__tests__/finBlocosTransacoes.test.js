@@ -34,7 +34,7 @@ const { getPool } = require("../db");
 const finDb = require("../finBlocosDb");
 
 const LIDER_VILA_NOVA = { membroId: 1003, nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["financeiro"] };
-const BLOCO_ENTREGUE = [{ BlocoId: 7, Numero: 1401, PrimeiraFolha: 70051, UltimaFolha: 70100, Situacao: "ENTREGUE", CongregacaoId: 2, Congregacao: "Vila Nova",
+const BLOCO_ENTREGUE = [{ BlocoId: 7, Numero: 1401, PrimeiraFolha: 70051, UltimaFolha: 70100, Situacao: "ENTREGUE", CongregacaoId: 2, Congregacao: "Vila Nova", SaidaDe: 70051,
   EntregueEm: new Date("2026-11-10T00:00:00Z"), DevolvidoEm: null, ChegouEm: new Date("2026-11-01T00:00:00Z") }];
 
 // as operações de uma transação, na ordem

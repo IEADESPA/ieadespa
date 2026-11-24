@@ -53,17 +53,18 @@ motivo), e toda ação grava na trilha. Toda migração é idempotente (`IF NOT 
 | 200 | `FinMovimentosCentro` | o livro de cada centro de custo (valor com sinal); nesta migração só o tipo `ABERTURA` (o saldo de abertura, positivo ou negativo) e o `ESTORNO` |
 | 200 | `FinLotesGrafica` | o lote da gráfica: a série (ano), a primeira e a última folha, as folhas por bloco (50) |
 | 200 | `FinBlocos` | cada bloco: o número (calculado pela primeira folha: 70.051 → bloco 1.401), a primeira e a última folha, com quem está (Tesouraria Geral ou a congregação), a situação (na Geral, esperando, em uso, fechado) |
-| 200 | `FinFolhasOcorrencias` | a exceção de uma folha: cancelada, arrancada ou extraviada, com a observação (a folha lançada vem do lançamento) |
+| 200 | `FinFolhas` | o destino de cada folha agora: lançada (vem do lançamento) ou a exceção (cancelada, arrancada ou extraviada, com a observação); a folha sem linha está livre. Desde a 201, a entrega (saída) em que a folha foi usada (`SaidaId`) |
 | 200 | `FinLivroBlocos` | o livro de entrada e saída: o cadastro do lote, a saída (entregue a quem, de qual congregação; a área só leva) e a entrada (devolvido por quem; recebe a Tesouraria Geral) |
-| 201 | `FinLancamentos` | a folha preenchida: bloco, folha, dia, hora (sozinha), tipo (dízimo, oferta de culto, oferta voluntária), forma (espécie ou Pix), valor, a voluntária junto do dízimo, o dizimista (matrícula ou nome digitado), "Este mês" ou "Mês posterior" e o mês em que soma (calculado) |
-| 201 | `FinRelatoriosMes` | o relatório do mês de cada congregação: a folha em que começa (a 1ª marcada "mês posterior" no mês anterior) e a última, a situação (aberto, mandado, conferido pela Geral, fechado pelo Conselho Fiscal), a reabertura só com o voto do Conselho e a autorização do Ministério |
-| 202 | `FinDizimosDigitais` | o Pix que o membro informa; ligado a uma folha do bloco (quem liga escolhe a folha livre) ou excluído com o motivo (o membro é avisado) |
-| 203 | `FinPreRepasses`, `FinComprovantesPix`, `FinDespesasCongregacionais` | o pré-repasse por período (corte com dia e hora), os comprovantes anexados (foto ou PDF), as despesas congregacionais (cadastra a congregação, aceita a Geral; obra só o Presidente) |
-| 204 | `FinCaixaDias`, `FinCaixaMovimentos`, `FinRecibos` | o caixa único da Geral (abre e fecha; espécie e Pix separados; "a espécie virou Pix" com o comprovante; espécie zero no fim do dia) e o recibo com o código do QR |
-| 205 | `FinExtratoBanco`, `FinExtratoCongregacao` | o arquivo do extrato da Cora (até a ligação automática) e o extrato de cada congregação na Geral (entra Pix e espécie; sai a parte da Geral quando o relatório fecha e a despesa dela paga pela Geral) |
-| 206 | `FinPercentuaisRateio`, `FinRateios`, `FinRateioItens` | os percentuais com a data em que passam a valer (30/60/10 e o dízimo do pastor), o rateio (escolher → rateado) e o que entrou em cada um |
-| 207 | `FinSaidas` | a saída de cada centro de custo (fornecedor da Igreja inteira, comprovante) |
-| 208 | `FinDocumentos` | o código de validação de cada folha do mural e de cada recibo (o QR abre a página pública que diz se existe e é aquele) |
+| 201 | índices, `FinFolhasDesfeitas` e a devolução parcial | a revisão de 23/11/2026 e a regra dele de 24/11 (ver "As regras dele de 23 e 24/11/2026"): os índices que a 200 deixou sem; o histórico da exceção desfeita; a faixa da saída, a saída que cada entrada fecha, se a devolução foi parcial e a faixa que voltou livre |
+| 202 | `FinLancamentos` | a folha preenchida: bloco, folha, dia, hora (sozinha), tipo (dízimo, oferta de culto, oferta voluntária), forma (espécie ou Pix), valor, a voluntária junto do dízimo, o dizimista (matrícula ou nome digitado), "Este mês" ou "Mês posterior" e o mês em que soma (calculado) |
+| 202 | `FinRelatoriosMes` | o relatório do mês de cada congregação: a folha em que começa (a 1ª marcada "mês posterior" no mês anterior) e a última, a situação (aberto, mandado, conferido pela Geral, fechado pelo Conselho Fiscal), a reabertura só com o voto do Conselho e a autorização do Ministério |
+| 203 | `FinDizimosDigitais` | o Pix que o membro informa; ligado a uma folha do bloco (quem liga escolhe a folha livre) ou excluído com o motivo (o membro é avisado) |
+| 204 | `FinPreRepasses`, `FinComprovantesPix`, `FinDespesasCongregacionais` | o pré-repasse por período (corte com dia e hora), os comprovantes anexados (foto ou PDF), as despesas congregacionais (cadastra a congregação, aceita a Geral; obra só o Presidente) |
+| 205 | `FinCaixaDias`, `FinCaixaMovimentos`, `FinRecibos` | o caixa único da Geral (abre e fecha; espécie e Pix separados; "a espécie virou Pix" com o comprovante; espécie zero no fim do dia) e o recibo com o código do QR |
+| 206 | `FinExtratoBanco`, `FinExtratoCongregacao` | o arquivo do extrato da Cora (até a ligação automática) e o extrato de cada congregação na Geral (entra Pix e espécie; sai a parte da Geral quando o relatório fecha e a despesa dela paga pela Geral) |
+| 207 | `FinPercentuaisRateio`, `FinRateios`, `FinRateioItens` | os percentuais com a data em que passam a valer (30/60/10 e o dízimo do pastor), o rateio (escolher → rateado) e o que entrou em cada um |
+| 208 | `FinSaidas` | a saída de cada centro de custo (fornecedor da Igreja inteira, comprovante) |
+| 209 | `FinDocumentos` | o código de validação de cada folha do mural e de cada recibo (o QR abre a página pública que diz se existe e é aquele) |
 
 ## 3. As rotas (todas com sessão e escopo desde o começo)
 
@@ -75,8 +76,8 @@ reabrir o mês) pedem `exigirFatorRecente` (428). Fora do escopo e "não existe"
 
 | Rota | Caminho | O que faz |
 | --- | --- | --- |
-| `FinCentrosCusto` | `financeiro/centros-custo/{acao?}` | a árvore com os saldos; o saldo de abertura (geral, 428); o estorno |
-| `FinBlocos` | `financeiro/blocos/{acao?}` | a lista (filtro e páginas de 40), as folhas de um bloco, o livro; o lote da gráfica (geral); entregar e devolver (geral); a ocorrência da folha |
+| `FinCentrosCusto` | `financeiro/centros-custo/{acao?}` | a árvore com os saldos; o saldo de abertura (geral, 428); o estorno. **Ainda não existe** (24/11/2026): só as tabelas estão na 200; a regra e a rota nascem com o desenho do saldo de abertura (rodada 27) |
+| `FinBlocos` | `financeiro/blocos/{acao?}` | a lista (filtro e páginas de 40), as folhas de um bloco, o livro; o lote da gráfica (geral); entregar e devolver, completa ou parcial (geral); a exceção da folha e desfazê-la (geral, com o motivo) |
 | `FinLancamentos` | `financeiro/lancamentos/{acao?}` | a planilha do mês da congregação, salvar as linhas, a linha de lançar |
 | `FinDizimoDigital` | `financeiro/dizimo-digital/{acao?}` e `meu-dizimo-digital` | informar (membro), ligar a uma folha, excluir com motivo |
 | `FinRepasses` | `financeiro/repasses/{acao?}` | o pré-repasse, os comprovantes, conferir com o corte, fechar o relatório |
@@ -100,14 +101,14 @@ notebook e celular. Divergência volta para a construção; não vai para ele.
 | 1a | O modelo base (migração 200), a regra dos blocos e dos centros de custo, a rota `FinBlocos` e `FinCentrosCusto` (leitura e saldo de abertura) | — (servidor) |
 | 1b | O módulo Financeiro na casca: a 2ª entrada do Svelte, o menu "por tipo de trabalho" e a 1ª tela | r13 `r13-fin-menu` op. 1 (o `FIN13`); r17 `r17-blocos` op. 1 |
 | 2 | As folhas do bloco e o livro de entrada e saída (o lote da gráfica, entregar, devolver, o rastreio) | r17 `r17-blocos-folhas` op. 1; r17 `r17-blocos-livro` op. 1 |
-| 3 | Lançar dízimos e ofertas: a planilha e a linha de lançar, "Este mês"/"Mês posterior", as folhas de outro mês, o dizimista do cadastro (migração 201) | r24 `r24-lancamento` op. 1 (na página r26) |
-| 4 | O dízimo digital: o membro informa; ligar escolhendo a folha livre ou excluir com motivo; o lançar e o fechar impedidos até resolver (migração 202) | r22 `r22-dizimo-digital` op. 1 (a mais nova; r21 op. 1 e r20 op. 2 antes) |
-| 5 | O caminho do repasse e o conferir: o pré-repasse por período, o corte com dia e hora, os comprovantes de Pix anexados, as despesas congregacionais (migração 203) | r20 `r20-repasse-fluxo` op. 1; r24 `r24-repasse-conferir` op. 2 sem a aba "Espécie e digital" (ver a pergunta 2) |
-| 6 | O caixa único em 4 passos e o recibo (a folha do recebimento com o QR) (migração 204) | r21 `r21-caixa` op. 1; r20 `r20-folha-recebimento` op. 1 |
-| 7 | Quanto cada congregação tem na Geral: o extrato sem mês e a conta geral (migração 205) | r26 `r26-saldo-congregacoes` op. 1 |
-| 8 | O rateio em duas páginas, sozinho para cada centro de custo, com estorno (migração 206) | r21 `r21-rateio` op. 1 |
-| 9 | O tesouro e as saídas de cada centro de custo; o que a congregação e a área veem dos 60% delas (migração 207) | r21 `r21-tesouro` op. 1 |
-| 10 | A folha do mural: 50 nomes por folha, contínua, o QR e "folha 2 de 3" em cada folha, 3 assinaturas; a página do QR (migração 208) | r26 `r26-folha-mural` op. 1 |
+| 3 | Lançar dízimos e ofertas: a planilha e a linha de lançar, "Este mês"/"Mês posterior", as folhas de outro mês, o dizimista do cadastro (migração 202) | r24 `r24-lancamento` op. 1 (na página r26) |
+| 4 | O dízimo digital: o membro informa; ligar escolhendo a folha livre ou excluir com motivo; o lançar e o fechar impedidos até resolver (migração 203) | r22 `r22-dizimo-digital` op. 1 (a mais nova; r21 op. 1 e r20 op. 2 antes) |
+| 5 | O caminho do repasse e o conferir: o pré-repasse por período, o corte com dia e hora, os comprovantes de Pix anexados, as despesas congregacionais (migração 204) | r20 `r20-repasse-fluxo` op. 1; r24 `r24-repasse-conferir` op. 2 sem a aba "Espécie e digital" (ver a pergunta 2) |
+| 6 | O caixa único em 4 passos e o recibo (a folha do recebimento com o QR) (migração 205) | r21 `r21-caixa` op. 1; r20 `r20-folha-recebimento` op. 1 |
+| 7 | Quanto cada congregação tem na Geral: o extrato sem mês e a conta geral (migração 206) | r26 `r26-saldo-congregacoes` op. 1 |
+| 8 | O rateio em duas páginas, sozinho para cada centro de custo, com estorno (migração 207) | r21 `r21-rateio` op. 1 |
+| 9 | O tesouro e as saídas de cada centro de custo; o que a congregação e a área veem dos 60% delas (migração 208) | r21 `r21-tesouro` op. 1 |
+| 10 | A folha do mural: 50 nomes por folha, contínua, o QR e "folha 2 de 3" em cada folha, 3 assinaturas; a página do QR (migração 209) | r26 `r26-folha-mural` op. 1 |
 | 11 | O relatório do mês fechado pelo Conselho Fiscal (a reabertura só com o voto e a autorização do Ministério) e "Minhas contribuições" na Minha vida | sem tela própria aprovada: perguntar antes (pergunta 4) |
 | 12 | Relatórios: para onde vai o dinheiro e as tendências ("Monte o seu gráfico") | r20 `r20-relatorios` op. 3 |
 | 13 | O contador: o ano numa linha e o resumo; a planilha no formato ITG 2002 | r21 `r21-contador` op. 1 |
@@ -173,8 +174,10 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
   vendo (`escopo`: a Geral, quantas congregações, a área e a congregação) para o título da página e o cabeçalho do módulo.
 - **O bloco que ainda está na Tesouraria Geral** (só a Geral vê) aparece com a etiqueta "Na Geral" e o uso "chegou da gráfica dd/mm"
   ou "ainda na gráfica": o desenho só mostra blocos já entregues.
-- **"Cadastrar lote da gráfica"** (Geral) mostra que o cadastro vem no incremento 2 (o desenho do formulário do lote não existe;
-  perguntar antes de construí-lo, junto com as folhas e o livro).
+- **"Cadastrar lote da gráfica"** (Geral) mostra que o cadastro vem num próximo incremento. *Correção de 24/11/2026:* o desenho do
+  formulário existe, sim: foi aprovado na rodada 27 (`r27-lote-grafica`; commit 34c792f, fontes em 1f7d51c), e a chegada com os números
+  pulados na rodada 28 (`r28-lote-chegada`). Ainda não construído (o servidor do cadastro e da chegada já existe); entra num incremento
+  próprio, com o par aprovado × construído.
 - **As páginas** mostram só as que existem (o desenho repete "1 2 3 4 5" mesmo com 2 blocos); no celular, "Próxima página" só quando
   há próxima.
 
@@ -195,6 +198,33 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
 - **"Registrar saída" (a entrega) não tem formulário aprovado:** o botão mostra o aviso de que vem num próximo incremento. O servidor
   da entrega já existe (`POST financeiro/blocos/entregar`).
 
+### As regras dele de 23 e 24/11/2026 (a revisão do incremento 2, migração 201)
+
+- **Desfazer a exceção da folha (23/11, vale):** só a Tesouraria Geral, escrevendo o motivo, nunca em bloco já devolvido nem em folha
+  de uma entrega que já voltou; a folha lançada se corrige pelo lançamento. A linha sai de `FinFolhas` e vai inteira para
+  `FinFolhasDesfeitas` (quem marcou e quando, o que era, quem desfez, quando e por quê), na mesma transação; a folha volta a ficar
+  livre. Rota `POST financeiro/blocos/desfazer-folha`.
+- **A devolução (24/11, no lugar da "devolução só de bloco cheio" de 23/11), com o detalhe da rodada 30:** a entrada leva a marca
+  **completa** ou **parcial**, e nada se recusa por folha livre.
+  - **Completa:** o bloco fecha. O recibo ainda não lançado passa normalmente (a folha sem destino continua com a congregação).
+  - **Parcial:** a tesouraria informa a **primeira folha em branco** (o rastreio sugere: a seguinte à última folha com destino da
+    entrega). Ela tem de ser da entrega e vir depois da última folha com destino. Dela até a 50ª, as folhas voltam **livres**; a
+    folha sem destino antes dela continua com a congregação. O bloco fica na Tesouraria Geral, e a aba Blocos o mostra "parcial · N
+    livres" (a API manda `parcial`, `livres` e `faixa`; o texto da tela vem com a r30 aprovada).
+  - **A nova saída do bloco parcial** aceita só as folhas livres, começando pela primeira livre, e a data não vem antes da volta.
+    Continuam a data da entrega não antes da chegada da gráfica, só congregação ativa e a recusa própria do bloco que já voltou.
+  - **Quem recebe** vê as folhas usadas antes só para consulta (sem a observação de outra congregação) e só marca as da sua entrega.
+    **Quem devolveu** continua vendo as suas folhas (até a anterior à primeira em branco), com o cabeçalho da entrega dela (a
+    congregação, a data da entrega e a da volta, "fechado"), sem ver o que acontece com as livres depois.
+  - **O livro:** a saída traz a faixa entregue; a entrada traz se foi parcial, a faixa que voltou livre (`faixaLivre`), a contagem só
+    das folhas da entrega que ela fecha e os `pendentes` (as folhas da entrega sem destino). A contagem não muda quando o bloco sai de
+    novo. Quem usou cada folha fica no histórico dela (`FinFolhas.SaidaId`).
+  - **O banco confere** (CHECK): a saída tem a faixa; a entrada parcial tem a faixa que voltou livre e a completa não tem; toda entrada
+    fecha uma saída, e uma saída se fecha uma vez só; toda folha com destino diz a entrega em que foi usada.
+- **Para o lançamento (incremento 3):** a gravação da folha lançada trava a linha do bloco pela chave (`UPDLOCK, ROWLOCK`, na mesma
+  ordem da exceção, do desfazer e da devolução), grava `SaidaId` = a saída em curso e só aceita folha da faixa da entrega em curso. As
+  folhas sem destino de uma entrega que já voltou (os pendentes) hoje ninguém marca: quem lhes dá destino, e quando, é pergunta aberta.
+
 ### Perguntas abertas do incremento 2 (para ele)
 
 1. O formulário de "Registrar saída" (entregar o bloco a uma congregação): desenhar numa rodada curta? Pela regra já falada, quem leva
@@ -202,3 +232,8 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
 2. A folha extraviada ficou no azul das notas: serve, ou ele quer outra cor?
 3. No celular (todos os níveis) e na congregação (também no notebook) o desenho não tem o seletor do bloco: aparece o bloco em uso
    mais recente. Quando a congregação tem dois blocos abertos, ela precisa escolher?
+4. (24/11) A folha sem destino de uma entrega que voltou em parte (o recibo ainda não lançado, que ficou com a congregação): quem lhe
+   dá destino depois da volta, e quando? Hoje ninguém marca (nem a Geral); o lançamento do incremento 3 é o caminho natural.
+5. (24/11) Quem recebe o bloco parcial vê as folhas usadas antes sem a observação de outra congregação; só a Geral vê todas. Serve?
+6. (24/11) O bloco que voltou sem uso nenhum (a primeira em branco é a primeira folha da entrega) não aparece em "Folhas do bloco"
+   para quem o devolveu (não há folha dele); no livro, a saída e a entrada continuam. Serve?

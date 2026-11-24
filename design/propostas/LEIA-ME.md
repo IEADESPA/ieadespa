@@ -10,9 +10,9 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
-| `propostas-r30/index.html` | A página da **rodada 30** (Financeiro, blocos de recibo), 345 KB. Gerada; não editar à mão |
+| `propostas-r30/index.html` | A página da **rodada 30** (Financeiro, blocos de recibo), 350 KB. Gerada; não editar à mão |
 | `propostas-r29/index.html` | A página da rodada 29, a publicada antes: a **base** de que a 30 parte. Não muda |
-| `r30-telas.js` | As telas da 30: registrar saída, a devolução só de bloco cheio, as cores da folha e o seletor, desfazer, as listas vazias |
+| `r30-telas.js` | As telas da 30: registrar saída, a devolução completa ou parcial, as cores da folha e o seletor, desfazer, as listas vazias |
 | `r30-lista.js` | A explicação da rodada (`EXPLICA_R30`), a de cada passo e a lista que junta as telas na página |
 | `montar-r30.js` | Monta a 30 a partir da base da 29, tira o código sem uso e procura as palavras que não existem na Igreja |
 | `conferir-r30.js` | Confere cada desenho (claro e escuro, cada nível, notebook e celular) |
@@ -49,7 +49,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 - **Nunca republicar enquanto o responsável está comentando:** as observações dele ficam no navegador e se perdem.
   A chave do `localStorage` (`propostas-r15`) não muda entre as rodadas.
 - Ler as escolhas dele: `ArtifactData`, coleção `escolhas` da página leve (ids `r30-*` e `geral-r30`).
-- **Antes de publicar, a ferramenta exige ler a versão no ar inteira** (a 30 tem cerca de 345 KB; leia em blocos de ~100
+- **Antes de publicar, a ferramenta exige ler a versão no ar inteira** (a 30 tem cerca de 350 KB; leia em blocos de ~100
   linhas, porque a ferramenta corta acima de 25 mil tokens). Faça isso num agente novo,
   para não pesar a conversa principal. A única diferença esperada é a casca que a plataforma põe em volta da página
   (o `<!doctype>` na 1ª linha e o fechamento no fim).
@@ -64,7 +64,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 3. `node montar-r31.js` e um `conferir-r31.js` (cópia do da 30), os dois com zero problema.
 4. Publique no mesmo endereço e registre: commit dos fontes da 31. A pasta da 29 pode sair quando a 31 entrar, porque o
    Git guarda o histórico.
-5. A página leve deve ficar abaixo de ~400 KB: a 30 tem 345 KB. Se a 31 passar, a 28 (a mais antiga recolhida) sai também.
+5. A página leve deve ficar abaixo de ~400 KB: a 30 tem 350 KB. Se a 31 passar, a 28 (a mais antiga recolhida) sai também.
 6. O conferidor não mede transbordo: meça no Edge (o `medir.js` da pasta de fotos da rodada) e olhe as fotos do pior caso
    (a mensagem de erro, o seletor aberto, o celular com o formulário).
 

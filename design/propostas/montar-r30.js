@@ -18,7 +18,7 @@ t(ancora, ancora + '\n' + ['r30-telas.js', 'r30-lista.js'].map(f => fs.readFileS
 corta('const TELAS_R27 = [', 'TELAS.unshift(...TELAS_R27.map(t => Object.assign({}, t, { rodada: 27 })));', '27');
 // 3. a rodada atual e os grupos: a 30 aberta, a 29 e a 28 respondidas e recolhidas
 { const i = html.indexOf('const RODADA_ATUAL = 29;'), j = html.indexOf('\n', html.indexOf('const GRUPOS_TELAS = ', i)); if (i < 0) throw new Error('não achei a rodada atual');
-  html = html.slice(0, i) + 'const RODADA_ATUAL = 30;\nconst GRUPOS_TELAS = [[30, "Rodada 30: Financeiro, blocos de recibo (o registro da saída, a devolução só de bloco cheio, o desfazer da folha marcada, as cores da folha, o seletor de bloco e os textos das telas) (para escolher agora)"], [29, "Rodada 29 (respondida)"], [28, "Rodada 28 (respondida)"]];' + html.slice(j); }
+  html = html.slice(0, i) + 'const RODADA_ATUAL = 30;\nconst GRUPOS_TELAS = [[30, "Rodada 30: Financeiro, blocos de recibo (o registro da saída, a devolução completa ou parcial, o desfazer da folha marcada, as cores da folha, o seletor de bloco e os textos das telas) (para escolher agora)"], [29, "Rodada 29 (respondida)"], [28, "Rodada 28 (respondida)"]];' + html.slice(j); }
 t('${EXPLICA_R29}', '${EXPLICA_R30}');
 t("'propostas-explica-r29'", "'propostas-explica-r30'", true);
 t("'propostas-r29-antigas'", "'propostas-r30-antigas'", true);

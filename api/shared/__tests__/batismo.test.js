@@ -123,50 +123,7 @@ describe("calcularAptidaoBatismo — item IV verificado por trilha de formação
 });
 
 describe("efetivarTurma (Art. 7º, II — efetivação automática)", () => {
-  test("efetiva só os APROVADOS da turma, nunca os pendentes/reprovados", async () => {
-    const { pool, chamadas } = criarPoolFalso([
-      [{ DataBatismo: "2026-05-16" }], // turma
-      [{ CandidatoId: 1, MembroId: 10 }, { CandidatoId: 2, MembroId: 11 }], // aprovados (2)
-      [], // update MembroReferencia #1
-      [], // update CandidatosBatismo #1
-      [], // update MembroReferencia #2
-      []  // update CandidatosBatismo #2
-    ]);
-    const total = await batismo.efetivarTurma(pool, 1);
-    expect(total).toBe(2);
-    expect(chamadas).toHaveLength(6);
-    expect(chamadas[2].sql).toMatch(/SituacaoMembro = 'EM_COMUNHAO'/);
-    expect(chamadas[2].inputs.dataBatismo).toBe("2026-05-16");
-  });
-
-  test("A2 (revisão de 24/11): a ficha em arrolamento batizada sai do grupo COMPLETADA, junto com a pendência, numa transação só, e com a trilha", async () => {
-    const auditoria = require("../auditoria");
-    const espia = jest.spyOn(auditoria, "registrarAuditoria").mockResolvedValue(undefined);
-    const { pool, chamadas } = criarPoolFalso([
-      [{ DataBatismo: "2026-05-16" }],
-      [{ CandidatoId: 1, MembroId: 10 }, { CandidatoId: 2, MembroId: 11 }],
-      [{ resolvidas: 1 }], // a 10 estava em arrolamento: a pendência fechou
-      [],
-      [{ resolvidas: 0 }], // a 11 não estava
-      []
-    ]);
-    expect(await batismo.efetivarTurma(pool, 1, 77)).toBe(2);
-    const efetiva = chamadas[2];
-    expect(efetiva.sql).toMatch(/SET XACT_ABORT ON;\s*BEGIN TRAN;/);
-    expect(efetiva.sql).toMatch(/SituacaoMembro = 'EM_COMUNHAO'/);
-    expect(efetiva.sql).toMatch(/UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME\(\), ResolvidaPor = @por/);
-    expect(efetiva.sql).toMatch(/WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA'/);
-    // o batismo grava a data do batismo, não a data de entrada (DataAdmissao): a nota não pode dizer que a data de entrada veio do batismo
-    expect(efetiva.sql).not.toMatch(/DataAdmissao/);
-    expect(efetiva.sql).toMatch(/Nota = N'Completada pelo batismo: em comunhão, a forma batismo e a data do batismo \(a data de entrada não muda\)\.'/);
-    expect(efetiva.sql).toMatch(/COMMIT;/);
-    expect(efetiva.inputs.por).toBe(77);
-    // a trilha só para quem estava em arrolamento, sem dado pessoal
-    expect(espia).toHaveBeenCalledTimes(1);
-    expect(espia).toHaveBeenCalledWith(expect.objectContaining({ tabela: "MembroReferencia", registroId: 10, usuarioId: 77, acao: "O batismo completou o arrolamento" }));
-    espia.mockRestore();
-  });
-
+  // a efetivação de cada candidato (a transação, a data de entrada pelo batismo, a pendência do arrolamento e a trilha): batismoEntrada.test.js
   test("turma inexistente não efetiva nada", async () => {
     const { pool, chamadas } = criarPoolFalso([[]]);
     const total = await batismo.efetivarTurma(pool, 999);

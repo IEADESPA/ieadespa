@@ -10,8 +10,6 @@ const { sql } = require("./db");
 const estatuto = require("./estatuto");
 const auditoria = require("./auditoria");
 const { sha256 } = auditoria;
-// pela referência ao módulo (a trilha do batismo que completa o arrolamento): o teste espia registrarAuditoria
-const registrarAuditoria = (registro) => auditoria.registrarAuditoria(registro);
 const trilhas = require("./trilhas");
 const auth = require("./auth");
 const { ehGeral } = require("./escopoRotas");
@@ -108,47 +106,71 @@ async function registrarAceiteEstatuto(pool, membroId) {
   return inserido.recordset[0].TermoAssinadoId;
 }
 
-// Efetivação (Art. 7º, II) — ao REALIZAR a turma, todo candidato já
-// APROVADO nela vira Membro em Comunhão automaticamente: DataBatismo e
-// FormaAdmissao vêm do próprio fluxo, "sem digitação posterior" (mesmo
-// texto da versão). Quem não foi aprovado a tempo NÃO é efetivado — fica
-// pra reatribuir numa turma seguinte (Status volta a AGUARDANDO_TURMA
-// fora daqui, ação separada).
-//
-// A ficha em ARROLAMENTO (veio do sistema pago e ainda não foi completada) que é batizada: a ficha sai do grupo em comunhão, com a forma batismo e a
-// data do batismo, então a pendência ARROLAMENTO fecha como COMPLETADA junto com a situação, na mesma transação, e a trilha diz que foi o batismo (A2 da
-// revisão de 24/11/2026: antes a ficha saía do grupo e a pendência ficava aberta). A data de entrada (DataAdmissao) NÃO muda aqui, como no batismo de quem
-// não veio da importação: se o sistema pago não a trouxe, ela continua vazia, e a Assembleia (que pede 90 dias da entrada) conta a ficha como "dados
-// incompletos" até alguém preenchê-la. Se a data do batismo deve virar a data de entrada, é pergunta para o responsável. `por`: quem realizou a turma.
+// A DATA DE ENTRADA PELO BATISMO (decisão dele de 24/11/2026, volta 5): a admissão no rol é quando a pessoa se torna membro. Quem se converteu na nossa igreja
+// (o congregado; e quem está com o arrolamento a completar, que ainda não é membro) é admitido no batismo nas águas: a data de entrada (DataAdmissao) passa a
+// ser a data do batismo, também por cima de uma data anterior de congregado (ex.: veio em 2006, foi batizado em 2010: a admissão é 2010, e os 90 dias da
+// Assembleia contam do batismo; a data de antes fica na trilha). Quem já entrou como membro por outro caminho — carta de mudança ou aclamação (veio de outra
+// igreja: a data de entrada é a da chegada, que a secretaria registra) e reconciliação (a volta, com a data dela) — fica com a forma e a data dele.
+const FORMAS_DE_OUTRO_CAMINHO = ["CARTA_MUDANCA", "ACLAMACAO", "RECONCILIACAO"];
+// antes: { situacao, formaAdmissao, dataAdmissao } ("AAAA-MM-DD" ou null); dataBatismo: "AAAA-MM-DD". Devolve { formaAdmissao, dataAdmissao }.
+function entradaPeloBatismo(antes, dataBatismo) {
+  const a = antes || {};
+  if (FORMAS_DE_OUTRO_CAMINHO.includes(a.formaAdmissao)) return { formaAdmissao: a.formaAdmissao, dataAdmissao: a.dataAdmissao || null };
+  return { formaAdmissao: "BATISMO", dataAdmissao: dataBatismo };
+}
+
+// Efetivação (Art. 7º, II) — ao REALIZAR a turma, todo candidato já APROVADO nela vira Membro em Comunhão automaticamente: DataBatismo e FormaAdmissao vêm do
+// próprio fluxo, "sem digitação posterior" (mesmo texto da versão), e a data de entrada pela regra acima. Quem não foi aprovado a tempo NÃO é efetivado — fica
+// pra reatribuir numa turma seguinte (Status volta a AGUARDANDO_TURMA fora daqui, ação separada).
+// Cada candidato numa TRANSAÇÃO própria (menor 6 da revisão do portão de 24/11/2026: antes a trilha ia depois do COMMIT): a ficha lida com trava, a situação, a
+// forma e a data de entrada, a pendência ARROLAMENTO fechada como COMPLETADA (a ficha que veio do sistema pago e ainda não tinha sido completada), a trilha
+// (com a forma e a data de antes: a data anterior de congregado só sobrevive nela, porque o banco não tem coluna de conversão) e o BATIZADO do candidato.
+// Um erro desfaz só o candidato da vez (os anteriores já ficaram) e sobe. `por`: quem realizou a turma.
+const NOTA_BATISMO = "Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo.";
 async function efetivarTurma(pool, turmaId, por = null) {
-  const turma = (await pool.request().input("id", sql.Int, turmaId).query(`SELECT DataBatismo FROM TurmasBatismo WHERE TurmaId = @id`)).recordset[0];
+  const turma = (await pool.request().input("id", sql.Int, turmaId)
+    .query(`SELECT CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo FROM TurmasBatismo WHERE TurmaId = @id`)).recordset[0];
   if (!turma) return 0;
   const aprovados = (await pool.request().input("turmaId", sql.Int, turmaId).query(`
     SELECT CandidatoId, MembroId FROM CandidatosBatismo WHERE TurmaId = @turmaId AND Status = 'APROVADO'
   `)).recordset;
+  const dataBatismo = turma.DataBatismo instanceof Date ? turma.DataBatismo.toISOString().slice(0, 10) : String(turma.DataBatismo).slice(0, 10);
 
   for (const candidato of aprovados) {
-    const r = await pool.request()
-      .input("id", sql.Int, candidato.MembroId).input("dataBatismo", sql.Date, turma.DataBatismo).input("por", sql.Int, por)
-      .query(`SET XACT_ABORT ON; BEGIN TRAN;
-              UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = 'BATISMO' WHERE MembroId = @id;
-              UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por,
-                Nota = N'Completada pelo batismo: em comunhão, a forma batismo e a data do batismo (a data de entrada não muda).'
-              WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA';
-              DECLARE @resolvidas INT = @@ROWCOUNT;
-              COMMIT;
-              SELECT @resolvidas AS resolvidas;`);
-    if (Number(r.recordset && r.recordset[0] && r.recordset[0].resolvidas) > 0) {
-      await registrarAuditoria({ tabela: "MembroReferencia", registroId: candidato.MembroId, acao: "O batismo completou o arrolamento", usuarioId: por,
-        dadosDepois: { situacaoMembro: "EM_COMUNHAO", formaAdmissao: "BATISMO", turmaId } });
+    const t = new sql.Transaction(pool);
+    await t.begin();
+    try {
+      const rq = () => new sql.Request(t);
+      const f = (await rq().input("id", sql.Int, candidato.MembroId).query(`SET XACT_ABORT ON;
+        SELECT SituacaoMembro, FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao
+        FROM MembroReferencia WITH (UPDLOCK, HOLDLOCK) WHERE MembroId = @id`)).recordset[0] || {};
+      const antes = { situacaoMembro: f.SituacaoMembro || null, formaAdmissao: f.FormaAdmissao || null, dataAdmissao: f.DataAdmissao || null };
+      const e = entradaPeloBatismo({ situacao: antes.situacaoMembro, formaAdmissao: antes.formaAdmissao, dataAdmissao: antes.dataAdmissao }, dataBatismo);
+      await rq().input("id", sql.Int, candidato.MembroId).input("dataBatismo", sql.Date, dataBatismo).input("forma", sql.NVarChar(30), e.formaAdmissao)
+        .input("dataAdmissao", sql.Date, e.dataAdmissao)
+        .query(`SET XACT_ABORT ON;
+                UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = @forma, DataAdmissao = @dataAdmissao WHERE MembroId = @id;`);
+      const p = (await rq().input("id", sql.Int, candidato.MembroId).input("por", sql.Int, por).input("nota", sql.NVarChar(300), NOTA_BATISMO)
+        .query(`SET XACT_ABORT ON;
+                UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por, Nota = @nota
+                WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA';
+                SELECT @@ROWCOUNT AS resolvidas;`)).recordset[0];
+      const completouArrolamento = Number(p && p.resolvidas) > 0;
+      await auditoria.registrarAuditoriaNaTransacao(t, { tabela: "MembroReferencia", registroId: candidato.MembroId, usuarioId: por,
+        acao: completouArrolamento ? "O batismo completou o arrolamento" : "O batismo admitiu o membro",
+        dadosAntes: antes, dadosDepois: { situacaoMembro: "EM_COMUNHAO", formaAdmissao: e.formaAdmissao, dataAdmissao: e.dataAdmissao, turmaId } });
+      await rq().input("id", sql.Int, candidato.CandidatoId).query(`SET XACT_ABORT ON; UPDATE CandidatosBatismo SET Status = 'BATIZADO' WHERE CandidatoId = @id`);
+      await t.commit();
+    } catch (erro) {
+      try { await t.rollback(); } catch (_) { /* já desfeita */ }
+      throw erro;
     }
-    await pool.request().input("id", sql.Int, candidato.CandidatoId).query(`UPDATE CandidatosBatismo SET Status = 'BATIZADO' WHERE CandidatoId = @id`);
   }
   return aprovados.length;
 }
 
 module.exports = {
-  efetivarTurma, turmaNoEscopo,
+  efetivarTurma, entradaPeloBatismo, FORMAS_DE_OUTRO_CAMINHO, turmaNoEscopo,
   IDADE_MINIMA_BATISMO, MESES_VALIDOS_TURMA, TIPOS_LOCAL_VEDADOS,
   mesValidoParaTurma, localPermitido, possuiCasamentoCivilRegistrado,
   calcularAptidaoBatismo, registrarAceiteEstatuto,

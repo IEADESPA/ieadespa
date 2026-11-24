@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 08:43 (Claude, sessão principal).
+Atualizado em 24/11/2026 09:00 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -56,12 +56,19 @@ escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o pon
   mexer na homologação.
 - **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, em `f722716`): o teste novo
   `finMigracoesIndices.test.js` (I3), ainda sem a migração. Depois vêm I4, os menores e as duas regras dele.
-- **Desenhista** (`C:/tmp/ieadespa-desenho-r30`, ramo `desenho-r30`, em `f3707d1`, enviado): o esqueleto da r30, sem
-  a 27 na página leve (de 387 para 289 KB). `r30-lista.js`, `r30-telas.js` e `propostas-r30/` ainda não estão
-  registrados. Não publicar.
+- **Desenhista: a r30 está PRONTA e NÃO publicada** (`C:/tmp/ieadespa-desenho-r30`, ramo `desenho-r30`, em `d0881bf`,
+  enviado). São 5 telas, 344 desenhos, 0 problema e 345 KB. Diário: `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`.
+  **Antes de publicar, um ajuste** pela regra nova dele (24/11): a "anulada" sai (o 4º botão, o cinza, o item da
+  legenda, o "marcar as 3 em branco" e o "3 anuladas" do livro). A devolução passa a ser completa ou parcial, com as
+  folhas em branco de volta a livres, e o "Registrar saída" passa a entregar um bloco parcial (só as folhas livres). O
+  desenhista volta para isso quando abrir uma vaga e depois publica. As respostas da r29 ficam para a próxima rodada de
+  Membros: a carta com o histórico pede uma tela antes de construir.
 - **Revisor de fora** (bancada, em `a4fd8b3`): o teste `revisor-sdk/testes/orcamento-local.test.mjs` foi escrito e
   ainda não está registrado; o código não começou. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-- O revisor do arrolamento entra quando uma vaga abrir.
+- **A prova do Code Review Graph** (agente novo, 24/11): o script e o relatório ficam em
+  `C:/tmp/ieadespa-bancada/prova-crg/` e não vão para o Git. A cópia do sistema com os defeitos plantados fica em
+  `C:/tmp/ieadespa-prova-crg`, sem remote, e é apagada no fim. O teto é de US$ 40.
+- Na fila, quando abrir vaga: o desenhista (o ajuste da r30) e o revisor do arrolamento.
 
 A trava do LocalDB está livre.
 

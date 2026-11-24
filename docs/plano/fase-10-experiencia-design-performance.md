@@ -1072,8 +1072,11 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
 
 Depois da revisão do Financeiro até `4c06d58`:
 
-- **A devolução é só de bloco cheio.** A devolução só passa com as 50 folhas usadas ou marcadas. Se sobrar folha em
-  branco, a tesouraria marca como anulada antes de devolver.
+- **As folhas em branco voltam livres (ele, 24/11, substitui a "devolução só de bloco cheio" de 23/11).** Normalmente
+  o bloco volta completo. Se uma congregação devolver o bloco por algum motivo com folhas nunca usadas, a tesouraria
+  marca a devolução como **parcial**. Essas folhas **não são anuladas**: voltam a ficar livres para uma próxima entrega,
+  porque imprimir bloco novo custa dinheiro e as folhas já existem. A entrega de um bloco parcial pega só as folhas
+  livres, e quem usou cada folha continua no histórico dela. Não existe a situação "anulada".
 - **A exceção da folha pode ser desfeita**, só pela Tesouraria Geral e com motivo obrigatório. Fica no histórico quem
   marcou, quem desfez, quando e por quê; nada se apaga. Não vale para folha de bloco já devolvido.
 - O formulário "Registrar saída" (entregar um bloco a uma congregação), a cor da folha extraviada e o seletor de bloco

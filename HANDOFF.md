@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 09:11 (Claude, sessão principal).
+Atualizado em 24/11/2026 09:38 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -64,20 +64,20 @@ escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o pon
   - Os commits novos vão ao homolog pelo Claude, depois do revisor do arrolamento.
 - **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, em `f722716`): o teste novo
   `finMigracoesIndices.test.js` (I3), ainda sem a migração. Depois vêm I4, os menores e as duas regras dele.
-- **Desenhista: a r30 está PRONTA e NÃO publicada** (`C:/tmp/ieadespa-desenho-r30`, ramo `desenho-r30`, em `d0881bf`,
-  enviado). São 5 telas, 344 desenhos, 0 problema e 345 KB. Diário: `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`.
-  **Antes de publicar, um ajuste** pela regra nova dele (24/11): a "anulada" sai (o 4º botão, o cinza, o item da
-  legenda, o "marcar as 3 em branco" e o "3 anuladas" do livro). A devolução passa a ser completa ou parcial, com as
-  folhas em branco de volta a livres, e o "Registrar saída" passa a entregar um bloco parcial (só as folhas livres). O
-  desenhista **voltou para isso às 09h50 de 24/11** e depois publica. As respostas da r29 ficam para a próxima rodada de
-  Membros: a carta com o histórico pede uma tela antes de construir.
-- **Revisor de fora** (bancada, em `a4fd8b3`): o teste `revisor-sdk/testes/orcamento-local.test.mjs` foi escrito e
-  ainda não está registrado; o código não começou. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+- **Desenhista: a r30 está PUBLICADA** (24/11, versão 12 da página leve KMeb…, 350 KB, 352 desenhos, 0 problema;
+  ramo `desenho-r30` mesclado na `main`). Ficou sem "anulada", com a devolução completa ou parcial e a saída do bloco
+  parcial só com as folhas livres. **Esperando ele conferir**: na página há 6 pontos marcados "Para conferir"
+  (as folhas em branco são sempre as do fim? o que cada congregação vê do bloco parcial, entre outros). Diário:
+  `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`. As respostas da r29 ficam para a próxima rodada de Membros: a carta
+  com o histórico pede uma tela antes de construir.
+- **Revisor de fora** (bancada, até `81fdf25`): prontos o crédito por dia com os 2 computadores, a largada no
+  `message_start`, o `--conferir-relatorio` e o teto mínimo por lente. Falta o recorte dos ramos e a agenda. Diário:
+  `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 - **A prova do Code Review Graph** (agente novo, 24/11): o script e o relatório ficam em
   `C:/tmp/ieadespa-bancada/prova-crg/` e não vão para o Git. A cópia do sistema com os defeitos plantados fica em
   `C:/tmp/ieadespa-prova-crg`, sem remote, e é apagada no fim. O teto é de US$ 40.
-- Na fila, quando abrir vaga, nesta ordem: a próxima volta do construtor do Membros (acima) e depois o revisor do
-  arrolamento, que revisa também os commits novos do Membros.
+- **A próxima volta do construtor do Membros começou** (a LGPD da importação e a migração 186, acima).
+- Na fila, quando abrir vaga: o revisor do arrolamento, que revisa também os commits novos do Membros.
 
 A trava do LocalDB está livre.
 

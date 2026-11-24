@@ -6,7 +6,7 @@ Em uso por: Mateus desde 23/11/2026 16:50
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 22:45 (Claude, sessão principal).
+Atualizado em 23/11/2026 23:55 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -58,19 +58,29 @@ travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **falta**
 
 - **A importação de mentira na homologação fica para o ÚLTIMO PASSO**, antes da produção de Membros. O sistema de
   proteção do Claude barrou mandá-la sem o sim explícito dele. Quando chegar a hora, pedir o "pode" de novo.
-- **O revisor de fora roda só quando mandarem** (nada de horário automático). Além do ieadespa, revisa também o
-  **asaf** e o **comep**.
+- **O PLANO NOVO do revisor de fora** (aprovado por ele às 23h50, depois da medição; substitui o "só quando
+  mandarem"):
+  1. primeiro o código novo da FASE 10 (os ramos do Membros e do Financeiro) e, depois, cada coisa nova que o
+     construtor terminar;
+  2. pedaços com metade do tamanho;
+  3. o Agendador do Windows liga o revisor de 4 em 4 horas, no máximo 30 minutos por vez;
+  4. o crédito espalhado pelos dias do mês.
+  O código antigo, o asaf e o comep ficam depois. Os 3 olhares e o máximo continuam.
 
 O que cada frente fazia (para retomar):
 
-1. **revisor de fora: FUNCIONANDO** (bancada até `d025795`, 90/90 testes). A chave fica num **workspace próprio**
-   (`revisor-de-fora`), porque a chave pessoal sem workspace dá 400. Os plugins embutidos do Claude Code ficam
-   desligados. A prova passou em 23/11 às 22h26 (US$ 0,08), e o gasto saiu dos créditos promocionais, conferido por
-   ele. A **1ª rodada real** (o próximo pedaço do lote 1 do ieadespa) começou às 22h35; o registro está em
-   `C:/tmp/ieadespa-bancada/revisor-rodada1.log`. Um agente monta as **listas de pedaços** do ieadespa inteiro, do comep
-   e do asaf. Em outro computador, o programa chega pela bancada, mas a chave não (cada um guarda a sua); a recomendação
-   é só este computador rodar, e os outros lerem os relatórios na bancada. Diário:
-   `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+1. **revisor de fora: FUNCIONANDO** (bancada até `a4fd8b3`, 105/105 testes). A chave fica num **workspace próprio**
+   (`revisor-de-fora`), porque a chave pessoal sem workspace dá 400. Os plugins e as habilidades embutidas do Claude
+   Code ficam desligados. O bloco comum é o mesmo nas 3 lentes, que largam em escalonado.
+   - **A medição de 23/11:** uma lente completa custa ~US$ 6,27, e um pedaço inteiro ~US$ 22 a 25 (~5 por mês). A 1ª
+     rodada, antes do conserto, gastou US$ 11,49 sem terminar. Gasto do ciclo: ~US$ 24.
+   - **No pedaço do login apareceram 5 achados graves, ainda não conferidos.** O detalhe está só na bancada privada
+     (`relatorios/ieadespa/2026-11-23-lote1-login-pin-medicao.md`), nunca aqui.
+   - Listas de pedaços: 159 no total (ieadespa 74, asaf 55, comep 30), a recortar pela metade.
+   - **Um agente monta o plano novo** (diferença dos ramos, `--agendado`, `LIGAR-AGENDA.cmd`, crédito por dia,
+     `--conferir-relatorio`). Depois, o Claude liga a agenda e confere os 5 graves do login.
+   - Em outro computador, o programa chega pela bancada, mas a chave não; só este computador roda.
+   Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
 2. **construtor do Membros:** o arrolamento está **na homologação** (servidor `20681e8`, tela `2ce12bc` e `90d3122`;
    homolog `a8d03c3`, base do teste de telas `11c51ff`). Já corrigiu da revisão a aspa sem fechar (`923dd5f`), a saída
    do IMPORTANDO (`07d592d`) e o texto do site (`4741cd3`; homolog `259a737`). Agora: o menu cortado a 1280 px e a

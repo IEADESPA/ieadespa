@@ -1,7 +1,7 @@
 // Monta a página da rodada 32 (24/11/2026), o começo do Módulo 3 (Estrutura e Territórios), a partir da página da
-// rodada 31 (propostas-r31/index.html, a versão publicada em 24/11/2026), que não muda. A 32 fica no alto e a 31, já
-// aprovada, recolhida embaixo (a classe .antiga). Os dois links do alto (KMeb…, rodadas 19 a 30, e G1gj…, 2 a 18) ficam.
-// A observação geral passa a 'geral-r32'. Para caber: a poda tira o código que nenhuma tela usa (o analisador do TypeScript).
+// rodada 31 (propostas-r31/index.html, a versão publicada em 24/11/2026), que não muda. Uma página por rodada (24/11/2026):
+// a página nova tem SÓ a 32 (a lista da 31 sai, e a poda leva o código que só ela usava); no alto, os links das anteriores
+// (58VZ…, rodada 31; KMeb…, rodadas 19 a 30; G1gj…, 2 a 18). As escolhas: coleção 'escolhas', ids 'r32-*' e 'geral-r32'. Para caber: a poda tira o código que nenhuma tela usa (o analisador do TypeScript).
 // No fim, a procura das palavras proibidas: a lista antiga (do Financeiro) na página toda, menos os fontes da 32; nos
 // fontes da 32, a lista do módulo 3 ("culto" é a língua da igreja aqui; sai o vocabulário do Regimento).
 const fs = require('fs'), path = require('path');
@@ -13,26 +13,28 @@ const antes = Buffer.byteLength(html);
 const FONTES = ['r32-base.js', 'r32-ficha.js', 'r32-cultos.js', 'r32-painel.js', 'r32-posse.js', 'r32-mapa.js', 'r32-lista.js'].filter(f => fs.existsSync(path.join(pasta, f)));
 const fontes32 = FONTES.map(f => fs.readFileSync(path.join(pasta, f), 'utf8')).join('\n');
 
-// 1. as telas da 32 logo depois da lista da 31 (unshift: a 32 fica na frente)
+// 1. as telas da 32 NO LUGAR da lista da 31 (sem a linha que põe a 31 em TELAS, a poda tira TELAS_R31 e o que só ela usa)
 const ancora = 'TELAS.unshift(...TELAS_R31.map(t => Object.assign({}, t, { rodada: 31 })));';
-t(ancora, ancora + '\n' + fontes32);
-// 2. a rodada atual e os grupos: a 32 no alto e a 31 recolhida (as anteriores estão nas páginas de arquivo, pelos links)
+t(ancora, fontes32);
+// 2. a rodada atual e o grupo: só a 32 (as anteriores estão nas páginas de arquivo, pelos links do alto)
 { const i = html.indexOf('const RODADA_ATUAL = 31;'), j = html.indexOf('\n', html.indexOf('const GRUPOS_TELAS = ', i)); if (i < 0) throw new Error('não achei a rodada atual');
-  html = html.slice(0, i) + 'const RODADA_ATUAL = 32;\nconst GRUPOS_TELAS = [[32, "Rodada 32: Estrutura e Territórios, o começo (a ficha da congregação, os cultos e os pontos de culto, o painel do que está desatualizado, a diretoria com o termo de posse e o mapa) (para escolher agora)"], [31, "Rodada 31: Membros, a saída e a volta (aprovada em 24/11/2026)"]];' + html.slice(j); }
+  html = html.slice(0, i) + 'const RODADA_ATUAL = 32;\nconst GRUPOS_TELAS = [[32, "Rodada 32: Estrutura e Territórios, o começo (a ficha da congregação, os cultos e os pontos de culto, o painel do que está desatualizado, a diretoria com o termo de posse e o mapa) (para escolher agora)"]];' + html.slice(j); }
 t('${EXPLICA_R31}', '${EXPLICA_R32}');
 t("'propostas-explica-r31'", "'propostas-explica-r32'", true);
 t("'propostas-r31-antigas'", "'propostas-r32-antigas'", true);
-t('// rodadas recolhidas embaixo da atual: na página nova da 31 não há nenhuma (GRUPOS_TELAS só com a 31)', '// rodadas recolhidas embaixo da atual: a 31, já aprovada, fica embaixo da 32');
-t('/* (sem uso desde a 31: a página nova não tem rodadas recolhidas) */', '/* Rodada 32: a 31, já aprovada, recolhida embaixo da 32 */');
+t('// rodadas recolhidas embaixo da atual: na página nova da 31 não há nenhuma (GRUPOS_TELAS só com a 31)', '// rodadas recolhidas embaixo da atual: uma página por rodada, não há nenhuma (GRUPOS_TELAS só com a 32)');
 // 3. ao abrir, a tela lembrada só vale se for da rodada atual (a chave 'propostas-r15' não muda)
 t('if (i >= 0 && TELAS[i].rodada === 31)', 'if (i >= 0 && TELAS[i].rodada === 32)');
 t("'geral-r31'", "'geral-r32'", true);
 t("escolhas/geral-r31'", "escolhas/geral-r32'", true);
 // 4. o HTML em volta
+t('<title>Propostas de tela</title>', '<title>Propostas de tela · rodada 32</title>');
 t('IEADESPA · FASE 10 · rodada 31', 'IEADESPA · FASE 10 · rodada 32');
 t('Observação geral sobre a rodada 31', 'Observação geral sobre a rodada 32');
+{ const kmeb = '<a class="aprovados-btn" href="https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz"';
+  t(kmeb, '<a class="aprovados-btn" href="https://claude.ai/artifact/58VZXcgVGNdrUxoVZRp2c6" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodada 31)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>\n    ' + kmeb); }
 t('Esta página começa na rodada 31. As rodadas 19 a 30 e as rodadas 2 a 18 ficam nas duas páginas acima, com as escolhas e as observações guardadas como estavam.',
-  'Esta página começa na rodada 31, que já foi aprovada e fica recolhida embaixo da 32. As rodadas 19 a 30 e as rodadas 2 a 18 ficam nas duas páginas acima, com as escolhas e as observações guardadas como estavam.');
+  'Esta página tem só a rodada 32: cada rodada ganha a sua página. A rodada 31, as rodadas 19 a 30 e as rodadas 2 a 18 ficam nas três páginas acima, com as escolhas e as observações guardadas como estavam.');
 
 // 5. a poda: sai a declaração de topo que ninguém mais usa (nem as telas, nem a página, nem as ferramentas de conferir e de foto)
 {

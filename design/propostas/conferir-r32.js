@@ -1,4 +1,4 @@
-// O conferir.js de sempre para a página da rodada 32 (24/11/2026; a 31 recolhida embaixo): a sintaxe, cada desenho (modos, níveis e aparelhos),
+// O conferir.js de sempre para a página da rodada 32 (24/11/2026; uma página por rodada: só a 32, sem a 31): a sintaxe, cada desenho (modos, níveis e aparelhos),
 // undefined/NaN/[object Object]/${ esquecido, caixas <div> desiguais, emojis e as palavras que não existem na Igreja.
 const fs = require('fs'), path = require('path');
 const arq = process.argv[2] || 'propostas-r32/index.html';

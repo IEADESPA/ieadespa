@@ -373,17 +373,21 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
       expect.objectContaining({ registroId: 9, usuarioId: null, acao: "Concluiu a importação do sistema pago" })]);
     expect(mockTx).toEqual(["begin", "commit"]);
   });
-  test("G2: a importação parada sem ninguém que entrou: as linhas ficam só com o nome e o motivo, e ela NÃO conclui com zero (continua em andamento)", async () => {
-    cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{}", importadas: 0 }], paradasDeFora: 5 });
+  // A que parou sem ninguém importado NÃO entra no prazo (o 7902eca tinha esse defeito): tirar as linhas dela deixava a importação única sem saída — o
+  // "Continuar a importação" recusava para sempre (NINGUEM_ENTROU, "Avise o suporte") e nenhuma outra podia começar. Ela fica como antes do G2: continua
+  // de onde parou, com os dados, quando a Secretaria Geral voltar. O que fazer com ela depois de um prazo, ele decide.
+  test("G2: a importação parada sem ninguém que entrou fica como está (continua de onde parou, com os dados): a rotina só pega a que tem gente importada", async () => {
+    cenarioGuarda({ paradas: [], paradasDeFora: 5 });
     await db.aplicarRetencao(POOL_G);
-    expect(mockConsultas.find((c) => /N'NAO_TERMINOU'/.test(c.sql)).inputs.id).toBe(9);
+    const sel = mockConsultas.find((c) => /WHERE i\.Situacao = N'IMPORTANDO'/.test(c.sql));
+    expect(sel.sql).toMatch(/EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l\.ImportacaoId = i\.ImportacaoId AND l\.Estado = N'IMPORTADA'\)/);
+    expect(mockConsultas.some((c) => /N'NAO_TERMINOU'/.test(c.sql))).toBe(false);
     expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(false);
-    expect(trilhas()).toEqual([expect.objectContaining({ registroId: 9, usuarioId: null, acao: "A rotina tirou os dados das linhas da importação parada há 7 dias (ninguém tinha entrado)",
-      dadosDepois: { linhasDeFora: 5, retencaoDias: 7 } })]);
+    expect(trilhas()).toEqual([]);
   });
   test("G2: o motivo novo tem o texto para a lista e o CSV; os textos da trilha cabem em 100 (com o prazo de 36.500 dias)", async () => {
     expect(require("../importacaoMembros").textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)");
-    for (const importadas of [0, 3]) {
+    for (const importadas of [3]) {
       jest.clearAllMocks();
       cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{}", importadas }], paradasDeFora: 1, politicas: { [db.POLITICA_PREVIA.categoria]: 36500 } });
       await db.aplicarRetencao(POOL_G);

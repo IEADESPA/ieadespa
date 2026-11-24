@@ -520,14 +520,17 @@ async function aplicarRetencao(pool) {
     }
     // G2 (revisão de 24/11/2026): a importação que começou a gravar e parou (IMPORTANDO) não tinha prazo, e as linhas que faltavam ficavam com CPF, celular,
     // mãe e pai. O prazo é o da prévia (a mesma planilha com dado pessoal esperando), contado da confirmação: passado ele, as linhas que faltavam ficam de
-    // fora como problema (NAO_TERMINOU), só com o nome e o motivo; com alguém já importado, a importação conclui (como no último lote: as matrículas novas
-    // destravam e a lista dos de fora entra nos 90 dias). Sem ninguém importado, ela não conclui com zero (soltaria a trava das matrículas com a importação
-    // única gasta): continua em andamento, já sem os dados pessoais, e a decisão do que fazer com ela fica com o responsável.
+    // fora como problema (NAO_TERMINOU), só com o nome e o motivo, e a importação conclui (como no último lote: as matrículas novas destravam e a lista dos
+    // de fora entra nos 90 dias). Só a que já tem alguém importado: a que parou sem ninguém fica como está, com os dados, e continua de onde parou quando a
+    // Secretaria Geral voltar (o 7902eca também a pegava, e era defeito: sem as linhas, o "Continuar a importação" recusava para sempre, com o NINGUEM_ENTROU
+    // e o "Avise o suporte", e nenhuma outra importação podia começar: a importação única ficava sem saída). O que fazer com ela depois de um prazo, o
+    // responsável decide.
     const paradas = (await rq().input("d", sql.Int, diasPrevia).query(`
-      SELECT i.ImportacaoId, i.Resumo, (SELECT COUNT(*) FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA') AS importadas
+      SELECT i.ImportacaoId, i.Resumo
       FROM ImportacoesMembros i
       WHERE i.Situacao = N'IMPORTANDO' AND i.ConfirmadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())
-        AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'PENDENTE')`)).recordset;
+        AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'PENDENTE')
+        AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA')`)).recordset;
     for (const pa of paradas) {
       const id = Number(pa.ImportacaoId);
       const marcadas = (await rq().input("id", sql.Int, id).query(`
@@ -535,11 +538,9 @@ async function aplicarRetencao(pool) {
         WHERE ImportacaoId = @id AND Estado = N'PENDENTE';
         SELECT @@ROWCOUNT AS n`)).recordset[0];
       const linhasDeFora = Number(marcadas && marcadas.n) || 0;
-      const comGente = Number(pa.importadas) > 0;
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: null, dadosDepois: { linhasDeFora, retencaoDias: diasPrevia },
-        acao: comGente ? `A rotina encerrou a importação parada há ${diasPrevia} dias (as linhas que faltavam ficaram de fora)`
-          : `A rotina tirou os dados das linhas da importação parada há ${diasPrevia} dias (ninguém tinha entrado)` });
-      if (comGente) await concluirNaTransacao(t, rq, id, null, lerJson(pa.Resumo));
+        acao: `A rotina encerrou a importação parada há ${diasPrevia} dias (as linhas que faltavam ficaram de fora)` });
+      await concluirNaTransacao(t, rq, id, null, lerJson(pa.Resumo));
     }
     const apagadas = (await rq().input("d", sql.Int, diasFora).query(`
       DECLARE @apagadas TABLE (ImportacaoId INT NOT NULL);

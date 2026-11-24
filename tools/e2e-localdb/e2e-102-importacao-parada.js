@@ -1,8 +1,9 @@
 // e2e-102-importacao-parada.js — G2 da revisão de 24/11/2026: a importação que começou a gravar e PAROU (IMPORTANDO) não tinha prazo, e as linhas que
 // faltavam ficavam com o CPF, o celular, a mãe e o pai. Contra o SQL Server de verdade; só dados de mentira (CPF de mentira com os dígitos certos, que não
 // é de ninguém). O prazo é o da prévia (7 dias, contados da confirmação; a política "prévia" ajusta). O que se prova:
-//   1. parada SEM ninguém importado: com 6 dias nada muda; com 8, as linhas ficam só com o nome e o motivo (NAO_TERMINOU), a trilha sem usuário, e ela NÃO
-//      conclui com zero (continua em andamento, as matrículas continuam travadas); rodar de novo não faz nada;
+//   1. parada SEM ninguém importado: a rotina NÃO mexe nela, nem passados os 7 dias (o 7902eca mexia, e era defeito: sem as linhas, o "Continuar" recusava
+//      para sempre, com o "Avise o suporte", e nenhuma outra importação podia começar). Com 12 dias, as linhas continuam pendentes e com os dados, sem
+//      trilha da rotina, as matrículas travadas, e um lote depois importa de onde parou;
 //   2. parada COM gente importada: com 8 dias, as que faltavam ficam de fora só com o nome e o motivo, ela CONCLUI (as matrículas destravam), as
 //      importadas ficam como na conclusão de sempre, a lista e o CSV mostram o motivo novo; rodar de novo não faz nada; a cadeia de hashes confere.
 // Roda sobre a base cenario-186: `BASE=cenario-186 bash rodar.sh roteiro e2e-102-importacao-parada.js`.
@@ -60,23 +61,22 @@ async function principal() {
   await db.aplicarRetencao(pool);
   ok(await pessoais(idA) === 2 && (await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'PENDENTE'", { i: idA })) === 2,
     "com 2 dias: nada muda (as linhas pendentes, ainda com os dados)");
+  const nA = await escalar("SELECT COUNT(*) FROM AuditLog");
   await voltar(idA, 4);
   await db.aplicarRetencao(pool);
   ok(await pessoais(idA) === 2, "com 6 dias: nada muda");
   await ate8(idA);
   const lA = await q("SELECT Linha, Acao, Estado, Problemas, Nome FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i ORDER BY Linha", { i: idA });
-  ok(lA.length === 2 && lA.every((l) => l.Acao === "PROBLEMA" && l.Estado === "FORA" && l.Problemas === "NAO_TERMINOU") && lA[0].Nome === "Ana Parada E2E102",
-    "com 12 dias (passou dos 7): as linhas ficam de fora, com o nome e o motivo NAO_TERMINOU", lA);
-  ok(await sobraFora(idA) === 0 && await pessoais(idA) === 0, "nenhuma outra coluna sobrou (CPF, celular, e-mail, mãe, pai, nascimento, a matrícula do arquivo)");
+  ok(lA.length === 2 && lA.every((l) => l.Acao === "NOVA" && l.Estado === "PENDENTE" && l.Problemas === null) && await pessoais(idA) === 2,
+    "com 12 dias (passou dos 7), sem ninguém importado: a rotina não mexe (as 2 linhas pendentes, ainda com os dados)", lA);
   ok(await escalar("SELECT Situacao FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idA }) === "IMPORTANDO" && await travadas(),
-    "sem ninguém importado, ela NÃO conclui com zero: continua em andamento e as matrículas continuam travadas");
-  const tA = await trilha("A rotina tirou os dados das linhas da importação parada%");
-  ok(tA.length === 1 && tA[0].RegistroId === idA && tA[0].UsuarioId === null && JSON.parse(tA[0].DadosDepois).linhasDeFora === 2
-    && tA[0].Acao === "A rotina tirou os dados das linhas da importação parada há 7 dias (ninguém tinha entrado)", "a trilha, sem usuário, diz quantas", tA);
-  const nA = await escalar("SELECT COUNT(*) FROM AuditLog");
-  await db.aplicarRetencao(pool);
-  ok(await escalar("SELECT COUNT(*) FROM AuditLog") === nA, "rodar de novo não faz nada");
-  // (limpeza do roteiro, só no LocalDB: a importação única parada sem ninguém fica para a decisão dele; para o caso 2 rodar, ela sai daqui)
+    "ela continua em andamento e as matrículas continuam travadas (não concluiu com zero)");
+  ok(await escalar("SELECT COUNT(*) FROM AuditLog") === nA && (await trilha("A rotina%importação parada%")).length === 0, "nenhuma trilha da rotina para ela");
+  const loteA = await db.importarLote(pool, { membroId: 9920 }, idA, {});
+  ok(loteA.sucesso === true && loteA.importadas === 2 && loteA.concluida === true
+    && await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (992001, 992002) AND SituacaoMembro = N'ARROLAMENTO'") === 2,
+    "a Secretaria Geral volta e continua: as 2 entram, de onde parou", loteA);
+  // (limpeza do roteiro, só no LocalDB: a importação é uma vez só; para o caso 2 rodar, a do caso 1 sai daqui. As 2 fichas dela ficam: o caso 2 usa outras)
   await q("DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i; DELETE FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idA });
 
   console.log("== 2. parada com gente importada ==");

@@ -1065,11 +1065,21 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   - O botão se chama "Descartar a prévia" e pergunta antes de apagar; ao lado, a nota "Sem confirmar, esta prévia se
     apaga sozinha em 7 dias." Depois de descartar, a tela volta ao arquivo.
   - No resultado, com gente de fora, a nota de até que dia a lista fica ("baixe antes, se precisar"); depois que ela sai,
-    uma linha na trilha. As importadas não saem da importação e os números do resultado ficam.
+    uma linha na trilha. As linhas importadas não são apagadas (ficam como diz o item abaixo) e os números do resultado
+    ficam.
   - Roda pela rotina diária, como as retenções que já existem (a `NotificacoesAgendador`), com a trilha de cada
-    apagamento. Os prazos de 7 e 90 dias valem enquanto não houver, em Proteção de Dados → Políticas de retenção, uma
-    política com o nome "Membros — prévia da importação que não foi confirmada" ou "Membros — lista dos que ficaram de
-    fora da importação". Hoje elas não aparecem na lista da tela: mostrá-las pede uma migração com a base legal (falta).
+    apagamento.
+- **Decisões da sessão de 24/11/2026, a partir da regra dele ("a lista dos de fora: nome e motivo") e da LGPD** (ele
+  confirma antes da produção, junto com o texto da base legal):
+  - Quando a importação termina, a linha importada fica só com o necessário para a trilha: o número da linha, a
+    matrícula, o nome e a situação. CPF, celular, e-mail, mãe, pai, nascimento e o resto saem (o dado vive na ficha,
+    onde a exclusão LGPD passa). O código já tirava os dados pessoais no fim desde 22/11; agora a regra está escrita.
+  - A linha de quem ficou de fora fica **só com o nome e o motivo** pelos 90 dias (a matrícula do arquivo também sai).
+  - A importação que terminou antes desta versão é limpa pela rotina diária.
+  - A migração 186 põe as duas políticas na tela Políticas de retenção ("Membros — prévia da importação que não foi
+    confirmada", 7 dias, e "Membros — lista dos que ficaram de fora da importação", 90 dias), com a base legal "LGPD
+    art. 6º, III (necessidade) e art. 16 (eliminação ao fim do tratamento)" e a finalidade de cada uma (conferir a
+    planilha antes de gravar; a secretaria corrigir os cadastros que não entraram). O Encarregado ajusta o prazo ali.
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
 

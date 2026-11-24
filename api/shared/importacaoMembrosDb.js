@@ -22,6 +22,19 @@ const TAMANHO_LOTE = 200;
 const SEGUIDAS_MAX = 5;   // 5 recusadas seguidas (sem nenhuma entrar entre elas) é o banco, não a linha: a importação para, sem ninguém de fora
 const BLOCO_GRAVACAO = 400;   // linhas por INSERT da prévia (OPENJSON)
 const POR_PAGINA = 100;
+// O que fica nas linhas quando a importação TERMINA (24/11/2026, decisão da sessão a partir da regra dele — "a lista dos de fora: nome e motivo" — e da LGPD).
+// Todas perdem os dados pessoais: o da importada vive na ficha, onde a exclusão LGPD passa; ela fica com a linha, a matrícula, o nome e a situação (e as marcas
+// que a lista e o resultado leem). A de fora fica SÓ com o nome e o motivo (Problemas) pelos 90 dias da guarda. A conclusão limpa as suas; a rotina diária
+// (aplicarRetencao) limpa as que terminaram antes desta versão. Os AINDA_* deixam a rotina tocar só na linha que ainda tem alguma coisa.
+const LIMPAR_PESSOAIS = "IgrejaArquivo = NULL, CongregacaoId = NULL, Sexo = NULL, DataNascimento = NULL, EstadoCivil = NULL, Email = NULL, Telefone = NULL, NomeMae = NULL, "
+  + "NomePai = NULL, Cpf = NULL, DataAdmissao = NULL, FormaAdmissao = NULL, DataBatismo = NULL, Escolaridade = NULL";
+const AINDA_PESSOAIS = "(l.IgrejaArquivo IS NOT NULL OR l.CongregacaoId IS NOT NULL OR l.Sexo IS NOT NULL OR l.DataNascimento IS NOT NULL OR l.EstadoCivil IS NOT NULL "
+  + "OR l.Email IS NOT NULL OR l.Telefone IS NOT NULL OR l.NomeMae IS NOT NULL OR l.NomePai IS NOT NULL OR l.Cpf IS NOT NULL OR l.DataAdmissao IS NOT NULL "
+  + "OR l.FormaAdmissao IS NOT NULL OR l.DataBatismo IS NOT NULL OR l.Escolaridade IS NOT NULL)";
+// (o número novo e o motivo do número saem juntos: CK_ImportacoesMembrosLinhas_Numero)
+const LIMPAR_FORA = "MatriculaArquivo = NULL, Matricula = NULL, NumeroNovo = 0, MotivoNumero = NULL, RepetidaLinha = NULL, RepetidaMembro = NULL, Avisos = NULL";
+const AINDA_FORA = "(l.MatriculaArquivo IS NOT NULL OR l.Matricula IS NOT NULL OR l.NumeroNovo = 1 OR l.MotivoNumero IS NOT NULL OR l.RepetidaLinha IS NOT NULL "
+  + "OR l.RepetidaMembro IS NOT NULL OR l.Avisos IS NOT NULL)";
 const MSG = Object.freeze({
   JA_IMPORTADO: "A importação do sistema pago já foi feita (é uma vez só). O que mudou depois se corrige à mão, na ficha de cada pessoa.",
   EM_ANDAMENTO: "A importação já foi confirmada e está em andamento: continue a importação.",
@@ -459,10 +472,11 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
     FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id`)).recordset[0];
   const resultado = { importadas: Number(c.importadas || 0), fora: Number(c.fora || 0), numeroNovo: Number(c.numeroNovo || 0), possivelRepetida: Number(c.possivelRepetida || 0),
     semCongregacao: Number(c.semCongregacao || 0) };
+  // a última coisa: as linhas ficam só com o necessário (LIMPAR_PESSOAIS e LIMPAR_FORA), depois das pendências e das contas, que leem a congregação da linha
   await rq().input("id", sql.Int, id).input("res", sql.NVarChar(sql.MAX), JSON.stringify({ ...(resumoPrevia || {}), resultado })).query(`
     UPDATE ImportacoesMembros SET Situacao = N'CONCLUIDA', ConcluidaEm = SYSUTCDATETIME(), Resumo = @res WHERE ImportacaoId = @id AND Situacao = N'IMPORTANDO';
-    UPDATE ImportacoesMembrosLinhas SET IgrejaArquivo = NULL, CongregacaoId = NULL, Sexo = NULL, DataNascimento = NULL, EstadoCivil = NULL, Email = NULL, Telefone = NULL,
-      NomeMae = NULL, NomePai = NULL, Cpf = NULL, DataAdmissao = NULL, FormaAdmissao = NULL, DataBatismo = NULL, Escolaridade = NULL WHERE ImportacaoId = @id;`);
+    UPDATE l SET ${LIMPAR_PESSOAIS} FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = @id;
+    UPDATE l SET ${LIMPAR_FORA} FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = @id AND l.Estado = N'FORA';`);
   await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Concluiu a importação do sistema pago", usuarioId: por, dadosDepois: resultado });
   return resultado;
 }
@@ -470,9 +484,11 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
 // ------------------------------------------------------------------ a guarda dos dados (a rotina diária)
 // Respostas dele de 23/11/2026 (LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7 dias (antes disso, o "Descartar" da
 // tela apaga na hora); a lista dos que ficaram de fora (nome e motivo) fica 90 dias depois de a importação terminar e se apaga sozinha. As importadas não saem
-// (a ficha é o registro dela; o retrato do resultado continua). O prazo segue a política de retenção com estes nomes, se o Encarregado a criar em
-// Proteção de Dados → Políticas de retenção; sem ela, valem os de 7 e 90 dias (as duas ainda não vêm semeadas na lista: falta uma migração com a base legal). Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada naquela hora
-// faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.
+// (a ficha é o registro dela; o retrato do resultado continua). Decisões da sessão de 24/11/2026 (da regra dele e da LGPD): ao terminar, a linha importada
+// fica só com a linha, a matrícula, o nome e a situação, e a de fora só com o nome e o motivo; a importação que terminou antes disso a rotina limpa. O prazo
+// segue a política de retenção com estes nomes em Proteção de Dados → Políticas de retenção (a migração 186 as semeia com a base legal; o Encarregado ajusta
+// os dias ali); sem ela, valem os de 7 e 90 dias. Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada
+// naquela hora faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.
 const POLITICA_PREVIA = Object.freeze({ categoria: "Membros — prévia da importação que não foi confirmada", padrao: 7 });
 const POLITICA_FORA = Object.freeze({ categoria: "Membros — lista dos que ficaram de fora da importação", padrao: 90 });
 async function prazosDaGuarda(pool) {
@@ -484,7 +500,7 @@ async function aplicarRetencao(pool) {
   const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
   // a base de antes da migração 185 (as bases antigas dos roteiros e2e): não há importação para guardar (o mesmo cuidado do afmDb e da minimizacaoLgpd)
   const tabela = (await pool.request().query("SELECT OBJECT_ID(N'dbo.ImportacoesMembros', N'U') AS id")).recordset[0];
-  if (!tabela || tabela.id == null) return { previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia, diasFora };
+  if (!tabela || tabela.id == null) return { previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia, diasFora };
   const r = await emTransacao(pool, async (t, rq) => {
     const velhas = (await rq().input("d", sql.Int, diasPrevia)
       .query("SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA' AND CriadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())")).recordset;
@@ -510,10 +526,27 @@ async function aplicarRetencao(pool) {
       await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina apagou a lista dos que ficaram de fora da importação (${diasFora} dias depois do fim)`,
         usuarioId: null, dadosDepois: { linhasApagadas: n, retencaoDias: diasFora } });
     }
-    return { sucesso: true, previasDescartadas: velhas.length, linhasForaApagadas };
+    // a importação que terminou antes desta versão (24/11/2026): o que sobrou nas linhas sai como na conclusão de agora (só a linha que ainda tem alguma
+    // coisa, por isso a segunda rodada não mexe em nada nem escreve na trilha); a mesma linha nas duas conta uma vez
+    const limpas = (await rq().query(`
+      DECLARE @limpas TABLE (ImportacaoId INT NOT NULL, Linha INT NOT NULL);
+      UPDATE l SET ${LIMPAR_PESSOAIS} OUTPUT inserted.ImportacaoId, inserted.Linha INTO @limpas
+      FROM ImportacoesMembrosLinhas l JOIN ImportacoesMembros i ON i.ImportacaoId = l.ImportacaoId WHERE i.Situacao = N'CONCLUIDA' AND ${AINDA_PESSOAIS};
+      UPDATE l SET ${LIMPAR_FORA} OUTPUT inserted.ImportacaoId, inserted.Linha INTO @limpas
+      FROM ImportacoesMembrosLinhas l JOIN ImportacoesMembros i ON i.ImportacaoId = l.ImportacaoId WHERE i.Situacao = N'CONCLUIDA' AND l.Estado = N'FORA' AND ${AINDA_FORA};
+      SELECT ImportacaoId, COUNT(DISTINCT Linha) AS n FROM @limpas GROUP BY ImportacaoId`)).recordset;
+    let linhasLimpas = 0;
+    for (const a of limpas) {
+      const id = Number(a.ImportacaoId), n = Number(a.n) || 0;
+      linhasLimpas += n;
+      // (a Acao da trilha cabe em 100: AuditLog.Acao é NVARCHAR(100) e o texto cortado quebraria a cadeia de hashes)
+      await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: null, dadosDepois: { linhasLimpas: n },
+        acao: "A rotina limpou as linhas da importação (de quem ficou de fora, só o nome e o motivo)" });
+    }
+    return { sucesso: true, previasDescartadas: velhas.length, linhasForaApagadas, linhasLimpas };
   });
   if (!r || r.sucesso !== true) throw new Error("importação: a guarda dos dados não rodou (a importação estava ocupada); a rotina de amanhã repete");
-  return { previasDescartadas: r.previasDescartadas, linhasForaApagadas: r.linhasForaApagadas, diasPrevia, diasFora };
+  return { previasDescartadas: r.previasDescartadas, linhasForaApagadas: r.linhasForaApagadas, linhasLimpas: r.linhasLimpas, diasPrevia, diasFora };
 }
 
 module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, listar, csv, confirmar, importarLote, aplicarRetencao };

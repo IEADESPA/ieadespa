@@ -199,6 +199,65 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
   });
 });
 
+// O QUE FICA NAS LINHAS QUANDO A IMPORTAÇÃO TERMINA (24/11/2026, decisão da sessão a partir da regra dele — "a lista dos de fora: nome e motivo" — e da LGPD):
+// a importada fica só com o necessário para a trilha (a linha, a matrícula, o nome e a situação, com as marcas que o resultado lê); o dado pessoal vive na
+// ficha, onde a exclusão LGPD passa. A de fora fica SÓ com o nome e o motivo, pelos 90 dias. As colunas vêm da migração 185: uma coluna nova que não
+// estiver numa das listas faz o teste falhar (não escapa calada).
+describe("o que fica nas linhas quando a importação termina", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const T185 = fs.readFileSync(path.join(__dirname, "..", "..", "..", "sql", "migrations", "185_importacao_membros.sql"), "utf8");
+  const bloco = T185.slice(T185.indexOf("CREATE TABLE dbo.ImportacoesMembrosLinhas"), T185.indexOf("CONSTRAINT PK_ImportacoesMembrosLinhas"));
+  const COLUNAS = [...bloco.matchAll(/^\s+(\w+)\s+(?:INT|NVARCHAR|BIT|NCHAR|CHAR|DATE)\b/gm)].map((m) => m[1]);
+  const FICA_IMPORTADA = ["ImportacaoId", "Linha", "Acao", "Estado", "MatriculaArquivo", "Matricula", "NumeroNovo", "MotivoNumero", "MatriculaFinal", "RepetidaLinha",
+    "RepetidaMembro", "Problemas", "Avisos", "Nome"];
+  const FICA_FORA = ["ImportacaoId", "Linha", "Acao", "Estado", "Nome", "Problemas"];
+  const apagadas = (texto) => [...texto.matchAll(/\b(\w+) = (?:NULL|0)\b/g)].map((m) => m[1]);
+  const comandos = (texto) => texto.split(";").map((s) => s.trim()).filter((s) => /^UPDATE l\b/.test(s));
+  function concluir() {
+    cenario({ linhas: [linha()], gravar: () => ({ ocupada: false, donoCpf: null }) });
+    mockRegras.unshift([/SELECT COUNT\(\*\) AS n FROM ImportacoesMembrosLinhas/, [{ n: 0 }]]);
+    mockRegras.push([/AS importadasNoTotal/, [{ importadasNoTotal: 1 }]]);
+    mockRegras.push([/SUM\(CASE WHEN Estado = N'IMPORTADA'/, [{ importadas: 1, fora: 1, numeroNovo: 0, possivelRepetida: 0, semCongregacao: 0 }]]);
+  }
+
+  test("as 28 colunas da migração 185, cada uma numa lista", () => {
+    expect(COLUNAS).toHaveLength(28);
+    expect(COLUNAS).toEqual(expect.arrayContaining([...FICA_IMPORTADA, "Cpf", "Telefone", "Email", "NomeMae", "NomePai", "DataNascimento"]));
+  });
+  test("a importada fica só com a linha, a matrícula, o nome e a situação (e as marcas do resultado): CPF, celular, e-mail, mãe, pai, nascimento e o resto saem", async () => {
+    concluir();
+    const r = await db.importarLote(POOL, QUEM, 7);
+    expect(r).toMatchObject({ sucesso: true, concluida: true });
+    const fim = mockConsultas.find((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql));
+    const todas = comandos(fim.sql).find((s) => !/l\.Estado = N'FORA'/.test(s));
+    expect(todas).toMatch(/WHERE l\.ImportacaoId = @id$/);
+    expect(new Set(apagadas(todas))).toEqual(new Set(COLUNAS.filter((c) => !FICA_IMPORTADA.includes(c))));
+  });
+  test("a de fora fica SÓ com o nome e o motivo (a matrícula do arquivo, as marcas e os avisos também saem)", async () => {
+    concluir();
+    await db.importarLote(POOL, QUEM, 7);
+    const fim = mockConsultas.find((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql));
+    const [todas, fora] = [comandos(fim.sql).find((s) => !/l\.Estado = N'FORA'/.test(s)), comandos(fim.sql).find((s) => /l\.Estado = N'FORA'/.test(s))];
+    expect(fora).toMatch(/WHERE l\.ImportacaoId = @id AND l\.Estado = N'FORA'$/);
+    // a MatriculaFinal da de fora já é NULL pela regra da tabela (CK_ImportacoesMembrosLinhas_Final)
+    expect(new Set([...apagadas(todas), ...apagadas(fora), "MatriculaFinal"])).toEqual(new Set(COLUNAS.filter((c) => !FICA_FORA.includes(c))));
+    // o número novo e o motivo do número saem juntos (CK_ImportacoesMembrosLinhas_Numero)
+    expect(fora).toMatch(/NumeroNovo = 0, MotivoNumero = NULL/);
+  });
+  test("a limpeza é a última coisa da conclusão: depois das pendências de repetida e das contas do resultado (o 'sem congregação' lê a congregação da linha)", async () => {
+    concluir();
+    await db.importarLote(POOL, QUEM, 7);
+    const ordem = (re) => mockConsultas.findIndex((c) => re.test(c.sql));
+    const iFim = ordem(/SET Situacao = N'CONCLUIDA'/);
+    expect(iFim).toBeGreaterThan(ordem(/INSERT INTO FichasPendencias \(MembroId, Tipo, OutroMembroId/));
+    expect(iFim).toBeGreaterThan(ordem(/SUM\(CASE WHEN Estado = N'IMPORTADA'/));
+    const fim = mockConsultas[iFim].sql;
+    expect(fim.indexOf("SET Situacao = N'CONCLUIDA'")).toBeLessThan(fim.indexOf("UPDATE l"));
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+});
+
 describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
   const { sql } = require("../db");
   const POOL_REQ = { request: () => new sql.Request() };
@@ -249,13 +308,14 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   const { sql } = require("../db");
   const POOL_G = { request: () => new sql.Request() };
   const { registrarAuditoriaNaTransacao } = require("../auditoria");
-  function cenarioGuarda({ previas = [], foraApagadas = [], politicas = {}, rc = 0, semTabela = false }) {
+  function cenarioGuarda({ previas = [], foraApagadas = [], limpas = [], politicas = {}, rc = 0, semTabela = false }) {
     mockRegras = [
       [/OBJECT_ID\(N'dbo\.ImportacoesMembros', N'U'\)/, [{ id: semTabela ? null : 1234 }]],
       [/FROM PoliticasRetencao/, (i) => (politicas[i.c] ? [{ DiasRetencao: politicas[i.c] }] : [])],
       [/sp_getapplock/, [{ rc }]],
       [/SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/, previas.map((id) => ({ ImportacaoId: id }))],
-      [/DELETE l OUTPUT/, foraApagadas]
+      [/DELETE l OUTPUT/, foraApagadas],
+      [/DECLARE @limpas/, limpas]
     ];
   }
   const trilhas = () => registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]);
@@ -263,7 +323,7 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   test("a prévia não confirmada passa de 7 dias: as linhas (com CPF, celular, mãe e pai) saem e ela fica DESCARTADA, com a trilha", async () => {
     cenarioGuarda({ previas: [12] });
     const r = await db.aplicarRetencao(POOL_G);
-    expect(r).toEqual({ previasDescartadas: 1, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(r).toEqual({ previasDescartadas: 1, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     const sel = mockConsultas.find((c) => /SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/.test(c.sql));
     expect(sel.sql).toMatch(/CriadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
     expect(sel.inputs.d).toBe(7);
@@ -277,7 +337,7 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   test("a lista dos de fora passa de 90 dias depois de terminar: só as linhas de fora saem (as importadas ficam), o resumo guarda o dia e a trilha diz quantas", async () => {
     cenarioGuarda({ foraApagadas: [{ ImportacaoId: 7, n: 4 }] });
     const r = await db.aplicarRetencao(POOL_G);
-    expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 4, diasPrevia: 7, diasFora: 90 });
+    expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 4, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     const del = mockConsultas.find((c) => /DELETE l OUTPUT/.test(c.sql));
     expect(del.sql).toMatch(/i\.Situacao = N'CONCLUIDA'/);
     expect(del.sql).toMatch(/i\.ConcluidaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
@@ -291,9 +351,35 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     expect(trilhas()).toEqual([expect.objectContaining({ registroId: 7, usuarioId: null, acao: "A rotina apagou a lista dos que ficaram de fora da importação (90 dias depois do fim)",
       dadosDepois: { linhasApagadas: 4, retencaoDias: 90 } })]);
   });
+  test("a importação que terminou antes desta versão: a rotina tira o que sobrou nas linhas (os dados pessoais; nas de fora, tudo menos o nome e o motivo), com a trilha", async () => {
+    cenarioGuarda({ limpas: [{ ImportacaoId: 5, n: 12 }] });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 12, diasPrevia: 7, diasFora: 90 });
+    const q = mockConsultas.find((c) => /DECLARE @limpas/.test(c.sql)).sql;
+    const ups = q.split(";").map((s) => s.trim()).filter((s) => /^UPDATE l\b/.test(s));
+    expect(ups).toHaveLength(2);
+    for (const u of ups) expect(u).toMatch(/JOIN ImportacoesMembros i ON i\.ImportacaoId = l\.ImportacaoId WHERE i\.Situacao = N'CONCLUIDA' AND/);
+    // só a linha que ainda tem alguma coisa: rodar de novo não mexe em nada nem escreve na trilha
+    expect(ups[0]).toMatch(/l\.Cpf IS NOT NULL/);
+    expect(ups[0]).toMatch(/l\.NomeMae IS NOT NULL/);
+    expect(ups[1]).toMatch(/l\.Estado = N'FORA' AND \(l\.MatriculaArquivo IS NOT NULL OR/);
+    expect(ups[1]).toMatch(/l\.NumeroNovo = 1/);
+    expect(ups[1]).toMatch(/l\.Avisos IS NOT NULL/);
+    // a mesma linha nas duas: conta uma vez
+    expect(q).toMatch(/COUNT\(DISTINCT Linha\)/);
+    expect(trilhas()).toEqual([expect.objectContaining({ tabela: "ImportacoesMembros", registroId: 5, usuarioId: null,
+      acao: "A rotina limpou as linhas da importação (de quem ficou de fora, só o nome e o motivo)",
+      dadosDepois: { linhasLimpas: 12 } })]);
+  });
+  test("cada texto da trilha da guarda cabe nos 100 caracteres da AuditLog.Acao (cortado, quebraria a cadeia de hashes), também com o prazo mais longo", async () => {
+    cenarioGuarda({ previas: [12], foraApagadas: [{ ImportacaoId: 7, n: 1 }], limpas: [{ ImportacaoId: 5, n: 1 }],
+      politicas: { [db.POLITICA_PREVIA.categoria]: 36500, [db.POLITICA_FORA.categoria]: 36500 } });
+    await db.aplicarRetencao(POOL_G);
+    expect(trilhas()).toHaveLength(3);
+    for (const a of trilhas()) expect(a.acao.length).toBeLessThanOrEqual(100);
+  });
   test("nada vencido: nada muda e nada vai para a trilha", async () => {
     cenarioGuarda({});
-    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     expect(mockConsultas.some((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id|JSON_MODIFY/.test(c.sql))).toBe(false);
     expect(trilhas()).toEqual([]);
   });
@@ -312,7 +398,7 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   });
   test("a base sem a migração 185 (as bases antigas dos roteiros e2e): a rotina não faz nada e não falha", async () => {
     cenarioGuarda({ previas: [12], semTabela: true });
-    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     expect(mockConsultas.some((c) => /sp_getapplock|DELETE/.test(c.sql))).toBe(false);
     expect(mockTx).toEqual([]);
   });

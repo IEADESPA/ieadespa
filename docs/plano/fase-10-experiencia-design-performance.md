@@ -1115,6 +1115,15 @@ Depois da revisão do Financeiro até `4c06d58`:
      o cargo são cortados sozinhos. Quem sai da Câmara perde a função, mas fica com o cargo e a situação.
   - No arrolamento, a congregação e a área completam a situação e os cargos do seu nível, e **não gravam função
     eclesiástica** (a revisão de 24/11 achou que hoje gravam qualquer cargo, até Pastor).
+- **A rodada 31 (24/11, à tarde): as 5 telas aprovadas na versão única** (r31-carta, -qr, -pedido, -abandono e
+  -volta), com 2 ajustes dele:
+  - **A carta impressa fica curta.** Tem gente com dezenas de cargos (ele mesmo já teve uns 10), e o histórico
+    inteiro iria para uma segunda folha. A carta mostra só o mais recente: a última função (com a data da consagração)
+    e o último cargo. Se a pessoa tem mais de 2 cargos ativos, aparecem os ativos. O cargo de maior grau prevalece (o
+    geral antes do de área e do local), e, se houver vários gerais, aparecem os gerais.
+  - **O QR mostra o histórico inteiro**, com todos os cargos, durante os 30 dias. Passados os 30 dias, a carta está
+    **vencida**: a página do QR diz que ela venceu, e a igreja que recebe decide se aceita ou não. Continua sem dado da
+    pessoa depois do prazo, como na r29.
 - **As respostas dele à revisão do arrolamento (24/11, à tarde):**
   - **Sem congregação, não há importação.** A importação é feita uma única vez e é só da Secretaria Geral. A linha
     da planilha sem congregação é recusada na prévia: a Geral corrige a planilha ou deixa a linha de fora. Por isso não

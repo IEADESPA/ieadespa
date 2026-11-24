@@ -50,6 +50,7 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
   if (condEscopo === "") return vazioResp;
   let cond = condEscopo ? ` AND ${condEscopo}` : "";
   if (congregacaoId) { pedido.input("cong", sql.Int, congregacaoId); cond += " AND m.CongregacaoId = @cong"; }
+  // "vieram do sistema pago em": o dia da importação de antes (MIN); a importação só das linhas que faltaram (G2), feita depois, não muda a data
   const r = await pedido.query(`
     SELECT m.CongregacaoId AS congId, c.Nome AS cong, c.AreaId AS areaId, ar.Nome AS area, COUNT(*) AS vieram, SUM(CASE WHEN m.SituacaoMembro = N'ARROLAMENTO' THEN 1 ELSE 0 END) AS faltam
     ${DE_PESSOA} ${VEIO} LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN Areas ar ON ar.AreaId = c.AreaId
@@ -59,7 +60,7 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
     ${DE_PESSOA} LEFT JOIN Departamentos d ON d.DepartamentoId = m.DepartamentoId
     WHERE ${NO_ROL} AND m.SituacaoMembro = N'ARROLAMENTO' AND m.CongregacaoId IS NOT NULL${cond}
     ORDER BY m.MembroId;
-    SELECT MAX(ConcluidaEm) AS veio FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA';`);
+    SELECT MIN(ConcluidaEm) AS veio FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA';`);
   const linhas = r.recordsets[0] || [];
   let vieram = 0, faltam = 0, semCongregacao = 0;
   const porArea = new Map();

@@ -246,7 +246,11 @@ const PROBLEMAS = Object.freeze({
   // na hora de gravar (não na prévia): o banco recusou a linha sempre, e o resto da importação seguiu sem ela (shared/importacaoMembrosDb.js, revisão de 23/11)
   ERRO_AO_GRAVAR: "O sistema não conseguiu gravar esta linha na importação: ficou de fora (confira os dados e cadastre à mão)",
   // a importação que parou e passou do prazo da guarda dos dados (G2, revisão de 24/11): a rotina deixa de fora as linhas que faltavam (importacaoMembrosDb)
-  NAO_TERMINOU: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)"
+  NAO_TERMINOU: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (entra na importação das linhas que faltaram, que é "
+    + "uma vez só, ou se cadastra à mão)",
+  // o mesmo motivo, na lista e no CSV da importação de antes, depois que a importação das linhas que faltaram foi feita (importacaoMembrosDb.listar e csv)
+  NAO_TERMINOU_RESTO_FEITO: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora, e a importação das linhas que faltaram já "
+    + "foi feita (confira na lista dela se a pessoa entrou; se não, cadastre à mão)"
 });
 const AVISOS = Object.freeze({
   MATRICULA_ZERO: "Matrícula 0: entra com a próxima matrícula do sistema",
@@ -254,6 +258,9 @@ const AVISOS = Object.freeze({
   MATRICULA_INVALIDA: "A matrícula não é um número: entra com a próxima do sistema",
   MATRICULA_REPETIDA_NO_ARQUIVO: "A mesma matrícula de outra linha do arquivo: entra com a próxima do sistema",
   MESMA_PESSOA_NO_ARQUIVO: "Parece a mesma pessoa de outra linha do arquivo (a mesma matrícula): marcada como possível ficha repetida",
+  // na importação das linhas que faltaram (G2): a matrícula do arquivo foi tomada depois (a importação de antes, um cadastro novo)
+  MATRICULA_DE_OUTRA_FICHA: "A matrícula já é de outra ficha do sistema: entra com a próxima do sistema",
+  MESMA_PESSOA_EM_OUTRA_FICHA: "Parece a mesma pessoa da ficha que tem essa matrícula: marcada como possível ficha repetida",
   CPF_REPETIDO_NO_ARQUIVO: "O mesmo CPF de outra linha do arquivo: entra sem o CPF, marcada como possível ficha repetida",
   CPF_EM_OUTRA_FICHA: "O CPF já está em outra ficha do sistema: entra sem o CPF, marcada como possível ficha repetida",
   NOME_NASCIMENTO_NO_ARQUIVO: "O mesmo nome e nascimento de outra linha do arquivo: marcada como possível ficha repetida",
@@ -369,7 +376,10 @@ function mesmaPessoa(a, b) {
 // A matrícula que JÁ É de uma ficha do sistema (as regras da rodada 28, 22/11/2026): a linha fica de fora (o problema MATRICULA_JA_EXISTE), seja quem for —
 // a ficha de lá continua como está e se completa à mão. O resto entra uma vez só, marcado (NUMERO, REPETIDA) para a secretaria acertar.
 // `fichasPorNomeNascimento`: Map(chaveNomeNascimento -> matrícula) das fichas do sistema com o mesmo nome e nascimento de alguma linha.
-function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map(), fichasPorNomeNascimento = new Map() } = {}) {
+// `continuacao` (G2, a importação só das linhas que faltaram): a matrícula do arquivo pode ter sido tomada DEPOIS da importação de antes (por ela mesma, quando
+// a linha repetia a matrícula de outra que entrou, ou por um cadastro novo). A linha não fica de fora por isso: entra com a próxima do sistema (NUMERO, como o
+// lote faz com a matrícula tomada depois da prévia) e, se parece a mesma pessoa da ficha que tem a matrícula, é possível repetida dela.
+function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = new Map(), fichasPorNomeNascimento = new Map(), continuacao = false } = {}) {
   const primeiraDaMatricula = new Map();   // matrícula do arquivo -> a primeira linha (não PROBLEMA) que a usa
   const numeroNovo = (l, motivo, aviso) => { l.numeroNovo = true; l.motivoNumero = motivo; l.avisos.push(aviso); };
   const repetida = (l, { linha = null, membro = null }, aviso) => {
@@ -379,9 +389,15 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
   for (const l of linhas) {
     l.numeroNovo = false; l.motivoNumero = null; l.matriculaNumero = null; l.repetidaLinha = null; l.repetidaMembro = null;
     const m = l.matricula;
-    if (m.numero && fichasPorMatricula.has(m.numero) && !l.problemas.includes("MATRICULA_JA_EXISTE")) l.problemas.push("MATRICULA_JA_EXISTE");
+    const tomada = !!m.numero && fichasPorMatricula.has(m.numero);
+    if (tomada && !continuacao && !l.problemas.includes("MATRICULA_JA_EXISTE")) l.problemas.push("MATRICULA_JA_EXISTE");
     if (l.problemas.length) { l.acao = "PROBLEMA"; continue; }
     l.acao = "NOVA";
+    if (tomada) {
+      numeroNovo(l, "DE_OUTRA_FICHA", "MATRICULA_DE_OUTRA_FICHA");
+      if (mesmaPessoa(l.dados, fichasPorMatricula.get(m.numero) || {})) repetida(l, { membro: m.numero }, "MESMA_PESSOA_EM_OUTRA_FICHA");
+      continue;
+    }
     if (m.zero) { numeroNovo(l, "ZERO", "MATRICULA_ZERO"); continue; }
     if (m.vazia) { numeroNovo(l, "VAZIA", "SEM_MATRICULA"); continue; }
     if (m.invalida) { numeroNovo(l, "INVALIDA", "MATRICULA_INVALIDA"); continue; }
@@ -430,9 +446,66 @@ function classificar(linhas, { fichasPorMatricula = new Map(), fichasPorCpf = ne
 }
 // A chave do "mesmo nome e nascimento": o nome sem acento nem maiúscula, com os espaços juntos (como o COLLATE Latin1_General_CI_AI da tela Fichas repetidas),
 // e a data AAAA-MM-DD.
+function chaveNome(nome) {
+  return String(nome == null ? "" : nome).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+}
 function chaveNomeNascimento(nome, dataISO) {
-  const n = String(nome == null ? "" : nome).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
-  return `${n}|${String(dataISO == null ? "" : dataISO).slice(0, 10)}`;
+  return `${chaveNome(nome)}|${String(dataISO == null ? "" : dataISO).slice(0, 10)}`;
+}
+
+// ------------------------------------------------------------------ a importação só das linhas que faltaram (G2, decisão dele de 24/11/2026)
+// A importação que parou e passou do prazo guardou QUAIS linhas faltaram, só o número da linha e o nome (`faltaram`: [{ linha, nome }]); os dados pessoais
+// delas se apagaram, e por isso a Secretaria Geral manda o arquivo de novo: o MESMO arquivo, ou uma planilha só com essas linhas (os números mudam). Ninguém de
+// fora da lista entra. 1º, a linha do arquivo com o mesmo número e o mesmo nome (sem acento nem maiúscula); 2º, para as que sobraram, o mesmo nome em outra
+// linha, se o nome aparece no arquivo (entre as linhas ainda soltas) no máximo tantas vezes quanto na lista — mais vezes, não dá para saber qual é a pessoa e
+// nenhuma delas entra (`ambiguas`). Devolve { achadas (as linhas do arquivo, cada uma com `linhaOriginal`), naoAchadas ([{ linha, nome }] da lista),
+// ambiguas, foraDaLista (as outras linhas do arquivo) }.
+function casarResto(linhas, faltaram) {
+  const kDe = (l) => (l.dados && l.dados.nome ? chaveNome(l.dados.nome) : "");
+  const pendentes = (faltaram || []).map((f) => ({ linha: Number(f.linha), nome: String(f.nome || ""), k: chaveNome(f.nome) })).filter((f) => f.k);
+  const soltas = new Set(linhas);
+  const porLinha = new Map(linhas.map((l) => [l.linha, l]));
+  const casadas = new Map();   // a linha do arquivo -> a linha da lista
+  const sobra = [];
+  for (const f of pendentes) {
+    const l = porLinha.get(f.linha);
+    if (l && soltas.has(l) && kDe(l) === f.k) { casadas.set(l, f); soltas.delete(l); } else sobra.push(f);
+  }
+  const sobraPorNome = new Map();
+  for (const f of sobra) { if (!sobraPorNome.has(f.k)) sobraPorNome.set(f.k, []); sobraPorNome.get(f.k).push(f); }
+  const naoAchadas = [];
+  let ambiguas = 0;
+  for (const [k, fs] of sobraPorNome) {
+    const candidatas = linhas.filter((l) => soltas.has(l) && kDe(l) === k);
+    if (candidatas.length > fs.length) {
+      ambiguas += candidatas.length;
+      for (const l of candidatas) soltas.delete(l);
+      naoAchadas.push(...fs);
+      continue;
+    }
+    candidatas.forEach((l, i) => { casadas.set(l, fs[i]); soltas.delete(l); });
+    naoAchadas.push(...fs.slice(candidatas.length));
+  }
+  const achadas = linhas.filter((l) => casadas.has(l));
+  for (const l of achadas) l.linhaOriginal = casadas.get(l).linha;
+  return { achadas, naoAchadas: naoAchadas.sort((a, b) => a.linha - b.linha).map((f) => ({ linha: f.linha, nome: f.nome })), ambiguas, foraDaLista: soltas.size };
+}
+// O que a prévia do resto diz (sem dado pessoal além do nome de quem não foi achado): os números e o aviso que não deixa passar — quem não foi achado fica de
+// fora desta importação, e ela é uma vez só.
+function resumoDoResto(casado, { de, faltaram }) {
+  const n = casado.naoAchadas.length;
+  const amb = casado.ambiguas;
+  const br = (v) => Number(v).toLocaleString("pt-BR");
+  const resto = { de, faltaram, achadas: casado.achadas.length, naoAchadas: n, ambiguas: amb, foraDaLista: casado.foraDaLista,
+    listaNaoAchadas: casado.naoAchadas.slice(0, 20).map((f) => ({ linha: f.linha, nome: String(f.nome).slice(0, 200) })) };
+  if (!n) return { resto, aviso: null };
+  const um = n === 1;
+  const ambTexto = amb ? `; ${amb === 1 ? "1 linha do arquivo tem um nome que aparece mais vezes no arquivo do que na lista e não entra"
+    : `${br(amb)} linhas do arquivo têm um nome que aparece mais vezes no arquivo do que na lista e não entram`}` : "";
+  return { resto, aviso: { codigo: "RESTO_NAO_ACHADAS",
+    texto: `${br(n)} das ${br(faltaram)} linhas que faltaram ${um ? "não foi achada" : "não foram achadas"} neste arquivo (procuramos o mesmo nome${ambTexto}): `
+      + `${um ? "fica" : "ficam"} de fora desta importação, que é uma vez só. Confira o arquivo antes de confirmar; depois, `
+      + `${um ? "essa pessoa só se cadastra" : "essas pessoas só se cadastram"} à mão.` } };
 }
 
 // ------------------------------------------------------------------ os números da prévia (sem dado pessoal)
@@ -535,6 +608,6 @@ function mapaDeCongregacoes(lista) {
   return m;
 }
 
-module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, chaveNomeNascimento, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
+module.exports = { LIMITE_TEXTO, LIMITE_LINHAS, SALTO_MATRICULA, COLUNAS, CAMPOS, PROBLEMAS, AVISOS, chave, chaveNome, chaveNomeNascimento, casarResto, resumoDoResto, lerCsv, mapearColunas, lerData, lerSexo, lerEstadoCivil,
   lerFormaAdmissao, lerEscolaridade, lerCpf, lerCelular, lerMatricula, chaveDaIgreja, lerLinha, prepararArquivo, mesmaPessoa, classificar, resumir, linhaParaLista,
   csvDaLista, mapaDeCongregacoes, textoDe };

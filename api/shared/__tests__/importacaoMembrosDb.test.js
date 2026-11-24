@@ -491,7 +491,8 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     for (const t of trilhas()) expect(t.acao.length).toBeLessThanOrEqual(100);
   });
   test("G2: o motivo novo tem o texto para a lista e o CSV; os textos da trilha cabem em 100 (com o prazo de 36.500 dias)", async () => {
-    expect(require("../importacaoMembros").textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)");
+    expect(require("../importacaoMembros").textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora "
+      + "(entra na importação das linhas que faltaram, que é uma vez só, ou se cadastra à mão)");
     for (const importadas of [3]) {
       jest.clearAllMocks();
       cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{}", importadas }], paradasDeFora: 1, politicas: { [db.POLITICA_PREVIA.categoria]: 36500 } });
@@ -665,5 +666,171 @@ describe("G2: descartar a importação parada sem ninguém importado", () => {
     const comPrevia = await db.estado(POOL_D);
     expect(comPrevia.descartadaPeloPrazo).toBeNull();
     expect(comPrevia.importacao).toMatchObject({ importacaoId: 14, situacao: "PREVIA" });
+  });
+});
+
+// G2 (decisão dele de 24/11/2026): com a lista de QUAIS linhas faltaram (a linha e o nome), a Secretaria Geral faz UMA importação nova só com elas — a exceção
+// ao "uma vez só" (MSG.JA_IMPORTADO), só para o resto daquela importação. O caminho no banco de verdade: o roteiro e2e-102.
+describe("G2: a importação só das linhas que faltaram (o resto)", () => {
+  const { sql } = require("../db");
+  const POOL_R = { request: () => new sql.Request() };
+  const { registrarAuditoriaNaTransacao } = require("../auditoria");
+  const regras = require("../importacaoMembros");
+  const CAB = "MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF";
+  const ARQUIVO = [CAB, "70100;Ana Já Entrou;IEADESPA - Vila Nova", "70101;Bia Já Entrou;IEADESPA - Vila Nova", "70102;Paulo Henrique Dias;IEADESPA - Vila Nova",
+    "70103;Raquel Monteiro;IEADESPA - Vila Nova"].join("\r\n");
+  const concluida = (extra = {}) => ({ ImportacaoId: 7, Situacao: "CONCLUIDA", RestoDe: null, NomeArquivo: "membros.csv", ConcluidaEm: new Date("2026-12-20T09:00:00Z"),
+    ConfirmadaEm: new Date("2026-12-01T09:00:00Z"), ConfirmadaPor: 1, Resumo: JSON.stringify({ resultado: { importadas: 2, fora: 2 } }), ...extra });
+  const situacao = (linhas) => [/FROM ImportacoesMembros WHERE Situacao IN/, linhas];
+  const faltaram = (linhas) => [/SELECT Linha, Nome FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'FORA' AND Problemas = N'NAO_TERMINOU' ORDER BY Linha/, linhas];
+  const FALTARAM = [{ Linha: 4, Nome: "Paulo Henrique Dias" }, { Linha: 5, Nome: "Raquel Monteiro" }];
+  const basePrevia = (sit, falta = FALTARAM) => [[/sp_getapplock/, [{ rc: 0 }]], situacao(sit), faltaram(falta),
+    [/FROM Congregacoes/, [{ CongregacaoId: 1, Nome: "Vila Nova", Ativa: true }]],
+    // a 70103 foi tomada depois da importação de antes (um cadastro novo): a linha entra com a próxima do sistema
+    [/JOIN MembroReferencia m ON m\.MembroId = j\.v/, (i) => (JSON.parse(i.j).includes(70103) ? [{ MembroId: 70103, Nome: "Fulano Cadastrado Depois", Cpf: null }] : [])],
+    [/ISNULL\(MAX\(MembroId\), 0\)/, [{ m: 70200 }]],
+    [/INSERT INTO ImportacoesMembros \(/, [{ ImportacaoId: 8 }]]];
+  test("a prévia do resto: do MESMO arquivo, só as linhas que faltaram; a matrícula tomada depois vira número novo; grava de qual importação é o resto", async () => {
+    mockRegras = basePrevia([concluida()]);
+    const r = await db.criarPrevia(POOL_R, QUEM, { nomeArquivo: "membros.csv", texto: ARQUIVO, resto: true });
+    expect(r).toMatchObject({ sucesso: true, importacaoId: 8 });
+    expect(r.resumo).toMatchObject({ total: 2, novas: 2, numeroNovo: 1, problemas: 0,
+      resto: { de: 7, faltaram: 2, achadas: 2, naoAchadas: 0, ambiguas: 0, foraDaLista: 2, listaNaoAchadas: [] } });
+    expect(r.resumo.avisosGerais.map((a) => a.codigo)).not.toContain("RESTO_NAO_ACHADAS");
+    // só as matrículas das linhas achadas vão ao banco (as das que já entraram, não)
+    expect(JSON.parse(mockConsultas.find((c) => /JOIN MembroReferencia m ON m\.MembroId = j\.v/.test(c.sql)).inputs.j)).toEqual([70102, 70103]);
+    expect(mockConsultas.find((c) => /Problemas = N'NAO_TERMINOU' ORDER BY Linha/.test(c.sql)).inputs.id).toBe(7);
+    const cab = mockConsultas.find((c) => /INSERT INTO ImportacoesMembros \(/.test(c.sql));
+    expect(cab.sql).toMatch(/RestoDe/);
+    expect(cab.inputs.resto).toBe(7);
+    const ls = JSON.parse(mockConsultas.find((c) => /INSERT INTO ImportacoesMembrosLinhas/.test(c.sql)).inputs.j);
+    expect(ls.map((l) => [l.l, l.n, l.a, l.m, l.nn, l.mn])).toEqual([[4, "Paulo Henrique Dias", "NOVA", 70102, 0, null], [5, "Raquel Monteiro", "NOVA", null, 1, "DE_OUTRA_FICHA"]]);
+    expect(registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1])).toEqual([expect.objectContaining({ registroId: 8, acao: "Fez a prévia da importação das linhas que faltaram",
+      dadosDepois: expect.objectContaining({ restoDe: 7, total: 2, naoAchadas: 0 }) })]);
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+  test("a linha que faltou e não está no arquivo: a prévia avisa (não passa calada); nenhuma achada: 409 e nada se grava", async () => {
+    mockRegras = basePrevia([concluida()], [...FALTARAM, { Linha: 9, Nome: "Samuel Brito" }]);
+    const r = await db.criarPrevia(POOL_R, QUEM, { texto: ARQUIVO, resto: true });
+    expect(r.resumo.resto).toMatchObject({ faltaram: 3, achadas: 2, naoAchadas: 1, listaNaoAchadas: [{ linha: 9, nome: "Samuel Brito" }] });
+    expect(r.resumo.avisosGerais[0]).toMatchObject({ codigo: "RESTO_NAO_ACHADAS" });
+    mockConsultas = [];
+    mockRegras = basePrevia([concluida()], [{ Linha: 9, Nome: "Samuel Brito" }]);
+    expect(await db.criarPrevia(POOL_R, QUEM, { texto: ARQUIVO, resto: true })).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RESTO_NADA_ACHADO });
+    expect(mockConsultas.some((c) => /INSERT/.test(c.sql))).toBe(false);
+  });
+  test("o resto só existe uma vez e só depois da importação concluída: cada recusa vem antes de ler o arquivo, e de novo debaixo da trava", async () => {
+    const tenta = () => db.criarPrevia(POOL_R, QUEM, { texto: ARQUIVO, resto: true });
+    mockRegras = basePrevia([]);
+    expect(await tenta()).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RESTO_SEM_IMPORTACAO });
+    mockRegras = basePrevia([concluida(), { ImportacaoId: 8, Situacao: "IMPORTANDO", RestoDe: 7, Resumo: "{}" }]);
+    expect(await tenta()).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.EM_ANDAMENTO });
+    mockRegras = basePrevia([concluida(), concluida({ ImportacaoId: 8, RestoDe: 7 })]);
+    expect(await tenta()).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RESTO_JA_FEITO });
+    mockRegras = basePrevia([concluida()], []);
+    expect(await tenta()).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.SEM_RESTO });
+    expect(mockConsultas.some((c) => /INSERT|FROM Congregacoes/.test(c.sql))).toBe(false);
+    // de novo debaixo da trava: outra aba concluiu o resto entre a leitura e a gravação
+    let leituras = 0;
+    mockConsultas = [];
+    mockRegras = basePrevia([]);
+    mockRegras.splice(1, 1, situacao(() => (++leituras === 1 ? [concluida()] : [concluida(), concluida({ ImportacaoId: 8, RestoDe: 7 })])));
+    expect(await tenta()).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RESTO_JA_FEITO });
+    expect(mockConsultas.some((c) => /INSERT/.test(c.sql))).toBe(false);
+  });
+  test("o resto que não é exatamente true é a prévia de sempre: com a importação concluída, uma vez só (JA_IMPORTADO)", async () => {
+    for (const lixo of ["true", 1, [true], { sim: true }, null, undefined]) {
+      mockRegras = basePrevia([concluida()]);
+      expect(await db.criarPrevia(POOL_R, QUEM, { texto: ARQUIVO, resto: lixo })).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.JA_IMPORTADO });
+    }
+  });
+  test("confirmar o resto: a exceção ao 'uma vez só' vale só para a prévia do resto da importação concluída, e uma vez", async () => {
+    const previaResto = (extra = {}) => ({ ImportacaoId: 8, Situacao: "PREVIA", RestoDe: 7, Resumo: "{}", ...extra });
+    const contar = [/SELECT COUNT\(\*\) AS n FROM ImportacoesMembrosLinhas/, [{ n: 2 }]];
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), previaResto()]), contar];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: true, importacaoId: 8, restantes: 2 });
+    expect(registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1].acao)).toEqual(["Confirmou a importação das linhas que faltaram"]);
+    // a prévia comum, com a importação concluída: uma vez só
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), previaResto({ RestoDe: null })]), contar];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.JA_IMPORTADO });
+    // o resto de outra importação (não a concluída de agora): não vale
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), previaResto({ RestoDe: 6 })]), contar];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.PREVIA_MUDOU });
+    // o resto já feito: não há segundo
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), concluida({ ImportacaoId: 9, RestoDe: 7 }), previaResto()]), contar];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RESTO_JA_FEITO });
+    // a prévia do resto que foi substituída por outra (ou descartada): "não é mais a atual", e não "já foi feita" (o e2e-102 achou)
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), previaResto({ ImportacaoId: 10 })]), contar,
+      [/SELECT RestoDe FROM ImportacoesMembros WHERE ImportacaoId = @id/, (i) => (i.id === 8 ? [{ RestoDe: 7 }] : [])]];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.PREVIA_MUDOU });
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida()]), contar, [/SELECT RestoDe FROM ImportacoesMembros WHERE ImportacaoId = @id/, [{ RestoDe: 7 }]]];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.PREVIA_MUDOU });
+    // o resto confirmado e em andamento: confirmar de novo é o "continue"
+    mockRegras = [[/sp_getapplock/, [{ rc: 0 }]], situacao([concluida(), previaResto({ Situacao: "IMPORTANDO" })]), contar];
+    expect(await db.confirmar(POOL_R, QUEM, 8)).toEqual({ sucesso: true, importacaoId: 8, jaConfirmada: true, restantes: 2 });
+  });
+  test("o estado com o resto: o que faltou (quantas e as 10 primeiras, só linha e nome), se pode, se está aberto e o que foi feito", async () => {
+    const lista = [/SELECT TOP \(10\) Linha, Nome, COUNT\(\*\) OVER \(\) AS Total FROM ImportacoesMembrosLinhas/, [{ Linha: 4, Nome: "Paulo Henrique Dias", Total: 2 },
+      { Linha: 5, Nome: "Raquel Monteiro", Total: 2 }]];
+    mockRegras = [situacao([concluida()]), lista];
+    let r = await db.estado(POOL_R);
+    expect(r).toMatchObject({ feita: true, emAndamento: false, importacao: { importacaoId: 7, situacao: "CONCLUIDA", restoDe: null } });
+    expect(r.resto).toEqual({ de: 7, faltaram: 2, linhas: [{ linha: 4, nome: "Paulo Henrique Dias" }, { linha: 5, nome: "Raquel Monteiro" }], possivel: true, aberto: false,
+      feito: null });
+    expect(mockConsultas.find((c) => /SELECT TOP \(10\) Linha, Nome/.test(c.sql)).inputs.id).toBe(7);
+    expect(mockConsultas.find((c) => /SELECT TOP \(10\) Linha, Nome/.test(c.sql)).sql).toMatch(/Estado = N'FORA' AND Problemas = N'NAO_TERMINOU'/);
+    expect(mockConsultas.find((c) => /FROM ImportacoesMembros WHERE Situacao IN/.test(c.sql)).sql).toMatch(/RestoDe/);
+    // a prévia do resto aberta: ela é a importação de agora (a tela abre nos números)
+    mockRegras = [situacao([concluida(), { ImportacaoId: 8, Situacao: "PREVIA", RestoDe: 7, Resumo: "{}" }]), lista];
+    r = await db.estado(POOL_R);
+    expect(r).toMatchObject({ feita: true, importacao: { importacaoId: 8, situacao: "PREVIA", restoDe: 7 }, resto: { possivel: false, aberto: true, feito: null } });
+    // em andamento: o prazo da parada vale para ele também
+    mockRegras = [situacao([concluida(), { ImportacaoId: 8, Situacao: "IMPORTANDO", RestoDe: 7, ConfirmadaEm: new Date(), UltimoLoteEm: null, Resumo: "{}" }]), lista,
+      [/AS importadas,\s+SUM/, [{ importadas: 0, restantes: 2 }]]];
+    r = await db.estado(POOL_R);
+    expect(r).toMatchObject({ emAndamento: true, restantes: 2, importadas: 0, importacao: { importacaoId: 8, restoDe: 7 }, prazo: { dias: 7, faltam: 7 },
+      resto: { possivel: false, aberto: true } });
+    // feito: a tela volta ao resultado da importação de antes, com o que o resto fez; o retrato é o da importação de antes
+    mockConsultas = [];
+    const fim = new Date("2026-12-22T10:00:00Z");
+    mockRegras = [situacao([concluida(), concluida({ ImportacaoId: 8, RestoDe: 7, ConcluidaEm: fim, Resumo: JSON.stringify({ resultado: { importadas: 1, fora: 1 } }) })]), lista];
+    r = await db.estado(POOL_R);
+    expect(r.importacao).toMatchObject({ importacaoId: 7 });
+    expect(r.resto).toMatchObject({ possivel: false, aberto: false, feito: { importacaoId: 8, concluidaEm: fim, importadas: 1, fora: 1 } });
+    expect(mockConsultas.filter((c) => /GROUP BY a\.AreaId/.test(c.sql)).map((c) => c.inputs.id)).toEqual([7]);
+    // nada faltou (ou a lista já se apagou) e nenhum resto: nada a mostrar
+    mockRegras = [situacao([concluida()])];
+    expect((await db.estado(POOL_R)).resto).toBeNull();
+    // sem importação concluída: sem resto
+    mockRegras = [situacao([]), lista];
+    expect((await db.estado(POOL_R)).resto).toBeNull();
+  });
+  test("o resto parado sem ninguém que a rotina descartou: a tela do resultado diz qual foi (e o resto volta a ser possível)", async () => {
+    const lista = [/SELECT TOP \(10\) Linha, Nome/, [{ Linha: 4, Nome: "Paulo Henrique Dias", Total: 1 }]];
+    const descartada = { ImportacaoId: 8, Situacao: "DESCARTADA", RestoDe: 7, NomeArquivo: "membros.csv", ConfirmadaEm: new Date("2026-12-21T09:00:00Z"),
+      DescartadaEm: new Date("2026-12-29T06:00:00Z"), Resumo: JSON.stringify({ descartadaPeloPrazo: 7 }) };
+    mockRegras = [situacao([concluida(), descartada]), lista, [/SELECT MAX\(ImportacaoId\) AS ultima/, [{ ultima: 8 }]]];
+    const r = await db.estado(POOL_R);
+    expect(r.importacao).toMatchObject({ importacaoId: 7 });
+    expect(r.descartadaPeloPrazo).toMatchObject({ importacaoId: 8, dias: 7 });
+    expect(r.resto).toMatchObject({ possivel: true, aberto: false, feito: null });
+  });
+  test("a lista e o CSV da importação de antes: depois do resto feito, o motivo de quem faltou diz que o resto já foi feito", async () => {
+    const linhaFora = { Total: 1, Linha: 4, MatriculaArquivo: null, Nome: "Paulo Henrique Dias", Acao: "PROBLEMA", Estado: "FORA", MatriculaFinal: null, Problemas: "NAO_TERMINOU",
+      Avisos: null, NumeroNovo: false, MotivoNumero: null };
+    const cenarioLista = (feito) => [[/SELECT Resumo FROM ImportacoesMembros/, [{ Resumo: "{}" }]], [/WITH ordem AS/, [linhaFora]],
+      [/FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND \(Acao = N'PROBLEMA'/, [linhaFora]],
+      [/WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'/, feito ? [{ ImportacaoId: 8 }] : []]];
+    mockRegras = cenarioLista(false);
+    expect((await db.listar(POOL_R, 7)).itens[0].motivos).toEqual([regras.PROBLEMAS.NAO_TERMINOU]);
+    expect(await db.csv(POOL_R, 7)).toContain(regras.PROBLEMAS.NAO_TERMINOU);
+    mockRegras = cenarioLista(true);
+    expect((await db.listar(POOL_R, 7)).itens[0].motivos).toEqual([regras.PROBLEMAS.NAO_TERMINOU_RESTO_FEITO]);
+    expect(await db.csv(POOL_R, 7)).toContain(regras.PROBLEMAS.NAO_TERMINOU_RESTO_FEITO);
+    expect(mockConsultas.find((c) => /WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'/.test(c.sql)).inputs.id).toBe(7);
+  });
+  test("o painel do arrolamento diz o dia em que vieram pela importação de antes (o resto, depois, não muda a data)", () => {
+    const f = require("fs").readFileSync(require("path").join(__dirname, "..", "arrolamentoDb.js"), "utf8");
+    expect(f).toMatch(/SELECT MIN\(ConcluidaEm\) AS veio FROM ImportacoesMembros WHERE Situacao = N'CONCLUIDA'/);
   });
 });

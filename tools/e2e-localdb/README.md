@@ -236,7 +236,11 @@ Cada versão parte da base da anterior (`BASE=...`):
   parada sem ninguém importado, com 8 dias, é DESCARTADA pela rotina (as linhas saem inteiras, a data da confirmação fica, as matrículas continuam travadas,
   o lote dela recusa, a tela diz qual foi) e uma importação nova pode começar; descartar à mão pede o 428, a local não pode (403 igual para a que existe e a
   que não existe), o número errado é 409 e o lixo 400; a parada com gente não se descarta; confirmada há 20 dias e com o lote agora, nada muda; com 8 dias do
-  lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo; a trilha sem dado pessoal e a cadeia.
+  lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo. Depois, a importação SÓ DAS LINHAS QUE
+  FALTARAM (o resto, uma vez): o estado diz quais faltaram; a prévia comum continua recusada; a planilha só com algumas entra pelo nome e avisa quem não
+  foi achado; o mesmo arquivo substitui essa prévia e acha todas; a matrícula tomada depois vira número novo (e a mesma pessoa, possível repetida); o lixo,
+  a local, o 428 e o arquivo sem nenhuma delas; importado, a tela volta ao resultado com o que o resto fez, a lista de antes diz que ele foi feito, um
+  segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado pessoal e a cadeia.
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

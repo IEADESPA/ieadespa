@@ -57,6 +57,8 @@ module.exports = async function (context, req) {
       }
       const opcoes = { nomeArquivo: corpo.nomeArquivo, texto: corpo.texto };
       if (Array.isArray(corpo.colunas)) opcoes.colunas = corpo.colunas;
+      // G2: a importação só das linhas que faltaram (só o true de verdade; o resto é a prévia de sempre)
+      if (corpo.resto === true) opcoes.resto = true;
       responder(await db.criarPrevia(pool, usuario, opcoes));
       return;
     }

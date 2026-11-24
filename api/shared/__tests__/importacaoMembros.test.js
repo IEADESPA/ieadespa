@@ -176,6 +176,83 @@ describe("classificar (uma vez só, 22/11/2026: toda linha que pode entrar ENTRA
   });
 });
 
+describe("G2: a importação só das linhas que faltaram (decisão dele de 24/11/2026)", () => {
+  // as linhas que faltaram na importação de antes: só o número da linha e o nome (o que a rotina guardou)
+  const FALTARAM = [{ linha: 4, nome: "Paulo Henrique Dias" }, { linha: 5, nome: "Raquel Monteiro" }, { linha: 7, nome: "Samuel Brito" }];
+  const nomes = (ls) => ls.map((l) => `${l.linha}:${l.dados.nome}`);
+  test("o MESMO arquivo: entram só as linhas da lista (o mesmo número de linha e o mesmo nome, sem acento nem maiúscula); as outras ficam fora", () => {
+    const prep = preparar(["70100;Ana Já Entrou;IEADESPA - Vila Nova", "70101;Bia Já Entrou;IEADESPA - Vila Nova", "70102;paulo  henrique DIAS;IEADESPA - Vila Nova",
+      "70103;Raquel Monteiro;IEADESPA - Vila Nova", "70104;Caio Já Entrou;IEADESPA - Vila Nova", "70105;Sâmuel Brito;IEADESPA - Vila Nova"]);
+    const c = r.casarResto(prep.linhas, FALTARAM);
+    expect(nomes(c.achadas)).toEqual(["4:paulo henrique DIAS", "5:Raquel Monteiro", "7:Sâmuel Brito"]);
+    expect(c.achadas.map((l) => l.linhaOriginal)).toEqual([4, 5, 7]);
+    expect(c).toMatchObject({ naoAchadas: [], ambiguas: 0, foraDaLista: 3 });
+  });
+  test("a planilha só com as linhas que faltaram (os números mudam): entra pelo nome, quando o nome aparece no arquivo no máximo tantas vezes quanto na lista", () => {
+    const prep = preparar(["70103;Raquel Monteiro;IEADESPA - Vila Nova", "70102;Paulo Henrique Dias;IEADESPA - Vila Nova", "70105;Samuel Brito;IEADESPA - Vila Nova"]);
+    const c = r.casarResto(prep.linhas, FALTARAM);
+    expect(nomes(c.achadas)).toEqual(["2:Raquel Monteiro", "3:Paulo Henrique Dias", "4:Samuel Brito"]);
+    expect(c.achadas.map((l) => l.linhaOriginal)).toEqual([5, 4, 7]);
+    expect(c).toMatchObject({ naoAchadas: [], ambiguas: 0, foraDaLista: 0 });
+  });
+  test("ninguém de fora da lista entra: o nome que está no arquivo mais vezes do que na lista não entra (não dá para saber qual é), e fica avisado", () => {
+    // a linha 4 da lista não bate pela linha (a planilha ganhou uma linha em cima); no arquivo há dois "Paulo Henrique Dias": nenhum entra
+    const prep = preparar(["70100;Paulo Henrique Dias;IEADESPA - Vila Nova", "70101;Paulo Henrique Dias;IEADESPA - Vila Nova", "70102;Outra Pessoa;IEADESPA - Vila Nova",
+      "70103;Raquel Monteiro;IEADESPA - Vila Nova"]);
+    const c = r.casarResto(prep.linhas, FALTARAM);
+    expect(nomes(c.achadas)).toEqual(["5:Raquel Monteiro"]);
+    expect(c.naoAchadas).toEqual([{ linha: 4, nome: "Paulo Henrique Dias" }, { linha: 7, nome: "Samuel Brito" }]);
+    expect(c).toMatchObject({ ambiguas: 2, foraDaLista: 1 });
+    // dois iguais na lista e um no arquivo: entra um (é um dos dois); o outro fica como não achado
+    const dois = r.casarResto(preparar(["70100;Lia Souza;IEADESPA - Vila Nova"]).linhas, [{ linha: 8, nome: "Lia Souza" }, { linha: 9, nome: "Lia Souza" }]);
+    expect(dois.achadas.map((l) => l.linhaOriginal)).toEqual([8]);
+    expect(dois.naoAchadas).toEqual([{ linha: 9, nome: "Lia Souza" }]);
+    // a linha que bate pela linha e pelo nome consome a dela antes do nome solto
+    const mistura = r.casarResto(preparar(["70100;Lia Souza;IEADESPA - Vila Nova", "70101;Lia Souza;IEADESPA - Vila Nova"]).linhas,
+      [{ linha: 3, nome: "Lia Souza" }, { linha: 30, nome: "Lia Souza" }]);
+    expect(mistura.achadas.map((l) => [l.linha, l.linhaOriginal])).toEqual([[2, 30], [3, 3]]);
+  });
+  test("a linha sem nome (ou com o nome inválido) nunca bate; lista vazia: nada entra", () => {
+    const prep = preparar(["70100;;IEADESPA - Vila Nova", "70101;Raquel Monteiro;IEADESPA - Vila Nova"]);
+    expect(nomes(r.casarResto(prep.linhas, FALTARAM).achadas)).toEqual(["3:Raquel Monteiro"]);
+    expect(r.casarResto(prep.linhas, [])).toMatchObject({ achadas: [], naoAchadas: [], ambiguas: 0, foraDaLista: 2 });
+  });
+  test("na continuação, a matrícula que já é de uma ficha NÃO deixa a linha de fora: entra com a próxima do sistema (NUMERO) e, se parece a mesma pessoa, REPETIDA dela", () => {
+    const banco = { fichasPorMatricula: new Map([[70102, { nome: "Paulo Henrique Dias", cpf: null }], [70103, { nome: "Fulano Cadastrado Depois", cpf: null }]]) };
+    const ls = r.classificar(preparar(["70102;Paulo Henrique Dias;IEADESPA - Vila Nova", "70103;Raquel Monteiro;IEADESPA - Vila Nova",
+      "70105;Samuel Brito;IEADESPA - Vila Nova"]).linhas, { ...banco, continuacao: true });
+    expect(ls.map((l) => [l.acao, l.problemas, l.numeroNovo, l.motivoNumero, l.matriculaNumero, l.repetidaMembro])).toEqual([
+      ["NOVA", [], true, "DE_OUTRA_FICHA", null, 70102], ["NOVA", [], true, "DE_OUTRA_FICHA", null, null], ["NOVA", [], false, null, 70105, null]]);
+    expect(ls[0].avisos).toEqual(["MATRICULA_DE_OUTRA_FICHA", "MESMA_PESSOA_EM_OUTRA_FICHA"]);
+    expect(ls[1].avisos).toEqual(["MATRICULA_DE_OUTRA_FICHA"]);
+    expect(r.textoDe("MATRICULA_DE_OUTRA_FICHA")).toBe("A matrícula já é de outra ficha do sistema: entra com a próxima do sistema");
+    expect(r.textoDe("MESMA_PESSOA_EM_OUTRA_FICHA")).toBe("Parece a mesma pessoa da ficha que tem essa matrícula: marcada como possível ficha repetida");
+    // fora da continuação, nada muda: a mesma matrícula deixa a linha de fora
+    const normal = r.classificar(preparar(["70102;Paulo Henrique Dias;IEADESPA - Vila Nova"]).linhas, banco);
+    expect(normal[0]).toMatchObject({ acao: "PROBLEMA", problemas: ["MATRICULA_JA_EXISTE"] });
+  });
+  test("o resumo do resto: quantas faltaram, quantas foram achadas, as não achadas (as 20 primeiras, só linha e nome) e o aviso que não deixa passar", () => {
+    const c = { achadas: [{}, {}], naoAchadas: [{ linha: 7, nome: "Samuel Brito" }], ambiguas: 0, foraDaLista: 3 };
+    const x = r.resumoDoResto(c, { de: 12, faltaram: 3 });
+    expect(x.resto).toEqual({ de: 12, faltaram: 3, achadas: 2, naoAchadas: 1, ambiguas: 0, foraDaLista: 3, listaNaoAchadas: [{ linha: 7, nome: "Samuel Brito" }] });
+    expect(x.aviso).toEqual({ codigo: "RESTO_NAO_ACHADAS", texto: "1 das 3 linhas que faltaram não foi achada neste arquivo (procuramos o mesmo nome): fica de fora "
+      + "desta importação, que é uma vez só. Confira o arquivo antes de confirmar; depois, essa pessoa só se cadastra à mão." });
+    const muitas = r.resumoDoResto({ achadas: [{}], naoAchadas: Array.from({ length: 25 }, (_, i) => ({ linha: i + 2, nome: `Pessoa ${i}` })), ambiguas: 2, foraDaLista: 0 },
+      { de: 12, faltaram: 1250 });
+    expect(muitas.resto.listaNaoAchadas).toHaveLength(20);
+    expect(muitas.aviso.texto).toBe("25 das 1.250 linhas que faltaram não foram achadas neste arquivo (procuramos o mesmo nome; 2 linhas do arquivo têm um nome que "
+      + "aparece mais vezes no arquivo do que na lista e não entram): ficam de fora desta importação, que é uma vez só. Confira o arquivo antes de confirmar; depois, "
+      + "essas pessoas só se cadastram à mão.");
+    expect(r.resumoDoResto({ achadas: [{}], naoAchadas: [], ambiguas: 0, foraDaLista: 0 }, { de: 12, faltaram: 1 }).aviso).toBeNull();
+  });
+  test("o motivo de quem faltou diz a saída de agora (a importação do resto); depois dela, diz que já foi feita", () => {
+    expect(r.textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (entra na importação das linhas que "
+      + "faltaram, que é uma vez só, ou se cadastra à mão)");
+    expect(r.textoDe("NAO_TERMINOU_RESTO_FEITO")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora, e a importação das "
+      + "linhas que faltaram já foi feita (confira na lista dela se a pessoa entrou; se não, cadastre à mão)");
+  });
+});
+
 describe("o resumo e a lista (sem dado pessoal)", () => {
   test("os números da prévia, a matrícula fora da sequência e a próxima matrícula", () => {
     const prep = preparar(["100;Ana;IEADESPA - Vila Nova", "101;Bia;IEADESPA - Vila Nova", "0;Caio;IEADESPA - GERAL", "999999;Davi;IEADESPA - Vila Nova", "102;;IEADESPA - Vila Nova"]);

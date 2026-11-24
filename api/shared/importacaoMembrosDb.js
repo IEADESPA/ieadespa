@@ -5,6 +5,8 @@
 // corrige à mão); colunas extras aceitas; matrícula repetida ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência
 // REPETIDA; todo importado entra em "Arrolamento a completar" (sem voto) com a pendência ARROLAMENTO. E a de 24/11/2026 (G3): sem congregação não há
 // importação — a linha "IEADESPA - GERAL" ou sem congregação fica de fora, com o motivo (a da prévia de antes da regra também: SEM_CONGREGACAO_FORA).
+// E a de 24/11/2026 (G2): a importação que parou e passou do prazo deixa de fora as linhas que faltavam, guardando QUAIS (a linha e o nome); com essa lista, a
+// Secretaria Geral faz UMA importação nova só com elas (o RESTO: RestoDe, migração 187) — a única exceção ao "uma vez só", e só para o resto daquela importação.
 //
 // O caminho: a PRÉVIA (o arquivo lido e conferido contra o banco; nada entra ainda; a nova prévia substitui a anterior) → a CONFIRMAÇÃO (a prévia vira a
 // importação em andamento; daqui não volta) → os LOTES (cada chamada importa até TAMANHO_LOTE linhas numa transação; a tela chama até acabar) → o FIM
@@ -50,7 +52,13 @@ const MSG = Object.freeze({
     + "Avise o suporte, ou descarte a importação e faça outra.",
   JA_ENTROU_ALGUEM: "Esta importação já gravou pessoas: ela não se descarta. Continue de onde parou.",
   NAO_ESTA_PARADA: "Esta importação não está mais em andamento (outra aba mexeu nela, ou o prazo já a encerrou): confira a tela de novo.",
-  DESCARTADA: "Esta importação foi descartada: para importar, escolha o arquivo de novo."
+  DESCARTADA: "Esta importação foi descartada: para importar, escolha o arquivo de novo.",
+  // a importação só das linhas que faltaram (G2)
+  RESTO_SEM_IMPORTACAO: "A importação do sistema pago ainda não terminou: não há linhas que faltaram para importar.",
+  SEM_RESTO: "Não há linhas que faltaram nesta importação (ou a lista delas já se apagou): não há o que importar de novo.",
+  RESTO_JA_FEITO: "A importação das linhas que faltaram já foi feita (é uma vez só). Quem ainda faltar se cadastra à mão.",
+  RESTO_NADA_ACHADO: "Nenhuma das linhas que faltaram foi achada neste arquivo (procuramos o mesmo nome). Mande o arquivo da importação, ou uma planilha só "
+    + "com essas linhas."
 });
 // A LINHA QUE O BANCO RECUSA (revisão de 23/11/2026, a saída do IMPORTANDO). Só um erro de DADO levantado pelos comandos da PRÓPRIA linha (a ficha, as
 // pendências, a marcação) deixa a linha de fora: a regra (CHECK, chave estrangeira), a chave repetida, o texto longo demais, a conversão, o nulo, o estouro, o
@@ -89,24 +97,28 @@ async function emTransacao(pool, fazer) {
 }
 
 // As importações que contam: a concluída (uma vez só), a em andamento e a prévia aberta; e a última confirmada que foi descartada (G2: a parada sem ninguém
-// importado, à mão ou pelo prazo), para a tela dizer o que houve com ela.
+// importado, à mão ou pelo prazo), para a tela dizer o que houve com ela. G2: `concluida` é a importação do sistema pago (sem RestoDe); `restoConcluido`, a
+// importação só das linhas que faltaram nela, já feita. A em andamento e a prévia podem ser de uma ou de outra (RestoDe diz).
 async function lerSituacao(rq) {
-  const r = await rq().query(`SELECT ImportacaoId, Situacao, NomeArquivo, HashArquivo, CriadaEm, CriadaPor, ConfirmadaEm, ConfirmadaPor, ConcluidaEm, DescartadaEm,
-      UltimoLoteEm, Resumo
+  const r = await rq().query(`SELECT ImportacaoId, Situacao, RestoDe, NomeArquivo, HashArquivo, CriadaEm, CriadaPor, ConfirmadaEm, ConfirmadaPor, ConcluidaEm,
+      DescartadaEm, UltimoLoteEm, Resumo
     FROM ImportacoesMembros WHERE Situacao IN (N'PREVIA', N'IMPORTANDO', N'CONCLUIDA') OR (Situacao = N'DESCARTADA' AND ConfirmadaEm IS NOT NULL) ORDER BY ImportacaoId`);
-  const de = (s) => r.recordset.filter((l) => l.Situacao === s).pop() || null;
-  return { concluida: de("CONCLUIDA"), andamento: de("IMPORTANDO"), previa: de("PREVIA"), descartada: de("DESCARTADA") };
+  const de = (s, f = () => true) => r.recordset.filter((l) => l.Situacao === s && f(l)).pop() || null;
+  return { concluida: de("CONCLUIDA", (l) => l.RestoDe == null), restoConcluido: de("CONCLUIDA", (l) => l.RestoDe != null), andamento: de("IMPORTANDO"),
+    previa: de("PREVIA"), descartada: de("DESCARTADA") };
 }
 const lerJson = (t) => { try { return t ? JSON.parse(t) : null; } catch (_) { return null; } };
-const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.Situacao, nomeArquivo: l.NomeArquivo, criadaEm: l.CriadaEm, confirmadaEm: l.ConfirmadaEm,
-  concluidaEm: l.ConcluidaEm, resumo: lerJson(l.Resumo) } : null);
+const publico = (l) => (l ? { importacaoId: Number(l.ImportacaoId), situacao: l.Situacao, restoDe: l.RestoDe == null ? null : Number(l.RestoDe), nomeArquivo: l.NomeArquivo,
+  criadaEm: l.CriadaEm, confirmadaEm: l.ConfirmadaEm, concluidaEm: l.ConcluidaEm, resumo: lerJson(l.Resumo) } : null);
 
 // O estado para a tela: já foi feita? há uma em andamento (quantas faltam)? há uma prévia aberta? `campos`: o catálogo do mapa das colunas (o select da tela).
 // Feita, vem também o RETRATO do resultado (a tela r27, passo 4): quem importou, as matrículas novas e onde as fichas estão hoje, por área.
 // Em andamento (G2, decisão dele de 24/11/2026), vem o PRAZO (a tela parada mostra "faltam N dias") e quantas já entraram (a parada sem ninguém tem outra saída).
+// Feita, vem também o RESTO (G2): quantas linhas faltaram e quais (as 10 primeiras), se a importação só delas pode ser feita, se está aberta ou já foi feita.
+// A importação de agora é a em andamento, depois a prévia, depois a concluída: a prévia e o andamento do resto vêm na frente do resultado.
 async function estado(pool) {
   const sit = await lerSituacao(() => pool.request());
-  const atual = sit.concluida || sit.andamento || sit.previa;
+  const atual = sit.andamento || sit.previa || sit.concluida;
   // os prazos da guarda dos dados (a nota do "Descartar" e a do resultado dizem o prazo de verdade, também o ajustado nas Políticas de retenção)
   const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
   let restantes = null, importadas = null, prazo = null;
@@ -117,9 +129,26 @@ async function estado(pool) {
     prazo = prazoDaParada(sit.andamento, diasPrevia);
   }
   const retrato = sit.concluida ? await retratoDoResultado(() => pool.request(), sit.concluida) : null;
-  const descartadaPeloPrazo = atual ? null : await descartadaPeloPrazoDe(pool, sit.descartada);
+  // (sem nada em curso: depois da importação concluída, a descartada só pode ser a do resto)
+  const descartadaPeloPrazo = sit.andamento || sit.previa ? null : await descartadaPeloPrazoDe(pool, sit.descartada);
+  const resto = sit.concluida ? await restoDe(() => pool.request(), sit) : null;
   return { sucesso: true, feita: !!sit.concluida, emAndamento: !!sit.andamento, importacao: publico(atual), restantes, importadas, prazo, retrato, descartadaPeloPrazo,
-    campos: regras.CAMPOS, guarda: { diasPrevia, diasFora } };
+    resto, campos: regras.CAMPOS, guarda: { diasPrevia, diasFora } };
+}
+// As linhas que faltaram na importação concluída (G2): as que a rotina deixou de fora no fim do prazo (NAO_TERMINOU), só o número da linha e o nome — o que
+// ficou nelas. Somem com a lista dos de fora (90 dias depois do fim): daí em diante, não há resto a importar.
+const FALTARAM = "FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND Estado = N'FORA' AND Problemas = N'NAO_TERMINOU'";
+async function restoDe(rq, sit) {
+  const de = Number(sit.concluida.ImportacaoId);
+  const ls = (await rq().input("id", sql.Int, de).query(`SELECT TOP (10) Linha, Nome, COUNT(*) OVER () AS Total ${FALTARAM} ORDER BY Linha`)).recordset;
+  const faltaram = ls.length ? Number(ls[0].Total) || 0 : 0;
+  const doResto = (l) => !!l && Number(l.RestoDe) === de;
+  const aberto = doResto(sit.previa) || doResto(sit.andamento);
+  const f = doResto(sit.restoConcluido) ? sit.restoConcluido : null;
+  const res = f ? (lerJson(f.Resumo) || {}).resultado || {} : null;
+  const feito = f ? { importacaoId: Number(f.ImportacaoId), concluidaEm: f.ConcluidaEm, importadas: Number(res.importadas || 0), fora: Number(res.fora || 0) } : null;
+  if (!faltaram && !feito && !aberto) return null;
+  return { de, faltaram, linhas: ls.map((l) => ({ linha: Number(l.Linha), nome: l.Nome || "" })), possivel: faltaram > 0 && !feito && !aberto, aberto, feito };
 }
 // A parada sem ninguém importado que a rotina descartou no fim do prazo (G2) não some calada: a tela volta ao arquivo dizendo qual foi e quando. Só se ela é
 // a última importação (depois dela, nem uma prévia).
@@ -185,15 +214,42 @@ async function contarRestantes(rq, id) {
 // ------------------------------------------------------------------ a prévia
 // Lê e confere o arquivo (o trabalho pesado fica fora da transação: nada é gravado até o fim) e grava a prévia com as linhas. A prévia anterior é descartada.
 // `colunas`: o mapa das colunas escolhido na tela (um campo ou null para cada coluna do cabeçalho); sem ele, cada coluna é reconhecida pelo nome.
-async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
-  const sit = await lerSituacao(() => pool.request());
-  if (sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
+// `resto` (só o true de verdade; G2): a importação só das linhas que faltaram na importação concluída — o arquivo de novo (o mesmo, ou uma planilha só com
+// essas linhas); entram na prévia só as linhas da lista (regras.casarResto), e a matrícula tomada depois não as deixa de fora (a continuação do classificar).
+// Recusas que não precisam do arquivo (e que valem de novo debaixo da trava): sem a importação concluída, uma em andamento, o resto já feito, nada que faltou.
+function recusaDoResto(sit) {
   if (sit.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
+  if (!sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.RESTO_SEM_IMPORTACAO };
+  if (sit.restoConcluido && Number(sit.restoConcluido.RestoDe) === Number(sit.concluida.ImportacaoId)) return { sucesso: false, status: 409, mensagem: MSG.RESTO_JA_FEITO };
+  return null;
+}
+async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas, resto }) {
+  const ehResto = resto === true;
+  const sit = await lerSituacao(() => pool.request());
+  let faltaram = null;
+  if (ehResto) {
+    const recusa = recusaDoResto(sit);
+    if (recusa) return recusa;
+    faltaram = (await pool.request().input("id", sql.Int, Number(sit.concluida.ImportacaoId)).query(`SELECT Linha, Nome ${FALTARAM} ORDER BY Linha`)).recordset
+      .map((l) => ({ linha: Number(l.Linha), nome: l.Nome || "" }));
+    if (!faltaram.length) return { sucesso: false, status: 409, mensagem: MSG.SEM_RESTO };
+  } else {
+    if (sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
+    if (sit.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
+  }
+  const restoDaImportacao = ehResto ? Number(sit.concluida.ImportacaoId) : null;
   const congs = (await pool.request().query("SELECT CongregacaoId, Nome, Ativa FROM Congregacoes")).recordset
     .map((c) => ({ congregacaoId: Number(c.CongregacaoId), nome: c.Nome, ativa: c.Ativa }));
   const prep = regras.prepararArquivo(texto, { congregacoes: regras.mapaDeCongregacoes(congs), hojeISO: hojeBrasilia(), escolha: colunas });
   // a coluna que falta: o mapa volta junto (só os nomes do cabeçalho, nenhum dado pessoal) para a tela ligar a coluna certa
   if (prep.erro) return { sucesso: false, status: 400, mensagem: prep.erro, ...(prep.colunas ? { colunas: prep.colunas, totalColunas: prep.totalColunas } : {}) };
+  // o resto: só as linhas da lista seguem (as outras nem vão ao banco)
+  let casado = null;
+  if (ehResto) {
+    casado = regras.casarResto(prep.linhas, faltaram);
+    if (!casado.achadas.length) return { sucesso: false, status: 409, mensagem: MSG.RESTO_NADA_ACHADO };
+    prep.linhas = casado.achadas;
+  }
 
   // as fichas que já existem com as matrículas e com os CPFs do arquivo (uma ida ao banco para cada)
   const mats = [...new Set(prep.linhas.map((l) => l.matricula.numero).filter(Boolean))];
@@ -223,19 +279,31 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
       GROUP BY j.n, j.d`);
     for (const l of r.recordset) fichasPorNomeNascimento.set(regras.chaveNomeNascimento(l.N, l.D), Number(l.MembroId));
   }
-  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf, fichasPorNomeNascimento });
+  regras.classificar(prep.linhas, { fichasPorMatricula, fichasPorCpf, fichasPorNomeNascimento, continuacao: ehResto });
   const maior = Number((await pool.request().query("SELECT ISNULL(MAX(MembroId), 0) AS m FROM MembroReferencia")).recordset[0].m);
   const resumo = regras.resumir(prep, { maiorMatriculaSistema: maior });
+  if (ehResto) {
+    const { resto: r, aviso } = regras.resumoDoResto(casado, { de: restoDaImportacao, faltaram: faltaram.length });
+    resumo.resto = r;
+    if (aviso) resumo.avisosGerais.unshift(aviso);
+  }
   const nome = typeof nomeArquivo === "string" ? nomeArquivo.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 200) || null : null;
 
   return emTransacao(pool, async (t, rq) => {
     const agora = await lerSituacao(rq);   // de novo, debaixo da trava
-    if (agora.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
-    if (agora.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
+    if (ehResto) {
+      const recusa = recusaDoResto(agora);
+      if (recusa) return recusa;
+      if (Number(agora.concluida.ImportacaoId) !== restoDaImportacao) return { sucesso: false, status: 409, mensagem: MSG.PREVIA_MUDOU };
+    } else {
+      if (agora.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
+      if (agora.andamento) return { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
+    }
     if (agora.previa) await descartarNaTransacao(rq, Number(agora.previa.ImportacaoId));
     const id = Number((await rq().input("n", sql.NVarChar(200), nome).input("h", sql.Char(64), sha256(texto)).input("por", sql.Int, Number(usuario.membroId))
-      .input("res", sql.NVarChar(sql.MAX), JSON.stringify(resumo))
-      .query(`INSERT INTO ImportacoesMembros (NomeArquivo, HashArquivo, CriadaPor, Resumo) OUTPUT INSERTED.ImportacaoId VALUES (@n, @h, @por, @res)`)).recordset[0].ImportacaoId);
+      .input("res", sql.NVarChar(sql.MAX), JSON.stringify(resumo)).input("resto", sql.Int, restoDaImportacao)
+      .query(`INSERT INTO ImportacoesMembros (NomeArquivo, HashArquivo, CriadaPor, Resumo, RestoDe) OUTPUT INSERTED.ImportacaoId VALUES (@n, @h, @por, @res, @resto)`))
+      .recordset[0].ImportacaoId);
     for (let i = 0; i < prep.linhas.length; i += BLOCO_GRAVACAO) {
       const bloco = prep.linhas.slice(i, i + BLOCO_GRAVACAO).map((l) => ({
         l: l.linha, a: l.acao, ma: l.matricula.texto || null, m: l.matriculaNumero, nn: l.numeroNovo ? 1 : 0, mn: l.motivoNumero, rl: l.repetidaLinha, rm: l.repetidaMembro,
@@ -251,9 +319,11 @@ async function criarPrevia(pool, usuario, { nomeArquivo, texto, colunas }) {
           ig NVARCHAR(150), c INT, s NCHAR(1), dn DATE, ec NVARCHAR(20), e NVARCHAR(150), t NVARCHAR(20), mae NVARCHAR(150), pai NVARCHAR(150), cpf CHAR(11), da DATE,
           fa NVARCHAR(30), db DATE, esc NVARCHAR(30)) j`);
     }
-    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Fez a prévia da importação do sistema pago", usuarioId: Number(usuario.membroId),
+    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: Number(usuario.membroId),
+      acao: ehResto ? "Fez a prévia da importação das linhas que faltaram" : "Fez a prévia da importação do sistema pago",
       dadosDepois: { nomeArquivo: nome, total: resumo.total, novas: resumo.novas, problemas: resumo.problemas, jaExistem: resumo.jaExistem, numeroNovo: resumo.numeroNovo,
-        possivelRepetida: resumo.possivelRepetida, colunasEscolhidas: !!(resumo.colunas && resumo.colunas.escolhidas) } });
+        possivelRepetida: resumo.possivelRepetida, colunasEscolhidas: !!(resumo.colunas && resumo.colunas.escolhidas),
+        ...(ehResto ? { restoDe: restoDaImportacao, faltaram: resumo.resto.faltaram, naoAchadas: resumo.resto.naoAchadas } : {}) } });
     return { sucesso: true, importacaoId: id, resumo };
   });
 }
@@ -311,8 +381,15 @@ const FILTROS = Object.freeze({
   repetidas: "AND a.Acao = N'NOVA' AND a.NumeroNovo = 0 AND (a.RepetidaLinha IS NOT NULL OR a.RepetidaMembro IS NOT NULL)",
   todas: ""
 });
-const paraLista = (l) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
-  matriculaFinal: l.MatriculaFinal == null ? null : Number(l.MatriculaFinal), problemas: l.Problemas ? l.Problemas.split(",") : [], avisos: l.Avisos ? l.Avisos.split(",") : [] });
+// `restoFeito` (G2): a importação das linhas que faltaram já foi feita — o motivo de quem faltou diz isso (e não mais "entra na importação das que faltaram")
+const paraLista = (l, restoFeito = false) => regras.linhaParaLista({ linha: Number(l.Linha), matriculaArquivo: l.MatriculaArquivo || "", nome: l.Nome || "", acao: l.Acao,
+  matriculaFinal: l.MatriculaFinal == null ? null : Number(l.MatriculaFinal),
+  problemas: l.Problemas ? l.Problemas.split(",").map((c) => (restoFeito && c === "NAO_TERMINOU" ? "NAO_TERMINOU_RESTO_FEITO" : c)) : [],
+  avisos: l.Avisos ? l.Avisos.split(",") : [] });
+async function restoFeitoDe(pool, id) {
+  return (await pool.request().input("id", sql.Int, id)
+    .query("SELECT TOP 1 ImportacaoId FROM ImportacoesMembros WHERE RestoDe = @id AND Situacao = N'CONCLUIDA'")).recordset.length > 0;
+}
 // O detalhe de cada linha para a tela (r27, "Matrícula a acertar" e "Possíveis repetidas"): por que a matrícula muda (e quem ficou com ela: a linha que veio
 // antes), de quem pode ser repetida e o número que ela RECEBE — o de verdade depois de importada; antes, o PREVISTO pela regra do lote (as matrículas do arquivo
 // entram primeiro e as novas seguem a ordem das linhas a partir da maior + 1; um cadastro feito no meio do caminho, ou uma matrícula liberada ao juntar fichas,
@@ -354,14 +431,16 @@ async function listar(pool, importacaoId, { filtro = "todas", pagina = 1 } = {})
     WHERE a.ImportacaoId = @id ${FILTROS[f]}
     ORDER BY a.Linha OFFSET @pula ROWS FETCH NEXT @n ROWS ONLY`);
   const total = r.recordset.length ? Number(r.recordset[0].Total) : 0;
-  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l), detalhe: detalheDe(l, base) })) };
+  const restoFeito = await restoFeitoDe(pool, id);
+  return { sucesso: true, filtro: f, pagina: p, porPagina: POR_PAGINA, total, itens: r.recordset.map((l) => ({ ...paraLista(l, restoFeito), detalhe: detalheDe(l, base) })) };
 }
 async function csv(pool, importacaoId) {
   const id = idValido(importacaoId);
   if (!id) return null;
   const r = await pool.request().input("id", sql.Int, id).query(`SELECT Linha, MatriculaArquivo, Nome, Acao, MatriculaFinal, Problemas, Avisos
     FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND (Acao = N'PROBLEMA' OR Avisos IS NOT NULL) ORDER BY Linha`);
-  return regras.csvDaLista(r.recordset.map(paraLista));
+  const restoFeito = await restoFeitoDe(pool, id);
+  return regras.csvDaLista(r.recordset.map((l) => paraLista(l, restoFeito)));
 }
 
 // ------------------------------------------------------------------ a confirmação (daqui não volta)
@@ -370,11 +449,21 @@ async function confirmar(pool, usuario, importacaoId) {
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
   return emTransacao(pool, async (t, rq) => {
     const sit = await lerSituacao(rq);
-    if (sit.concluida) return { sucesso: false, status: 409, mensagem: MSG.JA_IMPORTADO };
     if (sit.andamento) return Number(sit.andamento.ImportacaoId) === id
       ? { sucesso: true, importacaoId: id, jaConfirmada: true, restantes: await contarRestantes(rq, id) }
       : { sucesso: false, status: 409, mensagem: MSG.EM_ANDAMENTO };
+    // G2: a exceção ao "uma vez só" é só a prévia do resto da importação concluída de agora, e uma vez
+    const ehResto = !!sit.previa && Number(sit.previa.ImportacaoId) === id && sit.previa.RestoDe != null;
+    if (sit.concluida && !ehResto) {
+      // a prévia de um resto que outra substituiu (ou que foi descartada) "não é mais a atual"; a comum, depois da importação feita, "já foi feita"
+      const pedida = (await rq().input("id", sql.Int, id).query("SELECT RestoDe FROM ImportacoesMembros WHERE ImportacaoId = @id")).recordset[0];
+      return { sucesso: false, status: 409, mensagem: pedida && pedida.RestoDe != null ? MSG.PREVIA_MUDOU : MSG.JA_IMPORTADO };
+    }
     if (!sit.previa || Number(sit.previa.ImportacaoId) !== id) return { sucesso: false, status: 409, mensagem: MSG.PREVIA_MUDOU };
+    if (ehResto) {
+      if (!sit.concluida || Number(sit.concluida.ImportacaoId) !== Number(sit.previa.RestoDe)) return { sucesso: false, status: 409, mensagem: MSG.PREVIA_MUDOU };
+      if (sit.restoConcluido && Number(sit.restoConcluido.RestoDe) === Number(sit.previa.RestoDe)) return { sucesso: false, status: 409, mensagem: MSG.RESTO_JA_FEITO };
+    }
     await rq().input("id", sql.Int, id).query(SEM_CONGREGACAO_FORA);
     // a importação em que ninguém entra não se confirma (23/11/2026): terminaria CONCLUIDA com zero pessoas, soltaria a trava das matrículas e gastaria a
     // importação única com uma planilha errada (a transação desfaz a marca acima)
@@ -383,8 +472,8 @@ async function confirmar(pool, usuario, importacaoId) {
       UPDATE ImportacoesMembros SET Situacao = N'IMPORTANDO', ConfirmadaEm = SYSUTCDATETIME(), ConfirmadaPor = @por WHERE ImportacaoId = @id AND Situacao = N'PREVIA';
       UPDATE ImportacoesMembrosLinhas SET Estado = N'FORA' WHERE ImportacaoId = @id AND Acao = N'PROBLEMA';`);
     const restantes = await contarRestantes(rq, id);
-    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Confirmou a importação do sistema pago", usuarioId: Number(usuario.membroId),
-      dadosDepois: { aImportar: restantes } });
+    await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, usuarioId: Number(usuario.membroId),
+      acao: ehResto ? "Confirmou a importação das linhas que faltaram" : "Confirmou a importação do sistema pago", dadosDepois: { aImportar: restantes } });
     return { sucesso: true, importacaoId: id, restantes };
   });
 }

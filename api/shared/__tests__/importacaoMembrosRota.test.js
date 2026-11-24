@@ -73,6 +73,15 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     expect(c2.res.status).toBe(409);
     expect(c2.res.body).toEqual({ sucesso: false, mensagem: "A importação do sistema pago já foi feita (é uma vez só)." });
   });
+  // G2 (decisão dele de 24/11/2026): a importação só das linhas que faltaram é pedida com resto: true (só o true de verdade; o resto é a prévia de sempre)
+  test("a prévia do resto: só resto === true vai à camada como resto; o lixo vira a prévia de sempre", async () => {
+    await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", resto: true } });
+    expect(db.criarPrevia).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x", resto: true });
+    for (const resto of ["true", 1, [true], { sim: true }, false, null]) {
+      await chamar({ metodo: "POST", acao: "previa", token: tok.geral(5000 + db.criarPrevia.mock.calls.length), corpo: { texto: "x", resto } });
+      expect(db.criarPrevia).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x" });
+    }
+  });
   test("a prévia com o mapa das colunas escolhido na tela: a lista vai à camada; o que não é lista (ou é enorme) é 400 sem tocar no banco", async () => {
     await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", colunas: ["matricula", null] } });
     expect(db.criarPrevia).toHaveBeenCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x", colunas: ["matricula", null] });

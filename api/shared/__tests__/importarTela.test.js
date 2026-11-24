@@ -263,7 +263,7 @@ describe("G2: a importação só das linhas que faltaram (a tela)", () => {
   });
   test("a nota da prévia do resto: quantas foram achadas e quantas linhas do arquivo ficam fora da lista", () => {
     const T = carregar(jest.fn());
-    const r = { de: 7, faltaram: 1207, achadas: 1150, naoAchadas: 57, ambiguas: 0, foraDaLista: 3840, listaNaoAchadas: [] };
+    const r = { de: 7, faltaram: 1207, achadas: 1150, naoAchadas: 57, ambiguas: 0, foraDaLista: 3840, linhasNaoAchadas: [] };
     expect(T.fraseDaPreviaDoResto(r)).toBe("Importação só das linhas que faltaram (uma vez): 1.150 das 1.207 linhas foram achadas neste arquivo; as outras 3.840 "
       + "linhas do arquivo não estão na lista e ficam fora.");
     expect(T.fraseDaPreviaDoResto({ ...r, achadas: 1, faltaram: 3, foraDaLista: 1 })).toBe("Importação só das linhas que faltaram (uma vez): 1 das 3 linhas foi "

@@ -23,12 +23,12 @@ const comForm = (extra = {}) => ({ ...T.formInicial(ficha()), formaAdmissao: "BA
 const igual = (a, b) => expect(JSON.parse(JSON.stringify(a))).toEqual(b);
 
 describe("o formulário de completar", () => {
-  test("começa em comunhão (como no desenho), sem forma, sem data e sem cargo", () => {
-    igual(T.formInicial(ficha()), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", cargo: "", congregacaoId: null });
+  test("começa em comunhão (como no desenho), sem forma e sem data (a função eclesiástica não é do formulário)", () => {
+    igual(T.formInicial(ficha()), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
   });
   test("o que o sistema pago já trouxe vem preenchido; forma fora da lista e data inválida, não", () => {
-    igual(T.formInicial(ficha({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01T00:00:00.000Z" })), { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01", cargo: "", congregacaoId: null });
-    igual(T.formInicial(ficha({ formaAdmissao: "TRANSFERENCIA", dataAdmissao: "2015-13-45" })), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", cargo: "", congregacaoId: null });
+    igual(T.formInicial(ficha({ formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01T00:00:00.000Z" })), { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-06-01", congregacaoId: null });
+    igual(T.formInicial(ficha({ formaAdmissao: "TRANSFERENCIA", dataAdmissao: "2015-13-45" })), { situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
   });
   test("as 3 situações e as 4 formas do desenho, com os textos aprovados", () => {
     igual(T.SITUACOES.map((s) => [s.valor, s.rotulo, s.sub]), [["EM_COMUNHAO", "Em comunhão", "membro: ganha o voto"], ["CONGREGADO", "Congregado", "ainda não membro: não vota"], ["SEM_COMUNHAO", "Sem comunhão", "em disciplina ou afastado"]]);
@@ -38,9 +38,9 @@ describe("o formulário de completar", () => {
 });
 
 describe("o que vai no pedido", () => {
-  test("em comunhão: a matrícula, a situação, a forma e a data; o cargo só se tiver", () => {
+  test("em comunhão: a matrícula, a situação, a forma e a data; nunca a função eclesiástica (regra dele de 24/11: só a Câmara e a academia)", () => {
     igual(T.montarEnvio(comForm(), ficha(), HOJE), { ok: true, corpo: { matricula: 4102, situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "2009-03-12" } });
-    igual(T.montarEnvio(comForm({ cargo: "DIACONO" }), ficha(), HOJE).corpo.cargoMinisterial, "DIACONO");
+    expect(T.montarEnvio(comForm({ cargo: "DIACONO" }), ficha(), HOJE).corpo).not.toHaveProperty("cargoMinisterial");
   });
   test("sem comunhão também pede a forma e a data", () => {
     const r = T.montarEnvio(comForm({ situacao: "SEM_COMUNHAO" }), ficha(), HOJE);

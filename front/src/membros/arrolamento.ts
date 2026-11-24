@@ -1,6 +1,7 @@
 // COMPLETAR O ARROLAMENTO (FASE 10, Membros, rodada 28 aprovada em 23/11/2026): as regras da TELA, sem nenhum import (o teste carrega este arquivo direto:
 // api/shared/__tests__/arrolamentoTela.test.js). Quem veio do sistema pago entra "arrolamento a completar", sem voto; a secretaria escolhe a situação, como
-// e quando a pessoa entrou e o cargo, só se tiver. A tela confere antes de mandar para dizer o erro no campo; o servidor confere tudo de novo
+// e quando a pessoa entrou; a função eclesiástica só aparece para ler (regra dele de 24/11/2026: só a Câmara de liderança e a academia a mudam). A tela
+// confere antes de mandar para dizer o erro no campo; o servidor confere tudo de novo
 // (api/shared/arrolamento.js) e é ele quem decide.
 
 export type Situacao = "EM_COMUNHAO" | "CONGREGADO" | "SEM_COMUNHAO";
@@ -10,7 +11,6 @@ export interface FormCompletar {
   readonly situacao: Situacao;
   readonly formaAdmissao: string;
   readonly dataAdmissao: string;
-  readonly cargo: string;
   readonly congregacaoId: number | null;
 }
 /** o mínimo da ficha que a regra precisa (GET /api/arrolamento/ficha) */
@@ -26,7 +26,6 @@ export interface CorpoCompletar {
   situacao: Situacao;
   formaAdmissao?: string;
   dataAdmissao?: string;
-  cargoMinisterial?: string;
   congregacaoId?: number;
 }
 export type CampoComErro = "situacao" | "forma" | "data" | "congregacao";
@@ -56,6 +55,8 @@ export interface FichaArrolamento {
   readonly departamento: string | null;
   readonly formaAdmissao: string | null;
   readonly dataAdmissao: string | null;
+  /** a função eclesiástica que a ficha já tem (o nome), só para ler; null = nenhuma */
+  readonly funcao?: string | null;
 }
 export interface RespostaFichaArrolamento {
   readonly ficha: FichaArrolamento | null;
@@ -124,10 +125,11 @@ const soDia = (v: string | null | undefined): string => (typeof v === "string" ?
 export function formInicial(f: FichaBase): FormCompletar {
   const forma = FORMAS.some((x) => x.valor === f.formaAdmissao) ? String(f.formaAdmissao) : "";
   const data = soDia(f.dataAdmissao);
-  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "", cargo: "", congregacaoId: null };
+  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "", congregacaoId: null };
 }
 
-/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma, sem data e sem cargo; a congregação só na ficha sem ela. */
+/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma e sem data; a congregação só na ficha sem ela. A função
+ *  eclesiástica nunca vai: só a Câmara de liderança e a academia a mudam (regra dele de 24/11/2026). */
 export function montarEnvio(form: FormCompletar, ficha: FichaBase, hoje: string): Envio {
   if (!SITUACOES.some((s) => s.valor === form.situacao)) return { ok: false, campo: "situacao", mensagem: "Escolha a situação: em comunhão, congregado ou sem comunhão." };
   const corpo: CorpoCompletar = { matricula: ficha.matricula, situacao: form.situacao };
@@ -144,7 +146,6 @@ export function montarEnvio(form: FormCompletar, ficha: FichaBase, hoje: string)
     if (nasc && data < nasc) return { ok: false, campo: "data", mensagem: "A data de entrada não pode ser antes do nascimento." };
     corpo.formaAdmissao = form.formaAdmissao;
     corpo.dataAdmissao = data;
-    if (form.cargo) corpo.cargoMinisterial = form.cargo;
   }
   return { ok: true, corpo };
 }

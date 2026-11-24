@@ -1,4 +1,5 @@
-<!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação, como e quando a pessoa entrou e o cargo, só se tiver; ao
+<!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação e como e quando a pessoa entrou (a função eclesiástica só
+     aparece para ler: regra dele de 24/11/2026, só a Câmara de liderança e a academia a mudam); ao
      completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, ganha o voto. Depois, vai direto para a próxima. A congregação, a área e a Geral
      completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento); a ficha que veio sem congregação, só a Geral, escolhendo a congregação.
      As regras da tela em ../arrolamento.ts; o servidor confere tudo de novo. -->
@@ -24,10 +25,9 @@
   const hoje = hojeIso();
   let resp = $state<RespostaFichaArrolamento | null>(null);
   let erro = $state("");
-  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", cargo: "", congregacaoId: null });
+  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", congregacaoId: null });
   let erroCampo = $state<{ campo: CampoComErro; mensagem: string } | null>(null);
   let enviando = $state(false);
-  let cargos = $state<{ sigla: string; nome: string }[]>([]);
   let congs = $state<readonly Congregacao[]>([]);
   let entrada: HTMLInputElement | undefined = $state();
 
@@ -36,10 +36,6 @@
   const membro = $derived(form.situacao !== "CONGREGADO");
   const depois = $derived(depoisDe(form.situacao));
   const nota = $derived(notaDaData(form.situacao, form.dataAdmissao));
-
-  void pedir<{ sigla: string; nome: string; ativo?: boolean }[]>("/catalogos/cargosMinisteriais").then((x) => {
-    if (x.ok && Array.isArray(x.dados)) cargos = x.dados.filter((c) => c.ativo !== false && c.sigla !== "MEMBRO");
-  });
 
   let seq = 0;
   async function abrir(q: Record<string, number | null>) {
@@ -151,11 +147,12 @@
   {/if}
 {/snippet}
 
-{#snippet cargo()}
-  {#if membro}
+<!-- a função eclesiástica: só para ler, quando a ficha já tem (regra dele de 24/11/2026: só a Câmara de liderança e a academia mudam; o arrolamento não grava) -->
+{#snippet funcao()}
+  {#if ficha?.funcao}
     <div class="grupo">
-      <span class="rot">Cargo ou função <span class="dica">· só se tiver</span></span>
-      <Escolha rotulo="Nenhum" estilo="campo" larga valor={form.cargo} opcoes={[{ valor: "", rotulo: "Nenhum" }, ...cargos.map((c) => ({ valor: c.sigla, rotulo: c.nome }))]} onescolher={(v) => trocar("cargo", v ?? "")} />
+      <span class="rot">Função eclesiástica <span class="dica">· só a Câmara de liderança e a academia mudam</span></span>
+      <p class="so-ler">{ficha.funcao}</p>
     </div>
   {/if}
 {/snippet}
@@ -199,6 +196,7 @@
     {@render congregacao()}
     {@render situacao()}
     {@render entradaCampos()}
+    {@render funcao()}
     {@render muda()}
     {@render botao()}
   {:else}
@@ -209,7 +207,7 @@
           {@render congregacao()}
           {@render situacao()}
           {@render entradaCampos()}
-          {@render cargo()}
+          {@render funcao()}
         </div>
       </Cartao>
       <div class="dir">
@@ -250,6 +248,7 @@
   .rot { font-size: 14px; font-weight: 700; color: var(--sv-titulo); }
   .obr { color: var(--sv-atr); margin-left: 1px; }
   .dica { font-size: 12.5px; font-weight: 400; color: var(--sv-suave); }
+  .so-ler { margin: 0; font-size: 14px; color: var(--sv-titulo); }
   .erro { font-size: 12.5px; color: var(--sv-atr); font-weight: 600; }
   .ops { display: flex; gap: 8px; }
   .ops.col { flex-direction: column; }

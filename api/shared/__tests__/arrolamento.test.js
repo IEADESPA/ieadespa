@@ -10,8 +10,8 @@ const v = (corpo, ctx = {}) => regras.validarCompletar(corpo, { hoje: HOJE, nasc
 const comunhao = { situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "2009-03-12" };
 
 describe("validarCompletar: a situação", () => {
-  test("em comunhão, com a forma e a data de entrada de verdade: passa, sem cargo", () => {
-    expect(v(comunhao)).toEqual({ ok: true, dados: { situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "2009-03-12", cargo: null, congregacaoId: null } });
+  test("em comunhão, com a forma e a data de entrada de verdade: passa (sem função: o arrolamento não grava)", () => {
+    expect(v(comunhao)).toEqual({ ok: true, dados: { situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "2009-03-12", congregacaoId: null } });
   });
   test.each([undefined, null, "", "ARROLAMENTO", "em_comunhao", "MEMBRO", 1, [], {}, "' OR 1=1 --"])("situação %p: recusada", (situacao) => {
     const r = v({ ...comunhao, situacao });
@@ -52,30 +52,38 @@ describe("validarCompletar: como e quando a pessoa entrou", () => {
 
 describe("validarCompletar: o congregado", () => {
   test("o congregado ainda não é membro: sem forma, sem data e sem cargo, passa", () => {
-    expect(v({ situacao: "CONGREGADO" })).toEqual({ ok: true, dados: { situacao: "CONGREGADO", formaAdmissao: null, dataAdmissao: null, cargo: null, congregacaoId: null } });
+    expect(v({ situacao: "CONGREGADO" })).toEqual({ ok: true, dados: { situacao: "CONGREGADO", formaAdmissao: null, dataAdmissao: null, congregacaoId: null } });
     expect(v({ situacao: "CONGREGADO", formaAdmissao: "", dataAdmissao: null, cargoMinisterial: "" }).ok).toBe(true);
   });
   test("o congregado com forma ou data de entrada: recusado", () => {
     expect(v({ situacao: "CONGREGADO", formaAdmissao: "BATISMO" }).mensagem).toMatch(/congregado/i);
     expect(v({ situacao: "CONGREGADO", dataAdmissao: "2009-03-12" }).mensagem).toMatch(/congregado/i);
   });
-  test("o congregado com cargo: recusado", () => {
-    expect(v({ situacao: "CONGREGADO", cargoMinisterial: "DIACONO" }).mensagem).toMatch(/congregado/i);
+  test("o congregado com função: recusado (o arrolamento não grava função)", () => {
+    expect(v({ situacao: "CONGREGADO", cargoMinisterial: "DIACONO" }).ok).toBe(false);
   });
 });
 
-describe("validarCompletar: o cargo, só se tiver", () => {
-  test("nenhum, vazio ou MEMBRO: sem cargo", () => {
-    for (const cargoMinisterial of [undefined, null, "", "MEMBRO"]) expect(v({ ...comunhao, cargoMinisterial }).dados.cargo).toBeNull();
+// Regra dele de 24/11/2026 (A3 da revisão): a função eclesiástica (auxiliar, diácono, presbítero, evangelista, missionário, pastor) só a Câmara de
+// liderança e a academia mudam; a secretaria local e a da área NUNCA. O "cargo" do arrolamento era essa função (MembroReferencia.CargoMinisterial):
+// o arrolamento não a grava mais, em nenhum nível; a tela mostra a que já existe, só para ler.
+describe("validarCompletar: a função eclesiástica não se grava no arrolamento", () => {
+  test("nenhuma, vazia ou MEMBRO: passa, e os dados não levam função", () => {
+    for (const cargoMinisterial of [undefined, null, "", "MEMBRO"]) {
+      const r = v({ ...comunhao, cargoMinisterial });
+      expect(r.ok).toBe(true);
+      expect(r.dados).not.toHaveProperty("cargo");
+    }
   });
-  test("a sigla do cargo passa (o catálogo é conferido no banco)", () => {
-    expect(v({ ...comunhao, cargoMinisterial: "PRESBITERO" }).dados.cargo).toBe("PRESBITERO");
-    expect(v({ ...comunhao, situacao: "SEM_COMUNHAO", cargoMinisterial: "DIACONO" }).dados.cargo).toBe("DIACONO");
+  test.each(["AUXILIAR", "DIACONO", "PRESBITERO", "EVANGELISTA", "MISSIONARIO", "PASTOR"])("a função %s: recusada (só a Câmara de liderança e a academia)", (cargoMinisterial) => {
+    const r = v({ ...comunhao, cargoMinisterial });
+    expect(r).toEqual({ ok: false, mensagem: "A função eclesiástica (auxiliar, diácono, presbítero, evangelista, missionário, pastor) só a Câmara de liderança e a academia mudam: o arrolamento não grava função." });
+    expect(v({ ...comunhao, situacao: "SEM_COMUNHAO", cargoMinisterial }).ok).toBe(false);
   });
-  test.each(["'; DROP TABLE x; --", "presbitero", 5, {}, "X".repeat(40)])("cargo %p: recusado", (cargoMinisterial) => {
+  test.each(["'; DROP TABLE x; --", "presbitero", 5, {}, "X".repeat(40)])("lixo no campo %p: recusado", (cargoMinisterial) => {
     const r = v({ ...comunhao, cargoMinisterial });
     expect(r.ok).toBe(false);
-    expect(r.mensagem).toMatch(/cargo/i);
+    expect(r.mensagem).toMatch(/função/i);
   });
 });
 

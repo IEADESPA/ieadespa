@@ -3,8 +3,9 @@
 // "Vieram" = quem está no rol com a pendência ARROLAMENTO (aberta ou resolvida: toda ficha que a importação do sistema pago trouxe); "faltam" = quem ainda
 // está com a situação ARROLAMENTO (o mesmo número do 4º grupo do painel, shared/painelMembros.js); "completadas" = vieram − faltam. Tudo contado no banco,
 // dentro do escopo de quem vê (a mesma condição da lista e do painel: escopoRotas.condicaoSqlEscopoPessoa), sem trazer ficha para o Node.
-// A gravação é uma transação só, debaixo da trava da pessoa (a mesma da escada: escadaDb.comTravaDaPessoa): a situação, a forma e a data de entrada, o cargo
-// (histórico LEGADO, sem data), a congregação (só a ficha que veio sem ela), a pendência resolvida e a trilha. O UPDATE só pega a ficha que ainda está em
+// A gravação é uma transação só, debaixo da trava da pessoa (a mesma da escada: escadaDb.comTravaDaPessoa): a situação, a forma e a data de entrada, a
+// congregação (só a ficha que veio sem ela), a pendência resolvida e a trilha. A função eclesiástica não (regra dele de 24/11/2026: só a Câmara de liderança
+// e a academia). O UPDATE só pega a ficha que ainda está em
 // ARROLAMENTO: quem chega depois (a local e a área ao mesmo tempo) leva 409.
 const { sql } = require("./db");
 const auth = require("./auth");
@@ -87,13 +88,16 @@ async function painel(pool, usuario, { congregacaoId = null } = {}) {
   return resp;
 }
 
-// A ficha de uma pessoa, com o que veio do sistema pago (sem o CPF, o contato e a filiação: a tela de completar não usa).
+// A ficha de uma pessoa, com o que veio do sistema pago (sem o CPF, o contato e a filiação: a tela de completar não usa). A função eclesiástica (o nome do
+// catálogo; MEMBRO não é função) vem só para a tela mostrar: o arrolamento não a grava (regra dele de 24/11/2026, shared/arrolamento.js).
 async function lerFicha(rq, membroId) {
   const l = (await rq().input("id", sql.Int, membroId).query(`
     SELECT m.MembroId, m.Nome, m.Sexo, m.Status, m.SituacaoMembro, m.CongregacaoId, c.Nome AS Congregacao, d.Nome AS Departamento, m.FormaAdmissao,
            CONVERT(varchar(10), m.DataNascimento, 120) AS Nascimento, CONVERT(varchar(10), m.DataAdmissao, 120) AS DataAdmissao, CONVERT(varchar(10), m.DataBatismo, 120) AS DataBatismo,
-           CASE WHEN EXISTS (SELECT 1 FROM FichasPendencias fp WHERE fp.MembroId = m.MembroId AND fp.Tipo = N'ARROLAMENTO') THEN 1 ELSE 0 END AS Veio
+           CASE WHEN EXISTS (SELECT 1 FROM FichasPendencias fp WHERE fp.MembroId = m.MembroId AND fp.Tipo = N'ARROLAMENTO') THEN 1 ELSE 0 END AS Veio,
+           cm.Nome AS Funcao
     FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN Departamentos d ON d.DepartamentoId = m.DepartamentoId
+    LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial AND cm.Sigla <> N'MEMBRO'
     WHERE m.MembroId = @id`)).recordset[0];
   return l || null;
 }
@@ -155,12 +159,14 @@ async function fichaParaCompletar(pool, usuario, query, hoje) {
   return {
     sucesso: true, status: 200,
     ficha: { matricula: membroId, nome: l.Nome, nascimento: l.Nascimento || null, idade: idade(l.Nascimento, hoje), sexo: l.Sexo || null, congregacaoId: congId,
-      congregacao: l.Congregacao || null, departamento: l.Departamento || null, formaAdmissao: l.FormaAdmissao || null, dataAdmissao: l.DataAdmissao || null, dataBatismo: l.DataBatismo || null },
+      congregacao: l.Congregacao || null, departamento: l.Departamento || null, formaAdmissao: l.FormaAdmissao || null, dataAdmissao: l.DataAdmissao || null, dataBatismo: l.DataBatismo || null,
+      funcao: l.Funcao || null },
     proxima, andamento
   };
 }
 
-// COMPLETAR. corpo: { matricula, situacao, formaAdmissao, dataAdmissao, cargoMinisterial, congregacaoId }. Devolve { sucesso, status, mensagem, proxima }.
+// COMPLETAR. corpo: { matricula, situacao, formaAdmissao, dataAdmissao, congregacaoId } (a função eclesiástica não: shared/arrolamento.js recusa).
+// Devolve { sucesso, status, mensagem, proxima }.
 async function completar(pool, usuario, corpo, hoje) {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { sucesso: false, status: 400, mensagem: "Envie a situação, como e quando a pessoa entrou." };
   const membroId = auth.idDeRota(corpo.matricula);
@@ -177,10 +183,6 @@ async function completar(pool, usuario, corpo, hoje) {
   const congLida = l.CongregacaoId == null ? null : num(l.CongregacaoId);
   const pode = regras.podeCompletar({ geral: ehGeral(usuario), propria: membroId === Number(usuario.membroId), temCongregacao: congLida !== null, congregacaoPedida: d.congregacaoId });
   if (!pode.pode) return { sucesso: false, status: pode.status, mensagem: pode.mensagem };
-  if (d.cargo) {
-    const c = await pool.request().input("s", sql.NVarChar(30), d.cargo).query(`SELECT TOP 1 Nome FROM CargosMinisteriais WHERE Sigla = @s`);
-    if (!c.recordset[0]) return { sucesso: false, status: 400, mensagem: "Este cargo não está cadastrado: escolha da lista." };
-  }
   if (d.congregacaoId) {
     const c = await pool.request().input("c", sql.Int, d.congregacaoId).query(`SELECT TOP 1 Nome FROM Congregacoes WHERE CongregacaoId = @c AND Ativa = 1`);
     if (!c.recordset[0]) return { sucesso: false, status: 400, mensagem: "Esta congregação não foi encontrada: escolha da lista." };
@@ -199,17 +201,13 @@ async function completar(pool, usuario, corpo, hoje) {
               WHERE MembroId = @id AND SituacaoMembro = N'ARROLAMENTO' AND (Status IS NULL OR Status NOT IN (N'DESLIGADO', N'FALECIDO'))
                 AND ${congLida === null ? "CongregacaoId IS NULL" : "CongregacaoId = @lida"}`);
     if (!u.rowsAffected[0]) return { sucesso: false, status: 409, mensagem: "Esta ficha já foi completada (ou mudou agora há pouco): abra de novo." };
-    if (d.cargo) {
-      await escadaDb.trocarCargoNaTransacao(t, { membroId, cargoNovo: d.cargo, desde: null, origem: "LEGADO", por,
-        observacao: "Cargo que a pessoa já tinha no sistema pago, informado ao completar o arrolamento." });
-    }
     await rq().input("id", sql.Int, membroId).input("por", sql.Int, por).query(`
       UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por
       WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA'`);
     await registrarAuditoriaNaTransacao(t, { tabela: "MembroReferencia", registroId: membroId, acao: "Completou o arrolamento", usuarioId: por,
       dadosAntes: { situacaoMembro: "ARROLAMENTO", formaAdmissao: l.FormaAdmissao || null, dataAdmissao: l.DataAdmissao || null, congregacaoId: congLida },
       dadosDepois: { situacaoMembro: d.situacao, formaAdmissao: congregado ? (l.FormaAdmissao || null) : d.formaAdmissao, dataAdmissao: congregado ? (l.DataAdmissao || null) : d.dataAdmissao,
-        congregacaoId: d.congregacaoId || congLida, ...(d.cargo ? { cargoMinisterial: d.cargo } : {}) } });
+        congregacaoId: d.congregacaoId || congLida } });
     return { sucesso: true };
   });
   if (!feito || feito.sucesso === false) return { sucesso: false, status: (feito && feito.status) || 409, mensagem: (feito && feito.mensagem) || "Esta ficha mudou agora há pouco: abra de novo." };

@@ -1,11 +1,12 @@
 // e2e-98-arrolamento.js — COMPLETAR O ARROLAMENTO (FASE 10, Membros, rodada 28 aprovada em 23/11/2026), contra o SQL Server de verdade. Só dados de mentira.
 // Quem veio do sistema pago entra com a situação "Arrolamento a completar" (ARROLAMENTO), sem voto, e a pendência ARROLAMENTO. A secretaria escolhe a situação,
-// como e quando a pessoa entrou e o cargo, só se tiver; ao completar, a pessoa sai do grupo e, em comunhão, ganha o voto. Regra dele: "A área e a Geral também
+// e como e quando a pessoa entrou; ao completar, a pessoa sai do grupo. A função eclesiástica não se grava aqui (regra dele de 24/11/2026: só a Câmara de
+// liderança e a academia; a ficha mostra a que já existe, só para ler). Regra dele: "A área e a Geral também
 // podem completar e editar ... se a congregação não faz o que tem de fazer, a área faz, e o serviço não para." Cada uma só no seu escopo.
 //  1. o 4º grupo do painel (?resumo=1) e o andamento (GET /api/arrolamento): local, área (por congregação), Geral (por área e as sem congregação);
 //  2. a ficha para completar (GET /api/arrolamento/ficha): a próxima, pular, "não encontrada" igual para o que não existe e o que está fora do escopo;
 //  3. completar (POST /api/arrolamento/completar): a local, a área e a Geral; a extensão; a própria ficha; a sem congregação só a Geral, escolhendo a
-//     congregação; o cargo pelo histórico (LEGADO, sem data); a pendência resolvida e a trilha, numa transação só; a segunda vez 409; lixo sem 500;
+//     congregação; a função eclesiástica recusada em todo nível (nada muda); a pendência resolvida e a trilha, numa transação só; a segunda vez 409; lixo sem 500;
 //  4. a corrida (a local e a área ao mesmo tempo na mesma ficha): uma completa, a outra leva 409;
 //  5. o cadastro antigo (POST /api/pessoas) e o importador antigo não tiram ninguém do grupo nem põem ninguém nele; o cargo continua só da Geral ali.
 // Roda sobre a base cenario-185 (`BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js`).
@@ -167,7 +168,8 @@ async function principal() {
   r = await completar(tok.importada(), 9809, comunhao);
   ok(r.status === 403 && /própria ficha/.test(r.body.mensagem) && (await sit(9809)) === "ARROLAMENTO", "ninguém completa a própria ficha", r.body);
   r = await completar(tok.local(), 980101, comunhao);
-  ok(r.status === 200 && r.body.sucesso === true && /voto/.test(r.body.mensagem), "a secretaria de Vila Nova completa: em comunhão, ganha o voto", r.body);
+  ok(r.status === 200 && r.body.sucesso === true && /em comunhão \(na Assembleia, vota com 18 anos e 90 dias de entrada\)/.test(r.body.mensagem),
+    "a secretaria de Vila Nova completa: em comunhão, e o recado diz a regra do voto na Assembleia (sem 'ganhou o voto')", r.body);
   let f = await um("SELECT SituacaoMembro, FormaAdmissao, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao, CargoMinisterial FROM MembroReferencia WHERE MembroId = 980101");
   ok(f.SituacaoMembro === "EM_COMUNHAO" && f.FormaAdmissao === "BATISMO" && f.DataAdmissao === "2009-03-12" && !f.CargoMinisterial, "a ficha gravada com a data de verdade", f);
   let p = await pend(980101);
@@ -178,13 +180,28 @@ async function principal() {
   r = await completar(tok.local(), 980101, comunhao);
   ok(r.status === 409 && /já foi completad/.test(r.body.mensagem) && (await retrato()) === antes, "a segunda vez: 409, nada muda", r.body);
 
-  r = await completar(tok.area(), 980201, { ...comunhao, cargoMinisterial: "PRESBITERO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2001-05-01" });
-  ok(r.status === 200 && r.body.sucesso === true, "a área completa em Cidade Jardim, com o cargo (o serviço não para)", r.body);
-  const h = await q("SELECT Cargo, Desde, Origem, Ate FROM CargosMinisteriaisHistorico WHERE MembroId = 980201");
-  ok((await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = 980201")) === "PRESBITERO" && h.length === 1 && h[0].Origem === "LEGADO" && h[0].Desde === null && h[0].Ate === null,
-    "o cargo que ele já tinha entra no histórico como LEGADO, sem data (a Secretaria informa depois)", h);
+  // A3, regra dele de 24/11/2026: a função eclesiástica (auxiliar ... pastor) só a Câmara de liderança e a academia; a secretaria local e a da área nunca.
+  // O arrolamento não grava função em nenhum nível: o pedido com função é recusado inteiro e nada muda.
+  const CAMARA = /só a Câmara de liderança e a academia mudam: o arrolamento não grava função/;
+  for (const [quem, t, mat, funcao] of [["a área", tok.area(), 980201, "PRESBITERO"], ["a local", tok.local(), 980102, "PASTOR"], ["a Geral", tok.geral(), 980201, "DIACONO"]]) {
+    antes = await retrato();
+    r = await completar(t, mat, { ...comunhao, cargoMinisterial: funcao, formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2001-05-01" });
+    ok(r.status === 400 && CAMARA.test(r.body.mensagem) && (await retrato()) === antes && (await sit(mat)) === "ARROLAMENTO",
+      `${quem} não grava a função ${funcao} no arrolamento: 400, nada muda`, r.body);
+  }
+  r = await completar(tok.area(), 980201, { ...comunhao, formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2001-05-01" });
+  ok(r.status === 200 && r.body.sucesso === true, "a área completa em Cidade Jardim, sem função (o serviço não para)", r.body);
+  ok(!(await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = 980201")) && (await escalar("SELECT COUNT(*) FROM CargosMinisteriaisHistorico WHERE MembroId = 980201")) === 0,
+    "nenhuma função gravada, nenhum histórico de cargo aberto");
   r = await salvar(980201, { cargoMinisterial: "PASTOR" }, tok.area());
-  ok(r.status === 403 && (await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = 980201")) === "PRESBITERO", "depois de completar, o cadastro antigo continua sem deixar a área trocar o cargo", r.body);
+  ok(r.status === 403 && !(await escalar("SELECT CargoMinisterial FROM MembroReferencia WHERE MembroId = 980201")), "depois de completar, o cadastro antigo continua sem deixar a área trocar o cargo", r.body);
+  // a função que a ficha já tem aparece para ler (o nome do catálogo); sem função, nada
+  await q("UPDATE MembroReferencia SET CargoMinisterial = N'DIACONO' WHERE MembroId = 980103");
+  r = await ficha(tok.local(), { matricula: 980103 });
+  ok(r.body.ficha && r.body.ficha.funcao === "Diácono", "a ficha mostra a função que já tem, só para ler", r.body.ficha);
+  await q("UPDATE MembroReferencia SET CargoMinisterial = NULL WHERE MembroId = 980103");
+  r = await ficha(tok.local(), { matricula: 980102 });
+  ok(r.body.ficha && r.body.ficha.funcao === null, "sem função: a ficha vem com a função vazia", r.body.ficha);
 
   r = await completar(tok.area(), 980301, comunhao);
   ok(igualNao(r), "a área não completa a de outra área");
@@ -214,8 +231,8 @@ async function principal() {
 
   console.log("== 3. o que se manda errado ==");
   for (const [corpo, padrao] of [[{ ...comunhao, situacao: "ARROLAMENTO" }, /situação/i], [{ ...comunhao, formaAdmissao: "OUTRA" }, /como a pessoa entrou/i],
-    [{ ...comunhao, dataAdmissao: "2099-01-01" }, /depois de hoje/], [{ ...comunhao, dataAdmissao: "1980-01-01" }, /antes do nascimento/], [{ ...comunhao, cargoMinisterial: "XPTO" }, /cargo/i],
-    [{ situacao: "CONGREGADO", cargoMinisterial: "DIACONO" }, /congregado/i]]) {
+    [{ ...comunhao, dataAdmissao: "2099-01-01" }, /depois de hoje/], [{ ...comunhao, dataAdmissao: "1980-01-01" }, /antes do nascimento/], [{ ...comunhao, cargoMinisterial: "XPTO" }, /função/i],
+    [{ situacao: "CONGREGADO", cargoMinisterial: "DIACONO" }, CAMARA]]) {
     antes = await retrato();
     r = await completar(tok.local(), 980102, corpo);
     ok(r.status === 400 && padrao.test(r.body.mensagem) && (await retrato()) === antes, `recusado sem mexer no banco: ${r.body && r.body.mensagem}`, r.body);

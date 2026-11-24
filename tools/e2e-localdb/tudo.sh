@@ -171,4 +171,6 @@ bash rodar.sh preparar-186
 BASE=cenario-186 bash rodar.sh roteiro e2e-100-importacao-guarda.js
 # a revisao de 24/11/2026: quem esta em arrolamento nao vota nas enquetes nem no tema (A1); o batismo de quem esta em arrolamento fecha a pendencia (A2)
 BASE=cenario-186 bash rodar.sh roteiro e2e-101-voto-e-batismo-do-arrolamento.js
+# G2: a importacao que parou (IMPORTANDO) passa do prazo da previa: as linhas que faltavam ficam de fora so com o nome e o motivo; com gente, conclui
+BASE=cenario-186 bash rodar.sh roteiro e2e-102-importacao-parada.js
 echo TUDO-PRONTO

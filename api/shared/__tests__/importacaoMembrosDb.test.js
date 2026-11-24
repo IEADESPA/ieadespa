@@ -333,18 +333,63 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
   const { sql } = require("../db");
   const POOL_G = { request: () => new sql.Request() };
   const { registrarAuditoriaNaTransacao } = require("../auditoria");
-  function cenarioGuarda({ previas = [], foraApagadas = [], limpas = [], politicas = {}, rc = 0, semTabela = false }) {
+  function cenarioGuarda({ previas = [], foraApagadas = [], limpas = [], politicas = {}, rc = 0, semTabela = false, paradas = [], paradasDeFora = 0 }) {
     mockRegras = [
       [/OBJECT_ID\(N'dbo\.ImportacoesMembros', N'U'\)/, [{ id: semTabela ? null : 1234 }]],
       [/FROM PoliticasRetencao/, (i) => (politicas[i.c] ? [{ DiasRetencao: politicas[i.c] }] : [])],
       [/sp_getapplock/, [{ rc }]],
       [/SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/, previas.map((id) => ({ ImportacaoId: id }))],
+      [/WHERE i\.Situacao = N'IMPORTANDO'/, paradas],
+      [/N'NAO_TERMINOU'/, [{ n: paradasDeFora }]],
+      [/SUM\(CASE WHEN Estado = N'IMPORTADA'/, [{ importadas: 3, fora: paradasDeFora, numeroNovo: 0, possivelRepetida: 0, semCongregacao: 0 }]],
       [/DELETE l OUTPUT/, foraApagadas],
       [/DECLARE @limpas/, limpas]
     ];
   }
   const trilhas = () => registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]);
 
+  // G2 (revisão de 24/11/2026): a importação que começou a gravar e parou (IMPORTANDO) não tinha prazo, e as linhas que faltavam ficavam com CPF, celular,
+  // mãe e pai. O prazo é o da prévia (a planilha com dado pessoal esperando: 7 dias da confirmação; a política "prévia" ajusta os dois).
+  test("G2: a importação parada há mais que o prazo, com gente que já entrou: as que faltavam ficam de fora (só nome e motivo) e ela conclui", async () => {
+    cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{\"total\":5}", importadas: 3 }], paradasDeFora: 2 });
+    const r = await db.aplicarRetencao(POOL_G);
+    expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
+    const sel = mockConsultas.find((c) => /WHERE i\.Situacao = N'IMPORTANDO'/.test(c.sql));
+    expect(sel.sql).toMatch(/i\.ConfirmadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(sel.sql).toMatch(/l\.Estado = N'PENDENTE'/);
+    expect(sel.inputs.d).toBe(7);
+    const marca = mockConsultas.find((c) => /N'NAO_TERMINOU'/.test(c.sql));
+    expect(marca.inputs.id).toBe(9);
+    expect(marca.sql).toMatch(/SET Acao = N'PROBLEMA', Estado = N'FORA', Problemas = N'NAO_TERMINOU'/);
+    expect(marca.sql).toMatch(/Cpf = NULL/);
+    expect(marca.sql).toMatch(/NomeMae = NULL/);
+    expect(marca.sql).toMatch(/MatriculaArquivo = NULL/);
+    expect(marca.sql).toMatch(/WHERE ImportacaoId = @id AND Estado = N'PENDENTE'/);
+    const conclui = mockConsultas.find((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql));
+    expect(conclui.inputs.id).toBe(9);
+    expect(trilhas()).toEqual([
+      expect.objectContaining({ registroId: 9, usuarioId: null, acao: "A rotina encerrou a importação parada há 7 dias (as linhas que faltavam ficaram de fora)",
+        dadosDepois: { linhasDeFora: 2, retencaoDias: 7 } }),
+      expect.objectContaining({ registroId: 9, usuarioId: null, acao: "Concluiu a importação do sistema pago" })]);
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+  test("G2: a importação parada sem ninguém que entrou: as linhas ficam só com o nome e o motivo, e ela NÃO conclui com zero (continua em andamento)", async () => {
+    cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{}", importadas: 0 }], paradasDeFora: 5 });
+    await db.aplicarRetencao(POOL_G);
+    expect(mockConsultas.find((c) => /N'NAO_TERMINOU'/.test(c.sql)).inputs.id).toBe(9);
+    expect(mockConsultas.some((c) => /SET Situacao = N'CONCLUIDA'/.test(c.sql))).toBe(false);
+    expect(trilhas()).toEqual([expect.objectContaining({ registroId: 9, usuarioId: null, acao: "A rotina tirou os dados das linhas da importação parada há 7 dias (ninguém tinha entrado)",
+      dadosDepois: { linhasDeFora: 5, retencaoDias: 7 } })]);
+  });
+  test("G2: o motivo novo tem o texto para a lista e o CSV; os textos da trilha cabem em 100 (com o prazo de 36.500 dias)", async () => {
+    expect(require("../importacaoMembros").textoDe("NAO_TERMINOU")).toBe("A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)");
+    for (const importadas of [0, 3]) {
+      jest.clearAllMocks();
+      cenarioGuarda({ paradas: [{ ImportacaoId: 9, Resumo: "{}", importadas }], paradasDeFora: 1, politicas: { [db.POLITICA_PREVIA.categoria]: 36500 } });
+      await db.aplicarRetencao(POOL_G);
+      for (const t of trilhas()) expect(t.acao.length).toBeLessThanOrEqual(100);
+    }
+  });
   test("a prévia não confirmada passa de 7 dias: as linhas (com CPF, celular, mãe e pai) saem e ela fica DESCARTADA, com a trilha", async () => {
     cenarioGuarda({ previas: [12] });
     const r = await db.aplicarRetencao(POOL_G);

@@ -240,7 +240,9 @@ const PROBLEMAS = Object.freeze({
   COLUNAS_A_MAIS: "A linha tem mais colunas que o cabeçalho (um ';' no meio de um nome?)",
   MATRICULA_JA_EXISTE: "A matrícula já é de uma ficha do sistema: fica de fora (essa ficha se completa à mão)",
   // na hora de gravar (não na prévia): o banco recusou a linha sempre, e o resto da importação seguiu sem ela (shared/importacaoMembrosDb.js, revisão de 23/11)
-  ERRO_AO_GRAVAR: "O sistema não conseguiu gravar esta linha na importação: ficou de fora (confira os dados e cadastre à mão)"
+  ERRO_AO_GRAVAR: "O sistema não conseguiu gravar esta linha na importação: ficou de fora (confira os dados e cadastre à mão)",
+  // a importação que parou e passou do prazo da guarda dos dados (G2, revisão de 24/11): a rotina deixa de fora as linhas que faltavam (importacaoMembrosDb)
+  NAO_TERMINOU: "A importação parou e não terminou no prazo da guarda dos dados: esta linha ficou de fora (cadastre à mão)"
 });
 const AVISOS = Object.freeze({
   SEM_CONGREGACAO: "Entra sem congregação (no arquivo: GERAL ou vazio)",

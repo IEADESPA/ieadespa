@@ -178,10 +178,35 @@ describe("a linha que o banco recusa (a saída do IMPORTANDO)", () => {
     const seis = [2, 3, 4, 5, 6, 7].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: `Pessoa ${n}` }));
     cenarioRecusa({ linhas: seis, recusar: () => true });
     const r = await db.importarLote(POOL, QUEM, 7);
-    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(2) });
-    expect(r.mensagem).toBe("O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 2 do arquivo): a importação parou sem deixar ninguém de fora. Avise o suporte.");
+    // A6 (revisão de 24/11): a tela ganha a saída (podeDeixarDeFora); os números das linhas vão só para mostrar, o servidor nunca os lê de volta
+    expect(r).toEqual({ sucesso: false, status: 409, mensagem: db.MSG.RECUSADAS(2), podeDeixarDeFora: true, recusadas: [2, 3, 4, 5, 6] });
+    expect(r.mensagem).toBe("O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 2 do arquivo): a importação parou sem deixar ninguém de fora. "
+      + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte.");
     expect(tentadas()).toEqual(["Pessoa 2", "Pessoa 3", "Pessoa 4", "Pessoa 5", "Pessoa 6"]);
+    // (as marcas das tentativas ficaram em transações desfeitas: nenhum commit, ninguém de fora)
     expect(mockTx.filter((x) => x === "commit")).toHaveLength(0);
+  });
+  test("A6: 'deixar de fora e continuar' (a Geral confirma na tela): o servidor tenta de novo e deixa de fora SÓ as 5 que recusaram agora, sem gravar mais ninguém", async () => {
+    const seis = [2, 3, 4, 5, 6, 7].map((n) => linha({ Linha: n, MatriculaArquivo: String(500 + n), Matricula: 500 + n, Nome: `Pessoa ${n}` }));
+    cenarioRecusa({ linhas: seis, recusar: () => true });
+    const r = await db.importarLote(POOL, QUEM, 7, { deixarDeFora: true });
+    expect(r).toEqual({ sucesso: true, importacaoId: 7, importadas: 0, fora: 5, restantes: 5, concluida: false });
+    expect(tentadas()).toEqual(["Pessoa 2", "Pessoa 3", "Pessoa 4", "Pessoa 5", "Pessoa 6"]);
+    // só a última transação vale (as das tentativas foram desfeitas): ela marca as 5 e não grava ninguém (TOP 0); a 7 fica para o próximo lote
+    expect(mockTx.filter((x) => x === "commit")).toHaveLength(1);
+    expect(JSON.parse(marcas().pop().inputs.p)).toEqual([2, 3, 4, 5, 6]);
+    expect(mockConsultas.filter((c) => /FROM ImportacoesMembrosLinhas WITH \(UPDLOCK\)/.test(c.sql)).pop().inputs.n).toBe(0);
+    expect(mockTx.slice(-2)).toEqual(["begin", "commit"]);
+    const { registrarAuditoriaNaTransacao } = require("../auditoria");
+    // a trilha que vale é a da última transação (a que fez commit)
+    const trilha = registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).filter((a) => /não conseguiu gravar/.test(a.acao)).pop();
+    expect(trilha).toMatchObject({ usuarioId: 1, dadosDepois: { linhas: [2, 3, 4, 5, 6].map((l) => ({ linha: l, erro: 547 })), confirmadoNaTela: true } });
+  });
+  test("A6: com o 'deixar de fora', se as linhas agora entram (era passageiro), ninguém fica de fora", async () => {
+    cenarioRecusa({ linhas: tres(), recusar: () => false });
+    const r = await db.importarLote(POOL, QUEM, 7, { deixarDeFora: true });
+    expect(r).toMatchObject({ sucesso: true, importadas: 3, fora: 0 });
+    expect(marcas()).toHaveLength(0);
   });
   test("a última recusada e ninguém importado na importação toda: não conclui com zero (409, fica em andamento, nada perdido)", async () => {
     cenarioRecusa({ linhas: [linha({ Nome: "Recusada" })], recusar: () => true, restantes: 0, importadasNoTotal: 0 });

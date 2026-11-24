@@ -100,8 +100,15 @@ export const lerLista = (importacaoId: number, filtro: FiltroLista, pagina = 1):
   pedir<PaginaLista>(BASE + "/lista" + qs({ importacaoId, filtro, pagina }));
 export const confirmar = (importacaoId: number): Promise<Resultado<{ importacaoId: number; restantes: number }>> =>
   pedir(BASE + "/confirmar", { metodo: "POST", corpo: { importacaoId } });
-export const importarLote = (importacaoId: number): Promise<Resultado<{ importadas: number; restantes: number; concluida: boolean }>> =>
-  pedir(BASE + "/lote", { metodo: "POST", corpo: { importacaoId } });
+/** um lote; `deixarDeFora` = a Secretaria Geral confirmou deixar de fora as linhas que o sistema não conseguiu gravar (A6: o servidor decide quais) */
+export const importarLote = (importacaoId: number, deixarDeFora = false): Promise<Resultado<{ importadas: number; restantes: number; concluida: boolean }>> =>
+  pedir(BASE + "/lote", { metodo: "POST", corpo: deixarDeFora ? { importacaoId, deixarDeFora: true } : { importacaoId } });
+/** a importação parou com 5 linhas seguidas que o sistema não conseguiu gravar: o servidor diz que dá para deixá-las de fora (e quais, só para mostrar) */
+export function podeDeixarDeFora(corpo: unknown): boolean {
+  return !!corpo && typeof corpo === "object" && (corpo as { podeDeixarDeFora?: unknown }).podeDeixarDeFora === true;
+}
+export const PERGUNTA_DEIXAR_DE_FORA = "Deixar de fora as linhas que o sistema não conseguiu gravar? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), "
+  + "para a secretaria cadastrar à mão. Se as linhas seguintes também não entrarem, pare e avise o suporte.";
 /** o "Descartar": a prévia sai na hora, com os dados pessoais das linhas (antes dos dias da guarda) */
 export const descartar = (importacaoId: number): Promise<Resultado<{ sucesso: boolean }>> =>
   pedir(BASE + "/descartar", { metodo: "POST", corpo: { importacaoId } });

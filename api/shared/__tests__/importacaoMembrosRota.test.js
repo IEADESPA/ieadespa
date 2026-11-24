@@ -108,11 +108,18 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     expect(db.descartar).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 80 }), 7);
     const c = await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7 } });
     expect(c.res.body).toEqual({ sucesso: true, importacaoId: 7, importadas: 3, restantes: 0, concluida: true });
-    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 81 }), 7);
+    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 81 }), 7, { deixarDeFora: false });
+    // A6: o "deixar de fora e continuar" só com true de verdade (nunca uma lista de linhas do cliente)
+    await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7, deixarDeFora: true, linhas: [2, 3] } });
+    expect(db.importarLote).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), 7, { deixarDeFora: true });
+    for (const lixo of ["true", 1, [true], { a: 1 }]) {
+      await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7, deixarDeFora: lixo } });
+      expect(db.importarLote).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), 7, { deixarDeFora: false });
+    }
   });
   test("o corpo que não é objeto vale como vazio (sem quebrar)", async () => {
     await chamar({ metodo: "POST", acao: "lote", token: tok.geral(), corpo: ["x"] });
-    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.anything(), undefined);
+    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.anything(), undefined, { deixarDeFora: false });
   });
 });
 

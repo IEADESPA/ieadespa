@@ -9,7 +9,8 @@ const vm = require("vm");
 const { stripTypeScriptTypes } = require("node:module");
 
 const ARQ = path.join(__dirname, "..", "..", "..", "front", "src", "membros", "importar", "importar.ts");
-const NOMES = ["descartar", "GUARDA_PADRAO", "guardaDe", "notaDaPrevia", "PERGUNTA_DESCARTAR", "fraseForaApagada", "notaForaAte"];
+const NOMES = ["descartar", "GUARDA_PADRAO", "guardaDe", "notaDaPrevia", "PERGUNTA_DESCARTAR", "fraseForaApagada", "notaForaAte", "importarLote", "podeDeixarDeFora",
+  "PERGUNTA_DEIXAR_DE_FORA"];
 
 function carregar(pedir) {
   if (typeof stripTypeScriptTypes !== "function") throw new Error("este Node não tira tipos do TypeScript (precisa do 22.13 ou mais novo)");
@@ -23,6 +24,28 @@ function carregar(pedir) {
 const igual = (a, b) => expect(JSON.parse(JSON.stringify(a))).toEqual(b);
 const feita = (resumo, concluidaEm = "2026-12-10T18:42:00Z") => ({ importacaoId: 7, situacao: "CONCLUIDA", nomeArquivo: "membros.csv", criadaEm: null, confirmadaEm: null,
   concluidaEm, resumo });
+
+// A6 (revisão de 24/11/2026): 5 linhas seguidas que o sistema não conseguiu gravar param a importação; a tela ganha "deixar essas linhas de fora e continuar"
+describe("a saída quando o sistema não consegue gravar 5 linhas seguidas", () => {
+  test("o lote comum vai só com a importação; o 'deixar de fora' vai com true (nunca com a lista de linhas)", async () => {
+    const pedir = jest.fn(async () => ({ ok: true, dados: { importadas: 0, restantes: 1, concluida: false } }));
+    const T = carregar(pedir);
+    await T.importarLote(7);
+    await T.importarLote(7, true);
+    igual(pedir.mock.calls.map((c) => [c[0], c[1]]), [["/importacao-membros/lote", { metodo: "POST", corpo: { importacaoId: 7 } }],
+      ["/importacao-membros/lote", { metodo: "POST", corpo: { importacaoId: 7, deixarDeFora: true } }]]);
+  });
+  test("o botão só aparece quando o servidor diz que dá (podeDeixarDeFora: true)", () => {
+    const T = carregar(jest.fn());
+    expect(T.podeDeixarDeFora({ sucesso: false, podeDeixarDeFora: true, recusadas: [2, 3, 4, 5, 6] })).toBe(true);
+    for (const corpo of [null, undefined, "x", {}, { podeDeixarDeFora: "true" }, { podeDeixarDeFora: 1 }]) expect(T.podeDeixarDeFora(corpo)).toBe(false);
+  });
+  test("a pergunta antes de deixar de fora diz para onde as linhas vão e quando parar", () => {
+    const T = carregar(jest.fn());
+    expect(T.PERGUNTA_DEIXAR_DE_FORA).toBe("Deixar de fora as linhas que o sistema não conseguiu gravar? Elas vão para a lista dos que ficaram de fora (o nome e o motivo), "
+      + "para a secretaria cadastrar à mão. Se as linhas seguintes também não entrarem, pare e avise o suporte.");
+  });
+});
 
 describe("o botão Descartar", () => {
   test("chama a rota que apaga a prévia na hora (POST /importacao-membros/descartar com a importação)", async () => {

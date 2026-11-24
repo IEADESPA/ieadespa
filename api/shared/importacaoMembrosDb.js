@@ -42,7 +42,8 @@ const MSG = Object.freeze({
   NAO_EXISTE: "Importação não encontrada.",
   NINGUEM_ENTRA: "Nenhuma pessoa desta planilha entra no sistema: confira o arquivo antes de confirmar.",
   OCUPADO: "Outra pessoa está mexendo na importação agora. Tente de novo daqui a pouco.",
-  RECUSADAS: (linha) => `O sistema não conseguiu gravar ${SEGUIDAS_MAX} linhas seguidas (a partir da linha ${linha} do arquivo): a importação parou sem deixar ninguém de fora. Avise o suporte.`,
+  RECUSADAS: (linha) => `O sistema não conseguiu gravar ${SEGUIDAS_MAX} linhas seguidas (a partir da linha ${linha} do arquivo): a importação parou sem deixar ninguém de fora. `
+    + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte.",
   NINGUEM_ENTROU: "O sistema não conseguiu gravar nenhuma pessoa desta importação: ela parou sem deixar ninguém de fora. Avise o suporte."
 });
 // A LINHA QUE O BANCO RECUSA (revisão de 23/11/2026, a saída do IMPORTANDO). Só um erro de DADO levantado pelos comandos da PRÓPRIA linha (a ficha, as
@@ -336,8 +337,11 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
 // Cada lote é uma transação própria: o que entrou fica, e a chamada seguinte continua da primeira linha pendente. A linha que o banco RECUSA SEMPRE (um erro de
 // dado dela: veja recusaDaLinha) desfazia o lote inteiro a cada chamada e a importação ficava presa, com as matrículas novas travadas no sistema todo. Agora o
 // lote é refeito na mesma chamada, com a recusada marcada de fora (como PROBLEMA: na lista e no CSV, ninguém some calado) e só até UMA linha depois dela: se
-// essa entra, é a linha, e não o banco, e tudo é gravado junto. A ordem das outras não muda (NumeroNovo, Linha). 5 recusadas seguidas: para, sem marcar ninguém.
-async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE } = {}) {
+// essa entra, é a linha, e não o banco, e tudo é gravado junto. A ordem das outras não muda (NumeroNovo, Linha). 5 recusadas seguidas: para, sem marcar ninguém,
+// e a tela ganha a saída (A6 da revisão de 24/11/2026: antes, só mexendo no banco à mão): com `deixarDeFora` (a Secretaria Geral confirma na tela), a chamada
+// tenta de novo do mesmo ponto e, se as mesmas 5 recusarem outra vez, deixa SÓ essas de fora (as que o servidor acabou de ver recusar; nenhum número vem do
+// cliente), numa transação que não grava mais ninguém; a próxima chamada segue como sempre. Se elas entrarem (era passageiro), ninguém fica de fora.
+async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOTE, deixarDeFora = false } = {}) {
   const id = idValido(importacaoId);
   if (!id) return { sucesso: false, status: 400, mensagem: "Informe a importação." };
   let n = Math.max(1, Math.min(TAMANHO_LOTE, Math.floor(Number(tamanho) || TAMANHO_LOTE)));
@@ -349,13 +353,16 @@ async function importarLote(pool, usuario, importacaoId, { tamanho = TAMANHO_LOT
     } catch (e) {
       if (!recusaDaLinha(e)) throw e;
       fora.push({ linha: e.linhaImportacao, erro: e.number });
-      if (fora.length >= SEGUIDAS_MAX) return { sucesso: false, status: 409, mensagem: MSG.RECUSADAS(fora[0].linha) };
+      if (fora.length >= SEGUIDAS_MAX) {
+        if (deixarDeFora === true) return emTransacao(pool, (t, rq) => gravarLote(t, rq, { id, n: 0, por, fora, confirmadoNaTela: true }));
+        return { sucesso: false, status: 409, mensagem: MSG.RECUSADAS(fora[0].linha), podeDeixarDeFora: true, recusadas: fora.map((f) => f.linha) };
+      }
       n = e.antesNoLote + 1;   // as que entraram antes dela neste lote e mais UMA depois (a prova)
     }
   }
 }
 
-async function gravarLote(t, rq, { id, n, por, fora }) {
+async function gravarLote(t, rq, { id, n, por, fora, confirmadoNaTela = false }) {
   const imp = (await rq().input("id", sql.Int, id).query("SELECT ImportacaoId, Situacao, Resumo FROM ImportacoesMembros WITH (UPDLOCK) WHERE ImportacaoId = @id")).recordset[0];
   if (!imp) return { sucesso: false, status: 404, mensagem: MSG.NAO_EXISTE };
   if (imp.Situacao === "CONCLUIDA") return { sucesso: true, importacaoId: id, importadas: 0, fora: 0, restantes: 0, concluida: true };
@@ -366,7 +373,7 @@ async function gravarLote(t, rq, { id, n, por, fora }) {
       UPDATE ImportacoesMembrosLinhas SET Acao = N'PROBLEMA', Estado = N'FORA', Problemas = N'ERRO_AO_GRAVAR'
       WHERE ImportacaoId = @id AND Acao = N'NOVA' AND Estado = N'PENDENTE' AND Linha IN (SELECT CAST([value] AS INT) FROM OPENJSON(@p))`);
     await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: "Deixou de fora linhas que o sistema não conseguiu gravar", usuarioId: por,
-      dadosDepois: { linhas: fora.map((f) => ({ linha: f.linha, erro: f.erro })) } });
+      dadosDepois: { linhas: fora.map((f) => ({ linha: f.linha, erro: f.erro })), ...(confirmadoNaTela ? { confirmadoNaTela: true } : {}) } });
   }
   const linhas = (await rq().input("id", sql.Int, id).input("n", sql.Int, n).query(`
     SELECT TOP (@n) Linha, MatriculaArquivo, Matricula, NumeroNovo, MotivoNumero, RepetidaMembro, Nome, CongregacaoId, Sexo, CONVERT(varchar(10), DataNascimento, 120) AS DataNascimento,

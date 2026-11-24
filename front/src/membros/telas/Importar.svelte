@@ -15,7 +15,7 @@
   import PassoResultado from "../importar/PassoResultado.svelte";
   import { avisarFalha } from "../../comum/api";
   import {
-    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, PERGUNTA_DESCARTAR, quandoLongo, resumoDaTela,
+    confirmar, descartar, diaEHora, guardaDe, importarLote, lerEstado, PERGUNTA_DEIXAR_DE_FORA, PERGUNTA_DESCARTAR, podeDeixarDeFora, quandoLongo, resumoDaTela,
     type ArquivoLido, type EstadoImportacao, type MapaDaTela, type Previa
   } from "../importar/importar";
 
@@ -32,6 +32,8 @@
   let importando = $state(false);
   let andamento = $state("");
   let erroImp = $state("");
+  // A6 (revisão de 24/11/2026): parou com 5 linhas seguidas que o sistema não conseguiu gravar; a Secretaria Geral pode deixá-las de fora e continuar
+  let podeDeixar = $state(false);
   let descartando = $state(false);
   const agora = quandoLongo(new Date());
   // os prazos da guarda dos dados (do servidor; sem eles, 7 e 90 dias)
@@ -53,16 +55,23 @@
   if (geral) void carregar();
 
   // os lotes (até 200 fichas cada) até concluir; parou no meio (a internet caiu), a tela mostra "continuar" e nada se repete
-  async function rodarLotes(id: number, total: number) {
+  async function rodarLotes(id: number, total: number, deixarDeFora = false) {
     importando = true;
     erroImp = "";
+    podeDeixar = false;
     let feitas = 0;
     let parado = 0;
+    let deixar = deixarDeFora;   // só a primeira chamada leva a confirmação; as seguintes seguem como sempre
     andamento = `Trazendo as fichas: 0 de ${numero(total)}…`;
     try {
       for (;;) {
-        const l = await importarLote(id);
-        if (!l.ok) { erroImp = `${l.mensagem || "A importação parou no meio."} O que já entrou fica: continue de onde parou.`; return; }
+        const l = await importarLote(id, deixar);
+        deixar = false;
+        if (!l.ok) {
+          podeDeixar = podeDeixarDeFora(l.corpo);
+          erroImp = podeDeixar ? l.mensagem : `${l.mensagem || "A importação parou no meio."} O que já entrou fica: continue de onde parou.`;
+          return;
+        }
         feitas += l.dados.importadas;
         andamento = `Trazendo as fichas: ${numero(Math.min(feitas, total))} de ${numero(total)}…`;
         if (l.dados.concluida) break;
@@ -114,6 +123,11 @@
     if (!imp || importando) return;
     void rodarLotes(imp.importacaoId, est?.restantes ?? 0);
   }
+  function deixarDeForaEContinuar() {
+    const imp = est?.importacao;
+    if (!imp || importando || !window.confirm(PERGUNTA_DEIXAR_DE_FORA)) return;
+    void rodarLotes(imp.importacaoId, est?.restantes ?? 0, true);
+  }
 
   const sub = $derived(
     passo === 1 ? `só a Secretaria Geral · uma vez só · ${agora}`
@@ -145,6 +159,7 @@
         <Botao tipo="ouro" icone="seta" largo={celular} ocupado={importando} onclick={continuar}>Continuar a importação</Botao>
         {#if andamento}<p role="status">{andamento}</p>{/if}
         {#if erroImp}<Aviso tom="erro">{erroImp}</Aviso>{/if}
+        {#if podeDeixar && !importando}<Botao tipo="linha" largo={celular} onclick={deixarDeForaEContinuar}>Deixar essas linhas de fora e continuar</Botao>{/if}
       </section>
     {:else if passo === 4 && est.importacao && est.retrato}
       <PassoResultado {celular} importacao={est.importacao} retrato={est.retrato} {guarda} />

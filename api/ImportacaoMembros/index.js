@@ -66,7 +66,12 @@ module.exports = async function (context, req) {
       responder(await db.confirmar(pool, usuario, corpoDe(req).importacaoId));
       return;
     }
-    if (metodo === "POST" && acao === "lote") { responder(await db.importarLote(pool, usuario, corpoDe(req).importacaoId)); return; }
+    // A6: o "deixar de fora e continuar" da tela vai só como true (nenhuma lista de linhas do cliente: o servidor vê quais recusam)
+    if (metodo === "POST" && acao === "lote") {
+      const corpo = corpoDe(req);
+      responder(await db.importarLote(pool, usuario, corpo.importacaoId, { deixarDeFora: corpo.deixarDeFora === true }));
+      return;
+    }
     context.res = { status: 405, headers: semCache, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
   } catch (e) {
     context.log.error("[ImportacaoMembros]", acao, e && e.message);

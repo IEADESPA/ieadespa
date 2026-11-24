@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 10:10 (Claude, sessão principal).
+Atualizado em 24/11/2026 10:44 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,38 +46,36 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**AGENTES RETOMADOS às 08h40 de 24/11**, 4 ao mesmo tempo. Às 00h10 tinham sido parados porque ele ia desligar o
-computador. Cada um continua do seu ponto, a partir do trabalho começado e **não registrado** no disco: são testes
-escritos antes do código, ainda vermelhos. Não apague. Se a cota acabar, o ponto de cada um é este:
+**AGENTES, 24/11 à tarde** (4 ao mesmo tempo; se a cota acabar, o ponto de cada um é este):
 
-- **Membros: TERMINOU a guarda dos dados, o M5 e a volta 3** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`,
-  até `f7045ab`, enviado). jest 6897/6897; e2e-100 58/58, e as regressões verdes. Diário:
-  `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
-  - O M5 só fica igual ao desenho com a barra de 280 px do `bd694cf` (Financeiro). Até lá, 4 rótulos aparecem com
-    reticências.
-  - A volta 3: a linha importada já perdia o CPF e os outros dados pessoais desde `ded91fe`. Agora a linha de fora
-    fica só com o nome e o motivo, a rotina limpa as importações antigas e a migração 186 põe as 2 políticas na tela.
-    **O texto da base legal ele confirma antes da produção.**
-  - Ficaram de antes: o limite de 5 linhas seguidas, I1, S1 e as perguntas do arrolamento.
-  - O homolog recebeu `a8d03c3`, `259a737` e `11c51ff` na noite de 23/11, e o teste de telas passou verde.
-  - Os commits novos vão ao homolog pelo Claude, depois do revisor do arrolamento.
-- **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, em `f722716`): o teste novo
-  `finMigracoesIndices.test.js` (I3), ainda sem a migração. Depois vêm I4, os menores e as duas regras dele.
-- **Desenhista: a r30 está PUBLICADA** (24/11, versão 12 da página leve KMeb…, 350 KB, 352 desenhos, 0 problema;
-  ramo `desenho-r30` mesclado na `main`). Ficou sem "anulada", com a devolução completa ou parcial e a saída do bloco
-  parcial só com as folhas livres. **Esperando ele conferir**: na página há 6 pontos marcados "Para conferir"
-  (as folhas em branco são sempre as do fim? o que cada congregação vê do bloco parcial, entre outros). Diário:
-  `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`. As respostas da r29 ficam para a próxima rodada de Membros: a carta
-  com o histórico pede uma tela antes de construir.
-- **Revisor de fora** (bancada, até `81fdf25`): prontos o crédito por dia com os 2 computadores, a largada no
-  `message_start`, o `--conferir-relatorio` e o teto mínimo por lente. Falta o recorte dos ramos e a agenda. Diário:
-  `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-- **O desenhista prepara a r31** (Membros: a carta com o histórico, o QR, o pedido no celular com a cidade e o
-  abandono com a Câmara), no ramo `desenho-r31`. **Não publicar** enquanto ele confere a r30.
-- **O revisor do arrolamento revisa o ramo do Membros até `f7045ab`** (só leitura). Se der o sim, o Claude mescla no
-  homolog e atualiza a base do teste de telas.
+- **Membros** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`; diário `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`):
+  - **até `f7045ab` está no homolog** (24/11, mesclado pelo Claude; o conflito em `app/svelte` foi resolvido refazendo
+    o build). O revisor aprovou a homologação (`C:/tmp/ieadespa-membros/REVISAO-arrolamento.md`). **Falta conferir o
+    teste de telas do CI desta mesclagem e atualizar a base** (`tools/csp-e2e/base/commit.txt`, direto no homolog).
+  - **Volta 4 em andamento:** A1 (quem está em arrolamento vota nas enquetes; bloqueia a produção), A2, A4, A5, A6,
+    G2, G4, o "Completar ›" a mais e a regra dos 3 tipos dele (no arrolamento, a congregação e a área não gravam
+    função eclesiástica; ver o plano da fase 10).
+  - A produção também espera B1 (a importação inteira na homologação, o último passo, com o "pode" dele) e o texto
+    da base legal das 2 políticas (ele confirma).
+  - O G1 (as reticências do menu) espera a barra de 280 px do Financeiro.
+- **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, até `95fa19b`; diário
+  `C:/tmp/ieadespa-financeiro/DIARIO.md`): feitos I3, I4, M1 a M8, as regras de 23/11 e a devolução completa ou
+  parcial no servidor (migração 201 refeita; as outras a partir da 202). **Um revisor revisa de `4c06d58` a
+  `95fa19b`** (`C:/tmp/ieadespa-financeiro/REVISAO-ate-95fa19b.md`). As telas aprovadas que contam errado com o
+  servidor novo (o Livro, os blocos, as folhas, a lista e o seletor) esperam a aprovação da r30. Decididas pela
+  sessão: a folha sem destino de uma entrega que voltou é marcada pelo lançamento (incremento 3); a API exige a marca
+  completa ou parcial.
+- **Desenhista:** a **r30 está PUBLICADA** (versão 12 da página KMeb…), **esperando ele conferir** (6 pontos "Para
+  conferir"). A **r31 está PRONTA e NÃO publicada** (ramo `desenho-r31`, `14e7b6f`; a carta com o histórico, o QR, o
+  pedido com a cidade, o abandono com a Câmara e a volta sem cargos; 158 desenhos, só no claro). Publica depois que
+  ele responder a r30. Diário: `C:/tmp/ieadespa-desenho-r31-fotos/DIARIO.md`.
+- **Revisor de fora: PRONTO** (bancada até `97bc019`, 171/171 testes; a prova passou em 24/11, US$ 0,09). A agenda
+  **ainda não foi ligada**: ele pediu para entender a divisão antes. Ele quer a ordem: o site, depois a
+  infraestrutura, depois módulo a módulo. Pela conta, o ieadespa inteiro custa ~US$ 2.300 com os pedaços pequenos de
+  hoje. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`, seção 15.
+- **Os 5 graves do login** ainda não foram conferidos (`--conferir-relatorio`, ~US$ 5).
 
-A trava do LocalDB está livre.
+A trava do LocalDB: com quem estiver rodando e2e.
 
 **Decisão dele (24/11): um 2º computador com um assento Team Premium.** Pela página oficial, cada assento Premium
 põe US$ 100 e cada Standard US$ 20 num **saldo único da organização**, com teto de US$ 500 por mês, e toda chave da

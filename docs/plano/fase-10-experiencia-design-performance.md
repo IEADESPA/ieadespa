@@ -1092,6 +1092,19 @@ Depois da revisão do Financeiro até `4c06d58`:
   planilha, só o pessoal da Geral.** A congregação e a área veem e usam a lista no sistema, mas não baixam.
 - **Completar o arrolamento:** aprovado. **A área e a Geral também podem completar e editar** os dados do membro, e
   aprovar quando for o caso: se a congregação não faz o que tem de fazer, a área faz, e o serviço não para.
+  - **O "aprovar" (ele, 24/11): nada a mais.** Completou a ficha, ela sai do arrolamento sozinha; o "aprovar" era só a
+    área ou a Geral poderem fazer o serviço quando a congregação não faz.
+- **Os 3 tipos de dado da ficha (ele, 24/11, regra para todo o sistema):**
+  1. **A situação do membro** (congregado, membro em comunhão, sem comunhão) e os eventos simples (batismo,
+     reconciliação, conversão, carta de mudança): a secretaria local e a da área têm toda a autonomia.
+  2. **Os cargos administrativos** (dirigente de congregação, líderes, 1º e 2º tesoureiro, secretário etc.): cada
+     nível muda os do seu âmbito.
+  3. **As funções eclesiásticas** (auxiliar, diácono, presbítero, evangelista, missionário, pastor): só a Câmara de
+     liderança e a academia (o órgão de formação ministerial) mexem. A secretaria local e a da área **nunca**, em
+     nenhuma hipótese. São funções condicionadas à permanência em órgãos. Com a disciplina (sem comunhão), a função e
+     o cargo são cortados sozinhos. Quem sai da Câmara perde a função, mas fica com o cargo e a situação.
+  - No arrolamento, a congregação e a área completam a situação e os cargos do seu nível, e **não gravam função
+    eclesiástica** (a revisão de 24/11 achou que hoje gravam qualquer cargo, até Pastor).
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

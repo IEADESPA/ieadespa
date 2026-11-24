@@ -1,12 +1,12 @@
 # Passagem de bastão — ieadespa
 
-Em uso por: Mateus desde 23/11/2026 16:50
+Em uso por: Mateus desde 24/11/2026 08:34
 
 > Uma pessoa por vez. Antes de começar: `git pull` e leia a linha acima. Se estiver em uso por outra pessoa, não
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 23/11/2026 16:50 (Claude, sessão principal).
+Atualizado em 24/11/2026 10:44 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -46,15 +46,114 @@ achados vão para o **lote 1 da varredura**, e estão também na memória do pro
 - o painel de distritos;
 - 342 chaves estrangeiras sem índice.
 
-**4 agentes trabalhando desde as 19h10 de 23/11** (ordem nova dele: 4 ao mesmo tempo). Se a conversa cair, confira os
-diários antes de mandar de novo:
+**AGENTES, 24/11 à tarde** (4 ao mesmo tempo; se a cota acabar, o ponto de cada um é este):
 
-1. **revisor de fora:** monta `C:\MCP\bancada\revisor-sdk\`, genérico para todos os repositórios, e para antes da prova
-   com a chave. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
-2. **pesquisa dos 8 economizadores de tokens** (o PDF dele), só leitura. Resultado em
-   `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
-3. **desenhista:** só publica a rodada 29 na página KMeb….
-4. **construtor:** o e2e-51 e completar o arrolamento. Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+- **Membros** (`C:/tmp/ieadespa-svelte`, ramo `v10-membros-svelte`; diário `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`):
+  - **até `f7045ab` está no homolog** (24/11, mesclado pelo Claude; o conflito em `app/svelte` foi resolvido refazendo
+    o build). O revisor aprovou a homologação (`C:/tmp/ieadespa-membros/REVISAO-arrolamento.md`). **Falta conferir o
+    teste de telas do CI desta mesclagem e atualizar a base** (`tools/csp-e2e/base/commit.txt`, direto no homolog).
+  - **Volta 4 em andamento:** A1 (quem está em arrolamento vota nas enquetes; bloqueia a produção), A2, A4, A5, A6,
+    G2, G4, o "Completar ›" a mais e a regra dos 3 tipos dele (no arrolamento, a congregação e a área não gravam
+    função eclesiástica; ver o plano da fase 10).
+  - A produção também espera B1 (a importação inteira na homologação, o último passo, com o "pode" dele) e o texto
+    da base legal das 2 políticas (ele confirma).
+  - O G1 (as reticências do menu) espera a barra de 280 px do Financeiro.
+- **Financeiro** (`C:/tmp/ieadespa-financeiro/obra`, ramo `v10-financeiro-svelte`, até `95fa19b`; diário
+  `C:/tmp/ieadespa-financeiro/DIARIO.md`): feitos I3, I4, M1 a M8, as regras de 23/11 e a devolução completa ou
+  parcial no servidor (migração 201 refeita; as outras a partir da 202). **Um revisor revisa de `4c06d58` a
+  `95fa19b`** (`C:/tmp/ieadespa-financeiro/REVISAO-ate-95fa19b.md`). As telas aprovadas que contam errado com o
+  servidor novo (o Livro, os blocos, as folhas, a lista e o seletor) esperam a aprovação da r30. Decididas pela
+  sessão: a folha sem destino de uma entrega que voltou é marcada pelo lançamento (incremento 3); a API exige a marca
+  completa ou parcial.
+- **Desenhista:** a **r30 está PUBLICADA** (versão 12 da página KMeb…), **esperando ele conferir** (6 pontos "Para
+  conferir"). A **r31 está PRONTA e NÃO publicada** (ramo `desenho-r31`, `14e7b6f`; a carta com o histórico, o QR, o
+  pedido com a cidade, o abandono com a Câmara e a volta sem cargos; 158 desenhos, só no claro). Publica depois que
+  ele responder a r30. Diário: `C:/tmp/ieadespa-desenho-r31-fotos/DIARIO.md`.
+- **Revisor de fora: PRONTO** (bancada até `97bc019`, 171/171 testes; a prova passou em 24/11, US$ 0,09). A agenda
+  **ainda não foi ligada**: ele pediu para entender a divisão antes. Ele quer a ordem: o site, depois a
+  infraestrutura, depois módulo a módulo. Pela conta, o ieadespa inteiro custa ~US$ 2.300 com os pedaços pequenos de
+  hoje. Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`, seção 15.
+- **Os 5 graves do login** ainda não foram conferidos (`--conferir-relatorio`, ~US$ 5).
+
+A trava do LocalDB: com quem estiver rodando e2e.
+
+**Decisão dele (24/11): um 2º computador com um assento Team Premium.** Pela página oficial, cada assento Premium
+põe US$ 100 e cada Standard US$ 20 num **saldo único da organização**, com teto de US$ 500 por mês, e toda chave da
+organização gasta desse saldo. Mudar repositórios para outro computador não cria saldo à parte. O revisor de fora
+ganha uma configuração por computador (`config.local.json`, fora do Git), com os projetos de cada um e a parte do
+saldo que cabe a cada um. Dois computadores nunca rodam o mesmo projeto.
+
+**As pendências dele:** (1) a chave do revisor de fora: **FEITA**; (2) ver a trava: **FEITA** (ele viu a foto do
+travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **FEITA** (24/11: as 7 telas aprovadas, com
+ajustes; estão no plano da fase 10, em "As respostas dele à rodada 29", e foram para o desenhista da r30).
+
+**A prova do Code Review Graph (24/11, com o sim dele): NÃO ADOTAR.** Foram 5 defeitos plantados numa cópia,
+rodando 2 vezes com o mapa e 2 vezes sem. A média sem o mapa foi US$ 3,78 e com o mapa US$ 3,87, dentro do ruído; os
+15% a menos não apareceram. Achou 4, 4, 4 e 5 dos 5, sem alarme falso, e o modelo quase não usou o mapa. Gastou US$
+15,31, que o agente do revisor lança na conta do ciclo (~US$ 39,50 de US$ 200). O RTK não deixa ligar só o filtro de
+testes, e o Headroom fica de fora. **Conclusão: nenhum dos 8 economizadores entra.** A cópia foi apagada. Relatório:
+`C:/tmp/ieadespa-bancada/prova-crg/RELATORIO.md`.
+
+**Decisões dele (23/11, 22h40):**
+
+- **A importação de mentira na homologação fica para o ÚLTIMO PASSO**, antes da produção de Membros. O sistema de
+  proteção do Claude barrou mandá-la sem o sim explícito dele. Quando chegar a hora, pedir o "pode" de novo.
+- **O PLANO NOVO do revisor de fora** (aprovado por ele às 23h50, depois da medição; substitui o "só quando
+  mandarem"):
+  1. primeiro o código novo da FASE 10 (os ramos do Membros e do Financeiro) e, depois, cada coisa nova que o
+     construtor terminar;
+  2. pedaços com metade do tamanho;
+  3. o Agendador do Windows liga o revisor de 4 em 4 horas, no máximo 30 minutos por vez;
+  4. o crédito espalhado pelos dias do mês.
+  O código antigo, o asaf e o comep ficam depois. Os 3 olhares e o máximo continuam.
+
+O que cada frente fazia (para retomar):
+
+1. **revisor de fora: FUNCIONANDO** (bancada até `a4fd8b3`, 105/105 testes). A chave fica num **workspace próprio**
+   (`revisor-de-fora`), porque a chave pessoal sem workspace dá 400. Os plugins e as habilidades embutidas do Claude
+   Code ficam desligados. O bloco comum é o mesmo nas 3 lentes, que largam em escalonado.
+   - **A medição de 23/11:** uma lente completa custa ~US$ 6,27, e um pedaço inteiro ~US$ 22 a 25 (~5 por mês). A 1ª
+     rodada, antes do conserto, gastou US$ 11,49 sem terminar. Gasto do ciclo: ~US$ 24.
+   - **No pedaço do login apareceram 5 achados graves, ainda não conferidos.** O detalhe está só na bancada privada
+     (`relatorios/ieadespa/2026-11-23-lote1-login-pin-medicao.md`), nunca aqui.
+   - Listas de pedaços: 159 no total (ieadespa 74, asaf 55, comep 30), a recortar pela metade.
+   - **Um agente monta o plano novo** (diferença dos ramos, `--agendado`, `LIGAR-AGENDA.cmd`, crédito por dia,
+     `--conferir-relatorio`). Depois, o Claude liga a agenda e confere os 5 graves do login.
+   - Em outro computador, o programa chega pela bancada, mas a chave não; só este computador roda.
+   Diário: `C:/tmp/ieadespa-bancada/DIARIO-revisor-sdk.md`.
+2. **construtor do Membros:** o arrolamento está **na homologação** (servidor `20681e8`, tela `2ce12bc` e `90d3122`;
+   homolog `a8d03c3`, base do teste de telas `11c51ff`). Já corrigiu da revisão a aspa sem fechar (`923dd5f`), a saída
+   do IMPORTANDO (`07d592d`) e o texto do site (`4741cd3`; homolog `259a737`). Agora: o menu cortado a 1280 px e a
+   guarda dos dados (respostas dele: a prévia não confirmada se apaga em 7 dias, com o botão "Descartar"; a lista dos
+   de fora fica 90 dias). Diário: `C:/tmp/ieadespa-membros/DIARIO-arrolamento.md`.
+3. **revisor do arrolamento** (desde as 21h20): confere `58dcd0d..4741cd3` (o arrolamento e as correções) no worktree
+   `C:/tmp/ieadespa-revisao` (destacado em `4741cd3`). Relatório local `C:/tmp/ieadespa-membros/REVISAO-arrolamento.md`.
+4. **construtor do Financeiro** (desde as 21h20): as correções da revisão (índices, `XACT_ABORT`, os menores) e as
+   regras dele de 23/11 no servidor (a devolução só de bloco cheio; desfazer a exceção da folha com motivo, só a
+   Tesouraria Geral). **Sem mesclar no homolog** até o revisor conferir a tela do incremento 2 (`f722716`) e as
+   correções. Diário: `C:/tmp/ieadespa-financeiro/DIARIO.md`.
+5. **desenhista** (desde as 21h20): prepara a **rodada 30, sem publicar** até ele conferir a 29 (Financeiro: o
+   formulário "Registrar saída", a cor da folha extraviada, o seletor de bloco no celular, os textos sem desenho, a
+   recusa do bloco com folha em branco e o "Desfazer" da exceção). Worktree `C:/tmp/ieadespa-desenho-r30`, ramo
+   `desenho-r30`; diário `C:/tmp/ieadespa-desenho-r30-fotos/DIARIO.md`.
+
+**As revisões de 23/11 à noite** (relatórios locais, fora do Git):
+
+- **Importação e trava** (até `58dcd0d`; `C:/tmp/ieadespa-membros/REVISAO-importacao-trava.md`): **ainda não vai à
+  produção.** A trava está completa e nenhum defeito de segurança foi provado. Bloqueia: o ensaio da importação inteira
+  na homologação (~5 mil linhas de mentira, medindo o lote), depois do "vi" dele. As outras correções estão no item 2.
+- **Financeiro até `4c06d58`** (`C:/tmp/ieadespa-financeiro/REVISAO-1a-a-inc2.md`): `bd694cf` e `4c06d58` **podem ir à
+  homologação**. O 1b **não vai à produção** antes da troca de janeiro de 2027 (ele esconderia as telas antigas). Na
+  mesclagem do `bd694cf`, refazer o build (nunca mesclar `app/svelte` à mão) e atualizar a base do teste de telas.
+
+**O teste de telas do CI está resolvido:** a base do homolog estava velha. `f36ccf4` (base `b34284c`) passou verde, e o
+construtor já atualizou a base depois do arrolamento (`11c51ff`). **Regra:** depois de toda mesclagem que muda tela no
+homolog, conferir as divergências e atualizar a base, direto no homolog.
+
+Terminados: o **desenhista** publicou a rodada 29 (versão 11; DEPLOY OK em `15067a6`). A **pesquisa dos 8
+economizadores** (o PDF dele) concluiu que nenhum vale instalar agora: rendem no máximo uns 2% sem perder qualidade, e os
+que rendem mais trocam a leitura do código por resumos. Talvez mais tarde, só com teste de 5 defeitos plantados: o Code
+Review Graph no revisor de fora e o RTK. Detalhe em `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`.
 
 O estado de quando os agentes da tarde foram parados (cota acabando), sem nada pela metade no Git:
 
@@ -104,21 +203,21 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 - **A ordem na produção (regra dele, 23/11): a importação real vem antes de qualquer matrícula nova.** A trava está
   feita e na homologação (item 4, 1.1). Ele ainda precisa vê-la.
-- **O teste de telas do CI** já falhava no homolog `b34284c`, antes da trava. A causa não foi apurada.
+- **O teste de telas do CI:** a causa foi achada e corrigida em `f36ccf4` (veja o alto). Falta só a rodada
+  `45285926023` terminar verde. Quando o Membros for para a main, a base da main (os ramos carregam `0707967`) precisa
+  ser ajustada.
 - **Decisão dele, quando quiser:** pôr no CI o `tools/raio-x/varrer-padroes.js`, corrigido para enxergar `executar(`.
   Assim as regras de SQL 1 (consulta dentro de laço) e 3 (índice) viram aviso automático.
 - **Membros na homologação:** falta o OK final dele para a produção. A importação só vai à produção com "completar o
   arrolamento" pronto.
-- **O teste de telas do CI falhou no homolog `f774121`** (o 1b do Financeiro escondeu o menu antigo). Provável remédio:
-  atualizar a base `tools/csp-e2e/base/commit.txt`, como foi feito no Membros; conferir antes.
 - **Carteirinhas:** a do obreiro só a Secretaria Geral imprime; o QR de quem saiu mostra só o nome; testar a impressora
   de PVC; a foto de conferência dos ajustes na homologação.
 - **Bancada, decisões dele:** a 2.2.2 do servidor de memória, quando sair (prevista para 25/11), conferir antes de
   qualquer troca (a 2.2.1 já foi conferida e recusada); a cláusula 5.2 do `LICENSE`; a porta do construtor (`C:\tmp\ieadespa-bancada\pronto\APLICAR.md`). O login do Claude neste
   computador vence até 24/11.
 - **Risco não provado:** juntar fichas usa `DISABLE TRIGGER`, que precisa de ALTER no Azure.
-- **Worktrees:** `C:/tmp/ieadespa-svelte` tem junções `api/node_modules` e `site/node_modules`: apagar com `rmdir`
-  sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
+- **Worktrees:** `C:/tmp/ieadespa-svelte` e `C:/tmp/ieadespa-revisao` têm junções `api/node_modules` e
+  `site/node_modules`: apagar com `rmdir` sem `/s` antes de remover o worktree. Os do desenho (`C:/tmp/ieadespa-desenho-r27` e `-r28`) já podem sair; o ramo
   `v10-membros-importador-wip` também.
 - **Diários** (só neste computador): `C:\tmp\ieadespa-financeiro\DIARIO.md`, `C:\tmp\ieadespa-membros\` (DIARIO,
   DIARIO-importador, DIARIO-banco-lento) e os das rodadas em `C:/tmp/ieadespa-desenho-r27-fotos/` e `-r28-fotos/`.
@@ -127,19 +226,17 @@ vence em 31/12 e, vencido, a pessoa perde o acesso.
 
 **Ao voltar, nesta ordem:**
 
-1. **Publicar a rodada 29** com um agente NOVO, que só publica. A ferramenta exige ler antes a versão no ar inteira
-   (343 KB), e o desenhista que montou não tinha contexto para isso.
-   - A fonte é `design/propostas/` (`montar-r29.js`, `r29-*.js`).
-   - A página é <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>.
-   - Depois, avisar que ele pode conferir.
+1. **A rodada 29 está PUBLICADA** (23/11 à noite; versão 11 da página <https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz>,
+   387 KB). O banco da página ficou intacto: as 6 escolhas da r28 continuam lá. **Esperando ele conferir.** As escolhas
+   dele vão para a coleção `escolhas`, com os ids `r29-*` e `geral-r29`.
 2. **Ele vê a trava travada na homologação:** matrícula de teste 900007 › Membros › Fila de cadastros › Cadastro rápido
    › "Enviar para a secretaria" mostra a recusa. Depois do "vi", um agente faz a importação de mentira até o fim (o
    e2e-97 tem a planilha de mentira) para ele ver o liberado.
 3. **Construtor:** o e2e-51 e completar o arrolamento (item 1.2), com o resumo da missão parada (o passo 0 já está feito).
 
-**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem nova dele:
-**2 agentes ao mesmo tempo, o desenhista e o construtor**. O revisor confere antes da produção, no lugar do construtor,
-nunca como terceiro agente. A varredura de defeitos de segurança espera ("questões secundárias").
+**A rodada 28 foi conferida por ele em 23/11** (plano da fase, seção "Rodada 28: o que ele aprovou"). Ordem dele em
+vigor (23/11 à noite): **4 agentes ao mesmo tempo** (veja o bloco do alto). A varredura de defeitos de segurança fica
+com o revisor de fora, pelos créditos de API, não pela assinatura.
 
 **Toda missão do construtor começa trazendo a `main` para o ramo:** as regras de SQL do `api/CLAUDE.md` (seção "Banco
 (SQL Server)") ainda não estão nos ramos de Membros nem do Financeiro.

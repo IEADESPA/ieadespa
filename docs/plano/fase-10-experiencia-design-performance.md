@@ -1085,6 +1085,30 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     planilha antes de gravar; a secretaria corrigir os cadastros que não entraram). O Encarregado ajusta o prazo ali.
 - **O que a tela ganhou além do desenho**, aprovado por ele: "Continuar a importação" se ela parar no meio, o aviso das
   linhas que ficaram de fora, "Mostrar mais" nas listas longas e a caixa "Conferi" começando desmarcada.
+- **A guarda dos dados (LGPD), respostas dele (23/11/2026, à noite)**, depois da revisão:
+  - a prévia que não foi confirmada (tem CPF, celular, mãe e pai) **se apaga sozinha em 7 dias**, e o botão
+    "Descartar" apaga na hora;
+  - a lista dos que ficaram de fora (nome e motivo) fica **90 dias** depois de a importação terminar e depois se apaga
+    sozinha.
+- **A revisão de 23/11 (até `58dcd0d`)**: a trava está completa. Antes da produção, faltam o ensaio da importação
+  inteira na homologação (~5 mil linhas de mentira, medindo o lote), depois do "vi" dele sobre a trava, e as correções
+  da revisão (a aspa sem fechar no arquivo, a saída do IMPORTANDO, o texto do site e o menu cortado).
+
+### Financeiro, blocos de recibo: as respostas dele (23/11/2026, à noite)
+
+Depois da revisão do Financeiro até `4c06d58`:
+
+- **As folhas em branco voltam livres (ele, 24/11, substitui a "devolução só de bloco cheio" de 23/11).** Normalmente
+  o bloco volta completo. Se uma congregação devolver o bloco por algum motivo com folhas nunca usadas, a tesouraria
+  marca a devolução como **parcial**. Essas folhas **não são anuladas**: voltam a ficar livres para uma próxima entrega,
+  porque imprimir bloco novo custa dinheiro e as folhas já existem. A entrega de um bloco parcial pega só as folhas
+  livres, e quem usou cada folha continua no histórico dela. Não existe a situação "anulada".
+- **A exceção da folha pode ser desfeita**, só pela Tesouraria Geral e com motivo obrigatório. Fica no histórico quem
+  marcou, quem desfez, quando e por quê; nada se apaga. Não vale para folha de bloco já devolvido.
+- O formulário "Registrar saída" (entregar um bloco a uma congregação), a cor da folha extraviada e o seletor de bloco
+  no celular vão para o desenho da rodada 30.
+- O 1b continua fora da produção até a troca de janeiro de 2027 (plano da construção do Financeiro, §5): na produção
+  ele esconderia as telas antigas, e o módulo novo ainda está quase todo "em construção".
 
 ### Rodada 28: o que ele aprovou (23/11/2026)
 
@@ -1094,6 +1118,19 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
   planilha, só o pessoal da Geral.** A congregação e a área veem e usam a lista no sistema, mas não baixam.
 - **Completar o arrolamento:** aprovado. **A área e a Geral também podem completar e editar** os dados do membro, e
   aprovar quando for o caso: se a congregação não faz o que tem de fazer, a área faz, e o serviço não para.
+  - **O "aprovar" (ele, 24/11): nada a mais.** Completou a ficha, ela sai do arrolamento sozinha; o "aprovar" era só a
+    área ou a Geral poderem fazer o serviço quando a congregação não faz.
+- **Os 3 tipos de dado da ficha (ele, 24/11, regra para todo o sistema):**
+  1. **A situação do membro** (congregado, membro em comunhão, sem comunhão) e os eventos simples (batismo,
+     reconciliação, conversão, carta de mudança): a secretaria local e a da área têm toda a autonomia.
+  2. **Os cargos administrativos** (dirigente de congregação, líderes, 1º e 2º tesoureiro, secretário etc.): cada
+     nível muda os do seu âmbito.
+  3. **As funções eclesiásticas** (auxiliar, diácono, presbítero, evangelista, missionário, pastor): só a Câmara de
+     liderança e a academia (o órgão de formação ministerial) mexem. A secretaria local e a da área **nunca**, em
+     nenhuma hipótese. São funções condicionadas à permanência em órgãos. Com a disciplina (sem comunhão), a função e
+     o cargo são cortados sozinhos. Quem sai da Câmara perde a função, mas fica com o cargo e a situação.
+  - No arrolamento, a congregação e a área completam a situação e os cargos do seu nível, e **não gravam função
+    eclesiástica** (a revisão de 24/11 achou que hoje gravam qualquer cargo, até Pastor).
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,
@@ -1136,6 +1173,29 @@ A tela (r27 aprovada) está na homologação (ramo `v10-membros-svelte`, `68bce8
     depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
     batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
     apagamento aos poucos e sozinho.
+  - **As respostas dele à rodada 29 (23 e 24/11): as 7 telas aprovadas**, com estes ajustes (vão para a r30 e para a
+    construção):
+    - **O destino é só a cidade** (com o estado), nunca o nome da igreja. Em branco, fica a cidade da nossa igreja
+      (Parauapebas-PA). Isto substitui o "destino opcional" decidido pela sessão.
+    - **A carta é individual e traz o histórico do membro:** a data em que chegou e a da saída, o batismo nas águas, o
+      batismo no Espírito Santo, as consagrações e os cargos que teve, com as datas. O motivo dele: as pessoas
+      esquecem esses dados e depois pedem à secretaria. Os filhos menores que saem junto também recebem carta própria.
+      O QR confirma o que está na carta. Como os dados se apagam aos poucos, o QR confere a carta pela impressão
+      digital guardada e pelo protocolo, sem mostrar os dados depois do apagamento (decisão da sessão).
+    - **A situação na carta:** o congregado sai **em Paz**, nunca em Observação. A Observação é só para quem está sem
+      comunhão ou em disciplina, e então a carta diz **por quanto tempo**, sem dizer o motivo.
+    - **O pedido por outra pessoa:** podem pedir por alguém, conforme a situação, e fica registrado quem pediu e quando.
+      O aviso à pessoa não diz "responda este e-mail", porque ela pode nem ter e-mail: diz **"entre em contato com a
+      Secretaria Geral"** para saber e, se for o caso, ser reintegrada.
+    - **O abandono passa pela Câmara de liderança, além da Geral:** a congregação pede, a Geral confere e o caso só vale
+      depois de aprovado na reunião da Câmara ("para não dizer que foi algo sem nada"). Até lá, fica "aguardando a
+      Câmara". No sistema entra **só o registro**: a Secretaria Geral marca "aprovado na reunião de dd/mm/aaaa, ata nº
+      X". Não há pauta de reunião no sistema.
+    - **Ninguém devolve cargo a quem volta.** Quem sai perde os cargos, e para ter cargo de novo faz o caminho inteiro
+      (o protocolo da função). Isto substitui o "quem cuida daquele nível decide se os devolve".
+    - **O falecimento:** aprovado sem mudança. Ele perguntou o que a lei diz sobre os dados de quem faleceu (resposta na
+      conversa de 24/11).
+    - **Os cargos vagos:** ficam como estão. Quais cargos existem e como se criam será uma conversa à parte, no módulo 3.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
   termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
   importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).

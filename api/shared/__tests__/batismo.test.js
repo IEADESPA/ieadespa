@@ -156,6 +156,9 @@ describe("efetivarTurma (Art. 7º, II — efetivação automática)", () => {
     expect(efetiva.sql).toMatch(/SituacaoMembro = 'EM_COMUNHAO'/);
     expect(efetiva.sql).toMatch(/UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME\(\), ResolvidaPor = @por/);
     expect(efetiva.sql).toMatch(/WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA'/);
+    // o batismo grava a data do batismo, não a data de entrada (DataAdmissao): a nota não pode dizer que a data de entrada veio do batismo
+    expect(efetiva.sql).not.toMatch(/DataAdmissao/);
+    expect(efetiva.sql).toMatch(/Nota = N'Completada pelo batismo: em comunhão, a forma batismo e a data do batismo \(a data de entrada não muda\)\.'/);
     expect(efetiva.sql).toMatch(/COMMIT;/);
     expect(efetiva.inputs.por).toBe(77);
     // a trilha só para quem estava em arrolamento, sem dado pessoal

@@ -115,10 +115,11 @@ async function registrarAceiteEstatuto(pool, membroId) {
 // pra reatribuir numa turma seguinte (Status volta a AGUARDANDO_TURMA
 // fora daqui, ação separada).
 //
-// A ficha em ARROLAMENTO (veio do sistema pago e ainda não foi completada) que é batizada: o batismo responde o que o completar pergunta (a situação, em
-// comunhão; a forma, batismo; a data, a do batismo), então a pendência ARROLAMENTO fecha como COMPLETADA junto com a situação, na mesma transação, e a
-// trilha diz que foi o batismo (A2 da revisão de 24/11/2026: antes a ficha saía do grupo e a pendência ficava aberta). A DataAdmissao não muda aqui (como
-// no batismo de quem não veio da importação). `por`: quem realizou a turma.
+// A ficha em ARROLAMENTO (veio do sistema pago e ainda não foi completada) que é batizada: a ficha sai do grupo em comunhão, com a forma batismo e a
+// data do batismo, então a pendência ARROLAMENTO fecha como COMPLETADA junto com a situação, na mesma transação, e a trilha diz que foi o batismo (A2 da
+// revisão de 24/11/2026: antes a ficha saía do grupo e a pendência ficava aberta). A data de entrada (DataAdmissao) NÃO muda aqui, como no batismo de quem
+// não veio da importação: se o sistema pago não a trouxe, ela continua vazia, e a Assembleia (que pede 90 dias da entrada) conta a ficha como "dados
+// incompletos" até alguém preenchê-la. Se a data do batismo deve virar a data de entrada, é pergunta para o responsável. `por`: quem realizou a turma.
 async function efetivarTurma(pool, turmaId, por = null) {
   const turma = (await pool.request().input("id", sql.Int, turmaId).query(`SELECT DataBatismo FROM TurmasBatismo WHERE TurmaId = @id`)).recordset[0];
   if (!turma) return 0;
@@ -132,7 +133,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
       .query(`SET XACT_ABORT ON; BEGIN TRAN;
               UPDATE MembroReferencia SET SituacaoMembro = 'EM_COMUNHAO', DataBatismo = @dataBatismo, FormaAdmissao = 'BATISMO' WHERE MembroId = @id;
               UPDATE FichasPendencias SET Situacao = N'RESOLVIDA', Resolucao = N'COMPLETADA', ResolvidaEm = SYSUTCDATETIME(), ResolvidaPor = @por,
-                Nota = N'Completada pelo batismo: em comunhão, a forma e a data de entrada vêm do batismo.'
+                Nota = N'Completada pelo batismo: em comunhão, a forma batismo e a data do batismo (a data de entrada não muda).'
               WHERE MembroId = @id AND Tipo = N'ARROLAMENTO' AND Situacao = N'ABERTA';
               DECLARE @resolvidas INT = @@ROWCOUNT;
               COMMIT;

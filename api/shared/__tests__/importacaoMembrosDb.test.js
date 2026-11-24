@@ -241,3 +241,71 @@ describe("a lista e o estado da tela (r27, 23/11/2026)", () => {
     expect((await db.estado(POOL_REQ)).retrato).toBeNull();
   });
 });
+
+// A GUARDA DOS DADOS DA IMPORTAÇÃO (respostas dele de 23/11/2026, LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7
+// dias; a lista dos que ficaram de fora (nome e motivo) fica 90 dias depois de a importação terminar e se apaga sozinha. Pela rotina diária (as retenções da
+// NotificacoesAgendador), com o prazo ajustável em Proteção de Dados → Políticas de retenção como as outras. As datas de verdade: o roteiro e2e-100.
+describe("a guarda dos dados da importação (a rotina diária)", () => {
+  const { sql } = require("../db");
+  const POOL_G = { request: () => new sql.Request() };
+  const { registrarAuditoriaNaTransacao } = require("../auditoria");
+  function cenarioGuarda({ previas = [], foraApagadas = [], politicas = {}, rc = 0 }) {
+    mockRegras = [
+      [/FROM PoliticasRetencao/, (i) => (politicas[i.c] ? [{ DiasRetencao: politicas[i.c] }] : [])],
+      [/sp_getapplock/, [{ rc }]],
+      [/SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/, previas.map((id) => ({ ImportacaoId: id }))],
+      [/DELETE l OUTPUT/, foraApagadas]
+    ];
+  }
+  const trilhas = () => registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]);
+
+  test("a prévia não confirmada passa de 7 dias: as linhas (com CPF, celular, mãe e pai) saem e ela fica DESCARTADA, com a trilha", async () => {
+    cenarioGuarda({ previas: [12] });
+    const r = await db.aplicarRetencao(POOL_G);
+    expect(r).toEqual({ previasDescartadas: 1, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    const sel = mockConsultas.find((c) => /SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA'/.test(c.sql));
+    expect(sel.sql).toMatch(/CriadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(sel.inputs.d).toBe(7);
+    const apaga = mockConsultas.find((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id/.test(c.sql));
+    expect(apaga.inputs.id).toBe(12);
+    expect(apaga.sql).toMatch(/SET Situacao = N'DESCARTADA'/);
+    expect(trilhas()).toEqual([expect.objectContaining({ tabela: "ImportacoesMembros", registroId: 12, usuarioId: null,
+      acao: "A rotina descartou a prévia da importação que não foi confirmada em 7 dias" })]);
+    expect(mockTx).toEqual(["begin", "commit"]);
+  });
+  test("a lista dos de fora passa de 90 dias depois de terminar: só as linhas de fora saem (as importadas ficam), o resumo guarda o dia e a trilha diz quantas", async () => {
+    cenarioGuarda({ foraApagadas: [{ ImportacaoId: 7, n: 4 }] });
+    const r = await db.aplicarRetencao(POOL_G);
+    expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 4, diasPrevia: 7, diasFora: 90 });
+    const del = mockConsultas.find((c) => /DELETE l OUTPUT/.test(c.sql));
+    expect(del.sql).toMatch(/i\.Situacao = N'CONCLUIDA'/);
+    expect(del.sql).toMatch(/i\.ConcluidaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(del.sql).toMatch(/l\.Estado = N'FORA'/);
+    expect(del.sql).not.toMatch(/IMPORTADA/);
+    expect(del.inputs.d).toBe(90);
+    const marca = mockConsultas.find((c) => /JSON_MODIFY/.test(c.sql));
+    expect(marca.sql).toMatch(/\$\.foraApagadaEm/);
+    expect(marca.inputs.id).toBe(7);
+    expect(trilhas()).toEqual([expect.objectContaining({ registroId: 7, usuarioId: null, acao: "A rotina apagou a lista dos que ficaram de fora da importação (90 dias depois do fim)",
+      dadosDepois: { linhasApagadas: 4, retencaoDias: 90 } })]);
+  });
+  test("nada vencido: nada muda e nada vai para a trilha", async () => {
+    cenarioGuarda({});
+    expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, diasPrevia: 7, diasFora: 90 });
+    expect(mockConsultas.some((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id|JSON_MODIFY/.test(c.sql))).toBe(false);
+    expect(trilhas()).toEqual([]);
+  });
+  test("o prazo ajustado pelo Encarregado (Políticas de retenção) vale; sem a política, 7 e 90", async () => {
+    cenarioGuarda({ politicas: { [db.POLITICA_PREVIA.categoria]: 3, [db.POLITICA_FORA.categoria]: 30 } });
+    expect(await db.aplicarRetencao(POOL_G)).toMatchObject({ diasPrevia: 3, diasFora: 30 });
+    expect(mockConsultas.find((c) => /WHERE Situacao = N'PREVIA'/.test(c.sql)).inputs.d).toBe(3);
+    expect(mockConsultas.find((c) => /DELETE l OUTPUT/.test(c.sql)).inputs.d).toBe(30);
+    expect(db.POLITICA_PREVIA).toEqual({ categoria: "Membros — prévia da importação que não foi confirmada", padrao: 7 });
+    expect(db.POLITICA_FORA).toEqual({ categoria: "Membros — lista dos que ficaram de fora da importação", padrao: 90 });
+  });
+  test("a importação ocupada (a Geral mexendo agora): a rotina não mexe em nada e falha, para a de amanhã repetir", async () => {
+    cenarioGuarda({ previas: [12], rc: -1 });
+    await expect(db.aplicarRetencao(POOL_G)).rejects.toThrow(/ocupada/);
+    expect(mockConsultas.some((c) => /DELETE/.test(c.sql))).toBe(false);
+  });
+});

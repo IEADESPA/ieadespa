@@ -464,4 +464,47 @@ async function concluirNaTransacao(t, rq, id, por, resumoPrevia) {
   return resultado;
 }
 
-module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, estado, criarPrevia, descartar, listar, csv, confirmar, importarLote };
+// ------------------------------------------------------------------ a guarda dos dados (a rotina diária)
+// Respostas dele de 23/11/2026 (LGPD): a prévia que não foi confirmada (com CPF, celular, mãe e pai) se apaga sozinha em 7 dias (antes disso, o "Descartar" da
+// tela apaga na hora); a lista dos que ficaram de fora (nome e motivo) fica 90 dias depois de a importação terminar e se apaga sozinha. As importadas não saem
+// (a ficha é o registro dela; o retrato do resultado continua). O prazo é ajustável em Proteção de Dados → Políticas de retenção, como as outras retenções;
+// sem a política, valem os de 7 e 90 dias. Roda na rotina diária (NotificacoesAgendador), debaixo da trava da importação: a importação ocupada naquela hora
+// faz a rotina falhar sem mexer em nada, e a do dia seguinte repete.
+const POLITICA_PREVIA = Object.freeze({ categoria: "Membros — prévia da importação que não foi confirmada", padrao: 7 });
+const POLITICA_FORA = Object.freeze({ categoria: "Membros — lista dos que ficaram de fora da importação", padrao: 90 });
+async function aplicarRetencao(pool) {
+  const { diasDaPolitica } = require("./politicasRetencao");
+  const diasPrevia = await diasDaPolitica(pool, POLITICA_PREVIA.categoria, POLITICA_PREVIA.padrao);
+  const diasFora = await diasDaPolitica(pool, POLITICA_FORA.categoria, POLITICA_FORA.padrao);
+  const r = await emTransacao(pool, async (t, rq) => {
+    const velhas = (await rq().input("d", sql.Int, diasPrevia)
+      .query("SELECT ImportacaoId FROM ImportacoesMembros WHERE Situacao = N'PREVIA' AND CriadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())")).recordset;
+    for (const v of velhas) {
+      const id = Number(v.ImportacaoId);
+      await descartarNaTransacao(rq, id);
+      await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina descartou a prévia da importação que não foi confirmada em ${diasPrevia} dias`,
+        usuarioId: null });
+    }
+    const apagadas = (await rq().input("d", sql.Int, diasFora).query(`
+      DECLARE @apagadas TABLE (ImportacaoId INT NOT NULL);
+      DELETE l OUTPUT deleted.ImportacaoId INTO @apagadas
+      FROM ImportacoesMembrosLinhas l JOIN ImportacoesMembros i ON i.ImportacaoId = l.ImportacaoId
+      WHERE i.Situacao = N'CONCLUIDA' AND i.ConcluidaEm < DATEADD(DAY, -@d, SYSUTCDATETIME()) AND l.Estado = N'FORA';
+      SELECT ImportacaoId, COUNT(*) AS n FROM @apagadas GROUP BY ImportacaoId`)).recordset;
+    let linhasForaApagadas = 0;
+    for (const a of apagadas) {
+      const id = Number(a.ImportacaoId), n = Number(a.n) || 0;
+      linhasForaApagadas += n;
+      // o dia em que a lista saiu fica no resumo: a tela do resultado diz que ela foi apagada, em vez de mostrar uma lista menor sem explicar
+      await rq().input("id", sql.Int, id).query(`UPDATE ImportacoesMembros SET Resumo = JSON_MODIFY(Resumo, '$.foraApagadaEm', CONVERT(varchar(19), SYSUTCDATETIME(), 126))
+        WHERE ImportacaoId = @id AND ISJSON(Resumo) = 1`);
+      await registrarAuditoriaNaTransacao(t, { tabela: "ImportacoesMembros", registroId: id, acao: `A rotina apagou a lista dos que ficaram de fora da importação (${diasFora} dias depois do fim)`,
+        usuarioId: null, dadosDepois: { linhasApagadas: n, retencaoDias: diasFora } });
+    }
+    return { sucesso: true, previasDescartadas: velhas.length, linhasForaApagadas };
+  });
+  if (!r || r.sucesso !== true) throw new Error("importação: a guarda dos dados não rodou (a importação estava ocupada); a rotina de amanhã repete");
+  return { previasDescartadas: r.previasDescartadas, linhasForaApagadas: r.linhasForaApagadas, diasPrevia, diasFora };
+}
+
+module.exports = { TRAVA, TAMANHO_LOTE, POR_PAGINA, MSG, POLITICA_PREVIA, POLITICA_FORA, estado, criarPrevia, descartar, listar, csv, confirmar, importarLote, aplicarRetencao };

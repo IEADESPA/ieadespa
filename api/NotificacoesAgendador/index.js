@@ -134,8 +134,9 @@ module.exports = async function (context, req) {
   // Trava 7-C — as retenções que estavam só "anotadas" desde a v7.2, v7.3 e v7.4 (prazo padrão ajustável em Proteção de Dados → Políticas de retenção): a justificativa de
   // ausência na Santa Ceia sai 2 anos depois da Ceia; a ocorrência de canal encerrada perde a descrição e quem avisou em 5 anos, e o administrador que saiu perde o nome em
   // 5 anos; o contato do convidado externo sai 1 ano depois do último evento dele. Cada uma fail-soft (a próxima rodada repete).
+  // Fase 10 (respostas dele de 23/11/2026): a prévia da importação dos membros que não foi confirmada sai em 7 dias e a lista dos que ficaram de fora, 90 dias depois do fim.
   const retencaoAnotadas = { falhas: [] };
-  for (const [chave, modulo] of [["calendario", "../shared/calendarioDb"], ["canais", "../shared/canaisDb"], ["eventos", "../shared/eventosDb"]]) {
+  for (const [chave, modulo] of [["calendario", "../shared/calendarioDb"], ["canais", "../shared/canaisDb"], ["eventos", "../shared/eventosDb"], ["importacaoMembros", "../shared/importacaoMembrosDb"]]) {
     try { retencaoAnotadas[chave] = await require(modulo).aplicarRetencao(pool); } catch (e) { retencaoAnotadas.falhas.push(chave); context.log.error(`[RETENCAO] ${chave}:`, e.message); }
   }
   const { criadas, emailsEnviados, falhas = [] } = await avaliarRegras(pool);

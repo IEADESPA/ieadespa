@@ -18,6 +18,7 @@ jest.mock("../cuidadoPastoralDb", () => ({ rotinaDiaria: jest.fn(async () => ({ 
 jest.mock("../identidadeVisualDb", () => ({ rotinaAntesDosAvisos: jest.fn(async () => ({ falhas: [] })), rotinaDepoisDosAvisos: jest.fn(async () => ({ falhas: [] })) }));
 jest.mock("../enquetes", () => ({ encerrarVencidas: jest.fn(async () => ({ encerradas: 0 })) }));
 jest.mock("../afmDb", () => ({ rotinaDiaria: jest.fn(async () => ({ falhas: [] })) }));
+jest.mock("../importacaoMembrosDb", () => ({ aplicarRetencao: jest.fn(async () => ({ previasDescartadas: 1, linhasForaApagadas: 4, diasPrevia: 7, diasFora: 90 })) }));
 
 const { avaliarRegras } = require("../notificacaoMotor");
 const cuidadoDb = require("../cuidadoPastoralDb");
@@ -153,4 +154,20 @@ test("rotinas-diarias.yml: a versão da agenda pública roda mesmo com a rotina 
   const passo = yml.split("- name: ").find((p) => p.startsWith("Guarda a versão da agenda pública"));
   expect(passo).toMatch(/\n\s+if: \$\{\{ !cancelled\(\) \}\}\n/);
   expect(yml).toMatch(/avisar-falha:\n\s+needs: \[notificacoes, fluxos, ebd-fechamento\]\n\s+if: \$\{\{ failure\(\) \}\}/);
+});
+
+// a guarda dos dados da importação dos membros (respostas dele de 23/11/2026): a prévia não confirmada sai em 7 dias e a lista dos de fora 90 dias depois do fim,
+// na mesma fila das retenções anotadas (fail-soft: a falha aparece na resposta e a rotina de amanhã repete)
+test("a guarda dos dados da importação roda na rotina diária; a falha fica na lista das falhas sem derrubar a rodada", async () => {
+  const imp = require("../importacaoMembrosDb");
+  imp.aplicarRetencao.mockClear();
+  const ok = await rodar();
+  expect(imp.aplicarRetencao).toHaveBeenCalledTimes(1);
+  expect(imp.aplicarRetencao).toHaveBeenCalledWith(expect.anything());
+  expect(ok.body.retencaoAnotadas.importacaoMembros).toEqual({ previasDescartadas: 1, linhasForaApagadas: 4, diasPrevia: 7, diasFora: 90 });
+  expect(ok.body.retencaoAnotadas.falhas).not.toContain("importacaoMembros");
+  imp.aplicarRetencao.mockRejectedValueOnce(new Error("a importação estava ocupada"));
+  const falhou = await rodar();
+  expect(falhou.status).toBe(200);
+  expect(falhou.body.retencaoAnotadas.falhas).toContain("importacaoMembros");
 });

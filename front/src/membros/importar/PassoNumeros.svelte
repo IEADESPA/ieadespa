@@ -8,7 +8,7 @@
   import { numero, plural } from "../../comum/formato";
   import Quadros from "./Quadros.svelte";
   import Arrolamento from "./Arrolamento.svelte";
-  import { baixarLista, lerLista, porQue, repetidaDe, type FiltroLista, type ItemLista, type Previa, type Quadro } from "./importar";
+  import { baixarLista, lerLista, notaDaPrevia, porQue, repetidaDe, type FiltroLista, type Guarda, type ItemLista, type Previa, type Quadro } from "./importar";
 
   interface Props {
     celular: boolean;
@@ -18,8 +18,12 @@
     ocupado: boolean;
     erro: string;
     onconfirmar: () => void;
+    /** a guarda dos dados (respostas dele de 23/11/2026): em quantos dias a prévia não confirmada se apaga sozinha; o "Descartar" apaga na hora */
+    guarda: Guarda;
+    descartando: boolean;
+    ondescartar: () => void;
   }
-  let { celular, previa, andamento, ocupado, erro, onconfirmar }: Props = $props();
+  let { celular, previa, andamento, ocupado, erro, onconfirmar, guarda, descartando, ondescartar }: Props = $props();
 
   const r = $derived(previa.resumo);
   const quadros = $derived<Quadro[]>([
@@ -75,9 +79,15 @@
       <input type="checkbox" bind:checked={conferi} disabled={ocupado} />
       <span>{celular ? "Conferi os números. É uma vez só: o que mudar depois se corrige à mão, na ficha." : "Conferi os números. Sei que a importação é uma vez só: depois de confirmar, não se importa de novo, e o que mudar se corrige à mão, na ficha."}</span>
     </label>
-    <Botao tipo="ouro" icone="check" largo desligado={!conferi || r.novas === 0} {ocupado} onclick={onconfirmar}>Confirmar e trazer as {numero(r.novas)} {plural(r.novas, "ficha", "fichas")}</Botao>
+    <Botao tipo="ouro" icone="check" largo desligado={!conferi || r.novas === 0 || descartando} {ocupado} onclick={onconfirmar}>Confirmar e trazer as {numero(r.novas)} {plural(r.novas, "ficha", "fichas")}</Botao>
     {#if andamento}<p class="andamento" role="status">{andamento}</p>{/if}
     {#if erro}<Aviso tom="erro">{erro}</Aviso>{/if}
+    {#if !ocupado}
+      <div class="guarda">
+        <span>{notaDaPrevia(guarda)}</span>
+        <Botao tipo="texto" tam="pequeno" ocupado={descartando} onclick={ondescartar}>Descartar a prévia</Botao>
+      </div>
+    {/if}
   </section>
 {/snippet}
 
@@ -205,4 +215,6 @@
   .marcar input:checked::after { content: ""; width: 5px; height: 9px; border: solid var(--sv-escolha-texto); border-width: 0 2.5px 2.5px 0; transform: translateY(-1px) rotate(45deg); }
   .marcar input:focus-visible { outline: 3px solid var(--sv-ouro); outline-offset: 2px; }
   .andamento { font-size: 12.5px; color: var(--sv-texto); }
+  .guarda { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; padding-top: 8px; border-top: 1px solid var(--sv-linha); font-size: 12px; color: var(--sv-suave); line-height: 1.4; }
+  .guarda span { flex: 1 1 200px; min-width: 0; }
 </style>

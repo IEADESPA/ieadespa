@@ -7,10 +7,10 @@
   import { numero, plural } from "../../comum/formato";
   import Quadros from "./Quadros.svelte";
   import Arrolamento from "./Arrolamento.svelte";
-  import { baixarLista, diaMesHora, quandoCurto, type Importacao, type Quadro, type Retrato } from "./importar";
+  import { baixarLista, diaMesHora, fraseForaApagada, notaForaAte, quandoCurto, type Guarda, type Importacao, type Quadro, type Retrato } from "./importar";
 
-  interface Props { celular: boolean; importacao: Importacao; retrato: Retrato }
-  let { celular, importacao, retrato }: Props = $props();
+  interface Props { celular: boolean; importacao: Importacao; retrato: Retrato; guarda: Guarda }
+  let { celular, importacao, retrato, guarda }: Props = $props();
 
   const res = $derived(importacao.resumo?.resultado ?? null);
   const importadas = $derived(res ? res.importadas : retrato.porArea.reduce((s, a) => s + a.fichas, 0));
@@ -32,6 +32,9 @@
       ? `${numero(pendentes)} das ${numero(importadas)} ainda estão com a pendência “completar o arrolamento”, sem voto até completar.`
       : `As ${numero(importadas)} já completaram o arrolamento.`);
   const quando = $derived(quandoCurto(importacao.concluidaEm));
+  // a guarda dos dados (respostas dele de 23/11/2026): a lista dos que ficaram de fora fica um tempo depois do fim e se apaga sozinha
+  const foraAte = $derived(notaForaAte(importacao, guarda));
+  const foraApagada = $derived(fraseForaApagada(importacao, guarda));
 
   let baixando = $state(false);
   let erroBaixar = $state("");
@@ -79,9 +82,11 @@
         {#if novas.total > 0}<li><b>{quando}</b><span>{numero(novas.total)} {plural(novas.total, "matrícula nova", "matrículas novas")}: {faixa}</span></li>{/if}
         {#if retrato.quadros.repetidas > 0}<li><b>{quando}</b><span>{numero(retrato.quadros.repetidas)} {plural(retrato.quadros.repetidas, "ficha foi", "fichas foram")} para “Fichas repetidas”</span></li>{/if}
         {#if res && res.fora > 0}<li><b>{quando}</b><span>{numero(res.fora)} {plural(res.fora, "linha ficou", "linhas ficaram")} de fora</span></li>{/if}
+        {#if foraApagada}<li><b>{quandoCurto(importacao.resumo?.foraApagadaEm)}</b><span>{foraApagada}</span></li>{/if}
       </ul>
       <Botao tipo="linha" icone="doc" largo ocupado={baixando} onclick={baixar}>Baixar a lista do que aconteceu (sem CPF)</Botao>
       {#if erroBaixar}<Aviso tom="erro">{erroBaixar}</Aviso>{/if}
+      {#if foraAte}<p class="nota">{foraAte}</p>{/if}
       <p class="nota">Não se importa de novo: esta tela fica só com o resultado.</p>
     </section>
   </div>

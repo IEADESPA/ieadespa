@@ -218,6 +218,14 @@ Cada versão parte da base da anterior (`BASE=...`):
   de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
   5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; corrigido, continua de onde parou; a lista,
   o CSV e o resultado mostram as de fora; a trilha com o número do erro e sem a mensagem do banco; a cadeia de hashes).
+- **FASE 10, a guarda dos dados da importação** (respostas dele de 23/11/2026 e decisões de 24/11; migração 186), base `cenario-186`
+  (`bash rodar.sh preparar-186`: a `cenario-185` com a 186 aplicada duas vezes): `e2e-100` (as duas políticas aparecem na tela de Políticas, com 7 e 90 dias
+  e a base legal; a prévia não confirmada, com o CPF, o celular, a mãe e o pai, fica com 6 dias e sai pela rotina com 8: DESCARTADA, sem as linhas, a trilha
+  sem usuário; o "Descartar" apaga na hora, a liderança local não pode, de novo é 409 e o lixo é 400; o prazo que o Encarregado ajusta vale para o estado e
+  para a rotina, e quem não é Encarregado não ajusta; no fim, a importada fica só com a linha, a matrícula, o nome e a situação e a de fora só com o nome e o
+  motivo, conferido coluna por coluna; a importação que terminou antes desta versão é limpa pela rotina; a lista dos de fora fica com 89 dias e sai com 91,
+  só as linhas de fora: as importadas, o retrato e o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; a NotificacoesAgendador
+  de verdade roda a guarda; a trilha sem dado das linhas e a cadeia de hashes).
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos

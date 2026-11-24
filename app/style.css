@@ -1795,7 +1795,8 @@ html[data-tema="escuro"] .painel-layout[data-modulo="disciplina"], html[data-tem
 html[data-tema="escuro"] .painel-layout[data-modulo="canais"] { --cor-menu: #15133A; --cor-menu-ativo: #26265E; --cor-modulo: #A5B4FC; }
 html[data-tema="escuro"] .painel-layout[data-modulo="cuidadopastoral"], html[data-tema="escuro"] .painel-layout[data-modulo="assistenciasocial"], html[data-tema="escuro"] .painel-layout[data-modulo="psc"], html[data-tema="escuro"] .painel-layout[data-modulo="setores"] { --cor-menu: #2E1A04; --cor-menu-ativo: #3D2A05; --cor-modulo: #FCD34D; }
 html[data-tema="escuro"] .painel-layout[data-modulo="conquistas"] { --cor-menu: #062530; --cor-menu-ativo: #0B3A47; --cor-modulo: #67E8F9; }
-.sidebar .abas-secretaria { border-bottom: none; margin-bottom: 0; }
+/* na barra é uma coluna: sem quebra (com o flex-wrap das abas antigas cada linha ficava com a largura do texto mais comprido e passava da barra) */
+.sidebar .abas-secretaria { border-bottom: none; margin-bottom: 0; flex-wrap: nowrap; }
 .vol-selo-ok { background: var(--chip-verde-fundo); color: var(--chip-verde-texto); border-radius: 10px; }
 .psc-sinal-mini.psc-concluido { border-color: var(--chip-verde-texto); color: var(--chip-verde-texto); }
 /* os poucos fundos claros escritos direto no código das telas (Situação do Tesouro, PDQ, a foto vazia da lista de pessoas) seguem o modo escuro */

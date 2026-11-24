@@ -1131,6 +1131,29 @@ Depois da revisão do Financeiro até `4c06d58`:
     depois de 30 dias, grava DESLIGADO, deixa os cargos vagos, corta o acesso e apaga tudo de uma vez, guardando o
     batismo e o casamento. A regra nova muda o código, não só a tela: sair na hora, cargos vagos na hora e o
     apagamento aos poucos e sozinho.
+  - **As respostas dele à rodada 29 (23 e 24/11): as 7 telas aprovadas**, com estes ajustes (vão para a r30 e para a
+    construção):
+    - **O destino é só a cidade** (com o estado), nunca o nome da igreja. Em branco, fica a cidade da nossa igreja
+      (Parauapebas-PA). Isto substitui o "destino opcional" decidido pela sessão.
+    - **A carta é individual e traz o histórico do membro:** a data em que chegou e a da saída, o batismo nas águas, o
+      batismo no Espírito Santo, as consagrações e os cargos que teve, com as datas. O motivo dele: as pessoas
+      esquecem esses dados e depois pedem à secretaria. Os filhos menores que saem junto também recebem carta própria.
+      O QR confirma o que está na carta. Como os dados se apagam aos poucos, o QR confere a carta pela impressão
+      digital guardada e pelo protocolo, sem mostrar os dados depois do apagamento (decisão da sessão).
+    - **A situação na carta:** o congregado sai **em Paz**, nunca em Observação. A Observação é só para quem está sem
+      comunhão ou em disciplina, e então a carta diz **por quanto tempo**, sem dizer o motivo.
+    - **O pedido por outra pessoa:** podem pedir por alguém, conforme a situação, e fica registrado quem pediu e quando.
+      O aviso à pessoa não diz "responda este e-mail", porque ela pode nem ter e-mail: diz **"entre em contato com a
+      Secretaria Geral"** para saber e, se for o caso, ser reintegrada.
+    - **O abandono passa pela Câmara de liderança, além da Geral:** a congregação pede, a Geral confere e o caso só vale
+      depois de aprovado na reunião da Câmara ("para não dizer que foi algo sem nada"). Até lá, fica "aguardando a
+      Câmara". No sistema entra **só o registro**: a Secretaria Geral marca "aprovado na reunião de dd/mm/aaaa, ata nº
+      X". Não há pauta de reunião no sistema.
+    - **Ninguém devolve cargo a quem volta.** Quem sai perde os cargos, e para ter cargo de novo faz o caminho inteiro
+      (o protocolo da função). Isto substitui o "quem cuida daquele nível decide se os devolve".
+    - **O falecimento:** aprovado sem mudança. Ele perguntou o que a lei diz sobre os dados de quem faleceu (resposta na
+      conversa de 24/11).
+    - **Os cargos vagos:** ficam como estão. Quais cargos existem e como se criam será uma conversa à parte, no módulo 3.
 - **As matrículas novas depois da importação (23/11):** liberam-se **sozinhas** quando a importação do sistema pago
   termina (ela é uma vez só). Até lá, ninguém se cadastra: não há fila. É a trava simples, descrita em "A tela de
   importar os membros". O sistema que está hoje na produção não gera matrícula sozinho (a secretaria digita o número).

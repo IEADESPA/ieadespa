@@ -6,7 +6,7 @@ Em uso por: Mateus desde 24/11/2026 08:34
 > comece. Ao começar: troque pela sua (nome e data), commit e push. Ao parar: a passagem completa, a linha volta a
 > "Livre", commit e push (regra 4 do `CLAUDE.md`). Este arquivo é público: nada de senha, chave, token nem dado pessoal.
 
-Atualizado em 24/11/2026 08:36 (Claude, sessão principal).
+Atualizado em 24/11/2026 08:43 (Claude, sessão principal).
 
 **O revisor de fora (decisão dele, 23/11, à tarde):**
 
@@ -72,7 +72,14 @@ ganha uma configuração por computador (`config.local.json`, fora do Git), com 
 saldo que cabe a cada um. Dois computadores nunca rodam o mesmo projeto.
 
 **As pendências dele:** (1) a chave do revisor de fora: **FEITA**; (2) ver a trava: **FEITA** (ele viu a foto do
-travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **falta**.
+travado; a trava foi conferida pelo agente); (3) conferir a rodada 29: **FEITA** (24/11: as 7 telas aprovadas, com
+ajustes; estão no plano da fase 10, em "As respostas dele à rodada 29", e foram para o desenhista da r30).
+
+**A prova do Code Review Graph (o "talvez" da pesquisa dos economizadores): ele APROVOU o gasto (~US$ 25 do crédito
+de API) em 24/11.** Entra quando abrir uma vaga dos 4 agentes. É feita numa cópia do sistema em `C:\tmp`, com 5
+defeitos plantados, rodando a revisão 2 vezes com o mapa e 2 vezes sem. Adota só se achar os mesmos defeitos e gastar
+pelo menos 15% menos. Fica de fora o Headroom, que é um programa no meio do caminho e tem telemetria ligada; o RTK é só
+uma consulta grátis. Pesquisa: `C:/tmp/ieadespa-bancada/pesquisa-economizadores-2.md`, seção 6.
 
 **Decisões dele (23/11, 22h40):**
 

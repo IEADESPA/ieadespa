@@ -44,9 +44,9 @@ describe("o número do bloco e o lote da gráfica", () => {
   test("recusa o que não confere, com a mensagem de quem lê", () => {
     expect(regra.blocosDoLote({ serie: 1999, primeiraFolha: 1, totalFolhas: 50 }).erro).toMatch(/série/);
     expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 0, totalFolhas: 50 }).erro).toMatch(/primeira folha/);
-    expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 1, totalFolhas: 75 }).erro).toMatch(/blocos inteiros/);
+    expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 1, totalFolhas: 75 }).erro).toBe("O total de folhas tem de ser blocos inteiros de 50 (por exemplo, 10.000 = 200 blocos).");
     expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 1, totalFolhas: 10 }).erro).toMatch(/pelo menos um bloco/);
-    expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 1, totalFolhas: 50 * 1001 }).erro).toMatch(/no máximo/);
+    expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 1, totalFolhas: 50 * 1001 }).erro).toBe("Um lote tem no máximo 1.000 blocos. Cadastre em partes.");
     expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: 999999990, totalFolhas: 50 }).erro).toMatch(/limite/);
     for (const lixo of [null, undefined, "abc", 1.5, -3, [], {}, "1e3", " "]) {
       expect(regra.blocosDoLote({ serie: 2026, primeiraFolha: lixo, totalFolhas: 50 }).erro).toBeTruthy();
@@ -229,6 +229,57 @@ describe("a porta das ações do incremento 2", () => {
     expect(r.body.mensagem).toMatch(/observação/);
     expect(mockConsultas.filter((c) => /INSERT|UPDATE/.test(c.sql))).toHaveLength(0);
   });
+
+  // revisão m7 (o M9 de antes): o escopo das folhas e do livro também provado no jest, que o CI roda (o SQL de verdade, no e2e local)
+  const CONGREGACOES = [/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 3, Nome: "Vila Nova" }, { CongregacaoId: 4, Nome: "Bela Vista" }]];
+  const ESCOPO_NO_SQL = (coluna) => new RegExp(`${coluna.replace(".", "\\.")} IN \\(SELECT CAST\\(value AS INT\\) FROM OPENJSON\\(@escopoCongIds\\)\\)`);
+  test("as folhas da congregação: só as entregas que foram para o escopo dela (a condição vai no SQL, com os ids do escopo)", async () => {
+    mockRegras.push(CONGREGACOES);
+    const r = await chamar({ acao: "folhas", token: LOCAL() });
+    expect(r.status).toBe(200);
+    const vistas = mockConsultas.find((c) => /WITH vistas AS/.test(c.sql));
+    expect(vistas.sql).toMatch(ESCOPO_NO_SQL("s.CongregacaoId"));
+    expect(vistas.inputs.escopoCongIds).toBe(JSON.stringify([3]));
+  });
+  test("o bloco pedido pela congregação passa pela mesma condição de escopo; fora dele, o 404 é o mesmo do que não existe", async () => {
+    mockRegras.push(CONGREGACOES);
+    const fora = await chamar({ acao: "folhas", query: { bloco: 7 }, token: LOCAL() });
+    const vistas = mockConsultas.find((c) => /WITH vistas AS/.test(c.sql));
+    expect(vistas.sql).toMatch(ESCOPO_NO_SQL("s.CongregacaoId"));
+    expect(vistas.inputs).toMatchObject({ id: 7, escopoCongIds: JSON.stringify([3]) });
+    const nao = await chamar({ acao: "folhas", query: { bloco: 9999999 }, token: LOCAL() });
+    expect([fora.status, nao.status]).toEqual([404, 404]);
+    expect(fora.body).toEqual(nao.body);
+    expect(mockConsultas.filter((c) => /FROM FinFolhas f\s+LEFT JOIN FinLivroBlocos/.test(c.sql))).toHaveLength(0);
+  });
+  test("o escopo sem nenhuma congregação conhecida: nada, sem nem consultar os blocos", async () => {
+    mockRegras.push([/SELECT CongregacaoId, Nome FROM Congregacoes/, [{ CongregacaoId: 4, Nome: "Bela Vista" }]]);
+    expect((await chamar({ acao: "folhas", query: { bloco: 7 }, token: LOCAL() })).status).toBe(404);
+    const r = await chamar({ acao: "folhas", token: LOCAL() });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ bloco: null, folhas: [], opcoes: [] });
+    expect(mockConsultas.filter((c) => /WITH vistas AS|FROM FinFolhas/.test(c.sql))).toHaveLength(0);
+  });
+  test("regra 4 do banco (revisão m4): o filtro das entregas não põe função na coluna", async () => {
+    mockRegras.push(CONGREGACOES);
+    await chamar({ acao: "folhas", token: LOCAL() });
+    const vistas = mockConsultas.find((c) => /WITH vistas AS/.test(c.sql));
+    expect(vistas.sql).not.toMatch(/ISNULL\(/);
+    expect(vistas.sql).toMatch(/\(e\.RegistroId IS NULL OR e\.Parcial = 0 OR e\.PrimeiraFolha > s\.PrimeiraFolha\)/);
+  });
+  test("o livro da congregação: só as linhas do escopo, e o quadro \"agora\" também", async () => {
+    mockRegras.push(CONGREGACOES);
+    const r = await chamar({ acao: "livro", token: LOCAL() });
+    expect(r.status).toBe(200);
+    const livro = mockConsultas.find((c) => /FROM FinLivroBlocos l\b/.test(c.sql));
+    expect(livro.sql).toMatch(/l\.Tipo IN \('SAIDA', 'ENTRADA'\)/);
+    expect(livro.sql).toMatch(ESCOPO_NO_SQL("l.CongregacaoId"));
+    expect(livro.inputs.escopoCongIds).toBe(JSON.stringify([3]));
+    const agora = mockConsultas.find((c) => /FROM FinBlocos b\s+OUTER APPLY/.test(c.sql));
+    expect(agora.sql).toMatch(/b\.Situacao = 'ENTREGUE' AND /);
+    expect(agora.sql).toMatch(ESCOPO_NO_SQL("b.CongregacaoId"));
+    expect(agora.inputs.escopoCongIds).toBe(JSON.stringify([3]));
+  });
 });
 
 // ---- a revisão de 23/11/2026: a regra dele de desfazer a exceção da folha e o "levado pela área" ----
@@ -266,6 +317,13 @@ describe("a devolução completa ou parcial (regra de 24/11/2026)", () => {
   test("a mensagem da devolução parcial: as folhas que voltam livres (a r30), no plural e no singular", () => {
     expect(regra.mensagemDaParcial(1288, 64436, 64450)).toBe("Bloco 1.288 de volta, parcial: as folhas 64.436 a 64.450 estão livres para outra entrega.");
     expect(regra.mensagemDaParcial(1288, 64450, 64450)).toBe("Bloco 1.288 de volta, parcial: a folha 64.450 está livre para outra entrega.");
+  });
+
+  test("o bloco que já voltou em parte e está na Geral não volta de novo antes de sair (revisão m3: não é \"não saiu\")", () => {
+    expect(regra.mensagemJaVoltouParcial(1288, "2026-11-20", 64436, 64450))
+      .toBe("O bloco 1.288 já voltou, parcial, em 20/11/2026: as folhas 64.436 a 64.450 estão livres na Tesouraria Geral para outra entrega.");
+    expect(regra.mensagemJaVoltouParcial(1288, "2026-11-20", 64450, 64450))
+      .toBe("O bloco 1.288 já voltou, parcial, em 20/11/2026: a folha 64.450 está livre na Tesouraria Geral para outra entrega.");
   });
 });
 

@@ -23,14 +23,16 @@ const TABELAS = ["FinCentrosCusto", "FinMovimentosCentro", "FinLotesGrafica", "F
 const comecaIndice = async (tabela, coluna) => Number(await escalar(`
   SELECT COUNT(*) FROM sys.index_columns ic JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
   WHERE ic.object_id = OBJECT_ID(N'dbo.${tabela}') AND ic.key_ordinal = 1 AND c.name = N'${coluna}'`)) > 0;
-// a migração 201 rodada aqui no meio do roteiro, sobre um banco com dados (prova a idempotência e o acerto da Quantidade do cadastro)
-async function aplicar201() {
+// a migração rodada aqui no meio do roteiro, sobre um banco com dados (a 201: a idempotência e o acerto da Quantidade do cadastro; a 202: a
+// idempotência com as chaves novas no lugar)
+async function aplicarMigracao(numero) {
   const fs = require("fs");
   const pasta = path.join(API, "..", "sql", "migrations");
-  const nome = fs.readdirSync(pasta).find((n) => n.startsWith("201_") && n.endsWith(".sql"));
-  if (!nome) return ok(false, "a migração 201 existe");
+  const nome = fs.readdirSync(pasta).find((n) => n.startsWith(`${numero}_`) && n.endsWith(".sql"));
+  if (!nome) return ok(false, `a migração ${numero} existe`);
   for (const lote of fs.readFileSync(path.join(pasta, nome), "utf8").split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await q(lote);
 }
+const aplicar201 = () => aplicarMigracao("201");
 async function retratoFin() {
   const partes = [];
   for (const t of TABELAS) partes.push(JSON.stringify(await um(`SELECT COUNT(*) n, CHECKSUM_AGG(CHECKSUM(*)) c FROM ${t}`)));
@@ -40,6 +42,17 @@ async function recusa(sqlTexto, descricao) {
   let falhou = false;
   try { await q(sqlTexto); } catch (e) { falhou = true; }
   ok(falhou, `o banco recusa: ${descricao}`);
+}
+// revisão m2: a recusa tem de vir da restrição certa (o nome dela na mensagem do banco), não de um erro qualquer; e o que é certo passa
+async function recusaPor(sqlTexto, restricao, descricao) {
+  let mensagem = "";
+  try { await q(sqlTexto); } catch (e) { mensagem = String((e && e.message) || e); }
+  ok(mensagem.includes(restricao), `o banco recusa (${restricao}): ${descricao}`, mensagem.slice(0, 220) || "o banco aceitou");
+}
+async function aceita(sqlTexto, descricao) {
+  let mensagem = "";
+  try { await q(sqlTexto); } catch (e) { mensagem = String((e && e.message) || e); }
+  ok(mensagem === "", `o banco aceita: ${descricao}`, mensagem.slice(0, 220));
 }
 async function disparar(chamadas) {
   const t0 = Date.now() + 6000 + chamadas.length * 600;
@@ -78,6 +91,11 @@ async function disparar(chamadas) {
     ["FinFolhas", "SaidaId"], ["FinLivroBlocos", "SaidaId"], ["FinFolhasDesfeitas", "SaidaId"]]) {
     ok(await comecaIndice(t, c), `há índice que começa por ${t}.${c}`);
   }
+  console.log("== a 202: o banco confere a quem a SaidaId aponta e a faixa contra o bloco (revisão m2) ==");
+  ok(Number(await escalar(`SELECT COUNT(*) FROM sys.foreign_keys WHERE name IN ('FK_FinLivroBlocos_SaidaDoBloco', 'FK_FinFolhas_SaidaDoBloco', 'FK_FinFolhasDesfeitas_SaidaDoBloco',
+      'FK_FinLivroBlocos_FaixaDoBloco') AND is_disabled = 0 AND is_not_trusted = 0`)) === 4
+    && Number(await escalar(`SELECT COUNT(*) FROM sys.check_constraints WHERE name = 'CK_FinLivroBlocos_FaixaNoBloco' AND is_disabled = 0 AND is_not_trusted = 0`)) === 1,
+  "as quatro chaves e a conferência da faixa existem, ligadas e valendo para todas as linhas");
 
   console.log("== quem entra ==");
   const antes0 = await retratoFin();
@@ -144,10 +162,12 @@ async function disparar(chamadas) {
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
   r = await POST(H, "entregar", geral, { primeiraFolha: 70202, congregacaoId: CENTRAL, pessoa: { nome: "x" } });
   ok(r.status === 422 && /Não há bloco que comece na folha 70\.202/.test(r.body.mensagem), "folha que não é a primeira de um bloco é recusada", r.body);
-  const livro = await q(`SELECT l.Tipo, l.CongregacaoId, l.PessoaMembroId, l.PessoaNome, l.LevadoPelaArea, l.PrimeiraFolha, l.UltimaFolha, b.PrimeiraFolha AS BlocoPrimeira, b.UltimaFolha AS BlocoUltima
+  const livro = await q(`SELECT l.Tipo, l.CongregacaoId, l.PessoaMembroId, l.PessoaNome, l.LevadoPelaArea, l.PrimeiraFolha, l.UltimaFolha, l.BlocoPrimeiraFolha,
+           b.PrimeiraFolha AS BlocoPrimeira, b.UltimaFolha AS BlocoUltima
     FROM FinLivroBlocos l JOIN FinBlocos b ON b.BlocoId = l.BlocoId WHERE l.Tipo = 'SAIDA' ORDER BY l.RegistroId`);
   ok(livro.length === 3 && livro[0].PessoaMembroId === TESOUREIRA_LOCAL && livro[1].LevadoPelaArea === true && livro[2].PessoaNome === "Tesoureiro da Beta", "o livro registra cada saída, com quem levou e se foi pela área", livro);
   ok(livro.every((l) => l.PrimeiraFolha === l.BlocoPrimeira && l.UltimaFolha === l.BlocoUltima), "a saída guarda a faixa das folhas entregues: o bloco inteiro na primeira saída (regra de 24/11/2026)", livro);
+  ok(livro.every((l) => l.BlocoPrimeiraFolha === l.BlocoPrimeira), "e, com a faixa, a primeira folha do bloco (a 202 confere a faixa contra o bloco)", livro);
   // uma folha do 1.401 com destino (a tela das folhas vem no incremento 2): o bloco passa a "em uso". A folha guarda a entrega que a usou.
   const b1401 = await escalar(`SELECT BlocoId FROM FinBlocos WHERE Numero = 1401`);
   const saida1401 = await escalar(`SELECT RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = ${b1401}`);
@@ -172,9 +192,42 @@ async function disparar(chamadas) {
   await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, PrimeiraFolha: 70100, UltimaFolha: 70090 }), "entrada parcial com a faixa ao contrário");
   await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 0, PrimeiraFolha: 70090, UltimaFolha: 70100 }), "entrada completa com faixa livre");
   await recusa(`INSERT INTO FinLivroBlocos (Tipo, LoteId, Quantidade, DataRegistro, RegistradoPor, Parcial) VALUES ('CHEGADA', ${loteId}, 1, '2026-11-20', ${TESOUREIRO_GERAL}, 1)`, "chegada marcada como parcial");
-  await q(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403})`);
-  await recusa(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403})`, "duas entradas fechando a mesma saída");
-  await q(`DELETE FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND SaidaId = ${saida1403}`);
+  const b1403 = await escalar(`SELECT BlocoId FROM FinBlocos WHERE Numero = 1403`);
+  const saida1402 = await escalar(`SELECT RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = (SELECT BlocoId FROM FinBlocos WHERE Numero = 1402)`);
+  const entrada = (bloco, saida) => `INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId) OUTPUT INSERTED.RegistroId
+    VALUES ('ENTRADA', ${bloco}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida})`;
+  const entrada1403 = await escalar(entrada(b1403, saida1403));
+  await recusa(entrada(b1403, saida1403), "duas entradas fechando a mesma saída");
+  // revisão m2 (a 202): a SaidaId aponta para uma SAÍDA do mesmo bloco; cada caso abaixo só fere essa regra (o resto da linha está certo)
+  await recusaPor(entrada(b1403, entrada1403), "FK_FinLivroBlocos_SaidaDoBloco", "a entrada que fecha outra entrada, não uma saída");
+  await recusaPor(entrada(b1401, saida1402), "FK_FinLivroBlocos_SaidaDoBloco", "a entrada do 1.401 fechando a saída do 1.402 (outro bloco)");
+  const folhaDireta = (bloco, numero, saida) => `INSERT INTO FinFolhas (BlocoId, Folha, Destino, RegistradoPor, SaidaId) VALUES (${bloco}, ${numero}, 'LANCADA', ${TESOUREIRA_LOCAL}, ${saida})`;
+  await recusaPor(folhaDireta(b1401, 70093, saida1402), "FK_FinFolhas_SaidaDoBloco", "a folha do 1.401 usada na saída do 1.402");
+  await recusaPor(folhaDireta(b1403, 70160, entrada1403), "FK_FinFolhas_SaidaDoBloco", "a folha com a entrega apontando para uma entrada");
+  await recusaPor(desfeita("CANCELADA", "outro bloco", saida1402), "FK_FinFolhasDesfeitas_SaidaDoBloco", "a exceção desfeita do 1.401 com a entrega do 1.402");
+  await q(`DELETE FROM FinLivroBlocos WHERE RegistroId = ${entrada1403}`);
+  // e a faixa da saída e da entrada parcial: dentro do bloco (1.401 = 70.051 a 70.100) e até a última folha dele
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 1, UltimaFolha: 5 }), "CK_FinLivroBlocos_FaixaNoBloco", "a saída com a faixa 1 a 5 (folhas que não são do bloco)");
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 1, UltimaFolha: 5, BlocoPrimeiraFolha: 1 }), "FK_FinLivroBlocos_FaixaDoBloco", "a mesma faixa dizendo que o bloco começa na folha 1");
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 70001, UltimaFolha: 70100, BlocoPrimeiraFolha: 70051 }), "CK_FinLivroBlocos_FaixaNoBloco", "a saída que começa antes do bloco (na 70.001)");
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 70001, UltimaFolha: 70100, BlocoPrimeiraFolha: 70001 }), "FK_FinLivroBlocos_FaixaDoBloco", "a mesma, mentindo o começo do bloco");
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 70060, UltimaFolha: 70099, BlocoPrimeiraFolha: 70051 }), "FK_FinLivroBlocos_FaixaDoBloco", "a saída que não vai até a última folha do bloco");
+  await recusaPor(livroDireto("SAIDA", { PrimeiraFolha: 70060, UltimaFolha: 70150, BlocoPrimeiraFolha: 70051 }), "FK_FinLivroBlocos_FaixaDoBloco", "a saída que passa do fim do bloco");
+  await recusaPor(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, PrimeiraFolha: 70090, UltimaFolha: 70100 }), "CK_FinLivroBlocos_FaixaNoBloco", "a entrada parcial sem a primeira folha do bloco");
+  await recusaPor(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, PrimeiraFolha: 70090, UltimaFolha: 70120, BlocoPrimeiraFolha: 70051 }), "FK_FinLivroBlocos_FaixaDoBloco",
+    "a entrada parcial com a faixa livre passando do fim do bloco");
+  // o que está certo passa (a prova de que as recusas acima vêm só da regra nova)
+  await aceita(livroDireto("SAIDA", { PrimeiraFolha: 70061, UltimaFolha: 70100, BlocoPrimeiraFolha: 70051 }), "a saída das folhas livres do bloco (da 70.061 ao fim)");
+  await aceita(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, PrimeiraFolha: 70090, UltimaFolha: 70100, BlocoPrimeiraFolha: 70051 }), "a entrada parcial com a faixa livre dentro do bloco");
+  await aceita(folhaDireta(b1403, 70160, saida1403), "a folha com a saída do próprio bloco");
+  await q(`DELETE FROM FinFolhas WHERE Folha = 70160; DELETE FROM FinLivroBlocos WHERE BlocoId IN (${b1401}, ${b1403}) AND PessoaNome = N'Teste'`);
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE PessoaNome = N'Teste'`)) === 0 && Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE Tipo = 'SAIDA'`)) === 3,
+    "o livro volta como estava (as linhas de prova saíram)");
+  // a 202 roda a cada deploy: duas vezes de novo, sobre o banco com dados, sem mudar nada
+  const antes202 = await retratoFin();
+  await aplicarMigracao("202");
+  await aplicarMigracao("202");
+  ok((await retratoFin()) === antes202, "a 202 roda duas vezes sobre o banco com dados sem mudar nada");
   await recusa(`UPDATE FinBlocos SET Situacao = 'NA_GERAL' WHERE BlocoId = ${b1401}`, "bloco na Geral com congregação");
   await recusa(`UPDATE FinBlocos SET Situacao = 'DEVOLVIDO' WHERE BlocoId = ${b1401}`, "bloco devolvido sem a data da devolução");
   await recusa(`UPDATE FinBlocos SET Situacao = 'ENTREGUE', CongregacaoId = ${CENTRAL}, EntregueEm = '2026-11-21' WHERE Numero = 1590`, "entregar bloco que não chegou (direto no banco)");
@@ -271,7 +324,7 @@ async function disparar(chamadas) {
   const sobrepostos = Number(await escalar(`SELECT COUNT(*) FROM FinLotesGrafica a JOIN FinLotesGrafica b ON a.LoteId < b.LoteId AND a.PrimeiraFolha <= b.UltimaFolha AND a.UltimaFolha >= b.PrimeiraFolha`));
   ok(sobrepostos === 0 && rs.filter((x) => x.status === 201).length === 1, "4 lotes que se cruzam ao mesmo tempo: nenhum par de lotes se sobrepõe", rs.map((x) => x.status));
   ok(Number(await escalar(`SELECT COUNT(*) FROM AuditLog WHERE Acao LIKE 'FIN_%' AND RegistroId IS NULL`)) === 0, "nenhuma linha da trilha sem o registro");
-  // revisão I4: as transações ligam o XACT_ABORT por lote e desligam antes de fechar (o roteiro usa uma conexão só: o que vazasse ficaria nela)
+  // revisões I4 e m1: o XACT_ABORT vai dentro de cada consulta da transação e nunca na conexão (o roteiro usa uma conexão só: o que vazasse ficaria nela)
   ok(Number(await escalar(`SELECT @@OPTIONS & 16384`)) === 0, "depois das gravações, a conexão volta com o XACT_ABORT desligado");
 
   fim("e2e-200 (Financeiro: a base e os blocos de recibo)");

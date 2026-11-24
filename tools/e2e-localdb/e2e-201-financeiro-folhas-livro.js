@@ -49,12 +49,13 @@ async function lancarDireto(blocoId, de, ate, exceto = []) {
                   (SELECT TOP 1 s.RegistroId FROM FinLivroBlocos s WHERE s.Tipo = 'SAIDA' AND s.BlocoId = ${blocoId} ORDER BY s.RegistroId DESC) FROM n
            WHERE NOT EXISTS (SELECT 1 FROM FinFolhas f WHERE f.Folha = n.Folha) ${exceto.length ? `AND n.Folha NOT IN (${exceto.join(", ")})` : ""}`);
 }
-// a migração 201 rodada aqui no meio do roteiro, sobre um banco com dados (prova o acerto dos dados de antes da regra de 24/11/2026)
-async function aplicar201() {
+// a migração rodada aqui no meio do roteiro, sobre um banco com dados (prova o acerto dos dados de antes da regra de 24/11/2026: a 201, a faixa,
+// a saída de cada entrada e a entrega de cada folha; a 202, a primeira folha do bloco junto com a faixa)
+async function aplicarMigracao(numero) {
   const fs = require("fs");
   const pasta = path.join(API, "..", "sql", "migrations");
-  const nome = fs.readdirSync(pasta).find((n) => n.startsWith("201_") && n.endsWith(".sql"));
-  if (!nome) return ok(false, "a migração 201 existe");
+  const nome = fs.readdirSync(pasta).find((n) => n.startsWith(`${numero}_`) && n.endsWith(".sql"));
+  if (!nome) return ok(false, `a migração ${numero} existe`);
   for (const lote of fs.readFileSync(path.join(pasta, nome), "utf8").split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await q(lote);
 }
 // o livro inteiro de quem vê (as páginas de 5, uma atrás da outra)
@@ -138,7 +139,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, data: "2026-11-01" })).status === 422, "devolução com data antes da entrega é recusada");
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, data: "2099-01-01" })).status === 422, "devolução com data no futuro é recusada");
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70052, pessoa: { nome: "Lia Fontes" } })).status === 422, "folha que não é a primeira de um bloco é recusada");
-  ok((await POST(H, "devolver", geral, { primeiraFolha: 75001, pessoa: { nome: "Lia Fontes" } })).status === 422, "bloco que não saiu da Geral não volta");
+  r = await POST(H, "devolver", geral, { primeiraFolha: 75001, pessoa: { nome: "Lia Fontes" } });
+  ok(r.status === 422 && r.body.mensagem === "O bloco 1.500 ainda está na Tesouraria Geral: não saiu para voltar.", "bloco que não saiu da Geral não volta", r.body);
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
   ok((await POST(H, "devolver", geral, { primeiraFolha: 70051, pessoa: {} })).status === 422, "sem dizer quem devolveu é recusada");
   // a regra dele (24/11/2026, com o detalhe da r30): nada se recusa por folha livre; a parcial diz a primeira folha em branco, que tem de ser desta
@@ -231,20 +233,27 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   console.log("== a 201 sobre os dados de antes da regra de 24/11/2026 (o acerto que roda na homologação) ==");
   // cada bloco saiu uma vez só: a 201 acha a faixa de cada saída, a saída que cada entrada fecha e a entrega de cada folha. Simula o banco de
   // antes (as colunas vazias, com a conferência desligada), roda a 201 duas vezes e liga a conferência de novo.
-  const fotoLivro = () => q(`SELECT RegistroId, SaidaId, PrimeiraFolha, UltimaFolha, Parcial FROM FinLivroBlocos ORDER BY RegistroId`).then(JSON.stringify);
+  const fotoLivro = () => q(`SELECT RegistroId, SaidaId, PrimeiraFolha, UltimaFolha, BlocoPrimeiraFolha, Parcial FROM FinLivroBlocos ORDER BY RegistroId`).then(JSON.stringify);
   const fotoFolhas = () => q(`SELECT FolhaId, SaidaId FROM FinFolhas ORDER BY FolhaId`).then(JSON.stringify);
   const [livroAntes, folhasAntes] = [await fotoLivro(), await fotoFolhas()];
   ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE SaidaId IS NOT NULL`)) > 50 && Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE SaidaId IS NOT NULL`)) === 1, "há folhas e entrada para o acerto conferir");
-  await q(`ALTER TABLE FinFolhas NOCHECK CONSTRAINT CK_FinFolhas_Saida; ALTER TABLE FinLivroBlocos NOCHECK CONSTRAINT CK_FinLivroBlocos_Faixa; ALTER TABLE FinLivroBlocos NOCHECK CONSTRAINT CK_FinLivroBlocos_Entrada`);
-  await q(`UPDATE FinFolhas SET SaidaId = NULL; UPDATE FinLivroBlocos SET SaidaId = NULL WHERE Tipo = 'ENTRADA'; UPDATE FinLivroBlocos SET PrimeiraFolha = NULL, UltimaFolha = NULL WHERE Tipo = 'SAIDA'`);
-  await aplicar201();
-  await aplicar201();
+  // a 202 (revisão m2) também: a primeira folha do bloco some junto com a faixa, e a conferência dela desliga enquanto a 201 refaz a faixa
+  const CONFERENCIAS = [["FinFolhas", "CK_FinFolhas_Saida"], ["FinLivroBlocos", "CK_FinLivroBlocos_Faixa"], ["FinLivroBlocos", "CK_FinLivroBlocos_Entrada"], ["FinLivroBlocos", "CK_FinLivroBlocos_FaixaNoBloco"]];
+  await q(CONFERENCIAS.map(([t, c]) => `ALTER TABLE ${t} NOCHECK CONSTRAINT ${c}`).join("; "));
+  await q(`UPDATE FinFolhas SET SaidaId = NULL; UPDATE FinLivroBlocos SET SaidaId = NULL WHERE Tipo = 'ENTRADA';
+           UPDATE FinLivroBlocos SET PrimeiraFolha = NULL, UltimaFolha = NULL, BlocoPrimeiraFolha = NULL WHERE Tipo = 'SAIDA'`);
+  await aplicarMigracao("201");
+  await aplicarMigracao("201");
+  await aplicarMigracao("202");
+  await aplicarMigracao("202");
   let conferiu = true;
-  try { await q(`ALTER TABLE FinFolhas WITH CHECK CHECK CONSTRAINT CK_FinFolhas_Saida; ALTER TABLE FinLivroBlocos WITH CHECK CHECK CONSTRAINT CK_FinLivroBlocos_Faixa; ALTER TABLE FinLivroBlocos WITH CHECK CHECK CONSTRAINT CK_FinLivroBlocos_Entrada`); }
+  try { await q(CONFERENCIAS.map(([t, c]) => `ALTER TABLE ${t} WITH CHECK CHECK CONSTRAINT ${c}`).join("; ")); }
   catch (e) { conferiu = false; console.log(e.message); }
-  ok(conferiu && Number(await escalar(`SELECT COUNT(*) FROM sys.check_constraints WHERE name IN ('CK_FinFolhas_Saida', 'CK_FinLivroBlocos_Faixa', 'CK_FinLivroBlocos_Entrada') AND is_disabled = 0 AND is_not_trusted = 0`)) === 3,
-    "depois do acerto, a conferência do banco liga de novo e vale para todas as linhas");
-  ok((await fotoLivro()) === livroAntes && (await fotoFolhas()) === folhasAntes, "a 201 (duas vezes) refaz a faixa das saídas, a saída de cada entrada e a entrega de cada folha");
+  ok(conferiu && Number(await escalar(`SELECT COUNT(*) FROM sys.check_constraints WHERE name IN (${CONFERENCIAS.map(([, c]) => `'${c}'`).join(", ")}) AND is_disabled = 0 AND is_not_trusted = 0`)) === 4
+    && Number(await escalar(`SELECT COUNT(*) FROM sys.foreign_keys WHERE name LIKE 'FK_Fin%DoBloco' AND is_disabled = 0 AND is_not_trusted = 0`)) === 4,
+  "depois do acerto, a conferência do banco liga de novo e vale para todas as linhas (as chaves da 202 também)");
+  ok((await fotoLivro()) === livroAntes && (await fotoFolhas()) === folhasAntes,
+    "a 201 e a 202 (duas vezes cada) refazem a faixa das saídas, a primeira folha do bloco, a saída de cada entrada e a entrega de cada folha");
 
   console.log("== lixo em cada campo ==");
   // o 1.404 cheio (a 70.210 extraviada e as outras lançadas), para o lixo da devolução chegar até o fim; a 70.131 cancelada, para o do desfazer
@@ -299,8 +308,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 de volta, parcial: as folhas 70.531 a 70.550 estão livres para outra entrega.", "a devolução parcial do 1.410 em 12/11, com a primeira em branco 70.531", r.body);
   const bp = await um(`SELECT Situacao, CongregacaoId, EntregueEm, DevolvidoEm, CONVERT(char(10), ChegouEm, 23) AS Chegou FROM FinBlocos WHERE BlocoId = ${b1410}`);
   ok(bp.Situacao === "NA_GERAL" && bp.CongregacaoId === null && bp.EntregueEm === null && bp.DevolvidoEm === null && bp.Chegou === "2026-11-01", "o bloco fica na Tesouraria Geral (sem congregação), não fecha, e a chegada da gráfica continua", bp);
-  const entP = await um(`SELECT CongregacaoId, SaidaId, Parcial, PrimeiraFolha, UltimaFolha, CONVERT(char(10), DataRegistro, 23) AS Dia FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND BlocoId = ${b1410}`);
-  ok(entP.CongregacaoId === BETA && entP.SaidaId === saida1 && entP.Parcial === true && entP.PrimeiraFolha === 70531 && entP.UltimaFolha === 70550 && entP.Dia === "2026-11-12",
+  const entP = await um(`SELECT CongregacaoId, SaidaId, Parcial, PrimeiraFolha, UltimaFolha, BlocoPrimeiraFolha, CONVERT(char(10), DataRegistro, 23) AS Dia FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND BlocoId = ${b1410}`);
+  ok(entP.CongregacaoId === BETA && entP.SaidaId === saida1 && entP.Parcial === true && entP.PrimeiraFolha === 70531 && entP.UltimaFolha === 70550 && entP.BlocoPrimeiraFolha === 70501 && entP.Dia === "2026-11-12",
     "o livro registra a entrada parcial: da Beta, fechando a 1ª saída, com as folhas que voltaram livres (70.531 a 70.550)", entP);
   ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE BlocoId = ${b1410}`)) === 21 && Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE BlocoId = ${b1410} AND SaidaId = ${saida1}`)) === 21,
     "nenhuma folha se anula: as usadas guardam a 1ª entrega, e as sem destino antes da primeira em branco continuam com a Beta");
@@ -318,7 +327,7 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await POST(H, "folha", geral, { folha: 70540, oQueAconteceu: "cancelada", observacao: "x" });
   ok(r.status === 422 && /1\.410 ainda está na Tesouraria Geral/.test(r.body.mensagem), "com o bloco na Geral, a folha livre não ganha destino", r.body);
   r = await POST(H, "folha", geral, { folha: 70525, oQueAconteceu: "cancelada", observacao: "x" });
-  ok(r.status === 422 && /1\.410 ainda está na Tesouraria Geral/.test(r.body.mensagem), "nem a folha sem destino da Beta, depois da volta (o destino dela vem do lançamento; pergunta aberta)", r.body);
+  ok(r.status === 422 && /1\.410 ainda está na Tesouraria Geral/.test(r.body.mensagem), "nem a folha sem destino da Beta, depois da volta (quem dá destino a ela é o lançamento, no incremento 3)", r.body);
   r = await POST(H, "desfazer-folha", geral, { folha: 70530, motivo: "x" });
   ok(r.status === 422 && r.body.mensagem === "A folha 70.530 voltou com o bloco 1.410 numa devolução: as folhas que já voltaram não mudam mais.", "a exceção de uma entrega que já voltou não se desfaz", r.body);
   const fora = [await GET(H, "folhas", local, { bloco: b1410 }), await GET(H, "folhas", soCentral, { bloco: b1410 }), await GET(H, "folhas", soCentral, { bloco: 9999999 })];
@@ -330,7 +339,8 @@ const SAIDA_ATUAL = (blocoId) => `SELECT TOP 1 RegistroId FROM FinLivroBlocos WH
   r = await POST(H, "entregar", geral, { primeiraFolha: 70531, congregacaoId: VILA_NOVA, pessoa: { nome: "x" }, data: "2026-11-11" });
   ok(r.status === 422 && r.body.mensagem === "A data da entrega é antes da volta do bloco (12/11/2026).", "a nova saída com data antes da volta do bloco é recusada", r.body);
   r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "x" }, parcial: true, primeiraEmBranco: 70540 });
-  ok(r.status === 422 && /1\.410 ainda está na Tesouraria Geral/.test(r.body.mensagem), "o bloco parcial não volta de novo antes de sair", r.body);
+  ok(r.status === 422 && r.body.mensagem === "O bloco 1.410 já voltou, parcial, em 12/11/2026: as folhas 70.531 a 70.550 estão livres na Tesouraria Geral para outra entrega.",
+    "o bloco parcial não volta de novo antes de sair (revisão m3: a recusa diz que já voltou, não que não saiu)", r.body);
   ok((await retratoFin()) === antesP, "as recusas não mexeram no banco");
   r = await GET(H, "folhas", beta, { bloco: b1410 });
   ok(r.status === 200 && r.body.bloco.situacao === "fechado" && r.body.bloco.parcial === true && r.body.bloco.devolvidoEm === "2026-11-12" && JSON.stringify(r.body.bloco.faixa) === JSON.stringify({ primeiraFolha: 70501, ultimaFolha: 70530 })

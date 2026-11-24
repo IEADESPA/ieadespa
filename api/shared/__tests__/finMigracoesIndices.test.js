@@ -32,6 +32,11 @@ function tabelasEChaves(migracoes) {
       const t = tabelas.get(m[1]);
       if (t && !t.chaves.includes(m[2])) t.chaves.push(m[2]);
     }
+    // a chave estrangeira composta (ALTER TABLE dbo.FinX WITH CHECK ADD CONSTRAINT FK_... FOREIGN KEY (Coluna, ...)): conta a primeira coluna
+    for (const m of texto.matchAll(/ALTER TABLE dbo\.(Fin\w+)\s+WITH CHECK ADD CONSTRAINT\s+\w+\s+FOREIGN KEY\s*\(\s*(\w+)/g)) {
+      const t = tabelas.get(m[1]);
+      if (t && !t.chaves.includes(m[2])) t.chaves.push(m[2]);
+    }
   }
   return tabelas;
 }
@@ -80,6 +85,41 @@ describe("as migrações do Financeiro: índice em toda chave estrangeira (regra
       for (const indice of criacoes) expect(`${nome}: ${texto.includes(`name = N'${indice}'`) ? "com" : "SEM"} IF NOT EXISTS para ${indice}`).toBe(`${nome}: com IF NOT EXISTS para ${indice}`);
       const tabelasNovas = [...texto.matchAll(/CREATE TABLE dbo\.(\w+)/g)].map((x) => x[1]);
       for (const t of tabelasNovas) expect(texto.includes(`OBJECT_ID(N'dbo.${t}', N'U') IS NULL`)).toBe(true);
+      const restricoes = [...texto.matchAll(/ADD CONSTRAINT\s+(\w+)/g)].map((x) => x[1]);
+      for (const r of restricoes) expect(`${nome}: ${texto.includes(`name = N'${r}'`) ? "com" : "SEM"} IF NOT EXISTS para ${r}`).toBe(`${nome}: com IF NOT EXISTS para ${r}`);
     }
+  });
+});
+
+// Revisão de 24/11/2026 (m2): o banco confere a quem a SaidaId aponta (uma SAÍDA do mesmo bloco) e a faixa contra o bloco. As chaves são
+// declarativas (nada de gatilho: as gravações usam INSERT ... OUTPUT INSERTED sem INTO, que o SQL Server recusa em tabela com gatilho). O que
+// cada uma recusa de verdade está no e2e-200 (INSERT direto, com o nome da restrição na recusa).
+describe("a 202: a SaidaId e a faixa conferidas no banco (revisão m2)", () => {
+  const migracoes = lerMigracoesDoFinanceiro();
+  const a202 = (migracoes.find((m) => m.nome.startsWith("202_")) || { texto: "" }).texto;
+  const sem = (t) => t.replace(/\s+/g, " ");
+
+  test("a migração 202 existe e nenhuma migração do Financeiro cria gatilho", () => {
+    expect(a202).not.toBe("");
+    for (const { nome, texto } of migracoes) expect(`${nome}: ${/CREATE\s+TRIGGER/i.test(texto) ? "com" : "sem"} gatilho`).toBe(`${nome}: sem gatilho`);
+  });
+
+  test("a SaidaId da entrada, da folha e da exceção desfeita aponta para uma SAÍDA do mesmo bloco", () => {
+    expect(sem(a202)).toContain("CREATE UNIQUE INDEX UX_FinLivroBlocos_SaidaDoBloco ON dbo.FinLivroBlocos (RegistroId, BlocoId, Tipo);");
+    for (const tabela of ["FinLivroBlocos", "FinFolhas", "FinFolhasDesfeitas"]) {
+      expect(sem(a202)).toContain(`ALTER TABLE dbo.${tabela} ADD SaidaTipo AS CAST(N'SAIDA' AS NVARCHAR(10)) PERSISTED;`);
+      expect(sem(a202)).toContain(`ALTER TABLE dbo.${tabela} WITH CHECK ADD CONSTRAINT FK_${tabela}_SaidaDoBloco FOREIGN KEY (SaidaId, BlocoId, SaidaTipo) REFERENCES dbo.FinLivroBlocos (RegistroId, BlocoId, Tipo);`);
+    }
+  });
+
+  test("a faixa da saída e da entrada parcial fica dentro do bloco e vai até a última folha dele", () => {
+    expect(sem(a202)).toContain("CREATE UNIQUE INDEX UX_FinBlocos_Faixa ON dbo.FinBlocos (BlocoId, PrimeiraFolha, UltimaFolha);");
+    expect(sem(a202)).toContain("ALTER TABLE dbo.FinLivroBlocos WITH CHECK ADD CONSTRAINT FK_FinLivroBlocos_FaixaDoBloco FOREIGN KEY (BlocoId, BlocoPrimeiraFolha, UltimaFolha) REFERENCES dbo.FinBlocos (BlocoId, PrimeiraFolha, UltimaFolha);");
+    expect(sem(a202)).toContain("CHECK ((PrimeiraFolha IS NULL AND BlocoPrimeiraFolha IS NULL) OR (PrimeiraFolha IS NOT NULL AND BlocoPrimeiraFolha IS NOT NULL AND PrimeiraFolha >= BlocoPrimeiraFolha))");
+    // o acerto das linhas de antes vem ANTES das restrições (WITH CHECK confere todas as linhas)
+    const acerto = a202.indexOf("SET l.BlocoPrimeiraFolha = b.PrimeiraFolha");
+    expect(acerto).toBeGreaterThan(0);
+    expect(acerto).toBeLessThan(a202.indexOf("ADD CONSTRAINT FK_FinLivroBlocos_FaixaDoBloco"));
+    expect(acerto).toBeLessThan(a202.indexOf("ADD CONSTRAINT CK_FinLivroBlocos_FaixaNoBloco"));
   });
 });

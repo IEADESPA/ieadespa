@@ -36,9 +36,9 @@ function blocosDoLote(dados) {
   if (primeira === null || primeira < 1 || primeira > MAX_FOLHA) return { erro: "Informe o número da primeira folha do lote." };
   if (porBloco === null || porBloco < 1 || porBloco > 500) return { erro: "O número de folhas por bloco não confere." };
   if (total === null || total < porBloco) return { erro: `Informe quantas folhas vieram no lote (pelo menos um bloco de ${porBloco}).` };
-  if (total % porBloco !== 0) return { erro: `O total de folhas tem de ser blocos inteiros de ${porBloco} (por exemplo, ${porBloco * 200} = 200 blocos).` };
+  if (total % porBloco !== 0) return { erro: `O total de folhas tem de ser blocos inteiros de ${porBloco} (por exemplo, ${(porBloco * 200).toLocaleString("pt-BR")} = 200 blocos).` };
   const nBlocos = total / porBloco;
-  if (nBlocos > MAX_BLOCOS_POR_LOTE) return { erro: `Um lote tem no máximo ${MAX_BLOCOS_POR_LOTE} blocos. Cadastre em partes.` };
+  if (nBlocos > MAX_BLOCOS_POR_LOTE) return { erro: `Um lote tem no máximo ${MAX_BLOCOS_POR_LOTE.toLocaleString("pt-BR")} blocos. Cadastre em partes.` };
   const ultima = primeira + total - 1;
   if (ultima > MAX_FOLHA) return { erro: "O número da última folha passou do limite." };
   const blocos = [];
@@ -184,16 +184,23 @@ function devolucaoParcial(v) {
   return v === true ? true : null;
 }
 
+const milhar = (x) => Number(x).toLocaleString("pt-BR");
+const livresPorExtenso = (de, ate) => (Number(de) === Number(ate) ? `a folha ${milhar(de)} está livre` : `as folhas ${milhar(de)} a ${milhar(ate)} estão livres`);
+
 /** a mensagem da devolução parcial: as folhas que voltam livres, da primeira em branco ao fim do bloco */
 function mensagemDaParcial(numero, de, ate) {
-  const n = (x) => Number(x).toLocaleString("pt-BR");
-  const livres = Number(de) === Number(ate) ? `a folha ${n(de)} está livre` : `as folhas ${n(de)} a ${n(ate)} estão livres`;
-  return `Bloco ${n(numero)} de volta, parcial: ${livres} para outra entrega.`;
+  return `Bloco ${milhar(numero)} de volta, parcial: ${livresPorExtenso(de, ate)} para outra entrega.`;
+}
+
+/** a recusa da devolução do bloco que já voltou em parte e está na Geral (revisão m3): ele só volta de novo depois de sair; data em aaaa-mm-dd */
+function mensagemJaVoltouParcial(numero, data, de, ate) {
+  const dia = String(data).slice(0, 10).split("-").reverse().join("/");
+  return `O bloco ${milhar(numero)} já voltou, parcial, em ${dia}: ${livresPorExtenso(de, ate)} na Tesouraria Geral para outra entrega.`;
 }
 
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, mensagemDaParcial
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, mensagemDaParcial, mensagemJaVoltouParcial
 };

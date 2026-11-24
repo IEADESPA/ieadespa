@@ -231,7 +231,7 @@ describe("a porta das ações do incremento 2", () => {
   });
 });
 
-// ---- a revisão de 23/11/2026: as regras dele (o bloco só volta cheio; desfazer a exceção da folha) e o "levado pela área" ----
+// ---- a revisão de 23/11/2026: a regra dele de desfazer a exceção da folha e o "levado pela área" ----
 describe("a revisão de 23/11/2026 (regra pura)", () => {
   test("\"levado pela área\": sim, não ou sem o campo; qualquer outra coisa é recusada (nunca vira \"não\" calado)", () => {
     expect(regra.levadoPelaArea(true)).toBe(true);
@@ -248,10 +248,24 @@ describe("a revisão de 23/11/2026 (regra pura)", () => {
     for (const lixo of [null, undefined, "abc", 1.5, -3, 0, 2 ** 40, [], {}, "1e3"]) expect(regra.desfazimentoDaFolha({ folha: lixo, motivo: "x" }).erro).toBeTruthy();
     expect(regra.desfazimentoDaFolha(null).erro).toBeTruthy();
   });
-  test("a mensagem do bloco que ainda tem folha livre: singular, plural e o ponto do milhar", () => {
-    expect(regra.recusaDoBlocoComFolhaLivre(1401, 1)).toMatch(/^O bloco 1\.401 ainda tem 1 folha livre: /);
-    expect(regra.recusaDoBlocoComFolhaLivre(1401, 49)).toMatch(/^O bloco 1\.401 ainda tem 49 folhas livres: /);
-    expect(regra.recusaDoBlocoComFolhaLivre(1401, 49)).toMatch(/cancelada, arrancada ou extraviada/);
+});
+
+// ---- a regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11): a devolução completa ou parcial ----
+describe("a devolução completa ou parcial (regra de 24/11/2026)", () => {
+  test("parcial: sim (true), não (false ou sem o campo); qualquer outra coisa é recusada (nunca vira \"completa\" calada)", () => {
+    expect(regra.devolucaoParcial(true)).toBe(true);
+    expect(regra.devolucaoParcial(false)).toBe(false);
+    expect(regra.devolucaoParcial(undefined)).toBe(false);
+    expect(regra.devolucaoParcial(null)).toBe(false);
+    for (const lixo of ["true", "parcial", 1, 0, "", [], {}, [true]]) expect(regra.devolucaoParcial(lixo)).toBeNull();
+  });
+  test("a devolução completa do bloco com folha livre: a mensagem manda marcar parcial, e nunca anular a folha em branco", () => {
+    expect(regra.recusaDaDevolucaoCompleta(1401, 1)).toMatch(/^O bloco 1\.401 ainda tem 1 folha livre: /);
+    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).toMatch(/^O bloco 1\.401 ainda tem 49 folhas livres: /);
+    expect(regra.recusaDaDevolucaoCompleta(1401, 1200)).toMatch(/1\.200 folhas livres/);
+    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).toMatch(/parcial/);
+    expect(regra.recusaDaDevolucaoCompleta(1401, 49)).not.toMatch(/anul|cancel|toda folha precisa/i);
+    expect(regra.recusaDoBlocoComFolhaLivre).toBeUndefined();   // a recusa de 23/11 (marcar cada folha em branco) saiu
   });
 });
 
@@ -282,5 +296,13 @@ describe("a porta de desfazer a exceção da folha (só a Tesouraria Geral)", ()
   });
   test("pelo GET não desfaz (ação inválida)", async () => {
     expect((await chamar({ acao: "desfazer-folha", metodo: "GET", token: GERAL() })).status).toBe(404);
+  });
+  test("a devolução com o \"parcial\" que não é sim nem não: 422 com a mensagem, sem tocar no banco (regra de 24/11/2026)", async () => {
+    for (const lixo of ["sim", "true", 1]) {
+      const r = await chamar({ acao: "devolver", metodo: "POST", corpo: { primeiraFolha: 70051, pessoa: { nome: "Lia Fontes" }, parcial: lixo }, token: GERAL() });
+      expect(r.status).toBe(422);
+      expect(r.body.mensagem).toBe("Diga se a devolução é completa ou parcial.");
+    }
+    expect(mockConsultas).toHaveLength(0);
   });
 });

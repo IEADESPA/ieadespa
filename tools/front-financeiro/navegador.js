@@ -125,7 +125,7 @@ function apiFinanceiro(nivel, opcoes) {
     if (p === "/api/financeiro/blocos/devolver" && metodo === "POST") {
       // a regra dele (23/11/2026): o bloco só volta cheio; o servidor recusa com a mensagem (a tela só a mostra)
       if (corpo && corpo.pessoa && corpo.pessoa.nome === "Marta Lima") {
-        return { status: 422, corpo: { sucesso: false, mensagem: "O bloco 1.360 ainda tem 2 folhas livres: toda folha precisa de destino antes de o bloco voltar (lançada, ou cancelada, arrancada ou extraviada com a observação)." } };
+        return { status: 422, corpo: { sucesso: false, mensagem: "O bloco 1.360 ainda tem 2 folhas livres: a devolução completa é só do bloco todo usado; com folhas livres, a devolução é parcial." } };
       }
       return { corpo: { sucesso: true, mensagem: "Bloco 1.360 devolvido: está de novo com a Tesouraria Geral." } };
     }
@@ -406,7 +406,7 @@ async function provarLivro() {
   dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
   ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Marta Lima" } }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
   await calmo(page);
-  ok(/^O bloco 1.360 ainda tem 2 folhas livres: /.test(await ultimoAviso(page)), "geral: a recusa do bloco com folha livre aparece para a pessoa (só volta cheio, regra de 23/11)", await ultimoAviso(page));
+  ok(/^O bloco 1.360 ainda tem 2 folhas livres: /.test(await ultimoAviso(page)), "geral: a recusa da devolução completa do bloco com folha livre aparece para a pessoa (regra de 24/11)", await ultimoAviso(page));
   // o bloco que ainda está na Geral e o já devolvido: o rastreio não quebra e não oferece o registro
   await digitar(page, "Primeira folha do bloco", "70101");
   await espera(700);

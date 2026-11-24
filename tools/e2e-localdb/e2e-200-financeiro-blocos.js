@@ -73,7 +73,9 @@ async function disparar(chamadas) {
 
   console.log("== a 201: os índices que faltavam (revisão de 23/11/2026, regra 3 do banco) e o histórico da exceção desfeita ==");
   for (const [t, c] of [["FinBlocos", "LoteId"], ["FinLivroBlocos", "BlocoId"], ["FinLivroBlocos", "CongregacaoId"], ["FinLivroBlocos", "LoteId"], ["FinLivroBlocos", "PessoaMembroId"],
-    ["FinCentrosCusto", "CentroPaiId"], ["FinCentrosCusto", "AreaId"], ["FinFolhasDesfeitas", "BlocoId"], ["FinFolhasDesfeitas", "Folha"]]) {
+    ["FinCentrosCusto", "CentroPaiId"], ["FinCentrosCusto", "AreaId"], ["FinFolhasDesfeitas", "BlocoId"], ["FinFolhasDesfeitas", "Folha"],
+    // a regra de 24/11/2026 (a devolução parcial): a entrega de cada folha, a entrega que a entrada fecha
+    ["FinFolhas", "SaidaId"], ["FinLivroBlocos", "SaidaId"], ["FinFolhasDesfeitas", "SaidaId"]]) {
     ok(await comecaIndice(t, c), `há índice que começa por ${t}.${c}`);
   }
 
@@ -142,17 +144,36 @@ async function disparar(chamadas) {
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
   r = await POST(H, "entregar", geral, { primeiraFolha: 70202, congregacaoId: CENTRAL, pessoa: { nome: "x" } });
   ok(r.status === 422 && /Não há bloco que comece na folha 70\.202/.test(r.body.mensagem), "folha que não é a primeira de um bloco é recusada", r.body);
-  const livro = await q(`SELECT Tipo, CongregacaoId, PessoaMembroId, PessoaNome, LevadoPelaArea FROM FinLivroBlocos WHERE Tipo = 'SAIDA' ORDER BY RegistroId`);
+  const livro = await q(`SELECT l.Tipo, l.CongregacaoId, l.PessoaMembroId, l.PessoaNome, l.LevadoPelaArea, l.PrimeiraFolha, l.UltimaFolha, b.PrimeiraFolha AS BlocoPrimeira, b.UltimaFolha AS BlocoUltima
+    FROM FinLivroBlocos l JOIN FinBlocos b ON b.BlocoId = l.BlocoId WHERE l.Tipo = 'SAIDA' ORDER BY l.RegistroId`);
   ok(livro.length === 3 && livro[0].PessoaMembroId === TESOUREIRA_LOCAL && livro[1].LevadoPelaArea === true && livro[2].PessoaNome === "Tesoureiro da Beta", "o livro registra cada saída, com quem levou e se foi pela área", livro);
-  // uma folha do 1.401 com destino (a tela das folhas vem no incremento 2): o bloco passa a "em uso"
+  ok(livro.every((l) => l.PrimeiraFolha === l.BlocoPrimeira && l.UltimaFolha === l.BlocoUltima), "a saída guarda a faixa das folhas entregues: o bloco inteiro na primeira saída (regra de 24/11/2026)", livro);
+  // uma folha do 1.401 com destino (a tela das folhas vem no incremento 2): o bloco passa a "em uso". A folha guarda a entrega que a usou.
   const b1401 = await escalar(`SELECT BlocoId FROM FinBlocos WHERE Numero = 1401`);
-  await q(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70090, 'ARRANCADA', 'Rasgou na hora de preencher', ${TESOUREIRA_LOCAL})`);
-  await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70090, 'CANCELADA', 'de novo', ${TESOUREIRA_LOCAL})`, "a mesma folha com dois destinos");
-  await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70091, 'CANCELADA', '   ', ${TESOUREIRA_LOCAL})`, "folha cancelada sem a observação");
-  const desfeita = (destino, motivo) => `INSERT INTO FinFolhasDesfeitas (FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, DesfeitaPor, Motivo)
-    VALUES (999001, ${b1401}, 70092, '${destino}', 'x', ${TESOUREIRA_LOCAL}, SYSUTCDATETIME(), ${TESOUREIRO_GERAL}, '${motivo}')`;
+  const saida1401 = await escalar(`SELECT RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = ${b1401}`);
+  const saida1403 = await escalar(`SELECT RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = (SELECT BlocoId FROM FinBlocos WHERE Numero = 1403)`);
+  await q(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) VALUES (${b1401}, 70090, 'ARRANCADA', 'Rasgou na hora de preencher', ${TESOUREIRA_LOCAL}, ${saida1401})`);
+  await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) VALUES (${b1401}, 70090, 'CANCELADA', 'de novo', ${TESOUREIRA_LOCAL}, ${saida1401})`, "a mesma folha com dois destinos");
+  await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) VALUES (${b1401}, 70091, 'CANCELADA', '   ', ${TESOUREIRA_LOCAL}, ${saida1401})`, "folha cancelada sem a observação");
+  await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70092, 'LANCADA', NULL, ${TESOUREIRA_LOCAL})`, "folha com destino sem a entrega que a usou (regra de 24/11/2026)");
+  const desfeita = (destino, motivo, saida = saida1401) => `INSERT INTO FinFolhasDesfeitas (FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, DesfeitaPor, Motivo, SaidaId)
+    VALUES (999001, ${b1401}, 70092, '${destino}', 'x', ${TESOUREIRA_LOCAL}, SYSUTCDATETIME(), ${TESOUREIRO_GERAL}, '${motivo}', ${saida})`;
   await recusa(desfeita("CANCELADA", "   "), "exceção desfeita sem o motivo");
   await recusa(desfeita("LANCADA", "lançada"), "folha lançada no histórico das exceções desfeitas (o lançamento se corrige por estorno)");
+  await recusa(desfeita("CANCELADA", "sem a entrega", "NULL"), "exceção desfeita sem a entrega que a usou");
+  // o livro da regra de 24/11/2026: a saída com a faixa; a entrada com a saída que fecha, se foi parcial e as folhas livres que voltaram
+  const livroDireto = (tipo, extra) => `INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, ${Object.keys(extra).join(", ")})
+    VALUES ('${tipo}', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${Object.values(extra).join(", ")})`;
+  await recusa(livroDireto("SAIDA", { Parcial: 0 }), "saída sem a faixa das folhas");
+  await recusa(livroDireto("SAIDA", { PrimeiraFolha: 70100, UltimaFolha: 70051 }), "saída com a faixa ao contrário");
+  await recusa(livroDireto("ENTRADA", { FolhasLivres: 0 }), "entrada sem a saída que ela fecha");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 1, FolhasLivres: 0 }), "entrada parcial sem folha livre");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, Parcial: 0, FolhasLivres: -1 }), "entrada com folhas livres negativas");
+  await recusa(livroDireto("ENTRADA", { SaidaId: saida1401, PrimeiraFolha: 70051, UltimaFolha: 70100, FolhasLivres: 0 }), "entrada com a faixa (a faixa é da saída)");
+  await recusa(`INSERT INTO FinLivroBlocos (Tipo, LoteId, Quantidade, DataRegistro, RegistradoPor, Parcial) VALUES ('CHEGADA', ${loteId}, 1, '2026-11-20', ${TESOUREIRO_GERAL}, 1)`, "chegada marcada como parcial");
+  await q(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId, FolhasLivres) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403}, 3)`);
+  await recusa(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaNome, DataRegistro, RegistradoPor, SaidaId, FolhasLivres) VALUES ('ENTRADA', ${b1401}, ${VILA_NOVA}, N'Teste', '2026-11-20', ${TESOUREIRO_GERAL}, ${saida1403}, 3)`, "duas entradas fechando a mesma saída");
+  await q(`DELETE FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND SaidaId = ${saida1403}`);
   await recusa(`UPDATE FinBlocos SET Situacao = 'NA_GERAL' WHERE BlocoId = ${b1401}`, "bloco na Geral com congregação");
   await recusa(`UPDATE FinBlocos SET Situacao = 'DEVOLVIDO' WHERE BlocoId = ${b1401}`, "bloco devolvido sem a data da devolução");
   await recusa(`UPDATE FinBlocos SET Situacao = 'ENTREGUE', CongregacaoId = ${CENTRAL}, EntregueEm = '2026-11-21' WHERE Numero = 1590`, "entregar bloco que não chegou (direto no banco)");

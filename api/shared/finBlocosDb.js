@@ -4,8 +4,11 @@
 // Quem vê o quê: a Tesouraria Geral vê todos os blocos, inclusive os que estão com ela (na Geral); a congregação e a área veem só os blocos
 // entregues às congregações do seu escopo. O bloco nunca fica com a área: ela só leva (o livro registra "levado pela área").
 // Gravações em transação com trava de aplicação: dois lotes ao mesmo tempo nunca cruzam a numeração, e o mesmo bloco não sai duas vezes.
-// Revisão de 23/11/2026: SET XACT_ABORT ON em toda transação (regra 7 do banco); o bloco só volta cheio e a exceção da folha se desfaz com o
-// motivo, só pela Tesouraria Geral (as regras dele); os números das mensagens com o ponto do milhar.
+// Revisão de 23/11/2026: SET XACT_ABORT ON em toda transação (regra 7 do banco); a exceção da folha se desfaz com o motivo, só pela Tesouraria
+// Geral (a regra dele); os números das mensagens com o ponto do milhar.
+// Regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11): a devolução é completa ou parcial. Na parcial, as folhas sem uso
+// continuam livres e o bloco volta para a Geral, para sair de novo a partir da primeira folha livre (a saída guarda a faixa entregue); cada folha
+// guarda a entrega que a usou (FinFolhas.SaidaId) e a entrada guarda a saída que fecha e as folhas livres que voltaram (migração 201).
 const { sql } = require("./db");
 const auth = require("./auth");
 const { registrarAuditoriaNaTransacao } = require("./auditoria");
@@ -48,6 +51,23 @@ async function fecharTransacao(t, ok) {
   // quando o próprio banco já desfez a transação (o XACT_ABORT), o mssql já devolveu a conexão: o desligar e o rollback falham calados
   try { await new sql.Request(t).batch("SET XACT_ABORT OFF"); } catch { /* idem */ }
   try { if (ok) await t.commit(); else await t.rollback(); } catch (e) { if (ok) throw e; }
+}
+
+// A última saída do bloco no livro (regra de 24/11/2026: o bloco pode sair mais de uma vez): a entrega em curso, quando ele está entregue. Lida
+// com a linha do bloco já travada, na mesma transação. null = o bloco nunca saiu.
+async function ultimaSaida(t, blocoId) {
+  const s = (await new sql.Request(t).input("b", sql.Int, blocoId).query(`
+    SELECT TOP 1 RegistroId, PrimeiraFolha FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC`)).recordset[0];
+  return s ? { id: Number(s.RegistroId), primeiraFolha: Number(s.PrimeiraFolha) } : null;
+}
+
+// A primeira folha sem destino do bloco: a primeira do bloco, ou a seguinte de uma folha usada cuja próxima está livre. null = nenhuma livre.
+async function primeiraFolhaLivre(t, b) {
+  const r = (await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("p", sql.Int, b.PrimeiraFolha).input("u", sql.Int, b.UltimaFolha).query(`
+    SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM FinFolhas WHERE Folha = @p) THEN @p
+                ELSE (SELECT MIN(f.Folha + 1) FROM FinFolhas f
+                      WHERE f.BlocoId = @id AND f.Folha < @u AND NOT EXISTS (SELECT 1 FROM FinFolhas g WHERE g.Folha = f.Folha + 1)) END AS Livre`)).recordset[0];
+  return r && r.Livre != null ? Number(r.Livre) : null;
 }
 
 // Quem está vendo (o título da página e o cabeçalho do módulo): a Geral, ou quantas congregações ativas a pessoa alcança, a área delas (quando é
@@ -222,7 +242,8 @@ async function registrarChegada(pool, { loteId, ateFolha, data, por }) {
 }
 
 // A saída (só a Tesouraria Geral): o bloco que chegou e está na Geral é entregue a alguém de uma congregação. A área pode levar, mas o bloco nunca
-// fica com ela: fica registrado como "levado pela área" e passa a ser da congregação.
+// fica com ela: fica registrado como "levado pela área" e passa a ser da congregação. Regra de 24/11/2026: o bloco que voltou em parte sai de novo a
+// partir da primeira folha livre (informada pela primeira folha do bloco ou por essa folha), e a saída guarda a faixa entregue.
 async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPelaArea, data, por }) {
   const pf = inteiroPositivo(primeiraFolha), cong = inteiroPositivo(congregacaoId);
   if (!pf) return { sucesso: false, mensagem: "Informe a primeira folha do bloco." };
@@ -245,24 +266,42 @@ async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPela
       const m = (await new sql.Request(t).input("m", sql.Int, membroId).query(`SELECT 1 AS ok FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
       if (!m) return { sucesso: false, mensagem: "A pessoa escolhida não confere." };
     }
-    const b = (await new sql.Request(t).input("pf", sql.Int, pf)
-      .query(`SELECT BlocoId, Numero, Situacao, ChegouEm, DevolvidoEm FROM FinBlocos WITH (UPDLOCK, HOLDLOCK) WHERE PrimeiraFolha = @pf`)).recordset[0];
-    if (!b) return { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
+    // como na exceção da folha: acha o bloco sem trava e trava só a linha dele, pela chave (travar a faixa do índice dava impasse; a exceção, o
+    // desfazer e a devolução travam a mesma linha antes de mexer nas folhas, e a primeira folha livre só se calcula depois da trava)
+    const achado = (await new sql.Request(t).input("pf", sql.Int, pf)
+      .query(`SELECT TOP 1 BlocoId FROM FinBlocos WHERE PrimeiraFolha <= @pf AND UltimaFolha >= @pf ORDER BY PrimeiraFolha DESC`)).recordset[0];
+    const b = achado && (await new sql.Request(t).input("id", sql.Int, achado.BlocoId).query(`
+      SELECT BlocoId, Numero, PrimeiraFolha, UltimaFolha, Situacao, ChegouEm, DevolvidoEm FROM FinBlocos WITH (UPDLOCK, ROWLOCK) WHERE BlocoId = @id`)).recordset[0];
+    const naoComeca = { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
+    if (!b) return naoComeca;
+    // por onde o bloco sai: na Geral, a primeira folha livre; entregue ou devolvido, por onde saiu da última vez (para a recusa certa)
+    const inicio = b.Situacao === "NA_GERAL" ? await primeiraFolhaLivre(t, b) : ((await ultimaSaida(t, b.BlocoId)) || {}).primeiraFolha;
+    if (pf !== Number(b.PrimeiraFolha) && pf !== inicio) {
+      return b.Situacao === "NA_GERAL" && inicio != null && inicio !== Number(b.PrimeiraFolha)
+        ? { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} volta a sair pela folha ${milhar(inicio)}, a primeira livre.` } : naoComeca;
+    }
     if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido em ${dataBr(b.DevolvidoEm)}.` };
     if (b.Situacao !== "NA_GERAL") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi entregue.` };
     if (!b.ChegouEm) return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} ainda não chegou da gráfica.` };
+    if (inicio == null) return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} não tem folha livre.` };
     // a entrega não vem antes da chegada da gráfica (revisão M2; a devolução já confere a data contra a entrega)
     if (dia < iso(b.ChegouEm)) return { sucesso: false, mensagem: `A data da entrega é antes da chegada do bloco da gráfica (${dataBr(b.ChegouEm)}).` };
+    // a nova saída não vem antes da devolução parcial que trouxe o bloco de volta
+    const volta = (await new sql.Request(t).input("id", sql.Int, b.BlocoId)
+      .query(`SELECT TOP 1 DataRegistro FROM FinLivroBlocos WHERE Tipo = 'ENTRADA' AND BlocoId = @id ORDER BY RegistroId DESC`)).recordset[0];
+    if (volta && dia < iso(volta.DataRegistro)) return { sucesso: false, mensagem: `A data da entrega é antes da última devolução do bloco (${dataBr(volta.DataRegistro)}).` };
     await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("c", sql.Int, cong).input("d", sql.Date, dia)
       .query(`UPDATE FinBlocos SET Situacao = 'ENTREGUE', CongregacaoId = @c, EntregueEm = @d WHERE BlocoId = @id AND Situacao = 'NA_GERAL'`);
+    const ultima = Number(b.UltimaFolha);
     const reg = (await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("c", sql.Int, cong).input("m", sql.Int, membroId).input("n", sql.NVarChar(200), nome)
-      .input("area", sql.Bit, area).input("d", sql.Date, dia).input("por", sql.Int, por)
-      .query(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaMembroId, PessoaNome, LevadoPelaArea, DataRegistro, RegistradoPor)
-              OUTPUT INSERTED.RegistroId VALUES ('SAIDA', @id, @c, @m, @n, @area, @d, @por)`)).recordset[0].RegistroId;
+      .input("area", sql.Bit, area).input("d", sql.Date, dia).input("por", sql.Int, por).input("de", sql.Int, inicio).input("ate", sql.Int, ultima)
+      .query(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaMembroId, PessoaNome, LevadoPelaArea, DataRegistro, RegistradoPor, PrimeiraFolha, UltimaFolha)
+              OUTPUT INSERTED.RegistroId VALUES ('SAIDA', @id, @c, @m, @n, @area, @d, @por, @de, @ate)`)).recordset[0].RegistroId;
     await registrarAuditoriaNaTransacao(t, { tabela: "FinBlocos", registroId: b.BlocoId, acao: "FIN_BLOCO_ENTREGUE", usuarioId: por,
-      dadosDepois: { congregacaoId: cong, livro: reg, levadoPelaArea: area } });
+      dadosDepois: { congregacaoId: cong, livro: reg, levadoPelaArea: area, primeiraFolha: inicio, ultimaFolha: ultima } });
     ok = true;
-    return { sucesso: true, mensagem: `Bloco ${milhar(b.Numero)} entregue a ${c.Nome}.` };
+    const faixa = inicio === Number(b.PrimeiraFolha) ? "" : ` (folhas ${milhar(inicio)} a ${milhar(ultima)})`;
+    return { sucesso: true, mensagem: `Bloco ${milhar(b.Numero)} entregue a ${c.Nome}${faixa}.` };
   } finally {
     await fecharTransacao(t, ok);
   }
@@ -314,13 +353,19 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
   const opcoes = linhas.filter((l) => l.Situacao === "ENTREGUE" || Number(l.OrdemDevolvido) <= 50 || (escolhido && l.BlocoId === escolhido.BlocoId))
     .map((l) => ({ id: Number(l.BlocoId), numero: Number(l.Numero), congregacao: l.Congregacao, situacao: regra.situacaoDoBloco(l.Situacao, Number(l.Usadas)) }));
   if (!escolhido) return { sucesso: true, bloco: null, folhas: [], opcoes, escopo };
-  const f = await pool.request().input("b", sql.Int, escolhido.BlocoId)
-    .query(`SELECT Folha, Destino, Observacao FROM FinFolhas WHERE BlocoId = @b ORDER BY Folha`);
+  // a observação de uma folha usada numa entrega anterior (o bloco voltou em parte e saiu de novo, talvez para outra congregação) só a Tesouraria
+  // Geral vê; quem recebeu o bloco depois vê que a folha foi usada (a regra de 24/11/2026; pergunta aberta ao responsável)
+  const f = await pool.request().input("b", sql.Int, escolhido.BlocoId).query(`
+    SELECT f.Folha, f.Destino, f.Observacao, CASE WHEN f.SaidaId = s.RegistroId THEN 1 ELSE 0 END AS DaUltimaEntrega
+    FROM FinFolhas f
+    OUTER APPLY (SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC) s
+    WHERE f.BlocoId = @b ORDER BY f.Folha`);
   const total = Number(escolhido.UltimaFolha) - Number(escolhido.PrimeiraFolha) + 1;
   return {
     sucesso: true,
     bloco: { ...blocoDaLinha(escolhido), usadas: Number(escolhido.Usadas), livres: total - Number(escolhido.Usadas) },
-    folhas: f.recordset.map((x) => ({ folha: Number(x.Folha), destino: regra.destinoDaTela(x.Destino), observacao: x.Destino === "LANCADA" ? null : x.Observacao })),
+    folhas: f.recordset.map((x) => ({ folha: Number(x.Folha), destino: regra.destinoDaTela(x.Destino),
+      observacao: x.Destino === "LANCADA" || (!geral && !Number(x.DaUltimaEntrega)) ? null : x.Observacao })),
     opcoes, escopo
   };
 }
@@ -349,9 +394,11 @@ async function registrarFolha(pool, usuario, { geral, dados, por }) {
     if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido: as folhas dele não mudam mais.` };
     const ja = (await new sql.Request(t).input("f", sql.Int, v.folha).query(`SELECT Destino FROM FinFolhas WHERE Folha = @f`)).recordset[0];
     if (ja) return MUDOU(`A folha ${milhar(v.folha)} já tem destino (${regra.destinoDaTela(ja.Destino)}).`);
+    // a folha guarda a entrega em que foi usada (a última saída do bloco, que está entregue: regra de 24/11/2026)
     const id = (await new sql.Request(t).input("b", sql.Int, b.BlocoId).input("f", sql.Int, v.folha).input("d", sql.NVarChar(10), v.destino)
       .input("o", sql.NVarChar(300), v.observacao).input("por", sql.Int, por)
-      .query(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) OUTPUT INSERTED.FolhaId VALUES (@b, @f, @d, @o, @por)`)).recordset[0].FolhaId;
+      .query(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor, SaidaId) OUTPUT INSERTED.FolhaId
+              SELECT @b, @f, @d, @o, @por, (SELECT TOP 1 RegistroId FROM FinLivroBlocos WHERE Tipo = 'SAIDA' AND BlocoId = @b ORDER BY RegistroId DESC)`)).recordset[0].FolhaId;
     await registrarAuditoriaNaTransacao(t, { tabela: "FinFolhas", registroId: id, acao: "FIN_FOLHA_EXCECAO", usuarioId: por,
       dadosDepois: { bloco: Number(b.Numero), folha: v.folha, destino: v.destino } });
     ok = true;
@@ -363,7 +410,9 @@ async function registrarFolha(pool, usuario, { geral, dados, por }) {
 }
 
 // O livro de entrada e saída em páginas (5 no notebook, 3 no celular), do mais novo ao mais antigo. A Geral vê tudo (o cadastro e a chegada do
-// lote também); a área e a congregação, as saídas e as entradas das congregações do seu escopo, e os blocos delas agora.
+// lote também); a área e a congregação, as saídas e as entradas das congregações do seu escopo, e os blocos delas agora. Regra de 24/11/2026: a
+// saída traz a faixa entregue; a entrada traz se foi parcial e conta só as folhas da entrega que ela fecha (com as livres que voltaram, guardadas
+// na hora): a contagem não muda quando o bloco sai de novo.
 async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
   const escopo = await escopoDaTela(pool, usuario, geral);
   const pedido = pool.request();
@@ -381,7 +430,8 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
   pedido.input("pular", sql.Int, (pagina - 1) * porPagina).input("porPagina", sql.Int, porPagina);
   const r = await pedido.query(`
     SELECT l.RegistroId, l.Tipo, l.DataRegistro, l.LevadoPelaArea, l.Quantidade, l.PessoaNome, pm.Nome AS PessoaMembro, rp.Nome AS RegistradoPor,
-           b.Numero, b.PrimeiraFolha, b.UltimaFolha, c.Nome AS Congregacao, lg.Serie, lg.PrimeiraFolha AS LotePrimeira, lg.UltimaFolha AS LoteUltima,
+           l.PrimeiraFolha AS SaidaPrimeira, l.UltimaFolha AS SaidaUltima, l.Parcial, l.FolhasLivres,
+           b.Numero, c.Nome AS Congregacao, lg.Serie, lg.PrimeiraFolha AS LotePrimeira, lg.UltimaFolha AS LoteUltima,
            (SELECT COUNT(*) FROM FinBlocos x WHERE x.LoteId = lg.LoteId) AS LoteBlocos, k.Lancadas, k.Canceladas, k.Arrancadas, k.Extraviadas,
            COUNT(*) OVER () AS Total
     FROM FinLivroBlocos l
@@ -392,7 +442,7 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
     LEFT JOIN MembroReferencia rp ON rp.MembroId = l.RegistradoPor
     OUTER APPLY (SELECT SUM(CASE WHEN f.Destino = 'LANCADA' THEN 1 ELSE 0 END) AS Lancadas, SUM(CASE WHEN f.Destino = 'CANCELADA' THEN 1 ELSE 0 END) AS Canceladas,
                         SUM(CASE WHEN f.Destino = 'ARRANCADA' THEN 1 ELSE 0 END) AS Arrancadas, SUM(CASE WHEN f.Destino = 'EXTRAVIADA' THEN 1 ELSE 0 END) AS Extraviadas
-                 FROM FinFolhas f WHERE l.Tipo = 'ENTRADA' AND f.BlocoId = l.BlocoId) k
+                 FROM FinFolhas f WHERE l.Tipo = 'ENTRADA' AND f.SaidaId = l.SaidaId) k
     ${onde.length ? "WHERE " + onde.join(" AND ") : ""}
     ORDER BY l.DataRegistro DESC, l.RegistroId DESC
     OFFSET @pular ROWS FETCH NEXT @porPagina ROWS ONLY`);
@@ -408,11 +458,13 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
         return { ...reg, quantidade: l.Quantidade == null ? null : Number(l.Quantidade),
           lote: { serie: Number(l.Serie), primeiraFolha: Number(l.LotePrimeira), ultimaFolha: Number(l.LoteUltima), blocos: Number(l.LoteBlocos) } };
       }
-      const total = Number(l.UltimaFolha) - Number(l.PrimeiraFolha) + 1;
-      const contagem = l.Tipo === "ENTRADA" ? regra.contagemDasFolhas([
+      const base = { ...reg, bloco: Number(l.Numero), congregacao: l.Congregacao || "", pessoa: l.PessoaMembro || l.PessoaNome || "", levadoPelaArea: l.LevadoPelaArea === true };
+      if (l.Tipo === "SAIDA") return { ...base, contagem: null, folhas: { primeiraFolha: Number(l.SaidaPrimeira), ultimaFolha: Number(l.SaidaUltima) } };
+      const usadas = [l.Lancadas, l.Canceladas, l.Arrancadas, l.Extraviadas].reduce((a, n) => a + (Number(n) || 0), 0);
+      const contagem = regra.contagemDasFolhas([
         { Destino: "LANCADA", N: l.Lancadas }, { Destino: "CANCELADA", N: l.Canceladas }, { Destino: "ARRANCADA", N: l.Arrancadas }, { Destino: "EXTRAVIADA", N: l.Extraviadas }
-      ], total) : null;
-      return { ...reg, bloco: Number(l.Numero), congregacao: l.Congregacao || "", pessoa: l.PessoaMembro || l.PessoaNome || "", levadoPelaArea: l.LevadoPelaArea === true, contagem };
+      ], usadas + (Number(l.FolhasLivres) || 0));
+      return { ...base, contagem, parcial: l.Parcial === true };
     }),
     total: linhas.length ? Number(linhas[0].Total) : 0, pagina, porPagina, agora, escopo
   };
@@ -420,6 +472,7 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
 
 // O rastreio do bloco (só a Tesouraria Geral, no "Registrar entrada"): pela primeira folha (ou qualquer folha dele), o bloco, com quem está, quando
 // saiu, quantas folhas têm cada destino e as pessoas que podem devolver (quem o levou e a liderança da congregação; ou outra pessoa, escrita).
+// Entregue, a contagem é a da entrega em curso (regra de 24/11/2026: o bloco pode ter saído antes e voltado em parte).
 async function rastreio(pool, { folha }) {
   const f = inteiroPositivo(folha);
   if (!f) return { sucesso: false, mensagem: "Informe o número da primeira folha do bloco." };
@@ -430,13 +483,17 @@ async function rastreio(pool, { folha }) {
     WHERE @f BETWEEN b.PrimeiraFolha AND b.UltimaFolha`)).recordset[0];
   if (!b) return { sucesso: false, mensagem: `Nenhum bloco tem a folha ${milhar(f)}.` };
   const total = Number(b.UltimaFolha) - Number(b.PrimeiraFolha) + 1;
-  const contagem = regra.contagemDasFolhas((await pool.request().input("b", sql.Int, b.BlocoId)
-    .query(`SELECT Destino, COUNT(*) AS N FROM FinFolhas WHERE BlocoId = @b GROUP BY Destino`)).recordset, total);
+  const livres = total - Number(b.Usadas);
+  const saida = b.Situacao !== "ENTREGUE" ? null : (await pool.request().input("b", sql.Int, b.BlocoId).query(`
+      SELECT TOP 1 l.RegistroId, l.PessoaMembroId, COALESCE(m.Nome, l.PessoaNome) AS Nome FROM FinLivroBlocos l LEFT JOIN MembroReferencia m ON m.MembroId = l.PessoaMembroId
+      WHERE l.Tipo = 'SAIDA' AND l.BlocoId = @b ORDER BY l.RegistroId DESC`)).recordset[0];
+  const pedidoContagem = pool.request().input("b", sql.Int, b.BlocoId);
+  if (saida) pedidoContagem.input("s", sql.Int, saida.RegistroId);
+  const destinos = (await pedidoContagem.query(`SELECT Destino, COUNT(*) AS N FROM FinFolhas WHERE BlocoId = @b ${saida ? "AND SaidaId = @s" : ""} GROUP BY Destino`)).recordset;
+  // na entrega em curso: as folhas usadas nela e as livres (as de antes da faixa já foram usadas e não mudam mais)
+  const contagem = regra.contagemDasFolhas(destinos, saida ? destinos.reduce((a, d) => a + Number(d.N || 0), 0) + livres : total);
   let pessoas = [];
   if (b.Situacao === "ENTREGUE") {
-    const saida = (await pool.request().input("b", sql.Int, b.BlocoId).query(`
-      SELECT TOP 1 l.PessoaMembroId, COALESCE(m.Nome, l.PessoaNome) AS Nome FROM FinLivroBlocos l LEFT JOIN MembroReferencia m ON m.MembroId = l.PessoaMembroId
-      WHERE l.Tipo = 'SAIDA' AND l.BlocoId = @b ORDER BY l.RegistroId DESC`)).recordset[0];
     const lideres = (await pool.request().input("c", sql.Int, b.CongregacaoId).query(`
       SELECT m.MembroId, m.Nome, MIN(p.Nome) AS Papel
       FROM Lideranca l JOIN MembroReferencia m ON m.MembroId = l.MembroId LEFT JOIN Papeis p ON p.PapelId = l.PapelId
@@ -445,18 +502,22 @@ async function rastreio(pool, { folha }) {
     if (saida && saida.Nome) pessoas.push({ membroId: saida.PessoaMembroId ? Number(saida.PessoaMembroId) : null, nome: saida.Nome, papel: "quem levou o bloco" });
     for (const l of lideres) if (!pessoas.some((p) => p.membroId === Number(l.MembroId))) pessoas.push({ membroId: Number(l.MembroId), nome: l.Nome, papel: l.Papel || "" });
   }
-  return { sucesso: true, bloco: { ...blocoDaLinha(b), usadas: Number(b.Usadas), livres: total - Number(b.Usadas) }, contagem, pessoas };
+  return { sucesso: true, bloco: { ...blocoDaLinha(b), usadas: Number(b.Usadas), livres }, contagem, pessoas };
 }
 
 // A entrada (a devolução; só a Tesouraria Geral): o bloco que está com a congregação volta para a Geral. Quem recebe é quem está registrando (o nome
 // de quem está logado entra sozinho); quem devolveu é alguém do cadastro ou o nome escrito. A data não pode ser antes da entrega nem depois de hoje.
-// Regra dele (23/11/2026): o bloco só volta CHEIO — toda folha com destino (lançada, ou cancelada, arrancada ou extraviada). A exceção e o
-// desfazer travam a mesma linha do bloco antes de mexer nas folhas: a contagem aqui não muda até o fim da transação.
-async function devolver(pool, { primeiraFolha, pessoa, data, por }) {
+// Regra dele (24/11/2026, no lugar da "só bloco cheio" de 23/11): a tesouraria diz se a devolução é COMPLETA (o normal: toda folha da entrega
+// tem destino, e o bloco fecha) ou PARCIAL (a exceção: as folhas sem uso continuam livres, nada se anula, e o bloco volta para a Geral, pronto
+// para sair de novo a partir da primeira folha livre). A entrada guarda a saída que fecha e as folhas livres que voltaram. A exceção e o desfazer
+// travam a mesma linha do bloco antes de mexer nas folhas: a contagem aqui não muda até o fim da transação.
+async function devolver(pool, { primeiraFolha, pessoa, parcial, data, por }) {
   const pf = inteiroPositivo(primeiraFolha);
   if (!pf) return { sucesso: false, mensagem: "Informe a primeira folha do bloco." };
   const p = regra.pessoaDoLivro(pessoa, "Informe quem devolveu o bloco.");
   if (p.erro) return { sucesso: false, mensagem: p.erro };
+  const emParte = regra.devolucaoParcial(parcial);
+  if (emParte === null) return { sucesso: false, mensagem: "Diga se a devolução é completa ou parcial." };
   const dia = data == null || data === "" ? hojeBrasilia() : data;
   if (!dataValida(dia) || dia > hojeBrasilia()) return { sucesso: false, mensagem: "A data da devolução não confere." };
   const t = await abrirTransacao(pool);
@@ -466,27 +527,38 @@ async function devolver(pool, { primeiraFolha, pessoa, data, por }) {
       const m = (await new sql.Request(t).input("m", sql.Int, p.membroId).query(`SELECT 1 AS ok FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
       if (!m) return { sucesso: false, mensagem: "A pessoa escolhida não confere." };
     }
-    // como na exceção da folha: acha sem trava e trava a linha pela chave (as duas gravações travam o mesmo recurso, na mesma ordem)
-    const achado = (await new sql.Request(t).input("pf", sql.Int, pf).query(`SELECT BlocoId FROM FinBlocos WHERE PrimeiraFolha = @pf`)).recordset[0];
+    // como na exceção da folha: acha sem trava e trava a linha pela chave (as gravações do bloco travam o mesmo recurso, na mesma ordem)
+    const achado = (await new sql.Request(t).input("pf", sql.Int, pf)
+      .query(`SELECT TOP 1 BlocoId FROM FinBlocos WHERE PrimeiraFolha <= @pf AND UltimaFolha >= @pf ORDER BY PrimeiraFolha DESC`)).recordset[0];
     const b = achado && (await new sql.Request(t).input("id", sql.Int, achado.BlocoId)
       .query(`SELECT BlocoId, Numero, PrimeiraFolha, UltimaFolha, Situacao, CongregacaoId, EntregueEm, DevolvidoEm FROM FinBlocos WITH (UPDLOCK, ROWLOCK) WHERE BlocoId = @id`)).recordset[0];
-    if (!b) return { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
+    const saida = b ? await ultimaSaida(t, b.BlocoId) : null;
+    // pela primeira folha do bloco ou pela primeira da última saída (o bloco que saiu de novo a partir da primeira folha livre)
+    if (!b || (pf !== Number(b.PrimeiraFolha) && !(saida && pf === saida.primeiraFolha))) return { sucesso: false, mensagem: `Não há bloco que comece na folha ${milhar(pf)}.` };
     if (b.Situacao === "NA_GERAL") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} ainda está na Tesouraria Geral: não saiu para voltar.` };
     if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido em ${dataBr(b.DevolvidoEm)}.` };
     if (dia < iso(b.EntregueEm)) return { sucesso: false, mensagem: "A data da devolução é antes da entrega do bloco." };
+    // as folhas de antes da faixa da entrega já foram usadas (e não mudam mais): as livres do bloco são as livres da entrega
     const usadas = Number((await new sql.Request(t).input("id", sql.Int, b.BlocoId).query(`SELECT COUNT(*) AS N FROM FinFolhas WHERE BlocoId = @id`)).recordset[0].N);
     const livres = Number(b.UltimaFolha) - Number(b.PrimeiraFolha) + 1 - usadas;
-    if (livres > 0) return { sucesso: false, mensagem: regra.recusaDoBlocoComFolhaLivre(b.Numero, livres) };
-    const u = await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("d", sql.Date, dia)
-      .query(`UPDATE FinBlocos SET Situacao = 'DEVOLVIDO', DevolvidoEm = @d WHERE BlocoId = @id AND Situacao = 'ENTREGUE'`);
+    if (!emParte && livres > 0) return { sucesso: false, mensagem: regra.recusaDaDevolucaoCompleta(b.Numero, livres) };
+    if (emParte && livres === 0) return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} não tem folha livre: a devolução é completa.` };
+    // completa: o bloco fecha; parcial: volta para a Geral (sem congregação), com as folhas livres para outra saída
+    const u = await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("d", sql.Date, dia).query(emParte
+      ? `UPDATE FinBlocos SET Situacao = 'NA_GERAL', CongregacaoId = NULL, EntregueEm = NULL WHERE BlocoId = @id AND Situacao = 'ENTREGUE'`
+      : `UPDATE FinBlocos SET Situacao = 'DEVOLVIDO', DevolvidoEm = @d WHERE BlocoId = @id AND Situacao = 'ENTREGUE'`);
     if (!u.rowsAffected || !u.rowsAffected[0]) return MUDOU(`O bloco ${milhar(b.Numero)} acabou de mudar. Confira e tente de novo.`);
     const reg = (await new sql.Request(t).input("id", sql.Int, b.BlocoId).input("c", sql.Int, b.CongregacaoId).input("m", sql.Int, p.membroId)
       .input("n", sql.NVarChar(200), p.nome).input("d", sql.Date, dia).input("por", sql.Int, por)
-      .query(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaMembroId, PessoaNome, DataRegistro, RegistradoPor)
-              OUTPUT INSERTED.RegistroId VALUES ('ENTRADA', @id, @c, @m, @n, @d, @por)`)).recordset[0].RegistroId;
-    await registrarAuditoriaNaTransacao(t, { tabela: "FinBlocos", registroId: b.BlocoId, acao: "FIN_BLOCO_DEVOLVIDO", usuarioId: por, dadosDepois: { livro: reg } });
+      .input("saida", sql.Int, saida.id).input("parcial", sql.Bit, emParte).input("livres", sql.Int, livres)
+      .query(`INSERT INTO FinLivroBlocos (Tipo, BlocoId, CongregacaoId, PessoaMembroId, PessoaNome, DataRegistro, RegistradoPor, SaidaId, Parcial, FolhasLivres)
+              OUTPUT INSERTED.RegistroId VALUES ('ENTRADA', @id, @c, @m, @n, @d, @por, @saida, @parcial, @livres)`)).recordset[0].RegistroId;
+    await registrarAuditoriaNaTransacao(t, { tabela: "FinBlocos", registroId: b.BlocoId, acao: "FIN_BLOCO_DEVOLVIDO", usuarioId: por,
+      dadosDepois: { livro: reg, parcial: emParte, folhasLivres: livres } });
     ok = true;
-    return { sucesso: true, mensagem: `Bloco ${milhar(b.Numero)} devolvido: está de novo com a Tesouraria Geral.` };
+    return { sucesso: true, mensagem: emParte
+      ? `Bloco ${milhar(b.Numero)} devolvido em parte: está de novo com a Tesouraria Geral, com ${regra.folhasLivresPorExtenso(livres)} para outra entrega.`
+      : `Bloco ${milhar(b.Numero)} devolvido: está de novo com a Tesouraria Geral.` };
   } finally {
     await fecharTransacao(t, ok);
   }
@@ -495,7 +567,8 @@ async function devolver(pool, { primeiraFolha, pessoa, data, por }) {
 // Desfazer a exceção de uma folha (regra dele, 23/11/2026): só a Tesouraria Geral, com o motivo; nunca em bloco já devolvido; a folha lançada se
 // corrige pelo lançamento. A linha sai de FinFolhas e vai INTEIRA para FinFolhasDesfeitas (quem marcou e quando, o que era, quem desfez, quando
 // e por quê), na mesma transação: nada se perde, e a folha volta a poder ter destino. Trava a linha do bloco primeiro, como a exceção e a
-// devolução (a mesma ordem: nunca impasse, e a devolução nunca conta uma folha que está sendo desfeita).
+// devolução (a mesma ordem: nunca impasse, e a devolução nunca conta uma folha que está sendo desfeita). Regra de 24/11/2026: só a exceção da
+// entrega em curso; a folha de uma entrega que já voltou (em parte) não muda mais, como a do bloco devolvido.
 async function desfazerFolha(pool, { dados, por }) {
   const v = regra.desfazimentoDaFolha(dados);
   if (v.erro) return { sucesso: false, mensagem: v.erro };
@@ -509,13 +582,17 @@ async function desfazerFolha(pool, { dados, por }) {
     if (!b) return { sucesso: false, mensagem: `Nenhum bloco tem a folha ${milhar(v.folha)}.` };
     if (b.Situacao === "DEVOLVIDO") return { sucesso: false, mensagem: `O bloco ${milhar(b.Numero)} já foi devolvido: as folhas dele não mudam mais.` };
     const f = (await new sql.Request(t).input("f", sql.Int, v.folha)
-      .query(`SELECT FolhaId, Destino FROM FinFolhas WITH (UPDLOCK, ROWLOCK) WHERE Folha = @f`)).recordset[0];
+      .query(`SELECT FolhaId, Destino, SaidaId FROM FinFolhas WITH (UPDLOCK, ROWLOCK) WHERE Folha = @f`)).recordset[0];
     if (!f) return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} não tem exceção para desfazer: ela está livre.` };
     if (f.Destino === "LANCADA") return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} foi lançada: aqui só se desfaz a exceção (cancelada, arrancada ou extraviada).` };
+    const emCurso = b.Situacao === "ENTREGUE" ? await ultimaSaida(t, b.BlocoId) : null;
+    if (!emCurso || Number(f.SaidaId) !== emCurso.id) {
+      return { sucesso: false, mensagem: `A folha ${milhar(v.folha)} voltou com o bloco ${milhar(b.Numero)} numa devolução: as folhas que já voltaram não mudam mais.` };
+    }
     const desfeita = (await new sql.Request(t).input("id", sql.Int, f.FolhaId).input("por", sql.Int, por).input("motivo", sql.NVarChar(300), v.motivo).query(`
-      INSERT INTO FinFolhasDesfeitas (FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, DesfeitaPor, Motivo)
+      INSERT INTO FinFolhasDesfeitas (FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, DesfeitaPor, Motivo, SaidaId)
       OUTPUT INSERTED.DesfeitaId
-      SELECT FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, @por, @motivo FROM FinFolhas WHERE FolhaId = @id`)).recordset[0].DesfeitaId;
+      SELECT FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, @por, @motivo, SaidaId FROM FinFolhas WHERE FolhaId = @id`)).recordset[0].DesfeitaId;
     await new sql.Request(t).input("id", sql.Int, f.FolhaId).query(`DELETE FROM FinFolhas WHERE FolhaId = @id`);
     await registrarAuditoriaNaTransacao(t, { tabela: "FinFolhas", registroId: Number(f.FolhaId), acao: "FIN_FOLHA_DESFEITA", usuarioId: por,
       dadosAntes: { bloco: Number(b.Numero), folha: v.folha, destino: f.Destino }, dadosDepois: { desfeita: Number(desfeita) } });

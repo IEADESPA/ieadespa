@@ -26,6 +26,13 @@ function tabelasEChaves(migracoes) {
       tabelas.set(tabela, { chaves, comeca });
     }
   }
+  // a coluna nova de uma migração seguinte (ALTER TABLE dbo.FinX ADD Coluna INT ... REFERENCES ...)
+  for (const { texto } of migracoes) {
+    for (const m of texto.matchAll(/ALTER TABLE dbo\.(Fin\w+)\s+ADD\s+(\w+)\s+INT\b[^\n]*\bREFERENCES\b/g)) {
+      const t = tabelas.get(m[1]);
+      if (t && !t.chaves.includes(m[2])) t.chaves.push(m[2]);
+    }
+  }
   return tabelas;
 }
 
@@ -50,6 +57,9 @@ describe("as migrações do Financeiro: índice em toda chave estrangeira (regra
     expect(migracoes.length).toBeGreaterThan(0);
     expect(tabelas.get("FinBlocos").chaves).toEqual(expect.arrayContaining(["LoteId", "CongregacaoId"]));
     expect(tabelas.get("FinLivroBlocos").chaves).toEqual(expect.arrayContaining(["LoteId", "BlocoId", "CongregacaoId", "PessoaMembroId", "RegistradoPor"]));
+    // a regra de 24/11 (a devolução parcial): cada folha guarda a entrega que a usou, e a entrada guarda a entrega que ela fecha
+    expect(tabelas.get("FinFolhas").chaves).toContain("SaidaId");
+    expect(tabelas.get("FinLivroBlocos").chaves).toContain("SaidaId");
   });
 
   test("toda chave estrangeira das tabelas Fin* começa um índice (menos a de quem registrou)", () => {

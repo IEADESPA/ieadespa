@@ -153,7 +153,7 @@ function blocosAgora(linhas) {
   return r;
 }
 
-// ---- a revisão de 23/11/2026: as regras dele (o bloco só volta cheio; desfazer a exceção da folha) e o "levado pela área" ----
+// ---- a revisão de 23/11/2026: a regra dele de desfazer a exceção da folha e o "levado pela área" ----
 
 /** "levado pela área" na saída: true = sim; false ou sem o campo = não; qualquer outra coisa (o texto "true", 1...) = null, recusado, para
  *  nunca virar "não" calado */
@@ -173,16 +173,27 @@ function desfazimentoDaFolha(dados) {
   return { folha, motivo };
 }
 
-/** a recusa da devolução do bloco que ainda tem folha livre (regra dele de 23/11/2026: o bloco só volta cheio), nas palavras da tela */
-function recusaDoBlocoComFolhaLivre(numero, livres) {
-  const quantas = livres === 1 ? "1 folha livre" : `${Number(livres).toLocaleString("pt-BR")} folhas livres`;
-  return `O bloco ${Number(numero).toLocaleString("pt-BR")} ainda tem ${quantas}: toda folha precisa de destino antes de o bloco voltar `
-    + "(lançada, ou cancelada, arrancada ou extraviada com a observação).";
+// ---- a regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11): a devolução é COMPLETA ou PARCIAL ----
+// Completa (o normal): toda folha da entrega tem destino e o bloco fecha. Parcial (a exceção): as folhas que ninguém usou continuam livres (nada
+// se anula) e o bloco volta para a Tesouraria Geral, para sair de novo a partir da primeira folha livre.
+
+const folhasLivresPorExtenso = (n) => (Number(n) === 1 ? "1 folha livre" : `${Number(n).toLocaleString("pt-BR")} folhas livres`);
+
+/** "parcial" na devolução: true = parcial; false ou sem o campo = completa; qualquer outra coisa = null, recusado (nunca vira "completa" calada) */
+function devolucaoParcial(v) {
+  if (v === undefined || v === null || v === false) return false;
+  return v === true ? true : null;
+}
+
+/** a recusa da devolução COMPLETA do bloco que ainda tem folha livre: com folha livre, a devolução é parcial (nunca se manda anular a folha) */
+function recusaDaDevolucaoCompleta(numero, livres) {
+  return `O bloco ${Number(numero).toLocaleString("pt-BR")} ainda tem ${folhasLivresPorExtenso(livres)}: a devolução completa é só do bloco todo usado; `
+    + "com folhas livres, a devolução é parcial.";
 }
 
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
   destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
-  levadoPelaArea, desfazimentoDaFolha, recusaDoBlocoComFolhaLivre
+  levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, recusaDaDevolucaoCompleta, folhasLivresPorExtenso
 };

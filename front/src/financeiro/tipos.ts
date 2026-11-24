@@ -73,6 +73,11 @@ export interface FolhaComDestino {
   readonly observacao: string | null;
 }
 
+/** uma faixa de folhas ("64.436 a 64.450") */
+export interface Faixa { readonly primeiraFolha: number; readonly ultimaFolha: number }
+/** a última volta do bloco à Tesouraria Geral: de que congregação, quando e quantas folhas a entrega usou (a faixa antes da primeira em branco) */
+export interface VoltaBloco { readonly congregacao: string; readonly data: string; readonly usadas: number }
+
 /** o bloco das folhas e do rastreio (sem a chegada da gráfica, que esta parte não usa) */
 export interface BlocoDasFolhas {
   readonly id: number;
@@ -85,14 +90,27 @@ export interface BlocoDasFolhas {
   readonly devolvidoEm: string | null;
   readonly usadas: number;
   readonly livres: number;
+  /** a entrega vista voltou em parte (ou, na Geral, o bloco que voltou em parte e está com ela) */
+  readonly parcial?: boolean;
+  /** a faixa vista: a entrega (da primeira folha da saída ao fim, ou até a folha antes da primeira em branco) ou, na Geral, a que voltou livre */
+  readonly faixa?: Faixa;
+  /** na Geral, o bloco que voltou em parte e está com ela: de onde voltou */
+  readonly volta?: VoltaBloco | null;
 }
 
-/** uma opção do seletor "Bloco 1.401 · Vila Nova ▾" */
+/** uma opção do seletor de bloco (r30): "Bloco 1.401 · Vila Nova ▾" (na congregação, "Bloco 1.401 · em uso") */
 export interface OpcaoBloco {
   readonly id: number;
   readonly numero: number;
-  readonly congregacao: string;
+  /** null = o bloco voltou em parte e está com a Tesouraria Geral */
+  readonly congregacao: string | null;
   readonly situacao: SituacaoBloco;
+  readonly entregueEm: string | null;
+  readonly devolvidoEm: string | null;
+  readonly parcial: boolean;
+  readonly faixa: Faixa;
+  /** as folhas da faixa com destino */
+  readonly usadas: number;
 }
 
 export interface PaginaFolhas {

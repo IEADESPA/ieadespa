@@ -323,6 +323,21 @@ async function entregar(pool, { primeiraFolha, congregacaoId, pessoa, levadoPela
 
 // ---- incremento 2 (22/11/2026): as folhas de um bloco, a exceção da folha, o livro, o rastreio e a devolução ----
 
+// A última volta do bloco à Tesouraria Geral (a r30): de que congregação, em que dia e quantas folhas a entrega usou. "Usadas" é a faixa da entrega
+// até a folha antes da primeira em branco (as 35 do 1.288: as com destino e as que ficaram sem destino com a congregação), nunca só as com destino.
+async function ultimaVolta(pool, blocoId) {
+  const v = (await pool.request().input("b", sql.Int, blocoId).query(`
+    SELECT TOP 1 c.Nome AS Congregacao, e.DataRegistro, e.Parcial, e.PrimeiraFolha AS Branco, s.PrimeiraFolha AS EntregaDe, b.UltimaFolha
+    FROM FinLivroBlocos e
+    JOIN FinLivroBlocos s ON s.RegistroId = e.SaidaId
+    JOIN FinBlocos b ON b.BlocoId = e.BlocoId
+    LEFT JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
+    WHERE e.Tipo = 'ENTRADA' AND e.BlocoId = @b ORDER BY e.RegistroId DESC`)).recordset[0];
+  if (!v) return null;
+  const ate = v.Parcial === true ? Number(v.Branco) - 1 : Number(v.UltimaFolha);
+  return { congregacao: v.Congregacao || "", data: iso(v.DataRegistro), usadas: ate - Number(v.EntregaDe) + 1 };
+}
+
 const blocoDaLinha = (l) => ({
   id: Number(l.BlocoId), numero: Number(l.Numero), primeiraFolha: Number(l.PrimeiraFolha), ultimaFolha: Number(l.UltimaFolha),
   congregacao: l.CongregacaoId ? { id: Number(l.CongregacaoId), nome: l.Congregacao } : null,
@@ -350,7 +365,7 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
       FROM FinBlocos b
       LEFT JOIN Congregacoes c ON c.CongregacaoId = b.CongregacaoId
       ${FAIXA_ATUAL}
-      WHERE b.Situacao IN ('ENTREGUE', 'DEVOLVIDO') ${blocoId ? "OR (vp.VoltouParcial = 1 AND b.BlocoId = @id)" : ""}`;
+      WHERE b.Situacao IN ('ENTREGUE', 'DEVOLVIDO') OR vp.VoltouParcial = 1`;
   } else {
     const cond = await condicaoSqlEscopoCongregacao(pool, usuario, pedido, "s.CongregacaoId");
     if (cond === "") return blocoId ? { naoExiste: true } : { sucesso: true, bloco: null, folhas: [], opcoes: [], escopo };
@@ -389,9 +404,14 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
     const recente = (a, b) => String(iso(b.EntregueEm)).localeCompare(String(iso(a.EntregueEm))) || Number(b.Numero) - Number(a.Numero);
     escolhido = emCurso.filter((l) => Number(l.Usadas) > 0).sort(recente)[0] || emCurso.sort(recente)[0] || linhas.find((l) => Number(l.Fechada));
   }
-  // o bloco que está com a Geral (voltou em parte) não entra no seletor: o seletor é dos blocos das congregações ("Bloco 1.401 · Vila Nova")
-  const opcoes = linhas.filter((l) => !geral || l.Situacao !== "NA_GERAL")
-    .map((l) => ({ id: Number(l.BlocoId), numero: Number(l.Numero), congregacao: l.Congregacao, situacao: situacao(l) }));
+  // o seletor da r30 (em todos os níveis): de cada bloco, a congregação (null = está com a Geral, depois de voltar em parte), a situação, a data da
+  // entrega e a da volta, se a devolução foi parcial, a faixa vista e quantas folhas dela têm destino. Os textos ("38 com destino · 12 livres",
+  // "recebido em 25/11 · 50 livres", "parcial: as 35 usadas, só consulta") a tela escreve.
+  const opcoes = linhas.map((l) => ({
+    id: Number(l.BlocoId), numero: Number(l.Numero), congregacao: l.Congregacao || null, situacao: situacao(l),
+    entregueEm: iso(l.EntregueEm), devolvidoEm: iso(l.DevolvidoEm), parcial: Number(l.Parcial) === 1,
+    faixa: { primeiraFolha: Number(l.De), ultimaFolha: Number(l.Ate) }, usadas: Number(l.Usadas)
+  }));
   if (!escolhido) return { sucesso: true, bloco: null, folhas: [], opcoes, escopo };
   const f = await pool.request().input("b", sql.Int, escolhido.BlocoId).input("ate", sql.Int, Number(escolhido.Ate)).query(`
     SELECT f.Folha, f.Destino, f.Observacao, c.Nome AS CongregacaoDaEntrega
@@ -401,13 +421,15 @@ async function folhasDoBloco(pool, usuario, { geral, blocoId }) {
     WHERE f.BlocoId = @b AND f.Folha <= @ate ORDER BY f.Folha`);
   const de = Number(escolhido.De), ate = Number(escolhido.Ate), usadas = Number(escolhido.Usadas);
   const verObservacao = (x) => x.Destino !== "LANCADA" && (geral || (!!x.CongregacaoDaEntrega && auth.estaNoEscopo(usuario, x.CongregacaoDaEntrega)));
+  // o bloco que voltou em parte e está com a Geral: de onde voltou, quando e quantas a entrega usou (o cartão "O bloco 1.288 voltou parcial em 03/11")
+  const volta = geral && escolhido.Situacao === "NA_GERAL" ? await ultimaVolta(pool, escolhido.BlocoId) : null;
   return {
     sucesso: true,
     bloco: {
       id: Number(escolhido.BlocoId), numero: Number(escolhido.Numero), primeiraFolha: Number(escolhido.PrimeiraFolha), ultimaFolha: Number(escolhido.UltimaFolha),
       congregacao: escolhido.CongregacaoId ? { id: Number(escolhido.CongregacaoId), nome: escolhido.Congregacao } : null,
       situacao: situacao(escolhido), entregueEm: iso(escolhido.EntregueEm), devolvidoEm: iso(escolhido.DevolvidoEm),
-      parcial: Number(escolhido.Parcial) === 1, faixa: { primeiraFolha: de, ultimaFolha: ate }, usadas, livres: ate - de + 1 - usadas
+      parcial: Number(escolhido.Parcial) === 1, faixa: { primeiraFolha: de, ultimaFolha: ate }, usadas, livres: ate - de + 1 - usadas, volta
     },
     folhas: f.recordset.map((x) => ({ folha: Number(x.Folha), destino: regra.destinoDaTela(x.Destino), observacao: verObservacao(x) ? x.Observacao : null })),
     opcoes, escopo
@@ -552,10 +574,7 @@ async function rastreio(pool, { folha }) {
   const destinos = (await pool.request().input("b", sql.Int, b.BlocoId).input("de", sql.Int, inicio)
     .query(`SELECT Destino, COUNT(*) AS N FROM FinFolhas WHERE BlocoId = @b AND Folha >= @de GROUP BY Destino`)).recordset;
   const contagem = regra.contagemDasFolhas(destinos, ultima - inicio + 1);
-  const volta = Number(b.VoltouParcial) !== 1 ? null : (await pool.request().input("b", sql.Int, b.BlocoId).query(`
-      SELECT TOP 1 c.Nome AS Congregacao, e.DataRegistro, (SELECT COUNT(*) FROM FinFolhas f WHERE f.SaidaId = e.SaidaId) AS Usadas
-      FROM FinLivroBlocos e LEFT JOIN Congregacoes c ON c.CongregacaoId = e.CongregacaoId
-      WHERE e.Tipo = 'ENTRADA' AND e.BlocoId = @b ORDER BY e.RegistroId DESC`)).recordset[0];
+  const volta = Number(b.VoltouParcial) !== 1 ? null : await ultimaVolta(pool, b.BlocoId);
   let primeiraEmBranco = null;
   if (b.Situacao === "ENTREGUE") {
     const seguinte = b.UltimaComDestino == null ? inicio : Number(b.UltimaComDestino) + 1;
@@ -575,7 +594,7 @@ async function rastreio(pool, { folha }) {
     sucesso: true,
     bloco: { ...blocoDaLinha(b), usadas: Number(b.Usadas), livres: livresDaLinha(b), parcial: Number(b.VoltouParcial) === 1, faixa: faixaDaLinha(b), chegouEm: iso(b.ChegouEm) },
     contagem, primeiraEmBranco, pessoas,
-    volta: volta ? { congregacao: volta.Congregacao || "", data: iso(volta.DataRegistro), usadas: Number(volta.Usadas) } : null
+    volta
   };
 }
 

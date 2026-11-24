@@ -70,7 +70,7 @@ export function menuDoNivel(n: Nivel): readonly GrupoMenu[] {
 
 /** as telas do módulo: as construídas e o aviso "em construção" de um item do menu */
 export type Rota =
-  | { readonly tela: "blocos"; readonly aba: AbaBlocos }
+  | { readonly tela: "blocos"; readonly aba: AbaBlocos; /** no livro: abre o "Registrar saída" já com esta folha (o bloco que voltou em parte) */ readonly saida?: number }
   | { readonly tela: "obra"; readonly item: ChaveMenu };
 
 /** a rota que chega de FORA (a casca): só telas conhecidas; o resto é ignorado (fica a tela de agora) */

@@ -35,7 +35,8 @@ const ESCOPO = {
 };
 const blocoMentira = (id, primeira, cong, situacao, usadas, extra = {}) => ({
   id, numero: Math.floor((primeira - 1) / 50), primeiraFolha: primeira, ultimaFolha: primeira + 49, congregacao: cong ? { id: id + 100, nome: cong } : null,
-  situacao, entregueEm: cong ? "2026-11-01" : null, devolvidoEm: null, usadas, livres: 50 - usadas, ...extra
+  situacao, entregueEm: cong ? "2026-11-01" : null, devolvidoEm: null, usadas, livres: 50 - usadas, parcial: false,
+  faixa: { primeiraFolha: primeira, ultimaFolha: primeira + 49 }, volta: null, ...extra
 });
 // bloco 1.401 (70.051 a 70.100): 38 com destino (a 17ª cancelada, a 29ª arrancada), 12 livres
 function folhasDoBloco1401(registradas) {
@@ -47,9 +48,20 @@ function folhasDoBloco1401(registradas) {
   for (const r of registradas) f.push(r);
   return f.sort((a, b) => a.folha - b.folha);
 }
+const opcao = (id, numero, congregacao, situacao, extra = {}) => {
+  const primeira = numero * 50 + 1;
+  return { id, numero, congregacao, situacao, entregueEm: "2026-10-20", devolvidoEm: null, parcial: false, faixa: { primeiraFolha: primeira, ultimaFolha: primeira + 49 }, usadas: 0, ...extra };
+};
+// o seletor da r30: o em uso, o esperando, o que voltou parcial (na Geral; em Vila Nova, devolvido só com as 35 que ela usou) e o devolvido completo
 const OPCOES = [
-  { id: 1, numero: 1401, congregacao: "Vila Nova", situacao: "em-uso" }, { id: 2, numero: 1402, congregacao: `Vila Nova ${ATAQUE}`, situacao: "esperando" },
-  { id: 5, numero: 1360, congregacao: "Bela Vista", situacao: "fechado" }
+  opcao(1, 1401, "Vila Nova", "em-uso", { usadas: 38 }), opcao(2, 1402, `Vila Nova ${ATAQUE}`, "esperando", { entregueEm: "2026-11-25" }),
+  opcao(5, 1360, "Bela Vista", "fechado", { devolvidoEm: "2026-11-10", usadas: 49 }),
+  opcao(8, 1288, null, "na-geral", { parcial: true, faixa: { primeiraFolha: 64436, ultimaFolha: 64450 }, entregueEm: null })
+];
+const OPCOES_LOCAL = [
+  opcao(1, 1401, "Vila Nova", "em-uso", { usadas: 38 }), opcao(2, 1402, "Vila Nova", "esperando", { entregueEm: "2026-11-25" }),
+  opcao(8, 1288, "Vila Nova", "fechado", { parcial: true, devolvidoEm: "2026-11-03", entregueEm: "2026-09-08", faixa: { primeiraFolha: 64401, ultimaFolha: 64435 }, usadas: 35 }),
+  opcao(9, 1251, "Vila Nova", "fechado", { devolvidoEm: "2026-07-21", entregueEm: "2026-05-12", usadas: 50 })
 ];
 const LIVRO = [
   { id: 5, tipo: "saida", data: "2026-11-17", registradoPor: "João da Silva", bloco: 1402, congregacao: "Vila Nova", pessoa: "Rute Santos", levadoPelaArea: false, contagem: null },
@@ -102,10 +114,21 @@ function apiFinanceiro(nivel, opcoes) {
         f.splice(45, 1);   // a 46ª ficou livre e o bloco voltou assim
         return { corpo: { sucesso: true, bloco: blocoMentira(5, 68001, "Bela Vista", "fechado", 49, { devolvidoEm: "2026-11-10" }), folhas: f, opcoes: OPCOES, escopo: ESCOPO[nivel] } };
       }
+      if (q.get("bloco") === "8" && nivel === "geral") {   // o 1.288 voltou parcial de Vila Nova em 03/11: as 35 usadas e as 15 livres na Geral
+        const f = [];
+        for (let i = 1; i <= 35; i++) f.push({ folha: 64400 + i, destino: i === 22 ? "cancelada" : "lancada", observacao: i === 22 ? "Errou o valor" : null });
+        return { corpo: { sucesso: true, bloco: blocoMentira(8, 64401, null, "na-geral", 0, { entregueEm: null, parcial: true, livres: 15, faixa: { primeiraFolha: 64436, ultimaFolha: 64450 },
+          volta: { congregacao: "Vila Nova", data: "2026-11-03", usadas: 35 } }), folhas: f, opcoes: OPCOES, escopo: ESCOPO[nivel] } };
+      }
+      if (q.get("bloco") === "9" && nivel === "local") {   // o 1.251 voltou completo em 21/07: 49 lançadas e a 14ª arrancada
+        const f = [];
+        for (let i = 1; i <= 50; i++) f.push({ folha: 62550 + i, destino: i === 14 ? "arrancada" : "lancada", observacao: i === 14 ? "Tirada do bloco" : null });
+        return { corpo: { sucesso: true, bloco: blocoMentira(9, 62551, "Vila Nova", "fechado", 50, { devolvidoEm: "2026-07-21" }), folhas: f, opcoes: OPCOES_LOCAL, escopo: ESCOPO[nivel] } };
+      }
       if (q.get("bloco") && !["1", "2"].includes(q.get("bloco"))) return { status: 404, corpo: { sucesso: false, mensagem: "Registro não encontrado." } };
       const reg = estado.registradas;
       return { corpo: { sucesso: true, bloco: blocoMentira(1, 70051, "Vila Nova", "em-uso", 38 + reg.length), folhas: folhasDoBloco1401(reg),
-        opcoes: nivel === "local" ? OPCOES.slice(0, 2) : OPCOES, escopo: ESCOPO[nivel] } };
+        opcoes: nivel === "local" ? OPCOES_LOCAL : OPCOES, escopo: ESCOPO[nivel] } };
     }
     if (p === "/api/financeiro/blocos/folha" && metodo === "POST") {
       if (corpo && corpo.folha === 70089) return { status: 409, corpo: { sucesso: false, mensagem: "A folha 70.089 já tem destino (cancelada)." } };
@@ -212,6 +235,23 @@ async function escolher(page, rotulo, valorOuTexto) {
   return true;
 }
 const opcoesDe = async (page, rotulo) => { const el = (await campo(page, rotulo)).asElement(); return el ? el.evaluate((s) => [...s.options].map((o) => o.textContent.trim())) : null; };
+// o seletor de bloco da r30: o botão "Bloco 1.401 · Vila Nova ▾" abre a lista ("Os blocos de Vila Nova"), cada bloco com o título e a linha de baixo
+const botaoSeletor = (page) => page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button[aria-haspopup=listbox]")].find((x) => x.offsetParent !== null); return b ? b.textContent.replace(/\s+/g, " ").trim() : null; });
+async function abrirSeletor(page) {
+  const feito = await page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button[aria-haspopup=listbox]")].find((x) => x.offsetParent !== null); if (!b) return false; b.click(); return true; });
+  await calmo(page);
+  if (!feito) return null;
+  return page.evaluate(() => {
+    const l = document.querySelector("#financeiroRaiz [role=listbox]");
+    if (!l) return null;
+    return { titulo: (l.getAttribute("aria-label") || ""), itens: [...l.querySelectorAll("[role=option]")].map((o) => ({ texto: o.innerText.replace(/\s+/g, " ").trim(), escolhido: o.getAttribute("aria-selected") === "true" })) };
+  });
+}
+async function escolherNoSeletor(page, comeco) {
+  const feito = await page.evaluate((comeco) => { const o = [...document.querySelectorAll("#financeiroRaiz [role=option]")].find((x) => x.textContent.replace(/\s+/g, " ").trim().startsWith(comeco)); if (!o) return false; o.click(); return true; }, comeco);
+  await calmo(page);
+  return feito;
+}
 const ultimoAviso = (page) => page.evaluate(() => { const t = [...document.querySelectorAll("#toastContainer .toast")]; return t.length ? t[t.length - 1].textContent : ""; });
 async function fechar(s, nome) {
   const reg = await s.page.evaluate(() => ({ csp: window.__reg.csp.slice(), xss: window.__xssChamado, lado: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 }));
@@ -300,11 +340,19 @@ async function provarFolhas() {
   await calmo(page);
   const f41 = await infoFolha(page, "70.091");
   ok(f41 && /41ª: inexistente/.test(f41.rotulo) && f41.desligado, "geral: a 41ª agora é inexistente", f41);
-  // o seletor do bloco
-  const ops = await opcoesDe(page, "Bloco");
-  ok(ops && ops.length === 3 && ops[0] === "Bloco 1.401 · Vila Nova", "geral: o seletor \"Bloco 1.401 · Vila Nova\" com os blocos", ops);
+  // o seletor do bloco (r30): um botão que abre a lista
+  ok((await botaoSeletor(page)) === "Bloco 1.401 · Vila Nova", "geral: o seletor \"Bloco 1.401 · Vila Nova\"", await botaoSeletor(page));
+  const lista = await abrirSeletor(page);
+  ok(lista && lista.titulo === "Os blocos das congregações" && lista.itens.length === 4, "geral: a lista dos blocos", lista);
+  ok(lista && lista.itens[0].texto === "Bloco 1.401 · Vila Nova em uso · 38 com destino · 12 livres" && lista.itens[0].escolhido, "geral: o em uso, escolhido", lista && lista.itens[0]);
+  ok(lista && lista.itens.some((i) => i.texto === "Bloco 1.288 · na Tesouraria Geral parcial · 15 livres"), "geral: o bloco que voltou parcial, na Tesouraria Geral", lista && lista.itens);
+  ok(lista && lista.itens.some((i) => i.texto === "Bloco 1.360 · Bela Vista devolvido em 10/11 · completo: só consulta"), "geral: o devolvido, só consulta", lista && lista.itens);
+  await page.keyboard.press("Escape");
+  await calmo(page);
+  ok(await page.evaluate(() => !document.querySelector("#financeiroRaiz [role=listbox]")), "geral: Esc fecha a lista");
+  await abrirSeletor(page);
   const l2 = pedidos(api, "/api/financeiro/blocos/folhas").length;
-  ok(await escolher(page, "Bloco", "5"), "geral: escolher o bloco 1.360 (devolvido)");
+  ok(await escolherNoSeletor(page, "Bloco 1.360"), "geral: escolher o bloco 1.360 (devolvido)");
   const f5 = await esperarPedido(api, "/api/financeiro/blocos/folhas", "GET", l2);
   ok(f5 && f5.busca.bloco === "5", "geral: lê as folhas do bloco escolhido", f5 && f5.busca);
   await calmo(page);
@@ -312,7 +360,9 @@ async function provarFolhas() {
   ok(t.includes("As 50 folhas do bloco 1.360"), "geral: mostra o bloco escolhido");
   const livreDevolvido = await infoFolha(page, "68.046");
   ok(livreDevolvido && livreDevolvido.desligado, "geral: no bloco devolvido nenhuma folha se clica (nem a livre)", livreDevolvido);
-  ok(/já foi devolvido/.test(t), "geral: diz que o bloco já foi devolvido e não muda mais");
+  ok(t.includes("O bloco 1.360 voltou completo à Tesouraria Geral em 10/11. As folhas dele não mudam mais: ficam só para consulta."), "geral: o bloco devolvido, só para consulta (o texto da r30)");
+  ok(t.includes("68.001 a 68.050 · completo: 46 lançadas, 1 cancelada, 1 extraviada, 1 inexistente"), "geral: a conta do bloco devolvido", t.slice(0, 900));
+  ok(!t.includes("Normalmente é automático"), "geral: no bloco devolvido, sem a nota do automático");
   const ext = await infoFolha(page, "68.049"), inex = await infoFolha(page, "68.050");
   ok(ext && /extraviada/.test(ext.rotulo), "geral: a folha extraviada se distingue", ext);
   ok(inex && /: inexistente/.test(inex.rotulo), "geral: a folha inexistente se distingue (o nome dela no rótulo)", inex);
@@ -324,6 +374,18 @@ async function provarFolhas() {
   ok(cores.ext.fundo === "rgb(237, 233, 254)" && cores.ext.borda === "dashed" && cores.ext.cor === "rgb(124, 58, 237)", "geral: a extraviada é roxa com a borda tracejada (a cor aprovada na r30)", cores.ext);
   ok(cores.inex.imagem !== "none" && cores.inex.fundo !== cores.livre.fundo && cores.inex.fundo !== cores.lanc.fundo && cores.inex.borda !== "dashed",
     "geral: a inexistente tem cor própria (listrada), que não se confunde com a livre nem com a extraviada", cores.inex);
+  // o bloco que voltou parcial e está com a Geral: as usadas com a cor, as 15 livres prontas para sair
+  await abrirSeletor(page);
+  ok(await escolherNoSeletor(page, "Bloco 1.288"), "geral: escolher o 1.288 (na Tesouraria Geral)");
+  t = await textoTela(page);
+  ok((await botaoSeletor(page)) === "Bloco 1.288 · na Tesouraria Geral", "geral: o seletor diz onde o bloco está", await botaoSeletor(page));
+  ok(t.includes("O bloco 1.288 voltou parcial em 03/11 e está na Tesouraria Geral. As 35 usadas ficam no histórico, com quem usou (Vila Nova); as 15 livres (64.436 a 64.450) estão prontas para outra entrega."),
+    "geral: o cartão do bloco parcial (o texto da r30)", t.slice(0, 700));
+  ok(t.includes("64.401 a 64.450 · parcial: 35 com destino · 15 livres"), "geral: a conta do bloco parcial");
+  const livreNaGeral = await infoFolha(page, "64.440");
+  ok(livreNaGeral && /livre/.test(livreNaGeral.rotulo) && livreNaGeral.desligado, "geral: as livres que voltaram não se marcam (o bloco está na Geral)", livreNaGeral);
+  ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\" do cartão");
+  ok((await textoTela(page)).includes("o livro de entrada e saída"), "geral: leva ao livro de entrada e saída");
   await fechar(s, "folhas geral notebook");
 
   // a lista falhou: a aba das folhas diz sozinha quem está vendo
@@ -331,7 +393,7 @@ async function provarFolhas() {
   await clicar(s.page, "Folhas do bloco");
   await espera(400);
   ok((await textoTela(s.page)).includes("Área 2 · 12 congregações · as folhas de um bloco"), "área: o subtítulo vem da própria aba das folhas");
-  ok((await opcoesDe(s.page, "Bloco")) !== null, "área: tem o seletor do bloco");
+  ok((await botaoSeletor(s.page)) !== null, "área: tem o seletor do bloco");
   s.erros.length = 0;   // a falha simulada da lista (500) é de propósito
   await fechar(s, "folhas área notebook");
 
@@ -341,8 +403,19 @@ async function provarFolhas() {
   await espera(300);
   t = await textoTela(s.page);
   ok(t.includes("Congregação Vila Nova · as folhas de um bloco"), "local: o subtítulo");
-  ok((await opcoesDe(s.page, "Bloco")) === null, "local: sem o seletor do bloco (como no desenho)");
+  ok((await botaoSeletor(s.page)) === "Bloco 1.401 · em uso", "local: o seletor de bloco também na congregação (a r30), sem o nome dela", await botaoSeletor(s.page));
   ok(t.includes("As 50 folhas do bloco 1.401"), "local: as folhas do bloco em uso");
+  const listaLocal = await abrirSeletor(s.page);
+  ok(listaLocal && listaLocal.titulo === "Os blocos de Vila Nova" && JSON.stringify(listaLocal.itens.map((i) => i.texto)) === JSON.stringify([
+    "Bloco 1.401 · em uso 38 com destino · 12 livres", "Bloco 1.402 · esperando recebido em 25/11 · 50 livres",
+    "Bloco 1.288 · devolvido em 03/11 parcial: as 35 usadas, só consulta", "Bloco 1.251 · devolvido em 21/07 completo: só consulta"
+  ]), "local: a lista do desenho (o em uso, o esperando e os devolvidos)", listaLocal);
+  ok(await escolherNoSeletor(s.page, "Bloco 1.251"), "local: escolher o 1.251 (devolvido)");
+  t = await textoTela(s.page);
+  ok(t.includes("O bloco 1.251 voltou completo à Tesouraria Geral em 21/07. As folhas dele não mudam mais: ficam só para consulta. Clique numa folha para ver o histórico dela."),
+    "local: o cartão do bloco devolvido (o texto da r30)", t.slice(0, 600));
+  ok(t.includes("62.551 a 62.600 · completo: 49 lançadas, 1 arrancada"), "local: a conta do bloco devolvido (r30)");
+  ok((await botaoSeletor(s.page)) === "Bloco 1.251 · devolvido", "local: o seletor do devolvido", await botaoSeletor(s.page));
   await fechar(s, "folhas local notebook");
 
   // o celular: as 30 primeiras viram uma linha
@@ -350,10 +423,17 @@ async function provarFolhas() {
   await clicar(s.page, "Folhas do bloco");
   await espera(300);
   t = await textoTela(s.page);
-  ok(t.includes("Bloco 1.401 · 1ª a 30ª: todas com destino ✓"), "celular: as 30 primeiras numa linha", t.slice(0, 300));
+  ok(t.includes("1ª a 35ª: todas com destino"), "celular: as 35 primeiras numa linha (a r30)", t.slice(0, 300));
   const nCel = await s.page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz button")].filter((b) => /^Folha \d/.test(b.getAttribute("aria-label") || "") && b.offsetParent !== null).length);
-  ok(nCel === 20, "celular: aparecem só as 20 que importam (31ª a 50ª)", nCel);
-  ok((await opcoesDe(s.page, "Bloco")) === null, "celular: sem o seletor (como no desenho)");
+  ok(nCel === 15, "celular: a grade começa na 36ª (15 folhas)", nCel);
+  ok((await botaoSeletor(s.page)) === "Bloco 1.401 · Vila Nova", "celular: o seletor logo abaixo das abas, em todos os níveis (a r30)", await botaoSeletor(s.page));
+  const ordem = await s.page.evaluate(() => {
+    const raiz = document.querySelector("#financeiroRaiz");
+    const abas = raiz.querySelector(".abas-cel"), sel = raiz.querySelector("button[aria-haspopup=listbox]"), grade = raiz.querySelector(".grade"), leg = raiz.querySelector(".legenda");
+    const y = (e) => (e ? e.getBoundingClientRect().top : -1);
+    return [y(abas), y(sel), y(grade), y(leg)];
+  });
+  ok(ordem.every((v, i) => v >= 0 && (i === 0 || v > ordem[i - 1])), "celular: as abas, o seletor, a grade e a legenda, nessa ordem", ordem);
   await clicarFolha(s.page, "70.090");
   ok((await textoTela(s.page)).includes("Folha 70.090 · a 40ª"), "celular: o quadro diz a folha clicada");
   await fechar(s, "folhas geral celular");

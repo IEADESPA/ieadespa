@@ -1,7 +1,7 @@
 // Os textos e as contas das abas dos blocos de recibo (as folhas e o livro), como o desenho aprovado escreve (rodada 17, r17-blocos-folhas e
 // r17-blocos-livro, opção 1). O servidor confere tudo; aqui só se escreve o que ele mandou.
 import { dataBr, numero } from "../comum/formato";
-import type { ContagemFolhas, DestinoFolha, ExcecaoFolha, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
+import type { ContagemFolhas, DestinoFolha, EscopoTela, ExcecaoFolha, Faixa, OpcaoBloco, RegistroLivro, RegistroLote, PessoaDevolve, Rastreio } from "./tipos";
 
 /** "1 bloco", "2 blocos" */
 export const plural = (n: number, um: string, varios: string): string => `${numero(n)} ${n === 1 ? um : varios}`;
@@ -24,16 +24,47 @@ export const EXCECOES: readonly { readonly chave: ExcecaoFolha; readonly rotulo:
 /** a posição da folha no bloco: 70.090 no bloco 70.051 a 70.100 é a 40ª */
 export const posicao = (folha: number, primeiraFolha: number): number => folha - primeiraFolha + 1;
 
-/** no celular, as primeiras folhas com destino viram uma linha (o desenho: 38 com destino → "1ª a 30ª"; em dezenas inteiras, como as linhas
- *  do notebook). Devolve quantas se recolhem (0 = nenhuma). */
+/** no celular, as primeiras folhas com destino viram uma linha (a r30: 38 com destino → "1ª a 35ª"), em linhas inteiras de 5, e as 15 últimas
+ *  ficam sempre à vista (o 1.251, todo usado, também começa na 36ª). Devolve quantas se recolhem (0 = nenhuma). */
 export function recolhidasNoCelular(destinos: readonly (DestinoFolha | null)[]): number {
   let seguidas = 0;
   while (seguidas < destinos.length && destinos[seguidas] !== null) seguidas++;
-  return Math.floor(seguidas / 10) * 10;
+  return Math.max(0, Math.min(Math.floor(seguidas / 5) * 5, destinos.length - 15));
+}
+
+/** quantas folhas tem a faixa */
+export const tamanho = (f: Faixa): number => f.ultimaFolha - f.primeiraFolha + 1;
+/** "64.436 a 64.450" */
+export const textoFaixa = (f: Faixa): string => `${numero(f.primeiraFolha)} a ${numero(f.ultimaFolha)}`;
+
+/** o seletor de bloco fechado (a r30): na congregação, "Bloco 1.401 · em uso"; na Geral e na área, "Bloco 1.401 · Vila Nova" */
+export function textoDoSeletor(o: OpcaoBloco, local: boolean): string {
+  const onde = local ? (o.situacao === "em-uso" ? "em uso" : o.situacao === "esperando" ? "esperando" : "devolvido") : (o.congregacao ?? "na Tesouraria Geral");
+  return `Bloco ${numero(o.numero)} · ${onde}`;
+}
+
+/** uma linha da lista do seletor: o título e a linha de baixo (a r30: "Bloco 1.401 · em uso" / "38 com destino · 12 livres") */
+export function linhaDaOpcao(o: OpcaoBloco, local: boolean): { readonly titulo: string; readonly detalhe: string } {
+  const livres = plural(tamanho(o.faixa) - o.usadas, "livre", "livres");
+  const devolvido = `devolvido em ${diaMes(o.devolvidoEm)}`;
+  let situacao: string, detalhe: string;
+  if (o.situacao === "em-uso") { situacao = "em uso"; detalhe = `${numero(o.usadas)} com destino · ${livres}`; }
+  else if (o.situacao === "esperando") { situacao = "esperando"; detalhe = `recebido em ${diaMes(o.entregueEm)} · ${livres}`; }
+  else if (o.situacao === "fechado") { situacao = devolvido; detalhe = o.parcial ? `parcial: as ${numero(tamanho(o.faixa))} usadas, só consulta` : "completo: só consulta"; }
+  else { situacao = ""; detalhe = `parcial · ${livres}`; }
+  if (local) return { titulo: `Bloco ${numero(o.numero)} · ${situacao}`, detalhe };
+  return { titulo: `Bloco ${numero(o.numero)} · ${o.congregacao ?? "na Tesouraria Geral"}`, detalhe: situacao ? `${situacao} · ${detalhe}` : detalhe };
+}
+
+/** o título da lista do seletor: "Os blocos de Vila Nova", "Os blocos da Área 2" */
+export function tituloDoSeletor(e: EscopoTela | null): string {
+  if (!e || e.geral) return "Os blocos das congregações";
+  if (e.congregacao) return `Os blocos de ${e.congregacao}`;
+  return e.area ? `Os blocos da ${e.area}` : `Os blocos das ${numero(e.congregacoes)} congregações`;
 }
 
 /** "49 lançadas, 1 cancelada" (sem as livres) */
-function partesDaContagem(c: ContagemFolhas): string[] {
+export function partesDaContagem(c: ContagemFolhas): string[] {
   const p: string[] = [];
   if (c.lancadas) p.push(plural(c.lancadas, "lançada", "lançadas"));
   if (c.canceladas) p.push(plural(c.canceladas, "cancelada", "canceladas"));

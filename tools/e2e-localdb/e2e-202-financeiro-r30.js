@@ -2,6 +2,8 @@
 // Server de verdade. Base: cenario-200 (a 200, a 201, a 202 e a 203 aplicadas duas vezes), no LocalDB próprio do Financeiro:
 //   E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true' BASE=cenario-200 bash rodar.sh roteiro e2e-202-financeiro-r30.js
 // Cobre:
+// - as folhas da r30: o seletor de bloco em todos os níveis (a situação, as datas, a faixa vista e as usadas de cada bloco; o bloco que voltou em
+//   parte também na Geral, "na Tesouraria Geral") e a volta parcial (de onde, quando e as usadas: a faixa da entrega antes da primeira em branco);
 // - a FOLHA INEXISTENTE (decisão dele de 24/11/2026): a folha que a gráfica não imprimiu é um tipo a mais de exceção, onde as outras já aparecem
 //   (marcar, ver, contar no livro, desfazer), com a observação obrigatória; a migração 203 (o destino com 11 letras nas duas tabelas e os CHECKs),
 //   rodada de novo sobre dados. Duas consequências da regra ao pé da letra ficam fixadas como estão (perguntas abertas): a 50ª inexistente com
@@ -11,9 +13,10 @@ const { q, um, escalar, ok, fim, GET, POST, GERAL, LIDER, API, path } = L;
 const H = require(path.join(API, "FinBlocos/index.js"));
 
 const TESOUREIRO_GERAL = 1002, TESOUREIRA_LOCAL = 1003;
-const VILA_NOVA = 2;
+const CENTRAL = 1, VILA_NOVA = 2;
 const geral = GERAL(TESOUREIRO_GERAL, ["financeiro"]);
 const local = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Vila Nova E2E"]);
+const central = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Central E2E"]);
 
 const TABELAS = ["FinBlocos", "FinFolhas", "FinLivroBlocos", "FinFolhasDesfeitas", "AuditLog"];
 async function retratoFin() {
@@ -102,6 +105,42 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
     "a entrada do 1.401 no livro: 49 lançadas, 1 inexistente, nenhuma pendente", e);
   r = await POST(H, "folha", local, { folha: 70150, oQueAconteceu: "inexistente", observacao: "Faltou na gráfica" });
   ok(r.status === 200, "a 50ª do 1.402 também inexistente (para a 203 de novo sobre dados)");
+
+  console.log("== as folhas da r30: o seletor e a volta parcial ==");
+  // o 1.403 (70.151 a 70.200) vai a Vila Nova, usa 35 folhas (duas sem destino ainda: os pendentes) e volta PARCIAL; depois sai para a Central
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70151, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-13" })).status === 200, "o 1.403 entregue a Vila Nova em 13/11");
+  const b1403 = await idDo(1403);
+  await lancarDireto(b1403, 70151, 70185, [70180, 70181]);
+  r = await GET(H, "folhas", local, {});
+  let op = r.body.opcoes && r.body.opcoes.find((o) => o.numero === 1403);
+  ok(op && op.situacao === "em-uso" && op.congregacao === "Vila Nova E2E" && op.entregueEm === "2026-11-13" && op.devolvidoEm === null && op.parcial === false
+    && op.faixa.primeiraFolha === 70151 && op.faixa.ultimaFolha === 70200 && op.usadas === 33, "o seletor da congregação: o 1.403 em uso, entregue em 13/11, 33 com destino", op);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70151, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70186, data: "2026-11-20" });
+  ok(r.status === 200, "o 1.403 volta parcial (70.186 a 70.200 livres; a 70.180 e a 70.181 continuam com Vila Nova)", r.body);
+  r = await GET(H, "folhas", geral, {});
+  op = r.body.opcoes && r.body.opcoes.find((o) => o.numero === 1403);
+  ok(op && op.situacao === "na-geral" && op.congregacao === null && op.parcial === true && op.faixa.primeiraFolha === 70186 && op.faixa.ultimaFolha === 70200 && op.usadas === 0,
+    "a Geral vê no seletor o 1.403 que voltou em parte (na Tesouraria Geral, as 15 livres)", op);
+  r = await GET(H, "folhas", geral, { bloco: b1403 });
+  ok(r.status === 200 && r.body.bloco.situacao === "na-geral" && JSON.stringify(r.body.bloco.volta) === JSON.stringify({ congregacao: "Vila Nova E2E", data: "2026-11-20", usadas: 35 }),
+    "as folhas do 1.403 na Geral: voltou de Vila Nova em 20/11, a entrega usou 35 (as 33 com destino e as 2 pendentes)", r.body.bloco);
+  r = await GET(H, "rastreio", geral, { folha: 70190 });
+  ok(r.status === 200 && JSON.stringify(r.body.volta) === JSON.stringify({ congregacao: "Vila Nova E2E", data: "2026-11-20", usadas: 35 }) && r.body.bloco.parcial === true,
+    "o rastreio da saída: as mesmas 35 usadas (a faixa da entrega antes da primeira em branco)", r.body.volta);
+  r = await GET(H, "folhas", local, {});
+  op = r.body.opcoes && r.body.opcoes.find((o) => o.numero === 1403);
+  ok(op && op.situacao === "fechado" && op.parcial === true && op.devolvidoEm === "2026-11-20" && op.faixa.primeiraFolha === 70151 && op.faixa.ultimaFolha === 70185,
+    "o seletor de Vila Nova: o 1.403 devolvido em 20/11, parcial, só a faixa que ela usou (35)", op);
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70186, congregacaoId: CENTRAL, pessoa: { nome: "Davi Moura" }, data: "2026-11-21" })).status === 200, "o 1.403 sai de novo, parcial, para a Central");
+  r = await GET(H, "folhas", central, { bloco: b1403 });
+  ok(r.status === 200 && r.body.bloco.faixa.primeiraFolha === 70186 && r.body.bloco.livres === 15 && r.body.folhas.some((x) => x.folha === 70151 && x.destino === "lancada"),
+    "a Central vê o 1.403: as folhas de Vila Nova com a cor, e as 15 dela livres", r.body.bloco);
+  op = r.body.opcoes.find((o) => o.numero === 1403);
+  ok(op && op.situacao === "esperando" && op.congregacao === "Central E2E" && op.entregueEm === "2026-11-21" && op.faixa.primeiraFolha === 70186 && op.usadas === 0,
+    "o seletor da Central: o 1.403 esperando, recebido em 21/11, a faixa dela", op);
+  r = await GET(H, "folhas", local, { bloco: b1403 });
+  ok(r.status === 200 && r.body.bloco.faixa.ultimaFolha === 70185 && !r.body.folhas.some((x) => x.folha >= 70186), "Vila Nova continua vendo só as folhas dela do 1.403", r.body.bloco);
+  ok(!(await GET(H, "folhas", central, {})).body.opcoes.some((o) => o.congregacao === "Vila Nova E2E"), "a Central não vê no seletor os blocos de Vila Nova");
 
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();

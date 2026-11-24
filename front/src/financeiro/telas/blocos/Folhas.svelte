@@ -1,8 +1,10 @@
-<!-- Blocos de recibo: as folhas de um bloco (rodada 17, "r17-blocos-folhas", opção 1). O formulário primeiro: clicar numa folha livre leva o número
-     ao formulário (ninguém digita bloco nem folha); a pessoa só escolhe o que aconteceu (cancelada, arrancada, extraviada) e escreve a observação.
-     Embaixo, os quadradinhos das 50 folhas com a legenda e a nota: normalmente é automático (a folha lançada sai da planilha); esta tela é a exceção.
-     A Geral e a área escolhem o bloco no alto ("Bloco 1.401 · Vila Nova ▾"); a congregação vê o bloco em uso dela. No celular as primeiras folhas
-     com destino viram uma linha e aparecem só as que importam. -->
+<!-- Blocos de recibo: as folhas de um bloco (rodada 17, "r17-blocos-folhas", opção 1, com os acertos da rodada 30, "r30-blocos-folhas"). O formulário
+     primeiro: clicar numa folha livre leva o número ao formulário (ninguém digita bloco nem folha); a pessoa só escolhe o que aconteceu (cancelada,
+     arrancada, extraviada ou inexistente, cada uma com a frase de quando usar) e escreve a observação. Embaixo, os quadradinhos das 50 folhas com a
+     legenda sempre completa e a nota: normalmente é automático (a folha lançada sai da planilha); esta tela é a exceção. O seletor de bloco em todos
+     os níveis ("Bloco 1.401 · Vila Nova ▾"; na congregação, "Bloco 1.401 · em uso"), no celular logo abaixo das abas. O bloco devolvido fica só para
+     consulta; o que voltou em parte e está com a Geral mostra as livres prontas para sair. No celular a grade começa na 36ª: as de antes, todas com
+     destino, viram uma linha. -->
 <script lang="ts">
   import { pedir, qs, avisarFalha } from "../../../comum/api";
   import { numero } from "../../../comum/formato";
@@ -10,16 +12,18 @@
   import Icone from "../../../comum/Icone.svelte";
   import Aviso from "../../../comum/Aviso.svelte";
   import Estado from "../../../comum/Estado.svelte";
-  import { escopo, nivelDaSessao } from "../../estado.svelte";
-  import { NOME_DESTINO, EXCECOES, posicao, recolhidasNoCelular, plural } from "../../blocos";
-  import type { DestinoFolha, ExcecaoFolha, PaginaFolhas } from "../../tipos";
+  import { escopo, ir, nivelDaSessao } from "../../estado.svelte";
+  import { NOME_DESTINO, EXCECOES, posicao, recolhidasNoCelular, plural, diaMes, partesDaContagem, textoFaixa, tituloDoSeletor } from "../../blocos";
+  import type { DestinoFolha, ExcecaoFolha, Faixa, PaginaFolhas } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
   import Cabecalho from "./Cabecalho.svelte";
+  import SeletorBloco from "./SeletorBloco.svelte";
 
   interface Props { celular: boolean }
   let { celular }: Props = $props();
 
   const nivel = nivelDaSessao();
+  const local = nivel === "local";
   /** a legenda: sempre todas as situações, na mesma ordem (a r30); no celular, os nomes curtos */
   const LEGENDA: readonly { readonly chave: DestinoFolha | "livre" | "escolhida"; readonly nome: string; readonly curto: string }[] = [
     { chave: "lancada", nome: "lançada na planilha", curto: "lançada" }, { chave: "cancelada", nome: "cancelada", curto: "cancelada" },
@@ -67,8 +71,29 @@
     });
   });
   const comDestino = $derived(folhas.filter((f) => f.destino !== null).length);
+  /** a faixa que se marca: a da entrega em curso (as folhas de uma entrega anterior ficam só para consulta) */
+  const faixa = $derived<Faixa | null>(bloco ? (bloco.faixa ?? { primeiraFolha: bloco.primeiraFolha, ultimaFolha: bloco.ultimaFolha }) : null);
+  const marcavel = (f: { n: number; destino: DestinoFolha | null }) => aberto && f.destino === null && !!faixa && f.n >= faixa.primeiraFolha && f.n <= faixa.ultimaFolha;
+  /** a conta do quadro das folhas (a r30): "38 com destino · 12 livres"; no devolvido, "completo: 49 lançadas, 1 arrancada" */
+  const notaGrade = $derived.by(() => {
+    if (!bloco) return "";
+    const todas = `${numero(bloco.primeiraFolha)} a ${numero(bloco.ultimaFolha)}`;
+    const livres = plural(bloco.livres, "livre", "livres");
+    if (bloco.situacao === "fechado") {
+      if (bloco.parcial) return `${todas} · parcial: ${numero(comDestino)} com destino`;
+      const conta = (d: DestinoFolha) => folhas.filter((f) => f.destino === d).length;
+      const partes = partesDaContagem({ lancadas: conta("lancada"), canceladas: conta("cancelada"), arrancadas: conta("arrancada"), extraviadas: conta("extraviada"), inexistentes: conta("inexistente"), livres: 0 });
+      return `${todas} · completo${partes.length ? ": " + partes.join(", ") : ""}`;
+    }
+    if (bloco.situacao === "na-geral") return `${todas} · parcial: ${numero(comDestino)} com destino · ${livres}`;
+    return `${todas} · ${numero(comDestino)} com destino · ${livres}`;
+  });
   const recolhidas = $derived(celular ? recolhidasNoCelular(folhas.map((f) => f.destino)) : 0);
   const visiveis = $derived(folhas.slice(recolhidas));
+  /** no celular, a linha das primeiras folhas (no bloco que voltou em parte, de quem usou) */
+  const resumoCel = $derived(recolhidas ? `1ª a ${recolhidas}ª: todas com destino${bloco?.situacao === "na-geral" && bloco.volta ? ` (${bloco.volta.congregacao})` : ""}` : "");
+  /** o bloco que voltou em parte e está com a Geral sai de novo pelo livro, já com a primeira folha livre */
+  function irSaida() { if (faixa) ir({ tela: "blocos", aba: "livro", saida: faixa.primeiraFolha }); }
   const exemplo = $derived(escolhida ?? folhas.find((f) => f.destino === null)?.n ?? bloco?.ultimaFolha ?? null);
   const textoFolha = (n: number) => (bloco ? `${numero(n)} · ${posicao(n, bloco.primeiraFolha)}ª` : "");
 
@@ -94,29 +119,11 @@
   }
 
   const vazio = $derived(nivel === "local" ? "Nenhum bloco com a sua congregação agora. Bloco novo: peça à Tesouraria Geral." : "Nenhum bloco saiu para as congregações ainda.");
-  const entregues = $derived((dados?.opcoes ?? []).filter((o) => o.situacao !== "fechado"));
-  const devolvidos = $derived((dados?.opcoes ?? []).filter((o) => o.situacao === "fechado"));
 </script>
 
 {#snippet seletor()}
-  {#if nivel !== "local" && bloco && dados}
-    <label class="seletor">
-      <Icone nome="livro" tam={17} traco={2} />
-      <span class="sv-escondido">Bloco</span>
-      <select value={String(bloco.id)} onchange={(e) => void ler(Number((e.currentTarget as HTMLSelectElement).value))}>
-        {#if entregues.length}
-          <optgroup label="Com as congregações">
-            {#each entregues as o (o.id)}<option value={String(o.id)}>Bloco {numero(o.numero)} · {o.congregacao}</option>{/each}
-          </optgroup>
-        {/if}
-        {#if devolvidos.length}
-          <optgroup label="Devolvidos">
-            {#each devolvidos as o (o.id)}<option value={String(o.id)}>Bloco {numero(o.numero)} · {o.congregacao}</option>{/each}
-          </optgroup>
-        {/if}
-      </select>
-      <span class="seta" aria-hidden="true">▾</span>
-    </label>
+  {#if bloco && dados && dados.opcoes.length}
+    <SeletorBloco opcoes={dados.opcoes} escolhido={bloco.id} {local} titulo={tituloDoSeletor(dados.escopo)} {celular} onescolher={(id) => void ler(id)} />
   {/if}
 {/snippet}
 
@@ -155,8 +162,8 @@
 {#snippet grade()}
   <div class="grade" role="group" aria-label={bloco ? `As folhas do bloco ${numero(bloco.numero)}` : "As folhas do bloco"} aria-busy={carregando}>
     {#each visiveis as f (f.n)}
-      <button type="button" class="folha {f.destino ?? 'livre'}" class:escolhida={f.n === escolhida} disabled={!aberto || f.destino !== null}
-        aria-pressed={f.destino === null ? f.n === escolhida : undefined} aria-label={rotuloFolha(f)}
+      <button type="button" class="folha {f.destino ?? 'livre'}" class:escolhida={f.n === escolhida} disabled={!marcavel(f)}
+        aria-pressed={marcavel(f) ? f.n === escolhida : undefined} aria-label={rotuloFolha(f)}
         title={f.observacao ? `${NOME_DESTINO[f.destino ?? "livre"]}: ${f.observacao}` : undefined} onclick={() => escolherFolha(f.n)}>
         <strong>{numero(f.n)}</strong><span>{f.pos}ª</span>
       </button>
@@ -170,13 +177,38 @@
   </div>
 {/snippet}
 
-{#snippet fechado()}
-  {#if bloco}<p class="fechado">O bloco {numero(bloco.numero)} já foi devolvido à Tesouraria Geral: as folhas dele não mudam mais.</p>{/if}
+{#snippet cartaoFechado()}
+  {#if bloco}
+    <div class="cartao-info">
+      <Icone nome="cadeado" tam={17} traco={2} />
+      <p><strong>O bloco {numero(bloco.numero)} voltou {bloco.parcial ? "parcial" : "completo"} à Tesouraria Geral em {diaMes(bloco.devolvidoEm)}.</strong> As folhas dele não mudam mais: ficam só para
+        consulta.{celular ? "" : " Clique numa folha para ver o histórico dela."}</p>
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet cartaoEstoque()}
+  {#if bloco && faixa}
+    <div class="cartao-info estoque">
+      <p>
+        <strong>O bloco {numero(bloco.numero)} voltou parcial{bloco.volta ? ` em ${diaMes(bloco.volta.data)}` : ""} e está na Tesouraria Geral.</strong>
+        {#if celular}
+          As {numero(bloco.livres)} livres ({textoFaixa(faixa)}) podem sair de novo.
+        {:else if bloco.volta}
+          As {numero(bloco.volta.usadas)} usadas ficam no histórico, com quem usou ({bloco.volta.congregacao}); as {numero(bloco.livres)} livres ({textoFaixa(faixa)}) estão prontas para outra entrega.
+        {:else}
+          As {numero(bloco.livres)} livres ({textoFaixa(faixa)}) estão prontas para outra entrega.
+        {/if}
+      </p>
+      <button type="button" class="linha-botao" onclick={irSaida}><Icone nome="seta" tam={17} traco={2} />Registrar saída</button>
+    </div>
+  {/if}
 {/snippet}
 
 <div class="pagina folhas-bloco" class:cel={celular}>
   {#if celular}
     <Cabecalho aba="folhas" {celular} />
+    {@render seletor()}
   {:else}
     <Cabecalho aba="folhas" {celular} acoes={seletor} />
   {/if}
@@ -188,24 +220,29 @@
   {:else if !bloco}
     <Estado tipo="vazio" texto={vazio} />
   {:else if celular}
-    <span class="linha-cel">
-      <strong>Bloco {numero(bloco.numero)}</strong> · {#if recolhidas}1ª a {recolhidas}ª: todas com destino ✓{:else}folhas {numero(bloco.primeiraFolha)} a {numero(bloco.ultimaFolha)}{/if}
-    </span>
+    {#if resumoCel}<p class="resumo"><Icone nome="check" tam={14} traco={2.4} />{resumoCel}</p>{/if}
     {@render grade()}
-    <Quadro titulo={escolhida !== null ? `Folha ${numero(escolhida)} · a ${posicao(escolhida, bloco.primeiraFolha)}ª` : aberto ? "Toque numa folha livre" : `Bloco ${numero(bloco.numero)}`} celular>
-      {#if aberto}
+    {@render legenda()}
+    {#if bloco.situacao === "fechado"}
+      {@render cartaoFechado()}
+    {:else if bloco.situacao === "na-geral"}
+      {@render cartaoEstoque()}
+    {:else}
+      <Quadro titulo={escolhida !== null ? `Folha ${numero(escolhida)} · a ${posicao(escolhida, bloco.primeiraFolha)}ª` : "Toque numa folha livre"} celular>
         {@render escolhas()}
         {@render quandoUsar()}
         {@render campoObservacao()}
         {@render faltando()}
         <div class="fim">{@render botaoRegistrar()}</div>
-      {:else}
-        {@render fechado()}
-      {/if}
-    </Quadro>
+      </Quadro>
+    {/if}
   {:else}
+    {#if bloco.situacao === "fechado"}
+      {@render cartaoFechado()}
+    {:else if bloco.situacao === "na-geral"}
+      {@render cartaoEstoque()}
+    {:else}
     <Quadro titulo="A folha que você clicou" nota="só escolha o que aconteceu">
-      {#if aberto}
         <div class="formulario">
           <div class="campo">
             <span class="rot">Folha (bloco {numero(bloco.numero)})</span>
@@ -217,16 +254,13 @@
         </div>
         {@render quandoUsar()}
         {@render faltando()}
-      {:else}
-        {@render fechado()}
-      {/if}
     </Quadro>
-    <Quadro titulo={`As ${numero(folhas.length)} folhas do bloco ${numero(bloco.numero)}`}
-      nota={`${numero(bloco.primeiraFolha)} a ${numero(bloco.ultimaFolha)} · ${numero(comDestino)} com destino · ${plural(folhas.length - comDestino, "livre", "livres")}`}>
+    {/if}
+    <Quadro titulo={`As ${numero(folhas.length)} folhas do bloco ${numero(bloco.numero)}`} nota={notaGrade}>
       {@render grade()}
       {@render legenda()}
     </Quadro>
-    {#if exemplo !== null}
+    {#if aberto && exemplo !== null}
       <div class="nota">
         <Aviso><strong>Normalmente é automático:</strong> a folha lançada na planilha sai daqui sozinha. Esta tela é só para a exceção. Ninguém digita número: clique na folha e o sistema sabe a posição ({numero(exemplo)} = {posicao(exemplo, bloco.primeiraFolha)}ª do bloco {numero(bloco.primeiraFolha)} a {numero(bloco.ultimaFolha)}).</Aviso>
       </div>
@@ -253,19 +287,23 @@
     --f-inexistente: #1E293B; --f-inexistente-texto: #CBD5E1; --f-inexistente-risca: rgba(203, 213, 225, .14);
   }
 
-  /* o seletor do bloco, no alto (como o botão de linha do desenho: "Bloco 1.401 · Vila Nova ▾") */
-  .seletor {
-    position: relative; height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); color: var(--sv-titulo); display: inline-flex;
-    align-items: center; gap: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; flex: none; cursor: pointer;
+  /* o cartão no lugar do formulário: o bloco devolvido (só consulta, com o cadeado) e o que voltou em parte e está com a Geral (com "Registrar saída") */
+  .cartao-info {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--sv-borda); background: var(--sv-sup);
+    font-size: 13px; line-height: 1.45; color: var(--sv-texto); flex: none;
   }
-  .seletor :global(svg) { color: var(--sv-icone); }
-  .seletor:focus-within { border-color: var(--sv-mod); }
-  .seletor select {
-    appearance: none; border: 0; background: transparent; color: inherit; font: inherit; padding: 0; margin: 0; outline: none; cursor: pointer;
-    field-sizing: content; max-width: 260px; text-overflow: ellipsis;
+  .cartao-info :global(svg) { color: var(--sv-suave); flex: none; }
+  .cartao-info p { flex: 1; min-width: 0; }
+  .cartao-info strong { color: var(--sv-titulo); }
+  .cartao-info.estoque { align-items: center; gap: 14px; }
+  .cel .cartao-info { padding: 10px 12px; }
+  .cel .cartao-info.estoque { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .linha-botao {
+    height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--sv-campo-borda); background: transparent; color: var(--sv-titulo); display: inline-flex;
+    align-items: center; gap: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; flex: none; transition: background-color .15s ease;
   }
-  .seletor select option, .seletor select optgroup { color: var(--sv-texto); background: var(--sv-sup); }
-  .seta { font-size: 11px; margin-left: -2px; }
+  .linha-botao :global(svg) { color: var(--sv-icone); }
+  @media (hover: hover) { .linha-botao:hover { background: var(--sv-linha); } }
 
   /* o formulário: a folha, o que aconteceu, a observação e o botão numa linha */
   /* as medidas da r30 (r30FormFolha): a folha, o que aconteceu (agora com quatro escolhas), a observação e o botão */
@@ -301,7 +339,6 @@
   .quando { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 16px; font-size: 12px; line-height: 1.35; color: var(--sv-suave); }
   .quando strong { font-weight: 600; color: var(--sv-texto); }
   .cel .quando { flex-direction: column; gap: 2px; font-size: 11.5px; }
-  .fechado { font-size: 13px; color: var(--sv-texto); line-height: 1.4; }
   .fim { display: flex; justify-content: flex-end; }
 
   /* os quadradinhos das folhas: 10 por linha no notebook, 5 no celular */
@@ -347,6 +384,7 @@
   .legenda i.escolhida { background: #FFB800; }
 
   .nota :global(.aviso) { padding: 10px 12px; font-size: 13px; line-height: 1.45; }
-  .linha-cel { font-size: 12.5px; color: var(--sv-texto); }
-  .linha-cel strong { color: var(--sv-titulo); }
+  /* no celular, a linha das primeiras folhas, com o visto verde */
+  .resumo { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sv-texto); flex: none; }
+  .resumo :global(svg) { color: var(--sv-ok); }
 </style>

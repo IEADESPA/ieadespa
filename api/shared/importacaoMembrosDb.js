@@ -326,7 +326,7 @@ async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }
   await rq().input("m", sql.Int, membroId).input("t", sql.NVarChar(12), tipo).input("o", sql.Int, outro).input("d", sql.NVarChar(300), String(detalhe).slice(0, 300))
     .input("por", sql.Int, por).query(`
       IF (@o IS NULL OR EXISTS (SELECT 1 FROM MembroReferencia WHERE MembroId = @o))
-         AND NOT EXISTS (SELECT 1 FROM FichasPendencias WHERE MembroId = @m AND Tipo = @t AND ISNULL(OutroMembroId, -1) = ISNULL(@o, -1) AND Situacao = N'ABERTA')
+         AND NOT EXISTS (SELECT 1 FROM FichasPendencias WHERE MembroId = @m AND Tipo = @t AND (OutroMembroId = @o OR (OutroMembroId IS NULL AND @o IS NULL)) AND Situacao = N'ABERTA')
         INSERT INTO FichasPendencias (MembroId, Tipo, OutroMembroId, Detalhe, Origem, AbertaPor) VALUES (@m, @t, @o, @d, N'IMPORTACAO', @por)`);
 }
 

@@ -15,7 +15,8 @@ const regras = require("./arrolamento");
 const { hojeBrasilia } = require("./dataBrasilia");
 
 const NAO_ENCONTRADA = { sucesso: false, mensagem: "Matrícula não encontrada." };
-const NO_ROL = "ISNULL(m.Status, N'ATIVO') NOT IN (N'DESLIGADO', N'FALECIDO')";
+// a ficha sem Status está no rol (sem ISNULL na coluna: a regra 4 do Banco, api/CLAUDE.md)
+const NO_ROL = "(m.Status IS NULL OR m.Status NOT IN (N'DESLIGADO', N'FALECIDO'))";
 // as fichas que vieram do sistema pago (uma linha por pessoa): pelo índice IX_FichasPendencias_Situacao (Situacao, Tipo) INCLUDE (MembroId)
 const VEIO = `JOIN (SELECT DISTINCT fp.MembroId FROM FichasPendencias fp WHERE fp.Situacao IN (N'ABERTA', N'RESOLVIDA') AND fp.Tipo = N'ARROLAMENTO') v ON v.MembroId = m.MembroId`;
 const DE_PESSOA = "FROM MembroReferencia m LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId";
@@ -195,7 +196,7 @@ async function completar(pool, usuario, corpo, hoje) {
                 FormaAdmissao = CASE WHEN @congregado = 1 THEN FormaAdmissao ELSE @f END,
                 DataAdmissao = CASE WHEN @congregado = 1 THEN DataAdmissao ELSE @dt END,
                 CongregacaoId = CASE WHEN @nova IS NULL THEN CongregacaoId ELSE @nova END
-              WHERE MembroId = @id AND SituacaoMembro = N'ARROLAMENTO' AND ISNULL(Status, N'ATIVO') NOT IN (N'DESLIGADO', N'FALECIDO')
+              WHERE MembroId = @id AND SituacaoMembro = N'ARROLAMENTO' AND (Status IS NULL OR Status NOT IN (N'DESLIGADO', N'FALECIDO'))
                 AND ${congLida === null ? "CongregacaoId IS NULL" : "CongregacaoId = @lida"}`);
     if (!u.rowsAffected[0]) return { sucesso: false, status: 409, mensagem: "Esta ficha já foi completada (ou mudou agora há pouco): abra de novo." };
     if (d.cargo) {

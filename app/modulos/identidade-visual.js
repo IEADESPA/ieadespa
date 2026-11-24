@@ -192,7 +192,8 @@ function idvPintarMeu() {
       vão de ${idvData(d.calendarioProximo && d.calendarioProximo.sugestao.inicio)} a ${idvData(d.calendarioProximo && d.calendarioProximo.sugestao.fim)}, aqui mesmo.</p>`;
     return;
   }
-  const apto = d.apto ? "" : `<p class="subtitle psc-aviso">Só quem é membro ativo e em comunhão participa da escolha (Regimento, Art. 159). Se acha que é engano, fale com a Secretaria.</p>`;
+  // o motivo de verdade vem do servidor (a ficha com o arrolamento a completar, o congregado: revisão de 24/11/2026); sem ele (servidor de antes), o texto de sempre
+  const apto = d.apto ? "" : `<p class="subtitle psc-aviso">${typeof d.naoApto === "string" && d.naoApto ? escaparHtmlEbd(d.naoApto) : "Só quem é membro ativo e em comunhão participa da escolha (Regimento, Art. 159). Se acha que é engano, fale com a Secretaria."}</p>`;
   let corpo = "";
   if (c.fase === "AGUARDANDO") corpo = `<p class="subtitle">As sugestões abrem em ${idvData(c.calendario.sugestao.inicio)}.</p>`;
   if (c.fase === "SUGESTAO") corpo = idvPintarSugestaoMembro(d);

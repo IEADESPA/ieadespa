@@ -257,6 +257,15 @@ async function rodar({ mutar = {}, so = null } = {}) {
     confere(t.includes("Só quem é membro ativo e em comunhão participa da escolha") && !env.e("idvSugestaoTexto") && !botao(env, "Mandar sugestão"), "sugestões: o aviso e nenhum formulário");
     confere(t.includes("Você não mandou sugestão neste ano."), "sem sugestões: a frase certa");
     limpo(env, "não apto");
+    // o servidor diz o motivo de verdade (a ficha com o arrolamento a completar): a tela mostra esse texto, escapado, no lugar do de sempre
+    const srvM = servidor({ hoje: "2026-11-05" });
+    srvM.S.naoApto = `A sua ficha está com o arrolamento a completar: fale com a secretaria. ${F.ATAQUE("naoApto")}`;
+    const envM = novo(srvM);
+    await abrirMeu(envM, "pin2", 32);
+    const tM = texto(envM, "idvMeuConteudo");
+    confere(tM.includes("A sua ficha está com o arrolamento a completar") && !tM.includes("Só quem é membro ativo e em comunhão participa") && !envM.e("idvSugestaoTexto"),
+      "o motivo do servidor (arrolamento) no lugar do texto de sempre, e nenhum formulário");
+    limpo(envM, "não apto com o motivo", [F.ATAQUE("naoApto")]);
     // votação aberta: sem cédula
     const srv2 = servidor({ hoje: "2026-11-25" }); srv2.votacaoAberta();
     const env2 = novo(srv2);

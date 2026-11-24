@@ -25,8 +25,10 @@ const disciplina = require("./disciplina");
 const escopo = require("./escopo");
 const afmDb = require("./afmDb");
 
+// FASE 10 (decisão dele de 24/11/2026): quem está em ARROLAMENTO (veio do sistema pago e a secretaria ainda não completou) "não vota em nada e não conta em
+// nada" — sai de todo universo, também da presença e do quórum das reuniões de órgão ("não consegue nem entrar nessas reuniões"). Volta sozinho ao completar.
 function emComunhaoAtiva(membro, idsSobDisciplina) {
-  return membro.situacaoMembro !== "SEM_COMUNHAO" && !idsSobDisciplina.has(membro.membroId);
+  return membro.situacaoMembro !== "SEM_COMUNHAO" && membro.situacaoMembro !== "ARROLAMENTO" && !idsSobDisciplina.has(membro.membroId);
 }
 
 // Reg. Art. 142, III — vedado à Assembleia quem já tem Carta de Mudança
@@ -172,9 +174,9 @@ async function universoDoOrgao(pool, orgao, opcoes = {}) {
     const result = await pool.request().query(
       `SELECT MembroId AS membroId, Nome AS nome, SituacaoMembro AS situacaoMembro FROM MembroReferencia WHERE Status = 'ATIVO'`
     );
-    // o universo geral (enquetes e votação do tema): a ficha em ARROLAMENTO fica sem voto até completar (A1 da revisão de 24/11/2026). Só aqui: os
-    // universos dos órgãos (presença e quórum das reuniões) usam emComunhaoAtiva sem esta regra, que ainda não foi decidida para eles.
-    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina) && m.situacaoMembro !== "ARROLAMENTO");
+    // o universo geral (enquetes e votação do tema): além do filtro comum (o arrolamento sai de tudo), o CONGREGADO não vota — a tela aprovada da rodada 28
+    // ("ainda não membro: não vota"), seguida na volta 5 (24/11/2026). Só aqui: nos órgãos (presença e quórum) o congregado continua, porque não foi decidido.
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina) && m.situacaoMembro !== "CONGREGADO");
   }
 
   if (orgao.sigla === "ASSEMBLEIA_GERAL") {

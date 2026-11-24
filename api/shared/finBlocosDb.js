@@ -4,8 +4,9 @@
 // Quem vê o quê: a Tesouraria Geral vê todos os blocos, inclusive os que estão com ela (na Geral); a congregação e a área veem só os blocos
 // entregues às congregações do seu escopo. O bloco nunca fica com a área: ela só leva (o livro registra "levado pela área").
 // Gravações em transação com trava de aplicação: dois lotes ao mesmo tempo nunca cruzam a numeração, e o mesmo bloco não sai duas vezes.
-// Revisão de 23/11/2026: SET XACT_ABORT ON em toda transação (regra 7 do banco); a exceção da folha se desfaz com o motivo, só pela Tesouraria
-// Geral (a regra dele); os números das mensagens com o ponto do milhar.
+// Revisão de 23/11/2026: SET XACT_ABORT ON em toda transação (regra 7 do banco; desde a revisão m1 de 24/11, dentro de cada consulta e nunca na
+// conexão: ver abrirTransacao); a exceção da folha se desfaz com o motivo, só pela Tesouraria Geral (a regra dele); os números das mensagens com
+// o ponto do milhar.
 // Regra dele de 24/11/2026 (no lugar da "devolução só de bloco cheio" de 23/11), com o detalhe da r30: a devolução é completa ou parcial, e nada
 // se recusa por folha livre. Na parcial, a tesouraria informa a primeira folha em branco: dela ao fim do bloco, as folhas voltam livres e o bloco
 // fica na Geral, para sair de novo só com elas (a saída guarda a faixa entregue); a folha sem destino antes dela continua com a congregação.

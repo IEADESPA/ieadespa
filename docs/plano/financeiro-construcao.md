@@ -225,14 +225,14 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
     chaves estrangeiras compostas): a `SaidaId` da entrada, da folha e da exceção desfeita aponta para uma saída do mesmo bloco, e a
     faixa da saída e da entrada parcial fica dentro do bloco, até a última folha dele. A folha dentro do bloco segue só no código.
 - **Para o lançamento (incremento 3):** a gravação da folha lançada trava a linha do bloco pela chave (`UPDLOCK, ROWLOCK`, na mesma
-  ordem da exceção, do desfazer e da devolução) e grava `SaidaId` = a entrega a que a folha pertence (a saída cuja faixa a contém).
+  ordem da exceção, do desfazer e da devolução) e grava `SaidaId` = a entrega a que a folha pertence (a última saída do bloco que começa
+  nela ou antes dela: as faixas das saídas vão todas até o fim do bloco).
   Aceita a folha livre da entrega em curso e também a folha sem destino de uma entrega que já voltou.
   - **Decisão da sessão de 24/11/2026 (revisão N3):** a folha sem destino antes da primeira em branco da devolução parcial (o recibo
     ainda não lançado, que "continua com a congregação") ganha destino pelo **lançamento**, com a `SaidaId` da entrega original, mesmo
     com o bloco já na Tesouraria Geral ou entregue a outra congregação. Hoje ninguém consegue marcá-la (nem a Geral, nem quem recebe:
     a exceção da folha só vale na entrega em curso), e está certo esperar o incremento 3.
-  - Os pendentes da devolução completa (o recibo ainda não lançado "passa normalmente", regra de 24/11) seguem o mesmo caminho: leitura
-    da regra, a confirmar no desenho do lançamento.
+  - Os pendentes da devolução completa: ver a pergunta aberta 7.
 
 ### Perguntas abertas do incremento 2 (para ele)
 
@@ -247,3 +247,6 @@ incremento 1b. A produção só com o OK dele, numa missão própria, com a troc
 5. (24/11) Quem recebe o bloco parcial vê as folhas usadas antes sem a observação de outra congregação; só a Geral vê todas. Serve?
 6. (24/11) O bloco que voltou sem uso nenhum (a primeira em branco é a primeira folha da entrega) não aparece em "Folhas do bloco"
    para quem o devolveu (não há folha dele); no livro, a saída e a entrada continuam. Serve?
+7. (24/11) Os pendentes da devolução completa (o recibo ainda não lançado "passa normalmente", regra de 24/11; o bloco devolvido não
+   muda mais): também ganham destino pelo lançamento do incremento 3? É a leitura do construtor, não decisão; confirmar no desenho do
+   lançamento.

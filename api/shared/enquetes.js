@@ -24,10 +24,11 @@ async function membrosElegiveis(pool, sql, enquete) {
   return new Set(universo.map(m => m.membroId));
 }
 
-// "Apto e em comunhão" para uma pessoa: o mesmo critério de universoDoOrgao(pool, null) — ATIVO, não SEM_COMUNHAO, sem processo disciplinar ativo.
+// "Apto e em comunhão" para uma pessoa: o mesmo critério de universoDoOrgao(pool, null) — ATIVO, nem SEM_COMUNHAO nem ARROLAMENTO ("sem voto até completar",
+// A1 da revisão de 24/11/2026), sem processo disciplinar ativo. A ficha sem situação (NULL) continua apta, como antes.
 async function aptoEmComunhao(pool, membroId, sql = sqlPadrao) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`
-    SELECT CASE WHEN m.Status = 'ATIVO' AND ISNULL(m.SituacaoMembro, '') <> 'SEM_COMUNHAO'
+    SELECT CASE WHEN m.Status = 'ATIVO' AND (m.SituacaoMembro IS NULL OR m.SituacaoMembro NOT IN ('SEM_COMUNHAO', 'ARROLAMENTO'))
                  AND NOT EXISTS (SELECT 1 FROM ProcessosDisciplinares LEFT JOIN TiposPenalidade tp ON tp.PenalidadeId = ProcessosDisciplinares.PenalidadeId
                                  WHERE ProcessosDisciplinares.MembroId = m.MembroId AND ${CONDICAO_SQL_ATIVO} AND ${foraDaReadmissao("m")})
            THEN 1 ELSE 0 END AS apto

@@ -172,7 +172,9 @@ async function universoDoOrgao(pool, orgao, opcoes = {}) {
     const result = await pool.request().query(
       `SELECT MembroId AS membroId, Nome AS nome, SituacaoMembro AS situacaoMembro FROM MembroReferencia WHERE Status = 'ATIVO'`
     );
-    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
+    // o universo geral (enquetes e votação do tema): a ficha em ARROLAMENTO fica sem voto até completar (A1 da revisão de 24/11/2026). Só aqui: os
+    // universos dos órgãos (presença e quórum das reuniões) usam emComunhaoAtiva sem esta regra, que ainda não foi decidida para eles.
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina) && m.situacaoMembro !== "ARROLAMENTO");
   }
 
   if (orgao.sigla === "ASSEMBLEIA_GERAL") {

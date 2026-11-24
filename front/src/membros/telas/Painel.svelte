@@ -244,7 +244,8 @@
 {#snippet fimCima()}
   {#if escondidos > 0}<button type="button" class="gc-fim botao-txt" onclick={() => (todas = true)}>{fraseEscondidos}</button>{/if}
   {#if sessao.geral && (arrol?.semCongregacao ?? 0) > 0}
-    <!-- sem botão de completar aqui (G3, revisão de 24/11/2026: não estava no desenho): a Geral escolhe a congregação pelo cadastro e a ficha entra no arrolamento dela -->
+    <!-- sem botão de completar aqui (G3, revisão de 24/11/2026: não estava no desenho). Pergunta aberta: hoje não há outro caminho de tela para essas fichas
+         (a transferência recusa ficha sem congregação e o cadastro antigo não abre mais); a tela Completar ainda aceita a rota semCongregacao -->
     <p class="gc-fim">{fraseSemCongregacao(arrol?.semCongregacao ?? 0)}</p>
   {/if}
 {/snippet}

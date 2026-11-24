@@ -148,8 +148,8 @@ describe("a resposta do servidor que a tela aceita (o painel não quebra com res
 });
 
 // G3 da revisão de 24/11/2026: no painel da Geral, a frase "N fichas vieram sem congregação" fica (é do desenho aprovado, rodada 28), mas o "Completar ›"
-// depois dela sai (não estava no desenho). Para essas fichas, a Secretaria Geral escolhe a congregação pelo cadastro (a ficha sem congregação recebe a
-// primeira por lá) e elas entram no arrolamento daquela congregação, onde a congregação, a área ou a Geral completam.
+// depois dela sai (não estava no desenho). Pergunta aberta ao responsável: sem ele, hoje não há outro caminho de tela para essas fichas (a transferência
+// recusa ficha sem congregação e o cadastro antigo não abre mais); a tela Completar ainda aceita a rota semCongregacao, então voltar o botão é uma linha.
 describe("o painel da Geral igual ao aprovado (G3)", () => {
   const painel = fs.readFileSync(path.join(__dirname, "..", "..", "..", "front", "src", "membros", "telas", "Painel.svelte"), "utf8");
   test("a frase das fichas sem congregação continua, só para a Geral", () => {

@@ -153,8 +153,36 @@ function blocosAgora(linhas) {
   return r;
 }
 
+// ---- a revisão de 23/11/2026: as regras dele (o bloco só volta cheio; desfazer a exceção da folha) e o "levado pela área" ----
+
+/** "levado pela área" na saída: true = sim; false ou sem o campo = não; qualquer outra coisa (o texto "true", 1...) = null, recusado, para
+ *  nunca virar "não" calado */
+function levadoPelaArea(v) {
+  if (v === undefined || v === null || v === false) return false;
+  return v === true ? true : null;
+}
+
+/** desfazer a exceção de uma folha (só a Tesouraria Geral, regra dele de 23/11/2026): a folha e o motivo, obrigatório */
+function desfazimentoDaFolha(dados) {
+  const d = dados && typeof dados === "object" ? dados : {};
+  const folha = inteiro(d.folha);
+  if (folha === null || folha < 1 || folha > MAX_FOLHA) return { erro: "Escolha a folha." };
+  const motivo = typeof d.motivo === "string" ? d.motivo.trim() : "";
+  if (!motivo) return { erro: "Escreva o motivo: por que a exceção da folha está sendo desfeita." };
+  if (motivo.length > 300) return { erro: "O motivo passou de 300 letras." };
+  return { folha, motivo };
+}
+
+/** a recusa da devolução do bloco que ainda tem folha livre (regra dele de 23/11/2026: o bloco só volta cheio), nas palavras da tela */
+function recusaDoBlocoComFolhaLivre(numero, livres) {
+  const quantas = livres === 1 ? "1 folha livre" : `${Number(livres).toLocaleString("pt-BR")} folhas livres`;
+  return `O bloco ${Number(numero).toLocaleString("pt-BR")} ainda tem ${quantas}: toda folha precisa de destino antes de o bloco voltar `
+    + "(lançada, ou cancelada, arrancada ou extraviada com a observação).";
+}
+
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
-  destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora
+  destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
+  levadoPelaArea, desfazimentoDaFolha, recusaDoBlocoComFolhaLivre
 };

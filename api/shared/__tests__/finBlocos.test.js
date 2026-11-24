@@ -230,3 +230,57 @@ describe("a porta das ações do incremento 2", () => {
     expect(mockConsultas.filter((c) => /INSERT|UPDATE/.test(c.sql))).toHaveLength(0);
   });
 });
+
+// ---- a revisão de 23/11/2026: as regras dele (o bloco só volta cheio; desfazer a exceção da folha) e o "levado pela área" ----
+describe("a revisão de 23/11/2026 (regra pura)", () => {
+  test("\"levado pela área\": sim, não ou sem o campo; qualquer outra coisa é recusada (nunca vira \"não\" calado)", () => {
+    expect(regra.levadoPelaArea(true)).toBe(true);
+    expect(regra.levadoPelaArea(false)).toBe(false);
+    expect(regra.levadoPelaArea(undefined)).toBe(false);
+    expect(regra.levadoPelaArea(null)).toBe(false);
+    for (const lixo of ["true", "false", 1, 0, "sim", "", [], {}, [true]]) expect(regra.levadoPelaArea(lixo)).toBeNull();
+  });
+  test("desfazer a exceção: a folha e o motivo, obrigatório (até 300 letras)", () => {
+    expect(regra.desfazimentoDaFolha({ folha: "70090", motivo: "  Marcada na folha errada  " })).toEqual({ folha: 70090, motivo: "Marcada na folha errada" });
+    expect(regra.desfazimentoDaFolha({ folha: 70090, motivo: "   " }).erro).toMatch(/motivo/);
+    expect(regra.desfazimentoDaFolha({ folha: 70090 }).erro).toMatch(/motivo/);
+    expect(regra.desfazimentoDaFolha({ folha: 70090, motivo: "x".repeat(301) }).erro).toMatch(/300/);
+    for (const lixo of [null, undefined, "abc", 1.5, -3, 0, 2 ** 40, [], {}, "1e3"]) expect(regra.desfazimentoDaFolha({ folha: lixo, motivo: "x" }).erro).toBeTruthy();
+    expect(regra.desfazimentoDaFolha(null).erro).toBeTruthy();
+  });
+  test("a mensagem do bloco que ainda tem folha livre: singular, plural e o ponto do milhar", () => {
+    expect(regra.recusaDoBlocoComFolhaLivre(1401, 1)).toMatch(/^O bloco 1\.401 ainda tem 1 folha livre: /);
+    expect(regra.recusaDoBlocoComFolhaLivre(1401, 49)).toMatch(/^O bloco 1\.401 ainda tem 49 folhas livres: /);
+    expect(regra.recusaDoBlocoComFolhaLivre(1401, 49)).toMatch(/cancelada, arrancada ou extraviada/);
+  });
+});
+
+describe("a porta de desfazer a exceção da folha (só a Tesouraria Geral)", () => {
+  beforeAll(() => { process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-" + "x".repeat(24); });
+  beforeEach(() => { mockConsultas = []; mockRegras = []; });
+  const sessao = (extra) => auth.reassinarSessao({ membroId: 700002, permissoes: [], escopoCongregacoes: [], termosPendentes: [], via: "SENHA", ...extra });
+  const GERAL = () => sessao({ nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["financeiro"] });
+  const LOCAL = () => sessao({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"], permissoes: ["financeiro"] });
+  const AREA = () => sessao({ nivel: "AREA", escopoCongregacoes: ["Vila Nova", "Central"], permissoes: ["financeiro"] });
+  async function chamar({ acao, metodo = "GET", corpo, token }) {
+    const context = { bindingData: { acao }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await rota(context, { method: metodo, query: {}, body: corpo, headers: token ? { "x-auth-token": token } : {} });
+    return context.res;
+  }
+  test("sem sessão 401; a congregação e a área 403, sem tocar no banco", async () => {
+    const corpo = { folha: 70090, motivo: "Marcada na folha errada" };
+    expect((await chamar({ acao: "desfazer-folha", metodo: "POST", corpo })).status).toBe(401);
+    expect((await chamar({ acao: "desfazer-folha", metodo: "POST", corpo, token: LOCAL() })).status).toBe(403);
+    expect((await chamar({ acao: "desfazer-folha", metodo: "POST", corpo, token: AREA() })).status).toBe(403);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("sem o motivo: 422 com a mensagem, sem tocar no banco", async () => {
+    const r = await chamar({ acao: "desfazer-folha", metodo: "POST", corpo: { folha: 70090, motivo: " " }, token: GERAL() });
+    expect(r.status).toBe(422);
+    expect(r.body.mensagem).toMatch(/motivo/);
+    expect(mockConsultas).toHaveLength(0);
+  });
+  test("pelo GET não desfaz (ação inválida)", async () => {
+    expect((await chamar({ acao: "desfazer-folha", metodo: "GET", token: GERAL() })).status).toBe(404);
+  });
+});

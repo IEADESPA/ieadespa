@@ -290,6 +290,7 @@ case "$1" in
     cd "$AQUI"
     base restaurar cenario-184
     migrar 200 2
+    migrar 201 2   # a revisão de 23/11/2026: os índices que faltavam, FinFolhasDesfeitas e a Quantidade em blocos (e2e-200 e e2e-201)
     base salvar cenario-200
     ;;
   preparar-175)

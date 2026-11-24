@@ -18,7 +18,19 @@ const area = LIDER(TESOUREIRA_LOCAL, ["financeiro"], ["Central E2E", "Vila Nova 
 const semFinanceiro = LIDER(TESOUREIRA_LOCAL, ["pessoas"], ["Vila Nova E2E"]);
 const geralSemFinanceiro = GERAL(TESOUREIRO_GERAL, ["pessoas"]);
 
-const TABELAS = ["FinCentrosCusto", "FinMovimentosCentro", "FinLotesGrafica", "FinBlocos", "FinFolhas", "FinLivroBlocos"];
+const TABELAS = ["FinCentrosCusto", "FinMovimentosCentro", "FinLotesGrafica", "FinBlocos", "FinFolhas", "FinLivroBlocos", "FinFolhasDesfeitas"];
+// a coluna começa algum índice da tabela (a chave da junção, do filtro ou da chave estrangeira)
+const comecaIndice = async (tabela, coluna) => Number(await escalar(`
+  SELECT COUNT(*) FROM sys.index_columns ic JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+  WHERE ic.object_id = OBJECT_ID(N'dbo.${tabela}') AND ic.key_ordinal = 1 AND c.name = N'${coluna}'`)) > 0;
+// a migração 201 rodada aqui no meio do roteiro, sobre um banco com dados (prova a idempotência e o acerto da Quantidade do cadastro)
+async function aplicar201() {
+  const fs = require("fs");
+  const pasta = path.join(API, "..", "sql", "migrations");
+  const nome = fs.readdirSync(pasta).find((n) => n.startsWith("201_") && n.endsWith(".sql"));
+  if (!nome) return ok(false, "a migração 201 existe");
+  for (const lote of fs.readFileSync(path.join(pasta, nome), "utf8").split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean)) await q(lote);
+}
 async function retratoFin() {
   const partes = [];
   for (const t of TABELAS) partes.push(JSON.stringify(await um(`SELECT COUNT(*) n, CHECKSUM_AGG(CHECKSUM(*)) c FROM ${t}`)));
@@ -59,6 +71,12 @@ async function disparar(chamadas) {
   await recusa(`INSERT INTO FinMovimentosCentro (CentroCustoId, Tipo, Valor, DataMovimento, Descricao, EstornoDeId, CriadoPor) VALUES (${presidente}, 'ESTORNO', 1250.75, '2027-01-02', 'de novo', ${abertura}, ${TESOUREIRO_GERAL})`, "estornar duas vezes o mesmo movimento");
   ok(Number(await escalar(`SELECT SUM(Valor) FROM FinMovimentosCentro WHERE CentroCustoId = ${presidente}`)) === 0, "abertura + estorno = saldo zero (nada se apaga)");
 
+  console.log("== a 201: os índices que faltavam (revisão de 23/11/2026, regra 3 do banco) e o histórico da exceção desfeita ==");
+  for (const [t, c] of [["FinBlocos", "LoteId"], ["FinLivroBlocos", "BlocoId"], ["FinLivroBlocos", "CongregacaoId"], ["FinLivroBlocos", "LoteId"], ["FinLivroBlocos", "PessoaMembroId"],
+    ["FinCentrosCusto", "CentroPaiId"], ["FinCentrosCusto", "AreaId"], ["FinFolhasDesfeitas", "BlocoId"], ["FinFolhasDesfeitas", "Folha"]]) {
+    ok(await comecaIndice(t, c), `há índice que começa por ${t}.${c}`);
+  }
+
   console.log("== quem entra ==");
   const antes0 = await retratoFin();
   ok((await GET(H, "", null)).status === 401, "sem sessão: 401");
@@ -76,32 +94,54 @@ async function disparar(chamadas) {
   const blocos = await q(`SELECT Numero, PrimeiraFolha, UltimaFolha, Situacao, ChegouEm FROM FinBlocos WHERE LoteId = ${loteId} ORDER BY Numero`);
   ok(blocos.length === 200 && blocos[0].Numero === 1400 && blocos[1].Numero === 1401 && blocos[1].PrimeiraFolha === 70051 && blocos[199].UltimaFolha === 80000, "os blocos numerados pela primeira folha (70.051 = bloco 1.401) até a 80.000");
   ok(blocos.every((b) => b.Situacao === "NA_GERAL" && !b.ChegouEm), "todos na Geral, ainda na gráfica");
-  ok(Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE Tipo = 'CADASTRO' AND LoteId = ${loteId} AND Quantidade = 10000`)) === 1, "o livro registra o cadastro do lote");
+  // revisão M7: a Quantidade do livro conta BLOCOS no cadastro e na chegada (antes o cadastro gravava as folhas)
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinLivroBlocos WHERE Tipo = 'CADASTRO' AND LoteId = ${loteId} AND Quantidade = 200`)) === 1, "o livro registra o cadastro do lote (200 blocos)");
+  ok(/série 2026 cadastrado: 200 blocos, folhas 70\.001 a 80\.000/.test(r.body.mensagem), "a mensagem do cadastro com o ponto do milhar nas folhas e a série sem ponto", r.body.mensagem);
+  // o cadastro gravado antes da revisão (10.000 folhas): a 201 o acerta para 200 blocos, e rodar a 201 de novo não estraga
+  await q(`UPDATE FinLivroBlocos SET Quantidade = 10000 WHERE Tipo = 'CADASTRO' AND LoteId = ${loteId}`);
+  await aplicar201();
+  await aplicar201();
+  ok(Number(await escalar(`SELECT Quantidade FROM FinLivroBlocos WHERE Tipo = 'CADASTRO' AND LoteId = ${loteId}`)) === 200, "a 201 acerta o cadastro antigo para blocos e roda duas vezes sem estragar");
   ok(Number(await escalar(`SELECT COUNT(*) FROM AuditLog WHERE Acao = 'FIN_LOTE_CADASTRADO' AND RegistroId = ${loteId}`)) === 1, "a trilha registra o cadastro do lote");
   r = await POST(H, "lote", geral, { serie: 2026, primeiraFolha: 79951, totalFolhas: 100 });
-  ok(r.status === 422 && /cruzam/.test(r.body.mensagem), "um lote que cruza as folhas de outro é recusado", r.body);
+  ok(r.status === 422 && /As folhas 79\.951 a 80\.050 cruzam o lote da série 2026 \(70\.001 a 80\.000\)/.test(r.body.mensagem), "um lote que cruza as folhas de outro é recusado", r.body);
   r = await POST(H, "lote", geral, { serie: 2026, primeiraFolha: 70001, totalFolhas: 75 });
   ok(r.status === 422, "o total que não fecha blocos de 50 é recusado");
 
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { nome: "Tesoureira de Vila Nova" } });
-  ok(r.status === 422 && /ainda não chegou/.test(r.body.mensagem), "o bloco que não chegou da gráfica não se entrega", r.body);
+  ok(r.status === 422 && /O bloco 1\.401 ainda não chegou/.test(r.body.mensagem), "o bloco que não chegou da gráfica não se entrega", r.body);
   r = await POST(H, "chegada", geral, { loteId, ateFolha: 75000 });
   ok(r.status === 200 && r.body.blocos === 100, "a chegada até a folha 75.000: 100 blocos", r.body);
   r = await POST(H, "chegada", geral, { loteId, ateFolha: 75000 });
   ok(r.status === 200 && r.body.blocos === 0, "registrar a mesma chegada de novo não muda nada");
   ok((await POST(H, "chegada", geral, { loteId: 999999, ateFolha: 75000 })).status === 404, "lote que não existe: 404");
   r = await POST(H, "chegada", geral, { loteId, ateFolha: 90000 });
-  ok(r.status === 422, "folha de fora do lote na chegada é recusada");
+  ok(r.status === 422 && /A folha 90\.000 não é deste lote \(70\.001 a 80\.000\)/.test(r.body.mensagem), "folha de fora do lote na chegada é recusada", r.body);
+
+  // revisão M2, M3 e M5: a data antes da chegada, a congregação inativa e o "levado pela área" que não é sim nem não
+  const antesM = await retratoFin();
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { nome: "Tesoureira da Central" }, data: "2026-01-02" });
+  ok(r.status === 422 && /antes da chegada/.test(r.body.mensagem), "a entrega com data antes da chegada do bloco é recusada", r.body);
+  await q(`UPDATE Congregacoes SET Ativa = 0 WHERE CongregacaoId = ${BETA}`);
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } });
+  await q(`UPDATE Congregacoes SET Ativa = 1 WHERE CongregacaoId = ${BETA}`);
+  ok(r.status === 422 && /não está ativa/.test(r.body.mensagem), "a entrega a uma congregação inativa é recusada", r.body);
+  for (const lixo of ["true", "false", 1, 0, "sim", [], {}]) {
+    r = await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { nome: "x" }, levadoPelaArea: lixo });
+    ok(r.status === 422 && /levado pela área/.test(r.body.mensagem), `"levado pela área" = ${JSON.stringify(lixo)} é recusado (nunca vira "não" calado)`, r.body);
+  }
+  ok((await retratoFin()) === antesM, "as entregas recusadas não mexeram no banco");
 
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: VILA_NOVA, pessoa: { membroId: TESOUREIRA_LOCAL } });
-  ok(r.status === 200, "o bloco 1.401 entregue a Vila Nova", r.body);
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.401 entregue a Vila Nova E2E.", "o bloco 1.401 entregue a Vila Nova", r.body);
   r = await POST(H, "entregar", geral, { primeiraFolha: 70051, congregacaoId: BETA, pessoa: { nome: "Outra pessoa" } });
-  ok(r.status === 422 && /já foi entregue/.test(r.body.mensagem), "o mesmo bloco não sai duas vezes");
+  ok(r.status === 422 && /O bloco 1\.401 já foi entregue/.test(r.body.mensagem), "o mesmo bloco não sai duas vezes", r.body);
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70101, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute (tesoureira)" }, levadoPelaArea: true })).status === 200, "o bloco 1.402 entregue a Vila Nova, levado pela área");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70151, congregacaoId: BETA, pessoa: { nome: "Tesoureiro da Beta" } })).status === 200, "o bloco 1.403 entregue à Beta");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: 999, pessoa: { nome: "x" } })).status === 422, "congregação que não existe é recusada");
   ok((await POST(H, "entregar", geral, { primeiraFolha: 70201, congregacaoId: CENTRAL, pessoa: { membroId: 987654 } })).status === 422, "pessoa que não existe é recusada");
-  ok((await POST(H, "entregar", geral, { primeiraFolha: 70202, congregacaoId: CENTRAL, pessoa: { nome: "x" } })).status === 422, "folha que não é a primeira de um bloco é recusada");
+  r = await POST(H, "entregar", geral, { primeiraFolha: 70202, congregacaoId: CENTRAL, pessoa: { nome: "x" } });
+  ok(r.status === 422 && /Não há bloco que comece na folha 70\.202/.test(r.body.mensagem), "folha que não é a primeira de um bloco é recusada", r.body);
   const livro = await q(`SELECT Tipo, CongregacaoId, PessoaMembroId, PessoaNome, LevadoPelaArea FROM FinLivroBlocos WHERE Tipo = 'SAIDA' ORDER BY RegistroId`);
   ok(livro.length === 3 && livro[0].PessoaMembroId === TESOUREIRA_LOCAL && livro[1].LevadoPelaArea === true && livro[2].PessoaNome === "Tesoureiro da Beta", "o livro registra cada saída, com quem levou e se foi pela área", livro);
   // uma folha do 1.401 com destino (a tela das folhas vem no incremento 2): o bloco passa a "em uso"
@@ -109,6 +149,10 @@ async function disparar(chamadas) {
   await q(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70090, 'ARRANCADA', 'Rasgou na hora de preencher', ${TESOUREIRA_LOCAL})`);
   await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70090, 'CANCELADA', 'de novo', ${TESOUREIRA_LOCAL})`, "a mesma folha com dois destinos");
   await recusa(`INSERT INTO FinFolhas (BlocoId, Folha, Destino, Observacao, RegistradoPor) VALUES (${b1401}, 70091, 'CANCELADA', '   ', ${TESOUREIRA_LOCAL})`, "folha cancelada sem a observação");
+  const desfeita = (destino, motivo) => `INSERT INTO FinFolhasDesfeitas (FolhaId, BlocoId, Folha, Destino, Observacao, RegistradoPor, RegistradoEm, DesfeitaPor, Motivo)
+    VALUES (999001, ${b1401}, 70092, '${destino}', 'x', ${TESOUREIRA_LOCAL}, SYSUTCDATETIME(), ${TESOUREIRO_GERAL}, '${motivo}')`;
+  await recusa(desfeita("CANCELADA", "   "), "exceção desfeita sem o motivo");
+  await recusa(desfeita("LANCADA", "lançada"), "folha lançada no histórico das exceções desfeitas (o lançamento se corrige por estorno)");
   await recusa(`UPDATE FinBlocos SET Situacao = 'NA_GERAL' WHERE BlocoId = ${b1401}`, "bloco na Geral com congregação");
   await recusa(`UPDATE FinBlocos SET Situacao = 'DEVOLVIDO' WHERE BlocoId = ${b1401}`, "bloco devolvido sem a data da devolução");
   await recusa(`UPDATE FinBlocos SET Situacao = 'ENTREGUE', CongregacaoId = ${CENTRAL}, EntregueEm = '2026-11-21' WHERE Numero = 1590`, "entregar bloco que não chegou (direto no banco)");
@@ -153,6 +197,18 @@ async function disparar(chamadas) {
   const ativas = await escalar(`SELECT COUNT(*) FROM Congregacoes WHERE Ativa = 1`);
   ok(r.body.escopo.geral === true && r.body.escopo.congregacoes === ativas && r.body.escopo.area === null && r.body.escopo.congregacao === null, "o escopo da Geral: todas as congregações ativas", r.body.escopo);
 
+  console.log("== a chegada no meio do primeiro bloco (revisão M6) ==");
+  r = await POST(H, "lote", geral, { serie: 2027, primeiraFolha: 300001, totalFolhas: 100 });
+  const loteM6 = r.body.loteId;
+  r = await POST(H, "chegada", geral, { loteId: loteM6, ateFolha: 300010 });
+  ok(r.status === 422 && /Até a folha 300\.010 nenhum bloco chegou inteiro: o bloco 6\.000 vai até a folha 300\.050/.test(r.body.mensagem), "a chegada no meio do 1º bloco não diz que já tinham chegado", r.body);
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinBlocos WHERE LoteId = ${loteM6} AND ChegouEm IS NOT NULL`)) === 0, "nenhum bloco do lote ficou como chegado");
+  r = await POST(H, "chegada", geral, { loteId: loteM6, ateFolha: 300050 });
+  ok(r.status === 200 && r.body.blocos === 1, "até a última folha do 1º bloco: chegou 1 bloco", r.body);
+  r = await POST(H, "chegada", geral, { loteId: loteM6, ateFolha: 300050 });
+  ok(r.status === 200 && r.body.blocos === 0 && /já estavam registrados/.test(r.body.mensagem), "a mesma chegada de novo: já estavam registrados", r.body);
+  ok(Number(await escalar(`SELECT Quantidade FROM FinLivroBlocos WHERE Tipo = 'CHEGADA' AND LoteId = ${loteM6}`)) === 1, "a chegada também conta blocos no livro");
+
   console.log("== lixo em cada campo ==");
   const quebras = [], mudancas = [];
   const casos = [
@@ -193,6 +249,8 @@ async function disparar(chamadas) {
   const sobrepostos = Number(await escalar(`SELECT COUNT(*) FROM FinLotesGrafica a JOIN FinLotesGrafica b ON a.LoteId < b.LoteId AND a.PrimeiraFolha <= b.UltimaFolha AND a.UltimaFolha >= b.PrimeiraFolha`));
   ok(sobrepostos === 0 && rs.filter((x) => x.status === 201).length === 1, "4 lotes que se cruzam ao mesmo tempo: nenhum par de lotes se sobrepõe", rs.map((x) => x.status));
   ok(Number(await escalar(`SELECT COUNT(*) FROM AuditLog WHERE Acao LIKE 'FIN_%' AND RegistroId IS NULL`)) === 0, "nenhuma linha da trilha sem o registro");
+  // revisão I4: as transações ligam o XACT_ABORT por lote e desligam antes de fechar (o roteiro usa uma conexão só: o que vazasse ficaria nela)
+  ok(Number(await escalar(`SELECT @@OPTIONS & 16384`)) === 0, "depois das gravações, a conexão volta com o XACT_ABORT desligado");
 
   fim("e2e-200 (Financeiro: a base e os blocos de recibo)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

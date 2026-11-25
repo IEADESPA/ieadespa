@@ -7,7 +7,7 @@
 // e o Secretário Geral; a página do QR não mostra CPF nem endereço. A virada da 33 está aprovada e não volta.
 // O exemplo é a Débora Lima, 1ª secretária de Vila Nova em 2027, posta pelo dirigente (Pr. Abel) em 05/01/2027 (a tela de
 // janeiro da 33): as quatro pessoas que assinam são diferentes. Nome, CPF e endereço de mentira.
-const R34_DEB = { nome: 'Débora Lima', cpf: '000.000.000-00', end: 'Rua Onze, 52, bairro Vila Nova, Parauapebas-PA', cargo: '1º Secretário', cong: 'Vila Nova' };
+const R34_DEB = { nome: 'Débora Lima', cpf: '000.000.000-00', end: 'Rua Onze, 52, bairro Vila Nova, Parauapebas-PA', cargo: '1º Secretário', cong: 'Vila Nova', inicio: 'de 5 de janeiro' };
 // os modelos da parte 1, por cargo: [nome do modelo, quem usa, termos de 2027, o texto (a "função" e o "lugar" se preenchem)]
 const R34_MODELOS = [
   ['Dirigente', 'o titular', 45, 'Texto oficial do Regimento Interno, Art. 117 (Termo de Posse e Adesão ao Regimento Interno), transcrito sem mudar uma palavra.'],
@@ -21,7 +21,7 @@ const R34_MODELOS = [
 // a parte 1 montada para uma pessoa: o serviço do cargo, a natureza voluntária e a entrega
 const r34Parte1 = (m, x) => [
   ['QUALIFICAÇÃO:', `OUTORGANTE: IGREJA EVANGÉLICA ASSEMBLEIA DE DEUS – MINISTÉRIO DO SETA EM PARAUAPEBAS (IEADESPA), CNPJ nº 00.000.000/0001-00, neste ato representada por seu Presidente e por seu Secretário Geral. OUTORGADO: ${x.nome}, CPF nº ${x.cpf}, residente em ${x.end}. FUNÇÃO: ${x.cargo} da Congregação ${x.cong}.`],
-  ['DO SERVIÇO:', `O OUTORGADO assume, de 1º de janeiro a 31 de dezembro de 2027, a função de ${x.cargo} da Congregação ${x.cong}, para ${R34_MODELOS[m][3]}`],
+  ['DO SERVIÇO:', `O OUTORGADO assume, ${x.inicio || 'da data da posse'} a 31 de dezembro de 2027, a função de ${x.cargo} da Congregação ${x.cong}, para ${R34_MODELOS[m][3]}`],
   ['DA NATUREZA VOLUNTÁRIA:', 'O OUTORGADO declara exercer a função de forma voluntária, nos termos da Lei nº 9.608/98 (Voluntariado), sem vínculo empregatício nem salário, e aderir ao Estatuto Social e ao Regimento Interno da IEADESPA.'],
   ['DA ENTREGA:', 'Compromete-se a entregar a função, os documentos e o acesso ao sistema em dia em 31 de dezembro de 2027, ou antes, quando outro for posto em seu lugar.']
 ];
@@ -49,7 +49,7 @@ function r34Modelos(p, cel) {
   const linhas = R34_MODELOS.map((m, i) => r28Pes(p, r32Ic(p, i === 0 ? 'livro' : 'doc', i === 0 ? 'ouro' : ''), m[0], `${m[1]} · ${m[2]} em 2027`, i === 0 ? (cel ? r33Trava(p) : r18Etiq(p, 'Regimento', 'ouro')) : (cel ? r28Mais(p, '›') : ''), { i, alt: cel ? 44 : 46, sel: !cel && i === 3 })).join('');
   const lista = r32Car(p, 'Os modelos da parte 1', cel ? '' : r28Mais(p, '+ Modelo novo'), linhas, cel);
   if (cel) return r32EsCel(p, 'Modelos do termo', `${r16aAviso(p, 'A parte 1 muda conforme o cargo. A LGPD e o acesso são iguais para todos, com o nome e o cargo de cada um.')}${lista}${r20Nota(p, 'Mudar um modelo vale para os termos novos; os já aceitos ficam como foram aceitos.')}`);
-  const exemplo = { nome: '[nome]', cpf: '[CPF]', end: '[endereço]', cargo: '[1º ou 2º] Tesoureiro', cong: '[congregação]' };
+  const exemplo = { nome: '[nome]', cpf: '[CPF]', end: '[endereço]', cargo: '[1º ou 2º] Tesoureiro', cong: '[congregação]', inicio: 'de [data da posse]' };
   const texto = `<div style="font-size:13px;line-height:1.5;color:${p.texto};background:${p.fundo};border:1px solid ${p.borda};border-radius:10px;padding:10px 12px">${r34P1Html(r34Parte1(3, exemplo).slice(1), 13, p.titulo).replace(/\[([^\]]+)\]/g, '<span style="background:#FFF4D1;color:#8A5A00;font-weight:700;border-radius:4px;padding:0 3px">$1</span>')}</div>`;
   const dir = r32Car(p, 'Tesoureiro · 1º e 2º tesoureiro da congregação', r18Etiq(p, '82 termos em 2027', 'azul'), `${texto}${r20Nota(p, 'O que está em amarelo o sistema preenche com a pessoa. A qualificação (nome, CPF, endereço) vem antes, igual em todos os modelos.')}<div style="display:flex;gap:10px;padding-top:6px">${r21Ouro(p, 'Salvar o modelo', 'check', 42).replace('justify-content:center', 'justify-content:center;flex:1.4')}${r28Bt(p, 'Ver como fica no PDF', 'doc')}</div>`);
   const tit = r18Tit(p, 'Os modelos do termo, por cargo', `a parte 1 muda conforme o cargo · a LGPD e o acesso são iguais para todos · ${R34_JAN}`);
@@ -73,7 +73,7 @@ const R34_LOTE = [['Débora Lima', '1ª secretária', 'Vila Nova (7)', '05/01, 1
 function r34Lote(p, cel, quem) {
   const pres = quem === 'pres';
   const L = R34_LOTE;
-  const nums = r29Nums(p, pres ? [r32Num('318', 'termos de 2027'), r32Num('196', 'já aceitos pela pessoa'), r32Num('76', 'prontos para eu assinar', 'ouro'), r32Num('122', 'esperando a pessoa')] : [r32Num('318', 'termos de 2027'), r32Num('120', 'o Presidente já assinou'), r32Num('98', 'prontos para eu assinar', 'ouro'), r32Num('98', 'já assinei')], 0);
+  const nums = r29Nums(p, pres ? [r32Num('318', 'termos de 2027'), r32Num('196', 'já aceitos pela pessoa'), r32Num('76', 'prontos para eu assinar', 'ouro'), r32Num('122', 'esperando a pessoa')] : [r32Num('318', 'termos de 2027'), r32Num('134', 'o Presidente já assinou'), r32Num('98', 'prontos para eu assinar', 'ouro'), r32Num('98', 'já assinei')], 0);
   const filtros = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${r32Pils(p, ['Prontos para eu assinar', 'Esperando a pessoa', 'Já assinei'], 'Prontos para eu assinar')}<span style="width:1px;height:22px;background:${p.linha}"></span>${r32Pils(p, ['Área 2', 'Todos os cargos', 'Ano 2027'], 'Área 2')}</div>`;
   const cols = pres ? '28px minmax(0,1.15fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr) 54px' : '28px minmax(0,1.15fr) minmax(0,1.1fr) minmax(0,1fr) 88px 54px';
   const cab = pres ? ['', 'Quem tomou posse', 'Cargo e onde', 'Aceitou em', 'Deu a posse', ''] : ['', 'Quem tomou posse', 'Cargo e onde', 'Deu a posse', 'Presidente', ''];
@@ -127,7 +127,7 @@ function r34Area(p, cel) {
   const falta = n => (n === 4 ? 'completo' : n === 1 ? 'falta a pessoa aceitar' : n === 2 ? 'faltam o Presidente e o Sec. Geral' : 'falta o Secretário Geral');
   const pdf = x => (x[5] ? r28Mais(p, 'Baixar PDF') : `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:${p.suave}">${ic('cadeado', p.suave, 13, 2)}só o QR</span>`);
   if (cel) return r32EsCel(p, 'Termos de posse', `${r29Nums(p, [r32Num('96', 'termos'), r32Num('61', 'completos'), r32Num('12', 'sem aceite')], 1)}${r16aListaCel(p, R34_AREA.slice(0, 6).map(x => [`${x[0]} · ${x[1]}`, `${x[2]} · ${falta(x[4])}`, x[5] ? r28Mais(p, 'PDF') : ic('cadeado', p.suave, 15, 2)]))}${r20Nota(p, 'O PDF tem CPF e endereço: você baixa só o de quem pôs no cargo. Dos outros, vê a situação e o QR.')}${r21Linha(p, 'Aceite no balcão da área', 'pessoa')}`);
-  const tab = r16aTab(p, 'minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.25fr) 96px', ['Quem tomou posse', 'Cargo e onde', 'Deu a posse', 'Assinaturas', 'PDF'], R34_AREA.map(x => [`<strong style="color:${p.titulo}">${x[0]}</strong>`, `<span>${x[1]}<br><span style="font-size:12px;color:${p.suave}">${x[2]}</span></span>`, x[3], `<span style="display:flex;flex-direction:column;gap:2px">${bol(x[4])}<span style="font-size:11.5px;color:${p.suave}">${falta(x[4])}</span></span>`, pdf(x)])).replace(/min-height:44px/g, 'min-height:50px');
+  const tab = r16aTab(p, 'minmax(0,1.1fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.25fr) 96px', ['Quem tomou posse', 'Cargo e onde', 'Pôs no cargo', 'Assinaturas', 'PDF'], R34_AREA.map(x => [`<strong style="color:${p.titulo}">${x[0]}</strong>`, `<span>${x[1]}<br><span style="font-size:12px;color:${p.suave}">${x[2]}</span></span>`, x[3], `<span style="display:flex;flex-direction:column;gap:2px">${bol(x[4])}<span style="font-size:11.5px;color:${p.suave}">${falta(x[4])}</span></span>`, pdf(x)])).replace(/min-height:44px/g, 'min-height:50px');
   const nums = r29Nums(p, [r32Num('96', 'termos de 2027 na área'), r32Num('61', 'com as 4 assinaturas'), r32Num('23', 'faltam o Presidente ou o Sec. Geral'), r32Num('12', 'esperando a pessoa', 'ouro')], 0);
   const tit = r18Tit(p, 'Os termos de 2027 da Área 2', `todos que trabalham e usam o sistema · o PDF, só de quem você pôs no cargo · ${R34_JAN}`, m8Linha(p, 'Aceite no balcão', 'pessoa'));
   return r34Es(p, 'area', 'Termos de posse', `${tit}${nums}${r32Pils(p, ['Todos', 'Diretoria da área', 'Dirigentes', 'Diretorias locais', 'Outras funções'], 'Todos')}${tab}${r20Nota(p, 'O PDF tem o CPF e o endereço: baixam a própria pessoa, quem a pôs no cargo, o Presidente e o Secretário Geral. Dos outros, a área vê a situação e a página do QR.')}`, ['Área 2', 'Termos de posse']);

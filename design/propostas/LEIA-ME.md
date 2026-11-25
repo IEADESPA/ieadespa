@@ -68,7 +68,7 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 ## Publicar
 
 - **A página da rodada 34**: `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi` ("Propostas de tela · rodada 34"),
-  publicada em 25/11/2026 (versão 1, id 1795630726-5e30), com o banco (`db`) das escolhas (testado: gravar e apagar).
+  publicada em 25/11/2026 (versão 2, id 1795631022-db04), com o banco (`db`) das escolhas (testado: gravar e apagar).
 - **As páginas das rodadas anteriores**, nunca mais republicadas, cada uma com o seu banco: a
   `NF7zseCp4zVWsUEwUzmQDG` (rodada 33, ids `r33-*` e `geral-r33`), a `HYtYxyM4ysGnxhxnWiCk5o` (rodada 32, ids `r32-*` e `geral-r32`), a `58VZXcgVGNdrUxoVZRp2c6` (rodada 31, ids `r31-*` e `geral-r31`), a `KMebnrdoWfAhcz9yeRgjFz` (rodadas 19 a 30, ids
   `r30-*` e `geral-r30` e anteriores) e a `G1gj9hzSbdcqAZYcFjmJ1j` (rodadas 2 a 18).

@@ -929,6 +929,17 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       await conferirVacanciaNaTransacao();
       conferirTudoNaTransacao();
     });
+    test("julgar arquivando (sem vacância): o julgamento e a trilha na transação, sem a trava da escada nem a credencial", async () => {
+      prepararDecisao();
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "ARQUIVADO" });
+      expect(r.body.sucesso).toBe(true);
+      expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+      expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].transacao).toBe(1);
+      expect(rodou(/sp_getapplock/)).toHaveLength(0);
+      expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+      expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+      expect(rodou(/CredenciaisEclesiasticas/)).toHaveLength(0);
+    });
     test("julgar quando outra decisão chegou antes: recusa, nada de vacância nem trilha", async () => {
       prepararDecisao({ julgou: 0 });
       const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" });

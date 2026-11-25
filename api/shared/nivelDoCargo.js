@@ -31,7 +31,8 @@ function concessaoAlcanca(c, ordem, congregacoes, extensaoNome) {
 async function alcancaOsCargos(pool, sql, usuario, membroId, hoje) {
   const cargos = await cargosVigentes(pool, sql, membroId, hoje);
   if (cargos.length === 0) return true;
-  const concessoes = auth.concessoesDaVisao(usuario);
+  // Só a concessão com "pessoas" conta, mesmo que quem chama passe a sessão inteira em vez da visão da permissão.
+  const concessoes = auth.concessoesDaVisao(usuario).filter((c) => Array.isArray(c.permissoes) && c.permissoes.includes("pessoas"));
   for (const cargo of cargos) {
     const ordem = ordemDoCargo(cargo.tipo);
     const congregacoes = ordem === GERAL ? "TODAS" : await resolverEscopoCongregacoes(pool, cargo.tipo, cargo.id);

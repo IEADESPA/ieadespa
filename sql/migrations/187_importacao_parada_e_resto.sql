@@ -34,6 +34,11 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_ImportacoesMembros_Resto' AND object_id = OBJECT_ID(N'dbo.ImportacoesMembros'))
     CREATE UNIQUE INDEX UX_ImportacoesMembros_Resto ON dbo.ImportacoesMembros (RestoDe) WHERE Situacao = N'CONCLUIDA' AND RestoDe IS NOT NULL;
 GO
+-- a chave estrangeira RestoDe com o seu índice (regra 3 do Banco; menor 5 do portão da volta 5): o único acima é filtrado (só CONCLUIDA) e não serve à
+-- conferência da chave nem à procura do resto de uma importação
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ImportacoesMembros_RestoDe' AND object_id = OBJECT_ID(N'dbo.ImportacoesMembros'))
+    CREATE INDEX IX_ImportacoesMembros_RestoDe ON dbo.ImportacoesMembros (RestoDe);
+GO
 
 -- a confirmada que não gravou ninguém pode ser descartada (com a data da confirmação); o resto da regra das datas é o da 185
 IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_ImportacoesMembros_Datas' AND parent_object_id = OBJECT_ID(N'dbo.ImportacoesMembros'))

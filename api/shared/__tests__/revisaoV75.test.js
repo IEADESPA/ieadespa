@@ -271,7 +271,7 @@ describe("GestaoPessoas respeita o escopo de quem altera (POST e DELETE)", () =>
     expect(r.status).toBe(200);
     expect(r.body.sucesso).toBe(true);
     expect(gravou()).toBe(1);
-    const aud = registrarAuditoria.mock.calls[0][0];
+    const aud = registrarAuditoriaNaTransacao.mock.calls[0][1];
     expect(aud.dadosDepois).toMatchObject({ emailAlterado: true, emailAnterior: "a***@exemplo.org", emailNovo: "n***@outro.org" });
     expect(JSON.stringify(aud)).not.toMatch(/ana\.souza@exemplo|novo\.endereco/);
     expect(mockEmails).toHaveLength(1);
@@ -282,7 +282,7 @@ describe("GestaoPessoas respeita o escopo de quem altera (POST e DELETE)", () =>
     monta({ existente: ficha() });
     await chamar(hPessoas, { token: vilaNova(), corpo: corpo({ email: "ana.souza@exemplo.org" }) });
     expect(mockEmails).toHaveLength(0);
-    expect(registrarAuditoria.mock.calls[0][0].dadosDepois.emailAlterado).toBeUndefined();
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][1].dadosDepois.emailAlterado).toBeUndefined();
   });
   test("escopo geral (TODAS) continua alterando qualquer congregação", async () => {
     monta({ existente: ficha({ CongregacaoNome: "Central" }) });

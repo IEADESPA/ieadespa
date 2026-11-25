@@ -130,25 +130,29 @@ async function trocarCargoNaTransacao(t, { membroId, cargoNovo, desde, origem, c
 // Cadastro (só o nível geral chega aqui): o cargo mudou e/ou a Secretaria informou "no cargo desde". Sem mudança de cargo, só acerta a data da linha aberta (ou abre a linha
 // que faltava). Devolve { mudou:bool }.
 async function sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde, por }) {
+  if ((cargoAnterior || null) === (cargoNovo || null) && !desde) return { sucesso: true, mudou: false };
+  return comTravaDaPessoa(pool, membroId, (t) => sincronizarCadastroNaTransacao(t, { membroId, cargoAnterior, cargoNovo, desde, por }));
+}
+
+// O mesmo acerto, dentro da transação de quem chama (que já tem a trava `escada_<membro>`): a ficha da pessoa grava junto e nada fica pela metade.
+async function sincronizarCadastroNaTransacao(t, { membroId, cargoAnterior, cargoNovo, desde, por }) {
   const anterior = cargoAnterior || null;
   const novo = cargoNovo || null;
   if (anterior === novo && !desde) return { sucesso: true, mudou: false };
-  return comTravaDaPessoa(pool, membroId, async (t) => {
-    if (anterior !== novo) {
-      await trocarCargoNaTransacao(t, { membroId, cargoNovo: novo, desde: desde || null, origem: "CADASTRO", observacao: "Cargo alterado no cadastro pela Secretaria.", por });
-    } else if (novo && novo !== "MEMBRO") {
-      const upd = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("c", sql.NVarChar(30), novo).input("d", sql.Date, desde)
-        .query(`UPDATE CargosMinisteriaisHistorico SET Desde = @d WHERE MembroId = @m AND Ate IS NULL AND Cargo = @c`);
-      if (!upd.rowsAffected[0]) {
-        // A linha aberta é de outro cargo (troca antiga por fora) ou não existe: fecha a velha e abre a certa.
-        await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("ate", sql.Date, desde)
-          .query(`UPDATE CargosMinisteriaisHistorico SET Ate = CASE WHEN Desde IS NOT NULL AND Desde > @ate THEN Desde ELSE @ate END WHERE MembroId = @m AND Ate IS NULL`);
-        await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("c", sql.NVarChar(30), novo).input("d", sql.Date, desde).input("por", sql.Int, por)
-          .query(`INSERT INTO CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Origem, Observacao, CriadoPor) VALUES (@m, @c, @d, N'CADASTRO', N'Data de entrada no cargo informada pela Secretaria.', @por)`);
-      }
+  if (anterior !== novo) {
+    await trocarCargoNaTransacao(t, { membroId, cargoNovo: novo, desde: desde || null, origem: "CADASTRO", observacao: "Cargo alterado no cadastro pela Secretaria.", por });
+  } else if (novo && novo !== "MEMBRO") {
+    const upd = await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("c", sql.NVarChar(30), novo).input("d", sql.Date, desde)
+      .query(`UPDATE CargosMinisteriaisHistorico SET Desde = @d WHERE MembroId = @m AND Ate IS NULL AND Cargo = @c`);
+    if (!upd.rowsAffected[0]) {
+      // A linha aberta é de outro cargo (troca antiga por fora) ou não existe: fecha a velha e abre a certa.
+      await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("ate", sql.Date, desde)
+        .query(`UPDATE CargosMinisteriaisHistorico SET Ate = CASE WHEN Desde IS NOT NULL AND Desde > @ate THEN Desde ELSE @ate END WHERE MembroId = @m AND Ate IS NULL`);
+      await new sql.Request(t).input("m", sql.Int, Number(membroId)).input("c", sql.NVarChar(30), novo).input("d", sql.Date, desde).input("por", sql.Int, por)
+        .query(`INSERT INTO CargosMinisteriaisHistorico (MembroId, Cargo, Desde, Origem, Observacao, CriadoPor) VALUES (@m, @c, @d, N'CADASTRO', N'Data de entrada no cargo informada pela Secretaria.', @por)`);
     }
-    return { sucesso: true, mudou: true };
-  });
+  }
+  return { sucesso: true, mudou: true };
 }
 
 // Histórico de cargos de uma pessoa (cadastro e Meus Dados).
@@ -274,6 +278,6 @@ async function origensDoCargoAtual(pool) {
 }
 
 module.exports = {
-  ORIGEM_DA_MODALIDADE, comTravaDaPessoa, cargoDoTipo, dadosDaPessoa, avaliar, veDisciplinaDe, trocarCargoNaTransacao, sincronizarCadastro, historicoDe,
+  ORIGEM_DA_MODALIDADE, comTravaDaPessoa, cargoDoTipo, dadosDaPessoa, avaliar, veDisciplinaDe, trocarCargoNaTransacao, sincronizarCadastro, sincronizarCadastroNaTransacao, historicoDe,
   definirCHM, revogarDocumentoCHM, matricularCandidato, processosVetaveis, vetar, origensDoCargoAtual, dia, NAO_EXISTE, MUDOU, fecharTransacao, naTransacao
 };

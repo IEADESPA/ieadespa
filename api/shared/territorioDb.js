@@ -107,18 +107,22 @@ async function prepararEnderecoMembro(rq, dados, { membroId = null } = {}) {
 // Revisão de 06/11/2026 — a ficha que grava um bairro da lista o trava antes de gravar a pessoa (Bairros, depois MembroReferencia: a mesma ordem do editar e do
 // juntar, então os dois não se travam um ao outro) e relê o nome, a cidade e a UF sob a trava (a linha única nunca sai com o nome de antes de uma renomeação).
 // `fazer(rq)` grava a pessoa com as Requests da transação; devolve o que ele devolver (`{ desfazer: true }` desfaz).
+// O bairro da lista lido com trava, dentro da transação de quem chama, e a linha única refeita com ele (a gravação vem logo depois, na mesma transação).
+async function travarBairroDaFicha(rq, prep) {
+  if (!(prep && prep.partes && prep.partes.bairroId)) return;
+  const b = await lerBairro(rq, prep.partes.bairroId, { travar: true });
+  if (b) {
+    prep.partes = tr.aplicarBairro(prep.partes, b);
+    prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
+  }
+}
+
 async function gravarComBairroTravado(pool, prep, fazer) {
   const t = new sql.Transaction(pool);
   await t.begin();
   const rq = () => new sql.Request(t);
   try {
-    if (prep && prep.partes && prep.partes.bairroId) {
-      const b = await lerBairro(rq, prep.partes.bairroId, { travar: true });
-      if (b) {
-        prep.partes = tr.aplicarBairro(prep.partes, b);
-        prep.endereco = tr.montarLinhaEndereco(prep.partes, b.nome);
-      }
-    }
+    await travarBairroDaFicha(rq, prep);
     const r = await fazer(rq);
     if (r && r.desfazer) await t.rollback(); else await t.commit();
     return r;
@@ -652,7 +656,7 @@ async function bairrosParaEscolher(pool) {
 }
 
 module.exports = {
-  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher, gravarComBairroTravado, SO_MEMBROS, MINIMO_DIZIMISTAS_PARA_MOSTRAR,
+  SELECT_PARTES_MEUS: SELECT_PARTES, bairrosParaEscolher, gravarComBairroTravado, travarBairroDaFicha, SO_MEMBROS, MINIMO_DIZIMISTAS_PARA_MOSTRAR,
   SO_GERAL, catalogos, mapa, listarBairros, criarBairro, editarBairro, ativarBairro, juntarBairros, marcarPontoExtensao, extensoesDoMapa, mudarRaio,
   listarCriterios, criarCriterio, editarCriterio, apagarCriterio, simulacao, medidasDasExtensoes, dadosDoTitular, atosDoTitular,
   prepararEnderecoMembro, entradasEndereco, linhasDiantedaLinhaLegada, SET_ENDERECO, COLUNAS_ENDERECO, VALORES_ENDERECO, partesDaLinha, iso

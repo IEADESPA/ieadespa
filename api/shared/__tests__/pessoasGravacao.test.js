@@ -49,6 +49,7 @@ function regrasDaFicha(ficha) {
   mockRegras = [
     [/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Central" }] }],
     [/FROM CargosMinisteriais WHERE Sigla/, { recordset: [{ x: 1 }] }],
+    [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
     [/EmProcessoDeCargo/, () => ({ recordset: ficha ? [ficha] : [] })],
     [/UPDATE MembroReferencia SET Nome/, { recordset: [], rowsAffected: [1] }],
     [/INSERT INTO MembroReferencia/, { recordset: [], rowsAffected: [1] }],
@@ -124,6 +125,59 @@ describe("a data de saída ao salvar a ficha", () => {
       expect(r.status).toBe(200);
       expect(gravacoes()[0].entradas.dataSaida).toBe("2026-11-25");
     } finally { jest.useRealTimers(); }
+  });
+});
+
+describe("salvar a ficha numa transação só", () => {
+  const passos = () => mockConsultas.map((c) => c.texto).filter((t) => /^(BEGIN|COMMIT|ROLLBACK|VACANCIA|TRILHA|CREDENCIAL)|sp_getapplock|UPDATE MembroReferencia SET Nome|UPDATE SessoesAtivas|INSERT INTO CargosMinisteriaisHistorico/.test(t))
+    .map((t) => (/sp_getapplock/.test(t) ? "TRAVA" : /UPDATE MembroReferencia SET Nome/.test(t) ? "FICHA" : /UPDATE SessoesAtivas/.test(t) ? "SESSOES" : /CargosMinisteriaisHistorico/.test(t) ? "HISTORICO" : t));
+  const vacancia = require("../vacancia");
+  const semCargo = [/AlvoAdministra/, { recordset: [{ TemCargoVigente: 0, AlvoAdministra: 0, Outros: 0 }] }];
+  beforeEach(() => { mockRegras.unshift(semCargo, [/sp_getapplock/, { recordset: [{ resultado: 0 }] }]); });
+
+  test("a saída do rol (DESLIGADO): a ficha, a vacância e a trilha juntas; a credencial depois do commit", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "FICHA", "VACANCIA 5 DESLIGAMENTO", "TRILHA Atualizou pessoa", "COMMIT", "CREDENCIAL"]);
+  });
+
+  test("a vacância falha no meio: a ficha não fica gravada e o pedido pode ser repetido", async () => {
+    vacancia.encerrarVinculos.mockImplementationOnce(async () => { throw new Error("falha passageira"); });
+    await expect(chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) })).rejects.toThrow("falha passageira");
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "FICHA", "ROLLBACK"]);
+  });
+
+  test("o falecido sem a causa da saída: a vacância registra FALECIMENTO", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(passos()).toContain("VACANCIA 5 FALECIMENTO");
+  });
+
+  test("a saída para INATIVO: as sessões caem dentro da mesma transação, sem a trava da escada", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "INATIVO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(passos()).toEqual(["BEGIN", "FICHA", "SESSOES", "TRILHA Atualizou pessoa", "COMMIT"]);
+    expect(mockConsultas.find((c) => /UPDATE SessoesAtivas/.test(c.texto)).texto).toMatch(/^SET XACT_ABORT ON;/);
+  });
+
+  test("a troca de cargo: o histórico entra na mesma transação, depois da trava da escada", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ cargoMinisterial: "DIACONO" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "FICHA", "HISTORICO", "TRILHA Atualizou pessoa", "COMMIT"]);
+  });
+
+  test("outra alteração da mesma pessoa em andamento: nada é gravado", async () => {
+    mockRegras.unshift([/sp_getapplock/, { recordset: [{ resultado: -1 }] }]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ cargoMinisterial: "DIACONO" }) });
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/Tente de novo/);
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "ROLLBACK"]);
+  });
+
+  test("a ficha sem mudança de cargo nem de situação: só a ficha e a trilha, sem a trava", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ telefone: "91900000002" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(passos()).toEqual(["BEGIN", "FICHA", "TRILHA Atualizou pessoa", "COMMIT"]);
   });
 });
 

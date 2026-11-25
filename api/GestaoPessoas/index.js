@@ -4,7 +4,7 @@
 // POST   /api/pessoas            -> body: { membroId, nome, cargoMinisterial, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
-const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
+const { registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -476,36 +476,49 @@ module.exports = async function (context, req) {
       return { gravou: true };
     };
     const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
-    const resultadoGravacao = partesFinais && partesFinais.bairroId
-      ? await territorioDb.gravarComBairroTravado(pool, prepEnd, (rq) => gravarPessoa(preencher(rq()), prepEnd))
-      : await gravarPessoa(preencher(pool.request()), prepEnd);
-    if (!resultadoGravacao.gravou) {
+    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
+    // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada).
+    const mexeNoHistorico = cargoAnterior !== cargoNovo || !!cargoDesdeFinal;
+    // O motivo que a vacância grava nos vínculos encerrados: a causa da saída informada ou, sem ela, a do próprio status (o falecido sai por falecimento).
+    const motivoDaVacancia = motivoSaidaFinal || (statusFinal === "FALECIDO" ? "FALECIMENTO" : "DESLIGAMENTO");
+    // A ficha, o histórico de cargos, a vacância (ou o corte do acesso de quem sai do rol ativo) e a trilha numa transação só: uma falha no meio desfaz tudo e
+    // o pedido pode ser repetido. Quando o cargo ou o rol mudam, a trava da escada vem primeiro (a mesma da cerimônia de consagração e do abandono).
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if ((mexeNoHistorico || entrandoEmStatusTerminal) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
+      await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
+      const gravacao = await gravarPessoa(preencher(rq()), prepEnd);
+      if (!gravacao.gravou) { await desistir(); return "CARGO_MUDOU"; }
+      if (mexeNoHistorico) await escadaDb.sincronizarCadastroNaTransacao(transacao, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
+      if (entrandoEmStatusTerminal) {
+        await vacancia.encerrarVinculos(executor, sql, membroId, motivoDaVacancia);   // também derruba as sessões abertas da pessoa
+      } else if (saindoDoRolAtivo) {
+        // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
+        // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
+        await require("../shared/delegacoes").encerrarDelegacoesDaPessoa(executor, sql, membroId);
+        await auth.revogarSessoesDoMembro(executor, sql, membroId);
+      }
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "MembroReferencia",
+        registroId: Number(membroId),
+        acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
+        usuarioId: usuario.membroId,
+        dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
+          ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
+      });
+      return "GRAVOU";
+    });
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho === "CARGO_MUDOU") {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
       return;
     }
-
-    // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada). Falhou a trava? O cadastro já foi salvo; o histórico fica para a próxima gravação e a
-    // escada mostra "data de entrada no cargo não informada" até lá (nunca presume a data).
-    if (cargoAnterior !== cargoNovo || cargoDesdeFinal) {
-      try {
-        const h = await escadaDb.sincronizarCadastro(pool, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
-        if (!h.sucesso) context.log.warn(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${h.mensagem}`);
-      } catch (e) { context.log.error(`[GestaoPessoas] histórico de cargos de ${membroId} não atualizado: ${e.message}`); }
-    }
-
-    if (entrandoEmStatusTerminal) {
-      await vacancia.encerrarVinculos(pool, sql, membroId, motivoSaidaFinal || statusFinal);   // também derruba as sessões abertas da pessoa
-      await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaidaFinal || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
-    } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
-      // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
-      // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
-      await require("../shared/delegacoes").encerrarDelegacoesDaPessoa(pool, sql, membroId);
-      await auth.revogarSessoesDoMembro(pool, sql, membroId);
-    }
+    if (entrandoEmStatusTerminal) await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoDaVacancia, usuario.membroId);   // v8.4: a credencial, depois do commit
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
-    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
     const vDisciplinaMembro = auth.visaoDaPermissao(usuario, "disciplina");
     if (vDisciplinaMembro && noEscopoDaPessoa(vDisciplinaMembro, membro.congregacao, membro.extensao)) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);
@@ -517,14 +530,6 @@ module.exports = async function (context, req) {
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
     membro.fotoUrl = storage.urlComSas(membro.fotoUrl);
 
-    await registrarAuditoria({
-      tabela: "MembroReferencia",
-      registroId: Number(membroId),
-      acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
-      usuarioId: usuario.membroId,
-      dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
-        ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
-    });
     // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
     if (emailMudou && emailAnterior) {
       try {

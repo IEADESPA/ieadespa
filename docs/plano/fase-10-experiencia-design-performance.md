@@ -1279,6 +1279,22 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   7. **O ponto de culto guarda** o bairro, o dia e a hora, o responsável e o endereço da casa; o endereço só a
      liderança vê.
   8. **O mapa:** a congregação vê o ponto de cada membro dela; a área e a Geral veem só a contagem por bairro.
+- **A rodada 32 conferida por ele (24 e 25/11/2026):** o painel e a ficha da congregação **aprovados sem mudança**; os
+  cultos, o termo de posse e o mapa aprovados **com estes ajustes** (vão para a rodada 33):
+  - **Os cultos:** a **Geral monta a agenda padrão semanal** e manda para todas as congregações; a congregação não
+    mexe no padrão. Ela pode **acrescentar** cultos novos, que entram na hora (a Geral vê no painel). Para **mudar**
+    um culto do padrão, a congregação pede, e a Geral aceita ou recusa.
+  - **O termo de posse** fica em três partes, com um aceite só (no celular ou no balcão, com o PIN): (1) o **texto
+    oficial do Regimento**, Art. 117, "Termo de Posse e Adesão ao Regimento Interno" (já traz o serviço voluntário da
+    Lei 9.608/98, sem vínculo de emprego); (2) o **termo de LGPD**; (3) o **termo de acesso ao sistema**. O PDF sai com
+    o QR (a página do QR não mostra CPF nem endereço).
+  - **A virada do ano** (resposta 3 ajustada): a renovação em lote ("continuam em 2027") é **só do executivo, feita
+    pela Geral**: os dirigentes e os pastores de área. A diretoria da congregação não se renova em lote nem é
+    cadastrada antes pelo dirigente que sai: no ano novo, o dirigente (novo ou o mesmo) cadastra a diretoria dele.
+  - **O mapa** (a dúvida dele: o mapa erra e o bairro digitado pode não existir nele): a **contagem por bairro usa o
+    bairro da ficha, não o mapa**, e a ficha passa a **escolher o bairro numa lista fixa de Parauapebas**, que a Geral
+    cuida. O ponto de cada membro (só a congregação vê) sai do CEP e do número (erro de uns 50 m), e a secretaria
+    pode **arrastar o alfinete** para o lugar certo.
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

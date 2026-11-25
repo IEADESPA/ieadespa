@@ -1343,6 +1343,17 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   dos bairros e vilas de Parauapebas, o bairro na ficha e o alfinete). Os textos da LGPD e do acesso ao sistema (partes 2
   e 3) foram redigidos pelo desenhista e esperam a conferência dele. O painel e a ficha aprovados mudam só no texto da
   virada (a explicação da rodada lista cada linha).
+- **A rodada 34 (25/11/2026), publicada numa página nova:** `https://claude.ai/artifact/6sztidgaZ5r3a46jdZYzfi`, com
+  os ajustes da 33 em 2 telas (o mapa e a virada, aprovados, não voltam):
+  - **os cultos com a agenda personalizada:** cada culto do padrão diz para quem é (todas, só a Sede ou só as
+    congregações); o culto de domingo às 18h tem o tipo de cada domingo do mês (1º a 5º, e a Sede pode ter outro tipo no
+    mesmo domingo); Vila Nova e a Sede veem cada uma só os seus cultos; a congregação também pede a mudança do tipo de um
+    domingo. Os nomes dos cultos e dos domingos são de mentira, para ele conferir;
+  - **o termo de posse de todos que trabalham e usam o sistema:** a parte 1 por cargo (o dirigente com o Art. 117; os
+    outros modelos, redigidos pelo desenhista, para ele conferir, cuidados pela Secretaria Geral); o balcão em qualquer
+    nível; as quatro assinaturas (quem toma posse, quem deu a posse, o Presidente e o Secretário Geral) e a página dos
+    dois para assinar em lote, com filtro, podendo abrir; o PDF só para os quatro; a área vê a situação e o QR dos outros.
+    O acesso vale desde o aceite da pessoa; a assinatura dos dois completa o termo.
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

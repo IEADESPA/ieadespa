@@ -5,7 +5,7 @@
 //
 // Rodar (pelo PowerShell; pelo Bash o Edge sem tela não abre neste notebook):
 //   node tools/front-financeiro/navegador.js            (PUPPETEER_CORE = a pasta do puppeteer-core; sem ela, tools/csp-e2e/node_modules)
-//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer ou SO=livro roda só uma parte.
+//   LISTA=1 mostra cada caso aprovado; SO=folhas, SO=desfazer, SO=livro, SO=saida ou SO=vazios roda só uma parte.
 "use strict";
 const fs = require("fs");
 const os = require("os");
@@ -149,10 +149,16 @@ function apiFinanceiro(nivel, opcoes) {
     estado.pedidos.push({ metodo, caminho: p, busca: Object.fromEntries(q.entries()), corpo });
     if (p === "/api/financeiro/blocos" && metodo === "GET") {
       if (opcoes.listaFalha) return { status: 500, corpo: { sucesso: false, mensagem: "Falha simulada." } };
+      // os vazios da r30: antes do primeiro lote, ou a procura que nada acha (99.999)
+      if (opcoes.vazio || (q.get("procura") || "").replace(/\./g, "") === "99999") {
+        return { corpo: { sucesso: true, blocos: [], total: 0, pagina: 1, porPagina: 40,
+          resumo: nivel === "local" ? { tipo: "seus", emUsoOuEsperando: 0, folhasLivres: 0 } : { tipo: "lote", lote: null }, escopo: opcoes.escopo || ESCOPO[nivel] } };
+      }
       return { corpo: { sucesso: true, blocos: [blocoMentira(1, 70051, "Vila Nova", "em-uso", 38)], total: 1, pagina: 1, porPagina: 40,
         resumo: nivel === "local" ? { tipo: "seus", emUsoOuEsperando: 2, folhasLivres: 12 } : { tipo: "lote", lote: null }, escopo: ESCOPO[nivel] } };
     }
     if (p === "/api/financeiro/blocos/folhas" && metodo === "GET") {
+      if (opcoes.vazio) return { corpo: { sucesso: true, bloco: null, folhas: [], comHistorico: [], opcoes: [], escopo: opcoes.escopo || ESCOPO[nivel] } };
       if (q.get("bloco") === "5") {
         const f = [];
         for (let i = 1; i <= 50; i++) f.push({ folha: 68000 + i, destino: i === 3 ? "cancelada" : i === 49 ? "extraviada" : i === 50 ? "inexistente" : "lancada", observacao: i === 3 || i > 48 ? "Perdida" : null });
@@ -191,6 +197,9 @@ function apiFinanceiro(nivel, opcoes) {
     }
     if (p === "/api/financeiro/blocos/livro" && metodo === "GET") {
       const porPagina = Number(q.get("porPagina")) === 3 ? 3 : 5, pagina = Number(q.get("pagina")) || 1;
+      if (opcoes.vazio) {
+        return { corpo: { sucesso: true, registros: [], total: 0, pagina: 1, porPagina, agora: nivel === "geral" ? null : { emUso: 0, esperando: 0, aDevolver: 0 }, escopo: opcoes.escopo || ESCOPO[nivel] } };
+      }
       const lista = nivel === "geral" ? [...estado.saidas, ...LIVRO] : LIVRO.filter((r) => r.tipo === "saida" || r.tipo === "entrada");
       return { corpo: { sucesso: true, registros: lista.slice(0, porPagina), total: nivel === "geral" ? 412 : 37, pagina, porPagina,
         agora: nivel === "geral" ? null : AGORA[nivel], escopo: ESCOPO[nivel] } };
@@ -871,6 +880,77 @@ async function folhaDaSaida(page, api, texto) {
   await calmo(page);
   return r;
 }
+// as listas vazias da r30 ("r30-blocos-vazios"): cada nível com o seu texto, o nome da área e da congregação vindos de quem está vendo
+async function provarVazios() {
+  const tem = (t, frase) => t.includes(frase);
+  // a Geral no notebook, antes do primeiro lote: a aba Blocos, as Folhas (com o caminho para o livro) e o livro
+  let s = await abrir("geral", "notebook", { vazio: true });
+  let t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco ainda. Os blocos aparecem quando o lote da gráfica chega. Comece em “Cadastrar lote da gráfica”."), "geral: a aba Blocos antes do primeiro lote", t.slice(0, 400));
+  ok(!tem(t, "0 blocos") && !tem(t, "Congregação Situação"), "geral: sem a tabela e sem as páginas vazias", t.slice(0, 400));
+  ok(tem(t, "Nenhum lote da gráfica cadastrado ainda. Use o botão “Cadastrar lote da gráfica”, no alto."), "geral: o quadro do lote aponta para o botão");
+  await clicar(s.page, "Folhas do bloco");
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco saiu para as congregações ainda. Para entregar um bloco, use “Registrar saída”, no livro de entrada e saída."), "geral: as folhas sem bloco", t.slice(0, 400));
+  const l0 = pedidos(s.api, "/api/financeiro/blocos/livro").length;
+  ok(await clicar(s.page, "Ir ao livro de entrada e saída"), "geral: o botão que leva ao livro");
+  ok(await esperarPedido(s.api, "/api/financeiro/blocos/livro", "GET", l0), "geral: o botão abre o livro");
+  await calmo(s.page);
+  t = await textoTela(s.page);
+  ok(tem(t, "O livro ainda está vazio. O primeiro registro aparece quando a Tesouraria Geral cadastra o lote da gráfica, na aba Blocos."), "geral: o livro vazio", t.slice(0, 600));
+  ok(!tem(t, "nenhum registro"), "geral: o livro vazio sem as páginas");
+  await fechar(s, "vazios geral notebook");
+  // a Geral no celular: a frase não aponta para o botão (o celular não tem o cadastro do lote)
+  s = await abrir("geral", "celular", { vazio: true });
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco ainda. Os blocos aparecem quando o lote da gráfica chega.") && !tem(t, "Comece em") && !tem(t, "nenhum bloco"), "geral celular: a aba Blocos vazia", t.slice(0, 400));
+  await fechar(s, "vazios geral celular");
+  // a área: o nome dela, sem o botão do livro; o quadro do lote sem apontar para o botão que ela não tem
+  s = await abrir("area", "notebook", { vazio: true });
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum lote da gráfica cadastrado ainda.") && !tem(t, "Use o botão"), "área: o quadro do lote sem o botão");
+  await clicar(s.page, "Folhas do bloco");
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhuma congregação da Área 2 está com bloco agora. Os blocos saem da Tesouraria Geral. Quando um chegar a uma congregação da área, as folhas dele aparecem aqui."),
+    "área: as folhas sem bloco", t.slice(0, 400));
+  ok(!tem(t, "Ir ao livro"), "área: sem o botão do livro");
+  await clicar(s.page, "Livro de entrada e saída");
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco saiu para as congregações da Área 2 ainda. Quando a Tesouraria Geral entregar um bloco a uma delas, a saída fica registrada aqui."), "área: o livro vazio", t.slice(0, 600));
+  await fechar(s, "vazios área notebook");
+  // a congregação no celular
+  s = await abrir("local", "celular", { vazio: true });
+  await clicar(s.page, "Folhas do bloco");
+  t = await textoTela(s.page);
+  ok(tem(t, "Vila Nova está sem bloco de recibo agora. Para receber um bloco, fale com a Tesouraria Geral. Quando ele chegar, as folhas aparecem aqui."), "local celular: as folhas sem bloco", t.slice(0, 400));
+  await clicar(s.page, "Livro de entrada e saída");
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco saiu para Vila Nova ainda. Quando a Tesouraria Geral entregar um bloco a vocês, a saída fica registrada aqui."), "local celular: o livro vazio", t.slice(0, 600));
+  await fechar(s, "vazios local celular");
+  // a congregação Sede não se confunde com a Sede administrativa (regra dele, 17/11)
+  s = await abrir("local", "notebook", { vazio: true, escopo: { geral: false, congregacoes: 1, area: "Área 1", congregacao: "Sede" } });
+  await clicar(s.page, "Folhas do bloco");
+  ok(tem(await textoTela(s.page), "A congregação Sede está sem bloco de recibo agora."), "local: a congregação Sede nas folhas");
+  await clicar(s.page, "Livro de entrada e saída");
+  ok(tem(await textoTela(s.page), "Nenhum bloco saiu para a congregação Sede ainda."), "local: a congregação Sede no livro");
+  await fechar(s, "vazios Sede");
+  // a procura sem resultado, no lugar da tabela
+  s = await abrir("geral", "notebook");
+  const b0 = pedidos(s.api, "/api/financeiro/blocos").length;
+  await digitar(s.page, "Procurar pelo número", "99.999");
+  ok(await esperarPedido(s.api, "/api/financeiro/blocos", "GET", b0, 3000), "geral: a procura pede a lista");
+  await calmo(s.page);
+  t = await textoTela(s.page);
+  ok(tem(t, "Nenhum bloco tem o número 99.999. Confira o número do bloco ou da folha.") && !tem(t, "Nenhum bloco com essa procura"), "geral: a procura sem resultado (r30)", t.slice(0, 500));
+  await fechar(s, "procura sem resultado");
+  // o livro no celular: até 3 números de página (o desenho da r30)
+  s = await abrir("geral", "celular");
+  await clicar(s.page, "Livro de entrada e saída");
+  const nums = await s.page.evaluate(() => [...document.querySelectorAll("#financeiroRaiz nav.paginas button")].filter((b) => /^\d+$/.test(b.textContent.trim())).map((b) => b.textContent.trim()));
+  ok(JSON.stringify(nums) === JSON.stringify(["1", "2", "3"]), "geral celular: o livro com 3 números de página", nums);
+  await fechar(s, "livro celular páginas");
+}
+
 async function provarSaida() {
   let s = await abrir("geral", "notebook");
   let { page, api } = s;
@@ -1070,6 +1150,7 @@ async function provarSaida() {
     if (!SO || SO === "desfazer") { console.log("Desfazer e o histórico da folha"); await provarDesfazer(); }
     if (!SO || SO === "livro") { console.log("Livro de entrada e saída"); await provarLivro(); }
     if (!SO || SO === "saida") { console.log("Registrar saída"); await provarSaida(); }
+    if (!SO || SO === "vazios") { console.log("As listas vazias"); await provarVazios(); }
   } finally {
     await nav.close();
     await srv.fechar();

@@ -16,6 +16,8 @@
   import Quadro from "../../partes/Quadro.svelte";
   import Numeros from "../../partes/Numeros.svelte";
   import Paginas from "../../partes/Paginas.svelte";
+  import Vazio from "../../partes/Vazio.svelte";
+  import { vazioDoLivro } from "../../vazios";
   import Cabecalho from "./Cabecalho.svelte";
   import FormEntrada from "./FormEntrada.svelte";
   import FormSaida from "./FormSaida.svelte";
@@ -104,10 +106,12 @@
           {/each}
         </ul>
       {:else}
-        <Estado tipo="vazio" texto="Nenhum registro no livro ainda." />
+        <!-- o livro vazio (r30-blocos-vazios): o texto de cada nível, sem as páginas -->
+        {@const v = vazioDoLivro(nivel, dados.escopo)}
+        <Vazio dentro {celular} titulo={v.titulo} texto={v.texto} />
       {/if}
       {#if erro}<Estado tipo="erro" texto={erro} ontentar={() => void ler(pagina, porPagina)} />{/if}
-      <Paginas texto={textoPaginas} {pagina} {paginas} onir={(n) => (pagina = n)} />
+      {#if dados.total}<Paginas texto={textoPaginas} {pagina} {paginas} quantos={celular ? 3 : 5} onir={(n) => (pagina = n)} />{/if}
     {/if}
   </Quadro>
 {/snippet}

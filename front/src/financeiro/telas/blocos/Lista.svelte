@@ -15,6 +15,8 @@
   import Quadro from "../../partes/Quadro.svelte";
   import Numeros from "../../partes/Numeros.svelte";
   import Paginas from "../../partes/Paginas.svelte";
+  import Vazio from "../../partes/Vazio.svelte";
+  import { vazioDaProcura, vazioDosBlocos } from "../../vazios";
   import Cabecalho from "./Cabecalho.svelte";
 
   interface Props { celular: boolean }
@@ -35,6 +37,8 @@
   let erro = $state("");
   let carregando = $state(true);
   let avisoLote = $state(false);
+  /** a pílula e a procura com que a página que está na tela foi lida (a lista vazia diz o porquê) */
+  let lidoCom = $state<{ filtro: FiltroBlocos; procura: string }>({ filtro: "todos", procura: "" });
 
   // a procura espera a pessoa parar de digitar
   $effect(() => {
@@ -53,9 +57,19 @@
     if (!r.ok) { if (!r.cancelado) erro = r.mensagem; return; }
     erro = "";
     dados = r.dados;
+    lidoCom = { filtro: f, procura: p.trim() };
     escopo.tela = r.dados.escopo;
   }
   $effect(() => { void ler(filtro, procuraValendo, pagina); });
+
+  // as listas vazias da r30 ("r30-blocos-vazios"), no lugar da lista e das páginas: a procura sem resultado e a Geral antes do primeiro lote.
+  // A pílula sem bloco e a área ou a congregação sem bloco continuam com a frase de antes (sem texto aprovado ainda)
+  const vazio = $derived.by(() => {
+    if (!dados || dados.total) return null;
+    if (lidoCom.procura) return vazioDaProcura(lidoCom.procura);
+    if (lidoCom.filtro === "todos" && nivel === "geral") return vazioDosBlocos(celular);
+    return null;
+  });
 
   function escolherFiltro(f: FiltroBlocos) { filtro = f; pagina = 1; }
   function irPagina(n: number) { if (dados && n >= 1 && n <= paginas) pagina = n; }
@@ -105,6 +119,9 @@
     <Estado tipo="erro" texto={erro} ontentar={() => void ler(filtro, procuraValendo, pagina)} />
   {:else if !dados}
     <Estado tipo="carregando" linhas={5} />
+  {:else if vazio}
+    <Vazio titulo={vazio.titulo} texto={vazio.texto} {celular} />
+    {#if erro}<Estado tipo="erro" texto={erro} ontentar={() => void ler(filtro, procuraValendo, pagina)} />{/if}
   {:else if celular}
     {#if dados.blocos.length}
       <ul class="lista-cel" aria-busy={carregando}>
@@ -160,7 +177,7 @@
         <Numeros itens={[[lote.blocos, `blocos de ${lote.folhasPorBloco}`], [lote.folhas, "folhas"]]} />
         <p class="lote">{textoLote}</p>
       {:else}
-        <p class="lote">Nenhum lote da gráfica cadastrado ainda.</p>
+        <p class="lote sem">Nenhum lote da gráfica cadastrado ainda.{nivel === "geral" ? " Use o botão “Cadastrar lote da gráfica”, no alto." : ""}</p>
       {/if}
     </Quadro>
     <Aviso><strong>Bloco só fica com a Tesouraria Geral ou com a congregação.</strong> A área é só intermediária.</Aviso>
@@ -250,6 +267,7 @@
   .vazio { padding: 6px 16px; border-top: 1px solid var(--sv-linha); }
 
   .lote { font-size: 12.5px; color: var(--sv-texto); line-height: 1.35; }
+  .lote.sem { font-size: 13px; line-height: 1.45; }   /* sem lote, a frase da r30 ("r30-blocos-vazios") */
   .dir :global(.aviso) { padding: 10px 12px; font-size: 13px; line-height: 1.4; }
 
   /* o celular: a lista em linhas */

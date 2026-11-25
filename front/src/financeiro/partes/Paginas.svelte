@@ -1,13 +1,13 @@
-<!-- O rodapé das listas em páginas (o "r17Pag" do desenho): o texto à esquerda ("1 a 5 de 412 registros") e, à direita, ‹ até 5 números ›.
-     Só mostra as páginas que existem; a atual na cor do módulo. -->
+<!-- O rodapé das listas em páginas (o "r17Pag" do desenho): o texto à esquerda ("1 a 5 de 412 registros") e, à direita, ‹ até 5 números › (o livro
+     no celular, até 3: o "r30Pag"). Só mostra as páginas que existem; a atual na cor do módulo. -->
 <script lang="ts">
-  interface Props { texto: string; pagina: number; paginas: number; onir: (n: number) => void }
-  let { texto, pagina, paginas, onir }: Props = $props();
+  interface Props { texto: string; pagina: number; paginas: number; onir: (n: number) => void; /** quantos números de página, no máximo (5) */ quantos?: number }
+  let { texto, pagina, paginas, onir, quantos = 5 }: Props = $props();
 
-  // até 5 números de página em volta da atual
+  // até `quantos` números de página em volta da atual
   const numeros = $derived.by(() => {
-    const ini = Math.max(1, Math.min(pagina - 2, paginas - 4));
-    return Array.from({ length: Math.min(5, paginas) }, (_, i) => ini + i);
+    const ini = Math.max(1, Math.min(pagina - Math.floor(quantos / 2), paginas - quantos + 1));
+    return Array.from({ length: Math.min(quantos, paginas) }, (_, i) => ini + i);
   });
   const ir = (n: number) => { if (n >= 1 && n <= paginas && n !== pagina) onir(n); };
 </script>

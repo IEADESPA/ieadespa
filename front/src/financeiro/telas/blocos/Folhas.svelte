@@ -18,6 +18,8 @@
   import { NOME_DESTINO, EXCECOES, posicao, recolhidasNoCelular, plural, diaMes, partesDaContagem, textoFaixa, tituloDoSeletor } from "../../blocos";
   import type { DestinoFolha, ExcecaoFolha, Faixa, HistoricoFolha, PaginaFolhas } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
+  import Vazio from "../../partes/Vazio.svelte";
+  import { vazioDasFolhas } from "../../vazios";
   import Cabecalho from "./Cabecalho.svelte";
   import SeletorBloco from "./SeletorBloco.svelte";
   import FolhaMarcada from "./FolhaMarcada.svelte";
@@ -174,7 +176,8 @@
     await ler(bloco.id);
   }
 
-  const vazio = $derived(nivel === "local" ? "Nenhum bloco com a sua congregação agora. Bloco novo: peça à Tesouraria Geral." : "Nenhum bloco saiu para as congregações ainda.");
+  // sem bloco (r30-blocos-vazios): o texto de cada nível; a Geral tem o caminho para o livro, onde se registra a saída
+  const vazio = $derived(vazioDasFolhas(nivel, dados?.escopo ?? null));
 </script>
 
 {#snippet seletor()}
@@ -243,6 +246,10 @@
   {/if}
 {/snippet}
 
+{#snippet irAoLivro()}
+  <button type="button" class="linha-botao" onclick={() => ir({ tela: "blocos", aba: "livro" })}><Icone nome="seta" tam={17} traco={2} />Ir ao livro de entrada e saída</button>
+{/snippet}
+
 {#snippet cartaoEstoque()}
   {#if bloco && faixa}
     <div class="cartao-info estoque">
@@ -282,7 +289,7 @@
   {:else if !dados}
     <Estado tipo="carregando" linhas={5} />
   {:else if !bloco}
-    <Estado tipo="vazio" texto={vazio} />
+    <Vazio titulo={vazio.titulo} texto={vazio.texto} {celular} acao={nivel === "geral" ? irAoLivro : undefined} />
   {:else if celular}
     {#if resumoCel}<p class="resumo"><Icone nome="check" tam={14} traco={2.4} />{resumoCel}</p>{/if}
     {@render grade()}

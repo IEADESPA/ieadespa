@@ -9,7 +9,8 @@
 //  A2 (decisão dele de 24/11/2026). O batismo (GestaoTurmasBatismo REALIZAR -> batismo.efetivarTurma): quem se converteu aqui (o congregado, quem está em
 //   arrolamento) recebe a data de entrada igual à do batismo, também por cima de uma data anterior de congregado; quem veio de outra igreja (carta de
 //   mudança) fica com a forma e a data da chegada; quem JÁ é membro com a data de entrada (mesmo com a forma em branco) fica com ela (menor 4 do portão da
-//   volta 5). A ficha em arrolamento: a pendência fecha junto (RESOLVIDA, COMPLETADA, quem realizou). Cada efetivação deixa uma trilha, com a forma e a data
+//   volta 5); a data de antes do congregado vira a data da CONVERSÃO (o marco que a ficha 360 lê), nunca por cima de uma conversão já registrada
+//   (respostas dele à volta 6). A ficha em arrolamento: a pendência fecha junto (RESOLVIDA, COMPLETADA, quem realizou). Cada efetivação deixa uma trilha, com a forma e a data
 //   de antes.
 // Roda sobre a base cenario-186 (`BASE=cenario-186 bash rodar.sh roteiro e2e-101-voto-e-batismo-do-arrolamento.js`).
 process.env.AUTH_SECRET = "segredo-do-e2e-101-" + "x".repeat(24);
@@ -93,14 +94,17 @@ async function principal() {
     (990202, N'Gina Congregada E2E101', N'ATIVO', N'CONGREGADO', NULL, '2006-03-01'),
     (990203, N'Íris Da Carta E2E101', N'ATIVO', N'EM_COMUNHAO', N'CARTA_MUDANCA', '2015-02-01'),
     (990204, N'Jair Membro Antigo E2E101', N'ATIVO', N'EM_COMUNHAO', NULL, '2015-01-01'),
+    (990205, N'Kátia Congregada E2E101', N'ATIVO', N'CONGREGADO', NULL, '2008-01-01'),
     (990299, N'Hugo Pastor E2E101', N'ATIVO', N'EM_COMUNHAO', NULL, NULL);
     INSERT INTO FichasPendencias (MembroId, Tipo, Detalhe, Origem, AbertaPor) VALUES (990201, N'ARROLAMENTO', N'Importada do sistema pago (e2e-101).', N'IMPORTACAO', 990299)`);
   const turma = await escalar(`INSERT INTO TurmasBatismo (DataBatismo, Local, TipoLocal, AutorizacaoMesa, Status) OUTPUT inserted.TurmaId
     VALUES ('2026-10-03', N'Templo de mentira', N'TEMPLO', 1, N'REALIZADA')`);
-  await q(`INSERT INTO CandidatosBatismo (MembroId, TurmaId, Status) VALUES (990201, @t, N'APROVADO'), (990202, @t, N'APROVADO'), (990203, @t, N'APROVADO'), (990204, @t, N'APROVADO')`, { t: turma });
-  const trilhaAntes = await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId IN (N'990201', N'990202', N'990203', N'990204')");
+  await q(`INSERT INTO CandidatosBatismo (MembroId, TurmaId, Status) VALUES (990201, @t, N'APROVADO'), (990202, @t, N'APROVADO'), (990203, @t, N'APROVADO'), (990204, @t, N'APROVADO'), (990205, @t, N'APROVADO')`, { t: turma });
+  // a Kátia já tem a conversão registrada (2007): o batismo não grava outra nem troca a dela
+  await q(`INSERT INTO MarcosMembro (MembroId, Tipo, Descricao, DataMarco, DataAproximada, CriadoPor) VALUES (990205, N'CONVERSAO', N'Aceitou a Jesus (e2e-101).', '2007-05-05', 0, 990299)`);
+  const trilhaAntes = await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId IN (N'990201', N'990202', N'990203', N'990204', N'990205')");
   const n = await batismo.efetivarTurma(pool, turma, 990299);
-  ok(n === 4, "a turma efetiva os 4 aprovados", n);
+  ok(n === 5, "a turma efetiva os 5 aprovados", n);
   const ficha = (id) => um(`SELECT SituacaoMembro, FormaAdmissao, CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo, CONVERT(varchar(10), DataAdmissao, 120) AS DataAdmissao
     FROM MembroReferencia WHERE MembroId = @id`, { id });
   const f1 = await ficha(990201), f2 = await ficha(990202), f3 = await ficha(990203), f4 = await ficha(990204);
@@ -112,19 +116,27 @@ async function principal() {
     "veio de outra igreja (carta de mudança): fica com a forma e a data da chegada; só a data do batismo entra", f3);
   ok(f4.SituacaoMembro === "EM_COMUNHAO" && f4.FormaAdmissao === null && f4.DataAdmissao === "2015-01-01" && f4.DataBatismo === "2026-10-03",
     "já era membro (a forma em branco, a data de 2015): fica com a data de entrada (não perde os 90 dias); só a data do batismo entra", f4);
+  const conversoes = await q(`SELECT MembroId, CONVERT(varchar(10), DataMarco, 120) AS Data, CriadoPor FROM MarcosMembro WHERE Tipo = N'CONVERSAO'
+    AND MembroId IN (990201, 990202, 990203, 990204, 990205) ORDER BY MembroId, MarcoId`);
+  ok(conversoes.length === 2 && conversoes[0].MembroId === 990202 && conversoes[0].Data === "2006-03-01" && conversoes[0].CriadoPor === 990299,
+    "as duas datas: a congregada desde 2006 ganha a conversão em 2006 (só ela e a Kátia têm conversão; o arrolamento, a carta e o membro antigo, não)", conversoes);
+  ok(conversoes[1].MembroId === 990205 && conversoes[1].Data === "2007-05-05", "a Kátia continua com a conversão que já tinha (o batismo não grava por cima nem duplica)", conversoes[1]);
+  const fk = await ficha(990205);
+  ok(fk.DataAdmissao === "2026-10-03" && fk.FormaAdmissao === "BATISMO", "e a admissão da Kátia é a do batismo (os 90 dias contam dele)", fk);
   const p = await um("SELECT Situacao, Resolucao, ResolvidaPor, Nota FROM FichasPendencias WHERE MembroId = 990201 AND Tipo = N'ARROLAMENTO'");
   ok(p.Situacao === "RESOLVIDA" && p.Resolucao === "COMPLETADA" && p.ResolvidaPor === 990299 && /data de entrada igual à do batismo/.test(p.Nota || ""),
     "a pendência fechou junto: RESOLVIDA, COMPLETADA, por quem realizou, e a nota diz da data de entrada", p);
   ok((await escalar("SELECT COUNT(*) FROM FichasPendencias WHERE MembroId = 990201 AND Situacao = N'ABERTA'")) === 0, "nenhuma pendência aberta sobrou");
-  const tr = await q(`SELECT RegistroId, Acao, UsuarioId, DadosAntes FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId IN (N'990201', N'990202', N'990203', N'990204')
+  const tr = await q(`SELECT RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId IN (N'990201', N'990202', N'990203', N'990204', N'990205')
     ORDER BY AuditId`);
   const novas = tr.slice(trilhaAntes);
   const de = (id) => novas.find((x) => Number(x.RegistroId) === id);
-  ok(novas.length === 4 && de(990201).Acao === "O batismo completou o arrolamento" && de(990202).Acao === "O batismo admitiu o membro"
+  ok(novas.length === 5 && de(990201).Acao === "O batismo completou o arrolamento" && de(990202).Acao === "O batismo admitiu o membro"
     && de(990204).Acao === "O batismo foi registrado na ficha de quem já era membro" && novas.every((x) => x.UsuarioId === 990299),
     "uma trilha por efetivação, por quem realizou (a do arrolamento diz que o batismo o completou)", novas.map((x) => [x.RegistroId, x.Acao]));
   ok(/"dataAdmissao":"2006-03-01"/.test(de(990202).DadosAntes || ""), "a data anterior da congregada fica na trilha (não se perde)", de(990202).DadosAntes);
-  ok((await escalar("SELECT COUNT(*) FROM CandidatosBatismo WHERE TurmaId = @t AND Status = N'BATIZADO'", { t: turma })) === 4, "os 4 candidatos ficam BATIZADO");
+  ok(/"conversao":"2006-03-01"/.test(de(990202).DadosDepois || "") && !/"conversao"/.test(de(990205).DadosDepois || ""), "a trilha diz quando o batismo guardou a conversão (a da Kátia não: já existia)");
+  ok((await escalar("SELECT COUNT(*) FROM CandidatosBatismo WHERE TurmaId = @t AND Status = N'BATIZADO'", { t: turma })) === 5, "os 5 candidatos ficam BATIZADO");
   // o painel do arrolamento: vieram (a pendência, aberta ou resolvida) − faltam (ainda em ARROLAMENTO) = completadas — o batizado conta como completado
   const conta = await um(`SELECT SUM(CASE WHEN fp.Situacao = N'ABERTA' THEN 1 ELSE 0 END) AS abertas, SUM(CASE WHEN m.SituacaoMembro = N'ARROLAMENTO' THEN 1 ELSE 0 END) AS faltam
     FROM FichasPendencias fp JOIN MembroReferencia m ON m.MembroId = fp.MembroId WHERE fp.Tipo = N'ARROLAMENTO' AND fp.MembroId = 990201`);

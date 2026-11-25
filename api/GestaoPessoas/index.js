@@ -185,6 +185,9 @@ module.exports = async function (context, req) {
         condPainel = condEscopo ? `${condEscopo} AND m.CongregacaoId = @painelCong` : "m.CongregacaoId = @painelCong";
       }
       const resumo = condEscopo === "" ? painelMembros.vazio(hoje) : await painelMembros.lerPainel(pedido, sql, condPainel, hoje);
+      // volta 9: só a Geral (quem encerra) recebe o aviso das cadeiras e das vagas de comissão antigas de quem não é membro — da Igreja toda, também no
+      // painel de uma congregação
+      if (ehGeral(usuario)) resumo.cadeirasForaDoRol = await painelMembros.lerCadeirasForaDoRol(pool.request(), sql);
       context.res = { status: 200, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }, body: { sucesso: true, resumo } };
       return;
     }

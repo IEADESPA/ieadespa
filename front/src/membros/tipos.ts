@@ -81,6 +81,13 @@ export interface ResumoPainel {
   readonly grupos: Readonly<Record<Agrupamento, readonly GrupoPainel[]>>;
   readonly congregacoes: readonly { readonly congregacaoId: number; readonly nome: string; readonly total: number }[];
   readonly movimento: readonly { readonly mes: string; readonly entradas: number; readonly saidas: number }[];
+  /** só a Geral recebe (volta 9): as cadeiras e as vagas de comissão ainda abertas de quem não é membro (congregado ou arrolamento), até 3 nomes */
+  readonly cadeirasForaDoRol?: CadeirasForaDoRol;
+}
+export interface CadeirasForaDoRol {
+  readonly cadeiras: number;
+  readonly vagas: number;
+  readonly itens: readonly { readonly tipo: "CADEIRA" | "COMISSAO"; readonly onde: string; readonly nome: string }[];
 }
 
 /** COMPLETAR O ARROLAMENTO (rodada 28): os tipos moram em ./arrolamento.ts, junto com a conferência das respostas */

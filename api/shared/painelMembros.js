@@ -146,4 +146,26 @@ async function lerPainel(pedido, sql, condEscopo, hoje) {
   return mapear(r.recordsets, hoje);
 }
 
-module.exports = { FAIXAS, RECORTES, montarConsulta, janelaSeisMeses, mapear, vazio, limitar, lerPainel };
+// Volta 9 (decisão de 25/11/2026): o AVISO À GERAL das cadeiras (Assentos) e das vagas de comissão (ComissaoMembros) ainda abertas de quem não é membro
+// (congregado ou arrolamento: estatuto.SEM_CADEIRA, a mesma lista da recusa da cadeira). São as de antes da regra: nada se apaga — a Geral encerra cada uma,
+// com o motivo (Estrutura -> Órgãos; a vaga, na página da CLI). Só a Geral recebe (quem chama confere). Uma consulta só: as duas contas e até 3 nomes com o órgão.
+const TETO_AVISO_CADEIRAS = 3;
+async function lerCadeirasForaDoRol(pedido, sql) {
+  const { SEM_CADEIRA } = require("./estatuto");
+  SEM_CADEIRA.forEach((s, i) => pedido.input(`semCadeira${i}`, sql.NVarChar(30), s));
+  const r = await pedido.query(`
+    SELECT TOP (${TETO_AVISO_CADEIRAS}) x.Tipo, x.Onde, m.Nome,
+           SUM(CASE WHEN x.Tipo = N'CADEIRA' THEN 1 ELSE 0 END) OVER () AS Cadeiras, SUM(CASE WHEN x.Tipo = N'COMISSAO' THEN 1 ELSE 0 END) OVER () AS Vagas
+    FROM (
+      SELECT N'CADEIRA' AS Tipo, a.AssentoId AS Id, a.MembroId, o.Nome AS Onde FROM Assentos a JOIN Orgaos o ON o.OrgaoId = a.OrgaoId WHERE a.DataFim IS NULL
+      UNION ALL
+      SELECT N'COMISSAO', c.ComissaoMembroId, c.MembroId, c.Sigla FROM ComissaoMembros c WHERE c.DataFim IS NULL
+    ) x
+    JOIN MembroReferencia m ON m.MembroId = x.MembroId
+    WHERE m.SituacaoMembro IN (${SEM_CADEIRA.map((_, i) => `@semCadeira${i}`).join(", ")})
+    ORDER BY m.Nome, x.Tipo, x.Id`);
+  const linhas = r.recordset || [];
+  return { cadeiras: num(linhas[0] && linhas[0].Cadeiras), vagas: num(linhas[0] && linhas[0].Vagas), itens: linhas.map((l) => ({ tipo: l.Tipo, onde: l.Onde, nome: l.Nome })) };
+}
+
+module.exports = { FAIXAS, RECORTES, montarConsulta, janelaSeisMeses, mapear, vazio, limitar, lerPainel, lerCadeirasForaDoRol };

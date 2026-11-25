@@ -883,6 +883,8 @@ function ponteSvelteCasca(contexto) {
     sairDoModulo: () => { if (typeof moduloAtual !== "undefined" && moduloAtual) sairDoModulo(); },
     irMeuPainel: (sub) => irMinhaParteCasca(String(sub || "minhavida")),
     abrirMembros: (rota) => abrirMembrosCasca(rota),
+    // volta 9: o aviso da Geral (as cadeiras antigas de quem não é membro) abre Estrutura -> Órgãos, onde ela encerra com o motivo; só essa aba
+    abrirAba: (aba) => { if (aba === "orgaos" && typeof irParaBlocoPainel === "function") comTransicaoCasca(() => irParaBlocoPainel("orgaos")); },
     fecharGavetaCelular: () => { if (window.innerWidth <= 640 && typeof alternarMenuCelular === "function") alternarMenuCelular(false); },
     escopoDoModulo: (texto) => { const el = document.getElementById("menuModuloEscopo"); if (el) el.textContent = String(texto || ""); }
   };

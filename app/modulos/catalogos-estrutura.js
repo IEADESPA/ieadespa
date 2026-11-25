@@ -496,9 +496,11 @@ function tabelaComissaoCalculada(lista, siglaCadastroManual) {
 }
 
 async function removerMembroComissaoAcao(sigla, comissaoMembroId) {
-  if (!(await confirmarAcao(`Remover este membro da ${sigla.toUpperCase()}?`, "Remover"))) return;
+  // volta 9: encerrar a vaga pede o motivo (vai para a vaga e para a trilha); sem motivo, nada se encerra
+  const motivo = await pedirTexto(`Remover este membro da ${sigla.toUpperCase()}: qual o motivo?`, "Ex.: ainda não é membro (congregado)", "");
+  if (!motivo) return;
   const res = await fetchProtegido(`${API_BASE}/comissoes/${sigla}/${comissaoMembroId}/encerrar`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({})
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivoEncerramento: motivo })
   });
   const data = await res.json();
   avisarResultado(data);

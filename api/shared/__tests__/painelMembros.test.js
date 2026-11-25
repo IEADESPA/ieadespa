@@ -140,6 +140,48 @@ describe("GET /api/pessoas?resumo=1", () => {
     expect(r.status).toBe(403);
     expect(rodou(/GROUPING SETS/)).toHaveLength(0);
   });
+
+  // volta 9 (decisão de 25/11): o aviso à Geral das cadeiras e das vagas de comissão antigas de quem não é membro (congregado ou arrolamento) — só a Geral
+  // recebe (ela é quem encerra); até 3 nomes com o órgão, e as duas contas; nada se apaga
+  const CADEIRAS = { recordset: [
+    { Tipo: "CADEIRA", Onde: "Conselho Fiscal", Nome: "Davi Congregado", Cadeiras: 2, Vagas: 1 },
+    { Tipo: "COMISSAO", Onde: "CCJ", Nome: "Davi Congregado", Cadeiras: 2, Vagas: 1 },
+    { Tipo: "CADEIRA", Onde: "CLI", Nome: "Ana Arrolamento", Cadeiras: 2, Vagas: 1 }] };
+  test("a Geral recebe as cadeiras antigas de quem não é membro: as contas e até 3 nomes com o órgão, numa consulta só", async () => {
+    quando(/GROUPING SETS/, RESPOSTA);
+    quando(/FROM Assentos/, CADEIRAS);
+    const r = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { resumo: "1" });
+    expect(r.body.resumo.cadeirasForaDoRol).toEqual({ cadeiras: 2, vagas: 1, itens: [
+      { tipo: "CADEIRA", onde: "Conselho Fiscal", nome: "Davi Congregado" }, { tipo: "COMISSAO", onde: "CCJ", nome: "Davi Congregado" },
+      { tipo: "CADEIRA", onde: "CLI", nome: "Ana Arrolamento" }] });
+    const q = rodou(/FROM Assentos/);
+    expect(q).toHaveLength(1);
+    expect(q[0].sql).toMatch(/SELECT TOP \(3\)/);
+    expect(q[0].sql).toMatch(/a\.DataFim IS NULL/);
+    expect(q[0].sql).toMatch(/FROM ComissaoMembros c WHERE c\.DataFim IS NULL/);
+    // a situação vem por parâmetro, da mesma lista da recusa da cadeira, sem função na coluna
+    expect(q[0].sql).toMatch(/m\.SituacaoMembro IN \(@semCadeira0, @semCadeira1\)/);
+    expect([q[0].inputs.semCadeira0, q[0].inputs.semCadeira1]).toEqual(require("../estatuto").SEM_CADEIRA);
+    // o painel de uma congregação, escolhido pela Geral, também traz o aviso (a tarefa é da Igreja toda)
+    mockConsultas = [];
+    const r2 = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { resumo: "1", congregacaoId: "1" });
+    expect(r2.body.resumo.cadeirasForaDoRol.cadeiras).toBe(2);
+  });
+  test("a Geral sem nenhuma: as contas em zero e a lista vazia", async () => {
+    quando(/GROUPING SETS/, RESPOSTA);
+    const r = await pedir(tokenDe({ nivel: "GLOBAL", escopoCongregacoes: "TODAS" }), { resumo: "1" });
+    expect(r.body.resumo.cadeirasForaDoRol).toEqual({ cadeiras: 0, vagas: 0, itens: [] });
+  });
+  test("a área e a congregação NÃO recebem as cadeiras (nem a consulta roda)", async () => {
+    quando(/GROUPING SETS/, RESPOSTA);
+    quando(/FROM Assentos/, CADEIRAS);
+    for (const t of [tokenDe({ nivel: "AREA", escopoCongregacoes: ["Vila Nova", "Central"] }), tokenDe({ nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"] })]) {
+      mockConsultas = [];
+      const r = await pedir(t, { resumo: "1" });
+      expect(r.body.resumo.cadeirasForaDoRol).toBeUndefined();
+      expect(rodou(/FROM Assentos/)).toHaveLength(0);
+    }
+  });
 });
 
 describe("GET /api/pessoas?pagina=N — os filtros do que falta e do rol", () => {

@@ -1382,6 +1382,10 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
   dízimo cai no mês atual.
 - **Departamentos e Missões ficam FORA da 1ª entrega.** Continuam como hoje até nascer o módulo de cada um, e aí entram
   por ele.
+  - **Mudou em 25/11/2026 (ele):** os **centros de custo** dos departamentos e das secretarias entram no Financeiro já
+    em janeiro, com o saldo que veio de dezembro e o lançar das entradas e saídas de cada um pela Tesouraria Geral. O
+    módulo de Departamentos (relatórios, a tesouraria de cada um) continua para depois. Ver
+    [o plano até 01/01](plano-ate-01-01-2027.md#8-os-centros-de-custo-dos-departamentos-e-das-secretarias-a-mudança-dele-25112026).
 - **Só duas formas de receber: espécie e digital (Pix).** Maquininha, TED e cheque não existem por enquanto.
 - **O extrato:** a conta geral é no **banco Cora**.
   - Até existir a ligação automática (a v10.16 prevê o Pix pela Cora), alguém da Tesouraria Geral baixa o arquivo do

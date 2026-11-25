@@ -441,10 +441,14 @@ describe("EvoluirProcedimentoAbandono", () => {
       expect(fecha[0].inputs).toMatchObject({ m: 40, obs: "Encerrada pela saída do rol." });
       expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
     });
-    test("homologar o abandono de quem não estava em licença não mexe nas licenças", async () => {
+    test("homologar o abandono com a situação no rol fora da licença (dado antigo): a licença que ainda estiver aberta fecha do mesmo jeito", async () => {
       preparar();
       await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" });
-      expect(rodou(/UPDATE LicencasCandidatura/)).toHaveLength(0);
+      const fecha = rodou(/UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU'/);
+      expect(fecha).toHaveLength(1);
+      expect(fecha[0].transacao).toBe(1);
+      expect(fecha[0].sql).toMatch(/AND Status = 'EM_LICENCA'/);
+      expect(fecha[0].inputs).toMatchObject({ m: 40, obs: "Encerrada pela saída do rol." });
     });
     test("o prazo de recurso (30 dias) vence também quando a data chega do banco como objeto Date (antes nunca vencia)", async () => {
       preparar();

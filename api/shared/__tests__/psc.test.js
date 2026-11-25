@@ -604,3 +604,61 @@ describe("apuração assistida", () => {
     expect(apuracao.FONTES.sort()).toEqual(["BATISMOS", "EBD_DIARIO", "EBD_LICOES", "PRESTACAO_CONTAS", "REPASSES"]);
   });
 });
+
+describe("entradas e mensagens do PSC", () => {
+  test("parâmetros: vazio, nulo ou verdadeiro/falso não viram número", () => {
+    const base = { primeiroExercicio: 2026, prazoEnvioDias: 90, exerciciosParaReclassificacao: 2 };
+    for (const v of ["", "  ", null, true, false]) {
+      expect(psc.validarParametros({ ...base, prazoEnvioDias: v }).valido).toBe(false);
+      expect(psc.validarParametros({ ...base, exerciciosParaReclassificacao: v }).valido).toBe(false);
+      expect(psc.validarParametros({ ...base, primeiroExercicio: v }).valido).toBe(false);
+    }
+    expect(psc.validarParametros({ ...base, prazoEnvioDias: "0" }).dados.prazoEnvioDias).toBe(0);
+    expect(psc.validarParametros({ ...base, prazoEnvioDias: 0 }).dados.prazoEnvioDias).toBe(0);
+  });
+
+  test("decretar: a matrícula que não existe e a que não está apta recebem a mesma resposta", async () => {
+    const congregacao = { CongregacaoId: 4, Nome: "X", Ativa: true, Categoria: "CONGREGACAO", TutelaCongregacaoMaeId: null, PercentualRetencaoLocal: 40 };
+    const decretar = (pool) => psc.decretarReclassificacao(pool, {
+      reclassificacao: { reclassificacaoId: 1, congregacaoId: 4, status: "PROPOSTA" },
+      dados: { resolucao: "Res. CLI 1/2027", encarregadoMembroId: 9, congregacaoMaeId: null }, membroId: 1
+    });
+    const naoExiste = await decretar(criarPoolFalso([[congregacao], []]).pool);
+    const inativo = await decretar(criarPoolFalso([[congregacao], [{ MembroId: 9, Nome: "Fulano", Status: "DESLIGADO", SituacaoMembro: "EM_COMUNHAO" }]]).pool);
+    expect(naoExiste.sucesso).toBe(false);
+    expect(naoExiste.mensagem).toBe(inativo.mensagem);
+  });
+
+  test("decretar: a Congregação-Mãe é conferida antes do encarregado", async () => {
+    const congregacao = { CongregacaoId: 4, Nome: "X", Ativa: true, Categoria: "CONGREGACAO", TutelaCongregacaoMaeId: null, PercentualRetencaoLocal: 40 };
+    const { pool, chamadas } = criarPoolFalso([[congregacao], []]);
+    const r = await psc.decretarReclassificacao(pool, {
+      reclassificacao: { reclassificacaoId: 1, congregacaoId: 4, status: "PROPOSTA" },
+      dados: { resolucao: "Res. CLI 1/2027", encarregadoMembroId: 9, congregacaoMaeId: 999 }, membroId: 1
+    });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/Congregação-Mãe/);
+    expect(chamadas.some((c) => /FROM MembroReferencia/.test(c.sql))).toBe(false);
+  });
+
+  test("reabrir o exercício que sustenta reclassificação: a mensagem diz que, decretada ou revertida, a avaliação fica travada", async () => {
+    const { pool } = criarPoolFalso([[{ ReclassificacaoId: 3 }]]);
+    const r = await psc.reabrirAvaliacao(pool, {
+      avaliacao: { avaliacaoId: 7, congregacaoId: 4, ano: 2027, status: "HOMOLOGADA", enviadaPorMembroId: 1, validadaPorMembroId: 2, homologadaPorMembroId: 3 },
+      motivo: "Correção de um erro de digitação", membroId: 9
+    });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/travada/);
+  });
+
+  test("criar critério ao mesmo tempo que outro no mesmo degrau: mensagem clara, sem erro interno", async () => {
+    const fila = [[{ SinalId: 1, Ordem: 1 }], [{ Codigo: "1.2.a", Ordem: 1 }]];
+    const pool = { request: () => { const req = { input: () => req, query: async (t) => {
+      if (/INSERT INTO PscCriterios/.test(t)) { const e = new Error("duplicada"); e.number = 2627; throw e; }
+      return { recordset: fila.shift() || [] };
+    } }; return req; } };
+    const r = await psc.criarCriterio(pool, { dados: { sinalId: 1, nivel: 2, texto: "Critério de teste", orientacao: "" }, membroId: 1 });
+    expect(r.sucesso).toBe(false);
+    expect(r.mensagem).toMatch(/tente de novo/i);
+  });
+});

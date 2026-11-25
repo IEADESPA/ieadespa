@@ -30,7 +30,8 @@ const ID = {
   liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81,
   licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92,
   fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102,
-  licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106, licEncerrada: BASE_ID + 107
+  licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106, licEncerrada: BASE_ID + 107,
+  cliGeral: BASE_ID + 108, cliOutraArea: BASE_ID + 109
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -325,7 +326,8 @@ async function principal() {
   await q("INSERT INTO PscAvaliacoes (CongregacaoId, Ano, AbertaPorMembroId, Ciclo) VALUES (@c, 2029, @por, 1)", { c: tutelada, por: ID.geral });
   const textos = new Map((await psc.detectarAvaliacoesPendentes(await obterPool(), { hoje: "2031-06-01" })).map((f) => [f.referenciaId, f.fatoGerador]));
   const nunca = textos.get(nova * 10000 + 2028) || "";
-  const voltou = textos.get(tutelada * 10000 + 2029) || "";
+  const voltou = textos.get(tutelada * 10000 + 2029 + 100000000) || "";   // a volta para correção tem chave própria: o ciclo entra na chave (1 * 100 milhões)
+  ok(!textos.has(tutelada * 10000 + 2029), "o aviso da volta para correção não usa a chave do primeiro aviso", JSON.stringify([...textos.keys()].filter((k) => k % 10000 === 2029)));
   ok(/não foi enviada até 31\/03\/2029/.test(nunca), "o rascunho nunca enviado: o aviso diz que não foi enviada", nunca);
   ok(/voltou para correção e ainda não foi reenviada/.test(voltou) && !/não foi enviada/.test(voltou), "o enviado que voltou para correção: o aviso diz isso", voltou);
   // a proposta arquivada (para reabrir a avaliação que a sustentava) não impede a nova, depois da avaliação homologada de novo, ainda reprovada
@@ -341,6 +343,13 @@ async function principal() {
     "a proposta arquivada não impede a nova (a CLI volta a ter o que decidir)", JSON.stringify(novaProposta));
   ok((await psc.proporReclassificacaoSeCabivel(await obterPool(), { avaliacao: { congregacaoId: betel, ano: 2027 }, reprovadaNivel1: true, membroId: ID.geral })) === null,
     "e com a nova proposta aberta, não nasce uma segunda");
+  // o aviso da proposta à CLI: quem tem a permissão de homologar E alcança a congregação (o geral sim; o de outra área, não)
+  LID.cliGeral = await lideranca(ID.cliGeral, await papel("CLI geral E2E152", "GLOBAL", "psc_homologacao"), "GLOBAL", null);
+  LID.cliOutraArea = await lideranca(ID.cliOutraArea, await papel("CLI de área E2E152", "AREA", "psc_homologacao"), "AREA", area);
+  const avisoCli = (await psc.detectarReclassificacoesPropostas(await obterPool())).find((f) => f.referenciaId === novaProposta.reclassificacaoId);
+  const recebeCli = avisoCli ? (avisoCli.destinatarios || []).map((d) => d.membroId) : [];
+  ok(avisoCli && recebeCli.includes(ID.cliGeral) && !recebeCli.includes(ID.cliOutraArea), "o aviso da proposta vai à CLI do nível geral, não à de outra área",
+    JSON.stringify(recebeCli.filter((m) => [ID.cliGeral, ID.cliOutraArea].includes(m))));
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5. a medida cautelar ==");

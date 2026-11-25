@@ -5,6 +5,7 @@ let mockConsultas = [];
 let mockCongregacoes = [];
 let mockAvaliacoes = [];
 let mockReclassificacoes = [];
+let mockAvaliacoesDoAno = [];
 jest.mock("../db", () => {
   const novaRequest = () => {
     const entradas = {};
@@ -14,6 +15,7 @@ jest.mock("../db", () => {
         mockConsultas.push({ texto, entradas });
         if (/FROM PscParametros/.test(texto)) return { recordset: [{ PrimeiroExercicio: 2026, PrazoEnvioDias: 90, ExerciciosParaReclassificacao: 2 }] };
         if (/FROM PscAvaliacoes a JOIN/.test(texto)) return { recordset: mockAvaliacoes };
+        if (/SELECT AvaliacaoId, CongregacaoId, Status, NivelFinal/.test(texto)) return { recordset: mockAvaliacoesDoAno };
         if (/FROM PscReclassificacoes r JOIN/.test(texto)) return { recordset: mockReclassificacoes };
         if (/FROM Congregacoes c/.test(texto)) return { recordset: mockCongregacoes };
         if (/FROM Lideranca l/.test(texto)) return { recordset: [{ membroId: 1, nome: "Gestora", email: null }] };
@@ -29,7 +31,7 @@ jest.mock("../db", () => {
 const psc = require("../psc");
 const pool = { request: require("../db").__novaRequest };
 
-beforeEach(() => { mockConsultas = []; mockCongregacoes = []; mockAvaliacoes = []; mockReclassificacoes = []; });
+beforeEach(() => { mockConsultas = []; mockCongregacoes = []; mockAvaliacoes = []; mockReclassificacoes = []; mockAvaliacoesDoAno = []; });
 
 describe("o aviso de avaliação não enviada", () => {
   test("a busca das pendentes deixa de fora o ano da fundação e os anos sob tutela", async () => {
@@ -65,6 +67,14 @@ describe("o texto do aviso", () => {
 
 describe("o painel do exercício", () => {
   const linha = (cobravel) => ({ CongregacaoId: 7, Nome: "Vila Nova", Categoria: "CONGREGACAO", AreaId: 1, AreaNome: "Área 1", Cobravel: cobravel });
+
+  test("ano que não conta, com a avaliação só em rascunho: 'não se aplica', não atrasado", async () => {
+    mockCongregacoes = [linha(0)];
+    mockAvaliacoesDoAno = [{ AvaliacaoId: 5, CongregacaoId: 7, Status: "RASCUNHO" }];
+    const painel = await psc.montarPainel(pool, { ano: 2028, hoje: "2030-06-01" });
+    expect(painel.congregacoes[0].prazo.situacao).toBe("NAO_SE_APLICA");
+    expect(painel.resumo.atrasadas).toBe(0);
+  });
 
   test("ano que não conta para a unidade aparece como 'não se aplica', não como atrasado", async () => {
     mockCongregacoes = [linha(0)];

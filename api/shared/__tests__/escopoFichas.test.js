@@ -753,6 +753,14 @@ describe("GestaoCartas", () => {
       expect(minimizacao.excluirDocumentos.mock.calls).toEqual([[["https://armazem/doc-indicacao"]]]);
       expect(commitsAoApagar).toEqual([1]);
     });
+    test("a minimização fecha a licença por candidatura aberta na mesma transação, com o motivo da carta", async () => {
+      candidatas();
+      await processar(LOCAL());
+      const fecha = rodou(/UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU'/);
+      expect(fecha).toHaveLength(1);
+      expect(fecha[0].sql).toMatch(/^SET XACT_ABORT ON;/);
+      expect(fecha[0].inputs).toMatchObject({ m: 10, obs: "Encerrada pela carta de mudança." });
+    });
     test("a carta que outro processamento já concluiu: nada é minimizado, nenhum arquivo apagado", async () => {
       candidatas();
       quando(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/, [], 0);

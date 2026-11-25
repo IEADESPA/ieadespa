@@ -20,6 +20,8 @@ const { getPool, sql } = require("../shared/db");
 const { emTransacao } = require("../shared/transacaoCurta");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const vacancia = require("../shared/vacancia");
+const licencaCandidatura = require("../shared/licencaCandidatura");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { selectProcessoComInfracoes, validarOrgaoProcesso, SIGLAS_QUE_PODEM_RECORRER } = require("../shared/disciplinar");
 const { membroAutorizadoNoOrgaoLocal, ancestraisTerritoriais } = require("../shared/escopo");
@@ -320,6 +322,8 @@ module.exports = async function (context, req) {
                 WHERE ProcessoId = @id AND HomologadoPeloCEI = 0 AND CEIRecusouEm IS NULL`);
       if (!((gravou.rowsAffected && gravou.rowsAffected[0]) || 0)) { await desistir(); return "MUDOU"; }
       if (homologado) await vacancia.encerrarVinculos(executor, sql, atual.MembroId, "DISCIPLINA");
+      // a exclusão homologada fecha a licença por candidatura aberta (decisão de 25/11/2026), com o motivo neutro
+      if (homologado && atual.Resultado === "EXCLUSAO") await licencaCandidatura.encerrarLicencaAberta(executor, sql, atual.MembroId, licencaCandidatura.MOTIVO_SAIDA_DO_ROL, hojeBrasilia());
       await registrarAuditoriaNaTransacao(transacao, {
         tabela: "ProcessosDisciplinares", registroId: Number(processoId), acao: homologado ? "Homologou exclusão/disciplina rigorosa (CEI)" : "Não homologou (CEI)",
         usuarioId: usuario.membroId, dadosDepois: { homologado }
@@ -425,6 +429,8 @@ module.exports = async function (context, req) {
           WHERE ProcessoId = @id AND Status <> 'JULGADO'`);
       if (!((julgou.rowsAffected && julgou.rowsAffected[0]) || 0)) { await desistir(); return "JA_JULGADO"; }
       if (vacanciaAgora) await vacancia.encerrarVinculos(executor, sql, atual.MembroId, "DISCIPLINA");
+      // a exclusão com efeito já fecha a licença por candidatura aberta (decisão de 25/11/2026), com o motivo neutro
+      if (vacanciaAgora && resultado === "EXCLUSAO") await licencaCandidatura.encerrarLicencaAberta(executor, sql, atual.MembroId, licencaCandidatura.MOTIVO_SAIDA_DO_ROL, hojeBrasilia());
       await registrarAuditoriaNaTransacao(transacao, {
         tabela: "ProcessosDisciplinares",
         registroId: Number(processoId),

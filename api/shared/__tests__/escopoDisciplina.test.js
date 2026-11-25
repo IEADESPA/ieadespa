@@ -430,6 +430,22 @@ describe("EvoluirProcedimentoAbandono", () => {
       await poolDaVacancia.request().query("UPDATE Assentos SET DataFim = 1");
       expect(rodou(/UPDATE Assentos/)[0].transacao).toBe(1);
     });
+    test("homologar o abandono de quem estava em licença por candidatura: a licença fecha na mesma transação, com o motivo neutro", async () => {
+      preparar();
+      mockRegras.unshift([/SELECT Status FROM MembroReferencia WITH \(UPDLOCK, HOLDLOCK\)/, [{ Status: "LICENCA_CANDIDATURA" }]]);
+      const r = await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" });
+      expect(r.body.sucesso).toBe(true);
+      const fecha = rodou(/UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU'/);
+      expect(fecha).toHaveLength(1);
+      expect(fecha[0].transacao).toBe(1);
+      expect(fecha[0].inputs).toMatchObject({ m: 40, obs: "Encerrada pela saída do rol." });
+      expect(mockTransacoes.map(t => t.estado)).toEqual(["confirmada"]);
+    });
+    test("homologar o abandono de quem não estava em licença não mexe nas licenças", async () => {
+      preparar();
+      await evoluir(geral(["disciplina"]), 5, { acao: "HOMOLOGAR" });
+      expect(rodou(/UPDATE LicencasCandidatura/)).toHaveLength(0);
+    });
     test("o prazo de recurso (30 dias) vence também quando a data chega do banco como objeto Date (antes nunca vencia)", async () => {
       preparar();
       PROCEDIMENTOS[14] = { MembroId: 40, Tipo: "MATERIAL", Status: "HOMOLOGADO", DataNotificacao: "2020-01-01", PrazoDias: 15, DataHomologacao: new Date(`${diasAtras(40)}T00:00:00Z`) };
@@ -915,6 +931,14 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       expect(recolhe).toHaveLength(1);
       expect(recolhe[0].transacao).toBeNull();                                // a credencial, depois do commit
     };
+    // A exclusão fecha a licença por candidatura aberta na mesma transação (decisão de 25/11/2026), com o motivo neutro: a causa disciplinar é sigilosa e a
+    // observação da licença aparece para quem tem só "pessoas".
+    const conferirLicencaFechada = () => {
+      const fecha = rodou(/UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU'/);
+      expect(fecha).toHaveLength(1);
+      expect(fecha[0].transacao).toBe(1);
+      expect(fecha[0].inputs).toMatchObject({ m: 40, obs: "Encerrada pela saída do rol." });
+    };
     const conferirVacanciaNaTransacao = async () => {
       expect(vacancia.encerrarVinculos).toHaveBeenCalledTimes(1);
       await vacancia.encerrarVinculos.mock.calls[0][0].request().query("UPDATE Assentos SET DataFim = 1");
@@ -928,6 +952,7 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].sql).toMatch(/AND Status <> 'JULGADO'/);
       await conferirVacanciaNaTransacao();
       conferirTudoNaTransacao();
+      conferirLicencaFechada();
     });
     test("julgar arquivando (sem vacância): o julgamento e a trilha na transação, sem a trava da escada nem a credencial", async () => {
       prepararDecisao();
@@ -939,6 +964,7 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
       expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
       expect(rodou(/CredenciaisEclesiasticas/)).toHaveLength(0);
+      expect(rodou(/UPDATE LicencasCandidatura/)).toHaveLength(0);
     });
     test("julgar quando outra decisão chegou antes: recusa, nada de vacância nem trilha", async () => {
       prepararDecisao({ julgou: 0 });
@@ -955,6 +981,13 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
       expect(r.body.sucesso).toBe(true);
       await conferirVacanciaNaTransacao();
       conferirTudoNaTransacao();
+      conferirLicencaFechada();
+    });
+    test("não homologar a exclusão: a licença aberta continua", async () => {
+      prepararDecisao();
+      const r = await evoluir(geral(["disciplina", "cei"]), PENDENTE_CEI, { acao: "HOMOLOGAR_EXCLUSAO", homologado: false });
+      expect(r.body.sucesso).toBe(true);
+      expect(rodou(/UPDATE LicencasCandidatura/)).toHaveLength(0);
     });
     test.each([
       ["julgar", PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" }],

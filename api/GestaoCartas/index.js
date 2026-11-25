@@ -20,6 +20,8 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const { diasMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos } = require("../shared/minimizacaoLgpd");
 const { emTransacao } = require("../shared/transacaoCurta");
+const licencaCandidatura = require("../shared/licencaCandidatura");
+const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { obterTrava } = require("../shared/financeiroSeguro");
 const { filtrarPorEscopo, pessoaAlcancavel } = require("../shared/escopoRotas");
 
@@ -164,6 +166,8 @@ module.exports = async function (context, req) {
             .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA')`);
           if (!((concluiu.rowsAffected && concluiu.rowsAffected[0]) || 0)) { await desistir(); return null; }
           const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: c.MotivoSaida });
+          // a licença por candidatura ainda aberta fecha junto (decisão de 25/11/2026)
+          await licencaCandidatura.encerrarLicencaAberta(executor, sql, c.MembroId, "Encerrada pela carta de mudança.", hojeBrasilia());
           // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
           await registrarAuditoriaNaTransacao(transacao, {
             tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,

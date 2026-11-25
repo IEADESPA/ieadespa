@@ -112,12 +112,16 @@ function urlDocumentoComSas(urlBlob) {
 // Best-effort (vB.4, AnexosGenericos): excluir a linha do SQL é o que
 // importa pro controle de acesso parar de valer; o blob órfão não é um
 // problema que deva bloquear a exclusão do anexo.
+// Devolve true quando o arquivo saiu (ou já não existia) e false quando a exclusão falhou: quem precisa registrar a pendência (a minimização da LGPD,
+// shared/minimizacaoLgpd.js) olha o resultado; os outros chamadores seguem ignorando, como sempre.
 async function excluirDocumento(urlBlob) {
   try {
     const nomeBlob = new URL(urlBlob).pathname.split("/").pop();
     if (nomeBlob) await getContainerClient(CONTAINER_DOCUMENTOS).getBlockBlobClient(nomeBlob).deleteIfExists();
+    return true;
   } catch (e) {
     console.error("Falha ao excluir documento do Blob Storage (ignorado):", e.message);
+    return false;
   }
 }
 

@@ -15,11 +15,16 @@ const DIAS_MINIMIZACAO_PADRAO = 30; // usado só se a política estiver ausente/
 
 // Lê PoliticasRetencao pela categoria — é o que faz a retenção EXECUTAR de
 // verdade (antes disso, PoliticasRetencao não acionava nada, era só catálogo).
-async function diasMinimizacaoExMembro(pool) {
+// O prazo e de onde ele veio: `padrao` = true quando a política está inativa, ausente ou sem prazo ("indeterminado") e valeu o padrão de 30 dias (a
+// revisão de fora de 25/11/2026 pediu que a trilha e a resposta digam qual prazo valeu).
+async function prazoMinimizacaoExMembro(pool) {
   const politica = (await pool.request().query(`
     SELECT DiasRetencao FROM PoliticasRetencao WHERE Categoria = N'Dados de Ex-Membro (pós-Carta de Mudança)' AND Ativo = 1
   `)).recordset[0];
-  return politica && politica.DiasRetencao != null ? politica.DiasRetencao : DIAS_MINIMIZACAO_PADRAO;
+  return politica && politica.DiasRetencao != null ? { dias: politica.DiasRetencao, padrao: false } : { dias: DIAS_MINIMIZACAO_PADRAO, padrao: true };
+}
+async function diasMinimizacaoExMembro(pool) {
+  return (await prazoMinimizacaoExMembro(pool)).dias;
 }
 
 // A minimização DENTRO da transação de quem chama (shared/transacaoCurta.js): `t` = { executor, transacao }. Ou tudo vale (a vacância, os campos zerados, os
@@ -83,11 +88,16 @@ async function minimizarNaTransacao(t, membroId, { dataSaida, motivo }) {
   return documentos;
 }
 
-// Depois do commit: os arquivos dos documentos que a minimização tirou do banco.
+// Depois do commit: os arquivos dos documentos que a minimização tirou do banco. Devolve os endereços que o armazenamento NÃO apagou (fora do ar, credencial
+// vencida): o banco já não os tem, então quem chamou registra a pendência na trilha (o arquivo que já não existia conta como apagado).
 async function excluirDocumentos(urls) {
+  const naoApagados = [];
   for (const url of urls || []) {
-    try { await require("./storage").excluirDocumento(url); } catch (e) { /* o arquivo pode já não existir; o registro já saiu */ }
+    let apagou = false;
+    try { apagou = (await require("./storage").excluirDocumento(url)) !== false; } catch (e) { apagou = false; }
+    if (!apagou) naoApagados.push(url);
   }
+  return naoApagados;
 }
 
 // A minimização numa transação própria, e os arquivos depois do commit (para quem não tem outra gravação a fazer junto, como os roteiros de teste).
@@ -96,4 +106,4 @@ async function minimizarCamposExMembro(pool, membroId, opcoes) {
   await excluirDocumentos(documentos);
 }
 
-module.exports = { diasMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };
+module.exports = { diasMinimizacaoExMembro, prazoMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO };

@@ -23,7 +23,7 @@ const auth = require("../shared/auth");
 const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
-const { diasMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos } = require("../shared/minimizacaoLgpd");
+const { prazoMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos } = require("../shared/minimizacaoLgpd");
 const { emTransacao } = require("../shared/transacaoCurta");
 const licencaCandidatura = require("../shared/licencaCandidatura");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
@@ -48,13 +48,13 @@ const SELECT_LISTA = `
   LEFT JOIN ExtensoesTenda ex ON ex.ExtensaoId = m.ExtensaoId
   LEFT JOIN CargosMinisteriais cm ON cm.Sigla = m.CargoMinisterial`;
 
-function dataISO(data) {
-  if (!data) return null;
-  const d = new Date(data);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+// "AAAA-MM-DD" + n dias, sem passar pelo fuso do servidor (as Functions rodam em UTC; o dia de partida já é o de Brasília).
+function somarDias(diaISO, n) {
+  const d = new Date(`${diaISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
+const MSG_CANCELAR_NAO = "Carta não encontrada, já concluída ou já cancelada.";
 module.exports = async function (context, req) {
   const usuario = auth.exigirPermissao(req, context, "pessoas");
   if (!usuario) return;
@@ -94,22 +94,25 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Carta com status "${carta.Status}" não pode ser emitida.` } };
       return;
     }
-    const hoje = new Date();
-    const validade = carta.Tipo === "RECOMENDACAO"
-      ? dataISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 30))
-      : null;
+    const hoje = hojeBrasilia();   // a emissão e a validade pelo dia de Brasília (das 21h à meia-noite o servidor, em UTC, já está no dia seguinte)
+    const validade = carta.Tipo === "RECOMENDACAO" ? somarDias(hoje, 30) : null;
     // Só emite quem ainda a encontra CONFIRMADA (ou SOLICITADA, fora a Mudança): duas emissões ao mesmo tempo não se atropelam, e a regra da Mudança vale também aqui.
-    const upd = await pool.request()
-      .input("id", sql.Int, cartaId)
-      .input("hoje", sql.Date, dataISO(hoje))
-      .input("validade", sql.Date, validade)
-      .input("emitidoPor", sql.Int, usuario.membroId)
-      .query(`UPDATE CartasTransito SET Status = 'EMITIDA', DataEmissao = @hoje, DataValidade = @validade, EmitidoPor = @emitidoPor WHERE CartaId = @id AND (Status = 'CONFIRMADA' OR (Status = 'SOLICITADA' AND Tipo <> 'MUDANCA'))`);
-    if (upd.rowsAffected[0] === 0) {
+    // O ato e a trilha numa transação só: a carta nunca fica emitida sem o registro de quem emitiu.
+    const emitiu = await emTransacao(pool, async ({ rq, transacao, desistir }) => {
+      const upd = await rq()
+        .input("id", sql.Int, cartaId)
+        .input("hoje", sql.Date, hoje)
+        .input("validade", sql.Date, validade)
+        .input("emitidoPor", sql.Int, usuario.membroId)
+        .query(`UPDATE CartasTransito SET Status = 'EMITIDA', DataEmissao = @hoje, DataValidade = @validade, EmitidoPor = @emitidoPor WHERE CartaId = @id AND (Status = 'CONFIRMADA' OR (Status = 'SOLICITADA' AND Tipo <> 'MUDANCA'))`);
+      if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return false; }
+      await registrarAuditoriaNaTransacao(transacao, { tabela: "CartasTransito", registroId: Number(cartaId), acao: "Emitiu carta", usuarioId: usuario.membroId, dadosDepois: { status: "EMITIDA", validade } });
+      return true;
+    });
+    if (!emitiu) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Carta não pode ser emitida (o status mudou)." } };
       return;
     }
-    await registrarAuditoria({ tabela: "CartasTransito", registroId: Number(cartaId), acao: "Emitiu carta", usuarioId: usuario.membroId, dadosDepois: { status: "EMITIDA", validade } });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Carta emitida." } };
     return;
   }
@@ -123,16 +126,21 @@ module.exports = async function (context, req) {
     const cartaId = auth.idDeRota(cartaIdBruto);
     const carta = cartaId ? (await pool.request().input("id", sql.Int, cartaId).query(`SELECT MembroId FROM CartasTransito WHERE CartaId = @id`)).recordset[0] : null;
     if (!carta || !(await pessoaAlcancavel(pool, usuario, carta.MembroId))) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Carta não encontrada ou já concluída." } };
+      context.res = { status: 200, body: { sucesso: false, mensagem: MSG_CANCELAR_NAO } };
       return;
     }
-    const upd = await pool.request().input("id", sql.Int, cartaId)
-      .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id AND Status <> 'CONCLUIDA'`);
-    if (upd.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Carta não encontrada ou já concluída." } };
+    // A carta já cancelada não é cancelada de novo (nem ganha outra linha na trilha); o ato e a trilha numa transação só.
+    const cancelou = await emTransacao(pool, async ({ rq, transacao, desistir }) => {
+      const upd = await rq().input("id", sql.Int, cartaId)
+        .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id AND Status NOT IN ('CONCLUIDA','CANCELADA')`);
+      if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return false; }
+      await registrarAuditoriaNaTransacao(transacao, { tabela: "CartasTransito", registroId: Number(cartaId), acao: "Cancelou carta", usuarioId: usuario.membroId });
+      return true;
+    });
+    if (!cancelou) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: MSG_CANCELAR_NAO } };
       return;
     }
-    await registrarAuditoria({ tabela: "CartasTransito", registroId: Number(cartaId), acao: "Cancelou carta", usuarioId: usuario.membroId });
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Carta cancelada." } };
     return;
   }
@@ -156,22 +164,29 @@ module.exports = async function (context, req) {
 
     // vB.8 — o prazo agora vem de PoliticasRetencao (antes era um número
     // fixo no código, sem nenhuma relação com o catálogo de retenção).
-    const diasMinimizacao = await diasMinimizacaoExMembro(pool);
+    const prazo = await prazoMinimizacaoExMembro(pool);   // o da política de retenção ou, sem ela ativa e com prazo, o padrão de 30 dias (dito na resposta)
+    const diasMinimizacao = prazo.dias;
     let minimizadas = 0;
     let canceladas = 0;
     let semConfirmacao = 0;
+    let arquivosNaoApagados = 0;
 
     for (const c of candidatas) {
       if (!Number(c.ConfirmadaPeloMembro)) { semConfirmacao++; continue; }   // sem a confirmação do próprio membro não há desligamento a processar
       const dias = estatuto.diasDesde(c.dataReferencia);
       if (c.dataAdmissao && c.dataReferencia && c.dataAdmissao > c.dataReferencia) {
-        await pool.request().input("id", sql.Int, c.CartaId)
-          .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id`);
-        await registrarAuditoria({
-          tabela: "CartasTransito", registroId: Number(c.CartaId), acao: "Cancelou carta por retorno do membro (processamento)", usuarioId: usuario.membroId,
-          dadosDepois: { status: "CANCELADA", membroId: c.MembroId }
+        // O cancelamento e a trilha numa transação; só cancela a carta ainda pendente (dois processamentos ao mesmo tempo: só um cancela e só um registra).
+        const cancelou = await emTransacao(pool, async ({ rq, transacao, desistir }) => {
+          const upd = await rq().input("id", sql.Int, c.CartaId)
+            .query(`UPDATE CartasTransito SET Status = 'CANCELADA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA')`);
+          if (!((upd.rowsAffected && upd.rowsAffected[0]) || 0)) { await desistir(); return false; }
+          await registrarAuditoriaNaTransacao(transacao, {
+            tabela: "CartasTransito", registroId: Number(c.CartaId), acao: "Cancelou carta por retorno do membro (processamento)", usuarioId: usuario.membroId,
+            dadosDepois: { status: "CANCELADA", membroId: c.MembroId }
+          });
+          return true;
         });
-        canceladas++;
+        if (cancelou) canceladas++;
       } else if (dias !== null && dias >= diasMinimizacao) {
         // A carta concluída, a minimização (com a vacância) e a trilha numa transação só: ou tudo vale, ou nada muda e a carta volta no próximo processamento.
         // O estado da carta vai no WHERE (dois processamentos ao mesmo tempo: só um minimiza); a trava da escada põe em fila com a cerimônia da mesma pessoa.
@@ -182,18 +197,27 @@ module.exports = async function (context, req) {
           if (!((concluiu.rowsAffected && concluiu.rowsAffected[0]) || 0)) { await desistir(); return null; }
           // O membro sai mesmo sendo o último que administra os acessos (a saída é dele); a trilha registra, antes de a vacância encerrar o cargo.
           const ultimoAdministrador = travaPermissoes.ficariaSemAdministrador(await travaPermissoes.situacaoDoCargo(executor, sql, c.MembroId, hojeBrasilia()));
-          const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: c.MotivoSaida });
+          // A causa da saída é a da lista (CARTA_MUDANCA), a que a ficha e a vacância entendem; o motivo que o membro escreveu continua na carta.
+          const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: "CARTA_MUDANCA" });
           // a licença por candidatura ainda aberta fecha junto (decisão de 25/11/2026)
           await licencaCandidatura.encerrarLicencaAberta(executor, sql, c.MembroId, "Encerrada pela carta de mudança.", hojeBrasilia());
           // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
           await registrarAuditoriaNaTransacao(transacao, {
             tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,
-            dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias, ...(ultimoAdministrador ? { ultimoAdministrador: true } : {}) }
+            dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias, prazoDias: diasMinimizacao, ...(prazo.padrao ? { prazoPadrao: true } : {}), ...(ultimoAdministrador ? { ultimoAdministrador: true } : {}) }
           });
           return urls;
         });
         if (documentos === null) continue;   // outra alteração em andamento, ou a carta já mudou: fica para o próximo processamento
-        await excluirDocumentos(documentos);   // os arquivos, só depois do commit
+        const naoApagados = await excluirDocumentos(documentos);   // os arquivos, só depois do commit
+        if (naoApagados.length) {
+          // O banco já não tem o endereço: a trilha guarda quais arquivos ficaram para apagar à mão (o nome do arquivo é aleatório, sem dado de pessoa).
+          arquivosNaoApagados += naoApagados.length;
+          await registrarAuditoria({
+            tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Arquivos da minimização não apagados do armazenamento", usuarioId: usuario.membroId,
+            dadosDepois: { cartaId: c.CartaId, arquivos: naoApagados.map((u) => String(u).split("/").pop()) }
+          });
+        }
         minimizadas++;
       }
     }
@@ -203,7 +227,9 @@ module.exports = async function (context, req) {
       headers: { "Content-Type": "application/json" },
       body: {
         sucesso: true,
-        mensagem: `✅ Processamento concluído: ${minimizadas} saída(s) minimizada(s), ${canceladas} carta(s) cancelada(s) por retorno.`
+        mensagem: `✅ Processamento concluído: ${minimizadas} saída(s) minimizada(s), ${canceladas} carta(s) cancelada(s) por retorno`
+          + (prazo.padrao ? ` (prazo padrão de ${diasMinimizacao} dias: a política de retenção dos ex-membros está inativa ou sem prazo).` : ` (prazo de ${diasMinimizacao} dias, da política de retenção).`)
+          + (arquivosNaoApagados ? ` ${arquivosNaoApagados} arquivo(s) de documentos não puderam ser apagados do armazenamento agora: a trilha guarda quais.` : "")
           + (semConfirmacao ? ` ${semConfirmacao} carta(s) de mudança sem a confirmação do próprio membro ficam fora do processamento: peça a ele que confirme no aplicativo, ou cancele a carta.` : "")
       }
     };

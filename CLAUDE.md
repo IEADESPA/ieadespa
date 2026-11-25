@@ -31,15 +31,19 @@ adicionar `.env`, `*.db`, `node_modules` nem `.rar` lá. A cópia pesada aninhad
 
 ## 4. Uma pessoa por vez: a linha "Em uso por" do `HANDOFF.md`
 
-O `HANDOFF.md` (estado do trabalho) e a memória do projeto (`.claude/continuidade/memoria/`) vão para o Git, na `main`,
-para o colega continuar do mesmo ponto. São públicos: nada de senha, chave, token, CPF, endereço nem dado pessoal real.
+Desde 25/11/2026 o estado do trabalho mora na **bancada privada**, em `C:\MCP\bancada\projetos\ieadespa\`: o
+`HANDOFF.md` (com a linha "Em uso por"), a memória do projeto (`memoria.jsonl`, o servidor `memoria-projeto`) e a
+memória do Claude (`memoria-claude/`). O `HANDOFF.md` da raiz é só o aviso curto que aponta para lá; nunca volte a pôr
+estado, memória nem relatório neste repositório público.
 
-- **Antes de começar:** `git pull` e leia a linha "Em uso por" no alto do `HANDOFF.md`. Em uso por outra pessoa? Não
-  comece. Livre? Ponha o seu nome e a data/hora, commit e push.
-- **Ao parar:** a passagem completa (memória e `HANDOFF.md`), a linha volta a "Livre", commit e push.
+- **Antes de começar:** o aviso de início puxa a bancada e mostra a linha "Em uso por". Em uso por outra pessoa? Não
+  comece. Livre? Ponha o seu nome e a data/hora no `HANDOFF.md` da bancada e registre.
+- **Ao parar:** a passagem completa (memória e `HANDOFF.md` da bancada), a linha volta a "Livre" e registre.
+- **Registrar** é commit e push só da pasta do projeto, na bancada (os comandos estão nas regras globais:
+  `git -C C:/MCP/bancada add -- projetos/ieadespa`, commit, `pull --rebase --autostash`, push).
 - **A bancada** (instalador, aviso de início, servidor de memória, habilidades, regras globais e a lista `bancada.json`)
   mora no repositório privado `IEADESPA/bancada`, baixado em `C:\MCP\bancada`; aqui fica só a **porta**
-  (`.claude/continuidade/`: `INSTALAR.cmd`, `porta.sh`, `LEIA-ME.md`) e a memória. Melhoria da bancada, só lá, com push.
+  (`.claude/continuidade/`: `INSTALAR.cmd`, `porta.sh`, `LEIA-ME.md`). Melhoria da bancada, só lá, com push.
 - **Computador novo** (a porta avisa no começo da conversa): ofereça rodar `.claude\continuidade\INSTALAR.cmd` (dois
   cliques), que baixa a bancada e chama o instalador. Só com a licença da pessoa: primeiro `-SoTestar`, mostre o que
   mudaria e, com o sim, `-Sim`.

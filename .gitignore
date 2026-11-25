@@ -45,3 +45,7 @@ api/data/mockdb.json
 # comuns, sem permissões nem segredo. As permissões de cada pessoa (acumuladas a cada sessão, às vezes com trechos de
 # comando/credencial) e o autoMemoryDirectory dela ficam no settings.local.json, que nunca vai para o Git.
 .claude/settings.local.json
+
+# O estado do trabalho (o HANDOFF completo e as memorias) fica na bancada privada (C:\MCP\bancada\projetos\ieadespa):
+.claude/continuidade/memoria/
+.claude/continuidade/memoria-claude/

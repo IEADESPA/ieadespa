@@ -2,7 +2,8 @@
 // cenario-175 (`BASE=cenario-175 bash rodar.sh roteiro e2e-152-acesso.js`). Cobre:
 //   1. a matrícula da ficha só como número inteiro (o banco nunca recebe outra forma);
 //   2. salvar a ficha de quem já saiu mantém a data de saída; a data da saída pelo dia de Brasília;
-//   3. tirar do rol ativo quem tem cargo de liderança: só o nível geral, com a confirmação recente, e nunca a última pessoa que administra os acessos;
+//   3. tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, com a confirmação recente, e nunca a última pessoa que
+//      administra os acessos;
 //   4. a delegação não passa adiante a permissão que a recertificação vencida tirou do titular;
 //   4b. os avisos da congregação vão só para quem entra com a permissão (ATIVO, recertificação em dia, cargo vigente pelo dia de Brasília);
 //   5. a medida cautelar: só o cargo vigente recebe o fim, o fim anterior vai para a trilha, e uma falha no meio não deixa nada pela metade;
@@ -23,7 +24,8 @@ const ID = {
   titular: BASE_ID + 30, delegado: BASE_ID + 31,
   exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41,
   falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
-  avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63
+  avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63,
+  liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -64,6 +66,12 @@ async function principal() {
   LID.secLocal = await lideranca(ID.secLocal, pSec, "CONGREGACAO", sede);
   for (const k of ["lider", "liderInativar", "liderDesligar", "titular", "suspenso"]) LID[k] = await lideranca(ID[k], pTes, "CONGREGACAO", sede);
   for (const k of ["falhaDesligar", "falhaFicha"]) LID[k] = await lideranca(ID[k], pSec, "CONGREGACAO", sede);
+  // o nível do cargo (regra de 25/11/2026): um cargo local, um de área e um geral (este sem a permissão "permissoes", para não mexer na conta de quem administra)
+  const pArea = await papel("Pastor de Área E2E152", "AREA", "pessoas");
+  const pGeralFin = await papel("Tesoureiro Geral E2E152", "GLOBAL", "financeiro");
+  LID.liderLocal = await lideranca(ID.liderLocal, pTes, "CONGREGACAO", sede);
+  LID.liderArea = await lideranca(ID.liderArea, pArea, "AREA", area);
+  LID.liderGeral = await lideranca(ID.liderGeral, pGeralFin, "GLOBAL", null);
   LID.delegado = await lideranca(ID.delegado, pSec, "CONGREGACAO", sede);
   LID.exTesoureiro = await lideranca(ID.exTesoureiro, pTes, "CONGREGACAO", sede, "2024-12-31");
   LID.adminA = await lideranca(ID.adminA, pGeral, "GLOBAL", null);
@@ -74,6 +82,8 @@ async function principal() {
   }
   const local = () => L.LIDER(ID.secLocal, ["pessoas"], [NOME_SEDE]);
   const geral = () => L.GERAL(ID.geral, ["pessoas"]);
+  const daArea = () => L.LIDER(ID.secArea, ["pessoas"], [NOME_SEDE], "AREA");
+  const localSemFator = () => L.sessao(ID.secLocal, { via: "SENHA", fator: { via: "NENHUM", em: Date.now() }, nivel: "CONGREGACAO", escopoCongregacoes: [NOME_SEDE], permissoes: ["pessoas"] });
   const pessoas = (metodo, opcoes) => chamarRota("GestaoPessoas/index.js", { metodo, ...opcoes });
   const statusDe = (id) => escalar("SELECT Status FROM MembroReferencia WHERE MembroId = @id", { id });
   const fimDoCargo = (id) => escalar("SELECT ISNULL(CONVERT(varchar(10), AtivoAte, 120), 'vigente') FROM Lideranca WHERE MembroId = @id", { id });
@@ -115,24 +125,41 @@ async function principal() {
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 3. tirar do rol ativo quem tem cargo de liderança ==");
-  const rLocal = await pessoas("DELETE", { token: local(), binding: { membroId: String(ID.lider) } });
-  ok(rLocal.status === 403 && (await statusDe(ID.lider)) === "ATIVO" && (await fimDoCargo(ID.lider)) === "vigente", "a congregação não desliga quem tem cargo: 403, nada muda", `${rLocal.status} ${JSON.stringify(rLocal.body).slice(0, 120)}`);
-  for (const status of ["INATIVO", "AFASTADO", "FALECIDO"]) {
-    const r = await pessoas("POST", { token: local(), corpo: ficha(ID.liderInativar, { status }) });
-    ok(r.status === 403 && (await statusDe(ID.liderInativar)) === "ATIVO", `a congregação não muda para ${status} quem tem cargo: 403`, `${r.status} ${JSON.stringify(r.body).slice(0, 100)}`);
+  // o cargo de área e o geral: a secretaria local não muda a situação no rol
+  for (const alvo of ["liderArea", "liderGeral"]) {
+    const r = await pessoas("DELETE", { token: local(), binding: { membroId: String(ID[alvo]) } });
+    ok(r.status === 403 && (await statusDe(ID[alvo])) === "ATIVO" && (await fimDoCargo(ID[alvo])) === "vigente", `a secretaria local não desliga quem tem cargo acima dela (${alvo}): 403`, `${r.status} ${JSON.stringify(r.body).slice(0, 120)}`);
   }
+  for (const status of ["INATIVO", "AFASTADO", "FALECIDO"]) {
+    const r = await pessoas("POST", { token: local(), corpo: ficha(ID.liderArea, { status }) });
+    ok(r.status === 403 && (await statusDe(ID.liderArea)) === "ATIVO", `a secretaria local não muda para ${status} quem tem cargo de área: 403`, `${r.status} ${JSON.stringify(r.body).slice(0, 100)}`);
+  }
+  const areaNoGeral = await pessoas("DELETE", { token: daArea(), binding: { membroId: String(ID.liderGeral) } });
+  ok(areaNoGeral.status === 403 && (await statusDe(ID.liderGeral)) === "ATIVO", "a secretaria da área não desliga quem tem cargo geral: 403");
+  const areaInativa = await pessoas("POST", { token: daArea(), corpo: ficha(ID.liderArea, { status: "AFASTADO" }) });
+  ok(areaInativa.body && areaInativa.body.sucesso === true && (await statusDe(ID.liderArea)) === "AFASTADO", "a secretaria da área afasta quem tem cargo de área", JSON.stringify(areaInativa.body).slice(0, 120));
+  // o cargo local: a secretaria local, com a confirmação recente
+  const localSem = await pessoas("DELETE", { token: localSemFator(), binding: { membroId: String(ID.liderLocal) } });
+  ok(localSem.status === 428 && (await statusDe(ID.liderLocal)) === "ATIVO", "a secretaria local sem a confirmação recente: 428, nada muda");
+  const localDesliga = await pessoas("DELETE", { token: local(), binding: { membroId: String(ID.liderLocal) } });
+  ok(localDesliga.body && localDesliga.body.sucesso === true && (await statusDe(ID.liderLocal)) === "DESLIGADO" && (await fimDoCargo(ID.liderLocal)) !== "vigente",
+    "a secretaria local desliga quem tem cargo local, e o cargo acaba", JSON.stringify(localDesliga.body).slice(0, 120));
+  const localInativa = await pessoas("POST", { token: local(), corpo: ficha(ID.liderInativar, { status: "INATIVO" }) });
+  ok(localInativa.body && localInativa.body.sucesso === true && (await statusDe(ID.liderInativar)) === "INATIVO", "a secretaria local muda para INATIVO quem tem cargo local", JSON.stringify(localInativa.body).slice(0, 120));
+  const loginInativo = await chamarRota("LoginSecretaria/index.js", { metodo: "POST", corpo: { matricula: ID.liderInativar, senha: SENHA }, headers: cab() });
+  ok(!(loginInativo.body && loginInativo.body.token), "e quem ficou INATIVO perde o acesso do cargo na hora (o login recusa)");
   const semFator = await pessoas("DELETE", { token: geralSemFator(ID.geral, ["pessoas"]), binding: { membroId: String(ID.lider) } });
   ok(semFator.status === 428 && semFator.body && semFator.body.precisaFator === true && (await statusDe(ID.lider)) === "ATIVO", "o nível geral sem a confirmação recente: 428, nada muda");
-  const fichaSemFator = await pessoas("POST", { token: geralSemFator(ID.geral, ["pessoas"]), corpo: ficha(ID.liderInativar, { status: "INATIVO" }) });
-  ok(fichaSemFator.status === 428 && (await statusDe(ID.liderInativar)) === "ATIVO", "a ficha com INATIVO pelo geral sem a confirmação recente: 428");
+  const fichaSemFator = await pessoas("POST", { token: geralSemFator(ID.geral, ["pessoas"]), corpo: ficha(ID.liderGeral, { status: "INATIVO" }) });
+  ok(fichaSemFator.status === 428 && (await statusDe(ID.liderGeral)) === "ATIVO", "a ficha com INATIVO pelo geral sem a confirmação recente: 428");
   const inexistente = await pessoas("DELETE", { token: local(), binding: { membroId: "2147480001" } });
   const foraDoEscopo = await pessoas("DELETE", { token: L.LIDER(ID.secLocal, ["pessoas"], ["Outra Congregação E2E152"]), binding: { membroId: String(ID.lider) } });
   ok(inexistente.status === 403 && JSON.stringify(inexistente.body) === JSON.stringify(foraDoEscopo.body), "matrícula que não existe e de fora do escopo: a mesma recusa");
   const desligou = await pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.liderDesligar) } });
   ok(desligou.status === 200 && desligou.body && desligou.body.sucesso === true, "o nível geral com a confirmação recente desliga", `${desligou.status} ${JSON.stringify(desligou.body).slice(0, 120)}`);
   ok((await statusDe(ID.liderDesligar)) === "DESLIGADO" && (await fimDoCargo(ID.liderDesligar)) !== "vigente", "e o cargo dele foi encerrado");
-  const inativou = await pessoas("POST", { token: geral(), corpo: ficha(ID.liderInativar, { status: "INATIVO" }) });
-  ok(inativou.status === 200 && (await statusDe(ID.liderInativar)) === "INATIVO", "o nível geral com a confirmação recente muda para INATIVO", `${inativou.status} ${JSON.stringify(inativou.body).slice(0, 120)}`);
+  const inativou = await pessoas("POST", { token: geral(), corpo: ficha(ID.liderGeral, { status: "INATIVO" }) });
+  ok(inativou.status === 200 && (await statusDe(ID.liderGeral)) === "INATIVO", "o nível geral com a confirmação recente muda para INATIVO quem tem cargo geral", `${inativou.status} ${JSON.stringify(inativou.body).slice(0, 120)}`);
 
   // Quem administra os acessos: conta só quem entra (ATIVO, cargo vigente, com senha, nível geral, recertificação em dia).
   const outros = async () => (await travaPermissoes.situacaoDoCargo(await obterPool(), L.sql, ID.adminA, hojeBrasilia())).outros;

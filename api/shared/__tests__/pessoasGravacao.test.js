@@ -3,6 +3,8 @@
 // em tools/e2e-localdb/e2e-152-acesso.js.
 let mockRegras = [];
 let mockConsultas = [];
+// O cargo de liderança vigente da pessoa (o nível dele decide qual secretaria muda a situação dela no rol); o padrão é um cargo do nível geral.
+let mockCargo = { tipo: "GLOBAL", id: null };
 jest.mock("../db", () => {
   const executar = async (texto, entradas) => {
     mockConsultas.push({ texto, entradas });
@@ -50,6 +52,9 @@ function regrasDaFicha(ficha) {
     [/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Central" }] }],
     [/FROM CargosMinisteriais WHERE Sigla/, { recordset: [{ x: 1 }] }],
     [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
+    [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, () => ({ recordset: [{ EscopoTipo: mockCargo.tipo, EscopoId: mockCargo.id }] })],
+    [/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, { recordset: [{ Nome: "Central" }] }],
+    [/SELECT Nome FROM Congregacoes WHERE AreaId = @id/, { recordset: [{ Nome: "Central" }, { Nome: "Vila Nova" }] }],
     [/EmProcessoDeCargo/, () => ({ recordset: ficha ? [ficha] : [] })],
     [/UPDATE MembroReferencia SET Nome/, { recordset: [], rowsAffected: [1] }],
     [/INSERT INTO MembroReferencia/, { recordset: [], rowsAffected: [1] }],
@@ -59,6 +64,7 @@ function regrasDaFicha(ficha) {
 
 beforeEach(() => {
   mockConsultas = [];
+  mockCargo = { tipo: "GLOBAL", id: null };
   regrasDaFicha(fichaNoBanco());
 });
 
@@ -222,16 +228,87 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
       sit,
       [/AS CongregacaoNome, e\.Nome AS ExtensaoNome FROM MembroReferencia m/, { recordset: existe ? [{ CongregacaoNome: "Central", ExtensaoNome: null }] : [] }],
       [/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [{ MembroId: 5 }], rowsAffected: [1] }],
-      [/sp_getapplock/, { recordset: [{ resultado: 0 }] }]
+      [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
+      [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, () => ({ recordset: [{ EscopoTipo: mockCargo.tipo, EscopoId: mockCargo.id }] })],
+      [/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, { recordset: [{ Nome: "Central" }] }],
+      [/SELECT Nome FROM Congregacoes WHERE AreaId = @id/, { recordset: [{ Nome: "Central" }, { Nome: "Vila Nova" }] }]
     ];
   }
   const consultouSituacao = () => mockConsultas.some((c) => /AlvoAdministra/.test(c.texto));
+
+  // Regra do responsável (25/11/2026): a secretaria do nível do cargo, ou de cima, muda a situação no rol (cargo local: local, área e Geral; de área: área e
+  // Geral; geral: só a Geral), sempre com a confirmação reforçada.
+  describe("o nível do cargo decide qual secretaria muda a situação no rol", () => {
+    const area = (extra = {}) => sessao(78, { nivel: "AREA", escopoCongregacoes: ["Central", "Vila Nova"], ...extra });
+    const localSemFator = () => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], fator: { via: "NENHUM", em: Date.now() } });
+
+    test("cargo local: a secretaria local desliga, com a confirmação recente", async () => {
+      mockCargo = { tipo: "CONGREGACAO", id: 1 };
+      regrasDoDesligar(situacao(1));
+      const r = await chamar("DELETE", { token: local(), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(true);
+      expect(gravacoes()).toHaveLength(1);
+    });
+
+    test("cargo local: a secretaria local sem a confirmação recente recebe 428", async () => {
+      mockCargo = { tipo: "CONGREGACAO", id: 1 };
+      regrasDoDesligar(situacao(1));
+      const r = await chamar("DELETE", { token: localSemFator(), membroIdRota: "5" });
+      expect(r.status).toBe(428);
+      expect(gravacoes()).toHaveLength(0);
+    });
+
+    test("cargo local: a ficha com INATIVO pela secretaria local", async () => {
+      mockCargo = { tipo: "CONGREGACAO", id: 1 };
+      mockRegras.unshift(situacao(1));
+      const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "INATIVO" }) });
+      expect(r.body.sucesso).toBe(true);
+      expect(gravacoes()).toHaveLength(1);
+    });
+
+    test("cargo de área: a secretaria local é barrada (403); a da área desliga", async () => {
+      mockCargo = { tipo: "AREA", id: 3 };
+      regrasDoDesligar(situacao(1));
+      const barrada = await chamar("DELETE", { token: local(), membroIdRota: "5" });
+      expect(barrada.status).toBe(403);
+      expect(gravacoes()).toHaveLength(0);
+      const daArea = await chamar("DELETE", { token: area(), membroIdRota: "5" });
+      expect(daArea.body.sucesso).toBe(true);
+      expect(gravacoes()).toHaveLength(1);
+    });
+
+    test("cargo de área: a secretaria local com papel de nível acima, mas só com a própria congregação, também é barrada", async () => {
+      mockCargo = { tipo: "AREA", id: 3 };
+      regrasDoDesligar(situacao(1));
+      const r = await chamar("DELETE", { token: sessao(77, { nivel: "GLOBAL", escopoCongregacoes: ["Central"] }), membroIdRota: "5" });
+      expect(r.status).toBe(403);
+      expect(gravacoes()).toHaveLength(0);
+    });
+
+    test("cargo geral: a secretaria da área é barrada; só a Geral", async () => {
+      mockCargo = { tipo: "GLOBAL", id: null };
+      regrasDoDesligar(situacao(1, 0, 1));
+      const r = await chamar("DELETE", { token: area(), membroIdRota: "5" });
+      expect(r.status).toBe(403);
+      expect(gravacoes()).toHaveLength(0);
+      const geral = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(geral.body.sucesso).toBe(true);
+    });
+
+    test("a secretaria de uma Extensão não muda a situação de quem tem cargo da congregação", async () => {
+      mockCargo = { tipo: "CONGREGACAO", id: 1 };
+      regrasDoDesligar(situacao(1));
+      const r = await chamar("DELETE", { token: sessao(79, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], escopoExtensaoNome: "Extensão Norte" }), membroIdRota: "5" });
+      expect([403]).toContain(r.status);
+      expect(gravacoes()).toHaveLength(0);
+    });
+  });
 
   test("desligar: fora do nível geral, 403 e nada muda", async () => {
     regrasDoDesligar(situacao(1));
     const r = await chamar("DELETE", { token: local(), membroIdRota: "5" });
     expect(r.status).toBe(403);
-    expect(r.body.mensagem).toMatch(/Secretaria \(nível geral\)/);
+    expect(r.body.mensagem).toMatch(/nível do cargo/);
     expect(gravacoes()).toHaveLength(0);
   });
 

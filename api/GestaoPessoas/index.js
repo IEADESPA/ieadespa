@@ -31,6 +31,7 @@ const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
 const { emTransacao } = require("../shared/transacaoCurta");
 const travaPermissoes = require("../shared/travaPermissoes");
+const nivelDoCargo = require("../shared/nivelDoCargo");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
@@ -57,13 +58,14 @@ const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
 
 // Tirar do rol ativo quem tem cargo de liderança vigente tira o acesso dele (o login exige ATIVO), e o desligamento e o falecimento ainda encerram os mandatos:
-// é ato da Secretaria (nível geral), com a confirmação recente (428), e nunca da última pessoa que administra os acessos (shared/travaPermissoes.js).
+// é ato da secretaria do nível do cargo ou de cima (regra do responsável, 25/11/2026: shared/nivelDoCargo.js), com a confirmação recente (428), e nunca da
+// última pessoa que administra os acessos (shared/travaPermissoes.js).
 // Chamado depois da conferência do escopo. Devolve true se pode seguir; senão já deixou a resposta em context.res.
 async function conferirSaidaDeLideranca(pool, req, context, usuario, membroId) {
   const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());
   if (!situacao.temCargoVigente) return true;
-  if (!ehGeral(usuario)) {
-    context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem cargo de liderança: só a Secretaria (nível geral) a tira do rol ativo." } };
+  if (!(await nivelDoCargo.alcancaOsCargos(pool, sql, usuario, membroId, hojeBrasilia()))) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: nivelDoCargo.MENSAGEM_NIVEL } };
     return false;
   }
   if (!auth.exigirFatorRecente(req, context)) return false;

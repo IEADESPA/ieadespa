@@ -1,8 +1,8 @@
 // shared/arrolamento.js (FASE 10, Membros, rodada 28 aprovada em 23/11/2026) — COMPLETAR O ARROLAMENTO: as REGRAS PURAS (nenhuma consulta ao banco aqui;
 // quem lê e grava é shared/arrolamentoDb.js).
 // Quem veio do sistema pago entra com a situação "Arrolamento a completar" (ARROLAMENTO), sem voto, e a pendência ARROLAMENTO (migração 185). A regra dele
-// (plano da fase 10, "As regras da rodada 28"): a secretaria preenche a situação, a data e a forma de entrada (batismo, carta...); o cargo só se tiver; ao
-// completar, a pessoa ganha o voto. E a da aprovação (23/11): "A área e a Geral também podem completar e editar os dados do membro ... se a congregação não
+// (plano da fase 10, "As regras da rodada 28"): a secretaria preenche a situação, a data e a forma de entrada (batismo, carta...); ao completar, a pessoa sai
+// do grupo e, em comunhão, vota com 18 anos e 90 dias de entrada (o congregado continua fora de tudo, decisão dele de 25/11). E a da aprovação (23/11): "A área e a Geral também podem completar e editar os dados do membro ... se a congregação não
 // faz o que tem de fazer, a área faz, e o serviço não para." Cada uma só no seu escopo (shared/escopoRotas.js). Toda ficha do arrolamento tem congregação
 // (G3, decisão dele de 24/11/2026: sem congregação não há importação); a congregação não muda por aqui (é a transferência). A FUNÇÃO ECLESIÁSTICA (auxiliar, diácono, presbítero, evangelista, missionário, pastor: o
 // MembroReferencia.CargoMinisterial) não se grava aqui, em nenhum nível — regra dele de 24/11/2026: só a Câmara de liderança e a academia mudam a função; a

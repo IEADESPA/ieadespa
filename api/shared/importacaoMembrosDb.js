@@ -502,7 +502,8 @@ const DETALHE_NUMERO = {
   REPETIDA_NO_ARQUIVO: (t) => `A matrícula ${String(t || "").slice(0, 20)} veio repetida no arquivo do sistema pago: confira o número.`,
   DE_OUTRA_FICHA: (t) => `A matrícula ${String(t || "").slice(0, 20)} do sistema pago já era de outra ficha: confira o número.`
 };
-const DETALHE_ARROLAMENTO = "Importada do sistema pago: complete a situação, o cargo, a data e a forma de entrada (até lá, sem voto).";
+// menor 6 do portão da volta 5: o arrolamento completa a situação, a data e a forma de entrada; o cargo não passa por ele (o detalhe não promete o cargo)
+const DETALHE_ARROLAMENTO = "Importada do sistema pago: complete a situação, a data e a forma de entrada (até lá, sem voto).";
 const DETALHE_REPETIDA = "Importação do sistema pago: pode ser a mesma pessoa (o mesmo CPF, o mesmo nome e nascimento, ou a mesma matrícula e o mesmo nome).";
 
 async function abrirPendencia(rq, { membroId, tipo, outro = null, detalhe, por }) {
@@ -701,6 +702,9 @@ async function prazosDaGuarda(pool) {
   return { diasPrevia: await diasDaPolitica(pool, POLITICA_PREVIA.categoria, POLITICA_PREVIA.padrao),
     diasFora: await diasDaPolitica(pool, POLITICA_FORA.categoria, POLITICA_FORA.padrao) };
 }
+// G2: a importação parada venceu o prazo — do ÚLTIMO LOTE gravado; sem nenhum, da confirmação. Sem função sobre a coluna do filtro (regra 4 do Banco, menor 5
+// do portão da volta 5): o OR no lugar do COALESCE(UltimoLoteEm, ConfirmadaEm), com o mesmo resultado.
+const PARADA_VENCIDA = `(i.UltimoLoteEm < DATEADD(DAY, -@d, SYSUTCDATETIME()) OR (i.UltimoLoteEm IS NULL AND i.ConfirmadaEm < DATEADD(DAY, -@d, SYSUTCDATETIME())))`;
 async function aplicarRetencao(pool) {
   const { diasPrevia, diasFora } = await prazosDaGuarda(pool);
   // a base de antes da migração 185 (as bases antigas dos roteiros e2e): não há importação para guardar (o mesmo cuidado do afmDb e da minimizacaoLgpd); a
@@ -724,7 +728,7 @@ async function aplicarRetencao(pool) {
     const paradas = (await rq().input("d", sql.Int, diasPrevia).query(`
       SELECT i.ImportacaoId, i.Resumo
       FROM ImportacoesMembros i
-      WHERE i.Situacao = N'IMPORTANDO' AND COALESCE(i.UltimoLoteEm, i.ConfirmadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME())
+      WHERE i.Situacao = N'IMPORTANDO' AND ${PARADA_VENCIDA}
         AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'PENDENTE')
         AND EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA')`)).recordset;
     for (const pa of paradas) {
@@ -742,7 +746,7 @@ async function aplicarRetencao(pool) {
     // única com uma planilha que não entrou. As linhas saem inteiras, com os dados pessoais; a data da confirmação fica; as matrículas continuam travadas.
     const semNinguem = (await rq().input("d", sql.Int, diasPrevia).query(`
       SELECT i.ImportacaoId FROM ImportacoesMembros i
-      WHERE i.Situacao = N'IMPORTANDO' AND COALESCE(i.UltimoLoteEm, i.ConfirmadaEm) < DATEADD(DAY, -@d, SYSUTCDATETIME())
+      WHERE i.Situacao = N'IMPORTANDO' AND ${PARADA_VENCIDA}
         AND NOT EXISTS (SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l.ImportacaoId = i.ImportacaoId AND l.Estado = N'IMPORTADA')`)).recordset;
     for (const s of semNinguem) {
       const id = Number(s.ImportacaoId);

@@ -4,8 +4,8 @@
 // GET  /api/arrolamento/ficha           -> ?matricula=N | ?congregacaoId=N&depois=M — a ficha para completar, a próxima e o andamento da congregação dela
 // POST /api/arrolamento/completar       -> { matricula, situacao, formaAdmissao, dataAdmissao } — completa (409 se já foi completada); a função eclesiástica e a
 //                                          congregação no pedido são recusadas
-// Regra dele: a secretaria escolhe a situação, como e quando a pessoa entrou e o cargo, só se tiver; ao completar, a pessoa sai do grupo e, em comunhão, ganha
-// o voto. "A área e a Geral também podem completar e editar ... se a congregação não faz o que tem de fazer, a área faz, e o serviço não para."
+// Regra dele: a secretaria escolhe a situação e como e quando a pessoa entrou (o cargo não passa por aqui: a função eclesiástica só se lê, e o cargo
+// administrativo é a missão própria de 25/11); ao completar, a pessoa sai do grupo e, em comunhão, vota com 18 anos e 90 dias de entrada. "A área e a Geral também podem completar e editar ... se a congregação não faz o que tem de fazer, a área faz, e o serviço não para."
 // ESCOPO: a permissão "pessoas" e a pessoa no alcance de quem completa (shared/escopoRotas.js) — a congregação, a área (só as congregações dela) e a Geral; fora
 // do escopo (ou matrícula que não existe) a resposta é a mesma de "Matrícula não encontrada". Ninguém completa a própria ficha. Toda ficha do arrolamento tem
 // congregação (G3, decisão dele de 24/11/2026); a de antes da regra, sem congregação, não se completa por aqui (409). As regras em shared/arrolamento.js; as consultas e a gravação em shared/arrolamentoDb.js.

@@ -41,6 +41,11 @@ test("o fim do cargo conta pelo dia de Brasília, não pelo de Greenwich", async
   } finally { jest.useRealTimers(); }
 });
 
+test("o escopo vazio vale como o de todas as congregações, como no login", async () => {
+  await psc.resolverDestinatariosDaCongregacao(pool, { permissao: "psc_homologacao", congregacaoId: 7 });
+  expect(consultaDaLista().texto).toMatch(/ISNULL\(l\.EscopoTipo, ''\) IN \('', 'GLOBAL', 'DEPARTAMENTO'\)/);
+});
+
 // O resolvedor genérico (shared/notificacoes.js, usado pela AFM, canais, crise, cuidado pastoral, distritos e educação continuada): a mesma régua.
 describe("o resolvedor genérico por permissão", () => {
   const notificacoes = require("../notificacoes");

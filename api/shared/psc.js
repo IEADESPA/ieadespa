@@ -1263,7 +1263,7 @@ async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacao
                         WHERE r.MembroId = l.MembroId AND r.Permissao = @permissaoNome AND r.Status = 'EXPIRADA'
                           AND r.RecertificacaoId = (SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2 WHERE r2.MembroId = l.MembroId AND r2.Permissao = @permissaoNome))
         AND (
-          l.EscopoTipo IN ('GLOBAL', 'DEPARTAMENTO')
+          ISNULL(l.EscopoTipo, '') IN ('', 'GLOBAL', 'DEPARTAMENTO')   -- o escopo vazio vale como o de todas as congregações, como no login
           OR (l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @congregacaoId)
           OR (l.EscopoTipo = 'AREA' AND l.EscopoId = @areaId)
           OR (l.EscopoTipo = 'REGIAO' AND l.EscopoId = @regiaoId)
@@ -1275,8 +1275,8 @@ async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacao
 }
 
 // Fatos para o motor de notificações (vB.2) — ver shared/notificacaoDetectores.js.
-// Chave de deduplicação inteira: congregação * 10000 + ano (um aviso por
-// exercício e congregação, por mais que a rotina diária rode).
+// Chave de deduplicação inteira do aviso de pendência: congregação * 10000 + ano enquanto o exercício nunca foi enviado (um aviso por exercício e
+// congregação, por mais que a rotina diária rode) e, a cada volta para correção, uma chave nova com o ciclo (ver chaveDaPendencia).
 // Cada congregação é resolvida uma vez por rodada (a escada territorial custa 5 consultas) e não uma vez por exercício pendente.
 function destinatariosEmCache(pool, permissao) {
   const cache = new Map();
@@ -1285,6 +1285,12 @@ function destinatariosEmCache(pool, permissao) {
     return cache.get(congregacaoId);
   };
 }
+
+// O ciclo (quantas vezes a avaliação foi enviada) entra na casa das centenas de milhões, com teto de 20: não colide com a chave de sempre (que fica abaixo de
+// 100 milhões para congregações de número menor que 9.998) e cabe no INT do banco.
+const TETO_CICLO_NA_CHAVE = 20;
+const chaveDaPendencia = (congregacaoId, ano, ciclo) =>
+  Number(congregacaoId) * 10000 + Number(ano) + Math.min(Math.max(Number(ciclo) || 0, 0), TETO_CICLO_NA_CHAVE) * 100000000;
 
 async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {}) {
   const parametros = await lerParametros(pool);
@@ -1311,7 +1317,7 @@ async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {})
       // Ciclo = quantas vezes a avaliação foi enviada: a que já foi enviada e voltou (devolvida ou reaberta) não "deixou de ser enviada".
       const voltouParaCorrecao = Number(c.CicloAtual) > 0;
       fatos.push({
-        referenciaId: c.CongregacaoId * 10000 + ano, destinatarios,
+        referenciaId: chaveDaPendencia(c.CongregacaoId, ano, c.CicloAtual), destinatarios,
         fatoGerador: voltouParaCorrecao
           ? `A avaliação do PSC ${ano} de ${c.Nome} voltou para correção e ainda não foi reenviada (o prazo de envio era ${formatarDataBr(prazo)}). A avaliação anual é obrigatória (Regimento Art. 127).`
           : `A avaliação do PSC ${ano} de ${c.Nome} não foi enviada até ${formatarDataBr(prazo)}. A avaliação anual é obrigatória (Regimento Art. 127).`
@@ -1339,22 +1345,37 @@ async function detectarAvaliacoesParaValidar(pool) {
   return fatos;
 }
 
+// Os avisos da CLI vão a quem tem a permissão de homologar E alcança a congregação (a mesma lista que a tela do PSC mostra a essa pessoa).
 async function detectarAvaliacoesParaHomologar(pool) {
   const r = await pool.request().query(`
-    SELECT a.AvaliacaoId, a.Ano, a.Ciclo, c.Nome FROM PscAvaliacoes a JOIN Congregacoes c ON c.CongregacaoId = a.CongregacaoId WHERE a.Status = 'VALIDADA'
+    SELECT a.AvaliacaoId, a.CongregacaoId, a.Ano, a.Ciclo, c.Nome FROM PscAvaliacoes a JOIN Congregacoes c ON c.CongregacaoId = a.CongregacaoId WHERE a.Status = 'VALIDADA'
   `);
-  return r.recordset.map(a => ({ referenciaId: chaveDoCiclo(a.AvaliacaoId, a.Ciclo), fatoGerador: `A avaliação do PSC ${a.Ano} de ${a.Nome} foi validada e aguarda a homologação da CLI.` }));
+  const destinatariosDe = destinatariosEmCache(pool, "psc_homologacao");
+  const fatos = [];
+  for (const a of r.recordset) {
+    const destinatarios = await destinatariosDe(a.CongregacaoId);
+    if (destinatarios.length === 0) continue;
+    fatos.push({ referenciaId: chaveDoCiclo(a.AvaliacaoId, a.Ciclo), destinatarios, fatoGerador: `A avaliação do PSC ${a.Ano} de ${a.Nome} foi validada e aguarda a homologação da CLI.` });
+  }
+  return fatos;
 }
 
 async function detectarReclassificacoesPropostas(pool) {
   const r = await pool.request().query(`
-    SELECT r.ReclassificacaoId, r.AnoInicial, r.AnoFinal, r.ExerciciosConsecutivos, c.Nome
+    SELECT r.ReclassificacaoId, r.CongregacaoId, r.AnoInicial, r.AnoFinal, r.ExerciciosConsecutivos, c.Nome
     FROM PscReclassificacoes r JOIN Congregacoes c ON c.CongregacaoId = r.CongregacaoId WHERE r.Status = 'PROPOSTA'
   `);
-  return r.recordset.map(x => ({
-    referenciaId: x.ReclassificacaoId,
-    fatoGerador: `${x.Nome} foi reprovada no Nível 1 do PSC por ${x.ExerciciosConsecutivos} exercícios seguidos (${x.AnoInicial} a ${x.AnoFinal}). A reclassificação compulsória (Regimento Art. 129 §2º) aguarda a decisão da CLI.`
-  }));
+  const destinatariosDe = destinatariosEmCache(pool, "psc_homologacao");
+  const fatos = [];
+  for (const x of r.recordset) {
+    const destinatarios = await destinatariosDe(x.CongregacaoId);
+    if (destinatarios.length === 0) continue;
+    fatos.push({
+      referenciaId: x.ReclassificacaoId, destinatarios,
+      fatoGerador: `${x.Nome} foi reprovada no Nível 1 do PSC por ${x.ExerciciosConsecutivos} exercícios seguidos (${x.AnoInicial} a ${x.AnoFinal}). A reclassificação compulsória (Regimento Art. 129 §2º) aguarda a decisão da CLI.`
+    });
+  }
+  return fatos;
 }
 
 module.exports = {

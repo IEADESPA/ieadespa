@@ -1238,8 +1238,10 @@ async function historicoDaCongregacao(pool, congregacaoId) {
 async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacaoId }) {
   const escopo = require("./escopo");
   const { areaId, regiaoId, quadranteId, distritoId } = await escopo.ancestraisTerritoriais(pool, sql, 1, congregacaoId);
+  // Só quem entra no sistema com a permissão recebe (a régua do login): rol ATIVO, cargo vigente pelo dia de Brasília e a recertificação da permissão em dia.
   const r = await pool.request()
-    .input("permissao", sql.NVarChar(60), `%,${permissao},%`).input("congregacaoId", sql.Int, congregacaoId)
+    .input("permissao", sql.NVarChar(60), `%,${permissao},%`).input("permissaoNome", sql.NVarChar(60), permissao).input("congregacaoId", sql.Int, congregacaoId)
+    .input("hoje", sql.Date, hojeBrasilia())
     .input("areaId", sql.Int, areaId).input("regiaoId", sql.Int, regiaoId).input("quadranteId", sql.Int, quadranteId).input("distritoId", sql.Int, distritoId)
     .query(`
       SELECT DISTINCT m.MembroId AS membroId, m.Nome AS nome, m.Email AS email
@@ -1247,7 +1249,11 @@ async function resolverDestinatariosDaCongregacao(pool, { permissao, congregacao
       JOIN Papeis p ON p.PapelId = l.PapelId
       JOIN MembroReferencia m ON m.MembroId = l.MembroId
       WHERE (',' + p.Permissoes + ',') LIKE @permissao
-        AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+        AND m.Status = 'ATIVO'
+        AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
+        AND NOT EXISTS (SELECT 1 FROM RecertificacoesAcesso r
+                        WHERE r.MembroId = l.MembroId AND r.Permissao = @permissaoNome AND r.Status = 'EXPIRADA'
+                          AND r.RecertificacaoId = (SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2 WHERE r2.MembroId = l.MembroId AND r2.Permissao = @permissaoNome))
         AND (
           l.EscopoTipo IN ('GLOBAL', 'DEPARTAMENTO')
           OR (l.EscopoTipo = 'CONGREGACAO' AND l.EscopoId = @congregacaoId)

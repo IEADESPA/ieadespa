@@ -150,7 +150,8 @@ function apiFinanceiro(nivel, opcoes) {
     if (p === "/api/financeiro/blocos" && metodo === "GET") {
       if (opcoes.listaFalha) return { status: 500, corpo: { sucesso: false, mensagem: "Falha simulada." } };
       // os vazios da r30: antes do primeiro lote, ou a procura que nada acha (99.999)
-      if (opcoes.vazio || (q.get("procura") || "").replace(/\./g, "") === "99999") {
+      // a pílula "Fechado" com a procura de um bloco em uso: nada vem, mas o bloco existe
+      if (opcoes.vazio || (q.get("procura") || "").replace(/\./g, "") === "99999" || (q.get("situacao") === "fechado" && q.get("procura"))) {
         return { corpo: { sucesso: true, blocos: [], total: 0, pagina: 1, porPagina: 40,
           resumo: nivel === "local" ? { tipo: "seus", emUsoOuEsperando: 0, folhasLivres: 0 } : { tipo: "lote", lote: null }, escopo: opcoes.escopo || ESCOPO[nivel] } };
       }
@@ -942,6 +943,16 @@ async function provarVazios() {
   await calmo(s.page);
   t = await textoTela(s.page);
   ok(tem(t, "Nenhum bloco tem o número 99.999. Confira o número do bloco ou da folha.") && !tem(t, "Nenhum bloco com essa procura"), "geral: a procura sem resultado (r30)", t.slice(0, 500));
+  // com uma pílula, o bloco pode existir em outra situação: a frase da r30 ("Nenhum bloco tem o número") seria falsa
+  const b1 = pedidos(s.api, "/api/financeiro/blocos").length;
+  await clicar(s.page, "Fechado");
+  await esperarPedido(s.api, "/api/financeiro/blocos", "GET", b1, 3000);
+  const b2 = pedidos(s.api, "/api/financeiro/blocos").length;
+  await digitar(s.page, "Procurar pelo número", "1.401");
+  await esperarPedido(s.api, "/api/financeiro/blocos", "GET", b2, 3000);
+  await calmo(s.page);
+  t = await textoTela(s.page);
+  ok(!tem(t, "Nenhum bloco tem o número") && tem(t, "Nenhum bloco com essa procura."), "geral: a pílula com a procura não diz que o número não existe", t.slice(0, 500));
   await fechar(s, "procura sem resultado");
   // o livro no celular: até 3 números de página (o desenho da r30)
   s = await abrir("geral", "celular");

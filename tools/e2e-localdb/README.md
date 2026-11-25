@@ -209,7 +209,7 @@ Cada versão parte da base da anterior (`BASE=...`):
   inexistente de ponta a ponta, a devolução parcial com ela no fim e no meio, o seletor de bloco e a volta parcial, o histórico da folha com
   quem marcou e quem desfez, no escopo de cada nível, a saída da r30 (as congregações ativas com a área, a liderança da escolhida, o rastreio
   do bloco que nunca saiu e a linha do livro com a primeira folha do bloco), a devolução da r30 (quem trouxe, a primeira em branco que já
-  tem destino e as usadas da entrega na linha do livro) e a 203 rodada de novo sobre dados).
+  tem destino, as usadas da entrega na linha do livro e as inexistentes da entrega no rastreio) e a 203 rodada de novo sobre dados).
 
 `bash tudo.sh` roda a bateria inteira, cada grupo sobre a sua base.
 

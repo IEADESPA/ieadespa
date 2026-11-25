@@ -62,13 +62,13 @@
   }
   $effect(() => { void ler(filtro, procuraValendo, pagina); });
 
-  // as listas vazias da r30 ("r30-blocos-vazios"), no lugar da lista e das páginas: a procura sem resultado e a Geral antes do primeiro lote.
-  // A pílula sem bloco e a área ou a congregação sem bloco continuam com a frase de antes (sem texto aprovado ainda)
+  // as listas vazias da r30 ("r30-blocos-vazios"), no lugar da lista e das páginas: a procura sem resultado e a Geral antes do primeiro lote,
+  // só em "Todos" (com uma pílula, o bloco pode existir em outra situação). A pílula sem bloco e a área ou a congregação sem bloco continuam com
+  // a frase de antes (sem texto aprovado ainda)
   const vazio = $derived.by(() => {
-    if (!dados || dados.total) return null;
+    if (!dados || dados.total || lidoCom.filtro !== "todos") return null;
     if (lidoCom.procura) return vazioDaProcura(lidoCom.procura);
-    if (lidoCom.filtro === "todos" && nivel === "geral") return vazioDosBlocos(celular);
-    return null;
+    return nivel === "geral" ? vazioDosBlocos(celular) : null;
   });
 
   function escolherFiltro(f: FiltroBlocos) { filtro = f; pagina = 1; }

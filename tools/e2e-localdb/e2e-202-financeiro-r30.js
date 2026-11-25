@@ -3,7 +3,8 @@
 //   E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true' BASE=cenario-200 bash rodar.sh roteiro e2e-202-financeiro-r30.js
 // Cobre:
 // - a devolução (r30-blocos-devolver): a primeira em branco que já tem destino ("A folha 70.530 já está lançada: a primeira em branco vem depois
-//   dela."), quem trouxe ("Escolha quem trouxe o bloco.") e a linha do livro da entrada parcial com as usadas da entrega;
+//   dela."), quem trouxe ("Escolha quem trouxe o bloco."), a linha do livro da entrada parcial com as usadas da entrega e as inexistentes da
+//   entrega no rastreio (a do meio e a do fim); o nome da congregação e da área nas folhas e no livro (os vazios da r30);
 // - a saída (r30-blocos-saida): as congregações ativas com a área (a inativa nem aparece), a liderança da congregação escolhida (a inativa, a que
 //   não existe e o lixo: o mesmo 404; só a Tesouraria Geral), o rastreio do bloco que nunca saiu (a faixa desde a primeira folha e a chegada) e a
 //   linha do livro com a primeira folha do bloco (a saída parcial diz as folhas e as posições);

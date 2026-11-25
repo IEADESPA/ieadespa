@@ -46,7 +46,13 @@ describe("A2: a data de entrada pelo batismo (a regra pura)", () => {
     ["veio de outra igreja (carta de mudança, com a data da chegada): fica", { situacao: "EM_COMUNHAO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: "2015-02-01" }, "CARTA_MUDANCA", "2015-02-01"],
     ["veio de outra igreja por aclamação: fica", { situacao: "CONGREGADO", formaAdmissao: "ACLAMACAO", dataAdmissao: "2018-07-07" }, "ACLAMACAO", "2018-07-07"],
     ["voltou por reconciliação: fica", { situacao: "EM_COMUNHAO", formaAdmissao: "RECONCILIACAO", dataAdmissao: "2020-01-12" }, "RECONCILIACAO", "2020-01-12"],
-    ["carta de mudança sem a data da chegada: a forma fica e a data continua vazia (a secretaria registra a chegada)", { situacao: "ARROLAMENTO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: null }, "CARTA_MUDANCA", null]
+    ["carta de mudança sem a data da chegada: a forma fica e a data continua vazia (a secretaria registra a chegada)", { situacao: "ARROLAMENTO", formaAdmissao: "CARTA_MUDANCA", dataAdmissao: null }, "CARTA_MUDANCA", null],
+    // menor 4 do portão da volta 5: quem JÁ é membro (em comunhão ou sem comunhão) com a data de entrada não perde a data (nem os 90 dias)
+    ["já é membro em comunhão, com a forma em branco e a data de entrada: a forma e a data ficam", { situacao: "EM_COMUNHAO", formaAdmissao: null, dataAdmissao: "2015-01-01" }, null, "2015-01-01"],
+    ["já é membro com a forma batismo e a data de entrada (batizado de novo): ficam", { situacao: "EM_COMUNHAO", formaAdmissao: "BATISMO", dataAdmissao: "2012-04-04" }, "BATISMO", "2012-04-04"],
+    ["membro sem comunhão com a data de entrada: fica", { situacao: "SEM_COMUNHAO", formaAdmissao: null, dataAdmissao: "2011-06-30" }, null, "2011-06-30"],
+    // não decidido (pergunta aberta da volta 6): o membro sem data nenhuma continua como antes (o batismo e a data dele)
+    ["já é membro sem data de entrada nenhuma: como antes (a forma batismo e a data do batismo)", { situacao: "EM_COMUNHAO", formaAdmissao: null, dataAdmissao: null }, "BATISMO", "2026-10-03"]
   ])("%s", (_nome, antes, forma, data) => {
     expect(regra(antes, "2026-10-03")).toEqual({ formaAdmissao: forma, dataAdmissao: data });
   });
@@ -126,6 +132,27 @@ describe("A2 e o menor 6: a efetivação da turma", () => {
     const notas = mockConsultas.filter((c) => /UPDATE FichasPendencias/.test(c.sql)).map((c) => [c.inputs.id, c.inputs.nota]);
     expect(notas[0]).toEqual([10, "Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo."]);
     expect(notas[2]).toEqual([12, "Completada pelo batismo: em comunhão; a forma de entrada (carta de mudança) e a data de entrada de antes ficam."]);
+  });
+  test("menor 4: quem já era membro e é batizado fica com a data de entrada; a trilha não diz que o batismo o admitiu", async () => {
+    FICHAS[13] = { SituacaoMembro: "EM_COMUNHAO", FormaAdmissao: null, DataAdmissao: "2015-01-01" };
+    const antes = mockResponder;
+    mockResponder = (texto, inputs) => (/FROM CandidatosBatismo/.test(texto) ? [{ CandidatoId: 4, MembroId: 13 }] : antes(texto, inputs));
+    try {
+      expect(await batismo.efetivarTurma(pool, 5, 77)).toBe(1);
+      const u = mockConsultas.find((c) => /UPDATE MembroReferencia/.test(c.sql));
+      expect([u.inputs.forma, u.inputs.dataAdmissao, u.inputs.dataBatismo]).toEqual([null, "2015-01-01", "2026-10-03"]);
+      expect(mockTrilha[0]).toEqual(expect.objectContaining({ registroId: 13, acao: "O batismo foi registrado na ficha de quem já era membro",
+        dadosDepois: { situacaoMembro: "EM_COMUNHAO", formaAdmissao: null, dataAdmissao: "2015-01-01", turmaId: 5 } }));
+      // a nota (se houvesse a pendência) não pode dizer "a data de entrada igual à do batismo"
+      expect(mockConsultas.find((c) => /UPDATE FichasPendencias/.test(c.sql)).inputs.nota).not.toMatch(/igual à do batismo/);
+    } finally {
+      delete FICHAS[13];
+    }
+  });
+  test("a nota pura: quem ficou com a data de antes (sem forma de outro caminho) não lê 'igual à do batismo'", () => {
+    expect(batismo.notaDoBatismo({ formaAdmissao: null, dataAdmissao: "2015-01-01" }, "2026-10-03")).toBe("Completada pelo batismo: em comunhão; a data de entrada de antes fica.");
+    expect(batismo.notaDoBatismo({ formaAdmissao: "BATISMO", dataAdmissao: "2012-04-04" }, "2026-10-03")).toBe("Completada pelo batismo: em comunhão; a forma de entrada (batismo) e a data de entrada de antes ficam.");
+    expect(batismo.notaDoBatismo({ formaAdmissao: "BATISMO", dataAdmissao: "2026-10-03" }, "2026-10-03")).toBe("Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo.");
   });
   test("a nota pura: cada forma de outro caminho com o nome dela; sem data de entrada, a nota avisa que a data está em branco", () => {
     expect(batismo.notaDoBatismo({ formaAdmissao: "BATISMO", dataAdmissao: "2026-10-03" })).toBe("Completada pelo batismo: em comunhão, a forma batismo e a data de entrada igual à do batismo.");

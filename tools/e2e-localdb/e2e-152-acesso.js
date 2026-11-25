@@ -148,7 +148,9 @@ async function principal() {
   const porNaLicenca = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaLicenca, { status: "LICENCA_CANDIDATURA" }) }));
   ok(porNaLicenca.status === 400 && /Licença Candidatura/.test(porNaLicenca.body && porNaLicenca.body.mensagem) && (await statusDe(ID.fichaLicenca)) === "ATIVO",
     "a ficha não põe em licença por candidatura: 400, aponta a aba da licença, nada muda", resumo(porNaLicenca));
+  // em licença com a licença ABERTA (a recusa da ficha só vale enquanto ela está aberta: decisão de 25/11/2026)
   await q("UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id", { id: ID.fichaLicenca });
+  await q("INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, Status) VALUES (@id, '2026-10-04', '2026-07-06', 'EM_LICENCA')", { id: ID.fichaLicenca });
   const tirarDaLicenca = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaLicenca, { status: "ATIVO" }) }));
   ok(tirarDaLicenca.status === 409 && /Licença Candidatura/.test(tirarDaLicenca.body && tirarDaLicenca.body.mensagem) && (await statusDe(ID.fichaLicenca)) === "LICENCA_CANDIDATURA",
     "a ficha não tira da licença por candidatura: 409, aponta a aba da licença, nada muda", resumo(tirarDaLicenca));

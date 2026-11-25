@@ -1183,6 +1183,8 @@ Depois da revisão do Financeiro até `4c06d58`:
   - **A avaliação das congregações (PSC):** o ano da fundação e os anos sob tutela **não contam** na cobrança.
   - **A licença por candidatura:** quem não volta depois da eleição fica **INATIVO** no rol (pode voltar um dia pelo
     caminho normal). Se falecer durante a licença, a secretaria marca FALECIDO na ficha, e a licença fecha sozinha.
+  - **A simulação de emancipação:** o critério do encarregado em comunhão só a CME da própria área e a Geral veem; para
+    as outras, a Extensão aparece como "não dá para avaliar daqui".
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

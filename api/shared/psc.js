@@ -881,7 +881,7 @@ async function proporReclassificacaoSeCabivel(pool, { avaliacao, reprovadaNivel1
   const avaliacaoGatilho = historico.find(h => h.ano === gatilho.anoFinal);
   const ja = await pool.request().input("av", sql.Int, avaliacaoGatilho.avaliacaoId).input("c", sql.Int, avaliacao.congregacaoId).query(`
     SELECT TOP 1 ReclassificacaoId FROM PscReclassificacoes
-    WHERE AvaliacaoGatilhoId = @av OR (CongregacaoId = @c AND Status IN ('PROPOSTA', 'DECRETADA'))
+    WHERE (AvaliacaoGatilhoId = @av AND Status <> 'ARQUIVADA') OR (CongregacaoId = @c AND Status IN ('PROPOSTA', 'DECRETADA'))
   `);
   if (ja.recordset.length > 0) return null;
   let reclassificacaoId;
@@ -1297,7 +1297,9 @@ async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {})
     const prazo = prazoEnvio(ano, parametros.prazoEnvioDias);
     if (hoje <= prazo) continue;
     const pendentes = (await pool.request().input("ano", sql.SmallInt, ano).query(`
-      SELECT c.CongregacaoId, c.Nome FROM Congregacoes c
+      SELECT c.CongregacaoId, c.Nome,
+             (SELECT MAX(av.Ciclo) FROM PscAvaliacoes av WHERE av.CongregacaoId = c.CongregacaoId AND av.Ano = @ano) AS CicloAtual
+      FROM Congregacoes c
       WHERE c.Ativa = 1 AND c.Categoria = 'CONGREGACAO' AND NOT EXISTS (
         SELECT 1 FROM PscAvaliacoes a WHERE a.CongregacaoId = c.CongregacaoId AND a.Ano = @ano AND a.Status IN ('ENVIADA', 'VALIDADA', 'HOMOLOGADA')
       )
@@ -1306,9 +1308,13 @@ async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {})
     for (const c of pendentes) {
       const destinatarios = await destinatariosDe(c.CongregacaoId);
       if (destinatarios.length === 0) continue;
+      // Ciclo = quantas vezes a avaliação foi enviada: a que já foi enviada e voltou (devolvida ou reaberta) não "deixou de ser enviada".
+      const voltouParaCorrecao = Number(c.CicloAtual) > 0;
       fatos.push({
         referenciaId: c.CongregacaoId * 10000 + ano, destinatarios,
-        fatoGerador: `A avaliação do PSC ${ano} de ${c.Nome} não foi enviada até ${formatarDataBr(prazo)}. A avaliação anual é obrigatória (Regimento Art. 127).`
+        fatoGerador: voltouParaCorrecao
+          ? `A avaliação do PSC ${ano} de ${c.Nome} voltou para correção e ainda não foi reenviada (o prazo de envio era ${formatarDataBr(prazo)}). A avaliação anual é obrigatória (Regimento Art. 127).`
+          : `A avaliação do PSC ${ano} de ${c.Nome} não foi enviada até ${formatarDataBr(prazo)}. A avaliação anual é obrigatória (Regimento Art. 127).`
       });
     }
   }
@@ -1363,7 +1369,7 @@ module.exports = {
   // banco
   lerParametros, atualizarParametros, listarCatalogo, criarCriterio, atualizarCriterio,
   buscarCongregacao, abrirAvaliacao, buscarAvaliacao, detalharAvaliacao, listarAvaliacoes, salvarRespostas,
-  enviarAvaliacao, validarAvaliacao, devolverAvaliacao, reabrirAvaliacao, homologarAvaliacao,
+  enviarAvaliacao, validarAvaliacao, devolverAvaliacao, reabrirAvaliacao, homologarAvaliacao, proporReclassificacaoSeCabivel,
   buscarReclassificacao, listarReclassificacoes, decretarReclassificacao, arquivarReclassificacao, restabelecerReclassificacao, consultarTutela,
   montarPainel, historicoDaCongregacao, resolverDestinatariosDaCongregacao,
   detectarAvaliacoesPendentes, detectarAvaliacoesParaValidar, detectarAvaliacoesParaHomologar, detectarReclassificacoesPropostas

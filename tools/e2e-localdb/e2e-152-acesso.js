@@ -233,6 +233,19 @@ async function principal() {
     .congregacoes.map((l) => `${l.congregacaoId === nova ? "nova" : "tutelada"}:${l.prazo.situacao}`).sort().join(" ");
   ok((await painelDe(2027)) === "nova:NAO_SE_APLICA tutelada:NAO_SE_APLICA", "no painel de 2027 as duas aparecem como 'não se aplica'", await painelDe(2027));
   ok((await painelDe(2029)) === "nova:ATRASADO tutelada:ATRASADO", "no painel de 2029 as duas estão atrasadas", await painelDe(2029));
+  // a proposta arquivada (para reabrir a avaliação que a sustentava) não impede a nova, depois da avaliação homologada de novo, ainda reprovada
+  const betel = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Betel Proposta E2E152', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: areaPsc }))[0].id;
+  const reprovada = async (ano) => (await q(`INSERT INTO PscAvaliacoes (CongregacaoId, Ano, Status, ReprovadaNivel1, Ciclo, Versao) OUTPUT INSERTED.AvaliacaoId AS id
+    VALUES (@c, @ano, 'HOMOLOGADA', 1, 1, 1)`, { c: betel, ano }))[0].id;
+  await reprovada(2026);
+  const gatilhoBetel = await reprovada(2027);
+  await q(`INSERT INTO PscReclassificacoes (CongregacaoId, ExerciciosConsecutivos, AnoInicial, AnoFinal, AvaliacaoGatilhoId, Status, MotivoArquivamento)
+    VALUES (@c, 2, 2026, 2027, @g, 'ARQUIVADA', N'Reabrir a avaliação de 2027 (roteiro)')`, { c: betel, g: gatilhoBetel });
+  const novaProposta = await psc.proporReclassificacaoSeCabivel(await obterPool(), { avaliacao: { congregacaoId: betel, ano: 2027 }, reprovadaNivel1: true, membroId: ID.geral });
+  ok(novaProposta && novaProposta.reclassificacaoId && (await escalar("SELECT COUNT(*) FROM PscReclassificacoes WHERE CongregacaoId = @c AND Status = 'PROPOSTA'", { c: betel })) === 1,
+    "a proposta arquivada não impede a nova (a CLI volta a ter o que decidir)", JSON.stringify(novaProposta));
+  ok((await psc.proporReclassificacaoSeCabivel(await obterPool(), { avaliacao: { congregacaoId: betel, ano: 2027 }, reprovadaNivel1: true, membroId: ID.geral })) === null,
+    "e com a nova proposta aberta, não nasce uma segunda");
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5. a medida cautelar ==");

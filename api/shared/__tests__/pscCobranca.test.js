@@ -12,6 +12,7 @@ jest.mock("../db", () => {
         mockConsultas.push({ texto, entradas });
         if (/FROM PscParametros/.test(texto)) return { recordset: [{ PrimeiroExercicio: 2026, PrazoEnvioDias: 90, ExerciciosParaReclassificacao: 2 }] };
         if (/FROM Congregacoes c/.test(texto)) return { recordset: mockCongregacoes };
+        if (/FROM Lideranca l/.test(texto)) return { recordset: [{ membroId: 1, nome: "Gestora", email: null }] };
         return { recordset: [] };
       }
     };
@@ -36,6 +37,25 @@ describe("o aviso de avaliação não enviada", () => {
       expect(c.texto).toMatch(/rt\.Status = 'REVERTIDA'/);
       expect(c.texto).toMatch(/@ano BETWEEN YEAR\(DATEADD\(hour, -3, rt\.DecididaEm\)\) AND YEAR\(DATEADD\(hour, -3, rt\.RestabelecidaEm\)\)/);
     }
+  });
+});
+
+// A avaliação enviada e depois devolvida (ou reaberta) para correção não "deixou de ser enviada": o aviso diz o que aconteceu (Ciclo = quantas vezes foi enviada).
+describe("o texto do aviso", () => {
+  test("nunca enviada: 'não foi enviada até o prazo'", async () => {
+    mockCongregacoes = [{ CongregacaoId: 7, Nome: "Betel", CicloAtual: null }];
+    const fatos = await psc.detectarAvaliacoesPendentes(pool, { hoje: "2027-06-01" });
+    expect(fatos).toHaveLength(1);
+    expect(fatos[0].fatoGerador).toMatch(/A avaliação do PSC 2026 de Betel não foi enviada até 31\/03\/2027/);
+  });
+  test("enviada e devolvida ou reaberta: o aviso diz que voltou para correção e ainda não foi reenviada", async () => {
+    mockCongregacoes = [{ CongregacaoId: 7, Nome: "Betel", CicloAtual: 1 }];
+    const fatos = await psc.detectarAvaliacoesPendentes(pool, { hoje: "2027-06-01" });
+    expect(fatos).toHaveLength(1);
+    expect(fatos[0].fatoGerador).not.toMatch(/não foi enviada/);
+    expect(fatos[0].fatoGerador).toMatch(/voltou para correção/);
+    expect(fatos[0].fatoGerador).toMatch(/ainda não foi reenviada/);
+    expect(mockConsultas.find((c) => /FROM Congregacoes c/.test(c.texto)).texto).toMatch(/AS CicloAtual/);
   });
 });
 

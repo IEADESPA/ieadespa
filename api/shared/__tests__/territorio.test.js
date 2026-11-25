@@ -183,6 +183,60 @@ describe("critérios da simulação", () => {
     expect(tr.avaliarExtensao([], {}).situacao).toBe("SEM_CRITERIOS");
     expect(tr.avaliarExtensao([{ ...C[2] }], {}).situacao).toBe("SEM_CRITERIOS");
   });
+
+  describe("avaliarExtensaoParaQuemVe: o critério do Encarregado só para quem cuida da Mãe e o nível geral", () => {
+    const C = [
+      { criterioId: 1, indicador: "MESES_ABERTA", operador: "MINIMO", valor: 24, ativo: true, ordem: 10 },
+      { criterioId: 2, indicador: "MEMBROS_EM_COMUNHAO", operador: "MINIMO", valor: 50, ativo: true, ordem: 20 },
+      { criterioId: 3, indicador: "ENCARREGADO_EM_COMUNHAO", operador: "SIM", valor: null, ativo: true, ordem: 30 },
+      { criterioId: 4, indicador: "OBREIROS", operador: "MINIMO", valor: 1, ativo: false, ordem: 40 }
+    ];
+    const atende = { MESES_ABERTA: 30, MEMBROS_EM_COMUNHAO: 60, OBREIROS: 2 };
+    const ESTADOS = [{ ...atende, ENCARREGADO_EM_COMUNHAO: true }, { ...atende, ENCARREGADO_EM_COMUNHAO: false }, { ...atende }, { ...atende, ENCARREGADO_EM_COMUNHAO: null }];
+
+    test("quem cuida da Mãe: a mesma avaliação de sempre, com o critério do Encarregado", () => {
+      for (const m of ESTADOS) expect(tr.avaliarExtensaoParaQuemVe(C, m, { cuidaDaMae: true })).toEqual(tr.avaliarExtensao(C, m));
+      expect(tr.avaliarExtensaoParaQuemVe(C, ESTADOS[0], { cuidaDaMae: true })).toMatchObject({ situacao: "ATENDE_TUDO", atendidos: 3, total: 3 });
+    });
+
+    test("quem não cuida: o critério não aparece e a Extensão fica \"não dá para avaliar daqui\", sem a contagem", () => {
+      const r = tr.avaliarExtensaoParaQuemVe(C, ESTADOS[0], { cuidaDaMae: false });
+      expect(r.situacao).toBe("NAO_AVALIAVEL");
+      expect(r.atendidos).toBeNull();
+      expect(r.total).toBeNull();
+      expect(r.itens.map((i) => i.criterioId)).toEqual([1, 2]);
+      expect(JSON.stringify(r)).not.toMatch(/ENCARREGADO/);
+    });
+
+    test("quem não cuida recebe a mesma resposta, esteja o Encarregado em comunhão ou não (ou sem Encarregado)", () => {
+      const respostas = ESTADOS.map((m) => JSON.stringify(tr.avaliarExtensaoParaQuemVe(C, m, { cuidaDaMae: false })));
+      expect(new Set(respostas).size).toBe(1);
+      const falha = { ...atende, MEMBROS_EM_COMUNHAO: 10 };
+      const comFalha = [true, false].map((v) => JSON.stringify(tr.avaliarExtensaoParaQuemVe(C, { ...falha, ENCARREGADO_EM_COMUNHAO: v }, { cuidaDaMae: false })));
+      expect(comFalha[0]).toBe(comFalha[1]);
+      expect(JSON.parse(comFalha[0])).toMatchObject({ situacao: "NAO_AVALIAVEL", atendidos: null, total: null });
+    });
+
+    test("o critério do Encarregado desligado ou ausente: a avaliação é a de sempre para todos", () => {
+      const sem = C.map((c) => (c.indicador === "ENCARREGADO_EM_COMUNHAO" ? { ...c, ativo: false } : c));
+      for (const m of ESTADOS) expect(tr.avaliarExtensaoParaQuemVe(sem, m, { cuidaDaMae: false })).toEqual(tr.avaliarExtensao(sem, m));
+      const semLinha = C.filter((c) => c.indicador !== "ENCARREGADO_EM_COMUNHAO");
+      expect(tr.avaliarExtensaoParaQuemVe(semLinha, ESTADOS[1], { cuidaDaMae: false })).toMatchObject({ situacao: "ATENDE_TUDO", atendidos: 2, total: 2 });
+    });
+
+    test("só o critério do Encarregado ativo: quem não cuida recebe \"não dá para avaliar daqui\", não \"nenhum critério ativo\"", () => {
+      const so = [C[2]];
+      const r = tr.avaliarExtensaoParaQuemVe(so, { ENCARREGADO_EM_COMUNHAO: true }, { cuidaDaMae: false });
+      expect(r).toEqual({ situacao: "NAO_AVALIAVEL", itens: [], atendidos: null, total: null });
+      expect(tr.avaliarExtensaoParaQuemVe(so, { ENCARREGADO_EM_COMUNHAO: false }, { cuidaDaMae: false })).toEqual(r);
+    });
+
+    test("sem dizer quem vê: trata como quem não cuida (fecha, não abre)", () => {
+      expect(tr.avaliarExtensaoParaQuemVe(C, ESTADOS[0]).situacao).toBe("NAO_AVALIAVEL");
+      expect(tr.avaliarExtensaoParaQuemVe(C, ESTADOS[0], {}).situacao).toBe("NAO_AVALIAVEL");
+      expect(tr.avaliarExtensaoParaQuemVe(C, ESTADOS[0], { cuidaDaMae: "sim" }).situacao).toBe("NAO_AVALIAVEL");
+    });
+  });
 });
 
 describe("datas", () => {

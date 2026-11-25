@@ -585,6 +585,8 @@ política de segurança só dessa rota). Casca do service worker **v56**.
   o atalho de pedir Extensão, e o resumo avisa onde marcar o ponto (Extensão em Pontos das Extensões; congregação em Catálogos).
 - **O dízimo na simulação:** só saem do servidor as medidas dos critérios ativos; com menos de 3 dizimistas na Extensão, o dízimo médio aparece só como
   "atende / não atende" (o valor seria o de uma pessoa). "Não dá para medir" diz o que falta.
+- **O Encarregado na simulação (regra de 25/11/2026):** o critério "Encarregado em comunhão" só a CME da própria área (quem cuida da Mãe) e o nível geral
+  veem; para as outras, a Extensão aparece como "não dá para avaliar daqui", sem a contagem, por último na lista e sem o atalho de pedir.
 - **O endereço não se perde:** o endereço antigo numa linha vai para a Rua quando a ficha abre (escolher o bairro não apaga a rua e o número); apagar todas as
   linhas apaga o endereço de propósito; o nome escrito que já é um bairro cadastrado vira o bairro da lista (não fica na fila para sempre) e editar o bairro
   liga a fila; a ficha grava o bairro travado (a renomeação do bairro e a ficha nunca se travam uma à outra, e a linha única sai com o nome novo); as UFs e o

@@ -3,7 +3,7 @@
 // A regra pura está em shared/territorio.js (testada); o banco em shared/territorioDb.js. Só a sessão de liderança (senha). Entra quem entra na Expansão da v9.2: a
 // permissão "expansao" OU compor a CME. O alcance é o mesmo:
 //   - nível geral: vê os membros de todos; é o único que cadastra bairros, muda o raio de cobertura e monta a tabela de critérios;
-//   - CME: vê os membros de todos (contagem por bairro, nunca nome);
+//   - CME: vê os membros de todos (contagem por bairro, nunca nome); na simulação, o critério do Encarregado só nas Extensões da própria área;
 //   - os demais (Dirigente, Pastor de Área): os membros das congregações que o escopo cobre por inteiro; o Dirigente da Mãe marca o ponto das Extensões dela.
 //
 // ---- Leitura (GET /api/territorio/...) ----

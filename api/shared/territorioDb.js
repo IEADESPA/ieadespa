@@ -600,7 +600,9 @@ async function simulacao(pool, { alcance, hoje = hojeBrasilia() }) {
     criterios: criterios.filter((c) => c.ativo),
     extensoes: extensoes.map((e) => {
       const m = medidas.get(e.extensaoId) || {};
-      const avaliacao = tr.avaliarExtensao(criterios, m);
+      // o critério do Encarregado em comunhão: só quem cuida da Mãe (o Dirigente, a CME da própria área) e o nível geral o veem (shared/territorio.js)
+      const cuidaDaMae = !!cobre(alcance, e.maeNome);
+      const avaliacao = tr.avaliarExtensaoParaQuemVe(criterios, m, { cuidaDaMae });
       // só o que os critérios ativos usam sai da resposta (o resto nem é preciso para a tela); o dízimo médio de menos de 3 dizimistas sai sem o valor
       const ativos = new Set(avaliacao.itens.map((i) => i.indicador));
       const ocultarDizimo = (Number(m.DIZIMISTAS_12M) || 0) < MINIMO_DIZIMISTAS_PARA_MOSTRAR;
@@ -610,11 +612,17 @@ async function simulacao(pool, { alcance, hoje = hojeBrasilia() }) {
       return {
         extensaoId: e.extensaoId, nome: e.nome, maeNome: e.maeNome, abertaEm: e.abertaEm, medidas: visiveis, avaliacao, pedidoEmAndamento: e.pedidoEmAndamento,
         // o atalho para o pedido de emancipação da v9.2: quem cuida da Mãe (o Dirigente, o Pastor da Área) ou o nível geral, e sem pedido já correndo
-        podePedir: avaliacao.situacao === "ATENDE_TUDO" && !e.pedidoEmAndamento && cobre(alcance, e.maeNome)
+        podePedir: avaliacao.situacao === "ATENDE_TUDO" && !e.pedidoEmAndamento && cuidaDaMae
       };
-    }).sort((a, b) => (Number(b.avaliacao.situacao === "ATENDE_TUDO") - Number(a.avaliacao.situacao === "ATENDE_TUDO")) || (b.avaliacao.atendidos - a.avaliacao.atendidos)
-      || a.maeNome.localeCompare(b.maeNome, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR"))
+    }).sort(ordemDaSimulacao)
   };
+}
+// A ordem da simulação: quem atende tudo primeiro, depois quem atende mais; as que não dá para avaliar daqui vão por último; no empate, pela Mãe e pelo nome.
+function ordemDaSimulacao(a, b) {
+  const fim = (x) => Number(x.avaliacao.situacao === "NAO_AVALIAVEL");
+  const tudo = (x) => Number(x.avaliacao.situacao === "ATENDE_TUDO");
+  return (fim(a) - fim(b)) || (tudo(b) - tudo(a)) || ((b.avaliacao.atendidos || 0) - (a.avaliacao.atendidos || 0))
+    || a.maeNome.localeCompare(b.maeNome, "pt-BR") || a.nome.localeCompare(b.nome, "pt-BR");
 }
 
 async function listarCriterios(pool) {

@@ -31,6 +31,7 @@ const DIR = () => L.LIDER(3001, ["expansao", "pessoas"], ["Central E2E"]);
 const DIR_VILA = () => L.LIDER(9850, ["expansao"], ["Vila Nova E2E"]);
 const CME = () => L.LIDER(3003, ["expansao"], ["Central E2E", "Vila Nova E2E"], "AREA");
 const CME_SEM_PERMISSAO = () => L.LIDER(3003, [], ["Central E2E", "Vila Nova E2E"], "AREA");
+const CME_OUTRA_AREA = () => L.LIDER(3003, ["expansao"], ["Vila Nova E2E"], "AREA");   // compõe a CME, mas a área dele não tem a Central
 const SEM = () => L.LIDER(3001, ["pessoas"], ["Central E2E"]);
 const PINM = () => L.sessao(3001, { via: "PIN", permissoes: ["expansao"] });
 const P = { c1: 9801, c2: 9802, c3: 9803, c4: 9804, c5: 9805, c6: 9806, cDeslig: 9807, v1: 9811, v2: 9812, v3: 9813,
@@ -434,6 +435,48 @@ const bairroDoMapa = (mapa, nome) => (mapa.bairros || []).find((b) => b.nome ===
   ok(!r.body.extensoes.some((e) => e.extensaoId === ext), "o Dirigente da Vila não vê a Tenda da Central");
   r = guardar("simulacaoCME", await GET("simulacao", {}, CME()));
   ok(r.body.extensoes.find((e) => e.extensaoId === ext).podePedir === true, "o Pastor de Área (cobre a Central) também pode pedir");
+
+  console.log("== a simulação: o critério do Encarregado só para a CME da própria área e o nível geral (regra de 25/11/2026) ==");
+  const daExt = (corpo, id) => (corpo.extensoes || []).find((e) => e.extensaoId === id);
+  const temEncarregado = (e) => !!e && ("ENCARREGADO_EM_COMUNHAO" in (e.medidas || {}) || (e.avaliacao.itens || []).some((i) => i.indicador === "ENCARREGADO_EM_COMUNHAO"));
+  const cmePropria = daExt(r.body, ext);
+  ok(cmePropria.avaliacao.situacao === "ATENDE_TUDO" && cmePropria.medidas.ENCARREGADO_EM_COMUNHAO === true && temEncarregado(cmePropria),
+    "a CME da própria área (cobre a Central) vê o critério do Encarregado e a situação inteira", cmePropria.avaliacao);
+  const outra1 = await GET("simulacao", {}, CME_OUTRA_AREA());
+  let o = daExt(outra1.body, ext);
+  ok(outra1.status === 200 && o && o.avaliacao.situacao === "NAO_AVALIAVEL" && o.avaliacao.atendidos === null && o.avaliacao.total === null,
+    "a CME de outra área: a Tenda da Central fica \"não dá para avaliar daqui\", sem a contagem", o && o.avaliacao);
+  ok(!temEncarregado(o) && !/ENCARREGADO/.test(JSON.stringify(o)), "a CME de outra área: nada do Encarregado na Tenda da Central (nem a medida nem o item)", o);
+  ok(o.podePedir === false, "a CME de outra área não tem o \"Pedir a emancipação\" da Tenda da Central");
+  ok(o.avaliacao.itens.length === cmePropria.avaliacao.itens.length - 1 && o.avaliacao.itens.every((i) => cmePropria.avaliacao.itens.some((p) => p.criterioId === i.criterioId && p.resultado === i.resultado)),
+    "a CME de outra área vê os outros critérios da Tenda como a da própria área");
+  const vilaOutra = daExt(outra1.body, extVila);
+  ok(vilaOutra && temEncarregado(vilaOutra) && vilaOutra.avaliacao.situacao !== "NAO_AVALIAVEL", "na Tenda da Vila (a área dele), a mesma CME vê o critério do Encarregado");
+  const sits = outra1.body.extensoes.map((e) => e.avaliacao.situacao);
+  ok(sits.indexOf("NAO_AVALIAVEL") > 0 && sits.slice(sits.indexOf("NAO_AVALIAVEL")).every((s) => s === "NAO_AVALIAVEL"), "as Extensões que não dá para avaliar daqui vêm por último", sits);
+  const semPerm = await GET("simulacao", {}, CME_SEM_PERMISSAO());
+  ok(semPerm.status === 200 && semPerm.body.extensoes.length >= 2 && semPerm.body.extensoes.every((e) => !temEncarregado(e) && e.avaliacao.situacao === "NAO_AVALIAVEL" && e.avaliacao.total === null && !e.podePedir),
+    "a CME sem área (sem a permissão): nenhuma Extensão com o critério do Encarregado, todas \"não dá para avaliar daqui\"", semPerm.body.extensoes.map((e) => e.avaliacao.situacao));
+  const corpoOutra = JSON.stringify(outra1.body);
+  const corpoSemPerm = JSON.stringify(semPerm.body);
+  const corpoPropria = JSON.stringify(r.body);
+  // o Encarregado deixa de valer por caminhos que mexem só na medida dele (os membros em comunhão continuam os mesmos)
+  for (const [rotulo, mudar, desfazer] of [
+    ["sem Encarregado (o vínculo encerrado)",
+      () => q("UPDATE ExtensaoEncarregados SET Ate = @d, MotivoSaida = N'Teste E2E' WHERE ExtensaoId = @e AND Ate IS NULL", { e: ext, d: hoje }),
+      () => q("UPDATE ExtensaoEncarregados SET Ate = NULL, MotivoSaida = NULL WHERE ExtensaoId = @e AND MembroId = @m", { e: ext, m: P.enc })],
+    ["o Encarregado de outra congregação",
+      () => q("UPDATE MembroReferencia SET CongregacaoId = @c WHERE MembroId = @m", { c: vila, m: P.enc }),
+      () => q("UPDATE MembroReferencia SET CongregacaoId = @c WHERE MembroId = @m", { c: central, m: P.enc })]]) {
+    await mudar();
+    const sec = daExt((await GET("simulacao", {}, SEC())).body, ext);
+    ok(sec.medidas.ENCARREGADO_EM_COMUNHAO === false && sec.avaliacao.situacao === "NAO_ATENDE", `${rotulo}: o nível geral vê o critério cair`, sec.avaliacao);
+    ok(JSON.stringify((await GET("simulacao", {}, CME())).body) !== corpoPropria, `${rotulo}: a CME da própria área vê a mudança`);
+    ok(JSON.stringify((await GET("simulacao", {}, CME_OUTRA_AREA())).body) === corpoOutra, `${rotulo}: a CME de outra área recebe a mesma resposta, byte a byte (nem a situação, nem a contagem, nem a ordem mudam)`);
+    ok(JSON.stringify((await GET("simulacao", {}, CME_SEM_PERMISSAO())).body) === corpoSemPerm, `${rotulo}: a CME sem área também`);
+    await desfazer();
+  }
+  ok(JSON.stringify((await GET("simulacao", {}, CME())).body) === corpoPropria, "tudo desfeito: a simulação volta a ser a de antes");
   await q("UPDATE MembroReferencia SET SituacaoMembro = N'SEM_COMUNHAO' WHERE MembroId = @m", { m: P.enc });
   s1 = (await GET("simulacao", {}, SEC())).body.extensoes.find((e) => e.extensaoId === ext);
   ok(s1.medidas.ENCARREGADO_EM_COMUNHAO === false && s1.medidas.MEMBROS_EM_COMUNHAO === 3 && s1.avaliacao.situacao === "NAO_ATENDE", "o Encarregado sem comunhão: o critério cai na hora (calculado na leitura)");

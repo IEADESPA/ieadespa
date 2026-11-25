@@ -54,6 +54,7 @@ function motivoSaidaVisivel(m, vDisciplina) {
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
+const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
 
 // Tirar do rol ativo quem tem cargo de liderança vigente tira o acesso dele (o login exige ATIVO), e o desligamento e o falecimento ainda encerram os mandatos:
 // é ato da Secretaria (nível geral), com a confirmação recente (428), e nunca da última pessoa que administra os acessos (shared/travaPermissoes.js).
@@ -290,8 +291,14 @@ module.exports = async function (context, req) {
     }
 
     // A data de saída, quando vem no pedido, é um dia que existe (AAAA-MM-DD): ela fica gravada e os prazos de retenção contam dela.
-    if (dataSaida !== undefined && dataSaida !== null && dataSaida !== "" && !dataIsoValida(dataSaida)) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Informe a data de saída (dia/mês/ano)." } };
+    // Regra do responsável (25/11/2026): de 2006 (a fundação da igreja) até hoje, pelo dia de Brasília.
+    const dataSaidaInformada = dataSaida !== undefined && dataSaida !== null && dataSaida !== "";
+    if (dataSaidaInformada && !dataIsoValida(dataSaida)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Informe a data de saída (dia/mês/ano)." } };
+      return;
+    }
+    if (dataSaidaInformada && (dataSaida < DATA_SAIDA_MINIMA || dataSaida > hojeBrasilia())) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A data de saída vai de 01/01/2006 (a fundação da igreja) até hoje." } };
       return;
     }
 
@@ -404,12 +411,12 @@ module.exports = async function (context, req) {
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
       : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
-    // A ficha não manda a data de saída (só a mostra): sem o campo no pedido, quem continua fora do rol ativo mantém a data gravada (o histórico e os prazos
-    // de retenção contam dela). A data informada vale; a volta a ATIVO a limpa, como antes.
+    // A ficha não manda a data de saída (só a mostra): sem a data no pedido (ou com ela vazia), quem continua fora do rol ativo mantém a data gravada (o
+    // histórico e os prazos de retenção contam dela). A data informada vale; a volta a ATIVO a limpa, como antes.
     const dataSaidaGuardada = existia ? (existente.recordset[0].DataSaidaAnterior || null) : null;
-    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaida || hojeISO)
-      : dataSaida ? dataSaida
-        : (dataSaida === undefined && statusFinal !== "ATIVO") ? dataSaidaGuardada : null;
+    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaidaInformada ? dataSaida : hojeISO)
+      : dataSaidaInformada ? dataSaida
+        : statusFinal !== "ATIVO" ? dataSaidaGuardada : null;
 
     // v9.5 — o endereço em linhas: vindo da tela nova (enderecoPartes), a linha única é montada com ele; vindo só a linha única (tela antiga), as linhas ficam se a
     // linha não mudou e são limpas se mudou (deixariam de corresponder).

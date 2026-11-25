@@ -113,9 +113,41 @@ describe("a data de saída ao salvar a ficha", () => {
   test.each([["2026-02-30"], ["abc"], ["20/11/2026"], [" 2026-11-20 "], [20261120], [{ a: 1 }], ["x".repeat(5000)]])("data de saída que não é um dia (%p): recusada e nada é gravado", async (dataSaida) => {
     regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "DESLIGAMENTO", DataSaidaAnterior: "2026-11-20" }));
     const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida }) });
+    expect(r.status).toBe(400);
     expect(r.body.sucesso).toBe(false);
     expect(r.body.mensagem).toMatch(/data de saída/);
     expect(gravacoes()).toHaveLength(0);
+  });
+
+  // Regra do responsável (25/11/2026): a data de saída vai de 2006 (a fundação da igreja) até hoje, pelo dia de Brasília.
+  describe("de 2006 até hoje", () => {
+    const comRelogio = async (agora, fazer) => {
+      jest.useFakeTimers({ now: new Date(agora), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+      try { return await fazer(); } finally { jest.useRealTimers(); }
+    };
+    const salvarComData = (dataSaida) => {
+      regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "DESLIGAMENTO", DataSaidaAnterior: "2026-11-20" }));
+      return chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida }) });
+    };
+
+    test.each([["2005-12-31"], ["0001-01-01"], ["2026-11-26"], ["9999-12-31"]])("fora da faixa (%p): 400, com a faixa na mensagem, e nada é gravado", async (dataSaida) => {
+      const r = await comRelogio("2026-11-26T01:30:00Z", () => salvarComData(dataSaida));   // 25/11, 22h30 em Brasília: o dia 26 ainda é amanhã
+      expect(r.status).toBe(400);
+      expect(r.body.mensagem).toMatch(/2006/);
+      expect(gravacoes()).toHaveLength(0);
+    });
+
+    test.each([["2006-01-01"], ["2026-11-25"]])("dentro da faixa (%p): grava a data informada", async (dataSaida) => {
+      const r = await comRelogio("2026-11-26T01:30:00Z", () => salvarComData(dataSaida));
+      expect(r.status).toBe(200);
+      expect(gravacoes()[0].entradas.dataSaida).toBe(dataSaida);
+    });
+
+    test.each([[null], [""]])("o vazio (%p) pela API não apaga a data de quem já saiu", async (dataSaida) => {
+      const r = await salvarComData(dataSaida);
+      expect(r.status).toBe(200);
+      expect(gravacoes()[0].entradas.dataSaida).toBe("2026-11-20");
+    });
   });
 
   test("a saída registrada à noite fica com o dia de Brasília, não o de Greenwich", async () => {

@@ -40,11 +40,6 @@ function porRelogio(iso) {
   global.Date = DataDoRoteiro;
 }
 const soltarRelogio = () => { global.Date = DataReal; };
-const diaQueExiste = (v) => {
-  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
-  const d = new DataReal(`${v}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
-};
 
 async function principal() {
   await obterPool();
@@ -104,6 +99,11 @@ async function principal() {
   const salvou = await pessoas("POST", { token: geral(), corpo: ficha(ID.saiu, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", telefone: "91900001521" }) });
   ok(salvou.status === 200 && salvou.body && salvou.body.sucesso === true, "a ficha de quem saiu é salva", `${salvou.status} ${JSON.stringify(salvou.body).slice(0, 120)}`);
   ok((await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.saiu })) === "2026-11-20", "e a data de saída continua a gravada");
+  const vazia = await pessoas("POST", { token: geral(), corpo: ficha(ID.saiu, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida: "" }) });
+  ok(vazia.body && vazia.body.sucesso === true && (await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.saiu })) === "2026-11-20",
+    "a data vazia pela API também não apaga a gravada", JSON.stringify(vazia.body).slice(0, 120));
+  const antesDe2006 = await pessoas("POST", { token: geral(), corpo: ficha(ID.saiu, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida: "2005-12-31" }) });
+  ok(antesDe2006.status === 400 && /2006/.test(antesDe2006.body && antesDe2006.body.mensagem), "a data de saída antes de 2006: 400 com a faixa na mensagem");
   const diaUtc = await escalar("SELECT CONVERT(varchar(10), CAST(SYSUTCDATETIME() AS DATE), 120)");
   porRelogio(`${diaUtc}T00:40:00Z`);
   try {
@@ -266,7 +266,7 @@ async function principal() {
     await conferir(`ficha ${rotulo}`, () => pessoas("POST", { token: geral(), corpo: { membroId: lixo, nome: lixo, congregacaoId: sede, status: lixo, dataSaida: lixo } }));
     await conferir(`desligar ${rotulo}`, () => pessoas("DELETE", { token: geral(), binding: { membroId: typeof lixo === "string" ? lixo : JSON.stringify(lixo) } }));
     // a matrícula certa de quem já saiu, com lixo só na data de saída: recusada, e a data gravada não muda
-    if (lixo === undefined || lixo === null || lixo === "" || diaQueExiste(lixo)) continue;   // vazio = sem a data; 0001-01-01 e 9999-12-31 são dias de verdade
+    if (lixo === undefined || lixo === null || lixo === "") continue;   // vazio = sem a data (mantém a gravada); 0001-01-01 e 9999-12-31 ficam fora de 2006 até hoje
     await conferir(`data de saída ${rotulo}`, () => pessoas("POST", { token: geral(), corpo: ficha(ID.saiu, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida: lixo }) }));
   }
   ok(quebras.length === 0, `lixo em cada campo (${L.LIXO.length} valores): nunca 500, nunca texto interno`, quebras.slice(0, 5).join(" | "));

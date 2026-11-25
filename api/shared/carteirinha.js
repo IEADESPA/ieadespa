@@ -58,6 +58,9 @@ function situacaoConferencia(p) {
   if (p.situacaoMembro === "CONGREGADO") {
     return { situacao: "CONGREGADO", nome: p.nome, congregacao: p.congregacao || null, area: p.area || null, foto: true };
   }
+  // volta 9 (decisão de 25/11): quem está em arrolamento (a ficha veio do sistema pago e espera a secretaria) NÃO está em disciplina — a situação é neutra
+  // ("ficha em atualização"), só com o nome e a foto; a marca de disciplina de verdade continua valendo
+  if (p.situacaoMembro === "ARROLAMENTO" && !p.sobDisciplina && !p.foraDaComunhao) return { situacao: "EM_ATUALIZACAO", nome: p.nome, foto: true };
   if (!membroEmComunhao(p) || p.sobDisciplina) return { situacao: "DISCIPLINA", nome: p.nome, foto: true };
   const r = {
     situacao: "EM_COMUNHAO", nome: p.nome, foto: true,

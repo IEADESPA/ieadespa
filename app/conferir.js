@@ -78,6 +78,10 @@
         selo("info", "Congregado nesta Igreja", "Frequenta a Igreja; ainda não é membro.");
         pessoa(r, false);
         dados([["Congregação", lugar(r)]]);
+      } else if (r.situacao === "EM_ATUALIZACAO") {
+        // quem está em arrolamento (a ficha veio do sistema antigo): situação neutra, só o nome e a foto
+        selo("info", "Ficha em atualização pela secretaria", "A secretaria da Igreja está atualizando esta ficha. Dúvidas: a secretaria da congregação.");
+        pessoa(r, false);
       } else if (r.situacao === "DISCIPLINA") {
         selo("pend", "Em disciplina", "No momento não exerce cargo nem função. Dúvidas: a secretaria da congregação.");
         pessoa(r, false);

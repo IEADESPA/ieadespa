@@ -8,15 +8,17 @@
 // O banco é simulado por TEXTO da consulta (como em acessoMembro.test.js); o comportamento contra o SQL Server de verdade está no roteiro ponta a ponta.
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+jest.mock("../db", () => {
+  const novaRequest = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor, afetadas] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [afetadas === undefined ? 0 : afetadas] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequest(); } }
+  return { getPool: async () => ({ request: novaRequest }), sql: new Proxy({}, { get: (_a, nome) => (nome === "Transaction" ? Transaction : nome === "Request" ? Request : () => undefined) }) };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 const mockEmails = [];
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async (e) => { mockEmails.push(e); }) }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
@@ -26,7 +28,7 @@ jest.mock("../enquetes", () => ({ ...jest.requireActual("../enquetes"), membrosE
 
 const auth = require("../auth");
 const pin = require("../pinMembro");
-const { registrarAuditoria } = require("../auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../auditoria");
 const hTrocarSenha = require("../../TrocarSenha/index.js");
 const hFluxos = require("../../Fluxos/index.js");
 const hDelegacoes = require("../../GestaoDelegacoes/index.js");
@@ -53,7 +55,7 @@ const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permi
 const lideranca = (extra = {}) => tokenDe(5, { via: "SENHA", nivel: "GLOBAL", permissoes: ["pessoas", "permissoes"], escopoCongregacoes: "TODAS", ...extra });
 const livre = { EstavaBloqueado: false, Falhas: 1, BloqueadaAgora: false };
 
-beforeEach(() => { mockRegras = []; mockConsultas = []; mockEmails.length = 0; registrarAuditoria.mockClear(); });
+beforeEach(() => { mockRegras = []; mockConsultas = []; mockEmails.length = 0; registrarAuditoria.mockClear(); registrarAuditoriaNaTransacao.mockClear(); });
 
 describe("só a sessão aberta com a SENHA administrativa vale como liderança", () => {
   test("ehSessaoDeLideranca: via SENHA vale; PIN e código não valem, mesmo com nível e permissões; token antigo (sem via) vale só se carrega o nível", () => {
@@ -299,10 +301,11 @@ describe("GestaoPessoas respeita o escopo de quem altera (POST e DELETE)", () =>
   });
   test("desligar dentro do escopo: desliga e audita", async () => {
     quando(/SELECT c\.Nome AS CongregacaoNome, e\.Nome AS ExtensaoNome FROM MembroReferencia m/, [{ CongregacaoNome: "Vila Nova", ExtensaoNome: null }]);
-    quando(/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, [], 1);
+    quando(/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, [{ MembroId: 7 }], 1);
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
     const r = await chamar(hPessoas, { metodo: "DELETE", token: vilaNova(), ligado: { membroId: "7" } });
     expect(r.status).toBe(200);
-    expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "MembroReferencia", registroId: 7, acao: "Desligou pessoa", usuarioId: 5 });
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][1]).toMatchObject({ tabela: "MembroReferencia", registroId: 7, acao: "Desligou pessoa", usuarioId: 5 });
   });
 });
 

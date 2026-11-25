@@ -4,7 +4,7 @@
 // POST   /api/pessoas            -> body: { membroId, nome, cargoMinisterial, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -28,7 +28,8 @@ const POR_PAGINA_MAX = 100;
 const escadaDb = require("../shared/escadaDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
-const { dataIsoValida } = require("../shared/financeiroSeguro");
+const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
+const { emTransacao } = require("../shared/transacaoCurta");
 const travaPermissoes = require("../shared/travaPermissoes");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
@@ -555,19 +556,28 @@ module.exports = async function (context, req) {
       return;
     }
     if (!(await conferirSaidaDeLideranca(pool, req, context, usuario, membroDesligar))) return;
-    const upd = await pool.request().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeBrasilia())
-      .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
-              DataSaida = ISNULL(DataSaida, @hoje)
-              WHERE MembroId = @id AND Status <> 'DESLIGADO'`);
-    if (upd.rowsAffected[0] === 0) {
-      context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada (ou já estava desligada)." } };
+    // O status, a vacância automática (v1.5: Assentos, Liderança, cargo, EBD, delegações e sessões) e a trilha numa transação só: ou tudo vale, ou nada muda e o
+    // pedido pode ser repetido. A trava da escada põe em fila com a cerimônia de consagração da mesma pessoa (como no abandono). O falecido não vira desligado.
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if (!(await obterTrava(rq, `escada_${membroDesligar}`))) { await desistir(); return "OCUPADA"; }
+      const upd = await rq().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeBrasilia())
+        .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = ISNULL(DataSaida, @hoje)
+                OUTPUT INSERTED.MembroId
+                WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
+      if (!(upd.recordset || []).length) { await desistir(); return "JA_SAIU"; }
+      await vacancia.encerrarVinculos(executor, sql, membroDesligar, "DESLIGAMENTO");
+      await registrarAuditoriaNaTransacao(transacao, { tabela: "MembroReferencia", registroId: membroDesligar, acao: "Desligou pessoa", usuarioId: usuario.membroId });
+      return "DESLIGOU";
+    });
+    if (desfecho === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
-    // Vacância automática (v1.5): fecha Assentos/Liderança/Cargo — mesmo helper
-    // usado no procedimento de abandono e na exclusão disciplinar.
-    await vacancia.encerrarVinculos(pool, sql, membroDesligar, "DESLIGAMENTO");
-    await require("../shared/credencialDb").recolherSemFalhar(pool, membroDesligar, "Desligamento", usuario.membroId);   // v8.4: o recolhimento da credencial
-    await registrarAuditoria({ tabela: "MembroReferencia", registroId: membroDesligar, acao: "Desligou pessoa", usuarioId: usuario.membroId });
+    if (desfecho === "JA_SAIU") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa já está fora do rol (desligada ou falecida)." } };
+      return;
+    }
+    await require("../shared/credencialDb").recolherSemFalhar(pool, membroDesligar, "Desligamento", usuario.membroId);   // v8.4: o recolhimento da credencial, depois do commit
     context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: "✅ Pessoa desligada." } };
     return;
   }

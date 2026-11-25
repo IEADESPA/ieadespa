@@ -14,15 +14,15 @@ jest.mock("../db", () => {
     const r = { input: (nome, ...resto) => { entradas[nome] = resto[resto.length - 1]; return r; }, query: (texto) => executar(texto, entradas), batch: (texto) => executar(texto, entradas) };
     return r;
   };
-  class Transaction { async begin() {} async commit() {} async rollback() {} request() { return novaRequest(); } }
+  class Transaction { async begin() { mockConsultas.push({ texto: "BEGIN" }); } async commit() { mockConsultas.push({ texto: "COMMIT" }); } async rollback() { mockConsultas.push({ texto: "ROLLBACK" }); } request() { return novaRequest(); } }
   class Request { constructor() { return novaRequest(); } }
   const sql = new Proxy({}, { get: (_alvo, nome) => (nome === "Transaction" ? Transaction : nome === "Request" ? Request : () => undefined) });
   return { getPool: async () => ({ request: novaRequest }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async (_t, d) => { mockConsultas.push({ texto: `TRILHA ${d.acao}` }); return true; }), sha256: () => "" }));
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => true) }));
-jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
-jest.mock("../credencialDb", () => ({ recolherSemFalhar: jest.fn(async () => {}) }));
+jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async (_e, _s, id, motivo) => { mockConsultas.push({ texto: `VACANCIA ${id} ${motivo}` }); }) }));
+jest.mock("../credencialDb", () => ({ recolherSemFalhar: jest.fn(async () => { mockConsultas.push({ texto: "CREDENCIAL" }); }) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, urlDocumentoComSas: (u) => u, salvarFoto: jest.fn(), salvarDocumento: jest.fn() }));
 
 const auth = require("../auth");
@@ -135,7 +135,7 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
     mockRegras = [
       sit,
       [/AS CongregacaoNome, e\.Nome AS ExtensaoNome FROM MembroReferencia m/, { recordset: existe ? [{ CongregacaoNome: "Central", ExtensaoNome: null }] : [] }],
-      [/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [], rowsAffected: [1] }],
+      [/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [{ MembroId: 5 }], rowsAffected: [1] }],
       [/sp_getapplock/, { recordset: [{ resultado: 0 }] }]
     ];
   }
@@ -190,6 +190,48 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
     expect(fora.status).toBe(403);
     expect(JSON.stringify(inexistente.body)).toBe(JSON.stringify(fora.body));
     expect(consultouSituacao()).toBe(false);
+  });
+
+  describe("o desligamento numa transação só", () => {
+    const passos = () => mockConsultas.map((c) => c.texto).filter((t) => /^(BEGIN|COMMIT|ROLLBACK|VACANCIA|TRILHA|CREDENCIAL)|sp_getapplock|UPDATE MembroReferencia SET Status = 'DESLIGADO'/.test(t))
+      .map((t) => (/sp_getapplock/.test(t) ? "TRAVA" : /UPDATE MembroReferencia/.test(t) ? "STATUS" : t));
+    const vacancia = require("../vacancia");
+
+    test("status, vacância e trilha dentro da transação; a credencial depois do commit", async () => {
+      regrasDoDesligar(situacao(0, 0, 0));
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(true);
+      expect(passos()).toEqual(["BEGIN", "TRAVA", "STATUS", "VACANCIA 5 DESLIGAMENTO", "TRILHA Desligou pessoa", "COMMIT", "CREDENCIAL"]);
+      expect(mockConsultas.find((c) => /UPDATE MembroReferencia SET Status = 'DESLIGADO'/.test(c.texto)).texto).toMatch(/^SET XACT_ABORT ON;/);
+    });
+
+    test("a vacância falha no meio: nada fica gravado e o pedido pode ser repetido", async () => {
+      regrasDoDesligar(situacao(0, 0, 0));
+      vacancia.encerrarVinculos.mockImplementationOnce(async () => { throw new Error("falha passageira"); });
+      await expect(chamar("DELETE", { token: sessao(77), membroIdRota: "5" })).rejects.toThrow("falha passageira");
+      expect(passos()).toEqual(["BEGIN", "TRAVA", "STATUS", "ROLLBACK"]);
+      mockConsultas = [];
+      const deNovo = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(deNovo.body.sucesso).toBe(true);
+    });
+
+    test("outra alteração da mesma pessoa em andamento: nada muda e pede para tentar de novo", async () => {
+      regrasDoDesligar(situacao(0, 0, 0));
+      mockRegras.unshift([/sp_getapplock/, { recordset: [{ resultado: -1 }] }]);
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(/Tente de novo/);
+      expect(passos()).toEqual(["BEGIN", "TRAVA", "ROLLBACK"]);
+    });
+
+    test("quem já saiu do rol (desligado ou falecido): nada muda", async () => {
+      regrasDoDesligar(situacao(0, 0, 0));
+      mockRegras.unshift([/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [], rowsAffected: [0] }]);
+      const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+      expect(r.body.sucesso).toBe(false);
+      expect(passos()).toEqual(["BEGIN", "TRAVA", "STATUS", "ROLLBACK"]);
+      expect(mockConsultas.find((c) => /UPDATE MembroReferencia SET Status = 'DESLIGADO'/.test(c.texto)).texto).toMatch(/Status NOT IN \('DESLIGADO', 'FALECIDO'\)/);
+    });
   });
 
   test.each([["INATIVO"], ["AFASTADO"], ["DESLIGADO"], ["FALECIDO"]])("a ficha com a situação %s: fora do nível geral, 403 e nada muda", async (status) => {

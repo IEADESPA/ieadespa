@@ -59,6 +59,9 @@ const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
 // A licença por candidatura entra e sai só pela aba "Licença Candidatura" (GestaoLicencasCandidatura): lá ficam o registro da licença, o afastamento dos cargos e
 // a volta, que é decisão da Diretoria.
 const LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
+const MSG_LICENCA_ABERTA = "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o falecimento, aqui na ficha, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\".";
+// a licença por candidatura ainda aberta da pessoa (o índice IX_LicencasCandidatura_MembroId_Status, migração 300, atende a busca)
+const SQL_LICENCA_ABERTA = (dica) => `SELECT TOP 1 LicencaId FROM LicencasCandidatura${dica} WHERE MembroId = @id AND Status = 'EM_LICENCA'`;
 const TAMANHO_STATUS = 20;   // MembroReferencia.Status é NVARCHAR(20); a sigla do catálogo vai até 30
 
 // As outras datas da ficha: um dia que existe (AAAA-MM-DD), dentro do que a coluna DATE guarda; nascimento, admissão e batismo nunca no futuro (dia de Brasília).
@@ -87,6 +90,16 @@ const conferirSaidaDeLideranca = (pool, req, context, usuario, membroId) => nive
 // (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se
 // a pessoa ainda não tiver Cargo Ministerial definido (dado histórico). Quem
 // alimenta isso é a esteira de Consagrações (EvoluirConsagracao) e/ou o campo
+// licencaAberta: quem está em LICENCA_CANDIDATURA com a licença ainda aberta (a ficha, na tela, oferece só o falecimento; com a licença já encerrada, a lista
+// inteira — decisão de 25/11/2026). Só consulta as licenças quando alguém da lista está nessa situação.
+async function marcarLicencaAberta(pool, membros) {
+  const algumNaLicenca = membros.some(m => m.status === LICENCA_CANDIDATURA);
+  const abertas = algumNaLicenca
+    ? new Set(((await pool.request().query("SELECT MembroId FROM LicencasCandidatura WHERE Status = 'EM_LICENCA'")).recordset || []).map(r => r.MembroId))
+    : new Set();
+  return membros.map(m => Object.assign({}, m, { licencaAberta: m.status === LICENCA_CANDIDATURA && abertas.has(m.membroId) }));
+}
+
 // Cargo Ministerial do próprio cadastro — não existe mais edição manual de
 // "função" nesta tela (ver migração 013).
 const SELECT_MEMBRO = `
@@ -184,7 +197,7 @@ module.exports = async function (context, req) {
     } else {
       linhas = (await pedido.query(`${SELECT_MEMBRO}${onde} ORDER BY m.Nome`)).recordset;
     }
-    const membros = linhas
+    const membros = (await marcarLicencaAberta(pool, linhas))
       // Escopo EXTENSAO é mais estreito que a Congregação-Mãe: só quem tem exatamente essa Extensão vinculada entra na lista (noEscopoDaPessoa confere os
       // dois, concessão por concessão). O banco já filtrou; esta é a segunda conferência (nunca deixa passar quem está fora).
       .filter(m => noEscopoDaPessoa(usuario, m.congregacao, m.extensao))
@@ -441,12 +454,17 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "A licença por candidatura se registra na aba \"Licença Candidatura\" da pessoa: lá ficam a licença e o afastamento dos cargos." } };
       return;
     }
-    // Da licença, a ficha só grava o falecimento (a licença fecha junto, na transação abaixo); a volta e o não retorno são da aba da licença, o desligamento é
-    // o botão "Desligar" (que também fecha a licença).
+    // Da licença ABERTA, a ficha só grava o falecimento (a licença fecha junto, na transação abaixo); a volta e o não retorno são da aba da licença, o
+    // desligamento é o botão "Desligar" (que também fecha a licença). Sem licença aberta (encerrada por uma exclusão, ou o "não retornou" de antes), a ficha
+    // aceita a situação normalmente (decisão de 25/11/2026); a transação confere de novo, sob a trava da escada, que nenhuma licença abriu no meio.
     const saindoDaLicenca = statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA;
-    if (saindoDaLicenca && statusFinal !== "FALECIDO") {
-      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o falecimento, aqui na ficha, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\"." } };
-      return;
+    const conferirLicencaFechada = saindoDaLicenca && statusFinal !== "FALECIDO";
+    if (conferirLicencaFechada) {
+      const aberta = await pool.request().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(""));
+      if ((aberta.recordset || []).length) {
+        context.res = { status: 409, body: { sucesso: false, mensagem: MSG_LICENCA_ABERTA } };
+        return;
+      }
     }
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
     // verdade: força Sem Comunhão, registra a data de saída (se não vier informada) e
@@ -542,14 +560,18 @@ module.exports = async function (context, req) {
     // o pedido pode ser repetido. Quando o cargo ou o rol mudam, a trava da escada vem primeiro (a mesma da cerimônia de consagração e do abandono).
     let licencaEncerrada = 0;
     const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
-      if ((mexeNoHistorico || entrandoEmStatusTerminal) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
+      if ((mexeNoHistorico || entrandoEmStatusTerminal || saindoDaLicenca) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
+      if (conferirLicencaFechada && ((await rq().input("id", sql.Int, membroId).query(SQL_LICENCA_ABERTA(" WITH (UPDLOCK, HOLDLOCK)"))).recordset || []).length) {
+        await desistir();
+        return "LICENCA_ABERTA";
+      }
       await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
       const gravacao = await gravarPessoa(preencher(rq()), prepEnd);
       if (!gravacao.gravou) { await desistir(); return "FICHA_MUDOU"; }
       if (mexeNoHistorico) await escadaDb.sincronizarCadastroNaTransacao(transacao, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
       if (entrandoEmStatusTerminal) {
         await vacancia.encerrarVinculos(executor, sql, membroId, motivoDaVacancia);   // também derruba as sessões abertas da pessoa
-        if (saindoDaLicenca) licencaEncerrada = await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroId, "Encerrada pelo falecimento.", hojeISO);
+        if (saindoDaLicenca && statusFinal === "FALECIDO") licencaEncerrada = await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroId, "Encerrada pelo falecimento.", hojeISO);
       } else if (saindoDoRolAtivo) {
         // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
         // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
@@ -570,6 +592,10 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
+    if (desfecho === "LICENCA_ABERTA") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: MSG_LICENCA_ABERTA } };
+      return;
+    }
     if (desfecho === "FICHA_MUDOU") {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo ou a situação desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
       return;
@@ -578,6 +604,7 @@ module.exports = async function (context, req) {
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
     const membro = result.recordset[0];
+    Object.assign(membro, (await marcarLicencaAberta(pool, [membro]))[0]);
     const vDisciplinaMembro = auth.visaoDaPermissao(usuario, "disciplina");
     if (vDisciplinaMembro && noEscopoDaPessoa(vDisciplinaMembro, membro.congregacao, membro.extensao)) {
       const idsSobDisciplina = await disciplina.membrosSobDisciplina(pool);

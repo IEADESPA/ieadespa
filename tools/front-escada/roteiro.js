@@ -325,6 +325,18 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   lic.g("editarPessoa")(R.pessoa.membroId + 1);
   ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "ATIVO" && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["ATIVO", "FALECIDO", "INATIVO"])
     && lic.e("pessoaStatusDica").textContent === "", "outra pessoa: a lista inteira de volta, sem a licença", escolhiveis(lic));
+  // em LICENCA_CANDIDATURA, mas a licença já encerrada (licencaAberta false, da API): a lista inteira, e a dica diz que a licença acabou
+  lic.ev(`window._pessoasCache.push(${JSON.stringify({ ...R.pessoa, membroId: R.pessoa.membroId + 2, status: "LICENCA_CANDIDATURA", licencaAberta: false })});`);
+  lic.g("editarPessoa")(R.pessoa.membroId + 2);
+  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA"
+    && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["ATIVO", "FALECIDO", "INATIVO", "LICENCA_CANDIDATURA"]) && /encerrada/.test(lic.e("pessoaStatusDica").textContent),
+  "licença já encerrada: a lista inteira à escolha, e a dica diz que a licença acabou", escolhiveis(lic));
+  lic.doc.escolher(lic.e("pessoaStatus"), "INATIVO");
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "INATIVO", "licença já encerrada: escolher INATIVO e salvar manda INATIVO", p[0] && p[0].corpo);
   // sem Falecido na lista (catálogo sem ele): a opção entra só para quem está em licença
   lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option>';`);
   lic.g("editarPessoa")(R.pessoa.membroId);

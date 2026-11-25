@@ -30,7 +30,7 @@ const ID = {
   liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81,
   licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92,
   fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102,
-  licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106
+  licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106, licEncerrada: BASE_ID + 107
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -174,7 +174,7 @@ async function principal() {
   const decidir = (licencaId, retornou) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), binding: { id: String(licencaId) }, corpo: { retornou } });
   const licencaDe = (m) => escalar("SELECT TOP 1 CONCAT(Status, '|', ISNULL(ObservacaoRetorno, '-')) FROM LicencasCandidatura WHERE MembroId = @m ORDER BY LicencaId DESC", { m });
   const idLic = {};
-  for (const k of ["licNaoVolta", "licVolta", "licFalece", "licDesliga"]) {
+  for (const k of ["licNaoVolta", "licVolta", "licFalece", "licDesliga", "licEncerrada"]) {
     const r = await lic(ID[k]);
     idLic[k] = r.body && r.body.licencaId;
     ok(r.status === 201 && (await statusDe(ID[k])) === "LICENCA_CANDIDATURA", `a licença de ${k} pela rota da licença`, resumo(r));
@@ -193,6 +193,18 @@ async function principal() {
   const fichaDesliga = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.licDesliga, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) }));
   ok(fichaDesliga.status === 409 && /Desligar/.test(fichaDesliga.body && fichaDesliga.body.mensagem) && (await statusDe(ID.licDesliga)) === "LICENCA_CANDIDATURA" && /^EM_LICENCA/.test(await licencaDe(ID.licDesliga)),
     "a ficha não desliga quem está em licença: 409, aponta o botão Desligar", resumo(fichaDesliga));
+  // a licença encerrada sem trocar a situação no rol (a exclusão disciplinar, ou o "não retornou" de antes de 25/11/2026): a ficha volta a aceitar a situação
+  const listaLic = await tentar(() => pessoas("GET", { token: geral() }));
+  const marca = (m) => { const l = Array.isArray(listaLic.body) ? listaLic.body.find((x) => x.membroId === m) : null; return l ? l.licencaAberta : "ausente"; };
+  ok(listaLic.status === 200 && marca(ID.licEncerrada) === true && marca(ID.licNaoVolta) === false && marca(ID.licVolta) === false,
+    "a lista marca licencaAberta só para quem está com a licença aberta", `${marca(ID.licEncerrada)} ${marca(ID.licNaoVolta)} ${marca(ID.licVolta)}`);
+  await q("UPDATE LicencasCandidatura SET Status = 'NAO_RETORNOU', DataRetornoDecidida = '2026-10-10', ObservacaoRetorno = N'Encerrada pela saída do rol.' WHERE MembroId = @m", { m: ID.licEncerrada });
+  const listaLic2 = await tentar(() => pessoas("GET", { token: geral() }));
+  const linhaEnc = Array.isArray(listaLic2.body) ? listaLic2.body.find((x) => x.membroId === ID.licEncerrada) : null;
+  ok(linhaEnc && linhaEnc.status === "LICENCA_CANDIDATURA" && linhaEnc.licencaAberta === false, "licença encerrada sem trocar a situação: licencaAberta false", JSON.stringify(linhaEnc || {}).slice(0, 120));
+  const fichaEnc = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.licEncerrada, { status: "INATIVO" }) }));
+  ok(fichaEnc.status === 200 && fichaEnc.body && fichaEnc.body.sucesso === true && (await statusDe(ID.licEncerrada)) === "INATIVO",
+    "sem licença aberta, a ficha aceita a situação normalmente (INATIVO)", resumo(fichaEnc));
   const desligouLic = await tentar(() => pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.licDesliga) } }));
   ok(desligouLic.status === 200 && (await statusDe(ID.licDesliga)) === "DESLIGADO" && /^NAO_RETORNOU\|.*desligamento/.test(await licencaDe(ID.licDesliga)),
     "o Desligar de quem está em licença fecha a licença junto", resumo(desligouLic));

@@ -511,8 +511,12 @@ describe("a licença por candidatura não passa pela ficha", () => {
     expect(gravacoes()).toHaveLength(0);
   });
 
-  test.each([["ATIVO"], ["DESLIGADO"], ["INATIVO"], [undefined]])("tirar da licença pela ficha (%p): 409 com o caminho certo, nada é gravado", async (status) => {
+  // a licença EM_LICENCA da pessoa (a ficha só recusa a saída enquanto ela está aberta: decisão de 25/11/2026)
+  const comLicencaAberta = () => mockRegras.unshift([/SELECT TOP 1 LicencaId FROM LicencasCandidatura/, { recordset: [{ LicencaId: 9 }] }]);
+
+  test.each([["ATIVO"], ["DESLIGADO"], ["INATIVO"], [undefined]])("tirar da licença aberta pela ficha (%p): 409 com o caminho certo, nada é gravado", async (status) => {
     regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    comLicencaAberta();
     const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
     expect(r.status).toBe(409);
     expect(r.body.mensagem).toMatch(/Licença Candidatura/);
@@ -523,8 +527,39 @@ describe("a licença por candidatura não passa pela ficha", () => {
 
   test("tirar da licença pela ficha sem a confirmação recente: a recusa é a da licença, sem pedir o 428 antes", async () => {
     regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    comLicencaAberta();
     const r = await chamar("POST", { token: semFator(), corpo: corpoFicha({ status: "INATIVO" }) });
     expect(r.status).toBe(409);
+  });
+
+  test.each([["ATIVO"], ["INATIVO"]])("em LICENCA_CANDIDATURA sem licença aberta (já encerrada): a ficha aceita %p normalmente, sob a trava e com a conferência na transação", async (status) => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+    expect(gravacoes()[0].entradas.status).toBe(status);
+    const textos = mockConsultas.map((c) => c.texto);
+    const iBegin = textos.indexOf("BEGIN");
+    const iTrava = textos.findIndex((t) => /sp_getapplock/.test(t));
+    const iConfere = textos.findIndex((t, i) => i > iBegin && /SELECT TOP 1 LicencaId FROM LicencasCandidatura WITH \(UPDLOCK, HOLDLOCK\)/.test(t));
+    const iFicha = textos.findIndex((t) => /UPDATE MembroReferencia SET Nome/.test(t));
+    expect(iBegin).toBeGreaterThanOrEqual(0);
+    expect(iTrava).toBeGreaterThan(iBegin);
+    expect(iConfere).toBeGreaterThan(iTrava);
+    expect(iFicha).toBeGreaterThan(iConfere);
+    expect(mockConsultas.find((c) => /UPDATE LicencasCandidatura/.test(c.texto))).toBeUndefined();
+  });
+
+  test("a licença abre no meio (outra secretaria a registrou enquanto a ficha salvava): 409 com o caminho da licença, nada é gravado", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    let vez = 0;
+    mockRegras.unshift([/SELECT TOP 1 LicencaId FROM LicencasCandidatura/, () => ({ recordset: vez++ === 0 ? [] : [{ LicencaId: 9 }] })]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "ATIVO" }) });
+    expect(r.status).toBe(409);
+    expect(r.body.mensagem).toMatch(/Licença Candidatura/);
+    expect(gravacoes()).toHaveLength(0);
+    expect(mockConsultas.map((c) => c.texto)).toContain("ROLLBACK");
   });
 
   test("quem está em licença: salvar o telefone com a mesma situação continua valendo", async () => {

@@ -15,8 +15,9 @@ const STATUS_DEFAULT = [
   { sigla: "AFASTADO", nome: "Afastado", ativa: true }
 ];
 // A licença por candidatura entra pela aba "Licença Candidatura" (ela grava a licença, o afastamento dos cargos e a decisão do retorno): fora do seletor da ficha.
-// Para quem está nela, o seletor oferece só a própria licença e o falecimento (decisão de 25/11/2026): a volta e o não retorno vão pela aba da licença, o
-// desligamento pelo botão "Desligar" (o servidor recusa qualquer outra troca pela ficha).
+// Para quem está nela com a licença ABERTA, o seletor oferece só a própria licença e o falecimento (decisão de 25/11/2026): a volta e o não retorno vão pela aba
+// da licença, o desligamento pelo botão "Desligar" (o servidor recusa qualquer outra troca pela ficha). Com a licença já encerrada (a API manda licencaAberta
+// false), a lista inteira volta.
 const STATUS_LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
 const STATUS_FALECIDO = "FALECIDO";
 
@@ -26,12 +27,13 @@ function preencherSituacaoFichaPessoa(pessoa) {
   const select = document.getElementById("pessoaStatus");
   [...select.options].filter(o => o.getAttribute("data-so-desta-pessoa")).forEach(o => o.remove());
   const status = pessoa ? pessoa.status : "";
-  const emLicenca = status === STATUS_LICENCA_CANDIDATURA;
+  const naLicenca = status === STATUS_LICENCA_CANDIDATURA;
+  const emLicenca = naLicenca && pessoa.licencaAberta !== false;   // sem a informação, vale a regra da licença aberta (o servidor confere de qualquer jeito)
   const incluirSoDestaPessoa = (sigla, nome) => {
     if ([...select.options].some(o => o.value === sigla)) return;
     select.insertAdjacentHTML("beforeend", `<option value="${escaparHtmlEbd(sigla)}" data-so-desta-pessoa="1">${escaparHtmlEbd(nome)}</option>`);
   };
-  if (status) incluirSoDestaPessoa(status, emLicenca ? "Licença por candidatura" : status);
+  if (status) incluirSoDestaPessoa(status, naLicenca ? "Licença por candidatura" : status);
   if (emLicenca) incluirSoDestaPessoa(STATUS_FALECIDO, "Falecido");
   [...select.options].forEach(o => {
     const fora = emLicenca && o.value !== STATUS_LICENCA_CANDIDATURA && o.value !== STATUS_FALECIDO;
@@ -42,7 +44,7 @@ function preencherSituacaoFichaPessoa(pessoa) {
   select.disabled = false;
   document.getElementById("pessoaStatusDica").textContent = emLicenca
     ? "Em licença por candidatura: o falecimento se registra aqui, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\"; a volta e o não retorno, na aba \"Licença Candidatura\"."
-    : "";
+    : naLicenca ? "A licença por candidatura desta pessoa já foi encerrada: escolha a situação atual dela no rol." : "";
 }
 
 // v10.1 — o "Cadastrar Pessoa" em branco: a aba esperava as SEIS listas abaixo chegarem para só então pôr o formulário na tela (e, se uma falhava, ele nunca

@@ -396,7 +396,10 @@ async function principal() {
   for (const k of ["discJulgar", "discHomologar"]) {
     LID[k] = await lideranca(ID[k], pSec, "CONGREGACAO", sede);
     await q("INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) VALUES (@o, @m, 'FUNCAO', N'Conselheiro (roteiro)', '2025-01-01')", { o: orgao, m: ID[k] });
+    // a licença por candidatura aberta: a exclusão a fecha na mesma transação (decisão de 25/11/2026)
+    await q("INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, Status) VALUES (@m, '2026-10-04', '2026-07-06', 'EM_LICENCA')", { m: ID[k] });
   }
+  const licencaDisc = (m) => escalar("SELECT TOP 1 CONCAT(Status, '|', ISNULL(ObservacaoRetorno, '-')) FROM LicencasCandidatura WHERE MembroId = @m ORDER BY LicencaId DESC", { m });
   const procJulgar = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, OrgaoResponsavelId) OUTPUT INSERTED.ProcessoId
     VALUES (@m, '2026-09-01', 'EM_ANDAMENTO', @o)`, { m: ID.discJulgar, o: orgao });
   const procHomologar = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado, DataConclusao, HomologadoPeloCEI, OrgaoResponsavelId)
@@ -412,8 +415,8 @@ async function principal() {
       let erro = null;
       try { const r = await disc(p, corpo); if (r.status >= 500) erro = r; } catch (e) { erro = e; }
       ok(erro !== null, `${rotulo} com falha no fim: o erro chega a quem chamou`);
-      ok((await situacaoProc(p)) === antes && (await fimDoCargo(m)) === "vigente" && (await assentoAberto(m)),
-        `e nada ficou pela metade (${rotulo}: o processo como antes, o cargo e o assento abertos)`, `${await situacaoProc(p)} ${await fimDoCargo(m)}`);
+      ok((await situacaoProc(p)) === antes && (await fimDoCargo(m)) === "vigente" && (await assentoAberto(m)) && (await licencaDisc(m)) === "EM_LICENCA|-",
+        `e nada ficou pela metade (${rotulo}: o processo como antes, o cargo, o assento e a licença abertos)`, `${await situacaoProc(p)} ${await fimDoCargo(m)} ${await licencaDisc(m)}`);
     }
   } finally {
     await q("DROP TRIGGER IF EXISTS dbo.TR_E2E152_FalhaDecisao");
@@ -421,11 +424,13 @@ async function principal() {
   const julgou = await disc(procJulgar, { acao: "JULGAR", resultado: "EXCLUSAO" });
   ok(julgou.body && julgou.body.sucesso === true && (await situacaoProc(procJulgar)) === "JULGADO/-" && (await fimDoCargo(ID.discJulgar)) !== "vigente" && !(await assentoAberto(ID.discJulgar)),
     "a nova tentativa de julgar conclui tudo", JSON.stringify(julgou.body).slice(0, 120));
+  ok((await licencaDisc(ID.discJulgar)) === "NAO_RETORNOU|Encerrada pela saída do rol.", "o julgamento com exclusão fecha a licença aberta, com o motivo neutro", await licencaDisc(ID.discJulgar));
   const julgouDeNovo = await disc(procJulgar, { acao: "JULGAR", resultado: "SANCAO", penalidadeId: 1 });
   ok(julgouDeNovo.body && julgouDeNovo.body.sucesso === false && /já foi julgado/.test(julgouDeNovo.body.mensagem), "julgar de novo é recusado", JSON.stringify(julgouDeNovo.body).slice(0, 120));
   const homologou = await disc(procHomologar, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true });
   ok(homologou.body && homologou.body.sucesso === true && (await situacaoProc(procHomologar)) === "JULGADO/1" && (await fimDoCargo(ID.discHomologar)) !== "vigente"
     && !(await assentoAberto(ID.discHomologar)), "a nova tentativa de homologar conclui tudo", JSON.stringify(homologou.body).slice(0, 120));
+  ok((await licencaDisc(ID.discHomologar)) === "NAO_RETORNOU|Encerrada pela saída do rol.", "a homologação da exclusão fecha a licença aberta, com o motivo neutro", await licencaDisc(ID.discHomologar));
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5d. a licença por candidatura de quem tem cargo: o nível do cargo, o 428 e uma transação só ==");

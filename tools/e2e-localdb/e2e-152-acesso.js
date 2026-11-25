@@ -3,6 +3,7 @@
 //   1. a matrícula da ficha só como número inteiro (o banco nunca recebe outra forma);
 //   2. salvar a ficha de quem já saiu mantém a data de saída; a data da saída pelo dia de Brasília;
 //   2b. a situação no rol só do catálogo (gravada com a sigla dele), a licença por candidatura só pela aba dela e as outras datas da ficha conferidas;
+//   2c. a saída da licença: o não retorno põe INATIVO; o falecimento pela ficha e o desligamento fecham a licença aberta; a migração 300 (AFASTADO) duas vezes;
 //   3. tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, com a confirmação recente, e nunca a última pessoa que
 //      administra os acessos;
 //   4. a delegação não passa adiante a permissão que a recertificação vencida tirou do titular;
@@ -28,7 +29,8 @@ const ID = {
   avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63, avisoNova: BASE_ID + 64, avisoTutelada: BASE_ID + 65,
   liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81,
   licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92,
-  fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102
+  fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102,
+  licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -57,8 +59,13 @@ async function principal() {
     await q(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, DataAdmissao, Sexo)
       VALUES (@id, @n, @c, 'ATIVO', 'EM_COMUNHAO', '1984-03-12', '2010-05-02', 'M')`, { id, n: `Pessoa ${chave} E2E152`, c: sede });
   }
-  // AFASTADO não vem semeado no catálogo das situações no rol (migrações 016, 019 e 023): aqui a Secretaria o acrescentou (a seção 3 o usa)
-  await q("IF NOT EXISTS (SELECT 1 FROM StatusMembro WHERE Sigla = N'AFASTADO') INSERT INTO StatusMembro (Sigla, Nome) VALUES (N'AFASTADO', N'Afastado')");
+  // a migração 300 (AFASTADO no catálogo das situações no rol, resposta do responsável de 25/11/2026), duas vezes como em dois deploys: a base cenario-175 vem sem ela
+  const fs = require("fs");
+  const PASTA_MIG = path.join(API, "..", "sql", "migrations");
+  const m300 = fs.readFileSync(path.join(PASTA_MIG, fs.readdirSync(PASTA_MIG).find((n) => n.startsWith("300_"))), "utf8").split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean);
+  for (let vez = 0; vez < 2; vez++) for (const lote of m300) await q(lote);
+  ok((await escalar("SELECT COUNT(*) FROM StatusMembro WHERE Sigla = N'AFASTADO' AND Ativa = 1")) === 1
+    && (await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name = N'IX_LicencasCandidatura_MembroId_Status'")) === 1, "a migração 300 duas vezes: AFASTADO uma vez só no catálogo, e o índice");
   const papel = async (nome, nivel, perms) => (await q("INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES (@n, @v, @p); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: nome, v: nivel, p: perms }))[0].id;
   const pGeral = await papel("Geral E2E152", "GLOBAL", "pessoas,permissoes");
   const pTes = await papel("Tesoureiro E2E152", "CONGREGACAO", "financeiro,pessoas");
@@ -160,6 +167,35 @@ async function principal() {
   }
   const datasCertas = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaDatas, { dataBatismo: "2001-06-10", dataRitoRecebimento: "2016-03-20", dataAfastamento: "2020-02-01" }) }));
   ok(datasCertas.status === 200 && (await datasGravadas()) === "1984-03-12|2010-05-02|2001-06-10|2016-03-20|2020-02-01", "as datas certas são gravadas", resumo(datasCertas));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 2c. a saída da licença por candidatura ==");
+  const lic = (membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), corpo: { membroId, dataPleito: "2026-10-04" } });
+  const decidir = (licencaId, retornou) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token: geral(), binding: { id: String(licencaId) }, corpo: { retornou } });
+  const licencaDe = (m) => escalar("SELECT TOP 1 CONCAT(Status, '|', ISNULL(ObservacaoRetorno, '-')) FROM LicencasCandidatura WHERE MembroId = @m ORDER BY LicencaId DESC", { m });
+  const idLic = {};
+  for (const k of ["licNaoVolta", "licVolta", "licFalece", "licDesliga"]) {
+    const r = await lic(ID[k]);
+    idLic[k] = r.body && r.body.licencaId;
+    ok(r.status === 201 && (await statusDe(ID[k])) === "LICENCA_CANDIDATURA", `a licença de ${k} pela rota da licença`, resumo(r));
+  }
+  const naoVolta = await decidir(idLic.licNaoVolta, false);
+  ok(naoVolta.body && naoVolta.body.sucesso === true && (await statusDe(ID.licNaoVolta)) === "INATIVO" && /^NAO_RETORNOU/.test(await licencaDe(ID.licNaoVolta))
+    && (await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'LicencasCandidatura' AND RegistroId = @id AND Acao LIKE N'%não retorno%'", { id: idLic.licNaoVolta })) === 1,
+  "não retornou: a licença fecha, a pessoa fica INATIVO no rol e a trilha registra", resumo(naoVolta));
+  const volta = await decidir(idLic.licVolta, true);
+  ok(volta.body && volta.body.sucesso === true && (await statusDe(ID.licVolta)) === "ATIVO" && /^RETORNOU/.test(await licencaDe(ID.licVolta)), "retornou: a pessoa volta a ATIVO", resumo(volta));
+  const deNovoLic = await decidir(idLic.licNaoVolta, true);
+  ok(deNovoLic.body && deNovoLic.body.sucesso === false && (await statusDe(ID.licNaoVolta)) === "INATIVO", "a decisão já registrada não se repete (nem traz de volta a ATIVO)", resumo(deNovoLic));
+  const faleceuLic = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.licFalece, { status: "FALECIDO" }) }));
+  ok(faleceuLic.status === 200 && (await statusDe(ID.licFalece)) === "FALECIDO" && /^NAO_RETORNOU\|.*falecimento/.test(await licencaDe(ID.licFalece)),
+    "a ficha grava o falecimento de quem está em licença, e a licença fecha junto", resumo(faleceuLic));
+  const fichaDesliga = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.licDesliga, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) }));
+  ok(fichaDesliga.status === 409 && /Desligar/.test(fichaDesliga.body && fichaDesliga.body.mensagem) && (await statusDe(ID.licDesliga)) === "LICENCA_CANDIDATURA" && /^EM_LICENCA/.test(await licencaDe(ID.licDesliga)),
+    "a ficha não desliga quem está em licença: 409, aponta o botão Desligar", resumo(fichaDesliga));
+  const desligouLic = await tentar(() => pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.licDesliga) } }));
+  ok(desligouLic.status === 200 && (await statusDe(ID.licDesliga)) === "DESLIGADO" && /^NAO_RETORNOU\|.*desligamento/.test(await licencaDe(ID.licDesliga)),
+    "o Desligar de quem está em licença fecha a licença junto", resumo(desligouLic));
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 3. tirar do rol ativo quem tem cargo de liderança ==");

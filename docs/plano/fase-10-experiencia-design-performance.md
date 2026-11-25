@@ -1356,6 +1356,25 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     nível; as quatro assinaturas (quem toma posse, quem deu a posse, o Presidente e o Secretário Geral) e a página dos
     dois para assinar em lote, com filtro, podendo abrir; o PDF só para os quatro; a área vê a situação e o QR dos outros.
     O acesso vale desde o aceite da pessoa; a assinatura dos dois completa o termo.
+- **A rodada 34 conferida por ele (25/11/2026): as 2 telas aprovadas (versão única).** Os "para conferir" ficam como
+  desenhados. As observações dele:
+  - **O último domingo do mês:** à tarde, a reunião do Ministério; à noite, a ceia local. É o **último** domingo: o 5º
+    quando o mês tem 5, o 4º quando tem 4. A agenda tem a regra "último domingo do mês", não um número fixo.
+  - **A ceia geral** acontece a cada 3 ou 4 meses (a Geral marca as datas). No dia da ceia geral **não há ceia local**:
+    a agenda troca sozinha naquele domingo. A configuração entra na agenda (mostrada na rodada 35, sem tela nova).
+  - **A validade jurídica do termo assinado pelo sistema** (a dúvida dele: a autenticação da pessoa, não o texto).
+    - A assinatura por PIN ou senha é uma **assinatura eletrônica**: a lei brasileira (MP 2.200-2/2001, art. 10, § 2º, e
+      Lei 14.063/2020) aceita a assinatura fora do ICP-Brasil quando as partes admitem aquele meio. O peso dela num
+      processo depende de provar **quem** assinou e **que o texto não mudou**.
+    - **Decidido pela sessão, para dar esse peso:**
+      - no ato de assinar, o PIN ou a senha **mais o código por e-mail**;
+      - o resumo criptográfico do texto assinado guardado com a assinatura;
+      - o QR e o código de conferência no PDF;
+      - a cópia do termo assinado no e-mail da pessoa;
+      - a trilha com o dia, a hora e o aparelho;
+      - uma frase no próprio termo: a pessoa declara que aceita assinar pelo sistema.
+    - **Confirmar com o advogado da igreja antes da produção.** Se ele pedir mais, a assinatura pelo gov.br (gratuita) entra
+      como opção para os termos que pedirem.
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

@@ -1143,6 +1143,21 @@ Depois da revisão do Financeiro até `4c06d58`:
     quórum das reuniões de órgão.
   - No arrolamento, cada nível completa só os **cargos administrativos** do seu âmbito. A função eclesiástica aparece
     só para ler.
+- **As respostas dele à volta 5 do arrolamento (25/11):**
+  - **O cargo administrativo leva o acesso junto.** Quem ganha o cargo (por exemplo, eleito 1º tesoureiro geral em
+    assembleia) recebe o acesso ao sistema daquele cargo. Mas **só pode ter cargo administrativo quem é membro há pelo
+    menos 90 dias** (o mesmo prazo do voto, contado da admissão). O congregado (em arrolamento) não tem cargo
+    administrativo nenhum: o campo some da ficha dele. O acesso pode ser tirado depois, com o motivo anotado, **pela
+    Geral e pela liderança do mesmo nível do cargo**; o cargo continua. É regra de acesso: entra numa missão própria,
+    com plano aprovado antes de construir.
+  - **Batismo ou carta sem a data na planilha:** a pessoa entra no rol como "dados incompletos" (não conta como apta)
+    até a secretaria pôr a data certa.
+  - **O congregado fica fora de tudo**, também das listas de votantes montadas nome por nome e dos órgãos.
+  - **A importação parada (os 7 dias):** confirmadas as 4 leituras da construção: a parada sem ninguém importado conta
+    da confirmação; a lista do que ficou de fora fica 90 dias; a linha que faltou é achada pelo nome; para importar o
+    resto, a Secretaria Geral manda o arquivo de novo (o sistema não guarda CPF nem contato).
+  - Os textos construídos sem desenho ("As linhas que faltaram", o aviso "faltam N dias" e "Descartar a importação")
+    ele aprova vendo na homologação.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

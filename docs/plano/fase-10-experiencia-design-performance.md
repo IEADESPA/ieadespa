@@ -1169,6 +1169,14 @@ Depois da revisão do Financeiro até `4c06d58`:
   - **O congregado pode servir:** coopera nos serviços (ministério de menores, setor técnico, cuidado pastoral,
     expansão) e pode ter carteirinha, com as travas que cada serviço já tem. Só não vota, não conta em reunião e não
     tem cargo nem cadeira.
+- **As respostas dele sobre o acesso (25/11):**
+  - **Afastar, pôr de licença, inativar ou desligar quem tem cargo** é da secretaria **do nível daquele cargo** (o
+    cargo local, a secretaria local; o de área, a área; o geral, a Geral), sem esperar a Geral: "são 300, 400 cargos;
+    quem conhece é o local". Com o processo, a pessoa **perde na hora o acesso que o cargo dava** e fica só com o
+    perfil de membro dela.
+  - **A data de saída** vai de **2006 (a fundação da igreja) até hoje**: nem antes, nem no futuro. Dado antigo errado
+    que vier pela importação se pensa quando aparecer.
+  - **A avaliação das congregações (PSC):** o ano da fundação e os anos sob tutela **não contam** na cobrança.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

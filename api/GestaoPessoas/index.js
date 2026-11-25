@@ -31,6 +31,7 @@ const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
 const { emTransacao } = require("../shared/transacaoCurta");
 const nivelDoCargo = require("../shared/nivelDoCargo");
+const licencaCandidatura = require("../shared/licencaCandidatura");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
@@ -440,8 +441,11 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "A licença por candidatura se registra na aba \"Licença Candidatura\" da pessoa: lá ficam a licença e o afastamento dos cargos." } };
       return;
     }
-    if (statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA) {
-      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta se registra na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral)." } };
+    // Da licença, a ficha só grava o falecimento (a licença fecha junto, na transação abaixo); a volta e o não retorno são da aba da licença, o desligamento é
+    // o botão "Desligar" (que também fecha a licença).
+    const saindoDaLicenca = statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA;
+    if (saindoDaLicenca && statusFinal !== "FALECIDO") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o desligamento, pelo botão \"Desligar\"." } };
       return;
     }
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
@@ -536,6 +540,7 @@ module.exports = async function (context, req) {
     const motivoDaVacancia = motivoSaidaFinal || (statusFinal === "FALECIDO" ? "FALECIMENTO" : "DESLIGAMENTO");
     // A ficha, o histórico de cargos, a vacância (ou o corte do acesso de quem sai do rol ativo) e a trilha numa transação só: uma falha no meio desfaz tudo e
     // o pedido pode ser repetido. Quando o cargo ou o rol mudam, a trava da escada vem primeiro (a mesma da cerimônia de consagração e do abandono).
+    let licencaEncerrada = 0;
     const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
       if ((mexeNoHistorico || entrandoEmStatusTerminal) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
       await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
@@ -544,6 +549,7 @@ module.exports = async function (context, req) {
       if (mexeNoHistorico) await escadaDb.sincronizarCadastroNaTransacao(transacao, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
       if (entrandoEmStatusTerminal) {
         await vacancia.encerrarVinculos(executor, sql, membroId, motivoDaVacancia);   // também derruba as sessões abertas da pessoa
+        if (saindoDaLicenca) licencaEncerrada = await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroId, "Encerrada pelo falecimento.", hojeISO);
       } else if (saindoDoRolAtivo) {
         // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
         // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
@@ -556,7 +562,7 @@ module.exports = async function (context, req) {
         acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
         usuarioId: usuario.membroId,
         dadosDepois: { nome, cargoMinisterial, congregacaoId, status: statusFinal, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
-          ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
+          ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}), ...(licencaEncerrada ? { licencaEncerrada: true } : {}) }
       });
       return "GRAVOU";
     });
@@ -618,13 +624,18 @@ module.exports = async function (context, req) {
     // pedido pode ser repetido. A trava da escada põe em fila com a cerimônia de consagração da mesma pessoa (como no abandono). O falecido não vira desligado.
     const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
       if (!(await obterTrava(rq, `escada_${membroDesligar}`))) { await desistir(); return "OCUPADA"; }
-      const upd = await rq().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeBrasilia())
+      const hojeDeslig = hojeBrasilia();
+      const upd = await rq().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeDeslig)
         .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', DataSaida = ISNULL(DataSaida, @hoje)
-                OUTPUT INSERTED.MembroId
+                OUTPUT INSERTED.MembroId, DELETED.Status AS StatusAnterior
                 WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
       if (!(upd.recordset || []).length) { await desistir(); return "JA_SAIU"; }
       await vacancia.encerrarVinculos(executor, sql, membroDesligar, "DESLIGAMENTO");
-      await registrarAuditoriaNaTransacao(transacao, { tabela: "MembroReferencia", registroId: membroDesligar, acao: "Desligou pessoa", usuarioId: usuario.membroId });
+      // desligar quem estava em licença por candidatura fecha a licença aberta (resposta do responsável, 25/11/2026)
+      const licencaEncerrada = upd.recordset[0].StatusAnterior === LICENCA_CANDIDATURA
+        ? await licencaCandidatura.encerrarLicencaAberta(executor, sql, membroDesligar, "Encerrada pelo desligamento.", hojeDeslig) : 0;
+      await registrarAuditoriaNaTransacao(transacao, { tabela: "MembroReferencia", registroId: membroDesligar, acao: "Desligou pessoa", usuarioId: usuario.membroId,
+        ...(licencaEncerrada ? { dadosDepois: { licencaEncerrada: true } } : {}) });
       return "DESLIGOU";
     });
     if (desfecho === "OCUPADA") {

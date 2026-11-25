@@ -126,3 +126,58 @@ describe("a licença de quem tem cargo de liderança: o nível do cargo e a conf
     expect((await criar(local({ fator: { via: "NENHUM", em: Date.now() } }))).status).toBe(201);
   });
 });
+
+// O retorno é decisão da Diretoria (só o nível geral). Quem não volta sai da licença para INATIVO no rol (resposta do responsável, 25/11/2026); a licença, a
+// situação no rol e a trilha numa transação só.
+describe("o retorno da licença numa transação só", () => {
+  async function decidir(retornou, token = sessao(1)) {
+    const context = { bindingData: { id: "5" }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await hLicencas(context, { method: "POST", query: {}, body: { retornou }, headers: { "x-auth-token": token, "x-forwarded-for": "177.40.1.2:5000, 40.70.146.136:6000" } });
+    return context.res;
+  }
+  beforeEach(() => {
+    quando(/SELECT MembroId, Status FROM LicencasCandidatura WHERE LicencaId = @id/, [{ MembroId: 10, Status: "EM_LICENCA" }]);
+    quando(/UPDATE LicencasCandidatura SET Status = @status/, [], 1);
+    quando(/UPDATE MembroReferencia SET Status = '(ATIVO|INATIVO)'/, [], 1);
+  });
+
+  test("não retornou: a licença fecha e a pessoa fica INATIVO no rol, com a trilha, tudo na mesma transação", async () => {
+    const r = await decidir(false);
+    expect(r.body.sucesso).toBe(true);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+    for (const c of escritas()) expect(c.transacao).toBe(1);
+    expect(rodou(/UPDATE LicencasCandidatura SET Status = @status/)[0].inputs.status).toBe("NAO_RETORNOU");
+    expect(rodou(/UPDATE LicencasCandidatura SET Status = @status/)[0].sql).toMatch(/Status = 'EM_LICENCA'/);
+    const status = rodou(/UPDATE MembroReferencia SET Status = 'INATIVO'/);
+    expect(status).toHaveLength(1);
+    expect(status[0].sql).toMatch(/Status = 'LICENCA_CANDIDATURA'/);
+    expect(rodou(/sp_getapplock/)[0].inputs.recurso).toBe("escada_10");
+    expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  test("retornou: a pessoa volta a ATIVO na mesma transação", async () => {
+    const r = await decidir(true);
+    expect(r.body.sucesso).toBe(true);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+    for (const c of escritas()) expect(c.transacao).toBe(1);
+    expect(rodou(/UPDATE MembroReferencia SET Status = 'ATIVO'/)).toHaveLength(1);
+    expect(rodou(/UPDATE MembroReferencia SET Status = 'INATIVO'/)).toHaveLength(0);
+  });
+
+  test("a falha na trilha desfaz tudo: a licença continua aberta e a decisão pode ser repetida", async () => {
+    registrarAuditoriaNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+    await expect(decidir(false)).rejects.toThrow("falha simulada");
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    for (const c of escritas()) expect(c.transacao).toBe(1);
+  });
+
+  test("outra decisão já registrada no meio: recusa, nada muda", async () => {
+    mockRegras = mockRegras.filter(([p]) => !p.test("UPDATE LicencasCandidatura SET Status = @status"));
+    quando(/UPDATE LicencasCandidatura SET Status = @status/, [], 0);
+    const r = await decidir(false);
+    expect(r.body.sucesso).toBe(false);
+    expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    expect(rodou(/UPDATE MembroReferencia SET Status/)).toHaveLength(0);
+  });
+});

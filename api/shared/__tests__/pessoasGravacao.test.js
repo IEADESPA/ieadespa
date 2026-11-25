@@ -569,3 +569,56 @@ describe("as outras datas da ficha", () => {
     expect(gravacoes()[0].entradas).toMatchObject({ dataNascimento: "1990-01-01", dataAdmissao: "2015-01-01", dataBatismo: "2001-06-10", dataRitoRecebimento: "2016-03-20", dataAfastamento: "2020-02-01" });
   });
 });
+
+// Resposta do responsável (25/11/2026): quem falece durante a licença tem o falecimento gravado pela ficha, e o "Desligar" também vale a partir da licença; nos
+// dois casos a licença aberta fecha sozinha, na mesma transação. A volta a ATIVO continua só pela aba da licença.
+describe("a saída do rol de quem está em licença por candidatura fecha a licença", () => {
+  const passos = () => mockConsultas.map((c) => c.texto).filter((t) => /^(BEGIN|COMMIT|ROLLBACK|VACANCIA|TRILHA|CREDENCIAL)|sp_getapplock|UPDATE MembroReferencia SET (Nome|Status = 'DESLIGADO')|UPDATE LicencasCandidatura/.test(t))
+    .map((t) => (/sp_getapplock/.test(t) ? "TRAVA" : /UPDATE MembroReferencia SET Nome/.test(t) ? "FICHA" : /UPDATE MembroReferencia/.test(t) ? "STATUS" : /UPDATE LicencasCandidatura/.test(t) ? "LICENCA" : t.split(" ")[0]));
+  const licencaFechada = () => mockConsultas.find((c) => /UPDATE LicencasCandidatura/.test(c.texto));
+
+  test("a ficha grava FALECIDO de quem está em licença: a saída do rol e a licença fechada na mesma transação", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    mockRegras.unshift([/UPDATE LicencasCandidatura/, { recordset: [], rowsAffected: [1] }]);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.status).toBe("FALECIDO");
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "FICHA", "VACANCIA", "LICENCA", "TRILHA", "COMMIT", "CREDENCIAL"]);
+    expect(licencaFechada().texto).toMatch(/SET Status = 'NAO_RETORNOU'[\s\S]*WHERE MembroId = @m AND Status = 'EM_LICENCA'/);
+    expect(licencaFechada().texto).toMatch(/^SET XACT_ABORT ON;/);
+    expect(licencaFechada().entradas.obs).toMatch(/falecimento/);
+  });
+
+  test("a ficha de quem não está em licença não mexe nas licenças", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO" }) });
+    expect(r.status).toBe(200);
+    expect(licencaFechada()).toBeUndefined();
+  });
+
+  const regrasDoDesligar = (statusAnterior) => {
+    mockRegras = [
+      [/AlvoAdministra/, { recordset: [{ TemCargoVigente: 0, AlvoAdministra: 0, Outros: 1 }] }],
+      [/AS CongregacaoNome, e\.Nome AS ExtensaoNome FROM MembroReferencia m/, { recordset: [{ CongregacaoNome: "Central", ExtensaoNome: null }] }],
+      [/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [{ MembroId: 5, StatusAnterior: statusAnterior }], rowsAffected: [1] }],
+      [/UPDATE LicencasCandidatura/, { recordset: [], rowsAffected: [1] }],
+      [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
+      [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, { recordset: [] }]
+    ];
+  };
+
+  test("desligar quem está em licença: o desligamento e a licença fechada na mesma transação", async () => {
+    regrasDoDesligar("LICENCA_CANDIDATURA");
+    const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+    expect(r.status).toBe(200);
+    expect(passos()).toEqual(["BEGIN", "TRAVA", "STATUS", "VACANCIA", "LICENCA", "TRILHA", "COMMIT", "CREDENCIAL"]);
+    expect(mockConsultas.find((c) => /UPDATE MembroReferencia SET Status = 'DESLIGADO'/.test(c.texto)).texto).toMatch(/DELETED\.Status AS StatusAnterior/);
+    expect(licencaFechada().entradas.obs).toMatch(/desligamento/);
+  });
+
+  test("desligar quem não está em licença não mexe nas licenças", async () => {
+    regrasDoDesligar("ATIVO");
+    const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+    expect(r.status).toBe(200);
+    expect(licencaFechada()).toBeUndefined();
+  });
+});

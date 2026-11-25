@@ -22,6 +22,18 @@ describe("quem pode ter a física impressa", () => {
     expect(c.podeImprimir(pessoa({ situacaoMembro: "CONGREGADO" })).pode).toBe(true);
     expect(c.podeImprimir(pessoa({ status: "LICENÇA" })).pode).toBe(true);
   });
+  // menor 4 do portão da volta 7: quem está em arrolamento (a ficha veio do sistema pago e ainda está para completar) não é "em disciplina". Se o arrolado
+  // pode ter carteirinha não foi decidido: por ora não sai, com o motivo certo
+  test("em arrolamento: não sai, e o motivo é a ficha a completar (nunca 'em disciplina')", () => {
+    const r = c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO" }));
+    expect(r.pode).toBe(false);
+    expect(r.mensagem).toMatch(/ficha ainda está para completar/);
+    expect(r.mensagem).not.toMatch(/disciplina/i);
+    // quem está em arrolamento E com a marca da disciplina: a disciplina vale primeiro
+    expect(c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO", sobDisciplina: true })).mensagem).toMatch(/Em disciplina/);
+    // fora do rol continua "só quem está no rol"
+    expect(c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO", status: "DESLIGADO" })).mensagem).toMatch(/rol/);
+  });
   test("fora do rol ou em disciplina: não", () => {
     for (const p of [pessoa({ status: "DESLIGADO" }), pessoa({ status: "FALECIDO" }), pessoa({ excluido: true }), pessoa({ sobDisciplina: true }),
       pessoa({ situacaoMembro: "SEM_COMUNHAO" }), pessoa({ foraDaComunhao: true }), null]) {

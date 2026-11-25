@@ -29,6 +29,9 @@ function podeImprimir(p) {
   if (!STATUS_DE_MEMBRO.has(p.status)) return { pode: false, mensagem: "Só quem está no rol recebe a carteirinha." };
   if (p.excluido || p.foraDaComunhao || p.sobDisciplina) return { pode: false, mensagem: "Em disciplina: a carteirinha nova sai depois." };
   if (p.situacaoMembro === "CONGREGADO") return { pode: true, mensagem: null };
+  // menor 4 do portão da volta 7: o arrolamento não é disciplina (a ficha veio do sistema pago e espera a secretaria). Se o arrolado pode ter carteirinha não
+  // foi decidido (o congregado pode, 25/11): por ora não sai, com o motivo certo
+  if (p.situacaoMembro === "ARROLAMENTO") return { pode: false, mensagem: "A ficha ainda está para completar: a carteirinha sai depois que a secretaria completar a ficha." };
   if (!membroEmComunhao(p)) return { pode: false, mensagem: "Em disciplina: a carteirinha nova sai depois." };
   return { pode: true, mensagem: null };
 }

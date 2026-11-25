@@ -170,6 +170,10 @@ async function principal() {
   const recebem = async () => (await psc.resolverDestinatariosDaCongregacao(await obterPool(), { permissao: "psc_gestao", congregacaoId: sede }))
     .map((d) => d.membroId).filter((m) => [ID.avisoAtivo, ID.avisoInativo, ID.avisoRecert, ID.avisoFim].includes(m)).sort();
   ok(JSON.stringify(await recebem()) === JSON.stringify([ID.avisoAtivo, ID.avisoFim].sort()), "recebem só quem está ATIVO e com a recertificação em dia", JSON.stringify(await recebem()));
+  const notificacoes = require(path.join(API, "shared/notificacoes.js"));
+  const recebemGenerico = (await notificacoes.resolverDestinatariosPorPermissao(await obterPool(), { permissao: "psc_gestao" }))
+    .map((d) => d.membroId).filter((m) => [ID.avisoAtivo, ID.avisoInativo, ID.avisoRecert, ID.avisoFim].includes(m)).sort();
+  ok(JSON.stringify(recebemGenerico) === JSON.stringify([ID.avisoAtivo, ID.avisoFim].sort()), "o resolvedor genérico segue a mesma régua", JSON.stringify(recebemGenerico));
   // o cargo que acaba hoje no dia de Brasília: à noite (já amanhã em Greenwich) ainda vale
   const diaUtcAviso = await escalar("SELECT CONVERT(varchar(10), CAST(SYSUTCDATETIME() AS DATE), 120)");
   porRelogio(`${diaUtcAviso}T01:30:00Z`);

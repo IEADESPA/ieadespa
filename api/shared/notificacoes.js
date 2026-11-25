@@ -7,9 +7,11 @@ const { sql } = require("./db");
 // Quem tem a permissão (e, se pedido, o nível) de uma regra — mesmo padrão
 // de junção Lideranca+Papeis+MembroReferencia já usado em shared/universo.js
 // e no LoginSecretaria, só filtrando por Papeis.Permissoes em vez de listar
-// todo mundo. Mandato vencido (AtivoAte) não recebe.
+// todo mundo. Só quem entra no sistema com a permissão recebe (a régua do login): rol ATIVO, mandato vigente pelo dia de Brasília e a recertificação da
+// permissão em dia.
 async function resolverDestinatariosPorPermissao(pool, { permissao, nivel }) {
-  const request = pool.request().input("permissao", sql.NVarChar(60), `%,${permissao},%`);
+  const request = pool.request().input("permissao", sql.NVarChar(60), `%,${permissao},%`).input("permissaoNome", sql.NVarChar(60), permissao)
+    .input("hoje", sql.Date, require("./dataBrasilia").hojeBrasilia());
   let filtroNivel = "";
   if (nivel) {
     request.input("nivel", sql.NVarChar(20), nivel);
@@ -21,7 +23,11 @@ async function resolverDestinatariosPorPermissao(pool, { permissao, nivel }) {
     JOIN Papeis p ON p.PapelId = l.PapelId
     JOIN MembroReferencia m ON m.MembroId = l.MembroId
     WHERE (',' + p.Permissoes + ',') LIKE @permissao
-      AND (l.AtivoAte IS NULL OR l.AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+      AND m.Status = 'ATIVO'
+      AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
+      AND NOT EXISTS (SELECT 1 FROM RecertificacoesAcesso r
+                      WHERE r.MembroId = l.MembroId AND r.Permissao = @permissaoNome AND r.Status = 'EXPIRADA'
+                        AND r.RecertificacaoId = (SELECT MAX(r2.RecertificacaoId) FROM RecertificacoesAcesso r2 WHERE r2.MembroId = l.MembroId AND r2.Permissao = @permissaoNome))
       ${filtroNivel}
   `);
   return result.recordset;

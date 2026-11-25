@@ -40,3 +40,20 @@ test("o fim do cargo conta pelo dia de Brasília, não pelo de Greenwich", async
     expect(c.texto).not.toMatch(/AtivoAte >= CAST\(SYSUTCDATETIME\(\) AS DATE\)/);
   } finally { jest.useRealTimers(); }
 });
+
+// O resolvedor genérico (shared/notificacoes.js, usado pela AFM, canais, crise, cuidado pastoral, distritos e educação continuada): a mesma régua.
+describe("o resolvedor genérico por permissão", () => {
+  const notificacoes = require("../notificacoes");
+  test("ATIVO no rol, recertificação em dia e o fim do cargo pelo dia de Brasília", async () => {
+    jest.useFakeTimers({ now: new Date("2026-11-26T01:30:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      await notificacoes.resolverDestinatariosPorPermissao(pool, { permissao: "canais_gestao" });
+      const c = consultaDaLista();
+      expect(c.texto).toMatch(/m\.Status = 'ATIVO'/);
+      expect(c.texto).toMatch(/NOT EXISTS \(SELECT 1 FROM RecertificacoesAcesso r/);
+      expect(c.entradas.permissaoNome).toBe("canais_gestao");
+      expect(c.entradas.hoje).toBe("2026-11-25");
+      expect(c.texto).not.toMatch(/SYSUTCDATETIME/);
+    } finally { jest.useRealTimers(); }
+  });
+});

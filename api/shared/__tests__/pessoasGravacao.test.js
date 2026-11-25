@@ -47,8 +47,16 @@ const fichaNoBanco = (extra = {}) => ({ MembroId: 5, Status: "ATIVO", EmailAnter
 const membroLido = (extra = {}) => ({ membroId: 5, nome: "Pessoa Cinco", congregacao: "Central", extensao: null, status: "ATIVO", dataNascimento: "1990-01-01", motivoSaida: null, fotoUrl: null, ...extra });
 const corpoFicha = (extra = {}) => ({ membroId: 5, nome: "Pessoa Cinco", congregacaoId: 1, status: "ATIVO", dataNascimento: "1990-01-01", dataAdmissao: "2015-01-01", sexo: "F", ...extra });
 
+// O catálogo das situações no rol como as migrações o semeiam (016, 019 e 023), mais uma que a Secretaria desativou. O SQL Server compara sem caixa e sem o
+// espaço do fim (a rota usa a sigla que o catálogo devolve). Situação que a Secretaria acrescentou num caso: mockCatalogoExtra.
+const CATALOGO_STATUS = [["ATIVO", 1], ["LICENÇA", 1], ["INATIVO", 1], ["DESLIGADO", 1], ["FALECIDO", 1], ["LICENCA_CANDIDATURA", 1], ["TRANSFERIDO", 0]];
+let mockCatalogoExtra = [];
+const noCatalogo = (sigla) => (typeof sigla !== "string" ? undefined
+  : [...CATALOGO_STATUS, ...mockCatalogoExtra].find(([s]) => s.toUpperCase() === sigla.replace(/ +$/, "").toUpperCase()));
+
 function regrasDaFicha(ficha) {
   mockRegras = [
+    [/FROM StatusMembro WHERE Sigla = @sigla/, (e) => { const l = noCatalogo(e.sigla); return { recordset: l ? [{ Sigla: l[0], Ativa: l[1] }] : [] }; }],
     [/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Central" }] }],
     [/FROM CargosMinisteriais WHERE Sigla/, { recordset: [{ x: 1 }] }],
     [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
@@ -65,6 +73,7 @@ function regrasDaFicha(ficha) {
 beforeEach(() => {
   mockConsultas = [];
   mockCargo = { tipo: "GLOBAL", id: null };
+  mockCatalogoExtra = [];
   regrasDaFicha(fichaNoBanco());
 });
 
@@ -398,6 +407,7 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
   });
 
   test.each([["INATIVO"], ["AFASTADO"], ["DESLIGADO"], ["FALECIDO"]])("a ficha com a situação %s: fora do nível geral, 403 e nada muda", async (status) => {
+    mockCatalogoExtra = [["AFASTADO", 1]];   // AFASTADO não vem semeado: aqui a Secretaria o pôs no catálogo
     mockRegras.unshift(situacao(1));
     const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status }) });
     expect(r.status).toBe(403);
@@ -430,5 +440,132 @@ describe("tirar do rol ativo quem tem cargo de liderança", () => {
     const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "INATIVO" }) });
     expect(r.status).toBe(200);
     expect(gravacoes()).toHaveLength(1);
+  });
+});
+
+describe("a situação no rol pelo catálogo", () => {
+  test.each([["XPTO"], ["AFASTADO"], ["ATIVO' OR '1'='1"], [123], [{ a: 1 }], [["ATIVO"]], [true], ["X".repeat(31)]])("situação fora do catálogo (%p): 400 e nada é gravado", async (status) => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
+    expect(r.status).toBe(400);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/situação/i);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("a situação que a Secretaria desativou no catálogo não entra de novo", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "TRANSFERIDO" }) });
+    expect(r.status).toBe(400);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("quem já está numa situação desativada continua nela ao salvar a ficha", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "TRANSFERIDO" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "TRANSFERIDO", telefone: "91900000002" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.status).toBe("TRANSFERIDO");
+  });
+
+  test.each([["desligado"], ["DESLIGADO "], ["Desligado"]])("a situação escrita de outro jeito (%p) grava a sigla do catálogo e roda a saída do rol", async (status) => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status, motivoSaida: "DESLIGAMENTO" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.status).toBe("DESLIGADO");
+    expect(mockConsultas.some((c) => c.texto === "VACANCIA 5 DESLIGAMENTO")).toBe(true);
+  });
+
+  test("sigla do catálogo maior que a coluna da ficha: 400, sem cortar", async () => {
+    mockCatalogoExtra = [["SITUACAO_DE_NOME_LONGO", 1]];
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "SITUACAO_DE_NOME_LONGO" }) });
+    expect(r.status).toBe(400);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("a gravação só vale se a situação ainda é a que foi lida (outra mudança no meio: 409)", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ telefone: "91900000003" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].texto).toMatch(/AND Status = @statusLido/);
+    expect(gravacoes()[0].entradas.statusLido).toBe("ATIVO");
+    mockConsultas = [];
+    mockRegras.unshift([/UPDATE MembroReferencia SET Nome/, { recordset: [], rowsAffected: [0] }]);
+    const r2 = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ telefone: "91900000003" }) });
+    expect(r2.status).toBe(409);
+    expect(mockConsultas.map((c) => c.texto)).toContain("ROLLBACK");
+  });
+});
+
+// A licença por candidatura só pela aba "Licença Candidatura" (GestaoLicencasCandidatura): ela grava a licença, o afastamento dos cargos e a volta.
+describe("a licença por candidatura não passa pela ficha", () => {
+  const semFator = () => sessao(77, { fator: { via: "NENHUM", em: Date.now() } });
+
+  test.each([["LICENCA_CANDIDATURA"], ["licenca_candidatura"]])("pôr em licença pela ficha (%p): 400 com o caminho certo, nada é gravado", async (status) => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
+    expect(r.status).toBe(400);
+    expect(r.body.mensagem).toMatch(/Licença Candidatura/);
+    expect(gravacoes()).toHaveLength(0);
+    expect(mockConsultas.some((c) => /^VACANCIA/.test(c.texto))).toBe(false);
+  });
+
+  test("pessoa nova já em licença pela ficha: 400", async () => {
+    regrasDaFicha(null);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "LICENCA_CANDIDATURA" }) });
+    expect(r.status).toBe(400);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test.each([["ATIVO"], ["DESLIGADO"], ["INATIVO"], [undefined]])("tirar da licença pela ficha (%p): 409 com o caminho certo, nada é gravado", async (status) => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
+    expect(r.status).toBe(409);
+    expect(r.body.mensagem).toMatch(/Licença Candidatura/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("tirar da licença pela ficha sem a confirmação recente: a recusa é a da licença, sem pedir o 428 antes", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    const r = await chamar("POST", { token: semFator(), corpo: corpoFicha({ status: "INATIVO" }) });
+    expect(r.status).toBe(409);
+  });
+
+  test("quem está em licença: salvar o telefone com a mesma situação continua valendo", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "LICENCA_CANDIDATURA" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "LICENCA_CANDIDATURA", telefone: "91900000004" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.status).toBe("LICENCA_CANDIDATURA");
+  });
+});
+
+describe("as outras datas da ficha", () => {
+  const CAMPOS = [["dataNascimento", /nascimento/], ["dataAdmissao", /admissão/], ["dataBatismo", /batismo/], ["dataRitoRecebimento", /rito/], ["dataAfastamento", /afastamento/]];
+  const LIXO = [["2026-02-30"], ["abc"], ["20/11/2026"], [" 1990-01-01 "], [19900101], [{ a: 1 }], ["0000-01-01"], ["x".repeat(5000)]];
+  const amanha = () => { const d = new Date(`${require("../dataBrasilia").hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+
+  describe.each(CAMPOS)("%s", (campo, nomeNaMensagem) => {
+    test.each(LIXO)("formato que não é um dia (%p): 400 com o nome do campo, nada é gravado", async (valor) => {
+      const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ [campo]: valor }) });
+      expect(r.status).toBe(400);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(nomeNaMensagem);
+      expect(gravacoes()).toHaveLength(0);
+    });
+
+    test.each([[null], [""]])("o vazio (%p) continua valendo (sem a data)", async (valor) => {
+      const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ [campo]: valor }) });
+      expect(r.status).toBe(200);
+      expect(gravacoes()[0].entradas[campo]).toBeNull();
+    });
+  });
+
+  test.each([["dataNascimento", /nascimento/], ["dataAdmissao", /admissão/], ["dataBatismo", /batismo/]])("%s no futuro (amanhã em Brasília): 400", async (campo, nomeNaMensagem) => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ [campo]: amanha() }) });
+    expect(r.status).toBe(400);
+    expect(r.body.mensagem).toMatch(nomeNaMensagem);
+    expect(r.body.mensagem).toMatch(/futuro/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("as datas certas são gravadas como vieram", async () => {
+    const corpo = corpoFicha({ dataBatismo: "2001-06-10", dataRitoRecebimento: "2016-03-20", dataAfastamento: "2020-02-01" });
+    const r = await chamar("POST", { token: sessao(77), corpo });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas).toMatchObject({ dataNascimento: "1990-01-01", dataAdmissao: "2015-01-01", dataBatismo: "2001-06-10", dataRitoRecebimento: "2016-03-20", dataAfastamento: "2020-02-01" });
   });
 });

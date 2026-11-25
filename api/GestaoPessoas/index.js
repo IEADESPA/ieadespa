@@ -55,6 +55,28 @@ function motivoSaidaVisivel(m, vDisciplina) {
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
+// A licença por candidatura entra e sai só pela aba "Licença Candidatura" (GestaoLicencasCandidatura): lá ficam o registro da licença, o afastamento dos cargos e
+// a volta, que é decisão da Diretoria.
+const LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
+const TAMANHO_STATUS = 20;   // MembroReferencia.Status é NVARCHAR(20); a sigla do catálogo vai até 30
+
+// As outras datas da ficha: um dia que existe (AAAA-MM-DD), dentro do que a coluna DATE guarda; nascimento, admissão e batismo nunca no futuro (dia de Brasília).
+const DATAS_DA_FICHA = [
+  ["dataNascimento", "a data de nascimento", true],
+  ["dataAdmissao", "a data de admissão", true],
+  ["dataBatismo", "a data do batismo", true],
+  ["dataRitoRecebimento", "a data do rito de recebimento", false],
+  ["dataAfastamento", "a data do afastamento", false]
+];
+function conferirDatasDaFicha(corpo, hoje) {
+  for (const [campo, nome, naoNoFuturo] of DATAS_DA_FICHA) {
+    const valor = corpo[campo];
+    if (valor === undefined || valor === null || valor === "") continue;   // sem a data, como sempre
+    if (!dataIsoValida(valor) || valor < "0001-01-01") return `Informe ${nome} (dia/mês/ano).`;
+    if (naoNoFuturo && valor > hoje) return `${nome[0].toUpperCase()}${nome.slice(1)} não pode ser no futuro.`;
+  }
+  return null;
+}
 
 // Tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, o 428 e a trava do último administrador (regra do responsável,
 // 25/11/2026: shared/nivelDoCargo.js, a mesma da licença por candidatura).
@@ -287,6 +309,17 @@ module.exports = async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "A data de saída vai de 01/01/2006 (a fundação da igreja) até hoje." } };
       return;
     }
+    const erroNasDatas = conferirDatasDaFicha(req.body, hojeBrasilia());
+    if (erroNasDatas) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: erroNasDatas } };
+      return;
+    }
+    // A situação no rol, quando vem, é a sigla de uma situação do catálogo (StatusMembro); a conferência no catálogo vem depois da leitura da pessoa.
+    const statusInformado = status !== undefined && status !== null && status !== "";
+    if (statusInformado && (typeof status !== "string" || status.length > 30)) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "Situação no rol inválida: escolha uma das situações da lista." } };
+      return;
+    }
 
     // Causa de saída (Reg. Art. 11 — v1.5): mesmo padrão de validação de FORMAS_ADMISSAO.
     if (motivoSaida && !CAUSAS_SAIDA.includes(motivoSaida)) {
@@ -384,7 +417,33 @@ module.exports = async function (context, req) {
     const motivoSaidaFinal = motivoOculto ? motivoAnterior : (motivoSaida || null);
     const statusAnterior = existia ? existente.recordset[0].Status : null;
     const emailAnterior = existia ? existente.recordset[0].EmailAnterior : null;
-    const statusFinal = status || "ATIVO";
+    // Sem a situação no pedido, ATIVO (como sempre). A situação já gravada fica, mesmo que a Secretaria a tenha desativado no catálogo. Outra situação: só a ativa
+    // do catálogo, e a gravação usa a sigla que o catálogo devolve (o banco compara sem caixa e sem o espaço do fim; as conferências abaixo comparam a sigla).
+    let statusFinal = "ATIVO";
+    if (statusInformado && existia && status === statusAnterior) {
+      statusFinal = statusAnterior;
+    } else if (statusInformado) {
+      const cat = await pool.request().input("sigla", sql.NVarChar(30), status).query(`SELECT TOP 1 Sigla, Ativa FROM StatusMembro WHERE Sigla = @sigla`);
+      const linha = cat.recordset[0];
+      const sigla = linha ? String(linha.Sigla) : null;
+      if (!linha || (!linha.Ativa && sigla !== statusAnterior)) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: "Situação no rol fora do catálogo: escolha uma das situações da lista." } };
+        return;
+      }
+      if (sigla.length > TAMANHO_STATUS) {
+        context.res = { status: 400, body: { sucesso: false, mensagem: `A sigla desta situação passa de ${TAMANHO_STATUS} letras e não cabe no cadastro: ajuste o catálogo de situações.` } };
+        return;
+      }
+      statusFinal = sigla;
+    }
+    if (statusFinal === LICENCA_CANDIDATURA && statusAnterior !== LICENCA_CANDIDATURA) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: "A licença por candidatura se registra na aba \"Licença Candidatura\" da pessoa: lá ficam a licença e o afastamento dos cargos." } };
+      return;
+    }
+    if (statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA) {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta se registra na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral)." } };
+      return;
+    }
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de
     // verdade: força Sem Comunhão, registra a data de saída (se não vier informada) e
     // encerra Assentos/Liderança/Cargo — mesmo racional já usado em GestaoCartas/processar
@@ -396,7 +455,7 @@ module.exports = async function (context, req) {
     const hojeISO = hojeBrasilia();   // a data da saída é o dia de Brasília (depois das 21h o de Greenwich já é amanhã)
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
-      : (situacaoMembro || (status === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
+      : (situacaoMembro || (statusInformado && statusFinal === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
     // A ficha não manda a data de saída (só a mostra): sem a data no pedido (ou com ela vazia), quem continua fora do rol ativo mantém a data gravada (o
     // histórico e os prazos de retenção contam dela). A data informada vale; a volta a ATIVO a limpa, como antes.
     const dataSaidaGuardada = existia ? (existente.recordset[0].DataSaidaAnterior || null) : null;
@@ -442,7 +501,8 @@ module.exports = async function (context, req) {
       .input("dataSaida", sql.Date, dataSaidaFinal)
       .input("motivoSaida", sql.NVarChar(200), motivoSaidaFinal)
       .input("sexo", sql.NChar(1), sexoFinal)
-      .input("cargoLido", sql.NVarChar(30), cargoAnterior);
+      .input("cargoLido", sql.NVarChar(30), cargoAnterior)
+      .input("statusLido", sql.NVarChar(TAMANHO_STATUS), statusAnterior);
     const gravarPessoa = async (request, prepEnd) => {
       request.input("endereco", sql.NVarChar(300), prepEnd.endereco);
       territorioDb.entradasEndereco(request, prepEnd.partes);
@@ -459,7 +519,7 @@ module.exports = async function (context, req) {
                IgrejaAnterior = @igrejaAnterior, DataRitoRecebimento = @dataRitoRecebimento,
                NomeLidoRito = @nomeLidoRito, MinistranteRito = @ministranteRito, EstadoCivil = @estadoCivil,
                DataAfastamento = @dataAfastamento, DataSaida = @dataSaida, MotivoSaida = @motivoSaida, Sexo = @sexo
-        WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'')`);   // o cargo não mudou desde a leitura acima (uma conclusão no meio → 409)
+        WHERE MembroId = @id AND ISNULL(CargoMinisterial, N'') = ISNULL(@cargoLido, N'') AND Status = @statusLido`);   // o cargo e a situação não mudaram desde a leitura acima (→ 409)
         const passou = !!(gravou && gravou.rowsAffected && gravou.rowsAffected[0]);
         return { gravou: passou, desfazer: !passou };
       }
@@ -480,7 +540,7 @@ module.exports = async function (context, req) {
       if ((mexeNoHistorico || entrandoEmStatusTerminal) && !(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return "OCUPADA"; }
       await territorioDb.travarBairroDaFicha(rq, prepEnd);   // com um bairro da lista, a linha única é refeita com o bairro travado (revisão de 06/11/2026)
       const gravacao = await gravarPessoa(preencher(rq()), prepEnd);
-      if (!gravacao.gravou) { await desistir(); return "CARGO_MUDOU"; }
+      if (!gravacao.gravou) { await desistir(); return "FICHA_MUDOU"; }
       if (mexeNoHistorico) await escadaDb.sincronizarCadastroNaTransacao(transacao, { membroId, cargoAnterior, cargoNovo, desde: cargoDesdeFinal, por: usuario.membroId });
       if (entrandoEmStatusTerminal) {
         await vacancia.encerrarVinculos(executor, sql, membroId, motivoDaVacancia);   // também derruba as sessões abertas da pessoa
@@ -495,7 +555,7 @@ module.exports = async function (context, req) {
         registroId: Number(membroId),
         acao: existia ? "Atualizou pessoa" : "Cadastrou pessoa",
         usuarioId: usuario.membroId,
-        dadosDepois: { nome, cargoMinisterial, congregacaoId, status, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
+        dadosDepois: { nome, cargoMinisterial, congregacaoId, status: statusFinal, formaAdmissao, dataAdmissao, ...(cargoAnterior !== cargoNovo ? { cargoAnterior } : {}), ...(cargoDesdeFinal ? { cargoDesde: cargoDesdeFinal } : {}),
           ...(dizimistaAnterior !== dizimistaNovo ? { dizimistaAnterior, dizimistaFiel: dizimistaNovo } : {}), ...(sexoAnterior !== sexoFinal ? { sexoAnterior, sexo: sexoFinal } : {}), ...(emailMudou ? { emailAlterado: true, emailAnterior: mascararEmail(emailAnterior), emailNovo: mascararEmail(email) } : {}) }
       });
       return "GRAVOU";
@@ -504,8 +564,8 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
       return;
     }
-    if (desfecho === "CARGO_MUDOU") {
-      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
+    if (desfecho === "FICHA_MUDOU") {
+      context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo ou a situação desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
       return;
     }
     if (entrandoEmStatusTerminal) await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoDaVacancia, usuario.membroId);   // v8.4: a credencial, depois do commit

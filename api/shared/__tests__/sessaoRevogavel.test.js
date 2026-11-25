@@ -324,6 +324,7 @@ describe("eventos que derrubam sessões", () => {
   test("GestaoPessoas: quem sai do rol ativo (ATIVO -> INATIVO) perde as sessões; editar sem mudar o status não derruba", async () => {
     const existente = (status) => [{ MembroId: 40, Status: status, CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo] }));
     quando(/UPDATE MembroReferencia SET Nome/, []);   // v8.2: o UPDATE confere o cargo lido (aqui ele não mudou: 1 linha)
     const tk = sessaoDe(5, SID.atual, { permissoes: ["pessoas"] });
@@ -346,6 +347,7 @@ describe("eventos que derrubam sessões", () => {
   test.each(["INATIVO", "LICENÇA"])("GestaoPessoas: quem sai do rol ativo (ATIVO -> %s) leva junto as delegações; as sessões de quem as recebeu caem", async (statusNovo) => {
     const existente = [{ MembroId: 40, Status: "ATIVO", CongregacaoNome: "Central", ExtensaoNome: null, EmailAnterior: null }];
     quando(/FROM Congregacoes WHERE CongregacaoId = @id|SELECT Nome FROM Congregacoes/, [{ Nome: "Central", CongregacaoId: 1 }]);
+    quando(/FROM StatusMembro WHERE Sigla = @sigla/, (i) => [{ Sigla: i.sigla, Ativa: 1 }]);   // a situação nova está no catálogo
     quando(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'[\s\S]*OUTPUT INSERTED\.DelegadoMembroId/, [{ DelegadoMembroId: 77 }]);
     quando(REVOGA_DO_MEMBRO, abertasPorMembro({ 40: [SID.alvo], 77: [SID.delegado] }));
     quando(/UPDATE MembroReferencia SET Nome/, []);

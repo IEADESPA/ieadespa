@@ -92,21 +92,6 @@ export function partesDaContagem(c: ContagemFolhas): string[] {
   return p;
 }
 
-/** como o bloco voltou, no livro: "49 lançadas, 1 cancelada"; todas lançadas = "50 conferidas" (o desenho) */
-export function contagemDaEntrada(c: ContagemFolhas): string {
-  if (c.lancadas && !c.canceladas && !c.arrancadas && !c.extraviadas && !c.inexistentes && !c.livres) return plural(c.lancadas, "conferida", "conferidas");
-  const p = partesDaContagem(c);
-  if (c.livres) p.push(plural(c.livres, "livre", "livres"));
-  return p.join(", ");
-}
-
-/** no rastreio: "49 lançadas, 1 cancelada, nenhuma livre" */
-export function contagemDoRastreio(c: ContagemFolhas): string {
-  const p = partesDaContagem(c);
-  p.push(c.livres ? plural(c.livres, "livre", "livres") : "nenhuma livre");
-  return p.join(", ");
-}
-
 /** "devolvido por Bela Vista"; a congregação Sede não se confunde com a Sede administrativa (regra dele, 17/11): "pela congregação Sede" */
 const devolvidoPor = (congregacao: string): string => (/^sede$/i.test(congregacao.trim()) ? "pela congregação Sede" : `por ${congregacao}`);
 
@@ -134,18 +119,47 @@ export function linhaDoLivro(r: RegistroLivro, nivel: Nivel = "geral"): { readon
     }
     return { titulo: `Saída: bloco ${numero(r.bloco)} entregue a ${para}`, detalhe: como };
   }
-  const como = r.contagem ? contagemDaEntrada(r.contagem) : "";
-  return { titulo: `Entrada: bloco ${numero(r.bloco)} devolvido ${devolvidoPor(r.congregacao)}`, detalhe: `recebeu ${r.registradoPor}${como ? " · " + como : ""}` };
+  // a entrada (r30): a congregação não vê o próprio nome (quem trouxe); a parcial diz as usadas da entrega e as que voltaram livres
+  const por = nivel === "local" ? `por ${r.pessoa}` : devolvidoPor(r.congregacao);
+  if (r.parcial) {
+    const livres = r.contagem?.livres ?? 0;
+    const resto = nivel === "local" ? (livres === 1 ? "a 1 em branco ficou na Tesouraria Geral" : `as ${numero(livres)} em branco ficaram na Tesouraria Geral`)
+      : r.faixaLivre ? `livres de novo: ${textoFaixa(r.faixaLivre)}` : "";
+    const usadas = r.usadas != null ? plural(r.usadas, "usada", "usadas") : "";
+    return { titulo: `Entrada parcial: bloco ${numero(r.bloco)} devolvido ${por}`, detalhe: [`recebeu ${r.registradoPor}`, usadas, resto].filter(Boolean).join(" · ") };
+  }
+  const partes = r.contagem ? partesDaContagem(r.contagem) : [];
+  if (r.pendentes) partes.push(`${numero(r.pendentes)} sem destino`);
+  return { titulo: `Entrada: bloco ${numero(r.bloco)} devolvido ${por}`, detalhe: `recebeu ${r.registradoPor}${partes.length ? ` · completo: ${partes.join(", ")}` : ""}` };
 }
 
-/** o rastreio do bloco (depois de "Rastreio do bloco 1.360 (veio sozinho): ") e se ele pode voltar agora */
-export function textoDoRastreio(r: Rastreio): { readonly texto: string; readonly podeVoltar: boolean } {
-  const b = r.bloco;
-  const folhas = `folhas ${numero(b.primeiraFolha)} a ${numero(b.ultimaFolha)}`;
-  if (b.situacao === "na-geral") return { texto: `${folhas} · ainda está na Tesouraria Geral: não saiu para voltar`, podeVoltar: false };
-  if (b.situacao === "fechado") return { texto: `${folhas} · já foi devolvido em ${dataBr(b.devolvidoEm)}`, podeVoltar: false };
+/** a caixa do bloco na entrada (r30): verde-água com as contas (as com destino e as sem destino, com as posições quando são as do fim) ou
+ *  vermelha, com o porquê de não voltar (o que está na Geral, o que já voltou em parte, o devolvido) */
+export function caixaDaEntrada(r: Rastreio): CaixaSaida {
+  const b = r.bloco, n = numero(b.numero);
+  if (b.situacao === "fechado") return { negrito: "", texto: `O bloco ${n} já foi devolvido em ${dataBr(b.devolvidoEm)}.`, erro: true };
+  if (b.situacao === "na-geral") {
+    if (b.parcial && b.faixa && r.volta) {
+      return { negrito: "", texto: `O bloco ${n} já voltou, parcial, em ${dataBr(r.volta.data)}: as folhas ${textoFaixa(b.faixa)} estão livres na Tesouraria Geral para outra entrega.`, erro: true };
+    }
+    return { negrito: "", texto: `O bloco ${n} ainda está na Tesouraria Geral: não saiu para voltar.`, erro: true };
+  }
+  const c = r.contagem, f = b.faixa ?? { primeiraFolha: b.primeiraFolha, ultimaFolha: b.ultimaFolha };
+  const comDestino = c.lancadas + c.canceladas + c.arrancadas + c.extraviadas + (c.inexistentes ?? 0);
+  let conta: string;
+  if (!c.livres) conta = `as ${numero(comDestino)} com destino (${partesDaContagem(c).join(", ")})`;
+  else {
+    const pe = r.primeiraEmBranco ?? null;
+    const doFim = pe !== null && c.livres === b.ultimaFolha - pe + 1 ? ` (${posicao(pe, b.primeiraFolha)}ª a ${posicao(b.ultimaFolha, b.primeiraFolha)}ª)` : "";
+    conta = `${comDestino ? numero(comDestino) : "nenhuma"} com destino, ${numero(c.livres)} sem destino${doFim}`;
+  }
   const entregue = b.congregacao ? ` · entregue a ${b.congregacao.nome}${b.entregueEm ? ` em ${diaMes(b.entregueEm)}` : ""}` : "";
-  return { texto: `${folhas}${entregue} · ${contagemDoRastreio(r.contagem)}`, podeVoltar: true };
+  return { negrito: `Bloco ${n}`, texto: ` (veio sozinho): folhas ${textoFaixa(f)}${entregue} · ${conta}`, erro: false };
+}
+
+/** a confirmação da parcial, mais curta no celular (r30: "Bloco 1.288 de volta, parcial: 64.436 a 64.450 livres para outra entrega.") */
+export function confirmacaoNoCelular(mensagem: string): string {
+  return mensagem.replace(/^(Bloco [\d.]+ de volta, parcial): as folhas (.+?) estão livres para outra entrega\.$/, "$1: $2 livres para outra entrega.");
 }
 
 /** quem pode devolver, no "Devolvido por": "Lia Fontes · tesoureira de Bela Vista", "Ezequiel Ramos · quem levou o bloco" */

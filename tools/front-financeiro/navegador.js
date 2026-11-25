@@ -84,7 +84,9 @@ const LIVRO = [
   { id: 2, tipo: "cadastro", data: "2026-10-28", registradoPor: "João da Silva", quantidade: 200, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } },
   { id: 1, tipo: "entrada", data: "2026-10-21", registradoPor: "João da Silva", bloco: 1352, congregacao: "Sede", pessoa: `Ana Prado ${ATAQUE}`, levadoPelaArea: false,
     contagem: { lancadas: 50, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 0 } },
-  { id: 0, tipo: "chegada", data: "2026-10-20", registradoPor: "João da Silva", quantidade: 100, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } }
+  { id: 0, tipo: "chegada", data: "2026-10-20", registradoPor: "João da Silva", quantidade: 100, lote: { serie: 2026, primeiraFolha: 70001, ultimaFolha: 80000, blocos: 200 } },
+  { id: -1, tipo: "entrada", data: "2026-10-15", registradoPor: "João da Silva", bloco: 1288, congregacao: "Vila Nova", pessoa: "Rute Santos", levadoPelaArea: false,
+    contagem: { lancadas: 34, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 15 }, parcial: true, usadas: 35, pendentes: 0, faixaLivre: { primeiraFolha: 64436, ultimaFolha: 64450 } }
 ];
 const AGORA = { area: { emUso: 9, esperando: 2, aDevolver: 1 }, local: { emUso: 1, esperando: 1, aDevolver: 0 } };
 // a saída (r30-blocos-saida): as congregações ativas com a área e a liderança de cada uma
@@ -110,6 +112,11 @@ function rastreio(folha) {
   if (folha >= 64401 && folha <= 64450) {   // o 1.288: voltou parcial de Vila Nova em 03/11, as 35 usadas; as 15 livres (64.436 a 64.450) na Geral
     return { sucesso: true, bloco: blocoMentira(8, 64401, null, "na-geral", 35, { chegouEm: "2026-02-05", entregueEm: null, parcial: true, livres: 15, faixa: { primeiraFolha: 64436, ultimaFolha: 64450 } }),
       contagem: { lancadas: 0, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 15 }, primeiraEmBranco: null, pessoas: [], volta: { congregacao: "Vila Nova", data: "2026-10-01", usadas: 35 } };
+  }
+  if (folha >= 66001 && folha <= 66050) {   // o 1.320 com Vila Nova desde 08/09: 35 com destino (a 22ª cancelada) e as 15 últimas em branco
+    return { sucesso: true, bloco: blocoMentira(11, 66001, "Vila Nova", "em-uso", 35, { entregueEm: "2026-09-08" }),
+      contagem: { lancadas: 34, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 15 }, primeiraEmBranco: 66036,
+      pessoas: [{ membroId: 101, nome: "Rute Santos", papel: "Tesoureira" }], volta: null };
   }
   if (folha >= 67001 && folha <= 67050) {   // já devolvido
     return { sucesso: true, bloco: blocoMentira(7, 67001, "Monte Sião", "fechado", 50, { devolvidoEm: "2026-10-02" }),
@@ -186,6 +193,13 @@ function apiFinanceiro(nivel, opcoes) {
       // uma recusa do servidor (a tela só mostra a mensagem); a regra dele de 24/11/2026 com a r30 não recusa mais a devolução por folha livre
       if (corpo && corpo.pessoa && corpo.pessoa.nome === "Marta Lima") {
         return { status: 422, corpo: { sucesso: false, mensagem: "O bloco 1.360 já foi devolvido em 03/11/2026." } };
+      }
+      if (corpo && corpo.parcial) {
+        const de = Number(corpo.primeiraEmBranco).toLocaleString("pt-BR");
+        estado.saidas.unshift({ id: 200 + estado.saidas.length, tipo: "entrada", data: "2026-10-04", registradoPor: "João da Silva", bloco: 1320, congregacao: "Vila Nova", pessoa: "Rute Santos",
+          levadoPelaArea: false, contagem: { lancadas: 34, canceladas: 1, arrancadas: 0, extraviadas: 0, livres: 66050 - corpo.primeiraEmBranco + 1 }, parcial: true,
+          usadas: corpo.primeiraEmBranco - 66001, pendentes: 0, faixaLivre: { primeiraFolha: corpo.primeiraEmBranco, ultimaFolha: 66050 } });
+        return { corpo: { sucesso: true, mensagem: `Bloco 1.320 de volta, parcial: as folhas ${de} a 66.050 estão livres para outra entrega.` } };
       }
       return { corpo: { sucesso: true, mensagem: "Bloco 1.360 devolvido: está de novo com a Tesouraria Geral." } };
     }
@@ -617,10 +631,10 @@ async function provarLivro() {
   ok(t.includes("O livro") && t.includes("entradas, saídas e cadastros"), "geral: o quadro do livro");
   const linhas = [
     ["17/11", "Saída: bloco 1.402 entregue a Rute Santos (Vila Nova)", "registrou João da Silva · Tesouraria Geral"],
-    ["10/11", "Entrada: bloco 1.360 devolvido por Bela Vista", "recebeu João da Silva · 49 lançadas, 1 cancelada"],
+    ["10/11", "Entrada: bloco 1.360 devolvido por Bela Vista", "recebeu João da Silva · completo: 49 lançadas, 1 cancelada"],
     ["03/11", "Saída: bloco 1.395 entregue a Ezequiel Ramos (Monte Sião)", "levado pela área, sem ficar com ela"],
     ["28/10", "Cadastro: lote da gráfica, série 2026", "10.000 folhas · 70.001 a 80.000 · 200 blocos"],
-    ["21/10", "Entrada: bloco 1.352 devolvido pela congregação Sede", "recebeu João da Silva · 50 conferidas"]
+    ["21/10", "Entrada: bloco 1.352 devolvido pela congregação Sede", "recebeu João da Silva · completo: 50 lançadas"]
   ];
   for (const [d, tit, sub] of linhas) ok(t.includes(`${d} ${tit} ${sub}`), `geral: a linha "${tit}"`, t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 500));
   ok(t.includes("1 a 5 de 412 registros"), "geral: \"1 a 5 de 412 registros\"");
@@ -638,24 +652,28 @@ async function provarLivro() {
   ok(r1 && r1.busca.folha === "68010", "geral: o rastreio vem sozinho, só com os números", r1 && r1.busca);
   await calmo(page);
   t = await textoTela(page);
-  ok(t.includes("Rastreio do bloco 1.360 (veio sozinho): folhas 68.001 a 68.050 · entregue a Bela Vista em 08/09 · 49 lançadas, 1 cancelada, nenhuma livre"), "geral: o texto do rastreio", t.slice(t.indexOf("Rastreio"), t.indexOf("Rastreio") + 200));
+  let cxE = await caixaSaida(page);
+  ok(cxE && !cxE.erro && cxE.texto === "Bloco 1.360 (veio sozinho): folhas 68.001 a 68.050 · entregue a Bela Vista em 08/09 · as 50 com destino (49 lançadas, 1 cancelada)",
+    "geral: a caixa do bloco na entrada (r30)", cxE);
+  ok((await textoTela(page)).includes("A devolução Completa Parcial"), "geral: \"A devolução\", já em \"Completa\"");
+  ok(await page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => x.textContent.trim() === "Completa"); return !!b && b.getAttribute("aria-pressed") === "true"; }), "geral: \"Completa\" marcada");
   const opsP = await opcoesDe(page, "Devolvido por");
   ok(opsP && opsP.includes("Ezequiel Ramos · quem levou o bloco") && opsP.includes("Lia Fontes · tesoureira de Bela Vista") && opsP.some((o) => /Outra pessoa/.test(o)), "geral: quem pode devolver", opsP);
   const d0 = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   ok(pedidos(api, "/api/financeiro/blocos/devolver", "POST").length === d0, "geral: sem quem devolveu não registra");
-  ok((await textoTela(page)).includes("Escolha quem devolveu"), "geral: pede quem devolveu");
+  ok((await textoTela(page)).includes("Escolha quem trouxe o bloco."), "geral: pede quem trouxe (o texto da r30)");
   ok(await escolher(page, "Devolvido por", "Lia Fontes · tesoureira de Bela Vista"), "geral: escolher a Lia");
   const lv = pedidos(api, "/api/financeiro/blocos/livro").length;
   await clicar(page, "Registrar a entrada");
   const dv = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", d0);
-  ok(dv && JSON.stringify(dv.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { membroId: 301 } }), "geral: devolve pela PRIMEIRA folha do bloco (não a digitada) e a pessoa do cadastro", dv && dv.corpo);
+  ok(dv && JSON.stringify(dv.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { membroId: 301 }, parcial: false }), "geral: devolve pela PRIMEIRA folha do bloco (não a digitada), a pessoa do cadastro e completa", dv && dv.corpo);
   const relido = await esperarPedido(api, "/api/financeiro/blocos/livro", "GET", lv);
   ok(relido && (!relido.busca.pagina || relido.busca.pagina === "1"), "geral: depois da entrada, o livro volta à 1ª página", relido && relido.busca);
   await calmo(page);
   ok(/devolvido/.test(await ultimoAviso(page)), "geral: o aviso de sucesso", await ultimoAviso(page));
   t = await textoTela(page);
-  ok(!t.includes("Rastreio do bloco 1.360"), "geral: o formulário fica limpo depois da entrada");
+  ok(!(await caixaSaida(page)), "geral: o formulário fica limpo depois da entrada");
   // quem levou, escrito sem cadastro: vai o nome
   await digitar(page, "Primeira folha do bloco", "68001");
   await esperarPedido(api, "/api/financeiro/blocos/rastreio", "GET", pedidos(api, "/api/financeiro/blocos/rastreio").length - 1);
@@ -664,31 +682,62 @@ async function provarLivro() {
   let dAntes = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   let dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
-  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Ezequiel Ramos" } }), "geral: quem levou sem cadastro vai pelo nome", dEz && dEz.corpo);
+  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Ezequiel Ramos" }, parcial: false }), "geral: quem levou sem cadastro vai pelo nome", dEz && dEz.corpo);
   // outra pessoa: o nome escrito
   await digitar(page, "Primeira folha do bloco", "68001");
   await espera(700);
   await escolher(page, "Devolvido por", "outra");
-  ok(await digitar(page, "Nome de quem devolveu", "Marta Lima"), "geral: \"outra pessoa\" abre o campo do nome");
+  ok(await digitar(page, "Nome de quem trouxe", "Marta Lima"), "geral: \"outra pessoa\" abre o campo do nome");
   dAntes = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
   await clicar(page, "Registrar a entrada");
   dEz = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dAntes);
-  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Marta Lima" } }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
+  ok(dEz && JSON.stringify(dEz.corpo) === JSON.stringify({ primeiraFolha: 68001, pessoa: { nome: "Marta Lima" }, parcial: false }), "geral: outra pessoa vai pelo nome escrito", dEz && dEz.corpo);
   await calmo(page);
   ok(/^O bloco 1\.360 já foi devolvido em 03\/11\/2026\.$/.test(await ultimoAviso(page)), "geral: a recusa do bloco que já voltou aparece para a pessoa", await ultimoAviso(page));
   // o bloco que ainda está na Geral e o já devolvido: o rastreio não quebra e não oferece o registro
   await digitar(page, "Primeira folha do bloco", "70101");
   await espera(700);
   t = await textoTela(page);
-  ok(/Rastreio do bloco 1\.402.*ainda está na Tesouraria Geral/.test(t), "geral: o bloco na Geral: diz que ainda não saiu", t.slice(t.indexOf("Rastreio"), t.indexOf("Rastreio") + 200));
+  cxE = await caixaSaida(page);
+  ok(cxE && cxE.erro && cxE.texto === "O bloco 1.402 ainda está na Tesouraria Geral: não saiu para voltar.", "geral: o bloco na Geral: a caixa em vermelho diz que ainda não saiu", cxE);
   ok(await page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => x.textContent.trim() === "Registrar a entrada"); return !!b && b.disabled; }), "geral: o bloco na Geral não se registra");
   await digitar(page, "Primeira folha do bloco", "67001");
   await espera(700);
   t = await textoTela(page);
-  ok(/Rastreio do bloco 1\.340.*já foi devolvido em 02\/10\/2026/.test(t), "geral: o bloco devolvido: diz quando voltou", t.slice(t.indexOf("Rastreio"), t.indexOf("Rastreio") + 200));
+  cxE = await caixaSaida(page);
+  ok(cxE && cxE.erro && cxE.texto === "O bloco 1.340 já foi devolvido em 02/10/2026.", "geral: o bloco devolvido: a caixa em vermelho diz quando voltou", cxE);
+  ok(await page.evaluate(() => { const b = [...document.querySelectorAll("#financeiroRaiz button")].find((x) => x.textContent.trim() === "Parcial"); return !!b && b.disabled; }), "geral: sem bloco que volte, as escolhas ficam apagadas");
   await digitar(page, "Primeira folha do bloco", "5");
   await espera(700);
   ok((await textoTela(page)).includes("Nenhum bloco tem a folha 5."), "geral: a folha que nenhum bloco tem");
+  // a devolução parcial (r30): a primeira em branco que o sistema traz, a linha do que vai acontecer e a confirmação
+  await digitar(page, "Primeira folha do bloco", "66.001");
+  await espera(700);
+  await calmo(page);
+  cxE = await caixaSaida(page);
+  ok(cxE && !cxE.erro && cxE.texto === "Bloco 1.320 (veio sozinho): folhas 66.001 a 66.050 · entregue a Vila Nova em 08/09 · 35 com destino, 15 sem destino (36ª a 50ª)",
+    "geral: a caixa do bloco com as 15 do fim em branco", cxE);
+  ok(!(await textoTela(page)).includes("Primeira folha em branco"), "geral: na completa, sem a primeira em branco");
+  await clicar(page, "Parcial");
+  t = await textoTela(page);
+  ok(t.includes("Primeira folha em branco*") && (await page.evaluate(() => { const l = [...document.querySelectorAll("#financeiroRaiz label")].find((x) => x.textContent.trim().startsWith("Primeira folha em branco")); const i = l && l.querySelector("input"); return i ? i.value : null; })) === "66.036",
+    "geral: \"Parcial\" abre a primeira em branco, que o sistema já traz (66.036)");
+  ok(t.includes("66.036 · 36ª") || t.includes("· 36ª"), "geral: a posição da primeira em branco", t.slice(t.indexOf("Primeira folha em branco"), t.indexOf("Primeira folha em branco") + 80));
+  ok(t.includes("66.036 a 66.050 (15 folhas) voltam a ficar livres. O bloco fica na Tesouraria Geral, para outra entrega só com elas; as 35 usadas ficam no histórico, com Vila Nova."),
+    "geral: a linha do que vai acontecer, antes de gravar", t.slice(t.indexOf("voltam"), t.indexOf("voltam") + 200));
+  await digitar(page, "Primeira folha em branco", "66.040");
+  t = await textoTela(page);
+  ok(t.includes("66.040 a 66.050 (11 folhas) voltam a ficar livres.") && t.includes("as 39 usadas") && t.includes("· 40ª"), "geral: dá para mudar a que o sistema trouxe; a linha acompanha");
+  await escolher(page, "Devolvido por", "Rute Santos · tesoureira de Vila Nova");
+  const dP = pedidos(api, "/api/financeiro/blocos/devolver", "POST").length;
+  await clicar(page, "Registrar a entrada");
+  const dvP = await esperarPedido(api, "/api/financeiro/blocos/devolver", "POST", dP);
+  ok(dvP && JSON.stringify(dvP.corpo) === JSON.stringify({ primeiraFolha: 66001, pessoa: { membroId: 101 }, parcial: true, primeiraEmBranco: 66040 }), "geral: a parcial vai com a primeira em branco", dvP && dvP.corpo);
+  await calmo(page);
+  ok((await ultimoAviso(page)) === "Bloco 1.320 de volta, parcial: as folhas 66.040 a 66.050 estão livres para outra entrega.", "geral: a confirmação da parcial", await ultimoAviso(page));
+  ok(!(await caixaSaida(page)) && !(await textoTela(page)).includes("Primeira folha em branco"), "geral: o formulário fica limpo, de novo em \"Completa\"");
+  ok((await textoTela(page)).includes("04/10 Entrada parcial: bloco 1.320 devolvido por Vila Nova recebeu João da Silva · 39 usadas · livres de novo: 66.040 a 66.050"),
+    "geral: a linha da entrada parcial no livro (r30)");
   // a saída: o formulário da r30 no lugar do aviso
   ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\"");
   t = await textoTela(page);
@@ -723,6 +772,10 @@ async function provarLivro() {
   ok(t.includes("Entrada e saída de blocos quem registra é a Tesouraria Geral. Para pedir um bloco novo, fale com a Tesouraria Geral; a entrega fica registrada aqui."), "local: o aviso");
   ok(/Seus blocos agora em uso 1 esperando 1/.test(t) && !/a devolver/.test(t), "local: seus blocos agora (em uso, esperando)", t.slice(t.indexOf("Seus blocos"), t.indexOf("Seus blocos") + 60));
   ok(t.includes("1 a 5 de 37 registros"), "local: as páginas do livro");
+  ok(t.includes("10/11 Entrada: bloco 1.360 devolvido por Lia Fontes recebeu João da Silva · completo: 49 lançadas, 1 cancelada"), "local: a entrada diz quem trouxe, não a própria congregação (r30)",
+    t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 400));
+  ok(t.includes("15/10 Entrada parcial: bloco 1.288 devolvido por Rute Santos recebeu João da Silva · 35 usadas · as 15 em branco ficaram na Tesouraria Geral"),
+    "local: a entrada parcial: as em branco ficaram na Tesouraria Geral (r30)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 700));
   ok(t.includes("17/11 Saída: bloco 1.402 entregue a Rute Santos registrou João da Silva · Tesouraria Geral") && !t.includes("(Vila Nova)"),
     "local: a linha da saída sem o nome da própria congregação (r30)", t.slice(t.indexOf("O livro"), t.indexOf("O livro") + 300));
   await fechar(s, "livro local notebook");

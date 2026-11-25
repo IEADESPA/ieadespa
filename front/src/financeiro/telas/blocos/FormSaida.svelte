@@ -217,6 +217,8 @@
   .caixa select:disabled { color: var(--sv-suave); cursor: default; }
   .caixa select option { color: var(--sv-texto); background: var(--sv-sup); }
   .caixa .seta { position: absolute; right: 12px; font-size: 11px; color: var(--sv-texto); pointer-events: none; }
+  /* a escolha apagada não tem a seta (o desenho: "primeiro, a congregação") */
+  .caixa:has(select:disabled) .seta { display: none; }
   /* a data: o ícone à esquerda, como no desenho; o calendário do navegador abre ao tocar em qualquer parte do campo */
   .caixa.data input { position: relative; }
   .caixa.data input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: auto; height: auto; opacity: 0; cursor: pointer; }

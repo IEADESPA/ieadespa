@@ -596,7 +596,8 @@ async function livroDosBlocos(pool, usuario, { geral, pagina, porPagina }) {
         { Destino: "LANCADA", N: l.Lancadas }, { Destino: "CANCELADA", N: l.Canceladas }, { Destino: "ARRANCADA", N: l.Arrancadas }, { Destino: "EXTRAVIADA", N: l.Extraviadas },
         { Destino: "INEXISTENTE", N: l.Inexistentes }
       ], usadas + livres);
-      return { ...base, contagem, parcial, pendentes: Math.max(0, ate - Number(l.EntregaDe) + 1 - Number(l.ComDestinoNaEntrega || 0)),
+      // as usadas da entrega (a r30: "35 usadas"): a faixa da entrega até a folha antes da primeira em branco (a completa, até o fim do bloco)
+      return { ...base, contagem, parcial, usadas: ate - Number(l.EntregaDe) + 1, pendentes: Math.max(0, ate - Number(l.EntregaDe) + 1 - Number(l.ComDestinoNaEntrega || 0)),
         faixaLivre: parcial ? { primeiraFolha: Number(l.FaixaPrimeira), ultimaFolha: Number(l.FaixaUltima) } : null };
     }),
     total: linhas.length ? Number(linhas[0].Total) : 0, pagina, porPagina, agora, escopo
@@ -664,7 +665,7 @@ async function rastreio(pool, { folha }) {
 async function devolver(pool, { primeiraFolha, pessoa, parcial, primeiraEmBranco, data, por }) {
   const pf = inteiroPositivo(primeiraFolha);
   if (!pf) return { sucesso: false, mensagem: "Informe a primeira folha do bloco." };
-  const p = regra.pessoaDoLivro(pessoa, "Informe quem devolveu o bloco.");
+  const p = regra.pessoaDoLivro(pessoa, "Escolha quem trouxe o bloco.");
   if (p.erro) return { sucesso: false, mensagem: p.erro };
   const emParte = regra.devolucaoParcial(parcial);
   if (emParte === null) return { sucesso: false, mensagem: "Diga se a devolução é completa ou parcial." };
@@ -713,6 +714,9 @@ async function devolver(pool, { primeiraFolha, pessoa, parcial, primeiraEmBranco
       // até o fim do bloco, como sempre; a mensagem diz as livres sem elas)
       const depois = (await pedidoNaTransacao(t).input("id", sql.Int, b.BlocoId).input("x", sql.Int, branco)
         .query(`SELECT Folha, Destino FROM FinFolhas WHERE BlocoId = @id AND Folha >= @x`)).recordset;
+      // a própria folha digitada já tem destino: o texto da r30 diz qual e que a primeira em branco vem depois dela
+      const propria = depois.find((x) => Number(x.Folha) === branco && x.Destino !== "INEXISTENTE");
+      if (propria) return { sucesso: false, mensagem: `A folha ${milhar(branco)} já está ${regra.nomeDoDestino(propria.Destino)}: a primeira em branco vem depois dela.` };
       const outra = depois.filter((x) => x.Destino !== "INEXISTENTE").reduce((m, x) => Math.max(m, Number(x.Folha)), 0);
       if (outra) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: a ${milhar(outra)} já tem destino.` };
       if (depois.some((x) => Number(x.Folha) === branco)) return { sucesso: false, mensagem: `A folha ${milhar(branco)} não pode ser a primeira em branco: ela é inexistente.` };

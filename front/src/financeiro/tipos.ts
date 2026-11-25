@@ -170,6 +170,11 @@ export interface RegistroBloco {
   /** só na saída: as folhas que saíram e a primeira folha do bloco (a saída do bloco que voltou em parte diz as folhas e as posições) */
   readonly folhas?: Faixa;
   readonly blocoPrimeiraFolha?: number;
+  /** só na entrada (r30): a devolução parcial, as usadas da entrega, as folhas sem destino que ficaram com a congregação e a faixa que voltou livre */
+  readonly parcial?: boolean;
+  readonly usadas?: number;
+  readonly pendentes?: number;
+  readonly faixaLivre?: Faixa | null;
 }
 export type RegistroLivro = RegistroLote | RegistroBloco;
 
@@ -196,6 +201,8 @@ export interface Rastreio {
   readonly pessoas: readonly PessoaDevolve[];
   /** o bloco que voltou em parte e está na Geral: de onde voltou, quando e as usadas (a r30) */
   readonly volta?: VoltaBloco | null;
+  /** entregue: a primeira folha em branco que o sistema sugere para a devolução parcial (null = não sobra nenhuma) */
+  readonly primeiraEmBranco?: number | null;
 }
 
 /** o "Registrar saída" (r30): as congregações ativas, com a área de cada uma (a frase do "Levado pela área") */

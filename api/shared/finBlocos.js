@@ -135,6 +135,12 @@ function pessoaDoLivro(pessoa, rotulo) {
   return { membroId, nome: membroId === null ? nome : null };
 }
 
+/** o nome do destino guardado, na frase da tela ("A folha 64.440 já está lançada: …", a r30) */
+const NOME_DO_DESTINO = { LANCADA: "lançada", CANCELADA: "cancelada", ARRANCADA: "arrancada", EXTRAVIADA: "extraviada", INEXISTENTE: "inexistente" };
+function nomeDoDestino(guardado) {
+  return NOME_DO_DESTINO[guardado] || String(guardado || "").toLowerCase();
+}
+
 /** quantos registros por página o livro devolve (5 ou 3); outro valor = 5 */
 function porPaginaDoLivro(v) {
   const n = inteiro(typeof v === "number" ? v : String(v ?? ""));
@@ -236,6 +242,6 @@ function papelNoHistorico({ escopoTipo, papel, congregacao, area } = {}) {
 module.exports = {
   FOLHAS_POR_BLOCO, POR_PAGINA, MAX_BLOCOS_POR_LOTE,
   numeroDoBloco, blocosDoLote, posicaoDaFolha, situacaoDoBloco, filtroDaLista, procuraDaLista, paginaDaLista, excecaoDaFolha,
-  destinoDaTela, contagemDasFolhas, pessoaDoLivro, porPaginaDoLivro, blocosAgora,
+  destinoDaTela, contagemDasFolhas, pessoaDoLivro, nomeDoDestino, porPaginaDoLivro, blocosAgora,
   levadoPelaArea, desfazimentoDaFolha, devolucaoParcial, faixaLivre, mensagemDaParcial, mensagemJaVoltouParcial, horaBrasilia, papelNoHistorico
 };

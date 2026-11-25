@@ -2,6 +2,8 @@
 // Server de verdade. Base: cenario-200 (a 200, a 201, a 202 e a 203 aplicadas duas vezes), no LocalDB próprio do Financeiro:
 //   E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true' BASE=cenario-200 bash rodar.sh roteiro e2e-202-financeiro-r30.js
 // Cobre:
+// - a devolução (r30-blocos-devolver): a primeira em branco que já tem destino ("A folha 70.530 já está lançada: a primeira em branco vem depois
+//   dela."), quem trouxe ("Escolha quem trouxe o bloco.") e a linha do livro da entrada parcial com as usadas da entrega;
 // - a saída (r30-blocos-saida): as congregações ativas com a área (a inativa nem aparece), a liderança da congregação escolhida (a inativa, a que
 //   não existe e o lixo: o mesmo 404; só a Tesouraria Geral), o rastreio do bloco que nunca saiu (a faixa desde a primeira folha e a chegada) e a
 //   linha do livro com a primeira folha do bloco (a saída parcial diz as folhas e as posições);
@@ -332,6 +334,36 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   const parciais = todas.filter((x) => x.tipo === "saida" && x.folhas.primeiraFolha !== x.blocoPrimeiraFolha);
   ok(parciais.length > 0 && parciais.every((x) => x.folhas.primeiraFolha > x.blocoPrimeiraFolha && x.folhas.ultimaFolha >= x.folhas.primeiraFolha),
     "a saída do bloco que voltou em parte: a linha tem a faixa e a primeira folha do bloco (as posições)", parciais);
+
+  console.log("== a devolução da r30: completa ou parcial ==");
+  const b1410 = await idDo(1410);
+  await lancarDireto(b1410, 70501, 70535);
+  ok((await POST(H, "folha", local, { folha: 70536, oQueAconteceu: "cancelada", observacao: "Preenchida errado" })).status === 200, "a 70.536 cancelada em Vila Nova");
+  const antesDev = await retratoFin();
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: {}, parcial: false });
+  ok(r.status === 422 && r.body.mensagem === "Escolha quem trouxe o bloco.", "sem quem trouxe: o texto da r30", r.body);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70530, data: "2026-11-22" });
+  ok(r.status === 422 && r.body.mensagem === "A folha 70.530 já está lançada: a primeira em branco vem depois dela.", "a primeira em branco digitada já está lançada (o texto da r30)", r.body);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { nome: "Rute Santos" }, parcial: true, primeiraEmBranco: 70536, data: "2026-11-22" });
+  ok(r.status === 422 && r.body.mensagem === "A folha 70.536 já está cancelada: a primeira em branco vem depois dela.", "e a que já está cancelada", r.body);
+  ok((await retratoFin()) === antesDev, "as recusas não mexeram no banco");
+  r = await GET(H, "rastreio", geral, { folha: 70501 });
+  ok(r.status === 200 && r.body.primeiraEmBranco === 70537, "o rastreio sugere a 70.537, a seguinte à última com destino", r.body.primeiraEmBranco);
+  r = await POST(H, "devolver", geral, { primeiraFolha: 70501, pessoa: { membroId: TESOUREIRA_LOCAL }, parcial: true, primeiraEmBranco: 70537, data: "2026-11-22" });
+  ok(r.status === 200 && r.body.mensagem === "Bloco 1.410 de volta, parcial: as folhas 70.537 a 70.550 estão livres para outra entrega.", "o 1.410 de volta, parcial", r.body);
+  const todasDev = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    const x = (await GET(H, "livro", geral, { porPagina: 5, pagina: pg })).body.registros;
+    todasDev.push(...x);
+    if (x.length < 5) break;
+  }
+  const e1410 = todasDev.find((x) => x.tipo === "entrada" && x.bloco === 1410);
+  ok(e1410 && e1410.parcial === true && e1410.usadas === 36 && e1410.contagem.livres === 14 && JSON.stringify(e1410.faixaLivre) === JSON.stringify({ primeiraFolha: 70537, ultimaFolha: 70550 }),
+    "a linha da entrada parcial: as 36 usadas da entrega e as 14 livres de novo (70.537 a 70.550)", e1410);
+  const c1401 = todasDev.find((x) => x.tipo === "entrada" && x.bloco === 1401);
+  const c1402 = todasDev.find((x) => x.tipo === "entrada" && x.bloco === 1402 && x.parcial === false);
+  ok(c1401 && c1401.parcial === false && c1401.usadas === 50 && c1402 && c1402.usadas === 11,
+    "a entrada completa diz as usadas da entrega: as 50 do 1.401 e as 11 da reentrega do 1.402 (70.140 a 70.150)", [c1401, c1402]);
 
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();

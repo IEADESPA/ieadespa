@@ -453,6 +453,15 @@ describe("o histórico da folha e o desfazer (r30-blocos-desfazer)", () => {
     expect((await chamar({ acao: "historico", metodo: "POST", token: LOCAL() })).status).toBe(403);
   });
 });
+describe("a devolução (r30-blocos-devolver)", () => {
+  test("o nome do destino na frase: \"já está lançada\"", () => {
+    expect(regra.nomeDoDestino("LANCADA")).toBe("lançada");
+    expect(regra.nomeDoDestino("CANCELADA")).toBe("cancelada");
+    expect(regra.nomeDoDestino("ARRANCADA")).toBe("arrancada");
+    expect(regra.nomeDoDestino("EXTRAVIADA")).toBe("extraviada");
+    expect(regra.nomeDoDestino("INEXISTENTE")).toBe("inexistente");
+  });
+});
 describe("a saída (r30-blocos-saida)", () => {
   beforeAll(() => { process.env.AUTH_SECRET = process.env.AUTH_SECRET || "segredo-so-do-teste-" + "x".repeat(24); });
   beforeEach(() => { mockConsultas = []; mockRegras = []; });

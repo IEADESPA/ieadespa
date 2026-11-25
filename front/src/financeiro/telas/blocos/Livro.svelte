@@ -1,30 +1,29 @@
-<!-- Blocos de recibo: o livro de entrada e saída (rodada 17, "r17-blocos-livro", opção 1; a saída e o celular da rodada 30, "r30-blocos-saida").
-     A Tesouraria Geral tem os botões "Registrar entrada" e "Registrar saída" (o do formulário aberto é o dourado). Na entrada (a devolução) quem
-     recebe é sempre a Tesouraria Geral (o nome de quem está entrando vem sozinho); o número de uma folha do bloco puxa o rastreio e quem pode
-     devolver. A saída está em FormSaida.svelte. À direita, o livro em páginas (5 no notebook, 3 no celular). A área e a congregação veem o aviso,
-     os blocos delas agora e o livro das suas congregações. No celular a Geral vê os dois botões e o livro; o formulário abre ao tocar, no lugar
-     deles, com o X; depois de registrar, fecha e o livro volta. -->
+<!-- Blocos de recibo: o livro de entrada e saída (rodada 17, "r17-blocos-livro", opção 1; a saída, a devolução e o celular da rodada 30,
+     "r30-blocos-saida" e "r30-blocos-devolver"). A Tesouraria Geral tem os botões "Registrar entrada" e "Registrar saída" (o do formulário aberto
+     é o dourado); a entrada (a devolução, completa ou parcial) está em FormEntrada.svelte e a saída em FormSaida.svelte. À direita, o livro em
+     páginas (5 no notebook, 3 no celular). A área e a congregação veem o aviso, os blocos delas agora e o livro das suas congregações. No celular a
+     Geral vê os dois botões e o livro; o formulário abre ao tocar, no lugar deles, com o X; depois de registrar, fecha e o livro volta. -->
 <script lang="ts">
-  import { pedir, qs, avisarFalha } from "../../../comum/api";
+  import { pedir, qs } from "../../../comum/api";
   import { numero } from "../../../comum/formato";
   import { ponte } from "../../../comum/ponte";
   import Icone from "../../../comum/Icone.svelte";
   import Aviso from "../../../comum/Aviso.svelte";
   import Estado from "../../../comum/Estado.svelte";
   import { escopo, nav, nivelDaSessao } from "../../estado.svelte";
-  import { diaMes, linhaDoLivro, textoDoRastreio, rotuloDaPessoa, soNumeros } from "../../blocos";
-  import type { PaginaLivro, Rastreio } from "../../tipos";
+  import { confirmacaoNoCelular, diaMes, linhaDoLivro } from "../../blocos";
+  import type { PaginaLivro } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
   import Numeros from "../../partes/Numeros.svelte";
   import Paginas from "../../partes/Paginas.svelte";
   import Cabecalho from "./Cabecalho.svelte";
+  import FormEntrada from "./FormEntrada.svelte";
   import FormSaida from "./FormSaida.svelte";
 
   interface Props { celular: boolean }
   let { celular }: Props = $props();
 
   const nivel = nivelDaSessao();
-  const quemEntra = `${ponte().sessao().nome} · Tesouraria Geral (quem está entrando)`;
 
   // ---- o livro ----
   let pagina = $state(1);
@@ -67,58 +66,9 @@
     if (celular) noCelular = qual; else noNotebook = qual;
     dourado = qual;
   }
-  async function saidaFeita(mensagem: string) {
-    ponte().avisar(mensagem, "sucesso");
-    noCelular = null;
-    if (pagina === 1) await ler(1, porPagina); else pagina = 1;
-  }
-
-  // ---- a entrada (a devolução) ----
-  let folhaDigitada = $state("");
-  let rastreio = $state.raw<Rastreio | null>(null);
-  let erroRastreio = $state("");
-  let quem = $state("");
-  let outroNome = $state("");
-  let falta = $state("");
-  let gravando = $state(false);
-
-  // o rastreio vem sozinho quando a pessoa para de digitar (só os algarismos: "68.001" é a folha 68001)
-  let seqRastreio = 0;
-  $effect(() => {
-    const folha = soNumeros(folhaDigitada);
-    const meu = ++seqRastreio;
-    if (!folha) { rastreio = null; erroRastreio = ""; return; }
-    const t = setTimeout(async () => {
-      const r = await pedir<{ bloco: Rastreio["bloco"]; contagem: Rastreio["contagem"]; pessoas: Rastreio["pessoas"] }>("/financeiro/blocos/rastreio" + qs({ folha }));
-      if (meu !== seqRastreio) return;
-      quem = ""; outroNome = ""; falta = "";
-      if (!r.ok) { rastreio = null; erroRastreio = r.cancelado ? "" : r.mensagem; return; }
-      erroRastreio = "";
-      rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas };
-    }, 400);
-    return () => clearTimeout(t);
-  });
-  const estadoRastreio = $derived(rastreio ? textoDoRastreio(rastreio) : null);
-  const podeVoltar = $derived(!!estadoRastreio?.podeVoltar);
-
-  async function registrarEntrada() {
-    if (gravando || !rastreio || !podeVoltar) return;
-    let pessoa: { membroId: number } | { nome: string };
-    if (quem === "outra") {
-      if (!outroNome.trim()) { falta = "Escreva o nome de quem devolveu o bloco."; return; }
-      pessoa = { nome: outroNome.trim() };
-    } else {
-      const p = quem.startsWith("p") ? rastreio.pessoas[Number(quem.slice(1))] : undefined;
-      if (!p) { falta = "Escolha quem devolveu o bloco."; return; }
-      pessoa = p.membroId ? { membroId: p.membroId } : { nome: p.nome };
-    }
-    falta = "";
-    gravando = true;
-    const r = await pedir<{ mensagem: string }>("/financeiro/blocos/devolver", { metodo: "POST", corpo: { primeiraFolha: rastreio.bloco.primeiraFolha, pessoa } });
-    gravando = false;
-    if (!r.ok) { avisarFalha(r); return; }
-    ponte().avisar(r.dados.mensagem, "sucesso");
-    folhaDigitada = ""; rastreio = null; quem = ""; outroNome = "";
+  /** gravou (a saída ou a entrada): a confirmação (no celular, a da parcial mais curta), o formulário do celular fecha e o livro volta à 1ª página */
+  async function feito(mensagem: string) {
+    ponte().avisar(celular ? confirmacaoNoCelular(mensagem) : mensagem, "sucesso");
     noCelular = null;
     if (pagina === 1) await ler(1, porPagina); else pagina = 1;
   }
@@ -131,53 +81,12 @@
   </div>
 {/snippet}
 
-{#snippet fechar()}
-  <button type="button" class="fechar" aria-label="Fechar" onclick={() => (noCelular = null)}><Icone nome="fechar" tam={18} traco={2.2} /></button>
-{/snippet}
-
 {#snippet saida()}
-  <FormSaida {celular} inicial={inicialSaida} onfeito={(m) => void saidaFeita(m)} onfechar={() => (noCelular = null)} />
+  <FormSaida {celular} inicial={inicialSaida} onfeito={(m) => void feito(m)} onfechar={() => (noCelular = null)} />
 {/snippet}
 
 {#snippet entrada()}
-  <Quadro titulo="Registrar entrada" nota="o bloco volta para a Tesouraria Geral" {celular} extra={celular ? fechar : undefined}>
-    <label class="campo">
-      <span class="rot">Primeira folha do bloco<span class="obr" aria-hidden="true">*</span></span>
-      <span class="caixa"><Icone nome="busca" tam={15} traco={2} /><input type="text" inputmode="numeric" autocomplete="off" maxlength="12" required
-        placeholder="o número impresso na 1ª folha" bind:value={folhaDigitada} /></span>
-    </label>
-    {#if erroRastreio}<p class="falta" role="alert">{erroRastreio}</p>{/if}
-    {#if rastreio && estadoRastreio}
-      <div class="rastreio" aria-live="polite"><strong>Rastreio do bloco {numero(rastreio.bloco.numero)}</strong> (veio sozinho): {estadoRastreio.texto}</div>
-    {/if}
-    <div class="campo">
-      <span class="rot">Recebido por</span>
-      <span class="caixa auto"><Icone nome="cadeado" tam={15} traco={2} />{quemEntra}</span>
-    </div>
-    <label class="campo">
-      <span class="rot">Devolvido por</span>
-      <span class="caixa">
-        <select bind:value={quem} disabled={!podeVoltar} onchange={() => (falta = "")}>
-          <option value="">{podeVoltar ? "Escolha quem trouxe o bloco" : "primeiro, a folha do bloco"}</option>
-          {#if rastreio && podeVoltar}
-            {#each rastreio.pessoas as p, i (i)}<option value={`p${i}`}>{rotuloDaPessoa(p, rastreio.bloco.congregacao?.nome ?? null)}</option>{/each}
-            <option value="outra">Outra pessoa (escrever o nome)</option>
-          {/if}
-        </select>
-        <span class="seta" aria-hidden="true">▾</span>
-      </span>
-    </label>
-    {#if quem === "outra"}
-      <label class="campo">
-        <span class="rot">Nome de quem devolveu</span>
-        <span class="caixa"><input type="text" autocomplete="off" maxlength="200" bind:value={outroNome} oninput={() => (falta = "")} /></span>
-      </label>
-    {/if}
-    {#if falta}<p class="falta" role="alert">{falta}</p>{/if}
-    <div class="fim">
-      <button type="button" class="ouro baixo" disabled={!podeVoltar || gravando} aria-busy={gravando} onclick={() => void registrarEntrada()}><Icone nome="check" tam={18} traco={2.2} />Registrar a entrada</button>
-    </div>
-  </Quadro>
+  <FormEntrada {celular} onfeito={(m) => void feito(m)} onfechar={() => (noCelular = null)} />
 {/snippet}
 
 {#snippet livro()}
@@ -269,7 +178,6 @@
     height: 40px; padding: 0 16px; border-radius: 10px; border: 0; background: #FFB800; color: #0A2342; display: inline-flex; align-items: center; gap: 8px;
     font-size: 14px; font-weight: 700; white-space: nowrap; transition: transform .12s ease, box-shadow .15s ease;
   }
-  .ouro.baixo { height: 38px; }
   .ouro:active:not(:disabled) { transform: scale(.97); }
   .ouro:disabled { opacity: .6; cursor: default; }
   @media (hover: hover) { .ouro:hover:not(:disabled) { box-shadow: 0 2px 6px rgba(10, 35, 66, .18); } }
@@ -280,31 +188,6 @@
   .linha-botao :global(svg) { color: var(--sv-icone); }
   @media (hover: hover) { .linha-botao:hover { background: var(--sv-linha); } }
   .linha-botao[aria-pressed="true"] { border-color: var(--sv-mod); }
-  .fechar { width: 28px; height: 28px; margin: -4px -4px -4px 0; border: 0; background: transparent; color: var(--sv-suave); display: flex; align-items: center; justify-content: center; border-radius: 8px; flex: none; align-self: center; }
-
-  /* os campos do formulário (as medidas da rodada 17: a caixa de 38 + a borda) */
-  .campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .rot { font-size: 12.5px; font-weight: 600; color: var(--sv-titulo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .obr { color: var(--sv-atr); }
-  .caixa {
-    position: relative; min-height: 40px; border: 1px solid var(--sv-campo-borda); border-radius: 9px; background: var(--sv-campo); display: flex; align-items: center; gap: 8px;
-    padding: 0 11px; font-size: 13.5px; color: var(--sv-texto); min-width: 0;
-  }
-  .caixa :global(svg) { color: var(--sv-suave); flex: none; }
-  .caixa:focus-within { border-color: var(--sv-mod); }
-  .caixa.auto { border-style: dashed; background: transparent; white-space: nowrap; overflow: hidden; }
-  .caixa input, .caixa select {
-    flex: 1; min-width: 0; height: 38px; border: 0; background: transparent; font: inherit; font-size: 13.5px; color: var(--sv-texto); outline: none; padding: 0; margin: 0;
-  }
-  .caixa input::placeholder { color: var(--sv-suave); opacity: 1; }
-  .caixa select { appearance: none; cursor: pointer; padding-right: 18px; text-overflow: ellipsis; }
-  .caixa select:disabled { color: var(--sv-suave); cursor: default; }
-  .caixa select option { color: var(--sv-texto); background: var(--sv-sup); }
-  .caixa .seta { position: absolute; right: 12px; font-size: 11px; color: var(--sv-texto); pointer-events: none; }
-  .rastreio { padding: 10px 12px; border-radius: 11px; background: var(--sv-mod-fundo); font-size: 12.5px; line-height: 1.45; color: var(--sv-texto); }
-  .rastreio strong { color: var(--sv-titulo); }
-  .falta { font-size: 12.5px; font-weight: 600; color: var(--sv-atr); }
-  .fim { display: flex; justify-content: flex-end; }
 
   /* o livro: a data à esquerda, o que aconteceu e quem registrou */
   .registros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }   /* o vão do quadro do desenho entre as linhas */

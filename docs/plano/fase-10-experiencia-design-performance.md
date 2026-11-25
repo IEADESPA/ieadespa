@@ -1306,6 +1306,13 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     bairro da ficha, não o mapa**, e a ficha passa a **escolher o bairro numa lista fixa de Parauapebas**, que a Geral
     cuida. O ponto de cada membro (só a congregação vê) sai do CEP e do número (erro de uns 50 m), e a secretaria
     pode **arrastar o alfinete** para o lugar certo.
+- **A rodada 33 (25/11/2026), publicada numa página nova:** `https://claude.ai/artifact/NF7zseCp4zVWsUEwUzmQDG`, com
+  os ajustes acima em 3 telas: os cultos (a Geral monta a agenda padrão e responde aos pedidos; a congregação acrescenta
+  e pede; a área acompanha), o termo de posse em três partes (o aceite no celular e no balcão, o PDF de duas folhas, a
+  página do QR, a virada do executivo pela Geral e a diretoria cadastrada pelo dirigente em janeiro) e o mapa (a lista
+  dos bairros e vilas de Parauapebas, o bairro na ficha e o alfinete). Os textos da LGPD e do acesso ao sistema (partes 2
+  e 3) foram redigidos pelo desenhista e esperam a conferência dele. O painel e a ficha aprovados mudam só no texto da
+  virada (a explicação da rodada lista cada linha).
 - **O painel da Estrutura ("quem precisa de atenção"):** o cargo vago, o cargo vencendo, os dados velhos e o termo de
   posse pendente, e todos os avisos do módulo. Cada nível vê os seus tipos de aviso, como no Financeiro.
 - **A Sede:** fica numa área, a **Área 1 ("Distrito Sede")**, com os pontos de culto dela. É área de uma congregação

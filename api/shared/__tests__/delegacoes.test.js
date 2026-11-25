@@ -56,3 +56,36 @@ describe("permissoesEscopoDelegados", () => {
     expect(r.delegacoesAtivas).toHaveLength(1);
   });
 });
+
+// A permissão que a recertificação vencida tirou de quem é dono do cargo não chega a quem recebeu o cargo por delegação (o login do titular já a tira dele).
+describe("a delegação e a recertificação vencida do titular", () => {
+  const linha = (extra = {}) => ({ DelegacaoId: 1, LiderancaId: 1, DataFim: "2099-12-31", DataFimTexto: "2099-12-31", LiderancaAtivoAteTexto: null, Motivo: null, deleganteNome: "Fulano",
+    EscopoTipo: "GLOBAL", EscopoId: null, DepartamentoId: null, papelNome: "Tesoureiro Geral", papelNivel: "GLOBAL", permissoesStr: "pessoas, financeiro", ExpiradasDoTitular: "financeiro", ...extra });
+  const { concessoesDelegadas } = require("../delegacoes");
+
+  test("a concessão do delegado sai sem a permissão vencida do titular", async () => {
+    const { pool, chamadas } = criarPoolFalso([[linha()]]);
+    const r = await concessoesDelegadas(pool, sqlFalso, 6, "2026-11-25");
+    expect(r.concessoes).toHaveLength(1);
+    expect(r.concessoes[0].permissoes).toEqual(["pessoas"]);
+    expect(chamadas[0].sql).toMatch(/RecertificacoesAcesso/);
+  });
+
+  test("as vencidas do próprio delegado também continuam saindo", async () => {
+    const { pool } = criarPoolFalso([[linha({ ExpiradasDoTitular: null })]]);
+    const r = await concessoesDelegadas(pool, sqlFalso, 6, "2026-11-25", ["pessoas"]);
+    expect(r.concessoes[0].permissoes).toEqual(["financeiro"]);
+  });
+
+  test("o resumo das delegações também não soma a permissão vencida do titular", async () => {
+    const { pool } = criarPoolFalso([[linha({ ExpiradasDoTitular: "financeiro,pessoas" })]]);
+    const r = await permissoesEscopoDelegados(pool, sqlFalso, 6, "2026-11-25");
+    expect(r.permissoesExtras).toEqual([]);
+  });
+
+  test("a data final da delegação sai como o dia (texto), não como instante", async () => {
+    const { pool } = criarPoolFalso([[linha({ DataFim: new Date("2026-11-30T00:00:00Z"), DataFimTexto: "2026-11-30" })]]);
+    const r = await concessoesDelegadas(pool, sqlFalso, 6, "2026-11-25");
+    expect(r.delegacoesAtivas[0].dataFim).toBe("2026-11-30");
+  });
+});

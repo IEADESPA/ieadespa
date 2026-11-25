@@ -2,6 +2,7 @@
 // cenario-175 (`BASE=cenario-175 bash rodar.sh roteiro e2e-152-acesso.js`). Cobre:
 //   1. a matrícula da ficha só como número inteiro (o banco nunca recebe outra forma);
 //   2. salvar a ficha de quem já saiu mantém a data de saída; a data da saída pelo dia de Brasília;
+//   2b. a situação no rol só do catálogo (gravada com a sigla dele), a licença por candidatura só pela aba dela e as outras datas da ficha conferidas;
 //   3. tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, com a confirmação recente, e nunca a última pessoa que
 //      administra os acessos;
 //   4. a delegação não passa adiante a permissão que a recertificação vencida tirou do titular;
@@ -26,7 +27,8 @@ const ID = {
   falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
   avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63, avisoNova: BASE_ID + 64, avisoTutelada: BASE_ID + 65,
   liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81,
-  licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92
+  licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92,
+  fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -55,6 +57,8 @@ async function principal() {
     await q(`INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro, DataNascimento, DataAdmissao, Sexo)
       VALUES (@id, @n, @c, 'ATIVO', 'EM_COMUNHAO', '1984-03-12', '2010-05-02', 'M')`, { id, n: `Pessoa ${chave} E2E152`, c: sede });
   }
+  // AFASTADO não vem semeado no catálogo das situações no rol (migrações 016, 019 e 023): aqui a Secretaria o acrescentou (a seção 3 o usa)
+  await q("IF NOT EXISTS (SELECT 1 FROM StatusMembro WHERE Sigla = N'AFASTADO') INSERT INTO StatusMembro (Sigla, Nome) VALUES (N'AFASTADO', N'Afastado')");
   const papel = async (nome, nivel, perms) => (await q("INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES (@n, @v, @p); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: nome, v: nivel, p: perms }))[0].id;
   const pGeral = await papel("Geral E2E152", "GLOBAL", "pessoas,permissoes");
   const pTes = await papel("Tesoureiro E2E152", "CONGREGACAO", "financeiro,pessoas");
@@ -123,6 +127,39 @@ async function principal() {
     ok(r.status === 200 && r.body && r.body.sucesso === true, "à noite, a congregação desliga quem não tem cargo", `${r.status} ${JSON.stringify(r.body).slice(0, 120)}`);
     ok((await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.comum })) === hoje, `a data de saída é o dia de Brasília (${hoje}), não o UTC (${diaUtc})`);
   } finally { soltarRelogio(); }
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 2b. a situação no rol pelo catálogo, a licença só pela aba dela e as outras datas da ficha ==");
+  const tentar = async (chamada) => { try { return await chamada(); } catch (e) { return { status: "exceção", body: { mensagem: String(e && e.message).slice(0, 80) } }; } };
+  const resumo = (r) => `${r.status} ${JSON.stringify(r.body).slice(0, 120)}`;
+  const foraDoCatalogo = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaSituacao, { status: "XPTO" }) }));
+  ok(foraDoCatalogo.status === 400 && (await statusDe(ID.fichaSituacao)) === "ATIVO", "situação fora do catálogo: 400 e nada muda", resumo(foraDoCatalogo));
+  const minusculas = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaSituacao, { status: "desligado", motivoSaida: "DESLIGAMENTO" }) }));
+  ok(minusculas.status === 200 && (await statusDe(ID.fichaSituacao)) === "DESLIGADO"
+    && (await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.fichaSituacao })) === hojeBrasilia(),
+  "a situação escrita em minúsculas grava a sigla do catálogo e passa pela saída do rol (a data de saída de hoje)", resumo(minusculas));
+  const porNaLicenca = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaLicenca, { status: "LICENCA_CANDIDATURA" }) }));
+  ok(porNaLicenca.status === 400 && /Licença Candidatura/.test(porNaLicenca.body && porNaLicenca.body.mensagem) && (await statusDe(ID.fichaLicenca)) === "ATIVO",
+    "a ficha não põe em licença por candidatura: 400, aponta a aba da licença, nada muda", resumo(porNaLicenca));
+  await q("UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id", { id: ID.fichaLicenca });
+  const tirarDaLicenca = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaLicenca, { status: "ATIVO" }) }));
+  ok(tirarDaLicenca.status === 409 && /Licença Candidatura/.test(tirarDaLicenca.body && tirarDaLicenca.body.mensagem) && (await statusDe(ID.fichaLicenca)) === "LICENCA_CANDIDATURA",
+    "a ficha não tira da licença por candidatura: 409, aponta a aba da licença, nada muda", resumo(tirarDaLicenca));
+  const naLicenca = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaLicenca, { status: "LICENCA_CANDIDATURA", telefone: "91900001522" }) }));
+  ok(naLicenca.status === 200 && (await escalar("SELECT CONCAT(Status, '/', Telefone) FROM MembroReferencia WHERE MembroId = @id", { id: ID.fichaLicenca })) === "LICENCA_CANDIDATURA/91900001522",
+    "quem está em licença tem a ficha salva com a mesma situação", resumo(naLicenca));
+  const datasGravadas = () => escalar(`SELECT CONCAT(CONVERT(varchar(10), DataNascimento, 120), '|', CONVERT(varchar(10), DataAdmissao, 120), '|', ISNULL(CONVERT(varchar(10), DataBatismo, 120), '-'), '|',
+    ISNULL(CONVERT(varchar(10), DataRitoRecebimento, 120), '-'), '|', ISNULL(CONVERT(varchar(10), DataAfastamento, 120), '-')) FROM MembroReferencia WHERE MembroId = @id`, { id: ID.fichaDatas });
+  const datasAntes = await datasGravadas();
+  const amanha = (() => { const d = new Date(`${hojeBrasilia()}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  for (const [campo, valor, esperado] of [["dataNascimento", "abc", /nascimento/], ["dataNascimento", "0000-01-01", /nascimento/], ["dataAdmissao", "20/11/2026", /admissão/],
+    ["dataBatismo", "2026-02-30", /batismo/], ["dataRitoRecebimento", "abc", /rito/], ["dataAfastamento", 19900101, /afastamento/],
+    ["dataNascimento", amanha, /futuro/], ["dataAdmissao", amanha, /futuro/], ["dataBatismo", amanha, /futuro/]]) {
+    const r = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaDatas, { [campo]: valor }) }));
+    ok(r.status === 400 && esperado.test(r.body && r.body.mensagem) && (await datasGravadas()) === datasAntes, `${campo} = ${JSON.stringify(valor)}: 400 com a mensagem do campo, nada muda`, resumo(r));
+  }
+  const datasCertas = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaDatas, { dataBatismo: "2001-06-10", dataRitoRecebimento: "2016-03-20", dataAfastamento: "2020-02-01" }) }));
+  ok(datasCertas.status === 200 && (await datasGravadas()) === "1984-03-12|2010-05-02|2001-06-10|2016-03-20|2020-02-01", "as datas certas são gravadas", resumo(datasCertas));
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 3. tirar do rol ativo quem tem cargo de liderança ==");
@@ -413,7 +450,14 @@ async function principal() {
     if (lixo === undefined || lixo === null || lixo === "") continue;   // vazio = sem a data (mantém a gravada); 0001-01-01 e 9999-12-31 ficam fora de 2006 até hoje
     await conferir(`data de saída ${rotulo}`, () => pessoas("POST", { token: geral(), corpo: ficha(ID.saiu, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida: lixo }) }));
   }
-  ok(quebras.length === 0, `lixo em cada campo (${L.LIXO.length} valores): nunca 500, nunca texto interno`, quebras.slice(0, 5).join(" | "));
+  // a matrícula certa, com lixo num campo por vez (a situação e as outras datas da ficha)
+  for (const campo of ["status", "dataNascimento", "dataAdmissao", "dataBatismo", "dataRitoRecebimento", "dataAfastamento"]) {
+    for (const lixo of L.LIXO) {
+      if (lixo === undefined || lixo === null || lixo === "") continue;
+      await conferir(`${campo} ${JSON.stringify(lixo).slice(0, 30)}`, () => pessoas("POST", { token: geral(), corpo: ficha(ID.fichaDatas, { [campo]: lixo }) }));
+    }
+  }
+  ok(quebras.length === 0, `lixo em cada campo (${L.LIXO.length} valores; a ficha campo a campo): nunca 500, nunca texto interno`, quebras.slice(0, 5).join(" | "));
   ok((await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.saiu })) === "2026-11-20",
     "o lixo na data de saída não troca a data gravada");
 }

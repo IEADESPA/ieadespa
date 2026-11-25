@@ -1174,6 +1174,10 @@ Depois da revisão do Financeiro até `4c06d58`:
     cargo local, a secretaria local; o de área, a área; o geral, a Geral), sem esperar a Geral: "são 300, 400 cargos;
     quem conhece é o local". Com o processo, a pessoa **perde na hora o acesso que o cargo dava** e fica só com o
     perfil de membro dela.
+  - **Afastar do cargo é separado do rol:** afastar do **cargo** tira só o acesso do cargo, e a pessoa continua
+    membro ativo, entrando no aplicativo (carteirinha, contribuições). Já o membro **afastado, de licença ou inativo no
+    rol** perde também a entrada de membro, como hoje. O "afastar do cargo" entra com o cargo, no desenho da
+    Estrutura.
   - **A data de saída** vai de **2006 (a fundação da igreja) até hoje**: nem antes, nem no futuro. Dado antigo errado
     que vier pela importação se pensa quando aparecer.
   - **A avaliação das congregações (PSC):** o ano da fundação e os anos sob tutela **não contam** na cobrança.

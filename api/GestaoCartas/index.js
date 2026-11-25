@@ -11,6 +11,11 @@
 // se o membro foi readmitido (DataAdmissao posterior ao pedido) — aí a carta é
 // cancelada ("o relógio zerou", Reg. Art. 131 §4º, II).
 //
+// A Carta de Mudança é o desligamento, e só vale com a CONFIRMAÇÃO DO PRÓPRIO MEMBRO (SolicitarCarta: a sessão dele, com a declaração de ciência). Decisões de
+// 25/11/2026: a secretaria não emite a Mudança que o membro só pediu; o processamento só conta o prazo da confirmação e exige que ela exista. O membro sai
+// sozinho, seja qual for o cargo (regra do responsável, "A movimentação", 23/11): a vacância deixa os cargos vagos e não se barra pela trava do último que
+// administra os acessos; nesse caso a trilha registra (o aviso à Geral sai na confirmação da carta, não aqui).
+//
 // ESCOPO: a carta é da PESSOA — lista, emissão, cancelamento e o "processar" só alcançam as cartas de quem está na congregação que o usuário alcança
 // (shared/escopoRotas.js); carta de fora do escopo tem a MESMA resposta de "não encontrada". O "processar" é irreversível (zera contatos e desliga o membro), então cada
 // minimização e cada cancelamento por retorno deixam trilha de auditoria.
@@ -23,6 +28,7 @@ const { emTransacao } = require("../shared/transacaoCurta");
 const licencaCandidatura = require("../shared/licencaCandidatura");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { obterTrava } = require("../shared/financeiroSeguro");
+const travaPermissoes = require("../shared/travaPermissoes");
 const { filtrarPorEscopo, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const SELECT_LISTA = `
@@ -79,6 +85,11 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Carta não encontrada." } };
       return;
     }
+    // A Carta de Mudança só sai depois da confirmação do próprio membro (a declaração de ciência do desligamento); as outras, pedidas ou confirmadas.
+    if (carta.Tipo === "MUDANCA" && carta.Status === "SOLICITADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "A Carta de Mudança só é emitida depois que o próprio membro a confirma no aplicativo (a declaração de que sabe do desligamento)." } };
+      return;
+    }
     if (!["SOLICITADA", "CONFIRMADA"].includes(carta.Status)) {
       context.res = { status: 200, body: { sucesso: false, mensagem: `Carta com status "${carta.Status}" não pode ser emitida.` } };
       return;
@@ -87,13 +98,13 @@ module.exports = async function (context, req) {
     const validade = carta.Tipo === "RECOMENDACAO"
       ? dataISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 30))
       : null;
-    // Só emite quem ainda a encontra SOLICITADA/CONFIRMADA (duas emissões ao mesmo tempo não se atropelam).
+    // Só emite quem ainda a encontra CONFIRMADA (ou SOLICITADA, fora a Mudança): duas emissões ao mesmo tempo não se atropelam, e a regra da Mudança vale também aqui.
     const upd = await pool.request()
       .input("id", sql.Int, cartaId)
       .input("hoje", sql.Date, dataISO(hoje))
       .input("validade", sql.Date, validade)
       .input("emitidoPor", sql.Int, usuario.membroId)
-      .query(`UPDATE CartasTransito SET Status = 'EMITIDA', DataEmissao = @hoje, DataValidade = @validade, EmitidoPor = @emitidoPor WHERE CartaId = @id AND Status IN ('SOLICITADA','CONFIRMADA')`);
+      .query(`UPDATE CartasTransito SET Status = 'EMITIDA', DataEmissao = @hoje, DataValidade = @validade, EmitidoPor = @emitidoPor WHERE CartaId = @id AND (Status = 'CONFIRMADA' OR (Status = 'SOLICITADA' AND Tipo <> 'MUDANCA'))`);
     if (upd.rowsAffected[0] === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Carta não pode ser emitida (o status mudou)." } };
       return;
@@ -128,9 +139,11 @@ module.exports = async function (context, req) {
 
   if (method === "POST" && acao === "processar") {
     // (o apelido da data não pode se chamar "dataBase": DATABASE é palavra reservada do SQL Server e a consulta daria erro)
+    // O prazo conta da confirmação do membro (o dia de Brasília: a confirmação é gravada em UTC). A Mudança sem a confirmação dele (dado de antes da regra) não entra.
     const candidatasResult = await pool.request().query(`
       SELECT c.CartaId, c.MembroId, c.MotivoSaida,
-             CONVERT(varchar(10), ISNULL(c.DataConfirmacao, c.DataSolicitacao), 120) AS dataReferencia,
+             CASE WHEN c.DataConfirmacao IS NOT NULL AND c.DeclaracaoCiencia IS NOT NULL THEN 1 ELSE 0 END AS ConfirmadaPeloMembro,
+             CONVERT(varchar(10), DATEADD(hour, -3, c.DataConfirmacao), 120) AS dataReferencia,
              CONVERT(varchar(10), m.DataAdmissao, 120) AS dataAdmissao,
              cg.Nome AS congregacaoNome, ex.Nome AS extensaoNome
       FROM CartasTransito c
@@ -146,8 +159,10 @@ module.exports = async function (context, req) {
     const diasMinimizacao = await diasMinimizacaoExMembro(pool);
     let minimizadas = 0;
     let canceladas = 0;
+    let semConfirmacao = 0;
 
     for (const c of candidatas) {
+      if (!Number(c.ConfirmadaPeloMembro)) { semConfirmacao++; continue; }   // sem a confirmação do próprio membro não há desligamento a processar
       const dias = estatuto.diasDesde(c.dataReferencia);
       if (c.dataAdmissao && c.dataReferencia && c.dataAdmissao > c.dataReferencia) {
         await pool.request().input("id", sql.Int, c.CartaId)
@@ -163,15 +178,17 @@ module.exports = async function (context, req) {
         const documentos = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
           if (!(await obterTrava(rq, `escada_${c.MembroId}`))) { await desistir(); return null; }
           const concluiu = await rq().input("id", sql.Int, c.CartaId)
-            .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA')`);
+            .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA') AND DataConfirmacao IS NOT NULL AND DeclaracaoCiencia IS NOT NULL`);
           if (!((concluiu.rowsAffected && concluiu.rowsAffected[0]) || 0)) { await desistir(); return null; }
+          // O membro sai mesmo sendo o último que administra os acessos (a saída é dele); a trilha registra, antes de a vacância encerrar o cargo.
+          const ultimoAdministrador = travaPermissoes.ficariaSemAdministrador(await travaPermissoes.situacaoDoCargo(executor, sql, c.MembroId, hojeBrasilia()));
           const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: c.MotivoSaida });
           // a licença por candidatura ainda aberta fecha junto (decisão de 25/11/2026)
           await licencaCandidatura.encerrarLicencaAberta(executor, sql, c.MembroId, "Encerrada pela carta de mudança.", hojeBrasilia());
           // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
           await registrarAuditoriaNaTransacao(transacao, {
             tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,
-            dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias }
+            dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias, ...(ultimoAdministrador ? { ultimoAdministrador: true } : {}) }
           });
           return urls;
         });
@@ -184,7 +201,11 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { sucesso: true, mensagem: `✅ Processamento concluído: ${minimizadas} saída(s) minimizada(s), ${canceladas} carta(s) cancelada(s) por retorno.` }
+      body: {
+        sucesso: true,
+        mensagem: `✅ Processamento concluído: ${minimizadas} saída(s) minimizada(s), ${canceladas} carta(s) cancelada(s) por retorno.`
+          + (semConfirmacao ? ` ${semConfirmacao} carta(s) de mudança sem a confirmação do próprio membro ficam fora do processamento: peça a ele que confirme no aplicativo, ou cancele a carta.` : "")
+      }
     };
     return;
   }

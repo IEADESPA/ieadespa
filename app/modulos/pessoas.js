@@ -1074,7 +1074,7 @@ function renderizarCartas() {
       <td>${escaparHtmlEbd(c.dataPedido) || "-"}</td>
       <td>${escaparHtmlEbd(c.dataValidade) || "-"}</td>
       <td class="acoes-inline">
-        ${["SOLICITADA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="emitirCarta" data-args-click="${argsAttr(c.cartaId)}">Emitir</button>` : ""}
+        ${c.status === "CONFIRMADA" || (c.status === "SOLICITADA" && c.tipo !== "MUDANCA") ? `<button class="btn-link" data-on-click="emitirCarta" data-args-click="${argsAttr(c.cartaId)}">Emitir</button>` : ""}
         ${["SOLICITADA", "CONFIRMADA", "EMITIDA"].includes(c.status) ? `<button class="btn-link btn-link-perigo" data-on-click="cancelarCarta" data-args-click="${argsAttr(c.cartaId)}">Cancelar</button>` : ""}
         <button class="btn-link" data-on-click="imprimirCarta" data-args-click="${argsAttr(c.cartaId)}">🖨️ Imprimir</button>
         ${["EMITIDA", "CONFIRMADA"].includes(c.status) ? `<button class="btn-link" data-on-click="baixarPdfCarta" data-args-click="${argsAttr(c.cartaId, c.membroId)}">📄 Baixar PDF</button>` : ""}

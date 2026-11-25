@@ -342,6 +342,21 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   lic.g("editarPessoa")(R.pessoa.membroId);
   ok(JSON.stringify(escolhiveis(lic)) === JSON.stringify(["FALECIDO", "LICENCA_CANDIDATURA"]), "catálogo sem Falecido: a opção entra para quem está em licença", escolhiveis(lic));
 
+  // Decisão de 25/11/2026: a Carta de Mudança é o desligamento e só sai com a confirmação do próprio membro; a secretaria não a emite enquanto só pedida.
+  console.log("== cartas: o botão Emitir da Carta de Mudança só depois da confirmação do membro ==");
+  const car = montar({ geral: true });
+  car.ev(extrair("modulos/pessoas.js", ["ROTULO_CARTA", "cartasCache", "renderizarCartas"]), "pessoas.js(cartas)");
+  car.ev(`cartasCache = ${JSON.stringify([
+    { cartaId: 71, membroId: 501, nome: "Maria de Teste", tipo: "MUDANCA", status: "SOLICITADA" },
+    { cartaId: 72, membroId: 502, nome: "João de Teste", tipo: "MUDANCA", status: "CONFIRMADA" },
+    { cartaId: 73, membroId: 503, nome: "Ana de Teste", tipo: "RECOMENDACAO", status: "SOLICITADA" }
+  ])}; renderizarCartas();`);
+  const linhaDaCarta = (id) => car.e("resultadoListaCartas").innerHTML.split("<tr>").find((l) => l.includes(`<td>${id}</td>`)) || "";
+  const emitir = (id) => /data-on-click="emitirCarta"/.test(linhaDaCarta(id));
+  ok(!emitir(71), "Carta de Mudança só pedida (SOLICITADA): sem o botão Emitir");
+  ok(emitir(72), "Carta de Mudança confirmada pelo membro: o botão Emitir aparece");
+  ok(emitir(73), "Carta de Recomendação pedida: o botão Emitir continua");
+
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");
   ok(amb.g("formatarValorLgpd")(null, "data") === "-", "sem data: '-'");

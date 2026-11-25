@@ -706,19 +706,36 @@ describe("GestaoCartas", () => {
     });
   });
   test("emitir: só emite carta ainda SOLICITADA/CONFIRMADA (condição também no UPDATE, contra emissão em duplicidade)", async () => {
-    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "SOLICITADA", MembroId: 10 }]);
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "RECOMENDACAO", Status: "SOLICITADA", MembroId: 10 }]);
     quando(/UPDATE CartasTransito SET Status = 'EMITIDA'/, [], 0);
     const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
     expect(r.body.sucesso).toBe(false);
-    expect(rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'[\s\S]*Status IN \('SOLICITADA','CONFIRMADA'\)/)).toHaveLength(1);
+    expect(rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'[\s\S]*Status = 'CONFIRMADA' OR \(Status = 'SOLICITADA' AND Tipo <> 'MUDANCA'\)/)).toHaveLength(1);
     expect(registrarAuditoria).not.toHaveBeenCalled();
   });
+  // A Carta de Mudança é o desligamento: só vale com a confirmação do próprio membro (a declaração de ciência). A secretaria não emite a que ele só pediu.
+  test("emitir: a Carta de Mudança só pedida (SOLICITADA, sem a confirmação do membro) é recusada e nada é gravado", async () => {
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "SOLICITADA", MembroId: 10 }]);
+    const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/só é emitida depois que o próprio membro a confirma/);
+    expect(escritas()).toHaveLength(0);
+  });
+  test("emitir: a Carta de Mudança CONFIRMADA pelo membro é emitida (a condição do tipo vai também no UPDATE)", async () => {
+    quando(/SELECT Tipo, Status, MembroId FROM CartasTransito/, [{ Tipo: "MUDANCA", Status: "CONFIRMADA", MembroId: 10 }]);
+    const r = await chamar(hCartas, { metodo: "POST", token: LOCAL(), ligado: { acao: "emitir" }, corpo: { cartaId: 1 } });
+    expect(r.body.sucesso).toBe(true);
+    const upd = rodou(/UPDATE CartasTransito SET Status = 'EMITIDA'/);
+    expect(upd).toHaveLength(1);
+    expect(upd[0].sql).not.toMatch(/Status IN \('SOLICITADA','CONFIRMADA'\)/);
+  });
   describe("processar (minimização irreversível)", () => {
-    const candidatas = () => quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
-      { CartaId: 1, MembroId: 10, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
-      { CartaId: 2, MembroId: 20, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Vila Nova", extensaoNome: null },
-      { CartaId: 3, MembroId: 11, MotivoSaida: "Mudança", dataReferencia: diasAtras(60), dataAdmissao: diasAtras(10), congregacaoNome: "Central", extensaoNome: null },
-      { CartaId: 4, MembroId: 11, MotivoSaida: "Mudança", dataReferencia: diasAtras(5), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null }
+    const candidatas = (extra = []) => quando(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/, [
+      { CartaId: 1, MembroId: 10, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
+      { CartaId: 2, MembroId: 20, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: "2010-01-01", congregacaoNome: "Vila Nova", extensaoNome: null },
+      { CartaId: 3, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(60), dataAdmissao: diasAtras(10), congregacaoNome: "Central", extensaoNome: null },
+      { CartaId: 4, MembroId: 11, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 1, dataReferencia: diasAtras(5), dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null },
+      ...extra
     ]);
     const processar = (token) => chamar(hCartas, { metodo: "POST", token, ligado: { acao: "processar" } });
     test("dirigente: só mexe nas cartas da sua congregação (minimiza a vencida, cancela a de quem voltou, deixa a recente) e deixa trilha de cada ato", async () => {
@@ -776,6 +793,41 @@ describe("GestaoCartas", () => {
       await expect(processar(LOCAL())).rejects.toThrow("falha simulada");
       expect(mockTransacao).toEqual({ begin: 1, commit: 0, rollback: 1 });
       expect(minimizacao.excluirDocumentos).not.toHaveBeenCalled();
+    });
+    // Decisão 2 (25/11/2026): só a Mudança confirmada pelo próprio membro entra, e o prazo conta da confirmação (nunca do pedido).
+    test("o prazo conta só da confirmação do membro: a consulta não cai na data do pedido", async () => {
+      candidatas();
+      await processar(LOCAL());
+      const consulta = rodou(/WHERE c\.Tipo = 'MUDANCA' AND c\.Status IN/)[0].sql;
+      expect(consulta).not.toMatch(/ISNULL\(c\.DataConfirmacao, c\.DataSolicitacao\)/);
+      expect(consulta).toMatch(/c\.DataConfirmacao IS NOT NULL AND c\.DeclaracaoCiencia IS NOT NULL/);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/)[0].sql).toMatch(/DataConfirmacao IS NOT NULL AND DeclaracaoCiencia IS NOT NULL/);
+    });
+    test("a Mudança EMITIDA sem a confirmação do membro (dado antigo) fica fora do processamento e a resposta diz quantas", async () => {
+      candidatas([{ CartaId: 5, MembroId: 10, MotivoSaida: "Mudança", ConfirmadaPeloMembro: 0, dataReferencia: null, dataAdmissao: "2010-01-01", congregacaoNome: "Central", extensaoNome: null }]);
+      const r = await processar(LOCAL());
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/).map((c) => c.inputs.id)).toEqual([1]);
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/).map((c) => c.inputs.id)).toEqual([3]);
+      expect(r.body.mensagem).toMatch(/1 carta\(s\) de mudança sem a confirmação do próprio membro/);
+    });
+    // Correção da decisão 1 (25/11/2026): o membro sai sozinho, seja qual for o cargo; a vacância deixa os cargos vagos. Quem era o último que administra os
+    // acessos não barra: a trilha registra.
+    test("quem tem cargo e confirmou a própria carta é minimizado normalmente; sendo o último que administra os acessos, a trilha registra", async () => {
+      candidatas();
+      quando(/AlvoAdministra/, () => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: 0 }]);
+      const r = await processar(LOCAL());
+      expect(r.body.mensagem).toMatch(/1 saída\(s\) minimizada\(s\)/);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1])).toEqual([10]);
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /Minimizou/.test(a.acao));
+      expect(trilha.dadosDepois).toMatchObject({ cartaId: 1, ultimoAdministrador: true });
+      expect(rodou(/AlvoAdministra/)[0].sql).toMatch(/^SET XACT_ABORT ON;/);   // conferido dentro da transação, sob a trava da escada
+    });
+    test("quem não era o último que administra os acessos: a trilha não leva a marca", async () => {
+      candidatas();
+      quando(/AlvoAdministra/, () => [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: 2 }]);
+      await processar(LOCAL());
+      const trilha = require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1]).find((a) => /Minimizou/.test(a.acao));
+      expect(trilha.dadosDepois).not.toHaveProperty("ultimoAdministrador");
     });
   });
 });

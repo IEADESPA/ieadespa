@@ -230,10 +230,12 @@ Cada versão parte da base da anterior (`BASE=...`):
 - **FASE 10, a revisão de 24/11/2026 (Membros)**, base `cenario-186`: `e2e-101` (A1: o "apto e em comunhão" e o universo geral, que são os das enquetes e
   do tema: em arrolamento, congregado e sem comunhão não votam, só em comunhão; desde 25/11, o arrolamento e o congregado também ficam fora da presença e
   do quórum dos órgãos e da lista montada nome por nome; A2: o batismo admite o convertido com a data do batismo, quem veio de outra igreja fica com a data
-  da chegada e quem já era membro fica com a data dele; a pendência fecha como COMPLETADA, com a trilha e a data de antes; de novo, nada muda).
+  da chegada e quem já era membro fica com a data dele; a data de antes do congregado vira a conversão (o marco CONVERSAO), nunca por cima de uma que
+  já existe; a pendência fecha como COMPLETADA, com a trilha e a data de antes; as rotas de cadeira e de comissão recusam o congregado e o arrolamento;
+  de novo, nada muda).
 - **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
   `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
-  importação lê e grava o último lote. Rode um roteiro por vez, cada um com a base restaurada (`bash rodar.sh roteiro` restaura uma vez só, antes do
+  importação lê e grava o último lote (o `e2e-102` também confere o índice da chave `RestoDe`). Rode um roteiro por vez, cada um com a base restaurada (`bash rodar.sh roteiro` restaura uma vez só, antes do
   primeiro): em sequência na mesma base, o `e2e-96` e o `e2e-100` caem depois do `e2e-102`. `e2e-102`: o prazo de 7 dias conta do ÚLTIMO LOTE (sem lote, da confirmação) e o estado diz quantos dias faltam; a
   parada sem ninguém importado, com 8 dias, é DESCARTADA pela rotina (as linhas saem inteiras, a data da confirmação fica, as matrículas continuam travadas,
   o lote dela recusa, a tela diz qual foi) e uma importação nova pode começar; descartar à mão pede o 428, a local não pode (403 igual para a que existe e a

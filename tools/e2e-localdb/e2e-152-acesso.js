@@ -4,7 +4,9 @@
 //   2. salvar a ficha de quem já saiu mantém a data de saída; a data da saída pelo dia de Brasília;
 //   3. tirar do rol ativo quem tem cargo de liderança: só o nível geral, com a confirmação recente, e nunca a última pessoa que administra os acessos;
 //   4. a delegação não passa adiante a permissão que a recertificação vencida tirou do titular;
+//   4b. os avisos da congregação vão só para quem entra com a permissão (ATIVO, recertificação em dia, cargo vigente pelo dia de Brasília);
 //   5. a medida cautelar: só o cargo vigente recebe o fim, o fim anterior vai para a trilha, e uma falha no meio não deixa nada pela metade;
+//   5b. a saída do rol (desligar ou a ficha com DESLIGADO): uma falha no meio não deixa nada pela metade e a nova tentativa conclui; o falecido não vira desligado;
 //   6. lixo nos campos das rotas mexidas: nunca 500, nunca texto interno.
 process.env.AUTH_SECRET = "segredo-do-roteiro-do-acesso-3-" + "x".repeat(24);
 const L = require("./lib");
@@ -19,7 +21,9 @@ const ID = {
   lider: BASE_ID + 10, liderInativar: BASE_ID + 11, liderDesligar: BASE_ID + 12,
   adminA: BASE_ID + 20, adminB: BASE_ID + 21,
   titular: BASE_ID + 30, delegado: BASE_ID + 31,
-  exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41
+  exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41,
+  falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
+  avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -64,6 +68,7 @@ async function principal() {
   LID.geral = await lideranca(ID.geral, pGeral, "GLOBAL", null);
   LID.secLocal = await lideranca(ID.secLocal, pSec, "CONGREGACAO", sede);
   for (const k of ["lider", "liderInativar", "liderDesligar", "titular", "suspenso"]) LID[k] = await lideranca(ID[k], pTes, "CONGREGACAO", sede);
+  for (const k of ["falhaDesligar", "falhaFicha"]) LID[k] = await lideranca(ID[k], pSec, "CONGREGACAO", sede);
   LID.delegado = await lideranca(ID.delegado, pSec, "CONGREGACAO", sede);
   LID.exTesoureiro = await lideranca(ID.exTesoureiro, pTes, "CONGREGACAO", sede, "2024-12-31");
   LID.adminA = await lideranca(ID.adminA, pGeral, "GLOBAL", null);
@@ -156,6 +161,26 @@ async function principal() {
   ok(conc.length === 1 && !conc[0].permissoes.includes("financeiro") && conc[0].permissoes.includes("pessoas"), "e o delegado também não recebe o financeiro (o resto do papel continua)", JSON.stringify(conc));
 
   // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 4b. os avisos da congregação só para quem entra com a permissão ==");
+  const pAviso = await papel("Gestão PSC E2E152", "CONGREGACAO", "psc_gestao");
+  for (const k of ["avisoAtivo", "avisoInativo", "avisoRecert", "avisoFim"]) LID[k] = await lideranca(ID[k], pAviso, "CONGREGACAO", sede);
+  await q("UPDATE MembroReferencia SET Status = 'INATIVO' WHERE MembroId = @m", { m: ID.avisoInativo });
+  await q(`INSERT INTO RecertificacoesAcesso (MembroId, PapelId, Permissao, Status, Prazo) VALUES (@m, @p, N'psc_gestao', 'EXPIRADA', '2026-01-01')`, { m: ID.avisoRecert, p: pAviso });
+  const psc = require(path.join(API, "shared/psc.js"));
+  const recebem = async () => (await psc.resolverDestinatariosDaCongregacao(await obterPool(), { permissao: "psc_gestao", congregacaoId: sede }))
+    .map((d) => d.membroId).filter((m) => [ID.avisoAtivo, ID.avisoInativo, ID.avisoRecert, ID.avisoFim].includes(m)).sort();
+  ok(JSON.stringify(await recebem()) === JSON.stringify([ID.avisoAtivo, ID.avisoFim].sort()), "recebem só quem está ATIVO e com a recertificação em dia", JSON.stringify(await recebem()));
+  // o cargo que acaba hoje no dia de Brasília: à noite (já amanhã em Greenwich) ainda vale
+  const diaUtcAviso = await escalar("SELECT CONVERT(varchar(10), CAST(SYSUTCDATETIME() AS DATE), 120)");
+  porRelogio(`${diaUtcAviso}T01:30:00Z`);
+  try {
+    await q("UPDATE Lideranca SET AtivoAte = @h WHERE MembroId = @m", { m: ID.avisoFim, h: hojeBrasilia() });
+    ok((await recebem()).includes(ID.avisoFim), `o cargo que acaba hoje (${hojeBrasilia()}, Brasília) ainda recebe à noite`);
+  } finally { soltarRelogio(); }
+  await q("UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h) WHERE MembroId = @m", { m: ID.avisoFim, h: hojeBrasilia() });
+  ok(!(await recebem()).includes(ID.avisoFim), "o cargo que acabou ontem não recebe");
+
+  // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5. a medida cautelar ==");
   const medida = (corpo, token = L.GERAL(ID.geral, ["pessoas", "permissoes"])) => chamarRota("GestaoMedidasCautelares/index.js", { metodo: "POST", token, corpo });
   const m1 = await medida({ membroId: ID.exTesoureiro, motivo: "Apuração patrimonial (roteiro)", suspenderAcessoSistema: true });
@@ -181,6 +206,41 @@ async function principal() {
   }
   const deNovo = await medida({ membroId: ID.lider, motivo: "Falha no meio (roteiro), de novo", suspenderAcessoSistema: true });
   ok(deNovo.status === 201 && (await contarMedidas()) === antesFalha + 1 && (await fimDoCargo(ID.lider)) !== "vigente", "a nova tentativa conclui com uma medida só");
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 5b. a saída do rol numa transação só ==");
+  const orgao = await escalar("SELECT TOP 1 OrgaoId FROM Orgaos ORDER BY OrgaoId");
+  for (const m of [ID.falhaDesligar, ID.falhaFicha, ID.falecido]) {
+    await q("INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) VALUES (@o, @m, 'FUNCAO', N'Conselheiro (roteiro)', '2025-01-01')", { o: orgao, m });
+  }
+  const assentoAberto = async (m) => (await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId = @m AND DataFim IS NULL", { m })) === 1;
+  await q(`EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_E2E152_FalhaSaida ON dbo.AuditLog AFTER INSERT AS
+          IF EXISTS (SELECT 1 FROM inserted WHERE Tabela = N''MembroReferencia'' AND RegistroId IN (${ID.falhaDesligar}, ${ID.falhaFicha})) THROW 50153, N''falha simulada do roteiro'', 1;')`);
+  try {
+    let erro = null;
+    try { const r = await pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.falhaDesligar) } }); if (r.status >= 500) erro = r; } catch (e) { erro = e; }
+    ok(erro !== null, "desligar com falha no fim: o erro chega a quem chamou");
+    ok((await statusDe(ID.falhaDesligar)) === "ATIVO" && (await fimDoCargo(ID.falhaDesligar)) === "vigente" && (await assentoAberto(ID.falhaDesligar)),
+      "e nada ficou pela metade (continua ATIVO, com o cargo e o assento)");
+    erro = null;
+    try { const r = await pessoas("POST", { token: geral(), corpo: ficha(ID.falhaFicha, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) }); if (r.status >= 500) erro = r; } catch (e) { erro = e; }
+    ok(erro !== null, "a ficha com DESLIGADO e falha no fim: o erro chega a quem chamou");
+    ok((await statusDe(ID.falhaFicha)) === "ATIVO" && (await fimDoCargo(ID.falhaFicha)) === "vigente" && (await assentoAberto(ID.falhaFicha)),
+      "e nada ficou pela metade na ficha");
+  } finally {
+    await q("DROP TRIGGER IF EXISTS dbo.TR_E2E152_FalhaSaida");
+  }
+  const desligouDeNovo = await pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.falhaDesligar) } });
+  ok(desligouDeNovo.body && desligouDeNovo.body.sucesso === true && (await statusDe(ID.falhaDesligar)) === "DESLIGADO" && (await fimDoCargo(ID.falhaDesligar)) !== "vigente"
+    && !(await assentoAberto(ID.falhaDesligar)), "a nova tentativa de desligar conclui tudo", JSON.stringify(desligouDeNovo.body).slice(0, 120));
+  const fichaDeNovo = await pessoas("POST", { token: geral(), corpo: ficha(ID.falhaFicha, { status: "DESLIGADO", motivoSaida: "DESLIGAMENTO" }) });
+  ok(fichaDeNovo.body && fichaDeNovo.body.sucesso === true && (await statusDe(ID.falhaFicha)) === "DESLIGADO" && !(await assentoAberto(ID.falhaFicha)),
+    "a nova tentativa da ficha conclui tudo", JSON.stringify(fichaDeNovo.body).slice(0, 120));
+  const faleceu = await pessoas("POST", { token: geral(), corpo: ficha(ID.falecido, { status: "FALECIDO" }) });
+  ok(faleceu.body && faleceu.body.sucesso === true, "a ficha com FALECIDO, sem a causa da saída", JSON.stringify(faleceu.body).slice(0, 120));
+  ok((await escalar("SELECT MotivoEncerramento FROM Assentos WHERE MembroId = @m", { m: ID.falecido })) === "FALECIMENTO", "o assento fecha com o motivo FALECIMENTO");
+  const desligarFalecido = await pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.falecido) } });
+  ok(desligarFalecido.body && desligarFalecido.body.sucesso === false && (await statusDe(ID.falecido)) === "FALECIDO", "desligar um falecido: nada muda, continua FALECIDO");
 
   // A última pessoa que administra os acessos: nem desligada, nem suspensa (no fim do roteiro: encerra os outros administradores da base).
   await q(`UPDATE l SET AtivoAte = '2000-01-01' FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId

@@ -28,6 +28,7 @@ const POR_PAGINA_MAX = 100;
 const escadaDb = require("../shared/escadaDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { dataIsoValida } = require("../shared/financeiroSeguro");
 const travaPermissoes = require("../shared/travaPermissoes");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
@@ -285,6 +286,12 @@ module.exports = async function (context, req) {
         return;
       }
       cargoDesdeFinal = d.data;
+    }
+
+    // A data de saída, quando vem no pedido, é um dia que existe (AAAA-MM-DD): ela fica gravada e os prazos de retenção contam dela.
+    if (dataSaida !== undefined && dataSaida !== null && dataSaida !== "" && !dataIsoValida(dataSaida)) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Informe a data de saída (dia/mês/ano)." } };
+      return;
     }
 
     // Causa de saída (Reg. Art. 11 — v1.5): mesmo padrão de validação de FORMAS_ADMISSAO.

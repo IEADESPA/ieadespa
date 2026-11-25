@@ -109,6 +109,14 @@ describe("a data de saída ao salvar a ficha", () => {
     expect(gravacoes()[0].entradas.dataSaida).toBeNull();
   });
 
+  test.each([["2026-02-30"], ["abc"], ["20/11/2026"], [" 2026-11-20 "], [20261120], [{ a: 1 }], ["x".repeat(5000)]])("data de saída que não é um dia (%p): recusada e nada é gravado", async (dataSaida) => {
+    regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", MotivoAnterior: "DESLIGAMENTO", DataSaidaAnterior: "2026-11-20" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "DESLIGADO", motivoSaida: "DESLIGAMENTO", dataSaida }) });
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/data de saída/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
   test("a saída registrada à noite fica com o dia de Brasília, não o de Greenwich", async () => {
     jest.useFakeTimers({ now: new Date("2026-11-26T01:30:00Z"), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });   // 25/11, 22h30 em Brasília
     try {

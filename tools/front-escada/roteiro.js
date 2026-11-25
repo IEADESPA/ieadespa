@@ -29,7 +29,11 @@ function montar({ geral = true, gerais } = {}) {
   ev(extrair("script.js", ["jsonDaTela", "avisarResultado", "pedirTexto", "geralPara"]), "script.js(extra)");
   // v8.2: o login diz em quais permissões a sessão é do nível geral (o prelude do ambiente não conhece esta variável)
   ev(`var authPermissoesGerais = ${JSON.stringify(gerais || (geral ? ["afm", "consagracoes", "pessoas"] : []))};`, "permissoes-gerais");
-  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla"]), "pessoas.js(extraido)");
+  ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla",
+    "STATUS_LICENCA_CANDIDATURA", "preencherSituacaoFichaPessoa"]), "pessoas.js(extraido)");
+  // v10.1: as listas do formulário carregam por conta própria; aqui já estão prontas (o formulário não espera nada)
+  ev("var opcoesFormPessoaCarregando = null, opcoesFormPessoaProntas = true, opcoesFormPessoaFalha = '';", "listas-prontas");
+  ev("function endPreencher() {} function endLimpar() {} function endLerParaEnviar() { return {}; }", "stub: o endereço em linhas (v9.5) não é desta prova");
   ev("async function carregarPessoas() {}", "stub: a lista de pessoas não é desta prova");
   ev(extrair("modulos/meu-painel.js", ["formatarValorLgpd"]), "meu-painel.js(extraido)");
   ev(lerApp("modulos/consagracoes.js"), "consagracoes.js");
@@ -295,6 +299,23 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   finCad.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa }])}; window._cargosCache = [];`);
   finCad.g("editarPessoa")(R.pessoa.membroId);
   ok(finCad.e("pessoaCargoMinisterial").disabled && finCad.e("pessoaDizimista").disabled, "geral só no financeiro: cargo e dízimo travados no cadastro");
+
+  console.log("== cadastro: a licença por candidatura só pela aba dela ==");
+  ok(/\.filter\(s => s\.ativa !== false && s\.sigla !== STATUS_LICENCA_CANDIDATURA\)/.test(lerApp("modulos/pessoas.js")), "a lista de situações da ficha não oferece a licença por candidatura");
+  const lic = montar({ geral: true });
+  lic.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa, status: "LICENCA_CANDIDATURA" }, { ...R.pessoa, membroId: R.pessoa.membroId + 1, status: "ATIVO" }])}; window._cargosCache = [];`);
+  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option>';`);
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  ok(lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA" && lic.e("pessoaStatus").disabled && /Licença Candidatura/.test(lic.e("pessoaStatusDica").textContent),
+    "em licença: a situação aparece só para leitura, com o caminho na dica");
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "LICENCA_CANDIDATURA", "salvar a ficha de quem está em licença manda a mesma situação", p[0] && p[0].corpo);
+  lic.g("editarPessoa")(R.pessoa.membroId + 1);
+  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "ATIVO" && ![...lic.e("pessoaStatus").options].some((o) => o.value === "LICENCA_CANDIDATURA")
+    && lic.e("pessoaStatusDica").textContent === "", "outra pessoa: o campo volta a valer e a licença sai da lista");
 
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");

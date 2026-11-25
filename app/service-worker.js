@@ -65,7 +65,9 @@
 // meus-dados.js).
 // v59 (13/11/2026): FASE 10 — a votação vinculante com o tipo (proposta ou escolha): o seletor e a ajuda no formulário (index.html), os papéis das opções e o
 // resultado com o placar, a escolhida ou o empate (modulos/enquetes.js). Feita no ramo v10-votacao como v58; subiu para v59 porque a main já tinha usado a v58.
-const CACHE_NOME = "ieadespa-app-shell-v59";
+// v70 (25/11/2026): acesso parte 3 — a situação na ficha da pessoa: a licença por candidatura fora do seletor e só para leitura de quem está nela, com a dica
+// (pessoas.js, index.html). Número bem acima da v66 dos ramos em construção, para não colidir.
+const CACHE_NOME = "ieadespa-app-shell-v70";
 const ARQUIVOS_SHELL = ["/", "/index.html", "/eventos.js", "/script.js", "/modulos/afm.js", "/modulos/arquivos.js", "/modulos/assistencia.js", "/modulos/calendario.js", "/modulos/canais.js", "/modulos/catalogos-estrutura.js", "/modulos/checkin-infantil.js", "/modulos/comunicacao.js", "/modulos/consagracoes.js", "/modulos/crise-seguranca.js", "/modulos/cuidado-pastoral.js", "/modulos/disciplina.js", "/modulos/discipulado.js", "/modulos/distritos.js", "/modulos/doacoes.js", "/modulos/ebd.js", "/modulos/educacao-continuada.js", "/modulos/endereco.js", "/modulos/enquetes.js", "/modulos/entidades-vinculadas.js", "/modulos/escalas.js", "/modulos/eventos-congressos.js", "/modulos/expansao.js", "/modulos/financeiro.js", "/modulos/identidade-visual.js", "/modulos/meu-painel.js", "/modulos/meus-dados.js", "/modulos/ministerio-menores.js", "/modulos/missoes.js", "/modulos/ouvidoria.js", "/modulos/permissoes.js", "/modulos/pessoas.js", "/modulos/projetos-assembleia.js", "/modulos/protecao.js", "/modulos/psc.js", "/modulos/relatorios-departamentos.js", "/modulos/reunioes.js", "/modulos/seminario.js", "/modulos/setores-tecnicos.js", "/modulos/territorio.js", "/modulos/voluntariado.js", "/style.css", "/manifest.json", "/vendor/xlsx.full.min.js", "/vendor/simplewebauthn-browser.js"];
 
 self.addEventListener("install", (evento) => {

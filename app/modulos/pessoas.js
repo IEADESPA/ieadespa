@@ -10,8 +10,29 @@ const STATUS_DEFAULT = [
   { sigla: "ATIVO", nome: "ATIVO", ativa: true },
   { sigla: "LICENÇA", nome: "LICENÇA", ativa: true },
   { sigla: "INATIVO", nome: "INATIVO", ativa: true },
-  { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true }
+  { sigla: "DESLIGADO", nome: "DESLIGADO", ativa: true },
+  { sigla: "FALECIDO", nome: "Falecido", ativa: true },
+  { sigla: "AFASTADO", nome: "Afastado", ativa: true }
 ];
+// A licença por candidatura entra e sai pela aba "Licença Candidatura" (ela grava a licença, o afastamento dos cargos e a decisão do retorno): fora do seletor da
+// ficha; para quem está nela, a situação aparece só para leitura (o servidor recusa a troca pela ficha).
+const STATUS_LICENCA_CANDIDATURA = "LICENCA_CANDIDATURA";
+
+// A situação da pessoa no seletor: a opção que não está na lista (a licença, ou uma situação desativada no catálogo) entra só para esta pessoa; a licença trava o campo.
+function preencherSituacaoFichaPessoa(pessoa) {
+  const select = document.getElementById("pessoaStatus");
+  [...select.options].filter(o => o.getAttribute("data-so-desta-pessoa")).forEach(o => o.remove());
+  const status = pessoa ? pessoa.status : "";
+  if (status && ![...select.options].some(o => o.value === status)) {
+    const nome = status === STATUS_LICENCA_CANDIDATURA ? "Licença por candidatura" : status;
+    select.insertAdjacentHTML("beforeend", `<option value="${escaparHtmlEbd(status)}" data-so-desta-pessoa="1">${escaparHtmlEbd(nome)}</option>`);
+  }
+  if (status) select.value = status; else select.selectedIndex = 0;
+  const emLicenca = status === STATUS_LICENCA_CANDIDATURA;
+  select.disabled = emLicenca;
+  document.getElementById("pessoaStatusDica").textContent = emLicenca
+    ? "Em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\"; o desligamento, pelo botão \"Desligar\"." : "";
+}
 
 // v10.1 — o "Cadastrar Pessoa" em branco: a aba esperava as SEIS listas abaixo chegarem para só então pôr o formulário na tela (e, se uma falhava, ele nunca
 // aparecia). Agora o formulário entra na hora e cada lista carrega por conta própria: a que falha avisa no próprio campo e não derruba as outras. Enquanto a
@@ -116,7 +137,7 @@ function carregarOpcoesFormPessoa() {
   const statusesPronto = pedidos.statuses.then(statuses => {
     if (!valendo()) return;
     trocarOpcoesFormPessoa(document.getElementById("pessoaStatus"), (statuses || STATUS_DEFAULT)
-      .filter(s => s.ativa !== false)
+      .filter(s => s.ativa !== false && s.sigla !== STATUS_LICENCA_CANDIDATURA)
       .map(s => `<option value="${escaparHtmlEbd(s.sigla)}">${escaparHtmlEbd(s.nome)}</option>`).join(""));
   });
 
@@ -260,7 +281,7 @@ function limparFormPessoa() {
   document.getElementById("pessoaCongregacao").selectedIndex = 0;
   document.getElementById("pessoaDepartamento").value = "";
   document.getElementById("pessoaExtensao").value = "";
-  document.getElementById("pessoaStatus").selectedIndex = 0;
+  preencherSituacaoFichaPessoa(null);
   document.getElementById("pessoaFormaAdmissao").value = "";
   document.getElementById("pessoaSituacao").value = "EM_COMUNHAO";
   document.getElementById("pessoaEstadoCivil").value = "";
@@ -884,7 +905,7 @@ function editarPessoa(membroId) {
   if (!pessoa) return;
   document.getElementById("pessoaMatricula").value = pessoa.membroId;
   document.getElementById("pessoaNome").value = pessoa.nome;
-  document.getElementById("pessoaStatus").value = pessoa.status;
+  preencherSituacaoFichaPessoa(pessoa);
   document.getElementById("pessoaCongregacao").value = pessoa.congregacaoId != null ? String(pessoa.congregacaoId) : "";
   document.getElementById("pessoaDataNascimento").value = pessoa.dataNascimento || "";
   document.getElementById("pessoaDataAdmissao").value = pessoa.dataAdmissao || "";

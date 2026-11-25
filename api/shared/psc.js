@@ -22,6 +22,7 @@
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
+const { cancelarDelegacoes } = require("./delegacoes");
 
 const NIVEIS = [1, 2, 3, 4, 5];
 const STATUS_AVALIACAO = ["RASCUNHO", "ENVIADA", "VALIDADA", "HOMOLOGADA"];
@@ -987,7 +988,7 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
 
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
-  let liderancas;
+  let liderancas, delegados;
   try {
     const rebaixada = await new sql.Request(transaction).input("c", sql.Int, congregacao.CongregacaoId).input("mae", sql.Int, dados.congregacaoMaeId)
       .query(`
@@ -1000,10 +1001,12 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     // "Ontem": o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares), com o dia de Brasília.
     const dissolvidos = await new sql.Request(transaction).input("c", sql.Int, congregacao.CongregacaoId).input("h", sql.Date, hoje).query(`
       UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h)
-      OUTPUT INSERTED.MembroId
+      OUTPUT INSERTED.MembroId, INSERTED.LiderancaId
       WHERE EscopoTipo = 'CONGREGACAO' AND EscopoId = @c AND (AtivoAte IS NULL OR AtivoAte >= @h)
     `);
     liderancas = dissolvidos.recordset.map(x => x.MembroId);
+    // As delegações desses cargos ficam canceladas no mesmo ato (shared/delegacoes.js); as sessões de quem as recebeu caem com as da diretoria, abaixo.
+    delegados = await cancelarDelegacoes({ request: () => new sql.Request(transaction) }, sql, { liderancaIds: dissolvidos.recordset.map(x => x.LiderancaId) });
 
     const decretada = await new sql.Request(transaction)
       .input("id", sql.Int, reclassificacao.reclassificacaoId).input("por", sql.Int, membroId || null).input("res", sql.NVarChar(150), dados.resolucao)
@@ -1020,9 +1023,9 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     try { await transaction.rollback(); } catch { /* já encerrada */ }
     throw e;
   }
-  // v7.6 — a diretoria dissolvida perde também as sessões abertas, na hora (antes o token valia até expirar sozinho).
+  // v7.6 — a diretoria dissolvida perde também as sessões abertas, na hora (antes o token valia até expirar sozinho); e quem recebeu delegação desses cargos, também.
   const { revogarSessoesDoMembro } = require("./auth");
-  for (const membroDissolvido of new Set(liderancas)) await revogarSessoesDoMembro(pool, sql, membroDissolvido);
+  for (const membroDissolvido of new Set(liderancas.concat(delegados))) await revogarSessoesDoMembro(pool, sql, membroDissolvido);
   await registrarAuditoria({
     tabela: "PscReclassificacoes", registroId: reclassificacao.reclassificacaoId, acao: "RECLASSIFICACAO_DECRETADA", usuarioId: membroId,
     dadosAntes: { categoria: "CONGREGACAO", percentualRetencaoLocal: retencaoAnterior },

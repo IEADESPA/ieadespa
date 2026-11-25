@@ -134,6 +134,9 @@ async function encerrarVinculos(pool, sql, membroId, motivo) {
               WHERE MembroId = @id AND Status = N'ATIVO';
             END`);
 
+  // As delegações da pessoa (dadas e recebidas) ficam canceladas e as sessões abertas de quem recebeu uma delegação dela caem (shared/delegacoes.js).
+  await require("./delegacoes").encerrarDelegacoesDaPessoa(pool, sql, membroId);
+
   // v7.6 — sessão revogável: quem perde a membresia, o mandato (disciplina, licença de candidatura) ou sai do rol perde também as sessões abertas, na hora
   // (antes o token valia até expirar sozinho, 12 h). Usa o mesmo `pool` (dentro da transação de quem chamou, se houver).
   await require("./auth").revogarSessoesDoMembro(pool, sql, membroId);

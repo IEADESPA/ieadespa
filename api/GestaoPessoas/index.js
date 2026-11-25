@@ -456,6 +456,8 @@ module.exports = async function (context, req) {
       await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoSaidaFinal || statusFinal, usuario.membroId);   // v8.4: o recolhimento da credencial
     } else if (existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO") {
       // v7.6 — saiu do rol ativo (inativo, transferido, afastado...): as sessões abertas dela caem na hora (a entrada por PIN já exige status ATIVO).
+      // As delegações dela (dadas e recebidas) ficam canceladas e as sessões de quem recebeu caem junto (shared/delegacoes.js).
+      await require("../shared/delegacoes").encerrarDelegacoesDaPessoa(pool, sql, membroId);
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
     }
 

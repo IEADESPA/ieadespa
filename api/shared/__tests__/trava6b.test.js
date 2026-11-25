@@ -111,7 +111,7 @@ describe("vacância e a EBD", () => {
   const { sqlFalso } = require("./testUtils");
   test("disciplina e licença de candidatura tiram o professor, mas mantêm a matrícula de aluno", async () => {
     for (const motivo of ["DISCIPLINA", "LICENCA_CANDIDATURA"]) {
-      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], []]);
+      const { pool, chamadas } = criarPoolFalso([[], [], [], [], [], [], [], [], [], [], [], []]);   // a 12ª: as delegações da pessoa (shared/delegacoes.js)
       await encerrarVinculos(pool, sqlFalso, 42, motivo);
       expect(tudo0(chamadas)).toMatch(/UPDATE ExtensaoEncarregados SET Ate/);   // Trava 9-A — a vacância também tira o Encarregado e o dirigente de entidade
       // Trava 8-A — a disciplina fecha primeiro os processos de cargo em andamento (com o motivo) e revoga o CHM; a licença de candidatura (decisão de 29/10/2026,
@@ -128,6 +128,7 @@ describe("vacância e a EBD", () => {
       expect(tudo).not.toMatch(/EbdAlunos/);
       // v7.6 — o mandato acaba "ontem" (o login confere AtivoAte < hoje) e as sessões abertas da pessoa caem na hora; "hoje" é o de Brasília (dataDoAcesso.test.js)
       expect(tudo).toMatch(/UPDATE Lideranca SET AtivoAte = DATEADD\(day, -1, @h\)/);
+      expect(tudo).toMatch(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'/);
       expect(chamadas[chamadas.length - 1].sql).toMatch(/UPDATE SessoesAtivas SET Encerrada = 1/);
       expect(chamadas[chamadas.length - 1].inputs.membroId).toBe(42);
     }

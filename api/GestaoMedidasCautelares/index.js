@@ -13,6 +13,7 @@ const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const { encerrarDelegacoesDaPessoa } = require("../shared/delegacoes");
 
 const DIAS_RELATORIO = 30; // Art. 45 §2º
 
@@ -44,7 +45,7 @@ module.exports = async function (context, req) {
 
   if (req.method === "GET") {
     const result = await pool.request().query(`${SELECT_MEDIDA} ORDER BY mc.DataAplicacao DESC`);
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeBrasilia();                      // o prazo conta pelo dia de Brasília, o mesmo da data gravada
     const comPrazo = result.recordset.map(m => {
       const diasDesde = estatuto.diasDesde(m.dataAplicacao, hoje);
       const prazoVencido = !m.dataConclusaoRelatorio && diasDesde > DIAS_RELATORIO;
@@ -64,8 +65,8 @@ module.exports = async function (context, req) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "O relatório dessa medida já foi concluído." } };
       return;
     }
-    await pool.request().input("id", sql.Int, id)
-      .query(`UPDATE MedidasCautelares SET DataConclusaoRelatorio = CAST(SYSUTCDATETIME() AS DATE) WHERE MedidaId = @id`);
+    await pool.request().input("id", sql.Int, id).input("hoje", sql.Date, hojeBrasilia())
+      .query(`UPDATE MedidasCautelares SET DataConclusaoRelatorio = @hoje WHERE MedidaId = @id`);
     await registrarAuditoria({
       tabela: "MedidasCautelares", registroId: Number(id), acao: "Concluiu relatório de auditoria (Art. 45 §2º)", usuarioId: usuario.membroId
     });
@@ -75,6 +76,8 @@ module.exports = async function (context, req) {
 
   if (req.method === "POST" && !id) {
     const { membroId: membroIdBruto, motivo, suspenderAcessoSistema, suspensaoContasBancarias, suspensaoChavesFisicas } = req.body || {};
+    // Suspender o acesso tira cargo e permissão: pede a confirmação recente (428), como retirar um cargo ou cancelar uma delegação.
+    if (suspenderAcessoSistema && !auth.exigirFatorRecente(req, context)) return;
     if (!membroIdBruto || !motivo || typeof motivo !== "string" || !motivo.trim()) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Campos obrigatórios: membroId, motivo." } };
       return;
@@ -119,9 +122,10 @@ module.exports = async function (context, req) {
       .input("susBancaria", sql.Bit, !!suspensaoContasBancarias)
       .input("susChaves", sql.Bit, !!suspensaoChavesFisicas)
       .input("aplicadoPor", sql.Int, usuario.membroId)
-      .query(`INSERT INTO MedidasCautelares (MembroId, Motivo, SuspenderAcessoSistema, SuspensaoContasBancarias, SuspensaoChavesFisicas, AplicadoPor)
+      .input("hoje", sql.Date, hojeBrasilia())        // a data da decisão é o dia de Brasília (shared/dataBrasilia.js)
+      .query(`INSERT INTO MedidasCautelares (MembroId, Motivo, SuspenderAcessoSistema, SuspensaoContasBancarias, SuspensaoChavesFisicas, AplicadoPor, DataAplicacao)
               OUTPUT INSERTED.MedidaId
-              VALUES (@membroId, @motivo, @susAcesso, @susBancaria, @susChaves, @aplicadoPor)`);
+              VALUES (@membroId, @motivo, @susAcesso, @susBancaria, @susChaves, @aplicadoPor, @hoje)`);
     const medidaId = result.recordset[0].MedidaId;
 
     if (suspenderAcessoSistema) {
@@ -133,10 +137,10 @@ module.exports = async function (context, req) {
         .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h) WHERE MembroId = @membroId`);
       // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
       await auth.revogarSessoesDoMembro(pool, sql, membroId);
-      // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (antes a suspensa seguia na lista de quem recebe avisos por delegação, como o pedido da imprensa
-      // na crise). Ficam canceladas, com a trilha: levantar a medida não as revive (quem delegou faz uma nova, se quiser).
-      await pool.request().input("membroId", sql.Int, membroId)
-        .query(`UPDATE DelegacoesAcesso SET Status = 'CANCELADA' WHERE Status = 'ATIVA' AND (DelegadoMembroId = @membroId OR DeleganteMembroId = @membroId)`);
+      // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (a suspensa sai também da lista de quem recebe avisos por delegação, como o pedido
+      // da imprensa na crise). Ficam canceladas, com a trilha: levantar a medida não as revive (quem delegou faz uma nova, se quiser). As sessões abertas de quem
+      // recebeu uma delegação dela caem junto (shared/delegacoes.js).
+      await encerrarDelegacoesDaPessoa(pool, sql, membroId);
     }
 
     await registrarAuditoria({

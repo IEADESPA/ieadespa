@@ -71,6 +71,34 @@ describe("medida cautelar com suspensão do acesso (Art. 45 §1º, I)", () => {
     expect(contagem).toBeDefined();
     expect(contagem.inputs.hoje).toBe(HOJE_BRASILIA);
   });
+  test("a data da medida é o dia de Brasília, mesmo à noite", async () => {
+    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 20 }]);
+    quando(/INSERT INTO MedidasCautelares/, [{ MedidaId: 7 }]);
+    quando(/FROM MedidasCautelares mc/, [{ medidaId: 7 }]);
+    const r = await aplicar({ membroId: 20, motivo: "Auditoria do caixa", suspenderAcessoSistema: false });
+    expect(r.status).toBe(201);
+    const insercao = rodou(/INSERT INTO MedidasCautelares/)[0];
+    expect(insercao.sql).toMatch(/DataAplicacao/);
+    expect(insercao.sql).toMatch(/@hoje/);
+    expect(insercao.inputs.hoje).toBe(HOJE_BRASILIA);
+  });
+  test("a conclusão do relatório também grava o dia de Brasília", async () => {
+    quando(/SELECT \* FROM MedidasCautelares WHERE MedidaId = @id/, [{ MedidaId: 7, DataConclusaoRelatorio: null }]);
+    const context = { bindingData: { id: "7", acao: "concluir-relatorio" }, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await hCautelares(context, { method: "POST", query: {}, body: {}, headers: { "x-auth-token": GERAL() } });
+    expect(context.res.status).toBe(200);
+    const conclusao = rodou(/UPDATE MedidasCautelares SET DataConclusaoRelatorio/)[0];
+    expect(conclusao).toBeDefined();
+    expect(conclusao.inputs.hoje).toBe(HOJE_BRASILIA);
+    expect(conclusao.sql).not.toMatch(/SYSUTCDATETIME|GETDATE|GETUTCDATE/i);
+  });
+  test("o prazo de 30 dias do relatório conta pelo dia de Brasília: no 30º dia, à noite, ainda não venceu", async () => {
+    quando(/FROM MedidasCautelares mc/, [{ medidaId: 7, membroId: 20, dataAplicacao: "2026-10-25", dataConclusaoRelatorio: null }]);
+    const context = { bindingData: {}, log: { error() {}, info() {}, warn() {}, verbose() {} } };
+    await hCautelares(context, { method: "GET", query: {}, body: {}, headers: { "x-auth-token": GERAL() } });
+    expect(context.res.status).toBe(200);
+    expect(context.res.body[0]).toMatchObject({ diasDesdeAplicacao: 30, prazoRelatorioVencido: false });
+  });
 });
 
 describe("saída do rol de membros (vacância)", () => {
@@ -103,6 +131,43 @@ describe("congregação rebaixada a Extensão: a diretoria dissolvida", () => {
     const naDiretoria = rodou(/SELECT TOP 1 LiderancaId FROM Lideranca/)[0];
     expect(naDiretoria.inputs.h).toBe(HOJE_BRASILIA);
     expect(naDiretoria.sql).not.toMatch(/SYSUTCDATETIME/);
+  });
+  test("as delegações dos cargos dissolvidos ficam canceladas e as sessões de quem as recebeu caem junto com as da diretoria", async () => {
+    quando(/FROM Congregacoes WHERE CongregacaoId = @id/, [{ CongregacaoId: 4, Nome: "Vila Esperança", Ativa: true, Categoria: "CONGREGACAO", TutelaCongregacaoMaeId: null, PercentualRetencaoLocal: 40 }]);
+    quando(/SELECT MembroId, Nome, Status, SituacaoMembro FROM MembroReferencia/, [{ MembroId: 9, Nome: "Fulano de Tal", Status: "ATIVO", SituacaoMembro: "EM_COMUNHAO" }]);
+    quando(/UPDATE Congregacoes SET Categoria = 'EXTENSAO_TENDA'/, [], 1);
+    quando(/UPDATE Lideranca SET AtivoAte/, [{ MembroId: 31, LiderancaId: 301 }, { MembroId: 32, LiderancaId: 302 }], 2);
+    quando(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'[\s\S]*OUTPUT INSERTED\.DelegadoMembroId/, [{ DelegadoMembroId: 77 }, { DelegadoMembroId: 31 }]);
+    quando(/UPDATE PscReclassificacoes SET Status = 'DECRETADA'/, [], 1);
+    quando(/AS total/, [{ total: 0 }]);
+    const r = await psc.decretarReclassificacao({ request: () => new sql.Request() }, {
+      reclassificacao: { reclassificacaoId: 1, congregacaoId: 4, status: "PROPOSTA" },
+      dados: { resolucao: "Res. CLI 1/2027", encarregadoMembroId: 9, congregacaoMaeId: null }, membroId: 1
+    });
+    expect(r.sucesso).toBe(true);
+    const cancelamento = rodou(/UPDATE DelegacoesAcesso SET Status = 'CANCELADA'/);
+    expect(cancelamento).toHaveLength(1);
+    expect(cancelamento[0].sql).toMatch(/LiderancaId IN \(301,\s*302\)/);
+    // dentro da transação do decreto (antes de marcar a reclassificação), não depois
+    const ordem = mockConsultas.map((c) => c.sql);
+    expect(ordem.findIndex((s) => /UPDATE DelegacoesAcesso/.test(s))).toBeLessThan(ordem.findIndex((s) => /UPDATE PscReclassificacoes/.test(s)));
+    const revogadas = rodou(/UPDATE SessoesAtivas SET Encerrada = 1/).map((c) => c.inputs.membroId).sort((a, b) => a - b);
+    expect(revogadas).toEqual([31, 32, 77]);
+  });
+  test("sem cargo dissolvido, nenhuma delegação é tocada", async () => {
+    quando(/FROM Congregacoes WHERE CongregacaoId = @id/, [{ CongregacaoId: 4, Nome: "Vila Esperança", Ativa: true, Categoria: "CONGREGACAO", TutelaCongregacaoMaeId: null, PercentualRetencaoLocal: 40 }]);
+    quando(/SELECT MembroId, Nome, Status, SituacaoMembro FROM MembroReferencia/, [{ MembroId: 9, Nome: "Fulano de Tal", Status: "ATIVO", SituacaoMembro: "EM_COMUNHAO" }]);
+    quando(/UPDATE Congregacoes SET Categoria = 'EXTENSAO_TENDA'/, [], 1);
+    quando(/UPDATE Lideranca SET AtivoAte/, [], 0);
+    quando(/UPDATE PscReclassificacoes SET Status = 'DECRETADA'/, [], 1);
+    quando(/AS total/, [{ total: 0 }]);
+    const r = await psc.decretarReclassificacao({ request: () => new sql.Request() }, {
+      reclassificacao: { reclassificacaoId: 1, congregacaoId: 4, status: "PROPOSTA" },
+      dados: { resolucao: "Res. CLI 1/2027", encarregadoMembroId: 9, congregacaoMaeId: null }, membroId: 1
+    });
+    expect(r.sucesso).toBe(true);
+    expect(rodou(/DelegacoesAcesso/)).toHaveLength(0);
+    expect(rodou(/UPDATE SessoesAtivas/)).toHaveLength(0);
   });
 });
 

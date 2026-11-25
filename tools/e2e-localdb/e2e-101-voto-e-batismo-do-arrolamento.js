@@ -272,9 +272,12 @@ async function principal() {
   const hCart = require(L.path.join(L.API, "Carteirinhas/index.js"));
   const hConf = require(L.path.join(L.API, "ConferirCarteirinha/index.js"));
   ok((await escalar("SELECT SituacaoMembro FROM MembroReferencia WHERE MembroId = 990101")) === "ARROLAMENTO", "(a Ana continua em arrolamento)");
+  // a ficha importada de verdade tem a data que veio do sistema pago: a carteirinha não a mostra como "membro desde"
+  await q("UPDATE MembroReferencia SET DataAdmissao = '2012-05-05' WHERE MembroId = 990101");
   const minha = await L.chamar(hCart, { acao: "minha", token: L.PIN(990101) });
   const cart = minha.body && minha.body.carteirinha;
-  ok(minha.status === 200 && cart && cart.situacao === "EM_ATUALIZACAO" && !cart.cargo, "a Minha carteirinha de quem está em arrolamento: ficha em atualização (não 'em disciplina')", minha.body);
+  ok(minha.status === 200 && cart && cart.situacao === "EM_ATUALIZACAO" && !cart.cargo, "a Minha carteirinha de quem está em arrolamento: ficha em atualização (não 'em disciplina')", minha.body && { situacao: cart && cart.situacao });
+  ok(cart && cart.membroDesde === null, "e sem o 'membro desde' (a data do sistema pago tem sentido desconhecido)", cart && cart.membroDesde);
   const codigo = await escalar("SELECT TOP 1 Codigo FROM CarteirinhasQr WHERE MembroId = 990101");
   const ctxConf = { bindingData: { codigo }, log: { error() { }, info() { }, warn() { }, verbose() { } } };
   await hConf(ctxConf, { method: "GET", query: {}, body: undefined, headers: { "x-forwarded-for": "177.40.1.9:5000" } });

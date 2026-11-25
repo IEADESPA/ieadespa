@@ -8,8 +8,10 @@
 // POST /api/medidas-cautelares                          -> body: { membroId, motivo, suspenderAcessoSistema?, suspensaoContasBancarias?, suspensaoChavesFisicas? }
 // POST /api/medidas-cautelares/{id}/concluir-relatorio  -> fecha o prazo (representação à CLI feita)
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
+const travaPermissoes = require("../shared/travaPermissoes");
+const { emTransacao } = require("../shared/transacaoCurta");
 const estatuto = require("../shared/estatuto");
 const { exigirGeral } = require("../shared/escopoRotas");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
@@ -89,24 +91,12 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // Trava de segurança: nunca deixa "suspender acesso ao sistema" tirar a
-    // última pessoa com a permissão "permissoes" (quem gerencia acesso/senha
-    // de todo mundo) — senão ninguém mais consegue nem desfazer a própria
-    // medida. Precisa sobrar pelo menos 1 outra pessoa com essa permissão,
-    // ativa (AtivoAte nulo ou no futuro), antes de suspender esta.
+    // Trava de segurança: nunca deixa "suspender acesso ao sistema" tirar a última pessoa que administra os acessos (permissão "permissoes") — senão ninguém
+    // mais consegue nem desfazer a própria medida. Conta só quem entra de verdade com ela (shared/travaPermissoes.js: cargo vigente, ATIVO no rol, nível geral,
+    // recertificação em dia).
     if (suspenderAcessoSistema) {
-      const hoje = hojeBrasilia();                    // o dia de Brasília, o mesmo do login
-      const outrosComPermissao = await pool.request()
-        .input("membroId", sql.Int, membroId)
-        .input("hoje", sql.Date, hoje)
-        .query(`
-          SELECT COUNT(*) AS total
-          FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId
-          WHERE l.MembroId <> @membroId
-            AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
-            AND (',' + p.Permissoes + ',') LIKE '%,permissoes,%'
-        `);
-      if (outrosComPermissao.recordset[0].total === 0) {
+      const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());   // o dia de Brasília, o mesmo do login
+      if (travaPermissoes.ficariaSemAdministrador(situacao)) {
         context.res = {
           status: 200,
           body: { sucesso: false, mensagem: "Não é possível suspender o acesso ao sistema desta pessoa: ela é a única com a permissão \"permissoes\" ativa — ninguém mais conseguiria gerenciar acesso/senha depois. Conceda a permissão a outra pessoa antes de aplicar essa medida." }
@@ -115,38 +105,48 @@ module.exports = async function (context, req) {
       }
     }
 
-    const result = await pool.request()
-      .input("membroId", sql.Int, membroId)
-      .input("motivo", sql.NVarChar(1000), motivo.trim().slice(0, 1000))
-      .input("susAcesso", sql.Bit, !!suspenderAcessoSistema)
-      .input("susBancaria", sql.Bit, !!suspensaoContasBancarias)
-      .input("susChaves", sql.Bit, !!suspensaoChavesFisicas)
-      .input("aplicadoPor", sql.Int, usuario.membroId)
-      .input("hoje", sql.Date, hojeBrasilia())        // a data da decisão é o dia de Brasília (shared/dataBrasilia.js)
-      .query(`INSERT INTO MedidasCautelares (MembroId, Motivo, SuspenderAcessoSistema, SuspensaoContasBancarias, SuspensaoChavesFisicas, AplicadoPor, DataAplicacao)
-              OUTPUT INSERTED.MedidaId
-              VALUES (@membroId, @motivo, @susAcesso, @susBancaria, @susChaves, @aplicadoPor, @hoje)`);
-    const medidaId = result.recordset[0].MedidaId;
+    // A medida, o fim dos cargos, as sessões, as delegações e a trilha numa transação só (shared/transacaoCurta.js): uma falha no meio desfaz tudo, e a nova
+    // tentativa não deixa uma medida "aplicada" sem a suspensão nem uma segunda medida igual.
+    const medidaId = await emTransacao(pool, async ({ rq, executor, transacao }) => {
+      const hoje = hojeBrasilia();                    // a data da decisão é o dia de Brasília (shared/dataBrasilia.js)
+      const result = await rq()
+        .input("membroId", sql.Int, membroId)
+        .input("motivo", sql.NVarChar(1000), motivo.trim().slice(0, 1000))
+        .input("susAcesso", sql.Bit, !!suspenderAcessoSistema)
+        .input("susBancaria", sql.Bit, !!suspensaoContasBancarias)
+        .input("susChaves", sql.Bit, !!suspensaoChavesFisicas)
+        .input("aplicadoPor", sql.Int, usuario.membroId)
+        .input("hoje", sql.Date, hoje)
+        .query(`INSERT INTO MedidasCautelares (MembroId, Motivo, SuspenderAcessoSistema, SuspensaoContasBancarias, SuspensaoChavesFisicas, AplicadoPor, DataAplicacao)
+                OUTPUT INSERTED.MedidaId
+                VALUES (@membroId, @motivo, @susAcesso, @susBancaria, @susChaves, @aplicadoPor, @hoje)`);
+      const id = result.recordset[0].MedidaId;
 
-    if (suspenderAcessoSistema) {
-      // Ontem, não hoje: o login checa "AtivoAte < hoje" (mesmo padrão de
-      // vencimento de Assentos) — pra suspender JÁ no dia de hoje, precisa
-      // que a data fique estritamente no passado. "Hoje" é o de Brasília, a
-      // mesma régua do login (sessaoLideranca.suspensa; shared/dataBrasilia.js).
-      await pool.request().input("membroId", sql.Int, membroId).input("h", sql.Date, hojeBrasilia())
-        .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h) WHERE MembroId = @membroId`);
-      // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
-      await auth.revogarSessoesDoMembro(pool, sql, membroId);
-      // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (a suspensa sai também da lista de quem recebe avisos por delegação, como o pedido
-      // da imprensa na crise). Ficam canceladas, com a trilha: levantar a medida não as revive (quem delegou faz uma nova, se quiser). As sessões abertas de quem
-      // recebeu uma delegação dela caem junto (shared/delegacoes.js).
-      await encerrarDelegacoesDaPessoa(pool, sql, membroId);
-    }
+      let cargosEncerrados = [];
+      if (suspenderAcessoSistema) {
+        // Ontem, não hoje: o login checa "AtivoAte < hoje" (mesmo padrão de vencimento de Assentos) — pra suspender JÁ no dia de hoje, precisa que a data fique
+        // estritamente no passado. "Hoje" é o de Brasília, a mesma régua do login (sessaoLideranca.suspensa; shared/dataBrasilia.js).
+        // Só os cargos vigentes (como na vacância): o fim de um mandato já encerrado fica como estava, e o fim anterior de cada cargo vai para a trilha.
+        const fim = await rq().input("membroId", sql.Int, membroId).input("h", sql.Date, hoje)
+          .query(`UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h)
+                  OUTPUT DELETED.LiderancaId, CONVERT(varchar(10), DELETED.AtivoAte, 120) AS AtivoAteAnterior
+                  WHERE MembroId = @membroId AND (AtivoAte IS NULL OR AtivoAte >= @h)`);
+        cargosEncerrados = (fim.recordset || []).map((l) => ({ liderancaId: l.LiderancaId, ativoAteAnterior: l.AtivoAteAnterior || null }));
+        // v7.6 — e as sessões abertas caem na hora (antes o token valia até expirar sozinho, 12 h).
+        await auth.revogarSessoesDoMembro(executor, sql, membroId);
+        // Trava 7-C — e as delegações que a pessoa RECEBEU ou DEU deixam de valer (a suspensa sai também da lista de quem recebe avisos por delegação, como o pedido
+        // da imprensa na crise). Ficam canceladas, com a trilha: levantar a medida não as revive (quem delegou faz uma nova, se quiser). As sessões abertas de quem
+        // recebeu uma delegação dela caem junto (shared/delegacoes.js).
+        await encerrarDelegacoesDaPessoa(executor, sql, membroId);
+      }
 
-    await registrarAuditoria({
-      tabela: "MedidasCautelares", registroId: medidaId, acao: "Aplicou Medida Cautelar de Proteção Patrimonial (Art. 45)",
-      usuarioId: usuario.membroId,
-      dadosDepois: { membroId, motivo, suspenderAcessoSistema: !!suspenderAcessoSistema, suspensaoContasBancarias: !!suspensaoContasBancarias, suspensaoChavesFisicas: !!suspensaoChavesFisicas }
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "MedidasCautelares", registroId: id, acao: "Aplicou Medida Cautelar de Proteção Patrimonial (Art. 45)",
+        usuarioId: usuario.membroId,
+        ...(suspenderAcessoSistema ? { dadosAntes: { cargos: cargosEncerrados } } : {}),
+        dadosDepois: { membroId, motivo, suspenderAcessoSistema: !!suspenderAcessoSistema, suspensaoContasBancarias: !!suspensaoContasBancarias, suspensaoChavesFisicas: !!suspensaoChavesFisicas }
+      });
+      return id;
     });
 
     const criado = await pool.request().input("id", sql.Int, medidaId).query(`${SELECT_MEDIDA} WHERE mc.MedidaId = @id`);

@@ -3,15 +3,18 @@
 // cargo alterado/removido (e os delegados dele), "Derrubar acessos desta pessoa agora", "Minhas sessões", saída do rol (vacância).
 let mockRegras = [];
 let mockConsultas = [];
-jest.mock("../db", () => ({
-  getPool: async () => ({ request: () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
+jest.mock("../db", () => {
+  const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: async (texto) => {
     mockConsultas.push({ sql: texto, inputs: { ...inputs } });
     for (const [padrao, valor] of mockRegras) if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [1] };
     return { recordset: [], rowsAffected: [0] };
-  } }; return r; } }),
-  sql: new Proxy({}, { get: () => () => undefined })
-}));
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+  } }; return r; };
+  // as rotas que gravam em vários passos usam uma transação (shared/transacaoCurta.js): aqui ela só repassa os pedidos
+  class Transaction { async begin() {} async commit() {} async rollback() {} }
+  class Request { constructor() { return novaRequisicao(); } }
+  return { getPool: async () => ({ request: novaRequisicao }), sql: new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : () => undefined) }) };
+});
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../trilhas", () => ({ avaliarRequisitos: jest.fn(async () => ({ bloqueado: false })) }));
 jest.mock("../canaisDb", () => ({ sincronizarSucessoes: jest.fn(async () => ({})) }));
 jest.mock("../notificacaoEmail", () => ({ enviarEmailNotificacao: jest.fn(async () => {}) }));

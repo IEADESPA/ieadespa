@@ -18,7 +18,7 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 
 const auth = require("../auth");
 const { sql } = require("../db");
@@ -62,12 +62,11 @@ describe("medida cautelar com suspensão do acesso (Art. 45 §1º, I)", () => {
   });
   test("a conferência de 'outro com a permissão de acesso ainda vigente' usa o mesmo dia de Brasília", async () => {
     quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 20 }]);
-    quando(/SELECT 1 FROM Lideranca l JOIN Papeis p[\s\S]*permissoes/, [{ x: 1 }]);
-    quando(/COUNT\(\*\) AS total\s+FROM Lideranca/, [{ total: 1 }]);
+    quando(/AlvoAdministra/, [{ TemCargoVigente: 1, AlvoAdministra: 1, Outros: 1 }]);
     quando(/INSERT INTO MedidasCautelares/, [{ MedidaId: 7 }]);
     quando(/FROM MedidasCautelares mc/, [{ medidaId: 7 }]);
     await aplicar({ membroId: 20, motivo: "Auditoria do caixa", suspenderAcessoSistema: true });
-    const contagem = rodou(/COUNT\(\*\) AS total\s+FROM Lideranca/)[0];
+    const contagem = rodou(/AlvoAdministra/)[0];
     expect(contagem).toBeDefined();
     expect(contagem.inputs.hoje).toBe(HOJE_BRASILIA);
   });

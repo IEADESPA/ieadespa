@@ -22,7 +22,7 @@ jest.mock("../db", () => {
   const sql = new Proxy({ Transaction, Request }, { get: (alvo, prop) => (prop in alvo ? alvo[prop] : (typeof prop === "string" && /^[A-Z]/.test(prop) ? () => undefined : undefined)) });
   return { getPool: async () => ({ request: novaRequisicao }), sql };
 });
-jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), sha256: () => "" }));
+jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
 jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), minimizarCamposExMembro: jest.fn(async () => {}) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, salvarFoto: jest.fn(async (id) => `https://armazem/fotos/membro-${id}`), excluirFoto: jest.fn(async () => {}) }));
@@ -98,6 +98,7 @@ beforeEach(() => {
   mockConsultas = [];
   mockTransacao = { begin: 0, commit: 0, rollback: 0 };
   registrarAuditoria.mockClear();
+  require("../auditoria").registrarAuditoriaNaTransacao.mockClear();
   vacancia.encerrarVinculos.mockClear();
   minimizacao.minimizarCamposExMembro.mockClear();
   storage.salvarFoto.mockClear();
@@ -186,7 +187,7 @@ describe("GestaoMedidasCautelares: Art. 45 é da igreja inteira, só o GERAL", (
     expect(r.status).toBe(201);
     expect(rodou(/INSERT INTO MedidasCautelares/)[0].inputs.motivo).toBe("desvio");
     expect(rodou(/UPDATE Lideranca SET AtivoAte/)).toHaveLength(1);
-    expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+    expect(require("../auditoria").registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);   // a trilha vai na transação da medida
   });
   test("geral: um id na rota que não é matrícula canônica nunca vira 'criar medida nova'", async () => {
     // O banco aceitaria a criação (a pessoa existe, há outro com 'permissoes'): se o ramo de criar fosse alcançado, gravaria.

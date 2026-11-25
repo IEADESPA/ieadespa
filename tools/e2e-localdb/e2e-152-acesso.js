@@ -25,7 +25,7 @@ const ID = {
   exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41,
   falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
   avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63, avisoNova: BASE_ID + 64, avisoTutelada: BASE_ID + 65,
-  liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73
+  liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -292,6 +292,43 @@ async function principal() {
   ok((await escalar("SELECT MotivoEncerramento FROM Assentos WHERE MembroId = @m", { m: ID.falecido })) === "FALECIMENTO", "o assento fecha com o motivo FALECIMENTO");
   const desligarFalecido = await pessoas("DELETE", { token: geral(), binding: { membroId: String(ID.falecido) } });
   ok(desligarFalecido.body && desligarFalecido.body.sucesso === false && (await statusDe(ID.falecido)) === "FALECIDO", "desligar um falecido: nada muda, continua FALECIDO");
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 5c. a decisão disciplinar e a vacância numa transação só ==");
+  const disc = (processoId, corpo) => chamarRota("EvoluirProcessoDisciplinar/index.js", { metodo: "POST", binding: { processoId: String(processoId) }, token: L.GERAL(ID.geral, ["disciplina", "cei"]), corpo });
+  for (const k of ["discJulgar", "discHomologar"]) {
+    LID[k] = await lideranca(ID[k], pSec, "CONGREGACAO", sede);
+    await q("INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) VALUES (@o, @m, 'FUNCAO', N'Conselheiro (roteiro)', '2025-01-01')", { o: orgao, m: ID[k] });
+  }
+  const procJulgar = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, OrgaoResponsavelId) OUTPUT INSERTED.ProcessoId
+    VALUES (@m, '2026-09-01', 'EM_ANDAMENTO', @o)`, { m: ID.discJulgar, o: orgao });
+  const procHomologar = await escalar(`INSERT INTO ProcessosDisciplinares (MembroId, DataAbertura, Status, Resultado, DataConclusao, HomologadoPeloCEI, OrgaoResponsavelId)
+    OUTPUT INSERTED.ProcessoId VALUES (@m, '2026-09-01', 'JULGADO', 'EXCLUSAO', '2026-09-20', 0, @o)`, { m: ID.discHomologar, o: orgao });
+  const situacaoProc = (p) => escalar("SELECT CONCAT(Status, '/', ISNULL(CAST(HomologadoPeloCEI AS varchar(1)), '-')) FROM ProcessosDisciplinares WHERE ProcessoId = @p", { p });
+  await q(`EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_E2E152_FalhaDecisao ON dbo.AuditLog AFTER INSERT AS
+          IF EXISTS (SELECT 1 FROM inserted WHERE Tabela = N''ProcessosDisciplinares'' AND RegistroId IN (${procJulgar}, ${procHomologar})) THROW 50154, N''falha simulada do roteiro'', 1;')`);
+  try {
+    for (const [rotulo, p, m, corpo, antes] of [
+      ["julgar com exclusão", procJulgar, ID.discJulgar, { acao: "JULGAR", resultado: "EXCLUSAO" }, "EM_ANDAMENTO/-"],
+      ["homologar a exclusão", procHomologar, ID.discHomologar, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true }, "JULGADO/0"]
+    ]) {
+      let erro = null;
+      try { const r = await disc(p, corpo); if (r.status >= 500) erro = r; } catch (e) { erro = e; }
+      ok(erro !== null, `${rotulo} com falha no fim: o erro chega a quem chamou`);
+      ok((await situacaoProc(p)) === antes && (await fimDoCargo(m)) === "vigente" && (await assentoAberto(m)),
+        `e nada ficou pela metade (${rotulo}: o processo como antes, o cargo e o assento abertos)`, `${await situacaoProc(p)} ${await fimDoCargo(m)}`);
+    }
+  } finally {
+    await q("DROP TRIGGER IF EXISTS dbo.TR_E2E152_FalhaDecisao");
+  }
+  const julgou = await disc(procJulgar, { acao: "JULGAR", resultado: "EXCLUSAO" });
+  ok(julgou.body && julgou.body.sucesso === true && (await situacaoProc(procJulgar)) === "JULGADO/-" && (await fimDoCargo(ID.discJulgar)) !== "vigente" && !(await assentoAberto(ID.discJulgar)),
+    "a nova tentativa de julgar conclui tudo", JSON.stringify(julgou.body).slice(0, 120));
+  const julgouDeNovo = await disc(procJulgar, { acao: "JULGAR", resultado: "SANCAO", penalidadeId: 1 });
+  ok(julgouDeNovo.body && julgouDeNovo.body.sucesso === false && /já foi julgado/.test(julgouDeNovo.body.mensagem), "julgar de novo é recusado", JSON.stringify(julgouDeNovo.body).slice(0, 120));
+  const homologou = await disc(procHomologar, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true });
+  ok(homologou.body && homologou.body.sucesso === true && (await situacaoProc(procHomologar)) === "JULGADO/1" && (await fimDoCargo(ID.discHomologar)) !== "vigente"
+    && !(await assentoAberto(ID.discHomologar)), "a nova tentativa de homologar conclui tudo", JSON.stringify(homologou.body).slice(0, 120));
 
   // A última pessoa que administra os acessos: nem desligada, nem suspensa (no fim do roteiro: encerra os outros administradores da base).
   await q(`UPDATE l SET AtivoAte = '2000-01-01' FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId

@@ -70,7 +70,7 @@ async function chamar(handler, { metodo = "POST", corpo = {}, token, ligado = {}
 }
 const quando = (padrao, valor, afetadas) => mockRegras.push([padrao, valor, afetadas]);
 const rodou = (padrao) => mockConsultas.filter(c => padrao.test(c.sql));
-const escritas = () => mockConsultas.filter(c => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
+const escritas = () => mockConsultas.filter(c => /^\s*(SET XACT_ABORT ON;\s*)?(INSERT|UPDATE|DELETE)\b/i.test(c.sql));   // o prefixo da transação curta
 
 const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], ...extra });
 // Liderança LOCAL: papel de congregação com escopo da congregação "A".
@@ -888,6 +888,73 @@ describe("EvoluirProcessoDisciplinar (escopo do réu + órgão central é do ger
     test("o geral escolhe o destino livremente", async () => {
       preparar();
       expect((await recorrer(geral(["disciplina"]), 3)).body.sucesso).toBe(true);
+    });
+  });
+
+  // A decisão e a vacância (assentos, liderança, cargo, delegações, sessões) numa transação só: ou tudo vale, ou nada muda e a decisão pode ser repetida.
+  describe("julgar com exclusão e homologar a exclusão: a decisão e a vacância juntas", () => {
+    const PROCESSO_CENTRAL = 5, PENDENTE_CEI = 6;
+    const prepararDecisao = ({ julgou = 1, homologou = 1 } = {}) => {
+      preparar();
+      PROCESSOS[PROCESSO_CENTRAL] = { MembroId: 40, Status: "EM_ANDAMENTO", OrgaoResponsavelId: 1, OrgaoLocalId: null };
+      PROCESSOS[PENDENTE_CEI] = { MembroId: 40, Status: "JULGADO", Resultado: "EXCLUSAO", OrgaoResponsavelId: 1, OrgaoLocalId: null, HomologadoPeloCEI: 0, CEIRecusouEm: null };
+      quando(/sp_getapplock/, [{ resultado: 0 }]);
+      quando(/FROM TiposPenalidade WHERE Codigo = 'EXCLUSAO'/, [{ PenalidadeId: 9, Codigo: "EXCLUSAO" }]);
+      quando(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/, [], julgou);
+      quando(/UPDATE ProcessosDisciplinares SET HomologadoPeloCEI/, [], homologou);
+    };
+    afterEach(() => { delete PROCESSOS[PROCESSO_CENTRAL]; delete PROCESSOS[PENDENTE_CEI]; });
+    const conferirTudoNaTransacao = () => {
+      expect(mockTransacoes.map((t) => t.estado)).toEqual(["confirmada"]);
+      for (const c of escritas().filter((x) => !/CredenciaisEclesiasticas/.test(x.sql))) expect(c.transacao).toBe(1);
+      expect(rodou(/sp_getapplock/)[0].inputs.recurso).toBe("escada_40");   // em fila com a cerimônia de consagração da mesma pessoa
+      expect(registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(1);
+      expect(registrarAuditoriaNaTransacao.mock.calls[0][0]).toBe(mockTransacoes[0]);
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+      const recolhe = rodou(/UPDATE CredenciaisEclesiasticas SET Situacao = N'CANCELADA'/);
+      expect(recolhe).toHaveLength(1);
+      expect(recolhe[0].transacao).toBeNull();                                // a credencial, depois do commit
+    };
+    const conferirVacanciaNaTransacao = async () => {
+      expect(vacancia.encerrarVinculos).toHaveBeenCalledTimes(1);
+      await vacancia.encerrarVinculos.mock.calls[0][0].request().query("UPDATE Assentos SET DataFim = 1");
+      expect(rodou(/UPDATE Assentos/)[0].transacao).toBe(1);
+    };
+
+    test("julgar com exclusão: o julgamento, a vacância e a trilha na mesma transação; o estado vai no WHERE", async () => {
+      prepararDecisao();
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" });
+      expect(r.body.sucesso).toBe(true);
+      expect(rodou(/UPDATE ProcessosDisciplinares SET\s+Status = 'JULGADO'/)[0].sql).toMatch(/AND Status <> 'JULGADO'/);
+      await conferirVacanciaNaTransacao();
+      conferirTudoNaTransacao();
+    });
+    test("julgar quando outra decisão chegou antes: recusa, nada de vacância nem trilha", async () => {
+      prepararDecisao({ julgou: 0 });
+      const r = await evoluir(geral(["disciplina"]), PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" });
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.mensagem).toMatch(/já foi julgado/);
+      expect(vacancia.encerrarVinculos).not.toHaveBeenCalled();
+      expect(registrarAuditoriaNaTransacao).not.toHaveBeenCalled();
+      expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+    });
+    test("homologar a exclusão: a homologação, a vacância e a trilha na mesma transação", async () => {
+      prepararDecisao();
+      const r = await evoluir(geral(["disciplina", "cei"]), PENDENTE_CEI, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true });
+      expect(r.body.sucesso).toBe(true);
+      await conferirVacanciaNaTransacao();
+      conferirTudoNaTransacao();
+    });
+    test.each([
+      ["julgar", PROCESSO_CENTRAL, { acao: "JULGAR", resultado: "EXCLUSAO" }],
+      ["homologar", PENDENTE_CEI, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true }]
+    ])("%s: a falha no meio da vacância desfaz a decisão (o processo continua pendente e a decisão pode ser repetida)", async (_rotulo, id, corpo) => {
+      prepararDecisao();
+      vacancia.encerrarVinculos.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+      await expect(evoluir(geral(["disciplina", "cei"]), id, corpo)).rejects.toThrow("falha simulada");
+      expect(mockTransacoes.map((t) => t.estado)).toEqual(["desfeita"]);
+      for (const c of escritas()) expect(c.transacao).toBe(1);
+      expect(rodou(/CredenciaisEclesiasticas/)).toHaveLength(0);
     });
   });
 });

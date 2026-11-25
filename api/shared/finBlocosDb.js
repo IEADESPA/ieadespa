@@ -630,13 +630,16 @@ async function rastreio(pool, { folha }) {
   const contagem = regra.contagemDasFolhas(destinos, ultima - inicio + 1);
   const volta = Number(b.VoltouParcial) !== 1 ? null : await ultimaVolta(pool, b.BlocoId);
   let primeiraEmBranco = null;
+  // as inexistentes da entrega (só no bloco entregue): a tela da devolução parcial corta as do fim e diz as do meio, como a confirmação
+  let inexistentes = [];
   if (b.Situacao === "ENTREGUE") {
     // resposta dele (24/11/2026): a primeira em branco é procurada ignorando as inexistentes (a seguinte à última com outro destino, pulando as
     // inexistentes que vierem logo depois)
-    const inexistentes = new Set((await pool.request().input("b", sql.Int, b.BlocoId).input("de", sql.Int, inicio)
-      .query(`SELECT Folha FROM FinFolhas WHERE BlocoId = @b AND Folha >= @de AND Destino = 'INEXISTENTE'`)).recordset.map((x) => Number(x.Folha)));
+    inexistentes = (await pool.request().input("b", sql.Int, b.BlocoId).input("de", sql.Int, inicio)
+      .query(`SELECT Folha FROM FinFolhas WHERE BlocoId = @b AND Folha >= @de AND Destino = 'INEXISTENTE' ORDER BY Folha`)).recordset.map((x) => Number(x.Folha));
+    const fora = new Set(inexistentes);
     let seguinte = b.UltimaComDestino == null ? inicio : Number(b.UltimaComDestino) + 1;
-    while (inexistentes.has(seguinte)) seguinte++;
+    while (fora.has(seguinte)) seguinte++;
     primeiraEmBranco = seguinte <= ultima ? seguinte : null;
   }
   let pessoas = [];
@@ -648,7 +651,7 @@ async function rastreio(pool, { folha }) {
   return {
     sucesso: true,
     bloco: { ...blocoDaLinha(b), usadas: Number(b.Usadas), livres: livresDaLinha(b), parcial: Number(b.VoltouParcial) === 1, faixa: faixaDaLinha(b), chegouEm: iso(b.ChegouEm) },
-    contagem, primeiraEmBranco, pessoas,
+    contagem, primeiraEmBranco, inexistentes, pessoas,
     volta
   };
 }

@@ -118,6 +118,16 @@ function rastreio(folha) {
       contagem: { lancadas: 34, canceladas: 1, arrancadas: 0, extraviadas: 0, inexistentes: 0, livres: 15 }, primeiraEmBranco: 66036,
       pessoas: [{ membroId: 101, nome: "Rute Santos", papel: "Tesoureira" }], volta: null };
   }
+  if (folha >= 66501 && folha <= 66550) {   // o 1.330: 30 lançadas, a 40ª e a 50ª inexistentes (a gráfica não imprimiu), 18 em branco
+    return { sucesso: true, bloco: blocoMentira(12, 66501, "Vila Nova", "em-uso", 32, { entregueEm: "2026-09-08" }),
+      contagem: { lancadas: 30, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 2, livres: 18 }, primeiraEmBranco: 66531, inexistentes: [66540, 66550],
+      pessoas: [{ membroId: 101, nome: "Rute Santos", papel: "Tesoureira" }], volta: null };
+  }
+  if (folha >= 66551 && folha <= 66600) {   // o 1.331: 35 lançadas, só a 50ª inexistente, 14 em branco (36ª a 49ª)
+    return { sucesso: true, bloco: blocoMentira(13, 66551, "Vila Nova", "em-uso", 36, { entregueEm: "2026-09-08" }),
+      contagem: { lancadas: 35, canceladas: 0, arrancadas: 0, extraviadas: 0, inexistentes: 1, livres: 14 }, primeiraEmBranco: 66586, inexistentes: [66600],
+      pessoas: [{ membroId: 101, nome: "Rute Santos", papel: "Tesoureira" }], volta: null };
+  }
   if (folha >= 67001 && folha <= 67050) {   // já devolvido
     return { sucesso: true, bloco: blocoMentira(7, 67001, "Monte Sião", "fechado", 50, { devolvidoEm: "2026-10-02" }),
       contagem: { lancadas: 50, canceladas: 0, arrancadas: 0, extraviadas: 0, livres: 0 }, pessoas: [] };
@@ -738,6 +748,27 @@ async function provarLivro() {
   ok(!(await caixaSaida(page)) && !(await textoTela(page)).includes("Primeira folha em branco"), "geral: o formulário fica limpo, de novo em \"Completa\"");
   ok((await textoTela(page)).includes("04/10 Entrada parcial: bloco 1.320 devolvido por Vila Nova recebeu João da Silva · 39 usadas · livres de novo: 66.040 a 66.050"),
     "geral: a linha da entrada parcial no livro (r30)");
+  // a inexistente na parcial (resposta dele, 24/11): a do fim fica fora das que voltam livres; a do meio é dita, como na confirmação do servidor
+  await digitar(page, "Primeira folha do bloco", "66.551");
+  await espera(700);
+  await calmo(page);
+  cxE = await caixaSaida(page);
+  ok(cxE && cxE.texto === "Bloco 1.331 (veio sozinho): folhas 66.551 a 66.600 · entregue a Vila Nova em 08/09 · 36 com destino, 14 sem destino (36ª a 49ª)",
+    "geral: a 50ª inexistente fica fora das posições em branco", cxE);
+  await clicar(page, "Parcial");
+  t = await textoTela(page);
+  ok(t.includes("66.586 a 66.599 (14 folhas) voltam a ficar livres."), "geral: a inexistente do fim não volta livre", t.slice(t.indexOf("voltam") - 60, t.indexOf("voltam") + 40));
+  await digitar(page, "Primeira folha do bloco", "66.501");
+  await espera(700);
+  await calmo(page);
+  cxE = await caixaSaida(page);
+  ok(cxE && cxE.texto === "Bloco 1.330 (veio sozinho): folhas 66.501 a 66.550 · entregue a Vila Nova em 08/09 · 32 com destino, 18 sem destino", "geral: com a inexistente no meio, sem as posições", cxE);
+  await clicar(page, "Parcial");
+  t = await textoTela(page);
+  ok(t.includes("66.531 a 66.549 (18 folhas, menos a 66.540, inexistente) voltam a ficar livres."), "geral: a inexistente do meio é dita", t.slice(t.indexOf("voltam") - 80, t.indexOf("voltam") + 40));
+  await digitar(page, "Primeira folha em branco", "66.549");
+  ok((await textoTela(page)).includes("66.549 (1 folha) volta a ficar livre."), "geral: uma folha só: \"volta a ficar livre\"");
+  await clicar(page, "Completa");
   // a saída: o formulário da r30 no lugar do aviso
   ok(await clicar(page, "Registrar saída"), "geral: o botão \"Registrar saída\"");
   t = await textoTela(page);

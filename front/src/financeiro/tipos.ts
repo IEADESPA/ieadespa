@@ -203,6 +203,8 @@ export interface Rastreio {
   readonly volta?: VoltaBloco | null;
   /** entregue: a primeira folha em branco que o sistema sugere para a devolução parcial (null = não sobra nenhuma) */
   readonly primeiraEmBranco?: number | null;
+  /** entregue: as folhas inexistentes da entrega (a gráfica não imprimiu); a parcial não as devolve livres */
+  readonly inexistentes?: readonly number[];
 }
 
 /** o "Registrar saída" (r30): as congregações ativas, com a área de cada uma (a frase do "Levado pela área") */

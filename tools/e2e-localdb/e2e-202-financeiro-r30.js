@@ -364,13 +364,27 @@ const definicao = (restricao) => escalar(`SELECT definition FROM sys.check_const
   const c1402 = todasDev.find((x) => x.tipo === "entrada" && x.bloco === 1402 && x.parcial === false);
   ok(c1401 && c1401.parcial === false && c1401.usadas === 50 && c1402 && c1402.usadas === 11,
     "a entrada completa diz as usadas da entrega: as 50 do 1.401 e as 11 da reentrega do 1.402 (70.140 a 70.150)", [c1401, c1402]);
+  // o rastreio diz as inexistentes da entrega: a linha "voltam a ficar livres" da tela corta as do fim e diz as do meio, como a confirmação
+  ok((await POST(H, "entregar", geral, { primeiraFolha: 70551, congregacaoId: VILA_NOVA, pessoa: { nome: "Rute Santos" }, data: "2026-11-20" })).status === 200, "o 1.411 entregue a Vila Nova");
+  await lancarDireto(await idDo(1411), 70551, 70580);
+  for (const f of [70590, 70600]) ok((await POST(H, "folha", local, { folha: f, oQueAconteceu: "inexistente", observacao: "A gráfica não imprimiu" })).status === 200, `a ${f} inexistente`);
+  r = await GET(H, "rastreio", geral, { folha: 70551 });
+  ok(r.status === 200 && r.body.primeiraEmBranco === 70581 && JSON.stringify(r.body.inexistentes) === JSON.stringify([70590, 70600]),
+    "o rastreio do 1.411: a primeira em branco 70.581 e as inexistentes 70.590 (meio) e 70.600 (fim)", { pe: r.body.primeiraEmBranco, inex: r.body.inexistentes });
+  r = await GET(H, "rastreio", geral, { folha: 70520 });
+  ok(r.status === 200 && Array.isArray(r.body.inexistentes) && r.body.inexistentes.length === 0, "o bloco que voltou em parte e está na Geral: nenhuma inexistente a mostrar", r.body.inexistentes);
+  // os vazios da r30 dizem o nome da área e da congregação: vêm de quem está vendo, nas folhas e no livro
+  r = await GET(H, "folhas", local, {});
+  ok(r.status === 200 && r.body.escopo.congregacao === "Vila Nova E2E", "as folhas da congregação dizem o nome dela", r.body.escopo);
+  r = await GET(H, "livro", area, {});
+  ok(r.status === 200 && r.body.escopo.area === "Área Alfa E2E" && r.body.escopo.congregacao === null, "o livro da área diz o nome dela", r.body.escopo);
 
   console.log("== a 203 de novo, sobre dados ==");
   const antes = await retratoFin();
   await aplicarMigracao("203");
   await aplicarMigracao("203");
   ok((await retratoFin()) === antes, "a 203 rodada duas vezes sobre o banco com inexistentes não muda nada");
-  ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Destino = 'INEXISTENTE'`)) === 3 && b1402 > 0, "as três inexistentes continuam lá");
+  ok(Number(await escalar(`SELECT COUNT(*) FROM FinFolhas WHERE Destino = 'INEXISTENTE'`)) === 5 && b1402 > 0, "as cinco inexistentes continuam lá (as três de antes e as duas do 1.411)");
 
   fim("e2e-202 (Financeiro: o que a r30 pede ao servidor)");
 })().catch((e) => { console.log("ERRO:", e && e.stack); L.shimEncerrar(); process.exitCode = 1; });

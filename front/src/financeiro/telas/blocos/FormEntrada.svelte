@@ -9,7 +9,7 @@
   import { numero } from "../../../comum/formato";
   import { ponte } from "../../../comum/ponte";
   import Icone from "../../../comum/Icone.svelte";
-  import { caixaDaEntrada, posicao, rotuloDaPessoa, soNumeros, textoFaixa } from "../../blocos";
+  import { caixaDaEntrada, linhaDaVolta, livresDaParcial, posicao, rotuloDaPessoa, soNumeros } from "../../blocos";
   import type { Rastreio } from "../../tipos";
   import Quadro from "../../partes/Quadro.svelte";
 
@@ -46,7 +46,8 @@
       quem = ""; outroNome = ""; falta = ""; como = "completa";
       if (!r.ok) { rastreio = null; erroRastreio = r.cancelado ? "" : r.mensagem; brancoDigitado = ""; return; }
       erroRastreio = "";
-      rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, primeiraEmBranco: r.dados.primeiraEmBranco ?? null, volta: r.dados.volta ?? null };
+      rastreio = { bloco: r.dados.bloco, contagem: r.dados.contagem, pessoas: r.dados.pessoas, primeiraEmBranco: r.dados.primeiraEmBranco ?? null,
+        inexistentes: r.dados.inexistentes ?? [], volta: r.dados.volta ?? null };
       brancoDigitado = rastreio.primeiraEmBranco ? numero(rastreio.primeiraEmBranco) : "";
     }, 400);
     return () => clearTimeout(t);
@@ -54,14 +55,14 @@
   const caixa = $derived(rastreio ? caixaDaEntrada(rastreio) : null);
   const podeVoltar = $derived(!!caixa && !caixa.erro);
 
-  // a parcial: a primeira em branco digitada, a posição dela e o que volta a ficar livre (dela ao fim do bloco)
+  // a parcial: a primeira em branco digitada e o que volta a ficar livre (dela ao fim do bloco, sem as inexistentes do fim; as do meio são ditas,
+  // como na confirmação do servidor). A digitada que é inexistente não tem linha: o servidor recusa e diz por quê
   const branco = $derived(Number(soNumeros(brancoDigitado)) || 0);
   const parcial = $derived.by(() => {
     if (!rastreio || !podeVoltar || como !== "parcial" || !branco) return null;
-    const b = rastreio.bloco, de = b.faixa?.primeiraFolha ?? b.primeiraFolha;
-    if (branco < de || branco > b.ultimaFolha) return null;
-    return { posicao: posicao(branco, b.primeiraFolha), livres: b.ultimaFolha - branco + 1, usadas: branco - de, faixa: { primeiraFolha: branco, ultimaFolha: b.ultimaFolha },
-      congregacao: b.congregacao?.nome ?? "" };
+    const b = rastreio.bloco, de = b.faixa?.primeiraFolha ?? b.primeiraFolha, inexistentes = rastreio.inexistentes ?? [];
+    if (branco < de || branco > b.ultimaFolha || inexistentes.includes(branco)) return null;
+    return { linha: linhaDaVolta(livresDaParcial(branco, b.ultimaFolha, inexistentes)), usadas: branco - de, congregacao: b.congregacao?.nome ?? "" };
   });
   const posicaoDigitada = $derived(rastreio && branco >= rastreio.bloco.primeiraFolha && branco <= rastreio.bloco.ultimaFolha ? posicao(branco, rastreio.bloco.primeiraFolha) : 0);
 
@@ -118,7 +119,7 @@
 
 {#snippet volta()}
   {#if parcial}
-    <div class="volta" aria-live="polite"><strong>{textoFaixa(parcial.faixa)} ({numero(parcial.livres)} {parcial.livres === 1 ? "folha" : "folhas"}) {parcial.livres === 1 ? "volta" : "voltam"} a ficar livres.</strong>
+    <div class="volta" aria-live="polite"><strong>{parcial.linha}</strong>
       {#if celular}O bloco fica na Tesouraria Geral, para outra entrega.{:else}O bloco fica na Tesouraria Geral, para outra entrega só com elas; as {numero(parcial.usadas)} usadas ficam no histórico{parcial.congregacao ? `, com ${parcial.congregacao}` : ""}.{/if}</div>
   {/if}
 {/snippet}

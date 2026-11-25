@@ -149,12 +149,33 @@ export function caixaDaEntrada(r: Rastreio): CaixaSaida {
   let conta: string;
   if (!c.livres) conta = `as ${numero(comDestino)} com destino (${partesDaContagem(c).join(", ")})`;
   else {
+    // as em branco são as do fim quando vão da primeira em branco à última folha impressa (a inexistente do fim fica fora: a gráfica não imprimiu)
     const pe = r.primeiraEmBranco ?? null;
-    const doFim = pe !== null && c.livres === b.ultimaFolha - pe + 1 ? ` (${posicao(pe, b.primeiraFolha)}ª a ${posicao(b.ultimaFolha, b.primeiraFolha)}ª)` : "";
+    const fim = pe === null ? b.ultimaFolha : livresDaParcial(pe, b.ultimaFolha, r.inexistentes ?? []).ultimaFolha;
+    const doFim = pe !== null && c.livres === fim - pe + 1 ? ` (${posicao(pe, b.primeiraFolha)}ª a ${posicao(fim, b.primeiraFolha)}ª)` : "";
     conta = `${comDestino ? numero(comDestino) : "nenhuma"} com destino, ${numero(c.livres)} sem destino${doFim}`;
   }
   const entregue = b.congregacao ? ` · entregue a ${b.congregacao.nome}${b.entregueEm ? ` em ${diaMes(b.entregueEm)}` : ""}` : "";
   return { negrito: `Bloco ${n}`, texto: ` (veio sozinho): folhas ${textoFaixa(f)}${entregue} · ${conta}`, erro: false };
+}
+
+/** as folhas que voltam livres na devolução parcial (as mesmas da confirmação do servidor, `faixaLivre`): da primeira em branco ao fim do bloco,
+ *  sem as inexistentes do fim; as do meio vão em `menos` (resposta dele, 24/11/2026: a inexistente continua inexistente) */
+export function livresDaParcial(primeiraEmBranco: number, ultimaFolha: number, inexistentes: readonly number[]): Faixa & { readonly menos: readonly number[]; readonly quantas: number } {
+  const fora = new Set(inexistentes);
+  let fim = ultimaFolha;
+  while (fim > primeiraEmBranco && fora.has(fim)) fim--;
+  const menos = [...fora].filter((f) => f > primeiraEmBranco && f < fim).sort((x, y) => x - y);
+  return { primeiraFolha: primeiraEmBranco, ultimaFolha: fim, menos, quantas: fim - primeiraEmBranco + 1 - menos.length };
+}
+
+/** a linha do que vai acontecer na parcial, antes de gravar (r30): "64.436 a 64.450 (15 folhas) voltam a ficar livres."; com a inexistente do meio,
+ *  "66.531 a 66.549 (18 folhas, menos a 66.540, inexistente) voltam a ficar livres."; uma só, "66.549 (1 folha) volta a ficar livre." */
+export function linhaDaVolta(l: ReturnType<typeof livresDaParcial>): string {
+  const faixa = l.primeiraFolha === l.ultimaFolha ? numero(l.primeiraFolha) : textoFaixa(l);
+  const menos = !l.menos.length ? "" : l.menos.length === 1 ? `, menos a ${numero(l.menos[0])}, inexistente`
+    : `, menos as ${l.menos.slice(0, -1).map(numero).join(", ")} e ${numero(l.menos[l.menos.length - 1])}, inexistentes`;
+  return `${faixa} (${plural(l.quantas, "folha", "folhas")}${menos}) ${l.quantas === 1 ? "volta a ficar livre" : "voltam a ficar livres"}.`;
 }
 
 /** a confirmação da parcial, mais curta no celular (r30: "Bloco 1.288 de volta, parcial: 64.436 a 64.450 livres para outra entrega.") */

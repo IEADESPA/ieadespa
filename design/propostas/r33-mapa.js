@@ -1,8 +1,8 @@
 /* ---------------- 3. O MAPA: O BAIRRO DA FICHA, NUMA LISTA FIXA, E O ALFINETE QUE SE ARRASTA ---------------- */
 // Decidido por ele (25/11): a contagem por bairro usa o bairro da FICHA, não o mapa; a ficha escolhe o bairro numa lista
 // fixa de Parauapebas, que a Geral cuida. O ponto de cada membro (só a congregação vê) sai do CEP e do número (erro de
-// uns 50 m), e a secretaria pode arrastar o alfinete para o lugar certo. O Regimento põe o trabalho "dentro do município
-// de Parauapebas e zonas rurais adjacentes": a lista tem os bairros e as vilas da zona rural (a "cidade" da 32 sai).
+// uns 50 m), e a secretaria pode arrastar o alfinete para o lugar certo. A lista é a de Parauapebas (as vilas da zona rural
+// e as outras cidades ficam "para conferir"); o mapa da Geral continua o aprovado na 32, com a cidade no alto.
 // a lista: [bairro, membros pela ficha, ponto no mapa posto?]
 const R33_LISTA = [['Altamira', 97, 1], ['Bela Vista', 151, 1], ['Centro', 342, 1], ['Chácaras do Rio', 41, 1], ['Cidade Jardim', 190, 1], ['Jardim Ipê', 76, 1], ['Liberdade', 28, 1], ['Monte Sião', 88, 1], ['Nova Carajás', 64, 0], ['Novo Horizonte', 109, 1], ['Primavera', 120, 1], ['Vale do Sol', 33, 1], ['Vila Nova', 286, 1]];
 // o fundo do mapa (o mesmo desenho da 32: o rio e as ruas principais), para as telas pequenas
@@ -62,14 +62,14 @@ function r33MapaLocal(p, cel) {
 }
 // a área e a Geral: a contagem pelo bairro da ficha, sem pessoa
 function r33MapaConta(p, k, cel) {
-  const filtros = r32Pils(p, ['Congregações', 'Pontos de culto', 'Por bairro'], true);
+  const filtros = r32Pils(p, k === 'geral' ? (cel ? ['Parauapebas ▾', 'Igrejas', 'Por bairro'] : ['Parauapebas ▾', 'Congregações', 'Pontos de culto', 'Por bairro']) : ['Congregações', 'Pontos de culto', 'Por bairro'], true);
   const sem = k === 'area' ? ['96', 'fichas da área sem bairro na lista'] : ['412', 'fichas sem bairro na lista'];
   const nota = r16aAviso(p, `<strong>${sem[0]} ${sem[1]}</strong> não entram na contagem${k === 'geral' && !cel ? ' (escritas à mão antes da lista)' : ''}. ${k === 'geral' ? 'Passar para a lista em “Bairros da cidade”.' : 'Cada congregação escolhe o bairro na ficha.'}`);
   const lado = k === 'area'
     ? r32Car(p, 'Membros por bairro', r18Etiq(p, 'pela ficha', 'azul'), [['Vila Nova', '286 · a 0,4 km da igreja'], ['Cidade Jardim', '190 · a 0,3 km'], ['Bela Vista', '151 · a 0,5 km'], ['Primavera', '120 · a 0,6 km'], ['Monte Sião', '88 · a 0,4 km'], ['Nova Carajás', '64 · a igreja mais perto a 3,4 km']].filter((x, i) => !cel || i < 4 || i === 5).map((x, i) => r28Pes(p, r32Ic(p, 'casa', i === 5 ? 'ouro' : ''), x[0], x[1], '', { i, alt: cel ? 38 : 42 })).join(''), cel)
     : r32Car(p, 'Onde falta igreja', r18Etiq(p, '3 bairros', 'ouro'), R32_LONGE.map((x, i) => r28Pes(p, r32Ic(p, 'alvo', 'ouro'), x[0], x[1], '', { i, alt: cel ? 40 : 46 })).join(''), cel);
   if (cel) return r32EsCel(p, 'Mapa', `${filtros}${r32Mapa(p, 362, k === 'area' ? 236 : 246, k)}${nota}${lado}`);
-  const tit = r18Tit(p, k === 'area' ? 'O mapa da Área 2' : 'O mapa da igreja toda', `${k === 'area' ? 'as 12 congregações da área e os membros por bairro' : 'Parauapebas e a zona rural, as 45 congregações'} · a contagem é pelo bairro da ficha · ${R33_HOJE}`, filtros);
+  const tit = r18Tit(p, k === 'area' ? 'O mapa da Área 2' : 'O mapa da igreja toda', `${k === 'area' ? 'as 12 congregações da área e os membros por bairro' : 'em Parauapebas, 24 das 45 congregações'} · a contagem é pelo bairro da ficha · ${R33_HOJE}`, filtros);
   return r33Es(p, k, 'Mapa', `${tit}<div style="display:flex;gap:16px;align-items:flex-start">${r32Mapa(p, 620, 580, k)}${r18Col(r32Legenda(p, k), nota, lado)}</div>`, [k === 'area' ? 'Área 2' : 'Igreja toda', 'Mapa']);
 }
 const r33Mapa = (p, k, d) => { const cel = ehCel(d); return k === 'lista' ? r33Lista(p, cel) : k === 'ficha' ? r33Ficha(p, cel) : k === 'local' ? r33MapaLocal(p, cel) : r33MapaConta(p, k, cel); };

@@ -40,8 +40,8 @@ function r33Balcao(p, cel) {
   const pin = r32Car(p, 'Vire a tela para o Pb. Adão', r18Etiq(p, 'só ele digita', 'azul'), `<span style="font-size:13px;line-height:1.4;color:${p.texto}">Ele digita o PIN dele. O aceite vale para as três partes.</span>${r33Pin(p, 2)}${r33Teclado(p, cel)}`, cel);
   const atend = r20Nota(p, 'Fica no termo: “aceito no balcão da secretaria da Área 2, atendido por Elias Prado”, com a data e a hora.');
   if (cel) return r32EsCel(p, 'Aceite no balcão', `${quem}${r32Car(p, 'As três partes', '', partes, 1)}${pin}${atend}`);
-  const esq = r32Car(p, 'Quem toma posse', '', `<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">${quem}${r31Fatos(p, [['O cargo', 'dirigente de Betel (nº 27), Área 2'], ['Mandato', '01/01/2027 a 31/12/2027'], ['Por quê', 'continua em 2027: a Geral renovou em 01/12'], ['Celular', 'não usa: aceita aqui, no balcão']])}</div>`);
-  const tit = r18Tit(p, 'Aceite do termo de posse no balcão', `para quem não usa celular · atendido por Elias Prado, secretaria da Área 2 · ${R33_HOJE}`, m8Linha(p, 'Cancelar', 'voltar'));
+  const esq = r32Car(p, 'Quem toma posse', '', `<div style="display:flex;flex-direction:column;gap:10px;padding-top:4px">${quem}${r31Fatos(p, [['O cargo', 'dirigente de Betel (nº 27), Área 2'], ['Mandato', '01/01/2027 a 31/12/2027'], ['Por quê', 'continua em 2027: a Geral renovou em 15/12'], ['Celular', 'não usa: aceita aqui, no balcão']])}</div>`);
+  const tit = r18Tit(p, 'Aceite do termo de posse no balcão', `para quem não usa celular · atendido por Elias Prado, secretaria da Área 2 · 18/12/2026`, m8Linha(p, 'Cancelar', 'voltar'));
   return r33Es(p, 'area', 'Termos de posse', `${tit}${r17Dois(r18Col(esq, r32Car(p, 'As três partes, para ler junto com ele', '', partes)), r18Col(pin, atend), '1.2fr 1fr')}`, ['Termos de posse', 'Aceite no balcão'], R27_SEC.area);
 }
 // o termo em PDF: duas folhas A4 (a 1ª com o Regimento; a 2ª com a LGPD, o acesso, as confirmações e o QR)
@@ -59,7 +59,7 @@ function r33Papel2(W = 430) {
 }
 function r33Termo(p, cel) {
   if (cel) return r28MvCel(p, 'Termo de posse', `<div style="display:flex;align-items:center;gap:8px;flex:none"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">termo-de-posse-rui-andrade.pdf</span>${r28Mais(p, 'Baixar')}<span style="color:${p.suave}">·</span>${r28Mais(p, 'Compartilhar')}</div><div style="width:358px;height:506px;flex:none;align-self:center;overflow:hidden;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)"><div style="zoom:0.8326;width:430px">${r33Papel1()}</div></div><div style="display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;color:${p.texto}"><span style="color:${p.suave}">‹</span><strong>Folha 1 de 2</strong>${r28Mais(p, 'Folha 2 ›')}</div>`);
-  const tit = r18Tit(p, 'O termo de posse do Pb. Rui Andrade', `em PDF, duas folhas A4, com o QR · fica em “Minha vida” dele e na ficha de Monte Sião · ${R33_HOJE}`, `${m8Linha(p, 'Baixar', 'doc')}${m8Linha(p, 'Imprimir', 'imprimir')}`);
+  const tit = r18Tit(p, 'O termo de posse do Pb. Rui Andrade', `em PDF, duas folhas A4, com o QR · fica em “Minha vida” dele e na ficha de Monte Sião · 03/12/2026`, `${m8Linha(p, 'Baixar', 'doc')}${m8Linha(p, 'Imprimir', 'imprimir')}`);
   return r33Es(p, 'area', 'Termos de posse', `${tit}<div style="display:flex;gap:16px;align-items:flex-start;justify-content:center">${r33Papel1(432)}${r33Papel2(432)}</div>`, ['Monte Sião', 'Termos de posse']);
 }
 // a página que o QR abre: confere o termo sem CPF e sem endereço

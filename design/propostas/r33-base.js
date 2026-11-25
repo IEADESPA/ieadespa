@@ -11,7 +11,7 @@ const r31Caixa = (p, ok, tit, sub) => `<div style="display:flex;align-items:cent
 // o menu da 33: o da 32, e a Geral ganha a agenda padrão e os bairros da cidade em "Só a Geral"
 function r33Grupos(k, ativo) {
   const G = [['Painel', [['grafico', 'Painel da estrutura']]], ['Igrejas', [['igreja', k === 'area' ? 'Ficha da área' : 'Ficha da congregação'], ['relogio', 'Cultos e pontos'], ['mapa', 'Mapa']]], ['Diretoria', [['maleta', 'Diretoria e cargos'], ['doc', 'Termos de posse']]]];
-  if (k === 'geral') G.push(['Só a Geral', [['calendario', 'Agenda padrão'], ['casas', 'Bairros da cidade'], ['igreja', 'Áreas e números']]]);
+  if (k === 'geral') G.push(['Só a Geral', [['calendario', 'Agenda padrão'], ['casas', 'Bairros da cidade'], ['igreja', 'Áreas e números'], ['mais', 'Congregação nova']]]);
   return G.map(g => { const tem = g[1].some(f => f[1] === ativo); return [g[0], g[1].map(f => (f[1] === ativo ? f.concat([1]) : f)), tem]; });
 }
 const r33Es = (p, k, ativo, conteudo, trilha, usu) => r16bAperta(casca(p, { lateralHtml: menuCor(p, 'estrutura', { titulo: 'Estrutura', escopo: R32_ESC[k], grupos: r33Grupos(k, ativo), usuario: usu || R32_USU[k] }), trilha: ['Estrutura'].concat(trilha || [ativo]), faixa: R32_VERDE, conteudo }));

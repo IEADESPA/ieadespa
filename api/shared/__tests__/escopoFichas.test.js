@@ -24,7 +24,7 @@ jest.mock("../db", () => {
 });
 jest.mock("../auditoria", () => ({ registrarAuditoria: jest.fn(async () => true), registrarAuditoriaNaTransacao: jest.fn(async () => true), sha256: () => "" }));
 jest.mock("../vacancia", () => ({ encerrarVinculos: jest.fn(async () => {}) }));
-jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), minimizarCamposExMembro: jest.fn(async () => {}) }));
+jest.mock("../minimizacaoLgpd", () => ({ diasMinimizacaoExMembro: jest.fn(async () => 30), minimizarNaTransacao: jest.fn(async () => ["https://armazem/doc-indicacao"]), excluirDocumentos: jest.fn(async () => {}) }));
 jest.mock("../storage", () => ({ urlComSas: (u) => u, salvarFoto: jest.fn(async (id) => `https://armazem/fotos/membro-${id}`), excluirFoto: jest.fn(async () => {}) }));
 jest.mock("../protocolo", () => ({ gerarProtocolo: jest.fn(async () => "APR-2026-0001") }));
 jest.mock("../pdfInstitucional", () => {
@@ -100,7 +100,8 @@ beforeEach(() => {
   registrarAuditoria.mockClear();
   require("../auditoria").registrarAuditoriaNaTransacao.mockClear();
   vacancia.encerrarVinculos.mockClear();
-  minimizacao.minimizarCamposExMembro.mockClear();
+  minimizacao.minimizarNaTransacao.mockClear();
+  minimizacao.excluirDocumentos.mockClear();
   storage.salvarFoto.mockClear();
   storage.excluirFoto.mockClear();
   global.fetch = jest.fn();
@@ -724,10 +725,10 @@ describe("GestaoCartas", () => {
       candidatas();
       const r = await processar(LOCAL());
       expect(r.body.mensagem).toMatch(/1 saída\(s\) minimizada\(s\), 1 carta\(s\) cancelada\(s\)/);
-      expect(minimizacao.minimizarCamposExMembro.mock.calls.map((c) => c[1])).toEqual([10]);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1])).toEqual([10]);
       expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/).map((c) => c.inputs.id)).toEqual([1]);
       expect(rodou(/UPDATE CartasTransito SET Status = 'CANCELADA'/).map((c) => c.inputs.id)).toEqual([3]);
-      const acoes = registrarAuditoria.mock.calls.map((c) => c[0]);
+      const acoes = [...registrarAuditoria.mock.calls.map((c) => c[0]), ...require("../auditoria").registrarAuditoriaNaTransacao.mock.calls.map((c) => c[1])];
       expect(acoes).toHaveLength(2);
       expect(acoes.find((a) => /Minimizou/.test(a.acao))).toMatchObject({ tabela: "MembroReferencia", registroId: 10, usuarioId: 5, dadosDepois: { cartaId: 1 } });
       expect(acoes.find((a) => /Cancelou carta/.test(a.acao))).toMatchObject({ tabela: "CartasTransito", registroId: 3, usuarioId: 5 });
@@ -735,8 +736,38 @@ describe("GestaoCartas", () => {
     test("geral: processa as cartas de todas as congregações", async () => {
       candidatas();
       await processar(GERAL());
-      expect(minimizacao.minimizarCamposExMembro.mock.calls.map((c) => c[1]).sort()).toEqual([10, 20]);
-      expect(registrarAuditoria).toHaveBeenCalledTimes(3);
+      expect(minimizacao.minimizarNaTransacao.mock.calls.map((c) => c[1]).sort()).toEqual([10, 20]);
+      expect(registrarAuditoria).toHaveBeenCalledTimes(1);
+      expect(require("../auditoria").registrarAuditoriaNaTransacao).toHaveBeenCalledTimes(2);
+    });
+    // A carta concluída, a minimização (com a vacância) e a trilha numa transação só; o arquivo do armazenamento, só depois do commit.
+    test("a minimização numa transação: a carta concluída só se ainda estava pendente, a trilha nela, e os arquivos depois do commit", async () => {
+      candidatas();
+      const commitsAoApagar = [];
+      minimizacao.excluirDocumentos.mockImplementation(async () => { commitsAoApagar.push(mockTransacao.commit); });
+      await processar(LOCAL());
+      expect(mockTransacao).toEqual({ begin: 1, commit: 1, rollback: 0 });
+      expect(rodou(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/)[0].sql).toMatch(/Status IN \('CONFIRMADA','EMITIDA'\)/);
+      expect(rodou(/sp_getapplock/).map((c) => c.inputs.recurso)).toEqual(["escada_10"]);
+      expect(minimizacao.minimizarNaTransacao.mock.calls[0][0].transacao).toBeTruthy();
+      expect(minimizacao.excluirDocumentos.mock.calls).toEqual([[["https://armazem/doc-indicacao"]]]);
+      expect(commitsAoApagar).toEqual([1]);
+    });
+    test("a carta que outro processamento já concluiu: nada é minimizado, nenhum arquivo apagado", async () => {
+      candidatas();
+      quando(/UPDATE CartasTransito SET Status = 'CONCLUIDA'/, [], 0);
+      const r = await processar(LOCAL());
+      expect(r.body.mensagem).toMatch(/0 saída\(s\) minimizada\(s\)/);
+      expect(minimizacao.minimizarNaTransacao).not.toHaveBeenCalled();
+      expect(minimizacao.excluirDocumentos).not.toHaveBeenCalled();
+      expect(mockTransacao.rollback).toBe(1);
+    });
+    test("a falha no meio da minimização desfaz a transação e não apaga arquivo nenhum", async () => {
+      candidatas();
+      minimizacao.minimizarNaTransacao.mockImplementationOnce(async () => { throw new Error("falha simulada"); });
+      await expect(processar(LOCAL())).rejects.toThrow("falha simulada");
+      expect(mockTransacao).toEqual({ begin: 1, commit: 0, rollback: 1 });
+      expect(minimizacao.excluirDocumentos).not.toHaveBeenCalled();
     });
   });
 });

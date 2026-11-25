@@ -15,10 +15,12 @@
 // (shared/escopoRotas.js); carta de fora do escopo tem a MESMA resposta de "não encontrada". O "processar" é irreversível (zera contatos e desliga o membro), então cada
 // minimização e cada cancelamento por retorno deixam trilha de auditoria.
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
-const { diasMinimizacaoExMembro, minimizarCamposExMembro } = require("../shared/minimizacaoLgpd");
+const { diasMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos } = require("../shared/minimizacaoLgpd");
+const { emTransacao } = require("../shared/transacaoCurta");
+const { obterTrava } = require("../shared/financeiroSeguro");
 const { filtrarPorEscopo, pessoaAlcancavel } = require("../shared/escopoRotas");
 
 const SELECT_LISTA = `
@@ -154,14 +156,23 @@ module.exports = async function (context, req) {
         });
         canceladas++;
       } else if (dias !== null && dias >= diasMinimizacao) {
-        await minimizarCamposExMembro(pool, c.MembroId, { dataSaida: c.dataReferencia, motivo: c.MotivoSaida });
-        await pool.request().input("id", sql.Int, c.CartaId)
-          .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id`);
-        // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
-        await registrarAuditoria({
-          tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,
-          dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias }
+        // A carta concluída, a minimização (com a vacância) e a trilha numa transação só: ou tudo vale, ou nada muda e a carta volta no próximo processamento.
+        // O estado da carta vai no WHERE (dois processamentos ao mesmo tempo: só um minimiza); a trava da escada põe em fila com a cerimônia da mesma pessoa.
+        const documentos = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+          if (!(await obterTrava(rq, `escada_${c.MembroId}`))) { await desistir(); return null; }
+          const concluiu = await rq().input("id", sql.Int, c.CartaId)
+            .query(`UPDATE CartasTransito SET Status = 'CONCLUIDA' WHERE CartaId = @id AND Status IN ('CONFIRMADA','EMITIDA')`);
+          if (!((concluiu.rowsAffected && concluiu.rowsAffected[0]) || 0)) { await desistir(); return null; }
+          const urls = await minimizarNaTransacao({ executor, transacao }, c.MembroId, { dataSaida: c.dataReferencia, motivo: c.MotivoSaida });
+          // Irreversível (contatos e vínculo territorial zerados): fica na trilha QUEM mandou processar e QUAL carta, sem repetir o dado minimizado.
+          await registrarAuditoriaNaTransacao(transacao, {
+            tabela: "MembroReferencia", registroId: Number(c.MembroId), acao: "Minimizou dados de ex-membro (Carta de Mudança, Art. 132 §2º)", usuarioId: usuario.membroId,
+            dadosDepois: { cartaId: c.CartaId, diasDesdeOPedido: dias }
+          });
+          return urls;
         });
+        if (documentos === null) continue;   // outra alteração em andamento, ou a carta já mudou: fica para o próximo processamento
+        await excluirDocumentos(documentos);   // os arquivos, só depois do commit
         minimizadas++;
       }
     }

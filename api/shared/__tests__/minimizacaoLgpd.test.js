@@ -3,7 +3,11 @@
 // fallback de 30 dias nunca destrava um prazo MAIOR sozinho quando a
 // política está ausente/inativa.
 const { criarPoolFalso } = require("./testUtils");
-const { diasMinimizacaoExMembro, minimizarCamposExMembro, DIAS_MINIMIZACAO_PADRAO } = require("../minimizacaoLgpd");
+jest.mock("../storage", () => ({ excluirDocumento: jest.fn(async () => {}) }));
+const storage = require("../storage");
+const { diasMinimizacaoExMembro, minimizarNaTransacao, excluirDocumentos, DIAS_MINIMIZACAO_PADRAO } = require("../minimizacaoLgpd");
+// A minimização roda dentro da transação de quem chama (GestaoCartas "processar"): aqui o "executor" é o pool falso.
+const minimizarNoPool = (pool, membroId, opcoes) => minimizarNaTransacao({ executor: pool, transacao: null }, membroId, opcoes);
 
 describe("diasMinimizacaoExMembro", () => {
   test("usa o DiasRetencao da política quando ela existe e está ativa", async () => {
@@ -28,7 +32,7 @@ describe("diasMinimizacaoExMembro", () => {
 describe("minimizarCamposExMembro", () => {
   test("encerra vínculos (Assentos/Lideranca/Cargo e, desde a Trava 6-B, professor e aluno da EBD) antes de zerar os campos operacionais", async () => {
     const { pool, chamadas } = criarPoolFalso(Array.from({ length: 21 }, () => []));
-    await minimizarCamposExMembro(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
+    await minimizarNoPool(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
     // 9 de encerrarVinculos (Trava 8-A: a 1ª fecha os processos de cargo em andamento e a 2ª revoga o CHM; a 6ª, v8.2, fecha o histórico de cargos; a 9ª, v7.6,
     // derruba as sessões abertas) + o UPDATE final + (v8.2) o histórico de cargos apagado + (v8.4) a credencial cancelada + (v8.3) os documentos da indicação
     // apagados + (Trava 8-A) o diploma, o CHM, o parecer do CEI e os processos de consagração eliminados (Art. 132 §2º, II) + (v8.5) os marcos
@@ -71,5 +75,20 @@ describe("minimizarCamposExMembro", () => {
     expect(chamadas[20].sql).toMatch(/DELETE FROM AFMReciclagemResultados WHERE MembroId = @id/);
     expect(chamadas[20].sql).toMatch(/Natureza IN \(N'DIPLOMA_AFM', N'HISTORICO', N'DECLARACAO'\)/);
     expect(chamadas[20].sql).toMatch(/DELETE FROM AFMCursoMatriculas WHERE MembroId = @id/);
+  });
+});
+
+describe("os documentos da indicação: fora do banco na transação, fora do armazenamento só depois", () => {
+  test("a minimização devolve os endereços e não apaga arquivo nenhum; excluirDocumentos apaga cada um, sem parar no que já não existe", async () => {
+    storage.excluirDocumento.mockClear();
+    const recordsets = Array.from({ length: 21 }, () => []);
+    recordsets[17] = [{ Url: "https://armazem/doc-1" }, { Url: "https://armazem/doc-2" }];   // o DELETE ... OUTPUT DELETED.Url dos anexos da indicação
+    const { pool } = criarPoolFalso(recordsets);
+    const urls = await minimizarNoPool(pool, 42, { dataSaida: "2026-01-01", motivo: "Carta de Mudança" });
+    expect(urls).toEqual(["https://armazem/doc-1", "https://armazem/doc-2"]);
+    expect(storage.excluirDocumento).not.toHaveBeenCalled();
+    storage.excluirDocumento.mockImplementationOnce(async () => { throw new Error("o arquivo já não existe"); });
+    await excluirDocumentos(urls);
+    expect(storage.excluirDocumento.mock.calls.map((c) => c[0])).toEqual(["https://armazem/doc-1", "https://armazem/doc-2"]);
   });
 });

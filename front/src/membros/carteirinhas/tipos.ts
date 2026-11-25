@@ -95,7 +95,7 @@ export interface Resumo {
   readonly geral: boolean;
 }
 
-export type Situacao = "EM_COMUNHAO" | "CONGREGADO" | "DISCIPLINA" | "SAIU";
+export type Situacao = "EM_COMUNHAO" | "CONGREGADO" | "EM_ATUALIZACAO" | "DISCIPLINA" | "SAIU";
 export interface CarteirinhaDigital {
   readonly nome: string;
   readonly matricula: number;

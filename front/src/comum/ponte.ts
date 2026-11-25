@@ -42,6 +42,8 @@ export interface Ponte {
   abrirMembros(rota: unknown): void;
   /** no celular, fecha a gaveta do menu (☰) depois de escolher uma função */
   fecharGavetaCelular(): void;
+  /** abre uma aba da casca fora do módulo (só "orgaos": o aviso das cadeiras antigas da Geral). Opcional: a casca antiga não tem, e a tela avisa o caminho */
+  abrirAba?(aba: "orgaos"): void;
   /** o texto de "quem está vendo" no cabeçalho do módulo, no menu da esquerda */
   escopoDoModulo(texto: string): void;
 }

@@ -71,7 +71,40 @@ describe("as duas datas: a data de antes do congregado vira a data da conversão
     ["o congregado que veio por aclamação (a data fica como entrada): nada", { situacao: "CONGREGADO", formaAdmissao: "ACLAMACAO", dataAdmissao: "2018-07-07" }, null],
     ["quem já é membro (a data fica como entrada): nada", { situacao: "EM_COMUNHAO", formaAdmissao: null, dataAdmissao: "2015-01-01" }, null]
   ])("%s", (_nome, antes, data) => {
-    expect(regra(antes, batismo.entradaPeloBatismo(antes, "2026-10-03"))).toBe(data);
+    expect(regra(antes, batismo.entradaPeloBatismo(antes, "2026-10-03"), "2026-10-03", "2026-11-25")).toBe(data);
+  });
+  // menor 2 do portão da volta 7: a conversão (desde quando é congregado) vem antes do batismo e nunca no futuro (o dia de Brasília). A data errada da ficha
+  // não vira conversão: a regra devolve nada (o batismo segue; a data de antes fica na trilha)
+  test.each([
+    ["a data de antes DEPOIS do batismo (10/11, batismo em 03/10): nada", "2026-11-10", "2026-10-03", "2026-11-25", null],
+    ["a data de antes no futuro (2031): nada", "2031-01-01", "2026-10-03", "2026-11-25", null],
+    ["a turma lançada com data futura e a data de antes também no futuro (antes do batismo, mas depois de hoje): nada", "2026-12-01", "2026-12-20", "2026-11-25", null],
+    ["a data de antes de hoje mesmo, com o batismo depois: vale", "2026-11-25", "2026-12-20", "2026-11-25", "2026-11-25"],
+    ["a véspera do batismo: vale", "2026-10-02", "2026-10-03", "2026-11-25", "2026-10-02"],
+    ["sem a data do batismo, não há como conferir: nada", "2006-03-01", null, "2026-11-25", null]
+  ])("%s", (_nome, dataAntes, dataBatismo, hoje, esperado) => {
+    const antes = { situacao: "CONGREGADO", formaAdmissao: null, dataAdmissao: dataAntes };
+    expect(regra(antes, batismo.entradaPeloBatismo(antes, dataBatismo || "2026-10-03"), dataBatismo, hoje)).toBe(esperado);
+  });
+});
+
+// volta 9 (decisão de 25/11): a conversão lançada ou corrigida À MÃO segue a mesma regra — antes do batismo (no máximo no mesmo dia) e nunca no futuro
+describe("a conversão à mão: antes do batismo e nunca no futuro (a regra pura das rotas do marco)", () => {
+  const r = batismo.recusaDaConversao;
+  test.each([
+    ["depois do batismo: recusa e diz a data do batismo em dd/mm/aaaa", "2026-11-10", "2026-10-03", /antes do batismo.*03\/10\/2026/],
+    ["no futuro: recusa", "2026-11-26", null, /futuro/],
+    ["no futuro e depois do batismo: o futuro primeiro", "2031-01-01", "2026-10-03", /futuro/]
+  ])("%s", (_n, data, dataBatismo, msg) => {
+    expect(r(data, dataBatismo, "2026-11-25")).toMatch(msg);
+  });
+  test.each([
+    ["no mesmo dia do batismo: vale", "2026-10-03", "2026-10-03"],
+    ["antes do batismo: vale", "2006-03-01", "2026-10-03"],
+    ["sem batismo registrado: vale (só o futuro conta)", "2026-11-25", null],
+    ["sem data no marco: nada a conferir", null, "2026-10-03"]
+  ])("%s", (_n, data, dataBatismo) => {
+    expect(r(data, dataBatismo, "2026-11-25")).toBeNull();
   });
 });
 
@@ -165,6 +198,26 @@ describe("A2 e o menor 6: a efetivação da turma", () => {
     // a trilha do arrolamento (10) e a da carta (12) não levam conversão
     expect(mockTrilha[0].dadosDepois.conversao).toBeUndefined();
     expect(mockTrilha[2].dadosDepois.conversao).toBeUndefined();
+  });
+  test("menor 2 do portão v7: a data de antes depois do batismo, ou no futuro, não vira conversão (o batismo segue, a data fica na trilha)", async () => {
+    FICHAS[14] = { SituacaoMembro: "CONGREGADO", FormaAdmissao: null, DataAdmissao: "2026-11-10" };   // depois do batismo de 03/10/2026
+    FICHAS[15] = { SituacaoMembro: "CONGREGADO", FormaAdmissao: null, DataAdmissao: "2099-01-01" };   // antes da turma de 2099, mas no futuro
+    const antes = mockResponder;
+    let turma = "2026-10-03", candidato = 14;
+    mockResponder = (texto, inputs) => (/FROM TurmasBatismo/.test(texto) ? [{ DataBatismo: turma }]
+      : /FROM CandidatosBatismo/.test(texto) ? [{ CandidatoId: candidato, MembroId: candidato }] : antes(texto, inputs));
+    try {
+      expect(await batismo.efetivarTurma(pool, 5, 77)).toBe(1);
+      turma = "2099-12-20"; candidato = 15;
+      expect(await batismo.efetivarTurma(pool, 5, 77)).toBe(1);
+      expect(mockConsultas.filter((c) => /INSERT INTO MarcosMembro/.test(c.sql))).toHaveLength(0);
+      // a ficha vira membro mesmo assim, e a data de antes fica na trilha
+      expect(mockConsultas.filter((c) => /UPDATE MembroReferencia/.test(c.sql)).map((c) => c.inputs.id)).toEqual([14, 15]);
+      expect(mockTrilha.map((t) => t.dadosAntes.dataAdmissao)).toEqual(["2026-11-10", "2099-01-01"]);
+      expect(mockTrilha.every((t) => t.dadosDepois.conversao === undefined)).toBe(true);
+    } finally {
+      delete FICHAS[14]; delete FICHAS[15];
+    }
   });
   test("menor 4: quem já era membro e é batizado fica com a data de entrada; a trilha não diz que o batismo o admitiu", async () => {
     FICHAS[13] = { SituacaoMembro: "EM_COMUNHAO", FormaAdmissao: null, DataAdmissao: "2015-01-01" };

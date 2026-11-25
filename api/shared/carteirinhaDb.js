@@ -460,7 +460,9 @@ async function minha(pool, membroId, { urlFoto, svgDoQr }) {
   return {
     // o cargo só de quem está em comunhão (a mesma regra da conferência): o congregado, quem está em disciplina e quem saiu não mostram cargo
     nome: p.nome, matricula: p.membroId, tipo: p.tipo, tipoRotulo: regra.ROTULO_PUBLICO[p.tipo], cargo: sit.cargo || null,
-    funcao: p.funcao, congregacao: p.congregacao, area: p.area, membroDesde: regra.mesAno(p.dataAdmissao), situacao: sit.situacao, exerceCargo: sit.exerceCargo ?? null,
+    // volta 9: a ficha em atualização (arrolamento) não diz "membro desde" (a data que veio do sistema pago tem sentido desconhecido)
+    funcao: p.funcao, congregacao: p.congregacao, area: p.area, membroDesde: sit.situacao === "EM_ATUALIZACAO" ? null : regra.mesAno(p.dataAdmissao),
+    situacao: sit.situacao, exerceCargo: sit.exerceCargo ?? null,
     foto, qrSvg: svgDoQr(urlConferencia(codigo)), url: urlConferencia(codigo)
   };
 }

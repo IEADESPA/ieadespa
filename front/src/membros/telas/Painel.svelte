@@ -34,7 +34,7 @@
   let arrolErro = $state("");
   let todas = $state(false);
   // os avisos se refazem sozinhos quando os contadores do menu chegam ou mudam
-  const avisos = $derived(resumo ? montarAvisos(resumo, chegando, alerta, contadores, sessao.geral, cuidaDoCadastro() ? abrirArrolamento : null) : []);
+  const avisos = $derived(resumo ? montarAvisos(resumo, chegando, alerta, contadores, sessao.geral, cuidaDoCadastro() ? abrirArrolamento : null, abrirOrgaos) : []);
   let soMeu = $state(true);
 
   // ---- o gráfico grande: o que mostrar e como agrupar ficam guardados neste aparelho ----
@@ -121,6 +121,12 @@
   function abrirArrolamento() {
     if (vistaLocal && idDaCongregacao !== null) { ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao }); return; }
     document.getElementById("arrolamento-por-lugar")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  // volta 9: o aviso das cadeiras antigas abre Estrutura -> Órgãos (a casca); sem esse caminho na casca, a tela diz onde ir
+  function abrirOrgaos() {
+    const p = ponte();
+    if (p.abrirAba) p.abrirAba("orgaos");
+    else p.avisar("Encerre em Estrutura → Órgãos, com o motivo.");
   }
   $effect(() => { void congregacaoId; void carregar(); });
 

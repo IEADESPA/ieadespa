@@ -22,6 +22,18 @@ describe("quem pode ter a física impressa", () => {
     expect(c.podeImprimir(pessoa({ situacaoMembro: "CONGREGADO" })).pode).toBe(true);
     expect(c.podeImprimir(pessoa({ status: "LICENÇA" })).pode).toBe(true);
   });
+  // menor 4 do portão da volta 7: quem está em arrolamento (a ficha veio do sistema pago e ainda está para completar) não é "em disciplina". Se o arrolado
+  // pode ter carteirinha não foi decidido: por ora não sai, com o motivo certo
+  test("em arrolamento: não sai, e o motivo é a ficha a completar (nunca 'em disciplina')", () => {
+    const r = c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO" }));
+    expect(r.pode).toBe(false);
+    expect(r.mensagem).toMatch(/ficha ainda está para completar/);
+    expect(r.mensagem).not.toMatch(/disciplina/i);
+    // quem está em arrolamento E com a marca da disciplina: a disciplina vale primeiro
+    expect(c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO", sobDisciplina: true })).mensagem).toMatch(/Em disciplina/);
+    // fora do rol continua "só quem está no rol"
+    expect(c.podeImprimir(pessoa({ situacaoMembro: "ARROLAMENTO", status: "DESLIGADO" })).mensagem).toMatch(/rol/);
+  });
   test("fora do rol ou em disciplina: não", () => {
     for (const p of [pessoa({ status: "DESLIGADO" }), pessoa({ status: "FALECIDO" }), pessoa({ excluido: true }), pessoa({ sobDisciplina: true }),
       pessoa({ situacaoMembro: "SEM_COMUNHAO" }), pessoa({ foraDaComunhao: true }), null]) {
@@ -50,6 +62,14 @@ describe("a página de conferência (o que o QR abre)", () => {
     expect(c.situacaoConferencia(pessoa({ cargo: "DIACONO", statusMatricula: "ATIVA" })).exerceCargo).toBe(true);
     expect(c.situacaoConferencia(pessoa({ cargo: "DIACONO", statusMatricula: "INATIVA" })).exerceCargo).toBe(false);
     expect(c.situacaoConferencia(pessoa({ cargo: "MEMBRO" })).exerceCargo).toBeNull();
+  });
+  // volta 9 (decisão de 25/11): quem está em arrolamento não está em disciplina — a página do QR e a "Minha carteirinha" mostram uma situação neutra, só com o
+  // nome e a foto (nem congregação, nem cargo, nem "membro desde"); a disciplina de verdade continua dizendo disciplina
+  test("em arrolamento: a situação neutra (ficha em atualização), sem nada além do nome e da foto", () => {
+    const r = c.situacaoConferencia(pessoa({ situacaoMembro: "ARROLAMENTO", cargo: "DIACONO", funcao: "Dirigente" }));
+    expect(r).toEqual({ situacao: "EM_ATUALIZACAO", nome: "Ana Beatriz Moreira", foto: true });
+    expect(c.situacaoConferencia(pessoa({ situacaoMembro: "ARROLAMENTO", sobDisciplina: true })).situacao).toBe("DISCIPLINA");
+    expect(c.situacaoConferencia(pessoa({ situacaoMembro: "ARROLAMENTO", status: "DESLIGADO" }))).toEqual({ situacao: "SAIU", nome: "Ana Beatriz Moreira" });
   });
   test("congregado, disciplina e quem saiu: só o necessário; quem saiu nem foto nem congregação", () => {
     expect(c.situacaoConferencia(pessoa({ situacaoMembro: "CONGREGADO" }))).toMatchObject({ situacao: "CONGREGADO", foto: true, congregacao: "Vila Nova" });

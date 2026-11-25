@@ -27,8 +27,20 @@ export async function lerAlerta(geral: boolean): Promise<AlertaAssembleia | null
 }
 
 // abrirArrolamento: o que o aviso do 4º grupo abre (rodada 28: a congregação vai direto para "completar, uma por uma"; a área e a Geral, para a tabela)
-export function montarAvisos(resumo: ResumoPainel, chegando: readonly Transferencia[], alerta: AlertaAssembleia | null, c: Contadores, geral: boolean, abrirArrolamento: (() => void) | null = null): AvisoMembros[] {
+// abrirOrgaos: o que o aviso das cadeiras antigas abre (Estrutura -> Órgãos, onde a Geral encerra com o motivo)
+export function montarAvisos(resumo: ResumoPainel, chegando: readonly Transferencia[], alerta: AlertaAssembleia | null, c: Contadores, geral: boolean, abrirArrolamento: (() => void) | null = null,
+  abrirOrgaos: () => void = () => {}): AvisoMembros[] {
   const lista: AvisoMembros[] = [];
+  const fora = geral ? resumo.cadeirasForaDoRol : undefined;
+  if (fora && fora.cadeiras + fora.vagas > 0) {
+    // volta 9: as cadeiras e as vagas de comissão de antes da regra (o congregado e o arrolamento não têm cadeira): nada se apaga, a Geral encerra cada uma
+    const partes = [fora.cadeiras ? `${numero(fora.cadeiras)} ${plural(fora.cadeiras, "cadeira", "cadeiras")}` : "",
+      fora.vagas ? `${numero(fora.vagas)} ${plural(fora.vagas, "vaga", "vagas")} de comissão` : ""].filter(Boolean);
+    const resto = fora.cadeiras + fora.vagas - fora.itens.length;
+    const nomes = fora.itens.map((i) => `${i.nome} (${i.onde})`).join(" · ") + (resto > 0 ? ` · e mais ${resto}` : "");
+    lista.push({ chave: "cadeiras", icone: "alerta", titulo: `${partes.join(" e ")} de quem ainda não é membro: encerrar com o motivo`, sub: nomes,
+      tom: "primeiro", meu: true, abrir: abrirOrgaos });
+  }
   if (resumo.arrolamento > 0 && abrirArrolamento) {
     lista.push({ chave: "arrol", icone: "alerta", titulo: `${numero(resumo.arrolamento)} ${plural(resumo.arrolamento, "ficha", "fichas")} com o arrolamento a completar`, sub: "sem voto até completar",
       tom: "afazer", meu: true, abrir: abrirArrolamento });

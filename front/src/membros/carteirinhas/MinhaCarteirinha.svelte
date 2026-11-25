@@ -19,7 +19,7 @@
   }
   void ler();
 
-  const SIT = { EM_COMUNHAO: { rotulo: "Em comunhão", tom: "ok" }, CONGREGADO: { rotulo: "Congregado", tom: "info" }, DISCIPLINA: { rotulo: "Em disciplina", tom: "pend" }, SAIU: { rotulo: "Não é mais membro", tom: "erro" } } as const;
+  const SIT = { EM_COMUNHAO: { rotulo: "Em comunhão", tom: "ok" }, CONGREGADO: { rotulo: "Congregado", tom: "info" }, EM_ATUALIZACAO: { rotulo: "Ficha em atualização pela secretaria", tom: "info" }, DISCIPLINA: { rotulo: "Em disciplina", tom: "pend" }, SAIU: { rotulo: "Não é mais membro", tom: "erro" } } as const;
   const qr = $derived(c ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(c.qrSvg)}` : "");
   const foto = $derived(c?.foto && /^https:\/\//.test(c.foto) ? c.foto : null);
   const iniciais = $derived((c?.nome ?? "").trim().split(/\s+/).filter(Boolean).map((p, i, a) => (i === 0 || i === a.length - 1 ? p[0] : "")).join("").toUpperCase());

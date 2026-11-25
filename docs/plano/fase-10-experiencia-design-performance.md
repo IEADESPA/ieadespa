@@ -1158,6 +1158,17 @@ Depois da revisão do Financeiro até `4c06d58`:
     resto, a Secretaria Geral manda o arquivo de novo (o sistema não guarda CPF nem contato).
   - Os textos construídos sem desenho ("As linhas que faltaram", o aviso "faltam N dias" e "Descartar a importação")
     ele aprova vendo na homologação.
+  - **O completar exige a data** (sem ela, a ficha continua em arrolamento). A linha da importação que deu erro ao
+    gravar fica fora da importação do resto: a secretaria cadastra à mão.
+- **As respostas dele à volta 6 (25/11):**
+  - **As duas datas:** o batismo é quando a pessoa vira membro, e a data de entrada (admissão, a que conta os 90 dias)
+    é a do batismo. A ficha guarda também a **data da conversão** (desde quando é congregado), quando houver: ela
+    serve só para a caminhada da pessoa (a ficha 360) e não conta para o rol nem para o voto.
+  - **O congregado não tem cadeira em órgão nenhum** (conselho, comissão, Câmara, diretoria): o sistema recusa e
+    explica, como no cargo. Por isso ele nem aparece na lista do órgão nem na da assembleia; não há marca "não conta".
+  - **O congregado pode servir:** coopera nos serviços (ministério de menores, setor técnico, cuidado pastoral,
+    expansão) e pode ter carteirinha, com as travas que cada serviço já tem. Só não vota, não conta em reunião e não
+    tem cargo nem cadeira.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

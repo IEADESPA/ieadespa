@@ -95,6 +95,14 @@ describe("A1: quem está em arrolamento e o congregado não votam nem contam em 
     expect(lista.consultas[0]).not.toMatch(/ISNULL\(m\.SituacaoMembro|COALESCE\(m\.SituacaoMembro/);
   });
 
+  test("25/11 (volta 6): a composição da CLI (a tela e quem a reaproveita) não traz o arrolamento nem o congregado; o sem comunhão e o sob disciplina continuam nela", async () => {
+    const afmDb = require("../afmDb");
+    jest.spyOn(afmDb, "idsComCredencialEmDia").mockResolvedValue(new Set(FICHAS.map((f) => f.membroId)));
+    jest.spyOn(afmDb, "idsExcluidosCLI").mockResolvedValue(new Set());
+    const ids = [...new Set((await universo.composicaoCLI(pool, 1)).map((m) => m.membroId))].sort();
+    expect(ids).toEqual([2, 3, 5, 6]);
+  });
+
   test("o órgão sem cadeiras cadastradas (todo mundo ATIVO): saem o sem comunhão, o arrolamento, o congregado e quem está sob disciplina", async () => {
     const semCadeiras = { request: () => ({ input() { return this; }, query: async (t) => ({ recordset: /FROM Assentos/.test(t) ? [] : FICHAS }) }) };
     const ids = (await universo.universoDoOrgao(semCadeiras, { orgaoId: 8, sigla: "CEI" })).map((m) => m.membroId).sort();

@@ -138,7 +138,10 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   // v8.1 — excluído por 3 faltas seguidas (Estatuto Art. 27 §1º) sai da composição por QUALQUER caminho, sem perder cargo, cadeira ou acesso (essas providências são
   // humanas — ver shared/afm.js, providenciasDaExclusao). Volta com a readmissão (Regimento Art. 149 §1º) ou se a exclusão for anulada.
   const excluidos = await afmDb.idsExcluidosCLI(pool);
-  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo).filter(m => !excluidos.has(Number(m.membroId)));
+  // FASE 10 (decisão dele de 25/11/2026, volta 6): o congregado e quem está em arrolamento não têm cadeira em órgão nenhum, por isso nem aparecem na
+  // composição (a tela, o universo e quem a reaproveita), por qualquer caminho; sem marca "não conta". O sem comunhão continua (a tela diz por que não conta).
+  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo)
+    .filter(m => !excluidos.has(Number(m.membroId)) && m.situacaoMembro !== "CONGREGADO" && m.situacaoMembro !== "ARROLAMENTO");
 }
 
 // Art. 151 §2º — Colégio de Dirigentes Congregacionais: Pastores de Área

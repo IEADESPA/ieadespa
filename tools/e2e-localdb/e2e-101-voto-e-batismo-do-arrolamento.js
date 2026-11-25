@@ -48,6 +48,28 @@ async function principal() {
   ok(!doOrgao.has(990104), "congregado com cadeira no órgão: fora da presença e do quórum (25/11: o congregado fica fora dos órgãos)", [...doOrgao].filter((x) => x >= 990100 && x < 990200));
   ok(doOrgao.has(990103), "em comunhão com cadeira: continua no órgão");
 
+  console.log("== volta 6: o congregado e o arrolamento não têm cadeira (as rotas recusam e explicam) ==");
+  // as cadeiras de cima entraram por INSERT direto: fazem o papel da cadeira antiga (de antes da regra), que a leitura já tira do órgão
+  const hAssentos = require(L.path.join(L.API, "GestaoAssentos/index.js"));
+  const hComissoes = require(L.path.join(L.API, "GestaoComissoes/index.js"));
+  const geral = L.GERAL(990103, ["pessoas"]);
+  const cadeirasAntes = await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId IN (990101, 990104)");
+  const pedirCadeira = (membroId) => L.chamar(hAssentos, { metodo: "POST", token: geral, corpo: { membroId, orgaoId: orgao.OrgaoId, tipoAssento: "FUNCAO", cargoOuFuncao: "Conselheiro E2E101" } });
+  const rCong = await pedirCadeira(990104), rArrol = await pedirCadeira(990101);
+  ok(rCong.body && rCong.body.sucesso === false && /congregado ainda não é membro: não tem cadeira em órgão nenhum/.test(rCong.body.mensagem || ""),
+    "a cadeira do congregado: recusada, com a explicação", rCong.body);
+  ok(rArrol.body && rArrol.body.sucesso === false && /arrolamento a completar/.test(rArrol.body.mensagem || ""), "a cadeira de quem está em arrolamento: recusada, com a explicação", rArrol.body);
+  const pedirComissao = async (membroId) => {
+    const ctx = { bindingData: { sigla: "ccj" }, log: { error() { }, info() { }, warn() { }, verbose() { } } };
+    await hComissoes(ctx, { method: "POST", query: {}, body: { membroId }, headers: { "x-auth-token": geral } });
+    return ctx.res || { body: null };
+  };
+  const cCong = await pedirComissao(990104), cArrol = await pedirComissao(990101);
+  ok(cCong.body && cCong.body.sucesso === false && /congregado ainda não é membro/.test(cCong.body.mensagem || "")
+    && cArrol.body && cArrol.body.sucesso === false && /arrolamento a completar/.test(cArrol.body.mensagem || ""), "a vaga na comissão (CCJ): recusada aos dois, com a explicação", [cCong.body, cArrol.body]);
+  ok((await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId IN (990101, 990104)")) === cadeirasAntes
+    && (await escalar("SELECT COUNT(*) FROM ComissaoMembros WHERE MembroId IN (990101, 990104)")) === 0, "nada foi gravado (nem cadeira, nem vaga na comissão)");
+
   console.log("== A1: a LISTA_CUSTOM ==");
   const enq = await L.escalar(`INSERT INTO Enquetes (Titulo, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, Status, CriadoPor)
     OUTPUT INSERTED.EnqueteId VALUES (N'Lista de mentira E2E101', 'SECRETA', 'LISTA_CUSTOM', 0, 'MAIORIA_SIMPLES', 'ABERTA', 990103)`);

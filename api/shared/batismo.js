@@ -137,7 +137,8 @@ function conversaoPeloBatismo(antes, entrada) {
   if (a.situacao !== "CONGREGADO" || !a.dataAdmissao) return null;
   return entrada && entrada.dataAdmissao !== a.dataAdmissao ? a.dataAdmissao : null;
 }
-const DESCRICAO_CONVERSAO = "Congregado desde esta data (a data de entrada de antes do batismo, guardada pelo batismo como a conversão).";
+// o texto vai para a ficha 360 ("data · texto"): curto, para a pessoa ler
+const DESCRICAO_CONVERSAO = "Congregado desde esta data.";
 
 // Efetivação (Art. 7º, II) — ao REALIZAR a turma, todo candidato já APROVADO nela vira Membro em Comunhão automaticamente: DataBatismo e FormaAdmissao vêm do
 // próprio fluxo, "sem digitação posterior" (mesmo texto da versão), e a data de entrada pela regra acima. Quem não foi aprovado a tempo NÃO é efetivado — fica

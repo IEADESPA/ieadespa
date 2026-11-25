@@ -1,6 +1,7 @@
 // COMPLETAR O ARROLAMENTO (FASE 10, Membros, rodada 28 aprovada em 23/11/2026): as regras da TELA, sem nenhum import (o teste carrega este arquivo direto:
 // api/shared/__tests__/arrolamentoTela.test.js). Quem veio do sistema pago entra "arrolamento a completar", sem voto; a secretaria escolhe a situação, como
-// e quando a pessoa entrou e o cargo, só se tiver. A tela confere antes de mandar para dizer o erro no campo; o servidor confere tudo de novo
+// e quando a pessoa entrou; a função eclesiástica só aparece para ler (regra dele de 24/11/2026: só a Câmara de liderança e a academia a mudam). A tela
+// confere antes de mandar para dizer o erro no campo; o servidor confere tudo de novo
 // (api/shared/arrolamento.js) e é ele quem decide.
 
 export type Situacao = "EM_COMUNHAO" | "CONGREGADO" | "SEM_COMUNHAO";
@@ -10,8 +11,6 @@ export interface FormCompletar {
   readonly situacao: Situacao;
   readonly formaAdmissao: string;
   readonly dataAdmissao: string;
-  readonly cargo: string;
-  readonly congregacaoId: number | null;
 }
 /** o mínimo da ficha que a regra precisa (GET /api/arrolamento/ficha) */
 export interface FichaBase {
@@ -26,16 +25,15 @@ export interface CorpoCompletar {
   situacao: Situacao;
   formaAdmissao?: string;
   dataAdmissao?: string;
-  cargoMinisterial?: string;
-  congregacaoId?: number;
 }
-export type CampoComErro = "situacao" | "forma" | "data" | "congregacao";
+export type CampoComErro = "situacao" | "forma" | "data";
 
 /** vieram do sistema pago, já completadas e as que faltam */
 export interface Andamento { readonly vieram: number; readonly completadas: number; readonly faltam: number }
 export interface LugarArrolamento extends Andamento { readonly id: number | null; readonly nome: string; readonly area?: string | null }
 export interface ProximaFicha { readonly matricula: number; readonly nome: string; readonly sexo: string | null; readonly departamento: string | null }
-/** GET /api/arrolamento: o andamento, o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e as que vieram sem congregação */
+/** GET /api/arrolamento: o andamento, o dia em que vieram, cada congregação do escopo, as 4 próximas e, para a Geral, cada área e quantas estão sem
+ *  congregação (só as de antes da regra G3, de 24/11/2026: não se completam por aqui) */
 export interface PainelArrolamento {
   readonly andamento: Andamento;
   readonly veioEm: string | null;
@@ -56,6 +54,8 @@ export interface FichaArrolamento {
   readonly departamento: string | null;
   readonly formaAdmissao: string | null;
   readonly dataAdmissao: string | null;
+  /** a função eclesiástica que a ficha já tem (o nome), só para ler; null = nenhuma */
+  readonly funcao?: string | null;
 }
 export interface RespostaFichaArrolamento {
   readonly ficha: FichaArrolamento | null;
@@ -97,7 +97,8 @@ export function lerRespostaFicha(x: unknown): RespostaFichaArrolamento {
 export type Envio = { readonly ok: true; readonly corpo: CorpoCompletar } | { readonly ok: false; readonly campo: CampoComErro; readonly mensagem: string };
 
 export const SITUACOES: readonly { readonly valor: Situacao; readonly rotulo: string; readonly sub: string }[] = [
-  { valor: "EM_COMUNHAO", rotulo: "Em comunhão", sub: "membro: ganha o voto" },
+  // a regra de verdade da Assembleia (estatuto.js: 18 anos e 90 dias da entrada), sem prometer o voto na hora (menor 8 da revisão de 24/11/2026)
+  { valor: "EM_COMUNHAO", rotulo: "Em comunhão", sub: "membro: vota com 18 anos e 90 dias de entrada" },
   { valor: "CONGREGADO", rotulo: "Congregado", sub: "ainda não membro: não vota" },
   { valor: "SEM_COMUNHAO", rotulo: "Sem comunhão", sub: "em disciplina ou afastado" }
 ];
@@ -124,17 +125,15 @@ const soDia = (v: string | null | undefined): string => (typeof v === "string" ?
 export function formInicial(f: FichaBase): FormCompletar {
   const forma = FORMAS.some((x) => x.valor === f.formaAdmissao) ? String(f.formaAdmissao) : "";
   const data = soDia(f.dataAdmissao);
-  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "", cargo: "", congregacaoId: null };
+  return { situacao: "EM_COMUNHAO", formaAdmissao: forma, dataAdmissao: dataValida(data) ? data : "" };
 }
 
-/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma, sem data e sem cargo; a congregação só na ficha sem ela. */
+/** o pedido de completar, ou o campo com o erro. `hoje` = "AAAA-MM-DD". O congregado vai sem forma e sem data. A função eclesiástica nunca vai: só a
+ *  Câmara de liderança e a academia a mudam (regra dele de 24/11/2026). Nem a congregação: toda ficha do arrolamento tem a sua e ela muda pela
+ *  transferência (G3, decisão dele de 24/11/2026). */
 export function montarEnvio(form: FormCompletar, ficha: FichaBase, hoje: string): Envio {
   if (!SITUACOES.some((s) => s.valor === form.situacao)) return { ok: false, campo: "situacao", mensagem: "Escolha a situação: em comunhão, congregado ou sem comunhão." };
   const corpo: CorpoCompletar = { matricula: ficha.matricula, situacao: form.situacao };
-  if (ficha.congregacaoId === null) {
-    if (!form.congregacaoId) return { ok: false, campo: "congregacao", mensagem: "Escolha a congregação desta pessoa." };
-    corpo.congregacaoId = form.congregacaoId;
-  }
   if (form.situacao !== "CONGREGADO") {
     if (!FORMAS.some((x) => x.valor === form.formaAdmissao)) return { ok: false, campo: "forma", mensagem: "Escolha como a pessoa entrou." };
     const data = form.dataAdmissao;
@@ -144,7 +143,6 @@ export function montarEnvio(form: FormCompletar, ficha: FichaBase, hoje: string)
     if (nasc && data < nasc) return { ok: false, campo: "data", mensagem: "A data de entrada não pode ser antes do nascimento." };
     corpo.formaAdmissao = form.formaAdmissao;
     corpo.dataAdmissao = data;
-    if (form.cargo) corpo.cargoMinisterial = form.cargo;
   }
   return { ok: true, corpo };
 }
@@ -157,8 +155,11 @@ export function pctAndamento(completadas: number, vieram: number): number {
 }
 
 const mil = (n: number): string => n.toLocaleString("pt-BR");
+/** a ficha sem congregação que ficou de antes da regra G3 (24/11/2026: sem congregação não há importação). Ninguém escolhe a congregação aqui: ela não
+ *  se completa pelo arrolamento (o servidor recusa) */
 export function fraseSemCongregacao(n: number): string {
-  return n === 1 ? "1 ficha veio sem congregação: a Secretaria Geral escolhe a congregação." : `${mil(n)} fichas vieram sem congregação: a Secretaria Geral escolhe a congregação.`;
+  return n === 1 ? "1 ficha está sem congregação e não se completa pelo arrolamento: avise o suporte."
+    : `${mil(n)} fichas estão sem congregação e não se completam pelo arrolamento: avise o suporte.`;
 }
 /** "+ 6 congregações da Área 2" (as que não cabem na tabela) */
 export function fraseResto(n: number, area: string | null): string {
@@ -193,7 +194,8 @@ export function depoisDe(s: Situacao): { readonly rotulo: string; readonly tom: 
 export function notaDaData(s: Situacao, dataAdmissao: string): string {
   if (s !== "EM_COMUNHAO") return "";
   const ano = dataValida(dataAdmissao) ? dataAdmissao.slice(0, 4) : "";
-  return `A data de entrada é a de verdade${ano ? ` (${ano})` : ""}: com ela, o voto vale na hora.`;
+  // a regra de verdade da Assembleia (estatuto.js, calcularCapacidadeEleitoral: 18 anos, 90 dias da entrada, as duas datas na ficha), sem prometer o voto na hora
+  return `A data de entrada é a de verdade${ano ? ` (${ano})` : ""}. Na Assembleia, vota quem tem 18 anos e 90 dias de entrada, com a data de nascimento na ficha.`;
 }
 
 // a cor do círculo de iniciais pelo departamento (as do desenho r28); o nome vem do catálogo, então a regra procura pelo sentido (como departamento.ts)

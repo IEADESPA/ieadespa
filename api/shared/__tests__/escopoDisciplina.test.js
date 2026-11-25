@@ -1254,7 +1254,7 @@ describe("GestaoTurmasBatismo", () => {
     quando(/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, (i) => (CONGREGACOES[i.id] ? [{ Nome: CONGREGACOES[i.id] }] : []));
     quando(/INSERT INTO TurmasBatismo/, [{ TurmaId: 50 }]);
     quando(/UPDATE TurmasBatismo SET Status = /, [], afetadasMudancaTurma);
-    quando(/SELECT DataBatismo FROM TurmasBatismo/, [{ DataBatismo: "2026-05-10" }]);
+    quando(/AS DataBatismo FROM TurmasBatismo/, [{ DataBatismo: "2026-05-10" }]);
     quando(/FROM CandidatosBatismo WHERE TurmaId = @turmaId AND Status = 'APROVADO'/, [{ CandidatoId: 101, MembroId: 40 }]);
   };
   const NAO_ENCONTRADA = { status: 404, body: { sucesso: false, mensagem: "Turma não encontrada." } };

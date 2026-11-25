@@ -159,14 +159,17 @@ BASE=cenario-185 bash rodar.sh roteiro e2e-85-ficha-cpf-matricula.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-93-juntar-fichas.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-95-sobras-membros.js
 BASE=cenario-185 bash rodar.sh roteiro e2e-51-escada-fluxos.js
-BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js
-BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js
 # FASE 10, Membros, rodada 28: completar o arrolamento de quem veio do sistema pago (sem migração; a situação ARROLAMENTO e a pendência são da 185)
 BASE=cenario-185 bash rodar.sh roteiro e2e-98-arrolamento.js
-# a saida do IMPORTANDO (revisao de 23/11/2026): a linha que o banco recusa sempre fica de fora como problema; 5 seguidas param sem ninguem de fora
-BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js
-# a guarda dos dados da importacao (respostas dele de 23/11/2026 e decisoes de 24/11; migracao 186, as duas politicas de retencao): a previa sem confirmar sai em
-# 7 dias (e o "Descartar" na hora); no fim, as linhas ficam so com o necessario (a de fora, nome e motivo); a lista dos de fora, 90 dias depois do fim
+# a guarda dos dados da importacao (migracao 186) e a revisao de 24/11/2026: quem esta em arrolamento nao vota nas enquetes nem no tema (A1); o batismo (A2)
 bash rodar.sh preparar-186
-BASE=cenario-186 bash rodar.sh roteiro e2e-100-importacao-guarda.js
+BASE=cenario-186 bash rodar.sh roteiro e2e-101-voto-e-batismo-do-arrolamento.js
+# os roteiros da importacao (G2, decisao dele de 24/11/2026; migracao 187, o ultimo lote e a importacao do resto) rodam na cenario-187: a importacao (96), a trava
+# das matriculas (97), a linha que o banco recusa (99), a guarda dos dados (100) e a parada com o prazo do ultimo lote (102)
+bash rodar.sh preparar-187
+BASE=cenario-187 bash rodar.sh roteiro e2e-96-importacao-membros.js
+BASE=cenario-187 bash rodar.sh roteiro e2e-97-trava-matriculas.js
+BASE=cenario-187 bash rodar.sh roteiro e2e-99-importacao-recusada.js
+BASE=cenario-187 bash rodar.sh roteiro e2e-100-importacao-guarda.js
+BASE=cenario-187 bash rodar.sh roteiro e2e-102-importacao-parada.js
 echo TUDO-PRONTO

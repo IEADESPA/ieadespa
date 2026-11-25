@@ -54,6 +54,8 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     // (PIN), 33 e 34 = outros membros aptos, 14 = Secretário Geral (gestão)
     sessoes: { geral: { membroId: 13, gestao: true }, geral2: { membroId: 14, gestao: true }, semgestao: { membroId: 10, gestao: false }, pin: { membroId: 31 }, pin2: { membroId: 32 }, pin3: { membroId: 33 } },
     aptos: new Set([13, 14, 31, 33, 34]),
+    // o motivo de verdade de quem não participa (menor 7 da revisão do portão de 24/11/2026: a ficha em arrolamento, o congregado); null = o servidor de antes, que não manda
+    naoApto: null,
     membros: {
       13: { nome: A("nomePresidente", "Presidente Marcos"), congregacao: A("congCentral", "Central") }, 14: { nome: A("nomeSecretario", "Secretário Jonas"), congregacao: null },
       31: { nome: A("nomeAna", "Ana Sugestora Silva"), congregacao: A("congVila", "Vila Nova") }, 33: { nome: A("nomeBento", "Bento Artista"), congregacao: A("congCentral", "Central") },
@@ -215,7 +217,7 @@ function criarServidor({ ataque = true, hoje = "2026-11-05", comCiclo = true, co
     if (!c) c = cicloDoAno(anoAtual);
     materializar(c);
     const vigente = S.temas.find(t => t.ano === anoAtual);
-    const base = { sucesso: true, hoje: S.hoje, apto: S.aptos.has(membroId), maxSugestoes: iv.MAX_SUGESTOES, maxArtes: iv.MAX_ARTES, maxTexto: iv.MAX_TEXTO, maxImagemBytes: iv.MAX_IMAGEM_BYTES,
+    const base = { sucesso: true, hoje: S.hoje, apto: S.aptos.has(membroId), ...(S.naoApto !== null && !S.aptos.has(membroId) ? { naoApto: S.naoApto } : {}), maxSugestoes: iv.MAX_SUGESTOES, maxArtes: iv.MAX_ARTES, maxTexto: iv.MAX_TEXTO, maxImagemBytes: iv.MAX_IMAGEM_BYTES,
       identidadeVigente: vigente ? { ano: vigente.ano, tema: vigente.tema } : null, proximoAno: proximo, calendarioProximo: iv.calendario(proximo) };
     if (!c) return { ...base, ciclo: null };
     const f = formatarCiclo(c);
@@ -751,7 +753,7 @@ function contratoComOServidor() {
   if (!/podeRetirar: a\.Status === "ENVIADA"/.test(DB_SRC) || !/a\.podeRetirar === true/.test(modulo)) faltam.push("a arte do membro devia vir com podeRetirar e a tela só mostrar Retirar com ele");
   if (!/NAO_VOTADA/.test(DB_SRC) || !/NAO_VOTADA/.test(modulo) || !/\["DESEMPATE", "DIRETORIA"\]\.includes\(c\.TemaDefinidoPor\)/.test(DB_SRC)) faltam.push("o tema sem votação (NAO_VOTADA, DIRETORIA, com o motivo) devia existir no servidor e na tela");
   // os campos que a tela lê, na forma que o banco devolve
-  const campos = ["identidadeVigente", "proximoAno", "calendarioProximo", "apto", "maxSugestoes", "maxTexto", "maxArtes", "maxImagemBytes", "minhasSugestoes", "textoNaVotacao", "situacao",
+  const campos = ["identidadeVigente", "proximoAno", "calendarioProximo", "apto", "naoApto", "maxSugestoes", "maxTexto", "maxArtes", "maxImagemBytes", "minhasSugestoes", "textoNaVotacao", "situacao",
     "sugestaoId", "votacao", "aberta", "jaVotou", "votouEm", "enqueteId", "perguntaId", "opcaoId", "votos", "participantes", "cores", "minhasArtes", "arteId", "temImagem", "motivoRecusa",
     "enviadaEm", "resultado", "dataCulto", "ocasiaoRotulo", "votosVencedor", "presentes", "podeAbrir", "motivoNaoAbre", "ciclos", "cicloId", "anoAlvo", "fase", "calendario", "abertoEm",
     "abertoPor", "votacaoAutomatica", "apuracao", "tema", "desempate", "motivo", "resultadoPendente", "sugestoes", "retiradas", "textoFinal", "parecido", "criterio", "rotulo", "observacao",

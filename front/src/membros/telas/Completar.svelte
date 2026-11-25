@@ -1,6 +1,8 @@
-<!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação, como e quando a pessoa entrou e o cargo, só se tiver; ao
-     completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, ganha o voto. Depois, vai direto para a próxima. A congregação, a área e a Geral
-     completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento); a ficha que veio sem congregação, só a Geral, escolhendo a congregação.
+<!-- COMPLETAR O ARROLAMENTO (rodada 28, aprovada em 23/11/2026): a secretaria escolhe a situação e como e quando a pessoa entrou (a função eclesiástica só
+     aparece para ler: regra dele de 24/11/2026, só a Câmara de liderança e a academia a mudam); ao
+     completar, a pessoa sai do grupo "arrolamento a completar" e, em comunhão, vota com 18 anos e 90 dias de entrada. Depois, vai direto para a próxima. A congregação, a área e a Geral
+     completam, cada uma só no seu escopo (o servidor confere: api/Arrolamento). Toda ficha do arrolamento tem congregação e ela não muda aqui (G3, decisão
+     dele de 24/11/2026: sem congregação não há importação; a de antes da regra volta com o porquê, sem o formulário).
      As regras da tela em ../arrolamento.ts; o servidor confere tudo de novo. -->
 <script lang="ts">
   import { pedir, qs, avisarFalha } from "../../comum/api";
@@ -14,32 +16,25 @@
   import Chip from "../../comum/Chip.svelte";
   import Estado from "../../comum/Estado.svelte";
   import Avatar from "../../comum/Avatar.svelte";
-  import { ir, voltar, congregacoesDestino } from "../estado.svelte";
-  import type { Congregacao, RespostaFichaArrolamento } from "../tipos";
+  import { ir, voltar } from "../estado.svelte";
+  import type { RespostaFichaArrolamento } from "../tipos";
   import { FORMAS, SITUACOES, corDoDepartamento, depoisDe, diaPorExtenso, formInicial, hojeIso, lerRespostaFicha, montarEnvio, notaDaData, type CampoComErro, type FormCompletar, type Situacao } from "../arrolamento";
 
-  interface Props { matricula: number | null; congregacaoId: number | null; semCongregacao: boolean; celular: boolean; onnome: (n: string) => void }
-  let { matricula, congregacaoId, semCongregacao, celular, onnome }: Props = $props();
+  interface Props { matricula: number | null; congregacaoId: number | null; celular: boolean; onnome: (n: string) => void }
+  let { matricula, congregacaoId, celular, onnome }: Props = $props();
 
   const hoje = hojeIso();
   let resp = $state<RespostaFichaArrolamento | null>(null);
   let erro = $state("");
-  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "", cargo: "", congregacaoId: null });
+  let form = $state<FormCompletar>({ situacao: "EM_COMUNHAO", formaAdmissao: "", dataAdmissao: "" });
   let erroCampo = $state<{ campo: CampoComErro; mensagem: string } | null>(null);
   let enviando = $state(false);
-  let cargos = $state<{ sigla: string; nome: string }[]>([]);
-  let congs = $state<readonly Congregacao[]>([]);
   let entrada: HTMLInputElement | undefined = $state();
 
   const ficha = $derived(resp?.ficha ?? null);
-  const semCong = $derived(!!ficha && ficha.congregacaoId === null);
   const membro = $derived(form.situacao !== "CONGREGADO");
   const depois = $derived(depoisDe(form.situacao));
   const nota = $derived(notaDaData(form.situacao, form.dataAdmissao));
-
-  void pedir<{ sigla: string; nome: string; ativo?: boolean }[]>("/catalogos/cargosMinisteriais").then((x) => {
-    if (x.ok && Array.isArray(x.dados)) cargos = x.dados.filter((c) => c.ativo !== false && c.sigla !== "MEMBRO");
-  });
 
   let seq = 0;
   async function abrir(q: Record<string, number | null>) {
@@ -54,13 +49,11 @@
     if (lida.ficha) {
       form = formInicial(lida.ficha);
       onnome(lida.ficha.nome);
-      if (lida.ficha.congregacaoId === null && !congs.length) congs = await congregacoesDestino();
     }
     document.querySelector(".conteudo")?.scrollTo?.({ top: 0 });
   }
   function primeira() {
     if (matricula) return abrir({ matricula });
-    if (semCongregacao) return abrir({ semCongregacao: 1 });
     return abrir({ congregacaoId });
   }
   void primeira();
@@ -120,16 +113,6 @@
   </div>
 {/snippet}
 
-{#snippet congregacao()}
-  {#if semCong}
-    <div class="grupo">
-      <span class="rot">Congregação<span class="obr" aria-hidden="true">*</span> <span class="dica">veio sem congregação</span></span>
-      <Escolha rotulo="Escolha a congregação" estilo="campo" larga valor={form.congregacaoId} opcoes={congs.map((c) => ({ valor: c.congregacaoId, rotulo: c.nome, sub: c.areaNome ?? undefined }))} onescolher={(v) => trocar("congregacaoId", v)} />
-      {#if erroDe("congregacao")}<small class="erro">{erroDe("congregacao")}</small>{/if}
-    </div>
-  {/if}
-{/snippet}
-
 {#snippet entradaCampos()}
   {#if membro}
     <div class="dois" class:col={celular}>
@@ -151,11 +134,12 @@
   {/if}
 {/snippet}
 
-{#snippet cargo()}
-  {#if membro}
+<!-- a função eclesiástica: só para ler, quando a ficha já tem (regra dele de 24/11/2026: só a Câmara de liderança e a academia mudam; o arrolamento não grava) -->
+{#snippet funcao()}
+  {#if ficha?.funcao}
     <div class="grupo">
-      <span class="rot">Cargo ou função <span class="dica">· só se tiver</span></span>
-      <Escolha rotulo="Nenhum" estilo="campo" larga valor={form.cargo} opcoes={[{ valor: "", rotulo: "Nenhum" }, ...cargos.map((c) => ({ valor: c.sigla, rotulo: c.nome }))]} onescolher={(v) => trocar("cargo", v ?? "")} />
+      <span class="rot">Função eclesiástica <span class="dica">· só a Câmara de liderança e a academia mudam</span></span>
+      <p class="so-ler">{ficha.funcao}</p>
     </div>
   {/if}
 {/snippet}
@@ -196,9 +180,9 @@
     </Cartao>
   {:else if celular}
     {@render quem()}
-    {@render congregacao()}
     {@render situacao()}
     {@render entradaCampos()}
+    {@render funcao()}
     {@render muda()}
     {@render botao()}
   {:else}
@@ -206,10 +190,9 @@
     <div class="colunas">
       <Cartao titulo="O que falta" nota="o sistema pago não trouxe">
         <div class="form">
-          {@render congregacao()}
           {@render situacao()}
           {@render entradaCampos()}
-          {@render cargo()}
+          {@render funcao()}
         </div>
       </Cartao>
       <div class="dir">
@@ -250,6 +233,7 @@
   .rot { font-size: 14px; font-weight: 700; color: var(--sv-titulo); }
   .obr { color: var(--sv-atr); margin-left: 1px; }
   .dica { font-size: 12.5px; font-weight: 400; color: var(--sv-suave); }
+  .so-ler { margin: 0; font-size: 14px; color: var(--sv-titulo); }
   .erro { font-size: 12.5px; color: var(--sv-atr); font-weight: 600; }
   .ops { display: flex; gap: 8px; }
   .ops.col { flex-direction: column; }

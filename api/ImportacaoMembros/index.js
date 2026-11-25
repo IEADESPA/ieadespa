@@ -11,7 +11,7 @@
 // POST /api/importacao-membros/confirmar                -> { importacaoId } — confirmação reforçada (428): a prévia vira a importação; daqui não volta
 // POST /api/importacao-membros/lote                     -> { importacaoId } — importa o próximo lote (até 200); a tela chama até "concluida"
 // Regras (decisões do responsável, 18/11 e 22/11/2026): uma vez só; colunas extras aceitas; a matrícula que já é de uma ficha do sistema fica de fora (a rodada
-// 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; "IEADESPA - GERAL" sem congregação; todo importado em "Arrolamento a completar" (sem voto) com a
+// 28); matrícula repetida no arquivo ou zerada entra com a próxima do sistema e a pendência NUMERO; possível repetida, a pendência REPETIDA; a linha sem congregação ("IEADESPA - GERAL" ou vazia) fica de fora (G3, 24/11); todo importado em "Arrolamento a completar" (sem voto) com a
 // pendência ARROLAMENTO (shared/importacaoMembros.js e shared/importacaoMembrosDb.js).
 const auth = require("../shared/auth");
 const { getPool } = require("../shared/db");
@@ -57,16 +57,29 @@ module.exports = async function (context, req) {
       }
       const opcoes = { nomeArquivo: corpo.nomeArquivo, texto: corpo.texto };
       if (Array.isArray(corpo.colunas)) opcoes.colunas = corpo.colunas;
+      // G2: a importação só das linhas que faltaram (só o true de verdade; o resto é a prévia de sempre)
+      if (corpo.resto === true) opcoes.resto = true;
       responder(await db.criarPrevia(pool, usuario, opcoes));
       return;
     }
     if (metodo === "POST" && acao === "descartar") { responder(await db.descartar(pool, usuario, corpoDe(req).importacaoId)); return; }
+    // G2 (decisão dele de 24/11/2026): descartar a importação JÁ CONFIRMADA que parou sem ninguém importado é ato sensível como confirmar
+    if (metodo === "POST" && acao === "descartar-parada") {
+      if (!auth.exigirFatorRecente(req, context)) return;   // 428
+      responder(await db.descartarParada(pool, usuario, corpoDe(req).importacaoId));
+      return;
+    }
     if (metodo === "POST" && acao === "confirmar") {
       if (!auth.exigirFatorRecente(req, context)) return;   // 428: importar o rol inteiro é ato sensível
       responder(await db.confirmar(pool, usuario, corpoDe(req).importacaoId));
       return;
     }
-    if (metodo === "POST" && acao === "lote") { responder(await db.importarLote(pool, usuario, corpoDe(req).importacaoId)); return; }
+    // A6: o "deixar de fora e continuar" da tela vai só como true (nenhuma lista de linhas do cliente: o servidor vê quais recusam)
+    if (metodo === "POST" && acao === "lote") {
+      const corpo = corpoDe(req);
+      responder(await db.importarLote(pool, usuario, corpo.importacaoId, { deixarDeFora: corpo.deixarDeFora === true }));
+      return;
+    }
     context.res = { status: 405, headers: semCache, body: { sucesso: false, mensagem: "Método/rota não suportado." } };
   } catch (e) {
     context.log.error("[ImportacaoMembros]", acao, e && e.message);

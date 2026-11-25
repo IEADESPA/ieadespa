@@ -4,8 +4,9 @@
 // com regras (CHECK) de mentira postas só nesta base: uma linha sozinha no meio, uma no fim da fila (a de número novo) e um bloco de 5 seguidas.
 // O que se prova: a recusada sozinha fica de fora COMO PROBLEMA (na lista, no CSV, no resultado e na trilha, com o número do erro e sem a mensagem do banco) e
 // as outras entram na ordem; 5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, a importação continua em andamento e as matrículas travadas;
-// o suporte corrige (a regra sai) e a importação continua de onde parou até concluir. Roda sobre a base cenario-185:
-// `BASE=cenario-185 bash rodar.sh roteiro e2e-99-importacao-recusada.js`.
+// a saída pela tela (A6 da revisão de 24/11/2026, sem mexer no banco à mão): a Secretaria Geral confirma "deixar essas linhas de fora e continuar", só as 5
+// ficam de fora (a liderança local não pode) e a importação continua de onde parou até concluir. Roda sobre a base cenario-187:
+// `BASE=cenario-187 bash rodar.sh roteiro e2e-99-importacao-recusada.js`.
 process.env.AUTH_SECRET = "segredo-da-importacao-recusada-" + "x".repeat(24);
 const crypto = require("crypto");
 const L = require("./lib");
@@ -13,7 +14,8 @@ const { ok, fim, q, escalar, obterPool } = L;
 
 const PERM = ["pessoas"];
 const fator = () => ({ via: "CHAVE", em: Date.now() });
-const tok = { geral: () => L.sessao(9901, { via: "SENHA", fator: fator(), nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM }) };
+const tok = { geral: () => L.sessao(9901, { via: "SENHA", fator: fator(), nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: PERM }),
+  local: () => L.sessao(9902, { via: "SENHA", fator: fator(), nivel: "CONGREGACAO", escopoCongregacoes: [1], permissoes: PERM }) };
 const CONG = "Vila Recusa E2E99";
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
 const CAB = "MATRÍCULA;NOME;IGREJA;SEXO";
@@ -43,7 +45,7 @@ async function principal() {
   const linhaDb = (id, linha) => L.um("SELECT Acao, Estado, Problemas, MatriculaFinal FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha = @l", { i: id, l: linha });
 
   console.log("== o cenário ==");
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-185)");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros") === 0, "nenhuma importação ainda (a base cenario-187)");
   const area = (await q("INSERT INTO Areas (Nome) VALUES (N'Área E2E99'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
   const cong = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (@n, @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: CONG, a: area }))[0].id;
   await q(`IF NOT EXISTS (SELECT 1 FROM MembroReferencia WHERE MembroId = 9901) INSERT INTO MembroReferencia (MembroId, Nome, CongregacaoId, Status, SituacaoMembro)
@@ -72,8 +74,11 @@ async function principal() {
 
   console.log("== 2º lote: 5 seguidas é o banco, não a linha ==");
   const b2 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
-  ok(b2.status === 409 && b2.body.mensagem === "O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 6 do arquivo): a importação parou sem deixar ninguém de fora. Avise o suporte.",
-    "409 com a primeira do bloco (a linha 6)", b2.body);
+  ok(b2.status === 409 && b2.body.mensagem === "O sistema não conseguiu gravar 5 linhas seguidas (a partir da linha 6 do arquivo): a importação parou sem deixar ninguém de fora. "
+    + "Se o problema for dessas linhas, deixe-as de fora e continue; se voltar nas seguintes, avise o suporte." && b2.body.podeDeixarDeFora === true
+    && JSON.stringify(b2.body.recusadas) === JSON.stringify(BLOCO.map((linha, i) => ({ linha, nome: `Recusado Bloco ${i + 1} E2E99` }))),
+    "409 com a primeira do bloco (a linha 6), e a tela pode deixá-las de fora, vendo quais (a linha e o nome: menor 10)", b2.body);
+  ok(!/@|example|90000/.test(JSON.stringify(b2.body.recusadas)), "as linhas do 409 só com o número e o nome (sem contato)", b2.body.recusadas);
   const bloco = await q(`SELECT Linha, Acao, Estado FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha IN (${BLOCO.join(",")}) ORDER BY Linha`, { i: id });
   ok(bloco.length === 5 && bloco.every((l) => l.Acao === "NOVA" && l.Estado === "PENDENTE"), "o bloco continua pendente (ninguém de fora)", bloco);
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'IMPORTADA'", { i: id }) === 2, "nada mais gravado (só as 2 do 1º lote)");
@@ -84,35 +89,46 @@ async function principal() {
   const b2b = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
   ok(b2b.status === 409 && /linha 6/.test(b2b.body.mensagem), "chamar de novo sem corrigir: o mesmo 409 (não marca ninguém aos poucos)", b2b.body);
 
-  console.log("== o suporte corrige e a importação continua de onde parou ==");
-  await q("ALTER TABLE MembroReferencia DROP CONSTRAINT CK_E2E99_Bloco");
-  const b3 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
-  ok(b3.status === 200 && b3.body.importadas === 6 && b3.body.fora === 1 && b3.body.restantes === 0 && b3.body.concluida === true,
-    "200: as 6 entram (o bloco e a 11), a última da fila (a 5, de número novo) recusada fica de fora, e conclui", b3.body);
+  console.log("== a saída pela tela: deixar essas linhas de fora e continuar (A6, sem mexer no banco à mão) ==");
+  const tl = await R(tok.local(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id, deixarDeFora: true } });
+  ok(tl.status === 403 && (await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'FORA'", { i: id })) === 1, "a liderança local não pode: 403, nada muda", tl.status);
+  // o cliente manda lixo junto (uma lista de linhas): o servidor ignora e decide pelas que ele mesmo viu recusar
+  const b3 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id, deixarDeFora: true, linhas: [2, 4, 11] } });
+  ok(b3.status === 200 && b3.body.sucesso === true && b3.body.importadas === 0 && b3.body.fora === 5 && b3.body.restantes === 2 && b3.body.concluida === false,
+    "200: só as 5 do bloco ficam de fora, ninguém mais é gravado nesta chamada, faltam 2", b3.body);
+  const bl = await q(`SELECT Linha, Acao, Estado, Problemas FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha IN (${BLOCO.join(",")}) ORDER BY Linha`, { i: id });
+  ok(bl.length === 5 && bl.every((l) => l.Acao === "PROBLEMA" && l.Estado === "FORA" && l.Problemas === "ERRO_AO_GRAVAR"), "o bloco: PROBLEMA, FORA, ERRO_AO_GRAVAR", bl);
+  ok((await escalar("SELECT Estado FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha = 11", { i: id })) === "PENDENTE", "a 11 (a lista do cliente) continua pendente");
+  ok(await travadas(), "ainda em andamento: as matrículas continuam travadas");
+  const b4 = await R(tok.geral(), { metodo: "POST", acao: "lote", corpo: { importacaoId: id } });
+  ok(b4.status === 200 && b4.body.importadas === 1 && b4.body.fora === 1 && b4.body.restantes === 0 && b4.body.concluida === true,
+    "o lote seguinte, como sempre: a 11 entra, a última da fila (a 5, de número novo) recusada fica de fora, e conclui", b4.body);
   const l5 = await linhaDb(id, 5);
   ok(l5 && l5.Acao === "PROBLEMA" && l5.Estado === "FORA" && l5.Problemas === "ERRO_AO_GRAVAR", "a linha 5: PROBLEMA, FORA, ERRO_AO_GRAVAR", l5);
-  ok(b3.body.resultado && b3.body.resultado.importadas === 8 && b3.body.resultado.fora === 2, "o resultado: 8 importadas e 2 de fora", b3.body.resultado);
-  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 990206 AND 990211 AND SituacaoMembro = N'ARROLAMENTO'") === 6, "o bloco e a 11 no banco, com a matrícula do arquivo");
+  ok(b4.body.resultado && b4.body.resultado.importadas === 3 && b4.body.resultado.fora === 7, "o resultado: 3 importadas e 7 de fora", b4.body.resultado);
+  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 990206 AND 990211") === 1, "do bloco ninguém entrou; a 11 entrou com a matrícula do arquivo");
   ok(!(await travadas()), "concluída: as matrículas novas liberadas");
 
   console.log("== ninguém some calado: a lista, o CSV e o resultado ==");
   const lp = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(id), filtro: "problemas" } });
   const texto = require(L.path.join(L.API, "shared/importacaoMembros")).PROBLEMAS.ERRO_AO_GRAVAR;
-  ok(lp.status === 200 && lp.body.total === 2 && lp.body.itens.map((i) => i.linha).join(",") === "3,5" && lp.body.itens.every((i) => i.motivos.length === 1 && i.motivos[0] === texto),
-    "a lista 'problemas': as linhas 3 e 5, com o motivo", lp.body.itens);
+  ok(lp.status === 200 && lp.body.total === 7 && lp.body.itens.map((i) => i.linha).join(",") === "3,5,6,7,8,9,10" && lp.body.itens.every((i) => i.motivos.length === 1 && i.motivos[0] === texto),
+    "a lista 'problemas': as linhas 3, 5 e o bloco, com o motivo", lp.body.itens);
   ok(/não conseguiu gravar esta linha/.test(texto), "o motivo em português simples", texto);
   const cv = await R(tok.geral(), { acao: "lista.csv", query: { importacaoId: id } });
-  ok(cv.status === 200 && String(cv.body).includes("Recusada Sozinha E2E99") && String(cv.body).includes("Recusada Sozinha Final E2E99") && String(cv.body).includes(texto),
-    "o CSV para o Excel tem as duas, com o motivo", cv.status);
+  ok(cv.status === 200 && String(cv.body).includes("Recusada Sozinha E2E99") && String(cv.body).includes("Recusada Sozinha Final E2E99") && String(cv.body).includes("Recusado Bloco 3 E2E99")
+    && String(cv.body).includes(texto), "o CSV para o Excel tem as de fora, com o motivo", cv.status);
   const eF = await R(tok.geral());
-  ok(eF.body.feita === true && eF.body.importacao.resumo.resultado.fora === 2 && eF.body.importacao.resumo.resultado.importadas === 8, "o estado: feita, 8 importadas e 2 de fora", eF.body.importacao);
+  ok(eF.body.feita === true && eF.body.importacao.resumo.resultado.fora === 7 && eF.body.importacao.resumo.resultado.importadas === 3, "o estado: feita, 3 importadas e 7 de fora", eF.body.importacao);
 
   console.log("== a trilha ==");
   const marcas = await q("SELECT AuditId, Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro FROM AuditLog WHERE AuditId > @a AND Tabela = N'ImportacoesMembros' ORDER BY AuditId", { a: auditAntes });
   const deFora = marcas.filter((t) => /não conseguiu gravar/.test(t.Acao));
-  ok(deFora.length === 2 && deFora.every((t) => t.RegistroId === id && t.UsuarioId === 9901), "2 registros 'Deixou de fora linhas que o sistema não conseguiu gravar' (o 409 não deixou nenhum)", deFora.map((t) => t.Acao));
+  ok(deFora.length === 3 && deFora.every((t) => t.RegistroId === id && t.UsuarioId === 9901), "3 registros 'Deixou de fora linhas que o sistema não conseguiu gravar' (o 409 não deixou nenhum)", deFora.map((t) => t.Acao));
   const dados = deFora.map((t) => JSON.parse(t.DadosDepois || "{}"));
-  ok(JSON.stringify(dados.map((d) => d.linhas)) === JSON.stringify([[{ linha: 3, erro: 547 }], [{ linha: 5, erro: 547 }]]), "a trilha: a linha e o número do erro (547, a regra do banco)", dados);
+  ok(JSON.stringify(dados.map((d) => d.linhas)) === JSON.stringify([[{ linha: 3, erro: 547 }], BLOCO.map((l) => ({ linha: l, erro: 547 })), [{ linha: 5, erro: 547 }]]),
+    "a trilha: a linha e o número do erro (547, a regra do banco)", dados);
+  ok(dados.length === 3 && !dados[0].confirmadoNaTela && dados[1].confirmadoNaTela === true && !dados[2].confirmadoNaTela, "a trilha diz qual saída a Secretaria Geral confirmou na tela", dados);
   ok(!deFora.some((t) => /CK_E2E99|Recusad|conflicted/i.test(String(t.DadosDepois))), "a trilha sem a mensagem do banco (pode trazer o valor da linha)");
   let cadeiaOk = true;
   for (const t of marcas) {
@@ -122,7 +138,7 @@ async function principal() {
   }
   ok(cadeiaOk, "a cadeia de hashes da trilha da importação confere");
 
-  await q("ALTER TABLE MembroReferencia DROP CONSTRAINT CK_E2E99_Sozinha");
+  await q("ALTER TABLE MembroReferencia DROP CONSTRAINT CK_E2E99_Sozinha; ALTER TABLE MembroReferencia DROP CONSTRAINT CK_E2E99_Bloco");
   fim("e2e-99 (a linha que o banco recusa na importação)");
 }
 

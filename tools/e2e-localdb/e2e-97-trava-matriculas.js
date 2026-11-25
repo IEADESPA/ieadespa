@@ -6,7 +6,7 @@
 //  2. a importação em que NINGUÉM entra não se confirma (não vira CONCLUIDA, não solta a trava, não gasta a importação única);
 //  3. a importação PARADA NO MEIO (confirmada, um lote de 1, IMPORTANDO): continua travada;
 //  4. CONCLUÍDA (os lotes até o fim, pela rota): solta sozinha, sem botão — cada caminho volta a cadastrar, e a matrícula nova vem depois das importadas.
-// Roda sobre a base cenario-185 (`bash rodar.sh preparar-185` e depois `BASE=cenario-185 bash rodar.sh roteiro e2e-97-trava-matriculas.js`).
+// Roda sobre a base cenario-187 (`bash rodar.sh preparar-187` e depois `BASE=cenario-187 bash rodar.sh roteiro e2e-97-trava-matriculas.js`).
 process.env.AUTH_SECRET = "segredo-da-trava-das-matriculas-" + "x".repeat(24);
 process.env.CHAVE_SITE_SISTEMA = "chave-e2e-do-site-trava";
 process.env.PRE_CADASTRO_SITE_MIN_MS = "0";

@@ -3,10 +3,11 @@
 // Quem veio do sistema pago entra com a situação "Arrolamento a completar" (ARROLAMENTO), sem voto, e a pendência ARROLAMENTO (migração 185). A regra dele
 // (plano da fase 10, "As regras da rodada 28"): a secretaria preenche a situação, a data e a forma de entrada (batismo, carta...); o cargo só se tiver; ao
 // completar, a pessoa ganha o voto. E a da aprovação (23/11): "A área e a Geral também podem completar e editar os dados do membro ... se a congregação não
-// faz o que tem de fazer, a área faz, e o serviço não para." Cada uma só no seu escopo (shared/escopoRotas.js). A ficha que veio sem congregação fica com a
-// Geral, que escolhe a congregação (desenho r28). O cargo daqui é o que a pessoa JÁ TINHA no sistema pago: entra no histórico como LEGADO, sem data — o
-// cadastro completo continua deixando só a Geral trocar cargo (GestaoPessoas), e a esteira de consagração continua sendo o caminho de quem sobe.
-const auth = require("./auth");
+// faz o que tem de fazer, a área faz, e o serviço não para." Cada uma só no seu escopo (shared/escopoRotas.js). Toda ficha do arrolamento tem congregação
+// (G3, decisão dele de 24/11/2026: sem congregação não há importação); a congregação não muda por aqui (é a transferência). A FUNÇÃO ECLESIÁSTICA (auxiliar, diácono, presbítero, evangelista, missionário, pastor: o
+// MembroReferencia.CargoMinisterial) não se grava aqui, em nenhum nível — regra dele de 24/11/2026: só a Câmara de liderança e a academia mudam a função; a
+// secretaria local e a da área nunca. A tela mostra a que a ficha já tem, só para ler. Os cargos administrativos (dirigente, tesoureiro, secretário) não
+// passam pelo arrolamento (moram na liderança de cada nível).
 const { FORMAS_ADMISSAO } = require("./edicaoFicha");
 
 const SITUACOES = ["EM_COMUNHAO", "CONGREGADO", "SEM_COMUNHAO"];
@@ -15,25 +16,27 @@ const vazio = (v) => v === undefined || v === null || v === "";
 const dataISOValida = (txt) => typeof txt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(txt) && !Number.isNaN(Date.parse(`${txt}T00:00:00Z`))
   && new Date(`${txt}T00:00:00Z`).toISOString().slice(0, 10) === txt;
 const recusa = (mensagem) => ({ ok: false, mensagem });
+const MSG_CONGREGACAO = "A congregação não muda pelo arrolamento: para mudar, use a transferência.";
+// a ficha sem congregação que ficou de antes da regra G3 (a importação de hoje recusa a linha sem ela): ninguém a completa por aqui, nem a Geral
+const MSG_SEM_CONGREGACAO = "Esta ficha está sem congregação: ela não se completa pelo arrolamento. Toda ficha precisa de uma congregação; avise o suporte.";
+const MSG_FUNCAO = "A função eclesiástica (auxiliar, diácono, presbítero, evangelista, missionário, pastor) só a Câmara de liderança e a academia mudam: o arrolamento não grava função.";
 
 // Confere o que a secretaria mandou. ctx: { hoje: "AAAA-MM-DD" (Brasília), nascimento: "AAAA-MM-DD" | null }. Devolve { ok, dados } ou { ok: false, mensagem }.
-// dados: { situacao, formaAdmissao, dataAdmissao, cargo (sigla ou null; o catálogo é conferido no banco), congregacaoId (ou null) }.
+// dados: { situacao, formaAdmissao, dataAdmissao }.
 function validarCompletar(corpo, { hoje, nascimento = null } = {}) {
   if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return recusa("Envie a situação, como e quando a pessoa entrou.");
   const situacao = corpo.situacao;
   if (typeof situacao !== "string" || !SITUACOES.includes(situacao)) return recusa("Escolha a situação: em comunhão, congregado ou sem comunhão.");
   const congregado = situacao === "CONGREGADO";
 
-  let cargo = null;
-  if (!vazio(corpo.cargoMinisterial) && corpo.cargoMinisterial !== "MEMBRO") {
-    if (typeof corpo.cargoMinisterial !== "string" || !/^[A-Z_]{2,30}$/.test(corpo.cargoMinisterial)) return recusa("Escolha o cargo da lista (ou nenhum).");
-    cargo = corpo.cargoMinisterial;
-  }
+  // a função eclesiástica não se grava no arrolamento (qualquer sigla, ou lixo, no campo: recusado; vazio ou MEMBRO é "nenhuma")
+  if (!vazio(corpo.cargoMinisterial) && corpo.cargoMinisterial !== "MEMBRO") return recusa(MSG_FUNCAO);
+  // nem a congregação (G3): qualquer valor no campo é recusado
+  if (!vazio(corpo.congregacaoId)) return recusa(MSG_CONGREGACAO);
 
   let formaAdmissao = null, dataAdmissao = null;
   if (congregado) {
     if (!vazio(corpo.formaAdmissao) || !vazio(corpo.dataAdmissao)) return recusa("O congregado ainda não é membro: fica sem a forma e a data de entrada.");
-    if (cargo) return recusa("O congregado ainda não é membro: não tem cargo ministerial.");
   } else {
     if (typeof corpo.formaAdmissao !== "string" || !FORMAS_ADMISSAO.includes(corpo.formaAdmissao)) return recusa("Escolha como a pessoa entrou: batismo nas águas, carta de mudança, reconciliação ou aclamação.");
     formaAdmissao = corpo.formaAdmissao;
@@ -43,31 +46,22 @@ function validarCompletar(corpo, { hoje, nascimento = null } = {}) {
     if (nascimento && dataAdmissao < nascimento) return recusa("A data de entrada não pode ser antes do nascimento.");
   }
 
-  let congregacaoId = null;
-  if (!vazio(corpo.congregacaoId)) {
-    congregacaoId = auth.idDeRota(corpo.congregacaoId);
-    if (!congregacaoId) return recusa("Escolha a congregação da lista.");
-  }
-  return { ok: true, dados: { situacao, formaAdmissao, dataAdmissao, cargo, congregacaoId } };
+  return { ok: true, dados: { situacao, formaAdmissao, dataAdmissao } };
 }
 
-// Quem completa ESTA ficha (o escopo já foi conferido antes: fora dele a resposta é a de "não encontrada"). ctx: { geral, propria, temCongregacao, congregacaoPedida }.
-function podeCompletar({ geral, propria, temCongregacao, congregacaoPedida }) {
+// Quem completa ESTA ficha (o escopo já foi conferido antes: fora dele a resposta é a de "não encontrada"). ctx: { propria, temCongregacao }.
+function podeCompletar({ propria, temCongregacao }) {
   if (propria) return { pode: false, status: 403, mensagem: "Ninguém completa a própria ficha: peça a outra pessoa da Secretaria." };
-  if (!temCongregacao) {
-    if (!geral) return { pode: false, status: 403, mensagem: "A ficha que veio sem congregação, só a Secretaria Geral completa, escolhendo a congregação." };
-    if (!congregacaoPedida) return { pode: false, status: 400, mensagem: "Escolha a congregação desta pessoa." };
-    return { pode: true };
-  }
-  if (congregacaoPedida) return { pode: false, status: 400, mensagem: "Esta ficha já tem congregação: a congregação muda pela transferência." };
+  if (!temCongregacao) return { pode: false, status: 409, mensagem: MSG_SEM_CONGREGACAO };
   return { pode: true };
 }
 
 // O recado da tela depois de completar.
 function recadoFeito(situacao, nome) {
-  if (situacao === "EM_COMUNHAO") return `Arrolamento completado: ${nome} está em comunhão e ganhou o voto.`;
+  // a Assembleia pede 18 anos e 90 dias da entrada (estatuto.js): o recado não promete o voto na hora (A4, revisão de 24/11/2026)
+  if (situacao === "EM_COMUNHAO") return `Arrolamento completado: ${nome} está em comunhão (na Assembleia, vota com 18 anos e 90 dias de entrada).`;
   if (situacao === "CONGREGADO") return `Arrolamento completado: ${nome} ficou como congregado (ainda não membro, sem voto).`;
   return `Arrolamento completado: ${nome} ficou sem comunhão (sem voto).`;
 }
 
-module.exports = { SITUACOES, validarCompletar, podeCompletar, recadoFeito };
+module.exports = { SITUACOES, validarCompletar, podeCompletar, recadoFeito, MSG_SEM_CONGREGACAO };

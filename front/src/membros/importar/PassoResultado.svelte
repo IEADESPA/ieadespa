@@ -1,16 +1,29 @@
 <!-- Passo 4 da importação (r27): o resultado. Os quadros do que entrou, o aviso do arrolamento, onde as fichas ficaram HOJE (por área,
      quantas já completaram o arrolamento) e a trilha (quem importou, quando, as matrículas novas, as repetidas). Não se importa de novo:
-     a tela fica só com o resultado. -->
+     a tela fica só com o resultado — a exceção é o resto (G2, decisão dele de 24/11/2026): as linhas que faltaram quando a importação parou e
+     passou do prazo entram UMA vez numa importação só delas; o bloco "As linhas que faltaram" (sem desenho aprovado) diz quantas, as primeiras,
+     a saída e, depois, o que ela fez. -->
 <script lang="ts">
   import Botao from "../../comum/Botao.svelte";
   import Aviso from "../../comum/Aviso.svelte";
   import { numero, plural } from "../../comum/formato";
   import Quadros from "./Quadros.svelte";
   import Arrolamento from "./Arrolamento.svelte";
-  import { baixarLista, diaMesHora, fraseForaApagada, notaForaAte, quandoCurto, type Guarda, type Importacao, type Quadro, type Retrato } from "./importar";
+  import { baixarLista, diaMesHora, fraseDoResto, fraseForaApagada, notaForaAte, quandoCurto, type EstadoResto, type Guarda, type Importacao, type Quadro,
+    type Retrato } from "./importar";
 
-  interface Props { celular: boolean; importacao: Importacao; retrato: Retrato; guarda: Guarda }
-  let { celular, importacao, retrato, guarda }: Props = $props();
+  interface Props {
+    celular: boolean;
+    importacao: Importacao;
+    retrato: Retrato;
+    guarda: Guarda;
+    /** o resto (G2): as linhas que faltaram e a importação só delas */
+    resto?: EstadoResto | null;
+    /** o resto parado sem ninguém que a rotina descartou no fim do prazo (a frase pronta) */
+    descartadaResto?: string;
+    onresto?: () => void;
+  }
+  let { celular, importacao, retrato, guarda, resto = null, descartadaResto = "", onresto }: Props = $props();
 
   const res = $derived(importacao.resumo?.resultado ?? null);
   const importadas = $derived(res ? res.importadas : retrato.porArea.reduce((s, a) => s + a.fichas, 0));
@@ -24,7 +37,8 @@
     { n: retrato.quadros.comMatricula, rotulo: "Com a matrícula de antes", sub: "como no sistema pago" },
     { n: retrato.quadros.acertar, rotulo: "Com matrícula nova", sub: faixa },
     { n: retrato.quadros.repetidas, rotulo: "Em “Fichas repetidas”", sub: "para a secretaria juntar" },
-    { n: sem, rotulo: "Sem congregação", sub: "para a Geral distribuir" }
+    // G3 (decisão dele de 24/11/2026): nenhuma ficha entra sem congregação; o quinto quadro passa a ser o das linhas que ficaram de fora
+    { n: res ? res.fora : 0, rotulo: "Ficaram de fora", sub: "na lista para baixar" }
   ]);
   const forte = $derived(pendentes === importadas
     ? `${importadas === 1 ? "A ficha está" : `As ${numero(importadas)} estão`} com a pendência “completar o arrolamento”, sem voto até completar.`
@@ -34,7 +48,7 @@
   const quando = $derived(quandoCurto(importacao.concluidaEm));
   // a guarda dos dados (respostas dele de 23/11/2026): a lista dos que ficaram de fora fica um tempo depois do fim e se apaga sozinha
   const foraAte = $derived(notaForaAte(importacao, guarda));
-  const foraApagada = $derived(fraseForaApagada(importacao, guarda));
+  const foraApagada = $derived(fraseForaApagada(importacao));
 
   let baixando = $state(false);
   let erroBaixar = $state("");
@@ -44,17 +58,44 @@
     erroBaixar = await baixarLista(importacao.importacaoId);
     baixando = false;
   }
+
+  const restoTexto = $derived(fraseDoResto(resto));
+  let baixandoResto = $state(false);
+  let erroResto = $state("");
+  async function baixarResto() {
+    if (!resto?.feito || baixandoResto) return;
+    baixandoResto = true;
+    erroResto = await baixarLista(resto.feito.importacaoId);
+    baixandoResto = false;
+  }
 </script>
 
 <Quadros {quadros} {celular} />
 <Arrolamento {celular} {forte} />
+
+{#if restoTexto || descartadaResto}
+  <section class="resto" class:pode={resto?.possivel}>
+    <h2>As linhas que faltaram</h2>
+    {#if descartadaResto}<p>{descartadaResto}</p>{/if}
+    {#if restoTexto}<p>{restoTexto}</p>{/if}
+    {#if resto?.possivel && resto.linhas.length}
+      <ul>{#each resto.linhas as l (l.linha)}<li><span class="sv-num">Linha {numero(l.linha)}</span>{l.nome ? ` · ${l.nome}` : ""}</li>{/each}</ul>
+      {#if resto.faltaram > resto.linhas.length}<p class="nota">E mais {numero(resto.faltaram - resto.linhas.length)} {plural(resto.faltaram - resto.linhas.length, "linha", "linhas")}.</p>{/if}
+      <Botao tipo="ouro" icone="seta" largo={celular} onclick={onresto}>Importar só as linhas que faltaram</Botao>
+    {/if}
+    {#if resto?.feito}
+      <Botao tipo="linha" icone="doc" largo={celular} ocupado={baixandoResto} onclick={baixarResto}>Baixar a lista das que faltaram (sem CPF)</Botao>
+      {#if erroResto}<Aviso tom="erro">{erroResto}</Aviso>{/if}
+    {/if}
+  </section>
+{/if}
 
 {#if celular}
   <ul class="lista-cel">
     {#each areas as a (a.area ?? "")}
       <li><span><strong>{a.area ?? "Sem área"}</strong><small>{numero(a.congregacoes)} {plural(a.congregacoes, "congregação", "congregações")} · {numero(a.completas)} {plural(a.completas, "completa", "completas")}</small></span><b class="sv-num">{numero(a.fichas)}</b></li>
     {/each}
-    {#if sem}<li><span><strong>Sem congregação</strong><small class="ouro">a Geral escolhe</small></span><b class="sv-num">{numero(sem)}</b></li>{/if}
+    {#if sem}<li><span><strong>Sem congregação</strong><small class="ouro">avise o suporte</small></span><b class="sv-num">{numero(sem)}</b></li>{/if}
   </ul>
 {:else}
   <div class="dois">
@@ -71,7 +112,7 @@
       {#if sem}
         <div class="lin" role="row">
           <span class="nome" role="cell">Sem congregação</span><span role="cell">—</span><span role="cell" class="sv-num">{numero(sem)}</span>
-          <span role="cell" class="ouro">a Geral escolhe</span>
+          <span role="cell" class="ouro">avise o suporte</span>
         </div>
       {/if}
     </div>
@@ -87,12 +128,18 @@
       <Botao tipo="linha" icone="doc" largo ocupado={baixando} onclick={baixar}>Baixar a lista do que aconteceu (sem CPF)</Botao>
       {#if erroBaixar}<Aviso tom="erro">{erroBaixar}</Aviso>{/if}
       {#if foraAte}<p class="nota">{foraAte}</p>{/if}
-      <p class="nota">Não se importa de novo: esta tela fica só com o resultado.</p>
+      {#if !resto?.possivel}<p class="nota">Não se importa de novo: esta tela fica só com o resultado.</p>{/if}
     </section>
   </div>
 {/if}
 
 <style>
+  .resto { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+    align-items: flex-start; }
+  .resto.pode { border-color: var(--sv-ouro); box-shadow: 0 0 0 1px var(--sv-ouro); }
+  .resto p { font-size: 13px; color: var(--sv-texto); line-height: 1.45; }
+  .resto ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--sv-texto); line-height: 1.45; }
+  .resto .nota { font-size: 12px; color: var(--sv-suave); }
   .dois { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; align-items: start; }
   .tab { background: var(--sv-sup); border: 1px solid var(--sv-borda); border-radius: 14px; overflow: hidden; min-width: 0; }
   .cab, .lin { display: grid; grid-template-columns: minmax(0, 1.3fr) 104px 76px minmax(0, 1fr); gap: 10px; padding: 0 16px; align-items: center; }

@@ -308,6 +308,15 @@ case "$1" in
     migrar 186 2
     base salvar cenario-186
     ;;
+  preparar-187)
+    # FASE 10, a importação parada e a do resto (G2, decisão dele de 24/11/2026): a partir da base "cenario-186", aplica a 187 duas vezes (o último lote,
+    # a importação do resto e a descartada depois de confirmada; prova a idempotência); salva "cenario-187". Os roteiros da importação (e2e-96, 97, 99, 100
+    # e 102) rodam nela: a importação lê e grava o último lote.
+    cd "$AQUI"
+    base restaurar cenario-186
+    migrar 187 2
+    base salvar cenario-187
+    ;;
   preparar-175)
     # FASE 10 (17/11/2026, raio-x de velocidade): a partir da base "cenario-173", aplica a 175 duas vezes (os índices das tabelas grandes; prova a idempotência);
     # salva "cenario-175" (e2e-88 monta o próprio cenário).

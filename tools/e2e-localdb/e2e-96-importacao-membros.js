@@ -1,12 +1,12 @@
 // e2e-96-importacao-membros.js — A IMPORTAÇÃO DOS MEMBROS DO SISTEMA PAGO (FASE 10, v10.1e, passo 9 de Membros; migração 185; 22/11/2026), contra o SQL Server
 // de verdade. Só dados de mentira. As regras do responsável (18/11 e 22/11/2026): só a Secretaria Geral; UMA VEZ SÓ; colunas extras aceitas (e o mapa escolhido
 // na tela, 23/11); a matrícula que JÁ É de uma ficha do sistema fica de fora (as regras da rodada 28); a repetida no arquivo ou zerada entra com a próxima do
-// sistema e a pendência NUMERO; a possível repetida, a pendência REPETIDA; "IEADESPA - GERAL" sem congregação; todo importado em "Arrolamento a completar" (sem
+// sistema e a pendência NUMERO; a possível repetida, a pendência REPETIDA; a linha sem congregação ("IEADESPA - GERAL" ou vazia) fica de fora (G3, 24/11); todo importado em "Arrolamento a completar" (sem
 // voto) com a pendência ARROLAMENTO. E o que a tela r27 lê: os quadros, a matrícula a acertar (quem ficou com o número e o número previsto) e o retrato do fim.
 // O caminho inteiro pela rota: a prévia (e a que substitui a anterior), a lista e o CSV sem dado pessoal, a confirmação (428 sem fator recente), o que mudou no
 // banco DEPOIS da prévia (a matrícula usada por outro cadastro, o CPF gravado em outra ficha), os lotes (um de 4 e o resto disputado por DOIS processos ao mesmo
 // tempo: a trava faz um esperar o outro e ninguém entra duas vezes), as pendências, os dados pessoais das linhas apagados no fim, a cadeia da trilha e o "uma
-// vez só". Roda sobre a base cenario-185 (`bash rodar.sh preparar-185` e depois `BASE=cenario-185 bash rodar.sh roteiro e2e-96-importacao-membros.js`).
+// vez só". Roda sobre a base cenario-187 (`bash rodar.sh preparar-187` e depois `BASE=cenario-187 bash rodar.sh roteiro e2e-96-importacao-membros.js`).
 process.env.AUTH_SECRET = "segredo-da-importacao-de-membros-" + "x".repeat(24);
 const { spawn } = require("child_process");
 const crypto = require("crypto");
@@ -32,7 +32,7 @@ const CPF_A = cpfDe(960000001), CPF_B = cpfDe(960000002);
 const CAB = "MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF;COR FAVORITA";
 const ARQUIVO = [CAB,
   `960101;Ana Importada;IEADESPA - ${C.VN};FEMININO;14/03/1990;CASADA;ana.e2e96@example.org;(91) 98888-7777;Mae Ficticia;Pai Ficticio;${CPF_B};azul`,  // 2
-  "0;Bia Zerada;IEADESPA - GERAL;FEMININO",                                       // 3  matrícula 0, sem congregação
+  `0;Bia Zerada;IEADESPA - ${C.VN};FEMININO`,                                      // 3  matrícula 0
   `960103;Caio Souza;IEADESPA - ${C.MS};MASCULINO`,                               // 4
   `960103;Caio Mendes Souza;IEADESPA - ${C.MS}`,                                  // 5  repetida no arquivo, parece a mesma pessoa da 4
   `960001;Rui Lima;IEADESPA - ${C.VN}`,                                           // 6  a matrícula já é de "Rui Barbosa Lima": fica de fora
@@ -44,7 +44,9 @@ const ARQUIVO = [CAB,
   `;Wagner Vazio;IEADESPA - ${C.VN}`,                                             // 12 sem matrícula
   `960113;Xavier Dados Ruins;IEADESPA - ${C.VN};X;31/02/1990;NOIVO;x@;123;;;12345678900`,  // 13 valores estragados; a matrícula vai ser usada depois da prévia
   `960114;tito  antigo;IEADESPA - ${C.VN};MASCULINO;20/05/1980`,                 // 14 o mesmo nome e nascimento da ficha 960003 (sem maiúscula, espaço a mais)
-  `960115;Ana Importada;IEADESPA - ${C.MS};FEMININO;14/03/1990`                   // 15 o mesmo nome e nascimento da linha 2
+  `960115;Ana Importada;IEADESPA - ${C.MS};FEMININO;14/03/1990`,                  // 15 o mesmo nome e nascimento da linha 2
+  "960190;Gil Geral;IEADESPA - GERAL;MASCULINO",                                  // 16 sem congregação (G3, 24/11): não entra
+  "960191;Lia Sem Igreja;;FEMININO"                                               // 17 a igreja vazia: não entra
 ].join("\r\n");
 const sha256 = (t) => crypto.createHash("sha256").update(String(t), "utf8").digest("hex");
 
@@ -104,8 +106,10 @@ async function principal() {
   const p1 = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { nomeArquivo: "membros<script>.csv", texto: ARQUIVO } });
   const s1 = p1.body.resumo || {};
   ok(p1.status === 200 && p1.body.sucesso === true && Number.isInteger(p1.body.importacaoId), "a prévia é aceita", p1.body);
-  ok(s1.total === 14 && s1.novas === 9 && s1.problemas === 5 && s1.jaExistem === 2, "14 linhas: 9 entram; 5 não entram, 2 delas porque a matrícula já existe", s1);
-  ok(s1.numeroNovo === 3 && s1.possivelRepetida === 4 && s1.semCongregacao === 1, "3 com número novo, 4 possíveis repetidas, 1 sem congregação", s1);
+  ok(s1.total === 16 && s1.novas === 9 && s1.problemas === 7 && s1.jaExistem === 2, "16 linhas: 9 entram; 7 não entram, 2 delas porque a matrícula já existe", s1);
+  ok(s1.numeroNovo === 3 && s1.possivelRepetida === 4 && s1.semCongregacao === 2, "3 com número novo, 4 possíveis repetidas, 2 de fora sem congregação (G3)", s1);
+  ok((s1.avisosGerais || []).some((a) => a.codigo === "SEM_CONGREGACAO" && /2 linhas estão sem congregação/.test(a.texto) && /ficam de fora/.test(a.texto)),
+    "o aviso geral das 2 sem congregação: ficam de fora (corrija a planilha ou continue sem elas)", s1.avisosGerais);
   ok(JSON.stringify(s1.quadros) === JSON.stringify({ comMatricula: 3, acertar: 3, repetidas: 3 }), "os quadros da tela: cada uma numa caixa só (3 + 3 + 3 = 9)", s1.quadros);
   ok(s1.vazias === 0 && s1.totalColunas === 12 && s1.primeiraMatriculaNova === 960116 && s1.congregacoesReconhecidas === 2, "as vazias, as colunas, a primeira matrícula nova", s1);
   ok(JSON.stringify(s1.colunas || s1).includes("COR FAVORITA"), "a coluna extra desconhecida é aceita e mostrada", s1.colunas);
@@ -113,7 +117,7 @@ async function principal() {
     "o mapa das colunas na ordem do cabeçalho (a COR FAVORITA sem campo)", s1.colunas.lista);
   ok(!/Ana Importada|Xavier|example\.org|98888|Mae Ficticia/.test(JSON.stringify(s1)) && !JSON.stringify(s1).includes(CPF_B), "o resumo não tem dado pessoal");
   const id1 = p1.body.importacaoId;
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i", { i: id1 }) === 14, "as 14 linhas gravadas na prévia");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i", { i: id1 }) === 16, "as 16 linhas gravadas na prévia");
   ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId BETWEEN 960100 AND 960199") === 0, "na prévia ninguém entra ainda");
   ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembros WHERE ImportacaoId = @i AND NomeArquivo = N'membrosscript.csv'", { i: id1 }) === 1, "o nome do arquivo sem os sinais < >");
   const linhaDe = async (id, n) => (await q("SELECT * FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Linha = @l", { i: id, l: n }))[0];
@@ -124,17 +128,22 @@ async function principal() {
   const l7 = await linhaDe(id1, 7);
   ok(l7.Acao === "PROBLEMA" && l7.Problemas === "MATRICULA_JA_EXISTE", "a linha 7: a matrícula já é de outra pessoa — fica de fora", l7);
   ok(l8.Cpf === null && l8.RepetidaMembro === 960003 && l8.NumeroNovo === false, "a linha 8: o CPF já é da ficha 960003 — entra sem ele, como possível repetida", l8);
-  ok(l3.MotivoNumero === "ZERO" && l3.CongregacaoId === null, "a linha 3: matrícula 0 e 'IEADESPA - GERAL' sem congregação", l3);
+  const idVN = await escalar("SELECT CongregacaoId FROM Congregacoes WHERE Nome = @n", { n: C.VN });
+  ok(l3.MotivoNumero === "ZERO" && l3.CongregacaoId === idVN, "a linha 3: matrícula 0, com a congregação", l3);
+  const l16 = await linhaDe(id1, 16), l17 = await linhaDe(id1, 17);
+  ok([l16, l17].every((l) => l.Acao === "PROBLEMA" && l.Problemas === "SEM_CONGREGACAO" && l.CongregacaoId === null), "as linhas 16 (GERAL) e 17 (vazia): de fora, sem congregação (G3)", [l16, l17]);
 
   console.log("== a lista para conferir e o CSV ==");
   const lp = await R(tok.geral(), { acao: "lista", query: { importacaoId: id1, filtro: "problemas" } });
-  ok(lp.status === 200 && lp.body.total === 5 && lp.body.itens.map((i) => i.linha).join(",") === "6,7,9,10,11", "os 5 que não entram", lp.body);
+  ok(lp.status === 200 && lp.body.total === 7 && lp.body.itens.map((i) => i.linha).join(",") === "6,7,9,10,11,16,17", "os 7 que não entram", lp.body);
+  ok(lp.body.itens.filter((i) => i.linha >= 16).every((i) => i.motivos.length === 1 && /^Sem congregação \(no arquivo: GERAL ou vazio\): fica de fora/.test(i.motivos[0])),
+    "o motivo das linhas sem congregação na lista", lp.body.itens.slice(-2));
   ok(/já é de uma ficha do sistema: fica de fora/.test(lp.body.itens[0].motivos.join(" ")), "o motivo da linha 6 na lista", lp.body.itens[0]);
   const lac = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(id1), filtro: "acertar" } });
   const porLinha = (lista, n) => lista.body.itens.find((i) => i.linha === n) || {};
   ok(lac.status === 200 && lac.body.total === 3 && lac.body.itens.map((i) => i.linha).join(",") === "3,5,12", "a matrícula a acertar: as linhas 3, 5 e 12", lac.body);
-  ok(JSON.stringify(porLinha(lac, 3).detalhe) === JSON.stringify({ motivoNumero: "ZERO", semCongregacao: true, dono: null, repetidaDe: null, recebe: 960116, prevista: true }),
-    "a linha 3: matrícula 0, sem congregação, recebe a 960.116 (prevista)", porLinha(lac, 3));
+  ok(JSON.stringify(porLinha(lac, 3).detalhe) === JSON.stringify({ motivoNumero: "ZERO", dono: null, repetidaDe: null, recebe: 960116, prevista: true }),
+    "a linha 3: matrícula 0, recebe a 960.116 (prevista)", porLinha(lac, 3));
   ok(porLinha(lac, 5).detalhe.dono && porLinha(lac, 5).detalhe.dono.linha === 4 && porLinha(lac, 5).detalhe.dono.nome === "Caio Souza" && porLinha(lac, 5).detalhe.dono.sexo === "M" && porLinha(lac, 5).detalhe.recebe === 960117
     && porLinha(lac, 5).detalhe.repetidaDe.linha === 4, "a linha 5: a 960103 ficou com o Caio Souza (linha 4, masculino: a tela diz do Caio), que veio antes; recebe a 960.117", porLinha(lac, 5));
   ok(porLinha(lac, 12).detalhe.motivoNumero === "VAZIA" && porLinha(lac, 12).detalhe.recebe === 960118, "a linha 12: sem matrícula, recebe a 960.118", porLinha(lac, 12));
@@ -145,7 +154,7 @@ async function principal() {
   ok(la.status === 200 && la.body.total === 7 && la.body.itens.map((i) => i.linha).join(",") === "3,5,8,12,13,14,15", "os 7 que entram com aviso", la.body.total);
   const lt = await R(tok.geral(), { acao: "lista", query: { importacaoId: id1 } });
   const txtLista = JSON.stringify(lt.body);
-  ok(lt.body.total === 14 && !txtLista.includes(CPF_B) && !txtLista.includes(CPF_A) && !/example\.org|98888/.test(txtLista), "a lista inteira: nunca o CPF nem o contato");
+  ok(lt.body.total === 16 && !txtLista.includes(CPF_B) && !txtLista.includes(CPF_A) && !/example\.org|98888/.test(txtLista), "a lista inteira: nunca o CPF nem o contato");
   const cv = await R(tok.geral(), { acao: "lista.csv", query: { importacaoId: id1 } });
   ok(cv.status === 200 && /text\/csv/.test(cv.headers["Content-Type"]) && String(cv.body).startsWith("﻿Linha;") && !String(cv.body).includes(CPF_B), "o CSV para o Excel, sem CPF", cv.status);
   ok((await R(tok.local(), { acao: "lista", query: { importacaoId: id1 } })).status === 403, "a liderança local não vê a lista");
@@ -183,7 +192,7 @@ async function principal() {
   ok(c1.status === 200 && c1.body.restantes === 9, "confirmada: 9 a importar", c1.body);
   const c2 = await R(tok.geral(), { metodo: "POST", acao: "confirmar", corpo: { importacaoId: id2 } });
   ok(c2.status === 200 && c2.body.jaConfirmada === true && c2.body.restantes === 9, "confirmar de novo (o duplo clique): a mesma, sem erro", c2.body);
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'FORA'", { i: id2 }) === 5, "as 5 ficam de fora (3 com problema e as 2 que já existem)");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Estado = N'FORA'", { i: id2 }) === 7, "as 7 ficam de fora (5 com problema e as 2 que já existem)");
   const pAnd = await R(tok.geral(), { metodo: "POST", acao: "previa", corpo: { texto: ARQUIVO } });
   ok(pAnd.status === 409 && /em andamento/.test(pAnd.body.mensagem), "outra prévia com a importação em andamento: 409", pAnd.body);
   ok((await R(tok.geral(), { metodo: "POST", acao: "descartar", corpo: { importacaoId: id2 } })).status === 409, "descartar depois de confirmada: 409 (daqui não volta)");
@@ -233,7 +242,10 @@ async function principal() {
     "todo importado em 'Arrolamento a completar'");
   ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (" + finais.join(",") + ") AND SituacaoMembro = N'EM_COMUNHAO'") === 0,
     "nenhum importado EM_COMUNHAO (sem voto até completar)");
-  ok(await escalar("SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = @m", { m: fin(3) }) === null, "a 'IEADESPA - GERAL' sem congregação");
+  ok(await escalar("SELECT CongregacaoId FROM MembroReferencia WHERE MembroId = @m", { m: fin(3) }) === idVN, "a da matrícula 0 entrou com a congregação dela");
+  ok(await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (960190, 960191) OR Nome IN (N'Gil Geral', N'Lia Sem Igreja')") === 0, "as sem congregação não entraram (G3)");
+  ok(await escalar(`SELECT COUNT(*) FROM ImportacoesMembrosLinhas l JOIN MembroReferencia m ON m.MembroId = l.MatriculaFinal
+    WHERE l.ImportacaoId = @i AND l.Estado = N'IMPORTADA' AND m.CongregacaoId IS NULL`, { i: id2 }) === 0, "nenhuma ficha importada sem congregação (G3)");
   const xavF = (await q("SELECT Sexo, DataNascimento, EstadoCivil, Email, Telefone, Cpf FROM MembroReferencia WHERE MembroId = @m", { m: fin(13) }))[0];
   ok(xavF.Sexo === null && xavF.DataNascimento === null && xavF.EstadoCivil === null && xavF.Email === null && xavF.Telefone === null && xavF.Cpf === null,
     "os valores estragados ficaram de fora (a pessoa entrou sem eles)", xavF);
@@ -250,13 +262,13 @@ async function principal() {
   const imp = (await q("SELECT Situacao, ConcluidaEm, Resumo FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: id2 }))[0];
   const res = JSON.parse(imp.Resumo).resultado || {};
   ok(imp.Situacao === "CONCLUIDA" && imp.ConcluidaEm, "a importação concluída");
-  ok(res.importadas === 9 && res.fora === 5 && res.numeroNovo === 4 && res.possivelRepetida === 5 && res.semCongregacao === 1, "o resultado final", res);
+  ok(res.importadas === 9 && res.fora === 7 && res.numeroNovo === 4 && res.possivelRepetida === 5 && res.semCongregacao === 0, "o resultado final", res);
   const eF = await R(tok.geral());
   const ret = eF.body.retrato || {};
   ok(ret.confirmadaPor === nomeDe9601 && ret.matriculasNovas.total === 4 && ret.matriculasNovas.de === Math.min(...novos) && ret.matriculasNovas.ate === Math.max(...novos),
     "o retrato: quem importou e a faixa das matrículas novas", ret);
-  ok(JSON.stringify(ret.porArea) === JSON.stringify([{ area: "Área E2E96", semCongregacao: false, congregacoes: 2, fichas: 8, completas: 0 },
-    { area: null, semCongregacao: true, congregacoes: 0, fichas: 1, completas: 0 }]), "o retrato: as fichas por área (8 na Área E2E96, em 2 congregações) e 1 sem congregação", ret.porArea);
+  ok(JSON.stringify(ret.porArea) === JSON.stringify([{ area: "Área E2E96", semCongregacao: false, congregacoes: 2, fichas: 9, completas: 0 }]),
+    "o retrato: as 9 fichas na Área E2E96, em 2 congregações, nenhuma sem congregação (G3)", ret.porArea);
   ok(JSON.stringify(ret.quadros) === JSON.stringify({ comMatricula: 1, acertar: 4, repetidas: 4 }), "o retrato: os quadros do resultado (1 + 4 + 4 = 9)", ret.quadros);
   const laF = await R(tok.geral(), { acao: "lista", query: { importacaoId: String(id2), filtro: "acertar" } });
   ok(laF.body.itens.every((i) => i.detalhe.prevista === false && i.detalhe.recebe === i.matriculaFinal) && laF.body.total === 4,
@@ -264,7 +276,7 @@ async function principal() {
   ok(await escalar(`SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND (Cpf IS NOT NULL OR Email IS NOT NULL OR Telefone IS NOT NULL OR NomeMae IS NOT NULL
     OR NomePai IS NOT NULL OR DataNascimento IS NOT NULL OR IgrejaArquivo IS NOT NULL OR CongregacaoId IS NOT NULL OR Sexo IS NOT NULL)`, { i: id2 }) === 0,
     "no fim, os dados pessoais das linhas apagados (fica a lista para conferir)");
-  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Nome IS NOT NULL", { i: id2 }) === 13, "o nome fica para a lista (a linha sem nome não tinha)");
+  ok(await escalar("SELECT COUNT(*) FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @i AND Nome IS NOT NULL", { i: id2 }) === 15, "o nome fica para a lista (a linha sem nome não tinha)");
 
   console.log("== a trilha ==");
   const trilha = await q("SELECT AuditId, Tabela, RegistroId, Acao, UsuarioId, DadosAntes, DadosDepois, HashRegistro FROM AuditLog WHERE AuditId > @a AND Tabela = N'MembroReferencia' ORDER BY AuditId", { a: auditAntes });

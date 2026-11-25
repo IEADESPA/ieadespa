@@ -211,12 +211,13 @@ Cada versão parte da base da anterior (`BASE=...`):
   roda sobre a `cenario-185`: a ficha nova recusada pela trava (409) e, depois da importação semeada, a regra do cargo (403).
 - **FASE 10, completar o arrolamento** (rodada 28, sem migração), base `cenario-185`: `e2e-98` (o 4º grupo do painel e o andamento de cada nível; a
   congregação, a área e a Geral completam, cada uma só no seu escopo, e fora dele a mesma resposta de "não encontrada"; ninguém completa a própria ficha; a
-  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; o cargo que a pessoa já tinha entra no histórico
-  como LEGADO; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
+  ficha sem congregação só com a Geral, escolhendo a congregação; em comunhão, congregado e sem comunhão; a função eclesiástica não se grava em nenhum
+  nível (regra dele de 24/11: só a Câmara de liderança e a academia), e a que a ficha já tem aparece para ler; a pendência resolvida e a trilha; lixo e campos trocados; a mesma ficha disputada por 4 processos (uma completa, as outras 409); o cadastro e o
   importador antigos não põem nem tiram ninguém do arrolamento).
 - **FASE 10, a saída do IMPORTANDO** (revisão de 23/11/2026, sem migração), base `cenario-185`: `e2e-99` (o banco recusa de verdade, com regras CHECK
   de mentira: a linha recusada sozinha fica de fora como problema e as outras entram na ordem; a última da fila recusada fica de fora e a importação conclui;
-  5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; corrigido, continua de onde parou; a lista,
+  5 seguidas é o banco, não a linha: 409, ninguém de fora, nada gravado, em andamento e as matrículas travadas; a saída pela tela (A6, 24/11): a Secretaria
+  Geral confirma "deixar essas linhas de fora e continuar", só as 5 ficam de fora (a local não pode) e a importação continua até concluir; a lista,
   o CSV e o resultado mostram as de fora; a trilha com o número do erro e sem a mensagem do banco; a cadeia de hashes).
 - **FASE 10, a guarda dos dados da importação** (respostas dele de 23/11/2026 e decisões de 24/11; migração 186), base `cenario-186`
   (`bash rodar.sh preparar-186`: a `cenario-185` com a 186 aplicada duas vezes): `e2e-100` (as duas políticas aparecem na tela de Políticas, com 7 e 90 dias
@@ -226,6 +227,22 @@ Cada versão parte da base da anterior (`BASE=...`):
   motivo, conferido coluna por coluna; a importação que terminou antes desta versão é limpa pela rotina; a lista dos de fora fica com 89 dias e sai com 91,
   só as linhas de fora: as importadas, o retrato e o número do resultado ficam e o resumo guarda o dia; rodar de novo não faz nada; a NotificacoesAgendador
   de verdade roda a guarda; a trilha sem dado das linhas e a cadeia de hashes).
+- **FASE 10, a revisão de 24/11/2026 (Membros)**, base `cenario-186`: `e2e-101` (A1: o "apto e em comunhão" e o universo geral, que são os das enquetes e
+  do tema: em arrolamento, congregado e sem comunhão não votam, só em comunhão; A2: o batismo admite o convertido com a data do batismo, e quem veio de
+  outra igreja fica com a data da chegada; a pendência fecha como COMPLETADA, com a trilha e a data de antes; de novo, nada muda).
+- **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
+  `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
+  importação lê e grava o último lote. `e2e-102`: o prazo de 7 dias conta do ÚLTIMO LOTE (sem lote, da confirmação) e o estado diz quantos dias faltam; a
+  parada sem ninguém importado, com 8 dias, é DESCARTADA pela rotina (as linhas saem inteiras, a data da confirmação fica, as matrículas continuam travadas,
+  o lote dela recusa, a tela diz qual foi) e uma importação nova pode começar; descartar à mão pede o 428, a local não pode (403 igual para a que existe e a
+  que não existe), o número errado é 409 e o lixo 400; a parada com gente não se descarta; confirmada há 20 dias e com o lote agora, nada muda; com 8 dias do
+  lote, as que faltavam ficam de fora só com o nome e o motivo e ela conclui; a lista e o CSV com o motivo novo. Depois, a importação SÓ DAS LINHAS QUE
+  FALTARAM (o resto, uma vez): o estado diz quais faltaram; a prévia comum continua recusada; a planilha só com algumas entra pelo nome e avisa quem não
+  foi achado; o arquivo de antes sem a última linha substitui essa prévia e acha três das quatro (a que não veio, avisada); nenhum resumo guarda o nome
+  de quem não veio; a matrícula tomada depois vira número novo (e a mesma pessoa, possível repetida); o lixo, a local, o 428 e o arquivo sem nenhuma delas;
+  importado, a tela volta ao resultado com o que o resto fez (e quantas não vieram), a lista e o CSV de antes dizem de cada linha que faltou se veio no
+  resto ou não, um segundo resto é recusado (e o índice único do banco o impede) e o painel do arrolamento guarda o dia de antes; a trilha sem dado
+  pessoal e a cadeia.
 - **FASE 10, Financeiro** (migrações a partir da 200; roteiros `e2e-200` em diante). Roda numa **instância própria** do LocalDB, para não atropelar
   quem trabalha no `psc7` ao mesmo tempo: `sqllocaldb create fin` + `start fin`, copie para `bak/` a última base de Membros e use
   `E2E_INSTANCIA=fin E2E_BANCO=ieadespa_fin E2E_CS='Server=(localdb)\fin;Database=ieadespa_fin;Integrated Security=true'` em todos os comandos

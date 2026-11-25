@@ -13,7 +13,7 @@ const { registrarAuditoria } = require("./auditoria");
 const iv = require("./identidadeVisual");
 const { hojeBrasilia } = require("./dataBrasilia");
 const { obterTrava } = require("./financeiroSeguro");
-const { aptoEmComunhao } = require("./enquetes");
+const { situacaoParaVoto } = require("./enquetes");
 
 const PERMISSAO = iv.PERMISSAO;
 const RETENCAO_CATEGORIA = "Identidade visual — sugestões e artes dos membros";
@@ -356,6 +356,13 @@ async function excluirTema(pool, { ver, temaUsadoId }) {
 // ---------------------------------------------------------------
 
 const NAO_APTO = "Só quem é membro ativo e em comunhão participa da escolha da identidade visual (Regimento, Art. 159). Se acha que é engano, fale com a Secretaria.";
+// O motivo de verdade de quem não participa (menor 7 da revisão do portão, 24/11/2026): a ficha que veio do sistema pago e ainda está com o arrolamento a
+// completar não é "sem comunhão", e o congregado ainda não é membro (a tela aprovada da rodada 28: "não vota"). O resto, o texto de sempre.
+function textoNaoApto(motivo) {
+  if (motivo === "ARROLAMENTO") return "A sua ficha está com o arrolamento a completar (a situação e a data de entrada): até a secretaria da sua congregação completar, você não participa da escolha da identidade visual. Fale com ela.";
+  if (motivo === "CONGREGADO") return "Só membro em comunhão participa da escolha da identidade visual (Regimento, Art. 159): o congregado ainda não é membro. Se acha que é engano, fale com a Secretaria.";
+  return NAO_APTO;
+}
 const SEM_CICLO = (ano) => `Ainda não há processo de escolha aberto para a Identidade Visual de ${ano}: a Diretoria abre o ciclo do ano.`;
 
 async function sugerir(pool, { membroId, texto, agora = relogio() }) {
@@ -367,7 +374,8 @@ async function sugerir(pool, { membroId, texto, agora = relogio() }) {
   if (faseDe(c, hoje) !== "SUGESTAO") return RECUSA(`As sugestões para ${ano} vão de ${iv.dataBr(cal.sugestao.inicio)} a ${iv.dataBr(cal.sugestao.fim)}.`);
   const v = iv.validarTema(texto);
   if (v.problema) return RECUSA(v.problema);
-  if (!(await aptoEmComunhao(pool, membroId))) return RECUSA(NAO_APTO);
+  const voto = await situacaoParaVoto(pool, membroId);
+  if (!voto.apto) return RECUSA(textoNaoApto(voto.motivo));
   const conf = iv.conferirTemasUsados(v.normalizado, await lerTemasUsados(pool.request()));
   if (conf.igual) return RECUSA(`Esse tema já foi usado pela Igreja em ${conf.igual.ano} ("${conf.igual.tema}"). O Regimento veda tema repetido (Art. 159): pense em outro.`, { jaUsado: { ano: conf.igual.ano } });
   const t = new sql.Transaction(pool);
@@ -608,7 +616,8 @@ async function enviarArte(pool, { membroId, dados, agora = relogio() }) {
   const img = iv.prepararImagem(Buffer.from(d.imagemBase64, "base64"), d.tipo);
   if (img.problema) return RECUSA(img.problema);
   const buffer = img.buffer;
-  if (!(await aptoEmComunhao(pool, membroId))) return RECUSA(NAO_APTO);
+  const voto = await situacaoParaVoto(pool, membroId);
+  if (!voto.apto) return RECUSA(textoNaoApto(voto.motivo));
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
   const antes = (await pool.request().input("c", sql.Int, c.CicloId).input("m", sql.Int, membroId).input("h", sql.Char(64), hash)
     .query(`SELECT SUM(CASE WHEN Status IN ('ENVIADA', 'ESCOLHIDA') THEN 1 ELSE 0 END) AS ativas, SUM(CASE WHEN Sha256 = @h AND Status IN ('ENVIADA', 'ESCOLHIDA') THEN 1 ELSE 0 END) AS mesma
@@ -796,8 +805,10 @@ async function painelMembro(pool, { membroId, agora = relogio() }) {
   // em janeiro (ou até o processo seguinte abrir), o ciclo do ano corrente ainda vale: mostra o resultado
   if (!c) c = await cicloAtualizado(pool, await cicloDoAno(pool, anoAtual), agora);
   const vigente = (await pool.request().input("a", sql.SmallInt, anoAtual).query(`SELECT Ano, Tema FROM IdentidadeTemasUsados WHERE Ano = @a`)).recordset[0];
-  const apto = await aptoEmComunhao(pool, membroId);
-  const base = { sucesso: true, hoje, apto, maxSugestoes: iv.MAX_SUGESTOES, maxArtes: iv.MAX_ARTES, maxTexto: iv.MAX_TEXTO, maxImagemBytes: iv.MAX_IMAGEM_BYTES,
+  const voto = await situacaoParaVoto(pool, membroId);
+  const apto = voto.apto;
+  // naoApto: o motivo de verdade, para a tela dizer (menor 7 do portão); null quando participa
+  const base = { sucesso: true, hoje, apto, naoApto: apto ? null : textoNaoApto(voto.motivo), maxSugestoes: iv.MAX_SUGESTOES, maxArtes: iv.MAX_ARTES, maxTexto: iv.MAX_TEXTO, maxImagemBytes: iv.MAX_IMAGEM_BYTES,
     identidadeVigente: vigente ? { ano: Number(vigente.Ano), tema: vigente.Tema } : null, proximoAno: proximo, calendarioProximo: iv.calendario(proximo) };
   if (!c) return { ...base, ciclo: null };
   const ciclo = formatarCiclo(c, hoje);
@@ -1042,6 +1053,6 @@ module.exports = {
   listarTemas, salvarTema, excluirTema,
   sugerir, retirarSugestao, triar, desempatar,
   salvarCor, excluirCor, enviarArte, retirarArte, recusarArte, imagemDaArte, registrarResultado,
-  painelMembro, painelGestao, detalheCiclo,
+  painelMembro, painelGestao, detalheCiclo, textoNaoApto,
   rotinaDiaria, rotinaAntesDosAvisos, rotinaDepoisDosAvisos, detectarTriagem, detectarVotacao, detectarApuracao, detectarArte, aplicarRetencao, exclusaoLgpd, apagarArquivos, dadosDoTitular
 };

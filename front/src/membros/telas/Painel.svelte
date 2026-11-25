@@ -119,7 +119,7 @@
   const areaUnica = $derived.by(() => { const nomes = new Set(lugaresArrol.map((l) => l.area ?? "")); return nomes.size === 1 ? [...nomes][0] || null : null; });
   const fraseEscondidos = $derived(sessao.geral ? `+ ${numero(escondidos)} ${escondidos === 1 ? "área" : "áreas"}` : fraseResto(escondidos, areaUnica));
   function abrirArrolamento() {
-    if (vistaLocal && idDaCongregacao !== null) { ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao, semCongregacao: false }); return; }
+    if (vistaLocal && idDaCongregacao !== null) { ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao }); return; }
     document.getElementById("arrolamento-por-lugar")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   $effect(() => { void congregacaoId; void carregar(); });
@@ -184,11 +184,11 @@
         {@render barraArrol(a.completadas, a.vieram)}
         <p class="and-txt"><strong class="sv-num">{numero(a.completadas)} de {numero(a.vieram)}</strong> já completadas · faltam <span class="sv-num">{numero(a.faltam)}</span></p>
       </div>
-      {#if !celular}<p class="explica">Vieram do sistema pago{arrol.veioEm ? ` em ${diaMes(arrol.veioEm)}` : ""} sem a situação, a data e a forma de entrada. Ao completar, a pessoa sai deste grupo e ganha o voto.</p>{/if}
+      {#if !celular}<p class="explica">Vieram do sistema pago{arrol.veioEm ? ` em ${diaMes(arrol.veioEm)}` : ""} sem a situação, a data e a forma de entrada. Ao completar, a pessoa sai deste grupo; em comunhão, vota com 18 anos e 90 dias de entrada.</p>{/if}
       {#if a.faltam > 0}
         <div class="proximas">
           {#each arrol.proximas.slice(0, celular ? 3 : 4) as p (p.matricula)}
-            <button type="button" class="prox" onclick={() => ir({ tela: "completar", matricula: p.matricula, congregacaoId: null, semCongregacao: false })}>
+            <button type="button" class="prox" onclick={() => ir({ tela: "completar", matricula: p.matricula, congregacaoId: null })}>
               <Avatar nome={p.nome} tam={30} cor={corDoDepartamento(p.departamento)} />
               <span class="prox-t"><strong>{p.nome}</strong><small>nº {numero(p.matricula)} · veio do sistema pago · sem voto</small></span>
               <span class="mais">Completar ›</span>
@@ -196,7 +196,7 @@
           {/each}
         </div>
         {#if idDaCongregacao !== null}
-          <Botao tipo="ouro" icone="seta" largo tam={celular ? "grande" : "normal"} onclick={() => ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao, semCongregacao: false })}>Completar, uma por uma</Botao>
+          <Botao tipo="ouro" icone="seta" largo tam={celular ? "grande" : "normal"} onclick={() => ir({ tela: "completar", matricula: null, congregacaoId: idDaCongregacao })}>Completar, uma por uma</Botao>
         {/if}
       {/if}
     {:else if arrolErro}
@@ -244,7 +244,9 @@
 {#snippet fimCima()}
   {#if escondidos > 0}<button type="button" class="gc-fim botao-txt" onclick={() => (todas = true)}>{fraseEscondidos}</button>{/if}
   {#if sessao.geral && (arrol?.semCongregacao ?? 0) > 0}
-    <p class="gc-fim">{fraseSemCongregacao(arrol?.semCongregacao ?? 0)} <button type="button" class="mais botao-txt" onclick={() => ir({ tela: "completar", matricula: null, congregacaoId: null, semCongregacao: true })}>Completar ›</button></p>
+    <!-- G3 (decisão dele de 24/11/2026): sem congregação não há importação. Só a ficha de antes da regra cai aqui; ela não se completa pelo arrolamento
+         (o servidor recusa), então a frase diz o que fazer e não há botão -->
+    <p class="gc-fim">{fraseSemCongregacao(arrol?.semCongregacao ?? 0)}</p>
   {/if}
 {/snippet}
 

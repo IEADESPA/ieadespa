@@ -8,6 +8,7 @@ jest.mock("../importacaoMembrosDb", () => ({
   csv: jest.fn(async () => "﻿Linha;Matrícula\r\n"),
   criarPrevia: jest.fn(async () => ({ sucesso: true, importacaoId: 7, resumo: { total: 1 } })),
   descartar: jest.fn(async () => ({ sucesso: true })),
+  descartarParada: jest.fn(async () => ({ sucesso: true })),
   confirmar: jest.fn(async () => ({ sucesso: true, importacaoId: 7, restantes: 3 })),
   importarLote: jest.fn(async () => ({ sucesso: true, importacaoId: 7, importadas: 3, restantes: 0, concluida: true }))
 }));
@@ -72,6 +73,15 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     expect(c2.res.status).toBe(409);
     expect(c2.res.body).toEqual({ sucesso: false, mensagem: "A importação do sistema pago já foi feita (é uma vez só)." });
   });
+  // G2 (decisão dele de 24/11/2026): a importação só das linhas que faltaram é pedida com resto: true (só o true de verdade; o resto é a prévia de sempre)
+  test("a prévia do resto: só resto === true vai à camada como resto; o lixo vira a prévia de sempre", async () => {
+    await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", resto: true } });
+    expect(db.criarPrevia).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x", resto: true });
+    for (const resto of ["true", 1, [true], { sim: true }, false, null]) {
+      await chamar({ metodo: "POST", acao: "previa", token: tok.geral(5000 + db.criarPrevia.mock.calls.length), corpo: { texto: "x", resto } });
+      expect(db.criarPrevia).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x" });
+    }
+  });
   test("a prévia com o mapa das colunas escolhido na tela: a lista vai à camada; o que não é lista (ou é enorme) é 400 sem tocar no banco", async () => {
     await chamar({ metodo: "POST", acao: "previa", token: tok.geral(), corpo: { texto: "x", colunas: ["matricula", null] } });
     expect(db.criarPrevia).toHaveBeenCalledWith({ fake: true }, expect.anything(), { nomeArquivo: undefined, texto: "x", colunas: ["matricula", null] });
@@ -103,16 +113,36 @@ describe("cada ação chega à camada do banco com o que precisa", () => {
     expect(c2.res.status).toBe(200);
     expect(db.confirmar).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 79 }), 7);
   });
+  // G2 (decisão dele de 24/11/2026): descartar a importação JÁ CONFIRMADA (a parada sem ninguém importado) é ato sensível como confirmar: pede o fator recente
+  test("descartar a importação parada pede a confirmação recente (428) e, sem ela, nada muda", async () => {
+    const semFator = auth.reassinarSessao({ membroId: 82, via: "SENHA", nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes: ["pessoas"], termosPendentes: [] });
+    const c = await chamar({ metodo: "POST", acao: "descartar-parada", token: semFator, corpo: { importacaoId: 7 } });
+    expect(c.res.status).toBe(428);
+    expect(db.descartarParada).not.toHaveBeenCalled();
+    expect((await chamar({ metodo: "POST", acao: "descartar-parada", token: tok.local(), corpo: { importacaoId: 7 } })).res.status).toBe(403);
+    expect(db.descartarParada).not.toHaveBeenCalled();
+    const c2 = await chamar({ metodo: "POST", acao: "descartar-parada", token: tok.geral(83), corpo: { importacaoId: 7 } });
+    expect(c2.res.status).toBe(200);
+    expect(db.descartarParada).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 83 }), 7);
+    expect((await chamar({ metodo: "GET", acao: "descartar-parada", token: tok.geral(83) })).res.status).toBe(405);
+  });
   test("descartar e o lote", async () => {
     expect((await chamar({ metodo: "POST", acao: "descartar", token: tok.geral(80), corpo: { importacaoId: 7 } })).res.status).toBe(200);
     expect(db.descartar).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 80 }), 7);
     const c = await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7 } });
     expect(c.res.body).toEqual({ sucesso: true, importacaoId: 7, importadas: 3, restantes: 0, concluida: true });
-    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 81 }), 7);
+    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.objectContaining({ membroId: 81 }), 7, { deixarDeFora: false });
+    // A6: o "deixar de fora e continuar" só com true de verdade (nunca uma lista de linhas do cliente)
+    await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7, deixarDeFora: true, linhas: [2, 3] } });
+    expect(db.importarLote).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), 7, { deixarDeFora: true });
+    for (const lixo of ["true", 1, [true], { a: 1 }]) {
+      await chamar({ metodo: "POST", acao: "lote", token: tok.geral(81), corpo: { importacaoId: 7, deixarDeFora: lixo } });
+      expect(db.importarLote).toHaveBeenLastCalledWith({ fake: true }, expect.anything(), 7, { deixarDeFora: false });
+    }
   });
   test("o corpo que não é objeto vale como vazio (sem quebrar)", async () => {
     await chamar({ metodo: "POST", acao: "lote", token: tok.geral(), corpo: ["x"] });
-    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.anything(), undefined);
+    expect(db.importarLote).toHaveBeenCalledWith({ fake: true }, expect.anything(), undefined, { deixarDeFora: false });
   });
 });
 

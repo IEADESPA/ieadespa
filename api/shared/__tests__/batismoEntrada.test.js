@@ -88,6 +88,26 @@ describe("as duas datas: a data de antes do congregado vira a data da conversão
   });
 });
 
+// volta 9 (decisão de 25/11): a conversão lançada ou corrigida À MÃO segue a mesma regra — antes do batismo (no máximo no mesmo dia) e nunca no futuro
+describe("a conversão à mão: antes do batismo e nunca no futuro (a regra pura das rotas do marco)", () => {
+  const r = batismo.recusaDaConversao;
+  test.each([
+    ["depois do batismo: recusa e diz a data do batismo em dd/mm/aaaa", "2026-11-10", "2026-10-03", /antes do batismo.*03\/10\/2026/],
+    ["no futuro: recusa", "2026-11-26", null, /futuro/],
+    ["no futuro e depois do batismo: o futuro primeiro", "2031-01-01", "2026-10-03", /futuro/]
+  ])("%s", (_n, data, dataBatismo, msg) => {
+    expect(r(data, dataBatismo, "2026-11-25")).toMatch(msg);
+  });
+  test.each([
+    ["no mesmo dia do batismo: vale", "2026-10-03", "2026-10-03"],
+    ["antes do batismo: vale", "2006-03-01", "2026-10-03"],
+    ["sem batismo registrado: vale (só o futuro conta)", "2026-11-25", null],
+    ["sem data no marco: nada a conferir", null, "2026-10-03"]
+  ])("%s", (_n, data, dataBatismo) => {
+    expect(r(data, dataBatismo, "2026-11-25")).toBeNull();
+  });
+});
+
 describe("A2 e o menor 6: a efetivação da turma", () => {
   const FICHAS = {
     10: { SituacaoMembro: "ARROLAMENTO", FormaAdmissao: null, DataAdmissao: null },

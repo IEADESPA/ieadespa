@@ -144,6 +144,16 @@ function conversaoPeloBatismo(antes, entrada, dataBatismo, hoje) {
 }
 // o texto vai para a ficha 360 ("data · texto"): curto, para a pessoa ler
 const DESCRICAO_CONVERSAO = "Congregado desde esta data.";
+// A MESMA regra para a conversão lançada ou corrigida à mão (RegistrarMarcoMembro, EditarMarcoMembro; volta 9, decisão de 25/11): nunca no futuro e nunca
+// depois do batismo (no mesmo dia vale). `data` e `dataBatismo`: "AAAA-MM-DD" ou nulo; `hoje`: o dia de Brasília. Devolve a mensagem da recusa ou null.
+const dataBR = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+function recusaDaConversao(data, dataBatismo, hoje) {
+  if (!data) return null;
+  const d = String(data).slice(0, 10);
+  if (d > hoje) return "A data da conversão não pode ser no futuro.";
+  if (dataBatismo && d > String(dataBatismo).slice(0, 10)) return `A conversão vem antes do batismo: esta pessoa foi batizada em ${dataBR(String(dataBatismo).slice(0, 10))}.`;
+  return null;
+}
 
 // Efetivação (Art. 7º, II) — ao REALIZAR a turma, todo candidato já APROVADO nela vira Membro em Comunhão automaticamente: DataBatismo e FormaAdmissao vêm do
 // próprio fluxo, "sem digitação posterior" (mesmo texto da versão), e a data de entrada pela regra acima. Quem não foi aprovado a tempo NÃO é efetivado — fica
@@ -226,7 +236,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
 }
 
 module.exports = {
-  efetivarTurma, entradaPeloBatismo, conversaoPeloBatismo, notaDoBatismo, FORMAS_DE_OUTRO_CAMINHO, turmaNoEscopo,
+  efetivarTurma, entradaPeloBatismo, conversaoPeloBatismo, recusaDaConversao, notaDoBatismo, FORMAS_DE_OUTRO_CAMINHO, turmaNoEscopo,
   IDADE_MINIMA_BATISMO, MESES_VALIDOS_TURMA, TIPOS_LOCAL_VEDADOS,
   mesValidoParaTurma, localPermitido, possuiCasamentoCivilRegistrado,
   calcularAptidaoBatismo, registrarAceiteEstatuto,

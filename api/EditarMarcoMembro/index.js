@@ -55,6 +55,17 @@ module.exports = async function (context, req) {
     }
   }
 
+  // volta 9 (decisão de 25/11): a conversão corrigida também vem antes do batismo (no mesmo dia vale) e nunca no futuro (shared/batismo.js)
+  if (atual.Tipo === "CONVERSAO" && dataMarco) {
+    const f = (await pool.request().input("m", sql.Int, atual.MembroId)
+      .query(`SELECT CONVERT(varchar(10), DataBatismo, 120) AS DataBatismo FROM MembroReferencia WHERE MembroId = @m`)).recordset[0];
+    const recusa = require("../shared/batismo").recusaDaConversao(dataMarco, f && f.DataBatismo, require("../shared/dataBrasilia").hojeBrasilia());
+    if (recusa) {
+      context.res = { status: 400, body: { sucesso: false, mensagem: recusa } };
+      return;
+    }
+  }
+
   const descricaoFinal = descricao !== undefined ? String(descricao).trim().slice(0, 500) : atual.Descricao;
   const dataMarcoFinal = dataMarco !== undefined ? dataMarco : atual.DataMarco;
   const dataAproximadaFinal = dataAproximada !== undefined ? Boolean(dataAproximada) : atual.DataAproximada;

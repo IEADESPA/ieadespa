@@ -60,7 +60,7 @@ function regrasDaFicha(ficha) {
     [/SELECT TOP 1 Nome FROM Congregacoes/, { recordset: [{ Nome: "Central" }] }],
     [/FROM CargosMinisteriais WHERE Sigla/, { recordset: [{ x: 1 }] }],
     [/sp_getapplock/, { recordset: [{ resultado: 0 }] }],
-    [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, () => ({ recordset: [{ EscopoTipo: mockCargo.tipo, EscopoId: mockCargo.id }] })],
+    [/SELECT l\.EscopoTipo, l\.EscopoId FROM Lideranca l/, () => ({ recordset: mockCargo ? [{ EscopoTipo: mockCargo.tipo, EscopoId: mockCargo.id }] : [] })],
     [/SELECT Nome FROM Congregacoes WHERE CongregacaoId = @id/, { recordset: [{ Nome: "Central" }] }],
     [/SELECT Nome FROM Congregacoes WHERE AreaId = @id/, { recordset: [{ Nome: "Central" }, { Nome: "Vila Nova" }] }],
     [/EmProcessoDeCargo/, () => ({ recordset: ficha ? [ficha] : [] })],
@@ -657,5 +657,155 @@ describe("a saída do rol de quem está em licença por candidatura fecha a lice
     const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
     expect(r.status).toBe(200);
     expect(licencaFechada()).toBeUndefined();
+  });
+});
+
+// S3 (revisão de fora, 25/11/2026): o e-mail é o destino do código da segunda etapa do login e do "esqueci o PIN". Trocar ou apagar o e-mail de quem tem cargo
+// de liderança vigente segue a regra do nível do cargo (shared/nivelDoCargo.js) e pede a confirmação recente (428), como mudar a situação dele no rol. Sem cargo,
+// nada muda.
+describe("o e-mail de quem tem cargo de liderança", () => {
+  const local = (extra = {}) => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], ...extra });
+  const localSemFator = () => local({ fator: { via: "NENHUM", em: Date.now() } });
+  const comEmail = (extra = {}) => regrasDaFicha(fichaNoBanco({ EmailAnterior: "tesoureira@exemplo.org", ...extra }));
+
+  test.each([["trocado", { email: "joao.outro@exemplo.org" }], ["apagado (vazio)", { email: "" }], ["apagado (null)", { email: null }], ["apagado (sem o campo)", {}]])(
+    "cargo geral, e-mail %s pela secretaria local: 403 com a mensagem do nível, e nada é gravado", async (_rotulo, extra) => {
+      mockCargo = { tipo: "GLOBAL", id: null };
+      comEmail();
+      const r = await chamar("POST", { token: local(), corpo: corpoFicha(extra) });
+      expect(r.status).toBe(403);
+      expect(r.body.mensagem).toMatch(/e-mail/);
+      expect(gravacoes()).toHaveLength(0);
+    });
+
+  test("cargo local: a secretaria local troca o e-mail com a confirmação recente; sem ela, 428 e nada é gravado", async () => {
+    mockCargo = { tipo: "CONGREGACAO", id: 1 };
+    comEmail();
+    const semFator = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ email: "nova@exemplo.org" }) });
+    expect(semFator.status).toBe(428);
+    expect(gravacoes()).toHaveLength(0);
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ email: "nova@exemplo.org" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()[0].entradas.email).toBe("nova@exemplo.org");
+  });
+
+  test("cargo geral: a Geral troca, com a confirmação recente", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    comEmail();
+    const semFator = await chamar("POST", { token: sessao(77, { fator: { via: "NENHUM", em: Date.now() } }), corpo: corpoFicha({ email: "nova@exemplo.org" }) });
+    expect(semFator.status).toBe(428);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ email: "nova@exemplo.org" }) });
+    expect(r.body.sucesso).toBe(true);
+  });
+
+  test("sem cargo: a secretaria local troca o e-mail como sempre, sem pedir a confirmação recente", async () => {
+    mockCargo = null;
+    comEmail();
+    const r = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ email: "nova@exemplo.org" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+  });
+
+  test("com cargo, o mesmo e-mail (outra caixa, espaço em volta): não é troca, a ficha salva sem a conferência", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    comEmail();
+    const r = await chamar("POST", { token: localSemFator(), corpo: corpoFicha({ email: " Tesoureira@Exemplo.org " }) });
+    expect(r.body.sucesso).toBe(true);
+  });
+
+  test("o 403 de quem está fora do escopo vem antes (a mesma resposta de quem não existe)", async () => {
+    mockCargo = { tipo: "GLOBAL", id: null };
+    comEmail({ CongregacaoNome: "Vila Nova" });
+    const fora = await chamar("POST", { token: local(), corpo: corpoFicha({ email: "x@exemplo.org" }) });
+    expect(fora.status).toBe(403);
+    expect(fora.body.mensagem).not.toMatch(/e-mail/);
+  });
+});
+
+// E2: o aviso ao e-mail antigo que não sai fica dito na resposta e na trilha; a gravação continua valendo.
+describe("o aviso ao e-mail antigo", () => {
+  const { enviarEmailNotificacao } = require("../notificacaoEmail");
+  const { registrarAuditoria } = require("../auditoria");
+  beforeEach(() => { mockCargo = null; enviarEmailNotificacao.mockClear(); registrarAuditoria.mockClear(); regrasDaFicha(fichaNoBanco({ EmailAnterior: "maria@exemplo.org" })); });
+
+  test("o serviço de e-mail recusa (devolve false): a resposta diz que o aviso não saiu e a trilha registra, sem o endereço em claro", async () => {
+    enviarEmailNotificacao.mockImplementationOnce(async () => false);
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ email: "outro@exemplo.org" }) });
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+    expect(r.body.mensagem).toMatch(/aviso .* não saiu/);
+    const trilha = registrarAuditoria.mock.calls.map((c) => c[0]).find((a) => /Aviso da troca de e-mail não enviado/.test(a.acao));
+    expect(trilha).toMatchObject({ tabela: "MembroReferencia", registroId: 5, usuarioId: 77, dadosDepois: { emailAnterior: "m***@exemplo.org" } });
+    expect(JSON.stringify(trilha)).not.toMatch(/maria@exemplo\.org/);
+  });
+
+  test("o envio que lança erro: o mesmo (a gravação vale, a resposta e a trilha dizem)", async () => {
+    enviarEmailNotificacao.mockImplementationOnce(async () => { throw new Error("cliente de e-mail"); });
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ email: "outro@exemplo.org" }) });
+    expect(r.body.sucesso).toBe(true);
+    expect(r.body.mensagem).toMatch(/aviso .* não saiu/);
+    expect(registrarAuditoria.mock.calls.some((c) => /não enviado/.test(c[0].acao))).toBe(true);
+  });
+
+  test("o aviso que sai: a resposta de sempre e nenhuma trilha a mais", async () => {
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ email: "outro@exemplo.org" }) });
+    expect(r.body.mensagem).toBe("✅ Pessoa atualizada.");
+    expect(enviarEmailNotificacao).toHaveBeenCalledTimes(1);
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  test("o aviso sai logo depois do commit, antes da releitura da ficha (uma falha na releitura não o perde)", async () => {
+    mockRegras.unshift([/COALESCE\(cm\.Nome, m\.Funcao\)/, () => { throw new Error("releitura falhou"); }]);
+    await expect(chamar("POST", { token: sessao(77), corpo: corpoFicha({ email: "outro@exemplo.org" }) })).rejects.toThrow("releitura falhou");
+    expect(enviarEmailNotificacao).toHaveBeenCalledTimes(1);
+  });
+});
+
+// L4: de uma situação terminal para a outra (desligado para falecido, ou o contrário), a data de saída gravada fica.
+describe("a data de saída entre as situações terminais", () => {
+  beforeEach(() => { mockCargo = null; });
+  test.each([["DESLIGADO", "FALECIDO"], ["FALECIDO", "DESLIGADO"]])("de %s para %s sem a data no pedido: fica a de 2019", async (antes, depois) => {
+    regrasDaFicha(fichaNoBanco({ Status: antes, DataSaidaAnterior: "2019-03-10" }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: depois }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.dataSaida).toBe("2019-03-10");
+  });
+  test("de DESLIGADO (sem data gravada) para FALECIDO: hoje, como no Desligar", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "DESLIGADO", DataSaidaAnterior: null }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()[0].entradas.dataSaida).toBe(require("../dataBrasilia").hojeBrasilia());
+  });
+  test("de ATIVO para FALECIDO: continua hoje (a entrada no rol de saída de verdade)", async () => {
+    regrasDaFicha(fichaNoBanco({ Status: "ATIVO", DataSaidaAnterior: null }));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "FALECIDO" }) });
+    expect(gravacoes()[0].entradas.dataSaida).toBe(require("../dataBrasilia").hojeBrasilia());
+  });
+});
+
+// S5: a consulta da Extensão roda só depois do escopo da pessoa. Fora do escopo, a resposta é a mesma qualquer que seja a Extensão.
+describe("a Extensão informada e o escopo", () => {
+  const local = () => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] });
+  test("pessoa de outra congregação: a resposta é idêntica com a Extensão desativada dela, com outra e sem Extensão, e a Extensão nem é consultada", async () => {
+    mockCargo = null;
+    const respostas = [];
+    for (const extensaoId of [7, 8, undefined]) {
+      mockConsultas = [];
+      regrasDaFicha(fichaNoBanco({ CongregacaoNome: "Vila Nova" }));
+      mockRegras.unshift([/FROM ExtensoesTenda WHERE ExtensaoId = @id/, (e) => ({ recordset: e.id === 7 ? [{ Nome: "Extensão Desativada" }] : [] })]);
+      const r = await chamar("POST", { token: local(), corpo: { membroId: 5, nome: "x", ...(extensaoId ? { extensaoId } : {}) } });
+      respostas.push(JSON.stringify(r));
+      expect(mockConsultas.some((c) => /FROM ExtensoesTenda WHERE ExtensaoId = @id/.test(c.texto || ""))).toBe(false);
+    }
+    expect(new Set(respostas).size).toBe(1);
+    expect(JSON.parse(respostas[0]).status).toBe(403);
+  });
+  test("pessoa do escopo com Extensão inválida: a mensagem de sempre", async () => {
+    mockCargo = null;
+    regrasDaFicha(fichaNoBanco());
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ extensaoId: 8 }) });
+    expect(r.body.mensagem).toMatch(/Extensão da Tenda inválida/);
+    expect(gravacoes()).toHaveLength(0);
   });
 });

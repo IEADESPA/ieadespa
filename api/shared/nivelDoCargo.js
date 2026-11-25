@@ -27,9 +27,9 @@ function concessaoAlcanca(c, ordem, congregacoes, extensaoNome) {
   return congregacoes.every((nome) => auth.estaNoEscopo(c, nome) && (!c.escopoExtensaoNome || extensaoNome === c.escopoExtensaoNome));
 }
 
-// true quando a visão de quem pede alcança todos os cargos vigentes da pessoa (sem cargo: true).
-async function alcancaOsCargos(pool, sql, usuario, membroId, hoje) {
-  const cargos = await cargosVigentes(pool, sql, membroId, hoje);
+// true quando a visão de quem pede alcança todos os cargos vigentes da pessoa (sem cargo: true). `cargosLidos`: os cargos já lidos por quem chama.
+async function alcancaOsCargos(pool, sql, usuario, membroId, hoje, cargosLidos) {
+  const cargos = cargosLidos || (await cargosVigentes(pool, sql, membroId, hoje));
   if (cargos.length === 0) return true;
   // Só a concessão com "pessoas" conta, mesmo que quem chama passe a sessão inteira em vez da visão da permissão.
   const concessoes = auth.concessoesDaVisao(usuario).filter((c) => Array.isArray(c.permissoes) && c.permissoes.includes("pessoas"));
@@ -65,4 +65,20 @@ async function conferirSaidaDeLideranca(pool, sql, req, context, usuario, membro
   return true;
 }
 
-module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, conferirSaidaDeLideranca, MENSAGEM_NIVEL };
+// O e-mail de quem tem cargo de liderança vigente é o destino do código da segunda etapa do login e do "esqueci o PIN": trocá-lo ou apagá-lo é ato da
+// secretaria do nível do cargo ou de cima, com a confirmação recente (428) — a mesma regra de mudar a situação no rol, sem a trava do último administrador
+// (o e-mail novo não tira o acesso de ninguém). Revisão de fora de 25/11/2026 (S3). Sem cargo, passa. Chamado DEPOIS da conferência do escopo.
+const MENSAGEM_NIVEL_EMAIL = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) troca ou apaga o e-mail dela (é por ele que chega o código de acesso).";
+async function conferirTrocaDeEmailDeLideranca(pool, sql, req, context, usuario, membroId) {
+  const { hojeBrasilia } = require("./dataBrasilia");
+  const hoje = hojeBrasilia();
+  const cargos = await cargosVigentes(pool, sql, membroId, hoje);
+  if (cargos.length === 0) return true;
+  if (!(await alcancaOsCargos(pool, sql, usuario, membroId, hoje, cargos))) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: MENSAGEM_NIVEL_EMAIL } };
+    return false;
+  }
+  return auth.exigirFatorRecente(req, context);
+}
+
+module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, conferirSaidaDeLideranca, conferirTrocaDeEmailDeLideranca, MENSAGEM_NIVEL, MENSAGEM_NIVEL_EMAIL };

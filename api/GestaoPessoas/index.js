@@ -4,7 +4,7 @@
 // POST   /api/pessoas            -> body: { membroId, nome, cargoMinisterial, congregacaoId, status, ... } -> cria ou atualiza
 // DELETE /api/pessoas/{membroId} -> não remove de verdade: marca status = DESLIGADO
 const auth = require("../shared/auth");
-const { registrarAuditoriaNaTransacao } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const estatuto = require("../shared/estatuto");
 const disciplina = require("../shared/disciplina");
@@ -260,18 +260,6 @@ module.exports = async function (context, req) {
         return;
       }
     }
-    if (extensaoId) {
-      // v9.2 — a Extensão precisa estar ativa (a emancipada ou desativada só vale para quem já está nela: o registro histórico) e ser da congregação da pessoa
-      const ex = await pool.request().input("id", sql.Int, extensaoId).input("m", sql.Int, membroId).input("c", sql.Int, congregacaoId || null)
-        .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id
-                  AND (Ativa = 1 OR ExtensaoId = (SELECT ExtensaoId FROM MembroReferencia WHERE MembroId = @m))
-                  AND (@c IS NULL OR CongregacaoMaeId = @c)`);
-      if (ex.recordset.length === 0) {
-        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." } };
-        return;
-      }
-      destinoExtensaoNome = ex.recordset[0].Nome;
-    }
 
     // Formas de admissão fixas do Estatuto Art. 6º §1º — regra jurídica, não catálogo
     // editável por tela (mesmo espírito de shared/estatuto.js).
@@ -364,8 +352,25 @@ module.exports = async function (context, req) {
              c.Nome AS CongregacaoNome, e.Nome AS ExtensaoNome
       FROM MembroReferencia m LEFT JOIN Congregacoes c ON c.CongregacaoId = m.CongregacaoId LEFT JOIN ExtensoesTenda e ON e.ExtensaoId = m.ExtensaoId WHERE m.MembroId = @id`);
     const existia = existente.recordset.length > 0;
-    // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera.
-    if ((existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) || !noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
+    // O alvo (se já existe) e o destino (a congregação/extensão para onde vai) precisam estar no escopo de quem altera. O alvo vem PRIMEIRO, antes de qualquer
+    // consulta que dependa dos dados dele (a Extensão abaixo olha a Extensão atual da pessoa): fora do escopo, a resposta é a mesma, qualquer que seja o pedido.
+    if (existia && !noEscopoDaPessoa(usuario, existente.recordset[0].CongregacaoNome, existente.recordset[0].ExtensaoNome)) {
+      context.res = { status: 403, body: FORA_DO_ESCOPO };
+      return;
+    }
+    if (extensaoId) {
+      // v9.2 — a Extensão precisa estar ativa (a emancipada ou desativada só vale para quem já está nela: o registro histórico) e ser da congregação da pessoa
+      const ex = await pool.request().input("id", sql.Int, extensaoId).input("m", sql.Int, membroId).input("c", sql.Int, congregacaoId || null)
+        .query(`SELECT TOP 1 Nome FROM ExtensoesTenda WHERE ExtensaoId = @id
+                  AND (Ativa = 1 OR ExtensaoId = (SELECT ExtensaoId FROM MembroReferencia WHERE MembroId = @m))
+                  AND (@c IS NULL OR CongregacaoMaeId = @c)`);
+      if (ex.recordset.length === 0) {
+        context.res = { status: 200, body: { sucesso: false, mensagem: "Extensão da Tenda inválida (inativa, emancipada ou de outra congregação)." } };
+        return;
+      }
+      destinoExtensaoNome = ex.recordset[0].Nome;
+    }
+    if (!noEscopoDaPessoa(usuario, destinoCongregacaoNome, destinoExtensaoNome)) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
@@ -474,14 +479,20 @@ module.exports = async function (context, req) {
     // sair do rol ativo (para qualquer outra situação, inclusive as terminais) corta o acesso: quem tem cargo de liderança passa pela conferência
     const saindoDoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO";
     if (saindoDoRolAtivo && !(await conferirSaidaDeLideranca(pool, req, context, usuario, membroId))) return;
+    // O e-mail é o destino do código de acesso (a segunda etapa do login e o "esqueci o PIN"): trocar ou apagar o de quem tem cargo segue o nível do cargo + 428.
+    // Sem o campo no pedido, o e-mail é apagado (como sempre): também conta como troca.
+    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
+    if (emailMudou && !(await nivelDoCargo.conferirTrocaDeEmailDeLideranca(pool, sql, req, context, usuario, membroId))) return;
     const hojeISO = hojeBrasilia();   // a data da saída é o dia de Brasília (depois das 21h o de Greenwich já é amanhã)
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
       : (situacaoMembro || (statusInformado && statusFinal === "ATIVO" ? "EM_COMUNHAO" : "SEM_COMUNHAO"));
     // A ficha não manda a data de saída (só a mostra): sem a data no pedido (ou com ela vazia), quem continua fora do rol ativo mantém a data gravada (o
     // histórico e os prazos de retenção contam dela). A data informada vale; a volta a ATIVO a limpa, como antes.
+    // De uma situação terminal para a outra (desligado para falecido, ou o contrário), a saída já aconteceu: fica a data gravada (sem ela, hoje, como no Desligar).
     const dataSaidaGuardada = existia ? (existente.recordset[0].DataSaidaAnterior || null) : null;
-    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaidaInformada ? dataSaida : hojeISO)
+    const deTerminalParaTerminal = entrandoEmStatusTerminal && STATUS_TERMINAIS.includes(statusAnterior);
+    const dataSaidaFinal = entrandoEmStatusTerminal ? (dataSaidaInformada ? dataSaida : (deTerminalParaTerminal && dataSaidaGuardada) || hojeISO)
       : dataSaidaInformada ? dataSaida
         : statusFinal !== "ATIVO" ? dataSaidaGuardada : null;
 
@@ -551,7 +562,6 @@ module.exports = async function (context, req) {
       return { gravou: true };
     };
     const prepEnd = { partes: partesFinais, endereco: enderecoFinal };
-    const emailMudou = existia && String(emailAnterior || "").trim().toLowerCase() !== String(email || "").trim().toLowerCase();
     // v8.2 — o histórico de cargos acompanha a troca (ou recebe a data informada).
     const mexeNoHistorico = cargoAnterior !== cargoNovo || !!cargoDesdeFinal;
     // O motivo que a vacância grava nos vínculos encerrados: a causa da saída informada ou, sem ela, a do próprio status (o falecido sai por falecimento).
@@ -600,6 +610,24 @@ module.exports = async function (context, req) {
       context.res = { status: 409, body: { sucesso: false, mensagem: "O cargo ou a situação desta pessoa mudou enquanto você salvava. Abra a ficha de novo." } };
       return;
     }
+    // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar). Vai logo
+    // depois do commit (antes da credencial e da releitura, que podem falhar), e o resultado é lido: o aviso que não sai fica dito na resposta e na trilha.
+    let avisoEmailNaoSaiu = false;
+    if (emailMudou && emailAnterior) {
+      let enviado = false;
+      try {
+        enviado = await enviarEmailNotificacao({
+          email: emailAnterior,
+          titulo: "O e-mail do seu cadastro na IEADESPA foi alterado",
+          mensagem: `O e-mail do cadastro da matrícula ${membroId} foi alterado pela Secretaria. Se foi você quem pediu, não há nada a fazer; se não foi, avise a Secretaria da sua congregação.`
+        });
+      } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
+      if (enviado !== true) {
+        avisoEmailNaoSaiu = true;
+        await registrarAuditoria({ tabela: "MembroReferencia", registroId: Number(membroId), acao: "Aviso da troca de e-mail não enviado", usuarioId: usuario.membroId,
+          dadosDepois: { emailAnterior: mascararEmail(emailAnterior) } });
+      }
+    }
     if (entrandoEmStatusTerminal) await require("../shared/credencialDb").recolherSemFalhar(pool, membroId, motivoDaVacancia, usuario.membroId);   // v8.4: a credencial, depois do commit
 
     const result = await pool.request().input("id", sql.Int, membroId).query(`${SELECT_MEMBRO} WHERE m.MembroId = @id`);
@@ -616,18 +644,9 @@ module.exports = async function (context, req) {
     membro.menorDeIdade = idadeMembro !== null && idadeMembro < 18;
     membro.fotoUrl = storage.urlComSas(membro.fotoUrl);
 
-    // O e-mail é por onde chega o código de acesso do membro: quem perdeu o endereço antigo precisa saber que ele mudou (e quem não pediu, estranhar).
-    if (emailMudou && emailAnterior) {
-      try {
-        await enviarEmailNotificacao({
-          email: emailAnterior,
-          titulo: "O e-mail do seu cadastro na IEADESPA foi alterado",
-          mensagem: `O e-mail do cadastro da matrícula ${membroId} foi alterado pela Secretaria. Se foi você quem pediu, não há nada a fazer; se não foi, avise a Secretaria da sua congregação.`
-        });
-      } catch (e) { context.log.error("Falha ao avisar o e-mail antigo:", e.message); }
-    }
-
-    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, mensagem: existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.", membro } };
+    const mensagemGravou = existia ? "✅ Pessoa atualizada." : "✅ Pessoa cadastrada.";
+    context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { sucesso: true, membro,
+      mensagem: avisoEmailNaoSaiu ? `${mensagemGravou} Atenção: o aviso da troca de e-mail não saiu para o endereço antigo; avise a pessoa por outro meio.` : mensagemGravou } };
     return;
   }
 

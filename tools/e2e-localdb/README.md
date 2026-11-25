@@ -232,7 +232,9 @@ Cada versão parte da base da anterior (`BASE=...`):
   do quórum dos órgãos e da lista montada nome por nome; A2: o batismo admite o convertido com a data do batismo, quem veio de outra igreja fica com a data
   da chegada e quem já era membro fica com a data dele; a data de antes do congregado vira a conversão (o marco CONVERSAO), nunca por cima de uma que
   já existe; a pendência fecha como COMPLETADA, com a trilha e a data de antes; as rotas de cadeira e de comissão recusam o congregado e o arrolamento;
-  de novo, nada muda).
+  de novo, nada muda; desde a volta 8: a data de antes depois do batismo ou no futuro não vira conversão; o pedido de cadeira é VÁLIDO para um membro
+  (o mesmo pedido cria a cadeira do membro em comunhão); o ator errado (local, área, PIN) recebe o 403 igual para quem existe e quem não existe, e sem
+  sessão, 401; a composição da CLI não mostra o congregado nem o arrolamento com cadeira antiga, e o sem comunhão continua).
 - **FASE 10, a importação parada e a do resto** (G2, decisão dele de 24/11/2026; migração 187), base `cenario-187` (`bash rodar.sh preparar-187`: a
   `cenario-186` com a 187 aplicada duas vezes). Os roteiros da importação (`e2e-96`, `e2e-97`, `e2e-99`, `e2e-100` e `e2e-102`) rodam nela, porque a
   importação lê e grava o último lote (o `e2e-102` também confere o índice da chave `RestoDe`). Rode um roteiro por vez, cada um com a base restaurada (`bash rodar.sh roteiro` restaura uma vez só, antes do

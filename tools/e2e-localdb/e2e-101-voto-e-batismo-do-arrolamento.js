@@ -11,7 +11,10 @@
 //   mudança) fica com a forma e a data da chegada; quem JÁ é membro com a data de entrada (mesmo com a forma em branco) fica com ela (menor 4 do portão da
 //   volta 5); a data de antes do congregado vira a data da CONVERSÃO (o marco que a ficha 360 lê), nunca por cima de uma conversão já registrada
 //   (respostas dele à volta 6). A ficha em arrolamento: a pendência fecha junto (RESOLVIDA, COMPLETADA, quem realizou). Cada efetivação deixa uma trilha, com a forma e a data
-//   de antes.
+//   de antes. A conversão vem antes do batismo e nunca no futuro: a data de antes que fura isso não vira conversão (o batismo segue; menor 2 do portão v7).
+//  Volta 6 e o menor 3 do portão v7: as rotas de cadeira (/api/assentos, com um pedido VÁLIDO para um membro: o mesmo pedido cria a cadeira do membro em
+//   comunhão) e de comissão recusam o congregado e o arrolamento; o ator errado (local, área, PIN) recebe o 403 igual para quem existe e quem não existe, e
+//   sem sessão, 401; a composição da CLI no banco não mostra o congregado nem o arrolamento com cadeira antiga (o sem comunhão continua).
 // Roda sobre a base cenario-186 (`BASE=cenario-186 bash rodar.sh roteiro e2e-101-voto-e-batismo-do-arrolamento.js`).
 process.env.AUTH_SECRET = "segredo-do-e2e-101-" + "x".repeat(24);
 const L = require("./lib");
@@ -49,17 +52,37 @@ async function principal() {
   ok(!doOrgao.has(990104), "congregado com cadeira no órgão: fora da presença e do quórum (25/11: o congregado fica fora dos órgãos)", [...doOrgao].filter((x) => x >= 990100 && x < 990200));
   ok(doOrgao.has(990103), "em comunhão com cadeira: continua no órgão");
 
+  console.log("== volta 7: a composição da CLI no banco (a cadeira antiga no Conselho Fiscal entra na CLI por função) ==");
+  // o sem comunhão também com cadeira antiga: a composição da CLI o mostra (a regra de antes); o arrolamento e o congregado não aparecem
+  await q(`INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) VALUES (@o, 990102, 'FUNCAO', N'Conselheiro E2E101', '2025-01-01')`, { o: orgao.OrgaoId });
+  const cli = await um("SELECT TOP 1 OrgaoId FROM Orgaos WHERE Sigla = 'CLI'");
+  const naCli = new Set((await universo.composicaoCLI(pool, cli.OrgaoId)).map((m) => Number(m.membroId)));
+  const nossos = [...naCli].filter((x) => x >= 990100 && x < 990200);
+  ok(!naCli.has(990101) && !naCli.has(990104), "a composição da CLI: o arrolamento e o congregado com cadeira antiga não aparecem", nossos);
+  ok(naCli.has(990103) && naCli.has(990102), "a composição da CLI: o em comunhão e o sem comunhão continuam", nossos);
+
   console.log("== volta 6: o congregado e o arrolamento não têm cadeira (as rotas recusam e explicam) ==");
   // as cadeiras de cima entraram por INSERT direto: fazem o papel da cadeira antiga (de antes da regra), que a leitura já tira do órgão
   const hAssentos = require(L.path.join(L.API, "GestaoAssentos/index.js"));
   const hComissoes = require(L.path.join(L.API, "GestaoComissoes/index.js"));
+  const { CATALOGOS_CARGOS_POR_ORGAO } = require(L.path.join(L.API, "shared/diretoria"));
   const geral = L.GERAL(990103, ["pessoas"]);
   const cadeirasAntes = await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId IN (990101, 990104)");
-  const pedirCadeira = (membroId) => L.chamar(hAssentos, { metodo: "POST", token: geral, corpo: { membroId, orgaoId: orgao.OrgaoId, tipoAssento: "FUNCAO", cargoOuFuncao: "Conselheiro E2E101" } });
+  // menor 3 do portão da volta 7: o pedido tem de ser VÁLIDO para um membro (um cargo do catálogo do Conselho Fiscal ainda livre); senão a recusa provaria pouco
+  const ocupados = new Set((await q("SELECT CargoOuFuncao FROM Assentos WHERE OrgaoId = @o AND DataFim IS NULL", { o: orgao.OrgaoId })).map((l) => l.CargoOuFuncao));
+  const cargoLivre = Object.keys(CATALOGOS_CARGOS_POR_ORGAO.CONSELHO_FISCAL).find((k) => !ocupados.has(k));
+  ok(!!cargoLivre, "há um cargo do Conselho Fiscal livre para o pedido de cadeira", [...ocupados]);
+  const corpoCadeira = (membroId) => ({ membroId, orgaoId: orgao.OrgaoId, tipoAssento: "FUNCAO", cargoOuFuncao: cargoLivre });
+  const pedirCadeira = (membroId) => L.chamar(hAssentos, { metodo: "POST", token: geral, corpo: corpoCadeira(membroId) });
   const rCong = await pedirCadeira(990104), rArrol = await pedirCadeira(990101);
   ok(rCong.body && rCong.body.sucesso === false && /congregado ainda não é membro: não tem cadeira em órgão nenhum/.test(rCong.body.mensagem || ""),
     "a cadeira do congregado: recusada, com a explicação", rCong.body);
   ok(rArrol.body && rArrol.body.sucesso === false && /arrolamento a completar/.test(rArrol.body.mensagem || ""), "a cadeira de quem está em arrolamento: recusada, com a explicação", rArrol.body);
+  // o controle positivo: o MESMO pedido, para um membro em comunhão sem cadeira, cria a cadeira (o pedido é válido; o que recusou foi a situação)
+  await q(`INSERT INTO MembroReferencia (MembroId, Nome, Status, SituacaoMembro) VALUES (990105, N'Elias Em Comunhão E2E101', N'ATIVO', N'EM_COMUNHAO')`);
+  const rMembro = await pedirCadeira(990105);
+  ok(rMembro.status === 201 && rMembro.body && rMembro.body.sucesso === true && rMembro.body.assento && rMembro.body.assento.cargoOuFuncao === cargoLivre,
+    "o mesmo pedido para um membro em comunhão: a cadeira é criada (201)", rMembro.body);
   const pedirComissao = async (membroId) => {
     const ctx = { bindingData: { sigla: "ccj" }, log: { error() { }, info() { }, warn() { }, verbose() { } } };
     await hComissoes(ctx, { method: "POST", query: {}, body: { membroId }, headers: { "x-auth-token": geral } });
@@ -70,6 +93,31 @@ async function principal() {
     && cArrol.body && cArrol.body.sucesso === false && /arrolamento a completar/.test(cArrol.body.mensagem || ""), "a vaga na comissão (CCJ): recusada aos dois, com a explicação", [cCong.body, cArrol.body]);
   ok((await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId IN (990101, 990104)")) === cadeirasAntes
     && (await escalar("SELECT COUNT(*) FROM ComissaoMembros WHERE MembroId IN (990101, 990104)")) === 0, "nada foi gravado (nem cadeira, nem vaga na comissão)");
+
+  console.log("== volta 7: o ator errado nas duas rotas (a recusa não diz a situação de ninguém a quem não é da Geral) ==");
+  const rota = async (h, ligado, token, corpo) => {
+    const ctx = { bindingData: ligado || {}, log: { error() { }, info() { }, warn() { }, verbose() { } } };
+    await h(ctx, { method: "POST", query: {}, body: corpo, headers: token ? { "x-auth-token": token } : {} });
+    return ctx.res || { status: 0, body: null };
+  };
+  const congNome = (await um("SELECT TOP 1 Nome FROM Congregacoes ORDER BY CongregacaoId")).Nome;
+  const atores = [["a liderança local", L.LIDER(990103, ["pessoas", "financeiro", "reunioes"], [congNome], "CONGREGACAO")],
+    ["a área", L.LIDER(990103, ["pessoas", "financeiro", "reunioes"], [congNome], "AREA")], ["o membro por PIN", L.PIN(990103)]];
+  const NAO_EXISTE = 98765432;
+  for (const [nome, tk] of atores) {
+    const existe = await rota(hAssentos, {}, tk, corpoCadeira(990104)), naoExiste = await rota(hAssentos, {}, tk, corpoCadeira(NAO_EXISTE));
+    ok(existe.status === 403 && naoExiste.status === 403 && JSON.stringify(existe.body) === JSON.stringify(naoExiste.body),
+      `a cadeira, ${nome}: 403 igual para o congregado que existe e para a matrícula que não existe`, { existe, naoExiste });
+    for (const sigla of ["ccj", "pmo", "cder"]) {
+      const cE = await rota(hComissoes, { sigla }, tk, { membroId: 990104 }), cN = await rota(hComissoes, { sigla }, tk, { membroId: NAO_EXISTE });
+      ok(cE.status === 403 && cN.status === 403 && JSON.stringify(cE.body) === JSON.stringify(cN.body), `a comissão ${sigla.toUpperCase()}, ${nome}: 403 igual para os dois`, { cE, cN });
+    }
+  }
+  const semSessao = await rota(hAssentos, {}, null, corpoCadeira(990104)), semSessaoC = await rota(hComissoes, { sigla: "ccj" }, null, { membroId: 990104 });
+  ok(semSessao.status === 401 && semSessaoC.status === 401 && !/congregado|arrolamento/i.test(JSON.stringify([semSessao.body, semSessaoC.body])),
+    "sem sessão: 401 nas duas, sem dizer a situação", { semSessao, semSessaoC });
+  ok((await escalar("SELECT COUNT(*) FROM Assentos WHERE MembroId IN (990101, 990104)")) === cadeirasAntes
+    && (await escalar("SELECT COUNT(*) FROM ComissaoMembros WHERE MembroId IN (990101, 990104)")) === 0, "o ator errado não gravou nada");
 
   console.log("== A1: a LISTA_CUSTOM ==");
   const enq = await L.escalar(`INSERT INTO Enquetes (Titulo, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, Status, CriadoPor)
@@ -145,8 +193,32 @@ async function principal() {
   const cadeia = await um(`SELECT COUNT(*) AS n FROM AuditLog WHERE Tabela = N'MembroReferencia' AND HashRegistro IS NULL`);
   ok(cadeia.n === 0, "toda trilha nova tem o hash da cadeia", cadeia);
 
-  await q(`DELETE FROM CandidatosBatismo WHERE TurmaId = @t; DELETE FROM TurmasBatismo WHERE TurmaId = @t; DELETE FROM PublicoEnqueteCustom WHERE EnqueteId = @e;
-    DELETE FROM Enquetes WHERE EnqueteId = @e; DELETE FROM Assentos WHERE CargoOuFuncao = N'Conselheiro E2E101'`, { t: turma, e: enq });
+  console.log("== volta 8: a conversão vem antes do batismo e nunca no futuro (menor 2 do portão da volta 7) ==");
+  await q(`INSERT INTO MembroReferencia (MembroId, Nome, Status, SituacaoMembro, FormaAdmissao, DataAdmissao) VALUES
+    (990206, N'Lia Data Depois E2E101', N'ATIVO', N'CONGREGADO', NULL, '2026-11-10'),
+    (990207, N'Mário Data Futura E2E101', N'ATIVO', N'CONGREGADO', NULL, '2031-01-01'),
+    (990208, N'Nina Normal E2E101', N'ATIVO', N'CONGREGADO', NULL, '2009-09-09'),
+    (990209, N'Otávio Turma Futura E2E101', N'ATIVO', N'CONGREGADO', NULL, '2099-01-01')`);
+  const turma2 = await escalar(`INSERT INTO TurmasBatismo (DataBatismo, Local, TipoLocal, AutorizacaoMesa, Status) OUTPUT inserted.TurmaId
+    VALUES ('2026-10-03', N'Templo de mentira', N'TEMPLO', 1, N'REALIZADA')`);
+  await q(`INSERT INTO CandidatosBatismo (MembroId, TurmaId, Status) VALUES (990206, @t, N'APROVADO'), (990207, @t, N'APROVADO'), (990208, @t, N'APROVADO')`, { t: turma2 });
+  // a trava do futuro sozinha: a turma lançada com data futura (2099) e a data de antes ANTES dela, mas depois de hoje
+  const turma3 = await escalar(`INSERT INTO TurmasBatismo (DataBatismo, Local, TipoLocal, AutorizacaoMesa, Status) OUTPUT inserted.TurmaId
+    VALUES ('2099-10-17', N'Templo de mentira', N'TEMPLO', 1, N'REALIZADA')`);
+  await q(`INSERT INTO CandidatosBatismo (MembroId, TurmaId, Status) VALUES (990209, @t, N'APROVADO')`, { t: turma3 });
+  ok((await batismo.efetivarTurma(pool, turma2, 990299)) === 3 && (await batismo.efetivarTurma(pool, turma3, 990299)) === 1, "as duas turmas efetivam os 4 (o batismo segue)");
+  const marcos2 = await q(`SELECT MembroId, CONVERT(varchar(10), DataMarco, 120) AS Data FROM MarcosMembro WHERE Tipo = N'CONVERSAO' AND MembroId IN (990206, 990207, 990208, 990209)`);
+  ok(!marcos2.some((x) => x.MembroId === 990206), "a data de antes (10/11/2026) DEPOIS do batismo (03/10/2026) não vira conversão", marcos2);
+  ok(!marcos2.some((x) => x.MembroId === 990207), "a data de antes no futuro (2031) não vira conversão", marcos2);
+  ok(!marcos2.some((x) => x.MembroId === 990209), "a turma com data futura: a data de antes também no futuro (antes do batismo, depois de hoje) não vira conversão", marcos2);
+  ok(marcos2.length === 1 && marcos2[0].MembroId === 990208 && marcos2[0].Data === "2009-09-09", "o caso comum continua: uma conversão, em 2009", marcos2);
+  const f206 = await ficha(990206);
+  ok(f206.SituacaoMembro === "EM_COMUNHAO" && f206.DataAdmissao === "2026-10-03", "quem tinha a data errada vira membro do mesmo jeito, com a admissão do batismo", f206);
+  const tr206 = await um(`SELECT TOP 1 DadosAntes, DadosDepois FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId = N'990206' ORDER BY AuditId DESC`);
+  ok(/"dataAdmissao":"2026-11-10"/.test(tr206.DadosAntes || "") && !/"conversao"/.test(tr206.DadosDepois || ""), "a data errada fica na trilha, sem virar conversão", tr206);
+
+  await q(`DELETE FROM CandidatosBatismo WHERE TurmaId IN (@t, @t2, @t3); DELETE FROM TurmasBatismo WHERE TurmaId IN (@t, @t2, @t3); DELETE FROM PublicoEnqueteCustom WHERE EnqueteId = @e;
+    DELETE FROM Enquetes WHERE EnqueteId = @e; DELETE FROM Assentos WHERE MembroId BETWEEN 990101 AND 990105`, { t: turma, t2: turma2, t3: turma3, e: enq });
   fim("e2e-101 (o voto e o batismo de quem está em arrolamento)");
 }
 principal().catch((e) => { console.error(e); process.exitCode = 1; L.shimEncerrar(); });

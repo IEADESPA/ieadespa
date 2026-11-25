@@ -13,6 +13,7 @@ const { sha256 } = auditoria;
 const trilhas = require("./trilhas");
 const auth = require("./auth");
 const { ehGeral } = require("./escopoRotas");
+const { hojeBrasilia } = require("./dataBrasilia");
 
 const IDADE_MINIMA_BATISMO = 12; // Art. 80 §2º, I
 
@@ -132,9 +133,13 @@ function entradaPeloBatismo(antes, dataBatismo) {
 // para o voto. O batismo do CONGREGADO que tinha uma data de entrada anterior (a de quando chegou) guarda essa data como a conversão, em vez de deixá-la só na
 // trilha. Só do congregado: a data que veio do sistema pago para quem está em arrolamento tem sentido desconhecido (pergunta aberta). Devolve a data
 // ("AAAA-MM-DD") ou null. Quem grava confere que ainda não há conversão registrada (nunca por cima).
-function conversaoPeloBatismo(antes, entrada) {
+// Menor 2 do portão da volta 7: a conversão vem ANTES do batismo (no máximo no mesmo dia) e nunca no futuro (`hoje`: o dia de Brasília). A data de antes que
+// fura isso (a ficha com data errada, a turma lançada com atraso) não vira conversão — a regra devolve null, nunca um erro: o batismo segue e a data fica na
+// trilha. Sem a data do batismo não há como conferir: null.
+function conversaoPeloBatismo(antes, entrada, dataBatismo, hoje) {
   const a = antes || {};
-  if (a.situacao !== "CONGREGADO" || !a.dataAdmissao) return null;
+  if (a.situacao !== "CONGREGADO" || !a.dataAdmissao || !dataBatismo || !hoje) return null;
+  if (a.dataAdmissao > dataBatismo || a.dataAdmissao > hoje) return null;
   return entrada && entrada.dataAdmissao !== a.dataAdmissao ? a.dataAdmissao : null;
 }
 // o texto vai para a ficha 360 ("data · texto"): curto, para a pessoa ler
@@ -171,6 +176,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
     SELECT CandidatoId, MembroId FROM CandidatosBatismo WHERE TurmaId = @turmaId AND Status = 'APROVADO'
   `)).recordset;
   const dataBatismo = turma.DataBatismo instanceof Date ? turma.DataBatismo.toISOString().slice(0, 10) : String(turma.DataBatismo).slice(0, 10);
+  const hoje = hojeBrasilia();   // o dia da conferência da conversão (nada no futuro), um só para a turma inteira
 
   for (const candidato of aprovados) {
     const t = new sql.Transaction(pool);
@@ -183,7 +189,7 @@ async function efetivarTurma(pool, turmaId, por = null) {
       const antes = { situacaoMembro: f.SituacaoMembro || null, formaAdmissao: f.FormaAdmissao || null, dataAdmissao: f.DataAdmissao || null };
       const lida = { situacao: antes.situacaoMembro, formaAdmissao: antes.formaAdmissao, dataAdmissao: antes.dataAdmissao };
       const e = entradaPeloBatismo(lida, dataBatismo);
-      const conversao = conversaoPeloBatismo(lida, e);
+      const conversao = conversaoPeloBatismo(lida, e, dataBatismo, hoje);
       await rq().input("id", sql.Int, candidato.MembroId).input("dataBatismo", sql.Date, dataBatismo).input("forma", sql.NVarChar(30), e.formaAdmissao)
         .input("dataAdmissao", sql.Date, e.dataAdmissao)
         .query(`SET XACT_ABORT ON;

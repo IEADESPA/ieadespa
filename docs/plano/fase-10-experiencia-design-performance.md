@@ -1320,6 +1320,22 @@ guardadas para quando o módulo 3 começar. O levantamento completo do desenhist
     bairro da ficha, não o mapa**, e a ficha passa a **escolher o bairro numa lista fixa de Parauapebas**, que a Geral
     cuida. O ponto de cada membro (só a congregação vê) sai do CEP e do número (erro de uns 50 m), e a secretaria
     pode **arrastar o alfinete** para o lugar certo.
+- **A rodada 33 conferida por ele (25/11/2026):**
+  - **O mapa: aprovado** ("ficou melhor"). Só há congregações em **Parauapebas**: uma lista de bairros só.
+  - **Os cultos: a agenda ficou rasa; precisa ser personalizada.** Há culto que é **só da Sede** e culto que é **só
+    das congregações**, e o **culto de domingo muda de tipo a cada domingo** (a agenda tem de dizer o tipo de cada
+    domingo do mês). Vai para a rodada 34.
+  - **O termo de posse:**
+    - **Todo mundo que trabalha na igreja e tem acesso ao sistema** assina o seu termo de serviço voluntário do ano,
+      não só o dirigente. O termo é **personalizado para cada cargo ou função** (a parte 1 muda conforme o cargo).
+    - **O aceite no balcão** pode ser feito em qualquer nível: local, área ou Geral.
+    - **Assinam o Presidente e o Secretário Geral** (os dois juntos, como no estatuto), além de quem toma posse e de
+      quem deu a posse. Os dois têm **uma página para aceitar os termos de todo mundo**.
+    - **O PDF** (com CPF e endereço) baixam a própria pessoa, quem a pôs no cargo, o Presidente e o Secretário Geral.
+      A página do QR continua sem CPF nem endereço.
+    - **A virada: aprovada.** A diretoria local fica uns dias sem acesso até o dirigente cadastrar e cada um aceitar o
+      termo ("no máximo uma semana"); o acesso volta sozinho com o aceite.
+    - Depois: **os perfis de acesso de cada cargo**, ligados ao cargo na congregação (a missão do cargo com acesso).
 - **A rodada 33 (25/11/2026), publicada numa página nova:** `https://claude.ai/artifact/NF7zseCp4zVWsUEwUzmQDG`, com
   os ajustes acima em 3 telas: os cultos (a Geral monta a agenda padrão e responde aos pedidos; a congregação acrescenta
   e pede; a área acompanha), o termo de posse em três partes (o aceite no celular e no balcão, o PDF de duas folhas, a

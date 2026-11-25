@@ -233,6 +233,14 @@ async function principal() {
     .congregacoes.map((l) => `${l.congregacaoId === nova ? "nova" : "tutelada"}:${l.prazo.situacao}`).sort().join(" ");
   ok((await painelDe(2027)) === "nova:NAO_SE_APLICA tutelada:NAO_SE_APLICA", "no painel de 2027 as duas aparecem como 'não se aplica'", await painelDe(2027));
   ok((await painelDe(2029)) === "nova:ATRASADO tutelada:ATRASADO", "no painel de 2029 as duas estão atrasadas", await painelDe(2029));
+  // o texto do aviso: o rascunho aberto como a tela abre (sem Ciclo: nunca enviado) continua "não foi enviada"; o que foi enviado e voltou diz que voltou
+  await q("INSERT INTO PscAvaliacoes (CongregacaoId, Ano, AbertaPorMembroId) VALUES (@c, 2028, @por)", { c: nova, por: ID.geral });
+  await q("INSERT INTO PscAvaliacoes (CongregacaoId, Ano, AbertaPorMembroId, Ciclo) VALUES (@c, 2029, @por, 1)", { c: tutelada, por: ID.geral });
+  const textos = new Map((await psc.detectarAvaliacoesPendentes(await obterPool(), { hoje: "2031-06-01" })).map((f) => [f.referenciaId, f.fatoGerador]));
+  const nunca = textos.get(nova * 10000 + 2028) || "";
+  const voltou = textos.get(tutelada * 10000 + 2029) || "";
+  ok(/não foi enviada até 31\/03\/2029/.test(nunca), "o rascunho nunca enviado: o aviso diz que não foi enviada", nunca);
+  ok(/voltou para correção e ainda não foi reenviada/.test(voltou) && !/não foi enviada/.test(voltou), "o enviado que voltou para correção: o aviso diz isso", voltou);
   // a proposta arquivada (para reabrir a avaliação que a sustentava) não impede a nova, depois da avaliação homologada de novo, ainda reprovada
   const betel = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Betel Proposta E2E152', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: areaPsc }))[0].id;
   const reprovada = async (ano) => (await q(`INSERT INTO PscAvaliacoes (CongregacaoId, Ano, Status, ReprovadaNivel1, Ciclo, Versao) OUTPUT INSERTED.AvaliacaoId AS id

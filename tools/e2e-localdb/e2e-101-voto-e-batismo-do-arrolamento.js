@@ -1,10 +1,11 @@
 // e2e-101-voto-e-batismo-do-arrolamento.js — o voto e o batismo de quem está em arrolamento, contra o SQL Server de verdade. Só dados de mentira.
-//  A1 (decisão dele de 24/11/2026, volta 5). Quem está em arrolamento "não vota em nada e não conta em nada":
+//  A1 (decisões dele de 24/11/2026 e 25/11/2026). Quem está em arrolamento e o CONGREGADO "não votam em nada e não contam em nada":
 //   - o "apto e em comunhão" (enquetes.aptoEmComunhao) e o universo geral (universoDoOrgao com órgão nulo) dão a MESMA resposta: em arrolamento, sem
 //     comunhão e CONGREGADO ficam de fora (o congregado segue a tela aprovada: "ainda não membro: não vota"); em comunhão fica (a situação vazia não existe
 //     no banco: MembroReferencia.SituacaoMembro é NOT NULL);
-//   - o universo de um ÓRGÃO (presença e quórum): o arrolamento sai; o congregado continua (a regra dos órgãos para ele não foi decidida);
-//   - a LISTA_CUSTOM: quem está em arrolamento na lista não vota (conferido na leitura: completou, volta a votar).
+//   - o universo de um ÓRGÃO (presença e quórum): o arrolamento e o congregado saem ("o congregado fica fora de tudo, também das listas de votantes
+//     montadas nome por nome e dos órgãos", 25/11);
+//   - a LISTA_CUSTOM: quem está em arrolamento e o congregado na lista não votam (conferido na leitura: completou ou foi batizado, volta a votar).
 //  A2 (decisão dele de 24/11/2026). O batismo (GestaoTurmasBatismo REALIZAR -> batismo.efetivarTurma): quem se converteu aqui (o congregado, quem está em
 //   arrolamento) recebe a data de entrada igual à do batismo, também por cima de uma data anterior de congregado; quem veio de outra igreja (carta de
 //   mudança) fica com a forma e a data da chegada. A ficha em arrolamento: a pendência fecha junto (RESOLVIDA, COMPLETADA, quem realizou). Cada efetivação
@@ -43,19 +44,25 @@ async function principal() {
   }
   const doOrgao = new Set((await universo.universoDoOrgao(pool, { orgaoId: orgao.OrgaoId, sigla: orgao.Sigla })).map((m) => m.membroId));
   ok(!doOrgao.has(990101), "em arrolamento com cadeira no órgão: fora da presença e do quórum (não consegue nem entrar)", [...doOrgao].filter((x) => x >= 990100 && x < 990200));
-  ok(doOrgao.has(990103) && doOrgao.has(990104), "em comunhão e congregado com cadeira: continuam no órgão (a regra dos órgãos para o congregado não foi decidida)");
+  ok(!doOrgao.has(990104), "congregado com cadeira no órgão: fora da presença e do quórum (25/11: o congregado fica fora dos órgãos)", [...doOrgao].filter((x) => x >= 990100 && x < 990200));
+  ok(doOrgao.has(990103), "em comunhão com cadeira: continua no órgão");
 
   console.log("== A1: a LISTA_CUSTOM ==");
   const enq = await L.escalar(`INSERT INTO Enquetes (Titulo, Visibilidade, PublicoTipo, Vinculante, QuorumTipo, Status, CriadoPor)
     OUTPUT INSERTED.EnqueteId VALUES (N'Lista de mentira E2E101', 'SECRETA', 'LISTA_CUSTOM', 0, 'MAIORIA_SIMPLES', 'ABERTA', 990103)`);
-  for (const m of [990101, 990103]) await q("INSERT INTO PublicoEnqueteCustom (EnqueteId, MembroId) VALUES (@e, @m)", { e: enq, m });
+  for (const m of [990101, 990103, 990104]) await q("INSERT INTO PublicoEnqueteCustom (EnqueteId, MembroId) VALUES (@e, @m)", { e: enq, m });
   const e = { enqueteId: enq, publicoTipo: "LISTA_CUSTOM" };
   const naLista = await enquetes.membrosElegiveis(pool, sql, e);
   ok(!naLista.has(990101) && naLista.has(990103), "a lista: quem está em arrolamento não vota, mesmo na lista", [...naLista]);
-  ok((await enquetes.membroElegivel(pool, sql, e, 990101)) === false && (await enquetes.membroElegivel(pool, sql, e, 990103)) === true, "o voto de uma pessoa da lista: o mesmo critério");
+  ok(!naLista.has(990104), "a lista: o congregado não vota, mesmo posto na lista nome por nome (25/11)", [...naLista]);
+  ok((await enquetes.membroElegivel(pool, sql, e, 990101)) === false && (await enquetes.membroElegivel(pool, sql, e, 990104)) === false
+    && (await enquetes.membroElegivel(pool, sql, e, 990103)) === true, "o voto de uma pessoa da lista: o mesmo critério (o arrolamento e o congregado não votam)");
   await q("UPDATE MembroReferencia SET SituacaoMembro = N'EM_COMUNHAO' WHERE MembroId = 990101");
   ok((await enquetes.membroElegivel(pool, sql, e, 990101)) === true, "completou o arrolamento: volta a votar pela mesma lista (a lista não mudou)");
   await q("UPDATE MembroReferencia SET SituacaoMembro = N'ARROLAMENTO' WHERE MembroId = 990101");
+  await q("UPDATE MembroReferencia SET SituacaoMembro = N'EM_COMUNHAO' WHERE MembroId = 990104");
+  ok((await enquetes.membroElegivel(pool, sql, e, 990104)) === true, "o congregado batizado (em comunhão): volta a votar pela mesma lista");
+  await q("UPDATE MembroReferencia SET SituacaoMembro = N'CONGREGADO' WHERE MembroId = 990104");
 
   console.log("== A2: o batismo e a data de entrada ==");
   await q(`INSERT INTO MembroReferencia (MembroId, Nome, Status, SituacaoMembro, FormaAdmissao, DataAdmissao) VALUES

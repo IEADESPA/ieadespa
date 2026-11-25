@@ -12,9 +12,12 @@
 // decisão da Diretoria (Art. 157 §2º): só o nível GERAL registra. Licença põe a pessoa fora de Assentos e Liderança (vacância) e das funções (sem licença para
 // oficiar enquanto durar), mas o título ministerial e os processos de consagração ficam (decisão de 29/10/2026) — não pode ser lançada contra quem é de outra área.
 const auth = require("../shared/auth");
-const { registrarAuditoria } = require("../shared/auditoria");
+const { registrarAuditoria, registrarAuditoriaNaTransacao } = require("../shared/auditoria");
 const { getPool, sql } = require("../shared/db");
 const vacancia = require("../shared/vacancia");
+const nivelDoCargo = require("../shared/nivelDoCargo");
+const { emTransacao } = require("../shared/transacaoCurta");
+const { obterTrava } = require("../shared/financeiroSeguro");
 const { ehGeral, pessoaAlcancavel, filtrarPorEscopo, MSG_GERAL } = require("../shared/escopoRotas");
 const { dataISOValida } = require("../shared/escopoFichas");
 
@@ -93,27 +96,45 @@ module.exports = async function (context, req) {
     dataInicio.setDate(dataInicio.getDate() - DIAS_ANTECEDENCIA);
     const dataInicioLicenca = dataInicio.toISOString().slice(0, 10);
 
-    const result = await pool.request()
-      .input("membroId", sql.Int, membroId)
-      .input("dataPleito", sql.Date, dataPleito)
-      .input("dataInicioLicenca", sql.Date, dataInicioLicenca)
-      .input("criadoPor", sql.Int, usuario.membroId)
-      .query(`
-        INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, CriadoPor)
-        OUTPUT INSERTED.LicencaId
-        VALUES (@membroId, @dataPleito, @dataInicioLicenca, @criadoPor)`);
-    const licencaId = result.recordset[0].LicencaId;
+    // A licença tira a pessoa do rol ativo e encerra os mandatos: de quem tem cargo, só a secretaria do nível do cargo ou de cima, com a confirmação recente.
+    if (!(await nivelDoCargo.conferirSaidaDeLideranca(pool, sql, req, context, usuario, membroId))) return;
 
-    await pool.request().input("id", sql.Int, membroId).query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id`);
-    await vacancia.encerrarVinculos(pool, sql, membroId, "LICENCA_CANDIDATURA");
-
-    await registrarAuditoria({
-      tabela: "LicencasCandidatura",
-      registroId: licencaId,
-      acao: "Registrou licença por candidatura política",
-      usuarioId: usuario.membroId,
-      dadosDepois: { membroId, dataPleito, dataInicioLicenca }
+    // A licença, o status, a vacância (assentos, liderança, cargo, delegações, sessões) e a trilha numa transação só: ou tudo vale, ou nada muda e o pedido pode
+    // ser repetido. A trava da escada põe em fila com a cerimônia de consagração da mesma pessoa (como no desligamento).
+    const desfecho = await emTransacao(pool, async ({ rq, executor, transacao, desistir }) => {
+      if (!(await obterTrava(rq, `escada_${membroId}`))) { await desistir(); return { situacao: "OCUPADA" }; }
+      const status = await rq().input("id", sql.Int, membroId)
+        .query(`UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId = @id AND Status NOT IN ('DESLIGADO', 'FALECIDO')`);
+      if (!((status.rowsAffected && status.rowsAffected[0]) || 0)) { await desistir(); return { situacao: "SAIU" }; }
+      const result = await rq()
+        .input("membroId", sql.Int, membroId)
+        .input("dataPleito", sql.Date, dataPleito)
+        .input("dataInicioLicenca", sql.Date, dataInicioLicenca)
+        .input("criadoPor", sql.Int, usuario.membroId)
+        .query(`
+          INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, CriadoPor)
+          OUTPUT INSERTED.LicencaId
+          VALUES (@membroId, @dataPleito, @dataInicioLicenca, @criadoPor)`);
+      const licencaId = result.recordset[0].LicencaId;
+      await vacancia.encerrarVinculos(executor, sql, membroId, "LICENCA_CANDIDATURA");
+      await registrarAuditoriaNaTransacao(transacao, {
+        tabela: "LicencasCandidatura",
+        registroId: licencaId,
+        acao: "Registrou licença por candidatura política",
+        usuarioId: usuario.membroId,
+        dadosDepois: { membroId, dataPleito, dataInicioLicenca }
+      });
+      return { situacao: "GRAVOU", licencaId };
     });
+    if (desfecho.situacao === "OCUPADA") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Outra alteração desta pessoa está em andamento. Tente de novo em instantes." } };
+      return;
+    }
+    if (desfecho.situacao === "SAIU") {
+      context.res = { status: 200, body: { sucesso: false, mensagem: "Esta pessoa já saiu do rol de membros — não é possível registrar licença por candidatura." } };
+      return;
+    }
+    const licencaId = desfecho.licencaId;
 
     context.res = {
       status: 201,

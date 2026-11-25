@@ -13,7 +13,7 @@ jest.mock("../db", () => {
       if (padrao.test(texto)) return { recordset: typeof valor === "function" ? valor(inputs) : valor, rowsAffected: [afetadas === undefined ? 1 : afetadas] };
     }
     // Sem regra própria: UPDATE/DELETE "deu certo" (1 linha); consultas voltam vazias.
-    return { recordset: [], rowsAffected: [/^\s*(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };
+    return { recordset: [], rowsAffected: [/^\s*(SET XACT_ABORT ON;\s*)?(UPDATE|DELETE)\b/i.test(texto) ? 1 : 0] };   // com ou sem o prefixo da transação curta
   };
   const novaRequisicao = () => { const inputs = {}; const r = { input: (n, _t, v) => { inputs[n] = v; return r; }, query: (texto) => rodar(texto, inputs) }; return r; };
   class Transaction { async begin() { mockTransacao.begin++; } async commit() { mockTransacao.commit++; } async rollback() { mockTransacao.rollback++; } }
@@ -72,7 +72,7 @@ async function chamar(handler, { metodo = "GET", corpo = {}, token, ligado = {},
 }
 const quando = (padrao, valor, afetadas) => mockRegras.push([padrao, valor, afetadas]);
 const rodou = (padrao) => mockConsultas.filter((c) => padrao.test(c.sql));
-const escritas = () => mockConsultas.filter((c) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
+const escritas = () => mockConsultas.filter((c) => /^\s*(SET XACT_ABORT ON;\s*)?(INSERT|UPDATE|DELETE)\b/i.test(c.sql));
 const tokenDe = (membroId, extra = {}) => auth.reassinarSessao({ membroId, permissoes: [], escopoCongregacoes: [], termosPendentes: [], ...extra });
 // Geral: papel GLOBAL + escopo TODAS. Local: dirigente (membro 5) da congregação Central, a menos que se diga outro escopo.
 const GERAL = (permissoes = ["pessoas"]) => tokenDe(1, { via: "SENHA", fator: { via: "CHAVE", em: Date.now() }, nivel: "GLOBAL", escopoCongregacoes: "TODAS", permissoes });

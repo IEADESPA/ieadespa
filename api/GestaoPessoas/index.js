@@ -30,7 +30,6 @@ const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { dataIsoValida, obterTrava } = require("../shared/financeiroSeguro");
 const { emTransacao } = require("../shared/transacaoCurta");
-const travaPermissoes = require("../shared/travaPermissoes");
 const nivelDoCargo = require("../shared/nivelDoCargo");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
@@ -57,24 +56,9 @@ function motivoSaidaVisivel(m, vDisciplina) {
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
 const DATA_SAIDA_MINIMA = "2006-01-01";   // a fundação da igreja
 
-// Tirar do rol ativo quem tem cargo de liderança vigente tira o acesso dele (o login exige ATIVO), e o desligamento e o falecimento ainda encerram os mandatos:
-// é ato da secretaria do nível do cargo ou de cima (regra do responsável, 25/11/2026: shared/nivelDoCargo.js), com a confirmação recente (428), e nunca da
-// última pessoa que administra os acessos (shared/travaPermissoes.js).
-// Chamado depois da conferência do escopo. Devolve true se pode seguir; senão já deixou a resposta em context.res.
-async function conferirSaidaDeLideranca(pool, req, context, usuario, membroId) {
-  const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());
-  if (!situacao.temCargoVigente) return true;
-  if (!(await nivelDoCargo.alcancaOsCargos(pool, sql, usuario, membroId, hojeBrasilia()))) {
-    context.res = { status: 403, body: { sucesso: false, mensagem: nivelDoCargo.MENSAGEM_NIVEL } };
-    return false;
-  }
-  if (!auth.exigirFatorRecente(req, context)) return false;
-  if (travaPermissoes.ficariaSemAdministrador(situacao)) {
-    context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
-    return false;
-  }
-  return true;
-}
+// Tirar do rol ativo quem tem cargo de liderança: a secretaria do nível do cargo ou de cima, o 428 e a trava do último administrador (regra do responsável,
+// 25/11/2026: shared/nivelDoCargo.js, a mesma da licença por candidatura).
+const conferirSaidaDeLideranca = (pool, req, context, usuario, membroId) => nivelDoCargo.conferirSaidaDeLideranca(pool, sql, req, context, usuario, membroId);
 
 // "funcao" no retorno é só de exibição: prioriza o nome do Cargo Ministerial
 // (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se

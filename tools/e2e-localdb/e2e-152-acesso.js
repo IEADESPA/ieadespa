@@ -25,7 +25,8 @@ const ID = {
   exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41,
   falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
   avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63, avisoNova: BASE_ID + 64, avisoTutelada: BASE_ID + 65,
-  liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81
+  liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73, discJulgar: BASE_ID + 80, discHomologar: BASE_ID + 81,
+  licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -215,8 +216,10 @@ async function principal() {
   console.log("== 4c. a cobrança do PSC: nem o ano da fundação, nem os anos sob tutela ==");
   // Visto de 01/06/2031 (exercícios 2026 a 2030 com o prazo vencido). "Nova": fundada em 2027, cobrada a partir de 2028. "Tutelada": decretada em 05/2027
   // e restabelecida em 01/01/2029 às 01h (UTC), que em Brasília ainda é 31/12/2028: a tutela vai de 2027 a 2028, e 2026, 2029 e 2030 são cobrados.
-  const nova = (await q("INSERT INTO Congregacoes (Nome, AreaId, FundacaoAno) VALUES (N'Nova Cobrança E2E152', @a, 2027); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: area }))[0].id;
-  const tutelada = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Tutelada Cobrança E2E152', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: area }))[0].id;
+  // numa área própria: a área do cenário continua só com a sede (a secretaria da área do roteiro alcança todas as congregações dela)
+  const areaPsc = (await q("INSERT INTO Areas (Nome) VALUES (N'Área PSC E2E152'); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id"))[0].id;
+  const nova = (await q("INSERT INTO Congregacoes (Nome, AreaId, FundacaoAno) VALUES (N'Nova Cobrança E2E152', @a, 2027); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: areaPsc }))[0].id;
+  const tutelada = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Tutelada Cobrança E2E152', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: areaPsc }))[0].id;
   const gatilhoTutela = (await q(`INSERT INTO PscAvaliacoes (CongregacaoId, Ano, Status, Ciclo, Versao) OUTPUT INSERTED.AvaliacaoId AS id VALUES (@c, 2025, 'HOMOLOGADA', 1, 1)`, { c: tutelada }))[0].id;
   await q(`INSERT INTO PscReclassificacoes (CongregacaoId, ExerciciosConsecutivos, AnoInicial, AnoFinal, AvaliacaoGatilhoId, Status, DecididaEm, RestabelecidaEm)
     VALUES (@c, 2, 2024, 2025, @g, 'REVERTIDA', '2027-05-10T12:00:00', '2029-01-01T01:00:00')`, { c: tutelada, g: gatilhoTutela });
@@ -329,6 +332,38 @@ async function principal() {
   const homologou = await disc(procHomologar, { acao: "HOMOLOGAR_EXCLUSAO", homologado: true });
   ok(homologou.body && homologou.body.sucesso === true && (await situacaoProc(procHomologar)) === "JULGADO/1" && (await fimDoCargo(ID.discHomologar)) !== "vigente"
     && !(await assentoAberto(ID.discHomologar)), "a nova tentativa de homologar conclui tudo", JSON.stringify(homologou.body).slice(0, 120));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 5d. a licença por candidatura de quem tem cargo: o nível do cargo, o 428 e uma transação só ==");
+  const licenca = (token, membroId) => chamarRota("GestaoLicencasCandidatura/index.js", { metodo: "POST", token, corpo: { membroId, dataPleito: "2026-10-04" } });
+  LID.licArea = await lideranca(ID.licArea, pArea, "AREA", area);
+  LID.licLocal = await lideranca(ID.licLocal, pTes, "CONGREGACAO", sede);
+  LID.licFalha = await lideranca(ID.licFalha, pTes, "CONGREGACAO", sede);
+  await q("INSERT INTO Assentos (OrgaoId, MembroId, TipoAssento, CargoOuFuncao, DataInicio) VALUES (@o, @m, 'FUNCAO', N'Conselheiro (roteiro)', '2025-01-01')", { o: orgao, m: ID.licFalha });
+  const licencas = (m) => escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @m", { m });
+  const licAreaLocal = await licenca(local(), ID.licArea);
+  ok(licAreaLocal.status === 403 && (await statusDe(ID.licArea)) === "ATIVO" && (await fimDoCargo(ID.licArea)) === "vigente" && (await licencas(ID.licArea)) === 0,
+    "cargo de área: a secretaria local não registra a licença (403, nada muda)", `${licAreaLocal.status} ${JSON.stringify(licAreaLocal.body).slice(0, 100)}`);
+  const licAreaArea = await licenca(daArea(), ID.licArea);
+  ok(licAreaArea.status === 201 && (await statusDe(ID.licArea)) === "LICENCA_CANDIDATURA" && (await fimDoCargo(ID.licArea)) !== "vigente",
+    "a secretaria da área registra (a pessoa em licença, o cargo encerrado)", `${licAreaArea.status} ${JSON.stringify(licAreaArea.body).slice(0, 100)}`);
+  const licSemFator = await licenca(localSemFator(), ID.licLocal);
+  ok(licSemFator.status === 428 && (await statusDe(ID.licLocal)) === "ATIVO", "cargo local sem a confirmação recente: 428", `${licSemFator.status}`);
+  ok((await licenca(local(), ID.licLocal)).status === 201 && (await statusDe(ID.licLocal)) === "LICENCA_CANDIDATURA", "com a confirmação recente, a secretaria local registra");
+  await q(`EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_E2E152_FalhaLicenca ON dbo.AuditLog AFTER INSERT AS
+          IF EXISTS (SELECT 1 FROM inserted WHERE Tabela = N''LicencasCandidatura'') THROW 50155, N''falha simulada do roteiro'', 1;')`);
+  try {
+    let erro = null;
+    try { const r = await licenca(geral(), ID.licFalha); if (r.status >= 500) erro = r; } catch (e) { erro = e; }
+    ok(erro !== null, "a licença com falha no fim: o erro chega a quem chamou");
+    ok((await statusDe(ID.licFalha)) === "ATIVO" && (await licencas(ID.licFalha)) === 0 && (await fimDoCargo(ID.licFalha)) === "vigente" && (await assentoAberto(ID.licFalha)),
+      "e nada ficou pela metade (sem licença, ATIVO, com o cargo e o assento)");
+  } finally {
+    await q("DROP TRIGGER IF EXISTS dbo.TR_E2E152_FalhaLicenca");
+  }
+  const licDeNovo = await licenca(geral(), ID.licFalha);
+  ok(licDeNovo.status === 201 && (await licencas(ID.licFalha)) === 1 && (await statusDe(ID.licFalha)) === "LICENCA_CANDIDATURA" && !(await assentoAberto(ID.licFalha)),
+    "a nova tentativa conclui com uma licença só", `${licDeNovo.status} ${JSON.stringify(licDeNovo.body).slice(0, 100)}`);
 
   // A última pessoa que administra os acessos: nem desligada, nem suspensa (no fim do roteiro: encerra os outros administradores da base).
   await q(`UPDATE l SET AtivoAte = '2000-01-01' FROM Lideranca l JOIN Papeis p ON p.PapelId = l.PapelId

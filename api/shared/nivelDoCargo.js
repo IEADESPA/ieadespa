@@ -44,4 +44,25 @@ async function alcancaOsCargos(pool, sql, usuario, membroId, hoje) {
 
 const MENSAGEM_NIVEL = "Esta pessoa tem cargo de liderança de nível acima do seu: só a secretaria do nível do cargo (ou de cima) muda a situação dela no rol.";
 
-module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, MENSAGEM_NIVEL };
+// Tirar do rol ativo quem tem cargo de liderança vigente (inativar, afastar, licença, desligar, falecido) tira o acesso dele (o login exige ATIVO), e a saída
+// ainda encerra os mandatos: é ato da secretaria do nível do cargo ou de cima, com a confirmação recente (428), e nunca da última pessoa que administra os
+// acessos (shared/travaPermissoes.js). Chamado DEPOIS da conferência do escopo (quem não existe e quem está fora já receberam a mesma recusa).
+// Devolve true se pode seguir; senão já deixou a resposta em context.res.
+async function conferirSaidaDeLideranca(pool, sql, req, context, usuario, membroId) {
+  const travaPermissoes = require("./travaPermissoes");
+  const { hojeBrasilia } = require("./dataBrasilia");
+  const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());
+  if (!situacao.temCargoVigente) return true;
+  if (!(await alcancaOsCargos(pool, sql, usuario, membroId, hojeBrasilia()))) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: MENSAGEM_NIVEL } };
+    return false;
+  }
+  if (!auth.exigirFatorRecente(req, context)) return false;
+  if (travaPermissoes.ficariaSemAdministrador(situacao)) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
+    return false;
+  }
+  return true;
+}
+
+module.exports = { cargosVigentes, concessaoAlcanca, alcancaOsCargos, ordemDoCargo, conferirSaidaDeLideranca, MENSAGEM_NIVEL };

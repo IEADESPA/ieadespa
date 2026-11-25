@@ -18,6 +18,7 @@ const { getPool, sql } = require("../shared/db");
 const { composicaoCFO, composicaoCEP, composicaoCCJ, composicaoPorSiglaEleita, composicaoCDER, composicaoCME } = require("../shared/comissoes");
 const { comConflito } = require("../shared/violacaoUnica");
 const { composicaoCLI } = require("../shared/universo");
+const { recusaDeCadeira } = require("../shared/estatuto");
 const { reitorAtual } = require("../shared/afmDb");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
 const { obterTrava } = require("../shared/financeiroSeguro");
@@ -100,10 +101,16 @@ module.exports = comConflito(async function (context, req) {
     // A matrícula só vale na forma canônica de número (auth.idDeRota); o malformado cai na mesma resposta de "não encontrada".
     const membroId = auth.idDeRota(membroIdBruto);
     const membro = membroId
-      ? await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`)
+      ? await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`)
       : { recordset: [] };
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      return;
+    }
+    // a comissão também é órgão: o congregado e quem está em arrolamento não têm vaga nela (decisão dele de 25/11/2026)
+    const semCadeira = recusaDeCadeira(membro.recordset[0].SituacaoMembro);
+    if (semCadeira) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: semCadeira } };
       return;
     }
     // v8.1 — CDER (Art. 22): os 2 mestres são "da CLI" (precisam compor a CLI hoje), com a titulação registrada; o Reitor entra calculado, não por aqui.

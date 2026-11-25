@@ -83,6 +83,15 @@ function membroEmComunhao(status, situacaoMembro) {
   return status === "ATIVO" && (situacaoMembro === "EM_COMUNHAO" || situacaoMembro == null);
 }
 
+// FASE 10 (decisão dele de 25/11/2026, volta 6): o congregado (ainda não é membro, Estatuto Art. 7º, I) e quem está com o arrolamento a completar não têm
+// cadeira em órgão nenhum (conselho, comissão, Câmara, diretoria): o sistema recusa e explica. Devolve a mensagem da recusa, ou null quando a cadeira pode
+// seguir as outras conferências. O congregado pode servir (menores, setor técnico, cuidado pastoral, expansão) com as travas de cada serviço: isto é só da cadeira.
+function recusaDeCadeira(situacaoMembro) {
+  if (situacaoMembro === "CONGREGADO") return "O congregado ainda não é membro: não tem cadeira em órgão nenhum (conselho, comissão, Câmara, diretoria).";
+  if (situacaoMembro === "ARROLAMENTO") return "A ficha está com o arrolamento a completar: até a secretaria completar, a pessoa não tem cadeira em órgão nenhum (conselho, comissão, Câmara, diretoria).";
+  return null;
+}
+
 function calcularCapacidadeEleitoral(membro, hoje) {
   const emComunhao =
     membro.situacaoMembro === "EM_COMUNHAO" ||
@@ -501,6 +510,7 @@ module.exports = {
   diasDesde,
   estaSobDisciplina,
   membroEmComunhao,
+  recusaDeCadeira,
   calcularCapacidadeEleitoral,
   regraQuorumInstalacao,
   avaliarQuorumInstalacao,

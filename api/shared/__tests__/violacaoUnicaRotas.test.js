@@ -141,7 +141,7 @@ describe("GetOrgaos — a sigla repetida na corrida (UX_Orgaos_Sigla)", () => {
 
 describe("GestaoAssentos — o cargo fixo ocupado na corrida (UX_Assentos_CargoAtivo)", () => {
   const regras = () => {
-    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id/, [{ OrgaoId: 3, Sigla: "DIRETORIA_EXECUTIVA" }]);
     quando(/SELECT TOP 1 AssentoId FROM Assentos WHERE OrgaoId/, []);                                        // a conferência de cargoJaOcupado ainda vê o cargo livre
   };
@@ -172,7 +172,7 @@ describe("GestaoAssentos — o cargo fixo ocupado na corrida (UX_Assentos_CargoA
 describe("GestaoComissoes — a mesma pessoa ativa duas vezes na comissão (UX_ComissaoMembros_Ativo)", () => {
   const adicionar = (sigla) => chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas", "financeiro"]), ligado: { sigla }, corpo: { membroId: 40 } });
   const regras = () => {
-    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/FROM ComissaoMembros c\s+JOIN MembroReferencia m/, []);                                        // a conferência "já está na comissão" ainda não vê o outro pedido
     quando(/sp_getapplock/, [{ resultado: 0 }]);                                                            // (v8.1) a trava da comissão
     quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);

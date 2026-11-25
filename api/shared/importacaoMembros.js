@@ -495,8 +495,8 @@ function casarResto(linhas, faltaram) {
   for (const l of achadas) l.linhaOriginal = casadas.get(l).linha;
   return { achadas, naoAchadas: naoAchadas.sort((a, b) => a.linha - b.linha).map((f) => ({ linha: f.linha, nome: f.nome })), ambiguas, foraDaLista: soltas.size };
 }
-// O que a prévia do resto diz (sem dado pessoal além do nome de quem não foi achado): os números e o aviso que não deixa passar — quem não foi achado fica de
-// fora desta importação, e ela é uma vez só.
+// O que a prévia do resto diz (sem dado pessoal: o resumo guarda só números, e o aviso não leva nome): os números e o aviso que não deixa passar — quem não
+// foi achado fica de fora desta importação, e ela é uma vez só.
 function resumoDoResto(casado, { de, faltaram }) {
   const n = casado.naoAchadas.length;
   const amb = casado.ambiguas;

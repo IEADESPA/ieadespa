@@ -281,7 +281,7 @@ describe("GestaoAssentos", () => {
     expect((await chamar(hAssentos, { token: LOCAL(["reunioes"]) })).status).toBe(403);
   });
   test("geral cria a cadeira (grava membro, órgão e duração) e audita", async () => {
-    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id/, [{ OrgaoId: 3, Sigla: "CLI" }]);
     quando(/INSERT INTO Assentos/, [{ AssentoId: 8 }]);
     quando(/FROM Assentos a\s+JOIN MembroReferencia[\s\S]*WHERE a\.AssentoId = @id/, [{ assentoId: 8 }]);
@@ -293,7 +293,7 @@ describe("GestaoAssentos", () => {
     expect(registrarAuditoria.mock.calls[0][0]).toMatchObject({ tabela: "Assentos", acao: "Criou cadeira", usuarioId: 1 });
   });
   test("mandato negativo/gigante, data fora do formato e ids malformados: recusados e nada gravado", async () => {
-    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id/, [{ OrgaoId: 3, Sigla: "CLI" }]);
     const base = { membroId: 40, orgaoId: 3, tipoAssento: "FUNCAO" };
     for (const extra of [{ duracaoMeses: -3 }, { duracaoMeses: 0 }, { duracaoMeses: 601 }, { duracaoMeses: 1.5 }, { dataInicio: "10/01/2026" }, { dataInicio: "2026-13-45" }]) {
@@ -304,6 +304,23 @@ describe("GestaoAssentos", () => {
     const orgaoRuim = await chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), corpo: { ...base, orgaoId: "1e1" } });
     expect(orgaoRuim.body).toMatchObject({ sucesso: false, mensagem: "Órgão inválido." });
     expect(rodou(/INSERT INTO Assentos/)).toHaveLength(0);
+  });
+  // FASE 10 (decisão dele de 25/11/2026, volta 6): o congregado e quem está em arrolamento não têm cadeira em órgão nenhum; o sistema recusa e explica
+  test("congregado e arrolamento: a cadeira é recusada com a explicação e nada é gravado; em comunhão e sem comunhão seguem a regra de antes", async () => {
+    const fichas = { 40: "CONGREGADO", 41: "ARROLAMENTO", 42: "EM_COMUNHAO" };
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, (i) => [{ MembroId: i.id, SituacaoMembro: fichas[i.id] }]);
+    quando(/SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id/, [{ OrgaoId: 3, Sigla: "CLI" }]);
+    quando(/INSERT INTO Assentos/, [{ AssentoId: 8 }]);
+    quando(/FROM Assentos a\s+JOIN MembroReferencia[\s\S]*WHERE a\.AssentoId = @id/, [{ assentoId: 8 }]);
+    const pedir = (membroId) => chamar(hAssentos, { metodo: "POST", token: GERAL(["pessoas"]), corpo: { membroId, orgaoId: 3, tipoAssento: "FUNCAO", cargoOuFuncao: "Membro" } });
+    const cong = await pedir(40);
+    expect(cong.body).toMatchObject({ sucesso: false });
+    expect(cong.body.mensagem).toMatch(/congregado ainda não é membro: não tem cadeira em órgão nenhum/);
+    const arrol = await pedir(41);
+    expect(arrol.body).toMatchObject({ sucesso: false });
+    expect(arrol.body.mensagem).toMatch(/arrolamento a completar[\s\S]*não tem cadeira em órgão nenhum/);
+    expect(rodou(/INSERT INTO Assentos/)).toHaveLength(0);
+    expect((await pedir(42)).status).toBe(201);
   });
   test("geral encerra cadeira ativa (UPDATE só em cadeira sem DataFim); id malformado ou cadeira inexistente: 'não encontrada', nada gravado", async () => {
     quando(/SELECT \* FROM Assentos WHERE AssentoId = @id/, [{ AssentoId: 8, DataFim: null }]);
@@ -334,8 +351,22 @@ describe("GestaoComissoes", () => {
     expect(r.body).toMatchObject({ CCJ: [], CFO: [], CEP: [], PMO: [] });
     expect((await chamar(hComissoes, { token: LOCAL(["financeiro"]) })).status).toBe(403);
   });
+  test("congregado e arrolamento: a vaga na comissão é recusada com a explicação e nada é gravado (25/11: comissão também é órgão)", async () => {
+    const fichas = { 40: "CONGREGADO", 41: "ARROLAMENTO" };
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, (i) => [{ MembroId: i.id, SituacaoMembro: fichas[i.id] }]);
+    quando(/FROM ComissaoMembros c/, []);
+    quando(/sp_getapplock/, [{ resultado: 0 }]);
+    quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);
+    quando(/INSERT INTO ComissaoMembros/, [{ ComissaoMembroId: 3 }]);
+    for (const [id, texto] of [[40, /congregado ainda não é membro/], [41, /arrolamento a completar/]]) {
+      const r = await chamar(hComissoes, { metodo: "POST", token: GERAL(["pessoas"]), ligado: { sigla: "ccj" }, corpo: { membroId: id } });
+      expect(r.body).toMatchObject({ sucesso: false });
+      expect(r.body.mensagem).toMatch(texto);
+    }
+    expect(rodou(/INSERT INTO ComissaoMembros/)).toHaveLength(0);
+  });
   test("geral adiciona membro à CCJ (pessoas) e à PMO (financeiro): grava; matrícula malformada = 'não encontrada' sem gravar", async () => {
-    quando(/SELECT MembroId FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
+    quando(/SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id/, [{ MembroId: 40 }]);
     quando(/FROM ComissaoMembros c/, []);
     quando(/sp_getapplock/, [{ resultado: 0 }]);
     quando(/SELECT COUNT\(\*\) AS n FROM ComissaoMembros/, [{ n: 0 }]);

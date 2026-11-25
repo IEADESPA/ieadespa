@@ -14,10 +14,11 @@ const { CONDICAO_SQL_ATIVO, foraDaReadmissao } = require("./disciplina");
 const estatuto = require("./estatuto");
 const { registrarAuditoria } = require("./auditoria");
 
-// A LISTA_CUSTOM (decisão dele de 24/11/2026, volta 5): quem está em ARROLAMENTO não vota em nada, nem estando na lista. Conferido na LEITURA (não na criação
-// da enquete): a lista continua como foi feita, e quem completar o arrolamento volta a votar sozinho.
+// A LISTA_CUSTOM (decisões dele de 24/11/2026 e 25/11/2026): quem está em ARROLAMENTO e o CONGREGADO não votam em nada, nem estando na lista montada nome
+// por nome ("o congregado fica fora de tudo, também das listas de votantes montadas nome por nome"). Conferido na LEITURA (não na criação da enquete): a lista
+// continua como foi feita, e quem completar o arrolamento ou for batizado volta a votar sozinho. SituacaoMembro é NOT NULL (o NOT IN não derruba ninguém por NULL).
 const NA_LISTA_SEM_ARROLAMENTO = `FROM PublicoEnqueteCustom p JOIN MembroReferencia m ON m.MembroId = p.MembroId
-  WHERE p.EnqueteId = @id AND m.SituacaoMembro <> 'ARROLAMENTO'`;
+  WHERE p.EnqueteId = @id AND m.SituacaoMembro NOT IN ('ARROLAMENTO', 'CONGREGADO')`;
 
 async function membrosElegiveis(pool, sql, enquete) {
   if (enquete.publicoTipo === "LISTA_CUSTOM") {
@@ -31,7 +32,7 @@ async function membrosElegiveis(pool, sql, enquete) {
 
 // "Apto e em comunhão" para uma pessoa, com o MOTIVO de quem não está: o mesmo critério de universoDoOrgao(pool, null) — ATIVO, sem processo disciplinar
 // ativo, nem SEM_COMUNHAO, nem ARROLAMENTO ("não vota em nada" até completar, decisão dele de 24/11/2026), nem CONGREGADO (a tela aprovada da rodada 28:
-// "ainda não membro: não vota"). A ficha sem situação (NULL) continua apta, como antes. motivo: null (apto), "ARROLAMENTO", "CONGREGADO" ou "OUTRO" — a
+// "ainda não membro: não vota"; e 25/11: "fica fora de tudo"). A ficha sem situação (NULL) continua apta, como antes. motivo: null (apto), "ARROLAMENTO", "CONGREGADO" ou "OUTRO" — a
 // votação do tema diz o motivo de verdade (identidadeVisualDb.textoNaoApto).
 async function situacaoParaVoto(pool, membroId, sql = sqlPadrao) {
   const r = await pool.request().input("m", sql.Int, membroId).query(`

@@ -24,6 +24,7 @@ const { getPool, sql } = require("../shared/db");
 const { CATALOGOS_CARGOS_POR_ORGAO, ORGAOS_INCOMPATIVEIS, ARTIGOS_VEDACAO_PARENTESCO_DIRETORIA, validarIncompatibilidadeExecutiva, cargoJaOcupado } = require("../shared/diretoria");
 const { existeParentescoAte2Grau } = require("../shared/parentesco");
 const { comConflito } = require("../shared/violacaoUnica");
+const { recusaDeCadeira } = require("../shared/estatuto");
 
 const TIPOS_VALIDOS = ["ORDENACAO", "FUNCAO"];
 
@@ -132,9 +133,15 @@ module.exports = comConflito(async function (context, req) {
       context.res = { status: 400, body: { sucesso: false, mensagem: "Cargo ou função inválido (texto de até 100 caracteres)." } };
       return;
     }
-    const membro =await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId FROM MembroReferencia WHERE MembroId = @id`);
+    const membro = await pool.request().input("id", sql.Int, membroId).query(`SELECT MembroId, SituacaoMembro FROM MembroReferencia WHERE MembroId = @id`);
     if (membro.recordset.length === 0) {
       context.res = { status: 200, body: { sucesso: false, mensagem: "Matrícula não encontrada." } };
+      return;
+    }
+    // o congregado e quem está em arrolamento não têm cadeira em órgão nenhum (decisão dele de 25/11/2026)
+    const semCadeira = recusaDeCadeira(membro.recordset[0].SituacaoMembro);
+    if (semCadeira) {
+      context.res = { status: 200, body: { sucesso: false, mensagem: semCadeira } };
       return;
     }
     const orgao = await pool.request().input("id", sql.Int, orgaoId).query(`SELECT OrgaoId, Sigla FROM Orgaos WHERE OrgaoId = @id`);

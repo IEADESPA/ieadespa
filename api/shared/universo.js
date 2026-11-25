@@ -25,10 +25,13 @@ const disciplina = require("./disciplina");
 const escopo = require("./escopo");
 const afmDb = require("./afmDb");
 
-// FASE 10 (decisão dele de 24/11/2026): quem está em ARROLAMENTO (veio do sistema pago e a secretaria ainda não completou) "não vota em nada e não conta em
-// nada" — sai de todo universo, também da presença e do quórum das reuniões de órgão ("não consegue nem entrar nessas reuniões"). Volta sozinho ao completar.
+// FASE 10 (decisões dele de 24/11/2026 e 25/11/2026): quem está em ARROLAMENTO (veio do sistema pago e a secretaria ainda não completou) e o CONGREGADO
+// (ainda não é membro) "não votam em nada e não contam em nada" — saem de todo universo, também da presença e do quórum das reuniões de todo órgão ("não
+// consegue nem entrar nessas reuniões"; "o congregado fica fora de tudo, também das listas de votantes montadas nome por nome e dos órgãos"). É só um filtro
+// de leitura: volta sozinho ao completar o arrolamento ou ao ser batizado (em comunhão).
+const FORA_DE_TUDO = new Set(["SEM_COMUNHAO", "ARROLAMENTO", "CONGREGADO"]);
 function emComunhaoAtiva(membro, idsSobDisciplina) {
-  return membro.situacaoMembro !== "SEM_COMUNHAO" && membro.situacaoMembro !== "ARROLAMENTO" && !idsSobDisciplina.has(membro.membroId);
+  return !FORA_DE_TUDO.has(membro.situacaoMembro) && !idsSobDisciplina.has(membro.membroId);
 }
 
 // Reg. Art. 142, III — vedado à Assembleia quem já tem Carta de Mudança
@@ -135,7 +138,10 @@ async function composicaoCLI(pool, orgaoIdCLI) {
   // v8.1 — excluído por 3 faltas seguidas (Estatuto Art. 27 §1º) sai da composição por QUALQUER caminho, sem perder cargo, cadeira ou acesso (essas providências são
   // humanas — ver shared/afm.js, providenciasDaExclusao). Volta com a readmissão (Regimento Art. 149 §1º) ou se a exclusão for anulada.
   const excluidos = await afmDb.idsExcluidosCLI(pool);
-  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo).filter(m => !excluidos.has(Number(m.membroId)));
+  // FASE 10 (decisão dele de 25/11/2026, volta 6): o congregado e quem está em arrolamento não têm cadeira em órgão nenhum, por isso nem aparecem na
+  // composição (a tela, o universo e quem a reaproveita), por qualquer caminho; sem marca "não conta". O sem comunhão continua (a tela diz por que não conta).
+  return comOrdenacao.concat(comFuncao).concat(comLiderancaPorEscopo)
+    .filter(m => !excluidos.has(Number(m.membroId)) && m.situacaoMembro !== "CONGREGADO" && m.situacaoMembro !== "ARROLAMENTO");
 }
 
 // Art. 151 §2º — Colégio de Dirigentes Congregacionais: Pastores de Área
@@ -174,9 +180,8 @@ async function universoDoOrgao(pool, orgao, opcoes = {}) {
     const result = await pool.request().query(
       `SELECT MembroId AS membroId, Nome AS nome, SituacaoMembro AS situacaoMembro FROM MembroReferencia WHERE Status = 'ATIVO'`
     );
-    // o universo geral (enquetes e votação do tema): além do filtro comum (o arrolamento sai de tudo), o CONGREGADO não vota — a tela aprovada da rodada 28
-    // ("ainda não membro: não vota"), seguida na volta 5 (24/11/2026). Só aqui: nos órgãos (presença e quórum) o congregado continua, porque não foi decidido.
-    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina) && m.situacaoMembro !== "CONGREGADO");
+    // o universo geral (enquetes e votação do tema): o filtro comum (o arrolamento e o congregado saem de tudo, como nos órgãos)
+    return result.recordset.filter(m => emComunhaoAtiva(m, idsSobDisciplina));
   }
 
   if (orgao.sigla === "ASSEMBLEIA_GERAL") {

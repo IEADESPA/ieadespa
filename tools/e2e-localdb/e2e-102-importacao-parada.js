@@ -280,6 +280,8 @@ async function principal() {
       VALUES (N'x.csv', REPLICATE('0', 64), 9920, N'{}', @b, N'CONCLUIDA', SYSUTCDATETIME(), 9920, SYSUTCDATETIME())`, { b: idB });
   } catch (e) { bancoBarra = e && (e.number === 2601 || e.number === 2627); }
   ok(bancoBarra, "e o banco impede um segundo resto concluído da mesma importação (o índice único)");
+  ok((await escalar(`SELECT COUNT(*) FROM sys.indexes WHERE name = N'IX_ImportacoesMembros_RestoDe' AND object_id = OBJECT_ID(N'dbo.ImportacoesMembros')`)) === 1,
+    "a chave estrangeira RestoDe tem o seu índice (regra 3 do Banco), da migração 187");
   const ar = await chamarRota("Arrolamento/index.js", { token: tok.geral(), query: {} });
   const diaAntes = hojeBrasilia((await um("SELECT ConcluidaEm FROM ImportacoesMembros WHERE ImportacaoId = @i", { i: idB })).ConcluidaEm);
   ok(ar.status === 200 && ar.body.veioEm === diaAntes && diaAntes !== L.hojeBr(), "o painel do arrolamento: vieram no dia da importação de antes (o resto não muda a data)",

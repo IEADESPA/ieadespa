@@ -442,8 +442,10 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     expect(r).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     const sel = mockConsultas.find((c) => /WHERE i\.Situacao = N'IMPORTANDO'/.test(c.sql));
     // G2 (decisão dele de 24/11/2026): do ÚLTIMO LOTE; sem nenhum lote gravado, da confirmação
-    expect(sel.sql).toMatch(/COALESCE\(i\.UltimoLoteEm, i\.ConfirmadaEm\) < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
-    expect(sel.sql).not.toMatch(/AND i\.ConfirmadaEm </);
+    // sem função sobre a coluna do filtro (regra 4 do Banco, menor 5 do portão da volta 5): o OR no lugar do COALESCE
+    expect(sel.sql).toMatch(/i\.Situacao = N'IMPORTANDO' AND \(i\.UltimoLoteEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\) OR \(i\.UltimoLoteEm IS NULL AND i\.ConfirmadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)\)\)/);
+    expect(sel.sql).not.toMatch(/COALESCE\(i\.UltimoLoteEm/);
+    expect(sel.sql).not.toMatch(/IMPORTANDO' AND i\.ConfirmadaEm </);
     expect(sel.sql).toMatch(/l\.Estado = N'PENDENTE'/);
     expect(sel.inputs.d).toBe(7);
     const marca = mockConsultas.find((c) => /N'NAO_TERMINOU'/.test(c.sql));
@@ -469,7 +471,8 @@ describe("a guarda dos dados da importação (a rotina diária)", () => {
     cenarioGuarda({ ninguem: [{ ImportacaoId: 11 }], paradas: [] });
     expect(await db.aplicarRetencao(POOL_G)).toEqual({ previasDescartadas: 0, linhasForaApagadas: 0, linhasLimpas: 0, diasPrevia: 7, diasFora: 90 });
     const sel = mockConsultas.find((c) => /NOT EXISTS \(SELECT 1 FROM ImportacoesMembrosLinhas l WHERE l\.ImportacaoId = i\.ImportacaoId AND l\.Estado = N'IMPORTADA'\)/.test(c.sql));
-    expect(sel.sql).toMatch(/i\.Situacao = N'IMPORTANDO' AND COALESCE\(i\.UltimoLoteEm, i\.ConfirmadaEm\) < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)/);
+    expect(sel.sql).toMatch(/i\.Situacao = N'IMPORTANDO' AND \(i\.UltimoLoteEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\) OR \(i\.UltimoLoteEm IS NULL AND i\.ConfirmadaEm < DATEADD\(DAY, -@d, SYSUTCDATETIME\(\)\)\)\)/);
+    expect(sel.sql).not.toMatch(/COALESCE\(i\.UltimoLoteEm/);
     expect(sel.inputs.d).toBe(7);
     const apaga = mockConsultas.find((c) => /DELETE FROM ImportacoesMembrosLinhas WHERE ImportacaoId = @id AND NOT EXISTS/.test(c.sql));
     expect(apaga.inputs).toMatchObject({ id: 11, dias: 7 });

@@ -10,6 +10,11 @@ Tudo aqui é **público**: só nomes e números de mentira, nenhum dado de membr
 
 | Arquivo | O que é |
 | --- | --- |
+| `propostas-r33/index.html` | A página da **rodada 33** (Módulo 3, os ajustes da 32: os cultos com a agenda padrão da Geral, o termo de posse em três partes com a virada só do executivo, e o mapa com o bairro da ficha), 156 KB, só com a 33. Gerada; não editar à mão. Publicada numa página nova (25/11/2026) |
+| `r33-base.js` | As peças novas da 33 (o menu com a agenda padrão e os bairros, a casca do Membros para a ficha) e as que a poda da 32 tirou (a página do QR, a caixa “é verdadeiro”); o resto vem do código da 32 que continua na página |
+| `r33-cultos.js`, `r33-posse.js`, `r33-mapa.js` | As 3 telas da 33: a agenda padrão (a Geral monta e responde aos pedidos; a congregação acrescenta e pede), o termo em três partes (o aceite no celular e no balcão, o PDF de duas folhas, a página do QR, a virada pela Geral e a diretoria em janeiro) e o mapa (a lista dos bairros, o bairro na ficha, o alfinete) |
+| `r33-lista.js` | A explicação da rodada (`EXPLICA_R33`), a de cada tela (com os “Para conferir”) e a lista que junta as telas |
+| `montar-r33.js`, `conferir-r33.js` | Montam a 33 a partir da página da 32 (a poda leva o que só a 32 usava; o que a 33 reaproveita fica) e conferem cada desenho. A procura das palavras proibidas desconta o código do Módulo 3 (os fontes da 32 e da 33) da lista antiga |
 | `propostas-r32/index.html` | A página da **rodada 32** (Módulo 3, Estrutura e Territórios, o começo), 145 KB, só com a 32. Gerada; não editar à mão. Ajustada às respostas dele às 8 perguntas e publicada numa página nova (24/11/2026) |
 | `r32-base.js` | A casca do módulo (verde), quem está vendo e os dados de mentira comuns da 32 |
 | `r32-painel.js`, `r32-ficha.js`, `r32-cultos.js`, `r32-posse.js`, `r32-mapa.js` | As 5 telas da 32: o painel do que está desatualizado, a ficha da congregação (e a da área), os cultos e os pontos de culto, a diretoria com o termo de posse e o mapa |
@@ -46,8 +51,8 @@ as auditorias. As escolhas do responsável ficam no banco da própria página (c
 Na pasta `design/propostas`, com o Node.js:
 
 ```bash
-node montar-r32.js     # grava propostas-r32/index.html; no fim, as duas contagens de palavras proibidas em 0
-node conferir-r32.js   # no fim, "com problema 0"
+node montar-r33.js     # grava propostas-r33/index.html; no fim, as duas contagens de palavras proibidas em 0 e "sobrou da 32: nada"
+node conferir-r33.js   # no fim, "com problema 0"
 ```
 
 O `montar-r31.js` usa o TypeScript (do projeto ou o global do npm).
@@ -57,10 +62,10 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 
 ## Publicar
 
-- **A página da rodada 32**: `https://claude.ai/artifact/HYtYxyM4ysGnxhxnWiCk5o` ("Propostas de tela · rodada 32"),
-  publicada em 24/11/2026 (versão 1, id 1795545257-e9bf), com o banco (`db`) das escolhas.
+- **A página da rodada 33**: `https://claude.ai/artifact/NF7zseCp4zVWsUEwUzmQDG` ("Propostas de tela · rodada 33"),
+  publicada em 25/11/2026 (versão 1, id 1795614707-e67c), com o banco (`db`) das escolhas (testado: gravar e apagar).
 - **As páginas das rodadas anteriores**, nunca mais republicadas, cada uma com o seu banco: a
-  `58VZXcgVGNdrUxoVZRp2c6` (rodada 31, ids `r31-*` e `geral-r31`), a `KMebnrdoWfAhcz9yeRgjFz` (rodadas 19 a 30, ids
+  `HYtYxyM4ysGnxhxnWiCk5o` (rodada 32, ids `r32-*` e `geral-r32`), a `58VZXcgVGNdrUxoVZRp2c6` (rodada 31, ids `r31-*` e `geral-r31`), a `KMebnrdoWfAhcz9yeRgjFz` (rodadas 19 a 30, ids
   `r30-*` e `geral-r30` e anteriores) e a `G1gj9hzSbdcqAZYcFjmJ1j` (rodadas 2 a 18).
 - **A próxima rodada vai para uma página nova** (sem `url`, com as capacidades `{"db":{}}`): como não há versão no ar
   para ler, basta ler a página nova inteira antes de publicar (a ferramenta exige ler o que publica). Depois, grave e
@@ -68,18 +73,19 @@ nunca dentro do desenho: o que está no desenho é o que o construtor faz.
 - Ajustar a mesma rodada depois de publicada (antes de ele comentar): aí sim é o mesmo endereço, lendo a versão no ar.
 - **Nunca republicar enquanto o responsável está comentando:** as observações dele ficam no navegador e se perdem.
   A chave do `localStorage` (`propostas-r15`) não muda entre as rodadas.
-- Ler as escolhas dele: `ArtifactData`, coleção `escolhas` da página da rodada (na 32, ids `r32-*` e `geral-r32`).
+- Ler as escolhas dele: `ArtifactData`, coleção `escolhas` da página da rodada (na 33, ids `r33-*` e `geral-r33`).
 
 ## A próxima rodada
 
-1. Copie `montar-r32.js` para `montar-r33.js`: a base passa a ser `propostas-r32/index.html` (a publicada), a lista da
-   32 sai (a linha `TELAS.unshift(...TELAS_R32...)` é trocada pelos fontes da 33), os nomes `r32` viram `r33` e entra
-   no alto o link da página da 32 (HYtY…), antes dos outros.
-2. As telas novas em `r33-*.js` e a explicação em `r33-lista.js`: só no claro, cada nível, celular com a barra do
+1. Copie `montar-r33.js` para `montar-r34.js`: a base passa a ser `propostas-r33/index.html` (a publicada), a lista da
+   33 sai (a linha `TELAS.unshift(...TELAS_R33...)` é trocada pelos fontes da 34), os nomes `r33` viram `r34` e entra
+   no alto o link da página da 33 (NF7z…), antes dos outros. O código da 32 e da 33 que a 34 reaproveitar fica na base;
+   o que a poda já tirou (veja o `r33-base.js`) se copia da página antiga.
+2. As telas novas em `r34-*.js` e a explicação em `r34-lista.js`: só no claro, cada nível, celular com a barra do
    telefone. Quando ele se confunde com muitas opções, uma versão única bem explicada.
-3. `node montar-r33.js` e um `conferir-r33.js` (cópia do da 32), os dois com zero problema. Confira também que não
-   sobrou nada da 32 na página (`TELAS_R32`, `geral-r32`).
-4. Publique numa página nova, só com a 33, e registre: commit dos fontes e esta seção com o endereço novo.
+3. `node montar-r34.js` e um `conferir-r34.js` (cópia do da 33), os dois com zero problema. Confira também que não
+   sobrou nada da 33 na página (`TELAS_R33`, `geral-r33`).
+4. Publique numa página nova, só com a 34, e registre: commit dos fontes e esta seção com o endereço novo.
 5. Uma página por rodada, sem teto de tamanho a vigiar: a 32 tem 145 KB, e só a página nova é lida antes de publicar.
 6. O conferidor não mede transbordo: meça no Edge (o `medir.js` da pasta de fotos da rodada, só no claro) e olhe as
    fotos do pior caso (a mensagem de erro, o seletor aberto, o celular com o formulário), sem fotografar tudo.

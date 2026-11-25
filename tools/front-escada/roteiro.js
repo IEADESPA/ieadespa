@@ -30,7 +30,7 @@ function montar({ geral = true, gerais } = {}) {
   // v8.2: o login diz em quais permissões a sessão é do nível geral (o prelude do ambiente não conhece esta variável)
   ev(`var authPermissoesGerais = ${JSON.stringify(gerais || (geral ? ["afm", "consagracoes", "pessoas"] : []))};`, "permissoes-gerais");
   ev(extrair("modulos/pessoas.js", ["editarPessoa", "salvarPessoa", "limparFormPessoa", "travarCamposDoGeralPessoa", "mudouCargoPessoaAcao", "nomeCargoPorSigla",
-    "STATUS_LICENCA_CANDIDATURA", "preencherSituacaoFichaPessoa"]), "pessoas.js(extraido)");
+    "STATUS_LICENCA_CANDIDATURA", "STATUS_FALECIDO", "preencherSituacaoFichaPessoa"]), "pessoas.js(extraido)");
   // v10.1: as listas do formulário carregam por conta própria; aqui já estão prontas (o formulário não espera nada)
   ev("var opcoesFormPessoaCarregando = null, opcoesFormPessoaProntas = true, opcoesFormPessoaFalha = '';", "listas-prontas");
   ev("function endPreencher() {} function endLimpar() {} function endLerParaEnviar() { return {}; }", "stub: o endereço em linhas (v9.5) não é desta prova");
@@ -300,22 +300,35 @@ const opcoes = (amb) => amb.e("consagracaoModalidade").options;
   finCad.g("editarPessoa")(R.pessoa.membroId);
   ok(finCad.e("pessoaCargoMinisterial").disabled && finCad.e("pessoaDizimista").disabled, "geral só no financeiro: cargo e dízimo travados no cadastro");
 
-  console.log("== cadastro: a licença por candidatura só pela aba dela ==");
+  console.log("== cadastro: em licença por candidatura, só o falecimento pela ficha ==");
   ok(/\.filter\(s => s\.ativa !== false && s\.sigla !== STATUS_LICENCA_CANDIDATURA\)/.test(lerApp("modulos/pessoas.js")), "a lista de situações da ficha não oferece a licença por candidatura");
   const lic = montar({ geral: true });
   lic.ev(`window._pessoasCache = ${JSON.stringify([{ ...R.pessoa, status: "LICENCA_CANDIDATURA" }, { ...R.pessoa, membroId: R.pessoa.membroId + 1, status: "ATIVO" }])}; window._cargosCache = [];`);
-  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option>';`);
+  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option><option value="INATIVO">INATIVO</option><option value="FALECIDO">Falecido</option>';`);
+  const escolhiveis = (amb) => [...amb.e("pessoaStatus").options].filter((o) => !o.disabled && !o.hidden).map((o) => o.value).sort();
   lic.g("editarPessoa")(R.pessoa.membroId);
-  ok(lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA" && lic.e("pessoaStatus").disabled && /Licença Candidatura/.test(lic.e("pessoaStatusDica").textContent),
-    "em licença: a situação aparece só para leitura, com o caminho na dica");
+  ok(lic.e("pessoaStatus").value === "LICENCA_CANDIDATURA" && !lic.e("pessoaStatus").disabled && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["FALECIDO", "LICENCA_CANDIDATURA"])
+    && /Falecido/.test(lic.e("pessoaStatusDica").textContent) && /Desligar/.test(lic.e("pessoaStatusDica").textContent),
+  "em licença: só a licença e o falecimento à escolha, e a dica diz os dois caminhos (Falecido aqui, Desligar no botão)", escolhiveis(lic));
   lic.limparRegistro();
   lic.g("salvarPessoa")();
   await lic.ocioso();
   p = posts(lic, "pessoas");
-  ok(p.length === 1 && p[0].corpo.status === "LICENCA_CANDIDATURA", "salvar a ficha de quem está em licença manda a mesma situação", p[0] && p[0].corpo);
+  ok(p.length === 1 && p[0].corpo.status === "LICENCA_CANDIDATURA", "salvar sem mudar manda a mesma situação", p[0] && p[0].corpo);
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  lic.doc.escolher(lic.e("pessoaStatus"), "FALECIDO");
+  lic.limparRegistro();
+  lic.g("salvarPessoa")();
+  await lic.ocioso();
+  p = posts(lic, "pessoas");
+  ok(p.length === 1 && p[0].corpo.status === "FALECIDO", "escolher Falecido e salvar manda FALECIDO", p[0] && p[0].corpo);
   lic.g("editarPessoa")(R.pessoa.membroId + 1);
-  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "ATIVO" && ![...lic.e("pessoaStatus").options].some((o) => o.value === "LICENCA_CANDIDATURA")
-    && lic.e("pessoaStatusDica").textContent === "", "outra pessoa: o campo volta a valer e a licença sai da lista");
+  ok(!lic.e("pessoaStatus").disabled && lic.e("pessoaStatus").value === "ATIVO" && JSON.stringify(escolhiveis(lic)) === JSON.stringify(["ATIVO", "FALECIDO", "INATIVO"])
+    && lic.e("pessoaStatusDica").textContent === "", "outra pessoa: a lista inteira de volta, sem a licença", escolhiveis(lic));
+  // sem Falecido na lista (catálogo sem ele): a opção entra só para quem está em licença
+  lic.ev(`document.getElementById("pessoaStatus").innerHTML = '<option value="ATIVO">ATIVO</option>';`);
+  lic.g("editarPessoa")(R.pessoa.membroId);
+  ok(JSON.stringify(escolhiveis(lic)) === JSON.stringify(["FALECIDO", "LICENCA_CANDIDATURA"]), "catálogo sem Falecido: a opção entra para quem está em licença", escolhiveis(lic));
 
   console.log("== Meus Dados: data pura sem o dia a menos ==");
   ok(amb.g("formatarValorLgpd")("2026-10-28", "data") === "28/10/2026", "2026-10-28 aparece 28/10/2026");

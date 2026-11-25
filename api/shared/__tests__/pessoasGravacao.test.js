@@ -516,6 +516,8 @@ describe("a licença por candidatura não passa pela ficha", () => {
     const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status }) });
     expect(r.status).toBe(409);
     expect(r.body.mensagem).toMatch(/Licença Candidatura/);
+    expect(r.body.mensagem).toMatch(/"Falecido"/);
+    expect(r.body.mensagem).toMatch(/"Desligar"/);
     expect(gravacoes()).toHaveLength(0);
   });
 

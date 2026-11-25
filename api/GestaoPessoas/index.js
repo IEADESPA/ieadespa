@@ -445,7 +445,7 @@ module.exports = async function (context, req) {
     // o botão "Desligar" (que também fecha a licença).
     const saindoDaLicenca = statusAnterior === LICENCA_CANDIDATURA && statusFinal !== LICENCA_CANDIDATURA;
     if (saindoDaLicenca && statusFinal !== "FALECIDO") {
-      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o desligamento, pelo botão \"Desligar\"." } };
+      context.res = { status: 409, body: { sucesso: false, mensagem: "Esta pessoa está em licença por candidatura: a volta e o não retorno se registram na aba \"Licença Candidatura\" (decisão da Diretoria, pelo nível geral); o falecimento, aqui na ficha, escolhendo \"Falecido\"; o desligamento, pelo botão \"Desligar\"." } };
       return;
     }
     // Entrar num status terminal (vindo de outro) dispara a perda de membresia de

@@ -24,7 +24,7 @@ const ID = {
   titular: BASE_ID + 30, delegado: BASE_ID + 31,
   exTesoureiro: BASE_ID + 40, suspenso: BASE_ID + 41,
   falhaDesligar: BASE_ID + 50, falhaFicha: BASE_ID + 51, falecido: BASE_ID + 52,
-  avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63,
+  avisoAtivo: BASE_ID + 60, avisoInativo: BASE_ID + 61, avisoRecert: BASE_ID + 62, avisoFim: BASE_ID + 63, avisoNova: BASE_ID + 64, avisoTutelada: BASE_ID + 65,
   liderLocal: BASE_ID + 70, liderArea: BASE_ID + 71, liderGeral: BASE_ID + 72, secArea: BASE_ID + 73
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
@@ -210,6 +210,26 @@ async function principal() {
   } finally { soltarRelogio(); }
   await q("UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h) WHERE MembroId = @m", { m: ID.avisoFim, h: hojeBrasilia() });
   ok(!(await recebem()).includes(ID.avisoFim), "o cargo que acabou ontem não recebe");
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 4c. a cobrança do PSC: nem o ano da fundação, nem os anos sob tutela ==");
+  // Visto de 01/06/2031 (exercícios 2026 a 2030 com o prazo vencido). "Nova": fundada em 2027, cobrada a partir de 2028. "Tutelada": decretada em 05/2027
+  // e restabelecida em 01/01/2029 às 01h (UTC), que em Brasília ainda é 31/12/2028: a tutela vai de 2027 a 2028, e 2026, 2029 e 2030 são cobrados.
+  const nova = (await q("INSERT INTO Congregacoes (Nome, AreaId, FundacaoAno) VALUES (N'Nova Cobrança E2E152', @a, 2027); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: area }))[0].id;
+  const tutelada = (await q("INSERT INTO Congregacoes (Nome, AreaId) VALUES (N'Tutelada Cobrança E2E152', @a); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { a: area }))[0].id;
+  const gatilhoTutela = (await q(`INSERT INTO PscAvaliacoes (CongregacaoId, Ano, Status, Ciclo, Versao) OUTPUT INSERTED.AvaliacaoId AS id VALUES (@c, 2025, 'HOMOLOGADA', 1, 1)`, { c: tutelada }))[0].id;
+  await q(`INSERT INTO PscReclassificacoes (CongregacaoId, ExerciciosConsecutivos, AnoInicial, AnoFinal, AvaliacaoGatilhoId, Status, DecididaEm, RestabelecidaEm)
+    VALUES (@c, 2, 2024, 2025, @g, 'REVERTIDA', '2027-05-10T12:00:00', '2029-01-01T01:00:00')`, { c: tutelada, g: gatilhoTutela });
+  LID.avisoNova = await lideranca(ID.avisoNova, pAviso, "CONGREGACAO", nova);   // quem recebe o aviso de cada uma (sem destinatário, não há aviso)
+  LID.avisoTutelada = await lideranca(ID.avisoTutelada, pAviso, "CONGREGACAO", tutelada);
+  const pendentes = (await psc.detectarAvaliacoesPendentes(await obterPool(), { hoje: "2031-06-01" })).map((f) => f.referenciaId);
+  const anosCobrados = (c) => pendentes.filter((r) => Math.floor(r / 10000) === c).map((r) => r % 10000).sort();
+  ok(JSON.stringify(anosCobrados(nova)) === "[2028,2029,2030]", "a congregação fundada em 2027 não é cobrada de 2026 nem de 2027", JSON.stringify(anosCobrados(nova)));
+  ok(JSON.stringify(anosCobrados(tutelada)) === "[2026,2029,2030]", "a restabelecida não é cobrada dos anos sob tutela (o ano pelo relógio de Brasília)", JSON.stringify(anosCobrados(tutelada)));
+  const painelDe = async (ano) => (await psc.montarPainel(await obterPool(), { ano, hoje: "2031-06-01", nomesCongregacoesPermitidas: ["Nova Cobrança E2E152", "Tutelada Cobrança E2E152"] }))
+    .congregacoes.map((l) => `${l.congregacaoId === nova ? "nova" : "tutelada"}:${l.prazo.situacao}`).sort().join(" ");
+  ok((await painelDe(2027)) === "nova:NAO_SE_APLICA tutelada:NAO_SE_APLICA", "no painel de 2027 as duas aparecem como 'não se aplica'", await painelDe(2027));
+  ok((await painelDe(2029)) === "nova:ATRASADO tutelada:ATRASADO", "no painel de 2029 as duas estão atrasadas", await painelDe(2029));
 
   // ------------------------------------------------------------------------------------------------------------------
   console.log("== 5. a medida cautelar ==");

@@ -1122,11 +1122,19 @@ async function consultarTutela(pool, congregacaoId) {
 // Banco — visão geral, histórico e destinatários
 // ---------------------------------------------------------------
 
+// O exercício @ano só é cobrado da unidade que o passou inteiro como congregação: nem o ano da fundação (ou da emancipação), nem os anos sob tutela, do
+// decreto ao restabelecimento, contam (regra do responsável, 25/11/2026). As datas do decreto e do restabelecimento ficam em UTC; o ano é o de Brasília.
+const condicaoAnoCobravel = (c) => `(${c}.FundacaoAno IS NULL OR @ano > ${c}.FundacaoAno)
+      AND NOT EXISTS (SELECT 1 FROM PscReclassificacoes rt WHERE rt.CongregacaoId = ${c}.CongregacaoId AND rt.Status = 'REVERTIDA'
+        AND rt.DecididaEm IS NOT NULL AND rt.RestabelecidaEm IS NOT NULL
+        AND @ano BETWEEN YEAR(DATEADD(hour, -3, rt.DecididaEm)) AND YEAR(DATEADD(hour, -3, rt.RestabelecidaEm)))`;
+
 async function montarPainel(pool, { ano, nomesCongregacoesPermitidas, hoje = hojeBrasilia() }) {
   const parametros = await lerParametros(pool);
   const anoNum = Number(ano);
-  const congregacoes = (await pool.request().query(`
-    SELECT c.CongregacaoId, c.Nome, c.Categoria, c.AreaId, a.Nome AS AreaNome
+  const congregacoes = (await pool.request().input("ano", sql.SmallInt, anoNum).query(`
+    SELECT c.CongregacaoId, c.Nome, c.Categoria, c.AreaId, a.Nome AS AreaNome,
+           CASE WHEN ${condicaoAnoCobravel("c")} THEN 1 ELSE 0 END AS Cobravel
     FROM Congregacoes c LEFT JOIN Areas a ON a.AreaId = c.AreaId
     WHERE c.Ativa = 1 ORDER BY c.Nome
   `)).recordset.filter(c => !nomesCongregacoesPermitidas || nomesCongregacoesPermitidas.includes(c.Nome));
@@ -1184,8 +1192,8 @@ async function montarPainel(pool, { ano, nomesCongregacoesPermitidas, hoje = hoj
     const status = a ? a.Status : null;
     let prazo = situacaoPrazo({ ano: anoNum, status, hoje, prazoDias: parametros.prazoEnvioDias, primeiroExercicio: parametros.primeiroExercicio });
     // Unidade já rebaixada a Extensão da Tenda não tem avaliação a entregar (só avalia se quiser provar a recuperação):
-    // o painel concorda com os avisos, que também a deixam de fora.
-    if (!a && c.Categoria !== "CONGREGACAO") prazo = { ...prazo, situacao: "NAO_SE_APLICA" };
+    // o painel concorda com os avisos, que também a deixam de fora. O mesmo para o ano que não conta (fundação ou tutela).
+    if (!a && (c.Categoria !== "CONGREGACAO" || !Number(c.Cobravel))) prazo = { ...prazo, situacao: "NAO_SE_APLICA" };
     const reclass = reclassificacaoPorCongregacao.get(c.CongregacaoId) || null;
     return {
       congregacaoId: c.CongregacaoId, congregacaoNome: c.Nome, areaNome: c.AreaNome || null, categoria: c.Categoria,
@@ -1293,6 +1301,7 @@ async function detectarAvaliacoesPendentes(pool, { hoje = hojeBrasilia() } = {})
       WHERE c.Ativa = 1 AND c.Categoria = 'CONGREGACAO' AND NOT EXISTS (
         SELECT 1 FROM PscAvaliacoes a WHERE a.CongregacaoId = c.CongregacaoId AND a.Ano = @ano AND a.Status IN ('ENVIADA', 'VALIDADA', 'HOMOLOGADA')
       )
+      AND ${condicaoAnoCobravel("c")}
     `)).recordset;
     for (const c of pendentes) {
       const destinatarios = await destinatariosDe(c.CongregacaoId);

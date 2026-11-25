@@ -118,3 +118,104 @@ describe("a data de saída ao salvar a ficha", () => {
     } finally { jest.useRealTimers(); }
   });
 });
+
+describe("tirar do rol ativo quem tem cargo de liderança", () => {
+  const local = () => sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Central"] });
+  const geralSemFator = () => sessao(77, { fator: { via: "NENHUM", em: Date.now() } });
+  const situacao = (cargo, alvoAdministra = 0, outros = 1) => [/AlvoAdministra/, { recordset: [{ TemCargoVigente: cargo, AlvoAdministra: alvoAdministra, Outros: outros }] }];
+  function regrasDoDesligar(sit, existe = true) {
+    mockRegras = [
+      sit,
+      [/AS CongregacaoNome, e\.Nome AS ExtensaoNome FROM MembroReferencia m/, { recordset: existe ? [{ CongregacaoNome: "Central", ExtensaoNome: null }] : [] }],
+      [/UPDATE MembroReferencia SET Status = 'DESLIGADO'/, { recordset: [], rowsAffected: [1] }],
+      [/sp_getapplock/, { recordset: [{ resultado: 0 }] }]
+    ];
+  }
+  const consultouSituacao = () => mockConsultas.some((c) => /AlvoAdministra/.test(c.texto));
+
+  test("desligar: fora do nível geral, 403 e nada muda", async () => {
+    regrasDoDesligar(situacao(1));
+    const r = await chamar("DELETE", { token: local(), membroIdRota: "5" });
+    expect(r.status).toBe(403);
+    expect(r.body.mensagem).toMatch(/Secretaria \(nível geral\)/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("desligar: o nível geral sem a confirmação recente recebe 428 e nada muda", async () => {
+    regrasDoDesligar(situacao(1));
+    const r = await chamar("DELETE", { token: geralSemFator(), membroIdRota: "5" });
+    expect(r.status).toBe(428);
+    expect(r.body.precisaFator).toBe(true);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("desligar: nunca a última pessoa que administra os acessos", async () => {
+    regrasDoDesligar(situacao(1, 1, 0));
+    const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.mensagem).toMatch(/permissoes/);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("desligar: o nível geral com a confirmação recente desliga", async () => {
+    regrasDoDesligar(situacao(1, 1, 2));
+    const r = await chamar("DELETE", { token: sessao(77), membroIdRota: "5" });
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(true);
+    expect(gravacoes()).toHaveLength(1);
+  });
+
+  test("desligar quem não tem cargo de liderança: a congregação continua desligando", async () => {
+    regrasDoDesligar(situacao(0, 0, 0));
+    const r = await chamar("DELETE", { token: local(), membroIdRota: "5" });
+    expect(r.status).toBe(200);
+    expect(r.body.sucesso).toBe(true);
+  });
+
+  test("matrícula que não existe e de fora do escopo: a mesma recusa, sem olhar o cargo", async () => {
+    regrasDoDesligar(situacao(1), false);
+    const inexistente = await chamar("DELETE", { token: local(), membroIdRota: "5" });
+    regrasDoDesligar(situacao(1));
+    const fora = await chamar("DELETE", { token: sessao(77, { nivel: "CONGREGACAO", escopoCongregacoes: ["Vila Nova"] }), membroIdRota: "5" });
+    expect(inexistente.status).toBe(403);
+    expect(fora.status).toBe(403);
+    expect(JSON.stringify(inexistente.body)).toBe(JSON.stringify(fora.body));
+    expect(consultouSituacao()).toBe(false);
+  });
+
+  test.each([["INATIVO"], ["AFASTADO"], ["DESLIGADO"], ["FALECIDO"]])("a ficha com a situação %s: fora do nível geral, 403 e nada muda", async (status) => {
+    mockRegras.unshift(situacao(1));
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status }) });
+    expect(r.status).toBe(403);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("a ficha com a situação DESLIGADO: o nível geral sem a confirmação recente recebe 428", async () => {
+    mockRegras.unshift(situacao(1));
+    const r = await chamar("POST", { token: geralSemFator(), corpo: corpoFicha({ status: "DESLIGADO" }) });
+    expect(r.status).toBe(428);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("a ficha com a situação INATIVO: nunca a última pessoa que administra os acessos", async () => {
+    mockRegras.unshift(situacao(1, 1, 0));
+    const r = await chamar("POST", { token: sessao(77), corpo: corpoFicha({ status: "INATIVO" }) });
+    expect(r.body.sucesso).toBe(false);
+    expect(gravacoes()).toHaveLength(0);
+  });
+
+  test("quem tem cargo e continua ATIVO: a congregação salva a ficha sem a conferência", async () => {
+    mockRegras.unshift(situacao(1));
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ telefone: "91900000001" }) });
+    expect(r.status).toBe(200);
+    expect(consultouSituacao()).toBe(false);
+  });
+
+  test("quem não tem cargo: a congregação muda a situação para INATIVO", async () => {
+    mockRegras.unshift(situacao(0, 0, 0));
+    const r = await chamar("POST", { token: local(), corpo: corpoFicha({ status: "INATIVO" }) });
+    expect(r.status).toBe(200);
+    expect(gravacoes()).toHaveLength(1);
+  });
+});

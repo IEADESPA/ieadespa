@@ -28,6 +28,7 @@ const POR_PAGINA_MAX = 100;
 const escadaDb = require("../shared/escadaDb");
 const afm = require("../shared/afm");
 const { hojeBrasilia } = require("../shared/dataBrasilia");
+const travaPermissoes = require("../shared/travaPermissoes");
 const SEXOS = ["M", "F"];
 // "ana.souza@exemplo.org" -> "a***@exemplo.org": o suficiente para a trilha mostrar QUE o e-mail mudou, sem guardar o endereço na auditoria imutável.
 function mascararEmail(e) {
@@ -51,6 +52,24 @@ function motivoSaidaVisivel(m, vDisciplina) {
 // Status que encerram a membresia de vez — entrar num desses (vindo de outro status)
 // dispara a vacância automática de Assentos/Liderança/Cargo (shared/vacancia.js).
 const STATUS_TERMINAIS = ["DESLIGADO", "FALECIDO"];
+
+// Tirar do rol ativo quem tem cargo de liderança vigente tira o acesso dele (o login exige ATIVO), e o desligamento e o falecimento ainda encerram os mandatos:
+// é ato da Secretaria (nível geral), com a confirmação recente (428), e nunca da última pessoa que administra os acessos (shared/travaPermissoes.js).
+// Chamado depois da conferência do escopo. Devolve true se pode seguir; senão já deixou a resposta em context.res.
+async function conferirSaidaDeLideranca(pool, req, context, usuario, membroId) {
+  const situacao = await travaPermissoes.situacaoDoCargo(pool, sql, membroId, hojeBrasilia());
+  if (!situacao.temCargoVigente) return true;
+  if (!ehGeral(usuario)) {
+    context.res = { status: 403, body: { sucesso: false, mensagem: "Esta pessoa tem cargo de liderança: só a Secretaria (nível geral) a tira do rol ativo." } };
+    return false;
+  }
+  if (!auth.exigirFatorRecente(req, context)) return false;
+  if (travaPermissoes.ficariaSemAdministrador(situacao)) {
+    context.res = { status: 200, body: { sucesso: false, mensagem: travaPermissoes.MENSAGEM_ULTIMO } };
+    return false;
+  }
+  return true;
+}
 
 // "funcao" no retorno é só de exibição: prioriza o nome do Cargo Ministerial
 // (catálogo fechado, com escada — Art. 71) e cai pro texto livre antigo só se
@@ -370,6 +389,9 @@ module.exports = async function (context, req) {
     // encerra Assentos/Liderança/Cargo — mesmo racional já usado em GestaoCartas/processar
     // e na exclusão disciplinar, agora coberto também no fluxo manual de edição da Pessoa.
     const entrandoEmStatusTerminal = STATUS_TERMINAIS.includes(statusFinal) && statusAnterior !== statusFinal;
+    // sair do rol ativo (para qualquer outra situação, inclusive as terminais) corta o acesso: quem tem cargo de liderança passa pela conferência
+    const saindoDoRolAtivo = existia && statusAnterior !== statusFinal && statusFinal !== "ATIVO";
+    if (saindoDoRolAtivo && !(await conferirSaidaDeLideranca(pool, req, context, usuario, membroId))) return;
     const hojeISO = hojeBrasilia();   // a data da saída é o dia de Brasília (depois das 21h o de Greenwich já é amanhã)
     const situacaoFinal = entrandoEmStatusTerminal
       ? "SEM_COMUNHAO"
@@ -525,6 +547,7 @@ module.exports = async function (context, req) {
       context.res = { status: 403, body: FORA_DO_ESCOPO };
       return;
     }
+    if (!(await conferirSaidaDeLideranca(pool, req, context, usuario, membroDesligar))) return;
     const upd = await pool.request().input("id", sql.Int, membroDesligar).input("hoje", sql.Date, hojeBrasilia())
       .query(`UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO',
               DataSaida = ISNULL(DataSaida, @hoje)

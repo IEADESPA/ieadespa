@@ -10,7 +10,13 @@
 //   4b. os avisos da congregação vão só para quem entra com a permissão (ATIVO, recertificação em dia, cargo vigente pelo dia de Brasília);
 //   5. a medida cautelar: só o cargo vigente recebe o fim, o fim anterior vai para a trilha, e uma falha no meio não deixa nada pela metade;
 //   5b. a saída do rol (desligar ou a ficha com DESLIGADO): uma falha no meio não deixa nada pela metade e a nova tentativa conclui; o falecido não vira desligado;
-//   6. lixo nos campos das rotas mexidas: nunca 500, nunca texto interno.
+//   6. lixo nos campos das rotas mexidas: nunca 500, nunca texto interno;
+//   0/7. a migração 301 (uma licença por candidatura aberta por pessoa): banco sem duplicada, duplicadas semeadas antes, a segunda aplicação, o índice recusando;
+//        a rota recusa a segunda licença e o retorno diz a situação real;
+//   8. a Carta de Mudança: a secretaria não emite a só pedida; a confirmação do próprio membro (o último que administra os acessos) vale e avisa a Geral
+//      (migração 302); o processamento minimiza só a confirmada, conta da confirmação e a trilha marca o último administrador;
+//   9. o e-mail de quem tem cargo (o nível do cargo e o 428), o aviso ao e-mail antigo que não sai, e a data de saída entre as situações terminais;
+//   10. a medida cautelar: concluir o relatório uma vez só, e as restrições só sim/não.
 process.env.AUTH_SECRET = "segredo-do-roteiro-do-acesso-3-" + "x".repeat(24);
 const L = require("./lib");
 const { ok, fim, q, escalar, obterPool, path, API } = L;
@@ -31,7 +37,10 @@ const ID = {
   licArea: BASE_ID + 90, licLocal: BASE_ID + 91, licFalha: BASE_ID + 92,
   fichaSituacao: BASE_ID + 100, fichaLicenca: BASE_ID + 101, fichaDatas: BASE_ID + 102,
   licNaoVolta: BASE_ID + 103, licVolta: BASE_ID + 104, licFalece: BASE_ID + 105, licDesliga: BASE_ID + 106, licEncerrada: BASE_ID + 107,
-  cliGeral: BASE_ID + 108, cliOutraArea: BASE_ID + 109
+  cliGeral: BASE_ID + 108, cliOutraArea: BASE_ID + 109,
+  licDup1: BASE_ID + 110, licDup2: BASE_ID + 111, licSozinha: BASE_ID + 112, licRetornoReal: BASE_ID + 113,
+  avisoSecGeral: BASE_ID + 114, cartaSemConfirmacao: BASE_ID + 115,
+  emailArea: BASE_ID + 117, emailSemCargo: BASE_ID + 118, terminalL4: BASE_ID + 119, medidaRel: BASE_ID + 120
 };
 const SENHA = "Senha-Do-Roteiro-3#2026";
 let ipSeq = 1;
@@ -67,6 +76,63 @@ async function principal() {
   for (let vez = 0; vez < 2; vez++) for (const lote of m300) await q(lote);
   ok((await escalar("SELECT COUNT(*) FROM StatusMembro WHERE Sigla = N'AFASTADO' AND Ativa = 1")) === 1
     && (await escalar("SELECT COUNT(*) FROM sys.indexes WHERE name = N'IX_LicencasCandidatura_MembroId_Status'")) === 1, "a migração 300 duas vezes: AFASTADO uma vez só no catálogo, e o índice");
+  // as migrações deste ramo que a base não tem, lote a lote como no deploy. (A ponte do LocalDB não entrega as mensagens PRINT: o texto do que a 301 imprime
+  // — só a contagem, sem AVISO, e o AVISO sem a chave — está provado no teste de texto, api/shared/__tests__/licencaUnicaMigracao.test.js.)
+  const lotesDaMigracao = (n) => fs.readFileSync(path.join(PASTA_MIG, fs.readdirSync(PASTA_MIG).find((x) => x.startsWith(`${n}_`))), "utf8")
+    .split(/^\s*GO\s*$/gim).map((t) => t.trim()).filter(Boolean);
+  const aplicarMigracao = async (n) => { for (const lote of lotesDaMigracao(n)) await q(lote); };
+  for (let vez = 0; vez < 2; vez++) await aplicarMigracao(302);
+  ok((await escalar("SELECT COUNT(*) FROM NotificacaoRegras WHERE Chave = N'ACESSO_ULTIMO_ADMIN_SAINDO' AND PermissaoAlvo = N'pessoas' AND NivelAlvo = N'GLOBAL' AND Obrigatoria = 1")) === 1,
+    "a migração 302 duas vezes: a regra do aviso à Geral uma vez só");
+
+  console.log("== 0. a migração 301: uma licença por candidatura aberta por pessoa ==");
+  const duplicadasAbertas = () => escalar("SELECT COUNT(*) FROM (SELECT MembroId FROM LicencasCandidatura WHERE Status = N'EM_LICENCA' GROUP BY MembroId HAVING COUNT(*) > 1) d");
+  const indice301 = () => escalar(`SELECT COUNT(*) FROM sys.indexes WHERE name = N'UX_LicencasCandidatura_Aberta' AND object_id = OBJECT_ID(N'dbo.LicencasCandidatura')
+    AND is_unique = 1 AND has_filter = 1`);
+  const duplicadasMarcadas = () => escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE Status = N'DUPLICADA'");
+  const licencasNaBase = await escalar("SELECT COUNT(*) FROM LicencasCandidatura");
+  const repetidasNaBase = await duplicadasAbertas();
+  await aplicarMigracao(301);
+  ok(repetidasNaBase === 0 && (await indice301()) === 1 && (await duplicadasMarcadas()) === 0,
+    `num banco sem duplicada (${licencasNaBase} licença(s) na base): a 301 roda sem erro, só cria o índice e não mexe em linha`);
+  // como num banco de antes da regra: sem o índice (só aqui, no roteiro) e com licenças abertas repetidas
+  await q("DROP INDEX UX_LicencasCandidatura_Aberta ON dbo.LicencasCandidatura");
+  await q("UPDATE MembroReferencia SET Status = 'LICENCA_CANDIDATURA' WHERE MembroId IN (@a, @b, @c)", { a: ID.licDup1, b: ID.licDup2, c: ID.licSozinha });
+  const semear = (m, criadoEm, status = "EM_LICENCA") => escalar(`INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, Status, CriadoEm)
+    OUTPUT INSERTED.LicencaId VALUES (@m, '2026-10-04', '2026-07-06', @s, CAST(@c AS DATETIME2))`, { m, s: status, c: criadoEm });
+  const dup1Meio = await semear(ID.licDup1, "2026-09-02T10:00:00");
+  const dup1Antiga = await semear(ID.licDup1, "2026-09-01T10:00:00");   // a mais antiga tem o número MAIOR: vale a data, não o número
+  const dup1Nova = await semear(ID.licDup1, "2026-09-03T10:00:00");
+  const dup2Fechada = await semear(ID.licDup2, "2026-08-01T10:00:00", "RETORNOU");
+  const dup2Primeira = await semear(ID.licDup2, "2026-09-05T10:00:00");
+  const dup2Empate = await semear(ID.licDup2, "2026-09-05T10:00:00");   // a mesma data: fica a de número menor
+  const sozinha = await semear(ID.licSozinha, "2026-09-01T10:00:00");
+  ok((await duplicadasAbertas()) === 2, "o cenário: duas pessoas com licenças abertas repetidas, semeadas antes da migração");
+  await aplicarMigracao(301);
+  const lic301 = (id) => escalar(`SELECT CONCAT(Status, '|', ISNULL(CONVERT(varchar(10), DataRetornoDecidida, 120), '-'), '|', ISNULL(ObservacaoRetorno, '-'))
+    FROM LicencasCandidatura WHERE LicencaId = @id`, { id });
+  const fechadaPela301 = (mantida) => `DUPLICADA|${hojeBrasilia()}|Fechada pela migração 301: licença duplicada; a licença aberta da pessoa é a nº ${mantida}.`;
+  const estado1 = [await lic301(dup1Meio), await lic301(dup1Antiga), await lic301(dup1Nova)];
+  ok(estado1[1] === "EM_LICENCA|-|-" && estado1[0] === fechadaPela301(dup1Antiga) && estado1[2] === fechadaPela301(dup1Antiga),
+    "fica aberta a mais antiga pela data; as outras viram DUPLICADA, com a data de hoje e o número da que ficou", estado1);
+  ok((await lic301(dup2Primeira)) === "EM_LICENCA|-|-" && (await lic301(dup2Empate)) === fechadaPela301(dup2Primeira) && /^RETORNOU\|/.test(await lic301(dup2Fechada))
+    && (await lic301(sozinha)) === "EM_LICENCA|-|-", "no empate da data fica a de número menor; a licença já fechada e a licença única não mudam");
+  ok((await indice301()) === 1 && (await duplicadasAbertas()) === 0, "depois de fechar as duplicadas, o índice é criado");
+  ok((await duplicadasMarcadas()) === 3, "três licenças fechadas como DUPLICADA, nenhuma apagada", `${await duplicadasMarcadas()}`);
+  ok((await escalar("SELECT COUNT(*) FROM MembroReferencia WHERE MembroId IN (@a, @b, @c) AND Status = 'LICENCA_CANDIDATURA'", { a: ID.licDup1, b: ID.licDup2, c: ID.licSozinha })) === 3
+    && (await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'LicencasCandidatura' AND RegistroId IN (@a, @b, @c)", { a: dup1Meio, b: dup1Nova, c: dup2Empate })) === 0,
+  "a migração não mexe na situação das pessoas no rol nem grava na trilha");
+  const marcadas = await duplicadasMarcadas();
+  await aplicarMigracao(301);
+  ok((await duplicadasMarcadas()) === marcadas && (await indice301()) === 1, "a segunda aplicação (o deploy seguinte) roda sem erro e não muda nada");
+  let erroDoIndice = null;
+  try { await q("INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, Status) VALUES (@m, '2026-10-04', '2026-07-06', 'EM_LICENCA')", { m: ID.licSozinha }); }
+  catch (e) { erroDoIndice = e; }
+  ok(erroDoIndice && (erroDoIndice.number === 2601 || erroDoIndice.number === 2627)
+    && (await escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @m AND Status = N'EM_LICENCA'", { m: ID.licSozinha })) === 1,
+  "o banco recusa a segunda licença aberta da mesma pessoa, com o erro de chave repetida que a rota reconhece", erroDoIndice && `${erroDoIndice.number}`);
+  await q("INSERT INTO LicencasCandidatura (MembroId, DataPleito, DataInicioLicenca, Status) VALUES (@m, '2024-10-06', '2024-07-08', 'RETORNOU')", { m: ID.licSozinha });
+  ok((await escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @m", { m: ID.licSozinha })) === 2, "a licença já fechada da mesma pessoa continua aceita (o índice só olha as abertas)");
   const papel = async (nome, nivel, perms) => (await q("INSERT INTO Papeis (Nome, Nivel, Permissoes) VALUES (@n, @v, @p); SELECT CAST(SCOPE_IDENTITY() AS INT) AS id", { n: nome, v: nivel, p: perms }))[0].id;
   const pGeral = await papel("Geral E2E152", "GLOBAL", "pessoas,permissoes");
   const pTes = await papel("Tesoureiro E2E152", "CONGREGACAO", "financeiro,pessoas");
@@ -524,6 +590,106 @@ async function principal() {
   ok(quebras.length === 0, `lixo em cada campo (${L.LIXO.length} valores; a ficha campo a campo): nunca 500, nunca texto interno`, quebras.slice(0, 5).join(" | "));
   ok((await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.saiu })) === "2026-11-20",
     "o lixo na data de saída não troca a data gravada");
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 7. a licença aberta é única pela rota, e o retorno diz a situação real ==");
+  const outraLic = await lic(ID.licSozinha);
+  ok(outraLic.status === 200 && outraLic.body && outraLic.body.sucesso === false && /já tem uma licença por candidatura aberta/.test(outraLic.body.mensagem)
+    && (await escalar("SELECT COUNT(*) FROM LicencasCandidatura WHERE MembroId = @m", { m: ID.licSozinha })) === 2, "a rota recusa a segunda licença aberta com a mensagem clara, e nada é gravado", resumo(outraLic));
+  const licReal = await lic(ID.licRetornoReal);
+  ok(licReal.status === 201, "a licença de quem vai mudar de situação no meio", resumo(licReal));
+  await q("UPDATE MembroReferencia SET Status = 'AFASTADO' WHERE MembroId = @id", { id: ID.licRetornoReal });   // a situação mudou por fora da licença
+  const retornoReal = await decidir(licReal.body && licReal.body.licencaId, true);
+  const trilhaRetorno = await escalar("SELECT TOP 1 DadosDepois FROM AuditLog WHERE Tabela = N'LicencasCandidatura' AND RegistroId = @id ORDER BY AuditId DESC", { id: licReal.body && licReal.body.licencaId });
+  ok(retornoReal.body && retornoReal.body.sucesso === true && /não mudou/.test(retornoReal.body.mensagem) && /Afastado/.test(retornoReal.body.mensagem) && !/voltou para ATIVO/.test(retornoReal.body.mensagem)
+    && (await statusDe(ID.licRetornoReal)) === "AFASTADO" && /^RETORNOU/.test(await licencaDe(ID.licRetornoReal)),
+  "o retorno de quem já não estava em licença no rol: a decisão fica, a situação não muda, e a resposta diz Afastado", resumo(retornoReal));
+  ok(/"situacaoNoRol":"AFASTADO"/.test(trilhaRetorno || "") && /"situacaoMudou":false/.test(trilhaRetorno || ""), "e a trilha registra a situação real", String(trilhaRetorno).slice(0, 160));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 8. a Carta de Mudança: a confirmação do membro, o aviso à Geral e o processamento ==");
+  // A pessoa A é a única que administra os acessos (o fim da seção 5d). Quem recebe o aviso: uma secretaria geral com "pessoas" (sem "permissoes").
+  const pSecGeral = await papel("Secretaria Geral E2E152", "GLOBAL", "pessoas");
+  LID.avisoSecGeral = await lideranca(ID.avisoSecGeral, pSecGeral, "GLOBAL", null);
+  const minhas = (membroId, corpo) => chamarRota("SolicitarCarta/index.js", { metodo: "POST", token: L.PIN(membroId), corpo: { matricula: membroId, ...corpo } });
+  const cartas = (acao, corpo) => chamarRota("GestaoCartas/index.js", { metodo: "POST", binding: { acao }, token: local(), corpo });
+  const cartaDe = (id) => escalar("SELECT Status FROM CartasTransito WHERE CartaId = @id", { id });
+  const pedido = await minhas(ID.adminA, { tipo: "MUDANCA", destino: "Igreja de Teste", motivoSaida: "Mudança de cidade (roteiro)" });
+  const cartaA = pedido.body && pedido.body.cartaId;
+  ok(pedido.status === 201 && cartaA && (await cartaDe(cartaA)) === "SOLICITADA", "o próprio membro pede a Carta de Mudança", resumo(pedido));
+  const emitirPedida = await cartas("emitir", { cartaId: cartaA });
+  ok(emitirPedida.body && emitirPedida.body.sucesso === false && /confirma/.test(emitirPedida.body.mensagem) && (await cartaDe(cartaA)) === "SOLICITADA",
+    "a secretaria não emite a Carta de Mudança só pedida", resumo(emitirPedida));
+  const confirmou = await minhas(ID.adminA, { tipo: "MUDANCA", confirmar: true });
+  ok(confirmou.body && confirmou.body.sucesso === true && (await cartaDe(cartaA)) === "CONFIRMADA", "a confirmação do último que administra os acessos vale (não se barra a saída do membro)", resumo(confirmou));
+  const avisos = await q("SELECT DestinatarioMembroId AS d, Titulo, Mensagem FROM Notificacoes WHERE RegraChave = N'ACESSO_ULTIMO_ADMIN_SAINDO' AND ReferenciaTabela = N'CartasTransito' AND ReferenciaId = @c", { c: cartaA });
+  ok(avisos.some((a) => a.d === ID.avisoSecGeral) && !avisos.some((a) => a.d === ID.adminA) && avisos.every((a) => !/adminA|E2E152/.test(`${a.Titulo} ${a.Mensagem}`)),
+    "a Geral é avisada na confirmação (o próprio membro não), e o aviso não leva o nome", JSON.stringify(avisos.map((a) => a.d)));
+  const trilhaConfirmacao = await escalar("SELECT TOP 1 DadosDepois FROM AuditLog WHERE Tabela = N'CartasTransito' AND RegistroId = @c AND Acao = N'Confirmou solicitação de carta' ORDER BY AuditId DESC", { c: cartaA });
+  ok(new RegExp(`"confirmadoPor":${ID.adminA}`).test(trilhaConfirmacao || "") && /"via":"PIN"/.test(trilhaConfirmacao || "") && /"ultimoAdministrador":true/.test(trilhaConfirmacao || "")
+    && /"avisados":[1-9]/.test(trilhaConfirmacao || ""), "a trilha da confirmação diz quem confirmou (o próprio membro), por onde, e que a Geral foi avisada", String(trilhaConfirmacao).slice(0, 200));
+  // o prazo da política (ou o padrão) já passou desde a CONFIRMAÇÃO; e uma Mudança EMITIDA sem a confirmação do membro (dado de antes da regra), pedida há muito tempo
+  const { prazoMinimizacaoExMembro } = require(path.join(API, "shared/minimizacaoLgpd.js"));
+  const prazoCarta = await prazoMinimizacaoExMembro(await obterPool());
+  await q("UPDATE CartasTransito SET DataConfirmacao = DATEADD(day, -(@d + 1), SYSUTCDATETIME()) WHERE CartaId = @c", { c: cartaA, d: prazoCarta.dias });
+  const cartaVelha = await escalar(`INSERT INTO CartasTransito (MembroId, Tipo, Status, Destino, SolicitadoPor, DataSolicitacao, DataEmissao)
+    OUTPUT INSERTED.CartaId VALUES (@m, 'MUDANCA', 'EMITIDA', N'Igreja de Teste', @m, DATEADD(day, -(@d + 400), SYSUTCDATETIME()), '2024-01-10')`, { m: ID.cartaSemConfirmacao, d: prazoCarta.dias });
+  const dataSaidaEsperada = await escalar("SELECT CONVERT(varchar(10), DATEADD(hour, -3, DataConfirmacao), 120) FROM CartasTransito WHERE CartaId = @c", { c: cartaA });
+  const processou = await cartas("processar", {});
+  ok(processou.body && processou.body.sucesso === true && /1 saída\(s\) minimizada/.test(processou.body.mensagem) && /1 carta\(s\) de mudança sem a confirmação/.test(processou.body.mensagem),
+    "o processamento minimiza a confirmada e diz quantas ficaram fora por falta da confirmação", resumo(processou));
+  ok((await cartaDe(cartaA)) === "CONCLUIDA" && (await statusDe(ID.adminA)) === "DESLIGADO" && (await fimDoCargo(ID.adminA)) !== "vigente"
+    && (await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.adminA })) === dataSaidaEsperada,
+  "a carta confirmada: concluída, a pessoa fora do rol com a data da confirmação (Brasília) e o cargo vago", `${await cartaDe(cartaA)} ${await statusDe(ID.adminA)} ${await fimDoCargo(ID.adminA)} ${dataSaidaEsperada}`);
+  const trilhaMinimizacao = await escalar("SELECT TOP 1 DadosDepois FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId = @id AND Acao LIKE N'Minimizou dados de ex-membro%' ORDER BY AuditId DESC", { id: ID.adminA });
+  ok(new RegExp(`"cartaId":${cartaA}`).test(trilhaMinimizacao || "") && /"ultimoAdministrador":true/.test(trilhaMinimizacao || "") && new RegExp(`"prazoDias":${prazoCarta.dias}`).test(trilhaMinimizacao || ""),
+    "a trilha do processamento marca que saiu o último que administrava os acessos", String(trilhaMinimizacao).slice(0, 200));
+  ok((await cartaDe(cartaVelha)) === "EMITIDA" && (await statusDe(ID.cartaSemConfirmacao)) === "ATIVO",
+    "a Mudança sem a confirmação do membro não é processada, por mais antigo que seja o pedido");
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 9. o e-mail de quem tem cargo, o aviso ao e-mail antigo e a data de saída entre as situações terminais ==");
+  LID.emailArea = await lideranca(ID.emailArea, pArea, "AREA", area);
+  await q("UPDATE MembroReferencia SET Email = @e WHERE MembroId = @id", { id: ID.emailArea, e: "pastor.area@exemplo.org" });
+  await q("UPDATE MembroReferencia SET Email = @e WHERE MembroId = @id", { id: ID.emailSemCargo, e: "membro.comum@exemplo.org" });
+  const emailDe = (id) => escalar("SELECT ISNULL(Email, '-') FROM MembroReferencia WHERE MembroId = @id", { id });
+  const trocaLocal = await tentar(() => pessoas("POST", { token: local(), corpo: ficha(ID.emailArea, { email: "outro@exemplo.org" }) }));
+  ok(trocaLocal.status === 403 && /e-mail/.test(trocaLocal.body && trocaLocal.body.mensagem) && (await emailDe(ID.emailArea)) === "pastor.area@exemplo.org",
+    "cargo de área: a secretaria local não troca o e-mail (403, nada muda)", resumo(trocaLocal));
+  const apagaLocal = await tentar(() => pessoas("POST", { token: local(), corpo: ficha(ID.emailArea) }));
+  ok(apagaLocal.status === 403 && (await emailDe(ID.emailArea)) === "pastor.area@exemplo.org", "nem apaga (a ficha sem o e-mail)", resumo(apagaLocal));
+  const daAreaSemFator = L.sessao(ID.secArea, { via: "SENHA", fator: { via: "NENHUM", em: Date.now() }, nivel: "AREA", escopoCongregacoes: [NOME_SEDE], permissoes: ["pessoas"] });
+  const trocaSemFator = await tentar(() => pessoas("POST", { token: daAreaSemFator, corpo: ficha(ID.emailArea, { email: "novo.area@exemplo.org" }) }));
+  ok(trocaSemFator.status === 428 && (await emailDe(ID.emailArea)) === "pastor.area@exemplo.org", "a secretaria da área sem a confirmação recente: 428", resumo(trocaSemFator));
+  const trocaArea = await tentar(() => pessoas("POST", { token: daArea(), corpo: ficha(ID.emailArea, { email: "novo.area@exemplo.org" }) }));
+  const trilhaAviso = await escalar("SELECT TOP 1 DadosDepois FROM AuditLog WHERE Tabela = N'MembroReferencia' AND RegistroId = @id AND Acao = N'Aviso da troca de e-mail não enviado' ORDER BY AuditId DESC", { id: ID.emailArea });
+  ok(trocaArea.status === 200 && trocaArea.body && trocaArea.body.sucesso === true && (await emailDe(ID.emailArea)) === "novo.area@exemplo.org",
+    "com a confirmação recente, a secretaria da área troca", resumo(trocaArea));
+  ok(/aviso da troca de e-mail não saiu/.test(trocaArea.body && trocaArea.body.mensagem) && /\*\*\*@exemplo\.org/.test(trilhaAviso || "") && !/pastor\.area@/.test(trilhaAviso || ""),
+    "sem o serviço de e-mail (o roteiro), o aviso ao endereço antigo não sai: a resposta diz e a trilha registra, mascarado", `${trocaArea.body && trocaArea.body.mensagem} | ${trilhaAviso}`);
+  const semCargo = await tentar(() => pessoas("POST", { token: localSemFator(), corpo: ficha(ID.emailSemCargo, { email: "comum.novo@exemplo.org" }) }));
+  ok(semCargo.status === 200 && (await emailDe(ID.emailSemCargo)) === "comum.novo@exemplo.org", "sem cargo: a secretaria local troca o e-mail como sempre, sem a confirmação recente", resumo(semCargo));
+  await q("UPDATE MembroReferencia SET Status = 'DESLIGADO', SituacaoMembro = 'SEM_COMUNHAO', MotivoSaida = 'DESLIGAMENTO', DataSaida = '2019-03-10' WHERE MembroId = @id", { id: ID.terminalL4 });
+  const faleceuDepois = await tentar(() => pessoas("POST", { token: geral(), corpo: ficha(ID.terminalL4, { status: "FALECIDO" }) }));
+  ok(faleceuDepois.status === 200 && (await statusDe(ID.terminalL4)) === "FALECIDO"
+    && (await escalar("SELECT CONVERT(varchar(10), DataSaida, 120) FROM MembroReferencia WHERE MembroId = @id", { id: ID.terminalL4 })) === "2019-03-10",
+  "de desligado para falecido sem a data no pedido: fica a data de saída gravada (2019)", resumo(faleceuDepois));
+
+  // ------------------------------------------------------------------------------------------------------------------
+  console.log("== 10. a medida cautelar: o relatório concluído uma vez só, e as restrições sim/não ==");
+  const medRel = await medida({ membroId: ID.medidaRel, motivo: "Chaves do templo (roteiro)", suspensaoChavesFisicas: true });
+  const medidaRelId = medRel.body && medRel.body.medida && medRel.body.medida.medidaId;
+  ok(medRel.status === 201 && medidaRelId, "a medida sem suspensão do acesso", resumo(medRel));
+  const concluirRel = () => chamarRota("GestaoMedidasCautelares/index.js", { metodo: "POST", binding: { id: String(medidaRelId), acao: "concluir-relatorio" }, token: L.GERAL(ID.geral, ["pessoas", "permissoes"]) });
+  // (a corrida de verdade — dois pedidos ao mesmo tempo — não roda na ponte do LocalDB, uma conexão só: a gravação condicionada está no teste da rota)
+  const conclusoes = [await concluirRel(), await concluirRel()];
+  const dataConclusao = await escalar("SELECT CONVERT(varchar(10), DataConclusaoRelatorio, 120) FROM MedidasCautelares WHERE MedidaId = @id", { id: medidaRelId });
+  ok(conclusoes[0].body && conclusoes[0].body.sucesso === true && conclusoes[1].body && conclusoes[1].body.sucesso === false && dataConclusao === hojeBrasilia()
+    && (await escalar("SELECT COUNT(*) FROM AuditLog WHERE Tabela = N'MedidasCautelares' AND RegistroId = @id AND Acao LIKE N'Concluiu relatório%'", { id: medidaRelId })) === 1,
+  "concluir duas vezes: uma conclusão (a data de hoje) e uma trilha, gravadas juntas", conclusoes.map(resumo).join(" | "));
+  const textoFalse = await medida({ membroId: ID.medidaRel, motivo: "Apuração de contas (roteiro)", suspenderAcessoSistema: "false" });
+  ok(textoFalse.status === 400 && (await escalar("SELECT COUNT(*) FROM MedidasCautelares WHERE MembroId = @m", { m: ID.medidaRel })) === 1,
+    "o texto \"false\" em suspender o acesso: 400, nenhuma medida a mais", resumo(textoFalse));
 }
 
 principal().then(() => fim("e2e-152 (acesso, parte 3)")).catch((e) => { console.error(e); ok(false, "o roteiro quebrou: " + (e && e.message)); fim("e2e-152 (acesso, parte 3)"); });

@@ -1185,6 +1185,15 @@ Depois da revisão do Financeiro até `4c06d58`:
     caminho normal). Se falecer durante a licença, a secretaria marca FALECIDO na ficha, e a licença fecha sozinha.
   - **A simulação de emancipação:** o critério do encarregado em comunhão só a CME da própria área e a Geral veem; para
     as outras, a Extensão aparece como "não dá para avaliar daqui".
+  - **As cartas, a licença e o e-mail (decididas pela sessão em 25 e 26/11, pelas regras dele):**
+    - A Carta de Mudança só é emitida e processada depois da confirmação do próprio membro, e o prazo de 30 dias conta
+      da confirmação.
+    - O membro sai mesmo tendo cargo e mesmo sendo o último que administra os acessos. Nesse caso, a Geral é avisada na
+      confirmação.
+    - Quando a secretaria age pela pessoa que tem cargo, vale a regra do nível do cargo e a confirmação reforçada.
+    - Licença por candidatura: só uma aberta por pessoa, e o registro do retorno diz a situação real.
+    - Trocar ou apagar o e-mail de quem tem cargo vigente: só a secretaria do nível do cargo, ou de cima, com a
+      confirmação reforçada.
 - **A movimentação (saída e volta): volta para o desenho (rodada 29).** Ele marcou a versão, mas disse que ainda não está
   boa. As regras novas dele:
   - **O membro sai sozinho, pelo aplicativo, na hora:** pede a carta de mudança no próprio celular e sai na mesma hora,

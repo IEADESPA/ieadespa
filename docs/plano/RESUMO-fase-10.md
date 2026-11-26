@@ -1,5 +1,8 @@
 # FASE 10 em uma página (resumo para começar o dia)
 
+**O plano até 01/01/2027** (o que entra no dia 1º, semana a semana, as datas de "vai ou não vai" e o que depende dele):
+[`plano-ate-01-01-2027.md`](plano-ate-01-01-2027.md) (25/11/2026).
+
 Estado em 20/11/2026. O plano completo, com o porquê de cada decisão, está em
 [`fase-10-experiencia-design-performance.md`](fase-10-experiencia-design-performance.md) (≈1.460 linhas): leia só a
 seção que o trabalho do dia pede. Este resumo é atualizado junto com o plano a cada marco.

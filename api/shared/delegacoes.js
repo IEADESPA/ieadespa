@@ -50,7 +50,7 @@ async function criarDelegacao(pool, sql, { liderancaId, deleganteMembroId, deleg
 
 // Todo papel (Lideranca) hoje ativamente delegado a este membro — usado
 // tanto no login (pra somar permissão/escopo) quanto na tela "delegado a
-// mim". Ativa = Status='ATIVA' E dentro da janela de datas.
+// mim". Ativa = Status='ATIVA', dentro da janela de datas, com o cargo delegado vigente E quem delegou ATIVO no rol de membros (a mesma regra do login dele).
 async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
   const result = await pool.request().input("membroId", sql.Int, membroId).input("hoje", sql.Date, hoje).query(`
     SELECT d.DelegacaoId, d.LiderancaId, d.DataFim, CONVERT(varchar(10), d.DataFim, 120) AS DataFimTexto, d.Motivo, deleg.Nome AS deleganteNome,
@@ -61,8 +61,43 @@ async function delegacoesAtivasRecebidas(pool, sql, membroId, hoje) {
     JOIN MembroReferencia deleg ON deleg.MembroId = d.DeleganteMembroId
     WHERE d.DelegadoMembroId = @membroId AND d.Status = 'ATIVA' AND d.DataInicio <= @hoje AND d.DataFim >= @hoje
       AND (l.AtivoAte IS NULL OR l.AtivoAte >= @hoje)
+      AND deleg.Status = 'ATIVO'
   `);
   return result.recordset;
+}
+
+// Quem perde o cargo (medida cautelar, saída do rol, mudança de situação, diretoria dissolvida) leva junto as delegações: ficam CANCELADAS, com a trilha,
+// e levantar a medida ou voltar a ATIVO não as revive (quem delegou faz uma nova, se quiser). A sessão de quem recebeu carrega o cargo delegado como uma
+// concessão (ver concessoesDelegadas), então as sessões abertas dele caem na hora. `executor`: o pool ou a transação de quem chama.
+// Por pessoa (`membroId`): as delegações que ela deu (do cargo dela) e as que recebeu. Por cargo (`liderancaIds`): só as daquelas linhas de Lideranca.
+// Devolve as matrículas de quem recebeu (sem a própria pessoa).
+async function cancelarDelegacoes(executor, sql, { membroId = null, liderancaIds = null } = {}) {
+  const ids = [...new Set((liderancaIds || []).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
+  const pessoa = Number(membroId);
+  const porPessoa = Number.isInteger(pessoa) && pessoa > 0;
+  if (!porPessoa && ids.length === 0) return [];
+  const rq = executor.request();
+  if (porPessoa) rq.input("membroId", sql.Int, pessoa);
+  const r = await rq.query(`
+    UPDATE DelegacoesAcesso SET Status = 'CANCELADA'
+    OUTPUT INSERTED.DelegadoMembroId
+    WHERE Status = 'ATIVA' AND (${porPessoa
+      ? "DeleganteMembroId = @membroId OR DelegadoMembroId = @membroId OR LiderancaId IN (SELECT LiderancaId FROM Lideranca WHERE MembroId = @membroId)"
+      : `LiderancaId IN (${ids.join(",")})`})`);
+  return [...new Set((r.recordset || []).map((l) => Number(l.DelegadoMembroId)))].filter((d) => Number.isInteger(d) && d > 0 && d !== pessoa);
+}
+
+async function derrubarSessoesDosDelegados(executor, sql, delegados) {
+  const { revogarSessoesDoMembro } = require("./auth");
+  let sessoes = 0;
+  for (const d of new Set(delegados || [])) sessoes += await revogarSessoesDoMembro(executor, sql, d);
+  return sessoes;
+}
+
+async function encerrarDelegacoesDaPessoa(executor, sql, membroId) {
+  const delegados = await cancelarDelegacoes(executor, sql, { membroId });
+  await derrubarSessoesDosDelegados(executor, sql, delegados);
+  return delegados;
 }
 
 // Resolve o que a sessão do delegado ganha A MAIS (permissões + escopo) —
@@ -116,4 +151,4 @@ async function concessoesDelegadas(pool, sql, membroId, hoje, expiradas = []) {
   };
 }
 
-module.exports = { criarDelegacao, delegacoesAtivasRecebidas, permissoesEscopoDelegados, concessoesDelegadas };
+module.exports = { criarDelegacao, delegacoesAtivasRecebidas, permissoesEscopoDelegados, concessoesDelegadas, cancelarDelegacoes, derrubarSessoesDosDelegados, encerrarDelegacoesDaPessoa };

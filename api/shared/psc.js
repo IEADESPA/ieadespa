@@ -22,6 +22,7 @@
 const { sql } = require("./db");
 const { registrarAuditoria } = require("./auditoria");
 const { hojeBrasilia } = require("./dataBrasilia");
+const { cancelarDelegacoes } = require("./delegacoes");
 
 const NIVEIS = [1, 2, 3, 4, 5];
 const STATUS_AVALIACAO = ["RASCUNHO", "ENVIADA", "VALIDADA", "HOMOLOGADA"];
@@ -974,10 +975,11 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     if (!mae || !mae.Ativa) return { sucesso: false, mensagem: "Congregação-Mãe não encontrada ou desativada." };
     if (mae.Categoria !== "CONGREGACAO") return { sucesso: false, mensagem: "A tutela só pode ser assumida por uma Congregação (não por outra Extensão da Tenda)." };
   }
-  // O encarregado não pode ser quem está sendo destituído.
-  const naDiretoria = await pool.request().input("c", sql.Int, congregacao.CongregacaoId).input("m", sql.Int, encarregado.MembroId).query(`
+  // O encarregado não pode ser quem está sendo destituído. "Hoje" é o de Brasília, a régua do login (shared/dataBrasilia.js).
+  const hoje = hojeBrasilia();
+  const naDiretoria = await pool.request().input("c", sql.Int, congregacao.CongregacaoId).input("m", sql.Int, encarregado.MembroId).input("h", sql.Date, hoje).query(`
     SELECT TOP 1 LiderancaId FROM Lideranca
-    WHERE MembroId = @m AND EscopoTipo = 'CONGREGACAO' AND EscopoId = @c AND (AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+    WHERE MembroId = @m AND EscopoTipo = 'CONGREGACAO' AND EscopoId = @c AND (AtivoAte IS NULL OR AtivoAte >= @h)
   `);
   if (naDiretoria.recordset.length > 0) return { sucesso: false, mensagem: "O encarregado não pode ser alguém da diretoria que está sendo dissolvida." };
 
@@ -986,7 +988,7 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
 
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
-  let liderancas;
+  let liderancas, delegados;
   try {
     const rebaixada = await new sql.Request(transaction).input("c", sql.Int, congregacao.CongregacaoId).input("mae", sql.Int, dados.congregacaoMaeId)
       .query(`
@@ -996,13 +998,15 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     if (rebaixada.rowsAffected[0] !== 1) { await transaction.rollback(); return { sucesso: false, mensagem: "A unidade mudou de categoria enquanto você decidia — recarregue a tela." }; }
 
     // Diretoria dissolvida: encerra o mandato de todo cargo local (escopo desta congregação).
-    // "Ontem": o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares).
-    const dissolvidos = await new sql.Request(transaction).input("c", sql.Int, congregacao.CongregacaoId).query(`
-      UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, CAST(SYSUTCDATETIME() AS DATE))
-      OUTPUT INSERTED.MembroId
-      WHERE EscopoTipo = 'CONGREGACAO' AND EscopoId = @c AND (AtivoAte IS NULL OR AtivoAte >= CAST(SYSUTCDATETIME() AS DATE))
+    // "Ontem": o login confere AtivoAte < hoje (mesmo padrão das medidas cautelares), com o dia de Brasília.
+    const dissolvidos = await new sql.Request(transaction).input("c", sql.Int, congregacao.CongregacaoId).input("h", sql.Date, hoje).query(`
+      UPDATE Lideranca SET AtivoAte = DATEADD(day, -1, @h)
+      OUTPUT INSERTED.MembroId, INSERTED.LiderancaId
+      WHERE EscopoTipo = 'CONGREGACAO' AND EscopoId = @c AND (AtivoAte IS NULL OR AtivoAte >= @h)
     `);
     liderancas = dissolvidos.recordset.map(x => x.MembroId);
+    // As delegações desses cargos ficam canceladas no mesmo ato (shared/delegacoes.js); as sessões de quem as recebeu caem com as da diretoria, abaixo.
+    delegados = await cancelarDelegacoes({ request: () => new sql.Request(transaction) }, sql, { liderancaIds: dissolvidos.recordset.map(x => x.LiderancaId) });
 
     const decretada = await new sql.Request(transaction)
       .input("id", sql.Int, reclassificacao.reclassificacaoId).input("por", sql.Int, membroId || null).input("res", sql.NVarChar(150), dados.resolucao)
@@ -1019,9 +1023,9 @@ async function decretarReclassificacao(pool, { reclassificacao, dados, membroId 
     try { await transaction.rollback(); } catch { /* já encerrada */ }
     throw e;
   }
-  // v7.6 — a diretoria dissolvida perde também as sessões abertas, na hora (antes o token valia até expirar sozinho).
+  // v7.6 — a diretoria dissolvida perde também as sessões abertas, na hora (antes o token valia até expirar sozinho); e quem recebeu delegação desses cargos, também.
   const { revogarSessoesDoMembro } = require("./auth");
-  for (const membroDissolvido of new Set(liderancas)) await revogarSessoesDoMembro(pool, sql, membroDissolvido);
+  for (const membroDissolvido of new Set(liderancas.concat(delegados))) await revogarSessoesDoMembro(pool, sql, membroDissolvido);
   await registrarAuditoria({
     tabela: "PscReclassificacoes", registroId: reclassificacao.reclassificacaoId, acao: "RECLASSIFICACAO_DECRETADA", usuarioId: membroId,
     dadosAntes: { categoria: "CONGREGACAO", percentualRetencaoLocal: retencaoAnterior },

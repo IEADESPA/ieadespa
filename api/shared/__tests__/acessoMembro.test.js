@@ -147,6 +147,11 @@ describe("MembroEntrar — matrícula + PIN", () => {
   });
   test("contenção por origem: depois de 60 pedidos no minuto, 429 — e forjar x-forwarded-for não escapa", async () => {
     const ip = "177.30.1.1";
+    // pedidos que ACERTAM (o freio de falhas não entra na conta): aqui só o limite de pedidos por minuto
+    quando(/FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'/, membroAtivo());
+    quando(/FROM MembroPins/, [{ PinHash: HASH_7392, Provisorio: false, ProvisorioExpiraEm: null }]);
+    quando(/UPDATE t SET\s+Falhas = CASE/, [livre]);
+    quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
     let r;
     for (let i = 0; i < 60; i++) r = await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip });
     expect(r.status).toBe(200);
@@ -156,6 +161,113 @@ describe("MembroEntrar — matrícula + PIN", () => {
     const context = { bindingData: {}, log: { error() {} } };
     await hEntrar(context, { method: "POST", query: {}, body: { matricula: 20, pin: "7392" }, headers: { "x-forwarded-for": `9.9.${contadorIp++}.1, ${ip}:77, 40.70.146.136:2`, "x-azure-clientip": "5.5.5.5" } });
     expect(context.res.status).toBe(429);
+  });
+
+  describe("freio de falhas por conexão: muitas tentativas sem acerto da mesma conexão, em qualquer matrícula", () => {
+    const LIMITE = pin.LIMITE_FALHAS_ORIGEM_PIN;
+    const certoPara20 = () => {
+      quando(/FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'/, (inp) => (inp.id === 20 ? membroAtivo() : []));
+      quando(/FROM MembroPins/, [{ PinHash: HASH_7392, Provisorio: false, ProvisorioExpiraEm: null }]);
+      quando(/UPDATE t SET\s+Falhas = CASE/, [livre]);
+      quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
+    };
+
+    test("o limite fica bem acima do engano comum e do bloqueio por pessoa", () => {
+      expect(LIMITE).toBeGreaterThanOrEqual(4 * pin.LIMITE_FALHAS_PIN);
+    });
+    test("depois do limite de falhas em matrículas diferentes, a conexão recebe 429 — mesmo com o PIN certo — antes de tocar o banco e sem gastar a tentativa de ninguém", async () => {
+      const ip = "177.40.1.1";
+      certoPara20();
+      for (let m = 0; m < LIMITE; m++) expect((await chamar(hEntrar, { corpo: { matricula: 100 + m, pin: "7392" }, ip })).body).toEqual({ sucesso: false, mensagem: pin.MENSAGEM_GENERICA });
+      mockConsultas = [];
+      const r = await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip });
+      expect(r.status).toBe(429);
+      expect(Number(r.headers["Retry-After"])).toBeGreaterThan(60);
+      expect(r.body.sucesso).toBe(false);
+      expect(r.body.token).toBeUndefined();
+      expect(mockConsultas).toHaveLength(0);
+    });
+    test("a conta é igual para matrícula inexistente, sem PIN, PIN errado e pessoa já bloqueada", async () => {
+      const ip = "177.40.2.1";
+      quando(/FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'/, (inp) => (inp.id >= 300 ? [] : [{ MembroId: inp.id, Nome: "Fulano" }]));
+      quando(/FROM MembroPins/, (inp) => (inp.m >= 200 ? [] : [{ PinHash: HASH_7392, Provisorio: false }]));
+      quando(/UPDATE t SET\s+Falhas = CASE/, (inp) => (inp.m >= 150 ? [{ EstavaBloqueado: true, Falhas: 5, BloqueadaAgora: true }] : [livre]));
+      quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
+      const matriculas = [];
+      for (let i = 0; i < LIMITE; i++) matriculas.push([300, 200, 150, 20][i % 4] + i);      // inexistente, sem PIN, bloqueada, PIN errado
+      for (const m of matriculas) await chamar(hEntrar, { corpo: { matricula: m, pin: "0000" }, ip });
+      expect((await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip })).status).toBe(429);
+    });
+    test("outra conexão segue entrando normalmente", async () => {
+      certoPara20();
+      for (let m = 0; m < LIMITE; m++) await chamar(hEntrar, { corpo: { matricula: 100 + m, pin: "7392" }, ip: "177.40.3.1" });
+      const r = await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip: "177.40.3.2" });
+      expect(r.status).toBe(200);
+      expect(r.body.sucesso).toBe(true);
+    });
+    test("quem acerta não gasta a conta da conexão (o Wi-Fi da igreja com muita gente entrando não trava)", async () => {
+      const ip = "177.40.4.1";
+      certoPara20();
+      for (let i = 0; i < 20; i++) {
+        expect((await chamar(hEntrar, { corpo: { matricula: 20, pin: "0000" }, ip })).status).toBe(200);
+        expect((await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip })).body.sucesso).toBe(true);
+      }
+      for (let i = 0; i < LIMITE - 20; i++) expect((await chamar(hEntrar, { corpo: { matricula: 100 + i, pin: "7392" }, ip })).status).toBe(200);
+      expect((await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip })).status).toBe(429);
+    });
+    test("IPv6: os endereços da mesma rede /64 dividem a conta", async () => {
+      certoPara20();
+      for (let m = 0; m < LIMITE; m++) {
+        const context = { bindingData: {}, log: { error() {}, warn() {} } };
+        await hEntrar(context, { method: "POST", query: {}, body: { matricula: 100 + m, pin: "7392" }, headers: { "x-forwarded-for": `[2804:14c:5b81:9a10::${(m + 1).toString(16)}]:443, 40.70.146.136:2` } });
+      }
+      const context = { bindingData: {}, log: { error() {}, warn() {} } };
+      await hEntrar(context, { method: "POST", query: {}, body: { matricula: 20, pin: "7392" }, headers: { "x-forwarded-for": "[2804:14c:5b81:9a10:aaaa::1]:443, 40.70.146.136:2" } });
+      expect(context.res.status).toBe(429);
+    });
+    test("a passagem para o bloqueio deixa uma linha na trilha, sem IP e sem PIN; as recusas seguintes não enchem a trilha", async () => {
+      const ip = "177.40.5.1";
+      certoPara20();
+      for (let m = 0; m < LIMITE; m++) await chamar(hEntrar, { corpo: { matricula: 100 + m, pin: "7392" }, ip });
+      for (let i = 0; i < 5; i++) await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip });
+      const linhas = registrarAuditoria.mock.calls.map((c) => c[0]).filter((a) => a.acao === "ORIGEM_BLOQUEADA_POR_TENTATIVAS");
+      expect(linhas).toHaveLength(1);
+      expect(linhas[0]).toMatchObject({ tabela: "AcessoTentativas", registroId: 0, usuarioId: null });
+      expect(linhas[0].dadosDepois).toMatchObject({ canal: "PIN", falhas: LIMITE, minutos: 15 });
+      expect(JSON.stringify(linhas)).not.toMatch(/177\.|7392/);
+    });
+    test("erro do banco antes de conferir o PIN (o banco acordando, tempo esgotado) não conta como tentativa sem acerto da conexão", async () => {
+      const ip = "177.40.6.1";
+      const passoQueFalha = (id) => (id === 20 ? -1 : (id - 100) % 3);   // 0: a consulta do membro; 1: a do PIN; 2: a reserva da tentativa
+      const caiu = () => { throw new Error("tempo esgotado"); };
+      quando(/FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'/, (inp) => (passoQueFalha(inp.id) === 0 ? caiu() : [{ MembroId: inp.id, Nome: "Fulano" }]));
+      quando(/FROM MembroPins/, (inp) => (passoQueFalha(inp.m) === 1 ? caiu() : [{ PinHash: HASH_7392, Provisorio: false, ProvisorioExpiraEm: null }]));
+      quando(/UPDATE t SET\s+Falhas = CASE/, (inp) => (passoQueFalha(inp.m) === 2 ? caiu() : [livre]));
+      quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
+      for (let m = 0; m < LIMITE; m++) await expect(chamar(hEntrar, { corpo: { matricula: 100 + m, pin: "7392" }, ip })).rejects.toThrow("tempo esgotado");
+      const r = await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip });
+      expect(r.status).toBe(200);
+      expect(r.body.sucesso).toBe(true);
+    });
+    test("da conexão freada, a saída que a mensagem promete (entrar pelo código do e-mail) continua aberta", async () => {
+      const ip = "177.40.7.1";
+      certoPara20();
+      for (let m = 0; m < LIMITE; m++) await chamar(hEntrar, { corpo: { matricula: 100 + m, pin: "7392" }, ip });
+      const freada = await chamar(hEntrar, { corpo: { matricula: 20, pin: "7392" }, ip });
+      expect(freada.status).toBe(429);
+      expect(freada.body.mensagem).toMatch(/código por e-mail/);
+      mockRegras = [];
+      const hashCodigo = require("../codigoAcesso").hashCodigo("123456");
+      quando(/FROM MembroReferencia WHERE MembroId = @id AND Status = 'ATIVO'/, membroAtivo());
+      quando(/SELECT TOP 1 CodigoId, CodigoHash, ExpiraEm FROM CodigosAcessoMembro/, [{ CodigoId: 9, CodigoHash: hashCodigo, ExpiraEm: new Date(Date.now() + 60000) }]);
+      quando(/UPDATE CodigosAcessoMembro SET Tentativas = Tentativas \+ 1/, [{ Tentativas: 1 }]);
+      quando(/UPDATE CodigosAcessoMembro SET Usado = 1 OUTPUT/, [{ CodigoId: 9 }]);
+      quando(/UPDATE t SET\s+Falhas = CASE/, [livre]);
+      quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
+      const r = await chamar(hConfirmar, { corpo: { matricula: 20, codigo: "123456" }, ip });
+      expect(r.body).toMatchObject({ sucesso: true });
+      expect(auth.getSessao(r.body.token)).toMatchObject({ membroId: 20, via: "CODIGO" });
+    });
   });
 });
 
@@ -272,6 +384,58 @@ describe("GestaoPinMembro — PIN provisório gerado pela Secretaria", () => {
     expect(mockEmails[0].email).toBe("ana@exemplo.org");
     expect(JSON.stringify(mockEmails)).not.toContain(r.body.pin);
   });
+  describe("escopo por Extensão da Tenda: vale a regra de PESSOA (congregação e extensão)", () => {
+    const daExtensao = (extra = {}) => tokenDe(5, { permissoes: ["pessoas"], escopoCongregacoes: ["Central"], escopoExtensaoNome: "Tenda Jardim", ...extra });
+    const pessoa = (ExtensaoNome, CongregacaoNome = "Central") => quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c/, [{ MembroId: 20, Nome: "Ana Souza", Email: null, DataNascimento: null, CongregacaoNome, ExtensaoNome }]);
+    const gravouPin = () => rodou(/MembroPins/).length + rodou(/SessoesAtivas/).length;
+
+    test("quem alcança só a Extensão não gera o PIN de quem é da Congregação-Mãe fora dela: a MESMA recusa de quem não existe, e nada é gravado", async () => {
+      const inexistente = await chamar(hGestao, { token: daExtensao(), corpo: { membroId: 21 } });
+      for (const extensao of [null, "Tenda Vila Nova"]) {
+        mockRegras = []; mockConsultas = [];
+        pessoa(extensao);
+        quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+        const r = await chamar(hGestao, { token: daExtensao(), corpo: { membroId: 20 } });
+        expect(r.status).toBe(403);
+        expect(r.body).toEqual(inexistente.body);
+        expect(r.body.pin).toBeUndefined();
+        expect(gravouPin()).toBe(0);
+      }
+      expect(registrarAuditoria).not.toHaveBeenCalled();
+    });
+    test("quem alcança a Extensão gera o PIN de quem é dela", async () => {
+      pessoa("Tenda Jardim");
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const r = await chamar(hGestao, { token: daExtensao(), corpo: { membroId: 20 } });
+      expect(r.status).toBe(200);
+      expect(r.body.pin).toMatch(/^\d{4}$/);
+    });
+    test("quem alcança a congregação inteira gera o PIN de quem é de uma Extensão dela", async () => {
+      pessoa("Tenda Jardim");
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const r = await chamar(hGestao, { token: secretaria(), corpo: { membroId: 20 } });
+      expect(r.status).toBe(200);
+    });
+    test("com mais de uma concessão, só a que tem 'pessoas' decide: outra permissão de escopo maior não alarga o alcance", async () => {
+      const concessoes = [
+        { origem: "PROPRIA", permissoes: ["pessoas"], nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], escopoExtensaoNome: "Tenda Jardim", departamentoId: null },
+        { origem: "DELEGACAO", delegacaoId: 3, permissoes: ["financeiro"], nivel: "CONGREGACAO", escopoCongregacoes: ["Central"], escopoExtensaoNome: null, departamentoId: null }
+      ];
+      pessoa(null);
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const fora = await chamar(hGestao, { token: tokenDe(5, { concessoes, permissoes: undefined, escopoCongregacoes: undefined }), corpo: { membroId: 20 } });
+      expect(fora.status).toBe(403);
+      expect(gravouPin()).toBe(0);
+      // e duas concessões com "pessoas": a de escopo maior alcança
+      mockRegras = []; mockConsultas = [];
+      pessoa(null);
+      quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
+      const ambas = concessoes.map((c) => ({ ...c, permissoes: ["pessoas"] }));
+      const dentro = await chamar(hGestao, { token: tokenDe(5, { concessoes: ambas, permissoes: undefined, escopoCongregacoes: undefined }), corpo: { membroId: 20 } });
+      expect(dentro.status).toBe(200);
+    });
+  });
+
   test("membro sem e-mail: gera do mesmo jeito, sem aviso", async () => {
     quando(/FROM MembroReferencia m LEFT JOIN Congregacoes c/, [{ MembroId: 20, Nome: "Ana", Email: null, DataNascimento: null, CongregacaoNome: "Central" }]);
     quando(/SELECT @@ROWCOUNT AS n/, [{ n: 1 }]);
@@ -327,7 +491,23 @@ describe("ConfirmarCodigoAcessoMembro — o código do e-mail é o primeiro aces
 });
 
 describe("LoginSecretaria — bloqueio por tentativas e uma resposta só", () => {
-  const linhaLideranca = (senha) => [{ membroId: 5, escopoTipo: "GLOBAL", escopoId: null, senhaHash: auth.hashSenha(senha), departamentoId: null, ativoAte: null, papelNome: "Presidente", papelNivel: "GLOBAL", permissoesStr: "pessoas", nome: "Pr. Silva" }];
+  const linhaLideranca = (senha, extra = {}) => [{ membroId: 5, escopoTipo: "GLOBAL", escopoId: null, senhaHash: auth.hashSenha(senha), departamentoId: null, ativoAte: null, papelNome: "Presidente", papelNivel: "GLOBAL", permissoesStr: "pessoas", nome: "Pr. Silva", ativo: 1, ...extra }];
+  test("só entra quem está ATIVO no rol: fora dele, a mesma resposta de quem não é da liderança, sem sessão e sem gastar tentativa", async () => {
+    const msgs = [];
+    msgs.push((await chamar(hLogin, { corpo: { matricula: 20, senha: "qualquer" } })).body.mensagem);                     // não é da liderança
+    quando(/FROM Lideranca l/, linhaLideranca("senhaCerta", { ativo: 0 }));
+    quando(/UPDATE t SET\s+Falhas = CASE/, [livre]);
+    quando(/INSERT INTO SessoesAtivas/, sessaoCriada);
+    const r = await chamar(hLogin, { corpo: { matricula: 5, senha: "senhaCerta" } });
+    msgs.push(r.body.mensagem);
+    expect(r.body.sucesso).toBe(false);
+    expect(r.body.token).toBeUndefined();
+    expect(new Set(msgs).size).toBe(1);
+    expect(rodou(/INSERT INTO SessoesAtivas/)).toHaveLength(0);
+    expect(rodou(/UPDATE t SET\s+Falhas = CASE/)).toHaveLength(0);
+    // a situação vem do banco junto com a linha do cargo (a mesma consulta serve à segunda etapa)
+    expect(rodou(/FROM Lideranca l/)[0].sql).toMatch(/m\.Status\s*=\s*N?'ATIVO'/);
+  });
   test("matrícula sem acesso, senha errada e pessoa bloqueada respondem igual", async () => {
     const msgs = [];
     msgs.push((await chamar(hLogin, { corpo: { matricula: 20, senha: "qualquer" } })).body.mensagem);                     // não é da liderança

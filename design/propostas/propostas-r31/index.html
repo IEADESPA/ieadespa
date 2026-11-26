@@ -1,0 +1,1171 @@
+<title>Propostas de tela</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: cabeçalho curto, fila de telas, controles (opção e modo), prévia em escala e a caixa de aprovação embaixo. */
+:root {
+  --bg: #F2F4F8;
+  --sup: #FFFFFF;
+  --texto: #1A2230;
+  --suave: #556070;
+  --borda: #D6DCE5;
+  --titulo: #0A2342;
+  --ouro: #FFB800;
+  --sobre-ouro: #0A2342;
+  --ativo: #0A2342;
+  --sobre-ativo: #FFFFFF;
+  --ok: #166534;
+  --ok-fundo: #DCFCE7;
+  --falta: #7A4A00;
+  --falta-fundo: #FEF3C7;
+  --palco: #E3E7EE;
+  --foco: #1D4ED8;
+  --sombra: 0 18px 40px rgba(10, 35, 66, .16);
+  --letra: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #07152A; --sup: #0E2240; --texto: #E6ECF5; --suave: #A9B6CA; --borda: #24406A; --titulo: #FFFFFF;
+    --ativo: #FFB800; --sobre-ativo: #0A2342; --ok: #BBF7D0; --ok-fundo: #14532D; --falta: #FCD34D; --falta-fundo: #3D2A05;
+    --palco: #0B1C35; --foco: #93B4F8; --sombra: 0 18px 40px rgba(0, 0, 0, .45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #07152A; --sup: #0E2240; --texto: #E6ECF5; --suave: #A9B6CA; --borda: #24406A; --titulo: #FFFFFF;
+  --ativo: #FFB800; --sobre-ativo: #0A2342; --ok: #BBF7D0; --ok-fundo: #14532D; --falta: #FCD34D; --falta-fundo: #3D2A05;
+  --palco: #0B1C35; --foco: #93B4F8; --sombra: 0 18px 40px rgba(0, 0, 0, .45); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--texto); font-family: var(--letra); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.pagina { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.topo { display: flex; flex-direction: column; gap: 6px; }
+.selo { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+h1 { margin: 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.15; color: var(--titulo); text-wrap: balance; }
+.como { margin: 0; max-width: 70ch; color: var(--suave); }
+.telas { display: flex; flex-direction: column; gap: 14px; }
+.rodada { display: flex; flex-direction: column; gap: 8px; }
+.rodada h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); }
+.telas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.cheia {
+  position: fixed; inset: 0; z-index: 50; background: rgba(4, 12, 24, .95); display: flex; flex-direction: column; gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(12px, env(safe-area-inset-left, 0px));
+}
+.cheia-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cheia-barra span { flex: 1; min-width: 0; color: #FFFFFF; font-weight: 600; font-size: 14px; }
+.cheia-area { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.cheia-area .palco { position: absolute; }
+.tela-btn {
+  font: inherit; text-align: left; cursor: pointer; border: 1px solid var(--borda); background: var(--sup); color: var(--texto);
+  border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.tela-btn small { font-size: 12px; color: var(--suave); }
+.tela-btn strong { font-size: 14.5px; line-height: 1.25; color: var(--titulo); }
+.tela-btn[aria-pressed="true"] { border-color: var(--ativo); box-shadow: inset 0 0 0 1.5px var(--ativo); }
+.marca { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; background: var(--falta-fundo); color: var(--falta); }
+.marca.ok { background: var(--ok-fundo); color: var(--ok); }
+.painel { background: var(--sup); border: 1px solid var(--borda); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.decidido { margin: 0; font-size: 14px; color: var(--suave); }
+.decidido strong { color: var(--titulo); }
+.controles { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.grupo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grupo-rot { font-size: 13px; font-weight: 600; color: var(--suave); margin-right: 2px; }
+.op-btn, .modo-btn, .acao, .acao-sec, .link-btn {
+  font: inherit; cursor: pointer; border-radius: 10px; min-height: 40px; padding: 0 14px; border: 1px solid var(--borda);
+  background: var(--sup); color: var(--texto); font-weight: 600; font-size: 14px;
+}
+.op-btn[aria-pressed="true"], .modo-btn[aria-pressed="true"] { background: var(--ativo); color: var(--sobre-ativo); border-color: var(--ativo); }
+.op-btn .ok { margin-left: 6px; font-size: 12px; }
+.desc { margin: 0; font-size: 14.5px; color: var(--texto); max-width: 90ch; }
+.desc strong { color: var(--titulo); }
+.quadro { position: relative; width: 100%; background: var(--palco); border-radius: 14px; overflow: hidden; }
+.quadro.real { overflow: auto; }
+.palco { position: absolute; top: 0; transform-origin: top left; box-shadow: var(--sombra); overflow: hidden; font-family: var(--letra); line-height: 1.35; }
+.quadro.real .palco { position: relative; transform: none !important; left: 0 !important; margin: 16px auto; }
+.palco h1, .palco h2, .palco h3, .palco p { margin: 0; }
+.aprovacao { border-top: 1px solid var(--borda); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.situacao { font-size: 15px; color: var(--texto); }
+.situacao strong { color: var(--titulo); }
+label { font-size: 14px; font-weight: 600; color: var(--titulo); }
+textarea {
+  font: inherit; width: 100%; min-height: 76px; resize: vertical; border-radius: 10px; border: 1px solid var(--borda);
+  background: var(--bg); color: var(--texto); padding: 10px 12px;
+}
+.acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.acao { background: var(--ouro); color: var(--sobre-ouro); border-color: var(--ouro); font-weight: 700; }
+.link-btn { border-color: transparent; background: transparent; color: var(--suave); text-decoration: underline; }
+.aviso { margin: 0; font-size: 14px; color: var(--suave); min-height: 1.5em; }
+.geral { background: var(--sup); border: 1px solid var(--borda); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.geral h2 { margin: 0; font-size: 17px; color: var(--titulo); }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* "Já aprovados": os links para as páginas de arquivo (rodadas 19 a 30 e rodadas 2 a 18), que abrem em outra aba */
+.aprovados { display: flex; flex-direction: column; gap: 6px; }
+.aprovados-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--borda); background: var(--sup); color: var(--titulo); font: inherit; font-size: 15px; font-weight: 700; text-align: left; text-decoration: none;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.aprovados-tit { flex: 1; min-width: 0; }
+.aprovados-n { font-size: 13px; font-weight: 600; color: var(--suave); white-space: nowrap; }
+.aprovados-ext { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.aprovados-btn:hover { border-color: var(--suave); }
+.aprovados-btn:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; }
+.aprovados-nota { margin: 0; font-size: 13.5px; color: var(--suave); max-width: 90ch; }
+@media (max-width: 560px) { .aprovados-n { display: none; } }
+/* (sem uso desde a 31: a página nova não tem rodadas recolhidas) */
+.antiga { background: var(--sup); border: 1px solid var(--borda); border-radius: 12px; padding: 2px 16px; }
+.antiga summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--suave); list-style: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.antiga summary::-webkit-details-marker { display: none; }
+.antiga summary::before { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; margin: 0 4px 0 2px; }
+.antiga[open] summary::before { transform: rotate(45deg); }
+.antiga summary:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
+.antiga .telas-grid { padding: 2px 0 14px; }
+@media (prefers-reduced-motion: reduce) { .antiga summary::before { transition: none; } }
+[hidden] { display: none !important; }
+
+/* Rodada 19: a explicação da rodada (fora do desenho das telas), a explicação de cada passo, o contador e o rascunho das observações */
+.explica { background: var(--sup); border: 1px solid var(--borda); border-left: 4px solid var(--ouro); border-radius: 12px; padding: 4px 16px; }
+.explica summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--titulo); list-style: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.explica summary::-webkit-details-marker { display: none; }
+.explica summary::before { content: ""; width: 8px; height: 8px; flex: none; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease-out; margin: 0 4px 0 2px; }
+.explica[open] summary::before { transform: rotate(45deg); }
+.explica summary:focus-visible { outline: 3px solid var(--foco); outline-offset: 2px; border-radius: 6px; }
+.explica p, .explica ol { margin: 0 0 10px; max-width: 92ch; font-size: 14.5px; line-height: 1.55; color: var(--texto); }
+.explica ol { padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.explica strong { color: var(--titulo); }
+.desc .passo-expl { display: block; margin-top: 8px; padding: 9px 12px; border-left: 3px solid var(--ouro); background: var(--sup); border-radius: 0 10px 10px 0; font-size: 14.5px; line-height: 1.5; }
+#obs, #obs-geral { min-height: 150px; max-height: 70vh; }
+.obs-pe { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: -4px; font-size: 13px; color: var(--suave); }
+.obs-pe .rascunho { flex: 1; min-width: 0; }
+.obs-pe .conta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.obs-pe .conta.perto { color: var(--falta); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .explica summary::before { transition: none; } }
+</style>
+
+<div class="pagina">
+  <header class="topo">
+    <span class="selo">IEADESPA · FASE 10 · rodada 31</span>
+    <h1>Propostas de tela: escolha tela por tela</h1>
+    <p class="como">1) Escolha a tela. 2) Clique nas opções para comparar. 3) Troque entre o notebook e o celular e, quando aparecer, em "Quem está vendo". 4) Quando gostar de uma, toque em <strong>Aprovo esta opção</strong> e, se quiser, escreva o que mudar. <strong>Tela cheia</strong> mostra a tela inteira, sem cortar. Nada vai para o sistema sem a sua aprovação. Todos os nomes e números aqui são de mentira.</p>
+  </header>
+
+  <nav class="telas" id="telas" aria-label="Telas"></nav>
+
+  <div class="aprovados">
+    <a class="aprovados-btn" href="https://claude.ai/artifact/KMebnrdoWfAhcz9yeRgjFz" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodadas 19 a 30)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    <a class="aprovados-btn" href="https://claude.ai/artifact/G1gj9hzSbdcqAZYcFjmJ1j" target="_blank" rel="noopener"><span class="aprovados-tit">Já aprovados (rodadas 2 a 18)</span><span class="aprovados-n">abre em outra aba</span><svg class="aprovados-ext" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
+    <p class="aprovados-nota">Esta página começa na rodada 31. As rodadas 19 a 30 e as rodadas 2 a 18 ficam nas duas páginas acima, com as escolhas e as observações guardadas como estavam.</p>
+  </div>
+
+  <section class="painel" aria-live="polite">
+    <p class="decidido" id="decidido"></p>
+    <div class="controles">
+      <div class="grupo" id="opcoes" role="group" aria-label="Opções"></div>
+      <div class="grupo" role="group" aria-label="Ver">
+        <button type="button" class="modo-btn" id="tela-cheia">Tela cheia</button>
+      </div>
+    </div>
+    <div class="grupo" id="dispositivos" role="group" aria-label="Onde ver" hidden></div>
+    <div class="grupo" id="perfis" role="group" aria-label="Quem está vendo" hidden></div>
+    <p class="desc" id="desc"></p>
+    <div class="quadro" id="quadro"><div class="palco" id="palco"></div></div>
+    <div class="aprovacao">
+      <div class="situacao" id="situacao">Carregando as suas escolhas…</div>
+      <label for="obs">O que mudar nesta tela (opcional)</label>
+      <textarea id="obs" maxlength="20000" aria-describedby="obs-conta" placeholder="Ex.: gostei da opção 2, mas quero a foto maior e o botão mais embaixo."></textarea>
+      <div class="obs-pe"><span class="rascunho" id="rascunho" aria-live="polite"></span><span class="conta" id="obs-conta">0 de 20.000 caracteres</span></div>
+      <div class="acoes">
+        <button type="button" class="acao" id="aprovar">Aprovo esta opção</button>
+        <button type="button" class="acao-sec" id="guardar-obs">Guardar só a observação</button>
+        <button type="button" class="link-btn" id="tirar">Tirar a minha aprovação desta tela</button>
+      </div>
+      <p class="aviso" id="aviso" role="status"></p>
+    </div>
+  </section>
+
+  <section class="geral">
+    <h2>Observação geral sobre a rodada 31</h2>
+    <label for="obs-geral">Cores, letras, o que gostou ou não gostou em todas as telas (as das rodadas 2 a 30 continuam guardadas nas páginas de "Já aprovados")</label>
+    <textarea id="obs-geral" maxlength="20000" aria-describedby="geral-conta"></textarea>
+    <div class="obs-pe"><span class="rascunho" id="rascunho-geral" aria-live="polite"></span><span class="conta" id="geral-conta">0 de 20.000 caracteres</span></div>
+    <div class="acoes"><button type="button" class="acao-sec" id="guardar-geral">Guardar observação geral</button></div>
+    <p class="aviso" id="aviso-geral" role="status"></p>
+  </section>
+</div>
+
+<div class="cheia" id="cheia" hidden role="dialog" aria-modal="true" aria-label="Tela cheia">
+  <div class="cheia-barra">
+    <span id="cheia-titulo"></span>
+    <button type="button" class="modo-btn" id="cheia-anterior">‹ Opção anterior</button>
+    <button type="button" class="modo-btn" id="cheia-proxima">Próxima opção ›</button>
+    <button type="button" class="acao" id="cheia-fechar">Fechar</button>
+  </div>
+  <div class="cheia-area" id="cheia-area"><div class="palco" id="cheia-palco"></div></div>
+</div>
+
+<script>
+const I = {
+  casa: 'M3 11l9-7 9 7M5 10v10h14V10',
+  pasta: 'M3 7h6l2 2h10v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  pessoa: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1.5-4 4.5-6 8-6s6.5 2 8 6',
+  pessoas: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c1-3.5 3.8-5.5 7-5.5s6 2 7 5.5M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14.8c2 .7 3.4 2.4 4 5.2',
+  dinheiro: 'M3 6h18v12H3zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6.5 9h.01M17.5 15h.01',
+  livro: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7',
+  calendario: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  escudo: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+  megafone: 'M3 10v4h4l6 4V6l-6 4zM17 9a4 4 0 0 1 0 6',
+  coracao: 'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z',
+  globo: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z',
+  mapa: 'M9 4L3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14',
+  sino: 'M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
+  busca: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',
+  seta: 'M9 6l6 6-6 6',
+  setaBaixo: 'M6 9l6 6 6-6',
+  voltar: 'M15 6l-6 6 6 6',
+  digital: 'M12 11v4M8.5 8.5a5 5 0 0 1 7 0M6 13c0-3.3 2.7-6 6-6s6 2.7 6 6v1M9 14c0-1.7 1.3-3 3-3s3 1.3 3 3c0 2-.5 4-1.5 6M9 17c.3 1.3.3 2.5 0 3.5',
+  check: 'M5 12l5 5 9-10',
+  cartao: 'M3 6h18v12H3zM7 10h4M7 14h6M15 10h3',
+  balanca: 'M12 3v18M6 21h12M6 7h12M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0z',
+  lua: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z',
+  sol: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  planilha: 'M4 4h16v16H4zM4 10h16M4 15h16M10 4v16',
+  mais: 'M12 5v14M5 12h14',
+  grafico: 'M4 20V11M10 20V5M16 20v-7M21 20H3',
+  doc: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6',
+  relogio: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  maleta: 'M4 8h16v12H4zM9 8V5h6v3M4 13h16',
+  igreja: 'M12 2v4M10 4h4M12 6l6 5v10H6V11zM10 21v-5h4v5',
+  filtro: 'M3 5h18l-7 8v6l-4-2v-4z'
+};
+const ic = (n, cor, t = 20, w = 1.8) => `<svg width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="${cor}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="${I[n]}"/></svg>`;
+function P(modo) {
+  const e = modo === 'escuro';
+  return e ? {
+    e, fundo: '#0B1F3A', sup: '#102A4C', lateral: '#061629', lateralCartao: '#0E2748', ativo: '#13294A', topo: '#0E2748', borda: '#23406A',
+    texto: '#E8EEF7', titulo: '#FFFFFF', suave: '#B8C4D6', campo: '#0A1F3D', campoBorda: '#3C5A82', icone: '#FFC933', link: '#93B4F8',
+    ouroTinta: '#2A2410', ouroBorda: '#5C4A12', linha: '#1A3557'
+  } : {
+    e, fundo: '#F4F6FA', sup: '#FFFFFF', lateral: '#0A2342', lateralCartao: '#13294A', ativo: '#16365E', topo: '#FFFFFF', borda: '#DDE2EA',
+    texto: '#1B2430', titulo: '#0A2342', suave: '#5F6673', campo: '#F7F8FA', campoBorda: '#C9CFD8', icone: '#0A2342', link: '#1D4ED8',
+    ouroTinta: '#FFF4D6', ouroBorda: '#F2D27A', linha: '#EEF1F5'
+  };
+}
+const MODS = {
+  pessoas: ['#1D4ED8', '#93B4F8', '#E3ECFD', '#1E3A6E'],
+  financas: ['#0F766E', '#5EEAD4', '#DDF3EF', '#0F3D3A'],
+  ministerio: ['#6D28D9', '#C4B5FD', '#EDE7FB', '#34205E'],
+  departamentos: ['#BE185D', '#F9A8D4', '#FCE7F3', '#4A1530'],
+  ebd: ['#0369A1', '#7DD3FC', '#DFF1FA', '#0C3A52'],
+  expansao: ['#C2410C', '#FDBA74', '#FDEBDD', '#4A2410'],
+  territorio: ['#15803D', '#86EFAC', '#DCFCE7', '#14532D'],
+  agenda: ['#A21CAF', '#F0ABFC', '#FBE7FB', '#4A1650'],
+  governanca: ['#7A5800', '#FFC933', '#FFF4D6', '#3D2E05'],
+  protecao: ['#B91C1C', '#FCA5A5', '#FEE2E2', '#4C1717'],
+  comunicacao: ['#4338CA', '#A5B4FC', '#E8EAFD', '#26265E'],
+  cuidado: ['#B45309', '#FCD34D', '#FEF3C7', '#3D2A05']
+};
+const mc = (p, k) => ({ cor: p.e ? MODS[k][1] : MODS[k][0], fundo: p.e ? MODS[k][3] : MODS[k][2] });
+const logo = (t, borda = '#FFB800') => `<div style="width:${t}px;height:${t}px;border-radius:50%;background:#FFFFFF;border:${Math.max(2, Math.round(t / 32))}px solid ${borda};display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none"><img src="logo.png" alt="" style="width:${Math.round(t * 0.8)}px;height:${Math.round(t * 0.8)}px;object-fit:contain"></div>`;
+const campo = (p, rot, val, senha) => `<span style="display:flex;flex-direction:column;gap:6px;font-size:14px;font-weight:600;color:${p.titulo}">${rot}<span style="height:46px;border:1px solid ${p.campoBorda};border-radius:10px;background:${p.campo};display:flex;align-items:center;padding:0 14px;font-weight:400;font-size:15px;color:${senha ? p.texto : p.suave};letter-spacing:${senha ? '.2em' : '0'}">${val}</span></span>`;
+const statusBar = cor => `<div style="height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:15px;font-weight:600;color:${cor}"><span>9:41</span><span style="width:24px;height:11px;border-radius:3px;border:1.5px solid ${cor}"></span></div>`;
+function lateralSimples(p, o) {
+  const clara = o.lateral === 'clara';
+  const L = clara
+    ? { bg: p.e ? '#0E2748' : '#FFFFFF', txt: p.texto, sub: p.suave, borda: `border-right:1px solid ${p.borda};`, ativoBg: p.ouroTinta, ativoTxt: p.titulo, ativoIc: p.titulo, cartao: p.fundo, ic: p.suave, nome: p.titulo }
+    : { bg: p.lateral, txt: '#D5DEEA', sub: '#B9C6D8', borda: '', ativoBg: p.ativo, ativoTxt: '#FFFFFF', ativoIc: '#FFB800', cartao: p.lateralCartao, ic: '#D5DEEA', nome: '#FFFFFF' };
+  const item = it => it.ativo
+    ? `<span style="display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:10px;background:${L.ativoBg};border-left:4px solid #FFB800;color:${L.ativoTxt};font-size:15px;font-weight:600">${ic(it.ic, L.ativoIc, 20, 1.9)}${it.nome}</span>`
+    : `<span style="display:flex;align-items:center;gap:12px;height:44px;padding:0 16px;border-radius:10px;color:${L.txt};font-size:15px">${ic(it.ic, L.ic, 20)}${it.nome}</span>`;
+  return `<nav style="width:248px;flex:none;padding:20px 14px;background:${L.bg};${L.borda}display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px 18px">${logo(42)}<span style="font-size:16px;font-weight:800;letter-spacing:.04em;color:${L.nome}">IEADESPA</span></div>
+    ${o.itens.map(item).join('')}
+    <div style="flex:1"></div>
+    ${cartaoUsuario(L, o.usuario)}
+  </nav>`;
+}
+const cartaoUsuario = (L, u) => `<div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:${L.cartao}"><div style="width:34px;height:34px;border-radius:17px;background:#FFB800;color:#0A2342;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none">${u.ini}</div><div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;font-weight:600;color:${L.nome}">${u.nome}</span><span style="font-size:12px;color:${L.sub}">${u.papel}</span></div></div>`;
+function barraTopo(p, trilha, marinho) {
+  const bg = marinho ? (p.e ? '#061629' : '#0A2342') : p.topo;
+  const cor = marinho ? '#FFFFFF' : p.titulo, sub = marinho ? '#C9D4E3' : p.suave;
+  const campoBg = marinho ? 'rgba(255,255,255,.08)' : p.campo, campoBorda = marinho ? 'rgba(255,255,255,.22)' : p.campoBorda;
+  const partes = trilha.map((t, i) => i === trilha.length - 1 ? `<span style="font-size:15px;font-weight:600;color:${cor}">${t}</span>` : `<span style="font-size:15px;color:${sub}">${t}</span>${ic('seta', sub, 14, 2)}`).join('');
+  return `<header style="height:64px;flex:none;padding:0 28px;background:${bg};border-bottom:1px solid ${marinho ? bg : p.borda};display:flex;align-items:center;gap:10px">
+    ${partes}<div style="flex:1"></div>
+    <span style="width:300px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;color:${sub}">${ic('busca', sub, 18)}Buscar pessoa ou módulo<span style="margin-left:auto;font-size:12px;border:1px solid ${campoBorda};border-radius:6px;padding:1px 6px">Ctrl K</span></span>
+    <span style="width:40px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;justify-content:center">${ic(p.e ? 'sol' : 'lua', marinho ? '#FFC933' : p.icone, 20)}</span>
+    <span style="position:relative;width:40px;height:40px;border:1px solid ${campoBorda};border-radius:10px;background:${campoBg};display:flex;align-items:center;justify-content:center">${ic('sino', marinho ? '#FFFFFF' : p.icone, 20)}<span style="position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:4px;background:#FFB800"></span></span>
+  </header>`;
+}
+function casca(p, o) {
+  return `<div style="width:1280px;height:800px;display:flex;position:relative;background:${p.fundo};color:${p.texto}">
+    ${o.lateralHtml || lateralSimples(p, o)}
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+      ${barraTopo(p, o.trilha, o.topoMarinho)}
+      ${o.faixa ? `<div style="height:6px;flex:none;background:${o.faixa}"></div>` : ''}
+      <div style="flex:1;min-height:0;padding:24px 32px;display:flex;flex-direction:column;gap:20px;overflow:hidden;position:relative">${o.conteudo}</div>
+    </main>
+    ${o.sobre || ''}
+  </div>`;
+}
+const LIDER = { ini: 'JS', nome: 'João da Silva', papel: 'Secretaria Geral' };
+function nivel(p, grande) {
+  const seg = (t, a) => a
+    ? `<span style="flex:${grande ? 1 : 'none'};height:${grande ? 46 : 38}px;padding:0 18px;border-radius:9px;background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${grande ? 15.5 : 14.5}px;font-weight:700">${t}</span>`
+    : `<span style="flex:${grande ? 1 : 'none'};height:${grande ? 46 : 38}px;padding:0 18px;border-radius:9px;color:${p.texto};display:flex;align-items:center;justify-content:center;font-size:${grande ? 15.5 : 14.5}px;font-weight:600">${t}</span>`;
+  return `<div style="display:flex;${grande ? 'width:100%;' : ''}padding:4px;gap:4px;border-radius:12px;background:${p.e ? '#0A1F3D' : '#E8ECF2'};border:1px solid ${p.borda}">${seg('Local', false)}${seg('Área', true)}${seg('Geral', false)}</div>`;
+}
+const aba = (p, t, a) => a
+  ? `<span style="height:32px;padding:0 12px;border-radius:8px;background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};display:flex;align-items:center;font-size:13.5px;font-weight:700;white-space:nowrap">${t}</span>`
+  : `<span style="height:32px;padding:0 12px;border-radius:8px;border:1px solid ${p.borda};color:${p.texto};display:flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap">${t}</span>`;
+const TELAS = [];
+const ehCel = d => d === 'celular';
+function cascaCel(p, o) {
+  const barraBg = o.corBarra || p.sup, barraTx = o.corBarra ? '#FFFFFF' : p.titulo, barraIc = o.corBarra ? '#FFFFFF' : p.icone;
+  return `<div style="width:390px;height:844px;display:flex;flex-direction:column;position:relative;background:${o.fundo || p.fundo};color:${p.texto};overflow:hidden">
+    <div style="background:${barraBg}">${statusBar(barraTx)}</div>
+    <div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;background:${barraBg};${o.corBarra ? '' : `border-bottom:1px solid ${p.borda};`}">
+      ${ic(o.voltar ? 'voltar' : 'menu', barraIc, 24, 2)}<span style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${barraTx};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${o.titulo}</span>
+      ${ic('busca', barraIc, 22, 2)}<span style="position:relative;display:flex">${ic('sino', barraIc, 22, 2)}${o.avisos ? `<span style="position:absolute;top:-6px;right:-8px;min-width:18px;height:18px;border-radius:9px;background:#FFB800;color:#0A2342;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">${o.avisos}</span>` : ''}</span>
+    </div>
+    ${o.faixa ? `<div style="height:5px;flex:none;background:${o.faixa}"></div>` : ''}
+    <div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">${o.conteudo}</div>
+    ${o.baixo || ''}
+    ${o.sobre || ''}
+  </div>`;
+}
+I.menu = 'M4 6h16M4 12h16M4 18h16';
+I.fechar = 'M6 6l12 12M18 6L6 18';
+const chipFiltro = (p, t, ativo) => `<span style="height:32px;padding:0 12px;border-radius:16px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;${ativo ? `background:${p.e ? '#FFB800' : '#0A2342'};color:${p.e ? '#0A2342' : '#FFFFFF'};` : `border:1px solid ${p.borda};color:${p.texto};`}">${t}${ativo ? ic('fechar', p.e ? '#0A2342' : '#FFFFFF', 13, 2.6) : ''}</span>`;
+const CORES_MOD = {
+  financas: p => p.e ? { menu: '#082B28', ativo: '#0F3D3A', cor: '#5EEAD4', cab: 'rgba(255,255,255,.10)', sub: '#A7E5DA' } : { menu: '#0B4A44', ativo: '#126058', cor: '#0F766E', cab: 'rgba(255,255,255,.12)', sub: '#B6E6DE' },
+  catalogo: p => p.e ? { menu: '#2E2405', ativo: '#45370A', cor: '#FFC933', cab: 'rgba(255,255,255,.10)', sub: '#EADBA6' } : { menu: '#5A4100', ativo: '#73550A', cor: '#7A5800', cab: 'rgba(255,255,255,.12)', sub: '#F0DFA8' }
+};
+function menuCor(p, k, { titulo, escopo, grupos, usuario }) {
+  const C = CORES_MOD[k](p);
+  const corpo = grupos.map(g => `<div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#FFFFFF">${ic(g[2] ? 'setaBaixo' : 'seta', C.sub, 15, 2.4)}<span style="flex:1">${g[0]}</span>${g[2] ? '' : `<span style="font-size:11.5px;color:${C.sub}">${g[1].length}</span>`}</div>${g[2] ? g[1].map(f => f[2]
+    ? `<span style="display:flex;align-items:center;gap:12px;height:40px;margin-left:14px;padding:0 10px;border-radius:9px;background:${C.ativo};border-left:4px solid #FFB800;color:#FFFFFF;font-size:14.5px;font-weight:600">${ic(f[0], '#FFB800', 19, 2)}${f[1]}</span>`
+    : `<span style="display:flex;align-items:center;gap:12px;height:40px;margin-left:14px;padding:0 14px;color:#E6F2EF;font-size:14.5px">${ic(f[0], C.sub, 19)}${f[1]}</span>`).join('') : ''}`).join('');
+  return `<nav style="width:256px;flex:none;padding:18px 12px;background:${C.menu};display:flex;flex-direction:column;gap:2px;height:100%">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 8px 8px">${logo(36)}<span style="font-size:15px;font-weight:800;letter-spacing:.04em;color:#FFFFFF">IEADESPA</span></div>
+    <span style="display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;font-size:13px;color:${C.sub}">${ic('voltar', C.sub, 16, 2)}Menu principal</span>
+    <div style="margin:6px 0 8px;border-radius:14px;padding:12px 14px;background:${C.cab};display:flex;flex-direction:column;gap:3px"><span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${C.sub}">Módulo</span><span style="font-size:18px;font-weight:800;color:#FFFFFF">${titulo}</span><span style="font-size:12.5px;color:${C.sub}">${escopo}</span></div>
+    ${corpo}<div style="flex:1"></div>${cartaoUsuario({ cartao: 'rgba(255,255,255,.08)', nome: '#FFFFFF', sub: C.sub }, usuario)}
+  </nav>`;
+}
+const TES = { ini: 'RS', nome: 'Rute Santos', papel: 'Tesoureira · Vila Nova' };
+I.cadeado = 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3';
+I.lapis = 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4';
+I.chave = 'M15.5 12a4.5 4.5 0 1 0-4.2-2.9L3 17.4V21h3.6v-2.4H9v-2.4h2.4l1.9-1.9a4.5 4.5 0 0 0 2.2.7z';
+I.celular = 'M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2';
+I.notebook = 'M4 5h16v10H4zM2 19h20';
+I.engrenagem = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z';
+I.qr = 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z';
+I.ajudaQ = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01';
+I.alerta = 'M12 3l10 18H2zM12 10v5M12 18v.01';
+CORES_MOD.pessoas = p => p.e ? { menu: '#0B1B3F', ativo: '#14306B', cor: '#93B4F8', cab: 'rgba(255,255,255,.10)', sub: '#B9CCF5' } : { menu: '#163A8C', ativo: '#1F4BAE', cor: '#1D4ED8', cab: 'rgba(255,255,255,.12)', sub: '#C7D7FB' };
+const m8Verm = p => (p.e ? '#FCA5A5' : '#B91C1C');
+const m8Verde = p => (p.e ? '#86EFAC' : '#166534');
+const m8Ouro = (p, t, icone, alt = 40) => `<span style="height:${alt}px;padding:0 16px;border-radius:10px;background:#FFB800;color:#0A2342;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;white-space:nowrap;flex:none">${icone ? ic(icone, '#0A2342', 18, 2.2) : ''}${t}</span>`;
+const m8Linha = (p, t, icone) => `<span style="height:40px;padding:0 14px;border-radius:10px;border:1px solid ${p.campoBorda};color:${p.titulo};display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;white-space:nowrap;flex:none">${icone ? ic(icone, p.icone, 17, 2) : ''}${t}</span>`;
+const m8Info = (p, html) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:${p.e ? '#13294A' : '#EEF4FF'};border:1px solid ${p.e ? '#2B4A7A' : '#C7D7FB'};font-size:13.5px;line-height:1.45;color:${p.texto}">${ic('ajudaQ', p.link, 18, 2)}<div style="flex:1">${html}</div></div>`;
+const BARRA_SISTEMA = `<div style="height:48px;flex:none;background:#000000;display:flex;align-items:center;justify-content:space-around;padding:0 70px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2" stroke-linejoin="round"><path d="M16 5L7 12l9 7z"/></svg><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></div>`;
+const comBarraDoCelular = html => (/^\s*<div style="width:390px;height:844px/.test(html) ? `<div style="width:390px;height:844px;display:flex;flex-direction:column;background:#000000">${html.replace('height:844px', 'height:796px')}${BARRA_SISTEMA}</div>` : html);
+const R12_ITENS = { membro: [['casa', 'Início'], ['igreja', 'Minha vida'], ['sino', 'Avisos', 2]], lider: [['casa', 'Início'], ['maleta', 'Trabalho'], ['igreja', 'Minha vida'], ['sino', 'Avisos', 3]] };
+function r12Abas(p, itens, ativo, estilo) {
+  const marinho = p.e ? '#0E2748' : '#0A2342';
+  const bolinha = n => (n ? `<span style="min-width:17px;height:17px;border-radius:9px;background:#FFB800;color:#0A2342;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px">${n}</span>` : '');
+  if (estilo === 'pilulas') return `<div style="display:flex;flex:none;gap:6px;padding:10px 12px;background:${p.sup};border-bottom:1px solid ${p.borda}">${itens.map(it => `<span style="flex:1;min-width:0;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:12.5px;white-space:nowrap;font-weight:${it[1] === ativo ? 700 : 600};${it[1] === ativo ? 'background:#FFB800;color:#0A2342;' : `background:${p.linha};color:${p.texto};`}">${it[1]}${bolinha(it[2])}</span>`).join('')}</div>`;
+  if (estilo === 'icones') return `<div style="display:flex;flex:none;background:${p.sup};border-bottom:1px solid ${p.borda}">${itens.map(it => `<span style="flex:1;height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;font-size:11.5px;font-weight:${it[1] === ativo ? 700 : 500};color:${it[1] === ativo ? p.titulo : p.suave};${it[1] === ativo ? 'box-shadow:inset 0 -3px 0 #FFB800;' : ''}">${ic(it[0], it[1] === ativo ? p.titulo : p.suave, 21, it[1] === ativo ? 2 : 1.8)}${it[1]}${it[2] ? `<span style="position:absolute;top:6px;left:calc(50% + 6px)">${bolinha(it[2])}</span>` : ''}</span>`).join('')}</div>`;
+  return `<div style="display:flex;flex:none;background:${marinho};padding:0 6px">${itens.map(it => `<span style="flex:1;height:44px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:13px;white-space:nowrap;font-weight:${it[1] === ativo ? 700 : 500};color:${it[1] === ativo ? '#FFFFFF' : '#C7D7FB'};${it[1] === ativo ? 'box-shadow:inset 0 -3px 0 #FFB800;' : ''}">${it[1]}${bolinha(it[2])}</span>`).join('')}</div>`;
+}
+const TES_A2 = { ini: 'MP', nome: 'Marcos Paiva', papel: 'Tesouraria · Área 2' };
+const NIV13 = {
+  local: { usuario: TES, escopo: 'Congregação Vila Nova', titulo: 'Congregação Vila Nova', ent: 'R$ 18.420', sai: 'R$ 9.870', saldo: 'R$ 8.550', rep: 'R$ 2.763', repRot: 'Repasse a pagar (15%)',
+    fat: 1, tarefas: [['calendario', 'Fechar outubro', 'prazo 10/11 · falta conciliar o extrato', 'Fechar'], ['planilha', 'Lançar os dízimos de terça, 17/11', 'as folhas que chegaram', 'Lançar'], ['alerta', 'Conciliar o extrato de outubro', '3 diferenças com o banco', 'Conciliar']], meu: 3, tudo: 3, tudoRot: 'Tudo da congregação' },
+  area: { usuario: TES_A2, escopo: 'Área 2 · 12 congregações', titulo: 'Área 2 · 12 congregações', ent: 'R$ 198.300', sai: 'R$ 121.640', saldo: 'R$ 76.660', rep: '10 de 12', repRot: 'Repasses de outubro pagos',
+    fat: 11, tarefas: [['calendario', '3 fechamentos de outubro atrasados', 'Monte Sião, Bela Vista e Jardim das Oliveiras', 'Lembrar'], ['dinheiro', '2 repasses de outubro em aberto', 'Bela Vista e Cidade Jardim', 'Ver'], ['doc', 'Conferir 9 fechamentos entregues', 'antes de mandar para a Geral', 'Conferir']], meu: 3, tudo: 14, tudoRot: 'Tudo da área' },
+  geral: { usuario: LIDER, escopo: 'Tesouraria Geral · Igreja toda', titulo: 'Igreja toda · 45 congregações', ent: 'R$ 1.024.900', sai: 'R$ 640.210', saldo: 'R$ 384.690', rep: '38 de 45', repRot: 'Repasses de outubro pagos',
+    fat: 55, tarefas: [['doc', '9 fechamentos conferidos pelas áreas', 'esperando a Tesouraria Geral', 'Conferir'], ['dinheiro', '7 repasses de outubro em aberto', '3 há mais de 30 dias', 'Ver'], ['grafico', 'Demonstração de outubro', 'pronta para o Conselho', 'Abrir']], meu: 3, tudo: 61, tudoRot: 'Tudo da Igreja' }
+};
+const FIN13 = {
+  tarefa: [['Tesouraria do dia a dia', ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Fechamentos da área']], ['Contas e bancos', ['Contas a receber', 'Investimentos', 'Seguros', 'Obrigações']],
+    ['Planejamento', ['Orçamento', 'Campanhas', 'Obras', 'Plano (PDQ)']], ['Patrimônio', ['Patrimônio', 'Imóveis', 'Frota', 'Cessões', 'Receitas acessórias']], ['Pessoas e repasses', ['Prebenda', 'Repasses', 'Repasses da área', 'Rateio geral']],
+    ['Relatórios', ['Visão geral', 'Situação do tesouro', 'Demonstrações', 'Relatório do mês', 'Consolidado', 'Consolidado da área']], ['Regras e cadastros', ['Plano de contas', 'Parâmetros', 'Parâmetros monetários', 'Imunidade']]],
+  quando: [['Toda semana', ['Lançamentos', 'Dizimistas']], ['Todo mês', ['Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Repasses', 'Prebenda', 'Contas a receber', 'Relatório do mês', 'Fechamentos da área', 'Repasses da área', 'Consolidado da área']],
+    ['De vez em quando', ['Orçamento', 'Campanhas', 'Obras', 'Patrimônio', 'Imóveis', 'Frota', 'Seguros', 'Investimentos', 'Cessões', 'Receitas acessórias', 'Obrigações', 'Imunidade', 'Plano (PDQ)', 'Demonstrações', 'Consolidado', 'Situação do tesouro', 'Rateio geral', 'Visão geral']],
+    ['Configuração', ['Plano de contas', 'Parâmetros', 'Parâmetros monetários']]],
+  nivel: [['Da congregação', ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês']],
+    ['Da área', ['Fechamentos da área', 'Repasses da área', 'Consolidado da área']],
+    ['Da Tesouraria Geral', ['Repasses', 'Prebenda', 'Rateio geral', 'Orçamento', 'Investimentos', 'Seguros', 'Obrigações', 'Imunidade', 'Imóveis', 'Frota', 'Cessões', 'Receitas acessórias', 'Plano (PDQ)', 'Situação do tesouro', 'Demonstrações', 'Consolidado', 'Visão geral', 'Plano de contas', 'Parâmetros', 'Parâmetros monetários']]]
+};
+const VE13 = { local: ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês', 'Repasses', 'Visão geral'],
+  area: ['Lançamentos', 'Dizimistas', 'Saídas', 'Fechamento do mês', 'Conciliação bancária', 'Contas a receber', 'Campanhas', 'Obras', 'Patrimônio', 'Relatório do mês', 'Repasses', 'Visão geral', 'Fechamentos da área', 'Repasses da área', 'Consolidado da área', 'Consolidado'] };
+const ICO13 = { 'Lançamentos': 'planilha', 'Dizimistas': 'pessoas', 'Saídas': 'dinheiro', 'Fechamento do mês': 'calendario', 'Conciliação bancária': 'check', 'Relatório do mês': 'doc', 'Visão geral': 'grafico' };
+if (!FIN13.tarefa[0][1].includes('Blocos de recibo')) FIN13.tarefa[0][1].splice(2, 0, 'Blocos de recibo');
+if (!FIN13.quando[0][1].includes('Blocos de recibo')) FIN13.quando[0][1].push('Blocos de recibo');
+if (!FIN13.nivel[0][1].includes('Blocos de recibo')) FIN13.nivel[0][1].splice(2, 0, 'Blocos de recibo');
+['local', 'area'].forEach(k => ['Blocos de recibo', 'Cessões', 'Situação do tesouro'].forEach(x => { if (!VE13[k].includes(x)) VE13[k].push(x); }));
+Object.assign(ICO13, { 'Blocos de recibo': 'livro', 'Situação do tesouro': 'grafico', 'Saídas': 'dinheiro', 'Contas a receber': 'calendario', 'Demonstrações': 'doc', 'Consolidado': 'grafico', 'Repasses': 'seta', 'Prebenda': 'pessoa', 'Rateio geral': 'balanca', 'Investimentos': 'grafico', 'Cessões': 'igreja' });
+const r16aTab = (p, cols, cab, linhas) => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;overflow:hidden"><div style="display:grid;grid-template-columns:${cols};gap:10px;padding:0 16px;height:38px;align-items:center;font-size:12.5px;font-weight:700;color:${p.suave};background:${p.fundo}">${cab.map(c => `<span>${c}</span>`).join('')}</div>${linhas.map(l => `<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:0 16px;min-height:44px;align-items:center;border-top:1px solid ${p.linha};font-size:13.5px;color:${p.texto}">${l.map((c, i) => `<span style="${i === 0 ? `font-weight:600;color:${p.titulo};` : ''}min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c}</span>`).join('')}</div>`).join('')}</div>`;
+const r16aListaCel = (p, itens) => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:0 12px">${itens.map((it, i) => `<div style="display:flex;align-items:center;gap:10px;min-height:52px;${i ? `border-top:1px solid ${p.linha};` : ''}"><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it[0]}</div><div style="font-size:12px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${it[1]}</div></div>${it[2] || ''}</div>`).join('')}</div>`;
+const r16aAviso = (p, html, tipo) => tipo === 'alerta' ? `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:${p.e ? '#2A2410' : '#FFF8E1'};border:1px solid ${p.e ? '#5C4A12' : '#F2D27A'};font-size:13px;line-height:1.4;color:${p.texto}">${ic('alerta', p.e ? '#FFC933' : '#7A5800', 17, 2)}<div>${html}</div></div>` : m8Info(p, html).replace('padding:12px 14px', 'padding:10px 12px').replace('font-size:13.5px', 'font-size:13px');
+const r16bAperta = h => h.replace('padding:24px 32px;display:flex;flex-direction:column;gap:20px', 'padding:18px 28px;display:flex;flex-direction:column;gap:12px');
+const R17_GRUPOS = [['Tesouraria do dia a dia', 'Resumo da tesouraria'], ['Contas e bancos', 'Resumo de contas'], ['Planejamento', 'Resumo do planejamento'], ['Patrimônio', 'Resumo do patrimônio'], ['Pessoas e repasses', 'Resumo dos repasses'], ['Relatórios', 'Resumo dos relatórios'], ['Regras e cadastros', 'Resumo das regras']];
+R17_GRUPOS.forEach(([g, r]) => { const G = FIN13.tarefa.find(x => x[0] === g); if (G && !G[1].includes(r)) G[1].unshift(r); ICO13[r] = 'grafico'; });
+(() => { const G = FIN13.tarefa.find(x => x[0] === 'Regras e cadastros'); if (G && !G[1].includes('Tipos de entrada e saída')) G[1].splice(2, 0, 'Tipos de entrada e saída'); ICO13['Tipos de entrada e saída'] = 'planilha'; })();
+['local', 'area'].forEach(k => R17_GRUPOS.map(g => g[1]).concat(['Obrigações', 'Orçamento', 'Demonstrações', 'Receitas acessórias', 'Plano de contas', 'Tipos de entrada e saída', 'Parâmetros', 'Imunidade']).forEach(r => { if (!VE13[k].includes(r)) VE13[k].push(r); }));
+I.imprimir = I.imprimir || 'M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z';
+const r17Dois = (a, b, prop = '1.3fr 1fr') => `<div style="display:grid;grid-template-columns:${prop.split(' ').map(x => `minmax(0,${x})`).join(' ')};gap:14px;align-items:start">${a}${b}</div>`;
+const r17Campo = (p, rot, val, o = {}) => `<div style="display:flex;flex-direction:column;gap:4px;min-width:0;${o.larg ? `grid-column:span ${o.larg};` : ''}"><span style="font-size:12.5px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${rot}${o.obrig ? `<span style="color:${m8Verm(p)}">*</span>` : ''}${o.nota ? `<span style="font-weight:400;color:${p.suave}"> · ${o.nota}</span>` : ''}</span><span style="min-height:38px;border:${o.auto ? '1px dashed' : '1px solid'} ${p.campoBorda};border-radius:9px;background:${o.auto ? 'transparent' : p.campo};display:flex;align-items:center;gap:8px;padding:0 11px;font-size:13.5px;color:${o.vazio ? p.suave : p.texto}">${o.icone ? ic(o.icone, p.suave, 15, 2) : ''}${val}</span></div>`;
+const R17_TONS = { verde: ['#DDF3EF', '#0F766E', '#0F3D3A', '#5EEAD4'], azul: ['#E3ECFD', '#1D4ED8', '#13294A', '#93C5FD'], ouro: ['#FFF4D1', '#8A5A00', '#3A2E0B', '#FCD34D'], roxo: ['#EFE7FD', '#6D28D9', '#2A1D4A', '#C4B5FD'], verm: ['#FDE4E4', '#B91C1C', '#4C1717', '#FCA5A5'] };
+I.banco = I.banco || 'M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18';
+I.recibo = I.recibo || 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h4';
+I.impressora = I.impressora || 'M7 8V3h10v5M5 8h14a2 2 0 0 1 2 2v6h-4v4H7v-4H3v-6a2 2 0 0 1 2-2zM9 15h6';
+I.transferir = I.transferir || 'M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4';
+I.tendencia = I.tendencia || 'M3 17l6-6 4 4 8-8M15 7h6v6';
+I.obra = I.obra || 'M3 21h18M6 21V10h12v11M9 10V6h6v4M10 14h4';
+I.casas = I.casas || 'M3 21V11l6-5 6 5v10M9 21v-5M15 9l3-3 3 3v12h-6';
+I.prancheta = I.prancheta || 'M8 4h8v3H8zM6 5H5v16h14V5h-1M9 12h6M9 16h4';
+I.tarefa = I.tarefa || 'M4 4h16v16H4zM8 12l3 3 5-6';
+ICO13['Despesas congregacionais'] = 'recibo';
+const r18Tit = (p, t, s, dir = '') => `<div style="display:flex;align-items:center;gap:14px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><h1 style="font-size:22px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</h1><p style="font-size:13.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</p></div><div style="display:flex;gap:10px;align-items:center;flex:none">${dir}</div></div>`;
+const r18Col = (...partes) => `<div style="display:flex;flex-direction:column;gap:12px;min-width:0">${partes.join('')}</div>`;
+const r18Etiq = (p, t, tom = 'verde') => { const T = R17_TONS[tom]; return `<span style="display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;flex:none;background:${p.e ? T[2] : T[0]};color:${p.e ? T[3] : T[1]}">${t}</span>`; };
+function r18Qr(t, semente = 7, cor = '#0A2342') {
+  const n = 25; let s = semente * 7919 + 13, d = '';
+  const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const canto = (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
+    let liga;
+    if (canto) {
+      const fx = x < 8 ? x : x - (n - 7), fy = y < 8 ? y : y - (n - 7);
+      liga = fx >= 0 && fx <= 6 && fy >= 0 && fy <= 6 && (fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4));
+    } else liga = rnd() > 0.5;
+    if (liga) d += `M${x + 1} ${y + 1}h1v1h-1z`;
+  }
+  return `<svg width="${t}" height="${t}" viewBox="0 0 ${n + 2} ${n + 2}" aria-hidden="true" style="flex:none;display:block;background:#FFFFFF;shape-rendering:crispEdges"><path d="${d}" fill="${cor}"/></svg>`;
+}
+const r18PpCab = (tit, sub, dir) => `<div style="display:flex;align-items:center;gap:9px;border-bottom:2px solid #0A2342;padding-bottom:7px">${logo(26)}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:11.5px;font-weight:800">${tit}</div><div style="font-size:9px;color:#5B6678">${sub}</div></div>${dir || ''}</div>`;
+const r18PpQr = (t, cod, txt) => `<div style="display:flex;align-items:center;gap:10px;border:1px solid #D5DBE5;border-radius:6px;padding:6px 8px">${r18Qr(t, 11)}<div style="flex:1;min-width:0;font-size:8.8px;color:#3B4A63;line-height:1.35">${txt || 'Para conferir se este papel é verdadeiro, aponte a câmera do celular para o código.'} Ou abra <strong>conferir.ieadespa.org.br</strong> e digite <strong style="font-size:10px;color:#0A2342;letter-spacing:.04em">${cod}</strong>.</div></div>`;
+I.envelope = I.envelope || 'M3 6h18v12H3zM3 7l9 7 9-7';
+I.alvo = I.alvo || 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z';
+I.saida = I.saida || 'M3 7h13v10H3zM9.5 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 12h4M20 10l2 2-2 2';
+I.queda = I.queda || 'M3 7l6 6 4-4 8 8M15 17h6v-6';
+I.bandeja = I.bandeja || 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 2h6l1-2h5';
+ICO13['Caixa único'] = 'bandeja';
+ICO13['Para o contador'] = 'maleta';
+const r20Nota = (p, html) => `<span style="font-size:12px;color:${p.suave};line-height:1.4">${html}</span>`;
+
+/* ================================================================ RODADA 21 (Financeiro: os acertos que ele pediu na rodada 20, 20/11/2026) ================================================================ */
+// Os tipos de oferta são só “Oferta de culto” (genérica) e “Oferta voluntária” (pode vir junto do dízimo). O mural tem 50 nomes por folha, sem
+// importar o bloco, e cada folha tem a própria validação. O conferir ganha os comprovantes de Pix pelo sistema e a virada do mês. O rateio vira
+// duas páginas e só divide os 60% da Geral. O tesouro mostra só os centros de custo da Geral. O caixa único, só da Geral, em 4 passos.
+// Ícones que faltavam, no mesmo traço do iconeSvg() da casca (app/modulos/casca.js).
+I.camera = I.camera || 'M3 8h4l2-3h6l2 3h4v11H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z';
+I.clipe = I.clipe || 'M20 11.5l-8 8a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6';
+const r21Ouro = (p, t, ico, alt = 42) => m8Ouro(p, t, ico, alt).replace('flex:none', 'justify-content:center');
+const r21Linha = (p, t, ico) => m8Linha(p, t, ico).replace('flex:none', 'justify-content:center');
+// o extrato da conta geral em volta do Pix que está sendo conferido
+const R21_EXT = {
+  '70.082': [['08h33', 'PIX · CÍCERO GOMES', 95], ['08h47', 'PIX · ANA BEATRIZ MOREIRA', 410, 1], ['09h02', 'PIX · CARLOS EDUARDO SOUZA', 300], ['09h15', 'PIX · BRUNA FARIAS', 60]],
+  '70.114': [['06h12', 'PIX · DALVA RIBEIRO', 120], ['06h50', 'PIX · GABRIEL NUNES', 420, 1], ['07h31', 'PIX · EDSON MOTA', 75], ['08h02', 'PIX · HILDA PAIVA', 210]]
+};
+// o Pix de agora (o 4º de dezembro) contra o extrato: o mesmo extrato da rodada 21
+R21_EXT['70.166'] = R21_EXT['70.114'];
+
+const R22_REGRA = 'Troque o nível nos botões logo acima da tela. Nada de rolagem; no celular, pílulas no alto e nada preso embaixo. Nomes e números de mentira.';
+const r27Neutro = (p, t) => `<span style="display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;flex:none;border:1px solid ${p.borda};color:${p.suave}">${t}</span>`;
+// a bola do passo, sempre com o número: ok (verde), agora (ouro), depois (contorno)
+const r27Bola = (p, n, est, t = 26) => `<span style="width:${t}px;height:${t}px;border-radius:${t / 2}px;flex:none;display:flex;align-items:center;justify-content:center;font-size:${t > 24 ? 13 : 12}px;font-weight:800;${est === 'ok' ? `background:${m8Verde(p)};color:${p.e ? '#0B1F3A' : '#FFFFFF'};` : est === 'agora' ? 'background:#FFB800;color:#0A2342;' : `border:1.5px solid ${p.campoBorda};color:${p.suave};`}">${n}</span>`;
+const r27Check = (p, t = 20) => `<span style="width:${t}px;height:${t}px;border-radius:${t / 2}px;flex:none;background:${m8Verde(p)};display:flex;align-items:center;justify-content:center">${ic('check', p.e ? '#0B1F3A' : '#FFFFFF', Math.round(t * 0.6), 3)}</span>`;
+// um passo numerado: a bola, o título, a linha de baixo e o corpo
+const r27Passo = (p, n, est, tit, sub, corpo, o = {}) => `<div style="background:${p.sup};border:1px solid ${est === 'agora' ? '#FFB800' : p.borda};${est === 'agora' ? 'box-shadow:0 0 0 1px #FFB800;' : ''}border-radius:14px;padding:${o.cel ? '8px 11px' : '9px 14px 10px'};display:flex;flex-direction:column;gap:${o.cel ? 5 : 6}px;min-width:0;flex:none"><div style="display:flex;align-items:center;gap:10px">${r27Bola(p, n, est, o.cel ? 24 : 26)}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:${o.cel ? 13.5 : 14.5}px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tit}</div>${sub ? `<div style="font-size:12px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>` : ''}</div>${o.dir || ''}</div>${corpo || ''}</div>`;
+// um cartão com o título e, à direita, uma etiqueta
+const r27Cartao = (p, tit, dir, corpo, extra = '') => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:11px 14px;display:flex;flex-direction:column;gap:8px;min-width:0;flex:none;${extra}"><div style="display:flex;align-items:center;gap:8px;min-height:24px"><strong style="font-size:15px;color:${p.titulo};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tit}</strong>${dir || ''}</div>${corpo}</div>`;
+// o caminho em passos (no celular: as bolas e o passo de agora escrito embaixo)
+function r27Caminho(p, passos, o = {}) {
+  if (o.cel) {
+    const at = Math.max(0, passos.findIndex(x => x[2] === 'agora')), a = passos[at];
+    return `<div style="display:flex;flex-direction:column;gap:6px;flex:none"><div style="display:flex;align-items:center;gap:4px">${passos.map((x, i) => `${i ? `<span style="flex:1;height:2px;background:${x[2] === 'depois' ? p.borda : m8Verde(p)}"></span>` : ''}${r27Bola(p, i + 1, x[2], 22)}`).join('')}</div><div style="font-size:12.5px;color:${p.texto};line-height:1.35"><strong style="color:${p.titulo}">Passo ${at + 1} de ${passos.length}:</strong> ${a[0]} · ${a[1]}</div></div>`;
+  }
+  return `<div style="display:flex;align-items:stretch;gap:6px;flex:none">${passos.map((x, i) => `<div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:12px;background:${x[2] === 'agora' ? (p.e ? '#3A2E0B' : '#FFF4D1') : p.sup};border:1px solid ${x[2] === 'agora' ? '#FFB800' : p.borda}">${r27Bola(p, i + 1, x[2], 22)}<div style="min-width:0;line-height:1.2"><div style="font-size:12.5px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[0]}</div><div style="font-size:11.5px;color:${p.suave}">${x[1]}</div></div></div>`).join('')}</div>`;
+}
+// o Conselho Fiscal entra no Financeiro com o próprio acesso: vê o fechamento, os saldos de abertura e os relatórios
+NIV13.conselho = { usuario: { ini: 'PM', nome: 'Paulo Mendes', papel: 'Conselho Fiscal' }, escopo: 'Conselho Fiscal · a Igreja toda' };
+VE13.conselho = ['Fechamento do mês', 'Conciliação bancária', 'Relatório do mês', 'Visão geral', 'Situação do tesouro', 'Demonstrações', 'Consolidado', 'Saldos de abertura'];
+ICO13['Saldos de abertura'] = 'livro';
+
+/* ---------------- 4. IMPORTAR OS MEMBROS DO SISTEMA PAGO (Membros) ---------------- */
+// O cabeçalho que o sistema pago exporta (18/11): MATRÍCULA;NOME;IGREJA;SEXO;NASCIMENTO;ESTADO CIVIL;E-MAIL;CELULAR;MÃE;PAI;CPF.
+// Aqui com 2 colunas a mais, para mostrar o mapa flexível: ESCOLARIDADE (aceita) e PROFISSÃO (não usar: só nos Setores Técnicos).
+// Os números: 5.049 linhas, 2 vazias; 5.047 pessoas = 4.862 novas + 12 matrículas a acertar + 173 possíveis repetidas; 1 sem
+// congregação (o "IEADESPA - GERAL", que também é uma das 12, porque veio com a matrícula 0).
+const R27_SEC = { geral: LIDER, local: { ini: 'DL', nome: 'Débora Lima', papel: 'Secretaria · Vila Nova' }, area: { ini: 'EP', nome: 'Elias Prado', papel: 'Secretaria · Área 2' } };
+const R27_MB_ESC = { geral: 'Secretaria Geral · Igreja toda', local: 'Congregação Vila Nova', area: 'Área 2 · 12 congregações' };
+function r27MbCel(p, titulo, conteudo) {
+  const marca = '<div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">';
+  const h = cascaCel(p, { titulo, corBarra: p.e ? '#14306B' : '#1D4ED8', conteudo }), i = h.indexOf(marca);
+  return i < 0 ? h : h.slice(0, i) + r12Abas(p, R12_ITENS.lider, 'Trabalho', 'pilulas') + '<div style="flex:1;min-height:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px">' + h.slice(i + marca.length);
+}
+const r27Azul = p => mc(p, 'pessoas').cor;
+// uma linha de fatos: rótulo à esquerda, valor à direita
+const r28Fato = (p, rot, val, i) => `<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:10px;align-items:center;min-height:28px;${i ? `border-top:1px solid ${p.linha};` : ''}font-size:12.5px"><span style="color:${p.suave}">${rot}</span><span style="min-width:0;color:${p.titulo};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${val}</span></div>`;
+const r28Fatos = (p, L) => `<div style="display:flex;flex-direction:column">${L.map((x, i) => r28Fato(p, x[0], x[1], i)).join('')}</div>`;
+// o comprovante anexado
+const r28Anexo = (p, nome, sub) => `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;border:1px solid ${p.borda};background:${p.campo}">${ic('clipe', p.icone, 17, 2)}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:12.5px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</div><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div></div><span style="font-size:12.5px;font-weight:700;color:${p.link}">Abrir ›</span></div>`;
+// o membro comum: Minha vida (notebook e celular, com as pílulas do membro)
+const r28Mv = (p, u, trilha, conteudo) => r16bAperta(casca(p, { itens: [{ ic: 'casa', nome: 'Início' }, { ic: 'igreja', nome: 'Minha vida', ativo: 1 }, { ic: 'pessoa', nome: 'Meu Perfil' }], usuario: u, trilha: ['Minha vida'].concat(trilha), conteudo }));
+function r28MvCel(p, titulo, conteudo) {
+  const marca = '<div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">';
+  const h = cascaCel(p, { titulo, conteudo }), i = h.indexOf(marca);
+  return i < 0 ? h : h.slice(0, i) + r12Abas(p, R12_ITENS.membro, 'Minha vida', 'pilulas') + '<div style="flex:1;min-height:0;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px">' + h.slice(i + marca.length);
+}
+const R28_DEP = { Varões: '#1D4ED8', Senhoras: '#BE185D', Jovens: '#6D28D9', Adolescentes: '#0369A1', Crianças: '#15803D' };
+// a bolinha com as iniciais (quem fica só com o nome: tracejada)
+const r28Av = (p, ini, dep, t = 32) => `<span style="width:${t}px;height:${t}px;border-radius:${t / 2}px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:${t > 30 ? 12 : 11}px;font-weight:800;${dep ? `background:${R28_DEP[dep] || '#1D4ED8'};color:#FFFFFF;` : `border:1.5px dashed ${p.campoBorda};color:${p.suave};`}">${ini}</span>`;
+// uma pessoa numa lista: a bolinha, o nome, a linha de baixo e o que fica à direita
+const r28Pes = (p, av, tit, sub, dir, o = {}) => `<div style="display:flex;align-items:center;gap:10px;min-height:${o.alt || 44}px;${o.i ? `border-top:1px solid ${p.linha};` : ''}${o.sel ? `background:${p.e ? '#3A2E0B' : '#FFF8E1'};box-shadow:inset 3px 0 0 #FFB800;margin:0 -14px;padding:0 14px;` : ''}">${av}<div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:13.5px;font-weight:600;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tit}</div><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div></div>${dir || ''}</div>`;
+const r28Sit = (p, s, curto) => (!s ? r27Neutro(p, 'só o nome') : r18Etiq(p, curto ? s.replace('membro em comunhão', 'em comunhão') : s, /comunhão$/.test(s) && !/sem/.test(s) ? 'verde' : /congregad/.test(s) ? 'azul' : /completar/.test(s) ? 'ouro' : 'verm'));
+// a escolha (bolinha de marcar) e a pergunta
+const r28Opcao = (p, sel, tit, sub, cel) => `<div style="flex:1;min-width:0;display:flex;align-items:flex-start;gap:9px;padding:${cel ? '7px 10px' : '8px 11px'};border-radius:11px;box-sizing:border-box;border:${sel ? '2px solid #FFB800' : `1px solid ${p.borda}`};background:${sel ? (p.e ? '#3A2E0B' : '#FFF8E1') : p.sup}"><span style="width:18px;height:18px;border-radius:9px;flex:none;margin-top:1px;box-sizing:border-box;${sel ? `border:5px solid ${p.e ? '#FFB800' : '#0A2342'};` : `border:1.5px solid ${p.campoBorda};`}"></span><div style="min-width:0;line-height:1.3"><div style="font-size:13px;font-weight:700;color:${p.titulo}">${tit}</div>${sub ? `<div style="font-size:11.5px;color:${p.suave}">${sub}</div>` : ''}</div></div>`;
+const r28Bt = (p, t, i) => r21Linha(p, t, i).replace('justify-content:center', 'justify-content:center;flex:1;min-width:0');
+const r28Mais = (p, t) => `<span style="font-size:12.5px;font-weight:700;color:${p.link};white-space:nowrap">${t}</span>`;
+const r28Sel = (p, t, num) => `<span style="height:32px;border:1px solid ${p.campoBorda};border-radius:8px;background:${p.campo};display:inline-flex;align-items:center;gap:6px;padding:0 10px;font-size:13px;font-weight:600;color:${p.titulo};white-space:nowrap;flex:none">${t}${num ? '' : ic('setaBaixo', p.suave, 13, 2.2)}</span>`;
+// uma linha do "o que vai acontecer": o ícone e o texto
+const r28Vai = (p, L, cel) => `<div style="display:flex;flex-direction:column">${L.map((x, i) => `<div style="display:flex;align-items:flex-start;gap:10px;padding:${cel ? 6 : 7}px 0;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="width:26px;height:26px;border-radius:8px;flex:none;background:${p.e ? '#1E3A6E' : '#E3ECFD'};display:flex;align-items:center;justify-content:center">${ic(x[0], r27Azul(p), 15, 2)}</span><span style="flex:1;min-width:0;font-size:${cel ? 12.5 : 13}px;line-height:1.35;color:${p.texto};padding-top:3px">${x[1]}</span></div>`).join('')}</div>`;
+const r28Quem = (p, c, cel) => `<div style="background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:${cel ? '4px 12px' : '4px 14px'};flex:none">${r28Pes(p, r28Av(p, c.av[0], c.av[1], cel ? 32 : 36), c.nome, c.sub, cel ? '' : c.sitHtml || r28Sit(p, c.sit), { alt: cel ? 50 : 54 })}</div>`;
+
+/* ================= Rodada 29: a saída do membro, refeita com as regras de 23/11/2026 ================= */
+// O membro sai sozinho, pelo aplicativo, na hora, seja qual for o cargo; ninguém confirma. Sai com a carta de mudança em PDF
+// (os dados mais recentes, o QR e o protocolo, sem linha de assinatura). Cada adulto pede a sua; os filhos menores saem junto
+// com quem pediu. Os cargos ficam vagos sozinhos. A secretaria só entra no "não sabe usar" e no abandono. Os dados saem aos
+// poucos a partir de 30 dias. Nomes e números de mentira.
+const R29_HOJE = '25/11/2026';
+// o menu de Membros da 29: em Movimentações, "Saídas", "Abandono" e "Cargos vagos" (no lugar de "Desligamentos")
+function r29MbGrupos(k, ativo) {
+  const G = [['Painéis', [['grafico', 'Painel executivo']]], ['Membros', [['pessoas', 'Pessoas'], ['filtro', 'Listas'], ['doc', 'Fila de cadastros'], ['mais', 'Cadastrar']]], ['Movimentações', [['seta', 'Transferências'], ['saida', 'Saídas'], ['relogio', 'Abandono'], ['maleta', 'Cargos vagos']]], ['Cuidados com o cadastro', [['pessoas', 'Fichas repetidas'], ['lapis', 'Sugestões de alteração'], ['cartao', 'Carteirinhas']]]];
+  return G.map(g => { const tem = g[1].some(f => f[1] === ativo); return [g[0], g[1].map(f => (f[1] === ativo ? f.concat([1]) : f)), tem]; });
+}
+const R29_DIR = { local: { ini: 'AN', nome: 'Pr. Abel Nogueira', papel: 'Dirigente · Vila Nova' }, area: { ini: 'DT', nome: 'Pr. Davi Teixeira', papel: 'Pastor da Área 2' }, geral: LIDER };
+const r29Mb = (p, k, ativo, conteudo, trilha, usu) => r16bAperta(casca(p, { lateralHtml: menuCor(p, 'pessoas', { titulo: 'Membros', escopo: R27_MB_ESC[k], grupos: r29MbGrupos(k, ativo), usuario: usu || R27_SEC[k] }), trilha: ['Membros'].concat(trilha || [ativo]), faixa: mc(p, 'pessoas').cor, conteudo }));
+// quem saiu: por 30 dias o aplicativo só mostra as cartas
+const R29_CARLOS_U = { ini: 'CM', nome: 'Carlos Moreira', papel: 'Membro · Vila Nova' };
+const r29Saiu = (p, u, conteudo) => r16bAperta(casca(p, { itens: [{ ic: 'doc', nome: 'Minhas cartas', ativo: 1 }], usuario: u, trilha: ['Minhas cartas'], conteudo }));
+const r29SaiuCel = (p, conteudo) => cascaCel(p, { titulo: 'Minhas cartas', conteudo });
+// a caixinha de marcar
+const r29Caixa = (p, on) => `<span style="width:20px;height:20px;border-radius:6px;flex:none;box-sizing:border-box;display:flex;align-items:center;justify-content:center;${on ? `background:${p.e ? '#FFB800' : '#0A2342'};` : `border:1.5px solid ${p.campoBorda};`}">${on ? ic('check', p.e ? '#0A2342' : '#FFFFFF', 13, 3) : ''}</span>`;
+// os números pequenos no alto de uma lista (notebook) ou em quadradinhos (celular)
+const r29Nums = (p, L, cel) => cel
+  ? `<div style="display:flex;gap:8px;flex:none">${L.map(x => `<div style="flex:1;min-width:0;background:${p.sup};border:1px solid ${p.borda};border-radius:12px;padding:7px 10px;line-height:1.2"><strong style="font-size:19px;color:${p.titulo}">${x[0]}</strong><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[1]}</div></div>`).join('')}</div>`
+  : `<div style="display:flex;gap:10px;flex:none">${L.map(x => `<div style="flex:1;min-width:0;background:${p.sup};border:1px solid ${p.borda};border-radius:14px;padding:10px 14px;line-height:1.25"><strong style="font-size:24px;color:${x[2] ? x[2](p) : p.titulo}">${x[0]}</strong><div style="font-size:12.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[1]}</div></div>`).join('')}</div>`;
+
+/* ---------------- 1. A SAÍDA PELO APLICATIVO ---------------- */
+// O Carlos Moreira (diácono, tesoureiro de Vila Nova e professor dos Jovens) vai morar em Marabá com a esposa, a Ana Paula, e os
+// filhos Beatriz (15) e Lucas (8). Cada adulto pede a sua carta: a Ana Paula pede a dela no celular dela. Os filhos menores
+// saem junto com ele. Ninguém confirma: vale na hora.
+const R29_CARLOS = { av: ['CM', 'Varões'], nome: 'Carlos Moreira', sub: 'matrícula 2.317 · 48 anos · diácono · tesoureiro de Vila Nova', sit: 'membro em comunhão' };
+const R29_FILHOS = [['BM', 'Adolescentes', 'Beatriz Moreira', 'filha · 15 anos · congregada'], ['LM', 'Crianças', 'Lucas Moreira', 'filho · 8 anos · congregado']];
+const r29Filhos = (p, cel) => R29_FILHOS.map((x, i) => r28Pes(p, r28Av(p, x[0], x[1], cel ? 30 : 32), x[2], x[3], r29Caixa(p, 1), { i, alt: cel ? 44 : 46 })).join('');
+// as cartas prontas: a dele e as dos 2 filhos, cada uma com o protocolo
+const R29_CARTAS = [['Carlos Moreira', 'a sua · membro em comunhão', 'CARTA-2026-0318'], ['Beatriz Moreira', 'a filha · congregada', 'CARTA-2026-0319'], ['Lucas Moreira', 'o filho · congregado', 'CARTA-2026-0320']];
+function r29Pronto(p, cel) {
+  const az = r27Azul(p);
+  const lista = R29_CARTAS.map((x, i) => `<div style="display:flex;align-items:center;gap:10px;min-height:${cel ? 50 : 54}px;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="width:34px;height:34px;border-radius:9px;flex:none;background:${p.e ? '#1E3A6E' : '#E3ECFD'};display:flex;align-items:center;justify-content:center">${ic('doc', az, 18, 2)}</span><div style="flex:1;min-width:0;line-height:1.25"><div style="font-size:13.5px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cel ? x[0] : `Carta de mudança · ${x[0]}`}</div><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cel ? `${x[1].split(" · ")[0]} · ${x[2]}` : `${x[1]} · ${x[2]}`}</div></div><span style="font-size:12.5px;font-weight:700;color:${p.link};white-space:nowrap">Baixar PDF</span></div>`).join('');
+  const ok = `<div style="display:flex;align-items:center;gap:12px;padding:${cel ? '12px 14px' : '14px 16px'};border-radius:14px;background:${p.e ? '#0F3B2E' : '#E8F6EE'};border:1px solid ${p.e ? '#1F6B50' : '#A9DDBF'};flex:none">${r27Check(p, cel ? 30 : 34)}<div style="min-width:0;line-height:1.35"><div style="font-size:${cel ? 15 : 16}px;font-weight:800;color:${p.titulo}">Pronto: vocês saíram de Vila Nova em 25/11/2026</div><div style="font-size:12.5px;color:${p.texto}">Que Deus abençoe a caminhada da família em Marabá.</div></div></div>`;
+  const cartas = r27Cartao(p, 'As 3 cartas', r18Etiq(p, 'em PDF', 'azul'), `<div style="display:flex;flex-direction:column">${lista}</div>${r20Nota(p, 'Mandamos as 3 cartas também para c••••••@gmail.com.')}`, cel ? 'padding:8px 12px;gap:4px' : 'gap:4px');
+  const prazo = r16aAviso(p, cel ? '<strong>Até 25/12/2026</strong> você ainda entra aqui, só para baixar as cartas.' : '<strong>Até 25/12/2026</strong> você ainda entra no aplicativo, só para baixar as cartas de novo. Depois disso o acesso acaba.');
+  if (cel) return r29SaiuCel(p, `${ok}${cartas}${prazo}<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, 'Na igreja nova, entregue a carta: lá eles conferem pelo QR.')}</div>`);
+  const igreja = r27Cartao(p, 'Na igreja nova', '', `${r28Vai(p, [['doc', 'Entregue a carta impressa ou mande o PDF'], ['qr', 'A igreja que recebe aponta o celular para o QR e vê que a carta é verdadeira'], ['igreja', 'Ela leva os seus dados de hoje: a congregação, desde quando, a situação, o cargo e a função']])}`, 'gap:4px');
+  const tit = r18Tit(p, 'Minhas cartas', `o acesso fica aberto só para as cartas, até 25/12/2026 · ${R29_HOJE}`);
+  return r29Saiu(p, R29_CARLOS_U, `${tit}${ok}${r17Dois(r18Col(cartas, prazo), r18Col(igreja, `<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, 'Se mudar de ideia um dia, procure a secretaria de qualquer congregação: você volta com a mesma matrícula.')}</div>`), '1.1fr 1fr')}`);
+}
+// a página que o QR abre (pública, sem entrar): a carta é verdadeira, com os dados dela; depois de 30 dias, só o que fica para sempre
+const r29Publico = (p, conteudo) => `<div style="width:390px;height:844px;display:flex;flex-direction:column;background:${p.fundo};color:${p.texto};overflow:hidden"><div style="background:#0A2342">${statusBar('#FFFFFF')}</div><div style="height:60px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;background:#0A2342">${logo(34)}<div style="line-height:1.2"><div style="font-size:15px;font-weight:800;color:#FFFFFF;letter-spacing:.04em">IEADESPA</div><div style="font-size:12px;color:#C9D4E3">Conferir um documento</div></div></div><div style="flex:1;min-height:0;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:12px">${conteudo}</div></div>`;
+const r29PublicoNote = (p, conteudo) => `<div style="width:1280px;height:800px;display:flex;flex-direction:column;background:${p.fundo};color:${p.texto}"><header style="height:64px;flex:none;display:flex;align-items:center;gap:12px;padding:0 32px;background:#0A2342">${logo(38)}<span style="font-size:16px;font-weight:800;color:#FFFFFF;letter-spacing:.04em">IEADESPA</span><span style="font-size:14px;color:#C9D4E3">· Conferir um documento</span></header><div style="flex:1;min-height:0;display:flex;justify-content:center;align-items:flex-start;padding:28px 32px;gap:20px;overflow:hidden">${conteudo}</div></div>`;
+
+/* ---------------- 3. A SECRETARIA PEDE A CARTA POR QUEM NÃO SABE USAR ---------------- */
+// Sem prova: fica registrado quem pediu e quando, e a pessoa recebe um aviso. Podem pedir a congregação, a área e a Geral.
+const R29_POR = {
+  local: { quem: { av: ['MC', 'Senhoras'], nome: 'Maria José Cardoso', sub: 'matrícula 1.208 · 79 anos · Senhoras · não usa o aplicativo', sit: 'membro em comunhão' }, sec: 'Débora Lima, secretaria de Vila Nova', hora: '25/11/2026, às 10:12', destino: ['Ela ainda não sabe o nome da igreja em Belém', 1], aviso: 'Ela recebe um aviso no e-mail da filha, que é o contato da ficha', vai: [['pessoa', 'Ela sai do rol de membros de Vila Nova hoje, 25/11/2026'], ['maleta', 'Não tinha cargo: nada fica vago'], ['cartao', 'A carteirinha passa a mostrar só o nome'], ['relogio', 'A partir de 25/12/2026, os dados começam a ser apagados, aos poucos']], sub: 'Congregação Vila Nova · ela veio à secretaria' },
+  area: { quem: { av: ['SF', 'Varões'], nome: 'Sebastião Freitas', sub: 'matrícula 5.530 · 83 anos · Varões · Monte Sião · não usa o aplicativo', sit: 'membro em comunhão' }, sec: 'Elias Prado, secretaria da Área 2', hora: '25/11/2026, às 15:40', destino: ['Igreja Evangélica Shalom, em Canaã dos Carajás', 0], aviso: 'Ele recebe um aviso no e-mail do neto, que é o contato da ficha', vai: [['pessoa', 'Ele sai do rol de membros de Monte Sião hoje, 25/11/2026'], ['maleta', 'Era porteiro de Monte Sião: o cargo fica vago, e o pastor da área é avisado'], ['cartao', 'A carteirinha passa a mostrar só o nome'], ['relogio', 'A partir de 25/12/2026, os dados começam a ser apagados, aos poucos']], sub: 'Área 2 · Monte Sião está sem secretária, e a área faz' }
+};
+// a Geral: a trilha das cartas pedidas pela secretaria (protege quem saiu), e ela também pode pedir
+const R29_PEDIDAS = [['Sebastião Freitas', 'Monte Sião', 'Elias Prado · Área 2', '25/11 15:40', ['e-mail do neto', 'verde']], ['Maria José Cardoso', 'Vila Nova', 'Débora Lima · Vila Nova', '25/11 10:12', ['e-mail da filha', 'verde']], ['Raimunda Alves', 'Área 6 · Novo Horizonte', 'Lívia Castro · Novo Horizonte', '19/11 09:05', ['e-mail', 'verde']], ['Osvaldo Brito', 'Área 8 · Boa Esperança', 'Rosa Melo · Boa Esperança', '14/11 16:20', ['sem e-mail na ficha', 'ouro']], ['Antônia Prates', 'Área 8 · Nova Vida', 'João da Silva · Geral', '09/11 11:00', ['e-mail', 'verde']], ['Benedito Souza', 'Área 1 · Sede', 'Marta Lins · Sede', '06/11 14:32', ['e-mail', 'verde']], ['Zilda Moura', 'Área 4 · Liberdade', 'Paulo Vaz · Área 4', '03/11 10:48', ['e-mail', 'verde']]];
+// o aviso que chega para a pessoa (no e-mail que está na ficha)
+function r29Email(p, cel) {
+  const corpo = `<div style="font-size:${cel ? 13 : 14}px;line-height:1.5;color:${p.texto};display:flex;flex-direction:column;gap:${cel ? 8 : 10}px"><div>A paz do Senhor.</div><div>A secretaria da congregação <strong style="color:${p.titulo}">Vila Nova</strong> pediu hoje, <strong style="color:${p.titulo}">25/11/2026, às 10:12</strong>, a carta de mudança de <strong style="color:${p.titulo}">Maria José Cardoso</strong> (matrícula 1.208), a pedido dela. Ela saiu do rol de membros e levou a carta impressa.</div><div>A carta vai anexa, em PDF.</div>${r16aAviso(p, '<strong>Não foi ela quem pediu?</strong> Responda este e-mail ou fale com a Secretaria Geral. Fica registrado quem pediu e quando.', 'alerta')}<div style="color:${p.suave};font-size:12px">IEADESPA · este aviso vai para o e-mail que está na ficha.</div></div>`;
+  const cab = `<div style="display:flex;align-items:center;gap:10px">${logo(cel ? 34 : 40)}<div style="flex:1;min-width:0;line-height:1.3"><div style="font-size:${cel ? 14 : 15}px;font-weight:700;color:${p.titulo}">IEADESPA · Secretaria</div><div style="font-size:12px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">para: cl••••@gmail.com (a filha) · 25/11/2026 10:12</div></div></div><div style="font-size:${cel ? 16 : 18}px;font-weight:800;color:${p.titulo};line-height:1.3">A carta de mudança de Maria José Cardoso foi pedida</div>`;
+  const anexo = r28Anexo(p, 'carta-maria-jose-cardoso.pdf', 'carta de mudança · CARTA-2026-0287');
+  if (cel) return cascaCel(p, { titulo: 'E-mail', voltar: 1, conteudo: `${cab}${corpo}${anexo}` });
+  return `<div style="width:1280px;height:800px;display:flex;align-items:flex-start;justify-content:center;padding:40px;box-sizing:border-box;background:${p.fundo};color:${p.texto}"><div style="width:680px;background:${p.sup};border:1px solid ${p.borda};border-radius:16px;padding:24px 28px;display:flex;flex-direction:column;gap:14px">${r18Etiq(p, 'O e-mail que chega para a pessoa', 'azul')}${cab}${corpo}${anexo}</div></div>`;
+}
+
+/* ---------------- 5. OS CARGOS QUE FICARAM VAGOS ---------------- */
+// Quem sai deixa os cargos vagos na hora. A diretoria e os cargos são cadastrados na Estrutura (módulo 3): o "Preencher" daqui
+// leva ao cadastro do cargo lá (desenhado no módulo 3, não aqui). Quem preenche: a diretoria da congregação, o dirigente; a da
+// área, o pastor da área; a geral, a Geral; o dirigente da congregação, o pastor da área ou a Geral, direto (respostas de 23/11).
+const r29IcCargo = (p, nome) => `<span style="width:32px;height:32px;border-radius:9px;flex:none;background:${p.e ? '#1E3A6E' : '#E3ECFD'};display:flex;align-items:center;justify-content:center">${ic(nome, r27Azul(p), 17, 2)}</span>`;
+const r29Preencher = p => r28Mais(p, 'Preencher ›');
+const r29NotaEstr = (p, cel, extra) => r20Nota(p, cel ? 'Preencher abre o cargo na Estrutura, onde ficam a diretoria e os cargos.' : `Preencher abre o cargo na Estrutura, onde ficam cadastrados a diretoria e os cargos.${extra ? ' ' + extra : ''}`);
+function r29VagosLocal(p, cel) {
+  const vagos = [['maleta', 'Tesoureiro de Vila Nova', 'desde 25/11 · o Carlos saiu'], ['livro', 'Professor dos Jovens (EBD)', 'desde 25/11 · o Carlos saiu']];
+  const lista = r27Cartao(p, 'Cargos vagos', r18Etiq(p, '2', 'azul'), vagos.map((x, i) => r28Pes(p, r29IcCargo(p, x[0]), x[1], x[2], r29Preencher(p), { i, alt: cel ? 50 : 54 })).join(''), cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+  const escala = r27Cartao(p, 'Escalas com datas sem ninguém', r18Etiq(p, '2 datas', 'ouro'), `${r28Vai(p, [['calendario', 'Recepção: 29/11 e 06/12. O líder da recepção já foi avisado e repõe']], cel)}`, cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+  const nota = r29NotaEstr(p, cel, 'Se o Carlos voltar um dia, é o dirigente quem decide se devolve.');
+  if (cel) return r27MbCel(p, 'Cargos vagos', `${lista}${escala}${nota}`);
+  const tit = r18Tit(p, 'Cargos vagos de Vila Nova', `quem sai deixa o cargo vago na hora; a diretoria da congregação, o dirigente preenche · ${R29_HOJE}`);
+  return r29Mb(p, 'local', 'Cargos vagos', `${tit}${r17Dois(r18Col(lista, nota), r18Col(escala), '1fr 1fr')}`, null, R29_DIR.local);
+}
+const R29_VAGOS_AREA = [['Monte Sião', '3', 'dirigente, desde 02/11 (você ou a Geral põe)', 'verm'], ['Vila Nova', '2', 'tesoureiro, desde 25/11', 'ouro'], ['Cidade Jardim', '1', 'recepção, desde 25/11', 'ouro'], ['Bela Vista', '0', '—', 'verde'], ['Jardim Ipê', '0', '—', 'verde'], ['Nova Esperança', '1', 'porteiro, desde 12/10', 'ouro']];
+function r29VagosArea(p, cel) {
+  const meus = [['dinheiro', 'Tesoureira da Área 2', 'desde 16/11 · a Sílvia Matos saiu'], ['igreja', 'Dirigente de Monte Sião', 'desde 02/11 · o dirigente saiu']];
+  const meu = r27Cartao(p, 'Os que você preenche', r18Etiq(p, '2', 'azul'), `${meus.map((x, i) => r28Pes(p, r29IcCargo(p, x[0]), x[1], x[2], r29Preencher(p), { i, alt: cel ? 50 : 52 })).join('')}${r20Nota(p, cel ? 'O dirigente que falta, você ou a Geral põe, direto.' : 'Os cargos da área, o pastor da área preenche. O dirigente que falta numa congregação, você ou a Geral põe, direto.')}`, cel ? 'padding:8px 12px;gap:2px' : 'gap:4px');
+  if (cel) return r27MbCel(p, 'Cargos vagos', `${meu}${r16aListaCel(p, R29_VAGOS_AREA.slice(1, 5).map(x => [x[0], x[2], r18Etiq(p, x[1], x[3])]))}${r29NotaEstr(p, 1)}`);
+  const tab = r16aTab(p, 'minmax(0,1fr) 70px minmax(0,2fr)', ['Congregação', 'Vagos', 'O mais antigo'], R29_VAGOS_AREA.map(x => [x[0], r18Etiq(p, x[1], x[3]), x[2]]));
+  const nota = r29NotaEstr(p, 0, 'A diretoria de cada congregação, o dirigente preenche; a área acompanha.');
+  const tit = r18Tit(p, 'Cargos vagos da Área 2', `os da área e o dirigente que falta, o pastor da área; a diretoria das congregações, cada dirigente · ${R29_HOJE}`);
+  return r29Mb(p, 'area', 'Cargos vagos', `${tit}${r17Dois(r18Col(meu, nota), r18Col(`<span style="font-size:14.5px;font-weight:700;color:${p.titulo}">As congregações da área</span>`, tab), '1fr 1.4fr')}`, null, R29_DIR.area);
+}
+const R29_VAGOS_GERAL = [['Área 1', 2, 0], ['Área 2', 8, 1], ['Área 3', 3, 0], ['Área 4', 5, 1], ['Área 5', 1, 0], ['Área 6', 2, 0], ['Área 7', 4, 2], ['Área 8', 0, 0], ['Área 9', 1, 0]];
+function r29VagosGeral(p, cel) {
+  const gerais = [['dinheiro', '2º Tesoureiro Geral', 'desde 05/11 · o titular saiu'], ['igreja', 'Dirigente de Monte Sião (Área 2)', 'desde 02/11 · o dirigente saiu'], ['igreja', 'Dirigente de Esperança (Área 7)', 'desde 20/11 · o dirigente faleceu']];
+  const lista = r27Cartao(p, 'Os que a Geral pode preencher', r18Etiq(p, '3', 'azul'), `${gerais.map((x, i) => r28Pes(p, r29IcCargo(p, x[0]), x[1], x[2], r29Preencher(p), { i, alt: cel ? 50 : 52 })).join('')}${r20Nota(p, 'O dirigente que falta, a Geral ou o pastor da área põe, direto.')}`, cel ? 'padding:8px 12px;gap:2px' : 'gap:4px');
+  if (cel) return r27MbCel(p, 'Cargos vagos', `${lista}${r16aListaCel(p, R29_VAGOS_GERAL.slice(0, 4).map(x => [x[0], `${x[1]} vagos · ${x[2]} há mais de 30 dias`, '']))}${r29NotaEstr(p, 1)}`);
+  const tab = r16aTab(p, 'minmax(0,1fr) 80px minmax(0,1.3fr)', ['Área', 'Vagos', 'Há mais de 30 dias'], R29_VAGOS_GERAL.map(x => [x[0], String(x[1]), x[2] ? r18Etiq(p, String(x[2]), 'verm') : `<span style="color:${p.suave}">0</span>`]));
+  const nota = r29NotaEstr(p, 0, 'A Geral preenche os cargos gerais e pode pôr o dirigente que falta; a diretoria das congregações e das áreas, quem cuida daquele nível.');
+  const tit = r18Tit(p, 'Cargos vagos da Igreja toda', `quem saiu deixou o cargo vago sozinho; quem cuida de cada nível preenche · ${R29_HOJE}`);
+  return r29Mb(p, 'geral', 'Cargos vagos', `${tit}${r17Dois(r18Col(lista, nota), r18Col(`<span style="font-size:14.5px;font-weight:700;color:${p.titulo}">Por área (os das congregações e das áreas)</span>`, tab), '1fr 1.2fr')}`, null, R29_DIR.geral);
+}
+const r29Vagos = (p, k, d) => { const cel = ehCel(d); return k === 'area' ? r29VagosArea(p, cel) : k === 'geral' ? r29VagosGeral(p, cel) : r29VagosLocal(p, cel); };
+// a volta: dentro dos 30 dias (a ficha inteira) e depois de anos (só o que fica para sempre)
+function r29Volta(p, k, cel) {
+  const v30 = k === 'volta30';
+  const rec = r16aAviso(p, v30 ? (cel ? '<strong>O sistema reconheceu:</strong> é o Carlos Moreira, que saiu há 10 dias. A ficha ainda está inteira.' : '<strong>O sistema reconheceu:</strong> este cadastro do site é do Carlos Moreira, matrícula 2.317, que saiu em 25/11/2026 com carta. Faz 10 dias: a ficha ainda está inteira.') : (cel ? '<strong>O sistema reconheceu:</strong> é o Marcos Antunes, que saiu em 2019.' : '<strong>O sistema reconheceu</strong> pelo nome e pelo nascimento: este cadastro do site é do Marcos Antunes, matrícula 3.402, que saiu em 2019 com carta. Faz muitos anos: sobrou só o que fica para sempre.'));
+  const cargo = v30 ? (cel ? 'nenhum; cada nível decide' : 'nenhum; cada nível decide se devolve') : 'nenhum';
+  const como = r27Cartao(p, 'Como ele volta', '', r28Fatos(p, [['Matrícula', `${v30 ? '2.317' : '3.402'}, a mesma (é para sempre)`], ['Situação', r28Sit(p, 'membro em comunhão')], ['Data de entrada', `${v30 ? '05/12/2026' : '05/12/2026'}, a data nova`], ['Como entrou', 'Reconciliação'], ['Cargos', cargo], ['Integração', cel ? 'passa de novo' : 'passa de novo, como um membro novo']]), cel ? 'padding:10px 12px;gap:6px' : 'gap:8px');
+  const filhos = v30 ? r27Cartao(p, 'Os filhos que saíram com ele', '', `${r29Filhos(p, cel)}${r20Nota(p, 'Voltam junto, se ele marcar.')}`, cel ? 'padding:8px 12px;gap:2px' : 'gap:4px') : '';
+  const bt = r21Ouro(p, 'Confirmar a volta', 'check', cel ? 44 : 42);
+  if (cel) return r27MbCel(p, 'Uma volta', `${rec}${como}${filhos}${bt}`);
+  const grupo = (t, cor, L) => `<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:${p.titulo}"><span style="width:8px;height:8px;border-radius:4px;background:${cor}"></span>${t}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${L.map(x => r27Neutro(p, x)).join('')}</div></div>`;
+  const ficha = v30
+    ? r27Cartao(p, 'A ficha dele', '', `${grupo('Estava guardado: volta tudo, como era', m8Verde(p), ['Nome', 'Matrícula', 'Nascimento', 'Contatos', 'Endereço', 'A família', 'Batismo', 'Casamento', 'A linha do tempo'])}${grupo('Não volta sozinho', '#FFB800', ['Tesoureiro', 'Professor dos Jovens', 'Diácono'])}${r20Nota(p, 'Os cargos ficaram vagos quando ele saiu: quem cuida daquele nível decide se devolve.')}`, 'gap:10px')
+    : r27Cartao(p, 'A ficha dele', '', `${grupo('Estava guardado: para sempre', m8Verde(p), ['Nome', 'Matrícula', 'Nascimento', 'Data da saída'])}${grupo('Veio agora, do cadastro do site', r27Azul(p), ['Telefone', 'E-mail', 'Endereço'])}${grupo('Preencher de novo: foi apagado com o tempo', '#FFB800', ['Batismo', 'Estado civil', 'A família', 'CPF', 'O resto da ficha'])}`, 'gap:10px');
+  const tit = r18Tit(p, v30 ? 'Uma volta dentro dos 30 dias' : 'Uma volta depois de muitos anos', `Congregação Vila Nova · chegou pelo “Quero me cadastrar” · 05/12/2026`, m8Linha(p, 'Não é ele', 'voltar'));
+  const quem = r28Quem(p, v30 ? { av: ['CM', 'Varões'], nome: 'Carlos Moreira', sub: 'matrícula 2.317 · 48 anos · saiu em 25/11/2026 com carta', sitHtml: r27Neutro(p, 'fora do rol há 10 dias') } : { av: ['MA', 'Varões'], nome: 'Marcos Antunes', sub: 'matrícula 3.402 · 52 anos · saiu em 2019 com carta', sitHtml: r27Neutro(p, 'fora do rol desde 2019') });
+  return r29Mb(p, 'local', 'Fila de cadastros', `${tit}${rec}${quem}${r17Dois(r18Col(como, filhos), r18Col(ficha, bt), '1fr 1fr')}`, ['Fila de cadastros', v30 ? 'Carlos Moreira' : 'Marcos Antunes']);
+}
+// o campo com a mensagem do sistema logo embaixo, em vermelho
+const r30CampoErro = (p, rot, val, msg, o = {}) => r17Campo(p, rot, val, o).replace(`border:1px solid ${p.campoBorda}`, `border:1.5px solid ${m8Verm(p)}`).replace(/<\/div>$/, `<span style="font-size:12px;font-weight:600;color:${m8Verm(p)};line-height:1.35">${msg}</span></div>`);
+// a mensagem que aparece embaixo depois de gravar (a do servidor)
+const r30Toast = (p, html, cel) => `<div style="position:absolute;left:50%;bottom:${cel ? 6 : 4}px;transform:translateX(-50%);display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:12px;background:${p.e ? '#115E59' : '#0F766E'};color:#FFFFFF;font-size:${cel ? 13 : 13.5}px;font-weight:600;line-height:1.35;box-shadow:0 10px 28px rgba(0,0,0,${p.e ? .45 : .22});z-index:4;${cel ? 'width:330px;' : 'white-space:nowrap;'}">${ic('check', '#FFFFFF', 17, 2.4)}<span style="min-width:0">${html}</span></div>`;
+const r30Pos = (h, extra, cel) => `<div style="position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:${cel ? 10 : 12}px">${h}${extra || ''}</div>`;
+
+/* ================= RODADA 31 (24/11/2026): Membros › a saída e a volta, com as respostas dele à 29 ================= */
+// Respostas de 24/11: o destino é só a cidade e o estado, nunca o nome da igreja (em branco, Parauapebas - PA); a carta é
+// individual e traz o histórico (a chegada e a saída, os batismos, as consagrações e os cargos, com as datas), sem assinatura
+// (o QR, o protocolo e os nomes impressos bastam); os filhos menores ganham carta própria; o congregado sai "em Paz";
+// "Observação" é só para quem está sem comunhão ou em disciplina, com o tempo e sem o motivo; o QR confere pela impressão
+// digital guardada e pelo protocolo e, depois do apagamento, não mostra mais os dados. Nomes e números de mentira.
+
+/* ---------------- 1. A CARTA COM O HISTÓRICO (PDF, A4) ---------------- */
+// os fatos em duas colunas, com o valor quebrando a linha (nada cortado com reticências: o histórico aparece inteiro)
+const r31Fatos = (p, L, cel) => `<div style="display:flex;flex-direction:column">${L.map((x, i) => `<div style="display:grid;grid-template-columns:${cel ? 96 : 124}px minmax(0,1fr);gap:10px;padding:${cel ? 5 : 6}px 0;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="font-size:12.5px;color:${p.suave};line-height:1.4">${x[0]}</span><span style="font-size:13px;font-weight:600;color:${p.titulo};line-height:1.4;min-width:0">${Array.isArray(x[1]) ? x[1].map(v => `<div>${v}</div>`).join('') : x[1]}</span></div>`).join('')}</div>`;
+const R31_CARTA = {
+  comunhao: { nome: 'Carlos Moreira', trat: 'o irmão', a: 0, mat: '2.317', membro: 1, cidade: 'Marabá - PA', sit: 'em Comunhão',
+    hist: [['Chegada', '12/03/2009, por batismo, na Congregação Vila Nova'], ['Batismo nas águas', '12/03/2009, na Congregação Vila Nova'], ['Batismo no Espírito Santo', '20/09/2010'], ['Consagrações', ['Auxiliar, em 16/04/2014', 'Diácono, em 10/12/2017']], ['Cargos e funções', ['Secretário da Mocidade de Vila Nova, de 03/2012 a 12/2015', 'Professor dos Jovens (EBD), de 02/2016 a 25/11/2026', 'Tesoureiro de Vila Nova, de 01/2021 a 25/11/2026']], ['Estado civil', 'Casado'], ['Saída', '25/11/2026, com esta carta']],
+    junto: 'Acompanham o portador os filhos menores Beatriz Moreira (nº 30.641) e Lucas Moreira (nº 30.640), cada um com a sua carta.', pedido: 'a pedido do próprio membro, pelo aplicativo', prot: 'CARTA-2026-0318', cod: 'K7P-4M2', arq: 'carta-carlos-moreira.pdf' },
+  filho: { nome: 'Lucas Moreira', trat: 'o menor', a: 0, mat: '30.640', membro: 0, cidade: 'Marabá - PA', sit: 'em Paz',
+    hist: [['Chegada', '14/05/2018, apresentado na Congregação Vila Nova'], ['Batismo nas águas', '—'], ['Batismo no Espírito Santo', '—'], ['Consagrações', '—'], ['Cargos e funções', '—'], ['Estado civil', '—'], ['Saída', '25/11/2026, com esta carta, junto com o pai']],
+    junto: 'Acompanha o pai, Carlos Moreira (nº 2.317), que pediu esta carta.', pedido: 'a pedido do pai, Carlos Moreira, pelo aplicativo', prot: 'CARTA-2026-0320', cod: 'K7P-4M4', arq: 'carta-lucas-moreira.pdf' },
+  observacao: { nome: 'Jair Pinheiro', trat: 'o irmão', a: 0, mat: '3.876', membro: 1, cidade: 'Parauapebas - PA', sit: 'em Observação (em disciplina por 6 meses, até 02/03/2027)',
+    hist: [['Chegada', '02/08/2015, por carta de mudança, na Congregação Vila Nova'], ['Batismo nas águas', '15/11/2003, em Imperatriz - MA'], ['Batismo no Espírito Santo', '—'], ['Consagrações', '—'], ['Cargos e funções', ['Recepção de Vila Nova, de 03/2018 a 09/2026']], ['Estado civil', 'Solteiro'], ['Saída', '25/11/2026, com esta carta']],
+    junto: '', pedido: 'a pedido do próprio membro, pelo aplicativo', prot: 'CARTA-2026-0301', cod: 'H2Q-9T6', arq: 'carta-jair-pinheiro.pdf' },
+  balcao: { nome: 'Maria José Cardoso', trat: 'a irmã', a: 1, mat: '1.208', membro: 1, cidade: 'Belém - PA', sit: 'em Comunhão',
+    hist: [['Chegada', '06/01/1991, por batismo, na Congregação Vila Nova'], ['Batismo nas águas', '06/01/1991, na Congregação Vila Nova'], ['Batismo no Espírito Santo', '19/07/1992'], ['Consagrações', '—'], ['Cargos e funções', ['Dirigente do Círculo de Oração de Vila Nova, de 02/2010 a 12/2019']], ['Estado civil', 'Viúva'], ['Saída', '25/11/2026, com esta carta']],
+    junto: '', pedido: 'a pedido dela, pela secretaria de Vila Nova (Débora Lima)', prot: 'CARTA-2026-0287', cod: 'M3D-8R1', arq: 'carta-maria-jose-cardoso.pdf' }
+};
+// a folha A4 (largura W, altura W × 1,414): o modelo de sempre, agora com o quadro do histórico, sem linha de assinatura
+function r31Papel(c, W = 470) {
+  const marca = on => (on ? '(X)' : '( )'), ela = c.a ? 'a' : 'o';
+  const linha = (r, v, i) => `<div style="display:grid;grid-template-columns:116px minmax(0,1fr);gap:8px;padding:3px 0;${i ? 'border-top:1px solid #E6EAF0;' : ''}"><span style="color:#5B6678">${r}</span><span>${Array.isArray(v) ? v.map(x => `<div>${x}</div>`).join('') : v}</span></div>`;
+  const prot = `<div style="text-align:right;line-height:1.3;flex:none"><div style="font-size:8px;color:#5B6678">Protocolo</div><strong style="font-size:9.5px">${c.prot}</strong></div>`;
+  const corpo = `${r18PpCab('IEADESPA · Secretaria', 'Congregação Vila Nova · Área 2', prot)}
+    <div style="text-align:center;font-size:14px;font-weight:800;letter-spacing:.06em">CARTA DE MUDANÇA</div>
+    <div>Parauapebas, PA, 25/11/2026.</div><div>Saudações no SENHOR JESUS.</div>
+    <div style="text-align:justify">Apresentamos o portador desta carta, ${c.trat} <strong>${c.nome}</strong> (Cartão de Membro nº ${c.mat}), da Congregação Vila Nova, Área 2, que se muda para a cidade de <strong>${c.cidade}</strong>.</div>
+    <div><strong>${marca(c.membro)}</strong> Membro &nbsp; <strong>${marca(!c.membro)}</strong> Congregado &nbsp;·&nbsp; Situação: <strong>${c.sit}</strong>.</div>
+    <div>Nós ${ela} recomendamos que ${ela} recebais no Senhor, como usam os Santos.</div>
+    <div style="border:1px solid #D5DBE5;border-radius:6px;padding:6px 10px"><div style="font-size:9px;font-weight:800;letter-spacing:.06em;padding-bottom:2px">O HISTÓRICO NA IEADESPA</div>${c.hist.map((x, i) => linha(x[0], x[1], i)).join('')}</div>
+    ${c.junto ? `<div style="text-align:justify">${c.junto}</div>` : ''}<div style="flex:1"></div>
+    <div style="border-top:1px solid #D5DBE5;padding-top:6px;display:flex;flex-direction:column;gap:3px"><div style="font-size:8.8px;color:#3B4A63">Emitida pelo sistema da IEADESPA em 25/11/2026, ${c.pedido}. <strong style="color:#0A2342">Vale sem assinatura: confira pelo QR.</strong></div><div style="display:flex;gap:12px;font-size:9.5px"><span><strong>Pr. Abel Nogueira</strong> · pastor da congregação</span><span><strong>Débora Lima</strong> · secretária</span></div></div>
+    ${r18PpQr(52, c.cod, 'Confira se esta carta é verdadeira: aponte a câmera do celular para o código.')}`;
+  return `<div style="width:${W}px;height:${Math.round(W * 1.414)}px;flex:none;background:#FFFFFF;color:#0A2342;border:1px solid #D5DBE5;display:flex;flex-direction:column;gap:7px;padding:22px 26px;box-sizing:border-box;overflow:hidden;font-size:9.8px;line-height:1.38">${corpo}</div>`;
+}
+// no celular: o PDF aberto, na largura da tela (a folha de 470 reduzida para 358)
+const r31PapelCel = (p, c) => `<div style="display:flex;align-items:center;gap:8px;flex:none"><span style="flex:1;min-width:0;font-size:13px;font-weight:700;color:${p.titulo};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.arq}</span>${r28Mais(p, 'Baixar')}<span style="color:${p.suave}">·</span>${r28Mais(p, 'Compartilhar')}</div><div style="width:358px;height:506px;flex:none;align-self:center;overflow:hidden;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.18)"><div style="zoom:0.7617;width:470px">${r31Papel(c)}</div></div>`;
+const R31_LEVA = {
+  comunhao: [['pessoa', 'Os dados de hoje: a congregação, a situação e a cidade para onde ele vai (só a cidade, nunca o nome da igreja)'], ['livro', 'O histórico: a chegada, os batismos, as consagrações e os cargos que ele teve no sistema, com as datas'], ['pessoas', 'Quem vai junto: os filhos menores, cada um com a sua carta'], ['qr', 'Sem assinatura: o QR, o protocolo e os nomes do pastor e da secretária impressos']],
+  filho: [['pessoa', 'A carta própria do filho menor: ele é congregado, por isso “em Paz”'], ['livro', 'O histórico dele: a chegada, em 2018; o que ele ainda não tem fica com um traço'], ['pessoas', 'Diz com quem ele vai: o pai, que pediu a carta'], ['qr', 'O QR e o protocolo próprios']],
+  observacao: [['balanca', 'Em disciplina: “em Observação”, por quanto tempo e até quando, nunca o motivo'], ['mapa', 'Ele não escreveu a cidade: fica Parauapebas - PA, a cidade da nossa igreja'], ['livro', 'O histórico, como em todas as cartas'], ['qr', 'O QR, o protocolo e os nomes impressos']],
+  balcao: [['pessoa', 'A carta pedida pela secretaria diz no rodapé quem pediu'], ['livro', 'O histórico dela, como em todas as cartas'], ['doc', 'Sai impressa na hora, para ela levar'], ['qr', 'O QR vale do mesmo jeito']]
+};
+const r31Leva = (p, k) => r27Cartao(p, 'O que a carta leva', '', `<div style="display:flex;flex-direction:column">${R31_LEVA[k].map((x, i) => `<div style="display:flex;align-items:flex-start;gap:10px;padding:7px 0;${i ? `border-top:1px solid ${p.linha};` : ''}"><span style="width:26px;height:26px;border-radius:8px;flex:none;background:${p.e ? '#1E3A6E' : '#E3ECFD'};display:flex;align-items:center;justify-content:center">${ic(x[0], r27Azul(p), 15, 2)}</span><span style="flex:1;min-width:0;font-size:13px;line-height:1.35;color:${p.texto};padding-top:3px">${x[1]}</span></div>`).join('')}</div>`, 'gap:4px');
+const R31_JAIR_U = { ini: 'JP', nome: 'Jair Pinheiro', papel: 'Saiu de Vila Nova' };
+function r31CartaDoc(p, k, cel) {
+  const c = R31_CARTA[k];
+  if (k === 'balcao') {
+    // a secretaria de Vila Nova: a carta que ela pediu pela dona Maria José, aberta na lista das saídas
+    if (cel) return r27MbCel(p, 'A carta da Maria José', r31PapelCel(p, c));
+    const quem = r27Cartao(p, c.arq, r18Etiq(p, 'impressa', 'verde'), `${r31Fatos(p, [['Pedida por', 'Débora Lima, secretaria de Vila Nova'], ['Quando', '25/11/2026, às 10:12'], ['Protocolo', `${c.prot} · código ${c.cod}`]])}<div style="display:flex;gap:10px">${r21Ouro(p, 'Imprimir de novo', 'doc', 42).replace('display:flex', 'flex:1;display:flex')}${r28Bt(p, 'Baixar o PDF', 'doc')}</div>`, 'gap:8px');
+    return r29Mb(p, 'local', 'Saídas', `<div style="display:grid;grid-template-columns:470px minmax(0,1fr);gap:22px;align-items:start">${r31Papel(c)}${r18Col(quem, r31Leva(p, k))}</div>`, ['Saídas', 'Maria José Cardoso']);
+  }
+  if (cel) return r29SaiuCel(p, r31PapelCel(p, c));
+  const arq = r27Cartao(p, c.arq, r18Etiq(p, 'em PDF', 'azul'), `${r31Fatos(p, [['Protocolo', c.prot], ['Código', c.cod], ['Emitida em', R31_HOJE]])}<div style="display:flex;gap:10px">${r21Ouro(p, 'Baixar o PDF', 'doc', 42).replace('display:flex', 'flex:1;display:flex')}${r28Bt(p, 'Imprimir', 'doc')}</div>`, 'gap:8px');
+  return r29Saiu(p, k === 'observacao' ? R31_JAIR_U : R29_CARLOS_U, `<div style="display:grid;grid-template-columns:470px minmax(0,1fr);gap:22px;align-items:start">${r31Papel(c)}${r18Col(arq, r31Leva(p, k))}</div>`);
+}
+const r31Carta = (p, k, d) => r31CartaDoc(p, k, ehCel(d));
+const PERFIS31_CARTA = [['comunhao', 'A carta do Carlos · em comunhão, com o histórico'], ['filho', 'A carta do Lucas · filho menor, congregado: em Paz'], ['observacao', 'A carta do Jair · em disciplina: Observação, com o tempo'], ['balcao', 'Secretaria local · a carta pedida no balcão']];
+
+/* ---------------- 2. A PÁGINA QUE O QR ABRE: antes e depois do apagamento ---------------- */
+// Pública, sem entrar. Até 30 dias depois da saída, mostra os dados da carta para comparar com o papel; depois do apagamento,
+// só que a carta é verdadeira (o protocolo e a impressão digital guardada no dia da emissão), sem o nome nem o histórico.
+const r31Caixa = (p, ok, tit, sub) => `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:${ok ? (p.e ? '#0F3B2E' : '#E8F6EE') : (p.e ? '#3A1414' : '#FDE4E4')};border:1px solid ${ok ? (p.e ? '#1F6B50' : '#A9DDBF') : m8Verm(p)};flex:none">${ok ? r27Check(p, 32) : `<span style="width:32px;height:32px;border-radius:16px;flex:none;background:${m8Verm(p)};display:flex;align-items:center;justify-content:center">${ic('fechar', '#FFFFFF', 18, 2.6)}</span>`}<div style="line-height:1.3;min-width:0"><div style="font-size:16px;font-weight:800;color:${p.titulo}">${tit}</div><div style="font-size:12.5px;color:${p.texto}">${sub}</div></div></div>`;
+const R31_QR_FATOS = [['Documento', 'Carta de mudança'], ['Protocolo', 'CARTA-2026-0318'], ['Emitida em', '25/11/2026, a pedido do próprio membro'], ['Nome', 'Carlos Moreira'], ['Matrícula', '2.317'], ['Saiu de', 'Congregação Vila Nova · Área 2'], ['Vai para', 'Marabá - PA'], ['Situação', 'Comunhão']];
+const R31_QR_HIST = [['Chegada', '12/03/2009, por batismo'], ['Batismos', ['nas águas em 12/03/2009', 'no Espírito Santo em 20/09/2010']], ['Consagrações', ['auxiliar em 16/04/2014', 'diácono em 10/12/2017']], ['Cargos', ['secretário da Mocidade, de 2012 a 2015', 'professor dos Jovens, de 2016 a 2026', 'tesoureiro de Vila Nova, de 2021 a 2026']]];
+const R31_QR_HIST_CEL = [['Chegada', '12/03/2009'], ['Batismos', 'águas em 2009 · Espírito Santo em 2010'], ['Consagrações', 'auxiliar em 2014 · diácono em 2017'], ['Cargos', ['secretário da Mocidade, 2012 a 2015', 'professor dos Jovens, 2016 a 2026', 'tesoureiro de Vila Nova, 2021 a 2026']]];
+function r31Qr(p, k, cel) {
+  const pad = cel ? 'padding:8px 12px;gap:4px' : 'gap:4px';
+  if (k === 'antes') {
+    const caixa = r31Caixa(p, 1, 'Esta carta é verdadeira', cel ? 'Confira se os dados são os mesmos do papel.' : 'A impressão digital confere com a carta guardada em 25/11/2026. Confira se os dados abaixo são os mesmos do papel.');
+    const fatos = r27Cartao(p, 'Os dados da carta', '', r31Fatos(p, cel ? R31_QR_FATOS.filter(x => x[0] !== 'Matrícula').map(x => (x[0] === 'Emitida em' ? [x[0], '25/11/2026'] : x)) : R31_QR_FATOS, cel), pad);
+    const alerta = r16aAviso(p, cel ? 'Algo diferente no papel? A carta foi alterada: não a aceite.' : 'Se algo no papel estiver diferente destes dados, a carta foi alterada: não a aceite.', 'alerta');
+    const ate = `<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, cel ? 'Até 25/12/2026. Depois, os dados são apagados.' : 'Até 25/12/2026 a página mostra os dados da carta. Depois, eles são apagados, e a página diz só se a carta é verdadeira.')}</div>`;
+    if (cel) return r29Publico(p, `${caixa}${fatos}${r27Cartao(p, 'O histórico da carta', '', r31Fatos(p, R31_QR_HIST_CEL, 1), pad)}${alerta}`);
+    const hist = r27Cartao(p, 'O histórico da carta', '', r31Fatos(p, R31_QR_HIST), 'gap:4px');
+    return r29PublicoNote(p, `<div style="width:500px;display:flex;flex-direction:column;gap:12px">${caixa}${fatos}${alerta}</div><div style="width:460px;display:flex;flex-direction:column;gap:12px">${hist}${ate}</div>`);
+  }
+  if (k === 'depois') {
+    const caixa = r31Caixa(p, 1, 'Esta carta é verdadeira', cel ? 'O protocolo e a impressão digital conferem.' : 'O protocolo existe, e a impressão digital deste QR é a da carta guardada no dia da emissão.');
+    const fatos = r27Cartao(p, 'O que ainda dá para conferir', '', r31Fatos(p, [['Documento', 'Carta de mudança'], ['Protocolo', 'CARTA-2026-0318'], ['Emitida em', '25/11/2026'], ['Por', 'secretaria de Vila Nova · Área 2']]), pad);
+    const apagou = r16aAviso(p, cel ? '<strong>Os dados da pessoa já foram apagados,</strong> como manda a lei. Confira o nome e o histórico no papel.' : '<strong>Os dados da pessoa já foram apagados,</strong> como manda a lei de proteção de dados. Por isso a página não mostra mais o nome nem o histórico: confira esses dados no papel.');
+    const geral = `<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, 'Precisa confirmar com a igreja? Fale com a Secretaria Geral da IEADESPA, com o protocolo da carta.')}</div>`;
+    if (cel) return r29Publico(p, `${caixa}${fatos}${apagou}${geral}`);
+    const confere = r27Cartao(p, 'O que esta página confere', '', r28Vai(p, [['qr', 'O protocolo existe e foi emitido pela IEADESPA'], ['digital', 'A impressão digital do QR é a da carta guardada no dia: o QR não foi trocado'], ['cadeado', 'Os dados da pessoa não aparecem mais: saíram com o apagamento, 30 dias depois da saída']]), 'gap:4px');
+    return r29PublicoNote(p, `<div style="width:500px;display:flex;flex-direction:column;gap:12px">${caixa}${fatos}${apagou}</div><div style="width:460px;display:flex;flex-direction:column;gap:12px">${confere}${geral}</div>`);
+  }
+  if (k === 'codigo') {
+    // sem câmera: o código do rodapé, digitado à mão
+    const campo = r30CampoErro(p, 'Código do documento', 'K7P-4M9', cel ? 'Nenhum documento tem esse código. Confira no rodapé.' : 'Nenhum documento tem o código K7P-4M9. Confira as letras e os números no rodapé do papel.', { icone: 'busca' });
+    const form = r27Cartao(p, 'Conferir sem a câmera', '', `<span style="font-size:13px;color:${p.texto};line-height:1.45">Digite o código que está no rodapé do documento, ao lado do QR.</span>${campo}${r21Ouro(p, 'Conferir', 'check', cel ? 44 : 42)}`, cel ? 'padding:12px 14px;gap:10px' : 'gap:12px');
+    const onde = `<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, 'O código tem 3 letras ou números, um traço e mais 3, como K7P-4M2.')}</div>`;
+    if (cel) return r29Publico(p, `${form}${onde}`);
+    return r29PublicoNote(p, `<div style="width:520px;display:flex;flex-direction:column;gap:12px">${form}${onde}</div>`);
+  }
+  // a carta que não confere: o protocolo existe, mas a impressão digital do QR é outra
+  const caixa = r31Caixa(p, 0, 'Esta carta não confere', cel ? 'A impressão digital deste QR não é a da carta.' : 'O protocolo CARTA-2026-0318 existe, mas a impressão digital deste QR não é a da carta guardada.');
+  const fazer = r27Cartao(p, 'O que fazer', '', r28Vai(p, [['fechar', 'Não aceite a carta: o papel pode ter sido alterado'], ['pessoa', 'Peça à pessoa a carta original, em PDF ou impressa'], ['igreja', 'Na dúvida, fale com a Secretaria Geral da IEADESPA']], cel), cel ? 'padding:8px 12px;gap:2px' : 'gap:4px');
+  if (cel) return r29Publico(p, `${caixa}${fazer}`);
+  return r29PublicoNote(p, `<div style="width:560px;display:flex;flex-direction:column;gap:12px">${caixa}${fazer}</div>`);
+}
+const r31QrTela = (p, k, d) => r31Qr(p, k, ehCel(d));
+const PERFIS31_QR = [['antes', 'A igreja que recebe · até 30 dias: os dados da carta'], ['depois', 'Depois do apagamento · só que é verdadeira'], ['codigo', 'Sem a câmera · o código digitado à mão'], ['falsa', 'Uma carta que não confere']];
+
+/* ---------------- 3. O PEDIDO DA CARTA, COM A CIDADE ---------------- */
+// O destino é só a cidade e o estado (nunca o nome da igreja); em branco, fica Parauapebas - PA. Cada um ganha a carta dele.
+const R31_HOJE = '25/11/2026';
+// troca um texto do desenho aprovado da 29; se o texto não estiver lá, para (o conferidor acusa)
+const r31Troca = (h, pares) => pares.reduce((s, [a, b]) => { if (!s.includes(a)) throw new Error('r31Troca: não achei ' + a.slice(0, 50)); return s.split(a).join(b); }, h);
+const r31Nota = (p, t) => `<div style="display:flex;align-items:flex-start;gap:8px">${r20Nota(p, t)}</div>`;
+const r31Passos = est => [['Para onde e quem vai', 'a cidade e os filhos', est[0]], ['Conferir e confirmar', 'vale na hora', est[1]], ['As cartas prontas', 'em PDF', est[2]]];
+const R31_CIDADES = [['Marabá - PA', 1], ['Maracanaú - CE'], ['Maragogi - AL'], ['Marapanim - PA']];
+// o campo da cidade: escreve e escolhe da lista das cidades do Brasil (aberta, no passo "a lista aberta")
+function r31Cidade(p, cel, aberta, rot = 'Para qual cidade você vai?', val = 'Marabá - PA') {
+  const campo = r17Campo(p, rot, aberta ? 'Mara' : val, { icone: 'mapa', nota: cel ? '' : 'cidade e estado' });
+  const lista = aberta ? `<div style="position:absolute;left:0;right:0;top:100%;margin-top:4px;background:${p.sup};border:1px solid ${p.borda};border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,${p.e ? 0.5 : 0.18});padding:6px;z-index:5;display:flex;flex-direction:column;gap:2px">${R31_CIDADES.map(x => `<div style="display:flex;align-items:center;gap:9px;min-height:${cel ? 44 : 40}px;padding:0 10px;border-radius:9px;font-size:14px;color:${p.titulo};${x[1] ? `background:${p.e ? '#13294A' : '#EEF4FF'};` : ''}">${ic('mapa', p.suave, 15, 2)}<span><strong>Mara</strong>${x[0].slice(4)}</span></div>`).join('')}</div>` : '';
+  return `<div style="position:relative;flex:none">${campo}${lista}</div>`;
+}
+function r31Pedir(p, cel, aberta) {
+  const onde = r27Cartao(p, 'Para onde você vai?', '', `${r31Cidade(p, cel, aberta)}${r31Nota(p, cel ? 'Só a cidade, sem o nome da igreja. Em branco, fica Parauapebas - PA.' : 'Só a cidade e o estado, sem o nome da igreja. Se deixar em branco, fica Parauapebas - PA.')}`, cel ? 'padding:10px 12px;gap:7px;position:relative;z-index:3' : 'gap:8px;position:relative;z-index:3');
+  const junto = r27Cartao(p, 'Quem sai com você', '', `<div style="display:flex;flex-direction:column">${r29Filhos(p, cel)}</div>${r20Nota(p, cel ? 'Só os filhos com menos de 18 anos. Cada um ganha a carta dele.' : 'Só os filhos com menos de 18 anos. Cada um ganha a carta dele, com o histórico dele.')}${r16aAviso(p, cel ? 'A Ana Paula pede a carta dela no celular dela.' : '<strong>A Ana Paula, sua esposa, é maior de idade:</strong> ela pede a carta dela no celular dela.')}`, cel ? 'padding:10px 12px;gap:7px' : 'gap:8px');
+  const bt = r21Ouro(p, 'Continuar', 'seta', cel ? 44 : 42);
+  if (cel) return r28MvCel(p, 'Pedir a minha carta', `${r27Caminho(p, r31Passos(['agora', 'depois', 'depois']), { cel: 1 })}${onde}${junto}${bt}`);
+  const voce = r27Cartao(p, 'A carta leva o seu histórico', '', `${r28Quem(p, R29_CARLOS)}${r31Fatos(p, [['Chegada', '12/03/2009, por batismo'], ['Batismos', 'nas águas em 2009 · no Espírito Santo em 2010'], ['Consagrações', 'auxiliar em 2014 · diácono em 2017'], ['Cargos', 'tesoureiro de Vila Nova, professor dos Jovens e mais 1']])}${r20Nota(p, 'Vem da sua ficha, com as datas. Alguma data errada? Peça a correção antes, em “Minha ficha”.')}`, 'gap:8px');
+  const tit = r18Tit(p, 'Pedir a minha carta de mudança', `Minha vida · você sai na hora, com a carta em PDF · ninguém precisa aprovar · ${R31_HOJE}`);
+  return r28Mv(p, R29_CARLOS_U, ['Pedir a minha carta'], `${tit}${r27Caminho(p, r31Passos(['agora', 'depois', 'depois']))}${r17Dois(r18Col(onde, junto), r18Col(voce, bt), '1.1fr 1fr')}`);
+}
+// as cartas prontas (a da 29), agora dizendo que cada uma leva o histórico
+const r31Pronto = (p, cel) => (cel ? r29Pronto(p, 1) : r31Troca(r29Pronto(p, 0), [['Ela leva os seus dados de hoje: a congregação, desde quando, a situação, o cargo e a função', 'Cada carta leva o histórico de quem sai: a chegada, os batismos, as consagrações e os cargos, com as datas']]));
+// a secretaria pede no balcão por quem não usa o aplicativo: a congregação pela dona Maria José; a área pelo seu
+// Sebastião, de Monte Sião, que está sem secretária. A cidade no lugar da igreja
+const R31_POR_CID = { local: ['ela', 'Belém - PA'], area: ['ele', 'Canaã dos Carajás - PA'] };
+function r31PedirPor(p, k, cel) {
+  const c = R29_POR[k], aviso = c.aviso, [ele, cid] = R31_POR_CID[k], Ele = ele === 'ela' ? 'Ela' : 'Ele';
+  const como = r28Opcao(p, 1, k === 'area' ? 'Ele pediu pessoalmente, aqui na secretaria da área' : 'Ela pediu pessoalmente, aqui na secretaria', 'não precisa de papel nem de prova', cel);
+  const cidade = r31Cidade(p, cel, 0, `Para qual cidade ${ele} vai?`, cid);
+  const bt = r21Ouro(p, 'Pedir a carta e imprimir', 'imprimir', cel ? 44 : 42);
+  if (cel) return r27MbCel(p, 'Pedir a carta por alguém', `${r28Quem(p, c.quem, 1)}${como.replace('flex:1;min-width:0;', 'flex:none;')}${cidade}${r27Cartao(p, 'O que vai acontecer', '', r28Vai(p, [c.vai[0], c.vai[1], ['envelope', aviso]], 1), 'padding:8px 12px;gap:2px')}${r20Nota(p, `Fica registrado: ${c.sec.split(',')[0]}, ${c.hora}.`)}${bt}`);
+  const p1 = r27Passo(p, 1, 'ok', 'Quem pediu', 'fica registrado sozinho', `${como}${r31Fatos(p, [['Pedido por', c.sec], ['Quando', c.hora]])}`);
+  const p2 = r27Passo(p, 2, 'ok', 'Para onde vai', 'e quem sai junto', `${cidade}${r31Nota(p, 'Só a cidade e o estado, sem o nome da igreja. Em branco, fica Parauapebas - PA. Filhos menores que saem junto: nenhum.')}`);
+  const p3 = r27Passo(p, 3, 'agora', 'O que vai acontecer', 'na hora, como pelo aplicativo', `${r28Vai(p, c.vai.concat([['envelope', aviso]]))}${bt}${r20Nota(p, `${Ele} leva a carta impressa, com o histórico; o QR vale do mesmo jeito.`)}`);
+  const tit = r18Tit(p, 'Pedir a carta por alguém', `para quem não sabe usar o aplicativo · ${c.sub} · ${R31_HOJE}`, m8Linha(p, 'Cancelar', 'voltar'));
+  return r29Mb(p, k, 'Saídas', `${tit}${r28Quem(p, c.quem)}${r17Dois(r18Col(p1, p2), p3, '1fr 1fr')}`, ['Saídas', 'Pedir a carta por alguém']);
+}
+// a Geral: quem pediu por quem, agora com a cidade de cada um
+const R31_CID = ['Canaã dos Carajás - PA', 'Belém - PA', 'Parauapebas - PA', 'Marabá - PA', 'Imperatriz - MA', 'Curionópolis - PA', 'Parauapebas - PA'];
+function r31PedidasGeral(p, cel) {
+  const L = R29_PEDIDAS.map((x, i) => [x[0], x[1], R31_CID[i], x[2].replace(' · Novo Horizonte', ' · Área 6'), x[3], x[4]]);
+  if (cel) return r27MbCel(p, 'Pedidas pela secretaria', `${r16aAviso(p, 'Quem pediu a carta por quem não sabe usar o aplicativo, e para qual cidade a pessoa foi.')}${r16aListaCel(p, L.slice(0, 6).map(x => [x[0], `${x[2]} · ${x[3].split(' · ')[0]}`, r18Etiq(p, x[5][0].replace(' na ficha', ''), x[5][1])]))}`);
+  const tab = r16aTab(p, 'minmax(0,1fr) minmax(0,0.95fr) minmax(0,1fr) minmax(0,1.05fr) 80px minmax(0,0.85fr)', ['Quem saiu', 'Congregação', 'Vai para', 'Pedida por', 'Quando', 'O aviso foi para'], L.map(x => [x[0], x[1], x[2], x[3], x[4], r18Etiq(p, x[5][0], x[5][1])]));
+  const tit = r18Tit(p, 'Cartas pedidas pela secretaria', `em novembro · a congregação, a área ou a Geral pediu por quem não sabe usar o aplicativo · ${R31_HOJE}`, m8Ouro(p, 'Pedir a carta por alguém', 'mais', 40));
+  return r29Mb(p, 'geral', 'Saídas', `${tit}${tab}${r31Nota(p, 'Sem prova, mas com trilha: quem pediu, quando e para onde foi o aviso. O aviso manda a pessoa procurar a Secretaria Geral se não foi ela quem pediu. Quem não tem e-mail na ficha não recebe o aviso; a secretaria fica sabendo.')}`, ['Saídas', 'Pedidas pela secretaria']);
+}
+// o aviso para a pessoa: procurar a Secretaria Geral (nada de "responda este e-mail")
+const r31Email = (p, cel) => r31Troca(r29Email(p, cel), [
+  ['<strong>Não foi ela quem pediu?</strong> Responda este e-mail ou fale com a Secretaria Geral. Fica registrado quem pediu e quando.', '<strong>Não foi ela quem pediu, ou quer saber mais?</strong> Entre em contato com a Secretaria Geral da IEADESPA: lá ela fica sabendo de tudo e, se for o caso, é reintegrada. Fica registrado quem pediu e quando.'],
+  ['IEADESPA · este aviso vai para o e-mail que está na ficha.', 'IEADESPA · este aviso vai para o e-mail que está na ficha. Não precisa responder.']
+]);
+const r31Pedido = (p, k, d) => { const cel = ehCel(d); return k === 'cidade' ? r31Pedir(p, cel, 1) : k === 'pronto' ? r31Pronto(p, cel) : k === 'local' ? r31PedirPor(p, 'local', cel) : k === 'area' ? r31PedirPor(p, 'area', cel) : k === 'geral' ? r31PedidasGeral(p, cel) : k === 'aviso' ? r31Email(p, cel) : r31Pedir(p, cel, 0); };
+const PERFIS31_PEDIDO = [['membro', 'Membro · para qual cidade e quem vai'], ['cidade', 'Membro · a cidade, com a lista aberta'], ['pronto', 'Membro · uma carta para cada um'], ['local', 'Secretaria local · pede pela dona Maria José'], ['area', 'Secretaria da Área 2 · pede pelo seu Sebastião'], ['geral', 'Secretaria Geral · quem pediu por quem, com a cidade'], ['aviso', 'A pessoa · o aviso: procure a Secretaria Geral']];
+
+/* ---------------- 4. O ABANDONO: A CONGREGAÇÃO PEDE, A GERAL CONFERE E A CÂMARA DE LIDERANÇA APROVA ---------------- */
+// Resposta de 24/11: a Câmara de liderança vem ALÉM da Geral. Só vale aprovado na reunião; no sistema fica só o registro
+// ("aprovado na reunião de dd/mm/aaaa, ata nº X"), sem pauta. Até a Câmara aprovar, a pessoa continua no rol.
+const r31AbPassos = at => [['A congregação pede', 'a secretaria'], ['O aviso e os 15 dias', 'a pessoa se manifesta'], ['A Geral confere', 'quem pediu não confere'], ['A Câmara aprova', 'na reunião, com a ata'], ['Cabe recurso', 'à Assembleia, em 30 dias']].map((x, i) => x.concat([i < at ? 'ok' : i === at ? 'agora' : 'depois']));
+const r31Chip = (p, t, on) => chipFiltro(p, t, on).replace(/<svg[\s\S]*?<\/svg>/, '').replace('height:32px', 'height:28px').replace('padding:0 12px', 'padding:0 10px').replace('font-size:13px', 'font-size:12.5px');
+function r31AbConferir(p, cel) {
+  const fila = [['NC', 'Senhoras', 'Neide Costa', 'Área 2 · Cidade Jardim · prazo vencido em 04/11', 1], ['AR', 'Varões', 'Arlindo Reis', 'Área 7 · Esperança · prazo vencido em 18/11', 0], ['TB', 'Jovens', 'Tiago Barros', 'Área 4 · Liberdade · prazo vencido em 20/11', 0]];
+  const conf = r27Cartao(p, 'Para a Geral conferir', r18Etiq(p, '3', 'ouro'), fila.map((x, i) => r28Pes(p, r28Av(p, x[0], x[1], 30), x[2], cel ? x[3].replace('prazo vencido em', 'venceu em') : x[3], cel ? r28Mais(p, 'Abrir ›') : '', { i, alt: 46, sel: !cel && x[4] })).join(''), cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+  if (cel) return r27MbCel(p, 'Abandono', `${r27Caminho(p, r31AbPassos(2), { cel: 1 })}${conf}${r16aAviso(p, 'A Geral confere e leva à Câmara de liderança. Só vale depois de aprovado na reunião.')}`);
+  const vai = r28Vai(p, [['escudo', 'O caso vai para a próxima reunião da Câmara de liderança: fica “aguardando a Câmara”'], ['pessoa', 'Até a Câmara aprovar, ela continua no rol de Cidade Jardim'], ['doc', 'Depois da reunião, a Secretaria Geral registra a data e o número da ata']]);
+  const aberta = r27Cartao(p, 'Neide Costa · abandono', r18Etiq(p, 'para você conferir', 'ouro'), `${r31Fatos(p, [['Sem comunhão desde', '02/04/2026 (237 dias)'], ['Pedido por', 'Sandra Reis, secretaria de Cidade Jardim, em 20/10'], ['O aviso', 'em 20/10; prazo vencido em 04/11, sem resposta'], ['Tentou contato', '3 vezes: ligações e uma visita']])}<div style="font-size:13px;font-weight:700;color:${p.titulo}">Ao conferir</div>${vai}<div style="display:flex;gap:10px">${r21Ouro(p, 'Conferido: levar à Câmara', 'check', 42).replace('display:flex', 'flex:1.3;display:flex')}${r28Bt(p, 'Devolver', 'voltar')}</div>`, 'gap:8px');
+  const tit = r18Tit(p, 'Abandono', `Secretaria Geral · Igreja toda · a Geral confere, e a Câmara de liderança aprova · ${R31_HOJE}`);
+  return r29Mb(p, 'geral', 'Abandono', `${tit}${r27Caminho(p, r31AbPassos(2))}${r17Dois(r18Col(conf, r20Nota(p, 'Quem pediu não confere. Devolver: escreva o motivo, e a congregação vê.')), aberta, '1fr 1.25fr')}`);
+}
+// depois da reunião: a Secretaria Geral registra a data, o número da ata e o resultado de cada caso
+const R31_CAMARA = [['NC', 'Senhoras', 'Neide Costa', 'Área 2 · Cidade Jardim · conferido 25/11', 0], ['EP', 'Varões', 'Edson Paiva', 'Área 2 · Vila Nova · conferido 24/11', 0], ['AR', 'Varões', 'Arlindo Reis', 'Área 7 · Esperança · conferido 26/11', 0], ['TB', 'Jovens', 'Tiago Barros', 'Área 4 · Liberdade · conferido 27/11', 2]];
+const R31_RES = ['Aprovado', 'Não aprovado', 'Outra reunião'];
+function r31AbCamara(p, cel) {
+  const linha = (x, i) => `<div style="display:flex;${cel ? 'flex-direction:column;align-items:stretch;gap:6px;padding:8px 0' : 'align-items:center;gap:10px;min-height:54px'};${i ? `border-top:1px solid ${p.linha};` : ''}"><div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">${r28Av(p, x[0], x[1], 30)}<div style="min-width:0;line-height:1.25"><div style="font-size:13.5px;font-weight:700;color:${p.titulo};white-space:nowrap">${x[2]}</div><div style="font-size:11.5px;color:${p.suave};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x[3]}</div></div></div><div style="display:flex;gap:5px;flex:none">${R31_RES.map((t, j) => r31Chip(p, t, j === x[4])).join('')}</div></div>`;
+  const lista = r27Cartao(p, 'Aguardando a Câmara', r18Etiq(p, '4', 'ouro'), `<div style="display:flex;flex-direction:column">${R31_CAMARA.map(linha).join('')}</div>`, cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+  const data = r17Campo(p, 'Data da reunião', '02/12/2026', { obrig: 1, icone: 'calendario' }), ata = r17Campo(p, 'Ata nº', '47', { obrig: 1 });
+  const soma = `<div style="font-size:12.5px;color:${p.texto};line-height:1.4"><strong style="color:${p.titulo}">3 aprovados</strong> · 1 fica para outra reunião</div>`;
+  const bt = r21Ouro(p, 'Registrar a reunião', 'check', cel ? 44 : 42);
+  if (cel) return r27MbCel(p, 'A reunião da Câmara', `${lista}<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px">${data}${ata}</div>${soma}${bt}`);
+  const form = r27Cartao(p, 'A reunião da Câmara de liderança', '', `<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px">${data}${ata}</div>${r17Campo(p, 'Registrado por', 'João da Silva · Secretaria Geral (quem está entrando)', { auto: 1, icone: 'cadeado' })}${soma}${bt}${r20Nota(p, 'Só o registro: a pauta e a ata ficam com a Câmara.')}`, 'gap:10px');
+  const tit = r18Tit(p, 'A reunião da Câmara de liderança', `Secretaria Geral · o resultado de cada caso, a data e o número da ata · 02/12/2026`, m8Linha(p, 'Voltar', 'voltar'));
+  return r29Mb(p, 'geral', 'Abandono', `${tit}${r27Caminho(p, r31AbPassos(3))}${r17Dois(lista, form, '1.9fr 1fr')}`, ['Abandono', 'A reunião da Câmara']);
+}
+// o caso depois do registro: o que ficou registrado e o que aconteceu
+function r31AbFeito(p, cel) {
+  const reg = `<div style="display:flex;align-items:center;gap:12px;padding:${cel ? '10px 12px' : '12px 14px'};border-radius:14px;background:${p.e ? '#0F3B2E' : '#E8F6EE'};border:1px solid ${p.e ? '#1F6B50' : '#A9DDBF'};flex:none">${r27Check(p, cel ? 28 : 32)}<div style="min-width:0;line-height:1.35;font-size:${cel ? 13.5 : 14.5}px;color:${p.titulo}"><strong>Abandono aprovado na reunião da Câmara de liderança de 02/12/2026, ata nº 47.</strong></div></div>`;
+  const trilha = r27Cartao(p, 'O caminho do caso', '', r31Fatos(p, [['20/10', 'pedido por Sandra Reis, secretaria de Cidade Jardim'], ['04/11', 'o prazo do aviso venceu, sem resposta'], ['25/11', 'conferido por João da Silva, Secretaria Geral'], ['02/12', 'aprovado na Câmara (ata nº 47); registrou João da Silva']]), cel ? 'padding:8px 12px;gap:4px' : 'gap:4px');
+  const vai = r27Cartao(p, 'O que aconteceu', '', r28Vai(p, [['pessoa', 'Ela saiu do rol de membros de Cidade Jardim em 02/12/2026'], ['maleta', 'O cargo que tinha ficou vago: era da recepção'], ['doc', 'Não há carta: a volta é pela secretaria, como qualquer um que volta'], ['balanca', 'Cabe recurso à Assembleia até 01/01/2027'], ['relogio', 'A partir de 01/01/2027, os dados começam a ser apagados, aos poucos']], cel), cel ? 'padding:8px 12px;gap:2px' : 'gap:4px');
+  if (cel) return r27MbCel(p, 'Neide Costa', r30Pos(`${reg}${trilha}${r27Cartao(p, 'O que aconteceu', '', r28Vai(p, [['pessoa', 'Saiu do rol de Cidade Jardim em 02/12'], ['balanca', 'Recurso à Assembleia até 01/01/2027']], 1), 'padding:8px 12px;gap:2px')}`, r30Toast(p, 'Reunião registrada: 3 aprovados, 1 para outra reunião.', 1), 1));
+  const quem = r28Quem(p, { av: ['NC', 'Senhoras'], nome: 'Neide Costa', sub: 'matrícula 4.112 · Cidade Jardim · Área 2', sitHtml: r18Etiq(p, 'aprovado na Câmara', 'verm') });
+  const tit = r18Tit(p, 'Neide Costa · abandono', `Secretaria Geral · o caso depois da reunião da Câmara · 02/12/2026`, m8Linha(p, 'Voltar', 'voltar'));
+  return r29Mb(p, 'geral', 'Abandono', r30Pos(`${tit}${r27Caminho(p, r31AbPassos(4))}${quem}${reg}${r17Dois(trilha, vai, '1fr 1.1fr')}`, r30Toast(p, 'Reunião de 02/12/2026 registrada: 3 abandonos aprovados e 1 fica para outra reunião.')), ['Abandono', 'Neide Costa']);
+}
+// a secretaria de Vila Nova: os pedidos dela; o do Edson está aguardando a Câmara
+const R31_AB_VN = [['Jonas Ferreira', 'pedido em 25/11', ['15 dias, até 10/12', 'ouro']], ['Edson Paiva', 'conferido pela Geral em 24/11', ['aguardando a Câmara', 'azul'], 1], ['Luís Barbosa', 'aprovado na reunião de 18/11/2026, ata nº 46', ['recurso até 18/12', 'verm']], ['Rita Sales', 'pediu a carta em 12/11', ['arquivado', 'verde']]];
+function r31AbLocal(p, cel) {
+  const lista = r27Cartao(p, 'Os pedidos de Vila Nova', '', `<div style="display:flex;flex-direction:column">${R31_AB_VN.map((x, i) => r28Pes(p, r28Av(p, x[0].split(' ').map(s => s[0]).join(''), 'Varões', 30), x[0], x[1], r18Etiq(p, x[2][0], x[2][1]), { i, alt: 50, sel: !cel && x[3] })).join('')}</div>`, cel ? 'padding:8px 12px;gap:2px' : 'gap:2px');
+  if (cel) return r27MbCel(p, 'Abandono', `${r27Caminho(p, r31AbPassos(3), { cel: 1 })}${lista}${r16aAviso(p, '<strong>Aguardando a Câmara:</strong> só vale depois de aprovado na reunião. Até lá, ele continua no rol.')}`);
+  const caso = r27Cartao(p, 'Edson Paiva · abandono', r18Etiq(p, 'aguardando a Câmara', 'azul'), `${r31Fatos(p, [['Sem comunhão desde', '14/05/2026 (195 dias)'], ['Pedido por', 'Débora Lima, secretaria de Vila Nova, em 06/10'], ['O aviso', 'em 06/10; prazo vencido em 21/10, sem resposta'], ['Conferido', 'pela Secretaria Geral em 24/11'], ['A Câmara', 'vai para a próxima reunião da Câmara de liderança']])}${r16aAviso(p, '<strong>Até a Câmara aprovar, ele continua no rol de Vila Nova.</strong> Se ele voltar a frequentar antes da reunião, avise a Secretaria Geral: o pedido é arquivado.')}`, 'gap:8px');
+  const tit = r18Tit(p, 'Abandono', `90 dias sem comunhão: a congregação pede, a Geral confere e a Câmara de liderança aprova · Vila Nova · ${R31_HOJE}`);
+  return r29Mb(p, 'local', 'Abandono', `${tit}${r27Caminho(p, r31AbPassos(3))}${r17Dois(lista, caso, '1fr 1.15fr')}`);
+}
+const R31_AB_AREA = [['Jonas Ferreira', 'Vila Nova', '12/03/2026', ['15 dias correndo, até 10/12', 'ouro']], ['Neide Costa', 'Cidade Jardim', '02/04/2026', ['a Geral está conferindo', 'ouro']], ['Edson Paiva', 'Vila Nova', '14/05/2026', ['aguardando a Câmara', 'azul']], ['Gérson Lima', 'Monte Sião', '18/01/2026', ['aprovado na reunião de 18/11/2026, ata nº 46', 'verm']], ['Luís Barbosa', 'Vila Nova', '20/04/2026', ['aprovado na reunião de 18/11/2026, ata nº 46', 'verm']], ['Kleber Assis', 'Bela Vista', '05/05/2026', ['arquivado: voltou a frequentar', 'verde']], ['Rita Sales', 'Vila Nova', '09/06/2026', ['arquivado: pediu a carta em 12/11', 'verde']]];
+function r31AbArea(p, cel) {
+  const nums = [['1', '15 dias correndo'], ['2', 'na Geral ou na Câmara'], ['2', 'aprovados'], ['2', 'arquivados']];
+  if (cel) return r27MbCel(p, 'Abandono', `${r29Nums(p, [['1', 'correndo'], ['2', 'Geral/Câmara'], ['2', 'aprovados']], 1)}${r16aListaCel(p, R31_AB_AREA.map(x => [x[0], `${x[1]} · desde ${x[2]}`, r18Etiq(p, x[3][0].replace(/ na reunião.*/, '').replace(', até 10/12', '').replace(/: .*/, '').replace('a Geral está conferindo', 'na Geral'), x[3][1])]))}`);
+  const tab = r16aTab(p, 'minmax(0,1fr) minmax(0,0.8fr) 132px minmax(0,1.7fr)', ['Nome', 'Congregação', 'Sem comunhão desde', 'Onde está'], R31_AB_AREA.map(x => [x[0], x[1], x[2], r18Etiq(p, x[3][0], x[3][1])]));
+  const tit = r18Tit(p, 'Abandono na Área 2', `a área acompanha; a congregação pede, a Geral confere e a Câmara de liderança aprova · ${R31_HOJE}`, r28Sel(p, 'As 12 da Área 2'));
+  return r29Mb(p, 'area', 'Abandono', `${tit}${r27Caminho(p, r31AbPassos(3))}${r29Nums(p, nums)}${tab}`);
+}
+const r31Abandono = (p, k, d) => { const cel = ehCel(d); return k === 'camara' ? r31AbCamara(p, cel) : k === 'feito' ? r31AbFeito(p, cel) : k === 'local' ? r31AbLocal(p, cel) : k === 'area' ? r31AbArea(p, cel) : r31AbConferir(p, cel); };
+const PERFIS31_AB = [['geral', 'Secretaria Geral · conferir e levar à Câmara'], ['camara', 'Secretaria Geral · 02/12: registrar a reunião da Câmara'], ['feito', 'Secretaria Geral · o caso aprovado, com a ata'], ['local', 'Secretaria local · aguardando a Câmara'], ['area', 'Secretaria da Área 2 · acompanha']];
+
+/* ---------------- 5. A VOLTA DE QUEM SAIU, SEM OS CARGOS ---------------- */
+// Resposta de 24/11: ninguém decide devolver cargo. Quem sai perde os cargos; para ter cargo de novo, faz o caminho inteiro
+// (o protocolo da função). Saem todos os "devolve" da 29 (a volta e os cargos vagos).
+const r31Volta = (p, cel) => r31Troca(r29Volta(p, 'volta30', cel), cel
+  ? [['nenhum; cada nível decide', 'nenhum: não voltam']]
+  : [['nenhum; cada nível decide se devolve', 'nenhum: não voltam'], ['Não volta sozinho', 'Não voltam: ele perdeu na saída'], ['Os cargos ficaram vagos quando ele saiu: quem cuida daquele nível decide se devolve.', 'Quem sai perde os cargos. Para ter um cargo de novo, ele faz o caminho inteiro, como qualquer membro (o protocolo da função).']]);
+const r31Vagos = (p, cel) => (cel ? r31Troca(r29Vagos(p, 'local', 'celular'), [['Preencher abre o cargo na Estrutura, onde ficam a diretoria e os cargos.', 'Preencher abre o cargo na Estrutura. Se o Carlos voltar, os cargos não voltam com ele.']]) : r31Troca(r29Vagos(p, 'local', 'notebook'), [['Se o Carlos voltar um dia, é o dirigente quem decide se devolve.', 'Se o Carlos voltar, os cargos não voltam com ele: para ter cargo de novo, ele faz o caminho inteiro.']]));
+const r31VoltaTela = (p, k, d) => (k === 'vagos' ? r31Vagos(p, ehCel(d)) : r31Volta(p, ehCel(d)));
+const PERFIS31_VOLTA = [['volta30', 'Secretaria local · o Carlos volta 10 dias depois'], ['vagos', 'Dirigente de Vila Nova · os cargos vagos continuam vagos']];
+
+const r31T = (id, nome, parte, decidido, desc, fn, perfis, perfisRot, explica) => ({ id, nome, parte, w: 1280, h: 800, disp: true, perfis, perfisRot, decidido: `${decidido} ${R22_REGRA}`, opcoes: [['Versão única', desc, fn]], explica });
+// A explicação da rodada 31 (fica na página, FORA do desenho das telas).
+const EXPLICA_R31 = `<p><strong>A rodada 31 volta aos Membros, na saída e na volta, com as respostas que você deu à rodada 29. O principal é a carta com o histórico, que pede tela antes de construir. São 5 telas, cada uma numa versão só.</strong></p>
+<ol>
+<li><strong>A carta com o histórico:</strong> uma carta para cada pessoa, em PDF (folha A4), com a chegada e a saída, os batismos, as consagrações e os cargos que ela teve, com as datas. O congregado sai “em Paz”; “Observação” só para quem está sem comunhão ou em disciplina, com o tempo e sem o motivo. Sem assinatura: o QR, o protocolo e os nomes impressos.</li>
+<li><strong>A página que o QR abre:</strong> até 30 dias depois da saída, com os dados da carta, para comparar com o papel; depois do apagamento, só que a carta é verdadeira, pelo protocolo e pela impressão digital guardada.</li>
+<li><strong>O pedido da carta, com a cidade:</strong> o destino é só a cidade e o estado, nunca o nome da igreja; em branco, fica Parauapebas - PA. O aviso de quem teve a carta pedida por outra pessoa manda procurar a Secretaria Geral.</li>
+<li><strong>O abandono com a Câmara de liderança:</strong> a congregação pede, a Geral confere e a Câmara aprova na reunião. No sistema, só o registro: a data da reunião e o número da ata.</li>
+<li><strong>A volta sem os cargos:</strong> quem sai perde os cargos; para ter cargo de novo, faz o caminho inteiro. Saem todos os “devolve”.</li>
+</ol>
+<p>O resto da saída continua o aprovado na 29 (a saída pelo aplicativo, os cargos vagos, o que fica guardado e o falecimento). Em cada tela, troque quem está vendo nos botões logo acima. Os detalhes que eu decidi têm a marca “Para conferir” na explicação de cada tela, fora do desenho.</p>`;
+const R31_EX_CARTA = {
+  comunhao: '<strong>A carta do Carlos, como sai em PDF, numa folha A4.</strong> O começo é o modelo de sempre (a apresentação, membro ou congregado, a situação e a recomendação), com a cidade para onde ele vai: “que se muda para a cidade de Marabá - PA”, sem o nome da igreja. Embaixo, o quadro novo, “O histórico na IEADESPA”: a chegada, o batismo nas águas, o batismo no Espírito Santo, as consagrações e os cargos e funções que ele teve no sistema, cada um com as datas, o estado civil e a saída. A carta do pai diz quais filhos vão junto, cada um com a sua. No rodapé, sem linha de assinatura: o QR, o protocolo, o código para conferir e os nomes do pastor e da secretária. <em>Para conferir: (1) os cargos entram com o mês e o ano de começo e de fim, e o que acaba na saída termina no dia da saída; (2) o que a pessoa não tem fica com um traço, para a carta ter sempre o mesmo quadro.</em>',
+  filho: '<strong>A carta própria do filho menor.</strong> O Lucas, de 8 anos, é congregado, por isso “em Paz” (nunca “em Observação”). O histórico dele tem a chegada, em 2018, quando foi apresentado; o resto fica com um traço. A carta diz com quem ele vai: o pai, que pediu. Tem o QR e o protocolo próprios.',
+  observacao: '<strong>Quem está em disciplina sai com carta, “em Observação”, dizendo por quanto tempo:</strong> “em Observação (em disciplina por 6 meses, até 02/03/2027)”. O motivo nunca aparece. O Jair não escreveu a cidade: fica Parauapebas - PA, a cidade da nossa igreja. <em>Para conferir: (1) a carta diz o tempo da disciplina e até quando; (2) quem está sem comunhão, sem disciplina marcada, sai “em Observação (sem comunhão desde 10/06/2026)”, com a data e sem o motivo.</em>',
+  balcao: '<strong>A carta que a secretaria pediu pela dona Maria José,</strong> aberta na lista das saídas de Vila Nova. É a mesma carta, com o histórico dela; no rodapé, diz quem pediu: “a pedido dela, pela secretaria de Vila Nova (Débora Lima)”. A secretaria imprime de novo se precisar. <em>Para conferir: (1) o rodapé diz quem pediu a carta, a própria pessoa ou a secretaria; (2) a secretaria pode imprimir de novo enquanto a ficha estiver inteira, até 30 dias depois da saída.</em>'
+};
+const R31_EX_QR = {
+  antes: '<strong>A igreja de Marabá recebe a carta e aponta o celular para o QR.</strong> Abre a página de conferência da IEADESPA, sem entrar no sistema: “Esta carta é verdadeira”, com os dados dela (o nome, a matrícula, de onde saiu, a cidade, a situação) e o histórico, para comparar com o papel. Se algo no papel estiver diferente, a carta foi alterada. <em>Para conferir: a página mostra os dados até 30 dias depois da saída, quando começa o apagamento.</em>',
+  depois: '<strong>Depois do apagamento,</strong> a página continua dizendo que a carta é verdadeira, pelo protocolo e pela impressão digital da carta, guardada no dia da emissão: o QR não foi trocado. Mas não mostra mais o nome nem o histórico, que já foram apagados; esses dados se conferem no papel. <em>Para conferir: (1) depois de 30 dias a página não mostra nenhum dado da pessoa, nem o nome, que a igreja guarda para sempre só por dentro; (2) quem precisar confirmar fala com a Secretaria Geral, com o protocolo.</em>',
+  codigo: '<strong>Sem câmera, digita-se o código do rodapé</strong> (3 letras ou números, um traço e mais 3, como K7P-4M2) em conferir.ieadespa.org.br. Código errado: “Nenhum documento tem o código K7P-4M9. Confira as letras e os números no rodapé do papel.”',
+  falsa: '<strong>A carta que não confere:</strong> o protocolo existe, mas a impressão digital do QR não é a da carta guardada. A página diz para não aceitar a carta, pedir a original e, na dúvida, falar com a Secretaria Geral.'
+};
+const R31_EX_PEDIDO = {
+  membro: '<strong>O Carlos pede a carta no próprio celular.</strong> No primeiro passo, no lugar da igreja, vem “Para qual cidade você vai?”: só a cidade e o estado, nunca o nome da igreja. Se ele deixar em branco, fica Parauapebas - PA. Os filhos menores vêm marcados, e cada um ganha a carta dele, com o histórico dele. Do lado, no notebook, um resumo do histórico que vai na carta. O resto do caminho (conferir e confirmar com o PIN) é o aprovado na 29.',
+  cidade: '<strong>A cidade se escolhe de uma lista:</strong> ele escreve “Mara” e a lista mostra as cidades do Brasil que começam assim, com o estado. <em>Para conferir: a lista é a das cidades do Brasil, com o estado; não se escreve cidade solta, para não sair “Maraba” ou “Marabá-Pa” na carta.</em>',
+  pronto: '<strong>Pronto: as 3 cartas,</strong> a dele e as dos 2 filhos, cada uma com o protocolo e o histórico de quem sai. Igual à 29; muda só a frase do lado: a carta leva o histórico, com as datas.',
+  local: '<strong>A secretaria pede pela dona Maria José, no balcão,</strong> como na 29, com a cidade no lugar da igreja: “Para qual cidade ela vai?”, Belém - PA. A área e a Geral, quando pedem, veem o mesmo campo.',
+  area: '<strong>A Área 2 pede pelo seu Sebastião,</strong> de Monte Sião, que está sem secretária: o mesmo campo da cidade (Canaã dos Carajás - PA), e o registro diz que foi a secretaria da área. A Geral, quando pede, vê o mesmo.',
+  geral: '<strong>A Geral vê quem pediu por quem,</strong> agora com a cidade de cada um. Quem não escreveu a cidade aparece com Parauapebas - PA.',
+  aviso: '<strong>O aviso para a pessoa</strong> não diz mais “responda este e-mail”: ela pode nem ter e-mail. Diz “Não foi ela quem pediu, ou quer saber mais? Entre em contato com a Secretaria Geral da IEADESPA: lá ela fica sabendo de tudo e, se for o caso, é reintegrada.” <em>Para conferir: quem não tem e-mail na ficha continua sem aviso, e a secretaria fica sabendo (como na 29).</em>'
+};
+const R31_EX_AB = {
+  geral: '<strong>A Geral confere e leva à Câmara de liderança.</strong> Passados os 15 dias do aviso, a Secretaria Geral abre o caso e, no lugar de “Confirmar o abandono”, toca em “Conferido: levar à Câmara”. O caso fica “aguardando a Câmara”, e a pessoa continua no rol até a reunião. Quem pediu não confere. “Devolver” continua, com o motivo.',
+  camara: '<strong>Depois da reunião, a Secretaria Geral registra o que a Câmara decidiu,</strong> todos os casos da reunião de uma vez: a data da reunião, o número da ata e, em cada caso, “Aprovado”, “Não aprovado” ou “Outra reunião”. No sistema fica só o registro; a pauta e a ata ficam com a Câmara. <em>Para conferir: (1) quem registra é a Secretaria Geral; (2) o “Não aprovado” arquiva o pedido, e a pessoa continua no rol; (3) “Outra reunião” deixa o caso aguardando a Câmara.</em>',
+  feito: '<strong>O caso depois do registro:</strong> “Abandono aprovado na reunião da Câmara de liderança de 02/12/2026, ata nº 47.” O caminho do caso guarda quem pediu, o prazo do aviso, quem conferiu e a aprovação, com quem registrou. Só agora ela sai do rol: os cargos ficam vagos, não há carta e cabe recurso à Assembleia em 30 dias. <em>Para conferir: os 30 dias do recurso contam da reunião da Câmara, e o apagamento começa quando eles acabam.</em>',
+  local: '<strong>A secretaria de Vila Nova acompanha os pedidos dela:</strong> o do Jonas, nos 15 dias do aviso; o do Edson, conferido pela Geral e aguardando a Câmara; o do Luís, aprovado na reunião de 18/11, ata nº 46, com o prazo do recurso; e o da Rita, arquivado porque ela pediu a carta. Até a Câmara aprovar, o Edson continua no rol.',
+  area: '<strong>A área acompanha as 12 congregações:</strong> onde está cada pedido (os 15 dias, a Geral conferindo, aguardando a Câmara, aprovado com a reunião e a ata, arquivado).'
+};
+const R31_EX_VOLTA = {
+  volta30: '<strong>O Carlos voltou 10 dias depois.</strong> Ele volta como qualquer um que volta: a mesma matrícula, a data de entrada nova e a integração de novo. A ficha ainda está inteira, mas os cargos não voltam: “Cargos: nenhum: não voltam”. Para ter um cargo de novo, ele faz o caminho inteiro, como qualquer membro (o protocolo da função). Sai o “cada nível decide se devolve” da 29.',
+  vagos: '<strong>Os cargos vagos de Vila Nova,</strong> como na 29, sem a frase “é o dirigente quem decide se devolve”: se o Carlos voltar, os cargos não voltam com ele. A vaga se preenche pelo “Preencher”, como qualquer outra.'
+};
+const TELAS_R31 = [
+  r31T('r31-carta', 'A carta com o histórico, em PDF', 'Membros · Saídas', 'Versão única: uma carta para cada pessoa, numa folha A4, com o modelo de sempre e o quadro novo do histórico (a chegada, os batismos, as consagrações e os cargos, com as datas, e a saída). A cidade de destino, nunca a igreja. A situação: “em Comunhão”, “em Paz” (o congregado) ou “em Observação” (sem comunhão ou em disciplina, com o tempo e sem o motivo). Sem assinatura: o QR, o protocolo e os nomes impressos. Troque em “Qual carta”.',
+    'A folha A4 à esquerda e, à direita, o arquivo e o que a carta leva. No celular, o PDF aberto.', r31Carta, PERFIS31_CARTA, 'Qual carta e quem está vendo', R31_EX_CARTA),
+  r31T('r31-qr', 'A página que o QR abre', 'Membros · Saídas', 'Versão única: a página pública de conferência. Até 30 dias depois da saída, “Esta carta é verdadeira” com os dados e o histórico, para comparar com o papel. Depois do apagamento, só que a carta é verdadeira, pelo protocolo e pela impressão digital guardada no dia da emissão. Sem câmera, o código do rodapé. A carta que não confere. Troque em “Quando e como”.',
+    'Antes e depois do apagamento, o código digitado à mão e a carta que não confere.', r31QrTela, PERFIS31_QR, 'Quando e como', R31_EX_QR),
+  r31T('r31-pedido', 'O pedido da carta, com a cidade', 'Membros · Saídas', 'Versão única: o destino é só a cidade e o estado, escolhidos da lista; em branco, fica Parauapebas - PA. Cada pessoa ganha a sua carta. A secretaria, quando pede por alguém, usa o mesmo campo. O aviso de quem teve a carta pedida por outra pessoa manda procurar a Secretaria Geral. Troque em “Quem está vendo”.',
+    'O membro: a cidade e quem vai, a lista aberta e as cartas prontas. A secretaria no balcão, na congregação e na área. A Geral com a cidade. O aviso que chega.', r31Pedido, PERFIS31_PEDIDO, 'Quem está vendo e em que passo', R31_EX_PEDIDO),
+  r31T('r31-abandono', 'O abandono: a Geral confere e a Câmara aprova', 'Membros · Abandono', 'Versão única, com a resposta de 24/11: a congregação pede, a pessoa tem os 15 dias, a Geral confere e o caso vai para a reunião da Câmara de liderança, além da Geral. Só vale aprovado na reunião. No sistema, só o registro: a data da reunião e o número da ata. Depois, cabe recurso à Assembleia em 30 dias. Troque em “Quem está vendo”.',
+    'A Geral confere e leva à Câmara; registra a reunião; o caso aprovado com a ata. A congregação e a área acompanham.', r31Abandono, PERFIS31_AB, 'Quem está vendo e em que passo', R31_EX_AB),
+  r31T('r31-volta', 'A volta de quem saiu, sem os cargos', 'Membros · Fila de cadastros', 'Versão única: quem sai perde os cargos; ninguém decide devolver. Para ter um cargo de novo, faz o caminho inteiro (o protocolo da função). A volta é como na 29, sem os “devolve”. Troque em “Quem está vendo”.',
+    'A volta do Carlos dentro dos 30 dias e os cargos vagos de Vila Nova, sem os “devolve”.', r31VoltaTela, PERFIS31_VOLTA, 'Quem está vendo', R31_EX_VOLTA)
+];
+TELAS.unshift(...TELAS_R31.map(t => Object.assign({}, t, { rodada: 31 })));
+
+
+
+
+
+
+
+
+
+
+
+
+const $ = id => document.getElementById(id);
+const porId = id => TELAS.findIndex(t => t.id === id);
+const estado = { tela: 0, opcao: 0, modo: 'claro', perfil: 0, disp: 'notebook' };
+try {
+  const s = JSON.parse(localStorage.getItem('propostas-r15') || '{}');
+  if (s.disp === 'celular') estado.disp = 'celular';
+  const i = porId(s.id);
+  if (i >= 0 && TELAS[i].rodada === 31) { estado.tela = i; estado.opcao = TELAS[i].opcoes[s.opcao] ? s.opcao : 0; }
+} catch (e) { }
+const lembrar = () => { try { localStorage.setItem('propostas-r15', JSON.stringify({ id: TELAS[estado.tela].id, opcao: estado.opcao, modo: estado.modo, disp: estado.disp })); } catch (e) { } };
+let db = null, escolhas = {}, obsSuja = false, geralSuja = false;
+const tela = () => TELAS[estado.tela];
+const perfilAtual = () => tela().perfis ? tela().perfis[estado.perfil][0] : undefined;
+const dispAtual = () => tela().disp ? estado.disp : (tela().w < 500 ? 'celular' : 'notebook');
+const dims = () => { const t = tela(); return t.disp && estado.disp === 'celular' ? { w: 390, h: 844 } : { w: t.w, h: t.h }; };
+const desenhar = () => comBarraDoCelular(tela().opcoes[estado.opcao][2](P(estado.modo), perfilAtual(), dispAtual()));
+
+// Página nova a partir da rodada 31 (24/11/2026). As rodadas 19 a 30 (KMeb…) e 2 a 18 (G1gj…) ficam nas páginas antigas, intactas como arquivo do que já foi aprovado;
+// o "Já aprovados" é um link para ela (abre em outra aba). A chave 'propostas-r15' (a tela em que ele estava) continua a mesma.
+const RODADA_ATUAL = 31;
+const GRUPOS_TELAS = [[31, "Rodada 31: Membros, a saída e a volta (a carta com o histórico, a página do QR, o pedido com a cidade, o abandono com a Câmara de liderança e a volta sem os cargos) (para escolher agora)"]];
+let explicaAberta = true;
+try { explicaAberta = localStorage.getItem('propostas-explica-r31') !== 'fechada'; } catch (e) { }
+document.addEventListener('toggle', ev => { const d = ev.target; if (!d || !d.classList || !d.classList.contains('explica')) return; explicaAberta = d.open; try { localStorage.setItem('propostas-explica-r31', d.open ? 'aberta' : 'fechada'); } catch (e) { } }, true);
+function botoesDaRodada(r) {
+  return TELAS.map((t, i) => {
+    if (t.rodada !== r) return '';
+    const e = escolhas[t.id];
+    const marca = e && e.opcao ? `<span class="marca ok">Aprovada: opção ${e.opcao}</span>` : '<span class="marca">Falta escolher</span>';
+    return `<button type="button" class="tela-btn" data-tela="${i}" aria-pressed="${i === estado.tela}"><small>${t.parte}</small><strong>${t.nome}</strong>${marca}</button>`;
+  }).join('');
+}
+// rodadas recolhidas embaixo da atual: na página nova da 31 não há nenhuma (GRUPOS_TELAS só com a 31) (aberta se ele abriu, ou se a tela escolhida é dela)
+let antigaAberta = false;
+try { antigaAberta = localStorage.getItem('propostas-r31-antigas') === 'aberta'; } catch (e) { }
+document.addEventListener('toggle', ev => { const d = ev.target; if (!d || !d.classList || !d.classList.contains('antiga')) return; antigaAberta = d.open; try { localStorage.setItem('propostas-r31-antigas', d.open ? 'aberta' : 'fechada'); } catch (e) { } }, true);
+function renderTelas() {
+  const atual = GRUPOS_TELAS.find(g => g[0] === RODADA_ATUAL), antigas = GRUPOS_TELAS.filter(g => g[0] !== RODADA_ATUAL);
+  const aberta = antigaAberta || (TELAS[estado.tela] && TELAS[estado.tela].rodada !== RODADA_ATUAL);
+  $('telas').innerHTML = `<div class="rodada"><h2>${atual[1]}</h2><details class="explica"${explicaAberta ? ' open' : ''}><summary>O que muda nesta rodada (leia primeiro)</summary>${EXPLICA_R31}</details><div class="telas-grid">${botoesDaRodada(atual[0])}</div></div>` + antigas.map(g => `<details class="antiga"${aberta ? ' open' : ''}><summary>${g[1]}</summary><div class="telas-grid">${botoesDaRodada(g[0])}</div></details>`).join('');
+}
+function renderOpcoes() {
+  const t = tela(), e = escolhas[t.id];
+  $('opcoes').innerHTML = '<span class="grupo-rot">Opção</span>' + t.opcoes.map((o, i) => `<button type="button" class="op-btn" data-op="${i}" aria-pressed="${i === estado.opcao}" title="${o[0]}">${i + 1}. ${o[0]}${e && e.opcao === i + 1 ? '<span class="ok">✓</span>' : ''}</button>`).join('');
+  $('decidido').innerHTML = `<strong>Rodada ${t.rodada} · ${t.nome}.</strong> ${t.decidido}`;
+  const o = t.opcoes[estado.opcao];
+  $('desc').innerHTML = `<strong>Opção ${estado.opcao + 1}: ${o[0]}.</strong> ${o[1]}`;
+  if (t.explica && t.perfis && t.explica[t.perfis[estado.perfil][0]]) $('desc').innerHTML += `<span class="passo-expl">${t.explica[t.perfis[estado.perfil][0]]}</span>`;
+  $('aprovar').textContent = `Aprovo a opção ${estado.opcao + 1} (${o[0]})`;
+  const pf = $('perfis');
+  if (t.perfis) {
+    pf.hidden = false;
+    pf.innerHTML = '<span class="grupo-rot">' + (t.perfisRot || 'Quem está vendo') + '</span>' + t.perfis.map((x, i) => `<button type="button" class="modo-btn" data-perfil="${i}" aria-pressed="${i === estado.perfil}">${x[1]}</button>`).join('');
+  } else { pf.hidden = true; pf.innerHTML = ''; }
+  const dv = $('dispositivos');
+  if (t.disp) {
+    dv.hidden = false;
+    dv.innerHTML = '<span class="grupo-rot">Onde ver</span>' + [['notebook', 'Notebook'], ['celular', 'Celular']].map(x => `<button type="button" class="modo-btn" data-disp="${x[0]}" aria-pressed="${estado.disp === x[0]}">${x[1]}</button>`).join('');
+  } else { dv.hidden = true; dv.innerHTML = ''; }
+}
+function renderPrevia() {
+  const t = dims(), palco = $('palco');
+  palco.style.width = t.w + 'px';
+  palco.style.height = t.h + 'px';
+  palco.style.borderRadius = t.w < 500 ? '38px' : '10px';
+  palco.innerHTML = desenhar();
+  ajustar();
+  renderCheia();
+}
+function ajustar() {
+  const t = dims(), q = $('quadro'), palco = $('palco');
+  const larg = q.clientWidth, pad = t.w < 500 ? 24 : 0;
+  const s = Math.min(1, (larg - pad * 2) / t.w);
+  palco.style.transform = `scale(${s})`;
+  palco.style.left = Math.max(0, (larg - t.w * s) / 2) + 'px';
+  palco.style.top = pad + 'px';
+  q.style.height = (t.h * s + pad * 2) + 'px';
+}
+function renderCheia() {
+  if ($('cheia').hidden) return;
+  const t = tela(), dd = dims(), pc = $('cheia-palco');
+  pc.style.width = dd.w + 'px';
+  pc.style.height = dd.h + 'px';
+  pc.style.borderRadius = dd.w < 500 ? '38px' : '10px';
+  pc.innerHTML = desenhar();
+  encaixarCheia();
+  $('cheia-titulo').textContent = `${t.nome} · opção ${estado.opcao + 1} de ${t.opcoes.length}: ${t.opcoes[estado.opcao][0]}` + (t.disp ? ` · ${estado.disp}` : '') + (t.perfis ? ` · ${t.perfis[estado.perfil][1]}` : '');
+}
+function encaixarCheia() {
+  if ($('cheia').hidden) return;
+  const t = dims(), area = $('cheia-area'), pc = $('cheia-palco');
+  const w = area.clientWidth, h = area.clientHeight;
+  if (!w || !h) return;
+  const s = Math.min(w / t.w, h / t.h, 1.6);
+  pc.style.transform = `scale(${s})`;
+  pc.style.left = (w - t.w * s) / 2 + 'px';
+  pc.style.top = Math.max(0, (h - t.h * s) / 2) + 'px';
+}
+function abrirCheia() { $('cheia').hidden = false; document.body.style.overflow = 'hidden'; renderCheia(); $('cheia-fechar').focus(); }
+function fecharCheia() { $('cheia').hidden = true; document.body.style.overflow = ''; $('tela-cheia').focus(); }
+const LIMITE_OBS = 20000;
+const RASCUNHO = id => 'propostas-rascunho:' + id;
+const lerRascunho = id => { try { return localStorage.getItem(RASCUNHO(id)); } catch (e) { return null; } };
+const gravarRascunho = (id, v) => { try { if (v) localStorage.setItem(RASCUNHO(id), v); else localStorage.removeItem(RASCUNHO(id)); } catch (e) { } };
+const fmtN = n => n.toLocaleString('pt-BR');
+function contar(campo, alvo) { const n = $(campo).value.length, el = $(alvo); if (!el) return; el.textContent = `${fmtN(n)} de ${fmtN(LIMITE_OBS)} caracteres`; el.classList.toggle('perto', n >= LIMITE_OBS * 0.95); }
+function renderAprovacao(trocouTela) {
+  const t = tela(), e = escolhas[t.id];
+  if (trocouTela || !obsSuja) {
+    const salvo = (e && e.observacao) || '', r = lerRascunho(t.id);
+    if (r && r !== salvo) { $('obs').value = r; obsSuja = true; $('rascunho').textContent = 'Rascunho recuperado deste aparelho: ainda não foi guardado.'; }
+    else { $('obs').value = salvo; obsSuja = false; $('rascunho').textContent = ''; if (r && r === salvo) gravarRascunho(t.id, ''); }
+  }
+  if (obsSuja && e && $('obs').value === (e.observacao || '')) { obsSuja = false; gravarRascunho(t.id, ''); $('rascunho').textContent = ''; }
+  contar('obs', 'obs-conta');
+  if (!db) return;
+  $('situacao').innerHTML = e && e.opcao
+    ? `Nesta tela você aprovou a <strong>opção ${e.opcao} (${e.nome || ''})</strong>${e.em ? ' em ' + new Date(e.em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}.`
+    : (e && e.observacao ? 'Você deixou uma observação nesta tela, mas ainda não aprovou nenhuma opção.' : 'Você ainda não aprovou nenhuma opção desta tela.');
+  $('tirar').hidden = !(e && e.opcao);
+}
+function tudo(trocouTela) { renderTelas(); renderOpcoes(); renderPrevia(); renderAprovacao(trocouTela); lembrar(); }
+
+document.addEventListener('click', ev => {
+  const bt = ev.target.closest('button');
+  if (!bt) return;
+  if (bt.dataset.tela !== undefined) { estado.tela = +bt.dataset.tela; estado.opcao = 0; estado.perfil = 0; tudo(true); return; }
+  if (bt.dataset.op !== undefined) { estado.opcao = +bt.dataset.op; renderOpcoes(); renderPrevia(); lembrar(); return; }
+  if (bt.dataset.perfil !== undefined) { estado.perfil = +bt.dataset.perfil; renderOpcoes(); renderPrevia(); return; }
+  if (bt.dataset.disp !== undefined) { estado.disp = bt.dataset.disp; renderOpcoes(); renderPrevia(); lembrar(); return; }
+  if (bt.id === 'tela-cheia') { abrirCheia(); return; }
+  if (bt.id === 'cheia-fechar') { fecharCheia(); return; }
+  if (bt.id === 'cheia-anterior' || bt.id === 'cheia-proxima') {
+    const n = tela().opcoes.length;
+    estado.opcao = (estado.opcao + (bt.id === 'cheia-proxima' ? 1 : n - 1)) % n;
+    renderOpcoes(); renderPrevia(); lembrar(); return;
+  }
+  if (bt.id === 'aprovar') salvar('aprovar');
+  if (bt.id === 'guardar-obs') salvar('obs');
+  if (bt.id === 'tirar') salvar('tirar');
+  if (bt.id === 'guardar-geral') salvarGeral();
+});
+document.addEventListener('keydown', ev => {
+  if ($('cheia').hidden) return;
+  if (ev.key === 'Escape') fecharCheia();
+  else if (ev.key === 'ArrowRight') $('cheia-proxima').click();
+  else if (ev.key === 'ArrowLeft') $('cheia-anterior').click();
+});
+$('obs').addEventListener('input', () => { obsSuja = true; gravarRascunho(tela().id, $('obs').value); contar('obs', 'obs-conta'); $('rascunho').textContent = 'Rascunho guardado neste aparelho enquanto você escreve.'; });
+$('obs-geral').addEventListener('input', () => { geralSuja = true; gravarRascunho('geral-r31', $('obs-geral').value); contar('obs-geral', 'geral-conta'); $('rascunho-geral').textContent = 'Rascunho guardado neste aparelho enquanto você escreve.'; });
+new ResizeObserver(() => ajustar()).observe($('quadro'));
+new ResizeObserver(() => encaixarCheia()).observe($('cheia-area'));
+
+async function salvar(tipo) {
+  if (!db) { $('aviso').textContent = 'Esta página não consegue guardar aqui. Diga na conversa qual opção você aprova.'; return; }
+  const t = tela(), e = escolhas[t.id] || {}, o = t.opcoes[estado.opcao];
+  const obs = $('obs').value.trim().slice(0, LIMITE_OBS);
+  const doc = tipo === 'aprovar' ? { opcao: estado.opcao + 1, nome: o[0], observacao: obs, em: new Date().toISOString() }
+    : tipo === 'tirar' ? { opcao: null, nome: '', observacao: obs, em: new Date().toISOString() }
+      : { opcao: e.opcao || null, nome: e.nome || '', observacao: obs, em: e.em || new Date().toISOString() };
+  const botoes = ['aprovar', 'guardar-obs', 'tirar'].map($);
+  botoes.forEach(b => { b.disabled = true; });
+  try {
+    await db.doc('escolhas/' + t.id).set(doc);
+    obsSuja = false; gravarRascunho(t.id, ''); $('rascunho').textContent = '';
+    $('aviso').textContent = tipo === 'aprovar' ? `Guardado: você aprovou a opção ${estado.opcao + 1} da tela "${t.nome}".` : tipo === 'tirar' ? 'Guardado: esta tela voltou para "falta escolher".' : 'Observação guardada.';
+  } catch (err) {
+    $('aviso').textContent = 'Não consegui guardar agora. Tente de novo em instantes ou me diga na conversa.';
+  } finally { botoes.forEach(b => { b.disabled = false; }); }
+}
+async function salvarGeral() {
+  if (!db) { $('aviso-geral').textContent = 'Esta página não consegue guardar aqui. Escreva a observação na conversa.'; return; }
+  try {
+    await db.doc('escolhas/geral-r31').set({ observacao: $('obs-geral').value.trim().slice(0, LIMITE_OBS), em: new Date().toISOString() });
+    geralSuja = false; gravarRascunho('geral-r31', ''); $('rascunho-geral').textContent = '';
+    $('aviso-geral').textContent = 'Observação geral guardada.';
+  } catch (err) { $('aviso-geral').textContent = 'Não consegui guardar agora. Tente de novo em instantes.'; }
+}
+
+tudo(true);
+{ const r = lerRascunho('geral-r31'); if (r) { $('obs-geral').value = r; geralSuja = true; $('rascunho-geral').textContent = 'Rascunho recuperado deste aparelho: ainda não foi guardado.'; } contar('obs-geral', 'geral-conta'); }
+$('situacao').textContent = 'Carregando as suas escolhas…';
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+  if (!db) {
+    $('situacao').textContent = 'Aqui a página não consegue guardar a escolha. Olhe as opções e me diga na conversa qual você aprova.';
+    ['aprovar', 'guardar-obs', 'guardar-geral'].forEach(id => { $(id).disabled = true; });
+    $('tirar').hidden = true;
+    return;
+  }
+  db.collection('escolhas').onSnapshot(snap => {
+    escolhas = {};
+    snap.docs.forEach(d => { if (d.exists) escolhas[d.id] = d.data(); });
+    { const g = (escolhas['geral-r31'] && escolhas['geral-r31'].observacao) || ''; if (!geralSuja) $('obs-geral').value = g; else if ($('obs-geral').value === g) { geralSuja = false; gravarRascunho('geral-r31', ''); $('rascunho-geral').textContent = ''; } contar('obs-geral', 'geral-conta'); }
+    renderTelas(); renderOpcoes(); renderAprovacao(false);
+  }, () => { $('situacao').textContent = 'Não consegui ler as escolhas guardadas agora. Recarregue a página.'; });
+})();
+
+</script>

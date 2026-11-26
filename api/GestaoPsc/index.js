@@ -107,6 +107,14 @@ module.exports = async function (context, req) {
     return avaliacao;
   }
 
+  // Gravar como gestão (sugestões, responder, enviar, validar, devolver a enviada) vale só no escopo da própria psc_gestao: o escopo somado com a psc_homologacao
+  // (de outro cargo ou de uma delegação) serve à leitura, nunca à gestão. A avaliação que a pessoa enxerga mas não gere recebe 403.
+  function gestaoNoEscopo(avaliacao) {
+    if (auth.estaNoEscopo(auth.visaoDaPermissao(usuario, "psc_gestao"), avaliacao.congregacaoNome)) return true;
+    erro(context, 403, SEM_PERMISSAO);
+    return false;
+  }
+
   async function reclassificacaoDoCorpo() {
     const id = auth.idDeRota(corpo.reclassificacaoId);
     if (!id) { erro(context, 400, "Informe reclassificacaoId."); return null; }
@@ -234,6 +242,7 @@ module.exports = async function (context, req) {
       if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
       const avaliacao = await avaliacaoDoCorpo(corpo);
       if (!avaliacao) return;
+      if (!gestaoNoEscopo(avaliacao)) return;
       if (avaliacao.status !== "RASCUNHO") return erro(context, 422, "As sugestões só se atualizam enquanto a avaliação está em preenchimento.");
       const aplicadas = await apuracao.aplicarSugestoes(pool, { avaliacaoId: avaliacao.avaliacaoId, congregacaoId: avaliacao.congregacaoId, ano: avaliacao.ano });
       context.res = { status: 200, body: { sucesso: true, mensagem: `Sugestões do sistema atualizadas (${aplicadas} alínea(s)).`, aplicadas } };
@@ -244,6 +253,7 @@ module.exports = async function (context, req) {
       if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
       const avaliacao = await avaliacaoDoCorpo(corpo);
       if (!avaliacao) return;
+      if (!gestaoNoEscopo(avaliacao)) return;
       const v = psc.validarRespostasEntrada(corpo.respostas);
       if (!v.valido) return erro(context, 400, v.mensagem);
       return resposta(context, await psc.salvarRespostas(pool, { avaliacao, itens: v.itens, membroId: usuario.membroId }));
@@ -253,6 +263,7 @@ module.exports = async function (context, req) {
       if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
       const avaliacao = await avaliacaoDoCorpo(corpo);
       if (!avaliacao) return;
+      if (!gestaoNoEscopo(avaliacao)) return;
       return resposta(context, await psc.enviarAvaliacao(pool, { avaliacao, membroId: usuario.membroId }));
     }
 
@@ -260,6 +271,7 @@ module.exports = async function (context, req) {
       if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
       const avaliacao = await avaliacaoDoCorpo(corpo);
       if (!avaliacao) return;
+      if (!gestaoNoEscopo(avaliacao)) return;
       return resposta(context, await psc.validarAvaliacao(pool, { avaliacao, parecer: corpo.parecer, membroId: usuario.membroId }));
     }
 
@@ -271,6 +283,7 @@ module.exports = async function (context, req) {
       // Enviada: a gestão no escopo devolve. Validada: já passou pela validação, então só a CLI.
       if (avaliacao.status === "VALIDADA") { if (!exigirHomologacao()) return; }
       else if (!temGestao(usuario)) return erro(context, 403, SEM_PERMISSAO);
+      else if (!gestaoNoEscopo(avaliacao)) return;
       return resposta(context, await psc.devolverAvaliacao(pool, { avaliacao, motivo: corpo.motivo, membroId: usuario.membroId }));
     }
 
@@ -291,6 +304,7 @@ module.exports = async function (context, req) {
     // ---------- Reclassificação compulsória (CLI, escopo global) ----------
     if (acao === "reclassificacoes/decretar") {
       if (!exigirHomologacao()) return;
+      if (!auth.exigirFatorRecente(req, context)) return;   // encerra os mandatos da diretoria local e recolhe o caixa: confirmação recente (428), como retirar um cargo
       const reclassificacao = await reclassificacaoDoCorpo();
       if (!reclassificacao) return;
       const v = psc.validarDecreto({ ...corpo, congregacaoId: reclassificacao.congregacaoId });
